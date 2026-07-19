@@ -1,4 +1,4 @@
-/* stage 7c-iii part 3: the last of ai.c's parse tail, end to end vs gcc.
+/* stage 7c-iii part 3: the last of love.c's parse tail, end to end vs gcc.
    hex float literals, const-expr array dims, designated initializers with
    enum indices, and a local variable shadowing a typedef name. */
 #define NB 64
@@ -7,7 +7,7 @@ enum kind { KA, KB, KC, KN };
 int mx[KN][KN] = { [KA]={ [KA]=1, [KC]=2 }, [KC]={ [KB]=3 } };  /* designated, nested, enum idx */
 int limb[NB / 32];                                             /* const-expr dim = 2 */
 
-typedef long num;               /* ai.h's habit: `num` a typedef... */
+typedef long num;               /* love.h's habit: `num` a typedef... */
 
 static int shadowed(void)
 {

@@ -2,7 +2,7 @@
 
 holo (crew/holo/, the x86-64 + aarch64 assembler) is the last untrusted stage of the
 toolchain. we own everything above it -- the surface syntax, both compilers, the self-hosting
-core -- and moon compiles ai.c while holo links it, so the source-to-machine-code path no longer
+core -- and moon compiles love.c while holo links it, so the source-to-machine-code path no longer
 routes through gcc/ld. that makes an *end-to-end verified* chain possible for the first time;
 holo's encoder, being small and table-shaped, is the natural place to start closing it.
 

@@ -3,7 +3,7 @@
 ; amplification (how many times the live set gets recopied) on real workloads.
 ;
 ; needs a -DAI_STAT host (gauge's stat cells read 0 otherwise). build one, then:
-;   clang ... -DAI_STAT ... -o /tmp/love-stat ai.c host/*.c -lm
+;   clang ... -DAI_STAT ... -o /tmp/love-stat love.c host/*.c -lm
 ;   cat tools/gcstat.l | /tmp/love-stat                                   ; interpreted
 ;   cat love/glaze/emit.l love/glaze/auto.l tools/gcstat.l | /tmp/love-stat   ; glazed (x86-64)
 ;

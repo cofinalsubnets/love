@@ -65,7 +65,7 @@ is `wint = (< (32 2) max-charm)` (true on the full 64-bit hosted builds).
   `close`/`run`/`getenv`) were installed per-frontend, so a frontend could
   silently omit one and leave a missing-name landmine -- exactly how the wasm
   host diverged. The core now installs safe nil-returning defaults for all five
-  (`ai.c` `frontend_defaults`); a frontend's own `g_defn` still overrides
+  (`love.c` `frontend_defaults`); a frontend's own `g_defn` still overrides
   (the book is last-write-wins), but a forgotten one inherits a clean nil
   instead of a missing name. Verified on wasm (the names resolve to nil, and
   help.l passes from the core default alone with the host override removed) and

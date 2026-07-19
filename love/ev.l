@@ -18,7 +18,7 @@
 ; one link today, orth), walked head-first with `gone` as the per-layer miss
 ; sentinel (a stored () SHADOWS, never falls through), answering d on total miss.
 ; Every book read in this file routes here, so a later layer can shadow orth
-; without touching the compiler again. The C twin is ai.c's bookget; keep in step.
+; without touching the compiler again. The C twin is love.c's bookget; keep in step.
 (: (gv k d) ((: (go c) (? (atom? c) d
                           (: v (peep (cap c) k gone)
                              (? (id? v gone) (go (cup c)) v))))

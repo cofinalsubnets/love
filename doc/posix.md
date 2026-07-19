@@ -31,7 +31,7 @@ POSIX surface as nifs, exactly like ain's `connect`/`listen`/`accept`:
 
 > every host nif is `host_X` (an `ai_noinline` syscall worker) + `lvm_X` (the VM
 > tail wrapper) + a `nif_X[]` thread registered via `AI_NIF` in a `host/*.c` file
-> (auto-globbed — no ai.c/ai.h/main.c edit; main.c is core). The fd→port path is
+> (auto-globbed — no love.c/love.h/main.c edit; main.c is core). The fd→port path is
 > free: `ai_io_alloc(g,fd)` wraps any fd as a port with a close finalizer, and
 > read/write then come free via getc/putc. The general-POSIX nifs wear the
 > `posix_` C-symbol prefix (host/init.c: `lvm_posix_stat` &c); the love names stay

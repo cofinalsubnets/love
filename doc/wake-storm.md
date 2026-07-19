@@ -39,7 +39,7 @@ syscalls per trip — the rest ordinary interpreter ops (`lvm_cond`, `lvm_cup`,
 happens interpreted anyway, and the next call faults again. Recovery never
 sticks.
 
-The only silent-recovery barrier is `eat_run` (ai.c) — the wrapper around
+The only silent-recovery barrier is `eat_run` (love.c) — the wrapper around
 running a TOAST's native code; a fault inside answers 0/deopt and the session
 rides on. And the image is DESIGNED to carry no native artifacts: the bake
 empties the glaze compile cache and `gen_major` drops transient native
@@ -66,7 +66,7 @@ Whatever the stale cell backs sits on the checker's hot path.
 
 ## fix shapes (history -- the bake-side revert below landed)
 
-1. **Make recovery STICK** (small, ai.c / the nif deopt seam): when
+1. **Make recovery STICK** (small, love.c / the nif deopt seam): when
    `eat_run` reports a fault, re-point the faulting cell at its deopt
    target permanently (nif cells carry `e`, the bytecode entry, for exactly
    this). Converts any storm of this class into one fault + interp speed.

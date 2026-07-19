@@ -4,7 +4,7 @@
 // lifetime (the GC moves and reclaims the screen like any value) and the C
 // side stays a pure byte machine re-derived from the cask on every call.
 // Self-contained host nif file: auto-globbed + AI_NIF-registered, no
-// ai.c / main.c edit; quay.c rides along by unity include (it is not
+// love.c / main.c edit; quay.c rides along by unity include (it is not
 // otherwise linked into the host binary -- only the kernel ports carry it).
 //
 //   (screen b rows cols) -> b    open a cb over cask b (cb_open)
@@ -19,7 +19,7 @@
 //                                3 flag, 4 top, 5 bot; () misuse
 //   (reply scr)          -> (b ..) drain the reply queue (DSR/DA answers ride
 //                                home to the pty master) as byte charms; () quiet
-#include "ai.h"
+#include "love.h"
 #include <unistd.h>   // read (swig)
 #include <fcntl.h>    // O_NONBLOCK (swig)
 #include <errno.h>
@@ -265,7 +265,7 @@ static lvm(lvm_damage) {
  Sp[1] = out;
  Sp += 1; Ip += 1; return Continue(); }
 
-// gush is GONE: say rides the port vt's writen lane now (ai.c lvm_fputs), one
+// gush is GONE: say rides the port vt's writen lane now (love.c lvm_fputs), one
 // write(2) stroke for any string/cask at any port -- the fallback dance died
 // with it. swig stays: the CHUNK lane a per-byte see can't be.
 

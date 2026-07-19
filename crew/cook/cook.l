@@ -1,7 +1,7 @@
 #!/usr/bin/env -S love -l
 ; cook -- love make
 ;
-; love reads the `#!` hashbang line above as a line comment (ai.c: `#!` runs to
+; love reads the `#!` hashbang line above as a line comment (love.c: `#!` runs to
 ; end of line, like `;`), so loading this file as a library is unaffected -- the
 ; same line serves the OS as a shebang. with the file marked executable and a `cook`
 ; symlink to it on PATH (the user installs that), running `cook Cookfile [ticket]`

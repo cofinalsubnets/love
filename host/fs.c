@@ -1,6 +1,6 @@
 // host/fs.c -- the rest of the POSIX fs surface: the effect ops the fs tools
 // (mv, ln, touch, chmod, chown) still miss. Host-only, auto-globbed +
-// AI_NIF-registered (no ai.c/ai.h/main.c edit), the same discipline as the
+// AI_NIF-registered (no love.c/love.h/main.c edit), the same discipline as the
 // posix_ lane in host/init.c, whose conventions these keep:
 //   effect ops answer () ok | a POSITIVE errno | EINVAL misuse
 //   value ops answer the value | () absence
@@ -17,7 +17,7 @@
 //   (hardlink old new)    -> () | errno | EINVAL   (link(2); `link` the word is
 //                            the chain ctor, the most spoken name in the prel,
 //                            so the nif wears the long form)
-#include "ai.h"
+#include "love.h"
 #include <unistd.h>     // symlink readlink chown
 #include <string.h>     // memcpy
 #include <errno.h>

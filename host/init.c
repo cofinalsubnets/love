@@ -1,6 +1,6 @@
 // host/init.c -- the init (pid-1 supervisor) nifs: SPAWN a process without
 // waiting + REAP an arbitrary dead child WITH its pid. Host-only, auto-globbed +
-// AI_NIF-registered (no ai.c/ai.h/main.c edit), the same discipline as net.c
+// AI_NIF-registered (no love.c/love.h/main.c edit), the same discipline as net.c
 // (ain) / pty.c (bao). These are the two primitives a supervisor needs that the
 // existing nifs miss: run/exec/mind all BLOCK or REPLACE, and pty.c's `gather`
 // reaps a KNOWN pid (handing back only the status). init/init.l drives REAL
@@ -18,7 +18,7 @@
 // pointers, consumed before any further alloc), valid across the fork. The wait-
 // status decode is shared with bao via host/proc.h (proc_status).
 #define _GNU_SOURCE     // unshare / CLONE_* for newns (mirrors pty.c)
-#include "ai.h"
+#include "love.h"
 #include "proc.h"
 #include <unistd.h>     // fork execvp _exit read close getuid/getgid
 #include <stdio.h>      // fflush

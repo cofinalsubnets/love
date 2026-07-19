@@ -9,7 +9,7 @@ settles by probing the built `kore`. last trued up 2026-07-06.
 the distro plan (the love-native POSIX environment over the Linux kernel) climbs
 three rungs, each independently shippable: **kore** (this one -- the busybox
 clone), a **vim clone** over cb + bao's edln/edraw seeds, and a **chibicc-class
-C compiler** last, scoped to *compiles ai.c*, never the kernel. the pieces that
+C compiler** last, scoped to *compiles love.c*, never the kernel. the pieces that
 already existed -- cook (make), sh.l/bao (shell), holo (assembler), the terminal
 stack, init.l (pid 1) -- mean kore is the gap between the posix-pid1
 container and a livable system. the distro shape: kernel + static `love` + .l
@@ -85,7 +85,7 @@ the file discipline, two shapes:
   normalization); cat copies verbatim, head/tail/sort/uniq normalize like GNU
   sort does (GNU head does not -- known, harmless, unsmoked).
 * the nested-loop nom miscompile this rung surfaced was root-caused and FIXED
-  in both compilers (ev.l avb's shadow guard + ai.c's fars set, lawed in
+  in both compilers (ev.l avb's shadow guard + love.c's fars set, lawed in
   test/closure.l); nested loops may share noms freely again.
 * a value that can legitimately net 0 -- an end index, a (0 0) span -- reads
   BLUE (falsy): give it uread's (1 ..) success shape. and never name a local

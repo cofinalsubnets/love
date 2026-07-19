@@ -3,7 +3,7 @@
  * syscall table through __ai_sys (crew/moon/lib/mksys.l lays that leaf,
  * with __sigsetjmp/siglongjmp/__ai_sigret beside it; crew/moon/lib/math/
  * carries the math floor, crew/moon/lib/math/am.c -- ours). One file, mooncc-compiled, our own linker binds it:
- *   mooncc ai.o (host objects) nolibc.o (math objects) sys.o -o love
+ *   mooncc love.o (host objects) nolibc.o (math objects) sys.o -o love
  * Two arches, one body: every call below speaks the modern forms BOTH tables
  * carry (openat / newfstatat / ppoll / pipe2 / dup3 / clone / the *at file
  * ops) -- aarch64's asm-generic table dropped the legacy names outright, so

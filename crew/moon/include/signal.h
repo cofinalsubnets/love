@@ -18,7 +18,7 @@ struct sigaction {
 #define SIGSEGV 11
 #define SIGBUS   7
 #define SA_NODEFER 1073741824
-void *signal(int, void*);        /* returns the old handler; ai.c ignores it */
+void *signal(int, void*);        /* returns the old handler; love.c ignores it */
 int raise(int);
 int sigaction(int, struct sigaction const*, struct sigaction*);
 int sigemptyset(sigset_t*);

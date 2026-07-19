@@ -10,13 +10,13 @@ tear the compiler mid-run); it was `kore cc` through 7c-iii part 1.
 
 ## the goal, and the fence
 
-`cc` compiles **ai.c** -- and eventually the whole out/host build (ai.h's
+`cc` compiles **love.c** -- and eventually the whole out/host build (love.h's
 inline world, host/*.c) -- into objects the system linker accepts, on x86-64
 first, arm64 by parity. the closure it buys: love-in-love compiles the compiler
-that compiles ai.c, so userland is fully self-hosting and the KERNEL is the
+that compiles love.c, so userland is fully self-hosting and the KERNEL is the
 one imported artifact.
 
-**RUNG 2 LANDED 2026-07-12: EVERY out/host object compiles under mooncc.** ai.c
+**RUNG 2 LANDED 2026-07-12: EVERY out/host object compiles under mooncc.** love.c
 plus all thirteen host/*.c (cb/cuda/drm/fs/haven/image/image_baked/init/main/
 net/lux/pty) go through `mooncc -c`, and clang links the bag -- gcc appears
 ONLY as the linker. The all-mooncc binary boots and passes the whole 2831-test
@@ -54,12 +54,12 @@ unchanged. a foreign .o (gcc's .comment/.eh_frame zoo) scares off honestly
 ifunc/TLS tarpit and stays OFF the ladder. the whole 84-program battery
 passes linked through it (compile -c, link, run, gcc differential), weak
 default/override and the nif bracket walk are gated in test_moon, and the full
-14-object selfhost set (585KB ai.o included) links in under a second --
+14-object selfhost set (585KB love.o included) links in under a second --
 refusing at `sqrt`, the first libm undef, which is exactly rung 4's seam:
 the raw-syscall host + in-tree sin/cos/log, and gcc is gone entirely.
 
 **LADDER RUNG 4 LANDED 2026-07-12: THE GCC-FREE love.** the standalone chain is
-now entirely ours -- mooncc compiles ai.c + host/*.c + our own libc, mksys lays
+now entirely ours -- mooncc compiles love.c + host/*.c + our own libc, mksys lays
 the machine tail, and crew/holo/link.l binds them: no gcc, no glibc, no ld.
 three new pieces under crew/moon/lib/:
   * `nolibc.c` -- the raw libc. ~90 wrappers straight off the x86-64 syscall
@@ -75,7 +75,7 @@ three new pieces under crew/moon/lib/:
   * `mksys.l` -- lays sys.o, the four things C cannot say: the 7-slot syscall
     trampoline, `__sigsetjmp`/`siglongjmp` over our own layout INSIDE the
     glibc-sized 25-long buffer (the signal mask in buf[8], saved/restored by
-    rt_sigprocmask -- ai.c's fault barrier is `sigsetjmp(env,1)`, so the mask
+    rt_sigprocmask -- love.c's fault barrier is `sigsetjmp(env,1)`, so the mask
     is load-bearing), and `__ai_sigret` (the SA_RESTORER tail). every encoding
     objdump-checked, the holo house rule.
   * `math/` -- am.c, OUR transcendentals (fdlibm retired 2026-07-13: one 400-line file, sqrt exact / the seven <= a few ulp, `make ulp` is the differential gate; -lm is gone from every link).
@@ -92,7 +92,7 @@ global initializer still refuses -- dodge it with separate globals.
 
 the one firm fence: NOT C++, ever.
 
-## what ai.c actually demands (the census, 2026-07-06)
+## what love.c actually demands (the census, 2026-07-06)
 
 the subset is not "C11-ish" by taste -- it is measured off the target:
 
@@ -101,7 +101,7 @@ the subset is not "C11-ish" by taste -- it is measured off the target:
 * typedefs, structs, unions, enums (30+/12 uses), nested aggregates,
   a flexible array member (`struct env { ... word end[]; }`), designated
   initializers (`{.x = putcharm(2)}` -- the nif tables), ANONYMOUS unions
-  and structs (ai.h:152,204 -- confirmed in), one compound literal.
+  and structs (love.h:152,204 -- confirmed in), one compound literal.
 * function pointers as first-class citizens -- the lvm dispatch tables ARE
   the program. pointer arithmetic throughout.
 * varargs: va_list x4, variadic prototypes x24 (ai_push, the printers).
@@ -110,7 +110,7 @@ the subset is not "C11-ish" by taste -- it is measured off the target:
   trees (AI_STAT, ai_tco, arch selection), #include.
 * doubles (the gems: math.h's sin/cos/log/atan2/fmod...), NO long double.
 * _Static_assert x4; __attribute__ x10 but ALL behind ai_ macros (ai_inline,
-  ai_noinline) -- ai.h grows a plain-C branch under `__mooncc__` and the
+  ai_noinline) -- love.h grows a plain-C branch under `__mooncc__` and the
   attributes vanish. NO bitfields, NO VLAs, NO statement expressions.
 * setjmp/sigsetjmp + signal handlers: LIBC's problem, not the compiler's --
   cc only needs the calls and the volatile discipline around them.
@@ -170,10 +170,10 @@ gate per stage. the pipeline, each its own file:
   tables). the STILL-open .o world needs RELOCATABLE output -- symbol table,
   .text/.data/.rodata/.bss, RELA relocations (PC32/PLT32/64/GOTPCREL minimum);
   a well-fenced extension with its own laws (readelf as oracle).
-* **ai.h**: an `__mooncc__` branch making ai_inline/ai_noinline/attributes
+* **love.h**: an `__mooncc__` branch making ai_inline/ai_noinline/attributes
   plain no-ops. a core edit -- small, coordinated.
 * **headers**: our own include/ for the freestanding subset (stdint stddef
-  stdbool stdarg + declarations for the libc calls ai.c/host make: math,
+  stdbool stdarg + declarations for the libc calls love.c/host make: math,
   mman, unistd, signal, setjmp, stdio slice). dodges parsing glibc entirely;
   stage 7 decides header-by-header what the host files still miss.
 
@@ -197,7 +197,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
   fuller (gwen picks): unparenthesized conditions with mandatory braces,
   := style short declarations, cleaner declarator spellings for the
   gnarly cases (function-pointer types especially). the fence stands:
-  extensions, opt-in, never needed to compile plain C -- ai.c stays the
+  extensions, opt-in, never needed to compile plain C -- love.c stays the
   gate and it is written in C.
 
 ## the ladder (each stage lands green and useful on its own)
@@ -278,7 +278,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    alignment, the whole rounded to the widest; unions flatten offsets to
    zero), nested aggregates, arrays of structs and struct members that are
    arrays, ANONYMOUS struct/union members splicing their fields into the
-   parent (ai.h's habit), self-referential struct pointers (linked lists
+   parent (love.h's habit), self-referential struct pointers (linked lists
    walk), enum with values (constants FOLD AT PARSE), typedef (top-level),
    `.` and `->` (arrow desugars to (dot (deref ..)) and one lvalue door
    handles both), sizeof over every aggregate, switch with fallthrough as
@@ -297,7 +297,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    NEW holo (callr) -- indirect call, x64 FF /2, arm64 BLR, both objdump/
    llvm-mc frozen (holotest 177) -- after parking the pointer in callee-saved
    r3; and WHOLE-STRUCT ASSIGNMENT as a word-then-byte block copy (bcopy),
-   so a = b and *p = *q copy structs. THE ai.c dispatch tables now compile.
+   so a = b and *p = *q copy structs. THE love.c dispatch tables now compile.
    battery at 46 (fn-pointer call, dispatch table, struct copy by value and
    through pointers, fn-pointer parameter).
    INITIALIZERS (4c) LANDED 2026-07-06: brace and designated initializers
@@ -310,7 +310,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    LABEL-VALUED GLOBALS (4d) LANDED 2026-07-06: a global initializer whose
    value is a LABEL bakes an abs64 fixup ('fix 8 abs64 label 0) -- the label's
    ABSOLUTE load address -- so char *s = "hi" (a rodata string), &global, a
-   decayed array, and THE ai.c PATTERN, a static (name, fn-ptr) table like
+   decayed array, and THE love.c PATTERN, a static (name, fn-ptr) table like
    struct Nif tab[] = {{"inc", inc}, ..}, all bake correctly. the mechanism:
    holo gained an abs64 relocation kind (x64 + arm64, both le64 of the target),
    and elf64 now assembles at ORG = the load vaddr (base + header) so labels
@@ -326,7 +326,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    case-label expressions; sizeof of an EXPRESSION (only sizeof(TYPE) today);
    a bare TOP-LEVEL fn-pointer array int (*t[n])(..) = {..} (ptop lays its own
    declarators, doesn't route through pdtor -- the struct-wrapped table works,
-   which is what ai.c uses). battery at 56.
+   which is what love.c uses). battery at 56.
    ENV TRAP paid: a catted app is `#!/usr/bin/env -S love` + the cat, so bare
    `mooncc` runs on the PATH `love` -- a STALE install mis-runs it (missing baked
    core like holo callr) and the heap grows unboundedly; the make gate is safe
@@ -354,12 +354,12 @@ two ideas to keep warm as the stages climb, neither committed yet:
    also the function NAME `adj##` (a `##` in a nom) fed the confusion. fix:
    give the param a nom bound NOWHERE else (`mb`) and inline the sibling helper
    as a closure-local. the tell was `;; missing <nom>` weave-scares at LOAD.
-   NEXT gate to add (stage 6+): gcc -E vs cc -E token streams on ai.c's real
+   NEXT gate to add (stage 6+): gcc -E vs cc -E token streams on love.c's real
    headers + our include/.
-6. **the long tail ai.c names**: varargs (the SysV register-save dance --
+6. **the long tail love.c names**: varargs (the SysV register-save dance --
    the hairiest single item in the plan), doubles through the xmm ABI,
    _Static_assert, anonymous members (LANDED 4a), the one compound literal.
-   gate: every host/*.c compiles; ai.c compiles.
+   gate: every host/*.c compiles; love.c compiles.
    THE GEM LANE (6a) LANDED 2026-07-06: the `double` type as a first-class
    scalar riding the xmm register file. float literals lex (12.5, .5, 2., 1e9,
    3.14e-2, an f/F/l/L suffix consumed) into a 'flo token carrying a love gem;
@@ -431,7 +431,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    simplified ABI is a KNOWN gap: it does not interoperate with libc's printf
    until the gate wires real SysV varargs -- that's stage 7's linking moment.
    THE `float` SCALAR + THE COMPOUND LITERAL (6d) LANDED 2026-07-07: the last two
-   items ai.c needs (typedef float ai_flo_t; the `mm` macro's &(struct ai_r){..}).
+   items love.c needs (typedef float ai_flo_t; the `mm` macro's &(struct ai_r){..}).
    float is 4 bytes in MEMORY but shares the double register lane -- the core
    invariant is that a value in an xmm register is ALWAYS a 64-bit double, so a
    float LOAD widens (ldss + cvtss2sd) and a float STORE narrows (cvtsd2ss + stss);
@@ -453,8 +453,8 @@ two ideas to keep warm as the stages climb, neither committed yet:
    unwraps its one-element brace. battery 68->70 (69-float: the whole value path +
    ABI + a float global/struct; 70-compound-literal: struct + scalar literals
    address-taken and read); law.l gains the float / clit goldens. RUNG 3 IS NOW
-   FEATURE-COMPLETE for ai.c's C subset; stage 7 (the linker + real SysV) is next.
-7. **THE GATE**: cc-built ai.c (+ host/*.c, system ld, ai_tco=0) boots the
+   FEATURE-COMPLETE for love.c's C subset; stage 7 (the linker + real SysV) is next.
+7. **THE GATE**: cc-built love.c (+ host/*.c, system ld, ai_tco=0) boots the
    egg and runs `make test` green -- the corpus under a cc-built binary.
    this is the rung's kore-feature-complete moment. a multi-part integration
    gate, landing sub-rung by sub-rung:
@@ -478,15 +478,15 @@ two ideas to keep warm as the stages climb, neither committed yet:
    now (the arm64 reloc kinds differ; cc emits x64). GATE: the make .o smoke
    cc-compiles a lib + a main TU, links them with a gcc-built third TU via the
    system linker (-no-pie), runs, and matches an all-gcc build; probed live: cc<->
-   gcc interop both directions, cc calling libc (abs/strlen), the ai.c static
+   gcc interop both directions, cc calling libc (abs/strlen), the love.c static
    (name, fn-ptr) table across an R_64 link.
    7b REAL SysV VARARGS LANDED 2026-07-07: cc's variadic ABI is now gcc-compatible,
-   so ai_push (a variadic function DEFINED in ai.c but CALLED from the gcc-built
-   host objects -- ai.h declares it) works across the toolchain seam. the va_list
+   so ai_push (a variadic function DEFINED in love.c but CALLED from the gcc-built
+   host objects -- love.h declares it) works across the toolchain seam. the va_list
    is the real 24-byte struct { int gp_offset; int fp_offset; void
    *overflow_arg_area; void *reg_save_area; } (crew/moon/include/stdarg.h), a typedef
    to __va_list_tag[1] so it DECAYS to a pointer when handed to another function
-   (ai.c's gvzprintf/ai_pushr take a va_list). the CALLEE prologue lays a 176-byte
+   (love.c's gvzprintf/ai_pushr take a va_list). the CALLEE prologue lays a 176-byte
    register save area (6 gp @ +0 step 8, 8 xmm @ +48 step 16) and addresses its
    named register-passed params INSIDE it; va_start seeds gp_offset = 8*named-gp,
    fp_offset = 48 + 16*named-xmm, overflow = rbp+16, reg_save = &area; va_arg walks
@@ -513,7 +513,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    7c-i THE FREESTANDING HEADERS + IGNORABLE QUALIFIER/ATTRIBUTE SURFACE LANDED
    2026-07-07: crew/moon/include/ now carries stdint stddef stdbool math signal
    setjmp sys/mman unistd (they WIN over /usr/include for <> includes -- incload's
-   sys? path), each minimal and freestanding so ai.c never reaches into a glibc
+   sys? path), each minimal and freestanding so love.c never reaches into a glibc
    header. cc keeps NO linkage/qualifier state, so the parser gained `pquals`: a
    run of storage/qualifier keywords (const volatile restrict register auto inline
    extern static) and __attribute__((..)) / _Alignas(..) / _Noreturn / __inline
@@ -528,11 +528,11 @@ two ideas to keep warm as the stages climb, neither committed yet:
    `unsigned` keyword yet), and `signed`/hex/suffix literals stay out -- correct for
    this cc, refined in 7c-ii. gate: 72-quals.c (the qualifier + header-parse
    program, gcc=cc=37) folds into the auto-globbed battery; law.l proves the
-   ignored-qualifier equivalences + the abstract-declarator proto. ai.c itself still
+   ignored-qualifier equivalences + the abstract-declarator proto. love.c itself still
    stops at a LEX error (hex/unsigned/inline-asm -- the later sub-rungs).
    7c-ii UNSIGNED + HEX LANDED 2026-07-07: the lexer gained hex literals (0x..),
    integer suffixes (u/U/l/L, consumed), and the missing char/string escapes (\a \b
-   \f \v \? \e, via a shared `escv`) -- ai.c now lexes end to end. the parser reads a
+   \f \v \? \e, via a shared `escv`) -- love.c now lexes end to end. the parser reads a
    type-specifier RUN and canonicalizes it (`unsigned long` -> 'ulong, `signed char`
    -> 'char, `long long` -> 'long, `unsigned` -> 'uint) into the new unsigned scalars
    'uchar 'ushort 'uint 'ulong. gen treats them by WIDTH like their signed twins but
@@ -546,10 +546,10 @@ two ideas to keep warm as the stages climb, neither committed yet:
    objdump/llvm-mc-checked (holotest 189 -> 205). the headers now typedef the uintN_t names to REAL
    `unsigned` bases. gate: 73-unsigned.c (a FNV-style unsigned hash + logical shifts +
    unsigned compare/div/mod + zero-extend, gcc = cc = 177) in the battery; law.l goldens
-   the hex/suffix/escape lexing and the specifier-soup canonicalizer. ai.c now advances
+   the hex/suffix/escape lexing and the specifier-soup canonicalizer. love.c now advances
    PAST lexing to a parse error (7c-iii).
    7c-iii PART 1 (THE PARSE TAIL) LANDED 2026-07-07: the accumulated ~a-dozen parse/cpp
-   gaps that ai.c hits once it lexes, found by grinding cc through ai.c form by form.
+   gaps that love.c hits once it lexes, found by grinding cc through love.c form by form.
    cpp learned the OBJECT-vs-FUNCTION macro distinction: a macro `(` is a function macro
    ONLY when GLUED to the name (no space) -- the lexer now flags a glued `(` with a 4th
    token field (set when the prior char is an idchar), so `#define EOF (-1)` is an object
@@ -566,7 +566,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    boxfix capture trap (a deep-nested recursive helper captures outer `:`-locals as
    unfilled cells -> `;; missing <name>` at runtime). gate: 74-ctail.c (sizeof expr/type,
    void return, folded case, fn-ptr cast, function-type + multi-decl typedef, object-vs-
-   function macro, gcc = cc = 50) in the battery; law.l goldens each. ai.c now parses
+   function macro, gcc = cc = 50) in the battery; law.l goldens each. love.c now parses
    through ~5000 lines and stops at the first 2D array (`lvm_t *const tbl[KN][KN]`).
    7c-iii PART 2 (MULTIDIMENSIONAL ARRAYS + THE mooncc BREAKOUT) LANDED 2026-07-07:
    the declarator now reads a RUN of `[n]`/`[]` bracket suffixes (a top-level `adims`
@@ -579,14 +579,14 @@ two ideas to keep warm as the stages climb, neither committed yet:
    2D table takes a nested-brace initializer; only the OUTERMOST dim may be `[]`, its
    count inferred from the init's top level (`int g[][3] = {{..},{..}}`). an array
    dimension may be an ENUM CONSTANT (`int m[KN][KN]`), folded through ps 'enums (the
-   `dimval` helper threaded into `adims`/`pdtor` -- ai.h's kind matrices are `[KN][KN]`).
+   `dimval` helper threaded into `adims`/`pdtor` -- love.h's kind matrices are `[KN][KN]`).
    gate: 75-arr2d.c (row-major layout, `[i][j]` access, nested-brace + `[]`-inferred
    globals, gcc = cc = 18); law.l goldens the nested + enum-dim types. AND cc SPLIT OUT OF kore INTO ITS OWN
    APP `mooncc`: a catted `#!/usr/bin/env -S love -l` script (u-floor + asbook + elf/obj +
    crew/moon/{lex,cpp,parse,gen,cc}.l) whose tail SEAT in moon.l fires moon-main -- so a cc
    edit rebuilds only mooncc, never the whole kore cat, and a parallel kore rebuild can no
    longer tear the compiler mid-run. `make test_moon` and `make install` both target mooncc.
-   7c-iii PART 3 (THE LAST OF THE PARSE TAIL) LANDED 2026-07-07 -- ai.c NOW PARSES END
+   7c-iii PART 3 (THE LAST OF THE PARSE TAIL) LANDED 2026-07-07 -- love.c NOW PARSES END
    TO END (all 925 top-level forms; localized form by form with a ptop-loop driver over
    the preprocessed token stream, since macro-expanded tokens carry the macro-SITE line).
    four gaps, each found by grinding: (1) DESIGNATED array initializers `[i]=v` were
@@ -596,15 +596,15 @@ two ideas to keep warm as the stages climb, neither committed yet:
    `flolit`, the plain-hex-int path folded in). (3) array DIMENSIONS are now any integer
    CONSTANT EXPRESSION -- `adims` parses the dim with pexpr + cfold (subsuming the
    enum-constant case), so `ai_limb limb[64 / limb_bits]` folds. (4) BLOCK-SCOPED TYPEDEF
-   SHADOWING: ai.h makes `num`/`word` typedefs, and ai.c uses them as local variable
+   SHADOWING: love.h makes `num`/`word` typedefs, and love.c uses them as local variable
    names; a local whose name is a typedef now HIDES it for the rest of the block (pblock
    pins the name to not-a-type on the declaration, restores at `}`), so `num + num` reads
    as an expression, not a cast -- and a sibling function still sees the type. gate:
    76-ctail3.c (hex float, const-expr dim, nested enum-indexed designated init, a shadowed
-   local, gcc = cc = 41); law.l goldens each. the next wall is CODEGEN (`mooncc -c ai.c`
+   local, gcc = cc = 41); law.l goldens each. the next wall is CODEGEN (`mooncc -c love.c`
    parses, then errors in gen) -- 7d territory.
    THE GEN CHOKE LIST (measured 2026-07-07 by a full-corpus instrumented run --
-   log-and-continue wrappers on cgfn/cgexpr/cgstmt/cgdecl/cgimage): 15 of ai.c's 611
+   log-and-continue wrappers on cgfn/cgexpr/cgstmt/cgdecl/cgimage): 15 of love.c's 611
    functions refused, plus the data tail. THE GEN TAIL, FIRST CUT (landed 2026-07-08,
    15 -> 10): (a) mproto SIBLINGS -- `double sin(double), cos(double), ..;` registered
    cos only in the sig table, so a fn-as-VALUE use (`Ap(.., ai_cos)`) refused; gen's
@@ -612,15 +612,15 @@ two ideas to keep warm as the stages climb, neither committed yet:
    is the bare use's address, in code (the addr lane falls back to the fns table;
    locals still win) and in a global image (imlabel takes `&f`). (c) INDIRECT DOUBLE
    CALLS -- a call through a fn pointer typed its result 'long, so a double result
-   read r0 not f0 (a SILENT miscompile, exactly ai.c's lvm_math1 shape); the
+   read r0 not f0 (a SILENT miscompile, exactly love.c's lvm_math1 shape); the
    declarator dragon now carries the base type as the pointee's return --
    ('ptr ('fn ret)) through params/locals/typedefs/members/casts -- fn-name values
    get ret from the sig, and callr's result types by it. gate: 77-protoaddr.c
    (fn-ptr table image, &f/bare-f agreement, double through a pointer, gcc = cc = 42)
    + law goldens.
-   THE LIST CLEARED (2026-07-08, same day, commit by commit) -- **`mooncc -c ai.c`
+   THE LIST CLEARED (2026-07-08, same day, commit by commit) -- **`mooncc -c love.c`
    COMPILES END TO END: all 611 functions + the data tail, a ~514KB relocatable
-   ai.o.** the rest of the tail as it fell: ENUM-CONSTANT SHADOWING (a local named
+   love.o.** the rest of the tail as it fell: ENUM-CONSTANT SHADOWING (a local named
    `N` was folded to `enum { N = 13 }`'s value -- a silent read miscompile; locals
    now shadow enum constants like the typedef shadow, the constant PULLED for the
    block and re-pinned at `}`); FOLDING IMAGES (a scalar initializer that cfolds is
@@ -645,7 +645,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    .data symbols, the 7d link's first wall). gates: 78-enumshadow 79-tables
    80-manyargs 81-builtins 82-znvalue (gcc = cc = 42 each) + laws.
    **7d LANDED (2026-07-08): the cc-built love BOOTS the egg and passes the WHOLE
-   CORPUS -- 2831 tests green.** the recipe: `mooncc -c ai.c ai.o` (with
+   CORPUS -- 2831 tests green.** the recipe: `mooncc -c love.c love.o` (with
    `#define ai_tco 0` prepended -- cc emits no sibcalls, so the VM takes the
    trampoline dispatch, the same lane love0 exercises every gate) + gcc host
    objects built `-Dai_tco=0` + libc. the corpus was the differential oracle
@@ -668,18 +668,18 @@ two ideas to keep warm as the stages climb, neither committed yet:
    the bignum limbs keep the portable 32-bit branch, the lone `divq` asm stays
    out of reach. found on the way, in the CORE: a tco=0 host with the glaze
    baked segfaulted on its first hot loop (glazed code Continues by tail-jump --
-   threaded-VM only); ai.c now pins `love-tco` and auto.l keeps the pure
+   threaded-VM only); love.c now pins `love-tco` and auto.l keeps the pure
    interpreter on a trampoline build. and the house speed-law paid off:
-   `mooncc -c ai.c` took ~13 MINUTES -- holo's lay appended each lowered chunk to
+   `mooncc -c love.c` took ~13 MINUTES -- holo's lay appended each lowered chunk to
    the tail of the item stream, a re-copy per instruction -- accumulating
    reversed made it linear: **4.3 seconds**. gates: 83-ternflo 84-nan + the
    rbx interop check. unions by value stay refused; running the cc build at
    ai_tco=1 (`make vmret`-honest sibcalls) is stage 8's flat-stack rung.
 8. **the fixpoint + the flat stack** (2026-07-08):
    (a) THE FIXPOINT LANDED -- `cc(cc(love))` is BYTE-IDENTICAL to `cc(love)`. the
-   cc-built love (tco=0), running mooncc, compiles ai.c to an object bit-for-bit
+   cc-built love (tco=0), running mooncc, compiles love.c to an object bit-for-bit
    the same as the host-built mooncc does. self-hosting is a closed loop:
-   `cmp aiA.o aiB.o` where aiB.o = love-cc0 compiling ai.c. (the self-hosted
+   `cmp aiA.o aiB.o` where aiB.o = love-cc0 compiling love.c. (the self-hosted
    compile is ~6x slower -- 24s vs 4s -- because the cc build runs the pure
    interpreter, no glaze; correctness, not speed, is the fixpoint's claim.)
    (b) GUARANTEED SIBCALLS LANDED -- a RET-position call tail-JUMPS: the
@@ -698,7 +698,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    (a self-recursive tail is `jmp rec` not `call rec`; a frame-escaping fn
    keeps its call).
    (c) THE GLAZE RUNS AT ai_tco=1. the cc build's first crash was NOT Sp
-   threading at all -- cc predefined `__STDC_HOSTED__` = 0, so ai.c compiled
+   threading at all -- cc predefined `__STDC_HOSTED__` = 0, so love.c compiled
    its FREESTANDING lanes: `toast`/`nif` copied native code into the plain
    heap (NX) instead of the hosted W^X mmap+mprotect arena, and a glazed
    native body jmped into non-executable heap and faulted (rip in the heap,
@@ -721,7 +721,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    the assignment target `&g` across `g = <rhs-with-calls>` (ai_evals_),
    binop operands, argument marshalling. rsp sat at 8 mod 16 for the inner
    call, so glibc's fork (the first callee that stores aligned SSE to
-   rbp-relative slots) crashed. INVISIBLE to ai.c's own code (it never
+   rbp-relative slots) crashed. INVISIBLE to love.c's own code (it never
    movaps'es a frame slot) and to the -O0 gcc differential (both align
    correctly), so the whole corpus rode a skewed stack that only libc's
    fork child ever tripped. the fix (`gen.l`): a spill that outlives a
@@ -807,7 +807,7 @@ already a lawed calculator-to-ELF; stage 4 compiles real single-file C).
 into `lib/love/mooncc.image` (the live bake nif, doc/snapshot.md) and `bin/mooncc`
 is a three-line sh shim: `love --wake mooncc.image -e "(moon-main (cuup (cup
 cmdline)))" "$@"`. The whole-cat re-eval that every compile used to pay
-(~1.5 s wall) is paid once, at bake: `mooncc -c ai.c` 4.3 → 2.8 s wall, and a
+(~1.5 s wall) is paid once, at bake: `mooncc -c love.c` 4.3 → 2.8 s wall, and a
 small-file compile drops 0.77 s → 0.02 s -- gcc-class invocation latency.
 The image is binary-specific (anchor-checked) and installs from the same
 build as `bin/love` (strip keeps vaddrs, so the stripped install wakes it);

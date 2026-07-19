@@ -1,5 +1,5 @@
 // host/lux.c -- lux's socket nif. Host-only (links main.c), auto-globbed
-// + auto-registered via AI_NIF; no ai.c/ai.h/main.c edit (the app pattern, like
+// + auto-registered via AI_NIF; no love.c/love.h/main.c edit (the app pattern, like
 // host/net.c which this mirrors). One nif:
 //   (connectu path) -- connect to a unix-domain stream socket and wrap the fd
 //   as a port | nil. The load-bearing case is an X display socket
@@ -7,7 +7,7 @@
 //   codec (doc/proto/x11.l lineage) needs this one door the TCP nifs can't open.
 // Once the fd is a port, read/write ride the existing fgetc/fputc machinery
 // (cooperative on a not-ready fd), same as every net.c port.
-#include "ai.h"
+#include "love.h"
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>

@@ -1,6 +1,6 @@
 // Teensy 4.1 (i.MX RT1062) frontend for love -- bare metal, no Teensyduino.
 //
-// love's frontend contract (ai.h): the host defines ai_clock, the
+// love's frontend contract (love.h): the host defines ai_clock, the
 // ai_stdin/ai_stdout ports, the ai_fd_port_vt vtable, and the cooperative-wait
 // hooks. Here the console is LPUART6 on pin0(RX)/pin1(TX) at 115200 8N1,
 // reachable over a 3.3 V USB-serial adapter -- the analogue of the rp2040
@@ -9,7 +9,7 @@
 // timer, and GPIO; this file is just the love glue plus a few GPIO nifs. The
 // shell line editor (love/bao.l, the baked shell core) drives the console
 // exactly as it drives the kernel's.
-#include "../../ai.h"
+#include "../../love.h"
 #include "teensy41.h"
 
 #ifndef EOF
@@ -201,7 +201,7 @@ int main(void) {
   freelist->next = NULL;
   freelist->len = sizeof pool / sizeof(uintptr_t);
   struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
-  // BOUND the collector to the arena (the Appel knob -- gen_please, ai.c):
+  // BOUND the collector to the arena (the Appel knob -- gen_please, love.c):
   // 2*minor + 2*major carve out of the free list, and a major resize holds old
   // and new at once, so an unbounded budget OOMs inside the collector. A
   // quarter of the arena leaves the double-buffered resize and free-list

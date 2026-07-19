@@ -16,7 +16,7 @@ Status section below; this stays as the `--bake`/`--wake` design-of-record.)
    measured). Inside a snapshot it is precompiled: **always-on transparent JIT, zero startup cost,
    like luajit** — which is exactly what the bake needs (and why the naive bake was abandoned).
 3. **The GC-footprint tax goes away.** The image lives in an out-of-pool IMMORTAL region (extend
-   ai.c's existing "out-of-pool short-circuit ... immortal, never copied", ai.c:667), so the moving
+   love.c's existing "out-of-pool short-circuit ... immortal, never copied", love.c:667), so the moving
    collector never copies the egg/glaze closures — no per-collection cost from a bigger baseline.
 
 ## Mechanism — a binary heap dump + relocating load
@@ -86,7 +86,7 @@ rides on this once images are per-target.
 - **Maintenance** — the image rebuilds whenever prel/ev/glaze change (a Makefile dep); the stamp +
   eval fallback make a stale image safe, never wrong.
 - **Existing infra to lean on** — the generational collector already RELOCATES objects and has the
-  out-of-pool/immortal short-circuit (ai.c:667, the gen_*_relocate machinery); a
+  out-of-pool/immortal short-circuit (love.c:667, the gen_*_relocate machinery); a
   source-level round-trip is an independent cross-check (a dumped closure should `show`-match its
   eval'd twin).
 
@@ -111,8 +111,8 @@ Departures from the original plan above, worth noting:
   of `ai_image_save`): under ASLR the whole binary shifts by one base delta, so the immortals/refsym
   delta must equal the ai_image_save/anchor delta; a different binary (cross-arch or stale rebuild) lays
   symbols out differently → deltas disagree → refused. The 4-way {x86,aarch64}×{bin,img} matrix is clean.
-- **Core/host split (stdio out of ai.c).** The core owns the stdio-free buffer codec `ai_image_save` /
-  `ai_image_load` (ai.h); file I/O lives in `host/image.c`. The Phase-0 `image-check` and Phase-1
+- **Core/host split (stdio out of love.c).** The core owns the stdio-free buffer codec `ai_image_save` /
+  `ai_image_load` (love.h); file I/O lives in `host/image.c`. The Phase-0 `image-check` and Phase-1
   `image-rt` spikes are retired.
 - **The glaze bake is the corpus eval, not a split assert-free lib.** `--bake` evals the glaze
   (emit.l+auto.l, x86-gated) before dumping; the asserts' transient natives die in `gen_major`. emit.l's
@@ -125,7 +125,7 @@ Departures from the original plan above, worth noting:
 point required — and answers 1 | (); the session rides on. Wake it with `love --wake x.image
 prog.l args..`: the woken book carries every global pinned before the bake, so an app loaded
 warm (`love -l app -e '(bake "app.image")'`) never pays its load again — the mooncc image took
-`mooncc -c ai.c` from ~3.7 s to ~2.4 s, the whole per-run load tax. Three seams make mid-eval
+`mooncc -c love.c` from ~3.7 s to ~2.4 s, the whole per-run load tax. Three seams make mid-eval
 dumping honest where the boot bake could assume purity:
 
 - **The stack is ballast, not state.** The running continuation's objects get traced (they're
@@ -187,7 +187,7 @@ the boot bake. Smoke: boot/bake.l (test_hostnif) round-trips a pinned marker thr
      discontiguous memmap ranges, largest ~145 MB, and live pools pin its middle, so the request failed
      (`kfree` coalesces fine — it just can't span ranges or merge across a live block); (b) on that alloc
      failure `gen_major` fell back to the existing (smaller) spare half and "hoped it fits" — UNSOUND when
-     the live set exceeds a half, overflowing it → corruption. Fix (ai.c `gen_major`/`gen_please`, all
+     the live set exceeds a half, overflowing it → corruption. Fix (love.c `gen_major`/`gen_please`, all
      `g->budget`-gated so the host is untouched): cap the major `to_len` by the budget (never below the tight
      `need`), and make the OOM path SOUND — retry at the tight size, use the spare only when `need <=
      major_len`, else a clean OOM scare (no overflow). The nursery cap is also tightened to reserve for the

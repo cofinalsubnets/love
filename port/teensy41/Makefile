@@ -27,14 +27,14 @@ te_rt := $(shell f=$$($(KCC) $(te_triple) $(te_fpu) -print-libgcc-file-name 2>/d
   [ -e "$$f" ] && echo "$$f" || \
   arm-none-eabi-gcc -mcpu=cortex-m7 -mthumb $(te_fpu) -print-libgcc-file-name 2>/dev/null)
 
-te_h = $(ai_h) $(wildcard *.h)
+te_h = $(love_h) $(wildcard *.h)
 lib_h = $(R)/out/lib/egg.h $(R)/out/lib/prel.h $(R)/out/lib/ev.h $(R)/out/lib/bao.h
 
 # Local arch sources (teensy41.c, main.c) stay rooted in cwd; the shared runtime
-# (ai.c, libc/) carries the $(R)/ prefix. Local rule is listed first so this
+# (love.c, libc/) carries the $(R)/ prefix. Local rule is listed first so this
 # main.c wins the object-name race against the top-level host main.c.
 te_local_c = $(wildcard *.c)
-te_shared_c = $(ai_c) $(c_c)
+te_shared_c = $(love_c) $(c_c)
 te_local_o = $(te_local_c:%.c=$(o)/%.o)
 te_shared_o = $(te_shared_c:$(R)/%.c=$(o)/%.o)
 te_o = $(te_local_o) $(te_shared_o)

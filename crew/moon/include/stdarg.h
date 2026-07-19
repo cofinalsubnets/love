@@ -2,7 +2,7 @@
  * forms directly, over the target's real va_list -- the System V AMD64 24-byte
  * struct or the AAPCS64 32-byte one -- fed by cc's variadic prologue from a
  * register save area. both are an array of one so a va_list DECAYS to a pointer
- * when passed to another function (the C `va_list` habit -- ai.c's gvzprintf/
+ * when passed to another function (the C `va_list` habit -- love.c's gvzprintf/
  * ai_pushr take one), and va_arg mutates the shared state. the field LAYOUT
  * matches gcc's on each target, so a cc-compiled variadic function (ai_push) is
  * callable from gcc-built objects and vice versa. (on aarch64 gcc's va_list is

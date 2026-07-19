@@ -54,9 +54,9 @@ KCC_IS_CLANG := $(shell $(KCC) --version 2>/dev/null | grep -qiw clang && echo 1
 k_arch_c = $(wildcard $(R)/port/inle/$a/*.c)
 k_asm = $(wildcard $(R)/port/inle/$a/*.asm)
 k_free_c = $R/port/inle/kmain.c
-k_shared_c = $(ai_c) $(f_c) $(c_c)
+k_shared_c = $(love_c) $(f_c) $(c_c)
 k_S = $(wildcard $(R)/port/inle/$a/*.S)
-k_h = $(ai_h) $(wildcard *.h $(R)/port/inle/*.h $(R)/port/inle/$a/*.h)
+k_h = $(love_h) $(wildcard *.h $(R)/port/inle/*.h $(R)/port/inle/$a/*.h)
 
 k_odir = $(ko)/$a$(ksuf)
 
@@ -71,7 +71,7 @@ k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_S_o) $(k_asm_o)
 # limine memmap into kram_words and sets budget = kram_words/8 after ai_ini (the Appel knob). Without
 # that bound the nursery's copy-overhead resizer grows unbounded and gen_major's worst-case (all-survive)
 # sizing then asks kmallocw for a contiguous block bigger than the largest physical RAM range -> OOM.
-# See gen_please (ai.c) and the budget wiring (kmain.c).
+# See gen_please (love.c) and the budget wiring (kmain.c).
 kcflags = $(ai_cflags) -nostdinc -ffreestanding -fno-lto -fno-PIC \
   -ffunction-sections -fdata-sections
 kldflags := -static -nostdlib --gc-sections -T $(R)/port/inle/$a/$a.lds -z max-page-size=0x1000
@@ -88,7 +88,7 @@ ifdef K_TEST
 # qemu gdbstub): not a hang but a #PF, the GC's terminator scan following a tag-2
 # young-pointing terminator off the heap (gcp gets a terminator as a field because
 # range-gated tagp missed it). The kmallocw layout triggered it; glibc/host didn't.
-# Fixed by range-independent terminator recognition (tagl/in_live_pool in ai.c), so
+# Fixed by range-independent terminator recognition (tagl/in_live_pool in love.c), so
 # the test gate now exercises tco=1 like everything else. love0 stays the trampoline lane.
 kcppflags += -DK_TEST -Dai_tco=1
 endif
@@ -128,7 +128,7 @@ $(ko)/love-$a$(ksuf).elf: $(R)/port/inle/$a/$a.lds $(k_o)
 	@mkdir -p "$(dir $@)"
 	@$(KLD) $(kldflags) $(k_o) -o $@
 
-# Shared C sources (ai.c, port/quay/, c/) + per-arch port//.
+# Shared C sources (love.c, port/quay/, c/) + per-arch port//.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h; under INLE
 # the baked agent out/lib/inle.h.
 $(k_odir)/%.o: $(R)/%.c $(k_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/uu.h out/lib/bao.h $(if $(K_TEST),out/lib/ktests.h) $(if $(INLE)$(NETAGENT)$(NETBRAIN),out/lib/inle.h)
@@ -137,7 +137,7 @@ $(k_odir)/%.o: $(R)/%.c $(k_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib
 	@$(kcc) -c $< -o $@
 
 # l.o carries the version string (love_version.h); recompile it when the id changes.
-$(k_odir)/ai.o: out/lib/love_version.h
+$(k_odir)/love.o: out/lib/love_version.h
 
 $(k_odir)/%.o: $(R)/%.S $(k_h)
 	@echo AS	$@
@@ -262,7 +262,7 @@ init-container: host
 # PASSES (1708/1708 in ~2.5s). Two bugs were behind the long-parked hang:
 #  (1) the cooperative scheduler deadlocked -- a task blocked in `(wait p)` was
 #      saved by yield_sw parked on the kernel's serial input fd (a stale
-#      next_wait_fd), so find_runnable never rescheduled it (fixed in ai.c
+#      next_wait_fd), so find_runnable never rescheduled it (fixed in love.c
 #      lvm_wait: clear next_wake_at/next_wait_fd before yielding);
 #  (2) five float-sqrt asserts failed because libc/math.c pow(x,0.5) used
 #      exp(0.5*log x) (drifts a few ULP) instead of the exact Newton sqrt(), and

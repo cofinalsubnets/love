@@ -1,4 +1,4 @@
-#include "ai.h"
+#include "love.h"
 // The build's version string (the version-control id), generated into out/lib/love_version.h by
 // the Makefile and surfaced in the runtime as the `love-version` global (ai_ini_0).
 // Optional include so a standalone/unwired compile still builds; falls back to "unknown".
@@ -225,7 +225,7 @@ lvm(lvm_cbin, int);
 // here when an operand is a ai_O array, so each element op runs the promoting
 // scalar dispatch (exact bignum results) instead of the typed raw-C lanes.
 lvm(lvm_obin, int);
-// data-kind recovery (datp/typ): ai_typ/in_data now live in ai.h as a direct
+// data-kind recovery (datp/typ): ai_typ/in_data now live in love.h as a direct
 // compare against the sentinel addresses -- no generated header, no section.
 //
 // The data-kind sentinels: each is the first word (ap) of a data kind's heap
@@ -274,7 +274,7 @@ static ai_inline bool formp(word _) { return chainp(_); }
 // kinds that need one. The bytes live in an ordinary ai_str we mutate in place
 // (cf. the `to` output port). Earned by the build tools that back-patch a
 // binary image in place. Recognized by ap, like iop() for ports.
-// (struct ai_buf -- the 2-word wrapper -- now lives in ai.h, the buf's public face.)
+// (struct ai_buf -- the 2-word wrapper -- now lives in love.h, the buf's public face.)
 static ai_inline bool bufp(word _) { return lamp(_) && cell(_)->ap == lvm_buf; }
 // a TOAST: an opaque executable handle (toasted native code). A hot like a buf, but a
 // DISTINCT ap so it is not bufp -- no peep/pin/blit/tally as data; only `call` runs it.
@@ -682,12 +682,12 @@ static ai_inline struct ai_str *ini_str(struct ai_str *s, uintptr_t len) {
 // suffices and we NEVER heap-allocate a zero-length one (str0/strin/the reader and
 // the `+` string lane all hand back ai_str_empty). Predicates read `ap`, so it
 // behaves as a normal string value; the FAM `bytes[]` is simply absent (len 0).
-// External linkage (declared in ai.h with the EmptyString macro) so the
+// External linkage (declared in love.h with the EmptyString macro) so the
 // frontends can return it too (e.g. host_run's empty-output capture). (the
 // empty SYMBOL died in the one-nothing round: () reads as 0.)
 const struct ai_str ai_str_empty = { .ap = lvm_str, .len = 0 };
 // () -- the one serial-0 mint, shared by every core (serial 0 is never drawn, so
-// it is unique + least in the order). See the ZeroPoint macro in ai.h.
+// it is unique + least in the order). See the ZeroPoint macro in love.h.
 const struct ai_mint ai_mint_zero = { .ap = lvm_sym, .code = 0 };
 
 
@@ -881,7 +881,7 @@ nifs(native_implemented_function);
 static lvm(_lvm_yield_c) { return Pack(g), g; }
 static union u const yield_c[] = { {_lvm_yield_c} };
 
-// lvm_help: the default help ap, a first-class vm ap (declared in ai.h with
+// lvm_help: the default help ap, a first-class vm ap (declared in love.h with
 // ret0/cur/port_io). A raise enters it with the raised status encoded into g
 // (see ghelp2 below). The MORE bit is read control flow, not a scare: the
 // raise site left [resume port sentinel] on the stack (the read protocol), so
@@ -905,7 +905,7 @@ lvm(lvm_help) {
 static union u const raise_c[] = { {lvm_help} };
 
 // ghelp2/ghelp are defined after numap_drive (the help call frame runs
-// through its 3-arg twin); declared in ai.h.
+// through its 3-arg twin); declared in love.h.
 
 static struct ai_def const def1[] = { nifs(niff) insts(i_entry)};
 
@@ -3150,7 +3150,7 @@ static ai_inline struct ai_port_vt const *port_vt(word fd_tagged) {
  return fd >= 0 ? &ai_fd_port_vt : &synth[-(fd + 1)]; }
 
 // --- the buffered lanes (generic, above the vt) ------------------------------
-// a HEAP fd port is an ai_bio (ai.h): both buffer lanes ride behind the bare
+// a HEAP fd port is an ai_bio (love.h): both buffer lanes ride behind the bare
 // ai_io head, dressed lazily and invisible everywhere else. bio_of is the ONE
 // guard -- heap (traced, so a backing survives GC) AND fd >= 0 (synth ports
 // overlay their own fields past the head; statics are untraced) -- nothing
@@ -3246,7 +3246,7 @@ static ai_inline struct ai *zeof(struct ai*g) {
  struct ai *fc = ai_core_of(g);
  if (bio_rpending(bio_of(g, fc->io))) return fc->b = false, g;
  return port_vt(fc->io->fd)->eof(g); }
-// the exported faces (ai.h): a host nif consults/drains the read run without
+// the exported faces (love.h): a host nif consults/drains the read run without
 // knowing the bio shape -- swig's first course rides these.
 uintptr_t ai_io_pending(struct ai *g, struct ai_io *i) {
  struct ai_bio *b = bio_of(g, i);
@@ -3323,7 +3323,7 @@ static struct ai *to_putc(struct ai *g, int c) {
  return g; }
 static struct ai *to_flush(struct ai *g) { return g; }
 
-// the bulk lanes (ai_port_vt's writen/readn contract lives in ai.h): a sink
+// the bulk lanes (ai_port_vt's writen/readn contract lives in love.h): a sink
 // lands what fits in the CURRENT backing and answers 0 when full (the caller
 // putc's one byte -- to_putc grows, maybe GCs -- then retries); a C-string
 // source hands over the run it has, -1 when it's spent.
@@ -3434,7 +3434,7 @@ static struct ai*ioputs(struct ai*g, char const *s) {
  while (*s) g = ioputc(g, *s++);
  return g; }
 
-// the terminal scare face (declared in ai.h): an helpless scare's stashed
+// the terminal scare face (declared in love.h): an helpless scare's stashed
 // condition data prints as ";; a b" -- the shell help's face -- to the err
 // port; the bare scare (nil nil) is oom, which has no data: answer 0 and let
 // the frontend report it raw. best-effort: a failure mid-print just stops.
@@ -4025,7 +4025,7 @@ static void io_close(void *p) {
 // the dispatcher routes through ai_fd_port_vt, so the host's read/write
 // methods see this port like any other.
 struct ai *ai_io_alloc(struct ai *g, int fd) {
- uintptr_t const n = Width(struct ai_bio);     // a heap fd port carries the buffer lanes (ai.h)
+ uintptr_t const n = Width(struct ai_bio);     // a heap fd port carries the buffer lanes (love.h)
  if (ai_ok(g = ai_have(g, n + Width(struct ai_tag) + Width(struct ai_fz) + 1))) {
   union u *k = bump(g, n + Width(struct ai_tag));
   struct ai_bio *io = (struct ai_bio*) k;
@@ -5881,7 +5881,7 @@ static lvm(lvm_add_string) {
 static lvm(lvm_0) {                             // unsupported mix (array <-> string)
  return *++Sp = ZeroPoint, Ip++, Continue(); }
 
-// The fundamental value kind for generic-op dispatch (enum q in ai.h): a fixnum is
+// The fundamental value kind for generic-op dispatch (enum q in love.h): a fixnum is
 // the odd tag (KCharm), a non-data heap pointer is a thread/function (KHot), else ai_typ
 // gives the data kind. The refinement: a vec is always a rank>=1 array now (the
 // scalar gems wide/float/complex carry their own sentinels and ai_typ gives them
@@ -6032,7 +6032,7 @@ static lvm(data_pair_apply) {
 
 // === the two generic-op dispatch matrices (+ and *), adjacent ==============
 // All indexed by ai_kind. The kind
-// order (ai.h) makes each lane a contiguous block: [KCharm..KArrO] arithmetic (the
+// order (love.h) makes each lane a contiguous block: [KCharm..KArrO] arithmetic (the
 // scalar GEM tower charm/wide/float/complex/big, the vec sentinel, then the parallel
 // array tower arrZ/arrR/arrC/arrO), then [KString..KChain] sequence, then KMap, then KHot.
 // The rows below are NAMED-index (NUMK + the five) -- adding a kind can't shift a column.
@@ -7827,7 +7827,7 @@ static intptr_t vcmp_int(int op, intptr_t a, intptr_t b) {
 
 // === ordered comparison: a total order over lisp values ======================
 // `< <= > >=` extend across EVERY kind, not just numbers. The CROSS-kind order is
-// the enum q type lattice (ai.h) -- fixnum/number LOW, lambda HIGH, the very
+// the enum q type lattice (love.h) -- fixnum/number LOW, lambda HIGH, the very
 // order the generic-op matrix diagonals encode: number < string < symbol < chain <
 // map < lambda. (Arrays are the exception: an array operand compares ELEMENTWISE -> a
 // 0/1 mask via lvm_vbin, never the scalar order.) WITHIN a kind:

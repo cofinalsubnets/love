@@ -1,4 +1,4 @@
-/* the data tail, ai.c-shaped: arrays of unions/structs holding function
+/* the data tail, love.c-shaped: arrays of unions/structs holding function
    pointers, labels under integer casts ((word)f -- the nif/def tables), NULL
    members, and macro-computed constants ((Bits>>3), putcharm) folding into
    images. */

@@ -477,7 +477,7 @@ Proof. intro a. exact (st_beta (Var 0) a). Qed.
 Theorem beta_const : forall a, step (App tm_zero a) tm_one.
 Proof. intro a. exact (st_beta (Lam (Var 0)) a). Qed.
 
-(* THE BETA BRIDGE that closure `=` observes (ai.c clo_eq / nf_hash): a held redex --
+(* THE BETA BRIDGE that closure `=` observes (love.c clo_eq / nf_hash): a held redex --
    a partial-app (App (Lam b) a), the captured arg a sitting in the closure -- and its
    contractum (subst 0 a b, the no-capture residual) are identified by value `=` and the
    α-hash. This is SOUND and decidable precisely because it is ONE st_beta step, already in

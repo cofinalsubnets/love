@@ -12,7 +12,7 @@ commits. you steer; the dock is the wheel.
 ## what love is
 
 a fully-curried language with an infix, low-paren surface that factors down to a
-tiny lisp core, over a tiny generic C runtime (`ai.c` + `ai.h`) plus a self-hosting
+tiny lisp core, over a tiny generic C runtime (`love.c` + `love.h`) plus a self-hosting
 compiler written in love itself (the
 `love/{prel,ev,bao}.l` layers). every value is a total one-argument function;
 integers are church numerals; `+`/`*` are generic; truth is the sign of a
@@ -40,7 +40,7 @@ isolated binary does. when they differ, the binary wins.
    open). a high `bug` is gold -- the memory bugs were made of host-vs-love0
    divergences. or take a task the steering human hands you.
 2. **understand.** `(look "path")` reads source; `(sh (L "git" "log" "--oneline" "-20"))`
-   and `(sh (L "grep" "-rn" "PAT" "ai.c"))` orient you. probe small.
+   and `(sh (L "grep" "-rn" "PAT" "love.c"))` orient you. probe small.
 3. **edit.** `(lay "path" body)` writes a tree file. keep changes small and
    local; match the surrounding voice (cozy, lowercase, green-framed).
 4. **gate.** `(rebuild ())` builds and runs `make test` -- the gate is host +
@@ -60,7 +60,7 @@ isolated binary does. when they differ, the binary wins.
 - `+`/`*` are DYADIC: `(+ 1 2 3)` is `((+ 1 2) 3)` = application, not a 3-way
   sum -- so it church-exponentiates. always nest byte/number math pairwise.
 - a corpus test that spins a task must `(catch ...)` it, or an orphan stalls.
-- editing `ai.c`/`ai.h` needs no clean; a reader/opfix change re-derives the
+- editing `love.c`/`love.h` needs no clean; a reader/opfix change re-derives the
   lcat'd headers -- if a build looks stale or hangs, `(sh (L "rm" "-f" ...))`
   the stale `out/lib/*.h` and rebuild.
 

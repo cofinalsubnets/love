@@ -303,7 +303,7 @@
    (dirname t) (? ((kof t) = 'kw) (show (vof t)) (vof t))   ; #if/#else lex as keywords -> their text
    (condactive cond) (? (! (two? cond)) 1 (cap (cap cond)))
    (parentactive cond) (? (! (two? cond)) 1 (cap (cap cond)))
-   ; buf accumulates REVERSED (a cat per line re-copies the whole run -- ai.c's
+   ; buf accumulates REVERSED (a cat per line re-copies the whole run -- love.c's
    ; longest directive-free run is ~50k tokens); flush restores source order.
    (flush buf macs out) (revcat (expand (rev buf) macs) out)
    (cppgo toks macs cond buf out incf)
@@ -389,14 +389,14 @@
                ; lets gnulib take its _Static_assert lane (verify.h) not a fallback trick.
                _ (pin t "__STDC_VERSION__" `('obj `((tok 'num 201112 0))))
                ; HOSTED: a cc-built object links against libc into a hosted program,
-               ; so ai.c must take its hosted lanes -- the W^X mmap+mprotect code
+               ; so love.c must take its hosted lanes -- the W^X mmap+mprotect code
                ; arena (toast/nif), NOT the freestanding heap copy (which is NX, so
                ; a glazed native body jumped into non-executable heap and faulted).
                ; the whole tco=0 corpus missed it: the glaze is the only arena user
                ; and it's gated off on trampoline builds.
                _ (pin t "__STDC_HOSTED__" `('obj `((tok 'num 1 0))))
                ; the ARCH predefine (__x86_64__ / __aarch64__) is the DRIVER's:
-               ; cc.l prepends it as a -D-style define by target (ai.c's AI_ARCH/
+               ; cc.l prepends it as a -D-style define by target (love.c's AI_ARCH/
                ; IMAGE_ARCH read it -- a build without one believed its arch was
                ; "other" and the glaze handed holo an unknown target).
                ; __SIZEOF_INT128__ stays UNDEFINED on both, so the bignum limbs

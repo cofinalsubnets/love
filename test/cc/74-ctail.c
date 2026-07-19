@@ -1,4 +1,4 @@
-/* stage 7c-iii: the C-feature tail ai.c exercises -- sizeof(expr), bare void
+/* stage 7c-iii: the C-feature tail love.c exercises -- sizeof(expr), bare void
    return, folded/EOF case labels, function-pointer casts, function-type
    typedefs, multi-declarator typedefs, and object-vs-function macros. */
 #ifndef EOF

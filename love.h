@@ -1,5 +1,5 @@
-#ifndef _ai_h
-#define _ai_h
+#ifndef _love_h
+#define _love_h
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -100,7 +100,7 @@ struct ai_str {
 // a buf (the surface's cask): mutable bytes behind a 2-word wrapper whose ap is
 // lvm_buf (recognized by ap, like ports). The PUBLIC FACE, here so a host nif
 // file can wrap a C struct's bytes in a cask (host/cb.c does); the buf machinery
-// itself stays in ai.c.
+// itself stays in love.c.
 struct ai_buf { lvm_t *ap; struct ai_str *str; };
 // a mint: a bare nameless point -- just the hot and its serial. Named syms are
 // the (name . mint) chains now, so a mint carries NO name (the old `nom` field
@@ -220,7 +220,7 @@ struct ai {
                   // (lvm_numap/numtap, data_num_apply) -- no per-call sym_probe + book
                   // lookup. GC-traced (v0..end). Unsealed = nil -> hot_hook traps, never
                   // a wild read. (`+`/`*` of functions need no hook: their combinators are
-                  // the immortal constant threads stack_thread/compose_thread in ai.c.)
+                  // the immortal constant threads stack_thread/compose_thread in love.c.)
    ai_word hot_opfix; // the operator factor pass, sealed the same way (the prel's
                   // SECOND (seal-hooks) call, after opfix exists) -- ai_eval reads
                   // the field, so a book rebind can't reach the C compile lane;
@@ -247,7 +247,7 @@ struct ai_def { char const *n; intptr_t x; };
 // name with AI_NIF("name", nif_body) -- the entry lands in the `ai_nifs` section
 // and main()'s boot drains [__start_ai_nifs, __stop_ai_nifs) via ai_defn. So an
 // app thread adds nifs in its OWN host/<app>.c (auto-globbed + auto-registered)
-// without editing ai.c, ai.h, or main.c's table. No linker script: the toolchain
+// without editing love.c, love.h, or main.c's table. No linker script: the toolchain
 // auto-defines the bracket symbols (Linux __start_/__stop_; mach-o section$).
 #if defined(__APPLE__)
 extern struct ai_def const __start_ai_nifs[] __asm("section$start$__DATA$ai_nifs");
@@ -339,7 +339,7 @@ struct ai
  *ai_evals_(struct ai*, const char*),
  *ai_defn(struct ai*, struct ai_def const*, uintptr_t);
 
-// the heap-image snapshot CODEC (ai.c, stdio-free): save compacts g and serializes
+// the heap-image snapshot CODEC (love.c, stdio-free): save compacts g and serializes
 // {header, blob} into a fresh g->alloc'd buffer (free it with g->alloc(g, buf, 0)); load
 // reconstructs a fresh g from such a buffer, or NULL on any mismatch (the caller boots
 // normally). The host wraps these with file I/O (host/image.c). Buffer-based so a
@@ -428,7 +428,7 @@ struct ai_chain { lvm_t *ap; intptr_t a, b; };
 // caps the sequence lane; KMap is the map's own rung just under KHot (a map is still a
 // lookup lambda for +/*/apply -- the rung exists for the dispatch matrix's honest cells).
 // This enum is the DISPATCH order ONLY. The total COMPARE order is a SEPARATE remap --
-// cmp_rank in ai.c -- which reseats string just below the number band and the KArrO tray
+// cmp_rank in love.c -- which reseats string just below the number band and the KArrO tray
 // just BELOW chain (point < string < number < tray < chain < map < hot). The two coincide
 // only on the chain < map < hot tail; do NOT read this enum as the compare order.
 // KN is the matrix dimension.
@@ -450,7 +450,7 @@ extern const struct ai_mint ai_mint_zero;
 #define ZeroPoint ((word) &ai_mint_zero)
 void ai_wait_fds(int const *fds, int n, uintptr_t ticks);
 bool ai_ready(int fd), ai_strp(ai_word);
-uintptr_t ai_calloutresume(void);  // address of the WALKABLE call-out resume drive (ai.c callout_resume)
+uintptr_t ai_calloutresume(void);  // address of the WALKABLE call-out resume drive (love.c callout_resume)
 uintptr_t ai_calloutdrive(void);   // address of the stackless call-out drive (the glaze bakes it as an immediate)
 struct ai
  *ai_please(struct ai*, uintptr_t),
@@ -466,21 +466,21 @@ lvm(lvm_gc, uintptr_t);
 // ai_kind maps any value to its enum q: KCharm for a fixnum, KHot for a non-data heap
 // pointer (thread/function/map), else ai_typ's data kind -- refined for a rank>=1 vec,
 // which expands by element tier to KArrZ..KArrO (a rank-0 box stays KVec). Lives in
-// ai.c (it needs ai_typ from the generated data.h) and is shared by data.c's apply
+// love.c (it needs ai_typ from the generated data.h) and is shared by data.c's apply
 // sentinels. Both the `+`/`*` matrices and the apply matrix dispatch on this.
 enum q ai_kind(word);
 // (Apply is no longer a table: each data sentinel tail-jumps straight to its apply
-// handler in ai.c -- the sentinel already encodes the kind, and the apply was uniform
+// handler in love.c -- the sentinel already encodes the kind, and the apply was uniform
 // in the argument kind, so the old ai_apply_mx[ai_typ][ai_kind] was pure indirection.)
 extern union u const numap_drive[];          // [ap; swap; ret0] driver that runs (num-ap n x); shared by fixnum + data num apply
-lvm_t lvm_ap, lvm_chain, lvm_vec, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_flo, lvm_wide, lvm_cbox; // the data-kind sentinels (+ ap); defined in ai.c, read by inline predicates and ai_typ
+lvm_t lvm_ap, lvm_chain, lvm_vec, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_flo, lvm_wide, lvm_cbox; // the data-kind sentinels (+ ap); defined in love.c, read by inline predicates and ai_typ
 // ai_typ recovers a data value's kind by comparing its first word (ap) against
 // the sentinel addresses. A tiny compare on the COLD apply path (only reached
 // when a data value is applied). This replaces the old ai_data ELF-section
 // slot-index trick (data.c + tools/gen_data + data.ld + a reflected, generated
 // data.h + data_boot.o), which existed solely to turn this compare into one
 // shift -- all that build machinery for a couple of cold divisions. The
-// sentinels are now ordinary functions in ai.c; there is no section, no stride,
+// sentinels are now ordinary functions in love.c; there is no section, no stride,
 // no reflection, no platform split (this is what __APPLE__/wasm already did).
 static ai_inline bool in_data(void *a) {
  lvm_t *p = (lvm_t*) a;
@@ -510,7 +510,7 @@ static ai_inline struct ai_chain *ini_chain(struct ai_chain *w, intptr_t a, intp
  return w->ap = lvm_chain, w->a = a, w->b = b, w; }
 static ai_inline struct ai *encode(struct ai *g, enum ai_status s) { return
   (struct ai*) ((uintptr_t) g | s); }
-// Raise: to the global `help` function when installed, else raise_c (ai.c).
+// Raise: to the global `help` function when installed, else raise_c (love.c).
 // ghelp re-raises an already-tagged g's own status.
 struct ai *ghelp2(struct ai*, enum ai_status), *ghelp(struct ai*);
 static ai_inline struct ai *ai_have(struct ai *g, uintptr_t n) {

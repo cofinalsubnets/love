@@ -6,7 +6,7 @@
 // the page drains via ai_out_ptr/len/reset; stdin always reads EOF (the
 // REPL feeds source through ai_eval, not the stdin port). boot.l is
 // embedded and evaluated once by ai_init.
-#include "ai.h"
+#include "love.h"
 #include <emscripten.h>
 #include <time.h>
 #include <stdlib.h>

@@ -16,7 +16,7 @@
 # generated out/lib/*.h headers stay PINNED to canonical out/host paths and
 # plain $(CC): love0 never goes musl.
 ho = out/host$(hsuf)
-h_o = $(ai_c:$(R)/%.c=$(ho)/%.o)
+h_o = $(love_c:$(R)/%.c=$(ho)/%.o)
 # host/*.c: per-app host-nif files (auto-globbed, auto-registered via AI_NIF).
 # Linked DIRECTLY into the binary (not via liblove.a) so the ai_nifs section is
 # never archive-collected. Drop a host/<app>.c in and it builds -- no rule edit.
@@ -29,7 +29,7 @@ host_o = $(patsubst host/%.c,$(ho)/host/%.o,$(wildcard host/*.c))
 host_cc = $(if $(STATIC),$(if $(cc_user),$(CC),musl-clang),$(CC))
 hcc = $(host_cc) $(ai_cflags) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Iout/lib
 # whole-archive flag differs by linker (ld64 vs GNU ld); ai_typ is now a plain
-# compare in ai.h, so there is no data.ld / generated data.h on any platform.
+# compare in love.h, so there is no data.ld / generated data.h on any platform.
 ifeq ($(shell uname -s),Darwin)
 so_archive = -Wl,-force_load,$(ho)/liblove.a       # ld64's whole-archive
 # the host contract (ai_clock, ai_fd_port_vt, ai_stdin/out/err -- defined in
@@ -137,12 +137,12 @@ $(ho)/liblove.so: $(ho)/liblove.a
 # prel/ev/egg/repl + the test corpus), all produced without an interpreter --
 # hence -Iout/lib. Per-object into $(ho)/0/ so ccache caches each TU.
 gl0_cc = $(CCACHE) $(CC) $(ai_cflags) -DGL_BOOTSTRAP -Dai_tco=0 -I. -Iout/lib
-love0_o = out/host/0/main.o $(ai_c:$(R)/%.c=out/host/0/%.o)   # PINNED (not $(ho)/0)
-out/host/0/main.o: host/main.c $(ai_h) $(gl0_h)
+love0_o = out/host/0/main.o $(love_c:$(R)/%.c=out/host/0/%.o)   # PINNED (not $(ho)/0)
+out/host/0/main.o: host/main.c $(love_h) $(gl0_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(gl0_cc) -c $< -o $@
-out/host/0/%.o: $(R)/%.c $(ai_h)
+out/host/0/%.o: $(R)/%.c $(love_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(gl0_cc) -c $< -o $@
@@ -151,14 +151,14 @@ $(love0): $(love0_o)
 	@mkdir -p $(dir $@)
 	@$(CC) $(ai_cflags) -o $@ $(love0_o)
 
-# ai.c -> out/host/*.o
-$(ho)/%.o: $(R)/%.c $(ai_h) $(ho)/.hostcc
+# love.c -> out/host/*.o
+$(ho)/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -c $< -o $@
 
 # l.o carries the version string (love_version.h); relink it when the id changes.
-$(ho)/ai.o $(ho)/0/ai.o: out/lib/love_version.h
+$(ho)/love.o $(ho)/0/love.o: out/lib/love_version.h
 # host/main.o bakes the lcat lib headers inline (egg + prel/ev/cli/bao -- bao is the
 # baked shell core now, subsuming the old repl.h). Now that it rides the host/*.c
 # glob (compiled once, not recompiled on every link, as the old inline `$(hcc)

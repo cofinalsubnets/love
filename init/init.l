@@ -22,7 +22,7 @@
 ; global scope so the -e call finds `demos`/`real`.)
 ;
 ; what an ACTUAL pid1 still needs is small and core-clean (host/init.c via the AI_NIF
-; glob, no ai.c/ai.h edit -- the same discipline as ain/bao). DONE: fork/execve +
+; glob, no love.c/love.h edit -- the same discipline as ain/bao). DONE: fork/execve +
 ; the non-blocking waitpid reaper (spawn/hear). REMAINING: signalfd (SIGCHLD/SIGTERM
 ; become perceive events, merged with timers by ai_wait_fds exactly like {nic, clock}),
 ; mount (early /proc, /sys, devtmpfs), and the cgroup-v2 writes. everything BELOW that

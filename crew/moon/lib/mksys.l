@@ -5,7 +5,7 @@
 ;   __sigsetjmp / siglongjmp our own jmp_buf INSIDE the glibc-sized 25-long buffer:
 ;                            [0..5] rbx rbp r12 r13 r14 r15, [6] rsp, [7] rip,
 ;                            [8] the signal mask (rt_sigprocmask saves/restores it --
-;                            ai.c's fault barrier is sigsetjmp(env,1), the mask is load-bearing)
+;                            love.c's fault barrier is sigsetjmp(env,1), the mask is load-bearing)
 ;   __ai_sigret              the SA_RESTORER tail (rt_sigreturn) nolibc's sigaction installs
 ; (sqrt stays in C -- crew/moon/lib/math/am.c's am_sqrt, OURS and IEEE-exact; a thing
 ; C CAN say has no place here.) two targets: (mksys dst) lays x64, (mksys-arm64 dst)

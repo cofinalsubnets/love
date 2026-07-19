@@ -77,7 +77,7 @@ lint: $(ho)/love
 # just the core + the host CLI. test/cc are compiler test INPUTS (deliberate formatting),
 # crew/moon/include are libc-shaped headers, port/* is board code -- none house style, so
 # none are swept. `fmt-check` is the gate variant (exit 1 if anything is unformatted).
-FMT_FILES := ai.c ai.h $(wildcard host/*.c) $(wildcard host/*.h)
+FMT_FILES := love.c love.h $(wildcard host/*.c) $(wildcard host/*.h)
 fmt: $(ho)/love
 	@$(ho)/love $R/crew/moon/fmt.l -w $(FMT_FILES) && echo "fmt: formatted $(words $(FMT_FILES)) file(s)"
 fmt-check: $(ho)/love
@@ -130,7 +130,7 @@ out/host/flamegraph.svg: out/host/perf.data
 repl: host
 	@exec $m
 cloc:
-	cloc --by-file love ai.c ai.h main.c port tools test vim crew
+	cloc --by-file love love.c love.h main.c port tools test vim crew
 cat: clean all test
 cata: clean all test_all
 # Full clean rebuild, every frontend, all tests, then the corpus under valgrind.

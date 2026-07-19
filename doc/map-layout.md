@@ -10,7 +10,7 @@ numbers, and the why, so we don't re-litigate it.
 ## what love does today
 
 The map is **open-addressed, linear-probe**, with `(key, value)` slots **interleaved** in one
-backing: `[lvm_map_data, len, cap, k0,v0, k1,v1, …]` (ai.c, `map_slots`/`ai_mapput`). The hash is
+backing: `[lvm_map_data, len, cap, k0,v0, k1,v1, …]` (love.c, `map_slots`/`ai_mapput`). The hash is
 multiplicative — `rotl(mapmix * tagkey, 32) & mask`, `mapmix = 0x9e3779b97f4a7c15` — and it grows
 (doubling + rehash) at the **0.75 load factor**: `(len+1)*4 >= cap*3`. The glaze compiles the probe
 to native (`mprobe-ir`/`mpeep`/`mpin`) for the scan/bump/insert loops. With `(tablet n)` presizing

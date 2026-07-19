@@ -1,4 +1,4 @@
-/* the gcc builtins ai.c reaches: the overflow trio (op + seto, result through
+/* the gcc builtins love.c reaches: the overflow trio (op + seto, result through
    the pointer, flag the value), clzll (bsr ^ 63), expect (the value, hint
    dropped), isinf (bits<<1 == inf<<1), inf/nanf constants, trap (= ud2,
    not exercised here), clear_cache (a no-op on coherent x86). */

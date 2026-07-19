@@ -56,7 +56,7 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
 - Bar (gwen 2026-07-14): **THIS cut = battery + link-and-run** — hand-written `.s` snippets byte-identical
   to `/usr/bin/as`, then linked via link.l into binaries that run; the instruction tail grows one snippet
   at a time. **NEXT cut = `mooncc -S` round-trip** (teach mooncc an asm-text emitter, prove `mooncc -S | as` ==
-  `mooncc -c` byte-for-byte). North star (later): assemble real `gcc -S ai.c` → boot (needs link.l foreign-obj
+  `mooncc -c` byte-for-byte). North star (later): assemble real `gcc -S love.c` → boot (needs link.l foreign-obj
   features — .eh_frame/.bss/comdat it skips today).
 - Milestones: M1 ~15 core instrs → `.o` → link → runs (`.text` byte-diffed vs system as) · M2 width
   variants + memory operands + `.data`/relocs + **branch relaxation** (short/near) · M3 SSE + the long
@@ -141,7 +141,7 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
 - [ ] **kore-as-`cc`** — moon left the au/kore cat, so kore invoked as `cc` execs `mooncc`. No new PATH-walker needed: the `exec` nif IS `execvp` (host/main.c:334), which searches $PATH itself. kore's `cc` case builds argv `("mooncc" . args)` and `(exec …)`; on success it never returns, on absence it returns an errno fixnum (ENOENT) → fall back to `cc: mooncc not found` + quit 127
 - [x] **rename-all-the-way-down LANDED 2026-07-15** — `crew/cc/` → `crew/moon/`, `cc.l` → `moon.l`,
       `doc/cc.md` → `doc/moon.md`, the binary `aicc` → `mooncc` (+ `mooncc.image`, `bin/mooncc`), `cc-main`
-      → `moon-main`, `test_cc` → `test_moon`, `__aicc__` → `__mooncc__` (doc-only, the macro isn't in `ai.h`
+      → `moon-main`, `test_cc` → `test_moon`, `__aicc__` → `__mooncc__` (doc-only, the macro isn't in `love.h`
       yet). The math floor moved with it (`crew/moon/lib/math/am.c`, tracked through `common.mk`/`wasm`/`ulp`/
       `arm64check`). `make test` ×3 + `test_moon` green; `Cookfile` regenerated clean. Done ahead of the arm64
       batch (gwen's call — accepting the `crew/moon/` + `crew/holo/` merge friction with the in-flight arm64 work).

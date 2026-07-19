@@ -1,4 +1,4 @@
-/* SysV varargs: a va_list handed to a helper (the ai.c gvzprintf/ai_pushr shape),
+/* SysV varargs: a va_list handed to a helper (the love.c gvzprintf/ai_pushr shape),
    mixed int/double variadic reads through the register save area, and an array
    parameter decaying to a pointer. */
 #include <stdarg.h>

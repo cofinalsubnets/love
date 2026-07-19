@@ -9,7 +9,7 @@ emcc = $(CCACHE) $(EMCC)
 o = ../out/wasm
 
 # g.c was split into per-concern translation units (kernel/*.c); build them all.
-g_c = ../ai.c ../crew/moon/lib/math/am.c
+g_c = ../love.c ../crew/moon/lib/math/am.c
 g_h = $(wildcard ../*.h)
 
 # One object per source so an edit recompiles just that TU (and so ccache
@@ -43,22 +43,22 @@ all: love.js
 ../out/lib/egg.h ../out/lib/prel.h ../out/lib/ev.h ../out/lib/uu.h ../out/lib/love_version.h:
 	$(MAKE) -C .. out/lib/$(notdir $@)
 
-# ai.o bakes the version string (love_version.h, via ai.c's __has_include), so
-# regenerate it through the parent (force_version) and recompile ai.o when the
+# love.o bakes the version string (love_version.h, via love.c's __has_include), so
+# regenerate it through the parent (force_version) and recompile love.o when the
 # id changes -- mirrors the host build's l.o relink. Without this the browser
-# banner (love-version) drifts to whatever revision ai.o was last built at.
+# banner (love-version) drifts to whatever revision love.o was last built at.
 #
 # The committed love.js is ALWAYS built from a tree that love.js itself dirties, so
 # `git describe --dirty` would brand the page banner "-dirty" in perpetuity --
 # cosmetic, but it reads as broken. Map it to "-wasm" in a wasm-local copy (same
 # revision, honest "this is the browser build"); a clean tree just keeps the bare
-# id. Compile ai.o against it -- -I$(o) wins the "love_version.h" quote-include
+# id. Compile love.o against it -- -I$(o) wins the "love_version.h" quote-include
 # over ../out/lib, so the host build's honest -dirty is untouched.
 $(o)/love_version.h: ../out/lib/love_version.h
 	@mkdir -p $(dir $@)
 	@sed 's/-dirty"/-wasm"/' $< > $@
 
-$(o)/ai.o: ../ai.c $(g_h) $(o)/love_version.h
+$(o)/love.o: ../love.c $(g_h) $(o)/love_version.h
 	@mkdir -p $(dir $@)
 	$(emcc) -I$(o) $(CFLAGS) -c $< -o $@
 

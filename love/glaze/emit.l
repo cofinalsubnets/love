@@ -2,7 +2,7 @@
 ; closure to NATIVE machine code and installs it as a TRANSPARENT applicable value.
 ; This is "ev but faster": the result applies by juxtaposition ((f x), no verb), is
 ; =/show IDENTICAL to its source, and DEOPTS to the interpreter on overflow -- so
-; native is never wrong, only faster. The C seam is `nat` (ai.c): it W^X-installs
+; native is never wrong, only faster. The C seam is `nat` (love.c): it W^X-installs
 ; the bytes and wraps them in a closure cell [code, src, code, interp, lvm_ret, 0]
 ; whose value[-1]=src (=/show) and value[1]=interp (the deopt fallback).
 ;
@@ -59,7 +59,7 @@
    (mapkind _) (apof (tablet 0))                                                    ; lvm_map_lookup's sentinel, for the map-param entry guard + the (mpeep ..) probe
    (nomkind _) (apof 'nomk)                                                         ; lvm_nom's sentinel, for the point-param entry guard
    (mintkind _) (apof (nom 0))                                                      ; lvm_sym's (a mint's) sentinel, ditto -- () is a mint too
-   mapmix 11400714819323198485                                                      ; the hash multiplier 0x9e3779b97f4a7c15 (= ai.c's map hash mult), for the inline probe
+   mapmix 11400714819323198485                                                      ; the hash multiplier 0x9e3779b97f4a7c15 (= love.c's map hash mult), for the inline probe
    ; -- the map probe, via the crew/holo/ assembler SERVICE (baked into the post-egg layer; the glaze is its
    ;    client). crew/holo/ resolves the hit/miss/loop labels to rel32 -- no hand-counted je/jmp offsets, the
    ;    fragile bit. reg map: holo r0=rax, r7=x86-r8, r8=x86-r9, r9=x86-r10, r10=x86-r11. The probe wants
@@ -142,7 +142,7 @@
        (nif (emit (loopcode body 'i '+ '< 'x64)) (ev src) src 1))
    ; --- CALL-OUT BRIDGE, native side: the STACKLESS drive ------------------------------------------
    ; (jitcalloutsum clos) -- a native counted loop `(\ n (sum_{i<n} (clos i)))` that CALLS OUT to the
-   ; closure each iteration WITHOUT a re-entrant C frame. The call threads through callout_drive (ai.c,
+   ; closure each iteration WITHOUT a re-entrant C frame. The call threads through callout_drive (love.c,
    ; {lvm_ap, lvm_ret0}, address via `calloutdrive`): the blob builds a [arg, clos, retB] frame on Sp,
    ; points Ip at the drive, and TAIL-jumps; lvm_ap applies clos to the tagged counter, lvm_ret0
    ; delivers the result to retB -- the blob's own resume label `bb`, whose address is materialized

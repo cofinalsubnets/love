@@ -1276,7 +1276,7 @@
 ; --- re-declare member? through the glazed compiler: the recognizer's POINT-= grammar
 ; ((P = <..) over an entry-guarded nom|mint key) closes the singleton group, so the
 ; prel walker (egg-baked pre-glaze, interp) is re-stated here and autogroup hands back
-; the native -- mooncc walks 4.27M calls / 17.5M elements through it per ai.c compile.
+; the native -- mooncc walks 4.27M calls / 17.5M elements through it per love.c compile.
 ; Post-boot streams (the mooncc cat, the corpus) fold the native; egg-baked consumers keep
 ; the interp closure they already folded. Mirrors the ev rebind's gates: a re-load keeps
 ; the bake, a trampoline (tco=0) build stays interp. Charm keys deopt at the entry guard

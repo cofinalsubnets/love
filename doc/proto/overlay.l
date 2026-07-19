@@ -33,7 +33,7 @@
 ;     kinds.l with the LATTICE, JOIN, TRANSFER and LITERAL-KIND made USER-SUPPLIED
 ;     instead of hardwired to N<Z<R<C. Start by copying kinds.l and lifting `dom`
 ;     out as a parameter.
-;   * coins / dies (newtypes Stage 0, ~65 refs in ai.c) -- the RUNTIME face of a
+;   * coins / dies (newtypes Stage 0, ~65 refs in love.c) -- the RUNTIME face of a
 ;     die (a die + payload, riding +/*). Phase 0 does NOT use the runtime face:
 ;     see the scope decision below.
 ;   * the wev/opfix source->source prepass seam -- where a check pass hooks (it

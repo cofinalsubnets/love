@@ -5,7 +5,7 @@
 > juxtaposition (`(f x)`, no verb), `=`/`show`-identical to its source, and **deopting
 > to the interpreter on overflow** so it is never wrong, only faster. The bricks:
 >
-> - **`nat`** (nif, `ai.c`) — the install seam: emitted bytes → a TRANSPARENT
+> - **`nat`** (nif, `love.c`) — the install seam: emitted bytes → a TRANSPARENT
 >   applicable native closure. Cell `[code, src, code, interp, lvm_ret, 0]`, value at
 >   the 3rd word, so `value[-1]`=src (`fn_src`/printer/`salpha` → `=`/`show` see the
 >   source) and `value[1]`=interp (the deopt fallback). W^X arena with a finalizer.
@@ -72,7 +72,7 @@ That used to be a hard crash; it no longer is. On the host a signal barrier
 (`SIGSEGV`/`SIGILL`/`SIGBUS`/`SIGFPE` + `sigsetjmp`) turns a hardware fault into an
 ordinary love condition:
 
-- **`eat1`/`eat2`** wrap the native call in `eat_run` (`ai.c`, by `lvm_eat1`):
+- **`eat1`/`eat2`** wrap the native call in `eat_run` (`love.c`, by `lvm_eat1`):
   a fault in the body is caught and `eat` returns `0` — the non-buf value — so a
   bad body is survivable like any other error, never a core dump. The native body
   never touches love state, so this recovery is unconditional.
@@ -87,10 +87,10 @@ ordinary love condition:
 Host-only: the freestanding kernel has no signal layer (its fault vectors are a
 separate hookup), so there `eat` is still the raw trampoline. The one residual
 unrecoverable corner is a fault *mid-GC or mid-ring-mutation*, where the heap itself
-is inconsistent. See `call_run` / `g_eval` / `g_eval_fault_raise` in `ai.c`, and
+is inconsistent. See `call_run` / `g_eval` / `g_eval_fault_raise` in `love.c`, and
 the compile-gated `__fault` harness (`-DG_FAULT_TEST`).
 
-Both nifs live in `ai.c` — search `lvm_call` and `lvm_toast`; each is a few
+Both nifs live in `love.c` — search `lvm_call` and `lvm_toast`; each is a few
 lines of wiring (a forward-decl in the `lvm_t` block, the body, one nif-table
 entry; plus `toastp` and the `lvm_toasted` tag-ap). The host arena helpers
 (`code_maplen`, `code_unmap`) sit just above `lvm_toast` under `#if __STDC_HOSTED__`,

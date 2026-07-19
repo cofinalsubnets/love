@@ -21,7 +21,7 @@ expressions, and the false-folding `_Static_assert`s below now correctly FIRE. `
 goldens (both ternary directions, dead-arm div0, negative `&&`, `&&`/`||` both ways) plus the
 soundness asserts (the three that must fire, the negative-true that must not, and a genuinely
 non-constant assert still let by). `make test_moon` green; `test_raw` unregressed (no false
-assert in ai.c/host was silently riding the bug). The rest of this section is the record of what
+assert in love.c/host was silently riding the bug). The rest of this section is the record of what
 was wrong.
 
 The headline, because it is the only gap here that fails quietly. `cfold`

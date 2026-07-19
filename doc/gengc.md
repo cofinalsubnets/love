@@ -27,7 +27,7 @@ allocated (the un-recognized churn: `mapchurn` 82%, `revbig` 90%).
 
 ## The one insight that makes it small
 
-`gcp` (`ai.c:~1211`) forwards a word **only if it points inside `[p0, t0)`** —
+`gcp` (`love.c:~1211`) forwards a word **only if it points inside `[p0, t0)`** —
 the from-space bounds — and leaves every other word alone. So the minor collector
 is *already written*: point `p0`/`t0` at the **nursery** instead of the whole
 pool, and `gcp` copies young objects, leaves old objects in place (they fall
@@ -82,12 +82,12 @@ set needs care the two-pool flip gives for free in A. Defer.
 
 The barrier surface is **tiny**: the only in-place pointer mutation that can mint
 an old→young edge is a value pinned into a map/box — `ai_mapput`
-(`ai.c:~3927/3932`). Chains and arrays are immutable, casks hold bytes,
+(`love.c:~3927/3932`). Chains and arrays are immutable, casks hold bytes,
 numbers/strings are GC leaves, `pull`/`mapdel` only remove. So the barrier is one
 hot path: *when an old map takes a young value, remember the map.*
 
 The remembered set stores the **map header** (stable identity), not the backing
-or the slot — because `map_grow` (`ai.c:~3920`, and the sibling swap at `~4541`) swaps the backing
+or the slot — because `map_grow` (`love.c:~3920`, and the sibling swap at `~4541`) swaps the backing
 (`cell(m)[1].x = nb`), which is itself a header(old)→backing(young) edge created
 *outside* `ai_mapput`. Two clean ways to keep that edge from escaping:
 
@@ -106,7 +106,7 @@ runtime pure compute (even heavy map mutation) produces *zero* unbarried old→y
 edges, but the *compiler* mutates old objects in place by three routes a map
 barrier can't see:
 
-- **the reader** builds lists by set-tail (`ai.c:~3803` — `B(tail) = newcons`);
+- **the reader** builds lists by set-tail (`love.c:~3803` — `B(tail) = newcons`);
 - **ev** builds continuation **threads** by `poke` (`lvm_poke`), and **c0** builds
   threads + mutates its `struct env` scope in place;
 - the **task ring** splices a young yield/spawn snapshot into an existing node
@@ -137,11 +137,11 @@ minor only ever runs under a complete rem set — exactly the barrier
 Some kinds are born straight into old space, which dissolves the awkward minor-GC
 interactions rather than handling them:
 
-- **interned noms** → old. The weak intern table (`symbols_rebuild`, `ai.c:1012`)
+- **interned noms** → old. The weak intern table (`symbols_rebuild`, `love.c:1012`)
   is rebuilt only at a major; a minor never sees it, so a freshly interned symbol
   surviving a minor needs no table fix-up. (A nom referenced only by the weak
   table is meant to die — that is the major's job.)
-- **casks / ports / toasts** → old. Finalizers (`run_finalizers`, `ai.c:1032`)
+- **casks / ports / toasts** → old. Finalizers (`run_finalizers`, `love.c:1032`)
   run only at a major; a born-old finalizable object never dies in a minor, so a
   minor needs no finalizer pass.
 - **maps / boxes** → old. They are the *targets* of the barrier; keeping them old
@@ -166,7 +166,7 @@ the nursery moves.
 
 ## Sizing — a two-level `ai_please`
 
-Today `ai_please` (`ai.c:1078`) grows/shrinks the *whole* pool on a
+Today `ai_please` (`love.c:1078`) grows/shrinks the *whole* pool on a
 GC-time÷mutator-time ratio, keeping ≥¼ free. Generational splits the cost model:
 
 - **nursery size** is tuned for *pause* and *promotion rate*: big enough that
@@ -282,7 +282,7 @@ drops *witnesses* an incomplete barrier. So 3b is upgraded from demonstrated-on-
 example to proved-in-general. `rem_complete` itself is what `gen_audit` checks
 empirically on the real heap (0 misses across the corpus).
 
-A proof that ai.c's *pointer code* (`gcp` bounds, the tagged words, the two-space
+A proof that love.c's *pointer code* (`gcp` bounds, the tagged words, the two-space
 copy) REFINES this model is the larger separate effort — the place love's in-tree
 prover could eventually earn its keep, the same caveat `love/glaze/README.md` flags
 for a verified glaze.

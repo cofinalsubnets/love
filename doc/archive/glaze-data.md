@@ -91,8 +91,8 @@ Decomposed (us/it, this host):
   (steady) **325**, bump (`peep`+`pin`) **850**. The table *growth* is the cheap
   part. The bulk is per-key interpreted key-math `(+ 1 (* 97 i))` + the nif call +
   generic `peep`/`pin`, ×40000 across four passes. The hash fn (`rot(x*mix)`,
-  `ai.c:4508`), the 2-word open-addressed slots, and the `<3/4` load factor
-  (`map_min_cap=4`, `ai.c:263`; `ai_mapput`, `ai.c:4307`) are already good — this is
+  `love.c:4508`), the 2-word open-addressed slots, and the `<3/4` load factor
+  (`map_min_cap=4`, `love.c:263`; `ai_mapput`, `love.c:4307`) are already good — this is
   **dispatch**, not hashing.
 
 So the alloc-avoidance machinery already in the tree does **not** apply here:

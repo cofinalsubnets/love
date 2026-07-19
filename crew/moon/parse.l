@@ -9,7 +9,7 @@
 ; for gen's sizing. types: 'char 'short 'int 'long 'void | ('ptr t)
 ; | ('arr t n) | ('struct tag) -- unions flatten into 'struct entries whose
 ; offsets are all zero. anonymous struct/union MEMBERS splice their fields
-; into the parent (ai.h's habit). the AST as before, plus: ('dot e name)
+; into the parent (love.h's habit). the AST as before, plus: ('dot e name)
 ; (e->x desugars to (dot (deref e) x)), ('switch e items) with ('case v) and
 ; ('dflt) markers inline (fallthrough is the flat list), ('do body cond),
 ; ('goto name) ('lbl name), ('tdef) (a typedef, gen skips it). stage 4b adds
@@ -59,7 +59,7 @@
    ; to the top carrying no position, so we remember the deepest token any
    ; lookahead stood on and read the position back off THAT.
    ; ⚠ THE SUCCESSFUL PARSE MUST NOT PAY FOR THIS. there is no cheap mutable
-   ; scalar here -- a tablet peep+pin per lookahead cost +25% on ai.c -- so
+   ; scalar here -- a tablet peep+pin per lookahead cost +25% on love.c -- so
    ; only the RE-PARSE of an already-failing form runs on stamped tokens, and
    ; an unstamped one (every token of every parse that is going to succeed)
    ; costs mark a length test and nothing else. diagnostics are paid for out
@@ -975,8 +975,8 @@
    ; reads as an expression (not a cast), and a read of the local stays a var (not a
    ; folded number, which would also refuse as an lvalue). record (table name old);
    ; a typedef pins to 0 (not-a-type), an enum constant is PULLED (the fold site
-   ; tests charm?, and 0 is a charm); restore on block exit. ai.h makes `num`/`word`
-   ; typedefs and ai.c reuses `N` as a local over `enum { N = 13 }`.
+   ; tests charm?, and 0 is a charm); restore on block exit. love.h makes `num`/`word`
+   ; typedefs and love.c reuses `N` as a local over `enum { N = 13 }`.
    (declnames form) (? (&& (two? form) (<form = 'decl)) (map cap <>form) ())
    (shadow1 ps nm shadows)
     (: s1 (: old (peep (ps 'types) nm 'none)
@@ -1073,7 +1073,7 @@
    ; a comma-list of `*.. name (params)` function prototypes sharing one base type.
    ; each sibling's OWN stars ride into its sig's return slot -- dropping them read
    ; `struct ai *ai_strof(..)` as a struct-by-value return, and every host-TU call
-   ; to an mproto sibling refused (invisible from ai.c: the DEFINITIONS re-pin).
+   ; to an mproto sibling refused (invisible from love.c: the DEFINITIONS re-pin).
    ; registers each sig; answers (L rest-after-`;`) | ().
    (mproto ps base ts)
     (: (stars s ty) (: s2 (pquals s) (? (peekp s2 "*") (stars >s2 `('ptr ty)) `(ty s2)))
@@ -1146,7 +1146,7 @@
                       sr (stars ts0 base)
                       rty <sr ts1 (pquals <>sr)
                       ; the first declarator: a plain name, or a paren fn-pointer
-                      ; `(*name)(params)` (ai.c's ai_image_absguard) -- routed
+                      ; `(*name)(params)` (love.c's ai_image_absguard) -- routed
                       ; through pdtor like the comma declarators below; the
                       ; leading stars already rode into rty. -> (name rest ty),
                       ; ty () on the plain path (the declarator's type is rty)
@@ -1170,7 +1170,7 @@
                                         (? (peekp aft ";") `(`('proto name) (cup aft))
                                            ; more comma-separated declarators SHARING base -- each `* nm (params)`
                                            ; is another prototype (register its sig); ends at `;`. (`void *malloc
-                                           ; (size_t), free(void*)` / ai.h's `struct ai *ai_ini(void), *ai_ini_m(..)`)
+                                           ; (size_t), free(void*)` / love.h's `struct ai *ai_ini(void), *ai_ini_m(..)`)
                                            (peekp aft ",")
                                             (: rest (mproto ps base (cup aft))
                                                (? (two? rest) `(`('proto name) <rest) ()))
@@ -1223,7 +1223,7 @@
                                                   (: r (one (patt <>dr) (cap (cap dr)) (caup (cap dr)))
                                                      (? (two? r) (more <>r (link <r acc)) ()))))
                                             ; a declarator whose type is a FUNCTION type (a function-type
-                                            ; typedef: ai.h's `lvm_t lvm_ret0, lvm_cur, ..;`) DECLARES a
+                                            ; typedef: love.h's `lvm_t lvm_ret0, lvm_cur, ..;`) DECLARES a
                                             ; function -- register its sig (the typedef carries the return),
                                             ; lay NO storage (a gdecl here laid duplicate .data symbols)
                                             ; `;` ends the declaration -- PEEK for it: the remainder may

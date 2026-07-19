@@ -1,7 +1,7 @@
 // host/cuda.c -- the GPU backend's C boundary for tele's device seam. A device
 // PROBE (cuda-avail) plus the four kernel entry points the seam names: gemm, ew
 // (elementwise), reduce, transp. Auto-globbed + AI_NIF-registered, same discipline
-// as net.c/pty.c/init.c -- no ai.c/ai.h/main.c edit.
+// as net.c/pty.c/init.c -- no love.c/love.h/main.c edit.
 //
 // TWO builds, one file:
 //  * DEFAULT (no -DAI_CUDA): the probe reports 0 and the kernels are inert stubs.
@@ -11,11 +11,11 @@
 //  * -DAI_CUDA against a real device: the kernels dispatch to cuBLAS / hand
 //    kernels. Those bodies are sketched below and gated on ONE core change that is
 //    a core-thread task, NOT smuggled in here: the vec cell accessors
-//    (vec_data / ini_vec / vec_nelem) are static in ai.c today, so a nif cannot yet
+//    (vec_data / ini_vec / vec_nelem) are static in love.c today, so a nif cannot yet
 //    read/write a galaxy's float buffer. Until that's exported, the AI_CUDA bodies
 //    stay as the marshaling sketch -- the interface is frozen, only the kernel
 //    innards wait on the GPU (and that one export).
-#include "ai.h"
+#include "love.h"
 
 #ifdef AI_CUDA
 #include <cuda_runtime.h>

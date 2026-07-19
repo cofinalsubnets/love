@@ -5,7 +5,7 @@ set — bzip2, gzip, sed, grep, make, bash, coreutils, …) **with mooncc**, in 
 order, as a **conventional overlay over the love base system**. Two payoffs at once:
 
 - each real package drives mooncc through real-world C it has never seen, growing the
-  compiler the same way ai.c grew it (doc/moon.md's "gen choke list" — refuse a
+  compiler the same way love.c grew it (doc/moon.md's "gen choke list" — refuse a
   construct, add it, move on), and
 - the result is a familiar POSIX userland whose *entire toolchain underneath* is
   love/mooncc/holo — the "conventional overlay, love floor" the arc is aiming at.
@@ -34,14 +34,14 @@ shell/autotools bootstrap. Probed 2026-07-15 (`mooncc -c` per file):
 **A complete, working `bzip2` built entirely by mooncc.** Compress/decompress round-trips
 byte-perfect in BOTH file mode and `-c` stdout mode, the compressed bytes are **byte-identical
 to a gcc -O0 build**, and it interoperates BOTH ways with the system tool (system `bunzip2`
-decodes mooncc's output; mooncc decodes system `bzip2`'s). Linked with `gcc -no-pie` (the ai.c
+decodes mooncc's output; mooncc decodes system `bzip2`'s). Linked with `gcc -no-pie` (the love.c
 ladder's convention). So mooncc's codegen for the whole program — incl. decompress.c's
 nested-case coroutine (rung A) — is verified against gcc AND the real bzip2 format.
 
 **5 of 8 library files compile** with the landed header shims. The rungs:
 
 1. **missing `<ctype.h>`** — LANDED (`crew/moon/include/ctype.h`). mooncc ships headers
-   "sized to ai.c/host" (doc/moon.md); ctype was not one, and ai.c never needs it. bzip2's
+   "sized to love.c/host" (doc/moon.md); ctype was not one, and love.c never needs it. bzip2's
    `#include <ctype.h>` then **fell through to glibc's `/usr/include/ctype.h`**
    (GNU-extension-laden) and mooncc choked there. The 15-decl shim took crctable.c from
    refuse → a real 1947-byte `.o`.
@@ -101,7 +101,7 @@ The remaining rungs:
   (`crew/holo/obj.l`). Once bzip2.c compiled, the CLI's `-c` (write-to-stdout) mode SEGFAULTED.
   The localizer + `objdump` showed the cause: mooncc emitted `lea stdout(%rip)` with an
   **`R_X86_64_PLT32`** relocation — a *function-call* reloc — for `stdout`, which is external
-  DATA. The linker routed it through the PLT (a code stub), so the deref read garbage. ai.c
+  DATA. The linker routed it through the PLT (a code stub), so the deref read garbage. love.c
   never takes the address of an external data symbol (it uses raw `write(1,…)`), so this hid.
   Root: obj.l emitted PLT32 for ALL external refs, not distinguishing a `call`/`jmp` (control
   transfer, PLT32) from an `la`/`lea` (address-of, needs PC32). Fix: carry the byte preceding
@@ -118,7 +118,7 @@ The remaining rungs:
 The first real LFS package is **~a header-shim day** from compiling, not a rewrite. That
 validates the ladder: build a `crew/moon/include` that is self-contained + complete enough
 for third-party code (with `-nostdinc`), then walk the LFS order — each package adds a few
-header decls and, occasionally, one real parse/gen rung, exactly the ai.c grind.
+header decls and, occasionally, one real parse/gen rung, exactly the love.c grind.
 
 ## second rung, MEASURED: gzip 1.13
 
@@ -180,7 +180,7 @@ by its eightbyte classes — each eightbyte into a gp (`int`) or xmm (`sse`) reg
 combos (int:int, int:sse, sse:int, sse:sse). Arch-correct: x64 splits per eightbyte-class; arm64
 (AAPCS64) sends a non-HFA composite wholly in X regs, only an all-float HFA in V regs. Verified
 **byte-identical to gcc on both x86-64 and aarch64** (run under qemu) — call, return, and structs
-interleaved with scalar args. ai.c never passed a >8-byte struct by value, so it had hidden. A
+interleaved with scalar args. love.c never passed a >8-byte struct by value, so it had hidden. A
 register-exhausted arg or a >16-byte (MEMORY) struct still refuses (`crew/moon/law.l` asserts both
 directions). This is a general rung (every modern struct-by-value API needs it); it un-refuses
 timespec.h's helpers, though gzip.c itself hit a *separate* blocker — a cpp include bug, now
@@ -341,7 +341,7 @@ tracking:
 - **`punary` sizeof site**: when `ptype` settles the type, emit `('num (tsz ps ty))` — a real
   constant usable as an array bound; otherwise keep the deferred `('szof …)` so gen sizes it
   (identical behavior to before for every un-typeable expr). So the fold is a pure *extension*:
-  `test_raw` compiles all of ai.c + host/\*.c (many sizeofs) unchanged.
+  `test_raw` compiles all of love.c + host/\*.c (many sizeofs) unchanged.
 
 Verified `sizeof h->prefix + 1 + sizeof h->name + 1` = 257 (155+1+100+1) native == gcc; laws
 in `law.l` prove both the member-sizeof bound *and* `sizeof buf` reading buf's own local array

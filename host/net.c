@@ -1,6 +1,6 @@
 // host/net.c -- the ain socket nifs. Host-only (links main.c), auto-globbed
-// + auto-registered via AI_NIF; no ai.c/ai.h/main.c edit. Every nif mirrors
-// main.c's lvm_open: produce an OS fd, hand it to ai_io_alloc (ai.c) -> a heap
+// + auto-registered via AI_NIF; no love.c/love.h/main.c edit. Every nif mirrors
+// main.c's lvm_open: produce an OS fd, hand it to ai_io_alloc (love.c) -> a heap
 // port carrying a close finalizer. Once an fd is a port, READ AND WRITE COME
 // FREE through the existing fgetc/fputc machinery (the fgetc read path even
 // yields cooperatively on a not-ready fd), so a socket nif only has to make the
@@ -11,7 +11,7 @@
 // Blocking is intentional here: ain is one-shot, so a blocking getaddrinfo /
 // connect / accept is acceptable (the doc's Stage 1). The fgetc/fputc traffic
 // that follows is what interleaves cooperatively, not these setup calls.
-#include "ai.h"
+#include "love.h"
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
@@ -34,7 +34,7 @@
 
 // Is Sp-slot x a heap stream port? Same inline check main.c's lvm_close uses:
 // an even (heap) word whose first slot is the lvm_port_io discriminator. A
-// macro so it reads as one test at each use; lvm_port_io is declared in ai.h.
+// macro so it reads as one test at each use; lvm_port_io is declared in love.h.
 #define portp(x) (((x) & 1) == 0 && ((union u*) (x))->ap == lvm_port_io)
 // the backing OS fd of a known port, as a plain int.
 #define port_fd(x) ((int) getcharm(((struct ai_io*) (x))->fd))

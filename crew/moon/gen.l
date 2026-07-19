@@ -18,7 +18,7 @@
 ; (cgimage; string-into-char-array and [] size inference included). stage 4d:
 ; a GLOBAL initializer whose value is a LABEL bakes an abs64 fixup ('fix 8
 ; abs64 label 0), the label's absolute load address -- char *s = "hi" (a
-; rodata string), a static (name, fn-ptr) table (ai.c's nifs), &global,
+; rodata string), a static (name, fn-ptr) table (love.c's nifs), &global,
 ; a decayed array. fenced and refused, not fudged: ptr+ptr, deref of a
 ; non-pointer, assigning to an array, struct params or returns by value.
 ; stage 6d: the `float` scalar (4 bytes in memory, but a value in an xmm
@@ -204,7 +204,7 @@
    ; by-value aggregates (structs AND unions): a struct VALUE in cgexpr is its
    ; ADDRESS in r0; params/args/returns/results read the eightbytes through it.
    ; carried classes: one eightbyte ('int in a gp reg / 'sse in an xmm) and the
-   ; two uniform 16-byte pairs -- '(sse sse) the xmm pair (ai.c's struct ai_zn,
+   ; two uniform 16-byte pairs -- '(sse sse) the xmm pair (love.c's struct ai_zn,
    ; full lanes) and '(int int) rax:rdx (return/result lanes; int-pair args and
    ; params stay refused). MIXED 16-byte pairs and >16 bytes (MEMORY) refuse.
    ; the SysV eightbyte CLASSES of a small aggregate -- '(int) / '(sse) at <=8
@@ -409,7 +409,7 @@
    ; so the return-type narrowing keeps its truth) branches THROUGH the body:
    ; args land in fresh temps (the out-of-line call's exact semantics), then E
    ; cbranches straight to lbl -- no join label, no 0/1 settle, no retest. the
-   ; ai.c hot conditions are nearly all inline predicates, and the settle+retest
+   ; love.c hot conditions are nearly all inline predicates, and the settle+retest
    ; was the clang differential's largest bucket. depth 1 and the fesc/strs
    ; decline protocol exactly as cginl. -> forms | 'no (the fallback stands) --
    (retex f)                                     ; init-free scalar decls* + one `return E` -> (((name ty)..) E) | ()
@@ -1056,7 +1056,7 @@
            ; each pushed to the machine stack, then popped reversed into place.
            (: head <>e args <>>e
               bi (? (<head = 'var) <>head ())
-              (? ; the gcc builtins ai.c reaches -- x64 as short raw splices, arm64
+              (? ; the gcc builtins love.c reaches -- x64 as short raw splices, arm64
                  ; as neutral IR (its ops cover them) or one raw word (clz):
                  ; trap = ud2 / brk; inf/nanf = IEEE constants into f0; expect =
                  ; its value (the hint drops); clear_cache = nothing (coherent on
@@ -4085,7 +4085,7 @@
        ; always emit text + data (a library TU has no main); `saw` rides out so
        ; the EXECUTABLE path can insist on one.
        ; acc rides REVERSED (a cat per fn re-copies every prior fn's forms --
-       ; quadratic over ai.c's 611 fns); the tail restores emission order.
+       ; quadratic over love.c's 611 fns); the tail restores emission order.
        (gfns fs acc saw)
         (? (! (two? fs))
            (: dat (cgdata g) (? (bad? dat) () `(g (rev acc) dat saw)))
@@ -4100,7 +4100,7 @@
                        ; fn-start alignment to EVEN (2): a function's address can
                        ; ride into the heap as an object's ap (the lvm_* dispatch
                        ; kind), and the love image codec's pointer/fixnum discriminator
-                       ; is PARITY -- every pointer even, every fixnum odd (ai.c
+                       ; is PARITY -- every pointer even, every fixnum odd (love.c
                        ; img_encode). an odd-addressed fn pointer reads back as a
                        ; fixnum and the woken heap desyncs. WIDER alignment was built
                        ; and measured 2026-07-16 and REVERTED: 16 ran 8/8 corpus
@@ -4123,7 +4123,7 @@
              `(1 (crt0 + <>r + <dat + <>dat)))))   ; so the nif stream just rides along
    ; the RELOCATABLE OBJECT view (stage 7a): text and data split, plus the
    ; DEFINED function names (global FUNC symbols, statics excluded -- they stay
-   ; LOCAL, ai.h's inline helpers land in every TU) and global-variable names
+   ; LOCAL, love.h's inline helpers land in every TU) and global-variable names
    ; (global OBJECT symbols, statics excluded), plus the ai_nifs stream -- the
    ; .o emitter (crew/holo/obj.l) turns the rest (undefined labels,
    ; cross-section refs) into a symbol table + relocations.

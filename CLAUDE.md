@@ -1,7 +1,7 @@
 ```love
 ; love -- a fully-curried language with an infix, low-paren surface that factors down to a tiny
 ; lisp core: `map (+ 1)` and `(3 = 1 + 2)` desugar through opfix to plain parens (one source of
-; truth, shared by both compilers). that core rides a tiny generic C runtime (ai.c + ai.h) plus a
+; truth, shared by both compilers). that core rides a tiny generic C runtime (love.c + love.h) plus a
 ; self-hosting compiler written in love (the love/{prel,ev,bao}.l layers). source is .l; the host binary
 ; is `love`. see README.md.
 ;
@@ -27,7 +27,7 @@
 ;   came up EMPTY (a failed love0 gen left a 0-byte .h that make thinks is fresh) so `assemble` is
 ;   unbound and the glaze's map lane emits nothing. one bug, two faces -- infinite loop or crash.
 ; * `make clean` nukes out/dl (ovmf/limine) -- stash them first if you need the kernel tests.
-;   editing ai.h needs no clean (every object deps on $(ai_h), the lcat'd headers re-lay on love0).
+;   editing love.h needs no clean (every object deps on $(love_h), the lcat'd headers re-lay on love0).
 ; * CHECK A .l EDIT for balance before trusting it: `out/host/love tools/ltidy.l <file>` (or `make lint`
 ;   over every tracked .l) -- a .l-aware paren/bracket/brace + unclosed-string scan (`;`/`#!` comments,
 ;   `'` and backtick are reader ops NOT delimiters, so it won't trip where a C lexer would). SILENT means
@@ -64,9 +64,9 @@
 ; * the CREW (crew/, the apps) rides over the core, each owning NON-OVERLAPPING files so a session can take one in
 ;   parallel: lux (the X11 window manager, crew/lux/), inle (freestanding agent-kernel, port/inle/),
 ;   reef (the patch-set vcs, crew/reef/ + host/hash.c -- doc/reef.md, `make test_reef`), moon (the C
-;   compiler in love, crew/moon/ -- compiles ai.c + all host/*.c and holo links them, no gcc/glibc/ld:
+;   compiler in love, crew/moon/ -- compiles love.c + all host/*.c and holo links them, no gcc/glibc/ld:
 ;   `make test_raw`). apps
-;   add nifs through the host/*.c glob + AI_NIF (no core edit); ai.c/ai.h/host/main.c are CORE -- an
+;   add nifs through the host/*.c glob + AI_NIF (no core edit); love.c/love.h/host/main.c are CORE -- an
 ;   app session needing a core change stops and asks the core thread, never reaches in. the runnable
 ;   ones install on PATH via `make install`.
 ; * MODULES: a baked service keeps its names off the global book. the REGISTRY model (holo, the

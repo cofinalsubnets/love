@@ -1,7 +1,7 @@
 // host/pty.c -- bao's pty-wrapper nifs (the rlwrap/debugger muscle): spawn a
 // program on a fresh pseudo-terminal, reap it without blocking, signal it, and
 // read/write its window size. Self-contained host nif file: auto-globbed +
-// AI_NIF-registered, no edit to ai.c / ai.h / main.c (see host/host.c).
+// AI_NIF-registered, no edit to love.c / love.h / main.c (see host/host.c).
 //
 // The keystone, (mind argv), is host_run (main.c) with the stdout PIPE swapped
 // for a pty pair: the same argv-marshal-into-the-uncommitted-gap + close-on-exec
@@ -20,7 +20,7 @@
 // (winsize) takes a dummy arg (ignored, like getpid): a bare (winsize) is the
 // function itself -- (f) == f at zero operands -- so the call is (winsize 0).
 #define _GNU_SOURCE     // posix_openpt/grantpt/unlockpt/ptsname (not in gnu23's default set)
-#include "ai.h"
+#include "love.h"
 #include "proc.h"       // proc_status -- the wait-status decode, shared with init.c
 #include <stdlib.h>     // posix_openpt grantpt unlockpt ptsname
 #include <unistd.h>     // fork setsid dup2 close execvp read write _exit

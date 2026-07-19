@@ -14,7 +14,7 @@
    The same split the rest of the tree uses: prove the MODEL here, keep the C
    connected by the differential oracle (the corpus runs byte-identical with the
    minor firing) and by gen_audit (0 unremembered edges across the corpus, the
-   empirical form of rem_complete). A proof that ai.c's pointer code REFINES this
+   empirical form of rem_complete). A proof that love.c's pointer code REFINES this
    model is the larger separate effort doc/gengc.md flags.
 
    Universe-checked Rocq: the world does not explode here (cf. spec.v's preamble),

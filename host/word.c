@@ -1,7 +1,7 @@
 // host/word.c -- 8-byte word slots on a cask, for the flat solver (crew/sat/
 // flat.l): its state is casks of word slots whose LOW 4 bytes carry the value,
 // and the byte-at-a-time accessors were 4 dispatches per read. Host-only,
-// auto-globbed + AI_NIF-registered (no ai.c/ai.h/main.c edit), the hash.c
+// auto-globbed + AI_NIF-registered (no love.c/love.h/main.c edit), the hash.c
 // discipline:
 //
 //   (peepw c i)   -> the word at slot i, low 4 bytes | () misuse
@@ -10,7 +10,7 @@
 // flat.l binds getw/putw to these when they are in the book; the byte path
 // stays the portable twin (freestanding targets have no host glob). value
 // ops, so absence/misuse answers ().
-#include "ai.h"
+#include "love.h"
 #include <stdint.h>
 #include <string.h>
 

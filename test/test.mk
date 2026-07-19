@@ -468,7 +468,7 @@ test_moon: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	  [ $$a -eq 42 ] || { echo "FAIL ai_nifs bracket walk (two TUs packed + __start_/__stop_ synthesized, got $$a want 42)"; exit 1; }; \
 	  echo "mooncc: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets) ok"; \
 	else echo "mooncc: cc (laws only -- x86_64 e2e skipped on $$(uname -m)) ok"; fi
-# The rung-2 self-host gate ([[love-distro]]): compile ai.c AND every host/*.c with
+# The rung-2 self-host gate ([[love-distro]]): compile love.c AND every host/*.c with
 # mooncc (gcc/clang only LINKS), then run the whole corpus through the all-mooncc
 # binary. Proves the compiler compiles the runtime it runs on. OPT-IN, not in
 # test_all -- it rebuilds ~14 objects + links + runs the corpus, and needs the
@@ -479,8 +479,8 @@ test_selfhost: host out/host$(hsuf)/mooncc
 	@echo SELFHOST $(ho)/love-selfhost
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/selfhost; mkdir -p $$d; \
-	  $(ho)/mooncc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
-	    || { echo "FAIL mooncc -c ai.c"; exit 1; }; \
+	  $(ho)/mooncc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c love.c $$d/love.o \
+	    || { echo "FAIL mooncc -c love.c"; exit 1; }; \
 	  for f in host/*.c; do b=`basename $$f .c`; \
 	    $(ho)/mooncc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
 	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
@@ -492,7 +492,7 @@ test_selfhost: host out/host$(hsuf)/mooncc
 	  tail -1 $(ho)/.test_selfhost.out; \
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_selfhost.out; } \
 	    || { echo "FAIL all-mooncc corpus (exit $$s)"; exit 1; }; \
-	  echo "test_selfhost: ai.c + all `ls host/*.c | wc -l` host/*.c built by mooncc, corpus passes"
+	  echo "test_selfhost: love.c + all `ls host/*.c | wc -l` host/*.c built by mooncc, corpus passes"
 # The rung-4 gate ([[love-distro]]): the GCC-FREE fixpoint. Everything test_selfhost
 # builds, PLUS our own raw libc -- crew/moon/lib/nolibc.c (raw-syscall wrappers, mini
 # stdio, mmap malloc), the math floor crew/moon/lib/math/am.c (ours), and sys.o (the
@@ -507,8 +507,8 @@ test_raw: host out/host$(hsuf)/mooncc
 	@echo RAW $(ho)/love-raw
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_raw: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/raw; mkdir -p $$d; \
-	  $(ho)/mooncc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
-	    || { echo "FAIL mooncc -c ai.c"; exit 1; }; \
+	  $(ho)/mooncc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c love.c $$d/love.o \
+	    || { echo "FAIL mooncc -c love.c"; exit 1; }; \
 	  for f in host/*.c; do b=`basename $$f .c`; \
 	    $(ho)/mooncc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
 	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
@@ -526,7 +526,7 @@ test_raw: host out/host$(hsuf)/mooncc
 	  tail -1 $(ho)/.test_raw.out; \
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_raw.out; } \
 	    || { echo "FAIL all-raw corpus (exit $$s)"; exit 1; }; \
-	  echo "test_raw: ai.c + host/*.c + nolibc + am math + sys.o, our linker, no gcc/glibc/ld -- corpus passes"
+	  echo "test_raw: love.c + host/*.c + nolibc + am math + sys.o, our linker, no gcc/glibc/ld -- corpus passes"
 # test_raw_bake -- the WAKE half of the gcc-free image cycle. mooncc could never bake
 # before (an EXEC's low load address collides the codec's pointer/fixnum index range);
 # a -pie ET_DYN loads high and clears it. Reuses test_raw's raw objects, links them
@@ -566,8 +566,8 @@ test_raw_arm64: host out/host$(hsuf)/mooncc
 	@echo RAW-ARM64 $(ho)/love-raw-a64
 	@if ! command -v qemu-aarch64 >/dev/null 2>&1; then echo "test_raw_arm64: no qemu-aarch64, skipped"; exit 0; fi; \
 	  d=$(ho)/raw-a64; mkdir -p $$d; \
-	  $(ho)/mooncc -t arm64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
-	    || { echo "FAIL mooncc -t arm64 -c ai.c"; exit 1; }; \
+	  $(ho)/mooncc -t arm64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c love.c $$d/love.o \
+	    || { echo "FAIL mooncc -t arm64 -c love.c"; exit 1; }; \
 	  for f in host/*.c; do b=`basename $$f .c`; \
 	    $(ho)/mooncc -t arm64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
 	      || { echo "FAIL mooncc -t arm64 -c $$f"; exit 1; }; done; \

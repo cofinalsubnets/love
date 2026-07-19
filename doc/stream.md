@@ -1,6 +1,6 @@
 # stream.md — path B: the coinductive byte-stream io rework
 
-A design study (notes only — build in a dedicated core `ai.c` session). This is
+A design study (notes only — build in a dedicated core `love.c` session). This is
 **bao's path B**: the io/scheduler rework that unblocks
 the rlwrap wiring (`edraw` into `wrap`) which was *built and reverted* because it
 deadlocks the cooperative scheduler (see `crew/bao.md` §"path B", and the bao memory).
@@ -40,15 +40,15 @@ The `see`/`unsee`/`end?`/`key?` surface is **POSIX wrongly embedded in the
 generic core.** Four leaks, each a place where the cooperative model and the
 read model disagree:
 
-1. **`ungetc_buf` is invisible to the readiness check.** `lvm_fgetc` (ai.c:3168)
+1. **`ungetc_buf` is invisible to the readiness check.** `lvm_fgetc` (love.c:3168)
    parks the task whenever `!ai_ready(fd)` — *without first consulting the port's
    `ungetc_buf`*. The editor's escape decoder (`besc`/`besc1`, `love/bao.l:69-86`)
    reads bytes ahead; any pushed-back byte is then held in `ungetc_buf` where the
    poll-based readiness test cannot see it. A task can be **parked with the very
    byte it needs already in hand.** In monotask the `while(!ai_ready) ai_wait_fd`
-   spin (`lvm_yield_sw_mono`, ai.c:2128) is bailed out by the user's next
+   spin (`lvm_yield_sw_mono`, love.c:2128) is bailed out by the user's next
    keystroke; under two tasks, `yield_sw` hands control away and the byte is never
-   reconsidered. (`key?` already gets this right — ai.c:3663 tests
+   reconsidered. (`key?` already gets this right — love.c:3663 tests
    `ungetc_buf != EOF || ai_ready(fd)`; `see` does not. The asymmetry is the bug.)
 
 2. **The `-1` EOF sentinel is un-love.** Absence in love is the zero point `()`, not a
@@ -59,13 +59,13 @@ read model disagree:
    `g`.
 
 3. **fd/poll knowledge is smeared across the generic VM.** `next_wait_fd` is set
-   *inside* `lvm_fgetc` (ai.c:3172); the scheduler (`yield_sw_wait`/`find_runnable`,
-   ai.c:2135-2158) walks task nodes pulling `wait_fd` out of slot `N[4]`; `key?`
-   hardcodes `ai_stdin` (ai.c:3663). The generic tail-threaded VM should know
+   *inside* `lvm_fgetc` (love.c:3172); the scheduler (`yield_sw_wait`/`find_runnable`,
+   love.c:2135-2158) walks task nodes pulling `wait_fd` out of slot `N[4]`; `key?`
+   hardcodes `ai_stdin` (love.c:3663). The generic tail-threaded VM should know
    *generic-apply + scheduler-yield* and nothing about file descriptors.
 
 4. **The write side never yields.** `put`/`say`/`flush`/`puts`/`putc`
-   (ai.c:2595-2625) block synchronously in `zputc`/`zflush` and never park. In a
+   (love.c:2595-2625) block synchronously in `zputc`/`zflush` and never park. In a
    cooperative scheduler a blocking write to a flow-controlled fd stalls the *whole
    VM* — and with the editor and the pump both writing `out`, plus a child that can
    fill its pty slave when the pump is slow, the write side is a latent
@@ -188,7 +188,7 @@ Today three places know fds: `lvm_fgetc` (sets `next_wait_fd`), `lvm_key` (reads
   `next_wait_fd` and yields. Forcing `(cup s)` when `s`'s fd is not `ai_ready`
   parks the task on that fd (the existing `next_wait_fd = fd; Ap(lvm_yield_sw)`
   dance, now in one named place).
-- `find_runnable` / `yield_sw_wait` (ai.c:2135-2158) are **unchanged** — they
+- `find_runnable` / `yield_sw_wait` (love.c:2135-2158) are **unchanged** — they
   already multiplex N parked fds correctly. The bug was never the scheduler; it was
   the readiness *model* feeding it (defect 1). With lookahead in the source and EOF
   as `()`, a task never parks holding a byte, and `select` lets a task wait on
@@ -259,11 +259,11 @@ only scope; it is the first build step.)
 
 ## 12. The minimal-fix fallback (recorded, and why it is not the plan)
 
-If the window is too small for the full rework, two surgical `ai.c` fixes unblock
+If the window is too small for the full rework, two surgical `love.c` fixes unblock
 the deadlock without the redesign — recorded for completeness; **the user rejected
 the half-duplex shortcut and chose the full rework**, so these are a fallback only:
 
-1. **`lvm_fgetc` ungetc-park (ai.c:3171).** Mirror `key?`: park only when *both*
+1. **`lvm_fgetc` ungetc-park (love.c:3171).** Mirror `key?`: park only when *both*
    the pushback is empty and the fd is unready —
    `if (getcharm(i->ungetc_buf) == EOF && !ai_ready(getcharm(i->fd))) park`.
 2. **Generalize `key?` -> a port-taking `ready?`** (and keep `key?`=stdin for
@@ -277,7 +277,7 @@ principled end-state they are a down-payment on.
 
 ## 13. Coordination & risk
 
-- **Core thread owns `ai.c`/`ai.h`.** bao designs this (this doc); the `source`/
+- **Core thread owns `love.c`/`love.h`.** bao designs this (this doc); the `source`/
   `select`/scheduler edits land in a dedicated core session. The bao-side ports
   (`bao.l`, the shell core) are bao's.
 - **`bao.l` is shared and pinned** (kernel `(shell 0)`, the love0 corpus, the host

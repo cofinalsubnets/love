@@ -5,7 +5,7 @@
 ; leading binder -- but THAT rendering is intensional and free to vary (cprop may inline a
 ; constant capture), so SHOW of a capture is asserted EXTENSIONALLY: show -> read -> eval rebuilds
 ; a function of the same behavior (rt below; the dedicated suite is roundtrip.l).
-; `=` ITSELF, though, bridges the capture (the beta bridge, ai.c clo_eq/nf_hash): a partial-app IS
+; `=` ITSELF, though, bridges the capture (the beta bridge, love.c clo_eq/nf_hash): a partial-app IS
 ; the no-capture lambda with its captured args substituted -- a held redex equal to its reduct --
 ; so a closure is also asserted INTENSIONALLY below ((adder 5) = (\ x (+ x 5))). General beta/eta
 ; stay unbridged (the line: `=` surfaces the beta ev ALREADY ran, it does not reduce on its own).

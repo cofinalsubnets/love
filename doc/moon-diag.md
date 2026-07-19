@@ -143,7 +143,7 @@ into reading a number.
   the expression bottom, so a bad *operand* reports itself rather than the operator before
   it). The failing form's own first token is the fallback.
 - **⚠ the successful parse must not pay for it.** There is no cheap mutable scalar here; a
-  tablet peep+pin per lookahead cost **+25%** on `mooncc -c ai.c`. So the first pass runs
+  tablet peep+pin per lookahead cost **+25%** on `mooncc -c love.c`. So the first pass runs
   on *unstamped* tokens and `mark` costs a cell probe and nothing else; only the re-parse
   of an already-failing form (`pfail`) stamps `(kind val line seq file)` and runs the
   watermark for real. Slots 4 and 5 are free — the cpp hideset and the lexer's
@@ -153,7 +153,7 @@ Verified against gcc: a bad form in a header reports `deep.h:6` where gcc report
 `deep.h:6:11`; a bad form in the TU *after* two includes reports its own line, unskewed.
 Laws in `law.l` (the diagnostics section) pin both directions plus the join below.
 
-**Residual cost: ~5% on `mooncc -c ai.c`** (3.13s → 3.30s, output byte-identical). It is
+**Residual cost: ~5% on `mooncc -c love.c`** (3.13s → 3.30s, output byte-identical). It is
 front-end bookkeeping only — the marks flowing through `strcat-pass`, and `mark`'s three
 call sites. Several attempts to buy it back moved nothing (folding the strip into
 `strcat-pass`, a fast path for lone strings, dropping the file stack into a stash).

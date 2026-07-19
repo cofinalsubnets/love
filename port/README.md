@@ -18,14 +18,14 @@ repo instead -- point R (or an L variable) at an l checkout -- is TODO.
 Pulled back into the main (now `love`) tree under port/ on 2026-06-14 from
 the love-ports darcs repo (working files only, no _darcs history). The
 playdate/rp2040 entries below still carry their pre-rename notes; the new
-teensy41/ port is written against the current ai.h contract.
+teensy41/ port is written against the current love.h contract.
 
 ## archlinux/
 
 Arch Linux package (`PKGBUILD`, `love-git`): a `-git` package that clones
 the GitHub repo, builds the host CLI (`make host`), runs `make test` as the
 check, and installs via the main Makefile's `install` target (binary, manpage,
-the `love/*.l` egg sources, `liblove.{a,so}`, `ai.h`, and the vim files)
+the `love/*.l` egg sources, `liblove.{a,so}`, `love.h`, and the vim files)
 under `usr/` into `$pkgdir`. Not a device port -- the host package, kept here
 so every downstream packaging recipe lives under port/.
 
@@ -59,7 +59,7 @@ walks, packed into a flashable .hex (teensy_loader_cli). The roomy analogue of
 rp2040/ -- where the M0+ was dropped for "not enough RAM", the RT1062 fits the
 self-hosting double-bake easily. Console is LPUART6 on pin 0/1 at 115200 8N1
 (USB CDC is a TODO). Self-contained Makefile (`make`/`make flash`), written
-against the current ai.h names -- a structurally complete scaffold, not yet
+against the current love.h names -- a structurally complete scaffold, not yet
 silicon-verified; the FlexSPI/IVT/LUT bytes and register offsets (lifted from
 the i.MX RT1060 RM + PJRC cores/teensy4) are the verify-first surface. See
 teensy41/README.md for the full TODO list.

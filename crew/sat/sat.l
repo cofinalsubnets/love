@@ -5,7 +5,7 @@
 ; baseline below is the correctness oracle (Stage 1); the CDCL engine (Stages 2-3:
 ; two-watched-literals BCP, 1-UIP clause learning, non-chronological backjump, VSIDS
 ; + Luby restarts) is built on top, validated to agree with it. Run: out/host/love
-; crew/sat/sat.l  (strict asserts self-gate). ⚠ pure app -- no ai.c / ai.h / host edit.
+; crew/sat/sat.l  (strict asserts self-gate). ⚠ pure app -- no love.c / love.h / host edit.
 (:
    ; --- literals --------------------------------------------------------------
    (vof l)  (abs l)                                          ; the variable of a literal

@@ -11,11 +11,11 @@ retarget is the remaining work.
 The register convention is **not** register-pinning — it is the **platform C calling convention**.
 A `nat`/native closure's body is entered as an ordinary indirect *tail call* through a function
 pointer whose C type is `lvm_t = struct ai *(*)(struct ai *g, union u *Ip, ai_word *Hp, ai_word *Sp)`
-(`ai.h:54,75`). Dispatch is `Continue() = Ip->ap(g, Ip, Hp, Sp)` (`ai.h:55-56`); each op is a
+(`love.h:54,75`). Dispatch is `Continue() = Ip->ap(g, Ip, Hp, Sp)` (`love.h:55-56`); each op is a
 separate `ai_noinline noipa` function ending in a tail `Continue()`, so ops chain by sibling-jump
 and **g/Ip/Hp/Sp live in the ABI's first four argument registers across the whole chain**. Apply:
-`lvm_ap` (`ai.c:2596`) sets `Ip` to the closure value cell and `Continue()`s straight into the
-emitted bytes; install + cell layout `[code,src,code,interp,lvm_ret,n]` in `lvm_nif` (`ai.c:4856`).
+`lvm_ap` (`love.c:2596`) sets `Ip` to the closure value cell and `Continue()`s straight into the
+emitted bytes; install + cell layout `[code,src,code,interp,lvm_ret,n]` in `lvm_nif` (`love.c:4856`).
 The body may scratch other registers but **must preserve g/Ip/Hp/Sp** for the next op and for the
 deopt `interp` (`auto.l:1071`).
 
@@ -75,7 +75,7 @@ are now exposed.
   limb) — needed for the map hash constant `0x9e3779b97f4a7c15`.
 - **I-cache flush (C core, the one non-assembler prerequisite).** aarch64 needs
   `__builtin___clear_cache(base, base+len)` after writing code, before the first jump into it. Noted
-  but not yet emitted at `ai.c:4695-4696` (`eat_run`); for `nat` it belongs in `lvm_nif`/`lvm_toast`
+  but not yet emitted at `love.c:4695-4696` (`eat_run`); for `nat` it belongs in `lvm_nif`/`lvm_toast`
   where the bytes are written.
 
 ## status
@@ -116,7 +116,7 @@ are now exposed.
      (`ldrb`/`strb`) on the arm64 backend (P2 item) for the string/cask sub-cases.
   5. **wire into `auto.l`** — once a lane is proven equal to the byte path, pick the host target and
      route `auto.l`'s recognizers through the IR entries; then retire the byte path. Add the I-cache
-     flush in `nat`/`toast` (`ai.c`) so arm64 can actually run installed code.
+     flush in `nat`/`toast` (`love.c`) so arm64 can actually run installed code.
   - **P2 (separate sub-project):** the **float/grid lane** (`cgf`/`jitfr`/`loopcode-gridn`) — needs a
     FLOAT register file in `crew/asm/` (xmm/NEON + `movsd`/`addsd`/`mulsd`/`divsd`/`cvtsi2sd`/`ucomisd`/
     `movq`), which the integer-only IR doesn't model yet.

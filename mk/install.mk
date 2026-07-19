@@ -38,7 +38,7 @@ uninstall:
 	@echo RM	$(abspath $(installs))
 	@rm -f $(installs)
 
-$d/include/love.h: ai.h
+$d/include/love.h: love.h
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 

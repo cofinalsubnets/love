@@ -49,10 +49,10 @@ tco ?= 1
 # it runs only under the x86-guarded `test_glaze`, never the arch-neutral corpus (crash on non-x86).
 t = $R/test/00-init.l $R/test/spec.l $R/test/uu.l $(filter-out %/00-init.l %/spec.l %/glaze-x86.l %/uu.l,$(sort $(wildcard $R/test/*.l)))
 
-ai_h = $(wildcard $R/*.h)
+love_h = $(wildcard $R/*.h)
 # the core rides with its math floor (crew/moon/lib/math/am.c -- our own
-# transcendentals; ai.c's ai_* defines resolve there, no libm anywhere)
-ai_c = $R/ai.c $R/crew/moon/lib/math/am.c
+# transcendentals; love.c's ai_* defines resolve there, no libm anywhere)
+love_c = $R/love.c $R/crew/moon/lib/math/am.c
 f_c = $(wildcard $R/port/quay/*.c)
 c_c = $(wildcard $R/libc/*.c)
 

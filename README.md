@@ -217,7 +217,7 @@ on the front page):
   (x86_64/aarch64 via limine), and wasm.
 - moon is a C compiler, also written in love: a preprocessor, parser, and an
   optimizing amd64/arm64 backend through the holo assembler. it compiles love's own
-  C runtime -- `ai.c` and every `host/*.c` -- and, linked by holo with no
+  C runtime -- `love.c` and every `host/*.c` -- and, linked by holo with no
   gcc/glibc/ld in the loop, the rebuilt `love` passes the whole corpus (`make
   test_raw`). it builds real third-party C too (gnu tar, m4) and is closing on
   clang -O2 on the code it emits. [crew/moon/](crew/moon/)

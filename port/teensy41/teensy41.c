@@ -6,7 +6,7 @@
 // booting XIP from QSPI flash. The FlexSPI/IVT/boot-data blocks and the LUT
 // are lifted from the i.MX RT1060 Reference Manual (Serial NOR boot) and
 // PJRC's cores/teensy4 bootdata.c; treat them as the verify-first surface.
-#include "../../ai.h"
+#include "../../love.h"
 #include "teensy41.h"
 
 // Linker-provided bounds (teensy41.lds).

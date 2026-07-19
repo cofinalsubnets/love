@@ -8,7 +8,7 @@
 ; stdout, both live at once. Two tasks, each parked in a port read on a different
 ; fd, interleave with no select loop: the cooperative scheduler poll()s the fd a
 ; parked task blocks on (ai_wait_fds) and wakes the ready one (get yields when
-; its fd is not ready -- see host/net.c / ai.c). So the whole program is just two
+; its fd is not ready -- see host/net.c / love.c). So the whole program is just two
 ; pump loops + a teardown discipline; the real work is the socket nifs in C.
 ;
 ; Run it straight (prel is ALREADY in the egg -- do NOT `-l love/prel.l`; the egg mops

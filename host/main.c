@@ -1,4 +1,4 @@
-#include "ai.h"
+#include "love.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -83,7 +83,7 @@ static struct ai *fd_flush(struct ai *g) {
  if (g->io->fd == putcharm(STDOUT_FILENO)) fflush(stdout);
  return g; }
 
-// the bulk lanes (contract in ai.h). writen drains stdio first when the fd is
+// the bulk lanes (contract in love.h). writen drains stdio first when the fd is
 // stdout -- per-byte puts ride stdio there, and the direct write(2) must land
 // AFTER them or the stream interleaves. readn is one nonblocking gulp: the
 // O_NONBLOCK toggle is per-call because fd flags ride the open file description,
@@ -390,12 +390,12 @@ static union u const nif_pgaddr[] = {{lvm_pgaddr}, {lvm_ret0}};
 
 // (calloutdrive x) -> the address of callout_drive as a fixnum (x ignored) -- the glaze emitter reads
 // it once and bakes it as the `li Ip` immediate for a native-lane call-out (cf. pgaddr / ai_pg_dyad).
-// callout_drive is the STACKLESS call-out bridge (ai.c): a native blob threads a closure application
+// callout_drive is the STACKLESS call-out bridge (love.c): a native blob threads a closure application
 // through the VM stack -- no re-entrant C frame -- so a deep/re-entrant callee grows Sp, not the C
 // stack. (The retired re-entrant ai_call1 driver + its callout1 POC nif are gone with it.)
 static lvm(lvm_calloutdrive) { return Sp[0] = putcharm((intptr_t) ai_calloutdrive()), Ip++, Continue(); }
 static union u const nif_calloutdrive[] = {{lvm_calloutdrive}, {lvm_ret0}};
-// (calloutresume x) -> the address of callout_resume (the WALKABLE resume drive, ai.c) as a fixnum.
+// (calloutresume x) -> the address of callout_resume (the WALKABLE resume drive, love.c) as a fixnum.
 static lvm(lvm_calloutresume) { return Sp[0] = putcharm((intptr_t) ai_calloutresume()), Ip++, Continue(); }
 static union u const nif_calloutresume[] = {{lvm_calloutresume}, {lvm_ret0}};
 
@@ -409,8 +409,8 @@ static union u const
  nif_getpid[] = {{lvm_getpid}, {lvm_ret0}};
 // Register in the ai_nifs section (drained in main below). An app thread adds its
 // own nifs the same way in its OWN host/<app>.c -- auto-globbed, AI_NIF-registered,
-// NO edit here or to ai.c/ai.h:
-//   #include "ai.h"                                       // the nif-writing surface
+// NO edit here or to love.c/love.h:
+//   #include "love.h"                                       // the nif-writing surface
 //   static lvm(lvm_foo) { ... return Sp[0] = <v>, Ip++, Continue(); }
 //   static union u const nif_foo[] = {{lvm_foo}, {lvm_ret0}};  // 1-arg; curry for more
 //   AI_NIF("foo", nif_foo);
@@ -537,7 +537,7 @@ static char const baolaunch[] = "(bao 0)";   // bao.l is define-only -> the fron
 // copy + patch + atomic-rename -- no objcopy, ETXTBSY-proof) and exits; `--bake PATH` writes a
 // plain image file instead (the debug/inspection lane). `--wake PATH` boots from an image file
 // (any mismatch falls back to a normal egg boot). Opt-in flags; a normal run is the same code path.
-extern int image_dump(struct ai*, char const*);          // host/image.c (file I/O around ai.c's codec)
+extern int image_dump(struct ai*, char const*);          // host/image.c (file I/O around love.c's codec)
 extern int image_bake(struct ai*);                       // host/image.c (the self-bake)
 extern struct ai *image_load(char const*);
 static char const *image_dump_path = NULL;

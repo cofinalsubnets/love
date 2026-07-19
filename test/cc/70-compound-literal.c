@@ -1,5 +1,5 @@
 /* compound literals: an unnamed object from (type){ init }. its address is an
-   lvalue -- the ai.c `&(struct ai_r){..}` shape -- and it reads as a value. */
+   lvalue -- the love.c `&(struct ai_r){..}` shape -- and it reads as a value. */
 struct P { int a; int b; };
 int psum(struct P *p) { return p->a + p->b; }
 struct P *idp(struct P *p) { return p; }

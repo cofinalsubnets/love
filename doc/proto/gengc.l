@@ -1,5 +1,5 @@
 ; layer-2 spike: a GENERATIONAL GC (`gengc`) modelled in ai -- a runnable, value-level model of a
-; nursery + old-space copying collector over ai's current single-pool Cheney two-space core (ai.c
+; nursery + old-space copying collector over ai's current single-pool Cheney two-space core (love.c
 ; gcg/gcp/evac_*). it is the design-by-prototype step the measurement justified: tools/gcstat.l on a
 ; -DAI_STAT host showed ai's interpreted churn is 85-94% INFANT MORTALITY and the persistent live set
 ; is RECOPIED ~150x over a run (every full collection drags the same long-lived objects through to-
@@ -18,7 +18,7 @@
 ;   region membership  <->  a pointer ADDRESS-RANGE test (ai carries NO spare age bit -- the recent
 ;                           "drop jitba's GC tag word" commit confirms objects are header-minimal, so
 ;                           generation MUST be read from the address, never a per-object field).
-;   point + rem        <->  the WRITE BARRIER on ai_mapput (ai.c:~3909/3914) -- the ONLY in-place
+;   point + rem        <->  the WRITE BARRIER on ai_mapput (love.c:~3909/3914) -- the ONLY in-place
 ;                           pointer mutation that can mint an old->young edge (chains/arrays immutable,
 ;                           casks hold bytes, num/str are GC leaves). a tiny barrier surface: one hot path.
 ;   alloc-old          <->  TENURE-ON-BIRTH: interned noms (sidesteps the weak-table/minor-GC race),

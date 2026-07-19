@@ -6,7 +6,7 @@
 
 # Static lisp headers: each love/*.l is serialized to a C string literal in
 # out/lib/*.h by tools/lcat.l (run on the bootstrap interpreter love0). Frontends
-# #include these and assemble the bootstrap with G_EGG_PRE/POST (ai.h).
+# #include these and assemble the bootstrap with G_EGG_PRE/POST (love.h).
 # Drop a .l into love/ and it is picked up automatically -- no rule to edit.
 lib_h = $(patsubst love/%.l,out/lib/%.h,$(wildcard love/*.l))
 # the crew/holo/ assembler baked into BOTH runtimes as a core language service. The
@@ -104,11 +104,11 @@ out/lib/tests0.h: $t
 	@cat $t | $(sed_lit) > $@
 
 # love_version.h: the build's version-control id, surfaced in the runtime as the `love-version`
-# global (ai.c ai_ini_0). VCS-AGNOSTIC: a _darcs/ repo stamps darcs-<12-hex patch hash>
+# global (love.c ai_ini_0). VCS-AGNOSTIC: a _darcs/ repo stamps darcs-<12-hex patch hash>
 # (-dirty when darcs whatsnew is non-empty), else git describe, else "unknown" -- so the
 # darcs snapshot import carries this rule verbatim and stamps itself. Regenerated every
 # make but only rewritten when the id changes, so l.o relinks on a new revision, not on
-# every build. Frontends without it on the include path fall back to "unknown" (ai.c
+# every build. Frontends without it on the include path fall back to "unknown" (love.c
 # uses __has_include).
 .PHONY: force_version
 force_version: ;
@@ -124,5 +124,5 @@ out/lib/love_version.h: force_version
 
 # The lcat'd lib headers (egg.h et al) are PRODUCED BY running love0, so re-lay
 # them whenever love0 changes. (The old "edit a .h => make clean or love0 hangs" gum is
-# cleaned: love0's own objects already depend on $(ai_h), so love0 can't go stale.)
+# cleaned: love0's own objects already depend on $(love_h), so love0 can't go stale.)
 $(lib_h): $(love0)

@@ -44,15 +44,15 @@
    ; ---------------------------------------------------------------- expansion
    ev (run-cook (mk `("R := ."
                       "ho = out/host"
-                      "ai_c = $R/ai.c $R/data.c"
-                      "h_o = $(ai_c:$(R)/%.c=$(ho)/%.o)"
-                      "suf = $(ai_c:.c=.o)"
+                      "love_c = $R/love.c $R/data.c"
+                      "h_o = $(love_c:$(R)/%.c=$(ho)/%.o)"
+                      "suf = $(love_c:.c=.o)"
                       "all:"
                       "\techo \"E1[$(h_o)]\""
                       "\techo \"E2[$(suf)]\""
                       "\techo \"E3[$R/$(ho)]\"")) "all")
-   _ (ok "nested-paren + pattern subst-ref" (has ev "E1[out/host/ai.o out/host/data.o]"))
-   _ (ok "suffix subst-ref"                 (has ev "E2[./ai.o ./data.o]"))
+   _ (ok "nested-paren + pattern subst-ref" (has ev "E1[out/host/love.o out/host/data.o]"))
+   _ (ok "suffix subst-ref"                 (has ev "E2[./love.o ./data.o]"))
    _ (ok "single-char $R + $(VAR)"          (has ev "E3[./out/host]"))
 
    ; ---------------------------------------------------------------- functions

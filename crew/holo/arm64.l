@@ -175,7 +175,7 @@
    (arm64-jmp  label)    `((fix 4 'b26 label 0x14000000))
    (arm64-call label)    `((fix 4 'b26 label 0x94000000))
    ;; la: ADRP + ADD -- the page-relative pair (+-4GB), one fixup each. ADR alone
-   ;; (+-1MB, and the patch masks silently) can't span ai.c-scale images, and the
+   ;; (+-1MB, and the patch masks silently) can't span love.c-scale images, and the
    ;; pair is what the ELF reloc vocabulary speaks (PG_HI21 + ABS_LO12_NC), so the
    ;; .o path rides the same lowering as the exe/native one.
    (arm64-la d label)    (: dn (rn d)

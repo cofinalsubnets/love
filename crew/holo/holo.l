@@ -97,7 +97,7 @@
    ;; -- pass one: walk the program, lower each form, assign addresses, record labels. returns
    ;; (items . labels): the flat byte/fixup stream and a name->address tablet. items accumulate
    ;; REVERSED (each chunk prepended, one rev at the end) so a whole-program lay stays linear --
-   ;; appending to the tail re-copied the stream per instruction, and `mooncc -c ai.c` paid it as
+   ;; appending to the tail re-copied the stream per instruction, and `mooncc -c love.c` paid it as
    ;; 15 of its 16 minutes. --
    ;; ('align n) pads the stream to the next n-boundary with the backend's nop unit
    ;; (peep be 'nop, a byte-list, cycled to the exact count) -- alignment lives HERE,

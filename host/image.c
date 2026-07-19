@@ -1,12 +1,12 @@
 // host/image.c -- file I/O around the core's stdio-free image codec (ai_image_save /
-// ai_image_load, ai.c). The CORE owns the heap serialization (compact + range-encode a
-// {header, blob} buffer, and its inverse); the HOST owns stdio -- so ai.c stays
+// ai_image_load, love.c). The CORE owns the heap serialization (compact + range-encode a
+// {header, blob} buffer, and its inverse); the HOST owns stdio -- so love.c stays
 // freestanding-clean. main.c calls image_bake (--bake: lay the image back into the
 // binary's own .image section), image_dump (--bake PATH: write a plain image file), and
 // image_load (--wake PATH). Conventions: bake/dump 0 ok / <0 error; load NULL on any
 // problem so the caller falls back to a normal egg boot.
 #define _GNU_SOURCE
-#include "ai.h"
+#include "love.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

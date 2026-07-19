@@ -240,7 +240,7 @@
       (two? (cgn "int f(void){return 7;} int (*g(void))(void){ return f; } int main(){ return g()(); }"))
       (two? (cgn "int f0(int x){return x;} int f1(int x){return x+1;} int (*pick(int k))(int){ return k ? f1 : f0; } int main(){ return pick(1)(9); }"))
       (two? (cgn "int f(void){return 7;} int (*g(void))(void); int (*g(void))(void){ return f; } int main(){ return g()(); }"))
-      ; a dispatch table -- an array of function pointers, THE ai.c pattern
+      ; a dispatch table -- an array of function pointers, THE love.c pattern
       (two? (cgn "int a(int x){return x+1;} int b(int x){return x*2;} int main(){ int (*t[2])(int); t[0]=a; t[1]=b; return t[0](10)+t[1](10); }"))
       ; --- stage 4c: brace/designated initializers, string inits, [] inference, flexible arrays ---
       (= (cast "int main() { int a[3] = {1,2,3}; return a[0]; }")
@@ -268,7 +268,7 @@
       (two? (cgn "int a[2] = {1,2}; int *p = a; int main() { return p[1]; }"))     ; an array decays to its address
       (two? (cgn "char *m[3] = {\"a\",\"bb\",\"ccc\"}; int main() { return m[0][0]; }"))   ; an array of string pointers
       (two? (cgn "char *m[] = {\"x\",\"y\"}; int main() { return 0; }"))           ; ... with [] size inference
-      ; THE ai.c pattern: a static table of (name, function-pointer) records
+      ; THE love.c pattern: a static table of (name, function-pointer) records
       (two? (cgn "struct N { char *nm; int (*fn)(int); }; int f(int x){return x;} struct N t[1] = {{\"f\", f}}; int main() { return t[0].fn(9); }"))
       ; a static initializer is any CONSTANT ADDRESS: label + a compile-time byte
       ; offset (the offset rides the abs64 addend). &arr[i], decayed pointer
@@ -282,7 +282,7 @@
       ; a NON-constant address still refuses (gcc: initializer not constant)
       (! (cgn "int a[4]; int i; int *p = &a[i]; int main() { return 0; }"))
       ; the TOP-LEVEL fn-pointer fence FELL (rung D): ptop's first declarator
-      ; routes through pdtor now -- `T (*name)(args)` (ai.c's ai_image_absguard)
+      ; routes through pdtor now -- `T (*name)(args)` (love.c's ai_image_absguard)
       ; AND the array form both parse, and gen's &f-in-images lane lays them
       (two? (cgn "int a(int x){return x;} int (*t[1])(int) = {a}; int main() { return t[0](3); }"))
       (two? (cgn "long (*gp)(long) = 0; int main() { return gp ? 1 : 0; }"))))
@@ -574,7 +574,7 @@
       (= (ty1 "long long q;")     'long)     ; long long -> long
       (= (ty1 "int i;")           'int)))
 
-; -- 7c-iii: the C-feature tail cc needs to read ai.c -- function-type typedefs,
+; -- 7c-iii: the C-feature tail cc needs to read love.c -- function-type typedefs,
 ; multi-declarator typedefs, sizeof EXPR (a node gen sizes from the type), a bare
 ; void return, a folded case label, the function-pointer cast type, an incomplete
 ; array. the object-vs-function macro distinction rides in the cpp section above.
@@ -623,11 +623,11 @@
       (= (cast "enum q { A, B, KN }; int m[KN][KN]; int main(void){return 0;}")   ; an ENUM CONSTANT dim folds (KN = 2)
          '(prog ((tdef) (gdecl (("m" (arr (arr int 2) 2) ()))) (fn "main" () (blk ((ret (num 0))))))))))
 
-; -- 7c-iii part 3: the last of ai.c's parse tail. a hex FLOAT literal (0x1.0p-53,
+; -- 7c-iii part 3: the last of love.c's parse tail. a hex FLOAT literal (0x1.0p-53,
 ; a base-2 exponent after `p`). an array dimension is any integer CONSTANT EXPRESSION
 ; (2*3, 64/limb_bits) parsed by pexpr + cfold -- subsuming the enum-constant dim. a
 ; DESIGNATED array initializer `[i]=v` takes a const-expr (enum) index. and BLOCK-SCOPED
-; typedef shadowing: a local variable whose name is a typedef (ai.h makes `num`/`word`
+; typedef shadowing: a local variable whose name is a typedef (love.h makes `num`/`word`
 ; typedefs) hides it for the rest of the block, so `num + num` reads as an expression
 ; (not a cast) -- restored at block exit so a sibling function still sees the type.
 (: (cast src) (caup (cparse (caup (clex src))))

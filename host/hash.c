@@ -1,12 +1,12 @@
 // host/hash.c -- content addressing for the reef (crew/reef/): sha-256 over a
-// string's bytes. Host-only, auto-globbed + AI_NIF-registered (no ai.c/ai.h/
+// string's bytes. Host-only, auto-globbed + AI_NIF-registered (no love.c/love.h/
 // main.c edit), the fs.c discipline:
 //
 //   (sha256 str) -> the 64-char lowercase hex digest | () misuse
 //
 // FIPS 180-4, the compact single-pass shape; a value op, so absence/misuse
 // answers ().
-#include "ai.h"
+#include "love.h"
 #include <stdint.h>
 #include <string.h>
 
