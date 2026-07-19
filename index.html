@@ -8,11 +8,9 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<h1>🌑 <a href="https://github.com/cofinalsubnets/love">love</a> 🔭</h1>
+<h1 id="love_title">🌑 <a href="https://github.com/cofinalsubnets/love">love</a> 🔭</h1>
 
-<!-- the live bao shell: status, terminal, runnable chips, and the wasm driver.
-     raw HTML/JS, since the terminal + the data-run chips are markup, not prose. -->
- <p class="lead">love is a dynamically typed <a href="#language">lisp superset</a> where every value is a one-argument function.</p>
+<nav class="topnav"><a href="#language">language</a> &nbsp;&middot;&nbsp; <a href="#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="#crew">crew</a> &nbsp;&middot;&nbsp; <a href="bench/bench.html">bench</a></nav>
 
 <p id="status">loading the image...</p>
 
@@ -30,24 +28,15 @@
   <pre id="screen"></pre>
   <div id="appbar"><span id="appname"></span><span id="apphint"></span></div>
 </div>
-<span class="chip"
-data-run=
-'."hello world :3\n",
-15
-(\ n (.((n % 3 ? () "fizz") + (n % 5 ? () "buzz") || n), ."\n", n + 1))
-1'>hello world demo</span>
-<span class="chip" data-run="2 3 4">2 3 4</span>
-<span class="chip" data-run="map (+ 1) '(1 2 3)">map (+ 1) '(1 2 3)</span>
+<span class="chip" data-run='."hello world :3\n"'>hello world</span>
+<span class="chip" data-run='15 (\ n (.((n % 3 ? () "fizz") + (n % 5 ? () "buzz") || n), ."\n", n + 1)) 1'>fizzbuzz</span>
+<span class="chip" data-run="1 2 3 4">1 2 3 4</span>
 <span class="chip" data-run="map (net * jot * (+ 2)) $ jot (3 3)">map (net * jot * (+ 2)) $ jot (3 3)</span>
 <span class="chip" data-run="(1 / 2) 2">(1 / 2) 2</span>
 <span class="chip" data-run="(1 / 2) -1">(1 / 2) -1</span>
 <span class="chip" data-run="(i * pi) e">(i * pi) e</span>
-<span class="chip" data-run="'ab + 'cd">'ab + 'cd</span>
-<span class="chip" data-run="rove ()">🦑 play rove</span>
-<span class="chip" data-run="ink ()">🦑 ink screensaver</span>
-
-<hr>
-<nav class="topnav"><span class="here">love</span> &nbsp;&middot;&nbsp; <a href="#language">language</a> &nbsp;&middot;&nbsp; <a href="#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="#crew">crew</a> &nbsp;&middot;&nbsp; <a href="bench/bench.html">bench</a></nav>
+<span id="ink_chip" class="chip" data-run="ink ()">ink (screensaver demo)</span>
+<span id="rove_chip" class="chip" data-run="rove ()">rove (roguelike demo)</span>
 
 <script src="wasm/love.js"></script>
 <script>
@@ -109,7 +98,10 @@ data-run=
      + ' (ink-web-boot c r sd) (: _ (sbox <- () (ink-scene r c)) _ (tbox <- () 0) ((sbox -> () 0) 0.0))'
      + ' (ink-web-tick _) (: t (+ 1 (tbox -> () 0)) _ (tbox <- () t) ((sbox -> () 0) (* t 0.06))))');
     ev('(: rove (\\ _ (play "rove")) ink (\\ _ (play "ink")))');
-  } catch (e) { /* offline: the apps stay unavailable */ }
+  } catch (e) {
+    document.getElementById('rove_chip').style.display = 'none';
+    document.getElementById('ink_chip').style.display = 'none';
+  }
 
   const hist = []; let hi = 0;
 
@@ -310,11 +302,12 @@ data-run=
 <h2 id="language"><a href="#language">🎨 language</a></h2>
 <p>
 love is a dynamically typed lisp superset where every value is a one-argument function.
-all functions are curried with eager evaluation like in ocaml, and apl-like infix and
+all functions are curried with eager evaluation, and punctuation symbols are interpreted
+as infix by default.
 prefix notation is built in (it's optional and desugars to lisp). since every value is a
 function and every function is curried, apply reduces to a left fold by the identity
 function. pretty much every expression evaluates to something, as long as the parens
-balance...  unless, you infinite loop.... 😨</p>
+balance...  unless you infinite loop 😨</p>
 <p>the api is currently 🫨 unstable.
 type <code>names ()</code> at the repl to see a full list of the namespace.</p>
 <h3>big main headline features</h3>
@@ -327,16 +320,23 @@ type <code>names ()</code> at the repl to see a full list of the namespace.</p>
   evaluation order roughly kind of like ocaml i think; also similar to ocaml,
   sequencing is done through the let expression (or through <code>,</code>, see below).</p>
 <h4>🔣 extended lisp syntax</h4>
-<p>love code is written using a relaxed and simplified form of s-expressions.
-  it has three basic special forms, <code>: ? \</code>, plus macros. however,
-love also has extended infix and prefix notation as syntactic sugar.</p>
+<p>love is written using a relaxed and simplified form of s-expressions.
+it has three basic special forms, <code>:</code> let <code>?</code> cond <code>\</code> lambda,
+and normal lisp features like macros and call/cc. however,
+love also has extended infix and prefix notation, which desugar to lisp.</p>
 <p>an all-punct symbol acts as an infix operator when it occurs in non-leading position
 in a list. this can be escaped by wrapping the symbol in parentheses. infix operators are
-right-associative with flat precedence, a convention borrowed from APL. the exception is
-the weak binding <code>,</code> operator, which in infix position performs left-associative</p>
-<p>prefix operators are single characters, also called monadic operators or sigils,
-implemented as syntactic sugar by the reader when a punctuation sequence is glued directly
-to the next token (no whitespace between them).</p>
+right-associative, except for the weak binding <code>,</code> sequencing operator.</p>
+<p>prefix operators are single characters, aka sigils,
+desugared by the reader when a punctuation sequence is glued directly
+to the next token (no whitespace between them).  examples include
+<code>.</code> print,
+<code>+</code> <a href="#g-net">net</a>,
+<code>$</code> <a href="#g-sat">saturate</a>,
+<code>!</code> negate,
+<code>&lt;</code> <a href="#g-cap">cap</a>,
+<code>&gt;</code> <a href="#g-cup">cup</a>
+</p>
 <h4>🌌 constellations (aka numerics)</h4>
 <p>stars aka scalars: charm (fixnum) sun (pointer size int) gem (pointer size float) twin (complex gem) big (big int)</p>
 <p>galaxies aka trays of stars aka shaped numeric arrays with APL/NumPy-like extended math operations.</p>
@@ -422,14 +422,16 @@ and addition with a secret second kind of composition.</p>
   <dt id="g-red"><a href="#g-red">🔴 red</a></dt>
     <dd><a href="#g-color">color</a> of a value whose net is negative: <code>-1 '(1 2 3 -99999)</code>. boolean false.</dd>
   <dt id="g-sat"><a href="#g-sat">🌊 saturate (<code>$</code>)</a></dt>
-  <dd>retraction of a value's <a href="#g-net">net</a> (a <a href="#g-star">star</a>-typed value) onto the <span class="hi green"><a href="#g-green">green</a></span> <a href="#g-charm">charms</a>, ie. an integer in the interval [0, max-charm].
-    overflow or underflow goes to the limit (saturation).
-    therefore <span class="hi red"><a href="#g-red">red</a></span>
+  <dd>retraction of a value's <a href="#g-net">net</a> (a <a href="#g-star">star</a>-typed value)
+    onto the <span class="hi blue"><a href="#g-blue">blue</a></span>-<span class="hi green"><a href="#g-green">green</a></span>
+    <a href="#g-charm">charms</a>, ie. an integer in the interval [0, max-charm].
+    overflow and underflow go to the limit instead of wrapping (saturation).
+    thus <span class="hi green"><a href="#g-green">green</a></span>
+    saturates to <span class="hi green"><a href="#g-green">green</a></span>
+    while both <span class="hi red"><a href="#g-red">red</a></span>
     and <span class="hi blue"><a href="#g-blue">blue</a></span>
-      both saturate to <span class="hi blue"><a href="#g-blue">blue</a></span>,
-      while <span class="hi green"><a href="#g-green">green</a></span>
-      saturates to <span class="hi green"><a href="#g-green">green</a></span>.</dd>
-  <dt id="g-star"><a href="#g-star">⭐ star</a></dt>
+    saturate to <span class="hi blue"><a href="#g-blue">blue</a></span>.</dd>
+  <dt id="g-star"><a href="#g-star">🌟 star</a></dt>
     <dd>a scalar fixpoint of <a href="#g-net">net</a>: <a href="#g-charm">charm</a>, <a href="#g-sun">sun</a>, <a href="#g-big">big</a>, <a href="#g-gem">gem</a> or <a href="#g-twin">twin</a>.</dd>
   <dt id="g-string"><a href="#g-string">🧵 string</a></dt>
     <dd>a byte vector: indexes its bytes, nets its charm-sum.</dd>
@@ -456,7 +458,7 @@ and addition with a secret second kind of composition.</p>
 <h2 id="crew"><a href="#crew">the crew</a></h2>
 <dl class="crew">
   <dt>🌑 inle ◦ the vessel</dt>
-    <dd>a self-assembling hybrid of human engineering and salvaged alien technology</dd>
+    <dd>a hybrid of human engineering and ancient technology</dd>
   <dt>🔭 tele ◦ the pilot</dt>
     <dd>big telescope. pilot face of inle. pytorch clone</dd>
   <dt>🐇 bellberry ◦ the navigator</dt>
@@ -467,20 +469,20 @@ and addition with a secret second kind of composition.</p>
     <dd>white cat. ambivalently misanthropic. openbsd netcat clone</dd>
   <dt>🐕 bao ◦ the shell</dt>
     <dd>corgi shiba inu mix. very eager to please. rlwrap clone</dd>
-  <dt>🐀 salt ◦ the build system</dt>
+  <dt>🐀 cook ◦ the build system</dt>
     <dd>large albino rat. gnu make clone</dd>
   <dt>🐐 mow ◦ the grass chewer (garbage collector)</dt>
     <dd>goat. formerly gregarious, now solitary. two-gen two-space copying</dd>
   <dt>🕷️ holo ◦ the assembler</dt>
-    <dd>cave spider. short for holophrasm. currently amd64/arm64</dd>
+    <dd>cave spider. short for holophrasm</dd>
   <dt>🦇 thom ◦ the SAT bat</dt>
     <dd>cave bat friend of holo. they often discuss their inner lives</dd>
   <dt>🍄 moon ◦ the C compiler</dt>
-    <dd>bioluminescent mycelial network bridging holo's cave with the surface world</dd>
-  <dt>🦨 kore ◦ the coreutils</dt>
-    <dd>skunk. one binary, every tool name. busybox clone</dd>
+    <dd>luminescent mycelial network transmits light from the surface to holo's cave</dd>
   <dt>🦐 lux ◦ the window manager</dt>
     <dd>mantis shrimp. frequents a brine pool in holo's cave. xmonad clone</dd>
+  <dt>🦨 kore ◦ the utility skunk</dt>
+    <dd>spotted skunk. busybox clone</dd>
   <dt>🦑 quay ◦ the terminal emulator</dt>
     <dd>cuttlefish. 256 color skin. likes writing screensavers</dd>
   <dt>🐛 pulchritude ◦ the editor</dt>
