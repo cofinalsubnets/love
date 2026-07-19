@@ -15,8 +15,8 @@
 # (cook's `run` captures stdout and waits, so no streaming and no tty) -- is passed
 # straight to the real Makefile below.
 
-AI := out/host/love
-COOK := $(AI) -l crew/cook/cook.l crew/cook/Cookfile
+LOVE := out/host/love
+COOK := $(LOVE) -l crew/cook/cook.l crew/cook/Cookfile
 
 .DEFAULT_GOAL := all
 
@@ -24,14 +24,14 @@ COOK := $(AI) -l crew/cook/cook.l crew/cook/Cookfile
 # binary is absent (a fresh checkout), handing the C build to the real Makefile.
 # Source-change rebuilds are handled by Cookfile's 'host card (a `make host` that
 # no-ops when current), so this is not a staleness gate, just an existence one.
-$(AI):
+$(LOVE):
 	@$(MAKE) host
 
 # The verbs cook owns: it shells out to the toolchain itself. Ensure the binary
 # exists first, then let cook (via Cookfile) take over.
 COOKED := all test clean install bench vmret valg
 .PHONY: $(COOKED)
-$(COOKED): $(AI)
+$(COOKED): $(LOVE)
 	@$(COOK) $@
 
 # The verbs cook can't drive (interactive / streaming / sub-make): pass through to

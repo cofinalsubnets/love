@@ -13,12 +13,12 @@
 #     transition, SATISFIABLE (uf) and PROVEN-UNSATISFIABLE (uuf) sets, plus flat
 #     graph 3-coloring; a fixed file prefix per row, summed, signature verdicts.
 #     Downloaded once into out/bench/satlib/ (rows silently skip if offline).
-# The rnd instances are drawn from ai's own xoshiro (seed/random, reproducible), and
-# the SAME generator text feeds both the DIMACS dump and ai's in-process lane, so
-# every solver sees identical instances by construction; the SATLIB rows feed ai the
+# The rnd instances are drawn from love's own xoshiro (seed/random, reproducible), and
+# the SAME generator text feeds both the DIMACS dump and love's in-process lane, so
+# every solver sees identical instances by construction; the SATLIB rows feed love the
 # byte-identical files, converted to a formula literal by awk.
 #
-# ai's `fcdcl` (crew/sat/flat.l: flat-arena CDCL + the crew/holo/-emitted native BCP kernel)
+# love's `fcdcl` (crew/sat/flat.l: flat-arena CDCL + the crew/holo/-emitted native BCP kernel)
 # is timed by its OWN clock around the solve call, so the interpreter warmup + the
 # self-tests (which would otherwise dominate) are
 # excluded -- the honest "solve time". External solvers are timed by process
@@ -37,7 +37,7 @@ TIMEOUT=${1:-30}
 INSTANCES="5 6 7 8"
 RNDN="100 150"        # random-3-SAT row sizes; m = round(4.26 n), seeds 1000..1004
 RNDK=5
-SOLVERS="minisat cadical kissat glucose picosat"   # external; ai is special-cased
+SOLVERS="minisat cadical kissat glucose picosat"   # external; love is special-cased
 CNF=$R/out/bench/cnf
 mkdir -p "$CNF"
 
@@ -82,7 +82,7 @@ for h in $INSTANCES; do
   [ -f "$CNF/php$h.cnf" ] || gen "$h" | "$GL" 2>/dev/null > "$CNF/php$h.cnf"
 done
 
-# -- the random-3-SAT files, one per (size, seed): the SAME gen2 the ai lane runs. --
+# -- the random-3-SAT files, one per (size, seed): the SAME gen2 the love lane runs. --
 genrnd() { # $1 = n, $2 = m, $3 = seed
   printf '%s\n' "$GEN2"
   cat <<'AI'
@@ -111,7 +111,7 @@ wall() {
 }
 
 for h in $INSTANCES; do
-  # ai: its own solve clock (warmup + self-test excluded), under a process timeout.
+  # love: its own solve clock (warmup + self-test excluded), under a process timeout.
   # one full throwaway solve first: kernels assemble+cache AND the solver's own lisp
   # (fbva/fmk) JITs, both OUTSIDE the clock, like the interpreter warmup -- the honest
   # "solve time" is the warm one (the rnd lane already warms the same way). (clock 0)
@@ -121,9 +121,9 @@ for h in $INSTANCES; do
   out=$(printf '(: _ (fcdcl (php %s) (php-vars %s)) K 32 t0 (clock 0) (rep i r) (? (>= i K) r (rep (+ i 1) (fcdcl (php %s) (php-vars %s)))) r (rep 0 ()) tot (- (clock 0) t0) _ (puts (+ "RESULT " (+ (show tot) (+ " " (+ (show K) (+ " " (show r))))))))' "$h" "$h" "$h" "$h" \
         | cat "$R/crew/sat/sat.l" "$R/crew/sat/flat.l" - | timeout "$TIMEOUT" "$GL" 2>/dev/null | grep -a '^RESULT' || true)
   if [ -n "$out" ]; then
-    echo "php$h ai $(echo "$out" | awk '{printf "%.3f %s", $2/$3, $4}')"
+    echo "php$h love $(echo "$out" | awk '{printf "%.3f %s", $2/$3, $4}')"
   else
-    echo "php$h ai timeout dnf"
+    echo "php$h love timeout dnf"
   fi
   # external solvers: process wall-clock; verdict from the DIMACS SAT/UNSAT line.
   for s in $SOLVERS; do
@@ -147,15 +147,15 @@ AI
 )
 for n in $RNDN; do
   m=$(rndm "$n")
-  # ai: instance 0 solved once first (kernel assembly for the size bucket + warmth),
+  # love: instance 0 solved once first (kernel assembly for the size bucket + warmth),
   # then each solve clocked in-process and summed -- same accounting as the php rows.
   out=$({ printf '%s\n' "$GEN2"
           printf '%s\n' "$RNDDRV" | sed "s/@N@/$n/g; s/@M@/$m/g; s/@K@/$RNDK/g"; } \
         | cat "$R/crew/sat/sat.l" "$R/crew/sat/flat.l" - | timeout "$TIMEOUT" "$GL" 2>/dev/null | grep -a '^RESULT' || true)
   if [ -n "$out" ]; then
-    echo "rnd$n ai $(echo "$out" | awk '{print $2, $3}')"
+    echo "rnd$n love $(echo "$out" | awk '{print $2, $3}')"
   else
-    echo "rnd$n ai timeout dnf"
+    echo "rnd$n love timeout dnf"
   fi
   # external solvers: sum the batch; the signature from the 10/20 exit convention.
   for s in $SOLVERS; do
@@ -206,7 +206,7 @@ slibrow() {
     fi
     i=$((i+1))
   done
-  # ai: embed each file as a formula literal (awk; the % footer ends the body),
+  # love: embed each file as a formula literal (awk; the % footer ends the body),
   # one process for the row -- warm on the first file, then clock each solve. all
   # forms are BODY-LESS top-level `:` (the leaking idiom); state rides the boxes.
   drv=$(for f in $files; do
@@ -219,9 +219,9 @@ slibrow() {
           printf '(: _ (puts (+ "RESULT " (+ (show (peep MS 0 0)) (+ " " (+ (peep SG 0 "") "\n"))))))\n'; } \
         | cat "$R/crew/sat/sat.l" "$R/crew/sat/flat.l" - | timeout "$TIMEOUT" "$GL" 2>/dev/null | grep -a '^RESULT' || true)
   if [ -n "$out" ]; then
-    echo "$row ai $(echo "$out" | awk '{print $2, $3}')"
+    echo "$row love $(echo "$out" | awk '{print $2, $3}')"
   else
-    echo "$row ai timeout dnf"
+    echo "$row love timeout dnf"
   fi
   # external solvers: per-file wall clock, summed; signature from the 10/20 exits.
   for s in $SOLVERS; do

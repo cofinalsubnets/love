@@ -1,4 +1,4 @@
-; closure -- higher-order stress, idiomatic ai. `(2 (+ i))` is church-2 of the section (+i) =
+; closure -- higher-order stress, idiomatic love. `(2 (+ i))` is church-2 of the section (+i) =
 ; (+i)∘(+i); applied to i it is 3i (apply "add i" twice). The compiler flattens/inlines the
 ; composition -- fair, every language's optimizer does the same to its own closures -- so what runs is
 ; the rolling-hash loop, which loopclose CAN'T collapse to a formula: a real 100000-iteration loop,

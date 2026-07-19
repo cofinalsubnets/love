@@ -3,10 +3,10 @@ include!("../lib/bench.rs");
 use std::hint::black_box;
 
 // sum of (k^2 mod p) of the odd numbers in [0, N) -- a map/filter/fold pipeline.
-// checksum = 4891344686 (< 2^53). APPLES-TO-APPLES with ai's glaze: only the INPUT n is
+// checksum = 4891344686 (< 2^53). APPLES-TO-APPLES with love's glaze: only the INPUT n is
 // opaque (black_box, no compile-time fold / rep-doubling hang); the `% p` makes the body
 // non-polynomial so NEITHER compiler can close it -- both run an honest O(n) FUSED loop
-// (ai deforests to one native counted loop; rustc -O fuses + vectorizes the chain), which
+// (love deforests to one native counted loop; rustc -O fuses + vectorizes the chain), which
 // is exactly what this bench measures: the abstraction cost of the functional pipeline.
 const N: i64 = 20000;
 

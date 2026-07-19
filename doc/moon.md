@@ -54,7 +54,7 @@ unchanged. a foreign .o (gcc's .comment/.eh_frame zoo) scares off honestly
 ifunc/TLS tarpit and stays OFF the ladder. the whole 84-program battery
 passes linked through it (compile -c, link, run, gcc differential), weak
 default/override and the nif bracket walk are gated in test_moon, and the full
-14-object selfhost set (585KB love.o included) links in under a second --
+14-object selfhost set (585KB ai.o included) links in under a second --
 refusing at `sqrt`, the first libm undef, which is exactly rung 4's seam:
 the raw-syscall host + in-tree sin/cos/log, and gcc is gone entirely.
 
@@ -620,7 +620,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    + law goldens.
    THE LIST CLEARED (2026-07-08, same day, commit by commit) -- **`mooncc -c ai.c`
    COMPILES END TO END: all 611 functions + the data tail, a ~514KB relocatable
-   love.o.** the rest of the tail as it fell: ENUM-CONSTANT SHADOWING (a local named
+   ai.o.** the rest of the tail as it fell: ENUM-CONSTANT SHADOWING (a local named
    `N` was folded to `enum { N = 13 }`'s value -- a silent read miscompile; locals
    now shadow enum constants like the typedef shadow, the constant PULLED for the
    block and re-pinned at `}`); FOLDING IMAGES (a scalar initializer that cfolds is
@@ -645,7 +645,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    .data symbols, the 7d link's first wall). gates: 78-enumshadow 79-tables
    80-manyargs 81-builtins 82-znvalue (gcc = cc = 42 each) + laws.
    **7d LANDED (2026-07-08): the cc-built love BOOTS the egg and passes the WHOLE
-   CORPUS -- 2831 tests green.** the recipe: `mooncc -c ai.c love.o` (with
+   CORPUS -- 2831 tests green.** the recipe: `mooncc -c ai.c ai.o` (with
    `#define ai_tco 0` prepended -- cc emits no sibcalls, so the VM takes the
    trampoline dispatch, the same lane love0 exercises every gate) + gcc host
    objects built `-Dai_tco=0` + libc. the corpus was the differential oracle

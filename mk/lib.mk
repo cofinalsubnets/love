@@ -41,7 +41,7 @@ lib: $(lib_h) $(gl0_h)
 # lcat failure) would leave a 0-byte header that make then treats as up-to-date -- which
 # SILENTLY drops a baked service (e.g. an empty holo.h => `assemble` unbound => the glaze's
 # map lane emits nothing => a corrupt native => crash/hang). Fail loudly instead.
-lcat_h = @mkdir -p out/lib; echo AI	$@; \
+lcat_h = @mkdir -p out/lib; echo LOVE	$@; \
   $(love0) -l love/prel.l tools/lcat.l $< > $@.tmp && test -s $@.tmp && mv -f $@.tmp $@ \
     || { rm -f $@.tmp; echo "FAIL: $@ empty (love0 lcat failed -- broken bootstrap?)"; exit 1; }
 $(lib_h): out/lib/%.h: love/%.l tools/lcat.l   # + $(love0), stated below
@@ -62,45 +62,45 @@ out/lib/seal.h: crew/holo/seal.l tools/lcat.l
 # the assembler under BOTH compilers (c0 + the self-hosted ev), like prel/ev/bao.
 out/lib/holo0.h: crew/holo/holo.l
 	@mkdir -p out/lib
-	@echo AI	$@
+	@echo LOVE	$@
 	@$(sed_lit) $< > $@
 out/lib/x640.h: crew/holo/x64.l
 	@mkdir -p out/lib
-	@echo AI	$@
+	@echo LOVE	$@
 	@$(sed_lit) $< > $@
 out/lib/arm640.h: crew/holo/arm64.l
 	@mkdir -p out/lib
-	@echo AI	$@
+	@echo LOVE	$@
 	@$(sed_lit) $< > $@
 out/lib/seal0.h: crew/holo/seal.l
 	@mkdir -p out/lib
-	@echo AI	$@
+	@echo LOVE	$@
 	@$(sed_lit) $< > $@
 out/lib/%0.h: love/%.l
 	@mkdir -p out/lib
-	@echo AI	$@
+	@echo LOVE	$@
 	@$(sed_lit) $< > $@
 # the glaze headers (love/glaze/ -- outside the love/*.l wildcard, so explicit). Raw sed_lit:
 # the glaze source is sigil-heavy, so skip the lcat reader round-trip and bake it verbatim.
 out/lib/emit.h: love/glaze/emit.l
 	@mkdir -p out/lib
-	@echo AI	$@
+	@echo LOVE	$@
 	@$(sed_lit) $< > $@
 out/lib/auto.h: love/glaze/auto.l
 	@mkdir -p out/lib
-	@echo AI	$@
+	@echo LOVE	$@
 	@$(sed_lit) $< > $@
 out/lib/gexport.h: love/glaze/export.l
 	@mkdir -p out/lib
-	@echo AI	$@
+	@echo LOVE	$@
 	@$(sed_lit) $< > $@
 out/lib/hook.h: love/glaze/hook.l
 	@mkdir -p out/lib
-	@echo AI	$@
+	@echo LOVE	$@
 	@$(sed_lit) $< > $@
 out/lib/tests0.h: $t
 	@mkdir -p out/lib
-	@echo AI	$@
+	@echo LOVE	$@
 	@cat $t | $(sed_lit) > $@
 
 # love_version.h: the build's version-control id, surfaced in the runtime as the `love-version`

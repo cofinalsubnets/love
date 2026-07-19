@@ -109,7 +109,7 @@ $d/bin/ain: tools/ain.l
 # point. The tool files' SEATs stay quiet inside the cat (no file of theirs sits
 # in the program seat), so crew/kore/kore.l's dispatcher is the one thing firing.
 $d/bin/kore: $(korefiles)
-	@echo AI	$(abspath $@)
+	@echo LOVE	$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/usr/bin/env -S love'; cat $(korefiles); } > $@
 	@chmod 755 $@
@@ -123,7 +123,7 @@ $d/bin/kore: $(korefiles)
 # from the same build. Kept OUT of the kore cat so a cc edit never forces an kore
 # rebuild and vice versa.
 $d/bin/mooncc: $(MAKEFILE_LIST)
-	@echo AI	$(abspath $@)
+	@echo LOVE	$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
@@ -138,7 +138,7 @@ $d/lib/love/mooncc.image: $(ho)/mooncc.image
 # mod+q restarts in place by exec'ing this same script.
 luxfiles = crew/lux/core.l crew/lux/layout.l crew/lux/wire.l crew/lux/ewmh.l crew/lux/manage.l crew/lux/keys.l crew/lux/config.l crew/lux/lux.l
 $d/bin/lux: $(luxfiles)
-	@echo AI	$(abspath $@)
+	@echo LOVE	$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/usr/bin/env -S love -l'; cat $(luxfiles); } > $@
 	@chmod 755 $@
@@ -147,7 +147,7 @@ $d/bin/lux: $(luxfiles)
 # launch `(bao 0)` is normally fired by main.c on a tty), so the bin is a tiny
 # relocatable launcher: it loads the installed bao.l next door and fires it.
 $d/bin/bao: $(MAKEFILE_LIST)
-	@echo AI	$(abspath $@)
+	@echo LOVE	$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \

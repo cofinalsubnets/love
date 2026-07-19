@@ -8,7 +8,7 @@
 # <lang-roster> is the column SET (e.g. $(ALL_LANGS)). The page (in JS, at render)
 # orders EVERY column by NET ascending -- the GEOMETRIC MEAN of a language's per-bench
 # ms/it (magnitude-robust, so each bench counts in proportion and no heavy one dominates;
-# bintrees ranks, bell/cdcl/setup don't -- see NET). ai takes its HONEST position (still
+# bintrees ranks, bell/cdcl/setup don't -- see NET). love takes its HONEST position (still
 # tinted gold); a language with no rows sorts last.
 # The page embeds its data, so it opens straight off disk -- no server.
 roster="$1"
@@ -19,7 +19,7 @@ cat <<'HEAD'
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ai benchmarks</title>
+<title>love benchmarks</title>
 <style>
   /* tokyo-night, matching the site (style.css): periwinkle on polar-night blue,
      the self-hosted DOS/V bitmap font, green = a kept (fastest) answer. */
@@ -53,8 +53,8 @@ cat <<'HEAD'
              box-shadow: inset -1px 0 #3b4261; font-weight: normal; }
   td.miss { color: #3b4261; }
   td.fast { color: #9ece6a; font-weight: bold; }              /* a kept answer: the green */
-  .ai { background: rgba(169,177,214,.09) !important; }        /* the ai axis: translucent periwinkle */
-  th.ai { background: rgba(169,177,214,.20) !important; color: #c0caf5 !important; }
+  .love { background: rgba(169,177,214,.09) !important; }        /* the love axis: translucent periwinkle */
+  th.love { background: rgba(169,177,214,.20) !important; color: #c0caf5 !important; }
   .netrow th, .netrow td { border-top: 2px solid #545c7e; color: #e0af68; }   /* geomean: geometric-mean ms/it of the fundamentals -- the column-ordering key */
   .extra th, .extra td { color: #737aa2; }                                    /* below the geomean: bell (bignum) + setup (cold start) -- shown, not ranked */
   th.net, td.net { border-left: 2px solid #545c7e; color: #e0af68; }          /* ... as a column in the transposed view */
@@ -67,12 +67,12 @@ cat <<'HEAD'
 </style>
 </head>
 <body>
-<nav class="topnav"><a href="../index.html">ai</a> &nbsp;&middot;&nbsp; <a href="../language.html">language</a> &nbsp;&middot;&nbsp; <a href="../index.html#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="../crew/index.html">crew</a> &nbsp;&middot;&nbsp; <span class="here">bench</span></nav>
-<h1>ai benchmarks &mdash; milliseconds per iteration</h1>
+<nav class="topnav"><a href="../index.html">love</a> &nbsp;&middot;&nbsp; <a href="../language.html">language</a> &nbsp;&middot;&nbsp; <a href="../index.html#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="../crew/index.html">crew</a> &nbsp;&middot;&nbsp; <span class="here">bench</span></nav>
+<h1>love benchmarks &mdash; milliseconds per iteration</h1>
 <p class="note">Lower is better. Each language self-times its inner loop (reps
 auto-scaled past a 200&nbsp;ms floor, so startup is excluded). The fastest cell
-per bench is <b style="color:#9ece6a">green</b>; the <span class="ai"
-style="padding:0 .3em">ai</span> axis is tinted; a dot means no implementation
+per bench is <b style="color:#9ece6a">green</b>; the <span class="love"
+style="padding:0 .3em">love</span> axis is tinted; a dot means no implementation
 (or an unavailable toolchain). The ranking row orders the columns by the metric you pick above
 &mdash; default the <b>geometric mean</b> of each language's per-bench times, so every bench counts in
 proportion and no single heavy one dominates (a language is fast at some things, slow at others; try
@@ -93,18 +93,18 @@ HEAD
 
 # -- the SECOND table: the SAT-solver shootout (arg 2 = a satrace.sh result file,
 # "<instance> <solver> <ms> <verdict>" lines). Rendered STATIC at generation time
-# (no transpose needed), solvers ordered by net ms ascending -- ai its honest
+# (no transpose needed), solvers ordered by net ms ascending -- love its honest
 # position, a timeout ranking it last. Skipped if no file. --
 if [ -n "$2" ] && [ -s "$2" ]; then
 cat <<'SAT'
 <h2>SAT solvers &mdash; milliseconds to solve</h2>
-<p class="note">A separate field: ai&rsquo;s own CDCL solver (<code>crew/sat/flat.l</code>:
+<p class="note">A separate field: love&rsquo;s own CDCL solver (<code>crew/sat/flat.l</code>:
 flat cask-resident state driven by four native kernels &mdash; propagation, the whole
 conflict handler, the decision, and the <code>fbva</code> grow step &mdash; each assembled
 through <code>crew/holo/</code> at solver-build time, specialized to the instance size)
 against reference C solvers.
 Two row families: PHP(<i>n</i>) &mdash; (<i>n</i>+1) pigeons into <i>n</i> holes, UNSAT
-and resolution-hard, where clause learning alone is <b>exponential</b> and ai&rsquo;s
+and resolution-hard, where clause learning alone is <b>exponential</b> and love&rsquo;s
 <code>fbva</code> factoring pass (extended resolution) earns its keep &mdash; and
 rnd<i>n</i>, random 3-SAT at the threshold (<i>m</i> = 4.26<i>n</i>, five fixed-seed
 instances summed; the verdict column is the per-instance SAT/UNSAT signature, identical
@@ -112,12 +112,12 @@ across every solver): raw search with no factorable structure, the guard against
 pigeonhole specialization &mdash; and REAL instances from SATLIB, the classic
 competition-era benchmark library (uf/uuf = uniform random at the transition,
 satisfiable and proven-UNSATISFIABLE sets; flat = graph 3-coloring), byte-identical
-files raced by every solver. ai is timed by its own solve clock (interpreter warmup and
+files raced by every solver. love is timed by its own solve clock (interpreter warmup and
 the one-time kernel assembly excluded); the C solvers by process wall-clock (their
 startup is ~ms). <code>timeout</code> = exceeded the cutoff. The families pull opposite
 ways: the big inprocessing solvers (cadical, kissat) are built for structure but their
 machinery costs them the small random instances, where the light classics (picosat,
-minisat) lead &mdash; ai runs ahead of cadical on PHP(5&ndash;7) and mid-field on the
+minisat) lead &mdash; love runs ahead of cadical on PHP(5&ndash;7) and mid-field on the
 pure random rows; the threshold-SAT rows are a documented per-instance lottery
 (uf250 races a 14-instance panel to damp it). The net is the geometric mean over
 rows &mdash; the same key the language table uses &mdash; so no single row owns
@@ -135,16 +135,16 @@ awk '
     for(a=1;a<=ns;a++)for(b=a+1;b<=ns;b++)if(netv[ord[b]]<netv[ord[a]]){t=ord[a];ord[a]=ord[b];ord[b]=t}
     for(i=1;i<=ni;i++){m=1e18; for(j=1;j<=ns;j++){v=val[iord[i],ord[j]]; if(v!="timeout"&&v!=""&&v+0<m)m=v+0} minr[iord[i]]=m}
     printf "<table><thead><tr><th>instance</th>"
-    for(j=1;j<=ns;j++){s=ord[j]; printf "<th%s>%s</th>", (s=="ai"?" class=\047ai\047":""), s}
+    for(j=1;j<=ns;j++){s=ord[j]; printf "<th%s>%s</th>", (s=="love"?" class=\047ai\047":""), s}
     print "</tr></thead><tbody>"
     for(i=1;i<=ni;i++){inst=iord[i]; printf "<tr><th>%s</th>", inst
-      for(j=1;j<=ns;j++){s=ord[j]; v=val[inst,s]; c=(s=="ai"?"ai ":"")
+      for(j=1;j<=ns;j++){s=ord[j]; v=val[inst,s]; c=(s=="love"?"love ":"")
         if(v==""){printf "<td class=\047%smiss\047>·</td>",c}
         else if(v=="timeout"){printf "<td class=\047%sto\047>timeout</td>",c}
         else{f=(v+0==minr[inst]?"fast ":""); printf "<td class=\047%s%s\047>%s</td>",c,f,fmt(v+0)}}
       print "</tr>"}
     printf "<tr class=\047netrow\047><th>net</th>"
-    for(j=1;j<=ns;j++){s=ord[j]; printf "<td class=\047net%s\047>%s</td>", (s=="ai"?" ai":""), (anyto[s]?"dnf":fmt(netv[s]))}
+    for(j=1;j<=ns;j++){s=ord[j]; printf "<td class=\047net%s\047>%s</td>", (s=="love"?" love":""), (anyto[s]?"dnf":fmt(netv[s]))}
     print "</tr></tbody></table>"
   }' "$2"
 echo "</div>"
@@ -156,10 +156,10 @@ fi
 # Rendered STATIC (like the SAT table); a dnf lane ranks last. Skipped if no file. --
 if [ -n "$3" ] && [ -s "$3" ]; then
 cat <<'CC'
-<h2>compilers &mdash; milliseconds to build ai, and to test it</h2>
-<p class="note">A third field, ai&rsquo;s C toolchain against the incumbents:
-<b>mooncc</b> is ai&rsquo;s own C compiler (<code>crew/moon/</code>), and it builds
-<code>ai</code> with <i>no gcc, glibc, or ld</i> &mdash; mooncc lays every object,
+<h2>compilers &mdash; milliseconds to build love, and to test it</h2>
+<p class="note">A third field, love&rsquo;s C toolchain against the incumbents:
+<b>mooncc</b> is love&rsquo;s own C compiler (<code>crew/moon/</code>), and it builds
+<code>love</code> with <i>no gcc, glibc, or ld</i> &mdash; mooncc lays every object,
 <code>mksys</code> emits the syscall leaf, and our own linker (<code>crew/holo/</code>)
 binds the executable. The <b>build</b> row is the wall-clock to compile every C
 translation unit (<code>ai.c</code> + <code>host/*.c</code> + the <code>am</code> math
@@ -188,13 +188,13 @@ awk '
     for(j=1;j<=nc;j++){c=ord[j]; printf "<th%s>%s</th>", (c=="mooncc"?" class=\047ai\047":""), c}
     print "</tr></thead><tbody>"
     for(i=1;i<=np;i++){ph=pord[i]; printf "<tr><th>%s</th>", ph
-      for(j=1;j<=nc;j++){c=ord[j]; v=val[ph,c]; cl=(c=="mooncc"?"ai ":"")
+      for(j=1;j<=nc;j++){c=ord[j]; v=val[ph,c]; cl=(c=="mooncc"?"love ":"")
         if(v==""){printf "<td class=\047%smiss\047>·</td>",cl}
         else if(v=="dnf"){printf "<td class=\047%sto\047>dnf</td>",cl}
         else{f=(v+0==minr[ph]?"fast ":""); printf "<td class=\047%s%s\047>%s</td>",cl,f,fmt(v+0)}}
       print "</tr>"}
     printf "<tr class=\047netrow\047><th>net</th>"
-    for(j=1;j<=nc;j++){c=ord[j]; printf "<td class=\047net%s\047>%s</td>", (c=="mooncc"?" ai":""), (anydn[c]?"dnf":fmt(netv[c]))}
+    for(j=1;j<=nc;j++){c=ord[j]; printf "<td class=\047net%s\047>%s</td>", (c=="mooncc"?" love":""), (anydn[c]?"dnf":fmt(netv[c]))}
     print "</tr></tbody></table>"
   }' "$3"
 echo "</div>"
@@ -234,11 +234,11 @@ cat <<'TAIL'
 const fmt = x => x == null ? "·"
   : x < 1 ? x.toFixed(4) : x < 100 ? x.toFixed(3) : x.toFixed(1);
 
-// column order: every language (ai included -- its HONEST position) by NET time
+// column order: every language (love included -- its HONEST position) by NET time
 // ascending by the net (the GEOMETRIC MEAN of a language's per-bench ms/it; see NET below).
-// ai is still TINTED (the gold column) wherever it lands. No-data langs sort last.
+// love is still TINTED (the gold column) wherever it lands. No-data langs sort last.
 // NORANK benches are kept OUT of the net, each for a reason geomean can't fix: bell (bignum --
-// luajit/rust lack it entirely, so it's not a fair cross-language axis), cdcl (ai-only; its perf
+// luajit/rust lack it entirely, so it's not a fair cross-language axis), cdcl (love-only; its perf
 // lives in the SAT-solver table), setup (a one-time cold-start cost, not a per-iteration time).
 // bell + setup still SHOW as rows below the net; cdcl is dropped from this table. bintrees DOES
 // rank now -- the geomean lets the GC/alloc axis count proportionally without a heavy bench
@@ -253,7 +253,7 @@ const NORANK = b => b === "bell" || b === "cdcl" || b === "setup";
 // heavy bench dominates and a closed-form O(1) win helps by its ratio. HARMONIC rewards being
 // fast SOMEWHERE (the small values dominate); ARITHMETIC (the mean) lets a heavy bench dominate.
 // (A plain SUM is omitted: it is just the mean times the bench count -- the same order.) The
-// radio shows how it shifts: ai leads geometric/harmonic (the loop-closer), trails arithmetic.
+// radio shows how it shifts: love leads geometric/harmonic (the loop-closer), trails arithmetic.
 // A bench timed below the clock's resolution records as 0.0000 ms/it (rust's no-op closure);
 // 1/0 and log(0) would blow up the harmonic/geometric means, so floor at the display res.
 const GEOFLOOR = 1e-4;
@@ -283,11 +283,11 @@ function build() {
   const td = (b, l) => {
     const v = (PER[b] && PER[b][l] != null) ? PER[b][l] : null;
     const c = [];
-    if (l === "ai") c.push("ai");
+    if (l === "love") c.push("love");
     if (v == null) c.push("miss"); else if (v === minB[b]) c.push("fast");
     return "<td" + (c.length ? " class='" + c.join(" ") + "'" : "") + ">" + fmt(v) + "</td>";
   };
-  const netc = (l) => "<td class='net" + (l === "ai" ? " ai" : "") + "'>" + (HAS(l) ? fmt(RANK(l)) : "·") + "</td>";
+  const netc = (l) => "<td class='net" + (l === "love" ? " love" : "") + "'>" + (HAS(l) ? fmt(RANK(l)) : "·") + "</td>";
   let h = "<table><thead><tr><th>" + (transposed ? "language" : "bench") + "</th>";
   if (transposed) {                                                          // languages down the rows: FUND benches, then net, then the EXTRA benches, as COLUMNS
     for (const b of FUND) h += "<th>" + b + "</th>";
@@ -295,14 +295,14 @@ function build() {
     for (const b of EXTRA) h += "<th>" + b + "</th>";
     h += "</tr></thead><tbody>";
     for (const l of langs) {
-      h += "<tr><th" + (l === "ai" ? " class='ai'" : "") + ">" + l + "</th>";
+      h += "<tr><th" + (l === "love" ? " class='love'" : "") + ">" + l + "</th>";
       for (const b of FUND) h += td(b, l);
       h += netc(l);
       for (const b of EXTRA) h += td(b, l);
       h += "</tr>";
     }
   } else {                                                                   // benches down the rows: FUND rows, the net row, then the EXTRA rows (bell, setup) BELOW the net
-    for (const l of langs) h += "<th" + (l === "ai" ? " class='ai'" : "") + ">" + l + "</th>";
+    for (const l of langs) h += "<th" + (l === "love" ? " class='love'" : "") + ">" + l + "</th>";
     h += "</tr></thead><tbody>";
     for (const b of FUND) { h += "<tr><th>" + b + "</th>"; for (const l of langs) h += td(b, l); h += "</tr>"; }
     h += "<tr class='netrow'><th>" + metric + "</th>";

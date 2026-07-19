@@ -12,144 +12,144 @@ endif
 syn iskeyword @,33,37,38,42-43,45-47,48-57,58,60-63,92,94-95,124,126
 
 " The three special forms: : (letrec*/seq), ? (cond), \ (lambda/quote)
-syn keyword AiForm : ? \\
+syn keyword LoveForm : ? \\
 
 " Built-in functions (C nifs) + prel functions
-syn keyword AiFunc link cap cup caap caup cuap cuup
-syn keyword AiFunc caaap caaup cauap cauup cuaap cuaup cuuap cuuup
-syn keyword AiFunc id co const flip
-syn keyword AiFunc map foldl foldr foldl1 foldr1 filter init last each all any cat catmap
-syn keyword AiFunc rev take drop part zip ldel assq memq lidx sort sortsplit merge msort jot
-syn keyword AiFunc + - * / % < <= = >= > <- -> idp inc dec abs gcd modpow int
-syn keyword AiFunc << >> & \| ^
-syn keyword AiFunc pin pull peep tablet mint gauge
-syn keyword AiFunc sin cos log pow re im conj arg twin
-syn keyword AiFunc nump intp powg num-ap numfn randint net prod neg recip frac bit
-syn keyword AiFunc chainp strp symp tabp lamp hotp packp bigp widep trayp comp flop fixp nilp non atomp unip gemp crestp
-syn keyword AiFunc arr array arank alen ashape atype asum aprod amax amin aall iota
-syn keyword AiFunc a-rank a-shape a-type a-dim
-syn keyword AiFunc string snip intern nom mint tally slurp show sip pad page
-syn keyword AiFunc tablet keys dig sat non peep pin pull buf blit missing
-syn keyword AiFunc spin peek poke seek snip chainp trayp unip
-syn keyword AiFunc fgetc fungetc feof fputc fputs fputbn fputx fflush read
-syn keyword AiFunc putc puts putn putx getc read in out dot
-syn keyword AiFunc ev call-cc yield spawn wait sleep done? hush key?
-syn keyword AiFunc help scare scare? more? eof?
-syn keyword AiFunc rand randf rand-next randf-next rng-seed rng-get rng-set
-syn keyword AiFunc open close run getenv exit
-syn keyword AiFunc clock gauge assert love-version argv cmdline
-syn keyword AiSigilWord non twin sat
+syn keyword LoveFunc link cap cup caap caup cuap cuup
+syn keyword LoveFunc caaap caaup cauap cauup cuaap cuaup cuuap cuuup
+syn keyword LoveFunc id co const flip
+syn keyword LoveFunc map foldl foldr foldl1 foldr1 filter init last each all any cat catmap
+syn keyword LoveFunc rev take drop part zip ldel assq memq lidx sort sortsplit merge msort jot
+syn keyword LoveFunc + - * / % < <= = >= > <- -> idp inc dec abs gcd modpow int
+syn keyword LoveFunc << >> & \| ^
+syn keyword LoveFunc pin pull peep tablet mint gauge
+syn keyword LoveFunc sin cos log pow re im conj arg twin
+syn keyword LoveFunc nump intp powg num-ap numfn randint net prod neg recip frac bit
+syn keyword LoveFunc chainp strp symp tabp lamp hotp packp bigp widep trayp comp flop fixp nilp non atomp unip gemp crestp
+syn keyword LoveFunc arr array arank alen ashape atype asum aprod amax amin aall iota
+syn keyword LoveFunc a-rank a-shape a-type a-dim
+syn keyword LoveFunc string snip intern nom mint tally slurp show sip pad page
+syn keyword LoveFunc tablet keys dig sat non peep pin pull buf blit missing
+syn keyword LoveFunc spin peek poke seek snip chainp trayp unip
+syn keyword LoveFunc fgetc fungetc feof fputc fputs fputbn fputx fflush read
+syn keyword LoveFunc putc puts putn putx getc read in out dot
+syn keyword LoveFunc ev call-cc yield spawn wait sleep done? hush key?
+syn keyword LoveFunc help scare scare? more? eof?
+syn keyword LoveFunc rand randf rand-next randf-next rng-seed rng-get rng-set
+syn keyword LoveFunc open close run getenv exit
+syn keyword LoveFunc clock gauge assert love-version argv cmdline
+syn keyword LoveSigilWord non twin sat
 
 " Macros (head-symbol rewrites installed with ::)
-syn keyword AiMacro :: L list do begin progn let if cond quote tuple hash
-syn keyword AiMacro && \|\| :- ?- >>= <=<
+syn keyword LoveMacro :: L list do begin progn let if cond quote tuple hash
+syn keyword LoveMacro && \|\| :- ?- >>= <=<
 
 " Constants: booleans (1/0), the tier-spine array element-kind codes, e pi i
-syn keyword AiConst true false e pi tau i ieee-inf ieee-nan
-syn keyword AiConst Z R C O
+syn keyword LoveConst true false e pi tau i ieee-inf ieee-nan
+syn keyword LoveConst Z R C O
 
 " Quoted atoms: 'foo   (' is one-operand \ = quote)
-syn match AiAtomMark "'"
-syn match AiAtom "'[^ \t\n()`',;#\"]\+" contains=AiAtomMark
+syn match LoveAtomMark "'"
+syn match LoveAtom "'[^ \t\n()`',;#\"]\+" contains=LoveAtomMark
 
 " Reader mark: ` is the list ctor (evaluates each element)
-syn match AiListCtor "`"
+syn match LoveListCtor "`"
 
 " Operator sigils: a run of operator chars that LEADS a token -- standalone
 " (+ 1 2), or glued to its datum as a monadic ($x, +'(…), <>x). The negative
 " lookbehind for a name char (alnum/_) keeps punct that lives INSIDE a name from
 " lighting up (the kebab/?/! law: rand-next, done?, max-charm stay plain), and
-" AiNumber/AiFloat -- defined after this -- still win the sign/decimal of -3, 2.5,
+" LoveNumber/LoveFloat -- defined after this -- still win the sign/decimal of -3, 2.5,
 " .5 by definition order. (the valence law: glued is monadic; the runtime tables
 " are book['operators] / book['monadics].)
-syn match AiSigil "[A-Za-z0-9_]\@<![@#$~.!?%^*+/<>=-]\+"
+syn match LoveSigil "[A-Za-z0-9_]\@<![@#$~.!?%^*+/<>=-]\+"
 
 " Numbers (integer / bignum literals, possibly negative)
-syn match AiNumber "\<-\?\d\+\>"
+syn match LoveNumber "\<-\?\d\+\>"
 
 " Floating point literals: 1.5  -1.5  .5  1.  1e10  1.5e-3  (a point and/or exponent)
-" Defined after AiNumber so a float wins over the integer match at a shared start.
-syn match AiFloat "\<-\?\d\+\.\d*\([eE][-+]\?\d\+\)\?\>"
-syn match AiFloat "\<-\?\.\d\+\([eE][-+]\?\d\+\)\?\>"
-syn match AiFloat "\<-\?\d\+[eE][-+]\?\d\+\>"
+" Defined after LoveNumber so a float wins over the integer match at a shared start.
+syn match LoveFloat "\<-\?\d\+\.\d*\([eE][-+]\?\d\+\)\?\>"
+syn match LoveFloat "\<-\?\.\d\+\([eE][-+]\?\d\+\)\?\>"
+syn match LoveFloat "\<-\?\d\+[eE][-+]\?\d\+\>"
 
 " Strings
-syn region AiString start='"' skip='\\\\\|\\"' end='"'
+syn region LoveString start='"' skip='\\\\\|\\"' end='"'
 
 " Comments — ; to end of line, #! shebang; with TODO/FIXME highlighting inside
-syn match AiCommentTodo /\<\(TODO\|FIXME\|NOTE\|XXX\|HACK\)\>/ contained
-syn match AiComment ";.*$" contains=AiCommentTodo
-syn match AiComment "#!.*$" contains=AiCommentTodo
+syn match LoveCommentTodo /\<\(TODO\|FIXME\|NOTE\|XXX\|HACK\)\>/ contained
+syn match LoveComment ";.*$" contains=LoveCommentTodo
+syn match LoveComment "#!.*$" contains=LoveCommentTodo
 
 " Unmatched close paren is an error
-syn match AiParenError ")"
+syn match LoveParenError ")"
 
 syn sync lines=100
 
-hi def link AiAtomMark       Delimiter
-hi def link AiSigil          Special
-hi def link AiSigilWord      Operator
-hi def link AiAtom           Identifier
-hi def link AiComment        Comment
-hi def link AiCommentTodo    Todo
-hi def link AiForm           Statement
-hi def link AiFunc           Function
-hi def link AiMacro          Operator
-hi def link AiConst          Constant
-hi def link AiListCtor       Special
-hi def link AiNumber         Number
-hi def link AiFloat          Float
-hi def link AiParenError     Error
-hi def link AiString         String
-hi def link AiBool           Boolean
+hi def link LoveAtomMark       Delimiter
+hi def link LoveSigil          Special
+hi def link LoveSigilWord      Operator
+hi def link LoveAtom           Identifier
+hi def link LoveComment        Comment
+hi def link LoveCommentTodo    Todo
+hi def link LoveForm           Statement
+hi def link LoveFunc           Function
+hi def link LoveMacro          Operator
+hi def link LoveConst          Constant
+hi def link LoveListCtor       Special
+hi def link LoveNumber         Number
+hi def link LoveFloat          Float
+hi def link LoveParenError     Error
+hi def link LoveString         String
+hi def link LoveBool           Boolean
 
 " Rainbow parentheses — each nesting level gets its own colour.
 " Each region contains the cluster plus the next level; level 9 wraps to 0.
-" Toggle with \r (or :AiRainbow) — controlled by g:ai_rainbow (default: 1).
-syn cluster AiListCluster contains=AiAtom,AiAtomMark,AiConst,AiComment,AiCommentTodo,AiFunc,AiNumber,AiFloat,AiSymbol,AiForm,AiString,AiMacro,AiListCtor,AiSigil
+" Toggle with \r (or :LoveRainbow) — controlled by g:love_rainbow (default: 1).
+syn cluster LoveListCluster contains=LoveAtom,LoveAtomMark,LoveConst,LoveComment,LoveCommentTodo,LoveFunc,LoveNumber,LoveFloat,LoveSymbol,LoveForm,LoveString,LoveMacro,LoveListCtor,LoveSigil
 
-if !exists("g:ai_rainbow")
-  let g:ai_rainbow = 0
+if !exists("g:love_rainbow")
+  let g:love_rainbow = 0
 endif
 
-if g:ai_rainbow
-  syn region AiList0 matchgroup=AiLevel0 start="(" end=")" contains=@AiListCluster,AiList1
-  syn region AiList1 matchgroup=AiLevel1 start="(" end=")" contains=@AiListCluster,AiList2
-  syn region AiList2 matchgroup=AiLevel2 start="(" end=")" contains=@AiListCluster,AiList3
-  syn region AiList3 matchgroup=AiLevel3 start="(" end=")" contains=@AiListCluster,AiList4
-  syn region AiList4 matchgroup=AiLevel4 start="(" end=")" contains=@AiListCluster,AiList5
-  syn region AiList5 matchgroup=AiLevel5 start="(" end=")" contains=@AiListCluster,AiList6
-  syn region AiList6 matchgroup=AiLevel6 start="(" end=")" contains=@AiListCluster,AiList7
-  syn region AiList7 matchgroup=AiLevel7 start="(" end=")" contains=@AiListCluster,AiList8
-  syn region AiList8 matchgroup=AiLevel8 start="(" end=")" contains=@AiListCluster,AiList9
-  syn region AiList9 matchgroup=AiLevel9 start="(" end=")" contains=@AiListCluster,AiList0
+if g:love_rainbow
+  syn region LoveList0 matchgroup=LoveLevel0 start="(" end=")" contains=@LoveListCluster,LoveList1
+  syn region LoveList1 matchgroup=LoveLevel1 start="(" end=")" contains=@LoveListCluster,LoveList2
+  syn region LoveList2 matchgroup=LoveLevel2 start="(" end=")" contains=@LoveListCluster,LoveList3
+  syn region LoveList3 matchgroup=LoveLevel3 start="(" end=")" contains=@LoveListCluster,LoveList4
+  syn region LoveList4 matchgroup=LoveLevel4 start="(" end=")" contains=@LoveListCluster,LoveList5
+  syn region LoveList5 matchgroup=LoveLevel5 start="(" end=")" contains=@LoveListCluster,LoveList6
+  syn region LoveList6 matchgroup=LoveLevel6 start="(" end=")" contains=@LoveListCluster,LoveList7
+  syn region LoveList7 matchgroup=LoveLevel7 start="(" end=")" contains=@LoveListCluster,LoveList8
+  syn region LoveList8 matchgroup=LoveLevel8 start="(" end=")" contains=@LoveListCluster,LoveList9
+  syn region LoveList9 matchgroup=LoveLevel9 start="(" end=")" contains=@LoveListCluster,LoveList0
 
   if &background ==# "dark"
-    hi def AiLevel0 ctermfg=red         guifg=red1
-    hi def AiLevel1 ctermfg=yellow      guifg=orange1
-    hi def AiLevel2 ctermfg=green       guifg=yellow1
-    hi def AiLevel3 ctermfg=cyan        guifg=greenyellow
-    hi def AiLevel4 ctermfg=magenta     guifg=green1
-    hi def AiLevel5 ctermfg=red         guifg=springgreen1
-    hi def AiLevel6 ctermfg=yellow      guifg=cyan1
-    hi def AiLevel7 ctermfg=green       guifg=slateblue1
-    hi def AiLevel8 ctermfg=cyan        guifg=magenta1
-    hi def AiLevel9 ctermfg=magenta     guifg=purple1
+    hi def LoveLevel0 ctermfg=red         guifg=red1
+    hi def LoveLevel1 ctermfg=yellow      guifg=orange1
+    hi def LoveLevel2 ctermfg=green       guifg=yellow1
+    hi def LoveLevel3 ctermfg=cyan        guifg=greenyellow
+    hi def LoveLevel4 ctermfg=magenta     guifg=green1
+    hi def LoveLevel5 ctermfg=red         guifg=springgreen1
+    hi def LoveLevel6 ctermfg=yellow      guifg=cyan1
+    hi def LoveLevel7 ctermfg=green       guifg=slateblue1
+    hi def LoveLevel8 ctermfg=cyan        guifg=magenta1
+    hi def LoveLevel9 ctermfg=magenta     guifg=purple1
   else
-    hi def AiLevel0 ctermfg=red         guifg=red3
-    hi def AiLevel1 ctermfg=darkyellow  guifg=orangered3
-    hi def AiLevel2 ctermfg=darkgreen   guifg=orange2
-    hi def AiLevel3 ctermfg=blue        guifg=yellow3
-    hi def AiLevel4 ctermfg=darkmagenta guifg=olivedrab4
-    hi def AiLevel5 ctermfg=red         guifg=green4
-    hi def AiLevel6 ctermfg=darkyellow  guifg=paleturquoise3
-    hi def AiLevel7 ctermfg=darkgreen   guifg=deepskyblue4
-    hi def AiLevel8 ctermfg=blue        guifg=darkslateblue
-    hi def AiLevel9 ctermfg=darkmagenta guifg=darkviolet
+    hi def LoveLevel0 ctermfg=red         guifg=red3
+    hi def LoveLevel1 ctermfg=darkyellow  guifg=orangered3
+    hi def LoveLevel2 ctermfg=darkgreen   guifg=orange2
+    hi def LoveLevel3 ctermfg=blue        guifg=yellow3
+    hi def LoveLevel4 ctermfg=darkmagenta guifg=olivedrab4
+    hi def LoveLevel5 ctermfg=red         guifg=green4
+    hi def LoveLevel6 ctermfg=darkyellow  guifg=paleturquoise3
+    hi def LoveLevel7 ctermfg=darkgreen   guifg=deepskyblue4
+    hi def LoveLevel8 ctermfg=blue        guifg=darkslateblue
+    hi def LoveLevel9 ctermfg=darkmagenta guifg=darkviolet
   endif
 else
-  syn region AiList matchgroup=AiParen start="(" end=")" contains=@AiListCluster,AiList
-  hi def link AiParen Delimiter
+  syn region LoveList matchgroup=LoveParen start="(" end=")" contains=@LoveListCluster,LoveList
+  hi def link LoveParen Delimiter
 endif
 
-let b:current_syntax = "ai"
+let b:current_syntax = "love"

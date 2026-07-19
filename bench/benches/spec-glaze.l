@@ -1,8 +1,8 @@
-; spec-glaze -- an INTERNAL ai perf check for autospec (interpreter specialization), NOT a
-; cross-language bench. Deliberately OFF the default BENCHES / the comparison table: ai's glaze
+; spec-glaze -- an INTERNAL love perf check for autospec (interpreter specialization), NOT a
+; cross-language bench. Deliberately OFF the default BENCHES / the comparison table: love's glaze
 ; specializes the interpreter away (the 1st Futamura projection), which the other languages can't, so a
-; side-by-side column is apples-to-oranges -- it tells you nothing about them, only about ai's
-; partial evaluator. Run it on its own: `make -C bench BENCHES=spec-glaze` (ai only).
+; side-by-side column is apples-to-oranges -- it tells you nothing about them, only about love's
+; partial evaluator. Run it on its own: `make -C bench BENCHES=spec-glaze` (love only).
 ;
 ; A tiny tree-walking interpreter `ev1` over a fixed AST program P (the Horner form of 2x^3+3x^2+5x+7),
 ; summing P(i mod 97) mod 1e9+7 over i in [0,N). Under a naive interpreter every iteration walks + heads

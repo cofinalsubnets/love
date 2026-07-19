@@ -51,8 +51,8 @@
                       "\techo \"E1[$(h_o)]\""
                       "\techo \"E2[$(suf)]\""
                       "\techo \"E3[$R/$(ho)]\"")) "all")
-   _ (ok "nested-paren + pattern subst-ref" (has ev "E1[out/host/love.o out/host/data.o]"))
-   _ (ok "suffix subst-ref"                 (has ev "E2[./love.o ./data.o]"))
+   _ (ok "nested-paren + pattern subst-ref" (has ev "E1[out/host/ai.o out/host/data.o]"))
+   _ (ok "suffix subst-ref"                 (has ev "E2[./ai.o ./data.o]"))
    _ (ok "single-char $R + $(VAR)"          (has ev "E3[./out/host]"))
 
    ; ---------------------------------------------------------------- functions

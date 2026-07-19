@@ -118,7 +118,7 @@ candidate: $(ho)/love.cand.baked
 
 
 # rm the archive first: `ar r` REPLACES/ADDS but never REMOVES, so a renamed/dropped
-# source (e.g. love.c -> ai.c) would leave a stale .o in the archive -> multiple-
+# source (e.g. ai.c -> love.c) would leave a stale .o in the archive -> multiple-
 # definition at link. the rm rebuilds it fresh, so a rename no longer needs `make clean`.
 $(ho)/liblove.a: $(h_o)
 	@echo AR	$@
@@ -158,7 +158,7 @@ $(ho)/%.o: $(R)/%.c $(ai_h) $(ho)/.hostcc
 	@$(hcc) -c $< -o $@
 
 # l.o carries the version string (love_version.h); relink it when the id changes.
-$(ho)/love.o $(ho)/0/love.o: out/lib/love_version.h
+$(ho)/ai.o $(ho)/0/ai.o: out/lib/love_version.h
 # host/main.o bakes the lcat lib headers inline (egg + prel/ev/cli/bao -- bao is the
 # baked shell core now, subsuming the old repl.h). Now that it rides the host/*.c
 # glob (compiled once, not recompiled on every link, as the old inline `$(hcc)

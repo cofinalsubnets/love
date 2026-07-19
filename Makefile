@@ -97,7 +97,7 @@ fmt-check: $(ho)/love
 # Makefile changes. (A baked snapshot: re-run `make crew/cook/Cookfile` after adding
 # a source/test file, since the wildcard lists are frozen at emit time.)
 crew/cook/Cookfile: $(MAKEFILE_LIST) crew/cook/cook.l $(ho)/love
-	@echo AI	$@
+	@echo LOVE	$@
 	@$(ho)/love -l crew/cook/cook.l --emit Makefile > $@
 
 # ====================================================================

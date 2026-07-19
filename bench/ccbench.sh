@@ -1,13 +1,13 @@
 #!/bin/sh
-# ccbench.sh -- the COMPILER shootout (the page's FOURTH table). Builds the ai host
+# ccbench.sh -- the COMPILER shootout (the page's FOURTH table). Builds the love host
 # binary with three C compilers and, for each, reports two wall-clock costs:
 #   build : compile every C translation unit (ai.c + host/*.c + the am math floor)
-#           and link a working `ai` -- source to runnable binary.
+#           and link a working `love` -- source to runnable binary.
 #   test  : run the full arch-neutral corpus ($t, the same files test_host/test_raw
 #           feed) through the binary that build produced, with egg-boot EXCLUDED
 #           (subtracted) so it times the suite executing, not the compiler self-install.
 # The three compilers:
-#   mooncc : ai's OWN C compiler (crew/moon/), the exact `make test_raw` sequence --
+#   mooncc : love's OWN C compiler (crew/moon/), the exact `make test_raw` sequence --
 #            no gcc/glibc/ld anywhere: mooncc lays every .o, mksys emits the syscall
 #            leaf, our linker (crew/holo/) binds. It egg-boots (no baked image).
 #   gcc / clang : the same translation units at the host's real -O2 cflags, linked
@@ -79,7 +79,7 @@ build_cc() { # $1=compiler $2=binpath ; leaves objects under $WORK/<compiler>
     $cc $CFLAGS -o "$bin" "$od"/ai.o "$od"/am.o "$od"/host/*.o ) || return 1
 }
 
-# -- mooncc: the WHOLE toolchain in ai, verbatim from `make test_raw`. mooncc -c each
+# -- mooncc: the WHOLE toolchain in love, verbatim from `make test_raw`. mooncc -c each
 #    unit, mksys the syscall leaf, our linker binds. -I$ho picks up the lcat'd headers. --
 MC="$ho/mooncc"
 build_mooncc() { # $1=binpath
@@ -126,13 +126,13 @@ lane() { # $1=label $2=builder-cmd $3=binpath
 }
 
 if [ "$(uname -m)" = x86_64 ] && [ -x "$MC" ]; then
-  lane mooncc build_mooncc "$WORK/ai-mooncc"
+  lane mooncc build_mooncc "$WORK/love-mooncc"
 else
   echo "build mooncc dnf"; echo "test mooncc dnf"   # mooncc's native lane is x86-64 only
 fi
 for c in gcc clang; do
   if command -v "$c" >/dev/null 2>&1; then
-    lane "$c" "build_cc $c" "$WORK/ai-$c"
+    lane "$c" "build_cc $c" "$WORK/love-$c"
   else
     echo "build $c dnf"; echo "test $c dnf"
   fi

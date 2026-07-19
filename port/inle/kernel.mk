@@ -137,7 +137,7 @@ $(k_odir)/%.o: $(R)/%.c $(k_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib
 	@$(kcc) -c $< -o $@
 
 # l.o carries the version string (love_version.h); recompile it when the id changes.
-$(k_odir)/love.o: out/lib/love_version.h
+$(k_odir)/ai.o: out/lib/love_version.h
 
 $(k_odir)/%.o: $(R)/%.S $(k_h)
 	@echo AS	$@
@@ -286,13 +286,13 @@ out/lib/ktests.l: $(kt) $(MAKEFILE_LIST)
 	@mkdir -p out/lib
 	@cat $(kt) > $@
 out/lib/ktests.h: out/lib/ktests.l $(love0) tools/lcatv.l love/prel.l
-	@echo AI	$@
+	@echo LOVE	$@
 	@$(love0) -l love/prel.l tools/lcatv.l out/lib/ktests.l > $@
 # The inle agent, baked VERBATIM (lcatv) to a C string literal kmain.c #includes
 # under INLE and drinks form-by-form through zevs at boot -- same path as the
 # K_TEST corpus, one program instead of the test suite.
 out/lib/inle.h: port/inle/inle.l $(love0) tools/lcatv.l love/prel.l
-	@echo AI	$@
+	@echo LOVE	$@
 	@$(love0) -l love/prel.l tools/lcatv.l port/inle/inle.l > $@
 # arm64 EXECUTION validator: cross-build `love` for aarch64 + run the corpus under
 # qemu-aarch64 (the trustworthy check for the glaze's second target -- holotest

@@ -479,7 +479,7 @@ test_selfhost: host out/host$(hsuf)/mooncc
 	@echo SELFHOST $(ho)/love-selfhost
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/selfhost; mkdir -p $$d; \
-	  $(ho)/mooncc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c ai.c $$d/love.o \
+	  $(ho)/mooncc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
 	    || { echo "FAIL mooncc -c ai.c"; exit 1; }; \
 	  for f in host/*.c; do b=`basename $$f .c`; \
 	    $(ho)/mooncc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
@@ -507,7 +507,7 @@ test_raw: host out/host$(hsuf)/mooncc
 	@echo RAW $(ho)/love-raw
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_raw: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/raw; mkdir -p $$d; \
-	  $(ho)/mooncc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c ai.c $$d/love.o \
+	  $(ho)/mooncc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
 	    || { echo "FAIL mooncc -c ai.c"; exit 1; }; \
 	  for f in host/*.c; do b=`basename $$f .c`; \
 	    $(ho)/mooncc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
@@ -566,7 +566,7 @@ test_raw_arm64: host out/host$(hsuf)/mooncc
 	@echo RAW-ARM64 $(ho)/love-raw-a64
 	@if ! command -v qemu-aarch64 >/dev/null 2>&1; then echo "test_raw_arm64: no qemu-aarch64, skipped"; exit 0; fi; \
 	  d=$(ho)/raw-a64; mkdir -p $$d; \
-	  $(ho)/mooncc -t arm64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c ai.c $$d/love.o \
+	  $(ho)/mooncc -t arm64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
 	    || { echo "FAIL mooncc -t arm64 -c ai.c"; exit 1; }; \
 	  for f in host/*.c; do b=`basename $$f .c`; \
 	    $(ho)/mooncc -t arm64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
@@ -738,7 +738,7 @@ test_gen:
 	@echo "test_gen: skipped (needs rocq/coqc)"
 else
 test_gen: host
-	@echo AI	proof/rocq/gen.v "(tools/spec2coq.l on $m)"
+	@echo LOVE	proof/rocq/gen.v "(tools/spec2coq.l on $m)"
 	@$m tools/spec2coq.l > proof/rocq/gen.v
 	@echo TEST proof/rocq/gen.v "(coqc, against spec.v's shared model)"
 	@cd proof/rocq && $(COQC) -R . "" spec.v >/dev/null && $(COQC) -R . "" gen.v
@@ -757,7 +757,7 @@ test_uugen:
 	@echo "test_uugen: skipped (needs rocq/coqc)"
 else
 test_uugen: host
-	@echo AI	proof/rocq/uugen.v "(tools/uu2coq.l on $m)"
+	@echo LOVE	proof/rocq/uugen.v "(tools/uu2coq.l on $m)"
 	@$m tools/uu2coq.l > proof/rocq/uugen.v
 	@echo TEST proof/rocq/uugen.v "(coqc)"
 	@$(COQC) -q proof/rocq/uugen.v
@@ -774,7 +774,7 @@ test_uulean:
 else
 test_uulean: host
 	@mkdir -p lean
-	@echo AI	proof/lean/uugen.lean "(tools/uu2lean.l on $m)"
+	@echo LOVE	proof/lean/uugen.lean "(tools/uu2lean.l on $m)"
 	@$m tools/uu2lean.l > proof/lean/uugen.lean
 	@echo TEST proof/lean/uugen.lean "(lean)"
 	@$(LEAN) proof/lean/uugen.lean > out/host/.uulean.out 2>&1; r=$$?; \
@@ -885,7 +885,7 @@ endif
 # IMPLEMENTATION at corpus time. `make uuwm` refreshes it after a core.l edit;
 # test_uuwm (in test_all) regenerates and diffs, failing loudly on drift.
 uuwm: host
-	@echo AI	test/uuwm.l "(tools/uuwmgen.l on $m)"
+	@echo LOVE	test/uuwm.l "(tools/uuwmgen.l on $m)"
 	@$m tools/uuwmgen.l > test/uuwm.l
 test_uuwm: host
 	@echo TEST test/uuwm.l "(regenerate + diff)"
@@ -898,7 +898,7 @@ test_uuwm: host
 # proves the semilattice laws OF THE ANALYSIS at corpus time. `make uukind` refreshes
 # it after a kinds.l edit; test_uukind (in test_all) regenerates and diffs.
 uukind: host
-	@echo AI	test/uukind.l "(tools/kinds2uu.l on $m)"
+	@echo LOVE	test/uukind.l "(tools/kinds2uu.l on $m)"
 	@$m tools/kinds2uu.l > test/uukind.l
 test_uukind: host
 	@echo TEST test/uukind.l "(regenerate + diff)"

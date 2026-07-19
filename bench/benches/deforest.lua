@@ -1,6 +1,6 @@
 -- sum of squares of the odd numbers in [0, N) -- a map/filter/fold list pipeline.
 -- lua has no built-in map/filter, so the idiom is a single loop over the range (no
--- intermediate tables) -- this is the hand-written loop ai's deforestation produces.
+-- intermediate tables) -- this is the hand-written loop love's deforestation produces.
 -- checksum = 4891344686 (< 2^53, exact in a double).
 package.path = (arg[0]:match("(.*/)") or "./") .. "../lib/?.lua;" .. package.path
 local bench = require("bench")

@@ -1,18 +1,18 @@
 # Benchmark harness. Times equivalent numeric / list workloads written in many
 # languages and prints a side-by-side comparison. Each language self-times the
 # inner loop (auto-scaling reps past a 200ms floor) so interpreter startup is
-# excluded; see bench.ai / lib/bench.* for the shared protocol.
+# excluded; see bench.l / lib/bench.* for the shared protocol.
 #
 # Results are cached per language under out/bench/<lang>.txt. The user-facing
 # targets DEPEND on those files and just pretty-print them -- a bench is only
 # (re)run when its result file is missing or older than the bench sources (or,
-# for ai, the ai binary). So `make bench` reformats instantly once the files
+# for love, the love binary). So `make bench` reformats instantly once the files
 # exist; touch a source or `make clean` to force a re-run.
 #
-#   make / make bench   show the default column set (ai go rust julia
+#   make / make bench   show the default column set (love go rust julia
 #                          luajit pypy node), running only what is stale
 #   make all            show every language present on this machine
-#   make <lang>         show one language (ai is shown alongside for contrast),
+#   make <lang>         show one language (love is shown alongside for contrast),
 #                          e.g. make chez / make pypy / make rust
 #   make BENCHES=fib …  restrict the workload set (then clean to refresh files)
 #   make TIMEOUT=60 …   per-bench wall-clock cutoff in seconds (default 30)
@@ -42,18 +42,18 @@ BENCHES := fib tak sum deforest primes bell strcat strscan hash sort tree bintre
 # pays the timeout wall for them (re-test by removing one and `make clean`).
 SKIP :=
 
-# every language, in report-column order. ai first, then native (go rust java),
+# every language, in report-column order. love first, then native (go rust java),
 # JIT (julia luajit pypy node), BEAM (elixir), a scheme (chez), and a CL (sbcl).
 # (lean + apl dropped from the report: lean's per-sample AOT compile made it slow;
 # apl, once the closeable folds close, only sorted to the end. luajit stays -- it's
 # the inspiration for the auto-JIT.)
-ALL_LANGS := ai \
+ALL_LANGS := love \
              go rust java \
              julia luajit pypy node \
              elixir chez sbcl
 
 # the columns `make bench` shows by default.
-DEFAULT_LANGS := ai go rust julia luajit pypy node
+DEFAULT_LANGS := love go rust julia luajit pypy node
 
 # per-language: source extension, harness file (a result depends on it), the
 # interpreter binary (for the PATH presence check), and any extra prereq.
@@ -100,8 +100,8 @@ BIN_apl := dyalogscript
 
 EXTRA_ai := $(GL)
 
-# ai is always available (we build it); others only if their binary is on PATH.
-present = $(if $(filter ai,$(1)),$(1),$(if $(shell command -v $(BIN_$(1)) 2>/dev/null),$(1)))
+# love is always available (we build it); others only if their binary is on PATH.
+present = $(if $(filter love,$(1)),$(1),$(if $(shell command -v $(BIN_$(1)) 2>/dev/null),$(1)))
 PRESENT := $(foreach L,$(ALL_LANGS),$(call present,$(L)))
 SHOW    := $(filter $(PRESENT),$(DEFAULT_LANGS))
 
@@ -119,13 +119,13 @@ $(BDIR):
 
 # Per-language result file + single-language report target. The result file is
 # regenerated (benches re-run) only when its sources change; the phony <lang>
-# target just formats it, alongside ai for contrast (ai shows only itself).
+# target just formats it, alongside love for contrast (love shows only itself).
 define LANG_rule
 $$(BDIR)/$(1).txt: $(HARN_$(1)) $$(wildcard benches/*.$(EXT_$(1))) run.sh $(EXTRA_$(1)) | $$(BDIR)
 	@./run.sh $(1) "$$(BENCHES)" $$(TIMEOUT) "$$(SKIP)" $$(SAMPLES) > $$@
 
-$(1): $$(call txt,$(1)) $(if $(filter ai,$(1)),,$$(call txt,ai))
-	@awk -v langs='$(if $(filter ai,$(1)),ai,ai $(1))' -f report.awk $$^
+$(1): $$(call txt,$(1)) $(if $(filter love,$(1)),,$$(call txt,love))
+	@awk -v langs='$(if $(filter love,$(1)),love,love $(1))' -f report.awk $$^
 endef
 $(foreach L,$(ALL_LANGS),$(eval $(call LANG_rule,$(L))))
 
@@ -140,7 +140,7 @@ all run: $(call txt,$(PRESENT))
 raw: $(call txt,$(PRESENT))
 	@cat $^
 
-# The SAT-solver shootout (the page's SECOND table): ai's CDCL vs the reference C
+# The SAT-solver shootout (the page's SECOND table): love's CDCL vs the reference C
 # solvers on PHP(5..8). Cached like the language results -- re-run only when the
 # runner or the solver changes. `make satrace` to refresh it on its own.
 SATRACE := $(BDIR)/satrace.txt
@@ -157,7 +157,7 @@ $(SETUP): setup.sh $(GL) | $(BDIR)
 setup: $(SETUP)
 	@cat $(SETUP)
 
-# The compiler shootout (the page's FOURTH table): build the ai host binary with
+# The compiler shootout (the page's FOURTH table): build the love host binary with
 # mooncc / gcc / clang, and run the full corpus ($t) through each. Rows build+test,
 # columns the compilers. ai_cflags + the corpus come from the Makefile (one source of
 # truth); the mooncc lane needs out/host/mooncc(+.image), so depend on `host`. Cached;

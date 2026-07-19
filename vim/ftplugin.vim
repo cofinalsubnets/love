@@ -3,11 +3,11 @@ if exists("b:did_ftplugin")
 endif
 let b:did_ftplugin = 1
 
-command! -buffer AiRainbow call s:ToggleRainbow()
+command! -buffer LoveRainbow call s:ToggleRainbow()
 
 function! s:ToggleRainbow()
-  let g:ai_rainbow = !get(g:, 'ai_rainbow', 1)
-  set syntax=ai
+  let g:love_rainbow = !get(g:, 'love_rainbow', 1)
+  set syntax=love
 endfunction
 
-nnoremap <buffer> <LocalLeader>r :AiRainbow<CR>
+nnoremap <buffer> <LocalLeader>r :LoveRainbow<CR>
