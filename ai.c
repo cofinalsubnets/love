@@ -235,7 +235,6 @@ lvm(lvm_obin, int);
 // that cares re-inspects the arg itself, e.g. data_string_apply's index test).
 // Bodies within a group are byte-identical tail calls, kept distinct only by
 // address (ai_noicf, in the lvm macro) so ai_typ's compare elsewhere still works.
-// Formerly laid in the ai_data ELF section by data.c -- now just plain functions.
 // (The handlers live far below, near the generic-op dispatchers; declared here.)
 static lvm(data_num_apply); static lvm(data_string_apply);
 static lvm(data_sym_apply); static lvm(data_pair_apply);
@@ -6275,8 +6274,8 @@ uintptr_t ai_vec_bytes(struct ai_vec *v) {
 // ============================================================================
 // Step 8 -- random numbers. xoshiro256++ (Blackman & Vigna, public domain)
 // seeded by SplitMix64. State is a rank-1 i64 vec of length 4 (256 bits) that
-// rides the existing vec machinery -- no data sentinel, no enum q / ai_data_n
-// / gen_data / wasm-vt changes (cf. complex, Step 7). The payload is treated
+// rides the existing vec machinery -- no data sentinel, no enum q or wasm-vt
+// changes (cf. complex, Step 7). The payload is treated
 // as raw bytes (memcpy), never via the typed vec_get/put accessors, so the
 // 64-bit limbs survive on 32-bit ports and a given seed reproduces the same
 // sequence on host/kernel/MCU/WASM/Playdate. C holds no RNG state and never

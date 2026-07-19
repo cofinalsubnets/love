@@ -9,8 +9,7 @@
  * which is mapped at reset independent of the FlexRAM (ITCM/DTCM) split -- so
  * the scaffold needs no FlexRAM reconfiguration to have working memory (moving
  * hot code to ITCM / stack to DTCM is a documented optimisation, see README).
- * Mirrors the freestanding arch/<arch>/*.lds, including the contiguous
- * ai_data sentinel block that g_typ() indexes into (see data.ld). */
+ * Mirrors the freestanding arch/<arch>/*.lds. */
 
 OUTPUT_FORMAT("elf32-littlearm")
 ENTRY(cstartup)
@@ -41,13 +40,6 @@ SECTIONS {
   .text : {
     KEEP(*(.startup))
     *(.text .text.*)
-    /* love data self-quote sentinels: kept contiguous and in enum order
-       (ai_data.NN) so g_typ() recovers a kind from an ap's slot index.
-       Mirrors data.ld for the host link. */
-    . = ALIGN(16);
-    __start_ai_data = .;
-    KEEP(*(SORT_BY_NAME(ai_data.*)))
-    __stop_ai_data = .;
   } > FLASH
 
   .rodata : {

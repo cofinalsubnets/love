@@ -433,7 +433,6 @@ struct ai_chain { lvm_t *ap; intptr_t a, b; };
 // only on the chain < map < hot tail; do NOT read this enum as the compare order.
 // KN is the matrix dimension.
 enum q { KMint, KNom, KCharm, KWide, KFlo, KCplx, KBig, KVec, KArrZ, KArrR, KArrC, KArrO, KString, KChain, KMap, KHot, KN };
-#define ai_data_n 9     // # of data sentinels (vestigial now: ai_typ is a plain address-compare, no section/stride)
 typedef ai_word num, word;
 // The unique empty string -- a data-segment global the GC never moves (gcp's
 // out-of-pool short-circuit). Strings are immutable, so one empty string
