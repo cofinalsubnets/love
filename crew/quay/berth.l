@@ -9,8 +9,8 @@
 ; a fresh grid -- the full-screen guest repaints on its SIGWINCH, which is
 ; the one-buffer bargain throughout.
 ;
-; run: out/host/ai -l crew/quay/berth.l -e '(berth (L "sh"))'
-;      out/host/ai -l crew/quay/berth.l -e '(berth (L "vim" "README.md"))'
+; run: out/host/love -l crew/quay/berth.l -e '(berth (L "sh"))'
+;      out/host/love -l crew/quay/berth.l -e '(berth (L "vim" "README.md"))'
 ;
 ; host-only (screen/scribe + mind/gather + raw/winsize ride host/*.c), so
 ; berth never joins the corpus; the moor core needs no tty and is smoke-

@@ -66,7 +66,7 @@ wall() { t0=$(date +%s.%N); ( eval "$1" ) >/dev/null 2>&1; t1=$(date +%s.%N)
 med() { i=0; while [ "$i" -lt "$SAMPLES" ]; do wall "$1"; echo; i=$((i+1)); done \
         | sort -n | awk '{v[NR]=$0} END{print v[int((NR+1)/2)]}'; }
 
-# -- gcc / clang: the ordinary lane. Compile the libai.a translation units (ai.c +
+# -- gcc / clang: the ordinary lane. Compile the liblove.a translation units (ai.c +
 #    am.c) and the host/*.c glob (main.c carries the egg), then link the objects. --
 build_cc() { # $1=compiler $2=binpath ; leaves objects under $WORK/<compiler>
   cc=$1; bin=$2; od=$WORK/$(basename "$cc")
@@ -93,7 +93,7 @@ build_mooncc() { # $1=binpath
       "$MC" -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
     { cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l \
           crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
-      echo "(mksys \"$od/sys.o\")"; } | out/host/ai || exit 1
+      echo "(mksys \"$od/sys.o\")"; } | out/host/love || exit 1
     "$MC" "$od"/*.o -o "$bin" ) || return 1
 }
 

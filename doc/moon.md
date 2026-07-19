@@ -115,7 +115,7 @@ the subset is not "C11-ish" by taste -- it is measured off the target:
 * setjmp/sigsetjmp + signal handlers: LIBC's problem, not the compiler's --
   cc only needs the calls and the volatile discipline around them.
 * the tail-threaded VM: `return Continue()` everywhere. gcc keeps the stack
-  flat via sibling-call optimization (ai_tco=1). BUT ai0 already builds and
+  flat via sibling-call optimization (ai_tco=1). BUT love0 already builds and
   passes the whole corpus with -Dai_tco=0 -- the return-based mode -- so
   guaranteed sibcalls are a PERFORMANCE stage, not a correctness gate. the
   first cc-built ai runs ai_tco=0; a later stage adds guaranteed tail calls
@@ -330,7 +330,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    ENV TRAP paid: a catted app is `#!/usr/bin/env -S ai` + the cat, so bare
    `mooncc` runs on the PATH `ai` -- a STALE install mis-runs it (missing baked
    core like holo callr) and the heap grows unboundedly; the make gate is safe
-   (m defaults to ./out/host/ai). probe cc with `./out/host/ai out/host/mooncc`,
+   (m defaults to ./out/host/love). probe cc with `./out/host/love out/host/mooncc`,
    never a bare `mooncc`, until `make install` refreshes the PATH binary.
 5. **the preprocessor** LANDED 2026-07-06: crew/moon/cpp.l, TOKEN-BASED (it sits
    between clex and cparse, so an identifier inside a string/char literal --
@@ -647,7 +647,7 @@ two ideas to keep warm as the stages climb, neither committed yet:
    **7d LANDED (2026-07-08): the cc-built ai BOOTS the egg and passes the WHOLE
    CORPUS -- 2831 tests green.** the recipe: `mooncc -c ai.c ai.o` (with
    `#define ai_tco 0` prepended -- cc emits no sibcalls, so the VM takes the
-   trampoline dispatch, the same lane ai0 exercises every gate) + gcc host
+   trampoline dispatch, the same lane love0 exercises every gate) + gcc host
    objects built `-Dai_tco=0` + libc. the corpus was the differential oracle
    that named every remaining miscompile, each now a law + battery program:
    CALLEE-SAVED rbx (holo r3; the callr park / overflow builtins / va_arg walk
@@ -813,7 +813,7 @@ The image is binary-specific (anchor-checked) and installs from the same
 build as `bin/ai` (strip keeps vaddrs, so the stripped install wakes it);
 a mismatched pair falls back to a fresh boot with no moon-main, so never mix
 builds by hand. The repo cat `out/host/mooncc` is unchanged -- probe with
-`./out/host/ai out/host/mooncc`, as ever.
+`./out/host/love out/host/mooncc`, as ever.
 
 ## naming
 

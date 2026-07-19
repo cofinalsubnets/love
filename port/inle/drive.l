@@ -3,7 +3,7 @@
 ; the WRITE half (propose a source CHANGE, gate it, keep it or revert). rides the
 ; dock's verbs (look/lay/rebuild/sh) -- load it beside serve.l + judge.l.
 ;
-;   out/host/ai -l port/inle/judge.l -l port/inle/serve.l -l port/inle/drive.l -e "(dock 7620)"
+;   out/host/love -l port/inle/judge.l -l port/inle/serve.l -l port/inle/drive.l -e "(dock 7620)"
 ;   > (drive 1)            ; one iteration with the current proposer/grader
 ;
 ; TWO SEAMS, both slots you can retune live -- this is what makes it agnostic:

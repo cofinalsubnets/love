@@ -9,7 +9,7 @@
 ; pty; WM_DELETE or the child's exit steps away cleanly. an xterm, ai-native
 ; from the socket up.
 ;
-; run: out/host/ai -l crew/lux/core.l -l crew/lux/wire.l -l crew/quay/berth.l -l crew/quay/pier.l \
+; run: out/host/love -l crew/lux/core.l -l crew/lux/wire.l -l crew/quay/berth.l -l crew/quay/pier.l \
 ;        -e '(pier (L "sh") "/tmp/.X11-unix/X0" (xauth-cookie "/home/gwen/.Xauthority" "0") ())'
 ;      the fourth arg is a font atlas: () sails with the builtin moderndos
 ;      8x16; load crew/quay/psf.l and pass (psf-gz "/usr/share/kbd/console-

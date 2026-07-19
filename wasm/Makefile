@@ -40,10 +40,10 @@ all: ai.js
 ../out/lib/prel.h: ../love/prel.l
 ../out/lib/ev.h: ../love/ev.l
 ../out/lib/uu.h: ../love/uu.l
-../out/lib/egg.h ../out/lib/prel.h ../out/lib/ev.h ../out/lib/uu.h ../out/lib/ai_version.h:
+../out/lib/egg.h ../out/lib/prel.h ../out/lib/ev.h ../out/lib/uu.h ../out/lib/love_version.h:
 	$(MAKE) -C .. out/lib/$(notdir $@)
 
-# ai.o bakes the version string (ai_version.h, via ai.c's __has_include), so
+# ai.o bakes the version string (love_version.h, via ai.c's __has_include), so
 # regenerate it through the parent (force_version) and recompile ai.o when the
 # id changes -- mirrors the host build's l.o relink. Without this the browser
 # banner (ai-version) drifts to whatever revision ai.o was last built at.
@@ -52,13 +52,13 @@ all: ai.js
 # `git describe --dirty` would brand the page banner "-dirty" in perpetuity --
 # cosmetic, but it reads as broken. Map it to "-wasm" in a wasm-local copy (same
 # revision, honest "this is the browser build"); a clean tree just keeps the bare
-# id. Compile ai.o against it -- -I$(o) wins the "ai_version.h" quote-include
+# id. Compile ai.o against it -- -I$(o) wins the "love_version.h" quote-include
 # over ../out/lib, so the host build's honest -dirty is untouched.
-$(o)/ai_version.h: ../out/lib/ai_version.h
+$(o)/love_version.h: ../out/lib/love_version.h
 	@mkdir -p $(dir $@)
 	@sed 's/-dirty"/-wasm"/' $< > $@
 
-$(o)/ai.o: ../ai.c $(g_h) $(o)/ai_version.h
+$(o)/ai.o: ../ai.c $(g_h) $(o)/love_version.h
 	@mkdir -p $(dir $@)
 	$(emcc) -I$(o) $(CFLAGS) -c $< -o $@
 

@@ -4,7 +4,7 @@
 ; top-level def -- yet the checker is OBSERVE-ONLY and ERASABLE, so the network
 ; still runs (and differentiates) exactly as it did before the overlay.
 ;
-;   Run:  cat crew/tele/tele.l doc/proto/overlay-lib.l doc/proto/overlay-tele.l | out/host/ai
+;   Run:  cat crew/tele/tele.l doc/proto/overlay-lib.l doc/proto/overlay-tele.l | out/host/love
 ;
 ; tele's ops are already shape-relational -- mm contracts, transp2 flips, sum
 ; reduces to a scalar. we just NAME those relations as sigs and let the overlay's

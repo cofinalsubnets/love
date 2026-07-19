@@ -1,7 +1,7 @@
 ; ============================================================================
 ; overlay x uu -- the overlay's DEPENDENT-index check backed by uu's REAL normalizer.
 ; Run concatenated with the uu core (which leaks vof/GLOB/etc.):
-;     cat test/uu.l doc/proto/overlay-uu.l | out/host/ai
+;     cat test/uu.l doc/proto/overlay-uu.l | out/host/love
 ; The vec domain's `okr` (result-acceptable predicate) normalizes each vec's length
 ; INDEX with uu's `(vof () idx)` -- uu's genuine NbE over its nat_rect-defined `add`
 ; (NOT a toy Peano adder). So `vconcat` of a length-2 and a length-1 vector checks

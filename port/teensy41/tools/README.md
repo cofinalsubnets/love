@@ -8,7 +8,7 @@ PJRC bootloader chip on the board accepts it directly.
 ## Producing the image
 
 The `Makefile` runs `llvm-objcopy -O ihex` on the linked ELF to make
-`$R/out/teensy41/ai.hex`. The flashable layout (FlexSPI config block at
+`$R/out/teensy41/love.hex`. The flashable layout (FlexSPI config block at
 `0x60000000`, IVT at `0x60001000`, boot data, then code) is established by the
 linker script (`../teensy41.lds`) and the boot structs in `../teensy41.c`, so
 objcopy is the whole "packer".
@@ -18,7 +18,7 @@ objcopy is the whole "packer".
 Tap the white button on the Teensy 4.1 to enter the bootloader, then:
 
 ```
-teensy_loader_cli --mcu=TEENSY41 -w -v out/teensy41/ai.hex   # or: make flash
+teensy_loader_cli --mcu=TEENSY41 -w -v out/teensy41/love.hex   # or: make flash
 ```
 
 `teensy_loader_cli` is PJRC's open-source command-line loader

@@ -20,11 +20,11 @@ $(m):
 
 # vmret.l vs py/vmret.py over the host binary plus any kernel arch ELFs
 # present (each arch exercises a different ret matcher + the objdump choice).
-# ai0 is skipped: it builds -Dai_tco=0 (trampoline), where handler rets are
+# love0 is skipped: it builds -Dai_tco=0 (trampoline), where handler rets are
 # expected -- the vmret signal is noise there.
 test_vmret: | $(m)
 	@echo TEST vmret.l
-	@for e in $(R)/out/host/ai `find $(R)/out/free -name 'ai-*.elf' 2>/dev/null`; do \
+	@for e in $(R)/out/host/love `find $(R)/out/free -name 'ai-*.elf' 2>/dev/null`; do \
 	  python3 $(R)/tools/py/vmret.py $$e > $(R)/out/host/.vmret.py 2>&1; \
 	  $(m) $(R)/tools/vmret.l $$e > $(R)/out/host/.vmret.l 2>&1; \
 	  cmp -s $(R)/out/host/.vmret.py $(R)/out/host/.vmret.l && echo "  ok   $$e" \
@@ -39,7 +39,7 @@ test_vmret: | $(m)
 # root, so run it from there.
 test_cook: | $(m)
 	@echo TEST cook.l
-	@cd $(R) && out/host/ai crew/cook/cooktest.l
+	@cd $(R) && out/host/love crew/cook/cooktest.l
 
 # crew/tele/tele.l: the PyTorch-style autograd library (pure ai over the constellation
 # algebra). teletest.l grad-checks every op -- the analytic gradient (from `back`)
@@ -47,7 +47,7 @@ test_cook: | $(m)
 # as a user `-l` (NOT in the corpus), so `make test` is untouched; this is its gate.
 test_tele: | $(m)
 	@echo TEST tele.l
-	@cd $(R) && out/host/ai -l crew/tele/tele.l crew/tele/teletest.l
+	@cd $(R) && out/host/love -l crew/tele/tele.l crew/tele/teletest.l
 
 # crew/tele/xor.l: the flagship integration demo -- a 2-8-1 MLP learns XOR (the
 # not-linearly-separable problem a single linear layer can't solve). seeded, so it
@@ -55,4 +55,4 @@ test_tele: | $(m)
 # right. proves the whole stack (autograd + nn + optim) trains a real net.
 test_xor: | $(m)
 	@echo TEST xor.l
-	@cd $(R) && out/host/ai -l crew/tele/tele.l crew/tele/xor.l
+	@cd $(R) && out/host/love -l crew/tele/tele.l crew/tele/xor.l

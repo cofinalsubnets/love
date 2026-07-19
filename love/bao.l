@@ -1,7 +1,7 @@
 ; bao -- the shell core: the read-eval-print loop, its multi-line line editor,
 ; the stream shell (read/reads), the floor handler (welp), and the host-only
 ; pty wrapper (wrap). bao is the BAKED shell core for all three frontends -- the
-; host (out/host/ai), the freestanding kernel (kmain.c), and the ai0 bootstrap
+; host (out/host/love), the freestanding kernel (kmain.c), and the love0 bootstrap
 ; self-test -- loaded after the prel. (It was repl.l; the editor/repl internals
 ; used to LEAK as user-visible book globals because the corpus tested them by
 ; name. Now the editor + repl + the pty wrapper live inside one closure, so only
@@ -65,9 +65,9 @@
 ; reads: the stream shell -- a port is the LAZY charms, and reads drinks it:
 ; read and eval every form until the stream ends (eof, or input ends inside
 ; an unfinished shape); the value is the last form's. ev late-binds through
-; the book ((ev 'ev r)) so the one definition drives both of ai0's passes
+; the book ((ev 'ev r)) so the one definition drives both of love0's passes
 ; (c0 first, the hatched ev' second); the host's stdin runner and the
-; ai0/kernel corpus runners are all this function now.
+; love0/kernel corpus runners are all this function now.
 (: (reads p)
    ((: (g e z) (: r (sound p e)
        (? (id? r e) z (id? r p) z (g e (ev 'ev r)))))
@@ -413,7 +413,7 @@
    ; --- the host-only pty wrapper (wrap) ---
    ; reachable from the bao prompt to pty-wrap a host program -- (wrap (L
    ; "python3")). it uses the pty nifs (ptyrun, gather) which live in host/pty.c
-   ; and are NOT present in ai0 or the kernel; bao is baked into both, so the
+   ; and are NOT present in love0 or the kernel; bao is baked into both, so the
    ; references are DEFERRED to call time through (ev 'mind) / (ev 'gather)
    ; -- quoted symbols are inert data at bake time (no missing-name fires), and
    ; wrap is never CALLED on those frontends. on the host they resolve to the

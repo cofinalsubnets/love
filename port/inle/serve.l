@@ -10,16 +10,16 @@
 ; "model-agnostic" means here: the dock never learns what a model is.
 ;
 ; Launch from a STABLE COPY `out/host/dock` (so `adopt` can rebuild the canonical
-; out/host/ai without ETXTBSY -- see adopt), judge.l FIRST (the dock leaves the
+; out/host/love without ETXTBSY -- see adopt), judge.l FIRST (the dock leaves the
 ; probe ladder to judge, and a closure would fossilize a not-yet-loaded `judge`
 ; to the zero point):
-;   make host && cp out/host/ai out/host/dock
+;   make host && cp out/host/love out/host/dock
 ;   out/host/dock -l port/inle/judge.l -l port/inle/serve.l -l port/inle/drive.l -l port/inle/patch.l -e "(dock 7620)"
-; (a plain `out/host/ai ... -e "(dock N)"` works too, but then `adopt` can't
+; (a plain `out/host/love ... -e "(dock N)"` works too, but then `adopt` can't
 ; rebuild -- it would be rebuilding its own running exe. drive.l + patch.l are
 ; optional -- the self-modify loop; the dock serves fine without them.)
 ; Then drive it (another shell):
-;   out/host/ai tools/ain.l 127.0.0.1 7620
+;   out/host/love tools/ain.l 127.0.0.1 7620
 ;   > (brief ())            ; the served steering prompt -- read this first
 ;   > (verbs ())            ; the dock's own verbs
 ;   > (probe "(puts (show (+ 1 2)))")   ; run a candidate against the binary
@@ -56,13 +56,13 @@
    ; a subprocess under `timeout` (secs), so a hang or crash can't touch the
    ; dock. -> (status output): 0 clean, 124 hung, >=128 signal-killed. This is
    ; the "binary probe" the whole dock is named for; `judge` (judge.l) climbs
-   ; the full ladder (parse, host-vs-ai0 divergence, reward/bug lenses). --
-   (probe prog)      (probe-for "out/host/ai" prog 5)
+   ; the full ladder (parse, host-vs-love0 divergence, reward/bug lenses). --
+   (probe prog)      (probe-for "out/host/love" prog 5)
    (probe-for bin prog secs) (runl (L "timeout" (show secs) bin "-e" prog))
 
-   ; --- rebuild + gate, IN PLACE. `build` overwrites out/host/ai (fine only when
+   ; --- rebuild + gate, IN PLACE. `build` overwrites out/host/love (fine only when
    ; nothing is executing it -- else the relink ETXTBSYs; that is what the
-   ; candidate flow below is for). `gate` is `make test` (host + ai0, twice; 0 =
+   ; candidate flow below is for). `gate` is `make test` (host + love0, twice; 0 =
    ; the zz-fin summary on both passes). handy for a quick check; `adopt` uses the
    ; safe candidate flow instead. -> (status output). --
    (build _) (runl (L "make" "host"))
@@ -71,7 +71,7 @@
 
    ; --- adopt: the two-generation build + promote + re-exec -- the copying-GC /
    ; egg move at process AND filesystem scale. build the NEXT generation at a
-   ; SIDE PATH `out/host/ai.cand` (`make candidate`): nothing executes that name,
+   ; SIDE PATH `out/host/love.cand` (`make candidate`): nothing executes that name,
    ; so the relink can never ETXTBSY, no matter who runs `ai` (a repl, a test,
    ; even the dock's own client; the --bake itself is rename-safe). gate the
    ; candidate (`make test m=.../ai.cand`). ONLY on green PROMOTE by atomic
@@ -85,14 +85,14 @@
    dock-bin "out/host/dock"                          ; the stable copy the dock runs from
    relaunch-slot (tablet 0)                           ; dock stashes its re-exec argv here
    (promote _)                                        ; atomic swaps: candidate -> canonical -> dock copy
-     (: _ (sh (L "mv" "-f" "out/host/ai.cand" "out/host/ai"))
-        _ (sh (L "mv" "-f" "out/host/ai.cand.baked" "out/host/ai.baked"))
-        _ (sh (L "cp" "out/host/ai" (+ dock-bin ".new")))
+     (: _ (sh (L "mv" "-f" "out/host/love.cand" "out/host/love"))
+        _ (sh (L "mv" "-f" "out/host/love.cand.baked" "out/host/love.baked"))
+        _ (sh (L "cp" "out/host/love" (+ dock-bin ".new")))
         (sh (L "mv" "-f" (+ dock-bin ".new") dock-bin)))
    (adopt _)
      (: b (sh (L "make" "candidate"))                 ; build the next gen at the side path
         (? (! (= (cap b) 0)) (: _ (note "dock: candidate build FAILED -- staying") b)
-           (: g (sh (L "make" "test" "m=out/host/ai.cand"))   ; gate the candidate binary
+           (: g (sh (L "make" "test" "m=out/host/love.cand"))   ; gate the candidate binary
               (? (= (cap g) 0)
                  (: _ (note "dock: gate GREEN -- promoting the candidate + adopting")
                     _ (promote ())
@@ -115,7 +115,7 @@
      (+ "  (lay \"path\" body)     write a tree file (careful) -> 1|0\n"
      (+ "  (sh (L \"git\" ...))    shell out -> (status output)\n"
      (+ "  (probe \"PROG\")        run PROG against the binary, isolated -> (status stdout)\n"
-     (+ "  (judge \"PROG\")        the full ladder: parse/run/host-vs-ai0/reward/bug (judge.l)\n"
+     (+ "  (judge \"PROG\")        the full ladder: parse/run/host-vs-love0/reward/bug (judge.l)\n"
      (+ "  (build ())            make host (build in place) -> (status output)\n"
      (+ "  (gate ())             make test (the gate, twice) -> (status output)\n"
      (+ "  (rebuild ())          build, then gate iff it built\n"

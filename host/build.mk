@@ -12,35 +12,35 @@
 # it isn't), so a musl build never overwrites glibc objects -- musl's bare
 # `sigsetjmp` vs glibc's `__sigsetjmp` macro would otherwise poison a cross-libc
 # relink. The .hostcc stamp below catches the IN-PLACE flips (musl-clang
-# appearing/vanishing changes what out/host means). The bootstrap (ai0) + the
+# appearing/vanishing changes what out/host means). The bootstrap (love0) + the
 # generated out/lib/*.h headers stay PINNED to canonical out/host paths and
-# plain $(CC): ai0 never goes musl.
+# plain $(CC): love0 never goes musl.
 ho = out/host$(hsuf)
 h_o = $(ai_c:$(R)/%.c=$(ho)/%.o)
 # host/*.c: per-app host-nif files (auto-globbed, auto-registered via AI_NIF).
-# Linked DIRECTLY into the binary (not via libai.a) so the ai_nifs section is
+# Linked DIRECTLY into the binary (not via liblove.a) so the ai_nifs section is
 # never archive-collected. Drop a host/<app>.c in and it builds -- no rule edit.
 host_o = $(patsubst host/%.c,$(ho)/host/%.o,$(wildcard host/*.c))
 # the host runs $(tco) (common.mk; default 1 = tail-threaded, vmret-checked);
-# ai0 below stays pinned 0, the deliberate trampoline-coverage lane.
+# love0 below stays pinned 0, the deliberate trampoline-coverage lane.
 # (-I$(ho) -Iout/lib for the generated egg/cli headers.)
 # host_cc: STATIC picks musl-clang unless CC was set explicitly (the musl-gcc
-# fallback below); ai0 and the lib tools stay on plain $(CC) either way.
+# fallback below); love0 and the lib tools stay on plain $(CC) either way.
 host_cc = $(if $(STATIC),$(if $(cc_user),$(CC),musl-clang),$(CC))
 hcc = $(host_cc) $(ai_cflags) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Iout/lib
 # whole-archive flag differs by linker (ld64 vs GNU ld); ai_typ is now a plain
 # compare in ai.h, so there is no data.ld / generated data.h on any platform.
 ifeq ($(shell uname -s),Darwin)
-so_archive = -Wl,-force_load,$(ho)/libai.a       # ld64's whole-archive
+so_archive = -Wl,-force_load,$(ho)/liblove.a       # ld64's whole-archive
 # the host contract (ai_clock, ai_fd_port_vt, ai_stdin/out/err -- defined in
 # host/main.c, linked into `ai` itself, NOT the archive) is UNRESOLVED in the .so
 # by design: the loading executable provides it. GNU ld allows that by default;
 # ld64 rejects undefined symbols in a dylib unless told to defer them.
 so_undef = -Wl,-undefined,dynamic_lookup
 else
-so_archive = -Wl,--whole-archive $(ho)/libai.a -Wl,--no-whole-archive
+so_archive = -Wl,--whole-archive $(ho)/liblove.a -Wl,--no-whole-archive
 endif
-# STATIC=1 links a fully static `ai` against musl (and skips libai.so, which a
+# STATIC=1 links a fully static `ai` against musl (and skips liblove.so, which a
 # static build can't produce) -- the OPT-IN portable-binary lane (was briefly
 # the Linux default; demoted 2026-07-07, the why lives in common.mk's flavor
 # block): the binary runs on ANY Linux distro regardless of
@@ -76,18 +76,18 @@ $(ho)/.hostcc: force_hostcc
 	@mkdir -p $(ho)
 	@printf '%s\n' '$(host_cc) $(host_ldflags)' > $@.tmp
 	@if cmp -s $@.tmp $@ 2>/dev/null; then rm -f $@.tmp; else mv $@.tmp $@; echo SH $@; fi
-host: $(ho)/ai $(ho)/ai.baked $(if $(STATIC),,$(ho)/libai.so) $(ho)/ai.1 $(ho)/cook.1
-ai0: $(ai0)
+host: $(ho)/love $(ho)/ai $(ho)/love.baked $(if $(STATIC),,$(ho)/liblove.so) $(ho)/love.1 $(ho)/cook.1
+love0: $(love0)
 
 # dock: launch the steering dock (port/inle/serve.l) from a stable COPY out/host/dock,
-# so `adopt` can rebuild the canonical out/host/ai in place without ETXTBSY (the RELINK
+# so `adopt` can rebuild the canonical out/host/love in place without ETXTBSY (the RELINK
 # writes the exe file in place; the bake itself is rename-safe). loads the full crew -- the probe ladder
 # (judge), the server (serve), and the self-modify loop (drive + the model proposer patch).
 # PORT overrides the mooring; bind loopback and firewall/tunnel it -- it evals what it reads.
 .PHONY: dock
 DOCK_PORT ?= 7620
 dock: host
-	@cp $(ho)/ai $(ho)/dock
+	@cp $(ho)/love $(ho)/dock
 	exec $(ho)/dock -l port/inle/judge.l -l port/inle/serve.l -l port/inle/drive.l -l port/inle/patch.l -e "(dock $(DOCK_PORT))"
 # the default BOOT IMAGE: `$< --bake` boots the freshly-linked binary, snapshots the post-warm
 # heap (the glaze baked in, x86-64), and lays it back into the binary's OWN .image section --
@@ -99,33 +99,33 @@ dock: host
 # (~1.5 s to bake: the glaze self-tests native-compile; paid once per ai rebuild, not per run.)
 # The .baked STAMP carries the dependency (the bake mutates the binary itself); a static
 # pattern so the CANDIDATE bakes by the same recipe at its side path.
-$(ho)/ai.baked $(ho)/ai.cand.baked: %.baked: %
+$(ho)/love.baked $(ho)/love.cand.baked: %.baked: %
 	@echo BAKE	$<
 	@$< --bake
 	@touch $@
 
 
-# candidate: build + bake the NEXT GENERATION at the side path out/host/ai.cand.
+# candidate: build + bake the NEXT GENERATION at the side path out/host/love.cand.
 # nothing executes that name, so the in-place bake can never hit ETXTBSY -- a
 # rebuild succeeds no matter who is running `ai` (a repl, a test, the dock's own
-# client). gate it with `make test m=$(ho)/ai.cand` (m routes the whole corpus;
-# ai0 is independent), then promote on green with an ATOMIC RENAME (a new inode:
+# client). gate it with `make test m=$(ho)/love.cand` (m routes the whole corpus;
+# love0 is independent), then promote on green with an ATOMIC RENAME (a new inode:
 # executing processes keep the old one) -- the dock's `adopt` does exactly this.
 # on a red gate the canonical binary is UNTOUCHED; the failed candidate dies at
 # the side path like a to-space that never flips.
 .PHONY: candidate
-candidate: $(ho)/ai.cand.baked
+candidate: $(ho)/love.cand.baked
 
 
 # rm the archive first: `ar r` REPLACES/ADDS but never REMOVES, so a renamed/dropped
 # source (e.g. love.c -> ai.c) would leave a stale .o in the archive -> multiple-
 # definition at link. the rm rebuilds it fresh, so a rename no longer needs `make clean`.
-$(ho)/libai.a: $(h_o)
+$(ho)/liblove.a: $(h_o)
 	@echo AR	$@
 	@mkdir -p $(dir $@)
 	@rm -f $@; ar rcs $@ $^
 
-$(ho)/libai.so: $(ho)/libai.a
+$(ho)/liblove.so: $(ho)/liblove.a
 	@echo LD	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -shared -o $@ $(so_archive) $(so_undef)
@@ -137,7 +137,7 @@ $(ho)/libai.so: $(ho)/libai.a
 # prel/ev/egg/repl + the test corpus), all produced without an interpreter --
 # hence -Iout/lib. Per-object into $(ho)/0/ so ccache caches each TU.
 gl0_cc = $(CCACHE) $(CC) $(ai_cflags) -DGL_BOOTSTRAP -Dai_tco=0 -I. -Iout/lib
-ai0_o = out/host/0/main.o $(ai_c:$(R)/%.c=out/host/0/%.o)   # PINNED (not $(ho)/0)
+love0_o = out/host/0/main.o $(ai_c:$(R)/%.c=out/host/0/%.o)   # PINNED (not $(ho)/0)
 out/host/0/main.o: host/main.c $(ai_h) $(gl0_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
@@ -146,10 +146,10 @@ out/host/0/%.o: $(R)/%.c $(ai_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(gl0_cc) -c $< -o $@
-$(ai0): $(ai0_o)
+$(love0): $(love0_o)
 	@echo LD	$@
 	@mkdir -p $(dir $@)
-	@$(CC) $(ai_cflags) -o $@ $(ai0_o)
+	@$(CC) $(ai_cflags) -o $@ $(love0_o)
 
 # ai.c -> out/host/*.o
 $(ho)/%.o: $(R)/%.c $(ai_h) $(ho)/.hostcc
@@ -157,8 +157,8 @@ $(ho)/%.o: $(R)/%.c $(ai_h) $(ho)/.hostcc
 	@mkdir -p $(dir $@)
 	@$(hcc) -c $< -o $@
 
-# l.o carries the version string (ai_version.h); relink it when the id changes.
-$(ho)/ai.o $(ho)/0/ai.o: out/lib/ai_version.h
+# l.o carries the version string (love_version.h); relink it when the id changes.
+$(ho)/ai.o $(ho)/0/ai.o: out/lib/love_version.h
 # host/main.o bakes the lcat lib headers inline (egg + prel/ev/cli/bao -- bao is the
 # baked shell core now, subsuming the old repl.h). Now that it rides the host/*.c
 # glob (compiled once, not recompiled on every link, as the old inline `$(hcc)
@@ -170,23 +170,30 @@ $(ho)/host/cb.o: port/quay/quay.c port/quay/quay.h
 # host/main.c (auto-globbed into $(host_o)) carries main() + the egg, assembled
 # inline via G_EGG_PRE/POST. No separate main.c compile -- it rides the host/*.c
 # glob now; the recompile-on-header-change dep is the line just above.
-# one link rule, two names: `ai` (canonical) and `ai.cand` (the CANDIDATE -- the next
+# one link rule, two names: `love` (canonical) and `love.cand` (the CANDIDATE -- the next
 # generation built at a side path nothing executes, so the RELINK can never hit
-# ETXTBSY no matter who is running `ai`; see the candidate target below).
-$(ho)/ai $(ho)/ai.cand: $(host_o) $(ho)/libai.a $(ho)/.hostcc out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/post.h out/lib/uu.h $(holo_h) $(glaze_h)
+# ETXTBSY no matter who is running `love`; see the candidate target below).
+$(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/post.h out/lib/uu.h $(holo_h) $(glaze_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(hcc) -o $@ $(host_o) $(ho)/libai.a $(host_ldflags)
+	@$(hcc) -o $@ $(host_o) $(ho)/liblove.a $(host_ldflags)
 
-$(ho)/ai.1: doc/ai.1 out/lib/ai_version.h
+# compat: `ai` was the name from 2026-06-15 until the reversion to `love`. The old
+# name stays as a symlink so the doc/proto long tail -- and any external script that
+# hardcodes out/host/ai -- keeps working without a rewrite.
+$(ho)/ai: $(ho)/love
+	@echo LN	$@
+	@ln -sf love $@
+
+$(ho)/love.1: doc/love.1 out/lib/love_version.h
 	@echo SED	$@
 	@mkdir -p $(dir $@)
-	@v=$$(sed -n 's/.*AI_VERSION "\(.*\)"/\1/p' out/lib/ai_version.h); \
-	 sed "s/@VERSION@/$$v/" doc/ai.1 > $@
+	@v=$$(sed -n 's/.*AI_VERSION "\(.*\)"/\1/p' out/lib/love_version.h); \
+	 sed "s/@VERSION@/$$v/" doc/love.1 > $@
 
-$(ho)/cook.1: doc/cook.1 out/lib/ai_version.h
+$(ho)/cook.1: doc/cook.1 out/lib/love_version.h
 	@echo SED	$@
 	@mkdir -p $(dir $@)
-	@v=$$(sed -n 's/.*AI_VERSION "\(.*\)"/\1/p' out/lib/ai_version.h); \
+	@v=$$(sed -n 's/.*AI_VERSION "\(.*\)"/\1/p' out/lib/love_version.h); \
 	 sed "s/@VERSION@/$$v/" doc/cook.1 > $@
 

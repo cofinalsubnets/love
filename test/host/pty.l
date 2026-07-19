@@ -1,11 +1,11 @@
 ; --- test/host/pty.l: a runnable smoke test for bao's pty nifs (host/pty.c) ---
 ; NOT in the test/*.l corpus on purpose: the pty nifs (mind/gather/still/winsize)
-; live in host/pty.c, which the final `ai` links but ai0 does NOT -- and ai0
+; live in host/pty.c, which the final `ai` links but love0 does NOT -- and love0
 ; bakes the whole corpus, so a corpus test would read these names as missing and
-; fail ai0's self-test. So this is verified the host-nif way: standalone, against
+; fail love0's self-test. So this is verified the host-nif way: standalone, against
 ; the built binary. Run it (the assert macro comes from test/00-init.l):
 ;
-;   cat test/00-init.l test/host/pty.l | out/host/ai      ; green dots = pass, exits 1 on fail
+;   cat test/00-init.l test/host/pty.l | out/host/love      ; green dots = pass, exits 1 on fail
 ;
 ; Mechanics are scriptable (here); full interactive wrapping is manual (bao.l).
 

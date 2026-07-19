@@ -26,7 +26,7 @@ is true for any admitted group and the byte path (`jitgroup`) is unreachable. St
 
 The string lane needed a new assembler primitive: the IR had no byte-width memory op, but `peep` is a
 `movzx` byte read (and `pin`, stage 3, a byte store). Added **`ldxb`/`stxb`** (indexed zero-extend
-load / low-byte store) to `crew/asm/x64.l` — objdump-verified, `asmtest.l` entries, baked into ai0. Shared
+load / low-byte store) to `crew/asm/x64.l` — objdump-verified, `asmtest.l` entries, baked into love0. Shared
 prerequisite for string + cask.
 
 The IR path's neutral register roles are stable: `argregir` = the callee-saved arg bank (x64
@@ -175,14 +175,14 @@ porting a lane just re-routes its asserts from `jitgroup` to `jitgroupir` with n
   (that church-exponentiates). The idiv "hang" bug was exactly this.
 - A silent reader stop (exit 0, no `zz-fin`) = paren imbalance. The whole `test/glaze-x86.l` runs in
   ~1.5–1.8s; a hang/crawl is a *bug*, not slow benches (see CLAUDE.md "SPEED IS A SIGNAL").
-- **Run the glaze test via `make test_glaze`, never `out/host/ai test/glaze-x86.l` standalone.** The
+- **Run the glaze test via `make test_glaze`, never `out/host/love test/glaze-x86.l` standalone.** The
   harness *cats emit.l + auto.l ahead* of the test; standalone, `base-ev`/`jitgroupir`/the internals are
   unbound → `()` → `(base-ev '(..))` = const-1 = 1 SILENTLY skips every assert block, yet the top-level
   `(say "..ok")` still prints — a false pass. Same trap when probing an internal (`(cggir ..)` with
   cggir unbound = `(() ..)` = 1, not an error). Defenses now in the file: a **top-level** `(assert
   (lit? base-ev) (lit? jitgroupir) ..)` that scares on a wrong invocation, and a per-block `lit?`
   dependency guard. When probing by hand, cat the same files: `cat love/glaze/emit.l love/glaze/auto.l
-  probe.l | out/host/ai`. (`assemble` is a core service — bound even standalone — so it alone won't
+  probe.l | out/host/love`. (`assemble` is a core service — bound even standalone — so it alone won't
   catch a wrong context.)
 - x64 only in practice (`auto.l` calls `jitgroupir … 'x64`); the IR is kept neutral where free, but
   arm64 group codegen is unverified (no harness) — don't chase it here.

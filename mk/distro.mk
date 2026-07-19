@@ -2,7 +2,7 @@
 #
 # Fragment of the root Makefile (see the include list). The LFS "toolchain" phase
 # is already solved differently -- rung 4 is a gcc-free, glibc-free static `ai`
-# (out/host/ai-raw, `make test_raw`). So a bootable system is just PACKAGING what is
+# (out/host/love-raw, `make test_raw`). So a bootable system is just PACKAGING what is
 # already green: ai as pid 1 (init/boot.l), kore as the busybox-style userland
 # (crew/kore, the $(korefiles) cat), and init/sh.l as the console shell.
 #
@@ -16,8 +16,8 @@ distro_dir   = out/distro
 distro_root  = $(distro_dir)/root
 distro_img   = $(distro_dir)/initramfs.cpio.gz
 # the base ai binary: MUST be static (a bare initramfs has no ld.so/glibc). Prefer
-# the gcc-free ai-raw (the true ai base); fall back to a static-musl host ai.
-distro_ai    = $(firstword $(wildcard out/host/ai-raw out/host-musl/ai))
+# the gcc-free love-raw (the true ai base); fall back to a static-musl host ai.
+distro_ai    = $(firstword $(wildcard out/host/love-raw out/host-musl/love))
 # kore applets to expose as argv[0] symlinks (kore dispatches on the basename).
 distro_applets = ls cat head tail wc sort uniq grep sed cut tr nl rev cp mv rm \
                  mkdir rmdir ln touch pwd chmod basename dirname seq yes true \
@@ -29,7 +29,7 @@ BZIMAGE ?= /boot/vmlinuz-linux
 .PHONY: distro-initramfs distro-run distro-smoke
 distro-initramfs: $(distro_img)
 $(distro_img): init/boot.l init/sh.l $(korefiles) $(distro_ai)
-	@test -n "$(distro_ai)" || { echo "distro: need a STATIC ai -- run 'make test_raw' (ai-raw) or 'make STATIC=1'"; exit 1; }
+	@test -n "$(distro_ai)" || { echo "distro: need a STATIC ai -- run 'make test_raw' (love-raw) or 'make STATIC=1'"; exit 1; }
 	@echo DISTRO	$(abspath $@)  '(base: $(distro_ai))'
 	@rm -rf $(distro_root)
 	@mkdir -p $(distro_root)/bin $(distro_root)/lib $(distro_root)/proc $(distro_root)/sys $(distro_root)/dev $(distro_root)/tmp

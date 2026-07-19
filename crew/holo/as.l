@@ -9,7 +9,7 @@
 ;
 ; load AFTER holo.l + x64.l (bare, dev/test context -- the encoder primitives le32/byte/fix/modrm..
 ; are still on the global book; the eventual host path reaches them through the `holo` book):
-;   out/host/ai -l crew/holo/holo.l -l crew/holo/x64.l -l crew/holo/as.l ...
+;   out/host/love -l crew/holo/holo.l -l crew/holo/x64.l -l crew/holo/as.l ...
 
 (: ;; --- the physical register file: name -> (enc width-in-bytes). the low 8 have irregular
    ;; byte/word names, so spell the rows; r8..r15 are uniform (rN / rNd / rNw / rNb). ---

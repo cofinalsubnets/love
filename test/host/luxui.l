@@ -9,7 +9,7 @@
 ; can desync the other (the one-process attempt kept mis-reading geometry;
 ; the test/host/haven.l shape is the cure).
 ;
-;   cat test/00-init.l test/host/luxui.l | out/host/ai
+;   cat test/00-init.l test/host/luxui.l | out/host/love
 ;
 ; no Xvfb on the box -> a polite skip (the sentinel still prints).
 
@@ -43,7 +43,7 @@
 
  ; the real driver, the same module set bin/lux ships (DISPLAY rides env)
  ph (mind `("env" (+ "DISPLAY=:" (show dn))
-            "out/host/ai" "-l" "crew/lux/core.l" "-l" "crew/lux/layout.l"
+            "out/host/love" "-l" "crew/lux/core.l" "-l" "crew/lux/layout.l"
             "-l" "crew/lux/wire.l" "-l" "crew/lux/ewmh.l"
             "-l" "crew/lux/manage.l" "-l" "crew/lux/keys.l"
             "-l" "crew/lux/config.l" "-l" "crew/lux/lux.l"))
@@ -53,7 +53,7 @@
  ; the probe: its own process, its own streams; it waits for lux itself
  ; (_NET_SUPPORTED on the root), drives, asserts, and exits 0 or names its
  ; failure. Its pty is echoed either way -- a red run tells its story here.
- pr (mind `("out/host/ai" "-l" "crew/lux/core.l" "-l" "crew/lux/layout.l"
+ pr (mind `("out/host/love" "-l" "crew/lux/core.l" "-l" "crew/lux/layout.l"
             "-l" "crew/lux/wire.l" "-l" "test/host/luxui-probe.l"
             "-e" (+ "(probe \"" (+ dpy "\")"))))
  _ (must 'probe-up (two? pr))

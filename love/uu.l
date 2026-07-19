@@ -14,7 +14,7 @@
 ;   (let x a b) -- definitional: x binds the VALUE of a, transparent to conv
 ; and any other list is an application spine. (f) == f here too.
 ;
-; BAKED post.l-style on every corpus target (host + ai0 + the inle kernel +
+; BAKED post.l-style on every corpus target (host + love0 + the inle kernel +
 ; wasm), and swept at the tail into the ONE `uu` book (the holo/glaze module
 ; pattern) -- the surface is (uu 'vof), (uu 'defn), (uu 'chk), (uu 'lof), and every
 ; internal stays a probe away. the UniMath theorem corpus rides in test/uu.l

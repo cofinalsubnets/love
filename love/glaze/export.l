@@ -11,7 +11,7 @@
 ; emit.l opens with glaze-mark = (names ()) and auto.l closes with glaze-load; the diff
 ; is the module. `ev` itself predates the mark (the egg bound it), so the REBIND stays
 ; global -- rebinding is not a new name. evaled by host/main.c right after auto.l,
-; under the same arch gate; ai0/kernel/wasm never load the glaze and never load this.
+; under the same arch gate; love0/kernel/wasm never load the glaze and never load this.
 (: seen (: t (tablet 0) _ (each glaze-mark (\ k (pin t k 1))) t)
    m (tablet 0)
    _ (each glaze-load

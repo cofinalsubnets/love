@@ -9,7 +9,7 @@
 ; the whole screen. MapRequest inserts, DestroyNotify unmanages, every change
 ; retiles, and the wm parks when its last client leaves. run against
 ; `Xephyr :7 -ac`:
-;   out/host/ai doc/proto/wm.l &  then  DISPLAY=:7 xterm  (and another)
+;   out/host/love doc/proto/wm.l &  then  DISPLAY=:7 xterm  (and another)
 ; the Access error (code 10) on the redirect means another WM owns the display.
 (: s (connectu "/tmp/.X11-unix/X7")
    _ (? s 0 (: _ (say err "wm: no display socket /tmp/.X11-unix/X7 -- Xephyr up?\n") (quit 1)))

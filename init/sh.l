@@ -4,7 +4,7 @@
 ; init execs on the console: the pid1 story end to end (init -> sh -> real programs).
 ; it rides the host/init.c job-control nifs (spawn/wait/chdir/cwd) + getenv, plus the
 ; v2 plumbing (pipe/openfd/spawnio/fdclose) for | < > >>. run:
-;   out/host/ai -l init/sh.l -e "(sh 0)"
+;   out/host/love -l init/sh.l -e "(sh 0)"
 ; line editing on a real tty is bao's own editor (`edln`, the baked shell core):
 ; in-line editing + up/down command history. `-l/-e` pass argv so main.c skips raw
 ; mode -- sh raws the tty itself (edln owns echo) and drops back to cooked around

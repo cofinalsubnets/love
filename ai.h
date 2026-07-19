@@ -391,7 +391,7 @@ extern struct ai_io ai_stdin, ai_stdout, ai_stderr;
 #define cell(_) ((union u*)(_))
 // The BLUE FLOOR -- extra stack slack reserved on every avail check, a buffer
 // against off-by-one stack overshoots (blue is green's floor in the color law; the
-// floor is a green charm, a nonnegative count). It is 0 under GL_BOOTSTRAP so ai0
+// floor is a green charm, a nonnegative count). It is 0 under GL_BOOTSTRAP so love0
 // keeps STRICT discipline -- no buffer, a real overshoot surfaces -- and a small
 // default elsewhere. Override at compile time with -Dai_avail_floor=N. Folded into
 // both checks so they reserve floor extra words (Have1 is just Have(1)); at floor 0

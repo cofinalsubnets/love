@@ -15,7 +15,7 @@
 ; using a constructor we don't map (total2/coprod and friends). What survives is the
 ; predicative core: the path-algebra combinators and the nat/bool arithmetic.
 ;
-; Run: out/host/ai tools/uu2coq.l > proof/rocq/uugen.v   then  coqc proof/rocq/uugen.v
+; Run: out/host/love tools/uu2coq.l > proof/rocq/uugen.v   then  coqc proof/rocq/uugen.v
 
 (: _ (reads (open "test/uu.l" "r"))
    _ (reads (open "test/uulay.l" "r"))

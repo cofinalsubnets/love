@@ -107,4 +107,4 @@ The grep proved the surface was tiny — glued `*<scalar>`-as-iota lived **only*
 4. CLAUDE.md updated: `* prod` in the monadic words, `(jot x)` a range / section of tally.
 
 The **binary** now gives `*5 = 5` (vacuous, like `+5`), `*'(1 2 3 4) = 24`. `make test` green
-(host + ai0, both reach `zz-fin`).
+(host + love0, both reach `zz-fin`).

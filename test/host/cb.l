@@ -1,11 +1,11 @@
 ; --- test/host/cb.l: a vttest-lite for quay's console screen (host/cb.c + port/quay/quay.c) ---
 ; NOT in the test/*.l corpus on purpose: the screen nifs (screen/scribe/glass/gaze/reply)
-; live in host/cb.c, which the final `ai` links but ai0 does NOT -- and ai0 bakes the
-; whole corpus, so a corpus test would read these names as missing and fail ai0's
+; live in host/cb.c, which the final `ai` links but love0 does NOT -- and love0 bakes the
+; whole corpus, so a corpus test would read these names as missing and fail love0's
 ; self-test. So this is verified the host-nif way: standalone, against the built
 ; binary (the assert macro comes from test/00-init.l):
 ;
-;   cat test/00-init.l test/host/cb.l | out/host/ai      ; exits 1 on fail, prints cb: ok
+;   cat test/00-init.l test/host/cb.l | out/host/love      ; exits 1 on fail, prints cb: ok
 ;
 ; the same struct cb is the kernel's framebuffer console, so every law asserted
 ; here holds under inle too -- this file is the emulator's executable spec.

@@ -10,14 +10,14 @@ include common.mk
 
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
-# ai0 -- the bootstrap interpreter, PINNED to the canonical out/host tree (never
+# love0 -- the bootstrap interpreter, PINNED to the canonical out/host tree (never
 # $(hsuf)'d like $(ho)): it bakes the lcat headers every frontend shares. Defined
-# UP HERE, not by the host-build block below, because test_ai0's prerequisite uses
+# UP HERE, not by the host-build block below, because test_love0's prerequisite uses
 # it -- and make expands prerequisites at PARSE time, so a later definition reads as
-# empty, silently dropping test_ai0's dep on the binary. Serially that hides (the
-# earlier test_host builds ai0 transitively via host -> lib_h -> ai0); under -j,
-# test_ai0 then races ahead of the ai0 link ("out/host/ai0: No such file").
-ai0 = out/host/ai0
+# empty, silently dropping test_love0's dep on the binary. Serially that hides (the
+# earlier test_host builds love0 transitively via host -> lib_h -> love0); under -j,
+# test_love0 then races ahead of the love0 link ("out/host/love0: No such file").
+love0 = out/host/love0
 
 # every ai run UNDER make boots deterministically: the test gate must exercise the freshly-built egg
 # (not a stale baked image), and the bench controls glazed-vs-interp itself. So suppress the startup
@@ -25,8 +25,8 @@ ai0 = out/host/ai0
 export AI_NO_IMAGE := 1
 
 .PHONY: all install uninstall clean distclean
-.PHONY: host kernel wasm ai0
-.PHONY: test test_host test_all test_tools test_ai0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_hostnif test_doc test_glaze test_sat test_holo test_as test_holofuzz test_encver test_lux test_extract test_arm64 test_thumb1 test_wake
+.PHONY: host kernel wasm love0
+.PHONY: test test_host test_all test_tools test_love0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_hostnif test_doc test_glaze test_sat test_holo test_as test_holofuzz test_encver test_lux test_extract test_arm64 test_thumb1 test_wake
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench nettest lint fmt fmt-check
 
 # `make` with no target is `make test` -- pinned EXPLICITLY because the includes
@@ -44,13 +44,13 @@ include test/test.mk
 include mk/install.mk
 
 # `make test` is the FAST gate: just the two egg self-tests (the host binary `ai`
-# from-source under AI_NO_IMAGE, and ai0 -- c0 + the self-hosted ev, twice). It does
+# from-source under AI_NO_IMAGE, and love0 -- c0 + the self-hosted ev, twice). It does
 # NOT build the image (the --bake step), nor run coqc/lean/glaze/gc/tools, which
 # are slow and/or need extra toolchains -- those live in `make test_all` (and the
 # individual test_* targets). Serial by design: ~3s, no -j races, ctrl-C responsive.
 JOBS  ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 osync := $(if $(filter output-sync,$(.FEATURES)),--output-sync=target,)
-test_phases = test_host test_ai0 vmret
+test_phases = test_host test_love0 vmret
 test:
 	@$(MAKE) --no-print-directory $(test_phases)
 # vmret rides the fast `test`: the TCO gate (every lvm_* VM ap must tail-jump, never
@@ -61,15 +61,15 @@ test:
 # test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
 # extra toolchain (qemu + OVMF, x86_64-only; emcc + node) and no-ops when that
 # is absent. See their rules below.
-test_all: test_host test_ai0 test_proof test_gen test_uugen test_uulean test_uuwm test_uukind test_gc test_extract test_tools test_hostnif test_doc test_glaze test_sat test_holo test_as test_holofuzz test_encver test_lux test_kore test_reef test_vi test_moon test_raw nettest test_arm64 test_thumb1 test_kernel test_wasm test_wake
+test_all: test_host test_love0 test_proof test_gen test_uugen test_uulean test_uuwm test_uukind test_gc test_extract test_tools test_hostnif test_doc test_glaze test_sat test_holo test_as test_holofuzz test_encver test_lux test_kore test_reef test_vi test_moon test_raw nettest test_arm64 test_thumb1 test_kernel test_wasm test_wake
 all: host kernel wasm
 
 # lint: paren/bracket/brace balance + unclosed strings across every tracked .l
 # (tools/ltidy.l, a .l-aware scan -- ; and #! comments, ' and ` are reader ops).
 # QUIET when clean, line-pointed warnings + exit 1 on any imbalance; tabs warn but
 # don't fail. NOT in the test gate (it's an editing aid, not a semantic check).
-lint: $(ho)/ai
-	@$(ho)/ai $R/tools/ltidy.l $$(git ls-files '*.l') && echo "lint: .l balance clean"
+lint: $(ho)/love
+	@$(ho)/love $R/tools/ltidy.l $$(git ls-files '*.l') && echo "lint: .l balance clean"
 
 # fmt: reformat the HOUSE-STYLE C in place with moonfmt (crew/moon/fmt.l) -- reindent
 # to 1-space, respace glued operators, normalize known-type pointer declarators. it is
@@ -78,11 +78,11 @@ lint: $(ho)/ai
 # crew/moon/include are libc-shaped headers, port/* is board code -- none house style, so
 # none are swept. `fmt-check` is the gate variant (exit 1 if anything is unformatted).
 FMT_FILES := ai.c ai.h $(wildcard host/*.c) $(wildcard host/*.h)
-fmt: $(ho)/ai
-	@$(ho)/ai $R/crew/moon/fmt.l -w $(FMT_FILES) && echo "fmt: formatted $(words $(FMT_FILES)) file(s)"
-fmt-check: $(ho)/ai
+fmt: $(ho)/love
+	@$(ho)/love $R/crew/moon/fmt.l -w $(FMT_FILES) && echo "fmt: formatted $(words $(FMT_FILES)) file(s)"
+fmt-check: $(ho)/love
 	@bad=; for f in $(FMT_FILES); do \
-	  $(ho)/ai $R/crew/moon/fmt.l "$$f" | diff -q "$$f" - >/dev/null || bad="$$bad $$f"; done; \
+	  $(ho)/love $R/crew/moon/fmt.l "$$f" | diff -q "$$f" - >/dev/null || bad="$$bad $$f"; done; \
 	  if [ -n "$$bad" ]; then echo "fmt-check: needs formatting:$$bad" >&2; exit 1; else echo "fmt-check: clean"; fi
 
 # NB: there is NO git pre-commit hook -- committed artifacts (wasm/ai.js, bench/
@@ -96,9 +96,9 @@ fmt-check: $(ho)/ai
 # RESOLVED -- a flat, self-documenting snapshot. Regenerate it whenever the
 # Makefile changes. (A baked snapshot: re-run `make crew/cook/Cookfile` after adding
 # a source/test file, since the wildcard lists are frozen at emit time.)
-crew/cook/Cookfile: $(MAKEFILE_LIST) crew/cook/cook.l $(ho)/ai
+crew/cook/Cookfile: $(MAKEFILE_LIST) crew/cook/cook.l $(ho)/love
 	@echo AI	$@
-	@$(ho)/ai -l crew/cook/cook.l --emit Makefile > $@
+	@$(ho)/love -l crew/cook/cook.l --emit Makefile > $@
 
 # ====================================================================
 # wasm (own Makefile)

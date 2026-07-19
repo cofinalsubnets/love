@@ -14,7 +14,7 @@ Landed so far:
   whole-transformer form + folded `gfix`, the descending candidate-set), `950b1181` (the
   interpreter's in-place-mutating closure-capture fixpoint, via snapshot-before-step). One
   driver, four lattices: ascending/descending/mutating. Pure refactor throughout, gate green
-  (2717×3, ai0 included — it bootstraps through the capture code). This proves the harness leg
+  (2717×3, love0 included — it bootstraps through the capture code). This proves the harness leg
   of the plan end-to-end; steps 2–4 (fact table, kinds.l abstract interp, datalog.l rewrites)
   build on it.
 

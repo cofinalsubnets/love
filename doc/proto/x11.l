@@ -4,7 +4,7 @@
 ; cookie so the setup carries an empty auth block). proves the round trip a
 ; window manager needs: setup handshake parsed, InternAtom request/reply,
 ; CreateWindow + MapWindow encoded, the Expose event decoded coming back.
-;   run: out/host/ai doc/proto/x11.l
+;   run: out/host/love doc/proto/x11.l
 ; the wire layout is X Window System Protocol ch. 8-9 (setup), the per-request
 ; encodings from the protocol appendix. everything is one body-having `:` --
 ; local names, ain-style (tools/ain.l is the socket idiom source).

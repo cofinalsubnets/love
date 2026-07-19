@@ -108,8 +108,8 @@ work here, the traps, the architecture -- is [CLAUDE.md](CLAUDE.md).
 - `make repl` interactive shell
 - `make test_all` adds the freestanding kernel (qemu) + tool diffs
 - `make wasm` build the browser image (wasm/ai.js, used by index.html) -- rebuild + stage by hand
-- `out/host/ai` is the binary -- ai is the word now (it was `love` once)
-- `out/host/ai file.l` run a file
+- `out/host/love` is the binary -- ai is the word now (it was `love` once)
+- `out/host/love file.l` run a file
 - `echo .ev | ai` print the compiler
 
 that last one is not a joke. `.` prints, `ev` is the self-hosted evaluator,

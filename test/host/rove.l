@@ -6,7 +6,7 @@
 ; -- combat, loot, grog, the hatch, the pearl, death. the tty side (rove)
 ; stays a live probe: it is berth-thin over what this file proves.
 ;
-;   cat test/00-init.l test/host/rove.l | out/host/ai
+;   cat test/00-init.l test/host/rove.l | out/host/love
 
 (reads (open "crew/quay/rove.l" "r"))
 

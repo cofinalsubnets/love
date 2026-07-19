@@ -4,7 +4,7 @@
 ; charlist producer, so it runs ANYWHERE (no fds, no pty) and pins the shape the
 ; core session builds against. Run (assert comes from test/00-init.l):
 ;
-;   cat test/00-init.l doc/stream.l | out/host/ai
+;   cat test/00-init.l doc/stream.l | out/host/love
 ;
 ; green dots = pass, then `stream: ok`. What it demonstrates:
 ;   * a stream forces its head ONCE and MEMOIZES it -- the memo IS the lookahead,

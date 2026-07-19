@@ -4,34 +4,34 @@
 # which is invoked from the project root; paths resolve from there. Shared vars
 # live in common.mk. Every recipe here is unchanged from the single-file Makefile.
 
-# ai0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
+# love0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prel (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dai_tco=0,
 # so this also exercises the non-tail-threaded trampoline dispatch path.
 # stdin is /dev/null: the corpus reads from the baked string, not stdin, but
 # test/io.l exercises the real `in` port (a bare fgetc), which would otherwise
-# block on a tty (the old `cat $t | ai0` fed the test stream in on stdin).
+# block on a tty (the old `cat $t | love0` fed the test stream in on stdin).
 # Both gates require the zz-fin summary line, not just exit 0: a reader stop
 # (e.g. a stray `)` mid-corpus) silently drops the rest of the stream and
 # exits 0 without ever reaching zz-fin -- exit code alone green-lights a run
-# that only executed a prefix of the corpus. ai0 must print TWO summaries
+# that only executed a prefix of the corpus. love0 must print TWO summaries
 # (the corpus runs under both c0 and the self-hosted ev).
 # Both gates STREAM through `tee` (the dots appear live -- ai flushes per write, so
 # you watch progress and a stall marks a slow test) while still capturing the run for
 # the sentinel grep. The exit status rides a `.rc` file, not `$?` (the pipe's exit is
 # tee's, and /bin/sh has no pipefail), so the exit-0 AND sentinel checks both hold.
-test_ai0: $(ai0)
-	@echo TEST $(ai0)
-	@{ $(ai0) </dev/null; echo $$? > out/host/.test_ai0.rc; } | tee out/host/.test_ai0.out; \
-	  s=$$(cat out/host/.test_ai0.rc); \
-	  [ $$s -eq 0 ] && [ `grep -c "tests pass" out/host/.test_ai0.out` -eq 2 ]
+test_love0: $(love0)
+	@echo TEST $(love0)
+	@{ $(love0) </dev/null; echo $$? > out/host/.test_love0.rc; } | tee out/host/.test_love0.out; \
+	  s=$$(cat out/host/.test_love0.rc); \
+	  [ $$s -eq 0 ] && [ `grep -c "tests pass" out/host/.test_love0.out` -eq 2 ]
 test_host: $m
 	@echo TEST $m
 	@{ cat $t | $m; echo $$? > out/host/.test_host.rc; } | tee out/host/.test_host.out; \
 	  s=$$(cat out/host/.test_host.rc); \
 	  [ $$s -eq 0 ] && grep -q "tests pass" out/host/.test_host.out
-# Host-nif smoke tests: nifs defined in host/*.c link into `ai` but NOT ai0
-# (which bakes the test/*.l corpus), so they cannot sit DIRECTLY in test/ -- ai0
+# Host-nif smoke tests: nifs defined in host/*.c link into `ai` but NOT love0
+# (which bakes the test/*.l corpus), so they cannot sit DIRECTLY in test/ -- love0
 # would bake them, read the nif names as missing, and fail its self-test. They
 # live under test/host/ instead: the corpus glob ($t in common.mk) is a
 # NON-RECURSIVE test/*.l wildcard, so a subfolder is invisible to the bake. Run
@@ -42,13 +42,13 @@ test_host: $m
 # Add a thread's smoke script to hostnif_tests (ain: test/host/net.l, &c).
 # haven.l is OUT of the gate: it can wedge on a wayland resource (a stray holding
 # the socket) and stall the whole run indefinitely. run it standalone when working
-# on the compositor: `cat test/00-init.l test/host/haven.l | out/host/ai`.
+# on the compositor: `cat test/00-init.l test/host/haven.l | out/host/love`.
 hostnif_tests = test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/manifest.l test/host/pier.l test/host/font.l test/host/drm.l test/host/overlay.l test/host/bake.l test/host/rove.l
 # haven's real-client smoke binary: libwayland-client + the generated
 # xdg-shell glue -- deliberately NOT zero-dep, it exists to be the OTHER side
 # of haven's wire. built only where wayland-scanner + libwayland live;
 # test/host/haven.l skips its smoke act when the binary is absent. pinned to the
-# canonical out/host like ai0 (parse-time prereqs; it never links ai).
+# canonical out/host like love0 (parse-time prereqs; it never links ai).
 smoke = out/host/haven-smoke
 xdgxml = $(shell pkg-config --variable=pkgdatadir wayland-protocols 2>/dev/null)/stable/xdg-shell/xdg-shell.xml
 $(smoke): crew/haven/smoke.c
@@ -476,7 +476,7 @@ test_moon: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 # no baked image, so AI_NO_IMAGE forces the fresh-egg boot.
 .PHONY: test_selfhost
 test_selfhost: host out/host$(hsuf)/mooncc
-	@echo SELFHOST $(ho)/ai-selfhost
+	@echo SELFHOST $(ho)/love-selfhost
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/selfhost; mkdir -p $$d; \
 	  $(ho)/mooncc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
@@ -486,9 +486,9 @@ test_selfhost: host out/host$(hsuf)/mooncc
 	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
 	  $(ho)/mooncc -Icrew/moon/include -c crew/moon/lib/math/am.c $$d/am.o \
 	    || { echo "FAIL mooncc -c am.c"; exit 1; }; \
-	  $(host_cc) -static -o $(ho)/ai-selfhost $$d/*.o $(host_ldflags) \
+	  $(host_cc) -static -o $(ho)/love-selfhost $$d/*.o $(host_ldflags) \
 	    || { echo "FAIL link all-mooncc binary"; exit 1; }; \
-	  cat $t | AI_NO_IMAGE=1 $(ho)/ai-selfhost > $(ho)/.test_selfhost.out 2>&1; s=$$?; \
+	  cat $t | AI_NO_IMAGE=1 $(ho)/love-selfhost > $(ho)/.test_selfhost.out 2>&1; s=$$?; \
 	  tail -1 $(ho)/.test_selfhost.out; \
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_selfhost.out; } \
 	    || { echo "FAIL all-mooncc corpus (exit $$s)"; exit 1; }; \
@@ -504,7 +504,7 @@ test_selfhost: host out/host$(hsuf)/mooncc
 # opt-in as the lighter gcc-links-only check).
 .PHONY: test_raw
 test_raw: host out/host$(hsuf)/mooncc
-	@echo RAW $(ho)/ai-raw
+	@echo RAW $(ho)/love-raw
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_raw: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/raw; mkdir -p $$d; \
 	  $(ho)/mooncc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
@@ -520,9 +520,9 @@ test_raw: host out/host$(hsuf)/mooncc
 	  { cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l; \
 	    echo "(mksys \"$$d/sys.o\")"; } | $m \
 	    || { echo "FAIL mksys sys.o"; exit 1; }; \
-	  $(ho)/mooncc $$d/*.o -o $(ho)/ai-raw \
-	    || { echo "FAIL our-linker bind ai-raw"; exit 1; }; \
-	  cat $t | AI_NO_IMAGE=1 $(ho)/ai-raw > $(ho)/.test_raw.out 2>&1; s=$$?; \
+	  $(ho)/mooncc $$d/*.o -o $(ho)/love-raw \
+	    || { echo "FAIL our-linker bind love-raw"; exit 1; }; \
+	  cat $t | AI_NO_IMAGE=1 $(ho)/love-raw > $(ho)/.test_raw.out 2>&1; s=$$?; \
 	  tail -1 $(ho)/.test_raw.out; \
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_raw.out; } \
 	    || { echo "FAIL all-raw corpus (exit $$s)"; exit 1; }; \
@@ -540,15 +540,15 @@ test_raw: host out/host$(hsuf)/mooncc
 # Opt-in (not test_all): needs the -pie toolchain. x86-64 only.
 .PHONY: test_raw_bake
 test_raw_bake: test_raw
-	@echo BAKE-WAKE $(ho)/ai-raw-pie
+	@echo BAKE-WAKE $(ho)/love-raw-pie
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_raw_bake: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/raw; \
-	  $(ho)/mooncc -pie $$d/*.o -o $(ho)/ai-raw-pie \
-	    || { echo "FAIL -pie link ai-raw-pie"; exit 1; }; \
-	  cp $(ho)/ai-raw-pie $(ho)/ai-raw-baked; \
-	  $(ho)/ai-raw-baked --bake >/dev/null 2>&1 \
+	  $(ho)/mooncc -pie $$d/*.o -o $(ho)/love-raw-pie \
+	    || { echo "FAIL -pie link love-raw-pie"; exit 1; }; \
+	  cp $(ho)/love-raw-pie $(ho)/love-raw-baked; \
+	  $(ho)/love-raw-baked --bake >/dev/null 2>&1 \
 	    || { echo "FAIL --bake (mooncc-PIE binary refused to snapshot its own image)"; exit 1; }; \
-	  cat $(filter-out %/glaze.l,$t) | $(ho)/ai-raw-baked > $(ho)/.test_raw_bake.out 2>&1; s=$$?; \
+	  cat $(filter-out %/glaze.l,$t) | $(ho)/love-raw-baked > $(ho)/.test_raw_bake.out 2>&1; s=$$?; \
 	  tail -1 $(ho)/.test_raw_bake.out; \
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_raw_bake.out; } \
 	    || { echo "FAIL woken corpus (exit $$s) -- ai_image_load desync? see [[mooncc-fn-parity]]"; exit 1; }; \
@@ -563,7 +563,7 @@ test_raw_bake: test_raw
 # Opt-in (not in test_all): the qemu corpus costs minutes. Skips without qemu.
 .PHONY: test_raw_arm64
 test_raw_arm64: host out/host$(hsuf)/mooncc
-	@echo RAW-ARM64 $(ho)/ai-raw-a64
+	@echo RAW-ARM64 $(ho)/love-raw-a64
 	@if ! command -v qemu-aarch64 >/dev/null 2>&1; then echo "test_raw_arm64: no qemu-aarch64, skipped"; exit 0; fi; \
 	  d=$(ho)/raw-a64; mkdir -p $$d; \
 	  $(ho)/mooncc -t arm64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c ai.c $$d/ai.o \
@@ -580,10 +580,10 @@ test_raw_arm64: host out/host$(hsuf)/mooncc
 	    cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l; \
 	    echo "(mksys-arm64 \"$$d/sys.o\")"; } | $m \
 	    || { echo "FAIL mksys-arm64 sys.o"; exit 1; }; \
-	  $(ho)/mooncc -t arm64 $$d/*.o -o $(ho)/ai-raw-a64 \
-	    || { echo "FAIL our-linker bind ai-raw-a64"; exit 1; }; \
+	  $(ho)/mooncc -t arm64 $$d/*.o -o $(ho)/love-raw-a64 \
+	    || { echo "FAIL our-linker bind love-raw-a64"; exit 1; }; \
 	  cat $t \
-	    | AI_NO_IMAGE=1 qemu-aarch64 $(ho)/ai-raw-a64 > $(ho)/.test_raw_a64.out 2>&1; s=$$?; \
+	    | AI_NO_IMAGE=1 qemu-aarch64 $(ho)/love-raw-a64 > $(ho)/.test_raw_a64.out 2>&1; s=$$?; \
 	  tail -1 $(ho)/.test_raw_a64.out; \
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_raw_a64.out; } \
 	    || { echo "FAIL raw-arm64 corpus (exit $$s)"; exit 1; }; \
@@ -655,7 +655,7 @@ moon-m4: host out/host$(hsuf)/mooncc
 	@M4SRC="$(M4SRC)" ./tools/moon-m4.sh
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the
-# core's lists/tablets, adds no nif, and is NOT baked into ai0. The gate greps
+# core's lists/tablets, adds no nif, and is NOT baked into love0. The gate greps
 # the "N passed, 0 failed" sentinel AND exit 0 (a silent reader-stop exits 0).
 .PHONY: test_holo
 test_holo: host
@@ -876,7 +876,7 @@ test_holofuzz: host
 endif
 # uu's NbE kernel lives at love/uu.l (mark + kernel + the sweep into the `uu`
 # book at its tail) and bakes post.l-style through the lib_h/%0.h pattern
-# rules -- into the host, ai0, the inle kernel and wasm, so the corpus's uu
+# rules -- into the host, love0, the inle kernel and wasm, so the corpus's uu
 # files (test/uu*.l, binding the book surface at test/uu.l's head) run on
 # every target, and an overlay can reach (uu 'vof) in a bare binary.
 # test/uuwm.l is a COMMITTED GENERATED artifact: lux's zipper ops compiled
@@ -913,10 +913,10 @@ test_uukind: host
 # image under a budget the wake storm cannot meet (fresh lane ~1s, the storm was
 # >90s -- doc/wake-storm.md). GREEN since the dump's dead-native revert landed
 # (img_nif_interp: references re-aim at the bytecode twin); in test_all.
-test_wake: $(ho)/ai
+test_wake: $(ho)/love
 	@echo TEST wake "(the woken-image lane, doc/wake-storm.md)"
-	@cp $(ho)/ai $(ho)/ai.wake && $(ho)/ai.wake --bake
+	@cp $(ho)/love $(ho)/love.wake && $(ho)/love.wake --bake
 	@cat test/00-init.l test/uu.l > $(ho)/wake-corpus.l
-	@if env -u AI_NO_IMAGE timeout 60 $(ho)/ai.wake $(ho)/wake-corpus.l > /dev/null 2>&1; \
-	  then echo "test_wake: green (the woken image checks uu at speed)"; rm -f $(ho)/ai.wake $(ho)/wake-corpus.l; \
-	  else echo "test_wake: FAILED -- the wake storm (doc/wake-storm.md)"; rm -f $(ho)/ai.wake $(ho)/wake-corpus.l; exit 1; fi
+	@if env -u AI_NO_IMAGE timeout 60 $(ho)/love.wake $(ho)/wake-corpus.l > /dev/null 2>&1; \
+	  then echo "test_wake: green (the woken image checks uu at speed)"; rm -f $(ho)/love.wake $(ho)/wake-corpus.l; \
+	  else echo "test_wake: FAILED -- the wake storm (doc/wake-storm.md)"; rm -f $(ho)/love.wake $(ho)/wake-corpus.l; exit 1; fi

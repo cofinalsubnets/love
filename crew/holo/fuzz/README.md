@@ -51,7 +51,7 @@ python3 crew/holo/fuzz/fuzz.py --arch x64 -n 250 --seed 3 --no-llvm    # faster,
 python3 crew/holo/fuzz/fuzz.py --arch arm64 --classes ld,st,li -n 500  # a subset
 ```
 
-Deterministic per seed. Needs `out/host/ai` built, plus `objdump` (x64) / `llvm-mc` (arm64, and
+Deterministic per seed. Needs `out/host/love` built, plus `objdump` (x64) / `llvm-mc` (arm64, and
 x64 unless `--no-llvm`). Exit code is nonzero iff any sample fails.
 
 ## Coverage
@@ -96,6 +96,6 @@ backend should hard-reject rather than silently mis-encode.
 
 Add a `g_<class>(rng) -> (ir_string, checker)` generator and register it in `GENS`. The checker
 receives the parsed objdump instruction list and raises `Fail(msg)` on any mismatch. Probe what
-holo actually emits first (`echo "(...)" | ... | out/host/ai`, then `objdump` the bytes) so the
+holo actually emits first (`echo "(...)" | ... | out/host/love`, then `objdump` the bytes) so the
 checker matches reality rather than assumption — several classes lower to more than one machine
 instruction (e.g. `setcc` → setcc+movzx, three-address ALU with distinct dest → mov+op).

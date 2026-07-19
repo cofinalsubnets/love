@@ -89,7 +89,7 @@ ifdef K_TEST
 # young-pointing terminator off the heap (gcp gets a terminator as a field because
 # range-gated tagp missed it). The kmallocw layout triggered it; glibc/host didn't.
 # Fixed by range-independent terminator recognition (tagl/in_live_pool in ai.c), so
-# the test gate now exercises tco=1 like everything else. ai0 stays the trampoline lane.
+# the test gate now exercises tco=1 like everything else. love0 stays the trampoline lane.
 kcppflags += -DK_TEST -Dai_tco=1
 endif
 # INLE boots into the agent loop -- same settings as the normal interactive
@@ -121,9 +121,9 @@ kldflags_aarch64 = -m aarch64elf
 kcc = $(KCC) $(kcflags) $(kcflags_$a) $(kcppflags) $(kcc_if_clang)
 k_nasmflags := -f elf64 -g -F dwarf -Wall -w-reloc-abs-qword -w-reloc-abs-dword -w-reloc-rel-dword
 
-kernel: $(ko)/ai-$a$(ksuf).elf
+kernel: $(ko)/love-$a$(ksuf).elf
 
-$(ko)/ai-$a$(ksuf).elf: $(R)/port/inle/$a/$a.lds $(k_o)
+$(ko)/love-$a$(ksuf).elf: $(R)/port/inle/$a/$a.lds $(k_o)
 	@echo LD	$@
 	@mkdir -p "$(dir $@)"
 	@$(KLD) $(kldflags) $(k_o) -o $@
@@ -136,8 +136,8 @@ $(k_odir)/%.o: $(R)/%.c $(k_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
 
-# l.o carries the version string (ai_version.h); recompile it when the id changes.
-$(k_odir)/ai.o: out/lib/ai_version.h
+# l.o carries the version string (love_version.h); recompile it when the id changes.
+$(k_odir)/ai.o: out/lib/love_version.h
 
 $(k_odir)/%.o: $(R)/%.S $(k_h)
 	@echo AS	$@
@@ -165,7 +165,7 @@ $(ko)/limine.conf:
 	@mkdir -p $(dir $@)
 	@printf 'timeout: 1\n/gk\n    protocol: limine\n    path: boot():/boot/kernel\n' > $@
 
-$(ko)/ai-$a$(ksuf).iso: $(ko)/ai-$a$(ksuf).elf $(dl)/limine/limine $(ko)/limine.conf
+$(ko)/love-$a$(ksuf).iso: $(ko)/love-$a$(ksuf).elf $(dl)/limine/limine $(ko)/limine.conf
 	@echo MK $@
 	@rm -rf $(ko)/iso_root
 	@mkdir -p $(ko)/iso_root/boot
@@ -181,7 +181,7 @@ $(ko)/ai-$a$(ksuf).iso: $(ko)/ai-$a$(ksuf).elf $(dl)/limine/limine $(ko)/limine.
 	@$(dl)/limine/limine bios-install $@
 	@rm -rf $(ko)/iso_root
 
-$(ko)/ai-$a.hdd: $(ko)/ai-$a.elf $(dl)/limine/limine $(ko)/limine.conf
+$(ko)/love-$a.hdd: $(ko)/love-$a.elf $(dl)/limine/limine $(ko)/limine.conf
 	@echo MK $@
 	@rm -f $@
 	@dd if=/dev/zero bs=1M count=0 seek=64 of=$@
@@ -218,11 +218,11 @@ k_net_out = -netdev user,id=n0 $(k_net)
 .PHONY: run run-hdd run-$a run-hdd-$a run-headless run-inle run-netagent run-netbrain
 run: run-$a
 run-hdd: run-hdd-$a
-run-$a: $(ko)/ai-$a.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
+run-$a: $(ko)/love-$a.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
 	exec $(k_qemu) -cdrom $<
-run-hdd-$a: $(ko)/ai-$a.hdd $(dl)/edk2-ovmf/ovmf-code-$a.fd
+run-hdd-$a: $(ko)/love-$a.hdd $(dl)/edk2-ovmf/ovmf-code-$a.fd
 	exec $(k_qemu) -hda $<
-run-headless: $(ko)/ai-$a.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
+run-headless: $(ko)/love-$a.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
 	exec $(k_qemu) -cdrom $< -display none -no-reboot
 
 # Boot the baked inle agent. INLE = heartbeat/watchdog/checkpoint demos then a serial shell
@@ -230,15 +230,15 @@ run-headless: $(ko)/ai-$a.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
 # dials an oracle on its own clock. Each (re)builds its own-suffixed iso, then boots headless
 # with serial on stdio so you watch the agent narrate in this terminal (Ctrl-C to stop).
 run-inle:
-	@$(MAKE) -s INLE=1 $(ko)/ai-$a-inle.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
-	exec $(k_qemu) -cdrom $(ko)/ai-$a-inle.iso -display none -no-reboot
+	@$(MAKE) -s INLE=1 $(ko)/love-$a-inle.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
+	exec $(k_qemu) -cdrom $(ko)/love-$a-inle.iso -display none -no-reboot
 ifeq ($a,x86_64)
 run-netagent:
-	@$(MAKE) -s NETAGENT=1 $(ko)/ai-$a-netagent.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
-	exec $(k_qemu) $(k_net_in) -cdrom $(ko)/ai-$a-netagent.iso -display none -no-reboot
+	@$(MAKE) -s NETAGENT=1 $(ko)/love-$a-netagent.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
+	exec $(k_qemu) $(k_net_in) -cdrom $(ko)/love-$a-netagent.iso -display none -no-reboot
 run-netbrain:
-	@$(MAKE) -s NETBRAIN=1 $(ko)/ai-$a-netbrain.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
-	exec $(k_qemu) $(k_net_out) -cdrom $(ko)/ai-$a-netbrain.iso -display none -no-reboot
+	@$(MAKE) -s NETBRAIN=1 $(ko)/love-$a-netbrain.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
+	exec $(k_qemu) $(k_net_out) -cdrom $(ko)/love-$a-netbrain.iso -display none -no-reboot
 else
 run-netagent run-netbrain:
 	@echo "$@: x86_64 only (virtio-net driver is port/inle/x86_64/net.c); host arch is $a"
@@ -274,7 +274,7 @@ init-container: host
 # printing the usual summary over the serial console, then quits qemu (the `exit`
 # nif -> isa-debug-exit). tools/ktest.l (run on
 # the host l) boots it under qemu headless, captures the serial output, and checks
-# it. So this exercises the freestanding kernel the way test_host/test_ai0 exercise
+# it. So this exercises the freestanding kernel the way test_host/test_love0 exercise
 # the host. x86_64 only (qemu + isa-debug-exit); a no-op on other hosts.
 #
 # Drop from the kernel corpus: io.l (host file open) and run.l (subprocess/getenv)
@@ -285,15 +285,15 @@ kt = $(filter-out %/io.l %/run.l %/bell.l,$t)
 out/lib/ktests.l: $(kt) $(MAKEFILE_LIST)
 	@mkdir -p out/lib
 	@cat $(kt) > $@
-out/lib/ktests.h: out/lib/ktests.l $(ai0) tools/lcatv.l love/prel.l
+out/lib/ktests.h: out/lib/ktests.l $(love0) tools/lcatv.l love/prel.l
 	@echo AI	$@
-	@$(ai0) -l love/prel.l tools/lcatv.l out/lib/ktests.l > $@
+	@$(love0) -l love/prel.l tools/lcatv.l out/lib/ktests.l > $@
 # The inle agent, baked VERBATIM (lcatv) to a C string literal kmain.c #includes
 # under INLE and drinks form-by-form through zevs at boot -- same path as the
 # K_TEST corpus, one program instead of the test suite.
-out/lib/inle.h: port/inle/inle.l $(ai0) tools/lcatv.l love/prel.l
+out/lib/inle.h: port/inle/inle.l $(love0) tools/lcatv.l love/prel.l
 	@echo AI	$@
-	@$(ai0) -l love/prel.l tools/lcatv.l port/inle/inle.l > $@
+	@$(love0) -l love/prel.l tools/lcatv.l port/inle/inle.l > $@
 # arm64 EXECUTION validator: cross-build `ai` for aarch64 + run the corpus under
 # qemu-aarch64 (the trustworthy check for the glaze's second target -- holotest
 # proves byte encodings, this proves they run). No-ops without qemu + a cross-gcc.
@@ -304,9 +304,9 @@ test_arm64: host
 .PHONY: test_kernel
 ifeq ($a,x86_64)
 test_kernel: host $(R)/tools/ktest.l
-	@$(MAKE) -s K_TEST=1 $(ko)/ai-$a-test.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
-	@echo TEST $(ko)/ai-$a-test.iso "(serial, headless)"
-	@$m $(R)/tools/ktest.l $(ko)/ai-$a-test.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
+	@$(MAKE) -s K_TEST=1 $(ko)/love-$a-test.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
+	@echo TEST $(ko)/love-$a-test.iso "(serial, headless)"
+	@$m $(R)/tools/ktest.l $(ko)/love-$a-test.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
 else
 test_kernel:
 	@echo "test_kernel: skipped (host arch $a is not x86_64)"
@@ -314,7 +314,7 @@ endif
 
 # --- wasm headless test (wired into test_all; emcc + node) -----------------
 # Build ai.js and run the SAME $t corpus through it under node -- a third
-# runtime after the host and ai0, exercising wasm's <data.h> override
+# runtime after the host and love0, exercising wasm's <data.h> override
 # (sentinel-ap data kinds, no flat code-address space). The harness evals the
 # whole corpus in one ai_eval and greps the drained output for the zz-fin
 # summary, exactly as test_host greps `cat $t | ai`. No-op when emcc or node

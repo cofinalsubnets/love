@@ -5,7 +5,7 @@
 ; has no regex) and the grammar. `dimacs text` -> (formula . nvars): skip `c` comment lines, read the
 ; `p cnf N M` header for N, parse the body integers, split them into clauses at each terminating 0.
 ; Standalone (parse self-tests below); when loaded AFTER crew/sat/sat.l it also self-tests parse->solve via
-; `cdcl`. Run: out/host/ai crew/sat/dimacs.l   (or: cat crew/sat/sat.l crew/sat/dimacs.l | out/host/ai).
+; `cdcl`. Run: out/host/love crew/sat/dimacs.l   (or: cat crew/sat/sat.l crew/sat/dimacs.l | out/host/love).
 ; the combinators live in the `parse` MODULE book (love/post.l): bind the shared set --
 ; `parse` itself rebound LAST, so the earlier reads get the book (the sequence law).
 (: P parse

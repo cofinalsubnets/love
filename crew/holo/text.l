@@ -13,7 +13,7 @@
 ;
 ; needs only the baked post layer (the `parse` combinator book) -- no assembler names, so it
 ; loads in the raw holo.l stream (test_holo) and on the baked host (book-only) alike:
-;   out/host/ai -l crew/holo/text.l ...
+;   out/host/love -l crew/holo/text.l ...
 
 ; the combinators live in the `parse` MODULE book (love/post.l): bind the set this
 ; front-end drives -- `parse` itself rebound LAST (the sequence law).

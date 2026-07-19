@@ -25,8 +25,8 @@ installs = \
   $d/lib/love/ev.l \
   $d/lib/love/bao.l \
   $d/lib/love/mooncc.image \
-  $d/lib/libai.a \
-  $d/lib/libai.so \
+  $d/lib/liblove.a \
+  $d/lib/liblove.so \
   $d/include/ai.h \
   $v/ftdetect/ai.vim \
   $v/syntax/ai.vim \
@@ -51,19 +51,19 @@ $d/lib/love/%.l: love/%.l
 # tree is built on demand by a sub-make.
 glibc_ho = out/host
 ifneq ($(glibc_ho),$(ho))
-$(glibc_ho)/libai.a $(glibc_ho)/libai.so: force_hostcc
+$(glibc_ho)/liblove.a $(glibc_ho)/liblove.so: force_hostcc
 	@$(MAKE) --no-print-directory STATIC=0 $@
 endif
 
-$d/lib/libai.a: $(glibc_ho)/libai.a
+$d/lib/liblove.a: $(glibc_ho)/liblove.a
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 
-$d/lib/libai.so: $(glibc_ho)/libai.so
+$d/lib/liblove.so: $(glibc_ho)/liblove.so
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
 
-$d/bin/ai: $(ho)/ai $(ho)/ai.baked
+$d/bin/ai: $(ho)/love $(ho)/love.baked
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
 # the boot image travels INSIDE the binary (.image is an allocated PROGBITS section, so the
@@ -148,7 +148,7 @@ $d/bin/bao: $(MAKEFILE_LIST)
 	   echo 'exec "$$h/ai" -l "$$h/../lib/love/bao.l" -e "(bao 0)" "$$@"'; } > $@
 	@chmod 755 $@
 
-$d/share/man/man1/ai.1: $(ho)/ai.1
+$d/share/man/man1/ai.1: $(ho)/love.1
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 

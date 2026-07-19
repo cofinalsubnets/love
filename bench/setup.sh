@@ -36,7 +36,7 @@ emit() { command -v "$2" >/dev/null 2>&1 || return; echo "setup $1 1 $(med "$3")
 # ai measures its REAL cold start: the binary wakes its baked .image section (a precompiled, glaze-baked heap
 # snapshot, mmap'd + relocated -- no egg eval), ~4 ms. `unset AI_NO_IMAGE` defeats the Makefile-wide
 # suppression (the per-iteration harness sets it for determinism; the cold-start row wants the image).
-emit ai     "$R/out/host/ai" "unset AI_NO_IMAGE; $R/out/host/ai $T/t.l"
+emit ai     "$R/out/host/love" "unset AI_NO_IMAGE; $R/out/host/love $T/t.l"
 emit go     go               "cd $T && go run t.go"
 emit rust   rustc            "rustc -O $T/t.rs -o $T/t.rsbin && $T/t.rsbin"
 emit java   javac            "cd $T && javac T.java && java T"

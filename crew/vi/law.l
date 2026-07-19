@@ -2,7 +2,7 @@
 ; below drives the PURE engine (vstep, one byte at a time) and reads the
 ; tablet back -- no tty, no port, no file. the cat (`make test_vi`):
 ;
-;   cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/re.l crew/vi/core.l crew/vi/law.l | out/host/ai
+;   cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/re.l crew/vi/core.l crew/vi/law.l | out/host/love
 ;
 ; (vgo lines keys) births a buffer, feeds the TEXT's bytes (27 spelled \e via
 ; the 27-element list shape), and answers the state; the helpers read it back.

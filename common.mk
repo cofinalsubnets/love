@@ -8,7 +8,7 @@ R ?= .
 m = $R/out/host$(hsuf)/ai
 a ?= $(shell uname -m)
 
-# clang is the default host/ai0 compiler (every dev machine here has it; mac's
+# clang is the default host/love0 compiler (every dev machine here has it; mac's
 # `cc` is clang anyway, and the kernel build already defaults KCC=clang). NB: a
 # plain `CC ?= clang` is a no-op -- make ships a built-in default `CC = cc` (origin
 # `default`, not `undefined`), so `?=` never fires. Override the built-in default
@@ -22,12 +22,12 @@ cc_user := 1
 endif
 
 # The host binary's FLAVOR. The default is the dynamic glibc build (plus
-# libai.so, which the crew can share). STATIC=1 links `ai` fully static against
+# liblove.so, which the crew can share). STATIC=1 links `ai` fully static against
 # musl -- the OPT-IN portable lane (the STATIC block in the root Makefile has
 # the whole story), demoted from Linux default 2026-07-07: valgrind emulates
 # x87 at 64 bits and musl's strtod leans on the full 80, so under memcheck
 # every float literal misparsed ~1e-13 (`make valg` tripped spec.l's exact
-# euler law) -- and a static build can't produce libai.so. A STATIC build gets
+# euler law) -- and a static build can't produce liblove.so. A STATIC build gets
 # its own out/host-musl tree so the two libcs never share objects -- and $m
 # below follows, so tests run the flavor you asked for.
 override STATIC := $(filter-out 0,$(STATIC))
@@ -35,7 +35,7 @@ hsuf := $(if $(STATIC),-musl,)
 
 # ai_tco for the builds that can take it: 1 = the tail-threaded VM (aps tail-jump,
 # never return -- `make vmret` verifies it per binary), 0 = the trampoline loop.
-# The host runs $(tco). PINNED ELSEWHERE: ai0 stays 0 (the deliberate
+# The host runs $(tco). PINNED ELSEWHERE: love0 stays 0 (the deliberate
 # trampoline-coverage lane) and the kernel test build stays 0 (hangs at 1 --
 # see the K_TEST block in the root Makefile).
 tco ?= 1

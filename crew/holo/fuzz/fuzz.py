@@ -15,7 +15,7 @@ oracle checks meaning, not layout.
 import subprocess, tempfile, os, re, sys, random, argparse
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-AI = f"{ROOT}/out/host/ai"
+AI = f"{ROOT}/out/host/love"
 HOLO = [f"{ROOT}/crew/holo/holo.l", f"{ROOT}/crew/holo/x64.l", f"{ROOT}/crew/holo/arm64.l"]
 MASK = (1 << 64) - 1
 

@@ -1,6 +1,6 @@
 ; cooktest -- tests for cook's Makefile importer (crew/cook/cook.l).
 ;
-; Run on the host binary:  out/host/ai tools/cooktest.l
+; Run on the host binary:  out/host/love tools/cooktest.l
 ; (wired into the build as `make test_cook`, part of `make test`).
 ;
 ; cook reads a real Makefile -- variable expansion, the make functions,
@@ -11,7 +11,7 @@
 ; the pattern-rule tests build real files and check they appear.
 
 (: dir "/tmp/cooktest"
-   ai  "out/host/ai"                          ; run from the project root (where make runs)
+   ai  "out/host/love"                          ; run from the project root (where make runs)
 
    ; -- a tiny assert harness (this file is standalone, not in the corpus) --
    pass (tablet 0) fail (tablet 0)

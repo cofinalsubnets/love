@@ -225,7 +225,7 @@ glaze, not a bug to fix.
 ## Verification
 
 The recognizer model self-checks (`doc/proto/glaze-data.l`, all asserts green via
-`out/host/ai doc/proto/glaze-data.l`). **Stage B's gate landed in `love/glaze/auto.l`'s
+`out/host/love doc/proto/glaze-data.l`). **Stage B's gate landed in `love/glaze/auto.l`'s
 own assert block** (run on every glaze load, and by `make test_glaze`): the depth-8
 (255-node) chain fold glazes `==` interp and is `=`/`show`-transparent (`respec`,
 de-Bruijn `show`), deopting to `ev` on any non-chain; and `(+ (cap t) 0)` is

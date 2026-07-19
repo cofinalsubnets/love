@@ -3,7 +3,7 @@
 ; hexdump) -- so this file is the frozen record of that byte-for-byte round-trip against the system
 ; assembler. if a golden drifts, either as.l broke or GAS changed, and either is worth a look.
 ; regenerate a golden: printf '%s\n' 'SRC' | as --64 -o t.o - && objcopy -O binary -j .text t.o t.bin && xxd -p t.bin
-; run: out/host/ai -l crew/holo/holo.l -l crew/holo/x64.l -l crew/holo/as.l crew/holo/astest.l  (exits nonzero on any miss).
+; run: out/host/love -l crew/holo/holo.l -l crew/holo/x64.l -l crew/holo/as.l crew/holo/astest.l  (exits nonzero on any miss).
 ;
 ; SCOPE: the M1 straight-line battery -- suffix-less base mnemonics with the width read off the
 ; register (as.l takes no AT&T size suffix yet; that is the gcc -S north star). branch relaxation

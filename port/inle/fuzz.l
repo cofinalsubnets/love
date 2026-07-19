@@ -3,15 +3,15 @@
 ; interesting ones -- with a LOCAL proposer (a random ai-program generator) standing
 ; in for oracle.l's remote brain. same loop either way: swap `gen` for `(ask ...)`.
 ;
-;   out/host/ai -l port/inle/judge.l -l port/inle/fuzz.l -e "(fuzz 40 1)"
+;   out/host/love -l port/inle/judge.l -l port/inle/fuzz.l -e "(fuzz 40 1)"
 ;
 ; the generator emits a DETERMINISTIC subset -- arithmetic, application, church
-; numerals, lists -- NEVER clock/rand/twirl, so a host-vs-ai0 disagreement is a REAL
+; numerals, lists -- NEVER clock/rand/twirl, so a host-vs-love0 disagreement is a REAL
 ; bug, never nondeterminism. each candidate E is wrapped `(puts (show E))` so its
 ; VALUE is the observable the judge diffs across targets. apcap + the judge's
 ; `timeout` fence the church-exponent towers (a blow-up lands as scare/hung, caught).
 ;
-; interesting = judge-bug > 0: a crash, a hang, a host!=ai0 divergence, or a scare.
+; interesting = judge-bug > 0: a crash, a hang, a host!=love0 divergence, or a scare.
 
 (: ;; -- a reproducible RNG in a slot (seed once; no state threading) --
    rng-slot (tablet 0)

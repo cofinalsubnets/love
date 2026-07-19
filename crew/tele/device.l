@@ -8,7 +8,7 @@
 ; kernel decomposition (is this layer compute- or memory-bound?) before any silicon.
 ; crew/tele/cuda.l is the third backend -- same four entries, run on the GPU.
 ;
-;   Run:  cat crew/tele/tele.l crew/tele/device.l | out/host/ai      # then (tl-use sim-dev)
+;   Run:  cat crew/tele/tele.l crew/tele/device.l | out/host/love      # then (tl-use sim-dev)
 ;
 ; a "kernel" here is coarse (one gemm / one elementwise / one reduce) -- roofline
 ; granularity, the right altitude to answer "how big a GPU do I need" without a

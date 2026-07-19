@@ -21,7 +21,7 @@
   !(read (zs "(+ 1"))                          ; an unfinished shape is nothing
   (1 = (read (zs "1")))
   ; reads: the stream shell -- a port is the hot charms; every form evals,
-  ; the last value is the value. the host/ai0/kernel runners ARE reads.
+  ; the last value is the value. the host/love0/kernel runners ARE reads.
   (42 = (reads (tap (zs "(: zq 41) (zq + 1)"))))  ; defines land: the second form reads the first's
   !(reads (tap (zs "")))
   (7 = (reads (tap (zs "1 2 (3 + 4)"))))))     ; forms eval in order; the last one answers

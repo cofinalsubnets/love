@@ -8,7 +8,7 @@
 ; settle the rewrite against `ai` before touching the compiler.
 ;
 ; metavars are 'f 'g 'x 'z 'a 'b; the rhs binders (acc elt w) are chosen OUTSIDE that
-; set so subst leaves them alone (no capture). run: out/host/ai doc/proto/fuse.l
+; set so subst leaves them alone (no capture). run: out/host/love doc/proto/fuse.l
 ;
 ; --- fit with tele (autograd) --- this spike and crew/tele/tele.l are the two halves of
 ; one categorical picture from opposite directions. fuse is the COMPILE-TIME symbolic

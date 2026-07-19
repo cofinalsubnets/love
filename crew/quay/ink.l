@@ -5,11 +5,11 @@
 ; every cell -- then quantized onto a 256-color ocean ramp and said to the
 ; terminal as painted cells. any key returns you to shore.
 ;
-; run: out/host/ai -l crew/quay/ink.l -e '(ink ())'
+; run: out/host/love -l crew/quay/ink.l -e '(ink ())'
 ; the shimmer core is pure ai (ink-scene builds a frame(t) closure that runs
 ; headless into a jug -- the wasm console drives it); only the tty runner (ink)
 ; ties raw / winsize / cue?, which ride host/pty.c, so ink never joins the test
-; corpus (ai0 links no host nifs) -- probe it live under a pty instead.
+; corpus (love0 links no host nifs) -- probe it live under a pty instead.
 
 (: esc ("" + 27)
 

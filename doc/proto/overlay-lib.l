@@ -1,7 +1,7 @@
 ; ============================================================================
 ; overlay-lib -- the rung-1/2 type-overlay toolkit, as a LOADABLE library.
 ;
-;   out/host/ai -l doc/proto/overlay-lib.l            # load it, then REPL on stdin
+;   out/host/love -l doc/proto/overlay-lib.l            # load it, then REPL on stdin
 ;
 ; then, one form per line:
 ;   (domain units meters seconds area)                # define a units type-system

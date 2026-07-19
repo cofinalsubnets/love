@@ -2,7 +2,7 @@
 ; the pure constellation algebra (no host nif), so it runs on EVERY frontend --
 ; the host, wasm, and inle (the freestanding kernel): a neural net on bare metal.
 ;
-;   run:  out/host/ai -l crew/tele/tele.l crew/tele/xor.l
+;   run:  out/host/love -l crew/tele/tele.l crew/tele/xor.l
 ;
 ; the net: 2 -> H (tanh) -> 1 (sigmoid), trained full-batch by SGD on MSE. XOR is
 ; the classic not-linearly-separable problem -- a single linear layer cannot solve

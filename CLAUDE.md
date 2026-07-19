@@ -15,20 +15,20 @@
 ; result inline (`expr ; value`).
 
 ; --- how to work here (read this first) ---
-; * `make test` is the gate: host + self-hosted bootstrap ai0, BOTH required to print the zz-fin
-;   "tests pass" summary (ai0 EXACTLY twice -- a silent reader stop exits 0 without reaching zz-fin,
+; * `make test` is the gate: host + self-hosted bootstrap love0, BOTH required to print the zz-fin
+;   "tests pass" summary (love0 EXACTLY twice -- a silent reader stop exits 0 without reaching zz-fin,
 ;   so the exit code alone proves nothing). `make test_all` is the full gate -- the rocq/lean proofs,
-;   gc/glaze/sat/holo/lux, tool diffs, arm64 + the qemu kernel + wasm; `make valg` for memory. one file: `out/host/ai test/x.l` -- but the corpus runs CONCATENATED in one
+;   gc/glaze/sat/holo/lux, tool diffs, arm64 + the qemu kernel + wasm; `make valg` for memory. one file: `out/host/love test/x.l` -- but the corpus runs CONCATENATED in one
 ;   global scope, so keep helpers local (give `:` a body), and a single-file run lacks the asserts.
 ; * SPEED IS A SIGNAL: every test runs in a second or two, the glaze self-tests included (the whole
 ;   test/glaze-x86.l is ~1.5s). a test that HANGS or crawls is a bug announcing itself, never "slow
 ;   benches" to wait out or split off -- chase the slowness, it IS the bug. the classic: a native
 ;   lane fell through to garbage and now loops (or reads OOB and segfaults), e.g. a baked lcat header
-;   came up EMPTY (a failed ai0 gen left a 0-byte .h that make thinks is fresh) so `assemble` is
+;   came up EMPTY (a failed love0 gen left a 0-byte .h that make thinks is fresh) so `assemble` is
 ;   unbound and the glaze's map lane emits nothing. one bug, two faces -- infinite loop or crash.
 ; * `make clean` nukes out/dl (ovmf/limine) -- stash them first if you need the kernel tests.
-;   editing ai.h needs no clean (every object deps on $(ai_h), the lcat'd headers re-lay on ai0).
-; * CHECK A .l EDIT for balance before trusting it: `out/host/ai tools/ltidy.l <file>` (or `make lint`
+;   editing ai.h needs no clean (every object deps on $(ai_h), the lcat'd headers re-lay on love0).
+; * CHECK A .l EDIT for balance before trusting it: `out/host/love tools/ltidy.l <file>` (or `make lint`
 ;   over every tracked .l) -- a .l-aware paren/bracket/brace + unclosed-string scan (`;`/`#!` comments,
 ;   `'` and backtick are reader ops NOT delimiters, so it won't trip where a C lexer would). SILENT means
 ;   clean; line-pointed warnings + exit 1 on imbalance (a dropped paren is the classic .l slip, and it
@@ -36,7 +36,7 @@
 ; * C and docs EMBED ai the .l sweeps miss -- grep on every rename: host/main.c (s2cl + runner),
 ;   port/inle/kmain.c (the K_TEST runner), port/{playdate,rp2040}/main.c (g_evals_ driver strings),
 ;   wasm/; and index.html (the static page, style.css beside it) runs live demos as data-run chips --
-;   its reference section's examples + "; answers" are PROBED against out/host/ai, never written
+;   its reference section's examples + "; answers" are PROBED against out/host/love, never written
 ;   from memory; re-probe on every rename or semantic change.
 ; * a bare all-punct symbol mid-list captures its left operand when code compiles (opfix) -- escape
 ;   in parens ((+) is + as a value); GLUED to a datum it is monadic instead (the valence law: space
@@ -215,7 +215,7 @@ macros               ; ()      mopped up after birth -- off the book, so the nom
 ; three core tables are + , * , and apply. a both-fixnum fast path skips the table; otherwise one
 ; indexed jump picks a lane that widens only as far as the operands need (array, complex, bignum,
 ; float, ...). the VM is tail-threaded over a two-space copying collector; out-of-pool constants are
-; immortal. the love/ layer (prel ev bao cli egg) drips into every frontend: the host (out/host/ai), the
+; immortal. the love/ layer (prel ev bao cli egg) drips into every frontend: the host (out/host/love), the
 ; freestanding kernel (x86_64/aarch64), and wasm. build codegen lives in ai under tools/; the C is
 ; freestanding, -Wall -Wextra -Werror.
 ```

@@ -9,7 +9,7 @@
 ; datagrams and its replies route back automatically.
 ;
 ; This file only DEFINES (a body-less `:` leaks the helpers); drive it with:
-;   out/host/ai -l port/inle/oracle.l -e "(oracle 0)"      ; then: make run-netbrain
+;   out/host/love -l port/inle/oracle.l -e "(oracle 0)"      ; then: make run-netbrain
 ;
 ; With no ANTHROPIC_API_KEY it runs the ECHO brain ("<3 ping") -- a free wire
 ; smoke-test (does SLIRP route? does the reply come back?). With a key it asks

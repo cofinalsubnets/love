@@ -1,9 +1,9 @@
 #include "ai.h"
-// The build's version string (the version-control id), generated into out/lib/ai_version.h by
+// The build's version string (the version-control id), generated into out/lib/love_version.h by
 // the Makefile and surfaced in the runtime as the `ai-version` global (ai_ini_0).
 // Optional include so a standalone/unwired compile still builds; falls back to "unknown".
-#if defined(__has_include) && __has_include("ai_version.h")
-#include "ai_version.h"
+#if defined(__has_include) && __has_include("love_version.h")
+#include "love_version.h"
 #endif
 #ifndef AI_VERSION
 #define AI_VERSION "unknown"
@@ -993,7 +993,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   g = ai_defn(g, def0, countof(def0));
   g = ai_defn(g, def1, countof(def1));
   g = ai_defn(g, frontend_defaults, countof(frontend_defaults));   // overridable by the frontend
-  // `ai-version`: the build's version-control id (ai_version.h), surfaced on init so the user
+  // `ai-version`: the build's version-control id (love_version.h), surfaced on init so the user
   // can read the running version. A non-fixnum global, harmlessly skipped by ev.l's pureset.
   if (ai_ok(g = ai_strof(g, AI_VERSION))) {
    struct ai_def vd[] = {{"ai-version", ai_pop1(g)}};
@@ -4359,8 +4359,8 @@ static struct ai *ioparse(struct ai *g, bool multi) {
    if (nomp(A(g->sp[1]))) {                            // reader-macro wrap, pop the wrap frame
     bool emptyd = g->sp[0] == ZeroPoint;     // datum is the () zero-point (NOT the number 0)
     // @()/#() -> the DIRECT one-arg empty-collection nif, (iota 0) / (tablet 0). A one-arg nif
-    // call is ai0-safe; a ZERO-ARG macro (tuple)/(hash) is NOT expanded by the self-hosted feel,
-    // so @()->( tuple)->(spread (list)) would strand a macro value on ai0. The nif sidesteps it.
+    // call is love0-safe; a ZERO-ARG macro (tuple)/(hash) is NOT expanded by the self-hosted feel,
+    // so @()->( tuple)->(spread (list)) would strand a macro value on love0. The nif sidesteps it.
     char const *empty_ctor = !emptyd ? 0
                            : hashsym(A(g->sp[1])) ? "tablet"          // #() -> empty map
                            : symeq(A(g->sp[1]), "tuple", 5) ? "iota"  // @() -> empty z-array

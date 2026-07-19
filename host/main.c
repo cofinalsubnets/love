@@ -366,8 +366,8 @@ static lvm(lvm_getenv) {
 
 // (getpid x) -> the running process id (x ignored). The host-nif worked example,
 // merged here from the former host/host.c. NOTE: unlike the host/*.c nifs, main.c
-// is linked into ai0 too, so getpid is present in the bootstrap as well -- not a
-// pure host-glob nif. net.c (ain) / pty.c (bao) are the live not-in-ai0 ones.
+// is linked into love0 too, so getpid is present in the bootstrap as well -- not a
+// pure host-glob nif. net.c (ain) / pty.c (bao) are the live not-in-love0 ones.
 static lvm(lvm_getpid) { return Sp[0] = putcharm(getpid()), Ip++, Continue(); }
 
 // --- PARTIAL-GLAZE PROTOTYPE (flag-gated; see love/glaze/emit.l cgir bridge) -----------
@@ -440,10 +440,10 @@ static struct ai *env_budget(struct ai *g) {
   return g; }
 
 #ifdef GL_BOOTSTRAP
-// ai0: the CLI driver is the sed-wrapped raw text (it can't lcat its own arg
+// love0: the CLI driver is the sed-wrapped raw text (it can't lcat its own arg
 // ap). Self-test: the whole test corpus, baked in (sed-wrapped), run
 // twice -- once compiled by the C bootstrap compiler (c0), once by the
-// self-hosted ev installed from ev.l -- so one ai0 invocation exercises both
+// self-hosted ev installed from ev.l -- so one love0 invocation exercises both
 // compilers (and -Dai_tco=0 makes it the trampoline path). s2cldef installs
 // s2cl (string -> charlist); runner drinks the baked corpus (the global
 // `tests`) through reads (the shell core, love/bao.l), whose `(ev 'ev r)` indirection
@@ -496,7 +496,7 @@ static struct ai *boot(struct ai *g, bool argp) {
   return ai_evals_(g, runner); }                      // pass 2: corpus via the self-hosted ev
 
 #else
-// the full ai: raw terminal mode for the interactive REPL (ai0 never needs
+// the full ai: raw terminal mode for the interactive REPL (love0 never needs
 // it -- a build tool / self-test is non-interactive); the CLI driver is the
 // canonicalized lcat header; `rel` is the non-tty stdin runner.
 static struct termios saved_termios;
@@ -595,7 +595,7 @@ static struct ai *boot(struct ai *g, bool argp) {
 #endif                                                   //   glaze emits for the running arch, mooncc.image carries ALL backends
                                                          //   (crew/build.mk moonfiles), a test that wants a cross backend loads it
                                                          //   at runtime ((enter ()) (use 'holo) <backend.l> (leave ()) -- the
-                                                         //   test_glaze/test_raw_arm64 recipes), and ai0 keeps every backend so
+                                                         //   test_glaze/test_raw_arm64 recipes), and love0 keeps every backend so
                                                          //   the corpus's cross-arch asserts still run under both its compilers.
 #include "seal.h"
 #include "bao.h"

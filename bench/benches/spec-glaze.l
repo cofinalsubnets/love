@@ -8,7 +8,7 @@
 ; summing P(i mod 97) mod 1e9+7 over i in [0,N). Under a naive interpreter every iteration walks + heads
 ; the AST; autospec (love/glaze/auto.l) applies ev1 to the STATIC P at compile time, folding the dispatch
 ; away to straight-line arithmetic that then natives -- DEFAULT behavior (the glaze is baked in; probe:
-; `out/host/ai this-file` glazes it, no flags). The % 1e9+7 keeps everything in int64 (no bignum deopt),
+; `out/host/love this-file` glazes it, no flags). The % 1e9+7 keeps everything in int64 (no bignum deopt),
 ; so the number is native code vs interpretation. checksum = Σ_{i<N} P(i mod 97) mod 1000000007, N=10^6.
 (: (ev1 nd x) (? (id? (cap nd) 'lit) (caup nd)  (id? (cap nd) 'var) x
                  (id? (cap nd) 'add) (+ (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))

@@ -7,7 +7,7 @@
 ; and both colors must sit in their tiles. the whole loop: wayland socket ->
 ; SCM_RIGHTS fd -> shm pool -> commit -> layout -> mapin -> px-ship -> X.
 ;
-;   cat test/00-init.l test/host/haven.l | out/host/ai
+;   cat test/00-init.l test/host/haven.l | out/host/love
 ;
 ; no Xvfb on the box -> a polite skip (the sentinel still prints).
 
@@ -79,7 +79,7 @@
                       (go px 0))
 
  ; haven on its own X window + shore
- hv (mind `("out/host/ai" "-l" "crew/lux/core.l" "-l" "crew/lux/wire.l"
+ hv (mind `("out/host/love" "-l" "crew/lux/core.l" "-l" "crew/lux/wire.l"
             "-l" "crew/lux/layout.l" "-l" "crew/quay/pier.l"
             "-l" "crew/haven/wire.l" "-l" "crew/haven/haven.l"
             "-e" (+ "(haven \"" (+ sock (+ "\" \"" (+ dpy "\" () 320 240)"))))))
@@ -107,7 +107,7 @@
                              (? (< 30 n) n (: _ (rest 100) (waithue x y b g r (- t 1))))))
 
  ; the red skiff, alone: one toplevel takes the whole 320x240 glass
- skr (mind `("out/host/ai" "-l" "crew/haven/wire.l" "-l" "crew/haven/skiff.l"
+ skr (mind `("out/host/love" "-l" "crew/haven/wire.l" "-l" "crew/haven/skiff.l"
              "-e" (+ "(skiff \"" (+ sock "\" 320 240 12582912)"))))
  _ (must 'red-up (two? skr))
  _ (enlist 'skr (cap skr))
@@ -115,7 +115,7 @@
 
  ; the blue skiff arrives: the layout retiles -- blue masters the left
  ; column, red hears its new size and re-dresses into the right
- skb (mind `("out/host/ai" "-l" "crew/haven/wire.l" "-l" "crew/haven/skiff.l"
+ skb (mind `("out/host/love" "-l" "crew/haven/wire.l" "-l" "crew/haven/skiff.l"
              "-e" (+ "(skiff \"" (+ sock "\" 320 240 192)"))))
  _ (must 'blue-up (two? skb))
  _ (enlist 'skb (cap skb))
@@ -217,7 +217,7 @@
          ; size and does the honest resize: buffers struck (delete_id), a
          ; fresh pool dressed, the retired ids REUSED by libwayland. a
          ; bookkeeping slip is a protocol error and a nonzero exit below.
-         sky (mind `("out/host/ai" "-l" "crew/haven/wire.l" "-l" "crew/haven/skiff.l"
+         sky (mind `("out/host/love" "-l" "crew/haven/wire.l" "-l" "crew/haven/skiff.l"
                      "-e" (+ "(skiff \"" (+ sock "\" 320 240 12632064)"))))
          _ (must 'yellow-up (two? sky))
          _ (enlist 'sky (cap sky))
@@ -238,7 +238,7 @@
  ; enables on enter); the GATE ITSELF moors as the input method over the raw
  ; wire. the im's committed text must pour through haven into the skiff's
  ; mouth, and a grabbed keyboard steals the glass's keys from the clients
- skt (mind `("out/host/ai" "-l" "crew/haven/wire.l" "-l" "crew/haven/skiff.l"
+ skt (mind `("out/host/love" "-l" "crew/haven/wire.l" "-l" "crew/haven/skiff.l"
              "-e" (+ "(skiff \"" (+ sock "\" 320 240 8421504)"))))
  _ (must 'ti-up (two? skt))
  _ (enlist 'skt (cap skt))

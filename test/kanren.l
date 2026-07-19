@@ -3,7 +3,7 @@
 ; stay global; walk/est/query/streams/rel ride the book). this file is the assert
 ; suite + the relational-algebra demo. ONE body-having `:` -- the book binds and
 ; `unord_eq` (an unordered list equality; search order is not specified) stay LOCAL,
-; per the corpus law: a leak here would poison ai0's pass-2 re-sweep mark (the
+; per the corpus law: a leak here would poison love0's pass-2 re-sweep mark (the
 ; egg warm re-runs the prel sweep; a session global shadows a module name in it).
 (: K kanren
    est (K 'est)  query (K 'query)  rel (K 'rel)  sX (K 'sX)  slist (K 'slist)

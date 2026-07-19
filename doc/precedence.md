@@ -305,7 +305,7 @@ proof, not the assumption.
   a coined operator against `><` (`a ~ b >< c` → `(>< (~ a b) c)`).
 - Left-assoc is out of scope here; add a placeholder assert that a same-grip
   chain stays right-associative (the conservative-extension guarantee).
-- `make test` (host + ai0 bootstrap, both) with **zero edits to existing
+- `make test` (host + love0 bootstrap, both) with **zero edits to existing
   asserts** is the acceptance bar. Then `make test_all`.
 - Idempotence assert: `(op-core (op-core form)) = (op-core form)` on the mixed
   cases.

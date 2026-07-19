@@ -5,16 +5,16 @@
 ; hangs off AND the filter a differential fuzzer hangs off -- the same object, read
 ; two ways (the polarities are opposite on purpose).
 ;
-;   out/host/ai -l port/inle/judge.l -e "(judge-e \"(puts (show (+ 1 2)))\")"
+;   out/host/love -l port/inle/judge.l -e "(judge-e \"(puts (show (+ 1 2)))\")"
 ;
 ; the ladder, cheapest first:
 ;   parses  -- the reader accepts every form (in-process, via `sound`; no eval)
 ;   runs    -- host `ai -e` completes with no scare / missing-nom / overlay clash
 ;   hung    -- ... or it ran past a wall-clock cap (an infinite loop -- a real bug)
-;   agree   -- host and ai0 (the self-hosted bootstrap) print the SAME output
+;   agree   -- host and love0 (the self-hosted bootstrap) print the SAME output
 ; the run/hang/agree rungs execute the candidate in a SUBPROCESS under `timeout`, so
 ; a hang or crash can't take the judge down -- the isolation the in-process reader
-; can't give. host-vs-ai0 divergence is the gold the memory bugs were made of
+; can't give. host-vs-love0 divergence is the gold the memory bugs were made of
 ; (kernel-tco1-gc, glaze-intparam-guard were both target divergences).
 ;
 ; NB: relative binary paths -> run from the repo root. one `-e` form per candidate
@@ -42,13 +42,13 @@
    ;; here (a temp-file + `2>&1` variant can add it -- deferred, it's soft). --
    (judge-run bin prog secs) (run (L "timeout" (show secs) bin "-e" prog))   ; (show 5)="5"; (string 5) is the BYTE 5
 
-   ;; -- the judge: parse in-process, run host + ai0 isolated, classify by status,
+   ;; -- the judge: parse in-process, run host + love0 isolated, classify by status,
    ;; diff, tally. --
    (judge prog)
       (: pr (judge-parse prog) forms (cap pr) parses (cup pr)
          cap-s 5                                          ; the wall-clock cap (seconds)
-         rh (judge-run "out/host/ai"  prog cap-s) sh (cap rh) oh (cup rh)
-         r0 (judge-run "out/host/ai0" prog cap-s) s0 (cap r0) o0 (cup r0)
+         rh (judge-run "out/host/love"  prog cap-s) sh (cap rh) oh (cup rh)
+         r0 (judge-run "out/host/love0" prog cap-s) s0 (cap r0) o0 (cup r0)
          hung   (? (= sh 124) 1 (= s0 124) 1 0)           ; either target timed out
          crash  (? (>= sh 128) 1 (>= s0 128) 1 0)         ; killed by a signal (segv/abort)
          scare  (? (&& (! (= sh 0)) (&& (! (= sh 124)) (< sh 128))) 1 0)  ; host exited nonzero, not hang/signal

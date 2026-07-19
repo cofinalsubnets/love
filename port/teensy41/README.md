@@ -11,7 +11,7 @@ the self-hosting double-bake fits comfortably.
 ## Build
 
 ```
-cd port/teensy41 && make            # -> $R/out/teensy41/ai.hex
+cd port/teensy41 && make            # -> $R/out/teensy41/love.hex
 make flash                           # teensy_loader_cli --mcu=TEENSY41 -w -v ...
 ```
 

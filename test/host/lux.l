@@ -1,8 +1,8 @@
 ; --- test/host/lux.l: a runnable smoke test for lux's socket nif (host/lux.c) ---
 ; Standalone against the built binary, like test/host/net.l and for the same reason
-; (host/*.c links the final `ai` only; ai0 bakes the corpus without it):
+; (host/*.c links the final `ai` only; love0 bakes the corpus without it):
 ;
-;   cat test/00-init.l test/host/lux.l | out/host/ai
+;   cat test/00-init.l test/host/lux.l | out/host/love
 ;
 ; (connectu path) opens a unix-domain stream socket. A REAL round trip needs a
 ; unix listener on the other end -- that is an X display socket in practice, so

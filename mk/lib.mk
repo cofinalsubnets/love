@@ -5,7 +5,7 @@
 # live in common.mk. Every recipe here is unchanged from the single-file Makefile.
 
 # Static lisp headers: each love/*.l is serialized to a C string literal in
-# out/lib/*.h by tools/lcat.l (run on the bootstrap interpreter ai0). Frontends
+# out/lib/*.h by tools/lcat.l (run on the bootstrap interpreter love0). Frontends
 # #include these and assemble the bootstrap with G_EGG_PRE/POST (ai.h).
 # Drop a .l into love/ and it is picked up automatically -- no rule to edit.
 lib_h = $(patsubst love/%.l,out/lib/%.h,$(wildcard love/*.l))
@@ -14,10 +14,10 @@ lib_h = $(patsubst love/%.l,out/lib/%.h,$(wildcard love/*.l))
 # every one is arch-neutral -- but the HOST bakes its NATIVE backend only (main.c
 # arch-gates the include; mooncc.image carries ALL backends via its cat, and a test
 # that wants a cross backend runtime-loads it: (enter ()) (use 'holo) <backend.l>
-# (leave ())). ai0 keeps every backend so the corpus's cross-arch asserts run under
-# both its compilers. Both .h flavors are still GENERATED for both backends (ai0
+# (leave ())). love0 keeps every backend so the corpus's cross-arch asserts run under
+# both its compilers. Both .h flavors are still GENERATED for both backends (love0
 # needs them; the host simply includes one). asm_h = lcat headers (host ai);
-# asm0_h = sed-wrapped raw source (ai0, the bootstrap -- can't lcat its own sources).
+# asm0_h = sed-wrapped raw source (love0, the bootstrap -- can't lcat its own sources).
 holo_h = out/lib/holo.h  out/lib/x64.h  out/lib/arm64.h  out/lib/seal.h
 asm0_h = out/lib/holo0.h out/lib/x640.h out/lib/arm640.h out/lib/seal0.h
 # the glaze (native JIT, love/glaze/{emit,auto}.l): baked to raw-text headers (sed_lit,
@@ -26,25 +26,25 @@ asm0_h = out/lib/holo0.h out/lib/x640.h out/lib/arm640.h out/lib/seal0.h
 # an always-on JIT at zero startup (Phase 4, doc/snapshot.md). Their self-test asserts
 # native-compile transient closures -- the bake's gen_major drops them before serializing.
 glaze_h = out/lib/emit.h out/lib/auto.h out/lib/gexport.h out/lib/hook.h
-# ai0's bootstrap headers: sed-wrapped raw source (a text->C-literal needing no
-# interpreter -- the l reader strips the ; comments at read time), since ai0
+# love0's bootstrap headers: sed-wrapped raw source (a text->C-literal needing no
+# interpreter -- the l reader strips the ; comments at read time), since love0
 # can't lcat the very sources it is assembled from (chicken/egg). cli.l doubles as
-# ai0's CLI arg handler; prel/ev/egg/repl + the whole concatenated test corpus
-# are baked in so ai0 self-tests both compilers in one run (see main.c). The final
+# love0's CLI arg handler; prel/ev/egg/repl + the whole concatenated test corpus
+# are baked in so love0 self-tests both compilers in one run (see main.c). The final
 # l uses the canonicalized lcat headers from the rule below instead.
 sed_lit = sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/'
 gl0_h = out/lib/cli0.h out/lib/egg0.h out/lib/prel0.h out/lib/ev0.h out/lib/bao0.h out/lib/uu0.h out/lib/tests0.h $(asm0_h)
 .PHONY: lib
 lib: $(lib_h) $(gl0_h)
 # lcat a .l source into its C-string header, ATOMICALLY: generate to a temp, require it
-# non-empty, then mv into place. A bare `> $@` truncates first, so a broken ai0 (or any
+# non-empty, then mv into place. A bare `> $@` truncates first, so a broken love0 (or any
 # lcat failure) would leave a 0-byte header that make then treats as up-to-date -- which
 # SILENTLY drops a baked service (e.g. an empty holo.h => `assemble` unbound => the glaze's
 # map lane emits nothing => a corrupt native => crash/hang). Fail loudly instead.
 lcat_h = @mkdir -p out/lib; echo AI	$@; \
-  $(ai0) -l love/prel.l tools/lcat.l $< > $@.tmp && test -s $@.tmp && mv -f $@.tmp $@ \
-    || { rm -f $@.tmp; echo "FAIL: $@ empty (ai0 lcat failed -- broken bootstrap?)"; exit 1; }
-$(lib_h): out/lib/%.h: love/%.l tools/lcat.l   # + $(ai0), stated below
+  $(love0) -l love/prel.l tools/lcat.l $< > $@.tmp && test -s $@.tmp && mv -f $@.tmp $@ \
+    || { rm -f $@.tmp; echo "FAIL: $@ empty (love0 lcat failed -- broken bootstrap?)"; exit 1; }
+$(lib_h): out/lib/%.h: love/%.l tools/lcat.l   # + $(love0), stated below
 	$(lcat_h)
 # the crew/holo/ assembler (crew/holo/holo.l + crew/holo/x64.l) rides the SAME lcat pipeline into the
 # post-egg layer -- a core language service (the glaze is its client). Explicit rules
@@ -57,7 +57,7 @@ out/lib/arm64.h: crew/holo/arm64.l tools/lcat.l
 	$(lcat_h)
 out/lib/seal.h: crew/holo/seal.l tools/lcat.l
 	$(lcat_h)
-# ai0's sed-wrapped raw source of the same three (no interpreter -- the l reader
+# love0's sed-wrapped raw source of the same three (no interpreter -- the l reader
 # strips ; comments at read time), baked into the bootstrap so the corpus can test
 # the assembler under BOTH compilers (c0 + the self-hosted ev), like prel/ev/bao.
 out/lib/holo0.h: crew/holo/holo.l
@@ -103,7 +103,7 @@ out/lib/tests0.h: $t
 	@echo AI	$@
 	@cat $t | $(sed_lit) > $@
 
-# ai_version.h: the build's version-control id, surfaced in the runtime as the `ai-version`
+# love_version.h: the build's version-control id, surfaced in the runtime as the `ai-version`
 # global (ai.c ai_ini_0). VCS-AGNOSTIC: a _darcs/ repo stamps darcs-<12-hex patch hash>
 # (-dirty when darcs whatsnew is non-empty), else git describe, else "unknown" -- so the
 # darcs snapshot import carries this rule verbatim and stamps itself. Regenerated every
@@ -112,7 +112,7 @@ out/lib/tests0.h: $t
 # uses __has_include).
 .PHONY: force_version
 force_version: ;
-out/lib/ai_version.h: force_version
+out/lib/love_version.h: force_version
 	@mkdir -p out/lib
 	@if [ -d $(R)/_darcs ]; then \
 	  v="darcs-$$(darcs log --repodir $(R) --last 1 2>/dev/null | awk '/^patch/{print substr($$2,1,12)}')"; \
@@ -122,7 +122,7 @@ out/lib/ai_version.h: force_version
 	fi; printf '#define AI_VERSION "%s"\n' "$$v" > $@.tmp
 	@if cmp -s $@.tmp $@ 2>/dev/null; then rm -f $@.tmp; else mv $@.tmp $@; echo SH $@; fi
 
-# The lcat'd lib headers (egg.h et al) are PRODUCED BY running ai0, so re-lay
-# them whenever ai0 changes. (The old "edit a .h => make clean or ai0 hangs" gum is
-# cleaned: ai0's own objects already depend on $(ai_h), so ai0 can't go stale.)
-$(lib_h): $(ai0)
+# The lcat'd lib headers (egg.h et al) are PRODUCED BY running love0, so re-lay
+# them whenever love0 changes. (The old "edit a .h => make clean or love0 hangs" gum is
+# cleaned: love0's own objects already depend on $(ai_h), so love0 can't go stale.)
+$(lib_h): $(love0)

@@ -6,7 +6,7 @@
 ; sketch -- but milestone 1 (the heartbeat loop) is REAL on both frontends: it
 ; rides `rest`/`clock`/`twirl`/`catch`, which are core nifs, so the same code runs
 ; on the host and, unchanged, in the kernel. the `; value` comments are the
-; printed intent; run `out/host/ai -l port/inle/inle.l -e "(demos 0)"` to see them
+; printed intent; run `out/host/love -l port/inle/inle.l -e "(demos 0)"` to see them
 ; (the file only DEFINES demos now -- a plain load prints nothing; -l preloads it into
 ; the shared global scope so the -e call finds it).
 ;
@@ -245,7 +245,7 @@
 ; leaks `demos` to the global scope. the host sketch + the -inle build call (demos 0)
 ; explicitly; the net-agent build skips it and runs (serve fresh nic) directly (the
 ; demos' sleeps/spawns leave the NIC RX unpolled, so a live agent must start clean --
-; exactly why netecho slurps immediately). run `out/host/ai -l port/inle/inle.l -e "(demos 0)"`
+; exactly why netecho slurps immediately). run `out/host/love -l port/inle/inle.l -e "(demos 0)"`
 ; (the -l preload shares the global scope so `demos` is defined when -e fires; a positional
 ; file arg with -e AFTER it does NOT run -- the file is the program and the -e tokens are
 ; ignored trailing argv).

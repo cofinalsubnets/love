@@ -35,16 +35,16 @@ isolated binary does. when they differ, the binary wins.
 1. **pick work.** self-directed: run the differential fuzzer to find where the
    two compilers disagree -- `(look "port/inle/fuzz.l")`, `(look "port/inle/mutate.l")`.
    `(judge "PROG")` grades a candidate on a ladder (parses / runs / hangs /
-   host-vs-ai0 agree) and returns two lenses: `reward` (high = a correct,
+   host-vs-love0 agree) and returns two lenses: `reward` (high = a correct,
    portable program) and `bug` (high = an interesting divergence or crash to
-   open). a high `bug` is gold -- the memory bugs were made of host-vs-ai0
+   open). a high `bug` is gold -- the memory bugs were made of host-vs-love0
    divergences. or take a task the steering human hands you.
 2. **understand.** `(look "path")` reads source; `(sh (L "git" "log" "--oneline" "-20"))`
    and `(sh (L "grep" "-rn" "PAT" "ai.c"))` orient you. probe small.
 3. **edit.** `(lay "path" body)` writes a tree file. keep changes small and
    local; match the surrounding voice (cozy, lowercase, green-framed).
 4. **gate.** `(rebuild ())` builds and runs `make test` -- the gate is host +
-   ai0 **exactly twice**; a `(status . out)` of status 0 means the "tests pass"
+   love0 **exactly twice**; a `(status . out)` of status 0 means the "tests pass"
    summary printed on both passes. a silent reader stop exits 0 too, so trust
    the summary, not the code alone. never commit red.
 5. **commit.** `(sh (L "git" "add" "-A"))` then `(sh (L "git" "commit" "-m" MSG))`.

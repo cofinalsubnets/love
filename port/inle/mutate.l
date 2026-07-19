@@ -6,10 +6,10 @@
 ; (bignum growth, church towers, division, the ontology flips), not in the desert of
 ; uniformly-random junk. same propose->judge->keep loop as fuzz.l, just a smarter gen.
 ;
-;   out/host/ai -l port/inle/judge.l -l port/inle/fuzz.l -l port/inle/mutate.l -e "(mutfuzz 100 1)"
+;   out/host/love -l port/inle/judge.l -l port/inle/fuzz.l -l port/inle/mutate.l -e "(mutfuzz 100 1)"
 ;
 ; reuses judge.l (judge/judge-bug/judge-report) + fuzz.l (rng-next/rng-init/pick/ops/
-; gen/gen-num). deterministic seeds only -> a host!=ai0 disagreement is a real bug.
+; gen/gen-num). deterministic seeds only -> a host!=love0 disagreement is a real bug.
 
 (: (mem? x l) (? (atom? l) 0 (id? x (cap l)) 1 (mem? x (cup l)))
 

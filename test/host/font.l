@@ -3,7 +3,7 @@
 ; atlas discipline and the builtin bake are gated directly; the PSF lane
 ; is gated against a font SYNTHESIZED right here (no system fonts assumed):
 ;
-;   cat test/00-init.l test/host/font.l | out/host/ai
+;   cat test/00-init.l test/host/font.l | out/host/love
 
 (reads (open "crew/quay/psf.l" "r"))
 

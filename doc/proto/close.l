@@ -27,9 +27,9 @@
 ; this (it sees a data-dependent branch in the loop and gives up); close sees an affine guard and
 ; changes variable. that is the edge on `deforest`.
 ;
-; run:    out/host/ai doc/proto/close.l                         (the demo; standalone `assert` is
+; run:    out/host/love doc/proto/close.l                         (the demo; standalone `assert` is
 ;                                                                lenient -- eyeball the shown forms)
-; strict: cat test/00-init.l doc/proto/close.l | out/host/ai    (00-init makes `assert` enforce)
+; strict: cat test/00-init.l doc/proto/close.l | out/host/love    (00-init makes `assert` enforce)
 ;
 ; close composes RIGHTWARD off forest.l: deforestation lowers a map/filter/fold pipeline to the
 ; canonical fold `(foldl (+) z (map F SRC))`; the recognizer here takes THAT shape and, when F is

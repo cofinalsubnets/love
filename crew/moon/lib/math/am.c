@@ -1,5 +1,5 @@
 // crew/moon/lib/math/am.c -- the math floor: our own transcendentals, ONE file on
-// every frontend (host, ai0, kernel, wasm, the gcc-free raw build -- the last
+// every frontend (host, love0, kernel, wasm, the gcc-free raw build -- the last
 // vendored math, fdlibm, retired here). binary64, portable C in the mooncc subset:
 // unions for bit access, uint64 arithmetic, no fma/int128/builtins. coefficients
 // are TAYLOR/exact-rational (re-derivable, no minimax magic) at mpmath-verified

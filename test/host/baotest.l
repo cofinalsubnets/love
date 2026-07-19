@@ -11,7 +11,7 @@
 ; core (in the host egg) and `bao` is public, so this file gates the battery
 ; through the real test harness with no -l -- and no selftest name leaks to the book:
 ;
-;   cat test/00-init.l test/host/baotest.l | out/host/ai
+;   cat test/00-init.l test/host/baotest.l | out/host/love
 ;
 ; (wired into `make test_hostnif`.) green dots = pass.
 

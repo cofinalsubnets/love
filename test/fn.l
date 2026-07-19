@@ -27,7 +27,7 @@
   (= ((\ a b c (+ a (* b c))) 2 3) (\ c (+ 2 (* 3 c))))  ; multi-capture: two args filled, one binder remains
   (= ((\ s x (+ s x)) "hi") (\ x (+ "hi" x)))        ; a string capture, substituted as its literal
   (= ((\ i (\ x (+ x i))) 5) (\ x (+ x 5)))          ; NESTED-written factory: the beta bridge holds (regression: a flatten that stashed a nested src over a flat capture had broken clo_eq)
-  (= (\ i (\ x (+ x i))) (\ i x (+ x i)))            ; nested and multi-param spellings ARE the same function -- opfix (op-flat-ol) flattens both compilers (c0 + feel), so this holds under ai0 too
+  (= (\ i (\ x (+ x i))) (\ i x (+ x i)))            ; nested and multi-param spellings ARE the same function -- opfix (op-flat-ol) flattens both compilers (c0 + feel), so this holds under love0 too
   (= (\ x (\ x x)) (\ x (\ x x)))                    ; SHADOWING stays nested (not flattened to the ambiguous (\ x x x)); still self-equal
   (! (= ((\ a b (+ a b)) 1) (\ b (+ 2 b))))          ; a different capture stays distinct
   (! (= ((\ a b (+ a b)) 1) (\ b (- 1 b))))          ; a different body stays distinct

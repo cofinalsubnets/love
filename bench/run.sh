@@ -28,12 +28,12 @@ samples=${5:-5}   # timed windows per bench; the median ms/it window is reported
 # per-language file extension, interpreter binary, and run command. the command
 # is eval'd with $b bound to the bench name, so the source is benches/$b.$ext.
 case $lang in
-  # ai: the native glaze (love/glaze/{emit,auto}.l) is BAKED into out/host/ai and active by default, so the
+  # ai: the native glaze (love/glaze/{emit,auto}.l) is BAKED into out/host/love and active by default, so the
   # bench just runs through the binary -- no prepend. (`make bench` depends on `host`, so the baked glaze
   # is always fresh.) We do NOT cat the glaze source ahead of the bench: re-loading the glaze on top of
   # the baked glaze is a redundant DOUBLE-LOAD that faults under autospec; the baked binary is the truth.
   # cdcl alone prepends the SAT solver library it needs (not the glaze).
-  ai)            ext=l;    bin=../out/host/ai;  cmd='cat $([ "$b" = cdcl ] && printf "%s " ../crew/sat/sat.l) bench.l benches/$b.l | AI_NO_IMAGE=1 ../out/host/ai' ;;
+  ai)            ext=l;    bin=../out/host/love;  cmd='cat $([ "$b" = cdcl ] && printf "%s " ../crew/sat/sat.l) bench.l benches/$b.l | AI_NO_IMAGE=1 ../out/host/love' ;;
   chez)         ext=ss;   bin=chez;       cmd='chez --script benches/$b.ss' ;;
   sbcl)         ext=lisp; bin=sbcl;       cmd='sbcl --script benches/$b.lisp' ;;
   apl)          ext=apl;  bin=dyalogscript; cmd='dyalogscript benches/$b.apl' ;;   # Dyalog APL (~/.local install); the bench ⎕FIXes lib/bench.apl

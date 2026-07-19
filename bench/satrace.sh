@@ -29,7 +29,7 @@
 # NB: no `set -e` -- SAT solvers exit non-zero by convention (minisat: 10=SAT,
 # 20=UNSAT), and `timeout` exits 124, all of which are normal control flow here.
 R=..
-GL=$R/out/host/ai
+GL=$R/out/host/love
 export AI_NO_IMAGE=1   # REQUIRED for the flat solver's native BCP kernel: crew/sat/flat.l installs it
                        # through the `nif` seam, which the glazed image mops from the book (the
                        # no-image book keeps it). the old glaze<->sat.l miscompile is gone.

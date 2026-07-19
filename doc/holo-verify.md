@@ -58,7 +58,7 @@ movabs imm64). `test_encver` runs all three (~13s), guarded on coqc + ocamlopt.
 
 the loop, ~an afternoon per slice:
 
-1. **probe holo** for the exact bytes on the tricky cases (`echo '(...)' | ... | out/host/ai`,
+1. **probe holo** for the exact bytes on the tricky cases (`echo '(...)' | ... | out/host/love`,
    then disassemble). the reference must match holo's *choices*, so read them off the binary --
    never guess. the quirk cases are the ones to nail (SIB escapes, forced disp, form boundaries).
 2. **model in Rocq** (proof/rocq/enc<slice>.v): an `encode` matching holo, a small auditable

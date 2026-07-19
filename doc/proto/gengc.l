@@ -27,8 +27,8 @@
 ;                           survivors promoted into old; old is NOT scanned (that is the whole win).
 ;   major              <->  today's gcg: a full copy of old from the roots.
 ;
-; run:    out/host/ai doc/proto/gengc.l                       (the demo; standalone `assert` is lenient)
-; strict: cat test/00-init.l doc/proto/gengc.l | out/host/ai  (00-init makes `assert` enforce -- the gate)
+; run:    out/host/love doc/proto/gengc.l                       (the demo; standalone `assert` is lenient)
+; strict: cat test/00-init.l doc/proto/gengc.l | out/host/love  (00-init makes `assert` enforce -- the gate)
 ;
 ; the load-bearing assert is `barrier is necessary`: an old->young edge recorded WITHOUT the rem entry
 ; lets a minor wrongly collect a live young object -- the model reproduces the exact bug the barrier

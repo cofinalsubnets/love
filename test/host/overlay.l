@@ -1,6 +1,6 @@
 ; --- test/host/overlay.l: the lux type overlay + the baked uu book, end to end ---
 ; NOT in the test/*.l corpus (the overlay + uu ride the HOST binary's post-egg
-; layer; ai0/kernel/wasm have no post.l). Three legs:
+; layer; love0/kernel/wasm have no post.l). Three legs:
 ;   1. crew/lux/sigs.l checks CLEAN over the real core.l + layout.l sources
 ;      (read as DATA, checked pure with (overlay 'ov-check1) -- no install,
 ;      no eval, observe-only squared), and a deliberately wounded def is
@@ -20,7 +20,7 @@
 ;      hand-proved model by idpath BRIDGES: compiled-from-source == proved,
 ;      certified by conversion, so every model theorem transfers for free.
 ;
-;   cat test/00-init.l test/host/overlay.l | out/host/ai
+;   cat test/00-init.l test/host/overlay.l | out/host/love
 
 (reads (open "crew/lux/sigs.l" "r"))
 (reads (open "crew/lux/core.l" "r"))

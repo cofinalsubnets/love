@@ -1,6 +1,6 @@
 ; crew/tele/cuda.l -- the GPU backend for tele's device seam (host/cuda.c is its C half).
 ;
-;   Run:  cat crew/tele/tele.l crew/tele/cuda.l | out/host/ai     # then (tl-use cuda-dev)
+;   Run:  cat crew/tele/tele.l crew/tele/cuda.l | out/host/love     # then (tl-use cuda-dev)
 ;
 ; if host/cuda.c reports a device (cuda-avail -- 1 only in an -DAI_CUDA build on a
 ; box with a GPU), cuda-dev's kernels dispatch to the nifs. otherwise cuda-dev IS

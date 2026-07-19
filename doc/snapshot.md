@@ -60,8 +60,8 @@ load leaves the image intact (the image is never copied); spec green; valgrind c
 **Phase 3 — Build integration.** Build step: `ai --bake` (boot fully, lay the image into the binary's own .image section; `ai --bake PATH` writes a plain file instead).
 Embed via `objcopy`/a linked C array → `image.o`. `boot()`: if the image stamp matches this binary,
 `image-load` it; else FALL BACK to eval'ing the egg (so a stale/missing image is never fatal). Image
-is arch+build-specific → a Makefile dep on prel/ev/post/asm + the binary. · GATE: `out/host/ai`
-boots from the image; cold start measured (target <20 ms, from 233); spec+ai0 green.
+is arch+build-specific → a Makefile dep on prel/ev/post/asm + the binary. · GATE: `out/host/love`
+boots from the image; cold start measured (target <20 ms, from 233); spec+love0 green.
 
 **Phase 4 — Bake the glaze (the payoff).** Split emit.l/auto.l's inline asserts into
 `emit-test.l`/`auto-test.l` (the crew/asm/asmtest.l precedent) so the baked lib is assert-free; add the

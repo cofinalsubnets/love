@@ -1,9 +1,9 @@
 ; --- test/host/berth.l: the berth emulator's moor, end to end over a real pty ---
-; NOT in the test/*.l corpus (screen/scribe/mind live in host/*.c; ai0 links
+; NOT in the test/*.l corpus (screen/scribe/mind live in host/*.c; love0 links
 ; none of them). loads the berth library off disk with reads, berths real
 ; children, and reads the grid back through the glass:
 ;
-;   cat test/00-init.l test/host/berth.l | out/host/ai
+;   cat test/00-init.l test/host/berth.l | out/host/love
 ;
 ; interactive berthing (raw tty, keys, repaint) stays a live probe -- this
 ; verifies the moor: pty -> parser -> grid, replies riding home, exit status.
@@ -73,7 +73,7 @@
                   (? (= n (snip h i (+ i (tally n)))) 1 (find h n (+ i 1)))
                   0)
  ; (the octal escapes ride through TWO ai readers before sh: hence \\\\)
- md (mind `("out/host/ai" "-l" "crew/quay/berth.l"
+ md (mind `("out/host/love" "-l" "crew/quay/berth.l"
             "-e" "(berth (L \"sh\" \"-c\" \"printf 'x\\\\342\\\\224\\\\200y\\\\303\\\\251z'; sleep 1\"))"))
  outb (slurp (cup md))
  st (: (wf p) (: g2 (gather p) (? (two? g2) g2 (: _ (rest 2) (wf p)))) (wf (cap md)))

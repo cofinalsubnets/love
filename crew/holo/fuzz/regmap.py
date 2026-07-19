@@ -4,7 +4,7 @@ Emit (mov r0 rK) for every abstract reg, disassemble, read the source register."
 import subprocess, tempfile, os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-AI = f"{ROOT}/out/host/ai"
+AI = f"{ROOT}/out/host/love"
 HOLO = [f"{ROOT}/crew/holo/holo.l", f"{ROOT}/crew/holo/x64.l"]
 
 REGS = [f"r{i}" for i in range(15)] + ["sp"]

@@ -13,8 +13,8 @@
 ;
 ; Run it straight (prel is ALREADY in the egg -- do NOT `-l love/prel.l`; the egg mops
 ; book/tray/etc after it hatches, so re-feeding prel.l raises `missing book`):
-;   out/host/ai tools/ain.l HOST PORT
-;   out/host/ai tools/ain.l -l PORT
+;   out/host/love tools/ain.l HOST PORT
+;   out/host/love tools/ain.l -l PORT
 ; or as the `nc` applet of the multi-call `kore` (crew/kore/kore.l -- the header's old
 ; "until the egg bakes ain into a multi-call binary" note, landed). The socket nifs
 ; (connect/listen/accept/seal) live in host/net.c; prel stays socket-free so the

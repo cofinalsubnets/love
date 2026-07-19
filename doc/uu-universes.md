@@ -181,7 +181,7 @@ unconstrained, i.e. fully polymorphic.
 **What it is NOT (the whole-corpus migration is a genuine multi-session project, partly impossible):**
 1. **Constraint ACCUMULATION** (for *cumulative* defs) needs `cleq` to record into a global store
    instead of deciding locally, then a global `usat?`. The mode-flag version of `cleq` was built and
-   *worked on the host* but **OOM'd under ai0's baked self-test** (`oom@len=2^30`): `(peep UMODE 0 0)`
+   *worked on the host* but **OOM'd under love0's baked self-test** (`oom@len=2^30`): `(peep UMODE 0 0)`
    on every `cleq` miscompiles through c0 / the non-TCO trampoline — the same baked-ev fragility as the
    spec2coq counter and the glaze leak-parity work. Reverted; left the constraint-free path, which
    doesn't touch it. Re-landing needs either a c0-robust accumulation or running it off the baked path.
@@ -194,7 +194,7 @@ unconstrained, i.e. fully polymorphic.
    goal; it's "the predicatively-sound corpus green, the paradox defs rejected."
 
 So the engine (`usat?`) and the inference front (`elab`/`qdefn`) both exist; the remaining integration
-is real work, and the ai0-bake fragility around mutable-tablet state in a hot path is a concrete
+is real work, and the love0-bake fragility around mutable-tablet state in a hot path is a concrete
 blocker to solve first.
 
 ## Why this is the right first expansion

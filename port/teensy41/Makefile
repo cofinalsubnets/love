@@ -42,14 +42,14 @@ te_o = $(te_local_o) $(te_shared_o)
 OBJCOPY ?= $(shell command -v llvm-objcopy 2>/dev/null || echo arm-none-eabi-objcopy)
 
 .PHONY: teensy41 flash clean
-teensy41: $(o)/ai.hex
+teensy41: $(o)/love.hex
 default: teensy41
 
 clean:
 	rm -rf $(o)
 
 # Delegate to the root: the lcat lib headers are produced by the root's own
-# rules (on the bootstrap interpreter ai0), built on demand so a standalone
+# rules (on the bootstrap interpreter love0), built on demand so a standalone
 # `make -C port/teensy41` works from a clean tree.
 $(lib_h):
 	@$(MAKE) -C $(R) out/lib/$(@F)
@@ -65,16 +65,16 @@ $(o)/%.o: $(R)/%.c $(te_h) $(lib_h)
 	@mkdir -p $(dir $@)
 	@$(te_cc) -c $< -o $@
 
-$(o)/ai.elf: $(te_o) teensy41.lds
+$(o)/love.elf: $(te_o) teensy41.lds
 	@echo LD	$@
 	@$(KCC) $(te_triple) $(te_fpu) -nostdlib -fuse-ld=lld -Wl,--gc-sections \
 	  -Wl,-T,teensy41.lds $(te_o) $(te_rt) -o $@
 
 # .hex (Intel HEX) is what teensy_loader_cli / the Teensy Loader GUI flash.
-$(o)/ai.hex: $(o)/ai.elf
+$(o)/love.hex: $(o)/love.elf
 	@echo HEX	$@
 	@$(OBJCOPY) -O ihex -R .eh_frame $< $@
 
 # Flash a connected Teensy 4.1 (tap the on-board button to enter the bootloader):
-flash: $(o)/ai.hex
-	teensy_loader_cli --mcu=TEENSY41 -w -v $(o)/ai.hex
+flash: $(o)/love.hex
+	teensy_loader_cli --mcu=TEENSY41 -w -v $(o)/love.hex

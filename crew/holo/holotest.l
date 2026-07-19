@@ -2,7 +2,7 @@
 ; hex the assembler emits, and EVERY one was checked against the real toolchain: emit the bytes,
 ; `objdump -d -M intel`, confirm the mnemonic. so this file is the frozen record of that round-trip
 ; -- if a golden drifts, either the encoder broke or the disassembler disagrees, and either is a bug.
-; run: cat crew/holo/{holo,x64,arm64,thumb2,thumb1,text,elf,holotest}.l | out/host/ai
+; run: cat crew/holo/{holo,x64,arm64,thumb2,thumb1,text,elf,holotest}.l | out/host/love
 ; (exits nonzero on any miss). it gates both backends, the text front-end, and the ELF linker.
 
 (: pass (tablet 0) _ (pin pass 0 0)

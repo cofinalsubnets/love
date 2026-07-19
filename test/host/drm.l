@@ -7,7 +7,7 @@
 ; live display server it answers -EACCES and the gate says so politely.
 ; no card at all -> a polite skip (the sentinel still prints).
 ;
-;   cat test/00-init.l test/host/drm.l | out/host/ai
+;   cat test/00-init.l test/host/drm.l | out/host/love
 (reads (open "crew/lux/core.l" "r"))
 (reads (open "crew/haven/wire.l" "r"))
 (reads (open "crew/haven/drm.l" "r"))

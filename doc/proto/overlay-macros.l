@@ -1,6 +1,6 @@
 ; ============================================================================
 ; overlay-macros -- the ergonomic rung-1/2 surface: `domain` + `deft` macros.
-; Run: out/host/ai doc/proto/overlay-macros.l   (the overlay lives in post.l, baked in.)
+; Run: out/host/love doc/proto/overlay-macros.l   (the overlay lives in post.l, baked in.)
 ;
 ; The overlay (memory pluggable-types) checks a user-defined type domain against ai
 ; code, observe-only + erasable. Raw, that means a hand-built domain map and a

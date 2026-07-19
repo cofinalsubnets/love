@@ -16,7 +16,7 @@ bitfields, computed goto (see the gap table at the bottom). The LFS *userland* p
 are ordinary C: the first one is a day of header-shim + declaration work away, not a
 compiler rewrite. So climb the userland ladder first; the kernel is its far end.
 
-The base is [[ai-distro]] rung 4 — the gcc-free, glibc-free static `ai` (out/host/ai-raw,
+The base is [[ai-distro]] rung 4 — the gcc-free, glibc-free static `ai` (out/host/love-raw,
 `make test_raw`) — booting as pid 1 on the Linux kernel via `init/boot.l` + `mk/distro.mk`
 (`make distro-run`). The overlay is these packages, laid beside kore under /usr.
 

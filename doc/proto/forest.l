@@ -22,9 +22,9 @@
 ; subset (foldl consumer, map/filter producers, jot source) is now WIRED INTO love/glaze/auto.l (defoliate):
 ; a numeric map/jot/fold pipeline compiles to a native counted loop, == interp.
 ;
-; run:    out/host/ai doc/proto/forest.l              (the demo; standalone `assert` is lenient -- it
+; run:    out/host/love doc/proto/forest.l              (the demo; standalone `assert` is lenient -- it
 ;                                                       RETURNS a value, does not halt, so eyeball the shown forms)
-; strict: cat test/00-init.l doc/proto/forest.l | out/host/ai   (00-init makes `assert` enforce -- the real gate)
+; strict: cat test/00-init.l doc/proto/forest.l | out/host/love   (00-init makes `assert` enforce -- the real gate)
 ;
 ; HYGIENE: the step's element/acc binders are fresh gensym noms ((nom 'e)/(nom 'a)) -- unforgeable, so
 ; the naive symbol substitution `sub` can never capture a name in the user's stage source (which only

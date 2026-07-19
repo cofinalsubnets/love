@@ -4,7 +4,7 @@
 ; reads the PAINTED PIXELS back through the server with GetImage -- the whole loop:
 ; pty -> parser -> grid -> blit -> PutImage -> X -> GetImage.
 ;
-;   cat test/00-init.l test/host/pier.l | out/host/ai
+;   cat test/00-init.l test/host/pier.l | out/host/love
 ;
 ; no Xvfb on the box -> a polite skip (the sentinel still prints).
 
@@ -54,7 +54,7 @@
 
  ; the pier under test, on its own pty with a real child
  ; the child prints steadily, so a resize's FRESH grid refills on its own
- md (mind `("out/host/ai" "-l" "crew/lux/core.l" "-l" "crew/lux/wire.l" "-l" "crew/quay/berth.l"
+ md (mind `("out/host/love" "-l" "crew/lux/core.l" "-l" "crew/lux/wire.l" "-l" "crew/quay/berth.l"
             "-l" "crew/quay/pier.l"
             "-e" (+ "(pier (L \"sh\" \"-c\" \"while true; do printf H; sleep 0.3; done\") \"" (+ dpy "\" () ())"))))
  _ (must 'pier-up (two? md))

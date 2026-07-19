@@ -146,14 +146,14 @@ substrate above.
 ## Reproducing the probe (x86_64 + qemu)
 
 ```sh
-make host                                  # builds ai0 + the bake tools
+make host                                  # builds love0 + the bake tools
 cp love/glaze/probe.l out/lib/ktests.l            # make the probe the whole K_TEST corpus
-out/host/ai0 -l love/prel.l tools/lcatv.l out/lib/ktests.l > out/lib/ktests.h
+out/host/love0 -l love/prel.l tools/lcatv.l out/lib/ktests.l > out/lib/ktests.h
 touch out/lib/ktests.l out/lib/ktests.h
-make -s K_TEST=1 out/free/ai-x86_64-test.iso
+make -s K_TEST=1 out/free/love-x86_64-test.iso
 qemu-system-x86_64 -m 256M -M q35 -serial stdio -display none -no-reboot \
   -drive if=pflash,unit=0,format=raw,file=out/dl/edk2-ovmf/ovmf-code-x86_64.fd,readonly=on \
-  -cdrom out/free/ai-x86_64-test.iso \
+  -cdrom out/free/love-x86_64-test.iso \
   -device isa-debug-exit,iobase=0xf4,iosize=0x04
 # expect:  glaze-PROBE-START / glaze-PROBE-RESULT=42 / glaze-PROBE-END
 # then restore the real corpus:  make out/lib/ktests.h   (or rm it; the next build re-bakes)

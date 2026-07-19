@@ -3,7 +3,7 @@
 ; narrative -- how to work here, the traps, the vocabulary, the architecture -- lives in
 ; CLAUDE.md; deeper rationale in doc/ (doc/measures.md the net/tally design). it runs in the
 ; corpus SECOND (common.mk, right after test/00-init.l sets up the assert harness), so keep it
-; green -- `make test` (host + ai0, which must print the zz-fin summary twice). when in doubt,
+; green -- `make test` (host + love0, which must print the zz-fin summary twice). when in doubt,
 ; PROBE THE BINARY: never trust a prior over a one-line experiment.
 
 ; --- everything is a function --- (f x y) == ((f x) y), (f) == f; numbers are church

@@ -92,7 +92,7 @@
 ; shared prerequisite is visited once, and `shipped` records the items whose recipe
 ; actually CHANGED the file this pass (its mtime advanced), so a rebuilt prerequisite
 ; forces its dependents even when the clock granularity would hide it -- but a recipe
-; that re-runs without touching its output (the ai_version.h cmp idiom) does NOT
+; that re-runs without touching its output (the love_version.h cmp idiom) does NOT
 ; cascade, matching make's mtime-only decision.
 
 (: (prep item done shipped)

@@ -1,7 +1,7 @@
 ; ============================================================================
 ; overlay-matrix -- RUNNABLE dependent-types showcase. ONE matrix domain handles BOTH
 ; concrete dims (uu computes: 3+4=7) AND polymorphic dims (variables, symbolic + threaded).
-; Run: cat test/uu.l doc/proto/overlay-lib.l doc/proto/overlay-matrix.l | out/host/ai /dev/stdin
+; Run: cat test/uu.l doc/proto/overlay-lib.l doc/proto/overlay-matrix.l | out/host/love /dev/stdin
 ;
 ;   matmul  : (mat m n) (mat n p) -> (mat m p)          inner dims match (unify), thread
 ;   hconcat : (mat r a) (mat r b) -> (mat r (add a b))  rows match (unify), cols ADD

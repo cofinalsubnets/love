@@ -10,7 +10,7 @@
 ; rats, crabs and morays below decks, grog and gold, the pearl three decks
 ; down -- pure state in, pure state out, one key per turn.
 ;
-; run: out/host/ai -l crew/quay/rove.l -e '(rove ())'
+; run: out/host/love -l crew/quay/rove.l -e '(rove ())'
 ; the engine core is pure ai (delve/fov/paint/crawl-* run headless, gated by
 ; test/host/rove.l); only rove itself ties the tty (raw/winsize/cue? ride
 ; host/pty.c), so rove never joins the corpus.

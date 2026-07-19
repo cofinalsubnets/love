@@ -33,7 +33,7 @@
 ; the read of a lambda's free global happens at closure creation (the runtime
 ; compiler captures it) or as a live site in the body (the bootstrap lane);
 ; with the help installed across both moments, both lanes answer the help.
-; NOTE the discipline: ai0 runs this corpus TWICE in one scope, so a name
+; NOTE the discipline: love0 runs this corpus TWICE in one scope, so a name
 ; asserted missing must NEVER be defined later -- the second pass would fold it.
 (: help (\ s a b (? (&& (scare? s) (id? a 'missing)) 42 0)))
 (: (an-g _) an-phantom)

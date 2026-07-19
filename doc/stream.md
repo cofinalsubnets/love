@@ -280,7 +280,7 @@ principled end-state they are a down-payment on.
 - **Core thread owns `ai.c`/`ai.h`.** bao designs this (this doc); the `source`/
   `select`/scheduler edits land in a dedicated core session. The bao-side ports
   (`bao.l`, the shell core) are bao's.
-- **`bao.l` is shared and pinned** (kernel `(shell 0)`, the ai0 corpus, the host
+- **`bao.l` is shared and pinned** (kernel `(shell 0)`, the love0 corpus, the host
   egg). Stage 3 cannot move the editor out — it ports it in place, with the core
   thread.
 - **Risks:** interactive testing is a weak gate (mechanics scriptable via `sip`/the

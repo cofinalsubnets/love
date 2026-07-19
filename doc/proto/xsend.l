@@ -3,7 +3,7 @@
 ; whoever holds the GrabKey (the wm), exactly like fingers would. Speaks the
 ; same wire codec as doc/proto/{x11,wm}.l over the unix display socket.
 ; Types mod1+j (focus down) then mod1+Return (swap master), then leaves.
-;   run: out/host/ai doc/proto/xsend.l    (against `Xephyr :7 -ac`, wm running)
+;   run: out/host/love doc/proto/xsend.l    (against `Xephyr :7 -ac`, wm running)
 (: s (connectu "/tmp/.X11-unix/X7")
    _ (? s 0 (: _ (say err "xsend: no display socket -- Xephyr up?\n") (quit 1)))
    (line m) (: _ (say out m) _ (say out "\n") (flush out))

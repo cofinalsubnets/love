@@ -1,6 +1,6 @@
 ; crew/reef/reeftest.l -- the reef gate: a sandbox store driven end to end
 ; (record / log / diff, tips + snap + deps + the content addresses). runs under
-; `make test_reef`: cat test/00-init.l $(reeffiles) THIS | out/host/ai -- host
+; `make test_reef`: cat test/00-init.l $(reeffiles) THIS | out/host/love -- host
 ; nifs (sha256, readdir, chdir), so it stays OFF the corpus like the other
 ; hostnif tests. the make target clears the sandbox first; cwd is the repo
 ; root, and everything here happens inside out/host/.reeftest.

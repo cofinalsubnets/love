@@ -124,7 +124,7 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
 - [x] verified main.c's image-dump reach-through (`(peep book 'glaze 0) 'cache` → the closure returns the memo
       cache, `(keys c)` iterates the cache itself) — `--bake` writes a clean 3.6M image and `--wake` boots it
       (glaze/`ev` live). Grep found **zero** consumers that lean on a book being a tablet (the one `gfind … parse`
-      in emit.l is a *local* `parse`, shadowing the book). `make test` green ×3 (host + ai0 ×2, 3416 tests)
+      in emit.l is a *local* `parse`, shadowing the book). `make test` green ×3 (host + love0 ×2, 3416 tests)
 - [ ] (optional, gwen's word) a curation pass to trim the ~327 back toward 323 — new crew apps drip a few leaks
       each (post.l combinators, kanren internals, overlay `ov-*`, tele's `cuda-*`); or accept the drift
 - [ ] **NOT this cut:** phase 2 "the abyss" (descending scope layers, the chain in `g->book`, per-layer macro
@@ -157,7 +157,7 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
 
 ### C. docs & the public face
 
-- [ ] `index.html` crew list: add moon/mooncc + reef (pulchritude's creature already moved — `5b3f84bf`). Probe examples against `out/host/ai`, don't write from memory. Keep README's roster in sync when these land
+- [ ] `index.html` crew list: add moon/mooncc + reef (pulchritude's creature already moved — `5b3f84bf`). Probe examples against `out/host/love`, don't write from memory. Keep README's roster in sync when these land
 - [x] ~~`crew/README.md` roster~~ — DROPPED (gwen 2026-07-14). The file was deliberately deleted in `c21a0de0` (site consolidation → one static `index.html`); the roster lives in `index.html` now, not a per-crew README
 - [ ] blue paper (`tools/blue.l` → blue.md/html) — mention the toolchain + vcs if in scope
 - [x] `README.md` full crew roster — expanded the curated ain/bao/inle sample to the full 13-member roster mirroring `index.html` (gwen chose full roster over aicc+reef-only, 2026-07-14). aicc/moon + reef join both README + `index.html` together at the crew-list refresh above
@@ -167,10 +167,10 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
 
 ### D. the gate
 
-- [ ] `make test` green ×3 (host + ai0 ×2, + test_proof + test_gen)
+- [ ] `make test` green ×3 (host + love0 ×2, + test_proof + test_gen)
 - [ ] `make test_all` (proofs, gc/glaze/sat/holo/phos, tool diffs, arm64 + qemu kernel + wasm)
 - [ ] `make valg` clean, `make vmret` green
-- [ ] version stamp (`ai_version.h` / `force_version`) — currently `9b45d8d2-dirty`
+- [ ] version stamp (`love_version.h` / `force_version`) — currently `9b45d8d2-dirty`
 
 ### E. the cut
 
@@ -208,7 +208,7 @@ input paths `crew/phos/{core,sigs}.l`→`crew/lux/` and the `phos-sigs` binding�
 `uuwm`/`wm2uu`. Then **`make uuwm`** to regenerate the committed `test/uuwm.l` (else `test_uuwm`
 goes red — drift gate). Confirm `tools/uu2coq.l`/`uu2lean.l` gather-lists don't name the path.
 
-**4. build + gate, in order:** `make out/host/ai` (phos/lux is baked into no core, but `bin/lux`
+**4. build + gate, in order:** `make out/host/love` (phos/lux is baked into no core, but `bin/lux`
 + tests rebuild) → `make uuwm` → `make test_lux` → `make test` ×3 → `make test_all` (test_lux,
 test_uuwm, test_uukind, wasm, kernel, arm64) → `make valg` + `make vmret`. The X UI layer
 (`luxui`) needs a display — run under Xephyr/Xvfb per [[x11-wm-spike]], not the portable gate.

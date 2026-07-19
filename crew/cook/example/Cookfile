@@ -1,5 +1,5 @@
 ; Cookfile is plain love: lay out the recipes, then cook a ticket.
-; build with:   ../../out/host/ai -l ../cook.l [ticket]
+; build with:   ../../out/host/love -l ../cook.l [ticket]
 ; this dir has no Makefile, so cook discovers this Cookfile on its own.
 ; the first recipe ('all) is the default ticket.
 

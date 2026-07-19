@@ -282,7 +282,7 @@
    ;     path are opaque to hatch (it just runs an argv and hashes a file), the
    ;     way the store is opaque to what a hunk's old/new mean; for ai the recipe
    ;     is `make`, for a test a one-line stub. config in .reef/hatch:
-   ;       (hatch (recipe "make" "candidate") (out "out/host/ai")) ---
+   ;       (hatch (recipe "make" "candidate") (out "out/host/love")) ---
    (rf-hatched _) (rf-form ".reef/hatched")                     ; ((psid arch seed time)..) newest-first | ()
    (rf-hatch-find led psid arch)                                ; the last hatch of this (psid,arch) | ()
     (? (! (two? led)) ()

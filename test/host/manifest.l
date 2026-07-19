@@ -5,7 +5,7 @@
 ; screen read back through the cb glass -- the emulator built for berth is
 ; the spreadsheet's witness:
 ;
-;   cat test/00-init.l test/host/manifest.l | out/host/ai
+;   cat test/00-init.l test/host/manifest.l | out/host/love
 
 (reads (open "crew/manifest/manifest.l" "r"))
 
@@ -87,7 +87,7 @@
    (rowtx s r) (: c (gaze s 2)
                 (foldl (\ a i (+ a (: ch (& 255 (glass s (+ (* r c) i))) (? (= 0 ch) 32 ch))))
                        "" (jot c)))
- md (mind `("out/host/ai" "-l" "crew/manifest/manifest.l" "-e" "(manifest ())"))
+ md (mind `("out/host/love" "-l" "crew/manifest/manifest.l" "-e" "(manifest ())"))
  m (cup md)
  ; a reader task gathers every painted byte into a box, so the test can
  ; HANDSHAKE: keys sent before the child's raw-mode first frame would land

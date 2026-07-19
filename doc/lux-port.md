@@ -41,7 +41,7 @@ crew/lux/
   host/lux.c   the connectu nif (already landed).
 ```
 
-`core.l` needs no nifs, so it rides the corpus on every target (host + ai0 + kernel + wasm)
+`core.l` needs no nifs, so it rides the corpus on every target (host + love0 + kernel + wasm)
 with xmonad's QuickCheck laws as asserts — the invariants stay machine-checked. The rest is
 host-only (it speaks sockets), smoke-tested the `boot/lux.l` way (in `test_hostnif`) plus the
 Xephyr integration runs.
