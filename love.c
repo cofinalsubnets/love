@@ -5325,7 +5325,7 @@ struct image_hdr {
                                                 same words the GC traces, so a new v0 field rides along
                                                 with no codec change. nroot = how many were written. */
 };
-// the ABSOLUTE-POINTER GUARD (doc/wake-storm.md): a kept-absolute word is only wakeable
+// the ABSOLUTE-POINTER GUARD: a kept-absolute word is only wakeable
 // if it aims INSIDE the binary's own load segments (.text/.rodata shift by one base
 // delta) -- a JIT/W^X pointer dies with the bake process and every use post-wake is a
 // hardware fault the barrier eats PER CALL (the storm). The core cannot tell the two

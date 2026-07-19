@@ -184,13 +184,21 @@ on the front page):
   wrapper. [love/bao.l](love/bao.l) + [host/pty.c](host/pty.c)
 - 🐀 **salt** -- the build system: cook, a gnu make clone that reads a real Makefile.
   [crew/cook/](crew/cook/)
+- 🪸 **reef** -- the vcs: a patch-set version control folded together with the
+  installer -- record/log/diff/sync over a content-addressed patch DAG.
+  [crew/reef/](crew/reef/) + [doc/reef.md](doc/reef.md)
 - 🐐 **mow** -- the grass chewer: the two-gen, two-space copying garbage collector.
 - 🕷️ **holo** -- the assembler: an amd64/arm64 assembler (short for holophrasm), the
   glaze's back end. [crew/holo/](crew/holo/)
+- 🍄 **moon** -- the C compiler: mooncc, preprocessor to optimizing backend, holo its
+  assembler and linker -- love rebuilds itself gcc/glibc/ld-free. [crew/moon/](crew/moon/)
+- 🦨 **kore** -- the coreutils: one multi-call binary, busybox's trick -- diff, grep,
+  sed, the fs/line/process tools, nc, make, as, vi. [crew/kore/](crew/kore/)
 - 🦇 **thom** -- the SAT bat: a CDCL solver. [crew/sat/](crew/sat/)
 - 🦐 **lux** -- the window manager: an xmonad clone. [crew/lux/](crew/lux/)
 - 🦑 **quay** -- the terminal emulator: a cuttlefish with 256-color skin that likes
-  writing screensavers. [crew/quay/](crew/quay/)
+  writing screensavers -- and roguelikes: rove plays live on the front page.
+  [crew/quay/](crew/quay/)
 - 🐛 **pulchritude** -- the editor: a vi clone. [crew/vi/](crew/vi/)
 
 ### under the hood

@@ -34,11 +34,11 @@
 data-run=
 '."hello world :3\n",
 15
-(\ n (: f (? !(n % 3) "fizz") b (? !(n % 5) "buzz") (.(? ($f | $b) (f + b) n), ."\n", n + 1)))
+(\ n (.((n % 3 ? () "fizz") + (n % 5 ? () "buzz") || n), ."\n", n + 1))
 1'>hello world demo</span>
 <span class="chip" data-run="2 3 4">2 3 4</span>
 <span class="chip" data-run="map (+ 1) '(1 2 3)">map (+ 1) '(1 2 3)</span>
-<span class="chip" data-run="map (net * jot * (+ 2)) (jot (3 3))">map (net * jot * (+ 2)) (jot (3 3))</span>
+<span class="chip" data-run="map (net * jot * (+ 2)) $ jot (3 3)">map (net * jot * (+ 2)) $ jot (3 3)</span>
 <span class="chip" data-run="(1 / 2) 2">(1 / 2) 2</span>
 <span class="chip" data-run="(1 / 2) -1">(1 / 2) -1</span>
 <span class="chip" data-run="(i * pi) e">(i * pi) e</span>
@@ -475,6 +475,10 @@ and addition with a secret second kind of composition.</p>
     <dd>cave spider. short for holophrasm. currently amd64/arm64</dd>
   <dt>🦇 thom ◦ the SAT bat</dt>
     <dd>cave bat friend of holo. they often discuss their inner lives</dd>
+  <dt>🍄 moon ◦ the C compiler</dt>
+    <dd>bioluminescent mycelial network bridging holo's cave with the surface world</dd>
+  <dt>🦨 kore ◦ the coreutils</dt>
+    <dd>skunk. one binary, every tool name. busybox clone</dd>
   <dt>🦐 lux ◦ the window manager</dt>
     <dd>mantis shrimp. frequents a brine pool in holo's cave. xmonad clone</dd>
   <dt>🦑 quay ◦ the terminal emulator</dt>

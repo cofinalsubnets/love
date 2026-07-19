@@ -16,7 +16,7 @@
 #include <sys/mman.h>
 #include <link.h>
 
-// the wake-safety guard (doc/wake-storm.md): a kept-absolute pointer only survives a
+// the wake-safety guard: a kept-absolute pointer only survives a
 // wake if it aims inside the MAIN PROGRAM's load segments (one ASLR base delta shifts
 // them all). Anything else -- a JIT W^X page, an mmap, a shared library -- dies with
 // the bake process, and every post-wake use is a hardware fault the barrier eats per
@@ -93,8 +93,8 @@ int image_bake(struct ai *g) {
   uintptr_t len = 0;
   void *buf = ai_image_save(g, &len);
   // the codec silently reverts any would-be-dead native reference to the bytecode
-  // twin the cell carries (ai_image_redir); the bake stays correct (doc/wake-storm.md),
-  // so there is nothing to announce. only a REFUSED bake (below) is worth a word.
+  // twin the cell carries (ai_image_redir); the bake stays correct, so there is
+  // nothing to announce. only a REFUSED bake (below) is worth a word.
   if (!buf) { image_guard_report(); return -2; }
   if (len > ai_baked_image_len) {
     fprintf(stderr, "love: image %lu > .image reserve %lu -- bump RESERVE_WORDS in host/image_baked.c\n",
