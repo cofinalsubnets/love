@@ -85,6 +85,10 @@
  !(charm? (2 * 2305843009213693952)) (gem? (1 / 0)) (? word (1e308 < 1 / 0) 1) (0 = (/ 0 0))
  (ieee-inf = 1 / 0) ("ieee-inf" = (show (1 / 0))) ("-ieee-inf" = (show (-1 / 0)))
  ((/ 0 0) = (/ 0 0)) !(/ 0 0) (0 = $(/ 0 0)) (nom? 'inf) (nom? 'nan) (nom? 'ieee-nan)
+ ; bignum // and % ride Knuth-D long division, whose 128/64 step is one `divq` on x86-64 and a
+ ; soft divide elsewhere; `show` on a big divides too (the decimal printer), so it checks the same lane.
+ (1267650591354675262013 = (// (100 2) 1000000007)) (976371285 = (100 2) % 1000000007)
+ ((100 2) = (// (200 2) (100 2))) ("1267650600228229401496703205376" = (show (100 2)))
  (-2 = (^ 1 -1)) (15 = (8 | 4 | 2 | 1)) (16 = (>> 64 2)) (16 = (<< 2 3)))
 
 ; --- order & equality --- < <= > >= total over all values, the TRUE-BLUE bands: POINTS at the

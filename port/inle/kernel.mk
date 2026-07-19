@@ -234,16 +234,23 @@ test_kernel:
 endif
 
 # The aarch64 twin of test_kernel: cross-build the K_TEST kernel and run the same
-# corpus under full-TCG qemu-system-aarch64 (~45s). NOT wired into test_all --
-# that is a cross-arch emulation run bolted onto an already-long gate, so it stays
-# a deliberate step. Run it whenever love.c, the kernel, or port/inle/aarch64/
-# moves: the aarch64 kernel silently stopped LINKING once before, and nothing
-# caught it precisely because test_kernel is x86_64-gated.
+# corpus under full-TCG qemu-system-aarch64 (~45s). In test_all because the lane
+# needs a gate that RUNS it -- the aarch64 kernel silently stopped LINKING once,
+# and nothing caught it precisely because test_kernel is x86_64-gated.
+# Needs qemu-system-aarch64 and a CLANG $(KCC): the cross target comes from
+# -target $a-unknown-none-elf, which a native gcc cannot do. No-op without either
+# (so a plain `make test_all` stays green on a host lacking them), like test_wasm.
+QEMU_A64 ?= $(shell command -v qemu-system-aarch64 2>/dev/null)
 .PHONY: test_kernel_arm64
+ifeq ($(and $(QEMU_A64),$(filter 1,$(KCC_IS_CLANG))),)
+test_kernel_arm64:
+	@echo "test_kernel_arm64: skipped (need qemu-system-aarch64 + a clang KCC)"
+else
 test_kernel_arm64: host $(R)/tools/ktest.l
 	@$(MAKE) -s K_TEST=1 a=aarch64 $(ko)/love-aarch64-test.iso $(dl)/edk2-ovmf/ovmf-code-aarch64.fd
 	@echo TEST $(ko)/love-aarch64-test.iso "(serial, headless, TCG)"
 	@$m $(R)/tools/ktest.l $(ko)/love-aarch64-test.iso $(dl)/edk2-ovmf/ovmf-code-aarch64.fd aarch64
+endif
 
 # --- wasm headless test (wired into test_all; emcc + node) -----------------
 # Build love.js and run the SAME $t corpus through it under node -- a third
