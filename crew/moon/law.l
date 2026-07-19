@@ -120,7 +120,7 @@
       (= (cast "long g = 5; int main() { return 0; }")
          '(prog ((gdecl (("g" long (num 5))))
                  (fn "main" () (blk ((ret (num 0))))))))
-      (two? (cparse (caup (clex "int main() { int *a[3]; return 0; }"))))   ; an array of pointers parses (4d)
+      (okv? (cparse (caup (clex "int main() { int *a[3]; return 0; }"))))   ; an array of pointers parses (4d)
       (= (cast "int main() { int x=1; if (x) return 2; return 3; }")
          '(prog ((fn "main" () (blk ((decl (("x" int (num 1))))
                                      (if (var "x") (ret (num 2)) ())
@@ -135,15 +135,15 @@
       (= (cexp "sizeof(char)+sizeof(short)+sizeof(long)") '(bin + (bin + (num 1) (num 2)) (num 8)))
       (= (cast "int main() { while (1) break; return 0; }")
          '(prog ((fn "main" () (blk ((while (num 1) (brk)) (ret (num 0))))))))
-      (! (cparse (caup (clex "int main() { return (1+2; }"))))       ; the lost )
-      (! (cparse (caup (clex "int main() { if 1 return 2; }"))))     ; if wants parens
-      (! (cparse (caup (clex "int main() { return 42 }"))))
+      (gripe? (cparse (caup (clex "int main() { return (1+2; }"))))       ; the lost )
+      (gripe? (cparse (caup (clex "int main() { if 1 return 2; }"))))     ; if wants parens
+      (gripe? (cparse (caup (clex "int main() { return 42 }"))))
       (= (caup (cparse ())) '(prog ()))))     ; an empty token list is a VALID empty TU (crypt.c), not a parse failure
 
 ; --- the generator: one full golden, and the refusals that guard the seams ---
 (: (cast src) (caup (cparse (caup (clex src))))
    (cgn src) (: r (cparse (caup (clex src)))
-                (? (two? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
+                (? (okv? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
    ir (caup (cgn "int main() { return 42; }"))
    (assert
       ; slot -8 keeps r3 (rbx, SysV callee-saved) in any fn that TOUCHES r3;
@@ -182,7 +182,7 @@
 ; --- stage 4a: aggregates -- layout to the C rules, members, the new statements ---
 (: (cast src) (caup (cparse (caup (clex src))))
    (cgn src) (: r (cparse (caup (clex src)))
-                (? (two? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
+                (? (okv? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
    (cexpp pre e) (: ast (cast (+ pre (+ " int main() { return " (+ e "; }"))))
                     (last l) (? (two? (cup l)) (last (cup l)) (cap l))
                     fn (last (caup ast))
@@ -249,7 +249,7 @@
          '(prog ((tdef) (fn "main" () (blk ((decl (("s" (struct "S") (init ((dfield "y" (num 5)) (dfield "x" (num 2))))))) (ret (dot (var "s") "x"))))))))
       (= (cast "int g[] = {10,20,30}; int main() { return 0; }")   ; [] size inferred from the brace list
          '(prog ((gdecl (("g" (arr int 3) (init ((num 10) (num 20) (num 30)))))) (fn "main" () (blk ((ret (num 0))))))))
-      (two? (cparse (caup (clex "struct T { int n; char d[]; }; int main() { return sizeof(struct T); }"))))   ; a flexible array member parses
+      (okv? (cparse (caup (clex "struct T { int n; char d[]; }; int main() { return sizeof(struct T); }"))))   ; a flexible array member parses
       (two? (cgn "int main() { int a[4] = {5}; return a[0] + a[3]; }"))            ; partial init zero-fills the rest
       (two? (cgn "struct P { int a; int b; }; int main() { struct P t[2] = {{1,2},{3,4}}; return t[1].a; }"))  ; nested array-of-struct
       ; brace elision (C 6.7.9): a flat run fills nested subaggregates whose braces were
@@ -291,7 +291,7 @@
 ; the xmm value path, int<->double conversions, and the calling convention. ---
 (: (cast src) (caup (cparse (caup (clex src))))
    (cgn src) (: r (cparse (caup (clex src)))
-                (? (two? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
+                (? (okv? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
    (tn ts k) (? (< k 1) (cap ts) (tn (cup ts) (- k 1)))
    irbits (caup (cgn "int main() { double d = 1.0; return (int)d; }"))
    (has op forms) (: (go l) (? (! (two? l)) () (&& (two? (cap l)) (= (cap (cap l)) op)) 1 (go (cup l))) (go forms))
@@ -338,7 +338,7 @@
 (: (cast src) (caup (cparse (caup (clex src))))
    (csig src name) (: r (cparse (caup (clex src))) (peep (caup (cuup r)) name 'none))
    (cgn src) (: r (cparse (caup (clex src)))
-                (? (two? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
+                (? (okv? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
    (assert
       ; the `...` leaves the fn node clean; the variadic bit lives in the signature
       (= (cast "int f(int n, ...) { return n; }")
@@ -413,7 +413,7 @@
 ; an unnamed object whose ADDRESS is an lvalue. ---
 (: (cast src) (caup (cparse (caup (clex src))))
    (cgn src) (: r (cparse (caup (clex src)))
-                (? (two? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
+                (? (okv? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
    (cexp src) (: ast (cast (+ "int main() { return " (+ src "; }")))
                  fn (cap (caup ast))
                  items (caup (caup (cuup fn)))
@@ -447,7 +447,7 @@
 ; relocatable .o (the ELF bytes are gated end-to-end by the make .o link/interop
 ; smoke, which needs the holo book + the system linker). ---
 (: (cob src) (: r (cparse (caup (clex src)))
-                (? (two? r) (cgen-obj (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
+                (? (okv? r) (cgen-obj (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
    (el l i) (? (< i 1) (cap l) (el (cup l) (- i 1)))
    ob (cob "int f(int x) { return x; } int g = 5; int main() { return f(g); }")
    (assert
@@ -470,7 +470,7 @@
    (pps src) (: r (cpp (caup (clex src)) () "<law>")
                 (? (! (two? r)) 'FAIL
                    (: (go l) (? (! (two? l)) "" (+ (spell1 (cap l)) (+ (? (two? (cup l)) " " "") (go (cup l)))))
-                      (go (caup r)))))
+                      (go (fsbody (caup r))))))   ; peel cpp's leading spans marker (parse.l fsbody)
    (assert
       (= (pps "#define N 42\nN + 1") "42 + 1")                         ; object macro
       (= (pps "#define A B\n#define B 7\nA") "7")                      ; rescan to fixpoint
@@ -499,6 +499,36 @@
       (two? (cpp (caup (clex "#ifdef NOPE\nx\n#endif")) () "<law>"))   ; a fully-skipped file is a VALID empty TU (crypt.c), not a failure
       (! (cpp (caup (clex "#error boom")) () "<law>"))                 ; #error is FATAL
       (= (pps "#define E\nE + E") "+")))                               ; empty macro body vanishes
+
+; --- diagnostics: a parse refusal names where it stood (doc/moon-diag.md rung 2) ---
+; the gripe carrier is ('gripe file line col msg); file () means the TU itself,
+; which the driver (moon.l ccdie) fills the source path in for.
+(: (inc txt) (\ n s `(1 txt))
+   (ppi src txt) (: r (cpp (caup (clex src)) (inc txt) "<law>") (? (two? r) (caup r) 'FAIL))
+   (pgi src txt) (cparse (ppi src txt))
+   (gfile g) (caup g) (gline g) (cauup g)
+   hdr "int a(void);\nint b(void);\nint c(void);\n"
+   (assert
+      ; a bad form inside a HEADER names the HEADER and the header's own line.
+      ; this is the thing a line number alone can never say: an #include
+      ; splices the header's numbering into the one flat stream.
+      (: g (pgi "int a(void);\n#include \"h.h\"\n" "int ok(void);\nint bad(void) { return ( ; }\n")
+         (&& (gripe? g) (&& ((gfile g) = "h.h") ((gline g) = 2))))
+      ; ... and symmetrically the TU's own lines do NOT skew by the lines an
+      ; earlier include spliced in front of them
+      (: g (pgi "#include \"h.h\"\nint main(void)\n{\n  return (1 + ;\n}\n" hdr)
+         (&& (gripe? g) (&& (! (gfile g)) ((gline g) = 4))))
+      ; the report site is the FURTHEST token the parse reached, NOT the failing
+      ; form's first: a body that dies on line 5 must not point at line 2
+      (: g (cparse (caup (clex "int ok(void) { return 1; }\nint bad(void)\n{\n  int x = 1;\n  x = x + ;\n  return x;\n}\n")))
+         (&& (gripe? g) ((gline g) = 5)))
+      ; adjacent string literals JOIN ACROSS an include boundary -- host/main.c
+      ; splices the egg exactly so ("(" then #include egg.h then "'(" ..), so
+      ; the file marks must stay invisible to phase 6
+      (= (caup (pgi "char *s = \"a\"\n#include \"h.h\"\n\"c\";\n" "\"b\"\n"))
+         '(prog ((gdecl (("s" (ptr char) (str "abc")))))))
+      ; a clean parse is still a plain result, never mistaken for a gripe
+      (okv? (pgi "int main(void) { return 0; }\n" hdr))))
 
 ; -- 7c-i: freestanding-header surface. cc keeps no linkage/qualifier state, so
 ; storage/qualifier keywords (static const volatile restrict register inline) and
@@ -634,7 +664,7 @@
 ; eightbyte in a gp/xmm reg, two eightbytes (int/sse in any mix) in a register
 ; pair; returned, passed, copied. a >16-byte (MEMORY) struct still refuses.
 (: (cgn src) (: r (cparse (caup (clex src)))
-                (? (two? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
+                (? (okv? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
    (stg src) (: r (cparse (caup (clex src))) (peep (cauup r) "S" ()))
    (assert
       (= (stg "struct S { double re, im; }; int main(){return 0;}")
@@ -650,7 +680,7 @@
 ; is a function's address exactly like the bare use -- as a value in code and as
 ; a label in a global image. an undeclared &name still refuses.
 (: (cgn src) (: r (cparse (caup (clex src)))
-                (? (two? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
+                (? (okv? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
    (assert
       (two? (cgn "int one(int), two(int); int one(int x){return x+1;} int two(int x){return x+2;} int main(){return one(1)+two(2);}"))
       (two? (cgn "int one(int), two(int); int one(int x){return x+1;} int main(){ int (*p)(int) = two; return p != 0; }"))
@@ -667,7 +697,7 @@
 ; float operand -- each () out of cgen, never fudged bytes.
 (: (cast src) (caup (cparse (caup (clex src))))
    (cgn src) (: r (cparse (caup (clex src)))
-               (? (two? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
+               (? (okv? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
    hb (from 'holo 'holo-bytes)
    g1 (cgn "int main() { long v; asm(\"li %0, 40\" : \"=r\"(v)); return v + 2; }")
    want (hb 'x64 (asm-text "li r10, 40"))
@@ -697,7 +727,7 @@
 ; unshadowed sibling still drops its own, per-var within ONE call); a goto
 ; reads the whole universe (the escape edge), so its fn keeps both.
 (: (cgn src) (: r (cparse (caup (clex src)))
-               (? (two? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
+               (? (okv? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
    ; counts stores of the PARAM-home registers to the frame (the spill side).
    ; the set is exactly the two-param homes (r6 r5): the vmap's direct slot
    ; stores ride the OPERAND pool (r9 r10 r7 r8) and are not spills. the base
@@ -729,7 +759,7 @@
 ; its loop body all-register. s rides r5 (hpool front past the reserve) and
 ; i r9; the loop's imul/adds are 3-address on the homes, no slot traffic.
 (: (cgn src) (: r (cparse (caup (clex src)))
-               (? (two? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
+               (? (okv? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
    irB (cgn "long g(long x); long f(long n) { g(n); long s = 0; long i = 0; while (i < n) { s = s + i*i; i = i + 1; } return s; } int main() { return f(4); }")
    (assert
       (two? irB)
@@ -748,7 +778,7 @@
 ; bug, x64 only masked it because the folds erase intra-statement slot traffic
 ; from the ranking).
 (: (cgna src) (: r (cparse (caup (clex src)))
-                (? (two? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'arm64) ()))
+                (? (okv? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'arm64) ()))
    ; the two-param homes only (r10 r11) -- the vmap's direct slot stores ride
    ; the remaining pool (r12 r13 r14) and are not spills (wraps' twin above)
    (wrapsa fs) (: (go l n) (? (! (two? l)) n
@@ -794,5 +824,5 @@
       (member? '(add r5 r0 1) (caup irBa))           ; the loop counter i ALSO homes (r5): its
       (= 0 (wrapsa (caup irBa)))))                   ; ++ no longer leans its own slot. zero wraps
 
-(say err "crew/moon/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch/bitfields) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE (a typed local/member folds at parse -- an array bound), bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) + inline asm (holo-text templates, %N operands, one opaque raw, constraint refusals) + the alive pass (per-call wraps: dead-across drops, live-across keeps, shadowed/goto blanket; free locals home through calls; a born-at-a-call kill rides its statement's record) + arm64 homing (r10..r14 homes, fp wraps, fp+32 overflow, free locals off the pool) ok")
+(say err "crew/moon/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch/bitfields) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + diagnostics (a parse refusal's file + line: the furthest token reached, header attribution, strings joining across an include) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE (a typed local/member folds at parse -- an array bound), bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) + inline asm (holo-text templates, %N operands, one opaque raw, constraint refusals) + the alive pass (per-call wraps: dead-across drops, live-across keeps, shadowed/goto blanket; free locals home through calls; a born-at-a-call kill rides its statement's record) + arm64 homing (r10..r14 homes, fp wraps, fp+32 overflow, free locals off the pool) ok")
 (put err 10)

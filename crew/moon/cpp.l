@@ -22,6 +22,14 @@
    (lof t) <>>t
    (hof t) (? (3 < (tally t)) <>>>t ())
    (tok k v l) `(k v l)
+   ; -- include markers (doc/moon-diag.md rung 2) -- an #include splices the
+   ; header's OWN line numbering into the one flat output stream, so a line
+   ; number alone can't say which file it is (and isn't monotone across the
+   ; splice). doinc brackets each included run with these; parse's ctag pass
+   ; reads them into its position table and strips them, so no later stage
+   ; ever sees one. 'in carries the header's name, 'out pops back.
+   (fmin name) `('fmark 'in name)
+   fmout `('fmark 'out ())
    (idt? t) ((kof t) = 'id)
    (idv? t v) (&& ((kof t) = 'id) ((vof t) = v))
    (pv? t v) (&& ((kof t) = 'p) ((vof t) = v))
@@ -255,12 +263,38 @@
        ())
 
    ; -- adjacent string literal concatenation (phase 6) --
-   (strcat-pass ts)
+   ; it also RETIRES the file marks here, in the one pass that already rebuilds
+   ; the whole spine -- so parse receives a clean stream and pays nothing for a
+   ; separate strip. the SPANS it collects on the way -- ((index file)..),
+   ; which file each stretch of the flat output came from -- land in a stash
+   ; rather than riding back up, so the walk keeps its original shape: adding a
+   ; return value would have meant either a rev of the whole stream or a pair
+   ; allocated per token, and this pass runs over every token of every compile.
+   ; ⚠ the join must see THROUGH a mark: host/main.c splices the egg by
+   ; #include-ing bare string literals between two of its own ("(" then egg.h
+   ; then "'(" ..), so the strings a mark sits between are exactly the ones
+   ; that have to join. a mark consumed mid-join takes effect AFTER the merged
+   ; token (index n + 1) -- the joined literal belongs to the file its FIRST
+   ; piece came from.
+   (fmark? t) ((kof t) = 'fmark)
+   (fmpush t files) (? ((vof t) = 'in) (link (lof t) files) >files)
+   (fmtop files) (? (two? files) <files ())
+   spanacc (tablet 0)                               ; the spans, REVERSED, of the strcat-pass now running
+   (spanat n files) (pin spanacc 'l (link `(n (fmtop files)) (peep spanacc 'l ())))
+   ; -> the rest after a run of marks, the file stack they leave, and whether
+   ; the next real token is a string (so the caller knows to join)
+   (skipfm ts files) (? (&& (two? ts) (fmark? <ts)) (skipfm >ts (fmpush <ts files)) `(ts files))
+   (strcat-pass ts n files)
     (? (! (two? ts)) ()
        (: t <ts
-          (? (&& ((kof t) = 'str) (&& (two? >ts) ((kof <>ts) = 'str)))
-             (strcat-pass (link (tok 'str ((vof t) + (vof <>ts)) (lof t)) >>ts))
-             (link t (strcat-pass >ts)))))
+          (? (fmark? t)
+              (: fs (fmpush t files) _ (spanat n fs) (strcat-pass >ts n fs))
+             (! ((kof t) = 'str)) (link t (strcat-pass >ts (n + 1) files))
+             (: sr (skipfm >ts files) nxt (cap sr) fs (caup sr)
+                (? (! (&& (two? nxt) ((kof <nxt) = 'str))) (link t (strcat-pass >ts (n + 1) files))
+                   ; the marks we just consumed take effect after the merged token
+                   (: _ (? ((fmtop fs) = (fmtop files)) () (spanat (n + 1) fs))
+                      (strcat-pass (link (tok 'str ((vof t) + (vof <nxt)) (lof t)) >nxt) n fs)))))))
 
    ; -- the driver: walk logical lines, run directives, expand active code.
    ; macs is a MUTABLE tablet (so #define/#undef persist and includes share it);
@@ -330,9 +364,13 @@
                 (? (! (two? lr)) (: _ (say err ("cc: lex error in " + spelt)) _ (put err 10) 'cppbad)         ; doinc drops its accumulated `out`, reordering the stream
                    (: itoks <>lr
                       chf (: c <>>txt (? c c incf))
-                      done (cppgo itoks macs () () out chf)   ; recurse with FRESH cond; shares macs; accumulates
+                      ; the marks bracket the child's run. `out` is the REVERSED
+                      ; accumulator, so a link onto it appends in source order:
+                      ; the 'in mark lands before the header's tokens, the 'out
+                      ; mark onto (rev done) lands after them.
+                      done (cppgo itoks macs () () (link (fmin name) out) chf)   ; recurse with FRESH cond; shares macs; accumulates
                       (? (id? done 'cppbad) 'cppbad           ; a nested failure PROPAGATES up (never wipe `out` for it)
-                         (cppgo rest macs cond () (rev done) incf))))))))
+                         (cppgo rest macs cond () (link fmout (rev done)) incf))))))))
    (incname body)                                     ; the header name from #include tokens
     (? (! (two? body)) ()
        ((kof <body) = 'str) (vof <body)       ; "file"
@@ -379,4 +417,13 @@
                _ (pin t "false" `('obj `((tok 'num 0 0))))
                t)
        r (cppgo toks macs () () () incf)
-       (? (id? r 'cppbad) () `(1 (strcat-pass r)))))   ; an EMPTY token list is a valid empty TU, not a failure -- only 'cppbad fails
+       ; the spans ride the stream's HEAD as one marker token, so cpp keeps its
+       ; single (1 out) channel and parse peels them in O(1). a caller that
+       ; feeds parse raw lexer output simply has none, and parse reads ().
+       ; the spans ride the stream's HEAD as one marker token, so cpp keeps its
+       ; single (1 out) channel and parse peels them in O(1). a caller that
+       ; feeds parse raw lexer output simply has none, and parse reads ().
+       (? (id? r 'cppbad) ()
+          (: _ (pin spanacc 'l ())
+             out (strcat-pass r 0 ())
+             `(1 (link (tok 'fspans (rev (peep spanacc 'l ())) 0) out))))))   ; an EMPTY token list is a valid empty TU, not a failure -- only 'cppbad fails

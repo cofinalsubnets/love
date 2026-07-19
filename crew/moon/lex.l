@@ -6,6 +6,16 @@
 ; plus \") as ('str text). not yet (staged): hex/octal/float literals,
 ; adjacent-string pasting, the preprocessor's # lines.
 (:
+   ; a diagnostic carrier (doc/moon-diag.md): a stage may answer this instead of
+   ; a bare bad, naming its own cause -- file/line/col (any () when unknown) and a
+   ; message. gripe? guards it; the driver (moon.l ccdie) formats it, else falls
+   ; back to today's generic line so unconverted stages don't regress. a gripe IS
+   ; a chain, so okv? -- a real stage result -- excludes it explicitly. it lives
+   ; HERE, the first moon file in both load orders (crew/build.mk, test/test.mk),
+   ; so every later stage can answer one.
+   (gripe file line col msg) `('gripe file line col msg)
+   (gripe? x) (&& (two? x) (id? (cap x) 'gripe))
+   (okv? x) (&& (two? x) (! (gripe? x)))
    (clex src)
     (: n (tally src)
        kws '(auto break case char const continue default do double else enum

@@ -35,15 +35,7 @@
    (xmmreg i) (intern ("f" + (show i)))              ; the SysV double arg registers f0..f7
    (nthr l i) (? (i < 1) <l (nthr >l (i - 1)))
    (nthty l i) (? (! (two? l)) () (i < 1) <l (nthty >l (i - 1)))   ; the i-th list element or ()
-   (bad? x) (id? x 'bad)
-   ; a diagnostic carrier (doc/moon-diag.md): a stage may answer this instead of
-   ; a bare bad, naming its own cause -- file/line/col (any () when unknown) and a
-   ; message. gripe? guards it; the driver (moon.l ccdie) formats it, else falls
-   ; back to today's generic line so unconverted stages don't regress. a gripe IS
-   ; a chain, so okv? -- a real stage result -- excludes it explicitly.
-   (gripe file line col msg) `('gripe file line col msg)
-   (gripe? x) (&& (two? x) (id? (cap x) 'gripe))
-   (okv? x) (&& (two? x) (! (gripe? x)))
+   (bad? x) (id? x 'bad)                             ; the gripe carrier (gripe/gripe?/okv?) lives in lex.l -- parse answers one too
    ; -- the value tuple (the operand allocator's phase 0): every expression
    ; answers (ty reg forms) -- its type, the REGISTER holding the value, and
    ; the forms that compute it. reg is r0 on every lane until the allocator

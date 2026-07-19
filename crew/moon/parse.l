@@ -31,8 +31,49 @@
    (tkk t) <t (tkv t) <>t
    (tp? t s) (&& (two? t) (&& ((tkk t) = 'p) ((tkv t) = s)))
    (tkw? t k) (&& (two? t) (&& ((tkk t) = 'kw) ((tkv t) = k)))
-   (want ts s) (? (&& (two? ts) (tp? <ts s)) >ts ())
-   (peekp ts s) (&& (two? ts) (tp? <ts s))
+   ; -- where a refusal stood (doc/moon-diag.md rung 2) --
+   ; cpp hands the SPANS -- ((index file)..), which file each stretch of the
+   ; flat stream came from -- on a marker token at the stream's head, laid by
+   ; the pass that was already rebuilding the spine. peel it in O(1); a caller
+   ; feeding raw lexer output has none and reads ().
+   ; ⚠ the file has to be carried at all because an #include splices the
+   ; header's own line numbering into the one stream: a line number alone
+   ; can't say which file it means, and lines run BACKWARDS at a splice.
+   (fspans ts) (? (&& (two? ts) ((tkk <ts) = 'fspans)) (tkv <ts) ())
+   (fsbody ts) (? (&& (two? ts) ((tkk <ts) = 'fspans)) >ts ts)
+   (filat spans i)                                  ; the file in force at stream index i
+    (: (go l cur) (? (! (two? l)) cur (i < (cap (cap l))) cur (go >l (caup (cap l))))
+       (go spans ()))
+   ; a token the failing form's RE-PARSE stamped: (kind val line seq file).
+   ; slots 4 and 5 are free -- the cpp hideset and the lexer's glued-paren
+   ; flag both sit in slot 4 and are DEAD once parse holds the stream (parse
+   ; reads kind and val and nothing else).
+   (stampf ts i spans)
+    (? (! (two? ts)) ()
+       (: t <ts
+          (link `((tkk t) (tkv t) <>>t i (filat spans i)) (stampf >ts (i + 1) spans))))
+   (stamped? t) (two? >>>>t)                       ; a 5th cell -- probed, never counted: mark runs on EVERY lookahead of every parse
+   (seqof t) (? (stamped? t) <>>>t ())
+   (filof t) (? (stamped? t) <>>>>t ())
+   ; the watermark. a recursive-descent refusal answers a bare () and unwinds
+   ; to the top carrying no position, so we remember the deepest token any
+   ; lookahead stood on and read the position back off THAT.
+   ; ⚠ THE SUCCESSFUL PARSE MUST NOT PAY FOR THIS. there is no cheap mutable
+   ; scalar here -- a tablet peep+pin per lookahead cost +25% on ai.c -- so
+   ; only the RE-PARSE of an already-failing form runs on stamped tokens, and
+   ; an unstamped one (every token of every parse that is going to succeed)
+   ; costs mark a length test and nothing else. diagnostics are paid for out
+   ; of the failure path, where there is all the time in the world.
+   far (tablet 0)
+   (mark ts)
+    (: _ (? (! (two? ts)) ()
+            (: t <ts s (seqof t)
+               (? (&& (charm? s) ((peep far 'seq -1) < s))
+                  (: _ (pin far 'seq s) (pin far 'tok t))
+                  ())))
+       ts)
+   (want ts s) (: _ (mark ts) (? (&& (two? ts) (tp? <ts s)) >ts ()))
+   (peekp ts s) (: _ (mark ts) (&& (two? ts) (tp? <ts s)))
    asnops `(`("=" ()) `("+=" '+) `("-=" '-) `("*=" '*) `("/=" '/) `("%=" '%)
              `("&=" '&) `("|=" '|) `("^=" '^) `("<<=" 'shl) `(">>=" 'shr))
    scalars '(char short int long void double float)
@@ -426,7 +467,7 @@
 
    ; primary := num | str | id (an enum constant folds here) | ( expr )
    (pprim ps ts)
-    (? (! (two? ts)) ()
+    (? (! (two? (mark ts))) ()      ; the bottom of the expression ladder: mark here and a bad OPERAND reports itself, not the operator before it
        (: t <ts
           (? ((tkk t) = 'num) `(`('num (tkv t)) >ts)
              ((tkk t) = 'unum)                        ; a u-suffixed literal wears its unsignedness (neg/div/shift go unsigned):
@@ -1205,9 +1246,32 @@
                                                   (? (two? vps) `(`('gdecl vps) rest)
                                                      `(`('tdef) rest)))))
                                         (more <>first `(<first))))))))))))))
+   ; a parse refusal names where it stood. the first pass ran unstamped and so
+   ; left no trail -- so stamp JUST this form and run it through ptop again,
+   ; which is cheap (one form) and now marks as it goes. the FURTHEST token
+   ; that re-parse reaches is the report site; the form's own first token is
+   ; the fallback, for a form that dies before any lookahead marks (and for
+   ; the re-parse that unexpectedly SUCCEEDS -- ps carries the first attempt's
+   ; half-registered typedefs, so that is possible, and its watermark would be
+   ; at the form's end, which would read as a nonsense position).
+   ; ONE position and no more: the driver deskews a gripe's line for the
+   ; prepended -D lines, and a second line number baked into the message text
+   ; would ride out uncorrected.
+   (pfail ps ts2 spans toks)
+    (: i0 ((tally toks) - (tally ts2))   ; the failing form's index -- an O(n) walk, on the path that is already dying
+       ft (? (two? ts2) <ts2 ())
+       _ (pin far 'seq -1)
+       _ (pin far 'tok ())
+       r (ptop ps (stampf ts2 i0 spans))
+       dt (? (two? r) () (peep far 'tok ()))
+       t (? (two? dt) dt ft)
+       (? (! (two? t)) (gripe () () () "parse error at end of input")
+          (gripe (? (two? dt) (filof t) (filat spans i0)) <>>t ()
+                 ("parse error near " + (spell t)))))
    (cparse ts) (cparse-t ts 'x64)          ; the law tests + any bare caller: 64-bit widths (unchanged behavior)
    (cparse-t ts tgt)
     (: ps (psnew tgt)
+       toks (fsbody ts) spans (fspans ts)
        ; note the completed form's staticness/section per declared name, then
        ; clear the stashes for the next form
        (note f)
@@ -1227,5 +1291,5 @@
         (? (! (two? ts2)) `(1 `('prog (rev acc)) (ps 'stag) (ps 'sigs) (ps 'weaks)   ; empty acc = a valid EMPTY TU (crypt.c), not a parse failure
                               (ps 'sfns) (ps 'svars) (ps 'sects))
            (: r (ptop ps ts2)
-              (? (two? r) (: _ (note <r) (tops <>r (link <r acc))) ())))
-       (tops ts ())))
+              (? (two? r) (: _ (note <r) (tops <>r (link <r acc))) (pfail ps ts2 spans toks))))
+       (tops toks ())))

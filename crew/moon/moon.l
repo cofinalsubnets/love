@@ -66,22 +66,33 @@
           loc (file + (? ln (":" + (show ln)) "") + (? col (":" + (show col)) ""))
           (udie 1 ("cc: " + loc + ": " + msg)))
        (udie 1 plain))
+   ; the -D lines are prepended TEXT (below), so every line the lexer stamped on
+   ; a TU token sits that many lines high. take them back off before reporting.
+   ; a gripe naming a FILE came from an #include, which lexed fresh from its own
+   ; line 1 and never saw the defines -- leave it alone. ⚠ any stage that learns
+   ; to mint a gripe has to come through here, or it reports skewed lines.
+   (deskew val n)
+    (? (! (gripe? val)) val
+       (: f (el val 1) ln (el val 2)
+          (? f val
+             (! (charm? ln)) val
+             (gripe f (ln - n) (el val 3) (el val 4)))))
    ; the shared front end: source path (+ -I dirs, -D defines) -> (1 ast stag
    ; sigs ..) | a fatal exit. the -D lines PREPEND to the source text before the
    ; one lex, so the line numbering stays whole (tokens carry lines and a define
    ; body runs to its line's end -- a separately-lexed stream would restart at 1
-   ; and the last -D would swallow the file's first line); diagnostics under -D
-   ; skew by the define count, the price of the shared stream.
+   ; and the last -D would swallow the file's first line); deskew pays the
+   ; numbering back at the report.
    (cc-parse src is ds tgt)
     (: ds9 (link (archdef tgt) ds)         ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
        r (uread src)
        _ (? (two? r) () (udie 1 ("cc: cannot open " + src)))
        lx (clex ((deftext ds9) + <>r))
-       _ (? (okv? lx) () (ccdie lx src ("cc: lex error in " + src)))
+       _ (? (okv? lx) () (ccdie (deskew lx (tally ds9)) src ("cc: lex error in " + src)))
        pp (cpp <>lx (\ name sys? (incload is (cdir src) name sys?)) src)
-       _ (? (okv? pp) () (ccdie pp src ("cc: preprocessor error in " + src)))
+       _ (? (okv? pp) () (ccdie (deskew pp (tally ds9)) src ("cc: preprocessor error in " + src)))
        ps (cparse-t <>pp tgt)                 ; thread the target so parse sizes pointers/longs at the ABI width
-       _ (? (okv? ps) () (ccdie ps src ("cc: parse error in " + src)))
+       _ (? (okv? ps) () (ccdie (deskew ps (tally ds9)) src ("cc: parse error in " + src)))
        ps)
    ; the parser's static/section trio, threaded to the gen as one list
    (pxtra ps) `((el ps 5) (el ps 6) (el ps 7))

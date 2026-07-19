@@ -120,13 +120,84 @@ rung 1's 10. Laws in `law.l` flipped from `(! (cgn …))` to `(gripe? (cgn …))
 three undeclared seams. No message-content law: rung 2 reshapes the string with positions,
 so a strict golden would only churn.
 
-### rung 2 — positions into lex and parse errors
+### rung 2 — positions into parse errors — LANDED
 
-Thread the failing token's line/col into the gripe. Parse errors gain the construct where
-one is known; a bare position is already most of the value, since it converts "bisect a
-flattened TU with `gcc -E -P` over brace-balanced prefixes" into reading a number. The
-four unexplained parse failures above are the immediate test: they should root-cause
-themselves.
+Thread the failing token's position into the gripe. A bare position is most of the value,
+since it converts "bisect a flattened TU with `gcc -E -P` over brace-balanced prefixes"
+into reading a number.
+
+**How it landed.** Three pieces, and the shape of each was set by one constraint:
+
+- **the file, not just the line.** An `#include` splices the header's *own* line numbering
+  into the one flat post-cpp stream, so a line number alone can't say which file it means
+  — and lines run *backwards* at a splice. `cpp.l`'s `doinc` brackets each included run
+  with `fmark` tokens; `strcat-pass` (the pass that was already rebuilding the whole
+  spine) retires them and collects the **spans** — `((index file)..)`, a handful of
+  entries. They ride out on one `fspans` marker token at the stream's head, so `cpp` keeps
+  its single `(1 out)` channel and `parse` peels them in O(1). A caller feeding raw lexer
+  output has none and reads `()`. File `()` means the TU, which `ccdie` fills the source
+  path in for.
+- **the furthest token, not the form's first.** A recursive-descent refusal answers a bare
+  `()` and unwinds carrying no position, so the report site is a watermark: the deepest
+  token any lookahead stood on (`mark`, called from `want`/`peekp`/`pprim` — `pprim` is
+  the expression bottom, so a bad *operand* reports itself rather than the operator before
+  it). The failing form's own first token is the fallback.
+- **⚠ the successful parse must not pay for it.** There is no cheap mutable scalar here; a
+  tablet peep+pin per lookahead cost **+25%** on `mooncc -c ai.c`. So the first pass runs
+  on *unstamped* tokens and `mark` costs a cell probe and nothing else; only the re-parse
+  of an already-failing form (`pfail`) stamps `(kind val line seq file)` and runs the
+  watermark for real. Slots 4 and 5 are free — the cpp hideset and the lexer's
+  glued-paren flag both sit in slot 4 and are dead once parse holds the stream.
+
+Verified against gcc: a bad form in a header reports `deep.h:6` where gcc reports
+`deep.h:6:11`; a bad form in the TU *after* two includes reports its own line, unskewed.
+Laws in `law.l` (the diagnostics section) pin both directions plus the join below.
+
+**Residual cost: ~5% on `mooncc -c ai.c`** (3.13s → 3.30s, output byte-identical). It is
+front-end bookkeeping only — the marks flowing through `strcat-pass`, and `mark`'s three
+call sites. Several attempts to buy it back moved nothing (folding the strip into
+`strcat-pass`, a fast path for lone strings, dropping the file stack into a stash).
+
+⚠ **The line map is a dead end — don't spend a rung on it.** The idea: renumber included
+tokens into a virtual line space at splice time, so lines run monotone and both the spans
+and the watermark's seq retire. Two things kill it. (1) *Monotone is unreachable without
+restructuring cpp.* `clex` could take a base and mint header tokens already biased — that
+much is free, the lexer builds each token anyway. But `moon.l` lexes the whole TU in one
+shot before cpp sees its first `#include`, so the TU's post-include tokens are already
+stamped at base 0 and the stream still runs backwards at the splice's far end. The fix is a
+pull-based lexer interleaved with `cppgo`, or an O(n) restamp — and a restamp is exactly
+what cpp goes out of its way not to do: the hot path `(revcat line buf)` relinks the same
+token objects, so renumbering means minting a fresh token for every token in the program.
+(2) *It would not retire the watermark anyway.* `mark` is cheap today only because
+unstamped tokens let it bail on a cell probe; if every token carried a monotone line, `mark`
+would have to peep+pin the tablet on every lookahead — the original +25% design. Pay-on-
+failure survives the line map; the seq stamping is what makes it free.
+
+If the 5% is ever worth attacking, the lever is threading a token counter through `cppgo`
+(~6 mechanical call sites) so `doinc` records spans by index directly and the marker tokens
+retire — that takes the marks back out of `strcat-pass`, and with them the egg-splice hazard
+below. The wrinkle is that string merges shift the indices, so the spans need correcting by
+the merge count before each boundary.
+
+⚠ **`linesplit` reads line numbers.** cpp splits a logical line by "tokens sharing the
+head's line number", so line numbers are load-bearing for directive parsing, not just for
+diagnostics. Any renumbering scheme must stay uniform per source line.
+
+⚠ **`-D` skew.** The driver prepends `-D` lines as text, so every TU line the lexer stamps
+sits that many lines high; `moon.l`'s `deskew` takes them back off at the report. Any stage
+that learns to mint a gripe has to come through it, or it reports skewed lines. This is
+also why the message carries ONE position and no more — a second line number baked into
+the message string would ride out uncorrected (an earlier draft's "in the declaration at
+line N" did exactly that, and was cut).
+
+⚠ **strings join ACROSS an include.** `host/main.c` splices the egg by `#include`-ing bare
+string literals between two of its own (`"("` then `egg.h` then `"'("` ..), so the strings
+a mark sits between are exactly the ones phase 6 has to join. The first cut of the marks
+broke this and `test_raw` caught it — `mooncc -c host/main.c` failed with a parse error on
+the egg. A law now pins it.
+
+**Still bare:** lex errors (`clex` knows its line in the `go` loop — cheap, but no failure
+in the sweep needs it yet) and the `clval` address-of-an-undeclared-name path.
 
 ### rung 3 — `#error` echoes its text and file
 
@@ -200,5 +271,7 @@ before-picture — and note the census keys are themselves the indictment:
 ```
 
 The deliverable is those parentheticals disappearing — the failure list becoming
-*self-explanatory* — more than the compile count going up. Rung 1 alone should retire the
-first line; the four parse errors ought to root-cause themselves under rung 2.
+*self-explanatory* — more than the compile count going up. Rung 1 retired the first line;
+rung 2 the second. ⚠ the four parse failures have NOT been re-run against a real tree —
+there was no configured gzip source here, so rung 2 was verified on synthetic cases and
+against gcc's own file:line. Re-running the sweep is the first thing to do with one.
