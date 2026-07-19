@@ -28,7 +28,7 @@ samples=${5:-5}   # timed windows per bench; the median ms/it window is reported
 # per-language file extension, interpreter binary, and run command. the command
 # is eval'd with $b bound to the bench name, so the source is benches/$b.$ext.
 case $lang in
-  # ai: the native glaze (ai/glaze/{emit,auto}.l) is BAKED into out/host/ai and active by default, so the
+  # ai: the native glaze (love/glaze/{emit,auto}.l) is BAKED into out/host/ai and active by default, so the
   # bench just runs through the binary -- no prepend. (`make bench` depends on `host`, so the baked glaze
   # is always fresh.) We do NOT cat the glaze source ahead of the bench: re-loading the glaze on top of
   # the baked glaze is a redundant DOUBLE-LOAD that faults under autospec; the baked binary is the truth.

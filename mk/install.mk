@@ -21,10 +21,10 @@ installs = \
   $d/bin/bao \
   $d/share/man/man1/ai.1 \
   $d/share/man/man1/cook.1 \
-  $d/lib/ai/prel.l \
-  $d/lib/ai/ev.l \
-  $d/lib/ai/bao.l \
-  $d/lib/ai/mooncc.image \
+  $d/lib/love/prel.l \
+  $d/lib/love/ev.l \
+  $d/lib/love/bao.l \
+  $d/lib/love/mooncc.image \
   $d/lib/libai.a \
   $d/lib/libai.so \
   $d/include/ai.h \
@@ -41,7 +41,7 @@ $d/include/ai.h: ai.h
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 
-$d/lib/ai/%.l: ai/%.l
+$d/lib/love/%.l: love/%.l
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 
@@ -121,9 +121,9 @@ $d/bin/mooncc: $(MAKEFILE_LIST)
 	@install -d $(dir $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
-	   echo 'exec "$$h/ai" --wake "$$h/../lib/ai/mooncc.image" -e "(moon-main (cuup (cup cmdline)))" "$$@"'; } > $@
+	   echo 'exec "$$h/ai" --wake "$$h/../lib/love/mooncc.image" -e "(moon-main (cuup (cup cmdline)))" "$$@"'; } > $@
 	@chmod 755 $@
-$d/lib/ai/mooncc.image: $(ho)/mooncc.image
+$d/lib/love/mooncc.image: $(ho)/mooncc.image
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 
@@ -137,7 +137,7 @@ $d/bin/lux: $(luxfiles)
 	@{ echo '#!/usr/bin/env -S ai -l'; cat $(luxfiles); } > $@
 	@chmod 755 $@
 
-# bao: the interactive shell. Unlike crew/cook/ain, ai/bao.l is DEFINE-ONLY (the
+# bao: the interactive shell. Unlike crew/cook/ain, love/bao.l is DEFINE-ONLY (the
 # launch `(bao 0)` is normally fired by main.c on a tty), so the bin is a tiny
 # relocatable launcher: it loads the installed bao.l next door and fires it.
 $d/bin/bao: $(MAKEFILE_LIST)
@@ -145,7 +145,7 @@ $d/bin/bao: $(MAKEFILE_LIST)
 	@install -d $(dir $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
-	   echo 'exec "$$h/ai" -l "$$h/../lib/ai/bao.l" -e "(bao 0)" "$$@"'; } > $@
+	   echo 'exec "$$h/ai" -l "$$h/../lib/love/bao.l" -e "(bao 0)" "$$@"'; } > $@
 	@chmod 755 $@
 
 $d/share/man/man1/ai.1: $(ho)/ai.1

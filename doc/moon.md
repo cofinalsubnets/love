@@ -804,7 +804,7 @@ already a lawed calculator-to-ELF; stage 4 compiles real single-file C).
 ## the installed shape (2026-07-13): a wake shim over a baked image
 
 `make install` no longer ships the cat as `bin/mooncc`. The compiler bakes WARM
-into `lib/ai/mooncc.image` (the live bake nif, doc/snapshot.md) and `bin/mooncc`
+into `lib/love/mooncc.image` (the live bake nif, doc/snapshot.md) and `bin/mooncc`
 is a three-line sh shim: `ai --wake mooncc.image -e "(moon-main (cuup (cup
 cmdline)))" "$@"`. The whole-cat re-eval that every compile used to pay
 (~1.5 s wall) is paid once, at bake: `mooncc -c ai.c` 4.3 → 2.8 s wall, and a

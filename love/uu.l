@@ -1,4 +1,4 @@
-; ai/uu.l -- the uu kernel's HOME: MLTT with the UniMath Preamble's seven
+; love/uu.l -- the uu kernel's HOME: MLTT with the UniMath Preamble's seven
 ; inductives (empty unit bool coprod nat paths total2), bidirectional checking,
 ; NbE conversion (de bruijn levels as fresh vars, sigma- and pi-eta),
 ; type-in-type -- the universe stance of the reference

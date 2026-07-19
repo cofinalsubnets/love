@@ -600,7 +600,7 @@
 ; opfix = op-core, the operator factor pass. (Historically opfix also ran an
 ; optional native-codegen hook, book['opjit]; that JIT experiment was retracted --
 ; its one real win, reduction reassociation, lives in the C builtins now, and the
-; trampoline finding in ai/glaze/probe.l + the eat/toast nifs.)
+; trampoline finding in love/glaze/probe.l + the eat/toast nifs.)
 (: (opfix x) (op-core x))
 ; the SECOND seal: opfix exists now, so it joins num-ap/add/mul in the g->hot_*
 ; fields (idempotent for the trio) -- the C eval lane reads the field henceforth,

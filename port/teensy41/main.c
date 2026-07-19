@@ -7,7 +7,7 @@
 // port's UART0 console (USB CDC is a TODO, see README). The arch backend
 // (teensy41.c) owns the FlexSPI boot image, startup, clocks, LPUART, GPT
 // timer, and GPIO; this file is just the love glue plus a few GPIO nifs. The
-// shell line editor (ai/bao.l, the baked shell core) drives the console
+// shell line editor (love/bao.l, the baked shell core) drives the console
 // exactly as it drives the kernel's.
 #include "../../ai.h"
 #include "teensy41.h"

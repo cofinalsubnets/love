@@ -174,14 +174,14 @@ on the front page):
   kernel INLE=1` builds the image. [port/inle/](port/inle/)
 - 🔭 **tele** -- the pilot: a pytorch clone, autograd over the celestial numerics.
   [crew/tele/](crew/tele/)
-- 🐇 **bellberry** -- the navigator: the evaluator. [ai/ev.l](ai/ev.l)
+- 🐇 **bellberry** -- the navigator: the evaluator. [love/ev.l](love/ev.l)
 - 🕊 **gwen** -- the synthesist.
 - 🐈 **ain** -- the netcat: an openbsd netcat clone in ~70 lines -- `ain host port` a
   TCP client, `ain -l port` a server, bytes pumping both ways with no select loop.
   [tools/ain.l](tools/ain.l) + [host/net.c](host/net.c)
 - 🐕 **bao** -- the shell: an rlwrap clone. raw `ai` shrinks to a read/eval/write
   filter and bao is the editor + history + fault-face on top, doubling as a pty
-  wrapper. [ai/bao.l](ai/bao.l) + [host/pty.c](host/pty.c)
+  wrapper. [love/bao.l](love/bao.l) + [host/pty.c](host/pty.c)
 - 🐀 **salt** -- the build system: cook, a gnu make clone that reads a real Makefile.
   [crew/cook/](crew/cook/)
 - 🐐 **mow** -- the grass chewer: the two-gen, two-space copying garbage collector.

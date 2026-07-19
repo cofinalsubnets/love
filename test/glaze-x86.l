@@ -1,4 +1,4 @@
-; glaze-x86 -- the x86-64 native-codegen self-tests for the glaze (ai/glaze/{emit,auto}.l), the
+; glaze-x86 -- the x86-64 native-codegen self-tests for the glaze (love/glaze/{emit,auto}.l), the
 ; EXECUTING counterpart to the arch-neutral test/glaze.l (which only checks the substrate). HOST-
 ; x86-ONLY: these INSTALL and EXECUTE native machine code, so they're run only by the x86-guarded
 ; `make test_glaze` (never the arch-neutral corpus -- common.mk filters this file out). It runs against
@@ -16,7 +16,7 @@
 ; skips every block, yet the final top-level "ok" still prints (a false pass -- the const-1 trap). assert
 ; the harness names are bound so a wrong invocation SCARES `;; assert (lit? base-ev)` instead.
 ; the assembler and the glaze live in MODULES now (the registry via crew/holo/seal.l;
-; the glaze book via ai/glaze/export.l): this stream cat-loads post-boot, so nothing
+; the glaze book via love/glaze/export.l): this stream cat-loads post-boot, so nothing
 ; folded for it -- bind every internal it drives through the accessors, bare-global
 ; reads both (bcat stands in for the glaze's private byte-concat helper).
 (: assemble (from 'holo 'assemble)
@@ -180,7 +180,7 @@
      ggrid '(? (< px 64) (grid (+ px 1) (+ acc (col px 0 0))) acc)
      ng (grok '(\ _ 0) '(cx cy zx zy it) gmand gcol ggrid 'x64)
      (= 87130 (ng 0))))
-    (say err "ai/glaze/emit: native codegen ok (arith + loop + D-dim float grid, transparent, deopt)\n"))
+    (say err "love/glaze/emit: native codegen ok (arith + loop + D-dim float grid, transparent, deopt)\n"))
 ))
 
 ; CALL-OUT RECOGNIZER (natjit calloutinfo, hook.l): a counted sum whose per-step term calls a resolvable
@@ -702,7 +702,7 @@
     (: bclamp '(: (clamp i) (? (|| (< i 100) (> i 900)) (abs (- i 500)) 0)
                   (run n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (clamp i))) a)) 0 0) (run 1000))
        (&& !(id? (autogroup bclamp) bclamp) (= (base-ev bclamp) (ev bclamp)))))                ; native == interp; clamp a glazed sibling
-   (say err "ai/glaze/auto: native codegen ok
+   (say err "love/glaze/auto: native codegen ok
 ")))
 
 ; --- the neutral-IR retarget, leaf lane (jitir, emit.l) -- additive alongside the byte path.
@@ -812,7 +812,7 @@
       ; arm64: the group assembles (data); the H saves lr + uses 16-byte slots + bl calls (llvm-mc-verified)
       (< 0 (tally (peep (assemble 'arm64 (bcat (L (mkouterir 'arm64 1 'fib 1 0 () () () () ())
                   (mkhir 'arm64 '(fib) 'fib '(n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))))) 'bytes 0))))
-   (say err "ai/glaze/emit-ir: neutral-IR leaf + n-ary + group lanes ok (x86 == interp; arm64 assembles)\n")))
+   (say err "love/glaze/emit-ir: neutral-IR leaf + n-ary + group lanes ok (x86 == interp; arm64 assembles)\n")))
 
 ; --- delet soundness (auto.l): a value-let inlines only dup-cheap values. Two real miscompiles
 ;     shipped from the same line (found by the x11 wire-codec spike, doc/proto/x11.l): a `_`-bound
@@ -832,7 +832,7 @@
       (0 = (dsleaf 20))
       (= (slurp j) (+ (+ "" 1) 2))                                                                 ; both bytes, in order: the _-bound put kept
       (67305985 = v))                                                                              ; 0x04030201: the two dsr2 calls read in source order
-   (say err "ai/glaze/auto: delet keeps _-bound effects + call-binding order ok\n"))
+   (say err "love/glaze/auto: delet keeps _-bound effects + call-binding order ok\n"))
 
 ; --- the POINT-= grammar + the re-declared member?: the recognizer admits a point-guarded
 ;     key compared to a raw chain car ((= P (cap ..))), so the auto.l tail's member? is a
@@ -862,6 +862,6 @@
          (&& (1 = (pg 'b '(a b))) (0 = (pg 'z '(a b))) (0 = (pg 'z 7))))
       (< 0 (tally (peep (assemble 'arm64 (bcat (L (mkouterir 'arm64 2 'pm3 2 0 () () () () '(0))   ; ... and the point-guarded outer assembles on arm64
                   (mkhir 'arm64 '(pm3) 'pm3 '(x l) '(? (two? l) (? (= x (cap l)) 1 (pm3 x (cup l))) 0))))) 'bytes 0))))
-   (say err "ai/glaze/emit: the point-= grammar -- member? group-native, admission + both deopt lanes ok\n"))
+   (say err "love/glaze/emit: the point-= grammar -- member? group-native, admission + both deopt lanes ok\n"))
 
 (say err "test/glaze-x86: emit + auto + ir native codegen ok\n")

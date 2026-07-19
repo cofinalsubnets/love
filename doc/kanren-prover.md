@@ -9,11 +9,11 @@ wrong candidate. That asymmetry (cheap to search, sound to check) is the whole d
 
 ## The substrate is already in place
 
-- **kanren** (`ai/prel.l:600+`): a pure first-order `unify` (substitution or `ufail`, no
+- **kanren** (`love/prel.l:600+`): a pure first-order `unify` (substitution or `ufail`, no
   occurs check, cycle-safe `walk`/`reify`) + a church-stream search monad. A goal is
   `(\ s stream)`; `===` unifies, `+` interleaves (disjunction — complete), `*` binds
   (conjunction); `query` runs it. So a relation is a polynomial in unifications.
-- **uu** (`ai/uu.l`, baked as the `uu` book; theorem corpus in `test/uu.l`): the trusted
+- **uu** (`love/uu.l`, baked as the `uu` book; theorem corpus in `test/uu.l`): the trusted
   bidirectional checker `(chk cx en d t T)` (+ the
   predicative `pinf`/`pchk` for universes). The kernel: the search *proposes*, `chk` *disposes*.
 - **the bridge** (`tools/uu2coq.l`, `tools/uu2lean.l`): a uu-certified term → Rocq + Lean. A

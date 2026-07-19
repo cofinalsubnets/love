@@ -7,7 +7,7 @@
 ;   (+ (* (+ (* (+ (* 2 x) 3) x) 5) x) 7).
 ; three loops of identical shape, only the inner expression differs:
 ;   interp -- ev1 over a DYNAMIC program (carried in via a param) => pure interpretation, no spec
-;   pe     -- ev1 over the CONSTANT P inline => the in-compiler unfold (ai/ev.l feel/cprop) may specialize
+;   pe     -- ev1 over the CONSTANT P inline => the in-compiler unfold (love/ev.l feel/cprop) may specialize
 ;   hand   -- the straight-line residual => the ideal the specializer is chasing
 ;
 ; RESULT (host, 2026-06-22, 1e6 iters):

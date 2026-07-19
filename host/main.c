@@ -370,7 +370,7 @@ static lvm(lvm_getenv) {
 // pure host-glob nif. net.c (ain) / pty.c (bao) are the live not-in-ai0 ones.
 static lvm(lvm_getpid) { return Sp[0] = putcharm(getpid()), Ip++, Continue(); }
 
-// --- PARTIAL-GLAZE PROTOTYPE (flag-gated; see ai/glaze/emit.l cgir bridge) -----------
+// --- PARTIAL-GLAZE PROTOTYPE (flag-gated; see love/glaze/emit.l cgir bridge) -----------
 // pg_dyad: a stable-address, allocation-free fixnum dyadic op, called DIRECTLY from
 // emitted native code (SysV: rdi=op, rsi=a, rdx=b; untagged machine ints in and out).
 // It stands in for "the VM op's C body" that partial glazing splices in when the glaze
@@ -446,7 +446,7 @@ static struct ai *env_budget(struct ai *g) {
 // self-hosted ev installed from ev.l -- so one ai0 invocation exercises both
 // compilers (and -Dai_tco=0 makes it the trampoline path). s2cldef installs
 // s2cl (string -> charlist); runner drinks the baked corpus (the global
-// `tests`) through reads (the shell core, ai/bao.l), whose `(ev 'ev r)` indirection
+// `tests`) through reads (the shell core, love/bao.l), whose `(ev 'ev r)` indirection
 // late-binds to whatever `ev` is now, so the same shell drives the c0 pass and
 // (after the egg) the self-hosted pass.
 static char const cli[] =
@@ -457,7 +457,7 @@ static char const tests0[] =
  ;
 static char const
  s2cldef[] = "(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0))",
- runner[] = "(reads (tap (s2cl tests)))";   // the stream shell (ai/bao.l) drinks the baked corpus
+ runner[] = "(reads (tap (s2cl tests)))";   // the stream shell (love/bao.l) drinks the baked corpus
 
 // With args, run the build tool (lcat / gen_data) through the CLI driver.
 // With no args, self-test: eval prel+bao (the shell core) and run the baked corpus
@@ -482,7 +482,7 @@ static struct ai *boot(struct ai *g, bool argp) {
 #include "arm640.h"                                   //   below, so one eval here serves both corpus passes.
 #include "seal0.h"                                    // the module boundary: seal.l closes holo.l's scope layer as the `holo` book
   );
-  g = ai_evals_(g,                                    // the uu kernel (ai/uu.l, sweep at its tail): the corpus's uu
+  g = ai_evals_(g,                                    // the uu kernel (love/uu.l, sweep at its tail): the corpus's uu
 #include "uu0.h"                                       //   files drive it through the `uu` book under c0 AND the self-hosted ev
   );
   g = ai_evals_(g, s2cldef);
@@ -518,8 +518,8 @@ static char const cli[] =
 #include "cli.h"
  ;
 static char const
- rel[] = "(reads in)";   // non-tty stdin: the stream shell (ai/bao.l) drinks the in port
-// a tty: launch the bao shell. bao IS the baked shell core now (ai/bao.l, baked to
+ rel[] = "(reads in)";   // non-tty stdin: the stream shell (love/bao.l) drinks the in port
+// a tty: launch the bao shell. bao IS the baked shell core now (love/bao.l, baked to
 // bao.h, evaled in the egg-warm below), DEFINE-ONLY -- it installs (bao _)/shell/...
 // but does not launch, so the same image serves a pipe (the bare `rel` runner) and
 // the corpus self-test. The frontend launches it on a tty by evaling "(bao 0)".
@@ -527,10 +527,10 @@ static char const baolaunch[] = "(bao 0)";   // bao.l is define-only -> the fron
 
 // NOTE: the native-JIT experiment was retracted. It proved one durable finding
 // (you can run native code from a buf -- (eat 1 (toast bytes) x) -- and the kernel's
-// HHDM is executable, so a kernel JIT needs only a trampoline; see ai/glaze/probe.l) and
+// HHDM is executable, so a kernel JIT needs only a trampoline; see love/glaze/probe.l) and
 // one real speedup (reduction reassociation), which now lives baked in the C builtins
 // asum/aprod/amax/amin. The scalar/array kernels themselves were a net loss or
-// unused, so only eat (the curried eat1/eat2 nifs) + toast remain. See ai/glaze/README.md.
+// unused, so only eat (the curried eat1/eat2 nifs) + toast remain. See love/glaze/README.md.
 
 // --bake [PATH] / --wake PATH: the heap-image snapshot (doc/snapshot.md). `--bake` boots fully,
 // then lays the post-warm image back into the binary's OWN .image section (host/image.c's
@@ -547,7 +547,7 @@ static bool image_bake_p = false;                        // --bake with no PATH:
 // Loaded at startup when its magic validates; else a normal egg boot.
 extern uint64_t ai_baked_image[];
 extern uintptr_t ai_baked_image_len;
-// the glaze (native JIT, ai/glaze/{emit,auto}.l), x86-64 only. Baked but evaled ONLY
+// the glaze (native JIT, love/glaze/{emit,auto}.l), x86-64 only. Baked but evaled ONLY
 // before a --bake -- so a normal boot never pays the ~810 ms native-compile of
 // its self-tests, while the dumped snapshot carries the JIT always-on at zero startup
 // (Phase 4, doc/snapshot.md). The asserts compile transient native closures; the
@@ -560,12 +560,12 @@ static char const glaze_emit[] =
 static char const glaze_auto[] =
 #include "auto.h"
  ;
-static char const glaze_export[] =              // ai/glaze/export.l: sweep the span into the `glaze` book
+static char const glaze_export[] =              // love/glaze/export.l: sweep the span into the `glaze` book
 #include "gexport.h"
  ;
 #endif
 #if defined(__x86_64__) || defined(__aarch64__)
-static char const glaze_hook[] =                // ai/glaze/hook.l: install book['natjit] -- the ala
+static char const glaze_hook[] =                // love/glaze/hook.l: install book['natjit] -- the ala
 #include "hook.h"                               //   creation hook (glaze EVERY embedded closure, not just (ev '(\..))); the hook's lanes take `arch` (= (intern ai-arch)) so aarch64 emits its own code
  ;
 #endif
@@ -585,7 +585,7 @@ static struct ai *boot(struct ai *g, bool argp) {
 #include "ev.h"
     "))"
 #include "post.h"                                       // the post-egg layer (parser combinators, ...), evaled ONCE after the egg
-#include "uu.h"                                          // uu's NbE kernel (ai/uu.l, sweep at its tail) -- one global name, the
+#include "uu.h"                                          // uu's NbE kernel (love/uu.l, sweep at its tail) -- one global name, the
                                                          //   `uu` book; the corpus + an overlay reach (uu 'vof) through it
 #include "holo.h"                                         // the crew/holo/ assembler -- a post-egg language SERVICE, built as a
 #if defined(__x86_64__)                                  //   scope MODULE: holo.l opens a named layer ((enter 'holo)), the core +

@@ -3,7 +3,7 @@
 ; PATCH -- ask claude for the new contents of a file, hand it to drive as
 ; (path body). load after judge/serve/drive:
 ;   out/host/dock -l port/inle/judge.l -l port/inle/serve.l -l port/inle/drive.l -l port/inle/patch.l -e "(dock 7620)"
-;   > (improve "add a `double` helper to the prelude" "ai/prel.l")   ; one guarded iteration
+;   > (improve "add a `double` helper to the prelude" "love/prel.l")   ; one guarded iteration
 ;
 ; SAFE BY CONSTRUCTION: the model only ever proposes a file body; drive.l applies
 ; it with `lay`, the gate (rebuild + make test) judges it, and a RED gate reverts

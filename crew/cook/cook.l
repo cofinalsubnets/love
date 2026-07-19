@@ -9,7 +9,7 @@
 ;
 ; (this tool was first written as tools/bake.l; it was renamed to crew/cook/cook.l so
 ; the file name does not collide with the OTHER, unrelated sense of "bake" in this
-; tree -- baking the heap image / the egg (ai/egg.l), the array-perf bake. the
+; tree -- baking the heap image / the egg (love/egg.l), the array-perf bake. the
 ; build VERB here is `cook`; "bake" is reserved for the egg. the messages this tool
 ; prints are prefixed `cook:` for the same reason.)
 ;
@@ -42,7 +42,7 @@
 ; Cookfile, or a -f FILE) is ai source. See "importing a Makefile" at the foot of
 ; this file. The first rule is the default ticket either way.
 
-; the combinators live in the `parse` MODULE book (ai/post.l): bind the shared set --
+; the combinators live in the `parse` MODULE book (love/post.l): bind the shared set --
 ; `parse` itself rebound LAST, so the earlier reads get the book (the sequence law).
 (: P parse
    eps (P 'eps)  lit (P 'lit)  one (P 'one)  span (P 'span)  alt (P 'alt)
@@ -217,7 +217,7 @@
 ; cook reads a Cookfile (ordinary love source) -- but it can also read a real
 ; Makefile directly, the same dependency idea wearing make's notation. The reader
 ; is built on the PARSER COMBINATORS (after the gw.js style) now shared from the
-; post-egg layer ai/post.l: a parser is (\ s y n) over a string s, with a success
+; post-egg layer love/post.l: a parser is (\ s y n) over a string s, with a success
 ; continuation y = rest parsed and a failure continuation n = rest; the parsed
 ; payload is a list that `seq` concatenates. ai has no regex, so the leaves are
 ; `lit` (a literal prefix), `one` (one char by predicate) and `span` (a maximal
@@ -242,7 +242,7 @@
    emitp (tablet 0)
 
    ; -- the combinators (eps/lit/one/span/alt/seq/seqs/opt/skip/pmap/many/parse) now live in the POST-EGG
-   ;    layer ai/post.l, baked once after the egg; this body-having `:` just reads them as outer globals.
+   ;    layer love/post.l, baked once after the egg; this body-having `:` just reads them as outer globals.
 
    ; -- character classes and string utilities --
    (chws c)     (|| (c = 32) (c = 9))

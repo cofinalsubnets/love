@@ -5,7 +5,7 @@
 ; needs a -DAI_STAT host (gauge's stat cells read 0 otherwise). build one, then:
 ;   clang ... -DAI_STAT ... -o /tmp/ai-stat ai.c host/*.c -lm
 ;   cat tools/gcstat.l | /tmp/ai-stat                                   ; interpreted
-;   cat ai/glaze/emit.l ai/glaze/auto.l tools/gcstat.l | /tmp/ai-stat   ; glazed (x86-64)
+;   cat love/glaze/emit.l love/glaze/auto.l tools/gcstat.l | /tmp/ai-stat   ; glazed (x86-64)
 ;
 ; gauge 0 -> @(len heap stack n_gc max_len max_heap n_seen n_evac):
 ;   mortality = (n_seen - n_evac)/n_seen ; copy-amp = n_evac/max_heap.

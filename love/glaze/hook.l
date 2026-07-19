@@ -1,6 +1,6 @@
 ; hook -- install the native-creation hook: book['natjit], read by ev.l's `ala` on
 ; EVERY closure built, top-level AND embedded in a fn/let body (the reach the ev-rebind
-; in ai/glaze/auto.l never had -- it only saw the form handed to `ev`). A qualifying leaf (the
+; in love/glaze/auto.l never had -- it only saw the form handed to `ev`). A qualifying leaf (the
 ; emit grammar over its frame [imps args]) is native-backed AT CREATION and DEOPTS into
 ; the closure's own bytecode `e` on overflow -- so native is never wrong, just faster.
 ;
@@ -15,7 +15,7 @@
 ;  * no double-compile -- the deopt target is `e` itself (the bytecode closure ala built),
 ;    passed as nat/natn's `interp`; no separate (ev lam) pass.
 ; Loops are NOT caught here (their body isn't leaf-grammar) -- they stay bytecode, or use
-; ai/glaze/auto.l's counted-loop path. Rides the BAKED glaze through the module books
+; love/glaze/auto.l's counted-loop path. Rides the BAKED glaze through the module books
 ; (the binds just below). x86-64 only.
 ; natjit is the ONLY glaze name ala needs global (it reads the hook via (gv 'natjit), ev.l) -- plus its
 ; probe counter `fires` and `fired?`, all hook-owned. A post-egg stream installs a global ONLY by leaking
@@ -27,7 +27,7 @@
    natjit
     (: arch (intern ai-arch)                                                ; the runtime CPU target ('x64 / 'arm64), evaluated at boot on the actual binary -- so the SAME baked hook.h emits x64 on the x86 host and aarch64 under qemu (mirrors auto.l's `arch`). njit-loop/njit-loop-n already close over auto.l's arch; the leaf/float/callout/group lanes below take it explicitly.
                                                                             ; `assemble` below reads BARE: main.c brackets this load with (use 'holo) .. (leave ()), so it folds at compile (the capture law)
-   emit (glaze 'emit)  coreir (glaze 'coreir)  deoptir (glaze 'deoptir)     ;   the glaze names through its book (ai/glaze/export.l) -- this stream cat-loads
+   emit (glaze 'emit)  coreir (glaze 'coreir)  deoptir (glaze 'deoptir)     ;   the glaze names through its book (love/glaze/export.l) -- this stream cat-loads
    loopinfo (glaze 'loopinfo)  njit-loop (glaze 'njit-loop)                 ;   post-boot, so nothing folded for it. loop lane
    loopinfo-n (glaze 'loopinfo-n)  njit-loop-n (glaze 'njit-loop-n)         ;   (unify with auto-ev): the counted + N-VAR back-edges
    calloutinfo (glaze 'calloutinfo)  jitcalloutx (glaze 'jitcalloutx)       ;   + the CALL-OUT loop: a counted sum whose body calls a global closure (the stackless bridge)
@@ -36,7 +36,7 @@
    anat-defs (glaze 'anat-defs)  jgir-ok? (glaze 'jgir-ok?)  jitgroupirx (glaze 'jitgroupirx)  ; creation. + the (always-on) GROUP
    njit-amble (glaze 'njit-amble)                                            ;   + AMBLE, the universal boring-tier translator (the LAST lane)
    ; lane: parse defs (anat-defs), op-cover (jgir-ok?), compile PURE (jitgroupirx, e deopt). The pre-analysis
-   ; LOWERING hook (book['welow], church + HOF) now lives PRE-EGG in ai/ev.l -- the sole welow, no shadow here.
+   ; LOWERING hook (book['welow], church + HOF) now lives PRE-EGG in love/ev.l -- the sole welow, no shadow here.
    (exprn ps e) (? (member? e ps) 1  (whole? e) 1                          ; var in frame | int literal
                    (two? e) (: op <e
                                (? (member? op ('(+ - * // % & | ^ < <= > >= =) + (? (getenv "AI_PARTIAL_GLAZE") '(<< >>) ()))) (&& (exprn ps <>e) (exprn ps <>>e))

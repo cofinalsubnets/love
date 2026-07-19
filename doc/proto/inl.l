@@ -14,7 +14,7 @@
 ; i)) i) -> 3i (a value, fine) but ((\ n ..) 5) stays a capturing closure (it escapes).
 ;
 ; lp/lambp/w/macros are MOPPED post-egg, so this spec re-supplies them locally; inside feel/cprop the
-; real ones are live. Mirrors ai/ev.l's feel block. `make` does not run this; it is the why.
+; real ones are live. Mirrors love/ev.l's feel block. `make` does not run this; it is the why.
 
 (: macros (tablet 0)                                     ; the real macro table lives in the compiler
    (lambp x) (? (two? x) (&& (id? '\ (cap x)) (two? (cuup x))))

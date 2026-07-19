@@ -11,7 +11,7 @@ Status section below; this stays as the `--bake`/`--wake` design-of-record.)
 
 1. **Cold start ~233 ms → near-zero** for the WHOLE runtime (every script run, every repl, every
    bench wall-clock). This is the standalone win; it pays off even with no glaze.
-2. **The glaze bake becomes free.** Adding `ai/glaze/emit.l`+`auto.l` to the boot corpus costs
+2. **The glaze bake becomes free.** Adding `love/glaze/emit.l`+`auto.l` to the boot corpus costs
    ~+810 ms today (it is ~2000 lines of ai + ~50 native-compiling asserts, all eval'd at startup —
    measured). Inside a snapshot it is precompiled: **always-on transparent JIT, zero startup cost,
    like luajit** — which is exactly what the bake needs (and why the naive bake was abandoned).
@@ -30,7 +30,7 @@ rewritten so it can be re-based and re-linked in a fresh process:
   load). ASLR-safe: nothing absolute is stored.
 - **C `lvm_*` pointers** (the aps/hots/nifs — `lvm_chain`, `lvm_flo`, every nif entry, the C-resolved
   hooks num-ap/add/mul/help) → stored as a SYMBOLIC INDEX into a fixed table, re-resolved to the
-  current `.text` address on load. The enumeration already exists: the egg `mop` (ai/egg.l) walks and
+  current `.text` address on load. The enumeration already exists: the egg `mop` (love/egg.l) walks and
   deletes every `lvm_*` nom — reuse that set as the relocation table.
 - **Out-of-pool immortal constants** (`ZeroPoint`/`()`, the interned const region) → a tagged
   "resolve-to-C-const" entry, fixed up to the live const on load.
@@ -90,7 +90,7 @@ rides on this once images are per-target.
   source-level round-trip is an independent cross-check (a dumped closure should `show`-match its
   eval'd twin).
 
-Relates: the egg (ai/egg.l, the double-sat), [[glaze-float]] (the bake this unlocks), gengc.md
+Relates: the egg (love/egg.l, the double-sat), [[glaze-float]] (the bake this unlocks), gengc.md
 (the collector + immortal region).
 
 ## Status — landed (Phases 0–4 + cross-arch + the host/core split)
@@ -152,8 +152,8 @@ the boot bake. Smoke: boot/bake.l (test_hostnif) round-trips a pinned marker thr
 
 1. **A per-arch aarch64 glaze emitter — make the aarch64 image GLAZED too** ("even on an MCU, try"). The
    aarch64 host image works (cross-built + qemu-tested) but is glaze-LESS: the glaze emits x86-64 machine
-   code, so `main.c` gates the dump-time glaze load on `__x86_64__`. The recognizers (`ai/glaze/auto.l`)
-   are arch-NEUTRAL (they analyze ai source); only the codegen (`ai/glaze/emit.l` — `cgv`/`cgn`/
+   code, so `main.c` gates the dump-time glaze load on `__x86_64__`. The recognizers (`love/glaze/auto.l`)
+   are arch-NEUTRAL (they analyze ai source); only the codegen (`love/glaze/emit.l` — `cgv`/`cgn`/
    `loopcode`/the SSE/register layer) is x86. The `crew/asm/` assembler already has an arm64 backend
    (`crew/asm/arm64.l`, emits bytes as DATA), so the scope is a parallel arm64 instruction-selection path in
    emit.l + an arch dispatch in `auto-ev`'s `njit`, then dump a glazed aarch64 image. Biggest payoff for

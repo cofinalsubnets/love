@@ -103,7 +103,7 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
 - [x] `doc/reef.md` — first draft (verb set + composition story + MVP)
 
 **precedence (grip)** — LANDED 2026-07-14
-- [x] implement grips in the reader-operators block of `ai/prel.l` (op-ent normalizes to the triple `(name arity . grip)`, op-fr carries a grip slot + `op-frgrip`, op-steal gained the climb: fold when the frame grips tighter than the incomer, steal otherwise)
+- [x] implement grips in the reader-operators block of `love/prel.l` (op-ent normalizes to the triple `(name arity . grip)`, op-fr carries a grip slot + `op-frgrip`, op-steal gained the climb: fold when the frame grips tighter than the incomer, steal otherwise)
 - [x] assign the grip bands (multiplicative 60 / additive 50 / comparison 40 / logical 30 / house 27 / cons 25 / assignment 20 / cond 10)
 - [x] `make test` ×3 green (3416 → 3439, +23 from `test/precedence.l`) + `test_all` (glaze / holo / as / every crew app / wasm / x86 kernel / wake all green; the sole red is the pre-existing qemu-arm64 `uk-jj`, host-uukind passes, precedence.l passes on arm64)
 - [x] the corpus audit: only THREE asserts shifted, all `|`/`&`-mixed-with-`=` (the doc's flagged risk the audit had cleared for `&&`/`||` but not single `|`/`&`) — `test/spec.l:88`,`:164` parenthesized (bitwise below `=`, grip 30 < 40, gwen blessed the C-style band), `test/infixop.l:27` updated to the C-ternary read (`1 < 2 ? 'big 'small` → `(? (< 1 2) 'big 'small)`)
@@ -116,7 +116,7 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
   top-level `book` — it's *mopped* out of the image, so `pin`/`pull` on it no-op — the module books just
   stop exposing their raw backing tablet. Regular tablets throughout; only the *access* is limited.
 - [x] make each module book a **lookup-only closure over a private tablet** — LANDED 2026-07-14. All six
-      trailers (`crew/holo/export.l`, `ai/glaze/export.l`, `ai/prel.l` kanren, `ai/uu.l`, `ai/post.l`
+      trailers (`crew/holo/export.l`, `love/glaze/export.l`, `love/prel.l` kanren, `love/uu.l`, `love/post.l`
       parse+overlay) now bind `(\ k (? (id? k 'keys) (keys m) (peep m k 0)))` instead of the raw tablet `m`.
       `(holo 'assemble)` still looks up, `m` is closure-private, and `(pin holo ..)` has no tablet to poison
       (probed before/after: `(pin holo 'PWNED 666)` read back **666** → now **999**/default for all six). Bonus

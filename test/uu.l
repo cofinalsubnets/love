@@ -1,7 +1,7 @@
-; uu -- the UniMath theorem corpus over the uu kernel (ai/uu.l, baked into
+; uu -- the UniMath theorem corpus over the uu kernel (love/uu.l, baked into
 ; every corpus target and swept into the `uu` book). the kernel: MLTT with the
 ; Preamble's seven inductives, bidirectional checking, NbE conversion,
-; type-in-type -- see ai/uu.l for the term grammar and the machinery. this file
+; type-in-type -- see love/uu.l for the term grammar and the machinery. this file
 ; (and the test/uu*.l ladder above it in sort order) is the corpus HALF: every
 ; definition and theorem below is type-checked by the baked kernel at corpus
 ; time, then re-certified by Rocq + Lean via tools/uu2coq.l / uu2lean.l.

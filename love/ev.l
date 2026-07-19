@@ -90,7 +90,7 @@
 ; ALWAYS-ON: lowers every form (no gate), so the egg itself bakes church/HOF lowered and EVERY frontend --
 ; incl. the glaze-less kernel/wasm -- native-backs group code. Sound (capture-safe dsubx) + transparent.
 ; The helpers live INSIDE welow's closure (captured, never on the book), so only `welow` leaks -- no mop-list
-; entry, no names() growth. dechurch/dsimp/dehof + the ho-* bundle are the pre-egg twin of ai/glaze/auto.l's
+; entry, no names() growth. dechurch/dsimp/dehof + the ho-* bundle are the pre-egg twin of love/glaze/auto.l's
 ; (auto.l keeps its own for the autospec pipeline) -- keep them in step (ai's fixed church + HOF semantics).
 (: welow (:
    (dquote? x) (&& (two? x) (id? (cap x) '\) (= 2 (tally x)))                                             ; (\ datum) -> a quote, never descend
@@ -135,7 +135,7 @@
    ; --- HOF inlining (dehof-deep): inline non-recursive lambda-CONST bindings to first-order, then dsimp
    ;     beta-collapses. Only inside a LAMBDA-BODY group `:` (a top-level `:` holds operator defs opfix must
    ;     see + global-leak helpers). The ho-* fixpoint marks a binding HIGHER-ORDER (returns OR takes a
-   ;     function); dehof inlines exactly those. Ported from ai/glaze/auto.l (its autospec pipeline keeps its
+   ;     function); dehof inlines exactly those. Ported from love/glaze/auto.l (its autospec pipeline keeps its
    ;     own copy) -- prel-only (monofix is the shared harness), so it bakes pre-egg cleanly.
    (anat-defs bs) (? (atom? (cup bs)) (L () (cap bs))                                                     ; a : binding list -> (pairs body)
                      (: r (anat-defs (cuup bs))
@@ -212,7 +212,7 @@
   ; of karg (a local, at its [imps args] frame slot) / kim (a global constant) / em2 lvm_index.
   ; This is the THREADED (bytecode) backend -- the portable default that every target runs
   ; (host, kernel, wasm, aarch64, and the little ones: playdate, teensy). A NATIVE backend
-  ; (ai/glaze/emit.l, x86-64, opt-in) implements the SAME leaf interface over a byte buffer
+  ; (love/glaze/emit.l, x86-64, opt-in) implements the SAME leaf interface over a byte buffer
   ; instead of cells -- kim -> movabs, karg -> mov [rcx+8i] + a fixnum guard, em1 -> the
   ; op's machine code, aco -> cmp+jcc -- today via the ala creation hook (book['natjit])
   ; for leaf bodies, with the unhandled ops (kap = a call) DEOPTing into this thread.

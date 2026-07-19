@@ -285,15 +285,15 @@ kt = $(filter-out %/io.l %/run.l %/bell.l,$t)
 out/lib/ktests.l: $(kt) $(MAKEFILE_LIST)
 	@mkdir -p out/lib
 	@cat $(kt) > $@
-out/lib/ktests.h: out/lib/ktests.l $(ai0) tools/lcatv.l ai/prel.l
+out/lib/ktests.h: out/lib/ktests.l $(ai0) tools/lcatv.l love/prel.l
 	@echo AI	$@
-	@$(ai0) -l ai/prel.l tools/lcatv.l out/lib/ktests.l > $@
+	@$(ai0) -l love/prel.l tools/lcatv.l out/lib/ktests.l > $@
 # The inle agent, baked VERBATIM (lcatv) to a C string literal kmain.c #includes
 # under INLE and drinks form-by-form through zevs at boot -- same path as the
 # K_TEST corpus, one program instead of the test suite.
-out/lib/inle.h: port/inle/inle.l $(ai0) tools/lcatv.l ai/prel.l
+out/lib/inle.h: port/inle/inle.l $(ai0) tools/lcatv.l love/prel.l
 	@echo AI	$@
-	@$(ai0) -l ai/prel.l tools/lcatv.l port/inle/inle.l > $@
+	@$(ai0) -l love/prel.l tools/lcatv.l port/inle/inle.l > $@
 # arm64 EXECUTION validator: cross-build `ai` for aarch64 + run the corpus under
 # qemu-aarch64 (the trustworthy check for the glaze's second target -- holotest
 # proves byte encodings, this proves they run). No-ops without qemu + a cross-gcc.

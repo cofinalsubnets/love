@@ -6,11 +6,11 @@
 ; and the dispatch+navigation evaporate into the program's straight-line arithmetic -- the 1st
 ; Futamura projection proper (interp + program -> compiled residual).
 ;
-; this is the all-static folding the egg already does (feels/hgen in ai/ev.l), generalized to PARTIAL
+; this is the all-static folding the egg already does (feels/hgen in love/ev.l), generalized to PARTIAL
 ; staticness -- the difference between constant-folding and partial evaluation. it is also where the
 ; interpreter-specialization PRIZE actually lives: doc/proto/interp-spec.l measures a 6.5x gap between
 ; interpreting a program and running its straight-line residual, and shows the IN-COMPILER unfold
-; (ai/ev.l cprop) captures ~none of it. the offline mix below DOES: it specializes ev1 to P down to
+; (love/ev.l cprop) captures ~none of it. the offline mix below DOES: it specializes ev1 to P down to
 ; the exact `hand` residual, which then runs ~8x faster than interpreting P (measured, host). the
 ; companion is doc/proto/kinds.l: kinds.l is the binding-time ANALYSIS half (a static<dyn fixpoint
 ; reuses that same engine), mix is the SPECIALIZATION half it would feed.

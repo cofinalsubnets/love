@@ -11,7 +11,7 @@
 ; its fd is not ready -- see host/net.c / ai.c). So the whole program is just two
 ; pump loops + a teardown discipline; the real work is the socket nifs in C.
 ;
-; Run it straight (prel is ALREADY in the egg -- do NOT `-l ai/prel.l`; the egg mops
+; Run it straight (prel is ALREADY in the egg -- do NOT `-l love/prel.l`; the egg mops
 ; book/tray/etc after it hatches, so re-feeding prel.l raises `missing book`):
 ;   out/host/ai tools/ain.l HOST PORT
 ;   out/host/ai tools/ain.l -l PORT

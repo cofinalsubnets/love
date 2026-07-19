@@ -95,9 +95,9 @@ The grep proved the surface was tiny — glued `*<scalar>`-as-iota lived **only*
 `test/valence.l`; every `(jot n)` call passes a scalar, so the named word stays and the
 `(prod x)` else-branch was dead.
 
-1. `ai/prel.l` — flipped the `monadics` cell `* → prod` (the whole semantic change), and moved
+1. `love/prel.l` — flipped the `monadics` cell `* → prod` (the whole semantic change), and moved
    the table to the backtick/quoted-list form (`` `('(< cap) … '(* prod) …) ``).
-2. `ai/prel.l` — `jot` is now range-only (dropped the dead `(prod x)` else-branch):
+2. `love/prel.l` — `jot` is now range-only (dropped the dead `(prod x)` else-branch):
    ```lisp
    (jot x) ((: (go i) (? (< i x) (link i (go (+ i 1))))) 0)   ; the range 0..x-1, a section of tally
    ```

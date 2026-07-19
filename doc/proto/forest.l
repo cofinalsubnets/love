@@ -2,7 +2,7 @@
 ; removes the intermediate lists a map/filter pipeline builds. it walks a CONSUMER over a chain of
 ; PRODUCERS (map/filter) and collapses the whole nest into ONE pass over the base list -- no temporary
 ; cells allocated between stages. this is the rewrite-LEVEL half of the recognizer chain the glaze
-; (ai/glaze/) uses at the codegen level: the glaze lowers a FIRST-ORDER loop to native; deforestation
+; (love/glaze/) uses at the codegen level: the glaze lowers a FIRST-ORDER loop to native; deforestation
 ; is the algebraic, higher-order transform UPSTREAM that turns a combinator pipeline INTO such a loop.
 ; the two COMPOSE -- deforest a list pipeline to a fused fold, then glaze the fold -- exactly the way
 ; doc/proto/mix.l's interpreter-specialization composes with the glaze.
@@ -19,7 +19,7 @@
 ; the consumers recognized: foldl foldr each all any, and a BARE producer chain (its result IS a list,
 ; rebuilt in one foldr/link pass). the producers: map filter. everything else is traversed into (so a
 ; pipeline nested inside a stage function, the fold seed, or the base list is fused too). the glaze-path
-; subset (foldl consumer, map/filter producers, jot source) is now WIRED INTO ai/glaze/auto.l (defoliate):
+; subset (foldl consumer, map/filter producers, jot source) is now WIRED INTO love/glaze/auto.l (defoliate):
 ; a numeric map/jot/fold pipeline compiles to a native counted loop, == interp.
 ;
 ; run:    out/host/ai doc/proto/forest.l              (the demo; standalone `assert` is lenient -- it
@@ -158,7 +158,7 @@
  H '(foldl (+) 0 (filter (\ x (> x 4)) (map (* 2) (map (+ 1) '(1 2 3)))))   ; +1(2 3 4)*2(4 6 8) keep>4 (6 8)=14
  _ (assert (ok? H) "deep chain (filter . map . map) fuses end to end")
 
- ; glaze composition (NOW WIRED -- ai/glaze/auto.l `defoliate`): a numeric fold-over-map fuses to a
+ ; glaze composition (NOW WIRED -- love/glaze/auto.l `defoliate`): a numeric fold-over-map fuses to a
  ; single first-order accumulator loop -- (foldl (\ a e (+ a (* e e))) 0 (jot N)) -- which auto.l lowers
  ; to the named-let LOOP its existing lift/group recognizers compile to a NATIVE counted loop. So a
  ; map/jot/fold pipeline glazes end to end (== interp, ~19x faster at N=2e5: the intermediate lists are

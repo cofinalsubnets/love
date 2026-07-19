@@ -2,7 +2,7 @@
 
 Status: **design / brainstorm, not started.** Pick-up doc from the 2026-07-13 session.
 Companion to the dock ([`port/inle/{serve,drive,patch}.l`](../port/inle/patch.l), the
-adopt + two-generation re-exec machinery) and the bootstrap (the *egg*, [`ai/egg.l`](../ai/egg.l)).
+adopt + two-generation re-exec machinery) and the bootstrap (the *egg*, [`love/egg.l`](../love/egg.l)).
 `hatch` is a **working name** — see §Naming.
 
 ## The thesis

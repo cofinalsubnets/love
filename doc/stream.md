@@ -13,7 +13,7 @@ that session implements.
 
 `wrap` today is a *transparent* pty pump and works: `stdin -> master` in one task,
 `master -> stdout` in another, the two park on different fds and interleave through
-the cooperative scheduler (`ai/bao.l:43`). The rlwrap upgrade swaps the input side
+the cooperative scheduler (`love/bao.l:43`). The rlwrap upgrade swaps the input side
 for a line editor — `feedlines` reads keys via `edraw` and renders the edited line
 to `out`, sending to the child only on Enter:
 
@@ -42,7 +42,7 @@ read model disagree:
 
 1. **`ungetc_buf` is invisible to the readiness check.** `lvm_fgetc` (ai.c:3168)
    parks the task whenever `!ai_ready(fd)` — *without first consulting the port's
-   `ungetc_buf`*. The editor's escape decoder (`besc`/`besc1`, `ai/bao.l:69-86`)
+   `ungetc_buf`*. The editor's escape decoder (`besc`/`besc1`, `love/bao.l:69-86`)
    reads bytes ahead; any pushed-back byte is then held in `ungetc_buf` where the
    poll-based readiness test cannot see it. A task can be **parked with the very
    byte it needs already in hand.** In monotask the `while(!ai_ready) ai_wait_fd`
@@ -210,7 +210,7 @@ Strictly additive first; delete only after parity.
   rlwrap wiring that was reverted now runs. Gate: manual interactive (`(wrap (L
   "bash"))`, type, edit, Enter, see echo) + the scriptable pty round-trip in
   `boot/pty.l`.
-- **Stage 3 — port the editor/repl/sip surface** in `ai/bao.l` (the baked shell
+- **Stage 3 — port the editor/repl/sip surface** in `love/bao.l` (the baked shell
   core, formerly `repl.l`) and the cli onto streams. Heaviest stage (the egg-baked
   editor; coordinate with the core thread — `bao.l` is shared, kernel- and
   corpus-pinned).
@@ -267,7 +267,7 @@ the half-duplex shortcut and chose the full rework**, so these are a fallback on
    the pushback is empty and the fd is unready —
    `if (getcharm(i->ungetc_buf) == EOF && !ai_ready(getcharm(i->fd))) park`.
 2. **Generalize `key?` -> a port-taking `ready?`** (and keep `key?`=stdin for
-   the shell core `ai/bao.l`): `(ready? p)` probes `p`'s fd via `ai_ready`,
+   the shell core `love/bao.l`): `(ready? p)` probes `p`'s fd via `ai_ready`,
    register both names on one nif.
 
 These remove defect 1 and add the missing readiness surface, but leave the `-1`

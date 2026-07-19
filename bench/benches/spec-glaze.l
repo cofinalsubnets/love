@@ -6,7 +6,7 @@
 ;
 ; A tiny tree-walking interpreter `ev1` over a fixed AST program P (the Horner form of 2x^3+3x^2+5x+7),
 ; summing P(i mod 97) mod 1e9+7 over i in [0,N). Under a naive interpreter every iteration walks + heads
-; the AST; autospec (ai/glaze/auto.l) applies ev1 to the STATIC P at compile time, folding the dispatch
+; the AST; autospec (love/glaze/auto.l) applies ev1 to the STATIC P at compile time, folding the dispatch
 ; away to straight-line arithmetic that then natives -- DEFAULT behavior (the glaze is baked in; probe:
 ; `out/host/ai this-file` glazes it, no flags). The % 1e9+7 keeps everything in int64 (no bignum deopt),
 ; so the number is native code vs interpretation. checksum = Σ_{i<N} P(i mod 97) mod 1000000007, N=10^6.

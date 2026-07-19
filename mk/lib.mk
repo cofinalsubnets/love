@@ -4,11 +4,11 @@
 # which is invoked from the project root; paths resolve from there. Shared vars
 # live in common.mk. Every recipe here is unchanged from the single-file Makefile.
 
-# Static lisp headers: each ai/*.l is serialized to a C string literal in
+# Static lisp headers: each love/*.l is serialized to a C string literal in
 # out/lib/*.h by tools/lcat.l (run on the bootstrap interpreter ai0). Frontends
 # #include these and assemble the bootstrap with G_EGG_PRE/POST (ai.h).
-# Drop a .l into ai/ and it is picked up automatically -- no rule to edit.
-lib_h = $(patsubst ai/%.l,out/lib/%.h,$(wildcard ai/*.l))
+# Drop a .l into love/ and it is picked up automatically -- no rule to edit.
+lib_h = $(patsubst love/%.l,out/lib/%.h,$(wildcard love/*.l))
 # the crew/holo/ assembler baked into BOTH runtimes as a core language service. The
 # backends are pure ai (produce machine-code bytes as DATA, never execute them), so
 # every one is arch-neutral -- but the HOST bakes its NATIVE backend only (main.c
@@ -20,7 +20,7 @@ lib_h = $(patsubst ai/%.l,out/lib/%.h,$(wildcard ai/*.l))
 # asm0_h = sed-wrapped raw source (ai0, the bootstrap -- can't lcat its own sources).
 holo_h = out/lib/holo.h  out/lib/x64.h  out/lib/arm64.h  out/lib/seal.h
 asm0_h = out/lib/holo0.h out/lib/x640.h out/lib/arm640.h out/lib/seal0.h
-# the glaze (native JIT, ai/glaze/{emit,auto}.l): baked to raw-text headers (sed_lit,
+# the glaze (native JIT, love/glaze/{emit,auto}.l): baked to raw-text headers (sed_lit,
 # like asm0 -- no lcat reader round-trip). Evaled ONLY before a --bake (x86-gated
 # in main.c), so a normal boot never pays the ~810 ms; the baked snapshot then carries
 # an always-on JIT at zero startup (Phase 4, doc/snapshot.md). Their self-test asserts
@@ -42,13 +42,13 @@ lib: $(lib_h) $(gl0_h)
 # SILENTLY drops a baked service (e.g. an empty holo.h => `assemble` unbound => the glaze's
 # map lane emits nothing => a corrupt native => crash/hang). Fail loudly instead.
 lcat_h = @mkdir -p out/lib; echo AI	$@; \
-  $(ai0) -l ai/prel.l tools/lcat.l $< > $@.tmp && test -s $@.tmp && mv -f $@.tmp $@ \
+  $(ai0) -l love/prel.l tools/lcat.l $< > $@.tmp && test -s $@.tmp && mv -f $@.tmp $@ \
     || { rm -f $@.tmp; echo "FAIL: $@ empty (ai0 lcat failed -- broken bootstrap?)"; exit 1; }
-$(lib_h): out/lib/%.h: ai/%.l tools/lcat.l   # + $(ai0), stated below
+$(lib_h): out/lib/%.h: love/%.l tools/lcat.l   # + $(ai0), stated below
 	$(lcat_h)
 # the crew/holo/ assembler (crew/holo/holo.l + crew/holo/x64.l) rides the SAME lcat pipeline into the
 # post-egg layer -- a core language service (the glaze is its client). Explicit rules
-# (their sources live in crew/holo/, not ai/, so the pattern rule above misses them).
+# (their sources live in crew/holo/, not love/, so the pattern rule above misses them).
 out/lib/holo.h: crew/holo/holo.l tools/lcat.l
 	$(lcat_h)
 out/lib/x64.h: crew/holo/x64.l tools/lcat.l
@@ -76,25 +76,25 @@ out/lib/seal0.h: crew/holo/seal.l
 	@mkdir -p out/lib
 	@echo AI	$@
 	@$(sed_lit) $< > $@
-out/lib/%0.h: ai/%.l
+out/lib/%0.h: love/%.l
 	@mkdir -p out/lib
 	@echo AI	$@
 	@$(sed_lit) $< > $@
-# the glaze headers (ai/glaze/ -- outside the ai/*.l wildcard, so explicit). Raw sed_lit:
+# the glaze headers (love/glaze/ -- outside the love/*.l wildcard, so explicit). Raw sed_lit:
 # the glaze source is sigil-heavy, so skip the lcat reader round-trip and bake it verbatim.
-out/lib/emit.h: ai/glaze/emit.l
+out/lib/emit.h: love/glaze/emit.l
 	@mkdir -p out/lib
 	@echo AI	$@
 	@$(sed_lit) $< > $@
-out/lib/auto.h: ai/glaze/auto.l
+out/lib/auto.h: love/glaze/auto.l
 	@mkdir -p out/lib
 	@echo AI	$@
 	@$(sed_lit) $< > $@
-out/lib/gexport.h: ai/glaze/export.l
+out/lib/gexport.h: love/glaze/export.l
 	@mkdir -p out/lib
 	@echo AI	$@
 	@$(sed_lit) $< > $@
-out/lib/hook.h: ai/glaze/hook.l
+out/lib/hook.h: love/glaze/hook.l
 	@mkdir -p out/lib
 	@echo AI	$@
 	@$(sed_lit) $< > $@

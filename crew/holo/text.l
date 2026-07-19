@@ -1,5 +1,5 @@
 ; text -- a human-writable TEXT front-end for the neutral assembler, parsed with the post-egg PARSER
-; COMBINATORS (ai/post.l, the same set cook and sat use). it turns lines like
+; COMBINATORS (love/post.l, the same set cook and sat use). it turns lines like
 ;     li   r0, 60        ; a comment
 ;     add  r0, r0, r1
 ;     label loop
@@ -15,7 +15,7 @@
 ; loads in the raw holo.l stream (test_holo) and on the baked host (book-only) alike:
 ;   out/host/ai -l crew/holo/text.l ...
 
-; the combinators live in the `parse` MODULE book (ai/post.l): bind the set this
+; the combinators live in the `parse` MODULE book (love/post.l): bind the set this
 ; front-end drives -- `parse` itself rebound LAST (the sequence law).
 (: P parse
    eps (P 'eps)  lit (P 'lit)  one (P 'one)  span (P 'span)  alt (P 'alt)

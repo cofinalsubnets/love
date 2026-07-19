@@ -587,7 +587,7 @@ void kmain(void) {
   g = ai_defn(g, kd, countof(kd));
 #endif
   // load the prel, then run the l read-eval-print loop. its line
-  // editor (in ai/bao.l, the baked shell core) drives the console; PS/2 keyboard
+  // editor (in love/bao.l, the baked shell core) drives the console; PS/2 keyboard
   // and serial input both arrive as ANSI escape sequences the l edev decodes.
   struct ai *r = ai_evals_(g, "("
 #include "egg.h"
@@ -596,13 +596,13 @@ void kmain(void) {
  " "
 #include "ev.h"
  ai_egg_post
-#include "uu.h"                                        // the uu kernel (ai/uu.l, sweep at its tail): the corpus's uu files
+#include "uu.h"                                        // the uu kernel (love/uu.l, sweep at its tail): the corpus's uu files
 #include "bao.h"                                       //   drive it through the `uu` book on this target too
 #ifdef K_TEST
  // test build: drink the baked `tests` string (string -> charlist -> tap port)
- // through reads (ai/bao.l) -- the same stream shell as the host's stdin runner.
+ // through reads (love/bao.l) -- the same stream shell as the host's stdin runner.
  // zz-fin.l prints the summary and (exit 1)s on failure. (`tap` builds the port;
- // `sip` is the verb that draws ONE unit -- see the vessel frame in ai/prel.l.)
+ // `sip` is the verb that draws ONE unit -- see the vessel frame in love/prel.l.)
  "(reads (tap ((: (g i) (? (< i (tally tests)) (link (peep tests i 0) (g (+ 1 i))))) 0)))"
 #elif defined(INLE)
  // agent build: drink the baked `inle-src` (defines the agent; demos no longer

@@ -2,7 +2,7 @@
 ; counted loop to its exact closed form by MATRIX POWER. this is the sibling of close.l: where close
 ; sums a polynomial body Σ_{i<n} f(i) to an O(1) literal, cfinite closes an n-VARIABLE state loop
 ; `(\ n ((: (go v..) (? (< i n) (go U..) R)) inits..))` -- the shape loopinfo-n already extracts
-; (ai/glaze/auto.l:92 hands back exactly (vars updates T R inits)) -- to M^n x0, O(log n) exact.
+; (love/glaze/auto.l:92 hands back exactly (vars updates T R inits)) -- to M^n x0, O(log n) exact.
 ;
 ; THE UNIFICATION (the point of the spike). a linear-state update x <- M x is the WHOLE story; the
 ; two closers are ONE engine dispatched on the spectrum of M:

@@ -1,6 +1,6 @@
 # the aarch64 glaze — ABI spec & retarget plan
 
-The live glaze (`ai/glaze/emit.l` + `auto.l`) emits **raw x86-64 byte lists inline** and is x86-only.
+The live glaze (`love/glaze/emit.l` + `auto.l`) emits **raw x86-64 byte lists inline** and is x86-only.
 The path to an aarch64 glaze is to route `emit.l`'s codegen through the neutral assembler
 (`crew/asm/asm.l` + backends), after which `crew/asm/arm64.l` carries the second target. This doc is the ABI
 spec the retarget needs. The assembler side is **done and gated** (`crew/asm/asmtest.l`); the codegen
@@ -101,7 +101,7 @@ are now exposed.
     the stack math. Covers fib/tak/even-odd + overflow→deopt→bignum.
   Tests live in **`test/glaze-x86.l`** (`make test_glaze`, x86-host-only): x86 native == interp;
   arm64 assembles (data) and is llvm-mc-checked by hand — arm64 EXECUTION still needs the qemu kernel
-  harness (no aarch64 host here; cf. `ai/glaze/probe.l`).
+  harness (no aarch64 host here; cf. `love/glaze/probe.l`).
 
 - **Remaining (in order):**
   1. **counted-loop lane** — `loopcode` (`jitsum`) and `loopcode-n` (`jitloop-n`) → IR (the back-edge

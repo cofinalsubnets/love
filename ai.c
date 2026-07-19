@@ -5009,7 +5009,7 @@ lvm(lvm_eat2) {
 // gcp's out-of-pool short-circuit leaves the pointer untouched (like the immortal
 // data-segment constants), and a finalizer munmaps it when the toast is collected
 // (mirrors io_close). The freestanding kernel needs none of this: its HHDM is
-// mapped executable, so a plain heap copy already runs (see ai/glaze/README.md), and
+// mapped executable, so a plain heap copy already runs (see love/glaze/README.md), and
 // `toast` there is just that copy. Either way the idiom is (call (toast bytes) x).
 #if __STDC_HOSTED__
 #include <sys/mman.h>
@@ -5653,7 +5653,7 @@ op11(lvm_cup, chainp(Sp[0]) ? B(Sp[0]) : ZeroPoint)   // cup of an atom -> the c
 op11(lvm_books, g->book)   // the live layer chain (the abyss) -- runtime-internal, mopped at birth; ev.l's gv walks it
 op11(lvm_setbook, (g->book = Sp[0], nil))   // SET the layer chain: the scope-layer door (open/use/close ride it); runtime-internal, mopped at birth
 // (mods _): the MODULE REGISTRY book (g->mods) -- name -> module-book, written by `leave` on a
-// named scope, read by `use`/`from` (ai/prel.l). A LAZY SINGLETON: created on the first read, so
+// named scope, read by `use`/`from` (love/prel.l). A LAZY SINGLETON: created on the first read, so
 // a bootstrap's two prel runs capture the SAME tablet and a pre-egg registration survives the
 // egg warm. Runtime-internal (mopped at birth); the prel captures it pre-mop.
 lvm(lvm_mods) {

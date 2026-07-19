@@ -678,7 +678,7 @@
  bao   (cap (cup (cup (cup (cup _)))))
  edln  (cap (cup (cup (cup (cup (cup _)))))))
 
-; bao.l is DEFINE-ONLY -- loading it (egg-bake or `-l ai/bao.l`) installs the shell
+; bao.l is DEFINE-ONLY -- loading it (egg-bake or `-l love/bao.l`) installs the shell
 ; core but does NOT launch. The frontend launches: host/main.c evals `(bao 0)` on a
 ; tty (so `ai` on a terminal is the bao shell), a pipe stays the bare stdin runner
 ; `(reads in)`, and the kernel calls `(shell 0)`. Define-only is what makes bao

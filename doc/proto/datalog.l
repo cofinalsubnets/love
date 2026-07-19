@@ -12,7 +12,7 @@
 ; back-edge) or it loops. that is the same "reach a fixpoint, don't forbid the
 ; cycle" stance as the seminaive saturation itself.
 
-; the kanren machinery rides the `kanren` MODULE book now (ai/prel.l)
+; the kanren machinery rides the `kanren` MODULE book now (love/prel.l)
 (: walk (kanren 'walk)  var? (kanren 'var?))
 
 (:

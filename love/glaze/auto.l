@@ -16,7 +16,7 @@
 ;
 ; ev is 1-arg, so the loader's `(ev 'ev r)` = `((ev 'ev) r)` still works after the
 ; rebind; njit-loop/njit-loop-n call the captured base-ev -> no jit<->ev re-entry. Load AFTER
-; ai/glaze/emit.l (uses emit/cgv/ld-x/ld-i/epilogue/loopcode/nat). ⚠ x86-64.
+; love/glaze/emit.l (uses emit/cgv/ld-x/ld-i/epilogue/loopcode/nat). ⚠ x86-64.
 (: sfuel (tablet 0))   ; autospec's unfold-fuel -- its OWN global (a sibling-captured value-local in the letrec below misses in the hatched ev; smix re-seeds it per specialization, so the shared tablet is safe)
 (: glaze-loaded? (lit? (peep book 'glaze 0))   ; RE-LOAD detector, read BEFORE this load defglob's anything: the `glaze` MODULE book on the book => the glaze is installed (the file is being cat'd on top of the baked glaze; export.l pinned the book). Used at the `ev` rebind below to make a re-load IDEMPOTENT -- keep the baked glaze, don't reinstall -- so `cat auto.l prog | ai` just runs prog. (Loading the compiler's own source through itself otherwise recompiles its helpers wrong; tracked separately.)
    base-ev (: G (peep book 'glaze 0) (? (lit? G) (G 'base-ev) ev))   ; the PURE interpreter, captured ONCE: first load -> ev (interpreter); a RE-LOAD (glaze cat'd on the baked glaze) has ev=auto-ev already, so take the interpreter out of the MODULE book (else base-ev becomes the glaze and autospec's static fold re-enters it)
@@ -770,7 +770,7 @@
    ;     DOWN for foldr) and all/any (a short-circuit predicate -> an early-exit loop returning the truth
    ;     BITS 0/1). all/any glaze transparently ONLY because their false value is now the fixnum 0 (the
    ;     green floor) like =/</!, not the zero point `()` -- the integer compiler returns 0, so it matches
-   ;     (see ai/prel.l: all/any return truth bits). `each` is NOT here: its body is an EFFECT, outside
+   ;     (see love/prel.l: all/any return truth bits). `each` is NOT here: its body is an EFFECT, outside
    ;     the arithmetic fragment. Transducer view of shortcut fusion -- map f: elem|->(f elem); filter p:
    ;     step|->(? (p elem) step skip). `dsimp` then beta-inlines the unary stage lambdas + flattens
    ;     curried operator heads to a FIRST-ORDER step. Step binders are fresh gensym noms (hygienic).
@@ -1289,5 +1289,5 @@
               memb0))
 
 ; the module span closes here (opened by glaze-mark in emit.l): the names bound since
-; the mark are the glaze; ai/glaze/export.l sweeps them into the `glaze` book.
+; the mark are the glaze; love/glaze/export.l sweeps them into the `glaze` book.
 (: glaze-load (names ()))

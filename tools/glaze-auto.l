@@ -4,7 +4,7 @@
 ; gets LuaJIT-territory native code with NO hand-annotation -- the payoff the benches would read
 ; once the recognizer is wired into ev's compile path.
 ;
-; run:  out/host/ai -l ai/glaze/emit.l tools/glaze-auto.l   (emit.l leaks grok/jitfgrid as globals)
+; run:  out/host/ai -l love/glaze/emit.l tools/glaze-auto.l   (emit.l leaks grok/jitfgrid as globals)
 
 (: ; --- the EXACT bodies from bench/benches/float.l (verbatim) ---
    mps   '(cx cy zx zy it)

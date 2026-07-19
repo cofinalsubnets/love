@@ -1,6 +1,6 @@
 # Glazing the data workloads — past the arithmetic kernel
 
-The glaze (`ai/glaze/`) compiles ai closures to native code and wins ~12× where it
+The glaze (`love/glaze/`) compiles ai closures to native code and wins ~12× where it
 applies. It started as **arithmetic** only — scalar `+`/`-`/`*`/`…` over a fixnum
 param, and counted/recursive integer loops. The two benches where ai trails the
 field — **`hash`** and **`tree`** — are built from *heap operators* (`link`/`cap`/`cup`,
@@ -48,7 +48,7 @@ were the fragile part. Only the allocating halves remain: `tree`'s `mk` and `has
 `ins` (Stage D). The recognizer gate is also modelled and runnable in
 [`doc/proto/glaze-data.l`](proto/glaze-data.l) (its asserts pin which bench bodies
 cross which stage). The substrate this builds on is documented in
-[`ai/glaze/README.md`](../ai/glaze/README.md); the measurements below were taken on
+[`love/glaze/README.md`](../love/glaze/README.md); the measurements below were taken on
 this host, 2026-06-24, via the [`bench/`](../bench/) harness.
 
 ## Why — the gap is interpreter-vs-compiler, not a defect
@@ -104,7 +104,7 @@ can move these.
 
 ## The law that shapes the plan — own the loop
 
-The glaze's hard-won result (`ai/glaze/README.md`, "What the experiment found"): **a
+The glaze's hard-won result (`love/glaze/README.md`, "What the experiment found"): **a
 glaze wins only when it owns the loop.** A native arithmetic body called *per
 element* from an interpreted loop measured ~25% **slower** — the call-boundary tax
 (marshal in, the `eat` nif, decode out) beat interpreting a small body. Only the
@@ -149,7 +149,7 @@ soundness gate the implementation added on top.
 Per the scalar-hook lesson, every kernel is benchmarked against the interpreter
 *before* it is committed — a kernel that doesn't beat `ev` doesn't ship.
 
-- **Stage A — recognizer. ✅ LANDED.** `ai/glaze/auto.l`'s `groupok?` now admits the
+- **Stage A — recognizer. ✅ LANDED.** `love/glaze/auto.l`'s `groupok?` now admits the
   `cap`/`cup`/`two?` chain fold (plus the chain-vs-int typing above). `lvm_chain`'s
   sentinel comes from `(apof (link 0 0))`, the same `apof` trick the string lane uses
   for `lvm_str`. (The `peep` probe loop — `scan` — waits on Stage C.)
@@ -225,13 +225,13 @@ glaze, not a bug to fix.
 ## Verification
 
 The recognizer model self-checks (`doc/proto/glaze-data.l`, all asserts green via
-`out/host/ai doc/proto/glaze-data.l`). **Stage B's gate landed in `ai/glaze/auto.l`'s
+`out/host/ai doc/proto/glaze-data.l`). **Stage B's gate landed in `love/glaze/auto.l`'s
 own assert block** (run on every glaze load, and by `make test_glaze`): the depth-8
 (255-node) chain fold glazes `==` interp and is `=`/`show`-transparent (`respec`,
 de-Bruijn `show`), deopting to `ev` on any non-chain; and `(+ (cap t) 0)` is
 *rejected* (chain word in an int slot → stays interpreted). When Stage C lands its
 kernel joins the same block. A *verified* glaze — a proof that the emitted bytes mean
-the ai they claim — remains the separate, larger effort `ai/glaze/README.md` flags
+the ai they claim — remains the separate, larger effort `love/glaze/README.md` flags
 (the place ai's in-tree prover could earn its keep, the same caveat `doc/gengc.md`
 raises for the pointer code).
 
@@ -252,7 +252,7 @@ raises for the pointer code).
 - **Stage D allocation under a moving collector** is the real work and is
   unscoped here beyond the two routes above; pre-reserved bounded builds are the
   tractable first cut.
-- **AArch64 I-cache.** `ai/glaze/README.md` already flags the missing
+- **AArch64 I-cache.** `love/glaze/README.md` already flags the missing
   `__builtin___clear_cache` after a `toast` writes code; any data-loop kernel
   inherits that caveat until it lands.
 - **Measure-before-bake.** The scalar-hook precedent means none of B–D is assumed to

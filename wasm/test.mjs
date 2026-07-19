@@ -14,7 +14,7 @@ if (!files.length) { console.error('usage: test.mjs <corpus.l...>'); process.exi
 // but the native runner has the shell core baked too -- and the corpus tests its
 // surface (zev/charms). bao.l is that core (repl.l was consolidated into it), so
 // load it first so the wasm test sees the same full stack.
-const src = [readFileSync('ai/bao.l', 'utf8'),
+const src = [readFileSync('love/bao.l', 'utf8'),
              ...files.map(f => readFileSync(f, 'utf8'))].join('\n');
 
 const m = await Ai();

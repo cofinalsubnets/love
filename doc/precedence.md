@@ -1,6 +1,6 @@
 # precedence — right-to-left as far as it goes, then let grip decide
 
-Status: **SHIPPED 2026-07-14.** Grips live in [`ai/prel.l`](../ai/prel.l)'s
+Status: **SHIPPED 2026-07-14.** Grips live in [`love/prel.l`](../love/prel.l)'s
 reader-operators block (opfix); no C, both compilers inherit it.
 [`test/precedence.l`](../test/precedence.l) gates the tree + value + short-circuit
 + idempotence; `make test` is green ×3 (3439) and `test_all` is green bar the
@@ -71,9 +71,9 @@ it nests left. Grip and associativity compose in one predicate.
 
 ## what changes, precisely
 
-Everything is in the reader-operators block of `ai/prel.l`
-([the table `prel.l:289`](../ai/prel.l), [`op-ent` ~330](../ai/prel.l),
-[`op-del` ~407](../ai/prel.l), [`op-steal` ~422](../ai/prel.l), [`op-w` ~438](../ai/prel.l)).
+Everything is in the reader-operators block of `love/prel.l`
+([the table `prel.l:289`](../love/prel.l), [`op-ent` ~330](../love/prel.l),
+[`op-del` ~407](../love/prel.l), [`op-steal` ~422](../love/prel.l), [`op-w` ~438](../love/prel.l)).
 
 ### 1. the table entry carries a grip
 
@@ -136,7 +136,7 @@ triple.
 ### 2. the pending frame remembers its grip
 
 The op-fr frame is `(orig chain name need . got)`
-([`prel.l:386`](../ai/prel.l)). **Store grip on the frame — do not re-probe the
+([`prel.l:386`](../love/prel.l)). **Store grip on the frame — do not re-probe the
 table.** The frame keeps two symbols, and neither alone recovers grip:
 
 - `op-fro` = the *source* symbol. A composite like `!=` factors to `(! =)`; its
@@ -147,22 +147,22 @@ table.** The frame keeps two symbols, and neither alone recovers grip:
   operative grip is `<-`'s row. The resolved side can't see it.
 
 The one value that carries the right grip in *both* cases is `en`, the last-factor
-entry already in scope at the build site ([`prel.l:450`](../ai/prel.l)): for a
+entry already in scope at the build site ([`prel.l:450`](../love/prel.l)): for a
 composite it is `=`'s entry, for an alias it is `<-`'s. So **capture grip from
 `en` (`(cuup en)`) into the frame** at build time. This is a correctness point,
 not the perf tradeoff the frame-vs-reprobe question framed it as.
 
 Concretely: extend `op-fr` with a grip slot + an `op-frgrip` accessor, and thread
 it through the ~6 construction sites — two *preserve* (`op-del` re-arm
-[`prel.l:412`](../ai/prel.l), `op-steal` re-arm [`prel.l:428`](../ai/prel.l) →
-pass `(op-frgrip f)`), three *set* (the infix build [`prel.l:456`](../ai/prel.l)
-→ `(cuup en)`; the two prefix builds [`prel.l:453`](../ai/prel.l),
-[`prel.l:459`](../ai/prel.l) → house, inert since prefix frames fold on fill and
+[`prel.l:412`](../love/prel.l), `op-steal` re-arm [`prel.l:428`](../love/prel.l) →
+pass `(op-frgrip f)`), three *set* (the infix build [`prel.l:456`](../love/prel.l)
+→ `(cuup en)`; the two prefix builds [`prel.l:453`](../love/prel.l),
+[`prel.l:459`](../love/prel.l) → house, inert since prefix frames fold on fill and
 never sit filled to be stolen from).
 
 ### 3. op-steal becomes a climb
 
-Today [`op-steal` (`prel.l:422`)](../ai/prel.l) steals from a filled top frame
+Today [`op-steal` (`prel.l:422`)](../love/prel.l) steals from a filled top frame
 unconditionally. It gains the incoming operator's grip and **one new
 else-branch** — the climb reuses the existing `op-del`/`op-fold`, no new folding
 machinery:
@@ -195,25 +195,25 @@ existing `op-del (op-fold F)` cascade, so a looser frame beneath receives the
 folded value as an operand and sits filled, and the loop's next turn re-checks
 its grip. A small loop, not a rewrite. The caller in `op-w`'s infix branch
 passes the incoming grip: `(op-steal out pend)` → `(op-steal (cuup en) out pend)`
-([`prel.l:454`](../ai/prel.l), `en` already bound), and already threads
+([`prel.l:454`](../love/prel.l), `en` already bound), and already threads
 `(out . pend)` back from a steal, so the shape fits.
 
 ### 4. op-del is untouched for right-assoc
 
-`op-del`'s defer-vs-fold decision ([`prel.l:414`](../ai/prel.l)) — the line that
+`op-del`'s defer-vs-fold decision ([`prel.l:414`](../love/prel.l)) — the line that
 makes a filled infix frame *sit* rather than fold — stays as-is for the
 right-associative default. It only changes when we wire the left-assoc bit
 (fold-on-fill), which is the deferred namespace-assignment work.
 
 ### 5. `&&` and `||` go infix — as short-circuit macros, nearly free
 
-`&&` and `||` are **already short-circuit macros** ([`prel.l:256`](../ai/prel.l),
-[`prel.l:257`](../ai/prel.l)): `&&` expands to nested `(? a b ())`, `||` to
+`&&` and `||` are **already short-circuit macros** ([`prel.l:256`](../love/prel.l),
+[`prel.l:257`](../love/prel.l)): `&&` expands to nested `(? a b ())`, `||` to
 `(: y a (? y y rest))`. Both ride `?`/`:` — genuine lazy special forms — so
 left-to-right short-circuit is real today.
 
 They are **also already infix** — but at the wrong grip. A fresh punct symbol
-with no table row defaults to infix-at-two ([`prel.l:448`](../ai/prel.l)), so
+with no table row defaults to infix-at-two ([`prel.l:448`](../love/prel.l)), so
 `(0 < x && x < 10)` parses today (probed: reads `1`) — as
 `(< 0 (&& x (< x 10)))` under the flat right-fold, a latent mis-grouping. The two
 rows (`&& ||` at grip 30, the logical band) don't *add* infix; they **pin the
@@ -249,7 +249,7 @@ exists, so the grip machinery must stay operator-free and use only what's
 defined above it in the prel (`foldl`, `L`, `link`, `?`, kind tests — the same
 palette the current table build uses). No `!`/`+` sigils inside these
 definitions. The table itself is already built pre-opfix this way
-([`prel.l:289`](../ai/prel.l)); grips are just more data in the same fold.
+([`prel.l:289`](../love/prel.l)); grips are just more data in the same fold.
 
 Both compilers (c0 and the self-hosted `feel`) call `book['opfix]`, so the change
 lands in *one* place and both inherit it — no C edit, no second source of truth.
@@ -314,7 +314,7 @@ proof, not the assumption.
 
 - **left-associative operators / namespace assignment.** The `>`-vs-`≥` bit and
   the fold-on-fill path in `op-del`. This is the [[namespace-modules]] phase-2
-  scope-layer-door work ([`prel.l:280`](../ai/prel.l): *"a new arity or alias
+  scope-layer-door work ([`prel.l:280`](../love/prel.l): *"a new arity or alias
   waits for the scope-layer door"*). Precedence lands first; assignment rides the
   same guard later.
 - user-declarable grips (an operator declaring its own level at the scope-layer

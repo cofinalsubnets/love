@@ -65,7 +65,7 @@
  ; nets <= 0, so `(! topfd)` would falsely report the degree early. capped so a NON-polynomial body
  ; can't spin forever; a body still alive at the cap is rejected (close declines, the loop stays a
  ; loop). NB sampling can't PROVE a body polynomial -- a piecewise body (x<5 ? x^2 : 0) fits x^2 on the
- ; first samples then breaks; the glaze port (ai/glaze/auto.l loopclose) restricts to PURE-polynomial
+ ; first samples then breaks; the glaze port (love/glaze/auto.l loopclose) restricts to PURE-polynomial
  ; bodies (+ - * only) so this is sound there; here the demo bodies are all genuine polynomials.
  (topfd ys)  (? (nul? (cup ys)) (cap ys) (topfd (fd ys)))   ; the last entry of the diagonal: Δ^(L-1) f(0)
  (cdeg f cap) (: (go d) (? (>= d cap) -1 (? (= 0 (topfd (samples f (+ d 1)))) d (go (+ d 1)))) (go 0))

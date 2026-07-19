@@ -1,5 +1,5 @@
 ; post -- the POST-EGG layer: user-level defs that drip into the image AFTER the egg hatches, once.
-; The egg (ai/egg.l) bakes prel+ev and the evaluator sits on it TWICE (c0 then self-hosted), so
+; The egg (love/egg.l) bakes prel+ev and the evaluator sits on it TWICE (c0 then self-hosted), so
 ; anything in prel is compiled+run twice and bloats the baked heap image. prel earns that: it IS the
 ; language. But user-level libraries do not -- they pay the double-bootstrap for no benefit. So they
 ; live HERE: host/main.c evals post.l once, right after warming the egg and just before bao (the shell

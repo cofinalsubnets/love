@@ -19,7 +19,7 @@
 ; apply of interp to the original arg (still in Sp[0]). putfix is add rax,rax (its OF
 ; flag is exactly the 62-bit fixnum boundary); jno; or rax,1.
 
-; the module span opens here: ai/glaze/export.l diffs (names ()) against this mark and
+; the module span opens here: love/glaze/export.l diffs (names ()) against this mark and
 ; sweeps every name emit.l + auto.l leak into the ONE `glaze` book -- measured, never
 ; listed. (in a dev cat-load of these sources, where export.l never loads, it is inert.)
 (: glaze-mark (names ()))
@@ -749,7 +749,7 @@
                     (`('(ucomisd f0 f0) `('br 'vc ok)) + `(`('li A 0) `('movqxr 'f0 A)) + `(`('label ok)))))
    (jitfr lam tgt) (jitfrx lam tgt (ev lam))                        ; 2-arg public: bakes the interpreter deopt (auto-ev + the glaze-x86 tests)
    ; jitfrx: the deopt-parameterized core. auto-ev/tests reach it through jitfr ((ev lam)); the natjit
-   ; creation hook (ai/glaze/hook.l) calls it DIRECTLY with `e`, the bytecode twin ala already built --
+   ; creation hook (love/glaze/hook.l) calls it DIRECTLY with `e`, the bytecode twin ala already built --
    ; re-interpreting lam there would re-enter ala -> natjit -> ... (the leaf lane's `e`-deopt law).
    (jitfrx lam tgt interp)
     (: v <>lam  kind (apof 1.5)                                 ; lvm_flo's address, captured now (code never moves)

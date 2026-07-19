@@ -36,10 +36,10 @@ all: ai.js
 # prel.h/ev.h are serialized from lib/*.g by the top-level lcat rule;
 # host.c assembles them into the bootstrap via G_EGG_PRE/POST (no repl here --
 # the browser feeds the REPL through ai_eval).
-../out/lib/egg.h: ../ai/egg.l
-../out/lib/prel.h: ../ai/prel.l
-../out/lib/ev.h: ../ai/ev.l
-../out/lib/uu.h: ../ai/uu.l
+../out/lib/egg.h: ../love/egg.l
+../out/lib/prel.h: ../love/prel.l
+../out/lib/ev.h: ../love/ev.l
+../out/lib/uu.h: ../love/uu.l
 ../out/lib/egg.h ../out/lib/prel.h ../out/lib/ev.h ../out/lib/uu.h ../out/lib/ai_version.h:
 	$(MAKE) -C .. out/lib/$(notdir $@)
 

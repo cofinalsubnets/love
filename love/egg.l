@@ -2,7 +2,7 @@
  (mop _) ((peep book 'ev 0) '(:
    ; delete internal names. keep this up to date!
    ; NB: the old repl internals (do_eval m eofsym prc + the ed* editor) USED to be
-   ; mopped here -- they are now CLOSURE-PRIVATE inside ai/bao.l (the shell core), so
+   ; mopped here -- they are now CLOSURE-PRIVATE inside love/bao.l (the shell core), so
    ; they never reach the book and need no mop entry.
    ; operators/monadics/pureset are the SENSITIVE tablets (2026-07-07): a live pin into
    ; a compile table poisons every later compile, so they go book-private with the rest --

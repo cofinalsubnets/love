@@ -284,7 +284,7 @@ empirically on the real heap (0 misses across the corpus).
 
 A proof that ai.c's *pointer code* (`gcp` bounds, the tagged words, the two-space
 copy) REFINES this model is the larger separate effort — the place ai's in-tree
-prover could eventually earn its keep, the same caveat `ai/glaze/README.md` flags
+prover could eventually earn its keep, the same caveat `love/glaze/README.md` flags
 for a verified glaze.
 
 ## Not yet / open

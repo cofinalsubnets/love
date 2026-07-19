@@ -19,7 +19,7 @@ static const char boot_ai[] = "("
   " "
 #include "ev.h"
   ai_egg_post
-#include "uu.h"   // the uu kernel (ai/uu.l, sweep at its tail): the corpus's uu files ride the `uu` book here too
+#include "uu.h"   // the uu kernel (love/uu.l, sweep at its tail): the corpus's uu files ride the `uu` book here too
 ;
 
 // 256K: a single ai_eval can emit a lot before the page drains it -- the

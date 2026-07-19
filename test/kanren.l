@@ -1,4 +1,4 @@
-; kanren -- the machinery lives in ai/prel.l, swept into the `kanren` MODULE book
+; kanren -- the machinery lives in love/prel.l, swept into the `kanren` MODULE book
 ; (unify + its ufail/ufail? contract and the macro-emitted var/s_plus/s_star/===
 ; stay global; walk/est/query/streams/rel ride the book). this file is the assert
 ; suite + the relational-algebra demo. ONE body-having `:` -- the book binds and

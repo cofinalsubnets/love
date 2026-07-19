@@ -2,7 +2,7 @@
 ; ai -- a fully-curried language with an infix, low-paren surface that factors down to a tiny
 ; lisp core: `map (+ 1)` and `(3 = 1 + 2)` desugar through opfix to plain parens (one source of
 ; truth, shared by both compilers). that core rides a tiny generic C runtime (ai.c + ai.h) plus a
-; self-hosting compiler written in ai (the ai/{prel,ev,bao}.l layers). source is .l; the host binary
+; self-hosting compiler written in ai (the love/{prel,ev,bao}.l layers). source is .l; the host binary
 ; is `ai`. see README.md.
 ;
 ; this file is the NARRATIVE -- how to work here, the traps, the vocabulary, the architecture --
@@ -57,7 +57,7 @@
 ;   writes the inverse convention on reflex -- check every ` twice.
 ; * a corpus test that twirls a task must (catch p) it: an orphan stalls the kernel runner.
 ; * the repl reads each LINE as one expression (1 = 1 answers 1); files read forms. the interactive
-;   shell installs a default help (ai/bao.l shell-help): a scare prints `;; a b` and answers the zero
+;   shell installs a default help (love/bao.l shell-help): a scare prints `;; a b` and answers the zero
 ;   point, so the session survives every raise and a missing nom or apcap is VISIBLE; the more bits
 ;   keep the read protocol (port back when incomplete, sentinel at eof). file mode stays helpless.
 ; * python \b-sweeps treat - as a boundary: kebab names with capital segments mangle.
@@ -80,7 +80,7 @@
 ;   member, 'keys introspects, a missing module answers () (the presence guard), (from ()) lists the
 ;   registry. a test cat just never seals and reads the open layer bare; a backend joins a SEALED
 ;   holo at runtime: (enter ()) (use 'holo) <backend.l> (leave ()). the older MARK/SWEEP model
-;   remains for the glaze (ai/glaze/export.l diffs (names ()) across glaze-mark/glaze-load; the
+;   remains for the glaze (love/glaze/export.l diffs (names ()) across glaze-mark/glaze-load; the
 ;   surface is (glaze 'loopinfo)). baked consumers FOLD their bare refs at their own compile (the
 ;   capture law); post-boot STREAMS fold nothing -- they use/from at their head ((names ()) fell
 ;   820 -> 322; an app never leans on another module's leaks -- lux learned this). the laws live in
@@ -193,7 +193,7 @@ $'(1 2 3)            ; 6       $ sums the nets, then clamps once
 ;   wev -- the source->source pre-pass before analysis: expand macros, apply boxfix, fold pure globals,
 ;     mark apply strategy, flip (? !e a b) to (? e b a).
 ;   maps -- #(..)/map expand to nested pins.
-; the *egg* (ai/egg.l): WARM the egg (the quoted prel+ev corpus) and the evaluator SITS on it twice --
+; the *egg* (love/egg.l): WARM the egg (the quoted prel+ev corpus) and the evaluator SITS on it twice --
 ; compile the compiler with the C bootstrap, recompile the whole corpus through itself -- then the
 ; hatchling installs as `ev` in the image at C compile time, no allocation; `born` records the hatch
 ; time (unbound pre-egg, an unbound nom reading the zero point). just before birth the egg MOPS UP
@@ -202,7 +202,7 @@ $'(1 2 3)            ; 6       $ sums the nets, then clamps once
 ; array-ctor helpers, the macro expanders -- the macro TABLE lives on inside the compiler's closures),
 ; every hot lvm_* pointer, and finally the `book` itself. compiled references were folded, so only the
 ; noms die; noms the printer/reader/expanders EMIT (spread link pin tablet mono list ..) stay, as do
-; the C-resolved hooks (num-ap add mul help). the shell core (ai/bao.l) needs no mopping: its internals
+; the C-resolved hooks (num-ap add mul help). the shell core (love/bao.l) needs no mopping: its internals
 ; are closure-private, only its entry points (shell/welp/edraw/edln/wrap/bao + the stream shell zev/zevs)
 ; are globals.
 ; demo:
@@ -215,7 +215,7 @@ macros               ; ()      mopped up after birth -- off the book, so the nom
 ; three core tables are + , * , and apply. a both-fixnum fast path skips the table; otherwise one
 ; indexed jump picks a lane that widens only as far as the operands need (array, complex, bignum,
 ; float, ...). the VM is tail-threaded over a two-space copying collector; out-of-pool constants are
-; immortal. the ai/ layer (prel ev bao cli egg) drips into every frontend: the host (out/host/ai), the
+; immortal. the love/ layer (prel ev bao cli egg) drips into every frontend: the host (out/host/ai), the
 ; freestanding kernel (x86_64/aarch64), and wasm. build codegen lives in ai under tools/; the C is
 ; freestanding, -Wall -Wextra -Werror.
 ```

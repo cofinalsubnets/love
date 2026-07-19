@@ -2,7 +2,7 @@
 ; the multi-line line editor (ed*), the history zipper (uphist/downhist/mkframe/
 ; detach), joinln/flatten/splitat, and parseall used to be USER-VISIBLE book
 ; globals only because the corpus (the old test/repl.l + test/replio.l) tested
-; them by name. They now live INSIDE bao's closure (ai/bao.l), off the global
+; them by name. They now live INSIDE bao's closure (love/bao.l), off the global
 ; book -- so the corpus can no longer reach them, and that is the point.
 ;
 ; bao still exercises them, from INSIDE the closure, via `(bao 'test)` (which runs

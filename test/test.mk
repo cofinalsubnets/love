@@ -89,7 +89,7 @@ test_doc: host
 	  { [ $$r -eq 0 ] && grep -q ': ok' out/host/.test_doc.out; } \
 	    || { echo "FAIL $$s (exit $$r)"; exit 1; }; \
 	done
-# Native-codegen self-tests (the ai/glaze/ x86-64 jit): emit (the SSE emitter) +
+# Native-codegen self-tests (the love/glaze/ x86-64 jit): emit (the SSE emitter) +
 # auto (ev's source-recognizer: counted loops, float grids, recursive arith
 # groups) are exercised by test/glaze-x86.l (the asserts moved out of emit.l/
 # auto.l so they no longer run at every glaze load/bake); it cats emit.l + auto.l
@@ -108,8 +108,8 @@ test_glaze: host
 	  cat out/host/.test_glaze.out; \
 	  { [ $$r -eq 0 ] && grep -q "test/glaze-x86:" out/host/.test_glaze.out; } \
 	    || { echo "FAIL glaze x86 (exit $$r)"; exit 1; }; \
-	  echo "GLAZE ai/glaze/hook.l"; \
-	  { echo "(use 'holo)"; cat ai/glaze/hook.l; printf '\n(leave ())(puts "glaze-hook-ran")(putc 10)'; } | $m > out/host/.test_glaze.out 2>&1; r=$$?; \
+	  echo "GLAZE love/glaze/hook.l"; \
+	  { echo "(use 'holo)"; cat love/glaze/hook.l; printf '\n(leave ())(puts "glaze-hook-ran")(putc 10)'; } | $m > out/host/.test_glaze.out 2>&1; r=$$?; \
 	  cat out/host/.test_glaze.out; \
 	  { [ $$r -eq 0 ] && grep -q "glaze-hook-ran" out/host/.test_glaze.out; } \
 	    || { echo "FAIL glaze/hook (exit $$r)"; exit 1; }
@@ -535,7 +535,7 @@ test_raw: host out/host$(hsuf)/mooncc
 # that exercises ai_image_load on a mooncc binary -- the seam where [[mooncc-fn-parity]]
 # hid (an odd-addressed lvm_* ap mis-encodes as a fixnum, invisible to every egg-boot
 # gate; the fix aligns fns to even in gen.l). glaze.l is EXCLUDED: the bake mops the
-# eat/toast nifs (ai/egg.l seals them into the host image), so (lit? eat) cannot hold on
+# eat/toast nifs (love/egg.l seals them into the host image), so (lit? eat) cannot hold on
 # a woken heap -- the gcc build fails it identically, so it is not a mooncc regression.
 # Opt-in (not test_all): needs the -pie toolchain. x86-64 only.
 .PHONY: test_raw_bake
@@ -874,7 +874,7 @@ test_holofuzz: host
 	     || { echo "FAIL holofuzz arm64 -- a holo encoding disagrees with llvm-mc"; exit 1; }; \
 	 else echo "  (arm64 skipped: no llvm-mc)"; fi
 endif
-# uu's NbE kernel lives at ai/uu.l (mark + kernel + the sweep into the `uu`
+# uu's NbE kernel lives at love/uu.l (mark + kernel + the sweep into the `uu`
 # book at its tail) and bakes post.l-style through the lib_h/%0.h pattern
 # rules -- into the host, ai0, the inle kernel and wasm, so the corpus's uu
 # files (test/uu*.l, binding the book surface at test/uu.l's head) run on

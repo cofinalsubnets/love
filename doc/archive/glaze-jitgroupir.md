@@ -1,7 +1,7 @@
 # jitgroupir completion — porting the remaining group lanes to the neutral IR
 
 The integer group compiler exists in two forms. The **byte path** (`jitgroup`/`cgg`/`cggv`/`cggt`/
-`mkouter` in `ai/glaze/emit.l`) emits raw x86-64 byte lists with hand-counted rel32 offsets and owns
+`mkouter` in `love/glaze/emit.l`) emits raw x86-64 byte lists with hand-counted rel32 offsets and owns
 every lane. The **IR path** (`jitgroupir`/`cggir`/`cggvir`/`consir`/`mkouterir`/`mkhir`) emits neutral
 crew/asm/ IR — labels, no hand offsets — and currently owns only **integer arithmetic** and **value-mode
 cons** groups. A transitional gate (`jgir-ok?`) routes a group to the IR path when it fits, else falls
@@ -181,7 +181,7 @@ porting a lane just re-routes its asserts from `jitgroup` to `jitgroupir` with n
   `(say "..ok")` still prints — a false pass. Same trap when probing an internal (`(cggir ..)` with
   cggir unbound = `(() ..)` = 1, not an error). Defenses now in the file: a **top-level** `(assert
   (lit? base-ev) (lit? jitgroupir) ..)` that scares on a wrong invocation, and a per-block `lit?`
-  dependency guard. When probing by hand, cat the same files: `cat ai/glaze/emit.l ai/glaze/auto.l
+  dependency guard. When probing by hand, cat the same files: `cat love/glaze/emit.l love/glaze/auto.l
   probe.l | out/host/ai`. (`assemble` is a core service — bound even standalone — so it alone won't
   catch a wrong context.)
 - x64 only in practice (`auto.l` calls `jitgroupir … 'x64`); the IR is kept neutral where free, but

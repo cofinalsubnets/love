@@ -14,7 +14,7 @@ commits. you steer; the dock is the wheel.
 a fully-curried language with an infix, low-paren surface that factors down to a
 tiny lisp core, over a tiny generic C runtime (`ai.c` + `ai.h`) plus a self-hosting
 compiler written in ai itself (the
-`ai/{prel,ev,bao}.l` layers). every value is a total one-argument function;
+`love/{prel,ev,bao}.l` layers). every value is a total one-argument function;
 integers are church numerals; `+`/`*` are generic; truth is the sign of a
 value's `net`. the spec is `test/spec.l` -- the reference and the test in one, each law
 stated in its section comment and assert-backed below it, green on every

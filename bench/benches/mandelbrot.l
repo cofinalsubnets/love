@@ -1,7 +1,7 @@
 ; mandelbrot -- iterate z = z^2 + c over a 128x128 grid of c in [-2,1]x[-1.5,1.5], counting escape
 ; iterations (|z| > 2) up to 128. checksum = sum of the per-pixel iteration counts (= 424578). ai
 ; writes the z<-z^2+c step in the TWIN GEMS (complex scalars ~(re im)) -- idiomatic complex code.
-; the glaze's TWIN LANE (twolow, ai/glaze/auto.l) LOWERS the twin recurrence to a real/imag float
+; the glaze's TWIN LANE (twolow, love/glaze/auto.l) LOWERS the twin recurrence to a real/imag float
 ; pair and feeds the float-grid kernel (autonat/jitfgridn), so this glazes to native, bit-exact --
 ; the same kernel that owns the plain-float `float` bench. every IEEE-754 language reproduces the
 ; same escape counts (identical double ops); the ports use a real/imag float pair.

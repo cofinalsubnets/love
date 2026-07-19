@@ -1,7 +1,7 @@
 ; a map/filter/fold LIST pipeline: sum the squares-mod-p of the odd numbers in [0, N). written in the
 ; naive functional style -- (foldl + 0 (map f (filter odd (jot N)))) -- which under a plain interpreter
 ; materializes THREE intermediate lists (the jot range, the filtered odds, the mapped values). the
-; glaze's DEFORESTATION pass (ai/glaze/auto.l defoliate) fuses the whole pipeline into ONE native
+; glaze's DEFORESTATION pass (love/glaze/auto.l defoliate) fuses the whole pipeline into ONE native
 ; counted loop with NO intermediate allocation -- map substitutes the element, filter guards the step,
 ; foldl-over-jot lowers to the loop the group compiler natives -- so the cozy functional source runs as
 ; a hand-written loop would. the array-idiom counterpart is `mapfilter` (baked kernels); this is the
