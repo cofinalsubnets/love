@@ -91,9 +91,9 @@
     (? (= 1 (taut? c0)) 0
        (: c (dedup-lits c0)
           (? (atom? c) (pin s 'bad 1)
-             (atom? (cup c)) (: cid (fadd s (link (enc (cap c)) ())) (fenq s (enc (cap c)) (+ cid 1)))
+             (atom? >c) (: cid (fadd s (link (enc <c) ())) (fenq s (enc <c) (+ cid 1)))
              (: cid (fadd s (map enc c))
-                _ (fwatch s cid (enc (cap c))) (fwatch s cid (enc (caup c)))))))
+                _ (fwatch s cid (enc <c)) (fwatch s cid (enc <>c))))))
    ; --- the interpreted BCP twin: (fbcp3 fx ar wn) -> conflict cid or -1 ----------
    (fbcp3 fx ar wn)
     (: nv (getw fx 3) who (who-of nv) vao (vao-of nv)
@@ -112,9 +112,9 @@
                   (? (= 1 (lv oth)) (go (getw wn (+ p 1)) p)             ; satisfied by the other watch: keep
                      (: k ((: (sc j)                                     ; scan the tail for a non-false literal
                               (? (>= j (+ cid (+ 1 (getw ar cid)))) 0
-                                 (: e (getw ar j) (? (! (= -1 (lv e))) j (sc (+ j 1))))))
+                                 (: e (getw ar j) (? !(= -1 (lv e)) j (sc (+ j 1))))))
                            (+ cid 3))
-                        (? (! (= k 0))                                   ; slide the watch f -> ar[k]
+                        (? !(= k 0)                                   ; slide the watch f -> ar[k]
                            (: e (getw ar k) nx (getw wn (+ p 1))
                               _ (putw ar k f) _ (putw ar (+ cid 2) e)
                               _ (? (= prev 0) (putw fx (+ who f) nx) (putw wn (+ prev 1) nx))
@@ -150,7 +150,7 @@
                 (? (> j (+ cs (getw ar cs))) (link c w)
                    (: el (getw ar j) v (>> el 1)
                       (? (= v skipv) (go (+ j 1) c w)
-                         (! (= 0 (getw fx (+ seo v)))) (go (+ j 1) c w)
+                         !(= 0 (getw fx (+ seo v))) (go (+ j 1) c w)
                          (= 0 (getw fx (+ lvo v))) (go (+ j 1) c w)
                          (: _ (putw fx (+ seo v) 1)
                             _ (putw fx (+ aco v) (+ (getw fx (+ aco v)) (getw fx 6)))   ; bump
@@ -164,9 +164,9 @@
                     _ (putw fx (+ seo v) 0) c (- counter 1)
                     (? (= c 0) (link el widx)
                        (: a (abs1 (- (getw fx (+ rso v)) 1) v c widx)
-                          (walk (cap a) (cup a) (- np 1))))))
-              (cap a0) (cup a0) (- (getw fx 0) 1))
-           uip (cap r) wend (cup r)
+                          (walk <a >a (- np 1))))))
+              <a0 >a0 (- (getw fx 0) 1))
+           uip <r wend >r
            _ (putw ar (+ cid0 1) (^ uip 1))
            wr ((: (mn rd wr)                                ; minimize, compacting kept lits down
                   (? (>= rd wend) wr
@@ -176,7 +176,7 @@
                                              (: v2 (>> (getw ar j) 1)
                                                 (? (= v2 v) (ck (+ j 1))
                                                    (= 0 (getw fx (+ lvo v2))) (ck (+ j 1))
-                                                   (! (= 0 (getw fx (+ seo v2)))) (ck (+ j 1))
+                                                   !(= 0 (getw fx (+ seo v2))) (ck (+ j 1))
                                                    0)))) (+ rv 0)))     ; j starts at (rv-1)+1 = rv
                         (? (= red 1) (mn (+ rd 1) wr)
                            (: _ (putw ar wr el) (mn (+ rd 1) (+ wr 1)))))))
@@ -203,7 +203,7 @@
                            (: _ (putw fx (+ seo L) 1) (go (+ j 1) (+ glue 1) bj2))
                            (go (+ j 1) glue bj2)))))
                (+ cid0 2) (: _ (putw fx (+ seo dl) 1) 1) 0)
-           glue (cap gb) bj (cup gb)
+           glue <gb bj >gb
            nt ((: (go t)                                    ; backjump: pop above bj, save phase
                   (? (= t 0) 0
                      (: el (getw fx (+ 8 (- t 1))) v (>> el 1)
@@ -250,10 +250,10 @@
    ; body (args still on Sp). callee-saved r3/r11-r14 pushed after the guards.
    ; ===============================================================================
    (guard-ir i bufk)                                        ; Sp[i] must be a cask
-    (L (L 'ld 'r0 'r1 (* 8 i)) '(test r0 1) '(br ne deopt)
-       '(ld r7 r0 0) (L 'li 'r8 bufk) '(cmp r7 r8) '(br ne deopt))
+    `(`('ld 'r0 'r1 (* 8 i)) '(test r0 1) '(br ne deopt)
+       '(ld r7 r0 0) `('li 'r8 bufk) '(cmp r7 r8) '(br ne deopt))
    (fixg-ir i)                                              ; Sp[i] must be a fixnum
-    (L (L 'ld 'r0 'r1 (* 8 i)) '(test r0 1) '(br eq deopt))
+    `(`('ld 'r0 'r1 (* 8 i)) '(test r0 1) '(br eq deopt))
    epi-ir '((shl r0 1) (or r0 r0 1) (st r1 0 r0) (add r5 r5 16) (ld r7 r5 0) (jmpr r7))
    deopt2-ir '((label deopt) (ld r7 r5 8) (lea r5 r7 16) (ld r7 r5 0) (jmpr r7))   ; arity>=2
    deopt1-ir '((label deopt) (ld r7 r5 8) (mov r5 r7) (ld r7 r5 0) (jmpr r7))      ; arity 1
@@ -262,17 +262,17 @@
    (fbcp-ir nv)
     (: tro8 64 who8 (* 8 (who-of nv)) vao8 (* 8 (vao-of nv))
        lvo8 (* 8 (lvo-of nv)) rso8 (* 8 (rso-of nv)) bufk (apof (cask 1))
-       (cat (guard-ir 0 bufk) (cat (guard-ir 1 bufk) (cat (guard-ir 2 bufk)
-       (cat '((push r3) (push r11) (push r12) (push r13) (push r14)
+       (guard-ir 0 bufk + guard-ir 1 bufk + guard-ir 2 bufk
+       + '((push r3) (push r11) (push r12) (push r13) (push r14)
               (ld r0 r1 0)  (ld r0 r0 8) (lea r11 r0 16)
               (ld r0 r1 8)  (ld r0 r0 8) (lea r12 r0 16)
               (ld r0 r1 16) (ld r0 r0 8) (lea r13 r0 16))
-       (cat (L '(label drain)
+       + `('(label drain)
                '(ld r0 r11 8) '(ld r7 r11 0) '(cmp r0 r7) '(br ge noconf)
-               (L 'ldx 'r14 'r11 'r0 8 tro8)
+               `('ldx 'r14 'r11 'r0 8 tro8)
                '(xor r14 r14 1)
                '(add r0 r0 1) '(st r11 8 r0)
-               (L 'ldx 'r9 'r11 'r14 8 who8)
+               `('ldx 'r9 'r11 'r14 8 who8)
                '(li r10 0)
                '(label node)
                '(cmp r9 0) '(br eq drain)
@@ -280,7 +280,7 @@
                '(ldx r0 r12 r3 8 0) '(cmp r0 0) '(br ne live)   ; size 0 = TOMBSTONE (freduce):
                '(ldx r0 r13 r9 8 8)                             ; unlink the dead node, walk on
                '(cmp r10 0) '(br ne dprev)
-               (L 'stx 'r11 'r14 8 who8 'r0) '(jmp dnext)
+               `('stx 'r11 'r14 8 who8 'r0) '(jmp dnext)
                '(label dprev)
                '(stx r13 r10 8 8 r0)
                '(label dnext)
@@ -291,7 +291,7 @@
                '(label noswap)
                '(ldx r8 r12 r3 8 8)
                '(mov r0 r8) '(sar r0 1)
-               (L 'ldx 'r0 'r11 'r0 8 vao8)
+               `('ldx 'r0 'r11 'r0 8 vao8)
                '(cmp r0 r8) '(br eq keep)
                '(ldx r7 r12 r3 8 0) '(add r7 r7 r3) '(add r7 r7 1) '(push r7)
                '(add r0 r3 3)
@@ -299,7 +299,7 @@
                '(ld r7 sp 0) '(cmp r0 r7) '(br ge scanfail)
                '(ldx r7 r12 r0 8 0)
                '(mov r8 r7) '(sar r8 1)
-               (L 'ldx 'r8 'r11 'r8 8 vao8)
+               `('ldx 'r8 'r11 'r8 8 vao8)
                '(xor r7 r7 1)
                '(cmp r8 r7) '(br ne found)
                '(add r0 r0 1) '(jmp scan)
@@ -309,25 +309,25 @@
                '(stx r12 r3 8 16 r7)
                '(ldx r0 r13 r9 8 8)
                '(cmp r10 0) '(br ne fprev)
-               (L 'stx 'r11 'r14 8 who8 'r0) '(jmp flink)
+               `('stx 'r11 'r14 8 who8 'r0) '(jmp flink)
                '(label fprev)
                '(stx r13 r10 8 8 r0)
                '(label flink)
-               (L 'ldx 'r8 'r11 'r7 8 who8)
+               `('ldx 'r8 'r11 'r7 8 who8)
                '(stx r13 r9 8 8 r8)
-               (L 'stx 'r11 'r7 8 who8 'r9)
+               `('stx 'r11 'r7 8 who8 'r9)
                '(mov r9 r0)
                '(add sp sp 8) '(jmp node)
                '(label scanfail)
                '(add sp sp 8)
                '(ldx r8 r12 r3 8 8)
                '(mov r0 r8) '(sar r0 1)
-               (L 'ldx 'r7 'r11 'r0 8 vao8)
+               `('ldx 'r7 'r11 'r0 8 vao8)
                '(cmp r7 0) '(br ne conflict)
-               (L 'stx 'r11 'r0 8 vao8 'r8)                       ; unit: val[v] = oth
-               '(ld r7 r11 16) (L 'stx 'r11 'r0 8 lvo8 'r7)
-               '(add r7 r3 1)  (L 'stx 'r11 'r0 8 rso8 'r7)
-               '(ld r7 r11 0)  (L 'stx 'r11 'r7 8 tro8 'r8)
+               `('stx 'r11 'r0 8 vao8 'r8)                       ; unit: val[v] = oth
+               '(ld r7 r11 16) `('stx 'r11 'r0 8 lvo8 'r7)
+               '(add r7 r3 1)  `('stx 'r11 'r0 8 rso8 'r7)
+               '(ld r7 r11 0)  `('stx 'r11 'r7 8 tro8 'r8)
                '(add r7 r7 1) '(st r11 0 r7)
                '(label keep)
                '(ldx r7 r13 r9 8 8) '(mov r10 r9) '(mov r9 r7) '(jmp node)
@@ -337,62 +337,62 @@
                '(li r0 -1)
                '(label ret)
                '(pop r14) '(pop r13) '(pop r12) '(pop r11) '(pop r3))
-            (cat epi-ir deopt2-ir)))))))
+            + epi-ir + deopt2-ir))
    ; --- kernel 2: the CONFLICT handler -- (conf fx ar wn confl). ---------------------
    ; registers: r11=fx r12=ar r13=wn (pushed), r3 scratch (pushed), r14 counter/glue
    ; (pushed); r9 write index, r10 trail/read index, r0/r7/r8 scratch; fx w7 (byte 56)
    ; holds the current skip-var. the twin above is the spec, phase for phase.
    (cls-ir nv seo8)                                         ; clear the seen section (fresh labels)
     (: L1 (mint 0) L2 (mint 0)
-       (L '(li r0 0) '(li r8 0) (L 'label L1) (L 'cmp 'r0 nv) (L 'br 'gt L2)
-          (L 'stx 'r11 'r0 8 seo8 'r8) '(add r0 r0 1) (L 'jmp L1) (L 'label L2)))
+       `('(li r0 0) '(li r8 0) `('label L1) `('cmp 'r0 nv) `('br 'gt L2)
+          `('stx 'r11 'r0 8 seo8 'r8) '(add r0 r0 1) `('jmp L1) `('label L2)))
    (abs-ir lvo8 seo8 aco8)                                  ; absorb the clause at r7 (fresh labels);
     (: Ll (mint 0) Lt (mint 0) Ln (mint 0) Le (mint 0)      ; counter r14, write r9, skipv fx w7
-       (L '(ldx r0 r12 r7 8 0) '(add r0 r0 r7) '(add r0 r0 1) '(push r0)
+       `('(ldx r0 r12 r7 8 0) '(add r0 r0 r7) '(add r0 r0 1) '(push r0)
           '(add r7 r7 1)
-          (L 'label Ll) '(ld r0 sp 0) '(cmp r7 r0) (L 'br 'ge Le)
+          `('label Ll) '(ld r0 sp 0) '(cmp r7 r0) `('br 'ge Le)
           '(ldx r3 r12 r7 8 0)
           '(mov r0 r3) '(sar r0 1)
-          '(ld r8 r11 56) '(cmp r0 r8) (L 'br 'eq Ln)
-          (L 'ldx 'r8 'r11 'r0 8 seo8) '(cmp r8 0) (L 'br 'ne Ln)
-          (L 'ldx 'r8 'r11 'r0 8 lvo8) '(cmp r8 0) (L 'br 'eq Ln)
-          '(li r8 1) (L 'stx 'r11 'r0 8 seo8 'r8)
-          (L 'ldx 'r8 'r11 'r0 8 aco8) '(ld r3 r11 48) '(add r8 r8 r3) (L 'stx 'r11 'r0 8 aco8 'r8)
-          (L 'ldx 'r8 'r11 'r0 8 lvo8) '(ld r3 r11 16) '(cmp r8 r3) (L 'br 'ne Lt)
-          '(add r14 r14 1) (L 'jmp Ln)
-          (L 'label Lt) '(ldx r3 r12 r7 8 0) '(stx r12 r9 8 0 r3) '(add r9 r9 1)
-          (L 'label Ln) '(add r7 r7 1) (L 'jmp Ll)
-          (L 'label Le) '(add sp sp 8)))
+          '(ld r8 r11 56) '(cmp r0 r8) `('br 'eq Ln)
+          `('ldx 'r8 'r11 'r0 8 seo8) '(cmp r8 0) `('br 'ne Ln)
+          `('ldx 'r8 'r11 'r0 8 lvo8) '(cmp r8 0) `('br 'eq Ln)
+          '(li r8 1) `('stx 'r11 'r0 8 seo8 'r8)
+          `('ldx 'r8 'r11 'r0 8 aco8) '(ld r3 r11 48) '(add r8 r8 r3) `('stx 'r11 'r0 8 aco8 'r8)
+          `('ldx 'r8 'r11 'r0 8 lvo8) '(ld r3 r11 16) '(cmp r8 r3) `('br 'ne Lt)
+          '(add r14 r14 1) `('jmp Ln)
+          `('label Lt) '(ldx r3 r12 r7 8 0) '(stx r12 r9 8 0 r3) '(add r9 r9 1)
+          `('label Ln) '(add r7 r7 1) `('jmp Ll)
+          `('label Le) '(add sp sp 8)))
    (fconf-ir nv)
     (: tro8 64 lvo8 (* 8 (lvo-of nv)) rso8 (* 8 (rso-of nv)) who8 (* 8 (who-of nv))
        vao8 (* 8 (vao-of nv)) aco8 (* 8 (aco-of nv)) pho8 (* 8 (pho-of nv)) seo8 (* 8 (seo-of nv))
        bufk (apof (cask 1))
-       (cat (guard-ir 0 bufk) (cat (guard-ir 1 bufk) (cat (guard-ir 2 bufk) (cat (fixg-ir 3)
-       (cat '((push r3) (push r11) (push r12) (push r13) (push r14)
+       (guard-ir 0 bufk + guard-ir 1 bufk + guard-ir 2 bufk + fixg-ir 3
+       + '((push r3) (push r11) (push r12) (push r13) (push r14)
               (ld r0 r1 0)  (ld r0 r0 8) (lea r11 r0 16)
               (ld r0 r1 8)  (ld r0 r0 8) (lea r12 r0 16)
               (ld r0 r1 16) (ld r0 r0 8) (lea r13 r0 16)
               (ld r7 r1 24) (sar r7 1)                            ; confl -> r7 (first absorb's clause)
               (ld r0 r11 16) (cmp r0 0) (br eq retm1))            ; level 0 -> -1
-       (cat (cls-ir nv seo8)                                      ; phase 1: clear seen
-       (cat '((li r14 0)                                          ; counter
+       + cls-ir nv seo8                                      ; phase 1: clear seen
+       + '((li r14 0)                                          ; counter
               (ld r9 r11 32) (add r9 r9 2)                        ; widx = cid0+2
               (li r0 0) (st r11 56 r0))                           ; skipv = 0
-       (cat (abs-ir lvo8 seo8 aco8)                               ; phase 2: absorb the conflict clause
-       (cat (L '(ld r10 r11 0) '(sub r10 r10 1)                   ; t = top-1
+       + abs-ir lvo8 seo8 aco8                               ; phase 2: absorb the conflict clause
+       + `('(ld r10 r11 0) '(sub r10 r10 1)                   ; t = top-1
                '(label walk)
-               (L 'ldx 'r0 'r11 'r10 8 tro8)                      ; np = trail[t]
+               `('ldx 'r0 'r11 'r10 8 tro8)                      ; np = trail[t]
                '(mov r3 r0) '(sar r3 1)
-               (L 'ldx 'r8 'r11 'r3 8 seo8) '(cmp r8 0) '(br ne got)
+               `('ldx 'r8 'r11 'r3 8 seo8) '(cmp r8 0) '(br ne got)
                '(sub r10 r10 1) '(jmp walk)
                '(label got)
-               '(li r8 0) (L 'stx 'r11 'r3 8 seo8 'r8)            ; seen[v] = 0
+               '(li r8 0) `('stx 'r11 'r3 8 seo8 'r8)            ; seen[v] = 0
                '(sub r14 r14 1) '(cmp r14 0) '(br eq uip)
-               (L 'ldx 'r7 'r11 'r3 8 rso8) '(sub r7 r7 1)        ; cs = rsn[v]-1
+               `('ldx 'r7 'r11 'r3 8 rso8) '(sub r7 r7 1)        ; cs = rsn[v]-1
                '(st r11 56 r3)                                    ; skipv = v
                '(push r10))
-       (cat (abs-ir lvo8 seo8 aco8)                               ; absorb the reason clause
-       (cat '((pop r10) (sub r10 r10 1) (jmp walk)
+       + abs-ir lvo8 seo8 aco8                               ; absorb the reason clause
+       + '((pop r10) (sub r10 r10 1) (jmp walk)
               (label uip)
               (xor r0 r0 1)                                       ; asserting literal
               (ld r7 r11 32) (stx r12 r7 8 8 r0)                  ; ar[cid0+1] = it
@@ -403,7 +403,7 @@
               (ldx r0 r12 r10 8 0)
               (mov r3 r0) (sar r3 1)
               (st r11 56 r3))                                     ; w7 = v
-       (cat (L (L 'ldx 'r7 'r11 'r3 8 rso8)
+       + `(`('ldx 'r7 'r11 'r3 8 rso8)
                '(cmp r7 0) '(br eq mkeep)
                '(sub r7 r7 1)
                '(ldx r0 r12 r7 8 0) '(add r0 r0 r7) '(push r0)    ; inner lim (inclusive)
@@ -411,8 +411,8 @@
                '(label mck) '(ld r0 sp 0) '(cmp r7 r0) '(br gt mred)
                '(ldx r0 r12 r7 8 0) '(sar r0 1)
                '(ld r8 r11 56) '(cmp r0 r8) '(br eq mcknx)
-               (L 'ldx 'r8 'r11 'r0 8 lvo8) '(cmp r8 0) '(br eq mcknx)
-               (L 'ldx 'r8 'r11 'r0 8 seo8) '(cmp r8 0) '(br ne mcknx)
+               `('ldx 'r8 'r11 'r0 8 lvo8) '(cmp r8 0) '(br eq mcknx)
+               `('ldx 'r8 'r11 'r0 8 seo8) '(cmp r8 0) '(br ne mcknx)
                '(add sp sp 8) '(jmp mkeep)                        ; a fresh lit -> NOT redundant
                '(label mcknx) '(add r7 r7 1) '(jmp mck)
                '(label mred) '(add sp sp 8) '(jmp mnnext)
@@ -421,45 +421,45 @@
                '(label mnend) '(add sp sp 8))                     ; r9 = wend after compaction
        ; phase 3b: reason-side bump -- every UNSEEN var in a learnt literal's reason
        ; gets act += vinc (seen still holds the analysis marks; w7 free as scratch).
-       (cat (L '(ld r10 r11 32) '(add r10 r10 1)                  ; j = cid0+1
+       + `('(ld r10 r11 32) '(add r10 r10 1)                  ; j = cid0+1
                '(label rb) '(cmp r10 r9) '(br ge rbe)
                '(ldx r0 r12 r10 8 0) '(sar r0 1)                  ; v
-               (L 'ldx 'r7 'r11 'r0 8 rso8)
+               `('ldx 'r7 'r11 'r0 8 rso8)
                '(cmp r7 0) '(br eq rbn)
                '(sub r7 r7 1)
                '(ldx r0 r12 r7 8 0) '(add r0 r0 r7) '(st r11 56 r0)   ; w7 = last lit index
                '(add r7 r7 1)
                '(label rk) '(ld r0 r11 56) '(cmp r7 r0) '(br gt rbn)
                '(ldx r0 r12 r7 8 0) '(sar r0 1)                   ; v2
-               (L 'ldx 'r8 'r11 'r0 8 seo8) '(cmp r8 0) '(br ne rknx)
-               (L 'ldx 'r8 'r11 'r0 8 aco8) '(ld r3 r11 48) '(add r8 r8 r3)
-               (L 'stx 'r11 'r0 8 aco8 'r8)
+               `('ldx 'r8 'r11 'r0 8 seo8) '(cmp r8 0) '(br ne rknx)
+               `('ldx 'r8 'r11 'r0 8 aco8) '(ld r3 r11 48) '(add r8 r8 r3)
+               `('stx 'r11 'r0 8 aco8 'r8)
                '(label rknx) '(add r7 r7 1) '(jmp rk)
                '(label rbn) '(add r10 r10 1) '(jmp rb)
                '(label rbe))
-       (cat (cls-ir nv seo8)                                      ; phase 4: clear seen (-> level marks)
-       (cat (L '(ld r0 r11 16)                                    ; mark dl
-               '(li r8 1) (L 'stx 'r11 'r0 8 seo8 'r8)
+       + cls-ir nv seo8                                      ; phase 4: clear seen (-> level marks)
+       + `('(ld r0 r11 16)                                    ; mark dl
+               '(li r8 1) `('stx 'r11 'r0 8 seo8 'r8)
                '(li r14 1) '(li r10 0)                            ; glue=1, bj=0
                '(ld r7 r11 32) '(add r7 r7 2)
                '(label gb) '(cmp r7 r9) '(br ge gbe)
                '(ldx r0 r12 r7 8 0) '(sar r0 1)
-               (L 'ldx 'r0 'r11 'r0 8 lvo8)                       ; L
+               `('ldx 'r0 'r11 'r0 8 lvo8)                       ; L
                '(cmp r10 r0) '(br ge gb1) '(mov r10 r0)
                '(label gb1)
-               (L 'ldx 'r8 'r11 'r0 8 seo8) '(cmp r8 0) '(br ne gb2)
-               '(li r8 1) (L 'stx 'r11 'r0 8 seo8 'r8) '(add r14 r14 1)
+               `('ldx 'r8 'r11 'r0 8 seo8) '(cmp r8 0) '(br ne gb2)
+               '(li r8 1) `('stx 'r11 'r0 8 seo8 'r8) '(add r14 r14 1)
                '(label gb2) '(add r7 r7 1) '(jmp gb)
                '(label gbe)
                ; phase 5: backjump to bj (r10)
                '(ld r7 r11 0)
                '(label bjl) '(cmp r7 0) '(br eq bje)
                '(mov r8 r7) '(sub r8 r8 1)
-               (L 'ldx 'r0 'r11 'r8 8 tro8)                       ; el = trail[t-1]
+               `('ldx 'r0 'r11 'r8 8 tro8)                       ; el = trail[t-1]
                '(mov r3 r0) '(sar r3 1)
-               (L 'ldx 'r8 'r11 'r3 8 lvo8) '(cmp r8 r10) '(br le bje)
-               '(and r0 r0 1) '(add r0 r0 1) (L 'stx 'r11 'r3 8 pho8 'r0)
-               '(li r0 0) (L 'stx 'r11 'r3 8 vao8 'r0) (L 'stx 'r11 'r3 8 lvo8 'r0) (L 'stx 'r11 'r3 8 rso8 'r0)
+               `('ldx 'r8 'r11 'r3 8 lvo8) '(cmp r8 r10) '(br le bje)
+               '(and r0 r0 1) '(add r0 r0 1) `('stx 'r11 'r3 8 pho8 'r0)
+               '(li r0 0) `('stx 'r11 'r3 8 vao8 'r0) `('stx 'r11 'r3 8 lvo8 'r0) `('stx 'r11 'r3 8 rso8 'r0)
                '(sub r7 r7 1) '(jmp bjl)
                '(label bje) '(st r11 0 r7) '(st r11 8 r7) '(st r11 16 r10)
                ; phase 6: size, aru, reorder, watches
@@ -468,10 +468,10 @@
                '(stx r12 r3 8 0 r0) '(st r11 32 r9)               ; ar[cid0]=size; aru=wend
                '(cmp r0 2) '(br lt assert)
                '(mov r10 r3) '(add r10 r10 2)                     ; reorder: argmax level
-               '(ldx r0 r12 r10 8 0) '(sar r0 1) (L 'ldx 'r8 'r11 'r0 8 lvo8)
+               '(ldx r0 r12 r10 8 0) '(sar r0 1) `('ldx 'r8 'r11 'r0 8 lvo8)
                '(mov r7 r10) '(add r7 r7 1)
                '(label ro) '(cmp r7 r9) '(br ge roe)
-               '(ldx r0 r12 r7 8 0) '(sar r0 1) (L 'ldx 'r0 'r11 'r0 8 lvo8)
+               '(ldx r0 r12 r7 8 0) '(sar r0 1) `('ldx 'r0 'r11 'r0 8 lvo8)
                '(cmp r0 r8) '(br le ro2) '(mov r8 r0) '(mov r10 r7)
                '(label ro2) '(add r7 r7 1) '(jmp ro)
                '(label roe)
@@ -479,52 +479,52 @@
                '(ldx r7 r12 r3 8 8) '(ldx r8 r12 r3 8 16)         ; l0, l1
                '(ld r10 r11 40)                                   ; wnu
                '(stx r13 r10 8 0 r3)
-               (L 'ldx 'r0 'r11 'r7 8 who8) '(stx r13 r10 8 8 r0) (L 'stx 'r11 'r7 8 who8 'r10)
+               `('ldx 'r0 'r11 'r7 8 who8) '(stx r13 r10 8 8 r0) `('stx 'r11 'r7 8 who8 'r10)
                '(add r10 r10 2)
                '(stx r13 r10 8 0 r3)
-               (L 'ldx 'r0 'r11 'r8 8 who8) '(stx r13 r10 8 8 r0) (L 'stx 'r11 'r8 8 who8 'r10)
+               `('ldx 'r0 'r11 'r8 8 who8) '(stx r13 r10 8 8 r0) `('stx 'r11 'r8 8 who8 'r10)
                '(add r10 r10 2) '(st r11 40 r10)
                '(label assert)                                    ; phase 7: assign learnt[0], reason cid0+1
                '(ldx r8 r12 r3 8 8) '(mov r0 r8) '(sar r0 1)
-               (L 'stx 'r11 'r0 8 vao8 'r8)
-               '(ld r7 r11 16) (L 'stx 'r11 'r0 8 lvo8 'r7)
-               '(mov r7 r3) '(add r7 r7 1) (L 'stx 'r11 'r0 8 rso8 'r7)
-               '(ld r7 r11 0) (L 'stx 'r11 'r7 8 tro8 'r8) '(add r7 r7 1) '(st r11 0 r7)
+               `('stx 'r11 'r0 8 vao8 'r8)
+               '(ld r7 r11 16) `('stx 'r11 'r0 8 lvo8 'r7)
+               '(mov r7 r3) '(add r7 r7 1) `('stx 'r11 'r0 8 rso8 'r7)
+               '(ld r7 r11 0) `('stx 'r11 'r7 8 tro8 'r8) '(add r7 r7 1) '(st r11 0 r7)
                '(mov r0 r3) '(shl r0 6)                           ; return (cid0<<6)|min(glue,63)
                '(cmp r14 63) '(br le pk) '(li r14 63)
                '(label pk) '(or r0 r0 r14) '(jmp fin)
                '(label retm1) '(li r0 -1)
                '(label fin)
                '(pop r14) '(pop r13) '(pop r12) '(pop r11) '(pop r3))
-            (cat epi-ir deopt2-ir)))))))))))))))))
+            + epi-ir + deopt2-ir))
    ; --- kernel 3: DECIDE -- (dec fx). caller-saved regs only, no pushes. -------------
    (fdec-ir nv)
     (: tro8 64 lvo8 (* 8 (lvo-of nv)) rso8 (* 8 (rso-of nv)) vao8 (* 8 (vao-of nv))
        aco8 (* 8 (aco-of nv)) pho8 (* 8 (pho-of nv)) bufk (apof (cask 1))
-       (cat (guard-ir 0 bufk)
-       (cat '((ld r9 r1 0) (ld r9 r9 8) (lea r9 r9 16)
+       (guard-ir 0 bufk
+       + '((ld r9 r1 0) (ld r9 r9 8) (lea r9 r9 16)
               (li r7 0) (li r8 -1) (li r0 1))
-       (cat (L '(label dl) (L 'cmp 'r0 nv) '(br gt dle)
-               (L 'ldx 'r3 'r9 'r0 8 vao8) '(cmp r3 0) '(br ne dn)
-               (L 'ldx 'r3 'r9 'r0 8 aco8)
+       + `('(label dl) `('cmp 'r0 nv) '(br gt dle)
+               `('ldx 'r3 'r9 'r0 8 vao8) '(cmp r3 0) '(br ne dn)
+               `('ldx 'r3 'r9 'r0 8 aco8)
                '(cmp r7 0) '(br eq take)
                '(cmp r3 r8) '(br gt take) '(jmp dn)
                '(label take) '(mov r7 r0) '(mov r8 r3)
                '(label dn) '(add r0 r0 1) '(jmp dl)
                '(label dle) '(cmp r7 0) '(br eq ret0)
                '(ld r0 r9 16) '(add r0 r0 1) '(st r9 16 r0)       ; level++
-               (L 'ldx 'r3 'r9 'r7 8 pho8)
+               `('ldx 'r3 'r9 'r7 8 pho8)
                '(mov r0 r7) '(add r0 r0 r0)                       ; el = 2v (+1 unless phase 1)
                '(cmp r3 1) '(br eq pos) '(add r0 r0 1)
                '(label pos)
-               (L 'stx 'r9 'r7 8 vao8 'r0)                        ; assign(el, 0)
-               '(ld r3 r9 16) (L 'stx 'r9 'r7 8 lvo8 'r3)
-               '(li r3 0) (L 'stx 'r9 'r7 8 rso8 'r3)
-               '(ld r3 r9 0) (L 'stx 'r9 'r3 8 tro8 'r0) '(add r3 r3 1) '(st r9 0 r3)
+               `('stx 'r9 'r7 8 vao8 'r0)                        ; assign(el, 0)
+               '(ld r3 r9 16) `('stx 'r9 'r7 8 lvo8 'r3)
+               '(li r3 0) `('stx 'r9 'r7 8 rso8 'r3)
+               '(ld r3 r9 0) `('stx 'r9 'r3 8 tro8 'r0) '(add r3 r3 1) '(st r9 0 r3)
                '(mov r0 r7) '(jmp dfin)
                '(label ret0) '(li r0 0)
                '(label dfin))
-            (cat epi-ir deopt1-ir)))))
+            + epi-ir + deopt1-ir))
    fkers (tablet 0)                                         ; nv -> (bcp conf dec), one assemble per nvars
    fknob #0                                                 ; pin 1 to force the interpreted twins (the differential switch)
    fmaxl0 #2000                                             ; the initial learnt-DB cap (the gate lowers it to force reductions)
@@ -550,10 +550,10 @@
        _ (foldl (\ i b (: _ (pin c i b) (+ i 1))) 0 bs)
        (nif c fb '(\ q (q)) ar))
    (fbcpk nv)                                               ; -> (bcp conf dec), or () when they can't build
-    (? (! (&& (lit? nif) (id? (intern ai-arch) 'x64))) ()
+    (? !(&& (lit? nif) (id? (intern ai-arch) 'x64)) ()
        (: hit (peep fkers nv ())
           (? (two? hit) hit
-             (: ks (L (fnif (fbcp-ir nv) fbcp3 3)
+             (: ks `((fnif (fbcp-ir nv) fbcp3 3)
                       (fnif (fconf-ir nv) fconf3 4)
                       (fnif (fdec-ir nv) fdec3 1))
                 _ (pin fkers nv ks) ks))))
@@ -575,9 +575,9 @@
        _ (pin s 'learnts ()) _ (pin s 'nl 0) _ (pin s 'maxl (peep fmaxl0 () 2000))
        ks (fbcpk nv)
        use (&& (two? ks) (= 0 (peep fknob () 0)))
-       _ (pin s 'bcp  (? use (cap ks) fbcp3))
-       _ (pin s 'conf (? use (caup ks) fconf3))
-       _ (pin s 'dec  (? use (caup (cup ks)) fdec3))
+       _ (pin s 'bcp  (? use <ks fbcp3))
+       _ (pin s 'conf (? use <>ks fconf3))
+       _ (pin s 'dec  (? use <>>ks fdec3))
        _ (foldl (\ _ c (fload s c)) 0 formula) s)
    ; --- the cold path: restarts, decay, learnt-DB reduction (lisp side) -----------
    (fbackjump s lvl)                                        ; pop + unassign above lvl (restarts: lvl = 0)
@@ -604,7 +604,7 @@
    (frephase s st)                                          ; randomize every saved phase; -> st'
     (: fx (peep s 'fx ()) nv (peep s 'nvars 0) pho (pho-of nv)
        ((: (go v st) (? (> v nv) st
-             (: p (random st 2) _ (putw fx (+ pho v) (+ 1 (cap p))) (go (+ v 1) (cup p)))))
+             (: p (random st 2) _ (putw fx (+ pho v) (+ 1 <p)) (go (+ v 1) >p))))
         1 st))
    (fbest s)                                                ; restore the BEST-TRAIL phases (the deepest basin seen)
     (: fx (peep s 'fx ()) nv (peep s 'nvars 0) pho (pho-of nv) b (peep s 'bph ())
@@ -632,10 +632,10 @@
    (freduce s)
     (: fx (peep s 'fx ()) rso (peep s 'rso 0) ar (peep s 'ar ())
        ls (peep s 'learnts ())
-       srt (sortby (\ a b (<= (cup a) (cup b))) (filter (\ p (> (cup p) 3)) ls))
+       srt (sortby (\ a b (<= >a >b)) (filter (\ p (> >p 3)) ls))
        nk (// (tally srt) 2)
        dead (tablet 0)
-       _ (foldl (\ i p (: _ (? (>= i nk) (pin dead (cap p) 1) 0) (+ i 1))) 0 srt)
+       _ (foldl (\ i p (: _ (? (>= i nk) (pin dead <p 1) 0) (+ i 1))) 0 srt)
        _ ((: (zr t) (? (>= t (getw fx 0)) 0
               (: v (>> (getw fx (+ 8 t)) 1) _ (putw fx (+ rso v) 0) (zr (+ t 1))))) 0)
        ; the tombstone stashes the slab's true length at cid+1 (nothing reads a dead
@@ -645,7 +645,7 @@
        _ (foldl (\ _ cid (: n (getw ar cid)
                             _ (? (hot? j) (fdsay j "d " (map fdlit (fclits s cid))) 0)
                             _ (putw ar cid 0) _ (putw ar (+ cid 1) n) 0)) 0 (keys dead))
-       nl (filter (\ p (= 0 (peep dead (cap p) 0))) ls)
+       nl (filter (\ p (= 0 (peep dead <p 0))) ls)
        _ (pin s 'learnts nl) _ (pin s 'nl (tally nl))
        ; the cap grows LINEARLY: geometric (x3/2 per reduce) compounds to an unbounded
        ; DB on 100k-conflict runs -- watch lists balloon and bcp relives the pre-tombstone
@@ -662,7 +662,7 @@
    (fcompact s)
     (: fx (peep s 'fx ()) nv (peep s 'nvars 0) who (peep s 'who 0) rso (peep s 'rso 0) ar (peep s 'ar ())
        ls (peep s 'learnts ())
-       lt (tablet 0) _ (foldl (\ _ p (pin lt (cap p) (cup p))) 0 ls)
+       lt (tablet 0) _ (foldl (\ _ p (pin lt <p >p)) 0 ls)
        _ ((: (zw i) (? (> i (+ 1 (* 2 nv))) 0 (: _ (putw fx (+ who i) 0) (zw (+ i 1))))) 0)
        _ (putw fx 5 2)
        ; ZERO the level-0 reasons: every cid MOVES here, so a stale reason would
@@ -685,16 +685,16 @@
                            lits ((: (go j acc) (? (< j (+ cid 1)) acc (go (- j 1) (link (getw ar j) acc)))) (+ cid n) ())
                            (? (< n 2) (walk nxt nu nls)
                               (any (\ el (= 1 (flv s el))) lits) (walk nxt nu nls)
-                              (: nf (filter (\ el (! (= -1 (flv s el)))) lits)
+                              (: nf (filter (\ el !(= -1 (flv s el))) lits)
                                  ; all-false CAN arise here: a fact fenq'd earlier in
                                  ; THIS walk is still queued, so a later clause may be
                                  ; falsified before bcp ever sees it -- that is a
                                  ; level-0 conflict: the formula is UNSAT (s 'bad, read
                                  ; by the driver after the compaction).
                                  (? (atom? nf) (: _ (pin s 'bad 1) (walk nxt nu nls))
-                                    (atom? (cup nf)) (: _ (fenq s (cap nf) 0) (walk nxt nu nls))
+                                    (atom? >nf) (: _ (fenq s <nf 0) (walk nxt nu nls))
                                     (: _ (pour na (* 8 nu) ar (* 8 cid) (* 8 (+ n 1)))
-                                       l1 (cap nf) l2 (caup nf)
+                                       l1 <nf l2 <>nf
                                        p1 ((: (fnd j) (? (= (getw na j) l1) j (fnd (+ j 1)))) (+ nu 1))
                                        _ (fswap na (+ nu 1) p1)
                                        p2 ((: (fnd j) (? (= (getw na j) l2) j (fnd (+ j 1)))) (+ nu 2))
@@ -704,7 +704,7 @@
                                        (walk nxt (+ nu (+ n 1))
                                              (? (whole? g) (link (link nu g) nls) nls)))))))))))
             2 2 ())
-       _ (putw fx 4 (cap res)) _ (pin s 'learnts (cup res)) (pin s 'nl (tally (cup res))))
+       _ (putw fx 4 <res) _ (pin s 'learnts >res) (pin s 'nl (tally >res)))
    ; --- the search loop: three kernel calls + lisp bookkeeping --------------------
    (fsearch s)                                              ; -> 'sat or 'unsat (s holds the model on SAT)
     (: fx (peep s 'fx ()) nv (peep s 'nvars 0)
@@ -788,10 +788,10 @@
    fbvac0 #1                                                ; 1 = factor ORIGINAL structure only (no aux cascade)
    (bva-sub? r d)                                           ; sorted lists: is r a subset of d?
     (? (atom? r) 1 (atom? d) 0
-       (= (cap r) (cap d)) (bva-sub? (cup r) (cup d))
-       (< (cap d) (cap r)) (bva-sub? r (cup d)) 0)
+       (= <r <d) (bva-sub? >r >d)
+       (< <d <r) (bva-sub? r >d) 0)
    (bva-x1 d r)                                             ; the ONE literal of d beyond r (|d| = |r|+1)
-    (? (atom? r) (cap d) (= (cap d) (cap r)) (bva-x1 (cup d) (cup r)) (cap d))
+    (? (atom? r) <d (= <d <r) (bva-x1 >d >r) <d)
    (fbva formula nvars)                                     ; -> (formula2 . nvars2), equisatisfiable
     (: cls (tablet 0) ckey (tablet 0) occ (tablet 0) ncid #0 nv #0
        _ (pin nv () nvars)
@@ -804,12 +804,12 @@
                     _ (foldl (\ _ m (: _ (pin occ m (link cid (peep occ m ()))) 0)) 0 c)
                     1)))))
        delc (\ cid (: c (peep cls cid ())
-                      (? (! (two? c)) 0 (: _ (pull cls cid 0) _ (pull ckey c 0) 1))))
+                      (? !(two? c) 0 (: _ (pull cls cid 0) _ (pull ckey c 0) 1))))
        livec (\ l (filter (\ cid (< 1 (tally (peep cls cid ())))) (peep occ l ())))
        orig (\ m (<= (>> (abs m) 0) nvars))                 ; an ORIGINAL-variable literal
        ofree (\ c (all orig c))                             ; ... clause of only those
        try (\ l                                             ; one greedy factoring attempt at l -> 1 if applied
-        (: mcls0 (? (&& (= 1 (peep fbvac0 () 0)) (! (orig l))) ()
+        (: mcls0 (? (&& (= 1 (peep fbvac0 () 0)) !(orig l)) ()
                     (? (= 1 (peep fbvac0 () 0)) (filter (\ cid (= 1 (ofree (peep cls cid ())))) (livec l))
                        (livec l)))
            (? (< (tally mcls0) 4) 0
@@ -818,15 +818,15 @@
                           _ (foldl (\ _ cid
                                (: c (peep cls cid ()) r (rem-lit l c)
                                   k (foldl (\ b m2 (? (< (tally (peep occ m2 ())) (tally (peep occ b ()))) m2 b))
-                                           (cap r) (cup r))
+                                           <r >r)
                                   (foldl (\ _ did
                                        (: d (peep cls did ())
-                                          (? (! (two? d)) 0
+                                          (? !(two? d) 0
                                              (= did cid) 0
-                                             (! (= (tally d) (tally c))) 0
-                                             (! (= 1 (bva-sub? r d))) 0
+                                             !(= (tally d) (tally c)) 0
+                                             !(= 1 (bva-sub? r d)) 0
                                              (: m (bva-x1 d r)
-                                                (? (&& (= 1 (peep fbvac0 () 0)) (! (orig m))) 0
+                                                (? (&& (= 1 (peep fbvac0 () 0)) !(orig m)) 0
                                                    (member? m mlit) 0
                                                    (: _ (pin pc m (+ 1 (peep pc m 0)))
                                                       _ (pin pl m (link cid (peep pl m ()))) 0))))))
@@ -836,13 +836,13 @@
                           (? (atom? ks) (link mlit mcls)
                              (: best (foldl (\ b m (: cm (peep pc m 0) cb (peep pc b 0)   ; max count; ties -> LOWEST literal
                                                (? (|| (> cm cb) (&& (= cm cb) (< m b))) m b)))   ; (symmetric instances: keeps groups contiguous)
-                                            (cap ks) (cup ks))
+                                            <ks >ks)
                                 nc (peep pc best 0) nl (+ 1 (tally mlit))
                                 red2 (- (* nl nc) (+ nl nc))
                                 (? (> red2 red) (grow (link best mlit) (peep pl best ()) red2)
                                    (link mlit mcls))))))
                     (link l ()) mcls0 -1)
-                 mlit (cap g) mcls (cup g)
+                 mlit <g mcls >g
                  nl (tally mlit) ncl (tally mcls)
                  (? (< (- (* nl ncl) (+ nl ncl)) 1) 0        ; apply only when it strictly shrinks the formula
                     (: x (+ 1 (peep nv () 0)) _ (pin nv () x)
@@ -853,7 +853,7 @@
                        ; still present, or a tautology), then the originals deleted
                        _ (: j (peep fdrat0 () 0)
                             (? (hot? j)
-                               (: _ (foldl (\ _ m (: _ (fdsay j "" (L (- 0 x) m)) 0)) 0 mlit)
+                               (: _ (foldl (\ _ m (: _ (fdsay j "" `((- 0 x) m)) 0)) 0 mlit)
                                   _ (fdsay j "" (link x (map (\ m (- 0 m)) mlit)))
                                   _ (foldl (\ _ r (: _ (fdsay j "" (link x r)) 0)) 0 rs)
                                   (foldl (\ _ m (foldl (\ _ r (: _ (fdsay j "d " (link m r)) 0)) 0 rs)) 0 mlit))
@@ -870,9 +870,9 @@
                                                                      ; wandering: without it CDCL decides x freely
        _ (foldl (\ _ c (: _ (addc c) 0)) 0 formula)
        _ ((: (round r)                                       ; sweep most-occurring literals first; stop on a quiet
-             (: ls (sortby (\ a b (? (= (cap a) (cap b)) (<= (cup a) (cup b)) (> (cap a) (cap b))))   ; round OR when the
-                           (filter (\ p (>= (cap p) 4)) (map (\ m (link (tally (livec m)) m)) (keys occ))))   ; cumulative find
-                ch (foldl (\ a p (+ a (try (cup p)))) 0 ls)                                           ; is a handful (a sweep
+             (: ls (sortby (\ a b (? (= <a <b) (<= >a >b) (> <a <b)))   ; round OR when the
+                           (filter (\ p (>= <p 4)) (map (\ m (link (tally (livec m)) m)) (keys occ))))   ; cumulative find
+                ch (foldl (\ a p (+ a (try >p))) 0 ls)                                           ; is a handful (a sweep
                 (? (&& (> ch 0)                                                                       ; costs a full pass; an
                        (&& (> (* 16 (- (peep nv () 0) nvars)) nvars)                                   ; incidental 6-of-300 is
                            (&& (< r (peep fbvar0 () 8)) (< (peep nv () 0) (+ (* 4 nvars) 64)))))        ; not worth another)
@@ -889,10 +889,10 @@
     ; with nothing factorable exits after one pass (randoms: no ladder cost). models
     ; still project by the ORIGINAL nvars.
     (: p (? (= 0 (peep fbva0 () 1)) (link formula nvars)
-            ((: (go p k) (: p2 (fbva (cap p) (cup p))
-                            (? (|| (<= (* 16 (- (cup p2) (cup p))) (cup p)) (>= k 3)) p2 (go p2 (+ k 1)))))
+            ((: (go p k) (: p2 (fbva <p >p)
+                            (? (|| (<= (* 16 (- >p2 >p)) >p) (>= k 3)) p2 (go p2 (+ k 1)))))
              (link formula nvars) 1))
-       s (fmk (cap p) (cup p))
+       s (fmk <p >p)
        r (? (= 1 (peep s 'bad 0)) 'unsat
             (: r (fsearch s) (? (id? r 'unsat) 'unsat (fextract s nvars))))
        j (peep fdrat0 () 0)                                  ; cap an UNSAT proof with the empty clause
@@ -902,12 +902,12 @@
     ((: (go fm c) (: r (fcdcl fm nvars) (? (id? r 'unsat) c (go (link (block r) fm) (+ c 1))))) formula 0)
    (fdiff seed n m)                                         ; flat CDCL == the DPLL oracle (and models check)
     (: f (gen-formula seed n m) d (solve f n) c (fcdcl f n)
-       dsat (! (id? d 'unsat)) csat (! (id? c 'unsat))
-       (? (! (= dsat csat)) 0  (! csat) 1  (sat? c f)))
+       dsat !(id? d 'unsat) csat !(id? c 'unsat)
+       (? !(= dsat csat) 0  !csat 1  (sat? c f)))
    (ffuzz k n m) (all (\ i (= 1 (fdiff (+ 1009 (* i 7919)) n m))) (jot k))
    (fboth f n)                                              ; kernels and twins agree, verdict for verdict
     (: _ (pin fknob () 1) a (fcdcl f n) _ (pin fknob () 0) b (fcdcl f n)
-       (? (id? a 'unsat) (id? b 'unsat) (&& (! (id? b 'unsat)) (sat? b f))))
+       (? (id? a 'unsat) (id? b 'unsat) (&& !(id? b 'unsat) (sat? b f))))
 
    ; --- the in-gate DRAT checker: RUP + RAT on the first literal, a from-scratch
    ; reimplementation of the CHECKING side (shares nothing with the emitter but
@@ -933,51 +933,51 @@
         (? (atom? rest) (? (= ch 1) (pass db 0) 0)
            (: r ((: (scan c sat un)
                     (? (atom? c) (? (= sat 1) 'sat (? (atom? un) 'conf un))
-                       (: l (cap c)
-                          (? (= 1 (peep asg l 0)) (scan (cup c) 1 un)
-                             (= 1 (peep asg (neg l) 0)) (scan (cup c) sat un)
-                             (scan (cup c) sat (link l un))))))
-                 (cap rest) 0 ())
+                       (: l <c
+                          (? (= 1 (peep asg l 0)) (scan >c 1 un)
+                             (= 1 (peep asg (neg l) 0)) (scan >c sat un)
+                             (scan >c sat (link l un))))))
+                 <rest 0 ())
               (? (id? r 'conf) 1
-                 (id? r 'sat) (pass (cup rest) ch)
-                 (atom? (cup r)) (: _ (pin asg (cap r) 1) (pass (cup rest) 1))
-                 (pass (cup rest) ch)))))
+                 (id? r 'sat) (pass >rest ch)
+                 (atom? >r) (: _ (pin asg <r 1) (pass >rest 1))
+                 (pass >rest ch)))))
      db 0)
    (fd-rup? db c)                                           ; does the negation propagate to a conflict?
     (: asg (tablet 0) _ (foldl (\ _ l (: _ (pin asg (neg l) 1) 0)) 0 c) (fd-up db asg))
-   (fd-rat? db c)                                           ; RAT on (cap c): every resolvent taut or RUP
+   (fd-rat? db c)                                           ; RAT on <c: every resolvent taut or RUP
     (? (atom? c) 0
-       (: p (cap c)
+       (: p <c
           (all (\ d (? (member? (neg p) d)
-                       (: rv (+ (cup c) (rem-lit (neg p) d))
+                       (: rv (+ >c (rem-lit (neg p) d))
                           (? (= 1 (taut? rv)) 1 (fd-rup? db rv)))
                        1))
                db)))
    (fd-del db c)                                            ; drop ONE clause equal as a set
     (: k (sort c)
        ((: (go d) (? (atom? d) ()
-                     (= (sort (cap d)) k) (cup d)
-                     (link (cap d) (go (cup d))))) db))
+                     (= (sort <d) k) >d
+                     (link <d (go >d)))) db))
    (fd-check f proof)                                       ; 1 iff every step checks and one derives ()
     ((: (go db ps)
         (? (atom? ps) 0
-           (: st (cap ps) c (cup st)
-              (? (= 1 (cap st)) (go (fd-del db c) (cup ps))
+           (: st <ps c >st
+              (? (= 1 <st) (go (fd-del db c) >ps)
                  (: ok (? (= 1 (fd-rup? db c)) 1 (fd-rat? db c))
                     (? (= 0 ok) 0
                        (atom? c) 1
-                       (go (link c db) (cup ps))))))))
+                       (go (link c db) >ps)))))))
      (map dedup-lits f) proof)
 
  ; --- the gate: the flat engine answers exactly like the oracle, kernels == twins
  _ (assert
     ; tiny SAT / UNSAT
-    (: f '((1 2) (-1 3) (-2 -3)) m (fcdcl f 3) (&& (! (id? m 'unsat)) (sat? m f)))
+    (: f '((1 2) (-1 3) (-2 -3)) m (fcdcl f 3) (&& !(id? m 'unsat) (sat? m f)))
     (id? (fcdcl '((1) (-1)) 1) 'unsat)
     (id? (fcdcl '((1 2) (1 -2) (-1 2) (-1 -2)) 2) 'unsat)
     (id? (fcdcl '((1 2 3) (1 2 -3) (1 -2 3) (1 -2 -3) (-1)) 3) 'unsat)
     ; cyclic: SAT, the model checks, and #SAT == Lucas (solver-independent)
-    (: f (cyclic 12) m (fcdcl f 12) (&& (! (id? m 'unsat)) (sat? m f)))
+    (: f (cyclic 12) m (fcdcl f 12) (&& !(id? m 'unsat) (sat? m f)))
     (= (count-fcdcl (cyclic 8) 8) (lucas 8))
     (= (count-fcdcl (cyclic 10) 10) (lucas 10))
     ; differential fuzz vs the DPLL oracle, mixed SAT/UNSAT near the phase transition
@@ -1000,8 +1000,8 @@
        (&& (id? r 'unsat) (= 1 (fd-check f (fd-parse (slurp j))))))
     (: f (php 4) j (jug 0) _ (pin fdrat0 () j) r (fcdcl f (php-vars 4)) _ (pin fdrat0 () 0)
        ps (fd-parse (slurp j))
-       bad (map (\ st (? (&& (= 0 (cap st)) (= 2 (tally (cup st))))    ; negate a literal in every
-                         (link 0 (link (- 0 (cap (cup st))) (cup (cup st)))) st))  ; 2-lit add line:
+       bad (map (\ st (? (&& (= 0 <st) (= 2 (tally >st)))    ; negate a literal in every
+                         (link 0 (link (- 0 <>st) >>st)) st))  ; 2-lit add line:
             ps)                                                        ; the checker must refuse
        (&& (id? r 'unsat) (&& (= 1 (fd-check f ps)) (= 0 (fd-check f bad)))))
     (: keep (peep fmaxl0 () 0) _ (pin fmaxl0 () 24)
