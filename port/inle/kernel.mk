@@ -156,7 +156,7 @@ $(ko)/love-$a.hdd: $(ko)/love-$a.elf $(dl)/limine/limine $(ko)/limine.conf
 # --- qemu run targets ------------------------------------------------
 k_qemu_x86_64 = -M q35 -serial stdio
 k_qemu_risc = -device ramfb -device qemu-xhci -device usb-kbd -device usb-mouse
-k_qemu_aarch64 = -M virt,gic-version=2 -cpu cortex-a72 -serial stdio $(k_qemu_risc)
+k_qemu_aarch64 = -M virt,gic-version=2 -cpu cortex-a72 -serial stdio -semihosting $(k_qemu_risc)
 k_qemu = qemu-system-$a -m 256M $(k_qemu_$a) \
   -drive if=pflash,unit=0,format=raw,file=$(dl)/edk2-ovmf/ovmf-code-$a.fd,readonly=on
 
@@ -227,11 +227,23 @@ ifeq ($a,x86_64)
 test_kernel: host $(R)/tools/ktest.l
 	@$(MAKE) -s K_TEST=1 $(ko)/love-$a-test.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
 	@echo TEST $(ko)/love-$a-test.iso "(serial, headless)"
-	@$m $(R)/tools/ktest.l $(ko)/love-$a-test.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
+	@$m $(R)/tools/ktest.l $(ko)/love-$a-test.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd $a
 else
 test_kernel:
 	@echo "test_kernel: skipped (host arch $a is not x86_64)"
 endif
+
+# The aarch64 twin of test_kernel: cross-build the K_TEST kernel and run the same
+# corpus under full-TCG qemu-system-aarch64 (~45s). NOT wired into test_all --
+# that is a cross-arch emulation run bolted onto an already-long gate, so it stays
+# a deliberate step. Run it whenever love.c, the kernel, or port/inle/aarch64/
+# moves: the aarch64 kernel silently stopped LINKING once before, and nothing
+# caught it precisely because test_kernel is x86_64-gated.
+.PHONY: test_kernel_arm64
+test_kernel_arm64: host $(R)/tools/ktest.l
+	@$(MAKE) -s K_TEST=1 a=aarch64 $(ko)/love-aarch64-test.iso $(dl)/edk2-ovmf/ovmf-code-aarch64.fd
+	@echo TEST $(ko)/love-aarch64-test.iso "(serial, headless, TCG)"
+	@$m $(R)/tools/ktest.l $(ko)/love-aarch64-test.iso $(dl)/edk2-ovmf/ovmf-code-aarch64.fd aarch64
 
 # --- wasm headless test (wired into test_all; emcc + node) -----------------
 # Build love.js and run the SAME $t corpus through it under node -- a third

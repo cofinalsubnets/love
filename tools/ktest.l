@@ -15,16 +15,23 @@
 (: a    (cup argv)
    iso  (cap a)
    ovmf (cap (cup a))
+   arch (: x (cup (cup a)) (? (two? x) (cap x) "x86_64"))   ; optional 3rd arg; x86_64 by default
+   ; machine + exit channel are per-arch. x86_64 quits qemu by writing the
+   ; isa-debug-exit port; 'virt' has no such device, so aarch64 goes out through
+   ; ARM semihosting instead -- see k_qemu_exit in each port's arch.c.
+   mach (? (arch = "aarch64")
+           `("-M" "virt,gic-version=2" "-cpu" "cortex-a72" "-semihosting")
+           `("-M" "q35" "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"))
    ; 512M + 420s: the corpus outgrew the old 256M/90s budgets. under 256M the
    ; kernel died SILENTLY mid-corpus at a deterministic dot, no fault text, the
    ; crash point MOVING with unrelated image growth (a budget wall's face, not
    ; a logic bug); and a full green run is ~3min wall under TCG (the kernel's
    ; own summary clock reads ~17s -- don't trust it for the timeout).
-   r    (run `("timeout" "420" "qemu-system-x86_64" "-m" "512M" "-M" "q35"
-                "-serial" "stdio" "-display" "none" "-no-reboot"
-                "-drive" (+ "if=pflash,unit=0,format=raw,file=" (+ ovmf ",readonly=on"))
-                "-cdrom" iso
-                "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"))
+   r    (run (cat `("timeout" "420" (+ "qemu-system-" arch) "-m" "512M")
+             (cat mach
+                  `("-serial" "stdio" "-display" "none" "-no-reboot"
+                    "-drive" (+ "if=pflash,unit=0,format=raw,file=" (+ ovmf ",readonly=on"))
+                    "-cdrom" iso))))
    out  (cup r)
    ok   (&& (has? out "tests pass") (! (has? out "failed:")))
    (? ok (: _ (puts (lineof out "tests pass")) (putc 10))
