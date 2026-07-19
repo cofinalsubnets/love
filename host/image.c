@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
 #include <link.h>
 
 // the wake-safety guard (doc/wake-storm.md): a kept-absolute pointer only survives a
@@ -166,17 +167,16 @@ static union u const nif_bake[] = {{lvm_bake}, {lvm_ret0}};
 AI_NIF("bake", nif_bake);
 
 struct ai *image_load(char const *path) {
-  FILE *f = fopen(path, "rb");
-  if (!f) return NULL;
+  int fd = open(path, O_RDONLY);
+  if (fd < 0) return NULL;
+  struct stat st;
   struct ai *g = NULL;
-  if (!fseek(f, 0, SEEK_END)) {
-    long n = ftell(f);
-    if (n > 0 && !fseek(f, 0, SEEK_SET)) {
-      void *buf = malloc((size_t) n);             // the host owns the file buffer; the core copies the blob out
-      if (buf && fread(buf, 1, (size_t) n, f) == (size_t) n) g = ai_image_load(buf, (uintptr_t) n);
-      free(buf);
-    }
-  }
-  fclose(f);
+  if (!fstat(fd, &st) && st.st_size > 0) {        // map, don't read: the core copies the blob straight
+    size_t n = (size_t) st.st_size;               // out of the page cache -- one pass, no file buffer
+    void *buf = mmap(NULL, n, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0);
+    if (buf != MAP_FAILED) {
+      g = ai_image_load(buf, (uintptr_t) n);
+      munmap(buf, n); } }
+  close(fd);
   return g;
 }
