@@ -789,6 +789,17 @@
           (map (\ e (dsubx (ren + (drm nms env)) e)) x))
        (map (\ e (dsubx env e)) x))
    (dsub old new B) (dsubx `((link old new)) B)                              ; substitute old->new in B, capture-avoiding
+   ; the define-sugar DECLINE guard (twin of ev.l's welow): a sugared : binder ((g z..) B) is a LIST --
+   ; dsubx never renames it -- so a beta whose argument carries a colliding free name would capture.
+   ; DECLINE such a beta: the redex stays source -- a missed inline, never a miscompile.
+   (dsyms e) (? (nom? e) `(e) (atom? e) () (dquote? e) () (foldl (\ a x (a + (dsyms x))) () e))
+   (dsugcol bs) (? (atom? >bs) () (: r (dsugcol >>bs) n <bs (? (two? n) (n + r) r)))
+   (dsugs e) (? (atom? e) () (dquote? e) ()
+                (: r (foldl (\ a x (a + (dsugs x))) () e)
+                   (? (id? <e ':) ((dsugcol >e) + r) r)))
+   (dbeta? old new B) (: ds (dsugs B)
+      (? (atom? ds) 1
+         (&& !(member? old ds) !(foldl (\ a s (|| a (member? s ds))) 0 (dsyms new)))))
    (dmap? P)   (&& (two? P) (id? <P 'map))
    (dfilt? P)  (&& (two? P) (id? <P 'filter))
    (dprod? P)  (|| (dmap? P) (dfilt? P))
@@ -817,7 +828,7 @@
        (dquote? x) x
        (: y (link (dsimp <x) (map dsimp >x)) h <y as >y
           (? (atom? h) y
-             (&& (id? <h '\) (&& (3 = (tally h)) (1 = (tally as)))) (dsimp (dsub <>h <as <>>h))
+             (&& (id? <h '\) (&& (3 = (tally h)) (&& (1 = (tally as)) (dbeta? <>h <as <>>h)))) (dsimp (dsub <>h <as <>>h))
              (&& (atom? <h) !(dspecial? <h))                 (dsimp (link <h (>h + as)))
              y)))
    ; (jot N) is the LIST source -- the materialized chain (0 .. N-1) foldl/map iterate; the loop never

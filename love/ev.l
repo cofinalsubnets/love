@@ -107,12 +107,27 @@
           (map (\ e (dsubx (cat ren (drm nms env)) e)) x))
        (map (\ e (dsubx env e)) x))
    (dsub old new B) (dsubx (L (link old new)) B)                                                         ; substitute old->new in B, capture-avoiding
+   ; the define-sugar DECLINE guard: dsubx α-renames \ params and bare-NOM : binders, but a sugared
+   ; binder ((g z..) B) is a LIST -- never renamed -- so a beta whose argument carries a colliding free
+   ; name would be captured under it (and a sugared name equal to the substituted param would shadow
+   ; it). Rather than rename sugared heads, DECLINE such a beta: the redex stays source and compiles
+   ; as a plain application -- a missed inline, never a miscompile.
+   (dsyms e) (? (nom? e) (L e) (atom? e) () (dquote? e) () (foldl (\ a x (cat a (dsyms x))) () e))     ; every nom in e, quotes skipped
+   (dsugcol bs) (? (atom? (cup bs)) ()                                                                 ; a : binding list's SUGARED binder syms (name + params)
+                   (: r (dsugcol (cuup bs)) n (cap bs) (? (two? n) (cat n r) r)))
+   (dsugs e) (? (atom? e) () (dquote? e) ()                                                            ; every sugared binder sym of every : in e
+                (: r (foldl (\ a x (cat a (dsugs x))) () e)
+                   (? (id? (cap e) ':) (cat (dsugcol (cup e)) r) r)))
+   (dbeta? old new B) (: ds (dsugs B)                                                                  ; safe to beta old:=new into B?
+      (? (atom? ds) 1
+         (&& (! (member? old ds))
+             (! (foldl (\ a s (|| a (member? s ds))) 0 (dsyms new))))))
    (dspecial? h) (|| (id? h '?) (|| (id? h '\) (id? h ':)))
    (dsimp x)                                                                                              ; reduce to first-order: beta unary lambdas, flatten curried heads
     (? (atom? x) x  (dquote? x) x
        (: y (link (dsimp (cap x)) (map dsimp (cup x))) h (cap y) as (cup y)
           (? (atom? h) y
-             (&& (id? (cap h) '\) (&& (= 3 (tally h)) (= 1 (tally as)))) (dsimp (dsub (caup h) (cap as) (cap (cuup h))))
+             (&& (id? (cap h) '\) (&& (= 3 (tally h)) (&& (= 1 (tally as)) (dbeta? (caup h) (cap as) (cap (cuup h)))))) (dsimp (dsub (caup h) (cap as) (cap (cuup h))))
              (&& (atom? (cap h)) (! (dspecial? (cap h))))                 (dsimp (link (cap h) (cat (cup h) as)))
              y)))
    (ho-lamb? v) (&& (two? v) (id? (cap v) '\) (< 2 (tally v)))
