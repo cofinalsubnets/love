@@ -163,16 +163,13 @@ struct ai {
  // reports them.
  uintptr_t n_gc, max_len, max_heap, // gc instrumentation (cycles, peak pool len, peak live heap; words)
            n_seen, n_evac;          // Σ over collections: heap occupancy entering each (scanned = live+dead) and survivors copied out (live). mortality = (n_seen-n_evac)/n_seen; copy-amp = n_evac/max_heap -- the generational-GC justifier (does the same live set get recopied every cycle?)
- // generational write-barrier AUDIT (stage 2): the remembered set -- old objects that hold a young
- // pointer (recorded by the barrier at ai_mapput/map_grow). A malloc'd buffer (via g->alloc, like the
- // major pool it audits). gen_audit walks the old region each collection and
- // counts rem_miss = old->young edges the barrier failed to remember (a soundness hole for the minor).
+ // the REMEMBERED SET -- the whole write barrier: old objects/cells that took a young pointer
+ // (gen_wb at maps/rings; gen_wb_cell/gen_wb_two at compiler stores + poke), each rescanned by
+ // the next minor. A malloc'd buffer (via g->alloc, like the major pool). rem_miss counts
+ // entries DROPPED on overflow -- any miss forces the next collection to a MAJOR (roots-only
+ // trace, needs no rem set), so a minor only ever runs under a complete set. Cleared (with
+ // rem_n) on every collection.
  ai_word *rem; uintptr_t rem_cap, rem_n, rem_hi, rem_miss;
- // the DIRTY flag: a non-map write hit an old cell (reader set-tail / poke into a tenured thread /
- // c0 backpatch) -- the compiler is the only thing that mutates old in place, and not via a map. A
- // collection with dirty set must be a MAJOR (full); dirty clear -> a minor is sound. Cleared on
- // every collection. The audit runs only when clear, so it proves a minor would lose nothing.
- uintptr_t dirty;
  // stage 3: the MINOR + the MAJOR pool. The main pool is now a pure MINOR pool
  // (the whole heap [end,hp) is young -- the `minor` watermark stays == end, never advanced); OLD lives
  // in the `major_pool`, a separate two-space (di) region. A MINOR evacuates the minor pool -> major-pool

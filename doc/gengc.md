@@ -112,19 +112,25 @@ barrier can't see:
 - the **task ring** splices a young yield/spawn snapshot into an existing node
   (`lvm_yield_sw`/`spawn`/`wait`).
 
-So the v1 barrier is **two-part** (and this is what stage 2 ships):
+So the v1 barrier was **two-part**: the rem set for the map/task-node case, plus a
+coarse `dirty` flag that forced a **major** whenever a compiler route wrote an old
+cell. The flag is **retired** (2026-07-19): every route is precise on the one rem
+set —
 
-1. a **remembered set** for the precise, hot, minor-friendly case — an old *map*
-   (or task-ring node) taking a young value: `ai_mapput`, `map_grow`, `ai_mapdel`,
-   the task splices → `gen_wb(src, p)` remembers `src` when it's old and `p` young;
-2. a **dirty flag** for the compiler's in-place mutation — `lvm_poke`, the reader's
-   set-tail, and **c0 via its entry** set `g->dirty` when they write an old cell.
-   A collection with `dirty` set must be a **major**; clear → a minor is sound.
-   Since execution never sets it, compute gets minors and *compile bursts* get a
-   major to flush their edges (boot too, where c0 runs). This is far simpler than a
-   poke-precise rem set or card marking, and exact: dirty ⟺ "an unbarriered old
-   write happened since the last collection." See `doc/proto/gengc.l` for the model
-   (a precise rem set; the dirty flag is the C answer to non-map mutation).
+- old maps / task-ring nodes: `gen_wb(src, p)` remembers `src` when it's old and
+  `p` young (`ai_mapput`, `map_grow`, `ai_mapdel`, the task splices);
+- the reader's set-tail: `gen_wb` on the mutated spine cons (landed 2026-06-27);
+- c0's stores and ev's `poke`: `gen_wb_cell`/`gen_wb_two` remember the exact
+  mutated cell of a **tagged span** (a spin thread, an env) or the mutated cons —
+  both shapes the minor's inplace-scan re-walks soundly. `poke`'s tagged-span
+  contract lives at `lvm_poke`; ev's backpatch sites box their cell (`qsite`) so
+  no poke ever targets a chain field.
+
+The one escape is rem-set **overflow** (`rem_miss`): a dropped entry forces the
+next collection to a major, which traces from roots and needs no rem set. So a
+minor only ever runs under a complete rem set — exactly the barrier
+`proof/rocq/gc.v` proves sound (`barrier_sound`), with no unmodeled leg. See
+`doc/proto/gengc.l` for the runnable model.
 
 ## Tenure-on-birth
 
@@ -183,8 +189,9 @@ the minor.
    clean). The `young?` predicate lands with its first caller (stage 2) — an
    unused `static inline` is a `-Werror` failure here. *(done)*
 2. **the barrier + audit** — `ai_young(p) = lamp(p) && nursery <= p < hp`; the
-   two-part barrier above (rem set `gen_wb` for old maps/task-nodes + `dirty` flag
-   for compiler mutation). `gen_audit` runs under `-DAI_STAT` when `dirty` is clear
+   two-part barrier as first shipped (rem set `gen_wb` for old maps/task-nodes +
+   a `dirty` flag for compiler mutation, since retired — see above). `gen_audit`
+   ran under `-DAI_STAT` when `dirty` was clear
    (a minor would fire) and does a **reachability DFS from the GC roots**, checking
    every reachable old object's young fields are remembered — dead/orphaned backings
    are never visited, so no false positives. RESULT: 0 unremembered edges across the

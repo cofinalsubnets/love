@@ -1143,19 +1143,15 @@ static ai_inline void evac_data(struct ai *g, word const *const p0, word const*c
 // or the READER mints (a map pin, a reader set-tail) goes through gen_wb, so a minor
 // under a complete rem set is sound -- exactly the barrier proof/rocq/gc.v's `barrier_sound`
 // proves (rem_complete => the minor reaches every young object the mutator can). See
-// doc/gengc.md, doc/gc-single-barrier.md.
+// doc/gengc.md.
 //
-// The DIRTY flag is NOT a second barrier on the same edges -- it is "skip the minor,
-// do a MAJOR" (a major traces from roots with no rem set, so it is unconditionally
-// sound). One setter remains: ev's poke-based thread-build (lvm_poke, runtime
-// compile) writes at an ARBITRARY index into a tenured thread -- a cell the minor's
-// terminator-bounded inplace-scan can't be aimed at from outside, so a precise
-// rem-set entry there would be UNSOUND (an early gen_wb attempt hung the egg-warm).
-// c0's stores ARE precise now (gen_wb_cell/gen_wb_two below): each remembers the
-// exact mutated cell of a TAGGED span (thread/env) or the mutated cons, both shapes
-// gen_scan_inplace re-walks soundly -- so a c0 compile no longer forces majors.
-// Retiring dirty entirely needs the same for lvm_poke (build young + tenure the
-// group atomically, doc/gc-single-barrier.md Step 3, not done).
+// The rem set is the WHOLE barrier: every old-cell mutation is remembered precisely --
+// maps/rings via gen_wb, c0's stores and ev's poke via gen_wb_cell/gen_wb_two (the
+// exact mutated cell of a TAGGED span, or the mutated cons -- both shapes
+// gen_scan_inplace re-walks soundly; poke's tagged-span contract at lvm_poke). The
+// one escape is rem-set OVERFLOW (rem_miss): a dropped entry forces the next
+// collection to a MAJOR, which traces from roots with no rem set and so is
+// unconditionally sound.
 //
 // young?: a heap pointer allocated since the last collection -- in [minor, hp).
 // The ADDRESS is the generation (ai objects carry no age bit).
@@ -1167,8 +1163,8 @@ static bool gen_remembered(struct ai *g, word obj) {
 static void gen_remember(struct ai *g, word obj) {
  if (g->rem_n && g->rem[g->rem_n - 1] == obj) return;          // hot path: same map as last pin
  if (gen_remembered(g, obj)) return;                           // deduped: the set stays small (book + a few)
- if (g->rem_n < g->rem_cap) g->rem[g->rem_n++] = obj;          // full: dirty forces a MAJOR (roots-only trace, no rem set), so a dropped entry can't orphan a young edge
- else g->rem_miss++, g->dirty = 1;
+ if (g->rem_n < g->rem_cap) g->rem[g->rem_n++] = obj;          // full: the miss forces a MAJOR (roots-only trace, no rem set), so a dropped entry can't orphan a young edge
+ else g->rem_miss++;
  if (g->rem_n > g->rem_hi) g->rem_hi = g->rem_n; }
 // the write barrier: an old `src` gains a young key/value/backing/tail `p` -> remember
 // src so a minor rescans it. Old maps (a pin) and reader spines (set-tail) are the
@@ -1178,14 +1174,9 @@ static ai_inline void gen_wb(struct ai *g, word src, word p) {
  if (lamp(src) && ai_young(g, p) && !ai_young(g, src)) gen_remember(g, src); }
 static ai_inline bool ai_major_cell(struct ai *g, word *c) {       // a tenured cell: inside the major pool
  return (ai_word*) c >= g->major_base && (ai_word*) c < g->major_hp; }
-// the poke barrier: a raw cell poke into a tenured object -> dirty (force a major). A poke
-// can target a cell the minor's terminator-bounded inplace-scan won't reach, so the precise
-// rem set is unsafe here; a major traces from roots and is always sound. Boot/compile-only.
-static ai_inline void gen_dirty(struct ai *g, word *cell) {
- if (ai_major_cell(g, cell)) g->dirty = 1; }
-// c0's precise barrier (the bootstrap compiler off the dirty flag): a compile-time
-// store of a young value into a tenured cell, remembered by the smallest scannable
-// unit around it so the next minor re-promotes what the store planted.
+// the cell barrier (c0's stores, ev's poke): a store of a young value into a tenured
+// cell, remembered by the smallest scannable unit around it so the next minor
+// re-promotes what the store planted.
 //   gen_wb_cell -- the cell sits in a TAGGED span (a thread under construction, a
 //     struct env): gen_scan_inplace runs [cell, terminator), covering the store.
 //     Never a chain's field: data has no terminator, the scan would walk off the object.
@@ -1304,8 +1295,8 @@ static void gen_minor(struct ai *g) {
 // stale pointers are simply ignored). One Cheney pass from the real roots over BOTH from-spaces --
 // the major ACTIVE half (p0/t0) and the minor (gc_f2{lo,hi}) -- copying every reachable object,
 // young or old, into the spare half (or a fresh pair twice the size when the major is over half
-// full). This subsumes the dirty case: tracing from roots finds every LIVE old->young edge with no
-// rem set. Then rebuild the weak intern map + run finalizers into the to-space, flip, and reset the
+// full). This is why a rem-set overflow forces a major: tracing from roots finds every LIVE
+// old->young edge with no rem set. Then rebuild the weak intern map + run finalizers into the to-space, flip, and reset the
 // (now fully promoted) minor. The core stays put in the main pool, so there is no core-flop: nil is
 // ZeroPoint (an out-of-pool const), not the core.
 static struct ai *gen_major(struct ai *g) {
@@ -1387,21 +1378,21 @@ static struct ai *gen_grow(struct ai *g, uintptr_t len1) {
  g->alloc(g, g->pool, 0);                    // free the old main pool
  return h; }
 
-// gen_please: the generational GC entry. A MINOR (cheap, frequent) unless something dirtied the
-// major in place or the major lacks headroom for a worst-case drain -- then a MAJOR (drain +
+// gen_please: the generational GC entry. A MINOR (cheap, frequent) unless the rem set
+// overflowed or the major lacks headroom for a worst-case drain -- then a MAJOR (drain +
 // compact). The minor ends empty; then size it by Appel's rule against the memory budget (below),
 // DECOUPLED from the major (which grows in gen_major and far less often).
 static struct ai *gen_please(struct ai *g, uintptr_t req0) {
  uintptr_t seen_young = (uintptr_t)(g->hp - g->end);
  uintptr_t major_free = (uintptr_t)((g->major_base + g->major_len) - g->major_hp);
  g->since_major += seen_young;                                  // young allocated (∝ scanned) since the last major
- // a MAJOR (else a minor): forced by a compile-time in-place mutation (dirty: c0 at boot, ev's thread-build poke); or the major can't hold a worst-case
+ // a MAJOR (else a minor): forced by a rem-set overflow (rem_miss -- a dropped entry would make a minor unsound); or the major can't hold a worst-case
  // promotion; or we've allocated the post-major live set + 4 minor-pools' worth since the last major --
  // the amortization rule that periodically traces, so floating DEAD tenured objects (which never grow
  // occupancy -- they die in place, invisible to a minor) get swept and the pool can shrink back. The
  // 4*minor-pool floor keeps majors the minority (>= 4 minors between them) even when little is tenured;
  // the major_live0 term amortizes major cost against allocation as the tenured set grows.
- bool major = g->dirty
+ bool major = g->rem_miss
    || major_free < (uintptr_t) g->len + req0 + 16
    || g->since_major > g->major_live0 + 4 * (uintptr_t) g->len;
  word *before = g->major_hp;
@@ -1413,7 +1404,7 @@ static struct ai *gen_please(struct ai *g, uintptr_t req0) {
  uintptr_t copied = major ? (uintptr_t)(g->major_hp - g->major_base) : (uintptr_t)(g->major_hp - before);
  g->n_seen += seen_young;
  g->n_evac += copied;
- g->rem_n = 0, g->dirty = 0;
+ g->rem_n = 0, g->rem_miss = 0;
  { uintptr_t e = (uintptr_t)(g->major_hp - g->major_base); if (e > g->max_heap) g->max_heap = e; }
  // MINOR resize -- DETERMINISTIC, no wall clock. Keep the GC's COPY OVERHEAD (words copied / words
  // allocated) inside a band, the word-for-word analogue of the old time ratio -- so the schedule is
@@ -1634,8 +1625,8 @@ static struct ai *append(struct ai *g) {
 static ai_noinline struct ai *c0(struct ai *g, lvm_t *y) {
  // every in-place store below (env accumulators, cons surgery, thread emission) is
  // precisely barriered -- gen_wb_cell / gen_wb_two -- so a mid-compile collection
- // stays MINOR. (the old blanket `dirty = 1` here forced a major per compile; a
- // woken image paid it as a full-heap copy on every invocation.)
+ // stays MINOR. (a blanket forced-major here once cost a woken image a full-heap
+ // copy on every invocation.)
  // the operator factor pass: c0 delegates the sigil surface -> core source
  // rewrite to the l `opfix` prepass (prel.l) -- evaluated like a macro,
  // once that global exists (i.e. for everything after its own definition
@@ -3043,7 +3034,10 @@ lvm(lvm_peek) { return
 
 lvm(lvm_poke) {
  union u *c = cell(Sp[2]) + getcharm(Sp[0]);
- gen_dirty(g, (word*) c);            // a raw cell poke into a tenured object (ev thread-build / recursive-ref) -> major
+ Pack(g);                    // ai_young reads g->hp -- the live Hp may be ahead (the lvm-context law)
+ gen_wb_cell(g, c, Sp[1]);   // poke's CONTRACT: the target cell sits in a tagged span (a spin
+                             // thread, an env) -- never a chain's field (ev boxes those; a chain
+                             // has no terminator for the remembered cell-walk).
  return c->x = Sp[1], *(Sp += 2) = word(c), Ip++, Continue(); }
 
 lvm(lvm_spin) {
@@ -4494,7 +4488,7 @@ op11(lvm_clock, putcharm(ai_clock() - getcharm(Sp[0])))
 //   [6] n_seen    Σ heap occupancy entering each collection (scanned = live + dead, words)
 //   [7] n_evac    Σ heap survivors copied out each collection (live, words)
 //   [8] old       the tenured set: words live in the major pool, else [end, minor)
-//   [9] rem_miss  Σ old->young edges the write barrier FAILED to record (retired; stays 0)
+//   [9] rem_miss  rem-set entries dropped on overflow since the last collection (a miss forces a major; ~always 0)
 //  [10] rem_hi    peak remembered-set size (distinct old objects with a young field)
 //  [11] n_minor   MINOR collections so far (majors = n_gc - n_minor)
 //  [12] major_cap the major pool's reserved footprint: 2*major_len words (both halves), 0 if non-gen
