@@ -198,7 +198,8 @@ interpreted pass.
 `satrace.sh` also races five rows of REAL benchmark-library instances (SATLIB, the
 classic competition-era suite; downloaded once into `out/bench/satlib/`, rows skip
 silently offline): uf100/uuf100 (uniform random 3-SAT at the transition, 10 satisfiable
-/ 10 proven-unsatisfiable), uuf150 (5 UNSAT), uf250 (3 SAT), flat100 (3 graph
+/ 10 proven-unsatisfiable), uuf150 (5 UNSAT), uf250 (14 SAT — panel width because
+the threshold rows are a per-instance lottery), flat100 (3 graph
 3-colorings). Two traps en route: SATLIB files end in a `%` footer that minisat and
 cadical REJECT — the exit-code "solves" at 3ms were parse errors, and the signature
 column (`?????`) is what caught it (strip the footer at fetch); and the file naming is
@@ -318,12 +319,20 @@ kissat ~4000 and the rest behind. the per-row composition, MEASURED (uuf150-01):
   scheme took 2 restarts where we take dozens of luby blocks. uuf250-class likewise
   stays ~2.5× cadical's conflict count (target-phase decision ordering, tier-2
   clause management are the stable-mode refinements left).
-* **the flat row is our own preprocessing floor, not search**: flat100-1 splits as
-  bva=12ms / load=2ms / search=0–1ms — the solve is instant and ~85% of the row is
-  the interpreted fbva sweep (~10µs/clause over 1,117 clauses); the same tax is ~5ms
-  of every uuf instance. the fix is a native lane for the fbva intake (a fourth nif
-  kernel — the occ-index and match-count loops are exactly the flat-arena shape the
-  other three use), or a cheaper structural pre-filter.
+* **the flat row was our own preprocessing floor, not search — now kernelized**:
+  flat100-1 split as bva=12ms / load=2ms / search=0–1ms, ~85% of the row the
+  interpreted fbva sweep. fbva now runs over FLAT state (a clause arena +
+  occurrence index in casks, literals as offset keys so key order is signed order)
+  and its probe machinery is the FOURTH kernel, `fbvag` — one grow step per call:
+  pass 1 walks each M_cls clause's cheapest occ chain doing the sorted
+  two-pointer subset/extra merge, counting candidates under a running best; pass
+  2 re-walks, zeroing the counts on sight (state-clean without a touched list)
+  and chaining the winner's clauses. `fbvag3` is the honest twin (the arm64 /
+  no-nif engine, and the `fknob` differential oracle — outputs byte-identical
+  kernel vs twin vs the old tablet pass). flat100-1 fbva 12 → 4.2ms, the
+  three-instance row 57 → 16ms — inside the field's band; the sat gate itself
+  dropped 3.3 → 2.4s. host/word.c (`peepw`/`pinw`, cask word slots in one
+  dispatch) rode along and made ALL interpreted twins ~2.7× faster.
 * php8 sits 1.5ms behind cadical.
 
 all lisp cold-path or kernel-phase work; the architecture doesn't move.

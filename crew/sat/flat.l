@@ -1,4 +1,4 @@
-; crew/sat/flat -- the CDCL solver over FLAT state, with THREE DOMAIN-SPECIFIC NATIVE
+; crew/sat/flat -- the CDCL solver over FLAT state, with FOUR DOMAIN-SPECIFIC NATIVE
 ; KERNELS: at solver-build time the hot loops are assembled through crew/holo/ (neutral IR,
 ; section offsets baked as immediates -- each kernel is SPECIALIZED to the instance's
 ; nvars, cached per nv) and installed via the `nif` seam:
@@ -9,7 +9,10 @@
 ;                                                              -> (cid<<6)|glue | -1 at level 0
 ;   dec  (fx)              highest-activity free var, phase-saved polarity, assign
 ;                                                              -> the var | 0 = SAT
-; the interpreted twins (fbcp3/fconf3/fdec3) over the SAME memory are the deopt
+;   fbvag (bx ba bo bp)    one BVA grow step over the flat intake state (its own
+;                          arena family; the layout comment sits above fbvag3)
+;                                                              -> best key | count = M_cls
+; the interpreted twins (fbcp3/fconf3/fdec3/fbvag3) over the SAME memory are the deopt
 ; fallbacks, the arm64/no-`nif` engine (the glazed image mops nif; make exports
 ; AI_NO_IMAGE=1 so every gate run has it), and the differential oracle: the `fknob`
 ; box forces the twins and `fboth` gates verdict equality. lisp keeps only the cold
@@ -35,11 +38,15 @@
 ; the conf caller pre-ensures arena room (aru+nv+3 words) and node room (wnu+4): the
 ; kernels never grow a cask.
 (:
-   ; --- 8-byte word slots, low 4 bytes live ---------------------------------------
-   (getw c i) (: b (8 * i) ((peep c b 0) | (((peep c (b + 1) 0) << 8) | (((peep c (b + 2) 0) << 16) | ((peep c (b + 3) 0) << 24)))))
-   (putw c i v) (: b (8 * i)
-                   _ (pin c b (v & 255)) _ (pin c (b + 1) ((v >> 8) & 255))
-                   _ (pin c (b + 2) ((v >> 16) & 255)) (pin c (b + 3) ((v >> 24) & 255)))
+   ; --- 8-byte word slots, low 4 bytes live: the host's word nifs (host/word.c) when
+   ; they are in the book, the byte path as the portable twin (freestanding targets
+   ; have no host glob) -- picked once at bind time ---------------------------------
+   getw (? (lit? peepw) peepw
+           (\ c i (: b (8 * i) ((peep c b 0) | (((peep c (b + 1) 0) << 8) | (((peep c (b + 2) 0) << 16) | ((peep c (b + 3) 0) << 24)))))))
+   putw (? (lit? pinw) pinw
+           (\ c i v (: b (8 * i)
+                       _ (pin c b (v & 255)) _ (pin c (b + 1) ((v >> 8) & 255))
+                       _ (pin c (b + 2) ((v >> 16) & 255)) (pin c (b + 3) ((v >> 24) & 255)))))
    (enc l) (? (l < 0) (1 + (2 * (0 - l))) (2 * l))          ; signed literal -> encoded
    ; --- the layout, from nv (twins recompute these from fx w3) --------------------
    (lvo-of nv) (8 + (nv + 1))
@@ -522,6 +529,137 @@
                '(label ret0) '(li r0 0)
                '(label dfin))
             + epi-ir + deopt1-ir))
+   ; --- kernel 4: the BVA grow step -- (fbvag bx ba bo bp); fbvag3 below is the
+   ; twin, phase for phase. registers: r11=bx r12=ba r13=bo r14=bp (callee-saved),
+   ; r10=l, r9 the chain cursor, r0/r3/r7/r8 scratch; bx header words 14+ are the
+   ; spill frame (cid/n/limi/limj/x/pnext/tail), so the walk fits the register
+   ; file. byte offsets: w3=24 pnu, w5=40 l, w6=48 chain-in, w7=56 mode, w8=64 LO,
+   ; w9=72 HI, w11=88 best, w12=96 count, w13=104 chain-out, w14..w20=112..160.
+   (bva-p1-ir pco8)                                         ; pass-1 match block (m=r0): count + running best
+    (: An (mint 0) Ax (mint 0)
+       `(`('ldx 'r3 'r11 'r0 8 pco8) '(add r3 r3 1) `('stx 'r11 'r0 8 pco8 'r3)
+          '(ld r7 r11 96)
+          '(cmp r3 r7) `('br 'gt An)
+          '(cmp r3 r7) `('br 'ne Ax)
+          '(ld r7 r11 88) '(cmp r0 r7) `('br 'ge Ax)        ; ties -> LOWEST key
+          `('label An) '(st r11 88 r0) '(st r11 96 r3)
+          `('label Ax)))
+   (bva-p2-ir pco8)                                         ; pass-2 match block: reset on sight + collect best's cids
+    (: Ax (mint 0)
+       `('(li r3 0) `('stx 'r11 'r0 8 pco8 'r3)
+          '(ld r3 r11 88) '(cmp r0 r3) `('br 'ne Ax)
+          '(ld r3 r11 24) '(ld r7 r11 112)
+          '(stx r14 r3 8 0 r7)                              ; node = [cid, chain]
+          '(ld r7 r11 104) '(stx r14 r3 8 8 r7)
+          '(st r11 104 r3)
+          '(add r3 r3 2) '(st r11 24 r3)
+          `('label Ax)))
+   (bva-walk-ir oco8 hho8 mlo8 act)                         ; the shared two-pass walk (fresh labels)
+    (: Lo (mint 0) Lod (mint 0) Lk (mint 0) Lkn (mint 0) Lke (mint 0)
+       Lq (mint 0) Lqd (mint 0) Lm (mint 0) Lms (mint 0) Lmb (mint 0) Lmx (mint 0)
+       Lme (mint 0) Lm2 (mint 0) Lmm (mint 0)
+       (`('(ld r0 r11 48)                                   ; p = chain-in
+          `('label Lo) '(cmp r0 0) `('br 'eq Lod)
+          '(ldx r3 r14 r0 8 0) '(st r11 112 r3)             ; cid
+          '(ldx r7 r14 r0 8 8) '(st r11 152 r7)             ; pnext
+          '(ldx r7 r12 r3 8 0) '(st r11 120 r7)             ; n
+          '(add r7 r7 r3) '(st r11 128 r7)                  ; limi = cid + n
+          '(ld r0 r11 112) '(add r0 r0 1)                   ; k = fewest-occurrence lit, l aside
+          '(li r8 2147483647) '(li r9 0)
+          `('label Lk) '(ld r7 r11 128) '(cmp r0 r7) `('br 'gt Lke)
+          '(ldx r3 r12 r0 8 0)
+          '(cmp r3 r10) `('br 'eq Lkn)
+          `('ldx 'r7 'r11 'r3 8 oco8)
+          '(cmp r7 r8) `('br 'ge Lkn)
+          '(mov r8 r7) '(mov r9 r3)
+          `('label Lkn) '(add r0 r0 1) `('jmp Lk)
+          `('label Lke)
+          `('ldx 'r9 'r11 'r9 8 hho8)                       ; q = heads[k]
+          `('label Lq) '(cmp r9 0) `('br 'eq Lqd)
+          '(ldx r0 r13 r9 8 0)                              ; did
+          '(ldx r7 r13 r9 8 8) '(mov r9 r7)                 ; advance early: fails jump straight to Lq
+          '(ldx r7 r12 r0 8 0) '(ld r3 r11 120)
+          '(cmp r7 r3) `('br 'ne Lq)                        ; size != n (covers tombstones)
+          '(ld r3 r11 112) '(cmp r0 r3) `('br 'eq Lq)       ; did == cid
+          '(ld r3 r11 120) '(add r3 r0 r3) '(st r11 136 r3) ; limj = did + n
+          '(li r3 0) '(st r11 144 r3)                       ; x = 0
+          '(ld r7 r11 112) '(add r7 r7 1)                   ; i = cid+1
+          '(add r8 r0 1)                                    ; j = did+1
+          `('label Lm) '(ld r0 r11 128) '(cmp r7 r0) `('br 'gt Lme)
+          '(ldx r0 r12 r7 8 0)                              ; ci
+          '(cmp r0 r10) `('br 'eq Lms)                      ; ci == l -> i++
+          '(ld r3 r11 136) '(cmp r8 r3) `('br 'gt Lq)       ; j exhausted with r left -> fail
+          '(ldx r3 r12 r8 8 0)                              ; cj
+          '(cmp r0 r3) `('br 'eq Lmb)
+          '(cmp r3 r0) `('br 'lt Lmx)                       ; cj < ci -> the extra
+          `('jmp Lq)                                        ; ci < cj -> r not a subset
+          `('label Lmx) '(ld r0 r11 144) '(cmp r0 0) `('br 'ne Lq)   ; a second extra -> fail
+          '(st r11 144 r3) '(add r8 r8 1) `('jmp Lm)
+          `('label Lms) '(add r7 r7 1) `('jmp Lm)
+          `('label Lmb) '(add r7 r7 1) '(add r8 r8 1) `('jmp Lm)
+          `('label Lme)                                     ; i exhausted
+          '(ld r0 r11 144) '(cmp r0 0) `('br 'ne Lm2)
+          '(ld r3 r11 136) '(cmp r8 r3) `('br 'ne Lq)       ; x=0: exactly the last slot remains
+          '(ldx r0 r12 r8 8 0) `('jmp Lmm)
+          `('label Lm2) '(ld r3 r11 136) '(cmp r8 r3) `('br 'le Lq) ; x>0: j must be past limj
+          '(ld r0 r11 144)
+          `('label Lmm)                                     ; m = r0: band + M_lit mark
+          '(ld r3 r11 64) '(cmp r0 r3) `('br 'lt Lq)
+          '(ld r3 r11 72) '(cmp r0 r3) `('br 'gt Lq)
+          `('ldx 'r3 'r11 'r0 8 mlo8) '(cmp r3 0) `('br 'ne Lq))
+        + act
+        + `(`('jmp Lq)
+            `('label Lqd)
+            '(ld r0 r11 152) `('jmp Lo)
+            `('label Lod))))
+   (fbvag-ir NB2)
+    (: s2 ((2 * NB2) + 2)
+       hho8 192 oco8 (8 * (24 + s2)) pco8 (8 * (24 + (3 * s2))) mlo8 (8 * (24 + (4 * s2)))
+       bufk (apof (cask 1))
+       (guard-ir 0 bufk + guard-ir 1 bufk + guard-ir 2 bufk + guard-ir 3 bufk
+       + '((push r3) (push r11) (push r12) (push r13) (push r14)
+              (ld r0 r1 0)  (ld r0 r0 8) (lea r11 r0 16)
+              (ld r0 r1 8)  (ld r0 r0 8) (lea r12 r0 16)
+              (ld r0 r1 16) (ld r0 r0 8) (lea r13 r0 16)
+              (ld r0 r1 24) (ld r0 r0 8) (lea r14 r0 16)
+              (li r0 0) (st r11 88 r0) (st r11 96 r0) (st r11 104 r0) (st r11 160 r0)
+              (ld r0 r11 56) (cmp r0 0) (br eq grow))
+       ; build mode: chain occ[l]'s live in-band clauses, walk order (tail-append)
+       + `('(ld r10 r11 40)
+              `('ldx 'r9 'r11 'r10 8 hho8)                    ; q = heads[l]
+              '(ld r8 r11 64) '(ld r10 r11 72)               ; LO / HI
+              '(label bq) '(cmp r9 0) '(br eq bend)
+              '(ldx r0 r13 r9 8 0) '(ldx r7 r13 r9 8 8) '(mov r9 r7)
+              '(ldx r3 r12 r0 8 0)
+              '(cmp r3 2) '(br lt bq)                        ; unit / tombstone
+              '(st r11 112 r0)                               ; did
+              '(add r3 r0 r3) '(add r7 r0 1)                 ; limj / j
+              '(label bo) '(cmp r7 r3) '(br gt badd)
+              '(ldx r0 r12 r7 8 0)
+              '(cmp r0 r8) '(br lt bq)                       ; out of band -> skip the clause
+              '(cmp r0 r10) '(br gt bq)
+              '(add r7 r7 1) '(jmp bo)
+              '(label badd)
+              '(ld r0 r11 24) '(ld r7 r11 112)
+              '(stx r14 r0 8 0 r7)
+              '(li r3 0) '(stx r14 r0 8 8 r3)
+              '(ld r7 r11 160) '(cmp r7 0) '(br ne btl)
+              '(st r11 104 r0) '(jmp btl2)
+              '(label btl) '(stx r14 r7 8 8 r0)
+              '(label btl2) '(st r11 160 r0)
+              '(add r0 r0 2) '(st r11 24 r0)
+              '(ld r0 r11 96) '(add r0 r0 1) '(st r11 96 r0)
+              '(jmp bq)
+              '(label bend) '(ld r0 r11 96) '(jmp gret)
+              '(label grow)
+              '(ld r10 r11 40))
+       + bva-walk-ir oco8 hho8 mlo8 (bva-p1-ir pco8)
+       + '((ld r0 r11 88) (cmp r0 0) (br eq gret))
+       + bva-walk-ir oco8 hho8 mlo8 (bva-p2-ir pco8)
+       + '((ld r0 r11 88)
+              (label gret)
+              (pop r14) (pop r13) (pop r12) (pop r11) (pop r3))
+       + epi-ir + deopt2-ir))
    fkers (tablet 0)                                         ; nv -> (bcp conf dec), one assemble per nvars
    fknob #0                                                 ; pin 1 to force the interpreted twins (the differential switch)
    fmaxl0 #2000                                             ; the initial learnt-DB cap (the gate lowers it to force reductions)
@@ -554,6 +692,13 @@
                       (fnif (fconf-ir nv) fconf3 4)
                       (fnif (fdec-ir nv) fdec3 1))
                 _ (pin fkers nv ks) ks))))
+   bvkers (tablet 0)                                        ; NB -> (fbvag), the grow-step kernel, one assemble per bucket
+   (fbvagk NB2)
+    (? !(&& (lit? nif) (id? (intern ai-arch) 'x64)) ()
+       (: hit (peep bvkers NB2 ())
+          (? (two? hit) hit
+             (: ks (link (fnif (fbvag-ir NB2) fbvag3 4) ())
+                _ (pin bvkers NB2 ks) ks))))
    (fmk formula nvars)                                      ; build the flat solver state
     ; the LAYOUT nv is nvars rounded up to a power-of-2 bucket, so the kernel cache
     ; (keyed per layout) survives BVA's varying variable counts. phantom vars above
@@ -783,99 +928,245 @@
    fbva0 #1                                                 ; pin 0 to solve raw (the A/B switch)
    fbvar0 #8                                                ; BVA round cap
    fbvac0 #1                                                ; 1 = factor ORIGINAL structure only (no aux cascade)
-   (bva-sub? r d)                                           ; sorted lists: is r a subset of d?
-    (? (atom? r) 1 (atom? d) 0
-       (<r = <d) (bva-sub? >r >d)
-       (<d < <r) (bva-sub? r >d) 0)
-   (bva-x1 d r)                                             ; the ONE literal of d beyond r (|d| = |r|+1)
-    (? (atom? r) <d (<d = <r) (bva-x1 >d >r) <d)
+   ; the pass runs over FLAT state, and its hot loop -- the occ-probe / match-count
+   ; machinery inside `try` -- is the FOURTH native kernel (fbvag; fbvag3 the honest
+   ; twin, phase for phase). a literal is an OFFSET KEY: signed s -> s + NB, so key
+   ; order IS signed order and the hot walks compare words directly. nvars buckets
+   ; to a power of 2 (the kernel cache survives the ladder's varying counts) and NB
+   ; = 12*bucket+256 bounds every var a call can mint: a round starts under
+   ; 4*nvars+64, tries at most one lit per candidate, each adding at most one var.
+   ; bx header (24 words): w0 aru (clause-arena top) w1 onu (occ-node top) w2 nv
+   ; w3 pnu (match-node top) w4 mt (empty clause seen); the kernel seam: w5 l
+   ; w6 chain-in w7 mode (1 = build M_cls from occ[l], 0 = one grow level) w8/w9
+   ; the ORIGINAL-variable key band (sentinels 0/4NB pass everything when the aux
+   ; cascade is on) w10 NB; outs w11 best-key w12 count w13 chain-out; w14+ kernel
+   ; scratch. then five sections indexed by key, 2*NB+2 words each: HHO occ heads
+   ; | OCO raw occurrence counts (adds only -- the min-occ heuristic wants the
+   ; UNPRUNED tally) | LCO live counts (adds bump, deletes drop: the round sweep
+   ; reads a counter) | PCO the per-level match counts (pass 2 re-walks and zeroes:
+   ; state-clean without a touched list) | MLO the M_lit marks. a clause lays
+   ; [size, key0..] in ba, sorted; a tombstone zeroes the size and stashes the true
+   ; length at cid+1 (the freduce discipline -- occ chains are never pruned, every
+   ; walk checks the size first). occ / match nodes are [cid, next] in bo / bp
+   ; (0 = nil; words 0-1 reserved). the kernel never grows a cask: the driver
+   ; pre-ensures bp room (build: 2*OCO[l]; grow: 2*level-length) before each call.
+   ; --- the grow-step twin -- (fbvag3 bx ba bo bp), the kernel's spec. build mode
+   ; chains occ[l]'s live in-band clauses in WALK order (tail-append) -> count.
+   ; grow mode, pass 1: per clause, k = fewest-occurrence lit beside l; per occ[k]
+   ; partner of equal size, the ONE key beyond C\{l} (a sorted two-pointer merge);
+   ; in-band, unmarked keys count into PCO under a RUNNING best (count, ties ->
+   ; lowest key -- increments reach the final max, so the running max IS the
+   ; argmax). pass 2 (only when a best exists) re-walks, zeroing PCO on sight and
+   ; chaining the best key's clauses (front-push = the walk's own order reversed,
+   ; the pl discipline) -> best key, count + chain in w11-w13.
+   (fbvag3 bx2 ba2 bo2 bp2)
+    (: NB2 (getw bx2 10) s2 ((2 * NB2) + 2)
+       hho 24 oco (hho + s2) pco (hho + (3 * s2)) mlo (hho + (4 * s2))
+       l (getw bx2 5) lo (getw bx2 8) hi (getw bx2 9)
+       _ (putw bx2 11 0) _ (putw bx2 12 0) _ (putw bx2 13 0)
+       (? (1 = (getw bx2 7))
+          ((: (bld q cnt tail)                              ; build M_cls: live, in-band, walk order
+              (? (q = 0) (: _ (putw bx2 12 cnt) cnt)
+                 (: did (getw bo2 q) qn (getw bo2 (q + 1))
+                    n2 (getw ba2 did)
+                    ok (? (n2 < 2) 0
+                          ((: (ofr j) (? (j > (did + n2)) 1
+                                (: e2 (getw ba2 j)
+                                   (? (|| (e2 < lo) (e2 > hi)) 0 (ofr (j + 1))))))
+                           (did + 1)))
+                    (? (0 = ok) (bld qn cnt tail)
+                       (: p (getw bx2 3) _ (putw bx2 3 (p + 2))
+                          _ (putw bp2 p did) _ (putw bp2 (p + 1) 0)
+                          _ (? (tail = 0) (putw bx2 13 p) (putw bp2 (tail + 1) p))
+                          (bld qn (cnt + 1) p))))))
+           (getw bx2 (hho + l)) 0 0)
+          (: (mrg cid did n)                                ; the ONE key of d beyond c\{l}, -1 if none
+              ((: (go i j x)
+                  (? (i > (cid + n))
+                     (? (x > 0) (? (j > (did + n)) x -1)
+                        (j = (did + n)) (getw ba2 j) -1)
+                     (: ci (getw ba2 i)
+                        (? (ci = l) (go (i + 1) j x)
+                           (j > (did + n)) -1
+                           (: cj (getw ba2 j)
+                              (? (ci = cj) (go (i + 1) (j + 1) x)
+                                 (cj < ci) (? (x > 0) -1 (go i (j + 1) cj))
+                                 -1))))))
+               (cid + 1) (did + 1) 0)
+             (bmk2 cid n)                                   ; fewest-occurrence lit of the clause, l aside
+              ((: (go j k kc)
+                  (? (j > (cid + n)) k
+                     (: e2 (getw ba2 j)
+                        (? (e2 = l) (go (j + 1) k kc)
+                           (: ec (getw bx2 (oco + e2))
+                              (? (ec < kc) (go (j + 1) e2 ec) (go (j + 1) k kc)))))))
+               (cid + 1) 0 2147483647)
+             (walk p act)                                   ; the shared two-pass skeleton
+              (? (p = 0) 0
+                 (: cid (getw bp2 p) pn (getw bp2 (p + 1))
+                    n (getw ba2 cid) k (bmk2 cid n)
+                    _ ((: (ow q)
+                          (? (q = 0) 0
+                             (: did (getw bo2 q) qn (getw bo2 (q + 1))
+                                _ (? !(n = (getw ba2 did)) 0   ; (covers tombstones: size 0)
+                                     (did = cid) 0
+                                     (: m (mrg cid did n)
+                                        (? (m < 0) 0
+                                           (|| (m < lo) (m > hi)) 0
+                                           (1 = (getw bx2 (mlo + m))) 0
+                                           (act cid m))))
+                                (ow qn))))
+                       (getw bx2 (hho + k)))
+                    (walk pn act)))
+             _ (walk (getw bx2 6)
+                 (\ cid m (: c2 (1 + (getw bx2 (pco + m)))
+                             _ (putw bx2 (pco + m) c2)
+                             bb (getw bx2 12)
+                             (? (|| (c2 > bb) (&& (c2 = bb) (m < (getw bx2 11))))
+                                (: _ (putw bx2 11 m) (putw bx2 12 c2)) 0))))
+             bk (getw bx2 11)
+             (? (bk = 0) 0
+                (: _ (walk (getw bx2 6)
+                       (\ cid m (: _ (putw bx2 (pco + m) 0)
+                                   (? !(m = bk) 0
+                                      (: p (getw bx2 3) _ (putw bx2 3 (p + 2))
+                                         _ (putw bp2 p cid) _ (putw bp2 (p + 1) (getw bx2 13))
+                                         (putw bx2 13 p))))))
+                   bk)))))
    (fbva formula nvars)                                     ; -> (formula2 . nvars2), equisatisfiable
-    (: cls (tablet 0) ckey (tablet 0) occ (tablet 0) ncid #0 nv #0
-       _ (pin nv () nvars)
-       addc (\ c0                                           ; canon + dedupe + index; drops tautologies
+    (: NB ((12 * ((: (bkt k) (? (k >= nvars) k (bkt (2 * k)))) 16)) + 256)
+       s2 ((2 * NB) + 2)
+       HHO 24  OCO (HHO + s2)  LCO (OCO + s2)  PCO (LCO + s2)  MLO (PCO + s2)
+       fo (peep fbvac0 () 0)
+       LO (? (1 = fo) (NB - nvars) 0)                       ; the ORIGINAL-variable key band
+       HI (? (1 = fo) (NB + nvars) (4 * NB))                ; (sentinels: everything passes)
+       bx (cask (8 * (MLO + s2)))
+       b (tablet 0)
+       _ (putw bx 0 2) _ (putw bx 1 2) _ (putw bx 2 nvars) _ (putw bx 3 2)
+       _ (putw bx 8 LO) _ (putw bx 9 HI) _ (putw bx 10 NB)
+       _ (pin b 'ba (cask 8192)) _ (pin b 'bo (cask 8192)) _ (pin b 'bp (cask 4096))
+       ks (fbvagk NB)
+       gstep (? (&& (two? ks) (0 = (peep fknob () 0))) <ks fbvag3)
+       (bcl ar cid)                                         ; the clause back out, sorted signed lits
+        (: n (getw ar cid)
+           ((: (go j acc) (? (j = cid) acc (go (j - 1) (link ((getw ar j) - NB) acc)))) (cid + n) ()))
+       (feq e n)                                            ; the live cid holding exactly keys e (size n), or ()
+        (: ar (peep b 'ba ()) bo (peep b 'bo ())
+           k (foldl (\ a el (? ((getw bx (OCO + el)) < (getw bx (OCO + a))) el a)) <e >e)
+           (eqr j e2) (? (atom? e2) 1 !((getw ar j) = <e2) 0 (eqr (j + 1) >e2))
+           ((: (go p) (? (p = 0) ()
+                         (: cid (getw bo p)
+                            (? (&& (n = (getw ar cid)) (1 = (eqr (cid + 1) e))) cid
+                               (go (getw bo (p + 1)))))))
+            (getw bx (HHO + k))))
+       (addc c0)                                            ; canon + dedupe + lay + index; drops tautologies
         (: c (sort (dedup-lits c0))
            (? (1 = (taut? c)) 0
-              (? (whole? (peep ckey c ())) 0                ; the sorted clause ITSELF is the key (chains key by value)
-                 (: cid (peep ncid () 0) _ (pin ncid () (cid + 1))
-                    _ (pin cls cid c) _ (pin ckey c cid)
-                    _ (foldl (\ _ m (: _ (pin occ m (link cid (peep occ m ()))) 0)) 0 c)
-                    1)))))
-       delc (\ cid (: c (peep cls cid ())
-                      (? !(two? c) 0 (: _ (pull cls cid 0) _ (pull ckey c 0) 1))))
-       livec (\ l (filter (\ cid (1 < (tally (peep cls cid ())))) (peep occ l ())))
-       orig (\ m (((abs m) >> 0) <= nvars))                 ; an ORIGINAL-variable literal
-       ofree (\ c (all orig c))                             ; ... clause of only those
-       try (\ l                                             ; one greedy factoring attempt at l -> 1 if applied
-        (: mcls0 (? (&& (1 = (peep fbvac0 () 0)) !(orig l)) ()
-                    (? (1 = (peep fbvac0 () 0)) (filter (\ cid (1 = (ofree (peep cls cid ())))) (livec l))
-                       (livec l)))
-           (? ((tally mcls0) < 4) 0
-              (: g ((: (grow mlit mcls red)                  ; extend M_lit while the reduction strictly grows
-                       (: pc (tablet 0) pl (tablet 0)        ; candidate -> match count / matched cids
-                          _ (foldl (\ _ cid
-                               (: c (peep cls cid ()) r (rem-lit l c)
-                                  k (foldl (\ b m2 (? ((tally (peep occ m2 ())) < (tally (peep occ b ()))) m2 b))
-                                           <r >r)
-                                  (foldl (\ _ did
-                                       (: d (peep cls did ())
-                                          (? !(two? d) 0
-                                             (did = cid) 0
-                                             !((tally d) = (tally c)) 0
-                                             !(1 = (bva-sub? r d)) 0
-                                             (: m (bva-x1 d r)
-                                                (? (&& (1 = (peep fbvac0 () 0)) !(orig m)) 0
-                                                   (member? m mlit) 0
-                                                   (: _ (pin pc m (1 + (peep pc m 0)))
-                                                      _ (pin pl m (link cid (peep pl m ()))) 0))))))
-                                     0 (peep occ k ()))))
-                             0 mcls)
-                          ks (keys pc)
-                          (? (atom? ks) (link mlit mcls)
-                             (: best (foldl (\ b m (: cm (peep pc m 0) cb (peep pc b 0)   ; max count; ties -> LOWEST literal
-                                               (? (|| (cm > cb) (&& (cm = cb) (m < b))) m b)))   ; (symmetric instances: keeps groups contiguous)
-                                            <ks >ks)
-                                nc (peep pc best 0) nl (1 + (tally mlit))
+              (atom? c) (? (0 = (getw bx 4)) (: _ (putw bx 4 1) 1) 0)   ; the empty clause rides a flag
+              (: e (map (\ s (s + NB)) c) n (tally e)
+                 (? (whole? (feq e n)) 0
+                    (: _ (fens b 'ba (8 * ((getw bx 0) + (n + 1))))
+                       ar (peep b 'ba ()) cid (getw bx 0)
+                       _ (putw ar cid n)
+                       _ (foldl (\ j el (: _ (putw ar j el) (j + 1))) (cid + 1) e)
+                       _ (putw bx 0 (cid + (n + 1)))
+                       _ (foldl (\ _ el
+                            (: _ (fens b 'bo (8 * ((getw bx 1) + 2)))
+                               bo (peep b 'bo ()) p (getw bx 1)
+                               _ (putw bo p cid) _ (putw bo (p + 1) (getw bx (HHO + el)))
+                               _ (putw bx (HHO + el) p) _ (putw bx 1 (p + 2))
+                               _ (putw bx (OCO + el) (1 + (getw bx (OCO + el)))) 0))
+                          0 e)
+                       _ (? (n < 2) 0
+                            (foldl (\ _ el (: _ (putw bx (LCO + el) (1 + (getw bx (LCO + el)))) 0)) 0 e))
+                       1)))))
+       (delc cid)
+        (: ar (peep b 'ba ()) n (getw ar cid)
+           (? (n = 0) 0
+              (: _ (? (n < 2) 0                             ; units were never counted
+                      ((: (dr j) (? (j > (cid + n)) 0
+                            (: e2 (getw ar j)
+                               _ (putw bx (LCO + e2) ((getw bx (LCO + e2)) - 1)) (dr (j + 1)))))
+                       (cid + 1)))
+                 _ (putw ar cid 0) _ (putw ar (cid + 1) n) 1)))
+       (lcnt el) (getw bx (LCO + el))                       ; live (size >= 2) clauses holding el
+       (try l)                                              ; one greedy factoring attempt at key l -> 1 if applied
+        (: pnu0 (getw bx 3)                                 ; bp is per-try scratch: top restored on every exit
+           _ (putw bx 5 l)
+           _ (fens b 'bp (8 * (pnu0 + (2 * (getw bx (OCO + l))))))
+           _ (putw bx 7 1)
+           n0 (? (|| (l < LO) (l > HI)) 0                   ; an out-of-band l factors nothing
+                 (gstep bx (peep b 'ba ()) (peep b 'bo ()) (peep b 'bp ())))
+           (? (n0 < 4) (: _ (putw bx 3 pnu0) 0)
+              (: _ (putw bx (MLO + l) 1)
+                 g ((: (grow mlit len chain red)            ; extend M_lit while the reduction strictly grows
+                       (: _ (putw bx 6 chain) _ (putw bx 7 0)
+                          _ (fens b 'bp (8 * ((getw bx 3) + (2 * len))))
+                          bk (gstep bx (peep b 'ba ()) (peep b 'bo ()) (peep b 'bp ()))
+                          (? (bk = 0) (link mlit chain)
+                             (: nc (getw bx 12) nl (1 + (tally mlit))
                                 red2 ((nl * nc) - (nl + nc))
-                                (? (red2 > red) (grow (link best mlit) (peep pl best ()) red2)
-                                   (link mlit mcls))))))
-                    (link l ()) mcls0 -1)
-                 mlit <g mcls >g
+                                (? (red2 > red)                   ; max count; ties -> LOWEST literal
+                                   (: _ (putw bx (MLO + bk) 1)    ; (symmetric instances: groups stay contiguous)
+                                      (grow (link bk mlit) nc (getw bx 13) red2))
+                                   (link mlit chain))))))
+                    (link l ()) n0 (getw bx 13) -1)
+                 mlit <g
+                 bp2 (peep b 'bp ())
+                 mcls ((: (go p) (? (p = 0) () (link (getw bp2 p) (go (getw bp2 (p + 1)))))) >g)
+                 _ (foldl (\ _ m (: _ (putw bx (MLO + m) 0) 0)) 0 mlit)
+                 _ (putw bx 3 pnu0)
+                 ar (peep b 'ba ())
                  nl (tally mlit) ncl (tally mcls)
-                 (? (((nl * ncl) - (nl + ncl)) < 1) 0        ; apply only when it strictly shrinks the formula
-                    (: x (1 + (peep nv () 0)) _ (pin nv () x)
-                       rs (map (\ cid (rem-lit l (peep cls cid ()))) mcls)
+                 (? (((nl * ncl) - (nl + ncl)) < 1) 0       ; apply only when it strictly shrinks the formula
+                    (: x (1 + (getw bx 2)) _ (putw bx 2 x)
+                       ml (map (\ m (m - NB)) mlit)         ; signed, most-recent first (l last)
+                       rs (map (\ cid (rem-lit (l - NB) (bcl ar cid))) mcls)
                        ; the proof lines, in RAT-checkable order: the definitions
                        ; (-x m) while NO clause carries x (blocked on -x), then the
                        ; x-clauses (RAT on x: every resolvent is an original (m r),
                        ; still present, or a tautology), then the originals deleted
                        _ (: j (peep fdrat0 () 0)
                             (? (hot? j)
-                               (: _ (foldl (\ _ m (: _ (fdsay j "" `((0 - x) m)) 0)) 0 mlit)
-                                  _ (fdsay j "" (link x (map (\ m (0 - m)) mlit)))
+                               (: _ (foldl (\ _ m (: _ (fdsay j "" `((0 - x) m)) 0)) 0 ml)
+                                  _ (fdsay j "" (link x (map (\ m (0 - m)) ml)))
                                   _ (foldl (\ _ r (: _ (fdsay j "" (link x r)) 0)) 0 rs)
-                                  (foldl (\ _ m (foldl (\ _ r (: _ (fdsay j "d " (link m r)) 0)) 0 rs)) 0 mlit))
+                                  (foldl (\ _ m (foldl (\ _ r (: _ (fdsay j "d " (link m r)) 0)) 0 rs)) 0 ml))
                                0))
                        _ (foldl (\ _ m (: _ (foldl (\ _ r
-                              (: k (sort (link m r)) did (peep ckey k ())
+                              (: k (sort (link m r)) e2 (map (\ s (s + NB)) k)
+                                 did (feq e2 (tally e2))
                                  (? (whole? did) (delc did) (scare 'bva-miss k))))
-                            0 rs) 0)) 0 mlit)
+                            0 rs) 0)) 0 ml)
                        _ (foldl (\ _ r (: _ (addc (link x r)) 0)) 0 rs)
-                       _ (foldl (\ _ m (: _ (addc (link (0 - x) (link m ()))) 0)) 0 mlit)
-                       _ (addc (link x (map (\ m (0 - m)) mlit)))   ; the OTHER direction: x <- AND(m) --
-                       1))))))                                       ; a COMPLETE definition (pure extended
-                                                                     ; resolution), so x propagates instead of
-                                                                     ; wandering: without it CDCL decides x freely
+                       _ (foldl (\ _ m (: _ (addc (link (0 - x) (link m ()))) 0)) 0 ml)
+                       _ (addc (link x (map (\ m (0 - m)) ml)))   ; the OTHER direction: x <- AND(m) --
+                       1)))))                                      ; a COMPLETE definition (pure extended
+                                                                   ; resolution), so x propagates instead of
+                                                                   ; wandering: without it CDCL decides x freely
        _ (foldl (\ _ c (: _ (addc c) 0)) 0 formula)
-       _ ((: (round r)                                       ; sweep most-occurring literals first; stop on a quiet
-             (: ls (sortby (\ a b (? (<a = <b) (>a <= >b) (<a > <b)))   ; round OR when the
-                           (filter (\ p (<p >= 4)) (map (\ m (link (tally (livec m)) m)) (keys occ))))   ; cumulative find
-                ch (foldl (\ a p (a + (try >p))) 0 ls)                                           ; is a handful (a sweep
-                (? (&& (ch > 0)                                                                       ; costs a full pass; an
-                       (&& ((16 * ((peep nv () 0) - nvars)) > nvars)                                   ; incidental 6-of-300 is
-                           (&& (r < (peep fbvar0 () 8)) ((peep nv () 0) < ((4 * nvars) + 64)))))        ; not worth another)
+       _ ((: (round r)                                      ; sweep most-occurring literals first; stop on a quiet
+             (: nv2 (getw bx 2)                             ; round OR when the cumulative find is a handful (a sweep
+                ls (sortby (\ a2 b2 (? (<a2 = <b2) (>a2 <= >b2) (<a2 > <b2)))   ; costs a full pass; an
+                           ((: (go el acc)                                       ; incidental 6-of-300 is
+                               (? (el > (NB + nv2)) acc                          ; not worth another)
+                                  (: c (lcnt el)
+                                     (go (el + 1) (? (c >= 4) (link (link c (el - NB)) acc) acc)))))
+                            (NB - nv2) ()))
+                ch (foldl (\ a2 p (a2 + (try (>p + NB)))) 0 ls)
+                (? (&& (ch > 0)
+                       (&& ((16 * ((getw bx 2) - nvars)) > nvars)
+                           (&& (r < (peep fbvar0 () 8)) ((getw bx 2) < ((4 * nvars) + 64)))))
                    (round (r + 1)) 0)))
            0)
-       (link (map (\ cid (peep cls cid ())) (keys cls)) (peep nv () 0)))
+       ar (peep b 'ba ()) end (getw bx 0)
+       out ((: (walk cid acc)
+               (? (cid >= end) (rev acc)
+                  (: n (getw ar cid)
+                     (? (n = 0) (walk (cid + ((getw ar (cid + 1)) + 1)) acc)
+                        (walk (cid + (n + 1)) (link (bcl ar cid) acc))))))
+            2 ())
+       (link (? (1 = (getw bx 4)) (link () out) out) (getw bx 2)))
    (fcdcl formula nvars)
     ; the fbva LADDER: re-run the pass on its own output with the baseline lifted (level-1
     ; aux become "original" for level 2) while it keeps factoring SUBSTANTIALLY (> nvars/16
@@ -1019,4 +1310,4 @@
               (&& (ffuzz 30 12 50) ((count-fcdcl (cyclic 10) 10) = (lucas 10))))
        _ (pin fcmp0 () keep) ok))
  _ (say err ("crew/sat/flat: ok -- flat-arena CDCL == DPLL on 150 fuzzed + PHP(5) + #SAT==Lucas"
-             + (? (two? (fbcpk 8)) " (native bcp+conf+dec kernels live)\n" " (interpreted twins)\n"))))
+             + (? (two? (fbcpk 8)) " (native bcp+conf+dec+bvag kernels live)\n" " (interpreted twins)\n"))))
