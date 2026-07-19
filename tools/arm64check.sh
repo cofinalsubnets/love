@@ -28,7 +28,7 @@ fi
 # the native headers (egg + lcat libs) must exist; they are arch-neutral source.
 test -f out/lib/egg.h || { echo "test_arm64: run 'make host' first (need out/lib/*.h)"; exit 1; }
 
-O=out/arm64; mkdir -p $O
+O=out/arm64; mkdir -p $O; rm -f $O/*.o
 # ai_tco=1 (the DEFAULT threaded dispatch): the glaze native code is NOT
 # dispatch-independent -- it emits the threaded ABI (Ip/Hp/Sp in x1/x2/x3) and
 # its own Continue (advance Ip, br [Ip]). Under tco=0 the native is entered as

@@ -478,7 +478,7 @@ test_moon: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 test_selfhost: host out/host$(hsuf)/mooncc
 	@echo SELFHOST $(ho)/love-selfhost
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
-	  d=$(ho)/selfhost; mkdir -p $$d; \
+	  d=$(ho)/selfhost; mkdir -p $$d; rm -f $$d/*.o; \
 	  $(ho)/mooncc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c love.c $$d/love.o \
 	    || { echo "FAIL mooncc -c love.c"; exit 1; }; \
 	  for f in host/*.c; do b=`basename $$f .c`; \
@@ -506,7 +506,7 @@ test_selfhost: host out/host$(hsuf)/mooncc
 test_raw: host out/host$(hsuf)/mooncc
 	@echo RAW $(ho)/love-raw
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_raw: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
-	  d=$(ho)/raw; mkdir -p $$d; \
+	  d=$(ho)/raw; mkdir -p $$d; rm -f $$d/*.o; \
 	  $(ho)/mooncc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c love.c $$d/love.o \
 	    || { echo "FAIL mooncc -c love.c"; exit 1; }; \
 	  for f in host/*.c; do b=`basename $$f .c`; \
@@ -565,7 +565,7 @@ test_raw_bake: test_raw
 test_raw_arm64: host out/host$(hsuf)/mooncc
 	@echo RAW-ARM64 $(ho)/love-raw-a64
 	@if ! command -v qemu-aarch64 >/dev/null 2>&1; then echo "test_raw_arm64: no qemu-aarch64, skipped"; exit 0; fi; \
-	  d=$(ho)/raw-a64; mkdir -p $$d; \
+	  d=$(ho)/raw-a64; mkdir -p $$d; rm -f $$d/*.o; \
 	  $(ho)/mooncc -t arm64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c love.c $$d/love.o \
 	    || { echo "FAIL mooncc -t arm64 -c love.c"; exit 1; }; \
 	  for f in host/*.c; do b=`basename $$f .c`; \
@@ -607,7 +607,7 @@ test_thumb1: host out/host$(hsuf)/mooncc
 	@echo THUMB1 $(ho)/thumb1
 	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1 || ! command -v arm-none-eabi-ld >/dev/null 2>&1 || ! command -v qemu-system-arm >/dev/null 2>&1; then \
 	   echo "test_thumb1: no arm-none-eabi toolchain / qemu-system-arm, skipped"; exit 0; fi; \
-	  d=$(ho)/thumb1; mkdir -p $$d; \
+	  d=$(ho)/thumb1; mkdir -p $$d; rm -f $$d/*.o; \
 	  { printf 'int acc = 40;\n'; \
 	    printf 'int arr[4];\n'; \
 	    printf 'struct S { int *p; int x; };\n'; \
