@@ -9,7 +9,7 @@
 ;    the source; the enclosing closure's src is never rewritten.
 ;  * id?-distinct -- a fresh native cell per `ala` call (no compile cache), exactly like
 ;    bytecode closures: !(id? (\ x E) (\ x E)) holds.
-;  * macro-safe -- compiles the SURFACE body `(last (cup s))` (post-opfix, pre-tag), so
+;  * macro-safe -- compiles the SURFACE body `(last >s)` (post-opfix, pre-tag), so
 ;    iop/apx tags never reach codegen; a macro/non-arith body simply fails the grammar
 ;    and stays bytecode.
 ;  * no double-compile -- the deopt target is `e` itself (the bytecode closure ala built),
@@ -38,24 +38,24 @@
    ; lane: parse defs (anat-defs), op-cover (jgir-ok?), compile PURE (jitgroupirx, e deopt). The pre-analysis
    ; LOWERING hook (book['welow], church + HOF) now lives PRE-EGG in ai/ev.l -- the sole welow, no shadow here.
    (exprn ps e) (? (member? e ps) 1  (whole? e) 1                          ; var in frame | int literal
-                   (two? e) (: op (cap e)
-                               (? (member? op (cat '(+ - * // % & | ^ < <= > >= =) (? (getenv "AI_PARTIAL_GLAZE") '(<< >>) ()))) (&& (exprn ps (caup e)) (exprn ps (caup (cup e))))
-                                  (= op '?) (&& (two? (cup (cup (cup e)))) !(two? (cup (cup (cup (cup e)))))
-                                               (exprn ps (caup e)) (exprn ps (caup (cup e))) (exprn ps (caup (cup (cup e)))))
+                   (two? e) (: op <e
+                               (? (member? op ('(+ - * // % & | ^ < <= > >= =) + (? (getenv "AI_PARTIAL_GLAZE") '(<< >>) ()))) (&& (exprn ps <>e) (exprn ps <>>e))
+                                  (op = '?) (&& (two? >>>e) !(two? >>>>e)
+                                               (exprn ps <>e) (exprn ps <>>e) (exprn ps <>>>e))
                                   0))
                    0)
    ; opnd-ok? -- every OPERAND-position leaf symbol in e is a frame param. heads are op-checked by
    ; jgir-ok?; in FIRST-ORDER group code a group name only ever appears as a HEAD, so a bare-symbol
    ; operand that isn't a frame var is a FREE capture -> reject (jgir compiles a body over the frame
    ; params only; it has no slot to bind an outer var). the synthetic-__outer tail guard.
-   (opnd-ok? ps e) (? (two? e) (all (\ x (opnd-ok? ps x)) (cup e))  (name? e) (member? e ps)  1)
+   (opnd-ok? ps e) (? (two? e) (all (\ x (opnd-ok? ps x)) >e)  (name? e) (member? e ps)  1)
    ; gdefs-ok? -- the SAME free-capture guard, per group DEF body: jgir binds a def over ITS OWN frame
    ; params only, so an operand leaf a def reads that isn't one of that def's params is an outer capture
-   ; with no slot. opnd-ok? only ever guarded the TAIL; a trailing-call named-let `(\ n (: (go i a) (- n 3)
+   ; with no slot. opnd-ok? only ever guarded the TAIL; a trailing-call named-let `(\ n (: (go i a) (n - 3)
    ; (go 0 0)))` slips a free `n` into go's body, which the group lane then compiled reading go's LAST arg
    ; slot (n=0 -> -3). Guard every def body too -> a free-reading body DEOPTS to bytecode (sound), never
-   ; miscompiles. gd = ((name p..) . body): (cup (cap gd)) = the def's frame params, (cup gd) = its body.
-   (gdefs-ok? gds) (all (\ gd (opnd-ok? (cup (cap gd)) (cup gd))) gds)
+   ; miscompiles. gd = ((name p..) . body): ><gd = the def's frame params, >gd = its body.
+   (gdefs-ok? gds) (all (\ gd (opnd-ok? ><gd >gd)) gds)
    ; natjit e s a gv farq lamq -- e = the bytecode entry (deopt target), s = (\ frame.. body)
    ; the surface src, a = arity, gv = ala's global resolver (this hook is post-egg; `book`/`gv`
    ; are mopped here, so ala hands its folded gv down for the call-out + amble lanes to
@@ -69,29 +69,29 @@
    ; reference site, so amble compiles the SAME application (entry curried through the
    ; import names, all in the frame by fixcaps' pour) with no staleness bet; entry 0 (a
    ; forward ref, pre-weave) declines.
-   ; ps = (init (cup s)) = the frame [imps args]; body = the surface body. compile
+   ; ps = (init >s) = the frame [imps args]; body = the surface body. compile
    ; body over ps; deopt -> e. non-qualifying -> e unchanged.
    (natjit e s a gv farq lams)
-    (: ps (init (cup s))  body (last (cup s))
-       (? (&& (two? s) (two? (cup (cup s))) (exprn ps body))         ; >=1 param, a body, leaf grammar
-          (: _ (pin fires () (+ 1 (peep fires () 0)))                  ; compile via the neutral-IR lane (coreir); deopt target = e
-             (nif (emit (peep (assemble arch (coreir arch ps body (deoptir arch (? (= a 1) 0 1)))) 'bytes 0)) e s a))
+    (: ps (init >s)  body (last >s)
+       (? (&& (two? s) (two? >>s) (exprn ps body))         ; >=1 param, a body, leaf grammar
+          (: _ (pin fires () (1 + (peep fires () 0)))                  ; compile via the neutral-IR lane (coreir); deopt target = e
+             (nif (emit (peep (assemble arch (coreir arch ps body (deoptir arch (? (a = 1) 0 1)))) 'bytes 0)) e s a))
           ; FLOAT-RESULT leaf -- (\ x <fexpr>) that BOXES a gem (auto-ev's qualfr/jitfr lane).
           ; one param only (qualfr's shape), so a captured float leaf falls through for now. deopt -> e,
           ; not (ev s): jitfr bakes (ev lam), which under the hook would re-enter ala -> so jitfrx takes e.
           (qualfr s)
-            (: _ (pin fires () (+ 1 (peep fires () 0))) (jitfrx s arch e))
+            (: _ (pin fires () (1 + (peep fires () 0))) (jitfrx s arch e))
           ; NOT a leaf -- try the counted-loop lane, then the general N-VAR loop lane (auto-ev's
           ; njit-loop / njit-loop-n, but deopting to `e`, the bytecode ala already built, NOT
           ; (base-ev s): re-interpreting s here would re-enter ala -> natjit -> ... So natjit passes
           ; e; owning the loop's back-edge is the big win over the leaf. The N-VAR lane's post-overflow
           ; deopt is cf-deopt's matrix-power closure (C-finite) OR e -- both bytecode under the hook.
           (: li (loopinfo s)
-             (? li (: _ (pin fires () (+ 1 (peep fires () 0)))
-                      (njit-loop s (cap li) (caup li) (caup (cup li)) (caup (cup (cup li))) e))
+             (? li (: _ (pin fires () (1 + (peep fires () 0)))
+                      (njit-loop s <li <>li <>>li <>>>li e))
                 (: ln (loopinfo-n s)
-                   (? ln (: _ (pin fires () (+ 1 (peep fires () 0)))
-                            (njit-loop-n s (cap ln) (caup ln) (caup (cup ln)) (caup (cup (cup ln))) (caup (cup (cup (cup ln)))) e))
+                   (? ln (: _ (pin fires () (1 + (peep fires () 0)))
+                            (njit-loop-n s <ln <>ln <>>ln <>>>ln <>>>>ln e))
                     ; CALL-OUT loop lane: a counted sum `(\ n (sum_{i<n} (F i)))` whose per-step term calls a
                     ; RESOLVABLE GLOBAL closure F -- glazed as the STACKLESS callout bridge (emit.l jitcalloutx),
                     ; F's value baked into value[1] as (F . twin), the two soundness gates guarding the result.
@@ -105,14 +105,14 @@
                     ; after ~4k cumulative iters. Callout also beats falling to group-swallow here (~1.5 vs ~1.8
                     ; ns/iter, measured), so the recognizer order (callout before group) is already the cheap one.
                     (: ci (calloutinfo s)                                        ; ci = (F op iv ARG); resolve F via gv --
-                       fv (? (&& ci !(farq (cap ci))) (gv (cap ci) 0) 0)         ; NEVER for a farq name (a wire-resolved local; the book namesake is stale)
+                       fv (? (&& ci !(farq <ci)) (gv <ci 0) 0)         ; NEVER for a farq name (a wire-resolved local; the book namesake is stale)
                        (? (&& ci (lit? fv))
-                          (: _ (pin fires () (+ 1 (peep fires () 0))) (jitcalloutx fv s (caup ci) (caup (cup ci)) (caup (cup (cup ci))) arch))   ; op iv ARG
+                          (: _ (pin fires () (1 + (peep fires () 0))) (jitcalloutx fv s <>ci <>>ci <>>>ci arch))   ; op iv ARG
                      ; CAPTURED / multi-arg call-out: F (and the bound) are FRAME params -> read from the
                      ; [imps args] frame, no bake; deopt to value[1]=e (the bytecode twin, which captures F).
                      (: cf (calloutinfo-frame s)                                 ; cf = (Fidx Nidx op ARG)
                         (? cf
-                           (: _ (pin fires () (+ 1 (peep fires () 0))) (njit-calloutframe s (cap cf) (caup cf) a e (caup (cup cf)) (caup (cup (cup cf))) arch))   ; op ARG
+                           (: _ (pin fires () (1 + (peep fires () 0))) (njit-calloutframe s <cf <>cf a e <>>cf <>>>cf arch))   ; op ARG
                       ; GROUP lane (always-on) -- a reusable closure
                       ; (\ frame.. <first-order mutually-recursive arith group>) whose tail calls the group.
                       ; auto-ev can't reach this (never gets the closure body as a callable-later unit); natjit
@@ -123,28 +123,28 @@
                       ; at ala the body is post-feel: define-sugar `(fib n) B` is DESUGARED to `fib (\ n B)`,
                       ; so anat-defs yields dds = ((name . (\ p.. B))..). Convert to jitgroupir's ((name p..) . B).
                       ; TWO shapes: a FLAT tail (entry frame..) -- the outer closure IS the group entry, no
-                      ; indirection; or a GENERAL tail (any arith over group calls -- (+ 1 (fib m)), a reordered
+                      ; indirection; or a GENERAL tail (any arith over group calls -- (1 + (fib m)), a reordered
                       ; /computed-arg call, tree recursion) -- synthesize an entry ((__outer . frame) . tail) and
                       ; make IT the group entry, so the outer closure evaluates the tail then dispatches. opnd-ok?
                       ; rejects a tail that reads a captured var (jgir binds only the frame); jgir-ok? gates ops.
-                      (: pd (? (&& (two? body) (id? (cap body) ':)) (anat-defs (cup body)) ())
-                         dds (? pd (cap pd) ())  tail (? pd (caup pd) ())
-                         okshape (&& pd (two? tail) (all (\ dd (&& (two? dd) (name? (cap dd)) (two? (cup dd)) (id? (cap (cup dd)) '\) (two? (cup (cup dd))))) dds))   ; every def is name (\ p.. B)
-                         gdefs (? okshape (map (\ dd (: lam (cup dd) (link (cat (L (cap dd)) (init (cup lam))) (last (cup lam))))) dds) ())   ; ((name p..) . B)
-                         gnames (map (\ d (cap (cap d))) gdefs)
-                         flat? (&& okshape (member? (cap tail) gnames) (= (cup tail) ps))       ; tail IS (entry frame..)
-                         osym '__outer  agdefs (? okshape (cat gdefs (L (link (link osym ps) tail))) ())   ; group + synthetic ((__outer . frame) . tail)
+                      (: pd (? (&& (two? body) (id? <body ':)) (anat-defs >body) ())
+                         dds (? pd <pd ())  tail (? pd <>pd ())
+                         okshape (&& pd (two? tail) (all (\ dd (&& (two? dd) (name? <dd) (two? >dd) (id? <>dd '\) (two? >>dd))) dds))   ; every def is name (\ p.. B)
+                         gdefs (? okshape (map (\ dd (: lam >dd (link (`(<dd) + (init >lam)) (last >lam)))) dds) ())   ; ((name p..) . B)
+                         gnames (map (\ d <<d) gdefs)
+                         flat? (&& okshape (member? <tail gnames) (>tail = ps))       ; tail IS (entry frame..)
+                         osym '__outer  agdefs (? okshape (gdefs + `((link (link osym ps) tail))) ())   ; group + synthetic ((__outer . frame) . tail)
                          (? (&& flat? (jgir-ok? gdefs) (gdefs-ok? gdefs))                         ; FLAT: entry direct, zero indirection
-                            (: _ (pin fires () (+ 1 (peep fires () 0))) (jitgroupirx gdefs (cap tail) arch e s))   ; stamp the OUTER src s -> =/show transparent vs the bytecode twin
-                            (&& okshape (! (member? osym gnames)) (opnd-ok? ps tail) (jgir-ok? agdefs) (gdefs-ok? gdefs))   ; GENERAL tail via the synthetic entry
-                            (: _ (pin fires () (+ 1 (peep fires () 0))) (jitgroupirx agdefs osym arch e s))
+                            (: _ (pin fires () (1 + (peep fires () 0))) (jitgroupirx gdefs <tail arch e s))   ; stamp the OUTER src s -> =/show transparent vs the bytecode twin
+                            (&& okshape !(member? osym gnames) (opnd-ok? ps tail) (jgir-ok? agdefs) (gdefs-ok? gdefs))   ; GENERAL tail via the synthetic entry
+                            (: _ (pin fires () (1 + (peep fires () 0))) (jitgroupirx agdefs osym arch e s))
                             ; AMBLE lane (LAST): the universal boring-tier translation -- tagged values, Sp-slot
                             ; temporaries, drive call-outs, restart deopt. njit-amble answers 0 on decline.
                             (: aj (njit-amble s a e gv farq lams arch)
-                               (? aj (: _ (pin fires () (+ 1 (peep fires () 0))) aj)
+                               (? aj (: _ (pin fires () (1 + (peep fires () 0))) aj)
                                   (: _ (? (getenv "AI_AMBLE_TRACE2") (puts ("amble-DECLINE: " + (show s) + "\n")) 0) e)))))))))))))))   ; the decline trace (forensics: what the last lane passed on)
       natjit)                                          ; inner `:` BODY = the natjit closure (its ~20 glaze aliases stay private); close the inner scope
-   (fired? n) (< n (peep fires () 0))                 ; did the hook fire since count n? (outer, leaked with natjit/fires)
+   (fired? n) (n < (peep fires () 0))                 ; did the hook fire since count n? (outer, leaked with natjit/fires)
  _ (assert
     ; --- embedded leaves get native-backed at creation, and compute correctly ---
     (: n (peep fires () 0)
