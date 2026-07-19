@@ -1,7 +1,7 @@
 ; glaze-data.l -- a PLAN: extend the glaze past the arithmetic kernel to the data workloads
 ; (the `tree` and `hash` benches), and the recognizer gate that says which shapes can come along.
 ; STATUS: Stage A/B LANDED 2026-06-24 (commit 3fff0157) -- the `tree` traverse `ck` (the chain fold)
-; now compiles native (6.7x); `hash` (Stages C/D) is still a study. See doc/glaze-data.md. The model
+; now compiles native (6.7x); `hash` (Stages C/D) is still a study. See doc/archive/glaze-data.md. The model
 ; at the bottom now also reproduces the chain-vs-int SOUNDNESS gate the build added (cap-into-arith).
 ;
 ; the standing fact (measured 2026-06-24, this host, bench/): the benches where ai trails the

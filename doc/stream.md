@@ -1,7 +1,7 @@
 # stream.md — path B: the coinductive byte-stream io rework
 
-A design study (notes only — build in a dedicated core `ai.c` session). Companion
-to `doc/tag.md`. This is **bao's path B**: the io/scheduler rework that unblocks
+A design study (notes only — build in a dedicated core `ai.c` session). This is
+**bao's path B**: the io/scheduler rework that unblocks
 the rlwrap wiring (`edraw` into `wrap`) which was *built and reverted* because it
 deadlocks the cooperative scheduler (see `crew/bao.md` §"path B", and the bao memory).
 

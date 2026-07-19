@@ -1,5 +1,5 @@
 ; --- doc/stream.l: path B's coinductive byte-stream, the PURE HALF, in ai ---
-; a runnable design companion (like doc/tag.l) -- the real `source` is a C hot.
+; a runnable design companion -- the real `source` is a C hot.
 ; doc/stream.md is the full design; this models the algebra over an in-memory
 ; charlist producer, so it runs ANYWHERE (no fds, no pty) and pins the shape the
 ; core session builds against. Run (assert comes from test/00-init.l):
