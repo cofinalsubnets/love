@@ -206,13 +206,32 @@ static struct ai *host_grbufg(struct ai *g, uintptr_t len) {
   g->sp[1] = g->sp[0], g->sp++;
  return g; }
 
-// Workhorse for (run argv). Called with g Packed; argv is the single arg.
-// Pushes EXACTLY ONE net value above argv on every path so the lvm_run
-// shell collapses uniformly: success -> [(status . output), argv], failure
-// -> [errno-or-(-1) fixnum, argv]. Returns a not-ok g only on OOM.
+// Best-effort write-through for the tee mode below: loop over a partial write,
+// but let a failed/closed stdout pass silently -- a broken pipe on the ECHO of a
+// child's output must not fail the child, which ran fine.
+static void host_teeout(char const *p, size_t n) {
+ while (n) {
+  ssize_t w = write(STDOUT_FILENO, p, n);
+  if (w < 0) { if (errno == EINTR) continue; return; }
+  p += w, n -= (size_t) w; } }
+
+// Workhorse for (run argv) / (runt argv). Called with g Packed; argv is the
+// single arg. Pushes EXACTLY ONE net value above argv on every path so the
+// lvm_run shell collapses uniformly: success -> [(status . output), argv],
+// failure -> [errno-or-(-1) fixnum, argv]. Returns a not-ok g only on OOM.
 // &locals (pipes/pid/status) are fine here: this returns normally, it is
 // not a VM-dispatch tail-call site (cf. call_open vs lvm_open).
-ai_noinline static struct ai *host_run(struct ai *g, ai_word argv) {
+//
+// `tee` picks WHEN the captured output reaches stdout, not whether it is
+// captured: 0 (run) holds it until the child exits and hands the whole string
+// back for the caller to do as it likes; 1 (runt) ALSO write(2)s each chunk
+// through as it is read, so a long-running child STREAMS -- which is what make
+// does (it pipes the child too, then relays each chunk rather than hoarding it).
+// A capture-and-reprint caller passes 1 and skips its own reprint; a caller that
+// consumes the text -- $(shell ..), a glob, an mtime probe -- passes 0. Because
+// the tee bypasses the l-level `out` buffer, a teeing caller must (flush out)
+// first or its own echoed lines land after the child's bytes.
+ai_noinline static struct ai *host_run(struct ai *g, ai_word argv, int tee) {
  // pass 1: validate every element is a string; size the arg-byte blob.
  intptr_t argc = 0;
  uintptr_t total = 0;
@@ -272,7 +291,9 @@ ai_noinline static struct ai *host_run(struct ai *g, ai_word argv) {
   int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
   return ai_push(g, 1, putcharm(childerr)); }
 
- // drain stdout into a growing l string (bulk reads; stderr inherited).
+ // drain stdout into a growing l string (bulk reads; stderr inherited). Under
+ // tee, each chunk is ALSO written straight through as it arrives -- the read
+ // loop is already incremental, so streaming costs one write per chunk.
  uintptr_t n = 0, lim = 1u << 16;
  g = str0(g, lim);                                        // capture -> sp[0]
  while (ai_ok(g)) {
@@ -280,6 +301,7 @@ ai_noinline static struct ai *host_run(struct ai *g, ai_word argv) {
   r = read(op[0], txt(g->sp[0]) + n, lim - n);
   if (r < 0) { if (errno == EINTR) continue; break; }
   if (!r) break;                                          // EOF
+  if (tee) host_teeout(txt(g->sp[0]) + n, (size_t) r);    // ..before the buffer can move
   n += (uintptr_t) r; }
  close(op[0]);
  { int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}          // reap
@@ -296,7 +318,19 @@ ai_noinline static struct ai *host_run(struct ai *g, ai_word argv) {
 
 static lvm(lvm_run) {
  Pack(g);
- g = host_run(g, Sp[0]);
+ g = host_run(g, Sp[0], 0);
+ if (!ai_ok(g)) return ghelp(g);
+ Unpack(g);
+ Sp[1] = Sp[0];                                           // result over argv
+ Sp += 1; Ip += 1;
+ return Continue(); }
+
+// (runt argv) -- run, TEEING: identical to (run argv), same (status . output)
+// answer, but the child's stdout is relayed as it arrives instead of only at
+// exit. For a caller that just reprints what it captured; see host_run's `tee`.
+static lvm(lvm_runt) {
+ Pack(g);
+ g = host_run(g, Sp[0], 1);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
  Sp[1] = Sp[0];                                           // result over argv
@@ -404,6 +438,7 @@ static union u const
  nif_open[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_open}, {lvm_ret0}},
  nif_close[] = {{lvm_close}, {lvm_ret0}},
  nif_run[] = {{lvm_run}, {lvm_ret0}},
+ nif_runt[] = {{lvm_runt}, {lvm_ret0}},
  nif_exec[] = {{lvm_exec}, {lvm_ret0}},
  nif_getenv[] = {{lvm_getenv}, {lvm_ret0}},
  nif_getpid[] = {{lvm_getpid}, {lvm_ret0}};
@@ -418,6 +453,7 @@ AI_NIF("quit", nif_exit);
 AI_NIF("open", nif_open);
 AI_NIF("close", nif_close);
 AI_NIF("run", nif_run);
+AI_NIF("runt", nif_runt);
 AI_NIF("exec", nif_exec);
 AI_NIF("getenv", nif_getenv);
 AI_NIF("getpid", nif_getpid);

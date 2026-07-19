@@ -925,7 +925,8 @@ static union u const nif_absent[]      = {{lvm_absent}, {lvm_ret0}};
 static union u const nif_absent_open[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_absent2}, {lvm_ret0}};
 static struct ai_def const frontend_defaults[] = {
  {"quit", (word) nif_absent}, {"open", (word) nif_absent_open}, {"close", (word) nif_absent},
- {"run", (word) nif_absent},  {"getenv", (word) nif_absent} };
+ {"run", (word) nif_absent},  {"runt", (word) nif_absent},
+ {"getenv", (word) nif_absent} };
 
 // reverse-lookup a function value against the builtin table -> its source name,
 // or NULL. Used by the printer to render nifs (e.g. `+`) by name.

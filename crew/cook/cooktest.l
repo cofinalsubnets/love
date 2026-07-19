@@ -163,6 +163,20 @@
    _ (run `(love "-l" "crew/cook/cook.l" (+ dir "/e/Cookfile") "all"))
    _ (ok "emit: round-trip cooks the emitted Cookfile" (= 0 (cap (sh (+ "test -f " (+ dir "/e/out.txt"))))))
 
+   ; .DEFAULT_GOAL overrides "the first rule declared" as the default ticket --
+   ; both when cooking the Makefile directly and through the emitted Cookfile
+   ; (which must therefore lead with that recipe).
+   dgsrc (mk `(".PHONY: first second"
+               ".DEFAULT_GOAL := second"
+               "first:"  "\techo FIRST"
+               "second:" "\techo SECOND"))
+   _ (write-file (+ dir "/Makefile") dgsrc)
+   dgr (: r (run `(love "-l" "crew/cook/cook.l" (+ dir "/Makefile"))) (? (two? r) (cup r) ""))
+   _ (ok ".DEFAULT_GOAL is the default ticket" (has dgr "SECOND"))
+   _ (write-file (+ dir "/e/Cookfile") (run-emit dgsrc))
+   dgc (: r (run `(love "-l" "crew/cook/cook.l" (+ dir "/e/Cookfile"))) (? (two? r) (cup r) ""))
+   _ (ok "emit: .DEFAULT_GOAL survives the round-trip" (has dgc "SECOND"))
+
    ; ---------------------------------------------------------------- summary
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (puts (+ (show np) (+ " cook tests pass" (? (< 0 nf) (+ ", " (+ (show nf) " FAIL")) ""))))

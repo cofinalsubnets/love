@@ -141,9 +141,9 @@
 
    ; one step. a list HEADED BY THE SYMBOL `exec` -- (exec PROG ARGS..) -- is an
    ; INTERACTIVE step: it runs via the `exec` nif, which REPLACES cook and inherits
-   ; the terminal, so the child (the repl, gdb, qemu) drives the real tty rather than
-   ; having its stdout captured by `run`. A plain list of strings is an argv
-   ; subprocess (captured); any other lit? is a thunk.
+   ; the terminal, so the child (the repl, gdb, qemu) drives the real tty. A plain
+   ; list of strings is an argv subprocess -- streamed, but on a pipe with /dev/null
+   ; stdin, so it still cannot be interactive; any other lit? is a thunk.
    (step1 step)
    (? (&& (two? step) (<step = 'exec)) (do-exec >step)   ; (exec ..) -- the interactive step
       (two? step) (shell step)
@@ -159,27 +159,31 @@
        _ (exec argv)
        _ (say err ("cook: cannot exec " + (join " " argv))) _ (put err 10) (quit 1))
 
-   ; run one argv: echo it, run it, echo its captured stdout, abort on failure.
+   ; run one argv: echo it, run it STREAMING its output (runt relays each chunk as
+   ; it arrives, so a long step is not silent until it exits), abort on failure.
+   ; The flush is load-bearing: runt writes the child's bytes past the `out`
+   ; buffer, so an unflushed echo would land after them.
    (shell step)
    (: _ (puts ("  " + (join " " step))) _ (putc 10)
-       r (run step)
+       _ (flush out)
+       r (runt step)
        (? (two? r)
-          (: _ (puts >r)
-             (? (0 = <r) 0
-                (: _ (say err ("cook: command failed (exit " + (show <r) + ")"))
-                   _ (put err 10) (quit 1))))
+          (? (0 = <r) 0
+             (: _ (say err ("cook: command failed (exit " + (show <r) + ")"))
+                _ (put err 10) (quit 1)))
           (: _ (say err ("cook: cannot run " + (join " " step)))
              _ (put err 10) (quit 1))))
 
    ; run one make recipe line (via sh -c), make-style: echo the RAW command
-   ; (the expanded line, not the `sh -c` wrapper) unless @ silent, print its
-   ; captured stdout, and on a nonzero exit either carry on (- ignore, with a
-   ; note to err) or abort. The Makefile path's analogue of `shell`.
+   ; (the expanded line, not the `sh -c` wrapper) unless @ silent, STREAM its
+   ; stdout as it is produced, and on a nonzero exit either carry on (- ignore,
+   ; with a note to err) or abort. The Makefile path's analogue of `shell`, and
+   ; the one that carries a recursive $(MAKE) -- the whole reason it must stream.
    (sh-line silent ignore cmd)
    (: _ (? silent 0 (: _ (puts cmd) (putc 10)))
-       r (run `("sh" "-c" cmd))
+       _ (flush out)
+       r (runt `("sh" "-c" cmd))
        ec (? (two? r) <r -1)
-       _ (? (two? r) (puts >r) 0)
        (? (0 = ec) 0
           (! (two? r)) (: _ (say err ("cook: cannot run " + cmd)) _ (put err 10) (quit 1))
           ignore (: _ (say err ("cook: " + cmd + " (exit " + (show ec) + ", ignored)")) (put err 10))
@@ -610,6 +614,10 @@
                              (each tgts (\ t (? (haspct t) (pin patbox 0 (link `(t prs oos raws) (peep patbox 0 0))) 0)))
                              (each tgts (\ t (reg (mk-item t) (map mk-item prs) (map mk-item oos)
                                                   (expand-steps raws (mk-item t) prs "" as))))))))))))
+      ; make's .DEFAULT_GOAL overrides "first rule declared" -- it is a plain
+      ; variable, so it survives the dot-target drop above and lands in `as`.
+      dg (trim (peep as ".DEFAULT_GOAL" ""))
+      _ (? (0 < (tally dg)) (pin check 0 (mk-item dg)) 0)
       patlist (peep patbox 0 0)
       (psrc p item) (: stem <(pmatch <p item) prs <>p (? (two? prs) (stemsub <prs stem) ""))
       (best-of ms item)        ; prefer a pattern whose stem-source exists, then the shortest stem
