@@ -450,13 +450,13 @@ AI_NIF("pgaddr", nif_pgaddr);
 // Everything the two builds disagree about lives in this ONE conditional
 // region: the baked lisp text plus a `boot` entry that main tail-calls after
 // the universal setup (argv pins + the host nif defs above).
-// AI_BUDGET_MB: cap the whole GC footprint (2*minor + 2*major) at N megabytes -- the runtime
+// LOVE_BUDGET_MB: cap the whole GC footprint (2*minor + 2*major) at N megabytes -- the runtime
 // face of the ai_budget tunable (the field is set-at-runtime by design). The BENCH use: pin
 // the pool so an A/B compares identical GC schedules -- the resize controller can't wander
 // across a pool boundary between the two sides (the pool-cliff contamination class). Applied
 // to the LIVE g in main, after boot or image wake, so both boot paths honor it.
 static struct ai *env_budget(struct ai *g) {
-  char const *b = getenv("AI_BUDGET_MB");
+  char const *b = getenv("LOVE_BUDGET_MB");
   if (g && b && atol(b) > 0) g->budget = (uintptr_t) atol(b) * (1024 * 1024 / sizeof(ai_word));
   return g; }
 
@@ -554,12 +554,12 @@ extern uintptr_t ai_baked_image_len;
 // the post-warm dispatch (shared by boot() and the --wake path, which skips the warm).
 static struct ai *run_program(struct ai *g, bool argp, bool replp) {
 #ifdef AI_GLAZED
-  // AI_NO_GLAZE: a pure-interpreter session -- ev back to base-ev (kept in the glaze
-  // module book) and the natjit creation hook cleared. The forensics twin of AI_NO_IMAGE.
+  // LOVE_NO_GLAZE: a pure-interpreter session -- ev back to base-ev (kept in the glaze
+  // module book) and the natjit creation hook cleared. The forensics twin of LOVE_NO_IMAGE.
   // Checked here, the convergence of the egg-boot and image-wake paths: a body-less
   // top-level : pins even where the book nom is sealed away (an image). --bake never
   // sees it -- the knob governs a session, not the baked artifact.
-  if (getenv("AI_NO_GLAZE")) g = ai_evals_(g, "(: ev (glaze 'base-ev) natjit ())");
+  if (getenv("LOVE_NO_GLAZE")) g = ai_evals_(g, "(: ev (glaze 'base-ev) natjit ())");
 #endif
   if (argp) return ai_evals_(g, cli);
   if (!replp) return ai_evals_(g, "(reads in)");         // non-tty stdin: the stream shell (love/bao.l) drinks the in port
@@ -639,14 +639,14 @@ int main(int argc, char const **argv) {
   if (image_load_path && !(g = image_load(image_load_path))) image_load_path = NULL;   // NULL -> normal boot
   // AUTO-LOAD: with no image flag, wake the image baked into the binary's own .image section, so a
   // plain `love` is glazed-by-default at ~4 ms cold start instead of the ~230 ms egg eval. Opt out with
-  // AI_NO_IMAGE (the bench does, to control glazed-vs-interp itself). Any problem -- unbaked, stale,
+  // LOVE_NO_IMAGE (the bench does, to control glazed-vs-interp itself). Any problem -- unbaked, stale,
   // truncated -- makes the load return NULL, so we fall through to the normal egg boot. Never wrong.
-  if (!g && !bake && !getenv("AI_NO_IMAGE")) {
+  if (!g && !bake && !getenv("LOVE_NO_IMAGE")) {
    if (ai_baked_image_len && (g = ai_image_load(ai_baked_image, ai_baked_image_len)))
     image_load_path = "<baked>"; }                                     // a loaded image is the booted state: skip the egg warm
 #endif
   if (!g) g = ai_ini();
-  g = env_budget(g);                               // the AI_BUDGET_MB cap, on whichever g won (fresh or woken image)
+  g = env_budget(g);                               // the LOVE_BUDGET_MB cap, on whichever g won (fresh or woken image)
   bool argp = argc > 1;
   // The WHOLE C argv (incl. argv[0]/program name): cli.l drops the head for its own
   // use, while `cmdline` keeps the full list, pinned for user visibility.

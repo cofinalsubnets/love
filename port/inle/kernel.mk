@@ -213,7 +213,7 @@ out/lib/ktests.l: $(kt) $(MAKEFILE_LIST) out/lib/corpus.list
 	@mkdir -p out/lib
 	@cat $(kt) > $@
 out/lib/ktests.h: out/lib/ktests.l $(love0) tools/lcatv.l love/prel.l
-	@echo LOVE	$@
+	@echo AI	$@
 	@$(love0) -l love/prel.l tools/lcatv.l out/lib/ktests.l > $@
 # arm64 EXECUTION validator: cross-build `love` for aarch64 + run the corpus under
 # qemu-aarch64 (the trustworthy check for the glaze's second target -- holotest

@@ -39,20 +39,20 @@ moonfiles = crew/kore/text.l crew/kore/core.l crew/holo/holo.l crew/holo/x64.l c
 # instead of re-evaling the cat ~1.3s.) kore's shim threads basename($0) through as
 # the program name, so the argv[0]-symlink dispatch (`diff` -> kore) still lands.
 out/host$(hsuf)/.kore-cat.l: $(korefiles)
-	@echo LOVE	$(abspath $@)
+	@echo AI	$(abspath $@)
 	@cat $(korefiles) > $@
 out/host$(hsuf)/kore: out/host$(hsuf)/kore.image
-	@echo LOVE	$(abspath $@)
+	@echo AI	$(abspath $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
 	   echo 'n=$$(basename -- "$$0")'; \
 	   echo 'exec "$$h/love" --wake "$$h/kore.image" -e "(kore-main (link \"$$n\" (cuup (cup cmdline))))" "$$@"'; } > $@
 	@chmod 755 $@
 out/host$(hsuf)/.mooncc-cat.l: $(moonfiles)
-	@echo LOVE	$(abspath $@)
+	@echo AI	$(abspath $@)
 	@cat $(moonfiles) > $@
 out/host$(hsuf)/mooncc: out/host$(hsuf)/mooncc.image
-	@echo LOVE	$(abspath $@)
+	@echo AI	$(abspath $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
 	   echo 'exec "$$h/love" --wake "$$h/mooncc.image" -e "(moon-main (cuup (cup cmdline)))" "$$@"'; } > $@
@@ -61,20 +61,20 @@ out/host$(hsuf)/mooncc: out/host$(hsuf)/mooncc.image
 # doc/reef.md). its own catted shebang script, the mooncc precedent.
 reeffiles = crew/kore/text.l crew/kore/diff.l crew/reef/reef.l
 out/host$(hsuf)/reef: $(reeffiles)
-	@echo LOVE	$(abspath $@)
+	@echo AI	$(abspath $@)
 	@{ echo '#!/usr/bin/env -S love'; cat $(reeffiles); } > $@
 	@chmod 755 $@
 # the mooncc image: the compiler baked WARM (the live bake, doc/snapshot.md). The
 # cat loads under a NEUTRAL name so moon.l's tail SEAT stays quiet, then the bake
-# nif snapshots the session. AI_NO_IMAGE rides the recipe (exported above), so
+# nif snapshots the session. LOVE_NO_IMAGE rides the recipe (exported above), so
 # the bake session itself egg-boots -- same warm state, deterministically.
 $(ho)/mooncc.image: $(ho)/.mooncc-cat.l $m
-	@echo LOVE	$(abspath $@)
+	@echo AI	$(abspath $@)
 	@$m -l $(ho)/.mooncc-cat.l -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
 # the kore image: the multi-call toolbox baked WARM, the mooncc.image precedent. the
 # cat loads under a NEUTRAL name so kore.l's SEAT me? is false and stays quiet, then
 # the bake snapshots. test_kore wakes it per tool (`--wake kore.image -e '(kore-main
 # (link "kore" (cuup (cup cmdline))))'`) -- ~0.02s vs ~0.75s cold, across its ~77 spawns.
 $(ho)/kore.image: $(ho)/.kore-cat.l $m
-	@echo LOVE	$(abspath $@)
+	@echo AI	$(abspath $@)
 	@$m -l $(ho)/.kore-cat.l -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'

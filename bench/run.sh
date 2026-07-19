@@ -33,7 +33,7 @@ case $lang in
   # is always fresh.) We do NOT cat the glaze source ahead of the bench: re-loading the glaze on top of
   # the baked glaze is a redundant DOUBLE-LOAD that faults under autospec; the baked binary is the truth.
   # cdcl alone prepends the SAT solver library it needs (not the glaze).
-  love)            ext=l;    bin=../out/host/love;  cmd='cat $([ "$b" = cdcl ] && printf "%s " ../crew/sat/sat.l) bench.l benches/$b.l | AI_NO_IMAGE=1 ../out/host/love' ;;
+  love)            ext=l;    bin=../out/host/love;  cmd='cat $([ "$b" = cdcl ] && printf "%s " ../crew/sat/sat.l) bench.l benches/$b.l | LOVE_NO_IMAGE=1 ../out/host/love' ;;
   chez)         ext=ss;   bin=chez;       cmd='chez --script benches/$b.ss' ;;
   sbcl)         ext=lisp; bin=sbcl;       cmd='sbcl --script benches/$b.lisp' ;;
   apl)          ext=apl;  bin=dyalogscript; cmd='dyalogscript benches/$b.apl' ;;   # Dyalog APL (~/.local install); the bench ⎕FIXes lib/bench.apl

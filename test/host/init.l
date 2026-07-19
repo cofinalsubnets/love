@@ -30,8 +30,8 @@
        ; the "()"-returns are the REAL zero point now (the ai_nil -> () flip), not charm 0:
        ; (id? x ()) holds and (charm? x) is false -- charm 0 would fail both.
        (id? (fdclose -1) ()) !(charm? (fdclose -1))               ; fdclose nothing -> the real ()
-       (id? (getenv "AI_NO_SUCH_ENV_VAR_XYZZY") ())             ; getenv absent -> the real ()
-       !(charm? (getenv "AI_NO_SUCH_ENV_VAR_XYZZY"))))
+       (id? (getenv "LOVE_NO_SUCH_ENV_VAR_XYZZY") ())             ; getenv absent -> the real ()
+       !(charm? (getenv "LOVE_NO_SUCH_ENV_VAR_XYZZY"))))
 
 
 ; --- the fs nifs: stat readdir unlink lseek (the posix_ lane in host/init.c) -----

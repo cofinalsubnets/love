@@ -473,7 +473,7 @@ test_moon: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 # binary. Proves the compiler compiles the runtime it runs on. OPT-IN, not in
 # test_all -- it rebuilds ~14 objects + links + runs the corpus, and needs the
 # system static linker. x86-64 only (mooncc emits x64). The binary carries
-# no baked image, so AI_NO_IMAGE forces the fresh-egg boot.
+# no baked image, so LOVE_NO_IMAGE forces the fresh-egg boot.
 .PHONY: test_selfhost
 test_selfhost: host out/host$(hsuf)/mooncc
 	@echo SELFHOST $(ho)/love-selfhost
@@ -488,7 +488,7 @@ test_selfhost: host out/host$(hsuf)/mooncc
 	    || { echo "FAIL mooncc -c am.c"; exit 1; }; \
 	  $(host_cc) -static -o $(ho)/love-selfhost $$d/*.o $(host_ldflags) \
 	    || { echo "FAIL link all-mooncc binary"; exit 1; }; \
-	  cat $t | AI_NO_IMAGE=1 $(ho)/love-selfhost > $(ho)/.test_selfhost.out 2>&1; s=$$?; \
+	  cat $t | LOVE_NO_IMAGE=1 $(ho)/love-selfhost > $(ho)/.test_selfhost.out 2>&1; s=$$?; \
 	  tail -1 $(ho)/.test_selfhost.out; \
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_selfhost.out; } \
 	    || { echo "FAIL all-mooncc corpus (exit $$s)"; exit 1; }; \
@@ -522,7 +522,7 @@ test_raw: host out/host$(hsuf)/mooncc
 	    || { echo "FAIL mksys sys.o"; exit 1; }; \
 	  $(ho)/mooncc $$d/*.o -o $(ho)/love-raw \
 	    || { echo "FAIL our-linker bind love-raw"; exit 1; }; \
-	  cat $t | AI_NO_IMAGE=1 $(ho)/love-raw > $(ho)/.test_raw.out 2>&1; s=$$?; \
+	  cat $t | LOVE_NO_IMAGE=1 $(ho)/love-raw > $(ho)/.test_raw.out 2>&1; s=$$?; \
 	  tail -1 $(ho)/.test_raw.out; \
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_raw.out; } \
 	    || { echo "FAIL all-raw corpus (exit $$s)"; exit 1; }; \
@@ -583,7 +583,7 @@ test_raw_arm64: host out/host$(hsuf)/mooncc
 	  $(ho)/mooncc -t arm64 $$d/*.o -o $(ho)/love-raw-a64 \
 	    || { echo "FAIL our-linker bind love-raw-a64"; exit 1; }; \
 	  cat $t \
-	    | AI_NO_IMAGE=1 qemu-aarch64 $(ho)/love-raw-a64 > $(ho)/.test_raw_a64.out 2>&1; s=$$?; \
+	    | LOVE_NO_IMAGE=1 qemu-aarch64 $(ho)/love-raw-a64 > $(ho)/.test_raw_a64.out 2>&1; s=$$?; \
 	  tail -1 $(ho)/.test_raw_a64.out; \
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_raw_a64.out; } \
 	    || { echo "FAIL raw-arm64 corpus (exit $$s)"; exit 1; }; \
@@ -738,7 +738,7 @@ test_gen:
 	@echo "test_gen: skipped (needs rocq/coqc)"
 else
 test_gen: host
-	@echo LOVE	proof/rocq/gen.v "(tools/spec2coq.l on $m)"
+	@echo AI	proof/rocq/gen.v "(tools/spec2coq.l on $m)"
 	@$m tools/spec2coq.l > proof/rocq/gen.v
 	@echo TEST proof/rocq/gen.v "(coqc, against spec.v's shared model)"
 	@cd proof/rocq && $(COQC) -R . "" spec.v >/dev/null && $(COQC) -R . "" gen.v
@@ -757,7 +757,7 @@ test_uugen:
 	@echo "test_uugen: skipped (needs rocq/coqc)"
 else
 test_uugen: host
-	@echo LOVE	proof/rocq/uugen.v "(tools/uu2coq.l on $m)"
+	@echo AI	proof/rocq/uugen.v "(tools/uu2coq.l on $m)"
 	@$m tools/uu2coq.l > proof/rocq/uugen.v
 	@echo TEST proof/rocq/uugen.v "(coqc)"
 	@$(COQC) -q proof/rocq/uugen.v
@@ -774,7 +774,7 @@ test_uulean:
 else
 test_uulean: host
 	@mkdir -p lean
-	@echo LOVE	proof/lean/uugen.lean "(tools/uu2lean.l on $m)"
+	@echo AI	proof/lean/uugen.lean "(tools/uu2lean.l on $m)"
 	@$m tools/uu2lean.l > proof/lean/uugen.lean
 	@echo TEST proof/lean/uugen.lean "(lean)"
 	@$(LEAN) proof/lean/uugen.lean > out/host/.uulean.out 2>&1; r=$$?; \
@@ -885,7 +885,7 @@ endif
 # IMPLEMENTATION at corpus time. `make uuwm` refreshes it after a core.l edit;
 # test_uuwm (in test_all) regenerates and diffs, failing loudly on drift.
 uuwm: host
-	@echo LOVE	test/uuwm.l "(tools/uuwmgen.l on $m)"
+	@echo AI	test/uuwm.l "(tools/uuwmgen.l on $m)"
 	@$m tools/uuwmgen.l > test/uuwm.l
 test_uuwm: host
 	@echo TEST test/uuwm.l "(regenerate + diff)"
@@ -898,7 +898,7 @@ test_uuwm: host
 # proves the semilattice laws OF THE ANALYSIS at corpus time. `make uukind` refreshes
 # it after a kinds.l edit; test_uukind (in test_all) regenerates and diffs.
 uukind: host
-	@echo LOVE	test/uukind.l "(tools/kinds2uu.l on $m)"
+	@echo AI	test/uukind.l "(tools/kinds2uu.l on $m)"
 	@$m tools/kinds2uu.l > test/uukind.l
 test_uukind: host
 	@echo TEST test/uukind.l "(regenerate + diff)"
@@ -906,7 +906,7 @@ test_uukind: host
 	@cmp -s out/host/.uukind.l.tmp test/uukind.l \
 	  || { echo "FAIL: test/uukind.l is stale (doc/proto/kinds.l moved?) -- run: make uukind"; exit 1; }
 	@rm -f out/host/.uukind.l.tmp
-# test_wake: the WOKEN-IMAGE lane -- the one lane no other gate runs (AI_NO_IMAGE
+# test_wake: the WOKEN-IMAGE lane -- the one lane no other gate runs (LOVE_NO_IMAGE
 # is exported for every recipe above, so every gate exercises the fresh egg; only
 # a user's direct run wakes the image). Bakes a CANDIDATE COPY (love.wake -- the
 # canonical binary untouched, ETXTBSY-proof) and runs test/uu.l through the woken
@@ -917,6 +917,6 @@ test_wake: $(ho)/love
 	@echo TEST wake "(the woken-image lane, doc/wake-storm.md)"
 	@cp $(ho)/love $(ho)/love.wake && $(ho)/love.wake --bake
 	@cat test/00-init.l test/uu.l > $(ho)/wake-corpus.l
-	@if env -u AI_NO_IMAGE timeout 60 $(ho)/love.wake $(ho)/wake-corpus.l > /dev/null 2>&1; \
+	@if env -u LOVE_NO_IMAGE timeout 60 $(ho)/love.wake $(ho)/wake-corpus.l > /dev/null 2>&1; \
 	  then echo "test_wake: green (the woken image checks uu at speed)"; rm -f $(ho)/love.wake $(ho)/wake-corpus.l; \
 	  else echo "test_wake: FAILED -- the wake storm (doc/wake-storm.md)"; rm -f $(ho)/love.wake $(ho)/wake-corpus.l; exit 1; fi

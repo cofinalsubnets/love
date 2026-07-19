@@ -165,7 +165,7 @@ setup: $(SETUP)
 CCBENCH := $(BDIR)/ccbench.txt
 $(CCBENCH): ccbench.sh $(GL) $(R)/love.c $(wildcard $(R)/host/*.c) | $(BDIR)
 	@$(MAKE) -s -C $(R) host out/host/mooncc out/host/mooncc.image
-	@AI_CFLAGS='$(ai_cflags)' CORPUS='$(t)' ./ccbench.sh $(TIMEOUT) $(SAMPLES) > $@
+	@LOVE_CFLAGS='$(ai_cflags)' CORPUS='$(t)' ./ccbench.sh $(TIMEOUT) $(SAMPLES) > $@
 ccbench: $(CCBENCH)
 	@cat $(CCBENCH)
 

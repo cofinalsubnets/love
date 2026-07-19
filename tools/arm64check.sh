@@ -56,7 +56,7 @@ if [ $# -gt 0 ]; then set -- "$@"; DEFAULT_CORPUS=; else DEFAULT_CORPUS=1
   set -- test/00-init.l test/spec.l test/uu.l $(ls test/*.l | LC_ALL=C sort | grep -vE '00-init|spec\.l|glaze-x86|uu\.l') test/arm64/callout.l
 fi
 echo "AARCH64 qemu run ($(echo "$@" | wc -w) files)"
-cat "$@" | AI_NO_IMAGE=1 "$QEMU" $O/love > $O/.out 2>&1; r=$?
+cat "$@" | LOVE_NO_IMAGE=1 "$QEMU" $O/love > $O/.out 2>&1; r=$?
 tail -1 $O/.out
 # the default corpus must print "tests pass" AND each test/arm64/*.l sentinel (explicit-args runs skip the sentinel check)
 if [ -n "$DEFAULT_CORPUS" ]; then sent='test/arm64/callout:'; else sent=''; fi

@@ -533,12 +533,12 @@
                       !(member? go vars) !(member? go ps)) 1)
        ok (&& (two? s) (two? >s) (all name? ps) (adistinct ps)
               (a = (tally ps)) (0 < a) lpok (two? body)
-              (? (getenv "AI_AMBLE_NOCALL") !(ahascall? env go body) 1)              ; the call-lane bisect knob (forensics: splits call machinery from the rest)
+              (? (getenv "LOVE_AMBLE_NOCALL") !(ahascall? env go body) 1)              ; the call-lane bisect knob (forensics: splits call machinery from the rest)
               (all lit? gvals) (nd < 48) ((k + (tally gn) + (tally cn) + nq) < 48)   ; slots are cheap once the prologue GUARDS the room (below)
               (all (\ i (amble-ok? ps kn 0 0 0 i)) inits)
               (amble-ok? env kn go k 1 body))
        (? ok
-          (: _ (? (getenv "AI_AMBLE_TRACE") (puts ("amble: " + (show s) + "\n")) 0)   ; the compile trace (forensics: names every ambled source)
+          (: _ (? (getenv "LOVE_AMBLE_TRACE") (puts ("amble: " + (show s) + "\n")) 0)   ; the compile trace (forensics: names every ambled source)
              ng (1 + (tally gn) + (tally cn) + nq)          ; extras region = [() | globals | sibling entries | quoted data]: () is
                                                                 ; the empty MINT (li 1 would be the charm 0-fossil), entries + quotes
                                                                 ; are HEAP values -- all ride the nifx extras chain into GC-walked slots
@@ -994,7 +994,7 @@
    ; their C body (host/main.c ai_pg_dyad). () when the flag is off -> cgir rejects them exactly as
    ; before -> the whole closure stays bytecode (current behavior, byte-identical). x64-only. NOTE:
    ; UNARY (dummy arg) so the getenv body actually FIRES at call time -- a nullary (f) is f UNRUN.
-   (pgops _) (? (getenv "AI_PARTIAL_GLAZE") '(<< >>) ())
+   (pgops _) (? (getenv "LOVE_PARTIAL_GLAZE") '(<< >>) ())
    (pgsel op) (? (id? op '<<) 0 (id? op '>>) 1 (id? op 'min) 2 3)   ; op -> ai_pg_dyad's selector
    ; pgbridge: with a in tmp and b in acc, call ai_pg_dyad(sel, a, b) -> acc. Spills the 5 live
    ; convention regs (g/Ip/Hp/Sp/anchor -- all caller-saved) on the machine stack, snapshots rsp in

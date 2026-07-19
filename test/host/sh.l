@@ -47,23 +47,23 @@
 (: help 0)
 
 ; --- step 5: env nifs + $ expansion + $? -----------------------------------------
-(assert (id? (setenv "AI_SH_T5" "quay") ())
-        (= "quay" (getenv "AI_SH_T5"))
-        (foldl (\ a e (? a a (= e "AI_SH_T5=quay"))) 0 (environ 0))  ; raw K=V shape
-        (= '("echo" "quay") (sh-words "echo $AI_SH_T5"))
-        (= '("xquay") (sh-words "x$AI_SH_T5"))                       ; glued expansion
-        (= '("pre quay post") (sh-words "\"pre $AI_SH_T5 post\""))   ; expands in ".."
-        (= '("$AI_SH_T5") (sh-words "'$AI_SH_T5'"))                  ; literal in '..'
-        (= '("a") (sh-words "a $AI_SH_UNSET_ZZZ"))                   ; unset word drops away
+(assert (id? (setenv "LOVE_SH_T5" "quay") ())
+        (= "quay" (getenv "LOVE_SH_T5"))
+        (foldl (\ a e (? a a (= e "LOVE_SH_T5=quay"))) 0 (environ 0))  ; raw K=V shape
+        (= '("echo" "quay") (sh-words "echo $LOVE_SH_T5"))
+        (= '("xquay") (sh-words "x$LOVE_SH_T5"))                       ; glued expansion
+        (= '("pre quay post") (sh-words "\"pre $LOVE_SH_T5 post\""))   ; expands in ".."
+        (= '("$LOVE_SH_T5") (sh-words "'$LOVE_SH_T5'"))                  ; literal in '..'
+        (= '("a") (sh-words "a $LOVE_SH_UNSET_ZZZ"))                   ; unset word drops away
         (= '("$") (sh-words "$")))                                   ; a lone $ is literal
-(assert (id? (setenv "AI_SH_T5" ()) ())                              ; absence unsets
-        (id? (getenv "AI_SH_T5") ()))
+(assert (id? (setenv "LOVE_SH_T5" ()) ())                              ; absence unsets
+        (id? (getenv "LOVE_SH_T5") ()))
 ; $?: the last foreground status, read back through expansion
 (: _ (sh-run (L "sh" "-c" "exit 7"))
    (assert (= '("7") (sh-words "$?"))))
 ; export, through the shell's own pipeline
-(: _ (sh-run (L "export" "AI_SH_T6=pier"))
-   (assert (= "pier" (getenv "AI_SH_T6"))
-           (= '("pier") (sh-words "$AI_SH_T6"))))
+(: _ (sh-run (L "export" "LOVE_SH_T6=pier"))
+   (assert (= "pier" (getenv "LOVE_SH_T6"))
+           (= '("pier") (sh-words "$LOVE_SH_T6"))))
 
 (puts "sh: ok") (putc 10)

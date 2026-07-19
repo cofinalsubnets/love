@@ -97,7 +97,7 @@ Relates: the egg (love/egg.l, the double-sat), [[glaze-float]] (the bake this un
 
 The snapshot ships. A plain `love` wakes the image baked into its own .image section (laid by `make host`'s `--bake` step; found
 via `/proc/self/exe`) and boots a **glaze-baked** runtime in **~4–12 ms** instead of the ~230 ms egg eval
-— the native JIT is always-on, no flags. Opt out with `AI_NO_IMAGE` (the Makefile exports it for all
+— the native JIT is always-on, no flags. Opt out with `LOVE_NO_IMAGE` (the Makefile exports it for all
 recipes so the gate tests the fresh egg and the bench controls glaze itself). A bad/stale/cross-arch image
 → `image_load` NULL → normal boot, never wrong. The bench cold-start row reflects it (love 12 ms vs egg 230).
 

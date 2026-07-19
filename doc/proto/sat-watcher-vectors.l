@@ -26,7 +26,7 @@
 ;                                                              -> the var | 0 = SAT
 ; the interpreted twins (fbcp3/fconf3/fdec3) over the SAME memory are the deopt
 ; fallbacks, the arm64/no-`nif` engine (the glazed image mops nif; make exports
-; AI_NO_IMAGE=1 so every gate run has it), and the differential oracle: the `fknob`
+; LOVE_NO_IMAGE=1 so every gate run has it), and the differential oracle: the `fknob`
 ; box forces the twins and `fboth` gates verdict equality. lisp keeps only the cold
 ; path: restarts, learnt-DB reduction, activity decay/rescale.
 ; Run AFTER sat.l (it reuses the leaked oracle + instances):

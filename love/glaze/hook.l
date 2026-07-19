@@ -39,7 +39,7 @@
    ; LOWERING hook (book['welow], church + HOF) now lives PRE-EGG in love/ev.l -- the sole welow, no shadow here.
    (exprn ps e) (? (member? e ps) 1  (whole? e) 1                          ; var in frame | int literal
                    (two? e) (: op <e
-                               (? (member? op ('(+ - * // % & | ^ < <= > >= =) + (? (getenv "AI_PARTIAL_GLAZE") '(<< >>) ()))) (&& (exprn ps <>e) (exprn ps <>>e))
+                               (? (member? op ('(+ - * // % & | ^ < <= > >= =) + (? (getenv "LOVE_PARTIAL_GLAZE") '(<< >>) ()))) (&& (exprn ps <>e) (exprn ps <>>e))
                                   (op = '?) (&& (two? >>>e) !(two? >>>>e)
                                                (exprn ps <>e) (exprn ps <>>e) (exprn ps <>>>e))
                                   0))
@@ -142,7 +142,7 @@
                             ; temporaries, drive call-outs, restart deopt. njit-amble answers 0 on decline.
                             (: aj (njit-amble s a e gv farq lams arch)
                                (? aj (: _ (pin fires () (1 + (peep fires () 0))) aj)
-                                  (: _ (? (getenv "AI_AMBLE_TRACE2") (puts ("amble-DECLINE: " + (show s) + "\n")) 0) e)))))))))))))))   ; the decline trace (forensics: what the last lane passed on)
+                                  (: _ (? (getenv "LOVE_AMBLE_TRACE2") (puts ("amble-DECLINE: " + (show s) + "\n")) 0) e)))))))))))))))   ; the decline trace (forensics: what the last lane passed on)
       natjit)                                          ; inner `:` BODY = the natjit closure (its ~20 glaze aliases stay private); close the inner scope
    (fired? n) (n < (peep fires () 0))                 ; did the hook fire since count n? (outer, leaked with natjit/fires)
  _ (assert

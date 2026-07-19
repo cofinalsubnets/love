@@ -125,4 +125,4 @@ are now exposed.
   (x86 behavioral == interp); disassemble the arm64 output with `llvm-mc --disassemble
   --triple=aarch64`; integrate into `emit.l` additively; add `test/glaze-x86.l` coverage; `make
   test_glaze`; then the full `make test`. The glaze is corpus-independent (unbound under
-  `AI_NO_IMAGE`; `emit.l` is a host-only bake, not in `love0`), so only `test_glaze` exercises it.
+  `LOVE_NO_IMAGE`; `emit.l` is a host-only bake, not in `love0`), so only `test_glaze` exercises it.

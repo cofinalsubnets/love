@@ -22,7 +22,7 @@ love0 = out/host/love0
 # every love run UNDER make boots deterministically: the test gate must exercise the freshly-built egg
 # (not a stale baked image), and the bench controls glazed-vs-interp itself. So suppress the startup
 # image auto-load for all recipes. The USER's binary (run outside make) still wakes its baked image.
-export AI_NO_IMAGE := 1
+export LOVE_NO_IMAGE := 1
 
 .PHONY: all install uninstall clean distclean
 .PHONY: host kernel wasm love0
@@ -44,7 +44,7 @@ include test/test.mk
 include mk/install.mk
 
 # `make test` is the FAST gate: just the two egg self-tests (the host binary `love`
-# from-source under AI_NO_IMAGE, and love0 -- c0 + the self-hosted ev, twice). It does
+# from-source under LOVE_NO_IMAGE, and love0 -- c0 + the self-hosted ev, twice). It does
 # NOT build the image (the --bake step), nor run coqc/lean/glaze/gc/tools, which
 # are slow and/or need extra toolchains -- those live in `make test_all` (and the
 # individual test_* targets). Serial by design: ~3s, no -j races, ctrl-C responsive.
@@ -97,7 +97,7 @@ fmt-check: $(ho)/love
 # Makefile changes. (A baked snapshot: re-run `make crew/cook/Cookfile` after adding
 # a source/test file, since the wildcard lists are frozen at emit time.)
 crew/cook/Cookfile: $(MAKEFILE_LIST) crew/cook/cook.l $(ho)/love
-	@echo LOVE	$@
+	@echo AI	$@
 	@$(ho)/love -l crew/cook/cook.l --emit Makefile > $@
 
 # ====================================================================

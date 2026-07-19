@@ -12,7 +12,7 @@
 # conventional, the verdict is the `s VERIFIED` line.
 R=..
 GL=$R/out/host/love
-export AI_NO_IMAGE=1   # the native kernels ride the `nif` seam the glazed image mops
+export LOVE_NO_IMAGE=1   # the native kernels ride the `nif` seam the glazed image mops
 OUT=$R/out/drat
 mkdir -p "$OUT"
 DT=$OUT/drat-trim

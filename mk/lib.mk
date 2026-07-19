@@ -62,41 +62,41 @@ out/lib/seal.h: crew/holo/seal.l tools/lcat.l
 # the assembler under BOTH compilers (c0 + the self-hosted ev), like prel/ev/bao.
 out/lib/holo0.h: crew/holo/holo.l
 	@mkdir -p out/lib
-	@echo LOVE	$@
+	@echo AI	$@
 	@$(sed_lit) $< > $@
 out/lib/x640.h: crew/holo/x64.l
 	@mkdir -p out/lib
-	@echo LOVE	$@
+	@echo AI	$@
 	@$(sed_lit) $< > $@
 out/lib/arm640.h: crew/holo/arm64.l
 	@mkdir -p out/lib
-	@echo LOVE	$@
+	@echo AI	$@
 	@$(sed_lit) $< > $@
 out/lib/seal0.h: crew/holo/seal.l
 	@mkdir -p out/lib
-	@echo LOVE	$@
+	@echo AI	$@
 	@$(sed_lit) $< > $@
 out/lib/%0.h: love/%.l
 	@mkdir -p out/lib
-	@echo LOVE	$@
+	@echo AI	$@
 	@$(sed_lit) $< > $@
 # the glaze headers (love/glaze/ -- outside the love/*.l wildcard, so explicit). Raw sed_lit:
 # the glaze source is sigil-heavy, so skip the lcat reader round-trip and bake it verbatim.
 out/lib/emit.h: love/glaze/emit.l
 	@mkdir -p out/lib
-	@echo LOVE	$@
+	@echo AI	$@
 	@$(sed_lit) $< > $@
 out/lib/auto.h: love/glaze/auto.l
 	@mkdir -p out/lib
-	@echo LOVE	$@
+	@echo AI	$@
 	@$(sed_lit) $< > $@
 out/lib/gexport.h: love/glaze/export.l
 	@mkdir -p out/lib
-	@echo LOVE	$@
+	@echo AI	$@
 	@$(sed_lit) $< > $@
 out/lib/hook.h: love/glaze/hook.l
 	@mkdir -p out/lib
-	@echo LOVE	$@
+	@echo AI	$@
 	@$(sed_lit) $< > $@
 # the corpus SET stamp: tests0.h (and the kernel's ktests.l) aggregate $t, a wildcard --
 # so a DELETED test file leaves every remaining prereq older than the target and make
@@ -111,7 +111,7 @@ out/lib/corpus.list: force_corpus_list
 	@if cmp -s $@.tmp $@ 2>/dev/null; then rm -f $@.tmp; else mv $@.tmp $@; echo SH	$@; fi
 out/lib/tests0.h: $t out/lib/corpus.list
 	@mkdir -p out/lib
-	@echo LOVE	$@
+	@echo AI	$@
 	@cat $t | $(sed_lit) > $@
 
 # love_version.h: the build's version-control id, surfaced in the runtime as the `love-version`

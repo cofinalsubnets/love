@@ -26,7 +26,7 @@
    (exprp e v) (? (e = v)   1
                   (whole? e)  1
                   (two? e)  (: op <e
-                               (? (member? op ('(+ - * // % & | ^ < <= > >= =) + (? (getenv "AI_PARTIAL_GLAZE") '(<< >>) ()))) (&& (exprp <>e v) (exprp <>>e v))   ; PARTIAL GLAZE: << >> bridge (flag-gated)
+                               (? (member? op ('(+ - * // % & | ^ < <= > >= =) + (? (getenv "LOVE_PARTIAL_GLAZE") '(<< >>) ()))) (&& (exprp <>e v) (exprp <>>e v))   ; PARTIAL GLAZE: << >> bridge (flag-gated)
                                   (op = '?) (&& (two? >>>e) !(two? >>>>e)   ; exactly 3 operands
                                                (exprp <>e v) (exprp <>>e v) (exprp <>>>e v))
                                   0))
@@ -37,7 +37,7 @@
    ; --- arity-N leaf: (\ p0 .. p_{n-1} E), E over the params (any distinct symbols) ---
    (exprn ps e) (? (member? e ps) 1  (whole? e) 1
                    (two? e) (: op <e
-                               (? (member? op ('(+ - * // % & | ^ < <= > >= =) + (? (getenv "AI_PARTIAL_GLAZE") '(<< >>) ()))) (&& (exprn ps <>e) (exprn ps <>>e))   ; PARTIAL GLAZE: << >> bridge (flag-gated)
+                               (? (member? op ('(+ - * // % & | ^ < <= > >= =) + (? (getenv "LOVE_PARTIAL_GLAZE") '(<< >>) ()))) (&& (exprn ps <>e) (exprn ps <>>e))   ; PARTIAL GLAZE: << >> bridge (flag-gated)
                                   (op = '?) (&& (two? >>>e) !(two? >>>>e)
                                                (exprn ps <>e) (exprn ps <>>e) (exprn ps <>>>e))
                                   0))

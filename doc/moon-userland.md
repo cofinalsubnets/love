@@ -191,7 +191,7 @@ FIXED (below).
 The misleading "parse error at `typedef ptrdiff_t idx_t;`" was **a real, deterministic bug in
 the preprocessor's `#include` machinery** (`crew/moon/cpp.l`, `doinc`) — NOT a GC heisenbug and
 NOT a missing parser feature. The whole flakiness was an earlier, separate confound; under
-`AI_NO_GLAZE=1 AI_NO_IMAGE=1` gzip.c fails 12/12 deterministically. The forensics that nailed it:
+`LOVE_NO_GLAZE=1 LOVE_NO_IMAGE=1` gzip.c fails 12/12 deterministically. The forensics that nailed it:
 
 - The parse dies at `typedef ptrdiff_t idx_t;` (gnulib `idx.h`) because `ptrdiff_t` is **not
   registered** there (`types[ptrdiff_t]` = MISS) — even though gzip.c:61 `#include <stddef.h>`
@@ -215,7 +215,7 @@ degrading to `()`. Now a missing header refuses cleanly and *names itself*:
 `cc: cannot resolve #include <stdckdint.h>` → `cc: preprocessor error in gzip.c` — mooncc's
 "refuse rather than miscompile" law, made honest. Gated green on `make test_moon` + `make test_raw`.
 
-**Method note that mattered:** always probe under `AI_NO_GLAZE=1 AI_NO_IMAGE=1` for a
+**Method note that mattered:** always probe under `LOVE_NO_GLAZE=1 LOVE_NO_IMAGE=1` for a
 deterministic signal, and when a parser blames a symbol that "is" defined, suspect the token
 STREAM (cpp order), not the parser state. Dumping cpp's output positions + the include
 accumulator size per `#include` is what exposed the reorder.

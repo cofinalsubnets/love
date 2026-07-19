@@ -48,16 +48,16 @@ CORPUS=${CORPUS:-"$R/test/00-init.l $R/test/spec.l $R/test/uu.l $(ls "$R"/test/*
 
 # the host's real C flags come from the Makefile ($(ai_cflags)); fall back to a
 # matching set (common.mk) for a standalone run. -std probe = clang/gcc gnu23 else gnu2x.
-if [ -z "$AI_CFLAGS" ]; then
+if [ -z "$LOVE_CFLAGS" ]; then
   std=$(printf 'int main(void){return 0;}' | cc -std=gnu23 -x c -c -o /dev/null - 2>/dev/null && echo gnu23 || echo gnu2x)
-  AI_CFLAGS="-std=$std -g -O2 -pipe -Wall -Wextra -Werror -Wstrict-prototypes -Wno-unused-parameter -Wmissing-field-initializers -Wno-implicit-fallthrough -falign-functions=16 -fomit-frame-pointer -fno-stack-check -fno-stack-protector -fno-exceptions -fno-asynchronous-unwind-tables"
-  [ "$(uname -s)" = Darwin ] || AI_CFLAGS="$AI_CFLAGS -fcf-protection=none"
+  LOVE_CFLAGS="-std=$std -g -O2 -pipe -Wall -Wextra -Werror -Wstrict-prototypes -Wno-unused-parameter -Wmissing-field-initializers -Wno-implicit-fallthrough -falign-functions=16 -fomit-frame-pointer -fno-stack-check -fno-stack-protector -fno-exceptions -fno-asynchronous-unwind-tables"
+  [ "$(uname -s)" = Darwin ] || LOVE_CFLAGS="$LOVE_CFLAGS -fcf-protection=none"
 fi
 # drop -Werror: this table times compile+link, and -Werror is a lint GATE, not a
 # codegen or speed factor. Keeping it would bench a compiler's warning set, not its
 # throughput -- gcc's -Wall flags a benign construct in love.c (-Wmisleading-indentation)
 # that clang doesn't, and that shouldn't scratch it from a SPEED race.
-CFLAGS="$(printf '%s' "$AI_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/out/lib"
+CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/out/lib"
 
 # wall-clock (ms) of a command; echoes just the number. Runs in a subshell so a cd can't leak.
 wall() { t0=$(date +%s.%N); ( eval "$1" ) >/dev/null 2>&1; t1=$(date +%s.%N)
@@ -99,7 +99,7 @@ build_mooncc() { # $1=binpath
 
 # does $1 pass the corpus? (exit 0 AND the zz-fin sentinel). Guards against timing a
 # binary that silently reader-stops or crashes mid-corpus.
-passes() { out=$(cat $CORPUS | AI_NO_IMAGE=1 timeout "$TIMEOUT" "$1" 2>&1); r=$?
+passes() { out=$(cat $CORPUS | LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$1" 2>&1); r=$?
            [ $r -eq 0 ] && printf '%s' "$out" | grep -q "tests pass"; }
 
 # the corpus's OWN run time, boot EXCLUDED. Every fresh binary egg-boots (evals the
@@ -110,8 +110,8 @@ passes() { out=$(cat $CORPUS | AI_NO_IMAGE=1 timeout "$TIMEOUT" "$1" 2>&1); r=$?
 # what's left is the tests actually running -- the same method for all three compilers.
 corpus_ms() { # $1=binpath ; median full, median boot, report max(0, full-boot)
   bin=$1
-  full=$(med "cat $CORPUS | AI_NO_IMAGE=1 $bin")
-  boot=$(med "AI_NO_IMAGE=1 $bin </dev/null")
+  full=$(med "cat $CORPUS | LOVE_NO_IMAGE=1 $bin")
+  boot=$(med "LOVE_NO_IMAGE=1 $bin </dev/null")
   awk -v f="$full" -v b="$boot" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
 }
 
