@@ -573,6 +573,10 @@
    ; quoted list keeps its operators as plain symbols); the binding forms keep
    ; their binders (op-colon/op-lam); everything else walks. idempotent: factored
    ; output carries operators only in head position, where they read plain.
+   ; did the ORIGINAL form carry a TOP-LEVEL operator (an infix/prefix punct symbol)?
+   ; only then may a lone folded operand splice up -- a bare list-of-one like
+   ; ((mov r3 r12)) has no top-level operator and STAYS wrapped (it is data: a program).
+   (has-top-op? x) (? (atom? x) 0 (&& (nom? (cap x)) (op-puncp (cap x))) 1 (has-top-op? (cup x)))
    (op-core x)
     (? (atom? x) x
        (: h (cap x)
@@ -591,7 +595,8 @@
               (: p (caup x) r (cap p) d (op-core (caup p))
                  fs (? (nom? r) (monofactor r) 0)
                  (? (two? fs) (op-fin fs d) (link r (link d ()))))
-             (op-w x 0 0)))))
+             (: res (op-w x 0 0)                        ; splice a lone FOLDED operand up (an infix/prefix-op form)
+                (? (&& (has-top-op? x) (two? res) (atom? (cup res)) (two? (cap res))) (cap res) res)))))) ; (a = b)->(= a b) not ((= a b)); ((mov r3 r12)) (list-of-one, no top-level op) is KEPT; (f)/(f x) untouched
 ; opfix = op-core, the operator factor pass. (Historically opfix also ran an
 ; optional native-codegen hook, book['opjit]; that JIT experiment was retracted --
 ; its one real win, reduction reassociation, lives in the C builtins now, and the

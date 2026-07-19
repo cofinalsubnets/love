@@ -31,8 +31,8 @@
  ; as a list element. (1 + 2 3) is (+ 1 (2 3)), NOT ((+ 1 2) 3).
  ('(3 3) = `((1 + 2) 3))                        ; two elements: (+ 1 2) and 3
  ('(3 9) = `((1 + 2) (4 + 5)))
- ("((+ 1 (2 3)))" = (show (opfix '(1 + 2 3))))  ; 2 3 is one operand, the whole to the right of +
- ("((= (a b) (c d)))" = (show (opfix '(a b = c d))))
+ ("(+ 1 (2 3))" = (show (opfix '(1 + 2 3))))  ; 2 3 is one operand, the whole to the right of +
+ ("(= (a b) (c d))" = (show (opfix '(a b = c d))))
 
  ; operators as values and quoted operators are untouched
  (12 = (foldl (+) 0 '(3 4 5)))
@@ -76,7 +76,7 @@
   ('(7 (3 5)) = (7 >< 3 >< 5))                    ; nests RIGHT-associatively
   ('(9 (3 5)) = `(9 (3 >< 5)))                   ; works inside a list
   (nom? '><) (id? >< (><))                        ; no left operand / escaped: the plain symbol
-  ("((>< 3 5))" = (show (opfix '(3 >< 5))))))     ; parenthesized infix double-wraps, like (1 + 2)
+  ("(>< 3 5)" = (show (opfix '(3 >< 5))))))     ; a folded infix form IS the clause -- splices up, no wrapper (like (1 + 2))
 
 ; opfix does NOT rearrange a binding form: a `:` keeps its binder names (a symbol
 ; OR a define-sugar header) verbatim -- only each pair's value and the trailing
@@ -85,8 +85,8 @@
 ; (compared through show: opfix threads its spines with the 0-nil terminator, the
 ; reader with (); show renders both the same reparsable form, so the factor shows.)
 (assert
- ((show '(: >< (\ a b (L a b)) ((>< 3 5)))) = (show (opfix '(: >< (\ a b (L a b)) (3 >< 5)))))  ; explicit binder kept
- ((show '(: (>< a b) (L a b) ((>< 3 5)))) = (show (opfix '(: (>< a b) (L a b) (3 >< 5)))))      ; sugar header kept
- ((show '(\ a b ((+ a b)))) = (show (opfix '(\ a b (a + b)))))                                  ; \ args verbatim, body factored
- ((show '(: a 1 b 2 ((+ a b)))) = (show (opfix '(: a 1 b 2 (a + b)))))                          ; : values/body factored, names kept
+ ((show '(: >< (\ a b (L a b)) (>< 3 5))) = (show (opfix '(: >< (\ a b (L a b)) (3 >< 5)))))  ; explicit binder kept
+ ((show '(: (>< a b) (L a b) (>< 3 5))) = (show (opfix '(: (>< a b) (L a b) (3 >< 5)))))      ; sugar header kept
+ ((show '(\ a b (+ a b))) = (show (opfix '(\ a b (a + b)))))                                  ; \ args verbatim, body factored
+ ((show '(: a 1 b 2 (+ a b))) = (show (opfix '(: a 1 b 2 (a + b)))))                          ; : values/body factored, names kept
  (2 = (: x 1 x (x + 1) x)))                                                                     ; the sequence law, intact

@@ -17,7 +17,7 @@
 ; Z not nat: (3 3 3) = 3^27 would blow up unary-nat vm_compute.
 ; Reads test/spec.l, writes Coq to `out`.  Run: out/host/ai tools/spec2coq.l > proof/rocq/gen.v
 
-(: (cat l) (foldl (+) "" l)                            ; join a list of strings
+(: (join l) (foldl (+) "" l)                           ; join a list of strings with + (was `cat`, which shadowed the global dyadic cat)
 
    ; read a file's top-level forms as DATA (the reader strips ; comments)
    (forms path) (: q (open path "r") e (mint 0)
@@ -58,22 +58,22 @@
    (len4? x) (&& (two? x) (two? (cup x)) (two? (cup (cup x)))
                  (two? (cup (cup (cup x)))) (! (two? (cup (cup (cup (cup x)))))))
    (chains l) (? (&& (two? l) (two? (cup l)))
-               (cat `("(" (tv (cap l)) ", " (tv (e2 l)) ")" (? (two? (cup (cup l))) ";" "") (chains (cup (cup l))))) "")
-   (th x) (cat `("[" (chains (cup x)) "]"))             ; #(1 10 2 20) -> [(1, 10);(2, 20)]
+               ("(" + (tv (cap l)) + ", " + (tv (e2 l)) + ")" + (? (two? (cup (cup l))) ";" "") + (chains (cup (cup l)))) "")
+   (th x) ("[" + (chains (cup x)) + "]")             ; #(1 10 2 20) -> [(1, 10);(2, 20)]
    ; translate a collection value to a Coq `list Z`
-   (joinl l) (? (two? l) (cat `((tv (cap l)) (? (two? (cup l)) ";" "") (joinl (cup l)))) "")
-   (joinb s i) (? (< i (tally s)) (cat `((show (s i)) (? (< (+ 1 i) (tally s)) ";" "") (joinb s (+ 1 i)))) "")
-   (tl x) (? (qlist? x)  (cat `("[" (joinl (e2 x)) "]"))
-             (arrv? x)   (cat `("[" (joinl (cup x)) "]"))    ; tuple: the elements are the cup
-             (iotav? x)  (cat `("(iotaZ " (tv (e2 x)) ")"))   ; spec.v's iota, Z-arg face
-             (string? x)    (cat `("[" (joinb x 0) "]"))
+   (joinl l) (? (two? l) ((tv (cap l)) + (? (two? (cup l)) ";" "") + (joinl (cup l))) "")
+   (joinb s i) (? (< i (tally s)) ((show (s i)) + (? (< (+ 1 i) (tally s)) ";" "") + (joinb s (+ 1 i))) "")
+   (tl x) (? (qlist? x)  ("[" + (joinl (e2 x)) + "]")
+             (arrv? x)   ("[" + (joinl (cup x)) + "]")    ; tuple: the elements are the cup
+             (iotav? x)  ("(iotaZ " + (tv (e2 x)) + ")")   ; spec.v's iota, Z-arg face
+             (string? x)    ("[" + (joinb x 0) + "]")
              (: h (cap x)                                     ; the broadcast / append / repeat ops
-                (? (id? h '+)  (? (arr? x)        (cat `("(vaddt " (tl (e2 x)) " " (tl (e3 x)) ")"))
-                                  (intv? (e2 x))  (cat `("(" (tv (e2 x)) " :: " (tl (e3 x)) ")"))  ; scalar prepend
-                                  (cat `("(" (tl (e2 x)) " ++ " (tl (e3 x)) ")")))                ; list append
-                   (id? h '*)  (? (arr? x) (cat `("(vscale " (tv (e3 x)) " " (tl (e2 x)) ")"))     ; array scale
-                                  (cat `("(srep (Z.to_nat " (tv (e3 x)) ") " (tl (e2 x)) ")")))    ; list repeat
-                   (id? h '//) (cat `("(vquot " (tv (e3 x)) " " (tl (e2 x)) ")"))  "[]")))
+                (? (id? h '+)  (? (arr? x)        ("(vaddt " + (tl (e2 x)) + " " + (tl (e3 x)) + ")")
+                                  (intv? (e2 x))  ("(" + (tv (e2 x)) + " :: " + (tl (e3 x)) + ")")  ; scalar prepend
+                                  ("(" + (tl (e2 x)) + " ++ " + (tl (e3 x)) + ")"))                ; list append
+                   (id? h '*)  (? (arr? x) ("(vscale " + (tv (e3 x)) + " " + (tl (e2 x)) + ")")     ; array scale
+                                  ("(srep (Z.to_nat " + (tv (e3 x)) + ") " + (tl (e2 x)) + ")"))    ; list repeat
+                   (id? h '//) ("(vquot " + (tv (e3 x)) + " " + (tl (e2 x)) + ")")  "[]")))
 
    ; integer-valued term? a fixnum, an operator tree, or a numeral-application spine
    (intv? x) (? (charm? x) 1
@@ -88,29 +88,37 @@
                                0))
                 0)
    (allv? l) (? (two? l) (&& (intv? (cap l)) (allv? (cup l))) (! (two? l)))
+   ; a CLOSED +/-/* tree of numeric literals: evaluable with no free vars, so we can
+   ; check its actual value. the Coq model has only Vz (fixnum) for integers -- no big
+   ; kind -- so an expr that OVERFLOWS a charm (e.g. (* 2 2^61) = 2^62) is unmodellable
+   ; for a charm? test and must skip, not masquerade as Vz. (used by tk below.)
+   (concrete-int? x) (? (two? x) (&& (len3? x) (member? (cap x) '(+ - *))
+                                     (concrete-int? (e2 x)) (concrete-int? (e3 x)))
+                          (&& (! (nom? x)) (! (two? x))))
 
    ; translate an integer-valued term to a Coq Z expression
-   (tv x) (? (charm? x) (? (< x 0) (cat `("(" (show x) ")")) (show x))  ; parens: `Z.eqb -2` parses as subtraction
+   (tv x) (? (charm? x) (? (< x 0) ("(" + (show x) + ")") (show x))  ; parens: `Z.eqb -2` parses as subtraction
              (: h (cap x) b (binop h)
-                (? b (cat `("(" b " " (tv (e2 x)) " " (tv (e3 x)) ")"))   ; (Z.add a b) / (Z.gcd a b)
-                   (id? h 'sat)   (? (hashv? (e2 x)) (cat `("(Z.of_nat (length " (th (e2 x)) "))"))  ; $hash = key count
-                                     (listv? (e2 x)) (cat `("(Z.max 0 (asum " (tl (e2 x)) "))"))
-                                     (cat `("(Z.max 0 " (tv (e2 x)) ")")))  ; $list / $int
-                   (id? h 'net)   (cat `("(asum " (tl (e2 x)) ")"))   ; net/+list -- the sum
-                   (id? h 'tally) (cat `("(Z.of_nat (length " (tl (e2 x)) "))"))  ; count
-                   (id? h 'max)  (cat `("(amax " (tl (e2 x)) ")"))
-                   (id? h 'min)  (cat `("(amin " (tl (e2 x)) ")"))
-                   (id? h 'prod) (cat `("(aprod " (tl (e2 x)) ")"))
-                   (id? h 'abs)   (cat `("(Z.abs " (tv (e2 x)) ")"))
-                   (id? h 'peep)  (? (hashv? (e2 x)) (cat `("(hget " (th (e2 x)) " " (tv (e3 x)) " " (tv (e4 x)) ")"))
-                                     (cat `("(nth (Z.to_nat " (tv (e3 x)) ") " (tl (e2 x)) " " (tv (e4 x)) ")")))  ; hash lookup / array index
-                   (hashv? h)     (cat `("(hget " (th h) " " (tv (e2 x)) " 0)"))  ; (#(..) k) -- lookup, default 0
+                (? b ("(" + b + " " + (tv (e2 x)) + " " + (tv (e3 x)) + ")")   ; (Z.add a b) / (Z.gcd a b)
+                   (id? h 'sat)   (? (hashv? (e2 x)) ("(Z.of_nat (length " + (th (e2 x)) + "))")  ; $hash = key count
+                                     (listv? (e2 x)) ("(Z.max 0 (asum " + (tl (e2 x)) + "))")
+                                     ("(Z.max 0 " + (tv (e2 x)) + ")"))  ; $list / $int
+                   (id? h 'net)   ("(asum " + (tl (e2 x)) + ")")   ; net/+list -- the sum
+                   (id? h 'tally) ("(Z.of_nat (length " + (tl (e2 x)) + "))")  ; count
+                   (id? h 'max)  ("(amax " + (tl (e2 x)) + ")")
+                   (id? h 'min)  ("(amin " + (tl (e2 x)) + ")")
+                   (id? h 'prod) ("(aprod " + (tl (e2 x)) + ")")
+                   (id? h 'abs)   ("(Z.abs " + (tv (e2 x)) + ")")
+                   (id? h 'peep)  (? (hashv? (e2 x)) ("(hget " + (th (e2 x)) + " " + (tv (e3 x)) + " " + (tv (e4 x)) + ")")
+                                     ("(nth (Z.to_nat " + (tv (e3 x)) + ") " + (tl (e2 x)) + " " + (tv (e4 x)) + ")"))  ; hash lookup / array index
+                   (hashv? h)     ("(hget " + (th h) + " " + (tv (e2 x)) + " 0)")  ; (#(..) k) -- lookup, default 0
                    (spine (tv h) (cup x)))))                                ; (app .. ..) spine
    (spine acc rest) (? (two? rest)
-                       (spine (cat `("(appZ " acc " " (tv (cap rest)) ")")) (cup rest)) acc)
+                       (spine ("(appZ " + acc + " " + (tv (cap rest)) + ")") (cup rest)) acc)
 
    ; the KIND tag of a literal (syntactic) for the type predicates; "Vbot" if untaggable
-   (tk x) (? (intv? x) "Vz"  (gem? x) "Vflo"  (string? x) "Vstr"  (id? x 'i) "Vcx"
+   (tk x) (? (intv? x) (? (&& (concrete-int? x) (! (charm? (ev x)))) "Vbot" "Vz")  ; a concrete overflow (big) is unmodellable -> skip
+             (gem? x) "Vflo"  (string? x) "Vstr"  (id? x 'i) "Vcx"
              (two? x) (: h (cap x)
                         (? (id? h bs) (tkq (e2 x))                     ; '(..) or 'x
                            (id? h 'twin) "Vcx"                         ; ~(re im)
@@ -133,9 +141,9 @@
                     (= t "Vpair") 3 (= t "Vmap") 4  9))
    (xband? f) (&& (len3? f) (ordop? (cap f)) (>= (litband (e2 f)) 0) (>= (litband (e3 f)) 0)
                   (! (= (litband (e2 f)) (litband (e3 f)))))           ; both tagged, DIFFERENT bands
-   (xband f) (: h (cap f) a (cat `("(vband " (tk (e2 f)) ")")) b (cat `("(vband " (tk (e3 f)) ")"))
-               (? (id? h '<)  (cat `("(Z.ltb " a " " b ")"))  (id? h '<=) (cat `("(Z.leb " a " " b ")"))
-                  (id? h '>)  (cat `("(Z.ltb " b " " a ")"))  (cat `("(Z.leb " b " " a ")"))))
+   (xband f) (: h (cap f) a ("(vband " + (tk (e2 f)) + ")") b ("(vband " + (tk (e3 f)) + ")")
+               (? (id? h '<)  ("(Z.ltb " + a + " " + b + ")")  (id? h '<=) ("(Z.leb " + a + " " + b + ")")
+                  (id? h '>)  ("(Z.ltb " + b + " " + a + ")")  ("(Z.leb " + b + " " + a + ")")))
 
    ; translate a top-level predicate to a Coq bool, or 0 if not translatable.
    ; `!` factors to `nilp`: (nil? x) is the bit "x is nothing" (x <= 0 for integers);
@@ -143,38 +151,38 @@
    (tp f) (? (! (two? f)) 0
              (: h (cap f)
                 (? (id? h 'nil?) (: a (e2 f)
-                                   (? (intv? a)  (cat `("(Z.leb " (tv a) " 0)"))
-                                      (listv? a) (cat `("(Z.leb (asum " (tl a) ") 0)"))  ; !list: net <= 0
-                                      (: p (tp a) (? p (cat `("(negb " p ")")) 0))))
-                   (kpred h)  (: t (tk (e2 f)) (? (= t "Vbot") 0 (cat `("(" (kpred h) " " t ")"))))  ; (charm? 5), (two? '(..))..
+                                   (? (intv? a)  ("(Z.leb " + (tv a) + " 0)")
+                                      (listv? a) ("(Z.leb (asum " + (tl a) + ") 0)")  ; !list: net <= 0
+                                      (: p (tp a) (? p ("(negb " + p + ")") 0))))
+                   (kpred h)  (: t (tk (e2 f)) (? (= t "Vbot") 0 ("(" + (kpred h) + " " + t + ")")))  ; (charm? 5), (two? '(..))..
                    (! (len3? f)) 0
-                   (id? h '=) (? (&& (intv? (e2 f)) (intv? (e3 f)))   (cat `("(Z.eqb " (tv (e2 f)) " " (tv (e3 f)) ")"))
-                                 (&& (listv? (e2 f)) (listv? (e3 f))) (cat `("(leqb " (tl (e2 f)) " " (tl (e3 f)) ")"))  ; list/array =
+                   (id? h '=) (? (&& (intv? (e2 f)) (intv? (e3 f)))   ("(Z.eqb " + (tv (e2 f)) + " " + (tv (e3 f)) + ")")
+                                 (&& (listv? (e2 f)) (listv? (e3 f))) ("(leqb " + (tl (e2 f)) + " " + (tl (e3 f)) + ")")  ; list/array =
                                  0)
                    (xband? f) (xband f)                               ; cross-kind ordering: symbol<string<number<chain<map
                    (! (&& (intv? (e2 f)) (intv? (e3 f)))) 0           ; the within-band ORDERING ops below stay integer-only
-                   (id? h '<)  (cat `("(Z.ltb " (tv (e2 f)) " " (tv (e3 f)) ")"))
-                   (id? h '<=) (cat `("(Z.leb " (tv (e2 f)) " " (tv (e3 f)) ")"))
-                   (id? h '>)  (cat `("(Z.ltb " (tv (e3 f)) " " (tv (e2 f)) ")"))
-                   (id? h '>=) (cat `("(Z.leb " (tv (e3 f)) " " (tv (e2 f)) ")"))
+                   (id? h '<)  ("(Z.ltb " + (tv (e2 f)) + " " + (tv (e3 f)) + ")")
+                   (id? h '<=) ("(Z.leb " + (tv (e2 f)) + " " + (tv (e3 f)) + ")")
+                   (id? h '>)  ("(Z.ltb " + (tv (e3 f)) + " " + (tv (e2 f)) + ")")
+                   (id? h '>=) ("(Z.leb " + (tv (e3 f)) + " " + (tv (e2 f)) + ")")
                    0)))
 
    ; the original assert (infix, as in spec.l) shown above each theorem
-   (thm n f s) (cat `("(* " (show f) " *)" (string 10)
-                       "Theorem gen_" (show n) " : " s " = true.  Proof. vm_compute. reflexivity. Qed." (string 10)))
+   (thm n f s) ("(* " + (show f) + " *)" + (string 10) + "Theorem gen_" + (show n) + " : " + s + " = true.  Proof. vm_compute. reflexivity. Qed." + (string 10))
 
    nt (tablet 0) ns (tablet 0)                          ; translated / seen counters
    (bump b) (pin b 0 (+ 1 (peep b 0 0)))
    (walkops ops) (? (! ops) 0
                  (: f (cap ops) _ (bump ns) s (tp (fix1 f))
-                    _ (? s (: _ (bump nt) (. (thm (peep nt 0 0) f s))) 0)
+                    _ (? s (: _ (bump nt) (. (thm (peep nt 0 0) f s)))
+                           (say err ("  UNMODELED: " + (show f) + (string 10))))   ; LOUD: an assert the generator can't translate -> never proved
                     (walkops (cup ops))))
    (walk fs) (? (! fs) 0
                 (: f (cap fs)
                    _ (? (&& (two? f) (id? (cap f) 'assert)) (walkops (cup f)) 0)
                    (walk (cup fs))))
 
-   _ (. (cat (L
+   _ (. (join `(
      "(* proof/rocq/gen.v -- GENERATED from test/spec.l by tools/spec2coq.l. Do not edit;" (string 10)
      "   regenerate with `make test_gen`. Each integer-comparison corpus assert is" (string 10)
      "   translated to Coq, with its source assert shown in the comment above it." (string 10)
@@ -194,7 +202,10 @@
      "Open Scope Z_scope." (string 10)
      "Definition amin (l:list Z):Z := match l with nil=>0 | x::xs=>fold_right Z.min x xs end." (string 10)
      "Fixpoint leqb (a b:list Z):bool := match a,b with nil,nil=>true | x::a',y::b'=>andb (Z.eqb x y) (leqb a' b') | _,_=>false end." (string 10)
-     "Fixpoint vaddt (a b:list Z):list Z := match a,b with x::a',y::b'=>(x+y)::vaddt a' b' | _,_=>nil end." (string 10)
+     "Fixpoint vaddz (a b:list Z):list Z := match a,b with x::a',y::b'=>(x+y)::vaddz a' b' | _,_=>nil end." (string 10)
+     ; ai adds galaxies ELEMENTWISE only at equal length; a length mismatch answers () (net 0). the
+     ; length guard makes the model faithful (a truncating vaddt would net the common prefix -- wrong).
+     "Definition vaddt (a b:list Z):list Z := if Nat.eqb (length a) (length b) then vaddz a b else nil." (string 10)
      "Definition vquot (c:Z):list Z->list Z := map (fun e=>Z.quot e c)." (string 10)
      "Fixpoint hget (m:list (Z*Z)) (k d:Z):Z := match m with nil=>d | p::m' => if Z.eqb k (fst p) then snd p else hget m' k d end." (string 10)
      ; the KIND lattice: a value's tag, for the type predicates (a literal's kind is syntactic; vkind/vband avoid spec.v's value/band)
@@ -214,7 +225,8 @@
      "Definition atomp v := match v with Vpair => false | _ => true end." (string 10)
      "Definition lamp  v := match v with Vmap => true | _ => false end." (string 10)   ; lit? = the top region (map + the unmodeled fns/hots); among modeled kinds only Vmap qualifies
      "Definition vband v : Z := match v with Vsym => 0 | Vstr => 1 | Vz|Vflo|Vcx|Varr => 2 | Vpair => 3 | Vmap => 4 | Vbot => 9 end." (string 10) (string 10))))
+   _ (say err ("spec2coq: UNMODELED asserts (seen but never proved) --" + (string 10)))
    _ (walk (forms "test/spec.l"))
-   _ (. (cat `((string 10) "(* " (show (peep nt 0 0)) " theorems generated from "
-                (show (peep ns 0 0)) " asserts seen *)" (string 10))))
+   _ (. ((string 10) + "(* " + (show (peep nt 0 0)) + " theorems generated from " + (show (peep ns 0 0)) + " asserts seen *)" + (string 10)))
+   _ (say err ("spec2coq: " + (show (peep nt 0 0)) + " translated, " + (show (- (peep ns 0 0) (peep nt 0 0))) + " UNMODELED, of " + (show (peep ns 0 0)) + " asserts seen" + (string 10)))
    (quit 0))
