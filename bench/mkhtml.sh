@@ -99,9 +99,10 @@ if [ -n "$2" ] && [ -s "$2" ]; then
 cat <<'SAT'
 <h2>SAT solvers &mdash; milliseconds to solve</h2>
 <p class="note">A separate field: ai&rsquo;s own CDCL solver (<code>crew/sat/flat.l</code>:
-flat cask-resident state driven by three native kernels &mdash; propagation, the whole
-conflict handler, and the decision &mdash; each assembled through <code>crew/holo/</code> at
-solver-build time, specialized to the instance size) against reference C solvers.
+flat cask-resident state driven by four native kernels &mdash; propagation, the whole
+conflict handler, the decision, and the <code>fbva</code> grow step &mdash; each assembled
+through <code>crew/holo/</code> at solver-build time, specialized to the instance size)
+against reference C solvers.
 Two row families: PHP(<i>n</i>) &mdash; (<i>n</i>+1) pigeons into <i>n</i> holes, UNSAT
 and resolution-hard, where clause learning alone is <b>exponential</b> and ai&rsquo;s
 <code>fbva</code> factoring pass (extended resolution) earns its keep &mdash; and
@@ -116,8 +117,11 @@ the one-time kernel assembly excluded); the C solvers by process wall-clock (the
 startup is ~ms). <code>timeout</code> = exceeded the cutoff. The families pull opposite
 ways: the big inprocessing solvers (cadical, kissat) are built for structure but their
 machinery costs them the small random instances, where the light classics (picosat,
-minisat) lead &mdash; ai leads the whole-table net, ahead of cadical on PHP(5&ndash;7)
-and mid-field on the pure random rows.</p>
+minisat) lead &mdash; ai runs ahead of cadical on PHP(5&ndash;7) and mid-field on the
+pure random rows; the threshold-SAT rows are a documented per-instance lottery
+(uf250 races a 14-instance panel to damp it). The net is the geometric mean over
+rows &mdash; the same key the language table uses &mdash; so no single row owns
+the column order.</p>
 <div class="wrap">
 SAT
 awk '
@@ -127,7 +131,7 @@ awk '
     if(!(solv in ss)){sord[++ns]=solv; ss[solv]=1}
     val[inst,solv]=ms }
   END{
-    for(j=1;j<=ns;j++){s=sord[j]; net=0; to=0; for(i=1;i<=ni;i++){v=val[iord[i],s]; if(v=="timeout"){to=1; net+=1e9}else net+=v+0} netv[s]=net; anyto[s]=to; ord[j]=s}
+    for(j=1;j<=ns;j++){s=sord[j]; lg=0; n=0; to=0; for(i=1;i<=ni;i++){v=val[iord[i],s]; if(v=="timeout"){to=1; lg+=log(1e9); n++} else if(v!=""){x=v+0; if(x<0.001)x=0.001; lg+=log(x); n++}} netv[s]=(n?exp(lg/n):1e18); anyto[s]=to; ord[j]=s}
     for(a=1;a<=ns;a++)for(b=a+1;b<=ns;b++)if(netv[ord[b]]<netv[ord[a]]){t=ord[a];ord[a]=ord[b];ord[b]=t}
     for(i=1;i<=ni;i++){m=1e18; for(j=1;j<=ns;j++){v=val[iord[i],ord[j]]; if(v!="timeout"&&v!=""&&v+0<m)m=v+0} minr[iord[i]]=m}
     printf "<table><thead><tr><th>instance</th>"

@@ -240,5 +240,5 @@ mkdir -p "$SLIB"
 slibrow uf100   "RND3SAT/uf100-430.tar.gz"   uf100   10
 slibrow uuf100  "RND3SAT/uuf100-430.tar.gz"  uuf100  10
 slibrow uuf150  "RND3SAT/uuf150-645.tar.gz"  uuf150  5
-slibrow uf250   "RND3SAT/uf250-1065.tar.gz"  uf250   3
+slibrow uf250   "RND3SAT/uf250-1065.tar.gz"  uf250   14   # threshold-SAT is a per-instance lottery: panel width damps it
 slibrow flat100 "GCP/flat100-239.tar.gz"     flat100 3
