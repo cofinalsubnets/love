@@ -209,7 +209,7 @@ init-container: host
 # for the emulated kernel. (math.l REJOINED when the math floor became am.c --
 # the same <= 2 ulp seven everywhere, so the glibc-precision bands hold.)
 kt = $(filter-out %/io.l %/run.l %/bell.l,$t)
-out/lib/ktests.l: $(kt) $(MAKEFILE_LIST)
+out/lib/ktests.l: $(kt) $(MAKEFILE_LIST) out/lib/corpus.list
 	@mkdir -p out/lib
 	@cat $(kt) > $@
 out/lib/ktests.h: out/lib/ktests.l $(love0) tools/lcatv.l love/prel.l

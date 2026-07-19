@@ -98,7 +98,18 @@ out/lib/hook.h: love/glaze/hook.l
 	@mkdir -p out/lib
 	@echo LOVE	$@
 	@$(sed_lit) $< > $@
-out/lib/tests0.h: $t
+# the corpus SET stamp: tests0.h (and the kernel's ktests.l) aggregate $t, a wildcard --
+# so a DELETED test file leaves every remaining prereq older than the target and make
+# keeps baking the ghost. Depend on the LIST itself: regenerated every make, rewritten
+# only when membership changes (the love_version.h idiom below), so the aggregates
+# re-lay on an add OR a delete.
+.PHONY: force_corpus_list
+force_corpus_list: ;
+out/lib/corpus.list: force_corpus_list
+	@mkdir -p out/lib
+	@echo '$t' > $@.tmp
+	@if cmp -s $@.tmp $@ 2>/dev/null; then rm -f $@.tmp; else mv $@.tmp $@; echo SH	$@; fi
+out/lib/tests0.h: $t out/lib/corpus.list
 	@mkdir -p out/lib
 	@echo LOVE	$@
 	@cat $t | $(sed_lit) > $@
