@@ -107,7 +107,7 @@ work here, the traps, the architecture -- is [CLAUDE.md](CLAUDE.md).
 - `make` build + test
 - `make repl` interactive shell
 - `make test_all` adds the freestanding kernel (qemu) + tool diffs
-- `make wasm` build the browser image (wasm/ai.js, used by index.html) -- rebuild + stage by hand
+- `make wasm` build the browser image (wasm/love.js, used by index.html) -- rebuild + stage by hand
 - `out/host/love` is the binary -- ai is the word now (it was `love` once)
 - `out/host/love file.l` run a file
 - `echo .ev | ai` print the compiler

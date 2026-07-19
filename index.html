@@ -49,7 +49,7 @@ data-run=
 <hr>
 <nav class="topnav"><span class="here">ai</span> &nbsp;&middot;&nbsp; <a href="#language">language</a> &nbsp;&middot;&nbsp; <a href="#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="#crew">crew</a> &nbsp;&middot;&nbsp; <a href="bench/bench.html">bench</a></nav>
 
-<script src="wasm/ai.js"></script>
+<script src="wasm/love.js"></script>
 <script>
 (async () => {
   const status = document.getElementById('status');
@@ -60,7 +60,7 @@ data-run=
   const clear = document.getElementById('clear');
 
   const t0 = performance.now();
-  const M = await Ai();
+  const M = await Love();
   const init = M.cwrap('ai_init', 'number', []);
   const ev   = M.cwrap('ai_eval', 'number', ['string']);
   const optr = M.cwrap('ai_out_ptr', 'number', []);

@@ -85,7 +85,7 @@ fmt-check: $(ho)/love
 	  $(ho)/love $R/crew/moon/fmt.l "$$f" | diff -q "$$f" - >/dev/null || bad="$$bad $$f"; done; \
 	  if [ -n "$$bad" ]; then echo "fmt-check: needs formatting:$$bad" >&2; exit 1; else echo "fmt-check: clean"; fi
 
-# NB: there is NO git pre-commit hook -- committed artifacts (wasm/ai.js, bench/
+# NB: there is NO git pre-commit hook -- committed artifacts (wasm/love.js, bench/
 # bench.html) are rebuilt MANUALLY (`make wasm`, `make -C bench html`) and staged
 # by hand. An auto-rebuild hook re-ran the benchmarks on every commit (minutes);
 # it was removed deliberately. Rebuild before committing artifact-affecting code.

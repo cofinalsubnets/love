@@ -163,7 +163,7 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
 - [x] `README.md` full crew roster — expanded the curated ain/bao/inle sample to the full 13-member roster mirroring `index.html` (gwen chose full roster over aicc+reef-only, 2026-07-14). aicc/moon + reef join both README + `index.html` together at the crew-list refresh above
 - [ ] **bench.html** — restyle to match the rest of the site (style.css / index.html look-and-feel)
 - [ ] **regen the bench tables** — re-run the benches, refresh the numbers baked into bench.html
-- [ ] **regen wasm** — rebuild `wasm/ai.js` against the release binary (currently dirty in the tree)
+- [ ] **regen wasm** — rebuild `wasm/love.js` against the release binary (currently dirty in the tree)
 
 ### D. the gate
 

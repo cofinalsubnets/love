@@ -313,7 +313,7 @@ test_kernel:
 endif
 
 # --- wasm headless test (wired into test_all; emcc + node) -----------------
-# Build ai.js and run the SAME $t corpus through it under node -- a third
+# Build love.js and run the SAME $t corpus through it under node -- a third
 # runtime after the host and love0, exercising wasm's <data.h> override
 # (sentinel-ap data kinds, no flat code-address space). The harness evals the
 # whole corpus in one ai_eval and greps the drained output for the zz-fin
@@ -327,7 +327,7 @@ test_wasm:
 	@echo "test_wasm: skipped (needs emcc + node)"
 else
 test_wasm: wasm
-	@echo TEST wasm/ai.js "(node)"
+	@echo TEST wasm/love.js "(node)"
 	@$(NODE) $(R)/wasm/test.mjs $t
 endif
 

@@ -21,7 +21,7 @@
     #status { color: #888; font-size: .9em; }
     .banner { color: #888; margin-bottom: .5em; }
   </style>
-  <script src="ai.js"></script>
+  <script src="love.js"></script>
 </head>
 <body>
   <header>
@@ -44,7 +44,7 @@
     const input  = document.getElementById('input');
 
     const t0 = performance.now();
-    const M = await Ai();
+    const M = await Love();
     const init  = M.cwrap('ai_init',      'number', []);
     const eval_ = M.cwrap('ai_eval',      'number', ['string']);
     const oPtr  = M.cwrap('ai_out_ptr',   'number', []);

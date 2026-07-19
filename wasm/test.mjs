@@ -5,7 +5,7 @@
 // override (sentinel-ap data kinds, no flat code-address space).
 //
 // Usage: node wasm/test.mjs <corpus.l...>   (the Makefile passes $t, in order)
-import Ai from './ai.js';
+import Love from './love.js';
 import { readFileSync } from 'node:fs';
 
 const files = process.argv.slice(2);
@@ -17,7 +17,7 @@ if (!files.length) { console.error('usage: test.mjs <corpus.l...>'); process.exi
 const src = [readFileSync('love/bao.l', 'utf8'),
              ...files.map(f => readFileSync(f, 'utf8'))].join('\n');
 
-const m = await Ai();
+const m = await Love();
 const init = m.ccall('ai_init', 'number', [], []);
 if (init !== 0) { console.error(`ai_init failed (code ${init})`); process.exit(1); }
 

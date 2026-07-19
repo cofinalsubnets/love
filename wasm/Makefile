@@ -25,13 +25,13 @@ CFLAGS = -std=gnu2x -O2 -g0 -Dai_tco=0 \
   -I.. -I../out/lib
 
 EMFLAGS = \
-  -sMODULARIZE=1 -sEXPORT_NAME=Ai \
+  -sMODULARIZE=1 -sEXPORT_NAME=Love \
 	-sASSERTIONS -sSINGLE_FILE=1 \
   -sINITIAL_MEMORY=16MB -sALLOW_MEMORY_GROWTH=1 \
   -sEXPORTED_FUNCTIONS=_ai_init,_ai_eval,_ai_out_ptr,_ai_out_len,_ai_out_reset,_malloc,_free \
   -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString,stringToUTF8,lengthBytesUTF8,HEAPU8,HEAPU32
 
-all: ai.js
+all: love.js
 
 # prel.h/ev.h are serialized from lib/*.g by the top-level lcat rule;
 # host.c assembles them into the bootstrap via G_EGG_PRE/POST (no repl here --
@@ -48,7 +48,7 @@ all: ai.js
 # id changes -- mirrors the host build's l.o relink. Without this the browser
 # banner (love-version) drifts to whatever revision ai.o was last built at.
 #
-# The committed ai.js is ALWAYS built from a tree that ai.js itself dirties, so
+# The committed love.js is ALWAYS built from a tree that love.js itself dirties, so
 # `git describe --dirty` would brand the page banner "-dirty" in perpetuity --
 # cosmetic, but it reads as broken. Map it to "-wasm" in a wasm-local copy (same
 # revision, honest "this is the browser build"); a clean tree just keeps the bare
@@ -64,7 +64,7 @@ $(o)/ai.o: ../ai.c $(g_h) $(o)/love_version.h
 
 # Link step: emcc's link is multi-input, so ccache can't cache it -- use
 # bare $(EMCC). EMFLAGS (MODULARIZE, exports, memory) only apply here.
-ai.js: $(objs)
+love.js: $(objs)
 	$(EMCC) $(CFLAGS) $(EMFLAGS) $(objs) -o $@
 
 $(o)/host.o: host.c ../out/lib/egg.h ../out/lib/prel.h ../out/lib/ev.h ../out/lib/uu.h $(g_h)
@@ -78,11 +78,11 @@ $(o)/%.o: ../%.c $(g_h)
 serve: all
 	python3 -m http.server 8000
 
-# clean only the build intermediates ($(o) = ../out/wasm). ai.js is a TRACKED,
+# clean only the build intermediates ($(o) = ../out/wasm). love.js is a TRACKED,
 # committed artifact (the .githooks pre-commit keeps it fresh), so clean must
-# NOT delete it -- doing so left a spurious `D wasm/ai.js` after every top-level
+# NOT delete it -- doing so left a spurious `D wasm/love.js` after every top-level
 # `make clean`. (l.wasm was a dead pre-rename name; SINGLE_FILE=1 embeds the
-# wasm into ai.js, so no standalone .wasm is ever emitted.)
+# wasm into love.js, so no standalone .wasm is ever emitted.)
 clean:
 	rm -rf $(o)
 
