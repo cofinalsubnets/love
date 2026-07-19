@@ -9,8 +9,8 @@
 #   make distro-initramfs   -> out/distro/initramfs.cpio.gz
 #   make distro-run         -> boot it under qemu on a gcc-built stock kernel
 #
-# The kernel stays the one imported artifact (BZIMAGE, default the host's) -- see
-# doc/moon-kernel.md for the mooncc-builds-the-kernel ladder.
+# The kernel stays the one imported artifact (BZIMAGE, default the host's);
+# building it with mooncc is a later ladder, not yet mapped.
 
 distro_dir   = out/distro
 distro_root  = $(distro_dir)/root
