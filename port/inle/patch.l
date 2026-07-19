@@ -11,12 +11,11 @@
 ; `adopt` (serve.l) is a SEPARATE, explicit step: the loop lands the change in the
 ; tree; you re-exec onto it when you choose. nothing here re-execs on its own.
 ;
-; the curl/json machinery mirrors oracle.l's proven codec (find/unesc/xtext), kept
-; self-contained so the dock needn't load oracle's UDP loop. no key -> the model
-; call yields "" and the proposer goes idle (like oracle's echo fallback); a MOCK
+; the curl/json machinery (find/unesc/xtext) is self-contained. no key -> the model
+; call yields "" and the proposer goes idle; a MOCK
 ; model can be installed with `set-model` to exercise the whole loop offline.
 
-(: ;; --- json codec (same shape as oracle.l) --------------------------------
+(: ;; --- json codec ---------------------------------------------------------
    (find hay nee)
      (: n (tally nee)
         (hit i) (: (m j) (? (= j n) 1 (? (= (hay (+ i j)) (nee j)) (m (+ 1 j)) 0)) (m 0))

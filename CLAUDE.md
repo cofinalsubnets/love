@@ -62,7 +62,7 @@
 ;   keep the read protocol (port back when incomplete, sentinel at eof). file mode stays helpless.
 ; * python \b-sweeps treat - as a boundary: kebab names with capital segments mangle.
 ; * the CREW (crew/, the apps) rides over the core, each owning NON-OVERLAPPING files so a session can take one in
-;   parallel: lux (the X11 window manager, crew/lux/), inle (freestanding agent-kernel, port/inle/),
+;   parallel: lux (the X11 window manager, crew/lux/), inle (the freestanding kernel, port/inle/),
 ;   reef (the patch-set vcs, crew/reef/ + host/hash.c -- doc/reef.md, `make test_reef`), moon (the C
 ;   compiler in love, crew/moon/ -- compiles love.c + all host/*.c and holo links them, no gcc/glibc/ld:
 ;   `make test_raw`). apps

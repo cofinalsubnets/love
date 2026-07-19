@@ -18,33 +18,8 @@ void
 #include <stdbool.h>
 
 // khhdm -- the higher-half direct-map offset (physical P is reachable at
-// khhdm + P). Defined in kmain.c; the virtio-net driver reads it to turn heap
-// pointers into the guest-physical DMA addresses the device's rings need
-// (phys = virt - khhdm). 0 means identity-mapped.
+// khhdm + P). Defined in kmain.c. 0 means identity-mapped.
 extern uintptr_t khhdm;
-
-// net.c (port/inle/<a>/): the virtio-net driver. net_init brings the NIC up
-// (PCI enum -> virtqueues -> DRIVER_OK); a no-op when no device is present.
-void net_init(void);
-
-// net_serve -- the polled UDP echo server (the `netserve` nif body; `net` is the
-// prel content measure): answer ARP for 10.0.2.15 and echo UDP datagrams back.
-// Blocks (hlt between polls).
-void net_serve(void);
-
-// The k_sources[] NIC-socket methods (stage 2e): a UDP datagram queue exposed as
-// a byte stream so love `(slurp nic)` perceives one datagram and `(fputs nic r)
-// (fflush nic)` replies to its sender. kmain wires these into a k_sources slot +
-// a port bound to the `nic` global.
-int  nic_getc(int fd);
-void nic_putc(int fd, int c);
-void nic_flush(int fd);
-bool nic_ready(int fd);
-
-// nic_aim -- point the nic at an arbitrary destination (ipword = a.b.c.d packed,
-// oport its UDP port) for the next say/flush, resolving the route by ARP. lets the
-// love brain INITIATE an outbound datagram (the `aim` nif, milestone 5). 1 = routed.
-int  nic_aim(uint32_t ipword, uint16_t oport);
 
 #define k_boot_ram_max 64
 

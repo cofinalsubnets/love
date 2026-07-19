@@ -1,5 +1,5 @@
-; judge.l -- inle's local VERIFIER, the companion to oracle.l's remote brain.
-; oracle.l ASKS the model (a question out over UDP/curl); judge.l SCORES what the
+; judge.l -- the dock's local VERIFIER. patch.l ASKS the model for a change;
+; judge.l SCORES what the
 ; model writes back: given a candidate love program, it grades a LADDER of signals and
 ; returns one verdict + two scalar lenses. this is the reward oracle an RL loop
 ; hangs off AND the filter a differential fuzzer hangs off -- the same object, read

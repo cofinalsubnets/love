@@ -18,31 +18,6 @@ dl = out/dl
 ifdef K_TEST
 ksuf := -test
 endif
-# INLE=1 bakes the inle agent (port/inle/inle.l) into the image and boots
-# straight into it (the heartbeat loop on the real timer tick) instead of the
-# shell -- the kernel AS the self-driving agent. Its own suffix so it never
-# clobbers the normal interactive kernel. See port/inle/.
-ifdef INLE
-ksuf := -inle
-endif
-# NETECHO=1 boots into a love-driven UDP echo server over the `nic` port (stage 2e
-# gate): the agent perceives a datagram with (slurp nic) and replies with
-# (fputs nic d)(fflush nic). Own suffix; normal kernel unchanged.
-ifdef NETECHO
-ksuf := -netecho
-endif
-# NETAGENT=1 boots into the inle AGENT loop over the `nic` port (milestone 3):
-# the agent perceives a UDP datagram (slurp nic), CHOOSES a reply,
-# and survives faults via the watchdog -- vs NETECHO's raw byte echo. Own suffix.
-ifdef NETAGENT
-ksuf := -netagent
-endif
-# NETBRAIN=1 boots into the OUTBOUND brain (milestone 5): on its own clock the agent
-# INITIATES a UDP round-trip to a remote oracle (aim+say+flush+slurp) and acts on the
-# reply -- the (B) fork (port/inle/), the decide step gone remote. Own suffix.
-ifdef NETBRAIN
-ksuf := -netbrain
-endif
 
 # Cross toolchain defaults to clang + lld (one multi-target pair covers every
 # arch). Override for a GCC cross toolchain, e.g.
@@ -92,22 +67,6 @@ ifdef K_TEST
 # the test gate now exercises tco=1 like everything else. love0 stays the trampoline lane.
 kcppflags += -DK_TEST -Dai_tco=1
 endif
-# INLE boots into the agent loop -- same settings as the normal interactive
-# kernel (it is the shell's read-eval loop with inle as the program), just
-# -DINLE to select the boot driver in kmain.c.
-ifdef INLE
-kcppflags += -DINLE
-endif
-ifdef NETECHO
-kcppflags += -DNETECHO
-endif
-ifdef NETAGENT
-kcppflags += -DNETAGENT
-endif
-ifdef NETBRAIN
-kcppflags += -DNETBRAIN
-endif
-
 ifeq ($(KCC_IS_CLANG),1)
 kcc_if_clang = -target $a-unknown-none-elf
 endif
@@ -129,9 +88,8 @@ $(ko)/love-$a$(ksuf).elf: $(R)/port/inle/$a/$a.lds $(k_o)
 	@$(KLD) $(kldflags) $(k_o) -o $@
 
 # Shared C sources (love.c, port/quay/, c/) + per-arch port//.
-# Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h; under INLE
-# the baked agent out/lib/inle.h.
-$(k_odir)/%.o: $(R)/%.c $(k_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/uu.h out/lib/bao.h $(if $(K_TEST),out/lib/ktests.h) $(if $(INLE)$(NETAGENT)$(NETBRAIN),out/lib/inle.h)
+# Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
+$(k_odir)/%.o: $(R)/%.c $(k_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/uu.h out/lib/bao.h $(if $(K_TEST),out/lib/ktests.h)
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
@@ -202,20 +160,7 @@ k_qemu_aarch64 = -M virt,gic-version=2 -cpu cortex-a72 -serial stdio $(k_qemu_ri
 k_qemu = qemu-system-$a -m 256M $(k_qemu_$a) \
   -drive if=pflash,unit=0,format=raw,file=$(dl)/edk2-ovmf/ovmf-code-$a.fd,readonly=on
 
-# --- live-NIC agent boots (x86_64 only -- the virtio-net driver is port/inle/x86_64/net.c).
-# net.c probes for a TRANSITIONAL virtio-net (legacy PCI id 0x1000 with an I/O BAR), so
-# disable-modern=on is REQUIRED: a modern-only device (id 0x1040, no I/O BAR) is invisible to
-# it. SLIRP user networking seats the guest at 10.0.2.15, the host/gateway at 10.0.2.2.
-k_net = -device virtio-net-pci,netdev=n0,disable-modern=on
-# inbound (NETAGENT): forward host udp 5555 -> guest 5555, so you can drive the agent:
-#   printf '(* 6 7)' | nc -u -w1 127.0.0.1 5555    ->  42   (first datagram is lost to ARP)
-k_net_in = -netdev user,id=n0,hostfwd=udp::5555-:5555 $(k_net)
-# outbound (NETBRAIN): plain user net; the agent DIALS 10.0.2.2:9999 on its own clock, so
-# stand up a UDP server on the host :9999 first -- it receives each datagram and whatever it
-# replies is what the agent narrates (`oracle <- ...`). That server is the seam for a real brain.
-k_net_out = -netdev user,id=n0 $(k_net)
-
-.PHONY: run run-hdd run-$a run-hdd-$a run-headless run-inle run-netagent run-netbrain
+.PHONY: run run-hdd run-$a run-hdd-$a run-headless
 run: run-$a
 run-hdd: run-hdd-$a
 run-$a: $(ko)/love-$a.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
@@ -225,24 +170,6 @@ run-hdd-$a: $(ko)/love-$a.hdd $(dl)/edk2-ovmf/ovmf-code-$a.fd
 run-headless: $(ko)/love-$a.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
 	exec $(k_qemu) -cdrom $< -display none -no-reboot
 
-# Boot the baked inle agent. INLE = heartbeat/watchdog/checkpoint demos then a serial shell
-# (no NIC); NETAGENT = the inbound love-REPL over the wire; NETBRAIN = the outbound brain that
-# dials an oracle on its own clock. Each (re)builds its own-suffixed iso, then boots headless
-# with serial on stdio so you watch the agent narrate in this terminal (Ctrl-C to stop).
-run-inle:
-	@$(MAKE) -s INLE=1 $(ko)/love-$a-inle.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
-	exec $(k_qemu) -cdrom $(ko)/love-$a-inle.iso -display none -no-reboot
-ifeq ($a,x86_64)
-run-netagent:
-	@$(MAKE) -s NETAGENT=1 $(ko)/love-$a-netagent.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
-	exec $(k_qemu) $(k_net_in) -cdrom $(ko)/love-$a-netagent.iso -display none -no-reboot
-run-netbrain:
-	@$(MAKE) -s NETBRAIN=1 $(ko)/love-$a-netbrain.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
-	exec $(k_qemu) $(k_net_out) -cdrom $(ko)/love-$a-netbrain.iso -display none -no-reboot
-else
-run-netagent run-netbrain:
-	@echo "$@: x86_64 only (virtio-net driver is port/inle/x86_64/net.c); host arch is $a"
-endif
 
 # Boot init AS PID 1 in a container -- the Linux altitude of "love as the system".
 # A private pid+user+mount namespace (unprivileged, no daemon/image/root): --pid
@@ -288,12 +215,6 @@ out/lib/ktests.l: $(kt) $(MAKEFILE_LIST)
 out/lib/ktests.h: out/lib/ktests.l $(love0) tools/lcatv.l love/prel.l
 	@echo LOVE	$@
 	@$(love0) -l love/prel.l tools/lcatv.l out/lib/ktests.l > $@
-# The inle agent, baked VERBATIM (lcatv) to a C string literal kmain.c #includes
-# under INLE and drinks form-by-form through zevs at boot -- same path as the
-# K_TEST corpus, one program instead of the test suite.
-out/lib/inle.h: port/inle/inle.l $(love0) tools/lcatv.l love/prel.l
-	@echo LOVE	$@
-	@$(love0) -l love/prel.l tools/lcatv.l port/inle/inle.l > $@
 # arm64 EXECUTION validator: cross-build `love` for aarch64 + run the corpus under
 # qemu-aarch64 (the trustworthy check for the glaze's second target -- holotest
 # proves byte encodings, this proves they run). No-ops without qemu + a cross-gcc.

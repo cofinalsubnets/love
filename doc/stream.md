@@ -244,7 +244,7 @@ is gone.
 
 ## 11. A runnable model to write next (the pure half)
 
-`boot/stream.l` (a design companion like `boot/tag.l` / `boot/inle.l`,
+`boot/stream.l` (a design companion like `boot/tag.l`,
 UNVERIFIED-by-run until built) should model the **pure half over an in-memory list
 producer** — no fds, so it runs anywhere and pins the algebra:
 

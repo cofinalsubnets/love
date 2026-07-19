@@ -1,12 +1,10 @@
 ; --- init: a service supervisor modeled in love (a runnable sketch) ---
 ; the EXECUTABLE companion to the "love as pid 1" idea -- the Tier-1 init (runit/s6/
-; dinit class: own unit format, no D-Bus), the Linux-altitude sibling of inle
-; (port/inle/inle.l, the freestanding-kernel altitude). SAME program, same shape:
-; a perceive->decide->act supervisor with a watchdog over checkpointable state. inle
-; drives green tasks + a NIC; init drives PROCESSES + signals over the host kernel's
-; stack. the supervisor IS inle's watchdog (supervise/mission) generalized to N units.
+; dinit class: own unit format, no D-Bus): a perceive->decide->act supervisor with a
+; watchdog over checkpointable state, driving PROCESSES + signals over the host
+; kernel's stack.
 ;
-; like inle.l and boot/tag.l this is a SKETCH -- it models the parts that STAY love so
+; like boot/tag.l this is a SKETCH -- it models the parts that STAY love so
 ; the shape runs and is probed on the host. there are now TWO lanes:
 ;   (demos 0) -- the MODELED supervisor: a deterministic tour where a "service" is a
 ;     green task and a crash is a `scare` the watchdog `help` welps to () (the SAME
@@ -106,7 +104,7 @@
 ; --- install the watchdog as the global help (the floor that turns a service's fault
 ; into () so the supervisor sees a falsey `catch`) --- read control keeps the protocol;
 ; a real scare just welps (the supervisor narrates restarts itself; a true init would
-; log the fault to the journal here). mirrors inle.l / repl.l's shell-help, quieter.
+; log the fault to the journal here). mirrors repl.l's shell-help, quieter.
 (: help (\ s a b (? (more? s) (welp s a b) (welp s a b))))
 
 ; --- the REAL supervisor (needs host/init.c: spawn + hear; kill via bao's `still`) ---

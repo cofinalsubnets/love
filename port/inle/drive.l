@@ -11,7 +11,7 @@
 ;   grader   : ()  -> (status output)    green iff (cap ...) = 0
 ; the DEFAULT proposer is a tiny local demo (so the loop runs with no model and no
 ; risk); the DEFAULT grader is the dock's `rebuild` (real build + gate). Swap the
-; proposer for oracle.l's `(ask ...)` and a model drives; swap the grader for a
+; proposer for patch.l's model-driven one and a model drives; swap the grader for a
 ; fast stub to exercise the loop logic without a full rebuild (the tests do this).
 ;
 ; GIT IS THE SAFETY NET. a proposal is applied with `lay`, graded, and on a RED

@@ -5,7 +5,7 @@
 ; `show`'d values back, a welp-face so the session survives every raise. There
 ; is NO protocol to version and no SDK -- the API is the book: every global is a
 ; verb, `(names ())` discovers them, and the model that steers lives OUTSIDE the
-; dock entirely. A human at `ain`, an oracle curling a model (oracle.l), or any
+; dock entirely. A human at `ain`, a script curling a model, or any
 ; agent that can write text to a socket drives it the same way. That is what
 ; "model-agnostic" means here: the dock never learns what a model is.
 ;

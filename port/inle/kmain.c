@@ -172,9 +172,6 @@ static void serial_flush(int fd) { (void) fd; fbdraw(); }
 static struct k_source k_sources[k_sources_max] = {
   [0] = { .getc = kb_getc,      .ready = kb_ready    },
   [1] = { .putc = serial_putc1, .flush = serial_flush },
-  // Slot 2: the virtio-net UDP socket (net.c). getc hands one received datagram
-  // to love, putc/flush send a reply, ready polls the RX queue (feeds ai_wait_fds).
-  [2] = { .getc = nic_getc, .putc = nic_putc, .flush = nic_flush, .ready = nic_ready },
 };
 
 // Generic kernel dispatchers. ungetc/eof touch only header fields so
@@ -223,9 +220,6 @@ struct ai_io ai_stdout = { .ap = lvm_port_io,
 // No separate error stream; route err to the same fd as out (the console).
 struct ai_io ai_stderr = { .ap = lvm_port_io,
                          .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false), };
-// The NIC socket port (fd 2 -> k_sources[2]); bound to the love global `nic` below.
-static struct ai_io ai_nic = { .ap = lvm_port_io,
-                         .fd = putcharm(2), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false), };
 
 struct ai_port_vt const ai_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush, NULL, NULL };  // bulk lanes: the promised P3b, when ramfs/files need them
 
@@ -434,23 +428,6 @@ static lvm(lvm_fault) {
   Ip += 1;
   return Continue(); }
 
-// (net x) -- run the polled virtio-net UDP echo server (net.c). Blocks forever
-// (hlt between polls), so the post-call statements are unreachable.
-static lvm(lvm_net) {
-  net_serve();
-  Ip += 1;
-  return Continue(); }
-
-// (aim ipword oport) -- point the nic outbound for the NEXT say/flush so the love brain
-// can INITIATE a datagram (net.c, milestone 5). ipword packs a.b.c.d into one fixnum;
-// returns 1 if the route resolved by ARP, else 0. A 2-arg nif: this is the s2 shape's
-// op (the lvm_ret0 in nif_aim returns the result), expanded by hand to match kmain.
-static lvm(lvm_aim) {
-  intptr_t r = putcharm(nic_aim((uint32_t) getcharm(Sp[0]), (uint16_t) getcharm(Sp[1])));
-  *(Sp += 1) = r;
-  Ip += 1;
-  return Continue(); }
-
 #ifdef K_TEST
 // (exit code) -- quit qemu; the test corpus calls it on completion / failure.
 static lvm(lvm_kexit) { k_qemu_exit(getcharm(Sp[0])); Ip += 1; return Continue(); }
@@ -463,8 +440,6 @@ static union u
   nif_draw[] = {{draw}, {lvm_ret0}},
   nif_key[] = {{key}, {lvm_ret0}},
   nif_color[] = {{lvm_cur}, {.x = putcharm(2)}, {color}, {lvm_ret0}},
-  nif_net[] = {{lvm_net}, {lvm_ret0}},
-  nif_aim[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_aim}, {lvm_ret0}},   // 2-arg, s2 shape
 #ifdef K_TEST
   nif_exit[] = {{lvm_kexit}, {lvm_ret0}},
 #endif
@@ -511,25 +486,13 @@ static struct ai_def defs[] = {
 #ifdef K_TEST
   {"exit", (intptr_t) nif_exit},
 #endif
-  {"color", (intptr_t) nif_color},
-  {"netserve", (intptr_t) nif_net},     // `net` is taken (the prel content measure)
-  {"nic", (intptr_t) &ai_nic},          // the virtio-net socket as a love port
-  {"aim", (intptr_t) nif_aim} };        // point the nic outbound (milestone 5)
+  {"color", (intptr_t) nif_color} };
 
 #ifdef K_TEST
 // The whole test corpus, baked VERBATIM to a C string literal by tools/lcatv.l
 // (Makefile out/lib/ktests.h). Bound to the global `tests` and run through ev at boot.
 static char const ktests[] =
 #include "ktests.h"
-;
-#endif
-
-#if defined(INLE) || defined(NETAGENT) || defined(NETBRAIN)
-// The inle agent (port/inle/inle.l), baked VERBATIM by lcatv (out/lib/inle.h).
-// Bound to the global `inle-src` and drunk form-by-form through reads at boot --
-// the kernel boots straight into the self-driving heartbeat loop. See crew/inle.md.
-static char const inle_src[] =
-#include "inle.h"
 ;
 #endif
 
@@ -564,7 +527,6 @@ void kmain(void) {
  // and the kernel runs headless on the serial console alone.
  if (meminit()) {
   if (fbinit() && cbinit()) palette_init();
-  net_init();                          // bring up the NIC (no-op if absent)
   struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
   // BOUND the generational collector to the device's RAM (the Appel knob): without it the nursery's
   // copy-overhead resizer grows unbounded and gen_major's worst-case (all-survive) sizing then asks
@@ -578,13 +540,6 @@ void kmain(void) {
   g = ai_strof(g, ktests);
   struct ai_def td[] = {{"tests", ai_pop1(g)}};
   g = ai_defn(g, td, countof(td));
-#endif
-#if defined(INLE) || defined(NETAGENT) || defined(NETBRAIN)
-  // bind the baked agent to the global `inle-src`; the driver below drinks it
-  // through reads, then drops into the shell so the machine stays usable.
-  g = ai_strof(g, inle_src);
-  struct ai_def kd[] = {{"inle-src", ai_pop1(g)}};
-  g = ai_defn(g, kd, countof(kd));
 #endif
   // load the prel, then run the l read-eval-print loop. its line
   // editor (in love/bao.l, the baked shell core) drives the console; PS/2 keyboard
@@ -604,33 +559,6 @@ void kmain(void) {
  // zz-fin.l prints the summary and (exit 1)s on failure. (`tap` builds the port;
  // `sip` is the verb that draws ONE unit -- see the vessel frame in love/prel.l.)
  "(reads (tap ((: (g i) (? (< i (tally tests)) (link (peep tests i 0) (g (+ 1 i))))) 0)))"
-#elif defined(INLE)
- // agent build: drink the baked `inle-src` (defines the agent; demos no longer
- // auto-run), run (demos 0) to show the heartbeat/watchdog/checkpoint, then the shell.
- "(: _ (reads (tap ((: (g i) (? (< i (tally inle-src)) (link (peep inle-src i 0) (g (+ 1 i))))) 0))) _ (demos 0) (shell 0))"
-#elif defined(NETAGENT)
- // net-agent build (MILESTONE 4): drink inle-src (defines + leaks the agent --
- // policy, the watchdog `help`, `drive`), THEN run the merged loop. (drive fresh nic
- // 300) spawns a heartbeat task (a beat every ~3 s at 100 Hz) and runs the reactor in
- // this task; the kernel scheduler's one ai_wait_fds merges {nic-fd, clock}, so the
- // agent REACTS to UDP (decide via policy, reply on the wire, survive a faulting
- // packet via the watchdog) AND BEATS on its own initiative with no traffic. The m3
- // pure-reactive `serve` is still defined for comparison. Non-terminating; the agent
- // IS the server.
- "(: _ (reads (tap ((: (g i) (? (< i (tally inle-src)) (link (peep inle-src i 0) (g (+ 1 i))))) 0))) (drive fresh nic 300))"
-#elif defined(NETBRAIN)
- // net-brain build (MILESTONE 5): the OUTBOUND brain (crew/inle.md (B)). drink
- // inle-src, then build `ask1` -- a question -> its reply, via aim+say+flush+slurp to
- // a remote oracle (10.0.2.2:9999, the SLIRP host) -- and run `quest`: every ~3 s the
- // agent INITIATES a UDP round-trip on its OWN clock and narrates the reply. the decide
- // step is now REMOTE: the brain plugs in over the wire, not read+ev. a negative count
- // runs unbounded. Non-terminating; here the agent is a client, not a server.
- "(: _ (reads (tap ((: (g i) (? (< i (tally inle-src)) (link (peep inle-src i 0) (g (+ 1 i))))) 0))) (quest (\\ q (ask nic aim (ip4 10 0 2 2) 9999 q)) \"ping\" 300 -1))"
-#elif defined(NETECHO)
- // net-echo build (stage 2e gate): the agent perceives one UDP datagram off the
- // `nic` port (slurp), then acts -- writes it back to its sender (fputs+fflush).
- // a love-driven echo server, no C echo loop. boots straight into it.
- "(: (kecho _) (: d (slurp nic) _ (fputs nic d) _ (fflush nic) (kecho 0)) (kecho 0))"
 #else
  "(shell 0)"
 #endif

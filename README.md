@@ -169,9 +169,9 @@ member is a tiny love layer over a handful of host nifs; on a hosted system they
 `make install` onto PATH beside `love`. the full roster (the creatures they wear live
 on the front page):
 
-- 🌑 **inle** -- the vessel: the freestanding kernel, grown a NIC and a self-driving
-  agent loop, booting on bare metal with no OS -- a network REPL over UDP. `make
-  kernel INLE=1` builds the image. [port/inle/](port/inle/)
+- 🌑 **inle** -- the vessel: the freestanding kernel, booting on bare metal with no
+  OS -- a tty and a repl, nothing under it. `make kernel` builds the image, `make
+  run` boots it under qemu. [port/inle/](port/inle/)
 - 🔭 **tele** -- the pilot: a pytorch clone, autograd over the celestial numerics.
   [crew/tele/](crew/tele/)
 - 🐇 **bellberry** -- the navigator: the evaluator. [love/ev.l](love/ev.l)

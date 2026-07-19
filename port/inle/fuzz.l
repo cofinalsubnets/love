@@ -1,7 +1,6 @@
-; fuzz.l -- inle's generative differential fuzzer: the judge's first CLIENT.
+; fuzz.l -- the dock's generative differential fuzzer: the judge's first CLIENT.
 ; the loop the memory keeps circling -- propose a candidate, JUDGE it, keep the
-; interesting ones -- with a LOCAL proposer (a random love-program generator) standing
-; in for oracle.l's remote brain. same loop either way: swap `gen` for `(ask ...)`.
+; interesting ones -- with a LOCAL proposer (a random love-program generator).
 ;
 ;   out/host/love -l port/inle/judge.l -l port/inle/fuzz.l -e "(fuzz 40 1)"
 ;

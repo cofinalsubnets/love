@@ -1,13 +1,13 @@
 # port -- the freestanding targets of the love lisp
 
 This tree holds every non-host target. The core freestanding kernel is
-`inle/` (the kernel grown into a self-driving agent -- a ship in port):
-`kmain.c` + `k.h`, the agent sketch `inle.l`, and the per-arch backends
+`inle/` -- the freestanding build of love, a tty and a repl on bare metal:
+`kmain.c` + `k.h` and the per-arch backends
 `inle/x86_64/` and `inle/aarch64/` (arch.c + the boot `.S` + the `.lds`
 linker script, built by the root Makefile's `kernel` target). It lives here
 alongside the device ports below; `arch/` was merged into `port/` on
 2026-06-15 (`arch/<a>/` -> `port/<a>/`), then the kernel was gathered under
-`port/inle/<a>/` on 2026-06-17. See `crew/inle.md`.
+`port/inle/<a>/` on 2026-06-17.
 
 The device ports were split out of the main repo's arch/ tree on 2026-06-09
 (main repo: the `l` darcs repo; git provenance hashes below refer to its
