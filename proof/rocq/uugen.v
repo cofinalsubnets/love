@@ -1068,7 +1068,7 @@ Definition uu_kjoin_str_widens : (@paths nat (uu_kjoin 6 1) 5) :=
 (* === bridge: uu's nat ops ARE Coq's standard ones, so the laws above land on
    Nat.add / Nat.mul -- the operations spec.v's own laws speak. uu_add_std/uu_mul_std
    (induction over the shared recursion) tie them to the standard vocabulary, by which
-   the headline arithmetic laws are RESTATED on Nat.* and discharged FROM ai's exports. *)
+   the headline arithmetic laws are RESTATED on Nat.* and discharged FROM love's exports. *)
 Lemma paths_to_eq : forall (A : Type) (a b : A), paths a b -> a = b.
 Proof. intros A a b p; destruct p; reflexivity. Qed.
 Lemma uu_add_std : forall n m, uu_add n m = Nat.add n m.
