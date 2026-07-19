@@ -1,9 +1,9 @@
-```ai
-; ai -- a fully-curried language with an infix, low-paren surface that factors down to a tiny
+```love
+; love -- a fully-curried language with an infix, low-paren surface that factors down to a tiny
 ; lisp core: `map (+ 1)` and `(3 = 1 + 2)` desugar through opfix to plain parens (one source of
 ; truth, shared by both compilers). that core rides a tiny generic C runtime (ai.c + ai.h) plus a
-; self-hosting compiler written in ai (the love/{prel,ev,bao}.l layers). source is .l; the host binary
-; is `ai`. see README.md.
+; self-hosting compiler written in love (the love/{prel,ev,bao}.l layers). source is .l; the host binary
+; is `love`. see README.md.
 ;
 ; this file is the NARRATIVE -- how to work here, the traps, the vocabulary, the architecture --
 ; and my context file. the LAWS live in test/spec.l: the executable spec AND the reference, each
@@ -33,7 +33,7 @@
 ;   `'` and backtick are reader ops NOT delimiters, so it won't trip where a C lexer would). SILENT means
 ;   clean; line-pointed warnings + exit 1 on imbalance (a dropped paren is the classic .l slip, and it
 ;   catches it without a full rebuild). `-w` also strips trailing whitespace. NOT in the test gate.
-; * C and docs EMBED ai the .l sweeps miss -- grep on every rename: host/main.c (s2cl + runner),
+; * C and docs EMBED love the .l sweeps miss -- grep on every rename: host/main.c (s2cl + runner),
 ;   port/inle/kmain.c (the K_TEST runner), port/{playdate,rp2040}/main.c (g_evals_ driver strings),
 ;   wasm/; and index.html (the static page, style.css beside it) runs live demos as data-run chips --
 ;   its reference section's examples + "; answers" are PROBED against out/host/love, never written
@@ -64,7 +64,7 @@
 ; * the CREW (crew/, the apps) rides over the core, each owning NON-OVERLAPPING files so a session can take one in
 ;   parallel: lux (the X11 window manager, crew/lux/), inle (freestanding agent-kernel, port/inle/),
 ;   reef (the patch-set vcs, crew/reef/ + host/hash.c -- doc/reef.md, `make test_reef`), moon (the C
-;   compiler in ai, crew/moon/ -- compiles ai.c + all host/*.c and holo links them, no gcc/glibc/ld:
+;   compiler in love, crew/moon/ -- compiles ai.c + all host/*.c and holo links them, no gcc/glibc/ld:
 ;   `make test_raw`). apps
 ;   add nifs through the host/*.c glob + AI_NIF (no core edit); ai.c/ai.h/host/main.c are CORE -- an
 ;   app session needing a core change stops and asks the core thread, never reaches in. the runnable
@@ -110,7 +110,7 @@
 ; kind), and ABSTRACT DOMAIN (a compile pass climbs it by join to a fixpoint -- a kind per node -- so
 ; a +/* site with statically-numeric operands skips the table for its lane: doc/proto/kinds.l, the
 ; rewrite layer's analysis half). the VM is tail-threaded (aps tail-jump, never return -- `make
-; vmret` checks it) over a two-space copying heap. the C core is tiny; most of the language is ai
+; vmret` checks it) over a two-space copying heap. the C core is tiny; most of the language is love
 ; closures installed reflectively from the prel, then laid into a heap image (the *egg*) at compile
 ; time. gritty details at the bottom.
 
@@ -216,6 +216,6 @@ macros               ; ()      mopped up after birth -- off the book, so the nom
 ; indexed jump picks a lane that widens only as far as the operands need (array, complex, bignum,
 ; float, ...). the VM is tail-threaded over a two-space copying collector; out-of-pool constants are
 ; immortal. the love/ layer (prel ev bao cli egg) drips into every frontend: the host (out/host/love), the
-; freestanding kernel (x86_64/aarch64), and wasm. build codegen lives in ai under tools/; the C is
+; freestanding kernel (x86_64/aarch64), and wasm. build codegen lives in love under tools/; the C is
 ; freestanding, -Wall -Wextra -Werror.
 ```

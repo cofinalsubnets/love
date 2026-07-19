@@ -1,6 +1,6 @@
-# 🌑 ai
+# 🌑 love
 
-ai is a fully-curried language with an infix, low-paren surface that factors down
+love is a fully-curried language with an infix, low-paren surface that factors down
 to a small parenthesized core. every value is a total one-argument function, and
 (almost) every expression has a value. integers are church numerals, so a numeric
 list read left-associatively is a reversed exponential tower, and any recursive
@@ -21,9 +21,9 @@ features
 - lambdas, macros, closures, multitasking
 - freestanding bare metal kernel build
 - free portable C with zero dependencies
-- self-hosting compiler written in ai
+- self-hosting compiler written in love
 
-ai has three special forms plus "operators". the forms are
+love has three special forms plus "operators". the forms are
 - `\` lambda
 - `?` cond
 - `:` let
@@ -108,9 +108,9 @@ work here, the traps, the architecture -- is [CLAUDE.md](CLAUDE.md).
 - `make repl` interactive shell
 - `make test_all` adds the freestanding kernel (qemu) + tool diffs
 - `make wasm` build the browser image (wasm/love.js, used by index.html) -- rebuild + stage by hand
-- `out/host/love` is the binary -- ai is the word now (it was `love` once)
+- `out/host/love` is the binary -- love is the word (it was `ai` for a while); `out/host/ai` stays a symlink
 - `out/host/love file.l` run a file
-- `echo .ev | ai` print the compiler
+- `echo .ev | love` print the compiler
 
 that last one is not a joke. `.` prints, `ev` is the self-hosted evaluator,
 and what comes out is the lambda the compiler compiled itself into -- about
@@ -125,8 +125,8 @@ per the law.
 
 ### cook
 
-ai includes a somewhat GNU-compatible `make` clone called `cook` written in pure
-ai and bootstrapped through normal `make`. `cook` accepts either the traditional
+love includes a somewhat GNU-compatible `make` clone called `cook` written in pure
+love and bootstrapped through normal `make`. `cook` accepts either the traditional
 `Makefile` format or its own `Cookfile` DSL.
 
 ```
@@ -144,7 +144,7 @@ cook an item -- check its date, prep its ingredients, follow the recipe's
 steps, record what shipped, from the cards; the ticket names what to make
 (default: the first card, the standing check).
 
-- `ai -l crew/cook/cook.l [ticket]` -- cook a ticket (cook discovers the build file:
+- `love -l crew/cook/cook.l [ticket]` -- cook a ticket (cook discovers the build file:
   a `Makefile` if present, else a `Cookfile`, else a legacy `Cards.l`; name one
   explicitly to override)
 - cook reads a real **Makefile** directly -- a reasonably GNU-make-compatible
@@ -157,16 +157,16 @@ steps, record what shipped, from the cards; the ticket names what to make
 - [crew/cook/example/](crew/cook/example/) is a worked C build;
   [crew/cook/cooktest.l](crew/cook/cooktest.l) (`make test_cook`) tests the importer
 
-ai builds itself this way too: `ai -l crew/cook/cook.l Makefile host` runs g's own
+love builds itself this way too: `love -l crew/cook/cook.l Makefile host` runs g's own
 Makefile from scratch, and the cook-built binary passes the whole corpus. cook
-runs *on* ai, so you need an ai to begin; the [crew/cook/Cookfile](crew/cook/Cookfile) is the
+runs *on* love, so you need a love to begin; the [crew/cook/Cookfile](crew/cook/Cookfile) is the
 curated cross-cutting verbs (`test clean valg vmret bench install`).
 
 ### the crew
 
-the **inle crew** is the cast of programs and pieces that make up ai. each runnable
-member is a tiny ai layer over a handful of host nifs; on a hosted system they
-`make install` onto PATH beside `ai`. the full roster (the creatures they wear live
+the **inle crew** is the cast of programs and pieces that make up love. each runnable
+member is a tiny love layer over a handful of host nifs; on a hosted system they
+`make install` onto PATH beside `love`. the full roster (the creatures they wear live
 on the front page):
 
 - 🌑 **inle** -- the vessel: the freestanding kernel, grown a NIC and a self-driving
@@ -179,7 +179,7 @@ on the front page):
 - 🐈 **ain** -- the netcat: an openbsd netcat clone in ~70 lines -- `ain host port` a
   TCP client, `ain -l port` a server, bytes pumping both ways with no select loop.
   [tools/ain.l](tools/ain.l) + [host/net.c](host/net.c)
-- 🐕 **bao** -- the shell: an rlwrap clone. raw `ai` shrinks to a read/eval/write
+- 🐕 **bao** -- the shell: an rlwrap clone. raw `love` shrinks to a read/eval/write
   filter and bao is the editor + history + fault-face on top, doubling as a pty
   wrapper. [love/bao.l](love/bao.l) + [host/pty.c](host/pty.c)
 - 🐀 **salt** -- the build system: cook, a gnu make clone that reads a real Makefile.
@@ -204,21 +204,21 @@ on the front page):
   values is the enum order, and the lattice is literally the diagonal of the
   dispatch tables. `sort` is one C comparison per chain -- the total order is
   the comparator.
-- no interpreter state lives outside the heap: the book (an ordinary ai
+- no interpreter state lives outside the heap: the book (an ordinary love
   hash) carries the globals, macros, the operators table, the help function
   and the rng; C finds its own hooks by name, allocation-free. the egg pulls
   every compiler-internal name -- the book itself included -- before the
   image is born. a name not in the book is missing: reading one is a
   call for help, and helpless it reads the zero point, a nameless unit.
-- the compiler is written in ai. at build time the evaluator sits on the egg
+- the compiler is written in love. at build time the evaluator sits on the egg
   (the quoted compiler source) twice -- the C bootstrap compiles the compiler,
   which recompiles itself -- and the hatchling bakes into the binary; `born`
   records the hatch time. the same image runs on linux, bare metal
   (x86_64/aarch64 via limine), and wasm.
-- moon is a C compiler, also written in ai: a preprocessor, parser, and an
-  optimizing amd64/arm64 backend through the holo assembler. it compiles ai's own
+- moon is a C compiler, also written in love: a preprocessor, parser, and an
+  optimizing amd64/arm64 backend through the holo assembler. it compiles love's own
   C runtime -- `ai.c` and every `host/*.c` -- and, linked by holo with no
-  gcc/glibc/ld in the loop, the rebuilt `ai` passes the whole corpus (`make
+  gcc/glibc/ld in the loop, the rebuilt `love` passes the whole corpus (`make
   test_raw`). it builds real third-party C too (gnu tar, m4) and is closing on
   clang -O2 on the code it emits. [crew/moon/](crew/moon/)
 - status rides the two pointer tag bits: scare (something is wrong) and more

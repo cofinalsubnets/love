@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ai</title>
+<title>love</title>
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<h1>🌑 <a href="https://github.com/cofinalsubnets/ai">ai</a> 🔭</h1>
+<h1>🌑 <a href="https://github.com/cofinalsubnets/love">love</a> 🔭</h1>
 
 <!-- the live bao shell: status, terminal, runnable chips, and the wasm driver.
      raw HTML/JS, since the terminal + the data-run chips are markup, not prose. -->
- <p class="lead">ai is a dynamically typed <a href="#language">lisp superset</a> where every value is a one-argument function.</p>
+ <p class="lead">love is a dynamically typed <a href="#language">lisp superset</a> where every value is a one-argument function.</p>
 
 <p id="status">loading the image...</p>
 
@@ -47,7 +47,7 @@ data-run=
 <span class="chip" data-run="ink ()">🦑 ink screensaver</span>
 
 <hr>
-<nav class="topnav"><span class="here">ai</span> &nbsp;&middot;&nbsp; <a href="#language">language</a> &nbsp;&middot;&nbsp; <a href="#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="#crew">crew</a> &nbsp;&middot;&nbsp; <a href="bench/bench.html">bench</a></nav>
+<nav class="topnav"><span class="here">love</span> &nbsp;&middot;&nbsp; <a href="#language">language</a> &nbsp;&middot;&nbsp; <a href="#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="#crew">crew</a> &nbsp;&middot;&nbsp; <a href="bench/bench.html">bench</a></nav>
 
 <script src="wasm/love.js"></script>
 <script>
@@ -81,7 +81,7 @@ data-run=
   ev("(. love-version)");
   const ver = drain();
   status.style.display = 'none';
-  put(`;3 ai ${ver} ${(performance.now() - t0).toFixed(0)}ms`, 'cnd');
+  put(`;3 love ${ver} ${(performance.now() - t0).toFixed(0)}ms`, 'cnd');
   cmd.disabled = false; cmd.focus({preventScroll: true});
 
   // quay: fetch the real engine (crew/quay/rove.l) and install a web driver.
@@ -133,7 +133,7 @@ data-run=
     scroll.scrollTop = scroll.scrollHeight;
   }
 
-  // an ai string literal for src: " and \ ride \xHH (the reader's byte escape),
+  // a love string literal for src: " and \ ride \xHH (the reader's byte escape),
   // control chars likewise; everything else passes through as utf-8.
   function aiStr(s) {
     let r = '"';
@@ -309,7 +309,7 @@ data-run=
 
 <h2 id="language"><a href="#language">🎨 language</a></h2>
 <p>
-ai is a dynamically typed lisp superset where every value is a one-argument function.
+love is a dynamically typed lisp superset where every value is a one-argument function.
 all functions are curried with eager evaluation like in ocaml, and apl-like infix and
 prefix notation is built in (it's optional and desugars to lisp). since every value is a
 function and every function is curried, apply reduces to a left fold by the identity
@@ -327,9 +327,9 @@ type <code>names ()</code> at the repl to see a full list of the namespace.</p>
   evaluation order roughly kind of like ocaml i think; also similar to ocaml,
   sequencing is done through the let expression (or through <code>,</code>, see below).</p>
 <h4>🔣 extended lisp syntax</h4>
-<p>ai code is written using a relaxed and simplified form of s-expressions.
+<p>love code is written using a relaxed and simplified form of s-expressions.
   it has three basic special forms, <code>: ? \</code>, plus macros. however,
-ai also has extended infix and prefix notation as syntactic sugar.</p>
+love also has extended infix and prefix notation as syntactic sugar.</p>
 <p>an all-punct symbol acts as an infix operator when it occurs in non-leading position
 in a list. this can be escaped by wrapping the symbol in parentheses. infix operators are
 right-associative with flat precedence, a convention borrowed from APL. the exception is
@@ -342,7 +342,7 @@ to the next token (no whitespace between them).</p>
 <p>galaxies aka trays of stars aka shaped numeric arrays with APL/NumPy-like extended math operations.</p>
 <h3>some differences from other languages</h3>
 <h4>no thunks</h4>
-<p>since every function takes one argument, ai has no zero-argument functions or thunks.
+<p>since every function takes one argument, love has no zero-argument functions or thunks.
 the equivalent situation is just ignoring the argument, so if you want to write a thunk
 then just do that.</p>
 <h4>no varargs</h4>
@@ -351,9 +351,9 @@ functions, in addition to simulating them with macros. however, they don't autom
 assemble extra args into a list for you, you have to write the logic manually. if you
 really want an automatic syntax, you could probably write a macro to do that.</p>
 <h4>church numerals</h4>
-<p>natural numbers act transparently as church numerals in ai, which is a way of reproducing
+<p>natural numbers act transparently as church numerals in love, which is a way of reproducing
 natural number algebra in the form of iterators, or notationally, function exponents.
-in fact, the iterating action of numbers on functions corresponds in ai to exponentiation
+in fact, the iterating action of numbers on functions corresponds in love to exponentiation
 by the function numeral, which means a list of stars evaluates to an exponential tower.
 this extends to gem, twin, etc., and allows roots to be written numerically as fractional
 exponents. in the outward direction, extending the church algebra definitions to functions
