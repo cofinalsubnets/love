@@ -301,43 +301,31 @@
 
 <h2 id="language"><a href="#language">🎨 language</a></h2>
 <p>
-love is a dynamically typed lisp superset where every value is a one-argument function.
-all functions are curried with eager evaluation, and punctuation symbols are interpreted
-as infix by default.
-prefix notation is built in (it's optional and desugars to lisp). since every value is a
-function and every function is curried, apply reduces to a left fold by the identity
-function. pretty much every expression evaluates to something, as long as the parens
-balance...  unless you infinite loop 😨</p>
+love (aka ai, fka gwen lisp) is a lisp superset where every value is a one-argument
+function. functions are curried, punctuation symbols are applied infix, and many parens
+can be omitted, so it feels kind of like haskell, except eagerly evaluated and dynamically
+typed. all primitives are generic so pretty much every paren balanced expression evaluates
+to something...  unless you infinite loop 😨</p>
 <p>the api is currently 🫨 unstable.
 type <code>names ()</code> at the repl to see a full list of the namespace.</p>
-<h3>big main headline features</h3>
+<h3>some features</h3>
 <h4>🎯 global function type</h4>
-<p>everything is literally a function, even numbers (church numerals),
-  lists/maps/strings/arrays (accessors), and literally everything else.
-  you can apply pretty much anything to anything and get back something.</p>
-<h4>🍛 currying</h4>
-<p>all functions are theoretically curried with eager evaluation and unspecified
-  evaluation order roughly kind of like ocaml i think; also similar to ocaml,
-  sequencing is done through the let expression (or through <code>,</code>, see below).</p>
-<h4>🔣 extended lisp syntax</h4>
-<p>love is written using a relaxed and simplified form of s-expressions.
-it has three basic special forms, <code>:</code> let <code>?</code> cond <code>\</code> lambda,
-and normal lisp features like macros and call/cc. however,
-love also has extended infix and prefix notation, which desugar to lisp.</p>
-<p>an all-punct symbol acts as an infix operator when it occurs in non-leading position
-in a list. this can be escaped by wrapping the symbol in parentheses. infix operators are
-right-associative, except for the weak binding <code>,</code> sequencing operator.</p>
-<p>prefix operators are single characters, aka sigils,
-desugared by the reader when a punctuation sequence is glued directly
-to the next token (no whitespace between them).  examples include
-<code>.</code> print,
-<code>+</code> <a href="#g-net">net</a>,
-<code>$</code> <a href="#g-sat">saturate</a>,
-<code>!</code> negate,
-<code>&lt;</code> <a href="#g-cap">cap</a>,
-<code>&gt;</code> <a href="#g-cup">cup</a>
-</p>
-<h4>🌌 constellations (aka numerics)</h4>
+<p>literally everything is a one-argument function, including numbers (iterators),
+collections (accessors), and multi-argument functions (curried).</p>
+<h4>🔣 (extra (lisp syntax))</h4>
+<p>love uses a relaxed and simplified form of s-expressions with
+three special forms, <code>:</code> let <code>?</code> cond <code>\</code> lambda.
+love also has optional infix and prefix notation, which desugar to lisp. when
+subexpressions are grouped by infix operators, their own parens may be omitted, for
+example, <code>(2 ** 3 = 3 ** 2 - 1 ? 'yup 'nop)</code> evals to <code>yup</code>.</p>
+<h4>♾️ very self hosting</h4>
+<p>love has</p>
+<ul>
+  <li>a threaded bytecode compiler written in love</li>
+  <li>a native JIT compiler written in love</li>
+  <li>a C compiler written in love that builds love</li>
+</ul>
+<h4>🌌 lots of numerics (aka constellations)</h4>
 <p>stars aka scalars: charm (fixnum) sun (pointer size int) gem (pointer size float) twin (complex gem) big (big int)</p>
 <p>galaxies aka trays of stars aka shaped numeric arrays with APL/NumPy-like extended math operations.</p>
 <h3>some differences from other languages</h3>

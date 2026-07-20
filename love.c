@@ -204,8 +204,7 @@ lvm_t lvm_kcall,
  lvm_nif,         // CODEGEN BACKEND: emitted bytes -> applicable native value (1-arg / multi-arg)
  lvm_nifx,        // ... with an EXTRAS word (value[3]+8 = Ip+32): refs a native needs beyond the twin (the callout's clos, amble's ()/globals) ride a GC-walked cell slot, so value[1] stays the PLAIN twin and the image revert (img_nif_interp) never dereferences a pack
  lvm_resume,      // the WALKABLE call-out resume: jump blob-base + untag(offset) after delivering the result -- the frame carries an odd charm + an out-of-pool code address, so a GC (gen_grow included) with a call-out pending walks it clean (the retB stack-interior pointer is retired)
- lvm_calloutdrive, lvm_calloutresume,   // the drive addresses as fixnums (the glaze emitter bakes them as `li Ip` immediates)
- lvm_absent, lvm_absent2;   // safe defaults for the frontend nifs (exit/open/..)
+ lvm_calloutdrive, lvm_calloutresume;   // the drive addresses as fixnums (the glaze emitter bakes them as `li Ip` immediates)
 // Carry extra operands, so (like lvm_gc) they are declared apart from the
 // plain lvm_t list, which fixes the 4-argument ap signature. lvm_vbin
 // is the elementwise/broadcast dyadic engine (vop selects the op); lvm_vmap1
@@ -911,25 +910,6 @@ static union u const raise_c[] = { {lvm_help} };
 
 static struct ai_def const def1[] = { nifs(niff) insts(i_entry)};
 
-// --- frontend-nif defaults ---------------------------------------------------
-// exit/open/close/run/getenv are FRONTEND nifs: each frontend overrides them via
-// ai_defn (main.c POSIX, kmain.c qemu, the wasm host emscripten) -- the book is
-// last-write-wins, and a frontend's ai_defn runs after ai_ini. The core installs
-// safe no-op defaults here so the NAMES ALWAYS EXIST. A frontend that omits one
-// then inherits a clean nil instead of a MISSING name -- whose capture-at-
-// creation would raise (scare 'missing ..) at every define that merely mentions
-// it, even in an unrun branch (the wasm host's missing `exit` did exactly that).
-// The defaults need no OS, so they live in the freestanding core. open is the
-// only 2-arg one (curried via lvm_cur like the real main.c nif).
-lvm(lvm_absent)  { return Sp[0] = nil, Ip++, Continue(); }                 // 1-arg -> nil
-lvm(lvm_absent2) { return Sp[1] = nil, Sp += 1, Ip++, Continue(); }        // 2-arg -> nil (open)
-static union u const nif_absent[]      = {{lvm_absent}, {lvm_ret0}};
-static union u const nif_absent_open[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_absent2}, {lvm_ret0}};
-static struct ai_def const frontend_defaults[] = {
- {"quit", (word) nif_absent}, {"open", (word) nif_absent_open}, {"close", (word) nif_absent},
- {"run", (word) nif_absent},  {"runt", (word) nif_absent},
- {"getenv", (word) nif_absent} };
-
 // reverse-lookup a function value against the builtin table -> its source name,
 // or NULL. Used by the printer to render nifs (e.g. `+`) by name.
 char const *ai_nif_name(intptr_t x) {
@@ -995,7 +975,15 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
    {"love-tco", putcharm(ai_tco)}, };
   g = ai_defn(g, def0, countof(def0));
   g = ai_defn(g, def1, countof(def1));
-  g = ai_defn(g, frontend_defaults, countof(frontend_defaults));   // overridable by the frontend
+  // frontend-nif defaults: quit/open/close/run/runt/getenv are FRONTEND nifs, each
+  // frontend overrides them via ai_defn after ai_ini (main.c POSIX, kmain.c qemu, the
+  // wasm host emscripten; the book is last-write-wins). No-op lambdas here so the NAMES
+  // ALWAYS EXIST: a frontend that omits one inherits a clean nil instead of a MISSING
+  // name -- whose capture-at-creation would raise (scare 'missing ..) at every define
+  // that merely mentions it, even in an unrun branch (the wasm host's missing `exit`
+  // did exactly that). Lambdas, not bare () values: a non-fixnum global is skipped by
+  // ev.l's pureset, so a mention stays a late book read and the override lands.
+  g = ai_evals_(g, "(: (quit x) () (open x y) () (close x) () (run x) () (runt x) () (getenv x) ())");
   // `love-version`: the build's version-control id (love_version.h), surfaced on init so the user
   // can read the running version. A non-fixnum global, harmlessly skipped by ev.l's pureset.
   if (ai_ok(g = ai_strof(g, AI_VERSION))) {
