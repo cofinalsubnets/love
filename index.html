@@ -98,8 +98,8 @@
      + ' (ink-web-boot c r sd) (: _ (sbox <- () (ink-scene r c)) _ (tbox <- () 0) ((sbox -> () 0) 0.0))'
      + ' (ink-web-tick _) (: t (+ 1 (tbox -> () 0)) _ (tbox <- () t) ((sbox -> () 0) (* t 0.06))))');
     ev('(: rove (\\ _ (play "rove")) ink (\\ _ (play "ink")))');
-    document.getElementById('rove_chip').style.display = 'inline';
-    document.getElementById('ink_chip').style.display = 'inline';
+    document.getElementById('rove_chip').style.display = 'inline-block';
+    document.getElementById('ink_chip').style.display = 'inline-block';
   } catch (e) {
   }
 
