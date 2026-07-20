@@ -190,7 +190,7 @@ lvm_t lvm_kcall,
  lvm_ap,    lvm_tap,    lvm_apn,    lvm_tapn, lvm_ret,
  lvm_argap, lvm_quoteap, lvm_argtap,
  lvm_arg0, lvm_arg1, lvm_arg2, lvm_arg3,
- lvm_quo0, lvm_quo1, lvm_quo2, lvm_quo3, lvm_quom1, lvm_quom2, lvm_zp,
+ lvm_quo0, lvm_quo1, lvm_quo2, lvm_quo3, lvm_quom1, lvm_quom2,
  lvm_callk, lvm_scare, lvm_missing, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_spawn, lvm_wait,
  lvm_sleep, lvm_donep, lvm_hush, lvm_key,
  lvm_await,
@@ -841,8 +841,7 @@ _(nif_nifx, "nifx", s5(lvm_nifx))\
   _(lvm_jump) _(lvm_cond) _(lvm_arg) _(lvm_quote) _(lvm_defglob)\
   _(lvm_argap) _(lvm_quoteap) _(lvm_argtap)\
   _(lvm_arg0) _(lvm_arg1) _(lvm_arg2) _(lvm_arg3)\
-  _(lvm_quo0) _(lvm_quo1) _(lvm_quo2) _(lvm_quo3) _(lvm_quom1) _(lvm_quom2)\
-  _(lvm_zp)
+  _(lvm_quo0) _(lvm_quo1) _(lvm_quo2) _(lvm_quo3) _(lvm_quom1) _(lvm_quom2)
 #define niff(b, n, _) {n, (intptr_t) b},
 #define i_entry(i) {#i, (intptr_t) i},
 
@@ -1820,8 +1819,7 @@ out:
         pull(g, c); }
 
 static ai_noinline Ana(analyze) {
- if (x == ZeroPoint) return c0_i(g, c, lvm_zp); // () = the core: a runtime fetch (it flops; never bake/var-lookup it)
- if (nomp(x)) return ana_v(g, c, x); // lookup symbol as variable
+ if (nomp(x) && x != ZeroPoint) return ana_v(g, c, x); // lookup symbol as variable
  if (!chainp(x)) return ana_q(g, c, x); // non-chains are self quoting
  word a = A(x), b = B(x);                        // it must be a chain
  if (!chainp(b)) return analyze(g, c, a); // singleton list has value of element
@@ -2832,17 +2830,6 @@ lvm(lvm_quote) {
  Sp -= 1;
  Sp[0] = Ip[1].x;
  Ip += 2;
- return Continue(); }
-
-// push () -- the core, the one true nothing. A RUNTIME FETCH (no operand): the core
-// FLOPS with the dust, so () can never be baked as a quote constant (the egg's build
-// core != the runtime core). analyze emits this for the core; the value is always the
-// live core, forwarded by the collector when it moves.
-lvm(lvm_zp) {
- Have1();
- Sp -= 1;
- Sp[0] = ZeroPoint;
- Ip += 1;
  return Continue(); }
 
 // A port has no function meaning either: applying it behaves as 0 (yields 1), like
