@@ -80,6 +80,14 @@
 (: _                                ; the export-list holder: `_` never leaks to the book
  (: m (nom 0) eofsym (nom 0)
 
+   ; the host nifs the shell wants -- raw (termios), the pty pair (mind gather),
+   ; close -- are not on every frontend: the kernel pins none of them, love0
+   ; lacks the ptys. bind the global when it exists, else a no-op stub; the
+   ; mentions below read these locals, so bao compiles quiet everywhere and a
+   ; call answers a clean () where the facility is not.
+   (want n) (? (member? n (names ())) (ev n) (\ _ ()))
+   raw (want 'raw) mind (want 'mind) gather (want 'gather) close (want 'close)
+
    (revcat a b) (foldl (flip link) b a)
 
    ; parse a charlist as ONE expression. read EVERY top-level datum off the line:
@@ -401,23 +409,19 @@
    ; raws on the no-arg path (replp = !argp); the bin/bao launch passes argv
    ; (love -l bao.l -e "(bao 0)"), so argp is set and that raw_mode never fires --
    ; the shell owns it here instead, covering the launcher AND a manual -e launch.
-   ; deferred through (ev 'raw) like `wrap`'s host nifs: the bare nom is inert at
-   ; bake (no missing-name on the kernel/wasm bakes, where shell is never called),
-   ; live on the host. the nif captures cooked once + restores via atexit on exit.
+   ; the nif captures cooked once + restores via atexit on exit.
    (shell _)
-     (: _ (? (peep book (\ help) 0) 0 (ev (list (\ :) (\ help) shell-help)))
-        _ ((ev 'raw) 1)
+     (: _ (? !(member? 'help (names ())) (ev `(': 'help shell-help)))
+        _ (raw 1)
         _ (puts (";3 love " + love-version + "\n"))
         (repl 0 0))
 
    ; --- the host-only pty wrapper (wrap) ---
    ; reachable from the bao prompt to pty-wrap a host program -- (wrap (L
    ; "python3")). it uses the pty nifs (ptyrun, gather) which live in host/pty.c
-   ; and are NOT present in love0 or the kernel; bao is baked into both, so the
-   ; references are DEFERRED to call time through (ev 'mind) / (ev 'gather)
-   ; -- quoted symbols are inert data at bake time (no missing-name fires), and
-   ; wrap is never CALLED on those frontends. on the host they resolve to the
-   ; live nifs. NOTE: drives the real in/out tty fds, so it is exercised
+   ; and are NOT present in love0 or the kernel -- there mind/gather are the
+   ; want-stubs, so (wrap ..) answers a clean (). on the host they are the live
+   ; nifs. NOTE: drives the real in/out tty fds, so it is exercised
    ; manually (the in-process gate covers the master read/write lanes; see
    ; boot/pty.l).
 
@@ -429,7 +433,7 @@
    ; poll a non-blocking (gather pid) to its exited PAIR. the pair is told from
    ; still-running (0) STRUCTURALLY (two?), never by net: the status pair (0)
    ; nets blue, so ! / nil? can't tell it from 0 -- only two? can.
-   (waitfor pid) (: s ((ev 'gather) pid) (? (two? s) s (= 0 s) (do (rest 2) (waitfor pid)) s))
+   (waitfor pid) (: s (gather pid) (? (two? s) s (= 0 s) (do (rest 2) (waitfor pid)) s))
 
    ; (wrap argv) -- run argv on a fresh pty and become a TRANSPARENT bidirectional
    ; pump: stdin -> the child, the child's output -> stdout, both live at once
@@ -445,7 +449,7 @@
    ; returns the child's exited status pair, or ptyrun's errno fixnum on hatch
    ; failure.
    (wrap argv)
-     (: r ((ev 'mind) argv)
+     (: r (mind argv)
         (? (two? r)
            (: pid (cap r) m (cup r)
               up (twirl (\ _ (: _ (pump in m) (put m 4))) 0)   ; stdin -> child; VEOF on user EOF

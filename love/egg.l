@@ -8,7 +8,7 @@
    ; a compile table poisons every later compile, so they go book-private with the rest --
    ; opfix/ev hold them by capture. a fresh punct operator needs no pin (default dyadic);
    ; new arities/aliases wait for the scope-layer door. opfix itself STAYS: C resolves it by nom.
-   _ (each '(seal-hooks books setbook mods gv trim peek poke seek spin yield macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx feels apx iop gone numfn nfa nfq nfnest powg power ipow tray atype asum aprod alen a-coll a-dim a-emax a-rank a-shape a-type pureset operators monadics op-fr op-fold op-frg op-frgrip op-frd op-frn op-frc op-fro op-fin op-ent op-del op-core op-steal op-drain op-w op-long op-puncp op-punc-byte op-colon op-lam op-mem? op-disjoint? op-params op-flat-ol op-cm? op-take op-drop op-split opfactor monofactor mono-long seqx sortsplit lidx ldel eat1 eat2 packp rand-next randf-next _)
+   _ (each '(seal-hooks books setbook mods gv trim peek poke seek spin yield macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx feels apx iop gone numfn nfa nfq nfnest powg power ipow tray atype asum aprod alen a-coll a-dim a-emax a-rank a-shape a-type pureset operators monadics op-fr op-fold op-frg op-frgrip op-frd op-frn op-frc op-fro op-fin op-ent op-del op-core op-steal op-drain op-w op-long op-puncp op-punc-byte op-colon op-lam op-mem? op-disjoint? op-params op-flat-ol op-cm? op-take op-drop op-split opfactor monofactor mono-long seqx sortsplit lidx ldel packp rand-next randf-next _)
       (\ k (pull book k 0)))
    (each (keys book)
     (\ k (? (nom? k) (? (= "lvm_" (snip (string k) 0 4)) (pull book k 0) 0) 0)))))
@@ -19,4 +19,4 @@
  ; inner: c0-ev compiles the corpus; outer: that hatchling recompiles it -> ev self-hosted,
  ; not c0-compiled. the Futamura move: specialize the evaluator to the corpus, twice.
  _ (mop (pin book 'ev (sit (sit ev 0 egg) 0 egg)))
- (pin book 'born (clock now)))))   ; keep `book` reachable post-egg -- the host image-dump pulls eat/toast/nif + seals book (users); the no-image dev/test binary keeps them as the test knob
+ (pin book 'born (clock now)))))   ; keep `book` reachable post-egg -- the host image-dump pulls nif/nifx + seals book (users); the no-image dev/test binary keeps them as the test knob

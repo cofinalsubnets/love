@@ -6,12 +6,6 @@
    re. PRC16 (CP437-remapped) for the repl and code, TWN16 as the body fallback
    if Plex fails. (c) VileR, int10h.org, CC BY-SA 4.0. */
 @font-face {
-  font-family: "Web437 DOS/V TWN16";
-  src: url("fonts/Web437_DOS-V_TWN16.woff2") format("woff2"),
-       url("fonts/Web437_DOS-V_TWN16.woff") format("woff");
-  font-display: swap;
-}
-@font-face {
   font-family: "Web437 DOS/V re. PRC16";
   src: url("fonts/Web437_DOS-V_re_PRC16.woff2") format("woff2"),
        url("fonts/Web437_DOS-V_re_PRC16.woff") format("woff");
@@ -28,7 +22,7 @@
 
 body {
   background: #04060e; color: #c0caf5;
-  font-family: "IBM Plex Mono", "Web437 DOS/V TWN16", monospace;
+  font-family: "IBM Plex Mono", monospace;
   font-size: 32px; line-height: 1.5;
   max-width: 54em; margin: 0 auto; padding: 2em 1em 5em;
 }

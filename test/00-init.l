@@ -1,3 +1,10 @@
+; the corpus mentions the frontend nifs (quit/open/close/run/getenv); a bare target
+; (kernel, wasm) binds few of them, and an unbound mention raises missing at every
+; define that names one. this file leads the corpus, so pin a no-op fallback for
+; whichever are absent: every later mention compiles quiet, and absence answers ().
+(map (\ n (? (member? n (names ())) () (ev `(': `(n 'x) ())))) '(quit close run getenv))
+(? (member? 'open (names ())) () (ev '(: (open x y) ())))
+
 (: test_t0 (clock 0)
  (term_esc string) (do (putc 27) (puts string))
  green_dot "[32m."

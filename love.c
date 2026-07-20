@@ -168,7 +168,7 @@ lvm_t lvm_kcall,
  lvm_chain, lvm_vec, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_flo, // data sentinels (enum q order); each tail-jumps to its apply handler
  lvm_putn, lvm_gauge,    lvm_clock, lvm_apof, lvm_seal, lvm_books, lvm_setbook, lvm_mods,
  lvm_nilp,  lvm_putc, lvm_mint, lvm_nomctor, lvm_intern, lvm_chainp,
- lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy, lvm_eat1, lvm_eat2, lvm_toast, lvm_toasted,
+ lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy,
  lvm_coin, lvm_coinmk, lvm_load, lvm_dieof, lvm_coinp, lvm_add_coin, lvm_mul_coin,   // newtypes: a coin (die + payload), a typed hot riding KHot
  lvm_charmp,  lvm_nomp,   lvm_namep,  lvm_strp,   lvm_tabp, lvm_band,   lvm_bor,  lvm_real,  lvm_flop,
  lvm_sin, lvm_cos, lvm_log, lvm_pow,   // sqrt/exp/tan/atan/atan2 are derived (numeral/complex forms), not nifs
@@ -276,9 +276,6 @@ static ai_inline bool formp(word _) { return chainp(_); }
 // binary image in place. Recognized by ap, like iop() for ports.
 // (struct ai_buf -- the 2-word wrapper -- now lives in love.h, the buf's public face.)
 static ai_inline bool bufp(word _) { return lamp(_) && cell(_)->ap == lvm_buf; }
-// a TOAST: an opaque executable handle (toasted native code). A hot like a buf, but a
-// DISTINCT ap so it is not bufp -- no peep/pin/blit/tally as data; only `call` runs it.
-static ai_inline bool toastp(word _) { return lamp(_) && cell(_)->ap == lvm_toasted; }
 // A map is a lookup-lambda with stable identity across growth, like the hash it
 // replaces (whose struct stayed put while its bucket array reallocated). Two
 // threads: a fixed 2-word HEADER [lvm_map_lookup, backing, <tag>] that callers
@@ -775,17 +772,6 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
 //     operands is what makes `+` agree with addition, not the S combinator's (f x (g x)).
 #define compose_thread {{lvm_cur},{.x=putcharm(3)},{lvm_arg0},{lvm_arg2},{lvm_argap},{.x=putcharm(4)},{lvm_tap},{.x=putcharm(3)}}
 #define stack_thread   {{lvm_cur},{.x=putcharm(4)},{lvm_arg0},{lvm_argap},{.x=putcharm(3)},{lvm_arg2},{lvm_argap},{.x=putcharm(4)},{lvm_argap},{.x=putcharm(5)},{lvm_tap},{.x=putcharm(4)}}
-// HARNESS (compile-gated, -DG_FAULT_TEST): __fault deliberately derefs null to
-// raise a hardware fault inside eval -- the one in-eval fault a user can trigger to
-// probe the ai_eval fault barrier (the raw fault nifs spin/peek/poke/seek are pulled
-// from the image at birth, so nothing else reaches it). NEVER in a shipping or kernel
-// build (the kernel has no signal recovery -- it would crash qemu).
-#ifdef G_FAULT_TEST
-lvm_t lvm_fault;
-#define NIF_FAULT(_) _(nif_fault, "__fault", s1(lvm_fault))
-#else
-#define NIF_FAULT(_)
-#endif
 #define nifs(_) \
  _(nif_clock, "clock", s1(lvm_clock)) _(nif_gauge, "gauge", s1(lvm_gauge)) _(nif_apof, "apof", s1(lvm_apof))\
  _(nif_seal, "seal-hooks", s1(lvm_seal)) _(nif_books, "books", s1(lvm_books)) _(nif_setbook, "setbook", s1(lvm_setbook)) _(nif_mods, "mods", s1(lvm_mods))\
@@ -811,7 +797,6 @@ lvm_t lvm_fault;
  _(nif_table, "tablet", s1(lvm_tablet)) _(nif_keys, "keys", s1(lvm_keys))\
  _(nif_dig, "dig", s1(lvm_dig))\
  _(nif_bufnew, "cask", s1(lvm_bufnew)) _(nif_bcopy, "pour", s5(lvm_bcopy))\
- _(nif_eat1, "eat1", s2(lvm_eat1)) _(nif_eat2, "eat2", s3(lvm_eat2)) _(nif_toast, "toast", s1(lvm_toast))\
  _(nif_chainp, "two?", s1(lvm_chainp)) _(nif_strp, "string?", s1(lvm_strp))\
  _(nif_real, "gem", s1(lvm_real)) _(nif_flop, "gem?", s1(lvm_flop))\
  _(nif_sin, "sine", s1(lvm_sin)) _(nif_cos, "cosine", s1(lvm_cos))\
@@ -850,7 +835,7 @@ _(nif_nifx, "nifx", s5(lvm_nifx))\
  _(nif_rand_next, "rand-next", s1(lvm_rand_next)) _(nif_randf_next, "randf-next", s1(lvm_randf_next))\
  _(nif_coinmk, "coin", s2(lvm_coinmk)) _(nif_load, "load", s1(lvm_load))\
  _(nif_dieof, "die-of", s1(lvm_dieof)) _(nif_coinp, "coin?", s1(lvm_coinp))\
- _(nif_calloutdrive, "calloutdrive", s1(lvm_calloutdrive)) _(nif_calloutresume, "calloutresume", s1(lvm_calloutresume)) NIF_FAULT(_)
+ _(nif_calloutdrive, "calloutdrive", s1(lvm_calloutdrive)) _(nif_calloutresume, "calloutresume", s1(lvm_calloutresume))
 #define native_implemented_function(n, _, d) static union u const n[] = d;
 #define insts(_) _(lvm_unc) _(lvm_index) _(lvm_ret) _(lvm_ap) _(lvm_tap) _(lvm_apn) _(lvm_tapn)\
   _(lvm_jump) _(lvm_cond) _(lvm_arg) _(lvm_quote) _(lvm_defglob)\
@@ -975,15 +960,6 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
    {"love-tco", putcharm(ai_tco)}, };
   g = ai_defn(g, def0, countof(def0));
   g = ai_defn(g, def1, countof(def1));
-  // frontend-nif defaults: quit/open/close/run/runt/getenv are FRONTEND nifs, each
-  // frontend overrides them via ai_defn after ai_ini (main.c POSIX, kmain.c qemu, the
-  // wasm host emscripten; the book is last-write-wins). No-op lambdas here so the NAMES
-  // ALWAYS EXIST: a frontend that omits one inherits a clean nil instead of a MISSING
-  // name -- whose capture-at-creation would raise (scare 'missing ..) at every define
-  // that merely mentions it, even in an unrun branch (the wasm host's missing `exit`
-  // did exactly that). Lambdas, not bare () values: a non-fixnum global is skipped by
-  // ev.l's pureset, so a mention stays a late book read and the override lands.
-  g = ai_evals_(g, "(: (quit x) () (open x y) () (close x) () (run x) () (runt x) () (getenv x) ())");
   // `love-version`: the build's version-control id (love_version.h), surfaced on init so the user
   // can read the running version. A non-fixnum global, harmlessly skipped by ev.l's pureset.
   if (ai_ok(g = ai_strof(g, AI_VERSION))) {
@@ -1744,79 +1720,15 @@ static lvm(_lvm_yieldk) { return
  encode(g, ai_status_yield); }
 
 
-#if __STDC_HOSTED__
-#include <signal.h>
-#include <setjmp.h>
-// THE FAULT BARRIER infra -- shared by ai_eval (below) and eat (lvm_eat1/lvm_eat2). A hardware
-// fault (SIGSEGV/SIGILL/SIGBUS/SIGFPE) inside an armed region siglongjmps to the
-// innermost barrier and becomes a survivable love condition; outside any barrier the
-// default handler runs, so a genuine crash stays a crash. Host-only: the kernel has no
-// signal layer (its fault vectors are a separate hookup). ai_fault_jb is always the
-// INNERMOST barrier (each entry saves/restores it), so a fault in a native (call) body
-// recovers there (-> 0) while a fault in plain eval recovers at the ai_eval barrier.
-static sigjmp_buf ai_fault_jb;
-static volatile sig_atomic_t ai_fault_depth;   // nesting depth of active barriers (the handler gate)
-static void ai_fault_sig(int s) {
- if (ai_fault_depth) siglongjmp(ai_fault_jb, s);
- signal(s, SIG_DFL), raise(s); }
-static void ai_fault_arm(void) {
- static int armed; if (armed) return; armed = 1;
- struct sigaction sa; memset(&sa, 0, sizeof sa);
- sa.sa_handler = ai_fault_sig; sigemptyset(&sa.sa_mask); sa.sa_flags = SA_NODEFER;
- sigaction(SIGSEGV, &sa, 0); sigaction(SIGILL, &sa, 0);
- sigaction(SIGBUS, &sa, 0); sigaction(SIGFPE, &sa, 0); }
-#if ai_tco
-static volatile sig_atomic_t ai_eval_armed;          // an outermost ai_eval barrier is already up
-static struct ai *ai_eval_fault_raise(struct ai *c, int sig);   // recovery, defined just after ai_raise
-#endif
-#endif
-
+// A hardware fault (SIGSEGV/SIGILL/SIGBUS/SIGFPE) is a CRASH on every target: no signal
+// handler, no recovery. A fault means an invariant is already broken -- a dangling native,
+// a torn heap, a bad emit -- and the loud, immediate core dump names the site while the
+// evidence is still on the stack. (A barrier here once turned exactly that class of bug
+// into a silent per-call siglongjmp storm; the fix belongs at the source, e.g. the bake's
+// dead-native revert in img_nif_interp.)
 static struct ai *ai_eval(struct ai *g) {
  g = c0(g, _lvm_yieldk);
-#if __STDC_HOSTED__ && ai_tco
- // The barrier wraps the VM RUN of the OUTERMOST eval: a fault anywhere below (a bad
- // native call, a null deref, an ill-formed op) unwinds here -- the task BURNT. If it has
- // a runnable peer (the repl evaluates each line in a spawned task while its poll loop
- // stays runnable), toss the burnt task -- unlink it from the ring -- and serve the
- // survivors: resume a peer under the same barrier. done? reads an absent pid as done, so
- // the poll then carries on, ^C and cooperative scheduling intact. With no runnable peer
- // (file mode, the lone task) the stack resets to the eval boundary and the fault
- // re-raises as a catchable (scare 'fault sig) through `help` -- transparent, up through
- // object-array ops, twirl, and (ev ..). Nested evals run inside this one barrier
- // (ai_eval_armed); compilation (c0, above) is outside it.
- if (!ai_ok(g)) return g;
- if (ai_eval_armed) return g->ip->ap(g, g->ip, g->hp, g->sp);
- ai_fault_arm();
- struct ai *volatile vg = g; word *volatile esp = g->sp;   // entry g/sp, volatile across sigsetjmp
- sigjmp_buf prev; memcpy(&prev, &ai_fault_jb, sizeof prev);
- ai_eval_armed = 1, ai_fault_depth++;
- for (;;) {
-  int fsig = sigsetjmp(ai_fault_jb, 1);
-  struct ai *c = (struct ai *) vg;
-  if (fsig == 0) {
-   struct ai *r = c->ip->ap(c, c->ip, c->hp, c->sp);
-   ai_fault_depth--, ai_eval_armed = 0, memcpy(&ai_fault_jb, &prev, sizeof prev);
-   return r; }
-  // BURNT (fsig = the signal). Find any LIVE peer to serve next -- not just an already-
-  // runnable one (find_runnable's wake_at/wait_fd test is for normal scheduling; for
-  // RECOVERY the goal is to survive, and a resumed peer re-checks its own wait/sleep
-  // conditions, e.g. the repl task re-parks on stdin). The lone task -> no peer -> scare.
-  union u *dead = c->tasks, *next = 0;
-  for (union u *n = dead->m; n != dead; n = n->m)
-   if (n[1].m->ap != lvm_task_exit) { next = n; break; }
-  if (next) {                                              // serve the survivors
-   union u *p = next; while (p->m != dead) p = p->m;
-   p->m = dead->m;                                         // toss the burnt task: unlink from the ring
-   union u *ns = next + 5, *end = (union u*) ttag(c, ns);
-   uintptr_t rh = end - ns;
-   c->tasks = next;
-   c->sp = memmove(topof(c) - rh, ns, rh * sizeof(word));  // restore the peer's stack + ip, resume
-   c->ip = next[1].m;
-   continue; }
-  ai_fault_depth--, ai_eval_armed = 0, memcpy(&ai_fault_jb, &prev, sizeof prev);
-  c->sp = esp;                                             // lone task: reset + raise (scare 'fault sig)
-  return ai_eval_fault_raise(c, fsig); }
-#elif ai_tco
+#if ai_tco
  if (ai_ok(g)) g = g->ip->ap(g, g->ip, g->hp, g->sp);
  return g;
 #else
@@ -2320,8 +2232,7 @@ lvm(lvm_calloutdrive) { return Sp[0] = putcharm((intptr_t) callout_drive), Ip++,
 // callout_drive's RET was the ADDRESS OF A STACK SLOT holding the blob's resume point -- a stack-
 // INTERIOR in-pool pointer, which violates the stack-walk invariant (slots hold values or out-of-pool
 // code addresses only): a collection with a call-out pending (gen_grow under deep recursion) fed it
-// to gcp, which trapped, and eat_run's barrier ATE the trap per call -- a silent syscall storm, every
-// answer still right (uu2lean 3.4s -> 14min). Here the frame is [arg, clos, tag(bb - entry), entry]:
+// to gcp, which trapped. Here the frame is [arg, clos, tag(bb - entry), entry]:
 // the resume rides as an ODD CHARM offset (the walk skips it) plus the blob's raw W^X base (out of
 // every pool bound -- gcp returns it unharmed), and lvm_resume jumps base+offset after delivering the
 // result. NO stack-interior pointers remain, and a stack RELOCATION is equally safe: the offset is a
@@ -2385,25 +2296,6 @@ static struct ai *ai_raise(struct ai *c, enum ai_status s, word a, word b,
  return t->ap(encode(c, s));
 #endif
 }
-#if __STDC_HOSTED__ && ai_tco
-// The ai_eval barrier's recovery (see ai_eval): a caught hardware fault `sig` becomes a
-// scare delivered to `help`, like any other condition -- (scare 'fault sig). Unlike
-// 'missing, 'fault is NOT rooted in struct ai: it is a COLD tag (raised only on a real
-// fault, never during oom), so we re-create it on demand -- a clean fault, the only
-// recoverable kind, has the heap room to name itself. The intern runs UNDER the barrier
-// (re-armed here) so a heap too damaged to name the fault can't re-crash recovery: it
-// falls back to the bare scare, and the signal number still shows. A fault mid-mutation
-// or mid-GC is the residual unrecoverable corner.
-static struct ai *ai_eval_fault_raise(struct ai *c, int sig) {
- volatile word tag = nil; struct ai *volatile vc = c;   // volatile: survive the recovery longjmp
- sigjmp_buf prev; memcpy(&prev, &ai_fault_jb, sizeof prev);
- ai_fault_depth++;
- if (sigsetjmp(ai_fault_jb, 1) == 0) {
-  struct ai *h = ai_strof((struct ai *) vc, "fault");
-  if (ai_ok(h)) { h = intern(h); if (ai_ok(h)) vc = ai_core_of(h), tag = ai_pop1((struct ai *) vc); } }
- ai_fault_depth--; memcpy(&ai_fault_jb, &prev, sizeof prev);
- return ai_raise((struct ai *) vc, ai_status_scare, tag, putcharm(sig), help_scare_k); }
-#endif
 struct ai *ghelp2(struct ai *g, enum ai_status s) {
  struct ai *c = ai_core_of(g);
  int rd = s & ai_status_more;       // the more bit: a read-end condition --
@@ -4700,7 +4592,7 @@ static lvm(lvm_map_lookup) {
 op11(lvm_tabp, tabp(Sp[0]) ? putcharm(1) : nil)
 // (litp x): is x LIT -- a top-region reference value? lit? names the upper segment of
 // the lattice, ai_kind >= KMap: a map (mutable) and the tops above it (closures, nifs,
-// and the opaque hots cask/port/toast -- so `hot? ⟹ lit?`). NOT the fresh value-data
+// and the opaque hots cask/port -- so `hot? ⟹ lit?`). NOT the fresh value-data
 // below (numbers, strings, points, chains, trays), so a missing nom's () is not lit?.
 // (the raw heap-pointer test is `lamp`, C-internal; lit? is the lattice cut, not storage.)
 // A COIN dispatches via KHot but is NOT intrinsically a reference: its DIE decides --
@@ -4715,7 +4607,7 @@ lvm(lvm_litp) {
 // (hotp x): is x an opaque hot handle -- a buf or a port? (a task is referenced
 // by a fixnum id, not a handle object.) a hot also answers lamp (it acts as
 // a constant function); hotp is the refinement that names the zoo.
-op11(lvm_hotp, (bufp(Sp[0]) || iop(Sp[0]) || toastp(Sp[0])) ? putcharm(1) : nil)
+op11(lvm_hotp, (bufp(Sp[0]) || iop(Sp[0])) ? putcharm(1) : nil)
 
 // (hash x) -- the general hashing method exposed to l as a fixnum.
 op11(lvm_dig, putcharm(hash(g, Sp[0])))
@@ -4928,11 +4820,6 @@ lvm(lvm_snip) {
 // generic thread path and the cheney sound forwards its backing-string pointer.
 lvm(lvm_buf) {
  return Ip = cell(*++Sp), *Sp = putcharm(1), Continue(); }
-// the toast ap (its type tag): applied, a toast is const-1 like any opaque hot -- it is
-// meant to be (call ..)'d, not applied. Distinct from lvm_buf so toastp tells them apart.
-lvm(lvm_toasted) {
- return Ip = cell(*++Sp), *Sp = putcharm(1), Continue(); }
-
 // (buf n) — allocate a zeroed n-byte mutable buf. n<=0 / non-numeric -> the empty
 // string singleton EmptyString, so NO empty buf object ever exists (an un-writable 0-byte
 // buf IS ""); this lets ai_nilp drop its buf branch (every real buf has len>=1, truthy).
@@ -4954,67 +4841,15 @@ lvm(lvm_bufnew) {
  tagthread(k, Width(struct ai_buf));
  return Sp[0] = word(k), Ip++, Continue(); }
 
-// (call b x) — the JIT trampoline: jump into the machine code stored in buf b,
-// passing x as the sole argument (SysV AMD64: %rdi/%rax; AArch64: x0/x0), and
-// wrap the returned machine word as a fixnum. The bytes in b are the caller's
-// responsibility -- an ill-formed body is a hard crash, by design. AArch64 must
-// __builtin___clear_cache(txt(s), txt(s)+len(s)) before the jump (I-cache not
-// coherent with freshly-written D-cache); omitted for the x86_64 probe.
-#ifdef G_FAULT_TEST   // harness: trigger a hardware fault inside eval (see nifs)
-lvm(lvm_fault) { volatile char *p = 0; (void) *p; return Sp[0] = putcharm(0), Ip++, Continue(); }
-#endif
-
-// THE FAULT BARRIER (hosted). Running native (toasted) code is love's one
-// un-survivable corner: an ill-formed body faults the CPU (SIGSEGV/SIGILL/...),
-// below help. eat_run wraps the native call in a sigsetjmp; a fault during it is
-// caught and reported via *bad (the caller returns 0, the same value the non-buf
-// guard gives), so a bad body is survivable like any other love error -- never a
-// core dump. The handler only fires inside an active call (call_depth); a fault in
-// love's OWN code still crashes for real. The native body never touches love state
-// (the call contract), so recovery is clean -- no heap-consistency question here.
-// (The broad version -- a barrier at ai_eval turning faults in object-array ops,
-// spin, etc. into scares -- reuses this same handler; that's the next step.)
-#if __STDC_HOSTED__
-static ai_noinline ai_word eat_run(void *fnp, ai_word x, ai_word y, int two, int *bad) {
- ai_fault_arm();                                          // shared barrier (defined before ai_eval)
- sigjmp_buf prev; memcpy(&prev, &ai_fault_jb, sizeof prev);   // save outer (nesting)
- ai_fault_depth++;
- if (sigsetjmp(ai_fault_jb, 1) == 0) {
-  ai_word r = two ? ((ai_word (*)(ai_word, ai_word)) fnp)(x, y) : ((ai_word (*)(ai_word)) fnp)(x);
-  ai_fault_depth--; *bad = 0; memcpy(&ai_fault_jb, &prev, sizeof prev); return r; }
- ai_fault_depth--; *bad = 1; memcpy(&ai_fault_jb, &prev, sizeof prev); return 0; }  // recovered from a fault
-#else
-static ai_word eat_run(void *fnp, ai_word x, ai_word y, int two, int *bad) {  // freestanding: no signals (yet)
- *bad = 0; return two ? ((ai_word (*)(ai_word, ai_word)) fnp)(x, y) : ((ai_word (*)(ai_word)) fnp)(x); }
-#endif
-
-lvm(lvm_eat1) {
- word b = Sp[0], x = Sp[1];
- if (!toastp(b)) return *++Sp = putcharm(0), Ip++, Continue();   // only a toast is callable -> else nothing
- int bad; ai_word r = eat_run(txt(buf_str(b)), x, 0, 0, &bad);   // fault -> bad -> 0 (survivable)
- return *++Sp = putcharm(bad ? 0 : r), Ip++, Continue(); }   // arity 2: pop one, result at the new top
-
-// (eat2 b x y) — like (eat1 b x) but passes TWO arguments (SysV AMD64: x in
-// %rdi, y in %rsi; AArch64: x0, x1) for native two-argument kernels. Same raw
-// machine-word contract and fixnum-wrapped result as eat1, and the same fault
-// barrier. Arity 3.
-lvm(lvm_eat2) {
- word b = Sp[0], x = Sp[1], y = Sp[2];
- if (!toastp(b)) return Sp[2] = putcharm(0), Sp += 2, Ip++, Continue();   // only a toast is callable
- int bad; ai_word r = eat_run(txt(buf_str(b)), x, y, 1, &bad);
- return Sp[2] = putcharm(bad ? 0 : r), Sp += 2, Ip++, Continue(); }   // arity 3: collapse two, result at the new top
-
-// THE HOST EXEC ARENA (hosted builds only). The Linux malloc heap is NX, so a
-// buf of real code cannot be run directly -- the jump faults. `toast` copies the
-// bytes into a W^X mapping instead: mmap RW, write, mprotect to R+X, and never
-// write again (writable XOR executable, honored, so hardened systems that forbid
-// RWX still run it). The mapping is page-rounded and holds a ai_str header [len,
-// bytes..]; the resulting TOAST is a hot whose ->str lives outside the GC pool --
-// gcp's out-of-pool short-circuit leaves the pointer untouched (like the immortal
-// data-segment constants), and a finalizer munmaps it when the toast is collected
-// (mirrors io_close). The freestanding kernel needs none of this: its HHDM is
-// mapped executable, so a plain heap copy already runs (see love/glaze/README.md), and
-// `toast` there is just that copy. Either way the idiom is (call (toast bytes) x).
+// THE W^X CODE ARENA (hosted builds only). The Linux malloc heap is NX, so emitted
+// bytes cannot be run where they land -- the jump faults. `nat` copies them into a
+// W^X mapping instead: mmap RW, write, mprotect to R+X, and never write again
+// (writable XOR executable, honored, so hardened systems that forbid RWX still run
+// it). The mapping is page-rounded and holds an ai_str header [len, bytes..]; the
+// code address lives outside the GC pool -- gcp's out-of-pool short-circuit leaves
+// it untouched (like the immortal data-segment constants) -- and nat_unmap munmaps
+// it when the native closure dies. The freestanding kernel needs none of this: its
+// HHDM is mapped executable, so a plain heap copy already runs (love/glaze/README.md).
 #if __STDC_HOSTED__
 #include <sys/mman.h>
 #include <unistd.h>
@@ -5024,61 +4859,7 @@ lvm(lvm_eat2) {
 static ai_inline size_t code_maplen(size_t codelen) {   // round the arena up to a page; glibc's sysconf is a cached auxv load, not a syscall
  long q = sysconf(_SC_PAGESIZE); size_t ps = q > 0 ? (size_t) q : 4096, need = sizeof(struct ai_str) + codelen;
  return (need + ps - 1) & ~(ps - 1); }
-// Finalizer (runs inside GC, fz->p is the from-space buf wrapper, still
-// readable): recover the arena base from ->str and unmap it. ->str is an
-// out-of-pool pointer the collector never rewrote, so it still names the map.
-static void code_unmap(void *p) {
- struct ai_str *base = ((struct ai_buf*) p)->str;
- munmap(base, code_maplen(base->len)); }
 #endif
-
-// (toast src) — bake src's bytes into an opaque, executable TOAST (src a string or
-// buf; non-byte or empty -> 0). On a hosted build the bytes go into the W^X code
-// arena above; on the freestanding kernel a plain heap copy (the HHDM is already
-// executable). A toast is a distinct opaque hot -- hotp but NOT a buf, so it can't
-// be peep/pin/blit/tally'd as data; only (call ...) runs it, on either target. The
-// bytes are the caller's responsibility: toast only places them where they can run,
-// it does not check them.
-lvm(lvm_toast) {
- word src = Sp[0];
- if (!(strp(src) || bufp(src))) return Sp[0] = putcharm(0), Ip++, Continue();
- struct ai_str *in = bytes_of(src);
- uintptr_t n = len(in);
- if (n == 0) return Sp[0] = putcharm(0), Ip++, Continue();   // nothing to toast -> nothing
-#if __STDC_HOSTED__
- // The buf wrapper + finalizer node live in the heap; the ai_str backing lives
- // in the arena. Have() BEFORE the mmap so a GC retry (which re-runs the nif)
- // never leaks a mapping -- past Have no GC fires, so `in` stays valid below.
- Have(Width(struct ai_buf) + Width(struct ai_tag) + Width(struct ai_fz));
- size_t maplen = code_maplen(n);
- void *base = mmap(0, maplen, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
- if (base == MAP_FAILED) return Sp[0] = putcharm(0), Ip++, Continue();   // OOM -> nothing
- struct ai_str *s = ini_str((struct ai_str*) base, n);
- memcpy(txt(s), txt(bytes_of(Sp[0])), n);   // reload src: a GC in Have may have moved it
- if (mprotect(base, maplen, PROT_READ | PROT_EXEC))   // seal: writable -> executable
-  return munmap(base, maplen), Sp[0] = putcharm(0), Ip++, Continue();
- union u *k = (union u*) Hp; Hp += Width(struct ai_buf) + Width(struct ai_tag);
- ((struct ai_buf*) k)->ap = lvm_toasted;   // opaque toast tag, not lvm_buf: not peep/pin-able
- ((struct ai_buf*) k)->str = s;
- tagthread(k, Width(struct ai_buf));
- struct ai_fz *z = (struct ai_fz*) Hp; Hp += Width(struct ai_fz);
- z->p = k, z->fn = code_unmap, z->next = g->fz, g->fz = z;
- return Sp[0] = word(k), Ip++, Continue();
-#else
- // Freestanding: a heap buf copy (HHDM is RWX). Two objects under one Have, as
- // in lvm_bufnew, so no GC ever sees a half-built buf.
- uintptr_t sreq = str_type_width + b2w(n),
-           breq = Width(struct ai_buf) + Width(struct ai_tag);
- Have(sreq + breq);
- struct ai_str *s = ini_str((struct ai_str*) Hp, n); Hp += sreq;
- memcpy(txt(s), txt(bytes_of(Sp[0])), n);   // reload src: a GC in Have may have moved it
- union u *k = (union u*) Hp; Hp += breq;
- ((struct ai_buf*) k)->ap = lvm_toasted;   // opaque toast tag, not lvm_buf
- ((struct ai_buf*) k)->str = s;
- tagthread(k, Width(struct ai_buf));
- return Sp[0] = word(k), Ip++, Continue();
-#endif
-}
 
 // ============================================================================
 // CODEGEN BACKEND brick 1 -- the native-install seam (provisional; -> `ev`)
@@ -5262,7 +5043,7 @@ bool ai_strp(ai_word x) { return strp(x); }
 // thread aps/dispatchers). def1[] (via ai_nif_name) covers the nifs + insts.
 static lvm_t *const image_extra_aps[] = {
  lvm_chain, lvm_vec, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_flo, lvm_wide, lvm_cbox,  // data sentinels
- lvm_map_lookup, lvm_map_data, lvm_buf, lvm_coin, lvm_toasted, lvm_port_io,            // thread aps
+ lvm_map_lookup, lvm_map_data, lvm_buf, lvm_coin, lvm_port_io,                        // thread aps
  lvm_cur, lvm_help, lvm_ret0, lvm_ap, lvm_ret };                                       // dispatchers
 // size (words) of the object at p, using the SAME per-kind logic as the GC:
 // data kinds by their copy_* sizes; threads via the production terminator scan

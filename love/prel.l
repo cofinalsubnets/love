@@ -600,7 +600,7 @@
 ; opfix = op-core, the operator factor pass. (Historically opfix also ran an
 ; optional native-codegen hook, book['opjit]; that JIT experiment was retracted --
 ; its one real win, reduction reassociation, lives in the C builtins now, and the
-; trampoline finding in love/glaze/probe.l + the eat/toast nifs.)
+; trampoline finding in love/glaze/README.md.)
 (: (opfix x) (op-core x))
 ; the SECOND seal: opfix exists now, so it joins num-ap/add/mul in the g->hot_*
 ; fields (idempotent for the trio) -- the C eval lane reads the field henceforth,
@@ -611,11 +611,6 @@
 ; -- haskell-like weak-binding application (loosest grip). glued $x stays saturate, a different valence.
 (: (** a b) (b a))
 (: $ 1)
-; eat -- run a toast's native code. the ARITY is the first operand and currying
-; selects the eater: (eat 1 t x) passes one machine word, (eat 2 t x y) two. eat1/
-; eat2 (the raw 1-/2-arg ABI nifs) are mopped post-egg and fold in here; only a
-; toast is eatable and a faulting body returns 0 (the host fault barrier).
-(: (eat n) (? (= n 2) eat2 eat1))
 ; the RNG, two layers over the pure C steps (seed -> a fresh 256-bit state; C holds
 ; no state). FUNCTIONAL (reproducible): (random st n) draws once -> (value . st'),
 ; value's TYPE by n -- float -> float in [0,n), positive int -> int in [0,n), n <= 0

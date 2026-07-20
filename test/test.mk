@@ -534,9 +534,9 @@ test_raw: host out/host$(hsuf)/mooncc
 # then WAKES that image and runs the corpus over the woken heap. This is the ONLY gate
 # that exercises ai_image_load on a mooncc binary -- the seam where [[mooncc-fn-parity]]
 # hid (an odd-addressed lvm_* ap mis-encodes as a fixnum, invisible to every egg-boot
-# gate; the fix aligns fns to even in gen.l). glaze.l is EXCLUDED: the bake mops the
-# eat/toast nifs (love/egg.l seals them into the host image), so (lit? eat) cannot hold on
-# a woken heap -- the gcc build fails it identically, so it is not a mooncc regression.
+# gate; the fix aligns fns to even in gen.l). glaze.l is EXCLUDED: the bake pulls the
+# nif/nifx seam off the book (host/main.c), so (lit? nif) cannot hold on a woken heap
+# -- the gcc build fails it identically, so it is not a mooncc regression.
 # Opt-in (not test_all): needs the -pie toolchain. x86-64 only.
 .PHONY: test_raw_bake
 test_raw_bake: test_raw
