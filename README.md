@@ -240,10 +240,3 @@ on the front page):
   application equals its literal lambda: `(adder 5) = (\ x (+ x 5))`. numbers
   never equal closures -- numerals *act* as their lambdas (`(1 x) = x`), but
   `=` stays representation-strict.
-
-### credits
-
-- the web page is set in 8x16 DOS/V bitmap fonts from the [Oldschool PC Font
-  Pack](https://int10h.org/oldschool-pc-fonts/) by VileR, used under
-  [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/): **DOS/V TWN16**
-  for the body text, **DOS/V re. PRC16** for the live repl.

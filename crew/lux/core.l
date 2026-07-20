@@ -7,12 +7,18 @@
 ; A body-LESS top-level `:` -- every binding LEAKS to the global scope, so the
 ; other crew/lux/ files see this vocabulary once concatenated. Names are chosen to
 ; shadow NO nif (the single-`:` rung-6 trap: a local `put` shadowed the put nif);
-; the WM vocabulary is `z*` (the zipper) and `ws*`/admit/evict/shiftto (the sheaf).
+; the WM vocabulary is `z*` (the zipper) and `ws*`/admit/evict/shiftto/shiftwin (the sheaf).
 (:
    ; --- the app's own list utilities (an app owns its helpers -- these USED to ride the
    ;     glaze's leaked globals, gone since the glaze swept into its module book) ---
    (nthl l i) (? (= i 0) (cap l) (nthl (cup l) (- i 1)))            ; 0-based nth of a list
    (afind pred l) (? (atom? l) () (pred (cap l)) (cap l) (afind pred (cup l)))   ; first element satisfying pred, else ()
+   (rnext ring f d) (: n (tally ring)                                            ; the cyclic neighbor: d steps from f around ring
+                       (idx i m) (? (! (two? m)) () (= (cap m) f) i (idx (+ i 1) (cup m)))
+                       i (idx 1 ring)                                            ; 1-based (0 reads false), () when f is absent
+                       (? (= n 0) ()
+                          (! i) (cap ring)                                       ; absent (or ()): start at the head
+                          (nthl ring (% (+ (- i 1) (+ d n)) n))))
 
    ; --- the zipper: a workspace's tiled stack. () or (focus up down), up REVERSED
    ;     (nearest-first), so focus motion is O(1) at either end. ---
@@ -83,12 +89,16 @@
    (wstiled sh) (foldl (\ a p (cat a (zrow (caup p)))) () (wsboard sh))          ; every TILED window, all workspaces
    (wswins sh) (cat (wstiled sh) (map cap (wsfloat sh)))                         ; every managed window (tiled + floating)
    (wsknownw? sh w) (any (\ x (= x w)) (wswins sh))
+   (wsring sh) (cat (wsrow sh) (map cap (wsvisfl sh)))                           ; the focus ring: the tiled row, then the floats at home
    (wstagof sh w) (: r (filter (\ p (any (\ x (= x w)) (zrow (caup p)))) (wsboard sh))
                      (? (two? r) (cap (cap r)) (wsftag sh w)))                   ; the tag holding w (tiled, else a float's home), or ()
    (admit sh w) (? (wsknownw? sh w) sh (wsmap sh (zins w)))                      ; manage w into the current ws (a no-op if already managed)
    (evict sh w) (wsmake (wscur sh) (wsdel-tiled sh w) (wsunfl w (wsfloat sh)))   ; unmanage w everywhere (tiled or float)
-   (shiftto sh t) (? (! (&& (wsknown? sh t) (! (= t (wscur sh))) (two? (wsget sh (wscur sh))))) sh
-                     (: w (wsfoc sh) d (evict sh w)                              ; the focused window emigrates to tag t; we stay
-                        (wsset d t (zins w (wsget d t)))))
+   (shiftwin sh w t) (? (! (&& (wsknown? sh t) (wsknownw? sh w) (! (= t (wstagof sh w))))) sh
+                        (wsfloating? sh w)                                       ; a float emigrates by retagging its home (rect kept)
+                        (wsmake (wscur sh) (wsboard sh)
+                                (map (\ p (? (= (cap p) w) (L w (caup p) t) p)) (wsfloat sh)))
+                        (: d (evict sh w) (wsset d t (zins w (wsget d t)))))     ; tiled: leave here, arrive focused on t
+   (shiftto sh t) (shiftwin sh (wsfoc sh) t)                                     ; the focused window emigrates to tag t; we stay
    (wssane? sh) (&& (wsknown? sh (wscur sh)) (znodup? (wswins sh)))              ; the StackSet invariant
    (znodup? l) (? (! (two? l)) 1 (? (any (\ x (= x (cap l))) (cup l)) 0 (znodup? (cup l)))))

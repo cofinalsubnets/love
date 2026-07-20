@@ -36,9 +36,17 @@
       (sameset? (wswins (wsview s2 2)) (wswins s2))                             ; view moves no windows
       (= (wscur s4) 1) (= (wstagof s4 30) 2) (= (wsfoc s4) 20) (= (wsrow s4) '(20 10)) (wssane? s4)
       (= (shiftto s2 1) s2) (= (shiftto s2 9) s2)                               ; to self / to nowhere: no-ops
+      (: s5 (shiftwin s2 10 3)                                                  ; shiftwin names its window: 10 leaves, focus stays 30
+         (&& (= (wstagof s5 10) 3) (= (wsrow s5) '(30 20)) (= (wsfoc s5) 30) (wssane? s5)))
+      (= (shiftwin s2 10 1) s2) (= (shiftwin s2 99 2) s2)                       ; to its own tag / an unknown window: no-ops
       (! (wsknownw? (evict s2 20) 20)) (= (wsrow (evict s2 20)) '(30 10))
       (= (wsfoc (evict s2 30)) 20) (wssane? (evict s2 30))
-      (= (wstagof s2 10) 1) (! (wstagof s2 99))))
+      (= (wstagof s2 10) 1) (! (wstagof s2 99))
+      ; --- the focus ring (rnext walks it cyclically, either direction) ---
+      (= (rnext '(1 2 3) 2 1) 3) (= (rnext '(1 2 3) 2 -1) 1)
+      (= (rnext '(1 2 3) 3 1) 1) (= (rnext '(1 2 3) 1 -1) 3)                    ; wraps at either end
+      (= (rnext '(1 2 3) 9 1) 1) (! (rnext () 9 1))                             ; absent -> the head; an empty ring -> ()
+      (= (wsring s2) '(30 20 10))))                                             ; no floats: the ring IS the tiled row
 
 ; --- the floating half (W.float / W.sink) ---
 (: s2 (admit (admit (admit (sheaf '(1 2 3)) 10) 20) 30) r99 '(20 20 200 100)
@@ -55,7 +63,12 @@
       (= 1 (wsftag (wsview f2 2) 20))                                            ; viewing elsewhere doesn't move it
       (two? (wsvisfl f2)) (! (two? (wsvisfl (wsview f2 2))))                     ; visible at home, hidden abroad
       (= 1 (wstagof f2 20))                                                      ; wstagof answers a float's home
-      (= 1 (wsftag (wsdofloat (wsview f2 2) 20 '(0 0 9 9)) 20))))                ; re-floating abroad (a drag) keeps the home
+      (= 1 (wsftag (wsdofloat (wsview f2 2) 20 '(0 0 9 9)) 20))                  ; re-floating abroad (a drag) keeps the home
+      (= 2 (wsftag (shiftwin f2 20 2) 20))                                       ; shiftwin retags a float's home...
+      (= r99 (wsrect (shiftwin f2 20 2) 20))                                     ; ...still floating, rect kept
+      (wssane? (shiftwin f2 20 2)) (= (shiftwin f2 20 1) f2)                     ; to its own home: a no-op
+      (= (wsring f2) '(30 10 20))                                                ; the ring reaches the float, after the tiles
+      (! (any (\ x (= x 20)) (wsring (wsview f2 2))))))                          ; abroad, the float is off the ring
 
 ; --- the seeded fuzz: the whole op vocabulary, 200 steps, invariant per step ---
 (: r99 '(20 20 200 100)

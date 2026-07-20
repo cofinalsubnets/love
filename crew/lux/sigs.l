@@ -70,6 +70,8 @@
      (admit    (sheaf window)         sheaf)
      (evict    (sheaf window)         sheaf)
      (shiftto  (sheaf tag)            sheaf)
+     (shiftwin (sheaf window tag)     sheaf)
+     (wsring   (sheaf)                wrow)
      (wssane?  (sheaf)                top)
      ; the geometry (layout.l)
      (rct      (a b c d)              rect)
