@@ -67,7 +67,14 @@
  (nil? (! pp2))                        ; red content, still SOMETHING -- the !p law, closed
  (2 = (sat pp2))                       ; $ counts monomials
  (nil? (+ pp1 (q 1 2)))                ; distinct dies never combine
- (nil? (* pp1 "s")))                   ; a method owns its domain
+ (nil? (* pp1 "s"))                    ; a method owns its domain
+ ((* 5 zp) = zp)                       ; star times the zero poly IS the zero poly (no arity needed)
+ ((* zp 5) = zp)
+ (nil? (+ 5 zp))                       ; ... but + there stays (): the arity is unknowable
+ ((2 (poly rx)) = (poly (pmul rx rx))) ; polys are STARS (slot 7): a numeral squares through *
+ (((poly rx) ** 3) = (poly (pmul rx (pmul rx rx))))
+ ((3 zp) = zp)                         ; the zero poly powers to itself
+ (1 = (0 (poly rx))))                  ; the zero numeral: p**0 = 1
 
 ; --- the field: Q[x]/(x^2 - 2), where root-two squares to two --------------
 (: sq2xd `((q 2 1) (q 0 1))                     ; x^2 == 2
@@ -139,5 +146,30 @@
  ((feval (q 0 1) (q 0 1) (q -1 4)) = cimg)
  ((feval (q 1 1) (q -3 2) (q 13 2)) = cimg)
  ((feval (q -1 1) (q 3 2) (q 13 2)) = cimg))
+
+; --- the eval bridge: polys compile to live closures ------------------------
+; folded dyadic + / * with powers as repeated *, so one closure computes over
+; integers and q coins alike. the flagship: F1 and F3 of the counterexample,
+; COMPILED, evaluated at the published collision point -- the same -1/4 and 0
+; the modular certificate proved, now through ev'd code. a mixed evaluation
+; lands a coin, so zero reads (q 0 1), never the fixnum 0.
+(: xyz '(x y z)
+   ef1 (pfn pp1 xyz)                       ; x+y, from the COIN face
+   ef2 (pfn (pd (load pp2) 0) xyz)         ; d(x-2y)/dx = 1
+   ef3 (pfn (pmul (pmul rx rx) ry) xyz)    ; x^2 y: a power, repeated-*
+   efd (pfn (pdet jrows) xyz)              ; det J F compiles to const -2
+   efz (pfn (poly ()) xyz)                 ; the zero poly compiles to 0
+   eF1 (pfn pf1 xyz)
+   eF3 (pfn pf3 xyz))
+(assert
+ (5 = (ef1 2 3 0))
+ ((q 5 6) = (ef1 (q 1 2) (q 1 3) 0))       ; rationals ride the SAME closure
+ (1 = (ef2 9 9 9))
+ (12 = (ef3 2 3 0))                        ; 4*3
+ ((q 3 4) = (ef3 (q 1 2) 3 0))             ; a power over a coin stays total
+ (-2 = (efd 5 7 11))
+ (0 = (efz 1 2 3))
+ ((q -1 4) = (eF1 1 (q -3 2) (q 13 2)))    ; compiled F1 at the collision point
+ ((q 0 1) = (eF3 1 (q -3 2) (q 13 2))))    ; compiled F3 there: exactly zero
 
 (puts "rune: ok")

@@ -66,10 +66,13 @@
 ; coefficients sum red (the raw-list layer needs (0 = tally p) for that). the
 ; ZERO polynomial is the coin over () -- never bare (), which rides + and * as
 ; the do-nothing unit and would dodge annihilation. a method owns its domain:
-; a star operand lifts to the other side's arity (against the zero poly the
-; arity is unknowable -- ()); anything else answers (). pd/pdet work the raw
-; layer: (load p) to reach it, (poly ..) to come back.
-(: polyd #(0 'poly 6 1)
+; a star operand lifts to the other side's arity; against the zero poly the
+; arity is unknowable, so + and - answer () there, but * needs no lift at all
+; (c times the zero poly IS the zero poly); anything else answers (). slot 7
+; declares polys STARS, so a numeral powers a poly through its own * -- ipow's
+; squaring over coins, seeded at 1, lands on the zero-mul face. pd/pdet work
+; the raw layer: (load p) to reach it, (poly ..) to come back.
+(: polyd #(0 'poly 6 1 7 1)
    (polyish? v) (? (nil? v) 1 (two? v) (two? (cap v)) 0)
    (arity v) (tally (mkey (cap v)))
    (pok? v w) (? (polyish? v) 1 (star? v) (? (polyish? w) (tally w) ()) ())
@@ -78,10 +81,38 @@
                        (? (&& (pok? x y) (pok? y x))
                           (coin polyd (f (plift x y) (plift y x)))
                           ())))
+   (zface v w) (? (star? v) (? (polyish? w) (0 = tally w) 0) 0)
+   mulm (pmeth pmul)
    _ (pin polyd 1 (pmeth padd))
-   _ (pin polyd 2 (pmeth pmul))
+   _ (pin polyd 2 (\ a b (: x (load a) y (load b)
+                            (? (zface x y) (coin polyd ())
+                               (zface y x) (coin polyd ())
+                               (mulm a b)))))
    _ (pin polyd 5 (pmeth psub))
    (poly p) (? (polyish? p) (coin polyd p) ()))
+
+; --- the eval bridge: a poly compiles to a live closure ---------------------
+; pemit renders a poly (raw or coin) as core source over the given variable
+; symbols, one per key position. the emission is folded DYADIC + and * only --
+; never (+ a b c), which is application, and never (e x) numeral power, which
+; COMPOSES a non-numeric operand -- powers ride as repeated *, so the closure
+; computes over ANYTHING the generic ops carry: integers, bignums, gems, q
+; coins. pfn wraps the emission in \ and hands it to ev: a real curried
+; closure, glaze-eligible; args arrive in syms order.
+(: (reps s e acc) (? (e = 0) acc (reps s (e - 1) (link s acc)))
+   (mulfold l) (? (1 = tally l) (cap l) `('* (cap l) (mulfold (cup l))))
+   (mfacts key syms) (? (0 = tally key) ()
+                        (reps (cap syms) (cap key) (mfacts (cup key) (cup syms))))
+   (mterm m syms) (: fs (mfacts (mkey m) syms) c (mco m)
+                     (? (0 = tally fs) c
+                        (c = 1) (mulfold fs)
+                        (mulfold (link c fs))))
+   (psum pp syms) (? (0 = tally pp) 0
+                     (1 = tally pp) (mterm (cap pp) syms)
+                     `('+ (mterm (cap pp) syms) (psum (cup pp) syms)))
+   (pemit p syms) (psum (load p) syms)
+   (snocl l x) (? (0 = tally l) (link x ()) (link (cap l) (snocl (cup l) x)))
+   (pfn p syms) (ev (link '\ (snocl syms (pemit p syms)))))
 
 ; --- the field Q[x]/(m) ----------------------------------------------------
 (: (vmax a b) (? (a < b) b a)
