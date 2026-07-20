@@ -189,15 +189,20 @@
 ; the monadic words behind the glued sigils (the valence law; see opfix and
 ; book['monadics] below). net is the CONTENT MEASURE as a value -- + turned
 ; inward: a number is its own net (phase intact, exact), an array sums its
-; cells, a list the nets of its spine, a coin its payload's net SIGNED (or its
-; tally, when the die pins net-mode 1 in slot 6 -- lockstep with the C truth
-; path), and everything else is non-negative so its net IS its sat. prod is the
-; product twin; negate/reciprocal/fraction the dyadics turned inward; bit the
-; truth bit (the Iverson bracket, !!).
+; cells, a list the nets of its spine. a coin: a DECLARED star (slot 7) nets
+; ITSELF -- the self-netting fixpoint by declaration, so star? opens with no
+; edit and additivity lands exactly in the die's own ring (net (a + b) IS
+; (net a) + (net b), the measure-hom) -- else its tally under net-mode 1
+; (slot 6, lockstep with the C truth path), else its payload's net SIGNED.
+; everything else is non-negative so its net IS its sat. prod is the product
+; twin; negate/reciprocal/fraction the dyadics turned inward; bit the truth
+; bit (the Iverson bracket, !!).
 (: (net x) (? (tray? x) (asum x)
               (constellation? x) x
               (two? x) (foldl (\ a e (+ a (net e))) 0 x)
-              (coin? x) (? (= 1 (-> (die-of x) 6 0)) (tally x) (net (load x)))
+              (coin? x) (? (= 1 (-> (die-of x) 7 0)) x
+                           (= 1 (-> (die-of x) 6 0)) (tally x)
+                           (net (load x)))
               (sat x))
    (prod x) (? (tray? x) (aprod x)
                (two? x) (foldl (\ a e (* a (prod e))) 1 x)
@@ -214,6 +219,8 @@
    ; COMPOSED of stars, not a kind of star. galaxy? keys on the CELLS, not the O code, so a
    ; Z/R/C set qualifies outright and an object-typed set of star cells (e.g. bignums)
    ; still counts -- a set of strings does not (a string is no star).
+   ; (the fixpoint is OPEN: a coin whose die pins slot 7 nets itself, so it
+   ; passes with no coin branch here -- declaration arrives through net.)
    (star? x) (id? x (net x))
    ; (charm? -- a fixnum, the word-sized star -- is the C nif now, oddp C-side.)
    (galaxy? x) (? (tray? x) (? (nil? (= top-tray (tier x))) 1 (star? (peep x 0 0))) 0))
@@ -769,8 +776,12 @@
 (: q (: reduce (\ n d (? (= 0 n) (L 0 1)                        ; gcd out, sign on num, den > 0
                         (: g (gcd (abs n) (abs d)) s (? (< d 0) -1 1)
                            (L (// (* s n) g) (// (* s d) g)))))
-        (ok? v) (? (star? v) 1
-                   (two? v) (&& (star? (cap v)) (star? (caup v)))
+        ; the domain test is the CLOSED star (the fixpoint minus coins): star?
+        ; is open now, and an open star as an (n d) component would drag gcd
+        ; off the tower it terminates on -- a coin is never a coefficient.
+        (nstar? v) (? (coin? v) 0 (id? v (net v)))
+        (ok? v) (? (nstar? v) 1
+                   (two? v) (&& (nstar? (cap v)) (nstar? (caup v)))
                    0)
         st #(0 'q 7 1)                                          ; slot 7: a rational IS a star
         _ (pin st 1 (\ a b (: x (load a) y (load b)             ; (n1 d1) + (n2 d2)

@@ -116,6 +116,13 @@
     (nil? ((/ 1 2) (q 4 1)))           ; a non-whole exponent off the tower: ()
     (nil? (coin? (2 (sm 3))))          ; an UNflagged coin still composes (a closure)
 
+    ; --- rung 2: a declared star SELF-NETS, so the vocabulary follows the flag ---
+    (= (q 1 2) (net (q 1 2)))          ; net answers the coin ITSELF (the fixpoint, by declaration)
+    (star? (q 1 2))                    ; ... so star? holds with no coin branch of its own
+    (nil? (star? a))                   ; an undeclared coin still nets its payload: no star
+    (nil? (star? (sm 3)))
+    (= (q 5 6) (net (L (q 1 2) (q 1 3))))   ; additivity lands IN the ring: an exact rational sum
+
     ; --- a coin's lit?-ness is its die's call: fresh DATA by default ---
     (nil? (lit? (q 1 2)))          ; a rational is DATA -- a value, not a reference (like a number)
     (nil? (lit? a))                ; a mod-n residue too

@@ -74,7 +74,10 @@
  ((2 (poly rx)) = (poly (pmul rx rx))) ; polys are STARS (slot 7): a numeral squares through *
  (((poly rx) ** 3) = (poly (pmul rx (pmul rx rx))))
  ((3 zp) = zp)                         ; the zero poly powers to itself
- (1 = (0 (poly rx))))                  ; the zero numeral: p**0 = 1
+ (1 = (0 (poly rx)))                   ; the zero numeral: p**0 = 1
+ (star? pp1)                           ; a declared star self-nets: the vocabulary follows
+ (star? zp)                            ; the zero poly is a star, like 0
+ ((net (L pp1 pp1)) = (+ pp1 pp1)))    ; net of a list of polys is their SUM -- the hom in the ring
 
 ; --- the field: Q[x]/(x^2 - 2), where root-two squares to two --------------
 (: sq2xd `((q 2 1) (q 0 1))                     ; x^2 == 2
