@@ -105,6 +105,17 @@
     (nil? (- (q 1 2) "s"))                   ; nor text
     (= (q 1 1) (+ (q 1 2) (L 1 2)))          ; ... but a bare (n d) of stars reads as n/d
 
+    ; --- an OPEN star (slot 7): q declares its coins numeric, so a numeral
+    ;     POWERS them through their own * (exact squaring) instead of composing ---
+    (= (q 1 4) (2 (q 1 2)))            ; (n x) = x**n, through the die
+    (= (q 8 27) (3 (q 2 3)))
+    (= (q 1 4) ((q 1 2) ** 2))         ; the apply operator rides the same law
+    (= (q 1 2) (1 (q 1 2)))            ; the identity numeral
+    (= 1 (0 (q 5 7)))                  ; the zero numeral: x**0 = 1
+    (nil? (-1 (q 2 1)))                ; a reciprocal power needs coin / -- absent, ()
+    (nil? ((/ 1 2) (q 4 1)))           ; a non-whole exponent off the tower: ()
+    (nil? (coin? (2 (sm 3))))          ; an UNflagged coin still composes (a closure)
+
     ; --- a coin's lit?-ness is its die's call: fresh DATA by default ---
     (nil? (lit? (q 1 2)))          ; a rational is DATA -- a value, not a reference (like a number)
     (nil? (lit? a))                ; a mod-n residue too

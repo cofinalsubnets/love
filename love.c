@@ -326,7 +326,9 @@ static ai_inline word coin_load(word x) { return ((struct ai_coin*) x)->payload;
 // re-enter the VM): mode 1 nets by the COUNT, so truth reads "has any" even when
 // the payload's content sums red (a signed ledger, a polynomial's coefficients).
 enum { DIE_NAME = 0, DIE_ADD = 1, DIE_MUL = 2, DIE_APPLY = 3, DIE_HOT = 4, DIE_SUB = 5,
-       DIE_NET = 6 };   // net MODE, a fixnum: absent/0 = net of payload; 1 = net by TALLY (the count)
+       DIE_NET = 6,    // net MODE, a fixnum: absent/0 = net of payload; 1 = net by TALLY (the count)
+       DIE_STAR = 7 }; // truthy = the die's coins are NUMERIC: numeral application powers them
+                       // through their own * (prel num-ap reads this slot; C never does)
 // read a die slot, or () if absent / the die is not a map.
 static ai_inline word die_get(struct ai *g, word die, intptr_t slot) {
  return tabp(die) ? ai_mapget(g, nil, putcharm(slot), die) : nil; }

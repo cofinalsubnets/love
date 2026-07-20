@@ -155,7 +155,18 @@
         cmp7 (\ f (\ x (f (f (f (f (f (f (f x)))))))))
         cmp8 (\ f (\ x (f (f (f (f (f (f (f (f x))))))))))
         (cmp k) (? (= k 2) cmp2 (= k 3) cmp3 (= k 4) cmp4 (= k 5) cmp5 (= k 6) cmp6 (= k 7) cmp7 (= k 8) cmp8 0)
+        ; an OPEN star: a coin whose die pins slot 7 is numeric BY DECLARATION, so a
+        ; numeral powers it through its own * -- ipow is generic, the exact squaring
+        ; rides the die's mul. only whole exponents mean anything off the closed
+        ; tower (a negative needs coin division, absent -> (); a non-whole answers
+        ; (), the undefined-op law). unflagged coins keep composing below.
+        (starred? x) (? (coin? x) (= 1 (-> (die-of x) 7 0)) 0)
         (num-ap n x) (? (constellation? x) (powg x n)
+                        (starred? x)
+                        (? (whole? n) (: m (? (< n 0) (- 0 n) n)
+                                         (? (apover m) (scare 'apcap m)
+                                            (< n 0) (/ 1 (ipow x m)) (ipow x m)))
+                           ())
                         (: k (sat n)
                            (? (< k 1) 1 (= k 1) x
                               (apover k) (scare 'apcap k)
@@ -733,7 +744,9 @@
 ; unpinned, coin subtraction answers (), the undefined-op law. slot 6 is the NET
 ; MODE, a fixnum: absent/0 nets the payload (the hom); 1 nets by TALLY -- the
 ; count, never negative -- so a die over signed content (a ledger, a polynomial)
-; can make its coins' truth read "has any", not "sums green".
+; can make its coins' truth read "has any", not "sums green". slot 7 truthy
+; declares the die's coins STARS: numeral application powers them through their
+; own * (num-ap's open fork) instead of composing them as functions.
 ; LIVES HERE, below the #(..) `hash` macro: a macro must precede its use in the prel,
 ; since the bootstrap c0 is a single forward pass (no macro hoist). slot 0 = show-name.
 (: (ring name plus times) (:
@@ -759,7 +772,7 @@
         (ok? v) (? (star? v) 1
                    (two? v) (&& (star? (cap v)) (star? (caup v)))
                    0)
-        st #(0 'q)
+        st #(0 'q 7 1)                                          ; slot 7: a rational IS a star
         _ (pin st 1 (\ a b (: x (load a) y (load b)             ; (n1 d1) + (n2 d2)
               (? (&& (ok? x) (ok? y))
                  (coin st (reduce (+ (* (cap x) (caup y)) (* (cap y) (caup x))) (* (caup x) (caup y))))
