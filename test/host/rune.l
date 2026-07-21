@@ -239,6 +239,27 @@
  (1 = (simp '(+ (* (sin (+ y 0)) (sin y)) (* (cos y) (cos y))))))  ; the inner fix
                                                       ; opens pythagoras at the root
 
+; --- symbolic d: the derivative as a rule set, the guard doing the base case --
+; (d a v) -> 0 rides the matcher's GUARDED rule (fires only when a is free? of
+; v); (d a a) -> 1 the nonlinear pattern; sum/product/quotient/chain plain
+; patterns. deriv simps the result, so answers land collected.
+(assert
+ (0 = (deriv 'y 'x))                              ; free of x: the guarded base
+ (0 = (deriv 5 'x))
+ (1 = (deriv 'x 'x))                              ; d x/dx: the nonlinear rule
+ (2 = (deriv '(* 2 x) 'x))
+ ((deriv '(* x x) 'x) = '(* 2 x))                 ; the product rule, collected
+ ((deriv '(+ (* x x) (* 3 x)) 'x) = '(+ (* 2 x) 3))
+ ((deriv '(sin x) 'x) = '(cos x))
+ ((deriv '(cos x) 'x) = '(- 0 (sin x)))
+ ((deriv '(sin (* 2 x)) 'x) = '(* (cos (* 2 x)) 2))   ; the chain rule
+ ((deriv '(/ 1 x) 'x) = '(/ -1 (* x x)))          ; the quotient rule, folded red
+ ((deriv '(f x) 'x) = '(d (f x) x))               ; an unknown derivative stays symbolic
+ ((deriv `('+ `('sin 'x) `('* 'x (q 1 2))) 'x) = `('+ '(cos x) (q 1 2)))  ; exact halves ride
+ ((simp '(+ z z)) = '(* 2 z))                     ; the collect law that tidies d
+ ((deriv (pemit (psq rx) '(x y z)) 'x)
+  = (pemit (pd (psq rx) 0) '(x y z))))            ; d agrees with pd through the bridge
+
 ; --- unfix: terms back to the infix surface, as FORMS ------------------------
 ; low-paren infix source values: show prints them, ev runs them, and
 ; (opfix (unfix t)) = t is the round-trip law, over the corpus below.

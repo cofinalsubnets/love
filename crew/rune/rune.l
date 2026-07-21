@@ -127,13 +127,16 @@
 ; shared across two positions is a NONLINEAR pattern -- (- a a) matches only
 ; when both sides agree, structurally, coins by value -- at no extra cost.
 ; `rule` compiles the readable (vars pat tpl) triple: each named symbol in vs
-; becomes ONE var shared across both halves. `match` answers the binding, or
-; () on a miss -- a var-less hit is the EMPTY binding, whose truth is blue,
-; so test a miss against (), never with ! alone. `sew` fills a template under
-; a binding. `rewrite` drives a rule list bottom-up to a fixpoint (rw1 tries
-; the rules once, at the root); termination is the rule set's burden. a named
-; symbol is a (name . mint) chain -- the SAME shape as a var -- so mark and
-; rewrite treat noms as atoms, never walking into them.
+; becomes ONE var shared across both halves; `grule` adds a GUARD -- a closure
+; over the bound values, vs order -- that must answer green for the rewrite to
+; fire (how (d a v) -> 0 says "only when a is free of v"). `match` answers the
+; binding, or () on a miss -- a var-less hit is the EMPTY binding, whose truth
+; is blue, so test a miss against (), never with ! alone. `sew` fills a
+; template under a binding. `rewrite` drives a rule list bottom-up to a
+; fixpoint (rw1 tries the rules once, at the root, guards included);
+; termination is the rule set's burden. a named symbol is a (name . mint)
+; chain -- the SAME shape as a var -- so mark and rewrite treat noms as
+; atoms, never walking into them.
 (: sew (kanren 'subst)
    mnil (kanren 'empty_dict)
    (match p x) (: r (unify mnil p x) (ufail? r ? () r))
@@ -143,18 +146,24 @@
    (mark ps t) (? (nom? t) (: w (vlook t ps) (!w ? t w))
                   (two? t) (link (mark ps <t) (mark ps >t))
                   t)
-   (rule vs pat tpl) (: ps (map (\ s (link s (var s))) vs)
-                        (link (mark ps pat) (mark ps tpl)))
+   (grule vs pat tpl g) (: ps (map (\ s (link s (var s))) vs)
+                           `((mark ps pat) (mark ps tpl) g (map (\ pr >pr) ps)))
+   (rule vs pat tpl) (grule vs pat tpl 0)
+   (gpass? rl r) (: g (nth rl 2)
+                    (g = 0 ? 1 (ap g (map (sew r) (nth rl 3)))))
    (rw1 rs x) (? (0 = tally rs) x
-                 (: r (unify mnil <(<rs) x)
-                    (ufail? r ? (rw1 >rs x) (sew r >(<rs)))))
+                 (: rl <rs r (unify mnil <rl x)
+                    (? (ufail? r) (rw1 >rs x)
+                       (gpass? rl r) (sew r <>rl)
+                       (rw1 >rs x))))
    (rewrite rs x) (: y (? (nom? x) x (two? x) (map (rewrite rs) x) x)
                      z (rw1 rs y)
                      (z = y ? y (rewrite rs z))))
 
 ; --- laws + fold: the shipped simplifier -------------------------------------
-; `laws` is the core identity table -- units, annihilators, inverses, and the
-; pythagorean identity -- every rule strictly shrinking, so the fixpoint lands.
+; `laws` is the core identity table -- units, annihilators, inverses, the
+; doubling collect, and the pythagorean identity -- every rule shrinking or
+; size-keeping-once, so the fixpoint lands.
 ; fold1 computes a GROUND ring node: (op a b) for op in + - * with both
 ; operands stars (the open star: integers, gems, q coins, poly coins alike)
 ; folds to its value, cnormed so an integer-valued coin lands the integer.
@@ -171,6 +180,7 @@
           (rule '(a) '(- a a) 0)
           (rule '(a) '(/ a 1) 'a)
           (rule '(a) '(- 0 (- 0 a)) 'a)
+          (rule '(a) '(+ a a) '(* 2 a))
           (rule '(a) '(+ (* (sin a) (sin a)) (* (cos a) (cos a))) 1))
    (fold1 t) (? (nom? t) t
                 !(two? t) t
@@ -183,6 +193,28 @@
    (simp t) (: y (? (nom? t) t (two? t) (map simp t) t)
                z (fold1 (rw1 laws y))
                (z = y ? y (simp z))))
+
+; --- symbolic d: the derivative as a rule set --------------------------------
+; the term head `d` -- (d t v) -- reduces by dlaws: sum/product/quotient rules
+; are plain patterns, (d a a) -> 1 rides the nonlinear pattern, sin/cos carry
+; the chain rule, and the base case is the GUARDED rule: (d a v) -> 0 exactly
+; when a is free? of v -- the guard the matcher grew for it. a head with no
+; rule keeps its (d ..) term: a derivative rune cannot take stays symbolic,
+; the honest answer. deriv drives dlaws to a fixpoint and simps the result,
+; so d(x*x)/dx lands (* 2 x), not (+ (* 1 x) (* x 1)).
+(: (free? t v) (? (t = v) 0
+                  (nom? t) 1
+                  (two? t) ((&& (free? <t v) (free? >t v)) ? 1 0)
+                  1)
+   dlaws `((grule '(a v) '(d a v) 0 free?)
+           (rule '(a) '(d a a) 1)
+           (rule '(a b v) '(d (+ a b) v) '(+ (d a v) (d b v)))
+           (rule '(a b v) '(d (- a b) v) '(- (d a v) (d b v)))
+           (rule '(a b v) '(d (* a b) v) '(+ (* (d a v) b) (* a (d b v))))
+           (rule '(a b v) '(d (/ a b) v) '(/ (- (* (d a v) b) (* a (d b v))) (* b b)))
+           (rule '(a v) '(d (sin a) v) '(* (cos a) (d a v)))
+           (rule '(a v) '(d (cos a) v) '(- 0 (* (sin a) (d a v)))))
+   (deriv t v) (simp (rewrite dlaws `('d t v))))
 
 ; --- unfix: terms back to the infix surface ----------------------------------
 ; the inverse of opfix, as a FORM: unfix renders a core term as low-paren
