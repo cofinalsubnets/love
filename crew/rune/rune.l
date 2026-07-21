@@ -69,13 +69,16 @@
                            (padd (sg = 1 ? t (pneg t)) (go >r0 (j + 1) (0 - sg)))))
                      (go <rows 0 1))))
 
-; --- gcd: euclid in Q[x], answers monic -------------------------------------
-; UNIVARIATE (arity-1 keys): pmod is long division's remainder -- the lead
-; quotient monomial (pquo) rides pmul/psub, so cancellation is the ring's
-; own, exact -- and pgcd euclids until the zero poly, then normalizes monic
-; (unique in Q[x]; units divide out). cinv is the exact reciprocal of a
-; coefficient star: a coin through its die, an integer through the q ctor.
-; both faces load: raw monomial lists and poly coins alike; answers are raw.
+; --- gcd & squarefree factorization: euclid in Q[x], answers monic ----------
+; UNIVARIATE (arity-1 keys): pmod/pquot are long division's remainder and
+; quotient -- the lead quotient monomial (pquo) rides pmul/psub, so
+; cancellation is the ring's own, exact -- and pgcd euclids until the zero
+; poly, then normalizes monic (unique in Q[x]; units divide out). cinv is
+; the exact reciprocal of a coefficient star: a coin through its die, an
+; integer through the q ctor. psff is yun's algorithm: the ascending list
+; (a1 a2 ..) of monic squarefree factors, monic p = a1^1 * a2^2 * .. --
+; empty slots hold the 1 poly, a constant has no factors. both faces load:
+; raw monomial lists and poly coins alike; answers are raw.
 (: (cinv c) (coin? c ? (-1 c) (q 1 c))
    (pdeg p) <(mkey <p)
    (pmonic p) (? (0 = tally p) ()
@@ -85,8 +88,20 @@
    (pmod a b) (? (0 = tally a) ()
                  ((pdeg a) < (pdeg b)) a
                  (pmod (psub a (pmul (pquo a b) b)) b))
+   (pquot a b) (? (0 = tally a) ()
+                  ((pdeg a) < (pdeg b)) ()
+                  (: t (pquo a b)
+                     (padd t (pquot (psub a (pmul t b)) b))))
    (pgcd a b) (: x (load a) y (load b)
-                 (? (0 = tally y) (pmonic x) (pgcd y (pmod x y)))))
+                 (? (0 = tally y) (pmonic x) (pgcd y (pmod x y))))
+   (psff p) (: f (pmonic (load p))
+               (go w y) (? (0 = (pdeg w)) ()
+                           (: z (psub y (pd w 0))
+                              a (pgcd w z)
+                              (link a (go (pquot w a) (pquot z a)))))
+               (? (|| (0 = tally f) (0 = (pdeg f))) ()
+                  (: g (pgcd f (pd f 0))
+                     (go (pquot f g) (pquot (pd f 0) g))))))
 
 ; --- the poly coin: polynomials first-class under the generic ops ----------
 ; strike a CANONICAL monomial list (the engine's own output) and the surface

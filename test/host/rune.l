@@ -82,6 +82,27 @@
  ((pgcd (poly (pmul g1 g2)) (poly (pmul g1 g3))) = g1)   ; the coin faces load
  ((pgcd gm (pd gm 0)) = (gc 1)))                 ; m is SQUAREFREE: gcd(m, m') = 1
 
+; --- squarefree factorization: yun's algorithm over the gcd ------------------
+; (psff p) is the ascending factor list (a1 a2 ..), each monic squarefree,
+; monic p = a1^1 * a2^2 * .. -- rebuild says exactly that, powering each
+; factor through the poly COIN's numeral application.
+(: (rebuild fs) (: (go i r) (? (0 = tally r) (gc 1)
+                               (pmul (load (i (poly <r))) (go (i + 1) >r)))
+                   (go 1 fs)))
+(assert
+ ((psff (pmul g1 g2)) = `((pmul g1 g2)))         ; squarefree: one factor, itself
+ ((psff (pmul g1 (pmul g1 g2))) = `(g2 g1))      ; (x+1)^2 (x+2): (x+2)^1 (x+1)^2
+ ((psff (pmul (gc 3) (pmul g1 g1))) = `((gc 1) g1))   ; the unit drops, slot 1 empty
+ ((psff (pmul g1 (pmul g1 (pmul g1 g2))))
+  = `(g2 (gc 1) g1))                             ; a cube: the middle slot is 1
+ ((psff gm) = `((pmonic gm)))                    ; m squarefree, by yun this time
+ ((psff (gc 5)) = ())                            ; a constant has no factors
+ ((psff ()) = ())
+ ((psff (poly (pmul g1 g1))) = `((gc 1) g1))     ; the coin face loads
+ ((rebuild (psff (pmul gm (pmul gm g2))))
+  = (pmonic (pmul gm (pmul gm g2)))))            ; THE reconstruction law, degree 7:
+                                                 ; monic p = a1^1 a2^2 ..
+
 ; --- Q[x y z]: coefficients are stars -- integers or ratio coins ------------
 ; cnorm keeps them canonical: an integer-VALUED coin demotes to its integer,
 ; so Z[x..] sits inside Q[x..] structurally -- halves that sum whole land
