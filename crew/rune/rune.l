@@ -4,12 +4,16 @@
 ; whose corpus verifies the 2026 jacobian-conjecture disproof whole
 ; (det J symbolically, the collision certificates in exact arithmetic).
 ;
-; a POLY is a list of monomials, each (c e0 e1 .. ) -- an integer
-; coefficient then one exponent per variable -- keys lex-descending, no
-; zero coefficients, all polys in one expression sharing an arity. the
-; zero polynomial is (): the empty sum IS nothing. (coefficients stay
-; integers: ! cannot test a coefficient for zero -- a red coefficient
-; nets nothing -- so padd drops on (c = 0), which coins don't answer.)
+; a POLY is a list of monomials, each (c e0 e1 .. ) -- a coefficient (a
+; STAR: an integer or a ratio coin, so the ring is Q[x..] with Z[x..]
+; sitting inside it structurally) then one exponent per variable -- keys
+; lex-descending, no zero coefficients, all polys in one expression
+; sharing an arity. the zero polynomial is (): the empty sum IS nothing.
+; cnorm keeps coefficients CANONICAL: an integer-valued coin ((q n 1))
+; demotes to its integer numerator, so halves that sum whole land an
+; integer, = stays structural across Z and Q, and the zero-drop is the
+; plain (c = 0) -- a value-zero coin demotes to the fixnum 0 first.
+; (! can never test a coefficient: a red one nets nothing.)
 ;
 ; a K-ELEMENT of Q[x]/(m), deg m = d, is an ascending list of d q coins.
 ; the field is given not by m but by XD -- x^d rewritten as an element --
@@ -18,6 +22,7 @@
 ; --- the polynomial ring ---------------------------------------------------
 (: (mco m) (cap m)
    (mkey m) (cup m)
+   (cnorm c) (? (coin? c) (: p (load c) (? (1 = (caup p)) (cap p) c)) c)
    (keylt a b) (? (0 = tally a) 0
                   ((cap a) < (cap b)) 1
                   ((cap b) < (cap a)) 0
@@ -26,7 +31,7 @@
                    (0 = tally p2) p1
                    (: mp (cap p1) mq (cap p2)
                       (? ((mkey mp) = (mkey mq))
-                         (: c ((mco mp) + (mco mq)) r (padd (cup p1) (cup p2))
+                         (: c (cnorm ((mco mp) + (mco mq))) r (padd (cup p1) (cup p2))
                             (? (c = 0) r (link (link c (mkey mp)) r)))
                          (keylt (mkey mq) (mkey mp))
                          (link mp (padd (cup p1) p2))
@@ -34,14 +39,14 @@
    (pneg p) (map (\ mm (link (0 - (mco mm)) (mkey mm))) p)
    (psub p1 p2) (padd p1 (pneg p2))
    (zadd a b) (? (0 = tally a) () (link ((cap a) + (cap b)) (zadd (cup a) (cup b))))
-   (mmul a b) (link ((mco a) * (mco b)) (zadd (mkey a) (mkey b)))
+   (mmul a b) (link (cnorm ((mco a) * (mco b))) (zadd (mkey a) (mkey b)))
    (mrow a p2) (? (0 = tally p2) () (link (mmul a (cap p2)) (mrow a (cup p2))))
    (pmul p1 p2) (? (0 = tally p1) () (padd (mrow (cap p1) p2) (pmul (cup p1) p2)))
    (nth l n) (? (n = 0) (cap l) (nth (cup l) (n - 1)))
    (setn l n x) (? (n = 0) (link x (cup l)) (link (cap l) (setn (cup l) (n - 1) x)))
    (deln l n) (? (n = 0) (cup l) (link (cap l) (deln (cup l) (n - 1))))
    (zeros n) (? (n = 0) () (link 0 (zeros (n - 1))))
-   (pconst n c) (? (c = 0) () `((link c (zeros n))))
+   (pconst n c) (: k (cnorm c) (? (k = 0) () `((link k (zeros n)))))
    (pvar n k) `((link 1 (setn (zeros n) k 1))))
 
 ; --- the derivative and the determinant ------------------------------------
@@ -50,7 +55,7 @@
 (: (pd p v) (? (0 = tally p) ()
                (: mm (cap p) e (nth (mkey mm) v) r (pd (cup p) v)
                   (? (e = 0) r
-                     (padd `((link ((mco mm) * e) (setn (mkey mm) v (e - 1)))) r))))
+                     (padd `((link (cnorm ((mco mm) * e)) (setn (mkey mm) v (e - 1)))) r))))
    (pdet rows) (? (1 = tally rows) (cap (cap rows))
                   (: (go r0 j sg)
                      (? (0 = tally r0) ()

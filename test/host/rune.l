@@ -47,6 +47,28 @@
  ((pdet `(drow drow drow3)) = ())                ; equal rows kill it
  ((pdet `(dd1 dd2 dd3)) = (pmul rx (pmul ry rz))))
 
+; --- Q[x y z]: coefficients are stars -- integers or ratio coins ------------
+; cnorm keeps them canonical: an integer-VALUED coin demotes to its integer,
+; so Z[x..] sits inside Q[x..] structurally -- halves that sum whole land
+; integer coefficients, = crosses Z and Q, and the zero-drop stays (c = 0).
+(: qh (pconst 3 (q 1 2))
+   qp (padd (pmul qh rx) ry)                     ; x/2 + y
+   qd1 `((pconst 2 (q 1 2)) ())
+   qd2 `(() (pconst 2 2)))
+(assert
+ ((padd qh qh) = (pconst 3 1))                   ; 1/2 + 1/2 DEMOTES to the integer 1
+ ((padd qp qp) = (padd rx (pmul (pconst 3 2) ry)))   ; doubles to x + 2y, all integer
+ (0 = tally (psub qp qp))                        ; q coefficients vanish exactly
+ ((pmul qh (pconst 3 (q 2 3))) = (pconst 3 (q 1 3)))  ; 1/2 * 2/3 = 1/3, reduced
+ ((pmul (pconst 3 2) qh) = (pconst 3 1))         ; ... and demotes through mmul too
+ ((pd (pmul qh (psq rx)) 0) = rx)                ; d/dx x^2/2 = x: the 2 cancels the half
+ ((pconst 3 (q 0 1)) = ())                       ; a value-zero coin is NO constant
+ ((pconst 3 (q 4 2)) = (pconst 3 2))             ; an integer-valued coin enters demoted
+ ((pdet `(qd1 qd2)) = (pconst 2 1))              ; det diag(1/2 2) = 1: q entries, integer det
+ ((- (poly qp) (poly qp)) = (poly ()))           ; the coin face rides the same ring
+ ((q 3 2) = ((pfn qp '(x y z)) 1 1 0))           ; compiled: 1/2 + 1 = 3/2
+ ((q 4 1) = ((pfn qp '(x y z)) 2 3 0)))          ; a mixed evaluation LANDS a coin: (q 4 1), not 4
+
 ; --- the poly coin: polynomials first-class under + - * and ! ---------------
 ; the zero polynomial is the coin over (); ! reads "is the zero polynomial"
 ; even when the coefficients sum red -- the trap the raw layer carries
