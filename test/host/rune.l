@@ -278,6 +278,25 @@
  ((expand '(log (* x x))) = '(* 2 (log x)))           ; split, then collect
  ((expand '(log (exp (+ x y)))) = '(+ x y)))          ; the splits meet the cancellations
 
+; --- conditional laws: the guard door, open ----------------------------------
+; the division identities need x /= 0, so they fire on nz? -- the "manifestly
+; nonzero" certificate: a value-nonzero ground star (the square-sat test, so
+; a red star certifies), an exp form, a power of one. no certificate, no
+; rewrite: a/a simplifies by PROOF, never by assumption.
+(assert
+ (1 = (simp '(/ 3 3)))                                ; ground nonzero: fires
+ (1 = (simp '(/ -5 -5)))                              ; a red star certifies (the square test)
+ ((simp '(/ x x)) = '(/ x x))                         ; symbolic: x might be 0 -- stays
+ ((simp '(/ 0 0)) = '(/ 0 0))                         ; 0/0 is (): never 1, never 0
+ (1 = (simp '(/ (exp x) (exp x))))                    ; exp is never 0: a structural certificate
+ (0 = (simp '(/ 0 (exp y))))
+ ((simp '(/ 0 x)) = '(/ 0 x))                         ; ... but 0/x stays
+ ((simp '(/ (* x (exp y)) (exp y))) = 'x)             ; cancellation, certified
+ ((simp '(/ (* (exp y) x) (exp y))) = 'x)             ; ... either side
+ ((simp '(/ (* x y) y)) = '(/ (* x y) y))             ; uncertified: stays
+ (1 = (simp `('/ (q 1 2) (q 2 4))))                   ; a coin pair matches by VALUE, nonzero
+ ((simp '(/ (* x (** (exp z) 2)) (** (exp z) 2))) = 'x))  ; nz? climbs the power
+
 ; --- symbolic d: the derivative as a rule set, the guard doing the base case --
 ; (d a v) -> 0 rides the matcher's GUARDED rule (fires only when a is free? of
 ; v); (d a a) -> 1 the nonlinear pattern; sum/product/quotient/chain plain

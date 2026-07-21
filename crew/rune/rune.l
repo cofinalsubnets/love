@@ -169,7 +169,12 @@
 ; --- laws + fold: the shipped simplifier -------------------------------------
 ; `laws` is the core identity table -- units, annihilators, inverses, the
 ; doubling collect, the log/exp cancellations, and the pythagorean identity --
-; every rule shrinking or size-keeping-once, so the fixpoint lands. `xlaws`
+; every rule shrinking or size-keeping-once, so the fixpoint lands. the
+; CONDITIONAL division laws (a/a, 0/a, cancellation) ride guards: nz? is the
+; "manifestly nonzero" certificate -- a value-nonzero ground star (the
+; square-sat test: $(t*t) > 0 forces t /= 0, sound for red stars and blind
+; only toward blue, the safe direction), an exp form (never zero), or a power
+; of one -- so a/a needs a CERTIFICATE, never an assumption: x/x stays. `xlaws`
 ; adds the GROWING rules on top: distribution and the log/exp splits. simp
 ; never expands; `expand` does (each pass pushes a * inside a +, or a log/exp
 ; through its operand, so that fixpoint lands too -- collected on the way).
@@ -181,7 +186,11 @@
 ; folds; (/ 1 2) or 2**-1 as a gem would trade exactness away. `simpw` drives a rule table + fold bottom-up to a
 ; fixpoint, the same shape as rewrite (noms are atoms, never walked into);
 ; simp and expand are its two faces.
-(: laws `((rule '(a) '(+ a 0) 'a)
+(: (nz? t) (? (nom? t) ()
+              (star? t) !(0 = (sat (t * t)))
+              (two? t) (? (<t = 'exp) 1 (<t = '**) (nz? <>t) ())
+              ())
+   laws `((rule '(a) '(+ a 0) 'a)
           (rule '(a) '(+ 0 a) 'a)
           (rule '(a) '(* a 1) 'a)
           (rule '(a) '(* 1 a) 'a)
@@ -190,6 +199,10 @@
           (rule '(a) '(- a 0) 'a)
           (rule '(a) '(- a a) 0)
           (rule '(a) '(/ a 1) 'a)
+          (grule '(a) '(/ a a) 1 nz?)
+          (grule '(a) '(/ 0 a) 0 nz?)
+          (grule '(a b) '(/ (* a b) b) 'a (\ a b (nz? b)))
+          (grule '(a b) '(/ (* b a) b) 'a (\ a b (nz? b)))
           (rule '(a) '(** a 1) 'a)
           (rule '(a) '(** a 0) 1)
           (rule '(a) '(** 1 a) 1)
