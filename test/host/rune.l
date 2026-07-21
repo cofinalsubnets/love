@@ -246,8 +246,28 @@
  ((simp '(sin (+ 0 x))) = '(sin x))                   ; simplifies under any head
  ((simp '(/ x 1)) = 'x)                               ; division simplifies by law...
  ((simp '(/ 1 2)) = '(/ 1 2))                         ; ... but never folds to a gem
- (1 = (simp '(+ (* (sin (+ y 0)) (sin y)) (* (cos y) (cos y))))))  ; the inner fix
+ (1 = (simp '(+ (* (sin (+ y 0)) (sin y)) (* (cos y) (cos y)))))  ; the inner fix
                                                       ; opens pythagoras at the root
+ ((simp '(log (exp x))) = 'x)                         ; the log/exp cancellations...
+ ((simp '(exp (log x))) = 'x)
+ (1 = (simp '(exp 0)))                                ; ... and their ground points
+ (0 = (simp '(log 1)))
+ ((simp '(* x (+ y z))) = '(* x (+ y z))))            ; simp never grows -- expand does
+
+; --- expand: the growing laws -- distribution and the log/exp splits ---------
+; xlaws rides the same driver on top of laws, so every expansion is folded
+; and collected on the way.
+(assert
+ ((expand '(* x (+ y z))) = '(+ (* x y) (* x z)))     ; a * pushes inside a +
+ ((expand '(* (+ x y) z)) = '(+ (* x z) (* y z)))     ; ... either side
+ ((expand '(* (+ x y) (+ x y)))
+  = '(+ (+ (* x x) (* y x)) (+ (* x y) (* y y))))     ; the binomial, all four terms
+ (49 = (expand '(* (+ 3 4) (+ 3 4))))                 ; ground folds before it distributes
+ ((expand '(log (* x y))) = '(+ (log x) (log y)))     ; a log splits a product
+ ((expand '(log (/ (* x y) z))) = '(- (+ (log x) (log y)) (log z)))
+ ((expand '(exp (+ x y))) = '(* (exp x) (exp y)))     ; an exp splits a sum
+ ((expand '(log (* x x))) = '(* 2 (log x)))           ; split, then collect
+ ((expand '(log (exp (+ x y)))) = '(+ x y)))          ; the splits meet the cancellations
 
 ; --- symbolic d: the derivative as a rule set, the guard doing the base case --
 ; (d a v) -> 0 rides the matcher's GUARDED rule (fires only when a is free? of
@@ -264,6 +284,9 @@
  ((deriv '(cos x) 'x) = '(- 0 (sin x)))
  ((deriv '(sin (* 2 x)) 'x) = '(* (cos (* 2 x)) 2))   ; the chain rule
  ((deriv '(/ 1 x) 'x) = '(/ -1 (* x x)))          ; the quotient rule, folded red
+ ((deriv '(exp x) 'x) = '(exp x))                 ; exp is its own derivative
+ ((deriv '(exp (* 2 x)) 'x) = '(* (exp (* 2 x)) 2))
+ ((deriv '(log x) 'x) = '(/ 1 x))
  ((deriv '(f x) 'x) = '(d (f x) x))               ; an unknown derivative stays symbolic
  ((deriv `('+ `('sin 'x) `('* 'x (q 1 2))) 'x) = `('+ '(cos x) (q 1 2)))  ; exact halves ride
  ((simp '(+ z z)) = '(* 2 z))                     ; the collect law that tidies d
@@ -276,6 +299,7 @@
 (: tcorp `('(+ (* 2 x) 1) '(* 2 (+ x 1)) '(- (- 10 4) 3) '(- 10 (- 4 3))
            '(+ (sin x) 1) '(* 2 (sin (+ x 1))) '(f (+ x 1) y) '(+ (f x y) 1)
            '(* (** 2 x) (+ y 1)) `('+ 'x (q 1 2)) '(f (g x) y) '(* (+ a b) (+ c d))
+           '(+ (log x) (* 2 (exp x)))
            (pemit (padd (pmul rx rx) ry) '(x y z))))
 (assert
  ((unfix '(+ (* 2 x) 1)) = '(2 * x + 1))

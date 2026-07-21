@@ -168,14 +168,18 @@
 
 ; --- laws + fold: the shipped simplifier -------------------------------------
 ; `laws` is the core identity table -- units, annihilators, inverses, the
-; doubling collect, and the pythagorean identity -- every rule shrinking or
-; size-keeping-once, so the fixpoint lands.
+; doubling collect, the log/exp cancellations, and the pythagorean identity --
+; every rule shrinking or size-keeping-once, so the fixpoint lands. `xlaws`
+; adds the GROWING rules on top: distribution and the log/exp splits. simp
+; never expands; `expand` does (each pass pushes a * inside a +, or a log/exp
+; through its operand, so that fixpoint lands too -- collected on the way).
 ; fold1 computes a GROUND ring node: (op a b) for op in + - * with both
 ; operands stars (the open star: integers, gems, q coins, poly coins alike)
 ; folds to its value, cnormed so an integer-valued coin lands the integer.
 ; division and powers stay symbolic -- the RING folds; (/ 1 2) as a gem would
-; trade exactness away. `simp` drives laws + fold bottom-up to a fixpoint,
-; the same shape as rewrite (noms are atoms, never walked into).
+; trade exactness away. `simpw` drives a rule table + fold bottom-up to a
+; fixpoint, the same shape as rewrite (noms are atoms, never walked into);
+; simp and expand are its two faces.
 (: laws `((rule '(a) '(+ a 0) 'a)
           (rule '(a) '(+ 0 a) 'a)
           (rule '(a) '(* a 1) 'a)
@@ -187,7 +191,16 @@
           (rule '(a) '(/ a 1) 'a)
           (rule '(a) '(- 0 (- 0 a)) 'a)
           (rule '(a) '(+ a a) '(* 2 a))
+          (rule '(a) '(log (exp a)) 'a)
+          (rule '(a) '(exp (log a)) 'a)
+          (rule () '(exp 0) 1)
+          (rule () '(log 1) 0)
           (rule '(a) '(+ (* (sin a) (sin a)) (* (cos a) (cos a))) 1))
+   xlaws (laws + `((rule '(a b c) '(* a (+ b c)) '(+ (* a b) (* a c)))
+                   (rule '(a b c) '(* (+ a b) c) '(+ (* a c) (* b c)))
+                   (rule '(a b) '(log (* a b)) '(+ (log a) (log b)))
+                   (rule '(a b) '(log (/ a b)) '(- (log a) (log b)))
+                   (rule '(a b) '(exp (+ a b)) '(* (exp a) (exp b)))))
    (fold1 t) (? (nom? t) t
                 !(two? t) t
                 !(3 = tally t) t
@@ -196,15 +209,18 @@
                    ((&& (star? a) (star? b)) ?
                     (cnorm (? (<t = '+) (a + b) (<t = '-) (a - b) (a * b)))
                     t)))
-   (simp t) (: y (? (nom? t) t (two? t) (map simp t) t)
-               z (fold1 (rw1 laws y))
-               (z = y ? y (simp z))))
+   (simpw rs t) (: y (? (nom? t) t (two? t) (map (simpw rs) t) t)
+                   z (fold1 (rw1 rs y))
+                   (z = y ? y (simpw rs z)))
+   (simp t) (simpw laws t)
+   (expand t) (simpw xlaws t))
 
 ; --- symbolic d: the derivative as a rule set --------------------------------
 ; the term head `d` -- (d t v) -- reduces by dlaws: sum/product/quotient rules
-; are plain patterns, (d a a) -> 1 rides the nonlinear pattern, sin/cos carry
-; the chain rule, and the base case is the GUARDED rule: (d a v) -> 0 exactly
-; when a is free? of v -- the guard the matcher grew for it. a head with no
+; are plain patterns, (d a a) -> 1 rides the nonlinear pattern, sin/cos and
+; exp/log carry the chain rule, and the base case is the GUARDED rule:
+; (d a v) -> 0 exactly when a is free? of v -- the guard the matcher grew
+; for it. a head with no
 ; rule keeps its (d ..) term: a derivative rune cannot take stays symbolic,
 ; the honest answer. deriv drives dlaws to a fixpoint and simps the result,
 ; so d(x*x)/dx lands (* 2 x), not (+ (* 1 x) (* x 1)).
@@ -219,7 +235,9 @@
            (rule '(a b v) '(d (* a b) v) '(+ (* (d a v) b) (* a (d b v))))
            (rule '(a b v) '(d (/ a b) v) '(/ (- (* (d a v) b) (* a (d b v))) (* b b)))
            (rule '(a v) '(d (sin a) v) '(* (cos a) (d a v)))
-           (rule '(a v) '(d (cos a) v) '(- 0 (* (sin a) (d a v)))))
+           (rule '(a v) '(d (cos a) v) '(- 0 (* (sin a) (d a v))))
+           (rule '(a v) '(d (exp a) v) '(* (exp a) (d a v)))
+           (rule '(a v) '(d (log a) v) '(/ (d a v) a)))
    (deriv t v) (simp (rewrite dlaws `('d t v))))
 
 ; --- unfix: terms back to the infix surface ----------------------------------
