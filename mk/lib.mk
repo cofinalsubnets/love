@@ -57,6 +57,13 @@ out/lib/arm64.h: crew/holo/arm64.l tools/lcat.l
 	$(lcat_h)
 out/lib/seal.h: crew/holo/seal.l tools/lcat.l
 	$(lcat_h)
+# crew/rune/ the CAS rides the same lcat pipeline for device frontends that
+# bake it behind the egg (port/playdate's workbench). runeseal.h, not seal.h --
+# that name is holo's.
+out/lib/rune.h: crew/rune/rune.l tools/lcat.l
+	$(lcat_h)
+out/lib/runeseal.h: crew/rune/seal.l tools/lcat.l
+	$(lcat_h)
 # love0's sed-wrapped raw source of the same three (no interpreter -- the l reader
 # strips ; comments at read time), baked into the bootstrap so the corpus can test
 # the assembler under BOTH compilers (c0 + the self-hosted ev), like prel/ev/bao.
@@ -136,4 +143,4 @@ out/lib/love_version.h: force_version
 # The lcat'd lib headers (egg.h et al) are PRODUCED BY running love0, so re-lay
 # them whenever love0 changes. (The old "edit a .h => make clean or love0 hangs" gum is
 # cleaned: love0's own objects already depend on $(love_h), so love0 can't go stale.)
-$(lib_h): $(love0)
+$(lib_h) $(holo_h) out/lib/rune.h out/lib/runeseal.h: $(love0)

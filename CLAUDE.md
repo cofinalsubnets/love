@@ -34,7 +34,7 @@
 ;   clean; line-pointed warnings + exit 1 on imbalance (a dropped paren is the classic .l slip, and it
 ;   catches it without a full rebuild). `-w` also strips trailing whitespace. NOT in the test gate.
 ; * C and docs EMBED love the .l sweeps miss -- grep on every rename: host/main.c (s2cl + runner),
-;   port/inle/kmain.c (the K_TEST runner), port/{playdate,rp2040}/main.c (g_evals_ driver strings),
+;   port/inle/kmain.c (the K_TEST runner), port/rp2040/main.c (g_evals_ driver strings), port/playdate/ (main.c + cas.l -- the rune workbench),
 ;   wasm/; and index.html (the static page, style.css beside it) runs live demos as data-run chips --
 ;   its reference section's examples + "; answers" are PROBED against out/host/love, never written
 ;   from memory; re-probe on every rename or semantic change.
