@@ -157,6 +157,36 @@
                                                  ; irreducible cubic, squared linear,
                                                  ; simple linear -- rebuilt exactly
 
+; --- zassenhaus: factorization whole -----------------------------------------
+; rootless remainders of degree 4 up now split into irreducibles: berlekamp
+; mod a good prime, linear hensel to p^K, subset recombination centered
+; symmetrically -- all through the monic reduction, so every candidate
+; divides or dies over Z. pfac is now the COMPLETE factorization over Q.
+(: q1 (padd (pmul gx gx) (gc 1))                 ; x^2+1
+   q2 (padd (pmul gx gx) (gc 2))                 ; x^2+2
+   q3 (padd (pmul gx gx) (padd gx (gc 1)))       ; x^2+x+1
+   q4 (padd (pmul gx gx) (padd (pmul (gc -1) gx) (gc 1)))   ; x^2-x+1
+   x6 (padd (pmul gx (pmul gx (pmul gx (pmul gx (pmul gx gx))))) (gc -1))
+   phi5 (padd (pmul gx (pmul gx (pmul gx gx)))
+              (padd (pmul gx (pmul gx gx)) (padd (pmul gx gx) (padd gx (gc 1))))))
+(assert
+ ((pfac (pmul q1 q2)) = `(q2 q1))                ; a quartic splits into two
+                                                 ; irreducible quadratics -- invisible
+                                                 ; to rational roots, found mod p
+ ((pfac (pmul q3 q4)) = `(q4 q3))                ; x^4+x^2+1, no rational roots at all
+ ((pfac x6) = `(g1 gn q4 q3))                    ; THE flagship: x^6-1 falls to its four
+                                                 ; irreducibles -- roots, then berlekamp
+ ((refac (pfac x6)) = x6)                        ; ... and rebuilds exactly
+ ((pfac (pmul q1 q1)) = `(q1 q1))                ; a squared quadratic rides psff
+ ((pfac phi5) = `(phi5))                         ; the fifth cyclotomic: irreducible
+ ((pfac (padd (pmul gx (pmul gx (pmul gx gx))) (padd gx (gc 1))))
+  = `((padd (pmul gx (pmul gx (pmul gx gx))) (padd gx (gc 1)))))   ; x^4+x+1 too
+ ((pfac (padd (pmul (gc 2) (pmul gx gx)) gx))
+  = `((gc 2) gx (padd gx (gc (q 1 2)))))         ; the zero root keeps x canonical
+ (: bigz (pmul (gc 6) (pmul q1 (pmul q3 g1)))
+    ((refac (pfac bigz)) = bigz)))               ; constant + two quadratics + linear:
+                                                 ; the whole pipeline, rebuilt exact
+
 ; --- Q[x y z]: coefficients are stars -- integers or ratio coins ------------
 ; cnorm keeps them canonical: an integer-VALUED coin demotes to its integer,
 ; so Z[x..] sits inside Q[x..] structurally -- halves that sum whole land
