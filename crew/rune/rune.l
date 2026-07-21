@@ -249,11 +249,18 @@
 ; `laws` is the core identity table -- units, annihilators, inverses, the
 ; doubling collect, the log/exp cancellations, and the pythagorean identity --
 ; every rule shrinking or size-keeping-once, so the fixpoint lands. the
-; CONDITIONAL division laws (a/a, 0/a, cancellation) ride guards: nz? is the
-; "manifestly nonzero" certificate -- a value-nonzero ground star (the
-; square-sat test: $(t*t) > 0 forces t /= 0, sound for red stars and blind
-; only toward blue, the safe direction), an exp form (never zero), or a power
-; of one -- so a/a needs a CERTIFICATE, never an assumption: x/x stays. `xlaws`
+; CONDITIONAL laws (a/a, 0/a, cancellation, sqrt(a^2) -> a) ride guards over
+; the two certifiers, each carrying an ASSUMPTIONS CONTEXT c -- a list of
+; fact terms like ((pos x) (nz n)) -- as their first argument: nzc certifies
+; "nonzero" (a value-nonzero ground star by the square-sat test -- $(t*t) > 0
+; forces t /= 0, sound for red stars and blind only toward blue, the safe
+; direction -- pi/e, an exp form, a power or root or product of nonzeros, or
+; a DECLARED nz/pos/neg fact); posc certifies "positive" (positive ground,
+; pi/e, exp, roots/products/sums of positives, even powers of nonzeros, or a
+; declared pos). nz? is the empty-context face. `glaws` builds the guarded
+; rules over a context; laws = ulaws + (glaws ()), so bare simp certifies
+; only the MANIFEST -- x/x stays -- while (assume c t) simps t with the
+; declared facts in force: (assume '((nz x)) '(/ x x)) is 1. `xlaws`
 ; adds the GROWING rules on top: distribution and the log/exp splits. simp
 ; never expands; `expand` does (each pass pushes a * inside a +, or a log/exp
 ; through its operand, so that fixpoint lands too -- collected on the way).
@@ -267,14 +274,40 @@
 ; keeps its term. `simpw` drives a rule table + fold bottom-up to a
 ; fixpoint, the same shape as rewrite (noms are atoms, never walked into);
 ; simp is its laws face, expand its xlaws face -- through collect (below).
-(: (nz? t) (? (nom? t) (((t = 'pi) || (t = 'e)) ? 1 ())
-              (star? t) !(0 = (sat (t * t)))
-              (two? t) (? (<t = 'exp) 1
-                          (<t = '**) (nz? <>t)
-                          (<t = 'sqrt) (nz? <>t)
-                          ())
-              ())
-   laws `((rule '(a) '(+ a 0) 'a)
+(: (nzc c t) (? (nom? t) (? ((t = 'pi) || (t = 'e)) 1
+                             (member? `('nz t) c) 1
+                             (member? `('pos t) c) 1
+                             (member? `('neg t) c) 1
+                             ())
+                 (star? t) !(0 = (sat (t * t)))
+                 (two? t) (? (<t = 'exp) 1
+                             (<t = '**) (nzc c <>t)
+                             (<t = 'sqrt) (nzc c <>t)
+                             (<t = '*) (&& (nzc c <>t) (nzc c <>(>t)))
+                             ())
+                 ())
+   (nz? t) (nzc () t)
+   (posc c t) (? (nom? t) (? ((t = 'pi) || (t = 'e)) 1
+                             (member? `('pos t) c) 1
+                             ())
+                 (star? t) (0 < t)
+                 (two? t) (? (<t = 'exp) 1
+                             (<t = 'sqrt) (posc c <>t)
+                             (<t = '**)
+                             (? (posc c <>t) 1
+                                (&& (whole? <>(>t)) (0 = (% <>(>t) 2))
+                                    (nzc c <>t)) 1
+                                ())
+                             (<t = '*) (&& (posc c <>t) (posc c <>(>t)))
+                             (<t = '+) (&& (posc c <>t) (posc c <>(>t)))
+                             ())
+                 ())
+   (glaws c) `((grule '(a) '(/ a a) 1 (nzc c))
+               (grule '(a) '(/ 0 a) 0 (nzc c))
+               (grule '(a b) '(/ (* a b) b) 'a (\ a b (nzc c b)))
+               (grule '(a b) '(/ (* b a) b) 'a (\ a b (nzc c b)))
+               (grule '(a) '(sqrt (** a 2)) 'a (posc c)))
+   ulaws `((rule '(a) '(+ a 0) 'a)
           (rule '(a) '(+ 0 a) 'a)
           (rule '(a) '(* a 1) 'a)
           (rule '(a) '(* 1 a) 'a)
@@ -283,10 +316,6 @@
           (rule '(a) '(- a 0) 'a)
           (rule '(a) '(- a a) 0)
           (rule '(a) '(/ a 1) 'a)
-          (grule '(a) '(/ a a) 1 nz?)
-          (grule '(a) '(/ 0 a) 0 nz?)
-          (grule '(a b) '(/ (* a b) b) 'a (\ a b (nz? b)))
-          (grule '(a b) '(/ (* b a) b) 'a (\ a b (nz? b)))
           (rule '(a) '(** a 1) 'a)
           (rule '(a) '(** a 0) 1)
           (rule '(a) '(** 1 a) 1)
@@ -337,6 +366,7 @@
           (rule '(a) '(+ (* (sin a) (sin a)) (* (cos a) (cos a))) 1)
           (rule '(a) '(+ (** (sin a) 2) (** (cos a) 2)) 1)
           (rule '(a) '(+ (** (cos a) 2) (** (sin a) 2)) 1))
+   laws (ulaws + (glaws ()))
    xlaws (laws + `((rule '(a b c) '(* a (+ b c)) '(+ (* a b) (* a c)))
                    (rule '(a b c) '(* (+ a b) c) '(+ (* a c) (* b c)))
                    (rule '(a b c) '(* a (- b c)) '(- (* a b) (* a c)))
@@ -375,7 +405,8 @@
    (simpw rs t) (: y (? (nom? t) t (two? t) (map (simpw rs) t) t)
                    z (fold1 (rw1 rs y))
                    (z = y ? y (simpw rs z)))
-   (simp t) (simpw laws t))
+   (simp t) (simpw laws t)
+   (assume c t) (simpw (ulaws + (glaws c)) t))
 
 ; --- collect: the commutative collect -----------------------------------------
 ; + and * are commutative and associative, and - is + wearing a sign, so

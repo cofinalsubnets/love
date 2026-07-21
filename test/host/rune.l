@@ -471,6 +471,30 @@
  (1 = (simp `('/ (q 1 2) (q 2 4))))                   ; a coin pair matches by VALUE, nonzero
  ((simp '(/ (* x (** (exp z) 2)) (** (exp z) 2))) = 'x))  ; nz? climbs the power
 
+; --- assume: the assumptions context -----------------------------------------
+; a context is a list of FACT TERMS -- (pos x), (neg x), (nz x) -- and
+; (assume c t) simps t with those facts in force: the guarded laws build
+; over context-aware certifiers (nzc, posc), so a declared fact certifies
+; what the bare term cannot. simp stays assume-nothing.
+(assert
+ (1 = (assume '((nz x)) '(/ x x)))                    ; the declared fact certifies
+ (1 = (assume '((pos x)) '(/ x x)))                   ; positive is nonzero
+ (1 = (assume '((neg x)) '(/ x x)))                   ; ... and so is negative
+ ((assume '((nz y)) '(/ x x)) = '(/ x x))             ; a fact about y says nothing of x
+ ((assume '((nz x)) '(/ (* y x) x)) = 'y)             ; cancellation under the fact
+ ((assume '((pos x) (pos y)) '(/ (* z (* x y)) (* x y)))
+  = 'z)                                               ; a product of declared positives
+ (0 = (assume '((nz x)) '(/ 0 (* x (exp y)))))        ; ... facts and structure compose
+ ((assume '((pos x)) '(sqrt (** x 2))) = 'x)          ; |x| collapses under positivity
+ ((assume '((neg x)) '(sqrt (** x 2)))
+  = '(sqrt (** x 2)))                                 ; ... but NOT under negativity:
+                                                      ; sqrt(x^2) is -x there, so posc
+                                                      ; guards where nzc must not
+ ((simp '(sqrt (** x 2))) = '(sqrt (** x 2)))         ; bare: x may be red -- stays
+ ((simp '(sqrt (** (exp y) 2))) = '(exp y))           ; manifest positivity needs no fact
+ ((simp '(sqrt (** pi 2))) = 'pi)
+ ((assume () '(/ x x)) = '(/ x x)))                   ; the empty context IS simp
+
 ; --- symbolic d: the derivative as a rule set, the guard doing the base case --
 ; (d a v) -> 0 rides the matcher's GUARDED rule (fires only when a is free? of
 ; v); (d a a) -> 1 the nonlinear pattern; sum/product/quotient/chain plain
