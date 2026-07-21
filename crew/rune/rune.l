@@ -173,11 +173,12 @@
 ; adds the GROWING rules on top: distribution and the log/exp splits. simp
 ; never expands; `expand` does (each pass pushes a * inside a +, or a log/exp
 ; through its operand, so that fixpoint lands too -- collected on the way).
-; fold1 computes a GROUND ring node: (op a b) for op in + - * with both
+; fold1 computes a GROUND ring node: (op a b) for op in + - * ** with both
 ; operands stars (the open star: integers, gems, q coins, poly coins alike)
 ; folds to its value, cnormed so an integer-valued coin lands the integer.
-; division and powers stay symbolic -- the RING folds; (/ 1 2) as a gem would
-; trade exactness away. `simpw` drives a rule table + fold bottom-up to a
+; a power folds by APPLICATION -- (b a) is a**b -- on a whole nonnegative
+; exponent only; division and negative exponents stay symbolic -- the RING
+; folds; (/ 1 2) or 2**-1 as a gem would trade exactness away. `simpw` drives a rule table + fold bottom-up to a
 ; fixpoint, the same shape as rewrite (noms are atoms, never walked into);
 ; simp and expand are its two faces.
 (: laws `((rule '(a) '(+ a 0) 'a)
@@ -189,6 +190,9 @@
           (rule '(a) '(- a 0) 'a)
           (rule '(a) '(- a a) 0)
           (rule '(a) '(/ a 1) 'a)
+          (rule '(a) '(** a 1) 'a)
+          (rule '(a) '(** a 0) 1)
+          (rule '(a) '(** 1 a) 1)
           (rule '(a) '(- 0 (- 0 a)) 'a)
           (rule '(a) '(+ a a) '(* 2 a))
           (rule '(a) '(log (exp a)) 'a)
@@ -200,15 +204,16 @@
                    (rule '(a b c) '(* (+ a b) c) '(+ (* a c) (* b c)))
                    (rule '(a b) '(log (* a b)) '(+ (log a) (log b)))
                    (rule '(a b) '(log (/ a b)) '(- (log a) (log b)))
+                   (rule '(a b) '(log (** a b)) '(* b (log a)))
                    (rule '(a b) '(exp (+ a b)) '(* (exp a) (exp b)))))
    (fold1 t) (? (nom? t) t
                 !(two? t) t
                 !(3 = tally t) t
-                !(member? <t '(+ - *)) t
+                !(member? <t '(+ - * **)) t
                 (: a <>t b <>(>t)
-                   ((&& (star? a) (star? b)) ?
-                    (cnorm (? (<t = '+) (a + b) (<t = '-) (a - b) (a * b)))
-                    t)))
+                   (? !(&& (star? a) (star? b)) t
+                      (<t = '**) ((&& (whole? b) (0 <= b)) ? (cnorm (b a)) t)
+                      (cnorm (? (<t = '+) (a + b) (<t = '-) (a - b) (a * b))))))
    (simpw rs t) (: y (? (nom? t) t (two? t) (map (simpw rs) t) t)
                    z (fold1 (rw1 rs y))
                    (z = y ? y (simpw rs z)))
@@ -218,9 +223,10 @@
 ; --- symbolic d: the derivative as a rule set --------------------------------
 ; the term head `d` -- (d t v) -- reduces by dlaws: sum/product/quotient rules
 ; are plain patterns, (d a a) -> 1 rides the nonlinear pattern, sin/cos and
-; exp/log carry the chain rule, and the base case is the GUARDED rule:
-; (d a v) -> 0 exactly when a is free? of v -- the guard the matcher grew
-; for it. a head with no
+; exp/log carry the chain rule, the power rule guards on a CONSTANT exponent
+; (free? n v -- a symbolic exponent needs the log bridge and stays), and the
+; base case is the GUARDED rule: (d a v) -> 0 exactly when a is free? of v
+; -- the guard the matcher grew for it. a head with no
 ; rule keeps its (d ..) term: a derivative rune cannot take stays symbolic,
 ; the honest answer. deriv drives dlaws to a fixpoint and simps the result,
 ; so d(x*x)/dx lands (* 2 x), not (+ (* 1 x) (* x 1)).
@@ -234,6 +240,8 @@
            (rule '(a b v) '(d (- a b) v) '(- (d a v) (d b v)))
            (rule '(a b v) '(d (* a b) v) '(+ (* (d a v) b) (* a (d b v))))
            (rule '(a b v) '(d (/ a b) v) '(/ (- (* (d a v) b) (* a (d b v))) (* b b)))
+           (grule '(a n v) '(d (** a n) v) '(* n (* (** a (- n 1)) (d a v)))
+                  (\ a n v (free? n v)))
            (rule '(a v) '(d (sin a) v) '(* (cos a) (d a v)))
            (rule '(a v) '(d (cos a) v) '(- 0 (* (sin a) (d a v))))
            (rule '(a v) '(d (exp a) v) '(* (exp a) (d a v)))

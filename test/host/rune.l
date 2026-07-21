@@ -252,7 +252,15 @@
  ((simp '(exp (log x))) = 'x)
  (1 = (simp '(exp 0)))                                ; ... and their ground points
  (0 = (simp '(log 1)))
- ((simp '(* x (+ y z))) = '(* x (+ y z))))            ; simp never grows -- expand does
+ ((simp '(* x (+ y z))) = '(* x (+ y z)))             ; simp never grows -- expand does
+ (8 = (simp '(** 2 3)))                               ; a ground power folds by application...
+ ((simp `('** (q 1 2) 2)) = (q 1 4))                  ; ... exactly, through the die
+ ((simp '(** x 1)) = 'x)                              ; the power units
+ (1 = (simp '(** x 0)))
+ (1 = (simp '(** 1 x)))
+ ((simp '(** x 2)) = '(** x 2))                       ; a symbolic base stays
+ ((simp '(** 2 -1)) = '(** 2 -1)))                    ; a negative exponent never folds:
+                                                      ; a gem would trade exactness away
 
 ; --- expand: the growing laws -- distribution and the log/exp splits ---------
 ; xlaws rides the same driver on top of laws, so every expansion is folded
@@ -266,6 +274,7 @@
  ((expand '(log (* x y))) = '(+ (log x) (log y)))     ; a log splits a product
  ((expand '(log (/ (* x y) z))) = '(- (+ (log x) (log y)) (log z)))
  ((expand '(exp (+ x y))) = '(* (exp x) (exp y)))     ; an exp splits a sum
+ ((expand '(log (** x y))) = '(* y (log x)))          ; ... and drops a power
  ((expand '(log (* x x))) = '(* 2 (log x)))           ; split, then collect
  ((expand '(log (exp (+ x y)))) = '(+ x y)))          ; the splits meet the cancellations
 
@@ -287,6 +296,10 @@
  ((deriv '(exp x) 'x) = '(exp x))                 ; exp is its own derivative
  ((deriv '(exp (* 2 x)) 'x) = '(* (exp (* 2 x)) 2))
  ((deriv '(log x) 'x) = '(/ 1 x))
+ ((deriv '(** x 3) 'x) = '(* 3 (** x 2)))         ; the power rule
+ ((deriv '(** (sin x) 2) 'x) = '(* 2 (* (sin x) (cos x))))   ; ... with the chain
+ ((deriv '(** x x) 'x) = '(d (** x x) x))         ; a symbolic exponent fails the
+                                                  ; guard and stays, honestly
  ((deriv '(f x) 'x) = '(d (f x) x))               ; an unknown derivative stays symbolic
  ((deriv `('+ `('sin 'x) `('* 'x (q 1 2))) 'x) = `('+ '(cos x) (q 1 2)))  ; exact halves ride
  ((simp '(+ z z)) = '(* 2 z))                     ; the collect law that tidies d
