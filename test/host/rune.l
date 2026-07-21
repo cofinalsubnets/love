@@ -187,11 +187,15 @@
     ((refac (pfac bigz)) = bigz)))               ; constant + two quadratics + linear:
                                                  ; the whole pipeline, rebuilt exact
 
-; --- bivariate factorization: monic in x, hensel in y ------------------------
-; pfac dispatches on arity: an arity-2 poly MONIC IN X factors by evaluation
-; at a good point, the univariate pipeline on the image, and a hensel lift in
-; powers of y -- the same zassenhaus shape with the prime replaced by the
-; point. anything not monic-in-x is honestly kept whole.
+; --- bivariate factorization: hensel in y, the lead distributed --------------
+; pfac dispatches on arity: an arity-2 poly factors by evaluation at a good
+; point, the univariate pipeline on the image, and a hensel lift in powers
+; of y -- the same zassenhaus shape with the prime replaced by the point. a
+; POLYNOMIAL lead rides the same monic reduction as an integer one, a level
+; up: F(z y) = L^(n-1) f(z/L y) is monic in z, and factors map back through
+; z -> Lx and the y-content. the x-content factors in Q[y] (recursing into
+; pfac), pure-y polys route univariate, and one leading constant squares
+; the product exactly.
 (: bx (pvar 2 0)
    by (pvar 2 1)
    (bc c) (pconst 2 c)
@@ -210,11 +214,27 @@
  ((pfac (pmul bq b1)) = `(bq b1))                ; degree 2 meets degree 1
  ((pfac (padd (pmul bx bx) (pmul by by)))
   = `((padd (pmul bx bx) (pmul by by))))         ; x^2+y^2: irreducible over Q
- ((pfac (pmul by bx)) = `((pmul bx by)))         ; NOT monic in x: honestly whole
  ((refac2 (pfac (pmul bq (pmul b1 (pmul b1 b3)))))
-  = (pmul bq (pmul b1 (pmul b1 b3)))))           ; the reconstruction law, bivariate:
+  = (pmul bq (pmul b1 (pmul b1 b3))))            ; the reconstruction law, bivariate:
                                                  ; irreducible quadratic, squared
                                                  ; linear, y^2 linear -- exact
+ (: byx1 (padd (pmul by bx) (bc 1))              ; yx+1: the POLYNOMIAL lead
+    ((pfac (pmul byx1 b1)) = `(byx1 b1)))        ; THE lc-distribution case: the y
+                                                 ; lead lands on its own factor
+ (: byx1 (padd (pmul by bx) (bc 1))
+    ((pfac (pmul byx1 byx1)) = `(byx1 byx1)))    ; ... squared, through msff
+ ((pfac (padd (pmul by bx) (bc 1)))
+  = `((padd (pmul by bx) (bc 1))))               ; yx+1 alone: irreducible
+ ((pfac (pmul by bx)) = `(by bx))                ; the x-content splits off: xy = y * x
+ ((pfac (pmul by b2)) = `(by b2))                ; ... and carries its cofactor
+ ((pfac (psub (pmul by by) (bc 1)))
+  = `((padd by (bc 1)) (psub by (bc 1))))        ; a pure-y poly routes univariate
+ ((pfac (pmul (bc 2) (pmul (padd (pmul (bc 2) bx) by) b2)))
+  = `((bc 4) b2 (padd bx (pmul (bc (q 1 2)) by))))   ; a constant lead normalizes
+                                                 ; monic, the 4 squares the product
+ (: bigl (pmul by (pmul (padd (pmul by bx) (bc 1)) (pmul b1 b1)))
+    ((refac2 (pfac bigl)) = bigl)))              ; y-content + poly lead + squared
+                                                 ; linear: rebuilt exactly
 
 ; --- Q[x y z]: coefficients are stars -- integers or ratio coins ------------
 ; cnorm keeps them canonical: an integer-VALUED coin demotes to its integer,
