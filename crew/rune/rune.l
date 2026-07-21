@@ -119,6 +119,40 @@
    (snocl l x) (? (0 = tally l) (link x ()) (link (cap l) (snocl (cup l) x)))
    (pfn p syms) (ev (link '\ (snocl syms (pemit p syms)))))
 
+; --- the matcher: rules over terms, riding the kanren unifier ---------------
+; a TERM is core source -- a star, a symbol, or a folded dyadic form ('+ a b),
+; exactly what pemit renders and ev compiles -- so the rewrite layer and the
+; eval bridge share one term language. a PATTERN is a term with kanren logic
+; vars at the open positions, and `unify` (the compiler-grade core; the
+; relational rewrite layer it was kept public for) does the matching: one var
+; shared across two positions is a NONLINEAR pattern -- (- a a) matches only
+; when both sides agree, structurally, coins by value -- at no extra cost.
+; `rule` compiles the readable (vars pat tpl) triple: each named symbol in vs
+; becomes ONE var shared across both halves. `match` answers the binding, or
+; () on a miss -- a var-less hit is the EMPTY binding, whose truth is blue,
+; so test a miss against (), never with ! alone. `sew` fills a template under
+; a binding. `rewrite` drives a rule list bottom-up to a fixpoint (rw1 tries
+; the rules once, at the root); termination is the rule set's burden. a named
+; symbol is a (name . mint) chain -- the SAME shape as a var -- so mark and
+; rewrite treat noms as atoms, never walking into them.
+(: sew (kanren 'subst)
+   mnil (kanren 'empty_dict)
+   (match p x) (: r (unify mnil p x) (? (ufail? r) () r))
+   (vlook v ps) (? (0 = tally ps) ()
+                   ((cap (cap ps)) = v) (cup (cap ps))
+                   (vlook v (cup ps)))
+   (mark ps t) (? (nom? t) (: w (vlook t ps) (? (nil? w) t w))
+                  (two? t) (link (mark ps (cap t)) (mark ps (cup t)))
+                  t)
+   (rule vs pat tpl) (: ps (map (\ s (link s (var s))) vs)
+                        (link (mark ps pat) (mark ps tpl)))
+   (rw1 rs x) (? (0 = tally rs) x
+                 (: r (unify mnil (cap (cap rs)) x)
+                    (? (ufail? r) (rw1 (cup rs) x) (sew r (cup (cap rs))))))
+   (rewrite rs x) (: y (? (nom? x) x (two? x) (map (rewrite rs) x) x)
+                     z (rw1 rs y)
+                     (? (z = y) y (rewrite rs z))))
+
 ; --- the field Q[x]/(m) ----------------------------------------------------
 (: (vmax a b) (? (a < b) b a)
    (vpad v n) (? (n = 0) ()

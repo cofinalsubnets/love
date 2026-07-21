@@ -197,4 +197,32 @@
  ((q -1 4) = (eF1 1 (q -3 2) (q 13 2)))    ; compiled F1 at the collision point
  ((q 0 1) = (eF3 1 (q -3 2) (q 13 2))))    ; compiled F3 there: exactly zero
 
+; --- the matcher: laws as data, rewritten to a fixpoint ----------------------
+; patterns are terms with kanren vars; unify matches, so a var shared across
+; positions is a nonlinear pattern, and a coin literal matches by VALUE. the
+; term language is pemit's own, so rules rewrite compiled-poly source too.
+(: simp `((rule '(a) '(+ a 0) 'a)
+          (rule '(a) '(+ 0 a) 'a)
+          (rule '(a) '(* a 1) 'a)
+          (rule '(a) '(* 1 a) 'a)
+          (rule '(a) '(* a 0) 0)
+          (rule '(a) '(* 0 a) 0)
+          (rule '(a) '(- a a) 0)
+          (rule '(a) '(+ (* (sin a) (sin a)) (* (cos a) (cos a))) 1))
+   dbl (rule '(a) '(+ a a) '(* 2 a))
+   hlf (rule '(a) `('* 'a (q 1 2)) `('/ 'a 2)))
+(assert
+ ((rewrite simp '(+ x 0)) = 'x)
+ ((rewrite simp '(* (+ x 0) 1)) = 'x)                    ; inner rewrite feeds the root
+ ((rewrite simp '(+ (* x 0) (* 1 y))) = 'y)              ; two rules meet at the root
+ ((rewrite simp '(sin (* x 0))) = '(sin 0))              ; rewrites under ANY head
+ ((rewrite simp '(- (+ x y) (+ x y))) = 0)               ; NONLINEAR: one var, two positions
+ ((rewrite simp '(- (+ x y) (+ x z))) = '(- (+ x y) (+ x z)))   ; ... agree, or no match
+ ((rewrite simp '(+ (* (sin t) (sin t)) (* (cos t) (cos t)))) = 1)  ; pythagoras, structurally
+ ((match '(+ 1 2) '(+ 1 3)) = ())                        ; a miss is ()
+ ((rw1 `(dbl) '(+ (sin u) (sin u))) = '(* 2 (sin u)))    ; the bound var fills the template
+ ((rw1 `(hlf) `('* 'z (q 2 4))) = '(/ z 2))              ; a coin literal matches by VALUE
+ ((rw1 `((rule '(a b) '(+ a b) '(+ b a))) (pemit (padd rx ry) '(x y z)))
+  = '(+ y x)))                                           ; terms ARE pemit's language
+
 (puts "rune: ok")
