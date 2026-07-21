@@ -56,7 +56,7 @@
               "  d/dv g          = " + (show (unfix (deriv '(/ (* v x) x) 'v))) + "\n" +
               "  with ((nz x))   = " + (show (unfix (derivc '((nz x)) '(/ (* v x) x) 'v))) + "\n")
    (page ci n dc fv) (: c (card ci n)
-      hd ("rune -- exact algebra in love       [" + (show (ci + 1)) + "/" + (show NC) + "]\n" +
+      hd ("rune                                         [" + (show (ci + 1)) + "/" + (show NC) + "]\n" +
           "==================================================\n" +
           "n = " + (show n) + "\n\n")
       bd (? (c 'as) (astxt ())
