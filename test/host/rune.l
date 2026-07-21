@@ -187,6 +187,35 @@
     ((refac (pfac bigz)) = bigz)))               ; constant + two quadratics + linear:
                                                  ; the whole pipeline, rebuilt exact
 
+; --- bivariate factorization: monic in x, hensel in y ------------------------
+; pfac dispatches on arity: an arity-2 poly MONIC IN X factors by evaluation
+; at a good point, the univariate pipeline on the image, and a hensel lift in
+; powers of y -- the same zassenhaus shape with the prime replaced by the
+; point. anything not monic-in-x is honestly kept whole.
+(: bx (pvar 2 0)
+   by (pvar 2 1)
+   (bc c) (pconst 2 c)
+   b1 (padd bx by)                               ; x+y
+   b2 (padd bx (bc 1))                           ; x+1
+   b3 (padd bx (pmul by by))                     ; x+y^2
+   bq (padd (pmul bx bx) (padd by (bc 1)))       ; x^2+y+1
+   (refac2 fs) (? (0 = tally fs) (bc 1) (pmul <fs (refac2 >fs))))
+(assert
+ ((pfac (psub (pmul bx bx) (pmul by by)))
+  = `((psub bx by) b1))                          ; THE classic: x^2-y^2 = (x-y)(x+y)
+ ((pfac (pmul b1 b2)) = `(b2 b1))                ; a mixed pair splits
+ ((pfac (pmul b1 b3)) = `(b1 b3))                ; ... and a y^2 coefficient rides
+ ((pfac (pmul b1 b1)) = `(b1 b1))                ; multiplicity via msff, no 1 fillers
+ ((pfac bq) = `(bq))                             ; x^2+y+1: irreducible, kept
+ ((pfac (pmul bq b1)) = `(bq b1))                ; degree 2 meets degree 1
+ ((pfac (padd (pmul bx bx) (pmul by by)))
+  = `((padd (pmul bx bx) (pmul by by))))         ; x^2+y^2: irreducible over Q
+ ((pfac (pmul by bx)) = `((pmul bx by)))         ; NOT monic in x: honestly whole
+ ((refac2 (pfac (pmul bq (pmul b1 (pmul b1 b3)))))
+  = (pmul bq (pmul b1 (pmul b1 b3)))))           ; the reconstruction law, bivariate:
+                                                 ; irreducible quadratic, squared
+                                                 ; linear, y^2 linear -- exact
+
 ; --- Q[x y z]: coefficients are stars -- integers or ratio coins ------------
 ; cnorm keeps them canonical: an integer-VALUED coin demotes to its integer,
 ; so Z[x..] sits inside Q[x..] structurally -- halves that sum whole land
