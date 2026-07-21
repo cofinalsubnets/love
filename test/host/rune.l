@@ -236,6 +236,39 @@
     ((refac2 (pfac bigl)) = bigl)))              ; y-content + poly lead + squared
                                                  ; linear: rebuilt exactly
 
+; --- n variables: kronecker packs onto the bivariate engine ------------------
+; the last variable packs into the one before (y -> Y^D, z -> Y: injective
+; below D, lex-order-preserving), n variables fold to two, the bivariate
+; engine factors the image, and subsets recombine -- unpacked products
+; guarded by the pack round-trip, certified by exact division. pfac now
+; factors ANY arity.
+(: tcx (pvar 3 0)
+   tcy (pvar 3 1)
+   tcz (pvar 3 2)
+   (tcc c) (pconst 3 c)
+   t1 (padd tcx (padd tcy tcz))                  ; x+y+z
+   t2 (padd tcx (pmul tcy tcz))                  ; x+yz
+   (refac3 fs) (? (0 = tally fs) (tcc 1) (pmul <fs (refac3 >fs))))
+(assert
+ ((pfac (pmul t1 t2)) = `(t1 t2))                ; THE trivariate flagship:
+                                                 ; (x+y+z)(x+yz), split exactly
+ ((refac3 (pfac (pmul t1 t2))) = (pmul t1 t2))
+ ((pfac (pmul t1 t1)) = `(t1 t1))                ; multiplicity across the pack
+ ((pfac (padd (pmul tcx tcx) (padd (pmul tcy tcy) (pmul tcz tcz))))
+  = `((padd (pmul tcx tcx) (padd (pmul tcy tcy) (pmul tcz tcz)))))
+                                                 ; x^2+y^2+z^2: irreducible, kept
+ ((pfac (psub (pmul tcx tcx) (pmul tcz tcz)))
+  = `((padd tcx tcz) (psub tcx tcz)))            ; x^2-z^2 splits across the pack
+ ((pfac (pmul tcy (pmul tcz t1)))
+  = `(tcy t1 tcz))                               ; monomial content splits off
+ ((refac3 (pfac (pmul (tcc 3) (pmul t2 (pmul t1 t1)))))
+  = (pmul (tcc 3) (pmul t2 (pmul t1 t1))))       ; constant + squared + poly-lead:
+                                                 ; the reconstruction law, trivariate
+ (: dx (pvar 4 0) dy (pvar 4 1) dz (pvar 4 2) dw (pvar 4 3)
+    ((pfac (pmul (padd dx dw) (padd dx (padd dy dz))))
+     = `((padd dx dw) (padd dx (padd dy dz))))))  ; FOUR variables: the pack recurses,
+                                                 ; two folds down to the same engine
+
 ; --- Q[x y z]: coefficients are stars -- integers or ratio coins ------------
 ; cnorm keeps them canonical: an integer-VALUED coin demotes to its integer,
 ; so Z[x..] sits inside Q[x..] structurally -- halves that sum whole land

@@ -542,11 +542,69 @@
                 all (yfs + (go 1 (msff pp)))
                 cst (cnorm ((mco <x) * (cinv (lcs all))))
                 ((cst = 1) ? all (link (pconst 2 cst) all)))
+; --- n variables: kronecker packs onto the bivariate engine ------------------
+; the last rung. vpack folds the LAST variable into the one before it --
+; the substitution y -> Y^D, z -> Y with D past the last variable's degree,
+; a ring homomorphism whose exponent map e*D + e' is INJECTIVE below D and
+; ORDER-PRESERVING on lex keys, so the packed poly is canonical as it
+; stands. n variables pack down to two, the bivariate engine factors the
+; image whole (recursively through pfac), and subsets of image factors
+; recombine: a candidate is the UNPACKED subset product, guarded by the
+; pack ROUND-TRIP (a true factor's product never carries past D, and the
+; guard turns carry accidents into clean misses), then certified by mdm --
+; multivariate lex division with remainder, safe on any divisor. hits
+; divide out and the search restarts; the residual is a factor too. one
+; leading constant squares the product, as everywhere. this trades eez's
+; staged lifting for degree growth in the image -- exact and complete
+; either way, and the honest choice at this scale.
+   (mrg D k) (? (0 = tally >(>k)) `(((<k * D) + <>k))
+                (link <k (mrg D >k)))
+   (vpack x D) (map (\ m2 (link (mco m2) (mrg D (mkey m2)))) x)
+   (vunpk g D) (map (\ m2 (: (go l) (? (0 = tally >l)
+                                       `((cnorm (q (<l - (% <l D)) D)) (% <l D))
+                                       (link <l (go >l)))
+                             (link (mco m2) (go (mkey m2)))))
+                    g)
+   (lastk k) (? (0 = tally >k) <k (lastk >k))
+   (mdeglast x) (: (go l m2) (? (0 = tally l) m2
+                                (: e (lastk (mkey <l))
+                                   (go >l ((m2 < e) ? e m2))))
+                   (go x 0))
+   (kz1? x) (&& (1 = tally x) (0 = (net (mkey <x))))
+   (kge a b) (? (0 = tally a) 1 ((<a < <b) ? () (kge >a >b)))
+   (mdm f d) (: (go u qq rr)
+                (? (0 = tally u) `(qq rr)
+                   (kge (mkey <u) (mkey <d))
+                   (: t2 `((link (cnorm ((mco <u) * (cinv (mco <d))))
+                                 (ksub (mkey <u) (mkey <d))))
+                      (go (psub u (pmul t2 d)) (padd t2 qq) rr))
+                   (go >u qq (padd `((link (mco <u) (mkey <u))) rr)))
+                (go f () ()))
+   (mprod l) (? (1 = tally l) <l (pmul <l (mprod >l)))
+   (nrec s D x ls acc)
+   (? ((s + s) > (tally ls)) ((kz1? x) ? acc (link (pmonic x) acc))
+      (: (try cs) (? (0 = tally cs) ()
+                     (: pp (mprod <cs)
+                        cand (vunpk pp D)
+                        (? !((vpack cand D) = pp) (try >cs)
+                           (: dm (mdm x cand)
+                              ((0 = (tally <>dm)) ? `(cand <cs <dm)
+                                 (try >cs))))))
+         h (try (combs s ls))
+         (? (0 = tally h) (nrec (s + 1) D x ls acc)
+            (nrec 1 D <>(>h) (lminus ls <>h) (link <h acc)))))
+   (mfacn x) (: D ((mdeglast x) + 1)
+                fs (pfac (vpack x D))
+                out (nrec 1 D x (filter (\ g !(kz1? g)) fs) ())
+                cst (cnorm ((mco <x) * (cinv (lcs out))))
+                ((cst = 1) ? out
+                   (link (pconst (tally (mkey <x)) cst) out)))
    (pfac p2) (: x (load p2)
                 (? (0 = tally x) ()
                    (1 = (tally (mkey <x)))
                    ((0 = (pdeg x)) ? `(x) (ufac x))
-                   !(2 = (tally (mkey <x))) `(x)
+                   !(2 = (tally (mkey <x)))
+                   ((kz1? x) ? `(x) (mfacn x))
                    (&& (0 = (pdeg x)) (0 = (mdegy x))) `(x)
                    (0 = (pdeg x)) (map a1y2 (pfac (a2y1 x)))
                    (bfac2 x))))
