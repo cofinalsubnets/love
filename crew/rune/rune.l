@@ -20,48 +20,48 @@
 ; so reduction folds top powers down with no division anywhere.
 
 ; --- the polynomial ring ---------------------------------------------------
-(: (mco m) (cap m)
-   (mkey m) (cup m)
-   (cnorm c) (? (coin? c) (: p (load c) (? (1 = (caup p)) (cap p) c)) c)
+(: (mco m) <m
+   (mkey m) >m
+   (cnorm c) (coin? c ? (: p (load c) (1 = <>p ? <p c)) c)
    (keylt a b) (? (0 = tally a) 0
-                  ((cap a) < (cap b)) 1
-                  ((cap b) < (cap a)) 0
-                  (keylt (cup a) (cup b)))
+                  (<a < <b) 1
+                  (<b < <a) 0
+                  (keylt >a >b))
    (padd p1 p2) (? (0 = tally p1) p2
                    (0 = tally p2) p1
-                   (: mp (cap p1) mq (cap p2)
-                      (? ((mkey mp) = (mkey mq))
-                         (: c (cnorm ((mco mp) + (mco mq))) r (padd (cup p1) (cup p2))
-                            (? (c = 0) r (link (link c (mkey mp)) r)))
+                   (: mp <p1 mq <p2
+                      (? (mkey mp = mkey mq)
+                         (: c (cnorm (mco mp + mco mq)) r (padd >p1 >p2)
+                            (c = 0 ? r (link (link c (mkey mp)) r)))
                          (keylt (mkey mq) (mkey mp))
-                         (link mp (padd (cup p1) p2))
-                         (link mq (padd p1 (cup p2))))))
-   (pneg p) (map (\ mm (link (0 - (mco mm)) (mkey mm))) p)
+                         (link mp (padd >p1 p2))
+                         (link mq (padd p1 >p2)))))
+   (pneg p) (map (\ mm (link (0 - mco mm) (mkey mm))) p)
    (psub p1 p2) (padd p1 (pneg p2))
-   (zadd a b) (? (0 = tally a) () (link ((cap a) + (cap b)) (zadd (cup a) (cup b))))
-   (mmul a b) (link (cnorm ((mco a) * (mco b))) (zadd (mkey a) (mkey b)))
-   (mrow a p2) (? (0 = tally p2) () (link (mmul a (cap p2)) (mrow a (cup p2))))
-   (pmul p1 p2) (? (0 = tally p1) () (padd (mrow (cap p1) p2) (pmul (cup p1) p2)))
-   (nth l n) (? (n = 0) (cap l) (nth (cup l) (n - 1)))
-   (setn l n x) (? (n = 0) (link x (cup l)) (link (cap l) (setn (cup l) (n - 1) x)))
-   (deln l n) (? (n = 0) (cup l) (link (cap l) (deln (cup l) (n - 1))))
-   (zeros n) (? (n = 0) () (link 0 (zeros (n - 1))))
-   (pconst n c) (: k (cnorm c) (? (k = 0) () `((link k (zeros n)))))
+   (zadd a b) (0 = tally a ? () (link (<a + <b) (zadd >a >b)))
+   (mmul a b) (link (cnorm (mco a * mco b)) (zadd (mkey a) (mkey b)))
+   (mrow a p2) (0 = tally p2 ? () (link (mmul a <p2) (mrow a >p2)))
+   (pmul p1 p2) (0 = tally p1 ? () (padd (mrow <p1 p2) (pmul >p1 p2)))
+   (nth l n) (n = 0 ? <l (nth >l (n - 1)))
+   (setn l n x) (n = 0 ? (link x >l) (link <l (setn >l (n - 1) x)))
+   (deln l n) (n = 0 ? >l (link <l (deln >l (n - 1))))
+   (zeros n) (n = 0 ? () (link 0 (zeros (n - 1))))
+   (pconst n c) (: k (cnorm c) (k = 0 ? () `((link k (zeros n)))))
    (pvar n k) `((link 1 (setn (zeros n) k 1))))
 
 ; --- the derivative and the determinant ------------------------------------
 ; pd differentiates monomial by monomial (padd of singletons keeps the
 ; canonical order); pdet expands along the first row, minors by deln.
 (: (pd p v) (? (0 = tally p) ()
-               (: mm (cap p) e (nth (mkey mm) v) r (pd (cup p) v)
-                  (? (e = 0) r
-                     (padd `((link (cnorm ((mco mm) * e)) (setn (mkey mm) v (e - 1)))) r))))
-   (pdet rows) (? (1 = tally rows) (cap (cap rows))
+               (: mm <p e (nth (mkey mm) v) r (pd >p v)
+                  (e = 0 ? r
+                     (padd `((link (cnorm (mco mm * e)) (setn (mkey mm) v (e - 1)))) r))))
+   (pdet rows) (1 = tally rows ? <(<rows)
                   (: (go r0 j sg)
-                     (? (0 = tally r0) ()
-                        (: t (pmul (cap r0) (pdet (map (\ r (deln r j)) (cup rows))))
-                           (padd (? (sg = 1) t (pneg t)) (go (cup r0) (j + 1) (0 - sg)))))
-                     (go (cap rows) 0 1))))
+                     (0 = tally r0 ? ()
+                        (: t (pmul <r0 (pdet (map (\ r (deln r j)) >rows)))
+                           (padd (sg = 1 ? t (pneg t)) (go >r0 (j + 1) (0 - sg)))))
+                     (go <rows 0 1))))
 
 ; --- the poly coin: polynomials first-class under the generic ops ----------
 ; strike a CANONICAL monomial list (the engine's own output) and the surface
@@ -78,15 +78,15 @@
 ; squaring over coins, seeded at 1, lands on the zero-mul face. pd/pdet work
 ; the raw layer: (load p) to reach it, (poly ..) to come back.
 (: polyd #(0 'poly 6 1 7 1)
-   (polyish? v) (? (nil? v) 1 (two? v) (two? (cap v)) 0)
-   (arity v) (tally (mkey (cap v)))
-   (pok? v w) (? (polyish? v) 1 (star? v) (? (polyish? w) (tally w) ()) ())
-   (plift v w) (? (polyish? v) v (pconst (arity w) v))
+   (polyish? v) (? !v 1 (two? v) (two? <v) 0)
+   (arity v) (tally (mkey <v))
+   (pok? v w) (? (polyish? v) 1 (star? v) (polyish? w ? (tally w) ()) ())
+   (plift v w) (polyish? v ? v (pconst (arity w) v))
    (pmeth f) (\ a b (: x (load a) y (load b)
-                       (? (&& (pok? x y) (pok? y x))
-                          (coin polyd (f (plift x y) (plift y x)))
-                          ())))
-   (zface v w) (? (star? v) (? (polyish? w) (0 = tally w) 0) 0)
+                       ((&& (pok? x y) (pok? y x)) ?
+                        (coin polyd (f (plift x y) (plift y x)))
+                        ())))
+   (zface v w) (star? v ? (polyish? w ? (0 = tally w) 0) 0)
    mulm (pmeth pmul)
    _ (pin polyd 1 (pmeth padd))
    _ (pin polyd 2 (\ a b (: x (load a) y (load b)
@@ -94,7 +94,7 @@
                                (zface y x) (coin polyd ())
                                (mulm a b)))))
    _ (pin polyd 5 (pmeth psub))
-   (poly p) (? (polyish? p) (coin polyd p) ()))
+   (poly p) (polyish? p ? (coin polyd p) ()))
 
 ; --- the eval bridge: a poly compiles to a live closure ---------------------
 ; pemit renders a poly (raw or coin) as core source over the given variable
@@ -104,19 +104,18 @@
 ; computes over ANYTHING the generic ops carry: integers, bignums, gems, q
 ; coins. pfn wraps the emission in \ and hands it to ev: a real curried
 ; closure, glaze-eligible; args arrive in syms order.
-(: (reps s e acc) (? (e = 0) acc (reps s (e - 1) (link s acc)))
-   (mulfold l) (? (1 = tally l) (cap l) `('* (cap l) (mulfold (cup l))))
-   (mfacts key syms) (? (0 = tally key) ()
-                        (reps (cap syms) (cap key) (mfacts (cup key) (cup syms))))
+(: (reps s e acc) (e = 0 ? acc (reps s (e - 1) (link s acc)))
+   (mulfold l) (1 = tally l ? <l `('* <l (mulfold >l)))
+   (mfacts key syms) (0 = tally key ? () (reps <syms <key (mfacts >key >syms)))
    (mterm m syms) (: fs (mfacts (mkey m) syms) c (mco m)
                      (? (0 = tally fs) c
                         (c = 1) (mulfold fs)
                         (mulfold (link c fs))))
    (psum pp syms) (? (0 = tally pp) 0
-                     (1 = tally pp) (mterm (cap pp) syms)
-                     `('+ (mterm (cap pp) syms) (psum (cup pp) syms)))
+                     (1 = tally pp) (mterm <pp syms)
+                     `('+ (mterm <pp syms) (psum >pp syms)))
    (pemit p syms) (psum (load p) syms)
-   (snocl l x) (? (0 = tally l) (link x ()) (link (cap l) (snocl (cup l) x)))
+   (snocl l x) (0 = tally l ? `(x) (link <l (snocl >l x)))
    (pfn p syms) (ev (link '\ (snocl syms (pemit p syms)))))
 
 ; --- the matcher: rules over terms, riding the kanren unifier ---------------
@@ -137,21 +136,21 @@
 ; rewrite treat noms as atoms, never walking into them.
 (: sew (kanren 'subst)
    mnil (kanren 'empty_dict)
-   (match p x) (: r (unify mnil p x) (? (ufail? r) () r))
+   (match p x) (: r (unify mnil p x) (ufail? r ? () r))
    (vlook v ps) (? (0 = tally ps) ()
-                   ((cap (cap ps)) = v) (cup (cap ps))
-                   (vlook v (cup ps)))
-   (mark ps t) (? (nom? t) (: w (vlook t ps) (? (nil? w) t w))
-                  (two? t) (link (mark ps (cap t)) (mark ps (cup t)))
+                   (<(<ps) = v) >(<ps)
+                   (vlook v >ps))
+   (mark ps t) (? (nom? t) (: w (vlook t ps) (!w ? t w))
+                  (two? t) (link (mark ps <t) (mark ps >t))
                   t)
    (rule vs pat tpl) (: ps (map (\ s (link s (var s))) vs)
                         (link (mark ps pat) (mark ps tpl)))
    (rw1 rs x) (? (0 = tally rs) x
-                 (: r (unify mnil (cap (cap rs)) x)
-                    (? (ufail? r) (rw1 (cup rs) x) (sew r (cup (cap rs))))))
+                 (: r (unify mnil <(<rs) x)
+                    (ufail? r ? (rw1 >rs x) (sew r >(<rs)))))
    (rewrite rs x) (: y (? (nom? x) x (two? x) (map (rewrite rs) x) x)
                      z (rw1 rs y)
-                     (? (z = y) y (rewrite rs z))))
+                     (z = y ? y (rewrite rs z))))
 
 ; --- laws + fold: the shipped simplifier -------------------------------------
 ; `laws` is the core identity table -- units, annihilators, inverses, and the
@@ -174,16 +173,16 @@
           (rule '(a) '(- 0 (- 0 a)) 'a)
           (rule '(a) '(+ (* (sin a) (sin a)) (* (cos a) (cos a))) 1))
    (fold1 t) (? (nom? t) t
-                (nil? (two? t)) t
-                (nil? (3 = tally t)) t
-                (nil? (member? (cap t) '(+ - *))) t
-                (: a (caup t) b (caup (cup t))
-                   (? (&& (star? a) (star? b))
-                      (cnorm (? ((cap t) = '+) (a + b) ((cap t) = '-) (a - b) (a * b)))
-                      t)))
+                !(two? t) t
+                !(3 = tally t) t
+                !(member? <t '(+ - *)) t
+                (: a <>t b <>(>t)
+                   ((&& (star? a) (star? b)) ?
+                    (cnorm (? (<t = '+) (a + b) (<t = '-) (a - b) (a * b)))
+                    t)))
    (simp t) (: y (? (nom? t) t (two? t) (map simp t) t)
                z (fold1 (rw1 laws y))
-               (? (z = y) y (simp z))))
+               (z = y ? y (simp z))))
 
 ; --- unfix: terms back to the infix surface ----------------------------------
 ; the inverse of opfix, as a FORM: unfix renders a core term as low-paren
@@ -199,36 +198,36 @@
 ; table stays prefix, which reads back unchanged.
 (: ugrip '((+ 1) (- 1) (* 2) (/ 2) (** 3))
    (glook o gs) (? (0 = tally gs) ()
-                   ((cap (cap gs)) = o) (caup (cap gs))
-                   (glook o (cup gs)))
-   (ophead? x) (? (nom? (cap x)) (? (glook (cap x) ugrip) 1 0) 0)
-   (infix3? t) (? (3 = tally t) (ophead? t) 0)
+                   (<(<gs) = o) <>(<gs)
+                   (glook o >gs))
+   (ophead? x) (nom? <x ? (glook <x ugrip ? 1 0) 0)
+   (infix3? t) (3 = tally t ? (ophead? t) 0)
    (uxw x) (? (nom? x) x (two? x) (unfix x) x)
-   (uxs x g) (? (nom? x) (L x)
-                (nil? (two? x)) (L x)
-                (infix3? x) (? ((glook (cap x) ugrip) < g) (L (unfix x)) (unfix x))
-                (ophead? x) (L (unfix x))
+   (uxs x g) (? (nom? x) `(x)
+                !(two? x) `(x)
+                (infix3? x) (glook <x ugrip < g ? `((unfix x)) (unfix x))
+                (ophead? x) `((unfix x))
                 (unfix x))
    (unfix t) (? (nom? t) t
-                (nil? (two? t)) t
-                (infix3? t) (: g (glook (cap t) ugrip)
-                               ((uxs (caup t) (g + 1)) + (L (cap t)) + (uxs (caup (cup t)) g)))
-                (link (uxw (cap t)) (map uxw (cup t)))))
+                !(two? t) t
+                (infix3? t) (: g (glook <t ugrip)
+                               (uxs <>t (g + 1) + `(<t) + uxs <>(>t) g))
+                (link (uxw <t) (map uxw >t))))
 
 ; --- the field Q[x]/(m) ----------------------------------------------------
-(: (vmax a b) (? (a < b) b a)
+(: (vmax a b) (a < b ? b a)
    (vpad v n) (? (n = 0) ()
                  (0 = tally v) (link (q 0 1) (vpad () (n - 1)))
-                 (link (cap v) (vpad (cup v) (n - 1))))
-   (vzip a b) (? (0 = tally a) () (link ((cap a) + (cap b)) (vzip (cup a) (cup b))))
+                 (link <v (vpad >v (n - 1))))
+   (vzip a b) (0 = tally a ? () (link (<a + <b) (vzip >a >b)))
    (vadd a b) (: n (vmax (tally a) (tally b)) (vzip (vpad a n) (vpad b n)))
    (vscale c v) (map (* c) v)
-   (vshift v n) (? (n = 0) v (link (q 0 1) (vshift v (n - 1))))
-   (vmul a b) (? (0 = tally a) () (vadd (vscale (cap a) b) (vshift (vmul (cup a) b) 1)))
-   (vlast v) (? (1 = tally v) (cap v) (vlast (cup v)))
-   (vinit v) (? (1 = tally v) () (link (cap v) (vinit (cup v))))
-   (vrem xd v) (? ((tally v) < ((tally xd) + 1)) (vpad v (tally xd))
+   (vshift v n) (n = 0 ? v (link (q 0 1) (vshift v (n - 1))))
+   (vmul a b) (0 = tally a ? () (vadd (vscale <a b) (vshift (vmul >a b) 1)))
+   (vlast v) (1 = tally v ? <v (vlast >v))
+   (vinit v) (1 = tally v ? () (link <v (vinit >v)))
+   (vrem xd v) (tally v < tally xd + 1 ? (vpad v (tally xd))
                   (vrem xd (vadd (vinit v)
-                                 (vshift (vscale (vlast v) xd) ((tally v) - ((tally xd) + 1))))))
+                                 (vshift (vscale (vlast v) xd) (tally v - (tally xd + 1))))))
    (kmul xd a b) (vrem xd (vmul a b))
    (knum d c) (vpad `((q c 1)) d))
