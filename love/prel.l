@@ -158,8 +158,8 @@
         ; an OPEN star: a coin whose die pins slot 7 is numeric BY DECLARATION, so a
         ; numeral powers it through its own * -- ipow is generic, the exact squaring
         ; rides the die's mul. only whole exponents mean anything off the closed
-        ; tower (a negative needs coin division, absent -> (); a non-whole answers
-        ; (), the undefined-op law). unflagged coins keep composing below.
+        ; tower (a negative rides coin division, slot 8 -- unpinned, (); a non-whole
+        ; answers (), the undefined-op law). unflagged coins keep composing below.
         (starred? x) (? (coin? x) (= 1 (-> (die-of x) 7 0)) 0)
         (num-ap n x) (? (constellation? x) (powg x n)
                         (starred? x)
@@ -747,8 +747,8 @@
 ; net/=/</show default over the payload in the C core, so $/truth, value-equality, sort
 ; and the (name payload) show form all work with no extra ceremony. plus/times take
 ; payloads. (ring 'z5 plus times) / (monoid 'z5 plus) -> a constructor: payload -> coin.
-; `-` rides slot 5 for a die that pins it (ring/monoid pin none; q pins its own):
-; unpinned, coin subtraction answers (), the undefined-op law. slot 6 is the NET
+; `-` rides slot 5 and `/` slot 8 for a die that pins them (ring/monoid pin none;
+; q pins both): unpinned, they answer (), the undefined-op law. slot 6 is the NET
 ; MODE, a fixnum: absent/0 nets the payload (the hom); 1 nets by TALLY -- the
 ; count, never negative -- so a die over signed content (a ledger, a polynomial)
 ; can make its coins' truth read "has any", not "sums green". slot 7 truthy
@@ -764,7 +764,8 @@
    (monoid name plus) (ring name plus 0))                        ; a monoid is a ring with no product
 
 ; --- rationals: an exact field shipped as a coin over a reduced (num den) payload ---
-; +/*/- cross-multiply and reduce; = is payload equality after reduction (so (q 2 4) =
+; +/*/-// cross-multiply and reduce (/ inverts and multiplies; by zero -> (), Q holds
+; no inf, so reciprocal powers ride: (-1 (q 2 1)) is (q 1 2)); = is payload equality after reduction (so (q 2 4) =
 ; (q 1 2)); show is (q (num den)), which reads back since q also accepts the 2-list.
 ; the die declares its coins STARS (slot 7: numerals power through *, the surface net
 ; answers the coin ITSELF) and pins net-mode 2 (slot 6, RATIO): the C truth path
@@ -801,6 +802,10 @@
         _ (pin st 5 (\ a b (: x (load a) y (load b)             ; (n1 d1) - (n2 d2)
               (? (&& (ok? x) (ok? y))
                  (coin st (reduce (- (* (cap x) (caup y)) (* (cap y) (caup x))) (* (caup x) (caup y))))
+                 ()))))
+        _ (pin st 8 (\ a b (: x (load a) y (load b)             ; (n1 d1) / (n2 d2): invert and
+              (? (&& (ok? x) (ok? y) (nil? (= 0 (cap y))))      ; multiply; by zero -> () (no inf in Q)
+                 (coin st (reduce (* (cap x) (caup y)) (* (caup x) (cap y))))
                  ()))))
         (\ n (? (two? n) (coin st (reduce (cap n) (caup n)))    ; (q (n d)) -- the show form
                 (\ d (coin st (reduce n d)))))))               ; (q n d) -- the ergonomic curried form

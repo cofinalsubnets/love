@@ -169,7 +169,7 @@ lvm_t lvm_kcall,
  lvm_putn, lvm_gauge,    lvm_clock, lvm_apof, lvm_seal, lvm_books, lvm_setbook, lvm_mods,
  lvm_nilp,  lvm_putc, lvm_mint, lvm_nomctor, lvm_intern, lvm_chainp,
  lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy,
- lvm_coin, lvm_coinmk, lvm_load, lvm_dieof, lvm_coinp, lvm_add_coin, lvm_mul_coin, lvm_sub_coin,   // newtypes: a coin (die + payload), a typed hot riding KHot
+ lvm_coin, lvm_coinmk, lvm_load, lvm_dieof, lvm_coinp, lvm_add_coin, lvm_mul_coin, lvm_sub_coin, lvm_quot_coin,   // newtypes: a coin (die + payload), a typed hot riding KHot
  lvm_charmp,  lvm_nomp,   lvm_namep,  lvm_strp,   lvm_tabp, lvm_band,   lvm_bor,  lvm_real,  lvm_flop,
  lvm_sin, lvm_cos, lvm_log, lvm_pow,   // sqrt/exp/tan/atan/atan2 are derived (numeral/complex forms), not nifs
  // Step 7 -- complex (kernel/cplx.c). lvm_cplx_bin (declared apart, below) is
@@ -330,8 +330,9 @@ static ai_inline word coin_load(word x) { return ((struct ai_coin*) x)->payload;
 enum { DIE_NAME = 0, DIE_ADD = 1, DIE_MUL = 2, DIE_APPLY = 3, DIE_HOT = 4, DIE_SUB = 5,
        DIE_NET = 6,    // net MODE, a fixnum: absent/0 = net of payload; 1 = net by TALLY (the
                        // count); 2 = RATIO (an (n d)-of-reals payload nets n/d, sign exact)
-       DIE_STAR = 7 }; // truthy = the die's coins are NUMERIC: numeral application powers them
+       DIE_STAR = 7,   // truthy = the die's coins are NUMERIC: numeral application powers them
                        // through their own * (prel num-ap reads this slot; C never does)
+       DIE_DIV = 8 };  // `/` -- like `-` it has no kind matrix, so lvm_quot intercepts coins itself
 // read a die slot, or () if absent / the die is not a map.
 static ai_inline word die_get(struct ai *g, word die, intptr_t slot) {
  return tabp(die) ? ai_mapget(g, nil, putcharm(slot), die) : nil; }
@@ -2473,9 +2474,9 @@ static lvm(lvm_mulh) {
  dst[0] = fa, dst[1] = h, dst[2] = ga, dst[3] = ret;
  return Sp = dst, Ip = (union u*) numap_drive, Continue(); }
 
-// --- coin +/*/- : run the die's ADD/MUL/SUB closure over the two operands ----
-// Reached from the KHot lane -- and from lvm_sub's own coin check, `-` having no
-// kind matrix -- when either operand is a coin (so coin + number, coin +
+// --- coin +/*/-// : run the die's ADD/MUL/SUB/DIV closure over the two operands ----
+// Reached from the KHot lane -- and from lvm_sub's/lvm_quot's own coin checks, `-`
+// and `/` having no kind matrix -- when either operand is a coin (so coin + number, coin +
 // chain, coin + coin all land here). One operand is a coin: ITS die's method runs,
 // `(\ a b ...)`, computing the result via numap_drive -- the same frame lvm_addh uses
 // for church-add. The method gets the RAW operands, so a coin + a non-coin is the
@@ -2501,8 +2502,9 @@ static lvm(lvm_coin_op, intptr_t slot) {
  return Sp = dst, Ip = (union u*) numap_drive, Continue(); }
 lvm(lvm_add_coin) { return Ap(lvm_coin_op, g, DIE_ADD); }
 lvm(lvm_mul_coin) { return Ap(lvm_coin_op, g, DIE_MUL); }
-// `-` has no kind matrix; lvm_sub intercepts coins itself and lands here.
+// `-` and `/` have no kind matrix; lvm_sub/lvm_quot intercept coins themselves and land here.
 lvm(lvm_sub_coin) { return Ap(lvm_coin_op, g, DIE_SUB); }
+lvm(lvm_quot_coin) { return Ap(lvm_coin_op, g, DIE_DIV); }
 
 // applying a coin: run the die's APPLY closure as `((f self) arg)`; absent, a coin
 // is an opaque handle (const-1), like a cask/port. self is the value at Ip (the apply
@@ -5955,6 +5957,7 @@ lvm(lvm_quot) {
    intptr_t t = av / bv;
    if (t >= fix_min && t <= fix_max) return *++Sp = putcharm(t), Ip++, Continue(); } }
  avm_unit(a, b);
+ if (coinp(a) || coinp(b)) return Ap(lvm_quot_coin, g);   // the die's DIV method, slot 8
  return Ap(lvm_quotn, g); }
 
 // The ordered comparisons (lvm_lt/le/gt/ge) and their total order are defined

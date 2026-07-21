@@ -99,6 +99,18 @@
     (nil? (- a (z5 1)))                ; a die without slot 5 -> nil, like a monoid's *
     (nil? (- a (sm 3)))                ; distinct dies never combine
 
+    ; --- `/` rides slot 8: q pins it (invert and multiply); zero has no reciprocal ---
+    (= (q 3 2) (/ (q 1 2) (q 1 3)))    ; (1/2) / (1/3) = 3/2
+    (= (q 1 4) (/ (q 1 2) 2))          ; an integer rides cap/mint, either side
+    (= (q 2 1) (/ 1 (q 1 2)))          ; ... so 1 / (1/2) is the reciprocal, exact
+    (= (q -3 2) (/ (q 1 2) (q -1 3)))  ; the sign lands on the numerator, reduced
+    (nil? (/ (q 1 2) (q 0 1)))         ; by zero -> (): Q holds no inf
+    (nil? (/ (q 1 2) 0))               ; ... the bare zero too
+    (= (q 1 2) (/ (q 1 2) ()))         ; () is the do-nothing operand for / too
+    (= (q 1 2) (/ () (q 1 2)))         ; ... either side (the op never happens)
+    (nil? (/ a (z5 2)))                ; a die without slot 8 -> nil
+    (nil? (/ a (sm 3)))                ; distinct dies never combine
+
     ; --- a method OWNS its domain: off it (no star / (n d)-of-stars face), () ---
     (nil? (+ (q 1 2) (L (q 1 1) (q 0 1))))   ; a chain of coins is not an (n d)
     (nil? (* (q 1 2) (L 'x)))                ; nor a chain of symbols
@@ -112,7 +124,10 @@
     (= (q 1 4) ((q 1 2) ** 2))         ; the apply operator rides the same law
     (= (q 1 2) (1 (q 1 2)))            ; the identity numeral
     (= 1 (0 (q 5 7)))                  ; the zero numeral: x**0 = 1
-    (nil? (-1 (q 2 1)))                ; a reciprocal power needs coin / -- absent, ()
+    (= (q 1 2) (-1 (q 2 1)))           ; a reciprocal power rides coin / (slot 8)
+    (= (q 9 4) (-2 (q 2 3)))           ; (2/3)**-2 = 9/4: ipow, then invert
+    (= (q 9 4) ((q 2 3) ** -2))        ; the apply operator rides the same law
+    (nil? (-1 (q 0 1)))                ; zero has no reciprocal power
     (nil? ((/ 1 2) (q 4 1)))           ; a non-whole exponent off the tower: ()
     (nil? (coin? (2 (sm 3))))          ; an UNflagged coin still composes (a closure)
 
