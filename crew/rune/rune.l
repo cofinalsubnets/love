@@ -69,6 +69,25 @@
                            (padd (sg = 1 ? t (pneg t)) (go >r0 (j + 1) (0 - sg)))))
                      (go <rows 0 1))))
 
+; --- gcd: euclid in Q[x], answers monic -------------------------------------
+; UNIVARIATE (arity-1 keys): pmod is long division's remainder -- the lead
+; quotient monomial (pquo) rides pmul/psub, so cancellation is the ring's
+; own, exact -- and pgcd euclids until the zero poly, then normalizes monic
+; (unique in Q[x]; units divide out). cinv is the exact reciprocal of a
+; coefficient star: a coin through its die, an integer through the q ctor.
+; both faces load: raw monomial lists and poly coins alike; answers are raw.
+(: (cinv c) (coin? c ? (-1 c) (q 1 c))
+   (pdeg p) <(mkey <p)
+   (pmonic p) (? (0 = tally p) ()
+                 (: v (cinv (mco <p))
+                    (map (\ m (link (cnorm (v * mco m)) (mkey m))) p)))
+   (pquo a b) `((link (cnorm (mco <a * cinv (mco <b))) `((pdeg a - pdeg b))))
+   (pmod a b) (? (0 = tally a) ()
+                 ((pdeg a) < (pdeg b)) a
+                 (pmod (psub a (pmul (pquo a b) b)) b))
+   (pgcd a b) (: x (load a) y (load b)
+                 (? (0 = tally y) (pmonic x) (pgcd y (pmod x y)))))
+
 ; --- the poly coin: polynomials first-class under the generic ops ----------
 ; strike a CANONICAL monomial list (the engine's own output) and the surface
 ; arrives whole: + - * run padd/psub/pmul through the die (slots 1/5/2), =

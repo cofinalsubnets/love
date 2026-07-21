@@ -57,6 +57,31 @@
  ((pdet `(drow drow drow3)) = ())                ; equal rows kill it
  ((pdet `(dd1 dd2 dd3)) = (pmul rx (pmul ry rz))))
 
+; --- gcd: euclid in Q[x], monic ----------------------------------------------
+; pmod/pgcd ride the ring's own exact arithmetic; the flagship reproves the
+; disproof's squarefreeness fact -- m = 129x^3 + 49x - 6 has gcd(m, m') = 1,
+; the disc /= 0 certificate by euclid this time.
+(: gx (pvar 1 0)
+   (gc c) (pconst 1 c)
+   g1 (padd gx (gc 1))
+   g2 (padd gx (gc 2))
+   g3 (padd gx (gc 3))
+   gn (padd gx (gc -1))
+   gm (padd (pmul (gc 129) (pmul gx (pmul gx gx))) (padd (pmul (gc 49) gx) (gc -6))))
+(assert
+ ((pgcd (pmul g1 g2) (pmul g1 g3)) = g1)         ; the common factor, monic
+ ((pgcd (pmul (gc 2) g1) (pmul (gc 4) g1)) = g1) ; units divide out
+ ((pgcd (pmul (gc (q 1 2)) g1) g1) = g1)         ; ... ratio units too
+ ((pgcd g1 g2) = (gc 1))                         ; coprime -> the 1 poly
+ ((pgcd (pmul g1 g1) (pmul g1 g2)) = g1)         ; a square shares one factor
+ ((pgcd (pmul g1 gn) (pmul gn gn)) = gn)         ; a red constant rides: x - 1
+ ((pgcd (pmul gm g2) (pmul gm g3)) = (pmonic gm)); a cubic common factor
+ ((pgcd g1 ()) = g1)                             ; the zero poly absorbs...
+ ((pgcd () g1) = g1)                             ; ... either side
+ ((pgcd () ()) = ())
+ ((pgcd (poly (pmul g1 g2)) (poly (pmul g1 g3))) = g1)   ; the coin faces load
+ ((pgcd gm (pd gm 0)) = (gc 1)))                 ; m is SQUAREFREE: gcd(m, m') = 1
+
 ; --- Q[x y z]: coefficients are stars -- integers or ratio coins ------------
 ; cnorm keeps them canonical: an integer-VALUED coin demotes to its integer,
 ; so Z[x..] sits inside Q[x..] structurally -- halves that sum whole land
