@@ -344,7 +344,14 @@
  ((simp '(sin (- 0 x))) = '(- 0 (sin x)))             ; parity: sin is odd...
  ((simp '(cos (- 0 x))) = '(cos x))                   ; ... cos is even
  (1 = (simp '(+ (** (sin y) 2) (** (cos y) 2))))      ; pythagoras, powered
- (1 = (simp '(+ (** (cos u) 2) (** (sin u) 2)))))     ; ... either order
+ (1 = (simp '(+ (** (cos u) 2) (** (sin u) 2))))      ; ... either order
+ (0 = (simp '(sqrt 0)))                               ; the sqrt ground points
+ (1 = (simp '(sqrt 1)))
+ ((simp '(** (sqrt x) 2)) = 'x)                       ; sound on sqrt's own domain
+ ((simp '(sin (asin x))) = 'x)                        ; the arc inverses cancel
+ ((simp '(cos (acos x))) = 'x)
+ ((simp '(asin (- 0 x))) = '(- 0 (asin x)))           ; asin is odd
+ (1 = (simp '(/ (sqrt (exp y)) (sqrt (exp y))))))     ; nz? climbs sqrt to exp
 
 ; --- expand: the growing laws -- distribution and the log/exp splits ---------
 ; xlaws rides the same driver on top of laws, so every expansion is folded
@@ -466,6 +473,17 @@
  ((deriv '(tan x) 'x) = '(/ 1 (** (cos x) 2)))    ; the tan rule
  ((deriv '(tan (* 2 x)) 'x) = '(/ 2 (** (cos (* 2 x)) 2)))
  ((deriv '(atan x) 'x) = '(/ 1 (+ (** x 2) 1)))   ; ... and its inverse's
+ ((deriv '(sqrt x) 'x) = '(/ 1 (* 2 (sqrt x))))   ; the sqrt rule
+ ((deriv '(asin x) 'x) = '(/ 1 (sqrt (- 1 (** x 2)))))
+ ((deriv '(acos x) 'x) = '(- 0 (/ 1 (sqrt (- 1 (** x 2))))))
+ ((collect `('+ (deriv '(asin x) 'x) (deriv '(acos x) 'x)))
+  = 0)                                            ; asin + acos is CONSTANT: the
+                                                  ; derivatives cancel exactly
+ ((deriv '(asin (* 2 x)) 'x)
+  = '(/ 2 (sqrt (- 1 (** (* 2 x) 2)))))           ; the chain reaches under the root
+ (1 = (deriv '(** (sqrt x) 2) 'x))                ; the INPUT simps first...
+ ((deriv '(/ (sin x) (cos x)) 'x)
+  = '(/ 1 (** (cos x) 2)))                        ; ... so sin/cos derives as tan
  ((deriv '(** x x) 'x) = '(d (** x x) x))         ; a symbolic exponent fails the
                                                   ; guard and stays, honestly
  ((deriv '(f x) 'x) = '(d (f x) x))               ; an unknown derivative stays symbolic
