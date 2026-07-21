@@ -178,12 +178,14 @@
 ; adds the GROWING rules on top: distribution and the log/exp splits. simp
 ; never expands; `expand` does (each pass pushes a * inside a +, or a log/exp
 ; through its operand, so that fixpoint lands too -- collected on the way).
-; fold1 computes a GROUND ring node: (op a b) for op in + - * ** with both
+; fold1 computes a GROUND node: (op a b) for op in + - * ** / with both
 ; operands stars (the open star: integers, gems, q coins, poly coins alike)
 ; folds to its value, cnormed so an integer-valued coin lands the integer.
-; a power folds by APPLICATION -- (b a) is a**b -- on a whole nonnegative
-; exponent only; division and negative exponents stay symbolic -- the RING
-; folds; (/ 1 2) or 2**-1 as a gem would trade exactness away. `simpw` drives a rule table + fold bottom-up to a
+; a power folds by APPLICATION -- (b a) is a**b -- on a whole exponent.
+; Q IS THE FOLD CODOMAIN: a ground quotient or negative power folds EXACTLY
+; through the q coin ((/ 1 2) and (** 2 -1) both land (q 1 2), (/ 6 3) demotes
+; to 2) -- never to a gem. a zero divisor/base (nz? again) or a slot-less die
+; keeps its term. `simpw` drives a rule table + fold bottom-up to a
 ; fixpoint, the same shape as rewrite (noms are atoms, never walked into);
 ; simp and expand are its two faces.
 (: (nz? t) (? (nom? t) ()
@@ -222,10 +224,20 @@
    (fold1 t) (? (nom? t) t
                 !(two? t) t
                 !(3 = tally t) t
-                !(member? <t '(+ - * **)) t
+                !(member? <t '(+ - * ** /)) t
                 (: a <>t b <>(>t)
                    (? !(&& (star? a) (star? b)) t
-                      (<t = '**) ((&& (whole? b) (0 <= b)) ? (cnorm (b a)) t)
+                      (<t = '**)
+                      (? !(whole? b) t
+                         (: v (? (0 <= b) (b a)
+                                 !(nz? a) ()
+                                 (whole? a) (q 1 ((0 - b) a))
+                                 (b a))
+                            ((star? v) ? (cnorm v) t)))
+                      (<t = '/)
+                      (? !(nz? b) t
+                         (: v (? (&& (whole? a) (whole? b)) (q a b) (a / b))
+                            ((star? v) ? (cnorm v) t)))
                       (cnorm (? (<t = '+) (a + b) (<t = '-) (a - b) (a * b))))))
    (simpw rs t) (: y (? (nom? t) t (two? t) (map (simpw rs) t) t)
                    z (fold1 (rw1 rs y))

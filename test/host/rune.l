@@ -245,7 +245,12 @@
  (0 = (simp '(* (+ 1 2) (- x x))))
  ((simp '(sin (+ 0 x))) = '(sin x))                   ; simplifies under any head
  ((simp '(/ x 1)) = 'x)                               ; division simplifies by law...
- ((simp '(/ 1 2)) = '(/ 1 2))                         ; ... but never folds to a gem
+ ((simp '(/ 1 2)) = (q 1 2))                          ; ... and a ground quotient folds
+                                                      ; EXACTLY: Q the codomain, never a gem
+ (2 = (simp '(/ 6 3)))                                ; a whole quotient demotes
+ ((simp '(/ -1 4)) = (q -1 4))                        ; the sign lands on the numerator
+ ((simp '(/ 1 0)) = '(/ 1 0))                         ; a zero divisor keeps its term
+ (1.5 = (simp '(/ 3.0 2)))                            ; a gem quotient stays in its band
  (1 = (simp '(+ (* (sin (+ y 0)) (sin y)) (* (cos y) (cos y)))))  ; the inner fix
                                                       ; opens pythagoras at the root
  ((simp '(log (exp x))) = 'x)                         ; the log/exp cancellations...
@@ -259,8 +264,10 @@
  (1 = (simp '(** x 0)))
  (1 = (simp '(** 1 x)))
  ((simp '(** x 2)) = '(** x 2))                       ; a symbolic base stays
- ((simp '(** 2 -1)) = '(** 2 -1)))                    ; a negative exponent never folds:
-                                                      ; a gem would trade exactness away
+ ((simp '(** 2 -1)) = (q 1 2))                        ; a negative exponent folds into Q too
+ ((simp '(** 2 -3)) = (q 1 8))
+ ((simp `('** (q 2 3) -2)) = (q 9 4))                 ; ... the die's own reciprocal power
+ ((simp '(** 0 -2)) = '(** 0 -2)))                    ; zero has no reciprocal: the term stays
 
 ; --- expand: the growing laws -- distribution and the log/exp splits ---------
 ; xlaws rides the same driver on top of laws, so every expansion is folded
@@ -312,6 +319,7 @@
  ((deriv '(cos x) 'x) = '(- 0 (sin x)))
  ((deriv '(sin (* 2 x)) 'x) = '(* (cos (* 2 x)) 2))   ; the chain rule
  ((deriv '(/ 1 x) 'x) = '(/ -1 (* x x)))          ; the quotient rule, folded red
+ ((deriv '(/ x 2) 'x) = (q 1 2))                  ; ... and a ground answer lands in Q
  ((deriv '(exp x) 'x) = '(exp x))                 ; exp is its own derivative
  ((deriv '(exp (* 2 x)) 'x) = '(* (exp (* 2 x)) 2))
  ((deriv '(log x) 'x) = '(/ 1 x))
