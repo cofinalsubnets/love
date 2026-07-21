@@ -104,15 +104,17 @@
 
 ; --- the eval bridge: a poly compiles to a live closure ---------------------
 ; pemit renders a poly (raw or coin) as core source over the given variable
-; symbols, one per key position. the emission is folded DYADIC + and * only --
+; symbols, one per key position. the emission is folded DYADIC + * ** only --
 ; never (+ a b c), which is application, and never (e x) numeral power, which
-; COMPOSES a non-numeric operand -- powers ride as repeated *, so the closure
-; computes over ANYTHING the generic ops carry: integers, bignums, gems, q
-; coins. pfn wraps the emission in \ and hands it to ev: a real curried
-; closure, glaze-eligible; args arrive in syms order.
-(: (reps s e acc) (e = 0 ? acc (reps s (e - 1) (link s acc)))
-   (mulfold l) (1 = tally l ? <l `('* <l (mulfold >l)))
-   (mfacts key syms) (0 = tally key ? () (reps <syms <key (mfacts >key >syms)))
+; COMPOSES a non-numeric operand -- a power rides ('** s e): ** is the bound
+; base-first power, exact through every DIE_STAR operand (integers, bignums,
+; gems, q coins). pfn wraps the emission in \ and hands it to ev: a real
+; curried closure, glaze-eligible; args arrive in syms order.
+(: (mulfold l) (1 = tally l ? <l `('* <l (mulfold >l)))
+   (mfacts key syms) (? (0 = tally key) ()
+                        (0 = <key) (mfacts >key >syms)
+                        (1 = <key) (link <syms (mfacts >key >syms))
+                        (link `('** <syms <key) (mfacts >key >syms)))
    (mterm m syms) (: fs (mfacts (mkey m) syms) c (mco m)
                      (? (0 = tally fs) c
                         (c = 1) (mulfold fs)
@@ -367,7 +369,7 @@
            (rule '(a v) '(d (cos a) v) '(- 0 (* (sin a) (d a v))))
            (rule '(a v) '(d (exp a) v) '(* (exp a) (d a v)))
            (rule '(a v) '(d (log a) v) '(/ (d a v) a)))
-   (deriv t v) (simp (rewrite dlaws `('d t v))))
+   (deriv t v) (simp (collect (simp (rewrite dlaws `('d t v))))))
 
 ; --- unfix: terms back to the infix surface ----------------------------------
 ; the inverse of opfix, as a FORM: unfix renders a core term as low-paren

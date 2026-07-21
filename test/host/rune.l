@@ -183,15 +183,15 @@
  ((feval (q -1 1) (q 3 2) (q 13 2)) = cimg))
 
 ; --- the eval bridge: polys compile to live closures ------------------------
-; folded dyadic + / * with powers as repeated *, so one closure computes over
-; integers and q coins alike. the flagship: F1 and F3 of the counterexample,
+; folded dyadic + * ** (the bound base-first power, exact through DIE_STAR),
+; so one closure computes over integers and q coins alike. the flagship: F1 and F3 of the counterexample,
 ; COMPILED, evaluated at the published collision point -- the same -1/4 and 0
 ; the modular certificate proved, now through ev'd code. a mixed evaluation
 ; lands a coin, so zero reads (q 0 1), never the fixnum 0.
 (: xyz '(x y z)
    ef1 (pfn pp1 xyz)                       ; x+y, from the COIN face
    ef2 (pfn (pd (load pp2) 0) xyz)         ; d(x-2y)/dx = 1
-   ef3 (pfn (pmul (pmul rx rx) ry) xyz)    ; x^2 y: a power, repeated-*
+   ef3 (pfn (pmul (pmul rx rx) ry) xyz)    ; x^2 y: a power, ('** x 2)
    efd (pfn (pdet jrows) xyz)              ; det J F compiles to const -2
    efz (pfn (poly ()) xyz)                 ; the zero poly compiles to 0
    eF1 (pfn pf1 xyz)
@@ -351,7 +351,8 @@
 ; --- symbolic d: the derivative as a rule set, the guard doing the base case --
 ; (d a v) -> 0 rides the matcher's GUARDED rule (fires only when a is free? of
 ; v); (d a a) -> 1 the nonlinear pattern; sum/product/quotient/chain plain
-; patterns. deriv simps the result, so answers land collected.
+; patterns. deriv drives the result through simp AND collect, so answers
+; land canonical: coefficient first, powers powered, degree order.
 (assert
  (0 = (deriv 'y 'x))                              ; free of x: the guarded base
  (0 = (deriv 5 'x))
@@ -361,14 +362,15 @@
  ((deriv '(+ (* x x) (* 3 x)) 'x) = '(+ (* 2 x) 3))
  ((deriv '(sin x) 'x) = '(cos x))
  ((deriv '(cos x) 'x) = '(- 0 (sin x)))
- ((deriv '(sin (* 2 x)) 'x) = '(* (cos (* 2 x)) 2))   ; the chain rule
- ((deriv '(/ 1 x) 'x) = '(/ -1 (* x x)))          ; the quotient rule, folded red
+ ((deriv '(sin (* 2 x)) 'x) = '(* 2 (cos (* 2 x))))   ; the chain rule, coefficient first
+ ((deriv '(/ 1 x) 'x) = '(/ -1 (** x 2)))         ; the quotient rule, folded red
  ((deriv '(/ x 2) 'x) = (q 1 2))                  ; ... and a ground answer lands in Q
  ((deriv '(exp x) 'x) = '(exp x))                 ; exp is its own derivative
- ((deriv '(exp (* 2 x)) 'x) = '(* (exp (* 2 x)) 2))
+ ((deriv '(exp (* 2 x)) 'x) = '(* 2 (exp (* 2 x))))
  ((deriv '(log x) 'x) = '(/ 1 x))
  ((deriv '(** x 3) 'x) = '(* 3 (** x 2)))         ; the power rule
- ((deriv '(** (sin x) 2) 'x) = '(* 2 (* (sin x) (cos x))))   ; ... with the chain
+ ((deriv '(** (sin x) 2) 'x) = '(* 2 (* (cos x) (sin x))))   ; ... with the chain
+ ((deriv '(* (- x 1) (+ x 1)) 'x) = '(* 2 x))     ; product rule + collect: the whole road
  ((deriv '(** x x) 'x) = '(d (** x x) x))         ; a symbolic exponent fails the
                                                   ; guard and stays, honestly
  ((deriv '(f x) 'x) = '(d (f x) x))               ; an unknown derivative stays symbolic
@@ -392,7 +394,7 @@
  ((unfix '(- 10 (- 4 3))) = '(10 - 4 - 3))            ; ... the right rides the fold bare
  ((unfix '(+ (sin x) 1)) = '(sin x + 1))              ; application binds tightest
  ((unfix '(f (+ x 1) y)) = '(f (x + 1) y))            ; compound arguments wrap
- ((unfix (pemit (padd (pmul rx rx) ry) '(x y z))) = '(x * x + y))   ; a poly, rendered
+ ((unfix (pemit (padd (pmul rx rx) ry) '(x y z))) = '(x ** 2 + y))  ; a poly, rendered
  ((unfix 'x) = 'x)
  (all (\ t ((opfix (unfix t)) = t)) tcorp)            ; THE round-trip law
  (7 = (ev (unfix '(+ (* 2 3) 1)))))                   ; the rendered form is love source: it runs
