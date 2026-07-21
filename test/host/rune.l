@@ -13,6 +13,16 @@
 ;   cat test/00-init.l test/host/rune.l | out/host/love
 
 (reads (open "crew/rune/rune.l" "r"))
+(reads (open "crew/rune/seal.l" "r"))
+(use 'rune)
+
+; --- the module seam: rune registered, the splice + accessor both reach ----
+(assert
+ (member? 'rune (from ()))                ; the registry lists it
+ (member? 'deriv (from 'rune 'keys))      ; 'keys introspects the layer
+ (1 = ((from 'rune 'cnorm) (q 3 3)))      ; the opaque accessor reaches a member
+ (lit? (from 'rune))                      ; presence: the accessor is a closure
+ (! (from 'ruin)))                        ; a missing module answers ()
 
 ; --- the ring: canonical forms make the identities structural --------------
 ; commutative/associative/distributive, (x+y)^2, and the zero polynomial IS

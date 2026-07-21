@@ -67,6 +67,7 @@
 ;   compiler in love, crew/moon/ -- compiles love.c + all host/*.c and holo links them, no gcc/glibc/ld:
 ;   `make test_raw`), rune (the symbolic algebra engine, crew/rune/ -- exact multivariate polys +
 ;   Q[x]/(m) on the q coin; polys STRIKE AS COINS (die + - *, net-mode 1: !p is "zero poly");
+;   a REGISTERED MODULE like holo (rune.l enters, seal.l seals; (use 'rune) or (from 'rune 'deriv));
 ;   its gate test/host/rune.l verifies the 2026 jacobian-conjecture disproof whole). apps
 ;   add nifs through the host/*.c glob + AI_NIF (no core edit); love.c/love.h/host/main.c are CORE -- an
 ;   app session needing a core change stops and asks the core thread, never reaches in. the runnable

@@ -19,6 +19,12 @@
 ; the field is given not by m but by XD -- x^d rewritten as an element --
 ; so reduction folds top powers down with no division anywhere.
 
+; the module scope opens here: every binding below lands in this layer,
+; mutually visible by bare name; crew/rune/seal.l closes it, which REGISTERS
+; it as the module `rune` -- a consumer either (use 'rune) and reads bare,
+; or reaches one member through the accessor: (from 'rune 'deriv).
+(enter 'rune)
+
 ; --- the polynomial ring ---------------------------------------------------
 (: (mco m) <m
    (mkey m) >m
