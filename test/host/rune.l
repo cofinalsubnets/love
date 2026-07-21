@@ -276,7 +276,10 @@
  ((expand '(* x (+ y z))) = '(+ (* x y) (* x z)))     ; a * pushes inside a +
  ((expand '(* (+ x y) z)) = '(+ (* x z) (* y z)))     ; ... either side
  ((expand '(* (+ x y) (+ x y)))
-  = '(+ (+ (* x x) (* y x)) (+ (* x y) (* y y))))     ; the binomial, all four terms
+  = '(+ (* x x) (+ (* 2 (* x y)) (* y y))))           ; THE binomial: x^2 + 2xy + y^2 --
+                                                      ; (* y x) met (* x y) and collected
+ ((expand '(* (+ x 1) (+ x 1)))
+  = '(+ (* x x) (+ (* 2 x) 1)))                       ; ... x^2 + 2x + 1, the constant last
  (49 = (expand '(* (+ 3 4) (+ 3 4))))                 ; ground folds before it distributes
  ((expand '(log (* x y))) = '(+ (log x) (log y)))     ; a log splits a product
  ((expand '(log (/ (* x y) z))) = '(- (+ (log x) (log y)) (log z)))
@@ -284,6 +287,25 @@
  ((expand '(log (** x y))) = '(* y (log x)))          ; ... and drops a power
  ((expand '(log (* x x))) = '(* 2 (log x)))           ; split, then collect
  ((expand '(log (exp (+ x y)))) = '(+ x y)))          ; the splits meet the cancellations
+
+; --- collect: the commutative collect ----------------------------------------
+; + and * spines canonicalize: flatten, sort the cores by rendered key, merge
+; equal cores summing coefficients exactly, refold. purely syntactic order,
+; so equal terms MEET whatever their spelling; - and / are left alone.
+(assert
+ ((collect '(+ y x)) = '(+ x y))                      ; a sum sorts...
+ ((collect '(* y x)) = '(* x y))                      ; ... a product too
+ ((collect '(+ (* y x) (* x y))) = '(* 2 (* x y)))    ; (* y x) meets (* x y)
+ ((collect '(+ x (+ y x))) = '(+ (* 2 x) y))          ; ... across the assoc nesting
+ ((collect '(+ (+ x 1) (+ x 2))) = '(+ (* 2 x) 3))    ; constants merge, and sit last
+ ((collect '(+ (* 2 x) (* 3 x))) = '(* 5 x))          ; coefficients add
+ ((collect '(+ (* 2 x) (* -2 x))) = 0)                ; ... and cancel to the empty sum
+ ((collect `('+ `('+ 'x (q 1 2)) `('+ 'x (q 1 2))))
+  = '(+ (* 2 x) 1))                                   ; exact halves merge whole
+ ((collect '(* 3 (* x 2))) = '(* 6 x))                ; ground factors gather up front
+ ((collect '(* x (* 2 (* y (* 3 z))))) = '(* 6 (* x (* y z))))
+ ((collect '(- (+ y x) z)) = '(- (+ x y) z))          ; - is not commutative: untouched
+ ((collect 'x) = 'x))
 
 ; --- conditional laws: the guard door, open ----------------------------------
 ; the division identities need x /= 0, so they fire on nz? -- the "manifestly

@@ -187,7 +187,7 @@
 ; to 2) -- never to a gem. a zero divisor/base (nz? again) or a slot-less die
 ; keeps its term. `simpw` drives a rule table + fold bottom-up to a
 ; fixpoint, the same shape as rewrite (noms are atoms, never walked into);
-; simp and expand are its two faces.
+; simp is its laws face, expand its xlaws face -- through collect (below).
 (: (nz? t) (? (nom? t) ()
               (star? t) !(0 = (sat (t * t)))
               (two? t) (? (<t = 'exp) 1 (<t = '**) (nz? <>t) ())
@@ -242,8 +242,62 @@
    (simpw rs t) (: y (? (nom? t) t (two? t) (map (simpw rs) t) t)
                    z (fold1 (rw1 rs y))
                    (z = y ? y (simpw rs z)))
-   (simp t) (simpw laws t)
-   (expand t) (simpw xlaws t))
+   (simp t) (simpw laws t))
+
+; --- collect: the commutative collect -----------------------------------------
+; + and * are commutative and associative, so collect canonicalizes each
+; +/* spine, bottom-up: flatten, split every element into (c u) -- ground
+; coefficient and core -- sort the cores by their RENDERED key (purely
+; syntactic, deterministic, equal cores land adjacent: a sum by show-string,
+; where compounds carry the paren and lead, so higher terms come first; a
+; product noms-first, so variables precede function forms), merge equal cores
+; summing coefficients exactly, and refold -- the constant last in a sum, the
+; coefficient first in a product. so (* y x) meets (* x y), and the binomial
+; expand lands x^2 + 2xy + y^2. expand runs it; simp stays order-preserving.
+(: (spine o t) (? (nom? t) `(t)
+                  (&& (two? t) (3 = tally t) (o = <t))
+                  ((spine o <>t) + (spine o <>(>t)))
+                  `(t))
+   (tkey t) ((nom? t) ? ("0" + show t) ("1" + show t))
+   (tins lt x ys) (? (0 = tally ys) `(x)
+                     (lt x <ys) (link x ys)
+                     (link <ys (tins lt x >ys)))
+   (tsort lt xs) (? (0 = tally xs) () (tins lt <xs (tsort lt >xs)))
+   (csplit t) (? (nom? t) `(1 t)
+                 (star? t) `(t 1)
+                 (&& (two? t) (3 = tally t) ('* = <t) (star? <>t)) `(<>t <>(>t))
+                 `(1 t))
+   (cmerge ps) (? (0 = tally ps) ()
+                  (0 = tally >ps) ps
+                  (: p <ps r <(>ps)
+                     ((<>p = <>r) ? (cmerge (link `((cnorm (<p + <r)) <>p) >(>ps)))
+                                    (link p (cmerge >ps)))))
+   (cone p) (: c <p u <>p
+               (? (u = 1) c (c = 1) u `('* c u)))
+   (refold o xs) ((1 = tally xs) ? <xs `(o <xs (refold o >xs)))
+   (tsum t) (: ps (cmerge (tsort (\ p r ((show <>p) < (show <>r)))
+                                 (map csplit (spine '+ t))))
+               ks (filter (\ p !(<p = 0)) ps)
+               xs (map cone ((filter (\ p !(<>p = 1)) ks)
+                             + (filter (\ p (<>p = 1)) ks)))
+               ((0 = tally xs) ? 0 (refold '+ xs)))
+   (tmul xs) (? (0 = tally xs) 1 (cnorm (<xs * (tmul >xs))))
+   (tprod t) (: fs (spine '* t)
+                c (tmul (filter star? fs))
+                us (tsort (\ a b ((tkey a) < (tkey b)))
+                          (filter (\ f !(star? f)) fs))
+                (? (0 = tally us) c
+                   (c = 0) 0
+                   (c = 1) (refold '* us)
+                   (refold '* (link c us))))
+   (collect t) (? (nom? t) t
+                  !(two? t) t
+                  (: u (map collect t)
+                     (? !(3 = tally u) u
+                        ('+ = <u) (tsum u)
+                        ('* = <u) (tprod u)
+                        u)))
+   (expand t) (simp (collect (simpw xlaws t))))
 
 ; --- symbolic d: the derivative as a rule set --------------------------------
 ; the term head `d` -- (d t v) -- reduces by dlaws: sum/product/quotient rules
