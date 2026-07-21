@@ -623,8 +623,11 @@
 ; declares polys STARS, so a numeral powers a poly through its own * -- ipow's
 ; squaring over coins, seeded at 1, lands on the zero-mul face. pd/pdet work
 ; the raw layer: (load p) to reach it, (poly ..) to come back.
+; a RED star is a COEFFICIENT, not nothing: polyish? tests the zero point by
+; identity and value ((), the charm 0), never by net -- !(-1) is true, and the
+; old !v gate read -1 as the zero poly, so (+ p -1) dropped its constant.
 (: polyd #(0 'poly 6 1 7 1)
-   (polyish? v) (? !v 1 (two? v) (two? <v) 0)
+   (polyish? v) (? (id? v ()) 1 (0 = v) 1 (two? v) (two? <v) 0)
    (arity v) (tally (mkey <v))
    (pok? v w) (? (polyish? v) 1 (star? v) (polyish? w ? (tally w) ()) ())
    (plift v w) (polyish? v ? v (pconst (arity w) v))

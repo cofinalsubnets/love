@@ -307,6 +307,9 @@
  ((* 3 (poly rx)) = (poly (pmul (pconst 3 3) rx)))   ; a star lifts to the poly's arity
  ((+ (poly rx) 1) = (poly (padd rx (pconst 3 1))))   ; ... either side, + too
  ((- (poly rx) 1) = (poly (psub rx (pconst 3 1))))
+ ((+ (poly rx) -1) = (- (poly rx) 1))  ; a RED star is a coefficient, not the zero poly
+ ((* (poly rx) -2) = (poly (pmul (pconst 3 -2) rx)))
+ ((+ (poly rx) 0) = (poly rx))         ; ... while the zero star still rides as zero
  (! zp)                                ; the zero polynomial IS nothing
  (nil? (! pp2))                        ; red content, still SOMETHING -- the !p law, closed
  (2 = (sat pp2))                       ; $ counts monomials
