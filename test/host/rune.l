@@ -103,6 +103,28 @@
   = (pmonic (pmul gm (pmul gm g2)))))            ; THE reconstruction law, degree 7:
                                                  ; monic p = a1^1 a2^2 ..
 
+; --- multivariate gcd: content times primitive part, by pseudo-remainder -----
+; mgcd recurses on arity (pgcd the floor), lex-lead normalized to 1.
+(: u1 (padd rx ry)
+   u2 (padd rx rz)
+   u3 (padd ry rz))
+(assert
+ ((mgcd (pmul u1 u2) (pmul u1 u3)) = u1)         ; the common factor x+y
+ ((mgcd (pmul u1 (pmul u1 u2)) (pmul u1 (pmul u1 u3)))
+  = (pmul u1 u1))                                ; ... squared, still whole
+ ((mgcd u1 u2) = (pconst 3 1))                   ; coprime -> the 1 poly
+ ((mgcd (pconst 3 5) u1) = (pconst 3 1))         ; a constant is a unit
+ ((mgcd (pmul (pconst 3 2) u1) (pmul (pconst 3 4) u1)) = u1)   ; units divide out
+ ((mgcd (pmul (pconst 3 (q 1 2)) u1) u1) = u1)   ; ... ratio units too
+ ((mgcd (pmul rx ry) (pmul rx rz)) = rx)         ; a monomial factor
+ ((mgcd (pmul ry rz) (pmul ry ry)) = ry)         ; a gcd FREE of x: the content path
+ ((mgcd (psub (pmul rx rx) (pmul ry ry)) (pmul u1 u1)) = u1)   ; x^2-y^2 meets (x+y)^2:
+                                                 ; the PRS with content interplay
+ ((mgcd u1 ()) = u1)                             ; the zero poly absorbs...
+ ((mgcd () u1) = u1)                             ; ... either side
+ ((mgcd (poly (pmul u1 u2)) (poly (pmul u1 u3))) = u1)   ; the coin faces load
+ ((mgcd (pmul g1 g2) (pmul g1 g3)) = g1))        ; arity 1 rides pgcd, same answer
+
 ; --- Q[x y z]: coefficients are stars -- integers or ratio coins ------------
 ; cnorm keeps them canonical: an integer-VALUED coin demotes to its integer,
 ; so Z[x..] sits inside Q[x..] structurally -- halves that sum whole land

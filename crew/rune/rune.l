@@ -103,6 +103,49 @@
                   (: g (pgcd f (pd f 0))
                      (go (pquot f g) (pquot (pd f 0) g))))))
 
+; --- multivariate gcd: Q[x..] as (Q[y..])[x], the primitive PRS -------------
+; mgcd recurses on ARITY: view the poly univariate in the FIRST variable
+; (lex-descending keys make the lead monomial's e1 the x-degree free), take
+; the CONTENT -- the recursive mgcd fold over the x-coefficients (mcof drops
+; e1; one variable fewer each level, pgcd the arity-1 floor) -- split it
+; off (mdiv, exact lex division), and euclid the primitive halves by
+; PSEUDO-remainder (mprem cross-multiplies the lead coefficients, so the
+; top term cancels exactly with no coefficient division; each remainder
+; re-primitivized). a degree-0 remainder means coprime in x -- the 1 poly.
+; the answer is content-gcd times primitive-gcd, lex-lead normalized to 1
+; by pmonic. both faces load, answers raw, as with pgcd.
+(: (ksub a b) (? (0 = tally a) () (link (<a - <b) (ksub >a >b)))
+   (mcof p k) (map (\ m (link (mco m) >(mkey m)))
+                   (filter (\ m (k = <(mkey m))) p))
+   (mlift c k) (map (\ m (link (mco m) (link k (mkey m)))) c)
+   (me1s p) (? (0 = tally p) ()
+               (: e <(mkey <p)
+                  (link e (me1s (filter (\ m !(e = <(mkey m))) >p)))))
+   (mdiv f d) (? (0 = tally f) ()
+                 (: t `((link (cnorm (mco <f * cinv (mco <d)))
+                              (ksub (mkey <f) (mkey <d))))
+                    (padd t (mdiv (psub f (pmul t d)) d))))
+   (mprem f g) (? (0 = tally f) ()
+                  ((pdeg f) < (pdeg g)) f
+                  (: lg (mlift (mcof g (pdeg g)) 0)
+                     lf (mlift (mcof f (pdeg f)) ((pdeg f) - (pdeg g)))
+                     (mprem (psub (pmul lg f) (pmul lf g)) g)))
+   (mcont p) (: es (me1s p)
+                (go r acc) (? (0 = tally r) acc
+                              (go >r (mgcd acc (mcof p <r))))
+                (go >es (mcof p <es)))
+   (mpp p) (mdiv p (mlift (mcont p) 0))
+   (mgcd a b) (: x (load a) y (load b)
+                 (go f g) (: r (mprem f g)
+                             (? (0 = tally r) g
+                                (0 = (pdeg r)) (pconst (tally (mkey <g)) 1)
+                                (go g (mpp r))))
+                 (? (0 = tally x) (pmonic y)
+                    (0 = tally y) (pmonic x)
+                    (1 = tally (mkey <x)) (pgcd x y)
+                    (: c (mgcd (mcont x) (mcont y))
+                       (pmonic (pmul (mlift c 0) (go (mpp x) (mpp y))))))))
+
 ; --- the poly coin: polynomials first-class under the generic ops ----------
 ; strike a CANONICAL monomial list (the engine's own output) and the surface
 ; arrives whole: + - * run padd/psub/pmul through the die (slots 1/5/2), =
