@@ -7657,7 +7657,7 @@ static intptr_t vcmp_int(int op, intptr_t a, intptr_t b) {
 // under book (a map only outranks it by being mutable); the general n-D set (a tray) sits just BELOW
 // it. numbers fold to one by-value band; map/hot stay on top. The compare order is decoupled from the enum
 // (dispatch) order: we remap kinds to lattice ranks here, the enum/matrices are untouched.
-static ai_inline int cmp_rank(word x) {
+static ai_inline int cmp_rank(struct ai *g, word x) {
  if (nomp(x)) return 0;                            // mint/symbol -- the floor (a named sym is a (name . mint) chain)
  enum q k = ai_kind(x);
  if (k == KString) return 1;                       // string: above mint, below number
@@ -7666,6 +7666,8 @@ static ai_inline int cmp_rank(word x) {
  if (k == KArrO) return 3;                         // object tray: above the numbers, BELOW chain
  if (k == KChain) return 4;                        // chain: the grammar substrate -- HIGH, just under book (only book's mutability seats it above)
  if (k == KMap) return 5;                          // map: above chain
+ if (coinp(x) && die_get(g, coin_die(x), DIE_NET) == putcharm(2))
+  return 2;                                        // a RATIO coin seats IN the number band, by its value
  return 6; }                                       // KHot -- thread/function, the ceiling (the only kind left)
 static ai_inline intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb, uintptr_t lb) {
  uintptr_t n = la < lb ? la : lb;
@@ -7707,18 +7709,51 @@ static intptr_t galaxy_tie(struct ai_vec *va, struct ai_vec *vb) {
   if (ea.re != eb.re) return ea.re < eb.re ? -1 : 1;
   if (ea.im != eb.im) return ea.im < eb.im ? -1 : 1; }
  return 0; }
+// a RATIO coin's order is its VALUE's. the exact tier: word-sized integer
+// components cross-multiply in 128-bit (64-bit targets; a 32-bit build guards to
+// the 31-bit square root instead), so near-equal rationals order right where the
+// double quotient would tie. bignum components, float components, or a
+// scalar/complex/galaxy other side fall to the sign-exact net quotients.
+static ai_inline bool ratio_iview(word x, intptr_t *n, intptr_t *d) {
+ if (coinp(x)) { word p = coin_load(x);
+  if (!chainp(p) || !chainp(B(p))) return false;
+  word nn = A(p), dd = A(B(p));
+  if (!(charmp(nn) || widep(nn)) || !(charmp(dd) || widep(dd))) return false;
+  return *n = toint(nn), *d = toint(dd), *d != 0; }
+ if (charmp(x) || widep(x)) return *n = toint(x), *d = 1, true;
+ return false; }
+static ai_inline bool ratio_xcmp(intptr_t n1, intptr_t d1, intptr_t n2, intptr_t d2, intptr_t *c) {
+#if defined(__SIZEOF_INT128__)
+ __int128 l = (__int128) n1 * d2, r = (__int128) n2 * d1;
+#else
+ intptr_t lim = (intptr_t) 1 << 30;
+ if (n1 >= lim || n1 <= -lim || d1 >= lim || d1 <= -lim ||
+     n2 >= lim || n2 <= -lim || d2 >= lim || d2 <= -lim) return false;
+ int64_t l = (int64_t) n1 * d2, r = (int64_t) n2 * d1;
+#endif
+ intptr_t s = (d1 < 0) != (d2 < 0) ? -1 : 1;
+ return *c = l == r ? 0 : (l < r ? -s : s), true; }
 // 3-way total-order comparator (-1/0/1); the recursive engine for the chain case.
 // Floats collapse NaN to "equal" here (a structural total order can't carry IEEE
 // unorderedness); the scalar lane below keeps NaN unordered at the top level. hash
 // is alloc-free + GC-stable, so the lambda case is safe to call mid-comparison.
 static intptr_t cmp3(struct ai *g, word a, word b) {
- int ra = cmp_rank(a), rb = cmp_rank(b);
+ int ra = cmp_rank(g, a), rb = cmp_rank(g, b);
  if (ra != rb) return ra < rb ? -1 : 1;                    // cross-kind: the true-blue lattice (cmp_rank)
  // same band -- dispatch by the actual kind (NOT the synthetic cmp_rank, which remaps mint/
  // string/tray/chain off their enum ordinal). symbols first: a named sym IS a chain, so the chain
  // recursion below would otherwise grab it.
  if (nomp(a)) return mint_cmp(g, a, b);                    // mint band: () < bare mints < named syms
  if (ra == 2) {                                            // number band: stars + galaxies, ordered by net
+  if (coinp(a) || coinp(b)) {                              // a RATIO coin in the band (cmp_rank read its
+   intptr_t n1, d1, n2, d2, c;                             // mode-2 die): integer components -> EXACT
+   if (ratio_iview(a, &n1, &d1) && ratio_iview(b, &n2, &d2)
+       && ratio_xcmp(n1, d1, n2, d2, &c)) return c;
+   struct ai_zn za = ai_net(g, a), zb = ai_net(g, b);      // else the sign-exact quotients
+   if (za.re != zb.re) return za.re < zb.re ? -1 : 1;
+   if (za.im != zb.im) return za.im < zb.im ? -1 : 1;
+   if (galaxyp(a) != galaxyp(b)) return galaxyp(a) ? 1 : -1;  // net tie vs a galaxy: the star seats below
+   return 0; }
   if (galaxyp(a) || galaxyp(b)) {                          // a galaxy in play -> by net (re, im), then star<galaxy, then shape/content
    bool ga = galaxyp(a), gb = galaxyp(b);
    struct ai_zn na = ai_net(g, a), nb = ai_net(g, b);
@@ -7805,9 +7840,9 @@ lvm(lvm_sort) {
 static lvm(lvm_cmp_ord, int op) {
  word a = Sp[0], b = Sp[1]; intptr_t r;
  if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, op);      // array -> elementwise
- int ra = cmp_rank(a), rb = cmp_rank(b);
+ int ra = cmp_rank(g, a), rb = cmp_rank(g, b);
  if (ra != rb) r = vcmp_int(op, ra, rb);                   // cross-kind: the true-blue lattice (cmp_rank)
- else if (!(isnum(a) || Cp(a))) r = vcmp_int(op, cmp3(g, a, b), 0);  // same non-number band: string / sym / chain / lambda / map (cmp_rank remaps these off KCharm, so test the kind)
+ else if (!(isnum(a) || Cp(a)) || coinp(b)) r = vcmp_int(op, cmp3(g, a, b), 0);  // same non-number band, or a ratio coin either side (a coin as `a` fails isnum; as `b` this catches it): via cmp3
  else if (Cp(a) || Cp(b)) {                                // complex: lexicographic, per op
   ai_flo_t ar = Cp(a) ? cplx_re(a) : toflo(a), br = Cp(b) ? cplx_re(b) : toflo(b);
   r = ar != br ? vcmp_flo(op, ar, br)

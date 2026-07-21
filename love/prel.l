@@ -769,9 +769,10 @@
 ; the die declares its coins STARS (slot 7: numerals power through *, the surface net
 ; answers the coin ITSELF) and pins net-mode 2 (slot 6, RATIO): the C truth path
 ; reads n/d with the sign EXACT, so a rational's color is its VALUE's -- (q -1 2) is
-; nothing, $ ceils the magnitude, the subtract-and-test sign idiom holds. ORDER is
-; untouched: coin-coin still compares payloads, cross-kind still bands (the exact
-; value-compare lane is the open remainder of the open-stars design). a method
+; nothing, $ ceils the magnitude, the subtract-and-test sign idiom holds. ORDER too:
+; a ratio coin seats IN the number band, interleaved with the closed tower by value
+; (word-sized components compare by exact cross-multiply, so near-equal rationals
+; never tie by double rounding; wider fall to the sign-exact quotients). a method
 ; gets RAW operands, so it OWNS its domain: ok? admits a star or an (n d) of stars
 ; (an integer rides cap/mint: (cap 7) is 7, (caup 7) the unit), and anything else
 ; answers () -- the undefined-op law, and the fence that keeps a foreign operand (a

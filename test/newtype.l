@@ -128,6 +128,23 @@
     (nil? (nil? (q 1 (1000 10))))      ; a 10^1000 denominator underflows the double --
     (nil? (q -1 (1000 10)))            ; ... the sign survives it, both ways
 
+    ; --- the order half: a ratio coin seats IN the number band, by VALUE ---
+    (< (q 1 3) (q 1 2))                ; value order, not payload order
+    (nil? (< (q 1 2) (q 1 3)))
+    (nil? (< (q 1 2) (q 2 4)))         ; equal values tie (either side)
+    (nil? (< (q 2 4) (q 1 2)))
+    (< (q 1 2) 1)                      ; ... interleaved with the closed tower
+    (< 0 (q 1 2))
+    (< (q -1 2) 0)
+    (< 1 (q 3 2))
+    (>= (q 3 2) 1)                     ; the reversed faces ride the same lane
+    (<= (q 1 2) (q 2 4))
+    (< 1 (q 9007199254740993 9007199254740992))   ; 1 + 2^-53: the double quotient TIES at 1.0;
+                                       ; the exact cross-multiply tier does not
+    (= (L (q -1 2) (q 1 3) (q 1 2) 1 (q 3 2) 2)
+       (sort (L 2 (q 1 2) 1 (q 3 2) (q 1 3) (q -1 2))))   ; sort interleaves by value
+    (< (q 9 1) (cnt (L 1)))            ; a NON-ratio coin keeps the coin band, above the numbers
+
     ; --- rung 2: a declared star SELF-NETS, so the vocabulary follows the flag ---
     (= (q 1 2) (net (q 1 2)))          ; net answers the coin ITSELF (the fixpoint, by declaration)
     (star? (q 1 2))                    ; ... so star? holds with no coin branch of its own
