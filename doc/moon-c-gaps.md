@@ -246,16 +246,27 @@ big-constant initializers as ff.. (bitwise ops are undefined on love bignums —
 come off // and %). The lexer grew 'llnum/'ullnum: the LL/ULL suffixes force the pair
 type on t32 (1ull << 40 works); UL literals past 32 bits promote per C99.
 
+**by-value composites + varargs are real on thumb2** (rung 5): the sse2/'x2 lanes extend
+to t32 — a {double,double} HFA (`struct ai_zn`) rides d-pairs in args, params, returns,
+and call-result parking (the AAPCS32-VFP rule); an 8-byte one-sse blob rides the r0:r1
+pair into a d-reg (bit-identical to the packed S-pair), a ≤4-byte int one rides r0's
+word. Varargs: the prologue pushes r0-r3 under fp/lr, contiguous with the caller's stack
+args; va_list is gcc's one running pointer (`stdarg.h` `__arm__` branch); anonymous WORDS
+walk it (love.c's whole variadic surface — ai_push/ioprintf). En route: `__FLT_MAX__`
+predefined, the %-pow2 lane gated through immok (no AND-imm on t32), imby materializes on
+every arm, objelf32 learned R_ARM_THM_JUMP24. **love.c now compiles whole** for the M7 —
+the undef set is exactly the freestanding seam, zero `__aeabi_*` — and test_thumb2 runs an
+18-check gcc↔mooncc differential leg over the new lanes (45+45+9+18 total).
+
 What remains, all loud scares (never silent):
 
-- **by-value structs on t32** (`cgfn refuses zn` is love.c's wall): args, params, and
-  returns of aggregates refuse; AAPCS32 composites (incl. the {double,double} HFA that
-  `struct ai_zn` needs) are the next rung.
+- **mixed/int-pair 8..16B composites on t32** (an aone-'int 5..8B or a two-eightbyte
+  not-both-sse aggregate by value), register-exhausted stack HFAs (9+ double args), and
+  doubles/pairs/structs across a t32 VARIADIC seam — love.c reaches none of them.
 - **signed 64-bit `/` and `%`** refuse (`cgfn refuses`) — love.c's lane is unsigned; wrap
   the unsigned expansion in an abs/refix sleeve when needed.
-- **t32 varargs** — vaspill still emits the SysV shapes; a variadic t32 fn scares at the
-  backend (`bad-op stsd`).
-
+- **thumb1 varargs** — the pop-pc epilogue can't drop the r0-r3 block; vaspill-t32
+  refuses v6-M whole.
 - **thumb1 `leax`.** The indexed-call variant (`a[i]()` over a local array) hits
   `;; lea-range (r0 r4 8)` — the known scaled-indexed-address gap.
 
