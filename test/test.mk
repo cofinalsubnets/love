@@ -703,6 +703,21 @@ test_thumb2: host out/host$(hsuf)/mooncc
 	  timeout 30 qemu-system-arm -M mps2-an500 -semihosting -nographic -kernel $$d/t2z.elf </dev/null; a=$$?; \
 	  [ $$a -eq 18 ] || { echo "FAIL thumb2 composites+varargs (got $$a, want 18 = HFA d-pairs + 8B blob + <=4B int one + the AAPCS32 word walk, gcc<->mooncc both directions; 100+n names the first miss -- see test/thumb2/harnessz.c)"; exit 1; }; \
 	  echo "test_thumb2: mooncc -t thumb2 -c -> ELF32/EM_ARM (la + pairs + VFP + am.c bit-exact + composites/varargs: 45+45+9+18 differential checks), ld binds, runs on qemu Cortex-M7"
+# test_mps2 -- LOVE ITSELF on the M7: the whole runtime (love.c + am + libc + the
+# port glue) compiled end to end by mooncc -t thumb2 (port/mps2/, the qemu sim
+# port), linked by arm-none-eabi-ld, booted on qemu's Cortex-M7. The boot bakes
+# the egg FROM SOURCE on the emulated M7 -- the self-hosting double-bake under
+# emulation -- then the driver tail asserts spec laws over the hatched image and
+# exits 42 through semihosting. 98 = a fault (start.S names the stacked pc/lr).
+.PHONY: test_mps2
+test_mps2: host out/host$(hsuf)/mooncc
+	@echo MPS2 out/mps2/love.elf
+	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1 || ! command -v arm-none-eabi-ld >/dev/null 2>&1 || ! command -v qemu-system-arm >/dev/null 2>&1; then \
+	   echo "test_mps2: no arm-none-eabi toolchain / qemu-system-arm, skipped"; exit 0; fi; \
+	  $(MAKE) -C port/mps2 || { echo "FAIL mps2 build"; exit 1; }; \
+	  timeout 300 qemu-system-arm -M mps2-an500 -semihosting -nographic -kernel out/mps2/love.elf </dev/null; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL love-on-M7 boot (got $$a, want 42 = the egg hatched + the driver laws held; 98 = fault, 1 = a law failed)"; exit 1; }; \
+	  echo "test_mps2: love (all-mooncc thumb2) boots on qemu Cortex-M7 -- egg baked on-device, laws hold, exit 42"
 # moon-tar -- the userland cousin of test_raw: build GNU tar 1.13 (a real third-
 # party GNU package) with mooncc + nolibc + the holo linker, no gcc/glibc/ld, and
 # prove the binary RUNS -- cf/xf + czf/xzf roundtrips byte-identical + system-tar

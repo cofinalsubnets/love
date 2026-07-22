@@ -1,0 +1,60 @@
+# qemu MPS2+ AN500 (Cortex-M7) build -- love compiled END TO END by mooncc.
+# Run from the project root via `make -C port/mps2` (needs out/host/mooncc,
+# built by the root Makefile). Every C file -- love.c, the am math floor,
+# libc, main.c -- goes through `mooncc -t thumb2`; only start.S (12
+# instructions) and the final link are arm-none-eabi. mooncc's system
+# include dir is CWD-relative, so every compile runs from $(R).
+# Boot it: qemu-system-arm -M mps2-an500 -semihosting -nographic -kernel love.elf
+# (exit 42 = the egg hatched and the driver tail's laws held; `make
+# test_mps2` at the root gates exactly that).
+R := ../..
+o = out/mps2
+MOONCC = out/host/mooncc
+AS = arm-none-eabi-gcc -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-d16
+LD = arm-none-eabi-ld
+
+mps2_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Iout/lib
+lib_h = out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/bao.h out/lib/love_version.h
+
+objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o $(R)/$(o)/str.o \
+  $(R)/$(o)/ctype.o $(R)/$(o)/main.o $(R)/$(o)/start.o
+
+.PHONY: mps2 clean
+mps2: $(R)/$(o)/love.elf
+default: mps2
+
+clean:
+	rm -rf $(R)/$(o)
+
+# the lcat lib headers come from the root's own rules (on love0), on demand
+$(addprefix $(R)/,$(lib_h)):
+	@$(MAKE) -C $(R) $(patsubst $(R)/%,%,$@)
+
+$(R)/$(o)/love.o: $(R)/love.c $(R)/love.h $(addprefix $(R)/,$(lib_h))
+	@echo MOON	$@
+	@mkdir -p $(R)/$(o)
+	@cd $(R) && $(mps2_cc) -c love.c $(o)/love.o
+
+$(R)/$(o)/am.o: $(R)/crew/moon/lib/math/am.c
+	@echo MOON	$@
+	@mkdir -p $(R)/$(o)
+	@cd $(R) && $(MOONCC) -t thumb2 -Icrew/moon/lib/math -Icrew/moon/include -c crew/moon/lib/math/am.c $(o)/am.o
+
+$(R)/$(o)/%.o: $(R)/libc/%.c $(R)/love.h
+	@echo MOON	$@
+	@mkdir -p $(R)/$(o)
+	@cd $(R) && $(mps2_cc) -c libc/$*.c $(o)/$*.o
+
+$(R)/$(o)/main.o: main.c $(R)/love.h $(addprefix $(R)/,$(lib_h))
+	@echo MOON	$@
+	@mkdir -p $(R)/$(o)
+	@cd $(R) && $(mps2_cc) -c port/mps2/main.c $(o)/main.o
+
+$(R)/$(o)/start.o: start.S
+	@echo AS	$@
+	@mkdir -p $(R)/$(o)
+	@$(AS) -c start.S -o $@
+
+$(R)/$(o)/love.elf: $(objs) mps2.lds
+	@echo LD	$@
+	@$(LD) -T mps2.lds $(objs) -o $@

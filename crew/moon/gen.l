@@ -1732,6 +1732,15 @@
                    pk (pkr g)
                    _ (vmflush g)                          ; the call clobbers every pool reg
                    (? (bad? hr) 'bad
+                      ; t32: r12 is ALSO the far-mem/pair scratch, so a register park dies to any
+                      ; far frame offset in the ez emissions -- park in a frame slot instead and
+                      ; reload r12 as the LAST thing before the call (the far lane loading it is
+                      ; itself r12-into-r12, safe). the sib rewrite keeps the ld: the epilogue
+                      ; never touches r12.
+                      (t32? g)
+                       (: pko (ntmp g 'long)
+                          (mkv (fnret (vty hr)) 'r0 (cat pf (cat (tor0 g hr) (cat `(`('st 'r4 pko 'r0))
+                                    (spills + ezf + pops + setal + `(`('ld pk 'r4 pko) `('callr pk)) + clean + relods))))))
                       (mkv (fnret (vty hr)) 'r0 (cat pf (cat (tor0 g hr) (cat `(`('mov pk 'r0))
                                 (spills + ezf + pops + setal + `(`('callr pk)) + clean + relods)))))))))))
    (cgbin g env e wnt)

@@ -145,8 +145,29 @@
        _ (? (two? nrel)                             ; an ai_nifs data pointer is rare on thumb1 -- unsupported for now
              (scare 'obj32-nif-reloc-unsupported target) 0)
        exts (o-exts (trel + drel + nrel) tlabels dlabels nlabels)
+       ; STATIC fns whose addresses survive as relocations (a thumb2 la's movw/movt
+       ; pair, a data initializer's abs32 fn pointer -- love.c's ap tables): REL's
+       ; in-field addend is 16-bit SIGNED, so a deep .text offset cannot ride it --
+       ; the movt half truncates and the stored pointer drops its high bits (the
+       ; qemu-M7 boot's pc hijack: a cata popped as 0x14ab instead of 0x114ab).
+       ; each referenced .text label gets its own LOCAL FUNC symbol instead, thumb
+       ; bit in st_value like the globals, addend 0 -- the gcc convention.
+       fnset (: t (tablet 0) (go fs) (? !(two? fs) t (: _ (pin t (intern <fs) 1) (go >fs)))
+                (go funcnames))
+       locfns (: seen (tablet 0)
+                 (add lbl acc) (? (! (o-has? tlabels lbl)) acc
+                                  (o-has? fnset lbl) acc
+                                  (o-has? seen lbl) acc
+                                  (: _ (pin seen lbl 1) (lbl >< acc)))
+                 (go rs acc) (? !(two? rs) acc
+                                (: r <rs
+                                   (go >rs (? (member? <>r '(movw16 movt16 abs32)) (add <>>r acc) acc))))
+                 (rev (go drel (go trel ()))))
+       nloc (tally locfns)
        nfun (tally funcnames) nglob (tally globnames)
-       fstart 4 gstart (4 + nfun) estart ((4 + nfun) + nglob)
+       fstart (4 + nloc) gstart (fstart + nfun) estart (gstart + nglob)
+       locidx (: t (tablet 0) (go ls i) (? !(two? ls) t (: _ (pin t <ls (4 + i)) (go >ls (i + 1))))
+                 (go locfns 0))
        extidx (: t (tablet 0) (go es i) (? !(two? es) t (: _ (pin t <es (estart + i)) (go >es (i + 1))))
                   (go exts 0))
        fnidx (: t (tablet 0) (go fs i) (? !(two? fs) t (: _ (pin t (intern <fs) (fstart + i)) (go >fs (i + 1))))
@@ -154,11 +175,13 @@
        globidx (: t (tablet 0) (go gs i) (? !(two? gs) t (: _ (pin t (intern <gs) (gstart + i)) (go >gs (i + 1))))
                   (go globnames 0))
        ; an abs32 pool target -> (symidx field). a defined global / a function address binds its OWN
-       ; symbol (addend rides the field, usually 0); a .data/ai_nifs static or string binds the SECTION
-       ; symbol with its offset in the field (REL has no addend column); anything else is external.
+       ; symbol (addend rides the field, usually 0); a referenced STATIC fn its LOCAL symbol (above);
+       ; a .data/ai_nifs static or string binds the SECTION symbol with its offset in the field
+       ; (REL has no addend column); anything else is external.
        (a32loc lbl aux)
         (? (o-has? globidx lbl) `((peep globidx lbl 0) aux)
            (o-has? fnidx lbl)   `((peep fnidx lbl 0) aux)
+           (o-has? locidx lbl)  `((peep locidx lbl 0) aux)
            (o-has? dlabels lbl) `(2 ((peep dlabels lbl 0) + aux))
            (o-has? nlabels lbl) `(3 ((peep nlabels lbl 0) + aux))
            `((peep extidx lbl 0) aux))
@@ -170,15 +193,16 @@
                             (go >rs (? (id? <>r 'abs32) (: sl (a32loc <>>r <>>>r) (o-put32 bs <r <>sl)) bs))))
            (go rs bytes))
        ; a movw16/movt16 (thumb2 la) target -> (symidx addend). the shape of a32loc, but the fixup's
-       ; aux is Rd (not an addend), so the addend starts at 0; a section-bound target carries its
-       ; offset as the addend instead -- and a .text-bound one (a static fn: no symbol of its own)
-       ; carries the THUMB BIT in it too, since a section symbol's T is 0 and BLX needs bit 0.
+       ; aux is Rd (not an addend), so the addend starts at 0; a .data/nif section-bound target
+       ; carries its offset as the addend (BOTH fields carry the FULL value -- the linker reads each
+       ; field as a whole signed addend, so this only fits under 32K; a static FN never rides here,
+       ; it has its local symbol above).
        (mwloc lbl)
         (? (o-has? globidx lbl) `((peep globidx lbl 0) 0)
            (o-has? fnidx lbl)   `((peep fnidx lbl 0) 0)
+           (o-has? locidx lbl)  `((peep locidx lbl 0) 0)
            (o-has? dlabels lbl) `(2 (peep dlabels lbl 0))
            (o-has? nlabels lbl) `(3 (peep nlabels lbl 0))
-           (o-has? tlabels lbl) `(1 ((peep tlabels lbl 0) | 1))
            `((peep extidx lbl 0) 0))
        ; REL keeps the addend IN the imm16 scatter: re-encode each section-bound movw16/movt16 with
        ; its half of the addend (patch-with does the scatter; the linker adds S on top).
@@ -194,34 +218,40 @@
            (go rs bytes))
        tbytes (bakemw (bakeabs tbytes0 trel) trel)
        dbytes (bakeabs dbytes0 drel)
-       symnames (funcnames + globnames + (map (\ s (string s)) exts))
+       symnames ((map (\ s (string s)) locfns) + funcnames + globnames + (map (\ s (string s)) exts))
        str (o-strtab symnames)
        strblob <str stroffs <>str
        (nthr l i) (? (i < 1) <l (nthr >l (i - 1)))
        ; -- the symbol table. a FUNC symbol's value carries the THUMB BIT (bit 0): a
        ; cross-object R_ARM_THM_CALL folds it into T, so the callee is entered in
-       ; Thumb state -- vital on M0 (no ARM state at all). data OBJECT syms stay even. --
+       ; Thumb state -- vital on M0 (no ARM state at all). data OBJECT syms stay even.
+       ; the referenced-static LOCAL FUNC syms lead (symtab sh_info = first global). --
        symbytes
-        (: fsyms (: (go fs i acc) (? !(two? fs) (catall (rev acc))
+        (: lsyms (: (go ls i acc) (? !(two? ls) (catall (rev acc))
+                                     (go >ls (i + 1)
+                                         ((o-sym32 (nthr stroffs i) 0 2 1
+                                                      ((peep tlabels <ls 0) | 1)) >< acc)))   ; STB_LOCAL STT_FUNC, +thumb bit
+                    (go locfns 0 ()))
+           fsyms (: (go fs i acc) (? !(two? fs) (catall (rev acc))
                                      (go >fs (i + 1)
-                                         ((o-sym32 (nthr stroffs i)
+                                         ((o-sym32 (nthr stroffs (nloc + i))
                                                       (? (member? <fs wknames) 2 1)   ; STB_WEAK vs STB_GLOBAL
                                                       2 1 ((peep tlabels (intern <fs) 0) | 1)) >< acc)))  ; STT_FUNC, +thumb bit
                     (go funcnames 0 ()))
            gsyms (: (go gs i acc) (? !(two? gs) (catall (rev acc))
                                      (go >gs (i + 1)
-                                         ((o-sym32 (nthr stroffs (nfun + i)) 1 1 2 (peep dlabels (intern <gs) 0)) >< acc)))
+                                         ((o-sym32 (nthr stroffs (nloc + (nfun + i))) 1 1 2 (peep dlabels (intern <gs) 0)) >< acc)))
                     (go globnames 0 ()))
            esyms (: (go es i acc) (? !(two? es) (catall (rev acc))
                                      (go >es (i + 1)
-                                         ((o-sym32 (nthr stroffs ((nfun + nglob) + i)) 1 0 0 0) >< acc)))
+                                         ((o-sym32 (nthr stroffs (nloc + ((nfun + nglob) + i))) 1 0 0 0) >< acc)))
                     (go exts 0 ()))
            (catall `((o-sym32 0 0 0 0 0)              ; NULL
                       (o-sym32 0 0 3 1 0)              ; .text section symbol
                       (o-sym32 0 0 3 2 0)              ; .data
                       (o-sym32 0 0 3 3 0)              ; ai_nifs
-                      fsyms gsyms esyms)))
-       nsym (4 + nfun + nglob + (tally exts))
+                      lsyms fsyms gsyms esyms)))
+       nsym ((4 + nloc) + (nfun + (nglob + (tally exts))))
        ; -- .rel.text: R_ARM_THM_CALL for each external/weak `bl` (internal ones resolved in place). --
        reltext (: (go rs acc)
                    (? !(two? rs) (catall (rev acc))
@@ -269,7 +299,7 @@
               (sh32 (shname 0) 1 6 t-off t-sz 0 0 4 0)                     ; 1 .text  PROGBITS ALLOC|EXEC
               (sh32 (shname 1) 1 3 d-off d-sz 0 0 4 0)                     ; 2 .data  PROGBITS ALLOC|WRITE
               (sh32 (shname 2) 1 3 n-off n-sz 0 0 4 0)                     ; 3 ai_nifs
-              (sh32 (shname 3) 2 0 sym-off sym-sz 5 4 4 16)                ; 4 .symtab link=.strtab info=first-global
+              (sh32 (shname 3) 2 0 sym-off sym-sz 5 (4 + nloc) 4 16)       ; 4 .symtab link=.strtab info=first-global
               (sh32 (shname 4) 3 0 str-off str-sz 0 0 1 0)                 ; 5 .strtab
               (sh32 (shname 5) 9 0 rt-off rt-sz 4 1 4 8)                   ; 6 .rel.text  SHT_REL link=.symtab info=.text
               (sh32 (shname 6) 9 0 rd-off rd-sz 4 2 4 8)                   ; 7 .rel.data  SHT_REL link=.symtab info=.data
