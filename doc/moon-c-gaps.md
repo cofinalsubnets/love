@@ -246,6 +246,14 @@ big-constant initializers as ff.. (bitwise ops are undefined on love bignums —
 come off // and %). The lexer grew 'llnum/'ullnum: the LL/ULL suffixes force the pair
 type on t32 (1ull << 40 works); UL literals past 32 bits promote per C99.
 
+**love BOOTS on the M7** (port/mps2/, `make test_mps2`): the whole runtime compiled by
+mooncc -t thumb2, linked by arm-none-eabi-ld, bakes its egg from source on qemu's
+Cortex-M7 and passes spec laws (exit 42). The boot surfaced and fixed two deep holes:
+objelf32's REL movw/movt addends truncated static-fn addresses past 32K of .text
+(referenced .text labels now get LOCAL FUNC symbols, the gcc convention), and the t32
+callr park in r12 collided with the far-mem scratch (the target now parks in a frame
+slot, reloaded last before the call).
+
 **by-value composites + varargs are real on thumb2** (rung 5): the sse2/'x2 lanes extend
 to t32 — a {double,double} HFA (`struct ai_zn`) rides d-pairs in args, params, returns,
 and call-result parking (the AAPCS32-VFP rule); an 8-byte one-sse blob rides the r0:r1
