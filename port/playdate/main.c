@@ -4,31 +4,37 @@
 // ai_stdin/ai_stdout ports, the ai_fd_port_vt vtable, and the cooperative-wait
 // hooks. Here the console is a quay cb (50x30 cells of the 8x8 CGA font)
 // blitted to the 1-bit LCD each frame; stdout/stderr both land there, so the
-// prel's puts IS the screen and a scare face is visible. The heap rides
-// pd->system->realloc through ai_ini_m. The bootstrap egg compiles the love
-// compiler with the C evaluator, recompiles it with itself, installs it, then
+// prel's puts IS the screen and a scare face is visible. The heap rides the
+// SDK realloc through ai_ini_m. The bootstrap egg compiles the love compiler
+// with the C evaluator, recompiles it with itself, installs it, then
 // crew/rune/ bakes in as a registered module and cas.l (this folder) drives
 // the demo: the C update just clears the console, fires (cas ()), and blits.
-#include "pd_api.h"
+//
+// This file is mooncc-compiled on device (-t thumb2sp: the STM32F746's FPU is
+// single-precision, so every f64 op softens to __aeabi_* -- the same libgcc
+// helpers Panic's own toolchain leans on). The SDK lives behind pdglue.c's
+// word-only surface; nothing here sees pd_api.h, a float ABI, or a variadic.
 #include "../../love.h"
 #include "quay.h"
+#include "pdglue.h"
+
+#ifndef EOF
+#define EOF (-1)
+#endif
 
 #define NROWS 30
 #define NCOLS 50
 #define kcb (&K.cb)
 static struct k {
   struct ai *g;
-  PlaydateAPI *pd;
   int dead;                    // a scare froze the session; keep blitting it
-  struct { PDButtons current, pushed, released; } b;
   union {
     struct cb cb;
     uint8_t cb_bytes[sizeof(struct cb) + sizeof(uint32_t) * NROWS * NCOLS]; };
 } K;
 
 // --- clock + cooperative waits ---------------------------------------------
-static unsigned int (*clockfp)(void);
-ai_noinline uintptr_t ai_clock(void) { return clockfp ? clockfp() : 0; }
+uintptr_t ai_clock(void) { return pdg_ms(); }
 void ai_sleep(uintptr_t ms) {
   uintptr_t start = ai_clock();
   if (ms) while (ai_clock() - start < ms) ;
@@ -72,13 +78,11 @@ struct ai_port_vt const ai_fd_port_vt = { _getc, _ungetc, _eof, _putc, _flush, N
 //                   down 8 B 16 A 32)
 // (cur_set r c)  -- seat the console's write cursor
 static lvm(ai_crank) {
-  int d = K.pd->system->isCrankDocked();
-  float a = K.pd->system->getCrankAngle();
-  Sp[0] = d ? ai_nil : putcharm((int) a % 360);
+  Sp[0] = pdg_crank_docked() ? ai_nil : putcharm(pdg_crank_deg());
   Ip += 1;
   return Continue(); }
 static lvm(ai_pushed) {
-  Sp[0] = putcharm(K.b.pushed);
+  Sp[0] = putcharm(pdg_pushed());
   Ip += 1;
   return Continue(); }
 static lvm(ai_cur_set) {
@@ -98,17 +102,17 @@ static struct ai_def defs[] = {
 
 // --- the frame --------------------------------------------------------------
 static void blit(void) {
-  uint8_t *frame = K.pd->graphics->getFrame();
+  uint8_t *frame = pdg_frame();
   for (uint32_t i = 0; i < NROWS; i++)
     for (uint32_t j = 0; j < NCOLS; j++) {
       uint8_t ch = cb_ch(K.cb.cb[i * NCOLS + j]);
       uint8_t const *bmp = cga_8x8[ch == '\n' ? 0 : ch];
       for (uint32_t b = 0; b < 8; b++)
-        frame[LCD_ROWSIZE * (8 * i + b) + j] = bmp[b]; }
-  K.pd->graphics->markUpdatedRows(0, LCD_ROWS); }
+        frame[PDG_ROWSIZE * (8 * i + b) + j] = bmp[b]; }
+  pdg_mark_updated(); }
 
 static int k_update(void *_) {
-  K.pd->system->getButtonState(&K.b.current, &K.b.pushed, &K.b.released);
+  pdg_poll_buttons();
   if (!K.dead) {
     cb_cur(kcb, 0, 0);
     cb_fill(kcb, 0);
@@ -126,7 +130,7 @@ static int k_update(void *_) {
 // reach abort and the stdio buffer setup; none of them can actually run here,
 // the linker just wants the names.
 int _write(int fd, const void *b, size_t n) { return n; }
-void __attribute__((noreturn)) _exit(int c) { for (;;) ; }
+void _exit(int c) { for (;;) ; }
 int _fstat(int fd, void *st) { return -1; }
 int _isatty(int fd) { return 0; }
 int _kill(int pid, int sig) { return -1; }
@@ -139,13 +143,10 @@ void *_sbrk(intptr_t n) { return (void *) -1; }
 
 // --- entry -------------------------------------------------------------------
 static void *pd_alloc(struct ai *g, void *p, size_t n) {
-  return n ? K.pd->system->realloc(NULL, n) : (K.pd->system->realloc(p, 0), NULL); }
+  return n ? pdg_realloc(NULL, n) : (pdg_realloc(p, 0), NULL); }
 
-int eventHandler(PlaydateAPI *pd, PDSystemEvent event, uint32_t arg) {
-  if (event != kEventInit) return 0;
-  K.pd = pd;
-  pd->system->logToConsole("love: init");
-  clockfp = pd->system->getCurrentTimeMilliseconds;
+void love_init(void) {
+  pdg_log("love: init");
   cb_open(kcb, NROWS, NCOLS);
   kcb->flag |= cb_lnm | cb_wrap;   // console discipline + autowrap the long forms
   // first light before the bake: the egg takes a while on the device, and a
@@ -154,7 +155,7 @@ int eventHandler(PlaydateAPI *pd, PDSystemEvent event, uint32_t arg) {
     cb_putc(kcb, *s);
   blit();
   struct ai *g = ai_defn(ai_ini_m(pd_alloc), defs, countof(defs));
-  pd->system->logToConsole("love: core %s", ai_ok(g) ? "up" : "FAILED");
+  pdg_log(ai_ok(g) ? "love: core up" : "love: core FAILED");
   // bound the collector to a QUARTER of the device's 16 MB (the Appel knob,
   // teensy's law): a major resize holds old and new pools at once, so the
   // transient peak is double the budget -- 8 MB here, and the simulator
@@ -173,10 +174,10 @@ int eventHandler(PlaydateAPI *pd, PDSystemEvent event, uint32_t arg) {
     " "
 #include "cas.h"
     "0)");
-  pd->system->logToConsole("love: boot eval status %d", (int) ai_code_of(K.g));
+  pdg_log(ai_ok(K.g) ? "love: boot eval ok" : "love: boot eval FAILED");
   if (ai_ok(K.g))
-    pd->system->setUpdateCallback(k_update, NULL);
+    pdg_set_update(k_update);
   else if (ai_code_of(K.g) == ai_status_scare)
     ai_scare_face_(K.g),          // the condition lands on the cb...
     blit();                       // ...and freezes on the LCD
-  return 0; }
+}

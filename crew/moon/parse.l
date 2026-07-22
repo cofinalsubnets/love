@@ -206,7 +206,7 @@
    ; the machine WORD (bytes): a pointer and a gp scalar (long) ride it. 4 on the 32-bit thumb ABI,
    ; 8 otherwise. MUST match gen's (wsize g) (gen.l) -- a divergence mislays every pointer-bearing
    ; struct SILENTLY, since playout bakes offsets here at parse and gen trusts the stag table.
-   (pst32? ps) (member? (peep ps 'tgt ()) '(thumb2 thumb1))
+   (pst32? ps) (member? (peep ps 'tgt ()) '(thumb2 thumb2sp thumb1))
    (psword ps) (? (pst32? ps) 4 8)
    (tsz ps ty) (? (ptr? ty) (psword ps)
                   (arr? ty) (* <>>ty (tsz ps <>ty))

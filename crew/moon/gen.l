@@ -151,7 +151,8 @@
    ; build/epilogue path verbatim. register-homing is OFF for now (nhome=0): every
    ; param spills to its frame slot, the simplest correct lane. --
    (a64? g) (id? (peep g 'tgt ()) 'arm64)
-   (t32? g) (member? (peep g 'tgt ()) '(thumb2 thumb1))   ; the 32-bit thumb ABI family (AAPCS32): ARMv7E-M + ARMv6-M share it
+   (t32? g) (member? (peep g 'tgt ()) '(thumb2 thumb2sp thumb1))   ; the 32-bit thumb ABI family (AAPCS32): ARMv7E-M + ARMv6-M share it
+   (sp64? g) (id? (peep g 'tgt ()) 'thumb2sp)       ; ARMv7E-M with an SP-ONLY FPU (the playdate's STM32F746): f64 arithmetic softens
    (v6m? g) (id? (peep g 'tgt ()) 'thumb1)          ; ARMv6-M refinements ONLY: narrower immediates, no imm-mul, soft-divide, pop-pc epilogue
    (arm? g) (|| (a64? g) (t32? g))                  ; the lr-push / fp-base / bx-lr frame family
    (wsize g) (? (t32? g) 4 8)                       ; the machine WORD in bytes (a pointer, a gp scalar, a stack cell)
@@ -1957,6 +1958,97 @@
    ; with the caller's stack args), so the epilogue drops that 16-byte block
    ; after restoring fp/lr and before the return
    epi-t32va `(`('lea 'sp 'fp 0) `('pop 'fp) `('pop 'lr) `('add 'sp 'sp 16) `('ret))
+   ; -- the SOFT-DOUBLE pass (sp64: an SP-only FPU -- the playdate's STM32F746).
+   ; fpv4/5-SP keeps the 64-bit TRANSFERS (vldr/vstr.64, the core<->D vmov pair
+   ; moves), so ldsd/stsd/movqxr/movqrx ride the hardware and the double value
+   ; model keeps its d-regs -- but every f64 ARITHMETIC/compare/convert is
+   ; UNDEFINED there and lowers to its __aeabi_* libgcc call, the exact helpers
+   ; gcc emits at -mfpu=*-sp-*, so a mooncc double and a gcc double agree to
+   ; the BIT. every call blankets r0-r3 through a 32-byte sp cell (slots 0..12
+   ; the saves, 16 the float bounce) -- a gp PAIR can be live across these ops
+   ; (cvtlld holds its lo word over the first convert), and the cell keeps the
+   ; pass sound with no liveness reasoning; ABOVE sp always (an IRQ frame owns
+   ; the space below). d-regs need no saving: moon stages doubles only through
+   ; f0/f1 (both consumed operands) + the f15 narrow scratch, never d2..d7.
+   ; a compare's consumers are the FUSED next forms (br cc / set cc / the
+   ; eq-np ordered dance) -- rewritten as a unit, each VCMP-flavored cc mapped
+   ; onto a boolean helper + sense: plain loads restore r0-r3 after the cmp
+   ; without touching the flags, so the branch/set reads them across the
+   ; restore. anything unrecognized after a compare scares LOUD.
+   sf-bin (: t (tablet 0)
+             _ (pin t 'addsd '__aeabi_dadd) _ (pin t 'subsd '__aeabi_dsub)
+             _ (pin t 'mulsd '__aeabi_dmul) _ (pin t 'divsd '__aeabi_ddiv)
+             t)
+   ; VCMP-flavored cc -> (helper sense): sense 'ne = helper-true means the cc
+   ; holds; 'eq = helper-false (the negated relations, unordered-TRUE like the
+   ; flags they replace: le = !(a>b), lt = !(a>=b))
+   (sf-cc cc) (? (cc = 'gt) '(__aeabi_dcmpgt ne)
+                 (cc = 'ge) '(__aeabi_dcmpge ne)
+                 (cc = 'eq) '(__aeabi_dcmpeq ne)
+                 (cc = 'ne) '(__aeabi_dcmpeq eq)
+                 (cc = 'le) '(__aeabi_dcmpgt eq)
+                 (cc = 'lt) '(__aeabi_dcmpge eq)
+                 ())
+   sf-save `(`('sub 'sp 'sp 32) `('st 'sp 0 'r0) `('st 'sp 4 'r1) `('st 'sp 8 'r2) `('st 'sp 12 'r3))
+   sf-rest `(`('ld 'r0 'sp 0) `('ld 'r1 'sp 4) `('ld 'r2 'sp 8) `('ld 'r3 'sp 12) `('add 'sp 'sp 32))
+   (sf-slot r) (? (id? r 'r0) 0 (id? r 'r1) 4 (id? r 'r2) 8 (id? r 'r3) 12 -1)
+   (soften g fs)
+    (? (! (sp64? g)) fs
+       (: (go l)
+           (? (! (two? l)) ()
+              (: f <l r >l
+                 (? (! (two? f)) (link f (go r))
+                    (: op <f
+                       h9 (peep sf-bin op ())
+                       (? h9                          ; (op fD fS): fD = fD op fS
+                           (cat sf-save
+                            (cat `(`('movqrx 'r0 <>f) `('movqrx 'r2 <>>f) `('call h9) `('movqxr <>f 'r0))
+                             (cat sf-rest (go r))))
+                          (op = 'movsd)               ; no VMOV.F64 on SP: bounce the pair, no call
+                           (cat `(`('sub 'sp 'sp 16) `('stsd 'sp 0 <>>f) `('ldsd <>f 'sp 0) `('add 'sp 'sp 16))
+                                (go r))
+                          (member? op '(cvtsi2sd cvtui2sd))   ; (op fD rS)
+                           (: sl (sf-slot <>>f)
+                              (cat sf-save
+                               (cat (? (sl < 0) `(`('mov 'r0 <>>f)) `(`('ld 'r0 'sp sl)))
+                                (cat `(`('call (? (op = 'cvtsi2sd) '__aeabi_i2d '__aeabi_ui2d)) `('movqxr <>f 'r0))
+                                 (cat sf-rest (go r))))))
+                          (member? op '(cvttsd2si cvttsd2ui))   ; (op rD fS)
+                           (: sl (sf-slot <>f)
+                              (cat sf-save
+                               (cat `(`('movqrx 'r0 <>>f) `('call (? (op = 'cvttsd2si) '__aeabi_d2iz '__aeabi_d2uiz)))
+                                (cat (? (sl < 0) `(`('mov <>f 'r0)) `(`('st 'sp sl 'r0)))   ; through the save slot: the restore lands it
+                                 (cat sf-rest (go r))))))
+                          (op = 'cvtss2sd)            ; (op fD fS): float bits out via the bounce slot
+                           (cat sf-save
+                            (cat `(`('stss 'sp 16 <>>f) `('ld 'r0 'sp 16)
+                                   `('call '__aeabi_f2d) `('movqxr <>f 'r0))
+                             (cat sf-rest (go r))))
+                          (op = 'cvtsd2ss)            ; (op fD fS)
+                           (cat sf-save
+                            (cat `(`('movqrx 'r0 <>>f) `('call '__aeabi_d2f)
+                                   `('st 'sp 16 'r0) `('ldss <>f 'sp 16))
+                             (cat sf-rest (go r))))
+                          (op = 'ucomisd)
+                           (: args (sf-save + `(`('movqrx 'r0 <>f) `('movqrx 'r2 <>>f)))
+                              n1 (? (two? r) <r ())
+                              (? (&& (two? n1) (id? <n1 'br))
+                                  (: hs (sf-cc <>n1)
+                                     _ (? (two? hs) 0 (scare 'soften-cc n1))
+                                     (cat (args + `(`('call <hs) `('cmp 'r0 0)) + sf-rest + `(`('br <>hs <>>n1)))
+                                          (go >r)))
+                                 (&& (two? n1) (id? <n1 'set))
+                                  (: n2 (? (two? >r) <>r ())
+                                     n3 (? (&& (two? >r) (two? (cup (cup r)))) <>>r ())
+                                     dance (&& (two? n2) (&& (id? <n2 'set) (&& (member? <>n2 '(p np))
+                                                             (&& (two? n3) (member? <n3 '(and or))))))
+                                     hs (sf-cc <>n1)
+                                     _ (? (two? hs) 0 (scare 'soften-cc n1))
+                                     (cat (args + `(`('call <hs) `('cmp 'r0 0)) + sf-rest + `(`('set <>hs <>>n1)))
+                                          (go (? dance (cup (cup (cup r))) >r))))
+                                 (scare 'soften-ucomisd n1)))
+                          (link f (go r)))))))
+          (go fs)))
    ; the v6-M twin: ARMv6-M POP restores r0..r7 and PC but NOT LR, so the return folds into
    ; `pop {pc}` (the pushed lr lands straight in pc) -- no separate lr-restore + bx. fp is r7
    ; here (the backend numbers it). r4 is the BOTTOM base (see t16slots): pushed just under fp,
@@ -4220,9 +4312,12 @@
                        ; forms already say fp/sp/lr and pass through a4ize
                        ; untouched). lr rides its own push cell (bl clobbers
                        ; it); no r3 slot -- x3/r3 is caller-saved under AAPCS.
-                       ((? (v6m? g) (\ ir (t16la (t16slots ir frame))) (\ ir ir))   ; v6m: fp-neg slots -> r4-positive (after a4ize), then la -> literal pool
+                       ((? (v6m? g) (\ ir (t16la (t16slots ir frame)))   ; v6m: fp-neg slots -> r4-positive (after a4ize), then la -> literal pool
+                           (sp64? g) (\ ir (t16la ir))       ; playdate: la -> pooled ABS32 word (its loader can't relocate MOVW/MOVT)
+                           (\ ir ir))
                         (a4ize
                          (sibcall g
+                          (soften g
                           (cat (? (v6m? g)   ; v6m: extra push r4 (bottom base), planted AFTER the sub; fp stays at top
                                   `(`('label (intern <>f)) `('push 'lr) `('push 'fp) `('push 'r4)
                                      `('lea 'fp 'sp 0) `('sub 'sp 'sp frame) `('lea 'r4 'sp 0))
@@ -4232,7 +4327,7 @@
                                            ())
                                         `(`('push 'lr) `('push 'fp) `('lea 'fp 'sp 0) `('sub 'sp 'sp frame)))))
                            (cat <sp0
-                            (body + `(`('li 'r0 0)) + (peep g 'epi epi-a64)))))))
+                            (body + `(`('li 'r0 0)) + (peep g 'epi epi-a64))))))))
                        (deadst
                         (deaddef      ; rerun: the widened addrfold strands live-dest addr insns
                         (addrfold
@@ -4452,7 +4547,7 @@
             _ (pin t 'glob (tablet 0)) _ (pin t 'globs ()) _ (pin t 'strs ()) _ (pin t 'statics ())
             _ (pin t 'fns (tablet 0)) _ (pin t 'inl (tablet 0)) _ (pin t 'cgitems cgitems)
             _ (pin t 'stag stbl) _ (pin t 'sigs sigs)
-            _ (pin t 'tgt tgt) _ (pin t 'epi (? (id? tgt 'thumb1) epi-t16 (member? tgt '(arm64 thumb2)) epi-a64 epi))
+            _ (pin t 'tgt tgt) _ (pin t 'epi (? (id? tgt 'thumb1) epi-t16 (member? tgt '(arm64 thumb2 thumb2sp)) epi-a64 epi))
             _ (pin t 'sects (? (two? xtra) <>>xtra (tablet 0))) t)
        ; pass 0: every function name -- so a bare use of one is its address (la).
        ; the sig table too: an mproto sibling (`double sin(..), cos(..);`) has a

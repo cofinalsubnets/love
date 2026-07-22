@@ -1,12 +1,17 @@
 # Playdate build. Run from the project root via `make -C port/playdate`, or
 # directly via `cd port/playdate && make`. Output lands in $(R)/out/playdate/
-# ($n.pdx at the top). Requires PLAYDATE_SDK_PATH (pdc + C_API + simulator)
-# and arm-none-eabi-gcc for the device half; the simulator pdex.so is an
+# ($n.pdx at the top). Requires PLAYDATE_SDK_PATH (pdc + C_API + simulator);
+# the DEVICE half is compiled by mooncc -t thumb2sp (the STM32F746's FPU is
+# single-precision: every f64 op softens to the __aeabi_* libgcc helpers,
+# gated bit-exact by test_thumb2sp) with only pdglue.c + the SDK's setup.c on
+# arm-none-eabi-gcc -- pdglue owns pd_api.h and flattens the SDK to a
+# word-only seam. la rides pooled ABS32 words on this target (the loader
+# relocates words, never a MOVW/MOVT pair). The simulator pdex.so stays an
 # ordinary host gcc shared object, so `make sim` runs with no cross tools.
 #
 # Both halves bake the same program: the egg bootstrap (out/lib lcat headers,
 # delegated to the root), crew/rune/ as a registered module, and cas.l (this
-# folder, lcat'd locally) driving the workbench. See main.c.
+# folder, lcat'd locally) driving the workbench. See main.c + pdglue.c.
 R := ../..
 include $(R)/common.mk
 
@@ -14,16 +19,15 @@ o = $(R)/out/playdate
 n = love
 pd_sdk = $(PLAYDATE_SDK_PATH)
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
+MOONCC = $(R)/out/host/mooncc
 pd_cc = $(CCACHE) arm-none-eabi-gcc -g3
 pd_opt = -Os -falign-functions=16 -fomit-frame-pointer
-# the device M7's FPU is single-precision; gem (double) arithmetic rides the
-# libgcc soft helpers, which the SDK link script GROUPs in.
+# the device M7's FPU is single-precision; gcc-side doubles ride the libgcc
+# soft helpers -- the same __aeabi_* calls mooncc's soft-double pass emits.
 pd_fpu = -mfloat-abi=hard -mfpu=fpv5-sp-d16 -D__FPU_USED=1
 pd_mcflags = -mthumb -mcpu=cortex-m7 $(pd_fpu)
 pd_incdir = -I. -I$(o) -I$(R) -I$(R)/out/lib -I$(R)/port/quay -I$(pd_sdk)/C_API
-pd_defs = -DTARGET_PLAYDATE=1 -DTARGET_EXTENSION=1 -Dai_tco=0
-# -ffreestanding keeps love.c off the hosted-only lanes (the W^X mmap arena);
-# newlib's headers + libc.a still supply mem/str at compile and link.
+pd_defs = -DTARGET_PLAYDATE=1 -DTARGET_EXTENSION=1
 pd_cpflags = $(pd_mcflags) $(pd_opt) $(pd_defs) -std=gnu2x -ffreestanding \
   -gdwarf-2 -Wall -Wno-unused -Wstrict-prototypes -Wno-unknown-pragmas \
   -Wdouble-promotion -mword-relocations -fno-common \
@@ -32,21 +36,25 @@ pd_lds = $(pd_sdk)/C_API/buildsupport/link_map.ld
 pd_ldflags = -nostartfiles $(pd_mcflags) -T$(pd_lds) \
   -Wl,-Map=$(o)/pdex.map,--cref,--gc-sections,--no-warn-mismatch,--emit-relocs
 
+# mooncc's flags for the device C (run from $(R): its system include dir is
+# CWD-relative). TARGET_PLAYDATE gates main.c's newlib stubs.
+mc_flags = -t thumb2sp -D ai_tco=1 -D __STDC_HOSTED__=0 -D TARGET_PLAYDATE=1 -D TARGET_EXTENSION=1 \
+  -Iport/playdate -Iout/playdate -I. -Iout/lib -Iport/quay
+
 # the lcat lib headers this frontend bakes (produced by the root's rules on
 # love0, delegated below so a standalone make works from a clean tree)
 lib_hs = $(patsubst %,$(R)/out/lib/%.h,egg prel ev rune runeseal)
 pd_h = $(love_h) $(wildcard $(R)/port/quay/*.h) $(o)/cas.h $(lib_hs)
 
-# local main.c stays rooted in cwd (and wins the object-name race against the
-# top-level host main.c); the shared runtime (love.c + am.c) and quay carry
-# the $(R)/ prefix; the SDK helper has an absolute path we map by hand.
+# the split: mooncc carries love.c + am + quay + main.c; gcc carries pdglue.c
+# (the pd_api.h owner) + the SDK's setup.c. the sim build compiles everything
+# hosted, so pd_src keeps the full wildcard.
 pd_local_c = $(wildcard *.c)
 pd_shared_c = $(love_c) $(f_c)
 pd_sdk_c = $(pd_sdk)/C_API/buildsupport/setup.c
 pd_src = $(pd_local_c) $(pd_shared_c) $(pd_sdk_c)
-pd_local_o = $(pd_local_c:%.c=$(o)/%.o)
-pd_shared_o = $(pd_shared_c:$(R)/%.c=$(o)/%.o)
-pd_o = $(pd_local_o) $(pd_shared_o) $(o)/setup.o
+mc_shared_o = $(pd_shared_c:$(R)/%.c=$(o)/%.o)
+pd_o = $(o)/main.o $(mc_shared_o) $(o)/pdglue.o $(o)/setup.o
 
 .PHONY: default sim clean
 default: $(o)/$n.pdx
@@ -62,6 +70,8 @@ $(lib_hs):
 	@$(MAKE) -C $(R) out/lib/$(@F)
 $(m):
 	@$(MAKE) -C $(R) out/host/love
+$(MOONCC):
+	@$(MAKE) -C $(R) out/host/mooncc
 
 # cas.l -> C string literal, atomically (a 0-byte header would silently drop
 # the whole demo -- same discipline as the root's lcat_h)
@@ -80,23 +90,26 @@ $(o)/Source/pdex.%: $(o)/pdex.%
 	@mkdir -p $(dir $@)
 	@cp $< $@
 
-# local sources (listed before the shared rule so this main.c wins)
-$(o)/%.o: %.c $(pd_h)
-	@echo CC	$@
+# the mooncc half: main.c + the shared runtime + quay
+$(o)/main.o: main.c pdglue.h $(pd_h) | $(MOONCC)
+	@echo MOON	$@
+	@mkdir -p $(o)
+	@cd $(R) && out/host/mooncc $(mc_flags) -c port/playdate/main.c out/playdate/main.o
+$(o)/%.o: $(R)/%.c $(pd_h) | $(MOONCC)
+	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(pd_cc) -c $(pd_cpflags) $< -o $@
-# shared runtime + quay
-$(o)/%.o: $(R)/%.c $(pd_h)
+	@cd $(R) && out/host/mooncc $(mc_flags) -c $*.c out/playdate/$*.o
+# the gcc half: the SDK boundary
+$(o)/pdglue.o: pdglue.c pdglue.h
 	@echo CC	$@
-	@mkdir -p $(dir $@)
-	@$(pd_cc) -c $(pd_cpflags) $< -o $@
-# the SDK setup helper (absolute path, so an explicit rule)
-$(o)/setup.o: $(pd_sdk)/C_API/buildsupport/setup.c $(pd_h)
+	@mkdir -p $(o)
+	@$(pd_cc) -c $(pd_cpflags) pdglue.c -o $@
+$(o)/setup.o: $(pd_sdk)/C_API/buildsupport/setup.c
 	@echo CC	$@
-	@mkdir -p $(dir $@)
+	@mkdir -p $(o)
 	@$(pd_cc) -c $(pd_cpflags) $< -o $@
 
-$(o)/pdex.elf: $(pd_o)
+$(o)/pdex.elf: $(pd_o) $(pd_lds)
 	@echo LD	$@
 	@$(pd_cc) $(pd_o) $(pd_ldflags) -o $@
 

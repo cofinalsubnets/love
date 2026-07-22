@@ -52,8 +52,9 @@
                 (|| (s = "arm64") (s = "aarch64")) 'arm64
                 (|| (s = "thumb2") (s = "cortex-m7")) 'thumb2
                 (|| (s = "thumb1") (s = "cortex-m0")) 'thumb1   ; ARMv6-M (RP2040 / Cortex-M0+)
-                (udie 2 ("cc: unknown target " + s + " (x64 | arm64 | thumb2 | thumb1)")))
-   (archdef tgt) (? (id? tgt 'arm64) "__aarch64__" (member? tgt '(thumb2 thumb1)) "__arm__" "__x86_64__")
+                (|| (s = "thumb2sp") (s = "playdate")) 'thumb2sp   ; ARMv7E-M with an SP-only FPU (STM32F746): f64 softens to __aeabi_*
+                (udie 2 ("cc: unknown target " + s + " (x64 | arm64 | thumb2 | thumb2sp | thumb1)")))
+   (archdef tgt) (? (id? tgt 'arm64) "__aarch64__" (member? tgt '(thumb2 thumb2sp thumb1)) "__arm__" "__x86_64__")
    ; the diagnostic driver (doc/moon-diag.md): a stage answered a gripe (a cause
    ; it named itself) or a bare bad. a gripe prints "cc: <file>:<line>:<col>: msg"
    ; -- an unknown file takes the source path, an unknown line/col elides; anything

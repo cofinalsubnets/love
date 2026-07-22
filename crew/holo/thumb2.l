@@ -59,6 +59,10 @@
    ;; always BOTH (a fixup's size is fixed before the address is known). a .o leaves the pair as
    ;; R_ARM_THM_MOVW_ABS_NC / R_ARM_THM_MOVT_ABS (obj.l); v6-M has no MOVW/MOVT and pools instead.
    (thumb-la d label) (: dn (rn d) `((fix 4 'movw16 label dn) (fix 4 'movt16 label dn)))
+   ;; (lapool Rd): LDR.W Rd,[pc,#4] + B.N over the pad+word + NOP pad -- the literal-pool
+   ;; la (gen's t16la lays (align 4) before and the abs32 word after). the playdate face:
+   ;; its loader relocates ABS32 words at load time, never a MOVW/MOVT pair.
+   (thumb-lapool d) (: dn (rn d) (catall `((t32 (0xF8DF0004 | (dn << 12))) (t16 0xE002) (t16 0xBF00))))
 
    (thumb-mov d s) (: dn (rn d) sn (rn s) (t32 (0xEA4F0000 | ((dn << 8) | sn))))   ; MOV.W Rd, Rm (ORR Rd,Rn=15,Rm)
 
@@ -351,6 +355,7 @@
             (op = 'lea)  (thumb-lea  (at ins 1) (at ins 2) (at ins 3))
             (op = 'lean) (thumb-lea  (at ins 1) (at ins 2) (at ins 3))
             (op = 'la)   (thumb-la   (at ins 1) (at ins 2))
+            (op = 'lapool) (thumb-lapool (at ins 1))
             (op = 'leax) (thumb-leax (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))
             (op = 'ldx)  (thumb-ldx  (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))
             (op = 'ldxb) (thumb-ldxb (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))
@@ -411,4 +416,5 @@
    _ (pin thumb2 'patch thumb-patch)
    _ (pin thumb2 'nop `(0 191))                ; the ('align n) filler unit: NOP (16-bit) bf00 LE
    _ (defbackend 'thumb2 thumb2)
-   _ (defbackend 'cortex-m7 thumb2))
+   _ (defbackend 'cortex-m7 thumb2)
+   _ (defbackend 'thumb2sp thumb2))   ; the SP-only-FPU face (playdate): same encoder, gen softens f64

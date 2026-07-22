@@ -718,6 +718,67 @@ test_mps2: host out/host$(hsuf)/mooncc
 	  timeout 300 qemu-system-arm -M mps2-an500 -semihosting -nographic -kernel out/mps2/love.elf </dev/null; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL love-on-M7 boot (got $$a, want 42 = the egg hatched + the driver laws held; 98 = fault, 1 = a law failed)"; exit 1; }; \
 	  echo "test_mps2: love (all-mooncc thumb2) boots on qemu Cortex-M7 -- egg baked on-device, laws hold, exit 42"
+# test_thumb2sp -- the SP-only-FPU face (the playdate's STM32F746): f64
+# arithmetic SOFTENS to __aeabi_* libgcc calls while the 64-bit transfers keep
+# the d-reg value model. Gated on qemu's mps2-an386 -- a Cortex-M4 whose
+# FPv4-SP FPU FAULTS on any f64 arithmetic that slipped through -- against
+# gcc -mfpu=fpv4-sp-d16, which softens through the SAME libgcc helpers, so
+# even am.c stays BIT-exact. Three legs: VFP doubles (45), am.c (9),
+# composites+varargs (18).
+.PHONY: test_thumb2sp
+test_thumb2sp: host out/host$(hsuf)/mooncc
+	@echo THUMB2SP $(ho)/thumb2sp
+	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1 || ! command -v arm-none-eabi-ld >/dev/null 2>&1 || ! command -v qemu-system-arm >/dev/null 2>&1; then \
+	   echo "test_thumb2sp: no arm-none-eabi toolchain / qemu-system-arm, skipped"; exit 0; fi; \
+	  d=$(ho)/thumb2sp; mkdir -p $$d; rm -f $$d/*.o; \
+	  { echo '.syntax unified'; echo '.cpu cortex-m4'; echo '.fpu fpv4-sp-d16'; echo '.thumb'; \
+	    echo '.section .vectors,"a"'; echo '.word 0x20004000'; echo '.word _start+1'; \
+	    echo '.text'; echo '.thumb_func'; echo '.global _start'; echo '_start:'; \
+	    echo '  ldr r0, =0xE000ED88'; echo '  ldr r1, [r0]'; echo '  orr r1, r1, #0xF00000'; \
+	    echo '  str r1, [r0]'; echo '  dsb'; echo '  isb'; \
+	    echo '  bl run'; echo '  ldr r1, =0x20026'; echo '  push {r0}'; echo '  push {r1}'; \
+	    echo '  mov r1, sp'; echo '  movs r0, #0x20'; echo '  bkpt 0xAB'; echo '  b .'; } > $$d/start.S; \
+	  { echo 'MEMORY'; echo '{'; echo '  FLASH (rx) : ORIGIN = 0, LENGTH = 256K'; \
+	    echo '  RAM  (rwx) : ORIGIN = 0x20000000, LENGTH = 16K'; echo '}'; \
+	    echo 'SECTIONS'; echo '{'; echo '  .text : { KEEP(*(.vectors)) *(.text*) *(.rodata*) } > FLASH'; \
+	    echo '  .data : { *(.data*) } > RAM'; echo '  .bss : { *(.bss*) } > RAM'; echo '}'; } > $$d/link.ld; \
+	  arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -c $$d/start.S -o $$d/start.o || { echo "FAIL as start.S"; exit 1; }; \
+	  lg=`arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -print-libgcc-file-name`; \
+	  cp test/thumb2/libd.c test/thumb2/harnessd.c test/thumb2/libz.c test/thumb2/harnessz.c test/thumb2/harnessam.c $$d/; \
+	  $(ho)/mooncc -t thumb2sp -c $$d/libd.c $$d/libd.o || { echo "FAIL mooncc -t thumb2sp -c libd"; exit 1; }; \
+	  arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -ffreestanding -O2 -c $$d/harnessd.c -o $$d/harnessd.o || { echo "FAIL gcc harnessd"; exit 1; }; \
+	  arm-none-eabi-ld -T $$d/link.ld $$d/start.o $$d/harnessd.o $$d/libd.o $$lg -o $$d/tsd.elf || { echo "FAIL ld sp double objects"; exit 1; }; \
+	  timeout 30 qemu-system-arm -M mps2-an386 -semihosting -nographic -kernel $$d/tsd.elf </dev/null; a=$$?; \
+	  [ $$a -eq 45 ] || { echo "FAIL thumb2sp doubles (got $$a, want 45; 100+n names the first miss -- soft f64 vs gcc's __aeabi)"; exit 1; }; \
+	  $(ho)/mooncc -t thumb2sp -Icrew/moon/lib/math -Icrew/moon/include -c crew/moon/lib/math/am.c $$d/am.o || { echo "FAIL mooncc -t thumb2sp -c am.c"; exit 1; }; \
+	  arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -ffreestanding -O2 -c $$d/harnessam.c -o $$d/harnessam.o || { echo "FAIL gcc harnessam"; exit 1; }; \
+	  arm-none-eabi-ld -T $$d/link.ld $$d/start.o $$d/harnessam.o $$d/am.o $$lg -o $$d/tsam.elf || { echo "FAIL ld sp am objects"; exit 1; }; \
+	  timeout 60 qemu-system-arm -M mps2-an386 -semihosting -nographic -kernel $$d/tsam.elf </dev/null; a=$$?; \
+	  [ $$a -eq 9 ] || { echo "FAIL thumb2sp am.c (got $$a, want 9 = BIT-identical through the shared __aeabi helpers)"; exit 1; }; \
+	  $(ho)/mooncc -t thumb2sp -Icrew/moon/include -c $$d/libz.c $$d/libz.o || { echo "FAIL mooncc -t thumb2sp -c libz"; exit 1; }; \
+	  arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -ffreestanding -O2 -c $$d/harnessz.c -o $$d/harnessz.o || { echo "FAIL gcc harnessz"; exit 1; }; \
+	  arm-none-eabi-ld -T $$d/link.ld $$d/start.o $$d/harnessz.o $$d/libz.o $$lg -o $$d/tsz.elf || { echo "FAIL ld sp struct/vararg objects"; exit 1; }; \
+	  timeout 30 qemu-system-arm -M mps2-an386 -semihosting -nographic -kernel $$d/tsz.elf </dev/null; a=$$?; \
+	  [ $$a -eq 18 ] || { echo "FAIL thumb2sp composites+varargs (got $$a, want 18)"; exit 1; }; \
+	  echo "test_thumb2sp: mooncc -t thumb2sp (soft f64 over __aeabi) -> 45+9+18 differential checks vs gcc on qemu Cortex-M4"
+# test_playdate -- the playdate build gate: the device half compiled by mooncc
+# -t thumb2sp behind pdglue's word-only SDK seam, the whole pdx built by pdc.
+# Verifies the DEVICE elf: fully resolved (no UND), eventHandler exported, and
+# ZERO movw/movt relocations -- the loader relocates ABS32 words only, which
+# is why la rides the literal pool on this target. Needs PLAYDATE_SDK_PATH
+# (and arm-none-eabi-gcc); skips cleanly without, like moon-tar.
+.PHONY: test_playdate
+test_playdate: host out/host$(hsuf)/mooncc
+	@echo PLAYDATE out/playdate/love.pdx
+	@if [ -z "$$PLAYDATE_SDK_PATH" ] || ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
+	   echo "test_playdate: no PLAYDATE_SDK_PATH / arm-none-eabi toolchain, skipped"; exit 0; fi; \
+	  $(MAKE) -C port/playdate || { echo "FAIL playdate build"; exit 1; }; \
+	  u=`llvm-readelf -s out/playdate/pdex.elf | grep -c "UND [a-zA-Z_]"`; \
+	  [ "$$u" -eq 0 ] || { echo "FAIL pdex.elf has $$u undefined symbols"; exit 1; }; \
+	  llvm-readelf -s out/playdate/pdex.elf | grep -qw eventHandler || { echo "FAIL no eventHandler"; exit 1; }; \
+	  m=`llvm-readelf -r out/playdate/pdex.elf | grep -c "MOVW\|MOVT"`; \
+	  [ "$$m" -eq 0 ] || { echo "FAIL $$m movw/movt relocs (the loader can't relocate them)"; exit 1; }; \
+	  echo "test_playdate: love.pdx (device half all-mooncc -t thumb2sp, soft f64) -- resolved, word-relocs only"
 # test_teensy41 -- the REAL-METAL cousin's build gate: the whole teensy41 port
 # (love.c + am + libc + the arch backend) compiled by mooncc -t thumb2, linked
 # against the XIP flash map, and the ROM-facing boot image VERIFIED (FCFB tag

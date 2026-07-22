@@ -110,7 +110,7 @@
    ; reaches here for `-c`: .text + function/undef symbols + R_ARM_THM_CALL for every
    ; external `bl`. a DATA relocation (an abs32 pointer) would need the literal-pool
    ; `la` the backend doesn't emit yet, so a surviving data fixup scares LOUD. --
-   arm32-targets '(thumb1 thumb2 cortex-m0 cortex-m7 arm)
+   arm32-targets '(thumb1 thumb2 thumb2sp cortex-m0 cortex-m7 arm)
    (arm32? t) (member? t arm32-targets)
    r-thm-call 10                                    ; R_ARM_THM_CALL   ((S+A)|T) - P  (a thumb BL to a symbol)
    r-thm-jump24 30                                  ; R_ARM_THM_JUMP24 same math      (a thumb2 B.W tail-jump)
