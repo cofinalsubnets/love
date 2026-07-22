@@ -226,6 +226,10 @@ work fixed the pre-existing t32 >4-arg overflow ABI (4-byte slots, block-allocat
 t32 ≥8-byte struct-copy stride. 43 differential checks vs gcc ride `make test_thumb2`
 (test/thumb2/{lib64,harness64}.c).
 
+**thumb2 `leax` is fixed** — ADD.W Rd,Rn,Rm,LSL#n (one insn, both sources read before the
+write), with LDR/LDRB register-offset fusing ldx/ldxb at disp 0; indexed-array differential
+checks ride the test_thumb2 gate. thumb1's leax-call range gap remains (below).
+
 What remains, all loud scares (never silent):
 
 - **signed 64-bit `/` and `%`** refuse (`cgfn refuses`) — love.c's lane is unsigned; wrap
@@ -236,10 +240,6 @@ What remains, all loud scares (never silent):
 - **t32 varargs** — vaspill still emits the SysV shapes; a variadic t32 fn scares at the
   backend (`bad-op stsd`).
 
-- **thumb2 `leax`.** A variable-index array (`garr[i] = v`, local or global) hits
-  `;; bad-op leax` — thumb2 never got an leax lane (the constant-index forms fold and
-  compile). Unlike v6-M it HAS hardware scaled-index addressing (`LDR Rt,[Rn,Rm,LSL #n]`),
-  so its lane is an encoder, not a synthesis like thumb1's LSLS+ADDS.
 - **thumb1 `leax`.** The indexed-call variant (`a[i]()` over a local array) hits
   `;; lea-range (r0 r4 8)` — the known scaled-indexed-address gap.
 

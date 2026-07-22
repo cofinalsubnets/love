@@ -160,6 +160,26 @@
    (thumb-st1 base off s)  (thumb-mem 0xF800 0xF880 s base off)  ; STRB
    (thumb-st2 base off s)  (thumb-mem 0xF820 0xF8A0 s base off)  ; STRH
 
+   ;; indexed addressing: unlike v6-M, T32 has the scaled register offset in hardware. leax rides
+   ;; ADD.W Rd, Rn, Rm, LSL #amt (reads both sources before the write, so d may alias either);
+   ;; ldx/ldxb take the one-insn LDR/LDRB register form at disp 0, else synthesize off the dest.
+   (thumb-shamt scale) (? (scale = 1) 0 (scale = 2) 1 (scale = 4) 2 (scale = 8) 3 (scare 'badscale scale))
+   (thumb-addsh d b ix amt)                                   ; ADD.W Rd, Rb, Rix, LSL #amt
+      (: dn (rn d) bn (rn b) xn (rn ix)
+         (t32 (((0xEB00 | bn) << 16) | ((dn << 8) | (((amt & 3) << 6) | xn)))))
+   (thumb-leax d base ix scale disp)
+      (catall `((thumb-addsh d base ix (thumb-shamt scale))
+                 (? (disp = 0) () (thumb-addsub-imm 'add d d disp))))
+   (thumb-memsh lbase d b ix amt)                             ; LDR/LDRB Rt, [Rn, Rm, LSL #amt]
+      (: dn (rn d) bn (rn b) xn (rn ix)
+         (t32 (((lbase | bn) << 16) | ((dn << 12) | ((amt << 4) | xn)))))
+   (thumb-ldx d base ix scale disp)
+      (? (disp = 0) (thumb-memsh 0xF850 d base ix (thumb-shamt scale))
+         (catall `((thumb-addsh d base ix (thumb-shamt scale)) (thumb-ld d d disp))))
+   (thumb-ldxb d base ix scale disp)                          ; zero-extending byte (x64 movzx)
+      (? (disp = 0) (thumb-memsh 0xF810 d base ix (thumb-shamt scale))
+         (catall `((thumb-addsh d base ix (thumb-shamt scale)) (thumb-ldu1 d d disp))))
+
    ;; MOV (register) T1, the 16-bit hi-register form -- the ONLY move that legally targets sp
    ;; (MOV.W / ADDW with Rd=sp,Rn!=sp are UNPREDICTABLE on ARMv7-M). reaches all of r0..r15.
    (thumb-movr d s) (: dn (rn d) sn (rn s) (t16 (0x4600 | ((((dn >> 3) & 1) << 7) | ((sn << 3) | (dn & 7))))))
@@ -255,6 +275,9 @@
             (op = 'lea)  (thumb-lea  (at ins 1) (at ins 2) (at ins 3))
             (op = 'lean) (thumb-lea  (at ins 1) (at ins 2) (at ins 3))
             (op = 'la)   (thumb-la   (at ins 1) (at ins 2))
+            (op = 'leax) (thumb-leax (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))
+            (op = 'ldx)  (thumb-ldx  (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))
+            (op = 'ldxb) (thumb-ldxb (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))
             (op = 'push) (thumb-push (at ins 1))
             (op = 'pop)  (thumb-pop  (at ins 1))
             (op = 'neg)  (thumb-neg  (at ins 1))

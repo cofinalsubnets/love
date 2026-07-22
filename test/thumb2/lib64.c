@@ -28,3 +28,7 @@ u64 five(u64 a, int b, u64 c, int d, u64 e){ return a + b + c + d + e; }
 u64 sel(int c, u64 a){ return c ? a : 0; }
 u64 bump(u64 x){ acc64 += x; acc64++; return acc64; }
 u64 tow(int s){ u64 v = (u64)1 << s; return v | ((u64)1 << 33); }
+unsigned garr[8];
+char cbuf[8];
+u64 asum(int n){ int i; u64 s = 0; for (i = 0; i < n; i++) garr[i] = i*3+1; for (i = 0; i < n; i++) s += garr[i]; return s; }
+int csum(int n){ int i, s = 0; for (i = 0; i < n; i++) cbuf[i] = 'a'+i; for (i = 0; i < n; i++) s += cbuf[i]; return s; }

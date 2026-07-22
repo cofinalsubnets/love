@@ -681,8 +681,8 @@ test_thumb2: host out/host$(hsuf)/mooncc
 	  lg=`arm-none-eabi-gcc -mcpu=cortex-m7 -mthumb -print-libgcc-file-name`; \
 	  arm-none-eabi-ld -T $$d/link.ld $$d/start.o $$d/harness64.o $$d/lib64.o $$lg -o $$d/t2p.elf || { echo "FAIL ld thumb2 pair objects"; exit 1; }; \
 	  timeout 30 qemu-system-arm -M mps2-an500 -semihosting -nographic -kernel $$d/t2p.elf </dev/null; a=$$?; \
-	  [ $$a -eq 43 ] || { echo "FAIL thumb2 64-bit pairs (got $$a, want 43 = every differential check vs gcc; 100+n names the first miss -- see test/thumb2/harness64.c)"; exit 1; }; \
-	  echo "test_thumb2: mooncc -t thumb2 -c -> ELF32/EM_ARM (la + the 64-bit pair lanes: +,-,*,/,%,shifts,relations,clzll,pair args/returns -- 43 differential checks vs gcc), ld binds, runs on qemu Cortex-M7"
+	  [ $$a -eq 45 ] || { echo "FAIL thumb2 64-bit pairs (got $$a, want 45 = every differential check vs gcc; 100+n names the first miss -- see test/thumb2/harness64.c)"; exit 1; }; \
+	  echo "test_thumb2: mooncc -t thumb2 -c -> ELF32/EM_ARM (la + the 64-bit pair lanes: +,-,*,/,%,shifts,relations,clzll,pair args/returns -- 45 differential checks vs gcc: pairs + indexed arrays), ld binds, runs on qemu Cortex-M7"
 # moon-tar -- the userland cousin of test_raw: build GNU tar 1.13 (a real third-
 # party GNU package) with mooncc + nolibc + the holo linker, no gcc/glibc/ld, and
 # prove the binary RUNS -- cf/xf + czf/xzf roundtrips byte-identical + system-tar

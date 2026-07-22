@@ -434,6 +434,13 @@
       `("t2.mla"     "02fb0133"          '((mla r3 r2 r1 r3)))         ; mla r3, r2, r1, r3
       `("t2.clz"     "b1fa81f0"          '((clz r0 r1)))               ; clz r0, r1
       `("t2.shlv.r2" "01fa02f1"          '((shlv r1 r2)))              ; lsl.w r1, r1, r2
+      ;; indexed addressing: ADD.W shifted (leax), LDR/LDRB register-offset (ldx/ldxb at disp 0),
+      ;; and the disp!=0 synthesis off the dest.
+      `("t2.leax"    "01eb8200"          '((leax r0 r1 r2 4 0)))       ; add.w r0, r1, r2, lsl #2
+      `("t2.leax.d"  "04ebcc0909f20409"  '((leax r9 r4 r12 8 4)))      ; add.w r9,r4,r12,lsl#3 ; addw r9,r9,#4
+      `("t2.ldx"     "51f82200"          '((ldx r0 r1 r2 4 0)))        ; ldr.w r0, [r1, r2, lsl #2]
+      `("t2.ldxb"    "11f80250"          '((ldxb r5 r1 r2 1 0)))       ; ldrb.w r5, [r1, r2]
+      `("t2.ldx.d"   "00eb0300d0f80400"  '((ldx r0 r0 r3 1 4)))        ; disp!=0: add.w r0,r0,r3 ; ldr.w r0,[r0,#4]
       ;; the 64-bit unsigned divide/remainder expansions: dividend r2:r3 / divisor r0:r1 ->
       ;; r0:r1. 64-step restoring loop, fixed narrow branches (bhs +8 / blo +10 / bne -52),
       ;; r4-r7 saved. disassembly-verified whole (llvm-mc); the qemu gate proves the values.
