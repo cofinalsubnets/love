@@ -280,7 +280,7 @@
    ; pointer-scale by an immediate: x64 imul takes it straight; arm64 mul has
    ; no immediate form, so the size rides r3 first (free mid-expression: the
    ; shuttle holds r0/r1, and args only load at the pops)
-   (imby g rX sz) (? (|| (a64? g) (v6m? g)) `(`('li 'r3 sz) `('imul rX rX 'r3)) `(`('imul rX rX sz)))   ; v6-M mul, like arm64, has no imm form
+   (imby g rX sz) (? (arm? g) `(`('li 'r3 sz) `('imul rX rX 'r3)) `(`('imul rX rX sz)))   ; arm mul (a64/t32/v6-M) has no imm form
    (homable? pty) (|| (ptr? pty) (member? pty '(long ulong)))   ; an 8-byte gp scalar: what a register home can carry
    ; -- the immediate lane: the left value already in r0, a compile-time constant
    ; on the right -> ONE imm-form op (holo's add/sub/imul/and/or/xor/cmp take a
@@ -309,6 +309,7 @@
                               (: rd (? wnt wnt (rdst g rA))   ; a borrowed home shifts a COPY (no 3-address shr)
                                  (mkv 'ulong rd ((vfs av) + `(`('mov rd rA) `('shr rd (lg2v n))))))))
               (n = 1) (mkv 'ulong 'r0 ((vdrop g av) + `(`('li 'r0 0))))
+              (! (immok g 'log (n - 1))) 'no             ; t32 has no simple AND-imm: materialize (the register path)
               (: rd (? wnt wnt (rdst g rA))
                  fs ((vfs av) + `(`('and rd rA (n - 1))))
                  _ (? (id? rd rA) () (rfree g rA))
@@ -1223,7 +1224,9 @@
               (? (bad? lv) 'bad
                  (: _ (pin g 'fesc 1)                                       ; the va_list HOLDS frame addresses: no sibcalls here
                     (mkv 'long 'r0 (cat (tor0 g lv)
-                      (? (a64? g)
+                      (? (t32? g)   ; AAPCS32: __ap = the first anonymous word, past the named regs and named overflow
+                         `(`('lea 'r1 'r4 (8 + ((* 4 ngp) + nov))) `('st 'r0 0 'r1))
+                         (a64? g)
                          `(`('lea 'r1 'r4 ((ovb g) + (* 8 nov))) `('st 'r0 0 'r1)   ; __stack = fp+32 + named overflow
                             `('lea 'r1 'r4 (rsa + 64))  `('st 'r0 8 'r1)            ; __gr_top (past x0..x7)
                             `('lea 'r1 'r4 (rsa + 192)) `('st 'r0 16 'r1)           ; __vr_top (past q0..q7)
@@ -1241,7 +1244,10 @@
               ; which advances 8. AAPCS64: a NEGATIVE offs reads top + offs (ld4
               ; sign-extends) and advances toward 0; at >= 0 the arg rides __stack,
               ; which advances 8 (every AAPCS stack slot is one 8-byte cell).
-              walk (? (a64? g)
+              ; AAPCS32 (t32): __ap just walks, one word per anonymous arg.
+              walk (? (t32? g)
+                      `(`('ld 'r2 'r0 0) `('mov 'r3 'r2) `('add 'r3 'r3 4) `('st 'r0 0 'r3))
+                      (a64? g)
                       (: foff (? (flo? ty) 28 24)               ; __vr_offs / __gr_offs
                          toff (? (flo? ty) 16 8)                ; __vr_top / __gr_top
                          step (? (flo? ty) 16 8)                ; a vr slot is one q (16)
@@ -1262,6 +1268,7 @@
                             `('label ld))))
               _ (vmflush g)                           ; the walk's labels join
               (? (bad? lv) 'bad
+                 (&& (t32? g) (|| (flo? ty) (|| (llt? ty) (stru? ty)))) 'bad   ; t32 va_arg reads WORDS only (love.c's shape) -- refuse LOUD
                  (flo? ty) (mkv 'double 'r0 ((tor0 g lv) + walk + (fldf ty 'f0 'r2 0)))
                  (mkv ty 'r0 ((tor0 g lv) + walk + `(`((ldop ty) 'r0 'r2 0))))))
           (k = 'vaend) (mkv 'long 'r0 ())
@@ -1435,6 +1442,9 @@
                                         (cat (fstf g 'double 'r4 toff (xmmreg 0))
                                          (cat (fstf g 'double 'r4 (toff + 8) (xmmreg 1))
                                               `(`('lea 'r0 'r4 toff)))))))
+                       (&& (t32? g)                    ; t32: past the d-pair, only the 8B sse blob (d0) and the <=4B int one (r0) return
+                           (! (|| (&& (id? (aone g (vty cr)) 'sse) ((tsz g (vty cr)) = 8))
+                                  (&& (id? (aone g (vty cr)) 'int) ((tsz g (vty cr)) <= 4))))) 'bad
                        (ipair? g (vty cr))             ; a two-int struct result: park rax:rdx (arm64 x0:x1) the same way
                         (: toff (0 - ((peep g 'off 0) + 16))
                            _ (pin g 'off ((peep g 'off 0) + 16))
@@ -1530,13 +1540,23 @@
                  (: pty (nthty pts i)
                     aty (? pty pty (vty a))                ; classify by the param type if known, else the arg's
                     wd (flo? aty)
-                    (? (&& (t32? g) (stru? aty)) 'bad      ; t32 by-value struct args: refuse LOUD (AAPCS32 composites deferred)
+                    ; t32 composites: an HFA rides the d-regs (the sse2 pair lane below = AAPCS32-VFP
+                    ; d-pairs; an 8B one-sse blob = the packed S-pair, bit-identical); a <=4B int one
+                    ; rides r0's word. mixed/int-pair 8..16B stays deferred -- refuse LOUD.
+                    (? (&& (t32? g) (&& va? (stru? aty))) 'bad   ; a t32 VARIADIC call rides the base PCS: no d-reg composites -- refuse LOUD
+                       (&& (t32? g) (&& (stru? aty)
+                           (! (|| (sse2? g aty)
+                                  (|| (&& (id? (aone g aty) 'sse) ((tsz g aty) = 8))
+                                      (&& (id? (aone g aty) 'int) ((tsz g aty) <= 4))))))) 'bad
                        (sse2? g aty)                       ; a two-double struct arg: push its pair (re on top), an xmm PAIR target
                         (? (6 < xmmc) 'bad
                            (kls >as (i + 1) gpc (xmmc + 2) ovc
                                 (link `(`('x2 xmmc)
                                          ((tor0 g a) +
-                                          (? (a64? g)     ; arm64 push is a 16-byte cell of its own: lay the pair by hand
+                                          (? (t32? g)     ; t32: a 16-byte cell, four word copies
+                                             `(`('sub 'sp 'sp 16) `('ld 'r1 'r0 12) `('st 'sp 12 'r1) `('ld 'r1 'r0 8) `('st 'sp 8 'r1)
+                                                `('ld 'r1 'r0 4) `('st 'sp 4 'r1) `('ld 'r1 'r0 0) `('st 'sp 0 'r1))
+                                             (a64? g)     ; arm64 push is a 16-byte cell of its own: lay the pair by hand
                                              `(`('sub 'sp 'sp 16) `('ld 'r1 'r0 8) `('st 'sp 8 'r1) `('ld 'r1 'r0 0) `('st 'sp 0 'r1))
                                              `(`('ld 'r1 'r0 8) `('push 'r1) `('ld 'r1 'r0 0) `('push 'r1)))))
                                       acc)))
@@ -1575,7 +1595,8 @@
                        ; and class by its eightbyte -- INT a gp arg, SSE an xmm
                        (: one (? (stru? aty) (aone g aty) ())
                           wd2 (|| wd (id? one 'sse))
-                          aval (? one ((tor0 g a) + `(`('ld 'r0 'r0 0)))
+                          aval (? (&& (t32? g) (id? one 'sse)) ((tor0 g a) + (pld 'r0 0))   ; the t32 8B blob rides the r0:r1 pair
+                                  one ((tor0 g a) + `(`('ld 'r0 'r0 0)))
                                   wd ((asflo g a) + `(`('movqrx 'r0 'f0)))
                                   (asint g a))
                           ; a register arg rides a 16-byte cell: rsp stays 16-aligned
@@ -1584,7 +1605,7 @@
                           ; overflow arg keeps its 8-byte push -- the callee reads the
                           ; overflow block packed, and its target is love-internal (never
                           ; a libc movaps-on-rbp path), so a stray eval-time skew is moot.
-                          rpush (aval + (? (&& (t32? g) wd) spush2 (spush 'r0)))   ; a t32 double is the r0:r1 pair
+                          rpush (aval + (? (&& (t32? g) wd2) spush2 (spush 'r0)))   ; a t32 double (or 8B blob) is the r0:r1 pair
                           ; an overflow arg: x64 pushes 8 bytes (deepest first); arm64
                           ; stores into the pre-allocated packed block at its own slot
                           ; (sp sits at the block base whenever an arg evaluates)
@@ -1593,7 +1614,9 @@
                           opush (? (a64? g) (aval + `(`('st 'sp (* 8 ovc) 'r0)))
                                    (t32? g) (aval + `(`('st 'sp ovc 'r0)))
                                    (aval + `(`('push 'r0))))
-                          (? (&& wd2 (xmmc < 8)) (kls >as (i + 1) gpc (xmmc + 1) ovc (link `(`('x xmmc) rpush) acc))
+                          (? (&& (t32? g) (&& va? wd2)) 'bad   ; a t32 VARIADIC call rides the base PCS: no d-reg doubles -- refuse LOUD
+                             (&& wd2 (xmmc < 8)) (kls >as (i + 1) gpc (xmmc + 1) ovc (link `(`('x xmmc) rpush) acc))
+                             (&& (t32? g) wd2) 'bad         ; a t32 fp/blob OVERFLOW arg (9+ doubles): the 4-byte slot can't carry it -- refuse LOUD
                              (&& (! wd2) (gpc < (ngp g))) (kls >as (i + 1) (gpc + 1) xmmc ovc (link `(`('g gpc) rpush) acc))
                              (t32? g) (kls >as (i + 1) gpc xmmc (ovc + 4) (link `(`('ov ovc 4) opush) acc))
                              (kls >as (i + 1) gpc xmmc (ovc + 1) (link `(`('ov ovc) opush) acc)))))))))))
@@ -1626,7 +1649,10 @@
                                                           (&& (t32? g) (<kc = 'x))   ; a t32 double pops STRAIGHT into its d-reg
                                                            `(`('ldsd (xmmreg <>kc) 'sp 0) `('add 'sp 'sp 16))
                                                           (<kc = 'x2)   ; the struct pair: re then im (a natural 16-byte cell)
-                                                           (? (a64? g)
+                                                           (? (t32? g)   ; t32 pops STRAIGHT into the d-pair
+                                                              `(`('ldsd (xmmreg <>kc) 'sp 0) `('ldsd (xmmreg (<>kc + 1)) 'sp 8)
+                                                                 `('add 'sp 'sp 16))
+                                                              (a64? g)
                                                               `(`('ld px 'sp 0) `('movqxr (xmmreg <>kc) px)
                                                                  `('ld px 'sp 8) `('movqxr (xmmreg (<>kc + 1)) px)
                                                                  `('add 'sp 'sp 16))
@@ -1918,6 +1944,10 @@
    ; the sp hop rides lea (add-immediate) instead. cgstmt/build read the
    ; target's epilogue off g 'epi (pinned by cgen-core).
    epi-a64 `(`('lea 'sp 'fp 0) `('pop 'fp) `('pop 'lr) `('ret))
+   ; the thumb2 VARARG twin: the prologue pushed r0-r3 under fp/lr (contiguous
+   ; with the caller's stack args), so the epilogue drops that 16-byte block
+   ; after restoring fp/lr and before the return
+   epi-t32va `(`('lea 'sp 'fp 0) `('pop 'fp) `('pop 'lr) `('add 'sp 'sp 16) `('ret))
    ; the v6-M twin: ARMv6-M POP restores r0..r7 and PC but NOT LR, so the return folds into
    ; `pop {pc}` (the pushed lr lands straight in pc) -- no separate lr-restore + bx. fp is r7
    ; here (the backend numbers it). r4 is the BOTTOM base (see t16slots): pushed just under fp,
@@ -3633,7 +3663,10 @@
                          (cap (peep (g 'sigs) (g 'fn) `('long ()))))    ; else the current function's
                    (? (bad? r) 'bad
                       (flo? rt) ((asflo g r) + epj)                    ; a double return leaves f0 (xmm0; never inline -- gated)
-                      (&& (t32? g) (|| (stru? rt) (stru? (vty r)))) 'bad   ; t32 by-value struct returns: refuse LOUD
+                      (&& (t32? g) (&& (stru? rt)          ; t32 returns: the d-pair HFA, the 8B sse blob (d0),
+                          (! (|| (sse2? g rt)              ; and the <=4B int one (r0); mixed/int-pair refuse LOUD
+                                 (|| (&& (id? (aone g rt) 'sse) ((tsz g rt) = 8))
+                                     (&& (id? (aone g rt) 'int) ((tsz g rt) <= 4))))))) 'bad
                       (sse2? g rt)                                       ; a two-double struct returns as the xmm PAIR
                        (cat (tor0 g r) (cat (fldf 'double (xmmreg 0) 'r0 0)
                                        ((fldf 'double (xmmreg 1) 'r0 8) + epj)))
@@ -3903,6 +3936,10 @@
        _ (pin g 'fn <>f)
        sig (peep (g 'sigs) <>f ())
        vararg (? (two? sig) (nthr sig 2) ())
+       ; the epilogue is per-FN: a thumb2 vararg fn drops its r0-r3 push block on
+       ; the way out (epi-t32va); everyone else keeps the target default
+       _ (pin g 'epi (? (&& vararg (&& (t32? g) (! (v6m? g)))) epi-t32va
+                        (v6m? g) epi-t16 (arm? g) epi-a64 epi))
        fb9 (fbase g)                                 ; the frame base the RANKERS see: post-build ir1 (r4, or fp once a4ized)
        ; spill each param from its SysV register: integers from r6 r5 r2 r1 r7 r8
        ; (<=6), doubles from f0..f7 (<=8), SEPARATE counters. an OVERFLOW param
@@ -3910,7 +3947,10 @@
        (spill ps gpi xmmi ovi env acc)
         (? (! (two? ps)) `(acc env)
            (: p <ps pty <>p
-              (? (&& (t32? g) (stru? pty)) 'bad         ; t32 by-value struct params: refuse LOUD (AAPCS32 composites deferred)
+              (? (&& (t32? g) (&& (stru? pty)           ; t32 params: the d-pair HFA, the 8B sse blob, the <=4B int
+                     (! (|| (sse2? g pty)               ; one (the gp lane's word store IS its <=4 bytes);
+                            (|| (&& (id? (aone g pty) 'sse) ((tsz g pty) = 8))   ; mixed/int-pair composites refuse LOUD
+                                (&& (id? (aone g pty) 'int) ((tsz g pty) <= 4))))))) 'bad
                  (&& (stru? pty) (two? (aeb2 g pty)))   ; a 9..16B struct param: two eightbytes into a 16-byte slot, each from a gp or an xmm reg
                   (: cls (aeb2 g pty) c0 <cls c1 <>cls
                      ; the register FILE per eightbyte -- 'g gp / 'x xmm. SysV (x64) picks
@@ -3922,7 +3962,8 @@
                      gpn (+ (? (id? f0 'g) 1 0) (? (id? f1 'g) 1 0))
                      xmn (+ (? (id? f0 'x) 1 0) (? (id? f1 'x) 1 0))
                      (? (|| ((ngp g) < (gpi + gpn)) (8 < (xmmi + xmn)))   ; not enough regs -> the WHOLE aggregate goes to memory (2 stack eightbytes)
-                         (spill >ps gpi xmmi (ovi + 2) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc)
+                         (? (t32? g) 'bad               ; t32 stack HFA params (9+ doubles): deferred, refuse LOUD
+                            (spill >ps gpi xmmi (ovi + 2) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc))
                          (: off (0 - ((peep g 'off 0) + 16))
                             _ (pin g 'off ((peep g 'off 0) + 16))
                             st0 (? (id? f0 'g) `(`('st 'r4 off (nthr (argr g) gpi))) (fstf g 'double 'r4 off (xmmreg xmmi)))
@@ -3938,7 +3979,8 @@
                         _ (pin g 'off ((peep g 'off 0) + 8))
                         (spill >ps gpi (xmmi + 1) ovi (link `(<p off pty) env)
                                (acc + (fstf g 'double 'r4 off (xmmreg xmmi)))))
-                     (spill >ps gpi xmmi (ovi + 1) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc))
+                     (? (t32? g) 'bad                   ; t32 stack blob params: deferred, refuse LOUD
+                        (spill >ps gpi xmmi (ovi + 1) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc)))
                  (&& (stru? pty) (! (id? (aone g pty) 'int))) 'bad   ; MIXED pair / >16B stays ahead; a small INT one rides the gp lane
                  (&& (flo? pty) (xmmi < 8))
                   (: off (0 - ((peep g 'off 0) + 8))
@@ -3955,6 +3997,7 @@
                                             `('st 'r4 (off + 4) (nthr (argr g) (gpe + 1)))))))
                         (: ov8 (& (ovi + 7) -8)
                            (spill >ps 4 xmmi (ov8 + 8) (link `(<p ((ovb g) + ov8) pty) env) acc))))
+                 (&& (t32? g) (flo? pty)) 'bad          ; a t32 double param past d7: the 4-byte slot can't carry it -- refuse LOUD
                  (&& (! (flo? pty)) (gpi < (ngp g)))
                   (: off (0 - ((peep g 'off 0) + 8))
                      _ (pin g 'off ((peep g 'off 0) + 8))
@@ -4004,6 +4047,22 @@
                      (? (7 < gpi) (cls >qs gpi vri (ov + 1) (link `(<p ((ovb g) + (* 8 ov)) pty) env))
                         (cls >qs (gpi + 1) vri ov (link `(<p (rsa + (* 8 gpi)) pty) env))))))
            (cls ps 0 0 0 ()))
+       ; a VARIADIC function (AAPCS32, thumb2): no save area of its own -- the
+       ; prologue pushed r0-r3 just under the caller's stack args, one contiguous
+       ; word array from fp+8. a named register param is addressed INSIDE the push
+       ; block (fp+8+4i), a named overflow param past it (fp+24+). va_start reads
+       ; back vagp/vaov. WORD named params only (love.c's shape: pointers and
+       ; uintptr_t); doubles/pairs/structs refuse LOUD. v6-M: pop-pc can't drop
+       ; the block -- refuse whole.
+       (vaspill-t32 ps)
+        (? (v6m? g) 'bad
+           (: (cls qs gpi ov env)
+               (? (! (two? qs)) (: _ (pin g 'vagp gpi) _ (pin g 'vaov ov) `(() env))
+                  (: p <qs pty <>p
+                     (? (|| (flo? pty) (|| (llt? pty) (stru? pty))) 'bad
+                        (3 < gpi) (cls >qs gpi (ov + 4) (link `(<p (24 + ov) pty) env))
+                        (cls >qs (gpi + 1) ov (link `(<p (8 + (* 4 gpi)) pty) env)))))
+              (cls ps 0 0 ())))
        ; -- register-homed params (the leaf lane). a gp param that is an 8-byte
        ; scalar (long/ulong/pointer) whose address never escapes can live in a
        ; CALLER-SAVED, non-scratch register for the whole function instead of a
@@ -4158,10 +4217,13 @@
                           (cat (? (v6m? g)   ; v6m: extra push r4 (bottom base), planted AFTER the sub; fp stays at top
                                   `(`('label (intern <>f)) `('push 'lr) `('push 'fp) `('push 'r4)
                                      `('lea 'fp 'sp 0) `('sub 'sp 'sp frame) `('lea 'r4 'sp 0))
-                                  `(`('label (intern <>f))
-                                     `('push 'lr) `('push 'fp) `('lea 'fp 'sp 0) `('sub 'sp 'sp frame)))
+                                  (cat `(`('label (intern <>f)))
+                                   (cat (? (&& vararg (t32? g))   ; vararg t32: r0-r3 land under fp/lr,
+                                           `(`('push 'r3) `('push 'r2) `('push 'r1) `('push 'r0))   ; contiguous with the caller stack args
+                                           ())
+                                        `(`('push 'lr) `('push 'fp) `('lea 'fp 'sp 0) `('sub 'sp 'sp frame)))))
                            (cat <sp0
-                            (body + `(`('li 'r0 0)) + (? (v6m? g) epi-t16 epi-a64)))))))
+                            (body + `(`('li 'r0 0)) + (peep g 'epi epi-a64)))))))
                        (deadst
                         (deaddef      ; rerun: the widened addrfold strands live-dest addr insns
                         (addrfold
@@ -4286,6 +4348,7 @@
        _ (pin g 'hasasm ())                         ; fresh per fn: an asm statement pins it (homing off)
        _ (pin g 'argseal 0)                         ; fresh per fn: the vmap's staging seal depth
        sp1 (? (&& vararg (a64? g)) (vaspill-a64 params)
+              (&& vararg (t32? g)) (vaspill-t32 params)
               vararg (vaspill params) (spill params 0 0 0 () ()))
        ir1 (build sp1)
        n1 (peep g 'n 0) strs1 (g 'strs)             ; ir1's accumulators -- a DEOPT restores these

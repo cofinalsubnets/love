@@ -696,7 +696,13 @@ test_thumb2: host out/host$(hsuf)/mooncc
 	  arm-none-eabi-ld -T $$d/link.ld $$d/start.o $$d/harnessam.o $$d/am.o $$lg -o $$d/t2am.elf || { echo "FAIL ld thumb2 am objects"; exit 1; }; \
 	  timeout 60 qemu-system-arm -M mps2-an500 -semihosting -nographic -kernel $$d/t2am.elf </dev/null; a=$$?; \
 	  [ $$a -eq 9 ] || { echo "FAIL thumb2 am.c (got $$a, want 9 = the seven transcendentals BIT-IDENTICAL to the host am floor, incl. the Payne-Hanek big-argument reduction)"; exit 1; }; \
-	  echo "test_thumb2: mooncc -t thumb2 -c -> ELF32/EM_ARM (la + 64-bit pairs + VFP doubles + am.c bit-exact: 45+45+9 differential checks), ld binds, runs on qemu Cortex-M7"
+	  cp test/thumb2/libz.c test/thumb2/harnessz.c $$d/; \
+	  $(ho)/mooncc -t thumb2 -Icrew/moon/include -c $$d/libz.c $$d/libz.o || { echo "FAIL mooncc -t thumb2 -c libz"; exit 1; }; \
+	  arm-none-eabi-gcc -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-d16 -ffreestanding -O2 -c $$d/harnessz.c -o $$d/harnessz.o || { echo "FAIL gcc harnessz"; exit 1; }; \
+	  arm-none-eabi-ld -T $$d/link.ld $$d/start.o $$d/harnessz.o $$d/libz.o $$lg -o $$d/t2z.elf || { echo "FAIL ld thumb2 struct/vararg objects"; exit 1; }; \
+	  timeout 30 qemu-system-arm -M mps2-an500 -semihosting -nographic -kernel $$d/t2z.elf </dev/null; a=$$?; \
+	  [ $$a -eq 18 ] || { echo "FAIL thumb2 composites+varargs (got $$a, want 18 = HFA d-pairs + 8B blob + <=4B int one + the AAPCS32 word walk, gcc<->mooncc both directions; 100+n names the first miss -- see test/thumb2/harnessz.c)"; exit 1; }; \
+	  echo "test_thumb2: mooncc -t thumb2 -c -> ELF32/EM_ARM (la + pairs + VFP + am.c bit-exact + composites/varargs: 45+45+9+18 differential checks), ld binds, runs on qemu Cortex-M7"
 # moon-tar -- the userland cousin of test_raw: build GNU tar 1.13 (a real third-
 # party GNU package) with mooncc + nolibc + the holo linker, no gcc/glibc/ld, and
 # prove the binary RUNS -- cf/xf + czf/xzf roundtrips byte-identical + system-tar

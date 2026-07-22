@@ -113,6 +113,7 @@
    arm32-targets '(thumb1 thumb2 cortex-m0 cortex-m7 arm)
    (arm32? t) (member? t arm32-targets)
    r-thm-call 10                                    ; R_ARM_THM_CALL   ((S+A)|T) - P  (a thumb BL to a symbol)
+   r-thm-jump24 30                                  ; R_ARM_THM_JUMP24 same math      (a thumb2 B.W tail-jump)
    r-arm-abs32 2                                     ; R_ARM_ABS32      S + A           (la's pooled address word)
    r-thm-movw 47                                    ; R_ARM_THM_MOVW_ABS_NC  (S+A)|T, low 16   (thumb2 la)
    r-thm-movt 48                                    ; R_ARM_THM_MOVT_ABS     S+A, high 16
@@ -228,6 +229,9 @@
                          (? (id? k 'bl)
                              (: sym (? (o-has? wkset lbl) (peep fnidx lbl 0) (peep extidx lbl 0))
                                 (go >rs ((o-rel32 off sym r-thm-call) >< acc)))
+                            (id? k 'b)               ; a B.W tail-jump to an external/weak fn
+                             (: sym (? (o-has? wkset lbl) (peep fnidx lbl 0) (peep extidx lbl 0))
+                                (go >rs ((o-rel32 off sym r-thm-jump24) >< acc)))
                             (id? k 'abs32)
                              (: sl (a32loc lbl aux) (go >rs ((o-rel32 off <sl r-arm-abs32) >< acc)))
                             (member? k '(movw16 movt16))

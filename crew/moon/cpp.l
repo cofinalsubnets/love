@@ -409,6 +409,9 @@
                ; gcc's limit predefines, the ones the host seam reads
                _ (pin t "__INT_MAX__" `('obj `((tok 'num 2147483647 0))))
                _ (pin t "__LONG_MAX__" `('obj `((tok 'num 9223372036854775807 0))))
+               ; FLT_MAX exactly: (2 - 2^-23) * 2^127 = 2^128 - 2^104, double-exact
+               ; (love.c's 32-bit dtoa branch reads it; gcc predefines it everywhere)
+               _ (pin t "__FLT_MAX__" `('obj `((tok 'flo ((2.0 - (/ 1.0 8388608.0)) * (127 2.0)) 0))))
                ; bool/true/false BUILTIN (C23-style, no <stdbool.h> needed): modern C
                ; (gnulib, gzip) uses them bare. bool stays cc's int (the old stdbool.h
                ; choice) -- an int keyword token; true/false the 1/0 constants.
