@@ -675,7 +675,14 @@ test_thumb2: host out/host$(hsuf)/mooncc
 	  arm-none-eabi-ld -T $$d/link.ld $$d/start.o $$d/harness.o $$d/lib.o -o $$d/t2.elf || { echo "FAIL ld thumb2 objects"; exit 1; }; \
 	  timeout 30 qemu-system-arm -M mps2-an500 -semihosting -nographic -kernel $$d/t2.elf </dev/null; a=$$?; \
 	  [ $$a -eq 180 ] || { echo "FAIL thumb2 -c link+run (got $$a, want 180 = fnptr 30+12 + 'Z' 90 + addacc 43 + static-fn 5; a missing thumb bit on the static fn faults the BLX, a bad section addend misreads the string)"; exit 1; }; \
-	  echo "test_thumb2: mooncc -t thumb2 -c -> ELF32/EM_ARM (la via R_ARM_THM_MOVW_ABS_NC/MOVT_ABS: fn-ptr array, static fn, string, global), ld binds, runs on qemu Cortex-M7"
+	  cp test/thumb2/lib64.c test/thumb2/harness64.c $$d/; \
+	  $(ho)/mooncc -t thumb2 -c $$d/lib64.c $$d/lib64.o || { echo "FAIL mooncc -t thumb2 -c lib64"; exit 1; }; \
+	  arm-none-eabi-gcc -mcpu=cortex-m7 -mthumb -ffreestanding -O2 -c $$d/harness64.c -o $$d/harness64.o || { echo "FAIL gcc harness64"; exit 1; }; \
+	  lg=`arm-none-eabi-gcc -mcpu=cortex-m7 -mthumb -print-libgcc-file-name`; \
+	  arm-none-eabi-ld -T $$d/link.ld $$d/start.o $$d/harness64.o $$d/lib64.o $$lg -o $$d/t2p.elf || { echo "FAIL ld thumb2 pair objects"; exit 1; }; \
+	  timeout 30 qemu-system-arm -M mps2-an500 -semihosting -nographic -kernel $$d/t2p.elf </dev/null; a=$$?; \
+	  [ $$a -eq 43 ] || { echo "FAIL thumb2 64-bit pairs (got $$a, want 43 = every differential check vs gcc; 100+n names the first miss -- see test/thumb2/harness64.c)"; exit 1; }; \
+	  echo "test_thumb2: mooncc -t thumb2 -c -> ELF32/EM_ARM (la + the 64-bit pair lanes: +,-,*,/,%,shifts,relations,clzll,pair args/returns -- 43 differential checks vs gcc), ld binds, runs on qemu Cortex-M7"
 # moon-tar -- the userland cousin of test_raw: build GNU tar 1.13 (a real third-
 # party GNU package) with mooncc + nolibc + the holo linker, no gcc/glibc/ld, and
 # prove the binary RUNS -- cf/xf + czf/xzf roundtrips byte-identical + system-tar

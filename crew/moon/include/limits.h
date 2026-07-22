@@ -16,11 +16,13 @@
 #define INT_MAX    2147483647
 #define UINT_MAX   4294967295U
 #ifdef __arm__
-/* the 32-bit targets: long is the 4-byte word. no LLONG_* -- `long long` is not
- * a 64-bit type on the thumb targets yet (see stdint.h), so the macros would lie. */
+/* the 32-bit targets: long is the 4-byte word, long long the 8-byte pair. */
 #define LONG_MIN   (-2147483647L - 1)
 #define LONG_MAX   2147483647L
 #define ULONG_MAX  4294967295UL
+#define LLONG_MIN  (-9223372036854775807LL - 1)
+#define LLONG_MAX  9223372036854775807LL
+#define ULLONG_MAX 18446744073709551615ULL
 #else
 #define LONG_MIN   (-9223372036854775807L - 1)
 #define LONG_MAX   9223372036854775807L

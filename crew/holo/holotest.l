@@ -422,7 +422,25 @@
       ;; la: the MOVW/MOVT absolute pair (movw16/movt16 fixups, always both) -- x at +16, so
       ;; movw #16 ; movt #0, twice (r0 then r7). the thumb2 answer to a64's adrp+add.
       `("t2.la"      "40f21000c0f2000040f21007c0f2000741424300"
-                      '((la r0 x) (la r7 x) (label x) (raw (65 66 67 0)))))
+                      '((la r0 x) (la r7 x) (label x) (raw (65 66 67 0))))
+      ;; the 64-bit pair lanes (moon rung 3): the carry ALU family, the widening multiply
+      ;; family, clz, and a variable shift whose count is NOT r1 (T32 takes any count reg).
+      `("t2.adc"     "43eb0101"          '((adc r1 r3 r1)))            ; adc.w r1, r3, r1
+      `("t2.adcs"    "53eb0303"          '((adcs r3 r3 r3)))           ; adcs.w r3, r3, r3
+      `("t2.sbc"     "63eb0101"          '((sbc r1 r3 r1)))            ; sbc.w r1, r3, r1
+      `("t2.sbcs"    "75eb0107"          '((sbcs r7 r5 r1)))           ; sbcs.w r7, r5, r1
+      `("t2.ors"     "5cea020c"          '((ors r12 r12 r2)))          ; orrs.w r12, r12, r2
+      `("t2.umull"   "a2fb000c"          '((umull r0 r12 r2 r0)))      ; umull r0, r12, r2, r0
+      `("t2.mla"     "02fb0133"          '((mla r3 r2 r1 r3)))         ; mla r3, r2, r1, r3
+      `("t2.clz"     "b1fa81f0"          '((clz r0 r1)))               ; clz r0, r1
+      `("t2.shlv.r2" "01fa02f1"          '((shlv r1 r2)))              ; lsl.w r1, r1, r2
+      ;; the 64-bit unsigned divide/remainder expansions: dividend r2:r3 / divisor r0:r1 ->
+      ;; r0:r1. 64-step restoring loop, fixed narrow branches (bhs +8 / blo +10 / bne -52),
+      ;; r4-r7 saved. disassembly-verified whole (llvm-mc); the qemu gate proves the values.
+      `("t2.udivll"  "4df8044d4df8045d4df8046d4df8047d40f2000440f2000540f2400612eb020253eb030354eb040455eb050504d2b4eb000775eb010705d3b4eb000475eb010502f20102a6f20106b6f1000fe6d1104619465df8047b5df8046b5df8045b5df8044b"
+                      '((udivll)))
+      `("t2.uremll"  "4df8044d4df8045d4df8046d4df8047d40f2000440f2000540f2400612eb020253eb030354eb040455eb050504d2b4eb000775eb010705d3b4eb000475eb010502f20102a6f20106b6f1000fe6d1204629465df8047b5df8046b5df8045b5df8044b"
+                      '((uremll))))
    _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'thumb2 (at t 2))) 0 t2tests)
 
    ;; -- the thumb1 backend (crew/holo/thumb1.l): the SAME neutral IR, a FOURTH target -- ARMv6-M

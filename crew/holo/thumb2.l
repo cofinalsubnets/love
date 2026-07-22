@@ -66,7 +66,10 @@
    thumb-alu (tablet 0)
    _ (foldl (\ _ p (pin thumb-alu <p >p)) 0
         `(('add >< 0xEB00) ('sub >< 0xEBA0) ('and >< 0xEA00) ('or >< 0xEA40) ('xor >< 0xEA80)
-           ('adds >< 0xEB10) ('subs >< 0xEBB0)))               ; the S-variant: set the flags
+           ('adds >< 0xEB10) ('subs >< 0xEBB0)                 ; the S-variant: set the flags
+           ('adc >< 0xEB40) ('adcs >< 0xEB50)                  ; the carry family -- the 64-bit
+           ('sbc >< 0xEB60) ('sbcs >< 0xEB70)                  ;   pair lanes (moon rung 3)
+           ('ors >< 0xEA50)))                                  ; ORRS: pair equality / pair truth
    (thumb-alu-rrr base d a b)                                 ; hw1 = base|Rn(a); hw2 = Rd<<8 | Rm(b)
       (: dn (rn d) an (rn a) bn (rn b) (t32 (((base | an) << 16) | ((dn << 8) | bn))))
    ;; add/sub #imm12 via ADDW/SUBW (T4): a plain 12-bit unsigned; a negative flips the op.
@@ -96,6 +99,44 @@
    (thumb-imul d a b)                                         ; MUL Rd, Rn, Rm (T2); no immediate form
       (? (reg? b) (: dn (rn d) an (rn a) bn (rn b) (t32 (((0xFB00 | an) << 16) | (0xF000 | ((dn << 8) | bn)))))
          (scare 'thumb-mul-imm `('imul d a b)))
+   ;; the widening multiply family (the 64-bit pair lanes): UMULL RdLo,RdHi,Rn,Rm (T1) and
+   ;; MLA Rd,Rn,Rm,Ra (T1, mls without bit4). CLZ Rd,Rm (T1) for clzll.
+   (thumb-umull dl dh a b)
+      (: ln (rn dl) hn (rn dh) an (rn a) bn (rn b)
+         (t32 (((0xFBA0 | an) << 16) | ((ln << 12) | ((hn << 8) | bn)))))
+   (thumb-mla d a b acc)                                      ; d = a*b + acc
+      (: dn (rn d) an (rn a) bn (rn b) cn (rn acc)
+         (t32 (((0xFB00 | an) << 16) | ((cn << 12) | ((dn << 8) | bn)))))
+   (thumb-clz d s) (: dn (rn d) sn (rn s) (t32 (((0xFAB0 | sn) << 16) | (0xF080 | ((dn << 8) | sn)))))
+   ;; the 64-bit unsigned divide/remainder EXPANSION (moon's pair `/` and `%`): dividend r2:r3,
+   ;; divisor r0:r1, result r0:r1. a 64-step restoring shift-subtract -- (rem:dividend) doubles,
+   ;; a quotient bit rides in at bit 0; a carry OUT of rem (bit 64) forces the subtract (rem is
+   ;; then >= 2^64 > divisor; the 64-bit subtract still lands right, the result is < divisor).
+   ;; owns r2..r7 + r12-free; r4..r7 saved around it, so pool values above survive. branches are
+   ;; FIXED narrow offsets (no labels, like thumb1's divide) -- the layout below is byte-counted:
+   ;;   0 push*4, 16 movw*3, 28 LOOP adds/adcs*3, 44 bcs+12, 46 subs, 50 sbcs, 54 bcc+14,
+   ;;   56 SUB subs, 60 sbcs, 64 addw#1, 68 NEXT subw, 72 cmp, 76 bne LOOP(-52), 78 tail.
+   (t2-udivmod which)
+      (catall `((thumb-push 'r4) (thumb-push 'r5) (thumb-push 'r6) (thumb-push 'r7)
+                 (thumb-movw 'r4 0) (thumb-movw 'r5 0) (thumb-movw 'r6 64)
+                 (thumb-aluop 'adds 'r2 'r2 'r2)               ; loop: (rem:dividend) <<= 1
+                 (thumb-aluop 'adcs 'r3 'r3 'r3)
+                 (thumb-aluop 'adcs 'r4 'r4 'r4)
+                 (thumb-aluop 'adcs 'r5 'r5 'r5)
+                 (t16 0xD204)                                  ; bcs +8 -> the subtract (bit 64 set)
+                 (thumb-aluop 'subs 'r7 'r4 'r0)               ; trial rem - divisor (flags only)
+                 (thumb-aluop 'sbcs 'r7 'r5 'r1)
+                 (t16 0xD305)                                  ; bcc +10 -> next (rem < divisor)
+                 (thumb-aluop 'subs 'r4 'r4 'r0)               ; commit: rem -= divisor
+                 (thumb-aluop 'sbcs 'r5 'r5 'r1)
+                 (thumb-addsub-imm 'add 'r2 'r2 1)             ; quotient bit (bit 0 is clear)
+                 (thumb-addsub-imm 'sub 'r6 'r6 1)             ; next: counter
+                 (thumb-cmp 'r6 0)
+                 (t16 0xD1E6)                                  ; bne loop (-52)
+                 (? (id? which 'div)
+                    ((thumb-movr 'r0 'r2) + (thumb-movr 'r1 'r3))
+                    ((thumb-movr 'r0 'r4) + (thumb-movr 'r1 'r5)))
+                 (thumb-pop 'r7) (thumb-pop 'r6) (thumb-pop 'r5) (thumb-pop 'r4)))
 
    ;; loads/stores. LDR/STR Rt,[Rn,#imm12] (T3, positive 0..4095) else the T4 8-bit signed offset
    ;; (a frame slot's small negative). the FAR lane (offsets past that, via an r12 materialize) is
@@ -146,10 +187,11 @@
          ty (? (op = 'shl) 0 (op = 'shr) 1 (op = 'sar) 2 (op = 'ror) 3 (scare 'badshift op))
          hw2 ((((c >> 2) & 7) << 12) | ((dn << 8) | (((c & 3) << 6) | ((ty << 4) | dn))))
          (t32 (0xEA4F0000 | hw2)))
-   ;; shift by a register (count in r1, the IR contract; d in place, d != r1): LSL/LSR/ASR.W Rd,Rd,Rc.
+   ;; shift by a register: LSL/LSR/ASR.W Rd,Rd,Rc, d in place. the IR contract parks the count in
+   ;; r1, but the T32 encoding takes ANY count register -- the pair-shift lanes (whose r1 is the
+   ;; pair's high word) ride that freedom, so no r1 guard here (thumb1 keeps its restriction).
    (thumb-shiftv op d c)
-      (: _ (? (reg-eq c 'r1) 0 (scare 'shiftv-count-not-r1 `(op d c)))
-         dn (rn d) cn (rn c)
+      (: dn (rn d) cn (rn c)
          base (? (op = 'shlv) 0xFA00 (op = 'shrv) 0xFA20 (op = 'sarv) 0xFA40 (scare 'badshiftv op))
          (t32 (((base | dn) << 16) | (0xF000 | ((dn << 8) | cn)))))
 
@@ -187,6 +229,11 @@
             (op = 'mov)  (thumb-mov  (at ins 1) (at ins 2))
             (op = 'cmp)  (thumb-cmp  (at ins 1) (at ins 2))
             (op = 'imul) (thumb-imul (at ins 1) (at ins 2) (at ins 3))
+            (op = 'umull) (thumb-umull (at ins 1) (at ins 2) (at ins 3) (at ins 4))
+            (op = 'mla)  (thumb-mla  (at ins 1) (at ins 2) (at ins 3) (at ins 4))
+            (op = 'clz)  (thumb-clz  (at ins 1) (at ins 2))
+            (op = 'udivll) (t2-udivmod 'div)
+            (op = 'uremll) (t2-udivmod 'rem)
             (op = 'ld)   (thumb-ld   (at ins 1) (at ins 2) (at ins 3))
             (op = 'st)   (thumb-st   (at ins 1) (at ins 2) (at ins 3))
             (op = 'ld1)  (thumb-ld1  (at ins 1) (at ins 2) (at ins 3))

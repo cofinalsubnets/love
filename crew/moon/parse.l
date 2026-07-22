@@ -79,18 +79,23 @@
    scalars '(char short int long void double float)
    ; a type-specifier RUN (char short int long void double float signed unsigned)
    ; canonicalizes to one type symbol -- `unsigned long` -> 'ulong, `signed char`
-   ; -> 'char, `long long` -> 'long. the unsigned scalars are 'uchar 'ushort 'uint
-   ; 'ulong (gen gives them zero-extend loads + unsigned >> / compare / divide).
+   ; -> 'char. the unsigned scalars are 'uchar 'ushort 'uint 'ulong (gen gives
+   ; them zero-extend loads + unsigned >> / compare / divide). `long long` folds
+   ; to 'long on the 64-bit targets (same width); on the 32-bit thumb ABI it is
+   ; its own 8-byte type, 'llong/'ullong -- the register pair.
    tyspec '(char short int long void double float signed unsigned)
-   (canon specs)
+   (canon ps specs)
     (? (member? 'void specs) 'void
        (member? 'double specs) 'double
        (member? 'float specs) 'float
        (: uns (member? 'unsigned specs)
+          ll (&& (pst32? ps) (: (n2 l k) (? (! (two? l)) k (n2 >l (? (id? <l 'long) (k + 1) k)))
+                                (1 < (n2 specs 0))))                        ; TWO longs on t32
           base (? (member? 'char specs) 'char (member? 'short specs) 'short
-                  (member? 'long specs) 'long 'int)
+                  ll 'llong (member? 'long specs) 'long 'int)
           (? (! uns) base
-             (base = 'char) 'uchar (base = 'short) 'ushort (base = 'long) 'ulong 'uint)))
+             (base = 'char) 'uchar (base = 'short) 'ushort
+             (base = 'llong) 'ullong (base = 'long) 'ulong 'uint)))
    ; ignorable specifiers: storage/qualifier keywords + gcc attribute ids. cc
    ; keeps no linkage/qualifier state, so these are SKIPPED wherever a type may
    ; begin or a declarator may carry them -- __attribute__((..)) / _Alignas(..)
@@ -208,7 +213,9 @@
                   (stru? ty) (caup (peep (ps 'stag) <>ty 0))
                   (bitf? ty) (tsz ps <>ty)          ; the unit's size (a bitfield rides its declared type)
                   (|| (ty = 'char) (ty = 'uchar)) 1 (|| (ty = 'short) (ty = 'ushort)) 2
-                  (|| (ty = 'int) (|| (ty = 'uint) (ty = 'float))) 4 (psword ps))
+                  (|| (ty = 'int) (|| (ty = 'uint) (ty = 'float))) 4
+                  (|| (ty = 'llong) (ty = 'ullong)) 8         ; the t32 register pair (only canon'd there)
+                  (psword ps))
    (talign ps ty) (? (ptr? ty) (psword ps)
                      (arr? ty) (talign ps <>ty)
                      (stru? ty) (cauup (peep (ps 'stag) <>ty 0))
@@ -403,7 +410,7 @@
               (: (grab l acc) (? (&& (two? l) (&& ((tkk <l) = 'kw) (member? (tkv <l) tyspec)))
                                  (grab >l (link (tkv <l) acc)) `((rev acc) l))
                  r (grab ts ())
-                 `((canon <r) <>r))
+                 `((canon ps <r) <>r))
              (|| (tkw? t 'struct) (tkw? t 'union))
               (: uni (tkw? t 'union)
                  ts2 >ts
@@ -716,7 +723,7 @@
    ; left -- an approximation, honest for the putcharm-style word math images use.
    (cint? x) (|| (charm? x) (|| (sun? x) (big? x)))
    (uext? e) (? (! (two? e)) ()
-                (<e = 'cast) (member? <>e '(uchar ushort uint ulong))
+                (<e = 'cast) (member? <>e '(uchar ushort uint ulong ullong))
                 (<e = 'bin) (uext? <>>e)
                 ())
    (cfold e)

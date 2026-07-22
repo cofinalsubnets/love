@@ -18,14 +18,17 @@ typedef unsigned int       uint32_t;
 #define UINT16_MAX  65535
 #define UINT32_MAX  4294967295
 #ifdef __arm__
-/* the 32-bit targets (thumb1/thumb2): long IS the 4-byte word. the 64-bit
- * family is OMITTED -- cc has no register pairs on these targets yet, so a
- * 64-bit integer cannot be told truthfully (`long long` parses but is the same
- * 4-byte word); a program reaching for int64_t fails LOUD at the typedef. */
+/* the 32-bit targets (thumb1/thumb2): long IS the 4-byte word; long long is
+ * the 8-byte register pair (thumb2's rung-3 lanes). */
+typedef long long          int64_t;
+typedef unsigned long long uint64_t;
 typedef long               intptr_t;
 typedef unsigned long      uintptr_t;
-typedef long               intmax_t;
-typedef unsigned long      uintmax_t;
+typedef long long          intmax_t;
+typedef unsigned long long uintmax_t;
+#define INT64_MAX   9223372036854775807
+#define INT64_MIN   (-9223372036854775807 - 1)
+#define UINT64_MAX  18446744073709551615
 #define INTPTR_MAX  2147483647
 #define INTPTR_MIN  (-2147483647 - 1)
 #define UINTPTR_MAX 4294967295U

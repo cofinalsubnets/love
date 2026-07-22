@@ -214,7 +214,27 @@ The thumb2 `la` gap is **fixed**: `la` lowers to the MOVW/MOVT absolute pair (mo
 fixups → R_ARM_THM_MOVW_ABS_NC/MOVT_ABS, section-bound addends baked in-field, a static fn's
 thumb bit riding the addend), gated end-to-end by `make test_thumb2` (qemu Cortex-M7).
 
-What remains, both loud scares, never silent:
+**64-bit `long long` is real on thumb2** (rung 3, the register pairs): on the t32 targets
+`long long` canons to its own 8-byte type ('llong/'ullong — the 64-bit folds to 'long
+everywhere else), lo:hi riding r0:r1 on the value protocol, r2:r3 the shuttle. Covered:
++, -, ×(UMULL/MLA), unsigned / and % (a self-contained 64-step restoring expansion — no
+`__aeabi_uldivmod`, no libgcc), all shifts (constant and variable counts across the word
+boundary), every relation (SUBS/SBCS, exact at the 2^53 tie), widen/narrow, `__builtin_clzll`
+(CLZ), pair args (AAPCS32 even-odd pairs, 8-aligned stack slots, gp closing behind a stack
+arg) and pair returns, pair globals/locals/members/derefs, `++`/compound assigns. The same
+work fixed the pre-existing t32 >4-arg overflow ABI (4-byte slots, block-allocated) and the
+t32 ≥8-byte struct-copy stride. 43 differential checks vs gcc ride `make test_thumb2`
+(test/thumb2/{lib64,harness64}.c).
+
+What remains, all loud scares (never silent):
+
+- **signed 64-bit `/` and `%`** refuse (`cgfn refuses`) — love.c's lane is unsigned; wrap
+  the unsigned expansion in an abs/refix sleeve when needed.
+- **`1234ULL`-style suffixed literals past 32 bits** type as 'ulong (the lexer folds
+  UL/ULL into one token kind) — a plain or hex literal past the word types 'llong/'ullong
+  correctly. love.c has no such literal; the lexer split is the fix.
+- **t32 varargs** — vaspill still emits the SysV shapes; a variadic t32 fn scares at the
+  backend (`bad-op stsd`).
 
 - **thumb2 `leax`.** A variable-index array (`garr[i] = v`, local or global) hits
   `;; bad-op leax` — thumb2 never got an leax lane (the constant-index forms fold and
