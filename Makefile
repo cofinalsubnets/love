@@ -232,9 +232,13 @@ $(ho)/.mooncc-cat.l: $(moonfiles) $(ho)/.mooncc-cat.list
 	@mkdir -p $(dir $@)
 	@cat $(moonfiles) > $@
 sbfiles = src/apps/kore/text.l src/apps/kore/diff.l src/apps/dns/dns.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/sb.l
+# helm the supervisor -- a prototype init, catted the same way. member order is the
+# scope: the unit language, the supervisor over it, the socket over that, the driver last.
+helmfiles = src/apps/helm/unit.l src/apps/helm/sup.l src/apps/helm/moor.l src/apps/helm/helm.l
 $(ho)/sb: $(sbfiles)
 $(ho)/lush: $(lushfiles)
-$(ho)/sb $(ho)/lush:
+$(ho)/helm: $(helmfiles)
+$(ho)/sb $(ho)/lush $(ho)/helm:
 	@echo 'CAT	'$@
 	@mkdir -p $(dir $@)
 	@{ echo '#!/usr/bin/env -S love'; cat $^; } > $@
