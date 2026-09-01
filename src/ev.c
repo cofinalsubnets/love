@@ -23,53 +23,53 @@ static Cata(c1_ret);
 static Cata(c1_var);
 static Cata(c1_yield);
 static ai_noinline Ana(analyze);
-static ai_noinline int poll_parked(struct ai *g, uintptr_t now);
-static ai_noinline int wake_parked(struct ai *g, uintptr_t now,
-                                   struct ai_wait_fd const *fds, int nfds, int ask);
-static ai_noinline union u *yield_sw_wait(struct ai *g, uintptr_t my_wake, int my_wait_fd, int my_events, int me_live);
+static ai_noinline int
+ poll_parked(struct ai *g, uintptr_t now),
+ wake_parked(struct ai *g, uintptr_t now, struct ai_wait_fd const *fds, int nfds, int ask);
+static ai_noinline union u *yield_sw_wait(struct ai *g, uintptr_t my_wake, int my_wait_fd,
+                                          int my_events, int me_live);
 static ai_noinline void wait_one(int fd, int events, uintptr_t ms);
 static ai_noinline word missing_tag(struct ai *g);
-static bool lambp(struct ai *g, word x);
-static bool lexbound(struct ai *g, struct env *d, word x);
-static int parked_ready(struct ai *g, union u *n, uintptr_t now,
-                                  struct ai_wait_fd const *fds, int nfds, int *cur, int ask);
-static int polled_ready(struct ai_wait_fd const *fds, int nfds, int *cur, int fd, int ev);
-static int task_live(struct ai *g, union u *head, intptr_t pid, int me_live);
+static bool
+ lambp(struct ai *g, word x),
+ lexbound(struct ai *g, struct env *d, word x);
+static int
+ parked_ready(struct ai *g, union u *n, uintptr_t now, struct ai_wait_fd const *fds, int nfds,
+              int *cur, int ask),
+ polled_ready(struct ai_wait_fd const *fds, int nfds, int *cur, int fd, int ev),
+ task_live(struct ai *g, union u *head, intptr_t pid, int me_live);
 static intptr_t ai_ceilnet(struct ai *g, word x);
-static lvm(ap_next);
-static lvm(help_ret_more);
-static lvm(help_ret_scare);
-static lvm(lvm_add_coin);
-static lvm(lvm_coin_op);
-static lvm(lvm_mul_coin);
-static lvm(lvm_numap);
-static lvm(lvm_numtap);
-static lvm(lvm_resume);
-static struct ai *ai_raise(struct ai *c, word a, word b, union u const *K);
-static struct ai *ana_ap(struct ai *g, struct env **c, intptr_t x);
-static struct ai *ana_ap_r2l(struct ai *g, struct env **c, word x);
-static struct ai *ana_d(struct ai *g, struct env **b, word exp);
-static struct ai *c0_i(struct ai *g, struct env **c, lvm_t *i);
-static struct ai *c0_ix(struct ai *g, struct env **c, lvm_t *i, word x);
-static struct ai *c0_lambda(struct ai *g, struct env **c, intptr_t imps, intptr_t exp);
-static struct ai *enscope(struct ai *g, struct env *par, word args, word imps);
-static struct ai *eset(struct ai *g, struct env **c, int k, word v);
-static struct ai *lbox(struct ai *g);
-static struct ai *ldels(struct ai *g, word lam, word l);
-static struct ai *lset(struct ai *g, word y, int k, word v);
-static struct ai *pushl(struct ai*g);
-static struct ai *rev(struct ai *g, word l);
-static struct ai *sset(struct ai *g, word s, int k, word v);
-static union u *parked_find(struct ai *g, intptr_t pid, union u **prevp);
-static union u *run_splice_at(struct ai *g, union u *tail, union u *n);
+static lvm_t
+ ap_next, help_ret_more, help_ret_scare, lvm_add_coin, lvm_coin_op, lvm_mul_coin,
+ lvm_numap, lvm_numtap, lvm_resume;
+static struct ai
+ *ai_raise(struct ai *c, word a, word b, union u const *K),
+ *ana_ap(struct ai *g, struct env **c, intptr_t x),
+ *ana_ap_r2l(struct ai *g, struct env **c, word x),
+ *ana_d(struct ai *g, struct env **b, word exp),
+ *c0_i(struct ai *g, struct env **c, lvm_t *i),
+ *c0_ix(struct ai *g, struct env **c, lvm_t *i, word x),
+ *c0_lambda(struct ai *g, struct env **c, intptr_t imps, intptr_t exp),
+ *enscope(struct ai *g, struct env *par, word args, word imps),
+ *eset(struct ai *g, struct env **c, int k, word v),
+ *lbox(struct ai *g),
+ *ldels(struct ai *g, word lam, word l),
+ *lset(struct ai *g, word y, int k, word v),
+ *pushl(struct ai*g),
+ *rev(struct ai *g, word l),
+ *sset(struct ai *g, word s, int k, word v);
+static union u
+ *parked_find(struct ai *g, intptr_t pid, union u **prevp),
+ *run_splice_at(struct ai *g, union u *tail, union u *n);
 static void parked_drop(struct ai *g, union u *prev, union u *n);
-static word *task_help(struct ai *g);
-static word assq(struct ai *g, word l, word k);
-static word eget(struct ai *g, struct env *e, int k);
-static word lget(struct ai *g, word y, int k);
-static word lidx(struct ai*g, word x, word l);
-static word memq(struct ai *g, word l, word k);
-static word sget(struct ai *g, word s, int k);
+static word
+ *task_help(struct ai *g),
+ assq(struct ai *g, word l, word k),
+ eget(struct ai *g, struct env *e, int k),
+ lget(struct ai *g, word y, int k),
+ lidx(struct ai*g, word x, word l),
+ memq(struct ai *g, word l, word k),
+ sget(struct ai *g, word s, int k);
 // ============================================================================
 // ev
 // ============================================================================

@@ -4,50 +4,56 @@
 struct ai_chain; struct ai_image_guard; struct hc; struct image_hdr; struct img_ord;
 // this file's own, forward-declared so order within it does not matter.
 static ai_noinline intptr_t img_decode_cold(intptr_t v, char *code);
-static int img_lt_pair(struct img_ord const *o, uintptr_t i, uintptr_t j);
-static int img_lt_rank(struct img_ord const *o, uintptr_t i, uintptr_t j);
-static int img_lt_word(struct img_ord const *o, uintptr_t i, uintptr_t j);
-static int img_nom_before(word a, word b);
-static int img_tok(word const *key, uint16_t const *tk, word v);
-static int img_wxp(struct img_ctx *x, word v);
-static intptr_t image_ap_index(intptr_t ap);
-static intptr_t image_ap_resolve(intptr_t idx);
-static intptr_t image_fn_index(intptr_t v);
-static intptr_t image_fn_resolve(intptr_t j);
-static intptr_t image_fn_slot(word const *cell);
-static intptr_t image_imm_index(word v);
-static intptr_t img_decode(intptr_t v, word *base, char *code);
-static intptr_t img_encode(struct img_ctx *x, intptr_t v);
-static struct ai *img_canon_symbols(struct ai *g);
-static struct ai *img_wake(void const *buf, uintptr_t len,
-                           void *(*al)(struct ai*, void*, size_t));
-static uintptr_t hc_hchain(struct ai_chain *c);
-static uintptr_t hc_hstr(struct ai_str *s);
-static uintptr_t hc_off(struct hc *h, word x);
-static uintptr_t hc_stride(struct ai *g, union u *p, int *fzp);
-static uintptr_t image_datasize(union u *d, void const *s);
-static uintptr_t image_nhost(void);
-static uintptr_t image_objsize(struct ai *g, union u *p);
-static uintptr_t img_dict(word *sorted, uintptr_t nw, word *dict, uintptr_t *cnt);
-static uintptr_t img_hash(word v);
-static uintptr_t img_rank_assign(struct ai *g, word const *blob, uintptr_t const *slots,
-                                 uintptr_t nslot, word *rank, uintptr_t nser);
-static uintptr_t img_stream(unsigned char *out, word const *blob, uintptr_t nw,
-                            word const *key, uint16_t const *tk);
+static int
+ img_lt_pair(struct img_ord const *o, uintptr_t i, uintptr_t j),
+ img_lt_rank(struct img_ord const *o, uintptr_t i, uintptr_t j),
+ img_lt_word(struct img_ord const *o, uintptr_t i, uintptr_t j),
+ img_nom_before(word a, word b),
+ img_tok(word const *key, uint16_t const *tk, word v),
+ img_wxp(struct img_ctx *x, word v);
+static intptr_t
+ image_ap_index(intptr_t ap),
+ image_ap_resolve(intptr_t idx),
+ image_fn_index(intptr_t v),
+ image_fn_resolve(intptr_t j),
+ image_fn_slot(word const *cell),
+ image_imm_index(word v),
+ img_decode(intptr_t v, word *base, char *code),
+ img_encode(struct img_ctx *x, intptr_t v);
+static struct ai
+ *img_canon_symbols(struct ai *g),
+ *img_wake(void const *buf, uintptr_t len, void *(*al)(struct ai*, void*, size_t));
+static uintptr_t
+ hc_hchain(struct ai_chain *c),
+ hc_hstr(struct ai_str *s),
+ hc_off(struct hc *h, word x),
+ hc_stride(struct ai *g, union u *p, int *fzp),
+ image_datasize(union u *d, void const *s),
+ image_nhost(void),
+ image_objsize(struct ai *g, union u *p),
+ img_dict(word *sorted, uintptr_t nw, word *dict, uintptr_t *cnt),
+ img_hash(word v),
+ img_rank_assign(struct ai *g, word const *blob, uintptr_t const *slots, uintptr_t nslot,
+                 word *rank, uintptr_t nser),
+ img_stream(unsigned char *out, word const *blob, uintptr_t nw, word const *key,
+            uint16_t const *tk);
 static unsigned char const *img_expand(word *out, uintptr_t nw, unsigned char const *p,
                                        unsigned char const *end, word const *dict);
 static unsigned char hc_flag(struct hc *h, word x);
-static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintptr_t nw, char const *cseg, uintptr_t *outlen);
-static void image_root_enc(struct img_ctx *x, word v, uint64_t *tag, uint64_t *val);
-static void img_hashcons(struct ai *g);
-static void img_ord_sift(struct img_ord const *o, uintptr_t i, uintptr_t n);
-static void img_ord_swap(struct img_ord const *o, uintptr_t i, uintptr_t j);
-static void img_sort(struct img_ord const *o, uintptr_t n);
-static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_guard const *guard,
-                       uintptr_t *outnw, char **cseg, uintptr_t *ncode, uint8_t *why);
-static word hc_can(struct hc *h, word x);
-static word hc_intern(struct hc *h, union u *p, uintptr_t hv);
-static word image_root_dec(uint64_t tag, uint64_t val, word *base);
+static void
+ *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintptr_t nw, char const *cseg,
+           uintptr_t *outlen),
+ image_root_enc(struct img_ctx *x, word v, uint64_t *tag, uint64_t *val),
+ img_hashcons(struct ai *g),
+ img_ord_sift(struct img_ord const *o, uintptr_t i, uintptr_t n),
+ img_ord_swap(struct img_ord const *o, uintptr_t i, uintptr_t j),
+ img_sort(struct img_ord const *o, uintptr_t n);
+static word
+ *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_guard const *guard,
+            uintptr_t *outnw, char **cseg, uintptr_t *ncode, uint8_t *why),
+ hc_can(struct hc *h, word x),
+ hc_intern(struct hc *h, union u *p, uintptr_t hv),
+ image_root_dec(uint64_t tag, uint64_t val, word *base);
 // ============================================================================
 // the heap-image snapshot (doc/misc/snapshot.md): serialize the compacted live heap
 // with every pointer-bearing word range-encoded in place, so a fresh process

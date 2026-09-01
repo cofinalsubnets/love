@@ -3,48 +3,52 @@
 #include "love_int.h"
 // this file's own, forward-declared so order within it does not matter.
 static ai_dlimb div128by64(ai_limb hi, ai_limb lo, ai_limb d, ai_limb *rem);
-static ai_limb div2by1(ai_limb hi, ai_limb lo, ai_limb d, ai_limb *rem);
-static ai_limb rdigit(char c);
+static ai_limb
+ div2by1(ai_limb hi, ai_limb lo, ai_limb d, ai_limb *rem),
+ rdigit(char c);
 static ai_noinline bool vquot_needs_float(word a, word b);
-static ai_noinline int mag_add(ai_limb *r, ai_limb const *a, int na, ai_limb const *b, int nb);
-static ai_noinline int mag_cmp(ai_limb const *a, int na, ai_limb const *b, int nb);
-static ai_noinline int mag_mul_add_small(ai_limb *a, int n, ai_limb mul, ai_limb add);
-static ai_noinline int mag_sub(ai_limb *r, ai_limb const *a, int na, ai_limb const *b, int nb);
-static ai_noinline void mag_divmod(ai_limb *q, ai_limb *r,
-  ai_limb const *u, int m, ai_limb const *v, int n, ai_limb *un, ai_limb *vn);
-static ai_noinline void mag_mul(ai_limb *r, ai_limb const *a, int na, ai_limb const *b, int nb);
-static ai_noinline void vbin_fill(struct ai_tray *r, word a, word b, int op, bool fdom);
-static ai_noinline void vmap1_fill(struct ai_tray *r, struct ai_tray *a, ai_flo_t (*fn)(ai_flo_t));
-static ai_noinline void vmap2_fill(struct ai_tray *r, word a, word b, ai_flo_t (*fn)(ai_flo_t, ai_flo_t));
-static bool ratio_ifit(word x, int64_t *v);
-static bool ratio_iview(word x, int64_t *n, int64_t *d);
-static bool ratio_xcmp(int64_t n1, int64_t d1, int64_t n2, int64_t d2, intptr_t *c);
-static int big_mul_mag(ai_limb *r, ai_limb const *a, int na, ai_limb const *b, int nb, ai_limb *t);
-static int big_nlimbs(word x);
-static int cmp_rank(struct ai *g, word x);
-static int load_int_mag(word x, ai_limb scratch[wlimbs], ai_limb const **out, bool *neg);
-static int mag_copy(ai_limb *dst, ai_limb const *src, int n);
-static intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb, uintptr_t lb);
-static intptr_t galaxy_tie(struct ai_tray *va, struct ai_tray *vb);
-static intptr_t mint_cmp(struct ai *g, word a, word b);
-static intptr_t vcmp_sign(int op, int s);
-static intptr_t vop_int(int op, intptr_t a, intptr_t b);
-static lvm(lvm_aextreme);
-static lvm(lvm_bdiv);
-static lvm(lvm_bmul);
-static lvm(lvm_cmp_ord);
-static lvm(lvm_kmul);
-static struct ai *ai_bdiv_setup(struct ai *g, int which);
-static struct ai *ai_bmul_setup(struct ai *g);
-static struct ai *ai_kmul_setup(struct ai *g);
-static struct ai *big_read_radix(struct ai *g, ai_limb radix, int chunk, uintptr_t pfx);
+static ai_noinline int
+ mag_add(ai_limb *r, ai_limb const *a, int na, ai_limb const *b, int nb),
+ mag_cmp(ai_limb const *a, int na, ai_limb const *b, int nb),
+ mag_mul_add_small(ai_limb *a, int n, ai_limb mul, ai_limb add),
+ mag_sub(ai_limb *r, ai_limb const *a, int na, ai_limb const *b, int nb);
+static ai_noinline void
+ mag_divmod(ai_limb *q, ai_limb *r, ai_limb const *u, int m, ai_limb const *v, int n,
+            ai_limb *un, ai_limb *vn),
+ mag_mul(ai_limb *r, ai_limb const *a, int na, ai_limb const *b, int nb),
+ vbin_fill(struct ai_tray *r, word a, word b, int op, bool fdom),
+ vmap1_fill(struct ai_tray *r, struct ai_tray *a, ai_flo_t (*fn)(ai_flo_t)),
+ vmap2_fill(struct ai_tray *r, word a, word b, ai_flo_t (*fn)(ai_flo_t, ai_flo_t));
+static bool
+ ratio_ifit(word x, int64_t *v),
+ ratio_iview(word x, int64_t *n, int64_t *d),
+ ratio_xcmp(int64_t n1, int64_t d1, int64_t n2, int64_t d2, intptr_t *c);
+static int
+ big_mul_mag(ai_limb *r, ai_limb const *a, int na, ai_limb const *b, int nb, ai_limb *t),
+ big_nlimbs(word x),
+ cmp_rank(struct ai *g, word x),
+ load_int_mag(word x, ai_limb scratch[wlimbs], ai_limb const **out, bool *neg),
+ mag_copy(ai_limb *dst, ai_limb const *src, int n);
+static intptr_t
+ bytes_cmp(const char *pa, uintptr_t la, const char *pb, uintptr_t lb),
+ galaxy_tie(struct ai_tray *va, struct ai_tray *vb),
+ mint_cmp(struct ai *g, word a, word b),
+ vcmp_sign(int op, int s),
+ vop_int(int op, intptr_t a, intptr_t b);
+static lvm_t lvm_aextreme, lvm_bdiv, lvm_bmul, lvm_cmp_ord, lvm_kmul;
+static struct ai
+ *ai_bdiv_setup(struct ai *g, int which),
+ *ai_bmul_setup(struct ai *g),
+ *ai_kmul_setup(struct ai *g),
+ *big_read_radix(struct ai *g, ai_limb radix, int chunk, uintptr_t pfx);
 static struct ai_zn tray_cell_zn(struct ai_tray *v, uintptr_t i);
 static uintptr_t bdim(uintptr_t da, uintptr_t db);
 static union u *as_big(ai_word **hp, word x);
-static void big_addsub(ai_limb *r, int *rn, bool *rneg,
-  ai_limb const *a, int na, bool nega, ai_limb const *b, int nb, bool negb, bool subtract);
-static void mag_add_off(ai_limb *r, int rn, ai_limb const *s, int sn, int off);
-static void mag_mul_kara(ai_limb *r, ai_limb const *a, ai_limb const *b, int n, ai_limb *t);
+static void
+ big_addsub(ai_limb *r, int *rn, bool *rneg, ai_limb const *a, int na, bool nega,
+            ai_limb const *b, int nb, bool negb, bool subtract),
+ mag_add_off(ai_limb *r, int rn, ai_limb const *s, int sn, int off),
+ mag_mul_kara(ai_limb *r, ai_limb const *a, ai_limb const *b, int n, ai_limb *t);
 void ratio_mag_mul(uint64_t a, uint64_t b, uint64_t *hi, uint64_t *lo);
 // ============================================================================
 // big
