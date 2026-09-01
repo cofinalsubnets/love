@@ -50,11 +50,11 @@ too: unseated is reset on every face, and the corpus answers its own codes
 through kore0.l's pin, one door deeper. -41/+4 lines over three files.
 
 **Rung 1 -- the raw-fd lane, finished by subtraction.** `syswrite` and `syscall`
-exist because the raw-fd lane is half built. `openfd` and `pipe` mint an fd,
-`lseek` seeks it (`posix.c:725` names it "the openfd lane -- not ports"),
-`close` closes it -- and nothing reads or writes one. Every port nif in io.c
-is `if (iop(Sp[0])) { .. }` falling through to a no-op, `(fputs port s)` even
-documented "no-op on misuse", so a charm handed to `say` or `see` is silently
+existed because the raw-fd lane was half built. `openfd` and `pipe` minted an fd,
+`lseek` seeked it (`posix.c:725` names it "the openfd lane -- not ports"), a
+second nif closed it -- and nothing read or wrote one. Every port nif in io.c was
+`if (iop(Sp[0])) { .. }` falling through to a no-op, `(fputs port s)` even
+documented "no-op on misuse", so a charm handed to `say` or `see` was silently
 ignored. That hole is the whole reason for a second door. Close it under the
 names that already exist and both instruments have nowhere left to be special.
 
@@ -63,12 +63,21 @@ names that already exist and both instruments have nowhere left to be special.
   `ZeroPoint` on a charm; `lvm_shutfd` closed a charm and answered `()` for
   anything else. Shutfd's three lines are close's charm arm now -- a nif retired
   and 41 call sites spelled `close`.
-- **the io.c port surface takes a charm as an fd** -- `see` `say` `put` `slurp`
-  `flush`. Five silent no-ops become operations, and `syswrite` is not needed
-  under any name, its one law (an absent row swallows its bytes, so the count
-  comes back) being an ordinary count. fds 0, 1 and 2 are not special here: a
-  charm that reached `see` by mistake is misuse, and refusing the low three to
-  catch it would forbid `say` to stdout by number, which is a thing to want.
+- **the io.c port surface takes a charm as an fd. LANDED.** `see` `say` `put`
+  `chug` `slurp`, and `flush` which was already a no-op with nothing to do. Six
+  silent no-ops are operations, and `syswrite` is not needed under any name: its
+  laws are now `(say fd s)` into a pipe read back through the other end, and
+  `(say 4096 s)` swallowed by an absent row without faulting the task. fds 0, 1
+  and 2 are not special: a charm that reached `see` by mistake is misuse, and
+  refusing the low three to catch it would forbid `say` to stdout by number,
+  which is a thing to want.
+  The lanes are src/seat.c's, beside `ai_fd_write_all`, and they go at the ROW
+  and not at read(2) -- `k_fd_read` folds busy and end into one 0, so a syscall
+  read would take an idle pipe for its end. An fd spelled in love stays absolute
+  (kmain's seat law), so a raw op is seat-blind where the port lane is not.
+  `slurp`'s drain lost its `unsee`: the byte `see` drew goes to the jug instead
+  of back to the vessel, which is the same bytes in the same order for a port and
+  the only spelling a raw fd can hold, a pushback needing somewhere to live.
 - **`stat` takes a charm as an fd**, which is `fstat` without a new name.
   Nothing in the tree asserts anything about `(stat <charm>)`, and the
   contract's `()` for "absence or unreadability" is already the right answer
@@ -80,8 +89,9 @@ names that already exist and both instruments have nowhere left to be special.
   `wh == 1 ? SEEK_CUR : wh == 2 ? SEEK_END : SEEK_SET`, so `(lseek fd 0 7)`
   seeks to 0 and reports success. Pass it through and the row answers EINVAL.
 
-Nothing is added. `syswrite`, `syscall` and `k_sys_nr` go (~90 lines over
-kmain.c and sys.c), `fdclose` went, four nifs gain a kind, one loses a bug.
+No new nif. `syswrite`, `syscall` and `k_sys_nr` go (~90 lines over kmain.c and
+sys.c), `fdclose` went, six nifs gained a kind and one loses a bug -- and the
+three lanes those kinds ride are src/seat.c's, where the fd doors already live.
 
 test/kernel/sys.l is then ordinary corpus that runs on the host AND the kernel:
 counts and errnos, byte-exact reads off the ramfs, close and its EBADF on a

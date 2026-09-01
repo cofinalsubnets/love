@@ -302,13 +302,13 @@ static int k_fd_eff(struct ai *g, int fd) {
 // keep misuse from crashing (read-from-output-fd reads the end;
 // write-to-input-fd discards).
 // the row-level motions, on an ALREADY-RESOLVED fd. The port dispatchers below
-// resolve through the running task's seat first; src/sys.c's syscall door does
-// not, which is the one difference between the two callers.
-static intptr_t k_row_read(int fd, unsigned char *dst, uintptr_t n) {
+// resolve through the running task's seat first; src/sys.c's syscall door and
+// src/seat.c's raw-fd lanes do not, an fd spelled in love being absolute.
+intptr_t k_row_read(int fd, unsigned char *dst, uintptr_t n) {
   struct k_source *s = k_source(fd);
   if (!s || !s->readn) return -1;
   return s->readn(fd, dst, n); }
-static intptr_t k_row_write(int fd, unsigned char const *src, uintptr_t n) {
+intptr_t k_row_write(int fd, unsigned char const *src, uintptr_t n) {
   struct k_source *s = k_source(fd);
   if (!s) return (intptr_t) n;
   if (s->writen) return s->writen(fd, src, n);

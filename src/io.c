@@ -282,8 +282,23 @@ ai_noinline static struct ai *chug_str(struct ai *g, struct ai_io *i) {
    else vt->readn(g, (unsigned char*) d + u, n - u); } }
  return g->sp[1] = g->sp[0], g->sp += 1, g; }
 
+// a charm is a raw fd, whose "already readable" is the device's own answer: it
+// holds nothing of ours, so one gulp off the row is the whole run in hand. "" for
+// a busy row as for an ended one -- `see` is what tells those apart.
+ai_noinline static struct ai *chug_fd(struct ai *g, intptr_t fd) {
+ unsigned char buf[ai_iobuf];
+ intptr_t k = fd < 0 ? -1 : ai_fd_readn(g, (int) fd, buf, sizeof buf);
+ if (!ai_ok(g = str0(g, k > 0 ? (uintptr_t) k : 0))) return g;
+ if (k > 0) memcpy(txt(g->sp[0]), buf, (uintptr_t) k);
+ return g->sp[1] = g->sp[0], g->sp += 1, g; }
+
 lvm(lvm_chug) {
  if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
+ if (charmp(Sp[0])) {
+  Pack(g); g = chug_fd(g, getcharm(Sp[0]));
+  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+  Unpack(g);
+  ai_musttail return Next(1); }
  if (!iop(Sp[0])) { Sp[0] = EmptyString; ai_musttail return Next(1); }
  Pack(g); g = chug_str(g, (struct ai_io*) Sp[0]);
  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
@@ -365,9 +380,15 @@ struct ai_port_vt const
  ai_closed_vt = { noop_flush, NULL,      NULL,     NULL },       // what `close` leaves behind
  ai_ci_vt     = { noop_flush, NULL,      ci_readn, ci_athand };  // a charlist: prel's `tap`
 
-// (fputc port byte) — write byte to port; return byte.
+// (fputc port byte) — write byte to port; return byte. a charm operand is a raw
+// fd and the byte goes straight at the row -- nothing to buffer, nothing to flush.
 lvm(lvm_fputc) {
  if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
+ if (charmp(Sp[0])) {
+  intptr_t fd = getcharm(Sp[0]);
+  unsigned char c = (unsigned char) getcharm(Sp[1]);
+  if (fd >= 0) { Pack(g); ai_fd_say((int) fd, &c, 1); Unpack(g); }
+  ai_musttail return Nextp(1, 1); }
  if (iop(Sp[0])) {
   g->io = (struct ai_io*) Sp[0];
   Pack(g);
@@ -385,7 +406,8 @@ lvm(lvm_fputc) {
  ai_musttail return Nextp(1, 1); }
 
 // (fflush port): flush means deliver -- a short-answering device parks the task
-// and the op re-runs (safe: a flush consumes nothing)
+// and the op re-runs (safe: a flush consumes nothing). a raw fd holds nothing of
+// love's, so a charm falls through with nothing to do and answers itself.
 lvm(lvm_fflush) {
  if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
  if (iop(Sp[0])) {
@@ -400,9 +422,16 @@ lvm(lvm_fflush) {
  ai_musttail return Next(1); }
 
 // (fputs port s) — write every byte of string-or-cask s; no-op on misuse. bytes_of
-// re-reads each iteration so GC inside ioputc can forward it.
+// re-reads each iteration so GC inside ioputc can forward it. a charm operand is a
+// raw fd: ai_fd_say lands the whole run in one place, and neither it nor the row
+// under it touches love's heap, so the bytes keep their address for the call.
 lvm(lvm_fputs) {
  if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
+ if (charmp(Sp[0]) && (strp(Sp[1]) || caskp(Sp[1]))) {
+  intptr_t fd = getcharm(Sp[0]);
+  struct ai_str *v = bytes_of(Sp[1]);
+  if (fd >= 0) { Pack(g); ai_fd_say((int) fd, (unsigned char const*) txt(v), len(v)); Unpack(g); }
+  ai_musttail return Nextp(1, 1); }
  if (iop(Sp[0]) && (strp(Sp[1]) || caskp(Sp[1]))) {
   g->io = (struct ai_io*) Sp[0];
   uintptr_t i = 0, l = len(bytes_of(Sp[1]));
@@ -552,9 +581,19 @@ static ai_inline bool lam_head(struct ai *g, word a) {        // is a the symbol
 bool lam_isp(struct ai *g, word x) {         // (\ b.. body): >=2 operands
  return chainp(x) && lam_head(g, A(x)) && chainp(B(x)) && chainp(BB(x)); }
 // (fgetc port): a non-port reads as an already-empty stream (EOF), so a
-// read-until-(-1) loop over a misused port is bounded
+// read-until-(-1) loop over a misused port is bounded. a charm is a raw fd, read
+// one byte at a time off the row: no pushback of its own (nothing holds one), and
+// a busy row parks the task exactly as a port's would -- nothing was consumed.
 lvm(lvm_fgetc) {
  if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
+ if (charmp(Sp[0])) {
+  intptr_t fd = getcharm(Sp[0]);
+  unsigned char c;
+  intptr_t k;
+  Pack(g); k = fd < 0 ? -1 : ai_fd_readn(g, (int) fd, &c, 1); Unpack(g);
+  if (!k) { g->next_wait_fd = fd; ai_musttail return Ap(lvm_yield_sw, g); }
+  Sp[0] = putcharm(k > 0 ? (ai_word) c : EOF);
+  ai_musttail return Next(1); }
  if (iop(Sp[0])) {
   struct ai_io *i = (struct ai_io*) Sp[0];
   struct ai_bio *bb = bio_of(g, i);

@@ -61,6 +61,9 @@
    (< (lseek -1 0 0) 0)                          ; a bad fd is negative, never a seek
    (< (openfd "lib/no-such-thing.l" 0) 0)        ; and so is an absent path
    (id? (close -1) ())                         ; closing nothing is the zero point
+   ; the raw-fd lane reads the ramfs byte for byte where the port lane does, gulp
+   ; boundaries and all -- one file is longer than a single gulp
+   (: fd (openfd f 0) a (slurp fd) _ (close fd) (&& (= a (rd f)) (= sz (tally a))))
    ; a write moves the size, and the date with it: stat reads the copy's stamp once
    ; there is a copy, the bake's until then
    (= 3 <now)

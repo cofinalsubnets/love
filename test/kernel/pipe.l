@@ -15,6 +15,25 @@
          (port? wp) (port? rp)
          (= s "hello pipe")))
 
+; the same pair through the raw-fd lane: say/put/see/chug/slurp take a charm
+; where they take a port, unbuffered and straight at the row -- no fdopen, so no
+; finalizer to hand the end over to
+(: pp (pipe 0) rfd (cap pp) wfd (cup pp)
+   _ (say wfd "hello pipe") _ (put wfd 33)
+   a (see rfd)
+   x (chug rfd)                                 ; what the row still has in hand
+   _ (close wfd)
+   e (see rfd)
+   s (slurp rfd) _ (close rfd)
+ (assert (= 104 a) (= "ello pipe!" x) (= -1 e) (= "" s)))
+
+; a row that is not there swallows what is written and reads as the end. that is
+; what keeps a closed seat's output from faulting a task which cannot know, and
+; it is the same answer on both seats
+(assert (= "into the void" (say 4096 "into the void"))
+        (= -1 (see 4096)) (= "" (slurp 4096))
+        (= 4096 (flush 4096)))
+
 ; a parked reader wakes on the write, and ends on the close
 (: pp (pipe 0) rp (fdopen (cap pp))
    p (twirl (\ _ (slurp rp)) 0)

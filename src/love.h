@@ -336,6 +336,13 @@ struct ai
 // dying port through it. weak no-op default; the host overrides with write(2).
 void ai_fd_drain(int fd, void const*, uintptr_t);
 
+// the raw-fd lanes (src/seat.c): what an io op does when its operand is a charm
+// rather than a port. no buffer, no seat, one motion each, and the port protocol
+// on the answer -- >0 landed, 0 busy, -1 gone. `say` lands the whole run, waiting.
+intptr_t ai_fd_readn(struct ai*, int fd, unsigned char *dst, uintptr_t);
+intptr_t ai_fd_writen(int fd, unsigned char const *src, uintptr_t);
+uintptr_t ai_fd_say(int fd, unsigned char const *src, uintptr_t);
+
 uintptr_t ai_clock(void); // used by garbage collector
 intptr_t ai_nclock(void); // the fine interval clock (ns); weak ms-degraded default in love.c, hosts override with a real ns source
 // which kernel underneath (nolibc's os.c: 0 unprobed; 1 linux, 2 freebsd,

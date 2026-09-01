@@ -62,5 +62,41 @@
     (id? (stat f) ()) (id? (readdir d) ())
     (: e (unlink f) (&& (charm? e) (< 0 e)))))
 
+; --- the raw-fd lane: the port ops with a charm where the port goes ------------
+; an fd carries no buffer of love's and no seat, so each op is one motion on the
+; row -- and the answers are the port arm's, so the two spellings compose.
+(: pp (pipe 0) rfd (cap pp) wfd (cup pp)
+   _ (say wfd "through the door") _ (put wfd 33) _ (close wfd)
+   s (slurp rfd) _ (close rfd)
+   (assert (= "through the door!" s)))
+
+; see draws one byte, chug takes what the row still has in hand, and both answer
+; the empty end -- see is the door that tells a quiet row from an ended one, so it
+; is what a drain leans on
+(: pp (pipe 0) rfd (cap pp) wfd (cup pp)
+   _ (say wfd "abcdef")
+   a (see rfd)
+   x (chug rfd)
+   _ (close wfd)
+   e (see rfd)
+   y (chug rfd)
+   _ (close rfd)
+   (assert (= 97 a) (= "bcdef" x) (= -1 e) (= "" y)))
+
+; a file reads the same bytes both ways, gulp boundaries and all
+(: d "out/.fd-lane-probe" f (+ d "/x")
+   _ (mkdir d 493)
+   _ (: p (open f "w") _ (say p (* "abcdefgh" 2000)) (close p))
+   fd (openfd f 0) a (slurp fd) _ (close fd)
+   p (open f "r") b (slurp p) _ (close p)
+   _ (unlink f)
+   (assert (= a b) (= 16000 (tally a))))
+
+; a row that is not there swallows and reads as the end: a closed seat's output
+; must not fault a task that cannot know it is closed
+(assert (= "into the void" (say 4096 "into the void"))
+        (= -1 (see 4096)) (= "" (slurp 4096))
+        (= 4096 (flush 4096)))                      ; nothing of love's is pending
+
 (test_fin ())
 (puts "init: ok") (putc 10)

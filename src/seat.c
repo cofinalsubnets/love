@@ -35,6 +35,11 @@ __attribute__((weak)) intptr_t k_port_writen(struct ai **fp, unsigned char const
   (void) fp, (void) src, (void) n; return -1; }
 __attribute__((weak)) intptr_t k_port_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
   (void) g, (void) dst, (void) n; return -1; }
+// and the rows under them, which an fd spelled in love reaches without the seat.
+__attribute__((weak)) intptr_t k_row_read(int fd, unsigned char *dst, uintptr_t n) {
+  (void) fd, (void) dst, (void) n; return -1; }
+__attribute__((weak)) intptr_t k_row_write(int fd, unsigned char const *src, uintptr_t n) {
+  (void) fd, (void) src, (void) n; return -1; }
 
 // SIGPIPE is ignored (main) and the console re-raises it by hand: a runtime that answers
 // "the device is gone" must not be killed before it reads the answer, but a shell tool must
@@ -60,6 +65,47 @@ uintptr_t ai_fd_write_all(int fd, unsigned char const *src, uintptr_t n) {
  while (i < n) {
   ssize_t k = write(fd, src + i, n - i);
   if (k < 0) { if (errno == EINTR) continue; break; }
+  i += (uintptr_t) k; }
+ return i; }
+
+// --- the raw-fd lanes: love's io ops take a charm as well as a port --------
+// an fd spelled in love is an absolute row (kmain's seat law), so these skip the
+// seat translation the port lanes take. they keep the PORT protocol -- >0 landed,
+// 0 busy, -1 gone -- and not read(2)'s, because on inle busy and end are one
+// answer at the syscall door and a reader would take an idle pipe for its end.
+intptr_t ai_fd_readn(struct ai *g, int fd, unsigned char *dst, uintptr_t n) {
+ if (__ai_osv < 0) return k_row_read(fd, dst, n);
+ ssize_t k;
+ if (fd == STDIN_FILENO && ai_core_of(g)->inflag) k = read(fd, dst, n);   // the bit is already ours
+ else {
+  int fl = fcntl(fd, F_GETFL), off = fl >= 0 && !(fl & O_NONBLOCK);
+  if (off) fcntl(fd, F_SETFL, fl | O_NONBLOCK);
+  k = read(fd, dst, n);
+  if (off) fcntl(fd, F_SETFL, fl); }
+ return k > 0 ? (intptr_t) k
+      : k == 0 ? -1
+      : (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : -1; }
+
+intptr_t ai_fd_writen(int fd, unsigned char const *src, uintptr_t n) {
+ if (__ai_osv < 0) return k_row_write(fd, src, n);
+ int fl = fcntl(fd, F_GETFL), off = fl >= 0 && !(fl & O_NONBLOCK);
+ if (off) fcntl(fd, F_SETFL, fl | O_NONBLOCK);
+ ssize_t k;
+ do k = write(fd, src, n); while (k < 0 && errno == EINTR);
+ if (off) fcntl(fd, F_SETFL, fl);
+ return k > 0 ? (intptr_t) k
+      : (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : -1; }
+
+// land every byte, and answer how many got there. a raw fd carries no write run
+// of love's, so there is nothing to keep and come back to: a busy device is
+// waited on here rather than parked behind. bounded by the device draining --
+// a task that must not stall gives the fd to fdopen and writes the port.
+uintptr_t ai_fd_say(int fd, unsigned char const *src, uintptr_t n) {
+ uintptr_t i = 0;
+ while (i < n) {
+  intptr_t k = ai_fd_writen(fd, src + i, n - i);
+  if (k < 0) break;                            // the device is gone: the rest drops
+  if (!k) { ai_sleep(1); continue; }
   i += (uintptr_t) k; }
  return i; }
 
