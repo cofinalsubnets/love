@@ -114,8 +114,8 @@ static ai_inline intptr_t image_ap_resolve(intptr_t idx) {
  uintptr_t e = countof(image_extra_aps), d = ai_def1_n;
  if (idx < (intptr_t) e) return (intptr_t) image_extra_aps[idx];
  if (idx < (intptr_t)(e + d)) return ai_def1[idx - e].x;
- { uintptr_t k = (uintptr_t) idx - e - d;                    // the host slice; a short roster reads 0
-   return k < image_nhost() ? __start_love_nifs[k].x : 0; } }
+ uintptr_t k = (uintptr_t) idx - e - d;                    // the host slice; a short roster reads 0
+ return k < image_nhost() ? __start_love_nifs[k].x : 0; }
 // the bare-fn lane: a compiled thread embeds a nif's fn directly; it is reachable
 // symbolically as the code slot of its ai_def1 cell (cell[0], or cell[2] under lvm_cur)
 static intptr_t image_fn_slot(word const *cell) {
@@ -131,8 +131,8 @@ intptr_t image_fn_index(intptr_t v) {
 static intptr_t image_fn_resolve(intptr_t j) {
  uintptr_t d = ai_def1_n;
  if (j < (intptr_t) d) return image_fn_slot((word const*) ai_def1[j].x);
- { uintptr_t k = (uintptr_t) j - d;                          // the host slice; a short roster reads 0
-   return k < image_nhost() ? image_fn_slot((word const*) __start_love_nifs[k].x) : 0; } }
+ uintptr_t k = (uintptr_t) j - d;                          // the host slice; a short roster reads 0
+ return k < image_nhost() ? image_fn_slot((word const*) __start_love_nifs[k].x) : 0; }
 // the out-of-pool immortals: (), "", the std ports, NULL (a mid-eval dump meets it
 // in an undressed rbuf/wbuf), map_gap appended last so existing indices stay stable
 // every port vtable belongs here: a port's head carries its vt, so an imaged
@@ -331,10 +331,10 @@ intptr_t img_encode(struct img_ctx *x, intptr_t v) {
  if ((uintptr_t) v < ImageTBound && !x->guard)
   x->fail = 1;                                                                   // low absolute, no auditor to vouch for it
  if (img_wxp(x, (word) v)) x->fail = 1;                                         // un-wakeable absolute (a stray mmap)
- { uintptr_t r = (uintptr_t) v - (uintptr_t) image_immortals + ImageAbsBias;   // wraps below the anchor; the bias re-centres
-   if (r >= 2 * ImageAbsBias) { x->fail = 1; return v; }                       // farther from the anchor than the bias carries
-   x->nabs++;                                                                    // kept absolute: the image is now binary-specific
-   return (intptr_t)(ImageTBound + r); } }                                  // binary (host nif/.rodata), anchor-relative
+ uintptr_t r = (uintptr_t) v - (uintptr_t) image_immortals + ImageAbsBias;   // wraps below the anchor; the bias re-centres
+ if (r >= 2 * ImageAbsBias) { x->fail = 1; return v; }                       // farther from the anchor than the bias carries
+ x->nabs++;                                                                    // kept absolute: the image is now binary-specific
+ return (intptr_t)(ImageTBound + r); }                                  // binary (host nif/.rodata), anchor-relative
 // the decode ladder, split hot/cold by the rung-0 census: odd,
 // heap offset, lvm index and immortal are 98.7% of decodes; the cold tail keeps
 // the nif-cell interior, bare-fn and kept-absolute rungs out of the walk's way.
@@ -542,8 +542,8 @@ static struct ai *img_canon_symbols(struct ai *g) {
 static int img_lt_rank(struct img_ord const *o, uintptr_t i, uintptr_t j) {
  uintptr_t a = (uintptr_t) o->a[i], b = (uintptr_t) o->a[j], na = o->nm[a], nb = o->nm[b];
  if (!na || !nb) return na == nb ? a < b : !na;
- { word x = (word)((char const*) o->blob + na), y = (word)((char const*) o->blob + nb);
-   return img_nom_before(x, y) ? 1 : img_nom_before(y, x) ? 0 : a < b; } }
+ word x = (word)((char const*) o->blob + na), y = (word)((char const*) o->blob + nb);
+ return img_nom_before(x, y) ? 1 : img_nom_before(y, x) ? 0 : a < b; }
 // assign ranks 1..k to the marked serials; answers k, or -1 on oom. slots are
 // (word-offset << 1 | named); a named slot's word -1 is the encoded name.
 static uintptr_t img_rank_assign(struct ai *g, word const *blob, uintptr_t const *slots,

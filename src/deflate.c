@@ -152,12 +152,12 @@ static void df_wtoks(struct df_sink *t, const uint32_t *tok, unsigned k,
  for (i = 0; i < k; i++) {
   uint32_t v = tok[i];
   if (v < 256) { df_put(t, codl[v], lenl[v]); continue; }
-  { uint32_t u = v - 256;
-    unsigned lc = u >> 23, dc = (u >> 18) & 31;
-    df_put(t, codl[257 + lc], lenl[257 + lc]);
-    if (df_lext[lc]) df_put(t, (u >> 13) & 31, df_lext[lc]);
-    df_put(t, codd[dc], lend[dc]);
-    if (df_dext[dc]) df_put(t, u & 8191, df_dext[dc]); } }
+  uint32_t u = v - 256;
+  unsigned lc = u >> 23, dc = (u >> 18) & 31;
+  df_put(t, codl[257 + lc], lenl[257 + lc]);
+  if (df_lext[lc]) df_put(t, (u >> 13) & 31, df_lext[lc]);
+  df_put(t, codd[dc], lend[dc]);
+  if (df_dext[dc]) df_put(t, u & 8191, df_dext[dc]); }
  df_put(t, codl[256], lenl[256]); }                             // 256 ends the block
 
 static void df_wstored(struct df_sink *t, const uint8_t *s, uintptr_t i0, uintptr_t i1, int last) {

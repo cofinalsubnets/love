@@ -279,7 +279,7 @@ static lvm(lvm_math1) {
  word a = Sp[0];
  if (trayp(a)) {                               // (sin a-tray) etc. -> gem tray; a twin tray is undefined
   if (tray(a)->type == ai_C) return Answer(ZeroPoint);
-  { g->b = (ai_word) (uintptr_t) (fn); ai_musttail return Ap(lvm_vmap1, g); } }
+  g->b = (ai_word) (uintptr_t) (fn); ai_musttail return Ap(lvm_vmap1, g); }
  if (!isnum(a)) return Answer(ZeroPoint);
  ai_flo_t ad = toflo(a), rd = fn(ad);
  Have(gem_req);
@@ -291,7 +291,7 @@ static lvm(lvm_math2) {
  if (trayp(a) || trayp(b)) {                               // (pow arr ..) etc. -> float array
   if ((trayp(a) && tray(a)->type == ai_C) || (trayp(b) && tray(b)->type == ai_C))
    return Push(ZeroPoint);                 // complex array undefined here
-  { g->b = (ai_word) (uintptr_t) (fn); ai_musttail return Ap(lvm_vmap2, g); } }
+  g->b = (ai_word) (uintptr_t) (fn); ai_musttail return Ap(lvm_vmap2, g); }
  if (!isnum(a) || !isnum(b)) return Push(ZeroPoint);
  ai_flo_t ad = toflo(a), bd = toflo(b), rd = fn(ad, bd);
  Have(gem_req);
@@ -1127,7 +1127,7 @@ lvm(lvm_pow) {
    ai_flo_t m = ai_pow(-ad, bd), re = m * ai_cospi(bd), im = m * ai_sinpi(bd);
    Have(twin_req);
    *++Sp = mk_twin(&Hp, re, im); ai_musttail return Next(1); } }
- { g->b = (ai_word) (uintptr_t) (ai_pow); ai_musttail return Ap(lvm_math2, g); } }
+ g->b = (ai_word) (uintptr_t) (ai_pow); ai_musttail return Ap(lvm_math2, g); }
 
 // fill a packed ai_C array with (re = a-element, im = b-element) under broadcast
 static ai_noinline void twin_build_fill(struct ai_tray *r, word a, word b) {
@@ -1214,7 +1214,7 @@ lvm(lvm_re) {
   enum ai_tray_type t = tray(a)->type;
   if (t == ai_O) ai_musttail return Answer(ZeroPoint);   // a tray is not a number
   if (t != ai_C) ai_musttail return Next(1);          // a real array is its own real part
-  { g->b = (ai_word) (0); ai_musttail return Ap(lvm_cpart, g); } }
+  g->b = (ai_word) (0); ai_musttail return Ap(lvm_cpart, g); }
  if (isnum(a)) ai_musttail return Next(1);            // re of a real is itself
  ai_musttail return Answer(ZeroPoint); }
 
@@ -1228,7 +1228,7 @@ lvm(lvm_im) {
  if (trayp(a)) {
   enum ai_tray_type t = tray(a)->type;
   if (t == ai_O) ai_musttail return Answer(ZeroPoint);
-  { g->b = (ai_word) (t == ai_C ? 1 : -1); ai_musttail return Ap(lvm_cpart, g); } }   // real array -> zeros of its shape
+  g->b = (ai_word) (t == ai_C ? 1 : -1); ai_musttail return Ap(lvm_cpart, g); }   // real array -> zeros of its shape
  if (isnum(a)) ai_musttail return Answer(putcharm(0));   // im of a real is 0
  ai_musttail return Answer(ZeroPoint); }
 

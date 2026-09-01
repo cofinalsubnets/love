@@ -1622,14 +1622,14 @@ lvm(lvm_vbin) {
  if (((atray && tray(a)->type == ai_C) || (btray && tray(b)->type == ai_C) || twinp(a) || twinp(b))
      && !(atray && tray(a)->type == ai_O) && !(btray && tray(b)->type == ai_O)) {
   if (vop_bitp(op)) return Push(ZeroPoint);   // no bits on a complex
-  { g->b = (ai_word) (op); ai_musttail return Ap(lvm_cbin, g); } }
+  g->b = (ai_word) (op); ai_musttail return Ap(lvm_cbin, g); }
  if (!(atray || isnum(a)) || !(btray || isnum(b)))   // each operand: array or scalar
   return Push(op == vop_eq ? zero : ZeroPoint);   // `=` is boolean: undefined face -> 0, not ()
  if ((atray && tray(a)->type == ai_O) || (btray && tray(b)->type == ai_O)) {
   // boxed cells are not the word lane: a big refuses the bits on a star, so the
   // object tray refuses them whole rather than answering per-element zero.
   if (vop_bitp(op)) return Push(ZeroPoint);
-  { g->b = (ai_word) (op); ai_musttail return Ap(lvm_obin, g); } }                   // object array -> promoting lane
+  g->b = (ai_word) (op); ai_musttail return Ap(lvm_obin, g); }                   // object array -> promoting lane
  uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0,
            R = ra > rb ? ra : rb;
  // compute-type = max element type; a scalar int contributes the lowest type

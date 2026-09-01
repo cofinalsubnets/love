@@ -423,12 +423,12 @@ static struct ai *subst1(struct ai *g, word x, word p, word m) {
  { struct ai_str *nm; word a = A(x);
    if (nomp(a) && (nm = nom_str(g, a)) && len(nm) == 1 && *txt(nm) == '\\' &&
        chainp(B(x)) && !chainp(BB(x))) return ai_push(g, 1, x); }   // (\ q): a quote is data
- { struct ai_r *mm0 = ai_core_of(g)->root;
-   mm(g, &x); mm(g, &p); mm(g, &m);
-   g = subst1(g, A(x), p, m);
-   if (ai_ok(g)) g = subst1(g, B(x), p, m);
-   ai_core_of(g)->root = mm0;
-   return gxr(g); } }
+ struct ai_r *mm0 = ai_core_of(g)->root;
+ mm(g, &x); mm(g, &p); mm(g, &m);
+ g = subst1(g, A(x), p, m);
+ if (ai_ok(g)) g = subst1(g, B(x), p, m);
+ ai_core_of(g)->root = mm0;
+ return gxr(g); }
 
 static struct ai *c0_lambda(struct ai *g, struct env **c, intptr_t imps, intptr_t exp) {
  union u *k, *ip;
@@ -1029,11 +1029,11 @@ static lvm(lvm_coin_op) {
  word *dst = Sp - 2, ret = word(Ip + 1);
  dst[0] = a, dst[1] = f, dst[2] = b, dst[3] = ret;
  Sp = dst; Ip = (union u*) numap_drive; return Continue(); }
-static lvm(lvm_add_coin) { { g->b = (ai_word) (DieAdd); ai_musttail return Ap(lvm_coin_op, g); } }
-static lvm(lvm_mul_coin) { { g->b = (ai_word) (DieMul); ai_musttail return Ap(lvm_coin_op, g); } }
+static lvm(lvm_add_coin) { g->b = (ai_word) (DieAdd); ai_musttail return Ap(lvm_coin_op, g); }
+static lvm(lvm_mul_coin) { g->b = (ai_word) (DieMul); ai_musttail return Ap(lvm_coin_op, g); }
 // `-` and `/` have no kind matrix; lvm_sub/lvm_quot intercept coins themselves and land here.
-lvm(lvm_sub_coin) { { g->b = (ai_word) (DieSub); ai_musttail return Ap(lvm_coin_op, g); } }
-lvm(lvm_quot_coin) { { g->b = (ai_word) (DieDiv); ai_musttail return Ap(lvm_coin_op, g); } }
+lvm(lvm_sub_coin) { g->b = (ai_word) (DieSub); ai_musttail return Ap(lvm_coin_op, g); }
+lvm(lvm_quot_coin) { g->b = (ai_word) (DieDiv); ai_musttail return Ap(lvm_coin_op, g); }
 
 // applying a coin: run the die's apply closure as `((f self) arg)`; absent, a coin
 // is an opaque handle -- nothing to answer with, () -- like a cask/port. self is the value at Ip (the apply

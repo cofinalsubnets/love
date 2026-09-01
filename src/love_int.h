@@ -660,7 +660,7 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
  Have(box_req);                                                       \
  emit_int(_res, toint(a) c_op toint(b));                                    \
  ai_musttail return Push(_res); }
-#define mvm1(n) lvm(lvm_##n) { { g->b = (ai_word) (uintptr_t) (ai_##n); ai_musttail return Ap(lvm_math1, g); } }
+#define mvm1(n) lvm(lvm_##n) { g->b = (ai_word) (uintptr_t) (ai_##n); ai_musttail return Ap(lvm_math1, g); }
 #define m1(_) _(sin) _(cos)   // sqrt/exp/tan/atan derived; sin/cos/log are the kept transcendentals (log has its own ap)
 #define cmp_lt(nom, vop) lvm(nom) { \
  word a = Sp[0], b = Sp[1]; \
@@ -668,7 +668,7 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
   intptr_t r = vcmp_int(vop, a, b); \
   if (Ip[1].ap == lvm_cond) { Sp += 2; Ip = r ? Ip + 3 : Ip[2].m; ai_musttail return Continue(); } \
   ai_musttail return Push(r ? putcharm(1) : zero); } \
- { g->b = (ai_word) (vop); ai_musttail return Ap(lvm_cmp_ord, g); } }
+ g->b = (ai_word) (vop); ai_musttail return Ap(lvm_cmp_ord, g); }
 
 // --------------------------------------------------------------------------
 // THE TU SEAM. src/love*.c is one runtime cut into translation units so no single
