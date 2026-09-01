@@ -200,22 +200,26 @@
              ((tkk t = 'id) && member? (tkv t) qualid)
               (: r >ts (? (peekp r "(") (rstrq? (skipbal >r 1)) (rstrq? r)))
              ())))
-   (leadkw? ts k)
+   (leadkw? ps ts k)
     (? !(two? ts) ()
        (: t <ts
           (? ((tkk t = 'kw) && (tkv t = k)) 1
-             ((tkk t = 'kw) && (member? (tkv t) qualkw || member? (tkv t) tyspec)) (leadkw? >ts k)
+             ((tkk t = 'kw) && (member? (tkv t) qualkw || member? (tkv t) tyspec)) (leadkw? ps >ts k)
              ((tkk t = 'id) && member? (tkv t) qualid)
-              (: r >ts (? (peekp r "(") (leadkw? (skipbal >r 1) k) (leadkw? r k)))
+              (: r >ts (? (peekp r "(") (leadkw? ps (skipbal >r 1) k) (leadkw? ps r k)))
+             ; a typedef name is a type specifier like any other, and C lets a qualifier
+             ; follow the type: `uint32_t const x` is `const uint32_t x`. a struct/union/
+             ; enum head is not walked -- its tag, and a body, sit between it and the run.
+             ((tkk t = 'id) && tkbty? ps t) (leadkw? ps >ts k)
              ())))
    ; the `static` storage class -- so a block-scope `static` local is laid in .bss
    ; (a real global), not a stack slot (a stack `static` is uninitialised garbage
    ; every call -- the ai_pagesize bug).
-   (leadstatic? ts) (leadkw? ts 'static)
-   (leadextern? ts) (leadkw? ts 'extern)
+   (leadstatic? ps ts) (leadkw? ps ts 'static)
+   (leadextern? ps ts) (leadkw? ps ts 'extern)
    ; `const` in the specifier run. it names the object only when the declarator
    ; adds no pointer of its own, which cobj? decides per declarator.
-   (leadconst? ts) (leadkw? ts 'const)
+   (leadconst? ps ts) (leadkw? ps ts 'const)
    ; does a specifier-run `const` reach the object? arrays are transparent (`const
    ; char a[3]` is three const chars), a pointer is not: `const char *p` qualifies
    ; the pointee and p itself stays writable. a declarator-side `char * const p`
@@ -1692,13 +1696,13 @@
    ; decl := type [dtor [= asn] (, dtor [= asn])*] ;
    (pdecl ps ts)
     (: br (pbty ps ts)
-       stat (leadstatic? ts)                          ; block-scope `static` -> ('sdecl ..), laid in .bss
+       stat (leadstatic? ps ts)                          ; block-scope `static` -> ('sdecl ..), laid in .bss
        ; block-scope `extern` declares the file-scope object -- it lays no slot and takes
        ; no local name, exactly as the function declaration below already reads. without
        ; this the name bound a local and the body read a slot the linker never wrote:
        ; doom's d_net.c says `extern boolean advancedemo;` inside a function, and the
        ; object it tested was not the one d_main.c writes.
-       ext (leadextern? ts)
+       ext (leadextern? ps ts)
        (? !(two? br) ()
           (: base <br ts0 <>br
              bq (qspec ps ts base)   ; the run's const/volatile -- _Generic's, staged below
@@ -2178,7 +2182,7 @@
    ; staticness + the section attribute are noted at entry (the attribute-skip
    ; lanes recurse, so the outermost sighting wins) and pinned per name by tops.
    (ptop ps ts)
-    (: _ (? (peep ps 'curstat ()) () (? (leadstatic? ts) (pin ps 'curstat 1) ()))
+    (: _ (? (peep ps 'curstat ()) () (? (leadstatic? ps ts) (pin ps 'curstat 1) ()))
        _ (? (peep ps 'cursect ()) () (: sc (secat? ts) (? sc (pin ps 'cursect sc) ())))
        _ (? (peep ps 'curalias ()) () (: al (aliasat? ts) (? al (pin ps 'curalias al) ())))
        _ (? (peep ps 'curweak ()) () (? (wkany? ts) (pin ps 'curweak 1) ()))
@@ -2326,7 +2330,7 @@
                                          ; per declarator, since one specifier run serves them all and only
                                          ; some carry a star. an init-less one is left alone: it rides .bss,
                                          ; where it costs no file bytes at all.
-                                         _ (? !(leadconst? ts) ()
+                                         _ (? !(leadconst? ps ts) ()
                                               (: (goc l) (? !(two? l) 1
                                                             (: p <l
                                                                _ (? (cobj? <>p && two? <>>p)
