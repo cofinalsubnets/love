@@ -22,18 +22,16 @@ driver file and a way to say "run it".
 
 ## the map: what each block buys
 
-Two rows are gone from this table already: rung 1 took the `syswrite` and
-`syscall` nifs out of kmain, and `k_sys_nr` out of sys.c. Blocks are named
-rather than numbered -- the line numbers moved when they went.
+Five rows are gone from this table already -- rung 1 took the `syswrite` and
+`syscall` nifs and `k_sys_nr`, rung 2 the fs source and `ktests[]`, rung 3 the
+layer splice. Blocks are named rather than numbered: the numbers moved when they
+went.
 
 | block | buys |
 |---|---|
-| the fs source | the `lib/*.l` lcatfs bake, INSTEAD of the ramfs untar (83 lines of gz+ustar+symlink walk the corpus never runs) |
-| `ktests[]` vs `src_korelist[]` | which corpus is baked in, and which one binds |
 | the wake gate | `woke = false` by construction, INSTEAD of the image wake |
-| the layer splice | `(use 'coin) (use 'rng) (use 'q) (use 'kanren)` -- the corpus asserts on them, a booting kernel wants none |
-| the boot drink | `tests` through `reads`, INSTEAD of the kore cat and the boot cmdline |
-| Makefile x13 | `ksuf`, the `-test` odir, `-DK_TEST -Dai_tco=1`, the header swap, the `kt` roster, `ktests.{l,h}`, four gates |
+| the boot drink | `test/kernel/all.l` through `k-run-file`, INSTEAD of the kore cat and the boot cmdline |
+| Makefile | `ksuf`, the `-test` odir, `-DK_TEST -Dai_tco=1`, four gates |
 
 `-Dai_tco=1` is redundant: `src/love.h:39` already defaults it to 1 and the
 shipped kernel takes the default.
@@ -162,10 +160,17 @@ was true of a filesystem holding `lib/` and `tmp/`. The root now lists the tree'
 own top names, so the law says what it was always for -- entries are the distinct
 next COMPONENTS, never whole paths.
 
-**Rung 3 -- the layers move into the driver.** `(use 'coin) (use 'rng) (use 'q)
-(use 'kanren)` leave kmain for `all.l`; they are baked modules, so `use` finds
-them. The shipped image stops carrying a ring, a random stream, rationals and a
-unifier it never wanted.
+**Rung 3 -- the layers move into the driver. LANDED.** `(use 'coin) (use 'rng)
+(use 'q) (use 'kanren)` left kmain for `all.l`; they are baked modules, so `use`
+finds them with no filesystem read, and they now sit beside the only reason they
+exist.
+
+This rung's stated payoff was wrong and is worth saying so: the four were already
+`#ifdef K_TEST`, so the shipped image never carried a ring, a random stream,
+rationals or a unifier. What it buys is one `#ifdef` fewer -- two left in kmain,
+`woke = false` and the corpus call -- and a splice that no longer has to be
+spelled in C to be reached from love. The falsifier is the uses commented out:
+`;; missing rand`, exit 2, so the layers are load-bearing and the corpus says so.
 
 **Rung 4 -- delete K_TEST.** What is left is `ksuf`, the `-test` odir, the
 header swap, `-DK_TEST`, `tools/ccdb.l:32`, and the `ifndef K_TEST` half of the

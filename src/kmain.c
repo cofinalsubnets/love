@@ -1952,12 +1952,6 @@ void kmain(void) {
  "        go)"
  "      fdm (- 0 1) (- 0 1) (- 0 1))"
  "   (wait p) (catch p))"
-#ifdef K_TEST
- "(use 'coin)"                                         // the optional library layers, test build ONLY: the corpus asserts on
- "(use 'rng)"                                          //   coin, rng, q and kanren, a booting kernel wants none of them -- so
- "(use 'q)"                                            //   the shipped image carries no ring/monoid, no random stream, no
- "(use 'kanren)"                                       //   rationals and no unifier (~65K of heap for the last two alone)
-#endif
   );
   // a woken image's crew captured the seat-doors wrappers (src/main.c), which
   // read the live door off the tablet -- aim them at this seat's task shim, so
