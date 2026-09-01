@@ -697,8 +697,9 @@ static lvm(lvm_newns) { Sp[0] = putcharm(ENOSYS); ai_musttail return Next(1); }
 // --- the general POSIX fs surface (the posix_ symbol namespace; doc/misc/posix.md L0,
 // staging step 1) -- these serve any program, not just the supervisor, so their C
 // symbols wear the posix_ prefix; the love names stay the plain POSIX words.
-// (stat path)    -> (size mtime mode ns uid gid nlink blocks ino) | () -- absence (or
-//                   unreadability) is nothing.
+// (stat path|fd) -> (size mtime mode ns uid gid nlink blocks ino) | () -- absence (or
+//                   unreadability) is nothing. a charm is an open fd and the answer is
+//                   fstat's, the tuple being the same one either way.
 //                   size in bytes, mtime in milliseconds (the (clock t) scale), mode
 //                   the raw st_mode charm: kind reads off the S_IFMT bits in love
 //                   ((& mode 61440): 32768 file, 16384 dir, 40960 link) and the
@@ -712,7 +713,8 @@ static lvm(lvm_newns) { Sp[0] = putcharm(ENOSYS); ai_musttail return Next(1); }
 //                   first four alone, having no ownership to tell about.
 // (lstat path)   -> the same tuple, of the link itself where the path names one. du and
 //                   `stat` owe the link's own blocks and mode, not its target's, and a
-//                   dangling link still has a truth to tell about itself.
+//                   dangling link still has a truth to tell about itself. on a charm it
+//                   is `stat`: an fd already names the thing and no link is in the way.
 // (readdir path) -> the entry names, a list of strings ("." and ".." dropped), or ()
 //                   on failure. no order promised (readdir order, prepended) -- sort in love.
 // (unlink path)  -> () ok | a positive errno | EINVAL misuse (the mkdir convention:
@@ -720,12 +722,16 @@ static lvm(lvm_newns) { Sp[0] = putcharm(ENOSYS); ai_musttail return Next(1); }
 // (lseek fd off whence) -> the new offset | -errno | -1 misuse (the value-op
 //                   convention: negative = failure, like spawn/wait). raw fds, the
 //                   openfd lane -- not ports (a port's read buffer would desync
-//                   under a seek). whence: 0 SET, 1 CUR, 2 END.
+//                   under a seek). whence: 0 SET, 1 CUR, 2 END, and a stranger is the
+//                   row's EINVAL rather than a quiet SET.
 ai_noinline static struct ai *host_stat_tuple(struct ai *g, int follow) {
- char const *p = str_c(g->sp[0]);
+ ai_word x = g->sp[0];
  struct stat st;
- if (!p || (follow ? stat(p, &st) : lstat(p, &st)))
-  return g->sp[0] = ZeroPoint, g;                             // absent -> the real ()
+ int miss;
+ if (charmp(x)) miss = getcharm(x) < 0 || fstat((int) getcharm(x), &st);
+ else { char const *p = str_c(x);
+        miss = !p || (follow ? stat(p, &st) : lstat(p, &st)); }
+ if (miss) return g->sp[0] = ZeroPoint, g;                    // absent -> the real ()
  intptr_t ms = (intptr_t) st.st_mtim.tv_sec * 1000 + st.st_mtim.tv_nsec / 1000000,
           ns = (intptr_t) st.st_mtim.tv_sec * 1000000000 + st.st_mtim.tv_nsec;
  if (!ai_ok(g = ai_have(g, 9 * Width(struct ai_chain)))) return g;
@@ -822,9 +828,12 @@ static lvm(lvm_posix_environ) {
  ai_musttail return Next(1); }
 
 ai_noinline static ai_word host_posix_lseek(ai_word fdw, ai_word offw, ai_word whw) {
- if (!charmp(fdw) || !charmp(offw)) return putcharm(-1);
- int wh = charmp(whw) ? (int) getcharm(whw) : 0;
- wh = wh == 1 ? SEEK_CUR : wh == 2 ? SEEK_END : SEEK_SET;
+ if (!charmp(fdw) || !charmp(offw) || !charmp(whw)) return putcharm(-1);
+ intptr_t w = getcharm(whw);
+ // the three by name, a platform's numbers being its own; anything else goes down
+ // as -1, which no seat takes, so the ROW answers EINVAL. reading a stranger as
+ // SET would seek to 0 and call it success.
+ int wh = w == 0 ? SEEK_SET : w == 1 ? SEEK_CUR : w == 2 ? SEEK_END : -1;
  off_t r = lseek((int) getcharm(fdw), (off_t) getcharm(offw), wh);
  return r < 0 ? putcharm(-errno) : putcharm((intptr_t) r); }
 

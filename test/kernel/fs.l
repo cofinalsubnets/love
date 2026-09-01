@@ -60,6 +60,15 @@
           (id? (close fd) ())))
    (< (lseek -1 0 0) 0)                          ; a bad fd is negative, never a seek
    (< (openfd "lib/no-such-thing.l" 0) 0)        ; and so is an absent path
+   ; a whence no seat knows is the row's EINVAL and moves nothing -- read as SET
+   ; it would have seeked to 0 and called that success
+   (: fd (openfd f 0)
+      (&& (= 2 (lseek fd 2 0)) (= -22 (lseek fd 0 7)) (= -22 (lseek fd 0 -3))
+          (= 2 (lseek fd 0 1)) (id? (close fd) ())))
+   ; stat takes a charm as an fd, which is fstat under another name: the same
+   ; tuple the path answers, and nothing for a row that is not there
+   (: fd (openfd f 0) r (= (stat fd) (stat f)) _ (close fd) r)
+   (id? (stat 4096) ()) !(charm? (stat 4096))
    (id? (close -1) ())                         ; closing nothing is the zero point
    ; the raw-fd lane reads the ramfs byte for byte where the port lane does, gulp
    ; boundaries and all -- one file is longer than a single gulp

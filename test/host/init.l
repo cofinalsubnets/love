@@ -57,6 +57,15 @@
        (&& (= 5 (lseek fd 0 2)) (= 1 (lseek fd 1 0)) (= 3 (lseek fd 2 1))
            (id? (close fd) ())))
     (< (lseek -1 0 0) 0)                            ; a bad fd is a negative charm
+    ; a whence no seat knows is the row's EINVAL and moves nothing -- read as SET
+    ; it would have seeked to 0 and called that success
+    (: fd (openfd f 0)
+       (&& (= 2 (lseek fd 2 0)) (= -22 (lseek fd 0 7)) (= -22 (lseek fd 0 -3))
+           (= 2 (lseek fd 0 1)) (id? (close fd) ())))
+    ; stat takes a charm as an fd, which is fstat under another name: the same
+    ; tuple the path answers, and nothing for a row that is not there
+    (: fd (openfd f 0) r (= (stat fd) (stat f)) _ (close fd) r)
+    (id? (stat 4096) ()) !(charm? (stat 4096))
     ; unlink: () ok, then the file really is gone, and a re-unlink says so (ENOENT, POSITIVE)
     (id? (unlink f) ())
     (id? (stat f) ()) (id? (readdir d) ())

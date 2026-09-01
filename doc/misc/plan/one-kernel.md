@@ -78,20 +78,26 @@ names that already exist and both instruments have nowhere left to be special.
   `slurp`'s drain lost its `unsee`: the byte `see` drew goes to the jug instead
   of back to the vessel, which is the same bytes in the same order for a port and
   the only spelling a raw fd can hold, a pushback needing somewhere to live.
-- **`stat` takes a charm as an fd**, which is `fstat` without a new name.
-  Nothing in the tree asserts anything about `(stat <charm>)`, and the
-  contract's `()` for "absence or unreadability" is already the right answer
-  for EBADF. Worth doing on its own account: the `fstat` ROW has no love-level
-  caller at all -- src/image.c's two are the hosted file-load path and the
-  kernel wakes from memory -- so its only exercise anywhere is the instrument
-  written to exercise it.
-- **`lseek` stops normalizing an unknown whence.** `posix.c:832` reads
+- **`stat` takes a charm as an fd. LANDED.** `fstat` without a new name, and
+  the contract's `()` for "absence or unreadability" was already the right
+  answer for EBADF. `lstat` on a charm is the same thing: an fd names the thing
+  itself and no link is in the way. It earns its place twice over -- the `fstat`
+  ROW had no love-level caller at all (src/image.c's two are the hosted
+  file-load path, and the kernel wakes from memory), so its only exercise was
+  the instrument written to exercise it. `(= (stat fd) (stat path))` holds on
+  both seats, which is also a law about k_fd_stat and k_statat fabricating the
+  same tuple.
+- **`lseek` stops normalizing an unknown whence. LANDED.** It read
   `wh == 1 ? SEEK_CUR : wh == 2 ? SEEK_END : SEEK_SET`, so `(lseek fd 0 7)`
-  seeks to 0 and reports success. Pass it through and the row answers EINVAL.
+  seeked to 0 and reported success. The three are still spelled by name, a
+  platform's numbers being its own; a stranger goes down as -1, which no seat
+  takes, so the ROW answers EINVAL. A non-charm whence is misuse (-1) like the
+  other two operands rather than a quiet SET.
 
-No new nif. `syswrite`, `syscall` and `k_sys_nr` go (~90 lines over kmain.c and
-sys.c), `fdclose` went, six nifs gained a kind and one loses a bug -- and the
+No new nif. `fdclose` went, seven nifs gained a kind and one lost a bug -- the
 three lanes those kinds ride are src/seat.c's, where the fd doors already live.
+What remains of this rung is the subtraction it was for: `syswrite`, `syscall`
+and `k_sys_nr` (~90 lines over kmain.c and sys.c), and sys.l rewritten.
 
 test/kernel/sys.l is then ordinary corpus that runs on the host AND the kernel:
 counts and errnos, byte-exact reads off the ramfs, close and its EBADF on a
