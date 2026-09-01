@@ -1065,11 +1065,13 @@ static void pipe_free(struct k_pipe *p) {
   if (p->rrefs || p->wrefs) return;
   kfree(p->buf);
   kfree(p); }
+
 static void pipe_rclose(int fd) {
   struct k_pipe *p = k_pipe_of(fd);
   struct k_source *s = k_source(fd);
   if (s) *s = (struct k_source) {0};
   if (p) p->rrefs--, pipe_free(p); }
+
 static void pipe_wclose(int fd) {
   struct k_pipe *p = k_pipe_of(fd);
   struct k_source *s = k_source(fd);
@@ -1152,61 +1154,61 @@ long k_fd_pipe(int fds[2]) {
 // state outlives the call but the number.
 struct k_dh { uintptr_t pn; int at; char p[256]; };
 static void k_dir_close(int fd) {
-  struct k_source *s = k_source(fd);
-  if (!s) return;
-  kfree(s->state);
-  *s = (struct k_source) {0}; }
+ struct k_source *s = k_source(fd);
+ if (!s) return;
+ kfree(s->state);
+ *s = (struct k_source) {0}; }
 
 long k_fs_opendir(char const *p, uintptr_t pn) {
-  char cp[256];
-  intptr_t cn;
-  if (!k_fs_init()) return -ENOMEM;
-  if ((cn = k_canon(p, pn, cp)) < 0) return -ENAMETOOLONG;
-  if (!k_dirp(cp, (uintptr_t) cn))
-    return k_find(cp, (uintptr_t) cn) >= 0 ? -ENOTDIR : -ENOENT;
-  int fd = k_fd_free();
-  struct k_dh *h = kmallocw(b2w(sizeof *h));
-  struct k_source *s = h ? k_source_open(fd) : NULL;
-  if (!s) { kfree(h); return -ENOMEM; }
-  h->pn = (uintptr_t) cn, h->at = 0;
-  memcpy(h->p, cp, (uintptr_t) cn);
-  *s = (struct k_source) { .close = k_dir_close, .state = h };
-  return fd; }
+ char cp[256];
+ intptr_t cn;
+ if (!k_fs_init()) return -ENOMEM;
+ if ((cn = k_canon(p, pn, cp)) < 0) return -ENAMETOOLONG;
+ if (!k_dirp(cp, (uintptr_t) cn))
+  return k_find(cp, (uintptr_t) cn) >= 0 ? -ENOTDIR : -ENOENT;
+ int fd = k_fd_free();
+ struct k_dh *h = kmallocw(b2w(sizeof *h));
+ struct k_source *s = h ? k_source_open(fd) : NULL;
+ if (!s) { kfree(h); return -ENOMEM; }
+ h->pn = (uintptr_t) cn, h->at = 0;
+ memcpy(h->p, cp, (uintptr_t) cn);
+ *s = (struct k_source) { .close = k_dir_close, .state = h };
+ return fd; }
 
 // linux_dirent64: 19 header bytes then the name, NUL kept, the record rounded
 // to 8 -- so every record stays 8-aligned in the caller's buffer.
 struct k_dent { unsigned long ino; long off; unsigned short reclen;
                 unsigned char type; char name[]; };
 long k_fd_dents(int fd, void *buf, long cap) {
-  if (!k_row_live(fd)) return -EBADF;
-  struct k_source *s = k_source(fd);
-  if (s->close != k_dir_close) return -ENOTDIR;
-  struct k_dh *h = s->state;
-  long off = 0;
-  int walked = 0;                               // distinct names passed this scan
-  for (int i = 0; i < k_ents_n; i++) {
-    uintptr_t k;
-    char const *e = k_entry(i, h->p, h->pn, &k);
-    if (!e) continue;
-    bool seen = false;                          // one name per entry, k_readdir's rule
-    for (int j = 0; j < i && !seen; j++) {
-      uintptr_t k2;
-      char const *e2 = k_entry(j, h->p, h->pn, &k2);
-      seen = e2 && k2 == k && !memcmp(e, e2, k); }
-    if (seen) continue;
-    if (walked++ < h->at) continue;             // already handed out
-    long rl = (long) ((19 + k + 1 + 7) & ~(uintptr_t) 7);
-    if (off + rl > cap) return off ? off : -EINVAL;
-    struct k_dent *d = (struct k_dent*) ((char*) buf + off);
-    d->ino = (unsigned long) i + 1;             // fabricated: the first carrier's row
-    d->off = h->at + 1;
-    d->reclen = (unsigned short) rl;
-    d->type = (e[k] == '/' || k_ents[i].dir) ? 4 : 8;   // DT_DIR : DT_REG
-    memcpy(d->name, e, k);
-    d->name[k] = 0;
-    off += rl;
-    h->at++; }
-  return off; }
+ if (!k_row_live(fd)) return -EBADF;
+ struct k_source *s = k_source(fd);
+ if (s->close != k_dir_close) return -ENOTDIR;
+ struct k_dh *h = s->state;
+ long off = 0;
+ int walked = 0;                               // distinct names passed this scan
+ for (int i = 0; i < k_ents_n; i++) {
+  uintptr_t k;
+  char const *e = k_entry(i, h->p, h->pn, &k);
+  if (!e) continue;
+  bool seen = false;                          // one name per entry, k_readdir's rule
+  for (int j = 0; j < i && !seen; j++) {
+   uintptr_t k2;
+   char const *e2 = k_entry(j, h->p, h->pn, &k2);
+   seen = e2 && k2 == k && !memcmp(e, e2, k); }
+  if (seen) continue;
+  if (walked++ < h->at) continue;             // already handed out
+  long rl = (long) ((19 + k + 1 + 7) & ~(uintptr_t) 7);
+  if (off + rl > cap) return off ? off : -EINVAL;
+  struct k_dent *d = (struct k_dent*) ((char*) buf + off);
+  d->ino = (unsigned long) i + 1;             // fabricated: the first carrier's row
+  d->off = h->at + 1;
+  d->reclen = (unsigned short) rl;
+  d->type = (e[k] == '/' || k_ents[i].dir) ? 4 : 8;   // DT_DIR : DT_REG
+  memcpy(d->name, e, k);
+  d->name[k] = 0;
+  off += rl;
+  h->at++; }
+ return off; }
 
 // fstat(2)'s row face: what each row kind knows. the ramfs handle answers its
 // entry, a pipe end is a fifo, a directory row its tree, the boot rows a
@@ -1250,28 +1252,29 @@ lvm(k_lvm_getpid) {
 // -2 seats closed (an fdmap's () entry). quit is the door that takes it down.
 ai_noinline static ai_word k_procseat(struct ai *g, ai_word pw,
                                       ai_word w0, ai_word w1, ai_word w2) {
-  ai_word ws[3] = { w0, w1, w2 };
-  intptr_t pid = (pw & 1) ? getcharm(pw) : 0;
-  if (!pid) return putcharm(EINVAL);
-  struct k_seat *s = k_seat_slot();
-  if (!s) return putcharm(ENOMEM);
-  *s = (struct k_seat) { pid, {-1, -1, -1} };
-  for (int i = 0; i < 3; i++) {
-    intptr_t f = (ws[i] & 1) ? getcharm(ws[i]) : -1;
-    if (f == -2) { s->fd[i] = -2; continue; }
-    if (f == -1) f = i;                         // absent: inherit this slot
-    if (f >= 0 && f <= 2) {                     // a console-numbered fd means the
-      f = k_fd_eff(g, (int) f);                 // PARENT's view of it (2>&1 under
-      if (f < 0) { s->fd[i] = -2; continue; }   // a seat follows the seat)
-      if (f == i) continue; }                   // the identity seat is no seat
-    int d = k_dup_row((int) f, 0);
-    s = k_seat_find(pid);                       // the dup may have grown tables
-    if (d < 0) { s->fd[i] = -2; continue; }     // a dead fd seats closed, not silent
-    s->fd[i] = d; }
-  return ZeroPoint; }
+ ai_word ws[3] = { w0, w1, w2 };
+ intptr_t pid = (pw & 1) ? getcharm(pw) : 0;
+ if (!pid) return putcharm(EINVAL);
+ struct k_seat *s = k_seat_slot();
+ if (!s) return putcharm(ENOMEM);
+ *s = (struct k_seat) { pid, {-1, -1, -1} };
+ for (int i = 0; i < 3; i++) {
+  intptr_t f = (ws[i] & 1) ? getcharm(ws[i]) : -1;
+  if (f == -2) { s->fd[i] = -2; continue; }
+  if (f == -1) f = i;                         // absent: inherit this slot
+  if (f >= 0 && f <= 2) {                     // a console-numbered fd means the
+    f = k_fd_eff(g, (int) f);                 // PARENT's view of it (2>&1 under
+    if (f < 0) { s->fd[i] = -2; continue; }   // a seat follows the seat)
+    if (f == i) continue; }                   // the identity seat is no seat
+  int d = k_dup_row((int) f, 0);
+  s = k_seat_find(pid);                       // the dup may have grown tables
+  if (d < 0) { s->fd[i] = -2; continue; }     // a dead fd seats closed, not silent
+  s->fd[i] = d; }
+ return ZeroPoint; }
+
 static lvm(lvm_procseat) {
   Sp[3] = k_procseat(g, Sp[0], Sp[1], Sp[2], Sp[3]);
-  Sp += 3; ai_musttail return Next(1); }
+  ai_musttail return Nextp(1, 3); }
 
 // --- rung 5: the disk -- the block door love's filesystem (lib/fat.l) rides.
 // the driver is src/blk.c (virtio-blk, polled, synchronous); DMA rides
@@ -1297,23 +1300,25 @@ ai_noinline static struct ai *k_disk_read(struct ai *g) {
   if (k_blk_rw((uint64_t) lba, (uint32_t) n, txt(g->sp[0]), 0) < 0)
     g->sp[0] = ZeroPoint;
   return g->sp[2] = g->sp[0], g->sp += 2, g; }
+
 static lvm(lvm_disk_read) {
-  Pack(g); g = k_disk_read(g);
-  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
-  Unpack(g);
-  ai_musttail return Next(1); }
+ Pack(g); g = k_disk_read(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+ Unpack(g);
+ ai_musttail return Next(1); }
 
 ai_noinline static ai_word k_disk_write(ai_word lw, ai_word sw) {
-  intptr_t lba = (lw & 1) ? getcharm(lw) : -1;
-  if (lba < 0 || !ai_strp(sw)) return ZeroPoint;
-  struct ai_str *s = (struct ai_str*) sw;
-  if (!s->len || s->len % 512) return ZeroPoint;
-  if (k_blk_rw((uint64_t) lba, (uint32_t) (s->len / 512), s->bytes, 1) < 0)
-    return ZeroPoint;
-  return putcharm((intptr_t) (s->len / 512)); }
+ intptr_t lba = (lw & 1) ? getcharm(lw) : -1;
+ if (lba < 0 || !ai_strp(sw)) return ZeroPoint;
+ struct ai_str *s = (struct ai_str*) sw;
+ if (!s->len || s->len % 512) return ZeroPoint;
+ if (k_blk_rw((uint64_t) lba, (uint32_t) (s->len / 512), s->bytes, 1) < 0)
+  return ZeroPoint;
+ return putcharm((intptr_t) (s->len / 512)); }
+
 static lvm(lvm_disk_write) {
   Sp[1] = k_disk_write(Sp[0], Sp[1]);
-  Sp += 1; ai_musttail return Next(1); }
+  ai_musttail return Nextp(1, 1); }
 
 // --- the SVM spike (x86_64 only; src/x86_64_svm.c). (svm ())
 // is the capability and (svm-run ()) runs one guest, answering (exitcode rax
@@ -1347,6 +1352,7 @@ ai_noinline static struct ai *k_svm_run(struct ai *g) {
   c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
                 putcharm((intptr_t) code), word(c));
   return g->sp[1] = word(c), g->sp += 1, g; }
+
 static lvm(lvm_svm_run) {
   Pack(g); g = k_svm_run(g);
   if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
@@ -1375,12 +1381,9 @@ ai_noinline static struct ai *k_vmx_run(struct ai *g) {
   if (!ai_ok(g = ai_have(g, 4 * Width(struct ai_chain)))) return g;
   struct ai_chain *c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
                                  putcharm((intptr_t) err), ZeroPoint);
-  c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                putcharm((intptr_t) rip), word(c));
-  c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                putcharm((intptr_t) rax), word(c));
-  c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                putcharm((intptr_t) reason), word(c));
+  c = ini_chain(bump(g, Width(struct ai_chain)), putcharm(rip), word(c));
+  c = ini_chain(bump(g, Width(struct ai_chain)), putcharm(rax), word(c));
+  c = ini_chain(bump(g, Width(struct ai_chain)), putcharm(reason), word(c));
   return g->sp[1] = word(c), g->sp += 1, g; }
 static lvm(lvm_vmx_run) {
   Pack(g); g = k_vmx_run(g);
@@ -1592,17 +1595,15 @@ bool k_fb(volatile uint32_t **p, int *w, int *h, int *pitch) {
   return true; }
 
 static lvm(draw) {
-  fbdraw();
-  k_wait();
-  Ip += 1;
-  ai_musttail return Continue(); }
+ fbdraw();
+ k_wait();
+ ai_musttail return Next(1); }
 
 
 static lvm(key) {
  int b = kqpop();
  Sp[0] = putcharm(b < 0 ? 0 : b);
- Ip += 1;
- ai_musttail return Continue(); }
+ ai_musttail return Next(1); }
 
 static lvm(color) {
  uint8_t fg = getcharm(*Sp++), bg = getcharm(*Sp++);
@@ -1620,8 +1621,7 @@ static lvm(color) {
 // the post-call statements are reachable only if the fault did not fire.
 static lvm(lvm_fault) {
   k_fault_trigger(getcharm(Sp[0]));
-  Ip += 1;
-  ai_musttail return Continue(); }
+  ai_musttail return Next(1); }
 
 // (quit code) -- the exit door, and since rung 4 the door with two rooms behind
 // it. a SEATED task (a spawned process) quits as _exit: its seated fds close --
@@ -1646,6 +1646,7 @@ ai_noinline static int k_seat_exit(struct ai *g) {
   g->next_wake_at = 0;                          // a stale intention would gate the park
   g->next_wait_fd = -1;
   return 1; }
+
 // src/main.c's quit nif branches here on a negative osv: the seat/task door.
 lvm(k_lvm_quit) {
   if (k_seat_exit(g)) {
@@ -1657,7 +1658,8 @@ lvm(k_lvm_quit) {
     Sp[0] = code;
     Ip = (union u*) k_exit_body;
     ai_musttail return Ap(lvm_task_exit, g); }
-  k_reset(); Ip += 1; ai_musttail return Continue(); }
+  k_reset();
+  ai_musttail return Next(1); }
 
 
 

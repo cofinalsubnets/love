@@ -33,11 +33,11 @@ static uint32_t le32(const uint8_t *p) {
 static void cc_block(const uint32_t in[16], uint8_t out[64]) {
  uint32_t x[16];
  memcpy(x, in, sizeof x);
- for (int i = 0; i < 10; i++) {
-  QR(x[0], x[4], x[8],  x[12]); QR(x[1], x[5], x[9],  x[13]);
-  QR(x[2], x[6], x[10], x[14]); QR(x[3], x[7], x[11], x[15]);
-  QR(x[0], x[5], x[10], x[15]); QR(x[1], x[6], x[11], x[12]);
-  QR(x[2], x[7], x[8],  x[13]); QR(x[3], x[4], x[9],  x[14]); }
+ for (int i = 0; i < 10; i++)
+  QR(x[0], x[4], x[8],  x[12]), QR(x[1], x[5], x[9],  x[13]),
+  QR(x[2], x[6], x[10], x[14]), QR(x[3], x[7], x[11], x[15]),
+  QR(x[0], x[5], x[10], x[15]), QR(x[1], x[6], x[11], x[12]),
+  QR(x[2], x[7], x[8],  x[13]), QR(x[3], x[4], x[9],  x[14]);
  for (int i = 0; i < 16; i++) {
   uint32_t v = x[i] + in[i];
   out[4*i] = (uint8_t) v;         out[4*i+1] = (uint8_t) (v >> 8);
@@ -81,14 +81,15 @@ static void po_absorb(uint64_t h[5], const uint8_t *p, uint64_t hi) {
 // h = h * r mod 2^130 - 5. the modulus never appears: what runs past 2^130 comes
 // back at the bottom times five, which is what the s1..s4 terms are.
 static void po_mul(uint64_t h[5], const uint64_t r[5]) {
- uint64_t h0 = h[0], h1 = h[1], h2 = h[2], h3 = h[3], h4 = h[4];
- uint64_t s1 = r[1] * 5, s2 = r[2] * 5, s3 = r[3] * 5, s4 = r[4] * 5;
- uint64_t d0 = h0*r[0] + h1*s4   + h2*s3   + h3*s2   + h4*s1;
- uint64_t d1 = h0*r[1] + h1*r[0] + h2*s4   + h3*s3   + h4*s2;
- uint64_t d2 = h0*r[2] + h1*r[1] + h2*r[0] + h3*s4   + h4*s3;
- uint64_t d3 = h0*r[3] + h1*r[2] + h2*r[1] + h3*r[0] + h4*s4;
- uint64_t d4 = h0*r[4] + h1*r[3] + h2*r[2] + h3*r[1] + h4*r[0];
- uint64_t c;
+ uint64_t
+  h0 = h[0], h1 = h[1], h2 = h[2], h3 = h[3], h4 = h[4],
+  s1 = r[1] * 5, s2 = r[2] * 5, s3 = r[3] * 5, s4 = r[4] * 5,
+  d0 = h0*r[0] + h1*s4   + h2*s3   + h3*s2   + h4*s1,
+  d1 = h0*r[1] + h1*r[0] + h2*s4   + h3*s3   + h4*s2,
+  d2 = h0*r[2] + h1*r[1] + h2*r[0] + h3*s4   + h4*s3,
+  d3 = h0*r[3] + h1*r[2] + h2*r[1] + h3*r[0] + h4*s4,
+  d4 = h0*r[4] + h1*r[3] + h2*r[2] + h3*r[1] + h4*r[0],
+  c;
  c = d0 >> 26; h[0] = d0 & M26;
  d1 += c; c = d1 >> 26; h[1] = d1 & M26;
  d2 += c; c = d2 >> 26; h[2] = d2 & M26;
@@ -99,24 +100,25 @@ static void po_mul(uint64_t h[5], const uint64_t r[5]) {
 // the conditional subtract is a mask, never an if: both h and h-p are always
 // computed and one is selected, so nothing branches on the accumulator.
 static void po_fin(const uint64_t h[5], const uint8_t *key, uint8_t out[16]) {
- int64_t h0 = (int64_t) h[0], h1 = (int64_t) h[1], h2 = (int64_t) h[2],
-         h3 = (int64_t) h[3], h4 = (int64_t) h[4];
- int64_t c1 = h1 >> 26,       i1 = h1 & M26;
- int64_t a2 = h2 + c1, c2 = a2 >> 26, i2 = a2 & M26;
- int64_t a3 = h3 + c2, c3 = a3 >> 26, i3 = a3 & M26;
- int64_t a4 = h4 + c3, c4 = a4 >> 26, i4 = a4 & M26;
- int64_t a0 = h0 + c4 * 5, c0 = a0 >> 26, i0 = a0 & M26;
- int64_t j1 = i1 + c0;
- // g = h - p, as h + 5 - 2^130: the top limb goes negative exactly when h < p
- int64_t b0 = i0 + 5,  k0 = b0 >> 26, n0 = b0 & M26;
- int64_t b1 = j1 + k0, k1 = b1 >> 26, n1 = b1 & M26;
- int64_t b2 = i2 + k1, k2 = b2 >> 26, n2 = b2 & M26;
- int64_t b3 = i3 + k2, k3 = b3 >> 26, n3 = b3 & M26;
- int64_t n4 = (i4 + k3) - 0x4000000;
- int64_t keep = n4 >> 63, drop = ~keep;
- int64_t p0 = (i0 & keep) | (n0 & drop), p1 = (j1 & keep) | (n1 & drop),
-         p2 = (i2 & keep) | (n2 & drop), p3 = (i3 & keep) | (n3 & drop),
-         p4 = (i4 & keep) | (n4 & drop);
+ int64_t
+  h0 = (int64_t) h[0], h1 = (int64_t) h[1], h2 = (int64_t) h[2],
+  h3 = (int64_t) h[3], h4 = (int64_t) h[4],
+  c1 = h1 >> 26,       i1 = h1 & M26,
+  a2 = h2 + c1, c2 = a2 >> 26, i2 = a2 & M26,
+  a3 = h3 + c2, c3 = a3 >> 26, i3 = a3 & M26,
+  a4 = h4 + c3, c4 = a4 >> 26, i4 = a4 & M26,
+  a0 = h0 + c4 * 5, c0 = a0 >> 26, i0 = a0 & M26,
+  j1 = i1 + c0,
+  // g = h - p, as h + 5 - 2^130: the top limb goes negative exactly when h < p
+  b0 = i0 + 5,  k0 = b0 >> 26, n0 = b0 & M26,
+  b1 = j1 + k0, k1 = b1 >> 26, n1 = b1 & M26,
+  b2 = i2 + k1, k2 = b2 >> 26, n2 = b2 & M26,
+  b3 = i3 + k2, k3 = b3 >> 26, n3 = b3 & M26,
+  n4 = (i4 + k3) - 0x4000000,
+  keep = n4 >> 63, drop = ~keep,
+  p0 = (i0 & keep) | (n0 & drop), p1 = (j1 & keep) | (n1 & drop),
+  p2 = (i2 & keep) | (n2 & drop), p3 = (i3 & keep) | (n3 & drop),
+  p4 = (i4 & keep) | (n4 & drop);
  uint64_t w[4], f = 0;
  w[0] = (uint64_t) (p0 | (p1 << 26)) & 0xffffffff;
  w[1] = (uint64_t) ((p1 >> 6)  | (p2 << 20)) & 0xffffffff;
@@ -141,9 +143,11 @@ static void po_mac(const uint8_t *key, const uint8_t *msg, uintptr_t n,
   po_absorb(h, pad, 0); po_mul(h, r); }
  po_fin(h, key, out); }
 
+
 // --- the two nifs -----------------------------------------------------------------
 // str0 can collect, so the result is allocated first and the arguments re-read
 // off the stack after it: the pointers a C local held are stale across the bump.
+// FIXME why is this noinline?
 ai_noinline static struct ai *host_chacha20(struct ai *g) {
  ai_word kw = g->sp[0], nw = g->sp[1], cw = g->sp[2], tw = g->sp[3];
  if (!ai_strp(kw) || !ai_strp(nw) || !ai_strp(tw) || !oddp(cw)
@@ -156,16 +160,13 @@ ai_noinline static struct ai *host_chacha20(struct ai *g) {
         (const uint8_t*) txt(g->sp[4]), (uint8_t*) txt(g->sp[0]), n);
  g->sp[4] = g->sp[0], g->sp += 4;
  return g; }
-static lvm(lvm_chacha20) {
- Pack(g); g = host_chacha20(g);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- Unpack(g);
- ai_musttail return Next(1); }
+
+static lvm(lvm_chacha20) LvmCall(g, host_chacha20)
 
 ai_noinline static struct ai *host_poly1305(struct ai *g) {
  ai_word kw = g->sp[0], mw = g->sp[1];
- if (!ai_strp(kw) || !ai_strp(mw) || len(kw) != 32) {
-  g->sp[1] = ZeroPoint, g->sp += 1; return g; }
+ if (!ai_strp(kw) || !ai_strp(mw) || len(kw) != 32)
+  return g->sp[1] = ZeroPoint, g->sp += 1, g;
  uintptr_t n = len(mw);
  uint8_t tag[16];
  po_mac((const uint8_t*) txt(kw), (const uint8_t*) txt(mw), n, tag);
@@ -173,11 +174,7 @@ ai_noinline static struct ai *host_poly1305(struct ai *g) {
  memcpy(txt(g->sp[0]), tag, 16);
  g->sp[2] = g->sp[0], g->sp += 2;
  return g; }
-static lvm(lvm_poly1305) {
- Pack(g); g = host_poly1305(g);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- Unpack(g);
- ai_musttail return Next(1); }
+static lvm(lvm_poly1305) LvmCall(g, host_poly1305)
 
 static union u const
   nif_chacha20[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_chacha20}, {lvm_ret0}},

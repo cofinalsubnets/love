@@ -4,11 +4,7 @@
 // this file's own, forward-declared so order within it does not matter.
 static bool eqv_at(struct ai *g, word a, word b, word *base);
 // the bit_slow trio takes its linkage here: the macro body carries no storage class.
-static lvm(lvm_band_slow);
-static lvm(lvm_bor_slow);
-static lvm(lvm_bxor_slow);
-static lvm(lvm_mul_cart);
-static lvm(lvm_mul_rep);
+static lvm_t lvm_band_slow, lvm_bor_slow, lvm_bxor_slow, lvm_mul_cart, lvm_mul_rep;
 // ============================================================================
 // generic-op lane aps, the dispatch matrices, then the `+`/`*` dispatchers
 // ============================================================================
@@ -240,12 +236,18 @@ lvm(lvm_bxor) { word a = Sp[0], b = Sp[1];
 // >> : a floor shift. the fast path is two fixnums and a count the word can take;
 // everything else -- a big either side, a negative count, a count past the width --
 // goes to the lane that has the whole domain.
-lvm(lvm_bsr) { word a = Sp[0], b = Sp[1];
- if (charmp(a) && charmp(b)) { intptr_t k = getcharm(b);
-  if (k >= 0 && k < Bits) ai_musttail return Push(putcharm(getcharm(a) >> k)); }
+lvm(lvm_bsr) {
+ word a = Sp[0], b = Sp[1];
+ if (charmp(a) && charmp(b)) {
+  intptr_t k = getcharm(b);
+  if (k >= 0 && k < Bits)
+   ai_musttail return Push(putcharm(getcharm(a) >> k)); }
  avm_unit(a, b);
- if (trayp(a) || trayp(b)) { g->b = (ai_word) (vop_bsr); ai_musttail return Ap(lvm_vbin, g); }
- if (!intp(a) || !intp(b)) ai_musttail return Push(ZeroPoint);
+ if (trayp(a) || trayp(b)) {
+  g->b = (ai_word) (vop_bsr);
+  ai_musttail return Ap(lvm_vbin, g); }
+ if (!intp(a) || !intp(b))
+  ai_musttail return Push(ZeroPoint);
  Pack(g); g = ai_big_shift(g, vop_bsr);
  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  ai_musttail return Resume(); }

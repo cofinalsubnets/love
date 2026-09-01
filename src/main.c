@@ -311,6 +311,7 @@ static char const
 #include "peg0.h"
 ;
 
+// FIXME this seems confabulated. is there a reason why this split is actually necessary?
 // love0 is never interactive -- a build tool or the self-test -- so replp is the full
 // love's word and this lane only takes it to share main's one dispatch. love0 wakes an
 // image file (its own mooncc0.image bake); the .image self-patch is the full binary's.
@@ -673,8 +674,7 @@ int main(int argc, char const **argv) {
   char const *noimg = getenv("LOVE_NO_IMAGE");
   uintptr_t woke_ms = 0;                       // what the wake cost, for `born` below
   if (!g && !bake && !(noimg && *noimg)) {
-   uintptr_t t0 = ai_clock();
-   uintptr_t blen = 0;
+   uintptr_t t0 = ai_clock(), blen = 0;
    void const *bimg = NULL;
    if (ai_baked_pick(&bimg, &blen) && (g = ai_image_load(bimg, blen)))
     woke_ms = ai_clock() - t0,
@@ -687,6 +687,7 @@ int main(int argc, char const **argv) {
   g = env_budget(g);                               // the LOVE_BUDGET_MB cap, on whichever g won (fresh or woken image)
   bool argp = argc - skip > 1;
   if (!bake) {
+    // FIXME why do we call this twice? build one chain, the other is a tail of it
     g = argv_chain(g, argv, argc, 0);               // cmdline, first: it ends up deeper
     g = argv_chain(g, argv, argc, skip); }          // argv, on top -- sp[0]
   if (ai_ok(g)) {
@@ -695,12 +696,10 @@ int main(int argc, char const **argv) {
       g = ai_defn(g, mt->defs, mt->n, mt->mod);
     if (!bake) {
       g = ai_defv(g, "argv");
-      if (ai_ok(g)) ai_core_of(g)->sp++;            // the book holds argv; the line is sp[0] now
+      if (ai_ok(g)) g->sp++;            // the book holds argv; the line is sp[0] now
       g = ai_defv(g, "cmdline");
-      if (ai_ok(g)) ai_core_of(g)->sp++; }          // the book holds it now
-    if (image_load_path && ai_ok(g = ai_strof(g, image_load_path))) {
-      g = ai_defv(g, "love-image");
-      if (ai_ok(g)) ai_core_of(g)->sp++; }
+      if (ai_ok(g)) g->sp++; }          // the book holds it now
+    if (image_load_path && ai_ok(g = ai_defv(ai_strof(g, image_load_path), "love-image"))) g->sp++;
     // `love-os`: which kernel THIS RUN met, a nom beside love-arch's. It is read off
     // __ai_osv where nolibc probed one, and off the compile where only the compile could
     // know -- and it is pinned HERE rather than in ai_ini because a woken image restores

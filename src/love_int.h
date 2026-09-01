@@ -211,7 +211,6 @@ char const *ai_nif_name(intptr_t);
 #define sym(_) ((struct ai_mint*)(_))
 #define nom(_) ((struct ai_nom*)(_))
 #define big(_) ((struct ai_big*)(_))
-#define cask(_) ((struct ai_cask*)(_))
 static ai_inline bool mintp(word _) { return lamp(_) && cell(_)->ap == lvm_sym; }
 static ai_inline bool namep(word _) { return lamp(_) && cell(_)->ap == lvm_nom; }
 static ai_inline bool packp(word _) { return lamp(_) && cell(_)->ap == lvm_tray; }

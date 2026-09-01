@@ -108,6 +108,11 @@
 #define Unpack(g) ((void)0)
 #endif
 #define lvm(n) ai_noinline ai_noicf _lvm(n)
+// the pack/call/unpack most nifs wear: hand the stack to a C helper that may collect,
+// take its answer back, step one. LvmWrap is the whole op where the body is nothing else.
+#define LvmCall(g, f) {\
+ Pack(g); if (!ai_ok(g = f(g))) ai_musttail return Ap(_lvm_ghelp, g); Unpack(g); ai_musttail return Next(1); }
+#define LvmWrap(n, f) lvm(n) LvmCall(g, f)
 
 typedef intptr_t ai_word;
 
@@ -506,6 +511,7 @@ static ai_inline enum d ai_typ(union u *o) {
 #define str(_) ((struct ai_str*)(_))
 #define lamp evenp
 #define two(_) ((struct ai_chain*)(_))
+#define cask(_) ((struct ai_cask*)(_))
 static ai_inline bool chainp(word _) { return lamp(_) && cell(_)->ap == lvm_chain; }
 static ai_inline void *bump(struct ai *g, uintptr_t n) {
  if (g->gc_gen) { void *x = g->major_hp; g->major_hp += n; return x; }   // a generational collection promotes into the major pool

@@ -1,3 +1,4 @@
+// FIXME what is a "seat"? afaik that word means like a chair.
 // src/seat.c -- the seat two frontends share: src/main.c's binary and the
 // inle kernel both link this file, so what lives here exists ONCE where it
 // used to exist twice. the bodies bottom out in libc calls, and on inle those
@@ -41,12 +42,8 @@ __attribute__((weak)) intptr_t k_row_read(int fd, unsigned char *dst, uintptr_t 
 __attribute__((weak)) intptr_t k_row_write(int fd, unsigned char const *src, uintptr_t n) {
   (void) fd, (void) src, (void) n; return -1; }
 
-// SIGPIPE is ignored (main) and the console re-raises it by hand: a runtime that answers
-// "the device is gone" must not be killed before it reads the answer, but a shell tool must
-// still die on a closed pipe or `love ... | head` runs to completion writing into nothing.
-// so a heap port reports (writen answers -1, io_wdrain drops the run) and a static
-// re-raises. re-raising rather than exiting keeps the wait status a signal death, so the
-// shell's reporting and every `$?` downstream read as they always did.
+// re-raise rather than exit: the wait status stays a signal death, so the shell's
+// reporting and every `$?` downstream read as they always did. a heap port reports.
 static noreturn void console_hangup(void) {
  signal(SIGPIPE, SIG_DFL);
  raise(SIGPIPE);
@@ -69,10 +66,9 @@ uintptr_t ai_fd_write_all(int fd, unsigned char const *src, uintptr_t n) {
  return i; }
 
 // --- the raw-fd lanes: love's io ops take a charm as well as a port --------
-// an fd spelled in love is an absolute row (kmain's seat law), so these skip the
-// seat translation the port lanes take. they keep the PORT protocol -- >0 landed,
-// 0 busy, -1 gone -- and not read(2)'s, because on inle busy and end are one
-// answer at the syscall door and a reader would take an idle pipe for its end.
+// an fd spelled in love is an absolute row (kmain's seat law), so no seat translation.
+// >0 landed, 0 busy, -1 gone is the PORT protocol, not read(2)'s: on inle busy and end
+// are one answer at the door, so a reader would take an idle pipe for its end.
 intptr_t ai_fd_readn(struct ai *g, int fd, unsigned char *dst, uintptr_t n) {
  if (__ai_osv < 0) return k_row_read(fd, dst, n);
  ssize_t k;
@@ -109,26 +105,13 @@ uintptr_t ai_fd_say(int fd, unsigned char const *src, uintptr_t n) {
   i += (uintptr_t) k; }
  return i; }
 
-// the bulk lanes (contract in love.h). stdout rides stdio -- the static port has
-// no buffer of love's own (nothing traces a static), so without fwrite every
-// byte of every print would be its own write(2). one door, so there is no ordering to keep.
-//
-// nonblocking where a residue can be kept, and only there. a heap port carries love's write
-// run behind it and io_wdrain re-offers whatever this call refuses, so the door answers what
-// one stroke took and the writing task goes on rather than a peer that never reads stopping
-// the whole vm. the three statics have no such run (nothing traces a static) and their
-// per-byte lane prints from inside a structural printer, with nowhere to park mid-shape, so
-// a refusal there would be a byte on the floor: their door lands what it takes and is the
-// one place in this frontend still allowed to wait -- bounded, because a console drains.
-//
-// the O_NONBLOCK toggle is per-call for every fd we did not take. the flags ride the open
-// file description, which a pty child and the shell that launched us both share, and leaving
-// a terminal nonblocking at exit hands the user's shell back broken ("resource temporarily
-// unavailable" on their next line) -- so an fd we merely inherited gets its flags read and
-// put back around each call and we cache nothing. the pair is skipped where it already says
-// nonblocking, which is free and covers the fds love opens itself. per call is the whole
-// story: at 953 KB it would be 2.9M fcntls, which is why the run above pays the pair once
-// per 4096 and a pipe -- whose bit is taken for the session (`inflag`) -- skips it outright.
+// the bulk lanes (contract in love.h). stdout rides stdio: nothing traces a static, so
+// without fwrite every byte of every print would be its own write(2).
+// nonblocking only where a residue can be kept -- io_wdrain re-offers what a heap port's
+// door refused; a static has nowhere to park mid-shape, so it waits, bounded by a console
+// that drains. the O_NONBLOCK pair is per call on any fd we merely inherited: leaving a
+// terminal nonblocking at exit hands the user's shell back broken. 2.9M fcntls at 953 KB
+// is why the run pays it once per 4096 and a pipe takes the bit for the session (inflag).
 static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
  if (__ai_osv < 0) return k_port_writen(fp, src, n);
  struct ai_io *io = (*fp)->io;
@@ -172,11 +155,6 @@ struct ai_fio
 // k_fd_write's row, which is that port's absolute fd by the seat law.
 void ai_fd_drain(int fd, void const *p, uintptr_t n) { ai_fd_write_all(fd, p, n); }
 
-// waiting -- the frontier's fd-keyed park/wake and the fd close, one
-// definition each (plan C2). hosted, one poll(2) covers a whole block
-// (love.h lays struct ai_wait_fd as poll's own struct for exactly this); on
-// inle the rows and the tick clock answer, through the weak k_ hooks kmain
-// overrides -- conservative no-ops here, so a hosted link closes without them.
 __attribute__((weak)) void k_row_close(int fd) { (void) fd; }
 __attribute__((weak)) bool k_ready(int fd, int events) { (void) fd, (void) events; return true; }
 __attribute__((weak)) void k_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
@@ -187,27 +165,27 @@ __attribute__((weak)) void k_sleep(uintptr_t ms) { (void) ms; }
 // returns only when poll succeeds (data ready / deadline elapsed) or fails
 // for a non-EINTR reason.
 static void poll_wait(struct pollfd *fds, nfds_t nfds, uintptr_t ms) {
-  uintptr_t deadline = ms == 0 ? 0 : ai_clock() + ms;
-  for (;;) {
-    int t = ms == 0 ? -1 :
-            ms > (uintptr_t) __INT_MAX__ ? __INT_MAX__ : (int) ms;
-    if (poll(fds, nfds, t) >= 0 || errno != EINTR) return;
-    if (!deadline) continue;
-    uintptr_t now = ai_clock();
-    if (now >= deadline) return;
-    ms = deadline - now; } }
+ uintptr_t deadline = ms == 0 ? 0 : ai_clock() + ms;
+ for (;;) {
+  int t = ms == 0 ? -1 :
+          ms > (uintptr_t) __INT_MAX__ ? __INT_MAX__ : (int) ms;
+  if (poll(fds, nfds, t) >= 0 || errno != EINTR) return;
+  if (!deadline) continue;
+  uintptr_t now = ai_clock();
+  if (now >= deadline) return;
+  ms = deadline - now; } }
 
 void ai_sleep(uintptr_t ms) {
-  if (__ai_osv < 0) return k_sleep(ms);
-  poll_wait(NULL, 0, ms); }
+ if (__ai_osv < 0) return k_sleep(ms);
+ poll_wait(NULL, 0, ms); }
 
 static ai_noinline int poll_wrap(int fd, int events) {
-  struct pollfd p = { .fd = fd, .events = (short) events };
-  return poll(&p, 1, 0); }
+ struct pollfd p = { .fd = fd, .events = (short) events };
+ return poll(&p, 1, 0); }
 
 bool ai_ready(int fd, int events) {
-  if (__ai_osv < 0) return k_ready(fd, events);
-  return fd < 0 || poll_wrap(fd, events) > 0; }
+ if (__ai_osv < 0) return k_ready(fd, events);
+ return fd < 0 || poll_wrap(fd, events) > 0; }
 
 // love.h lays the block out as poll(2)'s own struct, so there is nothing to copy
 // and no vector of ours to size -- which is the whole reason the count needs no
@@ -224,9 +202,9 @@ _Static_assert(ai_wait_in == POLLIN && ai_wait_out == POLLOUT,
 // direction and a blanket mask would wake readers on writable. poll(2) fills
 // `revents` on the way back out and the scheduler reads it (love.h).
 void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
-  if (__ai_osv < 0) return k_wait_fds(fds, n, ms);
-  if (n <= 0) { ai_sleep(ms); return; }
-  poll_wait((struct pollfd*) fds, (nfds_t) n, ms); }
+ if (__ai_osv < 0) return k_wait_fds(fds, n, ms);
+ if (n <= 0) { ai_sleep(ms); return; }
+ poll_wait((struct pollfd*) fds, (nfds_t) n, ms); }
 
 // the same block, asked and not waited on -- one poll(2) for the whole parked ring,
 // where the weak default would spend one per fd. that is what lets the scheduler sweep
@@ -237,27 +215,27 @@ void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
 // on inle the sweep is per row (love.c's weak default's law: every slot filled,
 // so "none ready" never reads as "nobody answered").
 void ai_ready_fds(struct ai_wait_fd *fds, int n) {
-  if (__ai_osv < 0) {
-    for (int i = 0; i < n; i++)
-      fds[i].revents = k_ready(fds[i].fd, fds[i].events) ? fds[i].events : 0;
-    return; }
-  if (n <= 0) return;
-  if (poll((struct pollfd*) fds, (nfds_t) n, 0) >= 0) return;
-  for (int i = 0; i < n; i++) fds[i].revents = 0; }
+ if (__ai_osv < 0) {
+  for (int i = 0; i < n; i++)
+   fds[i].revents = k_ready(fds[i].fd, fds[i].events) ? fds[i].events : 0;
+  return; }
+ if (n <= 0) return;
+ if (poll((struct pollfd*) fds, (nfds_t) n, 0) >= 0) return;
+ for (int i = 0; i < n; i++) fds[i].revents = 0; }
 
 // override the weak g.c default with the real close. called by the finalizer
 // that ai_io_alloc registers, so it runs when a heap port becomes unreachable.
 // static stdin/stdout don't go through this path -- they live outside the l
 // heap and the GC never visits them. on inle the row's own close method runs.
 void ai_fd_close(int fd) {
-  if (__ai_osv < 0) return k_row_close(fd);
-  close(fd); }
+ if (__ai_osv < 0) return k_row_close(fd);
+ close(fd); }
 
 // a love port -> the fd under it, or -1 for anything that is not an fd port. the fd
 // port is this file's (ai_fd_port_vt below), so the question belongs here too.
 intptr_t ai_port_fd(ai_word x) {
  if (!charmp(x) && ((union u*) x)->ap == lvm_port_io)
-    return ai_io_fd((struct ai_io*) x);
+  return ai_io_fd((struct ai_io*) x);
  return -1; }
 
 // argv: the chain of strings at g->sp[0] -> a NUL-terminated char** laid in the

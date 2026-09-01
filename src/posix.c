@@ -1296,7 +1296,7 @@ static lvm(lvm_swig) {
       && !charmp(x) && ((union u*) x)->ap == lvm_cask) {
   struct ai_io *io = (struct ai_io*) p;
   intptr_t fd = ai_io_fd(io);
-  struct ai_str *s = ((struct ai_cask*) x)->str;
+  struct ai_str *s = cask(x)->str;
     // the port's own pending run comes first: a buffered see may have gulped
     // ahead of us, and reading the fd past it would scramble the byte order
   if (s->len && ai_io_pending(g, io)) {
@@ -1365,8 +1365,7 @@ static int call_open(struct ai_str *pv, struct ai_str *mv) {
 static lvm(lvm_open) {
   long rc = -1;
   if (!ai_strp(Sp[0]) || !ai_strp(Sp[1])) goto fail;
-  struct ai_str *pv = (struct ai_str*) Sp[0];
-  struct ai_str *mv = (struct ai_str*) Sp[1];
+  struct ai_str *pv = str(Sp[0]), *mv = str(Sp[1]);
   int fd = call_open(pv, mv);
   if (fd < 0) { rc = fd; goto fail; }
   Pack(g);
@@ -1376,14 +1375,10 @@ static lvm(lvm_open) {
   Unpack(g);
   // stack: [port, path, mode, ...] -> [port, ...]
   Sp[2] = Sp[0];
-  Sp += 2;
-  Ip += 1;
-  ai_musttail return Continue();
+  ai_musttail return Nextp(1, 2);
  fail:
   Sp[1] = putcharm(rc);
-  Sp += 1;
-  Ip += 1;
-  ai_musttail return Continue(); }
+  ai_musttail return Nextp(1, 1); }
 
 // (close x) -- a port, or a raw fd from openfd/pipe/dup. on a port: flush, close,
 // and HAND IT THE CLOSED VT, so every later read, write and flush finds the door
@@ -1393,10 +1388,9 @@ static lvm(lvm_close) {
   if (charmp(Sp[0])) {
     intptr_t fd = getcharm(Sp[0]);
     Sp[0] = (fd >= 0 && close((int) fd)) ? putcharm(-errno) : ZeroPoint;
-    Ip += 1;
-    ai_musttail return Continue(); }
+    ai_musttail return Next(1); }
   // inline "is x a port": heap pointer whose discriminator is lvm_port_io.
-  if (((union u*) Sp[0])->ap == lvm_port_io) {
+  if (cell(Sp[0])->ap == lvm_port_io) {
     struct ai_io *io = (struct ai_io*) Sp[0];
     intptr_t fd = ai_io_fd(io);
     if (fd >= 0) {
@@ -1415,8 +1409,7 @@ static lvm(lvm_close) {
       close(fd);
       ((struct ai_io*) Sp[0])->vt = &ai_closed_vt; } }   // re-read: wflush may collect
   Sp[0] = ZeroPoint;
-  Ip += 1;
-  ai_musttail return Continue(); }
+  ai_musttail return Next(1); }
 
 static union u const
   nif_open[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_open}, {lvm_ret0}},

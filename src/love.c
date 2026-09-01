@@ -4,75 +4,54 @@
 #include <stddef.h>
 struct ai_chain;
 // this file's own, forward-declared so order within it does not matter.
-static bool ai_major_cell(struct ai *g, word *c);
-static bool gen_remembered(struct ai *g, word obj);
+static bool
+ ai_major_cell(struct ai *g, word *c),
+ gen_remembered(struct ai *g, word obj);
 static char *add_emit(struct ai *g, char *w, word x);
 static int stringrank(struct ai *g, word x);
 static intptr_t seq_byte(word x);
-static lvm(_lvm_help_scare);
-static lvm(_lvm_yield_c);
 // the nifs.h table lands mid-file and names these, so the whole set is declared up here
 // (lvm_subn's body comes out of avm_slow, which carries no storage class of its own).
-static lvm(lvm_apof);
-static lvm(lvm_bigp);
-static lvm(lvm_books);
-static lvm(lvm_cap);
-static lvm(lvm_casknew);
-static lvm(lvm_chainp);
-static lvm(lvm_clock);
-static lvm(lvm_cup);
-static lvm(lvm_gauge);
-static lvm(lvm_intf);
-static lvm(lvm_key);
-static lvm(lvm_link);
-static lvm(lvm_mint);
-static lvm(lvm_mintp);
-static lvm(lvm_mods);
-static lvm(lvm_namep);
-static lvm(lvm_nclock);
-static lvm(lvm_nomctor);
-static lvm(lvm_nomp);
-static lvm(lvm_packp);
-static lvm(lvm_please);
-static lvm(lvm_setbooks);
-static lvm(lvm_setp);
-static lvm(lvm_snip);
-static lvm(lvm_strp);
-static lvm(lvm_sub);
-static lvm(lvm_subn);
-static lvm(lvm_sunp);
-static lvm(lvm_tune);
-static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, void*, size_t));
-static struct ai *ai_modtab(struct ai *g, char const *mod);
+static lvm_t
+ lvm_apof, lvm_bigp, lvm_books, lvm_cap, lvm_casknew, lvm_chainp, lvm_clock, lvm_cup,
+ lvm_gauge, lvm_intf, lvm_key, lvm_link, lvm_mint, lvm_mintp, lvm_mods, lvm_namep,
+ lvm_nclock, lvm_nomctor, lvm_nomp, lvm_packp, lvm_please, lvm_setbooks, lvm_setp,
+ lvm_snip, lvm_strp, lvm_sub, lvm_subn, lvm_sunp, lvm_tune, _lvm_help_scare, _lvm_yield_c;
+static struct ai
+ *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, void*, size_t)),
+ *ai_modtab(struct ai *g, char const *mod);
 static struct ai_tag *ttag2(struct ai *g, struct ai_gcx *X, union u *k);
 static uintptr_t stringlen(struct ai *g, word x);
-static void evac_big(struct ai *g, struct ai_gcx *X);
-static void evac_chain(struct ai *g, struct ai_gcx *X);
-static void evac_data(struct ai *g, struct ai_gcx *X);
-static void evac_gem(struct ai *g, struct ai_gcx *X);
-static void evac_nom(struct ai *g, struct ai_gcx *X);
-static void evac_str(struct ai *g, struct ai_gcx *X);
-static void evac_sun(struct ai *g, struct ai_gcx *X);
-static void evac_sym(struct ai *g, struct ai_gcx *X);
-static void evac_thread(struct ai *g, struct ai_gcx *X);
-static void evac_twin(struct ai *g, struct ai_gcx *X);
-static void gen_fz_relocate(struct ai *g);
-static void gen_minor(struct ai *g);
-static void gen_remember(struct ai *g, word obj);
-static void gen_scan_inplace(struct ai *g, struct ai_gcx *X, word obj);
-static void major_run_finalizers(struct ai *g, struct ai_gcx *X);
-static word copy_big(struct ai *g, struct ai_big *src);
-static word copy_chain(struct ai *g, struct ai_chain *src);
-static word copy_data(struct ai *g, union u *src);
-static word copy_gem(struct ai *g, struct ai_gem *src);
-static word copy_nom(struct ai *g, struct ai_nom *src);
-static word copy_str(struct ai *g, struct ai_str *src);
-static word copy_sun(struct ai *g, struct ai_sun *src);
-static word copy_sym(struct ai *g, struct ai_mint *src);
-static word copy_thread(struct ai *g, struct ai_gcx *X, union u *src);
-static word copy_tray(struct ai *g, struct ai_tray *src);
-static word copy_twin(struct ai *g, struct ai_twin *src);
-static word major_symbols_rebuild(struct ai *g, struct ai_gcx *X, word om);
+static void
+// FIXME redundant forward decls
+ evac_big(struct ai *g, struct ai_gcx *X),
+ evac_chain(struct ai *g, struct ai_gcx *X),
+ evac_data(struct ai *g, struct ai_gcx *X),
+ evac_gem(struct ai *g, struct ai_gcx *X),
+ evac_nom(struct ai *g, struct ai_gcx *X),
+ evac_str(struct ai *g, struct ai_gcx *X),
+ evac_sun(struct ai *g, struct ai_gcx *X),
+ evac_sym(struct ai *g, struct ai_gcx *X),
+ evac_thread(struct ai *g, struct ai_gcx *X),
+ evac_twin(struct ai *g, struct ai_gcx *X),
+ gen_fz_relocate(struct ai *g),
+ gen_minor(struct ai *g),
+ gen_remember(struct ai *g, word obj),
+ gen_scan_inplace(struct ai *g, struct ai_gcx *X, word obj),
+ major_run_finalizers(struct ai *g, struct ai_gcx *X);
+static word
+ copy_big(struct ai *g, struct ai_big *src),
+ copy_chain(struct ai *g, struct ai_chain *src),
+ copy_data(struct ai *g, union u *src),
+ copy_gem(struct ai *g, struct ai_gem *src),
+ copy_nom(struct ai *g, struct ai_nom *src),
+ copy_str(struct ai *g, struct ai_str *src),
+ copy_sun(struct ai *g, struct ai_sun *src),
+ copy_sym(struct ai *g, struct ai_mint *src),
+ copy_thread(struct ai *g, struct ai_gcx *X, union u *src),
+ copy_tray(struct ai *g, struct ai_tray *src),
+ copy_twin(struct ai *g, struct ai_twin *src),
+ major_symbols_rebuild(struct ai *g, struct ai_gcx *X, word om);
 // the build's version string, generated into out/lib/love_version.h and surfaced
 // as `love-version`. -DAiVersion wins (love0 pins "bootstrap" so a new commit never
 // relinks the bootstrap); -DAiHaveVersionH says the header exists -- mooncc has
@@ -85,9 +64,9 @@ static word major_symbols_rebuild(struct ai *g, struct ai_gcx *X, word om);
 #ifndef AiVersion
 #define AiVersion "unknown"
 #endif
-const word ai_map_gap_cell = 0;
-const struct ai_str0 ai_str_empty = { .ap = lvm_str, .len = 0 };
-const struct ai_mint ai_mint_zero = { .ap = lvm_sym, .code = 0 };
+word const ai_map_gap_cell = 0; // FIXME why do we need 0 as a constant :/
+struct ai_str0 const ai_str_empty = { .ap = lvm_str, .len = 0 };
+struct ai_mint const ai_mint_zero = { .ap = lvm_sym, .code = 0 };
 // ============================================================================
 // g
 // ============================================================================
@@ -130,12 +109,13 @@ struct ai *ai_defn(struct ai*g, struct ai_def const*defs, uintptr_t n, char cons
  ai_core_of(g)->sp++;
  return g; }
 
+// FIXME this function should pop the bound value off the stack
 // ai_defn's twin for a value that moves: it rides g->sp[0], where the collector
 // updates it, and is left there (a second name binds the same one; callers pop).
 // the sp[1] re-read happens after the book push, so a collection inside it is accounted for.
 struct ai *ai_defv(struct ai *g, char const *nm) {
  if (!ai_ok(g)) return g;
- g = ai_push(g, 1, A(ai_core_of(g)->book));           // [book, value, ..]
+ g = ai_push(g, 1, A(g->book));           // [book, value, ..]
  if (!ai_ok(g)) return g;
  g = ai_mapput(intern(ai_strof(ai_push(g, 1, ai_core_of(g)->sp[1]), nm)));
  if (ai_ok(g)) ai_core_of(g)->sp++;                   // [value, ..]
@@ -1377,24 +1357,20 @@ static lvm(lvm_sub) {
 //   nom + str  -> byte concat          text + list -> the bytes SPLICE in
 // text and chain are one monoid: a string or named symbol against a list contributes
 // its bytes as elements, never itself as one. a number is foreign to both bands: it
-// arrives as the band's unit, so the other operand answers whole. ai_add_lr selects
-// the ordered reading.
-// FIXME if we always want to allow commutative reading should this be false?
-static const bool ai_add_lr = true;
+// arrives as the band's unit, so the other operand answers whole.
 // one byte from a number, strictly an exact integer 0..255 (rep-blind: 66.0 is
 // 66); anything else answers -1.
-ai_inline intptr_t seq_byte(word x) {
+static ai_inline intptr_t seq_byte(word x) {
  if (charmp(x)) { intptr_t v = getcharm(x); return v < 0 || v > 255 ? -1 : v; }
  if (gemp(x)) { ai_flo_t f = gem_get(x);
   if (!(f >= 0 && f <= 255)) return -1;                 // range first (nan fails); cast below is safe
   return f != (ai_flo_t) (intptr_t) f ? -1 : (intptr_t) f; }
  return -1; }
-// list lane: at least one operand is a chain (the matrix only routes list-involved
-// chains here). list+list -> spine append; elt<->list -> the non-list operand joins
-// as a scalar element (front if it is on the left, else appended at the tail).
+// list lane. the matrix routes only list-involved pairs here (src/mx.l's five cells),
+// and lvm_add has already answered for () and every mint, so one operand is a chain and
+// the other is a chain, a string or a named symbol -- nothing else arrives.
+// list+list -> spine append; text <-> list -> the bytes splice; anything else adjoins.
 lvm(lvm_add_seq) {
- // a named symbol is an atom for + (an element to adjoin), so the list tests use
- // chainp; sym + sym/str/num falls through to zero (no symbol string algebra)
  word a = Sp[0], b = Sp[1];
  if (chainp(a) && chainp(b)) {                         // list + list -> append a..b
   uintptr_t n = llen(a); Have(n * Width(struct ai_chain));
@@ -1404,36 +1380,40 @@ lvm(lvm_add_seq) {
   for (word l = a; chainp(l); l = B(l), w++) ini_chain(w, A(l), word(w + 1));
   (w - 1)->b = b;                                // last cdr -> b
   ai_musttail return Push(word(base)); }
- if (chainp(a) || chainp(b)) {                          // elt <-> list (a bare mint never
-  bool front = !ai_add_lr || chainp(b);               // reaches here -- lvm_add's identity early-out caught it)
-  word lst = chainp(a) ? a : b, elt = chainp(a) ? b : a;
-  if (strp(elt) || nomp(elt)) {              // TEXT SPLICES as its bytes -- the charlist hom, so text
-   uintptr_t n = stringlen(g, elt);          // and chain are ONE monoid and + associates across the two.
-   uintptr_t m = front ? 0 : llen(lst);      // adjoining instead would merge two texts concatenated first.
-   Have((n + m) * Width(struct ai_chain));
-   a = Sp[0], b = Sp[1];                                        // re-read post-GC
-   front = !ai_add_lr || chainp(b);
-   lst = chainp(a) ? a : b, elt = chainp(a) ? b : a;
-   struct ai_str *sx = strp(elt) ? str(elt) : nom_str(g, elt);   // a nameless mint has no bytes: n = 0
-   unsigned char const *t = sx ? (unsigned char const*) txt(sx) : 0;
-   struct ai_chain *base = (struct ai_chain*) Hp, *bw = base + m;
-   Hp += (n + m) * Width(struct ai_chain);
-   for (uintptr_t i = 0; i < n; i++) ini_chain(bw + i, putcharm(t[i]), word(bw + i + 1));
-   if (n) bw[n - 1].b = front ? lst : ZeroPoint;
-   if (front) ai_musttail return Push(n ? word(bw) : lst);
-   struct ai_chain *w = base;                                    // text on the right: spine, then the bytes
-   for (word l = lst; chainp(l); l = B(l), w++) ini_chain(w, A(l), word(w + 1));
-   w[-1].b = n ? word(bw) : ZeroPoint;
-   ai_musttail return Push(word(base)); }
-  if (front) { Sp[0] = elt, Sp[1] = lst; ai_musttail return Ap(lvm_link, g); }  // (link elt list)
-  uintptr_t n = llen(lst) + 1; Have(n * Width(struct ai_chain));        // append elt at tail
-  lst = chainp(Sp[0]) ? Sp[0] : Sp[1], elt = chainp(Sp[0]) ? Sp[1] : Sp[0];
-  struct ai_chain *base = (struct ai_chain*) Hp, *w = base;
-  Hp += n * Width(struct ai_chain);
+ // elt <-> list: exactly one is a chain, the both-chains lane having answered above.
+ // said to the compiler rather than tested -- the fact is the matrix's, not something
+ // the optimizer can see, and without it the selects below re-test what is already known.
+ if (!chainp(a) && !chainp(b)) __builtin_unreachable();
+ // front is where the element or its bytes land -- ahead of the list when it is the
+ // left operand, at the tail when it is the right.
+ bool front = chainp(b);
+ word lst = chainp(a) ? a : b, elt = chainp(a) ? b : a;
+ if (strp(elt) || nomp(elt)) {              // TEXT SPLICES as its bytes -- the charlist hom, so text
+  uintptr_t n = stringlen(g, elt),          // and chain are ONE monoid and + associates across the two.
+            m = front ? 0 : llen(lst);      // adjoining instead would merge two texts concatenated first.
+  Have((n + m) * Width(struct ai_chain));
+  a = Sp[0], b = Sp[1];                                        // re-read post-GC
+  front = chainp(b);
+  lst = chainp(a) ? a : b, elt = chainp(a) ? b : a;
+  struct ai_str *sx = strp(elt) ? str(elt) : nom_str(g, elt);   // a nameless mint has no bytes: n = 0
+  unsigned char const *t = sx ? (unsigned char const*) txt(sx) : 0;
+  struct ai_chain *base = (struct ai_chain*) Hp, *bw = base + m;
+  Hp += (n + m) * Width(struct ai_chain);
+  for (uintptr_t i = 0; i < n; i++) ini_chain(bw + i, putcharm(t[i]), word(bw + i + 1));
+  if (n) bw[n - 1].b = front ? lst : ZeroPoint;
+  if (front) ai_musttail return Push(n ? word(bw) : lst);
+  struct ai_chain *w = base;                                    // text on the right: spine, then the bytes
   for (word l = lst; chainp(l); l = B(l), w++) ini_chain(w, A(l), word(w + 1));
-  ini_chain(w, elt, ZeroPoint);                     // trailing (elt . ()) -- list terminator (zero-ontology)
+  w[-1].b = n ? word(bw) : ZeroPoint;
   ai_musttail return Push(word(base)); }
- ai_musttail return Push(ZeroPoint); }          // neither is a real list (e.g. sym + sym/str/num): no algebra -> zero
+ if (front) { Sp[0] = elt, Sp[1] = lst; ai_musttail return Ap(lvm_link, g); }  // (link elt list)
+ uintptr_t n = llen(lst) + 1; Have(n * Width(struct ai_chain));        // append elt at tail
+ lst = chainp(Sp[0]) ? Sp[0] : Sp[1], elt = chainp(Sp[0]) ? Sp[1] : Sp[0];
+ struct ai_chain *base = (struct ai_chain*) Hp, *w = base;
+ Hp += n * Width(struct ai_chain);
+ for (word l = lst; chainp(l); l = B(l), w++) ini_chain(w, A(l), word(w + 1));
+ ini_chain(w, elt, ZeroPoint);                     // trailing (elt . ()) -- list terminator (zero-ontology)
+ ai_musttail return Push(word(base)); }
 
 // --- text lane: strings + symbols ---
 // the string tower is string (0) < uninterned-sym (1) < named-sym|num (2); mixing
@@ -1442,18 +1422,17 @@ lvm(lvm_add_seq) {
 struct ai_str *nom_str(struct ai *g, word x) {   // symbol -> name string, or 0 (a bare mint / the zero point / a non-symbol)
  return namep(x) ? str(nom(x)->name) : 0; }  // a named point (KNom) carries its name; a bare mint is nameless
 
-ai_inline int stringrank(struct ai *g, word x) {    // str 0 / mint 1 / named-sym|num 2
+static ai_inline int stringrank(struct ai *g, word x) {    // str 0 / mint 1 / named-sym|num 2
  if (strp(x)) return 0;
  if (namep(x)) return 2;          // a named symbol: result re-interns (the min pulls a string operand to 0 -> demote)
  if (mintp(x)) return 1;          // a bare mint / the zero point: an uninterned (fresh) symbol
  return 2; }                      // a number contributes one byte (rank 2)
-ai_inline uintptr_t stringlen(struct ai *g, word x) {  // bytes x contributes to a concat
+
+static ai_inline uintptr_t stringlen(struct ai *g, word x) {  // bytes x contributes to a concat
  if (strp(x)) return len(x);
  if (nomp(x)) { struct ai_str *n = nom_str(g, x); return n ? n->len : 0; }
  return 1; }                                            // number -> one byte
-// text concat: a's bytes then b's into a caller-owned allocation. `+`'s string lane and
-// the apply lane's juxtaposition both land here, so the two cannot drift apart.
-struct ai_str *seq_cat(struct ai *g, void *w, word a, word b);
+                                                        //
 ai_inline char *add_emit(struct ai *g, char *w, word x) {  // append x's bytes; return advanced w
  if (strp(x)) return (void) memcpy(w, txt(x), len(x)), w + len(x);
  if (nomp(x)) { struct ai_str *n = nom_str(g, x);
@@ -1463,6 +1442,7 @@ ai_inline char *add_emit(struct ai *g, char *w, word x) {  // append x's bytes; 
 struct ai_str *seq_cat(struct ai *g, void *w, word a, word b) {
  struct ai_str *z = ini_str(str(w), stringlen(g, a) + stringlen(g, b));
  return add_emit(g, add_emit(g, txt(z), a), b), z; }
+
 lvm(lvm_add_string) {
  word a = Sp[0], b = Sp[1];
  if (trayp(a) || trayp(b)) ai_musttail return Push(ZeroPoint); // array <-> string: undefined

@@ -27,19 +27,22 @@
 #include <string.h>
 
 // RFC 1951 3.2.5, and lib/gz.l's gz-lbase/gz-lext/gz-dbase/gz-dext say them again
-static const uint16_t df_lbase[29] = {
- 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59,
- 67, 83, 99, 115, 131, 163, 195, 227, 258 };
-static const uint8_t df_lext[29] = {
- 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0 };
-static const uint16_t df_dbase[30] = {
- 1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769,
- 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577 };
-static const uint8_t df_dext[30] = {
- 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11,
- 12, 12, 13, 13 };
-static const uint8_t df_clord[19] = {
- 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 };
+static uint16_t const
+ df_lbase[29] = {
+  3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59,
+  67, 83, 99, 115, 131, 163, 195, 227, 258 },
+ df_dbase[30] = {
+  1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769,
+  1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577 };
+
+static const uint8_t
+ df_lext[29] = {
+  0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0 },
+ df_dext[30] = {
+  0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11,
+  12, 12, 13, 13 },
+ df_clord[19] = {
+  16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 };
 
 #define DF_WSIZE 32768u
 #define DF_WMASK 32767u
@@ -67,8 +70,8 @@ static uint32_t df_rev(uint32_t v, unsigned k) {
  return a; }
 
 // the ladders are short and walked from the top (gz-lcode/gz-dcode)
-static unsigned df_lcode(unsigned v) { unsigned i; for (i = 28; i >= 1; i--) if (df_lbase[i] <= v) return i; return 0; }
-static unsigned df_dcode(unsigned v) { unsigned i; for (i = 29; i >= 1; i--) if (df_dbase[i] <= v) return i; return 0; }
+static unsigned df_lcode(unsigned v) { for (unsigned i = 28; i >= 1; i--) if (df_lbase[i] <= v) return i; return 0; }
+static unsigned df_dcode(unsigned v) { for (unsigned i = 29; i >= 1; i--) if (df_dbase[i] <= v) return i; return 0; }
 
 // --- the Huffman lengths: sorted leaves + the internal queue, ties to the leaf,
 // --- and the halving walk when the code outgrows the format (gz-hpass exactly).
@@ -184,9 +187,7 @@ static void df_carve(uint8_t *m, struct df_ar *a) {
  DF_TAKE(codl, 286, uint32_t); DF_TAKE(codd, 30, uint32_t); DF_TAKE(codc, 19, uint32_t);
  DF_TAKE(fixcl, 288, uint32_t); DF_TAKE(fixcd, 30, uint32_t);
  DF_TAKE(lenl, 286, uint8_t); DF_TAKE(lend, 30, uint8_t); DF_TAKE(lenc, 19, uint8_t);
- DF_TAKE(fixll, 288, uint8_t); DF_TAKE(fixld, 30, uint8_t); DF_TAKE(cl, 316, uint8_t);
-#undef DF_TAKE
-}
+ DF_TAKE(fixll, 288, uint8_t); DF_TAKE(fixld, 30, uint8_t); DF_TAKE(cl, 316, uint8_t); }
 
 #define DF_HASH(s, i) (((((uint32_t) (s)[i] << 10) ^ ((uint32_t) (s)[(i) + 1] << 5)) ^ (s)[(i) + 2]) & DF_HMASK)
 static void df_ins(const uint8_t *s, uintptr_t n, uintptr_t i, uint32_t *head, uint32_t *prev) {
@@ -240,38 +241,39 @@ static uintptr_t df_block(const uint8_t *s, uintptr_t n, uintptr_t i, struct df_
    i += l; } }
  last = n <= i;
  a->fl[256]++;                                                  // end-of-block, always sent
- { unsigned mxl = df_hlens(a->fl, 286, 15, a->lenl, a->hc, a->keys, a->w, a->sy, a->pa);
-   unsigned mxd = df_hlens(a->fd, 30, 15, a->lend, a->hc, a->keys, a->w, a->sy, a->pa);
-   unsigned hlit, hdist, hclen, nr, j2, mxc;
-   uint64_t dyn, fix, raw;
-   for (hlit = 286; hlit > 257 && !a->lenl[hlit - 1]; hlit--) ;
-   for (hdist = 30; hdist > 1 && !a->lend[hdist - 1]; hdist--) ;
-   memcpy(a->cl, a->lenl, hlit); memcpy(a->cl + hlit, a->lend, hdist);
-   nr = df_run(a->cl, hlit + hdist, a->rlb);
-   memset(a->fc, 0, 19 * sizeof *a->fc);
-   for (j2 = 0; j2 < nr; j2++) a->fc[a->rlb[j2] >> 7]++;
-   mxc = df_hlens(a->fc, 19, 7, a->lenc, a->hc, a->keys, a->w, a->sy, a->pa);
-   for (hclen = 19; hclen > 4 && !a->lenc[df_clord[hclen - 1]]; hclen--) ;
-   dyn = 17 + hclen * 3 + df_ccost(a->rlb, a->lenc, nr)
-       + df_cost(a->fl, a->lenl, 286) + df_cost(a->fd, a->lend, 30) + xb;
-   fix = 3 + df_cost(a->fl, a->fixll, 286) + df_cost(a->fd, a->fixld, 30) + xb;
-   raw = (i - i0) < 65536 ? 42 + (uint64_t) (i - i0) * 8 : dyn + fix;   // no stored spelling past len
-   if (raw < (dyn <= fix ? dyn : fix)) df_wstored(t, s, i0, i, last);
-   else if (fix < dyn) {
-    df_put(t, last ? 1 : 0, 1); df_put(t, 1, 2);
-    df_wtoks(t, a->tok, k, a->fixcl, a->fixll, a->fixcd, a->fixld); }
-   else {
-    df_hcodes(a->lenl, 286, mxl, a->codl);
-    df_hcodes(a->lend, 30, mxd, a->codd);
-    df_hcodes(a->lenc, 19, mxc, a->codc);
-    df_put(t, last ? 1 : 0, 1); df_put(t, 2, 2);
-    df_put(t, hlit - 257, 5); df_put(t, hdist - 1, 5); df_put(t, hclen - 4, 4);
-    for (j2 = 0; j2 < hclen; j2++) df_put(t, a->lenc[df_clord[j2]], 3);
-    for (j2 = 0; j2 < nr; j2++) {
-     uint32_t v = a->rlb[j2]; unsigned sy = v >> 7;
-     df_put(t, a->codc[sy], a->lenc[sy]);
-     if (df_clx(sy)) df_put(t, v & 127, df_clx(sy)); }
-    df_wtoks(t, a->tok, k, a->codl, a->lenl, a->codd, a->lend); } }
+ unsigned mxl = df_hlens(a->fl, 286, 15, a->lenl, a->hc, a->keys, a->w, a->sy, a->pa),
+          mxd = df_hlens(a->fd, 30, 15, a->lend, a->hc, a->keys, a->w, a->sy, a->pa),
+          hlit, hdist, hclen, nr, j2, mxc;
+ uint64_t dyn, fix, raw;
+
+ for (hlit = 286; hlit > 257 && !a->lenl[hlit - 1]; hlit--) ;
+ for (hdist = 30; hdist > 1 && !a->lend[hdist - 1]; hdist--) ;
+ memcpy(a->cl, a->lenl, hlit); memcpy(a->cl + hlit, a->lend, hdist);
+ nr = df_run(a->cl, hlit + hdist, a->rlb);
+ memset(a->fc, 0, 19 * sizeof *a->fc);
+ for (j2 = 0; j2 < nr; j2++) a->fc[a->rlb[j2] >> 7]++;
+ mxc = df_hlens(a->fc, 19, 7, a->lenc, a->hc, a->keys, a->w, a->sy, a->pa);
+ for (hclen = 19; hclen > 4 && !a->lenc[df_clord[hclen - 1]]; hclen--) ;
+ dyn = 17 + hclen * 3 + df_ccost(a->rlb, a->lenc, nr)
+     + df_cost(a->fl, a->lenl, 286) + df_cost(a->fd, a->lend, 30) + xb;
+ fix = 3 + df_cost(a->fl, a->fixll, 286) + df_cost(a->fd, a->fixld, 30) + xb;
+ raw = (i - i0) < 65536 ? 42 + (uint64_t) (i - i0) * 8 : dyn + fix;   // no stored spelling past len
+ if (raw < (dyn <= fix ? dyn : fix)) df_wstored(t, s, i0, i, last);
+ else if (fix < dyn) {
+  df_put(t, last ? 1 : 0, 1); df_put(t, 1, 2);
+  df_wtoks(t, a->tok, k, a->fixcl, a->fixll, a->fixcd, a->fixld); }
+ else {
+  df_hcodes(a->lenl, 286, mxl, a->codl);
+  df_hcodes(a->lend, 30, mxd, a->codd);
+  df_hcodes(a->lenc, 19, mxc, a->codc);
+  df_put(t, last ? 1 : 0, 1); df_put(t, 2, 2);
+  df_put(t, hlit - 257, 5); df_put(t, hdist - 1, 5); df_put(t, hclen - 4, 4);
+  for (j2 = 0; j2 < hclen; j2++) df_put(t, a->lenc[df_clord[j2]], 3);
+  for (j2 = 0; j2 < nr; j2++) {
+   uint32_t v = a->rlb[j2]; unsigned sy = v >> 7;
+   df_put(t, a->codc[sy], a->lenc[sy]);
+   if (df_clx(sy)) df_put(t, v & 127, df_clx(sy)); }
+  df_wtoks(t, a->tok, k, a->codl, a->lenl, a->codd, a->lend); }
  return i; }
 
 static int64_t df_go(const uint8_t *s, uintptr_t n, uint8_t *out, uintptr_t cap, uint8_t *m) {
@@ -297,9 +299,9 @@ static uint8_t *df_arena(struct ai *g, int *alloced) {
  *alloced = 0;
  if (g->major_pool && g->major_len * sizeof(ai_word) >= DF_ARENA)
   return (uint8_t*) ((g->major_base == g->major_pool) ? g->major_pool + g->major_len : g->major_pool);
- { void *p = g->alloc(g, NULL, DF_ARENA);
-   if (p) *alloced = 1;
-   return (uint8_t*) p; } }
+ void *p = g->alloc(g, NULL, DF_ARENA);
+ if (p) *alloced = 1;
+ return (uint8_t*) p; }
 
 // the image lane: deflate raw bytes into the caller's buffer, one pass, no love stack.
 // its arena is always its own -- df_arena may hand back the major pool's spare half, and
@@ -330,15 +332,10 @@ ai_noinline static struct ai *host_deflate(struct ai *g) {
  got = df_go((const uint8_t*) txt(g->sp[1]), len(g->sp[1]),
              (uint8_t*) txt(g->sp[0]), (uintptr_t) want, m);
  if (alloced) g->alloc(g, m, 0);
- if (got != want) { g->sp[1] = ZeroPoint, g->sp += 1; return g; }
- g->sp[1] = g->sp[0], g->sp += 1;
- return g; }
+ g->sp[1] = got != want ? ZeroPoint : g->sp[0];
+ return g->sp++, g; }
 
-static lvm(lvm_deflate) {
- Pack(g); g = host_deflate(g);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- Unpack(g);
- ai_musttail return Next(1); }
+static LvmWrap(lvm_deflate, host_deflate)
 
 // one operand, so the run is {impl, ret0} -- src/nifs.l states the law and lvm_cur
 // curries once unconditionally, which at arity one hands the body an operand too many.
