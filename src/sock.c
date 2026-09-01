@@ -125,12 +125,10 @@ static lvm(lvm_connectw) {
  Unpack(g);
  // stack: [port, fd, port#, ...] -> [port, ...]
  Sp[2] = Sp[0];
- Sp += 2; Ip += 1;
- ai_musttail return Continue();
+ ai_musttail return Nextp(1, 2);
  fail:                                    // [fd, port#, ret] -> [(), ret]
  Sp[1] = ZeroPoint;
- Sp += 1; Ip += 1;
- ai_musttail return Continue(); }
+ ai_musttail return Nextp(1, 1); }
 
 // (listen port) -- TCP server socket: socket()+SO_REUSEADDR+bind(INADDR_ANY,
 // port)+listen(). returns the listening port object, or () on any failure.
@@ -178,11 +176,10 @@ static lvm(lvm_listen) {
  Unpack(g);
  // stack: [port, port#, ...] -> [port, ...]
  Sp[1] = Sp[0];
- Sp += 1; Ip += 1;
- ai_musttail return Continue();
+ ai_musttail return Nextp(1, 1);
  fail:
- Sp[0] = ZeroPoint; Ip += 1;
- ai_musttail return Continue(); }
+ Sp[0] = ZeroPoint;
+ ai_musttail return Next(1); }
 
 // accept(2) without waiting, in readn's three terms: >=0 the fd, -2 nobody is there
 // yet, -1 gone. the O_NONBLOCK toggle is per call for main.c's reason -- the flags
@@ -218,11 +215,10 @@ static lvm(lvm_accept) {
  Unpack(g);
  // stack: [conn, l, ...] -> [conn, ...]
  Sp[1] = Sp[0];
- Sp += 1; Ip += 1;
- ai_musttail return Continue();
+ ai_musttail return Nextp(1, 1);
  fail:
- Sp[0] = ZeroPoint; Ip += 1;
- ai_musttail return Continue(); }
+ Sp[0] = ZeroPoint;
+ ai_musttail return Next(1); }
 
 // (shutdown s how) -- half-close a socket port. `how` is the POSIX SHUT_*
 // fixnum: 0 = read, 1 = write, 2 = both. the load-bearing case is (shutdown s 1)
@@ -250,8 +246,7 @@ static lvm(lvm_shutdown) {
   if (how >= 0 && how <= 2) shutdown(fd, (int) how); }
  // stack: [s, how, ...] -> [s, ...]
  Sp[1] = Sp[0];
- Sp += 1; Ip += 1;
- ai_musttail return Continue(); }
+ ai_musttail return Nextp(1, 1); }
 
 // --- UDP (inle's milestone-5 oracle wire) ---------------------------------
 // the TCP nifs above can't talk to inle: inle speaks UDP datagrams, each
@@ -291,11 +286,10 @@ static lvm(lvm_udpbind) {
  Unpack(g);
  // stack: [port#, ...] -> [port, ...]
  Sp[1] = Sp[0];
- Sp += 1; Ip += 1;
- ai_musttail return Continue();
+ ai_musttail return Nextp(1, 1);
  fail:
- Sp[0] = ZeroPoint; Ip += 1;
- ai_musttail return Continue(); }
+ Sp[0] = ZeroPoint;
+ ai_musttail return Next(1); }
 
 // recvfrom + peer marshaling; the &-taken sockaddr lives here so the lvm
 // wrapper stays TCO-clean. returns by value (16 bytes -> registers).
@@ -346,11 +340,10 @@ static lvm(lvm_udprecv) {
  Unpack(g);
  // stack: [port, ...] -> [(peerfix . bytes), ...]
  Sp[1] = Sp[0];
- Sp += 1; Ip += 1;
- ai_musttail return Continue();
+ ai_musttail return Nextp(1, 1);
  fail:
- Sp[0] = ZeroPoint; Ip += 1;
- ai_musttail return Continue(); }
+ Sp[0] = ZeroPoint;
+ ai_musttail return Next(1); }
 
 // sendto with the peer unmarshaled from its fixnum; the &-taken sockaddr
 // lives here so the lvm wrapper stays TCO-clean.
@@ -373,12 +366,10 @@ static lvm(lvm_udpsend) {
  if (w < 0) goto fail;
  // stack: [p, peerfix, bytes, ...] -> [p, ...]
  Sp[2] = Sp[0];
- Sp += 2; Ip += 1;
- ai_musttail return Continue();
+ ai_musttail return Nextp(1, 2);
  fail:
  Sp[2] = ZeroPoint;
- Sp += 2; Ip += 1;
- ai_musttail return Continue(); }
+ ai_musttail return Nextp(1, 2); }
 
 static union u const
  nif_connect[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_connect}, {lvm_connectw}, {lvm_ret0}},
@@ -423,11 +414,10 @@ static lvm(lvm_connectu) {
  Unpack(g);
  // stack: [port, path, ...] -> [port, ...]
  Sp[1] = Sp[0];
- Sp += 1; Ip += 1;
- ai_musttail return Continue();
+ ai_musttail return Nextp(1, 1);
  fail:
- Sp[0] = ZeroPoint; Ip += 1;
- ai_musttail return Continue(); }
+ Sp[0] = ZeroPoint;
+ ai_musttail return Next(1); }
 
 static union u const nif_connectu[] = {{lvm_connectu}, {lvm_ret0}};
 AiNif("connectu", nif_connectu);

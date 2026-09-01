@@ -10,7 +10,7 @@ static ai_noinline word ai_mapdel(struct ai *g, word m, word k, word dflt);
 // ============================================================================
 // backing is internal -- only ever reached from a header[1], never applied as a
 // l value; its ap answers () like lvm_cask should it ever be applied (it won't).
-lvm(lvm_map_data) {
+lvm(lvm_map_data) { // FIXME this seems to just return const (). what is this for? can we delete?
  Ip = cell(*++Sp); *Sp = ZeroPoint; ai_musttail return Continue(); }
 
 // the backing slot of k, or -- if absent -- the first empty slot on its probe
@@ -142,6 +142,8 @@ lvm(lvm_map_lookup) {
  Ip = cell(*++Sp); *Sp = v; ai_musttail return Continue(); }
 
 op11(lvm_tabp, tabp(Sp[0]) ? putcharm(1) : zero)
+
+// FIXME this predicate is confusing, let's try and remove it
 // (lit? x): the upper segment of the lattice, ai_kind >= KTablet -- tablets and the
 // tops above (closures, nifs, cask/port), never the fresh value-data below. a
 // coin's die decides (DieHot truthy = lit): lit? is the lattice cut, not storage.
@@ -435,6 +437,7 @@ lvm(lvm_bcopy) {
   if (n > 0) memmove(txt(d) + doff, txt(s) + soff, n); }
  ai_musttail return Answerp(4, dst); }
 
+// FIXME just make strp public
 // public predicate for frontends that need to check string args
 bool ai_strp(ai_word x) { return strp(x); }
 

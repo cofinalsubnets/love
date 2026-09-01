@@ -651,8 +651,8 @@ static void first_boot(char const **argv) {
 int main(int argc, char const **argv) {
   signal(SIGPIPE, SIG_IGN);
   struct ai *g = NULL;
-  char const *image_load_path = NULL, *bake = NULL;   // see boot(): "" = self-bake, a path = an image file
-  char const *bake_load = NULL;                      // bake -l CAT: read-eval it before the seal
+  char const *image_load_path = NULL, *bake = NULL,   // see boot(): "" = self-bake, a path = an image file
+             *bake_load = NULL;                      // bake -l CAT: read-eval it before the seal
   int skip = 0;                                      // words that are the prime's, not the program's
 #ifndef LoveBoot
   if (argc >= 2 && !strcmp(argv[1], "bake")) {

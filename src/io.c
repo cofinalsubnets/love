@@ -3,43 +3,49 @@
 #include "love_int.h"
 // this file's own, forward-declared so order within it does not matter.
 static ai_noinline double strtod_wrap(struct ai*g, word x);
-static ai_noinline struct ai *chug_str(struct ai *g, struct ai_io *i);
-static ai_noinline struct ai *p0text(struct ai *g);
-static bool bio_wpending(struct ai_bio *b);
-static bool is_dec_int(char const *s, uintptr_t n);
-static bool is_hex_int(char const *s, uintptr_t n);
-static bool is_oct_int(char const *s, uintptr_t n);
-static bool lam_head(struct ai *g, word a);
-static int p0getc(struct ai *g, uintptr_t d);
-static int p0peek(struct ai *g, uintptr_t d);
-static int p0peek2(struct ai *g, uintptr_t d);
-static int p0skip(struct ai *g, uintptr_t d);
-static intptr_t ci_readn(struct ai *g, unsigned char *dst, uintptr_t n);
-static intptr_t to_writen(struct ai **fp, unsigned char const *src, uintptr_t n);
-static struct ai *applyq(struct ai *g, char const *driver);
-static struct ai *bio_wgrow(struct ai *g);
-static struct ai *facex(struct ai *g, word x, int d);
-static struct ai *io_refill(struct ai *g);
-static struct ai *io_wdrain(struct ai *g, struct ai_io *i);
-static struct ai *ioread1str(struct ai*g, uintptr_t d);
-static struct ai *ioread1sym(struct ai*g, uintptr_t d, int c);
-static struct ai *noop_flush(struct ai *g);
-static struct ai *p0chars(struct ai *g, char const *s);
-static struct ai *p0onto(struct ai *g, char const *s);
-static struct ai *p0read1(struct ai *g, uintptr_t d);
-static struct ai *p0reads(struct ai *g, uintptr_t d);
-static struct ai *p1text(struct ai *g, char const *s);
-static struct ai *qtop(struct ai *g);
-static struct ai *readtext(struct ai *g, char const *s);
-static struct ai *zgetc(struct ai*g);
-static struct ai *zungetc(struct ai*g, int c);
-static struct ai*gfputbn(struct ai *g, intptr_t n, uint8_t b, struct ai_io *o);
-static struct ai*ioputn(struct ai *g, intptr_t n, uint8_t b);
+static ai_noinline struct ai
+ *chug_str(struct ai *g, struct ai_io *i),
+ *p0text(struct ai *g);
+static bool
+ bio_wpending(struct ai_bio *b),
+ is_dec_int(char const *s, uintptr_t n),
+ is_hex_int(char const *s, uintptr_t n),
+ is_oct_int(char const *s, uintptr_t n),
+ lam_head(struct ai *g, word a);
+static int
+ p0getc(struct ai *g, uintptr_t d),
+ p0peek(struct ai *g, uintptr_t d),
+ p0peek2(struct ai *g, uintptr_t d),
+ p0skip(struct ai *g, uintptr_t d);
+static intptr_t
+ ci_readn(struct ai *g, unsigned char *dst, uintptr_t n),
+ to_writen(struct ai **fp, unsigned char const *src, uintptr_t n);
+static struct ai
+ *applyq(struct ai *g, char const *driver),
+ *bio_wgrow(struct ai *g),
+ *facex(struct ai *g, word x, int d),
+ *io_refill(struct ai *g),
+ *io_wdrain(struct ai *g, struct ai_io *i),
+ *ioread1str(struct ai*g, uintptr_t d),
+ *ioread1sym(struct ai*g, uintptr_t d, int c),
+ *noop_flush(struct ai *g),
+ *p0chars(struct ai *g, char const *s),
+ *p0onto(struct ai *g, char const *s),
+ *p0read1(struct ai *g, uintptr_t d),
+ *p0reads(struct ai *g, uintptr_t d),
+ *p1text(struct ai *g, char const *s),
+ *qtop(struct ai *g),
+ *readtext(struct ai *g, char const *s),
+ *zgetc(struct ai*g),
+ *zungetc(struct ai*g, int c),
+ *gfputbn(struct ai *g, intptr_t n, uint8_t b, struct ai_io *o),
+ *ioputn(struct ai *g, intptr_t n, uint8_t b);
 static struct ai_bio *rbio_of(struct ai *g, struct ai_io *i);
 static uintptr_t ci_athand(struct ai *g, uintptr_t n);
 static union u *fn_unc0(union u *k);
-static void io_close(struct ai *g, void *p);
-static void p0pop(struct ai *g, uintptr_t d);
+static void
+ io_close(struct ai *g, void *p),
+ p0pop(struct ai *g, uintptr_t d);
 static word *p0cur(struct ai *g, uintptr_t d);
 // ============================================================================
 // io
@@ -1010,8 +1016,7 @@ static char const evfold[] = "((:(e a b)(? b(e(ev 'ev(cap b))(cup b))a)e)0)";
 // every top-level form of a text, evaluated in order -- the frontends' door for
 // a boot tail, a CLI driver, a corpus runner.
 ai_noinline struct ai *ai_evals_(struct ai *g, char const *s) {
- g = readtext(g, s);
- return applyq(g, evfold); }
+ return applyq(readtext(g, s), evfold); }
 
 // the egg takes two corpora: `corpus` is sat twice (ev compiles itself), `post`
 // once, after the hatch and before the mop -- the seat for love that needs the

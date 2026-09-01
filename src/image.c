@@ -70,7 +70,7 @@ static struct ai_image_guard image_guard(struct image_segs *segs) {
 // newline cost nothing and keep every later field where the codec expects it.
 // and the load side skips it in the host, never the core: a shebang is a POSIX exec
 // convention, and love.c stays freestanding-clean. the .image section lane never has one.
-#define ImageShebang "#!/usr/bin/env -S love wake"
+#define ImageShebang "#!/usr/bin/env -S love wake" // FIXME remove this, it's from when we laid separate images for kore/moon/etc
 static size_t image_shebang(char *sb, size_t cap) {
   size_t n = (size_t) snprintf(sb, cap, "%s", ImageShebang);
   while ((n + 1) % sizeof(uintptr_t)) sb[n++] = ' ';
