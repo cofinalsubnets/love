@@ -4,10 +4,11 @@
 ; small enumerable operand space, so the sharp oracle is assemble-side: write the
 ; instruction llvm-mc's way, assemble, demand the same bytes holo produced.
 ;
-; the arm64 op tables are read straight out of crew/holo/arm64.l, so a row added to
-; holo is checked the next run with no edit here -- the uncovered row is the one that
-; ships wrong. the x86 side has no name tables (the operand space IS the register
-; file), so it enumerates. sysdiff_arch=x64|arm64 narrows; default both.
+; the arm64 op tables and riscv's CSR table are read straight out of crew/holo/arm64.l
+; and rv64.l, so a row added to holo is checked the next run with no edit here -- the
+; uncovered row is the one that ships wrong. the x86 side has no name tables (the operand
+; space IS the register file), so it enumerates. SYSDIFF_ARCH=amd64|arm64|rv64 narrows;
+; default all three.
 ;
 ;   out/host/love test/holo/fuzz/sysdiff.l          (exit 1 on any disagreement)
 
@@ -48,25 +49,27 @@
 
  ; --- the ('key >< ..) rows of a `name (tabof ...)` form in arm64.l, source order ---
  a64src (rdf "crew/holo/arm64.l")
- (table nm)
-  (: i (idx-of a64src ("\n   " + nm + " (tabof"))
+ rv64src (rdf "crew/holo/rv64.l")
+ (table-in src nm)
+  (: i (idx-of src ("\n   " + nm + " (tabof"))
      _ (? (charm? i) 0 (: _ (puts ("sysdiff: no table " + nm + "\n")) (quit 1)))
-     j0 (idx-from a64src "(tabof" i)
+     j0 (idx-from src "(tabof" i)
      ; walk to the (tabof ..) close, then harvest ('name >< inside [i, j)
-     (close j d) (? ((a64src j) = 40) (close (j + 1) (d + 1))
-                    ((a64src j) = 41) (? (d = 1) j (close (j + 1) (d - 1)))
+     (close j d) (? ((src j) = 40) (close (j + 1) (d + 1))
+                    ((src j) = 41) (? (d = 1) j (close (j + 1) (d - 1)))
                     (close (j + 1) d))
      j (close j0 0)
      (namec? c) ((digit? c) || ((65 <= c) && (c <= 90)) || ((97 <= c) && (c <= 122)) || (c = 95))
      (harvest k acc)
-      (: h (idx-from a64src "('" k)
+      (: h (idx-from src "('" k)
          (? (!(charm? h) || (j < h)) (rev acc)
-            (: (e m) (? (namec? (a64src m)) (e (m + 1)) m)
+            (: (e m) (? (namec? (src m)) (e (m + 1)) m)
                b (e (h + 2))
-               (? (has? (snip a64src b (b + 3)) "><")
-                  (harvest b ((snip a64src (h + 2) b) >< acc))
+               (? (has? (snip src b (b + 3)) "><")
+                  (harvest b ((snip src (h + 2) b) >< acc))
                   (harvest b acc)))))
      (harvest i ()))
+ (table nm) (table-in a64src nm)
 
  ; --- the cases: [ir-form asm-text pair-key] (pair-key () when unpaired) ---
  (cases-a64 _)
@@ -123,15 +126,53 @@
      (out + foldl (\ a n (a + [[[(intern n)] n ()]])) ()
             '("cli" "sti" "hlt" "ud2" "iretq" "swapgs" "rdmsr" "wrmsr" "cpuid" "rdtsc")))
 
+ ; the riscv register file, holo's name on the left and the disassembler's on the right. zr is
+ ; x0, which nothing but the system lane ever names.
+ rv-r2x '((r0 "a0") (r1 "a1") (r3 "a3") (r8 "t0") (r13 "s2") (sp "sp") (fp "s0") (lr "ra") (zr "zero"))
+ (cases-rv _)
+  (: ; every named CSR read and written -- the table that would otherwise ship a wrong number
+     out (foldl (\ a c (a + [[['csrr 'r0 (intern c)] ("csrr a0, " + c) ()]
+                            [['csrw (intern c) 'r0] ("csrw " + c + ", a0") ()]]))
+                () (table-in rv64src "rv-csrnames"))
+     ; the register file, one csr each way
+     out (foldl (\ a p (: r <p x <>p
+                          (a + [[['csrr r 'mstatus] ("csrr " + x + ", mstatus") ()]
+                                [['csrw 'mtvec r] ("csrw mtvec, " + x) ()]])))
+                out rv-r2x)
+     ; the write pseudos and the read-modify-write forms they are made of, one funct3 apiece
+     out (foldl (\ a op (a + foldl (\ b p (: r <p x <>p
+                                             (b + [[[(intern op) 'sstatus r] (op + " sstatus, " + x) ()]])))
+                                   () rv-r2x))
+                out '("csrw" "csrs" "csrc"))
+     out (foldl (\ a op (a + foldl (\ b p (: r <p x <>p
+                                             (b + [[[(intern op) 'r0 'sie r] (op + " a0, sie, " + x) ()]])))
+                                   () rv-r2x))
+                out '("csrrw" "csrrs" "csrrc"))
+     ; the 5-bit immediate forms, at both ends of the field and inside it
+     out (foldl (\ a op (a + foldl (\ b u (b + [[[(intern op) 'sstatus u] (op + " sstatus, " + show u) ()]]))
+                                   () '(0 1 2 15 16 31)))
+                out '("csrwi" "csrsi" "csrci"))
+     out (foldl (\ a op (a + foldl (\ b u (b + [[[(intern op) 'r0 'mie u] (op + " a0, mie, " + show u) ()]]))
+                                   () '(0 1 2 15 16 31)))
+                out '("csrrwi" "csrrsi" "csrrci"))
+     ; the tlb flush over both slots, then the words that take no operand at all
+     out (foldl (\ a p (: r <p x <>p
+                          (a + [[['sfence r 'zr] ("sfence.vma " + x + ", zero") ()]
+                                [['sfence 'zr r] ("sfence.vma zero, " + x) ()]])))
+                out rv-r2x)
+     (out + [[['wfi] "wfi" ()] [['sret] "sret" ()] [['mret] "mret" ()]
+             [['fence] "fence" ()] [['fencei] "fence.i" ()]]))
+
  ; --- llvm-mc assembling: two passes (an error would slide the encodings) ---
  ro-reject "expected writable system register"
  (llvm arch asms)
-  (: triple (? (arch = "arm64") "aarch64" "x86_64")
-     nhead (? (arch = "arm64") 0 1)
-     head (? (arch = "arm64") "" ".intel_syntax noprefix\n")
+  (: triple (? (arch = "arm64") "aarch64" (arch = "rv64") "riscv64" "x86_64")
+     mattr (? (arch = "rv64") " -mattr=+m,+f,+d,+zicsr,+zifencei" "")
+     nhead (? (arch = "amd64") 1 0)
+     head (? (arch = "amd64") ".intel_syntax noprefix\n" "")
      (lay ls) (wrf (tmpd + "/.sysd.in") (head + foldl (\ a l (a + "\t" + l + "\n")) "" ls))
      _ (lay asms)
-     _ (sh ("llvm-mc -triple=" + triple + " --show-encoding < " + tmpd + "/.sysd.in > "
+     _ (sh ("llvm-mc -triple=" + triple + mattr + " --show-encoding < " + tmpd + "/.sysd.in > "
             + tmpd + "/.sysd.out 2> " + tmpd + "/.sysd.err"))
      ; pass 1: the rejected line numbers (0-based case index) and their reasons
      bad (foldl (\ a ln (: i (idx-of ln "<stdin>:")
@@ -148,7 +189,7 @@
                                 (go (i + 1) >m (<m >< acc))))
              (go 0 asms ()))
      _ (lay good)
-     _ (sh ("llvm-mc -triple=" + triple + " --show-encoding < " + tmpd + "/.sysd.in > "
+     _ (sh ("llvm-mc -triple=" + triple + mattr + " --show-encoding < " + tmpd + "/.sysd.in > "
             + tmpd + "/.sysd.out 2>/dev/null"))
      enc (foldl (\ a ln (: i (idx-of ln "encoding: [")
                            (? !(charm? i) a
@@ -175,9 +216,9 @@
         (go 0 asms enc ())))
 
  (sweep arch)
-  (: cs (? (arch = "arm64") (cases-a64 0) (cases-x64 0))
+  (: cs (? (arch = "arm64") (cases-a64 0) (arch = "rv64") (cases-rv 0) (cases-x64 0))
      _ (puts ("\n=== holo " + arch + " system-lane differential vs llvm-mc ===\n"))
-     tgt (? (arch = "arm64") 'arm64 'amd64)
+     tgt (? (arch = "arm64") 'arm64 (arch = "rv64") 'rv64 'amd64)
      ref (llvm arch (map (\ c (nthl c 1)) cs))
      seen (tablet 0)
      _ (map (\ c (? (id? (nthl c 2) ()) 0
@@ -213,6 +254,7 @@
      (? (two? fails) 1 0))
 
  sd-arch ("" + getenv "SYSDIFF_ARCH")
- arches (? (sd-arch = "amd64") '("amd64") (sd-arch = "arm64") '("arm64") '("amd64" "arm64"))
+ arches (? (sd-arch = "amd64") '("amd64") (sd-arch = "arm64") '("arm64") (sd-arch = "rv64") '("rv64")
+           '("amd64" "arm64" "rv64"))
  bad (foldl (\ a x (a + sweep x)) 0 arches)
  (? (0 < bad) (quit 1) (quit 0)))

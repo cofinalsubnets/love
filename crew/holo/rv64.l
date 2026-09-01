@@ -2,10 +2,12 @@
 ; pine64 ox64's T-Head c906 and qemu -M virt). like the others it pins a {lower,patch} pair -- here
 ; under 'rv64 and 'rv64 -- and the driver, IR forms and byte plumbing stay untouched. little-endian
 ; instructions, native three-address ALU. these tables are rv64imfd: no Zbb/Zba, and no A -- moon's
-; __sync seam hands its two atomic words (amoswap.aq, the release fence) in raw. the emitted words are
-; then squeezed to their 2-byte C forms where the operands fit (see rvc-of), so a linked image asks
-; for rv64imafdc -- rv64gc exactly, which every general-purpose rv64 core is. every word here was
-; checked against `llvm-mc --triple=riscv64` (--show-encoding / --disassemble). load after holo.l.
+; __sync seam hands its two atomic words (amoswap.aq, the release fence) in raw. the system lane at
+; the foot adds Zicsr and Zifencei, which codegen never asks for and a kernel cannot do without. the
+; emitted words are then squeezed to their 2-byte C forms where the operands fit (see rvc-of), so a
+; linked image asks for rv64imafdc -- rv64gc exactly, which every general-purpose rv64 core is, and
+; which carries those two already. every word here was checked against `llvm-mc --triple=riscv64`
+; (--show-encoding / --disassemble). load after holo.l.
 ;
 ; the novel bit: risc-v has no flags register, and the IR is flag-shaped (cmp .. br cond). so the
 ; assembler itself is the flags register: cmp/test/ucomisd emit nothing (or only an immediate
@@ -37,8 +39,10 @@
    ;;    homes), sp -> x2, fp -> s0 (x8), lr -> ra (x1). r19..r26 -> s4..s11 (x20..x27) is the
    ;;    callee-saved bank (arm64's r19..r28 shape) for a future glaze. x3 (gp) and x4 (tp) are
    ;;    platform-reserved and never touched; x30/x31 (t5/t6) are the two scratches above.
+   ;;    `zr` names x0, which the IR never asks for -- it is the system lane's whole-address-space
+   ;;    spelling (`sfence zr, zr`), arm64's `tlbi vmalle1is, zr` shape.
    rv-regs (tabof
-        [('sp >< 2) ('fp >< 8) ('lr >< 1)
+        [('sp >< 2) ('fp >< 8) ('lr >< 1) ('zr >< 0)
           ('r0 >< 10) ('r1 >< 11) ('r2 >< 12) ('r3 >< 13) ('r4 >< 14)
           ('r5 >< 15) ('r6 >< 16) ('r7 >< 17)
           ('r8 >< 5) ('r9 >< 6) ('r10 >< 7) ('r11 >< 28) ('r12 >< 29)
@@ -439,6 +443,48 @@
 
    (rv-tp d) (rv-i 0 4 0 (rvn d) 0x13)                                       ; addi d, tp, 0
 
+   ;; -- the system lane: Zicsr, the two fences, the privileged returns. codegen never emits
+   ;;    these; a kernel says them through mooncc's inline asm and the boot and trap lays say
+   ;;    them straight. every CSR access is ONE I-form -- the 12-bit number in the immediate
+   ;;    slot, funct3 the operation, opcode 0x73 -- so the lane is one builder and a name table.
+   ;;    two spellings part from GNU's, both because the neutral reader's identifiers carry no
+   ;;    dot: sfence.vma is `sfence`, fence.i is `fencei`; ecall and ebreak keep the neutral
+   ;;    names they already had, `sys` and `trap`. --
+   ;;    the CSRs a kernel touches. an unnamed one is a spelling and not a wall: a bare number
+   ;;    passes through, so `csrw 1985, r0` reaches the c906's own mhcr. one row, one register.
+   rv-csrnames (tabof
+        [('fflags >< 0x001) ('frm >< 0x002) ('fcsr >< 0x003)
+          ('cycle >< 0xC00) ('time >< 0xC01) ('instret >< 0xC02)
+          ('sstatus >< 0x100) ('sie >< 0x104) ('stvec >< 0x105) ('scounteren >< 0x106)
+          ('sscratch >< 0x140) ('sepc >< 0x141) ('scause >< 0x142) ('stval >< 0x143)
+          ('sip >< 0x144) ('satp >< 0x180)
+          ('mstatus >< 0x300) ('misa >< 0x301) ('medeleg >< 0x302) ('mideleg >< 0x303)
+          ('mie >< 0x304) ('mtvec >< 0x305) ('mcounteren >< 0x306)
+          ('mscratch >< 0x340) ('mepc >< 0x341) ('mcause >< 0x342) ('mtval >< 0x343)
+          ('mip >< 0x344)
+          ('mvendorid >< 0xF11) ('marchid >< 0xF12) ('mimpid >< 0xF13) ('mhartid >< 0xF14)])
+   (rv-csr c) (? (imm? c) c (look rv-csrnames c 'badcsr))
+   (rv-csru u) (? (0 <= u <= 31) u (scare 'rv-csr-uimm u))                   ; the 5-bit source
+   (rv-csrop f3 dn csr sn) (rv-i (rv-csr csr) sn f3 dn 0x73)
+   ;; rd = x0 reads nothing and rs1 = x0 writes nothing, so each pseudo IS the full form with x0
+   ;; standing in the slot it does not name -- which is what makes the read-modify-write forms
+   ;; (csrrw and kin, the mask an irq save wants back) the same builder and not another lane.
+   (rv-csrr d csr)      (rv-csrop 2 (rvn d) csr 0)
+   (rv-csrw csr s)      (rv-csrop 1 0 csr (rvn s))
+   (rv-csrs csr s)      (rv-csrop 2 0 csr (rvn s))
+   (rv-csrc csr s)      (rv-csrop 3 0 csr (rvn s))
+   (rv-csrwi csr u)     (rv-csrop 5 0 csr (rv-csru u))
+   (rv-csrsi csr u)     (rv-csrop 6 0 csr (rv-csru u))
+   (rv-csrci csr u)     (rv-csrop 7 0 csr (rv-csru u))
+   (rv-csrrw d csr s)   (rv-csrop 1 (rvn d) csr (rvn s))
+   (rv-csrrs d csr s)   (rv-csrop 2 (rvn d) csr (rvn s))
+   (rv-csrrc d csr s)   (rv-csrop 3 (rvn d) csr (rvn s))
+   (rv-csrrwi d csr u)  (rv-csrop 5 (rvn d) csr (rv-csru u))
+   (rv-csrrsi d csr u)  (rv-csrop 6 (rvn d) csr (rv-csru u))
+   (rv-csrrci d csr u)  (rv-csrop 7 (rvn d) csr (rv-csru u))
+   ;; the TLB flush: rs1 an address, rs2 an ASID, x0 in either slot meaning "all of them".
+   (rv-sfence a b) (rv-r 9 (rvn b) (rvn a) 0 0 0x73)                         ; sfence.vma a, b
+
    ;; the dispatch: an emitter tablet (shapes in holo.l's ir-arity), rows partial-applied.
    rv-emitters (emsof
         [('li >< rv-li) ('mov >< rv-mov) ('cmp >< rv-cmp) ('test >< rv-test)
@@ -475,7 +521,17 @@
           ('ret >< rv-i 0 1 0 0 0x67)                                        ; jalr x0, 0(ra)
           ('sys >< le32 0x73)                                                ; ecall
           ('nop >< le32 0x13)                                                ; addi x0, x0, 0
-          ('trap >< le32 0x100073)])                                         ; ebreak
+          ('trap >< le32 0x100073)                                           ; ebreak
+          ;; -- the system lane --
+          ('csrr >< rv-csrr) ('csrw >< rv-csrw) ('csrs >< rv-csrs) ('csrc >< rv-csrc)
+          ('csrwi >< rv-csrwi) ('csrsi >< rv-csrsi) ('csrci >< rv-csrci)
+          ('csrrw >< rv-csrrw) ('csrrs >< rv-csrrs) ('csrrc >< rv-csrrc)
+          ('csrrwi >< rv-csrrwi) ('csrrsi >< rv-csrrsi) ('csrrci >< rv-csrrci)
+          ('sfence >< rv-sfence)
+          ('wfi >< le32 0x10500073)                                          ; wait for interrupt
+          ('sret >< le32 0x10200073) ('mret >< le32 0x30200073)
+          ('fence >< le32 0x0FF0000F)                                        ; fence iorw, iorw
+          ('fencei >< le32 0x0000100F)])                                     ; fence.i
    _ (foldl (\ _ p (emrow rv-emitters <p (rv-aluop <p))) 0 rv-alu-rows)
 
    ;; -- rvc, the local squeeze. a lowered chunk that is exactly one 32-bit word carrying no fixup

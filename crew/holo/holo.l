@@ -114,6 +114,8 @@
            ; x86: interrupt flag, halt, the MSR pair, the descriptor tables, the control registers.
            ; aarch64: the sysreg pair, the pstate-field immediate, barriers, the sys operations (an
            ; operation NAME then a register, `zr` whole-system), the exception generators, the waits.
+           ; riscv: the Zicsr accesses (a CSR by name or number, the pseudos writing x0 into the
+           ; slot they do not name), the two fences, the TLB flush, the privileged returns.
           ('cli >< 0) ('sti >< 0) ('hlt >< 0) ('ud2 >< 0) ('iretq >< 0) ('swapgs >< 0)
           ('rdmsr >< 0) ('wrmsr >< 0) ('cpuid >< 0) ('rdtsc >< 0)
            ; the SVM lane: register-contracted too -- the vmcb's physical address rides rax.
@@ -131,6 +133,11 @@
           ('ldcr >< 2) ('stcr >< 2) ('lgdt >< 2) ('lidt >< 2) ('invlpg >< 2)
           ('mrs >< 2) ('msr >< 2) ('msri >< 2)
           ('tlbi >< 2) ('ic >< 2) ('dc >< 2) ('at >< 2)
+          ('sret >< 0) ('mret >< 0) ('fence >< 0) ('fencei >< 0)
+          ('csrr >< 2) ('csrw >< 2) ('csrs >< 2) ('csrc >< 2)
+          ('csrwi >< 2) ('csrsi >< 2) ('csrci >< 2) ('sfence >< 2)
+          ('csrrw >< 3) ('csrrs >< 3) ('csrrc >< 3)
+          ('csrrwi >< 3) ('csrrsi >< 3) ('csrrci >< 3)
           ('sx1 >< 1) ('sx2 >< 1) ('sx4 >< 1) ('zx1 >< 1) ('zx2 >< 1) ('zx4 >< 1)
           ('push >< 1) ('pop >< 1) ('neg >< 1) ('not >< 1) ('inc >< 1) ('dec >< 1) ('tp >< 1)
           ('jmp >< 1) ('jmp8 >< 1) ('jmpr >< 1) ('callr >< 1) ('call >< 1) ('raw >< 1) ('lapool >< 1)

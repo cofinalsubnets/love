@@ -308,6 +308,9 @@
    _ (chk-eq "text.sys.a64"
         (holo-hex 'arm64 '((mrs r0 ttbr1_el1) (dsb ish) (tlbi vmalle1is zr) (isb) (eret)))
         (holo-hex 'arm64 (asm-text "mrs r0, ttbr1_el1\ndsb ish\ntlbi vmalle1is, zr\nisb\neret")))
+   _ (chk-eq "text.sys.rv64"
+        (holo-hex 'rv64 '((csrr r0 mstatus) (csrw stvec r0) (sfence zr zr) (fencei) (sret)))
+        (holo-hex 'rv64 (asm-text "csrr r0, mstatus\ncsrw stvec, r0\nsfence zr, zr\nfencei\nsret")))
 
    ;; -- the ELF linker (crew/holo/elf.l) wraps assembled bytes in a well-formed static executable. --
    elfprog '((li r0 60) (li r6 0) (sys))
@@ -920,6 +923,31 @@
       ("rv.ret"      "8280"              ((ret)))                      ; ret (jalr x0, 0(ra))
       ("rv.sys"      "73000000"          ((sys)))                      ; ecall
       ("rv.trap"     "73001000"          ((trap)))                     ; ebreak
+      ;; the system lane: Zicsr, the fences, the privileged returns -- what a kernel says and
+      ;; codegen never does. every CSR access is one I-form, the pseudos writing x0 into the slot
+      ;; they do not name, so a disassembler prints them all back as csrrs/csrrw/csrrc.
+      ("rv.csrr"     "73250030"          ((csrr r0 mstatus)))          ; csrr a0, mstatus
+      ("rv.csrr.ctr" "732510c0"          ((csrr r0 time)))             ; csrr a0, time (the counters)
+      ("rv.csrw"     "73105530"          ((csrw mtvec r0)))            ; csrw mtvec, a0
+      ("rv.csrw.num" "7310157c"          ((csrw 1985 r0)))             ; csrw 0x7c1, a0 -- an unnamed csr
+      ("rv.csrs"     "73200510"          ((csrs sstatus r0)))          ; csrs sstatus, a0
+      ("rv.csrc"     "73b04610"          ((csrc sie r3)))              ; csrc sie, a3
+      ("rv.csrwi"    "73503000"          ((csrwi fcsr 0)))             ; csrwi fcsr, 0
+      ("rv.csrsi"    "73600110"          ((csrsi sstatus 2)))          ; csrsi sstatus, 2 (SIE on)
+      ("rv.csrci"    "73700110"          ((csrci sstatus 2)))          ; csrci sstatus, 2 (..and off)
+      ("rv.csrrw"    "73110114"          ((csrrw sp sscratch sp)))     ; csrrw sp, sscratch, sp (the trap swap)
+      ("rv.csrrs"    "73a50530"          ((csrrs r0 mstatus r1)))      ; csrrs a0, mstatus, a1
+      ("rv.csrrc"    "73b54510"          ((csrrc r0 sie r1)))          ; csrrc a0, sie, a1
+      ("rv.csrrwi"   "73d54f30"          ((csrrwi r0 mie 31)))         ; csrrwi a0, mie, 31
+      ("rv.csrrsi"   "73650110"          ((csrrsi r0 sstatus 2)))      ; csrrsi a0, sstatus, 2
+      ("rv.csrrci"   "73750110"          ((csrrci r0 sstatus 2)))      ; csrrci a0, sstatus, 2 (mask, keep the old)
+      ("rv.sfence"   "73000012"          ((sfence zr zr)))             ; sfence.vma (the whole map)
+      ("rv.sfence.a" "7300b512"          ((sfence r0 r1)))             ; sfence.vma a0, a1
+      ("rv.wfi"      "73005010"          ((wfi)))                      ; wfi
+      ("rv.sret"     "73002010"          ((sret)))                     ; sret
+      ("rv.mret"     "73002030"          ((mret)))                     ; mret
+      ("rv.fence"    "0f00f00f"          ((fence)))                    ; fence iorw, iorw
+      ("rv.fencei"   "0f100000"          ((fencei)))                   ; fence.i
       ;; the pad after a compressed ret: 2 bytes laid, 6 to the boundary -- so the filler unit
       ;; has to be c.nop. a torn wide nop leaves 0013, whose low bits say 32-bit, and a decoder
       ;; eats the ret standing behind it.
