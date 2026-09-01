@@ -71,13 +71,16 @@
        glo (ldsyms objs)
        o1 <objs
        ent (peep (peep o1 'base 0) <(peep (peep o1 'lanes 0) 'text ()) 0)
-       cx [glo n0 end end end relbox ()]
+       ;; ldpatch destructures this, so it is ten wide or every section it is
+       ;; handed patches to () -- no -pie table (r0 = r1 = end), no riscv, no arm32.
+       cx [glo n0 end end end relbox () () () (ld-extents objs)]
        ;; the read-only half. each lane is emitted at the address ldlay gave it,
-       ;; so the gap the alignment opened is written out as zeros.
-       et (ldemit cx 'text base objs ())
-       eo (ldemit cx 'rodata o0 objs (>et + [(ld-zeros (- o0 <et))]))
+       ;; so the gap the alignment opened is written out as zeros, and each named
+       ;; lane follows the one it travels with -- ldlay laid them in that order.
+       et (ldemitn cx 'text objs (ldemit cx 'text base objs ()))
+       eo (ldemitn cx 'rodata objs (ldemit cx 'rodata o0 objs (>et + [(ld-zeros (- o0 <et))])))
        ;; ..and the writable half, its own run of bytes from d0.
-       ed (ldemit cx 'data d0 objs ())
+       ed (ldemitn cx 'data objs (ldemit cx 'data d0 objs ()))
        en (ldemit cx 'nifs n0 objs (>ed + [(ld-zeros (- n0 <ed))]))
        tfsz (<eo - base)                  ; .text: text + rodata
        traw (pe-al pe-falign tfsz)
