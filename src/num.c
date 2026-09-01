@@ -1185,14 +1185,14 @@ ai_flo_t vop_flo(int op, ai_flo_t a, ai_flo_t b) {
  switch (op) {
   case vop_sub: return a - b; case vop_mul: return a * b;
   case vop_quot: return a / b; case vop_fquot: return ai_trunc(a / b);
-  case vop_rem: return ai_fmod(a, b);
+  case vop_rem: return b == 0 ? a : ai_fmod(a, b);
   default: return a + b; } }                   // vop_add
 static intptr_t vop_int(int op, intptr_t a, intptr_t b) {
  switch (op) {
   case vop_sub: return (intptr_t)((uintptr_t) a - (uintptr_t) b);
   case vop_mul: return (intptr_t)((uintptr_t) a * (uintptr_t) b);
   case vop_quot: case vop_fquot: return (b == 0 || (a == INTPTR_MIN && b == -1)) ? 0 : a / b;
-  case vop_rem:  return (b == 0 || (a == INTPTR_MIN && b == -1)) ? 0 : a % b;
+  case vop_rem:  return b == 0 ? a : (a == INTPTR_MIN && b == -1) ? 0 : a % b;
   case vop_band: return a & b;
   case vop_bor:  return a | b;
   case vop_bxor: return a ^ b;
@@ -1536,7 +1536,7 @@ static ai_noinline void vbin_fill(struct ai_tray *r, word a, word b, int op, boo
     #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { ai_flo_t av = atray?ap[p]:sa, bv = btray?bp[p]:sb; rp[p] = (E); } } while (0)
     switch (op) { case vop_add: VBF(av+bv); return; case vop_sub: VBF(av-bv); return;
       case vop_mul: VBF(av*bv); return; case vop_quot: VBF(av/bv); return;
-      case vop_fquot: VBF(ai_trunc(av/bv)); return; case vop_rem: VBF(ai_fmod(av,bv)); return; }
+      case vop_fquot: VBF(ai_trunc(av/bv)); return; case vop_rem: VBF(bv==0?av:ai_fmod(av,bv)); return; }
     #undef VBF
    }
   } else if (!fdom && (!atray || va->type == ai_Z) && (!btray || vb->type == ai_Z)) {
@@ -1556,7 +1556,7 @@ static ai_noinline void vbin_fill(struct ai_tray *r, word a, word b, int op, boo
       case vop_sub: VBF((intptr_t)((uintptr_t)av-(uintptr_t)bv)); return;
       case vop_mul: VBF((intptr_t)((uintptr_t)av*(uintptr_t)bv)); return;
       case vop_quot: case vop_fquot: VBF((bv==0||(av==INTPTR_MIN&&bv==-1))?0:av/bv); return;
-      case vop_rem: VBF((bv==0||(av==INTPTR_MIN&&bv==-1))?0:av%bv); return; } } } }
+      case vop_rem: VBF(bv==0?av:(av==INTPTR_MIN&&bv==-1)?0:av%bv); return; } } } }
     #undef VBF
  intptr_t ca[maxrank], cb[maxrank], idx[maxrank];
  for (uintptr_t j = 0; j < R; j++) idx[j] = 0;

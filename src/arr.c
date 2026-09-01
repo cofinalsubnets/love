@@ -860,7 +860,7 @@ static word obin_elem(struct ai **fp, int op, word a, word b) {
    case vop_quot: case vop_fquot:                         // object (ai_O) arrays truncate under both / and //
                   if (bv == 0) return putcharm(0);          // array convention: int /0 -> 0
                   of = (av == INTPTR_MIN && bv == -1); t = of ? 0 : av / bv; break;
-   case vop_rem:  if (bv == 0) return putcharm(0);
+   case vop_rem:  if (bv == 0) return a;                     // a % 0 = a: no modulus, a whole
                   of = (av == INTPTR_MIN && bv == -1); t = of ? 0 : av % bv; break;
    case vop_sub:  of = __builtin_sub_overflow(av, bv, &t); break;
    case vop_mul:  of = __builtin_mul_overflow(av, bv, &t); break;

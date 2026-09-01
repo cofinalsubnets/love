@@ -135,9 +135,14 @@
 (assert
  (3 = 1 + 2) (2.5 = 5 / 2) (2 = (// 5 2)) (0.5 = 1 / 2) (1 = 5 % 2) (3.5 = 1 + 2.5)
  (1.0 = 7.0 % 2.0) (0.0 = 7.5 % 2.5) (-1.0 = -7.0 % 2.0)   ; % rides fmod, so it holds on the
- (() = (% 7 0)) (() = (% 7.0 0.0))                         ; float lane too, sign following the
-                                                           ; dividend; and by zero it is fmod's NaN,
-                                                           ; which is the nothing -- never a scare
+ (7 = (% 7 0)) (7.0 = (% 7.0 0.0))                         ; float lane too, sign following the
+                                                           ; dividend; and a zero modulus is no
+                                                           ; modulus, so the dividend stands whole
+ ; ..which is forced, not chosen: the division identity holds at n = 0 as well, where
+ ; (a // 0) is infinity, (a // 0) * 0 is (), and () is the unit of + -- so the remainder
+ ; carries the whole a. Z/0Z is Z and the class of a is {a}; Coq's Z.rem says the same.
+ (7 = ((7 // 0) * 0) + (7 % 0)) (-7 = ((-7 // 0) * 0) + (-7 % 0))
+ (7 = ((7 // 3) * 3) + (7 % 3))
  (2 = 4 / 2) (charm? (4 / 2)) (-2 = (// -5 2))
  (-5 = ((- 0) 5)) (0.25 = ((/ 1) 4)) ((-1 ~ -2) = ((- 0) (1 ~ 2))) ; the sections are the monadics
  !(charm? (2 * 2305843009213693952)) (gem? (1 / 0)) (? word (1e308 < 1 / 0) 1) (() = (/ 0 0))

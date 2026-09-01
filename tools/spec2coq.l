@@ -56,7 +56,7 @@
    (binop h) (h @ '+ "Z.add"   '- "Z.sub"  '* "Z.mul"
                   '// "Z.quot" '% "Z.rem"  'gcd "Z.gcd"
                   '& "Z.land"  '| "Z.lor"  '^ "Z.lxor"  0)
-   (shiftf h) (h @ '<< "shlz" '>> "shrz" 0)  ; word shifts: the count rides mod 64
+   (shiftf h) (h @ '<< "shlz" '>> "shrz" 0)  ; shifts: no width, and a negative count reverses
    ; a word-lane operand: a charm, a nested bitwise tree of them, or a numeral
    ; spine that lands back in a charm
    (wz? o) (? (charm? o) 1
@@ -533,7 +533,7 @@
      "Definition vquot (c:Z):list Z->list Z := map (fun e=>Z.quot e c).\n"
      "Fixpoint hget (m:list (Z*Z)) (k d:Z):Z := match m with nil=>d | p::m' => if Z.eqb k (fst p) then snd p else hget m' k d end.\n"
      ; the word shifts: the count rides mod 64, >> is arithmetic (Z.shiftr on negatives)
-     "Definition shlz (a b:Z):Z := Z.shiftl a (Z.modulo b 64).  Definition shrz (a b:Z):Z := Z.shiftr a (Z.modulo b 64).\n"
+     "Definition shlz (a b:Z):Z := Z.shiftl a b.  Definition shrz (a b:Z):Z := Z.shiftr a b.\n"
      ; the unit lane: None is (). it rides through every lifted dyadic untouched --
      ; except *, where () is the zero and the zero annihilates (the associativity law)
      "Definition uop (f:Z->Z->Z) (a b:option Z) : option Z := match a,b with None,x=>x | x,None=>x | Some x, Some y => Some (f x y) end.\n"

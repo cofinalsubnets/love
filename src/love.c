@@ -1285,11 +1285,12 @@ static lvm(lvm_link) {
  Pack(g); g = ai_big_binop(g, vop); \
  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g); \
  ai_musttail return Resume(); }
-#define avm_slowdiv(op, vop, c_op, fexpr) lvm(lvm_##op##n) { \
+#define avm_slowdiv(op, vop, c_op, fexpr, zarm) lvm(lvm_##op##n) { \
  word a = Sp[0], b = Sp[1]; \
  if (trayp(a) || trayp(b)) { g->b = (ai_word) (vop); ai_musttail return Ap(lvm_vbin, g); } \
  if (twinp(a) || twinp(b)) { g->b = (ai_word) (vop); ai_musttail return Ap(lvm_twin_bin, g); } \
  if (!isnum(a) || !isnum(b)) ai_musttail return Push(ZeroPoint); \
+ zarm; \
  if (gemp(a) || gemp(b) || b == zero) { word _res; Have(box_req); \
   ai_flo_t ad = toflo(a), bd = toflo(b); \
   emit_gem(_res, fexpr); \
@@ -1311,8 +1312,12 @@ avm_slow(add, vop_add, __builtin_add_overflow, ad + bd)
 avm_slow(sub, vop_sub, __builtin_sub_overflow, ad - bd)
 avm_slow(mul, vop_mul, __builtin_mul_overflow, ad * bd)
 
-avm_slowdiv(fquot, vop_fquot, /, ai_trunc(ad / bd))  // `//` truncating: float operand floors toward zero
-avm_slowdiv(rem, vop_rem, %, ai_fmod(ad, bd))    // NaN on bd == 0
+avm_slowdiv(fquot, vop_fquot, /, ai_trunc(ad / bd), (void) 0)  // `//` truncating: float operand floors toward zero
+// a % 0 = a, in the numerator's own rep. a zero modulus is no modulus (Z/0Z is Z, and the
+// class of a is {a}), and it is what keeps a = (a // n) * n + (a % n) true at n = 0 --
+// where (a // 0) * 0 is () and () is the unit of +, so the remainder carries the whole a.
+avm_slowdiv(rem, vop_rem, %, ai_fmod(ad, bd),
+            if (b == zero || (gemp(b) && toflo(b) == 0)) ai_musttail return Push(a))
 
 // `/` true division: exact integer when b divides a, a float box otherwise
 // (the truncating quotient is `//`)
