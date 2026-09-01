@@ -172,11 +172,33 @@ rationals or a unifier. What it buys is one `#ifdef` fewer -- two left in kmain,
 spelled in C to be reached from love. The falsifier is the uses commented out:
 `;; missing rand`, exit 2, so the layers are load-bearing and the corpus says so.
 
-**Rung 4 -- delete K_TEST.** What is left is `ksuf`, the `-test` odir, the
-header swap, `-DK_TEST`, `tools/ccdb.l:32`, and the `ifndef K_TEST` half of the
-`k_pie_in` fork -- which then reads plainly: at the host's own arch project the
-shipped binary, everywhere else build the pie. `src/x86_64_asmops.h:11` loses
-its last sentence.
+**Rung 4 -- delete K_TEST. LANDED.** `ksuf`, the `-test` odir tree,
+`-DK_TEST -Dai_tco=1`, `tools/ccdb.l`'s copy of it, `src/x86_64_asmops.h`'s last
+sentence, and both `#ifdef`s left in kmain. The `k_pie_in` fork reads plainly
+now: at the host's own arch project the shipped binary, everywhere else build the
+pie.
+
+**ONE GATE PER LANE**, which is what the fork already was and what the gates were
+not. The projection wakes the image the binary carries; the pie carries none and
+warms the egg. So `test_disk` is the WAKE lane (x86_64, the projection) and
+`test_kernel_arm64` is the WARM lane (aarch64, the pie) -- named in both echo
+lines, because the pair is the coverage and a reader should not have to derive
+it. Neither lane is a face the artifact does not wear.
+
+The corpus is selected the way anything else is: `-append "test/kernel/all.l"`.
+That door already existed -- `k-prog`'s third lane evals a `.l` path off the
+ramfs -- so the shipped kernel needed nothing added to run the corpus, which is
+the claim at the top of this plan, now demonstrated rather than argued.
+`tools/ktest.l` passes the append for the `-kernel` door; firmware carries no
+command line, so the ESP gets `love.cmd` beside `love.elf` and the loader reads
+it. That cost two fields in `src/uefi_loader.c`'s hand-kept `struct k_boot` copy,
+which was a PREFIX of the real one -- `date` and `cmdline` were missing, and a
+member the compiler cannot find is how mooncc says so (`cannot compile
+'kcmdline' (cause unnamed)`, which is the same face it wears for anything else).
+
+Counts: the wake lane 4923, the warm lane 4907, against 4916 for the deleted test
+face. Nothing regressed; the lanes differ because a woken image and a warmed egg
+answer a few laws differently, which is the whole reason to run both.
 
 ## what this buys
 
@@ -194,6 +216,20 @@ that class of hole has a gate over it.
 And it removes the last reason the two arches differ in kind rather than in
 machine: x86_64 projects and wakes, aarch64 builds and warms, and after this
 both run the same corpus the same way.
+
+## what this rung found, and did not fix
+
+`test_uefi` and `test_uefi_arm64` are RED, and were before this arc touched them:
+BOOTX64.EFI comes out TRUNCATED. The section table promises 0x2A00 bytes and the
+file is 0x15D8, so BdsDxe answers "Unsupported" and never enters the loader. The
+last good artifact on this box is 2026-08-25 (10752 bytes); today's build of the
+same source is 5592.
+
+Where it is not: `ld-write` answers 5592 for a 5592-byte file, so the writer laid
+exactly what it was handed -- the PIECE LIST is short, upstream in `pelink`. Where
+it is not either: this arc. Rebuilding the EFI from HEAD's `uefi_loader.c` gives
+the same truncation, and the Aug 25 binary boots the 9.6 MB shipped kernel fine
+when dropped into today's ESP.
 
 ## traps this plan already knows
 

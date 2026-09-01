@@ -40,8 +40,9 @@ struct k_boot {
   // then reads as its own uptime, which is wrong but at least visibly so.
   uint64_t date;
   // the boot command line, copied whole at hand-off (PVH's start_info, the DTB's
-  // /chosen bootargs; the UEFI loader passes none). "" is a plain boot: the love-side
-  // split leaves cmdline seatless and the console shell takes over.
+  // /chosen bootargs, and love.cmd beside love.elf on an ESP, firmware carrying
+  // no line of its own). "" is a plain boot: the love-side split leaves cmdline
+  // seatless and the console shell takes over.
   char cmdline[256];
 };
 

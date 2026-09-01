@@ -29,7 +29,6 @@
          (inc "") (inc "/core") (inc "/out/lib") (inc "/out/host") (inc "/crew/quay")]
    ; the freestanding kernel: its own libc, its own headers, nothing hosted.
    inle (["-std=gnu23" "-Dai_tco=1" "-ffreestanding" "-nostdinc"
-          "-DK_TEST"
           (inc "") (inc "/core") (inc "/out/lib") (inc "/out/host") (inc "/crew/quay")]
          + [(inc "/free") (inc "/crew/moon/include")])
    ; moon's replacement libc -- compiled against its own headers, so glibc's

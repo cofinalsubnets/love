@@ -1789,10 +1789,6 @@ void kmain(void) {
   // the disk (rung 5): probe the bus, and hand the driver its one DMA block --
   // kmallocw memory, so pa = va - khhdm holds for everything the device reads.
   k_blk_init(kmallocw(b2w(352)));
-#ifdef K_TEST
-  bool woke = false;                             // the test pie is unbaked by construction
-  struct ai *g = ai_ini();
-#else
   // THE WAKE (phase D): the projection carries the artifact's baked image at
   // its re-based address, and ai_baked_pick reads it off the same two symbols
   // the hosted start does -- the image needs no finding on this seat either.
@@ -1806,7 +1802,6 @@ void kmain(void) {
   { char const *s = woke ? "; inle -- image awake\n" : "; inle -- baking the egg\n";
     for (; *s; s++) serial_putc(*s); }
   if (!woke) g = ai_ini();
-#endif
   // the nif drains re-pin over a woken book too (the host's law, main.c): the
   // section rides this binary, so the addresses are the image's own.
   g = ai_defn(g, __start_love_nifs,
@@ -1846,6 +1841,8 @@ void kmain(void) {
  "(use 'bao)"                                          //   one-name `uu` surface on this target too
   );
   }
+  // FIXME waaaaay too much code in here, old style too. also, this gets eval'd by c0, right? not ideal.
+  //
   // THE SEAT TEXT, both lanes: what this machine is that a host is not. over a
   // woken book these shadow the hosted bindings (getenv reads envt here, not
   // an environ that starts empty), which is the point.
@@ -1965,14 +1962,6 @@ void kmain(void) {
   // THE SESSION: a fresh writable layer, C-side (the host's run_program shape) --
   // the shell's defglobs (and the corpus stream's) land here, never in the base.
   r = ai_layer_(r);
-#ifdef K_TEST
-  // test build: the corpus is a FILE on the ramfs like everything else, and the
-  // boot cmdline names it -- test/kernel/all.l reads its own roster, slurps each
-  // member and drives it through reads (love/bao.l), the same stream shell as
-  // the host's stdin runner. zz-fin.l prints the summary and (exit 1)s.
-  r = ai_evals_(r,
-   "((k-run-file (? (two? bootargv) (cap bootargv) \"test/kernel/all.l\")) ())");
-#else
   // rung 3: the userland. first test/00-init.l's move, for the same reason it
   // makes it: an unbound mention raises missing at every define that names one,
   // and bao's file-help now folds a REAL quit -- one absent nif in the cat and
@@ -2021,7 +2010,6 @@ void kmain(void) {
    "      (quit (? (charm? r) r 0)))"
    "   0)");
   r = ai_evals_(r, "((from 'bao 'shell) 0)");
-#endif
   // a terminal scare gets the honest face on the serial console before reset
   if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
   ai_fin(r); }

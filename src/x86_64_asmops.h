@@ -8,8 +8,7 @@
 // neutral file r0=rax r1=rcx r2=rdx r3=rbx r5=rsi r6=rdi r7..r14=r8..r15).
 // so the spelling lives HERE, once per operation, and every call site says the
 // operation's NAME. that is what keeps the clang build alive as the differential
-// twin after the flip: both halves compile the same kernel, and K_TEST must
-// agree across them.
+// twin after the flip: both halves compile the same kernel.
 //
 // two things are worth knowing before editing:
 //

@@ -410,10 +410,6 @@ ko = out/free
   uefi test_disk test_uefi test_uefi_arm64 test_kboot test_kverb test_kernel_arm64 \
   test_inle test_wasm
 
-ifdef K_TEST
-ksuf := -test
-endif
-
 KCC ?= LOVE_NO_IMAGE= $(ho)/love mooncc
 
 k_arch_c = $(wildcard $(R)/src/$a_*.c)
@@ -424,8 +420,8 @@ k_shared_c = $(love_c) \
   $(c_c)
 k_h = $(love_h) $(R)/src/k.h $(R)/src/ustar.h $(wildcard *.h $(R)/src/$a_*.h)
 
-k_odir = $(ko)/$a$(ksuf)
-k_elf = $(ko)/love-$a$(ksuf).elf
+k_odir = $(ko)/$a
+k_elf = $(ko)/love-$a.elf
 k_pie = $(k_odir)/love.pie
 
 k_shared_o = $(k_shared_c:$(R)/%.c=$(k_odir)/%.o)
@@ -443,10 +439,6 @@ kcppflags := \
   -I. -Isrc -I$(R)/out/host -Iout/lib -I$(R)/crew/quay -I$(R) \
   -I$(R)/crew/moon/include \
   $(kcppflags)
-ifdef K_TEST
-# tail-threaded, matching the real kernel and the host; love0 stays the trampoline lane.
-kcppflags += -DK_TEST -Dai_tco=1
-endif
 kcc = $(KCC) $(kcppflags) -t $(tgt_$a)
 # ours has to exist before it can compile anything.
 kcc_dep = $(ho)/love.baked
@@ -479,16 +471,16 @@ $(k_odir)/kproject.l: $(kproject_l) $(k_odir)/kproject.list
 	   echo "(use 'kore)"; cat $(filter-out $R/crew/kore/text.l $R/crew/kore/u.l,$(kproject_l)); } > $@
 
 # at the host's own arch there is no second kernel build: $(kart_o) is linked into the
-# shipped love already, so the elf is projected out of that binary. $(k_pie) is the lane
-# for a machine this one cannot run, or a face the artifact does not wear (K_TEST).
+# shipped love already, so the elf is projected out of that binary, and it WAKES the
+# image the binary carries. $(k_pie) is the other lane -- a machine this one cannot
+# run, built from source, which carries no image and WARMS the egg instead. one gate
+# apiece: test_disk rides the projection, test_kernel_arm64 the pie.
 k_pie_in = $(k_pie)
 k_pie_dep =
-ifndef K_TEST
 ifeq ($a,$(hosta))
 k_pie_in = $(ho)/love
 # `love bake` rewrites $(ho)/love in place, so the projection is ordered behind the stamp
 k_pie_dep = $(kcc_dep)
-endif
 endif
 $(k_elf): $(k_odir)/kproject.l $(k_pie_in) $(k_pie_dep) $(k_boot_o) $m
 	@echo 'KPROJ	'$@
@@ -506,8 +498,8 @@ $(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) $(baked_h) $(cats_z) out/lib/korelist.
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
 
-# kmain_o -- the kernel frontend, COMPILED AND NOTHING MORE, at whatever arch and face the
-# caller's `a=` / `K_TEST=` say; the odir is spelled here so a caller never re-derives it.
+# kmain_o -- the kernel frontend, COMPILED AND NOTHING MORE, at whatever arch the caller's
+# `a=` says; the odir is spelled here so a caller never re-derives it.
 kmain_o: $(k_free_o)
 
 # THE CARRIED SEAT: the metal objects the one binary links, so `love kernel` projects a
@@ -642,11 +634,11 @@ init-container: host
 ifeq ($a,x86_64)
 
 test_disk: host $(R)/tools/ktest.l
-	@$(MAKE) -s K_TEST=1 $(ko)/love-$a-test.elf
-	@rm -f $(ko)/love-$a-test.elf.disk
-	@echo TEST $(ko)/love-$a-test.elf "(two boots, one disk: the reset-persistence gate)"
-	@$m $(R)/tools/ktest.l $(ko)/love-$a-test.elf - $a
-	@$m $(R)/tools/ktest.l $(ko)/love-$a-test.elf - $a "disk: fat kept across the reset"
+	@$(MAKE) -s $(k_elf)
+	@rm -f $(k_elf).disk
+	@echo TEST $(k_elf) "(the WAKE lane: two boots, one disk, the reset-persistence gate)"
+	@$m $(R)/tools/ktest.l $(k_elf) - $a
+	@$m $(R)/tools/ktest.l $(k_elf) - $a "disk: fat kept across the reset"
 	@echo "test_disk: the machine remembered"
 
 test_kverb: host
@@ -677,8 +669,8 @@ uefi_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
 k_efiname_x86_64 = BOOTX64.EFI
 k_efiname_aarch64 = BOOTAA64.EFI
 k_efiname = $(k_efiname_$a)
-k_uefid = $(ko)/uefi-$a$(ksuf)
-k_espd = $(ko)/esp-$a$(ksuf)
+k_uefid = $(ko)/uefi-$a
+k_espd = $(ko)/esp-$a
 $(k_uefid)/loader.o: $R/src/uefi_loader.c $(ho)/love.baked
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
@@ -690,11 +682,18 @@ $(k_uefid)/$(k_efiname): $(k_uefid)/loader.o $(uefi_l) $m
 # the ESP: the loader at that path, and the kernel beside it (the loader opens
 # "love.elf" on its own volume).
 $(k_espd)/EFI/BOOT/$(k_efiname): $(k_uefid)/$(k_efiname)
-$(k_espd)/love.elf: $(ko)/love-$a$(ksuf).elf
+$(k_espd)/love.elf: $(ko)/love-$a.elf
 $(k_espd)/EFI/BOOT/$(k_efiname) $(k_espd)/love.elf:
 	@echo 'CP	'$@
 	@mkdir -p $(dir $@)
 	@cp $< $@
+# the boot line an ESP carries: a firmware door has no -append, so the loader reads
+# this file beside love.elf. only the gates ask for one -- `make uefi` ships an ESP
+# that comes up in the console shell, which is what a person wants off a usb stick.
+$(k_espd)/love.cmd:
+	@echo 'CMD	'$@
+	@mkdir -p $(dir $@)
+	@echo 'test/kernel/all.l' > $@
 uefi: $(ko)/esp-$a/EFI/BOOT/$(k_efiname) $(ko)/esp-$a/love.elf
 	@echo "uefi: $(ko)/esp-$a is an ESP -- copy it to a FAT32 partition, or"
 	@echo "      qemu-system-$a -drive format=raw,file=fat:rw:$(ko)/esp-$a ..."
@@ -705,9 +704,9 @@ test_uefi:
 	@echo "test_uefi: skipped (x86_64 + dl/edk2-ovmf/ovmf-code-x86_64.fd needed)"
 else
 test_uefi: host $(R)/tools/ktest.l
-	@$(MAKE) -s K_TEST=1 $(ko)/esp-x86_64-test/EFI/BOOT/BOOTX64.EFI $(ko)/esp-x86_64-test/love.elf
-	@echo TEST $(ko)/esp-x86_64-test "(serial, headless, our own BOOTX64.EFI; ~64s, ceiling 420s)"
-	@$m $(R)/tools/ktest.l $(ko)/esp-x86_64-test $(OVMF_X64) x86_64
+	@$(MAKE) -s $(ko)/esp-x86_64/EFI/BOOT/BOOTX64.EFI $(ko)/esp-x86_64/love.elf $(ko)/esp-x86_64/love.cmd
+	@echo TEST $(ko)/esp-x86_64 "(serial, headless, our own BOOTX64.EFI; ~64s, ceiling 420s)"
+	@$m $(R)/tools/ktest.l $(ko)/esp-x86_64 $(OVMF_X64) x86_64
 endif
 
 OVMF_A64 := $(wildcard dl/edk2-ovmf/ovmf-code-aarch64.fd)
@@ -717,9 +716,9 @@ test_uefi_arm64:
 	@echo "test_uefi_arm64: skipped (qemu-system-aarch64 + dl/edk2-ovmf/ovmf-code-aarch64.fd needed)"
 else
 test_uefi_arm64: host $(R)/tools/ktest.l
-	@$(MAKE) -s K_TEST=1 a=aarch64 $(ko)/esp-aarch64-test/EFI/BOOT/BOOTAA64.EFI $(ko)/esp-aarch64-test/love.elf
-	@echo TEST $(ko)/esp-aarch64-test "(serial, headless, our own BOOTAA64.EFI; TCG, ceiling 420s)"
-	@$m $(R)/tools/ktest.l $(ko)/esp-aarch64-test $(OVMF_A64) aarch64
+	@$(MAKE) -s a=aarch64 $(ko)/esp-aarch64/EFI/BOOT/BOOTAA64.EFI $(ko)/esp-aarch64/love.elf $(ko)/esp-aarch64/love.cmd
+	@echo TEST $(ko)/esp-aarch64 "(serial, headless, our own BOOTAA64.EFI; TCG, ceiling 420s)"
+	@$m $(R)/tools/ktest.l $(ko)/esp-aarch64 $(OVMF_A64) aarch64
 endif
 
 test_inle:
@@ -736,9 +735,9 @@ test_kernel_arm64:
 	@echo "test_kernel_arm64: skipped (need qemu-system-aarch64)"
 else
 test_kernel_arm64: host $(R)/tools/ktest.l
-	@$(MAKE) -s K_TEST=1 a=aarch64 $(ko)/love-aarch64-test.elf
-	@echo TEST $(ko)/love-aarch64-test.elf "(serial, headless, TCG, -kernel; ~90s, ceiling 420s)"
-	@$m $(R)/tools/ktest.l $(ko)/love-aarch64-test.elf - aarch64
+	@$(MAKE) -s a=aarch64 $(ko)/love-aarch64.elf
+	@echo TEST $(ko)/love-aarch64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 420s)"
+	@$m $(R)/tools/ktest.l $(ko)/love-aarch64.elf - aarch64
 endif
 
 NODE ?= $(shell command -v node 2>/dev/null)

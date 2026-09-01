@@ -5,7 +5,7 @@
 // takes the pages at the link address (or anywhere, and maps them there),
 // copies the PT_LOADs home, finds `kboot` in the kernel's symtab (our binaries
 // carry one on purpose) and fills it: the UEFI memmap's conventional ranges,
-// the GOP framebuffer, the hhdm. then ExitBootServices, our page tables
+// the GOP framebuffer, the hhdm, and love.cmd's line if the volume has one. then ExitBootServices, our page tables
 // (identity + the hhdm's no-execute twin), and the kernel's entry. the kernel
 // notices nothing: kboot is kboot, and the same ELF boots every door.
 //
@@ -39,21 +39,40 @@ static void say(char *s) {
 
 static u64 die(char *s) { say("uefi: "); say(s); say("\r\n"); return 1; }
 
-// the k_boot shape (src/k.h) -- keep the two in step by hand: this file
-// compiles freestanding, before out/lib exists.
+// the k_boot shape (src/k.h) -- keep the two in step by hand: this file compiles
+// freestanding, before out/lib exists. every field through the last one WRITTEN
+// here has to match k.h's layout; a tail this copy is short of is a member the
+// compiler cannot find, which is how it says so.
 #define ram_max 64
 struct k_boot {
  u32 ram_n;
  struct { u64 base, len; } ram[ram_max];
  u64 hhdm;
  struct { u64 base; u16 w, h; u32 pitch_px; } fb;
- u8 has_fb; };
+ u8 has_fb;
+ u64 date;                             // no door here answers it; kmain's rtc does
+ char cmdline[256]; };
 
 static u8 mmap[32768];                 // the UEFI memory map, GetMemoryMap-filled
 // the page tables: pml4, a pdpt per window, four pds, and the spare pd the low
 // window takes when the kernel had to be relocated. a page table's low 12 bits
 // are its flags, so the aligned(4096) IS the contract -- mooncc honors it.
 static u64 pt[8 * 512] __attribute__((aligned(4096)));
+
+// the boot line, when the volume carries one: a firmware door has no -append, so
+// an ESP that wants the kernel to RUN something spells it in love.cmd beside
+// love.elf. absent is the ordinary case and leaves the console shell.
+static void kcmdline(void *root, struct k_boot *kb) {
+ void *cf = 0;
+ static u16 cname[9] = {'l','o','v','e','.','c','m','d',0};
+ if (efi_call(((void **) root)[1], (u64) root, (u64) &cf, (u64) cname, 1, 0)) return;
+ static u8 cbuf[256];
+ u64 csz = sizeof cbuf;
+ if (efi_call(((void **) cf)[4], (u64) cf, (u64) &csz, (u64) cbuf, 0, 0)) return;
+ u64 i = 0;
+ for (; i < csz && i + 1 < sizeof kb->cmdline && cbuf[i] >= 32; i++)
+  kb->cmdline[i] = (char) cbuf[i];                // stops at the trailing newline
+ kb->cmdline[i] = 0; }
 
 u64 efi_main(void *handle, void *st) {
  sys = (void **) st;
@@ -154,6 +173,7 @@ u64 efi_main(void *handle, void *st) {
     break; } } }
  if (!kb) return die("no kboot symbol in love.elf");
  kb->hhdm = HHDM;
+ kcmdline(root, kb);
 
  // the framebuffer, when GOP has a LINEAR one (the interactive door's console).
  // ⚠ a GOP is not a framebuffer: PixelBltOnly (format 3) answers a mode and a

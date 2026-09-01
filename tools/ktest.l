@@ -1,6 +1,9 @@
-; Driver for the kernel boot gates: boot the headless serial test kernel under qemu,
-; capture its serial console (the baked corpus runs at boot and prints the usual
-; "N tests pass" summary, then (exit) quits qemu via isa-debug-exit), and report.
+; Driver for the kernel boot gates: boot the shipped kernel under qemu with the
+; corpus named on its command line, capture the serial console (test/kernel/all.l
+; prints the usual "N tests pass" summary, then (exit) quits qemu via
+; isa-debug-exit), and report. There is no test kernel -- the elf door passes
+; -append, and the esp door has love.cmd beside love.elf, firmware carrying no
+; command line of its own.
 ; Run on the host love, which has the `hark` subprocess nif.
 ; argv = (this file firmware arch), and the file picks the door: a .elf boots
 ; direct (`qemu -kernel`, the PVH door -- no bootloader, no firmware image at
@@ -60,7 +63,7 @@
    ; at all. ramfb's lands in ordinary ram, so the console paints at memory
    ; speed and the lane costs nothing.
    gfx  (? (arch = "aarch64") ["-device" "ramfb"] ())
-   media (? elf? ["-kernel" iso]
+   media (? elf? ["-kernel" iso "-append" "test/kernel/all.l"]
             dir? (fw + (below4g + (gfx + ["-drive" (+ "format=raw,file=fat:rw:" iso)])))
             (scare 'ktest-media iso))
    ; kvm where the host can back it: 7x on this corpus (50s of TCG against 7s).
