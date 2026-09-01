@@ -92,8 +92,7 @@
    out  (cup r)
    line (lineof out "tests pass")
    ; "0 tests pass" is a corpus that died before its first assert wearing a
-   ; green face (a stale ktests bake did exactly this) -- a summary only counts
-   ; when it counted something.
+   ; green face -- a summary only counts when it counted something.
    ok   (&& (has? out "tests pass")
             (&& (! (has? out "failed:"))
             (&& (! (sub-at line 0 "0 tests pass" 0))

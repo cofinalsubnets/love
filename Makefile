@@ -406,7 +406,7 @@ include $(R)/mk/distro.mk
 ko = out/free
 
 # every gate and verb below is phony: one roster, so adding one is one line and not two.
-.PHONY: force_kfs_list kmain_o run run-$a run-sh run-headless init-container \
+.PHONY: kmain_o run run-$a run-sh run-headless init-container \
   uefi test_disk test_uefi test_uefi_arm64 test_kboot test_kverb test_kernel_arm64 \
   test_inle test_wasm
 
@@ -436,7 +436,7 @@ k_lay_o = $(k_odir)/$a/vec.o
 k_boot_o = $(k_odir)/$a/boot.o
 k_tail_o = $(k_odir)/$a/sys.o
 k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_host_o) $(k_lay_o) $(k_tail_o) \
-  $(k_odir)/rt.o $(if $(K_TEST),,$(k_odir)/src.o) $(k_doom_o)
+  $(k_odir)/rt.o $(k_odir)/src.o $(k_doom_o)
 
 kcppflags := \
   -I$(k_odir) \
@@ -495,25 +495,13 @@ $(k_elf): $(k_odir)/kproject.l $(k_pie_in) $(k_pie_dep) $(k_boot_o) $m
 	@mkdir -p "$(dir $@)"
 	@$m $(k_odir)/kproject.l $(k_pie_in) $(k_boot_o) $@ $a && test -s $@
 
-kfs = $(sort $(wildcard $R/lib/*.l))
-force_kfs_list: ;
-out/lib/kfs.list: force_kfs_list
-	@mkdir -p out/lib
-	@tf=$@.$$$$.tmp; echo '$(kfs)' > $$tf; \
-	 $(note)
-out/lib/kfs.h: $(kfs) out/lib/kfs.list $(love0) tools/lcatfs.l love/prel.l
-	@mkdir -p out/lib
-	@echo 'LOVE	'$@
-	@$(love0) -l love/prel.l tools/lcatfs.l $(kfs:$R/%=%) > $@
-
 out/lib/korelist.h: Makefile
 	@mkdir -p out/lib
 	@tf=$@.$$$$.tmp; printf '"%s"\n' '$(korefiles)' > $$tf; \
 	 $(note)
 
 # Shared C sources (src/love.c, crew/quay/, nolibc's six) + per-arch free/<a>/.
-# Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
-$(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) $(baked_h) $(cats_z) $(if $(K_TEST),out/lib/kfs.h out/lib/ktests.h,out/lib/korelist.h)
+$(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) $(baked_h) $(cats_z) out/lib/korelist.h
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
@@ -650,27 +638,6 @@ init-container: host
 	@command -v unshare >/dev/null || { echo "init-container: needs unshare (util-linux)"; exit 1; }
 	@echo "-- love as PID 1 in a pid+user+mount namespace --"
 	unshare --pid --fork --mount-proc --user --map-root-user -- $m -l crew/init/init.l -e "(pid1 0)"
-
-kt = $(filter-out %/run.l %/bell.l %/zz-fin.l,$t) \
-  $R/test/kernel/ramfs.l $R/test/kernel/fs.l $R/test/kernel/wfs.l \
-  $R/test/kernel/kore0.l $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/core.l $R/crew/kore/fs.l \
-  $R/test/kernel/kore.l $R/test/kernel/pipe.l \
-  $R/test/kernel/sh0.l $R/crew/lush/job.l $R/crew/lush/lex.l $R/crew/lush/gram.l \
-  $R/crew/lush/glob.l $R/crew/lush/word.l $R/crew/lush/eval.l $R/test/kernel/sh.l \
-  $R/test/kernel/disk.l $R/test/kernel/svm.l $R/test/kernel/vmx.l \
-  $R/test/zz-fin.l
-out/lib/ktests.list: force_dist_list
-	@mkdir -p out/lib
-	@tf=$@.$$$$.tmp; echo '$(kt)' > $$tf; \
-	 $(note)
-out/lib/ktests.l: $(kt) out/lib/corpus.list out/lib/ktests.list
-	@echo 'CAT	'$@
-	@mkdir -p out/lib
-	@cat $(kt) > $@
-out/lib/ktests.h: out/lib/%.h: out/lib/%.l $(love0) tools/lcatv.l love/prel.l
-	@echo 'LOVE	'$@
-	@$(love0) -l love/prel.l tools/lcatv.l $< > $@
-
 
 ifeq ($a,x86_64)
 

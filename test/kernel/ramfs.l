@@ -1,11 +1,12 @@
-; The ramfs, inle's rung 0 (doc/misc/inle.md). The initrd is .rodata -- tools/lcatfs.l
-; bakes one {path, bytes, len} row per file into out/lib/kfs.h -- and reads come
-; straight off it; the first write copies the blob into the kernel heap and the file
-; reads from the copy ever after. So: a baked path opens and reads, an unbaked one
-; answers the zero point for a read (a write CREATES since rung 2), and a write
-; is visible to the next open, because the copy is per file and not per fd.
+; The ramfs, inle's rung 0 (doc/misc/inle.md). The initrd is .rodata -- the
+; artifact's own source blob, inflated and walked as a tar into one {path, bytes,
+; len} row per file -- and reads come straight off it; the first write copies the
+; blob into the kernel heap and the file reads from the copy ever after. So: a
+; baked path opens and reads, an unbaked one answers the zero point for a read (a
+; write CREATES since rung 2), and a write is visible to the next open, because
+; the copy is per file and not per fd.
 ;
-; kernel only -- kernel.mk's kt, never $t: on the host `open` is the real
+; kernel only -- test/kernel/all.l's roster, never $t: on the host `open` is the real
 ; filesystem and these laws would write the tree. The scratch is a real baked row on
 ; purpose: lib/json.l is a file the boot never loads, and the write laws put its
 ; bytes back, so nothing downstream in the corpus sees a clobbered tree.
@@ -21,7 +22,7 @@
    (wr p s m) (: q (open p m) (? (port? q) (: _ (say q s) _ (close q) 1) 0))
    orig (rd f)
  (assert
-   ; a baked path opens, and carries the bytes lcatfs put in the row
+   ; a baked path opens, and carries the bytes the archive put in the row
    (port? (open f "r"))
    (< 0 (tally orig))
    ; ... and reads the same on the second open: a file does not drain

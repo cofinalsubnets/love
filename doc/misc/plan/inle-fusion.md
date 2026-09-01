@@ -220,9 +220,8 @@ all. the moves it took: the kernel-only nifs ride `ai_knifs`, a bracket
 apart, so reset/fault/the virt doors never enter the hosted book; vec.o's
 pointer tables lay as .data (under the pie `__ai_reloc` WRITES them hosted --
 a read-only segment there is a startup segfault, and the linker has no
-relro); the artifact's ramfs dates pin to the dist stamp (lcatfs -s) so the
-seed fixpoint stays a function of the tree's bytes, while the test kernel
-keeps real dates for the corpus's stat laws. the whole roster + the fixpoint
+relro); the artifact's ramfs dates pin to the dist stamp so the seed fixpoint
+stays a function of the tree's bytes. the whole roster + the fixpoint
 are green on the fused binary: 15.2 MB baked, of which 8.9 MB is the image
 and 3.1 MB the source blob.
 
@@ -230,8 +229,8 @@ and 3.1 MB the source blob.
 2 MB carriage question answered itself: the freight was the kernel's file
 trees in PLAIN TEXT beside their compressed twins in ai_srcgz -- so the
 shipped kernel inflates the blob it already carries and walks the tar into
-the ramfs (symlinks resolved; the K_TEST kernel keeps the lcatfs bake for its
-real-mtime stat laws -- doc/misc/plan/one-kernel.md retires that second face),
+the ramfs (symlinks resolved -- the test kernel takes the same blob since
+doc/misc/plan/one-kernel.md's rung 2, so there is one filesystem),
 korecat is catted off the ramfs from a baked roster,
 and the baked fused artifact is 13.46 MB -- THE PRE-FUSION SIZE. the whole
 tree lands on metal, which is the metal seed's doorstep. and `love kernel

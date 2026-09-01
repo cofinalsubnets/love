@@ -1,4 +1,4 @@
-; lush rides the corpus next (kernel.mk's kt: the six engine parts, then sh.l
+; lush rides the corpus next (test/kernel/all.l's roster: the six engine parts, then sh.l
 ; drives a pipeline) -- so the shipped kernel's move (kmain.c's rung-3 boot
 ; text) made corpus-side: pin a no-op fallback for every host nif the parts
 ; mention and this seat lacks. self-retiring, name by name, as rungs land the

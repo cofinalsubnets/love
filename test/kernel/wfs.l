@@ -6,7 +6,7 @@
 ; (); chdir wears the host's negative lane. test/host/fs.l holds sibling laws
 ; against the real tree.
 ;
-; kernel only -- kernel.mk's kt, never $t: on the host these paths are the real
+; kernel only -- test/kernel/all.l's roster, never $t: on the host these paths are the real
 ; filesystem. Everything made here is unmade at the foot, so the corpus behind
 ; reads the tree as this file found it.
 ;

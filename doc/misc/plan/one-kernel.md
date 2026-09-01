@@ -134,13 +134,33 @@ the finding under this rung. Every ordinary nif on this seat bottoms out in a
 libc call landing in sys.c's rows, so a green kernel corpus was always saying
 the seam is live; `syswrite` said it a second time, louder.
 
-**Rung 2 -- the corpus off the ramfs.** A driver file (`test/kernel/all.l`)
-reads a roster, slurps each member and drives `reads` -- the same shape kmain
-already spells for the kore cat at 2088-2097, about ten lines of love. The
-roster becomes a FILE both the host gate and the driver read, which retires the
-`kt` Makefile variable, `out/lib/ktests.{l,h}`, `out/lib/kfs.h` and `lcatfs.l`'s
-last caller. The gates invoke it as `-append "test/kernel/all.l"`. Rung 1's
-laws ride the same file on both seats.
+**Rung 2 -- the corpus off the ramfs. LANDED.** The step under it was the fs
+SOURCE: the test kernel now links `src.o` like the shipped one, so both inflate
+the same blob and walk the same tar. There is one filesystem. `kfs.h`, its list
+rule, `tools/lcatfs.l`, `tools/lcatv.l`, `out/lib/ktests.{l,h}` and the `kt`
+roster are all gone, and `k_bakes` needs no `#ifdef` because there is nothing to
+choose between.
+
+`test/kernel/all.l` is the corpus: it spells its own roster and hands each member
+to `reads`, which takes a FILE PORT and so needs no slurp, no tap and no baked
+string. kmain names it (`k-run-file`, the same door a `.l` path off the cmdline
+takes), so `-append "test/kernel/other.l"` replaces it and the wiring is one line.
+
+The roster is not a file both sides read, which the first draft wanted: nothing
+on the Makefile side needs it any more, so the driver globs `test/` the way
+mk/common.mk's `t` does -- the same three front-loads, the same exclusions --
+and spells the kernel half, which is a dependency order, in place. A new
+`test/*.l` is picked up by both without an edit.
+
+It reads FASTER, which was not the point but is the measure: x86_64 11.78s ->
+8.58s, aarch64 102.6s -> 67.9s. A baked string was one 900 KB allocation walked
+as a charlist; a port is a gulp at a time and the member is done with when the
+next one opens.
+
+One law moved, exactly the one the trap below named: `(= 2 (tally (readdir "")))`
+was true of a filesystem holding `lib/` and `tmp/`. The root now lists the tree's
+own top names, so the law says what it was always for -- entries are the distinct
+next COMPONENTS, never whole paths.
 
 **Rung 3 -- the layers move into the driver.** `(use 'coin) (use 'rng) (use 'q)
 (use 'kanren)` leave kmain for `all.l`; they are baked modules, so `use` finds
@@ -173,9 +193,14 @@ both run the same corpus the same way.
 ## traps this plan already knows
 
 - **the roster is an ordering, not a set.** `mk/common.mk`'s `t` front-loads
-  00-init, spec and uu.l explicitly, and a locale `ls` would order `uukind*`
-  before `uu.l` and run the laws against an unloaded kernel. A roster file must
-  keep the order; globbing the ramfs must not replace it.
+  00-init, spec and uu.l explicitly, and a locale sort would order `uukind*`
+  before `uu.l` and run the laws against an unloaded kernel. `test/kernel/all.l`
+  front-loads the same three and spells the kernel half, a dependency order, by
+  hand -- its own header says so, because a later reader will want to glob it.
+- **a member that will not open must be LOUD.** The roster names paths; a typo
+  drops a whole file's laws and the gate still counts what is left and goes
+  green. `feed` scares on a non-port, and the falsifier is one bad roster entry:
+  `;; no-corpus-member "..."`, exit 2.
 - **kore0.l's `quit` pin is load-bearing and positional.** It shadows `quit`
   for the REST of the stream, so files before it (00-init, spec, uu) still meet
   the real door -- which now resets. Ordinary assert failures do not quit; only
@@ -189,7 +214,7 @@ both run the same corpus the same way.
 - **the corpus is bigger than the machine at some sizes.** `ktest.l` asks for
   768M, and `test/gate/vec.sh` had to be raised to match (ed4007f7). A merged
   corpus is not smaller; price the margin before assuming a size.
-- **K_TEST also picks the fs SOURCE.** Rung 2 hands the merged kernel a corpus
-  whose stat laws (`test/kernel/fs.l`) read mtimes; the lcatfs bake preserved
-  real ones and the ustar walk carries the archive's. Check the laws hold on
-  tar mtimes before deleting `kfs.h`.
+- **K_TEST also picked the fs SOURCE.** Met at rung 2, and the mtime laws it
+  warned about held: the archive's dates are milliseconds on the same scale, so
+  `fs.l` needed no change there. What moved was the SHAPE -- the root used to
+  list two entries and now lists the tree's top names.

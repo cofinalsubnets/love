@@ -6,9 +6,10 @@
 ;
 ; the initrd is flat -- rows for "lib/json.l" and none for "lib" -- so a directory
 ; is a prefix some path lies under, and the entries are the distinct next components
-; of those paths. That is why the root lists one name and not thirteen.
+; of those paths. That is why the root lists "lib" once and never a path.
 ;
-; kernel only -- kernel.mk's kt, never $t: on the host these paths are the real tree.
+; kernel only -- test/kernel/all.l's roster, never $t: on the host these paths are
+; the real tree.
 ; It runs after ramfs.l, which owns lib/json.l's bytes; the write laws here take
 ; lib/dns.l instead (a file the boot never loads) and put it back.
 ;
@@ -31,7 +32,7 @@
    ; stat answers the four fields, and the size is the bytes a read hands over
    (two? st)
    (= sz <st)
-   ; the mtime is the source's, baked by lcatfs: milliseconds, and a 2020s stamp
+   ; the mtime is the source's, off the archive: milliseconds, and a 2020s stamp
    (< 1600000000000 <>st)
    (= 32768 (& 61440 <>>st))                     ; s_ifmt bits say regular file
    (= (* 1000000 <>st) <>>>st)                   ; ns is that same date whole
@@ -44,13 +45,14 @@
    ; readdir hands over the baked names as strings
    (member? "json.l" (readdir d))
    (string? (cap (readdir d)))
-   ; "" and "." are both the root, as they are on the host -- and it holds two
-   ; entries: lib, deduped across all thirteen rows that lie under it, and tmp,
-   ; the scratch the rung-2 tree seeds at boot
+   ; "" and "." are both the root, as they are on the host: the tree's own top
+   ; names, each deduped across every row beneath it, plus tmp -- the scratch the
+   ; rung-2 tree seeds at boot, which no row carries
    (member? "lib" (readdir "."))
    (member? "lib" (readdir ""))
+   (member? "test" (readdir ""))
    (member? "tmp" (readdir ""))
-   (= 2 (tally (readdir "")))
+   !(member? f (readdir ""))                     ; components, never whole paths
    ; a file is no directory, and neither is a prefix nothing lies under
    (id? (readdir f) ())
    (id? (readdir "lib/nope") ())

@@ -2,7 +2,7 @@
 ; protocol (a reader parks while a writer lives, reads the end at the last
 ; close), dup/dup2 as row aliases, and the spawn/wait shim over tasks -- a
 ; spawned tool's stdio seated under the folded ports. kernel corpus only
-; (kernel.mk's kt), after the kore subset: the spawn laws drive echo-main and
+; (test/kernel/all.l's roster), after the kore subset: the spawn laws drive echo-main and
 ; wc-main as processes. (their console output mid-corpus is the smoke, not a
 ; mess -- test/kernel/kore.l's precedent.)
 

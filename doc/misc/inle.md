@@ -76,10 +76,9 @@ the disk, the UEFI door, the command line, the aarch64 twin, the clang twin. Non
 
 ### rung 0 — the initrd, and a ramfs behind it  ✅ landed
 
-`tools/lcatfs.l` bakes `lib/*.l` per-file into `.rodata` as `{path, bytes, len}` rows
-(`out/lib/kfs.h`) where `lcatv.l` bakes one file into one literal. Reads come straight off the
-rows; the first write copies the blob into the kernel heap and the entry reads from the copy ever
-after. `open` and `close` land in `defs[]` beside it — the gate needs them, and `open`'s presence
+The initrd is the artifact's own source blob: the kernel inflates `ai_srcgz` and walks the tar
+into `{path, bytes, len}` rows in `.rodata`. Reads come straight off the rows; the first write
+copies the blob into the kernel heap and the entry reads from the copy ever after. `open` and `close` land in `defs[]` beside it — the gate needs them, and `open`'s presence
 is what lights `use` up (below).
 
 No driver, no PCI, no disk. This is the rung that changes what the machine *is*, and it defers
@@ -130,8 +129,8 @@ absence is loud.
   so `readdir` answers the distinct next components of every path under a prefix, and `stat` on
   one synthesizes the dir bits and its newest child's date. Nothing is stored for a directory and
   nothing can be; rung 2's writable tree is what gives one an existence of its own.
-* **The mtime is baked.** `lcatfs` takes each source's `stat` and lays the ms in the row, since
-  the initrd carries no directory and that date exists nowhere else. A write stamps the copy from
+* **The mtime is baked.** The archive's own date lands in the row as ms, since the initrd
+  carries no directory and that date exists nowhere else. A write stamps the copy from
   the clock, and `k_mtime` reads the copy once there is one — `k_blob`'s question, asked of the
   date.
 * *gate:* `test/kernel/fs.l`, 24 laws — the four stat fields against a read's own byte count, the
@@ -186,8 +185,8 @@ pairs on slot 0 behind the host's three doors.
 
 ### rung 3 — kore and lush boot  ✅ landed
 
-The whole `$(korefiles)` cat bakes verbatim (`lcatv`, the ktests precedent) into the SHIPPED
-kernel and evals at boot through the stream shell — the corpus's own reads-over-a-tap lane,
+The `$(korefiles)` ROSTER bakes into the SHIPPED kernel, the cat itself is built off the ramfs
+member by member, and it evals at boot through the stream shell — the corpus's own reads-over-a-tap lane,
 since that is the one door proven on full-surface text. `holo` and `peg` join the kernel's
 `ai_libs` beside uu and bao, because asbook.l wants `holo` and cook.l `peg`. The cmdline
 rides `kboot` from the doors that carry one — PVH's `start_info`, the DTB's `/chosen`
@@ -275,7 +274,7 @@ and `wait` is `catch`.
 * ⚠ **Every twirl must be caught** (CLAUDE.md's corpus law) — doubly here: an orphan stalls the
   kernel runner and the failure reads as a hang.
 * *gate:* `test/kernel/pipe.l` — the pair, EOF at the last close, dup/dup2, spawn/wait, the seat
-  driven bare — then lush itself: the engine parts bake into the K_TEST corpus (sh0.l pins what
+  driven bare — then lush itself: the engine parts ride the corpus roster (sh0.l pins what
   they mention and the seat lacks) and `test/kernel/sh.l` runs `kore ls lib | kore wc -l` through
   `sh-line`, the tail redirected onto the tree and read back. `test_kboot` grew the same pipeline
   as a fourth boot of the SHIPPED kernel through `sh -c`.

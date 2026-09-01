@@ -550,15 +550,6 @@ void kfree(void *p) {
 // ⚠ ms is the SOURCE's mtime, baked: the initrd carries no directory, so the date a
 // file was last written on the machine that built it exists nowhere else.
 struct k_file { char const *path, *bytes; uintptr_t len, ms; };
-#ifdef K_TEST
-// the TEST kernel keeps the lcatfs bake: its pie carries no source blob, and
-// the corpus's stat laws want the real mtimes only the bake preserves.
-static struct k_file const kfiles[] = {
-#include "kfs.h"
-};
-static struct k_file const *k_bakes = kfiles;
-static int k_bakes_n = (int) countof(kfiles);
-#else
 // THE INITRD IS THE SOURCE BLOB (plan D's first step): the artifact already
 // carries its whole tree as ai_srcgz, so the shipped kernel inflates that and
 // walks the tar instead of baking a second plain-text copy of anything. rows
@@ -632,7 +623,6 @@ static bool k_untar(void) {
   kfree(lnks);
   k_bakes = rows, k_bakes_n = m;
   return true; }
-#endif
 
 // an object in this link may bake files of its own into the tree beside the
 // initrd's: a strong k_baked overrides the weak nothing here and k_fs_init lays
@@ -671,9 +661,7 @@ static int k_ents_n, k_ents_cap;
 // a refusal leaves the console standing (the caller answers absence or ENOMEM).
 static bool k_fs_init(void) {
   if (k_ents) return true;
-#ifndef K_TEST
   if (!k_bakes && !k_untar()) return false;
-#endif
   int xn = k_baked(NULL, 0);
   if (xn > 0) {
     struct k_file *xr = kmallocw(b2w((uintptr_t) xn * sizeof *xr));
@@ -1764,21 +1752,11 @@ static struct ai_def const __attribute__((section("ai_knifs"), used)) defs[] = {
 #endif
   {"color", (intptr_t) nif_color} };
 
-#ifdef K_TEST
-// The whole test corpus, baked VERBATIM to a C string literal by tools/lcatv.l
-// (Makefile out/lib/ktests.h). Bound to the global `tests` and run through ev at boot.
-static char const ktests[] =
-#include "ktests.h"
-;
-#endif
-
-#ifndef K_TEST
-// the kore cat is CATTED FROM THE RAMFS at boot now -- the blob initrd carries
-// every member, so only the ORDER is baked: the korefiles roster, one line.
+// the kore cat is CATTED FROM THE RAMFS at boot -- the blob initrd carries every
+// member, so only the ORDER is baked: the korefiles roster, one line.
 static char const src_korelist[] =
 #include "korelist.h"
 ;
-#endif
 
 extern long __ai_osv;                  // nolibc's "which kernel" (os.c)
 void kmain(void) {
@@ -1846,18 +1824,10 @@ void kmain(void) {
   // headroom for the major's double-buffered resize, the kernel free list, and kmallocw fragmentation.
   // (The host runs g->budget == 0 / unbounded -- it has virtual memory and a fragmentation-proof malloc.)
   if (ai_ok(g)) ai_core_of(g)->budget = kram_words / 8;
-#ifdef K_TEST
-  // bind the baked corpus to the global `tests`; below it is read form-by-form
-  // and run through ev at boot (no console), then qemu is quit.
-  g = ai_strof(g, ktests);
-  struct ai_def td[] = {{"tests", ai_pop1(g)}};
-  g = ai_defn(g, td, countof(td), 0);
-#else
   // the kore ROSTER (rung 3): the cat itself is read off the ramfs below.
   g = ai_strof(g, src_korelist);
   struct ai_def kd[] = {{"korelist", ai_pop1(g)}};
   g = ai_defn(g, kd, countof(kd), 0);
-#endif
   // the boot cmdline, raw; the boot text below splits it into the argv shape.
   g = ai_strof(g, kboot.cmdline);
   struct ai_def bd[] = {{"bootline", ai_pop1(g)}};
@@ -2002,11 +1972,12 @@ void kmain(void) {
   // the shell's defglobs (and the corpus stream's) land here, never in the base.
   r = ai_layer_(r);
 #ifdef K_TEST
-  // test build: drink the baked `tests` string (string -> charlist -> tap port)
-  // through reads (love/bao.l) -- the same stream shell as the host's stdin runner.
-  // zz-fin.l prints the summary and (exit 1)s on failure. (`tap` builds the port;
-  // `sip` is the verb that draws ONE unit -- see the vessel frame in love/prel.l.)
-  r = ai_evals_(r, "(reads (tap ((: (g i) (? (< i (tally tests)) (link (peep tests i 0) (g (+ 1 i))))) 0)))");
+  // test build: the corpus is a FILE on the ramfs like everything else, and the
+  // boot cmdline names it -- test/kernel/all.l reads its own roster, slurps each
+  // member and drives it through reads (love/bao.l), the same stream shell as
+  // the host's stdin runner. zz-fin.l prints the summary and (exit 1)s.
+  r = ai_evals_(r,
+   "((k-run-file (? (two? bootargv) (cap bootargv) \"test/kernel/all.l\")) ())");
 #else
   // rung 3: the userland. first test/00-init.l's move, for the same reason it
   // makes it: an unbound mention raises missing at every define that names one,
