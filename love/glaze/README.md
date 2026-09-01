@@ -95,17 +95,16 @@ jumps into emitted bytes and prints the result, ending in `(exit 0)` (which the 
 routes to qemu's isa-debug-exit). Write one with holo for whichever target you are
 bringing up.
 
+The initrd is the source blob, so the probe is a file in the tree and the shipped
+kernel runs it by name -- there is nothing to bake and no second kernel to build.
+
 ```sh
-make host                                  # builds love0 + the bake tools
-cp <your-probe>.l out/lib/ktests.l         # make the probe the whole K_TEST corpus
-out/host/love0 -l love/prel.l tools/lcatv.l out/lib/ktests.l > out/lib/ktests.h
-touch out/lib/ktests.l out/lib/ktests.h
-make -s K_TEST=1 out/free/love-x86_64-test.iso
-qemu-system-x86_64 -m 256M -M q35 -serial stdio -display none -no-reboot \
-  -drive if=pflash,unit=0,format=raw,file=dl/edk2-ovmf/ovmf-code-x86_64.fd,readonly=on \
-  -cdrom out/free/love-x86_64-test.iso \
+cp <your-probe>.l test/kernel/probe.l      # anywhere in the tree the blob carries
+make -s out/free/love-x86_64.elf
+qemu-system-x86_64 -m 768M -M q35 -serial stdio -display none -no-reboot \
+  -kernel out/free/love-x86_64.elf -append test/kernel/probe.l \
   -device isa-debug-exit,iobase=0xf4,iosize=0x04
-# then restore the real corpus:  make out/lib/ktests.h   (or rm it; the next build re-bakes)
+# -append test/kernel/all.l runs the whole corpus; no -append drops to the shell
 ```
 
 ## Caveats / TODO

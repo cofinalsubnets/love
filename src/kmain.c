@@ -536,10 +536,9 @@ void kfree(void *p) {
 
 
 // --- the ramfs: the baked tree, and the copies writes make -----------------
-// The initrd is .rodata. tools/lcatfs.l bakes one {path, bytes, len} row per file
-// (out/lib/kfs.h) the way lcatv bakes the test corpus, and reads come straight off
-// it; the FIRST write copies that blob into the kernel heap and the entry reads
-// from the copy ever after. So a file nobody writes costs a row and not one word
+// the initrd is read-only bytes and one {path, bytes, len} row per file; reads come
+// straight off it, and the FIRST write copies that file into the kernel heap so the
+// entry reads from the copy ever after. so a file nobody writes costs a row and not one word
 // of the bounded heap -- bake generously, copy lazily -- and two opens of one path
 // see each other's writes, because the copy is per FILE and never per fd.
 //
@@ -564,7 +563,7 @@ extern intptr_t ai_inflate_raw(const unsigned char*, uintptr_t, unsigned char*, 
 // the archive's TOP (the tree looks the same from inside as a checkout does).
 // plain files land whole; a SYMLINK lands as a row whose target path rides
 // lnks[k] for the caller to resolve -- the lib/ door to the crew modules is
-// symlinks, and the old lcatfs bake followed them, so this walk must too.
+// symlinks, so a walk that dropped them would lose every module behind it.
 static int k_tar_walk(unsigned char const *t, uintptr_t n, struct k_file *rows, char **lnks) {
   int k = 0;
   for (uintptr_t o = 0; o + 512 <= n && t[o];) {

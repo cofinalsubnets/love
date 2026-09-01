@@ -2,9 +2,11 @@
 ;
 ; the initrd is the source blob, so every member is a file this machine can open:
 ; the driver spells the roster below and hands each member to `reads`, the same
-; stream shell the host's stdin runner uses. kmain names this file at boot, and a
-; boot cmdline naming another file replaces it -- which is the whole of the
-; kernel's corpus wiring, there being no baked string and no second filesystem.
+; stream shell the host's stdin runner uses. the BOOT CMDLINE names this file --
+; tools/ktest.l's -append, or love.cmd beside love.elf where firmware carries no
+; command line -- and naming another replaces it; an empty line drops to the console
+; shell. that is the whole of the kernel's corpus wiring: no baked string, no
+; second filesystem.
 ;
 ; ⚠ THE ROSTER IS AN ORDERING, NOT A SET. 00-init, spec and uu go first exactly as
 ; mk/common.mk's `t` front-loads them: a locale sort puts uukind* before uu.l and

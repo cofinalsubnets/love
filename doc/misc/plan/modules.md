@@ -224,8 +224,8 @@ unless something registered it, with a file of that name sitting in `lib/`.
 Callers write the path out -- 40 sites -- and the slashed include went with the
 walk, so crew/tls's three parts took the `(module 'tls` wrap sb and lush
 already wore. `lib/` is now a directory like any other; its seven crew
-symlinks and three subfolders have no user left in the tree, and only the
-K_TEST ramfs (`kfs`, a `lib/*.l` wildcard) still keys on the name.
+symlinks and three subfolders have no user left in the tree. (The `kfs` ramfs
+that still keyed on the name went with K_TEST -- doc/misc/plan/one-kernel.md.)
 
 What the walk was actually carrying, measured before removing it (a `say err`
 in libsrc, then the gate set): ten names on a hosted love -- clay elfsec fat

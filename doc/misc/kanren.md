@@ -165,9 +165,9 @@ thing to argue with.
 
 * `test/kanren.l` is the gate and rides the `make test` glob. `test/host/rune.l` is the consumer
   that must stay green — it is the reason for the invariant above.
-* kanren rides host, love0, wasm and the K_TEST kernel, so a size increase lands in four
-  frontends. A SHIPPED kernel does not carry it (uu + bao + holo + peg + the kore cat), so the
-  freestanding budget is not at risk.
+* kanren rides host, love0, wasm and the kernel, so a size increase lands in four frontends.
+  The kernel carries it as a baked module and splices it only where the corpus asks
+  (`test/kernel/all.l`), so it costs the image and not every file's scope.
 * ⚠ **the ambient splice is the real cost.** kanren's names are in every corpus file's scope, and
   a name added there is hard to take back. Prefer the registry — `(from 'kanren 'absent)` — unless
   infix is genuinely wanted, and say why at the site if it is.
