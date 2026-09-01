@@ -217,20 +217,6 @@ And it removes the last reason the two arches differ in kind rather than in
 machine: x86_64 projects and wakes, aarch64 builds and warms, and after this
 both run the same corpus the same way.
 
-## what this rung found, and did not fix
-
-`test_uefi` and `test_uefi_arm64` are RED, and were before this arc touched them:
-BOOTX64.EFI comes out TRUNCATED. The section table promises 0x2A00 bytes and the
-file is 0x15D8, so BdsDxe answers "Unsupported" and never enters the loader. The
-last good artifact on this box is 2026-08-25 (10752 bytes); today's build of the
-same source is 5592.
-
-Where it is not: `ld-write` answers 5592 for a 5592-byte file, so the writer laid
-exactly what it was handed -- the PIECE LIST is short, upstream in `pelink`. Where
-it is not either: this arc. Rebuilding the EFI from HEAD's `uefi_loader.c` gives
-the same truncation, and the Aug 25 binary boots the 9.6 MB shipped kernel fine
-when dropped into today's ESP.
-
 ## traps this plan already knows
 
 - **the roster is an ordering, not a set.** `mk/common.mk`'s `t` front-loads
