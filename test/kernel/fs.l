@@ -69,6 +69,14 @@
    ; tuple the path answers, and nothing for a row that is not there
    (: fd (openfd f 0) r (= (stat fd) (stat f)) _ (close fd) r)
    (id? (stat 4096) ()) !(charm? (stat 4096))
+   ; and stat reads a row's KIND off the fd: a file, and a directory, which opens
+   ; read-only by POSIX's own rule and answers as the tree it is
+   (: fd (openfd f 0) s (stat fd) _ (close fd) (= 32768 (& 61440 <>>s)))
+   (: fd (openfd d 0) s (stat fd) _ (close fd) (= 16384 (& 61440 <>>s)))
+   ; close wears the errno convention: a stranger row is EBADF, and so is the
+   ; second close of a real one -- the row is gone, which is what the answer says
+   (: fd (openfd f 0) a (close fd) b (close fd) (&& (id? a ()) (= -9 b)))
+   (= -9 (close 4096))
    (id? (close -1) ())                         ; closing nothing is the zero point
    ; the raw-fd lane reads the ramfs byte for byte where the port lane does, gulp
    ; boundaries and all -- one file is longer than a single gulp

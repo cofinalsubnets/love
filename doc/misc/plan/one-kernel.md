@@ -22,15 +22,17 @@ driver file and a way to say "run it".
 
 ## the map: what each block buys
 
+Two rows are gone from this table already: rung 1 took the `syswrite` and
+`syscall` nifs out of kmain, and `k_sys_nr` out of sys.c. Blocks are named
+rather than numbered -- the line numbers moved when they went.
+
 | block | buys |
 |---|---|
-| kmain 553, 674 | the `lib/*.l` lcatfs bake, INSTEAD of the ramfs untar (83 lines of gz+ustar+symlink walk the corpus never runs) |
-| kmain 1639, 1739, 1816 | the `syswrite` and `syscall` nifs |
-| kmain 1822, 1830, 1904 | `ktests[]` vs `src_korelist[]`, and which one binds |
-| kmain 1869 | `woke = false` by construction, INSTEAD of the image wake |
-| kmain 2040 | `(use 'coin) (use 'rng) (use 'q) (use 'kanren)` -- the corpus asserts on them, a booting kernel wants none |
-| kmain 2059 | drink `tests` through `reads`, INSTEAD of the kore cat and the boot cmdline |
-| sys.c 144 | `k_sys_nr`, the arch-keyed name->number table `syscall` reads |
+| the fs source | the `lib/*.l` lcatfs bake, INSTEAD of the ramfs untar (83 lines of gz+ustar+symlink walk the corpus never runs) |
+| `ktests[]` vs `src_korelist[]` | which corpus is baked in, and which one binds |
+| the wake gate | `woke = false` by construction, INSTEAD of the image wake |
+| the layer splice | `(use 'coin) (use 'rng) (use 'q) (use 'kanren)` -- the corpus asserts on them, a booting kernel wants none |
+| the boot drink | `tests` through `reads`, INSTEAD of the kore cat and the boot cmdline |
 | Makefile x13 | `ksuf`, the `-test` odir, `-DK_TEST -Dai_tco=1`, the header swap, the `kt` roster, `ktests.{l,h}`, four gates |
 
 `-Dai_tco=1` is redundant: `src/love.h:39` already defaults it to 1 and the
@@ -49,7 +51,7 @@ corpus asked qemu to exit 0. With it gone the `#ifdef` in the quit door goes
 too: unseated is reset on every face, and the corpus answers its own codes
 through kore0.l's pin, one door deeper. -41/+4 lines over three files.
 
-**Rung 1 -- the raw-fd lane, finished by subtraction.** `syswrite` and `syscall`
+**Rung 1 -- the raw-fd lane, finished by subtraction. LANDED.** `syswrite` and `syscall`
 existed because the raw-fd lane was half built. `openfd` and `pipe` minted an fd,
 `lseek` seeked it (`posix.c:725` names it "the openfd lane -- not ports"), a
 second nif closed it -- and nothing read or wrote one. Every port nif in io.c was
@@ -96,36 +98,41 @@ names that already exist and both instruments have nowhere left to be special.
 
 No new nif. `fdclose` went, seven nifs gained a kind and one lost a bug -- the
 three lanes those kinds ride are src/seat.c's, where the fd doors already live.
-What remains of this rung is the subtraction it was for: `syswrite`, `syscall`
-and `k_sys_nr` (~90 lines over kmain.c and sys.c), and sys.l rewritten.
 
-test/kernel/sys.l is then ordinary corpus that runs on the host AND the kernel:
-counts and errnos, byte-exact reads off the ramfs, close and its EBADF on a
-reclose, pipe roundtrips, partial reads with the remainder waiting,
-create/append/extend/unlink, rename, chdir/cwd, chmod, mkdir/rmdir/ENOTEMPTY,
-readdir. The struct-layout laws come out better rather than worse: comparing
-`(stat fd)` against `(stat path)` for one file catches a wrong offset through
-the parse that actually matters, where reading a raw 144-byte cask only asserts
-that the offsets are the ones we already wrote down.
+**The subtraction. LANDED.** `syswrite`, `syscall` and `k_sys_nr` are out (-93
+lines over kmain.c and sys.c), and `test/kernel/sys.l` with them: 386 lines, 114
+of the corpus's assertions.
 
-What goes with the instruments is one kind of law: the refusal branches nolibc
+The file was NOT rewritten in place, which the first draft of this rung expected.
+Once the laws are spelled with ordinary nifs they are laws that fs.l, wfs.l and
+pipe.l already hold -- wfs.l owns create/mkdir/rmdir/unlink/rename/chdir/chmod/
+utime, fs.l owns stat/readdir/lseek/openfd, pipe.l owns the pipe and its
+aliases -- so a rewritten sys.l would have been a fourth copy under a header
+explaining what it used to be. Its survivors moved to the file whose subject they
+are: the row KIND through `(stat fd)` (a file, a directory, a fifo, and `()` for
+a row that is not there) and close's EBADF on a stranger row and on a reclose.
+`(= (stat fd) (stat path))` replaces the 144-byte cask walk and is the better
+law -- it catches a wrong offset through the parse that matters, where reading
+the cask only asserted that the offsets are the ones we wrote down.
+
+What went with the instruments is one kind of law: the refusal branches nolibc
 cannot reach, and raw wire formats. A dirfd that is not AT_FDCWD, an absolute
 path ignoring its dirfd, O_RDWR on a ramfs file, `dup3` src == dst, `pipe2` with
 a flag word, `fcntl` with a stranger cmd, UTIME_OMIT, getcwd's ERANGE, the
 NULL-pointer EFAULT arms, getdents64's 8-aligned record walk. Every ROW under
 those keeps coverage through an ordinary nif -- dup issues fcntl, dup2 issues
 dup3, pipe issues pipe2, utime issues utimensat, rmdir issues unlinkat with
-AT_REMOVEDIR, readdir issues getdents64, stat issues newfstatat -- so what is
-lost is the argument values those rows refuse, which are defensive arms
-guarding against a caller that does not exist. src/sys.c should say so on them
-rather than leave them looking exercised. getpid's row is the one casualty that
-does not move: this seat has no getpid nif, so it goes untested.
+AT_REMOVEDIR, readdir issues getdents64, stat issues newfstatat and now fstat --
+so what is lost is the argument values those rows refuse, defensive arms
+guarding against a caller that does not exist. src/sys.c says so above its
+dispatch rather than leaving them looking exercised. getpid's row is the one
+casualty: this seat has no getpid nif (love's answers the TASK pid, kmain's own
+door), so nothing in the tree reaches it -- nolibc's own C callers still do.
 
-Two constraints on the rewrite. `fdopen`'s port finalizer owns the fd -- "hand
-it over, don't close it too" -- and sys.l double-closes freely today because
-`syscall "close"` went around the port. And a port buffers, so a law that
-interleaves seeks and reads on one fd cannot use a port for both; that is what
-gave lseek a raw lane in the first place.
+The instrument's claim to be "the syscall seam's one gate" was false, which is
+the finding under this rung. Every ordinary nif on this seat bottoms out in a
+libc call landing in sys.c's rows, so a green kernel corpus was always saying
+the seam is live; `syswrite` said it a second time, louder.
 
 **Rung 2 -- the corpus off the ramfs.** A driver file (`test/kernel/all.l`)
 reads a roster, slurps each member and drives `reads` -- the same shape kmain

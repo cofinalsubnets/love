@@ -23,7 +23,8 @@ callable inside the kernel, which is what lets more of the crew run there.
   that section.
 - **the syscall seam** (`67ab3584`, `46417cf5`) -- `src/sys.c` answers
   `__ai_sys` in C where a hosted seat has a mksys lay issuing `syscall`/`svc`.
-  Four numbers: read, write, close, lseek. Gate `test/kernel/sys.l`.
+  Four numbers: read, write, close, lseek. Gated by the ordinary nifs that issue
+  them -- the rows have no instrument of their own any more.
 - **phase A1** (`4433e222`, `37171d37`, `5353380e`) -- the ramfs has a face a
   syscall can call: nine `k_fs_*` taking (bytes, len), with the love marshaling
   split off above. All behaviour-neutral by gate.

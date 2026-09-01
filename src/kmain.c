@@ -1636,53 +1636,6 @@ static lvm(lvm_fault) {
   Ip += 1;
   ai_musttail return Continue(); }
 
-#ifdef K_TEST
-// (syswrite fd str) -> the count landed, or -1 on a non-string. THE SYSCALL
-// SEAM'S ONE GATE: it calls nolibc's write(), which is sc3(NR_write, ..) into
-// src/sys.c, which is the row -- so a green test/kernel/sys.l says that whole
-// path is live and no other test in the tree can say it. K_TEST only: the
-// shipped kernel has no reason to spell a syscall in love.
-extern long write(int, void const *, long);
-ai_noinline static ai_word k_syswrite(ai_word fw, ai_word sw) {
-  if (!ai_strp(sw)) return putcharm(-1);
-  struct ai_str *pv = (struct ai_str*) sw;
-  return putcharm(write((int) getcharm(fw), pv->bytes, (long) pv->len)); }
-static lvm(lvm_syswrite) {
-  Sp[1] = k_syswrite(Sp[0], Sp[1]);
-  Sp += 1; ai_musttail return Next(1); }
-
-// (syscall "name" a b c d) -> the raw answer, errno NEGATIVE as the door gives
-// it; () for a name no row answers to. The instrument for every row, so the
-// next one costs a test and not a nif -- and it takes the NAME because the
-// numbers are arch-keyed and src/sys.c is the only file that may spell them.
-// an argument spells itself by kind: a charm is the integer, a string passes
-// its bytes (core keeps a NUL behind them, so a path lands as C expects), a
-// cask lends its bytes as an output buffer the test reads back. any other kind
-// is misuse and answers -1 before the door is asked -- 0 there would be an
-// argument. ⚠ it reaches __ai_inle DIRECTLY, under nolibc: what it gates is
-// the dispatch and the k_* faces, which is where the rows are written.
-// syswrite proves the nolibc half once, so the composition is said.
-extern long __ai_inle(long, long, long, long, long, long, long);
-extern long k_sys_nr(char const *nm, long n);
-ai_noinline static ai_word k_syscall(ai_word nw, ai_word aw, ai_word bw, ai_word cw, ai_word dw) {
-  if (!ai_strp(nw)) return ZeroPoint;
-  struct ai_str *pv = (struct ai_str*) nw;
-  long nr = k_sys_nr(pv->bytes, (long) pv->len);
-  if (nr < 0) return ZeroPoint;
-  ai_word ws[4] = { aw, bw, cw, dw };
-  long v[4];
-  for (int i = 0; i < 4; i++) {
-    if (ws[i] & 1) v[i] = (long) getcharm(ws[i]);
-    else if (ai_strp(ws[i])) v[i] = (long) ((struct ai_str*) ws[i])->bytes;
-    else if (((union u*) ws[i])->ap == lvm_cask)
-      v[i] = (long) ((struct ai_cask*) ws[i])->str->bytes;
-    else return putcharm(-1); }
-  return putcharm(__ai_inle(nr, v[0], v[1], v[2], v[3], 0, 0)); }
-static lvm(lvm_syscall) {
-  Sp[4] = k_syscall(Sp[0], Sp[1], Sp[2], Sp[3], Sp[4]);
-  Sp += 4; ai_musttail return Next(1); }
-#endif
-
 // (quit code) -- the exit door, and since rung 4 the door with two rooms behind
 // it. a SEATED task (a spawned process) quits as _exit: its seated fds close --
 // the write end's close is the downstream reader's EOF -- the seat retires, and
@@ -1735,10 +1688,6 @@ static union u
   nif_svm_run[] = {{lvm_svm_run}, {lvm_ret0}},
   nif_vmx[] = {{lvm_vmx}, {lvm_ret0}},
   nif_vmx_run[] = {{lvm_vmx_run}, {lvm_ret0}},
-#endif
-#ifdef K_TEST
-  nif_syswrite[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_syswrite}, {lvm_ret0}},
-  nif_syscall[] = {{lvm_cur}, {.x = putcharm(5)}, {lvm_syscall}, {lvm_ret0}},
 #endif
   nif_fault[] = {{lvm_fault}, {lvm_ret0}};
 
@@ -1812,10 +1761,6 @@ static struct ai_def const __attribute__((section("ai_knifs"), used)) defs[] = {
   {"svm-run", (intptr_t) nif_svm_run},
   {"vmx", (intptr_t) nif_vmx},
   {"vmx-run", (intptr_t) nif_vmx_run},
-#endif
-#ifdef K_TEST
-  {"syswrite", (intptr_t) nif_syswrite},
-  {"syscall", (intptr_t) nif_syscall},
 #endif
   {"color", (intptr_t) nif_color} };
 

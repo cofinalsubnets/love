@@ -27,6 +27,13 @@
    s (slurp rfd) _ (close rfd)
  (assert (= 104 a) (= "ello pipe!" x) (= -1 e) (= "" s)))
 
+; a pipe end wears its own kind, where a ramfs fd wears a file's -- stat off the
+; fd is the one door either way
+(: pp (pipe 0) rfd (cap pp) wfd (cup pp)
+   s (stat rfd)
+   _ (close rfd) _ (close wfd)
+ (assert (= 4096 (& 61440 <>>s))))
+
 ; a row that is not there swallows what is written and reads as the end. that is
 ; what keeps a closed seat's output from faulting a task which cannot know, and
 ; it is the same answer on both seats

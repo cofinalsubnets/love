@@ -654,7 +654,7 @@ init-container: host
 kt = $(filter-out %/run.l %/bell.l %/zz-fin.l,$t) \
   $R/test/kernel/ramfs.l $R/test/kernel/fs.l $R/test/kernel/wfs.l \
   $R/test/kernel/kore0.l $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/core.l $R/crew/kore/fs.l \
-  $R/test/kernel/kore.l $R/test/kernel/pipe.l $R/test/kernel/sys.l \
+  $R/test/kernel/kore.l $R/test/kernel/pipe.l \
   $R/test/kernel/sh0.l $R/crew/lush/job.l $R/crew/lush/lex.l $R/crew/lush/gram.l \
   $R/crew/lush/glob.l $R/crew/lush/word.l $R/crew/lush/eval.l $R/test/kernel/sh.l \
   $R/test/kernel/disk.l $R/test/kernel/svm.l $R/test/kernel/vmx.l \

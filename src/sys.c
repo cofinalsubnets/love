@@ -141,29 +141,10 @@ static long k_utimeat(long dfd, char const *p, struct timespec const *ts, long f
   else ms = (uintptr_t) ts[1].tv_sec * 1000 + (uintptr_t) ts[1].tv_nsec / 1000000;
   return k_fs_utime(p, strlen(p), ms); }
 
-#ifdef K_TEST
-// the test instrument's door (kmain.c's `syscall` nif): a row's NAME to its
-// number. It lives here because the numbers are impl.h's and ARCH-KEYED --
-// close is 3 on x86_64 and 57 on aarch64 -- so a love test that spelled one
-// would pass on the seat it was written on and mean nothing on the other.
-long k_sys_nr(char const *nm, long n) {
-  struct { char const *n; long nr; } const t[] = {
-    {"read", NR_read}, {"write", NR_write},
-    {"close", NR_close}, {"lseek", NR_lseek},
-    {"openat", NR_openat}, {"newfstatat", NR_newfstatat},
-    {"mkdirat", NR_mkdirat}, {"unlinkat", NR_unlinkat},
-    {"renameat", NR_renameat}, {"chdir", NR_chdir},
-    {"getcwd", NR_getcwd}, {"fchmodat", NR_fchmodat},
-    {"utimensat", NR_utimensat},
-    {"pipe2", NR_pipe2}, {"dup3", NR_dup3}, {"fcntl", NR_fcntl},
-    {"fstat", NR_fstat}, {"getdents64", NR_getdents64},
-    {"getpid", NR_getpid}, {"clock_gettime", NR_clock_gettime} };
-  for (unsigned i = 0; i < sizeof t / sizeof *t; i++)
-    if ((long) strlen(t[i].n) == n && !memcmp(t[i].n, nm, (unsigned long) n))
-      return t[i].nr;
-  return -1; }
-#endif
 
+// the rows are exercised through the ordinary nifs, which issue them -- (open)
+// openat, (stat) newfstatat and fstat, (readdir) getdents64, (dup) fcntl. the
+// argument-refusal arms below have no caller in the tree: defensive, not covered.
 long __ai_inle(long n, long a, long b, long c, long d, long e, long f) {
   (void) e, (void) f;
   long r;

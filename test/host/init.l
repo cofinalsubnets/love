@@ -66,6 +66,14 @@
     ; tuple the path answers, and nothing for a row that is not there
     (: fd (openfd f 0) r (= (stat fd) (stat f)) _ (close fd) r)
     (id? (stat 4096) ()) !(charm? (stat 4096))
+    ; and stat reads a row's kind off the fd: a file, and a directory, which
+    ; opens read-only by POSIX's own rule
+    (: fd (openfd f 0) s (stat fd) _ (close fd) (= 32768 (& 61440 (cauup s))))
+    (: fd (openfd d 0) s (stat fd) _ (close fd) (= 16384 (& 61440 (cauup s))))
+    ; close wears the errno convention: a stranger row is EBADF, and so is the
+    ; second close of a real one -- the row is gone, which is what it says
+    (: fd (openfd f 0) a (close fd) b (close fd) (&& (id? a ()) (= -9 b)))
+    (= -9 (close 4096))
     ; unlink: () ok, then the file really is gone, and a re-unlink says so (ENOENT, POSITIVE)
     (id? (unlink f) ())
     (id? (stat f) ()) (id? (readdir d) ())
