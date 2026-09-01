@@ -64,10 +64,12 @@ static const uint8_t inf_clord[19] = {
 // an entry is (symbol << 4) | length, and 0 -- no code is 0 bits -- means "walk it".
 struct inf_code { uint16_t cnt[16], sym[288], *tab; unsigned root; };
 
-// FILE scope, not the decoder's frame: 9 KB of table has no business on a stack this
-// deep, and the nif runs to completion inside one lvm step, so nothing re-enters it.
-static uint16_t inf_ltab[1 << LROOT], inf_dtab[1 << DROOT], inf_ctab[1 << CROOT];
-static struct inf_code inf_lit, inf_dst, inf_cl;
+// one block's decode tables: the three canonical codes and the table each indexes.
+// per-call scratch on inf_run's frame, 11 KB of it -- the tightest stack under that is
+// the kernel's 64 KiB boot one, where kmain inflates the source blob into its initrd.
+struct inf_tabs {
+ uint16_t ltab[1 << LROOT], dtab[1 << DROOT], ctab[1 << CROOT];
+ struct inf_code lit, dst, cl; };
 
 static void inf_build(struct inf_code *c, const uint8_t *lens, unsigned nsym,
                       uint16_t *tab, unsigned root) {
@@ -109,6 +111,7 @@ static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t c
  uint64_t bb = 0;
  unsigned bc = 0, last, typ, i;
  uint8_t lens[320];
+ struct inf_tabs t;
 
 // one unaligned load where there is room. the byte loop below is the same act and
 // eight times the work; the arithmetic is libdeflate's -- absorb what fits, step by the
@@ -147,9 +150,9 @@ static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t c
 
   if (typ == 1) {                                // the fixed code, RFC 1951 §3.2.6
    for (i = 0; i < 288; i++) lens[i] = i < 144 ? 8 : i < 256 ? 9 : i < 280 ? 7 : 8;
-   inf_build(&inf_lit, lens, 288, inf_ltab, LROOT);
+   inf_build(&t.lit, lens, 288, t.ltab, LROOT);
    for (i = 0; i < 30; i++) lens[i] = 5;
-   inf_build(&inf_dst, lens, 30, inf_dtab, DROOT); }
+   inf_build(&t.dst, lens, 30, t.dtab, DROOT); }
   else {                                         // the block's own, read through a third
    unsigned hlit, hdist, hclen, tot, prev = 0;
    uint8_t cl[19];
@@ -157,14 +160,14 @@ static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t c
    hlit += 257; hdist += 1; hclen += 4;
    memset(cl, 0, sizeof cl);
    for (i = 0; i < hclen; i++) { unsigned v; TAKE(3, v); cl[inf_clord[i]] = (uint8_t) v; }
-   inf_build(&inf_cl, cl, 19, inf_ctab, CROOT);
+   inf_build(&t.cl, cl, 19, t.ctab, CROOT);
    memset(lens, 0, sizeof lens);
    tot = hlit + hdist;
    // a run may overshoot `tot` and the twin lets it: it writes into a tablet, which has
    // no end, and stops on the next look. so the write is clamped and the cursor is not.
    for (i = 0; i < tot; ) {
     unsigned sy, r, v, k;
-    SYM(inf_cl, inf_ctab, CROOT, sy);
+    SYM(t.cl, t.ctab, CROOT, sy);
     if (sy < 16)       { r = 1; v = sy; }
     else if (sy == 16) { TAKE(2, r); r += 3; v = prev; }
     else if (sy == 17) { TAKE(3, r); r += 3; v = 0; }
@@ -172,12 +175,12 @@ static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t c
     else return -1;
     for (k = 0; k < r; k++) if (i + k < sizeof lens) lens[i + k] = (uint8_t) v;
     i += r; prev = v; }
-   inf_build(&inf_lit, lens, hlit, inf_ltab, LROOT);
-   inf_build(&inf_dst, lens + hlit, hdist, inf_dtab, DROOT); }
+   inf_build(&t.lit, lens, hlit, t.ltab, LROOT);
+   inf_build(&t.dst, lens + hlit, hdist, t.dtab, DROOT); }
 
   for (;;) {                                     // the symbol loop, fixed or dynamic
    unsigned sy, l, d, x;
-   SYM(inf_lit, inf_ltab, LROOT, sy);
+   SYM(t.lit, t.ltab, LROOT, sy);
    if (sy < 256) {
     if (op >= cap) return -2;
     if (out) out[op] = (uint8_t) sy;
@@ -187,7 +190,7 @@ static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t c
    sy -= 257;
    l = inf_lbase[sy];
    if (inf_lext[sy]) { TAKE(inf_lext[sy], x); l += x; }
-   SYM(inf_dst, inf_dtab, DROOT, sy);
+   SYM(t.dst, t.dtab, DROOT, sy);
    if (sy > 29) return -1;
    d = inf_dbase[sy];
    if (inf_dext[sy]) { TAKE(inf_dext[sy], x); d += x; }
