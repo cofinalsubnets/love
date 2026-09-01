@@ -80,73 +80,73 @@
 (assert
  ; `+`: 15 kinds square, 225 cells
  (defn mxaddgrid mlist
-   ; kmint
+   ; KMint
    (mcons (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 nnil)))))))))))))))
    ; KNom
    (mcons (ncons 0 (ncons 1 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 1 (ncons 3 (ncons 4 (ncons 4 nnil)))))))))))))))
-   ; kcharm
+   ; KCharm
    (mcons (ncons 0 (ncons 5 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 5 (ncons 5 (ncons 4 (ncons 4 nnil)))))))))))))))
-   ; ksun
+   ; KSun
    (mcons (ncons 0 (ncons 5 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 5 (ncons 5 (ncons 4 (ncons 4 nnil)))))))))))))))
-   ; kgem
+   ; KGem
    (mcons (ncons 0 (ncons 5 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 5 (ncons 5 (ncons 4 (ncons 4 nnil)))))))))))))))
-   ; ktwin
+   ; KTwin
    (mcons (ncons 0 (ncons 5 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 5 (ncons 5 (ncons 4 (ncons 4 nnil)))))))))))))))
    ; KBig
    (mcons (ncons 0 (ncons 5 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 5 (ncons 5 (ncons 4 (ncons 4 nnil)))))))))))))))
-   ; ktrayZ
+   ; KTrayZ
    (mcons (ncons 0 (ncons 5 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 5 (ncons 5 (ncons 4 (ncons 4 nnil)))))))))))))))
-   ; ktrayR
+   ; KTrayR
    (mcons (ncons 0 (ncons 5 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 5 (ncons 5 (ncons 4 (ncons 4 nnil)))))))))))))))
-   ; ktrayC
+   ; KTrayC
    (mcons (ncons 0 (ncons 5 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 5 (ncons 5 (ncons 4 (ncons 4 nnil)))))))))))))))
-   ; ktrayO
+   ; KTrayO
    (mcons (ncons 0 (ncons 5 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 5 (ncons 5 (ncons 4 (ncons 4 nnil)))))))))))))))
-   ; kstring
+   ; KString
    (mcons (ncons 0 (ncons 1 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 1 (ncons 3 (ncons 4 (ncons 4 nnil)))))))))))))))
-   ; kchain
+   ; KChain
    (mcons (ncons 0 (ncons 3 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 3 (ncons 3 (ncons 4 (ncons 4 nnil)))))))))))))))
-   ; ktablet
+   ; KTablet
    (mcons (ncons 0 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 nnil)))))))))))))))
-   ; khot
+   ; KHot
    (mcons (ncons 0 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 nnil)))))))))))))))
     mnil))))))))))))))))
 
  ; `*`: 15 kinds square, 225 cells
  (defn mxmulgrid mlist
-   ; kmint
+   ; KMint
    (mcons (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 nnil)))))))))))))))
    ; KNom
    (mcons (ncons 7 (ncons 7 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 7 (ncons 7 (ncons 9 (ncons 9 nnil)))))))))))))))
-   ; kcharm
+   ; KCharm
    (mcons (ncons 7 (ncons 8 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 8 (ncons 8 (ncons 9 (ncons 9 nnil)))))))))))))))
-   ; ksun
+   ; KSun
    (mcons (ncons 7 (ncons 8 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 8 (ncons 8 (ncons 9 (ncons 9 nnil)))))))))))))))
-   ; kgem
+   ; KGem
    (mcons (ncons 7 (ncons 8 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 8 (ncons 8 (ncons 9 (ncons 9 nnil)))))))))))))))
-   ; ktwin
+   ; KTwin
    (mcons (ncons 7 (ncons 8 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 8 (ncons 8 (ncons 9 (ncons 9 nnil)))))))))))))))
    ; KBig
    (mcons (ncons 7 (ncons 8 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 8 (ncons 8 (ncons 9 (ncons 9 nnil)))))))))))))))
-   ; ktrayZ
+   ; KTrayZ
    (mcons (ncons 7 (ncons 8 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 8 (ncons 8 (ncons 9 (ncons 9 nnil)))))))))))))))
-   ; ktrayR
+   ; KTrayR
    (mcons (ncons 7 (ncons 8 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 8 (ncons 8 (ncons 9 (ncons 9 nnil)))))))))))))))
-   ; ktrayC
+   ; KTrayC
    (mcons (ncons 7 (ncons 8 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 8 (ncons 8 (ncons 9 (ncons 9 nnil)))))))))))))))
-   ; ktrayO
+   ; KTrayO
    (mcons (ncons 7 (ncons 8 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 8 (ncons 8 (ncons 9 (ncons 9 nnil)))))))))))))))
-   ; kstring
+   ; KString
    (mcons (ncons 7 (ncons 7 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 7 (ncons 7 (ncons 9 (ncons 9 nnil)))))))))))))))
-   ; kchain
+   ; KChain
    (mcons (ncons 7 (ncons 7 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 7 (ncons 11 (ncons 9 (ncons 9 nnil)))))))))))))))
-   ; ktablet
+   ; KTablet
    (mcons (ncons 7 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 nnil)))))))))))))))
-   ; khot
+   ; KHot
    (mcons (ncons 7 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 nnil)))))))))))))))
     mnil))))))))))))))))
 
- ; the band partition, derived by row+column equality over both squares
+ ; the band partition, DERIVED by row+column equality over both squares
  (defn mxbandtbl nlist
    (ncons 0 (ncons 1 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 1 (ncons 3 (ncons 4 (ncons 4 nnil))))))))))))))))
 
@@ -156,29 +156,29 @@
 
  ; `+` on the band quotient, 25 cells
  (defn mxaddbgrid mlist
-   ; band 0 -- kmint
+   ; band 0 -- KMint
    (mcons (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 nnil)))))
    ; band 1 -- KNom
    (mcons (ncons 0 (ncons 1 (ncons 2 (ncons 3 (ncons 4 nnil)))))
-   ; band 2 -- kcharm
+   ; band 2 -- KCharm
    (mcons (ncons 0 (ncons 5 (ncons 6 (ncons 5 (ncons 4 nnil)))))
-   ; band 3 -- kchain
+   ; band 3 -- KChain
    (mcons (ncons 0 (ncons 3 (ncons 2 (ncons 3 (ncons 4 nnil)))))
-   ; band 4 -- ktablet
+   ; band 4 -- KTablet
    (mcons (ncons 0 (ncons 4 (ncons 4 (ncons 4 (ncons 4 nnil)))))
     mnil))))))
 
  ; `*` on the band quotient, 25 cells
  (defn mxmulbgrid mlist
-   ; band 0 -- kmint
+   ; band 0 -- KMint
    (mcons (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 nnil)))))
    ; band 1 -- KNom
    (mcons (ncons 7 (ncons 7 (ncons 8 (ncons 7 (ncons 9 nnil)))))
-   ; band 2 -- kcharm
+   ; band 2 -- KCharm
    (mcons (ncons 7 (ncons 8 (ncons 10 (ncons 8 (ncons 9 nnil)))))
-   ; band 3 -- kchain
+   ; band 3 -- KChain
    (mcons (ncons 7 (ncons 7 (ncons 8 (ncons 11 (ncons 9 nnil)))))
-   ; band 4 -- ktablet
+   ; band 4 -- KTablet
    (mcons (ncons 7 (ncons 9 (ncons 9 (ncons 9 (ncons 9 nnil)))))
     mnil))))))
 

@@ -97,7 +97,7 @@
           ['de5vcv (cv '(v z) e5)]   ['de5vck (ck '(v z) e5 P ())]
           ['de5bcv (cv eb e5)]       ['de5bck (ck eb e5 P ())]]
 
-   _ (puts "; test/uuhomgen.l -- GENERATED from doc/misc/proto/dest.l by tools/dest2uu.l. Do not")
+   _ (puts "; test/uuhomgen.l -- generated from doc/misc/proto/dest.l by tools/dest2uu.l. Do not")
    _ (puts "\n; edit; refresh with `make uuhomgen`. The law-site programs, cv (r0 protocol)")
    _ (puts "\n; and ck (destination die), lifted to uu nlist terms -- 4 nats per instruction")
    _ (puts "\n; (op d a b), operands parity-tagged (reg r = 2r, imm k = 2k+1), frame offsets")

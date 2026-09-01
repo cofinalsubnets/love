@@ -259,20 +259,20 @@
    (srcof d) (show (at (unglue (opfix (at d 1))) 2))
 
    ; --- emit ---
-   _ (pl "; test/uuvallaw.l -- GENERATED from test/law.l by tools/law2uu.l. Do not edit;")
-   _ (pl "; refresh with `make uuvallaw`. CLAUDE.md's laws, ONE SPELLING for both lanes:")
+   _ (pl "; test/uuvallaw.l -- generated from test/law.l by tools/law2uu.l. Do not edit;")
+   _ (pl "; refresh with `make uuvallaw`. CLAUDE.md's laws, one spelling for both lanes:")
    _ (pl "; test/law.l quantifies each row over a corpus (refutation), and the rows the")
-   _ (pl "; measure tower can state arrive here as uu OBLIGATIONS over test/uuval.l's")
+   _ (pl "; measure tower can state arrive here as uu obligations over test/uuval.l's")
    _ (pl "; model (proof). the source row prints over its term, and every proof was")
-   _ (pl "; SEARCHED against the live kernel -- by conversion where the tower's round")
+   _ (pl "; searched against the live kernel -- by conversion where the tower's round")
    _ (pl "; trips are definitional, by cases on the saturated measure where they are")
    _ (pl "; not, and otherwise by the lemma the model names for that row.")
    _ (pl "; a guard the tower cannot read erases (the model has one uniform value),")
-   _ (pl "; which makes the obligation STRONGER than the row it came from, never")
-   _ (pl "; weaker; each such row names the guard it dropped. a guard it CAN read")
+   _ (pl "; which makes the obligation stronger than the row it came from, never")
+   _ (pl "; weaker; each such row names the guard it dropped. a guard it can read")
    _ (pl "; stays, as the orb it always was. a val-rung claim is veq's -- a guarded row
-; needs a DECIDABLE claim, and a path is not a bool -- and where the guard
-; erased the row gets its PATHS twin over the pinned carrier beside it, by
+; needs a decidable claim, and a path is not a bool -- and where the guard
+; erased the row gets its paths twin over the pinned carrier beside it, by
 ; uuval.l's bridge. Substrate: test/uuval.l over test/uu.l.")
    _ (pl "")
    _ (pl "(assert (member? 'vof (names ())))")
@@ -304,7 +304,7 @@
     (? (! (veqclaim? (at d 2))) 0
        (: q (at (at (at d 2) 3) 2) ta (at q 1) tb (at q 2)
           g (intern ("law-" + (qstrip (show (at d 0)))))
-          _ (pl " ; ..and the same law over the PINNED carrier, by the bridge")
+          _ (pl " ; ..and the same law over the pinned carrier, by the bridge")
           _ (pl (" (defq law-" + (qstrip (show (at d 0))) + "-p"))
           _ (pl ("   " + (show ['pi 'v 'val ['paths 'pval ['pin ta] ['pin tb]]])))
           (pl ("   " + (show ['lam 'v ['uv-veq-paths ta tb [g 'v]]]) + ")"))))
@@ -318,7 +318,7 @@
           proved)
    _ (pl ")")
    _ (pl "")
-   _ (pl "; --- rows whose CODOMAIN is the proof: the tower assigns the type, so the")
+   _ (pl "; --- rows whose codomain is the proof: the tower assigns the type, so the")
    _ (pl "; --- range check has nothing left to state ---")
    _ (map (\ d (pl (join [" ;   " (pad (show (at d 0)) 14) "lands in " (at d 2)]))) ranged)
    _ (pl "")

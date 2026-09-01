@@ -36,7 +36,7 @@
           ['sp2subst (esubst (e2 0) (e2 1))]
           ['sp3call (ecall (e3 0) (e3 1))]  ['sp3bind (ebind (e3 0) (e3 1))]]
 
-   _ (puts "; test/uusplgen.l -- GENERATED from doc/misc/proto/spl.l by tools/spl2uu.l. Do not")
+   _ (puts "; test/uusplgen.l -- generated from doc/misc/proto/spl.l by tools/spl2uu.l. Do not")
    _ (puts "\n; edit; refresh with `make uusplgen`. The call-site samples under the three")
    _ (puts "\n; compilers -- ecall (args into seats), ebind (the binding splice), esubst")
    _ (puts "\n; (the substitution splice) -- lifted to uu nlist terms, 2 nats per op (op x),")
