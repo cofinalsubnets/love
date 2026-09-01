@@ -434,7 +434,9 @@ static struct ai *c0_lambda(struct ai *g, struct env **c, intptr_t imps, intptr_
  union u *k, *ip;
  word ops = exp;             // the full operand list (params… body) for the stored src
  struct env *d = NULL;
- mm(g, &d); mm(g, &exp); mm(g, &ops);
+ // imps is rooted like the rest: the rename loop below mints and substitutes, and a
+ // collection there leaves an unrooted argument pointing into the from-space.
+ mm(g, &d); mm(g, &exp); mm(g, &ops); mm(g, &imps);
 
  // a param that shadows an enclosing binder renames to a fresh mint over the whole
  // operand list -- one cluster, so a like-named inner : renames with it and a
@@ -495,7 +497,7 @@ static struct ai *c0_lambda(struct ai *g, struct env **c, intptr_t imps, intptr_
 
  if (ai_ok(g)) k = g->ip, g->ip = ip, g = gxl(ai_push(g, 2, k, eget(g, d, EImps)));
 
- return um(g), um(g), um(g), g; }
+ return um(g), um(g), um(g), um(g), g; }
 
 static Ana(c0_cond_exit) { return
  incl(*c, 3),
