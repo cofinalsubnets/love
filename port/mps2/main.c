@@ -101,6 +101,8 @@ struct ai_fio ai_stdout = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_b
 struct ai_fio ai_stderr = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
 struct ai_port_vt const ai_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
 
+#include "../fdrow.h"                       // ai_fd_readn / ai_fd_say off the two above
+
 // --- the exit builtin -----------------------------------------------------
 // (m7exit code) -- leave the machine through semihosting with `code` as the
 // qemu exit status. The driver tail's last word.

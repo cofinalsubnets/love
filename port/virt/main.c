@@ -94,14 +94,7 @@ struct ai_fio ai_stdout = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_b
 struct ai_fio ai_stderr = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
 struct ai_port_vt const ai_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
 
-// the raw-fd lanes, which src/seat.c owns on a hosted seat: love's io ops take a bare fd
-// as well as a port, and this seat's fds are the console -- 0 in, 1 and 2 out, nothing
-// else. >0 landed, 0 busy, -1 gone is the port protocol, and a live wire is never gone.
-intptr_t ai_fd_readn(struct ai *g, int fd, unsigned char *dst, uintptr_t n) {
-  return fd ? -1 : fd_readn(g, dst, n); }
-
-uintptr_t ai_fd_say(int fd, unsigned char const *src, uintptr_t n) {
-  return fd == 1 || fd == 2 ? (uintptr_t) fd_writen(NULL, src, n) : 0; }
+#include "../fdrow.h"                       // ai_fd_readn / ai_fd_say off the two above
 
 // --- the exit builtin -----------------------------------------------------
 // (vexit code) -- leave the machine through the test finisher with `code` as
