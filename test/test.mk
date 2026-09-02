@@ -610,7 +610,7 @@ test_riscv: host
 # test_raw's riscv64 twin: mooncc -t riscv64 lays every object, mksys-riscv the syscall
 # leaf, OUR linker binds, qemu-riscv64 runs the whole corpus over the fresh egg. The riscv
 # backend loads into the sealed holo module at runtime for mksys. Opt-in; skips w/o qemu.
-test_raw_riscv: host out/lib/riscv.h
+test_raw_riscv: host out/lib/rv64.h
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
 	  sh test/gate/raw.sh riscv64 $(ho) $m $t
 # test_raw's aarch64 twin: mooncc -t arm64 lays every object, mksys-arm64 the syscall leaf,
