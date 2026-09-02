@@ -549,11 +549,23 @@ test_rvboot:
 # test_vec -- the INTERRUPT gate: raises a real CPU exception with (fault n) and reads the
 # report, the only way to reach src/mkvec.l's 32 stubs and the fault vector, then
 # checks the stubs no boot can reach against the architecture's own error-code list.
+# ⚠ WHICH vec.o: at the HOST arch there is no $(k_pie) build -- the elf is projected out of
+# the shipped love, which already carries the kart lane's objects -- so $(k_o) never runs and
+# the only vec.o laid for this machine is $(moon_d)/kvec.o. same mkvec.l, same arch, same lay.
+# a cross arch builds the pie and lays its own under $(ko). two ifeqs, never an else-ifeq.
+kvec_x86_64  = $(ko)/x86_64/x86_64/vec.o
+kvec_aarch64 = $(ko)/aarch64/aarch64/vec.o
+ifeq ($(hosta),x86_64)
+kvec_x86_64  = $(moon_d)/kvec.o
+endif
+ifeq ($(hosta),aarch64)
+kvec_aarch64 = $(moon_d)/kvec.o
+endif
 test_vec: host
 	@$(MAKE) -s a=x86_64 kernel
-	@sh test/gate/vec.sh x86_64 out/free/love-x86_64.elf out/free/x86_64/free/x86_64/vec.o
+	@sh test/gate/vec.sh x86_64 out/free/love-x86_64.elf $(kvec_x86_64)
 	@$(MAKE) -s a=aarch64 kernel
-	@sh test/gate/vec.sh aarch64 out/free/love-aarch64.elf out/free/aarch64/free/aarch64/vec.o
+	@sh test/gate/vec.sh aarch64 out/free/love-aarch64.elf $(kvec_aarch64)
 # THE FIXPOINT: the default love IS mooncc-built, so this gate has it rebuild ITSELF --
 # love1 (love0's lane, relinked) bakes its own compiler image, recompiles every TU, links
 # love2, and the two must be byte-identical. A headline invariant -- but it runs in
@@ -561,6 +573,7 @@ test_vec: host
 # $(moon_o) $(kart_o) is the link list, the artifact's own: the gate is handed make's
 # objects, it never globs the odir, and it links no less than `make` does.
 test_fixpoint: host $(love0) out/host/mooncc0.image
+	@$(MAKE) -s a=$(hosta) $(ko)/$(hosta)/mkvec.l
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
 	  sh test/gate/fixpoint.sh $(ho) $(love0) $(hosta) $(moon_o) $(kart_o)
 # THE CROSS-MACHINE FIXPOINT, in effigy (doc/misc/plan/seed-universal.md U0): the x-lane's
