@@ -68,7 +68,7 @@
                                 c (accept l)
                                 ; the maker hook: it claims /made and says "not mine" for
                                 ; everything else, including a path that is a file on disk
-                                _ (? c (: _ (serve1 dir mk c) _ (seal c 1) (close c)) 0)
+                                _ (? (hot? c) (: _ (serve1 dir mk c) _ (seal c 1) (close c)) 0)
                                 (? (peep stop 0 0) 1 (g (k + 1))))) 0)) 0)
    (ask req) (: c (connect "127.0.0.1" port)
                 _ (say c req)

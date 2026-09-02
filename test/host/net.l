@@ -47,19 +47,14 @@
  _ (close l))
 
 ; --- every failure lane answers the unit (never a stray fixnum / hang) ---
-; `nil?` cannot see the difference and that is why it is not the whole law: it
-; is the net test, so the charm zero and () both pass it, and these nifs used to
-; answer the charm while their posix.c siblings answered (). `id?` is what tells
-; a port-returning nif's "nothing" from a number that happens to be zero.
+; a failure is a nom, and the nom says which failure: refused is not a bad
+; argument, and the two operator problems a () could never part now read apart.
 (: _ (assert
-    (nil? (listen -1))                     ; bad port
-    (nil? (connect "127.0.0.1" 7392))      ; nothing listening on 7392 -> refused
-    (nil? (connect 12345 80))              ; non-string host
-    (nil? (connect "example.org" 80))      ; a NAME is a misuse: connect takes a quad
-    (id? () (listen -1))
-    (id? () (connect "127.0.0.1" 7392))
-    (id? () (connect 12345 80))
-    (id? () (udp-bind -1))))
+    (id? 'badarg (listen -1))                       ; bad port: refused up here
+    (id? 'econnrefused (connect "127.0.0.1" 7392))  ; nothing listening on 7392
+    (id? 'badarg (connect 12345 80))                ; non-string host
+    (id? 'badarg (connect "example.org" 80))        ; a NAME is a misuse: connect takes a quad
+    (id? 'badarg (udp-bind -1))))
 
 ; --- rung 5: seal lands the write run ------------------------------------------
 ; the bug: `seal` shuts the write half and never flushed. love.h has always

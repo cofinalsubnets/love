@@ -63,7 +63,7 @@
     (: dir (lux-rundir ())
        (sockish? n) ((snip n 0 4 = "lux-") &&
                         (snip n (#n - 5) #n = ".sock"))
-       (dead? p) (: c (connectu p) (c ? (: _ (close c) 0) 1))
+       (dead? p) (: c (connectu p) (hot? c ? (: _ (close c) 0) 1))
        (go ns acc) (? !(two? ns) acc
                       (: p (dir + ("/" + <ns))
                          (? (!(p = own) && dead? p) (unlink p, go >ns (p >< acc))
@@ -130,7 +130,7 @@
 (hear (\ a b ['scare a b]))
 
 (: s (x-connect lux-display)
-   _ (s ? 0 (say err "lux: no display -- Xephyr up?\n", quit 1))
+   _ (hot? s ? 0 (say err "lux: no display -- Xephyr up?\n", quit 1))
    (line m) (say out m, say out "\n", flush out)
    sc (x-setup s lux-auth)
    _ (sc ? 0 (say err "lux: setup refused (auth?)\n", quit 1))

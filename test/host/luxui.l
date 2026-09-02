@@ -46,7 +46,7 @@
  ; exec'd restart or a dead Xephyr session leaves)
  rdir (: rd (getenv "XDG_RUNTIME_DIR") (? (< 1 (tally rd)) rd "/tmp"))
  stale "lux-luxui-stale.sock"
- _ (: p (shore (+ rdir (+ "/" stale))) (? p (close p) 0))
+ _ (: p (shore (+ rdir (+ "/" stale))) (? (hot? p) (close p) 0))
  _ (must 'stale-planted (any (\ n (= n stale)) (readdir rdir)))
 
  ; the real driver, the same module set bin/lux ships (DISPLAY rides env).

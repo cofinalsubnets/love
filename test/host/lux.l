@@ -10,9 +10,9 @@
 ; not the gate. Here: the nif is present and every refusal lane answers nil,
 ; not a scare -- absence is nothing.
 (assert (lit? connectu))
-(assert !(connectu "/nonexistent/never/sock"))     ; no such path -> nil
-(assert !(connectu ""))                            ; empty path -> nil
-(assert !(connectu "/tmp"))                        ; a directory, not a socket -> nil
-(assert !(connectu 7))                             ; not a string -> nil
+(assert (id? 'enoent (connectu "/nonexistent/never/sock")))   ; no such path
+(assert (id? 'badarg (connectu "")))                          ; empty path: refused up here
+(assert (nom? (connectu "/tmp")))                             ; a directory, not a socket
+(assert (id? 'badarg (connectu 7)))                           ; not a string
 (test_fin ())
 (say err "test/host/lux: ok\n")

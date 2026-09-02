@@ -64,10 +64,10 @@
 
     ; server: listen + accept one client, then talk. close the listener after.
     (serve port) (: l (listen port)
-                    (? l (: c (accept l)
-                            (? c (: _ (talk c) _ (close l) 1)
+                    (? (hot? l) (: c (accept l)
+                            (? (hot? c) (: _ (talk c) _ (close l) 1)
                                (: _ (close l) (die "accept failed"))))
-                       (die (+ "cannot listen on port " (string port)))))
+                       (die (+ "cannot listen on port " (+ (string port) (+ " -- " (show l)))))))
 
     ; client: resolve, connect, then talk.
     (client host port) (: s (dial host port)

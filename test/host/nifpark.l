@@ -103,15 +103,15 @@
 ; fills the queue that constant sizes. linux queues one more than asked (the test
 ; is `> max`), so backlog+1 arrivals fill it and the next is dropped. if the
 ; constant moves and this does not, the fill stops one short, the stalled connect
-; lands instead, and `(nil? r)` reddens -- noisily, which is the point.
+; lands instead, and `(nom? r)` reddens -- noisily, which is the point.
 ;
 ; and the fill closes as it goes, which costs one fd instead of 513: a client
 ; hangup does not free the slot. An unaccepted connection holds its place in the
 ; queue until something accepts it, and nothing here ever does.
 ;
 ; closing the listener is what ends it: the queued connections reset, the stalled
-; client's handshake fails, and `catch` reaps a plain nil. no freeze, so no socket
-; is left behind by a task unspliced mid-park.
+; client's handshake fails, and `catch` reaps the failure's nom. no freeze, so no
+; socket is left behind by a task unspliced mid-park.
 (: port 7397
    l (listen port)
    n (tablet 0)
@@ -127,7 +127,7 @@
    _ (freeze t)
    _ (close a)
    _ (assert (0 < k)                    ; 0 with a blocking connect back in
-             (nil? r)                   ; the reset handshake is a plain nil
+             (nom? r)                   ; the reset handshake answers its nom
              (lit? a)))                 ; ... and a connect that did land is a port
 
 (: _ (say out "nifpark: ok") (putc 10))

@@ -139,7 +139,7 @@
    ; every line it yields means 53, but a stub on another port is a real thing to
    ; want and the walk carries the pair either way.
    (dns-ask ns port h ms)
-    (udp-bind 0 @ (p && p)
+    (udp-bind 0 @ (p && hot? p)
      (: id (clock 0 & 65535)
         q (dns-query id h)
       (? !(string? q) (close p, ())
@@ -207,7 +207,7 @@
    ; resolve, then connect to each address in turn until one takes. a dotted quad
    ; costs no lookup at all -- `resolve` hands it straight back.
    (dial h port)
-    (: (go (a . u)) (connect (dns-show a) port || go u)
+    (: (go (a . u)) (: c (connect (dns-show a) port) (hot? c ? c (go u)))
      (go (resolve h)))
 
    ; an address back to its dotted quad, which is the only spelling `connect` takes.

@@ -57,7 +57,7 @@
    ; the caller can tell "no such object" from "no such host".
    (http-get host port path)
     (: s (dial host port)
-       (? !s ()
+       (? !(hot? s) ()
           (: _ (say s ("GET " + path + " HTTP/1.1\r\nHost: " + host
                        + "\r\nConnection: close\r\nUser-Agent: sb\r\n\r\n"))
              _ (flush s)

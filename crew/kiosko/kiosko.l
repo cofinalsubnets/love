@@ -296,7 +296,7 @@
    (: _ (await l)
       c (accept l)
       _ (drain ())
-      _ (? c (: _ (before ? (before ()))
+      _ (? (hot? c) (: _ (before ? (before ()))
                 ; the session's raise is the session's: uncaught, a scare anywhere under
                 ; serve1 -- a file that vanished between the stat and the gulp, a peer that
                 ; hung up mid-write -- takes the whole server down with it, every other
@@ -310,9 +310,9 @@
                                _ (r ? (note quiet r)) _ (seal c 1) (close c))) ())))
       (accept-loop root l quiet before make))
    ; the entry. `root` is a directory (no trailing slash), `port` a fixnum, `before` a thunk
-   ; or (). answers () when the port cannot be taken, so a caller can say something better
-   ; than we can. all four operands, always -- three would hand back a closure, which is
-   ; truthy, and the caller's "did it listen?" test would read a failure as a success.
+   ; or (). answers the failure's nom when the port cannot be taken, so a caller can say
+   ; WHY ('eacces is not 'eaddrinuse). all four operands, always -- three would hand back
+   ; a closure, and the caller's nom? test wants the real answer.
    ; four operands, always -- three hands back a closure, which is truthy, and the
    ; caller's "did it listen?" test reads a failure as a success. `serve5` is the same
    ; entry with the maker hook; `serve` is it with no hook, which is every caller that
@@ -321,10 +321,12 @@
    (serve5 root port quiet before make)
    (: r (? (ends? root "/") (snip root 0 (#root - 1)) root)
       l (listen port)
-    (? l (!quiet ? (say err $ "kiosko: serving " + r + " on http://127.0.0.1:" + show port + "/\n"),
-          accept-loop r l quiet before make,
-          close l,
-          1))))
+    (? (hot? l)
+       (!quiet ? (say err $ "kiosko: serving " + r + " on http://127.0.0.1:" + show port + "/\n"),
+        accept-loop r l quiet before make,
+        close l,
+        1)
+       l)))
 
 ; --- the command line ---------------------------------------------------------------------
 (: _ (:
@@ -349,8 +351,9 @@ usage: kiosko [-p PORT] [-q] [DIR]
       port (peep box 'port 8080)
       _ (!(dir? (peep box 'root ".")) ?
          (say err $ "kiosko: not a directory: " + peep box 'root ".", put err 10, quit 1))
-      _ (!(serve (peep box 'root ".") port (peep box 'quiet 0) ()) ?
-         (say err ("kiosko: cannot listen on :" + show port), put err 10, quit 1))
+      r (serve (peep box 'root ".") port (peep box 'quiet 0) ())
+      _ (nom? r ?
+         (say err ("kiosko: cannot listen on :" + show port + " -- " + show r), put err 10, quit 1))
       (quit 0))
    kiosko-main)
 
