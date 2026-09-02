@@ -766,11 +766,11 @@ lvm(lvm_bdiv_start) {
  // one-shot the cheap cases: |a|<|b| (q=0), single-limb divisor, or a short quotient.
  if (m < n || n < 2 || m - n < (int) (bdiv_chunk / (uintptr_t) n)) {
   Pack(g); g = ai_big_binop(g, vop);
-  if (!ai_ok(g)) return Ap(_lvm_ghelp, g);
-  return Resume(); }
+  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+  ai_musttail return Resume(); }
  Pack(g); g = ai_bdiv_setup(g, vop == vop_rem);
- if (!ai_ok(g)) return Ap(_lvm_ghelp, g);
- return Resume(); }
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+ ai_musttail return Resume(); }
 
 static lvm(lvm_bdiv) {
  ai_limb *ws = (ai_limb*) txt(cask(Sp[1])->str);
@@ -1021,7 +1021,7 @@ lvm(lvm_aprod) {
 static lvm(lvm_aextreme) {
  int kind = (int) g->b;
  word x = Sp[0];
- if (!packp(x)) return Next(1);
+ if (!packp(x)) ai_musttail return Next(1);
  if (tray(x)->type == ai_O) {
   Pack(g); g = ored(g, kind);
   if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
@@ -1181,7 +1181,7 @@ lvm(lvm_vmap1) {
  ini_tray(r, ai_R, rank);
  for (uintptr_t i = 0; i < rank; i++) r->shape[i] = a->shape[i];
  vmap1_fill(r, a, fn);
- return Answer(word(r)); }
+ ai_musttail return Answer(word(r)); }
 
 // --- elementwise dyadic engine with broadcasting. integer division guards /0
 // and INT_MIN/-1 -> 0 (one element can't change the whole result's domain).
@@ -1449,7 +1449,7 @@ static lvm(lvm_cmp_ord) {
  else if (gemp(a) || gemp(b)) r = vcmp_flo(op, toflo(a), toflo(b));
  else if (bigp(a) || bigp(b)) r = vcmp_int(op, ai_big_cmp(a, b), 0);
  else r = vcmp_int(op, toint(a), toint(b));
- return Push(r ? putcharm(1) : zero); }
+ ai_musttail return Push(r ? putcharm(1) : zero); }
 // `<` `<=` are the implemented side (both-fixnum fast path: tagged order is
 // monotonic); `>` `>=` reverse the operands. cond fusion: when the fast path sees
 // lvm_cond next it branches directly (true -> Ip+3, false -> Ip[2].m) instead of
@@ -1621,14 +1621,14 @@ lvm(lvm_vbin) {
  // the gate below); mixing ai_C with ai_O is unsupported -- the ai_O lane wins
  if (((atray && tray(a)->type == ai_C) || (btray && tray(b)->type == ai_C) || twinp(a) || twinp(b))
      && !(atray && tray(a)->type == ai_O) && !(btray && tray(b)->type == ai_O)) {
-  if (vop_bitp(op)) return Push(ZeroPoint);   // no bits on a complex
+  if (vop_bitp(op)) ai_musttail return Push(ZeroPoint);   // no bits on a complex
   g->b = (ai_word) (op); ai_musttail return Ap(lvm_cbin, g); }
  if (!(atray || isnum(a)) || !(btray || isnum(b)))   // each operand: array or scalar
-  return Push(op == vop_eq ? zero : ZeroPoint);   // `=` is boolean: undefined face -> 0, not ()
+  ai_musttail return Push(op == vop_eq ? zero : ZeroPoint);   // `=` is boolean: undefined face -> 0, not ()
  if ((atray && tray(a)->type == ai_O) || (btray && tray(b)->type == ai_O)) {
   // boxed cells are not the word lane: a big refuses the bits on a star, so the
   // object tray refuses them whole rather than answering per-element zero.
-  if (vop_bitp(op)) return Push(ZeroPoint);
+  if (vop_bitp(op)) ai_musttail return Push(ZeroPoint);
   g->b = (ai_word) (op); ai_musttail return Ap(lvm_obin, g); }                   // object array -> promoting lane
  uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0,
            R = ra > rb ? ra : rb;
@@ -1638,9 +1638,9 @@ lvm(lvm_vbin) {
      tb = btray ? (int) tray(b)->type : gemp(b) ? (int) ai_R : (int) ai_Z,
      ct = ta > tb ? ta : tb;
  bool fdom = ct >= ai_R, cmp = op >= vop_lt;
- if (vop_bitp(op) && fdom) return Push(ZeroPoint);   // no bits on a gem
+ if (vop_bitp(op) && fdom) ai_musttail return Push(ZeroPoint);   // no bits on a gem
  uintptr_t n = bshape_n(a, b);                     // conformance + result size
- if (n == (uintptr_t) -1) return Push(op == vop_eq ? zero : ZeroPoint);   // non-conformant `=` -> 0
+ if (n == (uintptr_t) -1) ai_musttail return Push(op == vop_eq ? zero : ZeroPoint);   // non-conformant `=` -> 0
  // `/` over an all-integer broadcast promotes the whole result to f64 the moment
  // any element divides inexactly (matching the scalar `/`); `//` (vop_fquot) stays
  // integer. sound only after conformance is known good (offsets are then in range).
@@ -1653,7 +1653,7 @@ lvm(lvm_vbin) {
  ini_tray(r, rt, R);
  bshape_put(r->shape, R, a, b);
  vbin_fill(r, a, b, op, fdom);
- return Push(word(r)); }
+ ai_musttail return Push(word(r)); }
 
 // --- dyadic math map with broadcasting (pow / atan2 over arrays): lvm_vbin's
 // float-domain twin -- the result is always a float array, each element fn(av, bv)
@@ -1677,10 +1677,10 @@ lvm(lvm_vmap2) {
  word a = Sp[0], b = Sp[1];
  bool atray = trayp(a), btray = trayp(b);
  if (!(atray || isnum(a)) || !(btray || isnum(b)))   // each operand: array or scalar
-  return Push(ZeroPoint);
+  ai_musttail return Push(ZeroPoint);
  uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0,
            R = ra > rb ? ra : rb, n = bshape_n(a, b);
- if (n == (uintptr_t) -1) return Push(ZeroPoint);
+ if (n == (uintptr_t) -1) ai_musttail return Push(ZeroPoint);
  uintptr_t bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[ai_R];
  Have(b2w(bytes));
  a = Sp[0], b = Sp[1];                                       // re-read post-Have
@@ -1688,4 +1688,4 @@ lvm(lvm_vmap2) {
  ini_tray(r, ai_R, R);
  bshape_put(r->shape, R, a, b);
  vmap2_fill(r, a, b, fn);
- return Push(word(r)); }
+ ai_musttail return Push(word(r)); }

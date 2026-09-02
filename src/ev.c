@@ -1020,15 +1020,15 @@ static lvm(lvm_coin_op) {
  intptr_t slot = g->b;                              // the die slot, off the scratch
  word a = Sp[0], b = Sp[1];
  if (coinp(a) && coinp(b) && coin_die(a) != coin_die(b))
-  return Push(ZeroPoint);             // two distinct newtypes: no canonical +/*
+  ai_musttail return Push(ZeroPoint);             // two distinct newtypes: no canonical +/*
  word f = die_get(g, coinp(a) ? coin_die(a) : coin_die(b), slot);
- if (ai_nilp(g, f)) return Push(ZeroPoint);   // no method -> zero
+ if (ai_nilp(g, f)) ai_musttail return Push(ZeroPoint);   // no method -> zero
  Have(2);
  a = Sp[0], b = Sp[1];                              // re-read post-GC
  f = die_get(g, coinp(a) ? coin_die(a) : coin_die(b), slot);
  word *dst = Sp - 2, ret = word(Ip + 1);
  dst[0] = a, dst[1] = f, dst[2] = b, dst[3] = ret;
- Sp = dst; Ip = (union u*) numap_drive; return Continue(); }
+ Sp = dst; Ip = (union u*) numap_drive; ai_musttail return Continue(); }
 static lvm(lvm_add_coin) { g->b = (ai_word) (DieAdd); ai_musttail return Ap(lvm_coin_op, g); }
 static lvm(lvm_mul_coin) { g->b = (ai_word) (DieMul); ai_musttail return Ap(lvm_coin_op, g); }
 // `-` and `/` have no kind matrix; lvm_sub/lvm_quot intercept coins themselves and land here.

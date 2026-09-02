@@ -278,24 +278,24 @@ static lvm(lvm_math1) {
  ai_flo1 fn = (ai_flo1) (uintptr_t) g->b;
  word a = Sp[0];
  if (trayp(a)) {                               // (sin a-tray) etc. -> gem tray; a twin tray is undefined
-  if (tray(a)->type == ai_C) return Answer(ZeroPoint);
+  if (tray(a)->type == ai_C) ai_musttail return Answer(ZeroPoint);
   g->b = (ai_word) (uintptr_t) (fn); ai_musttail return Ap(lvm_vmap1, g); }
- if (!isnum(a)) return Answer(ZeroPoint);
+ if (!isnum(a)) ai_musttail return Answer(ZeroPoint);
  ai_flo_t ad = toflo(a), rd = fn(ad);
  Have(gem_req);
- Sp[0] = mk_gem(&Hp, rd); return Next(1); }
+ Sp[0] = mk_gem(&Hp, rd); ai_musttail return Next(1); }
 
 static lvm(lvm_math2) {
  ai_flo2 fn = (ai_flo2) (uintptr_t) g->b;
  word a = Sp[0], b = Sp[1];
  if (trayp(a) || trayp(b)) {                               // (pow arr ..) etc. -> float array
   if ((trayp(a) && tray(a)->type == ai_C) || (trayp(b) && tray(b)->type == ai_C))
-   return Push(ZeroPoint);                 // complex array undefined here
+   ai_musttail return Push(ZeroPoint);                 // complex array undefined here
   g->b = (ai_word) (uintptr_t) (fn); ai_musttail return Ap(lvm_vmap2, g); }
- if (!isnum(a) || !isnum(b)) return Push(ZeroPoint);
+ if (!isnum(a) || !isnum(b)) ai_musttail return Push(ZeroPoint);
  ai_flo_t ad = toflo(a), bd = toflo(b), rd = fn(ad, bd);
  Have(gem_req);
- *++Sp = mk_gem(&Hp, rd); return Next(1); }
+ *++Sp = mk_gem(&Hp, rd); ai_musttail return Next(1); }
 
 
 m1(mvm1)
@@ -953,8 +953,8 @@ lvm(lvm_obin) {
  int op = (int) g->b;
  Pack(g);
  g = obin_run(g, op);
- if (!ai_ok(g)) return Ap(_lvm_ghelp, g);
- return Resume(); }
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+ ai_musttail return Resume(); }
 
 // ai_O reduction body (kind: 0 sum, 1 prod, 2 max, 3 min). g->sp[0] is the array.
 struct ai *ored(struct ai *g, int kind) {
@@ -1010,11 +1010,11 @@ lvm(lvm_twin_bin) {
  int vop = (int) g->b;
  word a = Sp[0], b = Sp[1];
  if (!(twinp(a) || isnum(a)) || !(twinp(b) || isnum(b)) || vop > vop_quot)
-  return Push(ZeroPoint);
+  ai_musttail return Push(ZeroPoint);
  Have(twin_req);
  struct ai_twin *v = (struct ai_twin*) Hp; v->ap = lvm_twinbox; Hp += twin_req;
  twin_fill(v, a, b, vop);
- return Push(word(v)); }
+ ai_musttail return Push(word(v)); }
 
 // --- complex-array elementwise lane (ai_C): lvm_vbin's complex twin -- packed
 // (re,im) broadcast, a real element promoting to (v, 0)
@@ -1062,11 +1062,11 @@ lvm(lvm_cbin) {
  // lexicographic): a tray follows its scalar
  if (!(atray || twinp(a) || isnum(a)) || !(btray || twinp(b) || isnum(b))
      || op == vop_rem || op == vop_fquot)
-  return Push(op == vop_eq ? zero : ZeroPoint);   // `=` is boolean: undefined face -> 0, not ()
+  ai_musttail return Push(op == vop_eq ? zero : ZeroPoint);   // `=` is boolean: undefined face -> 0, not ()
  bool cmp = op >= vop_lt;
  uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0,
            R = ra > rb ? ra : rb, n = bshape_n(a, b);
- if (n == (uintptr_t) -1) return Push(op == vop_eq ? zero : ZeroPoint);   // non-conformant `=` -> 0
+ if (n == (uintptr_t) -1) ai_musttail return Push(op == vop_eq ? zero : ZeroPoint);   // non-conformant `=` -> 0
  enum ai_tray_type rt = cmp ? ai_Z : ai_C;              // compare -> i64 mask, else packed complex
  uintptr_t bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[rt];
  Have(b2w(bytes));
@@ -1075,7 +1075,7 @@ lvm(lvm_cbin) {
  ini_tray(r, rt, R);
  bshape_put(r->shape, R, a, b);
  cbin_fill(r, a, b, op, cmp);
- return Push(word(r)); }
+ ai_musttail return Push(word(r)); }
 
 // w ** z via the principal branch: exp(z * Log w); w == 0 falls out as the IEEE limit
 static ai_noinline void twin_pow_fill(struct ai_twin *v, word wbase, word zexp) {
@@ -1199,7 +1199,7 @@ static lvm(lvm_cpart) {
  ini_tray(r, rt, R);
  for (uintptr_t i = 0; i < R; i++) r->shape[i] = v->shape[i];
  cpart_fill(r, v, off);
- return Answer(word(r)); }
+ ai_musttail return Answer(word(r)); }
 
 // (re z) / (im z): the parts, elementwise over an array (a real array is its own
 // real part; im of one is fresh zeros); object array or non-number -> zero

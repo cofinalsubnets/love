@@ -138,7 +138,7 @@ static lvm(_lvm_help_scare) { return Pack(g), encode(g, (enum ai_status) g->b); 
 lvm(lvm_help) {
  struct ai *c = ai_core_of(g);
  c->b = (ai_word) ai_code_of(g);
- return Ap(_lvm_help_scare, c); }
+ ai_musttail return Ap(_lvm_help_scare, c); }
 
 // reverse-lookup a nif value -> its source name or NULL (the printer renders nifs by name)
 char const *ai_nif_name(intptr_t x) {
@@ -327,8 +327,8 @@ struct ai *gxr(struct ai *g) {
 lvm(lvm_gc) {
  uintptr_t n = (uintptr_t) g->b;                // Have's ask, left in the scratch slot
  Pack(g);
- if (!ai_ok(g = ai_please(g, n))) return Ap(_lvm_ghelp, g);
- return Resume(); }
+ if (!ai_ok(g = ai_please(g, n))) ai_musttail return Ap(_lvm_ghelp, g);
+ ai_musttail return Resume(); }
 
 static ai_noinline word gcp(struct ai*, struct ai_gcx*, word);
 
