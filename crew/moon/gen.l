@@ -481,13 +481,18 @@
    ; does, and the bank is not the question -- every other pool starts clear of r4 for this
    ; reason (a64 r19+, riscv r13+, x64 r11+), and v6m for its own (it plants r4 as a BOTTOM
    ; frame base after the sub). the m7 reset before it could print a second line.
+   ; the same law one register over: no r7 in v6m's pool, because fp IS r7 there (thumb1.l
+   ; numbers it, for the imm5 slot reads r11 could not reach). a seat and the frame base as
+   ; one register is a body that walks its own base away, and every slot read past that point
+   ; is wild. the save/restore pair cskeep asks for is no answer -- the register is clobbered
+   ; exactly while it is live, and the epilogue restores an fp nobody needed any more.
    ;; riscv leads with r15: seats fill from the head, and r15 is s1 -- the one callee-saved
    ;; register inside the rvc window (x8..x15 is s0, s1, a0..a5, and the rest is ABI-locked),
    ;; so the hottest seat is the only one whose ld/sd/mv can wear a 2-byte form.
    (cspool g) (? (abl? g 'cs) ()
                  (a64? g) '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
                  (rv? g) '(r15 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26)
-                 (v6m? g) '(r5 r6 r7)                 ; the 16-bit str/ldr reach r0-r7 only
+                 (v6m? g) '(r5 r6)                    ; the 16-bit str/ldr reach r0-r7 only, and r7 is fp
                  (t32? g) '(r5 r6 r7 r8 r9 r10)
                  (arm? g) ()
                  '(r11 r12 r13 r14))
@@ -3547,6 +3552,11 @@
               [(rg1 <>>f + rg1 <>>>f) [<>f] 1])
           (member? op flagops) [(rg1 <>>f + rg1 <>>>f) [<>f] ()]
           (op = 'push) [[<>f] () ()]
+          ; v6-M returns through `pop pc`, so this pop is an EXIT and reads what one owes back
+          ; -- lvtx says the same for its own walk. read as a plain pop it names no reads at
+          ; all, and a dead set crosses into the unreachable tail behind it: the return-value
+          ; mov above dies to that tail's own (li r0 0), which is a whole `return a / b`
+          ((op = 'pop) && (id? <>f 'pc)) [((lvret g) + (csregs g)) [<>f] ()]
           (op = 'pop) [() [<>f] ()]
           (member? op '(shl shr sar rol ror ror4)) [[<>f] [<>f] 1]
           (member? op ldops9) [[<>>f] [<>f] 1]
@@ -5141,6 +5151,7 @@
              (xit? l) (? !(two? l) ()
                          (: f <l
                             (? (two? f && (member? <f '(ret jmpr) ||
+                                           (id? <f 'pop && id? <>f 'pc) ||
                                            (id? <f 'jmp && !(labs <>f)))) 1
                                (xit? >l))))
              (? (!(two? dr) || !(xit? fs)) fs       ; no cs writes, or no exit: most fns leave here
