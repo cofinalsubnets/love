@@ -131,7 +131,7 @@ out/lib/readme.bin: $(love0) $(R)/love/cli.l $(R)/VERSION
 	@$(love0) -h </dev/null >> $@
 	@echo 'LOVE	'$@
 
-$(lib_h) $(holo_h) out/lib/rune.h: $(love0)
+$(lib_h) $(holo_h) $(glaze_h) out/lib/rune.h: $(love0)
 ho = out/host$(hsuf)
 h_o = $(love_c:$(R)/%.c=$(ho)/%.o)
 host_o = $(host_c:$(R)/%.c=$(ho)/%.o)
