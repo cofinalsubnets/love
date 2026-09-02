@@ -15,12 +15,12 @@
 
    ; mount one early filesystem at its fhs path (mkdir first; mount is () success /
    ; -errno failure -- e.g. ebusy when the kernel already auto-mounted devtmpfs).
-   ; charm?, never a truth test: a negative errno nets falsey, same as the () success.
+   ; the sign, never a truth test: 0 and -errno are both falsey.
    (mnt src tgt typ)
      (: _ (mkdir tgt 493)
         r (mount src tgt typ)
         (say1 (+ "  mount " (+ typ (+ " on " (+ tgt
-                 (? (charm? r) (+ " -> errno " (show (0 - r))) " -> ok")))))))
+                 (? (r < 0) (+ " -> errno " (show (0 - r))) " -> ok")))))))
 
    ; the console job: a fresh `love` running the shell over the inherited console fds.
    ; the -l registers module 'lush (the parts' own wraps); the -e reads it through

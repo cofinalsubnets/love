@@ -89,15 +89,19 @@ Two mappings are the elegant ones:
 
 ## Conventions
 
-An effect op answers `()` on success | `-errno` | EINVAL on misuse; a value op answers
-the value | `()` | `-errno`. One sign for one meaning: a failing call answers the negated
-errno whatever it answers on success, and since an effect op's success is `()` and a value
-op's is a number, neither ever needed the sign to tell success from failure. ⚠ **a negative
-errno nets falsey, exactly like the `()` success** — so a caller asks `charm?`, `id? .. ()`
-or `!`, never `?`. The MISUSE marker is the axis this does not settle: an effect op answers
-`EINVAL` positive, a value op `-1` or `-EINVAL`. Positive-for-misuse does part a bad call from
-a refused one by sign — `(rename d d/in)` is a real `-22` where `(rename 7 f)` is a `22` — but
-the three spellings are not one convention, and `-1` is `-EPERM`'s spelling. Open.
+An effect op answers `0` on success | `-errno` | EINVAL on misuse; a value op answers
+the value | `()` absence | `-errno`. **Ok is `0` exactly**; the sign then says which way it
+failed — `< 0` refused by the system, `> 0` called wrong. ⚠ **Never `!e` and never `? e`**:
+`0` and `-errno` are both falsey, and a misuse is the one answer that is truthy. Ask `e = 0`. That is why the success is `0` and not `()`: `()` is falsey too AND `() < 0` is
+**true**, so an `()` success could not be parted from a failure by truth or by order,
+only by kind — and it left `()` meaning two opposite things, since a value op's `()`
+is absence. It now means only that. This also matches the C underneath, where
+`kmain.c`'s `k_fs_*` and `__ai_sys` have always answered 0-or-negative, so an error
+crosses every seam untouched. The MISUSE marker is the one axis still split: an effect
+op answers `EINVAL` positive, a value op `-1` or `-EINVAL`. Positive does part a bad
+call from a refused one — `(rename d d/in)` is a real `-22` where `(rename 7 f)` is
+`22` — but the three spellings are not one convention, and `-1` is `-EPERM`'s
+spelling. Open.
 `stat` answers `(size mtime-ms mode ns uid gid nlink blocks ino)` — ns the
 whole mtime in nanoseconds, one charm, cook's build-grade resolution; blocks is `st_blocks`,
 512-byte units, which is DISK USAGE and not the size — or `()` for absence. `lstat` answers the

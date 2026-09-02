@@ -685,7 +685,7 @@
        t (p + "." + show (getpid ()))
        q (open t "w")
        _ (q ? (say q bs, close q))
-       _ (q && !(charm? (rename t p)) ? () (unlink t))   ; a charm is -errno: the rename lost
+       _ (q && (rename t p = 0) ? () (unlink t))         ; anything but 0: the rename lost
        ())
    ; a file's identity is its bytes: a relink that changed nothing is not a different
    ; compiler, and an inode cannot say so. reading a whole exe per link would swamp

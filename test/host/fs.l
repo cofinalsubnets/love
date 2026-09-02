@@ -15,7 +15,7 @@
 
    ; rename: the file moves whole -- old gone, new wears the same size
    _ (assert
-       (id? (rename a b) ())                        ; ok is the real (), not charm 0
+       (= 0 (rename a b))                           ; ok is the charm 0, not ()
        (id? (stat a) ()) (= 5 (cap (stat b)))
        (rename a (+ d "/x") < 0)                    ; a missing source is a live errno
        (= 22 (rename 7 b)))                         ; EINVAL misuse: a non-string path
@@ -25,7 +25,7 @@
    ; it bare. readlink answers that string verbatim; on a non-link (or a miss)
    ; it is nothing. stat follows the link, so through l it sees the file whole.
    _ (assert
-       (id? (symlink "b" l) ())
+       (= 0 (symlink "b" l))
        (= (readlink l) "b")
        (= 5 (cap (stat l))) (= 32768 (& 61440 (cauup (stat l))))
        (id? (readlink b) ()) (id? (readlink (+ d "/nope")) ()))
@@ -33,18 +33,18 @@
    ; chmod: the permission bits land exactly (0600 = 384); utime: the mtime
    ; lands on the stat scale (MILLISECONDS), and a non-charm ms reads "now"
    _ (assert
-       (id? (chmod b 384) ())
+       (= 0 (chmod b 384))
        (= 384 (- (cauup (stat b)) 32768))
-       (id? (utime b 1600000000000) ())
+       (= 0 (utime b 1600000000000))
        (= 1600000000000 (caup (stat b)))
-       (id? (utime b ()) ())
+       (= 0 (utime b ()))
        (< 1600000000000 (caup (stat b)))            ; "now" is later than the pinned past
        (chmod (+ d "/nope") 384 < 0)                ; a miss is a live errno
        (= 22 (chmod b "rw")))                       ; EINVAL misuse: a non-charm mode
 
    ; chown: a no-op self-chown succeeds (-1 -1 leaves both ids alone); misuse einvals
    _ (assert
-       (id? (chown b -1 -1) ())
+       (= 0 (chown b -1 -1))
        (= 22 (chown b "x" 0)))
 
    ; umask: always answers the previous mask, so set-read-restore round-trips
@@ -56,7 +56,7 @@
         _ (mkdir e 493)
         (assert
           (rmdir d < 0)                              ; d holds b and l still: not empty
-          (id? (rmdir e) ())
+          (= 0 (rmdir e))
           (id? (stat e) ())
           (rmdir e < 0)                              ; already gone: a live errno
           (= 22 (rmdir 7))))
@@ -66,11 +66,11 @@
    _ (: h (+ d "/h")
         _ (unlink h)
         (assert
-          (id? (hardlink b h) ())
+          (= 0 (hardlink b h))
           (= 5 (cap (stat h)))
           (hardlink b h < 0)                         ; the name is taken: EEXIST
           (: _ (unlink b) (= 5 (cap (stat h))))
-          (id? (unlink h) ())))
+          (= 0 (unlink h))))
 
    ; copyfile: a VALUE op, so it answers the byte count and encodes errno negative.
    ; an empty source answers 0 -- a falsy success, which is why every caller tests
@@ -84,8 +84,8 @@
           (= 0 (copyfile z (+ d "/z2")))            ; empty in, empty out, and 0 is the count
           (= -2 (copyfile (+ d "/nope") (+ d "/c3")))
           (= -1 (copyfile 7 c))                     ; misuse: a non-string path
-          (id? (unlink c) ()) (id? (unlink z) ())
-          (id? (unlink (+ d "/c2")) ()) (id? (unlink (+ d "/z2")) ())))
+          (= 0 (unlink c)) (= 0 (unlink z))
+          (= 0 (unlink (+ d "/c2"))) (= 0 (unlink (+ d "/z2")))))
 
    ; selfpath: the running binary's own path, the seat every library walk starts
    ; from. no cwd and no argv here -- an absolute path at a real regular file is

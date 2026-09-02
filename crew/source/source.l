@@ -166,7 +166,7 @@
     (: exe (selfpath 0)
        _ (string? exe ? 0 (src-die "can't find seed path"))
        here (cwd 0)
-       _ (? (charm? (chdir root)) (src-die ("can't enter " + root)) 0)
+       _ (? (chdir root = 0) 0 (src-die ("can't enter " + root)))
        xm (? (string? xa) (arch-mach (intern xa)) ())     ; make's word for it
        s (herald (string? xa ? [exe "make" ("xa=" + xm) ("out/x-" + xm + "/love")]
                               [exe "make" "dist"]))

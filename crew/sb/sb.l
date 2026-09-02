@@ -449,12 +449,11 @@
        (? (0 < dirty ())
           (: _ (say err "sb: working tree has changes; record or revert first\n") 0)
           (: home (cwd 0)
-             ; chdir answers () on success and -errno on failure -- both nil, and
-             ; () even sorts below 0, so neither `!` nor `< 0` tells them apart.
-             ; the failure is a charm; the success is the zero point.
+             ; chdir answers 0 ok or -errno, both falsey, so ask for the 0
              pd (: c (chdir peer)
-                   (? (charm? c) -1
-                      (: _ (mk ()) d (dirty ()) _ (chdir home) d)))
+                   (? (c = 0)
+                      (: _ (mk ()) d (dirty ()) _ (chdir home) d)
+                      -1))
              (? (pd < 0) (: _ (say err ("sb: cannot reach " + peer + "\n")) 0)
                 (: inb (copy "blob" peer ".") inp (copy "patch" peer ".")
                    ; the push: only onto a clean peer, and only if every write lands

@@ -59,14 +59,14 @@
    ; lseek rides the raw openfd lane: end is the size, set and cur the arithmetic
    (: fd (openfd f 0)
       (&& (= sz (lseek fd 0 2)) (= 1 (lseek fd 1 0)) (= 3 (lseek fd 2 1))
-          (id? (close fd) ())))
+          (= 0 (close fd))))
    (< (lseek -1 0 0) 0)                          ; a bad fd is negative, never a seek
    (< (openfd "lib/no-such-thing.l" 0) 0)        ; and so is an absent path
    ; a whence no seat knows is the row's EINVAL and moves nothing -- read as SET
    ; it would have seeked to 0 and called that success
    (: fd (openfd f 0)
       (&& (= 2 (lseek fd 2 0)) (= -22 (lseek fd 0 7)) (= -22 (lseek fd 0 -3))
-          (= 2 (lseek fd 0 1)) (id? (close fd) ())))
+          (= 2 (lseek fd 0 1)) (= 0 (close fd))))
    ; stat takes a charm as an fd, which is fstat under another name: the same
    ; tuple the path answers, and nothing for a row that is not there
    (: fd (openfd f 0) r (= (stat fd) (stat f)) _ (close fd) r)
@@ -77,9 +77,9 @@
    (: fd (openfd d 0) s (stat fd) _ (close fd) (= 16384 (& 61440 <>>s)))
    ; close wears the errno convention: a stranger row is EBADF, and so is the
    ; second close of a real one -- the row is gone, which is what the answer says
-   (: fd (openfd f 0) a (close fd) b (close fd) (&& (id? a ()) (= -9 b)))
+   (: fd (openfd f 0) a (close fd) b (close fd) (&& (= 0 a) (= -9 b)))
    (= -9 (close 4096))
-   (id? (close -1) ())                         ; closing nothing is the zero point
+   (= 0 (close -1))                            ; closing nothing still answers ok
    ; the raw-fd lane reads the ramfs byte for byte where the port lane does, gulp
    ; boundaries and all -- one file is longer than a single gulp
    (: fd (openfd f 0) a (slurp fd) _ (close fd) (&& (= a (rd f)) (= sz (tally a))))

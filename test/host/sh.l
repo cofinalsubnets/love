@@ -262,10 +262,10 @@
 
 ; (signal sig 1) ignores: a self-INT that would kill us just fizzles; restore after
 (: me (getpid 0)
-   _ (assert (id? (signal sig-int 1) ()))
+   _ (assert (= 0 (signal sig-int 1)))
    _ (still me sig-int)
    _ (assert 1)                                     ; still here: the ignore held
-   _ (assert (id? (signal sig-int 0) ())))
+   _ (assert (= 0 (signal sig-int 0))))
 
 ; wait's stop lane: a sigstopped child answers 256+sig (a charm past every exit
 ; status -- the shell's "park it as a job" signal), then CONT + KILL ends it 137
@@ -289,10 +289,10 @@
 (hear 0)
 
 ; env nifs: set, read back through environ's raw K=V, absence unsets
-(assert (id? (setenv "LOVE_SH_T5" "quay") ())
+(assert (= 0 (setenv "LOVE_SH_T5" "quay"))
         (= "quay" (getenv "LOVE_SH_T5"))
         (foldl (\ a e (? a a (= e "LOVE_SH_T5=quay"))) 0 (environ 0)))
-(assert (id? (setenv "LOVE_SH_T5" ()) ())                              ; absence unsets
+(assert (= 0 (setenv "LOVE_SH_T5" ()))                              ; absence unsets
         (id? (getenv "LOVE_SH_T5") ()))
 ; $? and export, through the shell's own line entry
 (: _ (sh-line "sh -c 'exit 7'")

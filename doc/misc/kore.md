@@ -83,11 +83,11 @@ The file discipline, two shapes:
   still holds at the leave is lost, exactly as `quit` lost it. The property is gated in
   test/gate/kore.sh and test/gate/moon.sh; a regression to `quit` passes every other check.
 * **the nif lane.** fs effects ride src/posix.c (app-glob AiNif, no core edit) and its
-  `posix_` conventions: an effect op answers () ok | -errno | EINVAL misuse; a value
-  op answers the value | () | -errno. src/posix.c holds rename symlink readlink chmod chown utime
+  `posix_` conventions: an effect op answers 0 ok | -errno | EINVAL misuse; a value
+  op answers the value | () absence | -errno. src/posix.c holds rename symlink readlink chmod chown utime
   umask rmdir hardlink (`link` the word belongs to the chain ctor). test/host/fs.l smokes them
-  under test_hostnif. ⚠ **`()` and `-errno` are BOTH falsey**, so a tool asks the KIND —
-  crew/kore/fs.l's `uok?` (`!(charm? e)`) — and never `!e` or a bare `? e`. That mistake is
+  under test_hostnif. ⚠ **`0` and `-errno` are BOTH falsey**, so a tool asks for the 0 —
+  crew/kore/core.l's `uok?` (`e = 0`) — and never `!e` or a bare `? e`. That mistake is
   per call site and silent: every miss reports success. test/gate/kore.sh carries a
   failure row per tool because of it.
 * **exit codes.** 0 clean, 1 something failed (reported on err, the loop continued), 2 usage;

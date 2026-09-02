@@ -16,9 +16,10 @@
 ; with ==> name <== and a blank line between.
 (module 'kore
 (:
-   ; did an effect nif succeed. src/posix.c answers () or -errno and BOTH net falsey, so
-   ; the kind is what parts them: a charm means the row said no. never `!e`, never `? e`.
-   (uok? e) !(charm? e)
+   ; did an effect nif succeed. src/posix.c answers 0 ok, -errno refused, +EINVAL misuse,
+   ; so ok is 0 EXACTLY and the sign only says which way it failed. never `!e` or `? e`:
+   ; 0 and -errno are both falsey, and a misuse is the one answer that is truthy.
+   (uok? e) (e = 0)
    ; -- cat: files (or -) onto out, verbatim --
    (cat-main as) (uchunks "cat" puts as)
 

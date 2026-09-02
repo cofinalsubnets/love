@@ -4,13 +4,12 @@
 // raw-fd plumbing, and the pty wrapper (bao's rlwrap/debugger muscle). host-only,
 // auto-globbed + AiNif-registered (no love.c/love.h/main.c edit). the
 // conventions, kept throughout:
-//   effect ops answer () ok | -errno | EINVAL misuse
+//   effect ops answer 0 ok | -errno | EINVAL misuse
 //   value ops answer the value | () absence | -errno
-// one sign for one meaning: a failing call answers the negated errno whatever it
-// answers on success. an effect op's success is () and a value op's is a number, so
-// neither needs the sign to tell success from failure -- and a negative errno nets
-// FALSEY, exactly like the () success, so a caller asks charm?, (id? .. ()) or !,
-// never ?.
+// ok is 0 exactly, and the sign then says which way it failed: below refused, above
+// called wrong. 0 rather than () so that it CAN be asked: an () success is tellable
+// from -errno neither by ! (both falsey) nor by < 0 (() sorts BELOW 0), leaving only
+// the kind. () is left meaning absence, which is all it means for a value op.
 //
 // the argv marshal is src/seat.c's (main.c wants it too and must not reach into an
 // app file). the local face here adds the -1: a misuse answers it on the stack, which
@@ -150,7 +149,7 @@ static lvm(lvm_sigignp) { Sp[0] = host_sigignp(Sp[0]); ai_musttail return Next(1
 // from sig_dfl_job above; a shell's forked subshell never execs, so it asks here.
 ai_noinline static ai_word host_sigclear(void) {
  sigset_t none; sigemptyset(&none);
- return sigprocmask(SIG_SETMASK, &none, NULL) ? putcharm(-errno) : ZeroPoint; }
+ return sigprocmask(SIG_SETMASK, &none, NULL) ? putcharm(-errno) : zero; }
 static lvm(lvm_sigclear) { Sp[0] = host_sigclear(); ai_musttail return Next(1); }
 
 // (spawn argv) -> the child pid, or a negated errno (negative, so a caller tells
@@ -382,7 +381,7 @@ ai_noinline static ai_word host_posix_signal(ai_word sigw, ai_word dw) {
  memset(&sa, 0, sizeof sa);
  sa.sa_handler = getcharm(dw) ? SIG_IGN : SIG_DFL;
  sigemptyset(&sa.sa_mask);
- return sigaction((int) getcharm(sigw), &sa, NULL) ? putcharm(-errno) : ZeroPoint; }
+ return sigaction((int) getcharm(sigw), &sa, NULL) ? putcharm(-errno) : zero; }
 
 static lvm(lvm_posix_signal) {
  Sp[1] = host_posix_signal(Sp[0], Sp[1]);
@@ -391,7 +390,7 @@ static lvm(lvm_posix_signal) {
 ai_noinline static ai_word host_chdir(ai_word arg) {
  char const *buf = str_c(arg);
  if (!buf) return putcharm(-1);
- return chdir(buf) ? putcharm(-errno) : ZeroPoint; }
+ return chdir(buf) ? putcharm(-errno) : zero; }
 static lvm(lvm_chdir) { Sp[0] = host_chdir(Sp[0]); ai_musttail return Next(1); }
 
 ai_noinline static struct ai *host_cwd(struct ai *g) {
@@ -545,7 +544,7 @@ static lvm(lvm_spawnio) {
 
 ai_noinline static ai_word host_posix_ttyfg(ai_word pgw) {
  pid_t pg = (charmp(pgw) && getcharm(pgw) > 0) ? (pid_t) getcharm(pgw) : getpgrp();
- return tcsetpgrp(0, pg) ? putcharm(-errno) : ZeroPoint; }
+ return tcsetpgrp(0, pg) ? putcharm(-errno) : zero; }
 
 static lvm(lvm_posix_ttyfg) {
   Sp[0] = host_posix_ttyfg(Sp[0]);
@@ -659,14 +658,14 @@ static lvm(lvm_mkdir) {
  char const *p = str_c(Sp[0]);
  if (!p) { Sp[1] = putcharm(EINVAL); Sp += 1; ai_musttail return Next(1); }
  intptr_t mode = charmp(Sp[1]) ? getcharm(Sp[1]) : 0755;
- Sp[1] = mkdir(p, (mode_t) mode) ? putcharm(-errno) : ZeroPoint;
+ Sp[1] = mkdir(p, (mode_t) mode) ? putcharm(-errno) : zero;
  ai_musttail return Nextp(1, 1); }
 
 #if defined(AiHaveMount)
 ai_noinline static ai_word host_mount(ai_word a, ai_word b, ai_word c) {
  char const *src = str_c(a), *tgt = str_c(b), *typ = str_c(c);
  if (!src || !tgt || !typ) return putcharm(EINVAL);
- return mount(src, tgt, typ, 0, NULL) ? putcharm(-errno) : ZeroPoint; }
+ return mount(src, tgt, typ, 0, NULL) ? putcharm(-errno) : zero; }
 static lvm(lvm_mount) { Sp[2] = host_mount(Sp[0], Sp[1], Sp[2]); Sp += 2; ai_musttail return Next(1); }
 #else
 // the call is there; our mount speaks a shape this kernel does not answer.
@@ -688,7 +687,7 @@ static lvm(lvm_newns) {
  ns_write("/proc/self/setgroups", "deny");                       // required before gid_map
  snprintf(b, sizeof b, "0 %ld 1\n", uid); ns_write("/proc/self/uid_map", b);
  snprintf(b, sizeof b, "0 %ld 1\n", gid); ns_write("/proc/self/gid_map", b);
- Sp[0] = ZeroPoint;
+ Sp[0] = zero;
  ai_musttail return Next(1); }
 #else
 // a linux mechanism; elsewhere the name stands and refuses.
@@ -791,7 +790,7 @@ static lvm(lvm_posix_readdir) {
 ai_noinline static ai_word host_posix_unlink(ai_word arg) {
  char const *p = str_c(arg);
  if (!p) return putcharm(EINVAL);
- return unlink(p) ? putcharm(-errno) : ZeroPoint; }
+ return unlink(p) ? putcharm(-errno) : zero; }
 
 static lvm(lvm_posix_unlink) {
   Sp[0] = host_posix_unlink(Sp[0]);
@@ -804,8 +803,8 @@ static lvm(lvm_posix_unlink) {
 ai_noinline static ai_word host_posix_setenv(ai_word nw, ai_word vw) {
  char const *n = str_c(nw), *v = str_c(vw);
  if (!n) return putcharm(EINVAL);
- if (!v) return unsetenv(n) ? putcharm(-errno) : ZeroPoint;
- return setenv(n, v, 1) ? putcharm(-errno) : ZeroPoint; }
+ if (!v) return unsetenv(n) ? putcharm(-errno) : zero;
+ return setenv(n, v, 1) ? putcharm(-errno) : zero; }
 static lvm(lvm_posix_setenv) {
  Sp[1] = host_posix_setenv(Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
@@ -923,7 +922,7 @@ AiNif("environ", nif_posix_environ);
 ai_noinline static ai_word host_posix_rename(ai_word ow, ai_word nw) {
  char const *o = str_c(ow), *n = str_c(nw);
  if (!o || !n) return putcharm(EINVAL);
- return rename(o, n) ? putcharm(-errno) : ZeroPoint; }
+ return rename(o, n) ? putcharm(-errno) : zero; }
 static lvm(lvm_posix_rename) {
  Sp[1] = host_posix_rename(Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
@@ -931,7 +930,7 @@ static lvm(lvm_posix_rename) {
 ai_noinline static ai_word host_posix_symlink(ai_word tw, ai_word pw) {
  char const *t = str_c(tw), *p = str_c(pw);
  if (!t || !p) return putcharm(EINVAL);
- return symlink(t, p) ? putcharm(-errno) : ZeroPoint; }
+ return symlink(t, p) ? putcharm(-errno) : zero; }
 static lvm(lvm_posix_symlink) {
  Sp[1] = host_posix_symlink(Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
@@ -954,7 +953,7 @@ static lvm(lvm_posix_readlink) {
 ai_noinline static ai_word host_posix_chmod(ai_word pw, ai_word mw) {
  char const *p = str_c(pw);
  if (!p || !charmp(mw)) return putcharm(EINVAL);
- return chmod(p, (mode_t) getcharm(mw)) ? putcharm(-errno) : ZeroPoint; }
+ return chmod(p, (mode_t) getcharm(mw)) ? putcharm(-errno) : zero; }
 static lvm(lvm_posix_chmod) {
  Sp[1] = host_posix_chmod(Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
@@ -962,7 +961,7 @@ static lvm(lvm_posix_chmod) {
 ai_noinline static ai_word host_posix_chown(ai_word pw, ai_word uw, ai_word gw) {
  char const *p = str_c(pw);
  if (!p || !charmp(uw) || !charmp(gw)) return putcharm(EINVAL);
- return chown(p, (uid_t) getcharm(uw), (gid_t) getcharm(gw)) ? putcharm(-errno) : ZeroPoint; }
+ return chown(p, (uid_t) getcharm(uw), (gid_t) getcharm(gw)) ? putcharm(-errno) : zero; }
 static lvm(lvm_posix_chown) {
  Sp[2] = host_posix_chown(Sp[0], Sp[1], Sp[2]);
  ai_musttail return Nextp(1, 2); }
@@ -977,7 +976,7 @@ ai_noinline static ai_word host_posix_utime(ai_word pw, ai_word msw) {
   ts[0].tv_nsec = ts[1].tv_nsec = (long) (ms % 1000) * 1000000;
  } else
   ts[0].tv_sec = ts[1].tv_sec = 0, ts[0].tv_nsec = ts[1].tv_nsec = UTIME_NOW;
- return utimensat(AT_FDCWD, p, ts, 0) ? putcharm(-errno) : ZeroPoint; }
+ return utimensat(AT_FDCWD, p, ts, 0) ? putcharm(-errno) : zero; }
 static lvm(lvm_posix_utime) {
  Sp[1] = host_posix_utime(Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
@@ -985,13 +984,13 @@ static lvm(lvm_posix_utime) {
 ai_noinline static ai_word host_posix_rmdir(ai_word pw) {
  char const *p = str_c(pw);
  if (!p) return putcharm(EINVAL);
- return rmdir(p) ? putcharm(-errno) : ZeroPoint; }
+ return rmdir(p) ? putcharm(-errno) : zero; }
 static lvm(lvm_posix_rmdir) { Sp[0] = host_posix_rmdir(Sp[0]); ai_musttail return Next(1); }
 
 ai_noinline static ai_word host_posix_hardlink(ai_word ow, ai_word nw) {
  char const *o = str_c(ow), *n = str_c(nw);
  if (!o || !n) return putcharm(EINVAL);
- return link(o, n) ? putcharm(-errno) : ZeroPoint; }
+ return link(o, n) ? putcharm(-errno) : zero; }
 static lvm(lvm_posix_hardlink) {
  Sp[1] = host_posix_hardlink(Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
@@ -1192,7 +1191,7 @@ static lvm(lvm_reap) {
 static lvm(lvm_kill) {
  intptr_t pid = charmp(Sp[0]) ? getcharm(Sp[0]) : 0,
           sig = charmp(Sp[1]) ? getcharm(Sp[1]) : 0;
- Sp[1] = kill((pid_t) pid, (int) sig) ? putcharm(-errno) : ZeroPoint;
+ Sp[1] = kill((pid_t) pid, (int) sig) ? putcharm(-errno) : zero;
  ai_musttail return Nextp(1, 1); }
 
 // workhorse for (winsize), called with g Packed (the dummy arg sits at sp[0]).
@@ -1226,7 +1225,7 @@ ai_noinline static int host_setwinsize(intptr_t fd, intptr_t row, intptr_t col) 
  struct winsize ws = {0};
  ws.ws_row = (unsigned short) row;
  ws.ws_col = (unsigned short) col;
- return ioctl((int) fd, TIOCSWINSZ, &ws) ? errno : 0; }
+ return ioctl((int) fd, TIOCSWINSZ, &ws) ? -errno : 0; }
 
 static lvm(lvm_setwinsize) {
  intptr_t fd  = ai_port_fd(Sp[0]),
@@ -1245,10 +1244,10 @@ static lvm(lvm_setwinsize) {
 // tail-jumps. returns 0 or the errno (EBADF for a non-port / closed fd).
 ai_noinline static int host_ptyecho(intptr_t fd, intptr_t on) {
  struct termios t;
- if (fd < 0) return EBADF;
- if (tcgetattr((int) fd, &t)) return errno;
+ if (fd < 0) return -EBADF;
+ if (tcgetattr((int) fd, &t)) return -errno;
  if (on) t.c_lflag |= ECHO; else t.c_lflag &= ~(tcflag_t) ECHO;
- return tcsetattr((int) fd, TCSANOW, &t) ? errno : 0; }
+ return tcsetattr((int) fd, TCSANOW, &t) ? -errno : 0; }
 
 static lvm(lvm_ptyecho) {
  intptr_t fd = ai_port_fd(Sp[0]),
@@ -1275,13 +1274,13 @@ static void raw_restore(void) {
 // lvm_raw's frame so its Continue() tail-jumps. returns 0 or the errno.
 ai_noinline int ai_raw_mode(intptr_t on) {
  struct termios t;
- if (tcgetattr(STDIN_FILENO, &t)) return errno;
+ if (tcgetattr(STDIN_FILENO, &t)) return -errno;
  if (!on) { raw_restore(); return 0; }
  if (!raw_have_cooked) { raw_cooked = t; raw_have_cooked = 1; atexit(raw_restore); }
  t.c_lflag &= ~(tcflag_t) (ICANON | ECHO | ISIG | IEXTEN);
  t.c_iflag &= ~(tcflag_t) (IXON | ICRNL | BRKINT | INPCK | ISTRIP);
  t.c_cc[VMIN] = 1; t.c_cc[VTIME] = 0;
- return tcsetattr(STDIN_FILENO, TCSANOW, &t) ? errno : 0; }
+ return tcsetattr(STDIN_FILENO, TCSANOW, &t) ? -errno : 0; }
 static lvm(lvm_raw) {
  intptr_t on = charmp(Sp[0]) ? getcharm(Sp[0]) : 0;
  int rc = ai_raw_mode(on);
@@ -1389,7 +1388,7 @@ static lvm(lvm_open) {
 static lvm(lvm_close) {
   if (charmp(Sp[0])) {
     intptr_t fd = getcharm(Sp[0]);
-    Sp[0] = (fd >= 0 && close((int) fd)) ? putcharm(-errno) : ZeroPoint;
+    Sp[0] = (fd >= 0 && close((int) fd)) ? putcharm(-errno) : zero;
     ai_musttail return Next(1); }
   // inline "is x a port": heap pointer whose discriminator is lvm_port_io.
   if (cell(Sp[0])->ap == lvm_port_io) {
@@ -1410,7 +1409,7 @@ static lvm(lvm_close) {
       Unpack(g);
       close(fd);
       ((struct ai_io*) Sp[0])->vt = &ai_closed_vt; } }   // re-read: wflush may collect
-  Sp[0] = ZeroPoint;
+  Sp[0] = zero;
   ai_musttail return Next(1); }
 
 static union u const

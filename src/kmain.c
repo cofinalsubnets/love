@@ -1393,7 +1393,7 @@ static lvm(lvm_vmx_run) {
 #endif
 
 // --- rung 2: the writable tree -- mkdir, rmdir, unlink, rename, chdir/cwd,
-// chmod, utime. doc/misc/posix.md's conventions exactly: an effect answers () |
+// chmod, utime. doc/misc/posix.md's conventions exactly: an effect answers 0 |
 // -errno (the host's numbers, negated -- kore reads them back, and mv's EXDEV
 // lane proves a shape can matter) | EINVAL on misuse; cwd answers the string | (). The environment is not here: a
 // tablet in the boot text (kmain, below), as doc/misc/inle.md says.
@@ -1403,8 +1403,8 @@ static lvm(lvm_vmx_run) {
 // k_parent_ok do -- ONE sign for every C face in this kernel, and it is the
 // one __ai_inle owes its caller (impl.h's er() reads an error as
 // (unsigned long) r > (unsigned long) -4096), so src/sys.c hands these answers
-// straight out with no flip anywhere. the love side wears that sign too, so an
-// error crosses every seam untouched; only absence, which is (), is a wrapper's.
+// straight out with no flip anywhere. the love side wears the same 0-or-negative
+// shape, so an answer crosses every seam untouched; () is absence and nothing else.
 // ⚠ ai_noinline is load-bearing here, not decoration: cp[256] living in an
 // lvm's own frame would block its musttail.
 ai_noinline int k_fs_mkdir(char const *p, uintptr_t pn, uintptr_t mode) {
@@ -1847,7 +1847,7 @@ void kmain(void) {
   r = ai_evals_(r,
  // the environment (rung 2): a TABLET, the pairs on slot 0, closures over it
  // wearing the host's names and shapes -- getenv the value | () absent/misused,
- // setenv () | EINVAL misuse (a non-string value UNSETS, the absence lane),
+ // setenv 0 | EINVAL misuse (a non-string value UNSETS, the absence lane),
  // environ the raw "NAME=value" strings.
  "(: envt (tablet 0)"
  "   (envget l n) (? (two? l) (? (= n (cap (cap l))) (cup (cap l)) (envget (cup l) n)) ())"
@@ -1856,7 +1856,7 @@ void kmain(void) {
  "   (getenv n) (? (string? n) (envget (peep envt 0 ()) n) ())"
  "   (setenv n v) (? (string? n)"
  "                   (: c (envcut (peep envt 0 ()) n)"
- "                      _ (pin envt 0 (? (string? v) (link (link n v) c) c)) ())"
+ "                      _ (pin envt 0 (? (string? v) (link (link n v) c) c)) 0)"
  "                   22)"
  "   (environ u) (map (\\ e (+ (cap e) (+ \"=\" (cup e)))) (peep envt 0 ())))"
  // the command line (rung 3): `bootargv` = (word..) off the raw boot line, split

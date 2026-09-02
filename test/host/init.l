@@ -29,7 +29,7 @@
        (= 3 (wait (spawn ["sh" "-c" "exit 3"])))
        ; the "()"-returns are the real zero point now (the ai_nil -> () flip), not charm 0:
        ; (id? x ()) holds and (charm? x) is false -- charm 0 would fail both.
-       (id? (close -1) ()) !(charm? (close -1))               ; close nothing -> the real ()
+       (= 0 (close -1))                                    ; closing nothing still answers ok
        (id? (getenv "LOVE_NO_SUCH_ENV_VAR_XYZZY") ())             ; getenv absent -> the real ()
        !(charm? (getenv "LOVE_NO_SUCH_ENV_VAR_XYZZY"))))
 
@@ -55,13 +55,13 @@
     ; lseek rides the raw openfd lane: end is the size, set returns the offset
     (: fd (openfd f 0)
        (&& (= 5 (lseek fd 0 2)) (= 1 (lseek fd 1 0)) (= 3 (lseek fd 2 1))
-           (id? (close fd) ())))
+           (= 0 (close fd))))
     (< (lseek -1 0 0) 0)                            ; a bad fd is a negative charm
     ; a whence no seat knows is the row's EINVAL and moves nothing -- read as SET
     ; it would have seeked to 0 and called that success
     (: fd (openfd f 0)
        (&& (= 2 (lseek fd 2 0)) (= -22 (lseek fd 0 7)) (= -22 (lseek fd 0 -3))
-           (= 2 (lseek fd 0 1)) (id? (close fd) ())))
+           (= 2 (lseek fd 0 1)) (= 0 (close fd))))
     ; stat takes a charm as an fd, which is fstat under another name: the same
     ; tuple the path answers, and nothing for a row that is not there
     (: fd (openfd f 0) r (= (stat fd) (stat f)) _ (close fd) r)
@@ -72,10 +72,10 @@
     (: fd (openfd d 0) s (stat fd) _ (close fd) (= 16384 (& 61440 (cauup s))))
     ; close wears the errno convention: a stranger row is EBADF, and so is the
     ; second close of a real one -- the row is gone, which is what it says
-    (: fd (openfd f 0) a (close fd) b (close fd) (&& (id? a ()) (= -9 b)))
+    (: fd (openfd f 0) a (close fd) b (close fd) (&& (= 0 a) (= -9 b)))
     (= -9 (close 4096))
     ; unlink: () ok, then the file really is gone, and a re-unlink says so (-ENOENT)
-    (id? (unlink f) ())
+    (= 0 (unlink f))
     (id? (stat f) ()) (id? (readdir d) ())
     (: e (unlink f) (&& (charm? e) (e < 0)))))
 

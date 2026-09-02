@@ -371,13 +371,11 @@
              (: st (? >argv (sh-int <>argv) (sh-status ()))
                 (sh-leave st))
            (cmd = "cd")
-             ; charm?, never a truth test. chdir answers () on success and the ERRNO on
-             ; failure -- and an errno is negative, so it is red, so `!r` reads a failure as
-             ; a success and `cd nowhere` returned 0 with no word said. `cd build && make`
-             ; then ran make wherever you already were. The kind is what separates them.
+             ; the sign, never a truth test: chdir answers 0 or -errno and both are falsey,
+             ; so `!r` reads a failure as a success and cd would leave you where you were.
              (: t (? >argv <>argv ("" + (getenv "HOME")))
                 r (chdir t)
-                (? (charm? r) (: _ (say err ("lush: cd: " + (t + "\n"))) 1) 0))
+                (? (r = 0) 0 (: _ (say err ("lush: cd: " + (t + "\n"))) 1)))
            (cmd = "trap") (sh-trapb >argv)
            (cmd = "export") (: _ (each >argv sh-export) 0)
            ; `command -v W` -- the probe every configure-shaped script opens with, and a
