@@ -97,7 +97,7 @@
    ; a directory answers a list from readdir, a file answers nothing -- that is the test,
    ; and it needs no mode bits (love has no bitwise and to pick S_IFDIR out of stat's mode).
    (dir? p)      (two? (readdir p))
-   ; mkdir every prefix, ignoring an already-there (mkdir answers an errno, and we do not
+   ; mkdir every prefix, ignoring an already-there (mkdir answers -errno, and we do not
    ; care which -- a real failure surfaces at the first open for writing). it walks the
    ; path rather than splitting it, so a leading slash survives: splitting on / and
    ; rejoining quietly turns /tmp/x into tmp/x, and the whole build then writes nowhere.

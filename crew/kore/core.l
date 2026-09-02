@@ -16,6 +16,9 @@
 ; with ==> name <== and a blank line between.
 (module 'kore
 (:
+   ; did an effect nif succeed. src/posix.c answers () or -errno and BOTH net falsey, so
+   ; the kind is what parts them: a charm means the row said no. never `!e`, never `? e`.
+   (uok? e) !(charm? e)
    ; -- cat: files (or -) onto out, verbatim --
    (cat-main as) (uchunks "cat" puts as)
 

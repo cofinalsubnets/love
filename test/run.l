@@ -30,11 +30,12 @@
   ; --- multiple args are marshalled in order, with no shell in between ---
   (: r (hark ["printf" "%s-%s" "ab" "cd"]) (= "ab-cd" (cup r)))
 
-  ; --- a program that can't be spawned -> positive errno fixnum, not a chain ---
-  (: r (hark ["/no/such/prog-xyzzy"]) (&& (charm? r) (< 0 r)))    ; abs path: ENOENT
-  (: r (hark ["no-such-prog-xyzzy"])  (&& (charm? r) (< 0 r)))    ; PATH miss: ENOENT
+  ; --- a program that can't be spawned -> -errno, a fixnum and not a chain ---
+  (: r (hark ["/no/such/prog-xyzzy"]) (&& (charm? r) (r < 0)))    ; abs path: ENOENT
+  (: r (hark ["no-such-prog-xyzzy"])  (&& (charm? r) (r < 0)))    ; PATH miss: ENOENT
 
-  ; --- our-side misuse -> -1 (a negative fixnum, distinct from any errno) ---
+  ; --- our-side misuse -> -1. ⚠ that is -EPERM's spelling; nothing here raises one,
+  ; but the marker and the errno band do share it ---
   (= -1 (hark 0))                                ; empty argv (nil)
   (= -1 (hark ["echo" 5]))                      ; 5 is not a string
 

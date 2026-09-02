@@ -89,8 +89,16 @@ Two mappings are the elegant ones:
 
 ## Conventions
 
-An effect op answers `()` on success | a POSITIVE errno | EINVAL on misuse; a value op answers
-the value | `()`. `stat` answers `(size mtime-ms mode ns uid gid nlink blocks ino)` — ns the
+An effect op answers `()` on success | `-errno` | EINVAL on misuse; a value op answers
+the value | `()` | `-errno`. One sign for one meaning: a failing call answers the negated
+errno whatever it answers on success, and since an effect op's success is `()` and a value
+op's is a number, neither ever needed the sign to tell success from failure. ⚠ **a negative
+errno nets falsey, exactly like the `()` success** — so a caller asks `charm?`, `id? .. ()`
+or `!`, never `?`. The MISUSE marker is the axis this does not settle: an effect op answers
+`EINVAL` positive, a value op `-1` or `-EINVAL`. Positive-for-misuse does part a bad call from
+a refused one by sign — `(rename d d/in)` is a real `-22` where `(rename 7 f)` is a `22` — but
+the three spellings are not one convention, and `-1` is `-EPERM`'s spelling. Open.
+`stat` answers `(size mtime-ms mode ns uid gid nlink blocks ino)` — ns the
 whole mtime in nanoseconds, one charm, cook's build-grade resolution; blocks is `st_blocks`,
 512-byte units, which is DISK USAGE and not the size — or `()` for absence. `lstat` answers the
 same of the LINK itself. ⚠ **the tail is append-only and a reader asks `tally` before reading past

@@ -4,9 +4,13 @@
 // raw-fd plumbing, and the pty wrapper (bao's rlwrap/debugger muscle). host-only,
 // auto-globbed + AiNif-registered (no love.c/love.h/main.c edit). the
 // conventions, kept throughout:
-//   effect ops answer () ok | a positive errno | EINVAL misuse
-//   value ops answer the value | () absence (or a negative -errno where a
-//   pid/fd/offset result must stay tellable from failure)
+//   effect ops answer () ok | -errno | EINVAL misuse
+//   value ops answer the value | () absence | -errno
+// one sign for one meaning: a failing call answers the negated errno whatever it
+// answers on success. an effect op's success is () and a value op's is a number, so
+// neither needs the sign to tell success from failure -- and a negative errno nets
+// FALSEY, exactly like the () success, so a caller asks charm?, (id? .. ()) or !,
+// never ?.
 //
 // the argv marshal is src/seat.c's (main.c wants it too and must not reach into an
 // app file). the local face here adds the -1: a misuse answers it on the stack, which
@@ -146,7 +150,7 @@ static lvm(lvm_sigignp) { Sp[0] = host_sigignp(Sp[0]); ai_musttail return Next(1
 // from sig_dfl_job above; a shell's forked subshell never execs, so it asks here.
 ai_noinline static ai_word host_sigclear(void) {
  sigset_t none; sigemptyset(&none);
- return sigprocmask(SIG_SETMASK, &none, NULL) ? putcharm(errno) : ZeroPoint; }
+ return sigprocmask(SIG_SETMASK, &none, NULL) ? putcharm(-errno) : ZeroPoint; }
 static lvm(lvm_sigclear) { Sp[0] = host_sigclear(); ai_musttail return Next(1); }
 
 // (spawn argv) -> the child pid, or a negated errno (negative, so a caller tells
@@ -340,7 +344,7 @@ static lvm(lvm_sigtake) { Sp[0] = ZeroPoint; ai_musttail return Next(1); }
 //                 it" (< 255 st) from "done". -errno on failure. the foreground wait:
 //                 spawn (inherited stdio) then wait, so a command owns the terminal
 //                 and the prompt returns only when it is done or parked.
-// (signal sig disp) -> sigaction: disp 0 = default, 1 = ignore. () | positive errno |
+// (signal sig disp) -> sigaction: disp 0 = default, 1 = ignore. () | -errno |
 //                 EINVAL misuse (the effect convention). the shell ignores INT/QUIT/
 //                 TSTP so the tty's ^C/^Z reach only the foreground child; spawn's
 //                 child side resets them (an ignored disposition survives exec).
@@ -378,7 +382,7 @@ ai_noinline static ai_word host_posix_signal(ai_word sigw, ai_word dw) {
  memset(&sa, 0, sizeof sa);
  sa.sa_handler = getcharm(dw) ? SIG_IGN : SIG_DFL;
  sigemptyset(&sa.sa_mask);
- return sigaction((int) getcharm(sigw), &sa, NULL) ? putcharm(errno) : ZeroPoint; }
+ return sigaction((int) getcharm(sigw), &sa, NULL) ? putcharm(-errno) : ZeroPoint; }
 
 static lvm(lvm_posix_signal) {
  Sp[1] = host_posix_signal(Sp[0], Sp[1]);
@@ -473,7 +477,7 @@ static lvm(lvm_selfpath) {
 //                   -errno on a fork/marshal failure.
 // (ttyfg pg)     -> give the terminal (fd 0) to process group pg; pg <= 0 takes it
 //                   back to the caller's own group (the shell reclaiming the tty
-//                   after a foreground job ends or stops). () | positive errno.
+//                   after a foreground job ends or stops). () | -errno.
 ai_noinline static struct ai *host_pipe(struct ai *g) {
  int fds[2];
  if (pipe(fds)) return g->sp[0] = putcharm(-errno), g;
@@ -541,7 +545,7 @@ static lvm(lvm_spawnio) {
 
 ai_noinline static ai_word host_posix_ttyfg(ai_word pgw) {
  pid_t pg = (charmp(pgw) && getcharm(pgw) > 0) ? (pid_t) getcharm(pgw) : getpgrp();
- return tcsetpgrp(0, pg) ? putcharm(errno) : ZeroPoint; }
+ return tcsetpgrp(0, pg) ? putcharm(-errno) : ZeroPoint; }
 
 static lvm(lvm_posix_ttyfg) {
   Sp[0] = host_posix_ttyfg(Sp[0]);
@@ -625,14 +629,13 @@ ai_noinline static ai_word host_fork(void) {
  return putcharm(pid < 0 ? -errno : pid); }
 static lvm(lvm_fork) { Sp[0] = host_fork(); ai_musttail return Next(1); }
 
-// (dup2 src dst) -> () | errno | EINVAL. the self-redirect (a forked subshell
+// (dup2 src dst) -> () | -errno | EINVAL. the self-redirect (a forked subshell
 // laying its own fdmap, a compound's `done < file` swap).
 // (dup fd) -> a fresh fd duplicating fd (>= 3, clear of stdio) | -errno. the
 // save half of the swap.
-// FIXME violates our negative errno convention
 ai_noinline static ai_word host_dup2(ai_word sw, ai_word dw) {
  return !charmp(sw) || !charmp(dw) ? putcharm(EINVAL) :
-        dup2((int) getcharm(sw), (int) getcharm(dw)) < 0 ? putcharm(errno) :
+        dup2((int) getcharm(sw), (int) getcharm(dw)) < 0 ? putcharm(-errno) :
         ZeroPoint; }
 
 static lvm(lvm_dup2) { Sp[1] = host_dup2(Sp[0], Sp[1]); Sp += 1; ai_musttail return Next(1); }
@@ -645,27 +648,25 @@ ai_noinline static ai_word host_dup(ai_word w) {
 static lvm(lvm_dup) { Sp[0] = host_dup(Sp[0]); ai_musttail return Next(1); }
 
 // --- pid1 bringup: mount the early filesystems + cgroup dirs ----------------------
-// (mkdir path mode) -> mkdir(2). () | -errno | -1 misuse. mode is octal (493 = 0755).
+// (mkdir path mode) -> mkdir(2). () | -errno | EINVAL misuse. mode is octal (493 = 0755).
 // also makes cgroup dirs (cgroup-v2 placement is then `open` + `say` the control file).
 // (mount src tgt type) -> mount(2), flags 0 / no data (enough for proc/sysfs/tmpfs).
-//   () | -errno | -1 misuse. needs privilege: run as pid1/root, or after (newns 0).
+//   () | -errno | EINVAL misuse. needs privilege: run as pid1/root, or after (newns 0).
 // (newns _) -> unshare a private user+mount namespace and selfmap to root-in-ns, so
 //   (mount ...) works unprivileged (the standard setgroups-deny + uid_map/gid_map).
 //   () | -errno. a real pid1 skips this -- it already is root.
-// () on success, a positive errno on failure (so `!`/truthiness tells them apart --
-// the pty/net convention; -errno would net falsey like the () success).
 static lvm(lvm_mkdir) {
  char const *p = str_c(Sp[0]);
  if (!p) { Sp[1] = putcharm(EINVAL); Sp += 1; ai_musttail return Next(1); }
  intptr_t mode = charmp(Sp[1]) ? getcharm(Sp[1]) : 0755;
- Sp[1] = mkdir(p, (mode_t) mode) ? putcharm(errno) : ZeroPoint;
+ Sp[1] = mkdir(p, (mode_t) mode) ? putcharm(-errno) : ZeroPoint;
  ai_musttail return Nextp(1, 1); }
 
 #if defined(AiHaveMount)
 ai_noinline static ai_word host_mount(ai_word a, ai_word b, ai_word c) {
  char const *src = str_c(a), *tgt = str_c(b), *typ = str_c(c);
  if (!src || !tgt || !typ) return putcharm(EINVAL);
- return mount(src, tgt, typ, 0, NULL) ? putcharm(errno) : ZeroPoint; }
+ return mount(src, tgt, typ, 0, NULL) ? putcharm(-errno) : ZeroPoint; }
 static lvm(lvm_mount) { Sp[2] = host_mount(Sp[0], Sp[1], Sp[2]); Sp += 2; ai_musttail return Next(1); }
 #else
 // the call is there; our mount speaks a shape this kernel does not answer.
@@ -681,7 +682,7 @@ static int ns_write(char const *path, char const *s) {
 static lvm(lvm_newns) {
  long uid = (long) getuid(), gid = (long) getgid();
  if (unshare(CLONE_NEWUSER | CLONE_NEWNS)) {
-   Sp[0] = putcharm(errno);
+   Sp[0] = putcharm(-errno);
    ai_musttail return Next(1); }
  char b[64];
  ns_write("/proc/self/setgroups", "deny");                       // required before gid_map
@@ -717,8 +718,7 @@ static lvm(lvm_newns) { Sp[0] = putcharm(ENOSYS); ai_musttail return Next(1); }
 //                   is `stat`: an fd already names the thing and no link is in the way.
 // (readdir path) -> the entry names, a list of strings ("." and ".." dropped), or ()
 //                   on failure. no order promised (readdir order, prepended) -- sort in love.
-// (unlink path)  -> () ok | a positive errno | EINVAL misuse (the mkdir convention:
-//                   an effect op nets truthy exactly when something went wrong).
+// (unlink path)  -> () ok | -errno | EINVAL misuse.
 // (lseek fd off whence) -> the new offset | -errno | -1 misuse (the value-op
 //                   convention: negative = failure, like spawn/wait). raw fds, the
 //                   openfd lane -- not ports (a port's read buffer would desync
@@ -791,21 +791,21 @@ static lvm(lvm_posix_readdir) {
 ai_noinline static ai_word host_posix_unlink(ai_word arg) {
  char const *p = str_c(arg);
  if (!p) return putcharm(EINVAL);
- return unlink(p) ? putcharm(errno) : ZeroPoint; }
+ return unlink(p) ? putcharm(-errno) : ZeroPoint; }
 
 static lvm(lvm_posix_unlink) {
   Sp[0] = host_posix_unlink(Sp[0]);
   ai_musttail return Next(1); }
 
-// (setenv name val) -> () | positive errno | EINVAL misuse; a non-string val unsets
+// (setenv name val) -> () | -errno | EINVAL misuse; a non-string val unsets
 // (the absence lane: (setenv n ()) clears n from the environment).
 // (environ _)       -> the environment as a list of "name=value" strings (the raw
 //                      POSIX shape -- split at the first '=' in love; no order promised).
 ai_noinline static ai_word host_posix_setenv(ai_word nw, ai_word vw) {
  char const *n = str_c(nw), *v = str_c(vw);
  if (!n) return putcharm(EINVAL);
- if (!v) return unsetenv(n) ? putcharm(errno) : ZeroPoint;
- return setenv(n, v, 1) ? putcharm(errno) : ZeroPoint; }
+ if (!v) return unsetenv(n) ? putcharm(-errno) : ZeroPoint;
+ return setenv(n, v, 1) ? putcharm(-errno) : ZeroPoint; }
 static lvm(lvm_posix_setenv) {
  Sp[1] = host_posix_setenv(Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
@@ -908,22 +908,22 @@ AiNif("setenv",  nif_posix_setenv);
 AiNif("environ", nif_posix_environ);
 // --- the rest of the fs surface: the effect ops the fs tools ride ---------------
 // (mv, ln, touch, chmod, chown -- crew/kore/fs.l and friends).
-//   (rename old new)      -> () | errno | EINVAL   (mv's heart; same filesystem)
-//   (symlink target path) -> () | errno | EINVAL   (path becomes a link to target)
+//   (rename old new)      -> () | -errno | EINVAL   (mv's heart; same filesystem)
+//   (symlink target path) -> () | -errno | EINVAL   (path becomes a link to target)
 //   (readlink path)       -> the target string | ()
-//   (chmod path mode)     -> () | errno | EINVAL   (mode the raw permission charm)
-//   (chown path uid gid)  -> () | errno | EINVAL   (-1 leaves that id alone)
-//   (utime path ms)       -> () | errno | EINVAL   (mtime and atime on the stat
+//   (chmod path mode)     -> () | -errno | EINVAL   (mode the raw permission charm)
+//   (chown path uid gid)  -> () | -errno | EINVAL   (-1 leaves that id alone)
+//   (utime path ms)       -> () | -errno | EINVAL   (mtime and atime on the stat
 //                            scale, milliseconds; a non-charm ms reads "now")
 //   (umask mask)          -> the previous mask | -1 misuse (always succeeds)
-//   (rmdir path)          -> () | errno | EINVAL   (the empty-directory unlink)
-//   (hardlink old new)    -> () | errno | EINVAL   (link(2); `link` the word is
+//   (rmdir path)          -> () | -errno | EINVAL   (the empty-directory unlink)
+//   (hardlink old new)    -> () | -errno | EINVAL   (link(2); `link` the word is
 //                            the chain ctor, the most spoken name in the prel,
 //                            so the nif wears the long form)
 ai_noinline static ai_word host_posix_rename(ai_word ow, ai_word nw) {
  char const *o = str_c(ow), *n = str_c(nw);
  if (!o || !n) return putcharm(EINVAL);
- return rename(o, n) ? putcharm(errno) : ZeroPoint; }
+ return rename(o, n) ? putcharm(-errno) : ZeroPoint; }
 static lvm(lvm_posix_rename) {
  Sp[1] = host_posix_rename(Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
@@ -931,7 +931,7 @@ static lvm(lvm_posix_rename) {
 ai_noinline static ai_word host_posix_symlink(ai_word tw, ai_word pw) {
  char const *t = str_c(tw), *p = str_c(pw);
  if (!t || !p) return putcharm(EINVAL);
- return symlink(t, p) ? putcharm(errno) : ZeroPoint; }
+ return symlink(t, p) ? putcharm(-errno) : ZeroPoint; }
 static lvm(lvm_posix_symlink) {
  Sp[1] = host_posix_symlink(Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
@@ -954,7 +954,7 @@ static lvm(lvm_posix_readlink) {
 ai_noinline static ai_word host_posix_chmod(ai_word pw, ai_word mw) {
  char const *p = str_c(pw);
  if (!p || !charmp(mw)) return putcharm(EINVAL);
- return chmod(p, (mode_t) getcharm(mw)) ? putcharm(errno) : ZeroPoint; }
+ return chmod(p, (mode_t) getcharm(mw)) ? putcharm(-errno) : ZeroPoint; }
 static lvm(lvm_posix_chmod) {
  Sp[1] = host_posix_chmod(Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
@@ -962,7 +962,7 @@ static lvm(lvm_posix_chmod) {
 ai_noinline static ai_word host_posix_chown(ai_word pw, ai_word uw, ai_word gw) {
  char const *p = str_c(pw);
  if (!p || !charmp(uw) || !charmp(gw)) return putcharm(EINVAL);
- return chown(p, (uid_t) getcharm(uw), (gid_t) getcharm(gw)) ? putcharm(errno) : ZeroPoint; }
+ return chown(p, (uid_t) getcharm(uw), (gid_t) getcharm(gw)) ? putcharm(-errno) : ZeroPoint; }
 static lvm(lvm_posix_chown) {
  Sp[2] = host_posix_chown(Sp[0], Sp[1], Sp[2]);
  ai_musttail return Nextp(1, 2); }
@@ -977,7 +977,7 @@ ai_noinline static ai_word host_posix_utime(ai_word pw, ai_word msw) {
   ts[0].tv_nsec = ts[1].tv_nsec = (long) (ms % 1000) * 1000000;
  } else
   ts[0].tv_sec = ts[1].tv_sec = 0, ts[0].tv_nsec = ts[1].tv_nsec = UTIME_NOW;
- return utimensat(AT_FDCWD, p, ts, 0) ? putcharm(errno) : ZeroPoint; }
+ return utimensat(AT_FDCWD, p, ts, 0) ? putcharm(-errno) : ZeroPoint; }
 static lvm(lvm_posix_utime) {
  Sp[1] = host_posix_utime(Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
@@ -985,13 +985,13 @@ static lvm(lvm_posix_utime) {
 ai_noinline static ai_word host_posix_rmdir(ai_word pw) {
  char const *p = str_c(pw);
  if (!p) return putcharm(EINVAL);
- return rmdir(p) ? putcharm(errno) : ZeroPoint; }
+ return rmdir(p) ? putcharm(-errno) : ZeroPoint; }
 static lvm(lvm_posix_rmdir) { Sp[0] = host_posix_rmdir(Sp[0]); ai_musttail return Next(1); }
 
 ai_noinline static ai_word host_posix_hardlink(ai_word ow, ai_word nw) {
  char const *o = str_c(ow), *n = str_c(nw);
  if (!o || !n) return putcharm(EINVAL);
- return link(o, n) ? putcharm(errno) : ZeroPoint; }
+ return link(o, n) ? putcharm(-errno) : ZeroPoint; }
 static lvm(lvm_posix_hardlink) {
  Sp[1] = host_posix_hardlink(Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
@@ -1093,23 +1093,23 @@ ai_noinline static struct ai *host_tether(struct ai *g) {
   // open the master, unlock the slave, copy the slave path (ptsname's buffer is
   // static -- snapshot it for the child, which inherits the snapshot across fork).
  int mfd = posix_openpt(O_RDWR | O_NOCTTY);
- if (mfd < 0) return ai_push(g, 1, putcharm(errno));
- if (grantpt(mfd) || unlockpt(mfd)) { int e = errno; close(mfd); return ai_push(g, 1, putcharm(e)); }
+ if (mfd < 0) return ai_push(g, 1, putcharm(-errno));
+ if (grantpt(mfd) || unlockpt(mfd)) { int e = errno; close(mfd); return ai_push(g, 1, putcharm(-e)); }
  char sname[128];
  { char const *p = ptsname(mfd);
-  if (!p || strlen(p) >= sizeof sname) { close(mfd); return ai_push(g, 1, putcharm(p ? ENAMETOOLONG : errno)); }
+  if (!p || strlen(p) >= sizeof sname) { close(mfd); return ai_push(g, 1, putcharm(-(p ? ENAMETOOLONG : errno))); }
   memcpy(sname, p, strlen(p) + 1); }
 
   // close-on-exec errno pipe: child writes its setup/exec errno here; a clean
   // exec closes the write end -> parent reads EOF (childerr stays 0).
  int ep[2];
- if (pipe(ep)) { int e = errno; close(mfd); return ai_push(g, 1, putcharm(e)); }
+ if (pipe(ep)) { int e = errno; close(mfd); return ai_push(g, 1, putcharm(-e)); }
  fcntl(ep[1], F_SETFD, FD_CLOEXEC);
 
  host_spawn_guard(g, 1);
  pid_t pid = fork();
  if (pid) host_spawn_guard(g, 0);   // parent (a failed fork included); the child's g is unmapped
- if (pid < 0) { int e = errno; close(mfd); close(ep[0]); close(ep[1]); return ai_push(g, 1, putcharm(e)); }
+ if (pid < 0) { int e = errno; close(mfd); close(ep[0]); close(ep[1]); return ai_push(g, 1, putcharm(-e)); }
  if (!pid) {                                       // child
   close(mfd); close(ep[0]);
   sig_dfl_job();                                  // the ignores must not ride the exec
@@ -1133,7 +1133,7 @@ ai_noinline static struct ai *host_tether(struct ai *g) {
  if (childerr) {                                   // setup/exec failed in the child
   close(mfd);
   int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
-  return ai_push(g, 1, putcharm(childerr)); }
+  return ai_push(g, 1, putcharm(-childerr)); }
 
   // success: master -> heap port (pushes it to sp[0]; argv slides to sp[1]).
  struct ai *io = ai_io_alloc(g, mfd);
@@ -1167,7 +1167,7 @@ ai_noinline static struct ai *host_reap(struct ai *g, ai_word pidw) {
  int st;
  pid_t r = waitpid((pid_t) pid, &st, WNOHANG);
  if (r == 0) { g->sp[0] = zero; return g; }            // still running
- if (r < 0)  { g->sp[0] = putcharm(errno); return g; }   // waitpid error
+ if (r < 0)  { g->sp[0] = putcharm(-errno); return g; }   // waitpid error
  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
                                  putcharm(proc_status(st)), ZeroPoint);   // a real ()-tailed list, not the charm-0 fossil
@@ -1186,11 +1186,13 @@ static lvm(lvm_reap) {
  ai_musttail return Next(1); }
 
 // (kill pid sig): POSIX kill(2). a negative pid signals the process group.
-// returns () on success, the errno fixnum on failure.
+// returns () on success, -errno on failure -- the effect shape, like every other one
+// here. it answered charm 0 for the success, which its own line above already denied
+// and which no caller could tell from a failure once both were charms.
 static lvm(lvm_kill) {
  intptr_t pid = charmp(Sp[0]) ? getcharm(Sp[0]) : 0,
           sig = charmp(Sp[1]) ? getcharm(Sp[1]) : 0;
- Sp[1] = kill((pid_t) pid, (int) sig) ? putcharm(errno) : zero;
+ Sp[1] = kill((pid_t) pid, (int) sig) ? putcharm(-errno) : ZeroPoint;
  ai_musttail return Nextp(1, 1); }
 
 // workhorse for (winsize), called with g Packed (the dummy arg sits at sp[0]).

@@ -205,12 +205,12 @@
      (: p (open path "w") (? (hot? p) (: _ (say p s) _ (flush p) (close p) 'ok) 'denied))
    (try-mount src tgt typ)
      (: _ (mkdir tgt 493)
-        r (mount src tgt typ)                            ; () success, +errno failure
+        r (mount src tgt typ)                            ; () success, -errno failure
         (note (+ "  mount " (+ typ (+ " on " (+ tgt
-                 (? r (+ " -> EPERM (errno " (+ (show r) ", needs root/pid-ns)")) " -> ok")))))))
+                 (? (charm? r) (+ " -> EPERM (errno " (+ (show (0 - r)) ", needs root/pid-ns)")) " -> ok")))))))
    (boot-system _)
      (: e (newns 0)
-        _ (note (? e "-- pid1 bringup: (no unpriv userns here; a real pid1 is root) --"
+        _ (note (? (charm? e) "-- pid1 bringup: (no unpriv userns here; a real pid1 is root) --"
                      "-- pid1 bringup: private user+mount ns (root-in-ns) --"))
         _ (try-mount "tmpfs" "/tmp/love-run"  "tmpfs")       ; works unprivileged -> proves mount
         _ (try-mount "proc"  "/tmp/love-proc" "proc")        ; needs a pid-ns too -> eperm here

@@ -1,10 +1,9 @@
 ; The writable tree, inle's rung 2 (doc/misc/inle.md): create, mkdir, rmdir, unlink,
 ; rename, chdir/cwd -- plus chmod and utime, which kore's cp and touch ride -- and
 ; the environment (getenv setenv environ), a tablet in the kernel's boot text. The
-; shapes are doc/misc/posix.md's and the host's exactly: an effect answers () | a
-; positive errno (the host's numbers) | 22 on misuse; a value answers the value |
-; (); chdir wears the host's negative lane. test/host/fs.l holds sibling laws
-; against the real tree.
+; shapes are doc/misc/posix.md's and the host's exactly: an effect answers () | -errno
+; (the host's numbers, negated) | 22 on misuse; a value answers the value | () | -errno.
+; test/host/fs.l holds sibling laws against the real tree.
 ;
 ; kernel only -- test/kernel/all.l's roster, never $t: on the host these paths are the real
 ; filesystem. Everything made here is unmade at the foot, so the corpus behind
@@ -34,29 +33,29 @@
    ; -- unlink: the entry leaves the tree; absence and misuse answer the host's way --
    (id? (unlink (d + "/b")) ())
    (id? (stat (d + "/b")) ())
-   (< 0 (unlink (d + "/b")))                    ; gone is a live errno
-   (= 21 (unlink d))                            ; a directory refuses: eisdir
+   (unlink (d + "/b") < 0)                      ; gone is a live errno
+   (= -21 (unlink d))                           ; a directory refuses: eisdir
    (= 22 (unlink 7))                            ; misuse: EINVAL
    ; -- mkdir/rmdir: a directory is a thing now, empty and stattable --
    (id? (mkdir e 493) ())
    (= 16384 (& 61440 <>>(stat e)))
    (id? (readdir e) ())                         ; empty, told from absent by stat
-   (= 17 (mkdir e 493))                         ; again: EEXIST
-   (= 17 (mkdir "lib" 493))                     ; a baked prefix is a directory too
-   (= 20 (mkdir (f + "/x") 493))                ; under a file: enotdir
-   (= 2 (mkdir "/hole/x" 493))                  ; under a hole: ENOENT
+   (= -17 (mkdir e 493))                        ; again: EEXIST
+   (= -17 (mkdir "lib" 493))                    ; a baked prefix is a directory too
+   (= -20 (mkdir (f + "/x") 493))               ; under a file: enotdir
+   (= -2 (mkdir "/hole/x" 493))                 ; under a hole: ENOENT
    (= 22 (mkdir 7 493))
    (wr (e + "/k") "y")
-   (= 39 (rmdir e))                             ; occupied: enotempty
+   (= -39 (rmdir e))                            ; occupied: enotempty
    (id? (unlink (e + "/k")) ())
    (id? (rmdir e) ())
-   (= 2 (rmdir e))                              ; and gone is ENOENT
-   (= 20 (rmdir f))                             ; a file was never a directory
+   (= -2 (rmdir e))                             ; and gone is ENOENT
+   (= -20 (rmdir f))                            ; a file was never a directory
    ; -- rename: a file moves whole; a target file is replaced under it --
    (id? (rename f (d + "/z")) ())
    (id? (stat f) ())
    (= 5 <(stat (d + "/z")))
-   (< 0 (rename (d + "/ghost") f))              ; a missing source is a live errno
+   (rename (d + "/ghost") f < 0)                ; a missing source is a live errno
    (= 22 (rename 7 f))
    (wr f "yo")
    (id? (rename (d + "/z") f) ())
@@ -67,7 +66,7 @@
    (id? (rename (d + "/dd") (d + "/ee")) ())
    (= "1" (rd (d + "/ee/x")))
    (id? (stat (d + "/dd")) ())
-   (= 22 (rename d (d + "/in")))
+   (= -22 (rename d (d + "/in")))              ; a real EINVAL: the sign parts it from the misuse row
    ; -- chdir/cwd: the cwd is a kernel string; "/" is the boot seat --
    (= "/" (cwd 0))
    (id? (chdir "lib") ())
@@ -87,7 +86,7 @@
    (id? (utime f ()) ())
    (< 1600000000000 <>(stat f))
    (= 22 (chmod 7 384))
-   (= 2 (chmod (d + "/ghost") 384))
+   (= -2 (chmod (d + "/ghost") 384))
    ; -- the environment: a tablet behind the host's three doors --
    (id? (getenv "WFS") ())                      ; unset is the real ()
    (id? (setenv "WFS" "1") ())

@@ -4,8 +4,8 @@
 ; still runs standalone against the built binary, like test/host/init.l --
 ; not in test/*.l. Run (assert comes from test/00-init.l):
 ;   cat test/00-init.l test/host/fs.l | out/host/love
-; the conventions under test are init.c's posix_ lane: an effect op answers ()
-; ok | a positive errno | EINVAL misuse; a value op answers the value | ().
+; the conventions under test are src/posix.c's posix_ lane: an effect op answers ()
+; ok | -errno | EINVAL misuse; a value op answers the value | () | -errno.
 
 (: d "out/.fs-nif-smoke"
    a (+ d "/a") b (+ d "/b") l (+ d "/l")
@@ -17,7 +17,7 @@
    _ (assert
        (id? (rename a b) ())                        ; ok is the real (), not charm 0
        (id? (stat a) ()) (= 5 (cap (stat b)))
-       (< 0 (rename a (+ d "/x")))                  ; a missing source is a live errno
+       (rename a (+ d "/x") < 0)                    ; a missing source is a live errno
        (= 22 (rename 7 b)))                         ; EINVAL misuse: a non-string path
 
    ; symlink + readlink: path becomes a link to target -- and the target string
@@ -39,7 +39,7 @@
        (= 1600000000000 (caup (stat b)))
        (id? (utime b ()) ())
        (< 1600000000000 (caup (stat b)))            ; "now" is later than the pinned past
-       (< 0 (chmod (+ d "/nope") 384))              ; a miss is a live errno
+       (chmod (+ d "/nope") 384 < 0)                ; a miss is a live errno
        (= 22 (chmod b "rw")))                       ; EINVAL misuse: a non-charm mode
 
    ; chown: a no-op self-chown succeeds (-1 -1 leaves both ids alone); misuse einvals
@@ -55,10 +55,10 @@
    _ (: e (+ d "/sub")
         _ (mkdir e 493)
         (assert
-          (< 0 (rmdir d))                           ; d holds b and l still: not empty
+          (rmdir d < 0)                              ; d holds b and l still: not empty
           (id? (rmdir e) ())
           (id? (stat e) ())
-          (< 0 (rmdir e))                           ; already gone: a live errno
+          (rmdir e < 0)                              ; already gone: a live errno
           (= 22 (rmdir 7))))
 
    ; hardlink: two names, one file -- content shows through both, and the
@@ -68,7 +68,7 @@
         (assert
           (id? (hardlink b h) ())
           (= 5 (cap (stat h)))
-          (< 0 (hardlink b h))                      ; the name is taken: EEXIST
+          (hardlink b h < 0)                         ; the name is taken: EEXIST
           (: _ (unlink b) (= 5 (cap (stat h))))
           (id? (unlink h) ())))
 

@@ -1393,10 +1393,9 @@ static lvm(lvm_vmx_run) {
 #endif
 
 // --- rung 2: the writable tree -- mkdir, rmdir, unlink, rename, chdir/cwd,
-// chmod, utime. doc/misc/posix.md's conventions exactly: an effect answers () | a
-// POSITIVE errno (the host's numbers -- kore reads them back, and mv's EXDEV
-// lane proves a shape can matter) | EINVAL on misuse; chdir wears the host's
-// negative lane; cwd answers the string | (). The environment is not here: a
+// chmod, utime. doc/misc/posix.md's conventions exactly: an effect answers () |
+// -errno (the host's numbers, negated -- kore reads them back, and mv's EXDEV
+// lane proves a shape can matter) | EINVAL on misuse; cwd answers the string | (). The environment is not here: a
 // tablet in the boot text (kmain, below), as doc/misc/inle.md says.
 
 // --- the PATH FACES ------------------------------------------------------
@@ -1404,10 +1403,8 @@ static lvm(lvm_vmx_run) {
 // k_parent_ok do -- ONE sign for every C face in this kernel, and it is the
 // one __ai_inle owes its caller (impl.h's er() reads an error as
 // (unsigned long) r > (unsigned long) -4096), so src/sys.c hands these answers
-// straight out with no flip anywhere. The love conventions are the k_* wrappers'
-// business: positive for most doors, negative for chdir, () for absence.
-// ⚠ do not "restore" the positive lane -- it was a fossil of the love bodies
-// these were lifted out of, and a flip per path is a sign to get wrong per path.
+// straight out with no flip anywhere. the love side wears that sign too, so an
+// error crosses every seam untouched; only absence, which is (), is a wrapper's.
 // ⚠ ai_noinline is load-bearing here, not decoration: cp[256] living in an
 // lvm's own frame would block its musttail.
 ai_noinline int k_fs_mkdir(char const *p, uintptr_t pn, uintptr_t mode) {

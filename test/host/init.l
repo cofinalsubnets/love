@@ -74,10 +74,10 @@
     ; second close of a real one -- the row is gone, which is what it says
     (: fd (openfd f 0) a (close fd) b (close fd) (&& (id? a ()) (= -9 b)))
     (= -9 (close 4096))
-    ; unlink: () ok, then the file really is gone, and a re-unlink says so (ENOENT, POSITIVE)
+    ; unlink: () ok, then the file really is gone, and a re-unlink says so (-ENOENT)
     (id? (unlink f) ())
     (id? (stat f) ()) (id? (readdir d) ())
-    (: e (unlink f) (&& (charm? e) (< 0 e)))))
+    (: e (unlink f) (&& (charm? e) (e < 0)))))
 
 ; --- the raw-fd lane: the port ops with a charm where the port goes ------------
 ; an fd carries no buffer of love's and no seat, so each op is one motion on the

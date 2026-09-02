@@ -111,9 +111,9 @@ ai_noinline static struct ai *host_harkstart(struct ai *g, int tee) {
  // errno into a local before the state push, on every one of these: the push
  // may collect, and a collection that grows the pool makes syscalls of its own.
  if (pipe(op)) { int e = errno;
-  return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(e)); }
+  return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(-e)); }
  if (pipe(ep)) { int e = errno; close(op[0]); close(op[1]);
-  return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(e)); }
+  return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(-e)); }
  fcntl(ep[1], F_SETFD, FD_CLOEXEC);
  fflush(stdout);
  host_spawn_guard(g, 1);
@@ -121,7 +121,7 @@ ai_noinline static struct ai *host_harkstart(struct ai *g, int tee) {
  if (pid) host_spawn_guard(g, 0);   // parent (a failed fork included); the child's g is unmapped
  if (pid < 0) { int e = errno;
   close(op[0]); close(op[1]); close(ep[0]); close(ep[1]);
-  return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(e)); }
+  return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(-e)); }
  if (!pid) {                                              // child
   signal(SIGPIPE, SIG_DFL);                               // the ignore must not ride the exec
   dup2(op[1], STDOUT_FILENO);
@@ -138,7 +138,7 @@ ai_noinline static struct ai *host_harkstart(struct ai *g, int tee) {
  if (childerr) {                                          // exec failed
   close(op[0]);
   int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
-  return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(childerr)); }
+  return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(-childerr)); }
 
  int fl = fcntl(op[0], F_GETFL);
  if (fl >= 0) fcntl(op[0], F_SETFL, fl | O_NONBLOCK);
@@ -229,7 +229,7 @@ ai_noinline static struct ai *host_exec(struct ai *g) {
  signal(SIGPIPE, SIG_DFL);                                 // ... nor this one
  stdin_hand(g);                                            // the child inherits fd 0: hand it over exact
  execvp(cav[0], cav);
- return ai_push(g, 1, putcharm(errno)); }                  // exec failed -> errno
+ return ai_push(g, 1, putcharm(-errno)); }                  // exec failed -> -errno
 
 static lvm(lvm_exec) {
  Pack(g);

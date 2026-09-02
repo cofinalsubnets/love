@@ -90,7 +90,7 @@
         (? !(alldig? p)
            (: _ (say err ("kill: invalid pid " + p)) _ (put err 10) 0)
            (: r (still (uatoi p) sg)
-              (? !r ok
+              (? (uok? r) ok
                  (: _ (say err ("kill: cannot kill " + p)) _ (put err 10) 0))))
        (go a ok) (? (two? a) (go >a (one <a ok))
                     (: _ (flush err) (? ok 0 1)))

@@ -289,7 +289,7 @@
       0)
 
    ; an interactive step: exec the argv, replacing this process (tty inherited).
-   ; the exec nif returns only on failure -- then an errno fixnum -- so anything
+   ; the exec nif returns only on failure -- then -errno -- so anything
    ; past it is the error path. exec is terminal by nature (the repl never returns),
    ; so cook's "cooked X" summary is correctly never reached.
    (do-exec argv)

@@ -60,12 +60,11 @@ no edit. What is still written fresh is the nif BODIES, and `doc/misc/plan/inle-
 plan for retiring that: `src/sys.c` answers `__ai_sys`, so nolibc — and everything written
 against it, `src/posix.c` included — can stand on this kernel instead of a hosted one.
 
-⚠ **The conventions are `doc/misc/posix.md`'s, exactly.** An effect answers `()` | a POSITIVE errno |
-EINVAL on misuse; a value answers the value | `()`. `stat` answers `(size mtime-ms mode ns)`.
+⚠ **The conventions are `doc/misc/posix.md`'s, exactly.** An effect answers `()` | `-errno` |
+EINVAL on misuse; a value answers the value | `()` | `-errno`. `stat` answers `(size mtime-ms mode ns)`.
 Divergence here is worse than absence — kore reads these shapes and a wrong one is silent.
-⚠ **`chdir` is the exception, on BOTH seats**: it answers a NEGATIVE errno (`putcharm(-e)`, and
-`-1` for misuse), here and in `src/posix.c`'s `host_chdir` alike. The twins agree, which is
-what matters; the sentence above simply never reached this one. Do not "fix" one of them.
+⚠ **a negative errno nets falsey, exactly like the `()` success**, so a caller asks `charm?`,
+`id? .. ()` or `!` — never `?`.
 
 ## the ladder
 

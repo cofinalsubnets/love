@@ -372,6 +372,23 @@ korerun realpath -e "$P/nosuch" > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "ko
 korerun link "$P/f1" "$P/hard1" && [ "$(stat -c %h "$P/hard1")" -ge 2 ] || fail "kore link"
 korerun unlink "$P/hard1" && [ ! -e "$P/hard1" ] || fail "kore unlink"
 korerun unlink "$P/hard1" 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore unlink miss (rc $r)"
+# the failure lane. an effect nif answers () or -errno and BOTH net falsey, so a tool
+# that truth-tests its answer instead of asking the kind reports success on every miss.
+# one row per tool, because the mistake is per call site.
+korerun mkdir "$P/f1/x" > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore mkdir under a file (rc $r)"
+korerun rmdir "$P/nosuchdir" > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore rmdir miss (rc $r)"
+korerun chmod 600 "$P/nosuchfile" > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore chmod miss (rc $r)"
+korerun touch "$P/f1/x" > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore touch under a file (rc $r)"
+korerun ln -s a "$P/f1/x" > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore ln -s under a file (rc $r)"
+korerun link "$P/nosuchfile" "$P/n2" > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore link miss (rc $r)"
+korerun mv "$P/nosuchfile" "$P/n2" > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore mv miss (rc $r)"
+# mv's cross-device leg: rename answers -EXDEV and mv copies then unlinks instead. only
+# where /tmp is a filesystem of its own, which is the only place the leg exists.
+if [ "$(stat -c %d /tmp 2>/dev/null)" != "$(stat -c %d "$P" 2>/dev/null)" ]; then
+  printf 'xdev\n' > /tmp/.kore-xdev
+  korerun mv /tmp/.kore-xdev "$P/xdev" && [ -f "$P/xdev" ] && [ ! -e /tmp/.kore-xdev ] \
+    || fail "kore mv cross-device"
+fi
 echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink/realpath/link) ok"
 
 # ------------------------------------------------------------------- the greps
