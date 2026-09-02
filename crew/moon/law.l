@@ -1560,12 +1560,13 @@
 (: (spsts fs) (: (go l n) (? !(two? l) n
                             (go >l (? (two? <l && id? <<l 'st && id? <><l 'sp) (n + 1) n)))
                  (go fs 0))
+   g4 {}                                     ; no 'tgt: the x64 shapes, which every law here speaks
    ; r1safe? is the license: pure r0-landing forms pass; a call, a label, an r1-write refuse
    _ (assert
-      (r1safe? '((la r0 s) (cmp r9 r0)))
-      !(r1safe? '((call f9)))
-      !(r1safe? '((ld r1 r4 8)))
-      !(r1safe? '((label .x))))
+      (r1safe? g4 '((la r0 s) (cmp r9 r0)))
+      !(r1safe? g4 '((call f9)))
+      !(r1safe? g4 '((ld r1 r4 8)))
+      !(r1safe? g4 '((label .x))))
    ; the divide always shuttles: a leaf right turns the push/pop pair into one mov -- and
    ; copy propagation reads the park straight through the staging, so the dividend arrives
    ; from its own arrival register and there is no staging copy left at all
@@ -1579,7 +1580,6 @@
       (= 0 (spsts df)))
    ; stld: a slot binding rides a mov and survives its source's death (the reload elides);
    ; when every carrier dies the reload stands
-   g4 {}
    sq '((st r4 40 r0) (mov r9 r0) (la r0 s) (cmp r9 r0) (br eq .t7) (ld r9 r4 40) (la r0 s2) (cmp r9 r0))
    _ (assert
       !(member? '(ld r9 r4 40) (stld g4 sq))
@@ -1601,21 +1601,21 @@
    ; carries the width, a def dirties it, a label clears the table, and an ask
    ; narrower than the known clean width stands
    _ (assert
-      ('((ldu4 r0 r4 40) (ret)) = (rezx '((ldu4 r0 r4 40) (zx4 r0) (ret))))
-      ('((ror4 r0 11) (ret)) = (rezx '((ror4 r0 11) (zx4 r0) (ret))))
-      ('((zx4 r0) (ret)) = (rezx '((zx4 r0) (zx4 r0) (ret))))
-      ('((ldu1 r0 r4 40) (ret)) = (rezx '((ldu1 r0 r4 40) (zx4 r0) (ret))))
-      ('((ldu4 r0 r4 40) (mov r9 r0) (ret)) = (rezx '((ldu4 r0 r4 40) (mov r9 r0) (zx4 r9) (ret))))
-      (member? '(zx1 r0) (rezx '((ldu4 r0 r4 40) (zx1 r0) (ret))))
+      ('((ldu4 r0 r4 40) (ret)) = (rezx g4 '((ldu4 r0 r4 40) (zx4 r0) (ret))))
+      ('((ror4 r0 11) (ret)) = (rezx g4 '((ror4 r0 11) (zx4 r0) (ret))))
+      ('((zx4 r0) (ret)) = (rezx g4 '((zx4 r0) (zx4 r0) (ret))))
+      ('((ldu1 r0 r4 40) (ret)) = (rezx g4 '((ldu1 r0 r4 40) (zx4 r0) (ret))))
+      ('((ldu4 r0 r4 40) (mov r9 r0) (ret)) = (rezx g4 '((ldu4 r0 r4 40) (mov r9 r0) (zx4 r9) (ret))))
+      (member? '(zx1 r0) (rezx g4 '((ldu4 r0 r4 40) (zx1 r0) (ret))))
       ; a set (or an li of 0/1) is a bool: the re-canonicalization over it is the identity
       ; and drops, a copy carries the fact, a def dirties it, and a following flags read keeps it
-      ('((set eq r0) (ret)) = (rezx '((set eq r0) (cmp r0 0) (set ne r0) (ret))))
-      ('((li r0 1) (ret)) = (rezx '((li r0 1) (cmp r0 0) (set ne r0) (ret))))
-      ('((set eq r0) (mov r9 r0) (ret)) = (rezx '((set eq r0) (mov r9 r0) (cmp r9 0) (set ne r9) (ret))))
-      ('((set eq r0) (add r0 r0 1) (cmp r0 0) (set ne r0) (ret)) = (rezx '((set eq r0) (add r0 r0 1) (cmp r0 0) (set ne r0) (ret))))
-      ('((set eq r0) (cmp r0 0) (set ne r0) (br eq .x)) = (rezx '((set eq r0) (cmp r0 0) (set ne r0) (br eq .x))))
-      (member? '(zx4 r0) (rezx '((ldu4 r0 r4 40) (add r0 r0 r1) (zx4 r0) (ret))))
-      (member? '(zx4 r0) (rezx '((ldu4 r0 r4 40) (label .z9) (zx4 r0) (ret)))))
+      ('((set eq r0) (ret)) = (rezx g4 '((set eq r0) (cmp r0 0) (set ne r0) (ret))))
+      ('((li r0 1) (ret)) = (rezx g4 '((li r0 1) (cmp r0 0) (set ne r0) (ret))))
+      ('((set eq r0) (mov r9 r0) (ret)) = (rezx g4 '((set eq r0) (mov r9 r0) (cmp r9 0) (set ne r9) (ret))))
+      ('((set eq r0) (add r0 r0 1) (cmp r0 0) (set ne r0) (ret)) = (rezx g4 '((set eq r0) (add r0 r0 1) (cmp r0 0) (set ne r0) (ret))))
+      ('((set eq r0) (cmp r0 0) (set ne r0) (br eq .x)) = (rezx g4 '((set eq r0) (cmp r0 0) (set ne r0) (br eq .x))))
+      (member? '(zx4 r0) (rezx g4 '((ldu4 r0 r4 40) (add r0 r0 r1) (zx4 r0) (ret))))
+      (member? '(zx4 r0) (rezx g4 '((ldu4 r0 r4 40) (label .z9) (zx4 r0) (ret)))))
    ; the a64 lane: the sweeps ride fp as the base past a4ize, a cs restore is an
    ; anchor there like x64's r3/cs reloads, and the immediate gates decline what
    ; the target has no encoding for (si, a non-mask logical, a wide cmp)
@@ -1648,7 +1648,7 @@
 ; the sp family never folds, since sp moves through the cell cursor and its copy records outlive it.
 (: gP {}
    pro '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3) (align 1))
-   (cp l) (drop 6 (coal gP (copyprop (pro + l))))     ; the real chain: the build tail's
+   (cp l) (drop 6 (coal gP (copyprop gP (pro + l))))     ; the real chain: the build tail's
                                                        ; forward walk, then the post-choice fold
    ; the sandwich, both directions at once: the rename breaks the fusion, coal rebuilds it on
    ; the copy's register, and both movs are gone -- for sub as much as for add, since it is the
@@ -1763,14 +1763,14 @@
    ; the forward carrier: seed the map with (mov orig sub) and let the pass itself rewrite the
    ; form -- no guard is restated here, cpwalk decides and holo judges
    (fwd f) (catmap (\ i (catmap (\ r9
-              (: out (cpwalk [['mov (nthr f i) r9] f] {})
+              (: out (cpwalk gX [['mov (nthr f i) r9] f] {})
                  f2 (nthr out (tally out - 1))
                  (? (emits? f2) () [[f i r9 f2]])))
-            cpfile)) (cprp f))
-   nfwd ((foldl (\ n f9 (n + tally (cprp f9))) 0 shapes) * tally cpfile)
+            cpfile)) (cprp gX f))
+   nfwd ((foldl (\ n f9 (n + tally (cprp gX f9))) 0 shapes) * tally cpfile)
    bad1 (catmap fwd shapes)
    ; the backward carrier: a copy off the shape's own destination, folded by the real coal
-   (soled f) (: d (rdsp f)                          ; the shapes coal can fold: one gp def
+   (soled f) (: d (rdsp gX f)                          ; the shapes coal can fold: one gp def
                 (? (id? d 'bar) () (: dfs <>d (? (two? dfs && !(two? >dfs) && member? <dfs cpfile)
                                                  dfs ()))))
    (bwd f) (: S (soled f)
@@ -1785,12 +1785,12 @@
    (assert
       ; the carrier is what it says it is, and every shape is one both halves already accept
       (= 78 (tally shapes))
-      !(two? (filter (\ f9 (id? (rdsp f9) 'bar)) shapes))
+      !(two? (filter (\ f9 (id? (rdsp gX f9) 'bar)) shapes))
       (all emits? shapes)
       !(two? (filter (\ o9 !(member? o9 heads)) rostered))    ; the drift gate
-      (= 390 nfwd) (= 585 nbwd)                               ; a silent narrowing shows up here
+      (= 390 nfwd) (= 660 nbwd)                               ; a silent narrowing shows up here
       !(two? bad1)                                            ; forward: 390 renames, all encodable
-      !(two? bad2)                                            ; backward: 570 folds, all encodable
+      !(two? bad2)                                            ; backward: 660 folds, all encodable
       ; and the law has teeth -- these are the two shapes the guards exist for, refused by holo
       ; itself, plus the alias emit-alu welcomes when the op commutes (coal declines it, and this
       ; records that the decline is conservative rather than necessary)
