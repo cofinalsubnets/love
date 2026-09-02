@@ -1143,14 +1143,19 @@
    ld-lanenames (ld-cls '((text ".text") (rodata ".rodata") (data ".data")
                           (nifs ".love.nifs") (bss ".bss") (image ".love.image")))
    (ld-lanenm l) (: r (peep ld-lanenames l ()) (two? r ? <r (string l)))
+   ; a lane's FIRST section, in lay order (object order, then header order): what
+   ; ldlay1 reaches first, so its flags name the lane's home and its alignment is
+   ; the lane's own. () where no object puts a section in the lane.
+   (ld-lane0 objs l)
+    (: (go os) (? !(two? os) ()
+                  (: is (peep (peep <os 'lanes 0) l ())
+                     (two? is ? (peep (peep <os 'secs 0) <is ()) (go >os))))
+       (go objs))
    ; a lane's HOME across the set -- what its sections' own flags said it travels
    ; with (ld-home). a lane the linker knows by name is its own home.
    (ld-homeof objs l)
     (? (member? l ld-lanes) l
-       (: (go os) (? !(two? os) 'rodata
-                     (: is (peep (peep <os 'lanes 0) l ())
-                        (two? is ? (peep <os 'secs 0 <is 4) (go >os))))
-          (go objs)))
+       (: s (ld-lane0 objs l) (two? s ? (s 4) 'rodata)))
    (ld-secflags h) (? (h == 'text) 6 (member? h '(data bss nifs image)) 3 2)
    (ld-segflags objs ls)                                    ; pf_r plus what the lanes ask
     (foldl (\ a l (: h (ld-homeof objs l)
@@ -1280,8 +1285,15 @@
        ; the entry symbol is a courtesy -- for objdump, gdb and a reader asking what
        ; runs first. the core never consults e_entry; it takes the vector table.
        ent (: e (glo "_start") (two? e ? <e org))
+       ; the nif bracket. lpos keeps a lane's CURSOR, and ldlay1 aligns the first section
+       ; as its own header asks -- so the alignment pad rides INSIDE the lane, and a start
+       ; read off the cursor points into the pad rather than at the array. ldkern and
+       ; ldlink never met it: both put the lane at a 16-aligned address of their own before
+       ; laying it, and a board map names lanes without saying where each one may begin.
+       ; the end is honest already, nothing following the last section.
        nif (: r (lpos 'nifs) (two? r ? r [org org 0]))
-       cx [glo <nif (<nif + nif 2) org org () () 1 be (ld-extents objs)]
+       n0 (ld-align (: s (ld-lane0 objs 'nifs) (two? s ? (s 3) 1)) <nif)
+       cx [glo n0 (<nif + nif 2) org org () () 1 be (ld-extents objs)]
        ; -- the bytes, run by run, lane by lane, in that same order --
        body (: (go rs fp acc)
                 (? !(two? rs) [fp acc]
