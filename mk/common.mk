@@ -93,6 +93,10 @@ love_h = $R/src/love.h $R/src/love_int.h $R/src/kinds.h $R/src/nifs.h $R/src/mx.
 love_tu = love.c ev.c io.c map.c snap.c num.c arr.c
 love_tu_c = $(patsubst %,$R/src/%,$(love_tu))
 love_c = $(love_tu_c) $R/crew/moon/lib/math/am.c
+# ..and the codecs snap.c reaches unconditionally, to pack and unpack an image's code
+# segment: a seat that links the runtime links these. the host globs them and the kernel
+# names them; this roster is for the bare ports, which link the runtime and nothing else.
+love_codec = inflate.c deflate.c
 # src/ is ONE folder, so these name the lanes a directory used to: the metal seat
 # (src/kernel.mk builds them) and the per-ISA files, which `a` picks by prefix.
 kernel_tu = kmain.c sys.c blk.c doom.c

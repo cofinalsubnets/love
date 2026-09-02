@@ -72,10 +72,11 @@ lay_lc  = $(subst $(R)/,,$(lay_l))
 kore_lc = $(subst $(R)/,,$(kore_l))
 be_lc   = $(subst $(R)/,,$(p_be_l))
 
-# the runtime, seven translation units deep (mk/common.mk's love_tu names them): a port
-# compiles every one under its own <x>_cc, since love.c owes the other six. love_m is the
-# object stems, love_dep what each one watches.
-love_m   = $(basename $(love_tu))
+# the runtime a bare seat links: love_tu's seven translation units and love_codec's pair
+# (mk/common.mk names both). a port compiles every one under its own <x>_cc, since love.c
+# owes the other six and snap.c owes the codecs. love_m is the object stems, love_dep what
+# each one watches.
+love_m   = $(basename $(love_tu) $(love_codec))
 love_dep = $(love_h) $(lib_hR) $(mc)
 love_o   = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(love_m)))
 

@@ -1157,6 +1157,9 @@ char *code_adopt(struct ai *g, char const *src, size_t n) {
 #else
 // freestanding: RAM runs as it is; blobs live in the heap (lvm_nif) and an image's segment in the allocator
 int code_in(struct ai *g, uintptr_t v) { (void) g, (void) v; return 0; }
+// no arena, so no blob carries the length word an install writes -- and nobody asks:
+// snap's code rung reaches this only behind the code_in above, which owns no address
+size_t code_len(char *code) { (void) code; return 0; }
 void code_free(struct ai *g, char *code) { (void) g, (void) code; }
 char *code_adopt(struct ai *g, char const *src, size_t n) {
  char *b = g->alloc(g, NULL, n);
