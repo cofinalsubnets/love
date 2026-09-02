@@ -5119,7 +5119,16 @@
                     (note >l (i + 1))))
              _ (note fs 1)
              dr (filter defs (csregs g))
-             (? !(two? dr) fs                       ; no cs writes: most fns leave here
+             ; a fn no path leaves owes no file back: the contract is what the CALLER sees on
+             ; return, and there is no return. a main ending in a non-returning call is the
+             ; shape -- deadlab takes the unreachable epilogue and deadst the saves it leaves
+             ; write-only. the walk sits past the cs-write test, so most fns never pay it
+             (xit? l) (? !(two? l) ()
+                         (: f <l
+                            (? (two? f && (member? <f '(ret jmpr) ||
+                                           (id? <f 'jmp && !(labs <>f)))) 1
+                               (xit? >l))))
+             (? (!(two? dr) || !(xit? fs)) fs       ; no cs writes, or no exit: most fns leave here
                 (: _ (foldl                         ; every written reg saved, before its first write
                       (\ _ r (: sv (saves r)
                                 (? !(two? sv) (scare 'cs-unsaved [fn r])
