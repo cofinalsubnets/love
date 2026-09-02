@@ -347,7 +347,7 @@ static lvm(lvm_sigtake) { Sp[0] = ZeroPoint; ai_musttail return Next(1); }
 //                 EINVAL misuse (the effect convention). the shell ignores INT/QUIT/
 //                 TSTP so the tty's ^C/^Z reach only the foreground child; spawn's
 //                 child side resets them (an ignored disposition survives exec).
-// (chdir path) -> () ok | -errno | -1 misuse. the `cd` builtin.
+// (chdir path) -> 0 ok | -errno | -1 misuse. the `cd` builtin.
 // (cwd _)      -> the current directory as a string, or () on failure. for the prompt.
 // the syscall body lives in an ai_noinline helper so the lvm_ wrapper stays a pure tail-jump (no ret):
 // the syscall + any stack buffer would otherwise block the sibcall to Continue() and trip `make vmret`.
@@ -628,7 +628,7 @@ ai_noinline static ai_word host_fork(void) {
  return putcharm(pid < 0 ? -errno : pid); }
 static lvm(lvm_fork) { Sp[0] = host_fork(); ai_musttail return Next(1); }
 
-// (dup2 src dst) -> () | -errno | EINVAL. the self-redirect (a forked subshell
+// (dup2 src dst) -> 0 | -errno | EINVAL. the self-redirect (a forked subshell
 // laying its own fdmap, a compound's `done < file` swap).
 // (dup fd) -> a fresh fd duplicating fd (>= 3, clear of stdio) | -errno. the
 // save half of the swap.
@@ -717,7 +717,7 @@ static lvm(lvm_newns) { Sp[0] = putcharm(ENOSYS); ai_musttail return Next(1); }
 //                   is `stat`: an fd already names the thing and no link is in the way.
 // (readdir path) -> the entry names, a list of strings ("." and ".." dropped), or ()
 //                   on failure. no order promised (readdir order, prepended) -- sort in love.
-// (unlink path)  -> () ok | -errno | EINVAL misuse.
+// (unlink path)  -> 0 ok | -errno | EINVAL misuse.
 // (lseek fd off whence) -> the new offset | -errno | -1 misuse (the value-op
 //                   convention: negative = failure, like spawn/wait). raw fds, the
 //                   openfd lane -- not ports (a port's read buffer would desync
@@ -796,7 +796,7 @@ static lvm(lvm_posix_unlink) {
   Sp[0] = host_posix_unlink(Sp[0]);
   ai_musttail return Next(1); }
 
-// (setenv name val) -> () | -errno | EINVAL misuse; a non-string val unsets
+// (setenv name val) -> 0 | -errno | EINVAL misuse; a non-string val unsets
 // (the absence lane: (setenv n ()) clears n from the environment).
 // (environ _)       -> the environment as a list of "name=value" strings (the raw
 //                      POSIX shape -- split at the first '=' in love; no order promised).
@@ -907,16 +907,16 @@ AiNif("setenv",  nif_posix_setenv);
 AiNif("environ", nif_posix_environ);
 // --- the rest of the fs surface: the effect ops the fs tools ride ---------------
 // (mv, ln, touch, chmod, chown -- crew/kore/fs.l and friends).
-//   (rename old new)      -> () | -errno | EINVAL   (mv's heart; same filesystem)
-//   (symlink target path) -> () | -errno | EINVAL   (path becomes a link to target)
+//   (rename old new)      -> 0 | -errno | EINVAL   (mv's heart; same filesystem)
+//   (symlink target path) -> 0 | -errno | EINVAL   (path becomes a link to target)
 //   (readlink path)       -> the target string | ()
-//   (chmod path mode)     -> () | -errno | EINVAL   (mode the raw permission charm)
-//   (chown path uid gid)  -> () | -errno | EINVAL   (-1 leaves that id alone)
-//   (utime path ms)       -> () | -errno | EINVAL   (mtime and atime on the stat
+//   (chmod path mode)     -> 0 | -errno | EINVAL   (mode the raw permission charm)
+//   (chown path uid gid)  -> 0 | -errno | EINVAL   (-1 leaves that id alone)
+//   (utime path ms)       -> 0 | -errno | EINVAL   (mtime and atime on the stat
 //                            scale, milliseconds; a non-charm ms reads "now")
 //   (umask mask)          -> the previous mask | -1 misuse (always succeeds)
-//   (rmdir path)          -> () | -errno | EINVAL   (the empty-directory unlink)
-//   (hardlink old new)    -> () | -errno | EINVAL   (link(2); `link` the word is
+//   (rmdir path)          -> 0 | -errno | EINVAL   (the empty-directory unlink)
+//   (hardlink old new)    -> 0 | -errno | EINVAL   (link(2); `link` the word is
 //                            the chain ctor, the most spoken name in the prel,
 //                            so the nif wears the long form)
 ai_noinline static ai_word host_posix_rename(ai_word ow, ai_word nw) {
@@ -1069,10 +1069,10 @@ AiNif("copyfile", nif_posix_copyfile);
 //   (tether argv)      -> (pid . master-port) | a fixnum (errno, or -1 = misuse)
 //   (reap pid)         -> (status)   exited (a pair, truthy even at status 0)
 //                       | ()         still running
-//                       | errno      waitpid error (e.g. ECHILD)
-//   (kill pid sig)     -> () ok | errno   (caller passes (0 - pid) for the group)
+//                       | -errno     waitpid error (e.g. ECHILD)
+//   (kill pid sig)     -> 0 ok | -errno  (caller passes (0 - pid) for the group)
 //   (winsize _)        -> (rows . cols) of the controlling tty (stdout), or ()
-//   (setwinsize p r c) -> () ok | errno   push a size onto a master port
+//   (setwinsize p r c) -> 0 ok | -errno  push a size onto a master port
 //
 // (winsize) takes a dummy arg (ignored, like getpid): a bare (winsize) is the
 // function itself -- (f) == f at zero operands -- so the call is (winsize 0).
@@ -1384,7 +1384,7 @@ static lvm(lvm_open) {
 // (close x) -- a port, or a raw fd from openfd/pipe/dup. on a port: flush, close,
 // and HAND IT THE CLOSED VT, so every later read, write and flush finds the door
 // that does nothing and the finalizer, which asks the vt for an fd, skips; answers
-// (). on a charm: close(2), () ok | -errno. no-op on anything else.
+// (). on a charm: close(2), 0 ok | -errno. no-op on anything else.
 static lvm(lvm_close) {
   if (charmp(Sp[0])) {
     intptr_t fd = getcharm(Sp[0]);
