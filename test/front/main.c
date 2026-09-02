@@ -127,9 +127,12 @@ void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
   (void) fds, (void) n;
   ai_sleep(ms); }                    // ms == 0 dies loudly; see the header note
 
-// --- the port vtable -------------------------------------------------------
-static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
-  struct dev *d = dev_of_fd(ai_io_fd(g->io));
+// --- the devices, by fd ----------------------------------------------------
+// the port rows below read their fd off the port and the raw-fd rows take love's
+// own argument, so the queue is reached by fd here and both meet at it -- a stall
+// arm faults a bare fd exactly as it faults a port, which is the point of this file.
+static intptr_t dev_readn(intptr_t fd, unsigned char *dst, uintptr_t n) {
+  struct dev *d = dev_of_fd(fd);
   if (!d) return -1;                                 // the console never reads
   if (d->rstall) return d->rstall -= 1, 0;           // armed: would-block
   uintptr_t have = d->qlen - d->qpos;
@@ -138,8 +141,7 @@ static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
   memcpy(dst, d->q + d->qpos, k);
   return d->qpos += k, (intptr_t) k; }
 
-static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
-  intptr_t fd = ai_io_fd((*fp)->io);
+static intptr_t dev_writen(intptr_t fd, unsigned char const *src, uintptr_t n) {
   struct dev *d = dev_of_fd(fd);
   if (!d) {
     if (fd == 1 || fd == 2) {
@@ -151,6 +153,13 @@ static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n)
   grow(&d->o, &d->ocap, d->olen + k);
   memcpy(d->o + d->olen, src, k);
   return d->olen += k, (intptr_t) k; }
+
+// --- the port vtable -------------------------------------------------------
+static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
+  return dev_readn(ai_io_fd(g->io), dst, n); }
+
+static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
+  return dev_writen(ai_io_fd((*fp)->io), src, n); }
 
 static struct ai *fd_flush(struct ai *g) {
   intptr_t fd = ai_io_fd(g->io);
@@ -164,6 +173,24 @@ struct ai_port_vt const ai_fd_port_vt =
 struct ai_fio ai_stdin  = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(0) };
 struct ai_fio ai_stdout = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(1) };
 struct ai_fio ai_stderr = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(2) };
+
+// --- the raw-fd rows -------------------------------------------------------
+// love's io ops take a charm as well as a port, so a frontend owes these two as
+// well as the vtable: src/seat.c has them on a hosted seat and port/fdrow.h on a
+// board, and both are unreachable from here. the shape is seat.c's, over these
+// devices -- >0 landed, 0 busy, -1 gone, and a say that lands every byte.
+intptr_t ai_fd_readn(struct ai *g, int fd, unsigned char *dst, uintptr_t n) {
+  (void) g;
+  return dev_readn(fd, dst, n); }
+
+uintptr_t ai_fd_say(int fd, unsigned char const *src, uintptr_t n) {
+  uintptr_t i = 0;
+  while (i < n) {
+    intptr_t k = dev_writen(fd, src + i, n - i);
+    if (k < 0) break;                                // the device is gone: the rest drops
+    if (!k) { ai_sleep(1); continue; }                // a wstall arm, counted down per call
+    i += (uintptr_t) k; }
+  return i; }
 
 // --- the nifs --------------------------------------------------------------
 // ⚠ no scratch on an lvm_ frame (CLAUDE.md, the tail-threaded VM): the bodies
