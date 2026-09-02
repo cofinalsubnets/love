@@ -7,7 +7,7 @@
   test_filemode test_stdinbuf test_glaze test_hook test_glazefuzz test_sat test_drat test_lux \
   test_sb test_kore test_refuzz test_cookdiff test_dist test_seed test_vi test_moon test_clay test_moonfuzz \
   test_ccarm64 test_ccriscv test_cts test_cts_arm64 test_cts_riscv test_libc test_ulp \
-  test_selfhost test_raw test_drv test_asmops test_dtb test_vec test_fixpoint test_raw_bake test_riscv \
+  test_selfhost test_raw test_drv test_asmops test_dtb test_rvboot test_vec test_fixpoint test_raw_bake test_riscv \
   test_raw_riscv test_raw_arm64 test_thumb1 test_thumb2 test_virt test_mps2 test_mps2_t1 \
   test_mps2_wake test_thumb2sp test_playdate test_teensy41 test_nucleo446 test_nucleo446_smoke \
   test_rp2040 test_front test_tco0 test_uulean moon-tar moon-tar-arm64 moon-tar-riscv moon-m4 moon-m4-arm64 moon-m4-riscv \
@@ -528,6 +528,24 @@ test_dtb:
 	@echo TEST test/gate/dtb.c
 	@$(CC) -I$R/src -I$R -o $(ho)/.dtbgate $R/test/gate/dtb.c
 	@$(ho)/.dtbgate
+# test_rvboot -- THE RISCV BRING-UP ON A HART: mkboot.l's sv39 lane and src/riscv64_dtb.c
+# under qemu -M virt, entered the way the kernel will be (OpenSBI, S-mode, a1 the tree).
+# Three objects and nothing else -- the stub, the door, and test/gate/rvboot.c standing in
+# for kmain -- bound by ldkern, the kernel linker's own door, since mooncc's driver enters
+# through its crt0 and a machine enters at the load address. Nine laws, exit 42.
+rvboot_o = $(ko)/riscv64/riscv64/boot.o $(ko)/riscv64/src/riscv64_dtb.o $(ko)/riscv64/rvboot.o
+$(ko)/riscv64/rvboot.o: test/gate/rvboot.c $(love_h) $(R)/src/k.h $(R)/src/dtb.h $(kcc_dep)
+	@echo 'MOON	'$@
+	@mkdir -p "$(dir $@)"
+	@$(KCC) -I$(ko)/riscv64 -I. -Isrc -I$(ho) -Iout/lib -I$R -I$R/crew/moon/include \
+	  -t rv64 -c $< -o $@
+$(ko)/riscv64/rvboot.elf: $(rvboot_o) test/gate/rvboot.l $m
+	@echo 'RVLINK	'$@
+	@LOVE_NO_IMAGE= $m test/gate/rvboot.l $(rvboot_o) $@
+test_rvboot:
+	@$(MAKE) -s a=riscv64 $(ko)/riscv64/riscv64/boot.o $(ko)/riscv64/src/riscv64_dtb.o
+	@$(MAKE) -s $(ko)/riscv64/rvboot.elf
+	@sh test/gate/boot.sh rvboot "$(MAKE)"
 # test_vec -- the INTERRUPT gate: raises a real CPU exception with (fault n) and reads the
 # report, the only way to reach src/mkvec.l's 32 stubs and the fault vector, then
 # checks the stubs no boot can reach against the architecture's own error-code list.

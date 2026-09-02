@@ -5,8 +5,9 @@
 ;                             the page tables + GDT, the long-mode ladder, khop
 ;   (lay-boot dst "aarch64")  the translation tables, MAIR/TCR/TTBR, the MMU
 ;                             switch, the hop into the mapped world, khop
+;   (lay-boot dst "riscv64")  the one sv39 root, satp, sstatus.FS, khop
 ;
-; the link is FLAT on both arches (the projection: vaddr = paddr at the kernel base), so a label's
+; the link is FLAT on every arch (the projection: vaddr = paddr at the kernel base), so a label's
 ; running address, its linked address, and the address a page table wants to hold
 ; are ONE number. `la` (x86 rip-relative lea; aarch64 adrp+add) answers it, and a
 ; field can name it whole -- the PVH note's entry word, the GDT register's base,
@@ -271,7 +272,63 @@
        (wfi)
        (jmp a64_park))
 
-   ;; the boot stack, both arches: kmain never returns, and 64 KiB is what a
+   ;; -- riscv64 ------------------------------------------------------------
+   ;; sv39, and the whole map is ONE table: a root's 512 entries each describe a
+   ;; gigabyte, so four of them at [0..3] are the identity window the kernel runs
+   ;; in and four more at [256..259] are the hhdm at 0xffffffc0_00000000 -- which
+   ;; is where sv39's upper half begins, index 256 being its first entry. no second
+   ;; level anywhere: x86 needs one for its 2 MiB pages and aarch64 one more for
+   ;; virt's device ground, and riscv wants neither -- MMIO lives under the first
+   ;; gigabyte, and a base sv39 PTE carries no memory type to say about it (that is
+   ;; the platform's PMA, or Svpbmt, and this machine needs neither).
+   r-boot ('((label rv_root)) + [['raw (b-zeros 4096)]])
+
+   ;; a leaf PTE for gigabyte i: PPN is (i << 30) >> 12, and PPN sits at bit 10, so
+   ;; the address half is just i << 28. flags V|R|W|G|A|D, plus X on the identity
+   ;; window alone -- the hhdm is how the kernel reaches ram (kboot.hhdm), and NOT
+   ;; being able to fetch through it is the whole reason a second window is worth
+   ;; its entries. x86 says this with NX at PML4[256], aarch64 with the XN pair.
+   (r-pte i x) ((i << 28) | (x ? 0xEF 0xE7))
+   r-boot-text
+    ('((label rvboot)
+       ;; SBI hands over a0 = this hart's id and a1 = the device tree. a1 is the
+       ;; only one that outlives the bring-up, and s2 is where it waits.
+       (mov r13 r1)
+       (la r0 rv_root))
+     + (foldl (\ a i (a + [['li 'r2 (r-pte i 1)] ['st 'r0 (i * 8) 'r2]
+                           ['li 'r2 (r-pte i 0)] ['st 'r0 (2048 + (i * 8)) 'r2]]))
+              () ^4)
+     + '(;; satp: mode 8 (sv39) over the root's PPN, then the fence that makes the
+         ;; map current. the pc is inside the identity window, so the fetch after
+         ;; this IS the test of it -- there is no literal to hop through the way
+         ;; the other two lanes take one, and a broken map faults here rather than
+         ;; being ridden quietly.
+         (shr r0 12)
+         (li r2 0x8000000000000000)
+         (or r0 r0 r2)
+         (csrw satp r0)
+         (sfence zr zr)
+         ;; FP on before ANY C runs -- dtb.h's walk is compiled and free to
+         ;; vectorize, and kmain is the runtime. a reset leaves sstatus.FS = Off,
+         ;; where the first fld traps; OpenSBI happens to hand over with it open
+         ;; already, and this is here so the kernel never depends on which firmware
+         ;; did it. 3 << 13 is Dirty, what a kernel that never swaps the file wants.
+         (li r8 0x6000)
+         (csrs sstatus r8)
+         (jmp khop)))
+
+   r-text
+    '((label khop)
+       (la sp kstack)                                ; flat: pc-relative IS the linked address
+       (li r8 0x10000) (add sp sp r8)                ; + kstack_size
+       (mov r0 r13)                                  ; the tree SBI passed, straight to the door
+       (call dtb_to_kboot)
+       (call kmain)
+       (label rv_park)
+       (wfi)
+       (jmp rv_park))
+
+   ;; the boot stack, every arch: kmain never returns, and 64 KiB is what a
    ;; firmware hand-off hands over. .bss so it costs the file nothing.
    b-stack [['label 'kstack] ['raw (b-zeros 65536)]]
 
@@ -298,6 +355,20 @@
                  [".text"      1 6 16   a-text]
                  [".bss"       8 3 16   b-stack]]
                 '("a64boot")             ; kproject.l names it as the ELF entry
+                () ()
+                '("khop"))
+       (arch = "riscv64")
+       ;; the stub before the tables, which is the other way round from both lanes
+       ;; above: this door is entered at the ADDRESS a kernel was loaded to and not
+       ;; at the symbol an ELF header names -- qemu's virt hands SBI the load base,
+       ;; and a flashed image on real silicon has no header to name anything with.
+       ;; so the first laid byte has to BE rvboot; e_entry lands on it either way.
+       (objsecs 'rv64
+                [[".boot.text" 1 6 16   r-boot-text]
+                 [".boot"      1 3 4096 r-boot]
+                 [".text"      1 6 16   r-text]
+                 [".bss"       8 3 16   b-stack]]
+                '("rvboot")              ; kproject.l names it as the ELF entry
                 () ()
                 '("khop"))
        (scare 'mkboot-arch arch)))

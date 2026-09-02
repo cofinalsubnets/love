@@ -1,14 +1,15 @@
 #!/bin/sh
-# test/gate/boot.sh -- LOVE ITSELF booting on emulated silicon. Five gates, one
-# procedure: build the port with its own make, run the ELF under qemu, and require an
-# exact exit code. 42 means the egg hatched on-device and the driver laws held; 98 is a
-# fault, 1 is a law that failed. These are the gates that prove the whole runtime --
-# not a codegen lane -- survives on a board.
+# test/gate/boot.sh -- LOVE ITSELF booting on emulated silicon, and inle's bring-up
+# beside it. Six gates, one procedure: build the port with its own make (rvboot's make
+# target builds it before calling), run the ELF under qemu, and require an exact exit
+# code. 42 means the laws held on-device; 98 is a fault, 1 is a law that failed. These
+# are the gates that prove a whole runtime -- not a codegen lane -- survives on a board.
 #
 #   mps2             Cortex-M7,  all-mooncc thumb2         42
 #   mps2_t1          Cortex-M0,  all-mooncc thumb1 (RP2040 ISA)  42
 #   mps2_wake        the IMAGE lane: baked on qemu's M7, woken in a DIFFERENT binary  42
 #   nucleo446_smoke  Cortex-M4, the -D QSMOKE self-check tally  28
+#   rvboot           riscv64 inle bring-up: sv39 + the tree door, S-mode under SBI  42
 #   virt             riscv64 bare metal, our linker + holo start.o  42
 #
 # ⚠ qemu reads </dev/null: -nographic muxes guest serial + monitor onto stdio, so
@@ -46,6 +47,11 @@ case $gate in
              qemu="qemu-system-arm -M netduinoplus2 -semihosting -nographic"
              why="nucleo446 QSMOKE self-check"
              done_msg="the -D QSMOKE twin boots on qemu Cortex-M4 -- self-checks hold and mkboot.l's sh_exit carries the tally out, exit 28" ;;
+  rvboot)    banner="RVBOOT out/free/riscv64/rvboot.elf" ; need=qemu-system-riscv64
+             elf=out/free/riscv64/rvboot.elf          ; tmo=120 ; want=42
+             qemu="qemu-system-riscv64 -M virt -m 128M -nographic -append rv-gate"
+             why="riscv bring-up"
+             done_msg="inle's riscv bring-up holds on a hart: sv39 on, the hhdm window reaches ram, and the tree qemu built reads back through it, exit 42" ;;
   virt)      banner="VIRT out/virt/love.elf"          ; need=qemu-system-riscv64
              elf=out/virt/love.elf                    ; tmo=300 ; want=42
              qemu="qemu-system-riscv64 -M virt -bios none -nographic"
@@ -61,7 +67,7 @@ echo "$banner"
 for tool in $need; do
   command -v "$tool" > /dev/null 2>&1 || {
     case $gate in
-      virt) echo "$name: no qemu-system-riscv64, skipped" ;;
+      virt|rvboot) echo "$name: no qemu-system-riscv64, skipped" ;;
       *)    echo "$name: no arm-none-eabi toolchain / qemu-system-arm, skipped" ;;
     esac
     exit 0; }

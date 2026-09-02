@@ -1067,7 +1067,9 @@
        _ (pin glo "kimage_end" [kend 0])
        e (glo ent)
        _ (atom? e ? (scare 'link-entry ent))
-       cx [glo n0 n1 n1 n1 () () () () (ld-extents objs)]    ; no -pie table here, and no riscv or arm kernel yet
+       ; no -pie table here and no arm32 kernel; riscv keeps its own reloc numbers,
+       ; so the machine says which namespace ldpatch reads (ldlink's own slot 6).
+       cx [glo n0 n1 n1 n1 () (mach = 243) () () (ld-extents objs)]
        en (ldemit cx 'note vbase objs ())
        eb (ldemit cx 'boot b0 objs (gap vbase b0))  ; the file resumes at vbase (offset 4096)
        et (ldemitn cx 'text objs (ldemit cx 'text t0 objs (>eb + gap <eb t0)))
