@@ -85,7 +85,7 @@ uintptr_t ai_clock(void) {
 
 // --- ports ----------------------------------------------------------------
 // Output goes to out_buf; the page reads it back through the exports below.
-static intptr_t _writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
+static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
   (void) fp;
   uintptr_t cap = sizeof out_buf - out_tail,
             room = out_len < cap ? cap - out_len : 0,
@@ -98,7 +98,7 @@ static struct ai *_flush(struct ai *g) { return g; }
 
 // No real stdin: every read is at the end (-1), never merely quiet -- the page
 // feeds source through ai_eval, not the stdin port, so nothing is coming.
-static intptr_t _readn(struct ai *g, unsigned char *dst, uintptr_t n) {
+static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
   return (void) g, (void) dst, (void) n, -1; }
 
 // fd values are nominal: all I/O routes through the vtable regardless.
@@ -109,7 +109,9 @@ struct ai_fio ai_stdout = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt,
 // No separate error stream in the browser host; route err to out's fd.
 struct ai_fio ai_stderr = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt,
                          .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
-struct ai_port_vt const ai_fd_port_vt = { _flush, _writen, _readn, NULL };
+struct ai_port_vt const ai_fd_port_vt = { _flush, fd_writen, fd_readn, NULL };
+
+#include "../port/fdrow.h"                    // ai_fd_readn / ai_fd_say off the two above
 
 // (exit n) -- a frontend nif, like main.c's and kmain.c's. The wasm host needs
 // it for the same reason they do: the test harness aborts a failed assert with

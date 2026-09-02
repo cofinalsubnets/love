@@ -1045,6 +1045,16 @@ static lvm(lvm_casknew) {
  tagthread(k, Width(struct ai_cask));
  ai_musttail return Answer(word(k)); }
 
+// AArch64 wants the I-cache told about freshly written code (a no-op on x86); wasm has
+// no code arena to tell and emscripten's clang has no intrinsic to tell it with, so the
+// question is answered ONCE here rather than at each install -- a site that forgets the
+// guard is a wasm build that dies in instruction selection, which is how this got said.
+#ifdef __wasm__
+#define ai_code_sync(a, b) ((void) (a), (void) (b))
+#else
+#define ai_code_sync(a, b) __builtin___clear_cache(a, b)
+#endif
+
 // the native code arena: hosted, the malloc heap is NX, so the glaze installs into
 // chunks of pages of its own. a chunk is RX; an install opens just the blob's pages,
 // writes, and seals them again (W^X, never both at once). a blob is [len, pad, code..],
@@ -1104,9 +1114,7 @@ char *code_install(struct ai *g, char const *src, size_t n) {
  memcpy(p + CodeHead, src, n);
  p[CodeHead + n] = 0;
  if (code_open(p, need, PROT_READ | PROT_EXEC)) return NULL;
-#ifndef __wasm__                                                  // emscripten's clang has no clear_cache (and wasm declines before this)
- __builtin___clear_cache(p + CodeHead, p + CodeHead + n);   // AArch64: the I-cache is not coherent with the fresh D-cache (no-op on x86)
-#endif
+ ai_code_sync(p + CodeHead, p + CodeHead + n);
  return p + CodeHead; }
 void code_free(struct ai *g, char *code) {
  char *p = code - CodeHead;
@@ -1137,7 +1145,7 @@ char *code_adopt(struct ai *g, char const *src, size_t n) {
   if (!b) return NULL;
   memcpy(b, src, n);
   char *x = ai_code_window(b);
-  __builtin___clear_cache(x, x + n);
+  ai_code_sync(x, x + n);
   struct ai_code *c = g->alloc(g, NULL, sizeof *c);
   if (!c) { g->alloc(g, b, 0); return NULL; }
   c->base = x, c->len = n, c->used = n, c->fixed = 1, c->next = g->code, g->code = c;
@@ -1147,9 +1155,7 @@ char *code_adopt(struct ai *g, char const *src, size_t n) {
  if (b == MAP_FAILED) return NULL;
  memcpy(b, src, n);
  if (mprotect(b, len, PROT_READ | PROT_EXEC)) { munmap(b, len); return NULL; }
-#ifndef __wasm__
- __builtin___clear_cache((char*) b, (char*) b + n);
-#endif
+ ai_code_sync((char*) b, (char*) b + n);
  struct ai_code *c = g->alloc(g, NULL, sizeof *c);
  if (!c) { munmap(b, len); return NULL; }
  c->base = b, c->len = len, c->used = len, c->fixed = 1, c->next = g->code, g->code = c;   // used = len: the tail is nobody's
@@ -1163,7 +1169,7 @@ size_t code_len(char *code) { (void) code; return 0; }
 void code_free(struct ai *g, char *code) { (void) g, (void) code; }
 char *code_adopt(struct ai *g, char const *src, size_t n) {
  char *b = g->alloc(g, NULL, n);
- if (b) memcpy(b, src, n), __builtin___clear_cache(b, b + n);
+ if (b) memcpy(b, src, n), ai_code_sync(b, b + n);
  return b; }
 #endif
 
