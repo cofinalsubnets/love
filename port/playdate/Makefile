@@ -53,7 +53,9 @@ pd_h = $(love_h) $(wildcard $(R)/crew/quay/*.h) $(o)/cas.h $(lib_hs)
 # (the pd_api.h owner) + the SDK's setup.c. the sim build compiles everything
 # hosted, so pd_src keeps the full wildcard.
 pd_local_c = $(wildcard *.c)
-pd_shared_c = $(love_c) $(f_c)
+# love_codec beside love_c: snap.c reaches the codecs unconditionally, and this roster
+# is named rather than globbed, so a runtime that grows a TU has to be told
+pd_shared_c = $(love_c) $(addprefix $(R)/src/,$(love_codec)) $(f_c)
 pd_sdk_c = $(pd_sdk)/C_API/buildsupport/setup.c
 pd_src = $(pd_local_c) $(pd_shared_c) $(pd_sdk_c)
 mc_shared_o = $(pd_shared_c:$(R)/%.c=$(o)/%.o)

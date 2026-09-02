@@ -49,10 +49,10 @@ void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) { ai_sleep(ms); }
 // --- port vtable: output rides the console buffer --------------------------
 // there is no text input on the device -- the crank and the buttons are the
 // whole keyboard -- so stdin is at the end from the first read and says so.
-static intptr_t _readn(struct ai *g, unsigned char *dst, uintptr_t n) {
+static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
   (void) g, (void) dst, (void) n;
   return -1; }
-static intptr_t _writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
+static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
   (void) fp;
   for (uintptr_t k = 0; k < n; k++) cb_putc(kcb, src[k]);
   return (intptr_t) n; }
@@ -62,7 +62,9 @@ struct ai_fio ai_stdin  = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_b
 struct ai_fio ai_stdout = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
 // No separate error stream on the device; the scare face lands on the LCD too.
 struct ai_fio ai_stderr = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
-struct ai_port_vt const ai_fd_port_vt = { _flush, _writen, _readn, NULL };
+struct ai_port_vt const ai_fd_port_vt = { _flush, fd_writen, fd_readn, NULL };
+
+#include "../fdrow.h"                       // ai_fd_readn / ai_fd_say off the two above
 
 // --- the playdate nifs ------------------------------------------------------
 // (crank ())     -- the crank angle 0..359, or () docked
