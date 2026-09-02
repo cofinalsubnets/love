@@ -1,0 +1,82 @@
+// dtb -> kboot, the door itself: every arch booting off a flat device tree walks it
+// the same way, and the two numbers that differ belong to the stub that jumped here.
+// So this is a header included ONCE per arch (aarch64_dtb.c, riscv64_dtb.c), each
+// spelling k_hhdm and k_map_top ahead of the include -- the constants fold and the
+// door is one function, with no wrapper standing between it and its caller.
+#include "k.h"
+
+#if !defined(k_hhdm) || !defined(k_map_top)
+#error "dtb.h: spell k_hhdm (the stub's window) and k_map_top (its far edge) first"
+#endif
+
+// everything from the RAM base up to the image's far edge (the firmware below it, the
+// dtb, the hole, the image itself) is spoken for, and no loader here reserves it --
+// hand it to the heap and the kernel eats itself. a VALUE the projection patches into
+// the file (tools/kproject.l), where the flat link's kimage_end symbol used to stand.
+extern uintptr_t const k_image_top;
+
+static uint32_t be32(uint8_t const *p) {
+  return (uint32_t) p[0] << 24 | (uint32_t) p[1] << 16
+       | (uint32_t) p[2] << 8  | p[3]; }
+static uint64_t be64(uint8_t const *p) {
+  return (uint64_t) be32(p) << 32 | be32(p + 4); }
+
+// flat-tree tokens (all fields big-endian, everything 4-aligned)
+#define FDT_BEGIN_NODE 1
+#define FDT_END_NODE   2
+#define FDT_PROP       3
+#define FDT_NOP        4
+#define FDT_END        9
+
+static int is(char const *a, char const *b) {      // tiny strcmp, self-contained
+  while (*a && *a == *b) { a++; b++; }
+  return *a == *b; }
+
+void dtb_to_kboot(uint64_t dtb_pa) {
+  uint8_t const *f = (uint8_t const *) (k_hhdm + dtb_pa);
+  if (be32(f) != 0xd00dfeed) return;
+  uint8_t const *p   = f + be32(f + 8);            // off_dt_struct
+  char const *str    = (char const *) (f + be32(f + 12));   // off_dt_strings
+  uint64_t k1 = (k_image_top + 0xfff) & ~0xfffull;   // page-rounded physical far edge
+  kboot.hhdm = k_hhdm;
+  uint32_t ac = 2, sc = 2;                         // root's cell counts (virt: 2/2)
+  int depth = 0, memd = 0, chos = 0;               // memd/chos: the depth of a memory / chosen node we are inside
+  for (;;) {
+    uint32_t tok = be32(p); p += 4;
+    if (tok == FDT_END) break;
+    if (tok == FDT_NOP) continue;
+    if (tok == FDT_BEGIN_NODE) {
+      char const *nm = (char const *) p;
+      uint32_t n = 0; while (nm[n]) n++;
+      p += (n + 1 + 3) & ~3u;
+      depth++;
+      // a memory bank is a child of root named memory or memory@...
+      if (depth == 2 && nm[0]=='m' && nm[1]=='e' && nm[2]=='m' && nm[3]=='o'
+          && nm[4]=='r' && nm[5]=='y' && (nm[6] == 0 || nm[6] == '@'))
+        memd = depth;
+      if (depth == 2 && is(nm, "chosen")) chos = depth;
+      continue; }
+    if (tok == FDT_END_NODE) {
+      if (depth == memd) memd = 0;
+      if (depth == chos) chos = 0;
+      depth--;
+      continue; }
+    if (tok != FDT_PROP) break;                    // a malformed tree: stop, keep what we have
+    uint32_t len = be32(p), nameoff = be32(p + 4);
+    p += 8;
+    char const *pn = str + nameoff;
+    if (depth == 1 && is(pn, "#address-cells")) ac = be32(p);
+    if (depth == 1 && is(pn, "#size-cells"))    sc = be32(p);
+    if (chos && depth == chos && is(pn, "bootargs") && len)
+      k_cmdline((char const *) p, len);
+
+    if (memd && depth == memd && is(pn, "reg")) {
+      uint32_t step = (ac + sc) * 4;
+      for (uint32_t o = 0; step && o + step <= len; o += step) {
+        uint64_t a = ac == 2 ? be64(p + o) : be32(p + o);
+        uint64_t s = sc == 2 ? be64(p + o + ac*4) : be32(p + o + ac*4);
+        uint64_t b = a + s;
+        if (a < k1) a = k1;                        // firmware + dtb + hole + image, one span
+        if (b > k_map_top) b = k_map_top;          // above the mapped window
+        if (b > a) k_ram_give(a, b - a); } }
+    p += (len + 3) & ~3u; } }

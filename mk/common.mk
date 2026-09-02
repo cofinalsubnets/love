@@ -97,7 +97,8 @@ love_c = $(love_tu_c) $R/crew/moon/lib/math/am.c
 # (src/kernel.mk builds them) and the per-ISA files, which `a` picks by prefix.
 kernel_tu = kmain.c sys.c blk.c doom.c
 kernel_c = $(patsubst %,$R/src/%,$(kernel_tu))
-arch_c = $(wildcard $R/src/x86_64_*.c) $(wildcard $R/src/aarch64_*.c) $(wildcard $R/src/uefi_*.c)
+arch_c = $(wildcard $R/src/x86_64_*.c) $(wildcard $R/src/aarch64_*.c) \
+  $(wildcard $R/src/riscv64_*.c) $(wildcard $R/src/uefi_*.c)
 # ..and the per-ISA set ONE machine's build takes. the rebuild gates link what the
 # artifact links, and that is the host's arch alone -- empty on an arch with no seat,
 # which is what those gates read to skip their kernel half.
