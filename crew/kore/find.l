@@ -125,7 +125,7 @@
            (: ws (map (\ w (? (w = "{}") p w)) <>e)
               _ (flush out)                     ; the child shares the port: say what we said
               pid (spawn ws)
-              (? (pid < 0) (: _ (say err ("find: cannot run " + <ws)) _ (put err 10)
+              (? (nom? pid) (: _ (say err ("find: cannot run " + <ws)) _ (put err 10)
                               _ (pin st 101 1) 0)
                  (? (wait pid) 0 1)))
           0))

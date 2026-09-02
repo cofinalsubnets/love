@@ -39,8 +39,8 @@ usage: gzip [-cdfklnNqrtv19] [-S SUF] [FILE..]
 no file, or a bare -, is the filter: stdin -> stdout"
 
    ; --- the small floor ------------------------------------------------------
-   (gzc-slurp p) (: q (open p "r") (q && (: s (slurp q) _ (close q) [1 (s + "")])))
-   (gzc-blurt p s) (: q (open p "w") (q && (: _ (say q s) _ (close q) 1)))
+   (gzc-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) [1 (s + "")])))
+   (gzc-blurt p s) (: q (open p "w") (hot? q && (: _ (say q s) _ (close q) 1)))
    (gzc-moan t m) (? (peep t 'q 0) 0
                      (: _ (say err ("gzip: " + m)) _ (put err 10) (flush err)))
    (gzc-tell t m) (peep t 'v 0 && (: _ (say err m) _ (put err 10) (flush err)))

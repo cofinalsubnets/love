@@ -22,9 +22,9 @@
    (= 0 (touch-main [(d + "/t")]))              ; be there, and be now
    (two? (stat (d + "/t")))
    (= 0 (mv-main [(d + "/t") (d + "/t2")]))
-   (id? (stat (d + "/t")) ())
+   (id? (stat (d + "/t")) 'enoent)
    (two? (stat (d + "/t2")))
    (= 0 (rm-main [(d + "/t2")]))
-   (id? (stat (d + "/t2")) ())
+   (id? (stat (d + "/t2")) 'enoent)
    (= 0 (rm-main ["-r" d]))                     ; the tree walks out bottom-up
-   (id? (stat d) ())))
+   (id? (stat d) 'enoent)))

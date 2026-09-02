@@ -21,7 +21,7 @@
    _ (: q (open f "w")
         _ (say q "alpha\nbravo\ncharlie\ndelta\necho\nfoxtrot\ngolf\nhotel\nindia\njuliet\n")
         (close q))
-   (waitfor pid) (: s (gather pid) (? (two? s) s (= 0 s) (do (rest 2) (waitfor pid)) s))
+   (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (do (rest 2) (waitfor pid))))
    ; spawn `love kore less ARGS..` on a pty, size it, type keys, answer what it drew
    ; the keys carry a "qq\n" tail: they are typed before the child has raw mode,
    ; so the line discipline is still canonical and holds a partial line back -- and

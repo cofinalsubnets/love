@@ -48,9 +48,9 @@
 (use "crew/sb/sb.l")   ; for the ignore law only -- .sb/ignore is sb's file
 
 (: (sp-die m) (say err ("selfpack: " + m + "\n"), quit 1)
-   (sp-read p) (: q (open p "r") (? q (: s (slurp q) _ (close q) [1 (s + "")]) ()))
+   (sp-read p) (: q (open p "r") (? (hot? q) (: s (slurp q) _ (close q) [1 (s + "")]) ()))
    (sp-write p s) (: q (open p "w")
-                     _ (? q 0 (sp-die ("cannot write " + p)))
+                     _ (? (hot? q) 0 (sp-die ("cannot write " + p)))
                      _ (say q s)
                      (close q))
    ; the rules, and sb owns them: .sb/ignore plus sb's own built-ins, so the vcs

@@ -19,9 +19,9 @@
        (go i acc) (? (i < n) (go (i + 1) ((* 10 acc) + (s i - 48))) acc)
        (? ((0 < n) && (s 0 = 45)) (0 - go 1 0) (go 0 0)))
    ; a path -> (1 text) when it opens, () when it does not (kore.l's read-text shape)
-   (uread p) (: q (open p "r") (? q (: t (slurp q) _ (close q) [1 t]) ()))
+   (uread p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) [1 t]) ()))
    ; a path + text -> 1 when it lands, () when it will not open (uread's mirror)
-   (uwrite p t) (: q (open p "w") (? q (: _ (say q t) _ (close q) 1) ()))
+   (uwrite p t) (: q (open p "w") (? (hot? q) (: _ (say q t) _ (close q) 1) ()))
    ; -- the option walk, shared by every applet taking clustered flags -----------
    ; clustering is not optional: this tree's own scripts write -qF, -qiw, -vE,
    ; -oE and -ne, so a walk that reads only whole words takes `-qF` for a pattern
@@ -248,7 +248,7 @@
    ; grep and sed each owe GNU a different sentence for the same failure.
    (uin miss f)
     (? (f = "-") [in 0]
-       (: q (open f "r") (? q [q 1] (: _ (miss f) ()))))
+       (: q (open f "r") (? (hot? q) [q 1] (: _ (miss f) ()))))
    (umiss who) (\ f (: _ (say err (who + ": cannot open " + f)) _ (put err 10) 0))
    ; the driver the rest ride: body gets (name first? reader) per operand and answers
    ; truth to keep the status. first? is 1 on the leading one, all `uhdr` needs.

@@ -727,9 +727,8 @@ static unsigned char const *k_blob(int i, uintptr_t *len) {
   struct k_file const *f = k_bake_row(e->bake);
   return *len = f->len, (unsigned char const*) f->bytes; }
 
-// src/sys.c's seek. ⚠ it answers an ERRNO where lvm_lseek answers a bare -1:
-// down here a caller can tell "no such fd" from "this row does not seek", which
-// the love door could not, having no errno table to name it with. whence 0/1/2
+// src/sys.c's seek. it answers a NEGATIVE errno, the one sign every C face in
+// this kernel wears; the love door upstairs names it (ai_err). whence 0/1/2
 // is SEEK_SET/CUR/END -- what the love door already meant by them.
 long k_fd_lseek(int fd, long off, int whence) {
   if (!k_row_live(fd)) return -9;                        // EBADF
@@ -1244,7 +1243,7 @@ lvm(k_lvm_getpid) {
   Sp[0] = putcharm(k_cur_pid(g));
   ai_musttail return Next(1); }
 
-// (procseat pid f0 f1 f2) -> () | ENOMEM. the spawn shim's registration, called
+// (procseat pid f0 f1 f2) -> () | 'enomem | 'badarg. the spawn shim's registration, called
 // in the PARENT right after twirl -- which does not switch tasks, so the seat is
 // in place before the child's first read. each fi: an fd >= 0 is DUPED into the
 // seat (fork's fd-copy made explicit, so the parent may close its own end);
@@ -1254,9 +1253,9 @@ ai_noinline static ai_word k_procseat(struct ai *g, ai_word pw,
                                       ai_word w0, ai_word w1, ai_word w2) {
  ai_word ws[3] = { w0, w1, w2 };
  intptr_t pid = (pw & 1) ? getcharm(pw) : 0;
- if (!pid) return putcharm(EINVAL);
+ if (!pid) return ai_badarg(g);
  struct k_seat *s = k_seat_slot();
- if (!s) return putcharm(ENOMEM);
+ if (!s) return ai_err(g, ENOMEM);
  *s = (struct k_seat) { pid, {-1, -1, -1} };
  for (int i = 0; i < 3; i++) {
   intptr_t f = (ws[i] & 1) ? getcharm(ws[i]) : -1;
@@ -1847,7 +1846,7 @@ void kmain(void) {
   r = ai_evals_(r,
  // the environment (rung 2): a TABLET, the pairs on slot 0, closures over it
  // wearing the host's names and shapes -- getenv the value | () absent/misused,
- // setenv 0 | EINVAL misuse (a non-string value UNSETS, the absence lane),
+ // setenv () | 'badarg misuse (a non-string value UNSETS, the absence lane),
  // environ the raw "NAME=value" strings.
  "(: envt (tablet 0)"
  "   (envget l n) (? (two? l) (? (= n (cap (cap l))) (cup (cap l)) (envget (cup l) n)) ())"
@@ -1856,8 +1855,8 @@ void kmain(void) {
  "   (getenv n) (? (string? n) (envget (peep envt 0 ()) n) ())"
  "   (setenv n v) (? (string? n)"
  "                   (: c (envcut (peep envt 0 ()) n)"
- "                      _ (pin envt 0 (? (string? v) (link (link n v) c) c)) 0)"
- "                   22)"
+ "                      _ (pin envt 0 (? (string? v) (link (link n v) c) c)) ())"
+ "                   'badarg)"
  "   (environ u) (map (\\ e (+ (cap e) (+ \"=\" (cup e)))) (peep envt 0 ())))"
  // the command line (rung 3): `bootargv` = (word..) off the raw boot line, split
  // quote-aware (-append 'sh -c \"cd lib; pwd\"' must reach the shell as one command).

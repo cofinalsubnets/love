@@ -413,14 +413,14 @@
           ; has, so the pipe moves aside and /dev/tty takes fd 0. no controlling
           ; terminal, no keys: pour it through instead. stdin being the terminal
           ; means there is no text at all, and `raw` is the isatty we have: it
-          ; answers 0 for a terminal on fd 0 and -ENOTTY for anything else
-          (: tty0? (raw 1 = 0)
+          ; answers () for a terminal on fd 0 and 'enotty for anything else
+          (: tty0? !(raw 1)
              _ (raw 0)
              _ (? tty0? (udie 2 "usage: less [-Nise] [+N|+/PAT] [FILE..]") 0)
              dfd (dup 0)
              tfd (openfd "/dev/tty" 0)
-             (? ((tfd < 0) || (dfd < 0))
-                 (: _ (? (0 <= dfd) (close dfd) 0) (pgpour ()))
+             (? ((nom? tfd) || (nom? dfd))
+                 (: _ (? (charm? dfd) (close dfd) 0) (pgpour ()))
                 (: _ (dup2 tfd 0)
                    _ (close tfd)
                    q (fdopen dfd)

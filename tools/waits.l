@@ -145,7 +145,7 @@
    (el l i) (? (i < 1) <l (el >l (i - 1)))
    (scan path)
     (: port (open path "r")
-       _ (? port 0 (die (+ "cannot open " path)))
+       _ (? (hot? port) 0 (die (+ "cannot open " path)))
        src (slurp port)
        _ (close port)
        (go ls n fn acc)

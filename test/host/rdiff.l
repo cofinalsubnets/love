@@ -24,7 +24,7 @@
 ; asserted at the foot.
 
 (: (rd-cl s) (map s (jot (tally s)))
-   (rd-slurp path) (: q (open path "r") (? q (: t (slurp q) _ (close q) t) ""))
+   (rd-slurp path) (: q (open path "r") (? (hot? q) (: t (slurp q) _ (close q) t) ""))
    (rd-cut s n) (? ((tally s) <= n) s (snip s 0 n))
    (rd-rep c n) (? (n <= 0) "" (c + (rd-rep c (n - 1))))
    ; every form a reader gets off a text. the read protocol is sound's, and the

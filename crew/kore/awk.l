@@ -1049,7 +1049,7 @@
           "toupper" (E \ (aw-up (s0 E)))
           "system" (E \ (: _ (flush out) _ (flush err)
                            p (spawn ["/bin/sh" "-c" (s0 E)])
-                           (p < 0 ? 127 (wait p))))
+                           (nom? p ? 127 (wait p))))
           "close"
            (E \ (: ps (E 'ports) nm2 (s0 E) q (peep ps nm2 'none)
                    (q == 'none ? -1 (close q, pin ps nm2 'none, 0))))
@@ -1145,7 +1145,7 @@
        p (peep ps nm 'none)
        (p !== 'none ? p
         (: q (open nm m)
-           (q || aw-err ("cannot open " + nm + " for writing"),
+           (hot? q || aw-err ("cannot open " + nm + " for writing"),
             pin ps nm q,
             q))))
    (aw-do-print E vs p)
@@ -1310,7 +1310,7 @@
    (aw-input E items as feed)
     (: (one f)
         (: q (? (f = "-") in
-                (: p (open f "r") (? p p (aw-err ("cannot open " + f)))))
+                (: p (open f "r") (? (hot? p) p (aw-err ("cannot open " + f)))))
            _ (pin (aw-g E) "FILENAME" (? (f = "-") "" f))
            _ (pin (aw-g E) "FNR" 0)
            rd (urd q)

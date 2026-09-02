@@ -60,7 +60,7 @@
         uleave uname-main unexpand-main uniq-main unlines unlink-main uptime-main uread urun
         uset usplit ustatf utag utty uupsay wc-main whoami-main xargs-main yes-main)
 (use 'holo) ; the assembler module: elf64, arbytes, ld-syms, at -- as/ar/ld/nm read it
-(: (read-text p) (: q (open p "r") (? q (: t (slurp q) _ (close q) [1 t]) ()))    ; (1 text) | ()
+(: (read-text p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) [1 t]) ()))    ; (1 text) | ()
    (die m) (: _ (say err m) _ (put err 10) (uleave 2))
 
    ; diff: two files -> unified hunks on out; the classic exit triple
@@ -81,7 +81,7 @@
           _ (? ((tgt = 'amd64) || (tgt = 'arm64)) ()
                (die ("as: unknown target " + <as)))
           q (open src "r")
-          _ (? q () (die ("as: cannot open " + src)))
+          _ (? (hot? q) () (die ("as: cannot open " + src)))
           (rd x acc) (: r (sound x)
                       (? (two? r) (rd >r (<r >< acc))
                          (id? r 'torn) (die ("as: unfinished form in " + src))
@@ -101,7 +101,7 @@
    ; (x/d verbs: add when a real script wants them.)
    (ar-write dst ms)                                          ; ms: ((basename bytes)..)
     (: q (open dst "w")
-       _ (? q () (die ("ar: cannot write " + dst)))
+       _ (? (hot? q) () (die ("ar: cannot write " + dst)))
        _ (say q (arbytes ms))
        (close q))
    (ar-t p)                                                   ; list member names

@@ -41,8 +41,8 @@
  (s2d s) (: n (tally s)                                  ; decimal, () on a non-digit
             (go i acc) (? (n <= i) acc (digit? (s i)) (go (i + 1) (10 * acc + ((s i) - 48))) ())
             (? (n = 0) () (go 0 0)))
- (sh c) (: pid (spawn ["sh" "-c" c]) (? (pid < 0) 1 (wait pid)))
- (rdf p) (: q (open p "r") (? q (: t (slurp q) _ (close q) t) ""))
+ (sh c) (: pid (spawn ["sh" "-c" c]) (? (nom? pid) 1 (wait pid)))
+ (rdf p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) t) ""))
  (wrf p t) (: q (open p "w") _ (say q t) (close q))
  tmpd "out/host"
 

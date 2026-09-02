@@ -47,7 +47,7 @@
           !(two? r) acc
           (forms >r (<r >< acc))))
    src (open "crew/moon/gen.l" "r")
-   _ (? src 0 (: _ (puts ";; moon-stage: cannot open crew/moon/gen.l") (quit 1)))
+   _ (? (hot? src) 0 (: _ (puts ";; moon-stage: cannot open crew/moon/gen.l") (quit 1)))
    text (slurp src)
    reps (catmap (\ f (? (two? f && id? <f ':) (ovck stage-dom stage-sigs f) ()))
                 (forms text ()))

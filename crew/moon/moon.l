@@ -684,8 +684,8 @@
     (: p (d + f)
        t (p + "." + show (getpid ()))
        q (open t "w")
-       _ (q ? (say q bs, close q))
-       _ (q && (rename t p = 0) ? () (unlink t))         ; anything but 0: the rename lost
+       _ (hot? q ? (say q bs, close q))
+       _ (hot? q && !(rename t p) ? () (unlink t))       ; anything but (): the rename lost
        ())
    ; a file's identity is its bytes: a relink that changed nothing is not a different
    ; compiler, and an inode cannot say so. reading a whole exe per link would swamp
@@ -913,7 +913,7 @@
        ; made -- this driver used to lay it and kore's `ld` did not, which made two
        ; doors over one linker write two different files.
        nw (ld-write dst ps)
-       _ (? (nw < 0) (udie 1 ("cc: cannot write " + dst + " -- errno " + show (0 - nw))) 0)
+       _ (? (nom? nw) (udie 1 ("cc: cannot write " + dst + " -- " + show nw)) 0)
        (chmod dst 493))
    usage "usage: mooncc [-c] [-pie] [-x c] [-t x64|arm64] [-os linux|none|freebsd] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)

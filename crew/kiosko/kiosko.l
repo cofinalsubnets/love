@@ -73,10 +73,10 @@
    ; `stat` cannot size -- a procfs file, a fifo -- and the fallback whenever a promise
    ; below turns out to be false. it reopens, because the lanes above have consumed theirs.
    (gulp-loop f) (: q (open f "r")
-                    (? !q ()
+                    (? !(hot? q) ()
                        (: j (jug 0) buf (cask 65536)
                           (go _) (: k (swig q buf)
-                                    (? (0 < k) (: _ (say j (snip buf 0 k)) (go ()))
+                                    (? (charm? k && 0 < k) (: _ (say j (snip buf 0 k)) (go ()))
                                        (: c (see q) (? (c = -1) 0 (: _ (put j c) (go ()))))))
                           _ (go ()) _ (close q) (slurp j))))
    (gulp f)
@@ -89,7 +89,7 @@
       (? !(0 < n) (gulp-loop f)
          !swigp (gulp-loop f)                          ; no cb.c: the slow lane still works
          (: q (open f "r")
-            (? !q ()
+            (? !(hot? q) ()
                ; --- lane 1, zero copies: ask for exactly n, and if we got n, hand back the
                ; cask. `say` writes a cask straight out and `tally` gives its length, so
                ; nothing downstream needs a string at all. the catch is that a full buffer
@@ -110,7 +110,7 @@
                ; the two syscalls a proof costs.
                (: buf (cask (n + 1))
                   k (swig q buf)
-                (0 < k && k < #buf ?
+                (charm? k && 0 < k && k < #buf ?
                  (: s (snip buf 0 k) (close q, s))
                  (close q, gulp-loop f)))))))    ; it grew past its own size
    ; `got?`, not `lit?`: lit? asks "is this a function", and a string is not one, so
@@ -134,7 +134,7 @@
                    (? (sub? acc "\r\n\r\n" || sub? acc "\n\n") acc
                       (reqcap < #acc) acc
                       (: k (swig c buf)
-                       (0 < k ? (go (acc + snip buf 0 k))
+                       (charm? k && 0 < k ? (go (acc + snip buf 0 k))
                         (see c @ -1 acc ch (go (acc + string ch))))))
                    (go ""))
    ; the request line: up to the first newline, without its carriage return.

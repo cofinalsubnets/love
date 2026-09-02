@@ -46,7 +46,7 @@
                         _ (scribe s ch)
                         b (cask 8192)
                         _ (: (drain x) (: n (swig m b)
-                                          (? (< 0 n)
+                                          (? (charm? n && < 0 n)
                                              (: _ (scribe (peep bx () 0) (snip b 0 n))
                                                 (drain ()))
                                              0))
@@ -60,7 +60,7 @@
                         _ (? dirty (pin dirty () 1) 0)
                         (moor bx m dirty))))
 
- (waitfor pid) (: s (gather pid) (? (two? s) s (= 0 s) (do (rest 2) (waitfor pid)) s))
+ (waitfor pid) (: s (gather pid) (? (two? s) s (nom? s) s (do (rest 2) (waitfor pid))))
 
  ; --- the harbour: every berth's screen, pty and child, under one wharf plan ---
  ; a pane is (box master pid). the harbour is a tablet, and the keys are the
@@ -73,7 +73,7 @@
  (hsoil hb) (: b (hb 'dirt) (pin b () 1))
 
  ; open a child on its own pty at r x c. tether's errno rides back out on a
- ; refusal -- a charm, never two?, which is how the caller tells it from a pane.
+ ; refusal -- a nom, never two?, which is how the caller tells it from a pane.
  (hopen argv r c) (: md (tether argv)
                      (? !(two? md) md
                       (: m >md

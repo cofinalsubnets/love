@@ -236,6 +236,7 @@ struct ai {
                   // 5 the help and 6 the stdio are the running task's, in its node
      hot_show,    // 7: show a value as a string
      mods,        // the module registry book: name -> module-book
+     errs,        // errno vocabulary: canonical number -> its nom; ai_err reads it
      inport;      // the buffered stdin port, or 0
    union {
     ai_word x;
@@ -472,6 +473,11 @@ struct ai
  *str0(struct ai*, uintptr_t),
  *grbufg(struct ai *g, uintptr_t len);
 lvm(lvm_gc);                                    // takes its word count in g->b
+// the nom a canonical errno names: 'eperm .. 'ehwpoison; 'eunknown for a number
+// the numbering leaves blank, 'badarg at -1 for a call refused before any
+// syscall ran. reads g->errs, interned at boot -- no allocation on any error path.
+ai_word ai_err(struct ai*, int);
+#define ai_badarg(g) ai_err(g, -1)
 uintptr_t hash(struct ai*, word), ai_tray_bytes(struct ai_tray*);
 // any value -> its enum q: KCharm for a fixnum, KHot for a non-data heap pointer,
 // else ai_typ's rep, a tray refined by element tier (KTrayZ..KTrayO).

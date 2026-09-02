@@ -29,7 +29,7 @@
 
 (:
    (sv-ends? s t) (: n #s m #t (m <= n && snip s (n - m) n = t))
-   (sv-rdf p) (: q (open p "r") (q && (: s (slurp q) _ (close q) (string? s && [1 s]))))
+   (sv-rdf p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) (string? s && [1 s]))))
    ; the directory a path sits in, as a link back up: "/a/b/c.l" -> "/a/b/"
    (sv-up p) (: n #p
                 (g k r) (? (k < n) (g (k + 1) (p k = 47 ? (k + 1) r)) (snip p 0 r))

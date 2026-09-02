@@ -104,16 +104,20 @@ static struct ai *host_harkst(struct ai *g, intptr_t fd, intptr_t pid, int tee) 
 ai_noinline static struct ai *host_harkstart(struct ai *g, int tee) {
  char **cav;
  g = ai_argv_marshal(g, &cav);
- if (!cav)                                                // a misuse, or the reserve
-  return ai_ok(g) ? ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(-1)) : g;
+ if (!cav) {                                              // a misuse, or the reserve
+  if (!ai_ok(g)) return g;
+  g = host_harkst(g, -1, 0, tee);                         // then the nom: harkst's push can collect
+  return ai_push(g, 1, ai_badarg(g)); }
 
  int op[2], ep[2];
  // errno into a local before the state push, on every one of these: the push
  // may collect, and a collection that grows the pool makes syscalls of its own.
  if (pipe(op)) { int e = errno;
-  return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(-e)); }
+  g = host_harkst(g, -1, 0, tee);
+  return ai_push(g, 1, ai_err(g, e)); }
  if (pipe(ep)) { int e = errno; close(op[0]); close(op[1]);
-  return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(-e)); }
+  g = host_harkst(g, -1, 0, tee);
+  return ai_push(g, 1, ai_err(g, e)); }
  fcntl(ep[1], F_SETFD, FD_CLOEXEC);
  fflush(stdout);
  host_spawn_guard(g, 1);
@@ -121,7 +125,8 @@ ai_noinline static struct ai *host_harkstart(struct ai *g, int tee) {
  if (pid) host_spawn_guard(g, 0);   // parent (a failed fork included); the child's g is unmapped
  if (pid < 0) { int e = errno;
   close(op[0]); close(op[1]); close(ep[0]); close(ep[1]);
-  return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(-e)); }
+  g = host_harkst(g, -1, 0, tee);
+  return ai_push(g, 1, ai_err(g, e)); }
  if (!pid) {                                              // child
   signal(SIGPIPE, SIG_DFL);                               // the ignore must not ride the exec
   dup2(op[1], STDOUT_FILENO);
@@ -138,7 +143,8 @@ ai_noinline static struct ai *host_harkstart(struct ai *g, int tee) {
  if (childerr) {                                          // exec failed
   close(op[0]);
   int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
-  return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(-childerr)); }
+  g = host_harkst(g, -1, 0, tee);
+  return ai_push(g, 1, ai_err(g, childerr)); }
 
  int fl = fcntl(op[0], F_GETFL);
  if (fl >= 0) fcntl(op[0], F_SETFL, fl | O_NONBLOCK);
@@ -223,20 +229,20 @@ static lvm(lvm_harkdrain) {
 ai_noinline static struct ai *host_exec(struct ai *g) {
  char **cav;
  g = ai_argv_marshal(g, &cav);
- if (!cav) return ai_ok(g) ? ai_push(g, 1, putcharm(-1)) : g;
+ if (!cav) return ai_ok(g) ? ai_push(g, 1, ai_badarg(g)) : g;
  fflush(stdout);
  fflush(stderr);
  signal(SIGPIPE, SIG_DFL);                                 // ... nor this one
  stdin_hand(g);                                            // the child inherits fd 0: hand it over exact
  execvp(cav[0], cav);
- return ai_push(g, 1, putcharm(-errno)); }                  // exec failed -> -errno
+ return ai_push(g, 1, ai_err(g, errno)); }                  // exec failed -> its nom
 
 static lvm(lvm_exec) {
  Pack(g);
  g = host_exec(g);                                         // returns only on failure
  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
- Sp[1] = Sp[0];                                            // errno fixnum over argv
+ Sp[1] = Sp[0];                                            // the errno nom over argv
  ai_musttail return Nextp(1, 1); }
 
 // (getenv name) -> string, or zero if unset / misused. zero = absent, not an error.

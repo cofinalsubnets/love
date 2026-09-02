@@ -15,8 +15,8 @@
 (use 'tar)
 
 (: (tarc-die m) (: _ (say err ("tar: " + m + "\n")) (quit 1))
-   (tarc-slurp p) (: q (open p "r") (q && (: s (slurp q) _ (close q) [1 (s + "")])))
-   (tarc-blurt p s) (: q (open p "w") (q && (: _ (say q s) _ (close q) 1)))
+   (tarc-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) [1 (s + "")])))
+   (tarc-blurt p s) (: q (open p "w") (hot? q && (: _ (say q s) _ (close q) 1)))
    (tarc-has? fl c) (: n #fl
                        (go k) (? (n <= k) 0 (fl k = c) 1 (go (k + 1)))
                        (go 0))

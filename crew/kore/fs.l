@@ -3,10 +3,9 @@
 ; same as core.l -- a toolbox, no seat, kore is its door. loads after core.l in the
 ; cat and rides its u-floor (udie, uread, ubase); the effects ride src/posix.c's
 ; posix_ lane (stat readdir unlink mkdir rename symlink hardlink rmdir
-; chmod utime cwd), whose convention shapes every loop here: an effect op answers
-; () or -errno -- BOTH falsey -- so success is a kind question, never a truth one,
-; and every loop below asks core.l's uok?. a body-less top-level `:` leaking
-; uoct (lawed in law.l) and the mains.
+; chmod utime cwd), whose convention shapes every loop here: an effect op
+; answers () ok or an errno nom, so !e is the success every loop below asks.
+; a body-less top-level `:` leaking uoct (lawed in law.l) and the mains.
 (module 'kore
 (:
    ; octal text -> a charm ("755" is 493), chmod's one argument shape
@@ -27,10 +26,10 @@
    ; that one's.
    (ucopy-bytes src dst)
     (? (member? 'copyfile (names ()))
-       (0 <= copyfile src dst)
+       (charm? (copyfile src dst))
        (: r (uread src)
           (? (two? r) (: q (open dst "w")
-                         (? q (: _ (say q <>r) _ (close q) 1) 0))
+                         (? (hot? q) (: _ (say q <>r) _ (close q) 1) 0))
              0)))
    ; the stat leads so the two failures stay tellable apart: one errno covers either end,
    ; and `cp: cannot open X` vs `cannot create Y` is the whole diagnostic. it is the same
@@ -87,8 +86,8 @@
        (? !(two? >rest) (udie 2 "usage: mv [-f] SRC DST")
           (: src <rest dst (udest src <>rest)
              e (rename src dst)
-             (? (uok? e) 0
-                (e = -18) (: _ (ucopy "mv" src dst) _ (unlink src) 0)  ; exdev: the long way
+             (? !e 0
+                (id? e 'exdev) (: _ (ucopy "mv" src dst) _ (unlink src) 0)  ; the long way
                 (udie 1 ("mv: cannot move " + src))))))
 
    ; -- rm: unlink, -r walks a tree bottom-up, -f keeps quiet about misses --
@@ -107,10 +106,10 @@
                               (go >m (? k ok 0))))
               ok (go (readdir q) 1)
               e (rmdir q)
-              (ok && uok? e))
-           (uok? (unlink q)))
+              (ok && !e))
+           !(unlink q))
        (one q ok)
-        (: hit (? r? (zap q) (uok? (unlink q)))
+        (: hit (? r? (zap q) !(unlink q))
            (? hit ok
               f? ok
               (: _ (say err ("rm: cannot remove " + q)) _ (put err 10) 0)))
@@ -134,7 +133,7 @@
                  (? (udirp q) ok
                     (: _ (say err ("mkdir: cannot create " + q)) _ (put err 10) 0)))
            (: e (mkdir q 493)
-              (? (uok? e) ok
+              (? !e ok
                  (: _ (say err ("mkdir: cannot create " + q)) _ (put err 10) 0))))
        (go a ok) (? (two? a) (go >a (one <a ok)) (? ok 0 1))
        (? (two? fs) (go fs 1) (udie 2 "usage: mkdir [-p] DIR..")))
@@ -143,7 +142,7 @@
         (? (two? a)
            (: e (rmdir <a)
               (go >a
-                  (? (uok? e) ok (: _ (say err ("rmdir: cannot remove " + <a)) _ (put err 10) 0))))
+                  (? !e ok (: _ (say err ("rmdir: cannot remove " + <a)) _ (put err 10) 0))))
            (? ok 0 1))
        (? (two? as) (go as 1) (udie 2 "usage: rmdir DIR..")))
 
@@ -159,14 +158,14 @@
        _ (? (two? >rest) () (udie 2 "usage: ln [-s] [-f] TARGET LINKNAME"))
        _ (? f? (unlink <>rest) ())
        e (? s? (symlink <rest <>rest) (hardlink <rest <>rest))
-       (? (uok? e) 0 (udie 1 ("ln: cannot link " + <>rest))))
+       (? !e 0 (udie 1 ("ln: cannot link " + <>rest))))
 
    ; -- touch: be there, and be now --
    (touch-main as)
     (: (one q ok)
-        (: _ (? (two? (stat q)) () (: p (open q "a") (? p (close p) ())))
+        (: _ (? (two? (stat q)) () (: p (open q "a") (? (hot? p) (close p) ())))
            e (utime q ())
-           (? (uok? e) ok (: _ (say err ("touch: cannot touch " + q)) _ (put err 10) 0)))
+           (? !e ok (: _ (say err ("touch: cannot touch " + q)) _ (put err 10) 0)))
        (go a ok) (? (two? a) (go >a (one <a ok)) (? ok 0 1))
        (? (two? as) (go as 1) (udie 2 "usage: touch FILE..")))
 
@@ -178,7 +177,7 @@
            (? (two? a)
               (: e (chmod <a m)
                  (go >a
-                     (? (uok? e) ok (: _ (say err ("chmod: cannot chmod " + <a)) _ (put err 10) 0))))
+                     (? !e ok (: _ (say err ("chmod: cannot chmod " + <a)) _ (put err 10) 0))))
               (? ok 0 1))
           (go >as 1)))
 
@@ -206,7 +205,7 @@
        (? d? (: (go a ok)
                  (? (two? a)
                     (: _ (imkp <a) e (mkdir <a m)
-                       ok2 (? (udirp <a) (: _ (? (uok? e) (chmod <a m) ()) ok)
+                       ok2 (? (udirp <a) (: _ (? !e (chmod <a m) ()) ok)
                               (: _ (say err ("install: cannot create " + <a)) _ (put err 10) 0))
                        (go >a ok2))
                     (? ok 0 1))
@@ -289,11 +288,11 @@
    (link-main as)
     (? !(two? >as) (udie 1 "usage: link FILE NEW")
        (: e (hardlink <as <>as)
-          (? (uok? e) 0 (udie 1 ("link: cannot link " + <>as + " to " + <as)))))
+          (? !e 0 (udie 1 ("link: cannot link " + <>as + " to " + <as)))))
    (unlink-main as)
     (? !(two? as) (udie 1 "usage: unlink FILE")
        (: e (unlink <as)
-          (? (uok? e) 0 (udie 1 ("unlink: cannot unlink " + <as)))))
+          (? !e 0 (udie 1 ("unlink: cannot unlink " + <as)))))
 
    ; ---- the reporting tools: stat, du -- and chown, mktemp ---------------------
    ; these read the stat tail. src/posix.c's stat answers
@@ -520,7 +519,7 @@
        uid <ug gid <>ug
        (one q ok)
         (: e (chown q uid gid)
-           ok2 (? (uok? e) ok
+           ok2 (? !e ok
                   (: _ (say err ("chown: cannot chown '" + q + "'")) _ (put err 10) 0))
            (? (r? && (udirp q))
               (foldl (\ acc c (one ((q + "/") + c) acc)) ok2 (readdir q))
@@ -563,8 +562,8 @@
         (? (n < 1) (? q? 1 (udie 1 "mktemp: could not make a name nobody had"))
            (: nm (umtname base)
               fd (? d? -1 (openfd nm 3))
-              got (? d? (uok? (mkdir nm 448)) (0 <= fd))
-              _ (? (0 <= fd) (close fd) ())
+              got (? d? !(mkdir nm 448) (charm? fd && 0 <= fd))
+              _ (? (charm? fd && 0 <= fd) (close fd) ())
               (? !got (try (n - 1))
                  (: _ (? u? (? d? (rmdir nm) (unlink nm)) ())
                     _ (say out nm) _ (put out 10) _ (flush out) 0))))

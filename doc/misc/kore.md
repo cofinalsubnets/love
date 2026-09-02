@@ -83,13 +83,12 @@ The file discipline, two shapes:
   still holds at the leave is lost, exactly as `quit` lost it. The property is gated in
   test/gate/kore.sh and test/gate/moon.sh; a regression to `quit` passes every other check.
 * **the nif lane.** fs effects ride src/posix.c (app-glob AiNif, no core edit) and its
-  `posix_` conventions: an effect op answers 0 ok | -errno | EINVAL misuse; a value
-  op answers the value | () absence | -errno. src/posix.c holds rename symlink readlink chmod chown utime
+  `posix_` conventions: an effect op answers () ok | an errno nom | 'badarg misuse; a
+  value op answers the value | () absence | a nom. src/posix.c holds rename symlink readlink chmod chown utime
   umask rmdir hardlink (`link` the word belongs to the chain ctor). test/host/fs.l smokes them
-  under test_hostnif. ⚠ **`0` and `-errno` are BOTH falsey**, so a tool asks for the 0 —
-  crew/kore/core.l's `uok?` (`e = 0`) — and never `!e` or a bare `? e`. That mistake is
-  per call site and silent: every miss reports success. test/gate/kore.sh carries a
-  failure row per tool because of it.
+  under test_hostnif. `!e` is the success test, `nom? e` the failure test, and a
+  specific errno matches by name (mv's `(id? e 'exdev)` lane). test/gate/kore.sh
+  carries a failure row per tool.
 * **exit codes.** 0 clean, 1 something failed (reported on err, the loop continued), 2 usage;
   diff keeps its classic 0/1/2 triple.
 
@@ -162,7 +161,7 @@ space.
 
 ## the process tools (crew/kore/proc.l)
 
-No new nifs — environ/getenv/setenv, spawn (pid | negative errno; a child that cannot exec
+No new nifs — environ/getenv/setenv, spawn (pid | the failure's nom; a child that cannot exec
 _exit(127)s) + wait, still (pty.c's kill), rest (core sleep, ms). env prints the world or
 assigns K=V.. and runs the command with the child's exit; sleep sums decimal durations with
 s/m/h/d suffixes (udur, lawed); kill sends -N or -NAME (default TERM) per pid, exit 0/1; xargs

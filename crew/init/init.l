@@ -182,7 +182,7 @@
 
    (perceive _)
      (: sig (sigfd 0)
-        (? !sig (note "  perceive: no signal source here")
+        (? !(hot? sig) (note "  perceive: no signal source here")
            (: pids (tablet 0) tries (tablet 0)
               units [(unit 'slow 'service ["sh" "-c" "sleep 0.15; exit 0"] 'on-fail ())
                      (unit 'flap 'service ["sh" "-c" "exit 1"]             'on-fail ())]
@@ -240,8 +240,8 @@
 
    ; drain glean until `target` children are collected (or steps run out). classify
    ; each dead pid by `pids`: present -> a child we started; absent -> a reparented
-   ; orphan (only pid 1 sees those). a non-pair glean -- () none pending (now the real
-   ; zero point) or -echild none left -- just paces the loop.
+   ; orphan (only pid 1 sees those). a non-pair glean -- () none pending or
+   ; 'echild none left -- just paces the loop.
    (glean-tour pids got target steps)
      (? (? (< steps 1) 1 (>= got target)) got
         (: ev (glean 0)

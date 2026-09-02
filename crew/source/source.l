@@ -27,7 +27,7 @@
        _ (mkdir (root + "/out/dist") 493)
        p (root + "/out/dist/" + top + ".tar.gz")
        q (open p "w")
-       _ (!q ? (src-die ("can't write " + p)))
+       _ (!(hot? q) ? (src-die ("can't write " + p)))
        _ (say q gz)
        _ (close q)
        p)
@@ -77,7 +77,7 @@
    (src-ccworks? cc dir)
     (: c (dir + "/.ccprobe.c") o (dir + "/.ccprobe.o")
        q (open c "w")
-       (? !q 0
+       (? !(hot? q) 0
           (: _ (say q "int main(void){return 0;}\n")
              _ (close q)
              nul (openfd "/dev/null" 1)
@@ -117,11 +117,11 @@
    ; a short read rides as a leftover, so the streams line up however the reads fall.
    ; `snip` reads the cask -- (snip (string b) 0 k) would copy all 64K to take the k bytes
    ; the read filled, and a short read at the tail of every file pays it twice.
-   (src-chunk q b) (: k (swig q b) (? (0 < k) (snip b 0 k) ""))
+   (src-chunk q b) (: k (swig q b) (? (charm? k && 0 < k) (snip b 0 k) ""))
    (src-same? p1 p2)
     (: q1 (open p1 "r")
        q2 (open p2 "r")
-       (? (!(q1 && q2)) (: _ (q1 ? (close q1) 0) _ (q2 ? (close q2) 0) 0)
+       (? (!(hot? q1 && hot? q2)) (: _ (hot? q1 ? (close q1) 0) _ (hot? q2 ? (close q2) 0) 0)
           (: b1 (cask 65536)
              b2 (cask 65536)
              (go r1 r2)
@@ -166,7 +166,7 @@
     (: exe (selfpath 0)
        _ (string? exe ? 0 (src-die "can't find seed path"))
        here (cwd 0)
-       _ (? (chdir root = 0) 0 (src-die ("can't enter " + root)))
+       _ (? !(chdir root) 0 (src-die ("can't enter " + root)))
        xm (? (string? xa) (arch-mach (intern xa)) ())     ; make's word for it
        s (herald (string? xa ? [exe "make" ("xa=" + xm) ("out/x-" + xm + "/love")]
                               [exe "make" "dist"]))
@@ -284,7 +284,7 @@
        exe (selfpath 0)
        _ (string? exe ? 0 (src-die "can't read the seed path"))
        pie (: h (open exe "r")
-             (? h (: s (slurp h) _ (close h) s)
+             (? (hot? h) (: s (slurp h) _ (close h) s)
                 (src-die "can't read this binary")))
        m (kern-b16 pie 18)
        arch (? (m = 62) "x86_64" (m = 183) "aarch64"

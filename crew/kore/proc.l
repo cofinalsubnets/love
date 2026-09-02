@@ -48,7 +48,7 @@
        rest (setp as)
        (? (two? rest)
           (: p (spawn rest)
-             (? (p < 0) (udie 127 ("env: cannot run " + <rest))
+             (? (nom? p) (udie 127 ("env: cannot run " + <rest))
                 (: w (wait p) _ (flush out) w)))
           (: (pr e) (? !(two? e) (: _ (flush out) 0)
                        (: _ (say out <e) _ (put out 10) (pr >e)))
@@ -90,7 +90,7 @@
         (? !(alldig? p)
            (: _ (say err ("kill: invalid pid " + p)) _ (put err 10) 0)
            (: r (still (uatoi p) sg)
-              (? (uok? r) ok
+              (? !r ok
                  (: _ (say err ("kill: cannot kill " + p)) _ (put err 10) 0))))
        (go a ok) (? (two? a) (go >a (one <a ok))
                     (: _ (flush err) (? ok 0 1)))
@@ -462,7 +462,7 @@
         (? !(two? rs)
            (: _ (flush out) bad)
            (: p (spawn (cmd + <rs))
-              w (? (p < 0) 127 (wait p))
+              w (? (nom? p) 127 (wait p))
               (go >rs (? (w = 127) 127
                               (w && !(bad = 127)) 123
                               bad))))

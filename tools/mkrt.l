@@ -31,7 +31,7 @@
        ; the backend file is the canonical arch word now -- one spelling, no map
        (: f ("crew/holo/" + string arch + ".l")
           q (open f "r")
-          (? q (: _ (rt-rdev (flow q)) (close q))
+          (? (hot? q) (: _ (rt-rdev (flow q)) (close q))
              (rt-die ("no backend aboard and no text at " + f)))))
    (rt-bytes s i acc) (? (i < 0) acc (rt-bytes s (i - 1) ((s i) >< acc)))
    (rt-le8 v i acc) (? (i = 8) acc (rt-le8 (v >> 8) (i + 1) (acc + [(v & 255)])))

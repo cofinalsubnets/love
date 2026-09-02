@@ -86,8 +86,8 @@
 
  ; ---- subprocess plumbing: sh with redirection; bytes laid via printf octal ----
  tmpd "out/host"
- (sh c) (: pid (spawn ["sh" "-c" c]) (? (pid < 0) 1 (wait pid)))
- (rdf p) (: q (open p "r") (? q (: t (slurp q) _ (close q) t) ""))
+ (sh c) (: pid (spawn ["sh" "-c" c]) (? (nom? pid) 1 (wait pid)))
+ (rdf p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) t) ""))
  (wrf p t) (: q (open p "w") _ (say q t) (close q))
  (oct3 c) (string [(48 + (int (c / 64))) (48 + (% (int (c / 8)) 8)) (48 + (% c 8))])
  (hex-bytes hx) (: n (tally hx)                              ; hex string -> charm list

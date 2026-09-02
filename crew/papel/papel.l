@@ -66,7 +66,7 @@
    ; under an installed love reads its own siblings, never the baked older copies.
    (want nm f) (? (from nm) 1
                   (: q (open (root + f) "r")
-                     (? q (: _ (close q) _ (use (root + f)) 1)
+                     (? (hot? q) (: _ (close q) _ (use (root + f)) 1)
                         (: _ (use nm) 1))))
    _ (want 'lapiz "lapiz/lapiz.l")
    _ (want 'cook "cook/cook.l"))
@@ -92,13 +92,13 @@
                     (go 0 0))
    (numof s)     ((: (g i acc) (? ((i < tally s) && (48 <= s i) && (s i <= 57))
                                   (g (i + 1) (acc * 10 + (s i - 48))) acc)) 0 0)
-   (slurpf f)    (: q (open f "r") (? q (slurp q) ""))
-   (spitf f s)   (: q (open f "w") _ (? q (: _ (say q s) (close q)) 0) (? q 1 0))
+   (slurpf f)    (: q (open f "r") (? (hot? q) (slurp q) ""))
+   (spitf f s)   (: q (open f "w") _ (? (hot? q) (: _ (say q s) (close q)) 0) (? (hot? q) 1 0))
    ; a directory answers a list from readdir, a file answers nothing -- that is the test,
    ; and it needs no mode bits (love has no bitwise and to pick S_IFDIR out of stat's mode).
    (dir? p)      (two? (readdir p))
-   ; mkdir every prefix, ignoring an already-there (mkdir answers -errno, and we do not
-   ; care which -- a real failure surfaces at the first open for writing). it walks the
+   ; mkdir every prefix, ignoring an already-there (mkdir answers an errno nom, and we
+   ; do not care which -- a real failure surfaces at the first open for writing). it walks the
    ; path rather than splitting it, so a leading slash survives: splitting on / and
    ; rejoining quietly turns /tmp/x into tmp/x, and the whole build then writes nowhere.
    (mkdirp p)    (: n #p
@@ -316,7 +316,7 @@ table{border-collapse:collapse}
       _ (mkdirp out)
       known (foldl (\ t s (pin t (base s) 1)) {} srcs)
       self (peep conf 'self "")
-      dep (stat self ? [self])
+      dep (two? (stat self) ? [self])
       dsts (map (s \ out + "/" + outname s) srcs)
       _ (each srcs (s \ recipe (out + "/" + outname s) (s . dep)
                          [(_ \ render conf known s (out + "/" + outname s))]))

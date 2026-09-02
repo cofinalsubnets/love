@@ -135,10 +135,10 @@
     (: n (tar-get e 'size 0)
        q (? (0 < n) (open (tar-get e 'path "") "r") 0)
        (? (0 = n) 1
-          (! q) ()
+          !(hot? q) ()
           (: (go left) (? (0 = left) 1
                           (: k (swig q buf)
-                             (? (0 >= k) ()
+                             (? !(charm? k && 0 < k) ()
                                 (: k2 (? (left < k) left k)
                                    _ (sha256-feed h (snip buf 0 k2))
                                    (go (left - k2))))))
@@ -228,8 +228,8 @@
    ; a walk answers paths relative to root and stores them that way: an archive
    ; carrying "/home/gwen/..." is one that unpacks over somebody's system. tar's own
    ; "removing leading /" warning exists because the naive spelling does that.
-   (tar-slurp p) (: q (open p "r") (? q (: s (slurp q) (close q, [1 (s + "")]))))
-   (tar-blurt p s) (: q (open p "w") (? q (say q s, close q, 1)))
+   (tar-slurp p) (: q (open p "r") (? (hot? q) (: s (slurp q) (close q, [1 (s + "")]))))
+   (tar-blurt p s) (: q (open p "w") (? (hot? q) (say q s, close q, 1)))
    (tar-join a b) (? #a (a + "/" + b) b)
    ; stat answers (size mtime-ms mode mtime-ns), and its mtime is milliseconds where
    ; tar's field is seconds. it follows a symlink -- there is no lstat here -- so the

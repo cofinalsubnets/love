@@ -155,6 +155,6 @@
           s <>r
           w (oc-read src s)
           nw (ld-write dst (? (fmt = "ihex") (oc-ihex s <w <>w) (oc-bin s <w)))
-          _ (? (nw < 0) (oc-die ("cannot write " + dst + " -- errno " + show (0 - nw))) 0)
+          _ (? (nom? nw) (oc-die ("cannot write " + dst + " -- " + show nw)) 0)
           (quit 0))))
 ) ; module 'holo

@@ -4,16 +4,18 @@
 // raw-fd plumbing, and the pty wrapper (bao's rlwrap/debugger muscle). host-only,
 // auto-globbed + AiNif-registered (no love.c/love.h/main.c edit). the
 // conventions, kept throughout:
-//   effect ops answer 0 ok | -errno | EINVAL misuse
-//   value ops answer the value | () absence | -errno
-// ok is 0 exactly, and the sign then says which way it failed: below refused, above
-// called wrong. 0 rather than () so that it CAN be asked: an () success is tellable
-// from -errno neither by ! (both falsey) nor by < 0 (() sorts BELOW 0), leaving only
-// the kind. () is left meaning absence, which is all it means for a value op.
+//   effect ops answer () ok | 'enoent | 'badarg
+//   value ops answer the value | () absence | 'enoent | 'badarg
+// the rule: if the C level set errno, it comes back as the nom naming it
+// (ai_err reads the boot-interned vocabulary, so no error path allocates); a
+// call refused here, before any syscall ran, answers 'badarg, which is not a
+// posix name, so the two can never shadow. ok is (), success with nothing more
+// to say. so !e reads "it worked" on an effect op, and nom? e reads "it
+// failed" on any op: errors are the only noms any of these answer.
 //
 // the argv marshal is src/seat.c's (main.c wants it too and must not reach into an
-// app file). the local face here adds the -1: a misuse answers it on the stack, which
-// is what every caller in this file hands back as the net value.
+// app file). the local face here adds the misuse answer: 'badarg on the stack,
+// which is what every caller in this file hands back as the net value.
 #define _GNU_SOURCE     // unshare / CLONE_* (newns), posix_openpt/grantpt/unlockpt/ptsname
 #include "love.h"
 #include <unistd.h>     // fork execvp _exit read close getuid/getgid symlink readlink chown
@@ -100,18 +102,18 @@ static char const *str_c(ai_word x) { return ai_strp(x) ? txt(x) : NULL; }
 // NUL-joined byte blob, laid in the uncommitted heap gap at Hp -- GC-invisible,
 // holds no l pointers, valid across a fork, consumed (execvp'd) before any
 // further allocation. called with g Packed. two failure faces: a misuse (non-
-// string element / empty argv) pushes putcharm(-1) and leaves *cavp NULL (the
-// caller returns g as-is, the -1 already the net value); oom returns !ok g
+// string element / empty argv) pushes 'badarg and leaves *cavp NULL (the
+// caller returns g as-is, 'badarg already the net value); oom returns !ok g
 // (*cavp NULL too, so `if (!*cavp) return g` covers both).
 static struct ai *argv_marshal(struct ai *g, char ***cavp) {
  g = ai_argv_marshal(g, cavp);
- return !*cavp && ai_ok(g) ? ai_push(g, 1, putcharm(-1)) : g; }
+ return !*cavp && ai_ok(g) ? ai_push(g, 1, ai_badarg(g)) : g; }
 
 // --- the supervisor pair: spawn without waiting, reap any dead child ------------
-// (spawn argv)  -> child pid (a fixnum) | a negative fixnum (-errno / -1 misuse)
+// (spawn argv)  -> child pid (a fixnum) | a nom ('badarg misuse)
 // (glean _)     -> (pid . status) of one reaped child
 //                | ()                 none pending
-//                | a negative fixnum  (-errno, e.g. -ECHILD: no children left)
+//                | a nom              (e.g. 'echild: no children left)
 // crew/init/init.l drives real processes with these plus the generic `still` (kill):
 // spawn returns a pid to track, glean is the SIGCHLD core (poll it, map the pid
 // back to a unit, restart per policy). on a real pid1 glean also collects
@@ -147,13 +149,13 @@ static lvm(lvm_sigignp) { Sp[0] = host_sigignp(Sp[0]); ai_musttail return Next(1
 
 // (sigclear _) -> () -- empty this process's signal mask. the exec children get it
 // from sig_dfl_job above; a shell's forked subshell never execs, so it asks here.
-ai_noinline static ai_word host_sigclear(void) {
+ai_noinline static ai_word host_sigclear(struct ai *g) {
  sigset_t none; sigemptyset(&none);
- return sigprocmask(SIG_SETMASK, &none, NULL) ? putcharm(-errno) : zero; }
-static lvm(lvm_sigclear) { Sp[0] = host_sigclear(); ai_musttail return Next(1); }
+ return sigprocmask(SIG_SETMASK, &none, NULL) ? ai_err(g, errno) : ZeroPoint; }
+static lvm(lvm_sigclear) { Sp[0] = host_sigclear(g); ai_musttail return Next(1); }
 
-// (spawn argv) -> the child pid, or a negated errno (negative, so a caller tells
-// a pid (positive) from a failure (negative) without a second value). fork +
+// (spawn argv) -> the child pid, or the failure's nom (a caller tells a pid, a
+// charm, from a failure, a nom, by kind alone). fork +
 // execvp; the parent returns immediately -- non-blocking, unlike run (waits +
 // captures) and exec (replaces in place). the child inherits init's stdio (a real
 // pid1 redirects to the journal); a failed exec _exit(127)s, seen by the next glean.
@@ -192,7 +194,7 @@ ai_noinline static struct ai *host_spawn(struct ai *g) {
  host_spawn_guard(g, 1);
  pid_t pid = fork();
  if (pid) host_spawn_guard(g, 0);   // parent (a failed fork included); the child's g is unmapped
- if (pid < 0) return ai_push(g, 1, putcharm(-errno));
+ if (pid < 0) return ai_push(g, 1, ai_err(g, errno));
  if (!pid) { sig_dfl_job(); execvp(cav[0], cav); _exit(127); }   // child: default signals, exec or die 127
  return ai_push(g, 1, putcharm(pid)); }                      // parent: the live pid
 
@@ -204,16 +206,16 @@ static lvm(lvm_spawn) {
  Sp[1] = Sp[0];                                              // pid over argv
  ai_musttail return Nextp(1, 1); }
 
-// (glean _) -> (pid . status) of one reaped child, () if none are pending, or a
-// negated errno (e.g. -ECHILD when no children remain). the pid is the car so the
+// (glean _) -> (pid . status) of one reaped child, () if none are pending, or
+// the failure's nom (e.g. 'echild when no children remain). the pid is the car so the
 // supervisor maps it back to a unit; status is proc_status (exit code / 128+sig).
 // waitpid(-1, WNOHANG) reaps any child -- incl. reparented orphans on a real pid1.
 // the arg is a dummy (ignored), so a bare (glean) curries; call it (glean 0).
 ai_noinline static struct ai *host_reapany(struct ai *g) {
  int st;
  pid_t r = waitpid(-1, &st, WNOHANG);
- if (r == 0) { g->sp[0] = ZeroPoint; return g; }            // none pending -> the real () (not charm 0)
- if (r < 0)  { g->sp[0] = putcharm(-errno); return g; }     // error (ECHILD = none alive)
+ if (r == 0) { g->sp[0] = ZeroPoint; return g; }            // none pending
+ if (r < 0)  { g->sp[0] = ai_err(g, errno); return g; }     // error ('echild = none alive)
  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
                                  putcharm(r), putcharm(proc_status(st)));
@@ -233,7 +235,7 @@ static lvm(lvm_reapany) {
 //                  first blocked (sigprocmask) so they queue to the fd instead of
 //                  their default disposition -- SIGCHLD's discard, SIGTERM's kill.
 //                  that queuing is exactly what turns a TERM into a graceful event,
-//                  not a death. () on failure. SIGINT is left unblocked so ^C bails.
+//                  not a death. a nom on failure. SIGINT is left unblocked so ^C bails.
 // (sigtake port) -> (signo . pid) of one pending signal, or () if none ready.
 // the supervisor parks with the core `(await sig)` (cooperative -- the scheduler
 // merges the sigfd with a heartbeat task's timer in one wait, the {nic, clock}
@@ -273,7 +275,7 @@ ai_noinline static struct ai *host_sigfd(struct ai *g) {
   for (ai_word p = a; chainp(p); p = B(p)) {
   if charmp(A(p)) sigaddset(&m, (int) getcharm(A(p))); }
  else { sigaddset(&m, SIGCHLD); sigaddset(&m, SIGTERM); }
- if (sigprocmask(SIG_BLOCK, &m, NULL)) return g->sp[0] = ZeroPoint, g;
+ if (sigprocmask(SIG_BLOCK, &m, NULL)) return g->sp[0] = ai_err(g, errno), g;
  // every door this libc carries, in order: the canonical one, then the BSD one
  // where it answers -- the try is the probe, as selfpath's ladder below.
  int fd = -1;
@@ -283,9 +285,9 @@ ai_noinline static struct ai *host_sigfd(struct ai *g) {
 #if defined(AiHaveKqueue)
  if (fd < 0) fd = host_sigfd_kq(a);          // ENOSYS: a BSD kernel; kqueue is the body
 #endif
- if (fd < 0) return g->sp[0] = ZeroPoint, g;
+ if (fd < 0) return g->sp[0] = ai_err(g, errno), g;
  struct ai *r = ai_io_alloc(g, fd);
- if (!ai_ok(r)) return close(fd), g->sp[0] = ZeroPoint, g;    // oom -> zero (cf. net.c lvm_listen)
+ if (!ai_ok(r)) return close(fd), g->sp[0] = ai_err(g, ENOMEM), g;
  g = r;
  return g->sp[1] = g->sp[0], g->sp += 1, g; }                 // port over the dummy arg
 static lvm(lvm_sigfd) {
@@ -302,18 +304,22 @@ ai_noinline static struct ai *host_sigtake(struct ai *g, int fd) {
  if (host_sigkq) {
   struct kevent ev;
   struct timespec z = {0, 0};
-  if (kevent(fd, 0, 0, &ev, 1, &z) != 1) { g->sp[0] = ZeroPoint; return g; }
+  int k = kevent(fd, 0, 0, &ev, 1, &z);
+  if (k < 0)  { g->sp[0] = ai_err(g, errno); return g; }
+  if (k != 1) { g->sp[0] = ZeroPoint; return g; }              // none ready
   signo = (intptr_t) ev.ident; pid = 0; }
  else
 #endif
  {
 #if defined(AiHaveSignalfd)
   struct signalfd_siginfo si;
-  ssize_t n = (fd >= 0) ? read(fd, &si, sizeof si) : -1;
-  if (n != (ssize_t) sizeof si) { g->sp[0] = ZeroPoint; return g; }  // none ready -> the real () (not charm 0)
+  ssize_t n = read(fd, &si, sizeof si);
+  if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {      // EAGAIN is absence, not failure
+   g->sp[0] = ai_err(g, errno); return g; }
+  if (n != (ssize_t) sizeof si) { g->sp[0] = ZeroPoint; return g; }  // none ready
   signo = (intptr_t) si.ssi_signo; pid = (intptr_t) si.ssi_pid;
 #else
-  (void) fd; g->sp[0] = ZeroPoint; return g;   // no canonical door: the kq lane above is the only one
+  (void) fd; g->sp[0] = ai_err(g, ENOSYS); return g;   // no canonical door: the kq lane above is the only one
 #endif
  }
  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
@@ -324,43 +330,43 @@ ai_noinline static struct ai *host_sigtake(struct ai *g, int fd) {
 
 static lvm(lvm_sigtake) {
  int fd = (int) ai_port_fd(Sp[0]);
- if (fd < 0) { Sp[0] = ZeroPoint; ai_musttail return Next(1); }
+ if (fd < 0) { Sp[0] = ai_badarg(g); ai_musttail return Next(1); }
  Pack(g);
  g = host_sigtake(g, fd);
  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  Ip += 1; ai_musttail return Continue(); }
 #else
-// a libc with neither door; keep the names present (so init.l loads) but inert.
-static lvm(lvm_sigfd)   { Sp[0] = ZeroPoint; ai_musttail return Next(1); }
-static lvm(lvm_sigtake) { Sp[0] = ZeroPoint; ai_musttail return Next(1); }
+// a libc with neither door; keep the names present (so init.l loads) but refusing.
+static lvm(lvm_sigfd)   { Sp[0] = ai_err(g, ENOSYS); ai_musttail return Next(1); }
+static lvm(lvm_sigtake) { Sp[0] = ai_err(g, ENOSYS); ai_musttail return Next(1); }
 #endif
 
 // --- foreground job control + cwd (the muscle a real shell needs) ---------------
 // (wait pid)   -> block until pid exits or stops: an exit is its proc_status (exit /
 //                 128+sig), a stop (^Z: SIGTSTP/SIGSTOP) is 256 + the stopping signal
 //                 -- a charm above every exit status, so a shell tells "stopped, job
-//                 it" (< 255 st) from "done". -errno on failure. the foreground wait:
+//                 it" (< 255 st) from "done". a nom on failure. the foreground wait:
 //                 spawn (inherited stdio) then wait, so a command owns the terminal
 //                 and the prompt returns only when it is done or parked.
-// (signal sig disp) -> sigaction: disp 0 = default, 1 = ignore. () | -errno |
-//                 EINVAL misuse (the effect convention). the shell ignores INT/QUIT/
+// (signal sig disp) -> sigaction: disp 0 = default, 1 = ignore. () | a nom |
+//                 'badarg misuse (the effect convention). the shell ignores INT/QUIT/
 //                 TSTP so the tty's ^C/^Z reach only the foreground child; spawn's
 //                 child side resets them (an ignored disposition survives exec).
-// (chdir path) -> 0 ok | -errno | -1 misuse. the `cd` builtin.
-// (cwd _)      -> the current directory as a string, or () on failure. for the prompt.
+// (chdir path) -> () ok | a nom | 'badarg misuse. the `cd` builtin.
+// (cwd _)      -> the current directory as a string, or a nom on failure. for the prompt.
 // the syscall body lives in an ai_noinline helper so the lvm_ wrapper stays a pure tail-jump (no ret):
 // the syscall + any stack buffer would otherwise block the sibcall to Continue() and trip `make vmret`.
-// WNOHANG, and the unit means "still running". every real answer is a charm (a
-// status, 256+sig for a stop, -errno for a failure), so the zero point is free to
-// carry the fourth term -- no sentinel is overloaded.
-ai_noinline static ai_word host_waitpid(ai_word arg) {
+// WNOHANG, and the unit means "still running". a real answer is a charm status
+// (256+sig for a stop) or a failure's nom, so the zero point is free to carry
+// the fourth term -- no sentinel is overloaded.
+ai_noinline static ai_word host_waitpid(struct ai *g, ai_word arg) {
  intptr_t pid = charmp(arg) ? getcharm(arg) : 0;
  int st;
  pid_t r;
  do r = waitpid((pid_t) pid, &st, WUNTRACED | WNOHANG); while (r < 0 && errno == EINTR);
  if (!r) return ZeroPoint;                                   // alive, neither exited nor stopped
- if (r < 0) return putcharm(-errno);
+ if (r < 0) return ai_err(g, errno);
  if (WIFSTOPPED(st)) return putcharm(256 + WSTOPSIG(st));
  return putcharm(proc_status(st)); }
 // (wait pid) waits by parking, not by blocking: a live child re-arms the task for the
@@ -371,31 +377,31 @@ ai_noinline static ai_word host_waitpid(ai_word arg) {
 // correct until something measures it hurting. nothing is consumed before the park
 // (WNOHANG left the child exactly as it found it), so the op re-runs whole.
 static lvm(lvm_waitpid) {
- ai_word r = host_waitpid(Sp[0]);
+ ai_word r = host_waitpid(g, Sp[0]);
  if (r == ZeroPoint) { g->next_wake_at = ai_clock() + 1; ai_musttail return Ap(lvm_yield_sw, g); }
  Sp[0] = r; ai_musttail return Next(1); }
 
-ai_noinline static ai_word host_posix_signal(ai_word sigw, ai_word dw) {
- if (!charmp(sigw) || !charmp(dw)) return putcharm(EINVAL);
+ai_noinline static ai_word host_posix_signal(struct ai *g, ai_word sigw, ai_word dw) {
+ if (!charmp(sigw) || !charmp(dw)) return ai_badarg(g);
  struct sigaction sa;
  memset(&sa, 0, sizeof sa);
  sa.sa_handler = getcharm(dw) ? SIG_IGN : SIG_DFL;
  sigemptyset(&sa.sa_mask);
- return sigaction((int) getcharm(sigw), &sa, NULL) ? putcharm(-errno) : zero; }
+ return sigaction((int) getcharm(sigw), &sa, NULL) ? ai_err(g, errno) : ZeroPoint; }
 
 static lvm(lvm_posix_signal) {
- Sp[1] = host_posix_signal(Sp[0], Sp[1]);
+ Sp[1] = host_posix_signal(g, Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
 
-ai_noinline static ai_word host_chdir(ai_word arg) {
+ai_noinline static ai_word host_chdir(struct ai *g, ai_word arg) {
  char const *buf = str_c(arg);
- if (!buf) return putcharm(-1);
- return chdir(buf) ? putcharm(-errno) : zero; }
-static lvm(lvm_chdir) { Sp[0] = host_chdir(Sp[0]); ai_musttail return Next(1); }
+ if (!buf) return ai_badarg(g);
+ return chdir(buf) ? ai_err(g, errno) : ZeroPoint; }
+static lvm(lvm_chdir) { Sp[0] = host_chdir(g, Sp[0]); ai_musttail return Next(1); }
 
 ai_noinline static struct ai *host_cwd(struct ai *g) {
  char buf[4096];
- if (!getcwd(buf, sizeof buf)) return g->sp[0] = ZeroPoint, g;
+ if (!getcwd(buf, sizeof buf)) return g->sp[0] = ai_err(g, errno), g;
  if (!ai_ok(g = ai_strof(g, buf))) return g;            // oom -> !ok, wrapper ghelps
  return g->sp[1] = g->sp[0], g->sp += 1, g; }           // cwd string over the dummy arg
 static lvm(lvm_cwd) {
@@ -454,11 +460,11 @@ static lvm(lvm_selfpath) {
  ai_musttail return Next(1); }
 
 // --- pipes + redirects (the fd plumbing a shell pipeline needs) ------------------
-// (pipe _)       -> (readfd . writefd) of a fresh pipe (raw fds), or -errno.
+// (pipe _)       -> (readfd . writefd) of a fresh pipe (raw fds), or a nom.
 // (openfd path m) -> a raw fd opening `path`: m 0 = read, 1 = write/create/trunc,
 //                   2 = write/create/append, 3 = write/create/EXCL at mode 0600 --
 //                   the one that fails on an existing name, which is what makes a
-//                   mktemp a claim and not a guess. -errno on failure, -1 on a bad path.
+//                   mktemp a claim and not a guess. a nom on failure, 'badarg on a bad path.
 // (spawnio argv in out err closes pg fg) -> pid. fork; in the child: the job-control
 //                   dance first -- pg < 0 stays in the parent's pgrp (the legacy /
 //                   non-tty lane), pg = 0 leads a fresh process group, pg > 0 joins
@@ -473,13 +479,13 @@ static lvm(lvm_selfpath) {
 //                   child must not leak, so a downstream reader sees EOF), reset the
 //                   job signals, execvp. the parent keeps its fds and closes the
 //                   pipe ends itself with `close`, which takes a raw fd too.
-//                   -errno on a fork/marshal failure.
+//                   a nom on a fork/marshal failure.
 // (ttyfg pg)     -> give the terminal (fd 0) to process group pg; pg <= 0 takes it
 //                   back to the caller's own group (the shell reclaiming the tty
-//                   after a foreground job ends or stops). () | -errno.
+//                   after a foreground job ends or stops). () | a nom.
 ai_noinline static struct ai *host_pipe(struct ai *g) {
  int fds[2];
- if (pipe(fds)) return g->sp[0] = putcharm(-errno), g;
+ if (pipe(fds)) return g->sp[0] = ai_err(g, errno), g;
  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return close(fds[0]), close(fds[1]), g;   // oom -> !ok
  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
                                 putcharm(fds[0]), putcharm(fds[1]));
@@ -492,14 +498,14 @@ static lvm(lvm_pipe) {
 
 static lvm(lvm_openfd) {
  char const *buf = str_c(Sp[0]);
- if (!buf) { Sp[1] = putcharm(-1); Sp += 1; ai_musttail return Next(1); }
+ if (!buf) { Sp[1] = ai_badarg(g); Sp += 1; ai_musttail return Next(1); }
  intptr_t m = charmp(Sp[1]) ? getcharm(Sp[1]) : 0;
  int flags = m == 1 ? (O_WRONLY | O_CREAT | O_TRUNC)
            : m == 2 ? (O_WRONLY | O_CREAT | O_APPEND)
            : m == 3 ? (O_WRONLY | O_CREAT | O_EXCL)
            : O_RDONLY,
      fd = open(buf, flags, m == 3 ? 0600 : 0644);
- Sp[1] = (fd < 0) ? putcharm(-errno) : putcharm(fd);
+ Sp[1] = (fd < 0) ? ai_err(g, errno) : putcharm(fd);
  ai_musttail return Nextp(1, 1); }
 
 ai_noinline static struct ai *host_spawnio(struct ai *g, int in, int out, int err,
@@ -510,7 +516,7 @@ ai_noinline static struct ai *host_spawnio(struct ai *g, int in, int out, int er
  ai_word closes = g->sp[4];                  // re-read post-marshal (ai_have may have GC'd)
  fflush(NULL);
  pid_t pid = fork();
- if (pid < 0) return ai_push(g, 1, putcharm(-errno));
+ if (pid < 0) return ai_push(g, 1, ai_err(g, errno));
  if (!pid) {
   if (pg >= 0) {
    setpgid(0, (pid_t) pg);                     // 0 leads a fresh group, >0 joins it
@@ -542,28 +548,29 @@ static lvm(lvm_spawnio) {
  Sp[7] = Sp[0];                              // pid over the 7 args
  ai_musttail return Nextp(1, 7); }
 
-ai_noinline static ai_word host_posix_ttyfg(ai_word pgw) {
+ai_noinline static ai_word host_posix_ttyfg(struct ai *g, ai_word pgw) {
  pid_t pg = (charmp(pgw) && getcharm(pgw) > 0) ? (pid_t) getcharm(pgw) : getpgrp();
- return tcsetpgrp(0, pg) ? putcharm(-errno) : zero; }
+ return tcsetpgrp(0, pg) ? ai_err(g, errno) : ZeroPoint; }
 
 static lvm(lvm_posix_ttyfg) {
-  Sp[0] = host_posix_ttyfg(Sp[0]);
+  Sp[0] = host_posix_ttyfg(g, Sp[0]);
   ai_musttail return Next(1); }
 
 // (fdopen fd) -> a port over a raw fd -- pipe/openfd's other half, so love reads
 // and writes its own plumbing (a command substitution drains a pipe with slurp, a
-// heredoc body pours in with say). () on a non-charm / negative fd or oom. the
-// port's GC finalizer owns the fd from here: hand it over, don't close it too.
+// heredoc body pours in with say). 'badarg on a non-charm / negative fd; oom
+// ghelps. the port's GC finalizer owns the fd from here: hand it over, don't
+// close it too.
 static lvm(lvm_fdopen) {
  intptr_t fd = charmp(Sp[0]) ? getcharm(Sp[0]) : -1;
- if (fd < 0) ai_musttail return Answer(ZeroPoint);
+ if (fd < 0) ai_musttail return Answer(ai_badarg(g));
  Pack(g);
  if (!ai_ok(g = ai_io_alloc(g, (int) fd))) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  Sp[1] = Sp[0];                              // port over the fd arg -- alloc pushed it
  ai_musttail return Nextp(1, 1); }
 
-// (spawnmap argv fdmap closes pg fg) -> pid | -errno. spawnio generalized: instead
+// (spawnmap argv fdmap closes pg fg) -> pid | a nom. spawnio generalized: instead
 // of the hardwired in/out/err triple, `fdmap` is a list of (childfd . srcfd) pairs
 // applied in order in the child -- dup2(srcfd, childfd) for a charm srcfd >= 0,
 // close(childfd) for () -- and each srcfd reads the fd table as remapped so far,
@@ -578,7 +585,7 @@ ai_noinline static struct ai *host_spawnmap(struct ai *g, intptr_t pg, intptr_t 
  ai_word fdmap = g->sp[1], closes = g->sp[2];   // re-read post-marshal (ai_have may have GC'd)
  fflush(NULL);
  pid_t pid = fork();
- if (pid < 0) return ai_push(g, 1, putcharm(-errno));
+ if (pid < 0) return ai_push(g, 1, ai_err(g, errno));
  if (!pid) {
   if (pg >= 0) {
    setpgid(0, (pid_t) pg);                     // 0 leads a fresh group, >0 joins it
@@ -617,59 +624,59 @@ static lvm(lvm_spawnmap) {
 static lvm(lvm_getuid) { Sp[0] = putcharm(getuid()); ai_musttail return Next(1); }
 static lvm(lvm_getgid) { Sp[0] = putcharm(getgid()); ai_musttail return Next(1); }
 
-// (fork _) -> child pid | 0 in the child | -errno. fork without exec -- the
+// (fork _) -> child pid | 0 in the child | a nom. fork without exec -- the
 // shell's subshell: the child evals a subtree and quits, and must never return
 // to the reader loop (doc/misc/posix.md's open question, answered conservatively:
 // the child owns a full copy-on-write address space, so the GC is fine; the
 // discipline is all in the caller -- flush out/err before, child = eval+quit).
-ai_noinline static ai_word host_fork(void) {
+ai_noinline static ai_word host_fork(struct ai *g) {
  fflush(NULL);
  pid_t pid = fork();
- return putcharm(pid < 0 ? -errno : pid); }
-static lvm(lvm_fork) { Sp[0] = host_fork(); ai_musttail return Next(1); }
+ return pid < 0 ? ai_err(g, errno) : putcharm(pid); }
+static lvm(lvm_fork) { Sp[0] = host_fork(g); ai_musttail return Next(1); }
 
-// (dup2 src dst) -> 0 | -errno | EINVAL. the self-redirect (a forked subshell
+// (dup2 src dst) -> () | a nom | 'badarg. the self-redirect (a forked subshell
 // laying its own fdmap, a compound's `done < file` swap).
-// (dup fd) -> a fresh fd duplicating fd (>= 3, clear of stdio) | -errno. the
+// (dup fd) -> a fresh fd duplicating fd (>= 3, clear of stdio) | a nom. the
 // save half of the swap.
-ai_noinline static ai_word host_dup2(ai_word sw, ai_word dw) {
- return !charmp(sw) || !charmp(dw) ? putcharm(EINVAL) :
-        dup2((int) getcharm(sw), (int) getcharm(dw)) < 0 ? putcharm(-errno) :
+ai_noinline static ai_word host_dup2(struct ai *g, ai_word sw, ai_word dw) {
+ return !charmp(sw) || !charmp(dw) ? ai_badarg(g) :
+        dup2((int) getcharm(sw), (int) getcharm(dw)) < 0 ? ai_err(g, errno) :
         ZeroPoint; }
 
-static lvm(lvm_dup2) { Sp[1] = host_dup2(Sp[0], Sp[1]); Sp += 1; ai_musttail return Next(1); }
+static lvm(lvm_dup2) { Sp[1] = host_dup2(g, Sp[0], Sp[1]); Sp += 1; ai_musttail return Next(1); }
 
-ai_noinline static ai_word host_dup(ai_word w) {
- if (!charmp(w)) return putcharm(-EINVAL);
+ai_noinline static ai_word host_dup(struct ai *g, ai_word w) {
+ if (!charmp(w)) return ai_badarg(g);
  int fd = fcntl((int) getcharm(w), F_DUPFD, 3);
- return putcharm(fd < 0 ? -errno : fd); }
+ return fd < 0 ? ai_err(g, errno) : putcharm(fd); }
 
-static lvm(lvm_dup) { Sp[0] = host_dup(Sp[0]); ai_musttail return Next(1); }
+static lvm(lvm_dup) { Sp[0] = host_dup(g, Sp[0]); ai_musttail return Next(1); }
 
 // --- pid1 bringup: mount the early filesystems + cgroup dirs ----------------------
-// (mkdir path mode) -> mkdir(2). () | -errno | EINVAL misuse. mode is octal (493 = 0755).
+// (mkdir path mode) -> mkdir(2). () | a nom | 'badarg misuse. mode is octal (493 = 0755).
 // also makes cgroup dirs (cgroup-v2 placement is then `open` + `say` the control file).
 // (mount src tgt type) -> mount(2), flags 0 / no data (enough for proc/sysfs/tmpfs).
-//   () | -errno | EINVAL misuse. needs privilege: run as pid1/root, or after (newns 0).
+//   () | a nom | 'badarg misuse. needs privilege: run as pid1/root, or after (newns 0).
 // (newns _) -> unshare a private user+mount namespace and selfmap to root-in-ns, so
 //   (mount ...) works unprivileged (the standard setgroups-deny + uid_map/gid_map).
-//   () | -errno. a real pid1 skips this -- it already is root.
+//   () | a nom. a real pid1 skips this -- it already is root.
 static lvm(lvm_mkdir) {
  char const *p = str_c(Sp[0]);
- if (!p) { Sp[1] = putcharm(EINVAL); Sp += 1; ai_musttail return Next(1); }
+ if (!p) { Sp[1] = ai_badarg(g); Sp += 1; ai_musttail return Next(1); }
  intptr_t mode = charmp(Sp[1]) ? getcharm(Sp[1]) : 0755;
- Sp[1] = mkdir(p, (mode_t) mode) ? putcharm(-errno) : zero;
+ Sp[1] = mkdir(p, (mode_t) mode) ? ai_err(g, errno) : ZeroPoint;
  ai_musttail return Nextp(1, 1); }
 
 #if defined(AiHaveMount)
-ai_noinline static ai_word host_mount(ai_word a, ai_word b, ai_word c) {
+ai_noinline static ai_word host_mount(struct ai *g, ai_word a, ai_word b, ai_word c) {
  char const *src = str_c(a), *tgt = str_c(b), *typ = str_c(c);
- if (!src || !tgt || !typ) return putcharm(EINVAL);
- return mount(src, tgt, typ, 0, NULL) ? putcharm(-errno) : zero; }
-static lvm(lvm_mount) { Sp[2] = host_mount(Sp[0], Sp[1], Sp[2]); Sp += 2; ai_musttail return Next(1); }
+ if (!src || !tgt || !typ) return ai_badarg(g);
+ return mount(src, tgt, typ, 0, NULL) ? ai_err(g, errno) : ZeroPoint; }
+static lvm(lvm_mount) { Sp[2] = host_mount(g, Sp[0], Sp[1], Sp[2]); Sp += 2; ai_musttail return Next(1); }
 #else
 // the call is there; our mount speaks a shape this kernel does not answer.
-static lvm(lvm_mount) { Sp[2] = putcharm(ENOSYS); Sp += 2; ai_musttail return Next(1); }
+static lvm(lvm_mount) { Sp[2] = ai_err(g, ENOSYS); Sp += 2; ai_musttail return Next(1); }
 #endif
 
 #if defined(AiHaveNamespaces)
@@ -681,25 +688,25 @@ static int ns_write(char const *path, char const *s) {
 static lvm(lvm_newns) {
  long uid = (long) getuid(), gid = (long) getgid();
  if (unshare(CLONE_NEWUSER | CLONE_NEWNS)) {
-   Sp[0] = putcharm(-errno);
+   Sp[0] = ai_err(g, errno);
    ai_musttail return Next(1); }
  char b[64];
  ns_write("/proc/self/setgroups", "deny");                       // required before gid_map
  snprintf(b, sizeof b, "0 %ld 1\n", uid); ns_write("/proc/self/uid_map", b);
  snprintf(b, sizeof b, "0 %ld 1\n", gid); ns_write("/proc/self/gid_map", b);
- Sp[0] = zero;
+ Sp[0] = ZeroPoint;
  ai_musttail return Next(1); }
 #else
 // a linux mechanism; elsewhere the name stands and refuses.
-static lvm(lvm_newns) { Sp[0] = putcharm(ENOSYS); ai_musttail return Next(1); }
+static lvm(lvm_newns) { Sp[0] = ai_err(g, ENOSYS); ai_musttail return Next(1); }
 #endif
 
 // --- the general POSIX fs surface (the posix_ symbol namespace; doc/misc/posix.md L0,
 // staging step 1) -- these serve any program, not just the supervisor, so their C
 // symbols wear the posix_ prefix; the love names stay the plain POSIX words.
-// (stat path|fd) -> (size mtime mode ns uid gid nlink blocks ino) | () -- absence (or
-//                   unreadability) is nothing. a charm is an open fd and the answer is
-//                   fstat's, the tuple being the same one either way.
+// (stat path|fd) -> (size mtime mode ns uid gid nlink blocks ino) | a nom
+//                   ('enoent absent, 'eacces unreadable, ..) | 'badarg. a charm is an
+//                   open fd and the answer is fstat's, the tuple the same either way.
 //                   size in bytes, mtime in milliseconds (the (clock t) scale), mode
 //                   the raw st_mode charm: kind reads off the S_IFMT bits in love
 //                   ((& mode 61440): 32768 file, 16384 dir, 40960 link) and the
@@ -715,22 +722,25 @@ static lvm(lvm_newns) { Sp[0] = putcharm(ENOSYS); ai_musttail return Next(1); }
 //                   `stat` owe the link's own blocks and mode, not its target's, and a
 //                   dangling link still has a truth to tell about itself. on a charm it
 //                   is `stat`: an fd already names the thing and no link is in the way.
-// (readdir path) -> the entry names, a list of strings ("." and ".." dropped), or ()
-//                   on failure. no order promised (readdir order, prepended) -- sort in love.
-// (unlink path)  -> 0 ok | -errno | EINVAL misuse.
-// (lseek fd off whence) -> the new offset | -errno | -1 misuse (the value-op
-//                   convention: negative = failure, like spawn/wait). raw fds, the
+// (readdir path) -> the entry names, a list of strings ("." and ".." dropped); an
+//                   empty directory is (), told from every failure by kind: a nom
+//                   ('enoent, 'enotdir, 'eacces ..) | 'badarg. no order promised
+//                   (readdir order, prepended) -- sort in love.
+// (unlink path)  -> () ok | a nom | 'badarg misuse.
+// (lseek fd off whence) -> the new offset | a nom | 'badarg misuse. raw fds, the
 //                   openfd lane -- not ports (a port's read buffer would desync
 //                   under a seek). whence: 0 SET, 1 CUR, 2 END, and a stranger is the
-//                   row's EINVAL rather than a quiet SET.
+//                   row's 'einval rather than a quiet SET.
 ai_noinline static struct ai *host_stat_tuple(struct ai *g, int follow) {
  ai_word x = g->sp[0];
  struct stat st;
- int miss;
- if (charmp(x)) miss = getcharm(x) < 0 || fstat((int) getcharm(x), &st);
- else { char const *p = str_c(x);
-        miss = !p || (follow ? stat(p, &st) : lstat(p, &st)); }
- if (miss) return g->sp[0] = ZeroPoint, g;                    // absent -> the real ()
+ if (charmp(x)) {
+  if (getcharm(x) < 0) return g->sp[0] = ai_badarg(g), g;
+  if (fstat((int) getcharm(x), &st)) return g->sp[0] = ai_err(g, errno), g; }
+ else {
+  char const *p = str_c(x);
+  if (!p) return g->sp[0] = ai_badarg(g), g;
+  if (follow ? stat(p, &st) : lstat(p, &st)) return g->sp[0] = ai_err(g, errno), g; }
  intptr_t ms = (intptr_t) st.st_mtim.tv_sec * 1000 + st.st_mtim.tv_nsec / 1000000,
           ns = (intptr_t) st.st_mtim.tv_sec * 1000000000 + st.st_mtim.tv_nsec;
  if (!ai_ok(g = ai_have(g, 9 * Width(struct ai_chain)))) return g;
@@ -765,9 +775,9 @@ static lvm(lvm_posix_stat) {
 
 ai_noinline static struct ai *host_posix_readdir(struct ai *g) {
  char const *p = str_c(g->sp[0]);
- if (!p) return g->sp[0] = ZeroPoint, g;
+ if (!p) return g->sp[0] = ai_badarg(g), g;
  DIR *d = opendir(p);
- if (!d) return g->sp[0] = ZeroPoint, g;
+ if (!d) return g->sp[0] = ai_err(g, errno), g;
  g->sp[0] = ZeroPoint;                                        // the accumulator, over the path
  for (struct dirent *e; (e = readdir(d));) {
   if (e->d_name[0] == '.' && (!e->d_name[1] || (e->d_name[1] == '.' && !e->d_name[2])))
@@ -787,26 +797,26 @@ static lvm(lvm_posix_readdir) {
  Unpack(g);
  ai_musttail return Next(1); }
 
-ai_noinline static ai_word host_posix_unlink(ai_word arg) {
+ai_noinline static ai_word host_posix_unlink(struct ai *g, ai_word arg) {
  char const *p = str_c(arg);
- if (!p) return putcharm(EINVAL);
- return unlink(p) ? putcharm(-errno) : zero; }
+ if (!p) return ai_badarg(g);
+ return unlink(p) ? ai_err(g, errno) : ZeroPoint; }
 
 static lvm(lvm_posix_unlink) {
-  Sp[0] = host_posix_unlink(Sp[0]);
+  Sp[0] = host_posix_unlink(g, Sp[0]);
   ai_musttail return Next(1); }
 
-// (setenv name val) -> 0 | -errno | EINVAL misuse; a non-string val unsets
+// (setenv name val) -> () | a nom | 'badarg misuse; a non-string val unsets
 // (the absence lane: (setenv n ()) clears n from the environment).
 // (environ _)       -> the environment as a list of "name=value" strings (the raw
 //                      POSIX shape -- split at the first '=' in love; no order promised).
-ai_noinline static ai_word host_posix_setenv(ai_word nw, ai_word vw) {
+ai_noinline static ai_word host_posix_setenv(struct ai *g, ai_word nw, ai_word vw) {
  char const *n = str_c(nw), *v = str_c(vw);
- if (!n) return putcharm(EINVAL);
- if (!v) return unsetenv(n) ? putcharm(-errno) : zero;
- return setenv(n, v, 1) ? putcharm(-errno) : zero; }
+ if (!n) return ai_badarg(g);
+ if (!v) return unsetenv(n) ? ai_err(g, errno) : ZeroPoint;
+ return setenv(n, v, 1) ? ai_err(g, errno) : ZeroPoint; }
 static lvm(lvm_posix_setenv) {
- Sp[1] = host_posix_setenv(Sp[0], Sp[1]);
+ Sp[1] = host_posix_setenv(g, Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
 
 extern char **environ;
@@ -826,18 +836,18 @@ static lvm(lvm_posix_environ) {
  Unpack(g);
  ai_musttail return Next(1); }
 
-ai_noinline static ai_word host_posix_lseek(ai_word fdw, ai_word offw, ai_word whw) {
- if (!charmp(fdw) || !charmp(offw) || !charmp(whw)) return putcharm(-1);
+ai_noinline static ai_word host_posix_lseek(struct ai *g, ai_word fdw, ai_word offw, ai_word whw) {
+ if (!charmp(fdw) || !charmp(offw) || !charmp(whw)) return ai_badarg(g);
  intptr_t w = getcharm(whw);
  // the three by name, a platform's numbers being its own; anything else goes down
- // as -1, which no seat takes, so the ROW answers EINVAL. reading a stranger as
+ // as -1, which no seat takes, so the row answers 'einval. reading a stranger as
  // SET would seek to 0 and call it success.
  int wh = w == 0 ? SEEK_SET : w == 1 ? SEEK_CUR : w == 2 ? SEEK_END : -1;
  off_t r = lseek((int) getcharm(fdw), (off_t) getcharm(offw), wh);
- return r < 0 ? putcharm(-errno) : putcharm((intptr_t) r); }
+ return r < 0 ? ai_err(g, errno) : putcharm((intptr_t) r); }
 
 static lvm(lvm_posix_lseek) {
- Sp[2] = host_posix_lseek(Sp[0], Sp[1], Sp[2]);
+ Sp[2] = host_posix_lseek(g, Sp[0], Sp[1], Sp[2]);
  ai_musttail return Nextp(1, 2); }
 
 static union u const
@@ -907,40 +917,40 @@ AiNif("setenv",  nif_posix_setenv);
 AiNif("environ", nif_posix_environ);
 // --- the rest of the fs surface: the effect ops the fs tools ride ---------------
 // (mv, ln, touch, chmod, chown -- crew/kore/fs.l and friends).
-//   (rename old new)      -> 0 | -errno | EINVAL   (mv's heart; same filesystem)
-//   (symlink target path) -> 0 | -errno | EINVAL   (path becomes a link to target)
-//   (readlink path)       -> the target string | ()
-//   (chmod path mode)     -> 0 | -errno | EINVAL   (mode the raw permission charm)
-//   (chown path uid gid)  -> 0 | -errno | EINVAL   (-1 leaves that id alone)
-//   (utime path ms)       -> 0 | -errno | EINVAL   (mtime and atime on the stat
+//   (rename old new)      -> () | a nom | 'badarg  (mv's heart; same filesystem)
+//   (symlink target path) -> () | a nom | 'badarg  (path becomes a link to target)
+//   (readlink path)       -> the target string | a nom | 'badarg
+//   (chmod path mode)     -> () | a nom | 'badarg  (mode the raw permission charm)
+//   (chown path uid gid)  -> () | a nom | 'badarg  (-1 leaves that id alone)
+//   (utime path ms)       -> () | a nom | 'badarg  (mtime and atime on the stat
 //                            scale, milliseconds; a non-charm ms reads "now")
-//   (umask mask)          -> the previous mask | -1 misuse (always succeeds)
-//   (rmdir path)          -> 0 | -errno | EINVAL   (the empty-directory unlink)
-//   (hardlink old new)    -> 0 | -errno | EINVAL   (link(2); `link` the word is
+//   (umask mask)          -> the previous mask | 'badarg misuse (always succeeds)
+//   (rmdir path)          -> () | a nom | 'badarg  (the empty-directory unlink)
+//   (hardlink old new)    -> () | a nom | 'badarg  (link(2); `link` the word is
 //                            the chain ctor, the most spoken name in the prel,
 //                            so the nif wears the long form)
-ai_noinline static ai_word host_posix_rename(ai_word ow, ai_word nw) {
+ai_noinline static ai_word host_posix_rename(struct ai *g, ai_word ow, ai_word nw) {
  char const *o = str_c(ow), *n = str_c(nw);
- if (!o || !n) return putcharm(EINVAL);
- return rename(o, n) ? putcharm(-errno) : zero; }
+ if (!o || !n) return ai_badarg(g);
+ return rename(o, n) ? ai_err(g, errno) : ZeroPoint; }
 static lvm(lvm_posix_rename) {
- Sp[1] = host_posix_rename(Sp[0], Sp[1]);
+ Sp[1] = host_posix_rename(g, Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
 
-ai_noinline static ai_word host_posix_symlink(ai_word tw, ai_word pw) {
+ai_noinline static ai_word host_posix_symlink(struct ai *g, ai_word tw, ai_word pw) {
  char const *t = str_c(tw), *p = str_c(pw);
- if (!t || !p) return putcharm(EINVAL);
- return symlink(t, p) ? putcharm(-errno) : zero; }
+ if (!t || !p) return ai_badarg(g);
+ return symlink(t, p) ? ai_err(g, errno) : ZeroPoint; }
 static lvm(lvm_posix_symlink) {
- Sp[1] = host_posix_symlink(Sp[0], Sp[1]);
+ Sp[1] = host_posix_symlink(g, Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
 
 ai_noinline static struct ai *host_posix_readlink(struct ai *g) {
  char const *p = str_c(g->sp[0]);
  char b[4096];
- if (!p) return g->sp[0] = ZeroPoint, g;
+ if (!p) return g->sp[0] = ai_badarg(g), g;
  ssize_t n = readlink(p, b, sizeof b - 1);
- if (n < 0) return g->sp[0] = ZeroPoint, g;
+ if (n < 0) return g->sp[0] = ai_err(g, errno), g;
  b[n] = 0;
  if (!ai_ok(g = ai_strof(g, b))) return g;                    // pushes: target over path
  return g->sp[1] = g->sp[0], g->sp += 1, g; }
@@ -950,25 +960,25 @@ static lvm(lvm_posix_readlink) {
  Unpack(g);
  ai_musttail return Next(1); }
 
-ai_noinline static ai_word host_posix_chmod(ai_word pw, ai_word mw) {
+ai_noinline static ai_word host_posix_chmod(struct ai *g, ai_word pw, ai_word mw) {
  char const *p = str_c(pw);
- if (!p || !charmp(mw)) return putcharm(EINVAL);
- return chmod(p, (mode_t) getcharm(mw)) ? putcharm(-errno) : zero; }
+ if (!p || !charmp(mw)) return ai_badarg(g);
+ return chmod(p, (mode_t) getcharm(mw)) ? ai_err(g, errno) : ZeroPoint; }
 static lvm(lvm_posix_chmod) {
- Sp[1] = host_posix_chmod(Sp[0], Sp[1]);
+ Sp[1] = host_posix_chmod(g, Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
 
-ai_noinline static ai_word host_posix_chown(ai_word pw, ai_word uw, ai_word gw) {
+ai_noinline static ai_word host_posix_chown(struct ai *g, ai_word pw, ai_word uw, ai_word gw) {
  char const *p = str_c(pw);
- if (!p || !charmp(uw) || !charmp(gw)) return putcharm(EINVAL);
- return chown(p, (uid_t) getcharm(uw), (gid_t) getcharm(gw)) ? putcharm(-errno) : zero; }
+ if (!p || !charmp(uw) || !charmp(gw)) return ai_badarg(g);
+ return chown(p, (uid_t) getcharm(uw), (gid_t) getcharm(gw)) ? ai_err(g, errno) : ZeroPoint; }
 static lvm(lvm_posix_chown) {
- Sp[2] = host_posix_chown(Sp[0], Sp[1], Sp[2]);
+ Sp[2] = host_posix_chown(g, Sp[0], Sp[1], Sp[2]);
  ai_musttail return Nextp(1, 2); }
 
-ai_noinline static ai_word host_posix_utime(ai_word pw, ai_word msw) {
+ai_noinline static ai_word host_posix_utime(struct ai *g, ai_word pw, ai_word msw) {
  char const *p = str_c(pw);
- if (!p) return putcharm(EINVAL);
+ if (!p) return ai_badarg(g);
  struct timespec ts[2];
  if charmp(msw) {
   intptr_t ms = getcharm(msw);
@@ -976,26 +986,26 @@ ai_noinline static ai_word host_posix_utime(ai_word pw, ai_word msw) {
   ts[0].tv_nsec = ts[1].tv_nsec = (long) (ms % 1000) * 1000000;
  } else
   ts[0].tv_sec = ts[1].tv_sec = 0, ts[0].tv_nsec = ts[1].tv_nsec = UTIME_NOW;
- return utimensat(AT_FDCWD, p, ts, 0) ? putcharm(-errno) : zero; }
+ return utimensat(AT_FDCWD, p, ts, 0) ? ai_err(g, errno) : ZeroPoint; }
 static lvm(lvm_posix_utime) {
- Sp[1] = host_posix_utime(Sp[0], Sp[1]);
+ Sp[1] = host_posix_utime(g, Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
 
-ai_noinline static ai_word host_posix_rmdir(ai_word pw) {
+ai_noinline static ai_word host_posix_rmdir(struct ai *g, ai_word pw) {
  char const *p = str_c(pw);
- if (!p) return putcharm(EINVAL);
- return rmdir(p) ? putcharm(-errno) : zero; }
-static lvm(lvm_posix_rmdir) { Sp[0] = host_posix_rmdir(Sp[0]); ai_musttail return Next(1); }
+ if (!p) return ai_badarg(g);
+ return rmdir(p) ? ai_err(g, errno) : ZeroPoint; }
+static lvm(lvm_posix_rmdir) { Sp[0] = host_posix_rmdir(g, Sp[0]); ai_musttail return Next(1); }
 
-ai_noinline static ai_word host_posix_hardlink(ai_word ow, ai_word nw) {
+ai_noinline static ai_word host_posix_hardlink(struct ai *g, ai_word ow, ai_word nw) {
  char const *o = str_c(ow), *n = str_c(nw);
- if (!o || !n) return putcharm(EINVAL);
- return link(o, n) ? putcharm(-errno) : zero; }
+ if (!o || !n) return ai_badarg(g);
+ return link(o, n) ? ai_err(g, errno) : ZeroPoint; }
 static lvm(lvm_posix_hardlink) {
- Sp[1] = host_posix_hardlink(Sp[0], Sp[1]);
+ Sp[1] = host_posix_hardlink(g, Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
 
-// (copyfile src dst) -> bytes copied | a negative fixnum (-errno / -1 misuse).
+// (copyfile src dst) -> bytes copied | a nom ('badarg misuse).
 // src's bytes into dst, without either passing through the heap.
 // the one that wanted it is the seed: `love source` lays bin/love by copying the running
 // artifact, ~12 MB, and slurping that made a love string the collector then had to carry
@@ -1007,13 +1017,13 @@ static lvm(lvm_posix_hardlink) {
 // would be one guarded branch inside it, worth adding when a profile asks.
 // and the buffer lives in a helper, not in the lvm_ -- 64K owed at a tail turns the jump
 // into a ret and grows the stack every dispatch (love.h's no-scratch rule).
-ai_noinline static ai_word host_posix_copyfile(ai_word sw, ai_word dw) {
+ai_noinline static ai_word host_posix_copyfile(struct ai *g, ai_word sw, ai_word dw) {
  char const *s = str_c(sw), *d = str_c(dw);
- if (!s || !d) return putcharm(-1);
+ if (!s || !d) return ai_badarg(g);
  int in = open(s, O_RDONLY);
- if (in < 0) return putcharm(-errno);
+ if (in < 0) return ai_err(g, errno);
  int out = open(d, O_WRONLY | O_CREAT | O_TRUNC, 0666);
- if (out < 0) { int e = errno; close(in); return putcharm(-e); }
+ if (out < 0) { int e = errno; close(in); return ai_err(g, e); }
  char buf[1 << 15];                               // the helper's own frame, never a global
  intptr_t done = 0, err = 0;
  for (;;) {
@@ -1027,14 +1037,14 @@ ai_noinline static ai_word host_posix_copyfile(ai_word sw, ai_word dw) {
 shut:
  close(in);
  if (close(out) && !err) err = errno;             // the write may land only here
- return putcharm(err ? -err : done); }
+ return err ? ai_err(g, (int) err) : putcharm(done); }
 static lvm(lvm_posix_copyfile) {
- Sp[1] = host_posix_copyfile(Sp[0], Sp[1]);
+ Sp[1] = host_posix_copyfile(g, Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
 
 static lvm(lvm_posix_umask) {
  Sp[0] = charmp(Sp[0]) ? putcharm((intptr_t) umask((mode_t) getcharm(Sp[0])))
-                     : putcharm(-1);
+                     : ai_badarg(g);
  ai_musttail return Next(1); }
 
 static union u const
@@ -1066,13 +1076,13 @@ AiNif("copyfile", nif_posix_copyfile);
 // and the parent keeps the master as a heap port (ai_io_alloc). so bao's editor
 // talks to any program over the master the way a terminal would.
 //
-//   (tether argv)      -> (pid . master-port) | a fixnum (errno, or -1 = misuse)
+//   (tether argv)      -> (pid . master-port) | a nom ('badarg misuse)
 //   (reap pid)         -> (status)   exited (a pair, truthy even at status 0)
 //                       | ()         still running
-//                       | -errno     waitpid error (e.g. ECHILD)
-//   (kill pid sig)     -> 0 ok | -errno  (caller passes (0 - pid) for the group)
-//   (winsize _)        -> (rows . cols) of the controlling tty (stdout), or ()
-//   (setwinsize p r c) -> 0 ok | -errno  push a size onto a master port
+//                       | a nom      waitpid error (e.g. 'echild)
+//   (kill pid sig)     -> () ok | a nom  (caller passes (0 - pid) for the group)
+//   (winsize _)        -> (rows . cols) of the controlling tty (stdout), or a nom
+//   (setwinsize p r c) -> () ok | a nom  push a size onto a master port
 //
 // (winsize) takes a dummy arg (ignored, like getpid): a bare (winsize) is the
 // function itself -- (f) == f at zero operands -- so the call is (winsize 0).
@@ -1080,8 +1090,8 @@ AiNif("copyfile", nif_posix_copyfile);
 // workhorse for (tether argv), called with g Packed; argv is the single arg and
 // the sole GC root at g->sp[0]. leaves exactly one net value above argv on every
 // non-oom path (so lvm_tether collapses uniformly, cf. hark): the
-// (pid . master-port) chain on success, an errno/-1 fixnum otherwise. returns a
-// not-ok g only on oom (lvm_tether routes that to ghelp).
+// (pid . master-port) chain on success, an errno nom / 'badarg otherwise.
+// returns a not-ok g only on oom (lvm_tether routes that to ghelp).
 ai_noinline static struct ai *host_tether(struct ai *g) {
   // no l allocation between the marshal and the fork: openpt/grantpt/unlockpt/
   // ptsname/pipe don't touch the heap, so the uncommitted gap holds.
@@ -1092,23 +1102,23 @@ ai_noinline static struct ai *host_tether(struct ai *g) {
   // open the master, unlock the slave, copy the slave path (ptsname's buffer is
   // static -- snapshot it for the child, which inherits the snapshot across fork).
  int mfd = posix_openpt(O_RDWR | O_NOCTTY);
- if (mfd < 0) return ai_push(g, 1, putcharm(-errno));
- if (grantpt(mfd) || unlockpt(mfd)) { int e = errno; close(mfd); return ai_push(g, 1, putcharm(-e)); }
+ if (mfd < 0) return ai_push(g, 1, ai_err(g, errno));
+ if (grantpt(mfd) || unlockpt(mfd)) { int e = errno; close(mfd); return ai_push(g, 1, ai_err(g, e)); }
  char sname[128];
  { char const *p = ptsname(mfd);
-  if (!p || strlen(p) >= sizeof sname) { close(mfd); return ai_push(g, 1, putcharm(-(p ? ENAMETOOLONG : errno))); }
+  if (!p || strlen(p) >= sizeof sname) { close(mfd); return ai_push(g, 1, ai_err(g, p ? ENAMETOOLONG : errno)); }
   memcpy(sname, p, strlen(p) + 1); }
 
   // close-on-exec errno pipe: child writes its setup/exec errno here; a clean
   // exec closes the write end -> parent reads EOF (childerr stays 0).
  int ep[2];
- if (pipe(ep)) { int e = errno; close(mfd); return ai_push(g, 1, putcharm(-e)); }
+ if (pipe(ep)) { int e = errno; close(mfd); return ai_push(g, 1, ai_err(g, e)); }
  fcntl(ep[1], F_SETFD, FD_CLOEXEC);
 
  host_spawn_guard(g, 1);
  pid_t pid = fork();
  if (pid) host_spawn_guard(g, 0);   // parent (a failed fork included); the child's g is unmapped
- if (pid < 0) { int e = errno; close(mfd); close(ep[0]); close(ep[1]); return ai_push(g, 1, putcharm(-e)); }
+ if (pid < 0) { int e = errno; close(mfd); close(ep[0]); close(ep[1]); return ai_push(g, 1, ai_err(g, e)); }
  if (!pid) {                                       // child
   close(mfd); close(ep[0]);
   sig_dfl_job();                                  // the ignores must not ride the exec
@@ -1132,7 +1142,7 @@ ai_noinline static struct ai *host_tether(struct ai *g) {
  if (childerr) {                                   // setup/exec failed in the child
   close(mfd);
   int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
-  return ai_push(g, 1, putcharm(-childerr)); }
+  return ai_push(g, 1, ai_err(g, childerr)); }
 
   // success: master -> heap port (pushes it to sp[0]; argv slides to sp[1]).
  struct ai *io = ai_io_alloc(g, mfd);
@@ -1159,14 +1169,14 @@ static lvm(lvm_tether) {
 // workhorse for (reap pid), called with g Packed and pid at g->sp[0]. the &st
 // waitpid + the chain alloc live here (off the wrapper's frame so lvm_reap's
 // Continue() tail-jumps, cf. host_tether). leaves exactly one net value at sp[0]:
-// the (status) one-element list, () still-running, or an errno fixnum. returns a
+// the (status) one-element list, () still-running, or an errno nom. returns a
 // not-ok g only on oom (lvm_reap routes that to ghelp).
 ai_noinline static struct ai *host_reap(struct ai *g, ai_word pidw) {
  intptr_t pid = charmp(pidw) ? getcharm(pidw) : 0;
  int st;
  pid_t r = waitpid((pid_t) pid, &st, WNOHANG);
- if (r == 0) { g->sp[0] = zero; return g; }            // still running
- if (r < 0)  { g->sp[0] = putcharm(-errno); return g; }   // waitpid error
+ if (r == 0) { g->sp[0] = ZeroPoint; return g; }          // still running
+ if (r < 0)  { g->sp[0] = ai_err(g, errno); return g; }   // waitpid error
  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
                                  putcharm(proc_status(st)), ZeroPoint);   // a real ()-tailed list, not the charm-0 fossil
@@ -1176,7 +1186,7 @@ ai_noinline static struct ai *host_reap(struct ai *g, ai_word pidw) {
 // (reap pid): non-blocking wait. a reaped child returns its decoded status as a
 // one-element list so the result is a present chain even at status 0 -- a caller
 // polling in a loop tells "exited 0" (a pair) from "still running" (()) without
-// the two collapsing to the same blue. a bare fixnum means waitpid itself erred.
+// the two collapsing to the same blue. a nom means waitpid itself erred.
 static lvm(lvm_reap) {
  Pack(g);
  g = host_reap(g, Sp[0]);
@@ -1185,30 +1195,29 @@ static lvm(lvm_reap) {
  ai_musttail return Next(1); }
 
 // (kill pid sig): POSIX kill(2). a negative pid signals the process group.
-// returns () on success, -errno on failure -- the effect shape, like every other one
-// here. it answered charm 0 for the success, which its own line above already denied
-// and which no caller could tell from a failure once both were charms.
+// () ok | a nom | 'badarg -- a non-charm pid may not fold to 0, which would
+// signal the caller's own whole group.
 static lvm(lvm_kill) {
- intptr_t pid = charmp(Sp[0]) ? getcharm(Sp[0]) : 0,
-          sig = charmp(Sp[1]) ? getcharm(Sp[1]) : 0;
- Sp[1] = kill((pid_t) pid, (int) sig) ? putcharm(-errno) : zero;
+ if (!charmp(Sp[0]) || !charmp(Sp[1])) {
+  Sp[1] = ai_badarg(g); ai_musttail return Nextp(1, 1); }
+ Sp[1] = kill((pid_t) getcharm(Sp[0]), (int) getcharm(Sp[1])) ? ai_err(g, errno) : ZeroPoint;
  ai_musttail return Nextp(1, 1); }
 
 // workhorse for (winsize), called with g Packed (the dummy arg sits at sp[0]).
 // the &ws ioctl + the chain alloc live here so lvm_winsize's Continue() tail-jumps
-// (cf. host_tether). overwrites sp[0] with (rows . cols), or () if stdout isn't a
-// tty. returns a not-ok g only on oom (lvm_winsize routes that to ghelp).
+// (cf. host_tether). overwrites sp[0] with (rows . cols), or a nom if stdout
+// isn't a tty. returns a not-ok g only on oom (lvm_winsize routes that to ghelp).
 ai_noinline static struct ai *host_winsize(struct ai *g) {
  struct winsize ws;
- if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) < 0) { g->sp[0] = zero; return g; }
+ if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) < 0) { g->sp[0] = ai_err(g, errno); return g; }
  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
                                  putcharm(ws.ws_row), putcharm(ws.ws_col));
  g->sp[0] = word(w);
  return g; }
 
-// (winsize): the controlling tty's size as (rows . cols), read off stdout; () if
-// stdout isn't a tty (ioctl fails). the size to mirror onto a wrapped child.
+// (winsize): the controlling tty's size as (rows . cols), read off stdout; a nom
+// ('enotty) if stdout isn't one. the size to mirror onto a wrapped child.
 static lvm(lvm_winsize) {
  Pack(g);
  g = host_winsize(g);
@@ -1217,8 +1226,8 @@ static lvm(lvm_winsize) {
  ai_musttail return Next(1); }
 
 // (setwinsize port rows cols): push a window size onto a master port; the kernel
-// raises SIGWINCH on the slave's foreground group. () on success, errno on
-// failure (incl. a non-port / closed port -> EBADF).
+// raises SIGWINCH on the slave's foreground group. () on success, a nom on
+// failure (incl. a non-port / closed port -> 'ebadf).
 // the &ws ioctl for (setwinsize), off lvm_setwinsize's frame so its Continue()
 // tail-jumps. returns 0 or the errno.
 ai_noinline static int host_setwinsize(intptr_t fd, intptr_t row, intptr_t col) {
@@ -1232,16 +1241,16 @@ static lvm(lvm_setwinsize) {
           row = charmp(Sp[1]) ? getcharm(Sp[1]) : 0,
           col = charmp(Sp[2]) ? getcharm(Sp[2]) : 0;
  int rc = host_setwinsize(fd, row, col);
- Sp[2] = rc ? putcharm(rc) : zero;
+ Sp[2] = rc ? ai_err(g, -rc) : ZeroPoint;
  ai_musttail return Nextp(1, 2); }
 
 // (ptyecho port on): toggle the pty's input ECHO. on = 0 / () clears it so a
 // line-editing wrapper (bao's edraw) owns the echo and the child's cooked-mode
 // echo doesn't double it; a truthy `on` restores it. ICANON is left intact -- the
 // child still reads whole lines and sees VEOF. tcsetattr on the master fd sets the
-// shared pty termios. () on success, errno on failure (non-port / closed -> EBADF).
-// the &t tcget/tcsetattr for (ptyecho), off lvm_ptyecho's frame so its Continue()
-// tail-jumps. returns 0 or the errno (EBADF for a non-port / closed fd).
+// shared pty termios. () on success, a nom on failure (non-port / closed ->
+// 'ebadf). the &t tcget/tcsetattr for (ptyecho), off lvm_ptyecho's frame so its
+// Continue() tail-jumps. returns 0 or a negated errno (EBADF for a non-port fd).
 ai_noinline static int host_ptyecho(intptr_t fd, intptr_t on) {
  struct termios t;
  if (fd < 0) return -EBADF;
@@ -1253,7 +1262,7 @@ static lvm(lvm_ptyecho) {
  intptr_t fd = ai_port_fd(Sp[0]),
           on = charmp(Sp[1]) ? getcharm(Sp[1]) : 0;
  int rc = host_ptyecho(fd, on);
- Sp[1] = rc ? putcharm(rc) : zero;
+ Sp[1] = rc ? ai_err(g, -rc) : ZeroPoint;
  ai_musttail return Nextp(1, 1); }
 
 // (raw on): own the interactive terminal discipline on stdin (fd 0). a truthy
@@ -1262,7 +1271,7 @@ static lvm(lvm_ptyecho) {
 // raw-on. bao's (shell _) calls (raw 1) because the bin/bao launch
 // (love -l bao.l -e "(bao 0)") passes argv, so main.c's argp path never raws --
 // without this the kernel tty echo doubles every line the editor draws. () on
-// success, errno on failure (stdin not a tty).
+// success, a nom on failure ('enotty: stdin is no tty).
 // one terminal, so one saved baseline and one atexit -- main.c's repl calls this too
 // (ai_raw_mode). two owners each capturing their own cooked state would be correct only
 // by atexit's LIFO ordering.
@@ -1284,15 +1293,15 @@ ai_noinline int ai_raw_mode(intptr_t on) {
 static lvm(lvm_raw) {
  intptr_t on = charmp(Sp[0]) ? getcharm(Sp[0]) : 0;
  int rc = ai_raw_mode(on);
- Sp[0] = rc ? putcharm(rc) : zero;
+ Sp[0] = rc ? ai_err(g, -rc) : ZeroPoint;
  ai_musttail return Next(1); }
 
 // (swig port b): drink whatever the fd has waiting into cask b, without blocking
 // (the caller parks on `see` for the first byte; swig drains the rest of the gulp).
 // n bytes read; 0 = nothing waiting or eof (the next see tells those apart); a
-// negative charm = -errno / misuse. the chunk lane a per-byte see cannot be.
+// nom = failure ('badarg misuse). the chunk lane a per-byte see cannot be.
 static lvm(lvm_swig) {
- ai_word p = Sp[0], x = Sp[1], out = putcharm(-1);
+ ai_word p = Sp[0], x = Sp[1], out = ai_badarg(g);
  if (!charmp(p) && ((union u*) p)->ap == lvm_port_io
       && !charmp(x) && ((union u*) x)->ap == lvm_cask) {
   struct ai_io *io = (struct ai_io*) p;
@@ -1312,7 +1321,7 @@ static lvm(lvm_swig) {
    out = k > 0 ? putcharm(k)
           : k == 0 ? putcharm(0)
           : (errno == EAGAIN || errno == EWOULDBLOCK) ? putcharm(0)
-          : putcharm(-errno); } }
+          : ai_err(g, errno); } }
  Sp[1] = out;
  ai_musttail return Nextp(1, 1); }
 
@@ -1342,9 +1351,9 @@ AiNif("swig", nif_swig);
 // both gate on the name, so the registration below is the whole wiring.
 
 // mode is a l string; only the first byte is consulted: r read, w truncate-or-
-// create, a append-or-create. an unknown mode is misuse and answers -1; open(2)
-// answers -errno, so the caller that cares can tell ETXTBSY (relinking a binary
-// that is running) from ENOENT rather than reading one word for every refusal.
+// create, a append-or-create. an unknown mode is misuse ('badarg upstairs);
+// open(2)'s refusal comes up as its nom, so the caller that cares tells 'etxtbsy
+// (relinking a binary that is running) from 'enoent by name.
 static int call_open(struct ai_str *pv, struct ai_str *mv) {
   if (mv->len == 0) return -1;
   int flags;
@@ -1356,13 +1365,11 @@ static int call_open(struct ai_str *pv, struct ai_str *mv) {
   int fd = open(pv->bytes, flags, 0644);
   return fd < 0 ? -errno : fd; }
 
-// (open path mode) -- a heap port (closed on GC), or a NEGATIVE fixnum: -errno
-// from open(2), -1 for misuse (a non-string argument, an unknown mode). the
-// value-op convention at the head of this file. ⚠ a success test reads the same
-// as it did against the zero point: nil? is ai_nilp, which is (net <= 0), and ?
-// is (net > 0), so every negative is falsy to BOTH. what a negative does not do
-// is MATCH the pattern (), so a caller that spells its failure arm as a literal
-// () rather than a test sees an errno as a port.
+// (open path mode) -- a heap port (closed on GC), or a nom: open(2)'s errno,
+// 'badarg for misuse (a non-string argument, an unknown mode). the value-op
+// convention at the head of this file. ⚠ a failure is TRUTHY now (a nom nets
+// positive), so a caller may not ask ? of the answer -- port? is the success
+// test, nom? the failure test, and both are exact.
 static lvm(lvm_open) {
   long rc = -1;
   if (!ai_strp(Sp[0]) || !ai_strp(Sp[1])) goto fail;
@@ -1378,17 +1385,17 @@ static lvm(lvm_open) {
   Sp[2] = Sp[0];
   ai_musttail return Nextp(1, 2);
  fail:
-  Sp[1] = putcharm(rc);
+  Sp[1] = rc == -1 ? ai_badarg(g) : ai_err(g, (int) -rc);
   ai_musttail return Nextp(1, 1); }
 
 // (close x) -- a port, or a raw fd from openfd/pipe/dup. on a port: flush, close,
 // and HAND IT THE CLOSED VT, so every later read, write and flush finds the door
 // that does nothing and the finalizer, which asks the vt for an fd, skips; answers
-// (). on a charm: close(2), 0 ok | -errno. no-op on anything else.
+// (). on a charm: close(2), () ok | a nom. no-op on anything else.
 static lvm(lvm_close) {
   if (charmp(Sp[0])) {
     intptr_t fd = getcharm(Sp[0]);
-    Sp[0] = (fd >= 0 && close((int) fd)) ? putcharm(-errno) : zero;
+    Sp[0] = (fd >= 0 && close((int) fd)) ? ai_err(g, errno) : ZeroPoint;
     ai_musttail return Next(1); }
   // inline "is x a port": heap pointer whose discriminator is lvm_port_io.
   if (cell(Sp[0])->ap == lvm_port_io) {
@@ -1409,7 +1416,7 @@ static lvm(lvm_close) {
       Unpack(g);
       close(fd);
       ((struct ai_io*) Sp[0])->vt = &ai_closed_vt; } }   // re-read: wflush may collect
-  Sp[0] = zero;
+  Sp[0] = ZeroPoint;
   ai_musttail return Next(1); }
 
 static union u const

@@ -16,10 +16,6 @@
 ; with ==> name <== and a blank line between.
 (module 'kore
 (:
-   ; did an effect nif succeed. src/posix.c answers 0 ok, -errno refused, +EINVAL misuse,
-   ; so ok is 0 EXACTLY and the sign only says which way it failed. never `!e` or `? e`:
-   ; 0 and -errno are both falsey, and a misuse is the one answer that is truthy.
-   (uok? e) (e = 0)
    ; -- cat: files (or -) onto out, verbatim --
    (cat-main as) (uchunks "cat" puts as)
 
@@ -206,7 +202,7 @@
        (opn l acc ok)
         (? !(two? l) [(rev acc) ok]
            (: q (open <l (? a? "a" "w"))
-              (? q (opn >l (q >< acc) ok)
+              (? (hot? q) (opn >l (q >< acc) ok)
                  (: _ (say err ("tee: cannot open " + <l)) _ (put err 10)
                     (opn >l acc 0)))))
        r (opn fs () 1)

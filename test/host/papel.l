@@ -42,7 +42,7 @@
 
 (: dir "/tmp/papeltest"
    (put-file f s) (: q (open (dir + "/" + f) "w") _ (say q s) (close q))
-   (get-file f)   (: q (open (dir + "/" + f) "r") (? q (slurp q) ""))
+   (get-file f)   (: q (open (dir + "/" + f) "r") (? (hot? q) (slurp q) ""))
    ; every attribute value introduced by `pre` and closed by a quote: the way to ask
    ; the emitted html what it actually said, without re-parsing it.
    (finds s pre)  (: m (tally pre) n (tally s)
@@ -199,7 +199,7 @@ Only a paragraph, so the title has to come from the meta block.
    _ (assert
       (10 < rn)                                   ; it built a real site
       (0 = (build rconf)))                        ; ..and is at once up to date
-   _ (: (page f) (: q (open (dir + "/love/" + f) "r") (? q (slurp q) ""))
+   _ (: (page f) (: q (open (dir + "/love/" + f) "r") (? (hot? q) (slurp q) ""))
         _ (each (filter (\ f ((from 'papel 'ends?) f ".html")) (readdir (dir + "/love")))
                 (\ f (: h (page f)
                         (assert (0 < tally h)

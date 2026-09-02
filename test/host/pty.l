@@ -16,7 +16,7 @@
 ; the status pair (0) nets blue (a chain of nothings is nothing), so it can't be
 ; distinguished from 0 by ! / nil? -- only by being a chain.
 (: (waitfor pid)
- (: s (gather pid) (? (two? s) s (= 0 s) (do (rest 2) (waitfor pid)) s)))
+ (: s (gather pid) (? (two? s) s (nom? s) s (do (rest 2) (waitfor pid)))))
 
 ; --- (tether argv): spawn `echo hello` on a pty, read its output off the master ---
 (: r (tether ["echo" "hello"])
@@ -44,19 +44,19 @@
     (two? st)           ; reaped
     (= 137 (cap st))))    ; 128 + 9: the signal-death encoding
 
-; --- (setwinsize port r c): ok on a live master, errno on a non-port ---
+; --- (setwinsize port r c): ok on a live master, an errno nom on a non-port ---
 (: r (tether ["cat"])
  _ (assert
-    (= 0 (setwinsize (cup r) 24 80))    ; 0 = ok
-    (setwinsize 5 24 80 < 0))            ; a bare fixnum (not a port) -> -EBADF
+    !(setwinsize (cup r) 24 80)          ; () = ok
+    (id? 'ebadf (setwinsize 5 24 80)))   ; a bare fixnum (not a port)
  _ (still (cap r) 9)
  _ (slurp (cup r))
  _ (waitfor (cap r)))
 
-; --- (still pid sig) on a dead pid -> an errno fixnum (ESRCH), never () ---
+; --- (still pid sig) on a dead pid -> its errno nom, never () ---
 (: dead (cap (tether ["true"]))       ; exits immediately
  _ (waitfor dead)                      ; gather it so the pid is truly gone (not a zombie)
- _ (assert (still dead 0 < 0)))          ; sig 0 probes existence -> -esrch
+ _ (assert (id? 'esrch (still dead 0))))  ; sig 0 probes existence
 
 ; --- bidirectional pty I/O: write to the master, read the child's echo back ---
 ; the foundation of bao's wrapper -- a host process and bao talk over the master
@@ -81,14 +81,14 @@
 ; so it line-buffers and flushes "hi\n" on the newline.
 (: r (tether ["tr" "a-z" "A-Z"])
  m (cup r)
- _ (assert (= 0 (ptyecho m 0)))                   ; echo off -> 0 ok
+ _ (assert !(ptyecho m 0))                        ; echo off -> ok
  _ (put m 104) _ (put m 105) _ (put m 10)  ; "hi\n"
  _ (flush m)
  a (see m) b (see m)                          ; first bytes back are tr's output
  _ (assert (= a 72) (= b 73))                     ; "hi" -- the "hi" echo is suppressed
  _ (still (cap r) 9)
  _ (waitfor (cap r)))
-(: _ (assert (ptyecho 5 0 < 0)))                    ; non-port -> -errno (EBADF)
+(: _ (assert (id? 'ebadf (ptyecho 5 0))))           ; non-port
 
 (test_fin ())
 (puts "pty: ok") (putc 10)

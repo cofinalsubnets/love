@@ -36,7 +36,7 @@
    (warnline path w) (path + ":" + show <w + ":" + show <>w + ": " + <>>w + "\n")
 
    ; --- the verbs ------------------------------------------------------------
-   (rdf p) (: q (open p "r") (? q (: t (slurp q) _ (close q) [1 t]) ()))
+   (rdf p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) [1 t]) ()))
 
    ; balance alone fails. the other rules speak -- an editing aid, read by hand --
    ; and nothing promotes one, so libra never refuses a file over a habit.

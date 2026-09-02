@@ -31,7 +31,7 @@
    ; wfs.l holds those laws), so here it is unmade the moment it is proved
    (! (port? (open "lib/no-such-thing.l" "r")))
    (: q (open "lib/no-such-thing.l" "w")
-      (&& (port? q) (: _ (close q) (= 0 (unlink "lib/no-such-thing.l")))))
+      (&& (port? q) (: _ (close q) !(unlink "lib/no-such-thing.l"))))
    ; the write copies the blob out of .rodata, and the next open sees it
    (wr f "hi" "w")
    (= "hi" (rd f))

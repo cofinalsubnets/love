@@ -36,10 +36,10 @@
    ; the port is minded, not closed at the tail: a torn read raises, and the close has
    ; to ride that way out too or the fd sits until a major compact.
    (look p) (: q (open p "r")                                            ; (1 text) | ()
-                 (? q (mind (\ _ (: s (slurp q) [1 (s + "")])) () (\ _ (close q))) ()))
-   (lay p s) (: q (open p "w") (? q (mind (\ _ (: _ (say q s) 1)) () (\ _ (close q))) 0))
+                 (? (hot? q) (mind (\ _ (: s (slurp q) [1 (s + "")])) () (\ _ (close q))) ()))
+   (lay p s) (: q (open p "w") (? (hot? q) (mind (\ _ (: _ (say q s) 1)) () (\ _ (close q))) 0))
    (form p) (: q (open p "r")                                 ; the file's one form | ()
-                  (? q (mind (\ _ (: r (sound (slurp q))
+                  (? (hot? q) (mind (\ _ (: r (sound (slurp q))
                                      d (? (two? r) <r ())
                                      (? (two? d) d ())))
                              () (\ _ (close q)))
@@ -449,9 +449,8 @@
        (? (0 < dirty ())
           (: _ (say err "sb: working tree has changes; record or revert first\n") 0)
           (: home (cwd 0)
-             ; chdir answers 0 ok or -errno, both falsey, so ask for the 0
              pd (: c (chdir peer)
-                   (? (c = 0)
+                   (? !c
                       (: _ (mk ()) d (dirty ()) _ (chdir home) d)
                       -1))
              (? (pd < 0) (: _ (say err ("sb: cannot reach " + peer + "\n")) 0)

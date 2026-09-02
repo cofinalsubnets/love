@@ -40,8 +40,8 @@
    rv-cbase (peep parts 'rv-cbase ())
 
    tmpd "out/host"
-   (sh c) (: pid (spawn ["sh" "-c" c]) (? (pid < 0) 1 (wait pid)))
-   (rdf p) (: q (open p "r") (? q (: t (slurp q) _ (close q) t) ""))
+   (sh c) (: pid (spawn ["sh" "-c" c]) (? (nom? pid) 1 (wait pid)))
+   (rdf p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) t) ""))
    (wrf p t) (: q (open p "w") _ (say q t) (close q))
    (tool? t) ((sh ("command -v " + t + " >/dev/null 2>&1")) = 0)
 

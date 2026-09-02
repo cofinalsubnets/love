@@ -89,28 +89,29 @@ Two mappings are the elegant ones:
 
 ## Conventions
 
-An effect op answers `0` on success | `-errno` | EINVAL on misuse; a value op answers
-the value | `()` absence | `-errno`. **Ok is `0` exactly**; the sign then says which way it
-failed — `< 0` refused by the system, `> 0` called wrong. ⚠ **Never `!e` and never `? e`**:
-`0` and `-errno` are both falsey, and a misuse is the one answer that is truthy. Ask `e = 0`. That is why the success is `0` and not `()`: `()` is falsey too AND `() < 0` is
-**true**, so an `()` success could not be parted from a failure by truth or by order,
-only by kind — and it left `()` meaning two opposite things, since a value op's `()`
-is absence. It now means only that. This also matches the C underneath, where
-`kmain.c`'s `k_fs_*` and `__ai_sys` have always answered 0-or-negative, so an error
-crosses every seam untouched. The MISUSE marker is the one axis still split: an effect
-op answers `EINVAL` positive, a value op `-1` or `-EINVAL`. Positive does part a bad
-call from a refused one — `(rename d d/in)` is a real `-22` where `(rename 7 f)` is
-`22` — but the three spellings are not one convention, and `-1` is `-EPERM`'s
-spelling. Open.
+An effect op answers `()` on success | an errno **nom** (`'enoent`, `'eexist`, ..) |
+`'badarg` on misuse; a value op answers the value | `()` absence | a nom | `'badarg`.
+The rule: **if the C level set errno, it comes back as the nom naming it** — `ai_err`
+reads the vocabulary interned at boot (`g->errs`, every canonical name, `'eunknown`
+for the numbering's blanks), so no error path allocates. A call refused upstairs,
+before any syscall ran, answers `'badarg`, which is not a posix name, so the two can
+never shadow. Success is `()`, the answer with nothing more to say: `!e` reads "it
+worked" on an effect op, `nom? e` reads "it failed" on any op, and a specific reason
+matches by name — kore's mv takes its cross-device lane on `(id? e 'exdev)`. ⚠ a
+failure is TRUTHY: never ask `? x` of a value op's answer — `hot?` is the port test,
+`two?` the tuple test, `charm?`/`string?` the rest. The C seams underneath are
+untouched: `kmain.c`'s `k_fs_*` and `__ai_sys` answer 0-or-negative as every C face
+must, and the nom is minted at the one place C meets love. The misuse axis is one
+word now: `'badarg`, retiring the positive-EINVAL / `-1` / `-EINVAL` split.
 `stat` answers `(size mtime-ms mode ns uid gid nlink blocks ino)` — ns the
 whole mtime in nanoseconds, one charm, cook's build-grade resolution; blocks is `st_blocks`,
-512-byte units, which is DISK USAGE and not the size — or `()` for absence. `lstat` answers the
-same of the LINK itself. ⚠ **the tail is append-only and a reader asks `tally` before reading past
+512-byte units, which is DISK USAGE and not the size — or the nom (`'enoent` absent,
+`'eacces` unreadable). `lstat` answers the same of the LINK itself. ⚠ **the tail is append-only and a reader asks `tally` before reading past
 `ns`**: the kernel's own stat (src/kmain.c) answers the first four alone, an image tree having no
 ownership to tell about, and kore's `stat`/`du` say so rather than reading a 0 someone might
 believe. `openfd`'s mode 3 is O_CREAT|O_EXCL at 0600 — the one that FAILS on an existing name,
-which is what makes a `mktemp` a claim and not a guess. `spawn` answers a pid or a
-negative errno, and a child that cannot exec `_exit(127)`s. `setenv` with a non-string value
+which is what makes a `mktemp` a claim and not a guess. `spawn` answers a pid or the
+failure's nom, and a child that cannot exec `_exit(127)`s. `setenv` with a non-string value
 unsets (the absence lane). Wrap at the call boundary — readdir/stat struct layouts and errno
 values differ across Linux/*BSD/mac, so the `call_X` worker normalizes and love sees a stable
 shape.

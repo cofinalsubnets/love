@@ -24,10 +24,9 @@
  ; is the presence test. `sound` answers three ways -- the datum consed onto the
  ; rest, () at a clean end, `torn` on a dropped paren -- so ask two?, never spin.
  (salt-file path c)
-  ; a test, not a match on (): a refusal answers -errno and no negative matches
-  ; the empty pattern
+  ; a kind test, not a match on (): a refusal answers a nom, and a nom is truthy
   (: q (open path "r")
-     (? !q c
+     (? !(hot? q) c
         (: t (slurp q)
            (go x) (sound x @ (d . u) (two? d && name? <d && pin c <d >d, go u))
          (go t, close q, c))))

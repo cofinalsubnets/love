@@ -38,7 +38,7 @@
    ; --- files, lines, words ----------------------------------------------------
    ; the two config files are line-oriented text, not love data, so `sound` is no
    ; use and this is a hand walk. absent is the normal case and reads as "".
-   (dns-look path) (: q (open path "r") (? q (: s (slurp q) _ (close q) s) ""))
+   (dns-look path) (: q (open path "r") (? (hot? q) (: s (slurp q) _ (close q) s) ""))
 
    (dns-eol t i n) (? (n <= i || t i = 10) i (dns-eol t (i + 1) n))
    (dns-lines t)

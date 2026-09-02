@@ -372,7 +372,7 @@
               (: nm (mname m)
                  (? (peep (mods ()) m ()) (prior nm)          ; read already -- the path is the mark
                     (: q (? (nil? fsopen) () (fsopen m "r"))
-                       (? (nil? q) (prior m)
+                       (? (nil? (hot? q)) (prior m)
                           ; a file whose own (module nm ..) registered wins: keep its tablet
                           ; over the loader's wrapper layer, which leave would pin over it.
                           ; the mark goes down before the read, so a file naming itself stops.

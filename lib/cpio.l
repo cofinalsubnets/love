@@ -166,7 +166,7 @@
                                          _ (symlink (peep e 'to "") p)
                                          (string? (readlink p)))
                     (: q (open p "w")
-                       _ (q && (: _ (say q (peep e 'body "")) (close q)))
+                       _ (hot? q && (: _ (say q (peep e 'body "")) (close q)))
                        _ (cpio-there? p && chmod p (peep e 'mode 420))
                        (cpio-there? p)))
               (ok && go >xs (skip ? k (k + 1)))))

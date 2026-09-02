@@ -83,7 +83,7 @@
       db (map entry rels)
       out-nom (root + "/compile_commands.json")
       q (open out-nom "w")
-      _ (? q 0 (: _ (say err ("ccdb: cannot write " + out-nom + "\n")) (quit 1)))
+      _ (? (hot? q) 0 (: _ (say err ("ccdb: cannot write " + out-nom + "\n")) (quit 1)))
       _ (say q (json-show db + "\n"))
       _ (close q)
       _ (say out (out-nom + ": " + show (tally db) + " entries\n"))

@@ -190,8 +190,9 @@ long __ai_nrfb(long n) {
   return -1; }
 
 /* freebsd errno -> canonical, indexed by freebsd's value (ELAST 97). rows
- * with no linux concept (the rpc/auth/capsicum family) keep their raw value:
- * our errno.h names none of them, so nothing upstairs can misread one. */
+ * with no canonical concept (the rpc/auth/capsicum family) map to 41, a blank
+ * in the canonical numbering, so no canonical name can misread one -- upstairs
+ * ai_err answers 'eunknown, and a numeric reader matches no errno.h define. */
 static unsigned char const os_err[] = {
   0,   1,   2,   3,   4,   5,   6,   7,   8,   9,     /* 0..9 as linux */
   10,  35,  12,  13,  14,  15,  16,  17,  18,  19,    /* 11 EDEADLK */
@@ -204,21 +205,21 @@ static unsigned char const os_err[] = {
   110, 111, 40,  36,  112, 113, 39,  67,  87,  122,   /* 62 ELOOP, 63 ENAMETOOLONG,
                                                        * 66 ENOTEMPTY, 68 EUSERS,
                                                        * 69 EDQUOT */
-  116, 66,  72,  73,  74,  75,  76,  37,  38,  79,    /* 70 ESTALE, 71 EREMOTE,
+  116, 66,  41,  41,  41,  41,  41,  37,  38,  41,    /* 70 ESTALE, 71 EREMOTE,
                                                        * 77 ENOLCK, 78 ENOSYS */
-  80,  81,  43,  42,  75,  125, 84,  87,  88,  74,    /* 82 EIDRM, 83 ENOMSG,
+  41,  41,  43,  42,  75,  125, 84,  41,  41,  74,    /* 82 EIDRM, 83 ENOMSG,
                                                        * 84 EOVERFLOW, 85 ECANCELED,
                                                        * 86 EILSEQ, 89 EBADMSG */
-  72,  67,  71,  93,  94,  131, 130, 97,              /* 90 EMULTIHOP, 91 ENOLINK,
+  72,  67,  71,  41,  41,  131, 130, 41,              /* 90 EMULTIHOP, 91 ENOLINK,
                                                        * 92 EPROTO, 95 ENOTRECOVERABLE,
                                                        * 96 EOWNERDEAD */
 };
 
-/* ..and netbsd rewrites only the tail: 85..98 in its own order (ENOATTR
- * keeps its raw 93 -- our errno.h names no such thing). below 85 the two
- * BSDs agree to the number. */
+/* ..and netbsd rewrites only the tail: 85..98 in its own order (ENOATTR has
+ * no canonical concept and takes the 41 blank). below 85 the two BSDs agree
+ * to the number. */
 static unsigned char const os_err_nb[] = {
-  84, 95, 125, 74, 61, 63, 60, 62, 93, 72, 67, 71, 130, 131 };
+  84, 95, 125, 74, 61, 63, 60, 62, 41, 72, 67, 71, 130, 131 };
 long __ai_errfb(long e) {
   if (__ai_osv == 3 && e >= 85 && e <= 98) return os_err_nb[e - 85];
   return (e > 0 && e < (long) (sizeof os_err)) ? os_err[e] : e; }

@@ -5,8 +5,8 @@
 ;   (status . output)  -- a pair -- when the process ran: status is the exit
 ;                         code (or 128+signal if killed), output is the child's
 ;                         captured stdout as one string;
-;   a positive fixnum  -- the OS errno -- when the program couldn't be spawned;
-;   a negative fixnum  -- our-side misuse (empty argv / a non-string element).
+;   an errno nom       -- 'enoent .. -- when the program couldn't be spawned;
+;   'badarg            -- our-side misuse (empty argv / a non-string element).
 ; So `two?` is the success/failure discriminator. stderr is inherited, not
 ; captured. (getenv name) -> string, or nil when unset.
 ;
@@ -30,14 +30,13 @@
   ; --- multiple args are marshalled in order, with no shell in between ---
   (: r (hark ["printf" "%s-%s" "ab" "cd"]) (= "ab-cd" (cup r)))
 
-  ; --- a program that can't be spawned -> -errno, a fixnum and not a chain ---
-  (: r (hark ["/no/such/prog-xyzzy"]) (&& (charm? r) (r < 0)))    ; abs path: ENOENT
-  (: r (hark ["no-such-prog-xyzzy"])  (&& (charm? r) (r < 0)))    ; PATH miss: ENOENT
+  ; --- a program that can't be spawned -> its errno's nom, not a chain ---
+  (id? 'enoent (hark ["/no/such/prog-xyzzy"]))    ; abs path: ENOENT
+  (id? 'enoent (hark ["no-such-prog-xyzzy"]))     ; PATH miss: ENOENT
 
-  ; --- our-side misuse -> -1. ⚠ that is -EPERM's spelling; nothing here raises one,
-  ; but the marker and the errno band do share it ---
-  (= -1 (hark 0))                                ; empty argv (nil)
-  (= -1 (hark ["echo" 5]))                      ; 5 is not a string
+  ; --- our-side misuse -> 'badarg, which is not a posix name ---
+  (id? 'badarg (hark 0))                          ; empty argv (nil)
+  (id? 'badarg (hark ["echo" 5]))                 ; 5 is not a string
 
   ; --- output larger than the initial buffer exercises the grow path ---
   (: r (hark ["seq" "20000"]) (&& (= 0 (cap r)) (< 65536 (sat (cup r)))))

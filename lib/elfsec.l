@@ -7,7 +7,7 @@
 ; x86-64 asking nothing of the machine underneath -- which is how `.comment`, the producer
 ; record, is read back with no binutils in the picture.
 (:
-   (es-slurp p) (: q (open p "r") (q && (: s (slurp q) _ (close q) s)))
+   (es-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) s)))
    (es-le s i n) (: (go k a m) (? (k = n) a (go (k + 1) (a + peep s (i + k) 0 * m) (m * 256)))
                     (go 0 0 1))
    ; e_ident[4] is the class, 1 is 32 and 2 is 64; the rows are the same fields at their two

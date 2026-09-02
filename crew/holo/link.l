@@ -1337,7 +1337,7 @@
    ; `open`'s own and passes straight through; the caller names itself in the
    ; sentence a reader gets, so a program that could not write its output says so
    ; and stops rather than reporting the build it did not do.
-   ; test it as (n < 0), never for truth: a zero-byte write is falsy too.
+   ; test it with nom?, never for truth: a zero-byte write is falsy too.
    (ld-write path ps)
     (: _ (unlink path)
        q (open path "w")
@@ -1345,5 +1345,5 @@
                    (: p <l
                       _ (say q (string? p ? p (cask p)))
                       (go >l (n + #p))))
-       (? q (go ps 0) q)))
+       (? (hot? q) (go ps 0) q)))
 ) ; module 'holo

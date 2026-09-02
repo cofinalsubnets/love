@@ -42,7 +42,7 @@
         (: r <rs ion (sh-nth r 0) op (sh-nth r 1)
            (? (op = "<h")
               (: pp (pipe 0)
-                 (? (charm? pp) (rderr opens "cannot pipe")
+                 (? (nom? pp) (rderr opens "cannot pipe")
                     (rdm >rs
                          ((dfd ion 0 . <pp) . fdmap)
                          (<pp . opens)
@@ -52,11 +52,11 @@
                     (: t <tf
                        (? (op = "<")
                             (: fd (openfd t 0)
-                               (? (fd < 0) (rderr opens (t + ": cannot open"))
+                               (? (nom? fd) (rderr opens (t + ": cannot open"))
                                   (rdm >rs ((dfd ion 0 . fd) . fdmap) (fd . opens) writes)))
                           ((op = ">") || (op = ">>"))
                             (: fd (openfd t (? (op = ">") 1 2))
-                               (? (fd < 0) (rderr opens (t + ": cannot open"))
+                               (? (nom? fd) (rderr opens (t + ": cannot open"))
                                   (rdm >rs ((dfd ion 1 . fd) . fdmap) (fd . opens) writes)))
                           ((op = ">&") || (op = "<&"))
                             (: d (dfd ion (? (op = "<&") 0 1))
@@ -338,7 +338,7 @@
      (? (two? args)
         (foldl (\ a p (: st (wait (sh-int p))
                          _ (sh-bgnote (sh-int p))
-                         (? (charm? st && (st < 0)) 127 st)))
+                         (? (charm? st) st 127)))
                0 args)
         (: _ (each (keys sh-jobs)
                    (\ nn (: j (sh-jobs nn)
@@ -371,11 +371,9 @@
              (: st (? >argv (sh-int <>argv) (sh-status ()))
                 (sh-leave st))
            (cmd = "cd")
-             ; the sign, never a truth test: chdir answers 0 or -errno and both are falsey,
-             ; so `!r` reads a failure as a success and cd would leave you where you were.
              (: t (? >argv <>argv ("" + (getenv "HOME")))
                 r (chdir t)
-                (? (r = 0) 0 (: _ (say err ("lush: cd: " + (t + "\n"))) 1)))
+                (? !r 0 (: _ (say err ("lush: cd: " + (t + "\n"))) 1)))
            (cmd = "trap") (sh-trapb >argv)
            (cmd = "export") (: _ (each >argv sh-export) 0)
            ; `command -v W` -- the probe every configure-shaped script opens with, and a
@@ -564,7 +562,7 @@
                  _ (each opens close)
                  s (th ())
                  _ (flush out) _ (flush err)
-                 _ (each saves (\ e (? (>e < 0) (close <e)
+                 _ (each saves (\ e (? (nom? >e) (close <e)
                                        (: _ (dup2 >e <e) (close >e)))))
                  s))))
    (sh-simple2 argv rs)
@@ -595,8 +593,8 @@
                            ())
                     _ (each opens close)
                     _ (sh-hwrite wrs)
-                    (? !(charm? pid) (sh-nofound <argv)
-                       (pid < 0) (cmderr (<argv + ": cannot spawn"))
+                    (? (nom? pid) (cmderr (<argv + ": cannot spawn"))
+                       !(charm? pid) (sh-nofound <argv)
                        (: _ (sh-waitfg [pid] (sh-unwords argv))
                           (sh-echk (sh-status ())))))))))
    (sh-fncall body argv)
@@ -723,7 +721,7 @@
                          _ (sh-dropcaps ())  ; ...and it is inside no capture of ours
                          s (b ())
                          (quit (? (charm? s) s (? (id? <s 'ret) >s 0))))
-              (p < 0) (cmderr "cannot fork")
+              (nom? p) (cmderr "cannot fork")
               (: _ (sh-waitfg [p] (sh-curline ())) (sh-echk (sh-status ()))))))
    ; the roster sh-subback puts back is the subshell's contract, so it has to ride
    ; the raised way out too: a scare under the body would leak the body's cwd, vars,
@@ -746,7 +744,7 @@
                                     (close <e))))
               _ (each opens close)
               s (b ())
-              _ (each saves (\ e (? (>e < 0) (close <e)
+              _ (each saves (\ e (? (nom? >e) (close <e)
                                     (: _ (dup2 >e <e) (close >e)))))
               s)))
 
@@ -947,7 +945,7 @@
                       0)])))
    (sh-capsub a)
      (: pp (pipe 0)
-        (? (charm? pp) (: _ (cmderr "cannot pipe") "")
+        (? (nom? pp) (: _ (cmderr "cannot pipe") "")
            (: rfd <pp wfd >pp
               d (twirl (\ _ (: p (fdopen rfd) t (slurp p) _ (close p) t)) 0)
               _ (flush out)                    ; the bytes already in hand are the caller's
@@ -993,7 +991,7 @@
                     (? (id? ln 'jug) (sh-capjug a)
                        (id? ln 'sub) (sh-capsub a)
                        (: pp (pipe 0)
-                          (? (charm? pp) ""
+                          (? (nom? pp) ""
                              (: rfd <pp wfd >pp
                                 ; guarded: the body's status is this
                                 ; substitution's value, never the shell's own

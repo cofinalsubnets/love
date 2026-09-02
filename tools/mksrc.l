@@ -22,7 +22,7 @@
 
 (? (lit? (from 'holo 'objelf)) (use 'holo) 0) ; splice the assembler when this love is baked; the guard below says so when not
 
-(: (mksrc-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) [1 (s + "")]) ()))
+(: (mksrc-slurp p) (: q (open p "r") (? (hot? q) (: s (slurp q) _ (close q) [1 (s + "")]) ()))
    (mksrc-die m) (: _ (say err ("mksrc: " + m + "\n")) (quit 1))
 
    ; text -> the byte list `raw` takes. Built from the tail so the walk is a tail call

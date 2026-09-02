@@ -1026,7 +1026,7 @@
      (lines (uncont src)) ())
 
    ; read a file whole (for `include`), then split it into classified lines.
-   (slurp-of path) (: q (open path "r") (? q (slurp q) (: _ (say err ("cook: cannot read " + path)) _ (put err 10) (quit 1))))
+   (slurp-of path) (: q (open path "r") (? (hot? q) (slurp q) (: _ (say err ("cook: cannot read " + path)) _ (put err 10) (quit 1))))
    (file-lines ip) (text-lines (slurp-of ip))
 
    ; seed the variable table the way make does: the environment first (every
@@ -1298,7 +1298,7 @@
 
    ; the build file may be named explicitly (the first arg word) or discovered in
    ; the cwd; the seat at the bottom already stripped the program head + -l chain.
-   (exists? p) (: q (open p "r") (? q 1 0))     ; a one-shot probe (the fd dies with the process)
+   (exists? p) (: q (open p "r") (? (hot? q) 1 0))     ; a one-shot probe (the fd dies with the process)
    ; discovery precedence: a love-native recipe file wins over a Makefile -- a
    ; legacy Cards.l first, then a Cookfile, then a Makefile. Only a Makefile-named
    ; file (makefilep) is ever read as make; Cards.l and Cookfile are love source.

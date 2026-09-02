@@ -1,8 +1,8 @@
 ; The writable tree, inle's rung 2 (doc/misc/inle.md): create, mkdir, rmdir, unlink,
 ; rename, chdir/cwd -- plus chmod and utime, which kore's cp and touch ride -- and
 ; the environment (getenv setenv environ), a tablet in the kernel's boot text. The
-; shapes are doc/misc/posix.md's and the host's exactly: an effect answers () | -errno
-; (the host's numbers, negated) | 22 on misuse; a value answers the value | () | -errno.
+; shapes are doc/misc/posix.md's and the host's exactly: an effect answers () ok |
+; an errno nom | 'badarg misuse; a value answers the value | () | a nom | 'badarg.
 ; test/host/fs.l holds sibling laws against the real tree.
 ;
 ; kernel only -- test/kernel/all.l's roster, never $t: on the host these paths are the real
@@ -20,7 +20,7 @@
    e (d + "/e")
  (assert
    ; -- create: `w` under a live directory mints the file; `a` does too --
-   (= 0 (mkdir d 493))
+   !(mkdir d 493)
    (wr f "five!")
    (= "five!" (rd f))
    (= 5 <(stat f))
@@ -31,80 +31,80 @@
    (two? (stat (d + "/b")))
    (! (port? (open "/no-such-dir/x" "w")))      ; an absent parent refuses
    ; -- unlink: the entry leaves the tree; absence and misuse answer the host's way --
-   (= 0 (unlink (d + "/b")))
-   (id? (stat (d + "/b")) ())
-   (unlink (d + "/b") < 0)                      ; gone is a live errno
-   (= -21 (unlink d))                           ; a directory refuses: eisdir
-   (= 22 (unlink 7))                            ; misuse: EINVAL
+   !(unlink (d + "/b"))
+   (id? (stat (d + "/b")) 'enoent)
+   (nom? (unlink (d + "/b")))                   ; gone is a live errno
+   (id? 'eisdir (unlink d))                     ; a directory refuses
+   (id? 'badarg (unlink 7))                     ; misuse
    ; -- mkdir/rmdir: a directory is a thing now, empty and stattable --
-   (= 0 (mkdir e 493))
+   !(mkdir e 493)
    (= 16384 (& 61440 <>>(stat e)))
    (id? (readdir e) ())                         ; empty, told from absent by stat
-   (= -17 (mkdir e 493))                        ; again: EEXIST
-   (= -17 (mkdir "lib" 493))                    ; a baked prefix is a directory too
-   (= -20 (mkdir (f + "/x") 493))               ; under a file: enotdir
-   (= -2 (mkdir "/hole/x" 493))                 ; under a hole: ENOENT
-   (= 22 (mkdir 7 493))
+   (id? 'eexist (mkdir e 493))                  ; again
+   (id? 'eexist (mkdir "lib" 493))             ; a baked prefix is a directory too
+   (id? 'enotdir (mkdir (f + "/x") 493))       ; under a file
+   (id? 'enoent (mkdir "/hole/x" 493))         ; under a hole
+   (id? 'badarg (mkdir 7 493))
    (wr (e + "/k") "y")
-   (= -39 (rmdir e))                            ; occupied: enotempty
-   (= 0 (unlink (e + "/k")))
-   (= 0 (rmdir e))
-   (= -2 (rmdir e))                             ; and gone is ENOENT
-   (= -20 (rmdir f))                            ; a file was never a directory
+   (id? 'enotempty (rmdir e))                   ; occupied
+   !(unlink (e + "/k"))
+   !(rmdir e)
+   (id? 'enoent (rmdir e))                      ; and gone
+   (id? 'enotdir (rmdir f))                     ; a file was never a directory
    ; -- rename: a file moves whole; a target file is replaced under it --
-   (= 0 (rename f (d + "/z")))
-   (id? (stat f) ())
+   !(rename f (d + "/z"))
+   (id? (stat f) 'enoent)
    (= 5 <(stat (d + "/z")))
-   (rename (d + "/ghost") f < 0)                ; a missing source is a live errno
-   (= 22 (rename 7 f))
+   (nom? (rename (d + "/ghost") f))             ; a missing source is a live errno
+   (id? 'badarg (rename 7 f))
    (wr f "yo")
-   (= 0 (rename (d + "/z") f))
+   !(rename (d + "/z") f)
    (= "five!" (rd f))
    ; a directory carries its children, and never moves into itself
-   (= 0 (mkdir (d + "/dd") 493))
+   !(mkdir (d + "/dd") 493)
    (wr (d + "/dd/x") "1")
-   (= 0 (rename (d + "/dd") (d + "/ee")))
+   !(rename (d + "/dd") (d + "/ee"))
    (= "1" (rd (d + "/ee/x")))
-   (id? (stat (d + "/dd")) ())
-   (= -22 (rename d (d + "/in")))              ; a real EINVAL: the sign parts it from the misuse row
+   (id? (stat (d + "/dd")) 'enoent)
+   (id? 'einval (rename d (d + "/in")))        ; a real einval: the name parts it from 'badarg
    ; -- chdir/cwd: the cwd is a kernel string; "/" is the boot seat --
    (= "/" (cwd 0))
-   (= 0 (chdir "lib"))
+   !(chdir "lib")
    (= "/lib" (cwd 0))
    (< 0 (tally (rd "json.l")))                  ; a relative path reads off the cwd
    (member? "json.l" (readdir "."))
-   (= 0 (chdir ".."))
+   !(chdir "..")
    (= "/" (cwd 0))
-   (< (chdir f) 0)                              ; a file is no seat (the negative lane)
-   (< (chdir "/nope") 0)
-   (= -1 (chdir 7))
+   (nom? (chdir f))                             ; a file is no seat
+   (nom? (chdir "/nope"))
+   (id? 'badarg (chdir 7))
    ; -- chmod and utime: the bits and the date land, and stat reads them back --
-   (= 0 (chmod f 384))
+   !(chmod f 384)
    (= 384 (- <>>(stat f) 32768))
-   (= 0 (utime f 1600000000000))
+   !(utime f 1600000000000)
    (= 1600000000000 <>(stat f))
-   (= 0 (utime f ()))
+   !(utime f ())
    (< 1600000000000 <>(stat f))
-   (= 22 (chmod 7 384))
-   (= -2 (chmod (d + "/ghost") 384))
+   (id? 'badarg (chmod 7 384))
+   (id? 'enoent (chmod (d + "/ghost") 384))
    ; -- the environment: a tablet behind the host's three doors --
    (id? (getenv "WFS") ())                      ; unset is the real ()
-   (= 0 (setenv "WFS" "1"))
+   !(setenv "WFS" "1")
    (= "1" (getenv "WFS"))
-   (= 0 (setenv "WFS" "2"))                  ; a re-set replaces: still one row
+   !(setenv "WFS" "2")                  ; a re-set replaces: still one row
    (= "2" (getenv "WFS"))
    (member? "WFS=2" (environ 0))
-   (= 0 (setenv "WFS2" "x"))
+   !(setenv "WFS2" "x")
    (= 2 (tally (environ 0)))
-   (= 0 (setenv "WFS2" ()))                  ; a non-string value unsets
+   !(setenv "WFS2" ())                  ; a non-string value unsets
    (id? (getenv "WFS2") ())
    (= 1 (tally (environ 0)))
-   (= 22 (setenv 7 "x"))
+   (id? 'badarg (setenv 7 "x"))
    (id? (getenv 7) ())
    ; -- and the tree (and the tablet) go back the way they came --
-   (= 0 (setenv "WFS" ()))
-   (= 0 (unlink f))
-   (= 0 (unlink (d + "/ee/x")))
-   (= 0 (rmdir (d + "/ee")))
-   (= 0 (rmdir d))
-   (id? (stat d) ())))
+   !(setenv "WFS" ())
+   !(unlink f)
+   !(unlink (d + "/ee/x"))
+   !(rmdir (d + "/ee"))
+   !(rmdir d)
+   (id? (stat d) 'enoent)))

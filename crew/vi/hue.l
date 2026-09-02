@@ -274,7 +274,7 @@
    (hue-rows x)
     (: h (getenv "HOME")
        q (? (string? h) (open (h + hue-theme-file) "r") ())
-       (? q (: t (slurp q)
+       (? (hot? q) (: t (slurp q)
                (go x acc) (: r (sound x)
                               (? (two? r) (go >r (<r >< acc)) (rev acc)))
                rs (go t ())

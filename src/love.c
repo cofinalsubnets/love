@@ -145,6 +145,38 @@ char const *ai_nif_name(intptr_t x) {
  for (uintptr_t i = 0; i < countof(def1); i++) if (def1[i].x == x) return def1[i].n;
  return 0; }
 
+// the canonical (linux) errno numbering, lowercase -- the spellings ai_ini_0
+// interns into g->errs. 41 and 58 are blanks in the numbering itself; a kernel
+// row with no canonical concept translates to 41 (os.c), which lands 'eunknown.
+static struct { short v; char n[16]; } const ai_errnames[] = {
+ {0,"eunknown"}, {-1,"badarg"}, {1,"eperm"}, {2,"enoent"}, {3,"esrch"},
+ {4,"eintr"}, {5,"eio"}, {6,"enxio"}, {7,"e2big"}, {8,"enoexec"},
+ {9,"ebadf"}, {10,"echild"}, {11,"eagain"}, {12,"enomem"}, {13,"eacces"},
+ {14,"efault"}, {15,"enotblk"}, {16,"ebusy"}, {17,"eexist"}, {18,"exdev"},
+ {19,"enodev"}, {20,"enotdir"}, {21,"eisdir"}, {22,"einval"}, {23,"enfile"},
+ {24,"emfile"}, {25,"enotty"}, {26,"etxtbsy"}, {27,"efbig"}, {28,"enospc"},
+ {29,"espipe"}, {30,"erofs"}, {31,"emlink"}, {32,"epipe"}, {33,"edom"},
+ {34,"erange"}, {35,"edeadlk"}, {36,"enametoolong"}, {37,"enolck"}, {38,"enosys"},
+ {39,"enotempty"}, {40,"eloop"}, {42,"enomsg"}, {43,"eidrm"}, {44,"echrng"},
+ {45,"el2nsync"}, {46,"el3hlt"}, {47,"el3rst"}, {48,"elnrng"}, {49,"eunatch"},
+ {50,"enocsi"}, {51,"el2hlt"}, {52,"ebade"}, {53,"ebadr"}, {54,"exfull"},
+ {55,"enoano"}, {56,"ebadrqc"}, {57,"ebadslt"}, {59,"ebfont"}, {60,"enostr"},
+ {61,"enodata"}, {62,"etime"}, {63,"enosr"}, {64,"enonet"}, {65,"enopkg"},
+ {66,"eremote"}, {67,"enolink"}, {68,"eadv"}, {69,"esrmnt"}, {70,"ecomm"},
+ {71,"eproto"}, {72,"emultihop"}, {73,"edotdot"}, {74,"ebadmsg"}, {75,"eoverflow"},
+ {76,"enotuniq"}, {77,"ebadfd"}, {78,"eremchg"}, {79,"elibacc"}, {80,"elibbad"},
+ {81,"elibscn"}, {82,"elibmax"}, {83,"elibexec"}, {84,"eilseq"}, {85,"erestart"},
+ {86,"estrpipe"}, {87,"eusers"}, {88,"enotsock"}, {89,"edestaddrreq"}, {90,"emsgsize"},
+ {91,"eprototype"}, {92,"enoprotoopt"}, {93,"eprotonosupport"}, {94,"esocktnosupport"}, {95,"enotsup"},
+ {96,"epfnosupport"}, {97,"eafnosupport"}, {98,"eaddrinuse"}, {99,"eaddrnotavail"}, {100,"enetdown"},
+ {101,"enetunreach"}, {102,"enetreset"}, {103,"econnaborted"}, {104,"econnreset"}, {105,"enobufs"},
+ {106,"eisconn"}, {107,"enotconn"}, {108,"eshutdown"}, {109,"etoomanyrefs"}, {110,"etimedout"},
+ {111,"econnrefused"}, {112,"ehostdown"}, {113,"ehostunreach"}, {114,"ealready"}, {115,"einprogress"},
+ {116,"estale"}, {117,"euclean"}, {118,"enotnam"}, {119,"enavail"}, {120,"eisnam"},
+ {121,"eremoteio"}, {122,"edquot"}, {123,"enomedium"}, {124,"emediumtype"}, {125,"ecanceled"},
+ {126,"enokey"}, {127,"ekeyexpired"}, {128,"ekeyrevoked"}, {129,"ekeyrejected"}, {130,"eownerdead"},
+ {131,"enotrecoverable"}, {132,"erfkill"}, {133,"ehwpoison"} };
+
 static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, void*, size_t)) {
  memset(g, 0, sizeof(struct ai));      // the core needs no leading ap: () is the const ZeroPoint, never (word)g
  g->len = len0, g->alloc = al;
@@ -227,10 +259,23 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
 #endif
   if (ai_ok(g = intern(ai_strof(g, AiArch))))
    g = ai_pop(ai_defv(g, "love-arch"), 1);
+  // the errno vocabulary (g->errs): canonical number -> its nom, all interned
+  // here so no error path ever allocates. ai_err reads it; 0 is 'eunknown, the
+  // answer for the numbering's blanks, and -1 'badarg, the refused-before-any-
+  // syscall answer -- neither is a posix name, so neither can shadow one.
+  if (ai_ok(g = map_new(g))) {
+   for (uintptr_t n = countof(ai_errnames); ai_ok(g) && n--;)
+    g = ai_mapput(ai_push(intern(ai_strof(g, ai_errnames[n].n)), 1, putcharm(ai_errnames[n].v)));
+   if (ai_ok(g)) g->errs = ai_pop1(g); }
   // the 'missing tag needs nothing here (the raise sites mint it); the reader owns
   // no operator tables -- book['operators] is seeded by the prel and factored at compile time
  }
  return g; }
+
+ai_word ai_err(struct ai *g, int e) {
+ g = ai_core_of(g);
+ word v = ai_mapget(g, 0, putcharm(e), g->errs);
+ return v ? v : ai_mapget(g, 0, zero, g->errs); }
 
 struct ai *ai_ini_m(void *(*al)(struct ai*, void*, size_t)) {
  uintptr_t const len0 = ai_minor0;   // initial minor pool; grows on demand (gen_grow)

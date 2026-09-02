@@ -17,7 +17,7 @@
 
 (? (lit? (from 'holo 'objelf)) (use 'holo) 0) ; splice the assembler when this love is baked
 
-(: (mkblob-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) [1 (s + "")]) ()))
+(: (mkblob-slurp p) (: q (open p "r") (? (hot? q) (: s (slurp q) _ (close q) [1 (s + "")]) ()))
    (mkblob-die m) (: _ (say err ("mkblob: " + m + "\n")) (quit 1))
 
    ; text -> the byte list `raw` takes, built from the tail so the walk is a tail call

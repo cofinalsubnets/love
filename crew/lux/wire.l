@@ -253,7 +253,7 @@
        (go 0))
    (xauth-cookie path disp)
     (: p (open path "r")
-       (p ? (: b (slurp p) _ (close p) (xauth-parse b disp))))
+       (hot? p ? (: b (slurp p) _ (close p) (xauth-parse b disp))))
 
    ; --- the event decoder: one 32-byte event -> (code detail window state) | ()
    ;     code 0 = X error (window is garbage). window at byte 8, state at byte 28,

@@ -191,7 +191,7 @@
                    (id? t 'deflist) (foldl (+) "" (map (\ it (itext <it + itext <>it)) <>b))
                    ""))
    (dtext d) (foldl (+) "" (map btext d))
-   (slurpf f) (: q (open f "r") (? q (slurp q) ""))
+   (slurpf f) (: q (open f "r") (? (hot? q) (slurp q) ""))
    _ (map (\ f (: src (slurpf f)
                   head (foldl (+) "" (ldoc-head src))
                   d (mdread (ldoc-md src))
@@ -238,7 +238,7 @@
 ; and the whole of it through the lens: a real header comes out as a document with
 ; a heading its sections hang off, which is what papel reads a page's title,
 ; anchors and contents nav from.
-(: (rd f) (: q (open f "r") (? q (slurp q) ""))
+(: (rd f) (: q (open f "r") (? (hot? q) (slurp q) ""))
    (nth l k) (? (k = 0) <l (nth >l (k - 1)))
    d (mdread ("# crew/lapiz/lapiz.l\n\n" + ldoc-md (rd "crew/lapiz/lapiz.l")))
    heads (filter (\ b (id? <b 'head)) d)

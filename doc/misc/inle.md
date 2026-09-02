@@ -60,10 +60,10 @@ no edit. What is still written fresh is the nif BODIES, and `doc/misc/plan/inle-
 plan for retiring that: `src/sys.c` answers `__ai_sys`, so nolibc — and everything written
 against it, `src/posix.c` included — can stand on this kernel instead of a hosted one.
 
-⚠ **The conventions are `doc/misc/posix.md`'s, exactly.** An effect answers `0` | `-errno` |
-EINVAL on misuse; a value answers the value | `()` absence | `-errno`. `stat` answers `(size mtime-ms mode ns)`.
-Divergence here is worse than absence — kore reads these shapes and a wrong one is silent.
-⚠ **`0` and `-errno` are both falsey**, so a caller asks `e = 0` — never `!e`, never `? e`.
+⚠ **The conventions are `doc/misc/posix.md`'s, exactly.** An effect answers `()` | an errno
+nom | `'badarg` on misuse; a value answers the value | `()` absence | a nom. `stat` answers
+`(size mtime-ms mode ns)`. Divergence here is worse than absence — kore reads these shapes
+and a wrong one is silent. `!e` is the success test; the k_* C faces below stay 0-or-negative.
 
 ## the ladder
 
@@ -164,8 +164,9 @@ pairs on slot 0 behind the host's three doors.
 * **rename carries a directory whole**: every live path at or under the prefix is respelled, the
   copies staged before any commit so a refused allocation leaves the tree untouched; a file lane
   replaces a target file under itself; `a` → `a/b` is EINVAL.
-* **The errno are the host's, by number** (moon's own `<errno.h>`, no errno variable) — kore
-  reads them back, and mv's EXDEV lane proves a shape can matter.
+* **The errno are the host's, by number** (moon's own `<errno.h>`, no errno variable) at the
+  C seams; love names them (`ai_err`) — kore reads the noms back, and mv's `'exdev` lane
+  proves a shape can matter.
 * ⚠ **Compile-time folding bit the gate, instructively.** A kore main folds its `quit` global at
   *its* compile, and `test/00-init.l`'s absent-nif fallback answers `()` — so the identity
   `quit` must be pinned **before** the crew cat loads (`test/kernel/kore0.l`), or every exit

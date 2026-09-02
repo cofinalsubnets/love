@@ -28,8 +28,8 @@
 
 (: cpioc-usage "usage: cpio {-o|-i|-t} [-H newc] [-dutv] [-F|-I|-O FILE] [--quiet]"
    (cpioc-moan m) (: _ (say err ("cpio: " + m)) _ (put err 10) (flush err))
-   (cpioc-slurp p) (: q (open p "r") (q && (: s (slurp q) _ (close q) [1 (s + "")])))
-   (cpioc-blurt p s) (: q (open p "w") (q && (: _ (say q s) _ (close q) 1)))
+   (cpioc-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) [1 (s + "")])))
+   (cpioc-blurt p s) (: q (open p "w") (hot? q && (: _ (say q s) _ (close q) 1)))
    (cpioc-blocks t n)                       ; GNU's parting word, on err, in 512s
     (? (peep t 'quiet 0) 0
        (: k ((n + 512 - 1) // 512)

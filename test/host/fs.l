@@ -4,8 +4,8 @@
 ; still runs standalone against the built binary, like test/host/init.l --
 ; not in test/*.l. Run (assert comes from test/00-init.l):
 ;   cat test/00-init.l test/host/fs.l | out/host/love
-; the conventions under test are src/posix.c's posix_ lane: an effect op answers ()
-; ok | -errno | EINVAL misuse; a value op answers the value | () | -errno.
+; the conventions under test are src/posix.c's posix_ lane: an effect op answers
+; () ok | an errno nom | 'badarg misuse; a value op answers the value | () | a nom.
 
 (: d "out/.fs-nif-smoke"
    a (+ d "/a") b (+ d "/b") l (+ d "/l")
@@ -15,37 +15,37 @@
 
    ; rename: the file moves whole -- old gone, new wears the same size
    _ (assert
-       (= 0 (rename a b))                           ; ok is the charm 0, not ()
-       (id? (stat a) ()) (= 5 (cap (stat b)))
-       (rename a (+ d "/x") < 0)                    ; a missing source is a live errno
-       (= 22 (rename 7 b)))                         ; EINVAL misuse: a non-string path
+       !(rename a b)                                ; ok is ()
+       (id? (stat a) 'enoent) (= 5 (cap (stat b)))
+       (id? 'enoent (rename a (+ d "/x")))          ; a missing source is a live errno
+       (id? 'badarg (rename 7 b)))                  ; misuse: a non-string path
 
    ; symlink + readlink: path becomes a link to target -- and the target string
    ; resolves relative to the link's directory, so a link beside its file names
    ; it bare. readlink answers that string verbatim; on a non-link (or a miss)
    ; it is nothing. stat follows the link, so through l it sees the file whole.
    _ (assert
-       (= 0 (symlink "b" l))
+       !(symlink "b" l)
        (= (readlink l) "b")
        (= 5 (cap (stat l))) (= 32768 (& 61440 (cauup (stat l))))
-       (id? (readlink b) ()) (id? (readlink (+ d "/nope")) ()))
+       (id? (readlink b) 'einval) (id? (readlink (+ d "/nope")) 'enoent))
 
    ; chmod: the permission bits land exactly (0600 = 384); utime: the mtime
    ; lands on the stat scale (MILLISECONDS), and a non-charm ms reads "now"
    _ (assert
-       (= 0 (chmod b 384))
+       !(chmod b 384)
        (= 384 (- (cauup (stat b)) 32768))
-       (= 0 (utime b 1600000000000))
+       !(utime b 1600000000000)
        (= 1600000000000 (caup (stat b)))
-       (= 0 (utime b ()))
+       !(utime b ())
        (< 1600000000000 (caup (stat b)))            ; "now" is later than the pinned past
-       (chmod (+ d "/nope") 384 < 0)                ; a miss is a live errno
-       (= 22 (chmod b "rw")))                       ; EINVAL misuse: a non-charm mode
+       (id? 'enoent (chmod (+ d "/nope") 384))      ; a miss is a live errno
+       (id? 'badarg (chmod b "rw")))                ; misuse: a non-charm mode
 
    ; chown: a no-op self-chown succeeds (-1 -1 leaves both ids alone); misuse einvals
    _ (assert
-       (= 0 (chown b -1 -1))
-       (= 22 (chown b "x" 0)))
+       !(chown b -1 -1)
+       (id? 'badarg (chown b "x" 0)))
 
    ; umask: always answers the previous mask, so set-read-restore round-trips
    _ (: m0 (umask 18)
@@ -55,26 +55,26 @@
    _ (: e (+ d "/sub")
         _ (mkdir e 493)
         (assert
-          (rmdir d < 0)                              ; d holds b and l still: not empty
-          (= 0 (rmdir e))
-          (id? (stat e) ())
-          (rmdir e < 0)                              ; already gone: a live errno
-          (= 22 (rmdir 7))))
+          (id? 'enotempty (rmdir d))                 ; d holds b and l still
+          !(rmdir e)
+          (id? (stat e) 'enoent)
+          (id? 'enoent (rmdir e))                    ; already gone: a live errno
+          (id? 'badarg (rmdir 7))))
 
    ; hardlink: two names, one file -- content shows through both, and the
    ; survivor keeps it when the first name unlinks
    _ (: h (+ d "/h")
         _ (unlink h)
         (assert
-          (= 0 (hardlink b h))
+          !(hardlink b h)
           (= 5 (cap (stat h)))
-          (hardlink b h < 0)                         ; the name is taken: EEXIST
+          (id? 'eexist (hardlink b h))               ; the name is taken
           (: _ (unlink b) (= 5 (cap (stat h))))
-          (= 0 (unlink h))))
+          !(unlink h)))
 
-   ; copyfile: a VALUE op, so it answers the byte count and encodes errno negative.
-   ; an empty source answers 0 -- a falsy success, which is why every caller tests
-   ; the sign and never the truth.
+   ; copyfile: a value op -- the byte count, or the failure's nom. an empty source
+   ; answers 0, a falsy success, which is why every caller asks charm? and never
+   ; the truth.
    _ (: c (+ d "/c") z (+ d "/z")
         _ (: p (open c "w") _ (say p "five!") (close p))
         _ (: p (open z "w") (close p))
@@ -82,10 +82,10 @@
           (= 5 (copyfile c (+ d "/c2")))
           (= 5 (cap (stat (+ d "/c2"))))
           (= 0 (copyfile z (+ d "/z2")))            ; empty in, empty out, and 0 is the count
-          (= -2 (copyfile (+ d "/nope") (+ d "/c3")))
-          (= -1 (copyfile 7 c))                     ; misuse: a non-string path
-          (= 0 (unlink c)) (= 0 (unlink z))
-          (= 0 (unlink (+ d "/c2"))) (= 0 (unlink (+ d "/z2")))))
+          (id? 'enoent (copyfile (+ d "/nope") (+ d "/c3")))
+          (id? 'badarg (copyfile 7 c))              ; misuse: a non-string path
+          !(unlink c) !(unlink z)
+          !(unlink (+ d "/c2")) !(unlink (+ d "/z2"))))
 
    ; selfpath: the running binary's own path, the seat every library walk starts
    ; from. no cwd and no argv here -- an absolute path at a real regular file is
@@ -99,11 +99,11 @@
 
    ; the OS roster: the linux lane is compiled in, not its stub. a lost
    ; __linux__ predefine compiles posix.c's lanes out in silence, so probe one:
-   ; the stub always answers enosys (38), the real mount answers the call's own
+   ; the stub always answers 'enosys, the real mount answers the call's own
    ; errno (nobody mounts "" on / as no-such-fs). sigfd's twin assert lives in
    ; test/host/sh.l. forks on the OS when a second one joins.
    _ (: e (mount "" "/" "no-such-fs")
-        (assert (charm? e) (e != 38)))
+        (assert (nom? e) (! (id? e 'enosys))))
 
    _ (unlink l) _ (unlink b)
    _ (test_fin ())

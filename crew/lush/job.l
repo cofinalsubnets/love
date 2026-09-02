@@ -96,7 +96,7 @@
         _ (? (sh-sigport ()) (close (sh-sigport ())) 0)
         _ (pin sh-sigport () 0)
         _ (sigclear 0)
-        _ (? (two? ns) (: p (sigfd ns) (? p (pin sh-sigport () p) 0)) 0)
+        _ (? (two? ns) (: p (sigfd ns) (? (hot? p) (pin sh-sigport () p) 0)) 0)
         0)
    (sh-disarm _)                               ; a forked child inherits neither
      (: _ (? (sh-sigport ()) (close (sh-sigport ())) 0)
@@ -173,14 +173,14 @@
      (: n (1 + (sh-njob ())) _ (pin sh-njob () n) _ (pin sh-jobs n [pids state cmd]) n)
    (sh-jobline n j)
      ("[" + ((show n) + ("] " + ((show (sh-nth j 1)) + ("  " + ((sh-nth j 2) + "\n"))))))
-   (sh-stopped? sts) (foldl (\ a x (? a a (255 < x))) 0 sts)
+   (sh-stopped? sts) (foldl (\ a x (? a a (charm? x && 255 < x))) 0 sts)
    ; wait a foreground job; a stop registers + reports it instead of hanging the prompt
    (sh-waitfg pids cmd)
      (: sts (map (\ p (wait p)) pids)
         _   (sh-sigdrain 0)                            ; POSIX: after the command, not during
         _   (? (sh-tty ()) (ttyfg 0) 0)                ; the shell takes the terminal back
         _   (pin sh-status ()                          ; $?: the last stage; a stop folds to 128+sig
-             (: st (last sts) (? (charm? st && (255 < st)) (st - 128) st)))
+             (: st (last sts) (? (charm? st && (255 < st)) (st - 128) (charm? st) st 127)))
         (? (sh-stopped? sts)
            (: n (sh-addjob pids 'stopped cmd)
               _ (puts (sh-jobline n (sh-jobs n))) 0)

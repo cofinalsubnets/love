@@ -34,7 +34,7 @@
                  nm <rq
                  (? (< 0 (tally nm))
                     (: q (open nm "w")
-                       (? q (: _ (say q (unlines (s2 'lines))) _ (close q)
+                       (? (hot? q) (: _ (say q (unlines (s2 'lines))) _ (close q)
                                _ (pin s2 'dirty ())
                                (vmsg s2 (+ nm " written")))
                           (: _ (pin s2 'quit ())          ; a failed wq must not quit
