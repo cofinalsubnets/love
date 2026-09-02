@@ -84,15 +84,23 @@
    (thumb-alu-rrr base d a b)                                 ; hw1 = base|Rn(a); hw2 = Rd<<8 | Rm(b)
       (: dn (rn d) an (rn a) bn (rn b) (t32 (((base | an) << 16) | ((dn << 8) | bn))))
    ;; add/sub #imm12 via addw/subw (T4): a plain 12-bit unsigned; a negative flips the op.
+   ;; a wider one chunks in 4095-byte steps, v6m's own answer for a big frame -- these write
+   ;; no flags, so the steps accumulate freely, and only the first reads a (the rest read d).
    (thumb-addsub-imm op d a imm)
       (: pos (? (imm < 0) -imm imm)
          fop (? (imm < 0) (op @ 'add 'sub 'sub 'add op) op)
-         _   (? (pos <= 4095) 0 (scare 'imm12-range imm))
          base (fop @ 'add 0xF200 0xF2A0)                   ; addw / subw hw1 base
-         dn (rn d) an (rn a)
-         hw1 (base | ((((pos >> 11) & 1) << 10) | an))         ; i = imm12 bit 11
-         hw2 ((((pos >> 8) & 7) << 12) | ((dn << 8) | (pos & 255)))   ; imm3, Rd, imm8
-         (t32 ((hw1 << 16) | hw2)))
+         dn (rn d)
+         (one src k)
+          (: an (rn src)
+             hw1 (base | ((((k >> 11) & 1) << 10) | an))         ; i = imm12 bit 11
+             hw2 ((((k >> 8) & 7) << 12) | ((dn << 8) | (k & 255)))   ; imm3, Rd, imm8
+             (t32 ((hw1 << 16) | hw2)))
+         (chunks p src acc)
+          (? (p <= 0) acc
+             (: c (? (4095 < p) 4095 p)
+                (chunks (p - c) d (acc + one src c))))
+         (? (pos <= 4095) (one a pos) (chunks pos a ())))
    (thumb-aluop op d a b)
       (: base (peep thumb-alu op 0)
          (? (reg? b) (thumb-alu-rrr base d a b)

@@ -230,8 +230,18 @@
    ;; arrives canonical from gen.l ((div r1 r1 r0), (rem r1 r1 r0 r3), &c) and the op is declared to
    ;; clobber r0..r3 (gen.l's rdsp), so the routine owns all four scratch regs. branch offsets are
    ;; fixed within the blob (like t1-set's branch-over) -- no labels, so many div sites never collide.
-   (t1-div-shape d a b)   ; the canonical arrival is all this backend lowers; anything else is loud
-      (reg-eq d 'r1 && reg-eq a 'r1 && reg-eq b 'r0 ? 0 (scare 'div-operands [d a b]))
+   ;; the routine is a fixed blob owning r0..r3: dividend in r1, divisor in r0, quotient out in
+   ;; r1. the NEUTRAL div pins none of the three -- amd64's own emitter stages the same way, and
+   ;; the three-address sdivs take any pair -- so the passes rename them soundly and this stages
+   ;; rather than refusing. r0 and r1 are the targets, so their old values are free scratch, and
+   ;; only a true swap needs r2, which the blob owns anyway.
+   (t1-mv d s) (? (reg-eq d s) () (t1-movr d s))   ; a self-mov is no staging at all
+   (t1-div-in a b)                                 ; -> the staging prefix, or ()
+      (? (reg-eq a 'r0 && reg-eq b 'r1)            ; the true swap: r2 holds a across it
+          (catall [(t1-movr 'r2 a) (t1-movr 'r0 b) (t1-movr 'r1 'r2)])
+         (reg-eq a 'r0) (t1-mv 'r1 a + t1-mv 'r0 b)   ; a rides r0: land it before r0 is written
+         (t1-mv 'r0 b + t1-mv 'r1 a))
+   (t1-div-out d) (t1-mv d 'r1)
    ;; udivmod core: N=r1 (dividend), D=r0 (divisor) -> quotient r1, remainder r2 (D kept, r3 spent).
    ;; 32 restoring steps: LSLS shifts N left leaving old bit31 in carry, adcs folds it into R (=R<<1|c);
    ;; blo skips the subtract when R<D. verified byte-exact vs llvm-mc (thumbv6m); the two branches are
@@ -248,22 +258,24 @@
                (t16 0x4051) (t16 0x1A89)       ; eors r1,r1,r2 ; subs r1,r1,r2  -> |a|
                (t16 0x4058) (t16 0x1AC0)])     ; eors r0,r0,r3 ; subs r0,r0,r3  -> |b|
    ;; unsigned: udiv leaves the quotient in r1 already; urem copies the remainder r2 -> r1.
-   (t1-udiv d a b)   (: _ (t1-div-shape d a b) (t1-udivmod ()))
-   (t1-urem d a b t) (: _ (t1-div-shape d a b) (catall [(t1-udivmod ()) (t16 0x0011)]))   ; movs r1,r2
+   (t1-udiv d a b)   (t1-div-in a b + t1-udivmod () + t1-div-out d)
+   (t1-urem d a b t) (t1-div-in a b + catall [(t1-udivmod ()) (t16 0x0011)] + t1-div-out d)   ; movs r1,r2
    ;; signed: abs, run unsigned, re-apply the sign. quotient's sign = sa^sb; remainder's = sa
    ;; (C truncates toward zero, so the remainder follows the dividend). the sign mask rides the
    ;; stack across the loop (which spends r2/r3); (x^m)-m negates when m=-1, is identity when m=0.
    (t1-div d a b)
-      (: _ (t1-div-shape d a b)
-         (catall [(t1-sabs ()) (t16 0x405A)    ; eors r2,r2,r3 -> qsign = sa^sb
-                  (t1-push 'r2) (t1-udivmod ()) (t1-pop 'r3)
-                  (t16 0x4059) (t16 0x1AC9)]))   ; eors r1,r1,r3 ; subs r1,r1,r3
+      (t1-div-in a b
+       + catall [(t1-sabs ()) (t16 0x405A)         ; eors r2,r2,r3 -> qsign = sa^sb
+                 (t1-push 'r2) (t1-udivmod ()) (t1-pop 'r3)
+                 (t16 0x4059) (t16 0x1AC9)]        ; eors r1,r1,r3 ; subs r1,r1,r3
+       + t1-div-out d)
    (t1-rem d a b t)
-      (: _ (t1-div-shape d a b)
-         (catall [(t1-sabs ())                 ; sa already in r2
-                  (t1-push 'r2) (t1-udivmod ()) (t1-pop 'r3)
-                  (t16 0x0011)                 ; movs r1,r2  -> |rem|
-                  (t16 0x4059) (t16 0x1AC9)]))   ; eors r1,r1,r3 ; subs r1,r1,r3
+      (t1-div-in a b
+       + catall [(t1-sabs ())                      ; sa already in r2
+                 (t1-push 'r2) (t1-udivmod ()) (t1-pop 'r3)
+                 (t16 0x0011)                      ; movs r1,r2  -> |rem|
+                 (t16 0x4059) (t16 0x1AC9)]        ; eors r1,r1,r3 ; subs r1,r1,r3
+       + t1-div-out d)
 
    ;; la (part 2): the literal-pool LOAD. v6-M has no MOVW/MOVT to build an address, so gen.l expands
    ;; (la Rd lbl) into (align 4) (lapool Rd) (raw ((fix 4 abs32 lbl 0))) -- the pooled address word sits
