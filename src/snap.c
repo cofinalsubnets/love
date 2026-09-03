@@ -728,8 +728,6 @@ static void img_hashcons(struct ai *g) {
 #define Why(n) ((void) (bad ? bad->why = (n) : 0))   // the step a refusal stopped at
 static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *bad,
                        uintptr_t *outnw, char **cseg, uintptr_t *ncode) {
- Why(1);
- if (!g->major_pool) return NULL;                        // needs the major pool (it holds the compacted live half)
  ai_core_of(g)->io = NULL;                               // clear the non-deterministic fd before the bake
  Why(2);
  if (!ai_ok(gen_major(g, 0, NULL))) return NULL;                  // compact: live half -> [major_base, major_hp) (oom -> no image)
@@ -923,7 +921,10 @@ struct ai *img_wake(void const *buf, uintptr_t len, void *(*al)(struct ai*, void
  // the one reading that would make a good image look foreign and fall silently back to the egg.
  if (len < sizeof H + db + ns + H.ncode) return NULL;             // truncated buffer
  struct ai *g = ai_ini_m(al);
- if (!g) return NULL;
+ if (!ai_ok(g)) {                    // a refused ini answers a tagged core, never NULL
+  struct ai *c = ai_core_of(g);
+  if (c) al(c, c, 0);
+  return NULL; }
  if (nw > g->major_len) {                                // grow the major pool to fit the image
   g->alloc(g, g->major_pool, 0);
   // the slack is what the nursery ramps into, and it must CLEAR the nursery: a minor is
@@ -934,10 +935,9 @@ struct ai *img_wake(void const *buf, uintptr_t len, void *(*al)(struct ai*, void
   // untouched until the ramp wants them.
   g->major_len = nw + (nw >> 1) + (1u << 19);
   g->major_pool = g->major_base = g->alloc(g, NULL, 2 * g->major_len * sizeof(word));
-  if (!g->major_pool) return NULL;
+  if (!g->major_pool) goto no;
  }
  word *base = g->major_base;
- if (!base) return NULL;
  g->major_hp = base + nw;
  // a distance, never two addresses: the two symbols shift together under ASLR, so storing
  // where they landed would write this run's mmap base into the header and no bake could be
@@ -947,29 +947,29 @@ struct ai *img_wake(void const *buf, uintptr_t len, void *(*al)(struct ai*, void
  // or not: an index means whatever this binary's tables say, so a foreign build reads the
  // same words as other functions.
  if ((intptr_t)((word) &ai_image_save - (word) image_immortals) != (intptr_t) H.anchor)
-  return NULL;                                                                   // a different binary -> normal boot
+  goto no;                                                                       // a different binary -> normal boot
  // expand the token stream into the pool, then decode it there in place. the two passes
  // read and write one word at a time at the same index, so src and base are the same array
  // -- and a payload word arrives already seated, which is why the flat-leaf memcpys are gone.
  unsigned char const *p0 = (unsigned char const*) buf + sizeof H + db,
                      *q = img_expand(base, nw, p0, p0 + ns, (word const*)((char const*) buf + sizeof H));
- if (!q || q != p0 + ns) return NULL;                          // an image consumes its stream exactly
+ if (!q || q != p0 + ns) goto no;                              // an image consumes its stream exactly
  // the natives' code, seated before the walk names it: a chunk of the arena, sealed
  char *code = NULL;
  if (H.ncode) {
   unsigned char const *p = (unsigned char const*) buf + sizeof H + db + ns;
   uintptr_t craw;
-  if (H.ncode < CodeSegHead) return NULL;
+  if (H.ncode < CodeSegHead) goto no;
   craw = (uintptr_t) ((uint64_t const*) p)[0];
   if (((uint64_t const*) p)[1]) {                        // deflated: inflate, then adopt the blobs
    unsigned char *t = g->alloc(g, NULL, craw);
-   if (!t) return NULL;
+   if (!t) goto no;
    if (ai_inflate_raw(p + CodeSegHead, H.ncode - CodeSegHead, t, craw) != (intptr_t) craw) {
-    g->alloc(g, t, 0); return NULL; }
+    g->alloc(g, t, 0); goto no; }
    code = code_adopt(g, (char const*) t, craw);
    g->alloc(g, t, 0); }
   else code = code_adopt(g, (char const*) p + CodeSegHead, craw);
-  if (!code) return NULL; }
+  if (!code) goto no; }
  word const *src = base;
  for (uintptr_t off = 0; off < nw; ) {
   uintptr_t sz;
@@ -989,14 +989,14 @@ struct ai *img_wake(void const *buf, uintptr_t len, void *(*al)(struct ai*, void
    word term = (word)(off * sizeof(word) + ai_thread_tag); uintptr_t k = 1;
    uintptr_t kmax = nw - off;                                                     // bound the walk: a mis-decoded word0 must refuse
    for (;; k++) {                                                                 // one pass, decoding to the terminator (rung 2):
-    if (k >= kmax) return NULL;                                                   // the load, never march off the pool (on metal the                                               // the load, never march off the pool (on metal the
+    if (k >= kmax) goto no;                                                       // the load, never march off the pool (on metal the
     if (s[k] == term) break;                                                      // pool's edge is a dead bus, and a dead bus is mute)
     base[off + k] = (word) img_decode((intptr_t) s[k], base, code); }
    base[off + k] = (word) p + ai_thread_tag;                                      // the terminator, decoded by hand: its head went live
    sz = k + 1; }
   off += sz; }
  uintptr_t nv = (word*) g->end - (word*) &g->v0;                         // same struct/binary (anchor-checked) -> same layout
- if (H.nroot != 2 + nv) return NULL;                                     // root count mismatch -> stale/foreign image -> normal boot
+ if (H.nroot != 2 + nv) goto no;                                         // root count mismatch -> stale/foreign image -> normal boot
  g->symbols = image_root_dec(H.root_tag[0], H.root_val[0], base);
  g->tasks   = (union u*) image_root_dec(H.root_tag[1], H.root_val[1], base);
  // the parked ring is not in the image: an fd means nothing in a new process,
@@ -1016,7 +1016,11 @@ struct ai *img_wake(void const *buf, uintptr_t len, void *(*al)(struct ai*, void
  // and a woken runtime already knows how much it will be scanning past.
  uintptr_t want = nw >> 1;
  if (want > (uintptr_t) g->len) { struct ai *h = gen_grow(g, want); if (ai_ok(h)) g = h; }
- return g; }
+ return g;
+ // a refused wake owns a whole runtime: the rem set and the major pool ride g->alloc,
+ // and the caller's fallback builds its own. the code chunk is sealed text and stays.
+no:
+ return ai_fin(g), NULL; }
 
 struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai*, void*, size_t)) {
  return img_wake(buf, len, al); }

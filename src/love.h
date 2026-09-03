@@ -373,8 +373,8 @@ struct ai
 // plus that object's hot). answer 0 and the dump refuses.
 // a refused dump names its first offenders: (heap word offset, the value, that object's ap).
 // output only, and NULL asks for none -- port/mps2 prints them where there is no debugger.
-// `why` names the step that refused: 1 no major pool, 2 the compaction scared, 3 out of
-// memory, 4 an unencodable heap word, 5 the root table is too small, 6 an unencodable root,
+// `why` names the step that refused: 2 the compaction scared, 3 out of memory, 4 an
+// unencodable heap word, 5 the root table is too small, 6 an unencodable root,
 // 8 the heap outgrew the lane floor, 9 the stack was not quiescent, 10 no room for the
 // serial ranks, 11 the rank walk ran out; 0 on the way out.
 struct ai_image_bad { uintptr_t q[3 * 2]; int n, why; };
