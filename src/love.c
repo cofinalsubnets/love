@@ -74,6 +74,7 @@ enum ai_status ai_fin(struct ai *g) {
  enum ai_status s = ai_code_of(g);
  if ((g = ai_core_of(g))) {
    for (struct ai_fz *fz = g->fz; fz; fz->fn(g, fz->p), fz = fz->next); // run finalizers
+   code_fin(g);                                 // ..then the native arena they hand blobs back to
    // the rem set and the major pool are ai_ini_0's own g->alloc calls, not room inside
    // the nursery -- a frontend that exits never misses them, one that fins to make room
    // for the next runtime gets nothing back without this.
@@ -1047,6 +1048,11 @@ static lvm(lvm_casknew) {
 // size takes it. on inle -- one hosted-compiled binary, so the question is asked at
 // RUN TIME, a negative __ai_osv -- and on a freestanding seat, RAM is executable and
 // a heap copy runs, with no finalizer owed.
+// one chunk; used is its bump, fixed = the image's own (shared blobs, never freed one at a
+// time). own is what the allocator was handed, NULL off mmap: a seat whose executable
+// window is an alias frees by the address it asked for, not the address it runs.
+struct ai_code { char *base, *own; size_t len, used; int fixed; struct ai_code *next; };
+struct ai_cfree { char *p; size_t n; struct ai_cfree *next; };           // a freed blob (its whole span)
 #if __STDC_HOSTED__
 // which kernel underneath: nolibc's os.c defines it (0 unprobed; 1..3 the
 // hosted kernels; negative = we ARE the kernel). weak for seats with no
@@ -1056,8 +1062,6 @@ __attribute__((weak)) long __ai_osv;
 #ifndef MAP_ANONYMOUS
 #define MAP_ANONYMOUS MAP_ANON
 #endif
-struct ai_code { char *base; size_t len, used; int fixed; struct ai_code *next; };   // one chunk; used is its bump, fixed = the image's own (shared blobs, never freed)
-struct ai_cfree { char *p; size_t n; struct ai_cfree *next; };           // a freed blob (its whole span)
 #define CodeChunk ((size_t) 1 << 20)
 #define CodeHead (2 * sizeof(uintptr_t))
 static size_t code_round(size_t n) { return (n + 15) & ~(size_t) 15; }
@@ -1075,7 +1079,7 @@ static struct ai_code *code_chunk(struct ai *g, size_t need) {
  if (b == MAP_FAILED) return NULL;
  struct ai_code *c = g->alloc(g, NULL, sizeof *c);
  if (!c) { munmap(b, len); return NULL; }
- c->base = b, c->len = len, c->used = 0, c->fixed = 0, c->next = g->code, g->code = c;
+ c->base = b, c->own = NULL, c->len = len, c->used = 0, c->fixed = 0, c->next = g->code, g->code = c;
  return c; }
 // (code_install g src n): n bytes of code -> their executable address, NULL when no seat can hold them
 char *code_install(struct ai *g, char const *src, size_t n) {
@@ -1131,7 +1135,7 @@ char *code_adopt(struct ai *g, char const *src, size_t n) {
   ai_code_sync(x, x + n);
   struct ai_code *c = g->alloc(g, NULL, sizeof *c);
   if (!c) { g->alloc(g, b, 0); return NULL; }
-  c->base = x, c->len = n, c->used = n, c->fixed = 1, c->next = g->code, g->code = c;
+  c->base = x, c->own = b, c->len = n, c->used = n, c->fixed = 1, c->next = g->code, g->code = c;
   return x; }
  size_t ps = code_page(), len = (n + ps - 1) & ~(ps - 1);
  void *b = mmap(0, len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -1141,8 +1145,10 @@ char *code_adopt(struct ai *g, char const *src, size_t n) {
  ai_code_sync((char*) b, (char*) b + n);
  struct ai_code *c = g->alloc(g, NULL, sizeof *c);
  if (!c) { munmap(b, len); return NULL; }
- c->base = b, c->len = len, c->used = len, c->fixed = 1, c->next = g->code, g->code = c;   // used = len: the tail is nobody's
+ c->base = b, c->own = NULL, c->len = len, c->used = len, c->fixed = 1, c->next = g->code, g->code = c;   // used = len: the tail is nobody's
  return b; }
+static void code_drop(struct ai *g, struct ai_code *c) {
+ if (c->own) g->alloc(g, c->own, 0); else munmap(c->base, c->len); }
 #else
 // freestanding: RAM runs as it is; blobs live in the heap (lvm_nif) and an image's segment in the allocator
 int code_in(struct ai *g, uintptr_t v) { (void) g, (void) v; return 0; }
@@ -1150,11 +1156,23 @@ int code_in(struct ai *g, uintptr_t v) { (void) g, (void) v; return 0; }
 // snap's code rung reaches this only behind the code_in above, which owns no address
 size_t code_len(char *code) { (void) code; return 0; }
 void code_free(struct ai *g, char *code) { (void) g, (void) code; }
+static void code_drop(struct ai *g, struct ai_code *c) { g->alloc(g, c->own, 0); }
+// seated as a chunk like the hosted lane's, so the session owns it and code_fin frees it
 char *code_adopt(struct ai *g, char const *src, size_t n) {
  char *b = g->alloc(g, NULL, n);
- if (b) memcpy(b, src, n), ai_code_sync(b, b + n);
+ if (!b) return NULL;
+ memcpy(b, src, n), ai_code_sync(b, b + n);
+ struct ai_code *c = g->alloc(g, NULL, sizeof *c);
+ if (!c) { g->alloc(g, b, 0); return NULL; }
+ c->base = c->own = b, c->len = c->used = n, c->fixed = 1, c->next = g->code, g->code = c;
  return b; }
 #endif
+// the arena is the session's, not the collector's: no root names a chunk, so nothing but
+// the end of the session can free one. blobs still live are dead code by then.
+void code_fin(struct ai *g) {
+ for (struct ai_code *c = g->code, *n; c; c = n) n = c->next, code_drop(g, c), g->alloc(g, c, 0);
+ for (struct ai_cfree *f = g->cfree, *n; f; f = n) n = f->next, g->alloc(g, f, 0);
+ g->code = NULL, g->cfree = NULL; }
 
 // ============================================================================
 // sym
