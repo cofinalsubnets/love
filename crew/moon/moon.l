@@ -337,7 +337,8 @@
       "__INTPTR_TYPE__=long int" "__UINTPTR_TYPE__=long unsigned int"
       "__INTPTR_MAX__=0x7fffffffffffffffL" "__UINTPTR_MAX__=0xffffffffffffffffUL" "__INTPTR_WIDTH__=64"
       "__SIZE_TYPE__=long unsigned int" "__SIZE_MAX__=0xffffffffffffffffUL" "__SIZE_WIDTH__=64"
-      "__PTRDIFF_TYPE__=long int" "__PTRDIFF_MAX__=0x7fffffffffffffffL" "__PTRDIFF_WIDTH__=64")
+      "__PTRDIFF_TYPE__=long int" "__PTRDIFF_MAX__=0x7fffffffffffffffL" "__PTRDIFF_WIDTH__=64"
+      "__BIGGEST_ALIGNMENT__=16")                    ; the widest ask, and bare aligned
    stdt32
     '("__LONG_MAX__=0x7fffffffL" "__LONG_WIDTH__=32"
       "__SIZEOF_LONG__=4" "__SIZEOF_POINTER__=4" "__SIZEOF_SIZE_T__=4" "__SIZEOF_PTRDIFF_T__=4"
@@ -362,7 +363,8 @@
       "__INTPTR_TYPE__=int" "__UINTPTR_TYPE__=unsigned int"
       "__INTPTR_MAX__=0x7fffffff" "__UINTPTR_MAX__=0xffffffffU" "__INTPTR_WIDTH__=32"
       "__SIZE_TYPE__=unsigned int" "__SIZE_MAX__=0xffffffffU" "__SIZE_WIDTH__=32"
-      "__PTRDIFF_TYPE__=int" "__PTRDIFF_MAX__=0x7fffffff" "__PTRDIFF_WIDTH__=32")
+      "__PTRDIFF_TYPE__=int" "__PTRDIFF_MAX__=0x7fffffff" "__PTRDIFF_WIDTH__=32"
+      "__BIGGEST_ALIGNMENT__=8")                     ; AAPCS's widest ask, and bare aligned
    ; wchar_t forks by ABI, not by width: signed int on x64/riscv64 (SysV),
    ; unsigned int on arm64/arm32 (AAPCS) -- gcc's values, so a header's typedef
    ; lays the same type a gcc object carries.

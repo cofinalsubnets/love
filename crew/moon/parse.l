@@ -312,7 +312,8 @@
                          (go >s d))))
        (go ts 0))
    ; the declaration's alignment ask, both spellings at one door: gcc's `aligned(N)`
-   ; (bare `aligned` is its "biggest useful", 16) and C11's `_Alignas(N|type-name)`,
+   ; (bare `aligned` is the target's widest ask -- __BIGGEST_ALIGNMENT__, 8 under AAPCS32
+   ; where every other target says 16) and C11's `_Alignas(N|type-name)`,
    ; scanned to the first depth-0 `;` or `{` like secat?. honored, not skipped --
    ; cgdata lays the global on the boundary and the .o header asks the linker for the
    ; same, where a skipped ask misaligns in silence (page tables, DMA). -> N | ()
@@ -328,7 +329,7 @@
                           ((tkv t = "aligned") || (tkv t = "__aligned__")))
                           (? (peekp >s "(")
                              (? (two? >>s && (tkk <>>s = 'num)) (tkv <>>s) (go >s d))
-                             16)
+                             (? (pst32? ps) 8 16))
                          ; C11 6.7.5: `_Alignas(T)` is `_Alignof(T)`, so the type lane
                          ; answers through talign like the operator does
                          ((tkk t = 'id) && (tkv t = "_Alignas") && peekp >s "(")
@@ -367,7 +368,7 @@
                 _ (pin t 'enums {})         ; enum constant -> value
                 _ (pin t 'declaring {})     ; the names of the declaration being parsed right now (C11 6.2.1p7)
                 _ (pin t 'labs {})          ; the labels defined in the function being parsed (C11 6.8.1p3)
-                _ (pin t 'etag {})          ; enum tag -> 1 when no enumerator is negative (an unsigned underlying type)
+                _ (pin t 'etag {})          ; enum tag -> the type its enumerators lowered to (see ety)
                 _ (pin t 'stag {})          ; tag -> (fields size align)
                 _ (pin t 'tags {})          ; a block tag's spelling -> the key it took in stag (C11 6.7.2.3)
                 _ (pin t 'utag {})          ; the tags of that table that are unions (the layout flattens them alike)
@@ -873,16 +874,25 @@
               (: ts2 >ts
                  tag (? (two? ts2 && (tkk <ts2 = 'id)) (tkv <ts2) ())
                  ts3 (? tag >ts2 ts2)
-                 ; an enum tag scopes by restoring, not by renaming: the type is 'int/'uint
-                 ; from here on, so no tag key ever reaches gen to be resolved late
-                 (ety pos) (: _ (? tag (: old (peep (ps 'etag) tag 'none)
-                                          _ (pin ps 'scopacc (['etag tag old] >< peep ps 'scopacc ()))
-                                          (pin (ps 'etag) tag pos))
-                                      0)
-                              (? pos 'uint 'int))
+                 ; an enum tag scopes by restoring, not by renaming: the type is a plain
+                 ; integer one from here on, so no tag key ever reaches gen to be resolved late.
+                 ; the WIDTH forks by ABI: AAPCS32 wants the smallest type holding every
+                 ; enumerator (gcc's -fshort-enums, its bare-metal arm default and what the
+                 ; objects we link beside carry), and every other target of ours says int.
+                 (ety pos lo hi)
+                  (: ty (? !(pst32? ps) (? pos 'uint 'int)
+                           pos (? (hi <= 255) 'uchar (hi <= 65535) 'ushort 'uint)
+                           ((-128 <= lo) && (hi <= 127)) 'char
+                           ((-32768 <= lo) && (hi <= 32767)) 'short
+                           'int)
+                     _ (? tag (: old (peep (ps 'etag) tag 'none)
+                                 _ (pin ps 'scopacc (['etag tag old] >< peep ps 'scopacc ()))
+                                 (pin (ps 'etag) tag ty))
+                             0)
+                     ty)
                  (? (peekp ts3 "{")
-                    (: (consts ts4 v pos)
-                        (? (peekp ts4 "}") [(ety pos) >ts4]    ; a trailing comma (or empty body): the enum ends
+                    (: (consts ts4 v pos lo hi)
+                        (? (peekp ts4 "}") [(ety pos lo hi) >ts4]   ; a trailing comma (or empty body): the enum ends
                            !(two? ts4 && (tkk <ts4 = 'id)) ()
                            (: name (tkv <ts4)
                               ts5 >ts4
@@ -900,11 +910,12 @@
                                     _ (pin ps 'scopacc (['enums name old] >< peep ps 'scopacc ()))
                                     ts6 <>vr
                                     pos2 (pos && !(<vr < 0))
-                                    (? (peekp ts6 ",") (consts >ts6 (<vr + 1) pos2)
+                                    lo2 (? (<vr < lo) <vr lo)   hi2 (? (hi < <vr) <vr hi)
+                                    (? (peekp ts6 ",") (consts >ts6 (<vr + 1) pos2 lo2 hi2)
                                        (: rest (want ts6 "}")
-                                          (? (two? rest) [(ety pos2) rest] ())))))))
-                       (consts >ts3 0 1))
-                    [(? (peep (ps 'etag) tag 0) 'uint 'int) ts3]))
+                                          (? (two? rest) [(ety pos2 lo2 hi2) rest] ())))))))
+                       (consts >ts3 0 1 0 0))
+                    [(peep (ps 'etag) tag 'int) ts3]))
              ((tkk t = 'id) && (? (peep (ps 'types) (tkv t) 0) 1 ()))
               [(peep (ps 'types) (tkv t) 0) >ts]
              ; __typeof(expr) / __typeof__(type-name) (gcc): the operand's parse-time
