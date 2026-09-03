@@ -1520,7 +1520,7 @@
    (clitcode g env off ty ini)
     (? (arr? ty || stru? ty)
         (: f (cgfill g env off ty ini)
-           (? (bad? f) 'bad (cgzero off ((tsz g ty + 7) & -8) + f)))
+           (? (bad? f) 'bad (cgzero g off ((tsz g ty + 7) & -8) + f)))
        (: v (? (two? ini && <ini = 'init)
                (? (two? <>ini) <<>ini '(num 0)) ini)
           (cgstore g env off ty v)))
@@ -5692,9 +5692,12 @@
        [items ()])
 
    ; -- local init (codegen): zero the slot, then fill (values may be runtime) --
-   (cgzero off span)                                ; zero [r4+off .. +span)
-    (: (go o rem acc)
-        (? (8 <= rem) (go (o + 8) (rem - 8) (acc + [['st 'r4 o 'r0]]))
+   ; `st` is the machine word, so the stride is wsize -- 8 on x64/arm64, 4 on t32. the
+   ; slot is rounded to 8 either way (ntmp/nslot), so the walk covers it whole.
+   (cgzero g off span)                              ; zero [r4+off .. +span)
+    (: w (wsize g)                                  ; before `go`: a later sibling reads as missing
+       (go o rem acc)
+        (? (w <= rem) (go (o + w) (rem - w) (acc + [['st 'r4 o 'r0]]))
            (0 < rem) (go (o + 1) (rem - 1) (acc + [['st1 'r4 o 'r0]]))
            acc)
        ('((li r0 0)) + go off span ()))
@@ -6089,7 +6092,7 @@
                   (? ((<init = 'init) && !(aggish? ty)) 'bad      ; a brace for a scalar
                      (: f (cgfill g env3 off ty init)
                         (? (bad? f) 'bad
-                           (one >ps env3 (acc + cgzero off span + f)))))
+                           (one >ps env3 (acc + cgzero g off span + f)))))
                  (arr? ty) 'bad                          ; a bare-expr init of an array
                  ; the slot is the destination (doc/misc/proto/dest.l's mem die): a licensed
                  ; constant init of a plain slotted scalar delivers as one store-immediate
