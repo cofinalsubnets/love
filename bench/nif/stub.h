@@ -19,7 +19,6 @@
 
 const struct ai_mint ai_mint_zero = {0, 0};
 
-bool ai_strp(ai_word w) { return false; }
 struct ai *ai_strof(struct ai *g, const char *s) { return g; }
 struct ai *str0(struct ai *g, uintptr_t n) { return g; }
 

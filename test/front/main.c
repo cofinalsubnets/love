@@ -230,7 +230,7 @@ static lvm(lvm_feed) {
       unsigned char b = (unsigned char) (getcharm(x) & 0xff);
       grow(&d->q, &d->qcap, d->qlen + 1);
       d->q[d->qlen++] = b; }
-    else if (ai_strp(x)) {
+    else if (strp(x)) {
       struct ai_str *s = (struct ai_str*) x;
       grow(&d->q, &d->qcap, d->qlen + s->len);
       memcpy(d->q + d->qlen, s->bytes, s->len);
