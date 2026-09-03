@@ -23,24 +23,20 @@
 // deadlines, (clock t), and every mtime. on inle the call lands in the
 // clock_gettime arm, which reads the kernel's kboot/kticks scale.
 ai_noinline uintptr_t ai_clock(void) {
-  struct timespec ts;
-  return clock_gettime(CLOCK_REALTIME, &ts) ? (uintptr_t) -1
-       : (uintptr_t) (ts.tv_sec * 1000 + ts.tv_nsec / 1000000); }
+ struct timespec ts;
+ return clock_gettime(CLOCK_REALTIME, &ts) ? (uintptr_t) -1 :
+  (uintptr_t) (ts.tv_sec * 1000 + ts.tv_nsec / 1000000); }
 
 // the kernel's port lanes (src/kmain.c): the seat translation, then the rows
 // -- a protocol read(2) cannot carry, busy and end being distinct answers, so
 // the vt branches here rather than riding the syscall door. weak refusals so a
 // hosted link, which never takes the branch, closes without them.
 __attribute__((weak)) struct ai *k_port_flush(struct ai *g) { return g; }
-__attribute__((weak)) intptr_t k_port_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
-  (void) fp, (void) src, (void) n; return -1; }
-__attribute__((weak)) intptr_t k_port_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
-  (void) g, (void) dst, (void) n; return -1; }
+__attribute__((weak)) intptr_t k_port_writen(struct ai **fp, unsigned char const *src, uintptr_t n) { return -1; }
+__attribute__((weak)) intptr_t k_port_readn(struct ai *g, unsigned char *dst, uintptr_t n) { return -1; }
 // and the rows under them, which an fd spelled in love reaches without the seat.
-__attribute__((weak)) intptr_t k_row_read(int fd, unsigned char *dst, uintptr_t n) {
-  (void) fd, (void) dst, (void) n; return -1; }
-__attribute__((weak)) intptr_t k_row_write(int fd, unsigned char const *src, uintptr_t n) {
-  (void) fd, (void) src, (void) n; return -1; }
+__attribute__((weak)) intptr_t k_row_read(int fd, unsigned char *dst, uintptr_t n) { return -1; }
+__attribute__((weak)) intptr_t k_row_write(int fd, unsigned char const *src, uintptr_t n) { return -1; }
 
 // re-raise rather than exit: the wait status stays a signal death, so the shell's
 // reporting and every `$?` downstream read as they always did. a heap port reports.
@@ -128,6 +124,7 @@ static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n)
  if (off) fcntl((int) fd, F_SETFL, fl);
  return k > 0 ? (intptr_t) k
       : (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : -1; }   // busy vs gone
+
 static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
  if (__ai_osv < 0) return k_port_readn(g, dst, n);
  intptr_t fd = ai_io_fd(g->io);
@@ -142,8 +139,7 @@ static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
       : k == 0 ? -1
       : (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : -1; }
 
-struct ai_port_vt const ai_fd_port_vt =
- { fd_flush, fd_writen, fd_readn, NULL };
+struct ai_port_vt const ai_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
 
 struct ai_fio
  ai_stdin = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(STDIN_FILENO) },
@@ -155,11 +151,10 @@ struct ai_fio
 // k_fd_write's row, which is that port's absolute fd by the seat law.
 void ai_fd_drain(int fd, void const *p, uintptr_t n) { ai_fd_write_all(fd, p, n); }
 
-__attribute__((weak)) void k_row_close(int fd) { (void) fd; }
-__attribute__((weak)) bool k_ready(int fd, int events) { (void) fd, (void) events; return true; }
-__attribute__((weak)) void k_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
-  (void) fds, (void) n, (void) ms; }
-__attribute__((weak)) void k_sleep(uintptr_t ms) { (void) ms; }
+__attribute__((weak)) void k_row_close(int fd) {}
+__attribute__((weak)) bool k_ready(int fd, int events) { return true; }
+__attribute__((weak)) void k_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {}
+__attribute__((weak)) void k_sleep(uintptr_t ms) {}
 
 // shared EINTR-retry skeleton for poll-based wait. ms=0 means infinite.
 // returns only when poll succeeds (data ready / deadline elapsed) or fails
@@ -203,8 +198,8 @@ _Static_assert(ai_wait_in == POLLIN && ai_wait_out == POLLOUT,
 // `revents` on the way back out and the scheduler reads it (love.h).
 void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
  if (__ai_osv < 0) return k_wait_fds(fds, n, ms);
- if (n <= 0) { ai_sleep(ms); return; }
- poll_wait((struct pollfd*) fds, (nfds_t) n, ms); }
+ if (n <= 0) ai_sleep(ms);
+ else poll_wait((struct pollfd*) fds, (nfds_t) n, ms); }
 
 // the same block, asked and not waited on -- one poll(2) for the whole parked ring,
 // where the weak default would spend one per fd. that is what lets the scheduler sweep
@@ -252,7 +247,7 @@ struct ai *ai_argv_marshal(struct ai *g, char ***cavp) {
  ai_word argv = g->sp[0];
  uintptr_t argc = 0, total = 0;
  for (ai_word p = argv; chainp(p); p = B(p)) {
-  if (!ai_strp(A(p))) return g;                              // misuse: non-string argv
+  if (!strp(A(p))) return g;                              // misuse: non-string argv
   argc++, total += len(A(p)) + 1; }                          // +1 for the NUL
  if (!argc) return g;                                        // empty argv
  if (!ai_ok(g = ai_have(g, argc + 1 + b2w(total)))) return g;

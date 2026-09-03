@@ -38,10 +38,10 @@
 ; the conf caller pre-ensures arena room (aru+nv+3 words) and node room (wnu+4): the
 ; kernels never grow a cask.
 (:
-   ; --- 8-byte word slots, low 4 bytes live: the host's word nifs, src/mem.c's
-   ; module 'mem. the host glob and k_host_c both carry it, so they are here -----
-   getw (from 'mem 'peepw)
-   putw (from 'mem 'pinw)
+   ; --- 8-byte word slots, low 4 bytes live: src/mem.c's word nifs. the host glob and
+   ; k_host_c both carry them, so they are here -------------------------------------
+   getw peepw
+   putw pinw
    (enc l) (? (l < 0) (1 + (2 * (0 - l))) (2 * l))          ; signed literal -> encoded
    ; --- the layout, from nv (twins recompute these from fx w3) --------------------
    (lvo-of nv) (8 + (nv + 1))

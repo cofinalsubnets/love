@@ -24,9 +24,9 @@ extern struct ai *ai_argv_marshal(struct ai*, char***);   // src/seat.c: argv ->
 // ai_clock lives in src/seat.c, one body for this frontend and the kernel's.
 // the fine clock's real source (the weak default in love.c degrades to ms*1e6)
 ai_noinline intptr_t ai_nclock(void) {
-  struct timespec ts;
-  return clock_gettime(CLOCK_MONOTONIC, &ts) ? -1
-       : (intptr_t) ts.tv_sec * 1000000000 + ts.tv_nsec; }
+ struct timespec ts;
+ return clock_gettime(CLOCK_MONOTONIC, &ts) ? -1
+  : (intptr_t) ts.tv_sec * 1000000000 + ts.tv_nsec; }
 
 
 static void stdin_give(struct ai *g) {
@@ -55,8 +55,8 @@ __attribute__((weak)) lvm(k_lvm_quit) { ai_musttail return Ap(_lvm_ghelp, g); }
 __attribute__((weak)) lvm(k_lvm_getpid) { ai_musttail return Ap(_lvm_ghelp, g); }
 
 static lvm(lvm_exit) {
-  if (__ai_osv < 0) ai_musttail return Ap(k_lvm_quit, g);
-  for (;;) stdin_give(g), exit(getcharm(Sp[0])); }
+ if (__ai_osv < 0) ai_musttail return Ap(k_lvm_quit, g);
+ for (;;) stdin_give(g), exit(getcharm(Sp[0])); }
 
 extern uintptr_t ai_fd_write_all(int, unsigned char const*, uintptr_t);   // src/seat.c
                                                                           //
@@ -110,8 +110,8 @@ ai_noinline static struct ai *host_harkstart(struct ai *g, int tee) {
   return ai_push(g, 1, ai_badarg(g)); }
 
  int op[2], ep[2];
- // errno into a local before the state push, on every one of these: the push
- // may collect, and a collection that grows the pool makes syscalls of its own.
+ // errno into a local before every state push: the push may collect, and a collection
+ // that grows the pool makes syscalls of its own.
  if (pipe(op)) { int e = errno;
   g = host_harkst(g, -1, 0, tee);
   return ai_push(g, 1, ai_err(g, e)); }
@@ -161,8 +161,7 @@ ai_noinline static struct ai *host_harkdrain(struct ai *g) {
    uintptr_t lim = len(g->sp[0]);
    if (n == lim) {                                        // full -> double it and retry
     if (ai_ok(g = grbufg(g, lim))) continue;
-    // oom mid-capture: close the pipe and kill the child rather than wait on
-    // it. a bounded reap of a killed child is not the wait this rung deletes.
+    // oom mid-capture: close the pipe and kill the child rather than wait on it
     close((int) fd);
     kill(pid, SIGKILL);
     { int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {} }
@@ -248,7 +247,7 @@ static lvm(lvm_exec) {
 // (getenv name) -> string, or zero if unset / misused. zero = absent, not an error.
 // the name goes to getenv where it lies: a love string's bytes[len] is always a NUL.
 static lvm(lvm_getenv) {
- char const *v = ai_strp(Sp[0]) ? getenv(txt(Sp[0])) : NULL;
+ char const *v = strp(Sp[0]) ? getenv(txt(Sp[0])) : NULL;
  if (!v) { Sp[0] = ZeroPoint; ai_musttail return Next(1); }
  Pack(g);
  if (!ai_ok(g = ai_strof(g, v))) ai_musttail return Ap(_lvm_ghelp, g);
@@ -390,20 +389,16 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
   return ai_evals_(g, runner); }                      // pass 2: corpus via the self-hosted ev
 
 #else
-// the full love: raw terminal mode for the interactive REPL (love0 never needs
-// it -- a build tool / self-test is non-interactive); the CLI driver is the
-// canonicalized lcat header.
-// ⚠ AND ai_tco: the glaze emits the TAIL-THREADED lvm shape (g, Ip, Hp, Sp), so a
-// trampoline build calling into it jumps with the wrong ABI -- `bake` walked into
-// unmapped memory out of ai_eval. the arch answers whether a JIT exists; ai_tco
-// answers whether this vm can call one.
+// the full love: raw terminal mode for the interactive REPL, and the CLI driver as the
+// canonicalized lcat header. ai_tco gates too: the glaze emits the tail-threaded lvm shape
+// (g, Ip, Hp, Sp), so a trampoline build calling into it jumps with the wrong ABI. the
+// arch answers whether a JIT exists, ai_tco whether this vm can call one.
 #if (defined(__x86_64__) || defined(__aarch64__)) && ai_tco
 #define AiGlazed 1                                      // the native JIT exists on this arch
 #endif
-// the tty is one terminal, so its cooked baseline and its atexit live in one
-// place -- posix.c's, which the (raw on) nif already drives. this is the same
-// call, and the capture-once latch there is what makes a repl that raws after
-// bao already did restore the true baseline rather than a raw one.
+// the tty is one terminal, so its cooked baseline and its atexit live in posix.c, which
+// the (raw on) nif drives. the capture-once latch there is what makes a repl that raws
+// after bao already did restore the true baseline rather than a raw one.
 extern int ai_raw_mode(intptr_t on);
 #define raw_mode() ((void) ai_raw_mode(1))
 
@@ -411,27 +406,22 @@ static char const cli[] =
 #include "cli.h"
 ;
 
-// the glaze, in one text. emit.l (the native emitter) then auto.l (ev's source
-// recognizer), which reads emit's names bare -- so the order here is the module,
-// and the pair declares it since neither file is it alone. holo leads because the
-// glaze folds `assemble` at its own compile, and orth's two names plus the ala
-// creation hook trail it -- hook.l leaks natjit/fires/fired?/bake on purpose, so it
-// stays outside the module. ai_evals_ evals form by form, so one text is one order.
+// the glaze, in one text: emit.l (the native emitter) then auto.l (ev's source recognizer,
+// which reads emit's names bare), so the order here is the module and the pair declares it.
+// holo leads because the glaze folds `assemble` at its own compile; orth and the ala
+// creation hook trail it, and hook.l leaks natjit/fires/fired?/bake so it stays outside.
 // not in src_mods: an unglazed build must not pay for it, and the empty twins below let
-// every eval site stand unconditional -- only the unsplice after the load still asks.
+// every eval site stand unconditional.
 #ifdef AiGlazed
-// the glaze's own source, DEFLATED (tools/mkgz.l lays it, the Makefile spells the
-// concatenation this used to make out of #includes): 138 KB of text that only a
-// `love bake` ever reads, for 41 KB of .rodata. src_glaze_z holds the bytes,
-// src_glaze_z_raw what they inflate to.
+// the glaze's own source, deflated by tools/mkgz.l: 138 KB of text that only a `love bake`
+// reads, for 41 KB of .rodata. src_glaze_z is the bytes, src_glaze_z_raw the inflated size.
 extern intptr_t ai_inflate_raw(const unsigned char*, uintptr_t, unsigned char*, uintptr_t);
 #include "glaze_z.h"
-// LOVE_NO_GLAZE: a pure-interpreter session -- ev back to base-ev (kept in the glaze
-// module book) and the natjit hook cleared. the forensics twin of LOVE_NO_IMAGE, and a
-// session knob: it governs a run, never the baked artifact.
+// LOVE_NO_GLAZE: a pure-interpreter session -- ev back to base-ev and the natjit hook
+// cleared. a session knob like LOVE_NO_IMAGE: it governs a run, never the artifact.
 static char const glaze_off[] = "(: ev (from 'glaze 'base-ev) natjit ())";
-// inflate, eval, hand the buffer back: ai_evals_ reads it form by form and keeps none of
-// it, and the buffer is off-heap, so a collect mid-eval cannot move it.
+// inflate, eval, hand the buffer back: ai_evals_ keeps none of it, and the buffer is
+// off-heap, so a collect mid-eval cannot move it.
 static struct ai *eval_glaze(struct ai *g) {
   char *t = g->alloc(g, NULL, src_glaze_z_raw + 1);
   if (!t) return g;
@@ -444,14 +434,12 @@ static char const glaze_off[] = "";
 #define eval_glaze(g) (g)
 #endif
 
-// the session layer: boot is over, and from here the base (prel/ev, the nifs, every
-// warmed module) is never the head again, so a top-level definition lands here instead.
-// never popped -- its lifetime is the session, which is what lets a catted app's files
-// share one vocabulary. both the egg boot and the image wake converge here.
-// love/cli.l DEFINES rather than runs, and `cli-line` is this tail entire: the argv[0]
-// verb door, the positional rail, the repl, the stdin drink. the isatty answer is the
-// only thing C still owns. the bake below carries it compiled, so `owed` is the egg
-// lane alone -- a wake that re-evals it pays a 2 KB compile to reach two names it has.
+// the session layer: boot is over and the base is never the head again, so a top-level
+// definition lands here. never popped -- its lifetime is the session, which is what lets a
+// catted app's files share one vocabulary; the egg boot and the image wake both converge.
+// love/cli.l defines rather than runs, and `cli-line` is this tail entire: the argv[0] verb
+// door, the positional rail, the repl, the stdin drink. the isatty answer is all C still
+// owns. the bake carries it compiled, so `owed` is the egg lane alone.
 static struct ai *run_program(struct ai *g, bool replp, bool owed) {
   if (replp) raw_mode();
   g = ai_layer_(g);
@@ -461,13 +449,11 @@ static struct ai *run_program(struct ai *g, bool replp, bool owed) {
 
 // read-eval one .l file into the booting session, loudly: a bake's cat has no shell help,
 // so a raise in it must end the bake rather than seal a half-built artifact.
-// the path is a value, never spliced into the source: bound as a name the text stays data
-// whatever it holds, and the eval'd form is a constant.
-// it closes q, because an open heap port registers a finalizer and would still be
-// reachable at the seal -- carrying its fd into the image.
-// the name is rebound to (), not pulled: the seal ends with (pull book 'book 0), so the
-// book is already off the book here and naming it answers `;; missing book`. either way
-// the name must stop holding the path, or an absolute one bakes the baker's directory in.
+// the path is a value, never spliced into the source, so the text stays data whatever it
+// holds. q is closed, or its finalizer would still be reachable at the seal and carry an
+// fd into the image; and the name is rebound to () rather than pulled, since the seal has
+// already dropped the book. either way the name must stop holding the path, or an absolute
+// one bakes the baker's directory in.
 static struct ai *bake_eval_file(struct ai *g, char const *path) {
   uintptr_t xn = strlen(path);
   if (!ai_ok(g = str0(g, xn))) return g;
@@ -481,14 +467,10 @@ static struct ai *bake_eval_file(struct ai *g, char const *path) {
     "      (: _ (say err (\"love: bake: cannot open \" + bake-load)) _ (put err 10) (quit 1))))");
   return ai_ok(g) ? ai_evals_(g, "(: bake-load ())") : g; }
 
+// FIXME waaaaaaaaaaaaaaaaaaaaay too much code in string literals
 static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load) {
-  // the debug door: LOVE_NO_MOP keeps the compiler's internals on the book (peek/poke/
-  // seek/feels/dis and the raw cell nifs) for introspection -- egg.l skips the birth mop
-  // when `nomop` is set. reaches only a fresh egg warm, so pair it with LOVE_NO_IMAGE
-  // (a baked image is already swept): `LOVE_NO_MOP=1 LOVE_NO_IMAGE=1 love`. off by
-  // default, so the shipped surface and every gate stay swept.
-  { char const *nm = getenv("LOVE_NO_MOP");
-    if (nm && *nm) g = ai_evals_(g, "(: nomop 1)"); }
+  char const *nm = getenv("LOVE_NO_MOP"); // leave internal names in global scope for debugging
+  if (nm && *nm) g = ai_evals_(g, "(: nomop 1)");
   g = ai_cats_egg(g);                                    // prel then ev's half, and the printer with `@`
   g = ai_cats_mods(g);                                   // register every baked module; the uses below are splices
   g = ai_evals_(g,
@@ -506,12 +488,13 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
   g = ai_unsplice_(g);
   g = ai_evals_(g, "(use 'bao)(use 'verbs)");
   g = ai_unsplice_(g);
-  // kanren, overlay and uu come off: both of the latter already have the accessor bound
-  // above, so the splice bought only ambient names, and `C`, `Q`, `src`, `glob`, `walk`,
-  // `var`, `con`, `est` are what this tree calls its locals. kanren keeps a surface, named
-  // rather than inherited. unsplice drops one link at a time, so bao comes off with them
-  // and goes straight back on: read/reads for cli, `@` for every later compile.
+  // kanren, overlay and uu come off: the latter two already have their accessor bound
+  // above, so the splice bought only ambient names -- `C`, `Q`, `src`, `glob`, `walk`,
+  // `var`, `con`, `est` are what this tree calls its locals. kanren keeps a named surface.
+  // unsplice drops one link at a time, so bao comes off with them and goes straight back
+  // on: read/reads for cli, `@` for every later compile.
   for (int i = 0; i < 4; i++) g = ai_unsplice_(g);       // bao, uu, overlay, kanren
+  // FIXME what is this even doing? we just used bao a couple of lines ago? what is "hoist"?
   g = ai_evals_(g, "(use 'bao)"
     "(hoist 'kanren ())"                                 // \\\, &&&, |||, zz -- macros, not names
     "(: unify (from 'kanren 'unify)  ufail (from 'kanren 'ufail)"
@@ -527,20 +510,21 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     "(: spawn0 spawn  spawnio0 spawnio  spawnmap0 spawnmap  wait0 wait"
     "   seat-doors (: t (tablet 4) _ (pin t 0 spawn0) _ (pin t 1 spawnio0)"
     "                 _ (pin t 2 spawnmap0) _ (pin t 3 wait0) t)"
-    "   (spawn argv) ((peep seat-doors 0 0) argv)"
-    "   (spawnio argv i o e cl pg fg) ((peep seat-doors 1 0) argv i o e cl pg fg)"
-    "   (spawnmap argv fdm cl pg fg) ((peep seat-doors 2 0) argv fdm cl pg fg)"
-    "   (wait p) ((peep seat-doors 3 0) p))");
+    "   (spawn argv) (peep seat-doors 0 0 argv)"
+    "   (spawnio argv i o e cl pg fg) (peep seat-doors 1 0 argv i o e cl pg fg)"
+    "   (spawnmap argv fdm cl pg fg) (peep seat-doors 2 0 argv fdm cl pg fg)"
+    "   (wait p) (peep seat-doors 3 0 p))");
 
+  // FIXME why are we pulling from book here, that's what mop is for
   g = ai_evals_(g, bake
     ? "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) _ (pull book 'born 0) (pull book 'book 0))"
     : "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) (pull book 'book 0))");
 
   if (bake) {                                            // the bake verb: snapshot the post-warm heap, then exit
     if (bake_load && !ai_ok(g = bake_eval_file(g, bake_load))) return g;
-    // the CLI driver rides the image too, last so it sits over the crew exactly as the
+    // the CLI driver rides the image too, last so it sits over the crew as the
     // session-layer eval it replaces did. pure definition: cli-line reads argv and the
-    // verb registry when CALLED, so nothing of this session is folded in.
+    // verb registry when called, so nothing of this session is folded in.
     g = ai_evals_(g, cli);
     int rc = *bake ? image_dump(g, bake) : image_bake(g);
     if (rc) fprintf(stderr, "love: bake failed (rc=%d)\n", rc);
@@ -576,9 +560,8 @@ static unsigned char *fb_untar(uintptr_t *outn) {
     return munmap(t, un), NULL;
   return *outn = un, t; }
 
-// find a tree-relative path in the ustar block. the archive's paths carry a TOP
-// component (the tree looks the same from inside as a checkout), so match past
-// it; a symlink member chases its target against its own directory.
+// find a tree-relative path in the ustar block. the archive's paths carry a top component,
+// so match past it; a symlink member chases its target against its own directory.
 static unsigned char const *fb_find(unsigned char const *t, uintptr_t n,
                                     char const *path, uintptr_t *len, int hop) {
   uintptr_t pl = strlen(path);
@@ -600,9 +583,8 @@ static unsigned char const *fb_find(unsigned char const *t, uintptr_t n,
 
 static void first_boot(char const **argv) {
   if (ai_srcgz_len < 18) return;                     // src/src.c's weak zero: this link carries no source
-  // the latch, and it is an env var precisely because the state it guards spans an exec:
-  // the re-exec below sets it, so the binary that comes back knows it already tried. a
-  // bake that leaves the .image section unfilled would otherwise loop forever.
+  // an env var because the state it guards spans an exec: the re-exec below sets it, so
+  // the binary that comes back knows it already tried and a failed bake cannot loop.
   if (getenv("LOVE_FIRST_BOOT")) {
     fprintf(stderr, "; first boot: still unbaked after a bake -- running from source\n");
     return; }
@@ -614,7 +596,7 @@ static void first_boot(char const **argv) {
     fprintf(stderr, "; first boot: the carried source will not inflate -- running from source\n");
     return; }
   // per-process, for the reason the bake's scratch is (src/image.c): concurrent first
-  // boots on one name write the cat into each other and unlink it under each other.
+  // boots on one name would write into and unlink each other's cat.
   snprintf(cat, sizeof cat, "%s.firstboot.%ld.l", exe, (long) getpid());
   int fd = open(cat, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) {                                      // a read-only seat -- /usr/bin, a container layer
@@ -638,7 +620,7 @@ static void first_boot(char const **argv) {
   close(fd), munmap(t, un);
   fprintf(stderr, ";; baking heap image\n");
   // a child, so the bake gets a clean process: it snapshots its own heap and exits, and
-  // this one still has a session to fall back to if it fails.
+  // this one keeps a session to fall back to.
   pid_t p = fork();
   if (!p) { char *args[] = { exe, (char*) "bake", (char*) "-l", cat, NULL };
             execv(exe, args); _exit(127); }
@@ -671,9 +653,8 @@ int main(int argc, char const **argv) {
 #endif
   if (argc >= 3 && !strcmp(argv[1], "wake"))
    image_load_path = argv[2], skip = 2;
-  // a leading wake with nothing to wake. its arity error is C's because its parse is:
-  // the registry's row would say "must lead the command line", which is the one thing
-  // this invocation got right.
+  // a leading wake with nothing to wake. the arity error is C's because the parse is:
+  // the registry's row would complain about the one thing this invocation got right.
   else if (argc == 2 && !strcmp(argv[1], "wake"))
    return fprintf(stderr, "love: wake needs an image path\n"), 2;
   if (image_load_path && !(g = image_load(image_load_path))) image_load_path = NULL;   // NULL -> normal boot
@@ -697,22 +678,13 @@ int main(int argc, char const **argv) {
     g = argv_chain(g, argv, argc, 0);               // cmdline, first: it ends up deeper
     g = argv_chain(g, argv, argc, skip); }          // argv, on top -- sp[0]
   if (ai_ok(g)) {
-    g = ai_defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs, 0);
-    for (struct ai_mod const *mt = __start_love_mods; mt < __stop_love_mods; mt++)
-      g = ai_defn(g, mt->defs, mt->n, mt->mod);
+    g = ai_defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
     if (!bake) {
       g = ai_defv(g, "argv");
       if (ai_ok(g)) g->sp++;            // the book holds argv; the line is sp[0] now
       g = ai_defv(g, "cmdline");
       if (ai_ok(g)) g->sp++; }          // the book holds it now
     if (image_load_path && ai_ok(g = ai_defv(ai_strof(g, image_load_path), "love-image"))) g->sp++;
-    // `love-os`: which kernel THIS RUN met, a nom beside love-arch's. It is read off
-    // __ai_osv where nolibc probed one, and off the compile where only the compile could
-    // know -- and it is pinned HERE rather than in ai_ini because a woken image restores
-    // the book the bake wrote, which would carry the baking machine's kernel forever.
-    // ⚠ AND IT STAYS UNPINNED WHERE NOTHING CAN TELL. moon.l's host-os owes a diagnostic
-    // there, not a guess at whichever kernel we happen to have started on; a negative osv
-    // is not that case, it is inle saying we ARE the kernel.
     if (!bake) {
       char const *osn =
 #if defined(AiNolibc)
@@ -736,8 +708,7 @@ int main(int argc, char const **argv) {
     if (!bake) g = stdin_take(g);
     // an egg warm, or a woken image straight to the program -- the wake skips the warm
     g = image_load_path ? run_program(g, !argp && isatty(STDIN_FILENO), 0)
-                        : boot(g, argp, bake, bake_load);
-  }
+                        : boot(g, argp, bake, bake_load); }
   if (ai_code_of(g) == ai_status_scare) ai_scare_face_(g);
   stdin_give(g);
   return ai_fin(g); }

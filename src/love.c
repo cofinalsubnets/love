@@ -1,3 +1,4 @@
+// FIXME move GC to its own file
 // love.c -- g, stack, gc, sys, str, sym, chain, tray. one translation unit of the runtime;
 // the shared layouts and the cross-TU seam are src/love_int.h.
 #include "love_int.h"
@@ -18,8 +19,7 @@ static lvm_t
  lvm_nclock, lvm_nomctor, lvm_nomp, lvm_packp, lvm_please, lvm_setbooks, lvm_setp,
  lvm_snip, lvm_strp, lvm_sub, lvm_subn, lvm_sunp, lvm_tune, _lvm_help_scare, _lvm_yield_c;
 static struct ai
- *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, void*, size_t)),
- *ai_modtab(struct ai *g, char const *mod);
+ *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, void*, size_t));
 static struct ai_tag *ttag2(struct ai *g, struct ai_gcx *X, union u *k);
 static uintptr_t stringlen(struct ai *g, word x);
 static void
@@ -82,29 +82,11 @@ enum ai_status ai_fin(struct ai *g) {
    g->alloc(g, g, 0); }                       // ..the pool is g, so it goes last
  return s; }
 
-// the module lane's target: find-or-make mod's tablet on the registry and push it
-// where the book map would sit. over a woken image the found tablet takes the re-pin.
-static struct ai *ai_modtab(struct ai *g, char const *mod) {
- if (!ai_ok(g)) return g;
- struct ai *c = ai_core_of(g);
- if (!ai_ok(g = intern(ai_strof(g, mod)))) return g;   // [modnom ..]
- c = ai_core_of(g);
- word m = ai_mapget(c, zero, c->sp[0], c->mods);
- if (m != zero) { c->sp[0] = m; return g; }             // [tablet ..]
- if (!ai_ok(g = map_new(g))) return g;                  // a fresh module: [tablet modnom ..]
- c = ai_core_of(g);
- g = ai_push(g, 3, c->sp[1], c->sp[0], c->mods);        // (key val coll) for mapput
- if (!ai_ok(g = ai_mapput(g))) return g;                // [mods tablet modnom ..]
- c = ai_core_of(g);
- c->sp[2] = c->sp[1], c->sp += 2;                       // [tablet ..]
- return g; }
-
 // every .x here must be immortal -- a nif address, a fixnum, an out-of-pool
 // constant. C cannot re-root what it holds in an array, and no ordering fixes it;
 // a value that moves arrives on the stack instead (ai_defv).
-// mod non-NULL binds the whole table under that module instead of the book.
-struct ai *ai_defn(struct ai*g, struct ai_def const*defs, uintptr_t n, char const *mod) {
- for (g = mod ? ai_modtab(g, mod) : ai_push(g, 1, A(ai_core_of(g)->book)); n--;
+struct ai *ai_defn(struct ai*g, struct ai_def const*defs, uintptr_t n) {
+ for (g = ai_push(g, 1, A(ai_core_of(g)->book)); n--;
   g = ai_mapput(intern(ai_strof(ai_push(g, 1, defs[n].x), defs[n].n))));
  ai_core_of(g)->sp++;
  return g; }
@@ -137,7 +119,7 @@ union u const yield_c[] = { {_lvm_yield_c} };
 static lvm(_lvm_help_scare) { return Pack(g), encode(g, (enum ai_status) g->b); }
 lvm(lvm_help) {
  struct ai *c = ai_core_of(g);
- c->b = (ai_word) ai_code_of(g);
+ c->b = ai_code_of(g);
  ai_musttail return Ap(_lvm_help_scare, c); }
 
 // reverse-lookup a nif value -> its source name or NULL (the printer renders nifs by name)
@@ -235,13 +217,13 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
    {"to-vt", (word) &ai_to_vt},
    // max-charm/min-charm: this build's fixnum bounds, exposed so width-specific
    // tests gate on the real boundary (it differs on 32- vs 64-bit ports).
-   {"max-charm", putcharm((ai_word)((uintptr_t)-1 >> 2))},
-   {"min-charm", putcharm(-(ai_word)((uintptr_t)-1 >> 2) - 1)},
+   {"max-charm", putcharm((word)((uintptr_t)-1 >> 2))},
+   {"min-charm", putcharm(-(word)((uintptr_t)-1 >> 2) - 1)},
    // love-tco: glazed code continues by tail-jump, which only the threaded build
    // honors -- auto.l reads this and keeps the interpreter on a trampoline build
    {"love-tco", putcharm(ai_tco)}, };
-  g = ai_defn(g, def0, countof(def0), 0);
-  g = ai_defn(g, def1, countof(def1), 0);
+  g = ai_defn(g, def0, countof(def0));
+  g = ai_defn(g, def1, countof(def1));
   if (ai_ok(g = ai_strof(g, AiVersion)))            // a live string: off the stack, never an ai_def
    g = ai_pop(ai_defv(g, "love-version"), 1);
   // `love-arch`: the host CPU the glaze emits for, and the assembler target every backend
@@ -272,7 +254,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
  }
  return g; }
 
-ai_word ai_err(struct ai *g, int e) {
+word ai_err(struct ai *g, int e) {
  g = ai_core_of(g);
  word v = ai_mapget(g, 0, putcharm(e), g->errs);
  return v ? v : ai_mapget(g, 0, zero, g->errs); }
@@ -396,9 +378,11 @@ static ai_inline void evac_data(struct ai *g, struct ai_gcx *X) {
 // young?: the address is the generation (no age bits) -- in [end, hp).
 static bool ai_young(struct ai *g, word p) {
  return lamp(p) && ptr(p) >= (word*) g->end && ptr(p) < g->hp; }
+
 static bool gen_remembered(struct ai *g, word obj) {
  for (uintptr_t i = 0; i < g->rem_n; i++) if (g->rem[i] == obj) return true;
  return false; }
+
 static void gen_remember(struct ai *g, word obj) {
  if (g->rem_n && g->rem[g->rem_n - 1] == obj) return;          // hot path: same map as last pin
  if (gen_remembered(g, obj)) return;                           // deduped: the set stays small (book + a few)
@@ -410,7 +394,7 @@ static void gen_remember(struct ai *g, word obj) {
 void gen_wb(struct ai *g, word src, word p) {
  if (lamp(src) && ai_young(g, p) && !ai_young(g, src)) gen_remember(g, src); }
 static ai_inline bool ai_major_cell(struct ai *g, word *c) {       // a tenured cell: inside the major pool
- return (ai_word*) c >= g->major_base && (ai_word*) c < g->major_hp; }
+ return ptr(c) >= g->major_base && ptr(c) < g->major_hp; }
 // the cell barrier (c0's emit, ev's poke): remember the smallest scannable unit around a
 // young-into-tenured store. the cell sits in a tagged span -- a thread, a scope -- and
 // never in a chain's field, which has no terminator for the remembered walk to stop at.
@@ -424,16 +408,15 @@ void gen_wb_cell(struct ai *g, void *cl, word v) {
 // the relocation; a thread's terminator sits in the major to-space.
 static void gen_scan_inplace(struct ai *g, struct ai_gcx *X, word obj) {
  union u *p = cell(obj);
- if (datp(obj)) switch (typ(obj)) {
+ if (!datp(obj))
+  for (union u *q = p; !tagl(g, X, q->x); q++) q->x = gcp(g, X, q->x); // read to the terminator
+ else switch (typ(obj)) {
   case DChain: { struct ai_chain *w = two(obj);
                  w->a = gcp(g, X, w->a), w->b = gcp(g, X, w->b); break; }
   case DTray:   { struct ai_tray *v = tray(p); if (v->type == ai_O) { word *e = (word*) tray_data(v);
                  for (uintptr_t i = 0, ne = tray_nelem(v); i < ne; i++) e[i] = gcp(g, X, e[i]); } break; }
-  case DNom:   { nom(p)->name = gcp(g, X, nom(p)->name); break; }
-  default: break;                                  // DMint/DString/DBig/DGem/DSun/DTwin: pointer-free leaves
- } else { for (union u *q = p; !tagl(g, X, q->x); q++) q->x = gcp(g, X, q->x); } }   // a thread: every word to the tag terminator (tagl: head in any live pool)
-          // including word0 -- a normal thread's ap is out-of-pool (gcp no-op) but a task-ring node's
-          // word0 is its `next` pointer, the very old->young edge the rem set exists to chase.
+  case DNom: nom(p)->name = gcp(g, X, nom(p)->name); break;
+  default: break; } }                              // DMint/DString/DBig/DGem/DSun/DTwin: pointer-free leaves
 
 // relocate finalizer nodes out of the dead minor into the major. a minor never
 // runs a finalizer; that waits for a major's compact.
@@ -469,6 +452,7 @@ static word major_symbols_rebuild(struct ai *g, struct ai_gcx *X, word om) {
   ns[2 * i] = nk, ns[2 * i + 1] = fwd, n++; }
  b[1].x = putcharm(n);
  return (word) hd; }
+
 static void major_run_finalizers(struct ai *g, struct ai_gcx *X) {
  struct ai_fz *new_fz = NULL;
  for (struct ai_fz *fz = g->fz; fz; fz = fz->next) {
@@ -501,10 +485,9 @@ static void gen_minor(struct ai *g) {
  // the weak intern map is its own field, not a root: promote its structure by hand
  // (entries stay weak -- a major drops dead atoms). young header: gcp it; tenured:
  // scan its possibly-young backing in place.
- if (g->symbols) {
+ if (g->symbols) { // FIXME when !g->symbols ? 
   if (ai_young(g, g->symbols)) g->symbols = gcp(g, &X, g->symbols);
-  else gen_scan_inplace(g, &X, g->symbols), gen_scan_inplace(g, &X, map_back(g->symbols));
- }
+  else gen_scan_inplace(g, &X, g->symbols), gen_scan_inplace(g, &X, map_back(g->symbols)); }
  for (uintptr_t i = 0; i < g->rem_n; i++) gen_scan_inplace(g, &X, g->rem[i]);        // major->young edges
  for (struct ai_fz *fz = g->fz; fz; fz = fz->next) fz->p = cell(gcp(g, &X, word(fz->p)));
  while (X.cp < g->major_hp) (datp(X.cp) ? evac_data : evac_thread)(g, &X);
@@ -522,8 +505,7 @@ static void gen_minor(struct ai *g) {
   for (struct ai_r *r = g->root; r; r = r->n) *r->x = gcp(g, &X, *r->x);
   if (g->symbols) {
    if (ai_young(g, g->symbols)) g->symbols = gcp(g, &X, g->symbols);
-   else gen_scan_inplace(g, &X, g->symbols), gen_scan_inplace(g, &X, map_back(g->symbols));
-  }
+   else gen_scan_inplace(g, &X, g->symbols), gen_scan_inplace(g, &X, map_back(g->symbols)); }
   for (uintptr_t i = 0; i < g->rem_n; i++) gen_scan_inplace(g, &X, g->rem[i]);
   for (struct ai_fz *fz = g->fz; fz; fz = fz->next) fz->p = cell(gcp(g, &X, word(fz->p)));
   while (X.cp < g->major_hp) (datp(X.cp) ? evac_data : evac_thread)(g, &X);
@@ -547,19 +529,19 @@ static void gen_minor(struct ai *g) {
 struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
  struct ai_gcx X = { .p0 = g->major_base, .t0 = g->major_hp };   // from-range 1: major active
  // size the to-space for the worst case: all of major-active and all of the minor survive
- uintptr_t used = (uintptr_t)(g->major_hp - g->major_base), young = (uintptr_t)(g->hp - (word*) g->end);
- uintptr_t need = used + young;
+ uintptr_t used = (uintptr_t)(g->major_hp - g->major_base), young = (uintptr_t)(g->hp - (word*) g->end),
+           need = used + young,
  // grow/shrink by a whole step (= ai_major0): one step at a time prevents thrash, and
  // snapping down reclaims floated dead promotions. headroom is 25% or a whole nursery
  // plus the pending request, whichever is larger -- the second is gen_please's forcing
  // test verbatim, and a pool sized under it leaves that test true after the major it
  // just forced, so every later collection is a major too.
- uintptr_t slack = (uintptr_t) g->len + req0 + 16, head = need >> 2;
- uintptr_t step = g->major0, want = need + (head > slack ? head : slack) + 16;
- uintptr_t to_len = ((want + step - 1) / step) * step;
+           slack = (uintptr_t) g->len + req0 + 16, head = need >> 2,
+           step = g->major0, want = need + (head > slack ? head : slack) + 16,
+           to_len = ((want + step - 1) / step) * step;
  if (to_len < step) to_len = step;
- uintptr_t free_len = to_len;                                   // the size asked for, before any clamp
- uintptr_t need_step = ((need + step - 1) / step) * step;       // the tight size: smallest step-multiple holding `need`
+ uintptr_t free_len = to_len,                                   // the size asked for, before any clamp
+           need_step = ((need + step - 1) / step) * step;       // the tight size: smallest step-multiple holding `need`
  if (need_step < step) need_step = step;
  // budget cap: keep the major pair within its share, but never below need_step (the
  // to-space must hold the worst-case promotion); too small falls through to the oom path
@@ -638,8 +620,8 @@ struct ai *gen_grow(struct ai *g, uintptr_t len1) {
 // the GC entry: a minor unless the rem set overflowed or the major lacks headroom --
 // then a major. afterwards size the minor by appel's rule against the budget.
 static struct ai *gen_please(struct ai *g, uintptr_t req0) {
- uintptr_t seen_young = (uintptr_t)(g->hp - g->end);
- uintptr_t major_free = (uintptr_t)((g->major_base + g->major_len) - g->major_hp);
+ uintptr_t seen_young = (uintptr_t)(g->hp - g->end),
+          major_free = (uintptr_t)((g->major_base + g->major_len) - g->major_hp);
  g->since_major += seen_young;                                  // young allocated (∝ scanned) since the last major
  // a major: forced by rem-set overflow, by the major lacking room for a worst-case
  // promotion, or by the amortization rule -- live set + 4 minor-pools allocated since
@@ -675,7 +657,8 @@ static struct ai *gen_please(struct ai *g, uintptr_t req0) {
  if (major) { if (copied > g->major_hi) g->major_hi = copied; }
  else if (copied > g->minor_hi) g->minor_hi = copied;
  g->rem_n = 0, g->rem_miss = 0;
- { uintptr_t e = (uintptr_t)(g->major_hp - g->major_base); if (e > g->max_heap) g->max_heap = e; }
+ uintptr_t e = (uintptr_t)(g->major_hp - g->major_base);
+ if (e > g->max_heap) g->max_heap = e;
  // minor resize, deterministic (words copied / words allocated -- no wall clock, so
  // the schedule is reproducible): keep the copy overhead inside a band, accumulated
  // over a sliding window; ai_budget caps the footprint by appel's rule.
@@ -1325,8 +1308,8 @@ static lvm(lvm_link) {
 
 #define avm_slow(op, vop, ovf, fexpr) lvm(lvm_##op##n) { \
  word a = Sp[0], b = Sp[1]; \
- if (trayp(a) || trayp(b)) { g->b = (ai_word) (vop); ai_musttail return Ap(lvm_vbin, g); } \
- if (twinp(a) || twinp(b)) { g->b = (ai_word) (vop); ai_musttail return Ap(lvm_twin_bin, g); } \
+ if (trayp(a) || trayp(b)) { g->b = (word) (vop); ai_musttail return Ap(lvm_vbin, g); } \
+ if (twinp(a) || twinp(b)) { g->b = (word) (vop); ai_musttail return Ap(lvm_twin_bin, g); } \
  if (!isnum(a) || !isnum(b)) ai_musttail return Push(ZeroPoint); \
  if (gemp(a) || gemp(b)) { word _res; Have(box_req); \
   ai_flo_t ad = toflo(a), bd = toflo(b); \
@@ -1341,8 +1324,8 @@ static lvm(lvm_link) {
  ai_musttail return Resume(); }
 #define avm_slowdiv(op, vop, c_op, fexpr, zarm) lvm(lvm_##op##n) { \
  word a = Sp[0], b = Sp[1]; \
- if (trayp(a) || trayp(b)) { g->b = (ai_word) (vop); ai_musttail return Ap(lvm_vbin, g); } \
- if (twinp(a) || twinp(b)) { g->b = (ai_word) (vop); ai_musttail return Ap(lvm_twin_bin, g); } \
+ if (trayp(a) || trayp(b)) { g->b = (word) (vop); ai_musttail return Ap(lvm_vbin, g); } \
+ if (twinp(a) || twinp(b)) { g->b = (word) (vop); ai_musttail return Ap(lvm_twin_bin, g); } \
  if (!isnum(a) || !isnum(b)) ai_musttail return Push(ZeroPoint); \
  zarm; \
  if (gemp(a) || gemp(b) || b == zero) { word _res; Have(box_req); \
@@ -1352,7 +1335,7 @@ static lvm(lvm_link) {
  if (!bigp(a) && !bigp(b)) { intptr_t av = toint(a), bv = toint(b); \
   if (!(av == INTPTR_MIN && bv == -1)) { word _res; Have(box_req); emit_int(_res, av c_op bv); \
    ai_musttail return Push(_res); } } \
- { g->b = (ai_word) (vop); ai_musttail return Ap(lvm_bdiv_start, g); } }   /* big // and % run yieldable (resumable long division) */
+ { g->b = (word) (vop); ai_musttail return Ap(lvm_bdiv_start, g); } }   /* big // and % run yieldable (resumable long division) */
 // a bare mint (() too) is not a number, so a numeric lane has nothing to compute with
 // and answers (), either side: - / // % & | ^ << >>. the sequence ops keep their own
 // band rules and never come here -- () is the unit of + (joining nothing on) and the
@@ -1377,8 +1360,8 @@ avm_slowdiv(rem, vop_rem, %, ai_fmod(ad, bd),
 // (the truncating quotient is `//`)
 lvm(lvm_quotn) {
  word a = Sp[0], b = Sp[1];
- if (trayp(a) || trayp(b)) { g->b = (ai_word) (vop_quot); ai_musttail return Ap(lvm_vbin, g); }
- if (twinp(a) || twinp(b)) { g->b = (ai_word) (vop_quot); ai_musttail return Ap(lvm_twin_bin, g); }
+ if (trayp(a) || trayp(b)) { g->b = (word) vop_quot; ai_musttail return Ap(lvm_vbin, g); }
+ if (twinp(a) || twinp(b)) { g->b = (word) vop_quot; ai_musttail return Ap(lvm_twin_bin, g); }
  if (!isnum(a) || !isnum(b)) ai_musttail return Push(ZeroPoint);
  if (gemp(a) || gemp(b) || b == zero) { word _res; Have(box_req);   // ±inf/NaN on ÷0
   ai_flo_t ad = toflo(a), bd = toflo(b);

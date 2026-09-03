@@ -40,9 +40,9 @@ uintptr_t ai_ustar_name(unsigned char const *h, char *out, uintptr_t cap) {
   return n; }
 
 uintptr_t ai_ustar_link(unsigned char const *h, char *out, uintptr_t cap) {
-  uintptr_t n = 0;
-  while (n < 100 && n < cap && h[157 + n]) { out[n] = (char) h[157 + n]; n++; }
-  return n; }
+ uintptr_t n = 0;
+ while (n < 100 && n < cap && h[157 + n]) out[n] = (char) h[157 + n], n++;
+ return n; }
 
 uintptr_t ai_lnk_canon(char const *at, char const *ln, char *out, uintptr_t cap) {
   uintptr_t n = 0;

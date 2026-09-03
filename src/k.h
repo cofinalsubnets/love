@@ -4,11 +4,7 @@
 #pragma once
 #include "love.h"
 
-void
- k_logf(char const*, ...),
- k_vlogf(char const*, va_list),
- k_log_clear(void),
- k_log_char(char);
+void kputc(int c), kputs(char const *s), kputn(uintptr_t n, int base);
 
 // k_boot -- the small struct the bootloader hand-off populates before
 // kmain() runs. kmain.c reads this in meminit/fbinit; each door fills it
@@ -24,47 +20,41 @@ extern uintptr_t khhdm;
 #define k_boot_ram_max 64
 
 struct k_boot {
-  uint32_t ram_n;
-  struct { uintptr_t base, len; } ram[k_boot_ram_max];
-  uintptr_t hhdm;                     // 0 means identity-mapped (UEFI path)
-  struct {
-    void    *base;                    // framebuffer linear address
-    uint16_t w, h;                    // pixels
-    uint32_t pitch_px;                // pixels per scanline (not bytes)
-  } fb;
-  bool has_fb;
-  // the wall date at boot, UNIX SECONDS -- what makes ai_clock a clock and not an
-  // uptime. NO door answers it now, so every one falls back to the machine's RTC
-  // in kmain -- a door that learns a date may still fill this. ⚠ 0 is "nobody
-  // knew", not midnight 1970: a stat
-  // then reads as its own uptime, which is wrong but at least visibly so.
-  uint64_t date;
-  // the boot command line, copied whole at hand-off (PVH's start_info, the DTB's
-  // /chosen bootargs, and love.cmd beside love.elf on an ESP, firmware carrying
-  // no line of its own). "" is a plain boot: the love-side split leaves cmdline
-  // seatless and the console shell takes over.
-  char cmdline[256];
-};
+ uint32_t ram_n;
+ struct { uintptr_t base, len; } ram[k_boot_ram_max];
+ uintptr_t hhdm;                     // 0 means identity-mapped (UEFI path)
+ struct {
+  void    *base;                    // framebuffer linear address
+  uint16_t w, h;                    // pixels
+  uint32_t pitch_px;                // pixels per scanline (not bytes)
+ } fb;
+ bool has_fb; // FIXME how is this different from fb.base == NULL
+ // the wall date at boot, UNIX SECONDS -- what makes ai_clock a clock and not an
+ // uptime. NO door answers it now, so every one falls back to the machine's RTC
+ // in kmain -- a door that learns a date may still fill this. ⚠ 0 is "nobody
+ // knew", not midnight 1970: a stat
+ // then reads as its own uptime, which is wrong but at least visibly so.
+ uint64_t date;
+ // the boot command line, copied whole at hand-off (PVH's start_info, the DTB's
+ // /chosen bootargs, and love.cmd beside love.elf on an ESP, firmware carrying
+ // no line of its own). "" is a plain boot: the love-side split leaves cmdline
+ // seatless and the console shell takes over.
+ char cmdline[256]; };
 
 extern struct k_boot kboot;
 
 // copy a hand-off cmdline into kboot; n bounds a source that may not be
 // NUL-terminated (the DTB prop), ~0 for the C-string doors.
 static inline void k_cmdline(char const *s, uintptr_t n) {
-  uintptr_t i = 0;
-  for (; i < n && i + 1 < sizeof kboot.cmdline && s[i]; i++) kboot.cmdline[i] = s[i];
-  kboot.cmdline[i] = 0; }
+ uintptr_t i = 0;
+ for (; i < n && i + 1 < sizeof kboot.cmdline && s[i]; i++) kboot.cmdline[i] = s[i];
+ kboot.cmdline[i] = 0; }
 
 // hand kmain one usable span of RAM. every backend walks its own map (PVH's
 // e820, the DTB's /memory) and lands here; a span too small to hold a pointer
 // pair is not worth a row.
 static inline void k_ram_give(uint64_t base, uint64_t len) {
-  if (len < 2 * sizeof(uintptr_t) || kboot.ram_n >= k_boot_ram_max) return;
-  kboot.ram[kboot.ram_n].base = base;
-  kboot.ram[kboot.ram_n].len  = len;
-  kboot.ram_n++; }
-
-// the panic-time console (src/kmain.c), for a backend with no live `struct g`
-void kputc(int c);
-void kputs(char const *s);
-void kputn(uintptr_t n, int base);
+ if (len < 2 * sizeof(uintptr_t) || kboot.ram_n >= k_boot_ram_max) return;
+ kboot.ram[kboot.ram_n].base = base;
+ kboot.ram[kboot.ram_n].len  = len;
+ kboot.ram_n++; }

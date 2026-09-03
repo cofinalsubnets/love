@@ -254,17 +254,11 @@ struct ai_def { char const *n; intptr_t x; };
 // host nif auto-registration: AiNif("name", fn) lands the entry in the love_nifs section
 // and boot drains [__start_love_nifs, __stop_love_nifs) through ai_defn, so an app adds nifs
 // in its own host/<app>.c. no linker script -- the toolchain defines the bracket symbols.
-// AiModNifs("mod", table) is the module twin: one row per (module, def table), so an
-// app's nifs register under its module and (module 'mod ..) text reopens the same one.
-struct ai_mod { char const *mod; struct ai_def const *defs; uintptr_t n; };
+// a nif rides the image as an index off this bracket, so nothing here is ever a kept absolute.
 extern struct ai_def const __start_love_nifs[], __stop_love_nifs[];
-extern struct ai_mod const __start_love_mods[], __stop_love_mods[];
 #define AiNif(nm, fn) \
   static struct ai_def const __attribute__((section("love_nifs"), used)) \
     _ainif_##fn = { (nm), (intptr_t) (fn) }
-#define AiModNifs(m, tab) \
-  static struct ai_mod const __attribute__((section("love_mods"), used)) \
-    _aimod_##tab = { (m), (tab), sizeof(tab)/sizeof*(tab) }
 
 // port vtable -- what a device owes, and nothing else. a NULL slot means no method
 // (no readn reads end, no writen discards). neither blocks the scheduler; the generic
@@ -363,7 +357,7 @@ struct ai
  *ai_ini_m(void*(*)(struct ai*, void*, size_t)),
  *ai_evals_(struct ai*, const char*),
  *ai_egg_(struct ai*, char const*, char const*, char const*, char const*),  // (egg, p1, corpus, post)
- *ai_defn(struct ai*, struct ai_def const*, uintptr_t, char const*),   // immortal values only; mod (or NULL = the book)
+ *ai_defn(struct ai*, struct ai_def const*, uintptr_t),                // immortal values only
  *ai_defv(struct ai*, char const*),                // its twin for a live heap value (rides sp[0], stays there)
  *ai_layer_(struct ai*),      // push a fresh writable layer (the runtime's enter); every frontend opens its session with it
  *ai_unsplice_(struct ai*);   // drop the link below the head (the runtime's bare leave)
@@ -377,11 +371,17 @@ struct ai
 // by parameter and the audit owns no state here; a NULL guard is audit off. the guard is
 // asked of every candidate absolute and told which object carries it (heap word offset
 // plus that object's hot). answer 0 and the dump refuses.
-struct ai_image_guard { uintptr_t (*ok)(void *ctx, uintptr_t v, uintptr_t off, uintptr_t ap); void *ctx; };
-void *ai_image_save(struct ai*, uintptr_t *outlen, struct ai_image_guard const*),
-     *ai_image_save_(struct ai*, uintptr_t *outlen, struct ai_image_guard const*);   // the unguarded worker: a mid-eval dump (the bake nif)
-struct ai *ai_image_load(void const *buf, uintptr_t len);
+// a refused dump names its first offenders: (heap word offset, the value, that object's ap).
+// output only, and NULL asks for none -- port/mps2 prints them where there is no debugger.
+// `why` names the step that refused: 1 no major pool, 2 the compaction scared, 3 out of
+// memory, 4 an unencodable heap word, 5 the root table is too small, 6 an unencodable root,
+// 8 the heap outgrew the lane floor, 9 the stack was not quiescent, 10 no room for the
+// serial ranks, 11 the rank walk ran out; 0 on the way out.
+struct ai_image_bad { uintptr_t q[3 * 2]; int n, why; };
+void *ai_image_save(struct ai*, uintptr_t *outlen, struct ai_image_bad*),
+     *ai_image_save_(struct ai*, uintptr_t *outlen, struct ai_image_bad*);   // the worker: a mid-eval dump (the bake nif)
 struct ai
+ *ai_image_load(void const *buf, uintptr_t len),
  *ai_image_load_m(void const *buf, uintptr_t len, void *(*)(struct ai*, void*, size_t));   // allocator-parameterized (a device heap has no malloc)
 
 // the terminal scare face: prints ";; a b\n" (show forms) to the err port from
@@ -462,7 +462,7 @@ struct ai_wait_fd { int fd; short events, revents; };
 
 void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ticks), // wait for a fd to be ready
     ai_ready_fds(struct ai_wait_fd *fds, int n);                  // non-blocking variant
-bool ai_ready(int fd, int events), ai_strp(ai_word);
+bool ai_ready(int fd, int events);
 struct ai
  *ai_please(struct ai*, uintptr_t),
  *ai_push(struct ai*, uintptr_t, ...),
@@ -541,5 +541,6 @@ static ai_inline struct ai *ai_have(struct ai *g, uintptr_t n) {
  return !ai_ok(g) || avail(g) >= n ? g : ai_please(g, n);
 #endif
 }
+static ai_inline bool strp(word _) { return lamp(_) && cell(_)->ap == lvm_str; }
 
 #endif

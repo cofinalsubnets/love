@@ -74,8 +74,8 @@ static lvm(lvm_scribe) {
  if (c) {
   out = Sp[0];
   if (x & 1) cb_putc(c, (char) (getcharm(x) & 0xff));
-  else if (ai_strp(x)) {
-   struct ai_str *s = (struct ai_str*) x;
+  else if (strp(x)) {
+   struct ai_str *s = str(x);
    for (uintptr_t i = 0; i < s->len; i++) cb_putc(c, s->bytes[i]); }
   else if (((union u*) x)->ap == lvm_cask) {
    struct ai_str *s = ((struct ai_cask*) x)->str;

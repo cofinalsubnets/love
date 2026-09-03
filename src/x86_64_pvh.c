@@ -11,8 +11,8 @@ struct hvm_start_info {
   uint32_t magic;                     // 0x336ec578 ("xEn3")
   uint32_t version, flags, nr_modules;
   uint64_t modlist_paddr, cmdline_paddr, rsdp_paddr, memmap_paddr;
-  uint32_t memmap_entries, reserved;
-};
+  uint32_t memmap_entries, reserved; };
+
 struct hvm_memmap_entry { uint64_t addr, size; uint32_t type, reserved; };
 
 // the physical footprint qemu loaded us into -- which e820 still calls usable

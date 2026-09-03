@@ -1,42 +1,53 @@
-// src/hash.c -- a digest over a string's bytes. host-only, auto-globbed + AiNif-
-// registered (no love.c/love.h/main.c edit), the fs.c discipline:
-//
-//   (sha256 str) -> the 64-char lowercase hex digest | () misuse
-//   (md5 str)    -> the 32-char lowercase hex digest | () misuse
-//   (crc32 str)  -> the IEEE crc32, a charm          | () misuse
-//   (cksum str)  -> POSIX cksum's crc, length folded in, a charm | () misuse
-//
-// and three of them stream, the state in a cask the caller allocates (the nifs do not
-// allocate) -- see the layouts below:
+// src/hash.c -- digests over a string's bytes. auto-globbed and AiNif-registered,
+// the fs.c discipline; value ops, so absence or misuse answers ().
+//   (sha256 str) / (md5 str)  -> the lowercase hex digest
+//   (crc32 str)               -> the IEEE crc32, a charm
+//   (cksum str)               -> POSIX cksum's crc with the length folded in, a charm
+// three of them also stream, the state in a cask the caller allocates (the nifs do not):
 //   (sha256-init b) / (sha256-feed b str) / (sha256-done b)   b a 105-byte cask
 //   (md5-init b)    / (md5-feed b str)    / (md5-done b)      b an 89-byte cask
 //   (cksum-init b)  / (cksum-feed b str)  / (cksum-done b)    b a 12-byte cask
-//
-// FIPS 180-4, RFC 1321, IEEE 802.3 and POSIX cksum, all the compact single-pass
-// shape; value ops, so absence/misuse answers (). crew/kore's cksum, md5sum and
-// sha256sum applets are these four plus a line of output.
-//
-// they are not all in the same position and it is worth knowing which is which.
-// crc32 shadows lib/gz.l's gz-crcwalk and cksum test/host/hash.l's hash-ckwalk: both
-// polynomials are stated in love, and test/host/{gzc,hash}.l hold the C to the walk at
-// every length, so a disagreement there has a right answer. sha256 and md5 shadow
-// nothing -- so crew/sb's blob and patch ids and crew/moon's cache key rest on this
-// file, and what holds those two honest is the published vectors in test/host/hash.l
-// and GNU coreutils in test/gate/kore.sh. that is a thinner rope than the rest of
-// host/ hangs from, and the fix is a love sha-256, not another vector.
+// FIPS 180-4, RFC 1321, IEEE 802.3 and POSIX cksum, all the compact single-pass shape.
+// crew/kore's cksum, md5sum and sha256sum applets are these four plus a line of output.
+// they do not all stand on the same footing. crc32 shadows lib/gz.l's gz-crcwalk and
+// cksum test/host/hash.l's hash-ckwalk -- both polynomials are stated in love and the C
+// is held to the walk at every length, so a disagreement has a right answer. sha256 and
+// md5 shadow nothing, yet crew/sb's blob and patch ids and crew/moon's cache key rest on
+// them; only the published vectors in test/host/hash.l and GNU coreutils in
+// test/gate/kore.sh hold them honest. the fix for that thin rope is a love sha-256.
 #include "love.h"
 #include <stdint.h>
 #include <string.h>
 
-static const uint32_t K[64] = {
- 0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
- 0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
- 0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
- 0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
- 0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
- 0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
- 0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
- 0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2};
+static uint32_t const
+ K[64] = {
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+  0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+  0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+  0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+  0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+  0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+  0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2},
+ MK[64] = { // md5 (rfc1321)
+  0xd76aa478,0xe8c7b756,0x242070db,0xc1bdceee,0xf57c0faf,0x4787c62a,0xa8304613,0xfd469501,
+  0x698098d8,0x8b44f7af,0xffff5bb1,0x895cd7be,0x6b901122,0xfd987193,0xa679438e,0x49b40821,
+  0xf61e2562,0xc040b340,0x265e5a51,0xe9b6c7aa,0xd62f105d,0x02441453,0xd8a1e681,0xe7d3fbc8,
+  0x21e1cde6,0xc33707d6,0xf4d50d87,0x455a14ed,0xa9e3e905,0xfcefa3f8,0x676f02d9,0x8d2a4c8a,
+  0xfffa3942,0x8771f681,0x6d9d6122,0xfde5380c,0xa4beea44,0x4bdecfa9,0xf6bb4b60,0xbebfbc70,
+  0x289b7ec6,0xeaa127fa,0xd4ef3085,0x04881d05,0xd9d4d039,0xe6db99e5,0x1fa27cf8,0xc4ac5665,
+  0xf4292244,0x432aff97,0xab9423a7,0xfc93a039,0x655b59c3,0x8f0ccc92,0xffeff47d,0x85845dd1,
+  0x6fa87e4f,0xfe2ce6e0,0xa3014314,0x4e0811a1,0xf7537e82,0xbd3af235,0x2ad7d2bb,0xeb86d391},
+ sha_h0[8] = {
+  0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19},
+ md5_h0[4] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
+
+
+static uint8_t const MS[64] = {
+ 7,12,17,22, 7,12,17,22, 7,12,17,22, 7,12,17,22,
+ 5, 9,14,20, 5, 9,14,20, 5, 9,14,20, 5, 9,14,20,
+ 4,11,16,23, 4,11,16,23, 4,11,16,23, 4,11,16,23,
+ 6,10,15,21, 6,10,15,21, 6,10,15,21, 6,10,15,21};
 
 static uint32_t rr(uint32_t x, int n) { return (x >> n) | (x << (32 - n)); }
 
@@ -46,18 +57,18 @@ static void sha_block(uint32_t h[8], const uint8_t *p) {
   w[i] = (uint32_t) p[4*i] << 24 | (uint32_t) p[4*i+1] << 16
        | (uint32_t) p[4*i+2] << 8 | (uint32_t) p[4*i+3];
  for (int i = 16; i < 64; i++) {
-  uint32_t s0 = rr(w[i - 15], 7) ^ rr(w[i - 15], 18) ^ (w[i - 15] >> 3);
-  uint32_t s1 = rr(w[i - 2], 17) ^ rr(w[i - 2], 19) ^ (w[i - 2] >> 10);
+  uint32_t s0 = rr(w[i - 15], 7) ^ rr(w[i - 15], 18) ^ (w[i - 15] >> 3),
+           s1 = rr(w[i - 2], 17) ^ rr(w[i - 2], 19) ^ (w[i - 2] >> 10);
   w[i] = w[i - 16] + s0 + w[i - 7] + s1; }
  uint32_t a = h[0], b = h[1], c = h[2], d = h[3],
           e = h[4], f = h[5], gg = h[6], hh = h[7];
  for (int i = 0; i < 64; i++) {
-  uint32_t s1 = rr(e, 6) ^ rr(e, 11) ^ rr(e, 25);
-  uint32_t ch = (e & f) ^ (~e & gg);
-  uint32_t t1 = hh + s1 + ch + K[i] + w[i];
-  uint32_t s0 = rr(a, 2) ^ rr(a, 13) ^ rr(a, 22);
-  uint32_t mj = (a & b) ^ (a & c) ^ (b & c);
-  uint32_t t2 = s0 + mj;
+  uint32_t s1 = rr(e, 6) ^ rr(e, 11) ^ rr(e, 25),
+           ch = (e & f) ^ (~e & gg),
+           t1 = hh + s1 + ch + K[i] + w[i],
+           s0 = rr(a, 2) ^ rr(a, 13) ^ rr(a, 22),
+           mj = (a & b) ^ (a & c) ^ (b & c),
+           t2 = s0 + mj;
   hh = gg; gg = f; f = e; e = d + t1;
   d = c; c = b; b = a; a = t1 + t2; }
  h[0] += a; h[1] += b; h[2] += c; h[3] += d;
@@ -108,7 +119,7 @@ static void blk_hex(const uint32_t *h, int words, int be, char *out) {
    out[8 * k + 2 * j + 1] = hx[b & 15]; }
  out[8 * words] = 0; }
 
-static void sha256_hex(const uint8_t *msg, size_t len, char out[65]) {
+static ai_inline void sha256_hex(const uint8_t *msg, size_t len, char out[65]) {
  uint32_t h[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
                   0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19};
  uint8_t buf[64];
@@ -117,7 +128,7 @@ static void sha256_hex(const uint8_t *msg, size_t len, char out[65]) {
  blk_hex(h, 8, 1, out); }
 
 ai_noinline static struct ai *host_sha256(struct ai *g) {
- if (!ai_strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
+ if (!strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
  struct ai_str *s = (struct ai_str*) g->sp[0];
  char hex[65];
  sha256_hex((const uint8_t*) s->bytes, (size_t) s->len, hex);
@@ -125,31 +136,10 @@ ai_noinline static struct ai *host_sha256(struct ai *g) {
  g->sp[1] = g->sp[0];
  g->sp += 1;
  return g; }
-static lvm(lvm_sha256) {
- Pack(g); g = host_sha256(g);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- Unpack(g);
- ai_musttail return Next(1); }
 
-// --- md5 (RFC 1321) ---------------------------------------------------------------
-// the same shape as sha256 above with the endianness turned around: md5 loads its
-// words and lays its length little-endian, where sha-256 does both big.
-static const uint32_t MK[64] = {
- 0xd76aa478,0xe8c7b756,0x242070db,0xc1bdceee,0xf57c0faf,0x4787c62a,0xa8304613,0xfd469501,
- 0x698098d8,0x8b44f7af,0xffff5bb1,0x895cd7be,0x6b901122,0xfd987193,0xa679438e,0x49b40821,
- 0xf61e2562,0xc040b340,0x265e5a51,0xe9b6c7aa,0xd62f105d,0x02441453,0xd8a1e681,0xe7d3fbc8,
- 0x21e1cde6,0xc33707d6,0xf4d50d87,0x455a14ed,0xa9e3e905,0xfcefa3f8,0x676f02d9,0x8d2a4c8a,
- 0xfffa3942,0x8771f681,0x6d9d6122,0xfde5380c,0xa4beea44,0x4bdecfa9,0xf6bb4b60,0xbebfbc70,
- 0x289b7ec6,0xeaa127fa,0xd4ef3085,0x04881d05,0xd9d4d039,0xe6db99e5,0x1fa27cf8,0xc4ac5665,
- 0xf4292244,0x432aff97,0xab9423a7,0xfc93a039,0x655b59c3,0x8f0ccc92,0xffeff47d,0x85845dd1,
- 0x6fa87e4f,0xfe2ce6e0,0xa3014314,0x4e0811a1,0xf7537e82,0xbd3af235,0x2ad7d2bb,0xeb86d391};
-static const uint8_t MS[64] = {
- 7,12,17,22, 7,12,17,22, 7,12,17,22, 7,12,17,22,
- 5, 9,14,20, 5, 9,14,20, 5, 9,14,20, 5, 9,14,20,
- 4,11,16,23, 4,11,16,23, 4,11,16,23, 4,11,16,23,
- 6,10,15,21, 6,10,15,21, 6,10,15,21, 6,10,15,21};
+static lvm(lvm_sha256) LvmCall(g, host_sha256)
 
-static uint32_t rl(uint32_t x, int n) { return (x << n) | (x >> (32 - n)); }
+static ai_inline uint32_t rl(uint32_t x, int n) { return (x << n) | (x >> (32 - n)); }
 
 static void md5_block(uint32_t h[4], const uint8_t *p) {
  uint32_t m[16], a = h[0], b = h[1], c = h[2], d = h[3];
@@ -166,7 +156,7 @@ static void md5_block(uint32_t h[4], const uint8_t *p) {
   a = d; d = c; c = b; b += rl(f, MS[i]); }
  h[0] += a; h[1] += b; h[2] += c; h[3] += d; }
 
-static void md5_hex(const uint8_t *msg, size_t len, char out[33]) {
+static ai_inline void md5_hex(const uint8_t *msg, size_t len, char out[33]) {
  uint32_t h[4] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
  uint8_t buf[64];
  unsigned r = blk_feed(h, buf, 0, md5_block, msg, (uintptr_t) len);
@@ -174,19 +164,16 @@ static void md5_hex(const uint8_t *msg, size_t len, char out[33]) {
  blk_hex(h, 4, 0, out); }
 
 ai_noinline static struct ai *host_md5(struct ai *g) {
- if (!ai_strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
+ if (!strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
  struct ai_str *s = (struct ai_str*) g->sp[0];
  char hex[33];
- md5_hex((const uint8_t*) s->bytes, (size_t) s->len, hex);
+ md5_hex((unsigned char const*) s->bytes, s->len, hex);
  if (!ai_ok(g = ai_strof(g, hex))) return g;                  // pushes: digest over arg
  g->sp[1] = g->sp[0];
  g->sp += 1;
  return g; }
-static lvm(lvm_md5) {
- Pack(g); g = host_md5(g);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- Unpack(g);
- ai_musttail return Next(1); }
+
+static lvm(lvm_md5) LvmCall(g, host_md5)
 
 // --- crc32 (IEEE 802.3: reflected, polynomial 0xedb88320) -------------------------
 // eight bytes at a time, and that is the whole difference: the byte-at-a-time walk
@@ -225,7 +212,7 @@ static uint32_t crc32_of(const uint8_t *p, uintptr_t n) {
  return c ^ 0xffffffff; }
 
 ai_noinline static struct ai *host_crc32(struct ai *g) {
- if (!ai_strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
+ if (!strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
  { struct ai_str *s = (struct ai_str*) g->sp[0];
    g->sp[0] = putcharm(crc32_of((const uint8_t*) s->bytes, (uintptr_t) s->len)); }
  return g; }
@@ -252,7 +239,7 @@ static uint32_t ck_bit(uint32_t c, uint8_t b) {
 static uint32_t ck_t[8][256];
 static int ck_ready;
 
-static void ck_init(void) {
+static ai_noinline void ck_init(void) {
  unsigned i, k;
  for (i = 0; i < 256; i++) ck_t[0][i] = ck_bit(0, (uint8_t) i);
  for (i = 0; i < 256; i++) {                    // table k is table 0 shifted k bytes on
@@ -290,15 +277,11 @@ static uint32_t ck_len(uint32_t c, uint64_t len) {
 static uint32_t cksum_of(const uint8_t *p, uintptr_t n) {
  return ~ck_len(ck_run(0, p, n), (uint64_t) n); }
 
-ai_noinline static struct ai *host_cksum(struct ai *g) {
- if (!ai_strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
- { struct ai_str *s = (struct ai_str*) g->sp[0];
-   g->sp[0] = putcharm(cksum_of((const uint8_t*) s->bytes, (uintptr_t) s->len)); }
- return g; }
 static lvm(lvm_cksum) {
- Pack(g); g = host_cksum(g);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- Unpack(g);
+ if (!strp(Sp[0])) Sp[0] = ZeroPoint;
+ else {
+  struct ai_str *s = str(Sp[0]);
+  Sp[0] = putcharm(cksum_of((unsigned char const*)s->bytes, s->len)); }
  ai_musttail return Next(1); }
 
 // --- the same digests, resumable ---------------------------------------------------
@@ -351,9 +334,6 @@ static void dig_st(uint8_t *st, const uint32_t *h, int words, uint64_t len) {
 // the three entry points a block digest wears, told apart by its state's width
 struct digspec { uintptr_t st; int words; unsigned remoff, bufoff; blkfn f; int be;
                  const uint32_t *h0; };
-static const uint32_t sha_h0[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-                                   0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
-static const uint32_t md5_h0[4] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
 static const struct digspec dig_sha = {ShaSt, 8, ShaRem, ShaBuf, sha_block, 1, sha_h0},
                             dig_md5 = {Md5St, 4, Md5Rem, Md5Buf, md5_block, 0, md5_h0};
 
@@ -372,7 +352,7 @@ static ai_word dig_init(ai_word x, const struct digspec *d) {
 // -- a caller reads by the gulp and never has to think in 64s.
 static ai_word dig_feed(ai_word x, ai_word a, const struct digspec *d) {
  struct ai_str *cs = dig_cask(x, d->st);
- if (!cs || !ai_strp(a)) return ZeroPoint;
+ if (!cs || !strp(a)) return ZeroPoint;
  struct ai_str *in = (struct ai_str*) a;
  uint8_t *st = (uint8_t*) cs->bytes;
  uint32_t h[8];
@@ -386,7 +366,7 @@ static ai_word dig_feed(ai_word x, ai_word a, const struct digspec *d) {
 
 // (X-done b) -> the hex digest | (). the pad is the one-shot's, over the remainder
 // rather than the message tail; b is left spent, not reusable.
-static struct ai *dig_done(struct ai *g, const struct digspec *d) {
+static ai_noinline struct ai *dig_done(struct ai *g, const struct digspec *d) {
  struct ai_str *cs = dig_cask(g->sp[0], d->st);
  if (!cs) return g->sp[0] = ZeroPoint, g;
  uint8_t *st = (uint8_t*) cs->bytes;
@@ -401,44 +381,31 @@ static struct ai *dig_done(struct ai *g, const struct digspec *d) {
  g->sp += 1;
  return g; }
 
-ai_noinline static ai_word host_sha_init(ai_word x) { return dig_init(x, &dig_sha); }
-ai_noinline static ai_word host_md5_init(ai_word x) { return dig_init(x, &dig_md5); }
-ai_noinline static ai_word host_sha_feed(ai_word x, ai_word a) {
- return dig_feed(x, a, &dig_sha); }
-ai_noinline static ai_word host_md5_feed(ai_word x, ai_word a) {
- return dig_feed(x, a, &dig_md5); }
-ai_noinline static struct ai *host_sha_done(struct ai *g) { return dig_done(g, &dig_sha); }
-ai_noinline static struct ai *host_md5_done(struct ai *g) { return dig_done(g, &dig_md5); }
+ai_inline static struct ai *host_sha_done(struct ai *g) { return dig_done(g, &dig_sha); }
+ai_inline static struct ai *host_md5_done(struct ai *g) { return dig_done(g, &dig_md5); }
 
-static lvm(lvm_sha_init) { Sp[0] = host_sha_init(Sp[0]); ai_musttail return Next(1); }
-static lvm(lvm_md5_init) { Sp[0] = host_md5_init(Sp[0]); ai_musttail return Next(1); }
+static lvm(lvm_sha_done) LvmCall(g, host_sha_done)
+static lvm(lvm_md5_done) LvmCall(g, host_md5_done)
+
+static lvm(lvm_sha_init) {
+ Sp[0] = dig_init(Sp[0], &dig_sha);
+ ai_musttail return Next(1); }
+
+static lvm(lvm_md5_init) {
+ Sp[0] = dig_init(Sp[0], &dig_md5);
+ ai_musttail return Next(1); }
+
 static lvm(lvm_sha_feed) {
- Sp[1] = host_sha_feed(Sp[0], Sp[1]); Sp += 1; ai_musttail return Next(1); }
-static lvm(lvm_md5_feed) {
- Sp[1] = host_md5_feed(Sp[0], Sp[1]); Sp += 1; ai_musttail return Next(1); }
-static lvm(lvm_sha_done) {
- Pack(g); g = host_sha_done(g);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- Unpack(g);
- ai_musttail return Next(1); }
-static lvm(lvm_md5_done) {
- Pack(g); g = host_md5_done(g);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- Unpack(g);
- ai_musttail return Next(1); }
+ Sp[1] = dig_feed(Sp[0], Sp[1], &dig_sha);
+ ai_musttail return Nextp(1, 1); }
 
-// cksum streams with no block and no remainder: its walk is a byte at a time, so the
-// whole state is the register and the count. and the count is not bookkeeping here
-// -- cksum folds it into the message at the end, which is why an empty file answers
-// 4294967295 and not 0, and why `done` is where the length finally speaks.
-ai_noinline static ai_word host_ck_init(ai_word x) {
- struct ai_str *s = dig_cask(x, CkSt);
- if (!s) return ZeroPoint;
- memset((uint8_t*) s->bytes, 0, CkSt);
- return x; }
+static lvm(lvm_md5_feed) {
+ Sp[1] = dig_feed(Sp[0], Sp[1], &dig_md5);
+ ai_musttail return Nextp(1, 1); }
+
 ai_noinline static ai_word host_ck_feed(ai_word x, ai_word a) {
  struct ai_str *cs = dig_cask(x, CkSt);
- if (!cs || !ai_strp(a)) return ZeroPoint;
+ if (!cs || !strp(a)) return ZeroPoint;
  struct ai_str *in = (struct ai_str*) a;
  uint8_t *st = (uint8_t*) cs->bytes;
  uint32_t c;
@@ -449,6 +416,7 @@ ai_noinline static ai_word host_ck_feed(ai_word x, ai_word a) {
  c = ck_run(c, (const uint8_t*) in->bytes, n);
  dig_st(st, &c, 1, len);
  return x; }
+
 ai_noinline static ai_word host_ck_done(ai_word x) {
  struct ai_str *cs = dig_cask(x, CkSt);
  if (!cs) return ZeroPoint;
@@ -457,24 +425,37 @@ ai_noinline static ai_word host_ck_done(ai_word x) {
  uint64_t len;
  dig_ld(st, &c, 1, &len);
  return putcharm(~ck_len(c, len)); }
-static lvm(lvm_ck_init) { Sp[0] = host_ck_init(Sp[0]); ai_musttail return Next(1); }
-static lvm(lvm_ck_feed) {
- Sp[1] = host_ck_feed(Sp[0], Sp[1]); Sp += 1; ai_musttail return Next(1); }
-static lvm(lvm_ck_done) { Sp[0] = host_ck_done(Sp[0]); ai_musttail return Next(1); }
 
-static union u const nif_sha256[] = {{lvm_sha256}, {lvm_ret0}},
-                    nif_sha_init[] = {{lvm_sha_init}, {lvm_ret0}},
-                    nif_sha_feed[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_sha_feed}, {lvm_ret0}},
-                    nif_sha_done[] = {{lvm_sha_done}, {lvm_ret0}},
-                    nif_md5[]    = {{lvm_md5},    {lvm_ret0}},
-                    nif_md5_init[] = {{lvm_md5_init}, {lvm_ret0}},
-                    nif_md5_feed[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_md5_feed}, {lvm_ret0}},
-                    nif_md5_done[] = {{lvm_md5_done}, {lvm_ret0}},
-                    nif_crc32[]  = {{lvm_crc32},  {lvm_ret0}},
-                    nif_cksum[]  = {{lvm_cksum},  {lvm_ret0}},
-                    nif_ck_init[] = {{lvm_ck_init}, {lvm_ret0}},
-                    nif_ck_feed[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ck_feed}, {lvm_ret0}},
-                    nif_ck_done[] = {{lvm_ck_done}, {lvm_ret0}};
+// cksum streams with no block and no remainder: its walk is a byte at a time, so the
+// whole state is the register and the count.
+static lvm(lvm_ck_init) {
+ struct ai_str *s = dig_cask(Sp[0], CkSt);
+ Sp[0] = !s ? ZeroPoint : word(memset(s->bytes, 0, CkSt));
+ ai_musttail return Next(1); }
+
+static lvm(lvm_ck_feed) {
+ Sp[1] = host_ck_feed(Sp[0], Sp[1]);
+ ai_musttail return Nextp(1, 1); }
+
+static lvm(lvm_ck_done) {
+ Sp[0] = host_ck_done(Sp[0]);
+ ai_musttail return Next(1); }
+
+static union u const
+ nif_sha256[] = {{lvm_sha256}, {lvm_ret0}},
+ nif_sha_init[] = {{lvm_sha_init}, {lvm_ret0}},
+ nif_sha_feed[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_sha_feed}, {lvm_ret0}},
+ nif_sha_done[] = {{lvm_sha_done}, {lvm_ret0}},
+ nif_md5[]    = {{lvm_md5},    {lvm_ret0}},
+ nif_md5_init[] = {{lvm_md5_init}, {lvm_ret0}},
+ nif_md5_feed[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_md5_feed}, {lvm_ret0}},
+ nif_md5_done[] = {{lvm_md5_done}, {lvm_ret0}},
+ nif_crc32[]  = {{lvm_crc32},  {lvm_ret0}},
+ nif_cksum[]  = {{lvm_cksum},  {lvm_ret0}},
+ nif_ck_init[] = {{lvm_ck_init}, {lvm_ret0}},
+ nif_ck_feed[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ck_feed}, {lvm_ret0}},
+ nif_ck_done[] = {{lvm_ck_done}, {lvm_ret0}};
+
 AiNif("sha256", nif_sha256);
 AiNif("sha256-init", nif_sha_init);
 AiNif("sha256-feed", nif_sha_feed);

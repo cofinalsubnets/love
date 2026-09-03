@@ -35,32 +35,32 @@ struct k_file { char const *path, *bytes; uintptr_t len, ms; };
 // mtime is 0 -- the blob carries none, and a date invented here would be a lie
 // the corpus's stat laws could read.
 int k_baked(struct k_file *rows, int cap) {
-  if (rows && cap > 0)
-    rows[0] = (struct k_file) { "doom1.wad", (char const *) doom_wad, doom_wad_len, 0 };
-  return 1; }
+ if (rows && cap > 0)
+  rows[0] = (struct k_file) { "doom1.wad", (char const *) doom_wad, doom_wad_len, 0 };
+ return 1; }
 
 // --- the four doors -------------------------------------------------------
 
 static uintptr_t dg_epoch;
 
 void DG_Init(void) {
-  dg_epoch = k_clock_ms();
-  k_scan_arm(1); }
+ dg_epoch = k_clock_ms();
+ k_scan_arm(1); }
 
 // blit the 640x400 frame into the middle of whatever the door handed over. no
 // scaling: a GOP mode smaller than the frame simply shows the part that fits,
 // which is honest where a stretch would hide the mode.
 void DG_DrawFrame(void) {
-  volatile uint32_t *fb;
-  int w, h, pitch;
-  if (!k_fb(&fb, &w, &h, &pitch)) return;
-  int cw = w < DOOMGENERIC_RESX ? w : DOOMGENERIC_RESX,
-      ch = h < DOOMGENERIC_RESY ? h : DOOMGENERIC_RESY,
-      ox = (w - cw) / 2, oy = (h - ch) / 2;
-  for (int y = 0; y < ch; y++) {
-    volatile uint32_t *d = fb + (uintptr_t) (y + oy) * pitch + ox;
-    uint32_t const *s = DG_ScreenBuffer + (uintptr_t) y * DOOMGENERIC_RESX;
-    for (int x = 0; x < cw; x++) d[x] = s[x]; } }
+ volatile uint32_t *fb;
+ int w, h, pitch;
+ if (!k_fb(&fb, &w, &h, &pitch)) return;
+ int cw = w < DOOMGENERIC_RESX ? w : DOOMGENERIC_RESX,
+     ch = h < DOOMGENERIC_RESY ? h : DOOMGENERIC_RESY,
+     ox = (w - cw) / 2, oy = (h - ch) / 2;
+ for (int y = 0; y < ch; y++) {
+  volatile uint32_t *d = fb + (uintptr_t) (y + oy) * pitch + ox;
+  uint32_t const *s = DG_ScreenBuffer + (uintptr_t) y * DOOMGENERIC_RESX;
+  for (int x = 0; x < cw; x++) d[x] = s[x]; } }
 
 void DG_SleepMs(uint32_t ms) { k_sleep(ms); }
 
@@ -74,54 +74,52 @@ static char const sc_ascii[] =
   "\0\0" "1234567890-=" "\0\0" "qwertyuiop[]" "\0\0" "asdfghjkl;'`"
   "\0" "\\" "zxcvbnm,./";
 static unsigned char sc_key(int sc) {
-  switch (sc) {
-    case 0x01: return KEY_ESCAPE;
-    case 0x0e: return KEY_BACKSPACE;
-    case 0x0f: return KEY_TAB;
-    case 0x1c: case 0x11c: return KEY_ENTER;
-    case 0x1d: case 0x11d: return KEY_FIRE;          // either ctrl fires
-    case 0x2a: case 0x36: return KEY_RSHIFT;
-    case 0x38: case 0x138: return KEY_LALT;
-    case 0x39: return KEY_USE;                       // space
-    case 0x3a: return KEY_CAPSLOCK;
-    // the arrow cluster and the keypad share a code, the cluster's extended:
-    // doom reads them alike (doomkeys.h's KEYP_8 IS KEY_UPARROW), so both go
-    // to the same key rather than one of them going nowhere.
-    case 0x48: case 0x148: return KEY_UPARROW;
-    case 0x50: case 0x150: return KEY_DOWNARROW;
-    case 0x4b: case 0x14b: return KEY_LEFTARROW;
-    case 0x4d: case 0x14d: return KEY_RIGHTARROW;
-    case 0x47: case 0x147: return KEY_HOME;
-    case 0x4f: case 0x14f: return KEY_END;
-    case 0x49: case 0x149: return KEY_PGUP;
-    case 0x51: case 0x151: return KEY_PGDN;
-    case 0x52: case 0x152: return KEY_INS;
-    case 0x53: case 0x153: return KEY_DEL;
-    default: break; }
-  if (sc >= 0x3b && sc <= 0x44) return (unsigned char) (0x80 + sc);   // F1..F10
-  if (sc > 0 && sc < (int) sizeof sc_ascii - 1) return (unsigned char) sc_ascii[sc];
-  return 0; }
+ switch (sc) {
+  case 0x01: return KEY_ESCAPE;
+  case 0x0e: return KEY_BACKSPACE;
+  case 0x0f: return KEY_TAB;
+  case 0x1c: case 0x11c: return KEY_ENTER;
+  case 0x1d: case 0x11d: return KEY_FIRE;          // either ctrl fires
+  case 0x2a: case 0x36: return KEY_RSHIFT;
+  case 0x38: case 0x138: return KEY_LALT;
+  case 0x39: return KEY_USE;                       // space
+  case 0x3a: return KEY_CAPSLOCK;
+  // the arrow cluster and the keypad share a code, the cluster's extended:
+  // doom reads them alike (doomkeys.h's KEYP_8 IS KEY_UPARROW), so both go
+  // to the same key rather than one of them going nowhere.
+  case 0x48: case 0x148: return KEY_UPARROW;
+  case 0x50: case 0x150: return KEY_DOWNARROW;
+  case 0x4b: case 0x14b: return KEY_LEFTARROW;
+  case 0x4d: case 0x14d: return KEY_RIGHTARROW;
+  case 0x47: case 0x147: return KEY_HOME;
+  case 0x4f: case 0x14f: return KEY_END;
+  case 0x49: case 0x149: return KEY_PGUP;
+  case 0x51: case 0x151: return KEY_PGDN;
+  case 0x52: case 0x152: return KEY_INS;
+  case 0x53: case 0x153: return KEY_DEL;
+  default: break; }
+ if (sc >= 0x3b && sc <= 0x44) return (unsigned char) (0x80 + sc);   // F1..F10
+ if (sc > 0 && sc < (int) sizeof sc_ascii - 1) return (unsigned char) sc_ascii[sc];
+ return 0; }
 
 int DG_GetKey(int *pressed, unsigned char *key) {
-  for (;;) {
-    int c = k_scan_pop();
-    if (c < 0) return 0;
-    unsigned char k = sc_key((c & ~0x80) | (c & 0x100));
-    if (!k) continue;
-    return *pressed = !(c & 0x80), *key = k, 1; } }
+ for (;;) {
+  int c = k_scan_pop();
+  if (c < 0) return 0;
+  unsigned char k = sc_key((c & ~0x80) | (c & 0x100));
+  if (!k) continue;
+  return *pressed = !(c & 0x80), *key = k, 1; } }
 
 // --- the nif --------------------------------------------------------------
 
 static char *dg_argv[] = { (char *) "doom", (char *) "-iwad", (char *) "doom1.wad", 0 };
 
 static void doom_run(void) {
-  doomgeneric_Create(3, dg_argv);
-  for (;;) doomgeneric_Tick(); }
+ for (doomgeneric_Create(3, dg_argv);;) doomgeneric_Tick(); }
 
 static lvm(lvm_doom) {
-  doom_run();
-  Ip += 1;
-  ai_musttail return Continue(); }
+ doom_run();
+ ai_musttail return Next(1); }
 
 static union u const nif_doom[] = {{lvm_doom}, {lvm_ret0}};
 AiNif("doom", nif_doom);

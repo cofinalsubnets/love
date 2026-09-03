@@ -206,7 +206,7 @@ int main(void) {
   sh_call(SH_CLOSE, (uintptr_t) cl);
   struct ai *g = ai_image_load(buf, len);
   if (!g) { sh_puts("; wake REFUSED\n"); m7_exit(5); }
-  g = ai_defn(g, defs, countof(defs), 0);
+  g = ai_defn(g, defs, countof(defs));
   if (ai_ok(g)) ai_core_of(g)->budget = freelist->len / 4;
   struct ai *r = ai_evals_(g,
     "(: ok (&& ((3 2) = 8)"
@@ -239,11 +239,6 @@ int main(void) {
 #define SH_CLOSE 0x02
 // the offender log rides the BAKER'S OWN frame -- the guard is told which object carries
 // each absolute, so naming them needs nothing of the core's. quads: obj-off, val, obj-hot.
-struct img_bad { uintptr_t q[3 * 2]; uintptr_t n; };
-static uintptr_t img_reject_all(void *ctx, uintptr_t v, uintptr_t off, uintptr_t ap) {
-  struct img_bad *b = ctx;
-  if (b->n < 2) b->q[3 * b->n] = off, b->q[3 * b->n + 1] = v, b->q[3 * b->n + 2] = ap, b->n++;
-  return 0; }
 static void sh_puts(const char *s) { while (*s) sh_putc(*s++); }
 // THE BAKED MODULE, the one this baker wants: the boot evals it to register the layer,
 // so the woken image serves ((from 'bao 'shell) 0) -- the teensy and nucleo launchers.
@@ -297,13 +292,13 @@ int main(void) {
   if (!ai_ok(r)) {
     if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
     m7_exit(3); }
-  struct img_bad bad = { {0}, 0 };
-  struct ai_image_guard gd = { img_reject_all, &bad };   // ANY kept absolute refuses the dump
+  struct ai_image_bad bad = { {0}, 0, 0 };               // an unencodable word refuses the dump
   uintptr_t len = 0;
-  void *img = ai_image_save(r, &len, &gd);
+  void *img = ai_image_save(r, &len, &bad);
   if (!img) {
-    sh_puts("; dump REFUSED -- absolutes in the heap (off, val, ap):\n");
-    for (uintptr_t i = 0; i < bad.n; i++) {
+    sh_puts("; dump REFUSED at stage "); sh_hex((uintptr_t) bad.why);
+    sh_puts(" -- (off, val, ap):\n");
+    for (int i = 0; i < bad.n; i++) {
       sh_hex(bad.q[3 * i]); sh_putc(' ');
       sh_hex(bad.q[3 * i + 1]); sh_putc(' ');
       sh_hex(bad.q[3 * i + 2]); sh_putc('\n'); }
@@ -352,7 +347,7 @@ int main(void) {
   freelist = (struct mem*) POOL;
   freelist->next = NULL;
   freelist->len = POOL_BYTES / sizeof(uintptr_t);
-  struct ai *g = ai_defn(ai_ini(), defs, countof(defs), 0);
+  struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
   if (ai_ok(g)) ai_core_of(g)->budget = POOL_BYTES / sizeof(ai_word) / 4;
   struct ai *r = ai_egg_(g,
 #include "egg.h"

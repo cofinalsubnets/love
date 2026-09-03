@@ -9,8 +9,7 @@
    ; --- the nifs. one row per (C symbol, love name, arity, impl). arity is a shape,
    ; not a number the C reads: 1 runs the op straight, 2..5 curry on lvm_cur first.
    nif-rows
-    '(
-      (nif_clock         "clock"         1 lvm_clock)
+    '((nif_clock         "clock"         1 lvm_clock)
       (nif_nclock        "nclock"        1 lvm_nclock)
       (nif_please        "please"        1 lvm_please)
       (nif_gauge         "gauge"         1 lvm_gauge)
@@ -143,51 +142,48 @@
       (nif_calloutdrive  "calloutdrive"  1 lvm_calloutdrive)
       (nif_jkoff         "jkoff"         1 lvm_jkoff)
       (nif_natp          "nat?"          1 lvm_natp)
-      (nif_calloutresume "calloutresume" 1 lvm_calloutresume)
-      )
+      (nif_calloutresume "calloutresume" 1 lvm_calloutresume))
 
    ; --- the instructions the codegen emits. no name column and no arity: an
    ; instruction is jumped to, not applied, so its C symbol is its only spelling.
    nif-insts
-    '(
-      lvm_unc lvm_index lvm_ret lvm_ap lvm_tap lvm_apn lvm_tapn lvm_jump lvm_cond lvm_arg
+    '(lvm_unc lvm_index lvm_ret lvm_ap lvm_tap lvm_apn lvm_tapn lvm_jump lvm_cond lvm_arg
       lvm_quote lvm_defglob lvm_argap lvm_quoteap lvm_argtap lvm_arg0 lvm_arg1 lvm_arg2
       lvm_arg3 lvm_quo0 lvm_quo1 lvm_quo2 lvm_quo3 lvm_quom1 lvm_quom2 lvm_aa lvm_aq lvm_qa
       lvm_qq lvm_aap lvm_aqp lvm_qap lvm_qqp lvm_argcap lvm_argcup lvm_argtwo lvm_argcond
-      lvm_argtwocond
-      )
+      lvm_argtwocond)
 
    ; --- the C, through clay ------------------------------------------------------
    ; one table: a nif's stream is a run inside it, and def1 carries the run's address.
    ; two shapes spliced in flat -- {impl, ret0}, and {cur, count, impl, ret0} above one operand.
    (vr s) ['var s]
    (cell e) ['init [e]]            ; one `union u`: braced, the ap being its first member
-   (catl l) (foldl (+) () l)
+   catl (foldl (+) ()) ; FIXME isn't there a nif for this?
    (nif-run a im)                  ; the cells of one nif's run
     (: end [(cell (vr (string im))) (cell (vr "lvm_ret0"))]
        (? (a < 2) end
           ([(cell (vr "lvm_cur"))
             (cell ['dfield "x" ['call (vr "putcharm") [['num a]]]])]
            + end)))
-   (nif-wide? r) (1 < (el r 2))    ; a curried run is four cells, a plain one two
+   (nif-wide? r) (1 < <>>r)    ; a curried run is four cells, a plain one two
    nif-table
     ['gdecl [["nifs" '(arr (const (named "union u")) 0)
-              ['init (catl (map (\ r (nif-run (el r 2) (el r 3))) nif-rows))]]]
+              ['init (catl (map (r \ nif-run <>>r <>>>r) nif-rows))]]]
      '(static)]
 
    ; where each nif's run starts: a running sum over the roster
    nif-ats
-    (: (go l n) (? (! (two? l)) () (link n (go >l (n + (? (nif-wide? <l) 4 2)))))
-       (go nif-rows 0))
+    (: (go l n) (two? l ? (n . go >l (n + (nif-wide? <l ? 4 2))))
+     (go nif-rows 0))
 
    ; the book table: love name -> the value as a word. a nif carries its run's address,
    ; an instruction carries itself. unsized, so C's count cannot disagree with the roster.
    (def-row nm v) ['init [['str nm] ['cast '(named "intptr_t") v]]]
-   (nif-at n) (? (n < 1) (vr "nifs") ['bin '+ (vr "nifs") ['num n]])
-   (zip a b) (? (! (two? a)) () (link [<a <b] (zip >a >b)))
+   (nif-at n) (n < 1 ? (vr "nifs") ['bin '+ (vr "nifs") ['num n]])
+   (zip a b) (two? a ? ([<a <b] . zip >a >b))
    nif-def1
     ['gdecl [["def1" '(arr (const (struct "ai_def")) 0)
-              ['init ((map (\ p (def-row (el <p 1) (nif-at <>p))) (zip nif-rows nif-ats))
+              ['init ((map (p \ def-row <><p (nif-at <>p)) (zip nif-rows nif-ats))
                       + (map (\ i (def-row (string i) (vr (string i)))) nif-insts))]]]
      '(static)]
 
@@ -195,8 +191,8 @@
    ; book name -> the lvm_ that runs it, as love data in .rodata: `dis` can name only
    ; the book key, mooncc's IR only the C symbol. lib/splice.l reads it out of .rodata.
    nif-lvmtext
-    (: (row r) ("(\"" + (el r 1) + "\" " + (string (el r 3)) + ")")
-       ("(" + (foldl (\ a r (a + row r)) "" nif-rows) + ")"))
+    (: (row r) ("(\"" + <>r + "\" " + string <>>>r + ")")
+       ("(" + foldl (a \ r \ a + row r) "" nif-rows + ")"))
    nif-lvmmap                       ; not static: the runtime asks for it by name
     ['gdecl [["ai_nif_lvm" '(arr (const char) 0) ['str nif-lvmtext]]] ()]
 
@@ -206,5 +202,5 @@
        nif-table '(note "") nif-def1 '(note "") nif-lvmmap]))
    ; a shape check first: a malformed tree arrives as a codegen error naming nothing.
    nifs-ok
-    (: bad (any (\ c (! (id? (clay-ok? c) 1))) [nif-table nif-def1])
+    (: bad (any (c \ clay-ok? c != 1) [nif-table nif-def1])
        (? bad 0 1)))

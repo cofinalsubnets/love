@@ -96,7 +96,7 @@ static ai_inline int proc_status(int st) {
 // a love string as a C string, or NULL for a non-string: bytes[len] is always a NUL
 // (src/love.h), so the bytes go to the syscall where they lie. a path the kernel finds
 // too long comes back ENAMETOOLONG, which is a truer answer than a cap of ours.
-static char const *str_c(ai_word x) { return ai_strp(x) ? txt(x) : NULL; }
+static ai_inline char const *str_c(ai_word x) { return strp(x) ? txt(x) : NULL; }
 
 // the argv marshal: the chain of strings at g->sp[0] -> argc+1 char** + the
 // NUL-joined byte blob, laid in the uncommitted heap gap at Hp -- GC-invisible,
@@ -1325,24 +1325,6 @@ static lvm(lvm_swig) {
  Sp[1] = out;
  ai_musttail return Nextp(1, 1); }
 
-static union u const
-  nif_raw[]        = {{lvm_raw}, {lvm_ret0}},
-  nif_swig[]       = {{lvm_cur}, {.x = putcharm(2)}, {lvm_swig}, {lvm_ret0}},
-  nif_tether[]     = {{lvm_tether}, {lvm_ret0}},
-  nif_reap[]       = {{lvm_reap}, {lvm_ret0}},
-  nif_kill[]       = {{lvm_cur}, {.x = putcharm(2)}, {lvm_kill}, {lvm_ret0}},
-  nif_winsize[]    = {{lvm_winsize}, {lvm_ret0}},
-  nif_setwinsize[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_setwinsize}, {lvm_ret0}},
-  nif_ptyecho[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ptyecho}, {lvm_ret0}};
-AiNif("tether", nif_tether);
-AiNif("gather", nif_reap);
-AiNif("still", nif_kill);
-AiNif("winsize", nif_winsize);
-AiNif("setwinsize", nif_setwinsize);
-AiNif("ptyecho", nif_ptyecho);
-AiNif("raw", nif_raw);
-AiNif("swig", nif_swig);
-
 // --- the port doors: (open path mode) and (close p) --------------------------
 // posix surface like everything above, and one body per behaviour (plan C2):
 // on inle the open(2)/close(2) below land in src/sys.c's arms, so the ramfs
@@ -1372,7 +1354,7 @@ static int call_open(struct ai_str *pv, struct ai_str *mv) {
 // test, nom? the failure test, and both are exact.
 static lvm(lvm_open) {
   long rc = -1;
-  if (!ai_strp(Sp[0]) || !ai_strp(Sp[1])) goto fail;
+  if (!strp(Sp[0]) || !strp(Sp[1])) goto fail;
   struct ai_str *pv = str(Sp[0]), *mv = str(Sp[1]);
   int fd = call_open(pv, mv);
   if (fd < 0) { rc = fd; goto fail; }
@@ -1421,6 +1403,22 @@ static lvm(lvm_close) {
 
 static union u const
   nif_open[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_open}, {lvm_ret0}},
-  nif_close[] = {{lvm_close}, {lvm_ret0}};
+  nif_close[] = {{lvm_close}, {lvm_ret0}},
+  nif_raw[]        = {{lvm_raw}, {lvm_ret0}},
+  nif_swig[]       = {{lvm_cur}, {.x = putcharm(2)}, {lvm_swig}, {lvm_ret0}},
+  nif_tether[]     = {{lvm_tether}, {lvm_ret0}},
+  nif_reap[]       = {{lvm_reap}, {lvm_ret0}},
+  nif_kill[]       = {{lvm_cur}, {.x = putcharm(2)}, {lvm_kill}, {lvm_ret0}},
+  nif_winsize[]    = {{lvm_winsize}, {lvm_ret0}},
+  nif_setwinsize[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_setwinsize}, {lvm_ret0}},
+  nif_ptyecho[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ptyecho}, {lvm_ret0}};
+AiNif("tether", nif_tether);
+AiNif("gather", nif_reap);
+AiNif("still", nif_kill);
+AiNif("winsize", nif_winsize);
+AiNif("setwinsize", nif_setwinsize);
+AiNif("ptyecho", nif_ptyecho);
+AiNif("raw", nif_raw);
+AiNif("swig", nif_swig);
 AiNif("open", nif_open);
 AiNif("close", nif_close);

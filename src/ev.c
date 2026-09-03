@@ -2,26 +2,13 @@
 // the shared layouts and the cross-TU seam are src/love_int.h.
 #include "love_int.h"
 struct ai_wait_fd;
-// this file's own, forward-declared so order within it does not matter.
+typedef Ana(ana);
+typedef Cata(cata);
 static Ana(ana_2, word a, word b);
-static Ana(ana_c);
-static Ana(ana_l);
-static Ana(ana_q);
-static Ana(ana_v);
-static Ana(c0_cond_exit);
-static Ana(c0_cond_r);
-static Cata(c1);
-static Cata(c1_apn);
+static ana ana_c, ana_l, ana_q, ana_v, c0_cond_exit, c0_cond_r;
 static Cata(c1_ar, lvm_t *i, word ar);
-static Cata(c1_cond_exit);
-static Cata(c1_cond_pop_exit);
-static Cata(c1_cur);
-static Cata(c1_i);
-static Cata(c1_ix);
-static Cata(c1_recv);
-static Cata(c1_ret);
-static Cata(c1_var);
-static Cata(c1_yield);
+static cata c1, c1_apn, c1_cond_exit, c1_cond_pop_exit, c1_cur, c1_i,
+            c1_ix, c1_recv, c1_ret, c1_var, c1_yield;
 static ai_noinline Ana(analyze);
 static ai_noinline int
  poll_parked(struct ai *g, uintptr_t now),
@@ -88,8 +75,6 @@ struct env {
   len,     // thread length accumulator: a fixnum, so no store to it needs a barrier
   end[]; };
 
-typedef Ana(ana);
-typedef Cata(cata);
 static Ana(ana_2, word, word);
 static Cata(pull) { return ai_ok(g) ? ((cata*) pop1(g))(g, c) : g; }
 
@@ -925,7 +910,7 @@ lvm(lvm_index) {
   // terminal. nom_str + ioput* hold no heap operand -> no GC, so Sp/Ip survive.
   struct ai_str *nm = nom_str(g, Ip[1].x);
   if (nm) { struct ai_io *sv = g->io; g->io = &ai_stderr.io;
-            struct ai *w = ioputs(g, ";; missing ");
+            struct ai *w = ioputs(g, ";; missing "); // FIXME another unneeded alias
             for (uintptr_t i = 0; ai_ok(w) && i < nm->len; i++) w = ioputc(w, nm->bytes[i]);
             if (ai_ok(w)) w = ioputc(w, '\n');
             if (ai_ok(w)) zflush(w);
@@ -1740,6 +1725,7 @@ lvm(lvm_spin) {
  Sp[0] = word(memset(tagthread(k, n), -1, n * sizeof(word)));
  ai_musttail return Next(1); }
 
+// FIXME i don't think anything underneath here belongs in this file
 // the net: the complex-valued measure. a complex scalar nets itself (additivity
 // needs phase, so the codomain is C and the order retraction happens once, in the
 // observers); every other scalar nets real; a link nets net(car) + net(cdr) and a
@@ -1810,11 +1796,13 @@ static intptr_t ai_saturate(struct ai *g, word x) {
   if (re >= (ai_flo_t) maxcharm) return maxcharm;
   intptr_t i = (intptr_t) re;
   return i + (re > (ai_flo_t) i ? 1 : 0); }
+
 lvm(lvm_saturate) {
  if (ai_ratio_exact(g, Sp[0])) { Pack(g); g = ai_ratio_rung(g, 2);
   if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
   ai_musttail return Resume(); }
  Sp[0] = putcharm(ai_saturate(g, Sp[0])); Ip += 1; ai_musttail return Continue(); }
+
 // the tower's third rung: ceil(re(net x)) -- the measure retracted onto the integers, where
 // saturate is this one with its floor raised to 0 and bit is it with the ceiling lowered to 1.
 // it saturates at the charm bounds like every rung below it: a charm is the codomain, so a
@@ -1826,9 +1814,9 @@ static intptr_t ai_ceilnet(struct ai *g, word x) {
   if (re <= (ai_flo_t) mincharm) return mincharm;
   intptr_t i = (intptr_t) re;
   return i + (re > (ai_flo_t) i ? 1 : 0); }
+
 lvm(lvm_ceil) {
  if (ai_ratio_exact(g, Sp[0])) { Pack(g); g = ai_ratio_rung(g, 1);
   if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
   ai_musttail return Resume(); }
  Sp[0] = putcharm(ai_ceilnet(g, Sp[0])); Ip += 1; ai_musttail return Continue(); }
-

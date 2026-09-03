@@ -214,7 +214,6 @@ char const *ai_nif_name(intptr_t);
 static ai_inline bool mintp(word _) { return lamp(_) && cell(_)->ap == lvm_sym; }
 static ai_inline bool namep(word _) { return lamp(_) && cell(_)->ap == lvm_nom; }
 static ai_inline bool packp(word _) { return lamp(_) && cell(_)->ap == lvm_tray; }
-static ai_inline bool strp(word _) { return lamp(_) && cell(_)->ap == lvm_str; }
 static ai_inline bool nomp(word x) { return lamp(x) && (cell(x)->ap == lvm_sym || cell(x)->ap == lvm_nom); }
 // mutable flat byte string. not a data kind: the head is the behaves-as-0 lvm_cask,
 // so the GC walks a cask as a plain length-2 thread and forwards the embedded ai_str

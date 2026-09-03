@@ -22,14 +22,16 @@ static lvm(lvm_mul_rep) {
  if ((!strp(seq) && !chainp(seq) && !namep(seq)) || (!charmp(cnt) && !bigp(cnt)))
   ai_musttail return Push(ZeroPoint);             // seq not a sequence/symbol, or count not exact
  uintptr_t n;
- if (charmp(cnt)) { intptr_t v = getcharm(cnt); n = (uintptr_t) (v < 0 ? -v : v); }
+ if (charmp(cnt)) {
+   intptr_t v = getcharm(cnt);
+   n = (uintptr_t) (v < 0 ? -v : v); }
  else n = (uintptr_t) maxcharm;                      // |big|: past addressable, dies in Have()
  if (chainp(seq)) {                                   // list -> n copies of the spine
   if (!n) ai_musttail return Push(ZeroPoint);   // 0 copies -> the empty list () (zero-ontology)
   uintptr_t m = llen(seq), total = m * n;
   Have(total * Width(struct ai_chain));
   seq = chainp(Sp[0]) ? Sp[0] : Sp[1];                // re-read post-GC
-  struct ai_chain *base = (struct ai_chain*) Hp, *w = base;
+  struct ai_chain *base = two(Hp), *w = base;
   Hp += total * Width(struct ai_chain);
   for (uintptr_t i = 0; i < n; i++)
    for (word l = seq; chainp(l); l = B(l), w++) ini_chain(w, A(l), word(w + 1));
@@ -89,14 +91,19 @@ lvm(data_string_apply) {
  if (nb) {
   bool mk = pt && namep(Sp[0]);                         // point + point -> the interned point
   uintptr_t m = na->len, n = nb->len, req = str_width(m + n);
-  if (!(m + n)) { Ip = cell(*++Sp); *Sp = mk ? ZeroPoint : EmptyString; ai_musttail return Continue(); }  // the empty spelling is the zero point; no empty string is ever allocated
+  if (!(m + n)) {
+   Ip = cell(*++Sp);
+   *Sp = mk ? ZeroPoint : EmptyString;
+   ai_musttail return Continue(); }  // the empty spelling is the zero point; no empty string is ever allocated
   Have(req + (mk ? intern_reserve(g) : 0));
   na = pt ? nom_str(g, word(Ip)) : str(word(Ip));       // re-read: a GC in Have moved the roots
   struct ai_str *z = seq_cat(g, Hp, word(na), Sp[0]);
   Hp += req;
   word v = word(z);
   if (mk) Pack(g), v = intern_checked(g, z), Unpack(g);
-  Ip = cell(*++Sp); *Sp = v; ai_musttail return Continue(); }
+  Ip = cell(*++Sp);
+  *Sp = v;
+  ai_musttail return Continue(); }
  word v = ZeroPoint;
  if (oddp(Sp[0])) {
   word k = getcharm(Sp[0]);
@@ -120,7 +127,7 @@ lvm(data_num_apply) {
  word h = hot_hook(g->hot_numap);
  word n = word(Ip), x = Sp[0], ret = Sp[1], *dst = Sp - 2;
  dst[0] = n, dst[1] = h, dst[2] = x, dst[3] = ret;
- Sp = dst, Ip = (union u*) numap_drive;
+ Sp = dst, Ip = cell(numap_drive);
  ai_musttail return Continue(); }
 
 // (l k): index the spine -- the kth element, negatives from the end, out of range ().
@@ -131,7 +138,7 @@ lvm(data_pair_apply) {
  if (chainp(Sp[0])) {
   uintptr_t n = llen(word(Ip));
   Have(n * Width(struct ai_chain));
-  struct ai_chain *base = (struct ai_chain*) Hp, *w = base;
+  struct ai_chain *base = two(Hp), *w = base;
   Hp += n * Width(struct ai_chain);
   for (word l = word(Ip); chainp(l); l = B(l), w++) ini_chain(w, A(l), word(w + 1));
   (w - 1)->b = Sp[0];                        // last cdr -> the operand (a chain is never empty)
@@ -199,7 +206,8 @@ avm_div(rem, %)
 // promotes to a float box. the INT_MIN/-1 guard precedes the `%` (it would be UB).
 lvm(lvm_quot) {
  word a = Sp[0], b = Sp[1];
- if (charmp(a) && charmp(b)) { intptr_t av = getcharm(a), bv = getcharm(b);
+ if (charmp(a) && charmp(b)) {
+  intptr_t av = getcharm(a), bv = getcharm(b);
   if (bv != 0 && !(av == INTPTR_MIN && bv == -1) && av % bv == 0) {
    intptr_t t = av / bv;
    if (t >= mincharm && t <= maxcharm) ai_musttail return Push(putcharm(t)); } }
@@ -559,13 +567,13 @@ static bool clo_load(struct ai *c, word v, struct clonf *o) {
  if (!lamp(v) || datp(v) || !in_heap(c, v)) return false;
  union u *k = cell(v);
  word s; int na = 0;
- if (fn_partialp(k)) {
+ if (!fn_partialp(k)) s = fn_src(c, k, v);
+ else {
   union u *bk = fn_base(k, &na);
   if (na < 0 || na > nf_maxcap) return false;
   word base = (word) bk;
   s = fn_src(c, cell(base), base);
-  for (int i = 0; i < na; i++) o->fv[i] = fn_arg(k, i, na);
- } else s = fn_src(c, k, v);
+  for (int i = 0; i < na; i++) o->fv[i] = fn_arg(k, i, na); }
  if (!s || !lam_isp(c, s)) return false;                  // source-less base / quote: not bridged here
  word p = B(s);                                           // (b0 b1 .. body): binder list then body
  int nb = 0; word t = p;
@@ -617,6 +625,7 @@ static uintptr_t nf_hash(struct ai *g, word x, struct arib *env, word fs, int fn
    if (sw_kind(f->tag) == sw_app) { h = (h ^ (v * mix)) * mix, spine = true, x = f->rest; break; }
    env = ((struct arib*) sw_drop(sw, struct arib))->up;
    t = (mix * (uintptr_t) (sw_n(f->tag) + 7)) ^ (v * mix); } } }
+
 bool clo_nfhash(struct ai *g, word x, uintptr_t *out, word *base) {
  struct clonf o;
  if (!clo_load(ai_core_of(g), x, &o) || !o.fn) return false;   // o.fn == 0: a no-capture lambda, already hashed via shash upstream
@@ -674,8 +683,10 @@ static bool nf_walk(struct ai *g, word a, struct arib *ra, struct clonf *ca,
     for (t = pb; chainp(B(t)); t = B(t)) nb++;
     word bb = A(t);
     if (na != nb) return false;
-    struct arib *rA = sw_take(sw, swend, struct arib); *rA = (struct arib) { pa, pa, na, na, ra };
-    struct arib *rB = sw_take(sw, swend, struct arib); *rB = (struct arib) { pb, pb, nb, nb, rb };
+    struct arib *rA = sw_take(sw, swend, struct arib),
+                *rB = sw_take(sw, swend, struct arib);
+    *rA = (struct arib) { pa, pa, na, na, ra };
+    *rB = (struct arib) { pb, pb, nb, nb, rb };
     struct salf *f = sw_take(sw, swend, struct salf);
     *f = (struct salf) { 0, 0, sw_tag(sw_lam, 0, 0) };
     ra = rA, rb = rB, a = ba, b = bb;
@@ -687,6 +698,7 @@ static bool nf_walk(struct ai *g, word a, struct arib *ra, struct clonf *ca,
    if (sw_kind(f->tag) == sw_app) { a = f->ra, b = f->rb; break; }
    rb = ((struct arib*) sw_drop(sw, struct arib))->up;        // a \-body: pop both ribs
    ra = ((struct arib*) sw_drop(sw, struct arib))->up; } } }
+
 static bool clo_eq(struct ai *g, struct clonf *ca, struct clonf *cb, word *scratch) {  // residual α+value equality
  if (ca->nr != cb->nr) return false;                                   // different residual arity
  struct arib rA = { ca->rem, ca->rem, ca->nr, ca->nr, 0 }, rB = { cb->rem, cb->rem, cb->nr, cb->nr, 0 };
@@ -759,7 +771,9 @@ static bool eqv_at(struct ai *g, word a, word b, word *base) {
      break; } }
   if (w == base) return true;              // worklist drained: all equal
   b = *--w, a = *--w; } }
-ai_noinline bool eqv(struct ai *g, word a, word b) { return eqv_at(g, a, b, off_pool(g)); }
+
+ai_noinline bool eqv(struct ai *g, word a, word b) {
+ return eqv_at(g, a, b, off_pool(g)); }
 
 // whole-array `=`: a boolean like every other kind (shapes match, every cell
 // equal), not the elementwise mask -- `<` and `>` are the mask makers. cells
@@ -936,9 +950,9 @@ static struct ai *obin_run(struct ai *g, int op) {
  for (uintptr_t p = 0; p < n; p++) {
   intptr_t oa = 0, ob = 0;
   for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
-  word ae = atray ? tray_get_obj(tray(g->sp[1]), oa) : g->sp[1];  // scalar operand re-read each step
-  word be = btray ? tray_get_obj(tray(g->sp[2]), ob) : g->sp[2];
-  word res = obin_elem(&g, op, ae, be);
+  word ae = atray ? tray_get_obj(tray(g->sp[1]), oa) : g->sp[1],  // scalar operand re-read each step
+       be = btray ? tray_get_obj(tray(g->sp[2]), ob) : g->sp[2],
+       res = obin_elem(&g, op, ae, be);
   if (!ai_ok(g)) return g;
   tray_put_obj(tray(g->sp[0]), p, res);                          // re-fetch result post-alloc
   // and barrier it: a minor mid-loop promotes the result array while its
@@ -1234,7 +1248,7 @@ lvm(lvm_im) {
 
 // (conj z): complex conjugate. conj lifts -- a real r becomes ~(r 0), so it
 // always lands in C (the monadic `~`).
-lvm(lvm_conj) {
+lvm(lvm_conj) { // FIXME shouldn't this work on twin trays?
  word a = Sp[0];
  if (twinp(a)) {
   ai_flo_t re = twin_re(a), im = twin_im(a);
@@ -1242,7 +1256,7 @@ lvm(lvm_conj) {
   Sp[0] = mk_twin(&Hp, re, -im);
   ai_musttail return Next(1); }
  if (isnum(a)) {
-  ai_flo_t re = toflo(a);            // lift a real to ~(r 0)
+  ai_flo_t re = toflo(a);            // lift a real to ~(r 0) // FIXME why? just be identity on non-twins
   Have(twin_req);
   Sp[0] = mk_twin(&Hp, re, 0);
   ai_musttail return Next(1); }
@@ -1255,6 +1269,7 @@ static ai_noinline word abs_wmin(struct ai *g) {
  ai_limb lb[wlimbs];
  for (int i = 0; i < wlimbs; i++) lb[i] = (ai_limb) (u >> (limb_bits * i));
  return ai_big_canon(&g->hp, lb, wlimbs, false); }
+
 lvm(lvm_abs) {
  word a = Sp[0], _res;
  if (charmp(a)) {
@@ -1272,7 +1287,8 @@ lvm(lvm_abs) {
   Have(box_req);
   emit_gem(_res, v);
   ai_musttail return Answer(_res); }
- if (sunp(a)) { intptr_t n = sun_get(a);
+ if (sunp(a)) {
+  intptr_t n = sun_get(a);
   if (n == INTPTR_MIN) {                              // |INTPTR_MIN| = 2^(W-1): the bignum lane
    Have(b2w(sizeof(struct ai_big) + wlimbs * sizeof(ai_limb)));
    Pack(g);                                           // canon bumps the synced g->hp, lvm_bmul's law
@@ -1312,7 +1328,7 @@ static ai_noinline void carg_fill(struct ai_tray *r, struct ai_tray *v) {
   for (uintptr_t p = 0; p < n; p++) rf[p] = ai_atan2(fp[2*p+1], fp[2*p]); }
  else for (uintptr_t p = 0; p < n; p++) rf[p] = ai_atan2(0, tray_get_flo(v, p)); }
 
-// (arg z): phase angle atan2(im, re); elementwise over an array, zero on a non-number
+// (arg z): phase angle atan2(im, re); elementwise over an array, () on a non-number
 lvm(lvm_carg) {
  word a = Sp[0], _res;
  if (twinp(a)) {
@@ -1333,10 +1349,9 @@ lvm(lvm_carg) {
   for (uintptr_t i = 0; i < R; i++) r->shape[i] = v->shape[i];
   carg_fill(r, v);
   ai_musttail return Answer(word(r)); }
- if (isnum(a)) {
+ if (isnum(a)) { // FIXME seriously? it's 0
   ai_flo_t r = ai_atan2(0, toflo(a));
   Have(box_req);
   emit_gem(_res, r);
   ai_musttail return Answer(_res); }
  ai_musttail return Answer(ZeroPoint); }
-

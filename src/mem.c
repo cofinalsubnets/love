@@ -1,20 +1,17 @@
-// src/mem.c -- 8-byte word slots on a cask, low 4 bytes live: the flat solver's
-// state (crew/sat/flat.l), where the byte-at-a-time accessors cost 4 dispatches
-// per read. host-only, auto-globbed + AiModNifs-registered under module 'mem
-// (no love.c/love.h/main.c edit; nothing on the bare book).
-//
-//   ((from 'mem 'peepw) c i)   -> the word at slot i, low 4 bytes | () misuse
-//   ((from 'mem 'pinw) c i v)  -> lay v zero-extended into slot i -> c | () misuse
-//
-// value ops, so absence/misuse answers (); flat.l binds getw/putw to them when
-// the module is registered, the byte path staying the portable twin
-// (freestanding targets have no host glob).
+// FIXME this file is too short, merge it somewhere else
+// src/mem.c -- 8-byte word slots on a cask, low 4 bytes live: the flat solver's state
+// (crew/sat/flat.l), where the byte-at-a-time accessors cost 4 dispatches per read.
+// auto-globbed and AiNif-registered.
+//   (peepw c i)   -> the word at slot i, low 4 bytes | () misuse
+//   (pinw c i v)  -> lay v zero-extended into slot i -> c | () misuse
+// value ops, so absence/misuse answers (); flat.l binds getw/putw to them, the byte path
+// staying the portable twin (freestanding targets have no host glob).
 #include "love.h"
 #include <string.h>
 #include <stdint.h>
 
 static lvm(lvm_peepw) {
- ai_word c = Sp[0], out = ZeroPoint;
+ word c = Sp[0], out = ZeroPoint;
  if (!charmp(c) && cell(c)->ap == lvm_cask && charmp(Sp[1])) {
   intptr_t i = getcharm(Sp[1]);
   struct ai_str *s = cask(c)->str;
@@ -26,7 +23,7 @@ static lvm(lvm_peepw) {
  ai_musttail return Nextp(1, 1); }
 
 static lvm(lvm_pinw) {
- ai_word c = Sp[0], out = ZeroPoint;
+ word c = Sp[0], out = ZeroPoint;
  if (!charmp(c) && cell(c)->ap == lvm_cask && charmp(Sp[1]) && charmp(Sp[2])) {
   intptr_t i = getcharm(Sp[1]);
   uint64_t v = (uint64_t) getcharm(Sp[2]) & 0xffffffffu;
@@ -40,7 +37,5 @@ static lvm(lvm_pinw) {
 static union u const
   nif_peepw[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_peepw}, {lvm_ret0}},
   nif_pinw[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_pinw},  {lvm_ret0}};
-static struct ai_def const memdefs[] = {
-  {"peepw", (intptr_t) nif_peepw},
-  {"pinw",  (intptr_t) nif_pinw}, };
-AiModNifs("mem", memdefs);
+AiNif("peepw", nif_peepw);
+AiNif("pinw", nif_pinw);

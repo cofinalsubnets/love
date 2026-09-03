@@ -93,15 +93,12 @@
       (jmpr r1))                  ; the kernel's entry, never back
 
    efi-exports '("efi_call" "efi_go")
-   (efi-tgt arch) (? (arch = "aarch64") 'arm64 'amd64)
-   (efi-ir arch)  (? (arch = "aarch64") efi-ir-arm64 efi-ir-x64)
+   (efi-tgt arch) (arch @ "aarch64" 'arm64 'amd64)
+   (efi-ir arch)  (arch @ "aarch64" efi-ir-arm64 efi-ir-x64)
    (mkboot out arch objs)
     (: srcs (map (\ f (: r (uread f)
-                         (? (two? r) [f <>r]
-                            (: _ (say err ("mkefi: cannot open " + f)) (quit 1)))))
+                       (two? r ? [f <>r] (say err ("mkefi: cannot open " + f), quit 1))))
                  objs)
        (pelink (efi-tgt arch)
-               (link ["efi0" (string (objelf (efi-tgt arch) (efi-ir arch)
-                                             () efi-exports () () () () () () ()))]
-                     srcs)
+               (["efi0" (string (objelf (efi-tgt arch) (efi-ir arch) () efi-exports () () () () () () ()))] .  srcs)
                out)))

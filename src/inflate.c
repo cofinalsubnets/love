@@ -1,30 +1,19 @@
-// src/inflate.c -- the C twin of lib/gz.l's inflate, auto-globbed + AiNif-registered
-// (no love.c/love.h/main.c edit), the tls.c discipline:
-//
-//   (inflate s n) -> the bytes | ()    s a raw DEFLATE stream, n its inflated size or 0
-//
+// src/inflate.c -- the C twin of lib/gz.l's inflate, auto-globbed and AiNif-registered,
+// the tls.c discipline: (inflate s n) -> the bytes | (), s a raw DEFLATE stream and n its
+// inflated size or 0. `gz-inflate` reaches for this and falls back to gz-puff.
 // a twin, not a replacement: gz-puff stays the readable statement of RFC 1951 and the
 // differential oracle (test/host/gzc.l holds the two to the same bytes over corpora and
-// over torn and doctored streams). `gz-inflate` reaches for this and falls back to it.
-//
-// the algorithm is not the love file's, and here that is the whole point. gz-puff
-// walks a canonical code one bit at a time because in love a table would cost more to
-// build than it saves; this reads a 64-bit window and indexes a table built per block.
-// the two are held to the same bytes, never to the same shape -- so a divergence is a
-// bug in one of them and never a licensed difference.
-//
-// and where the stream is malformed the twin's answer is still the law. gz-huff does
-// not check that the code lengths describe a code, so an over-subscribed one decodes to
-// nonsense there rather than failing -- and this file reproduces that nonsense exactly:
-// the table is filled first-writer-wins so a doubly-claimed slot answers the shortest
-// code, which is what the bit walk finds, and the symbol array is zeroed so an index off
-// its end reads 0, which is what `peep` on a tablet answers. checking would be better
-// engineering and a differential failure, and the differential is what we have.
-//
-// the size argument is a hint and a bound: nothing grows here (host/ has no malloc,
-//   and a love string cannot be extended), so the output is allocated once. a positive n
-//   is believed and verified -- the gzip trailer always has it -- and a wrong or absent
-//   one costs a counting pass first, which is the decode with the stores dropped.
+// over torn and doctored streams). the algorithms differ on purpose -- gz-puff walks the
+// canonical code a bit at a time, this reads a 64-bit window into a per-block table --
+// so the two are held to the same bytes, never to the same shape.
+// malformed streams answer alike too. gz-huff does not check that the code lengths
+// describe a code, so an over-subscribed one decodes to nonsense there, and this
+// reproduces that nonsense: the table is first-writer-wins, so a doubly-claimed slot
+// answers the shortest code, and the zeroed symbol array reads 0 past its end, which is
+// what `peep` answers. checking would be better engineering and a differential failure.
+// the size argument is a hint and a bound -- nothing grows here, so the output is
+// allocated once. a positive n is believed and verified; a wrong or absent one costs a
+// counting pass first, which is the decode with the stores dropped.
 #include "love.h"
 #include <stdint.h>
 #include <string.h>
@@ -44,10 +33,9 @@ static const uint8_t inf_dext[30] = {
 static const uint8_t inf_clord[19] = {
  16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 };
 
-// eight unaligned bytes as a word, little-endian by construction rather than by the
-// machine's say-so. not memcpy and not a cast: gcc folds this to one load, and mooncc
-// -- which is what compiles the shipped artifact -- emits eight loads and shifts where it
-// would emit a call for the memcpy, which measured 1.5x slower over the whole decode.
+// eight unaligned bytes as a word, little-endian by construction. not memcpy and not a
+// cast: gcc folds this to one load, and mooncc emits shifts where memcpy would be a call
+// -- 1.5x slower over the whole decode.
 #define LD64(p) ((uint64_t) (p)[0]       | (uint64_t) (p)[1] <<  8 \
                | (uint64_t) (p)[2] << 16 | (uint64_t) (p)[3] << 24 \
                | (uint64_t) (p)[4] << 32 | (uint64_t) (p)[5] << 40 \
@@ -232,7 +220,7 @@ ai_noinline static struct ai *host_inflate(struct ai *g) {
  intptr_t hint;
  int64_t want;
  int guessed;
- if (!ai_strp(sw) || !oddp(nw)) { g->sp[1] = ZeroPoint, g->sp += 1; return g; }
+ if (!strp(sw) || !oddp(nw)) { g->sp[1] = ZeroPoint, g->sp += 1; return g; }
  hint = getcharm(nw);
  guessed = hint > 0;
  want = guessed ? (int64_t) hint

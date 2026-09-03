@@ -171,7 +171,7 @@ test_front: $(ho)/front
 # Host-nif smoke tests: the host lane's nifs link into `love` but NOT love0, so they live under
 # test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
 # AND a "<name>: ok"; a cold lane opts in via hostnif_cold.
-hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/serve.l test/host/sbhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l test/host/gzc.l test/host/hash.l test/host/modnif.l
+hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/serve.l test/host/sbhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l test/host/gzc.l test/host/hash.l
 # out/host/lush: test/host/sh.l drives the BUILT shell end to end, via out/host/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
@@ -418,7 +418,7 @@ test_clay: host
 # eight ways from a fixed seed. Two reds -- no SCARE, no hang -- plus G1 on every mutant that
 # still parses, and a printed CENSUS of named-vs-bare refusals. stderr is KEPT: cpp speaks there.
 test_moonfuzz: host
-	@echo TEST test/gate/moonfuzz.l "(moon refusal fuzz: 888 mutants of test/cc)"
+	@echo TEST test/gate/moonfuzz.l "(moon refusal fuzz: 8 mutants per file over test/cc)"
 	@$m -l test/gate/moonfuzz.l < /dev/null
 # test_forge -- nifs WRITTEN IN LOVE (lib/forge.l): a kernel's holo IR assembled for this cpu,
 # installed through the `nif` seam, and required to agree with the twin it deopts into -- on the

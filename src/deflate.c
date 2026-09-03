@@ -1,27 +1,18 @@
-// src/deflate.c -- the C twin of lib/gz.l's DEFLATE coder, auto-globbed +
-// AiNif-registered (no love.c/love.h/main.c edit), inflate.c's discipline:
-//
-//   (deflate s) -> the raw DEFLATE stream | ()
-//
-// a twin held to the bytes, like gz-find's machine-code presentation and unlike a
-// licensed re-compressor: same greedy parse (chain 32, min match 3, the far-3
-// refusal at 4096), same 16384-symbol blocks each costed stored/fixed/dynamic,
-// same two-queue Huffman merge with its leaf-wins tie, same halving walk back
-// under the depth limit -- so `cmp` over any input is the differential, and a
-// divergence is a bug in one of them and never a licensed difference. gz-deflate
-// stays the readable statement; test/host/gzc.l holds the two to the same bytes.
-//
-// why this exists: the love coder is correct and 35x-to-13x off C -- but its
-// real cost is the heap, not the clock. interpreted DEFLATE churns cells per
-// symbol, and on the love0 egg that runs selfpack the heap grows toward the
-// budget -- half the box's RAM by default -- before a collection pays. this file
-// is a fixed window and some tables.
-//
-// scratch is not the heap: the off semispace where it is big enough (the major
-// pool's spare half is dead between collections), one g->alloc block where it is
-// not. and the shape is inflate's counting pass twice over: count, str0 the exact
-// answer, re-derive and emit -- because str0 may collect, and a collection flips
-// the spare half out from under any pointer held across it.
+// src/deflate.c -- the C twin of lib/gz.l's DEFLATE coder, auto-globbed and
+// AiNif-registered, inflate.c's discipline: (deflate s) -> the raw stream | ().
+// a twin held to the bytes: same greedy parse (chain 32, min match 3, the far-3
+// refusal at 4096), same 16384-symbol blocks each costed stored/fixed/dynamic, same
+// two-queue Huffman merge with its leaf-wins tie, same halving walk back under the
+// depth limit -- so `cmp` over any input is the differential. gz-deflate stays the
+// readable statement; test/host/gzc.l holds the two to the same bytes.
+// why it exists: the love coder is 35x-to-13x off C, but its real cost is the heap.
+// interpreted DEFLATE churns cells per symbol, and on the love0 egg that runs selfpack
+// the heap grows toward the budget before a collection pays. this is a fixed window
+// and some tables.
+// scratch is not the heap: the off semispace where it is big enough (the major pool's
+// spare half is dead between collections), one g->alloc block where it is not. the
+// shape is inflate's counting pass twice over -- count, str0 the exact answer,
+// re-derive and emit -- because str0 may collect and a collection flips that half.
 #include "love.h"
 #include <stdint.h>
 #include <string.h>
@@ -54,16 +45,19 @@ static const uint8_t
 // the bit sink: LSB-first bytes, codes handed in already reversed (gz-put's law).
 // with no out it counts, which is the whole first pass.
 struct df_sink { uint8_t *out; uintptr_t op, cap; uint64_t acc; unsigned nb; int err; };
+
 static void df_put(struct df_sink *t, uint32_t v, unsigned k) {
  t->acc |= (uint64_t) (v & ((1u << k) - 1)) << t->nb;
  t->nb += k;
  while (t->nb >= 8) {
   if (t->out) { if (t->op >= t->cap) { t->err = 1; return; } t->out[t->op] = (uint8_t) (t->acc & 255); }
   t->op++; t->acc >>= 8; t->nb -= 8; } }
+
 static void df_align(struct df_sink *t) {
  if (!t->nb) return;
  if (t->out) { if (t->op >= t->cap) { t->err = 1; return; } t->out[t->op] = (uint8_t) (t->acc & 255); }
  t->op++; t->acc = 0; t->nb = 0; }
+
 static uint32_t df_rev(uint32_t v, unsigned k) {
  uint32_t a = 0; unsigned i;
  for (i = 0; i < k; i++) { a = (a << 1) | (v & 1); v >>= 1; }
@@ -85,10 +79,10 @@ static unsigned df_hlens(uint32_t *f, unsigned nsym, unsigned lim, uint8_t *lens
  for (pass = 0;; pass++) {
   unsigned nl = 0, top, li, ii, mx = 0;
   for (i = 0; i < nsym; i++) if (hc[i]) keys[nl++] = (hc[i] << 9) + i;
-  { unsigned a; for (a = 1; a < nl; a++) {                      // counts ride their symbol; ties to
-     uint32_t v = keys[a]; unsigned b = a;                      // the lower symbol, sort ascending
-     while (b && keys[b - 1] > v) { keys[b] = keys[b - 1]; b--; }
-     keys[b] = v; } }
+  unsigned a; for (a = 1; a < nl; a++) {                      // counts ride their symbol; ties to
+   uint32_t v = keys[a]; unsigned b = a;                      // the lower symbol, sort ascending
+   while (b && keys[b - 1] > v) { keys[b] = keys[b - 1]; b--; }
+   keys[b] = v; }
   for (i = 0; i < nl; i++) { w[i] = keys[i] >> 9; sy[i] = keys[i] & 511; }
   memset(pa, 0, (2 * nl - 1) * sizeof *pa);
   li = 0; ii = nl;
@@ -133,7 +127,9 @@ static unsigned df_run(const uint8_t *cl, unsigned tot, uint32_t *rl) {
    if (r >= 3) { rl[j++] = (17u << 7) + (r - 3); i += r; r = 0; }
    while (r) { rl[j++] = (0u << 7); i++; r--; } } }
  return j; }
-static unsigned df_clx(unsigned sy) { return sy == 16 ? 2 : sy == 17 ? 3 : sy == 18 ? 7 : 0; }
+
+static unsigned df_clx(unsigned sy) {
+ return sy == 16 ? 2 : sy == 17 ? 3 : sy == 18 ? 7 : 0; }
 
 // what a block would cost, in bits (gz-cost / gz-ccost)
 static uint64_t df_cost(const uint32_t *f, const uint8_t *lens, unsigned nsym) {
@@ -171,9 +167,9 @@ static void df_wstored(struct df_sink *t, const uint8_t *s, uintptr_t i0, uintpt
 // the arena, carved once: the finder's two windows outlive every block, the rest
 // is per block or per code and merely reused.
 struct df_ar {
- uint32_t *head, *prev, *tok, *fl, *fd;
- uint32_t *hc, *keys, *w, *sy, *pa, *rlb, *fc;
- uint32_t *codl, *codd, *codc, *fixcl, *fixcd;
+ uint32_t *head, *prev, *tok, *fl, *fd,
+          *hc, *keys, *w, *sy, *pa, *rlb, *fc,
+          *codl, *codd, *codc, *fixcl, *fixcd;
  uint8_t *lenl, *lend, *lenc, *fixll, *fixld, *cl; };
 #define DF_ARENA (384u << 10)
 static void df_carve(uint8_t *m, struct df_ar *a) {
@@ -320,7 +316,7 @@ ai_noinline static struct ai *host_deflate(struct ai *g) {
  uint8_t *m;
  int alloced;
  int64_t want, got;
- if (!ai_strp(sw)) { g->sp[0] = ZeroPoint; return g; }
+ if (!strp(sw)) { g->sp[0] = ZeroPoint; return g; }
  m = df_arena(g, &alloced);
  if (!m) { g->sp[0] = ZeroPoint; return g; }
  want = df_go((const uint8_t*) txt(sw), len(sw), 0, (uintptr_t) -1, m);

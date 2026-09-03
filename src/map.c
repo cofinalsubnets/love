@@ -1,3 +1,4 @@
+// FIXME when except love0 are we ever __STDC_HOSTED__ ?
 // map.c -- map, codegen backend. one translation unit of the runtime;
 // the shared layouts and the cross-TU seam are src/love_int.h.
 #include "love_int.h"
@@ -79,7 +80,8 @@ static ai_noinline struct ai *map_grow(struct ai *g) {
 // factor, re-reading k/v from the stack afterwards. leaves the map at sp[2].
 ai_noinline struct ai *ai_mapput(struct ai *g) {
  if (!ai_ok(g)) return g;
- bool found; uintptr_t i = map_probe(g, g->sp[2], g->sp[0], &found);
+ bool found;
+ uintptr_t i = map_probe(g, g->sp[2], g->sp[0], &found);
  if (found) {
   gen_wb(g, map_back(g->sp[2]), g->sp[1]);         // barrier: a young value into an old backing
   return map_slots(g->sp[2])[2 * i + 1] = g->sp[1], g->sp += 2, g; }
@@ -96,9 +98,11 @@ ai_noinline struct ai *ai_mapput(struct ai *g) {
 // ai_mapdel: delete k, backward-shift the probe chain so no tombstone is
 // needed; v is the not-found result. no allocation. leaves the map at sp[2].
 static ai_noinline word ai_mapdel(struct ai *g, word m, word k, word dflt) {
- bool found; uintptr_t i = map_probe(g, m, k, &found);
+ bool found;
+ uintptr_t i = map_probe(g, m, k, &found);
  if (!found) return dflt;
- word *s = map_slots(m); uintptr_t mask = map_cap(m) - 1;
+ word *s = map_slots(m);
+ uintptr_t mask = map_cap(m) - 1;
  for (uintptr_t j = i;;) {
   j = (j + 1) & mask;
   if (s[2 * j] == map_gap) break;
@@ -116,7 +120,7 @@ static ai_noinline word ai_mapdel(struct ai *g, word m, word k, word dflt) {
 struct ai *map_new(struct ai *g) {
  uintptr_t cap = map_min_cap, nb = 4 + 2 * cap;
  if (!ai_ok(g = ai_have(g, nb + 3))) return g;
- union u *b = map_fill_back((union u*) g->hp, cap), *h = (union u*) (g->hp + nb);
+ union u *b = map_fill_back(cell(g->hp), cap), *h = cell(g->hp + nb);
  h[0].ap = lvm_map_lookup, h[1].x = (word) b, tagthread(h, 2);
  g->hp += nb + 3;
  return ai_push(g, 1, (word) h); }
@@ -125,13 +129,13 @@ struct ai *map_new(struct ai *g) {
 // factor, so inserting n known keys never rehashes). n<=0 keeps the min capacity.
 lvm(lvm_tablet) {
  intptr_t raw = charmp(Sp[0]) ? getcharm(Sp[0]) : 0;          // saturate to a bounded green charm first
- uintptr_t hint = raw <= 0 ? 0 : (uintptr_t) raw > map_hint_max ? map_hint_max : (uintptr_t) raw;
- uintptr_t cap = map_min_cap;
+ uintptr_t hint = raw <= 0 ? 0 : (uintptr_t) raw > map_hint_max ? map_hint_max : (uintptr_t) raw,
+           cap = map_min_cap;
  while (cap * 3 <= hint * 4) cap *= 2;                        // grow to hold `hint` below the 0.75 load factor
  uintptr_t nb = 4 + 2 * cap;
  Have(nb + 3);
- union u *b = map_fill_back((union u*) Hp, cap);
- union u *h = (union u*) (Hp + nb);
+ union u *b = map_fill_back(cell(Hp), cap),
+         *h = cell(Hp + nb);
  h[0].ap = lvm_map_lookup, h[1].x = (word) b, tagthread(h, 2);
  Sp[0] = (word) h;
  Hp += nb + 3; ai_musttail return Next(1); }
@@ -139,7 +143,8 @@ lvm(lvm_tablet) {
 // (m k): map application is lookup, () if absent; unwinds like self-quote
 lvm(lvm_map_lookup) {
  word v = ai_mapget(g, ZeroPoint, Sp[0], (word) Ip);   // a map miss answers () (the zero point), not the number 0
- Ip = cell(*++Sp); *Sp = v; ai_musttail return Continue(); }
+ Ip = cell(*++Sp), *Sp = v;
+ ai_musttail return Continue(); }
 
 op11(lvm_tabp, tabp(Sp[0]) ? putcharm(1) : zero)
 
@@ -199,12 +204,10 @@ lvm(lvm_peep) {                                // (peep coll key default): colle
     if (chainp(x)) z = A(x); } }
  ai_musttail return Answerp(2, z); }
 
-// (pin coll key val): a map or a cask has a cell, so the write is in place and the same
-// collection answers; text, a chain and a tray have none, so a fresh one carrying the pin
-// answers -- the functional update. (peep (pin c k v) k d) = v wherever the pin lands;
-// a rank-0 scalar is the one kind peep reads that pin does not write (there is no cell to
-// replace, only the value itself). out-of-range/wrong-kind is a silent no-op answering
-// coll, the byte ops' misuse convention.
+// (pin coll key val): a map or cask has a cell, so the write is in place and the same
+// collection answers; text, a chain and a tray have none and answer a fresh one. a rank-0
+// scalar is the one kind peep reads and pin cannot write. out-of-range or wrong-kind is a
+// silent no-op answering coll, the byte ops' misuse convention.
 lvm(lvm_pin) {
  word x = Sp[0], n;                              // coll
  if (tabp(x)) {
@@ -269,8 +272,7 @@ lvm(lvm_keys) {
    if (s[2 * --i] != map_gap)
     ini_chain(chains, s[2 * i], list), list = (intptr_t) chains, chains++; }
  Sp[0] = list;
- Ip += 1;
- ai_musttail return Continue(); }
+ ai_musttail return Next(1); }
 
 // `base` is where this walk's worklist starts, on the eqv_at pattern: a leaf that is
 // a lambda hashes its source, and that source can hold a quote to walk as data -- the
@@ -285,9 +287,8 @@ ai_noinline uintptr_t hash_two(struct ai *g, word x, word *base) {
   h = (h ^ hash_at(g, x, w)) * mix;     // x is a leaf: only a lambda source recurses
   if (w == base) return h; } }
 
-// the anchor an out-of-pool ap hashes against: the offset survives a bake/wake
-// where the raw address does not (a bake-time bucket index would miss at wake and
-// every nif-keyed table would silently read empty).
+// the anchor an out-of-pool ap hashes against: the offset survives a bake/wake where the
+// raw address does not, so a nif-keyed table still finds its buckets at wake.
 static const char hash_base[1] = {0};
 struct arib; uintptr_t shash(struct ai *g, word x, struct arib *env, word *base);  // α-invariant source hash
 bool clo_nfhash(struct ai *g, word x, uintptr_t *out, word *base);  // partial-app -> capture-substitution normal-form hash (the beta bridge)
@@ -295,6 +296,7 @@ bool clo_nfhash(struct ai *g, word x, uintptr_t *out, word *base);  // partial-a
 // worklist. a charm settles here so the hot key never pays for the hand-off.
 uintptr_t hash(struct ai *g, intptr_t x) {
  return charmp(x) ? rot(x*mix) : hash_at(g, x, off_pool(g)); }
+
 uintptr_t hash_at(struct ai *g, intptr_t x, word *base) {
  if (charmp(x)) return rot(x*mix);
  if (!datp(x)) {
@@ -344,25 +346,21 @@ uintptr_t hash_at(struct ai *g, intptr_t x, word *base) {
 // ============================================================================
 // codegen backend brick 1 -- the native-install seam (provisional; -> `ev`)
 // ============================================================================
-// the native finalizer: the cell's header duplicates its code address (a dead native's
-// header is the out-of-pool code addr, a live one's a forward), and the arena takes the blob back
+// the native finalizer: the cell's header duplicates its code address (dead = the
+// out-of-pool addr, live = a forward), and the arena takes the blob back
 #if __STDC_HOSTED__
 static void nat_free(struct ai *g, void *p) { code_free(g, (char*) ((union u*) p)[0].ap); }
 #endif
 
-// (nif code interp src arity): emitted bytes -> a transparent applicable native
-// closure (the lvm ABI: g=rdi Ip=rsi Hp=rdx Sp=rcx). arity 1: a 6-word cell
-// entering the native body directly; arity>=2: an 8-word lvm_cur cell (curry to
-// saturation). value[-1]=src (=/show-identical to the source), value[1]=interp
-// (the deopt fallback, so native is never wrong), lvm_ret at the same offset in
-// both, so the emitted body is layout-blind. cell[0] duplicates the code addr:
-// run_finalizers' dead/live discriminator. internal: the egg mops it.
-// a decline (bad args, no code pages, inle) answers the interp twin itself,
-// so every caller transparently falls back to bytecode.
-// nifx adds an extras word (value[3]+8 = Ip+32): refs a native needs beyond the twin
-// ride a GC-walked cell slot, so value[1] stays the plain twin.
-// the cell is [header src code|cur (arity) interp lvm_ret n (extras)]: code is the
-// arena's (hosted) or a heap string's (freestanding, where RAM runs as it is)
+// (nif code interp src arity): emitted bytes -> a transparent applicable native closure
+// (the lvm ABI: g=rdi Ip=rsi Hp=rdx Sp=rcx). the cell is [header src code|cur (arity)
+// interp lvm_ret n (extras)] -- arity 1 enters the body directly, arity>=2 curries to
+// saturation through lvm_cur, and lvm_ret sits at the same offset in both so the emitted
+// body is layout-blind. value[1] is the interp twin, so a decline (bad args, no code
+// pages, inle) simply answers it and every caller falls back to bytecode. cell[0]
+// duplicates the code addr for run_finalizers' dead/live test; internal, the egg mops it.
+// nifx adds an extras word (value[3]+8 = Ip+32) for refs a native needs beyond the twin.
+// code is the arena's (hosted) or a heap string's (freestanding, where RAM runs as it is)
 lvm(lvm_nifx) {                               // Sp[0]=code Sp[1]=interp Sp[2]=src Sp[3]=arity [Sp[4]=extras]
  int xtra = Ip->ap == lvm_nifx, nsp = xtra ? 4 : 3;   // entered at its own word (nif's tail-jumps here with Ip at nif's)
  word codebuf = Sp[0];
@@ -375,10 +373,8 @@ lvm(lvm_nifx) {                               // Sp[0]=code Sp[1]=interp Sp[2]=s
 #endif
  char *code;
 #if __STDC_HOSTED__
- // inle declines: its heap rides the NX hhdm window (a wild jump into the
- // heap faults by design), and a heap copy would move under the collector
- // besides. the interp twin runs; a metal nat door would want out-of-pool
- // pages through the low window, which keeps X.
+ // inle declines: its heap rides the NX hhdm window and would move under the collector
+ // besides, so the interp twin runs. a metal door would want low-window pages, which keep X.
  if (__ai_osv < 0) ai_musttail return Answerp(nsp, Sp[1]);
  Have(11 + Width(struct ai_fz));              // 11 covers every cell (6..9 words) + tag + fz
  code = code_install(g, txt(bytes_of(Sp[0])), n);   // reload codebuf: a GC in Have may have moved it
@@ -436,8 +432,3 @@ lvm(lvm_bcopy) {
   if (soff + n > sl) n = sl - soff;
   if (n > 0) memmove(txt(d) + doff, txt(s) + soff, n); }
  ai_musttail return Answerp(4, dst); }
-
-// FIXME just make strp public
-// public predicate for frontends that need to check string args
-bool ai_strp(ai_word x) { return strp(x); }
-

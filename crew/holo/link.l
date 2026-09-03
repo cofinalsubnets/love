@@ -372,7 +372,6 @@
    ; -- archives. the noms no object defines but the linker lays: a driver over any
    ; door here answers for these, so a ledger must not go looking for them in a .a.
    ldsynth '("__start_love_nifs" "__stop_love_nifs" "__start_love_rela" "__stop_love_rela"
-             "__start_love_mods" "__stop_love_mods"
              "__data_start__" "__data_end__" "__data_load__"
              "__bss_start__" "__bss_end__" "__load_size__")
    (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs), global noms

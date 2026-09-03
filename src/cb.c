@@ -1,3 +1,4 @@
+// FIXME there's nothing here, why is this a separate file?
 // src/cb.c -- quay's screen nifs, wired up for this seat and nothing more.
 // the bodies are generic and live with the engine (crew/quay/nif.c over quay.c);
 // what is host here is only the registration -- the love_nifs section glob is the
