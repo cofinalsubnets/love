@@ -685,6 +685,13 @@ also takes — probe the one you mean.
   device — which is exactly why `port/playdate` routes it through `pdglue.c` on
   arm-none-eabi-gcc and calls that a "word-only seam". AAPCS32 wants the hidden-pointer memory
   return the v6-M lane already implements (`sretm?`); thumb2 has no such lane.
+- **an enum is 4 bytes on t32, and arm-none-eabi-gcc makes it 1 or 2.** Neither a refusal nor a
+  bug: AAPCS wants the smallest type that holds the enumerators and the bare-metal gcc defaults
+  to `-fshort-enums` (`__ARM_SIZEOF_MINIMAL_ENUM 1`), where `enum` lowers to `'int`/`'uint` at
+  parse on every target of ours. So the two disagree on `sizeof` and on any struct with an enum
+  member — at exactly the seam the ports link across. Probe: `enum e { A = 148 };` and return
+  `sizeof(enum e)` — gcc 1, ours 4. In-tree that seam is libgcc, whose ABI carries no enum, and
+  the Playdate SDK, which `pdglue.c` already keeps to words.
 - **a MEMORY-class composite RETURN on arm64 and riscv64** — `no lane for returning this
   80-byte struct by value on <tgt>`. Probe: `typedef struct { long a[10]; } R;` with a
   definition that returns one; a bare prototype compiles everywhere.

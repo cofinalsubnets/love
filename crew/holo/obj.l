@@ -372,15 +372,15 @@
                 + rels
                 + [shstrblob sht])))
 
-   ; .data's placement grain: 8, or the widest ('align n) the stream asks. an
-   ; aligned(N) global (mooncc honoring __attribute__((aligned))) pads within the
-   ; section (lay, org 0), so the header must ask the linker for the section's own
-   ; start at that N -- or the inner pad aligns nothing.
-   (o-dalign forms)
+   ; .data's placement grain: the caller's floor, or the widest ('align n) the
+   ; stream asks. an aligned(N) global (mooncc honoring __attribute__((aligned)))
+   ; pads within the section (lay, org 0), so the header must ask the linker for the
+   ; section's own start at that N -- or the inner pad aligns nothing.
+   (o-dalign a0 forms)
     (: (go l a2) (? !(two? l) a2
                     (: f <l
                        (go >l (two? f && <f == 'align && f 1 > a2 ? <>f a2))))
-       (go forms 8))
+       (go forms a0))
 
    ; build the whole .o image. textforms/dataforms/nifforms/imgforms are cgen-obj's
    ; split IR -- the two named streams are the ones where the address is the point
@@ -408,16 +408,16 @@
    ; read-only home, and it is a promise the stream has to keep: no relocation, ever.
    (objsecs4 textforms dataforms nifforms imgforms bssforms rodataforms)
     [[".text"   1 6 16 textforms]
-     [".rodata" 1 2 (o-dalign rodataforms) rodataforms]
-     [".data"   1 3 (o-dalign dataforms) dataforms]
-     [".bss"    8 3 (o-dalign bssforms) bssforms]
+     [".rodata" 1 2 (o-dalign 8 rodataforms) rodataforms]
+     [".data"   1 3 (o-dalign 8 dataforms) dataforms]
+     [".bss"    8 3 (o-dalign 8 bssforms) bssforms]
      ["love_nifs" 1 3 8 nifforms]
      [".love.image"  1 3 16 imgforms]]
    ; a named section a compiler emits: progbits on the widest grain its own globals
    ; ask for, allocated, and writable unless ro says the compiler found every global
    ; in it const and reloc-free. the descriptor a hand-written lay needs is its own
    ; business -- it says the flags outright.
-   (objsec-named nm forms ro) [nm 1 (? ro 2 3) (o-dalign forms) forms]
+   (objsec-named nm forms ro) [nm 1 (? ro 2 3) (o-dalign 8 forms) forms]
    ; ..and the code twin, for a function that named its own section (love.c's data
    ; sentinels). flags 6 = alloc|execinstr, which is also what picks objsecs'
    ; internal-resolve lane; a jump out to .text becomes a relocation, as it must.
@@ -426,16 +426,18 @@
    (objsec-code nm forms al) [nm 1 6 al forms]
    ; the arm32 twin of objsecs4: four, because there is no .image lane at 32 bits
    ; (no bake), so a non-empty one is a caller's mistake and not a section. the grain
-   ; is 4 throughout rather than objsecs4's 16/8 -- a thumb function is 2-byte
-   ; aligned and flash is the scarce thing on these parts, which is also why .bss
-   ; rides here: these ports copy .data out of flash and zero .bss themselves
-   ; (rp2040.c, teensy41.c, nucleo446.c), so a zero laid in .data is flash spent twice.
+   ; for code is 4 rather than objsecs4's 16 -- a thumb function is 2-byte aligned
+   ; and flash is the scarce thing on these parts, which is also why .bss rides
+   ; here: these ports copy .data out of flash and zero .bss themselves (rp2040.c,
+   ; teensy41.c, nucleo446.c), so a zero laid in .data is flash spent twice. the
+   ; data lanes ask o-dalign on a floor of 4: an aligned(N) global owes the linker
+   ; its N here exactly as at 64 bits, or the pad inside aligns nothing.
    (objsecs3 target textforms dataforms nifforms imgforms bssforms rodataforms)
     (: _ (? (two? imgforms) (scare 'obj-image-arm32 target) 0)
        [[".text"   1 6 4 textforms]
-        [".rodata" 1 2 4 rodataforms]
-        [".data"   1 3 4 dataforms]
-        [".bss"    8 3 4 bssforms]
+        [".rodata" 1 2 (o-dalign 4 rodataforms) rodataforms]
+        [".data"   1 3 (o-dalign 4 dataforms) dataforms]
+        [".bss"    8 3 (o-dalign 4 bssforms) bssforms]
         ["love_nifs" 1 3 4 nifforms]])
 
    (objelf target0 textforms dataforms funcnames globnames wknames nifforms imgforms locnames bssforms rodataforms)

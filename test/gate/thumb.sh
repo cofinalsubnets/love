@@ -179,6 +179,8 @@ thumb1)
     " = the seven transcendentals BIT-IDENTICAL to the host am floor through the shared __aeabi soft float, incl. the Payne-Hanek big-argument reduction"
   lane f  test/thumb1/libf.c  test/thumb1/harnessf.c  "" 7  30 "thumb1 bare floats" \
     " = every differential check vs gcc; 100+n names the first miss -- see test/thumb1/harnessf.c; a bare float is ONE WORD on v6-M (ai_flo_t IS float on a 32-bit love -- the widened-pair mismatch here kept the egg from hatching)"
+  lane a  test/thumb2/liba.c  test/thumb2/harnessa.c  "" 6  30 "thumb1 aligned(N)" \
+    " = every aligned(N) global lands on its N after the link; 100+n names the first miss -- see test/thumb2/harnessa.c. the pad inside a section is laid by mooncc either way, so a miss here is sh_addralign: objsecs3's data lanes handing the linker a grain narrower than the stream asked for"
   lane z  test/thumb1/libzn.c test/thumb1/harnesszn.c "" 9  30 "thumb1 composites" \
     " = every differential check vs gcc; 100+n names the first miss -- see test/thumb1/harnesszn.c; the MEMORY-return (sret) lane and the position-0 16B r0-r3 quad are the featured shapes"
   # the other direction: read one of the objects just written back through the front
@@ -191,7 +193,7 @@ thumb1)
     cat crew/kore/asbook.l \
         crew/holo/elf.l crew/holo/obj.l crew/holo/link.l test/gate/ld32.l
     echo "(ld32-check \"$d/am.lib.o\")"; } | "$ho/love" || fail "ld-read of $d/am.lib.o"
-  echo "test_thumb1: mooncc -t thumb1 -c -> ELF32/EM_ARM (R_ARM_THM_CALL + soft divide + la/R_ARM_ABS32 + 32-bit struct layout + leax + AAPCS32 varargs + 64-bit pairs + soft doubles + am.c bit-exact + composites vs gcc), ld binds, runs on qemu Cortex-M0; holo's own ld-read reads the object back" ;;
+  echo "test_thumb1: mooncc -t thumb1 -c -> ELF32/EM_ARM (R_ARM_THM_CALL + soft divide + la/R_ARM_ABS32 + 32-bit struct layout + leax + AAPCS32 varargs + 64-bit pairs + soft doubles + am.c bit-exact + aligned(N) section grain + composites vs gcc), ld binds, runs on qemu Cortex-M0; holo's own ld-read reads the object back" ;;
 thumb2)
   lane p  test/thumb2/lib64.c test/thumb2/harness64.c "" 48 30 "thumb2 64-bit pairs" \
     " = every differential check vs gcc; 100+n names the first miss -- see test/thumb2/harness64.c"
@@ -199,9 +201,11 @@ thumb2)
     " = every differential check vs gcc -mfloat-abi=hard; 100+n names the first miss -- see test/thumb2/harnessd.c"
   lane am "$am" test/thumb2/harnessam.c "$aminc" 9 60 "thumb2 am.c" \
     " = the seven transcendentals BIT-IDENTICAL to the host am floor, incl. the Payne-Hanek big-argument reduction"
+  lane a  test/thumb2/liba.c  test/thumb2/harnessa.c  "" 6  30 "thumb2 aligned(N)" \
+    " = every aligned(N) global lands on its N after the link; 100+n names the first miss -- see test/thumb2/harnessa.c. the pad inside a section is laid by mooncc either way, so a miss here is sh_addralign: objsecs3's data lanes handing the linker a grain narrower than the stream asked for"
   lane z  test/thumb2/libz.c  test/thumb2/harnessz.c "-Icrew/moon/include" 18 30 "thumb2 composites+varargs" \
     " = HFA d-pairs + 8B blob + <=4B int one + the AAPCS32 word walk, gcc<->mooncc both directions; 100+n names the first miss -- see test/thumb2/harnessz.c"
-  echo "test_thumb2: mooncc -t thumb2 -c -> ELF32/EM_ARM (la + pairs + VFP + am.c bit-exact + composites/varargs: 48+45+9+18 differential checks), ld binds, runs on qemu Cortex-M7" ;;
+  echo "test_thumb2: mooncc -t thumb2 -c -> ELF32/EM_ARM (la + pairs + VFP + am.c bit-exact + aligned(N) section grain + composites/varargs: 48+45+9+6+18 differential checks), ld binds, runs on qemu Cortex-M7" ;;
 thumb2sp)
   lane d  test/thumb2/libd.c  test/thumb2/harnessd.c  "" 45 30 "thumb2sp doubles" \
     "; 100+n names the first miss -- soft f64 vs gcc's __aeabi"
