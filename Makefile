@@ -409,7 +409,7 @@ k_o = $(k_c:$(R)/%.c=$(k_odir)/%.o) $(k_lay_o) $(k_tail_o) \
 
 kcppflags := \
   -I$(k_odir) \
-  -I. -Isrc -I$(R)/out/host -Iout/lib -I$(R)/crew/quay -I$(R) \
+  -I. -Isrc -Iout/lib -I$(R)/crew/quay -I$(R) \
   -I$(R)/crew/moon/include \
   $(kcppflags)
 kcc = $(mooncc) $(kcppflags) -t $(tgt_$a)

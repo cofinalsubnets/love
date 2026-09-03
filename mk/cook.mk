@@ -25,8 +25,8 @@ $(COOKED): $(LOVE)
 	@$(COOK) $@
 
 # the verbs cook cannot drive -- interactive, streaming, or a sub-make -- passed verbatim.
-PASSED := host love0 kernel wasm lib hooks uninstall \
-          run run-hdd run-headless repl gdb disasm perf flame cloc \
+PASSED := host love0 kernel wasm lib uninstall \
+          run run-sh run-headless repl gdb disasm perf flame cloc \
           test_slow test_host test_love0 test_tools test_wasm \
           cat cata catav
 .PHONY: $(PASSED)
