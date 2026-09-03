@@ -142,6 +142,15 @@
  (= (11 ~ 2) (peep (+ @(10 20) ca-v) 0 0))       ; z @(10 20) lifts to (10,0)/(20,0)
  (= (23 ~ 4) (peep (+ ca-v @(10 20)) 1 0))
 
+ ; --- the accessors, elementwise over an array: re/im/arg drop to the real tier,
+ ;     conj stays complex; a real array is its own real part and its own conjugate ---
+ (= @(1.0 3.0) (re ca-v))   (= @(2.0 4.0) (im ca-v))
+ (aall (= ca-v (conj (conj ca-v))))              ; conj is an involution on the array too
+ (= (1 ~ -2) (peep (conj ca-v) 0 0))   (= (3 ~ -4) (peep (conj ca-v) 1 0))
+ (= twin-tray (tier (conj ca-v)))                 ; the tier is kept
+ (near (/ pi 2) (peep (arg (twin-tray '(1) [(0 ~ 1)])) 0 0))
+ (= @(1.0 2.0) (conj @(1.0 2.0)))                 ; a real array conjugates to itself
+
  ; --- `=` over complex arrays -> a boolean (whole-array); the orderings -> a mask ---
  (= ca-v ca-v)
  !(= ca-v (twin-tray '(2) [(9 ~ 9) (3 ~ 4)]))   ; one cell differs -> false, never a mask

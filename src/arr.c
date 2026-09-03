@@ -1246,17 +1246,37 @@ lvm(lvm_im) {
  if (isnum(a)) ai_musttail return Answer(putcharm(0));   // im of a real is 0
  ai_musttail return Answer(ZeroPoint); }
 
-// (conj z): complex conjugate. conj lifts -- a real r becomes ~(r 0), so it
-// always lands in C (the monadic `~`).
-lvm(lvm_conj) { // FIXME shouldn't this work on twin trays?
+// the array lane of conj: the operand's shape, each cell's imaginary negated
+static lvm(lvm_cconj) {
+ struct ai_tray *v = tray(Sp[0]);
+ uintptr_t R = v->rank, n = tray_nelem(v),
+           bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[ai_C];
+ Have(b2w(bytes));
+ v = tray(Sp[0]);                                           // re-read post-Have
+ struct ai_tray *r = (struct ai_tray*) Hp; Hp += b2w(bytes);
+ ini_tray(r, ai_C, R);
+ for (uintptr_t i = 0; i < R; i++) r->shape[i] = v->shape[i];
+ ai_flo_t *rf = tray_data(r), *fp = tray_data(v);
+ for (uintptr_t p = 0; p < n; p++) rf[2*p] = fp[2*p], rf[2*p + 1] = -fp[2*p + 1];
+ ai_musttail return Answer(word(r)); }
+
+// (conj z): complex conjugate, elementwise over an array. conj lifts -- a real r
+// becomes ~(r 0), so a scalar always lands in C (the monadic `~`); a real array is
+// its own conjugate. object array or non-number -> zero.
+lvm(lvm_conj) {
  word a = Sp[0];
  if (twinp(a)) {
   ai_flo_t re = twin_re(a), im = twin_im(a);
   Have(twin_req);
   Sp[0] = mk_twin(&Hp, re, -im);
   ai_musttail return Next(1); }
+ if (trayp(a)) {
+  enum ai_tray_type t = tray(a)->type;
+  if (t == ai_O) ai_musttail return Answer(ZeroPoint);   // a tray is not a number
+  if (t != ai_C) ai_musttail return Next(1);             // a real array is its own conjugate
+  ai_musttail return Ap(lvm_cconj, g); }
  if (isnum(a)) {
-  ai_flo_t re = toflo(a);            // lift a real to ~(r 0) // FIXME why? just be identity on non-twins
+  ai_flo_t re = toflo(a);            // lift a real to ~(r 0)
   Have(twin_req);
   Sp[0] = mk_twin(&Hp, re, 0);
   ai_musttail return Next(1); }
@@ -1349,7 +1369,7 @@ lvm(lvm_carg) {
   for (uintptr_t i = 0; i < R; i++) r->shape[i] = v->shape[i];
   carg_fill(r, v);
   ai_musttail return Answer(word(r)); }
- if (isnum(a)) { // FIXME seriously? it's 0
+ if (isnum(a)) {                    // 0 for a positive real, pi for a negative one
   ai_flo_t r = ai_atan2(0, toflo(a));
   Have(box_req);
   emit_gem(_res, r);
