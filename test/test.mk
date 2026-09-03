@@ -6,7 +6,7 @@
 .PHONY: \
   test_filemode test_stdinbuf test_glaze test_hook test_glazefuzz test_sat test_drat test_lux \
   test_sb test_kore test_refuzz test_cookdiff test_dist test_seed test_vi test_moon test_clay test_moonfuzz \
-  test_ccarm64 test_ccriscv test_cts test_cts_arm64 test_cts_riscv test_libc test_ulp \
+  test_ccarm64 test_ccriscv test_ccthumb1 test_ccthumb2 test_cts test_cts_arm64 test_cts_riscv test_libc test_ulp \
   test_selfhost test_raw test_drv test_asmops test_dtb test_rvboot test_vec test_fixpoint test_raw_bake test_riscv \
   test_raw_riscv test_raw_arm64 test_thumb1 test_thumb2 test_virt test_mps2 test_mps2_t1 \
   test_mps2_wake test_thumb2sp test_playdate test_teensy41 test_nucleo446 test_nucleo446_smoke \
@@ -435,6 +435,14 @@ test_ccarm64: host
 	@sh test/gate/ccarch.sh arm64 $(ho) $m
 test_ccriscv: host
 	@sh test/gate/ccarch.sh riscv64 $(ho) $m
+# test_ccthumb1 / test_ccthumb2 -- the same battery on the DEVICE CPUs, where ccarch.sh's
+# procedure cannot reach: M-profile has no qemu-user lane and is ILP32, so x64 is neither
+# runnable nor the right oracle. arm-none-eabi-gcc's build of the same source, on the same
+# machine, is (ccthumb.sh says why, and what the three exclusion lists each assert).
+test_ccthumb1: host
+	@sh test/gate/ccthumb.sh thumb1 $(ho) $m
+test_ccthumb2: host
+	@sh test/gate/ccthumb.sh thumb2 $(ho) $m
 # test_cts -- an OUTSIDE corpus: c-testsuite's 220 single-file programs, each held to the
 # stdout the corpus itself ships, on all three targets. Every file in test/cc/ was written
 # here to pin a fault we had already met; these were not, and the first run found nine

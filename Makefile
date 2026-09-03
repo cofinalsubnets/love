@@ -783,7 +783,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
 	test_asmops test_dtb test_rvboot test_elf32 test_objcopy test_distboot test_fat test_wasm \
-	test_riscv test_ccarm64 test_ccriscv test_cts_arm64 test_cts_riscv \
+	test_riscv test_ccarm64 test_ccriscv test_ccthumb1 test_ccthumb2 test_cts_arm64 test_cts_riscv \
 	test_raw_arm64 test_raw_riscv \
 	test_virt test_thumb1 test_thumb2 test_thumb2sp \
 	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446 test_nucleo446_smoke \
