@@ -375,11 +375,12 @@ struct ai
 // output only, and NULL asks for none -- port/mps2 prints them where there is no debugger.
 // `why` names the step that refused: 2 the compaction scared, 3 out of memory, 4 an
 // unencodable heap word, 5 the root table is too small, 6 an unencodable root,
-// 8 the heap outgrew the lane floor, 9 the stack was not quiescent, 10 no room for the
-// serial ranks, 11 the rank walk ran out; 0 on the way out.
+// 8 the heap outgrew the lane floor, 10 no room for the serial ranks, 11 the rank walk
+// ran out; 0 on the way out.
 struct ai_image_bad { uintptr_t q[3 * 2]; int n, why; };
-void *ai_image_save(struct ai*, uintptr_t *outlen, struct ai_image_bad*),
-     *ai_image_save_(struct ai*, uintptr_t *outlen, struct ai_image_bad*);   // the worker: a mid-eval dump (the bake nif)
+// the running stack is ballast, not state: its objects ride into the blob and the load side
+// resets sp/ip, so a dump wherever it is called is a dump like any other.
+void *ai_image_save(struct ai*, uintptr_t *outlen, struct ai_image_bad*);
 struct ai
  *ai_image_load(void const *buf, uintptr_t len),
  *ai_image_load_m(void const *buf, uintptr_t len, void *(*)(struct ai*, void*, size_t));   // allocator-parameterized (a device heap has no malloc)

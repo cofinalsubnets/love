@@ -23,35 +23,46 @@
 
 extern size_t host_selfpath(char*, size_t);       // src/posix.c: the one selfpath door (per-OS ladder)
 
-// `bake PATH` lays the image directly executable -- ./img runs `love wake ./img args..`,
-// the one shape a shebang can carry. `env -S` rather than a baked-in path, so the image
-// follows love on PATH instead of pinning one build. always written, never a flag: the
-// line costs 32 bytes and reading stays tolerant, so an image with no shebang loads as it
-// always did. padded to a word, because the core reads its header at offset 0 of whatever
-// it is handed and aarch64 faults on an unaligned one. the load side skips it in the host,
-// never the core -- a shebang is a POSIX convention, and love.c stays freestanding-clean.
-#define ImageShebang "#!/usr/bin/env -S love wake" // FIXME remove this, it's from when we laid separate images for kore/moon/etc
-static size_t image_shebang(char *sb, size_t cap) {
-  size_t n = (size_t) snprintf(sb, cap, "%s", ImageShebang);
-  while ((n + 1) % sizeof(uintptr_t)) sb[n++] = ' ';
-  sb[n++] = '\n';
-  return n; }
+// the scratch beside a bake's target, per-process. two loves bake the same name
+// concurrently all the time under `make -jN`, and on one shared name they interleave into
+// each other's bytes, the second to rename answering ENOENT. NULL on refusal.
+static char *bake_scratch(struct ai *g, char const *path) {
+  long pid = (long) getpid();
+  int n = snprintf(NULL, 0, "%s.bake.%ld", path, pid);       // measure, then the one exact block
+  char *t = n < 0 ? NULL : g->alloc(g, NULL, (size_t) n + 1);
+  if (t) snprintf(t, (size_t) n + 1, "%s.bake.%ld", path, pid);
+  return t; }
 
-int image_dump(struct ai *g, char const *path) {
+// the one bake to a file, for the nif and the verb alike. the path is sp[0], read after the
+// dump: gen_major moves the string and sp[0] is a root, so it rides the move where a C local
+// would not. noinline keeps these buffers out of lvm_bake's frame, which would defeat the
+// lvm_ ap's tail-jump (make vmret). 0 ok, <0 refused.
+ai_noinline static int image_put(struct ai *g) {
   uintptr_t len = 0;
-  void *buf = ai_image_save(g, &len, NULL);       // g->alloc'd; bake exits right after, so we don't free it
+  void *buf = ai_image_save(g, &len, NULL);
   if (!buf) return -2;
-  char sb[64];
-  size_t sn = image_shebang(sb, sizeof sb);
-  FILE *f = fopen(path, "wb");
-  int rc = !f ? -4
-         : (fwrite(sb, 1, sn, f) != sn) ? -4
-         : (fwrite(buf, 1, len, f) == len) ? 0 : -4;
-  if (f) fclose(f);
-  if (!rc) {                                      // an executable image, or the #! is decoration
-    struct stat st;
-    if (!stat(path, &st)) chmod(path, (st.st_mode | 0111) & 07777); }
-  return rc; }
+  char const *path = txt(str(g->sp[0]));          // a love string ends in a NUL
+  // land it beside the target, never on it: "wb" empties the file and only then writes the
+  // megabytes back, so a reader in between gets a short image, which wakes with no verbs.
+  char *tmp = bake_scratch(g, path);
+  int rc = -4;
+  if (tmp) {
+    FILE *f = fopen(tmp, "wb");
+    rc = !f ? -4 : (fwrite(buf, 1, len, f) == len) ? 0 : -4;
+    if (f && fclose(f)) rc = -4;
+    if (!rc && rename(tmp, path)) rc = -4;        // the adopt: atomic, a whole file or none
+    if (rc) remove(tmp);
+    g->alloc(g, tmp, 0); }
+  return g->alloc(g, buf, 0), rc; }
+
+// `bake PATH`: image_put reads the path off the stack, so the C string goes there first.
+// the push can move g, so g comes back out, and the rc rides g->b, written last.
+struct ai *image_dump(struct ai *g, char const *path) {
+  g = ai_strof(g, path);
+  if (!ai_ok(g)) return ai_core_of(g)->b = -2, g;
+  int rc = image_put(g);
+  ai_core_of(g)->sp++;
+  return ai_core_of(g)->b = rc, g; }
 
 // image_bake -- the self-bake: lay the post-warm image into the running binary's own
 // .image section on disk. ETXTBSY-proof by the adopt pattern -- copy the file, lay the blob
@@ -186,60 +197,34 @@ int image_bake(struct ai *g) {
   // phdrs -- the one place a live address and a file position name the same byte.
   struct bake_at bl = { (uintptr_t) &ai_baked_image_len, 0, 0 };
   dl_iterate_phdr(bake_phdr, &bl);
-  if (!bl.found) return -5;
-  // the scratch path is per-process. two loves bake the same binary concurrently all the
-  // time under `make -jN`, and on one shared name they interleave into each other's bytes,
-  // the second to rename answering ENOENT. the pid separates them; the rename is atomic
-  // either way, so the last to land installs a whole image and the other's is dropped.
-  char exe[4096], tmp[sizeof exe + 32];            // + ".bake.<pid>" and its NUL
-  if (!host_selfpath(exe, sizeof exe)) return -6;
-  snprintf(tmp, sizeof tmp, "%s.bake.%ld", exe, (long) getpid());
+  if (!bl.found) return g->alloc(g, buf, 0), -5;
+  // exe[4096] is the kernel's own PATH_MAX, not a cap of ours: host_selfpath asks about a
+  // real file, and no path an open could name is longer.
+  char exe[4096];
+  char *tmp = host_selfpath(exe, sizeof exe) ? bake_scratch(g, exe) : NULL;
   struct stat st;
-  int src = open(exe, O_RDONLY);
-  if (src < 0 || fstat(src, &st)) { if (src >= 0) close(src); return -6; }
-  int rc = bake_tail(g, src, tmp, buf, len, bl.off, st.st_mode & 07777);
-  if (rc > 0) {
-    fprintf(stderr, "love: .image is not laid last -- nowhere to grow the image\n");
-    rc = -3; }
-  close(src);
-  if (!rc && rename(tmp, exe)) rc = -6;           // the adopt: atomic, a new inode
-  if (rc) unlink(tmp);
-  return rc; }
+  int rc = -6, src = tmp ? open(exe, O_RDONLY) : -1;
+  if (src >= 0 && !fstat(src, &st)) {
+    rc = bake_tail(g, src, tmp, buf, len, bl.off, st.st_mode & 07777);
+    if (rc > 0) {
+      fprintf(stderr, "love: .image is not laid last -- nowhere to grow the image\n");
+      rc = -3; }
+    if (!rc && rename(tmp, exe)) rc = -6;         // the adopt: atomic, a new inode
+    if (rc) unlink(tmp); }
+  if (src >= 0) close(src);
+  g->alloc(g, tmp, 0);
+  return g->alloc(g, buf, 0), rc; }
 
-// (bake path) -- snapshot the live session to an image file mid-eval: the running stack's
-// objects ride into the blob as wake-unreachable ballast and the load side resets sp/ip, so
-// `love wake path prog.l ..` boots a session carrying every global this one had pinned. a
-// live native closure rides too, its code being bytes the image carries. answers 1 | ().
-// the frame-heavy body lives in a plain helper, since path[4096] and &len escape and pin
-// the frame, which would defeat the lvm_ ap's tail-jump (make vmret).
-static ai_noinline ai_word image_bake_do(struct ai *g) {
- if (!strp(g->sp[0])) return ai_zero;
- struct ai_str *s = (struct ai_str*) g->sp[0];
- char path[4096];
- if (s->len >= sizeof path) return ai_zero;
- memcpy(path, s->bytes, s->len);                 // copy out first: the dump's gen_major moves the string
- path[s->len] = 0;
- uintptr_t len = 0;
- void *buf = ai_image_save_(g, &len, NULL);
- if (!buf) return ai_zero;
- // replace the file, never truncate it: fopen("wb") empties it and only then writes the
- // megabytes back, so a concurrent reader gets a short image -- which wakes with no verb
- // table. the scratch carries the pid for the self-bake's reason above.
- char tmp[sizeof path + 32];                     // + ".bake.<pid>" and its NUL
- snprintf(tmp, sizeof tmp, "%s.bake.%ld", path, (long) getpid());
- FILE *f = fopen(tmp, "wb");
- int rc = !f ? -1 : (fwrite(buf, 1, len, f) == len) ? 0 : -1;
- if (f && fclose(f)) rc = -1;
- if (!rc && rename(tmp, path)) rc = -1;          // the adopt: atomic, a whole file or none
- if (rc) remove(tmp);
- g->alloc(g, buf, 0);                            // a session lives on after a bake: no leak
- return rc ? ai_zero : putcharm(1); }
+// the (bake path) nif: `love wake path prog.l ..` boots a session carrying every global
+// this one had pinned, a live native closure among them -- its code is bytes the image
+// carries. answers 1 | ().
 static lvm(lvm_bake) {
  Pack(g);
- ai_word r = image_bake_do(g);
+ ai_word r = strp(g->sp[0]) && !image_put(g) ? putcharm(1) : ai_zero;
  Unpack(g);
- Sp[0] = r; Ip += 1;
- ai_musttail return Continue(); }
+ Sp[0] = r;
+ ai_musttail return Next(1); }
+
 static union u const nif_bake[] = {{lvm_bake}, {lvm_ret0}};
 AiNif("bake", nif_bake);
 
@@ -252,8 +237,8 @@ struct ai *image_load(char const *path) {
     size_t n = (size_t) st.st_size;               // out of the page cache -- one pass, no file buffer
     void *buf = mmap(NULL, n, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0);
     if (buf != MAP_FAILED) {
-      // step over a `bake -x` shebang if the image wears one (image_dump pads the line so
-      // what follows stays word-aligned). a plain image starts at the magic.
+      // step over a shebang if the image wears one -- images written before the line was
+      // dropped carry one, padded to a word. a plain image starts at the magic.
       size_t off = 0;
       if (n > 2 && ((char*) buf)[0] == '#' && ((char*) buf)[1] == '!') {
         char *nl = memchr(buf, '\n', n);

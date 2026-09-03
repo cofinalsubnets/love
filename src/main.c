@@ -288,10 +288,10 @@ static struct ai *env_budget(struct ai *g) {
         g->budget = kb * 1024 / 2 / sizeof(ai_word); } } }
   return g; }
 
-extern int image_dump(struct ai*, char const*),          // src/image.c (file I/O around love.c's codec)
-           image_bake(struct ai*),                       // src/image.c (the self-bake)
+extern int image_bake(struct ai*),                       // src/image.c (the self-bake)
            ai_baked_pick(void const**, uintptr_t*);      // the carried image, if one is baked in
-extern struct ai *image_load(char const*);
+extern struct ai *image_load(char const*),
+                 *image_dump(struct ai*, char const*);   // src/image.c: `bake PATH`, rc in g->b
 extern uint64_t ai_baked_image[];
 extern uintptr_t ai_baked_image_len;
 
@@ -526,7 +526,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     // session-layer eval it replaces did. pure definition: cli-line reads argv and the
     // verb registry when called, so nothing of this session is folded in.
     g = ai_evals_(g, cli);
-    int rc = *bake ? image_dump(g, bake) : image_bake(g);
+    int rc = *bake ? (int) ai_core_of(g = image_dump(g, bake))->b : image_bake(g);
     if (rc) fprintf(stderr, "love: bake failed (rc=%d)\n", rc);
     exit(rc ? 1 : 0); }
   return run_program(g, !argp && isatty(STDIN_FILENO), 1); }

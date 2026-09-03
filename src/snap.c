@@ -892,7 +892,7 @@ static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintp
  g->alloc(g, d, 0);
  return *outlen = total, buf; }
 
-void *ai_image_save_(struct ai *g, uintptr_t *outlen, struct ai_image_bad *bad) {
+void *ai_image_save(struct ai *g, uintptr_t *outlen, struct ai_image_bad *bad) {
  struct image_hdr H;
  uintptr_t nw = 0;
  char *cseg = NULL; uintptr_t ncode = 0;
@@ -901,10 +901,6 @@ void *ai_image_save_(struct ai *g, uintptr_t *outlen, struct ai_image_bad *bad) 
  void *buf = img_wire(g, &H, blob, nw, cseg, outlen);
  if (cseg) g->alloc(g, cseg, 0);
  return g->alloc(g, blob, 0), buf; }
-
-void *ai_image_save(struct ai *g, uintptr_t *outlen, struct ai_image_bad *bad) {
- if (ptr(g->sp) != topof(g)) return Why(9), NULL;             // quiescent: an empty ai stack at the dump point
- return ai_image_save_(g, outlen, bad); }
 
 // the image-wake progress hook: weak no-op, overridden by a port bringing the
 // wake up on new metal (a crashed wake with no debugger is otherwise invisible).
