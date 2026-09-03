@@ -121,7 +121,7 @@ static ai_inline intptr_t image_ap_resolve(intptr_t idx) {
 // symbolically as the code slot of its ai_def1 cell (cell[0], or cell[2] under lvm_cur)
 static intptr_t image_fn_slot(word const *cell) {
  return (intptr_t) (cell[0] == (word) lvm_cur ? cell[2] : cell[0]); }
-intptr_t image_fn_index(intptr_t v) {
+static intptr_t image_fn_index(intptr_t v) {
  for (uintptr_t j = 0; j < ai_def1_n; j++) {
   word const *c = (word const*) ai_def1[j].x;
   if (image_fn_slot(c) == v) return (intptr_t) j; }
@@ -140,7 +140,7 @@ static intptr_t image_fn_resolve(intptr_t j) {
 static const word image_immortals[] = { ZeroPoint, EmptyString, (word) &ai_stdin, (word) &ai_stdout, (word) &ai_stderr, 0, map_gap,
  (word) &ai_fd_port_vt, (word) &ai_to_vt, (word) &ai_closed_vt, (word) &ai_ci_vt,
  (word) yield_c };   // g->ip's parked value: a root holds this binary address, so only an index survives
-intptr_t image_imm_index(word v) {
+static intptr_t image_imm_index(word v) {
  for (uintptr_t i = 0; i < countof(image_immortals); i++) if (image_immortals[i] == v) return (intptr_t) i;
  return -1; }
 // ai_image_save / ai_image_load, the buffer codec: save compacts g and serializes
@@ -281,7 +281,7 @@ static word image_root_dec(uint64_t tag, uint64_t val, word *base) {
 #define ImageCodeBase (ImageIdxBase + 2 * (ImageNLvm + ImageNImm) \
                                     + 2 * ImageNLvm * ImageCellW + 2 * ImageNFn)
 #define ImageCodeMax ((uintptr_t) 1 << 28)   /* bytes of code an image can carry */
-intptr_t img_encode(struct img_ctx *x, intptr_t v) {
+static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
  uintptr_t const hb = ImageIdxBase;
  // the ap table first, before parity: on thumb every fn address is odd and would ride raw
  // as a "fixnum", valid only at the baker's base. ~300 fixnums out of 2^31 collide.
@@ -321,7 +321,7 @@ intptr_t img_encode(struct img_ctx *x, intptr_t v) {
  return img_refuse(x, v); }
 // the decode ladder, split hot/cold by the rung-0 census: odd, heap offset, lvm index and
 // immortal are 98.7% of decodes, so the cold tail stays out of the walk's way.
-ai_noinline intptr_t img_decode_cold(intptr_t v, char *code) {
+static ai_noinline intptr_t img_decode_cold(intptr_t v, char *code) {
  uintptr_t const hb = ImageIdxBase;
  uintptr_t uv = (uintptr_t) v;
  if (uv < hb + 2 * (ImageNLvm + ImageNImm) + 2 * ImageNLvm * ImageCellW) {   // nif-cell interior: base + word offset
@@ -333,7 +333,7 @@ ai_noinline intptr_t img_decode_cold(intptr_t v, char *code) {
                                          - 2 * ImageNLvm * ImageCellW) / 2));
  return (intptr_t)(code + (uv - ImageCodeBase) / 2); }                       // native code: the woken segment
 
-ai_inline intptr_t img_decode(intptr_t v, word *base, char *code) {
+static ai_inline intptr_t img_decode(intptr_t v, word *base, char *code) {
  uintptr_t const hb = ImageIdxBase;
  if (oddp(v)) return v;
  uintptr_t uv = (uintptr_t) v;
@@ -906,7 +906,7 @@ void *ai_image_save(struct ai *g, uintptr_t *outlen, struct ai_image_bad *bad) {
 // wake up on new metal (a crashed wake with no debugger is otherwise invisible).
 // stages: 1 header, 2 pool, 3 blob, 4 the token stream expanded, 0x100+k walk (per 64K words), 5 walk, 6 roots.
 // the wake: `buf` holds the header, dictionary and token stream to read.
-struct ai *img_wake(void const *buf, uintptr_t len, void *(*al)(struct ai*, void*, size_t)) {
+static struct ai *img_wake(void const *buf, uintptr_t len, void *(*al)(struct ai*, void*, size_t)) {
  struct image_hdr H;
  if (len < sizeof H) return NULL;
  memcpy(&H, buf, sizeof H);
