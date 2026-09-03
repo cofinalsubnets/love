@@ -1,4 +1,3 @@
-// FIXME when except love0 are we ever __STDC_HOSTED__ ?
 // map.c -- map, codegen backend. one translation unit of the runtime;
 // the shared layouts and the cross-TU seam are src/love_int.h.
 #include "love_int.h"
@@ -348,6 +347,8 @@ uintptr_t hash_at(struct ai *g, intptr_t x, word *base) {
 // ============================================================================
 // the native finalizer: the cell's header duplicates its code address (dead = the
 // out-of-pool addr, live = a forward), and the arena takes the blob back
+// hosted here reads "not a bare board": mooncc predefines 1 and only port/ passes 0.
+// wasm is hosted too and declines below, on __wasm__.
 #if __STDC_HOSTED__
 static void nat_free(struct ai *g, void *p) { code_free(g, (char*) ((union u*) p)[0].ap); }
 #endif
