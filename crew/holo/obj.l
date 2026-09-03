@@ -432,13 +432,44 @@
    ; teensy41.c, nucleo446.c), so a zero laid in .data is flash spent twice. the
    ; data lanes ask o-dalign on a floor of 4: an aligned(N) global owes the linker
    ; its N here exactly as at 64 bits, or the pad inside aligns nothing.
+   ; the ELF ABI attributes an arm32 object owes its linker. ld MERGES two objects by
+   ; these and refuses a pair that cannot merge, and Tag_ABI_enum_size and Tag_ABI_VFP_args
+   ; are the two questions where our objects meet gcc's on these parts -- libgcc rides
+   ; every thumb1 and thumb2sp link, the playdate its own SDK. an object carrying no such
+   ; section states nothing, so the check ld exists to make could not be made at all. we
+   ; answer only what we know: the architecture, the profile, the ISA, the FPU, wchar_t,
+   ; the enum width, the float model and the float-argument lane.
+   ; ⚠ AN UNSTATED TAG IS NOT NEUTRAL. it reads 0, and a 0 can DISARM the check on a tag
+   ; that was stated: ld runs the VFP_args comparison -- the one that is a hard error and
+   ; not a warning -- only where Tag_ABI_FP_number_model says the object uses floats at
+   ; all. without tag 23 ours linked silently against a soft-float object while gcc's own
+   ; refused, so the tag we cared about was decorative. saying less is a position too.
+   ; format: 'A', le32 over all that follows, "aeabi\0", then Tag_File (1) carrying its own
+   ; le32 length, then (tag value) pairs -- uleb128 each, a string value NUL-terminated.
+   ; every tag and value here is under 128, so one byte apiece.
+   (armattrs t)
+    (: t1 (t == 'thumb1)
+       pairs ('(5) + o-strbytes (? t1 "6-M" "7E-M") + '(0)     ; Tag_CPU_name
+              + [6 (? t1 11 13)]                               ; Tag_CPU_arch: v6-M | v7E-M
+              + '(7 77)                                        ; Tag_CPU_arch_profile: 'M'
+              + [9 (? t1 1 2)]                                 ; Tag_THUMB_ISA_use: 1 | 2
+              + (? (t == 'thumb2) '(10 8)                      ; Tag_FP_arch: FPv5/FP-D16
+                   (t == 'thumb2sp) '(10 6 27 1) ())           ; ..VFPv4-D16, and SP only
+              + '(18 4)                                        ; Tag_ABI_PCS_wchar_t
+              + '(23 3)                                        ; Tag_ABI_FP_number_model: IEEE 754
+              + '(26 1)                                        ; Tag_ABI_enum_size: small
+              + (? t1 () '(28 1)))                             ; Tag_ABI_VFP_args: VFP regs
+       sub ('(1) + le32 (5 + #pairs) + pairs)             ; Tag_File, over its own length
+       ('(65) + le32 (10 + #sub) + o-strbytes "aeabi" + '(0) + sub))
+
    (objsecs3 target textforms dataforms nifforms imgforms bssforms rodataforms)
     (: _ (? (two? imgforms) (scare 'obj-image-arm32 target) 0)
        [[".text"   1 6 4 textforms]
         [".rodata" 1 2 (o-dalign 4 rodataforms) rodataforms]
         [".data"   1 3 (o-dalign 4 dataforms) dataforms]
         [".bss"    8 3 (o-dalign 4 bssforms) bssforms]
-        ["love_nifs" 1 3 4 nifforms]])
+        ["love_nifs" 1 3 4 nifforms]
+        [".ARM.attributes" 1879048195 0 1 [['raw (armattrs target)]]]])   ; SHT_ARM_ATTRIBUTES
 
    (objelf target0 textforms dataforms funcnames globnames wknames nifforms imgforms locnames bssforms rodataforms)
     (: target (arch-nom target0)
