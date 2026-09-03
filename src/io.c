@@ -318,7 +318,7 @@ uintptr_t ai_io_wpending(struct ai *g, struct ai_io *i) {
 
 // GC-context finalizer hook: weak no-op; the host overrides with write(2).
 __attribute__((weak)) void ai_fd_drain(int fd, void const *p, uintptr_t n) {
- (void) fd; (void) p; (void) n; }
+ }
 
 struct ci { struct ai_io io; ai_word head; }; // charlist input
 struct to { struct ai_io io; struct ai_str *buf; ai_word i; }; // lisp string output
@@ -619,7 +619,6 @@ lvm(lvm_fungetc) {
 // heap-port finalizer: runs inside GC (from-space readable); fd < 0 means
 // already closed or a non-OS fd
 void io_close(struct ai *g, void *p) {
- (void) g;
  struct ai_bio *b = p;                         // every finalized port is a bio (ai_io_alloc made it)
  intptr_t fd = ai_io_fd(&b->f.io);
  if (fd < 0) return;

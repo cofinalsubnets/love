@@ -224,7 +224,7 @@ static void blk_scan(void *dma) {
     if (blk_mmio(m, dma)) return; } }
 
 #else
-static void blk_scan(void *dma) { (void) dma; }
+static void blk_scan(void *dma) { }
 #endif
 
 // --- the three doors kmain wires to love ------------------------------------

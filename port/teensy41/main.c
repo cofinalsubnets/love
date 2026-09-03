@@ -49,7 +49,6 @@ void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
 // pumps the ring and answers the same question without waiting. (serial_getc
 // stays in the driver -- psram-test.c is a standalone image with no scheduler.)
 static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
-  (void) g;
   uintptr_t k = 0;
   while (k < n && serial_rx_ready()) dst[k++] = (unsigned char) serial_getc();
   return (intptr_t) k; }

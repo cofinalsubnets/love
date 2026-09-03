@@ -323,7 +323,6 @@ static char const
 // mooncc0.image is the `bake` nif's, called from a -e, so it seals the session layer with
 // cli0 already on it -- and every build-time object compile is one wake of it.
 static struct ai *run_program(struct ai *g, bool replp, bool owed) {
-  (void) replp;
   g = ai_layer_(g);
   if (owed) g = ai_evals_(g, cli);
   return ai_evals_(g, "(cli-line cmdline 0)"); }
@@ -334,7 +333,6 @@ static struct ai *run_program(struct ai *g, bool replp, bool owed) {
 // again through it. bake/bake_load are the full love's; they land here so one call
 // serves both lanes.
 static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load) {
-  (void) bake, (void) bake_load;
   if (argp) {
     g = ai_evals_(g,
 #include "p10.h"

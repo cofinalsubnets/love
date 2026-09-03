@@ -265,7 +265,7 @@ struct ai *ai_ini_m(void *(*al)(struct ai*, void*, size_t)) {
  struct ai *g = al(NULL, NULL, 2 * len0 * sizeof(word));
  return g == NULL ? encode(g, ai_status_scare) : ai_ini_0(g, len0, al); }
 
-void *ai_libc_alloc(struct ai*g, void *p, size_t n) { (void) g; return n ? malloc(n) : (free(p), NULL); }
+void *ai_libc_alloc(struct ai*g, void *p, size_t n) { return n ? malloc(n) : (free(p), NULL); }
 struct ai *ai_ini(void) { return ai_ini_m(ai_libc_alloc); }
 
 // ============================================================================
@@ -931,9 +931,9 @@ lvm(lvm_natp) {
 
 // default fd-keyed waits, conservative (all fds always-ready; multi-source wait
 // collapses to sleep) so non-multitasking frontends link without impls
-__attribute__((weak)) bool ai_ready(int fd, int events) { (void) fd, (void) events; return true; }
+__attribute__((weak)) bool ai_ready(int fd, int events) { return true; }
 __attribute__((weak)) void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ticks) {
-  (void) fds; (void) n; ai_sleep(ticks); }
+  ai_sleep(ticks); }
 // the default authoritative readiness sweep: ask one at a time but fill every
 // slot, so "none ready" never reads as "nobody answered"; hosts replace the loop
 // with one poll(2)
@@ -941,7 +941,7 @@ __attribute__((weak)) void ai_ready_fds(struct ai_wait_fd *fds, int n) {
   for (int i = 0; i < n; i++)
     fds[i].revents = ai_ready(fds[i].fd, fds[i].events) ? fds[i].events : 0; }
 
-__attribute__((weak)) void ai_fd_close(int fd) { (void) fd; }   // host overrides with close(2)
+__attribute__((weak)) void ai_fd_close(int fd) { }   // host overrides with close(2)
 // default sleep is busy wait
 __attribute__((weak)) ai_noinline void ai_sleep(uintptr_t ticks) {
   for (ticks += ai_clock(); ai_clock() < ticks;); }
@@ -1151,11 +1151,11 @@ static void code_drop(struct ai *g, struct ai_code *c) {
  if (c->own) g->alloc(g, c->own, 0); else munmap(c->base, c->len); }
 #else
 // freestanding: RAM runs as it is; blobs live in the heap (lvm_nif) and an image's segment in the allocator
-int code_in(struct ai *g, uintptr_t v) { (void) g, (void) v; return 0; }
+int code_in(struct ai *g, uintptr_t v) { return 0; }
 // no arena, so no blob carries the length word an install writes -- and nobody asks:
 // snap's code rung reaches this only behind the code_in above, which owns no address
-size_t code_len(char *code) { (void) code; return 0; }
-void code_free(struct ai *g, char *code) { (void) g, (void) code; }
+size_t code_len(char *code) { return 0; }
+void code_free(struct ai *g, char *code) { }
 static void code_drop(struct ai *g, struct ai_code *c) { g->alloc(g, c->own, 0); }
 // seated as a chunk like the hosted lane's, so the session owns it and code_fin frees it
 char *code_adopt(struct ai *g, char const *src, size_t n) {

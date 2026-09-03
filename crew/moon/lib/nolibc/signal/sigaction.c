@@ -41,7 +41,7 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
 #ifndef AiNbTramp
     /* no proven return path on this ISA: refuse rather than register a tramp
      * that was never laid. freebsd on this arch does not come through here. */
-    (void) a; (void) old; __errno_v = ENOSYS; return -1;
+    __errno_v = ENOSYS; return -1;
 #else
     /* the same permutation and shim; netbsd's shape puts the mask before the
      * flags, and the kernel provides no return path -- the registered tramp

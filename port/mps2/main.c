@@ -84,7 +84,6 @@ void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
 // read is 0 and never -1), out through semihosting. This used to spin in
 // uart_getc until a byte arrived, which stopped the vm rather than the task.
 static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
-  (void) g;
   uintptr_t k = 0;
   while (k < n && uart_rx_ready()) dst[k++] = (unsigned char) (UREG(0x00) & 0xff);
   return (intptr_t) k; }

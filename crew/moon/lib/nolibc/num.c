@@ -295,7 +295,7 @@ char *mktemp(char *tmpl) {
   tmpl[0] = 0;
   return tmpl; }
 /* one fixed "C" locale, so setlocale just answers its name. */
-char *setlocale(int cat, char const *loc) { (void) cat; (void) loc; return (char *) "C"; }
+char *setlocale(int cat, char const *loc) { return (char *) "C"; }
 struct lconv *localeconv(void) {                   /* the C locale's table: "." and empties */
   static struct lconv c = { (char *) ".", (char *) "", (char *) "",
     (char *) "", (char *) "", (char *) "", (char *) "", (char *) "",
@@ -382,9 +382,9 @@ int scanf(char const *fmt, ...) {
 
 /* no name database yet: every passwd/group lookup misses, so tar prints numeric
  * owner/group (its own fallback). a real /etc/passwd walk is a later rung. */
-struct passwd *getpwuid(uid_t u) { (void) u; return 0; }
-struct passwd *getpwnam(char const *n) { (void) n; return 0; }
-struct group *getgrgid(gid_t g) { (void) g; return 0; }
-struct group *getgrnam(char const *n) { (void) n; return 0; }
+struct passwd *getpwuid(uid_t u) { return 0; }
+struct passwd *getpwnam(char const *n) { return 0; }
+struct group *getgrgid(gid_t g) { return 0; }
+struct group *getgrnam(char const *n) { return 0; }
 void setgrent(void) { }
 

@@ -43,14 +43,13 @@ void ai_sleep(uintptr_t ms) {
 // NEGATIVE fd is ALWAYS ready -- a string port waits on nothing external.
 // fd 0 answers instantly too (it is always at the end), so every fd is
 // honestly ready here.
-bool ai_ready(int fd, int events) { (void) fd, (void) events; return 1; }
+bool ai_ready(int fd, int events) { return 1; }
 void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) { ai_sleep(ms); }
 
 // --- port vtable: output rides the console buffer --------------------------
 // there is no text input on the device -- the crank and the buttons are the
 // whole keyboard -- so stdin is at the end from the first read and says so.
 static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
-  (void) g, (void) dst, (void) n;
   return -1; }
 static struct ai *fd_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
   for (uintptr_t k = 0; k < n; k++) cb_putc(kcb, src[k]);

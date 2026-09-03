@@ -69,9 +69,8 @@ static long at_ok(long dfd, char const *p) {
   if (!p) return -EFAULT;
   return (dfd == AT_FDCWD || p[0] == '/') ? 0 : -ENOTSUP; }
 
-static long k_openat(long dfd, char const *p, long fl, long mode) {
-  (void) mode;                                  // the ramfs mints its own (0644)
-  long r = at_ok(dfd, p);
+static long k_openat(long dfd, char const *p, long fl, long mode) {   // mode is not ours:
+  long r = at_ok(dfd, p);                                            // the ramfs mints 0644
   if (r) return r;
   long acc = fl & 3;
   if (fl & O_DIRECTORY) {                       // opendir's lane, read-only by nature

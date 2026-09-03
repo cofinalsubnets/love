@@ -66,7 +66,7 @@ void DG_SleepMs(uint32_t ms) { k_sleep(ms); }
 
 uint32_t DG_GetTicksMs(void) { return (uint32_t) (k_clock_ms() - dg_epoch); }
 
-void DG_SetWindowTitle(char const *t) { (void) t; }
+void DG_SetWindowTitle(char const *t) { }
 
 // PS/2 set 1, make codes; an extended key wears 0x100 (k_scan_pop's fold). the
 // letters and digits come off a table because a switch of forty rows is worse.

@@ -856,7 +856,7 @@ static intptr_t ram_writen(int fd, unsigned char const *src, uintptr_t n) {
   e->ms = k_clock_ms();
   return (intptr_t) n; }
 
-static bool ram_ready(int fd) { (void) fd; return true; }
+static bool ram_ready(int fd) { return true; }
 
 static void ram_close(int fd) {
   struct k_source *s = k_source(fd);

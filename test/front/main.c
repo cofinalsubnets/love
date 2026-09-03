@@ -124,7 +124,6 @@ bool ai_ready(int fd, int events) {
   return d ? (d->qpos < d->qlen || d->ended) : true; }
 
 void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
-  (void) fds, (void) n;
   ai_sleep(ms); }                    // ms == 0 dies loudly; see the header note
 
 // --- the devices, by fd ----------------------------------------------------
@@ -180,7 +179,6 @@ struct ai_fio ai_stderr = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putc
 // board, and both are unreachable from here. the shape is seat.c's, over these
 // devices -- >0 landed, 0 busy, -1 gone, and a say that lands every byte.
 intptr_t ai_fd_readn(struct ai *g, int fd, unsigned char *dst, uintptr_t n) {
-  (void) g;
   return dev_readn(fd, dst, n); }
 
 uintptr_t ai_fd_say(int fd, unsigned char const *src, uintptr_t n) {

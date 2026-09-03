@@ -77,7 +77,6 @@ void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
 // wire, so a dry read is 0 and never -1). This used to spin in uart_getc until
 // a byte arrived, which stopped the vm rather than the reading task.
 static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
-  (void) g;
   uintptr_t k = 0;
   while (k < n && uart_rx_ready()) dst[k++] = UART[0];
   return (intptr_t) k; }

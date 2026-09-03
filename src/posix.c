@@ -182,7 +182,6 @@ void host_spawn_guard(struct ai *g, int on) {
  guard1(g, g->hp, adv);
  if (g->major_pool) guard1(g->major_pool, g->major_pool + 2 * g->major_len, adv);
 #else
- (void) g; (void) on;
 #endif
 }
 
@@ -319,7 +318,7 @@ ai_noinline static struct ai *host_sigtake(struct ai *g, int fd) {
   if (n != (ssize_t) sizeof si) { g->sp[0] = ZeroPoint; return g; }  // none ready
   signo = (intptr_t) si.ssi_signo; pid = (intptr_t) si.ssi_pid;
 #else
-  (void) fd; g->sp[0] = ai_err(g, ENOSYS); return g;   // no canonical door: the kq lane above is the only one
+  g->sp[0] = ai_err(g, ENOSYS); return g;   // no canonical door: the kq lane above is the only one
 #endif
  }
  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;

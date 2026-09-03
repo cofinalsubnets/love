@@ -178,5 +178,6 @@ static inline void k_psci_system_reset(void) {
   register uint64_t r0 asm("x0") = fn;
   asm volatile ("hvc #0" : "+r"(r0) :: "memory");
   fn = r0;
+  (void) fn;
 #endif
-  (void) fn; }
+  }

@@ -15,7 +15,6 @@ long __ai_osv;         /* 0 unprobed; 1 linux; 2 freebsd; 3 netbsd; -1 inle,
  * the dead-static sweep cannot drop -- one line, kept for the symbol. */
 __attribute__((weak))
 long __ai_inle(long n, long a, long b, long c, long d, long e, long f) {
-  (void) n, (void) a, (void) b, (void) c, (void) d, (void) e, (void) f;
   return -38; }
 
 long __ai_osdetect(void) {
@@ -80,16 +79,16 @@ long __ai_ocan(long f) { return f; }
 long __ai_mapfb(long f) { return f; }
 long __ai_safb(long f) { return f; }
 long __ai_sacan(long f) { return f; }
-void __ai_tiofb(struct termios const *t, struct __fb_termios *f) { (void) t; (void) f; }
-void __ai_tiocan(struct __fb_termios const *f, struct termios *t) { (void) f; (void) t; }
+void __ai_tiofb(struct termios const *t, struct __fb_termios *f) { }
+void __ai_tiocan(struct __fb_termios const *f, struct termios *t) { }
 long __ai_affb(long a) { return a; }
 long __ai_afcan(long a) { return a; }
 long __ai_sotype(long t) { return t; }
 long __ai_msgfb(long f) { return f; }
 long __ai_msgcan(long f) { return f; }
-int __ai_sofb(long *lv, long *op) { (void) lv; (void) op; return 0; }
+int __ai_sofb(long *lv, long *op) { return 0; }
 unsigned int __ai_sain(void const *a, unsigned int n, void *out) { memcpy(out, a, n); return n; }
-void __ai_saout(void *a, unsigned int n) { (void) a; (void) n; }
+void __ai_saout(void *a, unsigned int n) { }
 #else
 /* canonical (linux x86_64) -> {freebsd, netbsd}, sorted by canonical. a row
  * rides here only when the members speak the call correctly on that kernel --
