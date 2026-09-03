@@ -162,9 +162,9 @@ struct ai {
  int next_wait_fd,     // fd the task suspended on, -1 = not waiting on I/O
      next_wait_events; // ai_wait_in (the default) or ai_wait_out (connect's handshake)
  // the VM's one word-size scratch: what the last port refill left (a byte, EOF, or
- // IoWouldBlock), and the word count a Have() asks lvm_gc for. ⚠ the two never
- // overlap -- every refill writes b as the last act before the return that hands it
- // back, so nothing allocates between the deposit and the read.
+ // IoWouldBlock), what a write door landed, and the word count a Have() asks lvm_gc for.
+ // the three never overlap, and the rule that keeps it so: deposit b as the last act
+ // before the return that hands it back, so nothing allocates before the read.
  ai_word b;
  ai_word inflag;       // fd 0's flags as we found them (a charm), 0 = we left them alone
  uintptr_t next_serial, // mint id counter
@@ -263,11 +263,12 @@ extern struct ai_def const __start_love_nifs[], __stop_love_nifs[];
 // port vtable -- what a device owes, and nothing else. a NULL slot means no method
 // (no readn reads end, no writen discards). neither blocks the scheduler; the generic
 // layer above owns ungetc_buf.
-//   writen: land up to n bytes in one motion: >0 landed, 0 no room now (caller keeps
-//     the residue), -1 the device is gone (io_wdrain drops the run). it may allocate,
-//     hence the frame by address: land nothing after an allocating step -- grow, answer
-//     0, let the caller re-derive src. only a door whose port keeps a write run may
-//     refuse; the static ports cannot park, so their door must land what it takes.
+//   writen: land up to n bytes in one motion and answer g, the count in g->b: >0 landed,
+//     0 no room now (caller keeps the residue), -1 the device is gone (io_wdrain drops
+//     the run). it may allocate, hence g in and g out -- land nothing after an allocating
+//     step: grow, answer 0, let the caller re-derive src. only a door whose port keeps a
+//     write run may refuse; the static ports cannot park, so their door must land what it
+//     takes.
 //   readn: drink up to n waiting bytes: >0 bytes, 0 nothing yet (the scheduler owns the
 //     wait), -1 end of stream. never allocates, hence frame by value. the end is stable:
 //     a spent device owes -1 to every ask, not just the first (test/front/io.l law 3).
@@ -276,8 +277,8 @@ extern struct ai_def const __start_love_nifs[], __stop_love_nifs[];
 //     device", so a run must come out of a buffer instead. `chug` is the one caller.
 struct ai_port_vt {
  struct ai*(*flush)(struct ai*);
- intptr_t (*writen)(struct ai**, unsigned char const*, uintptr_t),
-          (*readn)(struct ai*, unsigned char*, uintptr_t);
+ struct ai *(*writen)(struct ai*, unsigned char const*, uintptr_t);
+ intptr_t (*readn)(struct ai*, unsigned char*, uintptr_t);
  uintptr_t (*athand)(struct ai*, uintptr_t); };
 
 enum ai_status ai_fin(struct ai*);

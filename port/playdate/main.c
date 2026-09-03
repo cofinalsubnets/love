@@ -52,10 +52,9 @@ void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) { ai_sleep(ms); }
 static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
   (void) g, (void) dst, (void) n;
   return -1; }
-static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
-  (void) fp;
+static struct ai *fd_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
   for (uintptr_t k = 0; k < n; k++) cb_putc(kcb, src[k]);
-  return (intptr_t) n; }
+  return g->b = (intptr_t) n, g; }
 static struct ai *_flush(struct ai *g) { return g; }
 
 struct ai_fio ai_stdin  = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(0) };

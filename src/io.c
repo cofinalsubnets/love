@@ -18,9 +18,9 @@ static int
  p0peek2(struct ai *g, uintptr_t d),
  p0skip(struct ai *g, uintptr_t d);
 static intptr_t
- ci_readn(struct ai *g, unsigned char *dst, uintptr_t n),
- to_writen(struct ai **fp, unsigned char const *src, uintptr_t n);
+ ci_readn(struct ai *g, unsigned char *dst, uintptr_t n);
 static struct ai
+ *to_writen(struct ai *g, unsigned char const *src, uintptr_t n),
  *applyq(struct ai *g, char const *driver),
  *bio_wgrow(struct ai *g),
  *facex(struct ai *g, word x, int d),
@@ -117,7 +117,7 @@ static struct ai *io_wdrain(struct ai *g, struct ai_io *i) {
   uintptr_t n = getcharm(b->wlen);
   if (!n) return g;
   intptr_t k;
-  avec(g, i, k = vt->writen(&g, (unsigned char*) txt(str(b->wbuf)), n));
+  avec(g, i, k = ai_core_of(g = vt->writen(g, (unsigned char*) txt(str(b->wbuf)), n))->b);
   if (!ai_ok(g)) return g;
   b = (struct ai_bio*) i;                       // writen may allocate: re-derive
   // the device is gone: drop the run -- keeping it parks a task forever
@@ -197,8 +197,8 @@ struct ai *ioputc(struct ai*g, int c) {
  if (!vt->writen) return g;                      // no write door: the byte goes nowhere
  if (!b) {                                       // no buffer: the same lane at n = 1.
   unsigned char x = (unsigned char) c;           // src is a C local, so a sink that
-  if (!vt->writen(&g, &x, 1) && ai_ok(g))        // grows on the first ask lands it on
-   vt->writen(&g, &x, 1);                        // the second -- the growth made room.
+  if (!ai_core_of(g = vt->writen(g, &x, 1))->b && ai_ok(g))   // grows on the first ask
+   g = vt->writen(g, &x, 1);                     // lands it on the second -- room now.
   return g; }
  if (!b->wbuf || charmp(b->wbuf)) {              // dress the write backing
   if (!ai_ok(g = str0(g, ai_iobuf))) return g;
@@ -342,23 +342,22 @@ static intptr_t ci_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
 // the string sink's write door: land what fits, else double and answer 0 having
 // landed nothing. the grow and the copy cannot share a call: str0 collects, and
 // src may be the very string being printed -- the caller re-derives and comes back.
-static intptr_t to_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
- struct ai *g = *fp;
+static struct ai *to_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
  struct to *o = (struct to*) g->io;
  uintptr_t i = getcharm(o->i), cap = len(o->buf);
  if (i < cap) {
   uintptr_t k = cap - i < n ? cap - i : n;
   memcpy(txt(o->buf) + i, src, k);
   o->i = putcharm(i + k);
-  return (intptr_t) k; }
- if (!ai_ok(*fp = g = str0(g, cap ? cap * 2 : ai_iobuf))) return 0;
+  return g->b = (intptr_t) k, g; }
+ if (!ai_ok(g = str0(g, cap ? cap * 2 : ai_iobuf))) return ai_core_of(g)->b = 0, g;
  o = (struct to*) g->io;                  // GC may have moved it; g->io is GC-traced
  struct ai_str *nb = str(g->sp[0]);
  memcpy(txt(nb), txt(o->buf), i);
  o->buf = nb;
  gen_wb(g, (word) o, (word) nb);   // a tenured string-sink takes a fresh young backing -> remember it
  g->sp++;
- return 0; }
+ return g->b = 0, g; }
 
 struct ai_port_vt const
  ai_to_vt     = { noop_flush, to_writen, NULL,     NULL },       // a string sink: prel's `jug`
@@ -421,7 +420,7 @@ lvm(lvm_fputs) {
   uintptr_t i = 0, l = len(bytes_of(Sp[1]));
   // the bulk lane when the port has one; a 0 makes one byte of progress through ioputc.
   // only for an empty buffer: going direct past a pending run would shuffle the stream.
-  intptr_t (*wn)(struct ai**, unsigned char const*, uintptr_t) = g->io->vt->writen;
+  struct ai *(*wn)(struct ai*, unsigned char const*, uintptr_t) = g->io->vt->writen;
   Pack(g);
   g = io_wdrain(g, (struct ai_io*) g->sp[0]);   // buffered puts land before the bulk stroke
   // backpressure: the write run is a buffer, not a queue -- an op that would push it past
@@ -431,10 +430,8 @@ lvm(lvm_fputs) {
    g->next_wake_at = ai_clock() + 1;            // the write residue's poll -- see io_wdrain
    ai_musttail return Ap(lvm_yield_sw, g); }
   while (ai_ok(g) && i < l) {
-   struct ai *w = g;       // the frame by address, off the restrict-qualified param
    intptr_t k = wn && !bio_wpending(bio_of(g, (struct ai_io*) g->sp[0]))
-              ? wn(&w, (unsigned char const*) txt(bytes_of(w->sp[1])) + i, l - i) : 0;
-   g = w;
+              ? ai_core_of(g = wn(g, (unsigned char const*) txt(bytes_of(g->sp[1])) + i, l - i))->b : 0;
    if (k > 0) i += (uintptr_t) k;
    else g = ioputc(g, txt(bytes_of(g->sp[1]))[i++]); }
   if (!ai_ok(g = zflush(g))) ai_musttail return Ap(_lvm_ghelp, g);

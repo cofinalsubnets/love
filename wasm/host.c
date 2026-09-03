@@ -85,15 +85,14 @@ uintptr_t ai_clock(void) {
 
 // --- ports ----------------------------------------------------------------
 // Output goes to out_buf; the page reads it back through the exports below.
-static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
-  (void) fp;
+static struct ai *fd_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
   uintptr_t cap = sizeof out_buf - out_tail,
             room = out_len < cap ? cap - out_len : 0,
             k = room < n ? room : n;
   memcpy(out_buf + out_len, src, k);
   out_len += (uint32_t) k;
   out_full |= k < n;
-  return (intptr_t) k; }
+  return g->b = (intptr_t) k, g; }
 static struct ai *_flush(struct ai *g) { return g; }
 
 // No real stdin: every read is at the end (-1), never merely quiet -- the page

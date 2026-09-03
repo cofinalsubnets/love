@@ -292,8 +292,8 @@ intptr_t k_row_write(int fd, unsigned char const *src, uintptr_t n) {
 intptr_t k_port_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
  return k_row_read(k_fd_eff(g, (int) ai_io_fd(g->io)), dst, n); }
 
-intptr_t k_port_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
- return k_row_write(k_fd_eff(*fp, (int) ai_io_fd((*fp)->io)), src, n); }
+struct ai *k_port_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
+ return g->b = k_row_write(k_fd_eff(g, (int) ai_io_fd(g->io)), src, n), g; }
 
 // src/sys.c's door: the POSIX shapes over the same rows. the port layer says end with -1 and
 // read(2) says it with 0, so the ends are translated here rather than in the syscall table,

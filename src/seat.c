@@ -32,7 +32,7 @@ ai_noinline uintptr_t ai_clock(void) {
 // the vt branches here rather than riding the syscall door. weak refusals so a
 // hosted link, which never takes the branch, closes without them.
 __attribute__((weak)) struct ai *k_port_flush(struct ai *g) { return g; }
-__attribute__((weak)) intptr_t k_port_writen(struct ai **fp, unsigned char const *src, uintptr_t n) { return -1; }
+__attribute__((weak)) struct ai *k_port_writen(struct ai *g, unsigned char const *src, uintptr_t n) { return g->b = -1, g; }
 __attribute__((weak)) intptr_t k_port_readn(struct ai *g, unsigned char *dst, uintptr_t n) { return -1; }
 // and the rows under them, which an fd spelled in love reaches without the seat.
 __attribute__((weak)) intptr_t k_row_read(int fd, unsigned char *dst, uintptr_t n) { return -1; }
@@ -108,22 +108,22 @@ uintptr_t ai_fd_say(int fd, unsigned char const *src, uintptr_t n) {
 // that drains. the O_NONBLOCK pair is per call on any fd we merely inherited: leaving a
 // terminal nonblocking at exit hands the user's shell back broken. 2.9M fcntls at 953 KB
 // is why the run pays it once per 4096 and a pipe takes the bit for the session (inflag).
-static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
- if (__ai_osv < 0) return k_port_writen(fp, src, n);
- struct ai_io *io = (*fp)->io;
+static struct ai *fd_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
+ if (__ai_osv < 0) return k_port_writen(g, src, n);
+ struct ai_io *io = g->io;
  intptr_t fd = ai_io_fd(io);
  if (io == &ai_stdout.io || io == &ai_stdin.io || io == &ai_stderr.io) {
   uintptr_t k = io == &ai_stdout.io ? fwrite(src, 1, n, stdout)
                                  : ai_fd_write_all((int) fd, src, n);
   if (k < n && errno == EPIPE) console_hangup();
-  return (intptr_t) k; }
+  return g->b = (intptr_t) k, g; }
  int fl = fcntl((int) fd, F_GETFL), off = fl >= 0 && !(fl & O_NONBLOCK);
  if (off) fcntl((int) fd, F_SETFL, fl | O_NONBLOCK);
  ssize_t k;
  do k = write((int) fd, src, n); while (k < 0 && errno == EINTR);
  if (off) fcntl((int) fd, F_SETFL, fl);
- return k > 0 ? (intptr_t) k
-      : (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : -1; }   // busy vs gone
+ return g->b = k > 0 ? (intptr_t) k
+             : (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : -1, g; }   // busy vs gone
 
 static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
  if (__ai_osv < 0) return k_port_readn(g, dst, n);

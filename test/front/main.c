@@ -158,8 +158,8 @@ static intptr_t dev_writen(intptr_t fd, unsigned char const *src, uintptr_t n) {
 static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
   return dev_readn(ai_io_fd(g->io), dst, n); }
 
-static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
-  return dev_writen(ai_io_fd((*fp)->io), src, n); }
+static struct ai *fd_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
+  return g->b = dev_writen(ai_io_fd(g->io), src, n), g; }
 
 static struct ai *fd_flush(struct ai *g) {
   intptr_t fd = ai_io_fd(g->io);

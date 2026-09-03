@@ -82,10 +82,9 @@ static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
   while (k < n && uart_rx_ready()) dst[k++] = UART[0];
   return (intptr_t) k; }
 
-static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
-  (void) fp;
+static struct ai *fd_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
   for (uintptr_t k = 0; k < n; k++) v_putc((char) src[k]);
-  return (intptr_t) n; }
+  return g->b = (intptr_t) n, g; }
 
 static struct ai *fd_flush(struct ai *g) { return g; }
 
