@@ -10,13 +10,8 @@ endif
 # bootstrap interpreter
 love0 = out/host/love0
 
-.PHONY: all install uninstall clean distclean host kernel wasm love0 site site-serve test test_host \
-  test_hdiff test_slow test_extra test_tools test_love0 test_wasm test_proof test_gen test_uugen \
-  test_gc test_gcheck test_gcstress test_hostegg test_hostnif test_doc test_glaze test_hook test_sat test_cli \
-  test_holo test_as test_elf32 test_objcopy test_holofuzz test_glazefuzz test_encver test_lux \
-  test_extract test_big test_mx test_clay test_moonfuzz test_thumb1 test_thumb2 \
-  test_virt test_wake test_rp2040 valg disasm flame cat cata catav perf repl gdb \
-  vmret waits bench nettest lint ccdb ulp
+.PHONY: all install uninstall clean distclean host kernel wasm love0 lint ccdb ulp \
+  site site-serve valg disasm flame cat cata catav perf repl gdb bench cloc
 
 # an unpacked release builds the product; a checkout keeps the fast gate
 ifeq ($(in_git),)
@@ -38,36 +33,40 @@ boot_h = out/lib/cli0.h out/lib/egg0.h out/lib/post0.h out/lib/p10.h out/lib/pre
 .PHONY: lib
 lib: $(lib_h) $(boot_h)
 lcat_love = $(love0) -l love/prel.l
-# same bytes: stamp anyway, or the target stays older than its inputs forever
-publish = if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; touch $@; else mv -f $$t $@; echo "$$tag	$@"; fi
-# a forced witness keeps its mtime -- that is what stops the cascade
+# A FORCED WITNESS KEEPS ITS MTIME, and that is the whole point: make cannot depend on a
+# variable's VALUE, so a roster change has to be noticed some other way. Depending on the
+# Makefile instead was measured at 90 s and 42 targets for a bare `touch Makefile` -- the
+# .mooncc-cat.l -> mooncc0.image -> every moon object chain. Do not simplify this away.
 note = if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo 'SH	'$@; fi
-lcat_h = @mkdir -p out/lib; tag=LOVE; t=$@.$$$$.tmp; \
-  $(lcat_love) tools/lcat.l $< > $$t && test -s $$t \
-    || { rm -f $$t; echo "FAIL: $@ empty (lcat failed -- broken bootstrap?)"; exit 1; }; \
-  $(publish)
+# every header below is written straight to $@. .DELETE_ON_ERROR (above) takes the
+# half-written one away when a generator dies, which is the whole of the guarantee.
 $(lib_h): out/lib/%.h: love/%.l tools/lcat.l   # + $(love0), stated below
-	$(lcat_h)
-sed_h = @mkdir -p out/lib; tag=SED; t=$@.$$$$.tmp; LOVE_NO_IMAGE= $(sed_lit) $< > $$t; \
-  $(publish)
+	@echo 'LOVE	'$@
+	@mkdir -p out/lib
+	@$(lcat_love) tools/lcat.l $< > $@
 $(holo_h): out/lib/%.h: crew/holo/%.l tools/lcat.l
-	$(lcat_h)
+	@echo 'LOVE	'$@
+	@mkdir -p out/lib
+	@$(lcat_love) tools/lcat.l $< > $@
 out/lib/rune.h: crew/rune/rune.l tools/lcat.l
-	$(lcat_h)
-$(asm0_h): out/lib/%0.h: crew/holo/%.l
-	$(sed_h)
-out/lib/%0.h: love/%.l
-	$(sed_h)
+	@echo 'LOVE	'$@
+	@mkdir -p out/lib
+	@$(lcat_love) tools/lcat.l $< > $@
 $(glaze_h): out/lib/%.h: love/glaze/%.l
-	$(lcat_h)
+	@echo 'LOVE	'$@
+	@mkdir -p out/lib
+	@$(lcat_love) tools/lcat.l $< > $@
+$(asm0_h): out/lib/%0.h: crew/holo/%.l
+	@echo 'SED	'$@
+	@mkdir -p out/lib
+	@LOVE_NO_IMAGE= $(sed_lit) $< > $@
+out/lib/%0.h: love/%.l
+	@echo 'SED	'$@
+	@mkdir -p out/lib
+	@LOVE_NO_IMAGE= $(sed_lit) $< > $@
 glaze_items = "(use 'holo)(module 'glaze " @out/lib/emit.h @out/lib/auto.h ")" \
   "(: ev (from 'glaze 'ev) member? (from 'glaze 'member?))" \
   @out/lib/hook.h @out/lib/walk.h @out/lib/holo.h @out/lib/amd64.h @out/lib/arm64.h
-out/lib/glaze_z.h: $(glaze_h) $(holo_h) tools/mkgz.l $(love0)
-	@mkdir -p out/lib; tag=MKGZ; t=$@.$$$$.tmp; \
-	  $(lcat_love) tools/mkgz.l src_glaze_z $(glaze_items) > $$t && test -s $$t \
-	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
-	  $(publish)
 cats_egg_items   = @out/lib/egg.h
 cats_p1_items    = @out/lib/p1.h
 cats_prel_items  = @out/lib/prel.h " " @out/lib/ev.h
@@ -78,47 +77,30 @@ cats_modsb_items = @out/lib/bao.h @out/lib/verbs.h @out/lib/scan.h @out/lib/re.h
 cats_z = out/lib/cat_egg_z.h out/lib/cat_p1_z.h out/lib/cat_prel_z.h out/lib/cat_post_z.h \
   out/lib/cat_modsa_z.h out/lib/cat_modsb_z.h \
   out/lib/cat_mods_amd64_z.h out/lib/cat_mods_arm64_z.h out/lib/cat_mods_rv64_z.h
+# mkgz names its own symbol and sizes on err, so these carry no echo of their own.
+out/lib/glaze_z.h: $(glaze_h) $(holo_h) tools/mkgz.l $(love0)
+	@$(lcat_love) tools/mkgz.l src_glaze_z $(glaze_items) > $@
 out/lib/cat_egg_z.h: out/lib/egg.h tools/mkgz.l $(love0)
-	@mkdir -p out/lib; tag=MKGZ; t=$@.$$$$.tmp; \
-	  $(lcat_love) tools/mkgz.l ai_cat_egg_z $(cats_egg_items) > $$t && test -s $$t \
-	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
-	  $(publish)
+	@$(lcat_love) tools/mkgz.l ai_cat_egg_z $(cats_egg_items) > $@
 out/lib/cat_p1_z.h: out/lib/p1.h tools/mkgz.l $(love0)
-	@mkdir -p out/lib; tag=MKGZ; t=$@.$$$$.tmp; \
-	  $(lcat_love) tools/mkgz.l ai_cat_p1_z $(cats_p1_items) > $$t && test -s $$t \
-	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
-	  $(publish)
+	@$(lcat_love) tools/mkgz.l ai_cat_p1_z $(cats_p1_items) > $@
 out/lib/cat_prel_z.h: out/lib/prel.h out/lib/ev.h tools/mkgz.l $(love0)
-	@mkdir -p out/lib; tag=MKGZ; t=$@.$$$$.tmp; \
-	  $(lcat_love) tools/mkgz.l ai_cat_prel_z $(cats_prel_items) > $$t && test -s $$t \
-	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
-	  $(publish)
+	@$(lcat_love) tools/mkgz.l ai_cat_prel_z $(cats_prel_items) > $@
 out/lib/cat_post_z.h: out/lib/post.h tools/mkgz.l $(love0)
-	@mkdir -p out/lib; tag=MKGZ; t=$@.$$$$.tmp; \
-	  $(lcat_love) tools/mkgz.l ai_cat_post_z $(cats_post_items) > $$t && test -s $$t \
-	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
-	  $(publish)
+	@$(lcat_love) tools/mkgz.l ai_cat_post_z $(cats_post_items) > $@
 out/lib/cat_modsa_z.h: out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/glob.h out/lib/kanren.h out/lib/overlay.h out/lib/uu.h tools/mkgz.l $(love0)
-	@mkdir -p out/lib; tag=MKGZ; t=$@.$$$$.tmp; \
-	  $(lcat_love) tools/mkgz.l ai_cat_mods_a_z $(cats_modsa_items) > $$t && test -s $$t \
-	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
-	  $(publish)
+	@$(lcat_love) tools/mkgz.l ai_cat_mods_a_z $(cats_modsa_items) > $@
 out/lib/cat_modsb_z.h: out/lib/bao.h out/lib/verbs.h out/lib/scan.h out/lib/re.h out/lib/peg.h tools/mkgz.l $(love0)
-	@mkdir -p out/lib; tag=MKGZ; t=$@.$$$$.tmp; \
-	  $(lcat_love) tools/mkgz.l ai_cat_mods_b_z $(cats_modsb_items) > $$t && test -s $$t \
-	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
-	  $(publish)
+	@$(lcat_love) tools/mkgz.l ai_cat_mods_b_z $(cats_modsb_items) > $@
 out/lib/cat_mods_%_z.h: out/lib/holo.h out/lib/%.h tools/mkgz.l $(love0)
-	@mkdir -p out/lib; tag=MKGZ; t=$@.$$$$.tmp; \
-	  $(lcat_love) tools/mkgz.l ai_cat_mods_h_z @out/lib/holo.h @out/lib/$*.h > $$t && test -s $$t \
-	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
-	  $(publish)
+	@$(lcat_love) tools/mkgz.l ai_cat_mods_h_z @out/lib/holo.h @out/lib/$*.h > $@
 .PHONY: force_corpus_list
 force_corpus_list: ;
+# love0 reads this at runtime to find the corpus. $t is a glob, so it is written
+# every run; only the phony test_love0 wants it, so the moving mtime costs nothing.
 out/lib/corpus.list: force_corpus_list
 	@mkdir -p out/lib
-	@tf=$@.$$$$.tmp; echo '$t' > $$tf; \
-	 $(note)
+	@echo '$t' > $@
 
 out/lib/love_version.h: $(R)/VERSION
 	@mkdir -p out/lib
@@ -151,10 +133,8 @@ $(ho)/love.baked $(ho)/love.cand.baked: %.baked: % $(ho)/.dist-cat.l
 	@$< bake -l $(ho)/.dist-cat.l
 	@touch $@
 
-
 .PHONY: candidate
 candidate: $(ho)/love.cand.baked
-
 
 $(ho)/liblove.a: $(h_o)
 	@echo 'AR	'$@
@@ -203,30 +183,47 @@ $(ho)/src/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 
 moon0 = $(love0) wake out/host/mooncc0.image mooncc $(GCDBG)
 moon0_dep = out/host/mooncc0.image
+# THE MOONCC OBJECT LANE: love's own C compiled by mooncc into one directory, worn twice --
+# at the host's arch, and at the cross arch $(xa) names. $(call moonlane,NAME,DIRVAR,CCVAR,
+# ARCHVAR), every argument but the first a variable NAME so the body stays deferred; the
+# kart shape below is the same idiom. Answers $(1)_love_o, _host_o, _math_o and $(1)_o.
+define moonlane
+$(1)_love_o = $$(love_tu:%.c=$$($(2))/%.o)
+$(1)_host_o = $$(host_c:$$(R)/src/%.c=$$($(2))/host_%.o)
+$(1)_math_o = $$(patsubst crew/moon/lib/math/%.c,$$($(2))/m_%.o,$$(wildcard crew/moon/lib/math/*.c))
+$(1)_o = $$($(1)_love_o) $$($(1)_host_o) $$($(1)_math_o) $$($(2))/sys.o
+$$($(1)_love_o): $$($(2))/%.o: $$(R)/src/%.c $$(love_h) $$(moon0_dep)
+	@echo 'MOON	'$$@
+	@mkdir -p $$(dir $$@)
+	@$$($(3)) -D ai_tco=$$(tco) -D AiHaveVersionH -I$$(ho) -I. -Isrc -Iout/lib -c $$< $$@
+$$($(2))/love.o: out/lib/love_version.h        # only this TU carries the version id
+$$($(2))/host_%.o: $$(R)/src/%.c $$(love_h) $$(moon0_dep)
+	@echo 'MOON	'$$@
+	@mkdir -p $$(dir $$@)
+	@$$($(3)) -D ai_tco=$$(tco) -I$$(ho) -I. -Isrc -Iout/lib -c $$< $$@
+$$($(2))/host_main.o $$($(2))/host_cats.o: $$(baked_h)
+$$($(2))/host_main.o: out/lib/glaze_z.h
+$$($(2))/host_cats.o: $$(cats_z)
+$$($(2))/host_cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
+$$($(2))/m_%.o: crew/moon/lib/math/%.c $$(moon0_dep)
+	@echo 'MOON	'$$@
+	@mkdir -p $$(dir $$@)
+	@$$($(3)) -Icrew/moon/lib/math -Icrew/moon/include -c $$< $$@
+# the machine tail rides the host's own cat, one cut for every consumer; only the entry
+# names the arch.
+$$($(2))/sys.o: out/host/.mksys-cat.l $$(love0)
+	@echo 'HOLO	'$$@
+	@mkdir -p $$(dir $$@)
+	@LOVE_NO_IMAGE= $$(love0) -l out/host/.mksys-cat.l -q -e "((from 'moon '$$(mksys_$$($(4)))) \"$$@\")" && test -s $$@
+endef
+
 moon_d = $(ho)/moon
-moon_host_o = $(host_c:$(R)/src/%.c=$(moon_d)/host_%.o)
-moon_math_o = $(patsubst crew/moon/lib/math/%.c,$(moon_d)/m_%.o,$(wildcard crew/moon/lib/math/*.c))
-moon_love_o = $(love_tu:%.c=$(moon_d)/%.o)
-moon_o = $(moon_love_o) $(moon_host_o) $(moon_math_o) $(moon_d)/sys.o
-$(moon_love_o): $(moon_d)/%.o: $(R)/src/%.c $(love_h) $(moon0_dep)
-	@echo 'MOON	'$@
-	@mkdir -p $(dir $@)
-	@$(moon0) -D ai_tco=$(tco) -D AiHaveVersionH -I$(ho) -I. -Isrc -Iout/lib -c $< $@
-$(moon_d)/love.o: out/lib/love_version.h        # only this TU carries the version id
-$(moon_d)/host_%.o: $(R)/src/%.c $(love_h) $(moon0_dep)
-	@echo 'MOON	'$@
-	@mkdir -p $(dir $@)
-	@$(moon0) -D ai_tco=$(tco) -I$(ho) -I. -Isrc -Iout/lib -c $< $@
-$(moon_d)/host_main.o $(moon_d)/host_cats.o: $(baked_h)
-$(moon_d)/host_cats.o: $(cats_z)
-$(moon_d)/host_cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
-$(moon_d)/m_%.o: crew/moon/lib/math/%.c $(moon0_dep)
-	@echo 'MOON	'$@
-	@mkdir -p $(dir $@)
-	@$(moon0) -Icrew/moon/lib/math -Icrew/moon/include -c $< $@
+$(eval $(call moonlane,moon,moon_d,moon0,hosta))
 mksys_l = crew/kore/text.l crew/kore/u.l crew/kore/asbook.l \
           crew/holo/amd64.l crew/holo/arm64.l crew/holo/rv64.l \
           crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
+.PHONY: force_dist_list
+force_dist_list: ;
 out/host/.mksys-cat.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(mksys_l)' > $$tf; \
@@ -235,10 +232,6 @@ out/host/.mksys-cat.l: $(mksys_l) out/host/.mksys-cat.list
 	@echo 'CAT	'$@
 	@mkdir -p $(dir $@)
 	@cat $(mksys_l) > $@
-$(moon_d)/sys.o: out/host/.mksys-cat.l $(love0)
-	@echo 'HOLO	'$@
-	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= $(love0) -l out/host/.mksys-cat.l -q -e "((from 'moon '$(mksys_$(hosta))) \"$@\")" && test -s $@
 ifneq ($(HCC),)
 $(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/src/love_data.ld $(baked_h)
 	@echo 'LD	'$@
@@ -268,7 +261,7 @@ $(ho)/.mooncc-cat.list: force_dist_list
 $(ho)/.mooncc-cat.l: $(moonfiles) $(ho)/.mooncc-cat.list
 	@echo 'CAT	'$@
 	@mkdir -p $(dir $@)
-	@cat $(filter %.l,$^) > $@
+	@cat $(moonfiles) > $@
 sbfiles = crew/kore/text.l crew/kore/diff.l lib/dns.l crew/sb/merge.l crew/sb/http.l crew/sb/sb.l
 $(ho)/sb: $(sbfiles)
 $(ho)/lush: $(lushfiles)
@@ -294,8 +287,6 @@ distfiles = crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/
             lib/gz.l lib/tar.l crew/tar/tarcmd.l crew/gz/gzcmd.l lib/cpio.l \
             crew/cpio/cpiocmd.l crew/source/source.l crew/lapiz/lapiz.l \
             lib/salt.l crew/libra/libra.l lib/hueweb.l lib/serve.l
-.PHONY: force_dist_list
-force_dist_list: ;
 $(ho)/.dist.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \
@@ -352,40 +343,16 @@ $(error x-lane: no such arch `$(xa)' -- the roster carries x86_64 aarch64 riscv6
 endif
 xd = out/x-$(xa)
 moonx = $(moon0) -t $(xtgt)
-xhost_o = $(host_c:$(R)/src/%.c=$(xd)/host_%.o)
-xmath_o = $(patsubst crew/moon/lib/math/%.c,$(xd)/m_%.o,$(wildcard crew/moon/lib/math/*.c))
-xlove_o = $(love_tu:%.c=$(xd)/%.o)
-xobjs = $(xlove_o) $(xhost_o) $(xmath_o) $(xd)/sys.o
-$(xlove_o): $(xd)/%.o: $(R)/src/%.c $(love_h) out/host/mooncc0.image
-	@echo 'MOON	'$@
-	@mkdir -p $(dir $@)
-	@$(moonx) -D ai_tco=$(tco) -D AiHaveVersionH -I$(ho) -I. -Isrc -Iout/lib -c $< $@
-$(xd)/love.o: out/lib/love_version.h            # only this TU carries the version id
-$(xd)/host_main.o $(xd)/host_cats.o: $(baked_h)
-$(xd)/host_cats.o: $(cats_z)
-$(xd)/host_%.o: $(R)/src/%.c $(love_h) out/host/mooncc0.image
-	@echo 'MOON	'$@
-	@mkdir -p $(dir $@)
-	@$(moonx) -D ai_tco=$(tco) -I$(ho) -I. -Isrc -Iout/lib -c $< $@
-$(xd)/host_main.o: $(baked_h)
-$(moon_d)/host_main.o $(ho)/src/main.o $(xd)/host_main.o: out/lib/glaze_z.h
-$(xd)/host_cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
-$(xd)/m_%.o: crew/moon/lib/math/%.c out/host/mooncc0.image
-	@echo 'MOON	'$@
-	@mkdir -p $(dir $@)
-	@$(moonx) -Icrew/moon/lib/math -Icrew/moon/include -c $< $@
-$(xd)/sys.o: out/host/.mksys-cat.l $(love0)
-	@echo 'HOLO	'$@
-	@mkdir -p $(dir $@)
-	@$(love0) -l out/host/.mksys-cat.l -q -e "((from 'moon '$(xmksys)) \"$@\")" && test -s $@
+$(eval $(call moonlane,x,xd,moonx,xa))
+$(ho)/src/main.o: out/lib/glaze_z.h
 
 $(xd)/src.o: $(dist_source) tools/mksrc.l out/host/.mksys-cat.l $(love0)
 	@$(love0) -l out/host/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(xtgt)
 $(xd)/rt.o: $(rt_slice) tools/mkrt.l out/host/mooncc0.image $(love0)
 	@$(love0) wake out/host/mooncc0.image tools/mkrt.l $@ $(xtgt)
-$(xd)/love: $(xobjs) $(xd)/src.o $(xd)/rt.o out/lib/readme.bin
+$(xd)/love: $(x_o) $(xd)/src.o $(xd)/rt.o out/lib/readme.bin
 	@echo 'MOON	'$@
-	@$(moonx) -pie $(xobjs) $(xkart_o) $(xd)/src.o $(xd)/rt.o -freadme=out/lib/readme.bin -o $@
+	@$(moonx) -pie $(x_o) $(xkart_o) $(xd)/src.o $(xd)/rt.o -freadme=out/lib/readme.bin -o $@
 fat = out/dist/love-fat
 .PHONY: dist-fat
 dist-fat: $(ho)/love.baked $(xd)/love tools/fatpack.l
@@ -405,33 +372,39 @@ include $(R)/mk/distro.mk
 
 ko = out/free
 
-# every gate and verb below is phony: one roster, so adding one is one line and not two.
-.PHONY: kmain_o run run-$a run-sh run-headless init-container \
-  uefi test_disk test_uefi test_uefi_arm64 test_kboot test_kverb test_kernel_arm64 \
-  test_inle test_wasm
+# the kernel's verbs; its gates are test/test.mk's.
+.PHONY: kmain_o run run-$a run-sh run-headless init-container uefi
 
-KCC ?= LOVE_NO_IMAGE= $(ho)/love mooncc
+# love's own mooncc, and the artifact that answers it. the compiler IS the shipped
+# binary, so nothing foreign builds the kernel and there is no second cc to name.
+# LOVE_NO_IMAGE= leads: an egg-booted love has no verbs.
+mooncc = LOVE_NO_IMAGE= $(ho)/love mooncc
+mooncc_dep = $(ho)/love.baked
 
+# this machine's metal files, and the three TUs only a kernel has a frontend for.
 k_arch_c = $(wildcard $(R)/src/$a_*.c)
 k_free_c = $R/src/kmain.c $R/src/blk.c $R/src/sys.c
-k_host_c = $(patsubst %,$R/src/%.c,main cats cb image mem hash sock tls deflate inflate src posix seat ustar)
-k_shared_c = $(love_c) \
+# the whole kernel compile, in link order: the runtime and its math floor, the console
+# engine with its two fonts, nolibc, the metal, the free trio -- and $(host_c) itself,
+# because the kernel runs the same frontend the host does. taking that roster rather than
+# copying it is what lets a new src/<app>.c reach the kernel with no rule edit.
+k_c = $(love_c) \
   $R/crew/quay/cga_8x8.c $R/crew/quay/moderndos_8x16.c $R/crew/quay/paint.c \
-  $(c_c)
-k_h = $(love_h) $(R)/src/k.h $(R)/src/ustar.h $(wildcard *.h $(R)/src/$a_*.h)
+  $(c_c) $(k_arch_c) $(k_free_c) $(host_c)
+k_h = $(love_h) $(R)/src/k.h $(R)/src/ustar.h $(wildcard $(R)/src/$a_*.h)
 
 k_odir = $(ko)/$a
 k_elf = $(ko)/love-$a.elf
 k_pie = $(k_odir)/love.pie
 
-k_shared_o = $(k_shared_c:$(R)/%.c=$(k_odir)/%.o)
-k_arch_o = $(k_arch_c:$(R)/%.c=$(k_odir)/%.o)
-k_free_o = $(k_free_c:$(R)/%.c=$(k_odir)/%.o)
-k_host_o = $(k_host_c:$(R)/%.c=$(k_odir)/%.o)
+# the lays and the machine tail live under $(k_odir)/$a/ so vec.o and sys.o do not
+# collide with the src/ objects of the same name.
 k_lay_o = $(k_odir)/$a/vec.o
 k_boot_o = $(k_odir)/$a/boot.o
 k_tail_o = $(k_odir)/$a/sys.o
-k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_host_o) $(k_lay_o) $(k_tail_o) \
+# $(k_free_o) alone is named apart: `make kmain_o` is the ports' door to it.
+k_free_o = $(k_free_c:$(R)/%.c=$(k_odir)/%.o)
+k_o = $(k_c:$(R)/%.c=$(k_odir)/%.o) $(k_lay_o) $(k_tail_o) \
   $(k_odir)/rt.o $(k_odir)/src.o $(k_doom_o)
 
 kcppflags := \
@@ -439,9 +412,7 @@ kcppflags := \
   -I. -Isrc -I$(R)/out/host -Iout/lib -I$(R)/crew/quay -I$(R) \
   -I$(R)/crew/moon/include \
   $(kcppflags)
-kcc = $(KCC) $(kcppflags) -t $(tgt_$a)
-# ours has to exist before it can compile anything.
-kcc_dep = $(ho)/love.baked
+kcc = $(mooncc) $(kcppflags) -t $(tgt_$a)
 
 kernel: $(k_elf)
 
@@ -457,7 +428,7 @@ $(k_odir)/src.o: $(dist_source) tools/mksrc.l out/host/.mksys-cat.l $m
 $(k_pie): $(k_o) $m
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
-	@$(KCC) -pie -t $(tgt_$a) $(k_o) -o $@
+	@$(mooncc) -pie -t $(tgt_$a) $(k_o) -o $@
 kproject_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
   $R/crew/holo/elf.l $R/crew/holo/obj.l $R/crew/holo/link.l $R/tools/kproject.l
 $(k_odir)/kproject.list: force_dist_list
@@ -480,7 +451,7 @@ k_pie_dep =
 ifeq ($a,$(hosta))
 k_pie_in = $(ho)/love
 # `love bake` rewrites $(ho)/love in place, so the projection is ordered behind the stamp
-k_pie_dep = $(kcc_dep)
+k_pie_dep = $(mooncc_dep)
 endif
 $(k_elf): $(k_odir)/kproject.l $(k_pie_in) $(k_pie_dep) $(k_boot_o) $m
 	@echo 'KPROJ	'$@
@@ -492,8 +463,8 @@ out/lib/korelist.h: Makefile
 	@tf=$@.$$$$.tmp; printf '"%s"\n' '$(korefiles)' > $$tf; \
 	 $(note)
 
-# Shared C sources (src/love.c, crew/quay/, nolibc's six) + per-arch free/<a>/.
-$(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) $(baked_h) $(cats_z) out/lib/korelist.h
+# every $(k_c) source, wherever in the tree it lives, lands under $(k_odir) by its path.
+$(k_odir)/%.o: $(R)/%.c $(k_h) $(mooncc_dep) $(baked_h) $(cats_z) out/lib/korelist.h
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
@@ -550,7 +521,7 @@ doom_c = $(filter-out $(doom_drop),$(wildcard $(doom_d)/*.c))
 k_doom_o = $(patsubst $(doom_d)/%.c,$(k_odir)/doom/%.o,$(doom_c)) $(k_odir)/doom/wad.o
 k_free_c += $R/src/doom.c
 kcppflags += -I$(doom_d)
-$(k_odir)/doom/%.o: $(doom_d)/%.c $(kcc_dep)
+$(k_odir)/doom/%.o: $(doom_d)/%.c $(mooncc_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
@@ -604,7 +575,7 @@ $(k_tail_o): out/host/.mksys-cat.l $m
 	@mkdir -p "$(dir $@)"
 	@$m -l out/host/.mksys-cat.l -q -e "((from 'moon '$(mksys_$a)) \"$@\")" && test -s $@
 
-k_kvm = $(if $(and $(wildcard /dev/kvm),$(filter x86_64,$a),$(filter x86_64,$(shell uname -m))),-enable-kvm -cpu host,)
+k_kvm = $(if $(and $(wildcard /dev/kvm),$(filter x86_64,$a),$(filter x86_64,$(hosta))),-enable-kvm -cpu host,)
 k_qemu_x86_64 = -M q35 -serial stdio
 k_qemu_aarch64 = -M virt,gic-version=2 -cpu cortex-a72 -serial stdio -semihosting \
   -device ramfb -device qemu-xhci -device usb-kbd -device usb-mouse
@@ -631,36 +602,6 @@ init-container: host
 	@echo "-- love as PID 1 in a pid+user+mount namespace --"
 	unshare --pid --fork --mount-proc --user --map-root-user -- $m -l crew/init/init.l -e "(pid1 0)"
 
-ifeq ($a,x86_64)
-
-test_disk: host $(R)/tools/ktest.l
-	@$(MAKE) -s $(k_elf)
-	@rm -f $(k_elf).disk
-	@echo TEST $(k_elf) "(the WAKE lane: two boots, one disk, the reset-persistence gate)"
-	@$m $(R)/tools/ktest.l $(k_elf) - $a
-	@$m $(R)/tools/ktest.l $(k_elf) - $a "disk: fat kept across the reset"
-	@echo "test_disk: the machine remembered"
-
-test_kverb: host
-	@$(MAKE) -s $(k_elf)
-	@echo TEST love kernel "(the projection verb; byte-identical to make's)"
-	@rm -f $(ko)/.kverb.elf
-	@cd $(ko) && $(abspath $m) kernel .kverb.elf > /dev/null
-	@cmp $(ko)/.kverb.elf $(k_elf)
-	@rm -f $(ko)/.kverb.elf
-
-test_kboot: host $(R)/tools/kboot.l
-	@$(MAKE) -s $(k_elf)
-	@echo TEST $(k_elf) "(the kore cat off cmdline; 4 boots, ceiling 420s each)"
-	@$m $(R)/tools/kboot.l $(k_elf) "kore ls lib" "json.l"
-	@$m $(R)/tools/kboot.l $(k_elf) "kore wc lib/json.l" "lib/json.l" $$(wc -c < $(R)/lib/json.l)
-	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"cd lib; pwd\"" "/lib"
-	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"kore ls lib | kore wc -l\"" $$(ls $(R)/lib | wc -l)
-else
-test_disk test_kboot:
-	@echo "$@: skipped (host arch $a is not x86_64)"
-endif
-
 uefi_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
   $R/crew/holo/elf.l $R/crew/holo/obj.l $R/crew/holo/link.l $R/crew/holo/pe.l \
   $R/src/uefi_mkefi.l
@@ -674,7 +615,7 @@ k_espd = $(ko)/esp-$a
 $(k_uefid)/loader.o: $R/src/uefi_loader.c $(ho)/love.baked
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= $(ho)/love mooncc -t $(tgt_$a) -c $< $@
+	@$(mooncc) -t $(tgt_$a) -c $< $@
 $(k_uefid)/$(k_efiname): $(k_uefid)/loader.o $(uefi_l) $m
 	@echo 'HOLO	'$@
 	@mkdir -p $(dir $@)
@@ -698,60 +639,6 @@ uefi: $(ko)/esp-$a/EFI/BOOT/$(k_efiname) $(ko)/esp-$a/love.elf
 	@echo "uefi: $(ko)/esp-$a is an ESP -- copy it to a FAT32 partition, or"
 	@echo "      qemu-system-$a -drive format=raw,file=fat:rw:$(ko)/esp-$a ..."
 
-OVMF_X64 := $(wildcard dl/edk2-ovmf/ovmf-code-x86_64.fd)
-ifeq ($(and $(filter x86_64,$a),$(OVMF_X64)),)
-test_uefi:
-	@echo "test_uefi: skipped (x86_64 + dl/edk2-ovmf/ovmf-code-x86_64.fd needed)"
-else
-test_uefi: host $(R)/tools/ktest.l
-	@$(MAKE) -s $(ko)/esp-x86_64/EFI/BOOT/BOOTX64.EFI $(ko)/esp-x86_64/love.elf $(ko)/esp-x86_64/love.cmd
-	@echo TEST $(ko)/esp-x86_64 "(serial, headless, our own BOOTX64.EFI; ~64s, ceiling 420s)"
-	@$m $(R)/tools/ktest.l $(ko)/esp-x86_64 $(OVMF_X64) x86_64
-endif
-
-OVMF_A64 := $(wildcard dl/edk2-ovmf/ovmf-code-aarch64.fd)
-QEMU_A64 ?= $(shell command -v qemu-system-aarch64 2>/dev/null)
-ifeq ($(and $(OVMF_A64),$(QEMU_A64)),)
-test_uefi_arm64:
-	@echo "test_uefi_arm64: skipped (qemu-system-aarch64 + dl/edk2-ovmf/ovmf-code-aarch64.fd needed)"
-else
-test_uefi_arm64: host $(R)/tools/ktest.l
-	@$(MAKE) -s a=aarch64 $(ko)/esp-aarch64/EFI/BOOT/BOOTAA64.EFI $(ko)/esp-aarch64/love.elf $(ko)/esp-aarch64/love.cmd
-	@echo TEST $(ko)/esp-aarch64 "(serial, headless, our own BOOTAA64.EFI; TCG, ceiling 420s)"
-	@$m $(R)/tools/ktest.l $(ko)/esp-aarch64 $(OVMF_A64) aarch64
-endif
-
-test_inle:
-	@$(MAKE) -s test_disk
-	@$(MAKE) -s test_uefi
-	@$(MAKE) -s test_kboot
-	@$(MAKE) -s test_kverb
-	@$(MAKE) -s test_kernel_arm64
-	@$(MAKE) -s test_uefi_arm64
-	@echo "test_inle: boot, disk, command line, firmware -- both arches"
-
-ifeq ($(QEMU_A64),)
-test_kernel_arm64:
-	@echo "test_kernel_arm64: skipped (need qemu-system-aarch64)"
-else
-test_kernel_arm64: host $(R)/tools/ktest.l
-	@$(MAKE) -s a=aarch64 $(ko)/love-aarch64.elf
-	@echo TEST $(ko)/love-aarch64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 420s)"
-	@$m $(R)/tools/ktest.l $(ko)/love-aarch64.elf - aarch64
-endif
-
-NODE ?= $(shell command -v node 2>/dev/null)
-EMCC ?= $(or $(shell command -v emcc 2>/dev/null),/usr/lib/emscripten/emcc)
-ifeq ($(and $(NODE),$(wildcard $(EMCC))),)
-test_wasm:
-	@echo "test_wasm: skipped (needs emcc + node)"
-else
-test_wasm:
-	@$(MAKE) -s -C $(R)/wasm gate
-	@echo TEST out/wasm/love.js "(node)"
-	@$(NODE) $(R)/wasm/test.mjs --love $(R)/out/wasm/love.js $t
-endif
-
 # --- downloads -------------------------------------------------------
 dl/edk2-ovmf/ovmf-code-%.fd:
 	@echo 'MK	'ovmf
@@ -762,34 +649,6 @@ dl/edk2-ovmf/ovmf-code-%.fd:
 	esac
 include $(R)/test/test.mk
 include $(R)/mk/install.mk
-
-test_phases = test_host test_love0
-# fast gate
-test:
-	@$(MAKE) --no-print-directory $(test_phases)
-
-# slow gate
-test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_cookdiff test_dist test_seed
-
-
-# really slow gate
-test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_uulean test_uuwm \
-	test_uukind test_gc test_gcheck test_gcstress test_extract test_big test_mx \
-	test_tools test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as \
-	test_holofuzz test_glazefuzz test_encver test_lux test_kore test_refuzz test_sb test_vi \
-	test_moon test_clay test_moonfuzz test_forge \
-	test_cts test_libc test_ulp test_raw \
-	test_drv test_hdiff test_tco0 nettest test_wake test_gz test_cpio \
-	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
-	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
-	test_asmops test_dtb test_rvboot test_elf32 test_objcopy test_distboot test_fat test_wasm \
-	test_riscv test_ccarm64 test_ccriscv test_ccthumb1 test_ccthumb2 test_cts_arm64 test_cts_riscv \
-	test_raw_arm64 test_raw_riscv \
-	test_virt test_thumb1 test_thumb2 test_thumb2sp \
-	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446 test_nucleo446_smoke \
-	test_playdate test_rp2040 test_teensy41 \
-	test_freebsd test_netbsd test_freebsd_arm64 test_netbsd_arm64 \
-	test_inle
 
 all: host kernel wasm dist
 
@@ -845,6 +704,7 @@ out/host/perf.data: host
 	cat $t | perf record -o $@ $m
 perf: out/host/perf.data
 	exec perf report -i $<
+flame: out/host/flamegraph.svg
 out/host/flamegraph.svg: out/host/perf.data
 	flamegraph -o $@ --perfdata $<
 repl: host
@@ -860,23 +720,6 @@ disasm: host
 	exec rizin -A $m
 gdb: host
 	exec gdb $m
-OBJDUMP_ANY := $(shell command -v objdump 2>/dev/null || command -v llvm-objdump 2>/dev/null)
-ifeq ($(OBJDUMP_ANY),)
-vmret: host
-	@echo "vmret: skipped (needs objdump or llvm-objdump)"
-else
-vmret: host
-	@$m tools/vmret.l $m
-endif
-
-WAITS_C := $(shell git ls-files '*.c' 2>/dev/null)
-ifeq ($(WAITS_C),)
-waits: host
-	@echo "waits: skipped (needs a git checkout to enumerate the .c files)"
-else
-waits: host
-	@$m tools/waits.l $(WAITS_C)
-endif
 
 bench: host
 	$(MAKE) -C bench bench

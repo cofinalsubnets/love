@@ -2,19 +2,60 @@
 # A fragment of the root Makefile, included by ./Makefile and invoked from the
 # project root; paths resolve from there. Shared vars live in mk/common.mk.
 
-# every gate below is phony: one roster, so adding a gate is one line and not two.
+# EVERY gate below is phony, this roster included -- a gate whose name is missing here
+# stops running the day a file of that name appears. Generated from what this file
+# defines; the root Makefile names only its own verbs.
 .PHONY: \
-  test_filemode test_stdinbuf test_glaze test_hook test_glazefuzz test_sat test_drat test_lux \
-  test_sb test_kore test_refuzz test_cookdiff test_dist test_seed test_vi test_moon test_clay test_moonfuzz \
-  test_ccarm64 test_ccriscv test_ccthumb1 test_ccthumb2 test_cts test_cts_arm64 test_cts_riscv test_libc test_ulp \
-  test_selfhost test_raw test_drv test_asmops test_dtb test_rvboot test_vec test_fixpoint test_raw_bake test_riscv \
-  test_raw_riscv test_raw_arm64 test_thumb1 test_thumb2 test_virt test_mps2 test_mps2_t1 \
-  test_mps2_wake test_thumb2sp test_playdate test_teensy41 test_nucleo446 test_nucleo446_smoke \
-  test_rp2040 test_front test_tco0 test_uulean moon-tar moon-tar-arm64 moon-tar-riscv moon-m4 moon-m4-arm64 moon-m4-riscv \
-  moon-lua moon-lua-arm64 moon-lua-riscv moon-sqlite moon-sqlite-arm64 moon-sqlite-riscv \
-  moon-gzip moon-gzip-arm64 moon-gzip-riscv moon-bzip2 moon-bzip2-arm64 moon-bzip2-riscv \
-  test_holo test_as test_elf32 test_objcopy test_gz test_cpio test_forge test_distboot test_bakerep \
-  uuwm uukind uuhomgen uusplgen uumx uuvallaw test_uuwm test_uukind test_uuhomgen test_uusplgen test_uumx test_uuvallaw
+  moon-bzip2 moon-bzip2-arm64 moon-bzip2-riscv moon-gzip moon-gzip-arm64 moon-gzip-riscv \
+  moon-lua moon-lua-arm64 moon-lua-riscv moon-m4 moon-m4-arm64 moon-m4-riscv moon-sqlite \
+  moon-sqlite-arm64 moon-sqlite-riscv moon-tar moon-tar-arm64 moon-tar-riscv mx nettest test \
+  test_as test_asmops test_bakerep test_big test_ccarm64 test_ccriscv test_ccthumb1 \
+  test_ccthumb2 test_clay test_cli test_cookdiff test_cpio test_cts test_cts_arm64 \
+  test_cts_riscv test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb \
+  test_elf32 test_encver test_extra test_extract test_fat test_filemode test_fixpoint \
+  test_forge test_freebsd test_freebsd_arm64 test_front test_gc test_gcheck test_gcstress \
+  test_gen test_glaze test_glazefuzz test_gz test_hdiff test_holo test_holofuzz test_hook \
+  test_host test_hostegg test_hostnif test_inle test_kboot test_kernel_arm64 test_kore \
+  test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
+  test_mps2_wake test_mx test_netbsd test_netbsd_arm64 test_nucleo446 test_nucleo446_smoke \
+  test_objcopy test_playdate test_proof test_raw test_raw_arm64 test_raw_bake test_raw_riscv \
+  test_refuzz test_riscv test_rp2040 test_rvboot test_sat test_sb test_seat test_seed \
+  test_selfhost test_slow test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
+  test_thumb2 test_thumb2sp test_tools test_uefi test_uefi_arm64 test_ulp test_uugen \
+  test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
+  test_vec test_vi test_virt test_wake test_wasm test_xfixpoint uuhomgen uukind uumx uusplgen \
+  uuvallaw uuwm vmret waits
+
+# THE THREE GATES. `make test` is the fast one an edit loop runs, test_slow the
+# merge gate, test_extra the really slow one (qemu boots, cross-arch, boards).
+# Everything below is a member of one of them, or opt-in by name.
+test_phases = test_host test_love0
+# fast gate
+test:
+	@$(MAKE) --no-print-directory $(test_phases)
+
+# slow gate
+test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_cookdiff test_dist test_seed
+
+
+# really slow gate
+test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_uulean test_uuwm \
+	test_uukind test_gc test_gcheck test_gcstress test_extract test_big test_mx \
+	test_tools test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as \
+	test_holofuzz test_glazefuzz test_encver test_lux test_kore test_refuzz test_sb test_vi \
+	test_moon test_clay test_moonfuzz test_forge \
+	test_cts test_libc test_ulp test_raw \
+	test_drv test_hdiff test_tco0 nettest test_wake test_gz test_cpio \
+	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
+	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
+	test_asmops test_dtb test_rvboot test_elf32 test_objcopy test_distboot test_fat test_wasm \
+	test_riscv test_ccarm64 test_ccriscv test_ccthumb1 test_ccthumb2 test_cts_arm64 test_cts_riscv \
+	test_raw_arm64 test_raw_riscv \
+	test_virt test_thumb1 test_thumb2 test_thumb2sp \
+	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446 test_nucleo446_smoke \
+	test_playdate test_rp2040 test_teensy41 \
+	test_freebsd test_netbsd test_freebsd_arm64 test_netbsd_arm64 \
+	test_inle
 
 # $m is the WARM love -- the baked image woken, what ships. a gate whose subject is
 # the egg boot spells LOVE_NO_IMAGE=1 itself; love0 is always the egg.
@@ -510,7 +551,8 @@ test_tco0:
 	@$(MAKE) --no-print-directory tco=0 host
 	@$(MAKE) --no-print-directory tco=0 test_host
 	@echo "test_tco0: the trampoline builds, bakes and passes the host corpus"
-# test_hdiff -- the FOREIGN-CC differential at the host (KCC's twin one level up). gcc and
+# test_hdiff -- the FOREIGN-CC differential at the host: the one lane a cc that is not
+# ours still gets to build, since nothing foreign builds the kernel at all. gcc and
 # clang each link the whole vm at ai_tco=1, which the default mooncc lane never does, and
 # each must build, answer, pass the quick host suite and come out ret-free. NOT the corpus
 # twice over: semantics are the interpreter's, and they do not move with the compiler.
@@ -542,10 +584,10 @@ test_dtb:
 # for kmain -- bound by ldkern, the kernel linker's own door, since mooncc's driver enters
 # through its crt0 and a machine enters at the load address. Nine laws, exit 42.
 rvboot_o = $(ko)/riscv64/riscv64/boot.o $(ko)/riscv64/src/riscv64_dtb.o $(ko)/riscv64/rvboot.o
-$(ko)/riscv64/rvboot.o: test/gate/rvboot.c $(love_h) $(R)/src/k.h $(R)/src/dtb.h $(kcc_dep)
+$(ko)/riscv64/rvboot.o: test/gate/rvboot.c $(love_h) $(R)/src/k.h $(R)/src/dtb.h $(mooncc_dep)
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
-	@$(KCC) -I$(ko)/riscv64 -I. -Isrc -I$(ho) -Iout/lib -I$R -I$R/crew/moon/include \
+	@$(mooncc) -I$(ko)/riscv64 -I. -Isrc -I$(ho) -Iout/lib -I$R -I$R/crew/moon/include \
 	  -t rv64 -c $< -o $@
 $(ko)/riscv64/rvboot.elf: $(rvboot_o) test/gate/rvboot.l $m
 	@echo 'RVLINK	'$@
@@ -590,9 +632,9 @@ test_fixpoint: host $(love0) out/host/mooncc0.image
 # opt-in BY NAME (a full rebuild under emulation is minutes): `make test_xfixpoint`,
 # or `make xa=riscv64 test_xfixpoint` for the other twin. skips loudly without qemu.
 .PHONY: test_xfixpoint
-test_xfixpoint: $(xobjs) $(xkart_o) $(love0) out/host/mooncc0.image
+test_xfixpoint: $(x_o) $(xkart_o) $(love0) out/host/mooncc0.image
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(wildcard $R/src/$(xa)_*.c)' \
-	  sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xtgt) $(xmksys) $(tco) $(xd) $(xa) $(xobjs) $(xkart_o)
+	  sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xtgt) $(xmksys) $(tco) $(xd) $(xa) $(x_o) $(xkart_o)
 # test_fat -- the fat container (seed-universal U1): the one file answers through
 # its prefix + cache on the native machine, the pack is byte-deterministic, and
 # the foreign member answers under qemu-user. opt-in by name, like the x-lane.
@@ -1053,3 +1095,111 @@ test_wake: $(ho)/love
 	@if timeout 60 $(ho)/love.wake $(ho)/wake-corpus.l > /dev/null 2>&1; \
 	  then echo "test_wake: green (the woken image checks uu at speed)"; rm -f $(ho)/love.wake $(ho)/wake-corpus.l; \
 	  else echo "test_wake: FAILED -- the wake storm (doc/wake-storm.md)"; rm -f $(ho)/love.wake $(ho)/wake-corpus.l; exit 1; fi
+
+# --- the metal gates: what boots, and where ---------------------------
+# The kernel BUILD rules and the `run`/`uefi` verbs stay in the root Makefile;
+# these are only the gates that drive the artifacts those rules lay.
+
+ifeq ($a,x86_64)
+
+test_disk: host $(R)/tools/ktest.l
+	@$(MAKE) -s $(k_elf)
+	@rm -f $(k_elf).disk
+	@echo TEST $(k_elf) "(the WAKE lane: two boots, one disk, the reset-persistence gate)"
+	@$m $(R)/tools/ktest.l $(k_elf) - $a
+	@$m $(R)/tools/ktest.l $(k_elf) - $a "disk: fat kept across the reset"
+	@echo "test_disk: the machine remembered"
+
+test_kverb: host
+	@$(MAKE) -s $(k_elf)
+	@echo TEST love kernel "(the projection verb; byte-identical to make's)"
+	@rm -f $(ko)/.kverb.elf
+	@cd $(ko) && $(abspath $m) kernel .kverb.elf > /dev/null
+	@cmp $(ko)/.kverb.elf $(k_elf)
+	@rm -f $(ko)/.kverb.elf
+
+test_kboot: host $(R)/tools/kboot.l
+	@$(MAKE) -s $(k_elf)
+	@echo TEST $(k_elf) "(the kore cat off cmdline; 4 boots, ceiling 420s each)"
+	@$m $(R)/tools/kboot.l $(k_elf) "kore ls lib" "json.l"
+	@$m $(R)/tools/kboot.l $(k_elf) "kore wc lib/json.l" "lib/json.l" $$(wc -c < $(R)/lib/json.l)
+	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"cd lib; pwd\"" "/lib"
+	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"kore ls lib | kore wc -l\"" $$(ls $(R)/lib | wc -l)
+else
+test_disk test_kboot:
+	@echo "$@: skipped (host arch $a is not x86_64)"
+endif
+
+OVMF_X64 := $(wildcard dl/edk2-ovmf/ovmf-code-x86_64.fd)
+ifeq ($(and $(filter x86_64,$a),$(OVMF_X64)),)
+test_uefi:
+	@echo "test_uefi: skipped (x86_64 + dl/edk2-ovmf/ovmf-code-x86_64.fd needed)"
+else
+test_uefi: host $(R)/tools/ktest.l
+	@$(MAKE) -s $(ko)/esp-x86_64/EFI/BOOT/BOOTX64.EFI $(ko)/esp-x86_64/love.elf $(ko)/esp-x86_64/love.cmd
+	@echo TEST $(ko)/esp-x86_64 "(serial, headless, our own BOOTX64.EFI; ~64s, ceiling 420s)"
+	@$m $(R)/tools/ktest.l $(ko)/esp-x86_64 $(OVMF_X64) x86_64
+endif
+
+OVMF_A64 := $(wildcard dl/edk2-ovmf/ovmf-code-aarch64.fd)
+QEMU_A64 ?= $(shell command -v qemu-system-aarch64 2>/dev/null)
+ifeq ($(and $(OVMF_A64),$(QEMU_A64)),)
+test_uefi_arm64:
+	@echo "test_uefi_arm64: skipped (qemu-system-aarch64 + dl/edk2-ovmf/ovmf-code-aarch64.fd needed)"
+else
+test_uefi_arm64: host $(R)/tools/ktest.l
+	@$(MAKE) -s a=aarch64 $(ko)/esp-aarch64/EFI/BOOT/BOOTAA64.EFI $(ko)/esp-aarch64/love.elf $(ko)/esp-aarch64/love.cmd
+	@echo TEST $(ko)/esp-aarch64 "(serial, headless, our own BOOTAA64.EFI; TCG, ceiling 420s)"
+	@$m $(R)/tools/ktest.l $(ko)/esp-aarch64 $(OVMF_A64) aarch64
+endif
+
+test_inle:
+	@$(MAKE) -s test_disk
+	@$(MAKE) -s test_uefi
+	@$(MAKE) -s test_kboot
+	@$(MAKE) -s test_kverb
+	@$(MAKE) -s test_kernel_arm64
+	@$(MAKE) -s test_uefi_arm64
+	@echo "test_inle: boot, disk, command line, firmware -- both arches"
+
+ifeq ($(QEMU_A64),)
+test_kernel_arm64:
+	@echo "test_kernel_arm64: skipped (need qemu-system-aarch64)"
+else
+test_kernel_arm64: host $(R)/tools/ktest.l
+	@$(MAKE) -s a=aarch64 $(ko)/love-aarch64.elf
+	@echo TEST $(ko)/love-aarch64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 420s)"
+	@$m $(R)/tools/ktest.l $(ko)/love-aarch64.elf - aarch64
+endif
+
+NODE ?= $(shell command -v node 2>/dev/null)
+EMCC ?= $(or $(shell command -v emcc 2>/dev/null),/usr/lib/emscripten/emcc)
+ifeq ($(and $(NODE),$(wildcard $(EMCC))),)
+test_wasm:
+	@echo "test_wasm: skipped (needs emcc + node)"
+else
+test_wasm:
+	@$(MAKE) -s -C $(R)/wasm gate
+	@echo TEST out/wasm/love.js "(node)"
+	@$(NODE) $(R)/wasm/test.mjs --love $(R)/out/wasm/love.js $t
+endif
+
+# --- the two binary-shape gates, both skipping when their tool is absent ---
+
+OBJDUMP_ANY := $(shell command -v objdump 2>/dev/null || command -v llvm-objdump 2>/dev/null)
+ifeq ($(OBJDUMP_ANY),)
+vmret: host
+	@echo "vmret: skipped (needs objdump or llvm-objdump)"
+else
+vmret: host
+	@$m tools/vmret.l $m
+endif
+
+WAITS_C := $(shell git ls-files '*.c' 2>/dev/null)
+ifeq ($(WAITS_C),)
+waits: host
+	@echo "waits: skipped (needs a git checkout to enumerate the .c files)"
+else
+waits: host
+	@$m tools/waits.l $(WAITS_C)
+endif

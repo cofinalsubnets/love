@@ -1,5 +1,6 @@
 #!/bin/sh
-# test/gate/hdiff.sh -- THE FOREIGN-CC DIFFERENTIAL at the host, KCC's twin one level up.
+# test/gate/hdiff.sh -- THE FOREIGN-CC DIFFERENTIAL at the host: the one lane a cc that
+# is not ours still gets to build.
 #
 # `love` is mooncc-built and holo-linked in the default lane, so gcc and clang no longer
 # touch the vm at all -- and what they would catch, nothing else does. Two things only:

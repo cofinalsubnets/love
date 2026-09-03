@@ -59,8 +59,8 @@ in_git := $(wildcard $R/.git)
 # love0, which by definition cannot be built by the compiler it exists to bootstrap.
 
 # WHO LINKS `love`: mooncc by default, and the whole vm with it. HCC=1 takes the $(CC) lane
-# instead -- the differential the kernel spells KCC, worn at the host. It is the only build
-# that puts a foreign cc on the vm at ai_tco=1, which is where ai_musttail is live and where
+# instead -- the one differential a foreign cc still gets, the kernel having none. It is the
+# only build that puts a foreign cc on the vm at ai_tco=1, where ai_musttail is live and where
 # a prototype mismatch our own sibcall pass waves through is refused (doc/misc/moon-c-gaps.md).
 # ⚠ ITS OWN TREE, because the two loves are the same path otherwise: out/host-cc keeps the
 # objects and the binary apart, and $m follows it so a test runs the one you asked for.
