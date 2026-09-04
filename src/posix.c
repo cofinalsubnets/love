@@ -13,9 +13,9 @@
 // to say. so !e reads "it worked" on an effect op, and nom? e reads "it
 // failed" on any op: errors are the only noms any of these answer.
 //
-// the argv marshal is src/fd.c's (main.c wants it too and must not reach into an
-// app file). the local face here adds the misuse answer: 'badarg on the stack,
-// which is what every caller in this file hands back as the net value.
+// the argv marshal is here, beside the spawns that consume it; main.c wants it too, so it
+// is not static. the local face adds the misuse answer: 'badarg on the stack, which is
+// what every caller in this file hands back as the net value.
 #define _GNU_SOURCE     // unshare / CLONE_* (newns), posix_openpt/grantpt/unlockpt/ptsname
 #include "love.h"
 #include <unistd.h>     // fork execvp _exit read close getuid/getgid symlink readlink chown
@@ -200,12 +200,12 @@ static lvm(lvm_sigclear) { Sp[0] = host_sigclear(g); ai_musttail return Next(1);
 // execvp; the parent returns immediately -- non-blocking, unlike run (waits +
 // captures) and exec (replaces in place). the child inherits init's stdio (a real
 // pid1 redirects to the journal); a failed exec _exit(127)s, seen by the next glean.
-// spawn guard: the heap pools leave an exec-bound fork's inheritance, so a
-// swapless box is not asked to double-charge a budget-sized commitment the
-// child never touches (it execs at once). scoped by the caller: the (fork)
-// nif and any child that walks the heap inherit whole, as fork means.
-// best-effort -- an unaligned edge or a kernel without the advice keeps
-// plain fork.
+// spawn guard: the heap pools leave an exec-bound fork's inheritance, so fork copies no
+// page tables for memory the child drops at once. the cost it removes scales with 4 KB
+// PTEs, so it grows with the heap -- 300 spawns at a 151 MB live heap take 350 ms guarded
+// and 820-1080 unguarded. scoped by the caller: the (fork) nif and any child that walks
+// the heap inherit whole, as fork means. best-effort -- an unaligned edge or a kernel
+// without the advice keeps plain fork.
 #if defined(AiHaveDontfork)
 static void guard1(void *lo, void *hi, int adv) {
  uintptr_t a = ((uintptr_t) lo + 4095) & ~(uintptr_t) 4095,
@@ -215,11 +215,10 @@ static void guard1(void *lo, void *hi, int adv) {
 void host_spawn_guard(struct ai *g, int on) {
 #if defined(AiHaveDontfork)
  int adv = on ? MADV_DONTFORK : MADV_DOFORK;
- // the ceiling is the frontier, not the block top: a marshal (argv_marshal,
- // main.c's own) lays the child's argv at g->hp, so the window above hp
- // stays mapped; the live bulk below it is what a swapless box cannot
- // double-charge. nothing allocates between the two calls, so the ranges
- // agree.
+ // the ceiling is the frontier, not the block top: ai_argv_marshal lays the
+ // child's argv at g->hp, so the window above hp stays mapped and is the one
+ // thing execvp can still read; the live bulk below it the child never looks
+ // at. nothing allocates between the two calls, so the ranges agree.
  guard1(g, g->hp, adv);
  if (g->major_pool) guard1(g->major_pool, g->major_pool + 2 * g->major_len, adv);
 #else

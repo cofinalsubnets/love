@@ -316,7 +316,7 @@ void k_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
     k_wait(); } }
 
 // milliseconds since the epoch: one scale for the scheduler's deadlines, for (clock t) and
-// for every mtime. ai_clock is one body (src/fd.c) and src/sys.c's arm serves it from
+// for every mtime. ai_clock is one body (src/posix.c) and src/sys.c's arm serves it from
 // here. the date rides kboot, and where nobody knew it this degrades to milliseconds since
 // boot and says so by reading as 1970.
 uintptr_t k_clock_ms(void) { return (uintptr_t) (kboot.date * 1000 + kticks * k_tick_ms); }

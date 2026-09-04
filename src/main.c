@@ -19,9 +19,9 @@ extern void host_spawn_guard(struct ai*, int);   // src/posix.c (exec-bound fork
 #include <signal.h>
 #include <sys/wait.h>
 #include <sys/mman.h>    // the first boot's inflate buffer (mmap, no malloc)
-extern struct ai *ai_argv_marshal(struct ai*, char***);   // src/fd.c: argv -> char** in the heap gap
+extern struct ai *ai_argv_marshal(struct ai*, char***);   // src/posix.c: argv -> char** in the heap gap
 
-// ai_clock lives in src/fd.c, one body for this frontend and the kernel's.
+// ai_clock lives in src/posix.c, one body for this frontend and the kernel's.
 // the fine clock's real source (the weak default in love.c degrades to ms*1e6)
 ai_noinline intptr_t ai_nclock(void) {
  struct timespec ts;

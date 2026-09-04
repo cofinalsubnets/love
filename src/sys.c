@@ -198,7 +198,7 @@ long __ai_inle(long n, long a, long b, long c, long d, long e, long f) {
   // page already is, so answer that and refuse the exec ask rather than tell a caller
   // whose next move is a jump that it succeeded.
   case NR_mprotect: return (c & 4) ? -EACCES : 0;
-  // one clock, the wall: ai_clock's body is clock_gettime now (src/fd.c),
+  // one clock, the wall: ai_clock's body is clock_gettime now (src/posix.c),
   // so this arm is where the kernel's scale becomes a timespec.
   case NR_clock_gettime: {
    if (a) return -EINVAL;                    // CLOCK_REALTIME only
