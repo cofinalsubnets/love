@@ -353,6 +353,7 @@ uintptr_t hash_at(struct ai *g, intptr_t x, word *base) {
 static void nat_free(struct ai *g, void *p) { code_free(g, (char*) ((union u*) p)[0].ap); }
 #endif
 
+// FIXME doesn't belong in this file
 // (nif code interp src arity): emitted bytes -> a transparent applicable native closure
 // (the lvm ABI: g=rdi Ip=rsi Hp=rdx Sp=rcx). the cell is [header src code|cur (arity)
 // interp lvm_ret n (extras)] -- arity 1 enters the body directly, arity>=2 curries to
