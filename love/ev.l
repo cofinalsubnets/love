@@ -53,11 +53,21 @@
    ; that looks like a heap pointer, which `=`/eql would deref and crash on.
    (opof v) (? (lvm_ret0 == peek 1 v) (peek 0 v . 1)
                (lvm_cur == peek 0 v && lvm_ret0 == peek 3 v) (peek 2 v . peek 1 v))
+   ; a mint, a name and a tablet compare by address, so `=` on one of them IS identity, and
+   ; identity is the cheaper op. a CONSTANT operand of those kinds licenses lvm_same at lvm_eq's
+   ; site -- the other side may be any value, a kind that is not the constant's answering 0 under
+   ; both. eqop rides sameop so a book carrying one and not the other keeps lvm_eq.
+   sameop <(opof (gv 'id? ()))
+   eqop (sameop && <(opof (gv '= ())))
+   ; nom? is name? and mint? together; () is the serial-0 mint both predicates decline, and
+   ; there is only ever the one, so it compares by address like any other point
+   (byaddr? v) (nom? v || tablet? v || id? v ())
+   (addreq? as) (any (a \ (: k (kconst a) (<k && byaddr? >k))) as)
    (hgen v op ar pure x) (: as >x n (tally as)
     (go hv a) (atom? a ? (bake hv)             ; all args constant -> fold to a value
      (: cv (kconst <a)
       (? (pure && <cv) (go (hv >cv) >a)         ; static arg: fold it into the partial
-         (op && n = ar) (iop . op . as)              ; matching-arity nif -> inline (the hot path, keep)
+         (op && n = ar) (iop . (op == eqop && addreq? as ? sameop op) . as)   ; matching-arity nif -> inline (the hot path, keep)
          (id? hv v)                                            ; no static prefix folded -> the original apply
           (1 < ar && ar <= n ? (apx . ar . x)   ;   multi-arg fn the args saturate -> n-ary apply
                                (apx . 0 . x))   ;   generic l2r apply
