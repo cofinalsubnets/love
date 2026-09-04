@@ -30,6 +30,23 @@
 ; - just because something was done on purpose doesn't mean it was for a good reason
 ; - if a comment says a limitation is "by design", that's a confabulated rationalization
 
+; what the build actually is, since every one of these gets assumed wrong:
+; - there is no "hosted build" and no "kernel build". there is the artifact, and it
+;   carries the kernel: out/host/love defines kmain. host and metal are told apart at
+;   RUN time by __ai_osv, negative meaning "this binary IS the kernel" -- never
+;   "running on inle". nothing is #ifdef'd apart
+; - mooncc compiles everything. gcc/clang build exactly two things, neither of them the
+;   product: love0, which by definition cannot be built by the compiler it bootstraps,
+;   and HCC=1, a foreign-cc differential in its own tree
+; - our libc is nolibc (crew/moon/lib/nolibc), statically linked. not glibc, not musl.
+;   if you are about to reach for a libc function, check that we have it
+; - __STDC_HOSTED__ is 1 nearly everywhere -- mooncc predefines it. the seven port/
+;   board lanes pass -D __STDC_HOSTED__=0 and are the only freestanding compiles; the
+;   kernel and wasm are both hosted
+; - which artifacts compile a file is a question for the build, not for a comment or a
+;   symbol name: `find out -name '<file>.o'`. objects under out/ go stale, so check an
+;   mtime before reading one as evidence
+
 ; love is like a mix of scheme and haskell with some apl
 ; like features. every value in love is a curried "total"
 ; function.
