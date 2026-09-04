@@ -1,6 +1,6 @@
 // ev.c -- ev, vm, the lisp help. one translation unit of the runtime;
-// the shared layouts and the cross-TU seam are src/love_int.h.
-#include "love_int.h"
+// the shared layouts and the cross-TU seam are src/love.h.
+#include "love.h"
 struct ai_wait_fd;
 typedef Ana(ana);
 typedef Cata(cata);
@@ -808,7 +808,7 @@ lvm(lvm_calloutdrive) { ai_musttail return Answer(putcharm((intptr_t) callout_dr
 // blob's raw out-of-pool base, and lvm_resume jumps base+offset. relocation-safe.
 static union u const callout_resume[] = { {lvm_ap}, {.ap = lvm_resume} };
 lvm(lvm_calloutresume) { ai_musttail return Answer(putcharm((intptr_t) callout_resume)); }
-// the addresses a native reads off g (love_int.h's JkX): the kind sentinels its guards
+// the addresses a native reads off g (love.h's JkX): the kind sentinels its guards
 // compare against and the two drives -- a blob carries none of them, so it rides an image
 void jk_ini(struct ai *g) {
  g->jk[JkChain] = (word) lvm_chain, g->jk[JkStr] = (word) lvm_str, g->jk[JkMap] = (word) lvm_map_lookup;
@@ -1425,7 +1425,7 @@ lvm(lvm_yield_sw) {
 lvm(lvm_yield_nif) { Ip++; ai_musttail return Ap(lvm_yield_sw, g); }
 lvm(lvm_task_exit) { ai_musttail return Ap(lvm_yield_sw, g); }
 static union u const spawn_body[] = { {lvm_ap}, {.ap = lvm_task_exit} };
-lvm(lvm_spawn) {
+lvm(lvm_twirl) {
  Have(11);
  // new task node N: [next, saved_ip=spawn_body, pid, wake_at, wait_fd, wait_events, help, stdio, stack[0..1]=x,fn, tag]
  union u *N = (union u*) Hp;

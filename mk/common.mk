@@ -86,10 +86,10 @@ t = $R/test/00-init.l $R/test/spec.l $R/test/uu.l $(filter-out %/00-init.l %/spe
 
 # the runtime's own headers. named, not globbed: src/ holds the metal seat's k.h and the
 # per-ISA asmops beside these, and a touch on those must not rebuild every love object.
-love_h = $R/src/love.h $R/src/love_int.h $R/src/kinds.h $R/src/nifs.h $R/src/mx.h
+love_h = $R/src/love.h $R/src/kinds.h $R/src/nifs.h $R/src/mx.h
 # the core rides with its math floor: our own transcendentals, no libm anywhere.
 # love.c broke into TUs so the biggest one is not the whole build's critical path;
-# src/love_int.h is what they share. the roster is mk/tu.mk, which wasm/Makefile reads too.
+# src/love.h is what they share. the roster is mk/tu.mk, which wasm/Makefile reads too.
 include $(R)/mk/tu.mk
 love_tu_c = $(patsubst %,$R/src/%,$(love_tu))
 love_c = $(love_tu_c) $R/crew/moon/lib/math/am.c

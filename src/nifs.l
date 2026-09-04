@@ -115,7 +115,7 @@
       (nif_callk         "call-cc"       1 lvm_callk)
       (nif_scare         "scare"         2 lvm_scare)
       (nif_yield         "yield"         1 lvm_yield_nif)
-      (nif_spawn         "twirl"         2 lvm_spawn)
+      (nif_twirl         "twirl"         2 lvm_twirl)
       (nif_wait          "catch"         1 lvm_wait)
       (nif_sleep         "rest"          1 lvm_sleep)
       (nif_donep         "landed?"       1 lvm_donep)

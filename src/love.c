@@ -1,6 +1,6 @@
 // love.c -- g, stack, sys, str, sym, chain, tray. one translation unit of the runtime;
-// the shared layouts and the cross-TU seam are src/love_int.h.
-#include "love_int.h"
+// the shared layouts and the cross-TU seam are src/love.h.
+#include "love.h"
 #include <stddef.h>
 struct ai_chain;
 // this file's own, forward-declared so order within it does not matter.
@@ -1017,7 +1017,7 @@ size_t const ai_T[] = {
 uintptr_t ai_tray_bytes(struct ai_tray *v) {
  return sizeof(struct ai_tray) + v->rank * sizeof(word) + ai_T[v->type] * tray_nelem(v); }
 
-// these are love_int.h's data-apply shims: one TU has to hold the body.
+// these are love.h's data-apply shims: one TU has to hold the body.
 #if ai_data_section
 // the slot is the kind. each sentinel lays in its own input section love.data.N,
 // N its enum d value, on a grain of ai_data_stride -- so a run of one-fn sections

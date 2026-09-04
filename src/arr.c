@@ -1,6 +1,6 @@
 // arr.c -- generic-op lane, rng, eq, obin. one translation unit of the runtime;
-// the shared layouts and the cross-TU seam are src/love_int.h.
-#include "love_int.h"
+// the shared layouts and the cross-TU seam are src/love.h.
+#include "love.h"
 // this file's own, forward-declared so order within it does not matter.
 static bool eqv_at(struct ai *g, word a, word b, word *base);
 // the bit_slow trio takes its linkage here: the macro body carries no storage class.

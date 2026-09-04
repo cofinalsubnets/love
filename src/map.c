@@ -1,6 +1,6 @@
 // map.c -- map, codegen backend. one translation unit of the runtime;
-// the shared layouts and the cross-TU seam are src/love_int.h.
-#include "love_int.h"
+// the shared layouts and the cross-TU seam are src/love.h.
+#include "love.h"
 // this file's own, forward-declared so order within it does not matter.
 static ai_noinline struct ai *map_grow(struct ai *g);
 static ai_noinline uintptr_t hash_two(struct ai *g, word x, word *base);

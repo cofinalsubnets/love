@@ -33,7 +33,7 @@
    (jit2 lam) (jitn lam)                                                  ; arity-2 alias (self-test/auto.l)
    (gfind p l) (atom? l ? () (p <l) <l (gfind p >l))     ; first elt matching p
    ; a blob names no address of the binary: the kind sentinels and the callout drives are read
-   ; off g at run time (love_int.h's JkX slots), so the bytes ride any base and any image
+   ; off g at run time (love.h's JkX slots), so the bytes ride any base and any image
    (jk tgt r k) ['ld r (greg tgt 'g) ((jkoff 0) + (8 * k))]   ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume 9 cur 10 unc
    mapmix 0x9e3779b97f4a7c15                                       ; = love.c's map hash multiplier, for the inline probe
    (hasm tgt ir) (: f (glazeasm 'f) ((lit? f ? f (from 'holo 'assemble)) tgt ir))   ; the pinned assembler, else the module's
