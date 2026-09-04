@@ -940,6 +940,51 @@
                  (<e9 = 'un && <>e9 = 'not) 1
                  (member? <e9 '(land lor)) 1
                  (<e9 = 'bin && member? <>e9 '(eq ne lt le gt ge)))
+   ; the splice bind, one for both splices: params ps against args as -> [benv acc rbs sbs] |
+   ; 'bad. an arg lands as a folded constant (kb? licenses the name -- cginl's const bind, and
+   ; () for the predicate splice, whose body is one expression), as the alias register of a
+   ; homed local (call-free splice, and the body never assigns the param: call-by-value holds),
+   ; as a pool park (call-free, pk? prices the name, and two seats stay free -- parks that
+   ; drained the pool starved the hints around them), else as a frame slot -- a register-riding
+   ; value stores itself. rpin holds every bind register for the splice's span; rbs lists the
+   ; parks for the release, sbs the constants for the body's substitution
+   (sbind g env ps as nocall body kb? pk?)
+    (: (go ps as benv acc rbs sbs)
+        (? !(two? ps) [benv acc rbs sbs]
+           (: nm <<ps pty <><ps
+              kb (? (kb? && kb? nm)
+                    (: kc (knum g <as)
+                       (? !(two? kc) ()
+                          (: cv (cnum g ['cast pty ['num <kc]])
+                             (two? cv ? ['cast pty ['num <cv]])))))
+              al (? (nocall && !(flo? pty) && 8 = tsz g pty &&
+                     two? <as && <<as = 'var && !(wrs? nm body))
+                    (: v9 (vent g env <><as)               ; a homed/riding local: a read-only
+                       (? (two? v9 && <v9 = 'regv && !(flo? <>>v9)) <>v9)))   ; reg holding the value
+              al (? al (? (alsafe? g al) al ()) ())        ; staging must never write it
+              (? (two? kb) (go >ps >as benv acc rbs ([nm kb] . sbs))
+                 al (: _ (pin g 'rpin ((rp g al) . g 'rpin))   ; the alias bind: zero forms
+                       (go >ps >as ([nm ['reg al] pty] . benv) acc rbs sbs))
+                 (: r (cgexpr g env <as ())
+                    (? (bad? r) 'bad
+                       (pair? g pty)                          ; a pair param: an 8-byte slot, both words
+                        (: off (ntmp g 'llong)
+                           (go >ps >as ([nm off pty] . benv) (acc + asll g r + pst 'r4 off) rbs sbs))
+                       (: rb (? (nocall && !(flo? pty) && pk? nm && deep? (g 'pool)) (ralloc g) ())
+                          (? rb                              ; the park bind: the value rides a pool reg
+                              (: _ (pin g 'rpin ((rp g rb) . g 'rpin))
+                                 (go >ps >as ([nm ['reg rb] pty] . benv)
+                                     (acc + asintt g r pty + [['mov rb 'r0]] + cvt pty rb)
+                                     (rb . rbs) sbs))
+                             (: off (ntmp g 'long)
+                                vd (? (flo? (vty r) || id? pty 'bool || id? (vreg r) 'r0) () (vreg r))
+                                (go >ps >as ([nm off pty] . benv)
+                                    (? vd (: fs (acc + vfs r + [['st 'r4 off vd]]) _ (rfree g vd) fs)
+                                       (acc + asintt g r pty
+                                            + (pty @ 'bool (cvt pty 'r0))   ; the entry conversion the splice skips
+                                            + [['st 'r4 off 'r0]]))
+                                    rbs sbs)))))))))
+       (go ps as () () () ()))
    (cbinl g env e cc lbl)
     (: head <>e args <>>e
        il0 (peep g 'inlining ())                  ; cbinl nests to depth 3 (it emits no
@@ -956,59 +1001,13 @@
           (: fe0 (g 'fesc)
              strs0 (g 'strs)
              rp0 (g 'rpin)
-             ; the register-bind license: a call-free splice (body and args) reads its scalar
-             ; args from registers. an arg that is a word-typed pinned local aliases its pin
-             ; (call-by-value holds: wrs? bars a body that assigns the param, and a later drop
-             ; leaves the alias holding the passed value); anything else parks canonically in a
-             ; fresh pool reg. rpin holds every bind reg against wr?/rfree/psreset for the splice's
-             ; span. the slot bind stands when
-             ; the type narrows to the alias, a call rides anywhere, or the pool is shallow --
-             ; a park may only take a register when two stay free: parks that drained the pool
-             ; starved the hints and pins around them and the shuttle spushed (measured: corpus
-             ; L1 loads +0.4% -- the displacement is unpriced by any other gate).
              (anyc l) (? !(two? l) () (? (callish? <l) 1 (anyc >l)))
              nocall (!(callish? e9) && !(anyc args))
              _ (pin g 'inlining (d0 + 1))
-             (cbind ps as benv acc rbs)            ; cginl's bind, the same slots
-              (? !(two? ps) [benv acc rbs]
-                 (: pty <><ps
-                    al (? (nocall && !(flo? pty) && 8 = tsz g pty &&
-                           two? <as && <<as = 'var &&
-                           !(wrs? <<ps <><>>>inlf))
-                          (: v9 (vent g env <><as)         ; a homed/riding local (regv): a
-                             (? (two? v9 && (<v9 = 'regv) && !(flo? <>>v9))   ; read-only reg holding the
-                                <>v9)))                 ; canonical current value
-                    al (al && alsafe? g al ? al)   ; staging must never write it
-                    (? al                          ; the alias bind: zero forms
-                        (: _ (pin g 'rpin (rp g al . g 'rpin))
-                           (cbind >ps >as ([<<ps ['reg al] pty] . benv) acc rbs))
-                       (: r (cgexpr g env <as ())
-                          (? (bad? r) 'bad
-                             (pair? g pty)         ; a pair param: an 8-byte slot, both words
-                              (: off (ntmp g 'llong)
-                                 (cbind >ps >as
-                                        ([<<ps off pty] . benv)
-                                        (acc + asll g r + pst 'r4 off) rbs))
-                             (: rb (nocall && !(flo? pty) &&
-                                       deep? (g 'pool) ?               ; park only into a deep pool
-                                       (ralloc g))
-                                (? rb              ; the park bind: the value rides a pool reg
-                                    (: _ (pin g 'rpin (rp g rb . g 'rpin))
-                                       (cbind >ps >as ([<<ps ['reg rb] pty] . benv)
-                                              (acc + asintt g r pty
-                                                   + ([['mov rb 'r0]] + cvt pty rb))
-                                              (rb . rbs)))
-                                   (: off (ntmp g 'long)
-                                      (cbind >ps >as
-                                             ([<<ps off pty] . benv)
-                                             (acc + asintt g r pty
-                                                  + (pty = 'bool ? (cvt pty 'r0))   ; the entry conversion the splice skips
-                                                  + [['st 'r4 off 'r0]])
-                                             rbs)))))))))
              (dtmp ds benv9)                       ; the body's own decls: fresh temps over the params
               (? !(two? ds) benv9
                  (: d9 <ds (dtmp >ds ([<d9 (ntmp g <>d9) <>d9] . benv9))))
-             br (cbind <>>inlf args () () ())
+             br (sbind g env <>>inlf args nocall <><>>>inlf () (nm \ 1))   ; every park priced in: the body is one expression
              ib0 (peep g 'inlbody 0)
              _ (pin g 'inlbody (ib0 + 1))          ; the body blinds the alias bind (name conflation)
              bf (? (bad? br) 'bad (cbranch g (dtmp <rx <br) e9 cc lbl))
@@ -7003,14 +7002,10 @@
        rt <(peep (g 'sigs) <>f ['long ()])
        ilb9 (nlab g ".il")
        rp0 (g 'rpin)
-       ; the alias bind, cbinl's extended to a VALUE splice: a word-typed var arg over a
-       ; pinned/homed local reads straight from that register -- licensed only when the whole
-       ; splice is call-free and the body never assigns that param (statements can); &param
-       ; self-declines through clval (regv answers 'bad, the real call stands). rpin holds the
-       ; alias against wr?/rfree/psreset across the body's own statement resets. a park here
-       ; spans the whole body and starves its statements (an ungated one measured corpus L1
-       ; loads +0.36%), so it must earn the seat: weighted body reads >= 8 -- a read inside a
-       ; loop, where the slot bind reloads every iteration -- and cbinl's deep-pool gate.
+       ; the bind is sbind's; &param self-declines through clval (regv answers 'bad, the real
+       ; call stands). a park here spans the whole body and starves its statements (an ungated
+       ; one measured corpus L1 loads +0.36%), so it must earn the seat: weighted body reads
+       ; >= 8 -- a read inside a loop, where the slot bind reloads every iteration
        (anyc (a . u)) (callish? a || anyc u)
        body9 <><>>>f
        ; the bind pricing, per loop iteration: weighted body reads earn the park
@@ -7025,62 +7020,13 @@
        dns (dnames body9 ())
        (anyasm x) (? (id? x 'asm) 1 !(two? x) () (anyasm <x || anyasm >x))
        asm9 (anyasm body9)
-       ; the const bind: a literal arg whose conversion to the param type folds exactly
-       ; (cnum's arithmetic is the slot round-trip's) substitutes into the body -- no
-       ; slot, no forms, and every immediate lane reads the constant where the slot
-       ; bind hid it behind a reload. declined when the body assigns or shadows the
-       ; name, or carries asm (an output could write it unseen); &param declines the
-       ; whole splice through clval and the real call stands.
-       (bind ps as benv acc rbs sbs)                 ; arg values -> a folded constant, the alias register, a priced park, else slots
-        (? !(two? ps) [benv acc rbs sbs]
-           (: pty <><ps
-              kb (? (asm9 || wrs? <<ps body9 || member? <<ps dns) ()
-                    (: kc (knum g <as)
-                       (? !(two? kc) ()
-                          (: cv (cnum g ['cast pty ['num <kc]])
-                             (two? cv ? ['cast pty ['num <cv]])))))
-              (? (two? kb) (bind >ps >as benv acc rbs ([<<ps kb] . sbs))
-           (: al (? (nocall && !(flo? pty) && 8 = tsz g pty &&
-                     two? <as && <<as = 'var && !(wrs? <<ps body9))
-                  (: v9 (vent g env <><as)
-                   (? (two? v9 && <v9 = 'regv && !(flo? <>>v9)) <>v9)))
-              al (? al (? (alsafe? g al) al ()) ())  ; staging must never write it
-              (? al                                  ; the alias bind: zero forms
-                  (: _ (pin g 'rpin ((rp g al) . g 'rpin))
-                     (bind >ps >as ([<<ps ['reg al] pty] . benv) acc rbs sbs))
-                 (: r (cgexpr g env <as ())
-                    (? (bad? r) 'bad
-                       (pair? g pty)                 ; a pair param: an 8-byte slot, both words land
-                        (: off (ntmp g 'llong)
-                           (bind >ps >as
-                                 ([<<ps off pty] . benv)
-                                 (acc + asll g r + pst 'r4 off) rbs sbs))
-                       (: rb (? (nocall && !(flo? pty) &&
-                                 paid? <<ps &&
-                                 deep? (g 'pool))              ; a seat is earned: paid reads into a deep pool
-                                 (ralloc g) ())
-                          (? rb                      ; the park bind: the value rides a pool reg
-                              (: _ (pin g 'rpin ((rp g rb) . g 'rpin))
-                                 (bind >ps >as ([<<ps ['reg rb] pty] . benv)
-                                       (acc + asintt g r pty
-                                            + ([['mov rb 'r0]] + cvt pty rb))
-                                       (rb . rbs) sbs))
-                             ; a register-riding value stores itself (no r0 bridge)
-                             (: off (ntmp g 'long)
-                                vd (? (flo? (vty r) || id? pty 'bool ||
-                                       id? (vreg r) 'r0) ()
-                                      (vreg r))
-                                (bind >ps >as
-                                      ([<<ps off pty] . benv)
-                                      (? vd
-                                         (: fs (acc + vfs r + [['st 'r4 off vd]])
-                                            _ (rfree g vd)
-                                            fs)
-                                         (acc + asintt g r pty
-                                              + (pty @ 'bool (cvt pty 'r0))   ; the entry conversion the splice skips
-                                              + [['st 'r4 off 'r0]]))
-                                      rbs sbs)))))))))))
-       br (bind <>>f args () () () ())
+       ; the const bind's license: a literal arg whose conversion to the param type folds exactly
+       ; (cnum's arithmetic is the slot round-trip's) substitutes into the body -- no slot, no
+       ; forms, and every immediate lane reads the constant where the slot bind hid it behind a
+       ; reload. declined when the body assigns or shadows the name, or carries asm (an output
+       ; could write it unseen)
+       (kok? nm) !(asm9 || wrs? nm body9 || member? nm dns)
+       br (sbind g env <>>f args nocall body9 kok? paid?)
        ; the body-decl license: a decl name whose weighted reads price a pool seat (the
        ; park's discipline) register-binds in cgdecl's splice lane; nesting saves/restores
        rb0 (g 'inlrb)
