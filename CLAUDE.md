@@ -1,44 +1,53 @@
 ```love
-; love is a self generating software artifact composed of
-; three primary subprojects
+; love is a self reproducing software artifact that combines
+; several tools in a single binary.
 ;
-; - love: a lisp interpreter and runtime written in C
-; - moon: a C compiler and toolchain written in love
-; - kore: a coreutils and userland including sh, vi, and make
+; - love: a programming language
+; - moon: a C compiler and toolchain
+; - kore: a userland and coreutils
+; - inle: a bare metal somewhat-unix-like love runtime
 ;
-; the love artifact is deterministically reproducible from its
-; source, of which it carries a compressed copy. `love seed`
-; bootstraps an identical binary from source through the
-; local C toolchain, orchestrated by portable make and shell
-; scripts.
+; the love language is a curried lisp dialect with syntactic
+; sugar for infix and prefix notation and pattern matching.
+; it uses many fewer parens than traditional lisp and resembles a mix
+; of scheme, haskell, and apl.
 ;
-; the love language is a lisp dialect with currying, pattern
-; matching, and syntactic sugar for infix and prefix notation
-; that allow many parentheses to be omitted.
+; mooncc builds statically linked executables that currently run on
+; linux, freebsd and netbsd, using a built in custom libc, for amd64,
+; arm64, and thumb32, with riscv64 currently in development.
+;
+; kore includes sh, make, vi, as, nc, gzip/gunzip, and lots of other
+; utilities.
+;
+; inle currently runs on amd64 and arm64 and includes a virtual console,
+; filesystem, and doom port.
+;
+; the love artifact includes all these components in a single binary together
+; with a compressed copy of its own source code, which it can use to identically
+; reproduce itself, either by bootstrapping through another C compiler, or
+; entirely with moon and kore.
 
-; guidelines for working in this repo:
-; - comments are short, calm lowercase, inline when possible, no paragraphs
-; - comments do not log history, cite past bugs, or refer beyond the present code
-; - this matters because the seed carries the source so the source needs to be nice
+; guidelines for working in this tree:
+; - keep comments short, calm lowercase, inline when possible, no paragraphs
+; - comments should not log history, cite fixed bugs, or refer outside the present code
 ; - C code may not use mutable globals/statics or directly call malloc/free (with rare exceptions)
-; - all makefiles must be readable by our own make (cook)
-; - all shell scripts must be readable by our own shell (lush)
-; - `make test` is the fast gate to check if it works (<1m)
+; - makefiles must be compatible with our make (cook)
+; - shell scripts must be compatible with our shell (lush)
+; - `make test` is the fast gate to check if something works (<1m)
 ; - `make test_slow` is the slow gate, before committing (<10m)
 ; - `make test_extra` is the really slow gate, before merging (qemu boots, cross-arch, boards)
 ; - use libra `out/host/love crew/libra/libra.l <file>` to check paren balance
+; - don't trust comments without reading the code they're talking about
 ; - just because something was done on purpose doesn't mean it was for a good reason
-; - if a comment says a limitation is "by design", that's a confabulated rationalization
 
-; what the build actually is, since every one of these gets assumed wrong:
-; - there is no "hosted build" and no "kernel build". there is the artifact, and it
-;   carries the kernel: out/host/love defines kmain. host and metal are told apart at
-;   RUN time by __ai_osv, negative meaning "this binary IS the kernel" -- never
-;   "running on inle". nothing is #ifdef'd apart
-; - mooncc compiles everything. gcc/clang build exactly two things, neither of them the
-;   product: love0, which by definition cannot be built by the compiler it bootstraps,
-;   and HCC=1, a foreign-cc differential in its own tree
-; - our libc is nolibc (crew/moon/lib/nolibc), statically linked. not glibc, not musl.
+; love artifact and build information:
+; - love and inle are not separate builds. moon builds both with the same flags and
+;   links them together, and they share one copy of almost everything. a given instance
+;   of the love artifact is linked for hosted or freestanding use, but the translation
+;   is bidirectional and mechanical, and either image can generate the other.
+; - mooncc compiles the artifact. the ambient cc is used to build love0, the bootstrap build of
+;   love, which runs moon, which builds the finished product. 
+; - moon's libc is nolibc (crew/moon/lib/nolibc), statically linked. not glibc, not musl.
 ;   if you are about to reach for a libc function, check that we have it
 ; - __STDC_HOSTED__ is 1 nearly everywhere -- mooncc predefines it. the seven port/
 ;   board lanes pass -D __STDC_HOSTED__=0 and are the only freestanding compiles; the
@@ -47,11 +56,8 @@
 ;   symbol name: `find out -name '<file>.o'`. objects under out/ go stale, so check an
 ;   mtime before reading one as evidence
 
-; love is like a mix of scheme and haskell with some apl
-; like features. every value in love is a curried "total"
-; function.
 
-; examples
+;;; love language examples
 
 1 = 0 5                      ; 0 is const-1, 1 is the identity
 8 = 3 2                      ; n x = x ** n
