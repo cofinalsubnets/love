@@ -8,26 +8,23 @@
 #include "../crew/moon/lib/nolibc/impl.h"
 #include <stdint.h>
 
-// the seat is nolibc's core.c: errno, the streams, the mmap-arena malloc. what a hosted
-// __ai_start would arm the kernel arms here -- an empty environment and the std streams
-// write-through on fds 1 and 2 at cap 0. seat-blind, so a seated task's C-level printf
-// reaches the console where its port reaches the pipe. kmain calls this after the osv.
+// the C runtime is nolibc's core.c: errno, the streams, the mmap-arena malloc. what a
+// hosted __ai_start would arm the kernel arms here -- an empty environment and the std
+// streams write-through on fds 1 and 2 at cap 0. a task's C-level printf reaches the
+// console where its own port reaches the pipe. kmain calls this after the osv.
 static char *k_env0[] = { 0 };
 void k_seat_init(void) {
   environ = k_env0;
   stdout->fd = 1; stdout->wr = 1;
   stderr->fd = 2; stderr->wr = 1; }
 
-// the kernel side (kmain.c): a raw fd through the k_sources row, no port above it, and
-// seat-blind by design. the seat is the port layer's -- k_fd_eff is reached only from
-// k_port_readn, k_port_writen, k_row_close and k_procseat -- so an fd spelled in love is
-// already an absolute row and only a port's own fd is remapped, exactly as a real kernel's
-// trap number is already the calling process's own.
-// the divergence that buys, named so it is not rediscovered as a bug: a seated task
-// spelling `write(1, ..)` reaches row 1 where POSIX would reach whatever its parent
-// seated. nothing does -- love's stdio goes through the folded ports and posix.c touches
-// an implicit fd only at three terminal-control calls. closing it wants per-task row
-// tables rather than an ambient g, which moves under collection and can only be threaded.
+// the kernel side (kmain.c): a raw fd through the k_sources row, no port above it. an fd
+// spelled in love is an absolute row, exactly as a real kernel's trap number is already
+// the calling process's own -- redirection lives in the port a task wears, never here.
+// the divergence that buys, named so it is not rediscovered as a bug: a task spelling
+// `write(1, ..)` reaches row 1 where POSIX would reach whatever its parent handed it.
+// nothing does -- love's stdio goes through the folded ports and posix.c touches an
+// implicit fd only at three terminal-control calls.
 // the kernel free list (kmain.c), the page supply under the mmap arm below
 extern void *kmallocw(uintptr_t n), kfree(void *p);
 
@@ -201,7 +198,7 @@ long __ai_inle(long n, long a, long b, long c, long d, long e, long f) {
   // page already is, so answer that and refuse the exec ask rather than tell a caller
   // whose next move is a jump that it succeeded.
   case NR_mprotect: return (c & 4) ? -EACCES : 0;
-  // one clock, the wall: ai_clock's body is clock_gettime now (src/seat.c),
+  // one clock, the wall: ai_clock's body is clock_gettime now (src/fd.c),
   // so this arm is where the kernel's scale becomes a timespec.
   case NR_clock_gettime: {
    if (a) return -EINVAL;                    // CLOCK_REALTIME only

@@ -19,9 +19,9 @@ extern void host_spawn_guard(struct ai*, int);   // src/posix.c (exec-bound fork
 #include <signal.h>
 #include <sys/wait.h>
 #include <sys/mman.h>    // the first boot's inflate buffer (mmap, no malloc)
-extern struct ai *ai_argv_marshal(struct ai*, char***);   // src/seat.c: argv -> char** in the heap gap
+extern struct ai *ai_argv_marshal(struct ai*, char***);   // src/fd.c: argv -> char** in the heap gap
 
-// ai_clock lives in src/seat.c, one body for this frontend and the kernel's.
+// ai_clock lives in src/fd.c, one body for this frontend and the kernel's.
 // the fine clock's real source (the weak default in love.c degrades to ms*1e6)
 ai_noinline intptr_t ai_nclock(void) {
  struct timespec ts;
@@ -58,7 +58,7 @@ static lvm(lvm_exit) {
  if (__ai_osv < 0) ai_musttail return Ap(k_lvm_quit, g);
  for (;;) stdin_give(g), exit(getcharm(Sp[0])); }
 
-extern uintptr_t ai_fd_write_all(int, unsigned char const*, uintptr_t);   // src/seat.c
+extern uintptr_t ai_fd_write_all(int, unsigned char const*, uintptr_t);   // src/fd.c
                                                                           //
 static void stdin_hand(struct ai *g) {
  stdin_give(g);
@@ -120,9 +120,7 @@ ai_noinline static struct ai *host_harkstart(struct ai *g, int tee) {
   return ai_push(g, 1, ai_err(g, e)); }
  fcntl(ep[1], F_SETFD, FD_CLOEXEC);
  fflush(stdout);
- host_spawn_guard(g, 1);
  pid_t pid = fork();
- if (pid) host_spawn_guard(g, 0);   // parent (a failed fork included); the child's g is unmapped
  if (pid < 0) { int e = errno;
   close(op[0]); close(op[1]); close(ep[0]); close(ep[1]);
   g = host_harkst(g, -1, 0, tee);

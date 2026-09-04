@@ -1,9 +1,9 @@
-// FIXME what is a "seat"? afaik that word means like a chair.
-// src/seat.c -- the seat two frontends share: src/main.c's binary and the
-// inle kernel both link this file, so what lives here exists ONCE where it
-// used to exist twice. the bodies bottom out in libc calls, and on inle those
-// land in src/sys.c's arms (__ai_call's negative-osv door), so most need no
-// branch of their own.
+// src/fd.c -- love's ports over OS file descriptors: ai_fd_port_vt and the ai_fd_* family
+// beneath it, plus the readiness and wait primitives the scheduler parks on. the bare-board
+// counterpart is port/fdrow.h, which this file is poll.h and signal.h deeper than.
+// src/main.c's binary and the inle kernel both link it, so what lives here exists once
+// rather than twice. the bodies bottom out in libc calls, and on inle those land in
+// src/sys.c's arms (__ai_call's negative-osv door), so most need no branch of their own.
 #include "love.h"
 #include <errno.h>
 #include <fcntl.h>
@@ -14,23 +14,14 @@
 #include <stdnoreturn.h>
 #include <time.h>
 #include <unistd.h>
-#include <string.h>   // memcpy, for the argv marshal at the foot of this file
 
 // __ai_osv, "which kernel this binary stands on", rides love.h: os.c defines
 // it hosted, love.c carries the weak zero for links with no nolibc at all.
 
-// CLOCK_REALTIME in milliseconds -- the one scale for the scheduler's
-// deadlines, (clock t), and every mtime. on inle the call lands in the
-// clock_gettime arm, which reads the kernel's kboot/kticks scale.
-ai_noinline uintptr_t ai_clock(void) {
- struct timespec ts;
- return clock_gettime(CLOCK_REALTIME, &ts) ? (uintptr_t) -1 :
-  (uintptr_t) (ts.tv_sec * 1000 + ts.tv_nsec / 1000000); }
-
-// the kernel's port lanes (src/kmain.c): the seat translation, then the rows
-// -- a protocol read(2) cannot carry, busy and end being distinct answers, so
-// the vt branches here rather than riding the syscall door. weak refusals so a
-// hosted link, which never takes the branch, closes without them.
+// the kernel's port lanes (src/kmain.c), reached on a negative osv: a protocol read(2)
+// cannot carry, busy and end being distinct answers, so the vt branches here rather than
+// riding the syscall door. these bodies both declare the doors and stand in for them where
+// no kmain.c is linked -- love0 and the HCC build, neither of which can take the branch.
 __attribute__((weak)) struct ai *k_port_flush(struct ai *g) { return g; }
 __attribute__((weak)) struct ai *k_port_writen(struct ai *g, unsigned char const *src, uintptr_t n) { return g->b = -1, g; }
 __attribute__((weak)) intptr_t k_port_readn(struct ai *g, unsigned char *dst, uintptr_t n) { return -1; }
@@ -232,36 +223,3 @@ intptr_t ai_port_fd(ai_word x) {
  if (!charmp(x) && ((union u*) x)->ap == lvm_port_io)
   return ai_io_fd((struct ai_io*) x);
  return -1; }
-
-// argv: the chain of strings at g->sp[0] -> a NUL-terminated char** laid in the
-// uncommitted heap gap at Hp. GC-invisible, holds no l pointers, and valid across a
-// fork -- host_spawn_guard (src/posix.c) leaves the window above hp mapped for exactly
-// this, so what execvp reads must live here and not in the strings themselves.
-// consumed before any further allocation; never bumps Hp.
-//
-// -> g, and *cavp is the vector or NULL. the two failures are told apart by the g:
-// argv not a chain of strings, or empty, leaves g OK (each caller says what a misuse
-// answers -- they do not agree), and a failed reserve leaves it not ok.
-struct ai *ai_argv_marshal(struct ai *g, char ***cavp) {
- *cavp = NULL;
- ai_word argv = g->sp[0];
- uintptr_t argc = 0, total = 0;
- for (ai_word p = argv; chainp(p); p = B(p)) {
-  if (!strp(A(p))) return g;                              // misuse: non-string argv
-  argc++, total += len(A(p)) + 1; }                          // +1 for the NUL
- if (!argc) return g;                                        // empty argv
- if (!ai_ok(g = ai_have(g, argc + 1 + b2w(total)))) return g;
- argv = g->sp[0];                            // ai_have may have GC'd; argv is the only
-                                             // root, at sp[0], so it is forwarded there
- char **cav = (char**) g->hp,                                // at Hp: aligned
-      *blob = (char*) (g->hp + (argc + 1));                  // whole words after
- uintptr_t off = 0, i = 0;
- for (ai_word p = argv; chainp(p); p = B(p), i++) {
-  struct ai_str *s = str(A(p));
-  memcpy(blob + off, txt(s), len(s));
-  blob[off + len(s)] = 0;
-  cav[i] = blob + off;
-  off += len(s) + 1; }
- cav[argc] = NULL;
- *cavp = cav;
- return g; }

@@ -13,7 +13,7 @@
 // to say. so !e reads "it worked" on an effect op, and nom? e reads "it
 // failed" on any op: errors are the only noms any of these answer.
 //
-// the argv marshal is src/seat.c's (main.c wants it too and must not reach into an
+// the argv marshal is src/fd.c's (main.c wants it too and must not reach into an
 // app file). the local face here adds the misuse answer: 'badarg on the stack,
 // which is what every caller in this file hands back as the net value.
 #define _GNU_SOURCE     // unshare / CLONE_* (newns), posix_openpt/grantpt/unlockpt/ptsname
@@ -31,6 +31,7 @@
 #include <termios.h>    // tcgetattr tcsetattr ECHO TCSANOW (ptyecho, raw)
 #include <dirent.h>     // opendir/readdir/closedir
 #include <sys/mman.h>       // madvise (the spawn guard)
+#include <time.h>           // clock_gettime, for ai_clock
 
 // --- what this LIBC carries, asked once -------------------------------------
 // the question a lane owes is which doors it may call, never which kernel it is
@@ -75,10 +76,50 @@
 #if defined(AiHaveNamespaces)
 #include <sched.h>          // unshare, CLONE_NEWUSER/NEWNS (newns)
 #endif
-// ⚠ OUTSIDE every guard: both are called unconditionally below (argv_marshal, sigtake, the
-// pty pair), so declaring them under one kernel's feature is a build that only stands there.
-extern struct ai *ai_argv_marshal(struct ai*, char***);   // src/seat.c: argv -> char** in the heap gap
-extern intptr_t ai_port_fd(ai_word);   // src/seat.c: the fd under a love port, or -1
+// ⚠ OUTSIDE every guard: what follows is called unconditionally below (argv_marshal,
+// sigtake, the pty pair), so putting any of it under one kernel's feature is a build that
+// only stands on that kernel.
+// CLOCK_REALTIME in milliseconds -- the one scale for the scheduler's
+// deadlines, (clock t), and every mtime. on inle the call lands in the
+// clock_gettime arm, which reads the kernel's kboot/kticks scale.
+ai_noinline uintptr_t ai_clock(void) {
+ struct timespec ts;
+ return clock_gettime(CLOCK_REALTIME, &ts) ? (uintptr_t) -1 :
+  (uintptr_t) (ts.tv_sec * 1000 + ts.tv_nsec / 1000000); }
+
+// argv: the chain of strings at g->sp[0] -> a NUL-terminated char** laid in the
+// uncommitted heap gap at Hp. GC-invisible, holds no l pointers, and valid across a
+// fork -- host_spawn_guard below leaves the window above hp mapped for exactly this, so
+// what execvp reads must live here and not in the strings themselves.
+// consumed before any further allocation; never bumps Hp.
+//
+// -> g, and *cavp is the vector or NULL. the two failures are told apart by the g:
+// argv not a chain of strings, or empty, leaves g OK (each caller says what a misuse
+// answers -- they do not agree), and a failed reserve leaves it not ok.
+struct ai *ai_argv_marshal(struct ai *g, char ***cavp) {
+ *cavp = NULL;
+ ai_word argv = g->sp[0];
+ uintptr_t argc = 0, total = 0;
+ for (ai_word p = argv; chainp(p); p = B(p)) {
+  if (!strp(A(p))) return g;                              // misuse: non-string argv
+  argc++, total += len(A(p)) + 1; }                          // +1 for the NUL
+ if (!argc) return g;                                        // empty argv
+ if (!ai_ok(g = ai_have(g, argc + 1 + b2w(total)))) return g;
+ argv = g->sp[0];                            // ai_have may have GC'd; argv is the only
+                                             // root, at sp[0], so it is forwarded there
+ char **cav = (char**) g->hp,                                // at Hp: aligned
+      *blob = (char*) (g->hp + (argc + 1));                  // whole words after
+ uintptr_t off = 0, i = 0;
+ for (ai_word p = argv; chainp(p); p = B(p), i++) {
+  struct ai_str *s = str(A(p));
+  memcpy(blob + off, txt(s), len(s));
+  blob[off + len(s)] = 0;
+  cav[i] = blob + off;
+  off += len(s) + 1; }
+ cav[argc] = NULL;
+ *cavp = cav;
+ return g; }
+extern intptr_t ai_port_fd(ai_word);   // src/fd.c: the fd under a love port, or -1
 
 // a wait(2) status word -> the value a reaper hands back: the exit code, or
 // 128+signal for a signalled death (the shell convention), or -1 for the
@@ -190,9 +231,7 @@ ai_noinline static struct ai *host_spawn(struct ai *g) {
  g = argv_marshal(g, &cav);
  if (!cav) return g;                                         // misuse pushed -1, or oom
  fflush(NULL);                                               // flush now, not twice in the child
- host_spawn_guard(g, 1);
  pid_t pid = fork();
- if (pid) host_spawn_guard(g, 0);   // parent (a failed fork included); the child's g is unmapped
  if (pid < 0) return ai_push(g, 1, ai_err(g, errno));
  if (!pid) { sig_dfl_job(); execvp(cav[0], cav); _exit(127); }   // child: default signals, exec or die 127
  return ai_push(g, 1, putcharm(pid)); }                      // parent: the live pid
@@ -1114,9 +1153,7 @@ ai_noinline static struct ai *host_tether(struct ai *g) {
  if (pipe(ep)) { int e = errno; close(mfd); return ai_push(g, 1, ai_err(g, e)); }
  fcntl(ep[1], F_SETFD, FD_CLOEXEC);
 
- host_spawn_guard(g, 1);
  pid_t pid = fork();
- if (pid) host_spawn_guard(g, 0);   // parent (a failed fork included); the child's g is unmapped
  if (pid < 0) { int e = errno; close(mfd); close(ep[0]); close(ep[1]); return ai_push(g, 1, ai_err(g, e)); }
  if (!pid) {                                       // child
   close(mfd); close(ep[0]);

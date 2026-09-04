@@ -292,7 +292,7 @@ frontends eval the cat at boot instead, the modules register themselves, and
 every `(use 'x)` in a boot is a pure splice.
 
 What went with it: `struct ai_lib`, `ai_libs()`, `k_libs`/`host_libs` and
-seat.c's picker, the `lib` nif, and the whole `struct ti` C-string port
+fd.c's picker, the `lib` nif, and the whole `struct ti` C-string port
 (`ti_athand`/`ti_readn`/`ai_ti_vt`) that existed only to read a table row.
 Eight frontends lost their table and their ~20 `src_*` arrays for one
 `src_mods` apiece. −113 lines, −4360 bytes of binary, image boot unchanged.

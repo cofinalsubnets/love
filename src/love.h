@@ -337,7 +337,7 @@ struct ai
 // dying port through it. weak no-op default; the host overrides with write(2).
 void ai_fd_drain(int fd, void const*, uintptr_t);
 
-// the raw-fd lanes (src/seat.c): what an io op does when its operand is a charm
+// the raw-fd lanes (src/fd.c): what an io op does when its operand is a charm
 // rather than a port. no buffer, no seat, one motion each, and the port protocol
 // on the answer -- >0 landed, 0 busy, -1 gone. `say` lands the whole run, waiting.
 intptr_t ai_fd_readn(struct ai*, int fd, unsigned char *dst, uintptr_t);

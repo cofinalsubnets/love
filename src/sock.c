@@ -21,7 +21,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-extern intptr_t ai_port_fd(word);   // src/seat.c: the fd under a love port, or -1
+extern intptr_t ai_port_fd(word);   // src/fd.c: the fd under a love port, or -1
 
 // every socket fd is close-on-exec: no child inherits one, and a server that re-execs
 // does not carry its own listener across (SO_REUSEADDR does not permit two live ones).

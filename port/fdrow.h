@@ -1,5 +1,5 @@
-// port/fdrow.h -- the raw-fd rows, which src/seat.c owns on a hosted seat and no bare port
-// can take from it: seat.c is poll.h and signal.h deep. love's io ops speak a bare fd as
+// port/fdrow.h -- the raw-fd rows, which src/fd.c owns on a hosted seat and no bare port
+// can take from it: fd.c is poll.h and signal.h deep. love's io ops speak a bare fd as
 // well as a port, and a bare seat has one row, the console -- 0 in, 1 and 2 out, nothing
 // else. included once, after the seat spells fd_readn and fd_writen, the two names every
 // bare seat's vtable already carries -- the four boards and the wasm host.

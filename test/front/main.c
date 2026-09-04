@@ -175,8 +175,8 @@ struct ai_fio ai_stderr = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putc
 
 // --- the raw-fd rows -------------------------------------------------------
 // love's io ops take a charm as well as a port, so a frontend owes these two as
-// well as the vtable: src/seat.c has them on a hosted seat and port/fdrow.h on a
-// board, and both are unreachable from here. the shape is seat.c's, over these
+// well as the vtable: src/fd.c has them on a hosted seat and port/fdrow.h on a
+// board, and both are unreachable from here. the shape is fd.c's, over these
 // devices -- >0 landed, 0 busy, -1 gone, and a say that lands every byte.
 intptr_t ai_fd_readn(struct ai *g, int fd, unsigned char *dst, uintptr_t n) {
   return dev_readn(fd, dst, n); }

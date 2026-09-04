@@ -152,7 +152,7 @@ every runtime branch fusion needs becomes live and gated before anything merges.
   default for links without the door; and the kernel links the REAL mksys tail
   (dead on metal, but it is the fused shape and it answers `__ai_sigret` and
   the netbsd leaves the stubs used to fake).
-- B2 ✅ `src/seat.c`, one TU both links carry: `ai_clock` is one
+- B2 ✅ `src/fd.c`, one TU both links carry: `ai_clock` is one
   clock_gettime body (src/sys.c's arm serves it from `k_clock_ms`);
   `ai_fd_port_vt` + the statics exist once, the host bodies branching to
   kmain's exported `k_port_*` lanes on v<0 -- the port protocol keeps busy
@@ -161,7 +161,7 @@ every runtime branch fusion needs becomes live and gated before anything merges.
   the mechanism is weak defaults for whichever side a link lacks, plus a weak
   `__ai_osv` for foreign-libc links (love0) that carry no os.c -- zero reads
   hosted, which such a link is. the ports (playdate/mps2/virt/teensy) define
-  their own vt and never link seat.c.
+  their own vt and never link fd.c.
 - Gate: both binaries build and pass, the whole roster. ⚠ landing B2 tripped
   the KERNEL LANES' MEMORY WALL, not a defect: gen_major grows the pool by
   allocating a new contiguous 2x pair beside the old one, so the ask (~78M at

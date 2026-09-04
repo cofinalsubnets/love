@@ -71,7 +71,7 @@ names that already exist and both instruments have nowhere left to be special.
   and 2 are not special: a charm that reached `see` by mistake is misuse, and
   refusing the low three to catch it would forbid `say` to stdout by number,
   which is a thing to want.
-  The lanes are src/seat.c's, beside `ai_fd_write_all`, and they go at the ROW
+  The lanes are src/fd.c's, beside `ai_fd_write_all`, and they go at the ROW
   and not at read(2) -- `k_fd_read` folds busy and end into one 0, so a syscall
   read would take an idle pipe for its end. An fd spelled in love stays absolute
   (kmain's seat law), so a raw op is seat-blind where the port lane is not.
@@ -95,7 +95,7 @@ names that already exist and both instruments have nowhere left to be special.
   other two operands rather than a quiet SET.
 
 No new nif. `fdclose` went, seven nifs gained a kind and one lost a bug -- the
-three lanes those kinds ride are src/seat.c's, where the fd doors already live.
+three lanes those kinds ride are src/fd.c's, where the fd doors already live.
 
 **The subtraction. LANDED.** `syswrite`, `syscall` and `k_sys_nr` are out (-93
 lines over kmain.c and sys.c), and `test/kernel/sys.l` with them: 386 lines, 114

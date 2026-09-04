@@ -66,7 +66,7 @@ static struct font const kfont = { .glyphs = (uint8_t*) moderndos_8x16, .w = 8, 
 
 void k_reset(void), archinit(void), fbdraw(void), serial_init(void), serial_putc(int),
      k_fault_trigger(intptr_t n),
-// the seat hooks src/seat.c branches to on a negative osv (weak no-ops there)
+// the seat hooks src/fd.c branches to on a negative osv (weak no-ops there)
      k_row_close(int fd), k_sleep(uintptr_t ms), k_wait_fds(struct ai_wait_fd*, int, uintptr_t),
      k_seat_init(void);                // src/sys.c: arm environ + the std streams
 bool k_ready(int fd, int events);
@@ -249,7 +249,7 @@ intptr_t k_row_write(int fd, unsigned char const *src, uintptr_t n) {
  for (uintptr_t k = 0; k < n; k++) s->putc(fd, src[k]);
  return (intptr_t) n; }
 
-// the port lanes ai_fd_port_vt (src/seat.c) takes on a negative osv: the seat
+// the port lanes ai_fd_port_vt (src/fd.c) takes on a negative osv: the seat
 // translation, then the rows -- a protocol read(2) cannot carry (busy and end
 // are distinct answers), which is why these do not ride the syscall door.
 intptr_t k_port_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
@@ -284,7 +284,7 @@ struct ai *k_port_flush(struct ai *g) {
  if (s && s->flush) s->flush(fd);
  return g; }
 
-// ai_fd_close's inle lane (src/seat.c): close through k_sources[fd].
+// ai_fd_close's inle lane (src/fd.c): close through k_sources[fd].
 // Statics (stdin/stdout) have NULL close -- nothing to release.
 void k_row_close(int fd) {
  struct k_source *s = k_source(fd);
@@ -316,7 +316,7 @@ void k_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
     k_wait(); } }
 
 // milliseconds since the epoch: one scale for the scheduler's deadlines, for (clock t) and
-// for every mtime. ai_clock is one body (src/seat.c) and src/sys.c's arm serves it from
+// for every mtime. ai_clock is one body (src/fd.c) and src/sys.c's arm serves it from
 // here. the date rides kboot, and where nobody knew it this degrades to milliseconds since
 // boot and says so by reading as 1970.
 uintptr_t k_clock_ms(void) { return (uintptr_t) (kboot.date * 1000 + kticks * k_tick_ms); }
