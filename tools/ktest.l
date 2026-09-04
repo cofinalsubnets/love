@@ -23,7 +23,7 @@
 (: a    (cup argv)
    iso  (cap a)
    ovmf (cap (cup a))
-   arch (: x (cup (cup a)) (? (two? x) (cap x) "x86_64"))   ; optional 3rd arg; x86_64 by default
+   arch (: x (cup (cup a)) (? (two? x) (cap x) "x64"))   ; optional 3rd arg; x64 by default
    ; optional 4th arg: a line the serial output must also contain -- test_disk's
    ; second boot demands "disk: fat kept across the reset" on top of the summary.
    need (: x (cup (cup (cup a))) (? (two? x) (cap x) ""))
@@ -36,16 +36,16 @@
    dir? (: st (stat iso)                          ; (size mtime mode ..) -- `at` is not bound here
            m (? (two? st) (cap (cup (cup st))) 0)
            (= 16384 (& m 61440)))
-   ; machine + exit channel are per-arch. x86_64 quits qemu by writing the
+   ; machine + exit channel are per-arch. x64 quits qemu by writing the
    ; isa-debug-exit port; the two 'virt's have no such device, so k_reset goes
    ; out through PSCI / SBI and -no-reboot below turns that into the exit.
-   mach (? (arch = "aarch64")
+   mach (? (arch = "a64")
            ["-M" "virt,gic-version=2" "-cpu" "cortex-a72" "-semihosting"]
-           (arch = "riscv64")
+           (arch = "rv64")
            ["-M" "virt"]
            ["-M" "q35" "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"])
    ; the two virts carry their disk on virtio-mmio; q35 on pci
-   mmio? (|| (arch = "aarch64") (arch = "riscv64"))
+   mmio? (|| (arch = "a64") (arch = "rv64"))
    ; 768M + 420s. the corpus outgrew 256M (a silent death mid-corpus) and then
    ; 512M (";; oom@len=N" at a deterministic dot) -- both the same wall: a major
    ; collection grows the pool by allocating a new contiguous 2x pair while the
@@ -66,16 +66,16 @@
    ; Blt() and its gop answers a mode with no address, which is no framebuffer
    ; at all. ramfb's lands in ordinary ram, so the console paints at memory
    ; speed and the lane costs nothing.
-   gfx  (? (arch = "aarch64") ["-device" "ramfb"] ())
+   gfx  (? (arch = "a64") ["-device" "ramfb"] ())
    media (? elf? ["-kernel" iso "-append" "test/kernel/all.l"]
             dir? (fw + (below4g + (gfx + ["-drive" (+ "format=raw,file=fat:rw:" iso)])))
             (scare 'ktest-media iso))
    ; kvm where the host can back it: 7x on this corpus (50s of TCG against 7s).
-   ; x86_64-on-x86_64 only -- `virt` is asked for gic-version=2 above, and an
+   ; x64-on-x64 only -- `virt` is asked for gic-version=2 above, and an
    ; arm host whose gic cannot back v2 refuses the pairing rather than degrading.
    ; a box without /dev/kvm falls to tcg, so the verdict never rides on this.
    kvm  (? (&& (two? (stat "/dev/kvm"))
-           (&& (arch = "x86_64") (has? (cup (hark ["uname" "-m"])) "x86_64")))
+           (&& (arch = "x64") (has? (cup (hark ["uname" "-m"])) "x86_64")))
            ["-enable-kvm" "-cpu" "host"] ())
    ; the scratch disk (rung 5): a sparse raw image beside the artifact, virtio-blk
    ; to the kernel. truncate creates it and leaves an existing one's bytes alone
@@ -91,7 +91,7 @@
                (d + ["-device" "virtio-blk-device,drive=d0"
                      "-global" "virtio-mmio.force-legacy=false"])
                (d + ["-device" "virtio-blk-pci,drive=d0"])))
-   r    (hark (cat ["timeout" "420" (+ "qemu-system-" arch) "-m" "768M"]
+   r    (hark (cat ["timeout" "420" (+ "qemu-system-" (arch-mach (intern arch))) "-m" "768M"]
              (cat mach
              (cat kvm
              (cat dargs

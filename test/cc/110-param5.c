@@ -1,6 +1,6 @@
 /* the 5th integer parameter is a POINTER, not the frame.
  *
- * 106-param4's arm64 sibling, and a different fault under the same lane. gen
+ * 106-param4's a64 sibling, and a different fault under the same lane. gen
  * speaks r4 for the frame base on every target, and a4ize retargets it to fp
  * at the end of build BY POSITION: an r4 sitting in a memory op's BASE slot
  * becomes fp, an r4 anywhere else is left alone. On AArch64 gp 4 arrives in
@@ -19,7 +19,7 @@
  *
  * x64 cannot reach it (r4 is rbp, never an argument register) and neither can
  * thumb (4 arg registers) or riscv (nhome = 0, so nothing rides) -- which is
- * why 110 programs and the whole love corpus under mooncc/arm64 stayed green.
+ * why 110 programs and the whole love corpus under mooncc/a64 stayed green.
  *
  * The register pressure is load-bearing, exactly as in 106: the 6th parameter
  * must exist and be live, or the 5th never rides and the fault does not

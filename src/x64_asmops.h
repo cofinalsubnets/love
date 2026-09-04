@@ -1,4 +1,4 @@
-// asmops -- the x86_64 privileged instructions, one static inline each, in BOTH
+// asmops -- the x64 privileged instructions, one static inline each, in BOTH
 // inline-asm spellings.
 //
 // the kernel is the last place in the tree that talks to the machine in
@@ -30,7 +30,7 @@
 // `cli` and `hlt` spell the same in both dialects.
 static inline void k_cli(void) { asm volatile ("cli"); }
 static inline void k_sti(void) { asm volatile ("sti"); }
-// the idle wait, kmain's kwait: halt until the next interrupt. the aarch64
+// the idle wait, kmain's kwait: halt until the next interrupt. the a64
 // twin of this name is `wfi`, which is the whole reason kmain calls k_wait()
 // and not either mnemonic.
 static inline void k_wait(void) { asm volatile ("hlt"); }
@@ -164,7 +164,7 @@ static inline void k_cpuid(uint32_t leaf, uint32_t *b, uint32_t *c, uint32_t *d)
 #endif
   *b = rb; *c = rc; *d = rd; }
 
-// --- SVM, the AMD-V lane (src/x86_64_svm.c) ---------------------
+// --- SVM, the AMD-V lane (src/x64_svm.c) ---------------------
 // vmrun/vmload/vmsave take the VMCB's PHYSICAL address in rax and name no
 // operand on holo's surface; AT&T names %rax and LLVM prints it back bare, so
 // the two halves disassemble alike.
@@ -221,7 +221,7 @@ static inline void k_vmload(uint64_t vmcb_pa) {
 static inline void k_stgi(void) { asm volatile ("stgi" ::: "memory"); }
 static inline void k_clgi(void) { asm volatile ("clgi" ::: "memory"); }
 
-// --- VMX, the Intel lane (src/x86_64_vmx.c) ---------------------
+// --- VMX, the Intel lane (src/x64_vmx.c) ---------------------
 // Nothing here is register-contracted the way SVM's ops are: vmxon, vmclear and
 // vmptrld take a MEMORY operand holding a physical address. Both dialects spell
 // those three the SAME way, with no #ifdef between them -- mooncc grew the "m"

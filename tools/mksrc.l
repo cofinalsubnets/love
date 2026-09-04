@@ -72,7 +72,7 @@
    ; call later.
    (mksrc-main av)
     (: n (tally av)
-       (? (2 <= n) (mksrc (? (3 <= n) (name <>>av) 'amd64) <av <>av)
+       (? (2 <= n) (mksrc (? (3 <= n) (name <>>av) 'x64) <av <>av)
           (mksrc-die "usage: mksrc ARCHIVE.tar.gz OUT.o [ARCH]")))
 
    (mksrc-main >argv))

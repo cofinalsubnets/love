@@ -4,17 +4,17 @@
 ; small enumerable operand space, so the sharp oracle is assemble-side: write the
 ; instruction llvm-mc's way, assemble, demand the same bytes holo produced.
 ;
-; the arm64 op tables and riscv's CSR table are read straight out of crew/holo/arm64.l
+; the a64 op tables and riscv's CSR table are read straight out of crew/holo/a64.l
 ; and rv64.l, so a row added to holo is checked the next run with no edit here -- the
 ; uncovered row is the one that ships wrong. the x86 side has no name tables (the operand
-; space IS the register file), so it enumerates. SYSDIFF_ARCH=amd64|arm64|rv64 narrows;
+; space IS the register file), so it enumerates. SYSDIFF_ARCH=x64|a64|rv64 narrows;
 ; default all three.
 ;
 ;   out/host/love test/holo/fuzz/sysdiff.l          (exit 1 on any disagreement)
 
 (reads (open "crew/holo/holo.l" "r"))
-(reads (open "crew/holo/amd64.l" "r"))
-(reads (open "crew/holo/arm64.l" "r"))
+(reads (open "crew/holo/x64.l" "r"))
+(reads (open "crew/holo/a64.l" "r"))
 (reads (open "crew/holo/rv64.l" "r"))
 ; holo rides module 'holo: reading the source registers it, and the names come
 ; through the door rather than off this file's layer.
@@ -47,8 +47,8 @@
  (wrf p t) (: q (open p "w") _ (say q t) (close q))
  tmpd "out/host"
 
- ; --- the ('key >< ..) rows of a `name (tabof ...)` form in arm64.l, source order ---
- a64src (rdf "crew/holo/arm64.l")
+ ; --- the ('key >< ..) rows of a `name (tabof ...)` form in a64.l, source order ---
+ a64src (rdf "crew/holo/a64.l")
  rv64src (rdf "crew/holo/rv64.l")
  (table-in src nm)
   (: i (idx-of src ("\n   " + nm + " (tabof"))
@@ -73,15 +73,15 @@
 
  ; --- the cases: [ir-form asm-text pair-key] (pair-key () when unpaired) ---
  (cases-a64 _)
-  (: sysregs (table "arm64-sysregs")
+  (: sysregs (table "a64-sysregs")
      out (foldl (\ a r (a + [[['mrs 'r5 (intern r)] ("mrs x5, " + r) ()]
                             [['msr (intern r) 'r5] ("msr " + r + ", x5") ()]]))
                 () sysregs)
      out (foldl (\ a o (a + [[['dsb (intern o)] ("dsb " + o) ()]
                             [['dmb (intern o)] ("dmb " + o) ()]]))
-                out (table "arm64-barrier-opts"))
+                out (table "a64-barrier-opts"))
      out (foldl (\ a f (a + foldl (\ b i (b + [[['msri (intern f) i] ("msr " + f + ", #" + show i) ()]])) () ^16))
-                out (table "arm64-pstate"))
+                out (table "a64-pstate"))
      ; the sys family: llvm-mc knows which operations take a register and refuses the
      ; other spelling; offer both, and `pair` demands the accepted one matched.
      out (foldl (\ a row (: ir <row
@@ -89,8 +89,8 @@
                                              (b + [[[(intern ir) (intern o) 'r7] (ir + " " + o + ", x7") pk]
                                                    [[(intern ir) (intern o) 'zr] (ir + " " + o) pk]])))
                                    a (table (nthl row 1)))))
-                out '(("tlbi" "arm64-tlbi-ops") ("ic" "arm64-ic-ops")
-                      ("dc" "arm64-dc-ops") ("at" "arm64-at-ops")))
+                out '(("tlbi" "a64-tlbi-ops") ("ic" "a64-ic-ops")
+                      ("dc" "a64-dc-ops") ("at" "a64-at-ops")))
      out (foldl (\ a imm (a + [[['brk imm] ("brk #" + show imm) ()]
                               [['dbrk imm] ("hlt #" + show imm) ()]
                               [['hvc imm] ("hvc #" + show imm) ()]
@@ -166,10 +166,10 @@
  ; --- llvm-mc assembling: two passes (an error would slide the encodings) ---
  ro-reject "expected writable system register"
  (llvm arch asms)
-  (: triple (? (arch = "arm64") "aarch64" (arch = "rv64") "riscv64" "x86_64")
+  (: triple (? (arch = "a64") "a64" (arch = "rv64") "rv64" "x64")
      mattr (? (arch = "rv64") " -mattr=+m,+f,+d,+zicsr,+zifencei" "")
-     nhead (? (arch = "amd64") 1 0)
-     head (? (arch = "amd64") ".intel_syntax noprefix\n" "")
+     nhead (? (arch = "x64") 1 0)
+     head (? (arch = "x64") ".intel_syntax noprefix\n" "")
      (lay ls) (wrf (tmpd + "/.sysd.in") (head + foldl (\ a l (a + "\t" + l + "\n")) "" ls))
      _ (lay asms)
      _ (sh ("llvm-mc -triple=" + triple + mattr + " --show-encoding < " + tmpd + "/.sysd.in > "
@@ -216,9 +216,9 @@
         (go 0 asms enc ())))
 
  (sweep arch)
-  (: cs (? (arch = "arm64") (cases-a64 0) (arch = "rv64") (cases-rv 0) (cases-x64 0))
+  (: cs (? (arch = "a64") (cases-a64 0) (arch = "rv64") (cases-rv 0) (cases-x64 0))
      _ (puts ("\n=== holo " + arch + " system-lane differential vs llvm-mc ===\n"))
-     tgt (? (arch = "arm64") 'arm64 (arch = "rv64") 'rv64 'amd64)
+     tgt (? (arch = "a64") 'a64 (arch = "rv64") 'rv64 'x64)
      ref (llvm arch (map (\ c (nthl c 1)) cs))
      seen (tablet 0)
      _ (map (\ c (? (id? (nthl c 2) ()) 0
@@ -254,7 +254,7 @@
      (? (two? fails) 1 0))
 
  sd-arch ("" + getenv "SYSDIFF_ARCH")
- arches (? (sd-arch = "amd64") '("amd64") (sd-arch = "arm64") '("arm64") (sd-arch = "rv64") '("rv64")
-           '("amd64" "arm64" "rv64"))
+ arches (? (sd-arch = "x64") '("x64") (sd-arch = "a64") '("a64") (sd-arch = "rv64") '("rv64")
+           '("x64" "a64" "rv64"))
  bad (foldl (\ a x (a + sweep x)) 0 arches)
  (? (0 < bad) (quit 1) (quit 0)))

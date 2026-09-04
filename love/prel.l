@@ -1085,21 +1085,21 @@
     (: pb (bpr fs) r (boxfix-core <pb >pb)
        (? r (catmap (p \ list <p >p) <r + list >r) fs)))))
 
-; the ISA vocabulary, and it is one word per machine: 'amd64 'arm64 'rv64, with the
+; the ISA vocabulary, and it is one word per machine: 'x64 'a64 'rv64, with the
 ; embedded targets keeping theirs. Every other spelling anyone says -- a -t flag, a `seed`
 ; argument, uname's answer, a gnu triple's head -- comes through `archof` and leaves
 ; canonical, so nothing downstream normalizes a second time.
 ; here because no crew file sits under all the readers: moon, holo, kore, source, forge
 ; and sat share only the prel, which is also where love-arch is pinned.
-(: arch-canon {'amd64 'amd64  'x64 'amd64  'x86_64 'amd64  'x86-64 'amd64
-               'arm64 'arm64  'aarch64 'arm64
+(: arch-canon {'x64 'x64  'amd64 'x64  'x86_64 'x64  'x86-64 'x64
+               'a64 'a64  'arm64 'a64  'aarch64 'a64
                'rv64 'rv64  'riscv 'rv64  'riscv64 'rv64
                'thumb1 'thumb1  'cortex-m0 'thumb1
                'thumb2 'thumb2  'cortex-m7 'thumb2
                'thumb2sp 'thumb2sp  'playdate 'thumb2sp}
    ; the word the world outside says: uname's machine, and the head of a gnu triple. the
    ; embedded targets answer () -- no kernel is ever asked their name.
-   arch-uname {'amd64 "x86_64" 'arm64 "aarch64" 'rv64 "rv64"}
+   arch-uname {'x64 "x86_64" 'a64 "aarch64" 'rv64 "riscv64"}
    ; any spelling -> the canonical nom, () for one nobody here knows. takes a nom or a
    ; string, since a flag arrives as text where a table key is a nom.
    archof (arch-canon * name)

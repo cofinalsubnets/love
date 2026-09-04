@@ -1,5 +1,5 @@
 // test/gate/rvboot.c -- the riscv bring-up on a real hart: mkboot.l's sv39 lane and
-// src/riscv64_dtb.c's door, entered the way the kernel will be entered (qemu -M virt,
+// src/rv64_dtb.c's door, entered the way the kernel will be entered (qemu -M virt,
 // OpenSBI, S-mode at the ELF's entry with a1 holding the tree) and asked whether the
 // world it built is the world it promised.
 //

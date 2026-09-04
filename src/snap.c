@@ -301,7 +301,7 @@ static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
  intptr_t ii = image_imm_index((word) v);
  if (ii >= 0) return (intptr_t)(hb + 2 * ImageNLvm + 2 * (uintptr_t) ii);       // out-of-pool immortal
  // the bare-fn lane again, for an even-pointer arch: a compiled thread embeds a nif's code
- // slot directly, and on thumb the parity branch above catches it. x64/arm64 pointers are
+ // slot directly, and on thumb the parity branch above catches it. x64/a64 pointers are
  // even, so the same words reached the kept-absolute tail and made every image binary-specific.
  intptr_t fj = image_fn_index(v);
  if (fj >= 0) return (intptr_t)(hb + 2 * (ImageNLvm + ImageNImm)

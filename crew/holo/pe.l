@@ -14,7 +14,7 @@
 ; firmware protects a loaded image by section, and every section it finds
 ; executable it also makes read-only. one rwx section therefore comes back as
 ; ro+X, and the first write to a static takes a permission fault -- which is
-; what aarch64 firmware does and x86 firmware happens not to. so .text carries
+; what a64 firmware does and x86 firmware happens not to. so .text carries
 ; text + rodata and no write bit, .data carries data + nifs + bss and no
 ; execute bit, and the protection lands where it was aimed.
 ;
@@ -54,8 +54,8 @@
           (catall (blocks sites ()))))
 
    ;; the coff machine, elf.l's elf-machines in the other clothing
-   pe-machines (tabof [('amd64 . 34404)                          ; 0x8664
-                       ('arm64 . 43620)])                       ; 0xaa64
+   pe-machines (tabof [('x64 . 34404)                          ; 0x8664
+                       ('a64 . 43620)])                       ; 0xaa64
 
    ;; link a set -- ((id bytes)..), the mkefi thunk first -- into a pe32+ at out.
    (pelink target srcs out)

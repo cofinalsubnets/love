@@ -10,7 +10,7 @@
 ; in the inner body-having `:`. the laws are test/glaze-hook.l, `make test_hook`.
 (: fires {0}                                                              ; probe counter: closures the hook native-backed
    natjit
-    (: arch love-arch                                                     ; the runtime target ('amd64 / 'arm64), read on the actual binary
+    (: arch love-arch                                                     ; the runtime target ('x64 / 'a64), read on the actual binary
        G (from 'glaze)                                                    ; this file is not in the module (test_glaze re-cats it alone): every name arrives by key
        emit (G 'emit)  coreir (G 'coreir)  deoptir (G 'deoptir)
        loopinfo (G 'loopinfo)  njit-loop (G 'njit-loop)

@@ -12,7 +12,7 @@
 ; the NOBITS lane, and the sections a static image cannot use are dropped on a
 ; stated rule, never on a hunch -- see `class`. anything else with bytes still
 ; scares off honestly, never drops silently. the targets are obj.l's
-; (x86-64 field relocs REPLACE their field; aarch64 and riscv64 ones OR bits
+; (x86-64 field relocs REPLACE their field; a64 and rv64 ones OR bits
 ; into the instruction word(s) the placeholder carries).
 ; `ldkern` is the second door out: the same objects laid for the bare metal --
 ; several page-aligned pt_loads, each carrying p_paddr = p_vaddr - bias, so one
@@ -615,7 +615,7 @@
    ; section base; a named one resolves through the book (so a weak def's
    ; callers meet the strong override). entries arrive in ascending offset
    ; order (obj.l's walk order) -- pieces come out as text snips + byte lists.
-   ; rv flags an em_riscv link: riscv's reloc numbers live in their own namespace
+   ; rv flags an em_rv64 link: riscv's reloc numbers live in their own namespace
    ; and R_RISCV_64 is 2 -- the same number as R_X86_64_PC32 -- so the kind
    ; dispatch below switches on the machine, never on the number alone.
    ; cx is the resolution context every lane shares -- (glo n0 n1 r0 r1 relbox rv
@@ -682,7 +682,7 @@
                                               '(1 2 4 10 11 257 275 277 278 282 283 284 285 286 299))
                          0 (scare 'link-reloc kind))
                     _ (ro + w <= sz ? 0 (scare 'link-oob (peep ob 'id 0)))
-                    ; the aarch64/riscv field kinds patch bits of the instruction word the
+                    ; the a64/riscv field kinds patch bits of the instruction word the
                     ; placeholder carries -- read it back and or the field in
                     wd (? abs64? 0 (rle32 s (off0 + ro)))
                     bs (? abs64? (le64 sa)                             ; the abs64 three: S + a outright
@@ -722,7 +722,7 @@
                           ; is one field: the low 12 bits of S+a into imm12, scaled by
                           ; the width the opcode implies (an `ldr x`'s imm12 counts
                           ; 8-byte units). nc = no check: the low bits cannot overflow.
-                          ; holo's own aarch64 emits only adrp+add, so the ldst widths
+                          ; holo's own a64 emits only adrp+add, so the ldst widths
                           ; arrive from a foreign object -- clang folds the add away.
                           (: sc (kind @ 284 2 285 4 286 8 299 16 1)
                              (le32 (wd | (((sa % 4096) // sc) << 10)))))
@@ -867,7 +867,7 @@
     (: mach (peep elf-machines target 0)
        _ (? (0 < mach) 0 (scare 'link-target target))
        objs (map (p \ ld-read <p <>p mach) srcs)
-       rv (mach = 243)                          ; em_riscv: its own reloc-number namespace (see ldpatch)
+       rv (mach = 243)                          ; em_rv64: its own reloc-number namespace (see ldpatch)
        base (? (charm? org) org pie 0 elf-base)
        ; w^x gives each lane the rights it needs and no others: read+execute for the
        ; code, read for the literals, read+write for the data -- three segments, and
@@ -1030,8 +1030,8 @@
    ; ride the data run, and .bss follows it past p_filesz. .note.pvh is laid at vbase and rides
    ; no PT_LOAD: nothing maps it, qemu reads it out of the file through pt_note
    ; to find xen_elfnote_phys32_entry, so it lives in the header page where ld
-   ; puts it too. `ent` names the entry symbol (kmain on x86_64, a64boot on
-   ; aarch64) rather than taking the first object's text, and `kimage_end` is
+   ; puts it too. `ent` names the entry symbol (kmain on x64, a64boot on
+   ; a64) rather than taking the first object's text, and `kimage_end` is
    ; synthesized just past .bss -- pvh.c and dtb.c read it to hand the heap
    ; every byte of RAM the image does not occupy.
    (ldkern target ent vbase bias srcs)

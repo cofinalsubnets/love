@@ -1,7 +1,7 @@
 /* the musl image rungs: constant float expressions in a global image
  * (exp_data's poly scaled by (1 << EXP_TABLE_BITS)), the indexed null-ground
  * (&((T*)0)->ts[i], ioctl's compat table), sizeof over a literal ('T' is an
- * int), and __attribute__((packed)) laying align-1 (x86_64 epoll_event --
+ * int), and __attribute__((packed)) laying align-1 (x64 epoll_event --
  * the kernel ABI). freestanding, exit-code only. */
 
 typedef unsigned uint32_t;

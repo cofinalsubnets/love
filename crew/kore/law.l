@@ -312,8 +312,8 @@
 ; align/word/tail boundaries, every start including one past the end, and charms
 ; present and absent.
 ;
-; this is the arm64 gate. the kernel is assembled per target from one IR and the
-; ABI register roles differ (r1 is Sp on amd64 and Ip on arm64), so a port that
+; this is the a64 gate. the kernel is assembled per target from one IR and the
+; ABI register roles differ (r1 is Sp on x64 and Ip on a64), so a port that
 ; reads right and disassembles right can still be wrong. a bad one fails here
 ; loudly rather than corrupting a line split somewhere quiet.
 (: sc ((from 'scan 'scanner) ())

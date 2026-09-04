@@ -1,17 +1,17 @@
 ; src/mkvec.l -- lay vec.o, the kernel's interrupt tail: the exception and IRQ entry points,
 ; register-exact leaves C cannot say. mksys.l is the precedent and the shape is the same --
 ; one scaffold, a payload per ISA -- but this one is generated rather than transcribed, the
-; 32 x86 stubs and the 16 aarch64 vector slots having been .macro/.rept loops in GAS.
+; 32 x86 stubs and the 16 a64 vector slots having been .macro/.rept loops in GAS.
 ;
-;   (lay-vec dst "x86_64")   the IDT, the ISR tables, exc_stub_0..31, the three
+;   (lay-vec dst "x64")   the IDT, the ISR tables, exc_stub_0..31, the three
 ;                            IRQ handlers, archinit (IDT + PIC + PIT), k_reset/k_halt
-;   (lay-vec dst "aarch64")  the 2 KiB-aligned 16 x 0x80 vector table, the IRQ
+;   (lay-vec dst "a64")  the 2 KiB-aligned 16 x 0x80 vector table, the IRQ
 ;                            save/restore path, the fault report path
-;   (lay-vec dst "riscv64")  the one direct-mode trap entry: save, k_trap, restore, sret
+;   (lay-vec dst "rv64")  the one direct-mode trap entry: save, k_trap, restore, sret
 ;
 ; runs after crew/holo/{elf,obj}.l in a (use 'holo) cat; src/kernel.mk drives it. register
 ; vocabulary is holo's -- x86: r0=rax r1=rcx r2=rdx r3=rbx r4=rbp r5=rsi r6=rdi r7..r14=
-; r8..r15; aarch64: rN = xN; riscv: r0..r7 = a0..a7, r8..r12 = t0..t4, lr = ra.
+; r8..r15; a64: rN = xN; riscv: r0..r7 = a0..a7, r8..r12 = t0..t4, lr = ra.
 ; x86 port i/o is register-contracted (dx the port, al the datum),
 ; so every `out 0x21, al` becomes a `li r2 <port>` then `outb` -- one instruction more than
 ; GAS's immediate form, and the same bus traffic.
@@ -22,7 +22,7 @@
    (v-zeros n) (v-rep n 0)
    (v-mapi f l) (: (go l2 i) (two? l2 ? (f i <l2 . go >l2 (i + 1))) (go l 0))
 
-   ;; -- x86_64 ------------------------------------------------------------
+   ;; -- x64 ------------------------------------------------------------
    ;; the vectors the CPU pushes an error code for. every other one pushes a dummy 0 first,
    ;; so every frame reaching k_exception has one shape -- the whole reason the stubs exist.
    xerr-vecs '(8 10 11 12 13 14 17 21 29 30)
@@ -166,14 +166,14 @@
          (label k_halt)
          (cli) (hlt) (jmp k_halt)))
 
-   ;; -- aarch64 -----------------------------------------------------------
+   ;; -- a64 -----------------------------------------------------------
    ;; the table is 16 entries of 0x80 bytes, 2 KiB-aligned. we run at EL1 on SP_EL1, so only
    ;; the "current EL with SP_ELx" group can fire: 0x200 sync, 0x280 IRQ, 0x300 FIQ, 0x380
    ;; SError. IRQs funnel to k_irq, everything else to a_fault (report + halt) -- the twelve
    ;; that cannot fire included, so a surprise reports rather than running into padding.
    a-slots '(a_fault a_fault a_fault a_fault      ; current EL, SP_EL0: sync IRQ FIQ SError
              a_fault a_irq   a_fault a_fault      ; current EL, SP_ELx
-             a_fault a_fault a_fault a_fault      ; lower EL, aarch64
+             a_fault a_fault a_fault a_fault      ; lower EL, a64
              a_fault a_fault a_fault a_fault)     ; lower EL, aarch32
    ;; the IRQ path saves the caller-saved GPRs (x0..x18) plus x29/x30; k_irq is AAPCS, so it
    ;; preserves x19..x28 itself. 21 slots rounded to 176 keeps sp 16-byte aligned. single
@@ -196,7 +196,7 @@
      + '((call k_irq))
      + a-pop
      + [['add 'sp 'sp a-frame] ['eret]]
-     ;; the fault path: ESR/ELR/FAR to k_fault, which reports and halts. like x86_64's
+     ;; the fault path: ESR/ELR/FAR to k_fault, which reports and halts. like x64's
      ;; k_exception, faults are not resumed.
      + '((label a_fault)
          (mrs r0 esr_el1)
@@ -207,7 +207,7 @@
          (wfi)
          (jmp a_halt)))
 
-   ;; -- riscv64 ------------------------------------------------------------
+   ;; -- rv64 ------------------------------------------------------------
    ;; one entry, direct mode: stvec's low two bits pick it, so `vectors` only has to be
    ;; 4-aligned. the hart masks sstatus.SIE on the way in and sret restores it from SPIE,
    ;; so sepc/scause/stval hold across the call and the handler cannot nest. k_trap sorts
@@ -243,8 +243,8 @@
    ;; ignores the low 11 bits: a table off its boundary dispatches into another entry.
    (lay-vec dst arch) (write-bytes dst (lay-vec-bytes arch))
    (lay-vec-bytes arch)
-    (? (arch = "x86_64")
-       (objsecs 'amd64
+    (? (arch = "x64")
+       (objsecs 'x64
                 [[".text"   1 6 16 x-text]
                  [".data"   1 3 8  x-rodata]
                  [".bss"    8 3 16 x-bss]]
@@ -254,13 +254,13 @@
                 ;; the stubs and the common tail as local function symbols, so nm, gdb and
                 ;; a fault backtrace all name them where a bare label could not.
                 (x-stub-names + '("exc_common")))
-       (arch = "aarch64")
-       (objsecs 'arm64
+       (arch = "a64")
+       (objsecs 'a64
                 [[".text.vectors" 1 6 2048 a-text]]
                 '("vectors")             ; arch.c: extern uint8_t vectors[] -> VBAR_EL1
                 () ()
                 '("a_irq" "a_fault"))
-       (arch = "riscv64")
+       (arch = "rv64")
        (objsecs 'rv64
                 [[".text" 1 6 16 r-text]]
                 '("vectors")             ; arch.c: extern uint8_t vectors[] -> stvec

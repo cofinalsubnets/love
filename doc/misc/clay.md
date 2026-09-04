@@ -56,7 +56,7 @@ are emit-only.
 
 `src/mkvec.l:4-6` states it, about assembly:
 
-> this one is generated rather than transcribed: the 32 x86 stubs and the 16 aarch64
+> this one is generated rather than transcribed: the 32 x86 stubs and the 16 a64
 > vector slots were `.macro`/`.rept` loops in GAS, and a love loop says the same thing
 > without an assembler's macro language.
 
@@ -331,9 +331,9 @@ why `vbin_fill` earns its place even though it comes later.
   touched.
 * **G3 differential** -- the `test/gate/ulp.sh` shape: build the generated C with the system
   cc AND with mooncc, link both into one harness, require byte-identical reports. then the
-  `test/gate/ccarch.sh` shape across arm64 and riscv64, because `255e8074` proved TARGETS
-  ARE NOT REDUNDANT (with `40a5a2b7` reverted, arm64 caught the bug while x86-64 and
-  riscv64 both answered correctly by accident). for dtoa, add the exhaustive 2^32 float
+  `test/gate/ccarch.sh` shape across a64 and rv64, because `255e8074` proved TARGETS
+  ARE NOT REDUNDANT (with `40a5a2b7` reverted, a64 caught the bug while x86-64 and
+  rv64 both answered correctly by accident). for dtoa, add the exhaustive 2^32 float
   sweep.
 * **G4 the theorem** -- `tools/clay2coq.l`, sibling of `spec2coq.l` / `mx2coq.l`.
   axiom-free, tracked in git, regenerated every run, skips loudly without coqc. it has no

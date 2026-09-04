@@ -1,4 +1,4 @@
-// dtb -> kboot on riscv64: the aarch64 door's twin, and the same walk (dtb.h) behind
+// dtb -> kboot on rv64: the a64 door's twin, and the same walk (dtb.h) behind
 // two of this stub's numbers. Entry is S-mode under SBI -- the firmware hands a0 the
 // hartid and a1 the device tree, and mkboot.l's lane turns sv39 on and jumps high
 // before calling here, so the tree is read through the window like everywhere else.

@@ -25,7 +25,7 @@
 ;   dec  (fx)              highest-activity free var, phase-saved polarity, assign
 ;                                                              -> the var | 0 = SAT
 ; the interpreted twins (fbcp3/fconf3/fdec3) over the SAME memory are the deopt
-; fallbacks, the arm64/no-`nif` engine (the glazed image mops nif; make exports
+; fallbacks, the a64/no-`nif` engine (the glazed image mops nif; make exports
 ; LOVE_NO_IMAGE=1 so every gate run has it), and the differential oracle: the `fknob`
 ; box forces the twins and `fboth` gates verdict equality. lisp keeps only the cold
 ; path: restarts, learnt-DB reduction, activity decay/rescale.
@@ -625,12 +625,12 @@
    fknob {0}                                                ; pin 1 to force the interpreted twins (the differential switch)
    fmaxl0 {3000}                                            ; the initial learnt-DB cap (the gate lowers it to force reductions)
    (fnif ir fb ar)                                          ; assemble + install one kernel (fb = the honest twin)
-    (: bs (peep (assemble 'amd64 ir) 'bytes 0)
+    (: bs (peep (assemble 'x64 ir) 'bytes 0)
        c (cask (tally bs))
        _ (foldl (\ i b (: _ (pin c i b) (+ i 1))) 0 bs)
        (nif c fb '(\ q (q)) ar))
    (fbcpk nv)                                               ; -> (bcp conf dec), or () when they can't build
-    (? (! (&& (lit? nif) (id? (intern love-arch) 'amd64))) ()
+    (? (! (&& (lit? nif) (id? (intern love-arch) 'x64))) ()
        (: hit (peep fkers nv ())
           (? (two? hit) hit
              (: ks [(fnif (fbcp-ir nv) fbcp3 3)

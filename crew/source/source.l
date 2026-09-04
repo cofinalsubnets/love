@@ -147,7 +147,7 @@
    ; roster, and its first boot on the target bakes and patches it in place (src/main.c),
    ; the same bytes a native `make dist` lays.
    (seed-cross root xa dst)
-    (: made (root + "/out/x-" + (arch-mach (intern xa)) + "/love")
+    (: made (root + "/out/x-" + (show (intern xa)) + "/love")
        e (copyfile made dst)
        _ (e < 0 ? (src-die ("can't write " + dst)))
        _ (chmod dst 493)
@@ -167,7 +167,7 @@
        _ (string? exe ? 0 (src-die "can't find seed path"))
        here (cwd 0)
        _ (? !(chdir root) 0 (src-die ("can't enter " + root)))
-       xm (? (string? xa) (arch-mach (intern xa)) ())     ; make's word for it
+       xm (? (string? xa) (show (intern xa)) ())     ; make's word for it
        s (herald (string? xa ? [exe "make" ("xa=" + xm) ("out/x-" + xm + "/love")]
                               [exe "make" "dist"]))
        st (two? s ? <s s)
@@ -188,9 +188,9 @@
    ; canonical inside, the world's word only at the doors. the prel's arch-canon takes
    ; every other spelling anyone types -- uname's, Debian's, the ISA shorthands -- so there
    ; is no second table here; `arch-mach` puts the triple word back on where make wants it
-   ; (a cross toolchain's prefix is spelled aarch64-, never arm64-).
-   seed-arches '(amd64 arm64 rv64)
-   ; the arch word is positional and A PATH still wins: `./aarch64` is the
+   ; (a cross toolchain's prefix is spelled a64-, never a64-).
+   seed-arches '(x64 a64 rv64)
+   ; the arch word is positional and A PATH still wins: `./a64` is the
    ; directory, the verb rail's own rule worn one level down.
    (seed-arch? w) (: n #w
                      (go i) (? (n <= i) (member? (arch-nom w) seed-arches)
@@ -204,7 +204,7 @@
     (puts ("usage: love seed [--self] [ARCH] [DIR]\n"
            + "  lay this binary's source under DIR (default .) and rebuild it there;\n"
            + "  the result has to BE this binary, byte for byte.\n"
-           + "  ARCH    amd64 | arm64 | rv64 -- an egg for that machine instead\n"
+           + "  ARCH    x64 | a64 | rv64 -- an egg for that machine instead\n"
            + "  --self  build with nothing ambient: our own mooncc, our own userland\n"))
 
    (seed-lay as0)
@@ -213,7 +213,7 @@
        as1 (self? ? >as0 as0)
        ; naming this machine is a native seed, fixpoint and all: the cross lane
        ; exists for a machine we are not, and the fixpoint is scoped to where the
-       ; output ought to be this binary -- which `love seed x86_64` on an x86_64
+       ; output ought to be this binary -- which `love seed x64` on an x64
        ; box asks for exactly as much as a bare `love seed`. the word is eaten either
        ; way, or the arch would go on to be read as the directory.
        xa0 (? ((two? as1) && (seed-arch? <as1)) (arch-nom <as1) ())
@@ -287,7 +287,7 @@
              (? (hot? h) (: s (slurp h) _ (close h) s)
                 (src-die "can't read this binary")))
        m (kern-b16 pie 18)
-       arch (? (m = 62) "x86_64" (m = 183) "aarch64" (m = 243) "riscv64"
+       arch (? (m = 62) "x64" (m = 183) "a64" (m = 243) "rv64"
                (src-die "no boot door for this machine"))
        gz (source-gz "x")
        _ (string? gz ? 0 (src-die "this love carries no source"))

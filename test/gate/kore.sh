@@ -84,7 +84,7 @@ if [ "$(uname -m)" = x86_64 ]; then
   chmod +x "$ho/.kore-as.elf"; "$ho/.kore-as.elf"; r=$?
   [ $r -eq 7 ] || fail "kore as run (exit $r)"
 fi
-# ar + ld, over mooncc objects (x86_64; both ride the mooncc verb of $m).
+# ar + ld, over mooncc objects (x64; both ride the mooncc verb of $m).
 # ar: GNU-shape TO THE BYTE -- same members through binutils ar (D = deterministic,
 # our only mode) and ours, whole archives cmp'd; `ar t` lists alike. ld: lay the
 # same crt0 object mooncc's own link lane synthesizes (crt0/objelf leak from the
@@ -102,7 +102,7 @@ if [ "$(uname -m)" = x86_64 ]; then
     cmp -s "$ho/.kore-gnu.a" "$ho/.kore-our.a" || fail "kore ar vs GNU (archive bytes)"
     ar t "$ho/.kore-gnu.a" > "$g"; korerun ar t "$ho/.kore-our.a" > "$o"; same "ar t"
   fi
-  "$m" -l "$ho/.mooncc-cat.l" -e '(: _ (use (name "holo")) _ (use (name "moon")) (write-bytes "'"$ho"'/.kore-crt0.o" (objelf (intern "amd64") crt0 () (link "__ai_start" ()) () (link "__ai_start" ()) () () () () ())))' >/dev/null 2>&1
+  "$m" -l "$ho/.mooncc-cat.l" -e '(: _ (use (name "holo")) _ (use (name "moon")) (write-bytes "'"$ho"'/.kore-crt0.o" (objelf (intern "x64") crt0 () (link "__ai_start" ()) () (link "__ai_start" ()) () () () () ())))' >/dev/null 2>&1
   [ -s "$ho/.kore-crt0.o" ] || fail "kore ld: crt0 lay"
   moonc "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-mc.elf" >/dev/null 2>&1 || fail "kore ld: mooncc link"
   korerun ld "$ho/.kore-crt0.o" "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-ld.elf" || fail "kore ld"

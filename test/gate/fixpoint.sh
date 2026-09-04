@@ -29,9 +29,9 @@ cat=$ho/.mooncc-cat.l
 # ⚠ the spelling arrives as $(hosta), never from `uname -m` here: on the BSDs those two
 # disagree (amd64, evbarm), and a gate that spells the arch itself is a second authority.
 case "$ha" in
-  x86_64)  mks=mksys ;;
-  aarch64) mks=mksys-arm64 ;;
-  riscv64) mks=mksys-riscv ;;
+  x64)  mks=mksys ;;
+  a64) mks=mksys-a64 ;;
+  rv64) mks=mksys-rv64 ;;
   *) echo "test_fixpoint: no seed for $ha, skipped"; exit 0
 esac
 
@@ -80,7 +80,7 @@ test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 # so the rebuild owes it. ⚠ a gate that links what make links and compiles less
 # still answers love1 == love2 -- it just answers it about a shorter binary than
 # anyone ships. an arch with no seat carries none, and $gate_arch_c is empty there.
-# ⚠ the arch is in the FILENAME now (src/x86_64_arch.c), so k_$b.o already spells
+# ⚠ the arch is in the FILENAME now (src/x64_arch.c), so k_$b.o already spells
 # what make spells -- the object names have to match, love2 links them by basename.
 if [ -n "$gate_arch_c" ]; then
   kinc="-I$ho -I. -Isrc -Iout/lib -Icrew/quay -Icrew/moon/include"

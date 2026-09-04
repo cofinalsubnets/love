@@ -5,7 +5,7 @@
 ; disassembler. the sources are cat'd in rather than `use`d because the host bakes its native
 ; backend only -- the other four reach these goldens no other way (test/holo.l is the in-corpus
 ; smoke over the baked module).
-; run: cat crew/holo/{holo,x64,arm64,thumb2,riscv,thumb1,text,elf}.l test/holo/golden.l
+; run: cat crew/holo/{holo,x64,a64,thumb2,riscv,thumb1,text,elf}.l test/holo/golden.l
 ;      | out/host/love   (nonzero exit on any miss)
 
 (use 'holo) ; the cat's wrapped sources just registered the module
@@ -18,7 +18,7 @@
        (bump fail,
         sayln $ "FAIL " + name + ": want " + show want + " got " + show got + "\n"))
    (chk2 name want target prog) (chk-eq name want (holo-hex target prog))
-   (chk name want prog) (chk2 name want 'amd64 prog)
+   (chk name want prog) (chk2 name want 'x64 prog)
 
    ;; -- the golden table: (name  expected-hex  IR-program). --
    tests '(
@@ -253,14 +253,14 @@
    _ (foldl (\ _ t (chk (at t 0) (at t 1) (at t 2))) 0 tests)
 
    ;; -- label addresses are exposed on the assemble result, for a loader/linker to read. --
-   loopres (assemble 'amd64 '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret)))
+   loopres (assemble 'x64 '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret)))
    _ (chk-eq "addr.top"  0  (label-at loopres 'top))
    _ (chk-eq "addr.done" 17 (label-at loopres 'done))
 
    ;; -- the relaxing layout (laylax): the object writer's entry. in-range jmp/br land as the
    ;; 2-byte short forms (EB rel8 / 7x rel8); an external or weak-marked target stays rel32.
    ;; same (items . labels) shape as lay, resolved the same way.
-   rx-be (peep backends 'amd64 ())
+   rx-be (peep backends 'x64 ())
    (rx prog longs)
       (: p (laylax prog rx-be 0 (tablet 0) longs)
          (hexs (resolve <p >p rx-be 0)))
@@ -283,44 +283,44 @@
    ;; that scare and delegates everything else back to welp. --
    caught (tablet 0) _ (pin caught 0 0)
    _ (hear (\ a b (? (a = 'alias-dst) (: _ (pin caught 0 1) ()) (welp a b))))
-   _ (holo-bytes 'amd64 '((sub r0 r3 r0)))
+   _ (holo-bytes 'x64 '((sub r0 r3 r0)))
    _ (chk-eq "alias.refused" 1 (peep caught 0 0))
 
-   ;; -- the same principle one target over: aarch64's register-form ALU is the shifted-register
+   ;; -- the same principle one target over: a64's register-form ALU is the shifted-register
    ;; one, where encoding 31 is XZR in every slot -- so `(sub sp sp r0)` has honest-looking bytes
    ;; (`neg xzr, x0`) that leave sp alone. it raises instead; moving sp is `lea`'s job. --
    spcaught (tablet 0) _ (pin spcaught 0 0)
-   _ (hear (\ a b (? (a = 'arm64-alu-sp) (: _ (pin spcaught 0 1) ()) (welp a b))))
-   _ (holo-bytes 'arm64 '((sub sp sp r0)))
+   _ (hear (\ a b (? (a = 'a64-alu-sp) (: _ (pin spcaught 0 1) ()) (welp a b))))
+   _ (holo-bytes 'a64 '((sub sp sp r0)))
    _ (chk-eq "a64.alu.sp.refused" 1 (peep spcaught 0 0))
 
    ;; -- the text front-end (crew/holo/text.l) parses to the same IR, so it assembles byte-identically. --
-   _ (chk-eq "text.basic" (holo-hex 'amd64 '((li r0 60) (ret)))
-                          (holo-hex 'amd64 (asm-text "li r0, 60\nret")))
+   _ (chk-eq "text.basic" (holo-hex 'x64 '((li r0 60) (ret)))
+                          (holo-hex 'x64 (asm-text "li r0, 60\nret")))
    _ (chk-eq "text.full"
-        (holo-hex 'amd64 '((add r0 r0 r1) (label loop) (dec r0) (br ne loop) (ret)))
-        (holo-hex 'amd64 (asm-text "add r0, r0, r1   ; with a comment\nlabel loop\n  dec r0\n  br ne, loop\n\n  ret\n")))
+        (holo-hex 'x64 '((add r0 r0 r1) (label loop) (dec r0) (br ne loop) (ret)))
+        (holo-hex 'x64 (asm-text "add r0, r0, r1   ; with a comment\nlabel loop\n  dec r0\n  br ne, loop\n\n  ret\n")))
    ;; the system lane rides the text front-end with no grammar change -- an operation name and a
    ;; system register are ordinary symbols, underscores and all. this is the seam mooncc's inline
    ;; asm parses through, so the kernel's templates land here.
-   _ (chk-eq "text.sys.x64" (holo-hex 'amd64 '((cli) (ldcr r0 2) (lidt r6 0) (iretq)))
-                            (holo-hex 'amd64 (asm-text "cli\nldcr r0, 2\nlidt r6, 0\niretq")))
+   _ (chk-eq "text.sys.x64" (holo-hex 'x64 '((cli) (ldcr r0 2) (lidt r6 0) (iretq)))
+                            (holo-hex 'x64 (asm-text "cli\nldcr r0, 2\nlidt r6, 0\niretq")))
    _ (chk-eq "text.sys.a64"
-        (holo-hex 'arm64 '((mrs r0 ttbr1_el1) (dsb ish) (tlbi vmalle1is zr) (isb) (eret)))
-        (holo-hex 'arm64 (asm-text "mrs r0, ttbr1_el1\ndsb ish\ntlbi vmalle1is, zr\nisb\neret")))
+        (holo-hex 'a64 '((mrs r0 ttbr1_el1) (dsb ish) (tlbi vmalle1is zr) (isb) (eret)))
+        (holo-hex 'a64 (asm-text "mrs r0, ttbr1_el1\ndsb ish\ntlbi vmalle1is, zr\nisb\neret")))
    _ (chk-eq "text.sys.rv64"
         (holo-hex 'rv64 '((csrr r0 mstatus) (csrw stvec r0) (sfence zr zr) (fencei) (sret)))
         (holo-hex 'rv64 (asm-text "csrr r0, mstatus\ncsrw stvec, r0\nsfence zr, zr\nfencei\nsret")))
 
    ;; -- the ELF linker (crew/holo/elf.l) wraps assembled bytes in a well-formed static executable. --
    elfprog '((li r0 60) (li r6 0) (sys))
-   elfres  (elf64 'amd64 (\ a elfprog) '(65 66 67))
+   elfres  (elf64 'x64 (\ a elfprog) '(65 66 67))
    elfimg  (peep elfres 'bytes 0)
    _ (chk-eq "elf.magic"   127     (at elfimg 0))        ; \x7f E L F
    _ (chk-eq "elf.machine" 62      (at elfimg 18))       ; e_machine = x86-64
    _ (chk-eq "elf.entry"   4194424 (peep elfres 'entry 0))
-   _ (chk-eq "elf.size"    (120 + (tally (holo-bytes 'amd64 elfprog) + 3)) (tally elfimg))
-   _ (chk-eq "elf.arm64-machine" 183 (at (peep (elf64 'arm64 (\ a elfprog) ()) 'bytes 0) 18))
+   _ (chk-eq "elf.size"    (120 + (tally (holo-bytes 'x64 elfprog) + 3)) (tally elfimg))
+   _ (chk-eq "elf.a64-machine" 183 (at (peep (elf64 'a64 (\ a elfprog) ()) 'bytes 0) 18))
 
    ;; ..and the ELF32 twin: a 52-byte header + a 32-byte phdr. the two facts a width knob
    ;; would have gotten wrong are pinned here -- p_flags sits seventh in an Elf32_Phdr (at 76,
@@ -367,7 +367,7 @@
    _ (rfx 'bl '(255 247 255 255) 4096 256)                       ; ..the same bl two bytes further on
    _ (chk-eq "refix.addend.refused" 1 (peep rfcaught 0 0))
 
-   ;; -- the aarch64 backend (crew/holo/arm64.l): the same neutral IR, a second target. fixed 32-bit
+   ;; -- the a64 backend (crew/holo/a64.l): the same neutral IR, a second target. fixed 32-bit
    ;; little-endian words; every golden checked vs llvm-mc / llvm-objdump. --
    a64tests '(
       ("a64.li"     "800780d2"          ((li r0 60)))
@@ -412,7 +412,7 @@
       ("a64.subs"   "600007eb"          ((subs r0 r3 r7)))            ; subs x0,x3,x7
       ("a64.mulo.prog" "047c479b007c079b9ffc80eb4100005402000014a0001fd6c0035fd6"   ; smulh x4,x0,x7; mul x0,x0,x7; cmp x4,x0,asr#63; b.ne ovf; b done; br x5; ret
                       ((mulo r0 r0 r7 r4 ovf) (jmp done) (label ovf) (jmpr r5) (label done) (ret)))
-      ;; p1: shifts/test/div/rem/indexed -- the integer + map lanes on aarch64. llvm-mc-verified.
+      ;; p1: shifts/test/div/rem/indexed -- the integer + map lanes on a64. llvm-mc-verified.
       ("a64.sar"    "00fc4193"          ((sar r0 1)))                 ; asr x0,x0,#1   (untag)
       ("a64.shr"    "e7fc41d3"          ((shr r7 1)))                 ; lsr x7,x7,#1
       ("a64.shl"    "00f07dd3"          ((shl r0 3)))                 ; lsl x0,x0,#3
@@ -448,7 +448,7 @@
           (adds r4 r4 r4) (br vs deopt) (or r4 r4 1) (st r3 0 r4) (add r1 r1 16) (ld r5 r1 0) (jmpr r5)
           (label deopt) (ld r5 r1 8) (mov r1 r5) (ld r5 r1 0) (jmpr r5)))
       ;; scalar-double fp (the float glaze lane): f0..f15 -> d0..d15. SSE-named IR, two-address, mapped to
-      ;; the arm64 scalar-double form. each golden checked vs llvm-objdump (mnemonics in the trailing comment).
+      ;; the a64 scalar-double form. each golden checked vs llvm-objdump (mnemonics in the trailing comment).
       ("a64.cvttsd2si" "0400789e"        ((cvttsd2si r4 f0)))           ; fcvtzs x4, d0 (toward zero)
       ("a64.cvtsi2sd" "8000629e"          ((cvtsi2sd f0 r4)))           ; scvtf d0, x4
       ("a64.movqxr"   "8100679e"          ((movqxr f1 r4)))             ; fmov  d1, x4  (gpr bits -> fpr)
@@ -487,7 +487,7 @@
       ("a64.shlv"     "0020c19a"          ((shlv r0 r1)))               ; lsl x0, x0, x1
       ("a64.shrv"     "e724c19a"          ((shrv r7 r1)))               ; lsr x7, x7, x1
       ("a64.sarv"     "6328c19a"          ((sarv r3 r1)))               ; asr x3, x3, x1
-      ;; the cc-rung lanes (mooncc -t arm64): lean; the 24-bit add/sub split; the far memory
+      ;; the cc-rung lanes (mooncc -t a64): lean; the 24-bit add/sub split; the far memory
       ;; lane (movz x16 + add/sub off the base); fp LDUR/STUR + far (frame slots run negative);
       ;; f16+ registers; cmp's cmn flip; p/np as vs/vc (FCMP parks unordered in V). llvm-mc-verified.
       ("a64.lean"     "808000d1"          ((lean r0 r4 -32)))           ; sub x0, x4, #32 (lea's alias)
@@ -532,7 +532,7 @@
       ;; 31 as XZR -- so it is `lea .. 0`, add #0, and `mov` scares on sp rather than answer XZR.
       ("a64.sp.read"  "e9030091"          ((lea r9 sp 0)))              ; mov x9, sp
       ("a64.sp.write" "3f010091"          ((lea sp r9 0)))              ; mov sp, x9
-      ;; lia: the absolute (linked) address, which no aarch64 immediate can hold -- so an inline
+      ;; lia: the absolute (linked) address, which no a64 immediate can hold -- so an inline
       ;; literal, exactly what `ldr xd, =sym` assembles to:
       ;;   ldr xd, .+8 ; b .+12 ; .quad <the abs64 placeholder a reloc overwrites>
       ;; both offsets are constants of the shape, so it needs no label of its own.
@@ -576,7 +576,7 @@
       ("a64.shl128v"  "f00301cb1024d09a5120c19a310210aa3f0000f15100919a300001d11020d09a3f0001f10222919a0020c19ae023809a" ((shl128v)))
       ("a64.shr128v"  "f00301cb5020d09a1124c19a310210aa3f0000f11100919a300001d15024d09a3f0001f10022919a4224c19ae223829a" ((shr128v)))
       ("a64.sar128v"  "f00301cb5020d09a1124c19a310210aa3f0000f11100919a300001d15028d09a3f0001f10022919a51fc7f934228c19a2222829a" ((sar128v))))
-   _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'arm64 (at t 2))) 0 a64tests)
+   _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'a64 (at t 2))) 0 a64tests)
 
    ;; -- the thumb2 backend: the same neutral IR, a third target -- armv7e-m (Cortex-M7, the Teensy
    ;; 4.1 / Playdate device CPU). mixed 16/32-bit little-endian, a 32-bit word laid hi-halfword
@@ -877,7 +877,7 @@
       ("rv.stxb"     "b30fd5002388af00"  ((stxb r3 r0 1 16 r0)))       ; add t6,a0,a3 ; sb a0,16(t6) (cask-lane pin)
       ("rv.leax"     "b30563008505"      ((leax r1 r9 r9 1 1)))        ; add a1,t1,t1 ; addi a1,a1,1
       ("rv.lea"      "130507fe"          ((lea r0 r4 -32)))            ; addi a0, a4, -32
-      ;; the stack pair (16-byte aligned like arm64), and lr by name across nested calls
+      ;; the stack pair (16-byte aligned like a64), and lr by name across nested calls
       ("rv.push"     "41112ae0"          ((push r0)))                  ; addi sp,sp,-16 ; sd a0,0(sp)
       ("rv.pop"      "82664101"          ((pop r3)))                   ; ld a3,0(sp) ; addi sp,sp,16
       ("rv.push.lr"  "411106e0"          ((push lr)))                  ; addi sp,sp,-16 ; sd ra,0(sp)

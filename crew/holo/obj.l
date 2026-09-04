@@ -7,9 +7,9 @@
 ; (R_X86_64_PC32 via the .data section symbol), a call to a symbol defined
 ; elsewhere (R_X86_64_PLT32), a data pointer to a label (R_X86_64_64). intra-.text
 ; branches and calls stay pc-relative and resolve internally (both ends ride .text
-; and move together). aarch64 rides the same walk with its own reloc vocabulary
+; and move together). a64 rides the same walk with its own reloc vocabulary
 ; (CALL26/JUMP26, the ADRP/ADD pair, ABS64) -- see the type table and reltext --
-; and riscv64 likewise (CALL_PLT over the auipc pair, JAL, R_RISCV_64).
+; and rv64 likewise (CALL_PLT over the auipc pair, JAL, R_RISCV_64).
 ; loads after crew/holo/elf.l in the au cat -- reads elf-machines / write-bytes
 ; bare, and the assembler internals bare too: the cat leads with (use 'holo)
 ; (crew/kore/asbook.l), so lay/laylax/patch-with/le*/catall resolve through the
@@ -24,18 +24,18 @@
                                                     ; kernel's PVH note names its 32-bit entry, and the
                                                     ; kernel links flat under 4 GiB so the address fits.
                                                     ; the linker checks it; nothing hosted emits it.
-   ; ... and aarch64. field relocs here patch bits of an instruction word, not a
+   ; ... and a64. field relocs here patch bits of an instruction word, not a
    ; whole field -- the placeholder bytes carry the base opcode (the fixup's aux).
    ra-abs64  257                                    ; R_AARCH64_ABS64           S + A
    ra-jump26 282                                    ; R_AARCH64_JUMP26          (S+A-P)>>2 into b's imm26
    ra-call26 283                                    ; R_AARCH64_CALL26          ... into bl's imm26
    ra-pghi21 275                                    ; R_AARCH64_ADR_PREL_PG_HI21  page(S+A)-page(P) into adrp
    ra-lo12   277                                    ; R_AARCH64_ADD_ABS_LO12_NC   (S+A) & 0xfff into add
-   ; ... and riscv64. the backend's 8-byte 'pcrel (one fixup across the auipc
+   ; ... and rv64. the backend's 8-byte 'pcrel (one fixup across the auipc
    ; pair) maps whole onto call_plt: S+a-p split hi20-into-auipc / lo12-into-the-
    ; second-word -- and jalr/addi/ld share the I-form imm field, so the one type
    ; serves call and la alike (the placeholder carries both base words).
-   rr-64    2                                       ; r_riscv_64        S + A  (collides with R_X86_64_PC32: link.l dispatches by machine)
+   rr-64    2                                       ; r_rv64_64        S + A  (collides with R_X86_64_PC32: link.l dispatches by machine)
    rr-jal   17                                      ; R_RISCV_JAL       S + A - P into jal's j-imm
    rr-call  19                                      ; R_RISCV_CALL_PLT  S + A - P across the auipc pair
 
@@ -52,7 +52,7 @@
    ; an adrp page delta or an abs-lo12 does not and always relocates); otherwise
    ; it becomes a relocation record (off kind label addend) and placeholder bytes
    ; hold its place -- zeros where RELA overwrites the field outright (x64, abs64),
-   ; the base opcode word where the reloc patches instruction bits (aarch64).
+   ; the base opcode word where the reloc patches instruction bits (a64).
    ; the addend is the fixup's aux -- a data pointer to &arr[i]/&s.field bakes the
    ; constant byte offset there, and the RELA carries it (added to the section-sym
    ; addend below), so the linker's S+a lands on the element, not the base.
@@ -488,9 +488,9 @@
    ; from -- but writes no file bytes, which is the whole meaning of .bss.
    (objsecs target0 secs funcnames globnames wknames locnames)
     (: target (arch-nom target0)
-       a64 (id? target 'arm64)
+       a64 (id? target 'a64)
        rv (id? target 'rv64)
-       _ (? (id? target 'amd64 || a64 || rv) 0 (scare 'obj-target target))
+       _ (? (id? target 'x64 || a64 || rv) 0 (scare 'obj-target target))
        ; the in-place-resolvable kinds (translation-invariant). riscv's both label
        ; kinds are pure byte deltas (auipc is byte pc-relative by nature -- no page
        ; math), so intra-.text la/call/jmp all resolve inside the .o.
@@ -629,7 +629,7 @@
                              (member? pv '(232 233)) r-plt32
                              r-pc32)
                           ((sa + aux) - 4))
-                 ; aarch64: an adrp/add pair relocates by kind (a page delta never
+                 ; a64: an adrp/add pair relocates by kind (a page delta never
                  ; resolves inside a .o, even for a .text target); a b26 that
                  ; survived the walk is weak, external, or in another section here.
                  'adrp21 (o-rela off si ra-pghi21 sa)

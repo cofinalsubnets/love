@@ -1,11 +1,11 @@
-// asmops -- the aarch64 privileged instructions, one static inline each, in
-// BOTH inline-asm spellings. the x86_64 twin (src/x86_64_asmops.h) opens
+// asmops -- the a64 privileged instructions, one static inline each, in
+// BOTH inline-asm spellings. the x64 twin (src/x64_asmops.h) opens
 // with the why; the short version is that the kernel has to say the same thing
 // to two compilers, clang in GNU's ARM template and mooncc in holo's NEUTRAL
 // text (crew/holo/text.l -- mnemonic, then operands, one instruction per LINE,
 // rN = xN), so the spelling lives here and the call sites say the NAME.
 //
-// aarch64 shares more than x86 does: `mrs`/`msr`/`dc`/`ic`/`at`/`dsb`/`isb`/
+// a64 shares more than x86 does: `mrs`/`msr`/`dc`/`ic`/`at`/`dsb`/`isb`/
 // `wfi` all read identically in the two dialects once each compiler has put its
 // own register name into %0. what diverges is small and enumerable:
 //
@@ -31,12 +31,12 @@
 // these spell the same in both dialects.
 static inline void k_isb(void)     { asm volatile ("isb" ::: "memory"); }
 static inline void k_dsb_ish(void) { asm volatile ("dsb ish" ::: "memory"); }
-// the idle wait, kmain's kwait; the x86_64 twin of this name is `hlt`.
+// the idle wait, kmain's kwait; the x64 twin of this name is `hlt`.
 static inline void k_wait(void)    { asm volatile ("wfi"); }
 
 // --- system register reads --------------------------------------------
 // `mrs %0, <reg>` is shared: holo carries the sysreg names in its own table
-// (crew/holo/arm64.l), so the line the assembler sees is the line written here.
+// (crew/holo/a64.l), so the line the assembler sees is the line written here.
 static inline uint64_t k_rd_ctr_el0(void) {
   uint64_t v; asm volatile ("mrs %0, ctr_el0" : "=r"(v)); return v; }
 static inline uint64_t k_rd_mair_el1(void) {

@@ -48,7 +48,7 @@ emitting bytes and calling them where they land.
 The **host** is the opposite: Linux maps the malloc heap no-execute, so raw heap bytes
 can't be run. That is what the W^X arena (`code_maplen` + `nat_unmap` in `love.c`) is
 for, and `nif`/`nifx` route every hosted install through it. The corpus test
-(`test/glaze.l`) stays architecture-neutral — x86_64 opcodes would crash an aarch64 or
+(`test/glaze.l`) stays architecture-neutral — x64 opcodes would crash an a64 or
 wasm host — so it covers the install guards (non-byte / empty code → nothing) plus the
 *decline* laws, which read as plain arithmetic and answer the same everywhere by design;
 the executing tests are `test/glaze-x86.l`.
@@ -67,7 +67,7 @@ sequence for that target with holo rather than reaching for a hardcoded x86-64 b
 
 ## What the experiment found, and where it went
 
-The full version generated x86_64/SSE in love and ran it through the leaf trampoline:
+The full version generated x64/SSE in love and ran it through the leaf trampoline:
 a scalar `(\ p <arith>)` kernel, an automatic `ev`/`opfix` hook to apply it
 transparently, and array kernels (`amap`/`areduce`/…) over `z`/`r`/`c` arrays. The
 transparency was made exact (`=`-preserving via `respec`, de-Bruijn `show` intact).
@@ -100,9 +100,9 @@ kernel runs it by name -- there is nothing to bake and no second kernel to build
 
 ```sh
 cp <your-probe>.l test/kernel/probe.l      # anywhere in the tree the blob carries
-make -s out/free/love-x86_64.elf
+make -s out/free/love-x64.elf
 qemu-system-x86_64 -m 768M -M q35 -serial stdio -display none -no-reboot \
-  -kernel out/free/love-x86_64.elf -append test/kernel/probe.l \
+  -kernel out/free/love-x64.elf -append test/kernel/probe.l \
   -device isa-debug-exit,iobase=0xf4,iosize=0x04
 # -append test/kernel/all.l runs the whole corpus; no -append drops to the shell
 ```

@@ -42,18 +42,18 @@
    ; the ABI is spelled nowhere below. the lvm ops are tail-called C functions of
    ; (g, Ip, Hp, Sp), so the four roles sit wherever the platform's own convention
    ; puts the first four arguments -- and only Hp (r2) lands in the same abstract
-   ; register on both. r1 is Sp on amd64 and Ip on arm64, so a kernel that writes
+   ; register on both. r1 is Sp on x64 and Ip on a64, so a kernel that writes
    ; its registers out cannot move: assembled for the other target it would read its
    ; arguments off the instruction pointer. sc is the scratch and is here for the
-   ; same reason -- r0 is free on amd64 and is `g` on arm64.
+   ; same reason -- r0 is free on x64 and is `g` on a64.
    ;                            g   ip  sp  scratch
-   (abi tgt) (? (id? tgt 'arm64) '(r0 r1 r3 r4) '(r6 r5 r1 r0))
+   (abi tgt) (? (id? tgt 'a64) '(r0 r1 r3 r4) '(r6 r5 r1 r0))
    ; r7..r14 are free of the ABI on both and are spelled: r7 = the charm, r8 = the
    ; cursor, r9 = the bytes, r10 = n, r11 = the charm in all eight lanes, r12 = ones,
-   ; r13 = highs, r14 = ~w. r11..r14 are callee-saved on amd64 (x86's r12..r15) so
-   ; they are pushed; on arm64 they are caller-saved and the pushes are merely idle.
+   ; r13 = highs, r14 = ~w. r11..r14 are callee-saved on x64 (x86's r12..r15) so
+   ; they are pushed; on a64 they are caller-saved and the pushes are merely idle.
    ; the guards deopt before any push, so the machine sp is balanced on every way
-   ; out -- and arm64's push is `str s, [sp, #-16]!`, which keeps sp 16-aligned
+   ; out -- and a64's push is `str s, [sp, #-16]!`, which keeps sp 16-aligned
    (scan-ir tgt)
     (: rg (abi tgt) G <rg IP <>rg SP <>>rg SC <>>>rg
        ([['ld SC SP 0] ['test SC 1] '(br ne deopt)               ; Sp[0] a pointer ...
@@ -104,7 +104,7 @@
    ; build it, or answer the twin. `nif` hands the twin back itself when it declines
    ; (inle's heap rides an NX window; so does wasm), so no fallback is arranged here
    (mk _) (: h (from 'holo) g (from 'glaze)
-             (? (nil? h || nil? g || !(member? love-arch '(amd64 arm64))) walk
+             (? (nil? h || nil? g || !(member? love-arch '(x64 a64))) walk
                 (: bs (peep ((h 'assemble) love-arch (scan-ir love-arch)) 'bytes 0)
                    ((g 'nif) (cask bs) walk '(\ q (q)) 3))))
    box (tablet 0)                                ; one install for the process, not one per ask

@@ -5,7 +5,7 @@
  * when passed to another function (the C `va_list` habit -- love.c's gvzprintf/
  * ai_pushr take one), and va_arg mutates the shared state. the field LAYOUT
  * matches gcc's on each target, so a cc-compiled variadic function (ai_push) is
- * callable from gcc-built objects and vice versa. (on aarch64 gcc's va_list is
+ * callable from gcc-built objects and vice versa. (on a64 gcc's va_list is
  * a bare struct passed by reference -- a composite > 16 bytes -- which is the
  * same wire as the array's decay: one pointer at the 32-byte struct.) the
  * offset fields are `int`: SysV's run 0..176, AAPCS64's are NEGATIVE -- counted

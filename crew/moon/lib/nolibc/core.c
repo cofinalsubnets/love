@@ -69,9 +69,9 @@ FILE *stdin = &__stdf[0], *stdout = &__stdf[1], *stderr = &__stdf[2];
 
 
 /* ---- signals: glibc's 152-byte sigaction folded onto the kernel's 32-byte
- * one. BOTH arches carry the restorer slot (aarch64 is the odd asm-generic
+ * one. BOTH arches carry the restorer slot (a64 is the odd asm-generic
  * arch that kept SA_RESTORER in its uapi) -- but only x86-64 needs it filled
- * (sys.o's __ai_sigret); aarch64 leaves flag+slot zero and the kernel lays
+ * (sys.o's __ai_sigret); a64 leaves flag+slot zero and the kernel lays
  * its vdso return trampoline. ---- */
 
 

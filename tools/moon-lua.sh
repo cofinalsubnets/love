@@ -9,13 +9,13 @@
 # declarator + braced-string-literal rungs).
 #
 # TWO TARGETS, one procedure (raw.sh's shape): `moon-lua.sh` builds the native
-# x86-64 lane, `moon-lua.sh arm64` cross-compiles the same sources with
-# `mooncc -t arm64` and runs the battery under qemu-aarch64. The cross lane
-# SKIPS cleanly without qemu, like test_raw_arm64.
+# x86-64 lane, `moon-lua.sh a64` cross-compiles the same sources with
+# `mooncc -t a64` and runs the battery under qemu-aarch64. The cross lane
+# SKIPS cleanly without qemu, like test_raw_a64.
 #
 # WHY A CROSS LANE. Every package rung here had been x64-only, and a 30k-line
 # package is a far wider net than the 110 single-file programs of test/cc: the
-# first arm64 run found a miscompile that had survived both, and Lua found it
+# first a64 run found a miscompile that had survived both, and Lua found it
 # in the one way that is hard to notice -- string.match, string.gsub and
 # string.find-with-a-pattern all silently returned nil in an interpreter that
 # otherwise ran floats, coroutines and its whole battery correctly. The cause
@@ -30,7 +30,7 @@
 #   curl -O https://www.lua.org/ftp/lua-5.4.7.tar.gz
 #   tar xzf lua-5.4.7.tar.gz
 #   make moon-lua LUASRC=$PWD/lua-5.4.7
-#   make moon-lua-arm64 LUASRC=$PWD/lua-5.4.7
+#   make moon-lua-a64 LUASRC=$PWD/lua-5.4.7
 #
 # THE SOURCES ARE CACHED, so none of that is needed twice: this looks for
 # `lua-5.4.*` under dl/ and then under $MOONSRC -- ~/src when that is unset --
@@ -43,11 +43,11 @@ target=${1:-x64}
 case $target in
   x64)   name=moon-lua       ; tflag=""         ; sub=moonlua
          mksys=mksys       ; backend=""              ; run=""            ; need="" ;;
-  arm64) name=moon-lua-arm64 ; tflag="-t arm64" ; sub=moonlua-a64
-         mksys=mksys-arm64 ; backend=crew/holo/arm64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
-  riscv64) name=moon-lua-riscv ; tflag="-t riscv64" ; sub=moonlua-rv
-         mksys=mksys-riscv ; backend=crew/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
-  *) echo "moon-lua.sh: unknown target $target (x64 | arm64 | riscv64)" >&2; exit 1 ;;
+  a64) name=moon-lua-a64 ; tflag="-t a64" ; sub=moonlua-a64
+         mksys=mksys-a64 ; backend=crew/holo/a64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
+  rv64) name=moon-lua-rv64 ; tflag="-t rv64" ; sub=moonlua-rv
+         mksys=mksys-rv64 ; backend=crew/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
+  *) echo "moon-lua.sh: unknown target $target (x64 | a64 | rv64)" >&2; exit 1 ;;
 esac
 
 # where a package's sources may live, first hit wins: the tree-local dl,
@@ -120,7 +120,7 @@ assert(("hello"):upper() == "HELLO")
 assert(string.format("%d %5.2f %s %x", 42, 3.14159, "ok", 255) == "42  3.14 ok ff")
 assert(("a,b,c"):match("([^,]+)") == "a")
 -- the pattern matcher in anger: match/gsub/find-with-a-pattern all ran the
--- do_match recursion, and all three silently answered nil on the first arm64
+-- do_match recursion, and all three silently answered nil on the first a64
 -- build (see the header). plain find does NOT -- it shortcuts to lmemfind --
 -- so a pattern with a special character is the one that asks the question.
 assert(("hello world"):gsub("o", "0") == "hell0 w0rld")

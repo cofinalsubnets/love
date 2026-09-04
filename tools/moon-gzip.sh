@@ -23,7 +23,7 @@
 # anyway, so an UNconfigured tree builds too. It stays the witness because it is
 # the one file that says the tree was prepared.
 #
-# THREE TARGETS, one procedure (raw.sh's shape): `moon-gzip.sh arm64` cross
+# THREE TARGETS, one procedure (raw.sh's shape): `moon-gzip.sh a64` cross
 # compiles and runs under qemu, SKIPPING cleanly without it.
 #
 # ⚠ THE ONE APP-SIDE EDIT, and it is a real 64-bit portability bug in gzip, not
@@ -37,11 +37,11 @@ target=${1:-x64}
 case $target in
   x64)   name=moon-gzip       ; tflag=""            ; sub=moongzip
          mksys=mksys       ; backend=""               ; run=""            ; need="" ;;
-  arm64) name=moon-gzip-arm64 ; tflag="-t arm64"    ; sub=moongzip-a64
-         mksys=mksys-arm64 ; backend=crew/holo/arm64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
-  riscv64) name=moon-gzip-riscv ; tflag="-t riscv64" ; sub=moongzip-rv
-         mksys=mksys-riscv ; backend=crew/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
-  *) echo "moon-gzip.sh: unknown target $target (x64 | arm64 | riscv64)" >&2; exit 1 ;;
+  a64) name=moon-gzip-a64 ; tflag="-t a64"    ; sub=moongzip-a64
+         mksys=mksys-a64 ; backend=crew/holo/a64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
+  rv64) name=moon-gzip-rv64 ; tflag="-t rv64" ; sub=moongzip-rv
+         mksys=mksys-rv64 ; backend=crew/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
+  *) echo "moon-gzip.sh: unknown target $target (x64 | a64 | rv64)" >&2; exit 1 ;;
 esac
 
 # where a package's sources may live, first hit wins: the tree-local dl, then

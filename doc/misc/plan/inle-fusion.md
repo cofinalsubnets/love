@@ -1,7 +1,7 @@
 # plan: one binary, host and free
 
 **THE CLAIM: the tree builds two loves for one machine.** `out/host/love` and
-`out/free/love-x86_64.elf` share `src/love.c`, `am.c` and quay -- ~86% of the
+`out/free/love-x64.elf` share `src/love.c`, `am.c` and quay -- ~86% of the
 kernel's text and 78% of the host's -- and then implement twenty-one of the same
 behaviours twice. `open`, `stat`, `readdir`, `lseek`, `mkdir`, `rename`, `pipe`,
 `dup`: each is one body in `src/posix.c` and a second in `src/kmain.c`. The
@@ -80,15 +80,15 @@ because `__ai_sys` has exactly three callers -- `__ai_call` (universal),
 BSD, translate", so the inle test must come FIRST. ⚠ on metal `__ai_start` is
 not the entry, so metal WRITES `__ai_osv` rather than passing it.
 
-**The aarch64 entry.** x86_64 already carries two entries -- `e_entry` and the
+**The a64 entry.** x64 already carries two entries -- `e_entry` and the
 PVH note's, and `src/mkboot.l` says so: "the ELF entry is kmain's; the PVH
-entry rides the note". aarch64 has one, and `qemu -kernel` uses it (measured:
+entry rides the note". a64 has one, and `qemu -kernel` uses it (measured:
 `e_entry` 0x40204000 vs load base 0x40200000, and `.boot` at the base is page
 tables, so an image-base entry would execute them). Our UEFI loader reads
 `e_entry` too but is ours to change. So the conflict is `-kernel` against the
 hosted OS loader, and the answer is Linux's own: **one ELF plus a raw Image
 projection**, `e_entry = _start` for hosted, the projection entered at byte 0
-for `-kernel`. Measured: qemu loads a raw arm64 image at RAM base + 0x80000 and
+for `-kernel`. Measured: qemu loads a raw a64 image at RAM base + 0x80000 and
 enters its first byte. Costs laying `a64boot` first (it is 16 KiB in today,
 behind the page tables) and either a relink or a 64-byte Image header.
 
@@ -167,7 +167,7 @@ every runtime branch fusion needs becomes live and gated before anything merges.
   allocating a new contiguous 2x pair beside the old one, so the ask (~78M at
   today's corpus) must fit a hole the old pair fragments -- a placement
   lottery any image-size change re-rolls (a 5 KB delta lost it on
-  test_uefi_arm64, `;; oom@len=16384`, len being the NURSERY size -- the ask
+  test_uefi_a64, `;; oom@len=16384`, len being the NURSERY size -- the ask
   showed only under a kmallocw-refusal probe). the lanes run 768M now
   (tools/ktest.l, kboot.l); the cure would be a pool pair in two blocks.
 
@@ -204,9 +204,9 @@ host-only TUs): FOUR symbols remain defined on both sides -- `ai_fd_close`,
   page arm -- kmallocw supplies pages like any kernel does, zeroed because
   MAP_ANONYMOUS promises that -- and quit/getpid branch to `k_lvm_` twins.
 - C3 ✅ absorbed by the projection: the projected ELF's `e_entry` IS `a64boot`,
-  and qemu's arm64 `-kernel` reads exactly that -- the raw-Image question was
+  and qemu's a64 `-kernel` reads exactly that -- the raw-Image question was
   an artifact of the one-file-everywhere shape and never arises under
-  projection. arm64 came through the same tool with zero arch-specific code.
+  projection. a64 came through the same tool with zero arch-specific code.
 - Gate ✅ the whole roster on the fused pipeline: every door, both arches,
   kboot's real pipelines on the projected SHIPPED kernel, test_slow + the
   seed fixpoint.
@@ -255,7 +255,7 @@ the wake found, both fixed at their root:
   wake pins its task shim into the slots. captures heal at one choke point;
   the egg lanes are untouched (their cat captures the live door directly).
 
-still D-adjacent: the arm64 artifact via the cross lane (its kernel projects
+still D-adjacent: the a64 artifact via the cross lane (its kernel projects
 from the odir pie and egg-boots); the right inverse (`love hostbin` on metal
 -- the projection is bias-invertible, the pie's own header rides the flat
 image at bias+0); a metal nat door (out-of-pool pages through the low

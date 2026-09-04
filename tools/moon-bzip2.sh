@@ -17,7 +17,7 @@
 # A missing tree is a clean SKIP rather than a failure -- these stay opt-in, and a
 # green `make test_slow` says nothing about them.
 #
-# THREE TARGETS, one procedure (raw.sh's shape): `moon-bzip2.sh arm64` cross
+# THREE TARGETS, one procedure (raw.sh's shape): `moon-bzip2.sh a64` cross
 # compiles and runs the round-trips under qemu, SKIPPING cleanly without it.
 #
 # ⚠ bzip2's own Makefile passes -D_FILE_OFFSET_BITS=64, and it is load-bearing
@@ -30,11 +30,11 @@ target=${1:-x64}
 case $target in
   x64)   name=moon-bzip2       ; tflag=""            ; sub=moonbz2
          mksys=mksys       ; backend=""               ; run=""            ; need="" ;;
-  arm64) name=moon-bzip2-arm64 ; tflag="-t arm64"    ; sub=moonbz2-a64
-         mksys=mksys-arm64 ; backend=crew/holo/arm64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
-  riscv64) name=moon-bzip2-riscv ; tflag="-t riscv64" ; sub=moonbz2-rv
-         mksys=mksys-riscv ; backend=crew/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
-  *) echo "moon-bzip2.sh: unknown target $target (x64 | arm64 | riscv64)" >&2; exit 1 ;;
+  a64) name=moon-bzip2-a64 ; tflag="-t a64"    ; sub=moonbz2-a64
+         mksys=mksys-a64 ; backend=crew/holo/a64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
+  rv64) name=moon-bzip2-rv64 ; tflag="-t rv64" ; sub=moonbz2-rv
+         mksys=mksys-rv64 ; backend=crew/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
+  *) echo "moon-bzip2.sh: unknown target $target (x64 | a64 | rv64)" >&2; exit 1 ;;
 esac
 
 pkgfind() {                        # pkgfind <dir-glob> <witness-file>

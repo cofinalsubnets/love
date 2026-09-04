@@ -97,7 +97,7 @@ CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$h
 love_tu="love ev io map snap num arr"
 host_cs=$(for f in "$R"/src/*.c; do b=$(basename "$f" .c)
   case " $love_tu kmain sys blk doom " in *" $b "*) continue;; esac
-  case "$b" in x86_64_*|aarch64_*|uefi_*) continue;; esac
+  case "$b" in x64_*|a64_*|uefi_*) continue;; esac
   printf '%s\n' "$f"; done)
 # mk/common.mk's $(data_ld), which a bench link owes exactly as a host link does: the data
 # sentinels' tiling IS src/love.h's ai_typ, and ld left to itself keeps each love.data.N an
@@ -159,7 +159,7 @@ build_mooncc() { # $1=binpath
       mc -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
     { cat crew/kore/text.l crew/kore/u.l crew/kore/asbook.l \
           crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
-      echo "((from 'moon 'mksys) \"$od/sys.o\")"; } | env LOVE_NO_IMAGE= "$SEED" || exit 1
+      echo "((from 'moon 'mksys-x64) \"$od/sys.o\")"; } | env LOVE_NO_IMAGE= "$SEED" || exit 1
     mc "$od"/*.o -o "$bin" ) || return 1
 }
 

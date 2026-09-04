@@ -43,7 +43,7 @@ the standing rule (gwen, 2026-08-16). done 2026-08-16:
   on every lane (49/32/54 of ~50 samples caught). the x64 lane now ALSO runs
   the llvm-mc second opinion the old gate skipped (--no-llvm).
 - **test/holo/fuzz/sysdiff.l** -- the system-lane byte-exact differential;
-  output count-identical to the python (x64 743/0/0, arm64 167/0/19).
+  output count-identical to the python (x64 743/0/0, a64 167/0/19).
   regmap.py (a one-time register-map probe) deleted with them.
 - **tools/py/** -- gone. vmret.l stands alone (its gate reads the tool's
   own ret-free verdict); uu_parity.py ported to tools/uuparity.l.

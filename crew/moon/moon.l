@@ -193,10 +193,10 @@
                          (go (i + 1)))
                (go 0))
    (deftext ds) (foldl (\ a d (a + "#define " + eqsp d + "\n")) "" ds)
-   ; the target -t names: 'amd64 (the default), 'arm64, 'rv64, or one of the embedded
+   ; the target -t names: 'x64 (the default), 'a64, 'rv64, or one of the embedded
    ; three. the spellings are the prel's (arch-canon), which is also what uname's answer
-   ; and a `seed` argument come through -- so `-t x86_64` and `-t riscv` land where
-   ; `-t amd64` and `-t rv64` do, and this file keeps no second list to drift.
+   ; and a `seed` argument come through -- so `-t x64` and `-t riscv` land where
+   ; `-t x64` and `-t rv64` do, and this file keeps no second list to drift.
    ; the arch predefine (__x86_64__ / __aarch64__ / __arm__) rides the -D channel so cpp
    ; stays target-blind.
    (totgt s) (: t (archof s) (? t t (udie 2 ("cc: unknown target " + s))))
@@ -205,7 +205,7 @@
    ; `defined(__x86_64)` for its varargs lane, and one spelling missing reads as an
    ; unsupported machine rather than as a compiler that only knows the other word.
    (archdefs tgt)
-   (tgt @ 'arm64                          '("__aarch64__")
+   (tgt @ 'a64                          '("__aarch64__")
           'rv64                        '("__riscv")
           ('thumb2 || 'thumb2sp || 'thumb1) '("__arm__" "__arm")
                                           '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
@@ -248,8 +248,8 @@
    (featdefs tgt)
     ('("__STDC_NO_ATOMICS__=1" "__STDC_NO_THREADS__=1"
        "__STDC_UTF_16__=1" "__STDC_UTF_32__=1")
-     + (? (id? tgt 'amd64) () '("__STDC_NO_COMPLEX__=1"))
-     + (? (member? tgt '(amd64 arm64)) () '("__STDC_NO_VLA__=1")))
+     + (? (id? tgt 'x64) () '("__STDC_NO_COMPLEX__=1"))
+     + (? (member? tgt '(x64 a64)) () '("__STDC_NO_VLA__=1")))
    ; the gcc-shaped predefine table (doc/misc/moon-c-gaps: the predefine surface) --
    ; the <stdint>/<limits>/<float.h> family a library config reads instead of
    ; probing: pdclib, gnulib and musl typedef straight off these names. one
@@ -365,11 +365,11 @@
       "__SIZE_TYPE__=unsigned int" "__SIZE_MAX__=0xffffffffU" "__SIZE_WIDTH__=32"
       "__PTRDIFF_TYPE__=int" "__PTRDIFF_MAX__=0x7fffffff" "__PTRDIFF_WIDTH__=32"
       "__BIGGEST_ALIGNMENT__=8")                     ; AAPCS's widest ask, and bare aligned
-   ; wchar_t forks by ABI, not by width: signed int on x64/riscv64 (SysV),
-   ; unsigned int on arm64/arm32 (AAPCS) -- gcc's values, so a header's typedef
+   ; wchar_t forks by ABI, not by width: signed int on x64/rv64 (SysV),
+   ; unsigned int on a64/arm32 (AAPCS) -- gcc's values, so a header's typedef
    ; lays the same type a gcc object carries.
    (wchdefs tgt)
-    (? (id? tgt 'arm64 || arm32? tgt)
+    (? (id? tgt 'a64 || arm32? tgt)
        '("__WCHAR_TYPE__=unsigned int" "__WCHAR_MAX__=0xffffffffU" "__WCHAR_MIN__=0U" "__WCHAR_WIDTH__=32")
        '("__WCHAR_TYPE__=int" "__WCHAR_MAX__=0x7fffffff" "__WCHAR_MIN__=(-__WCHAR_MAX__ - 1)" "__WCHAR_WIDTH__=32"))
    (stddefs tgt) ((? (arm32? tgt) stdt32 stdlp64) + wchdefs tgt + stdcommon)
@@ -399,7 +399,7 @@
                  + '("AiNolibc=1")
                  + (? (id? dia 'moon) '("__moon__=1") ())   ; the dialect's own macro: extensions on
                  +   ; ds9, not ds: a :-local shadows the param over the whole scope (the boxfix cell trap)
-                 (? (member? tgt '(amd64 arm64)) ("__SIZEOF_INT128__=16" >< ds) ds))     ; the wide pair (gen's d128 lane); love.c's limb seam reads it, and gcc says the same on both
+                 (? (member? tgt '(x64 a64)) ("__SIZEOF_INT128__=16" >< ds) ds))     ; the wide pair (gen's d128 lane); love.c's limb seam reads it, and gcc says the same on both
        ; `-` is read here and nowhere else, so every door onto a TU gets stdin for
        ; free -- and cdir answers "" for it, which is the cwd, gcc's own rule for a
        ; source with no directory of its own.
@@ -486,7 +486,7 @@
            (ld r6 r6 0)
            (call main)
            (mov r6 r0) (li r0 60) (sys))
-   ; the aarch64 twin, and it serves both kernels the way x64's does (rung UV1):
+   ; the a64 twin, and it serves both kernels the way x64's does (rung UV1):
    ; linux zeroes every register and lays argc at [sp], freebsd hands the vector
    ; base in x0 with sp only near it -- a pad word below argc as often as not,
    ; which is why a linux-shaped entry there is a coin flip: half the runs read
@@ -516,7 +516,7 @@
                (call main)
                (li r8 93) (sys))
    ; the riscv twin: a0 = the OS stack pointer, exit_group = 94 in a7 (the
-   ; answer already rides a0); the default __ai_start mirrors arm64's.
+   ; answer already rides a0); the default __ai_start mirrors a64's.
    crt0-rv '((lea r0 sp 0)
               (li r1 0)
               (call __ai_start)
@@ -763,7 +763,7 @@
    (rtcarried home tgt os)
     (? (id? os 'none) ()                                     ; freestanding owes no runtime
        (id? tgt 'rv64 && member? os '(freebsd netbsd)) ()
-       (: nm (? (member? tgt '(amd64 arm64 rv64)) (string tgt) ())
+       (: nm (? (member? tgt '(x64 a64 rv64)) (string tgt) ())
           (? (! (string? nm)) ()
              (: z (runtime-gz nm)
                 (? (! (string? z)) ()
@@ -844,7 +844,7 @@
              (nlmems ndir))
         + map (\ f [("m_" + dotobj f) (string (cc-objbytes (mdir + f) (f9 [mdir inc])))])
               mfs
-        + (? (member? tgt '(amd64 arm64 rv64)) [["mksys.o" (string (mksys-bytes tgt))]] ())))
+        + (? (member? tgt '(x64 a64 rv64)) [["mksys.o" (string (mksys-bytes tgt))]] ())))
    (rtpull srcs tgt os nostd vb)
     (: mach (peep elf-machines tgt 0)
        lg (ldledger srcs mach) dt <lg owed <>lg
@@ -876,7 +876,7 @@
                           'nostd nostd 'vb vb 'ni ni 'rdme rdme}))
     ; -os freebsd links on x64 only (the one lane with a table + mksys twin);
     ; any other tgt under it is refused rather than half-built.
-    (: _ (? (id? os 'freebsd && ! (id? tgt 'amd64))
+    (: _ (? (id? os 'freebsd && ! (id? tgt 'x64))
             (udie 1 "cc: -os freebsd links x64 only for now") ())
        ars (filter dota? ins)
        srcs (map (\ f (? (dotc? f) [f (string (cc-objbytes f t))]
@@ -903,7 +903,7 @@
        runs (? (charm? dorg) [['at org 'text 'rodata 'nifs]
                               ['copy dorg 'data 'bss]]
               [['at org 'text 'rodata 'data 'nifs 'bss]])
-       c9 (tgt @ 'arm64 crt0-a64 'rv64 crt0-rv crt0)   ; x64's serves both kernels
+       c9 (tgt @ 'a64 crt0-a64 'rv64 crt0-rv crt0)   ; x64's serves both kernels
        all (? arm? srcs
               (["crt0" (string (objelf tgt c9 () '("__ai_start") () '("__ai_start") () () () () ()))] >< srcs))
        ; the archives first, then whatever the runtime still owes: a library the
@@ -917,7 +917,7 @@
        nw (ld-write dst ps)
        _ (? (nom? nw) (udie 1 ("cc: cannot write " + dst + " -- " + show nw)) 0)
        (chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [-x c] [-t x64|arm64] [-os linux|none|freebsd] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
+   usage "usage: mooncc [-c] [-pie] [-x c] [-t x64|a64|rv64] [-os linux|none|freebsd] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n (tally s)
@@ -1137,7 +1137,7 @@
     (: sd (std-take as)
        dia <sd
        as9 <>sd                                    ; the line with -std= lifted off it
-       ntv (? (member? love-arch '(amd64 arm64 rv64)) love-arch 'amd64)   ; unknown grounds keep amd64
+       ntv (? (member? love-arch '(x64 a64 rv64)) love-arch 'x64)   ; unknown grounds keep x64
        f (flags as9 (fseed ntv dia))       ; the flag set, seeded whole
        ; normalise in the tablet, not at a reader. -I dirs want a trailing slash, and the
        ; consumers now take `f` itself -- so a `dirn` applied on the way out of one reader

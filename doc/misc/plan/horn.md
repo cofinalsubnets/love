@@ -25,7 +25,7 @@ than mine prefers one.
 * **an fd is a port on both seats already.** src/sock.c's whole method is "produce an OS fd,
   hand it to `ai_io_alloc`, and read and write come free"; doc/misc/inle.md says `ai_io_alloc`
   is core, not host. Neither seat needs a new mechanism, only a new device.
-* **the PCI walk is written** (src/blk.c, CF8/CFC) and so is virtio-mmio on aarch64. The disk
+* **the PCI walk is written** (src/blk.c, CF8/CFC) and so is virtio-mmio on a64. The disk
   rung already paid for both transports.
 * **the flow doors are written** — spout/drip, backpressure, parking, the reader-bootstrap
   arc's whole rung 9. PCM is a byte stream that must not be dropped, which is the one shape
@@ -41,7 +41,7 @@ One device, two faces, the way the framebuffer already has two:
 * **the C face** is a direct call (`k_horn_write`), for a program linked into the image that
   has no love heap in hand — src/doom.c reaches `k_fb` the same way today.
 
-⚠ **the door is a vtable, not an AC'97 shape.** qemu's aarch64 `virt` has no AC'97 (it offers
+⚠ **the door is a vtable, not an AC'97 shape.** qemu's a64 `virt` has no AC'97 (it offers
 virtio-sound), and the hosted seats have neither. If the second device is a rewrite, the first
 one was designed wrong.
 
@@ -64,7 +64,7 @@ blocked writer parks and wakes, that the residue is kept.
 
 `/dev/dsp` is native on FreeBSD and NetBSD: open, three ioctls (`SNDCTL_DSP_SETFMT`, `SPEED`,
 `CHANNELS`), then `write`. No library, no protocol, and the seed-universal arc already has boxes
-on both (test_freebsd_arm64, test_netbsd_arm64).
+on both (test_freebsd_a64, test_netbsd_a64).
 
 ⚠ **this is not the Linux lane.** This box has `/dev/snd/*` and no `/dev/dsp` at all — OSS is
 gone from ordinary Linux, so anyone reading "just use /dev/dsp" will find nothing there.
@@ -83,7 +83,7 @@ measurement. ⚠ device naming is a policy question, not a lookup: `pcmC0D0p` is
 one you want (this box's first playback node is `pcmC0D3p`). **~2-4 days**, and the widest error
 bar on the ladder.
 
-### rung 3 — inle on x86_64: AC'97
+### rung 3 — inle on x64: AC'97
 
 `-device AC97`, and it is the friendly one: **two I/O-port BARs**, so none of the 64-bit-MMIO
 grief rung 5 hit under OVMF. A 32-entry buffer descriptor list of `kmallocw` buffers, the run
@@ -96,7 +96,7 @@ BDL and every sample buffer are subject to it. ⚠ every door's map stops at 4 G
 registers are 16-bit, so `k_inw`/`k_outw` are a prerequisite. **~2-3 days**, ~200 lines, a twin
 of blk.c in shape.
 
-### rung 4 — inle on aarch64: virtio-sound
+### rung 4 — inle on a64: virtio-sound
 
 qemu `virt` carries `virtio-sound-device`. The transport is already written (blk.c's virtio-mmio
 half); what is new is the device's own control/stream queues. This is the rung that proves rung

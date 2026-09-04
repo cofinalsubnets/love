@@ -6,7 +6,7 @@
 # OUR OWN static linker (crew/holo/link.l, via `mooncc a.o..`) binds them. No gcc, no
 # glibc, no ld anywhere: the whole chain is love. Corpus green over the fresh egg.
 #
-# THREE targets, ONE procedure: x64 native, riscv64 and arm64 under qemu-user. They
+# THREE targets, ONE procedure: x64 native, rv64 and a64 under qemu-user. They
 # were three near-identical recipes; what actually differs is four things -- the -t
 # flag, whether the holo backend has to be loaded for mksys (the host bake carries
 # only the native one), which mksys entry lays the syscall leaf, and the runner. A
@@ -29,14 +29,14 @@ shift 3
 
 case $target in
   x64)     name=test_raw        ; tflag=""           ; sub=raw     ; bin=love-raw
-           out=.test_raw.out    ; mksys=mksys        ; backend=""
+           out=.test_raw.out    ; mksys=mksys-x64    ; backend=""
            run=""               ; need=""            ; pretty=x64 ;;
-  riscv64) name=test_raw_riscv  ; tflag="-t riscv64" ; sub=raw-rv  ; bin=love-raw-rv
-           out=.test_raw_rv.out ; mksys=mksys-riscv  ; backend=crew/holo/rv64.l
-           run=qemu-riscv64     ; need=qemu-riscv64  ; pretty=riscv64 ;;
-  arm64)   name=test_raw_arm64  ; tflag="-t arm64"   ; sub=raw-a64 ; bin=love-raw-a64
-           out=.test_raw_a64.out; mksys=mksys-arm64  ; backend=crew/holo/arm64.l
-           run=qemu-aarch64     ; need=qemu-aarch64  ; pretty=aarch64 ;;
+  rv64) name=test_raw_rv64  ; tflag="-t rv64" ; sub=raw-rv64; bin=love-raw-rv64
+           out=.test_raw_rv.out ; mksys=mksys-rv64  ; backend=crew/holo/rv64.l
+           run=qemu-riscv64     ; need=qemu-riscv64  ; pretty=rv64 ;;
+  a64)   name=test_raw_a64  ; tflag="-t a64"   ; sub=raw-a64 ; bin=love-raw-a64
+           out=.test_raw_a64.out; mksys=mksys-a64  ; backend=crew/holo/a64.l
+           run=qemu-aarch64     ; need=qemu-aarch64  ; pretty=a64 ;;
   *) echo "raw.sh: unknown target $target" >&2; exit 1 ;;
 esac
 
@@ -46,7 +46,7 @@ fail() { echo "FAIL $name: $*" >&2; exit 1; }
 # so it is the host arch that gates it. The cross lanes need their qemu.
 if [ -z "$need" ]; then
   arch=$(uname -m)
-  if [ "$arch" != x86_64 ]; then
+  if [ "$arch" != x64 ]; then
     echo "$name: x86-64 only, skipped on $arch"
     exit 0
   fi

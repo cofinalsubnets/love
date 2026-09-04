@@ -62,7 +62,7 @@
    ; answer is the very symbol the backend table is keyed by.
    (mkblob-main av)
     (: n (tally av)
-       (? (3 <= n) (mkblob (? (4 <= n) (name (av 3)) 'amd64) <av <>av <>>av)
+       (? (3 <= n) (mkblob (? (4 <= n) (name (av 3)) 'x64) <av <>av <>>av)
           (mkblob-die "usage: mkblob IN OUT.o SYM [ARCH]")))
 
    (mkblob-main >argv))

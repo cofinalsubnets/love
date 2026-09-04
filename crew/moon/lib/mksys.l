@@ -8,8 +8,8 @@
 ;                            love.c's fault barrier is sigsetjmp(env,1), the mask is load-bearing)
 ;   __ai_sigret              the sa_restorer tail (rt_sigreturn) nolibc's sigaction installs
 ; (sqrt stays in C -- crew/moon/lib/math/am.c's am_sqrt, OURS and IEEE-exact; a thing
-; C can say has no place here.) three targets, one layer: (mksys dst) lays x64,
-; (mksys-arm64 dst) aarch64, (mksys-riscv dst) riscv64 -- all seed mksys-as, which
+; C can say has no place here.) three targets, one layer: (mksys-x64 dst) lays x64,
+; (mksys-a64 dst) a64, (mksys-rv64 dst) rv64 -- all seed mksys-as, which
 ; picks the arch's IR table. the x64 lane serves two kernels from one object
 ; (doc/misc/plan/seed-universal.md rung UV1): the tail is OS-blind -- cf cleared
 ; before the insn, and a carry answer (freebsd's error convention) parked
@@ -21,15 +21,15 @@
 ; crew/holo/{elf,obj}.l in a cat (the mooncc prefix layers; the assembler itself
 ; rides the baked holo book):
 ;   { cat crew/kore/{text,core,asbook}.l crew/holo/{elf,obj}.l crew/moon/lib/mksys.l;
-;     echo '(mksys "out/.../sys.o")'; } | out/host/love
+;     echo '(mksys-x64 "out/.../sys.o")'; } | out/host/love
 ; register vocabulary is holo's: r0=rax r1=rcx r2=rdx r3=rbx r4=rbp r5=rsi r6=rdi
 ; r7=r8 r8=r9 r9=r10 r10=r11 r11=r12 r12=r13 r13=r14 r14=r15.
 (module 'moon
 (use 'holo) ; objelf, the relocatable writer
-(: (mksys dst) (mksys-as 'amd64 dst)
-   (mksys-arm64 dst) (mksys-as 'arm64 dst)
-   (mksys-riscv dst) (mksys-as 'rv64 dst)
-   (mksys-freebsd dst) (mksys-as 'amd64 dst)   ; one object serves both kernels
+(: (mksys-x64 dst) (mksys-as 'x64 dst)
+   (mksys-a64 dst) (mksys-as 'a64 dst)
+   (mksys-rv64 dst) (mksys-as 'rv64 dst)
+   (mksys-freebsd dst) (mksys-as 'x64 dst)   ; one object serves both kernels
    (mksys-as arch dst) (write-bytes dst (mksys-bytes arch))
    ; the netbsd/aarch64 dispatch table. That kernel takes the syscall number
    ; from the svc immediate -- the number is in the instruction -- and offers no
@@ -37,13 +37,13 @@
    ; #198) both sigsys, and x8 + svc #0 sigsyses too (all three probed on the
    ; box). a runtime number is therefore unsayable in one instruction, so we lay
    ; one `svc #n; ret' per number and BRANCH INTO IT. 512 covers the roster
-   ; (the highest we speak is __wait450 at 449); 4 kB of sys.o, aarch64 only.
+   ; (the highest we speak is __wait450 at 449); 4 kB of sys.o, a64 only.
    ; the bound is spelled at the two sites, not bound once: a forward VALUE in
    ; this group does not resolve the way a forward lambda does (c0's letrec).
    (nb-tab i acc) (? (i < 0) acc (nb-tab (i - 1) (['svcn i] >< (['ret] >< acc))))
    ; the bytes alone -- moon.l's runtime pull lays sys in-memory through this
    (mksys-bytes arch)
-    (: ir (? (id? arch 'amd64)
+    (: ir (? (id? arch 'x64)
          '(
          ; -- __ai_sys: SysV args (rdi rsi rdx rcx r8 r9 [rsp+8]) -> the kernel's
          ;    (rax rdi rsi rdx r10 r8 r9). each mov reads a slot the previous one
@@ -200,16 +200,16 @@
          (li r0 1)                   ; exit
          (sys))
 
-         (id? arch 'arm64)
+         (id? arch 'a64)
          ; one expression: the written leaves ++ the generated netbsd table.
-         ; the aarch64 lane: same four leaves on the asm-generic table. registers are
-         ; holo's arm64 file, rN = xN one-to-one (plus fp/lr/sp by name). the jmp_buf
+         ; the a64 lane: same four leaves on the asm-generic table. registers are
+         ; holo's a64 file, rN = xN one-to-one (plus fp/lr/sp by name). the jmp_buf
          ; inside the same 25-long buffer: [0..9] x19..x28, [10] fp, [11] sp, [12] lr
          ; (the return pc -- BL parked it there, so it IS the return seam), [13..20]
          ; d8..d15 (AAPCS saves the LOW HALVES only -- str dN is exactly that),
          ; [21] the signal mask. rt_sigprocmask is 135; the kernel preserves every
          ; register but x0 across svc, so buf/val stage in x9/x10 and ride through.
-         ; __ai_sigret stays laid (rt_sigreturn 139) though aarch64's sigaction never
+         ; __ai_sigret stays laid (rt_sigreturn 139) though a64's sigaction never
          ; points at it -- the kernel supplies its own vdso trampoline (nolibc gates
          ; sa_restorer off); the symbol keeps the two sys.o surfaces identical.
          ('(
@@ -219,7 +219,7 @@
          ;    carry with a positive errno in x0, and linux preserves nzcv across
          ;    svc (it rides SPSR through the eret), so a carry going in clear can
          ;    only have been raised by a BSD. clearing it takes a borrow --
-         ;    aarch64's cmp is subs, and subtracting 0 leaves C set.
+         ;    a64's cmp is subs, and subtracting 0 leaves C set.
          (label __ai_sys)
          (la r9 __ai_osv)            ; netbsd wants the number in the instruction
          (ld r9 r9 0)
@@ -276,7 +276,7 @@
          (ret)
 
          ; -- __ai_sys7(n,a..g): the wide door netbsd's classic pads want. On
-         ;    aarch64 the seventh argument is just another register -- the kernel
+         ;    a64 the seventh argument is just another register -- the kernel
          ;    reads x0..x7 -- so unlike x64 nothing rides the stack.
          (label __ai_sys7)
          (la r9 __ai_osv)
@@ -446,7 +446,7 @@
 
          ; -- the netbsd leaves. __ai_nb_sigtramp is read off the box's own libc
          ;    (nm + objdump: `mov x0, x28; svc #0x134'): the kernel calls the
-         ;    handler directly and leaves the ucontext in x28 -- aarch64's r15 --
+         ;    handler directly and leaves the ucontext in x28 -- a64's r15 --
          ;    and setcontext is the way back. a fall-through exits loudly.
          (label __ai_nb_sigtramp)
          (mov r0 r28)
@@ -476,7 +476,7 @@
          (label __ai_nbsvc))
           + (nb-tab 511 ()))       ; 512 stubs: 0 .. 511
 
-         ; the riscv64 lane: the same four leaves on the same asm-generic table
+         ; the rv64 lane: the same four leaves on the same asm-generic table
          ; (rt_sigprocmask 135, rt_sigreturn 139; ecall preserves every register
          ; but a0, so buf/val stage in t0/t1 and ride through). registers are
          ; holo's riscv file: r0..r7 = a0..a7, r8/r9 = t0/t1, fp = s0,
@@ -558,7 +558,7 @@
          (ret)                       ; jalr x0, 0(ra)
 
          ; -- __ai_sigret: rt_sigreturn, laid for surface parity (riscv's
-         ;    sigaction rides the kernel's vdso trampoline, like aarch64).
+         ;    sigaction rides the kernel's vdso trampoline, like a64).
          (label __ai_sigret)
          (li r7 139)                 ; rt_sigreturn
          (sys)))
@@ -567,9 +567,9 @@
        ; neither it nor the netbsd pair -- nothing has laid that tail, which is
        ; the whole of what impl.h's AiOsTranslate says to the C.
        (objelf arch ir ()
-               (? (id? arch 'amd64)
+               (? (id? arch 'x64)
                   '("__ai_sys" "__ai_sys7" "__sigsetjmp" "siglongjmp" "__ai_sigret" "__ai_nb_sigtramp")
-                  (id? arch 'arm64)
+                  (id? arch 'a64)
                   '("__ai_sys" "__ai_sys7" "__sigsetjmp" "siglongjmp" "__ai_sigret"
                     "__ai_nb_sigtramp" "__ai_nbp20" "__ai_nbp202")
                   '("__ai_sys" "__sigsetjmp" "siglongjmp" "__ai_sigret"))

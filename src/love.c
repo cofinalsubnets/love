@@ -194,12 +194,12 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
    g = ai_pop(ai_defv(g, "love-version"), 1);
   // `love-arch`: the host CPU the glaze emits for, and the assembler target every backend
   // is registered under. A NOM, in the prel's canonical spelling (love/prel.l's arch-canon)
-  // -- so a reader compares it against 'amd64 rather than interning a string first, and
+  // -- so a reader compares it against 'x64 rather than interning a string first, and
   // there is one word for this machine across holo, moon, kore and the seed.
 #if defined(__x86_64__)
-  #define AiArch "amd64"
+  #define AiArch "x64"
 #elif defined(__aarch64__)
-  #define AiArch "arm64"
+  #define AiArch "a64"
 #elif defined(__riscv)
   #define AiArch "rv64"
 #else

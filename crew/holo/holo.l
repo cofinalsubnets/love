@@ -25,7 +25,7 @@
 ;   (shl/shr/sar/rol/ror d c)                  ; shift / rotate d in place by immediate count c
 ;   (ror4 d c) (rorv/rorv4 d c)                ; 32-bit rotate right (imm; count via r1) + the 64-bit count form
 ;   (test a b)             ; set flags from a and b
-;   (div d a b) (rem d a b t)                  ; signed truncating quotient / remainder; t a scratch (arm64 rem; x86 ignores)
+;   (div d a b) (rem d a b t)                  ; signed truncating quotient / remainder; t a scratch (a64 rem; x86 ignores)
 ;   (push s) (pop d)
 ;   (jmp label) (br cond label)                ; cond: eq ne lt le gt ge below above ae be s ns vs vc
 ;   (jmpr d)                                   ; indirect: jump to the address in register d
@@ -112,7 +112,7 @@
           ('insb >< 0) ('insw >< 0) ('insl >< 0) ('outsb >< 0) ('outsw >< 0) ('outsl >< 0)
            ; the system lane -- privileged instructions, arch-specific like the port i/o above.
            ; x86: interrupt flag, halt, the MSR pair, the descriptor tables, the control registers.
-           ; aarch64: the sysreg pair, the pstate-field immediate, barriers, the sys operations (an
+           ; a64: the sysreg pair, the pstate-field immediate, barriers, the sys operations (an
            ; operation NAME then a register, `zr` whole-system), the exception generators, the waits.
            ; riscv: the Zicsr accesses (a CSR by name or number, the pseudos writing x0 into the
            ; slot they do not name), the two fences, the TLB flush, the privileged returns.

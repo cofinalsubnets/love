@@ -4,7 +4,7 @@
 # -t the other arch -- link love1: machine A's bytes for machine B. Then love1
 # itself, under qemu-user standing in for machine B, bakes its own mooncc
 # image, rebuilds every TU natively (mooncc's default target is the ground it
-# stands on -- no -t below, an arm64 machine would pass none), links love2,
+# stands on -- no -t below, an a64 machine would pass none), links love2,
 # and love1 must equal love2 TO THE BYTE. One cmp says two things at once:
 # the twin machine reproduces this machine's bytes (what "same fixpoint
 # everywhere" asks for), and mooncc's output does not depend on the arch

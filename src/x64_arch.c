@@ -1,4 +1,4 @@
-// x86_64 architecture-specific C: CPU-exception handling and the COM1
+// x64 architecture-specific C: CPU-exception handling and the COM1
 // serial console. the stubs in mkvec.l (exc_stub_0 .. exc_stub_31,
 // funnelling through exc_common) build the frame below and call
 // k_exception; uart_isr funnels IRQ4 into k_uart (see the bottom).

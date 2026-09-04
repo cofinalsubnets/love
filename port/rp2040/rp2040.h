@@ -1,7 +1,7 @@
 // RP2040 register map (Cortex-M0+, bare metal -- no Pico SDK).
 //
 // Only the registers the bare-metal frontend touches: resets, the XOSC+PLL
-// clock bring-up, UART0 (a PL011, same PrimeCell layout the aarch64 console
+// clock bring-up, UART0 (a PL011, same PrimeCell layout the a64 console
 // drives), the 64-bit timer, SIO/IO_BANK0/PADS_BANK0 for GPIO, and the M0+
 // VTOR. Values lifted from the RP2040 datasheet register listings; kept terse.
 #pragma once

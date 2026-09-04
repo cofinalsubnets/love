@@ -3,7 +3,7 @@
 ;   (elfsec path nm) -> (1 bytes) | ()      the section named nm, or () for no file / no section
 ;
 ; the (1 bytes) wrapper is the answer, not the bytes: an empty section is a real section and
-; a bare () would call it absent. a section table is a table, so an aarch64 object reads on
+; a bare () would call it absent. a section table is a table, so an a64 object reads on
 ; x86-64 asking nothing of the machine underneath -- which is how `.comment`, the producer
 ; record, is read back with no binutils in the picture.
 (:

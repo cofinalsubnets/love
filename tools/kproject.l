@@ -13,10 +13,10 @@
 ; over a boot.o it laid itself (crew/source/source.l).
 
 (: (kparams arch)                       ; target, kernel base, entry symbol
-    (? (arch = "x86_64")  ['amd64   0x200000   "kmain"]
-       (arch = "aarch64") ['arm64 0x40200000 "a64boot"]
+    (? (arch = "x64")  ['x64   0x200000   "kmain"]
+       (arch = "a64") ['a64 0x40200000 "a64boot"]
        ; entered at the lowest load, not the entry symbol -- kproject lays boot first
-       (arch = "riscv64") ['rv64  0x80200000 "rvboot"]
+       (arch = "rv64") ['rv64  0x80200000 "rvboot"]
        (scare 'kproject-arch arch))
    (kread p) (: r (uread p) (two? r ? [p <>r] (scare 'kproject-open p)))
 

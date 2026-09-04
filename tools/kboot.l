@@ -1,4 +1,4 @@
-; Driver for `make test_kboot` (inle rung 3): boot the shipped x86_64 kernel
+; Driver for `make test_kboot` (inle rung 3): boot the shipped x64 kernel
 ; direct (`qemu -kernel`, the PVH door) with a boot command line, capture the
 ; serial console, and ask that every expected substring made it out. The seated
 ; tool runs off the baked kore cat and quits -- the reset door, which -no-reboot
@@ -17,7 +17,7 @@
    elf  (cap a)
    app  (cap (cup a))
    want (cup (cup a))
-   ; kvm where the host can back it -- this lane is x86_64 only, so the arch
+   ; kvm where the host can back it -- this lane is x64 only, so the arch
    ; question is just the host's. Without /dev/kvm it falls to tcg, same verdict.
    kvm  (? (&& (two? (stat "/dev/kvm")) (has? (cup (hark ["uname" "-m"])) "x86_64"))
            ["-enable-kvm" "-cpu" "host"] ())

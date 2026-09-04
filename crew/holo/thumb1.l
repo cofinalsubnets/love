@@ -36,7 +36,7 @@
    (lo? r) (rn r <= 7)                   ; a "low" register -- the only ones most 16-bit ops reach
    (need-lo r why) (lo? r ? 0 (scare why r))   ; guard: v6-M op wants r0..r7
 
-   ;; -- condition codes: IR name -> the 4-bit aarch32 cond field (same encoding aarch64/thumb2 use). --
+   ;; -- condition codes: IR name -> the 4-bit aarch32 cond field (same encoding a64/thumb2 use). --
    t1-cc (tabof
         [('eq . 0) ('ne . 1) ('ae . 2) ('below . 3) ('s . 4) ('ns . 5)
           ('vs . 6) ('vc . 7) ('p . 6) ('np . 7)
@@ -184,7 +184,7 @@
    (t1-lds2 d base off) (t1-ldh d base off + t1-sxh d)          ; ldrsh == ldrh + sxth
 
    ;; ---- indexed addressing: d <- base + index*scale (+disp). v6-M has no scaled-index memory op, so
-   ;;      synthesize LSLS+ADDS. moon's leax contract reads both sources before writing (x64 SIB / arm64
+   ;;      synthesize LSLS+ADDS. moon's leax contract reads both sources before writing (x64 SIB / a64
    ;;      add-shifted), so d may alias base or index -- and the two live sources are always distinct regs.
    ;;      scale 1 -> ADDS (3-addr, alias-safe outright). scale>1 shifts index by log2: shift into d works
    ;;      unless d==base (that shift would clobber base first), so that lone case borrows a saved low temp.
@@ -231,7 +231,7 @@
    ;; clobber r0..r3 (gen.l's rdsp), so the routine owns all four scratch regs. branch offsets are
    ;; fixed within the blob (like t1-set's branch-over) -- no labels, so many div sites never collide.
    ;; the routine is a fixed blob owning r0..r3: dividend in r1, divisor in r0, quotient out in
-   ;; r1. the NEUTRAL div pins none of the three -- amd64's own emitter stages the same way, and
+   ;; r1. the NEUTRAL div pins none of the three -- x64's own emitter stages the same way, and
    ;; the three-address sdivs take any pair -- so the passes rename them soundly and this stages
    ;; rather than refusing. r0 and r1 are the targets, so their old values are free scratch, and
    ;; only a true swap needs r2, which the blob owns anyway.

@@ -22,10 +22,10 @@ extern intptr_t ai_inflate_raw(unsigned char const*, uintptr_t, unsigned char*, 
 #include "cat_modsa_z.h"
 #if defined(__x86_64__)
 #define AiCatModsH 1
-#include "cat_mods_amd64_z.h"
+#include "cat_mods_x64_z.h"
 #elif defined(__aarch64__)
 #define AiCatModsH 1
-#include "cat_mods_arm64_z.h"
+#include "cat_mods_a64_z.h"
 #elif defined(__riscv)
 #define AiCatModsH 1
 #include "cat_mods_rv64_z.h"

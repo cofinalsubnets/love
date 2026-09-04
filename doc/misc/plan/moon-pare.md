@@ -49,7 +49,7 @@ One entry there was already built twice.
   rung 2 settles that with same-run bases and real samples, not this footnote.
 - **rung 1 — the rotate lands, and the pair stops lying. LANDED 2026-08-22.** The
   recognizer is in gen.l (constant and spliced-variable counts, both directions, both
-  widths; `ror4`/`rorv`/`rorv4` joined holo on x64 + arm64), pinned by law, by
+  widths; `ror4`/`rorv`/`rorv4` joined holo on x64 + a64), pinned by law, by
   `test/cc/152-rotate.c` on three targets, and the fixpoint. The re-fill answered the
   confound: sha256 4.23× → 2.90×, chacha 5.80× → 3.59×, every rotate-free row inside
   noise — **both hypotheses were true, each owning a row**, and the pair reads array vs

@@ -351,7 +351,7 @@
                 _ (pin (t 'stag) "__va_list_tag"
                        (? (pst32? t) '((("__ap" 0 (ptr void))) 4 4)
                           (id? tgt 'rv64) '((("__ap" 0 (ptr void))) 8 8)   ; LP64: one walking pointer, 8-byte slots
-                          (id? tgt 'arm64)
+                          (id? tgt 'a64)
                            '((("__stack" 0 (ptr void)) ("__gr_top" 8 (ptr void)) ("__vr_top" 16 (ptr void))
                               ("__gr_offs" 24 int) ("__vr_offs" 28 int)) 32 8)
                           '((("gp_offset" 0 int) ("fp_offset" 4 int) ("overflow_arg_area" 8 (ptr void))
@@ -694,7 +694,7 @@
    ; stored (unit-byte-offset bitoff) let gen load the aligned word and extract.
    (bfmem? m) (two? >>m)                            ; a member pair carrying a width: (name ty width)
    ; a trailing __attribute__((..)) run on a struct body: consume it, reading
-   ; whether `packed` rides inside (x86_64 epoll_event -- the kernel ABI needs
+   ; whether `packed` rides inside (x64 epoll_event -- the kernel ABI needs
    ; the packed layout, so skipping the attribute would mislay `data` at 8)
    (pattpk ts)
     (? !(two? ts && idv? <ts "__attribute__") [0 ts]
@@ -1081,7 +1081,7 @@
              (member? (tkk t) '(wstr str16 str32))
               (: ety (? (tkk t = 'str16) 'ushort
                         (tkk t = 'str32) 'uint
-                        (member? (peep ps 'tgt ()) '(arm64 thumb2 thumb2sp thumb1)) 'uint
+                        (member? (peep ps 'tgt ()) '(a64 thumb2 thumb2sp thumb1)) 'uint
                         'int)
                  (s16 l) (? !(two? l) ()
                             (65536 <= <l) (: v (<l - 65536)
@@ -2291,7 +2291,7 @@
        (? !(two? t) (gripe () () () "parse error at end of input")
           (gripe (? (two? dt) (filof t) (filat spans i0)) <>>t ()
                  (? why why ("parse error near " + spell t)))))
-   (cparse ts) (cparse-t ts 'amd64)          ; the law tests + any bare caller: 64-bit widths (unchanged behavior)
+   (cparse ts) (cparse-t ts 'x64)          ; the law tests + any bare caller: 64-bit widths (unchanged behavior)
    (cparse-t ts tgt) (cparse-d ts tgt 'moon)  ; ..and the default dialect, which is what a bare caller means
    (cparse-d ts tgt dia)
     (: ps (psnew-d tgt dia)

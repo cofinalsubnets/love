@@ -112,7 +112,7 @@
    ; counter backwards, so the `. =` per slot is a check as well as a placement.
    ; one row per seat class, saying both numbers: the stride the C compiles under and the
    ; stride ld is told. it need only clear the fattest sentinel body a backend emits, which
-   ; measures call lowering rather than code -- arm64 4, x64 8, thumb2 60, riscv64 88 -- so
+   ; measures call lowering rather than code -- a64 4, x64 8, thumb2 60, rv64 88 -- so
    ; lean's 16 is twice x64's measured 8 with room for an `endbr64`.
    mx-strides '((lean 16  ("__x86_64__" "__aarch64__"))
                 (fat  128 ()))              ; no predicate: the #else, and there is one

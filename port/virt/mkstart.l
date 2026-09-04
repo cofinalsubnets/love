@@ -1,4 +1,4 @@
-; port/virt/mkstart.l -- lay start.o for the qemu-virt (riscv64) port: the one
+; port/virt/mkstart.l -- lay start.o for the qemu-virt (rv64) port: the one
 ; piece of the image that is not C, and even it is holo IR, not foreign asm.
 ; the board's mask ROM jumps to the DRAM base (0x80000000) with everything at
 ; reset defaults -- sp is garbage, the FPU is OFF (mstatus.FS = 0), mtvec
@@ -11,7 +11,7 @@
 ; rows -- these four words are the only ones the tree needs).
 ;
 ; runs after crew/holo/{elf,obj}.l in a cat with the riscv backend spliced
-; into the sealed holo module (the mksys-riscv shape; port/virt/Makefile).
+; into the sealed holo module (the mksys-rv64 shape; port/virt/Makefile).
 (: ;; csr rd rs1: the Zicsr I-form (opcode 0x73) -- f3 2 = csrrs, 1 = csrrw
    (csrw f3 rd rs1 csr) ((csr << 20) | ((rs1 << 15) | ((f3 << 12) | ((rd << 7) | 0x73))))
    (mkstart dst)

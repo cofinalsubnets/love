@@ -33,7 +33,7 @@ address-assigning driver. Wasm breaks each assumption that driver rests on:
 - **mandatory validation, typed instructions.** holo's IR deliberately forgets
   width past the op name; a module must know i32 from i64 per value.
 
-Scale anchor: riscv — a fifth register-machine ELF target riding arm64's lanes —
+Scale anchor: riscv — a fifth register-machine ELF target riding a64's lanes —
 cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
 
 ## the ladder
@@ -96,7 +96,7 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   layer (a neutered configuration, not a rewrite — the five real targets must not
   feel it), the shadow stack for address-taken locals, `callr` via
   `call_indirect`. `stage.l` grows the dice the lane needs.
-- **rung 5 — the gate.** `test_ccwasm` beside ccarm64/ccriscv, the law corpus and
+- **rung 5 — the gate.** `test_ccwasm` beside cca64/ccrv64, the law corpus and
   `wasm/test.mjs`'s bao ride through our module. Verification instrument: a
   foreign validator/engine at gate time only (node already sits there and already
   skips when absent) — same standing as qemu-user in dist_cross. The product

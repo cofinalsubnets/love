@@ -29,23 +29,23 @@
 # boot the same qemu shape with -qmp; its console is VGA, so the one-time
 # setup (rc.conf sshd=YES dhcpcd=YES, the key, consdev=com0) types in by QMP
 # send-key, root with no password. sshd's default already takes keyed root.
-# ⚠ TWO DIMENSIONS NOW: the OS and the ISA. `osbox.sh OUT LOVE0 freebsd arm64`
+# ⚠ TWO DIMENSIONS NOW: the OS and the ISA. `osbox.sh OUT LOVE0 freebsd a64`
 # runs the same battery against a freebsd/arm64 box (FBSD_ARM64_SSH), and the
 # LOCAL half of every comparison rides qemu-aarch64 -- same binary, same ISA,
-# two kernels, which is the claim. Without that emulator the arm64 lane skips
+# two kernels, which is the claim. Without that emulator the a64 lane skips
 # loudly, exactly as a missing box does.
 # an arm64 freebsd box (2026-08-18): the aarch64 BASIC-CLOUDINIT qcow2 from the
 # same VM-IMAGES tree, booted by qemu-system-aarch64 -M virt -accel kvm on an
-# aarch64 host (a pi is native; TCG elsewhere is ~2x slower again). ⚠ the disk
+# a64 host (a pi is native; TCG elsewhere is ~2x slower again). ⚠ the disk
 # must be virtio-blk-PCI said explicitly -- `if=virtio' lands it on the MMIO bus,
 # which the edk2 firmware does not enumerate, and UEFI walks the whole PXE list
 # instead. edk2 is not packaged for arch-arm; the .fd is GUEST code, so a copy
 # from any host serves, and an empty 64M file is a fine varstore.
-# an arm64 netbsd box (2026-08-18, NBSD_ARM64_SSH): the evbarm-aarch64
+# an arm64 netbsd box (2026-08-18, NBSD_ARM64_SSH): the evbarm-a64
 # arm64.img.gz from the same cdn tree, on the same edk2 shape as its freebsd
 # neighbour -- and it boots to a serial login, so the one-time setup types in
 # over -serial stdio rather than QMP.
-# usage: osbox.sh OUTDIR LOVE0 freebsd|netbsd [x64|arm64]
+# usage: osbox.sh OUTDIR LOVE0 freebsd|netbsd [x64|a64]
 set -u
 
 ho=$1
@@ -55,8 +55,8 @@ arch=${4:-x64}
 case "$os-$arch" in
   netbsd-x64)    box=${NBSD_SSH:-};       sd=${NBSD_SEED:-} ;;
   freebsd-x64)   box=${FBSD_SSH:-};       sd=${FBSD_SEED:-} ;;
-  freebsd-arm64) box=${FBSD_ARM64_SSH:-}; sd=${FBSD_ARM64_SEED:-} ;;
-  netbsd-arm64)  box=${NBSD_ARM64_SSH:-}; sd=${NBSD_ARM64_SEED:-} ;;
+  freebsd-a64) box=${FBSD_ARM64_SSH:-}; sd=${FBSD_ARM64_SEED:-} ;;
+  netbsd-a64)  box=${NBSD_ARM64_SSH:-}; sd=${NBSD_ARM64_SEED:-} ;;
   *) echo "osbox: no box is defined for $os on $arch" >&2; exit 1 ;;
 esac
 t=test_$os; [ "$arch" = x64 ] || t=test_${os}_${arch}
@@ -67,7 +67,7 @@ d=$ho/$os-$arch
 # the LOCAL half of each comparison: native where the arch is this machine's,
 # qemu-user where it is not. The point of the leg is ONE binary under TWO
 # kernels, so the emulator stands in for linux/arm64 hardware and nothing else.
-if [ "$arch" = arm64 ]; then
+if [ "$arch" = a64 ]; then
   qemu=$(command -v qemu-aarch64 2>/dev/null || true)
   [ -n "$qemu" ] || { echo "$t: skipped (no qemu-aarch64 for the local half)"; exit 0; }
   run() { "$qemu" "$@"; }

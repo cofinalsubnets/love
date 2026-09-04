@@ -1,19 +1,19 @@
 #!/bin/sh
-# test/gate/riscv.sh -- the riscv64 codegen rung end to end: the whole test/cc battery
-# compiled `mooncc -t riscv64` (EM_RISCV static ELF, the holo riscv backend), run under
+# test/gate/rv64.sh -- the rv64 codegen rung end to end: the whole test/cc battery
+# compiled `mooncc -t rv64` (EM_RISCV static ELF, the holo riscv backend), run under
 # qemu-riscv64 user mode, and DIFFERENTIAL against the native x64 build of the same
 # file. mooncc is its own reference here -- the frontend is shared, so only codegen can
 # diverge.
 #
 # THE UNSUPPORTED FILES ARE ASSERTED, NOT SKIPPED, exactly as ccarch.sh does it: a
 # listed program must REFUSE -- nonzero, no signal, a diagnostic naming both the file
-# and the CAUSE. A silent skip list is where a regression hides. The day riscv64 grows
+# and the CAUSE. A silent skip list is where a regression hides. The day rv64 grows
 # one of these lanes its build starts succeeding, this check fails, and the name comes
 # off the list.
 #
 # NOT set -e: both halves capture $? to compare them.
 #
-# usage: riscv.sh OUTDIR LOVE
+# usage: rv64.sh OUTDIR LOVE
 set -u
 
 ho=$1
@@ -22,9 +22,9 @@ m=$2
 fail() { echo "FAIL $*" >&2; exit 1; }
 moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 
-echo "RISCV test/cc battery (mooncc -t riscv64 vs native x64, under qemu-riscv64)"
+echo "RISCV test/cc battery (mooncc -t rv64 vs native x64, under qemu-riscv64)"
 if ! command -v qemu-riscv64 > /dev/null 2>&1 || [ "$(uname -m)" != x86_64 ]; then
-  echo "test_riscv: skipped (needs qemu-riscv64 + an x86_64 host)"
+  echo "test_rv64: skipped (needs qemu-riscv64 + an x64 host)"
   exit 0
 fi
 
@@ -33,7 +33,7 @@ mkdir -p "$d"
 p=0
 r=0
 
-# the features riscv64 has no lane for. ⚠ TWO SPELLINGS OF ONE LIST: ccarch.sh's riscv64
+# the features rv64 has no lane for. ⚠ TWO SPELLINGS OF ONE LIST: ccarch.sh's rv64
 # case is the same set, and a program added to test/cc/ has to join both or this gate reads
 # a clean refusal as a broken compile. Diff them when either moves.
 unsupported="100-complex 102-bigstruct 111-int128 117-vastruct 151-w128fuzz"
@@ -43,9 +43,9 @@ for f in test/cc/*.c; do
 
   case " $unsupported " in
     *" $b "*)
-      moonrun -t riscv64 "$f" "$d/rv_$b" > "$d/$b.log" 2>&1; st=$?
+      moonrun -t rv64 "$f" "$d/rv_$b" > "$d/$b.log" 2>&1; st=$?
       [ "$st" -ne 0 ] \
-        || fail "$b: mooncc -t riscv64 BUILT a program listed as unsupported -- take it off the list in this script"
+        || fail "$b: mooncc -t rv64 BUILT a program listed as unsupported -- take it off the list in this script"
       [ "$st" -lt 128 ] || fail "$b: mooncc died on a signal ($st) where a refusal was expected"
       grep -q "$f" "$d/$b.log" \
         || { cat "$d/$b.log" >&2; fail "$b: the refusal does not name the file"; }
@@ -57,7 +57,7 @@ for f in test/cc/*.c; do
       continue ;;
   esac
 
-  moonrun -t riscv64 "$f" "$d/rv_$b" > /dev/null 2>&1 || fail "riscv compile $f"
+  moonrun -t rv64 "$f" "$d/rv_$b" > /dev/null 2>&1 || fail "riscv compile $f"
   qemu-riscv64 "$d/rv_$b"; a=$?
 
   moonrun "$f" "$d/x_$b" > /dev/null 2>&1 || fail "x64 compile $f"
@@ -67,4 +67,4 @@ for f in test/cc/*.c; do
   p=$((p + 1))
 done
 
-echo "test_riscv: $p/$p battery files agree riscv-vs-x64, and $r unsupported ones refuse cleanly"
+echo "test_rv64: $p/$p battery files agree rv64-vs-x64, and $r unsupported ones refuse cleanly"

@@ -41,7 +41,7 @@
 ; guard in a kernel deopts into the twin, so a shape the IR does not say is not a bug and not a
 ; raise -- it is the twin's turn. that is what makes a kernel writable at all: it says the one
 ; monomorphic lane it is fast at and hands back everything else. that is also why forging only
-; where the ABI kit has a row costs nothing but speed: amd64 forges, every other target runs the
+; where the ABI kit has a row costs nothing but speed: x64 forges, every other target runs the
 ; twins and `forge-why` says `no-abi`.
 ;
 ; mkir is a thunk because a kernel's IR carries live addresses: `forge-trayk` and friends are
@@ -70,9 +70,9 @@
    ; pushed. every guard jumps to the label `deopt`, which the epilogue below plants.
    ; guards come before any push, so the machine sp is balanced on the deopt path too.
    ;
-   ; that binding is amd64'S, and it is spelled, not derived. the lvm ABI is each
+   ; that binding is x64'S, and it is spelled, not derived. the lvm ABI is each
    ; platform's own C convention, so the four roles land in different registers per
-   ; target -- r1 is Sp here and Ip on arm64, and only Hp coincides. every guard,
+   ; target -- r1 is Sp here and Ip on a64, and only Hp coincides. every guard,
    ; epilogue and deopt tail below names them by number, and holo lowers all of it on
    ; any backend, so an off-x64 assemble succeeds and installs a kernel reading Ip
    ; where it means Sp. what the roles need is a row per target -- love/scan.l has one
@@ -156,7 +156,7 @@
    forge-seam (from 'glaze 'nif)
    forge-seamx (from 'glaze 'nifx)                  ; the same door, one extras slot wider
    forge-arch love-arch
-   forge-abi? (id? forge-arch 'amd64)               ; the targets the kit above spells
+   forge-abi? (id? forge-arch 'x64)               ; the targets the kit above spells
    forge-asm (from 'holo 'assemble)
    ; assemble one kernel -> its bytes | (). the deopt tail is the module's, because it is
    ; arity-determined and mechanical; the epilogue is the kernel's, because only the kernel

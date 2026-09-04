@@ -1,6 +1,6 @@
 ; thumb2 -- the armv7e-m (Cortex-M7) backend for the neutral assembler (crew/holo/holo.l), the third
-; target. like arm64.l it pins a {lower,patch} pair (here under 'thumb2 and 'thumb2sp) and the driver,
-; IR forms, and byte plumbing stay untouched -- but the ISA is a different animal from aarch64 despite
+; target. like a64.l it pins a {lower,patch} pair (here under 'thumb2 and 'thumb2sp) and the driver,
+; IR forms, and byte plumbing stay untouched -- but the ISA is a different animal from a64 despite
 ; the shared "ARM" name. this is 32-bit Thumb-2: mixed 16/32-bit little-endian instructions, r0..r15
 ; (r13=sp, r14=lr, r15=pc), a two-address-ish data-processing surface. every word here was checked
 ; against `llvm-mc --triple=thumbv7em-none-eabi` (--disassemble / --show-encoding). load after holo.l.
@@ -19,7 +19,7 @@
 ; immediates: add/sub take a plain 12-bit addw/subw (0..4095, a negative flips the op); cmp takes an
 ; 8-bit modified-immediate (0..255 rides through untouched). the logicals (and/or/xor) have only the
 ; Thumb modified-immediate form, so an immediate there raises -- moon's `immok` seam blocks it upstream
-; and materializes the value into a register instead (mirrors arm64.l's bitmask stance).
+; and materializes the value into a register instead (mirrors a64.l's bitmask stance).
 
 (module 'holo
 (: ;; -- registers. abstract number = hardware number for r0..r12; sp/lr/pc/fp are named. r12 (IP) is
@@ -31,7 +31,7 @@
           ('r10 . 10) ('r11 . 11) ('r12 . 12)])
    (rn r) (look thumb-regs r 'badreg)
 
-   ;; -- condition codes: IR name -> the aarch32 cond field (same 4-bit encoding aarch64 uses). --
+   ;; -- condition codes: IR name -> the aarch32 cond field (same 4-bit encoding a64 uses). --
    thumb-cc (tabof
         [('eq . 0) ('ne . 1) ('ae . 2) ('below . 3) ('s . 4) ('ns . 5)
           ('vs . 6) ('vc . 7) ('p . 6) ('np . 7)
@@ -318,7 +318,7 @@
 
    ;; -- the system lane. M-profile draws one shareability domain, so a barrier takes only
    ;; `sy`: naming any other asks for a distinction this core does not have, and widening it
-   ;; to sy in silence would let a shared lay read as portable when it is not. (arm64.l's
+   ;; to sy in silence would let a shared lay read as portable when it is not. (a64.l's
    ;; barrier table is the wider vocabulary, for the arch that earns it.)
    (thumb-dsb opt) (opt @ 'sy (t32 0xF3BF8F4F) (scare 'thumb-barrier-opt opt))
    ;; bkpt #imm8 -- the debugger halt. `trap` is this same instruction at 0; the immediate

@@ -10,7 +10,7 @@ The cipher rows (chacha20, poly1305, `bench/ccrypto.l`) are **subsidiary**: a le
 not a target. chacha indexes a 16-word array in its inner loop and poly keeps five scalar
 limbs, so the pair reads whether a gap is array slots or general residency. (It once read a
 second signal too — chacha rotates 320 times a block, poly never — until gen.l learned the
-rotate idiom, 2026-08-22: `ror4`/`rorv`/`rorv4` in holo's IR on x64 + arm64, sha256
+rotate idiom, 2026-08-22: `ror4`/`rorv`/`rorv4` in holo's IR on x64 + a64, sha256
 4.23× → 2.90× and chacha 5.80× → 3.59× on landing, every rotate-free row inside noise.
 Both hypotheses had been true, each owning a row.) ⚠ do not read the pair to zero:
 `src/love.c:6138`'s z-tray comparison is the same array-indexed shape.
@@ -196,8 +196,8 @@ and together they are the method the forward path below inherits:
    unop; the table's exact folds retire it, and `imma` now gates x64's imul on imm32
    (a 2^40 known would have ridden the three-operand form). Priced: ccnif .text hash.c
    −48 B, deflate.c −478 B (−4.9%), inflate.c −54 B, every clock inside the band;
-   the arm64 battery 117,627 → 115,160 instructions (**−2.10%**, 132 of 153 programs
-   changed). test_cts 212/220 and cts_arm64 211/220 unchanged, fixpoint byte-identical.
+   the a64 battery 117,627 → 115,160 instructions (**−2.10%**, 132 of 153 programs
+   changed). test_cts 212/220 and cts_a64 211/220 unchanged, fixpoint byte-identical.
 6. **int-vacate — LANDED 2026-08-28.** Two verdict arms in `upar`: an int param in a64's
    r4 arrival rides free with its entry cvt, as a pointer does (`a4rider?` — the pool test
    had refused it), and a HOT int param that cannot ride (a quad under a dirty body)
@@ -227,7 +227,7 @@ and together they are the method the forward path below inherits:
    arrival-aligned front evicted the untouched arrival the sweeps forward from (Ip's slot
    loads came back the first time). A bool in a quad arrival vacates rather than rides
    (its cvt defs through `set`, which qclob? cannot tell from a clobber). Priced: the
-   arm64 exact meter 1,507.87G → **1,496.89G (−0.73%)** on the arm64check corpus —
+   a64 exact meter 1,507.87G → **1,496.89G (−0.73%)** on the arm64check corpus —
    mag_mul −5.6%, lvm_aq −46%, ai_big_canon −14%, ai_net −16%, lvm_eq −4.5%, nf_hash
    and shash −6%, hash_at −9%; the largest regression ai_big_to_flo +0.1G. x64 perf,
    interleaved before/after on the corpus: 74,286 → 73,238 samples (−1.4%), lvm_eq
@@ -239,7 +239,7 @@ and together they are the method the forward path below inherits:
    its register clean to width 1 — a bool — so the bool re-canonicalization `cmp r 0;
    set ne r` over it is the identity and drops (a mov carries the fact, any other def
    dirties it, and a flags read right after keeps the pair). lvm_eq's hot line is
-   `cmp; sete; movzbq; test` now. Priced on the arm64 exact meter, body-changed fns only
+   `cmp; sete; movzbq; test` now. Priced on the a64 exact meter, body-changed fns only
    (the corpus walk drifts between binaries — lvm_qa/lvm_aq moved ∓10G on identical
    bodies): lvm_cond −2.70G (−4.1%), lvm_eq −1.25G (−4.9%), lvm_nilp −0.54G, lvm_argcond
    −0.40G, ~−5G = −0.33% of the corpus; the total read −0.95% with the drift. x64 .text
@@ -258,7 +258,7 @@ and together they are the method the forward path below inherits:
    subset safe was reading make's `grep Segmentation`, which the bake's own fallback
    swallows: judge a build by booting its love (`echo '(putx 42)' | LOVE_NO_IMAGE=1 love`)
    and by the test/cc battery through the bootstrap image, never by make's exit. Priced
-   on the arm64 exact meter, body-changed fns: lvm_link −8.1G (−7.0%), lvm_cur −5.6G
+   on the a64 exact meter, body-changed fns: lvm_link −8.1G (−7.0%), lvm_cur −5.6G
    (−2.1%), shash −3.3G (−23%), nf_hash −0.9G, evac_data −0.6G, gcp −0.44G, ai_big_binop
    −0.44G; corpus total 1,482.65G → **1,472.60G (−0.68%)** (lvm_qa's +10.6G is the walk
    drift flipping back). x64 .text −1,666 instructions (−1.16%): gcp 903 → 865, p0read1
@@ -297,9 +297,9 @@ the order — cheapest-instrument-first is):
   removed nothing it needs and the residency story it must NOT pay for is now one
   mechanism instead of five.
 
-## the arm64 lane rides the sweeps (2026-08-23)
+## the a64 lane rides the sweeps (2026-08-23)
 
-The sweep chain reaches arm64 — at the POST-CHOICE seam (before deadlab), not inside
+The sweep chain reaches a64 — at the POST-CHOICE seam (before deadlab), not inside
 build. The seam was chosen because the old world's rankers priced ir1 as built and an
 in-build sweep starved them; the rankers are deleted now (the cut rung), so the seam is
 held by its second reason — the frame base is settled fp there (pre-a4ize an r4 is also
@@ -315,11 +315,11 @@ of `immok`: a64 add/sub ±16M, cmp ±4095, logicals bottom-aligned masks, mul ne
 `cmpfuse` and the `si` fold stay home — no memory-operand compare and no store-immediate
 off x64. The epilogue's `(lea sp fp 0)` is teardown, not an address take (stld/deadst).
 
-Priced by count — on fixed-width arm64 count IS bytes, and on in-order cores it is
+Priced by count — on fixed-width a64 count IS bytes, and on in-order cores it is
 close to cycles: the 150-program battery's .text −28,672 B (**−2.76%**), 131/150
 programs changed, riscv byte-identical (still unswept — its lane needs its own rezx
-producer table: `rorw` sign-extends). Gates: ccarm64 150, cts_arm64 211/220, fixpoint,
-test_slow, and a cross-seeded `love-aarch64` bakes and runs `love cc` under qemu.
+producer table: `rorw` sign-extends). Gates: cca64 150, cts_a64 211/220, fixpoint,
+test_slow, and a cross-seeded `love-a64` bakes and runs `love cc` under qemu.
 
 ## the SSA question, measured (2026-08-27)
 

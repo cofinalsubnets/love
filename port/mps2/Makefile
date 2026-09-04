@@ -44,7 +44,7 @@ $(eval $(call p_obj,main-baker,port/mps2/main.c,$(mainc),$(mps2_cc) -D BAKER))
 $(eval $(call p_obj,main-waker,port/mps2/main.c,$(mainc),$(mps2_cc) -D WAKER))
 
 # start.o: the vector table, the FPU gate and the semihosting trampoline, laid from holo IR
-# -- no gas. port/virt/mkstart.l is the same shape at riscv64, port/rp2040/mkboot2.l the
+# -- no gas. port/virt/mkstart.l is the same shape at rv64, port/rp2040/mkboot2.l the
 # named-section one.
 $(eval $(call p_lay,start,mkstart,"$(o)/start.o"))
 

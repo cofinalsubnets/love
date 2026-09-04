@@ -53,8 +53,8 @@ echo "CC crew/holo/text.l (love0 lane)"
 "$m" crew/moon/stage.l || fail "moon-stage (the ;; moon-stage line names the seam)"
 
 arch=$(uname -m)
-if [ "$arch" != x86_64 ]; then
-  echo "mooncc: cc (laws only -- x86_64 e2e skipped on $arch) ok"
+if [ "$arch" != x64 ]; then
+  echo "mooncc: cc (laws only -- x64 e2e skipped on $arch) ok"
   exit 0
 fi
 
@@ -140,11 +140,11 @@ c11feat() {                        # TGT MACRO want(1 present | 0 absent)
   moonrun -c -t "$1" -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
     || fail "C11 feature macro $2 on $1 (want present=$3)"
 }
-for t in x64 arm64 riscv64 thumb2 thumb2sp thumb1; do
+for t in x64 a64 rv64 thumb2 thumb2sp thumb1; do
   for mac in __STDC_NO_ATOMICS__ __STDC_NO_THREADS__ __STDC_UTF_16__ __STDC_UTF_32__; do
     c11feat "$t" "$mac" 1
   done
-  case $t in x64|arm64) c11feat "$t" __STDC_NO_VLA__ 0 ;; *) c11feat "$t" __STDC_NO_VLA__ 1 ;; esac
+  case $t in x64|a64) c11feat "$t" __STDC_NO_VLA__ 0 ;; *) c11feat "$t" __STDC_NO_VLA__ 1 ;; esac
   case $t in x64)       c11feat "$t" __STDC_NO_COMPLEX__ 0 ;; *) c11feat "$t" __STDC_NO_COMPLEX__ 1 ;; esac
 done
 # a TU that is ONLY a _Static_assert -- want answers the remainder, which is () at
@@ -304,7 +304,7 @@ moonrun "$ho/.casm3.c" "$ho/.casm3" > /dev/null 2>&1 || fail "mooncc asm in-out 
 "$ho/.casm3"; a=$?
 [ $a -eq 42 ] || fail "mooncc asm in-out (got $a want 42)"
 
-moonrun -t arm64 -o "$ho/.casm1a" "$ho/.casm1.c" > /dev/null 2>&1 || fail "mooncc asm arm64 compile"
+moonrun -t a64 -o "$ho/.casm1a" "$ho/.casm1.c" > /dev/null 2>&1 || fail "mooncc asm a64 compile"
 
 # the same template through the BOOTSTRAP compiler. every check above rides the
 # default love, and inline asm is the one feature whose front end (the combinators
@@ -629,8 +629,8 @@ done
 # ..and where the arch has NO translation tables the refusal must stand: riscv's os.c
 # reads -os and only linux has an answer, so a BSD there owes a compile that #errors.
 # handing it the carried (linux-built) archive would link linux's numbers in silence.
-moonrun -t riscv64 "$ho/.os.c" -o "$ho/.os.rv" > /dev/null 2>&1 \
-  || fail "carried runtime: -t riscv64 did not link"
+moonrun -t rv64 "$ho/.os.c" -o "$ho/.os.rv" > /dev/null 2>&1 \
+  || fail "carried runtime: -t rv64 did not link"
 moonrun -t riscv64 -os netbsd "$ho/.os.c" -o "$ho/.os.rvnb" > /dev/null 2>&1 \
   && fail "carried runtime: -t riscv64 -os netbsd linked -- it took linux's archive for a BSD"
 echo "mooncc: the carried runtime is kernel-neutral (linux/freebsd/netbsd all take it; riscv's BSDs still refuse) ok"

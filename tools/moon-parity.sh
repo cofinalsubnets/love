@@ -5,7 +5,7 @@
 #
 # moon-sweep.sh measures one target against a real package; moon-reject.sh measures
 # the refusal surface against gcc. This measures the TARGETS AGAINST EACH OTHER,
-# which neither of those can see: a lane that x64 has and riscv64 does not is
+# which neither of those can see: a lane that x64 has and rv64 does not is
 # invisible to any single-target sweep, and invisible to gcc, because gcc has them
 # all. Cross-target drift is the failure this tree actually ships -- src/love.c compiles
 # everywhere, so the gaps live in the C that src/love.c never writes.
@@ -19,7 +19,7 @@
 #   —        -- refused. The cause is printed by `moon-parity.sh why`.
 #
 # The borrow test is "an undefined symbol the probe's own source never declared",
-# not a grep for __aeabi_ -- so it catches an x64 or riscv64 lane reaching for
+# not a grep for __aeabi_ -- so it catches an x64 or rv64 lane reaching for
 # libgcc's own spellings (__divti3, __muldc3) as readily as arm's.
 #
 # ⚠ NO FOREIGN TOOL: the symbols come from `kore nm -u`, which is holo's ELF reader
@@ -54,7 +54,7 @@ d=${TMPDIR:-/tmp}/moon-parity.$$
 mkdir -p "$d"
 trap 'rm -rf "$d"' EXIT
 
-targets='amd64 arm64 riscv64 thumb2 thumb2sp thumb1'
+targets='x64 a64 rv64 thumb2 thumb2sp thumb1'
 
 # p LABEL SOURCE [DECLARED..] -- one feature, compiled on every target. LABEL is the
 # doc's row spelling and the join key; keep the two identical or `check` reports drift
@@ -121,9 +121,9 @@ if [ -s "$d/objs" ]; then
     $1=="U" && NF==2 { print (f==""?one:f), $2 }
   ' "$d/undef.txt" > "$d/pairs.txt"
   while read -r f s; do
-    b=${f##*/}; b=${b%.o}                 # p3.arm64
+    b=${f##*/}; b=${b%.o}                 # p3.a64
     i=${b%%.*}; i=${i#p}                  # 3
-    t=${b#*.}                             # arm64
+    t=${b#*.}                             # a64
     grep -qx -- "$s" "$d/p$i.allow" 2>/dev/null && continue
     printf 'libgcc' > "$d/p$i.$t.v"
     printf '%s\n' "$s" >> "$d/p$i.$t.borrow"
@@ -133,13 +133,13 @@ fi
 cell() { v=$(cat "$d/p$1.$2.v"); [ "$v" = ok ] && printf '✓' || printf '%s' "$v"; }
 
 emit_table() {
-  echo '| lane | x64 | arm64 | riscv64 | thumb2 | thumb2sp | thumb1 |'
+  echo '| lane | x64 | a64 | rv64 | thumb2 | thumb2sp | thumb1 |'
   echo '|---|:-:|:-:|:-:|:-:|:-:|:-:|'
   i=0
   while [ $i -lt $n ]; do
     i=$((i+1))
     printf '| %s | %s | %s | %s | %s | %s | %s |\n' "$(cat "$d/p$i.label")" \
-      "$(cell $i x64)" "$(cell $i arm64)" "$(cell $i riscv64)" \
+      "$(cell $i x64)" "$(cell $i a64)" "$(cell $i rv64)" \
       "$(cell $i thumb2)" "$(cell $i thumb2sp)" "$(cell $i thumb1)"
   done
 }

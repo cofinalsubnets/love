@@ -346,7 +346,7 @@ until rung 6.
 - **rung 7 — the other ISAs.** a64 next (its pool and sweeps differ; the a64
   sweep chain reads the chosen ir). Then the pure upside: rv64 and t32 have
   nhome=0 TODAY — locals in registers for the first time on riscv's t0..t3
-  pool; thumb2's pool is empty so cs seats only. ccarch/ccriscv gate each.
+  pool; thumb2's pool is empty so cs seats only. ccarch/ccrv64 gate each.
 
   **OPENED 2026-08-28 (ee160604): MOON_ABLATE=uni opts a remaining ISA into
   the one build; a64 is calibrated and gate-green, NOT yet flipped.** The a64
@@ -370,11 +370,11 @@ until rung 6.
   homed-through-storm won dynamically because per-PATH crossings are rare;
   chasing that residual wants path frequency, not more static counts).
   a64 under the knob: −1391 forms vs the dance, zero genfails over 86 TUs,
-  test_ccarm64 153/153, test_cts_arm64 211/220 (the corpus reference),
-  moon-tar/gzip-arm64 build+run+roundtrip. arm64check.sh fails on BOTH
+  test_cca64 153/153, test_cts_a64 211/220 (the corpus reference),
+  moon-tar/gzip-a64 build+run+roundtrip. arm64check.sh fails on BOTH
   worlds — the local cross-gcc predates musttail (environmental, recorded).
-  rv64/t32 under the knob are BEHAVIORALLY GREEN too (ccriscv 150/150,
-  cts_riscv 210/220 — the corpus reference — and thumb2's differential
+  rv64/t32 under the knob are BEHAVIORALLY GREEN too (ccrv64 150/150,
+  cts_rv64 210/220 — the corpus reference — and thumb2's differential
   battery runs on qemu Cortex-M7), so the pure-upside claim is validated,
   not just predicted; their calibration and flips remain open.
 
@@ -384,9 +384,9 @@ until rung 6.
   guest instructions; the corpus rides `LOVE_NO_IMAGE=1 qemu-aarch64
   -plugin insncount.so lovex < corpus.l`, boot-subtracted, and repeat runs
   agree to 5 parts in a million — no cycles lottery, no attribution
-  ambiguity. ⚠ `love seed arm64` DROPS MOON_ABLATE somewhere in its spawn
+  ambiguity. ⚠ `love seed a64` DROPS MOON_ABLATE somewhere in its spawn
   (both worlds seeded byte-identical); build the per-world binary with
-  `MOON_ABLATE=... make xa=aarch64 out/x-aarch64/love` instead. The verdict:
+  `MOON_ABLATE=... make xa=a64 out/x-a64/love` instead. The verdict:
   the one build reads +2.0% guest insns over the dance (22.90G vs 22.45G,
   corpus minus boot) DESPITE −1391 forms and −0.58% .text — the fourth time
   this arc's statics pointed opposite to dynamics, and the first where the
@@ -423,8 +423,8 @@ until rung 6.
     the parity instrument holds; x64's lane is untouched byte-for-byte.
   Re-measured at matched corpus: dance 55.145G → uni 54.926G exact guest
   insns (−0.40%; tailst moved the dance itself −0.001%). lvm_cond now −142M
-  vs the dance, mag_mul +93M residual. Gates: test, ccarm64 153/153,
-  cts_arm64 211/220, ccriscv 150/150, thumb2 battery — all at reference.
+  vs the dance, mag_mul +93M residual. Gates: test, cca64 153/153,
+  cts_a64 211/220, ccrv64 150/150, thumb2 battery — all at reference.
   ⚠ attribution caveat: the LAST text symbol swallows the post-text islands
   (lvm_chain "+105M" is veneer/island code differing between layouts, not
   lvm_chain — it is one branch in both worlds). All three instruments now
@@ -437,7 +437,7 @@ until rung 6.
   default cross binary answers the exact meter within 5.7ppm of the
   calibrated uni world (54.9261G vs 54.9258G), the data/bss fingerprint
   matches the uni world exactly, and gates sit at reference (test ×3,
-  ccarm64 153/153, cts_arm64 211/220, test_slow + seed fixpoint). ⚠ a
+  cca64 153/153, cts_a64 211/220, test_slow + seed fixpoint). ⚠ a
   byte-compare across the flip CANNOT close: MOON_ABLATE=uni opts EVERY
   remaining ISA in, so a pre-flip uni cross binary carries rv64-uni rt
   members where the default keeps rv64 on the dance — the embedded rt
@@ -470,7 +470,7 @@ until rung 6.
   2026-08-28** — the default is the one build (uniw? bars only t32), and the
   parity closed at the FILE HASH this time: the rv64 artifact carries no t32
   objects, so post-flip default and MOON_ABLATE=uni are byte-identical.
-  Gates at reference (test, ccriscv 151/151, cts_riscv 211/220, test_slow +
+  Gates at reference (test, ccrv64 151/151, cts_rv64 211/220, test_slow +
   fixpoint). **t32 FLIPPED the same day — the LAST bar comes off uniw?: the
   one build is the default on every target**, a hygiene flip (the empty t32
   pool grants nothing) whose one real finding was v6m's: the first grant
@@ -492,7 +492,7 @@ until rung 6.
   pmax/pmin/pslots/nreads/nrac, and the obuild/pcell/alloc/pdefcs/pdef knob
   arms; spill keeps two policies (() and 'uni); uniw? itself is gone (the
   one build is the only world; uni9 = !(sr6f || vararg)). law.l drops the
-  knob-face law blocks (x64 pcell, the arm64 stage-D section, the pdef/
+  knob-face law blocks (x64 pcell, the a64 stage-D section, the pdef/
   pdefcs hull halves, the alloc round-trip) and the stale rv64-VLA refusal
   law (three lanes now). rcost STAYS (rprice/rpays? price splice binds);
   spill/build, repack's chains, the sweeps, sibcall, and the armed shadow
@@ -500,7 +500,7 @@ until rung 6.
   objects (ev.c + am.c across all five targets) byte-identical pre/post;
   the whole rv64 artifact's .text diffs ONLY in 974 auipc + 37 addi address
   pairs chasing the smaller carried source (no semantic word differs);
-  test, test_moon, ccarm64 153, ccriscv 151, thumb1+thumb2, test_slow +
+  test, test_moon, cca64 153, ccrv64 151, thumb1+thumb2, test_slow +
   fixpoint all at reference. The old worlds live in git history (any
   pre-cut commit rebuilds them); MOON_ABLATE keeps ralloc/tpool/cs as
   pricing levers. ⚠ a whole-artifact byte or .text compare can never close
@@ -508,7 +508,7 @@ until rung 6.
   address-formers to move.
 
   (superseded) rv64 pricing was BLOCKED before it started: the hosted cross binary
-  (`make xa=riscv64 out/x-riscv64/love`) refuses in BOTH worlds on a
+  (`make xa=rv64 out/x-rv64/love`) refuses in BOTH worlds on a
   pre-existing gap — "no lane for a variable-length array on rv64"
   (src/image.c image_bake) — so there is no corpus lane to meter. The
   rv64 flip decision waits on that lane (or on choosing a smaller

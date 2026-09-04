@@ -23,8 +23,8 @@
    ; the pure interpreter, captured once: on a re-load `ev` is auto-ev already, so read the interpreter
    ; out of the module book -- else base-ev is the glaze, and autospec's static fold re-enters it
    base-ev (: G (from 'glaze) (? G (G 'base-ev) ev))
-   arch love-arch                         ; the host CPU as the assembler target ('amd64 / 'arm64), already a nom; glaze loads only on these
-   x86? (id? arch 'amd64)                 ; gates the still-x86-only lanes (float result, counted loops, float grids)
+   arch love-arch                         ; the host CPU as the assembler target ('x64 / 'a64), already a nom; glaze loads only on these
+   x86? (id? arch 'x64)                 ; gates the still-x86-only lanes (float result, counted loops, float grids)
    ; the emitter's expression grammar over var v, exact arity: (+ x 1 2) is a tower, not x + 1
    (exprp e v) (? (e = v) 1  (whole? e) 1  (atom? e) 0
                   (e @ (op a b) (member? op '(+ - * // % & | ^ < <= > >= =) && exprp a v && exprp b v)
@@ -1140,11 +1140,11 @@
    ; that rewrote embedded lambdas on a jit-walk -- cannot sit here: it is pre-macroexpansion, so it can
    ; disturb a macro's data args, and the compile cache would make structurally-equal closures
    ; id?-identical, against love's !(id? (\ x E) (\ x E)).
-   ; the lanes route to `arch`. on x86 the full glaze runs; on arm64 the integer lanes and the scalar
+   ; the lanes route to `arch`. on x86 the full glaze runs; on a64 the integer lanes and the scalar
    ; float-result leaf are live, and only the float-grid lane and castbuild's cask-fill are x86-only --
    ; autogroup carries every source rewrite that lowers to the integer group, so fib/tak/primes glaze
    ; there too.
-   (auto-ev e) (? !x86? (? (qual e)  (memo e (l \ jitir l arch))        ; arm64: integer + scalar-float lanes native
+   (auto-ev e) (? !x86? (? (qual e)  (memo e (l \ jitir l arch))        ; a64: integer + scalar-float lanes native
                                (qualn e) (memo e (l \ jitnir l arch))
                                (qualc e) (memo e (l \ jitnir (flatc l) arch))
                                (qualfr e) (memo e (l \ jitfr l arch))      ; float-result leaf -> heap-boxed gem

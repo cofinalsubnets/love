@@ -19,28 +19,34 @@ m = $R/out/host$(hsuf)/love
 # `else ifeq` as a bare else and drops the condition.
 uname_m := $(shell uname -m)
 hosta := $(uname_m)
-ifeq ($(uname_m),amd64)
-hosta := x86_64
-endif
-ifeq ($(uname_m),arm64)
-hosta := aarch64
-endif
 ifeq ($(uname_m),evbarm)
 hosta := $(shell uname -p)
+endif
+ifeq ($(hosta),x86_64)
+hosta := x64
+endif
+ifeq ($(hosta),amd64)
+hosta := x64
+endif
+ifeq ($(hosta),aarch64)
+hosta := a64
+endif
+ifeq ($(hosta),arm64)
+hosta := a64
+endif
+ifeq ($(hosta),riscv64)
+hosta := rv64
 endif
 # ⚠ `?=` MAKES A RECURSIVE VARIABLE, so `a ?= $(shell uname -m)` re-forks uname at every
 # single reference -- 203 of them before this build even reached out/lib/egg.h. Deferring
 # to the simply-expanded $(hosta) keeps the override and spends one fork for the tree.
 a ?= $(hosta)
 
-# arch -> the holo backend that lays for it, and the mksys entry that answers its machine
-# tail. one table, three keys: $a (the kernel), $(hosta) (the host's src.o and rt.o), $(xa).
-tgt_x86_64    = amd64
-tgt_aarch64   = arm64
-tgt_riscv64   = rv64
-mksys_x86_64  = mksys
-mksys_aarch64 = mksys-arm64
-mksys_riscv64 = mksys-riscv
+# the arch word IS the holo backend's name and the mksys entry's suffix; what the world
+# calls the machine (uname -m, qemu-system-*, the ovmf image) is the one table left.
+uname_x64  = x86_64
+uname_a64  = aarch64
+uname_rv64 = riscv64
 
 # THE VERSION, the checked-in ./VERSION and the whole of it -- what a build is called,
 # moving only when a release does. No VCS suffix anywhere: dist names the tarball for it,
@@ -101,8 +107,8 @@ love_codec = gz.c
 # (src/kernel.mk builds them) and the per-ISA files, which `a` picks by prefix.
 kernel_tu = kmain.c sys.c blk.c doom.c
 kernel_c = $(patsubst %,$R/src/%,$(kernel_tu))
-arch_c = $(wildcard $R/src/x86_64_*.c) $(wildcard $R/src/aarch64_*.c) \
-  $(wildcard $R/src/riscv64_*.c) $(wildcard $R/src/uefi_*.c)
+arch_c = $(wildcard $R/src/x64_*.c) $(wildcard $R/src/a64_*.c) \
+  $(wildcard $R/src/rv64_*.c) $(wildcard $R/src/uefi_*.c)
 # ..and the per-ISA set ONE machine's build takes. the rebuild gates link what the
 # artifact links, and that is the host's arch alone -- empty on an arch with no seat,
 # which is what those gates read to skip their kernel half.

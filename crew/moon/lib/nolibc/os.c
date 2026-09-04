@@ -2,7 +2,7 @@
  * rungs UV1-UV2). one build runs linux, freebsd and netbsd: __ai_osdetect asks
  * the kernel which it is (once, at entry or lazily under __ai_call), and
  * numbers, errnos, signals, masks and flag words translate through the tables
- * here. x64 and arm64 carry them; riscv takes the identity stubs below and
+ * here. x64 and a64 carry them; riscv takes the identity stubs below and
  * answers whichever kernel -os named. */
 #include "impl.h"
 
@@ -178,7 +178,7 @@ static short const os_nr[][3] = {
 };
 
 /* ⚠ A PLAIN SCAN, and it must be: the rows are keyed by OUR NR_*, which impl.h
- * defines per arch, so the written order is ascending on x86_64 (read 0, write
+ * defines per arch, so the written order is ascending on x64 (read 0, write
  * 1, close 3 ..) and is NOT on the asm-generic arches (read 63, write 64, close
  * 57 ..). An early exit on a passed key would answer ENOSYS to almost every
  * call the moment this lane opens on arm64. 71 rows, and only on a BSD. */

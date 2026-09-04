@@ -76,7 +76,7 @@
    ;; high regs to 6); C7 /0 id sign-extends a negative signed-32 (7 bytes);
    ;; else the 10-byte movabs (B8+rd io). li density is high (every constant
    ;; and every call-staged argument), so the short form is a real text lever.
-   ;; the immediate must be a number -- see arm64-li's note. every other
+   ;; the immediate must be a number -- see a64-li's note. every other
    ;; operand slot refuses a stranger through `rn`; this one does arithmetic,
    ;; and a symbol survives arithmetic and assembles to a quiet wrong constant.
    (emit-li d imm)
@@ -278,9 +278,9 @@
    ;; the one-operand unsigned divide (the divq the bignum kernel's inline asm speaks):
    ;; rdx:rax / r -> rax quotient, rdx remainder. F7 /6. caller stages rdx:rax itself.
    (emit-divq s) (: sn (rn s) [(rex 1 0 0 (hi sn)) 247 (modrm 3 6 sn)])
-   ;; the thread pointer (the TLS base): x86_64 keeps it in fs, and the ABI lays
+   ;; the thread pointer (the TLS base): x64 keeps it in fs, and the ABI lays
    ;; the pointer itself as the first word of its own block, so (tp d) is one
-   ;; segment-prefixed load -- mov d, fs:[0]. (arm64's face would be mrs tpidr_el0.)
+   ;; segment-prefixed load -- mov d, fs:[0]. (a64's face would be mrs tpidr_el0.)
    (emit-tp d)
       (: dn (rn d) ([100 (rex 1 (hi dn) 0 0) 139 (modrm 0 (lo dn) 4) (sib 0 4 5)] + le32 0))
    ;; compare-and-swap (the atomic seam): lock cmpxchg [ptr], new. x86 compares
@@ -342,7 +342,7 @@
    ;; two part company, and in the kernel's bring-up they do: the image is linked
    ;; high and runs low until paging comes on, so the hop into the high mapping
    ;; needs the address the linker assigned. abs64 is never resolvable inside a
-   ;; .o, so this always leaves a relocation. aarch64 says it in three words.
+   ;; .o, so this always leaves a relocation. a64 says it in three words.
    (emit-lia d label)
       (: dn (rn d) [(rex 1 0 0 (hi dn)) (184 | lo dn) (fix 8 'abs64 label 0)])
    ;; ldseg: d <- the segment register n (ES CS SS DS FS GS = 0..5). 8C /r, the
@@ -369,7 +369,7 @@
    (emit-callr d) (: dn (rn d) ((dn >= 8 ? '(65)) + [255 (modrm 3 2 dn)]))
    ;; mulo: d <- a*b (low 64), branch to lbl on signed overflow. imul (0F AF) sets OF when the
    ;; product leaves signed-64, so a plain `jo` is exact -- the scratch `t` is unused on x86 (only
-   ;; aarch64 needs it, for smulh).
+   ;; a64 needs it, for smulh).
    (emit-mulo d a b t lbl) (emit-imul d a b + [15 128 (fix 4 'rel32 lbl 0)])      ; <imul> ; 0F 80 jo rel32
    ;; set: d <- (cond) ? 1 : 0 from the last cmp -- setcc dl (0F 9x /0) then movzx d,dl (0F B6 /r). a
    ;; REX (B for r8b+, a bare 0x40 for spl/bpl/sil/dil) forces the byte operand to be the low byte,
@@ -437,7 +437,7 @@
       (: dn (xrn d) (catall ['(243) (xrex 0 dn (rn base)) '(15 16) (mem dn base disp)]))
 
    ;; -- the system lane: what a kernel says and a userland never does. every encoding below was
-   ;; taken from `llvm-mc -triple=x86_64 --show-encoding`, and test/holo/golden.l keeps them there.
+   ;; taken from `llvm-mc -triple=x64 --show-encoding`, and test/holo/golden.l keeps them there.
    ;;
    ;; the descriptor-table loads and invlpg are one opcode, 0F 01, told apart by the Modrm digit
    ;; -- so they ride `mem` (which takes the digit where a register number would go) with a REX
@@ -528,7 +528,7 @@
           ('rem . (\ d a b t (emit-div 1 1 d a b)))         ; (rem d a b t) -- the scratch t is rdx's job on x86
           ('urem . (\ d a b t (emit-div 1 0 d a b)))
           ('call . emit-call)
-          ('la . emit-la) ('lar . emit-la)                 ; lar == la on x86 (rip-rel lea, already translation-invariant); arm64 differs (ADR vs ADRP)
+          ('la . emit-la) ('lar . emit-la)                 ; lar == la on x86 (rip-rel lea, already translation-invariant); a64 differs (ADR vs ADRP)
           ('lia . emit-lia) ('ldseg . emit-ldseg)
           ('cmppd . emit-cmppd) ('movmskpd . emit-movmskpd)
           ('cvtsi2sd . emit-cvtsi2sd) ('cvttsd2si . emit-cvttsd2si)
@@ -598,5 +598,5 @@
          (? !(fits8 (rel - 2)) ()
             (<ins == 'jmp) (emit-jmp8 (ins 1))
             (emit-br8 (ins 1) (ins 2))))}
-   (defbackend 'amd64 x64))
+   (defbackend 'x64 x64))
 ) ; module 'holo

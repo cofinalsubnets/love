@@ -1,8 +1,8 @@
-// aarch64 architecture-specific C: the PL011 serial console, the GICv2
+// a64 architecture-specific C: the PL011 serial console, the GICv2
 // interrupt controller, the ARM generic timer, and CPU-exception
 // reporting. the exception vector table itself is laid by src/mkvec.l;
-// archinit points VBAR_EL1 at it. this is the aarch64 counterpart of
-// x86_64/arch.c -- same contract (archinit, serial_init, serial_putc,
+// archinit points VBAR_EL1 at it. this is the a64 counterpart of
+// x64/arch.c -- same contract (archinit, serial_init, serial_putc,
 // k_reset), different hardware.
 #include <stdint.h>
 #include "asmops.h"                    // the privileged instructions, both spellings
@@ -16,7 +16,7 @@ extern uint64_t kticks;
 
 // kq (k/main.c) enqueues one input byte; cb_putc / fbdraw render the
 // console. fault reporting writes the framebuffer ring buffer (kcb) and
-// mirrors to serial, exactly as x86_64 does.
+// mirrors to serial, exactly as x64 does.
 void kq(uint8_t);
 struct cb;
 extern void cb_putc(struct cb*, char);
@@ -106,7 +106,7 @@ static void mmio_map(void) {
   k_tlbi_all(); }
 
 // --- PL011 serial console --------------------------------------------
-// the aarch64 analogue of x86_64's COM1: a second console alongside the
+// the a64 analogue of x64's COM1: a second console alongside the
 // framebuffer, and the only console when no framebuffer is present.
 // output is also the panic channel. input is interrupt-driven via the
 // receive FIFO: a burst raises the receive interrupt at the FIFO
@@ -114,7 +114,7 @@ static void mmio_map(void) {
 // once the line goes idle. either way the GIC delivers UART_INTID,
 // k_irq routes it to k_uart, and k_uart drains the whole FIFO into the
 // same input queue the rest of the kernel reads. bytes pass through
-// verbatim, exactly as on x86_64.
+// verbatim, exactly as on x64.
 #define UARTDR    0x000                // data register
 #define UARTFR    0x018                // flag register
 #define UARTLCR_H 0x02c                // line control
@@ -126,7 +126,7 @@ static void mmio_map(void) {
 
 // --- the wall clock: the PL031 RTC ------------------------------------
 // one register, already UNIX SECONDS, and already mapped: RTC_PHYS shares the 2MiB
-// block mmio_map lays for the UART. the aarch64 counterpart of x86_64's CMOS walk,
+// block mmio_map lays for the UART. the a64 counterpart of x64's CMOS walk,
 // and a tenth its size -- ⚠ so it must be called AFTER archinit, like everything
 // else that touches device memory here.
 uint64_t k_rtc(void) { return mmio_rd(RTC_PHYS, 0); }
@@ -179,7 +179,7 @@ static void gic_init(void) {
   mmio_wr(GICC_PHYS, GICC_CTLR, 1); }        // enable CPU interface
 
 // --- ARM generic timer (EL1 physical timer) --------------------------
-// fires TIMER_INTID at ~100 Hz, matching the x86_64 PIT rate; the
+// fires TIMER_INTID at ~100 Hz, matching the x64 PIT rate; the
 // handler reloads the countdown, which also deasserts the interrupt.
 static uint64_t timer_interval;        // CNTFRQ_EL0 / 100
 
@@ -253,7 +253,7 @@ void archinit(void) {
   k_daif_unmask_irq(); }               // unmask IRQ (DAIF.I = 0)
 
 // (fault n) backend: deliberately raise a CPU exception. n indexes the
-// x86 vector numbers the builtin shares across arches; on aarch64 we
+// x86 vector numbers the builtin shares across arches; on a64 we
 // map 3 -> breakpoint, 13/14 -> data abort, anything else -> undefined
 // instruction. does not return -- k_fault reports and halts.
 void k_fault_trigger(intptr_t n) {

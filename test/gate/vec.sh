@@ -2,12 +2,12 @@
 # test/gate/vec.sh -- the INTERRUPT gate.
 #
 # src/mkvec.l lays the exception and IRQ entry points that used to be
-# x86_64/x86_64.S and aarch64/aarch64.S. a green `make test_disk` already
+# x64/x64.S and a64/a64.S. a green `make test_disk` already
 # proves most of that lay by running it: nothing boots without archinit's IDT,
 # and the corpus is FED over the serial line and CLOCKED by the timer, so
 # uart_isr and timer_isr run thousands of times per gate. what a green boot
 # never touches is the part that only runs when something goes wrong --
-# the 32 exception stubs, the common tail, and aarch64's fault vector.
+# the 32 exception stubs, the common tail, and a64's fault vector.
 #
 # so this gate makes something go wrong, on purpose, and reads the report:
 #
@@ -24,7 +24,7 @@
 #      the other twenty-seven come off the same loop, and a loop is exactly the
 #      thing that goes wrong at one end. so the laid object is read back and
 #      the error-code split is checked stub by stub against the architecture's
-#      own list -- and on aarch64, that the vector table is 2 KiB-aligned with
+#      own list -- and on a64, that the vector table is 2 KiB-aligned with
 #      one entry every 0x80 and exactly one of the sixteen (index 5, current EL
 #      with SP_ELx, IRQ) going somewhere different from the rest.
 #
@@ -43,16 +43,16 @@ fail() { echo "FAIL test_vec($arch): $*" >&2; : > "$work/failed"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 case $arch in
-  x86_64)  qemu=qemu-system-x86_64;  mach="-M q35" ;;
-  aarch64) qemu=qemu-system-aarch64; mach="-M virt,gic-version=2 -cpu cortex-a72" ;;
-  riscv64) qemu=qemu-system-riscv64; mach="-M virt" ;;
+  x64)  qemu=qemu-system-x86_64;  mach="-M q35" ;;
+  a64) qemu=qemu-system-aarch64; mach="-M virt,gic-version=2 -cpu cortex-a72" ;;
+  rv64) qemu=qemu-system-riscv64; mach="-M virt" ;;
   *) echo "FAIL test_vec: unknown arch $arch" >&2; exit 1 ;;
 esac
 
 # KVM where the host can back it; without /dev/kvm this falls to TCG and the
-# faults report the same. x86_64-on-x86_64 only -- `virt` is asked for
+# faults report the same. x64-on-x64 only -- `virt` is asked for
 # gic-version=2 above, which an arm host with no v2 backing refuses outright.
-if [ "$arch" = x86_64 ] && [ -e /dev/kvm ] && [ "$(uname -m)" = x86_64 ]; then
+if [ "$arch" = x64 ] && [ -e /dev/kvm ] && [ "$(uname -m)" = x86_64 ]; then
   mach="$mach -enable-kvm -cpu host"
 fi
 
@@ -105,19 +105,19 @@ else
   # no-error-code stub (0, 3, 6), an error-code stub whose code happens to be
   # zero (13), and the one that reports all three fields (14).
   case $arch in
-    x86_64) cases='0:exception 0 (#DE)
+    x64) cases='0:exception 0 (#DE)
 3:exception 3 (#BP)
 6:exception 6 (#UD)
 13:exception 13 (#GP)
 14:exception 14 (#PF)|err=2|cr2=600000000000' ;;
-    # aarch64 has no error-code split: every fault reaches the sync vector and
+    # a64 has no error-code split: every fault reaches the sync vector and
     # a_fault reads ESR/ELR/FAR itself. esr 0x2000000 is EC=0 (unknown
     # instruction, the udf), 0x96000044 EC=0x25 (data abort at the current EL).
-    aarch64) cases='6:esr=2000000
+    a64) cases='6:esr=2000000
 14:data abort|far=600000000000' ;;
     # riscv has one entry and k_trap reads scause/sepc/stval itself: cause 2 is the
     # illegal instruction, 3 the breakpoint, 15 a store page fault with the address.
-    riscv64) cases='6:illegal instruction|cause=2
+    rv64) cases='6:illegal instruction|cause=2
 3:breakpoint|cause=3
 14:store page fault|cause=f|tval=ffffffc100000000' ;;
   esac
@@ -142,7 +142,7 @@ elif [ ! -f "$obj" ]; then
   fail "$obj was never laid"
 else
   case $arch in
-    x86_64)
+    x64)
       # the ARCHITECTURE's list, not a restatement of mkvec.l: these are the
       # vectors for which the CPU itself pushes an error code (Intel SDM
       # vol.3 6.3.1 -- #DF #TS #NP #SS #GP #PF #AC #CP #VC #SX).
@@ -166,7 +166,7 @@ else
         v=$((v + 1))
       done
       ;;
-    aarch64)
+    a64)
       # VBAR_EL1 ignores the low 11 bits, so a table off its 2 KiB boundary
       # would dispatch into the middle of another entry. sh_addralign is the
       # last column of the section header, and it is the linker's instruction.
@@ -187,7 +187,7 @@ else
       [ "$(echo "$odd" | tr -d ' ')" = 6 ] ||
         fail "exactly one of the sixteen vectors (slot 5, current EL SP_ELx IRQ) must differ; the odd one out is entry$odd"
       ;;
-    riscv64)
+    rv64)
       # one entry, one return: every register the entry saves against sp comes back
       # off the same slot -- the two unnamed scratches included -- and the sret is
       # the last word laid, so nothing runs past the restore.

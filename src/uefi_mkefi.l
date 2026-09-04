@@ -7,7 +7,7 @@
 ; three thunks in one object, laid FIRST so the PE entry is the first text byte.
 ; what they have to say differs by arch because the CALLING CONVENTION does:
 ; UEFI on x86-64 is ms_abi and the loader C is sysv, so both directions need a
-; shuffle; UEFI on aarch64 is AAPCS64, which is what the C already speaks, so
+; shuffle; UEFI on a64 is AAPCS64, which is what the C already speaks, so
 ; the two call thunks are pure tail jumps and only efi_go carries weight.
 ;   efiboot -- firmware enters here.
 ;   efi_call -- every UEFI service goes back OUT through this.
@@ -58,12 +58,12 @@
       (raw (15 34 223))           ; mov cr3, rdi
       (jmpr r5))                  ; jmp rsi -- kmain, never back
 
-;; -- aarch64: AAPCS64 both ways ---------------------------------------------
+;; -- a64: AAPCS64 both ways ---------------------------------------------
 ;; x0..x5 carry (fn a b c d e) in and (a b c d e) out, so efi_call is a shuffle
 ;; and a TAIL jump: fn returns straight to efi_call's caller with LR untouched.
 ;; efiboot is the same trick with no shuffle at all -- UEFI hands x0/x1 exactly
 ;; where efi_main(handle, st) wants them.
-   efi-ir-arm64
+   efi-ir-a64
     '((label efiboot)
       (jmp efi_main)              ; x0/x1 already right; LR rides through
       (label efi_call)
@@ -93,8 +93,8 @@
       (jmpr r1))                  ; the kernel's entry, never back
 
    efi-exports '("efi_call" "efi_go")
-   (efi-tgt arch) (arch @ "aarch64" 'arm64 'amd64)
-   (efi-ir arch)  (arch @ "aarch64" efi-ir-arm64 efi-ir-x64)
+   (efi-tgt arch) (arch @ "a64" 'a64 'x64)
+   (efi-ir arch)  (arch @ "a64" efi-ir-a64 efi-ir-x64)
    (mkboot out arch objs)
     (: srcs (map (\ f (: r (uread f)
                        (two? r ? [f <>r] (say err ("mkefi: cannot open " + f), quit 1))))

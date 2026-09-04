@@ -89,7 +89,7 @@
    (<= <>was <>now)
    (= (tally orig) <back)
    ; the wall clock, which every line above leans on: the door's date if it left
-   ; one, else the machine's own rtc (mc146818 on x86_64, PL031 on aarch64). It reads as
+   ; one, else the machine's own rtc (mc146818 on x64, PL031 on a64). It reads as
    ; milliseconds since the epoch here exactly as it does on the host -- an uptime
    ; in ticks is what it used to be, and would fail this by a factor of a thousand.
    (< 1600000000000 (clock 0))))

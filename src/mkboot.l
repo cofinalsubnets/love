@@ -1,17 +1,17 @@
 ; src/mkboot.l -- lay boot.o, the kernel's BRING-UP: the code that runs before there is a C environment to run in. mkvec.l's
 ; sibling and mksys.l's class -- register-exact leaves C cannot say.
 ;
-;   (lay-boot dst "x86_64")   the PVH note qemu reads to find the 32-bit entry,
+;   (lay-boot dst "x64")   the PVH note qemu reads to find the 32-bit entry,
 ;                             the page tables + GDT, the long-mode ladder, khop
-;   (lay-boot dst "aarch64")  the translation tables, MAIR/TCR/TTBR, the MMU
+;   (lay-boot dst "a64")  the translation tables, MAIR/TCR/TTBR, the MMU
 ;                             switch, the hop into the mapped world, khop
-;   (lay-boot dst "riscv64")  the one sv39 root, satp, sstatus.FS, khop
+;   (lay-boot dst "rv64")  the one sv39 root, satp, sstatus.FS, khop
 ;
 ; the link is FLAT on every arch (the projection: vaddr = paddr at the kernel base), so a label's
 ; running address, its linked address, and the address a page table wants to hold
-; are ONE number. `la` (x86 rip-relative lea; aarch64 adrp+add) answers it, and a
+; are ONE number. `la` (x86 rip-relative lea; a64 adrp+add) answers it, and a
 ; field can name it whole -- the PVH note's entry word, the GDT register's base,
-; the ljmp's target. `lia` (x86 movabs; aarch64 an inline literal) stays only
+; the ljmp's target. `lia` (x86 movabs; a64 an inline literal) stays only
 ; where an absolute is wanted for its own sake: the hop that takes the first
 ; fetch after the MMU comes on, where a pc-relative branch would ride a broken
 ; map instead of failing on it, and the stack it lands on.
@@ -19,7 +19,7 @@
 ; runs after crew/holo/{elf,obj}.l in a (use 'holo) cat, with the target's
 ; backend text joined (a frontend bakes holo with the NATIVE backend only);
 ; src/kernel.mk drives it. register vocabulary is holo's -- x86: r0=rax
-; r1=rcx r2=rdx r3=rbx r5=rsi r6=rdi; aarch64: rN = xN.
+; r1=rcx r2=rdx r3=rbx r5=rsi r6=rdi; a64: rN = xN.
 (:
    (b-rep n x) (? (n < 1) () (x >< (b-rep (n - 1) x)))
    (b-zeros n) (b-rep n 0)
@@ -66,7 +66,7 @@
    (i-ljmp l a)     ((234 >< (b-abs32 l a)) + '(8 0))        ; ea off32 sel16  ljmp $0x08, $sym
    (i32 bs) ['raw bs]                                        ; one 32-bit instruction, one form
 
-   ;; -- x86_64 ------------------------------------------------------------
+   ;; -- x64 ------------------------------------------------------------
    ;; the note `qemu -kernel` reads to find the 32-bit entry. it is an ELF NOTE
    ;; the LOADER consults, not advisory metadata, so link.l places it like
    ;; progbits instead of dropping it (dropping it would strand the kernel).
@@ -158,7 +158,7 @@
        (label x_park)
        (cli) (hlt) (jmp x_park))
 
-   ;; -- aarch64 -----------------------------------------------------------
+   ;; -- a64 -----------------------------------------------------------
    ;; the tables mirror x86's shape index for index: one L1 named twice, as the
    ;; identity map under TTBR0 (where the kernel runs) and as the hhdm at
    ;; L0[256] under TTBR1. the first gig is virt's MMIO ground and is laid as a
@@ -272,12 +272,12 @@
        (wfi)
        (jmp a64_park))
 
-   ;; -- riscv64 ------------------------------------------------------------
+   ;; -- rv64 ------------------------------------------------------------
    ;; sv39, and the whole map is ONE table: a root's 512 entries each describe a
    ;; gigabyte, so four of them at [0..3] are the identity window the kernel runs
    ;; in and four more at [256..259] are the hhdm at 0xffffffc0_00000000 -- which
    ;; is where sv39's upper half begins, index 256 being its first entry. no second
-   ;; level anywhere: x86 needs one for its 2 MiB pages and aarch64 one more for
+   ;; level anywhere: x86 needs one for its 2 MiB pages and a64 one more for
    ;; virt's device ground, and riscv wants neither -- MMIO lives under the first
    ;; gigabyte, and a base sv39 PTE carries no memory type to say about it (that is
    ;; the platform's PMA, or Svpbmt, and this machine needs neither).
@@ -287,7 +287,7 @@
    ;; the address half is just i << 28. flags V|R|W|G|A|D, plus X on the identity
    ;; window alone -- the hhdm is how the kernel reaches ram (kboot.hhdm), and NOT
    ;; being able to fetch through it is the whole reason a second window is worth
-   ;; its entries. x86 says this with NX at PML4[256], aarch64 with the XN pair.
+   ;; its entries. x86 says this with NX at PML4[256], a64 with the XN pair.
    (r-pte i x) ((i << 28) | (x ? 0xEF 0xE7))
    r-boot-text
     ('((label rvboot)
@@ -338,8 +338,8 @@
    ;; file bytes today and the loader hands the whole span over.
    (lay-boot dst arch) (write-bytes dst (lay-boot-bytes arch))
    (lay-boot-bytes arch)
-    (? (arch = "x86_64")
-       (objsecs 'amd64
+    (? (arch = "x64")
+       (objsecs 'x64
                 [[".note.pvh"  7 2 4    x-note]
                  [".boot"      1 3 4096 x-boot]
                  [".boot.text" 1 6 16   x-boot-text]
@@ -348,8 +348,8 @@
                 ()                       ; the ELF entry is kmain's; the PVH entry rides the note
                 () ()
                 '("pvh32" "pvh64" "khop"))
-       (arch = "aarch64")
-       (objsecs 'arm64
+       (arch = "a64")
+       (objsecs 'a64
                 [[".boot"      1 3 4096 a-boot]
                  [".boot.text" 1 6 16   a-boot-text]
                  [".text"      1 6 16   a-text]
@@ -357,7 +357,7 @@
                 '("a64boot")             ; kproject.l names it as the ELF entry
                 () ()
                 '("khop"))
-       (arch = "riscv64")
+       (arch = "rv64")
        ;; the stub before the tables, which is the other way round from both lanes
        ;; above: this door is entered at the ADDRESS a kernel was loaded to and not
        ;; at the symbol an ELF header names -- qemu's virt hands SBI the load base,

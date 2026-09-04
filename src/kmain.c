@@ -9,7 +9,7 @@
 #include <errno.h>      // the E numbers only (the host's, linux's) -- no errno variable down here
 
 uint64_t kticks;
-// the timer runs at 100 Hz on both arches (mkvec.l's PIT divisor, aarch64's
+// the timer runs at 100 Hz on both arches (mkvec.l's PIT divisor, a64's
 // cntfrq/100), so one tick is this many milliseconds -- the granularity every
 // deadline below rounds up to.
 #define k_tick_ms 10
@@ -97,7 +97,7 @@ uint64_t k_rtc(void);                  // the machine's own clock, unix seconds 
 #include <stdarg.h>
 // kboot -- the machine as the door found it, filled BEFORE kmain reads it:
 // pvh_to_kboot off qemu's hvm_start_info, the UEFI loader off the firmware
-// memmap and GOP, the aarch64 stub off the DTB. nothing below asks which door
+// memmap and GOP, the a64 stub off the DTB. nothing below asks which door
 // answered, which is the whole point of the struct.
 struct k_boot kboot;
 
@@ -1188,7 +1188,7 @@ static lvm(lvm_disk_write) {
   Sp[1] = k_disk_write(Sp[0], Sp[1]);
   ai_musttail return Nextp(1, 1); }
 
-// --- the SVM spike (x86_64 only; src/x86_64_svm.c). (svm ()) is the capability and
+// --- the SVM spike (x64 only; src/x64_svm.c). (svm ()) is the capability and
 // (svm-run ()) runs one guest, answering (exitcode rax rip) or (). nothing else asks for a
 // guest yet: these two rows prove a guest can run and that the exit lands back in plain C.
 #if defined(__x86_64__)
@@ -1225,7 +1225,7 @@ static lvm(lvm_svm_run) {
   Unpack(g);
   ai_musttail return Next(1); }
 
-// ..and its Intel twin (src/x86_64_vmx.c). (vmx-run ())
+// ..and its Intel twin (src/x64_vmx.c). (vmx-run ())
 // answers FOUR numbers where the SVM door answers three: the last is the
 // VM-instruction error, which is the only thing a refused entry has to say and
 // is worth carrying out to where a human reads it.
@@ -1471,7 +1471,7 @@ static lvm(color) {
  ai_musttail return Next(1); }
 
 // (fault n) -- deliberately raise a CPU exception to exercise the ap in arch.c.
-// k_fault_trigger maps n to a concrete fault, the cases mirroring x86_64 vector numbers and
+// k_fault_trigger maps n to a concrete fault, the cases mirroring x64 vector numbers and
 // each arch picking its analogue. the ap reports and halts, so k_fault_trigger does not
 // return and the statements after the call are reachable only if the fault did not fire.
 static lvm(lvm_fault) {
@@ -1595,8 +1595,8 @@ static struct ai_def const __attribute__((section("ai_knifs"), used)) defs[] = {
   {"disk", (intptr_t) nif_disk},
   {"disk-read", (intptr_t) nif_disk_read},
   {"disk-write", (intptr_t) nif_disk_write},
-  // x86_64 only, so a love-side reader asks (member? 'svm (names ())) before (svm ()): on
-  // the aarch64 seat the nom is not in the book, so reading it is missing, not absence.
+  // x64 only, so a love-side reader asks (member? 'svm (names ())) before (svm ()): on
+  // the a64 seat the nom is not in the book, so reading it is missing, not absence.
 #if defined(__x86_64__)
   {"svm", (intptr_t) nif_svm},
   {"svm-run", (intptr_t) nif_svm_run},
@@ -1615,7 +1615,7 @@ extern long __ai_osv;                  // nolibc's "which kernel" (os.c)
 void kmain(void) {
 #if defined(__x86_64__)
  // Enable x87/SSE before ANY other C runs -- a compiler vectorizes freely on
- // x86_64 (even a struct copy compiles to movups), and that #UDs into a triple
+ // x64 (even a struct copy compiles to movups), and that #UDs into a triple
  // fault with no output while SSE is masked. This is the single SSE-enable
  // point; archinit no longer repeats it.
  k_sse_enable();
@@ -1630,7 +1630,7 @@ void kmain(void) {
  archinit();
  // the wall date, in the one order that can answer on every door: whatever the
  // door left in kboot if it had one, else the machine's RTC -- which archinit has
- // just made reachable (the aarch64 read is device memory, and mmio_map lays it).
+ // just made reachable (the a64 read is device memory, and mmio_map lays it).
  if (!kboot.date) kboot.date = k_rtc();
  serial_init();
  // the heap (meminit) is the only hard requirement. the framebuffer

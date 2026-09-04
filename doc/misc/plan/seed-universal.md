@@ -4,8 +4,8 @@
 environment.** Per target, one byte string — whatever machine, arch, or OS did
 the building. Every rung below either proves the invariant somewhere new or
 removes a reason it could fail; an environment joins the roster only by
-producing the same bytes. Standing evidence, 2026-08-16: love-aarch64 built on
-bee (x86_64) == built on pi (aarch64), real silicon both ends; the x86_64
+producing the same bytes. Standing evidence, 2026-08-16: love-a64 built on
+bee (x64) == built on pi (a64), real silicon both ends; the x64
 mirror leg and the OS dimension climb toward the same bar. What the bar has
 extracted so far: the image renames its serials canonical at save (one live
 heap, one byte string — a dead task pid and its +1 nom ripple were the two
@@ -156,14 +156,14 @@ owes a roster gate: on linux, assert the linux features are aboard.
   machine's bytes for the other arch), love1 under qemu-user rebuilds itself
   natively and must answer the same bytes — one cmp proves the twin machine
   reproduces this machine's, and that mooncc's output does not depend on the
-  arch mooncc runs on. The literal leg rides a real aarch64 box (pi.lan): the
+  arch mooncc runs on. The literal leg rides a real a64 box (pi.lan): the
   shipped twin runs `love seed` there and its own sha256 check is the
   two-machine compare — which found the twin was NOT a seed (dist_cross
   linked no source blob; fixed, the twin link now mirrors the native one).
-  Still owed: a native riscv64 ride of test_fixpoint.
+  Still owed: a native rv64 ride of test_fixpoint.
 - **rung U1 — the container.** THE RULING (gwen, 2026-08-17): the strong
-  reading is chosen. There are not multiple builds of love — no x86_64 binary
-  and aarch64 binary. THE artifact carries the text for every platform and the
+  reading is chosen. There are not multiple builds of love — no x64 binary
+  and a64 binary. THE artifact carries the text for every platform and the
   OS compatibility layer, and one byte string answers the fixpoint on every
   arch. That was the initial bar for `love seed`; U1 is the container that
   makes the one file execute everywhere. Its own ladder:
@@ -387,14 +387,14 @@ owes a roster gate: on linux, assert the linux features are aboard.
 - **rung U2 — the targets DISSOLVE.** Decided 2026-08-16 (chosen, revisable);
   Landed 2026-08-17: ONE binary. The host build is subsumed — out/host/love
   links the source blob + readme and, baked, IS the artifact (`make` in a clean
-  tree produces love0 and the seed, nothing else); love-x86_64/love-aarch64
+  tree produces love0 and the seed, nothing else); love-x64/love-a64
   and the dist_cross twin are gone as products (`dist-seed` is the tree's
   binary; the x-lane objects remain only for test_xfixpoint); `love seed`
   takes no arch; and a git-less tree re-cuts its archive from itself
   (tools/selfpack.l, gated by distboot's binary compare). The seed's bytes
   are the tree's, never the builder's — that is the standing invariant. The
   full statement:
-  once the invariant holds per target, love-x86_64 and love-aarch64 stop being
+  once the invariant holds per target, love-x64 and love-a64 stop being
   products — ONE `love`, one byte string, every machine. The invariant is what
   makes this well-defined: each lane's bytes are already machine-independent
   (proven both directions on real silicon), so the union artifact is too — any

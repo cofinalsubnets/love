@@ -1,5 +1,5 @@
-// asmops -- the riscv64 privileged instructions, one static inline each, in BOTH
-// inline-asm spellings. the x86_64 twin (src/x86_64_asmops.h) opens with the why;
+// asmops -- the rv64 privileged instructions, one static inline each, in BOTH
+// inline-asm spellings. the x64 twin (src/x64_asmops.h) opens with the why;
 // the short version is that the kernel says the same thing to clang in GNU's
 // template and to mooncc in holo's NEUTRAL text (crew/holo/text.l -- mnemonic,
 // then operands, one instruction per LINE; r0..r7 = a0..a7, r8..r12 = t0..t4,
@@ -20,7 +20,7 @@
 #include <stdint.h>
 
 // --- the wait, and the fence -------------------------------------------
-// the idle wait, kmain's kwait; the x86_64 twin of this name is `hlt`.
+// the idle wait, kmain's kwait; the x64 twin of this name is `hlt`.
 static inline void k_wait(void)  { asm volatile ("wfi"); }
 // fence iorw, iorw: what a DMA ring needs around its publish and its read.
 static inline void k_fence(void) { asm volatile ("fence" ::: "memory"); }

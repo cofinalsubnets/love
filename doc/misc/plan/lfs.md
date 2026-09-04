@@ -7,8 +7,8 @@ axes, and only one of them is LFS's own ladder:
 - **A — native equivalents.** Our code doing the package's job (kore, lush, cook, moon,
   holo, `lib/gz.l`, `lib/tar.l`). This is where nearly all the distance is.
 - **B — LFS packages built by our toolchain.** Six, with repeatable harnesses:
-  `tools/moon-{bzip2,gzip,lua,m4,sqlite,tar}.sh`, each with x86-64, arm64 and riscv
-  lanes (`make moon-tar`, `make moon-tar-arm64`, …). ⚠ every one is **opt-in** — no tier
+  `tools/moon-{bzip2,gzip,lua,m4,sqlite,tar}.sh`, each with x86-64, a64 and riscv
+  lanes (`make moon-tar`, `make moon-tar-a64`, …). ⚠ every one is **opt-in** — no tier
   runs them, so a green `test_slow` says nothing about them. Run them by name.
 
 ## chapters 5–6, the toolchain — climbed, and self-hosting
@@ -18,7 +18,7 @@ LFS spends two chapters here and calls it the hard part. It is the part we are d
 | LFS | ours | state |
 | --- | --- | --- |
 | binutils | `crew/holo/` — as, ld, ar+ranlib, nm, objcopy | byte-identical smokes vs GNU/llvm |
-| gcc | `crew/moon/` — mooncc, C11 freestanding | self-hosting, fixpoint-gated, x64 + arm64 + riscv |
+| gcc | `crew/moon/` — mooncc, C11 freestanding | self-hosting, fixpoint-gated, x64 + a64 + riscv |
 | glibc | `crew/moon/lib/nolibc/` | by-need members, no host libc |
 | linux-headers | `crew/moon/include/` | our own minimal set, not the host's |
 

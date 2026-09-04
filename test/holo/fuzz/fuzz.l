@@ -1,22 +1,22 @@
-; test/holo/fuzz/fuzz.l -- holo encoder differential fuzz: x86-64 + aarch64 + riscv64.
+; test/holo/fuzz/fuzz.l -- holo encoder differential fuzz: x86-64 + a64 + rv64.
 ; for each generated IR form we know the intended instruction. holo (loaded in-process)
 ; encodes it; the bytes go through a foreign decoder (x64: objdump -M intel, cross-read
-; by llvm-mc; arm64/riscv: llvm-mc) and the decoded instruction must match intent --
+; by llvm-mc; a64/riscv: llvm-mc) and the decoded instruction must match intent --
 ; mnemonic, operands, and nothing undecodable. tolerates encoding non-uniqueness:
 ; registers compare by abstract identity (width-agnostic), immediates by value mod 2^64;
 ; a byte-exact oracle would false-alarm on legal 32-bit-mov-zero-extend and disp-size
 ; choices. a decode oracle checks meaning, not layout.
 ;
 ; knobs ride the environment: fuzz_n (per class, default 8), fuzz_seed, fuzz_arch
-; (amd64|arm64|riscv -- holo's own names, default all three). run from the repo root:
+; (x64|a64|riscv -- holo's own names, default all three). run from the repo root:
 ;
 ;   out/host/love test/holo/fuzz/fuzz.l
 ;
 ; exit 1 on any failure; each failure names its class, IR, hex and reason.
 
 (reads (open "crew/holo/holo.l" "r"))
-(reads (open "crew/holo/amd64.l" "r"))
-(reads (open "crew/holo/arm64.l" "r"))
+(reads (open "crew/holo/x64.l" "r"))
+(reads (open "crew/holo/a64.l" "r"))
 (reads (open "crew/holo/rv64.l" "r"))
 ; holo rides module 'holo: reading the source registers it, and the names come
 ; through the door rather than off this file's layer.
@@ -129,7 +129,7 @@
                               (tally (toks (nthl fs 1))) (has? <m "(bad)")] >< acc)))))))
      (go (lines (rdf (tmpd + "/.fuzz.out"))) ()))
 
- ; arm64/riscv: llvm-mc --disassemble. a fixed-width lane gets full consumption for free
+ ; a64/riscv: llvm-mc --disassemble. a fixed-width lane gets full consumption for free
  ; (count*4 must equal the byte count); riscv rides the C extension and is variable width, so
  ; vw walks the stream instead -- an instruction's first byte has its low two bits set on a
  ; 4-byte word and clear on a 2-byte one, which is the whole of risc-v's length encoding here.
@@ -384,7 +384,7 @@
    ["stsd" (\ _ (: b (rrand 0) o (disp-any 0) s (frand 0)
                    [[['stsd b o s]] (spec1 '("movsd") [['m b o] ['x (fno s)]])]))]]
 
- ; ================================================================ arm64 lane
+ ; ================================================================ a64 lane
  arm-alu '(("add" "add") ("sub" "sub") ("and" "and") ("or" "orr") ("xor" "eor") ("imul" "mul"))
  arm-sized-ld '(("ld1" ("ldrsb" "ldursb") x) ("ld2" ("ldrsh" "ldursh") x)
                 ("ld4" ("ldrsw" "ldursw") x) ("ldu1" ("ldrb" "ldurb") w)
@@ -645,9 +645,9 @@
 
  ; ---- the lanes; the 10th column names the disassembler a lane needs ----
  arches
-  [["amd64" 'amd64 gens-x64 (\ hx (disasm-x64 hx)) ops-comma mem-x64 (\ s (abs-x64 s)) imm-x64 1 "objdump"]
-   ["arm64" 'arm64 gens-arm (\ hx (disasm-mc hx "aarch64" "" "//" 0)) ops-arm mem-arm (\ s (abs-arm s)) imm-arm 0 "llvm-mc"]
-   ["riscv" 'rv64 gens-rv (\ hx (disasm-mc hx "riscv64" " --mattr=+m,+f,+d,+c" "#" 1)) ops-comma mem-rv (\ s (abs-rv s)) imm-rv 0 "llvm-mc"]]
+  [["x64" 'x64 gens-x64 (\ hx (disasm-x64 hx)) ops-comma mem-x64 (\ s (abs-x64 s)) imm-x64 1 "objdump"]
+   ["a64" 'a64 gens-arm (\ hx (disasm-mc hx "aarch64" "" "//" 0)) ops-arm mem-arm (\ s (abs-arm s)) imm-arm 0 "llvm-mc"]
+   ["rv64" 'rv64 gens-rv (\ hx (disasm-mc hx "riscv64" " --mattr=+m,+f,+d,+c" "#" 1)) ops-comma mem-rv (\ s (abs-rv s)) imm-rv 0 "llvm-mc"]]
  (tool? t) ((sh ("command -v " + t + " >/dev/null 2>&1")) = 0)
 
  fz-n (: v ("" + getenv "FUZZ_N") (? (0 < tally v) (s2i v) 8))

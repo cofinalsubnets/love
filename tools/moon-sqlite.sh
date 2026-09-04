@@ -7,16 +7,16 @@
 # rung, after bzip2, gzip, tar, m4 and lua.
 #
 # TWO TARGETS, one procedure (raw.sh's shape, as moon-lua.sh does it):
-# `moon-sqlite.sh` builds the native x86-64 lane, `moon-sqlite.sh arm64`
-# cross-compiles the same source with `mooncc -t arm64` and runs the battery
+# `moon-sqlite.sh` builds the native x86-64 lane, `moon-sqlite.sh a64`
+# cross-compiles the same source with `mooncc -t a64` and runs the battery
 # under qemu-aarch64. The cross lane SKIPS cleanly without qemu.
 #
 # WHY THE CROSS LANE IS WORTH ITS MINUTE. This is the widest single net the
 # tree has: 256k lines from one file, and the amalgamation is machine-built
 # from many, so it reaches C shapes nobody writes by hand -- deep switch
 # ladders, computed unions, 64-bit mixing, a whole float formatter of its own.
-# The precedent is moon-lua-arm64, whose FIRST run found a miscompile that 110
-# single-file cc programs and the entire love corpus under mooncc/arm64 had all
+# The precedent is moon-lua-a64, whose FIRST run found a miscompile that 110
+# single-file cc programs and the entire love corpus under mooncc/a64 had all
 # been green over. A package on a cross target is the cheapest coverage here.
 #
 # The amalgamation is the one imported artifact -- two files, no configure.
@@ -25,7 +25,7 @@
 #   curl -O https://sqlite.org/2024/sqlite-amalgamation-3450300.zip
 #   unzip sqlite-amalgamation-3450300.zip
 #   make moon-sqlite       SQLSRC=$PWD/sqlite-amalgamation-3450300
-#   make moon-sqlite-arm64 SQLSRC=$PWD/sqlite-amalgamation-3450300
+#   make moon-sqlite-a64 SQLSRC=$PWD/sqlite-amalgamation-3450300
 #
 # THE SOURCES ARE CACHED, so none of that is needed twice: this looks for
 # `sqlite-amalgamation-*` under dl/ and then under $MOONSRC -- ~/src when that is unset --
@@ -41,11 +41,11 @@ target=${1:-x64}
 case $target in
   x64)   name=moon-sqlite       ; tflag=""         ; sub=moonsqlite
          mksys=mksys       ; backend=""              ; run=""            ; need="" ;;
-  arm64) name=moon-sqlite-arm64 ; tflag="-t arm64" ; sub=moonsqlite-a64
-         mksys=mksys-arm64 ; backend=crew/holo/arm64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
-  riscv64) name=moon-sqlite-riscv ; tflag="-t riscv64" ; sub=moonsqlite-rv
-         mksys=mksys-riscv ; backend=crew/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
-  *) echo "moon-sqlite.sh: unknown target $target (x64 | arm64 | riscv64)" >&2; exit 1 ;;
+  a64) name=moon-sqlite-a64 ; tflag="-t a64" ; sub=moonsqlite-a64
+         mksys=mksys-a64 ; backend=crew/holo/a64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
+  rv64) name=moon-sqlite-rv64 ; tflag="-t rv64" ; sub=moonsqlite-rv
+         mksys=mksys-rv64 ; backend=crew/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
+  *) echo "moon-sqlite.sh: unknown target $target (x64 | a64 | rv64)" >&2; exit 1 ;;
 esac
 
 # where a package's sources may live, first hit wins: the tree-local dl,
@@ -87,7 +87,7 @@ echo "  sqlite3.c -> $(wc -c < "$d/sqlite3.o") bytes of object"
 
 cat > "$d/drv.c" <<'EOF'
 /* the battery, and it is a DIFFERENTIAL payload: every line is a computed
- * value printed to stdout, so the arm64 build's output is compared to the
+ * value printed to stdout, so the a64 build's output is compared to the
  * x86-64 build's byte for byte rather than merely checked for "ok". a codegen
  * fault then names the query it broke instead of showing up as a bad exit
  * code. nothing here may vary between two correct runs -- no clock, no

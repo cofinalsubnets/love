@@ -1,5 +1,5 @@
 // test/gate/dtb.c -- the device-tree door on trees whose answers are written down here.
-// src/dtb.h is the walk both boot doors ride (aarch64_dtb.c, riscv64_dtb.c), and until
+// src/dtb.h is the walk both boot doors ride (a64_dtb.c, rv64_dtb.c), and until
 // now the only thing that ever ran it was a qemu boot, which reaches exactly ONE tree:
 // virt's, with 2/2 cells and one bank. So this builds trees on the host -- the other
 // cell widths, a nested `reg` that is not memory, both clamps, a torn magic, a cmdline

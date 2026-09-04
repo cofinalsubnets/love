@@ -47,7 +47,7 @@ extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
 /* ⚠ WHERE THE TRANSLATION LAYER COMPILES. nolibc's C is written in one kernel's
  * spelling -- linux's, because that is where we started and NOT because it is a
  * default -- and os.c translates the others into it. The tables compile where
- * the machine tail they call has been laid: x86_64 and aarch64 have it, riscv
+ * the machine tail they call has been laid: x64 and a64 have it, riscv
  * takes os.c's identity stubs and speaks whichever kernel -os named. This is a
  * claim about mksys leaves, never a roster of kernels we are willing to run on.
  * ⚠ AND THE NETBSD RETURN PATH IS ITS OWN CLAIM -- narrower in principle, though
@@ -173,7 +173,7 @@ struct _IO_FILE {
 /* ---- the NR_* the members say: linux's, the CANONICAL numbers -- one body
  * per member, and a freebsd runtime translates through os.c's map (a member's
  * freebsd branch reaches an unmappable call by NR_fb_* through fb0..fb6
- * below). linux's one arch gate: riscv64 shares aarch64's asm-generic table
+ * below). linux's one arch gate: rv64 shares a64's asm-generic table
  * verbatim. ---- */
 #if defined(__aarch64__) || defined(__riscv)
 #define NR_getcwd          17

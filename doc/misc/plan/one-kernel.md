@@ -12,7 +12,7 @@ until 2026-09-01 (see "what this buys"), and no gate could see it.
 The whole apparatus exists to hand the kernel a corpus it is already carrying.
 `dist_drop` is `bench port wasm`, so `test/` rides the source blob: 394 files,
 in the ramfs of every shipped kernel. And `k-prog`'s third lane already evals a
-`.l` path off that ramfs. Both facts are measured, on the SHIPPED x86_64 elf:
+`.l` path off that ramfs. Both facts are measured, on the SHIPPED x64 elf:
 
     -append "test/zz-fin.l"        ;; missing test_get      (read, evaled, right failure)
     kore wc test/spec.l            75679                    (byte-exact off the ramfs)
@@ -150,8 +150,8 @@ mk/common.mk's `t` does -- the same three front-loads, the same exclusions --
 and spells the kernel half, which is a dependency order, in place. A new
 `test/*.l` is picked up by both without an edit.
 
-It reads FASTER, which was not the point but is the measure: x86_64 11.78s ->
-8.58s, aarch64 102.6s -> 67.9s. A baked string was one 900 KB allocation walked
+It reads FASTER, which was not the point but is the measure: x64 11.78s ->
+8.58s, a64 102.6s -> 67.9s. A baked string was one 900 KB allocation walked
 as a charlist; a port is a gulp at a time and the member is done with when the
 next one opens.
 
@@ -173,15 +173,15 @@ spelled in C to be reached from love. The falsifier is the uses commented out:
 `;; missing rand`, exit 2, so the layers are load-bearing and the corpus says so.
 
 **Rung 4 -- delete K_TEST. LANDED.** `ksuf`, the `-test` odir tree,
-`-DK_TEST -Dai_tco=1`, `tools/ccdb.l`'s copy of it, `src/x86_64_asmops.h`'s last
+`-DK_TEST -Dai_tco=1`, `tools/ccdb.l`'s copy of it, `src/x64_asmops.h`'s last
 sentence, and both `#ifdef`s left in kmain. The `k_pie_in` fork reads plainly
 now: at the host's own arch project the shipped binary, everywhere else build the
 pie.
 
 **ONE GATE PER LANE**, which is what the fork already was and what the gates were
 not. The projection wakes the image the binary carries; the pie carries none and
-warms the egg. So `test_disk` is the WAKE lane (x86_64, the projection) and
-`test_kernel_arm64` is the WARM lane (aarch64, the pie) -- named in both echo
+warms the egg. So `test_disk` is the WAKE lane (x64, the projection) and
+`test_kernel_a64` is the WARM lane (a64, the pie) -- named in both echo
 lines, because the pair is the coverage and a reader should not have to derive
 it. Neither lane is a face the artifact does not wear.
 
@@ -206,7 +206,7 @@ Coverage, and the arc has already paid for the claim. `test_vec` is the only
 gate in the tree that boots a WARM kernel -- everything else either projects the
 host binary, which wakes a baked image, or builds K_TEST, which carries no
 `src.o` to warm from. It was one of the 43 orphans no aggregate reached until
-148fdc35, and the first thing it found was a warm aarch64 kernel that reaches
+148fdc35, and the first thing it found was a warm a64 kernel that reaches
 the shell, answers status ok and prints nothing at all, at `-m 512M` and no
 other size from 256M to 4096M. That is the GC placement lottery `tools/ktest.l`
 already documents (a major takes a contiguous 2x pool beside the old one). One
@@ -214,7 +214,7 @@ kernel means the corpus runs on the ramfs walk, the wake and the warm path, so
 that class of hole has a gate over it.
 
 And it removes the last reason the two arches differ in kind rather than in
-machine: x86_64 projects and wakes, aarch64 builds and warms, and after this
+machine: x64 projects and wakes, a64 builds and warms, and after this
 both run the same corpus the same way.
 
 ## traps this plan already knows

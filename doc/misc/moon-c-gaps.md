@@ -12,7 +12,7 @@ Probe recipe:
 ```sh
 printf 'int m(void){ return 0; }\n' >> q.c
 out/host/love mooncc \
-  -c -t amd64 -o /dev/null q.c
+  -c -t x64 -o /dev/null q.c
 ```
 
 ---
@@ -183,7 +183,7 @@ Four of them carry an edge worth knowing:
   asks the linker for the same boundary. ⚠ on a **local or a struct member it is still
   skipped in silence** — the row below.
 
-- **variable-length arrays** ride x64, arm64 and riscv64; the thumb family says `no lane
+- **variable-length arrays** ride x64, a64 and rv64; the thumb family says `no lane
   for a variable-length array on <tgt>`. ⚠ a VLA with an *initializer* refuses everywhere
   (`parse error near =`) — C's own rule, not a gap. `__builtin_alloca` is absent on every
   target, so a VLA is the only dynamic frame allocation here.
@@ -250,7 +250,7 @@ the driver's `-D` channel (cpp stays target-blind): the `__INTn_TYPE__`/`__UINTn
 `__WCHAR_TYPE__`/`__WINT_TYPE__`, `__BYTE_ORDER__` and the `__ORDER_*` trio, `__CHAR_BIT__`,
 the `__SIZEOF_*__` set, `__LP64__`/`_LP64` (c-testsuite 00212), and the full `__FLT_*`/
 `__DBL_*`/`__LDBL_*` trait sets. Every value is gcc's own spelling on that target (verified by
-stringize-diff against `gcc -dM -E` on x64/riscv64/arm-none-eabi and clang's aarch64), and
+stringize-diff against `gcc -dM -E` on x64/riscv64/arm-none-eabi and clang's a64), and
 `__LONG_MAX__` moved out of cpp into the fork, so t32 now answers `0x7fffffffL` instead of the
 64-bit lie. On top of the older rows: `__STDC__`, `__STDC_HOSTED__`, `__mooncc__`, the linux/
 unix spellings, the arch pairs, `__INT_MAX__`, `__FLT_MAX__`/`__DBL_MAX__`,
@@ -262,14 +262,14 @@ Three deliberate deviations, all in the compiler's favor of honesty:
   signed on every target, and a predefine describes *this* compiler.
 - the `__LDBL_*` rows answer **double's** values — no `long double` here, so a consumer takes
   its double lane, the one we can compile (`__DECIMAL_DIG__` is 17, not x87's 21).
-- `__SIZEOF_INT128__` stays **x64-only** where real gcc also defines it on aarch64/riscv64 —
+- `__SIZEOF_INT128__` stays **x64-only** where real gcc also defines it on a64/rv64 —
   only gen's x64 lane carries d128, and claiming it elsewhere invites code we refuse.
 
 **C11's conditional-feature macros landed 2026-08-14** (`featdefs`, moon.l; the gate sweeps all
 six targets). Saying an absence out loud is what makes it *conforming* rather than a hole, and
 it lets a portable source take its other lane instead of hitting a parse error:
 `__STDC_NO_ATOMICS__` and `__STDC_NO_THREADS__` everywhere, `__STDC_NO_COMPLEX__` off x64,
-`__STDC_NO_VLA__` off x64/arm64 — each row tracking the parity table below, because claiming an
+`__STDC_NO_VLA__` off x64/a64 — each row tracking the parity table below, because claiming an
 absence we do not have sends a consumer down a fallback for nothing. `__STDC_UTF_16__` and
 `__STDC_UTF_32__` are the positive twins: `u""` is UTF-16 and `U""` UTF-32, which is exactly
 what those two assert.
@@ -446,7 +446,7 @@ differed. That instrument costs nothing and nobody had pointed it at the tray op
 
 `test_cts` holds c-testsuite's 220 programs to the output they ship (doc/misc/moon.md). Its roster is
 **refusals only**, each loud and named — no program in the corpus compiles clean and answers
-wrong on any of the three targets. 212 answer on x64 and 8 refuse (9 on arm64, 10 on riscv64,
+wrong on any of the three targets. 212 answer on x64 and 8 refuse (9 on a64, 10 on rv64,
 the target rows below). `roster_wrong` stays in the gate, empty, because the day one comes back
 it belongs there and `wrong` is the kind that must stay loud.
 
@@ -611,11 +611,11 @@ gate compiling clang at `ai_tco=1`, which is what caught it.
 
 ## target asymmetries
 
-Six targets: **x64, arm64, riscv64, thumb2, thumb2sp, thumb1**. The 32-bit ones carry most of
+Six targets: **x64, a64, rv64, thumb2, thumb2sp, thumb1**. The 32-bit ones carry most of
 the live gaps, but not all of them — two lanes are x64-only. Everything here is a **loud scare,
 never silent**.
 
-| lane | amd64 | arm64 | rv64 | thumb2 | thumb2sp | thumb1 |
+| lane | x64 | a64 | rv64 | thumb2 | thumb2sp | thumb1 |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
 | `__int128` | ✓ | — | — | — | — | — |
 | `_Complex` arithmetic | ✓ | — | — | — | — | — |
@@ -637,7 +637,7 @@ never silent**.
 each refusal's cause). Regenerate it rather than editing a cell by hand.
 
 ⚠ **A ✓ means the lane exists, not that it is differentiated** — the sweep compiles (`-c`) and
-reads the object's symbols, and only x64/arm64/riscv64 have running gates behind them. ⚠ several of
+reads the object's symbols, and only x64/a64/rv64 have running gates behind them. ⚠ several of
 these refusals arrive as `cannot compile 'f' (cause unnamed)` rather than a named cause —
 `__int128` and every composite-argument row among them. The refusal is real either way; what is
 missing is the sentence naming it.
@@ -654,7 +654,7 @@ lane is ours or there is no lane.
 
 ⚠ **The two struct rows do not move together, and thumb1 inverts them.** v6-M returns *any*
 struct over 4 bytes through memory (`sretm?`), so thumb1 takes both composite returns while
-refusing every composite *argument*; arm64 and riscv64 are the mirror image, taking arguments
+refusing every composite *argument*; a64 and rv64 are the mirror image, taking arguments
 and the 16B return but refusing the MEMORY-class return — which is what stops PDCLib's dlmalloc
 on the cross targets.
 
@@ -664,20 +664,20 @@ overflow block on x64 (SysV's rule; the param side already bound it there, and t
 `xdrawcursor(int,int,Glyph,int,int,Glyph)` in st). ⚠ **The SSE twin still refuses**: five
 `struct { float a,b,c; }` by value exhausts xmm0–7 and `cgfn` gives up — the same rule, the
 other register file, and c-testsuite's 00204 is the probe.
-**arm64, riscv64 and t32 refuse the gp case too** — deliberately, because each has a
+**a64, rv64 and t32 refuse the gp case too** — deliberately, because each has a
 *different* rule:
-AAPCS64 closes the gp file behind a stack composite (C.13), riscv64 SPLITS one across the
+AAPCS64 closes the gp file behind a stack composite (C.13), rv64 SPLITS one across the
 register/stack seam, and t32 has no lane at all. Three rules, three rungs; do not fold them.
 
-⚠ **A by-value composite NAMED in a variadic parameter list rides x64 and arm64** (`vaspill`,
+⚠ **A by-value composite NAMED in a variadic parameter list rides x64 and a64** (`vaspill`,
 `vaspill-a64`); `vaspill-rv` and `vaspill-t32` refuse the shape, each for its own ABI's reason.
-⚠ that is a different shape from *passing* a composite at a variadic call site, which riscv64
+⚠ that is a different shape from *passing* a composite at a variadic call site, which rv64
 also takes — probe the one you mean.
 
 - **mixed/int-pair 8..16B composites on t32** — an aone-`int` 5..8B, or a two-eightbyte
   not-both-sse aggregate by value; register-exhausted stack HFAs (9+ double args); and
   doubles/pairs/structs across a t32 VARIADIC seam. love.c reaches none of them.
-- **a 16B all-int composite RETURN on t32** refuses on thumb2 and thumb2sp; arm64, riscv64 and
+- **a 16B all-int composite RETURN on t32** refuses on thumb2 and thumb2sp; a64, rv64 and
   x64 all take it. ⚠ the probe must DEFINE one, not declare it —
   `typedef struct {int a,b,c,d;} R; static R mk(int x){ R r = {x,x,x,x}; return r; }` plus a
   caller; a bare prototype compiles everywhere. It is what stops the Playdate SDK's own
@@ -685,7 +685,7 @@ also takes — probe the one you mean.
   device — which is exactly why `port/playdate` routes it through `pdglue.c` on
   arm-none-eabi-gcc and calls that a "word-only seam". AAPCS32 wants the hidden-pointer memory
   return the v6-M lane already implements (`sretm?`); thumb2 has no such lane.
-- **a MEMORY-class composite RETURN on arm64 and riscv64** — `no lane for returning this
+- **a MEMORY-class composite RETURN on a64 and rv64** — `no lane for returning this
   80-byte struct by value on <tgt>`. Probe: `typedef struct { long a[10]; } R;` with a
   definition that returns one; a bare prototype compiles everywhere.
 - **signed 64-bit `/` and `%` on thumb2 and thumb2sp** refuse (`cgfn refuses`) — love.c's lane
@@ -744,7 +744,7 @@ The three real blockers:
 - **The raw blob cannot name an outer label.** `cgasm` assembles the body immediately via
   `holo-bytes` with an empty pre-bound label table, so a label not defined inside the template
   hits `(scare 'undef-label ..)`. The hook is clean, though — raw is lowered verbatim by every
-  backend (`x64.l`, `arm64.l`, `thumb2.l`, `thumb1.l`), and `chunk-len`/`resolve` already handle
+  backend (`x64.l`, `a64.l`, `thumb2.l`, `thumb1.l`), and `chunk-len`/`resolve` already handle
   an inline `('fix w kind label aux)` anywhere in the stream, so a raw carrying an unresolved fix
   would lay out against the **outer** function's label table for free. What is missing is a holo
   door — a variant of `assemble-at` that assembles while leaving a whitelist of external labels
@@ -773,7 +773,7 @@ computed goto, `_Generic`, and attribute semantics that change codegen.
 
 ## external corpora
 
-**c-testsuite is wired** — `test_cts`, `test_cts_arm64`, `test_cts_riscv` over
+**c-testsuite is wired** — `test_cts`, `test_cts_a64`, `test_cts_rv64` over
 `test/gate/cts.sh` (doc/misc/moon.md). 220 single-file programs held to the output they ship, on all
 three targets, ~60 s each, opt-in on `make dl/c-testsuite` and skipping whole without it. Its
 first run is where twelve rows of the syntax ledger above and six of the wrong-answer rows came

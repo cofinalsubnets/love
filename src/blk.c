@@ -1,6 +1,6 @@
 // blk -- the disk (rung 5): virtio-blk, polled, one request in flight.
-// x86_64 finds it by PCI config-space walk (CF8/CFC) and drives the MODERN
-// virtio-pci transport; aarch64 scans qemu virt's fixed virtio-mmio slots
+// x64 finds it by PCI config-space walk (CF8/CFC) and drives the MODERN
+// virtio-pci transport; a64 scans qemu virt's fixed virtio-mmio slots
 // (version 2 -- the test lane passes force-legacy=false). Both transports
 // share one split virtqueue and one synchronous request door: k_blk_rw posts
 // a three-descriptor chain (header, data, status) and spins on the used ring
@@ -52,7 +52,7 @@ static inline void w64(volatile uint8_t *p, uint64_t v) {   // two 32-bit halves
 
 // the hardware fence DMA needs around the avail publish and the used read.
 // x86 is TSO and every ring access above is volatile, so program order is
-// enough; aarch64 reorders Normal-vs-Device, so a real barrier stands there.
+// enough; a64 reorders Normal-vs-Device, so a real barrier stands there.
 static inline void dma_fence(void) {
 #if defined(__aarch64__)
   k_dsb_ish();
@@ -138,7 +138,7 @@ static int blk_pci(uint32_t bdf, void *dma) {
     else if (type == 2) notify = at, nmult = pci_r32(bdf, c + 16);
     else if (type == 4) devcfg = at; }
   if (!common || !notify || !devcfg) return 0; // legacy-only device: not driven
-  // every x86_64 door's map stops at 4G (pvh + uefi/loader.c both lay 0..4G),
+  // every x64 door's map stops at 4G (pvh + uefi/loader.c both lay 0..4G),
   // so a BAR above it is out of reach -- OVMF parks 64-bit
   // BARs there unless the lane pins its MMIO window low (tools/ktest.l's fw_cfg).
   // khhdm 0 would be a true identity door where everything is reachable.

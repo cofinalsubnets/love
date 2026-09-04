@@ -11,7 +11,7 @@
 #   curl -O https://ftp.gnu.org/gnu/m4/m4-1.4.tar.gz
 #   tar xzf m4-1.4.tar.gz && (cd m4-1.4 && ./configure)
 #   make moon-m4       M4SRC=$PWD/m4-1.4
-#   make moon-m4-arm64 M4SRC=$PWD/m4-1.4
+#   make moon-m4-a64 M4SRC=$PWD/m4-1.4
 #
 # THE SOURCES ARE CACHED, so none of that is needed twice: this looks for
 # `m4-1.4*` under dl/ and then under $MOONSRC -- ~/src when that is unset --
@@ -20,14 +20,14 @@
 # rather than a failure, so this gate stays opt-in either way.
 #
 # TWO TARGETS, one procedure (raw.sh's shape, as moon-lua.sh and moon-sqlite.sh
-# do it): `moon-m4.sh arm64` cross-compiles the same sources with `mooncc -t
-# arm64` and runs everything under qemu-aarch64, SKIPPING cleanly without it.
+# do it): `moon-m4.sh a64` cross-compiles the same sources with `mooncc -t
+# a64` and runs everything under qemu-aarch64, SKIPPING cleanly without it.
 # config.h is reused as configure wrote it, which is sound here and worth
 # saying why: both targets are little-endian LP64, and the answers that differ
 # between them are the ones the header already corrects by hand.
 #
 # â  THE CHECK SUITE NEEDS A WRAPPER on the cross target. check-them is a shell
-# script that finds `m4` on PATH and execs it, and an aarch64 binary is not
+# script that finds `m4` on PATH and execs it, and an a64 binary is not
 # executable here (no binfmt_misc registration for qemu). So the cross lane
 # puts a one-line `m4` script on PATH that execs qemu with the real binary --
 # the suite then runs completely unmodified, which is the point of running it.
@@ -46,11 +46,11 @@ target=${1:-x64}
 case $target in
   x64)   name=moon-m4       ; tflag=""         ; sub=moonm4
          mksys=mksys       ; backend=""              ; run=""            ; need="" ;;
-  arm64) name=moon-m4-arm64 ; tflag="-t arm64" ; sub=moonm4-a64
-         mksys=mksys-arm64 ; backend=crew/holo/arm64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
-  riscv64) name=moon-m4-riscv ; tflag="-t riscv64" ; sub=moonm4-rv
-         mksys=mksys-riscv ; backend=crew/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
-  *) echo "moon-m4.sh: unknown target $target (x64 | arm64 | riscv64)" >&2; exit 1 ;;
+  a64) name=moon-m4-a64 ; tflag="-t a64" ; sub=moonm4-a64
+         mksys=mksys-a64 ; backend=crew/holo/a64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
+  rv64) name=moon-m4-rv64 ; tflag="-t rv64" ; sub=moonm4-rv
+         mksys=mksys-rv64 ; backend=crew/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
+  *) echo "moon-m4.sh: unknown target $target (x64 | a64 | rv64)" >&2; exit 1 ;;
 esac
 
 # where a package's sources may live, first hit wins: the tree-local dl,

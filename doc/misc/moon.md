@@ -99,7 +99,7 @@ compiler and, off linux, another kernel).
 A `-D` prepends a `#define` line to the source text before the one lex, so a function-like
 `-DF(x)=..` rides the normal macro path (and diagnostics under `-D` skew by the define count).
 
-Targets: `x64`/`amd64`, `arm64`/`aarch64`, `riscv64`, `thumb2`/`cortex-m7`,
+Targets: `x64`/`x64`, `a64`/`a64`, `rv64`, `thumb2`/`cortex-m7`,
 `thumb1`/`cortex-m0`, `thumb2sp`/`playdate`.
 
 **`-std=` is a rail, not an advisory.** It is the one flag that says what *language* the
@@ -247,7 +247,7 @@ the runtime sources the implicit link pulls — are found through three rungs, t
    is the binary's own.
 
 The runtime itself rides COMPILED as well as in source: tools/mkrt.l lays each hosted
-ISA's nolibc archive (x64/arm64/riscv64, ~1.5 MB of archive under DEFLATE, ~210 kB carried,
+ISA's nolibc archive (x64/a64/rv64, ~1.5 MB of archive under DEFLATE, ~210 kB carried,
 one inflate on the ISA a link asks for) beside the source blob, stamped with
 `rtcid` — a pure hash of the include/ + lib/ slice. A link consults the cache, then the
 carried archive (the blob lane by construction; a disk home only when its slice hashes to
@@ -415,7 +415,7 @@ exists anywhere.
     asm [volatile] ("li %0, 40" : "=r"(v) : "r"(x), "i"(3) : "memory");
 
 * Registers are the neutral file: x64 r0=rax r1=rcx r2=rdx r3=rbx r4=rbp (the frame) r5=rsi
-  r6=rdi r7..r14=r8..r15; arm64 rN=xN. So a raw x64 syscall is
+  r6=rdi r7..r14=r8..r15; a64 rN=xN. So a raw x64 syscall is
   `asm("sys" : : "r0"(nr), "r6"(a0), "r5"(a1), "r2"(a2))`.
 * Constraints: `"r"`/`"=r"`/`"+r"` pick a register, `"rN"` forms pin one, `"i"` an immediate
   (parse-time constant). `%0..%9` substitute (outputs first), `%%` a literal `%`. Adjacent
@@ -427,7 +427,7 @@ exists anywhere.
 * Operands stage through the machine stack, so calls inside operand expressions are safe, and
   any scalar lvalue output works (`*p`, `a[i]`). Float/struct/bitfield operands refuse.
 * Allowed registers (operands + clobbers): x64 r0-r3 + r5-r10 (r3 rides every prologue's -8
-  slot; r4 is the frame and refuses), arm64 adds r4 (x4, an argument register there — 5+-arg
+  slot; r4 is the frame and refuses), a64 adds r4 (x4, an argument register there — 5+-arg
   syscalls need it). `sp` and the callee-saved r11-r14 refuse. Clobbers
   (`"memory"`/`"cc"`/register names) are validated but need no action: an asm-containing function
   turns register HOMING off (`g 'hasasm`), so nothing lives in a register across any statement.
@@ -490,7 +490,7 @@ never a bare `mooncc`, until `make install` refreshes the PATH binary.
   edged only when it is READ: five of its lines had gone stale by 2026-08-16 — four already
   fixed, and 00219 filed as a refusal when the truth was a live miscompile, which is what
   a gate nobody runs without an opt-in corpus buys you.
-* Cross targets get their own gates (`test_ccarm64`, `test_ccriscv`, `test_thumb*`), and
+* Cross targets get their own gates (`test_cca64`, `test_ccrv64`, `test_thumb*`), and
   doc/mooncc-differentials records why a package on a cross target beats a test suite on one.
 * The corpus itself is the deepest oracle: `test_raw` runs it over a gcc-free build,
   `test_fixpoint` pins the compile byte-for-byte.

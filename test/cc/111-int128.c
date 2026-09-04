@@ -1,4 +1,4 @@
-/* the wide pair: __int128 / unsigned __int128 (gen's d128 lane: x64, arm64).
+/* the wide pair: __int128 / unsigned __int128 (gen's d128 lane: x64, a64).
  *
  * the lane's whole surface, one check each: widening 64x64 products (the ONE
  * multiply the bignum kernel lives on), general 128x128 low products, carry
@@ -9,7 +9,7 @@
  * negation's borrow, truth off either half, casts in and out, the folded
  * (double)((u128)1<<64) constant, wide ++/-- (step, store, step back),
  * compound assigns, and a static function RETURNING the pair on the protocol
- * (rdx:rax, the SysV i128 return; x2:x0 on aarch64).
+ * (rdx:rax, the SysV i128 return; x2:x0 on a64).
  *
  * a target without the lane refuses this file loud (ccarch.sh expects that,
  * like 100-complex): parse accepts the type everywhere, gen carries it where

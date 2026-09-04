@@ -649,7 +649,7 @@
                ; ImageArch read it -- a build without one believed its arch was
                ; "other" and the glaze handed holo an unknown target).
                ; __sizeof_int128__ rides the driver's -D channel too, on the
-               ; targets gen carries the d128 lane for (x64, arm64): love.c
+               ; targets gen carries the d128 lane for (x64, a64): love.c
                ; takes 64-bit limbs there -- and on x64 the `divq` __asm__ lane
                ; with them; every other target keeps the portable 32-bit branch.
                ; the OS predefines (__linux__ and kin) are the driver's too,

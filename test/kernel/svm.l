@@ -1,6 +1,6 @@
 ; --- test/kernel/svm.l: the amd-v spike -- one guest, one exit.
 ; guarded twice, and both guards are the tree's own laws. The nom is in the book
-; only on x86_64, so presence is asked of (names ()) and never by reading it (a
+; only on x64, so presence is asked of (names ()) and never by reading it (a
 ; read would be a missing condition, not an absence); and the CPU under that
 ; seat may still be an Intel one, or a qemu model without the feature, so
 ; (svm ()) answers for the silicon. Either way this file says so and stays

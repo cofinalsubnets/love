@@ -22,7 +22,7 @@ ho=$1
 shift
 
 arch=$(uname -m)
-if [ "$arch" != x86_64 ]; then
+if [ "$arch" != x64 ]; then
   echo "test_raw_bake: x86-64 only, skipped on $arch"
   exit 0
 fi

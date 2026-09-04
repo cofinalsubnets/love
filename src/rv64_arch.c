@@ -1,6 +1,6 @@
-// riscv64 architecture-specific C: the ns16550 serial console, the PLIC, the
+// rv64 architecture-specific C: the ns16550 serial console, the PLIC, the
 // SBI timer, and trap reporting. the trap entry itself is laid by src/mkvec.l;
-// archinit points stvec at it. the aarch64 file's contract (archinit,
+// archinit points stvec at it. the a64 file's contract (archinit,
 // serial_init, serial_putc, k_reset), the riscv 'virt' machine's hardware.
 #include <stdint.h>
 #include "asmops.h"                    // the privileged instructions, both spellings
@@ -18,7 +18,7 @@ extern uint8_t vectors[];              // the trap entry (mkvec.l)
 // --- QEMU 'virt' machine fixed MMIO layout ---------------------------
 // every device sits under the first gigabyte, inside the window mkboot.l's
 // stub already maps: a base sv39 pte says nothing about memory type, so there
-// is no device mapping to add the way aarch64's mmio_map does.
+// is no device mapping to add the way a64's mmio_map does.
 #define UART_PHYS   0x10000000         // ns16550a, byte registers
 #define RTC_PHYS    0x00101000         // goldfish rtc
 #define PLIC_PHYS   0x0c000000
@@ -36,7 +36,7 @@ static inline void mmio_wr(uintptr_t phys, uintptr_t off, uint32_t v) {
   *(volatile uint32_t*) (khhdm + phys + off) = v; }
 
 // --- ns16550 serial console -------------------------------------------
-// x86_64's COM1 with the same register file behind memory instead of ports:
+// x64's COM1 with the same register file behind memory instead of ports:
 // the console beside the framebuffer, and the only one when there is none.
 // input is interrupt-driven: the PLIC delivers UART_IRQ, k_trap claims it,
 // and k_uart drains the FIFO into the same queue the rest of the kernel reads.

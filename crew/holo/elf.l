@@ -2,7 +2,7 @@
 ; will load and run them. one PT_LOAD segment maps the whole file (headers included) at a fixed base;
 ; the entry point is the first byte of code. it is the smallest thing that turns the assembler's
 ; output into a file you can chmod +x and run -- the literal "probe the binary" proof. it is target-
-; aware: pass 'amd64 or 'arm64 and it assembles with that backend and stamps the matching e_machine
+; aware: pass 'x64 or 'a64 and it assembles with that backend and stamps the matching e_machine
 ; (the rest of the ELF is identical across both -- 64-bit LSB ET_EXEC).
 ;
 ; `elf64` takes a target and a program-builder (\ dataddr -> IR): the builder is handed the absolute
@@ -18,9 +18,9 @@
    ; already one of these by the time a target reaches holo, so a second alias here would
    ; be a second place to keep in step.
    elf-machines (tabof
-        [('amd64 . 62) ('arm64 . 183)
+        [('x64 . 62) ('a64 . 183)
          ('thumb1 . 40) ('thumb2 . 40) ('thumb2sp . 40) ('arm . 40)    ; EM_ARM
-         ('rv64 . 243)])                                  ; em_riscv
+         ('rv64 . 243)])                                  ; em_rv64
 
    ;; one 56-byte program header. p_paddr is p_vaddr's twin on every hosted target -- the
    ;; kernel lane is where they part (a high virtual address loaded at a low physical one).
@@ -35,12 +35,12 @@
    ;; table -- the symbol table rides there, past p_filesz, mapped by nothing and read by nm/gdb.
    (elf64-hdrn etype entry machine sh phs)
     (: shoff (two? sh ? <sh 0) shnum (two? sh ? <>sh 0) shstrx (two? sh ? <>>sh 0)
-       rv? (machine = 243)
+       rv64? (machine = 243)
       (catall [
         '(127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0)               ; e_ident: \x7fELF, 64-bit LSB SysV
         (le16 etype) (le16 machine) (le32 1)                   ; e_type (2 EXEC / 3 DYN), e_machine, version 1
         (le64 entry) (le64 64) (le64 shoff)                    ; e_entry, e_phoff=64, e_shoff
-        (le32 (rv? ? 5 0)) (le16 64) (le16 56)                 ; e_flags (riscv: RVC | FLOAT_ABI_DOUBLE), e_ehsize=64, e_phentsize=56
+        (le32 (rv64? ? 5 0)) (le16 64) (le16 56)                 ; e_flags (riscv: RVC | FLOAT_ABI_DOUBLE), e_ehsize=64, e_phentsize=56
         (le16 #phs) (le16 (two? sh ? 64 0)) (le16 shnum) (le16 shstrx)
         (catall phs)]))
 

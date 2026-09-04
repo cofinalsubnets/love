@@ -4,7 +4,7 @@
  * hardware instruction, so they are the ones a stated example can agree with
  * and a random one cannot:
  *
- *   - the u128/u64 divide. x86 has divq and answers in two steps; aarch64 has
+ *   - the u128/u64 divide. x86 has divq and answers in two steps; a64 has
  *     no wide divide at all and rides 64 restoring steps, where the doubled
  *     remainder's carry-out is a case an example rarely reaches (it needs a
  *     divisor past 2^63).

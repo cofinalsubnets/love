@@ -45,8 +45,8 @@ have() { command -v "$1" >/dev/null 2>&1; }
 # the ONE declared divergence, and why it is one: k_divzero only has to FAULT.
 # clang's AT&T half divides 32-bit (divl), the neutral half 64-bit (divq) --
 # holo's surface has no 32-bit divide and #DE does not care which raised it.
-divergent_x86_64="k_divzero"
-divergent_aarch64=""
+divergent_x64="k_divzero"
+divergent_a64=""
 
 # the privileged sequence of each function in an object: mnemonic and symbolic
 # operands, registers normalized away. k_asmops_probe itself is skipped -- it is
@@ -65,7 +65,7 @@ seq() {
       sub(/[ \t]*(\/\/|#[ ]).*$/, "", line)        # objdump aside comments
       gsub(/[ \t]+/, " ", line); sub(/ +$/, "", line)
       if (line == "") next
-      if (arch == "amd64") {
+      if (arch == "x64") {
         if (line !~ /^(cli|sti|hlt|ud2|int3|in[bwl]|out[bwl]|div[qlw])( |$)/ &&
             line !~ /^(rdmsr|wrmsr|cpuid|vmrun|vmload|vmsave|stgi|clgi)( |$)/ &&
             line !~ /^(vmxon|vmclear|vmptrld|vmxoff|vmlaunch)( |$)/ &&
@@ -81,10 +81,10 @@ seq() {
     }'
 }
 
-for a in x86_64 aarch64; do
+for a in x64 a64; do
   case $a in
-    x86_64)  t=x64;   ctarget=x86_64-none-elf ;;
-    aarch64) t=arm64; ctarget=aarch64-none-elf ;;
+    x64)  t=x64;   ctarget=x86_64-none-elf ;;
+    a64) t=a64; ctarget=aarch64-none-elf ;;
   esac
   h=src/${a}_asmops.h
   # -I src is arch-neutral now: src/asmops.h picks by the target's own predefine

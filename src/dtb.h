@@ -1,6 +1,6 @@
 // dtb -> kboot, the door itself: every arch booting off a flat device tree walks it
 // the same way, and the two numbers that differ belong to the stub that jumped here.
-// So this is a header included ONCE per arch (aarch64_dtb.c, riscv64_dtb.c), each
+// So this is a header included ONCE per arch (a64_dtb.c, rv64_dtb.c), each
 // spelling k_hhdm and k_map_top ahead of the include -- the constants fold and the
 // door is one function, with no wrapper standing between it and its caller.
 #include "k.h"

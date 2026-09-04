@@ -7,13 +7,13 @@
 #
 # tar's source is the one imported artifact. Point TARSRC at a CONFIGURED
 # tar-1.13 tree (./configure already run, so config.h exists). Without one the
-# check SKIPS (like test_raw_arm64 without qemu). To make one:
+# check SKIPS (like test_raw_a64 without qemu). To make one:
 #   curl -O https://ftp.gnu.org/gnu/tar/tar-1.13.tar.gz
 #   tar xzf tar-1.13.tar.gz && cd tar-1.13
-#   cp /usr/share/automake-*/config.{sub,guess} .   # 1999 vintage: no x86_64
+#   cp /usr/share/automake-*/config.{sub,guess} .   # 1999 vintage: no x64
 #   CC="gcc -std=gnu89" ./configure                 # its probes are implicit-int
 #   make moon-tar       TARSRC=$PWD/tar-1.13
-#   make moon-tar-arm64 TARSRC=$PWD/tar-1.13
+#   make moon-tar-a64 TARSRC=$PWD/tar-1.13
 #
 # THE SOURCES ARE CACHED, so none of that is needed twice: this looks for
 # `tar-1.13*` under dl/ and then under $MOONSRC -- ~/src when that is unset --
@@ -26,7 +26,7 @@
 # hard error. mooncc compiles every actual source either way.)
 #
 # TWO TARGETS, one procedure (raw.sh's shape, as moon-lua/sqlite/m4 do it):
-# `moon-tar.sh arm64` cross-compiles with `mooncc -t arm64` and runs the
+# `moon-tar.sh a64` cross-compiles with `mooncc -t a64` and runs the
 # roundtrips under qemu-aarch64, SKIPPING cleanly without it. config.h is
 # reused as configure wrote it for the host -- sound here because both targets
 # are little-endian LP64.
@@ -40,11 +40,11 @@ target=${1:-x64}
 case $target in
   x64)   name=moon-tar       ; tflag=""         ; sub=moontar
          mksys=mksys       ; backend=""              ; run=""            ; need="" ;;
-  arm64) name=moon-tar-arm64 ; tflag="-t arm64" ; sub=moontar-a64
-         mksys=mksys-arm64 ; backend=crew/holo/arm64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
-  riscv64) name=moon-tar-riscv ; tflag="-t riscv64" ; sub=moontar-rv
-         mksys=mksys-riscv ; backend=crew/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
-  *) echo "moon-tar.sh: unknown target $target (x64 | arm64 | riscv64)" >&2; exit 1 ;;
+  a64) name=moon-tar-a64 ; tflag="-t a64" ; sub=moontar-a64
+         mksys=mksys-a64 ; backend=crew/holo/a64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
+  rv64) name=moon-tar-rv64 ; tflag="-t rv64" ; sub=moontar-rv
+         mksys=mksys-rv64 ; backend=crew/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
+  *) echo "moon-tar.sh: unknown target $target (x64 | a64 | rv64)" >&2; exit 1 ;;
 esac
 
 # where a package's sources may live, first hit wins: the tree-local dl,

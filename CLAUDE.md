@@ -13,13 +13,13 @@
 ; of scheme, haskell, and apl.
 ;
 ; mooncc builds statically linked executables that currently run on
-; linux, freebsd and netbsd, using a built in custom libc, for amd64,
-; arm64, and thumb32, with riscv64 currently in development.
+; linux, freebsd and netbsd, using a built in custom libc, for x64,
+; a64, and thumb32, with rv64 currently in development.
 ;
 ; kore includes sh, make, vi, as, nc, gzip/gunzip, and lots of other
 ; utilities.
 ;
-; inle currently runs on amd64, arm64 and rv64 and includes a virtual console,
+; inle currently runs on x64, a64 and rv64 and includes a virtual console,
 ; filesystem, and doom port.
 ;
 ; the love artifact includes all these components in a single binary together

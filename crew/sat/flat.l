@@ -13,7 +13,7 @@
 ;                          arena family; the layout comment sits above fbvag3)
 ;                                                              -> best key | count = M_cls
 ; the interpreted twins (fbcp3/fconf3/fdec3/fbvag3) over the same memory are the deopt
-; fallbacks, the arm64/no-`nif` engine (the seam rides `(from 'glaze 'nif)` -- main.c's
+; fallbacks, the a64/no-`nif` engine (the seam rides `(from 'glaze 'nif)` -- main.c's
 ; seal pulls nif off the book, and the glaze module is the door it keeps), and the
 ; differential oracle: the `fknob` box forces the twins and `fboth` gates verdict
 ; equality. lisp keeps only the cold path: restarts, learnt-db reduction, decay/rescale.
@@ -679,11 +679,11 @@
    ; one door left.
    nifseam (from 'glaze 'nif)
    (fnif ir fb ar)                                          ; assemble + install one kernel (fb = the honest twin)
-    (: bs (peep ((from 'holo 'assemble) 'amd64 ir) 'bytes 0)   ; through the registry accessor -- holo's whole public surface
+    (: bs (peep ((from 'holo 'assemble) 'x64 ir) 'bytes 0)   ; through the registry accessor -- holo's whole public surface
        c (cask bs)                                           ; the charlist lane fills in C
        (nifseam c fb '(\ q (q)) ar))
    (fbcpk nv)                                               ; -> (bcp conf dec), or () when they can't build
-    (? !(id? love-arch 'amd64) ()
+    (? !(id? love-arch 'x64) ()
        (: hit (peep fkers nv ())
           (? (two? hit) hit
              (: ks [(fnif (fbcp-ir nv) fbcp3 3)
@@ -692,7 +692,7 @@
                 _ (pin fkers nv ks) ks))))
    bvkers (tablet 0)                                        ; nb -> (fbvag), the grow-step kernel, one assemble per bucket
    (fbvagk NB2)
-    (? !(id? love-arch 'amd64) ()
+    (? !(id? love-arch 'x64) ()
        (: hit (peep bvkers NB2 ())
           (? (two? hit) hit
              (: ks (fnif (fbvag-ir NB2) fbvag3 4 >< ())

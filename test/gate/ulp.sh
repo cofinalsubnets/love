@@ -47,7 +47,7 @@ fail() { echo "FAIL test_ulp: $*" >&2; exit 1; }
 moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 
 arch=$(uname -m)
-if [ "$arch" != x86_64 ]; then
+if [ "$arch" != x64 ]; then
   echo "test_ulp: x86-64 only (mooncc emits x64), skipped on $arch"
   exit 0
 fi

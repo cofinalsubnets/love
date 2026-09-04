@@ -3,7 +3,7 @@
 # `mooncc -t thumb1|thumb2`, run on qemu's Cortex-M, and required to answer exactly what
 # arm-none-eabi-gcc answers for the same source on the same machine.
 #
-# WHY A SECOND ORACLE. ccarch.sh pins arm64 and riscv64 against the x86-64 build, which
+# WHY A SECOND ORACLE. ccarch.sh pins a64 and rv64 against the x86-64 build, which
 # works because those are LP64 like x64 and run under qemu-USER. The thumb family is
 # M-profile: no MMU, no Linux, no qemu-user lane at all, and ILP32 besides -- so x64
 # cannot be the reference (a program reading `sizeof(long)` is not wrong to differ) and

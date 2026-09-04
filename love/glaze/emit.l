@@ -6,7 +6,7 @@
 ; [code, src, code, interp, lvm_ret, 0], value[-1]=src (=/show) and value[1]=interp.
 ;
 ; every lane below lays neutral crew/holo/ IR and assembles it per target, so the
-; roles are named through `greg`: x86 lands g/Ip/Hp/Sp in rdi/rsi/rdx/rcx, aarch64
+; roles are named through `greg`: x86 lands g/Ip/Hp/Sp in rdi/rsi/rdx/rcx, a64
 ; in x0..x3. putfix is `adds A A A` then `or A A 1` -- the overflow flag is the
 ; 62-bit fixnum boundary, which is what every arith result gates on.
 
@@ -27,9 +27,9 @@
               ((: (go i) (i < 8 ? ((u // (i 256)) % 256 . go (i + 1)) ())) 0))   ; so //% splits n into 8 LE bytes
    (le4 n) ((: (go i) (i < 4 ? ((n >> (8 * i)) & 255 . go (i + 1)) ())) 0)  ; n -> 4 LE bytes (offsets < 2^31, & ok)
    (emit l) (cask l)                       ; the charlist lane fills in C -- this was a pin per byte
-   (jit lam) (jitir lam 'amd64)            ; (jit '(\ x E)): an arity-1 arith leaf -> the neutral-IR lane
+   (jit lam) (jitir lam 'x64)            ; (jit '(\ x E)): an arity-1 arith leaf -> the neutral-IR lane
    (argix e ps i) (atom? ps ? 0  (e = <ps) i  (argix e >ps (i + 1)))   ; a param -> its frame index
-   (jitn lam) (jitnir lam 'amd64)          ; (jitn '(\ p0 .. E)): arity>=2 (natn curries to saturation)
+   (jitn lam) (jitnir lam 'x64)          ; (jitn '(\ p0 .. E)): arity>=2 (natn curries to saturation)
    (jit2 lam) (jitn lam)                                                  ; arity-2 alias (self-test/auto.l)
    (gfind p l) (atom? l ? () (p <l) <l (gfind p >l))     ; first elt matching p
    ; a blob names no address of the binary: the kind sentinels and the callout drives are read
@@ -37,7 +37,7 @@
    (jk tgt r k) ['ld r (greg tgt 'g) ((jkoff 0) + (8 * k))]   ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume 9 cur 10 unc
    mapmix 0x9e3779b97f4a7c15                                       ; = love.c's map hash multiplier, for the inline probe
    (hasm tgt ir) (: f (glazeasm 'f) ((lit? f ? f (from 'holo 'assemble)) tgt ir))   ; the pinned assembler, else the module's
-   (asmx ir) ((hasm 'amd64 ir) 'bytes)                                          ; assemble neutral IR -> flat bytes, x86
+   (asmx ir) ((hasm 'x64 ir) 'bytes)                                          ; assemble neutral IR -> flat bytes, x86
    (asmt tgt ir) ((hasm tgt ir) 'bytes)                                       ; ... target-aware (the loop/float lanes that run on both arches)
    ; the map probe, laid by the crew/holo/ assembler so hit/miss/loop resolve as labels.
    ; reg map: holo r0=rax, r7=x86-r8, r8=x86-r9, r9=x86-r10, r10=x86-r11. it wants the map
@@ -50,7 +50,7 @@
       + [['label 'miss] ['li 'r0 d] '(jmp end)
          '(label hit) '(leax r0 r9 r9 1 0) '(ldx r0 r7 r0 8 8) '(sar r0 1) '(label end)])
    (asmx-seed ir nm addr) (: t (pin {} nm addr) f (glazeasm 'at)
-                             (((lit? f ? f (from 'holo 'assemble-at)) 'amd64 ir t) 'bytes))   ; one pre-bound external label nm->addr (the glaze's deopt handler)
+                             (((lit? f ? f (from 'holo 'assemble-at)) 'x64 ir t) 'bytes))   ; one pre-bound external label nm->addr (the glaze's deopt handler)
    ; the same probe with write tails, so `pin` is insert-or-update. a miss (a gap at slot I)
    ; with the table near full needs a grow, which native cannot do, so it deopts through an
    ; external label the caller seeds; `(tablet n)` presizes so a counted insert loop never gets
@@ -97,8 +97,8 @@
    ; test the loop runs while.
    (foldinit op)  (op = '* ? 1 0)                                 ; * folds from 1, + from 0
    ; loopregs: N / counter / accumulator, caller-saved on both targets so they survive the body's
-   ; acc/tmp/scratch. arm64 picks x6/x7/x8 to dodge scratch=x10 and anchor=x9.
-   (loopregs tgt) (id? tgt 'amd64 ? '(r8 r9 r10) '(r6 r7 r8))
+   ; acc/tmp/scratch. a64 picks x6/x7/x8 to dodge scratch=x10 and anchor=x9.
+   (loopregs tgt) (id? tgt 'x64 ? '(r8 r9 r10) '(r6 r7 r8))
    ; loopepi: the result is already in acc -- putfix, then Continue (Ip += 16 ; jmp [Ip]).
    (loopepi tgt) (: A (greg tgt 'acc) S (greg tgt 'sp) IP (greg tgt 'ip) T (greg tgt 'tmp)
       ([['adds A A A]] + (ldeopt tgt 0) + [['or A A 1] ['st S 0 A] ['add IP IP 16] ['ld T IP 0] ['jmpr T]]))
@@ -107,7 +107,7 @@
     (: rs (loopregs tgt) N (rs 0) CV (rs 1) ACC (rs 2) A (greg tgt 'acc) S (greg tgt 'sp)
        bodyir (cgvir tgt (\ e d (e = cv && [['mov A CV]])) body 0)      ; body -> acc; the counter is read from cv
        accir  (op @ '+ ([['adds ACC ACC A]] + (ldeopt tgt 0))                                  ; acc += acc ; overflow -> inline deopt
-                  '* (: dl (mint 0) ok (mint 0)                                                ; acc *= acc ; mulo sets no arm64 flag, so it branches
+                  '* (: dl (mint 0) ok (mint 0)                                                ; acc *= acc ; mulo sets no a64 flag, so it branches
                        ([['mulo ACC ACC A (greg tgt 'scratch) dl]] + [['jmp ok] ['label dl]] + (deoptbody tgt 0) + [['label ok]]))
                   ())
        pre  [['ld N S 0] ['sar N 1] ['li CV 0] ['li ACC (foldinit op)]]   ; N = Sp[0]>>1 (assumed fixnum) ; cv = 0 ; acc = init
@@ -116,7 +116,7 @@
    ; (jitsum body) -- compile (\ n (sum_{i<n} body(i))) to a native counted loop (x86 self-test helper).
    (jitsum body)
     (: src ['\ 'n [[': ['go 'i 'a] ['? ['< 'i 'n] ['go ['+ 'i 1] ['+ 'a body]] 'a]] 0 0]]
-       (nif (emit (loopcode body 'i '+ '< 'amd64)) (ev src) src 1))
+       (nif (emit (loopcode body 'i '+ '< 'x64)) (ev src) src 1))
    ; --- the stackless call-out drive ---------------------------------------------------------
    ; a counted loop over (clos i) that calls out without a re-entrant C frame: the blob builds
    ; the frame on Sp, points Ip at callout_drive (love.c, {lvm_ap, lvm_ret0}) and tail-jumps, and
@@ -183,7 +183,7 @@
           ['ld U IP 8]  ['st SP 40 U]                         ; Stwin = value[1] = twin (interp)        -> R[5]
           ['ld T SP 48] ['sar T 1] ['st SP 16 T]            ; sn = untag(arg @ R[6])                  -> R[2]
           ['li T 1] ['st SP 0 T] ['li T 0] ['st SP 8 T]   ; sa = tag(0)=1, tagged so gate 2 checks the fixnum boundary ; SC = 0   -> R[0] R[1]
-          ['lar T 'entry0] ['st SP 32 T]]                     ; Sbase = the blob base (out-of-pool W^X; lar = ADR on arm64)  -> R[4]
+          ['lar T 'entry0] ['st SP 32 T]]                     ; Sbase = the blob base (out-of-pool W^X; lar = ADR on a64)  -> R[4]
         + ['(label top)
            ['ld T SP 8] ['ld U SP 16] ['cmp T U] ['br 'ge 'end]]   ; i >= n -> end
         + (caarg tgt arg)                                       ; F[0] = tag(ARG(counter)) -- bare i, or a computed expr (deopts to `deopt`)
@@ -209,7 +209,7 @@
            ['add SP SP 56]                                     ; Sp = entry (R+48); Sp[0] = the original tagged n
            ['mov IP A] ['ld A IP 0] ['jmpr A]]               ; Continue into twin, applied to Sp[0] = n
         + (name? arg ? () (caargdeopt tgt))))                  ; the computed-arg `deopt` label, only when arg is an expr
-   (jitcalloutsum clos) (jitcalloutx clos ['\ 'n 0] '+ 'i 'i 'amd64)
+   (jitcalloutsum clos) (jitcalloutx clos ['\ 'n 0] '+ 'i 'i 'x64)
    (jitcalloutx clos src op iv arg tgt)
     (: fop (id? op '* ? (*) (+))  a0 (foldinit op)                             ; the fold op as a value -- a bare `* +` mid-list mis-factors -- and its identity
        argfn (name? arg ? 0 (ev ['\ iv arg]))                               ; a computed arg -> a closure (\ counter ARG); a bare one needs none
@@ -899,7 +899,7 @@
               + rb + (loopepi tgt))))                      ; result -> acc ; putfix + Continue
    ; (jitloop-n lam vars updates test result inits) -- a general N-var loop -> native (x86 self-test helper).
    (jitloop-n lam vars updates test result inits)
-    (nif (emit (loopcode-n <>lam vars updates test result inits 'amd64)) (ev lam) lam 1)
+    (nif (emit (loopcode-n <>lam vars updates test result inits 'x64)) (ev lam) lam 1)
    ; --- the float lane: unboxed doubles in xmm/d --------------------------------------------------
    ; float values stay in registers, never boxed. f0 is the accumulator and a nested operand spills
    ; to the machine stack. peek is mopped, so a float constant is materialized arithmetically:
@@ -914,7 +914,7 @@
           eu ((: (go e) (((e + 1) 2.0) <= ax ? (go (e + 1)) e)) (int ((log ax) / (log 2.0))))   ; raise past the log's error
           e  ((: (go e) (ax < (e 2.0) ? (go (e - 1)) e)) eu)                                    ; then lower; (e 2.0) is the tower, 2.0 ** e
           ((s * 9223372036854775808) + ((e + 1023) * 4503599627370496) + (int (((ax / (e 2.0)) - 1.0) * 4503599627370496.0)))))
-   ; the float spill rides the machine stack at the loop/group slot size (x86 8 / arm64 16, for sp
+   ; the float spill rides the machine stack at the loop/group slot size (x86 8 / a64 16, for sp
    ; alignment), so a mid-nest deopt (deoptbody, slotsz*d) unwinds it correctly.
    (xpushir tgt) [['sub 'sp 'sp (slotsz tgt)] '(stsd sp 0 f0)]   ; spill xmm0/d0 -> [sp]
    (xpop1ir tgt) ['(ldsd f1 sp 0) ['add 'sp 'sp (slotsz tgt)]]   ; reload [sp] -> xmm1/d1
@@ -939,7 +939,7 @@
       cc (op @ '< 'below  '<= 'be  '> 'above  '>= 'ae  'eq)
       ((cgf tgt v a d) + (xpushir tgt) + (cgf tgt v b (d + 1)) + (xpop1ir tgt) + '((ucomisd f1 f0)) + [['set cc (greg tgt 'acc)]]))   ; ucomisd xmm1,xmm0 ; acc = (cc) ? 1 : 0
    ; (jitf '(\ x (cmp <fexpr> <fexpr>))) -- a float predicate over a fixnum arg -> native 0/1 (x86 helper).
-   (jitf lam) (: v <>lam (nif (emit (asmx ((cgfp 'amd64 v <>>lam 0) + (loopepi 'amd64)))) (ev lam) lam 1))
+   (jitf lam) (: v <>lam (nif (emit (asmx ((cgfp 'x64 v <>>lam 0) + (loopepi 'x64)))) (ev lam) lam 1))
    ; --- heap result (the deferred "Have-checked box"): (jitfr '(\ x <fexpr>)) returns a gem, not 0/1.
    ; the lane never allocates because it can't GC (its raw regs aren't roots) -- so it does the alloc
    ; twin of the overflow guard: a room guard (Sp - Hp >= gem_req+floor words) deopts to interp when
@@ -949,9 +949,9 @@
    ; ptr is the gem), bump Hp by gem_req. the epilogue stores the pointer (NO putfix) and threads the
    ; advanced Hp on through Continue, so the box is live to the next op and the GC at the next safepoint.
    ; nanc: NaN -> 0.0 in f0 (mk_gem's law). x86: ucomisd xmm0,xmm0 ; jnp +4 ; xorpd (the parity cc +
-   ; self-jump as a raw blob). arm64: fcmp d0,d0 ; b.vc ok ; (d0 <- 0) ; ok -- unordered sets V, so vc
+   ; self-jump as a raw blob). a64: fcmp d0,d0 ; b.vc ok ; (d0 <- 0) ; ok -- unordered sets V, so vc
    ; skips when not-NaN; zero via a GPR 0 moved into d0.
-   (nanc tgt) (id? tgt 'amd64 ? [['raw '(102 15 46 192  123 4  102 15 87 192)]]
+   (nanc tgt) (id? tgt 'x64 ? [['raw '(102 15 46 192  123 4  102 15 87 192)]]
                  (: A (greg tgt 'acc) ok (mint 0)
                     (['(ucomisd f0 f0) ['br 'vc ok]] + [['li A 0] ['movqxr 'f0 A]] + [['label ok]])))
    (jitfr lam tgt) (jitfrx lam tgt (ev lam))                        ; 2-arg public: bakes the interpreter deopt (auto-ev + the glaze-x86 tests)
@@ -1031,10 +1031,10 @@
     ; the scalar D-dim kernel as one neutral IR program, both targets: control flow is labels, the
     ; recurrence is allocp's cse'd scalar-double forms, the cold derives are IR too.
     ; k=r7, acc=r8, counters r9.. through gr; f2..=consts, f8..=invariants, fvars next, rest the
-    ; DAG pool. x86 D>=3 spills the callee-saved counters; on arm64 the counters are caller-saved.
+    ; DAG pool. x86 D>=3 spills the callee-saved counters; on a64 the counters are caller-saved.
     (: D #dims  M #invs  N #fvars  SCR (greg tgt 'acc)    ; scr: integer scratch (the fbits load + the result)
        cregs (rangeL 10 (10 + D))                                             ; counter regs (phys r10..), outer->inner
-       saved (id? tgt 'amd64 ? (rangeL 12 (10 + D)) ())                       ; x86 r12.. callee-saved (D>=3); arm64's counters are caller-saved
+       saved (id? tgt 'x64 ? (rangeL 12 (10 + D)) ())                       ; x86 r12.. callee-saved (D>=3); a64's counters are caller-saved
        fenv (invs + fvars)
        cenv (map2 (\ nm r [nm [['cvtsi2sd 'f0 (gr r)]]]) cnames cregs)    ; counter name -> its (cvtsi2sd f0 cntr) IR (cgFd reads it)
        ht (htbl (fcc bound (fccl invd (fccl updates (fcc testexpr ())))) 2)   ; distinct consts -> xmm2..7
@@ -1108,8 +1108,8 @@
        ht (htbl (fcc bound (fccl updates (fcc testexpr ()))) 2)                          ; only inner-recurrence consts (bound+..) -> f2,f3; derive consts inline -> f4,5,6 free
        breg (fr (hlook bound ht))  pred (cmppd-imm cmpop)
        idx (map2 (\ i d (i . d)) (rangeL 0 M) invd)                                   ; (inv-index . derive-expr) pairs
-       d0 (foldl (\ a p (a + (cgFd 'amd64 ht cenv >p) + [['movsd (fr (8 + <p)) 'f0]])) () idx)       ; inv i lane0 -> low of f(8+i)
-       d1 (foldl (\ a p (a + (cgFd 'amd64 ht cenv >p) + [['unpcklpd (fr (8 + <p)) 'f0]])) () idx)    ; inv i lane1 (counter+1) -> high
+       d0 (foldl (\ a p (a + (cgFd 'x64 ht cenv >p) + [['movsd (fr (8 + <p)) 'f0]])) () idx)       ; inv i lane0 -> low of f(8+i)
+       d1 (foldl (\ a p (a + (cgFd 'x64 ht cenv >p) + [['unpcklpd (fr (8 + <p)) 'f0]])) () idx)    ; inv i lane1 (counter+1) -> high
        derives (d0 + [['inc iir]] + d1 + [['dec iir]])                               ; lane1 = the same derive at counter+1
        zerof (foldl (\ a j (a + [['xorpd (fr (8 + M + j)) (fr (8 + M + j))]])) () (rangeL 0 N))   ; fvars := 0 (both lanes)
        aenv ((efold fenv 8) + ht)
@@ -1121,7 +1121,7 @@
        maskc [['movupd 'f6 (fr magr)] ['cmppd 'f6 breg pred] '(andpd f5 f6) '(psubq f4 f5) '(movmskpd r0 f5)]
        iter (['(label itop) ['cmp 'r7 lim] '(br ge iesc)] + bodyc + maskc             ; while k<lim and any lane alive
              + '((test r0 r0) (br eq iesc)) + wb + '((inc r7) (jmp itop) (label iesc)))
-       deopt (deoptbody 'amd64 0)                                                          ; tail-apply the interp fallback (overflow)
+       deopt (deoptbody 'x64 0)                                                          ; tail-apply the interp fallback (overflow)
        accb ('((movqrx r0 f4) (adds r8 r8 r0) (br vc cont0)) + deopt                     ; acc += count.lane0 ; guard
              + '((label cont0) (movhlps f6 f4) (movqrx r0 f6) (adds r8 r8 r0) (br vc cont1)) + deopt + '((label cont1)))   ; acc += count.lane1 ; guard
        cell (derives + zerof + '((xorpd f4 f4) (pcmpeqd f5 f5) (li r7 0)) + iter + accb)   ; count=0; alive=ones; k=0; loop; acc
@@ -1133,10 +1133,10 @@
        preload (foldl (\ a e (a + [['li 'r0 (fbits <e)] ['movqxr (fr <>e) 'r0] ['unpcklpd (fr <>e) (fr <>e)]])) () ht)   ; broadcast each const [c,c]
        (preload + '((li r8 0)) + (loop-nest 0 cell) + '((mov r0 r8))))                    ; IR program (x86): acc=0 ; nest ; result -> r0(=acc)
    ; jitfgridn tries the 2-wide packed kernel when the shape fits and takes the scalar one otherwise.
-   ; grid2 is x86-only, since neon has no movmskpd, so arm64 always rides gridn. both kernels answer an
+   ; grid2 is x86-only, since neon has no movmskpd, so a64 always rides gridn. both kernels answer an
    ; IR program ending with the checksum in acc, and jitfgridn appends loopepi and assembles for tgt.
    (jitfgridn lam cnames dims invs invd fvars updates testexpr cmpop bound lim tgt)
-    (: pk (id? tgt 'amd64 && grid2-ok? dims invs fvars updates testexpr cmpop bound
+    (: pk (id? tgt 'x64 && grid2-ok? dims invs fvars updates testexpr cmpop bound
              ? (loopcode-grid2 dims cnames invs invd fvars updates testexpr cmpop bound lim) ())
        prog (atom? pk ? (loopcode-gridn dims cnames invs invd fvars updates testexpr cmpop bound lim tgt) pk)
        (nif (emit (asmt tgt (prog + (loopepi tgt)))) (ev lam) lam 1))
@@ -1170,14 +1170,14 @@
    ; --- the neutral-IR lanes ---------------------------------------------------------------------
    ; greg maps a logical role to the abstract holo register, per target. x86 lands g/Ip/Hp/Sp in
    ; rdi/rsi/rdx/rcx (abstract r6/r5/r2/r1, SysV's first four args -- the convention IS the calling
-   ; convention); aarch64's aapcs lands them in x0..x3, so the accumulator moves off r0. anchor is
+   ; convention); a64's aapcs lands them in x0..x3, so the accumulator moves off r0. anchor is
    ; the machine stack-pointer snapshot for the deopt unwind; scratch is the callout lanes' second
    ; temp (mulo/rem take it as an operand and x86 ignores it -- rdx is the divide's own).
    ; ⚠ EVERY ROLE MUST BE CALLER-SAVED. a blob is an lvm: entered by jmp, left by jmp, so it owns no
    ; epilogue to restore in, and the ret at the end of the dispatch chain answers to the C caller.
-   ; holo's r0..r14 are x0..x14 on aarch64, all temporary; on amd64 r3 and r4 are rbx and rbp.
+   ; holo's r0..r14 are x0..x14 on a64, all temporary; on x64 r3 and r4 are rbx and rbp.
    (greg tgt role)                                                     ; a role table, not a chain: read it in columns
-    (: x (id? tgt 'amd64)
+    (: x (id? tgt 'x64)
        (? (id? role 'g)       (x ? 'r6 'r0)   (id? role 'ip)      (x ? 'r5 'r1)
           (id? role 'hp)      (x ? 'r2 'r2)   (id? role 'sp)      (x ? 'r1 'r3)
           (id? role 'acc)     (x ? 'r0 'r4)   (id? role 'tmp)     (x ? 'r7 'r5)
@@ -1246,7 +1246,7 @@
       ([['ld A S (8 * i)] ['test A 1]] + (zdeopt tgt d) + [['sar A 1]]))
    (arithl tgt op d) (: A (greg tgt 'acc) T (greg tgt 'tmp) SC (greg tgt 'scratch) dl (mint 0) ok (mint 0)   ; acc = (popped a) OP acc, overflow -> inline deopt
       (op @ '+ ([['adds A A T]] + (ldeopt tgt d))
-            '* ([['mulo A A T SC dl]] + [['jmp ok] ['label dl]] + (deoptbody tgt d) + [['label ok]])   ; mulo sets no arm64 flag, so it branches; SC is the smulh scratch
+            '* ([['mulo A A T SC dl]] + [['jmp ok] ['label dl]] + (deoptbody tgt d) + [['label ok]])   ; mulo sets no a64 flag, so it branches; SC is the smulh scratch
             '- ([['subs T T A]] + (ldeopt tgt d) + [['mov A T]])
             ()))
    (divl tgt op d) (: A (greg tgt 'acc) T (greg tgt 'tmp) SC (greg tgt 'scratch)   ; a in tmp (popped), b in acc -> acc; b == 0 deopts
@@ -1271,16 +1271,16 @@
    ; (call <name>), each H opens (label <name>), and the assembler resolves the rel offsets. IR
    ; chunks concatenate flat through bcat. it covers the full op grammar: int arith, tco, value-mode
    ; cons, and the string/map/cask lanes.
-   ; arg-register ABI: args in the callee-saved bank (x86 rbx/r13/r14/r15, arm64 x19..x22) and the
+   ; arg-register ABI: args in the callee-saved bank (x86 rbx/r13/r14/r15, a64 x19..x22) and the
    ; OVF anchor in another callee-saved reg. a call passes args on the machine stack, and each H
-   ; saves, loads and restores its own arg regs so a caller's args survive a nested call; on arm64 it
+   ; saves, loads and restores its own arg regs so a caller's args survive a nested call; on a64 it
    ; also saves lr, which bl clobbers, where x86's call/RET keeps the return address on the stack.
    ; mov to or from sp is `lea`: the ORR-based mov reads and writes XZR for reg 31, never sp.
-   (slotsz tgt) (id? tgt 'amd64 ? 8 16)                                          ; the push/pop unit
-   (govf tgt)   (id? tgt 'amd64 ? 'r11 'r23)                                     ; the OVF anchor reg: x86 r12 / arm64 x23
-   (argregir tgt i) ((id? tgt 'amd64 ? '(r3 r12 r13 r14) '(r19 r20 r21 r22)) i)
-   (hsave tgt)  (id? tgt 'amd64 ? () ['(push lr)])                            ; arm64's H spills lr; x86 rides call/RET's stack
-   (hrest tgt)  (id? tgt 'amd64 ? () ['(pop lr)])
+   (slotsz tgt) (id? tgt 'x64 ? 8 16)                                          ; the push/pop unit
+   (govf tgt)   (id? tgt 'x64 ? 'r11 'r23)                                     ; the OVF anchor reg: x86 r12 / a64 x23
+   (argregir tgt i) ((id? tgt 'x64 ? '(r3 r12 r13 r14) '(r19 r20 r21 r22)) i)
+   (hsave tgt)  (id? tgt 'x64 ? () ['(push lr)])                            ; a64's H spills lr; x86 rides call/RET's stack
+   (hrest tgt)  (id? tgt 'x64 ? () ['(pop lr)])
    (saveargsir tgt k) (foldl (\ a i (bcat [a [['push (argregir tgt i)]]])) () (rangeL 0 k))
    (restargsir tgt k) (foldl (\ a i (bcat [a [['pop (argregir tgt ((k - 1) - i))]]])) () (rangeL 0 k))
    (loadargsir tgt k) (foldl (\ a i (bcat [a [['ld (argregir tgt i) 'sp ((slotsz tgt) * ((2 * k) - i))]]])) () (rangeL 0 k))   ; argreg_i <- the passed arg at [sp + slotsz*(2k-i)]
@@ -1293,7 +1293,7 @@
    ; which is the gap against a register machine. when one operand is already a param (so, in an arg
    ; reg) or a small immediate, combine it directly -- acc OP= reg|imm, no stack traffic -- and
    ; primes' (d * d), (n < (d * d)), (d + 1) and (0 = ..) all run flat. the ALU takes a reg or an imm
-   ; for adds/subs/cmp on both targets, arm64's imm being 12-bit; mulo is register-only on arm64, so
+   ; for adds/subs/cmp on both targets, a64's imm being 12-bit; mulo is register-only on a64, so
    ; the imm lane skips `*`, and the case that matters -- d*d -- is a register anyway.
    (pimm? x) (whole? x && (x < 0 ? (0 - x) x) <= 4095)                      ; an immediate both arches add/sub/cmp directly
    (preg tgt ps x) (member? x ps && argregir tgt (argix x ps 0))            ; x a param -> its arg reg, else ()
@@ -1325,7 +1325,7 @@
                     (? pb                             (bcat [(go a) (garith-r tgt op pb)])   ; (E op p): E->acc; acc OP= p_reg
                        (pimm? b && !(id? op '*))   (bcat [(go a) (garith-i tgt op b)])    ; (E op C)
                        (pa && member? op '(+ *))   (bcat [(go b) (garith-r tgt op pa)])   ; (p op E): commute
-                       (pimm? a && id? op '+)     (bcat [(go b) (garith-i tgt op a)])    ; (C + E): commute; an imm `*` has no arm64 form, so it stays generic
+                       (pimm? a && id? op '+)     (bcat [(go b) (garith-i tgt op a)])    ; (C + E): commute; an imm `*` has no a64 form, so it stays generic
                        (bcat [(go a) [['push A]] (go b) [['pop T]] (garith tgt op)])))   ; generic
                (member? op '(// %))
                  (bcat [(go a) [['push A]] (go b) [['test A A] '(br eq OVF) ['pop T]] (divir tgt op)])
@@ -1435,7 +1435,7 @@
        epi (valt ? [['st S 0 A] ['add IP IP 16] ['ld T IP 0] ['jmpr T]]                                  ; a value: store acc as-is, then Continue with no putfix
                  [['adds A A A] '(br vs DEOPT) ['or A A 1] ['st S 0 A] ['add IP IP 16] ['ld T IP 0] ['jmpr T]])   ; an int: putfix, overflow -> deopt, then Continue
        (bcat [(hsave tgt) [['push OVFR]] (saveargsir tgt k) [['lea OVFR 'sp 0]] pushargs
-              [['call entry] ['add 'sp 'sp (ss * k)]] (restargsir tgt k) [['pop OVFR]] (hrest tgt)   ; lr is saved and restored around `call entry`: on arm64 bl clobbers x30, which is the live return address the threaded tail-call chain eventually rets through, and the outer tail-jumps onward, so it must hand x30 back intact
+              [['call entry] ['add 'sp 'sp (ss * k)]] (restargsir tgt k) [['pop OVFR]] (hrest tgt)   ; lr is saved and restored around `call entry`: on a64 bl clobbers x30, which is the live return address the threaded tail-call chain eventually rets through, and the outer tail-jumps onward, so it must hand x30 back intact
               epi
               [['label 'OVF] ['lea 'sp OVFR 0]] (restargsir tgt k) [['pop OVFR]] (hrest tgt)
               [['label 'DEOPT]] (deoptmn tgt (arity > 1))]))
@@ -1461,7 +1461,7 @@
    ; (jitgroupir defs entry tgt): defs are ((nameform . body) ..), and the entry is the group's value.
    ; the deopt fallback is (ev <the whole group>), and post-rebind `ev` is the glaze, so it re-glazes
    ; the group -- harmless, a never-deopting native gets rebuilt -- which is why the mpeep/mpin ->
-   ; peep/pin aliases (ldxb/stxb) must assemble on every target, arm64 included. mpeep and mpin are
+   ; peep/pin aliases (ldxb/stxb) must assemble on every target, a64 included. mpeep and mpin are
    ; glaze-internal, not real fns: the aliases read the previous, global binding by the sequence law
    ; rather than recursing, so a non-map lane keeps the core accessors.
    (jitgroupir defs entry tgt)

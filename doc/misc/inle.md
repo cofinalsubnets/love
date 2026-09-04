@@ -34,7 +34,7 @@ Since rung 4 it has processes — pipes over kernel-heap queues, `spawn`/`wait` 
 over `twirl`/`catch` (a process IS a task), per-pid stdio seats under the folded ports, and a
 seat-aware `quit` — so lush runs real pipelines of kore tools.
 
-Since rung 5 it has the disk: virtio-blk (PCI on x86_64, virtio-mmio on aarch64; polled, one
+Since rung 5 it has the disk: virtio-blk (PCI on x64, virtio-mmio on a64; polled, one
 C file) under three raw nifs, and **FAT32 r/w written in love** (`lib/fat.l`, off the ramfs)
 over them — a file written before a reset is there after it, and mtools reads what it writes.
 
@@ -69,7 +69,7 @@ and a wrong one is silent. `!e` is the success test; the k_* C faces below stay 
 
 Sizes are one focused person, rough, and they compound: each rung is gated before the next.
 Each rung names its own gate at the foot; **`make test_inle` runs all of them** — the corpus,
-the disk, the UEFI door, the command line, the aarch64 twin, the clang twin. None of it is on
+the disk, the UEFI door, the command line, the a64 twin, the clang twin. None of it is on
 `test_slow`, so this is the one to type when free/ or the kore cat moves.
 
 ### rung 0 — the initrd, and a ramfs behind it  ✅ landed
@@ -120,8 +120,8 @@ absence is loud.
   corpus's `(rest 30)` sleeps 30 ms, as it always claimed to.
 * ⚠ **The date has to come from the machine, not the door.** No door answers a boot date, so
   the RTC is read directly:
-  the mc146818 CMOS walk on x86_64 (BCD, 12-hour and update-in-progress all handled, bounded so
-  an absent chip cannot hang the boot), one register of the PL031 on aarch64, which already sits
+  the mc146818 CMOS walk on x64 (BCD, 12-hour and update-in-progress all handled, bounded so
+  an absent chip cannot hang the boot), one register of the PL031 on a64, which already sits
   inside the 2MiB block `mmio_map` lays for the UART. Both doors prove it in the gate.
 * ⚠ **A directory is a PREFIX.** The initrd is flat — a row for `lib/json.l` and none for `lib` —
   so `readdir` answers the distinct next components of every path under a prefix, and `stat` on
@@ -219,13 +219,13 @@ whole toolbox: `-append "kore ls lib"` runs the tool, `-append "sh"` boots lush,
 * **lush boots**, interactively and with the whole cat behind it: the prompt carries the cwd,
   builtins (cd, pwd, export, read ..) ride the rung-2 tree, and a bare `ls lib | wc -l` is
   rung 4's spawn over the registry — no `/bin`, no PATH, the verb table IS the path.
-* *gate:* `make test_kboot` — four boots of the shipped x86_64 kernel through the PVH door,
+* *gate:* `make test_kboot` — four boots of the shipped x64 kernel through the PVH door,
   each `-append` a real command line: `kore ls lib`, `kore wc lib/json.l` byte-exact against
   the host `wc`, `sh -c "cd lib; pwd"`, and a pipeline. Opt-in (a cold cat eval per boot);
   run it when the kernel or the cat moves. vi is the interactive smoke under `run-*`, and its
   boot is proven headless — `-append "vi lib/json.l"` draws the hued file over serial. The
-  aarch64 twin dispatches the same way through its DTB door (spot-proven; the gate lane is
-  x86_64's).
+  a64 twin dispatches the same way through its DTB door (spot-proven; the gate lane is
+  x64's).
 
 ### rung 4 — pipes, `spawn`, `wait`  ✅ landed
 
@@ -280,8 +280,8 @@ and `wait` is `catch`.
 
 ### rung 5 — the disk  ✅ landed
 
-PCI config-space enumeration (CF8/CFC), then **virtio-blk** — modern virtio-pci on x86_64,
-virtio-mmio on aarch64 (qemu virt's 32 fixed slots), one split virtqueue, polled, synchronous,
+PCI config-space enumeration (CF8/CFC), then **virtio-blk** — modern virtio-pci on x64,
+virtio-mmio on a64 (qemu virt's 32 fixed slots), one split virtqueue, polled, synchronous,
 all in `src/blk.c` (~250 lines, the one part that had to be C). Over it three nifs —
 `(disk _)` the sector count, `(disk-read l n)`, `(disk-write l s)` — and over those **FAT32
 r/w written in love**: `lib/fat.l`, which rides the ramfs into every kernel via the module

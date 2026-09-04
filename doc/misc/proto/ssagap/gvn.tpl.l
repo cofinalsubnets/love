@@ -172,10 +172,10 @@
                   (go (i + 1))))
            (go <s))
        (foldl (\ _ s (span s)) 0 spans))
-   pr (cc-parse src {'is is9 'ds '("ai_tco=1" "AiHaveVersionH") 'tgt 'amd64 'os 'linux 'vb () 'dia 'moon})
+   pr (cc-parse src {'is is9 'ds '("ai_tco=1" "AiHaveVersionH") 'tgt 'x64 'os 'linux 'vb () 'dia 'moon})
    _ (? !(okv? pr) (puts ("!! parsefail " + src + "\n"))
         (@ pr [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs]
-           (: ob (cgen-obj ast stag sigs weaks [sfns svars sects alias aligns ainl noinl consts rstrs ()] 'amd64)
+           (: ob (cgen-obj ast stag sigs weaks [sfns svars sects alias aligns ainl noinl consts rstrs ()] 'x64)
               (? !(two? ob) (puts ("!! genfail " + src + "\n"))
                  (: _ (puts ("== " + src + "\n"))
                     _ (foldl (\ _ fn (: _ (gvn src <fn <>fn) (licm src <fn <>fn))) 0 (vfns <>ob))

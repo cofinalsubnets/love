@@ -30,7 +30,7 @@
 # make owns the dependency graph; this owns the procedure.
 # NOT set -e: the checks report their own failures with context.
 #
-# usage: cts.sh ARCH OUTDIR LOVE     (ARCH: x64 | arm64 | riscv64)
+# usage: cts.sh ARCH OUTDIR LOVE     (ARCH: x64 | a64 | rv64)
 set -u
 
 arch=$1
@@ -39,8 +39,8 @@ m=$3
 
 case $arch in
   x64)     name=test_cts       ; tflag=""           ; QEMU= ; qemu= ; pretty=x86-64 ;;
-  arm64)   name=test_cts_arm64 ; tflag="-t arm64"   ; qemu=qemu-aarch64 ; pretty=aarch64 ;;
-  riscv64) name=test_cts_riscv ; tflag="-t riscv64" ; qemu=qemu-riscv64 ; pretty=riscv64 ;;
+  a64)   name=test_cts_a64 ; tflag="-t a64"   ; qemu=qemu-aarch64 ; pretty=a64 ;;
+  rv64) name=test_cts_rv64 ; tflag="-t rv64" ; qemu=qemu-riscv64 ; pretty=rv64 ;;
   *) echo "cts.sh: unknown target $arch" >&2; exit 1 ;;
 esac
 

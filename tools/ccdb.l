@@ -46,11 +46,11 @@
 
    (flags-for rel)
     (? (pre? rel "crew/moon/lib/") moonlibc
-       ; src/asmops.h picks the machine's set off a predefine, so only the aarch64
+       ; src/asmops.h picks the machine's set off a predefine, so only the a64
        ; lane needs saying -- the rest read as the host's.
-       (pre? rel "src/aarch64_") (inle + ["--target=aarch64-unknown-none-elf"])
+       (pre? rel "src/a64_") (inle + ["--target=aarch64-unknown-none-elf"])
        ((pre? rel "src/kmain") || (pre? rel "src/sys") || (pre? rel "src/blk")
-        || (pre? rel "src/doom") || (pre? rel "src/x86_64_")) inle
+        || (pre? rel "src/doom") || (pre? rel "src/x64_")) inle
        (pre? rel "port/playdate/") (? (tally pd-sdk) (playdate + [("-I" + pd-sdk + "/C_API")]) playdate)
        (pre? rel "wasm/") (host + [("-I" + emsdk + "/upstream/emscripten/system/include")])
        host)

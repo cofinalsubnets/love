@@ -1,17 +1,17 @@
-; arm64 call-out execution -- run only under qemu-aarch64 (test_raw_arm64), never in the x86
-; corpus: it builds nifs with `jitcalloutx ... 'arm64`, whose code is aarch64 bytes -- calling one on
-; x86 jumps into arm64 machine code (a fault). It lives in test/arm64/ (a subfolder), so the
-; non-recursive test/*.l corpus glob (make test / love0 bake) never sees it. test_raw_arm64 names it past the
+; a64 call-out execution -- run only under qemu-aarch64 (test_raw_a64), never in the x86
+; corpus: it builds nifs with `jitcalloutx ... 'a64`, whose code is a64 bytes -- calling one on
+; x86 jumps into a64 machine code (a fault). It lives in test/a64/ (a subfolder), so the
+; non-recursive test/*.l corpus glob (make test / love0 bake) never sees it. test_raw_a64 names it past the
 ; corpus, and gate_sentinel there is what proves it was read and not stopped short.
 ;
-; Proves the stackless call-out bridge (emit.l calloutir/calloutframeir) executes correctly on aarch64:
+; Proves the stackless call-out bridge (emit.l calloutir/calloutframeir) executes correctly on a64:
 ; the near pc-relative resume address (`lar` -> ADR, translation-invariant in the word-aligned mmap blob,
 ; where la's page-relative adrp would mis-page) and the fold-op overflow gates -- the + fold keeps sa
 ; tagged (the fixnum TAG boundary at 2^62, not the 64-bit 2^63); the * fold keeps sa raw (mulo) and retags
 ; with an overflow gate at the end. == the interpreter across fast path, empty, the [2^62,2^63) window,
 ; past 2^63, and the float (gate 1) deopt -- both the direct emit and the auto-glaze (natjit hook), + and *.
 
-; --- direct emit: build the aarch64 nif by hand and run it ---
+; --- direct emit: build the a64 nif by hand and run it ---
 (: G (from 'glaze)  jitcalloutx (G 'jitcalloutx)
    (ca-sq i)   (* i i)
    (ca-half i) (* i 0.5)
@@ -21,14 +21,14 @@
    (ca-md7 x)  (% x 7)                               ; bounded 0..6 -> a computed-arg overflow deopts only on the arg
    ca-src   '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (ca-sq i)))   a)) 0 0))
    caf-src  '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (ca-half i))) a)) 0 0))
-   nat  (jitcalloutx ca-sq   ca-src  '+ 'i 'i 'arm64)   ; native aarch64 call-out (+ fold, bare arg)
-   natf (jitcalloutx ca-half caf-src '+ 'i 'i 'arm64)
-   natp (jitcalloutx ca-inc  '(\ n 0) '* 'i 'i 'arm64)  ; * fold: product of (i+1) = n!
-   natpf (jitcalloutx ca-ph  '(\ n 0) '* 'i 'i 'arm64)  ; * fold, float callee -> gate 1
-   natp3 (jitcalloutx ca-thr  '(\ n 0) '* 'i 'i 'arm64) ; * fold, product lands in [2^62,2^63)
-   natc  (jitcalloutx ca-sq  '(\ n 0) '+ 'i '(+ i 1) 'arm64)                       ; non-(F i): sum sq(i+1)
-   natco (jitcalloutx ca-sq  '(\ n 0) '+ 'i '(* i i) 'arm64)                       ; non-(F i): sum sq(i*i) = i^4 (overflows -> bignum twin)
-   natcd (jitcalloutx ca-md7 '(\ n 0) '+ 'i '(* (* i i) 1000000000) 'arm64)        ; non-(F i): arg overflows ~i=68k -> caargdeopt -> twin (bounded clos)
+   nat  (jitcalloutx ca-sq   ca-src  '+ 'i 'i 'a64)   ; native a64 call-out (+ fold, bare arg)
+   natf (jitcalloutx ca-half caf-src '+ 'i 'i 'a64)
+   natp (jitcalloutx ca-inc  '(\ n 0) '* 'i 'i 'a64)  ; * fold: product of (i+1) = n!
+   natpf (jitcalloutx ca-ph  '(\ n 0) '* 'i 'i 'a64)  ; * fold, float callee -> gate 1
+   natp3 (jitcalloutx ca-thr  '(\ n 0) '* 'i 'i 'a64) ; * fold, product lands in [2^62,2^63)
+   natc  (jitcalloutx ca-sq  '(\ n 0) '+ 'i '(+ i 1) 'a64)                       ; non-(F i): sum sq(i+1)
+   natco (jitcalloutx ca-sq  '(\ n 0) '+ 'i '(* i i) 'a64)                       ; non-(F i): sum sq(i*i) = i^4 (overflows -> bignum twin)
+   natcd (jitcalloutx ca-md7 '(\ n 0) '+ 'i '(* (* i i) 1000000000) 'a64)        ; non-(F i): arg overflows ~i=68k -> caargdeopt -> twin (bounded clos)
    r3m ((: (go i a) (? (< i 3000000) (go (+ i 1) (+ a (ca-sq i))) a)) 0 0)   ; interp reference (inline sum; a closure never glazed -> pure interp) for the boundary case
    ; NB: strict prefix `(= a b)` throughout -- opfix currently mis-factors compound=compound infix
    ; (((f x) = (g y)) -> (f (= x (g y)))), so prefix sidesteps it entirely (opfix fix is a follow-up).
@@ -51,10 +51,10 @@
        (= 979 (natco 6)) (= 1950333330 (natco 100))      ; sum i^4: fixnum then overflow -> bignum twin
        (= 280000 (natcd 70000)) (= 399999 (natcd 100000))))   ; arg overflow -> caargdeopt -> twin
 
-; --- auto-glaze: the natjit hook (now installed on aarch64) glazes these at closure creation, no manual
+; --- auto-glaze: the natjit hook (now installed on a64) glazes these at closure creation, no manual
 ; jitcalloutx. ag-sum is a top-level global-f sum (hook's calloutinfo -> jitcalloutx arch); ag-summer
 ; returns an embedded captured closure (only the hook catches it -> njit-calloutframe arch, the frame-read
-; F + hand-rolled lvm_ret, the genuinely-new aarch64 path). == interp across the same fast/gate cases.
+; F + hand-rolled lvm_ret, the genuinely-new a64 path). == interp across the same fast/gate cases.
 (: (ag-sq i)  (* i i)
    (ag-half i) (* i 0.5)
    (ag-inc i)  (+ i 1)
@@ -83,4 +83,4 @@
        ; non-(F i) auto-glaze: global-F sum sq(i*i) + captured sum sq(i+1)
        (= 979 (ag-cgsum 6)) (= 1950333330 (ag-cgsum 100))                            ; global computed arg: fixnum + overflow -> bignum
        (= 55 (ccg 5)) (= 0 (ccg 0)) (= 91 (ccg 6)))                                  ; captured computed arg (frame lane)
-   (say err "test/arm64/callout: aarch64 call-out execution (direct + auto-glaze, lar/ADR + fold gates + computed args) ok\n"))
+   (say err "test/a64/callout: a64 call-out execution (direct + auto-glaze, lar/ADR + fold gates + computed args) ok\n"))

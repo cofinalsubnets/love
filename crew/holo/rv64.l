@@ -30,17 +30,17 @@
 ; scratch -- address synthesis, immediate materialization, rotate temps -- dead after every lowered
 ; chunk. x30 (t5) is the flag scratch: it holds a materialized cmp immediate, a test result, or an
 ; adds/subs overflow bit from the compare to its br/set, so it must survive between instructions --
-; the one riscv-specific caveat: a far-displacement stx/stxb between a cmp and its br borrows x30
+; the one rv64-specific caveat: a far-displacement stx/stxb between a cmp and its br borrows x30
 ; and breaks the fusion (real codegen keeps cmp and br adjacent; nothing emits that shape).
 
 (module 'holo
 (: ;; -- registers: r0..r7 -> a0..a7 (x10..x17, the LP64D argument file), r8..r12 -> t0..t4
    ;;    (x5,x6,x7,x28,x29 caller-saved), r13/r14/r15 -> s2/s3/s1 (x18,x19,x9 callee-saved, the
    ;;    homes), sp -> x2, fp -> s0 (x8), lr -> ra (x1). r19..r26 -> s4..s11 (x20..x27) is the
-   ;;    callee-saved bank (arm64's r19..r28 shape) for a future glaze. x3 (gp) and x4 (tp) are
+   ;;    callee-saved bank (a64's r19..r28 shape) for a future glaze. x3 (gp) and x4 (tp) are
    ;;    platform-reserved and never touched; x30/x31 (t5/t6) are the two scratches above.
    ;;    `zr` names x0, which the IR never asks for -- it is the system lane's whole-address-space
-   ;;    spelling (`sfence zr, zr`), arm64's `tlbi vmalle1is, zr` shape.
+   ;;    spelling (`sfence zr, zr`), a64's `tlbi vmalle1is, zr` shape.
    rv-regs (tabof
         [('sp >< 2) ('fp >< 8) ('lr >< 1) ('zr >< 0)
           ('r0 >< 10) ('r1 >< 11) ('r2 >< 12) ('r3 >< 13) ('r4 >< 14)
@@ -351,7 +351,7 @@
    (rv-dec d) (rv-i -1 (rvn d) 0 (rvn d) 0x13)
 
    ;; M: div/rem round toward zero like x86, but never trap -- /0 answers -1 (quot) or the
-   ;; dividend (rem), and the caller already guards zero. t is arm64's scratch shape, unused here.
+   ;; dividend (rem), and the caller already guards zero. t is a64's scratch shape, unused here.
    (rv-imul d a b) (rv-aluop 'imul d a b)
    (rv-div d a b)     (rv-alu-rrr 4 1 (rvn d) (rvn a) (rvn b))               ; div
    (rv-rem d a b t)   (rv-alu-rrr 6 1 (rvn d) (rvn a) (rvn b))               ; rem
@@ -372,7 +372,7 @@
    ;; control. jmp is the wide jal (+-1MB, scares beyond); call/la/lar are auipc pairs (+-2GB,
    ;; one 8-byte fixup whose aux packs both base words -- 'pcrel patches hi20 into the first,
    ;; lo12 into the second). la and lar coincide: auipc is byte pc-relative by nature, so the
-   ;; pair is translation-invariant (x86's rip-rel lea already is; arm64 needed ADR for that).
+   ;; pair is translation-invariant (x86's rip-rel lea already is; a64 needed ADR for that).
    ;; -- the short branch (holo's 'short hook). rv-br always ends (.. hop jal): a fused
    ;;    compare-branch inverted so it hops the wide jal. inside the fused form's own +-4KB the
    ;;    jal is dead weight -- drop it, flip the hop back, and aim it at the label. all four
