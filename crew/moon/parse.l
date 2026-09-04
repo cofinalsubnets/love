@@ -1394,7 +1394,7 @@
                 (? (cint? v) [['num v] <>r]            ; cint?: a sun-sized fold (max-charm's image) is still a number
                    ((<e = 'un) &&
                     (<>e = 'neg) && (<<>>e = 'flo))
-                    [['flo (0.0 - <><>>e)] <>r]             ; -1.0 in a global image: fold the neg into the literal
+                    [['flo (-1.0 * <><>>e)] <>r]           ; -1.0 in a global image: fold the neg into the literal (times -1, so -0.0 keeps its sign)
                    r)))))
    ; a `[]` bound completes from the initializer (C11 6.7.9p22, 6.5.2.5p22 for a
    ; compound literal); one that implies no count leaves the type as it stands

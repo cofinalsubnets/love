@@ -702,10 +702,10 @@
    ; a member's (offset ty) off a struct type, | 'bad
    (fmem g ty name)
     (? !(stru? ty) 'bad
-       (: e (peep (g 'stag) <>ty 0)
-          (? !(two? e) 'bad
-             (: f (assoc name <e)
-                (? (two? f) [<>f <>>f] 'bad)))))
+     (: e (g 'stag <>ty)
+      (one? e ? 'bad
+       (: f (assoc name <e)
+        (one? f ? 'bad [<>f <>>f])))))
    (lg2 n) (: (go k v) (v <= 1 ? k (go (k + 1) (v >> 1))) (go 0 n))   ; a true log2 -- a pointer diff over a >8-byte struct needs sar 4+, not a capped 3
    ; pointer-scale by an immediate: x64 imul takes it straight; arm mul has no immediate form, so
    ; the size rides r3 first (free mid-expression: the shuttle holds r0/r1, args load at the pops)
@@ -727,7 +727,7 @@
    (homefold g ps gpi acc hx)
     (? !(two? ps) acc
        (: pty <><ps
-          (? (flo? pty || sse2? g pty || id? (aone g pty) 'sse) (homefold g >ps gpi acc hx)
+          (? (flo? pty || sse2? g pty || aone g pty = 'sse) (homefold g >ps gpi acc hx)
              (nhome g <= gpi) acc
              (lhomable? pty) (homefold g >ps (gpi + 1) (hx acc gpi <ps) hx)
              (homefold g >ps (gpi + 1) acc hx))))
@@ -756,7 +756,7 @@
            ; is the same read the general divide below takes). `(long)-8 / 2u` is -4, and
            ; reducing it to a logical shift answered 9223372036854775804 -- a whole
            ; quadrant off, silently, for the one divisor shape that looks safest.
-           (? !((cmpu g aty nty) && pow2? n) 'no
+           (? !(cmpu g aty nty && pow2? n) 'no
               (op = '/) (? (n = 1) (mkv (rbin g aty nty) rA (vfs av))
                            (? (wr? g rA)
                               (mkv (rbin g aty nty) rA (vfs av + [['shr rA (lg2 n)]]))
@@ -766,18 +766,18 @@
               !(immok g 'log (n - 1)) 'no                ; t32 has no simple and-imm: materialize (the register path)
               (: rd (wnt || rdst g rA)
                  fs (vfs av + [['and rd rA (n - 1)]])
-                 _ (? (rpeq? g rd rA) () (rfree g rA))
+                 _ (rpeq? g rd rA ? () (rfree g rA))
                  (mkv (rbin g aty nty) rd fs)))
-          (: sn (? (ptr? aty && member? op '(+ -)) (* n (tsz g <>aty)) n)
+          (: sn (? (ptr? aty && member? op '(+ -)) (n * tsz g <>aty) n)
              iop (irop op)
              ; a bare constant reads as `int` (numty capped it: imma bounds every lane to
              ; the signed-32 range anyway); a coated one carries its own type, so
              ; `uint op <lit>` wraps and `uint op (ulong)k` widens, as C says.
              u32 (member? op '(+ - *) && u32bin? g aty nty)
-             (? (id? iop 'no) 'no
+             (? (iop = 'no) 'no
                 !(imma g iop sn) 'no
                 (: rt (? (ptr? aty) aty (rbin g aty nty))
-                   (? ((sn = 0) && member? op '(+ -)) (mkv rt rA (vfs av))
+                   (? (sn = 0 && member? op '(+ -)) (mkv rt rA (vfs av))
                       (: rd (wnt || rdst g rA)
                          fs (vfs av + [[iop rd rA sn]] + (? u32 [['zx4 rd]] ()))
                          _ (? (rpeq? g rd rA) () (rfree g rA))
@@ -818,13 +818,13 @@
              ; (0x1.ff..f -> 0x2.0), and at the top that is the infinity pattern C wants
              (m < mant ? ((e + bias) * mant + m) ((e + 1 + bias) * mant)))))
    (fbits x)                                        ; double -> its IEEE-754 bits as the signed i64 pattern
-    (? (x = 0.0) 0                                  ; (the sign bit would make a BIG, and les/imnum walk i64 patterns)
-       !(x = x) 9221120237041090560                 ; nan (the quiet pattern) -- fenc's climb never ends on a non-finite
+    (? (x = 0.0) (1.0 / x < 0.0 ? -9223372036854775808 0)   ; -0.0 = 0.0, so the reciprocal's sign parts them
+       !(x = x) 9221120237041090560                 ; nan (the quiet pattern) -- fenc's climb never ends on a non-finite ;;; FIXME is this ever true?? love doesn't follow NaN != NaN
        (x + x = x) (x < 0.0 ? -4503599627370496 9218868437227405312)   ; +-inf (1e999 reads as one)
        (: m (fenc (x < 0.0 ? (0.0 - x) x) 1023 52)
           (x < 0.0 ? (m - 9223372036854775808) m)))
    (fbits32 x)                                      ; double -> its IEEE-754 single (u32) bits (a `float` image)
-    (? (x = 0.0) 0
+    (? (x = 0.0) (1.0 / x < 0.0 ? 2147483648 0)
        !(x = x) 2143289344
        (x + x = x) (x < 0.0 ? 4286578688 2139095040)
        (: ax (x < 0.0 ? (0.0 - x) x)
@@ -833,23 +833,63 @@
           m (ax < 128 2.0 ? (fenc ax 127 23) 2139095040)
           ((x < 0.0) * 2147483648 + m)))
    (fldf ty freg base off)                          ; load a float/double from [base+off] into freg (widen if float)
-    (ty = 'float ? [['ldss freg base off] ['cvtss2sd freg freg]]
-                   [['ldsd freg base off]])
+    (ty @ 'float [['ldss freg base off] ['cvtss2sd freg freg]]
+                 [['ldsd freg base off]])
    ; the narrow scratch: x64 f2 (xmm2, caller-saved, never live here); a64 f16 -- v2 is the
    ; third fp argument and v8..v15 carry a callee-saved low half, so v16+ are the only pure temps.
    ; t32 (fpv5-d16) has no register past d15, so d15/f15 is reserved as the scratch (the backend's
    ; converters own its s30 half) -- moon never allocates it.
    (fsc g) (? (a8? g) 'f16 (t32? g) 'f15 'f2)
    (fstf g ty base off val)                         ; store val (a double in an xmm) to [base+off] as ty (narrow if float)
-    (? (ty = 'float) (: f9 (fsc g) [['cvtsd2ss f9 val] ['stss base off f9]])   ; scratch narrows (val untouched)
-       [['stsd base off val]])
+    (ty @ 'float (: f9 (fsc g) [['cvtsd2ss f9 val] ['stss base off f9]])   ; scratch narrows (val untouched)
+                 [['stsd base off val]])
+   (mkflo g d)                                      ; a double constant -> its value tuple
+    (? (t32? g)                                     ; the 64-bit pattern splits over the r0:r1 pair
+       (: v (fbits d)
+          (mkv 'double 'r0 [['li 'r0 (v & 4294967295)] ['li 'r1 ((v >> 32) & 4294967295)]
+                            '(movqxr f0 r0)]))
+       (mkv 'double 'r0 [['li 'r0 (fbits d)] '(movqxr f0 r0)]))
+   ; the type of a constant arithmetic expression, read off the tree: 'double, 'int (any
+   ; integer type -- it converts), or 'no. `float` answers 'no -- the f suffix parses as a
+   ; cast and rounds to 24 bits at every step, where the fold below runs in doubles.
+   (dbty e)
+    (? (atom? e) 'no
+       (: k <e
+          ; a name is the commonest leaf and never constant, so it answers first
+          (? (id? k 'var) 'no
+             (id? k 'num) 'int
+             (id? k 'flo) 'double
+             (id? k 'bin)
+              (: a (dbty <>>e)                      ; the left alone settles most of them
+                 (? (id? a 'no) 'no
+                    (: b (dbty <>>>e)
+                       (? (id? b 'no) 'no
+                          (id? a 'double || id? b 'double) (member? <>e '(+ - * /) ? 'double 'no)
+                          (member? <>e '(+ - * / % shl shr & | ^)) 'int
+                          'no))))
+             (id? k 'un) (? (id? <>e 'neg) (dbty <>>e)
+                             (id? <>e 'bnot) (id? (dbty <>>e) 'int ? 'int 'no)
+                             'no)
+             (id? k 'cast)
+              (? (id? (dbty <>>e) 'no) 'no
+                 (id? <>e 'double) 'double
+                 (member? <>e '(bool char uchar short ushort int uint long ulong llong ullong)) 'int
+                 'no)
+             'no)))
+   ; love answers () for a NaN and `infinity` past the range, and neither is a fold: the
+   ; finite doubles are the ones love computes bit for bit as the target's fpu would.
+   (dfin? v) (gem? v && (v = 0.0 || !(v + v = v)))
+   ; a constant double expression -> its value tuple | (). parse's cfold is the integer twin
+   ; (array dims, case labels) and imgbytes' ffold the image-time one; this is the runtime one.
+   (cgdfold g e)
+    (id? (dbty e) 'double && (: v (ffold e) (dfin? v ? (mkflo g v) ())))
    ; result -> f0 as a double. t32: an unsigned word rides the U-converter (no 64-bit widen
    ; dodge on a 32-bit target); a pair source is the deferred cvtllsd (backend scares LOUD).
    (asflo g r) (? (flo? (vty r)) (vfs r)
                   (gcplx? (vty r))                  ; complex -> real reads re (C's implicit conversion)
-                   (tor0 g r + (? (id? (cxb (vty r)) 'float)
-                                    '((ldss f0 r0 0) (cvtss2sd f0 f0))
-                                    '((ldsd f0 r0 0))))
+                   (tor0 g r + (cxb (vty r) = 'float ?
+                                '((ldss f0 r0 0) (cvtss2sd f0 f0))
+                                '((ldsd f0 r0 0))))
                   (t32? g && llt? (vty r)) (tor0 g r + cvtlld g (usg? (vty r)))
                   (t32? g && usg? (vty r)) (tor0 g r + '((cvtui2sd f0 r0)))
                   (id? (vty r) 'ulong) (tor0 g r + ul2d)
@@ -865,13 +905,13 @@
    ; instruction's own indefinite -- C leaves every one of them undefined. --
    (dtoul g)
     (: lb (nlab g ".du") ld (nlab g ".dv")
-       [['li 'r1 0x43e0000000000000] '(movqxr f1 r1)         ; 2^63
+       ['(li r1 0x43e0000000000000) '(movqxr f1 r1)         ; 2^63
           '(ucomisd f0 f1) ['br 'ae lb]
           '(cvttsd2si r0 f0) ['jmp ld]                        ; d < 2^63: straight
           ['label lb]
           '(subsd f0 f1)                                       ; d - 2^63, exact
           '(cvttsd2si r0 f0)
-          ['li 'r1 0x8000000000000000] '(xor r0 r0 r1)         ; put 2^63 back
+          '(li r1 0x8000000000000000) '(xor r0 r0 r1)         ; put 2^63 back
           ['label ld]])
    ; asint honouring an unsigned 64-bit destination: every caller that knows the type it converts
    ; into comes through here (a cast, a store/init, a homed assign, an outgoing arg, a return).
@@ -889,7 +929,7 @@
                    ('regw x) ['regw x y]    ; a d128 pair home: (lo hi)
                    ('glob x) ['glo x y]
                    ['loc h y]))
-          (peep (g 'glob) name 0 @ (a . b . _) ['glo a b] 'bad)))
+          (g 'glob name @ (a . b . _) ['glo a b] 'bad)))
    ; a static object's one address: a frame slot reads off r4, a global off its label through
    ; the address temp -- (f base off) lays the access
    (atstat en tmp f) (? (<en = 'loc) (f 'r4 <>en) ([['la tmp <>en]] + f tmp 0))
@@ -909,23 +949,23 @@
    (cgleaf g env e rX)
     (: kc (knum g e)
        (? (two? kc) [['li rX <kc]]
-          !(<e = 'var) 'no
+          (<e != 'var) 'no
           (: en (vent g env <>e)
-             (? (bad? en) 'no
-                !(<en = 'loc) 'no
-                (: ty <>>en
-                   (stru? ty || arr? ty || flo? ty || d128? ty ? 'no
-                      [[(ldop ty) rX 'r4 <>en]]))))))
+           (? (bad? en) 'no
+              !(<en = 'loc) 'no
+              (: ty <>>en
+                 (stru? ty || arr? ty || flo? ty || d128? ty ? 'no
+                    [[(ldop ty) rX 'r4 <>en]]))))))
    ; park the left operand out of r0 so the right may compute: a leaf re-aims at a fresh pool
    ; register (no protocol mov at all), anything else takes one mov. answers the (possibly
    ; re-homed) tuple | 'sh (pool dry -> the caller keeps the memory shuttle).
    (vpark g env e v)
-    (? !(id? (vreg v) 'r0) v
-       (: rX (ralloc g)
-          (? !rX 'sh
-             (: lf (cgleaf g env e rX)
-                (? !(id? lf 'no) (mkv (vty v) rX lf)
-                   (mkv (vty v) rX (vfs v + [['mov rX 'r0]])))))))
+    (vreg v != 'r0 ? v
+     (: rX (ralloc g)
+      (? !rX 'sh
+       (: lf (cgleaf g env e rX)
+        (lf != 'no ? (mkv (vty v) rX lf)
+         (mkv (vty v) rX (vfs v + [['mov rX 'r0]])))))))
    ; a truth value in r0 that `cmp r0 0` can test: a double folds to d != 0.0
    (ctest g env e)
     (: r (cgexpr g env e ())
@@ -942,19 +982,19 @@
    ; the fesc/strs decline protocol is exactly cginl's. -> forms | 'no (the fallback stands) --
    (retex f)                                     ; init-free scalar decls* + one `return E` -> (((name ty)..) E) | ()
     (: (dok ps acc9)
-        (? !(two? ps) acc9
-           (: p9 <ps
-              (? (two? <>>p9 || arr? <>p9 || stru? <>p9) 'bad
-                 (dok >ps ([<p9 <>p9] . acc9)))))
+        (? (one? ps) acc9
+         (: p9 <ps
+          (? (two? <>>p9 || arr? <>p9 || stru? <>p9) 'bad
+           (dok >ps ([<p9 <>p9] . acc9)))))
        (go items dacc)
-        (? !(two? items) ()
-           (: it <items
-              (? (<it = 'decl)
-                  (: ds (dok <>it dacc) (? (bad? ds) () (go >items ds)))
-                 !(<it = 'ret) ()
-                 !(two? <>it) ()
-                 (two? >items) ()
-                 [dacc <>it])))
+        (? (one? items) ()
+         (: it <items
+          (? (<it = 'decl)
+              (: ds (dok <>it dacc) (bad? ds ? () (go >items ds)))
+             (<it != 'ret) ()
+             (one? <>it) ()
+             (two? >items) ()
+             [dacc <>it])))
        (go <><>>>f ()))
    (abit? e9) (? !(two? e9) ()
                  (<e9 = 'un && <>e9 = 'not) 1
@@ -970,11 +1010,11 @@
    ; parks for the release, sbs the constants for the body's substitution
    (sbind g env ps as nocall body kb? pk?)
     (: (go ps as benv acc rbs sbs)
-        (? !(two? ps) [benv acc rbs sbs]
+        (? (one? ps) [benv acc rbs sbs]
            (: nm <<ps pty <><ps
               kb (? (kb? && kb? nm)
                     (: kc (knum g <as)
-                       (? !(two? kc) ()
+                       (? (one? kc) ()
                           (: cv (cnum g ['cast pty ['num <kc]])
                              (two? cv ? ['cast pty ['num <cv]])))))
               al (? (nocall && !(flo? pty) && 8 = tsz g pty &&
@@ -1935,12 +1975,7 @@
                    [['li 'r0 (u % 18446744073709551616)]
                     ['li 'r2 (u // 18446744073709551616)]]))
            (: W (wnt || 'r0) (mkv 'long W [['li W v]])))
-       ('flo d)
-        (? (t32? g)                                  ; the 64-bit pattern splits over the r0:r1 pair
-           (: v (fbits d)
-              (mkv 'double 'r0 [['li 'r0 (v & 4294967295)] ['li 'r1 ((v >> 32) & 4294967295)]
-                                  '(movqxr f0 r0)]))
-           (mkv 'double 'r0 [['li 'r0 (fbits d)] '(movqxr f0 r0)]))
+       ('flo d) (mkflo g d)
        ('str s)
         (: lbl (nlab g ".S")
            _ (pin g 'strs ([lbl s] . g 'strs))
@@ -2246,8 +2281,10 @@
                                (vfs lv + [['st 'r4 off 'r0]] + vfs r))))))))
        ('cast ty x)
         (: tgt ty
-           r (cgexpr g env x (? (!(flo? tgt) && !(two? (cvt tgt 'r0))) wnt ()))
-           (? (bad? r) 'bad
+           fv (flo? tgt ? (cgdfold g e) ())         ; (double) of a constant expression is one
+           r (two? fv ? 'bad (cgexpr g env x (? (!(flo? tgt) && !(two? (cvt tgt 'r0))) wnt ())))
+           (? (two? fv) fv
+              (bad? r) 'bad
               (flo? tgt && d128? (vty r))
                ; (double) of a wide value: only a constant expression, folded exactly (love.c's
                ; (double)limb_base = 2^64; cfold is bignum-native, love's + converts a big
@@ -2284,8 +2321,10 @@
               (two? (cvt tgt 'r0)) (mkv tgt 'r0 (tor0 g r + cvt tgt 'r0))   ; int -> narrower int
               (mkv tgt (vreg r) (vfs r))))                                    ; a full-word int cast keeps the register (a wide one narrows to its lo)
        ('un op x)
-        (: r (cgexpr g env x ())
-           (? (bad? r) 'bad
+        (: fv (id? op 'neg ? (cgdfold g e) ())      ; -1.5 is a 'un over a 'flo, not a literal
+           r (two? fv ? 'bad (cgexpr g env x ()))
+           (? (two? fv) fv
+              (bad? r) 'bad
               (gcplx? (vty r) && id? op 'neg)      ; -z: both components flip through the complex lane
                (: pa (cxpark g r)
                   (? (bad? pa) 'bad
@@ -2508,10 +2547,12 @@
         (: lv (clval g env e)
            (? (bad? lv) 'bad (loadval g lv wnt)))
        ('bin op a b)
-        (? (id? op '|)
-            (: r9 (cgror g env a b wnt)
-               (? (id? r9 'no) (cgbin g env e wnt) r9))
-           (cgbin g env e wnt)))
+        (: fv (member? op '(+ - * /) ? (cgdfold g e) ())   ; 1.5 + 2.25 is a constant, not an addsd
+           (? (two? fv) fv
+              (id? op '|)
+               (: r9 (cgror g env a b wnt)
+                  (? (id? r9 'no) (cgbin g env e wnt) r9))
+              (cgbin g env e wnt))))
    ; a targetable gp register argument: pure and single-emission, reading only an immediate, the
    ; frame, a home register, or a label -- so it skips the push/pop cell and lands straight in its
    ; argument register, emitted between the home spills and the pops. deferring a pure read past
@@ -5774,6 +5815,17 @@
            (: p <l off <p items <>p
               (go >l (off + imbytelen items) (acc + zeros (off - pos) + items))))
        (go ps 0 ()))
+   ; a cast's conversion on a folded integer (C11 6.3.1.3): the narrow types wrap at their
+   ; width and the signed ones re-sign; the word-sized ones keep the pattern. cnum lays the
+   ; same law for the register lane, parse's cfold for an integer constant expression.
+   (icast ty v)
+    (ty @ 'bool (v != 0)
+          'uchar (v & 255) 'ushort (v & 65535) 'uint (v & 4294967295)
+          ('char || 'short || 'int)
+           (: w (ty @ 'char 8 'short 16 32)
+              r (v & ((1 << w) - 1))
+              (r < (1 << (w - 1)) ? r (r - (1 << w))))
+          v)
    ; a constant integer expression at image time -> its value | 'no. C's static initializers
    ; permit any int const-expr in a subscript or pointer offset (`&a[2*K+1]`), so the arithmetic
    ; folds here. `//` truncates toward zero (C's `/`); the machine ops wrap at the word.
@@ -5784,9 +5836,11 @@
        ; integer constant expression holds. it truncates toward zero, which is what `// 1` does.
        'cast (: v (icfold <>>e)
               (? (flo? <>e) 'no
-                 !(v = 'no) (? (<>e = 'bool) (v != 0) v)
+                 !(v = 'no) (icast <>e v)
                  (: f (ffold <>>e)
-                    (? (bad? f) 'no (<>e = 'bool) (? (f = 0.0) 0 1) (ceil (f // 1))))))
+                    (? (bad? f) 'no
+                       (<>e = 'bool) (f = 0.0 ? 0 1)          ; to _Bool is a compare, never a truncation
+                       (icast <>e (ceil (f // 1)))))))
        'un
         (: v (icfold <>>e)
            (? (v = 'no) 'no (<>e = 'neg) -v (<>e = 'bnot) (-v - 1) 'no))
@@ -5855,7 +5909,7 @@
         (<e @ 'flo <>e
             'num (0.0 + <>e)
             'cast (flo? <>e ? (ffold <>>e) 'bad)
-            'un (: v (ffold <>>e) (? (bad? v) 'bad (<>e = 'neg) (0.0 - v) 'bad))
+            'un (: v (ffold <>>e) (? (bad? v) 'bad (<>e = 'neg) (-1.0 * v) 'bad))   ; times -1: 0.0 - 0.0 is +0.0, and -0.0 is its own value
             'bin
             (: op <>e a (ffold <>>e) b (ffold <>>>e)
                (? (bad? a || bad? b) 'bad
