@@ -72,52 +72,58 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 3 = #[3 1 2]                 ; #x = (tally x)
 60 = *[[3 2] [2 [5]]]        ; *x = (prod x)
 1 < 2 <= 3                   ; comparison chaining
+
 ; triangular number sequence
 [1 3 6 10 15] = map (net * jot * (+ 2)) ^5 ; ^n = (jot n)
+
 ; infix notation
 (tally "hello" = 3 + 2 ? 'ok 'whoa) = (? (= (tally "hello") (+ 3 2)) 'ok 'whoa)
-; immediate invoked infix lambda with pattern matching example
-(([a b c] \ [(a * b + c) (b * c + a) (c * a + b)]) [3 2 5] @
- [1 3 7] 'this-will-not-match
- ("this" | "won't" | "match") 'either
- [11 13 17] "this matches strict nil tail"
- (11 13 17) "this matches lax about the tail"
- (11 >< 13 >< 17 >< _) 'this-is-fine-too)
 
-; language traps
+; an infix lambda (params \ body) applied on the spot, its answer matched by @
+(([a b c] \ [(a * b + c) (b * c + a) (c * a + b)]) [3 2 5] @
+ [1 3 7] 'this-does-not-match
+ ("this" || "alternation") 'does-not-match-either
+ [11 13 17] "this matches exactly"
+ (l && two? l) 'this-guard-matches
+ (11 . 13 . 17 . _) 'this-prefix-matches)
+
+; language advisories
 ; - (x) = x: singleton lists are no-ops
-; - $ x != $x: spaced and glued are different operators
-; - (+ 2 3 4) = ((+ 2 3) 4) = (5 4) = 1024: no varargs
+; - glued and spaced are different operators: <a is (cap a), (< a) is a partial of <;
+;   $x and ($ x) likewise part company for everything but a plain number
+; - (+ 2 3 4) = ((+ 2 3) 4) = (5 4) = 1024: no varargs, binary ops are binary
+; - u + M u = (+ u (M u)): application binds tighter than infix -- and applying a
+;   number is the tower (3 2 = 8), so write (u + M) u
 ; - (1 +) = (+ 1): no sections
-; - gem? (3 / 2) = 1: / gives a float; // for int
+; - (map < l) is (< map l): an infix operator by value is parenthesised, (<). the
+;   accessor is cap -- and love orders across kinds, so the misread answers 0 in silence
+; - 3 / 2 = 1.5 && 3 // 2 = 1: / returns a float, use // for int
 ; - (-17 % 8) = -1: % and // truncate toward zero; hand-roll floor-mod
-; - (map < l) passes a comparison partial, not car; car as a function is (x \ <x)
-; - a lambda parameter sharing a name with a LATER non-lambda sibling binding
-;   in the same (: ..) raises "missing X" (the forward-binding trap)
-; - a mid-letrec assert binds to _, or it becomes define-sugar and never runs
-; - in a catted module file `name value` builds at bake, `(name args)` defers
-; - juxtaposition binds tighter than infix: `u + M u` is `(+ u (M u))`, and
-;   applying a number is the tower -- write `(u + M) u`
+; - (: a b  b 5 ..) is ";; missing b": a value binding sees only EARLIER siblings, a
+;   lambda body sees later ones too. same split when a module file bakes -- `name value`
+;   runs at bake, `(name args)` defers
+; - a mid-letrec assert must bind: `_ (assert ..)`. bare `(assert ..)` is define-sugar,
+;   so a false one never runs and passes in silence
 
 ; the working vocabulary (verified in-tree)
 ; - (show x) prints-to-string; puts/putc write; putx prints a form
 ; - sort orders numbers, symbols, strings, and lists; rev, tally (#), member?, map
 ; - tablets: {} makes, (pin t k v) mutates AND answers t (so foldl builds one),
-;   (peep t k dflt) reads, (t k) applies; (keys t) is UNSORTED -- sort before
+;   (peep t k d) reads with default, t k = peep t k () ; (keys t) is UNSORTED -- sort before
 ;   walking or answers drift
-; - strings index by application: ("abc" 0) = 97; lists DON'T index that way
-; - charm? is the number predicate; (show 'sym) spells a symbol
-; - car/cdr are total: <() = >() = (); (= a b) across types answers 0, never dies
+; - strings and lists index by application: "abc" 0 = 97, [1 2 3] 1 = 2
+; - charm? is number predicate; (show 'sym) spells a symbol
+; - cap/cup are total: <() = >() = (); (= a b) across types answers 0, never dies
 
 ; booleans
-; love's exact booleans are {0,1}. however any value can be
-; considered boolean if it occurs as a ? predicate. the truth
-; value chosen in this situation is described for all x by the
-; lambda equations
-(x \ ?x = (bit x) = ($x > 0))
-(x \ $x = (ceil (re (net x))))
-; where the basic operation net is a complex-valued structure
-; respecting sum defined explicitly for all basic love data types. 
+; the exact boolean values are {0,1}. however any value can be
+; considered boolean if it occurs as a ? predicate. a value is
+; true in this situation iff the real part of its net is positive,
+; where net is a built in function that reduces any value to a
+; complex number. there are lots of ways to state this in love
+; here are some equations for all x:
+(x \ ?x = bit x = re (net x) > 0)
+; where the basic operation net is a complex sum defined for all love types.
 (? 1 2 3)  ; 2 ; this predicate succeeds
 (? 0 2 3)  ; 3 ; this predicate fails
 (-1 ? 2 3) ; 3 ; infix ? is idiomatic ternary syntax
