@@ -924,7 +924,7 @@ static struct ai *img_wake(void const *buf, uintptr_t len, void *(*al)(struct ai
  if (nw > g->major_len) {                                // grow the major pool to fit the image
   g->alloc(g, g->major_pool, 0);
   // the slack is what the nursery ramps into, and it must CLEAR the nursery: a minor is
-  // forced to a major once the pool has less free than a whole one (gen_please's
+  // forced to a major once the pool has less free than a whole one (ai_please's
   // worst-case promotion test), and the wake seeds g->len at nw >> 1 below -- so a
   // quarter sits under it by construction and latches the first collection to a major
   // over the whole woken image. a floor besides, for the small end; the pages stay

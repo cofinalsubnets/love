@@ -159,7 +159,7 @@ Resident size does not move by itself: the major pool is sized off the image wit
 smaller live set lands in the same pair. Wake first got SLOWER, 43.1 → 54.0 ms, and the decode is
 not why — it roughly halves with the words. The woken session ran one major collection during boot
 that the larger image did not, because `img_wake` seeded the nursery at `nw >> 1` while the pool
-carried `nw >> 2` of slack, making `gen_please`'s `major_free < g->len` true by construction. A
+carried `nw >> 2` of slack, making `ai_please`'s `major_free < g->len` true by construction. A
 boot's allocation is a fixed cost and does not shrink with the live set, so the smaller nursery no
 longer swallowed it. The slack now clears the seeded nursery (`nw + (nw >> 1)`, and a floor for
 the small end), and the wake clears the remembered set it invalidates — a forced first major had

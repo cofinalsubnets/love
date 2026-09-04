@@ -195,7 +195,7 @@ struct ai {
  ai_word *rem;
  uint32_t rem_n, rem_hi, rem_miss;   // all three bounded by AiRemCap, the fixed capacity
  // the sub-word collector scalars, adjacent so both ride the rem set's tail
- bool gc_gen;                             // set during a generational collection: bump() targets major_hp, not hp
+ bool gc_gen;                             // set during a collection: gbump() targets major_hp, not hp
  int8_t lean;                             // resize-stickiness streak (+grow/-shrink); a resize needs |lean| >= 2
                                           // (a resize is a full copy + a total refault)
  // the two pools: the main pool is pure minor, the young heap being [end, hp); old lives
@@ -213,7 +213,7 @@ struct ai {
                                   // after it. a major fires once since_major > major_live0 +
                                   // 4*minor-pool, so tenured garbage sweeps and the pool can shrink
    win_alloc, win_copied,         // sliding window (words) for the deterministic minor-resize ratio:
-                                          // overhead = copied/alloc; reset on a resize (gen_please)
+                                          // overhead = copied/alloc; reset on a resize (ai_please)
    n_resize,                      // pool reallocations so far -- gauge[13]; catches pool-cliff contamination
    budget,                     // total memory cap in words (2*minor + 2*major); 0 = unbounded.
                                             // appel's rule: the nursery gets the free budget after the major pool.
@@ -519,10 +519,12 @@ static ai_inline enum d ai_typ(union u *o) {
 #define str(_) ((struct ai_str*)(_))
 #define lamp evenp
 #define two(_) ((struct ai_chain*)(_))
+#define chain_req Width(struct ai_chain)
+#define mint_req Width(struct ai_mint)
+#define nom_req Width(struct ai_nom)
 #define cask(_) ((struct ai_cask*)(_))
 static ai_inline bool chainp(word _) { return lamp(_) && cell(_)->ap == lvm_chain; }
-static ai_inline void *bump(struct ai *g, uintptr_t n) {
- if (g->gc_gen) { void *x = g->major_hp; g->major_hp += n; return x; }   // a generational collection promotes into the major pool
+static ai_inline void *bump(struct ai *g, uintptr_t n) {   // the mutator's: the nursery. gc.c bumps the major itself
  if (avail(g) < n) __builtin_trap();
  void *x = g->hp; g->hp += n; return x; }
 static ai_inline struct ai_chain *ini_chain(struct ai_chain *w, intptr_t a, intptr_t b) {

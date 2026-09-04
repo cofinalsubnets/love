@@ -1,6 +1,6 @@
 ; the collector's shape: both degenerate while staying correct, so no other assert reads
 ; them, and both are vacuous in a lane that barely collects.
-; latch -- gen_please majors while major_free < g->len and a major re-sizes to need +25%,
+; latch -- ai_please majors while major_free < g->len and a major re-sizes to need +25%,
 ; so a nursery above that quarter forces one at every collection. minor share measured
 ; 86 baked, 84 egg, 97 stress, 99 budgeted; a latch reads 0.
 ; rem set -- an overflow is sound (a miss forces a major) but gen_remembered is a linear

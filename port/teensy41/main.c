@@ -258,7 +258,7 @@ int main(void) {
     for (; *s; s++) serial_putc(*s); }
   if (!woke) g = ai_ini();
   g = ai_defn(g, defs, countof(defs));
-  // BOUND the collector to the arena (the Appel knob -- gen_please, love.c):
+  // BOUND the collector to the arena (the Appel knob -- ai_please, love.c):
   // 2*minor + 2*major carve out of the free list, and a major resize holds old
   // and new at once, so an unbounded budget OOMs inside the collector. A
   // quarter of the arena leaves the double-buffered resize and free-list

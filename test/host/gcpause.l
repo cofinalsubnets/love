@@ -40,7 +40,7 @@
 
    ; a forced major fires on a near-empty nursery, so gen_major sizes its
    ; to-space just 25% over the live set -- less headroom than one full
-   ; nursery, and gen_please's worst-case-promotion guard then (rightly)
+   ; nursery, and ai_please's worst-case-promotion guard then (rightly)
    ; escalates every next collection to a major. production never sees this
    ; (a natural major fires with the nursery FULL, so the resized pool
    ; inherits nursery-sized headroom); restore it the same way -- churn dead

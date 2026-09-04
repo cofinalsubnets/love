@@ -77,13 +77,13 @@ _Static_assert(sizeof(union u) == sizeof(intptr_t), "cell size equals word size"
 #ifndef ai_major0
 # define ai_major0 (1u << 16)      // ~512 KB major-pool half; grows much less often than the minor pool
 #endif
-// the nursery's copy-overhead setpoint (gen_please): resize to keep copied/allocated
+// the nursery's copy-overhead setpoint (ai_please): resize to keep copied/allocated
 // inside [1/(4*ratio), 1/ratio]. larger ratio = lower overhead, more RAM.
 #ifndef ai_gc_ratio
 # define ai_gc_ratio 24   // the knee of the GC-reduction curve; past it RAM doubles for a flat curve
 #endif
 // total memory budget in words (2*minor + 2*major); 0 = unbounded. a device sets its
-// RAM (-Dai_budget=131072 for a 1 MB Teensy); the nursery then sizes by appel's rule (gen_please).
+// RAM (-Dai_budget=131072 for a 1 MB Teensy); the nursery then sizes by appel's rule (ai_please).
 #ifndef ai_budget
 # define ai_budget 0
 #endif
@@ -406,10 +406,13 @@ size_t strlen(char const*);
 // the lean scalar boxes: {ap, payload} GC leaves, copied like bignums
 struct ai_gem { lvm_t *ap; ai_word w; };
 #define gem_req Width(struct ai_gem)
+#define gem(_) ((struct ai_gem*)(_))
 struct ai_sun { lvm_t *ap; intptr_t w; };    // raw intptr_t payload, no bit pun
 #define sun_req Width(struct ai_sun)
+#define sun(_) ((struct ai_sun*)(_))
 #define box_req (gem_req > sun_req ? gem_req : sun_req)     // what emit_int/emit_gem reserve
 struct ai_twin { lvm_t *ap; ai_word re, im; };   // two punned-double payload words
+#define twin(_) ((struct ai_twin*)(_))
 // pun through a union, not memcpy(&local,..): the memcpy form escapes a stack
 // local, and clang -Os then refuses the sibling call out of any inlining VM ap --
 // silently breaking threaded dispatch (tools/vmret.l).
