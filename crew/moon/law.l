@@ -271,9 +271,9 @@
    ; name is repack's business. copyof? is that sentence -- rg is read out into some other
    ; register, i.e. the value does not alias rg.
    (copyof? fs rg) (two? (filter (\ f (two? f && id? <f 'mov &&
-                                       id? (nthr f 2) rg && !(id? (nthr f 1) rg)))
+                                       id? (f 2) rg && !(id? (f 1) rg)))
                                  fs))
-   (ldinto fs rg) (tally (filter (\ f (two? f && id? <f 'ld && id? (nthr f 1) rg)) fs))
+   (ldinto fs rg) (tally (filter (\ f (two? f && id? <f 'ld && id? (f 1) rg)) fs))
    (cspair? fs rg)                                    ; some slot holds rg's save/restore pair, once each
     (: so (stofs fs 'st rg) lo (ldofs fs 'ld rg)
        (once k l) (: (go e n) (? !(two? e) n (go >e (? (<e = k) (n + 1) n))) (go l 0))
@@ -1207,7 +1207,7 @@
    ; a call-crossing fn's param cells: the spills land at entry (the first arg
    ; store precedes every ALU op); the cells are repack's to place from here
    (fsti fs rg) (: (go l i) (? !(two? l) 99
-                               (two? <l && (= <<l 'st) && (= (nthr <l 3) rg)) i
+                               (two? <l && (= <<l 'st) && (= (<l 3) rg)) i
                                (go >l (i + 1)))
                    (go fs 0))
    (falu fs) (: (go l i) (? !(two? l) 99
@@ -1763,8 +1763,8 @@
    ; the forward carrier: seed the map with (mov orig sub) and let the pass itself rewrite the
    ; form -- no guard is restated here, cpwalk decides and holo judges
    (fwd f) (catmap (\ i (catmap (\ r9
-              (: out (cpwalk gX [['mov (nthr f i) r9] f] {})
-                 f2 (nthr out (tally out - 1))
+              (: out (cpwalk gX [['mov (f i) r9] f] {})
+                 f2 (out (tally out - 1))
                  (? (emits? f2) () [[f i r9 f2]])))
             cpfile)) (cprp gX f))
    nfwd ((foldl (\ n f9 (n + tally (cprp gX f9))) 0 shapes) * tally cpfile)
@@ -1777,7 +1777,7 @@
               (? !(two? S) ()
                  (catmap (\ r9
                    (: out (coal gX (pro9 + [f ['mov r9 <S] '(ret)]))
-                      f2 (nthr out 5)
+                      f2 (out 5)
                       (? (emits? f2) () [[f r9 f2]])))
                   cpfile)))
    nbwd ((tally (filter (\ f9 (two? (soled f9))) shapes)) * tally cpfile)
@@ -1805,7 +1805,7 @@
 ; constant); a value-position asn keeps it too (its answer is read).
 (: (sis fs) (tally (filter (\ f (two? f && member? <f '(si si1 si2 si4))) fs))
    (lik fs k) (tally (filter (\ f (two? f && id? <f 'li && (= <>>f k))) fs))
-   (sivk fs k) (tally (filter (\ f (two? f && member? <f '(si si1 si2 si4) && (= (nthr f 3) k))) fs))
+   (sivk fs k) (tally (filter (\ f (two? f && member? <f '(si si1 si2 si4) && (= (f 3) k))) fs))
    ; every local here escapes through a call: a merely &-taken local promotes now
    ; (the address never leaves, so rung 2 folds its si into a li on a seat, and the
    ; one build homes it outright) -- a law about the si lane needs a slot no
@@ -2142,8 +2142,8 @@ long f(long n) {
 }
 int main() { return 0; }"
    (csset fs) (: t (foldl (\ t9 f9 (? (two? f9 && id? <f9 'st && id? <>f9 'sp &&
-                                        member? (nthr f9 3) '(r11 r12 r13 r14))
-                                       (pin t9 (nthr f9 3) 1) t9))
+                                        member? (f9 3) '(r11 r12 r13 r14))
+                                       (pin t9 (f9 3) 1) t9))
                           {} fs)
                   (keys t))
    fJ (fnf 'f <>(cgn srcJ))
