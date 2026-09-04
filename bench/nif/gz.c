@@ -1,13 +1,13 @@
-/* the GZIP floor -- src/deflate.c and src/inflate.c through mooncc, gcc and
+/* the GZIP floor -- src/gz.c, both directions, through mooncc, gcc and
  * clang, with the three reports diffed and the three builds timed. ccnif.sh
  * drives it.
  *
- * WHY THIS FILE. these two are the widest C in host/ and the least like the
+ * WHY THIS FILE. this is the widest C in host/ and the least like the
  * rest of the tree: a 64-bit bit accumulator shifted by a runtime count, a
  * table indexed by a masked window, a greedy match finder walking a hash chain,
  * an insertion sort over packed keys, and an eight-in-order copy that is
  * DELIBERATELY not a word move. every one of those is a lane love.c never
- * exercises, and both files are compiled by mooncc in the shipped artifact.
+ * exercises, and the file is compiled by mooncc in the shipped artifact.
  *
  * ⚠ A ROUND TRIP IS NOT ENOUGH and it is worth saying why. inflate(deflate(x))
  * == x holds under a great many wrong deflates -- any legal stream decodes --
@@ -20,12 +20,11 @@
  * test can agree with itself while both halves are wrong.
  *
  * ⚠ AND THE MALFORMED STREAMS ARE PART OF THE SUBJECT, not a robustness check.
- * src/inflate.c reproduces gz-puff's answer for a stream that does not
+ * gz.c's inflate reproduces gz-puff's answer for a stream that does not
  * describe a code -- first-writer-wins in the table, a zeroed symbol array --
  * so what it answers on garbage is as specified as what it answers on a valid
  * block, and the refusal paths are where the bit reader's edges live. */
-#include "../../src/deflate.c"
-#include "../../src/inflate.c"
+#include "../../src/gz.c"
 #include "stub.h"
 #include "say.h"
 
@@ -294,16 +293,16 @@ int main(int argc, char **argv)
 	for (n = 3; n <= 258; n++) {
 		unsigned c = df_lcode(n);
 		say_u("lcode", c);
-		say_u("lext", n - df_lbase[c]);
+		say_u("lext", n - gz_lbase[c]);
 	}
 	for (n = 1; n <= 32768; n <<= 1) {
 		unsigned c = df_dcode(n);
 		say_u("dcode", c);
-		say_u("dext", n - df_dbase[c]);
+		say_u("dext", n - gz_dbase[c]);
 	}
 	for (n = 0; n < 30; n++) {
-		say_u("dcode.base", df_dcode(df_dbase[n]));
-		say_u("dcode.top", df_dcode(df_dbase[n] + (1u << df_dext[n]) - 1));
+		say_u("dcode.base", df_dcode(gz_dbase[n]));
+		say_u("dcode.top", df_dcode(gz_dbase[n] + (1u << gz_dext[n]) - 1));
 	}
 
 	return 0;

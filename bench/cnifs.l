@@ -5,7 +5,7 @@
 ; actually does, on the path a user waits on -- and they are here because the corpus row
 ; averages a compiler over all of src/love.c and the ciphers are 120 lines apiece.
 ;
-;   inflate   src/inflate.c: a bit reader, a table lookup per symbol, a byte copy. The
+;   inflate   src/gz.c: a bit reader, a table lookup per symbol, a byte copy. The
 ;             branchiest of the three, and the one `love source` spends its time in.
 ;   crc32     src/hash.c: eight INDEPENDENT table lookups per eight bytes and nothing
 ;             else. No branches in the loop at all, so it reads pure load/xor throughput.

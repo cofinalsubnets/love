@@ -28,7 +28,7 @@
 ; apply and the compare wants an instruction. test/gate/gzfind.l is the differential.
 ;
 ; and so does inflate, in C. `gz-puff` below is the whole of RFC 1951 and the oracle;
-; `gz-inflate` is a door that reaches for src/inflate.c's nif and falls back to it. That
+; `gz-inflate` is a door that reaches for src/gz.c's nif and falls back to it. That
 ; one is 205x, not 2.7x, and the difference is the algorithm: the C indexes a table where
 ; puff walks a canonical code one bit at a time, which is the right trade at C's per-op
 ; cost and the wrong one at love's -- building the same table in love costs 44 ms on this
@@ -551,7 +551,7 @@
        _ (gz-blocks (gz-finder n) s n j t head prev 0)
        _ (gz-align j t)
        ((slurp j) + ""))
-   ; src/deflate.c where the artifact carries it, the coder above where it does not --
+   ; src/gz.c where the artifact carries it, the coder above where it does not --
    ; and the C is a twin held to the bytes, so the door changes cost and never content.
    ; the love lane is the oracle test/host/gzc.l holds it to.
    (gz-deflate s)
@@ -749,7 +749,7 @@
                     (<(>r)) [1 (gz-take b)]
                     (go ())))
        (? n (go ()) ()))
-   ; the door. src/inflate.c where the artifact carries it, gz-puff where it does not
+   ; the door. src/gz.c where the artifact carries it, gz-puff where it does not
    ; and wherever it declines -- and a torn stream declines, so a torn one is read twice
    ; and answers () both times. `string?`, never `?`: a string of NULs sums to zero and
    ; would read as absent. The presence probe is gz-nif's, and why is written there.

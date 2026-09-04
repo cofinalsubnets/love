@@ -48,7 +48,7 @@ mind before reading a mooncc move of the same size.
 
 ## the same floors compiled STRAIGHT (ccnif, 2026-08-28)
 
-`make -C bench ccnif` builds src/hash.c, src/deflate.c, src/inflate.c with every lane
+`make -C bench ccnif` builds src/hash.c and src/gz.c with every lane
 and reads them three ways — answers (a divergence is a miscompile, the only thing in the
 script that says a compiler is *wrong*), .text, wall clock. No love runtime, no libc in
 the loop; ~20 s, so it is the per-edit instrument where ccbench is the per-rung one.

@@ -4,7 +4,7 @@
 # it is a development instrument, run by hand while working on gen.l, and what it
 # prints is three readings of the same source, not a verdict.
 #
-# THE SUBJECT is src/hash.c, src/deflate.c and src/inflate.c -- sha-256, md5,
+# THE SUBJECT is src/hash.c and src/gz.c -- sha-256, md5,
 # crc32, cksum, DEFLATE and inflate. They are the widest C the tree owns and the
 # least like the rest of it: 32-bit rotates, a wrapping add carried over eight
 # registers, two table walks reading EIGHT INDEPENDENT lookups a step, a 64-bit
@@ -140,7 +140,7 @@ syms() {   # "<name> <bytes>" for an object's text symbols, gap-derived, section
     END { for (i = 1; i <= k; i++) print na[i], (i<k ? ad[i+1]-ad[i] : e-ad[i]) }' | sort
 }
 printf '%-16s' "file"; for l in $have; do printf '%12s' "$l"; done; echo
-for f in hash deflate inflate; do
+for f in hash gz; do
   printf '%-16s' "src/$f.c"
   base=
   for l in $have; do
