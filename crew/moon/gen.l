@@ -57,7 +57,6 @@
    xops '(leax ldx ldxb)                            ; the indexed forms (base index scale disp)
    stxops '(stx stxb)                               ; the indexed stores
    siops '(si si1 si2 si4)                          ; the store-immediates (the addressing fold + the asn/decl delivery lanes)
-   cmpmops '(cmpm cmprm)                            ; the memory cmps (made only by cmpfuse)
    aluops '(add sub and or xor imul)
    ; the arm overflow lane (add/sub_overflow): an aluops shape, but the flags feed the `set vs`
    ; right behind it -- so never pure (deaddef would lift it away) and never in aluops itself,
@@ -88,8 +87,6 @@
    argregs-t32 '(r0 r1 r2 r3)                        ; aapcs32: r0..r3  through argr -- a VALUE
                                                     ; binding resolves in source order)
    (xmmreg i) (name ("f" + show i))                ; the SysV double arg registers f0..f7
-   (nthr l i) (? (i < 1) <l (nthr >l (i - 1)))
-   (nthty (a >< u) i) (i < 1 ? a (nthty u (i - 1)))      ; the i-th list element or ()
    (bad? x) (id? x 'bad)                             ; the gripe carrier (gripe/gripe?/okv?) lives in lex.l -- parse answers one too
    ; -- the value tuple: every expression answers (ty reg forms) -- its type, the register
    ; holding the value, and the forms that compute it. the flo lane keeps the f0 protocol (its
@@ -526,7 +523,7 @@
        (fits32? n))
    ; the fold side of the gate: may this op take n as its immediate here? (the
    ; sweeps ask before rewriting a reg-reg form -- a decline keeps the register)
-   (imma g op n) (op @ 'imul (!(arm? g) && fits32? n)   ; x64's three-operand imul takes an imm32
+   (imma g op n) (op @ 'imul ((x64t? g || rv? g) && fits32? n)   ; imul imm: x64's three-operand form, riscv materializes; a64/t32 have none
                        ('add || 'sub) (immok g 'addsub n)
                        'cmp (immok g 'cmp n)
                        (immok g 'log n))
@@ -766,13 +763,12 @@
                  (mkv (rbin g aty nty) rd fs)))
           (: sn (? (ptr? aty && member? op '(+ -)) (* n (tsz g <>aty)) n)
              iop (irop op)
-             icl (? (member? op '(+ -)) 'addsub (op = '*) 'mul 'log)
-             ; a bare constant reads as `int` (numty capped it: immok bounds every lane to
+             ; a bare constant reads as `int` (numty capped it: imma bounds every lane to
              ; the signed-32 range anyway); a coated one carries its own type, so
              ; `uint op <lit>` wraps and `uint op (ulong)k` widens, as C says.
              u32 (member? op '(+ - *) && u32bin? g aty nty)
              (? (id? iop 'no) 'no
-                !(immok g icl sn) 'no
+                !(imma g iop sn) 'no
                 (: rt (? (ptr? aty) aty (rbin g aty nty))
                    (? ((sn = 0) && member? op '(+ -)) (mkv rt rA (vfs av))
                       (: rd (? wnt wnt (rdst g rA))
@@ -994,7 +990,7 @@
                                         ([<<ps off pty] . benv)
                                         (acc + asll g r + pst 'r4 off) rbs))
                              (: rb (nocall && !(flo? pty) &&
-                                       two? >>(g 'pool) ?              ; park only into a deep pool
+                                       deep? (g 'pool) ?               ; park only into a deep pool
                                        (ralloc g))
                                 (? rb              ; the park bind: the value rides a pool reg
                                     (: _ (pin g 'rpin (rp g rb . g 'rpin))
@@ -1074,20 +1070,10 @@
         (: (fcb z9)
             (: a (cgexpr g env lhs ())
                (? (bad? a) 'bad
-                  (: af (? (t32? g)                      ; the gp shuttle moves the pair on t32
-                           (asflo g a + '((movqrx r0 f0)) + spush2)
-                           (asflo g a))                  ; the word hold joins per-arm below
+                  (: af (asflo g a)
                      b (cgexpr g env rhs ())
                      (? (bad? b) 'bad
-                        (: mid (? (t32? g)
-                                  (af + asflo g b + (spop2 'r2 'r3 + '((movqxr f1 r2))))
-                                  ; the left's bits hold in a gp reg -- movqrx aims straight at it
-                                  (: bf (asflo g b)
-                                     s (? (r1safe? g bf) 'r1 (spare g bf))
-                                     (? s (af + [['movqrx s 'f0]] +
-                                           (bf + [['movqxr 'f1 s]]))
-                                        (af + ('((movqrx r0 f0)) + spush 'r0) +
-                                         (bf + spop 'r1 + '((movqxr f1 r1)))))))
+                        (: mid (fshut g af (asflo g b))
                            swp (member? op '(lt le))
                            cf [['ucomisd (? swp 'f0 'f1) (? swp 'f1 'f0)]]
                            ecc (? (arm? g)               ; VCMP/FCMP flags: gt/ge unordered-false native
@@ -1186,12 +1172,7 @@
                                     ta9 (numty9 lhs (vty a)) tb9 (numty9 rhs (vty b))
                                     brf (znrw g ta9 tb9 'r1 'r0 +
                                          ['(cmp r1 r0) ['br (bcc op (cmpu g ta9 tb9)) lbl]])
-                                    (? (!(two? (vfs a)) && !(id? (vreg a) 'r0) && psafe? g bf (vreg a))
-                                       (bf + ([['mov 'r1 (vreg a)]] + brf))   ; the left rides: read through it
-                                       (r1safe? g bf) (af0 + '((mov r1 r0)) + bf + brf)
-                                       (: s (spare g bf)
-                                          (? s (af0 + ([['mov s 'r0]] + bf) + ([['mov 'r1 s]] + brf))
-                                             (af + bf + (spop 'r1 + brf))))))))
+                                    (shut1 g a af0 bf + brf))))
                           (: b (cgexpr g env rhs ())
                              (? (bad? b) 'bad
                                 (flo? (vty b)) (: _ (rfree g (vreg ah)) _ (rfree g (vreg b)) (fcb ()))
@@ -1318,6 +1299,30 @@
                  (psafe? g bf <l) <l
                  (go >l))
        (go (g 'pool)))
+   ; the shuttle, spelled once: land the left in r1 and the right in r0. av the left's
+   ; tuple, af its r0 forms (the caller builds af before bf: the free order), bf the right's.
+   ; a left already riding a register the right never writes is read through it; else the
+   ; r1 skip, then a pool cell, and the sp cell last
+   (shut1 g av af bf)
+    (: rA (vreg av)
+       (? (!(two? (vfs av)) && !(id? rA 'r0) && psafe? g bf rA) (bf + [['mov 'r1 rA]])
+          (r1safe? g bf) (af + '((mov r1 r0)) + bf)
+          (: s (spare g bf)
+             (? s (af + [['mov s 'r0]] + bf + [['mov 'r1 s]])
+                (af + spush 'r0 + bf + spop 'r1)))))
+   ; the double twin: left in f1, right in f0. the left's bits hold in a gp register across
+   ; the right (movqrx aims straight at it); t32 moves the pair through the gp stack
+   (fshut g af bf)
+    (? (t32? g) (af + '((movqrx r0 f0)) + spush2 + bf + spop2 'r2 'r3 + '((movqxr f1 r2)))
+       (: s (? (r1safe? g bf) 'r1 (spare g bf))
+          (? s (af + [['movqrx s 'f0]] + bf + [['movqxr 'f1 s]])
+             (af + '((movqrx r0 f0)) + spush 'r0 + bf + spop 'r1 + '((movqxr f1 r1))))))
+   ; the count park: the value already in r0 holds in a pool register past the count's
+   ; forms bf, then value r0 / count r1 (the variable shifts' and rotates' contract)
+   (cshut g bf)
+    (: s (spare g bf)
+       (? s ([['mov s 'r0]] + bf + ['(mov r1 r0) ['mov 'r0 s]])
+          (spush 'r0 + bf + '((mov r1 r0)) + spop 'r0)))
 
    ; -- the pair kit (t32 llong/ullong, moon rung 3): a 64-bit value rides r0 (lo) : r1 (hi),
    ; the aapcs32 return pair. pairs never enter the operand pool or the immediate lanes --
@@ -1384,7 +1389,7 @@
    (pshiftv g kind)
     (? (v6m? g)
        [['call (kind @ 'shl '__aeabi_llsl 'shr '__aeabi_llsr '__aeabi_lasr)]]
-    (: lb (nlab g ".pb") ls (nlab g ".ps") ld (nlab g ".pd")
+    (: lb (nlab g ".pb") ld (nlab g ".pd")
        one (kind @ 'shl '((mov r1 r0) (shlv r1 r2) (li r0 0))
                    'shr '((mov r0 r1) (shrv r0 r2) (li r1 0))
                         '((mov r0 r1) (sarv r0 r2) (sar r1 31)))
@@ -1968,10 +1973,7 @@
            _ (pin g 'argpos ())
            (? (!(bad? r) && bitf? (vty r)) 'bad   ; &bitfield is illegal C -- refuse
               !(bad? r)                        ; under & the lvalue's address escapes: a real lea, so the gate sees it
-              (: fs (? (vm? r) (vfs r + (: b (vmb r) o (vmo r)
-                                           (b @ 'r4 [['lea 'r0 'r4 o]]
-                                                'r0 (o @ 0 () [['add 'r0 'r0 o]])
-                                                (o @ 0 [['mov 'r0 b]] [['add 'r0 b o]]))))
+              (: fs (? (vm? r) (vfs r + unlean (mata (vmb r) (vmo r)))
                         (unlean (vfs r)))
                  _ (? (vm? r) (rfree g (vmb r)) ())
                  v (mkv ['ptr (vty r)] 'r0 fs)
@@ -2017,21 +2019,13 @@
                        (mkv ty 'r0
                         (as128 g r + (<rv @ 'loc [['st 'r4 <>rv 'r0] ['st 'r4 (<>rv + 8) 'r2]]
                                                  [['la 'r1 <>rv] '(st r1 0 r0) '(st r1 8 r2)]))))
-                     ; a double source must truncate first: this lane's guard rules out a
-                     ; float target but says nothing about the float source, and a double's
-                     ; value lives in f0 with its reg field not consulted -- so the store-the-
-                     ; register lanes below would put the raw IEEE bit pattern in the slot,
-                     ; and the narrow lane rides tor0, which moves rather than converts.
-                     (flo? (vty r))
+                     ; a double source truncates first (its value lives in f0, and the
+                     ; register lanes below would store the raw bits); a narrow target
+                     ; converts on the protocol. asintt is tor0 on a non-float
+                     (flo? (vty r) || two? (cvt ty 'r0))
                       (mkv ty 'r0 (asintt g r ty + cvt ty 'r0
                                    + (<rv @ 'loc [[(stop ty) 'r4 <>rv 'r0]]
                                                  [['la 'r1 <>rv] [(stop ty) 'r1 0 'r0]])))
-                     (two? (cvt ty 'r0))              ; a narrow target converts on the protocol
-                      (: fs (tor0 g r + cvt ty 'r0 +
-                             (<rv = 'loc ?
-                              [[(stop ty) 'r4 <>rv 'r0]]
-                              [['la 'r1 <>rv] [(stop ty) 'r1 0 'r0]]))
-                         (mkv ty 'r0 fs))
                      (<rv = 'loc)
                       (mkv ty (vreg r) (vfs r + [['st 'r4 <>rv (vreg r)]]))
                      (mkv ty (vreg r) (vfs r + [['la 'r1 <>rv] ['st 'r1 0 (vreg r)]]))))
@@ -2579,7 +2573,7 @@
         (? !(two? as) (rev acc)
            ; a targetable leaf skips the cell: classified 'ez/'ezm, emitted
            ; straight into its argument register after the spills.
-           (: ez (? (gpc < ngp g) (ezarg g env <as (nthty pts i) gpc) 'no)
+           (: ez (? (gpc < ngp g) (ezarg g env <as (pts i) gpc) 'no)
               (? !(id? ez 'no) (kls >as (i + 1) (gpc + 1) xmmc ovc (ez . acc))
            ; a direct &x / array / struct-var argument is presumed dead once the callee returns
            ; (the &Hp / &_res idiom): argpos exempts its lea from the fesc pin, one-shot. the
@@ -2599,7 +2593,7 @@
                    (cgexpr g env <as aim))
               _ (pin g 'argpos ())
               (? (bad? a) 'bad
-                 (: pty (nthty pts i)
+                 (: pty (pts i)
                     aty (? pty pty (vty a))                ; classify by the param type if known, else the arg's
                     wd (flo? aty)
                     ; t32 composites: an HFA rides the d-regs (the sse2 pair lane below = AAPCS32-VFP
@@ -3011,10 +3005,7 @@
                    vop (w @ 32 'rorv4 'rorv)
                    af (tor0 g xv)
                    bf (tor0 g cv)
-                   st (: s (spare g bf)             ; the value holds in a pool reg past the count's eval
-                         (? s (([['mov s 'r0]] + bf) + ['(mov r1 r0) ['mov 'r0 s]])
-                            (spush 'r0 + bf + '((mov r1 r0)) + spop 'r0)))
-                   (mkv rt 'r0 (af + st + (ng ? '((neg r1))) + [[vop 'r0 'r1]])))))))
+                   (mkv rt 'r0 (af + cshut g bf + (ng ? '((neg r1))) + [[vop 'r0 'r1]])))))))
    (cgror g env L R wnt)                            ; -> tuple | 'bad | 'no (the general lane stands)
     (? !(rot4? g) 'no
        (: a (two? L && (<L = 'bin) && member? <>L '(shl shr) ? L)
@@ -3105,10 +3096,7 @@
                     (? (bad? b) 'bad
                        (: af (tor0 g a)
                           bf (tor0 g b)
-                          st (: s (spare g bf)      ; the value holds in a pool reg past the count's eval
-                                (? s (([['mov s 'r0]] + bf) + ['(mov r1 r0) ['mov 'r0 s]])
-                                   (spush 'r0 + bf + ('((mov r1 r0)) + spop 'r0))))
-                          (mkv rt 'r0 (af + st + ([[vop 'r0 'r1]] + nar 'r0))))))))
+                          (mkv rt 'r0 (af + cshut g bf + [[vop 'r0 'r1]] + nar 'r0)))))))
           (: ta (vty a)
              ; a constant right rides the immediate lane; a constant left swaps
              ; over (commutative ops) or mirrors (relations, rflip) onto the right
@@ -3138,19 +3126,11 @@
                          ta9 (numty9 lhs ta)   ; C's type for a literal, read through
                          tb9 (numty9 rhs tb)   ; its written face (-1, ~0) -- see numty9
                          av (? (id? ah 'sh) a ah)
-                         ; the memory shuttle: left in r1, right in r0 (today's shape) --
-                         ; the cell is the last resort: a left already riding a register bf
-                         ; skips reads through it, then the r1 skip, then a pool-cell park
+                         ; the memory shuttle (shut1): left in r1, right in r0
                          (shut z9)
-                          (: mid (: rA (vreg av)
-                                    af9 (tor0 g av)       ; built first (the standing free order); the ride drops it
+                          (: mid (: af9 (tor0 g av)       ; built first (the standing free order); the ride drops it
                                     bf (tor0 g b)
-                                    (? (!(two? (vfs av)) && !(id? rA 'r0) && psafe? g bf rA)
-                                       (bf + [['mov 'r1 rA]])
-                                       (r1safe? g bf) (af9 + '((mov r1 r0)) + bf)
-                                       (: s (spare g bf)
-                                          (? s (af9 + ([['mov s 'r0]] + bf) + [['mov 'r1 s]])
-                                             (af9 + spush 'r0 + bf + spop 'r1)))))
+                                    (shut1 g av af9 bf))
                              back '((mov r0 r1))
                              pa (ptr? ta) pb (ptr? tb)
                              unsg (cmpu g ta9 tb9)                      ; divide and compare take the common type's signedness -- see cmpu
@@ -3307,18 +3287,8 @@
                             (flo? ta || flo? tb)
                              ; the double lane: either operand double -> both to double (f1=left,
                              ; f0=right through the gp stack), then the scalar-double op or ucomisd.
-                             (: mid (? (t32? g)               ; the gp stack moves pairs on t32
-                                       (asflo g av + ('((movqrx r0 f0)) + spush2) +
-                                        (asflo g b + spop2 'r2 'r3 + '((movqxr f1 r2))))
-                                       ; the left's bits hold in a gp reg across the right --
-                                       ; movqrx aims straight at it, no bridge, no cell
-                                       (: af (asflo g av)
-                                          bf (asflo g b)
-                                          s (? (r1safe? g bf) 'r1 (spare g bf))
-                                          (? s (af + [['movqrx s 'f0]] +
-                                                (bf + [['movqxr 'f1 s]]))
-                                             (af + ('((movqrx r0 f0)) + spush 'r0) +
-                                              (bf + spop 'r1 + '((movqxr f1 r1)))))))
+                             (: af (asflo g av)
+                                mid (fshut g af (asflo g b))
                                 (op @ '+ (mkv 'double 'r0 (mid + '((addsd f0 f1))))
                                     '* (mkv 'double 'r0 (mid + '((mulsd f0 f1))))
                                     '- (mkv 'double 'r0 (mid + '((subsd f1 f0) (movsd f0 f1))))
@@ -7811,18 +7781,18 @@
                                    (? (member? A '(r0 r1 r2 r3)) (A . go >l) (go >l))))
                       (go rides))
                (? (qk && two? qrr && qclob? irU qrr)
-                  (: _ (pins (fnreset g) 'n n0 'strs strs0 'pool0 tpool 'pool tpool)
+                  (: _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'pool0 tpool 'pool tpool)
                      (attempt ()))
                   (bad? irU ||
                    (two? av9 && peep g 'lsq 0 != av9 3) ||
                    !(peep g 'dseq 0 = (two? av9 ? (av9 13) (peep g 'dseq 0))))
-                  (: _ (pins (fnreset g) 'n n0 'strs strs0 'pool0 tpool 'pool tpool)
+                  (: _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'pool0 tpool 'pool tpool)
                      sb (spill () params 0 0 0 () ())
                      sb (? (two? vzf) [(<sb + vzf) <>sb] sb)
                      (build sb))
                   irU))
            (attempt 1))
-       n0 (peep g 'n 0) strs0 (g 'strs)             ; snapshot the accumulators for ubuild's retry
+       n0 (peep g 'n 0) strs0 (g 'strs) sts0 (g 'statics)   ; snapshot the accumulators for ubuild's retry
        ; the operand pool is empty on t32: aapcs32 keeps r4-r11 callee-saved and the thumb2
        ; frame saves only lr+fp, while r0-r3/r12 are args and scratch -- there is no free
        ; caller-saved register to pool. riscv's own pool is t0..t3 (r8..r11), caller-saved and
@@ -7835,9 +7805,6 @@
        srt (two? sig ? <sig 'long)
        sr6f (sretm? g srt)
        ; -- the one build (moon-ssa rungs 6+7, the only world): seats from
-       ; alive, one build per fn. a memory sret and varargs take the bare
-       ; spill build (one build there too, no seats).
-       uni9 !(sr6f || vararg)       ; -- the one build (moon-ssa rungs 6+7, the only world): seats from
        ; alive, one build per fn. a memory sret and varargs take the bare
        ; spill build (one build there too, no seats).
        uni9 !(sr6f || vararg)
@@ -8223,7 +8190,7 @@
        r (cgen-core ast stbl sigs weaks xtra tgt)
        (? (gripe? r) r                               ; a named cause rides out to the driver (a gripe is a chain, so guard before two?)
           !(two? r) ()
-          !(nthr r 3) ()                          ; no main -> no program (the exe has nothing to start)
+          !(r 3) ()                               ; no main -> no program (the exe has nothing to start)
           (: dat <>>r                           ; (dataforms nifforms): the exe resolves labels itself,
              ; ..and the bss forms ride the tail as real zeros: one flat image has no
              ; NOBITS lane to put them in, so the file carries what the sections would not.
@@ -8244,7 +8211,7 @@
              (loc? nm) (!(id? (peep svars nm 'no) 'no) ||
                         peep sects nm () = "love_nifs")     ; a nif entry is static by shape; any other
                                                                  ; named section stays exported (.image is read by symbol)
-             als (? (two? xtra && 3 < #xtra) (nthr xtra 3) {})
+             als (? (two? xtra && 3 < #xtra) (xtra 3) {})
              fnames (: (go fs acc) (? !(two? fs) (rev acc)
                                       (: f <fs
                                          (go >fs (? (<f = 'fn && id? (peep sfns <>f 'no) 'no)
