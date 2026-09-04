@@ -25,6 +25,7 @@ struct ai *str0(struct ai *g, uintptr_t n) { return g; }
 lvm(lvm_ret0) { return g; }
 lvm(lvm_cur) { return g; }
 lvm(lvm_cask) { return g; }
+lvm(lvm_str) { return g; }              // love.h's inline strp() names it, so every nif does
 lvm(_lvm_ghelp) { return g; }
 
 #endif
