@@ -691,11 +691,9 @@ enum vop { vop_add, vop_sub, vop_mul, vop_quot, vop_rem, vop_fquot,
 // the cells are machine words; other operands take the whole op to the zero point
 #define vop_bitp(op) ((op) >= vop_band && (op) <= vop_bsr)
 word intern_checked(struct ai*, struct ai_str*);
-uintptr_t intern_reserve(struct ai*),
-          hash(struct ai*, intptr_t);
+uintptr_t intern_reserve(struct ai*);
 union u *map_fill_back(union u*, uintptr_t);
 lvm_t lvm_kcall,
- lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembox, // the data sentinels; each tail-jumps to its apply handler
  lvm_putn, lvm_seal, lvm_heard, lvm_worn, lvm_myself,
  lvm_nilp, lvm_putc, lvm_intern,
  lvm_saturate, lvm_ceil, lvm_peep, lvm_lamsrc, lvm_nifnom, lvm_cask, lvm_bcopy,
@@ -1186,7 +1184,6 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
 #define cata1(n, ...) static Cata(n) { return __VA_ARGS__, pull(g, c); }
 #define forget() (ai_core_of(g)->root=(mm0),g)
 
-#define fs0(g) (ai_core_of(g)->sp[0])
 
 
 
