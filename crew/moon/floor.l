@@ -24,8 +24,8 @@
    ; the admission rule here: a name earns the floor by being about C, not about a machine.
    (tysz w stag ty)
     (? (ptr? ty) w
-       (arr? ty) (* <>>ty (tysz w stag <>ty))
-       (stru? ty) <>(peep stag <>ty 0)
+       (arr? ty) (<>>ty * tysz w stag <>ty)
+       (stru? ty) <>(stag <>ty)
        (bitf? ty) (tysz w stag <>ty)       ; the unit's size (a bitfield rides its declared type)
        (ty @ ('char || 'uchar || 'bool) 1
              ('short || 'ushort) 2
@@ -36,7 +36,7 @@
    (tyalign w stag ty)
     (? (ptr? ty) w
        (arr? ty) (tyalign w stag <>ty)
-       (stru? ty) <>>(peep stag <>ty 0)
+       (stru? ty) <>>(stag <>ty)
        (bitf? ty) (tyalign w stag <>ty)
        (tysz w stag ty))
    (aup n a) ((n + (a - 1)) & -a)     ; round n up to alignment a
@@ -52,7 +52,7 @@
    (trank ty) (ty @ ('i128 || 'u128) 4 ('llong || 'ullong) 3 ('long || 'ulong) 2 1)
    (tusg? ty) (member? ty '(uchar ushort uint ulong ullong u128))
    (tusg ty) (ty @ 'int 'uint 'long 'ulong 'llong 'ullong 'i128 'u128 ty)
-   (tw w64 ty) (: r (trank ty) (r = 1 ? 4 (r = 2) (? w64 8 4) (r = 3) 8 16))
+   (tw w64 ty) (trank ty @ 1 4 2 (w64 ? 8 4) 3 8 16)
    (pprom ty) (? (bitf? ty) (pprom <>ty)              ; a bitfield promotes as its unit
                  (member? ty '(bool char uchar short ushort)) 'int
                  ty)
