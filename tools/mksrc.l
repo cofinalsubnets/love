@@ -22,14 +22,14 @@
 
 (? (lit? (from 'holo 'objelf)) (use 'holo) 0) ; splice the assembler when this love is baked; the guard below says so when not
 
-(: (mksrc-slurp p) (: q (open p "r") (? (hot? q) (: s (slurp q) _ (close q) [1 (s + "")]) ()))
-   (mksrc-die m) (: _ (say err ("mksrc: " + m + "\n")) (quit 1))
+(: (mksrc-slurp p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, [1 (s + "")]))))
+   (mksrc-die m) (say err ("mksrc: " + m + "\n"), quit 1)
 
    ; text -> the byte list `raw` takes. Built from the tail so the walk is a tail call
    ; and the list comes out in order; ~0.25 s over a 3.6 MB archive.
-   (mksrc-bytes s i acc) (? (i < 0) acc (mksrc-bytes s (i - 1) ((s i) >< acc)))
+   (mksrc-bytes s i acc) (i < 0 ? acc (mksrc-bytes s (i - 1) (s i . acc)))
    ; a little-endian 8-byte word, the width src/src.c reads it at
-   (mksrc-le8 v i acc) (? (i = 8) acc (mksrc-le8 (v >> 8) (i + 1) (acc + [(v & 255)])))
+   (mksrc-le8 v i acc) (i = 8 ? acc (mksrc-le8 (v >> 8) (i + 1) (acc + [(v & 255)])))
 
    ; a cross arch's backend joins at runtime (obj.l's law: registered, not
    ; merely named -- the baked holo carries the native one only). the text
@@ -39,30 +39,28 @@
     (? (lit? (from 'holo 'objelf)) (mksrc-be2 arch)
        (mksrc-die "no holo aboard -- this love is unbaked (make host bakes it)"))
    (mksrc-be2 arch)
-    (? (lit? (peep backends arch ())) 0
+    (? (lit? (backends arch)) 0
        ; the backend file is the canonical arch word now -- one spelling, no map
        (: f ("crew/holo/" + string arch + ".l")
           q (open f "r")
-          (? q (: _ (mksrc-rdev (flow q)) (close q))
+          (? q (mksrc-rdev (flow q), close q)
              (mksrc-die ("no backend aboard and no text at " + f)))))
    (mksrc-rdev cl)
-    (: r (sound cl)
-       (? (two? r) (: _ (ev 'ev (cap r)) (mksrc-rdev (cup r)))
-          (id? r 'torn) (mksrc-die "torn backend text")
-          0))
+    (sound cl @ 'torn (mksrc-die "torn backend text")
+                (a . u) (ev a, mksrc-rdev u))
 
    (mksrc arch src dst)
     (: _ (mksrc-be arch)
        g (mksrc-slurp src)
-       _ (? (two? g) 0 (mksrc-die ("cannot read " + src)))
+       _ (one? g ? (mksrc-die ("cannot read " + src)))
        s <>g
-       n (tally s)
-       _ (? (0 < n) 0 (mksrc-die (src + " is empty")))
+       n #s
+       _ (n < 1 ? (mksrc-die (src + " is empty")))
        forms ['(label ai_srcgz_len) ['raw (mksrc-le8 n 0 ())]
               '(label ai_srcgz)     ['raw (mksrc-bytes s (n - 1) ())]]
        ob (objelf arch () () () '("ai_srcgz" "ai_srcgz_len") () () () () () forms)
        _ (write-bytes dst ob)
-       (say out ("MKSRC\t" + dst + " (" + (show n) + " bytes)\n")))
+       (say out $ "MKSRC\t" + dst + " (" + show n + " bytes)\n"))
 
    ; `argv` is a list and its head is this script's own path, so the arguments
    ; start at the tail -- tools/tgz.l says the same thing at its own foot.
@@ -71,8 +69,8 @@
    ; equal-looking, `id?` to nothing, and objsecs refuses it as an unknown target one
    ; call later.
    (mksrc-main av)
-    (: n (tally av)
-       (? (2 <= n) (mksrc (? (3 <= n) (name <>>av) 'x64) <av <>av)
-          (mksrc-die "usage: mksrc ARCHIVE.tar.gz OUT.o [ARCH]")))
+    (: n #av
+       (2 <= n ? (mksrc (3 <= n ? (name <>>av) 'x64) <av <>av)
+        (mksrc-die "usage: mksrc ARCHIVE.tar.gz OUT.o [ARCH]")))
 
    (mksrc-main >argv))

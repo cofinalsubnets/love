@@ -13,11 +13,12 @@
 ; every byte goes out as a three-digit octal escape: always three, so a following digit
 ; cannot extend it, and no byte value needs a case of its own.
 
-(: (gz-die m) (: _ (say err ("mkgz: " + m + "\n")) (quit 1))
+(: (gz-die m) (say err $ "mkgz: " + m + "\n", quit 1)
 
    (gz-slurp p)
     (: q (open p "r")
-       (? q (: s (slurp q) _ (close q) (s + "")) (gz-die ("cannot read " + p))))
+     (? q (: s (slurp q) (close q, s + ""))
+          (gz-die ("cannot read " + p))))
 
    ; a C literal back to its bytes. only \n \\ \" ever reach here (both layers write
    ; those three and nothing else), and anything outside a "..." run is layout.
@@ -26,25 +27,25 @@
        (go i q acc)
         (? (n <= i) (string (rev acc))
            (: c (s i)
-              (? q (? (c = 34) (go (i + 1) 0 acc)
-                      (c = 92) (: d (s (i + 1)) (go (i + 2) 1 ((d = 110 ? 10 d) >< acc)))
-                      (go (i + 1) 1 (c >< acc)))
+              (? q (c @ 34 (go (i + 1) 0 acc)
+                        92 (: d (s (i + 1)) (go (i + 2) 1 ((d @ 110 10 d) . acc)))
+                        (go (i + 1) 1 (c . acc)))
                  (go (i + 1) (c = 34 ? 1 0) acc))))
        (go 0 0 ()))
 
-   (gz-item a) (? (= (a 0) 64) (gz-unesc (gz-slurp (snip a 1 #a))) a)
+   (gz-item a) (a 0 @ 64 (gz-unesc (gz-slurp (snip a 1 #a))) a)
 
    (gz-oct c) [92 (48 + c // 64) (48 + c // 8 % 8) (48 + c % 8)]
-   (gz-row s i j acc) (? (j < i) acc (gz-row s i (j - 1) (cat (gz-oct (s j)) acc)))
+   (gz-row s i j acc) (? (j < i) acc (gz-row s i (j - 1) (gz-oct (s j) + acc)))
    (gz-lines s i n)
-    (? (n <= i) 0
-       (: e (n < i + 20 ? n (i + 20))
-          _ (say out ("\"" + string (gz-row s i (e - 1) ()) + "\"\n"))
-          (gz-lines s e n)))
+    (n <= i ? 0
+     (: e (n < i + 20 ? n (i + 20))
+      (say out ("\"" + string (gz-row s i (e - 1) ()) + "\"\n"),
+       gz-lines s e n)))
 
    ; argv leads with this script's own path, so the arguments start at the tail
    as >argv
-   _ (? (two? as) 0 (gz-die "usage: mkgz SYM ITEM ..."))
+   _ (atom? as ? (gz-die "usage: mkgz SYM ITEM ..."))
    sym <as
    txt (foldl (\ a i (a + gz-item i)) "" >as)
    z (deflate txt)

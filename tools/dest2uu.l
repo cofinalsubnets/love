@@ -24,64 +24,60 @@
 (: regs '((r0 0) (r1 1) (r2 2) (r3 3) (r4 4) (r5 5) (r6 6) (r7 7)
           (r8 8) (r9 9) (r10 10) (r11 11) (sp 12))
    rels '((lt 0) (ge 1) (le 2) (gt 3) (eq 4) (ne 5))
-   (look t k) (: e (assoc k t) (? (two? e) (cap (cup e)) (scare 'dest2uu-look k)))
+   (look t k) (: e (assoc k t) (two? e ? <>e (scare 'dest2uu-look k)))
    ; labels and frame offsets take codes as met, in emission order -- presence is
    ; the (1 x) wrapper, a code may be 0
    LAB (tablet 0) OFF (tablet 0)
-   (dyn t x) (: e (peep t x ())
+   (dyn t x) (: e (t x)
                 (? (two? e) <e
                    (: k (peep t 'n 0) _ (pin t 'n (k + 1)) _ (pin t x [k]) k)))
-   (tr r) (2 * (look regs r))
+   (tr r) (2 * look regs r)
    (ti k) (1 + 2 * k)
    (toff o) (ti (dyn OFF o))
    (tlab l) (ti (dyn LAB l))
-   (tx x) (? (charm? x) (ti x) (tr x))
-   (each f l) (? (two? l) (: _ (f <l) (each f >l)) ())
+   (tx x) (charm? x ? (ti x) (tr x))
 
    ; the shuttle idioms, folded before the lift: shov -> push X, shpo -> pop X
    (plift fs)
-    (? !(two? fs) ()
-       (? (&& (id? (<fs 0) 'sub) (id? (<fs 1) 'sp) (two? >fs)
-              (id? ((cap >fs) 0) 'st) (id? ((cap >fs) 1) 'sp))
-          (link ['push ((cap >fs) 3)] (plift (cup >fs)))
-          (&& (id? (<fs 0) 'ld) (id? (<fs 2) 'sp) (two? >fs)
-              (id? ((cap >fs) 0) 'add) (id? ((cap >fs) 1) 'sp))
-          (link ['pop (<fs 1)] (plift (cup >fs)))
-          (link <fs (plift >fs))))
+    (? (one? fs) ()
+       (? (<fs 0 = 'sub && <fs 1 = 'sp && two? >fs
+           && <>fs 0 = 'st && <>fs 1 = 'sp)
+          (['push (<>fs 3)] . plift >>fs)
+          (<fs 0 = 'ld && <fs 2 = 'sp && two? >fs
+           && <>fs 0 = 'add && <>fs 1 = 'sp)
+          (['pop (<fs 1)] . plift >>fs)
+          (<fs . plift >fs)))
    (lift1 f)
     (: h (f 0)
-       (? (id? h 'li)    [0 (tr (f 1)) (tx (f 2)) 0]
-          (id? h 'mov)   [1 (tr (f 1)) (tr (f 2)) 0]
-          (id? h 'ld)    [2 (tr (f 1)) (tr (f 2)) (toff (f 3))]
-          (id? h 'st)    [3 (tr (f 1)) (toff (f 2)) (tr (f 3))]
-          (id? h 'si)    [4 (tr (f 1)) (toff (f 2)) (ti (f 3))]
-          (id? h 'add)   [5 (tr (f 1)) (tx (f 2)) (tx (f 3))]
-          (id? h 'sub)   [6 (tr (f 1)) (tx (f 2)) (tx (f 3))]
-          (id? h 'cmp)   [7 (tx (f 1)) (tx (f 2)) 0]
-          (id? h 'set)   [8 (ti (look rels (f 1))) (tr (f 2)) 0]
-          (id? h 'br)    [9 (ti (look rels (f 1))) (tlab (f 2)) 0]
-          (id? h 'jmp)   [10 (tlab (f 1)) 0 0]
-          (id? h 'label) [11 (tlab (f 1)) 0 0]
-          (id? h 'call)  [12 (tlab (f 1)) 0 0]
-          (id? h 'ret)   [13 0 0 0]
-          (id? h 'push)  [14 (tr (f 1)) 0 0]
-          (id? h 'pop)   [15 (tr (f 1)) 0 0]
+       (? (h = 'li)    [0 (tr (f 1)) (tx (f 2)) 0]
+          (h = 'mov)   [1 (tr (f 1)) (tr (f 2)) 0]
+          (h = 'ld)    [2 (tr (f 1)) (tr (f 2)) (toff (f 3))]
+          (h = 'st)    [3 (tr (f 1)) (toff (f 2)) (tr (f 3))]
+          (h = 'si)    [4 (tr (f 1)) (toff (f 2)) (ti (f 3))]
+          (h = 'add)   [5 (tr (f 1)) (tx (f 2)) (tx (f 3))]
+          (h = 'sub)   [6 (tr (f 1)) (tx (f 2)) (tx (f 3))]
+          (h = 'cmp)   [7 (tx (f 1)) (tx (f 2)) 0]
+          (h = 'set)   [8 (ti (look rels (f 1))) (tr (f 2)) 0]
+          (h = 'br)    [9 (ti (look rels (f 1))) (tlab (f 2)) 0]
+          (h = 'jmp)   [10 (tlab (f 1)) 0 0]
+          (h = 'label) [11 (tlab (f 1)) 0 0]
+          (h = 'call)  [12 (tlab (f 1)) 0 0]
+          (h = 'ret)   [13 0 0 0]
+          (h = 'push)  [14 (tr (f 1)) 0 0]
+          (h = 'pop)   [15 (tr (f 1)) 0 0]
           (scare 'dest2uu-op h)))
 
-   (pre fs) (? !(two? fs) ()
-               (? (member? ((cap fs) 0) '(call jmp ret)) () (link <fs (pre >fs))))
+   (pre fs) (? (one? fs) ()
+               (member? (<fs 0) '(call jmp ret)) ()
+               (<fs . pre >fs))
    (emit1 g)
     (: nm (g 0) fs (plift (g 1))
-       _ (each (\ f (puts (+ (+ "\n ; " (string nm)) (+ "  " (show f))))) fs)
-       _ (puts (+ "\n (defn " (+ (string nm) " nlist")))
-       _ (each (\ f (: q (lift1 f)
-                      (puts (+ "\n   " " "
-                             (+ "(ncons " (+ (show (q 0))
-                              (+ " (ncons " (+ (show (q 1))
-                               (+ " (ncons " (+ (show (q 2))
-                                (+ " (ncons " (show (q 3)))))))))))))
-             fs)
-       _ (puts (+ "\n    nnil" (+ (")" * (4 * (tally fs))) ")")))
+       _ (each fs (f \ puts $ "\n ; " + string nm + "  " + show f))
+       _ (puts $ "\n (defn " + string nm + " nlist")
+       _ (each fs (f \ (: q (lift1 f)
+                          (puts $ "\n    (ncons " + show (q 0) + " (ncons " + show (q 1)
+                                  + " (ncons " + show (q 2) + " (ncons " + show (q 3)))))
+       _ (puts $ "\n    nnil" + ")" * (4 * #fs) + ")")
        ())
 
    eb '(bin add (v y) (k 1))                    ; dest.l's e5 bin, held inline there
@@ -106,6 +102,6 @@
    _ (puts "\n; Each source form is printed over its term. Laws: test/uuhomlaw.l; substrate:")
    _ (puts "\n; test/uuhom.l over test/uu.l (the kernel).")
    _ (puts "\n(assert")
-   _ (each emit1 progs)
+   _ (each progs emit1)
    _ (puts ")\n")
    0)

@@ -48,11 +48,9 @@
 (use "crew/sb/sb.l")   ; for the ignore law only -- .sb/ignore is sb's file
 
 (: (sp-die m) (say err ("selfpack: " + m + "\n"), quit 1)
-   (sp-read p) (: q (open p "r") (? (hot? q) (: s (slurp q) _ (close q) [1 (s + "")]) ()))
+   (sp-read p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, [1 (s + "")]))))
    (sp-write p s) (: q (open p "w")
-                     _ (? (hot? q) 0 (sp-die ("cannot write " + p)))
-                     _ (say q s)
-                     (close q))
+                     (!(hot? q) ? (sp-die ("cannot write " + p)), say q s, close q))
    ; the rules, and sb owns them: .sb/ignore plus sb's own built-ins, so the vcs
    ; walk and the dist cut cannot disagree about what this tree is -- one law, one
    ; file, and a generated file named there drops out of both. then the cut's own
@@ -67,14 +65,14 @@
    ; handed to the walk, not run after it: what the archive will not carry is never
    ; read (out/ and dl/ are gigabytes on a build box, and a rejected directory is
    ; never descended into at all).
-   (sp-keep? rules nom) (! (sp-ign? nom rules))
+   (sp-keep? rules nom) !(sp-ign? nom rules)
    ; re-home the kept entries under top -- the walk is already sorted, so order
    ; is preserved.
    (sp-take es top acc)
-    (? !(two? es) (rev acc)
+    (? (one? es) (rev acc)
        (: e <es
-          _ (pin e 'nom (top + "/" + (tar-get e 'nom "")))
-          (sp-take >es top (e >< acc))))
+          _ (pin e 'nom (top + "/" + tar-get e 'nom ""))
+          (sp-take >es top (e . acc))))
 
    ; the tree root leads the walk; top goes in behind it wearing the root's mode,
    ; and the rest is re-homed under top. shared, so the thin pass and the cut level
@@ -83,42 +81,41 @@
     (: root <es
        te (tar-entry top 'dir "")
        _ (pin te 'mode (tar-get root 'mode 493))
-       (tar-level (root >< (te >< (sp-take >es top ()))) stamp))
+       (tar-level (root . te . sp-take >es top ()) stamp))
 
    ; the cut that reads: pack, hash, and write when the content actually moved.
    (sp-cut arch side top stamp rules)
     (: g (tar-gather? (sp-keep? rules) "." "")
-       _ (? g 0 (sp-die "cannot read the tree"))
+       _ (!g ? (sp-die "cannot read the tree"))
        lev (sp-lev <>g top stamp)
        a (tar-pack lev)
-       _ (? a 0 (sp-die "cannot pack (a path too long for ustar?)"))
+       _ (!a ? (sp-die "cannot pack (a path too long for ustar?)"))
        h (sha256 a)
        old (sp-read side)
        have (sp-read arch)
-       fresh (two? old && two? have && (= (<(>old)) h))
+       fresh (two? old && two? have && <>old = h)
        ; an archive with no sidecar (a seed-laid tree, a fresh checkout of out/):
        ; adopt it when its content is this content -- no rewrite, so its mtime
        ; holds and nothing downstream re-links.
-       adopt (? (fresh || !(two? have)) 0
-                (: u (gz-unzip (<(>have))) (two? u && (= (<(>u)) a))))
+       adopt (? (fresh || one? have) 0
+                (: u (gz-unzip <>have) (two? u && <>u = a)))
        (? fresh 0
           adopt (sp-write side h)
           (: z (gz-zip a "" 0)
-             _ (sp-write arch z)
-             _ (sp-write side h)
-             _ (say out ("selfpack: " + show (tally lev) + " entries -> " + arch + "\n"))
-             0)))
+             (sp-write arch z, sp-write side h,
+              say out $ "selfpack: " + show #lev + " entries -> " + arch + "\n",
+              0))))
 
    (sp-main av)
-    (: n (tally av)
-       _ (? (2 <= n) 0 (sp-die "usage: selfpack ARCHIVE.tar.gz TOP [STAMP [DROP..]]"))
+    (: n #av
+       _ (n < 2 ? (sp-die "usage: selfpack ARCHIVE.tar.gz TOP [STAMP [DROP..]]"))
        arch <av
-       top (<(>av))
-       stamp (? (3 <= n) (<(sound (<(>(>av))))) 0)
+       top <>av
+       stamp (3 <= n ? <(sound <>>av) 0)
        ; top joins the drops: a tree never packs an unpacked copy of itself.
        ; a release untarred at the root (a field test's leftover) otherwise
        ; rides the next blob, and the artifact swallows a whole second love.
-       drops (top >< (? (3 <= n) (>(>(>av))) ()))
+       drops (top . (3 <= n ? >>>av ()))
        side (arch + ".sha")
        ; the thin pass: stat the tree, hash the archive it describes, and settle the
        ; run when that id is the one the sidecar already names and the archive is
@@ -129,10 +126,10 @@
        ; which reads each file once and so cannot disagree with itself.
        rules (sp-rules drops)
        t (tar-thin? (sp-keep? rules) "." "")
-       _ (? t 0 (sp-die "cannot read the tree"))
+       _ (!t ? (sp-die "cannot read the tree"))
        hq (tar-hash (sp-lev <>t top stamp))
        old (sp-read side)
-       quiet ((string? hq) && (two? old) && (= (<(>old)) hq) && (two? (stat arch)))
-       (? quiet 0 (sp-cut arch side top stamp rules)))
+       quiet (string? hq && two? old && <>old = hq && two? (stat arch))
+       (quiet ? 0 (sp-cut arch side top stamp rules)))
 
    (sp-main >argv))

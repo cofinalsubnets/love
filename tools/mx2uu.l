@@ -26,57 +26,55 @@
 (: _ (reads (open "src/mx.l" "r")) ())
 
 (:
-   nl (string 10)
    (join l) (foldl (+) "" l)
-   (pl s) (puts (s + nl))
-   (at l i) (? (0 < i) (at >l (i - 1)) <l)
+   (pl s) (puts (s + "\n"))
 
    kinds mx-kinds                                    ; the kind noms, enum order
    addm mx-add                                       ; one row of lane noms per kind
    mulm mx-mul
-   nk (tally kinds)
-   ridx (jot nk)
-   (cell m i j) (at (at m i) j)
-   (rrow m i) (map (\ j (cell m i j)) ridx)
-   (rcol m j) (map (\ i (cell m i j)) ridx)
+   nk #kinds
+   ridx ^nk
+   (cell m i j) (m i j)                              ; a grid is indexed by application
+   (rrow m i) (map (j \ cell m i j) ridx)
+   (rcol m j) (map (i \ cell m i j) ridx)
    ; a kind's dispatch signature: its row and column in both matrices -- equal
    ; signature = same band. mx2coq derives the partition from this same datum.
    (sig i) (list (rrow addm i) (rcol addm i) (rrow mulm i) (rcol mulm i))
-   (idxin x l k) (? (! (two? l)) -1 (<l = x) k (idxin x >l (k + 1)))
-   sigs ((: (go is acc) (? (! (two? is)) (rev acc)
+   (idxin x l k) (? (one? l) -1 (<l = x) k (idxin x >l (k + 1)))
+   sigs ((: (go is acc) (? (one? is) (rev acc)
                            (: s (sig <is)
-                              (go >is (? (-1 < (idxin s acc 0)) acc (link s acc))))))
+                              (go >is (-1 < idxin s acc 0 ? acc (s . acc))))))
          ridx ())
    (band i) (idxin (sig i) sigs 0)                   ; class id, enum-appearance order
-   nb (tally sigs)
-   reps (map (\ c ((: (go is) (? (c = (band <is)) <is (go >is))) ridx)) (jot nb))
-   (members c) (filter (\ i (c = (band i))) ridx)
+   nb #sigs
+   reps (map (c \ ((: (go is) (c = band <is ? <is (go >is))) ridx)) ^nb)
+   (members c) (filter (i \ c = band i) ridx)
 
    ; --- the noms the artifact wears ---
-   (kn i) ("mx" + string (at kinds i))               ; mxkcharm ..
+   (kn i) ("mx" + string (kinds i))                  ; mxkcharm ..
    ; the table spells a lane as its C symbol (lvm_addn); the prefix says nothing
    ; here, so it comes off -- mxLaddn, matching mx.v's Laddn.
-   (ln x) (: t (string x) ("mxL" + (? ("lvm_" = (snip t 0 4)) (snip t 4 (tally t)) t)))
+   (ln x) (: t (string x) ("mxL" + ("lvm_" = snip t 0 4 ? (snip t 4 #t) t)))
    lanes ((: (go rows acc)                           ; distinct lanes, appearance order
-            (? (! (two? rows)) (rev acc)
-               (go >rows (foldl (\ a x (? (member? x a) a (link x a))) acc <rows))))
+            (? (one? rows) (rev acc)
+               (go >rows (foldl (\ a x (member? x a ? a (x . a))) acc <rows))))
           (addm + mulm) ())
    (lcode x) (idxin x lanes 0)
    ; mirror: the argument swap's action on lanes. the positional degenerate pair
    ; trades places (bin_a answers the a operand, bin_b the b); the rest are fixed.
-   (mir x) (: t (string x) (? (t = "lvm_bin_a") 'lvm_bin_b (t = "lvm_bin_b") 'lvm_bin_a x))
+   (mir x) (: t (string x) (t @ "lvm_bin_a" 'lvm_bin_b "lvm_bin_b" 'lvm_bin_a x))
 
    ; --- literals: an nlist row, and a grid of them under their row names ---
-   (rowlit cs) (: (go l) (? (two? l) (join ["(ncons " (show <l) " " (go >l) ")"]) "nnil")
+   (rowlit cs) (: (go l) (two? l ? (join ["(ncons " (show <l) " " (go >l) ")"]) "nnil")
                   (go cs))
    (flatdef nm cs cmt)
-    (join [nl " ; " cmt nl " (defn " nm " nlist" nl "   " (rowlit cs) ")" nl])
+    (join ["\n ; " cmt "\n (defn " nm " nlist\n   " (rowlit cs) ")\n"])
    (griddef nm rows labs cmt)
-    (: n (tally rows)
-       (go r) (? (r = n) (join [nl "    mnil" (")" * n) ")" nl])
-                 (join [nl "   ; " (at labs r) nl "   (mcons " (rowlit (at rows r)) (go (r + 1))]))
-       (join [nl " ; " cmt nl " (defn " nm " mlist" (go 0)]))
-   (rowsof m is js) (map (\ i (map (\ j (lcode (cell m i j))) js)) is)
+    (: n #rows
+       (go r) (? (r = n) (join ["\n    mnil" (")" * n) ")\n"])
+                 (join ["\n   ; " (labs r) "\n   (mcons " (rowlit (rows r)) (go (r + 1))]))
+       (join ["\n ; " cmt "\n (defn " nm " mlist" (go 0)]))
+   (rowsof m is js) (map (i \ map (j \ lcode (cell m i j)) js) is)
 
    ; --- the header ---
    _ (pl "; test/uumx.l -- generated from src/mx.l by tools/mx2uu.l. Do not edit;")
@@ -93,10 +91,10 @@
    _ (pl "")
    _ (pl "; --- the codes ---")
    _ (pl "(assert")
-   _ (map (\ i (pl (join [" (defn " (kn i) " nat " (show i) ")"]))) ridx)
-   _ (map (\ x (pl (join [" (defn " (ln x) " nat " (show (lcode x)) ")"]))) lanes)
+   _ (map (i \ pl (join [" (defn " (kn i) " nat " (show i) ")"])) ridx)
+   _ (map (x \ pl (join [" (defn " (ln x) " nat " (show (lcode x)) ")"])) lanes)
    _ (pl (join [" (defn mxnk nat " (show nk) ")"]))
-   _ (pl (join [" (defn mxnl nat " (show (tally lanes)) ")"]))
+   _ (pl (join [" (defn mxnl nat " (show #lanes) ")"]))
    _ (pl (join [" (defn mxnb nat " (show nb) "))"]))
    _ (pl "")
    _ (pl "; --- mlist: nlist's shape one type up, a list of rows. the two walkers below")
@@ -133,10 +131,10 @@
    _ (pl " (9 = (vof 0 '(mxnth 0 (mxrow 1 (mcons (ncons 5 nnil) (mcons (ncons 9 nnil) mnil)))))))")
 
    ; --- the tables ---
-   klabs (map (\ i (string (at kinds i))) ridx)
-   blabs (map (\ c (join ["band " (show c) " -- " (string (at kinds (at reps c)))])) (jot nb))
-   bidx (jot nb)
-   bimg (map (\ c (at reps c)) bidx)
+   klabs (map (i \ string (kinds i)) ridx)
+   blabs (map (c \ join ["band " (show c) " -- " (string (kinds (reps c)))]) ^nb)
+   bidx ^nb
+   bimg (map (c \ reps c) bidx)
    _ (pl "")
    _ (pl "; --- the squares, one row per kind in enum order ---")
    _ (puts "(assert")
@@ -146,7 +144,7 @@
                     (join ["`*`: " (show nk) " kinds square, " (show (nk * nk)) " cells"])))
    _ (puts (flatdef "mxbandtbl" (map band ridx)
                     "the band partition, DERIVED by row+column equality over both squares"))
-   _ (puts (flatdef "mxmirtbl" (map (\ x (lcode (mir x))) lanes)
+   _ (puts (flatdef "mxmirtbl" (map (x \ lcode (mir x)) lanes)
                     "mirror: the argument swap's action on lanes, in code order"))
    _ (puts (griddef "mxaddbgrid" (rowsof addm bimg bimg) blabs
                     (join ["`+` on the band quotient, " (show (nb * nb)) " cells"])))

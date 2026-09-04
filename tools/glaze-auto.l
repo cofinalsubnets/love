@@ -1,12 +1,11 @@
 ; glaze-auto -- the auto-hook end to end: take the float benchmark's unchanged source (the
 ; mand/col/grid mandelbrot nest from bench/benches/float.l), recognize it with `grok`, glaze it
-; to native, and time it the way the bench does. demonstrates that ordinary interpreted source
-; gets LuaJIT-territory native code with no hand-annotation -- the payoff the benches would read
-; once the recognizer is wired into ev's compile path.
+; to native, and time it the way the bench does. ordinary interpreted source, no hand-annotation.
 ;
 ; run:  out/host/love -l love/glaze/emit.l tools/glaze-auto.l   (emit.l leaks grok/jitfgrid as globals)
 
-(: ; --- the exact bodies from bench/benches/float.l (verbatim) ---
+(: ; the exact bodies from bench/benches/float.l -- quoted source the recognizer reads, so
+   ; they stay verbatim: infixing one would change the datum grok matches on
    mps   '(cx cy zx zy it)
    mbody '(? (&& (< it 100) (<= (+ (* zx zx) (* zy zy)) 4.0))
              (mand cx cy (+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy) (+ it 1)) it)
@@ -15,18 +14,19 @@
    ; the interpreted reference (what the bench runs today): rebuild the nest and call grid(0,0)
    interp ((ev ['\ '_ [': ['mand 'cx 'cy 'zx 'zy 'it] mbody ['col 'px 'py 'acc] cbody ['grid 'px 'acc] gbody ['grid 0 0]]]) 0)
 
-   ; --- the auto-hook: recognize the nest from source and glaze it. no change to the source. ---
+   ; the auto-hook: recognize the nest from source and glaze it. no change to the source.
    ng (grok '(\ _ 0) mps mbody cbody gbody 'x64)
-   _ (? (id? ng ()) (: _ (dot "grok did NOT recognize the nest\n") (exit 1)) 0)
+   _ (!ng ? (dot "grok did NOT recognize the nest\n", exit 1))
    native (ng 0)
 
-   _ (dot (+ "checksum: interp=" (+ (show interp) (+ " native=" (+ (show native)
-            (? (&& (= 87130 interp) (= interp native)) "  OK (auto-glazed, bit-exact)\n" "  MISMATCH\n"))))))
+   _ (dot $ "checksum: interp=" + show interp + " native=" + show native
+           + (87130 = interp && interp = native ? "  OK (auto-glazed, bit-exact)\n" "  MISMATCH\n"))
 
-   ; --- time both, bench style: us/grid + the reps/time throughput the bench reports ---
-   (rep f n a) (? (< n 0) a (rep f (- n 1) (+ a (f 0))))
-   ti (: a (clock 0) _ ((\ _ ((: (gi px acc) (? (< px 64) (gi (+ px 1) (+ acc ((: (ci py ac) (? (< py 64) (ci (+ py 1) (+ ac ((: (mi cx cy zx zy it) (? (&& (< it 100) (<= (+ (* zx zx) (* zy zy)) 4.0)) (mi cx cy (+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy) (+ it 1)) it)) (+ -2.0 (* px 0.046875)) (+ -1.5 (* py 0.046875)) 0.0 0.0 0))) ac)) 0 0))) acc)) 0 0)) 0) (- (clock 0) a))
-   tn (: a (clock 0) _ (rep ng 1999 0) (// (* (- (clock 0) a) 1000) 2000))
-   _ (dot (+ "interp 1 grid:  " (+ (show ti) " ms\n")))
-   _ (dot (+ "native /grid:   " (+ (show tn) " us  (was interp ~14700 us/grid; node 196; luajit 220)\n")))
+   ; time both, bench style: us/grid + the reps/time throughput the bench reports
+   (rep f n a) (n < 0 ? a (rep f (n - 1) (a + f 0)))
+   ; the timed interpreted nest is the same source inlined -- verbatim for the same reason
+   ti (: a (clock 0) _ ((\ _ ((: (gi px acc) (? (< px 64) (gi (+ px 1) (+ acc ((: (ci py ac) (? (< py 64) (ci (+ py 1) (+ ac ((: (mi cx cy zx zy it) (? (&& (< it 100) (<= (+ (* zx zx) (* zy zy)) 4.0)) (mi cx cy (+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy) (+ it 1)) it)) (+ -2.0 (* px 0.046875)) (+ -1.5 (* py 0.046875)) 0.0 0.0 0))) ac)) 0 0))) acc)) 0 0)) 0) (clock 0 - a))
+   tn (: a (clock 0) _ (rep ng 1999 0) ((clock 0 - a) * 1000 // 2000))
+   _ (dot $ "interp 1 grid:  " + show ti + " ms\n")
+   _ (dot $ "native /grid:   " + show tn + " us  (was interp ~14700 us/grid; node 196; luajit 220)\n")
    (dot ";; glaze-auto: float.l source auto-glazed to native, LuaJIT-territory, no source change\n"))

@@ -17,13 +17,13 @@
 
 (? (lit? (from 'holo 'objelf)) (use 'holo) 0) ; splice the assembler when this love is baked
 
-(: (mkblob-slurp p) (: q (open p "r") (? (hot? q) (: s (slurp q) _ (close q) [1 (s + "")]) ()))
-   (mkblob-die m) (: _ (say err ("mkblob: " + m + "\n")) (quit 1))
+(: (mkblob-slurp p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, [1 (s + "")]))))
+   (mkblob-die m) (say err $ "mkblob: " + m + "\n", quit 1)
 
    ; text -> the byte list `raw` takes, built from the tail so the walk is a tail call
-   (mkblob-bytes s i acc) (? (i < 0) acc (mkblob-bytes s (i - 1) ((s i) >< acc)))
+   (mkblob-bytes s i acc) (i < 0 ? acc (mkblob-bytes s (i - 1) (s i . acc)))
    ; a little-endian 8-byte word, the width the C side reads it at
-   (mkblob-le8 v i acc) (? (i = 8) acc (mkblob-le8 (v >> 8) (i + 1) (acc + [(v & 255)])))
+   (mkblob-le8 v i acc) (i = 8 ? acc (mkblob-le8 (v >> 8) (i + 1) (acc + [(v & 255)])))
 
    ; a cross arch's backend joins at runtime (obj.l's law: registered, not merely
    ; named), and an unbaked love has no holo at all -- say so.
@@ -31,38 +31,36 @@
     (? (lit? (from 'holo 'objelf)) (mkblob-be2 arch)
        (mkblob-die "no holo aboard -- this love is unbaked (make host bakes it)"))
    (mkblob-be2 arch)
-    (? (lit? (peep backends arch ())) 0
+    (? (lit? (backends arch)) 0
        ; the backend file is the canonical arch word now -- one spelling, no map
        (: f ("crew/holo/" + string arch + ".l")
           q (open f "r")
-          (? q (: _ (mkblob-rdev (flow q)) (close q))
-             (mkblob-die ("no backend aboard and no text at " + f)))))
+          (? q (mkblob-rdev (flow q), close q)
+           (mkblob-die ("no backend aboard and no text at " + f)))))
    (mkblob-rdev cl)
-    (: r (sound cl)
-       (? (two? r) (: _ (ev 'ev (cap r)) (mkblob-rdev (cup r)))
-          (id? r 'torn) (mkblob-die "torn backend text")
-          0))
+    (sound cl @ 'torn (mkblob-die "torn backend text")
+                (a . u) (ev a, mkblob-rdev u))
 
    (mkblob arch src dst sym)
     (: _ (mkblob-be arch)
        g (mkblob-slurp src)
-       _ (? (two? g) 0 (mkblob-die ("cannot read " + src)))
+       _ (one? g ? (mkblob-die $ "cannot read " + src))
        s <>g
-       n (tally s)
+       n #s
        _ (? (0 < n) 0 (mkblob-die (src + " is empty")))
        lsym (sym + "_len")
        forms [['label (name lsym)] ['raw (mkblob-le8 n 0 ())]
               ['label (name sym)]  ['raw (mkblob-bytes s (n - 1) ())]]
        ob (objelf arch () () () [sym lsym] () () () () () forms)
        _ (write-bytes dst ob)
-       (say out ("MKBLOB\t" + dst + " (" + (show n) + " bytes)\n")))
+       (say out $ "MKBLOB\t" + dst + " (" + show n + " bytes)\n"))
 
    ; `argv` is a list whose head is this script's own path, so the arguments
    ; start at the tail. the arch arrives as TEXT and `name` interns it, so the
    ; answer is the very symbol the backend table is keyed by.
    (mkblob-main av)
-    (: n (tally av)
-       (? (3 <= n) (mkblob (? (4 <= n) (name (av 3)) 'x64) <av <>av <>>av)
-          (mkblob-die "usage: mkblob IN OUT.o SYM [ARCH]")))
+    (: n #av
+     (3 <= n ? (mkblob (4 <= n ? (name (av 3)) 'x64) <av <>av <>>av)
+      (mkblob-die "usage: mkblob IN OUT.o SYM [ARCH]")))
 
    (mkblob-main >argv))

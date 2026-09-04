@@ -20,22 +20,20 @@
 ; format (the LINK's arch), and a cross backend joins from its tree text the
 ; way mksrc.l joins one.
 
-(: (rt-die m) (: _ (say err ("mkrt: " + m + "\n")) (quit 1))
+(: (rt-die m) (say err ("mkrt: " + m + "\n"), quit 1)
    (rt-rdev cl)
-    (: r (sound cl)
-       (? (two? r) (: _ (ev 'ev (cap r)) (rt-rdev (cup r)))
-          (id? r 'torn) (rt-die "torn backend text")
-          0))
+    (sound cl @ 'torn (rt-die "torn backend text")
+                (a . u) (ev a, rt-rdev u))
    (rt-be arch)
-    (? (lit? (peep (from 'holo 'backends) arch ())) 0
+    (? (lit? (from 'holo 'backends arch)) 0
        ; the backend file is the canonical arch word now -- one spelling, no map
        (: f ("crew/holo/" + string arch + ".l")
           q (open f "r")
-          (? (hot? q) (: _ (rt-rdev (flow q)) (close q))
+          (? (hot? q) (rt-rdev (flow q), close q)
              (rt-die ("no backend aboard and no text at " + f)))))
-   (rt-bytes s i acc) (? (i < 0) acc (rt-bytes s (i - 1) ((s i) >< acc)))
-   (rt-le8 v i acc) (? (i = 8) acc (rt-le8 (v >> 8) (i + 1) (acc + [(v & 255)])))
-   (rt-zeros k acc) (? (k < 1) acc (rt-zeros (k - 1) (0 >< acc)))
+   (rt-bytes s i acc) (i < 0 ? acc (rt-bytes s (i - 1) (s i . acc)))
+   (rt-le8 v i acc) (i = 8 ? acc (rt-le8 (v >> 8) (i + 1) (acc + [(v & 255)])))
+   (rt-zeros k acc) (k < 1 ? acc (rt-zeros (k - 1) (0 . acc)))
 
    ; the archives are three independent mooncc runs -- a cold one is ~45 s and
    ; nothing in it reads another -- so build them at once and let the runtime
@@ -45,20 +43,20 @@
    ; target to `one`, one archive slower.
    (rt-fan rtarch cd ts)
     (? !(string? cd) ()
-       (: _ (flush out) _ (flush err)
+       (: _ (flush out, flush err)
           ps (rt-kids rtarch ts ())
           (foldl (\ _ p (wait p)) 0 ps)))
    (rt-kids rtarch ts acc)
-    (? !(two? ts) acc
+    (? (one? ts) acc
        (: p (fork 0)
-          (? (p = 0) (: _ (rtarch "crew/moon/" <ts 'linux ()) (quit 0))
-             (0 < p) (rt-kids rtarch >ts (p >< acc))
+          (? (p = 0) (rtarch "crew/moon/" <ts 'linux (), quit 0)
+             (0 < p) (rt-kids rtarch >ts (p . acc))
              acc)))
 
    ; one member: label len, label bytes, zero-padded so the next len lands
    ; 8-aligned (a riscv core may trap an unaligned word; the pad is free)
    (rt-forms nm s)
-    (: n (tally s)
+    (: n #s
        pad ((8 - (n & 7)) & 7)
        [['label (name ("ai_rtgz_" + nm + "_len"))]
         ['raw (rt-le8 n 0 ())]
@@ -68,12 +66,12 @@
    (mkrt arch dst)
     ; every archive arch joins, not just the object's: the image bakes the
     ; native backend only, and each ISA's members ride its own obj writer
-    (: _ (rt-be 'x64) _ (rt-be 'a64) _ (rt-be 'rv64) _ (rt-be arch)
+    (: _ (rt-be 'x64, rt-be 'a64, rt-be 'rv64, rt-be arch)
        rtcid (from 'moon 'rtcid)
        rtarch (from 'moon 'rtarch)
        objelf (from 'holo 'objelf)
        cid (rtcid "crew/moon/")
-       _ (? (string? cid) 0 (rt-die "no crew/moon/ slice to hash -- run from the tree root"))
+       _ (!(string? cid) ? (rt-die "no crew/moon/ slice to hash -- run from the tree root"))
        ; through rtarch, so the runtime cache serves a repeat build (~instant)
        ; and only a real slice or compiler change recompiles the members --
        ; without this every seed and rebake paid three full runtime compiles.
@@ -82,11 +80,10 @@
        ; deflated: ~1.5 MB of archive across the three ISAs becomes ~210 kB,
        ; and rtcarried pays one inflate for the ISA it wants.
        (one tgt) (: a (rtarch "crew/moon/" tgt 'linux ())
-                    _ (? (string? a) 0 (rt-die (show tgt + ": no archive (a member refused?)")))
+                    _ (!(string? a) ? (rt-die (show tgt + ": no archive (a member refused?)")))
                     z (deflate a)
-                    _ (? (string? z) 0 (rt-die (show tgt + ": deflate refused the archive")))
-                    _ (say out ("MKRT\t" + show tgt + " " + show (tally a)
-                                + " -> " + show (tally z) + "\n"))
+                    _ (!(string? z) ? (rt-die (show tgt + ": deflate refused the archive")))
+                    _ (say out $ "MKRT\t" + show tgt + " " + show #a + " -> " + show #z + "\n")
                     z)
        forms ((rt-forms "id" cid)
               + (rt-forms "x64" (one 'x64))
@@ -101,8 +98,8 @@
        (say out ("MKRT\t" + dst + "\n")))
 
    (mkrt-main av)
-    (: n (tally av)
-       (? (1 <= n) (mkrt (? (2 <= n) (name <>av) 'x64) <av)
-          (rt-die "usage: love wake out/host/mooncc0.image tools/mkrt.l OUT.o [ARCH]")))
+    (: n #av
+       (1 <= n ? (mkrt (2 <= n ? (name <>av) 'x64) <av)
+        (rt-die "usage: love wake out/host/mooncc0.image tools/mkrt.l OUT.o [ARCH]")))
 
    (mkrt-main >argv))

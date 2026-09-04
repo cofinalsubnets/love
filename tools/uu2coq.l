@@ -35,29 +35,27 @@
    _ (reads (open "test/uuvallaw.l" "r"))
    _ (reads (open "test/uukindlaw.l" "r"))          ; load + certify uu's corpus (populates GLOB)
    bs (intern "\\")
-   (unq x) (? (&& (two? x) (id? (cap x) bs)) (cap (cup x)) x)   ; strip one ' (reads shows quote as (\ ..))
+   (unq x) (two? x && <x = bs ? (x 1) x)   ; strip one ' (reads shows quote as (\ ..))
    (cat l) (foldl (+) "" l)
-   (e2 l) (cap (cup l))  (e3 l) (cap (cup (cup l)))
-   (e4 l) (cap (cup (cup (cup l))))  (e5 l) (cap (cup (cup (cup (cup l)))))
 
    ; read a file's top-level forms as data (the reader strips ; comments)
 
    ; a uu name -> a Rocq identifier: prefix uu_, kebab '-' -> '_'
-   (sanit s) (: (g i acc) (? (< i (tally s)) (g (+ 1 i) (+ acc (: c (s i) (? (= c 45) 95 c)))) acc) (g 0 ""))
+   (sanit s) (: (g i acc) (? (< i #s) (g (+ 1 i) (+ acc (: c (s i) (? (= c 45) 95 c)))) acc) (g 0 ""))
    (rocqn nm) (+ "uu_" (sanit (string nm)))
 
    ; --- collect (kind nm T t) entries from the uu.l forms (defns live inside asserts) ---
-   (deq? c) (&& (two? c) (| (id? (cap c) 'defn) (id? (cap c) 'defq)))
-   (axq? c) (&& (two? c) (id? (cap c) 'axm))
-   (entry c) (? (deq? c) ['def (unq (e2 c)) (unq (e3 c)) (unq (e4 c))]
-                (axq? c) ['axm (unq (e2 c)) (unq (e3 c)) ()])
-   (kids ks acc) (? (two? ks) (kids (cup ks) (? (| (deq? (cap ks)) (axq? (cap ks))) (link (entry (cap ks)) acc) acc)) acc)
+   (deq? c) (two? c && (<c = 'defn || <c = 'defq))
+   (axq? c) (two? c && <c = 'axm)
+   (entry c) (? (deq? c) ['def (unq (c 1)) (unq (c 2)) (unq (c 3))]
+                (axq? c) ['axm (unq (c 1)) (unq (c 2)) ()])
+   (kids ks acc) (two? ks ? (kids >ks (deq? <ks || axq? <ks ? (entry <ks . acc) acc)) acc)
    (gather fs acc) (? (two? fs)
                       (gather (cup fs) (: F (cap fs)
-                        (? (&& (two? F) (id? (cap F) 'assert)) (kids (cup F) acc)
-                           (| (deq? F) (axq? F)) (link (entry F) acc) acc)))
+                        (? (two? F && <F = 'assert) (kids >F acc)
+                           (deq? F || axq? F) (entry F . acc) acc)))
                       (rev acc))
-   (app2 a b) (? (two? a) (link (cap a) (app2 (cup a) b)) b)   ; not `cat` -- the local cat is the string fold
+   (app2 a b) (two? a ? (<a . app2 >a b) b)   ; not `cat` -- the local cat is the string fold
    ents (gather (app2 (forms (open "test/uu.l" "r")) (app2 (forms (open "test/uuhom.l" "r")) (app2 (forms (open "test/uuhomgen.l" "r")) (app2 (forms (open "test/uuhomlaw.l" "r")) (app2 (forms (open "test/uusplgen.l" "r")) (app2 (forms (open "test/uuspllaw.l" "r")) (app2 (forms (open "test/uulay.l" "r")) (app2 (forms (open "test/uupatch.l" "r")) (app2 (forms (open "test/uuwm.l" "r")) (app2 (forms (open "test/uuwmlaw.l" "r")) (app2 (forms (open "test/uukind.l" "r")) (app2 (forms (open "test/uukindlaw.l" "r")) (app2 (forms (open "test/uumx.l" "r")) (app2 (forms (open "test/uumxlaw.l" "r")) (app2 (forms (open "test/uuval.l" "r")) (app2 (forms (open "test/uuvalband.l" "r")) (forms (open "test/uuvallaw.l" "r")))))))))))))))))) ())
 
    ; the silent-no-op gate (defense in depth behind uu.l's arity-door macros):
@@ -67,14 +65,13 @@
    ; nothing and paints its assert dot green. redden here instead. the empty seat is
    ; `id? ()` and not `!`: a term of 0 is a legal def (a code table's first row) and
    ; falsy, so truthiness would redden it.
-   _ (map (\ e (? (| (&& (id? (cap e) 'def) (id? (e4 e) ()))
-                     (! (peep GLOB (e2 e) 0)))
-                  (: _ (puts "MALFORMED-OR-UNPINNED-DEF ") _ (puts (string (e2 e))) (quit 1))
+   _ (map (\ e (? (<e = 'def && (id? (e 3) ()) || !(peep GLOB (e 1) 0))
+                  (puts "MALFORMED-OR-UNPINNED-DEF ", puts (string (e 1)), quit 1)
                   0))
         ents)
 
    ; names that exist (corpus-wide) -- for telling a global reference from a bound var
-   nt (tablet 0) _ (map (\ e (pin nt (e2 e) 1)) ents)
+   nt (tablet 0) _ (map (\ e (pin nt (e 1) 1)) ents)
    (corpus? x) (peep nt x 0)
 
    ; explicit skips: the type-in-type detonations (sound MLTT can't host them, and
@@ -98,35 +95,35 @@
    (? (charm? t) (show t)
       (nom? t) (atom-c t)
       (two? t) (: h (cap t)
-        (? (id? h 'pi)        ("(forall " + (string (e2 t)) + " : " + (u2c (e3 t)) + ", " + (u2c (e4 t)) + ")")
-           (id? h 'lam)       ("(fun " + (string (e2 t)) + " => " + (u2c (e3 t)) + ")")
-           (id? h 'let)       ("(let " + (string (e2 t)) + " := " + (u2c (e3 t)) + " in " + (u2c (e4 t)) + ")")
-           (id? h 'succ)      ("(S " + (u2c (e2 t)) + ")")
-           (id? h 'idpath)    ("(idpath " + (u2c (e2 t)) + ")")
-           (id? h 'paths)     ("(@paths " + (u2c (e2 t)) + " " + (u2c (e3 t)) + " " + (u2c (e4 t)) + ")")
-           (id? h 'nat_rect)  ("(nat_rect " + (u2c (e2 t)) + " " + (u2c (e3 t)) + " " + (u2c (e4 t)) + " " + (u2c (e5 t)) + ")")
-           (id? h 'bool_rect) ("(bool_rect " + (u2c (e2 t)) + " " + (u2c (e3 t)) + " " + (u2c (e4 t)) + " " + (u2c (e5 t)) + ")")
-           (id? h 'unit_rect) ("(unit_rect " + (u2c (e2 t)) + " " + (u2c (e3 t)) + " " + (u2c (e4 t)) + ")")
-           (id? h 'empty_rect)("(Empty_set_rect " + (u2c (e2 t)) + " " + (u2c (e3 t)) + ")")
+        (? (h = 'pi)        ("(forall " + (string (t 1)) + " : " + (u2c (t 2)) + ", " + (u2c (t 3)) + ")")
+           (h = 'lam)       ("(fun " + (string (t 1)) + " => " + (u2c (t 2)) + ")")
+           (h = 'let)       ("(let " + (string (t 1)) + " := " + (u2c (t 2)) + " in " + (u2c (t 3)) + ")")
+           (h = 'succ)      ("(S " + (u2c (t 1)) + ")")
+           (h = 'idpath)    ("(idpath " + (u2c (t 1)) + ")")
+           (h = 'paths)     ("(@paths " + (u2c (t 1)) + " " + (u2c (t 2)) + " " + (u2c (t 3)) + ")")
+           (h = 'nat_rect)  ("(nat_rect " + (u2c (t 1)) + " " + (u2c (t 2)) + " " + (u2c (t 3)) + " " + (u2c (t 4)) + ")")
+           (h = 'bool_rect) ("(bool_rect " + (u2c (t 1)) + " " + (u2c (t 2)) + " " + (u2c (t 3)) + " " + (u2c (t 4)) + ")")
+           (h = 'unit_rect) ("(unit_rect " + (u2c (t 1)) + " " + (u2c (t 2)) + " " + (u2c (t 3)) + ")")
+           (h = 'empty_rect)("(Empty_set_rect " + (u2c (t 1)) + " " + (u2c (t 2)) + ")")
            ; Sigma -> a primitive-projection total2 record (preamble below): it has the
            ; same definitional eta uu's Sigma has, so eta-dependent proofs (idisweq ..)
-           ; export soundly. total2 mirrors pi (e2 var, e3 domain, e4 body); tpair's
+           ; export soundly. total2 mirrors pi (index 1 var, 2 domain, 3 body); tpair's
            ; family is implicit, inferred from the def's stated type.
-           (id? h 'total2)    ("(total2 (fun " + (string (e2 t)) + " : " + (u2c (e3 t)) + " => " + (u2c (e4 t)) + "))")
-           (id? h 'tpair)     ("(tpair " + (u2c (e2 t)) + " " + (u2c (e3 t)) + ")")
-           (id? h 'pr1)       ("(pr1 " + (u2c (e2 t)) + ")")
-           (id? h 'pr2)       ("(pr2 " + (u2c (e2 t)) + ")")
+           (h = 'total2)    ("(total2 (fun " + (string (t 1)) + " : " + (u2c (t 2)) + " => " + (u2c (t 3)) + "))")
+           (h = 'tpair)     ("(tpair " + (u2c (t 1)) + " " + (u2c (t 2)) + ")")
+           (h = 'pr1)       ("(pr1 " + (u2c (t 1)) + ")")
+           (h = 'pr2)       ("(pr2 " + (u2c (t 1)) + ")")
            ; coprod -> sum; ii1/ii2 -> inl/inr (other summand inferred), the eliminator -> sum_rect
-           (id? h 'coprod)    ("(sum " + (u2c (e2 t)) + " " + (u2c (e3 t)) + ")")
-           (id? h 'ii1)       ("(inl " + (u2c (e2 t)) + ")")
-           (id? h 'ii2)       ("(inr " + (u2c (e2 t)) + ")")
-           (id? h 'coprod_rect)("(sum_rect " + (u2c (e2 t)) + " " + (u2c (e3 t)) + " " + (u2c (e4 t)) + " " + (u2c (e5 t)) + ")")
+           (h = 'coprod)    ("(sum " + (u2c (t 1)) + " " + (u2c (t 2)) + ")")
+           (h = 'ii1)       ("(inl " + (u2c (t 1)) + ")")
+           (h = 'ii2)       ("(inr " + (u2c (t 1)) + ")")
+           (h = 'coprod_rect)("(sum_rect " + (u2c (t 1)) + " " + (u2c (t 2)) + " " + (u2c (t 3)) + " " + (u2c (t 4)) + ")")
            ; (the T t) is a type ascription -- emit it as one
-           (id? h 'the)       ("(" + (u2c (e3 t)) + " : " + (u2c (e2 t)) + ")")
+           (h = 'the)       ("(" + (u2c (t 2)) + " : " + (u2c (t 1)) + ")")
            ; full path induction (J): uu (paths_rect P pr e) -> match on the paths Id type
-           (id? h 'paths_rect)
-             ("(match " + (u2c (e4 t)) + " as ep0 in (paths _ bp0) return ("
-              + (u2c (e2 t)) + " bp0 ep0) with idpath _ => " + (u2c (e3 t)) + " end)")
+           (h = 'paths_rect)
+             ("(match " + (u2c (t 3)) + " as ep0 in (paths _ bp0) return ("
+              + (u2c (t 1)) + " bp0 ep0) with idpath _ => " + (u2c (t 2)) + " end)")
            ("(" + (spine-c t) + ")")))                              ; an application spine
       (show t))
 
@@ -141,23 +138,23 @@
    (ment-l l acc) (? (two? l) (ment-l (cup l) (ment (cap l) acc)) acc)
 
    ; candidates: a def, in the fragment, not blacklisted, present in glob (uu-certified)
-   (cand? e) (&& (id? (cap e) 'def) (! (peep bl (e2 e) 0)) (peep GLOB (e2 e) 0) (tr? (e3 e)) (tr? (e4 e)))
+   (cand? e) (&& (<e = 'def) (! (peep bl (e 1) 0)) (peep GLOB (e 1) 0) (tr? (e 2)) (tr? (e 3)))
    cands (foldl (\ a e (? (cand? e) (link e a) a)) () ents)   ; reversed; restore order at emit
    ; each candidate's mentioned-names list (its global dependencies)
-   (mlist e) (keys (ment-l (link (e3 e) (link (e4 e) ())) (tablet 0)))
+   (mlist e) (keys (ment-l (link (e 2) (link (e 3) ())) (tablet 0)))
 
    ; --- dependency closure: keep only defs all of whose mentions also survive ---
    (allin? l ex) (? (two? l) (&& (peep ex (cap l) 0) (allin? (cup l) ex)) 1)
-   (pass cs ex) (foldl (\ a e (? (allin? (mlist e) ex) (: _ (pin a (e2 e) 1) a) a)) (tablet 0) cs)
+   (pass cs ex) (foldl (\ a e (? (allin? (mlist e) ex) (: _ (pin a (e 1) 1) a) a)) (tablet 0) cs)
    (fix ex) (: ex2 (pass cands ex) (? (= $ex2 $ex) ex2 (fix ex2)))
-   ex0 (foldl (\ a e (: _ (pin a (e2 e) 1) a)) (tablet 0) cands)    ; seed: all candidates
+   ex0 (foldl (\ a e (: _ (pin a (e 1) 1) a)) (tablet 0) cands)    ; seed: all candidates
    keep (fix ex0)                                                   ; the closed exportable set
 
    ; --- emit, in source order ---
-   (emit e) (cat ["Definition " (rocqn (e2 e)) " : " (u2c (e3 e)) " :=" (string 10)
-                  "  " (u2c (e4 e)) "." (string 10)])
+   (emit e) (cat ["Definition " (rocqn (e 1)) " : " (u2c (e 2)) " :=" (string 10)
+                  "  " (u2c (e 3)) "." (string 10)])
    ; foldr keeps ents' order, and coq wants every definition before its uses (foldl flips)
-   exports (foldr (\ e a (? (peep keep (e2 e) 0) (link e a) a)) () ents)
+   exports (foldr (\ e a (? (peep keep (e 1) 0) (link e a) a)) () ents)
 
    _ (dot (cat [
       "(* test/proof/rocq/uugen.v -- GENERATED from test/uu.l by tools/uu2coq.l. Do not edit;" (string 10)
@@ -239,6 +236,6 @@
               "Print Assumptions add_comm_std." (string 10)
               "Print Assumptions add_assoc_std." (string 10)
               "Print Assumptions mul_comm_std." (string 10) (string 10)
-              "(* " (show $keep) " exported / " (show (tally ents)) " corpus entries swept;" (string 10)
+              "(* " (show $keep) " exported / " (show #ents) " corpus entries swept;" (string 10)
               "   3 headline laws (add_comm, add_assoc, mul_comm) landed on Coq's Nat.* via the bridge *)" (string 10)]))
    (quit 0))

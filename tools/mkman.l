@@ -8,11 +8,11 @@
 ; second argument the placeholder rides through, which is what a hand run wants.
 (use 'lapiz)
 (: (rd p) (: q (open p "r")
-             (? q (: t (slurp q) _ (close q) t)
-                (: _ (say err ("mkman: cannot read " + p)) _ (put err 10) (quit 1))))
+             (? q (: t (slurp q) (close q, t))
+                (say err ("mkman: cannot read " + p), put err 10, quit 1)))
    ; the version is whatever sits between love_version.h's two quotes
    (quoted t)
-    (: n (tally t)
+    (: n #t
        (go i a) (? (n <= i) ""
                    !(t i = 34) (go (i + 1) a)
                    (two? a) (snip t <a i)
@@ -21,14 +21,14 @@
    ; segments onto a list and joined once -- a per-hit concat would re-copy the whole
    ; page each time, which on a man page is quadratic for no reason
    (fill t k v)
-    (: n (tally t) m (tally k)
+    (: n #t m #k
        (go i st acc)
-        (? (n <= i) (foldl (+) "" (rev ((snip t st n) >< acc)))
-           (((i + m) <= n) && (snip t i (i + m) = k))
-            (go (i + m) (i + m) (v >< ((snip t st i) >< acc)))
+        (? (n <= i) (foldl (+) "" (rev (snip t st n . acc)))
+           (i + m <= n && snip t i (i + m) = k)
+            (go (i + m) (i + m) (v . snip t st i . acc))
            (go (i + 1) st acc))
        (go 0 0 ()))
    vh >>argv
    rf (md->rf (rd <>argv))
-   _ (puts (? (two? vh) (fill rf "@VERSION@" (quoted (rd <vh))) rf))
+   _ (puts (two? vh ? (fill rf "@VERSION@" (quoted (rd <vh))) rf))
    0)

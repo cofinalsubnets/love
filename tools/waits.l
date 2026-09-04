@@ -35,17 +35,17 @@
 ; Usage: love tools/waits.l file ..   (paths as the roster spells them: repo-relative)
 ; Exit:  0 = the waits are exactly the roster, 1 = they are not, 2 = usage error.
 
-(: (die m) (: _ (say err "waits: ") _ (say err m) _ (say err "\n") (quit 2))
+(: (die m) (say err "waits: ", say err m, say err "\n", quit 2)
 
    ; --- what counts as a wait -------------------------------------------------
    hooks ["ai_sleep" "ai_wait_fds" "ai_fd_drain" "wait_one"]
-   (hook? nm) (any (\ h (h = nm)) hooks)
+   (hook? nm) (any (= nm) hooks)
    ; the three love.h contract symbols, whose bodies are the wait itself: a
    ; frontend's `ai_wait_fds` reaching ai_sleep is what a wait hook is, so the
    ; family's own implementations are exempt and only callers from outside it
    ; have to answer. the runtime's wait_one is not one of these -- it is ordinary
    ; code that happens to wait, so it answers on the roster like anyone else.
-   (impl? nm) (any (\ h (h = nm)) ["ai_sleep" "ai_wait_fds" "ai_fd_drain"])
+   (impl? nm) (any (= nm) ["ai_sleep" "ai_wait_fds" "ai_fd_drain"])
 
    ; --- the roster: (file function hook why) ----------------------------------
    ; every wait in the tree, and the sentence that earns it.
@@ -68,66 +68,60 @@
      "the panic blink after a fatal shell exit -- nothing runs after it"]]
 
    ; --- character classes ------------------------------------------------------
-   (idc? c) (|| (&& (c >= 97) (c <= 122))
-             (|| (&& (c >= 65) (c <= 90))
-             (|| (&& (c >= 48) (c <= 57)) (c = 95))))
-   (blank? c) (|| (c = 32) (c = 9))
-   (inch? s c) (: n (tally s) (go k) (? (n <= k) () ((s k) = c) 1 (go (k + 1))) (go 0))
+   (idc? c) (97 <= c <= 122 || 65 <= c <= 90 || 48 <= c <= 57 || c = 95)
+   (blank? c) (c = 32 || c = 9)
+   (inch? s c) (: n #s (go k) (? (n <= k) () (s k = c) 1 (go (k + 1))) (go 0))
 
    ; --- line helpers -----------------------------------------------------------
-   (lines s) (: n (tally s)
+   (lines s) (: n #s
                 (go start i acc)
-                 (? (n <= i) (rev (? (start < i) (link (snip s start i) acc) acc))
-                    ((s i) = 10) (go (i + 1) (i + 1) (link (snip s start i) acc))
+                 (? (n <= i) (rev (start < i ? (snip s start i . acc) acc))
+                    (s i = 10) (go (i + 1) (i + 1) (snip s start i . acc))
                     (go start (i + 1) acc))
                 (go 0 0 ()))
-   (rtrim s) (: (go e) (? (&& (e > 0) (blank? (s (e - 1)))) (go (e - 1)) e)
-                (snip s 0 (go (tally s))))
-   (uncomment s) (: n (tally s)
-                    (go i) (? ((i + 1) >= n) s
-                              (&& ((s i) = 47) ((s (i + 1)) = 47)) (snip s 0 i)
+   (rtrim s) (: (go e) (e > 0 && blank? (s (e - 1)) ? (go (e - 1)) e)
+                (snip s 0 (go #s)))
+   (uncomment s) (: n #s
+                    (go i) (? (i + 1 >= n) s
+                              (s i = 47 && s (i + 1) = 47) (snip s 0 i)
                               (go (i + 1)))
                     (go 0))
 
    ; every identifier in s that is immediately followed by `(`
-   (calls s) (: n (tally s)
-                (end k) (? (&& (k < n) (idc? (s k))) (end (k + 1)) k)
+   (calls s) (: n #s
+                (end k) (k < n && idc? (s k) ? (end (k + 1)) k)
                 (go i acc)
                  (? (n <= i) (rev acc)
                     (idc? (s i))
                      (: j (end i)
-                        (go j (? (&& (j < n) ((s j) = 40)) (link (snip s i j) acc) acc)))
+                        (go j (j < n && s j = 40 ? (snip s i j . acc) acc)))
                     (go (i + 1) acc))
                 (go 0 ()))
 
    ; --- naming the enclosing function ------------------------------------------
    ; a top-level line: column 0, has a paren, and is not a preprocessor line /
    ; comment / brace. it either defines (a header) or declares (a prototype).
-   (top? s) (: n (tally s)
-               c (? (n < 1) 32 (s 0))
-               (&& (n > 0)
-                (&& (! (blank? c))
-                 (&& (! (any (\ x (x = c)) [35 47 42 125 41]))
-                     (inch? s 40)))))
+   (top? s) (: n #s
+               c (n < 1 ? 32 (s 0))
+               (n > 0 && !(blank? c) && !(any (= c) [35 47 42 125 41]) && inch? s 40))
    ; the `{` half is load-bearing. the runtime puts the first statement on the
    ; header line (`static lvm(lvm_yield_sw_mono) { uintptr_t my_wake = ..;`), so
    ; a bare "ends in a semicolon means prototype" test throws away the scheduler.
-   (header? s) (: n (tally s)
-                  (&& (top? s) (|| (inch? s 123) (! ((s (n - 1)) = 59)))))
+   (header? s) (: n #s (top? s && (inch? s 123 || !(s (n - 1) = 59))))
    ; ..and the other half declares. a prototype names a function and calls none:
    ; `static void wait_one(int fd, int events, uintptr_t ms);` is a wait's spelling,
    ; not a wait. the seam between the runtime's TUs is a block of these, so a scan
    ; that read them as calls would redden on the declaration of every hook.
-   (proto? s) (&& (top? s) (! (header? s)))
+   (proto? s) (top? s && !(header? s))
    ; a name that is a qualifier or a keyword, never the function being defined
    nonfn ["__attribute__" "if" "while" "for" "switch" "return" "sizeof" "defined"]
-   (ident-from s i) (: n (tally s)
-                       (go k) (? (&& (k < n) (idc? (s k))) (go (k + 1)) (snip s i k))
+   (ident-from s i) (: n #s
+                       (go k) (k < n && idc? (s k) ? (go (k + 1)) (snip s i k))
                        (go i))
-   (at? s i p) (: m (tally p)
-                  (go k) (? (m <= k) 1 ((s (i + k)) = (p k)) (go (k + 1)) ())
-                  (&& ((i + m) <= (tally s)) (go 0)))
-   (find s p) (: n (tally s)
+   (at? s i p) (: m #p
+                  (go k) (? (m <= k) 1 (s (i + k) = p k) (go (k + 1)) ())
+                  (i + m <= #s && go 0))
+   (find s p) (: n #s
                  (go i) (? (n <= i) () (at? s i p) i (go (i + 1)))
                  (go 0))
    ; the function a definition line names: the first call-shaped identifier that
@@ -135,8 +129,8 @@
    ; where the name is inside the parens and every VM op is spelled that way.
    (hdr-name s)
     (: j (find s "lvm(")
-       cs (filter (\ x (! (any (\ q (q = x)) nonfn))) (calls s))
-       (? (! (() = j)) (ident-from s (j + 4))
+       cs (filter (x \ !(any (= x) nonfn)) (calls s))
+       (? (j != ()) (ident-from s (j + 4))
           (two? cs) <cs
           (rtrim s)))
 
@@ -144,59 +138,58 @@
    ; -> ((file fn hook line) ..), one entry per distinct wait; `line` is where it
    ; was first seen, which is where a reader should go look. the key is the first
    ; three -- two calls to the same hook from the same function are one fact.
-   (seen? l k) (any (\ e (e = k)) l)
-   (key e) (+ <e (+ " " (+ (el e 1) (+ " " (el e 2)))))
-   (el l i) (? (i < 1) <l (el >l (i - 1)))
+   (seen? l k) (any (= k) l)
+   ; a roster row is a list, so it indexes by application -- no walker of our own
+   (key e) (<e + " " + e 1 + " " + e 2)
    (scan path)
     (: port (open path "r")
-       _ (? (hot? port) 0 (die (+ "cannot open " path)))
+       _ (!(hot? port) ? (die ("cannot open " + path)))
        src (slurp port)
        _ (close port)
        (go ls n fn acc)
-        (? (! (two? ls)) (rev acc)
+        (? (one? ls) (rev acc)
            (: line (uncomment (rtrim <ls))
               hdr (header? line)
-              fn2 (? hdr (hdr-name line) fn)
+              fn2 (hdr ? (hdr-name line) fn)
               ; a definition line names its own function, and that is not a call
-              hits (? (|| (impl? fn2) (proto? line)) ()
-                      (filter (\ c (&& (hook? c) (! (&& hdr (c = fn2))))) (calls line)))
+              hits (impl? fn2 || proto? line ? ()
+                    (filter (c \ hook? c && !(hdr && c = fn2)) (calls line)))
               acc2 (foldl (\ a c (: e [path fn2 c n]
-                                    (? (seen? (map key a) (key e)) a (link e a))))
+                                    (seen? (map key a) (key e) ? a (e . a))))
                           acc hits)
               (go >ls (n + 1) fn2 acc2)))
        (go (lines src) 1 "" ()))
 
    ; --- the report --------------------------------------------------------------
-   (show2 e) (: _ (say out "  ") _ (say out (el e 1)) _ (say out " -> ")
-                _ (say out (el e 2)) (put out 10))
+   (show2 e) (say out "  ", say out (e 1), say out " -> ", say out (e 2), put out 10)
    ; a found wait points at its line; a roster entry has no line, it has a reason
-   (showx e) (: _ (say out "  ") _ (say out <e) _ (put out 58)
-                _ (putbn out (el e 3) 10) _ (say out ":") _ (show2 e) 0)
-   (show3 r) (: _ (say out "  ") _ (say out <r) _ (show2 r)
-                _ (say out "      ") _ (say out (el r 3)) (put out 10))
+   (showx e) (say out "  ", say out <e, put out 58,
+              putbn out (e 3) 10, say out ":", show2 e, 0)
+   (show3 r) (say out "  ", say out <r, show2 r,
+              say out "      ", say out (r 3), put out 10)
    (llen l) (foldl (\ n _ (n + 1)) 0 l)
 
    paths >argv
-   _ (? (two? paths) 0 (die "usage: waits.l FILE .."))
+   _ (one? paths ? (die "usage: waits.l FILE .."))
    found (foldl (\ a p (+ a (scan p))) () paths)
    fkeys (map key found)
    rkeys (map key roster)
-   extra (filter (\ e (! (seen? rkeys (key e)))) found)
-   stale (filter (\ r (! (seen? fkeys (key r)))) roster)
-   (? (|| (two? extra) (two? stale))
+   extra (filter (e \ !(seen? rkeys (key e))) found)
+   stale (filter (r \ !(seen? fkeys (key r))) roster)
+   (? (two? extra || two? stale)
       (: _ (? (two? extra)
-              (: _ (say out "waits: ") _ (putbn out (llen extra) 10)
-                 _ (say out " call site(s) reach a wait hook and are NOT on the roster:\n")
-                 _ (each extra showx)
-                 (say out "  -- if this wait is right, put it on the roster in tools/waits.l with its reason.\n"))
+              (say out "waits: ", putbn out (llen extra) 10,
+               say out " call site(s) reach a wait hook and are NOT on the roster:\n",
+               each extra showx,
+               say out "  -- if this wait is right, put it on the roster in tools/waits.l with its reason.\n")
               0)
          _ (? (two? stale)
-              (: _ (say out "waits: ") _ (putbn out (llen stale) 10)
-                 _ (say out " roster entry(s) have no call site (stale -- delete them):\n")
-                 (each stale show3))
+              (say out "waits: ", putbn out (llen stale) 10,
+               say out " roster entry(s) have no call site (stale -- delete them):\n",
+               each stale show3)
               0)
          (quit 1))
-      (: _ (say out "waits: all ") _ (putbn out (llen found) 10)
-         _ (say out " waits in ") _ (putbn out (llen paths) 10)
-         _ (say out " files are the roster\n")
-         (quit 0))))
+      (say out "waits: all ", putbn out (llen found) 10,
+       say out " waits in ", putbn out (llen paths) 10,
+       say out " files are the roster\n",
+       quit 0)))

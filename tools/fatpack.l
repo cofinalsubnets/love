@@ -13,14 +13,14 @@
 ; the container never runs native; the extraction does. the distributed
 ; bytes stay immutable -- a bake belongs to the extraction (rung U1.2).
 
-(: (fp-die m) (: _ (say err ("fatpack: " + m + "\n")) (quit 1))
-   (fp-read p) (: q (open p "r") (? (hot? q) (: s (slurp q) _ (close q) [1 (s + "")]) ()))
-   (fp-write p s) (: q (open p "w") _ (? (hot? q) 0 (fp-die ("cannot write " + p))) _ (say q s) (close q))
+(: (fp-die m) (say err ("fatpack: " + m + "\n"), quit 1)
+   (fp-read p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, [1 (s + "")]))))
+   (fp-write p s) (: q (open p "w") (!(hot? q) ? (fp-die ("cannot write " + p)), say q s, close q))
    bs 4096
-   (fp-blocks n) ((n + bs - 1) // bs)
-   (fp-pad n) ("\x00" * ((fp-blocks n) * bs - n))
+   (fp-blocks n) ((n + bs - 1) // bs)              ; // outranks +, so the sum keeps its parens
+   (fp-pad n) ("\x00" * (fp-blocks n * bs - n))
    ; the members' sha, 16 hex -- the cache name's content half
-   (fp-id16 h) (: (go i a) (? (i < 16) (go (i + 1) (a + (string (peep h i 0)))) a) (go 0 ""))
+   (fp-id16 h) (: (go i a) (i < 16 ? (go (i + 1) (a + string (h i))) a) (go 0 ""))
    ; (arch size) -> one case arm; b/n in blocks, s the exact byte count
    (fp-arm arch b n s)
     (arch + ") b=" + show b + " n=" + show n + " s=" + show s + ";;\n")
@@ -42,22 +42,22 @@
     (? (atom? l) ()
        (atom? >l) (fp-die "ARCH with no FILE")
        (: g (fp-read <>l)
-          _ (? (two? g) 0 (fp-die ("cannot read " + <>l)))
-          ((<l >< <>g) >< fp-members >>l)))
+          _ (one? g ? (fp-die ("cannot read " + <>l)))
+          ((<l . <>g) . fp-members >>l)))
    (fp-main av)
-    (: _ (? (3 <= (tally av)) 0 (fp-die "usage: fatpack OUT ARCH FILE [ARCH FILE ..]"))
+    (: _ (#av < 3 ? (fp-die "usage: fatpack OUT ARCH FILE [ARCH FILE ..]"))
        out <av
        ms (fp-members >av)
        id (fp-id16 (sha256 (foldl (\ a m (a + >m)) "" ms)))
        ; lay the arms and the body: member k starts at block 1 + blocks-before-it
        arms (: (go l b) (? (atom? l) ""
-                 (: n (tally >(<l))
-                    ((fp-arm <(<l) b (fp-blocks n) n) + (go >l (b + (fp-blocks n))))))
+                 (: n #><l
+                    ((fp-arm <<l b (fp-blocks n) n) + (go >l (b + fp-blocks n)))))
                (go ms 1))
        pre (fp-prefix id arms)
-       _ (? ((tally pre) <= bs) 0 (fp-die "prefix outgrew its block"))
-       body (foldl (\ a m (a + >m + (fp-pad (tally >m)))) (pre + (fp-pad (tally pre))) ms)
+       _ (bs < #pre ? (fp-die "prefix outgrew its block"))
+       body (foldl (\ a m (a + >m + (fp-pad #>m))) (pre + (fp-pad #pre)) ms)
        _ (fp-write out body)
-       (say out ("FAT\t" + out + " (" + (show (tally ms)) + " texts, "
-                 + (show (tally body)) + " bytes, id " + id + ")\n")))
+       (say out $ "FAT\t" + out + " (" + show #ms + " texts, "
+                  + show #body + " bytes, id " + id + ")\n"))
    (fp-main >argv))

@@ -19,16 +19,16 @@
 ; the hand-written file used to arrange by hand and explain in a paragraph.
 (use 'vi) ; hue's table rides module 'vi -- the cat registered it just above
 
-(: (line s) (: _ (say out s) (put out 10))
+(: (line s) (say out s, put out 10)
    (blank x) (line "")
-   (bytes s) (: n (tally s) (go i acc) (? (i < 0) acc (go (i - 1) (link (s i) acc)))
+   (bytes s) (: n #s (go i acc) (i < 0 ? acc (go (i - 1) (s i . acc)))
                 (go (n - 1) ()))
-   (join l sep) (foldl (\ a w (? (0 < (tally a)) (a + sep + w) w)) "" l)
-   (pad t n) (: (sp j) (? (j < 1) "" (" " + (sp (j - 1))))
-                k (n - (tally t))
-                (t + (sp k)))
-   (pre? t p) (: m (tally p)
-                 (go i) (? (m <= i) 1 ((tally t) <= i) () ((t i) = (p i)) (go (i + 1)) ())
+   (join l sep) (foldl (\ a w (0 < #a ? (a + sep + w) w)) "" l)
+   (pad t n) (: (sp j) (j < 1 ? "" (" " + sp (j - 1)))
+                k (n - #t)
+                (t + sp k))
+   (pre? t p) (: m #p
+                 (go i) (? (m <= i) 1 (#t <= i) () (t i = p i) (go (i + 1)) ())
                  (go 0))
    (esc? c set) (: b (bytes set) (member? c b))
    ; a keyword as vim reads one: | and \ carry meaning in a syn keyword line
@@ -39,7 +39,7 @@
                     "" (bytes t))
 
    ; --- the groups: Love<Class>, straight off the table ------------------------
-   (cap1 t) (: c (t 0) ((string (? (&& (97 <= c) (c <= 122)) (c - 32) c)) + (snip t 1 (tally t))))
+   (cap1 t) (: c (t 0) (string (97 <= c <= 122 ? (c - 32) c) + snip t 1 #t))
    (grp r) ("Love" + (cap1 (string (hue-cls r))))
 
    ; --- the vocabulary ---------------------------------------------------------
@@ -57,23 +57,21 @@
    ; and calling it the language, so this dies loudly rather than emit a file that
    ; looks fine and is wrong. unreachable while the seal holds, which is the point:
    ; it is what notices if the seal ever goes lane-dependent again.
-   _ (? (member? 'book (names ()))
-         (: _ (say err "hue2vim: `book` is still on the book -- the seal did not run, and that is build state, not the language")
-            _ (put err 10)
-            (quit 1))
-        0)
+   _ (member? 'book (names ())
+      ? (say err "hue2vim: `book` is still on the book -- the seal did not run, and that is build state, not the language",
+         put err 10, quit 1))
    wtab (: seen (tablet ())
            (go l t)
-            (? (! (two? l)) t
+            (? (one? l) t
                (: r <l
-                  ws (filter (\ w (&& (! (seen w)) (! (pre? w "hue-")))) (hue-words (hue-arg r)))
-                  _ (each ws (\ w (pin seen w 1)))
+                  ws (filter (w \ !(seen w) && !(pre? w "hue-")) (hue-words (hue-arg r)))
+                  _ (each ws (w \ pin seen w 1))
                   _ (pin t (hue-cls r) ws)
                   (go >l t)))
            (go (hue-tagged 'word) (tablet ())))
-   (kwlines g ws) (? (! (two? ws)) ()
-                     (: _ (line ("syn keyword " + g + " " + (join (map kwesc (take 8 ws)) " ")))
-                        (kwlines g (drop 8 ws))))
+   (kwlines g ws) (one? ws ? ()
+                   (line $ "syn keyword " + g + " " + join (map kwesc (take 8 ws)) " ",
+                    kwlines g (drop 8 ws)))
 
    ; --- one tag, one vim rendering ---------------------------------------------
    ; the tag set is closed at eight, so this dispatch is the whole other half of
@@ -83,20 +81,20 @@
    sig  (clesc hue-sigils)
    (vim r)
     (: g (grp r) tag (hue-tag r) a (hue-arg r)
-       (? (id? tag 'eol)
-           (each a (\ o (line ("syn match " + g + " \"" + o + ".*$\" contains=LoveTodo"))))
-          (id? tag 'span)
+       (? (tag = 'eol)
+           (each a (o \ line ("syn match " + g + " \"" + o + ".*$\" contains=LoveTodo")))
+          (tag = 'span)
            (: q (string a) e (string (hue-nth (hue-rule r) 2))
               (line ("syn region " + g + " start='" + q + "' skip='" + e + e + e + e
                      + "\\|" + e + e + q + "' end='" + q + "'")))
-          (id? tag 'mark)
+          (tag = 'mark)
            (line ("syn match " + g + " \"" + (string a) + "[^" + stop + "]*\""))
           ; sep: one byte standing alone, and a tag of its own because both
           ; readings reach a tag through its first row, so a second row under
           ; one tag would be read by neither
-          (id? tag 'sep)
+          (tag = 'sep)
            (line ("syn match " + g + " \"" + (string a) + "\""))
-          (id? tag 'num)
+          (tag = 'num)
            ; hex first: `0x1f` would otherwise take the plain-integer match on its
            ; leading 0 and leave the rest bare, which is a worse lie than no colour
            (: _ (line ("syn match " + g + " \"\\<-\\?0[xX]\\x\\+\\>\""))
@@ -104,13 +102,13 @@
               _ (line ("syn match " + g + " \"\\<-\\?\\d\\+\\.\\d*\\([eE][-+]\\?\\d\\+\\)\\?\\>\""))
               _ (line ("syn match " + g + " \"\\<-\\?\\.\\d\\+\\([eE][-+]\\?\\d\\+\\)\\?\\>\""))
               (line ("syn match " + g + " \"\\<-\\?\\d\\+[eE][-+]\\?\\d\\+\\>\"")))
-          (id? tag 'word) (kwlines g (wtab (hue-cls r)))
-          (id? tag 'punct)
+          (tag = 'word) (kwlines g (wtab (hue-cls r)))
+          (tag = 'punct)
            ; the valence law as vim reads it: a punct run leads a token (the
            ; lookbehind), and it is monadic when the full run touches a datum
            ; start. the excluded set carries the sigil chars themselves so a
            ; greedy run cannot backtrack and split itself.
-           (? (id? a 'glued)
+           (? (a = 'glued)
                (line ("syn match " + g + " \"[A-Za-z0-9_]\\@<![" + sig
                       + "]\\+\\ze[^ \\t),;" + sig + "]\""))
               (line ("syn match " + g + " \"[A-Za-z0-9_]\\@<![" + sig + "]\\+\"")))
@@ -131,12 +129,12 @@
             (magenta     purple1       darkmagenta  darkviolet))
    (levline i l k)
     (line ("    hi def LoveLevel" + (show i) + " ctermfg=" + (string (hue-nth l k))
-           + (: p (13 - (tally (string (hue-nth l k)))) (: (sp j) (? (j < 1) "" (" " + (sp (j - 1)))) (sp p)))
+           + (: p (13 - #(string (hue-nth l k))) (: (sp j) (? (j < 1) "" (" " + (sp (j - 1)))) (sp p)))
            + "guifg=" + (string (hue-nth l (k + 1)))))
-   (levels-of k) (: (go l i) (? (! (two? l)) () (: _ (levline i <l k) (go >l (i + 1)))) (go levels 0))
+   (levels-of k) (: (go l i) (one? l ? () (levline i <l k, go >l (i + 1))) (go levels 0))
 
    pgroup (grp <(hue-tagged 'delim))
-   cluster (join ((map grp (filter (\ r (! (id? (hue-tag r) 'delim))) hue-classes))
+   cluster (join ((map grp (filter (r \ hue-tag r != 'delim) hue-classes))
                   + '("LoveTodo")) ",")
 
    ; the delim row's bytes read as pairs -- (0,1) then (2,3) then (4,5) -- and one
@@ -145,10 +143,10 @@
    ; regions a level, and buys only the mis-colouring of `(a]`, which is libra's
    ; to say and not a highlighter's. `[` is the one byte vim's regex would read
    ; as a collection; `(`, `{` and `}` are literal under default magic.
-   (vim-brk c) (? (c = 91) "\\[" (string c))
+   (vim-brk c) (c = 91 ? "\\[" (string c))
    brkpairs
-    (: (go j k a) (? (tally hue-brk <= j) a
-                     (go (j + 2) k (a + ((" " + k) + ("=\"" + (vim-brk (hue-brk j)) + "\"")))))
+    (: (go j k a) (? (#hue-brk <= j) a
+                     (go (j + 2) k (a + " " + k + "=\"" + vim-brk (hue-brk j) + "\"")))
        ((go 0 "start" "") + (go 1 "end" "")))
 
 ; --- the file ------------------------------------------------------------------
@@ -176,7 +174,7 @@
    _ (blank ())
    _ (line "\" the classes, in REVERSE table order: vim's last match wins, hue-lex's first")
    _ (line "\" row wins, and reversing makes the two agree.")
-   _ (each (rev hue-classes) (\ r (vim r)))
+   _ (each (rev hue-classes) vim)
    _ (blank ())
    _ (line "\" a close paren with nothing open is an error -- vim-only; lib/lint.l is where")
    _ (line "\" the tree actually answers that question.")
@@ -184,7 +182,7 @@
    _ (blank ())
    _ (line "syn sync lines=100")
    _ (blank ())
-   _ (each hue-classes (\ r (line ("hi def link " + (pad (grp r) 14) + " " + (string (hue-grp r))))))
+   _ (each hue-classes (r \ line ("hi def link " + pad (grp r) 14 + " " + string (hue-grp r))))
    _ (line ("hi def link " + (pad "LoveTodo" 14) + " Todo"))
    _ (line ("hi def link " + (pad "LoveParenError" 14) + " Error"))
    _ (blank ())
@@ -198,10 +196,10 @@
    _ (blank ())
    _ (line "if g:love_rainbow")
    _ (: (go i) (? (9 < i) ()
-                  (: _ (line ("  syn region LoveList" + (show i) + " matchgroup=LoveLevel" + (show i)
-                              + brkpairs + " contains=@LoveListCluster,LoveList"
-                              + (show (? (i < 9) (i + 1) 0))))
-                     (go (i + 1))))
+                  (line $ "  syn region LoveList" + show i + " matchgroup=LoveLevel" + show i
+                          + brkpairs + " contains=@LoveListCluster,LoveList"
+                          + show (i < 9 ? (i + 1) 0),
+                   go (i + 1)))
         (go 0))
    _ (blank ())
    _ (line "  if &background ==# \"dark\"")

@@ -31,17 +31,15 @@
 (: (ain-main as)
  (:
     ; parse a decimal port string -> a fixnum (a string indexes its bytes; '0' = 48).
-    (atoi s) (: (go i acc) (? (< i (tally s)) (go (+ 1 i) (+ (* 10 acc) (- (s i) 48))) acc)
+    (atoi s) (: (go i acc) (i < #s ? (go (1 + i) (10 * acc + s i - 48)) acc)
                 (go 0 0))
-    (die m) (: _ (say err (+ "ain: " (+ m "\n"))) (quit 1))
+    (die m) (say err $ "ain: " + m + "\n", quit 1)
 
     ; pump bytes from port `src` to port `dst`, one byte at a time, until src
     ; hits EOF (get -> -1). flush after each byte makes stdout prompt (it is a
     ; no-op on a socket port -- fd_flush only flushes the real stdout fd), so one
     ; pump serves both directions. Returns nil at EOF; the caller owns teardown.
-    (pump src dst) (: ch (see src)
-                      (? (= ch -1) 0
-                         (: _ (put dst ch) _ (flush dst) (pump src dst))))
+    (pump src dst) (see src @ -1 0 ch (put dst ch, flush dst, pump src dst))
 
     ; the conversation over a connected socket `s`. The two directions are
     ; independent half-duplex channels: a read-side EOF does not mean the write
@@ -54,29 +52,28 @@
     ;     scheduler (each parked in a port read on its own fd).
     ; Teardown joins through one path: send all of stdin, half-close, then wait
     ; for the inbound pump to drain to the peer's EOF before the final close.
-    (talk s) (: down (twirl (\ _ (pump s out)) 0)   ; socket -> stdout, in a task
-                _ (pump in s)                        ; stdin -> socket (drains fully here)
-                _ (seal s 1)                     ; half-close write: peer sees stdin EOF
-                _ (catch down)                        ; let the inbound pump drain to socket EOF
-                _ (flush out)
-                _ (close s)
-                1)
+    (talk s) (: down (twirl (_ \ pump s out) 0)   ; socket -> stdout, in a task
+              (pump in s,                        ; stdin -> socket (drains fully here)
+               seal s 1,                     ; half-close write: peer sees stdin EOF
+               catch down,                        ; let the inbound pump drain to socket EOF
+               flush out,
+               close s,
+               1))
 
     ; server: listen + accept one client, then talk. close the listener after.
     (serve port) (: l (listen port)
                     (? (hot? l) (: c (accept l)
-                            (? (hot? c) (: _ (talk c) _ (close l) 1)
-                               (: _ (close l) (die "accept failed"))))
-                       (die (+ "cannot listen on port " (+ (string port) (+ " -- " (show l)))))))
+                            (hot? c ? (talk c, close l, 1)
+                             (close l, die "accept failed")))
+                       (die $ "cannot listen on port " + string port + " -- " + show l)))
 
     ; client: resolve, connect, then talk.
     (client host port) (: s (dial host port)
                           (? s (talk s) (die (+ "cannot connect to " (+ host (+ ":" (string port)))))))
 
     ; dispatch on the args: -l port = server, host port = client, else usage.
-    (? (= (cap as) "-l") (? (two? (cup as)) (serve (atoi (caup as)))
-                            (die "usage: ain -l PORT"))
-       (two? (cup as)) (client (cap as) (atoi (caup as)))
+    (? (<as = "-l") (two? >as ? (serve (atoi <>as)) (die "usage: ain -l PORT"))
+       (two? >as) (client <as (atoi <>as))
        (die "usage: ain HOST PORT  |  ain -l PORT"))))
 
 ; the seat: fire ain-main iff this very file sits in the program seat of the real
@@ -84,6 +81,6 @@
 ; taking the args after the seat. `cmdline` is the full C argv, never rebound, so the
 ; test reads the same in both load orders; a multi-call cat (kore) never matches and the
 ; dispatcher there calls ain-main itself. body-having: nothing leaks.
-(: s ((from 'verbs 'fire) ["ain" "ain.l"])
-   (? (two? s) (ain-main >s) ()))
+(: s (from 'verbs 'fire ["ain" "ain.l"])
+   (two? s ? (ain-main >s)))
 ) ; module ain

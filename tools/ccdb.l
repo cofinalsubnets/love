@@ -19,8 +19,8 @@
 
 (: root (cwd 0)
    (inc p) ("-I" + root + p)
-   (pre? s p) ((snip s 0 (tally p)) = p)
-   (dot-c? nom) (: n (tally nom) (2 < n && (snip nom (n - 2) n) = ".c"))
+   (pre? s p) (snip s 0 #p = p)
+   (dot-c? nom) (: n #nom (2 < n && snip nom (n - 2) n = ".c"))
 
    ; the host lane: love.c, host/, and the crew's C.
    ; /core carries love.h and every lane names it bare, so a group that drops it
@@ -49,9 +49,9 @@
        ; src/asmops.h picks the machine's set off a predefine, so only the a64
        ; lane needs saying -- the rest read as the host's.
        (pre? rel "src/a64_") (inle + ["--target=aarch64-unknown-none-elf"])
-       ((pre? rel "src/kmain") || (pre? rel "src/sys") || (pre? rel "src/blk")
-        || (pre? rel "src/doom") || (pre? rel "src/x64_")) inle
-       (pre? rel "port/playdate/") (? (tally pd-sdk) (playdate + [("-I" + pd-sdk + "/C_API")]) playdate)
+       (pre? rel "src/kmain" || pre? rel "src/sys" || pre? rel "src/blk"
+        || pre? rel "src/doom" || pre? rel "src/x64_") inle
+       (pre? rel "port/playdate/") (#pd-sdk ? (playdate + [("-I" + pd-sdk + "/C_API")]) playdate)
        (pre? rel "wasm/") (host + [("-I" + emsdk + "/upstream/emscripten/system/include")])
        host)
 
@@ -59,17 +59,16 @@
    ; lanes only, so its flags would be the wrong ones; .clangd quiets the path to match.
    (skip? rel)
     (pre? rel "port/rp2040/"
-     || (rel = "port/playdate/pdglue.c" && !(tally pd-sdk))
-     || ((pre? rel "wasm/") && !(tally emsdk)))
+     || rel = "port/playdate/pdglue.c" && !#pd-sdk
+     || pre? rel "wasm/" && !#emsdk)
 
    ; the walk prunes what is not source before it descends -- out/ and dl/ are gigabytes
    ; on a build box, and everything hidden at the root is the machine's.
    skip-top '("out" "bin" "dl")
-   (top nom) (: n (tally nom)
+   (top nom) (: n #nom
                 (go i) (? (n <= i) nom (nom i = 47) (snip nom 0 i) (go (i + 1)))
                 (go 0))
-   (keep? nom) (: seg (top nom)
-                  (! (member? seg skip-top || (tally seg && (peep seg 0 0 = 46)))))
+   (keep? nom) (: seg (top nom) !(member? seg skip-top || #seg && peep seg 0 0 = 46))
 
    (entry rel)
     {"directory" root

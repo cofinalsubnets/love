@@ -13,20 +13,16 @@
    ; elements; wm2uu matches the core shapes. opfix is the one door between them,
    ; so the translator reads what the compiler reads, whatever the surface wears.
    ; no rev: uu's defn wants a name before its uses, which is the order wm2uu-as answers
-   gens (wm2uu-as (map (\ f (unglue (opfix f))) (forms (open "crew/lux/core.l" "r"))) lux-sigs ())
+   gens (wm2uu-as (map (f \ unglue (opfix f)) (forms (open "crew/lux/core.l" "r"))) lux-sigs ())
    _ (puts "; test/uuwm.l -- generated from crew/lux/core.l by tools/uuwmgen.l. Do not")
-   _ (puts (+ (string 10) "; edit; refresh with `make uuwm`. The window-manager moves, compiled from"))
-   _ (puts (+ (string 10) "; the source the lux runs (kind-directed by crew/lux/sigs.l) -- so the laws"))
-   _ (puts (+ (string 10) "; in test/uuwmlaw.l are proved of the implementation itself; an invariant-"))
-   _ (puts (+ (string 10) "; breaking core.l edit fails a proof at `make test`. Substrate: test/uu.l."))
-   _ (puts (+ (string 10) "(assert"))
-   _ (map (\ g (: _ (puts (+ (string 10) " (defn "))
-                  _ (puts (string (cap g)))
-                  _ (puts (+ (string 10) "   "))
-                  _ (puts (show (cap (cup g))))
-                  _ (puts (+ (string 10) "   "))
-                  _ (puts (show (cap (cup (cup g)))))
-                  (puts ")")))
-          gens)
-   _ (puts (+ ")" (string 10)))
+   _ (puts "\n; edit; refresh with `make uuwm`. The window-manager moves, compiled from")
+   _ (puts "\n; the source the lux runs (kind-directed by crew/lux/sigs.l) -- so the laws")
+   _ (puts "\n; in test/uuwmlaw.l are proved of the implementation itself; an invariant-")
+   _ (puts "\n; breaking core.l edit fails a proof at `make test`. Substrate: test/uu.l.")
+   _ (puts "\n(assert")
+   _ (each gens (g \ (puts "\n (defn ", puts (string <g),
+                      puts "\n   ", puts (show <>g),
+                      puts "\n   ", puts (show <>>g),
+                      puts ")")))
+   _ (puts ")\n")
    0)

@@ -16,17 +16,13 @@
    _ (wear ()) ())
 
 (: ops '((pushk 0) (pusha 1) (pushl 2) (pushs 3) (setl 4) (sets 5) (add 6) (emit 7))
-   (opc o) (: e (assoc o ops) (? (two? e) (cap (cup e)) (scare 'spl2uu-op o)))
-   (each f l) (? (two? l) (: _ (f <l) (each f >l)) ())
+   (opc o) (: e (assoc o ops) (two? e ? <>e (scare 'spl2uu-op o)))
    (emit1 g)
     (: nm (g 0) th ((g 1) ())
-       _ (each (\ f (puts (+ (+ "\n ; " (string nm)) (+ "  " (show f))))) th)
-       _ (puts (+ "\n (defn " (+ (string nm) " nlist")))
-       _ (each (\ f (puts (+ "\n   " " "
-                           (+ "(ncons " (+ (show (opc (f 0)))
-                            (+ " (ncons " (show (f 1))))))))
-               th)
-       _ (puts (+ "\n    nnil" (+ (")" * (2 * (tally th))) ")")))
+       _ (each th (f \ puts $ "\n ; " + string nm + "  " + show f))
+       _ (puts $ "\n (defn " + string nm + " nlist")
+       _ (each th (f \ puts $ "\n    (ncons " + show (opc (f 0)) + " (ncons " + show (f 1)))
+       _ (puts $ "\n    nnil" + ")" * (2 * #th) + ")")
        ())
    progs [['sp0call (ecall (e0 0) (e0 1))]  ['sp0bind (ebind (e0 0) (e0 1))]
           ['sp0subst (esubst (e0 0) (e0 1))]
@@ -44,6 +40,6 @@
    _ (puts "\n; Each source op prints over its term. Laws: test/uuspllaw.l; substrate:")
    _ (puts "\n; test/uuhom.l's stack machine over test/uu.l (the kernel).")
    _ (puts "\n(assert")
-   _ (each emit1 progs)
+   _ (each progs emit1)
    _ (puts ")\n")
    0)

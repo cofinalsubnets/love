@@ -26,9 +26,7 @@
 ; had to refuse on when it could not. the lane's symbol is the datum now.
 
 (: (join l) (foldl (+) "" l)
-   nl (string 10)
-
-   (at l i) (? (< 0 i) (at (cup l) (- i 1)) (cap l))
+   nl "\n"
 
    ; the table comes from mx.l, catted ahead of this file -- love data, the
    ; same datum love.c's mx.h is laid from. it used to arrive as a dump: out/.mx.l,
@@ -40,51 +38,52 @@
    kinds mx-kinds                                       ; the kind noms, enum order
    addm  mx-add                                         ; one row of lane noms per kind
    mulm  mx-mul
-   nk (tally kinds)
+   nk #kinds
 
-   ridx (jot nk)                                        ; every kind -- the whole square
-   (cell m i j) (at (at m i) j)
-   (rrow m i) (map (\ j (cell m i j)) ridx)
-   (rcol m j) (map (\ i (cell m i j)) ridx)
+   ridx ^nk                                             ; every kind -- the whole square
+   (cell m i j) (m i j)                                 ; a grid is indexed by application
+   (rrow m i) (map (j \ cell m i j) ridx)
+   (rcol m j) (map (i \ cell m i j) ridx)
    ; a kind's dispatch signature: its row and column in both matrices --
    ; equal signature = same band
    (sig i) (list (rrow addm i) (rcol addm i) (rrow mulm i) (rcol mulm i))
-   (idxin x l k) (? (! (two? l)) -1 ((cap l) = x) k (idxin x (cup l) (+ 1 k)))
-   sigs ((: (go is acc) (? (! is) (rev acc)
-                           (: s (sig (cap is))
-                              (go (cup is) (? (< -1 (idxin s acc 0)) acc (link s acc)))))) ridx ())
+   (idxin x l k) (? (one? l) -1 (<l = x) k (idxin x >l (k + 1)))
+   sigs ((: (go is acc) (? (one? is) (rev acc)
+                           (: s (sig <is)
+                              (go >is (-1 < idxin s acc 0 ? acc (s . acc)))))) ridx ())
    (band i) (idxin (sig i) sigs 0)                      ; class id, enum-appearance order
-   nb (tally sigs)
-   reps (map (\ c ((: (go is) (? (= c (band (cap is))) (cap is) (go (cup is)))) ridx)) (jot nb))
-   (members c) (filter (\ i (= c (band i))) ridx)
+   nb #sigs
+   reps (map (c \ ((: (go is) (c = band <is ? <is (go >is))) ridx)) ^nb)
+   (members c) (filter (i \ c = band i) ridx)
 
-   (kn i) (show (at kinds i))                           ; kcharm ...
+   (kn i) (show (kinds i))                              ; kcharm ...
    ; lane nom -> Coq ctor. the table spells lanes as their C symbols (lvm_addn), and
    ; the prefix says nothing here, so it comes off: Laddn, not Llvm_addn.
-   (ln x) (: t (show x) ("L" + (? (= "lvm_" (snip t 0 4)) (snip t 4 (tally t)) t)))
+   (ln x) (: t (show x) ("L" + ("lvm_" = snip t 0 4 ? (snip t 4 #t) t)))
    lanes ((: (go rows acc)                              ; distinct lanes, appearance order
-            (? (! rows) (rev acc)
-               (go (cup rows) (foldl (\ a x (? (member? x a) a (link x a))) acc (cap rows)))))
-          (cat addm mulm) ())
+            (? (one? rows) (rev acc)
+               (go >rows (foldl (\ a x (member? x a ? a (x . a))) acc <rows))))
+          (addm + mulm) ())
 
-   (commas f l) (join (map (\ x (? (id? x (cap l)) (f x) ("; " + (f x)))) l))
-   (bars f l)   (join (map (\ x (? (id? x (cap l)) (f x) (" | " + (f x)))) l))
+   ; id?, not =: the test is "is this the head cell", not "does it look like it"
+   (commas f l) (join (map (x \ (id? x <l ? (f x) ("; " + f x))) l))
+   (bars f l)   (join (map (x \ (id? x <l ? (f x) (" | " + f x))) l))
 
    ; one dispatch table as nested matches: one row per kind, each an inner match on b
    (mxdef nm m)
      ("Definition " + nm + " (a b : kind) : lane :=" + nl + " match a with" + nl
-      + (join (map (\ i (" | " + (kn i) + " => match b with "
-                         + (join (map (\ j ((? (= 0 j) "" " | ") + (kn j) + " => " + (ln (cell m i j)))) (jot nk)))
-                         + " end" + nl))
-              (jot nk)))
+      + (join (map (i \ " | " + kn i + " => match b with "
+                         + (join (map (j \ (j = 0 ? "" " | ") + kn j + " => " + ln (cell m i j)) ^nk))
+                         + " end" + nl)
+              ^nk))
       + " end." + nl)
 
    ; the band matrix as data: nb x nb lanes off the representatives
    (bandb nm m)
      ("Definition " + nm + " : list (list lane) := [" + nl
-      + (join (map (\ c ("  [" + (commas (\ c2 (ln (cell m (at reps c) (at reps c2)))) (jot nb))
-                         + "]" + (? (= c (- nb 1)) "" ";") + nl))
-              (jot nb)))
+      + (join (map (c \ "  [" + (commas (c2 \ ln (cell m (reps c) (reps c2))) ^nb)
+                         + "]" + (c = nb - 1 ? "" ";") + nl)
+              ^nb))
       + " ]." + nl)
 
    _ (dot (join [
@@ -97,7 +96,7 @@
 "   states as prose: every kind collapses to a BAND (the partition is derived" nl
 ; the count is read off the roster, so the sentence cannot outlive it
 ("   from the table by row+column equality, both ops at once), the "
-+ (show ((tally kinds) * (tally kinds))) + "-") nl
++ show (#kinds * #kinds) + "-") nl
 "   cell tables factor through the band quotient with nothing left over, the" nl
 "   dispatch COMMUTES up to mirror (a symmetric lane orients itself; the" nl
 "   positional bin_a/bin_b pair carries orientation in the name), and" nl
@@ -109,27 +108,27 @@
 "From Stdlib Require Import List Arith." nl
 "Import ListNotations." nl nl]))
 
-   _ (dot ("Inductive kind := " + (bars (\ i (kn i)) (jot nk)) + "." + nl))
+   _ (dot ("Inductive kind := " + (bars (i \ kn i) ^nk) + "." + nl))
    _ (dot ("Inductive lane := " + (bars ln lanes) + "." + nl))
    _ (dot ("Definition lane_eqb (x y : lane) : bool := match x, y with "
-         + (join (map (\ x ((? (id? x (cap lanes)) "" " | ") + (ln x) + ", " + (ln x) + " => true")) lanes))
+         + (join (map (x \ (id? x <lanes ? "" " | ") + ln x + ", " + ln x + " => true") lanes))
          + " | _, _ => false end." + nl))
    ; mirror: the argument swap's action on lanes. the positional degenerate pair
    ; trades places (bin_a answers Sp[0], bin_b Sp[1]); every symmetric lane is fixed.
-   (mir x) (: t (show x) (? (= t "lvm_bin_a") "Lbin_b" (= t "lvm_bin_b") "Lbin_a" (ln x)))
+   (mir x) (: t (show x) (t @ "lvm_bin_a" "Lbin_b" "lvm_bin_b" "Lbin_a" (ln x)))
    _ (dot ("Definition mirror (l : lane) : lane := match l with "
-         + (join (map (\ x ((? (id? x (cap lanes)) "" " | ") + (ln x) + " => " + (mir x))) lanes))
+         + (join (map (x \ (id? x <lanes ? "" " | ") + ln x + " => " + mir x) lanes))
          + " end." + nl + nl))
    _ (dot (mxdef "addmx" addm))
    _ (dot (mxdef "mulmx" mulm))
    _ (dot ("Definition band (k : kind) : nat := match k with "
-         + (join (map (\ c ((? (= 0 c) "" " | ") + (bars (\ i (kn i)) (members c)) + " => " + (show c))) (jot nb)))
+         + (join (map (c \ (c = 0 ? "" " | ") + (bars (i \ kn i) (members c)) + " => " + show c) ^nb))
          + " end." + nl))
    _ (dot ("Definition rk : list kind := [" + (commas kn ridx) + "]." + nl + nl))
    _ (dot (bandb "addb" addm))
    _ (dot (bandb "mulb" mulm))
-   _ (dot ("Definition addband (x y : nat) : lane := nth y (nth x addb []) " + (ln (cap lanes)) + "." + nl))
-   _ (dot ("Definition mulband (x y : nat) : lane := nth y (nth x mulb []) " + (ln (cap lanes)) + "." + nl + nl))
+   _ (dot ("Definition addband (x y : nat) : lane := nth y (nth x addb []) " + ln <lanes + "." + nl))
+   _ (dot ("Definition mulband (x y : nat) : lane := nth y (nth x mulb []) " + ln <lanes + "." + nl + nl))
 
    (thm nm s) ("Theorem " + nm + " : " + s + " = true." + nl + "Proof. vm_compute. reflexivity. Qed." + nl)
    (allsq f) ("forallb (fun a => forallb (fun b => " + f + ") rk) rk")
@@ -139,9 +138,9 @@
        + (thm "mul_dispatch_commutes"     (allsq "lane_eqb (mulmx a b) (mirror (mulmx b a))")) + nl))
    _ (dot ("(* the lattice, read off the diagonal: one add/mul lane pair per band *)" + nl
        + "Theorem the_diagonal_reads_the_lattice :" + nl
-       + "  map (fun k => (addmx k k, mulmx k k)) [" + (commas (\ c (kn (at reps c))) (jot nb)) + "]" + nl
-       + "  = [" + (commas (\ c ("(" + (ln (cell addm (at reps c) (at reps c))) + ", "
-                                     + (ln (cell mulm (at reps c) (at reps c))) + ")")) (jot nb)) + "]." + nl
+       + "  map (fun k => (addmx k k, mulmx k k)) [" + (commas (c \ kn (reps c)) ^nb) + "]" + nl
+       + "  = [" + (commas (c \ "(" + ln (cell addm (reps c) (reps c)) + ", "
+                                     + ln (cell mulm (reps c) (reps c)) + ")") ^nb) + "]." + nl
        + "Proof. vm_compute. reflexivity. Qed." + nl + nl))
    _ (dot ("Print Assumptions add_factors_through_bands.   (* must stay \"Closed under the global context\" *)" + nl
        + "Print Assumptions mul_dispatch_commutes." + nl))

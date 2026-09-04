@@ -17,7 +17,7 @@
 ;     on. every numeric lane absorbs it (nothing to compute with), as * always did --
 ;     modeled over option Z / option (list Z), None the unit, uop/ulop lifted for +,
 ;     uabs/umul/ulmul absorbing.
-;   * TEXT as spelling (the symbol-as-spelling lane): symbols and strings are
+;   * text as spelling (the symbol-as-spelling lane): symbols and strings are
 ;     their byte lists under + (concat) and * (repeat), equality band-guarded
 ;     (symbol never = string).
 ;   * a kind lattice (value tags) for the type predicates (fixp/chainp/strp/..) and
@@ -46,7 +46,7 @@
 
    ; read a file's top-level forms as data (the reader strips ; comments)
 
-   ; exactly three elements? (STRUCTURAL chainp, never `!`: '(0) nets zero)
+   ; exactly three elements? (structural chainp, never `!`: '(0) nets zero)
    (len3? [_ _ _]) 1
    ; opfix wraps an operator form one layer ((f) == f); unwrap a 1-element list
    (unwrap r) (two? r && atom? >r ? <r r)
@@ -68,7 +68,7 @@
    (zlist? l) (two? l ? (zel? <l && zlist? >l) (id? l ()))  ; proper list of them (ends in (), not any atom)
    ; a nettable quoted list may also hold noms (each nets its spelling) -- good for the
    ; measure lanes (sat/net/tally) only: extraction or elementwise = would conflate a
-   ; nom with its net (caup answers the SYMBOL, never a number)
+   ; nom with its net (caup answers the symbol, never a number)
    (znlist? l) (two? l ? ((zel? <l || nom? <l) && znlist? >l) (id? l ()))
    (qnlist? x) (two? x && id? <x bs && un2? x && znlist? <>x)
    (qlist? x) (two? x && id? <x bs && un2? x && zlist? <>x)  ; '(1 2 3): \ + a z-list, exactly 2 (a lambda is 3+)
@@ -81,7 +81,7 @@
    (lam1? x) (lamform? x && atom? >>>x && nom? <>x)           ; exactly (\ p b), p a nom
    (inlam f k) (: v ("v" + show (peep vc 0 0)) _ (pin vc 0 (1 + peep vc 0 0))
                   _ (pin vtab <>f v) r (k v) _ (pull vtab <>f 0) r)
-   ; a function TERM (map/fold/compose argument, or a beta head) -> its Coq fun, else 0
+   ; a function term (map/fold/compose argument, or a beta head) -> its Coq fun, else 0
    (tfn f) (? (atom? f) 0
               (atom? >f && binop <f) (binop <f)                   ; (+) -- the escaped operator
               (un2? f && binop <f && intv? <>f)
@@ -99,7 +99,7 @@
              (<f @ '< "Z.leb" '> "(fun a b : Z => Z.leb b a)" 0) 0)
 
    ; -- the unit lane: () (and a fresh mint) rides + and absorbs every numeric op --
-   (mintv? ('mint >< _)) 1
+   (mintv? ('mint . _)) 1
    (unit? x)  (id? x () || mintv? x)
    ; a unit among the elements (never a proper list's own terminal ())
    (hasu? x)  (? (unit? x) 1 (two? x) (hasu? <x || (two? >x ? (hasu? >x) 0)) 0)
@@ -200,9 +200,9 @@
                              (? r (ltap ("(LAp " + acc + " " + r + ")") >args env) 0)))
    ; params then body: the last param is the innermost binder (LV 0 in the body)
    (ltlam rest ps env) (? (two? >rest)
-                          (? (nom? <rest) (ltlam >rest (<rest >< ps) env) 0)
+                          (? (nom? <rest) (ltlam >rest (<rest . ps) env) 0)
                           (: r (lt <rest (ps + env))
-                             (? r (llwrap r (tally ps)) 0)))
+                             (? r (llwrap r #ps) 0)))
    (llwrap s n) (0 < n ? (llwrap ("(LLam " + s + ")") (n - 1)) s)
 
    ; -- forms that read the unit: (:) (?) (\) and '(), a cond whose literal tests all
@@ -259,7 +259,7 @@
    (listv? x) (arr? x || lst? x)                     ; any collection value
    ; the list reducers (love surface -> coq): net -> asum, prod -> aprod, max/min, tally -> count
    (lop? h) (member? h '(net prod tally max min))
-   ; a hash literal {k v ..} = (hash k v ..): an assoc list of fixnum chains (EVEN count)
+   ; a hash literal {k v ..} = (hash k v ..): an assoc list of fixnum chains (even count)
    (even? l) (two? l ? !(even? >l) 1)
    (hashv? x) (two? x && id? <x 'hash && zlist? >x && even? >x)
    (len4? [_ _ _ _]) 1
@@ -366,7 +366,7 @@
    (spine acc rest) (two? rest ? (spine ("(appZ " + acc + " " + tv <rest + ")") >rest) acc)
 
    ; the kind tag of a literal (syntactic) for the type predicates; "Vbot" if untaggable.
-   ; an int-shaped expression that is closed answers by its VALUE's kind, not its shape:
+   ; an int-shaped expression that is closed answers by its value's kind, not its shape:
    ; a narrow op widens on a zero divisor ((% 7 0) is 0.0), and a big overflows the lattice,
    ; which has no big kind -- so that one skips rather than masquerading as Vz.
    (tk x) (? (unitv? x) "Vunit"                                        ; () and every form that reads it
@@ -478,7 +478,7 @@
    ; the original assert (infix, as in spec.l) shown above each theorem. Coq
    ; comments nest: a shown `(*)` (the escaped operator) opens one and swallows
    ; the file, so pad the two magic pairs apart.
-   (esc s) (: n (tally s)
+   (esc s) (: n #s
               ((: (go i acc)
                  (? (i < n)
                     (: c (s i) d (i + 1 < n ? (s (i + 1)) -1)

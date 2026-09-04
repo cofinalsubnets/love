@@ -5,33 +5,33 @@
 ; turns into a qemu exit; a boot that reaches the shell instead just times out
 ; and reports. Run on the host love (the `hark` nif). argv = (this elf append expect..).
 
-; the helpers live in their own form (ktest.l's structure) on purpose: folding
-; them into the driver's `:` below segfaults the host -- defining sub-at/has? and
-; calling has? inside one letrec blows the C stack (a core bug, 2026-08-07 open).
-(: (sub-at s i t j) (? (>= j (tally t)) 1                    ; does t occur in s at index i?
-       (? (= (peep s (+ i j) 0) (peep t j 0)) (sub-at s i t (+ 1 j)) 0))
-   (has? s t) ((: (g i) (? (> (+ i (tally t)) (tally s)) 0
-       (? (sub-at s i t 0) 1 (g (+ 1 i))))) 0))
+; the helpers keep their own form: folding them into the driver's `:` below blows
+; the C stack on the host, so sub-at and has? may not share a letrec with it.
+(: (sub-at s i t j) (? (j >= #t) 1                           ; does t occur in s at index i?
+       (s (i + j) = t j ? (sub-at s i t (j + 1)) 0))
+   (has? s t) ((: (g i) (? (i + #t > #s) 0
+       (sub-at s i t 0 ? 1 (g (i + 1))))) 0))
 
-(: a    (cup argv)
-   elf  (cap a)
-   app  (cap (cup a))
-   want (cup (cup a))
+(: a    >argv
+   elf  <a
+   app  <>a
+   want >>a
    ; kvm where the host can back it -- this lane is x64 only, so the arch
    ; question is just the host's. Without /dev/kvm it falls to tcg, same verdict.
-   kvm  (? (&& (two? (stat "/dev/kvm")) (has? (cup (hark ["uname" "-m"])) "x86_64"))
-           ["-enable-kvm" "-cpu" "host"] ())
+   mach (hark ["uname" "-m"])
+   kvm  (two? (stat "/dev/kvm") && has? >mach "x86_64"
+         ? ["-enable-kvm" "-cpu" "host"] ())
    ; 768M for the same reason as ktest.l's: the major pool's contiguous 2x
    ; grow wants a hole the old pair fragments, and margin is the mitigation.
-   r    (hark (cat ["timeout" "420" "qemu-system-x86_64" "-m" "768M" "-M" "q35"]
-              (cat kvm
-                   ["-kernel" elf "-append" app
-                    "-serial" "stdio" "-display" "none" "-no-reboot"])))
-   out  (cup r)
-   miss ((: (g w acc) (? (! (two? w)) (rev acc)
-                         (g (cup w) (? (has? out (cap w)) acc (link (cap w) acc))))) want ())
-   (? (! (two? miss))
-      (: _ (puts (+ "kboot ok: " app)) (putc 10))
-      (: _ (say err (+ "test_kboot FAILED: " app)) _ (put err 10)
-         _ (each miss (\ m (: _ (say err (+ "  missing: " m)) (put err 10))))
-         _ (say err out) _ (put err 10) (quit 1))))
+   r    (hark (["timeout" "420" "qemu-system-x86_64" "-m" "768M" "-M" "q35"]
+               + kvm
+               + ["-kernel" elf "-append" app
+                  "-serial" "stdio" "-display" "none" "-no-reboot"]))
+   out  >r
+   miss ((: (g w acc) (one? w ? (rev acc)
+                       (g >w (has? out <w ? acc (<w . acc))))) want ())
+   (one? miss
+    ? (puts ("kboot ok: " + app), putc 10)
+      (say err ("test_kboot FAILED: " + app), put err 10,
+       each miss (m \ (say err ("  missing: " + m), put err 10)),
+       say err out, put err 10, quit 1)))
