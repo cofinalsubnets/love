@@ -89,8 +89,8 @@ t = $R/test/00-init.l $R/test/spec.l $R/test/uu.l $(filter-out %/00-init.l %/spe
 love_h = $R/src/love.h $R/src/love_int.h $R/src/kinds.h $R/src/nifs.h $R/src/mx.h
 # the core rides with its math floor: our own transcendentals, no libm anywhere.
 # love.c broke into TUs so the biggest one is not the whole build's critical path;
-# src/love_int.h is what they share. the order here is the link's, not a dependency.
-love_tu = love.c ev.c io.c map.c snap.c num.c arr.c
+# src/love_int.h is what they share. the roster is mk/tu.mk, which wasm/Makefile reads too.
+include $(R)/mk/tu.mk
 love_tu_c = $(patsubst %,$R/src/%,$(love_tu))
 love_c = $(love_tu_c) $R/crew/moon/lib/math/am.c
 # ..and the codecs snap.c reaches unconditionally, to pack and unpack an image's code

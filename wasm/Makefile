@@ -7,11 +7,11 @@ emcc = $(CCACHE) $(EMCC)
 # This frontend's build output directory under the top-level out/.
 o = ../out/wasm
 
-# ⚠ THE WHOLE CORE, not the file that used to be it: love.c became seven TUs and src/ is
-# one folder now, so both of these named a layout that is gone -- g_c compiled a seventh
-# of the core and g_h wildcarded a directory that does not exist, which left every object
-# here with NO header dependency at all.
-g_c = $(patsubst %,../src/%,love.c ev.c io.c map.c snap.c num.c arr.c) ../crew/moon/lib/math/am.c
+# the whole core, off the one roster: a list spelled again here goes stale the next time a
+# TU is added, and a short g_c compiles a fraction of the core into a link that still works
+# until it does not. g_h is src/ whole, so every object here keeps a header dependency.
+include ../mk/tu.mk
+g_c = $(patsubst %,../src/%,$(love_tu)) ../crew/moon/lib/math/am.c
 g_h = $(wildcard ../src/*.h)
 
 # One object per source, so an edit recompiles just that TU and ccache can cache each.
