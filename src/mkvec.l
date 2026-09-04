@@ -7,10 +7,12 @@
 ;                            IRQ handlers, archinit (IDT + PIC + PIT), k_reset/k_halt
 ;   (lay-vec dst "aarch64")  the 2 KiB-aligned 16 x 0x80 vector table, the IRQ
 ;                            save/restore path, the fault report path
+;   (lay-vec dst "riscv64")  the one direct-mode trap entry: save, k_trap, restore, sret
 ;
 ; runs after crew/holo/{elf,obj}.l in a (use 'holo) cat; src/kernel.mk drives it. register
 ; vocabulary is holo's -- x86: r0=rax r1=rcx r2=rdx r3=rbx r4=rbp r5=rsi r6=rdi r7..r14=
-; r8..r15; aarch64: rN = xN. x86 port i/o is register-contracted (dx the port, al the datum),
+; r8..r15; aarch64: rN = xN; riscv: r0..r7 = a0..a7, r8..r12 = t0..t4, lr = ra.
+; x86 port i/o is register-contracted (dx the port, al the datum),
 ; so every `out 0x21, al` becomes a `li r2 <port>` then `outb` -- one instruction more than
 ; GAS's immediate form, and the same bus traffic.
 (:
@@ -205,6 +207,36 @@
          (wfi)
          (jmp a_halt)))
 
+   ;; -- riscv64 ------------------------------------------------------------
+   ;; one entry, direct mode: stvec's low two bits pick it, so `vectors` only has to be
+   ;; 4-aligned. the hart masks sstatus.SIE on the way in and sret restores it from SPIE,
+   ;; so sepc/scause/stval hold across the call and the handler cannot nest. k_trap sorts
+   ;; the cause: an interrupt returns here, a fault reports and halts.
+   ;; saved: the caller-saved file -- ra, t0..t4, a0..a7 -- and the two scratches x30/x31,
+   ;; which the abstract file does not name: x30 holds a cmp's flags until its br, and an
+   ;; interrupt lands anywhere. k_trap is ABI, so s0..s11 are its own to keep. 16 slots
+   ;; is 128 bytes, and sp stays 16-aligned.
+   r-save '(lr r8 r9 r10 r11 r12 r0 r1 r2 r3 r4 r5 r6 r7)
+   r-frame 128
+   ;; sd/ld of the two unnamed registers against sp, as words: S-form splits the offset
+   ;; 11:5 / 4:0, I-form carries it whole.
+   (r-sd rs2 off) (le32 (((off >> 5) << 25) | (rs2 << 20) | (2 << 15) | (3 << 12)
+                         | ((off & 31) << 7) | 0x23))
+   (r-ld rd off)  (le32 ((off << 20) | (2 << 15) | (3 << 12) | (rd << 7) | 0x03))
+   r-push (v-mapi (\ i r ['st 'sp (8 * i) r]) r-save
+           + [['raw (r-sd 30 112)] ['raw (r-sd 31 120)]])
+   r-pop  (v-mapi (\ i r ['ld r 'sp (8 * i)]) r-save
+           + [['raw (r-ld 30 112)] ['raw (r-ld 31 120)]])
+   r-text
+    ([['label 'vectors] ['sub 'sp 'sp r-frame]]
+     + r-push
+     + '((csrr r0 scause)
+         (csrr r1 sepc)
+         (csrr r2 stval)
+         (call k_trap))
+     + r-pop
+     + [['add 'sp 'sp r-frame] ['sret]])
+
    ;; -- the two objects ---------------------------------------------------
    ;; SHF flags: 2 ALLOC, 3 ALLOC|WRITE, 6 ALLOC|EXEC. types: 1 PROGBITS, 8 NOBITS.
    ;; .text.vectors asks for 2048 because `vectors` goes straight into VBAR_EL1, which
@@ -228,4 +260,9 @@
                 '("vectors")             ; arch.c: extern uint8_t vectors[] -> VBAR_EL1
                 () ()
                 '("a_irq" "a_fault"))
+       (arch = "riscv64")
+       (objsecs 'rv64
+                [[".text" 1 6 16 r-text]]
+                '("vectors")             ; arch.c: extern uint8_t vectors[] -> stvec
+                () () ())
        (scare 'mkvec-arch arch)))

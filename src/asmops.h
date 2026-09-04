@@ -4,4 +4,6 @@
 #include "x86_64_asmops.h"
 #elif defined(__aarch64__)
 #include "aarch64_asmops.h"
+#elif defined(__riscv)
+#include "riscv64_asmops.h"
 #endif

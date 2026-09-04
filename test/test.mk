@@ -15,7 +15,7 @@
   test_elf32 test_encver test_extra test_extract test_fat test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_arm64 test_front test_gc test_gcheck test_gcstress \
   test_gen test_glaze test_glazefuzz test_gz test_hdiff test_holo test_holofuzz test_hook \
-  test_host test_hostegg test_hostnif test_inle test_kboot test_kernel_arm64 test_kore \
+  test_host test_hostegg test_hostnif test_inle test_kboot test_kernel_arm64 test_kernel_riscv64 test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_wake test_mx test_netbsd test_netbsd_arm64 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_raw test_raw_arm64 test_raw_bake test_raw_riscv \
@@ -605,6 +605,7 @@ test_rvboot:
 # a cross arch builds the pie and lays its own under $(ko). two ifeqs, never an else-ifeq.
 kvec_x86_64  = $(ko)/x86_64/x86_64/vec.o
 kvec_aarch64 = $(ko)/aarch64/aarch64/vec.o
+kvec_riscv64 = $(ko)/riscv64/riscv64/vec.o
 ifeq ($(hosta),x86_64)
 kvec_x86_64  = $(moon_d)/kvec.o
 endif
@@ -616,6 +617,8 @@ test_vec: host
 	@sh test/gate/vec.sh x86_64 out/free/love-x86_64.elf $(kvec_x86_64)
 	@$(MAKE) -s a=aarch64 kernel
 	@sh test/gate/vec.sh aarch64 out/free/love-aarch64.elf $(kvec_aarch64)
+	@$(MAKE) -s a=riscv64 kernel
+	@sh test/gate/vec.sh riscv64 out/free/love-riscv64.elf $(kvec_riscv64)
 # THE FIXPOINT: the default love IS mooncc-built, so this gate has it rebuild ITSELF --
 # love1 (love0's lane, relinked) bakes its own compiler image, recompiles every TU, links
 # love2, and the two must be byte-identical. A headline invariant -- but it runs in
@@ -1160,7 +1163,8 @@ test_inle:
 	@$(MAKE) -s test_kverb
 	@$(MAKE) -s test_kernel_arm64
 	@$(MAKE) -s test_uefi_arm64
-	@echo "test_inle: boot, disk, command line, firmware -- both arches"
+	@$(MAKE) -s test_kernel_riscv64
+	@echo "test_inle: boot, disk, command line, firmware -- all three arches"
 
 ifeq ($(QEMU_A64),)
 test_kernel_arm64:
@@ -1170,6 +1174,17 @@ test_kernel_arm64: host $(R)/tools/ktest.l
 	@$(MAKE) -s a=aarch64 $(ko)/love-aarch64.elf
 	@echo TEST $(ko)/love-aarch64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 420s)"
 	@$m $(R)/tools/ktest.l $(ko)/love-aarch64.elf - aarch64
+endif
+
+QEMU_RV64 ?= $(shell command -v qemu-system-riscv64 2>/dev/null)
+ifeq ($(QEMU_RV64),)
+test_kernel_riscv64:
+	@echo "test_kernel_riscv64: skipped (need qemu-system-riscv64)"
+else
+test_kernel_riscv64: host $(R)/tools/ktest.l
+	@$(MAKE) -s a=riscv64 $(ko)/love-riscv64.elf
+	@echo TEST $(ko)/love-riscv64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 420s)"
+	@$m $(R)/tools/ktest.l $(ko)/love-riscv64.elf - riscv64
 endif
 
 NODE ?= $(shell command -v node 2>/dev/null)

@@ -579,6 +579,7 @@ k_kvm = $(if $(and $(wildcard /dev/kvm),$(filter x86_64,$a),$(filter x86_64,$(ho
 k_qemu_x86_64 = -M q35 -serial stdio
 k_qemu_aarch64 = -M virt,gic-version=2 -cpu cortex-a72 -serial stdio -semihosting \
   -device ramfb -device qemu-xhci -device usb-kbd -device usb-mouse
+k_qemu_riscv64 = -M virt -serial stdio -display none
 k_qemu = qemu-system-$a -m 256M $(k_qemu_$a) $(k_kvm)
 k_fw = -drive if=pflash,unit=0,format=raw,file=dl/edk2-ovmf/ovmf-code-$a.fd,readonly=on
 

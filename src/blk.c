@@ -56,6 +56,8 @@ static inline void w64(volatile uint8_t *p, uint64_t v) {   // two 32-bit halves
 static inline void dma_fence(void) {
 #if defined(__aarch64__)
   k_dsb_ish();
+#elif defined(__riscv)
+  k_fence();
 #endif
 }
 
@@ -181,14 +183,21 @@ static void blk_scan(void *dma) {
       if (d != 0x1042 && d != 0x1001) continue;
       if (blk_pci(bdf, dma)) return; } } }
 
-#elif defined(__aarch64__)
+#elif defined(__aarch64__) || defined(__riscv)
 // --- qemu virt's virtio-mmio slots, the version-2 transport ------------------
-// 32 fixed slots; the test lane runs -global virtio-mmio.force-legacy=false,
-// so a populated slot speaks version 2. a version-1 slot is skipped with a
-// word: it is a configuration face, not an absence.
+// fixed slots (32 on the arm virt, 8 on the riscv one); the test lane runs
+// -global virtio-mmio.force-legacy=false, so a populated slot speaks version 2.
+// a version-1 slot is skipped with a word: it is a configuration face, not an
+// absence.
+#if defined(__aarch64__)
 #define VIRTIO_MMIO_PHYS 0x0a000000
 #define VIRTIO_MMIO_N    32
 #define VIRTIO_MMIO_STEP 0x200
+#else
+#define VIRTIO_MMIO_PHYS 0x10001000
+#define VIRTIO_MMIO_N    8
+#define VIRTIO_MMIO_STEP 0x1000
+#endif
 
 static int blk_mmio(volatile uint8_t *m, void *dma) {
   w32(m + 0x70, 0);                            // status: reset

@@ -45,6 +45,7 @@ have() { command -v "$1" >/dev/null 2>&1; }
 case $arch in
   x86_64)  qemu=qemu-system-x86_64;  mach="-M q35" ;;
   aarch64) qemu=qemu-system-aarch64; mach="-M virt,gic-version=2 -cpu cortex-a72" ;;
+  riscv64) qemu=qemu-system-riscv64; mach="-M virt" ;;
   *) echo "FAIL test_vec: unknown arch $arch" >&2; exit 1 ;;
 esac
 
@@ -66,23 +67,34 @@ else
     n=$(tr -d '\0' < "$work/out" | wc -l | tr -d ' ')
     [ "${n:-0}" -gt 0 ] && tr -d '\0' < "$work/out" | head -n "$n" | grep -qa '\*\*\* CPU exception'
   }
-  # boot, feed one expression, stop as soon as the report lands whole. the kernel is
-  # halted at that point and would otherwise sit until a timeout.
+  # boot, type one expression AT THE PROMPT, stop as soon as the report lands whole.
+  # the kernel is halted at that point and would otherwise sit until a timeout.
+  # ⚠ the line goes in after the prompt, never with the boot: a byte queued on the
+  # UART before the console is up is the firmware's and the FIFO reset's to drop
+  # (OpenSBI reads one off the 16550 at init), so stdin is a fifo this loop writes
+  # once the shell has spoken. the ceiling is the prompt's: an egg baked under TCG
+  # takes riscv ~60s to reach it, and the loop leaves as soon as the report lands.
   fault_report() {
-    printf '(fault %s)\n' "$1" > "$work/in"
     : > "$work/out"
+    rm -f "$work/in"; mkfifo "$work/in"
     # 768M like tools/ktest.l: a major takes a contiguous 2x pool beside the old one,
     # and whether it fits is a placement lottery -- 512M loses it and the boot says nothing.
     # shellcheck disable=SC2086
     $qemu $mach -m 768M -serial stdio -display none -no-reboot \
           -kernel "$elf" < "$work/in" > "$work/out" 2>/dev/null &
     qp=$!
-    i=0
-    while [ $i -lt 600 ]; do
+    exec 3> "$work/in"
+    typed=0 i=0
+    while [ $i -lt 3000 ]; do
       said && break
+      # the prompt, with or without its colour wrap
+      if [ $typed = 0 ] && grep -qa -e '^> ' -e 'm> ' "$work/out"; then
+        printf '(fault %s)\n' "$1" >&3; typed=1
+      fi
       kill -0 $qp 2>/dev/null || break
       sleep 0.1; i=$((i + 1))
     done
+    exec 3>&-
     kill $qp 2>/dev/null
     wait $qp 2>/dev/null
     n=$(tr -d '\0' < "$work/out" | wc -l | tr -d ' ')
@@ -103,6 +115,11 @@ else
     # instruction, the udf), 0x96000044 EC=0x25 (data abort at the current EL).
     aarch64) cases='6:esr=2000000
 14:data abort|far=600000000000' ;;
+    # riscv has one entry and k_trap reads scause/sepc/stval itself: cause 2 is the
+    # illegal instruction, 3 the breakpoint, 15 a store page fault with the address.
+    riscv64) cases='6:illegal instruction|cause=2
+3:breakpoint|cause=3
+14:store page fault|cause=f|tval=ffffffc100000000' ;;
   esac
 
   echo "$cases" | while IFS=: read -r vec want; do
@@ -169,6 +186,23 @@ else
       odd=$(echo "$br" | awk '{c[$3]++; t[$3] = t[$3] " " NR} END { for (k in c) if (c[k] == 1) print t[k] }')
       [ "$(echo "$odd" | tr -d ' ')" = 6 ] ||
         fail "exactly one of the sixteen vectors (slot 5, current EL SP_ELx IRQ) must differ; the odd one out is entry$odd"
+      ;;
+    riscv64)
+      # one entry, one return: every register the entry saves against sp comes back
+      # off the same slot -- the two unnamed scratches included -- and the sret is
+      # the last word laid, so nothing runs past the restore.
+      d=$(llvm-objdump -d --no-show-raw-insn "$obj")
+      sd=$(echo "$d" | awk '$2 == "sd" { print $3 }' | sort)
+      ld=$(echo "$d" | awk '$2 == "ld" { print $3 }' | sort)
+      n=$(echo "$sd" | grep -c .)
+      [ "$n" = 16 ] || fail "the trap entry should save 16 registers; it saves $n"
+      [ "$sd" = "$ld" ] || fail "the trap entry restores a different set than it saves"
+      echo "$sd" | grep -q '^t5,' || fail "the trap entry does not save t5, the flag scratch"
+      echo "$sd" | grep -q '^t6,' || fail "the trap entry does not save t6, the address scratch"
+      n=$(echo "$d" | grep -c 'sret')
+      [ "$n" = 1 ] || fail "the trap entry should hold exactly one sret; found $n"
+      echo "$d" | awk 'NF && /^ +[0-9a-f]+:/ { last = $2 } END { print last }' | grep -q sret ||
+        fail "the sret is not the last instruction of the trap entry"
       ;;
   esac
 fi

@@ -287,7 +287,7 @@
              (? (hot? h) (: s (slurp h) _ (close h) s)
                 (src-die "can't read this binary")))
        m (kern-b16 pie 18)
-       arch (? (m = 62) "x86_64" (m = 183) "aarch64"
+       arch (? (m = 62) "x86_64" (m = 183) "aarch64" (m = 243) "riscv64"
                (src-die "no boot door for this machine"))
        gz (source-gz "x")
        _ (string? gz ? 0 (src-die "this love carries no source"))

@@ -37,11 +37,15 @@
            m (? (two? st) (cap (cup (cup st))) 0)
            (= 16384 (& m 61440)))
    ; machine + exit channel are per-arch. x86_64 quits qemu by writing the
-   ; isa-debug-exit port; 'virt' has no such device, so aarch64 goes out through
-   ; arm semihosting instead -- see k_qemu_exit in each port's arch.c.
+   ; isa-debug-exit port; the two 'virt's have no such device, so k_reset goes
+   ; out through PSCI / SBI and -no-reboot below turns that into the exit.
    mach (? (arch = "aarch64")
            ["-M" "virt,gic-version=2" "-cpu" "cortex-a72" "-semihosting"]
+           (arch = "riscv64")
+           ["-M" "virt"]
            ["-M" "q35" "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"])
+   ; the two virts carry their disk on virtio-mmio; q35 on pci
+   mmio? (|| (arch = "aarch64") (arch = "riscv64"))
    ; 768M + 420s. the corpus outgrew 256M (a silent death mid-corpus) and then
    ; 512M (";; oom@len=N" at a deterministic dot) -- both the same wall: a major
    ; collection grows the pool by allocating a new contiguous 2x pair while the
@@ -77,13 +81,13 @@
    ; to the kernel. truncate creates it and leaves an existing one's bytes alone
    ; (same size), so a marker written by one boot survives into the next -- the
    ; persistence gate boots twice on purpose, and test/kernel/disk.l reads which
-   ; boot it is off the disk itself. aarch64 rides virtio-mmio, and qemu's virt
+   ; boot it is off the disk itself. the virts ride virtio-mmio, and qemu's
    ; slots default to the legacy layout -- force-legacy=false is what makes them
    ; speak version 2, the one blk.c drives.
    disk (+ iso ".disk")
    _    (hark ["truncate" "-s" "35840000" disk])
    dargs (: d ["-drive" (+ "file=" (+ disk ",if=none,format=raw,id=d0"))]
-            (? (arch = "aarch64")
+            (? mmio?
                (d + ["-device" "virtio-blk-device,drive=d0"
                      "-global" "virtio-mmio.force-legacy=false"])
                (d + ["-device" "virtio-blk-pci,drive=d0"])))

@@ -15,6 +15,8 @@
 (: (kparams arch)                       ; target, kernel base, entry symbol
     (? (arch = "x86_64")  ['amd64   0x200000   "kmain"]
        (arch = "aarch64") ['arm64 0x40200000 "a64boot"]
+       ; entered at the lowest load, not the entry symbol -- kproject lays boot first
+       (arch = "riscv64") ['rv64  0x80200000 "rvboot"]
        (scare 'kproject-arch arch))
    (kread p) (: r (uread p) (two? r ? [p <>r] (scare 'kproject-open p)))
 
@@ -88,7 +90,8 @@
                    (go (e + 24))))) symo)
       eaddr (: r (peep glo entnm ())
                (? (two? r) <r (scare 'kproject-entry entnm)))
-      cx [glo b0 b0 b0 b0 () 0 () () (ld-extents objs)]
+      ; riscv keeps its own reloc numbers, so the machine says which namespace ldpatch reads
+      cx [glo b0 b0 b0 b0 () (mach = 243) () () (ld-extents objs)]
 
       ; --- the patch list: every love_rela site slides by bias, and k_image_top
       ; takes the image's far edge -- ascending, for the one-pass surgery below

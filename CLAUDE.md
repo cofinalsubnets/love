@@ -19,7 +19,7 @@
 ; kore includes sh, make, vi, as, nc, gzip/gunzip, and lots of other
 ; utilities.
 ;
-; inle currently runs on amd64 and arm64 and includes a virtual console,
+; inle currently runs on amd64, arm64 and rv64 and includes a virtual console,
 ; filesystem, and doom port.
 ;
 ; the love artifact includes all these components in a single binary together
