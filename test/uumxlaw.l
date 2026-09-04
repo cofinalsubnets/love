@@ -145,28 +145,24 @@
 (hear (\ p e (: h (peep HELPC () 0) (? h (h p e) 0))))
 (assert
  ; the cartesian cell is not the zero
- (id? 'accepted (rejects (\ z (defq mx-ok-cart
+ ('accepted = (rejects (\ z (defq mx-ok-cart
     (paths nat (mxmul mxKChain mxKChain) mxLmul_cart) (idpath mxLmul_cart)))))
- (id? 'rejected (rejects (\ z (defq mx-bad-cart
-    (paths nat (mxmul mxKChain mxKChain) mxL0) (idpath mxL0)))))
+ ('rejected = (rejects (\ z (defq mx-bad-cart (paths nat (mxmul mxKChain mxKChain) mxL0) (idpath mxL0)))))
  ; the band assignment has to be the derived one: shift it by a kind and the
  ; factorization stops holding
- (id? 'rejected (rejects (\ z (defq mx-bad-band
+ ('rejected = (rejects (\ z (defq mx-bad-band
     (paths bool
       (mxsq (lam a (lam b (nateqb (mxadd a b) (mxaddband (mxband a) (mxband (succ b)))))))
       true)
     (idpath true)))))
  ; and mirror is not the identity: the positional pair really does trade places
- (id? 'rejected (rejects (\ z (defq mx-bad-mirror
+ ('rejected = (rejects (\ z (defq mx-bad-mirror
     (paths bool (mxsq (lam a (lam b (nateqb (mxadd a b) (mxadd b a))))) true)
     (idpath true)))))
  ; the compose cell is the mul lane, not the Church sum -- a band with one
  ; operation would make uuhom's monoid the whole story, and it is half of it
- (id? 'accepted (rejects (\ z (defq mx-ok-compose
-    (paths nat (mxmul mxKHot mxKHot) mxLmulh) (idpath mxLmulh)))))
- (id? 'rejected (rejects (\ z (defq mx-bad-compose
-    (paths nat (mxmul mxKHot mxKHot) mxLaddh) (idpath mxLaddh)))))
+ ('accepted = (rejects (\ z (defq mx-ok-compose (paths nat (mxmul mxKHot mxKHot) mxLmulh) (idpath mxLmulh)))))
+ ('rejected = (rejects (\ z (defq mx-bad-compose (paths nat (mxmul mxKHot mxKHot) mxLaddh) (idpath mxLaddh)))))
  ; ..and the mint annihilates there rather than uniting
- (id? 'rejected (rejects (\ z (defq mx-bad-compose-unit
-    (paths nat (mxmul mxKHot mxKMint) mxLmulh) (idpath mxLmulh))))))
+ ('rejected = (rejects (\ z (defq mx-bad-compose-unit (paths nat (mxmul mxKHot mxKMint) mxLmulh) (idpath mxLmulh))))))
 (hear test-strict)

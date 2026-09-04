@@ -36,8 +36,8 @@
     (= [1 (link 'w [(link 'dq [(link 'lit "v=") (link 'var "V")])])] (sh-lex "\"v=$V\""))
     (= [1 (link 'w [(link 'sub "echo hi")])] (sh-lex "$(echo hi)"))
     (= [1 (link 'w [(link 'sub "date")])] (sh-lex "`date`"))
-    (id? (cap (sh-lex "echo 'x")) 'more)
-    (id? (cap (sh-lex "echo \\")) 'more)
+    ((cap (sh-lex "echo 'x")) = 'more)
+    ((cap (sh-lex "echo \\")) = 'more)
     ; an empty payload is a parse, not a failure. A (payload . j) answer nets
     ; its head alone -- the improper tail is out of the sum -- so "" , `` and a
     ; heredoc owed no lines all net zero, and a truth test called each of them
@@ -57,35 +57,35 @@
 ; and_or; a dangling && is parse-'more (the PS2 lane); compounds refuse politely
 (: pr (sh-parse (cup (sh-lex "a | b && c ; d &")))
    a (cup pr)
-   (assert (id? (cap pr) 'ok) (id? (cap a) 'seq)
-           (id? (cap (sh-nth a 1)) 'and)
-           (id? (cap (sh-nth (sh-nth a 1) 1)) 'pipe)
-           (id? (cap (sh-nth a 2)) 'bg)))
+   (assert ((cap pr) = 'ok) ((cap a) = 'seq)
+           ((cap (sh-nth a 1)) = 'and)
+           ((cap (sh-nth (sh-nth a 1) 1)) = 'pipe)
+           ((cap (sh-nth a 2)) = 'bg)))
 (: pr (sh-parse (cup (sh-lex "a | b")))
    a (cup pr)
-   (assert (id? (cap a) 'pipe) (= 2 (tally (sh-nth a 1)))))
+   (assert ((cap a) = 'pipe) (= 2 (tally (sh-nth a 1)))))
 (: pr (sh-parse (cup (sh-lex "! false")))
-   (assert (id? (cap (cup pr)) 'not)))
-(assert (id? (cap (sh-parse (cup (sh-lex "a &&")))) 'more)
-        (id? (cap (sh-parse (cup (sh-lex "( x )")))) 'ok))
+   (assert ((cap (cup pr)) = 'not)))
+(assert ((cap (sh-parse (cup (sh-lex "a &&")))) = 'more)
+        ((cap (sh-parse (cup (sh-lex "( x )")))) = 'ok))
 
 ; rung 3: compounds parse (and stay 'more while open), ${..} lexes as vop,
 ; heredocs rewrite to <h with the body as the target word
 (: pr (sh-parse (cup (sh-lex "if a; then b; fi")))
-   (assert (id? (cap pr) 'ok) (id? (cap (cup pr)) 'if)))
+   (assert ((cap pr) = 'ok) ((cap (cup pr)) = 'if)))
 (: pr (sh-parse (cup (sh-lex "while a; do b; done < f")))
-   (assert (id? (cap pr) 'ok) (id? (cap (cup pr)) 'rdr)))
+   (assert ((cap pr) = 'ok) ((cap (cup pr)) = 'rdr)))
 (: pr (sh-parse (cup (sh-lex "case x in a|b) c;; esac")))
-   (assert (id? (cap pr) 'ok) (id? (cap (cup pr)) 'case)))
+   (assert ((cap pr) = 'ok) ((cap (cup pr)) = 'case)))
 (: pr (sh-parse (cup (sh-lex "f() { x; }")))
-   (assert (id? (cap pr) 'ok) (id? (cap (cup pr)) 'fun)))
-(assert (id? (cap (sh-parse (cup (sh-lex "if a; then b")))) 'more)
-        (id? (cap (sh-parse (cup (sh-lex "for f in")))) 'more)
+   (assert ((cap pr) = 'ok) ((cap (cup pr)) = 'fun)))
+(assert ((cap (sh-parse (cup (sh-lex "if a; then b")))) = 'more)
+        ((cap (sh-parse (cup (sh-lex "for f in")))) = 'more)
         (= '(1 (w (vop "x" ":-" "y"))) (: r (sh-lex "${x:-y}") r)))
 (: lx (sh-lex "cat <<EOF\nbody\nEOF")
    t (cup lx)
    (assert (= 1 (cap lx))
-           (id? (cap (caup t)) 'rd)                      ; (rd () . "<h")
+           ((cap (caup t)) = 'rd)                      ; (rd () . "<h")
            (= "<h" (cup (cup (caup t))))))
 
 ; rung 3, end to end through the built shell: control flow, functions,
@@ -293,7 +293,7 @@
         (= "quay" (getenv "LOVE_SH_T5"))
         (foldl (\ a e (? a a (= e "LOVE_SH_T5=quay"))) 0 (environ 0)))
 (assert !(setenv "LOVE_SH_T5" ())                                   ; absence unsets
-        (id? (getenv "LOVE_SH_T5") ()))
+        ((getenv "LOVE_SH_T5") = ()))
 ; $? and export, through the shell's own line entry
 (: _ (sh-line "sh -c 'exit 7'")
    (assert (= 7 (sh-status ())) (= '("7") (sh-fields [(link 'var "?")]))))
@@ -389,7 +389,7 @@
    r (trap (\ _ (sh-subhere (\ _ (: _ (chdir "/") (scare 'boom 0))))) () (\ a b a))
    here (cwd 0)
    _ (chdir start)
-   (assert (id? r 'boom)                       ; the condition still rides outward
+   (assert (r = 'boom)                       ; the condition still rides outward
            (start = here)                      ; ..and the subshell's chdir did not
            !(start = "/")))                    ; ..(and the law was not vacuous)
 ; `exit` in a forkless body may not reach `quit` -- it folds to ('xit . st),
@@ -427,9 +427,9 @@
  (= 262144 (cup (sh-loveval "2 3 4")))
  (= "hi" (cup (sh-loveval "\"hi\"")))
  (= [1 2 3] (cup (sh-loveval "[1 2 3]")))
- (id? 'err (cap (sh-loveval "(1 +")))
- (id? 'unfinished-form (cap (cup (sh-loveval "(1 +"))))
- (id? 'err (cap (sh-loveval "nosuchname")))
+ ('err = (cap (sh-loveval "(1 +")))
+ ('unfinished-form = (cap (cup (sh-loveval "(1 +"))))
+ ('err = (cap (sh-loveval "nosuchname")))
  ; a string is its bytes, so a capture is usable; everything else prints sayable
  (= "hi" (sh-lovetext "hi"))
  (= "(1 2 3)" (sh-lovetext [1 2 3]))
@@ -448,8 +448,8 @@
     (= [1 ew (w1 ('lov >< "(\"}\")"))] (sh-lex "echo ${(\"}\")}"))
     (= [1 ew (w1 ('lov >< "('a)"))] (sh-lex "echo ${('a)}"))
     ; the reader wants another line, and 'more is how PS2 is asked for one
-    (id? (cap (sh-lex "echo ${(1 +")) 'more)
-    (id? (cap (sh-lex "echo ${(1 + 2)")) 'more)
+    ((cap (sh-lex "echo ${(1 +")) = 'more)
+    ((cap (sh-lex "echo ${(1 + 2)")) = 'more)
     ; the two nesting scanners step over the body rather than through it
     (= [1 ew (w1 ('sub >< "echo ${('a)}"))] (sh-lex "echo $(echo ${('a)})"))
     (= [1 ew (w1 ('vop >< ["U" ":-" "${('a)}"]))] (sh-lex "echo ${U:-${('a)}}"))

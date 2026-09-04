@@ -77,12 +77,12 @@
 (assert
  ('(0 -1) = helm-dec 27 91 65) ('(0 1) = helm-dec 27 91 66)
  ('(1 0) = helm-dec 27 91 67) ('(-1 0) = helm-dec 27 91 68)
- (id? 'esc (helm-dec 27 -1 -1))
+ ('esc = (helm-dec 27 -1 -1))
  ('(-1 0) = helm-dec 104 -1 -1) ('(0 1) = helm-dec 106 -1 -1)
  ('(0 -1) = helm-dec 107 -1 -1) ('(1 0) = helm-dec 108 -1 -1)
  ('(-1 -1) = helm-dec 121 -1 -1) ('(1 -1) = helm-dec 117 -1 -1)
  ('(-1 1) = helm-dec 98 -1 -1) ('(1 1) = helm-dec 110 -1 -1)
- (id? 'quit (helm-dec -1 -1 -1))
+ ('quit = (helm-dec -1 -1 -1))
  (113 = helm-dec 113 -1 -1))
 
 ; --- the crawl on a hand deck: every verb of the game, deterministic ---
@@ -120,7 +120,7 @@
 (: g (hand-g ())
    _ (pin g 'ms [(mob-new 0 2 1)], pin (g 'p) 'hp 1)
    _ (crawl-turn g 46)
- (assert (id? 'dead (g 'over)) (find (g 'msg) "done for" 0)))
+ (assert ('dead = (g 'over)) (find (g 'msg) "done for" 0)))
 
 ; the hatch: > climbs down only where the hatch is cut, and restocks the deck
 (: g (hand-g ())
@@ -136,7 +136,7 @@
 (: g (hand-g ())
    _ (pin (g 'loot) (2 + 9 * 1) ['pearl 0])
    _ (crawl-turn g [1 0])
- (assert (id? 'won (g 'over)) (find (g 'msg) "pearl" 0)))
+ (assert ('won = (g 'over)) (find (g 'msg) "pearl" 0)))
 
 ; --- the whole game, generated: a seeded random walk holds every invariant ---
 (: g (crawl-new 60 20 (wheel 3))

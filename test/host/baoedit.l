@@ -48,8 +48,8 @@
    (= abc (cap (edln (keys [97 98 99 13]) "" ())))               ; a b c -> "abc"
    (= abc (cap (edln (keys [97 99 27 91 68 98 13]) "" ())))      ; a c, left, b -> "abc"
    (= abc (cap (edln (keys [97 98 120 127 99 13]) "" ())))       ; a b x <bsp> c -> "abc"
-   (id? 'eof (edln (keys [4]) "" ()))                            ; ^D -> the 'eof sentinel
-   (id? 'eof (edln (keys 0) "" ()))                              ; port EOF -> the same
+   ('eof = (edln (keys [4]) "" ()))                            ; ^D -> the 'eof sentinel
+   ('eof = (edln (keys 0) "" ()))                              ; port EOF -> the same
    ; a submitted line is pushed onto history (most-recent first); blanks dropped:
    (= [abc] (cup (edln (keys [97 98 99 13]) "" ())))             ; nhist on empty -> (abc)
    (= [abc abc] (cup (edln (keys [97 98 99 13]) "" [abc])))      ; ... pushed on front

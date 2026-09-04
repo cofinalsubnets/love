@@ -105,8 +105,8 @@
        ; the scare's stage is 'late when the front end still answered -- (el r 1)
        ; there is the whole AST, and it is a census key. a red run has to stay
        ; readable, so a tree never becomes one.
-       (? sc ['scare (? (id? <r 'bad) (el r 1) 'late)]
-          (id? <r 'bad)
+       (? sc ['scare (? (<r = 'bad) (el r 1) 'late)]
+          (<r = 'bad)
           (: st (el r 1) cy (el r 2)
              (? (gripe? cy) ['named st] ['bare st]))
           ; it parsed. the clay leg -- G1 over a tree the corpus never had.
@@ -116,7 +116,7 @@
                 (: t (cshow a)
                    (? (gripe? t) ['inexpr 'clay]
                       (: b (front t)
-                         (? (! (id? <b 'ok)) ['reparse 'clay]
+                         (? (! (<b = 'ok)) ['reparse 'clay]
                             ((el b 1) = a) ['ok 'clay]
                             ['diff 'clay]))))))))
 

@@ -66,7 +66,7 @@
        (\ x (? (lit? x || coin? x) 1
                (: ws (list 0 2 -5 2.5 (twin 3 4) () "" "ab" 'sym '(1 2) @(1 2))
                   (ch v) (? (two? v) 1 0)
-                  (txt? v) (string? v || (? (id? v ()) 0 (nom? v)))
+                  (txt? v) (string? v || (? (v = ()) 0 (nom? v)))
                   ; the cartesian order seam: a left chain against another chain
                   ; reassociates into a different nesting. text on either side demotes
                   ; to repetition, which does associate.
@@ -102,7 +102,7 @@
                (: ms (list 0 1 2 5)
                   nums (list 0 2 -5 2.5 (twin 3 4))
                   act (all (\ m (all (\ n ((x * (m + n)) = ((x * m) + (x * n)))) ms)) ms)
-                  num (? (two? x || tray? x || string? x || (? (id? x ()) 0 (nom? x))) 1
+                  num (? (two? x || tray? x || string? x || (? (x = ()) 0 (nom? x))) 1
                          (all (\ y (all (\ z ((x * (y + z)) = ((x * y) + (x * z)))) nums)) nums))
                   cart (? (two? x)
                           (: bs (list '(3) '(-2 1))

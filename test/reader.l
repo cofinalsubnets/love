@@ -25,7 +25,7 @@
 (assert
  (: r (sound '(49)) (&& (two? r) (1 = (cap r)) (nil? (cup r))))  ; a datum, nothing after
  (nil? (sound ()))                                    ; a clean end -- the blue floor
- (id? 'torn (sound '(40)))                            ; the text ran out inside a shape
+ ('torn = (sound '(40)))                            ; the text ran out inside a shape
  (: r (sound '(49 32 50))                             ; ...and the residue reads the next
     (&& (1 = (cap r)) (2 = (cap (sound (cup r))))))
  (: r (sound '(40 41)) (&& (two? r) (nil? (cap r)))))  ; the datum () is still a datum
@@ -39,7 +39,7 @@
     (&& ('(1 2) = (cap r)) (3 = (cap (sound (cup r))))))  ; ...and the residue resumes
  (: r (sound "1") (&& (two? r) (1 = (cap r))))
  (nil? (sound ""))                                    ; empty text: a clean end, not torn
- (id? 'torn (sound "(1"))
+ ('torn = (sound "(1"))
  (nil? (sound 42)) (nil? (sound 'notaport))           ; nothing to read is a clean end
  ((sound "(1 2) 3") = (sound (map "(1 2) 3" (jot 7)))))  ; the two doors agree, datum and rest
 
@@ -55,7 +55,7 @@
 (: (rdr-all x)                                      ; every datum of a text, in order
    (: (go cl acc) (: r (sound cl)
                      (? (two? r)      (go (cup r) (link (cap r) acc))
-                        (id? r 'torn) 'torn
+                        (r = 'torn) 'torn
                         (rev acc)))
       (go x ()))
    (rdr-doors s) (: cl (map s (jot (tally s)))      ; string, charlist and port agree
@@ -66,7 +66,7 @@
     (&& ('(1 2) = (cap r)) (3 = (cap (sound (cup r))))))   ; a port, and its residue resumes
  (nil? (sound (tap ())))                            ; a spent port is a clean end
  (nil? (sound (jug 0)))                             ; ...and so is one with no read door
- (id? 'torn (sound (tap (map "(1" (jot 2)))))       ; torn reads torn off a port too
+ ('torn = (sound (tap (map "(1" (jot 2)))))       ; torn reads torn off a port too
  ; the sieve: one byte per gulp, so every lane crosses a thunk at every position.
  (rdr-doors "(1 2) 3 \"hi\" 'q")
  (rdr-doors "#!/usr/bin/env love\n(a b)")           ; the lookahead: one position, 3 forces
@@ -101,7 +101,7 @@
  ("hi" = (rdr "\"hi\""))
  ("a\"b" = (rdr "\"a\\\"b\""))
  ("" = (rdr "\"\""))
- (id? 'torn (sound "\"oops")))
+ ('torn = (sound "\"oops")))
 
 ; --- numbers -------------------------------------------------------------------
 ; an integer literal reads its value -- in all three bases, at full precision, and the

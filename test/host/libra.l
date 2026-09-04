@@ -177,18 +177,18 @@
    (bare s) ((: (g i acc) (? (i < tally s) (g (i + 1) (? (alnum? (s i)) (acc + string (s i)) acc)) acc))
              0 "")
    (itext l) (foldl (+) "" (map (\ x (: t <x
-                                        (? (id? t 'text) <>x
-                                           (id? t 'code) <>x
-                                           (id? t 'link) (itext <>x + nthl x 2)
-                                           ((id? t 'strong) || (id? t 'em)) (itext <>x)
+                                        (? (t = 'text) <>x
+                                           (t = 'code) <>x
+                                           (t = 'link) (itext <>x + nthl x 2)
+                                           ((t = 'strong) || (t = 'em)) (itext <>x)
                                            ""))) l))
    (btext b) (: t <b
-                (? (id? t 'head)  (itext (nthl b 2))
-                   (id? t 'para)  (itext <>b)
-                   (id? t 'fence) (nthl b 2)
-                   (id? t 'quote) (dtext <>b)
-                   ((id? t 'bullets) || (id? t 'numbers)) (foldl (+) "" (map itext <>b))
-                   (id? t 'deflist) (foldl (+) "" (map (\ it (itext <it + itext <>it)) <>b))
+                (? (t = 'head)  (itext (nthl b 2))
+                   (t = 'para)  (itext <>b)
+                   (t = 'fence) (nthl b 2)
+                   (t = 'quote) (dtext <>b)
+                   ((t = 'bullets) || (t = 'numbers)) (foldl (+) "" (map itext <>b))
+                   (t = 'deflist) (foldl (+) "" (map (\ it (itext <it + itext <>it)) <>b))
                    ""))
    (dtext d) (foldl (+) "" (map btext d))
    (slurpf f) (: q (open f "r") (? (hot? q) (slurp q) ""))
@@ -241,12 +241,12 @@
 (: (rd f) (: q (open f "r") (? (hot? q) (slurp q) ""))
    (nth l k) (? (k = 0) <l (nth >l (k - 1)))
    d (mdread ("# crew/lapiz/lapiz.l\n\n" + ldoc-md (rd "crew/lapiz/lapiz.l")))
-   heads (filter (\ b (id? <b 'head)) d)
+   heads (filter (\ b (<b = 'head)) d)
    _ (assert
       (3 < tally heads)
       ('(head 1 ((text "crew/lapiz/lapiz.l"))) = <heads)   ; the file names the page
       (2 = <>(nth heads 1))                               ; ..and its banners are sections
-      (0 < tally (filter (\ b (id? <b 'fence)) d)))       ; the diagrams survived as displays
+      (0 < tally (filter (\ b (<b = 'fence)) d)))       ; the diagrams survived as displays
    0)
 
 (test_fin ())

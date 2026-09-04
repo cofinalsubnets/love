@@ -68,7 +68,7 @@
 ; the lie.
 (: q (dns-query 4660 "ab.cd")
    r (dns-reply q 0 1)
-   _ (assert (id? (dns-answers r 4660) 'torn)))
+   _ (assert ((dns-answers r 4660) = 'torn)))
 
 ; --- law 4: /etc/hosts answers with no packet at all ---------------------------
 ; and a fixture is the only way to say that: pointing at the machine's own file

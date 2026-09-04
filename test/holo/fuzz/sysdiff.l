@@ -108,7 +108,7 @@
          ("rsi" "si") ("rdi" "di") ("r8" "r8w") ("r9" "r9w") ("r10" "r10w") ("r11" "r11w")
          ("r12" "r12w") ("r13" "r13w") ("r14" "r14w") ("r15" "r15w"))
  (cases-x64 _)
-  (: gp (filter (\ p !(id? <p 'sp)) x64-r2x)               ; rsp is not a cr-move operand
+  (: gp (filter (\ p !(<p = 'sp)) x64-r2x)               ; rsp is not a cr-move operand
      out (foldl (\ a n (a + foldl (\ b p (b + [[['ldcr <p n] ("mov " + <>p + ", cr" + show n) ()]
                                               [['stcr n <p] ("mov cr" + show n + ", " + <>p) ()]]))
                                   () gp))
@@ -181,7 +181,7 @@
                                  e (idx-of ln ": error: ")
                                  (? (!(charm? j) || !(charm? e)) a
                                     (: n (s2d (snip ln (i + 8) j))
-                                       (? (id? n ()) a
+                                       (? (n = ()) a
                                           ([(n - 1 - nhead) (snip ln (e + 9) (tally ln))] >< a))))))))
                 () (lines (rdf (tmpd + "/.sysd.err"))))
      good (: (go i m acc) (? !(two? m) (rev acc)
@@ -221,19 +221,19 @@
      tgt (? (arch = "a64") 'a64 (arch = "rv64") 'rv64 'x64)
      ref (llvm arch (map (\ c (nthl c 1)) cs))
      seen (tablet 0)
-     _ (map (\ c (? (id? (nthl c 2) ()) 0
+     _ (map (\ c (? ((nthl c 2) = ()) 0
                     (? (peep seen (intern (nthl c 2)) -1) 0 (pin seen (intern (nthl c 2)) 0))))
             cs)
      (one c r st)                                         ; st = [npass nskip fails]
       (: ir <c asm (nthl c 1) pair (nthl c 2)
          want <r why (nthl r 1)
          got (holo-hex tgt [ir])
-         (? (id? want ())
+         (? (want = ())
             (? ((has? why ro-reject) && (4 <= tally asm) && ((snip asm 0 4) = "msr ")) [<st (nthl st 1 + 1) (nthl st 2)]
-               !(id? pair ()) [<st (nthl st 1 + 1) (nthl st 2)]
+               !(pair = ()) [<st (nthl st 1 + 1) (nthl st 2)]
                [<st (nthl st 1) ((nthl st 2) + [[ir asm got ("llvm-mc reject: " + why)]])])
             (? (got = want)
-               (: _ (? (id? pair ()) 0 (pin seen (intern pair) 1))
+               (: _ (? (pair = ()) 0 (pin seen (intern pair) 1))
                   [(<st + 1) (nthl st 1) (nthl st 2)])
                [<st (nthl st 1) ((nthl st 2) + [[ir asm got ("want " + want)]])])))
      st (: (go m rs st) (? !(two? m) st (go >m >rs (one <m <rs st)))
@@ -241,7 +241,7 @@
      ; a pair whose spellings llvm-mc both refused hides a table typo -- fail it
      fails ((nthl st 2)
             + (foldl (\ a c (: pk (nthl c 2)
-                               (? (id? pk ()) a
+                               (? (pk = ()) a
                                   (? (peep seen (intern pk) 0) a
                                      (: _ (pin seen (intern pk) 1)
                                         (a + [[pk pk () "llvm-mc took NEITHER spelling"]]))))))

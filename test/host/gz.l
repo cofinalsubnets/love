@@ -93,9 +93,9 @@
  (two? tz-r)
  (3 = (tally tz-back))
  ("a.txt" = (peep <tz-back 'nom ()))
- (id? 'file (peep <tz-back 'kind ()))
+ ('file = (peep <tz-back 'kind ()))
  ("alpha\n" = (peep <tz-back 'body ()))
- (id? 'dir (peep <(>tz-back) 'kind ()))
+ ('dir = (peep <(>tz-back) 'kind ()))
  ("sub/b.txt" = (peep <(>(>tz-back)) 'nom ()))
  ; order is the archive's. a reader that answered entries reversed would satisfy
  ; every "is it in there" law and still extract a tree whose directories arrive

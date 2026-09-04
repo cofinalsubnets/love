@@ -48,7 +48,7 @@
 (: r (tether ["cat"])
  _ (assert
     !(setwinsize (cup r) 24 80)          ; () = ok
-    (id? 'ebadf (setwinsize 5 24 80)))   ; a bare fixnum (not a port)
+    ('ebadf = (setwinsize 5 24 80)))   ; a bare fixnum (not a port)
  _ (still (cap r) 9)
  _ (slurp (cup r))
  _ (waitfor (cap r)))
@@ -56,7 +56,7 @@
 ; --- (still pid sig) on a dead pid -> its errno nom, never () ---
 (: dead (cap (tether ["true"]))       ; exits immediately
  _ (waitfor dead)                      ; gather it so the pid is truly gone (not a zombie)
- _ (assert (id? 'esrch (still dead 0))))  ; sig 0 probes existence
+ _ (assert ('esrch = (still dead 0))))  ; sig 0 probes existence
 
 ; --- bidirectional pty I/O: write to the master, read the child's echo back ---
 ; the foundation of bao's wrapper -- a host process and bao talk over the master
@@ -88,7 +88,7 @@
  _ (assert (= a 72) (= b 73))                     ; "hi" -- the "hi" echo is suppressed
  _ (still (cap r) 9)
  _ (waitfor (cap r)))
-(: _ (assert (id? 'ebadf (ptyecho 5 0))))           ; non-port
+(: _ (assert ('ebadf = (ptyecho 5 0))))           ; non-port
 
 (test_fin ())
 (puts "pty: ok") (putc 10)

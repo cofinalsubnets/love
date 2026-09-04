@@ -11,7 +11,7 @@
 ; corpus hears test-strict (00-init.l) and a missing read ends the run, as in file mode.
 (hear welp)
 (assert
- (id? (:) an-never-defined)                      ; the floor handler: the zero point
+ ((:) = an-never-defined)                      ; the floor handler: the zero point
  !an-never-defined                               ; ... so a missing name is false
  !(nom? an-never-defined))                       ; ... the zero point (absence): not a nom -- anonymous and empty
 (hear 0)
@@ -21,13 +21,13 @@
 ; value no longer tells bound from missing apart -- the condition lane does)
 (: an-zero 0)
 (hear (\ a b 'BOOM))
-(assert (0 = an-zero) !(id? 'BOOM an-zero) !(id? (:) an-zero))
+(assert (0 = an-zero) !('BOOM = an-zero) !((:) = an-zero))
 (hear 0)
 
 ; the help hears (help 'missing nom) and its result is the value at the site
-(hear (\ a b (? (id? a 'missing) ['missing-was b] 0)))
+(hear (\ a b (? (a = 'missing) ['missing-was b] 0)))
 (assert (: r an-ghost
-           (&& (two? r) (id? 'missing-was (cap r)) (id? 'an-ghost (caup r)))))
+           (&& (two? r) ('missing-was = (cap r)) ('an-ghost = (caup r)))))
 (hear 0)
 
 ; the read of a lambda's free global happens at closure creation (the runtime
@@ -35,7 +35,7 @@
 ; with the help installed across both moments, both lanes answer the help.
 ; note the discipline: love0 runs this corpus twice in one scope, so a name
 ; asserted missing must never be defined later -- the second pass would fold it.
-(hear (\ a b (? (id? a 'missing) 42 0)))
+(hear (\ a b (? (a = 'missing) 42 0)))
 (: (an-g _) an-phantom)
 (assert (42 = (an-g 0)))
 (hear 0)
@@ -50,9 +50,9 @@
 (: an-outer 99)
 (assert
  (99 = (: a an-outer an-outer 2 a))              ; the bare pre-pin read is the book's an-outer
- (id? (:) (: a an-local an-local 2 a))            ; ... and of nothing, the zero point
+ ((:) = (: a an-local an-local 2 a))            ; ... and of nothing, the zero point
  (2 = (: a an-local an-local 2 an-local))        ; the body reads the local, post-pin
- (id? (:) (: f (\ _ an-cell) v (f 0) an-cell 5 v))  ; the closure's read is the cell: the point pre-pin
+ ((:) = (: f (\ _ an-cell) v (f 0) an-cell 5 v))  ; the closure's read is the cell: the point pre-pin
  (5 = (: f (\ _ an-cell) v (f 0) an-cell 5 (f 0)))) ; ... and the value, once pinned
 (hear 0)
 ; at every depth means nested too, and a shadowed name is the sharp case: the
@@ -65,17 +65,17 @@
 (assert
  (43 = (: q 1 (: an-outer2 (an-outer2 + 1) an-outer2)))      ; shadowed constant, nested: the outer 42 + 1
  (43 = ((\ p (: p (p + 1) p)) 42))                           ; ..and a shadowed lambda param, alike
- (id? (:) (: an-o3 99 (: f (\ _ an-o3) r (f 0) an-o3 42 r))) ; ..the closure's read is the cell, outer in scope
+ ((:) = (: an-o3 99 (: f (\ _ an-o3) r (f 0) an-o3 42 r))) ; ..the closure's read is the cell, outer in scope
  (2 = (: b 1 b (b + 1) b))                                   ; a rebind within one chain still
  (43 = (: c 42 d (c + 1) d)))                                ;   reads the previous value, and folds
 
 ; the help hears the cell miss too; the payload is the binding-site nom
-(hear (\ a b (? (&& (id? a 'missing) (nom? b) ("an-fwd" = (string b))) 'cell-nom 0)))
-(assert (id? 'cell-nom (: g (\ _ an-fwd) q (g 0) an-fwd 2 q)))
+(hear (\ a b (? (&& (a = 'missing) (nom? b) ("an-fwd" = (string b))) 'cell-nom 0)))
+(assert ('cell-nom = (: g (\ _ an-fwd) q (g 0) an-fwd 2 q)))
 (hear 0)
 
-(hear (\ a b (? (id? a 'missing) 'fired 0)))
-(assert (id? (:) ()) (id? (?) ()) (id? (\) ()))
+(hear (\ a b (? (a = 'missing) 'fired 0)))
+(assert ((:) = ()) ((?) = ()) ((\) = ()))
 (hear 0)
 
 ; the conditioned read itself is the compiler's (boxfix's letrec cells) and its nom
@@ -85,6 +85,6 @@
 (assert (: t {1 0} s (mint 0)
            (&& !(id? s (peep t 1 s))               ; a pinned 0 is present, not absent
                (id? s (peep t 9 s))                ; an absent key is absent
-               (id? (:) (peep t 9 ())))))          ; ... and the caller may still name absence ()
+               ((:) = (peep t 9 ())))))          ; ... and the caller may still name absence ()
 
 (hear test-strict)   ; the empty slot is this file's subject; the corpus resumes strict

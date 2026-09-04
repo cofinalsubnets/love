@@ -50,11 +50,11 @@
 ; a failure is a nom, and the nom says which failure: refused is not a bad
 ; argument, and the two operator problems a () could never part now read apart.
 (: _ (assert
-    (id? 'badarg (listen -1))                       ; bad port: refused up here
-    (id? 'econnrefused (connect "127.0.0.1" 7392))  ; nothing listening on 7392
-    (id? 'badarg (connect 12345 80))                ; non-string host
-    (id? 'badarg (connect "example.org" 80))        ; a NAME is a misuse: connect takes a quad
-    (id? 'badarg (udp-bind -1))))
+    ('badarg = (listen -1))                       ; bad port: refused up here
+    ('econnrefused = (connect "127.0.0.1" 7392))  ; nothing listening on 7392
+    ('badarg = (connect 12345 80))                ; non-string host
+    ('badarg = (connect "example.org" 80))        ; a NAME is a misuse: connect takes a quad
+    ('badarg = (udp-bind -1))))
 
 ; --- rung 5: seal lands the write run ------------------------------------------
 ; the bug: `seal` shuts the write half and never flushed. love.h has always

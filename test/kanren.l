@@ -32,7 +32,7 @@
       (= '(1 2 3 4) (slist (s_app d '(3 4))))))
  ; --- unification + reification through `query` ---
  (= '((a 1)) (query 0 '(a) (\\\ a (est a 1))))
- (id? () (query 0 '(a) (\\\ a (&&& (est a 1) (est a 2)))))              ; 1 and 2 don't unify -> no answer
+ (() = (query 0 '(a) (\\\ a (&&& (est a 1) (est a 2)))))              ; 1 and 2 don't unify -> no answer
  (= '((a (1 2 (3 (4))) b (3 (4)) c 4))
     (query 0 '(a b c) (\\\ a b c (&&& (est a [1 2 b])
                                       (est b [3 [c]])
@@ -55,32 +55,32 @@
   (&& (nil? (ufail? r)) (= 'y (walk r v))))
  ; --- disequality: the constraint store rides beside `unify`, order-free ---
  (= '((a 2)) (query 0 '(a) (\\\ a (&&& (dif a 1) (est a 2)))))
- (id? () (query 0 '(a) (\\\ a (&&& (dif a 1) (est a 1)))))              ; the constraint fires later
- (id? () (query 0 '(a) (\\\ a (&&& (est a 1) (dif a 1)))))              ; ..and the other order too
+ (() = (query 0 '(a) (\\\ a (&&& (dif a 1) (est a 1)))))              ; the constraint fires later
+ (() = (query 0 '(a) (\\\ a (&&& (est a 1) (dif a 1)))))              ; ..and the other order too
  (= '((a 1)) (query 0 '(a) (\\\ a (&&& (est a 1) (dif a 2)))))          ; can never be equal -> nothing to watch
- (id? () (query 0 '(a b) (\\\ a b (&&& (dif a b) (est a b)))))         ; two holes told apart, then joined
+ (() = (query 0 '(a b) (\\\ a b (&&& (dif a b) (est a b)))))         ; two holes told apart, then joined
  ; a disequality over a pair is one constraint, not two: it fails only when both halves land
  (: g (\ a b (&&& (dif [a b] [1 2]) (est a 1)))
   (&& (= '((a 1 b 3)) (query 0 '(a b) (\\\ a b (&&& (g a b) (est b 3)))))
-      (id? () (query 0 '(a b) (\\\ a b (&&& (g a b) (est b 2)))))))
+      (() = (query 0 '(a b) (\\\ a b (&&& (g a b) (est b 2)))))))
  ; --- absento: x occurs nowhere in t, now or ever ---
  (= '((t (1 2))) (query 0 '(t) (\\\ t (&&& (absent 'x t) (est t '(1 2))))))
- (id? () (query 0 '(t) (\\\ t (&&& (absent 'x t) (est t '(1 x))))))
- (id? () (query 0 '(t) (\\\ t (&&& (est t '(1 (x))) (absent 'x t)))))   ; and it looks deep
+ (() = (query 0 '(t) (\\\ t (&&& (absent 'x t) (est t '(1 x))))))
+ (() = (query 0 '(t) (\\\ t (&&& (est t '(1 (x))) (absent 'x t)))))   ; and it looks deep
  ; --- a type constraint over any predicate: (apt nom? x) is symbolo ---
  (= '((a foo)) (query 0 '(a) (\\\ a (&&& (apt nom? a) (est a 'foo)))))
- (id? () (query 0 '(a) (\\\ a (&&& (apt nom? a) (est a 1)))))
+ (() = (query 0 '(a) (\\\ a (&&& (apt nom? a) (est a 1)))))
  ; --- the extra-logical three: soft cut, commit, negation as failure ---
  (= '((a 1)) (query 0 '(a) (\\\ a (ifte (est a 1) (\ st (sun st)) (est a 2)))))   ; the test held: else is dropped
  (= '((a 2)) (query 0 '(a) (\\\ a (ifte (&&& (est a 1) (est a 3)) (\ st (sun st)) (est a 2)))))
  (= 1 (tally (query 0 '(a) (\\\ a (sole (||| (est a 1) (est a 2)))))))            ; commit to the first answer
  (= '((a 1)) (query 0 '(a) (\\\ a (&&& (est a 1) (naf (est a 2))))))              ; a=1, and 1 is not 2
- (id? () (query 0 '(a) (\\\ a (&&& (est a 1) (naf (est a 1))))))                  ; ..but it is 1
+ (() = (query 0 '(a) (\\\ a (&&& (est a 1) (naf (est a 1))))))                  ; ..but it is 1
  ; --- ties: a binder is a love lambda, so alpha-equivalence is the language's ---
  (= (tie (\ x [x 'y])) (tie (\ z [z 'y])))                    ; alpha-equal binders are `=`, and so unify
  (nil? (= (tie (\ x [x 'y])) (tie (\ x [x 'w]))))
  (= '((b y)) (query 0 '(b) (\\\ b (est (tie (\ x [x b])) (tie (\ x [x 'y]))))))   ; unify under the binder
- (id? () (query 0 '(b) (\\\ b (&&& (est (tie (\ x [x b])) (tie (\ x [x 'y])))     ; ..and the store still holds
+ (() = (query 0 '(b) (\\\ b (&&& (est (tie (\ x [x b])) (tie (\ x [x 'y])))     ; ..and the store still holds
                                    (dif b 'y)))))
  ; the bound atom reifies as a1, a2, .. in first-sight order -- the answer reads
  (= '((b (tie a1 (a1 a1)))) (query 0 '(b) (\\\ b (est b (tie (\ x [x x]))))))

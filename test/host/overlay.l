@@ -39,7 +39,7 @@
  ; the wound hands it a tag and a sheaf
  hurt (chk1 lux-dom (link '(oops (sheaf tag) top) lux-sigs)
             '(: (oops s t) (zins (wstagof s t) s)))
- _ (assert (two? hurt) (id? 'oops (cap (cap hurt))))
+ _ (assert (two? hurt) ('oops = (cap (cap hurt))))
 
  ; leg 2: the gradual laws
  sg2 (link '(g1 (rect) window) (link '(g2 (window) top) lux-sigs))
@@ -56,7 +56,7 @@
 ; the kernel refuses through the help cell -- install the escape (test/uu.l's
 ; own tail move; the kernel span rightly bakes no global help), probe, uninstall
 (hear (\ p e (: h (peep (uu 'HELPC) () 0) (h ? (h p e) 0))))
-(assert (id? 'rejected ((uu 'rejects) (z \ (uu 'defn) 'boot-bad 'nat '(lam x x)))))
+(assert ('rejected = ((uu 'rejects) (z \ (uu 'defn) 'boot-bad 'nat '(lam x x)))))
 (hear 0)
 
 ; leg 4: load the whole uu corpus (kernel + the StackSet model + its theorems,
@@ -153,7 +153,7 @@
         (zfocup agree-zfocup) (zfocdn agree-zfocdn) (zswapup agree-zswapup)
         (zswapdn agree-zswapdn) (zmaster agree-zmaster) (zins agree-zins)
         (znub agree-znub) (zdel agree-zdel))
- (mname nm) (id? nm 'znub ? 'nfilt nm)                 ; znub's proved twin is nfilt
+ (mname nm) (nm = 'znub ? 'nfilt nm)                   ; znub's proved twin is nfilt
  _ (map (nm \ (: sg (w2-sigof lux-sigs nm)
                  ps (cup (cap (w2-find nm cforms)))
                  ks (cap (cup sg))

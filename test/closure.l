@@ -140,7 +140,7 @@
                _ (pin K 'k 'yes) (helper 'k))
    ; a binding whose nom also spells a macro is a variable here, never a macro head
    (tk3 _) (: (a o) (zz o) c (tablet 0) zz (\ o (peep c o 'no)) _ (pin c 'k 'yes) (a 'k))
-   (assert (id? 'yes (tk1 ())) (id? 'yes (tk2 ())) (id? 'yes (tk3 ()))))
+   (assert ('yes = (tk1 ())) ('yes = (tk2 ())) ('yes = (tk3 ()))))
 
 ; --- a top-level `:` reads its own name late ----------------------------------
 ; the outer let is body-less, so closure-fct defglobs -- after its own def is built.

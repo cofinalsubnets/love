@@ -20,7 +20,7 @@
    cok (from 'clay 'clay-ok?)
    nl (string 10)
    (one c) (cs c)                      ; a single top-level item, no (prog ..) wrapper
-   (gripe? x) (&& (two? x) (id? <x 'gripe)))
+   (gripe? x) (&& (two? x) (<x = 'gripe)))
 
 ; --- types: the base and the declarator are built separately, because a C
 ; declaration brackets its own name. these are the shapes love.c actually writes.

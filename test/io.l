@@ -180,15 +180,15 @@
   (nil? (sound '(41)))                                  ; ")"
 
   ; --- torn: the text ran out inside a shape ---
-  (id? 'torn (sound '(40)))                             ; unclosed list
-  (id? 'torn (sound '(34 97)))                          ; unterminated string
-  (id? 'torn (sound '(39)))                             ; dangling quote
+  ('torn = (sound '(40)))                             ; unclosed list
+  ('torn = (sound '(34 97)))                          ; unterminated string
+  ('torn = (sound '(39)))                             ; dangling quote
 
   ; torn and the clean end are distinct, and neither is a datum: a datum comes back as a
   ; cons whatever it holds, so reading "()" answers the datum () -- exactly the case a
   ; net test would call nothing.
   (: r (sound '(40 41)) (&& (two? r) (nil? (cap r))))
-  !(id? 'torn (sound ()))
+  !('torn = (sound ()))
 
   ; a torn read resumes: hand back the same text with the rest appended
   (: r (sound (cat '(40 49) '(32 50 41))) (&& (two? r) (= '(1 2) (cap r))))

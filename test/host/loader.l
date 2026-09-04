@@ -22,7 +22,7 @@
 ; symbol still misses: the loader has no path to invent, so the splice raises by
 ; name and nothing registers.
 (: a (trap (\ _ (use 'zz-loadprobe)) () (\ a b 'caught))
- (assert (id? a 'caught) (nil? (from 'zz-loadprobe))))
+ (assert (a = 'caught) (nil? (from 'zz-loadprobe))))
 
 ; the path lane: one layer named for the basename, registered, spliced -- bare names
 ; resolve in forms compiled after the use (the capture law: a use must precede its readers)
@@ -62,7 +62,7 @@
 
 ; a path that opens nothing is a miss, like any other
 (: a (trap (\ _ (use "lib/zz-absent.l")) () (\ a b 'caught))
- (assert (id? a 'caught)))
+ (assert (a = 'caught)))
 
 (: _ (unlink "lib/zz-loadprobe.l") _ (unlink "lib/zz-loadprobe/sub.l")
    _ (unlink "lib/zz-pathprobe.l") _ (unlink "lib/zz-elsewhere.l")
@@ -81,7 +81,7 @@
         (close p)))
 (: a (trap (\ _ (use 'zz-seatprobe)) () (\ a b 'caught))
    b (trap (\ _ (use 'zz-fhsprobe)) () (\ a b 'caught))
- (assert (id? a 'caught) (id? b 'caught)
+ (assert (a = 'caught) (b = 'caught)
          (nil? (from 'zz-seatprobe)) (nil? (from 'zz-fhsprobe))))
 (: _ (unlink "out/lib/zz-seatprobe.l") _ (unlink "out/lib/love/zz-fhsprobe.l")
    _ (rmdir "out/lib/love") 0)

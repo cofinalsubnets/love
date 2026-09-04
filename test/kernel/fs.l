@@ -40,7 +40,7 @@
    (= 16384 (& 61440 <>>(stat d)))
    (< 1600000000000 <>(stat d))
    ; absence is the real (), never an empty tray of fields
-   (id? (stat "lib/no-such-thing.l") 'enoent)
+   ((stat "lib/no-such-thing.l") = 'enoent)
    (! (charm? (stat "lib/no-such-thing.l")))
    ; readdir hands over the baked names as strings
    (member? "json.l" (readdir d))
@@ -54,31 +54,31 @@
    (member? "tmp" (readdir ""))
    !(member? f (readdir ""))                     ; components, never whole paths
    ; a file is no directory, and neither is a prefix nothing lies under
-   (id? (readdir f) 'enotdir)
-   (id? (readdir "lib/nope") 'enoent)
+   ((readdir f) = 'enotdir)
+   ((readdir "lib/nope") = 'enoent)
    ; lseek rides the raw openfd lane: end is the size, set and cur the arithmetic
    (: fd (openfd f 0)
       (&& (= sz (lseek fd 0 2)) (= 1 (lseek fd 1 0)) (= 3 (lseek fd 2 1))
           !(close fd)))
-   (id? 'ebadf (lseek -1 0 0))                   ; a bad fd is its nom, never a seek
-   (id? 'enoent (openfd "lib/no-such-thing.l" 0))  ; and so is an absent path
+   ('ebadf = (lseek -1 0 0))                   ; a bad fd is its nom, never a seek
+   ('enoent = (openfd "lib/no-such-thing.l" 0))  ; and so is an absent path
    ; a whence no seat knows is the row's 'einval and moves nothing -- read as SET
    ; it would have seeked to 0 and called that success
    (: fd (openfd f 0)
-      (&& (= 2 (lseek fd 2 0)) (id? 'einval (lseek fd 0 7)) (id? 'einval (lseek fd 0 -3))
+      (&& (= 2 (lseek fd 2 0)) ('einval = (lseek fd 0 7)) ('einval = (lseek fd 0 -3))
           (= 2 (lseek fd 0 1)) !(close fd)))
    ; stat takes a charm as an fd, which is fstat under another name: the same
    ; tuple the path answers, and nothing for a row that is not there
    (: fd (openfd f 0) r (= (stat fd) (stat f)) _ (close fd) r)
-   (id? (stat 4096) 'ebadf) !(charm? (stat 4096))
+   ((stat 4096) = 'ebadf) !(charm? (stat 4096))
    ; and stat reads a row's KIND off the fd: a file, and a directory, which opens
    ; read-only by POSIX's own rule and answers as the tree it is
    (: fd (openfd f 0) s (stat fd) _ (close fd) (= 32768 (& 61440 <>>s)))
    (: fd (openfd d 0) s (stat fd) _ (close fd) (= 16384 (& 61440 <>>s)))
    ; close wears the errno convention: a stranger row is 'ebadf, and so is the
    ; second close of a real one -- the row is gone, which is what the answer says
-   (: fd (openfd f 0) a (close fd) b (close fd) (&& !a (id? 'ebadf b)))
-   (id? 'ebadf (close 4096))
+   (: fd (openfd f 0) a (close fd) b (close fd) (&& !a ('ebadf = b)))
+   ('ebadf = (close 4096))
    !(close -1)                                 ; closing nothing still answers ok
    ; the raw-fd lane reads the ramfs byte for byte where the port lane does, gulp
    ; boundaries and all -- one file is longer than a single gulp

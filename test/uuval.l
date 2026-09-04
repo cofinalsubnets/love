@@ -1595,71 +1595,62 @@
 (assert
  ; ceil is not the identity on the integer part -- the rung that makes the
  ; tower more than five copies of one retraction
- (id? 'accepted (rejects (\ z (defn uv-ok-ceil
-    (paths zed (rceil (rmk (ii1 2) true)) (ii1 3)) (idpath (ii1 3))))))
- (id? 'rejected (rejects (\ z (defn uv-bad-ceil
-    (paths zed (rceil (rmk (ii1 2) true)) (ii1 2)) (idpath (ii1 2))))))
+ ('accepted = (rejects (\ z (defn uv-ok-ceil (paths zed (rceil (rmk (ii1 2) true)) (ii1 3)) (idpath (ii1 3))))))
+ ('rejected = (rejects (\ z (defn uv-bad-ceil (paths zed (rceil (rmk (ii1 2) true)) (ii1 2)) (idpath (ii1 2))))))
  ; the clamp bites at 0, and takes the whole negative half with it
- (id? 'accepted (rejects (\ z (defn uv-ok-clamp (paths nat (zsat (zneg 4)) 0) (idpath 0)))))
- (id? 'rejected (rejects (\ z (defn uv-bad-clamp (paths nat (zsat (zneg 4)) 5) (idpath 5)))))
+ ('accepted = (rejects (\ z (defn uv-ok-clamp (paths nat (zsat (zneg 4)) 0) (idpath 0)))))
+ ('rejected = (rejects (\ z (defn uv-bad-clamp (paths nat (zsat (zneg 4)) 5) (idpath 5)))))
  ; net sums over a link; it does not read the head alone
- (id? 'rejected (rejects (\ z (defq uv-bad-link
+ ('rejected = (rejects (\ z (defq uv-bad-link
     (pi d nat (pi a (vtre d) (pi b (vtre d)
       (paths msr (netd (succ d) (ii2 (tpair a b))) (netd d a)))))
     (lam d (lam a (lam b (idpath (netd d a)))))))))
  ; and saturate is idempotent, not idempotent-up-to-one
- (id? 'rejected (rejects (\ z (defq uv-bad-satidem
+ ('rejected = (rejects (\ z (defq uv-bad-satidem
     (pi v val (paths nat (vsat (nval (succ (vsat v)))) (vsat v)))
     (lam v (idpath (vsat v)))))))
  ; the tag on the leaf: () and 0 net the same and are not the same value
- (id? 'accepted (rejects (\ z (defn uv-ok-tag
-    (paths bool (veq vnilv (nval 0)) false) (idpath false)))))
- (id? 'rejected (rejects (\ z (defn uv-bad-tag
-    (paths bool (veq vnilv (nval 0)) true) (idpath true)))))
+ ('accepted = (rejects (\ z (defn uv-ok-tag (paths bool (veq vnilv (nval 0)) false) (idpath false)))))
+ ('rejected = (rejects (\ z (defn uv-bad-tag (paths bool (veq vnilv (nval 0)) true) (idpath true)))))
  ; ..and it is only the tag: the measure cannot tell them apart
- (id? 'rejected (rejects (\ z (defn uv-bad-tagnet
+ ('rejected = (rejects (\ z (defn uv-bad-tagnet
     (paths bool (meqb (vnet vnilv) (vnet (nval 0))) false) (idpath false)))))
  ; the ceiling holds a net that will not fit at the edge
- (id? 'accepted (rejects (\ z (defn uv-ok-ceiling
-    (paths nat (zsatc (nzed (add chmax 3))) chmax) (idpath chmax)))))
- (id? 'rejected (rejects (\ z (defn uv-bad-ceiling
+ ('accepted = (rejects (\ z (defn uv-ok-ceiling (paths nat (zsatc (nzed (add chmax 3))) chmax) (idpath chmax)))))
+ ('rejected = (rejects (\ z (defn uv-bad-ceiling
     (paths nat (zsatc (nzed (add chmax 3))) (add chmax 3)) (idpath (add chmax 3))))))
  ; and truth is green above the floor, not green alone -- 0 is both
- (id? 'rejected (rejects (\ z (defq uv-bad-green
+ ('rejected = (rejects (\ z (defq uv-bad-green
     (pi v val (paths bool (beqb (vbit v) (vgreen v)) true))
     (lam v (uv-colq (pr1 (vre v)) (pr2 (vre v))))))))
  ; transitivity takes both sides -- the left one alone says nothing about the right
- (id? 'accepted (rejects (\ z (defq uv-ok-trans
+ ('accepted = (rejects (\ z (defq uv-ok-trans
     (pi u val (pi v val (pi w val (pi h1 (paths bool (veq u v) true)
        (pi h2 (paths bool (veq v w) true) (paths bool (veq u w) true))))))
     uv-veq-trans))))
- (id? 'rejected (rejects (\ z (defq uv-bad-trans
+ ('rejected = (rejects (\ z (defq uv-bad-trans
     (pi u val (pi v val (pi w val (pi h1 (paths bool (veq u v) true)
        (paths bool (veq u w) true)))))
     (lam u (lam v (lam w (lam h1 (uv-veq-refl u)))))))))
  ; ..and the congruence takes both limbs: a link is not read by its cap alone
- (id? 'rejected (rejects (\ z (defq uv-bad-link-cong
+ ('rejected = (rejects (\ z (defq uv-bad-link-cong
     (pi a val (pi b val (pi c val (pi d val (pi ha (paths bool (veq a c) true)
        (paths bool (veq (vlink a b) (vlink c d)) true))))))
     (lam a (lam b (lam c (lam d (lam ha (uv-veq-refl (vlink a b)))))))))))
  ; the pin does not move the net: a normaliser that did would be worthless, and
  ; every law crossing the bridge would be crossing to a different carrier
- (id? 'accepted (rejects (\ z (defq uv-ok-pinnet
-    (pi v val (paths msr (pnet (pin v)) (vnet v))) uv-pin-net))))
- (id? 'rejected (rejects (\ z (defq uv-bad-pinnet
-    (pi v val (paths msr (pnet (pin v)) mzero)) uv-pin-net))))
+ ('accepted = (rejects (\ z (defq uv-ok-pinnet (pi v val (paths msr (pnet (pin v)) (vnet v))) uv-pin-net))))
+ ('rejected = (rejects (\ z (defq uv-bad-pinnet (pi v val (paths msr (pnet (pin v)) mzero)) uv-pin-net))))
  ; ..and the bridge goes both ways: soundness alone leaves veq free to accept
  ; more than paths does, which is exactly the thing a decision procedure owes
- (id? 'accepted (rejects (\ z (defq uv-ok-bridge
+ ('accepted = (rejects (\ z (defq uv-ok-bridge
     (pi u val (pi w val (pi h (paths pval (pin u) (pin w)) (paths bool (veq u w) true))))
     uv-paths-veq))))
- (id? 'rejected (rejects (\ z (defq uv-bad-bridge
+ ('rejected = (rejects (\ z (defq uv-bad-bridge
     (pi u val (pi w val (paths bool (veq u w) true)))
     (lam u (lam w (uv-veq-refl u)))))))
  ; and a leaf spelled at height 1 is a legal VALUE and not a legal pinned one --
  ; the many-spellings defect, turned into a type error
- (id? 'accepted (rejects (\ z (defn uv-ok-pin pval
-    (tpair (tpair 0 (anum (rmsr (zrea (nzed 7))))) (idpath 0))))))
- (id? 'rejected (rejects (\ z (defn uv-bad-pin pval
-    (tpair (tpair 1 (ii1 (anum (rmsr (zrea (nzed 7)))))) (idpath 1)))))))
+ ('accepted = (rejects (\ z (defn uv-ok-pin pval (tpair (tpair 0 (anum (rmsr (zrea (nzed 7))))) (idpath 0))))))
+ ('rejected = (rejects (\ z (defn uv-bad-pin pval (tpair (tpair 1 (ii1 (anum (rmsr (zrea (nzed 7)))))) (idpath 1)))))))
 (hear test-strict)

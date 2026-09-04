@@ -18,19 +18,19 @@
        (: p (spawn ["sleep" "5"])
           (&& (charm? p) (< 0 p)
               ; a child alive, none exited -> glean is the real () (not charm 0), nil?-true
-              (id? (glean 0) ()) (nil? (glean 0)) !(charm? (glean 0))
+              ((glean 0) = ()) (nil? (glean 0)) !(charm? (glean 0))
               ; kill it (bao's `still`), then glean the zombie -> (pid . 128+sig)
               (: _ (still p 9) r (glean-until 200)
                  (&& (two? r) (= (cap r) p) (= (cup r) 137)))))
        ; no children left -> 'echild: a nom, truthy, and not the () above
-       (id? 'echild (glean 0)) (nom? (glean 0)) !(nil? (glean 0)) !(id? (glean 0) ())
+       ('echild = (glean 0)) (nom? (glean 0)) !(nil? (glean 0)) !((glean 0) = ())
        ; the blocking foreground wait: spawn then wait -> the child's exit status
        (= 0 (wait (spawn ["true"])))
        (= 3 (wait (spawn ["sh" "-c" "exit 3"])))
        ; the "()"-returns are the real zero point, not charm 0:
-       ; (id? x ()) holds and (charm? x) is false -- charm 0 would fail both.
+       ; (x = ()) holds and (charm? x) is false -- charm 0 would fail both.
        !(close -1)                                         ; closing nothing still answers ok
-       (id? (getenv "LOVE_NO_SUCH_ENV_VAR_XYZZY") ())             ; getenv absent -> the real ()
+       ((getenv "LOVE_NO_SUCH_ENV_VAR_XYZZY") = ())             ; getenv absent -> the real ()
        !(charm? (getenv "LOVE_NO_SUCH_ENV_VAR_XYZZY"))))
 
 
@@ -48,36 +48,36 @@
     (= 32768 (& 61440 (cauup st)))                  ; s_ifmt bits say regular file
     ; a directory wears the dir bits; a missing path is its nom
     (= 16384 (& 61440 (cauup (stat d))))
-    (id? (stat (+ f "-absent")) 'enoent) !(charm? (stat (+ f "-absent")))
+    ((stat (+ f "-absent")) = 'enoent) !(charm? (stat (+ f "-absent")))
     ; readdir: our one entry, as a string; a missing dir is its nom
     (: l (readdir d) (&& (two? l) (= "x" (cap l)) !(two? (cup l))))
-    (id? (readdir (+ d "-absent")) 'enoent)
+    ((readdir (+ d "-absent")) = 'enoent)
     ; lseek rides the raw openfd lane: end is the size, set returns the offset
     (: fd (openfd f 0)
        (&& (= 5 (lseek fd 0 2)) (= 1 (lseek fd 1 0)) (= 3 (lseek fd 2 1))
            !(close fd)))
-    (id? 'ebadf (lseek -1 0 0))                     ; a bad fd is its nom
+    ('ebadf = (lseek -1 0 0))                     ; a bad fd is its nom
     ; a whence no seat knows is the row's 'einval and moves nothing -- read as SET
     ; it would have seeked to 0 and called that success
     (: fd (openfd f 0)
-       (&& (= 2 (lseek fd 2 0)) (id? 'einval (lseek fd 0 7)) (id? 'einval (lseek fd 0 -3))
+       (&& (= 2 (lseek fd 2 0)) ('einval = (lseek fd 0 7)) ('einval = (lseek fd 0 -3))
            (= 2 (lseek fd 0 1)) !(close fd)))
     ; stat takes a charm as an fd, which is fstat under another name: the same
     ; tuple the path answers, and nothing for a row that is not there
     (: fd (openfd f 0) r (= (stat fd) (stat f)) _ (close fd) r)
-    (id? (stat 4096) 'ebadf) !(charm? (stat 4096))
+    ((stat 4096) = 'ebadf) !(charm? (stat 4096))
     ; and stat reads a row's kind off the fd: a file, and a directory, which
     ; opens read-only by POSIX's own rule
     (: fd (openfd f 0) s (stat fd) _ (close fd) (= 32768 (& 61440 (cauup s))))
     (: fd (openfd d 0) s (stat fd) _ (close fd) (= 16384 (& 61440 (cauup s))))
     ; close wears the errno convention: a stranger row is 'ebadf, and so is the
     ; second close of a real one -- the row is gone, which is what it says
-    (: fd (openfd f 0) a (close fd) b (close fd) (&& !a (id? 'ebadf b)))
-    (id? 'ebadf (close 4096))
+    (: fd (openfd f 0) a (close fd) b (close fd) (&& !a ('ebadf = b)))
+    ('ebadf = (close 4096))
     ; unlink: () ok, then the file really is gone, and a re-unlink says so
     !(unlink f)
-    (id? (stat f) 'enoent) (id? (readdir d) ())
-    (id? 'enoent (unlink f))))
+    ((stat f) = 'enoent) ((readdir d) = ())
+    ('enoent = (unlink f))))
 
 ; --- the raw-fd lane: the port ops with a charm where the port goes ------------
 ; an fd carries no buffer of love's and no seat, so each op is one motion on the

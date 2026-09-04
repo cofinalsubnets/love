@@ -239,7 +239,7 @@ some literal
       ; generated page loses nothing (verified against groff by hand, byte-identical
       ; to the hand-written pages these replaced).
       _ (map (\ f (: d (mdread (slurpf f))
-                     (assert (id? 'meta (cap (cap d)))    ; a .th, and it leads
+                     (assert ('meta = (cap (cap d)))    ; a .th, and it leads
                              (! (member? 'rule (map cap d)))))) ["doc/love.md" "doc/cook.md"])
       0)
 

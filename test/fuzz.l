@@ -214,7 +214,7 @@
    fz-small (fz-int -4 5)
    fz-mix  (fz-oneof [fz-small fz-s fz-nomv fz-l])
    fz-mix3 (fz-trip fz-mix fz-mix fz-mix)
-   (fz-txt? v) ((string? v || (? (id? v ()) 0 (nom? v))) ? 1 0)   ; a ?-name owes a bit
+   (fz-txt? v) ((string? v || (? (v = ()) 0 (nom? v))) ? 1 0)   ; a ?-name owes a bit
    (fz-ch? v)  (two? v ? 1 0)
    (fz-mul-skip a b c) (fz-ch? a && (fz-ch? b || fz-ch? c) && !(fz-txt? b) && !(fz-txt? c))
    (fz-add-assoc v)

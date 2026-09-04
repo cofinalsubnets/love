@@ -16,9 +16,9 @@
    ; rename: the file moves whole -- old gone, new wears the same size
    _ (assert
        !(rename a b)                                ; ok is ()
-       (id? (stat a) 'enoent) (= 5 (cap (stat b)))
-       (id? 'enoent (rename a (+ d "/x")))          ; a missing source is a live errno
-       (id? 'badarg (rename 7 b)))                  ; misuse: a non-string path
+       ((stat a) = 'enoent) (= 5 (cap (stat b)))
+       ('enoent = (rename a (+ d "/x")))          ; a missing source is a live errno
+       ('badarg = (rename 7 b)))                  ; misuse: a non-string path
 
    ; symlink + readlink: path becomes a link to target -- and the target string
    ; resolves relative to the link's directory, so a link beside its file names
@@ -28,7 +28,7 @@
        !(symlink "b" l)
        (= (readlink l) "b")
        (= 5 (cap (stat l))) (= 32768 (& 61440 (cauup (stat l))))
-       (id? (readlink b) 'einval) (id? (readlink (+ d "/nope")) 'enoent))
+       ((readlink b) = 'einval) ((readlink (+ d "/nope")) = 'enoent))
 
    ; chmod: the permission bits land exactly (0600 = 384); utime: the mtime
    ; lands on the stat scale (MILLISECONDS), and a non-charm ms reads "now"
@@ -39,13 +39,13 @@
        (= 1600000000000 (caup (stat b)))
        !(utime b ())
        (< 1600000000000 (caup (stat b)))            ; "now" is later than the pinned past
-       (id? 'enoent (chmod (+ d "/nope") 384))      ; a miss is a live errno
-       (id? 'badarg (chmod b "rw")))                ; misuse: a non-charm mode
+       ('enoent = (chmod (+ d "/nope") 384))      ; a miss is a live errno
+       ('badarg = (chmod b "rw")))                ; misuse: a non-charm mode
 
    ; chown: a no-op self-chown succeeds (-1 -1 leaves both ids alone); misuse einvals
    _ (assert
        !(chown b -1 -1)
-       (id? 'badarg (chown b "x" 0)))
+       ('badarg = (chown b "x" 0)))
 
    ; umask: always answers the previous mask, so set-read-restore round-trips
    _ (: m0 (umask 18)
@@ -55,11 +55,11 @@
    _ (: e (+ d "/sub")
         _ (mkdir e 493)
         (assert
-          (id? 'enotempty (rmdir d))                 ; d holds b and l still
+          ('enotempty = (rmdir d))                 ; d holds b and l still
           !(rmdir e)
-          (id? (stat e) 'enoent)
-          (id? 'enoent (rmdir e))                    ; already gone: a live errno
-          (id? 'badarg (rmdir 7))))
+          ((stat e) = 'enoent)
+          ('enoent = (rmdir e))                    ; already gone: a live errno
+          ('badarg = (rmdir 7))))
 
    ; hardlink: two names, one file -- content shows through both, and the
    ; survivor keeps it when the first name unlinks
@@ -68,7 +68,7 @@
         (assert
           !(hardlink b h)
           (= 5 (cap (stat h)))
-          (id? 'eexist (hardlink b h))               ; the name is taken
+          ('eexist = (hardlink b h))               ; the name is taken
           (: _ (unlink b) (= 5 (cap (stat h))))
           !(unlink h)))
 
@@ -82,8 +82,8 @@
           (= 5 (copyfile c (+ d "/c2")))
           (= 5 (cap (stat (+ d "/c2"))))
           (= 0 (copyfile z (+ d "/z2")))            ; empty in, empty out, and 0 is the count
-          (id? 'enoent (copyfile (+ d "/nope") (+ d "/c3")))
-          (id? 'badarg (copyfile 7 c))              ; misuse: a non-string path
+          ('enoent = (copyfile (+ d "/nope") (+ d "/c3")))
+          ('badarg = (copyfile 7 c))              ; misuse: a non-string path
           !(unlink c) !(unlink z)
           !(unlink (+ d "/c2")) !(unlink (+ d "/z2"))))
 
@@ -103,7 +103,7 @@
    ; errno (nobody mounts "" on / as no-such-fs). sigfd's twin assert lives in
    ; test/host/sh.l. forks on the OS when a second one joins.
    _ (: e (mount "" "/" "no-such-fs")
-        (assert (nom? e) (! (id? e 'enosys))))
+        (assert (nom? e) (! (e = 'enosys))))
 
    _ (unlink l) _ (unlink b)
    _ (test_fin ())

@@ -31,12 +31,12 @@
   (: r (hark ["printf" "%s-%s" "ab" "cd"]) (= "ab-cd" (cup r)))
 
   ; --- a program that can't be spawned -> its errno's nom, not a chain ---
-  (id? 'enoent (hark ["/no/such/prog-xyzzy"]))    ; abs path: ENOENT
-  (id? 'enoent (hark ["no-such-prog-xyzzy"]))     ; PATH miss: ENOENT
+  ('enoent = (hark ["/no/such/prog-xyzzy"]))    ; abs path: ENOENT
+  ('enoent = (hark ["no-such-prog-xyzzy"]))     ; PATH miss: ENOENT
 
   ; --- our-side misuse -> 'badarg, which is not a posix name ---
-  (id? 'badarg (hark 0))                          ; empty argv (nil)
-  (id? 'badarg (hark ["echo" 5]))                 ; 5 is not a string
+  ('badarg = (hark 0))                          ; empty argv (nil)
+  ('badarg = (hark ["echo" 5]))                 ; 5 is not a string
 
   ; --- output larger than the initial buffer exercises the grow path ---
   (: r (hark ["seq" "20000"]) (&& (= 0 (cap r)) (< 65536 (sat (cup r)))))

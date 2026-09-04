@@ -951,42 +951,35 @@
 (hear (\ p e (: h (peep HELPC () 0) (? h (h p e) 0))))
 (assert
  ; the integers really do associate -- and zsucc really does travel
- (id? 'accepted (rejects (\ z (defq uv-ok-zsucc
+ ('accepted = (rejects (\ z (defq uv-ok-zsucc
     (pi a zed (paths zed (zadd a (zsucc zzero)) (zsucc a)))
     (lam a (idpath (zsucc a)))))))
- (id? 'rejected (rejects (\ z (defq uv-bad-zsucc
-    (pi a zed (paths zed (zadd a (zsucc zzero)) a))
-    (lam a (idpath a))))))
+ ('rejected = (rejects (\ z (defq uv-bad-zsucc (pi a zed (paths zed (zadd a (zsucc zzero)) a)) (lam a (idpath a))))))
  ; the degeneration drops the number; it does not keep it
- (id? 'accepted (rejects (\ z (defq uv-ok-degen
+ ('accepted = (rejects (\ z (defq uv-ok-degen
     (pi m msr (pi a val (pi b val (paths val (vadd (vnum m) (vlink a b)) (vlink a b)))))
     (lam m (lam a (lam b (idpath (vlink a b)))))))))
- (id? 'rejected (rejects (\ z (defq uv-bad-degen
+ ('rejected = (rejects (\ z (defq uv-bad-degen
     (pi m msr (pi a val (pi b val (paths val (vadd (vnum m) (vlink a b)) (vnum m)))))
     (lam m (lam a (lam b (idpath (vnum m)))))))))
  ; () is the unit of + and the zero of *, not the unit of both
- (id? 'rejected (rejects (\ z (defq uv-bad-mulunit
-    (pi v val (paths val (vmul vnilv v) v)) (lam v (idpath v))))))
+ ('rejected = (rejects (\ z (defq uv-bad-mulunit (pi v val (paths val (vmul vnilv v) v)) (lam v (idpath v))))))
  ; the sign of a product is not the sign of its magnitude
- (id? 'accepted (rejects (\ z (defn uv-ok-zmul
-    (paths zed (zmul (ii2 1) (ii1 3)) (ii2 5)) (idpath (ii2 5))))))
- (id? 'rejected (rejects (\ z (defn uv-bad-zmul
-    (paths zed (zmul (ii2 1) (ii1 3)) (ii1 6)) (idpath (ii1 6))))))
+ ('accepted = (rejects (\ z (defn uv-ok-zmul (paths zed (zmul (ii2 1) (ii1 3)) (ii2 5)) (idpath (ii2 5))))))
+ ('rejected = (rejects (\ z (defn uv-bad-zmul (paths zed (zmul (ii2 1) (ii1 3)) (ii1 6)) (idpath (ii1 6))))))
  ; ..and the bridge names the lane mx.l names: a chain against a number keeps
  ; the chain, which is bin_a with the chain on the left
- (id? 'accepted (rejects (\ z (defn uv-ok-lane
-    (paths nat (mxadd mxKChain mxKCharm) mxLbin_a) (idpath mxLbin_a)))))
- (id? 'rejected (rejects (\ z (defn uv-bad-lane
-    (paths nat (mxadd mxKChain mxKCharm) mxLbin_b) (idpath mxLbin_b)))))
+ ('accepted = (rejects (\ z (defn uv-ok-lane (paths nat (mxadd mxKChain mxKCharm) mxLbin_a) (idpath mxLbin_a)))))
+ ('rejected = (rejects (\ z (defn uv-bad-lane (paths nat (mxadd mxKChain mxKCharm) mxLbin_b) (idpath mxLbin_b)))))
  ; append associates and does not commute -- a law that held of both would be
  ; holding of nothing
- (id? 'rejected (rejects (\ z (defq uv-bad-app-comm
+ ('rejected = (rejects (\ z (defq uv-bad-app-comm
     (pi d nat (pi t (vtre d) (pi v val
        (paths bool (veq (vappd d t v) (vapp v (tpair d t))) true))))
     (lam d (lam t (lam v (uv-veq-refl (vappd d t v)))))))))
  ; ..and the pad really is invisible to it: an append onto a padded spine is the
  ; append onto the spine, which is the step the associativity leans on
- (id? 'accepted (rejects (\ z (defq uv-ok-app-pad
+ ('accepted = (rejects (\ z (defq uv-ok-app-pad
     (pi a nat (pi b nat (pi t (vtre a) (pi w val
        (paths bool (veq (vappd (mx2 a b) (padl a b t) w) (vappd a t w)) true)))))
     uv-vapp-padl)))))

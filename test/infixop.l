@@ -52,7 +52,7 @@
 ; structural incompleteness still pends: an unclosed list comes back torn.
 ; a trailing operator does not pend -- "1 +" is two complete datums whose factor
 ; folds to the partial (+ 1) at compile time, not a reader state.
-(assert (id? 'torn (sound '(40 49 32 43))))              ; "(1 +" -> torn
+(assert ('torn = (sound '(40 49 32 43))))              ; "(1 +" -> torn
 (: r (sound '(49 32 43))                                 ; "1 +"  -> 1, then +
    (assert (1 = <r) ('+ = (cap (sound >r)))))
 
