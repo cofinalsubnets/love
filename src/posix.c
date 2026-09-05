@@ -225,19 +225,49 @@ void host_spawn_guard(struct ai *g, int on) {
 #endif
 }
 
-ai_noinline static struct ai *host_spawn(struct ai *g) {
+// the one fork + exec. argv rides at sp[0]; in/out/err are spawnio's fixed triple
+// (-1: leave it), applied first; fdmap is a list of (childfd . srcfd) pairs and closes a list
+// of fds, both read off the stack AFTER the marshal (a GC may have moved them), -1 for
+// none. pg >= 0 puts the child in that group (0: a fresh one it leads), fg hands it the
+// terminal. pushes the pid, or a nom.
+ai_noinline static struct ai *host_spawnx(struct ai *g, int in, int out, int err,
+                                          int mapat, int closeat, intptr_t pg, intptr_t fg) {
  char **cav;
  g = argv_marshal(g, &cav);
  if (!cav) return g;                                         // misuse pushed -1, or oom
+ ai_word fdmap = mapat >= 0 ? g->sp[mapat] : ZeroPoint,
+         closes = closeat >= 0 ? g->sp[closeat] : ZeroPoint;
  fflush(NULL);                                               // flush now, not twice in the child
  pid_t pid = fork();
  if (pid < 0) return ai_push(g, 1, ai_err(g, errno));
- if (!pid) { sig_dfl_job(); execvp(cav[0], cav); _exit(127); }   // child: default signals, exec or die 127
+ if (!pid) {
+  if (pg >= 0) {
+   setpgid(0, (pid_t) pg);                     // 0 leads a fresh group, >0 joins it
+   if (fg) { signal(SIGTTOU, SIG_IGN);          // the handoff, from the background
+    tcsetpgrp(0, pg ? (pid_t) pg : getpid()); } }
+  if (in  >= 0) dup2(in, 0);
+  if (out >= 0) dup2(out, 1);
+  if (err >= 0) dup2(err, 2);
+  for (ai_word p = fdmap; chainp(p); p = B(p)) {
+   ai_word e = A(p);
+   if (!chainp(e)) continue;
+   intptr_t cfd = charmp(A(e)) ? getcharm(A(e)) : -1;
+   if (cfd < 0) continue;
+   ai_word sw = B(e);
+   if (charmp(sw) && getcharm(sw) >= 0) dup2((int) getcharm(sw), (int) cfd);
+   else close((int) cfd); }                    // () (or a negative) srcfd closes childfd
+  for (ai_word p = closes; chainp(p); p = B(p)) {
+   intptr_t fd = getcharm(A(p));
+   if (fd > 2) close((int) fd); }
+  sig_dfl_job();                                // undo the shell's ignores (TTOU too)
+  execvp(cav[0], cav);
+  _exit(127); }                                 // seen by the next glean
+ if (pg >= 0) setpgid(pid, (pid_t) (pg ? pg : pid));   // parent side too: no race window
  return ai_push(g, 1, putcharm(pid)); }                      // parent: the live pid
 
 static lvm(lvm_spawn) {
  Pack(g);
- g = host_spawn(g);
+ g = host_spawnx(g, -1, -1, -1, -1, -1, -1, 0);
  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  Sp[1] = Sp[0];                                              // pid over argv
@@ -248,20 +278,26 @@ static lvm(lvm_spawn) {
 // supervisor maps it back to a unit; status is proc_status (exit code / 128+sig).
 // waitpid(-1, WNOHANG) reaps any child -- incl. reparented orphans on a real pid1.
 // the arg is a dummy (ignored), so a bare (glean) curries; call it (glean 0).
-ai_noinline static struct ai *host_reapany(struct ai *g) {
+// waitpid(WNOHANG) + the chain alloc, off the wrappers' frames so their tails jump
+// (cf. host_tether). leaves exactly one net value at sp[0]: () still running / none
+// pending, an errno nom, or the record -- (status) for a named pid, (pid . status)
+// when the wait was a wildcard and the pid is news. not-ok g only on oom.
+ai_noinline static struct ai *host_reap(struct ai *g, pid_t pid) {
  int st;
- pid_t r = waitpid(-1, &st, WNOHANG);
- if (r == 0) { g->sp[0] = ZeroPoint; return g; }            // none pending
- if (r < 0)  { g->sp[0] = ai_err(g, errno); return g; }     // error ('echild = none alive)
+ pid_t r = waitpid(pid, &st, WNOHANG);
+ if (r == 0) { g->sp[0] = ZeroPoint; return g; }
+ if (r < 0)  { g->sp[0] = ai_err(g, errno); return g; }
  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
+ word status = putcharm(proc_status(st));
  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                                 putcharm(r), putcharm(proc_status(st)));
+                                pid < 0 ? putcharm(r) : status,
+                                pid < 0 ? status : ZeroPoint);   // a real ()-tailed list, not the charm-0 fossil
  g->sp[0] = word(w);
  return g; }
 
 static lvm(lvm_reapany) {
  Pack(g);
- g = host_reapany(g);
+ g = host_reap(g, -1);
  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  Ip += 1; ai_musttail return Continue(); }
@@ -545,32 +581,6 @@ static lvm(lvm_openfd) {
  Sp[1] = (fd < 0) ? ai_err(g, errno) : putcharm(fd);
  ai_musttail return Nextp(1, 1); }
 
-ai_noinline static struct ai *host_spawnio(struct ai *g, int in, int out, int err,
-                                            intptr_t pg, intptr_t fg) {
- char **cav;
- g = argv_marshal(g, &cav);
- if (!cav) return g;                         // misuse pushed -1, or oom
- ai_word closes = g->sp[4];                  // re-read post-marshal (ai_have may have GC'd)
- fflush(NULL);
- pid_t pid = fork();
- if (pid < 0) return ai_push(g, 1, ai_err(g, errno));
- if (!pid) {
-  if (pg >= 0) {
-   setpgid(0, (pid_t) pg);                     // 0 leads a fresh group, >0 joins it
-   if (fg) { signal(SIGTTOU, SIG_IGN);          // the handoff, from the background
-    tcsetpgrp(0, pg ? (pid_t) pg : getpid()); } }
-  if (in  >= 0) dup2(in, 0);
-  if (out >= 0) dup2(out, 1);
-  if (err >= 0) dup2(err, 2);
-  for (ai_word p = closes; chainp(p); p = B(p)) {
-   intptr_t fd = getcharm(A(p));
-   if (fd > 2) close((int) fd); }
-  sig_dfl_job();                                // undo the shell's ignores (TTOU too)
-  execvp(cav[0], cav);
-  _exit(127); }
- if (pg >= 0) setpgid(pid, (pid_t) (pg ? pg : pid));   // parent side too: no race window
- return ai_push(g, 1, putcharm(pid)); }
-
 static lvm(lvm_spawnio) {
  int in  = charmp(Sp[1]) ? (int) getcharm(Sp[1]) : -1,
      out = charmp(Sp[2]) ? (int) getcharm(Sp[2]) : -1,
@@ -578,9 +588,8 @@ static lvm(lvm_spawnio) {
  intptr_t pg = charmp(Sp[5]) ? getcharm(Sp[5]) : -1,
           fg = charmp(Sp[6]) ? getcharm(Sp[6]) : 0;
  Pack(g);
- g = host_spawnio(g, in, out, err, pg, fg);  // argv at sp[0], closes at sp[4]
- if (!ai_ok(g))
-   ai_musttail return Ap(_lvm_ghelp, g);
+ g = host_spawnx(g, in, out, err, -1, 4, pg, fg);   // argv at sp[0], closes at sp[4]
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  Sp[7] = Sp[0];                              // pid over the 7 args
  ai_musttail return Nextp(1, 7); }
@@ -615,41 +624,11 @@ static lvm(lvm_fdopen) {
 // ((1 . f) (2 . 1)) and the second entry sees the first's work). pg/fg and the
 // closes list ride unchanged from spawnio (the job-control dance + the pipe ends
 // the child must not leak). spawnio stays for its callers; this is the shell's lane.
-ai_noinline static struct ai *host_spawnmap(struct ai *g, intptr_t pg, intptr_t fg) {
- char **cav;
- g = argv_marshal(g, &cav);
- if (!cav) return g;                         // misuse pushed -1, or oom
- ai_word fdmap = g->sp[1], closes = g->sp[2];   // re-read post-marshal (ai_have may have GC'd)
- fflush(NULL);
- pid_t pid = fork();
- if (pid < 0) return ai_push(g, 1, ai_err(g, errno));
- if (!pid) {
-  if (pg >= 0) {
-   setpgid(0, (pid_t) pg);                     // 0 leads a fresh group, >0 joins it
-   if (fg) { signal(SIGTTOU, SIG_IGN);          // the handoff, from the background
-    tcsetpgrp(0, pg ? (pid_t) pg : getpid()); } }
-  for (ai_word p = fdmap; chainp(p); p = B(p)) {
-   ai_word e = A(p);
-   if (!chainp(e)) continue;
-   intptr_t cfd = charmp(A(e)) ? getcharm(A(e)) : -1;
-   if (cfd < 0) continue;
-   ai_word sw = B(e);
-   if (charmp(sw) && getcharm(sw) >= 0) dup2((int) getcharm(sw), (int) cfd);
-   else close((int) cfd); }                    // () (or a negative) srcfd closes childfd
-  for (ai_word p = closes; chainp(p); p = B(p)) {
-   intptr_t fd = getcharm(A(p));
-   if (fd > 2) close((int) fd); }
-  sig_dfl_job();                                // undo the shell's ignores (TTOU too)
-  execvp(cav[0], cav);
-  _exit(127); }
- if (pg >= 0) setpgid(pid, (pid_t) (pg ? pg : pid));   // parent side too: no race window
- return ai_push(g, 1, putcharm(pid)); }
-
 static lvm(lvm_spawnmap) {
  intptr_t pg = charmp(Sp[3]) ? getcharm(Sp[3]) : -1,
           fg = charmp(Sp[4]) ? getcharm(Sp[4]) : 0;
  Pack(g);
- g = host_spawnmap(g, pg, fg);               // argv at sp[0], fdmap sp[1], closes sp[2]
+ g = host_spawnx(g, -1, -1, -1, 1, 2, pg, fg);   // argv at sp[0], fdmap sp[1], closes sp[2]
  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  Sp[5] = Sp[0];                              // pid over the 5 args
@@ -1202,28 +1181,13 @@ static lvm(lvm_tether) {
  ai_musttail return Nextp(1, 1); }
 
 // workhorse for (reap pid), called with g Packed and pid at g->sp[0]. the &st
-// waitpid + the chain alloc live here (off the wrapper's frame so lvm_reap's
-// Continue() tail-jumps, cf. host_tether). leaves exactly one net value at sp[0]:
-// the (status) one-element list, () still-running, or an errno nom. returns a
-// not-ok g only on oom (lvm_reap routes that to ghelp).
-ai_noinline static struct ai *host_reap(struct ai *g, ai_word pidw) {
- intptr_t pid = charmp(pidw) ? getcharm(pidw) : 0;
- int st;
- pid_t r = waitpid((pid_t) pid, &st, WNOHANG);
- if (r == 0) return g->sp[0] = ZeroPoint, g;         // still running
- if (r < 0) return g->sp[0] = ai_err(g, errno), g;   // waitpid error
- if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
- struct ai_chain *w = ini_chain(bump(g, Width(struct ai_chain)),
-                                putcharm(proc_status(st)), ZeroPoint);
- return g->sp[0] = word(w), g; }
-
 // (reap pid): non-blocking wait. a reaped child returns its decoded status as a
 // one-element list so the result is a present chain even at status 0 -- a caller
 // polling in a loop tells "exited 0" (a pair) from "still running" (()) without
 // the two collapsing to the same blue. a nom means waitpid itself erred.
 static lvm(lvm_reap) {
  Pack(g);
- g = host_reap(g, Sp[0]);
+ g = host_reap(g, (pid_t) (charmp(Sp[0]) ? getcharm(Sp[0]) : 0));
  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  ai_musttail return Next(1); }
