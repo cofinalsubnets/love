@@ -7895,13 +7895,24 @@
                            (go (keys (g 'alias)) ()))   ; a data alias (musl's __stdin_used) names the same bytes
                     (globs >gs want zm (acc + (1 < an ? [['align an]])
                                            + als + [['label lbl] ['raw bytes]]))))))
+       ; equal literals share one block with every label on it. C leaves it unspecified
+       ; whether equal string literals are distinct objects, so the merge is free -- the
+       ; named const objects, which must keep distinct addresses, are rg/rs/cg/cs above
+       ; and never reach here. grouped at layout, not at intern: the codegen retry paths
+       ; roll 'strs back, and a table minted here cannot go stale under them.
        (strs ss acc)
-        (? !(two? ss) acc
-           (: p <ss
-              (bts s i bacc) (i < 0 ? bacc (bts s (i - 1) (s i . bacc)))
-              t <>p
-              (strs >ss (acc + [['label <p]
-                                ['raw (bts t (#t - 1) () + '(0))]]))))
+        (: (bts s i bacc) (i < 0 ? bacc (bts s (i - 1) (s i . bacc)))
+           (grp l seen ord)
+            (? !(two? l) [seen (rev ord)]
+               (: p <l t <>p old (peep seen t ())
+                  (grp >l (pin seen t (old + [<p])) (two? old ? ord (t . ord)))))
+           (lay ts seen a)
+            (? !(two? ts) a
+               (: t <ts
+                  (lay >ts seen (a + map (\ b ['label b]) (seen t)
+                                    + [['raw (bts t (#t - 1) () + '(0))]]))))
+           gs (grp ss {} ())
+           (lay <>gs <gs acc))
        ; ..and whether one of them may ride a lane nothing writes: the .rodata rule
        ; (ro?) asked of every global in it, since flags belong to the section and one
        ; writable member decides for all -- a section anything outside the program
