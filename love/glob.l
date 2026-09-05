@@ -46,7 +46,7 @@
                  (act? i && (b = 63)) ((j < ns) && fm (i + 1) (j + 1))
                  (&& (act? i) (b = 91) (j < ns))
                    (: c (cls i j)
-                      (? !(two? c) (((s j) = 91) && fm (i + 1) (j + 1))  ; lone [ is itself
+                      (? (one? c) (((s j) = 91) && fm (i + 1) (j + 1))  ; lone [ is itself
                          (<c && fm >c (j + 1))))
                  (j < ns && s j = b) (fm (i + 1) (j + 1)))))
       (bit (fm 0 0))))

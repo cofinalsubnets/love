@@ -307,6 +307,7 @@ static lvm(lvm_math2) {
 
 
 m1(mvm1)
+lvm(lvm_atan2) { g->b = (ai_word) (uintptr_t) (ai_atan2); ai_musttail return Ap(lvm_math2, g); }
 
 // (log x): a positive real stays float; a negative real or complex widens to the
 // complex principal value ~((log |z|) (arg z)) -- so (log -1) = (* i pi), euler in
@@ -1142,6 +1143,37 @@ lvm(lvm_pow) {
    Have(twin_req);
    *++Sp = mk_twin(&Hp, re, im); ai_musttail return Next(1); } }
  g->b = (ai_word) (uintptr_t) (ai_pow); ai_musttail return Ap(lvm_math2, g); }
+
+// (sqrt x): a complex operand or a negative real widens to the principal root,
+// as (** x 1/2) does; a non-negative real stays in the float lane.
+lvm(lvm_sqrt) {
+ word a = Sp[0];
+ if (twinp(a)) {
+  Have(twin_req + gem_req);
+  word half = mk_gem(&Hp, (ai_flo_t) 0.5);
+  struct ai_twin *v = (struct ai_twin*) Hp;
+  Hp += twin_req;
+  v->ap = lvm_twinbox;
+  twin_pow_fill(v, a, half);
+  ai_musttail return Answer(word(v)); }
+ if (isnum(a) && toflo(a) < 0) {
+  ai_flo_t m = ai_sqrt(-toflo(a));
+  Have(twin_req);
+  ai_musttail return Answer(mk_twin(&Hp, 0, m)); }
+ g->b = (ai_word) (uintptr_t) (ai_sqrt); ai_musttail return Ap(lvm_math1, g); }
+
+// (exp x): a complex operand takes the complex power lane, as (** e x) does.
+lvm(lvm_exp) {
+ word a = Sp[0];
+ if (twinp(a)) {
+  Have(twin_req + gem_req);
+  word e = mk_gem(&Hp, (ai_flo_t) 2.718281828459045);
+  struct ai_twin *v = (struct ai_twin*) Hp;
+  Hp += twin_req;
+  v->ap = lvm_twinbox;
+  twin_pow_fill(v, e, a);
+  ai_musttail return Answer(word(v)); }
+ g->b = (ai_word) (uintptr_t) (ai_exp); ai_musttail return Ap(lvm_math1, g); }
 
 // fill a packed ai_C array with (re = a-element, im = b-element) under broadcast
 static ai_noinline void twin_build_fill(struct ai_tray *r, word a, word b) {

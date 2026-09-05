@@ -438,8 +438,8 @@
                              (['? (adesug env ti ta <l) (adesug env ti ta <>l)] + (two? >>l ? [(go >>l)] ()))))
                 as)
              (id? op 'nil? && 1 = #as && !(member? op env))    ; opfix spells the negations as ?s: (nil? x) is (? x 0 1),
-               ['? (adesug env ti ta <as) 0 1]                 ; (atom? x) is (? (two? x) 0 1), (!= a b) is (? (= a b) 0 1)
-             (id? op 'atom? && 1 = #as && !(member? op env))
+               ['? (adesug env ti ta <as) 0 1]                 ; (one? x) is (? (two? x) 0 1), (!= a b) is (? (= a b) 0 1)
+             ((id? op 'one? || id? op 'atom?) && 1 = #as && !(member? op env))
                ['? ['two? (adesug env ti ta <as)] 0 1]
              (id? op '!= && 2 = #as && !(member? op env))
                ['? ['= (adesug env ti ta <as) (adesug env ti ta <>as)] 0 1]

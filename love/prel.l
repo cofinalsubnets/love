@@ -6,27 +6,23 @@
    (const x _) x
    (co f x y) (f y x)                ; the argument-transpose
    flip co
-   two? link?
+   link? two?
    intern name
-   sat saturate)
+   saturate sat
+   link . >< .)                     ; the infix cons: (a >< b) and (a . b) are (. a b); glued ><x stays the cup-cap accessor (valence)
 (: : () ? () \ ())
 (: pi 3.141592653589793
    tau (* 2 pi)
    e 2.718281828459045
    true 1 false 0
    i (twin 0 1) ;; FIXME up top
-   (tangent x) (/ (sine x) (cosine x))
-   ; the math.h spellings, so C's names read here too. `pow` waits for `**`, below.
-   sin sine cos cosine tan tangent fabs abs
-   (sqrt x) ((/ 1 2) x)
-   (exp x) (x e)
-   (atan x) (arg (twin 1 x))
-   (atan2 y x) (arg (twin x y))
+   ; the long spellings, synonyms of the math.h nifs. `pow` waits for `**`, below.
+   sine sin cosine cos tangent tan fabs abs
    star-tray (tray 0) gem-tray (tray 0.0) twin-tray (tray (twin 0 0)) top-tray (tray ())  ; the four typed-tray ctors (witness baked in)
    (tier v) (? (tray? v) (: c (atype v) (? (= c 0) star-tray (= c 1) gem-tray (= c 2) twin-tray top-tray)) ())  ; a tray's tier is its ctor; nil off a tray
    zero? nil?
-   (atom? x) (nil? (two? x))
-   one? atom?
+   (one? x) (nil? (two? x))
+   atom? one?
    ; a fresh layer: its own macro table at key 0, the pre-enter chain and name at charm key 31337.
    ; a charm key cannot collide with a name. (enter ()) is anonymous.
    (enter nm) (: F (tablet 0) _ (pin F 0 (tablet 0)) _ (pin F 31337 (link (books ()) nm))
@@ -56,8 +52,7 @@
    (caaap x) (cap (cap (cap x))) (caaup x) (cap (cap (cup x)))
    (cauap x) (cap (cup (cap x))) (cauup x) (cap (cup (cup x)))
    (cuaap x) (cup (cap (cap x))) (cuaup x) (cup (cap (cup x)))
-   (cuuap x) (cup (cup (cap x))) (cuuup x) (cup (cup (cup x)))
-   >< link . link)                                  ; the infix cons: (a >< b) and (a . b) are (link a b); glued ><x stays the cup-cap accessor (valence)
+   (cuuap x) (cup (cup (cap x))) (cuuup x) (cup (cup (cup x))))
 (: (gcd a b) (? (= b 0) (? (< a 0) (- 0 a) a) (gcd b (% a b)))
    (modpow b k m) (? (< k 1) 1 (: h (modpow b (// k 2) m) h2 (% (* h h) m)
                                  (? (= 0 (% k 2)) h2 (% (* h2 b) m)))))
@@ -436,7 +431,7 @@
 (: operators (pins (tablet 0)
  0 (pins (tablet 0)                                 ; --- arity 0: glued. takes nothing from the form
  '< cap '> cup '+ net '* prod '| abs '- negate '/ reciprocal
- '% fraction '? bit '$ saturate '! nil? '^ jot
+ '% fraction '? bit '$ sat '! nil? '^ jot
  '# tally '~ conj                              ; the count, and the twin's flip
  '0? nil? '1? one? '2? two?)                   ; the arity predicates: a row is a word, so it may
                                                ; spell digits -- 2?<>x is (two? (cap (cup x)))
@@ -478,7 +473,7 @@
 ; wants a tree of noms, and this is the one place that knows the map.
 (: opnoms (pins (tablet 0)
    cap 'cap cup 'cup net 'net prod 'prod abs 'abs negate 'negate
-   reciprocal 'reciprocal fraction 'fraction bit 'bit saturate 'saturate
+   reciprocal 'reciprocal fraction 'fraction bit 'bit sat 'sat
    nil? 'nil? jot 'jot one? 'one? two? 'two? tally 'tally conj 'conj)
    (opnom v) (? (two? v) 0 (peep opnoms v 0))       ; a list is never a row; keep it off the hash
    (opword v) (: n (opnom v) (? n n v))             ; ..and the total one: the word, or v untouched

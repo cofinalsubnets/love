@@ -13,7 +13,7 @@
 (: (rt x) (ev (cap (sound (show x))))
  (assert
   (= "\+" (show (+)))
-  (= "link" (show link))
+  (= "." (show link))
   (= "(\\ a a)" (show (\ x x)))
   (= "(\\ a b (+ a b))" (show (\ a b (+ a b))))      ; already canonical: prints as written
   (= (show (\ x x)) (show (\ y y)))               ; a-equivalent -> identical print

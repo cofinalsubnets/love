@@ -585,6 +585,8 @@ float am_sinf(float), am_cosf(float), am_atan2f(float, float), am_sqrtf(float),
 #define ai_log   am_logf
 #define ai_pow   am_powf
 #endif
+static ai_inline ai_flo_t ai_tan(ai_flo_t x) { return ai_sin(x) / ai_cos(x); }
+static ai_inline ai_flo_t ai_atan(ai_flo_t x) { return ai_atan2(x, (ai_flo_t) 1); }
 
 // bignum limbs: native-width wherever a double-width product type exists (64-bit
 // limbs do a quarter the limb-ops); the 32-bit wasm shim (no __int128) keeps 32-bit
@@ -699,7 +701,7 @@ lvm_t lvm_kcall,
  lvm_saturate, lvm_ceil, lvm_peep, lvm_lamsrc, lvm_nifnom, lvm_cask, lvm_bcopy,
  lvm_coin, lvm_coinmk, lvm_load, lvm_dieof, lvm_coinp, lvm_sub_coin, lvm_quot_coin,   // newtypes: a coin (die + payload), a typed hot riding KHot
  lvm_charmp, lvm_tabp, lvm_band, lvm_bor, lvm_gem, lvm_gemp,
- lvm_sin, lvm_cos, lvm_log, lvm_pow,   // sqrt/exp/tan/atan/atan2 are derived (numeral/complex forms), not nifs
+ lvm_sin, lvm_cos, lvm_tan, lvm_atan, lvm_atan2, lvm_exp, lvm_sqrt, lvm_log, lvm_pow,
  lvm_twin, lvm_twinp, lvm_re, lvm_im, lvm_conj, lvm_abs, lvm_carg,   // complex; lvm_twin_bin declared apart below
  lvm_bxor, lvm_bsr, lvm_bsl, lvm_puts,
  lvm_string, lvm_lt,     lvm_le,   lvm_eq,     lvm_same, lvm_gt,  lvm_ge,
@@ -1209,7 +1211,7 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
  emit_int(_res, toint(a) c_op toint(b));                                    \
  ai_musttail return Push(_res); }
 #define mvm1(n) lvm(lvm_##n) { g->b = (ai_word) (uintptr_t) (ai_##n); ai_musttail return Ap(lvm_math1, g); }
-#define m1(_) _(sin) _(cos)   // sqrt/exp/tan/atan derived; sin/cos/log are the kept transcendentals (log has its own ap)
+#define m1(_) _(sin) _(cos) _(tan) _(atan)   // the real-only unaries; sqrt/exp/log widen to complex and have their own aps
 #define cmp_lt(nom, vop) lvm(nom) { \
  word a = Sp[0], b = Sp[1]; \
  if (__builtin_expect(charmp(a) && charmp(b), 1)) { \

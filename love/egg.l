@@ -5,7 +5,7 @@
       (\ k (pull book k 0)))
    (each (keys book)
     (\ k (? (nom? k) (? (= "lvm_" (snip (string k) 0 4)) (pull book k 0) 0) 0)))))
- (sit e z a) (? (link? a) (sit e (e (cap a)) (cup a)) z)
+ (sit e z a) (? (two? a) (sit e (e (cap a)) (cup a)) z)
 (\ egg post (:
  now (clock 0)
  ; sit twice so ev compiles itself

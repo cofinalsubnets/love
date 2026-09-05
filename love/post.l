@@ -183,19 +183,19 @@
   ; the noms canon leaves spelled as written: free, global and :-bound. quoted data is
   ; data, never a reference, so a binder cannot capture into it. one walk, into a tablet
   ; the proposals then read by key; bd is the binders in scope, a stack, so it stays a list.
-  (fvs x bd t) (? !(two? x) (? (nom? x) (? (inq x bd) t (pin t x 1)) t)
+  (fvs x bd t) (? (one? x) (? (nom? x) (? (inq x bd) t (pin t x 1)) t)
                   (qot? x) t
                   (lam? x) (fvl >x bd t)
                   (fvs >x bd (fvs <x bd t)))
-  (fvl l bd t) (? !(two? >l) (fvs <l bd t)
-                  (fvl >l (<l >< bd) t))
-  (canon x sc i fv) (? !(two? x) (? (nom? x) (: r (assoc x sc) (? r >r x)) x)
+  (fvl l bd t) (? (one? >l) (fvs <l bd t)
+                  (fvl >l (<l . bd) t))
+  (canon x sc i fv) (? (one? x) (? (nom? x) (: r (assoc x sc) (? r >r x)) x)
                        (qot? x) x
-                       (lam? x) ('\ >< cops >x sc i fv)
-                       (canon <x sc i fv >< canon >x sc i fv))
-  (cops l sc i fv) (? !(two? >l) ((canon <l sc i fv) >< ())          ; the last operand is the body
+                       (lam? x) ('\ . cops >x sc i fv)
+                       (canon <x sc i fv . canon >x sc i fv))
+  (cops l sc i fv) (? !(two? >l) [(canon <l sc i fv)]          ; the last operand is the body
                       (: j (nxt i fv) nm (lnom j)
-                       (nm >< cops >l ((<l >< nm) >< sc) (1 + j) fv)))
+                       (nm . cops >l ((<l . nm) . sc) (1 + j) fv)))
 
   (pfn o v sn) (? (partp v)
     (: n (nargs v)
@@ -231,6 +231,7 @@
 ; form; it answers its operand, so it drops into any sequence.
 (: (print o x) (: _ (px o x ()) x)
    (show x) (: o (jug 0) _ (px o x ()) (slurp o))
-   (dot x) (: _ (? (string? x || (hot? x && !(port? x))) (say out x) (px out x ())) _ (flush out) x))
+   (dot x) (: _ (? (string? x || hot? x && !(port? x)) (say out x) (px out x ())) _ (flush out) x))
 (: putx (print out)
    _ (seal-hook 7 show))                           ; `string` coerces through it from here on
+(: (red? x) (+x < 0) (blue? x) (+x = 0) (green? x) (+x > 0))
