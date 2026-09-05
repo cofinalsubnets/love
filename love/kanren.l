@@ -170,10 +170,9 @@
     (keyvar keys k) (? (atom? keys) 0 (: kv <keys (? (k = <kv) kv (keyvar >keys k))))
     (reify1 st) (dename (flip catmap ks (\ k (: kv (keyvar <<st k) (? (two? kv) [k (walk_star <st kv ())])))))
     (map reify1 ((? n (stake n) slist) (g st0))))
-   g-die (: d {0 'goal}                              ; the goal-coin: + = disj = |||, * = conj = &&&
-          (pins d 1 (\ A B (coin d (disj2 A B)))
-                  2 (\ A B (coin d (conj2 A B)))))
-   rel (coin g-die))                     ; wrap a goal as a ring element
+   g-die (die 'goal (z \ {'+ (\ A B (z (disj2 A B)))   ; the goal-coin: + = disj = |||, * = conj = &&&
+                        '* (\ A B (z (conj2 A B)))}))
+   rel (coin g-die))                     ; wrap a goal as a coin
 (: (=== u v) (rel (est u v))                        ; the relation's infix unify -- it needs no row
    (=/= u v) (rel (dif u v)))                       ; in prel's `operators`, which holds only the
 ; exceptions, and any all-punct head is already infix-dyadic at house band. =/= shares a band

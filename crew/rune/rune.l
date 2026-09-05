@@ -612,21 +612,21 @@
 ; a red star is a coefficient, not nothing: polyish? tests the zero point by
 ; identity and value ((), the charm 0), never by net -- !(-1) is true, and the
 ; old !v gate read -1 as the zero poly, so (+ p -1) dropped its constant.
-(: polyd {0 'poly 6 1 7 1}
-   (polyish? v) (? (= v ()) 1 (0 = v) 1 (two? v) (two? <v) 0)
+(: (polyish? v) (? (= v ()) 1 (0 = v) 1 (two? v) (two? <v) 0)
    (arity v) #(mkey <v)
    (pok? v w) (? (polyish? v) 1 (star? v) (polyish? w ? #w))
    (plift v w) (? (polyish? v) v (pconst (arity w) v))
-   (pmeth f a b) (: x (load a) y (load b)
-                  (? (pok? x y && pok? y x) (coin polyd (f (plift x y) (plift y x)))))
+   (pmeth z f) (\ a b (: x (load a) y (load b)
+                       (? (pok? x y && pok? y x) (z (f (plift x y) (plift y x))))))
    (zface v w) (? (star? v) (? (polyish? w) (0 = tally w) 0) 0)
-   mulm (pmeth pmul)
-   _ (pin polyd 1 (pmeth padd))
-   _ (pin polyd 2 (\ a b (: x (load a) y (load b)
-                            (? (zface x y) (coin polyd ())
-                               (zface y x) (coin polyd ())
-                               (mulm a b)))))
-   _ (pin polyd 5 (pmeth psub))
+   polyd (die 'poly (z \ {'net 'tally 'star 1
+                          '+ (pmeth z padd)
+                          '* (: mulm (pmeth z pmul)
+                               (\ a b (: x (load a) y (load b)
+                                        (? (zface x y) (z ())
+                                           (zface y x) (z ())
+                                           (mulm a b)))))
+                          '- (pmeth z psub)}))
    (poly p) (? (polyish? p) (coin polyd p) ()))
 
 ; --- the eval bridge: a poly compiles to a live closure ---------------------

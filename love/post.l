@@ -211,6 +211,22 @@
 
 (: (array s) (: sh (a-shape s) (a-coll sh (foldl (*) 1 sh) 0)))
 
+; --- die: a newtype descriptor. the mechanism is C (coin/coin?/die-of/load, the KHot lane
+; in +/*): a coin carries a die, the {slot method} tablet the C side reads, and this is its
+; name->slot face. (die 'nm spec) -> the die, its constructor (coin d). spec is a tablet keyed
+; by these symbols (a raw slot charm passes), or a function of the constructor when a method
+; strikes its own kind: (z \ {'+ ..}). a method takes both operands raw; (lift z f) lowers
+; them and re-strikes f's answer. slot 6 is a mode, never a closure -- the nets table names it.
+(: dieslots {'name 0 '+ 1 '* 2 'ap 3 'hot 4 '- 5 'net 6 'star 7 '/ 8}
+   dienets  {'payload 0 'tally 1 'ratio 2}
+   (dieslot k) (charm? k ? k (: v (peep dieslots k -1) (v < 0 ? (scare 'die-slot k) v)))
+   (dienet v)  (charm? v ? v (: n (peep dienets v -1) (n < 0 ? (scare 'die-net v) n)))
+   (die nm spec)
+    (: d {0 nm}
+       s (tablet? spec ? spec (spec (coin d)))      ; the die is bound before a method names it back
+       (foldl (\ d k (pin d (dieslot k) (k = 'net ? (dienet (s k)) (s k)))) d (keys s)))
+   (lift z f) (\ a b (z (f (load a) (load b)))))
+
 ;;; FIXME help/io setters below here. redesign the API with more structure
 ; binary?: does f take exactly two operands? read two ways -- the arity off the n-ary closure
 ; marker, else the param count off the source a compiled lambda stashes. one-sided on purpose:
@@ -438,7 +454,7 @@
                                 (go >l 0)) 0)
        (? !(two? ks) (say o "{}") (: _ (put o 123) _ (go ks 1) (put o 125)))))
 
-  ; --- coins show as (name 'payload): the arity-1 ctor love/coin.l hands out, applied
+  ; --- coins show as (name 'payload): the die's name applied
   ; to what it was given, so the form evals back to an equal coin when the name is a
   ; bound ctor. the payload is quoted where it would otherwise re-evaluate -- a chain
   ; reads as an application and a nom as a variable. without that (q (1 2)) read back as

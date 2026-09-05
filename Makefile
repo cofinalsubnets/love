@@ -29,7 +29,7 @@ asm0_h = out/lib/holo0.h out/lib/x640.h out/lib/a640.h
 glaze_h = out/lib/emit.h out/lib/auto.h out/lib/hook.h out/lib/walk.h
 sed_lit = sed \
   -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/'
-boot_h = out/lib/cli0.h out/lib/egg0.h out/lib/post0.h out/lib/p10.h out/lib/prel0.h out/lib/ev0.h out/lib/bao0.h out/lib/uu0.h out/lib/coin0.h out/lib/rng0.h out/lib/q0.h out/lib/glob0.h out/lib/kanren0.h out/lib/overlay0.h out/lib/peg0.h out/lib/verbs0.h $(asm0_h)
+boot_h = out/lib/cli0.h out/lib/egg0.h out/lib/post0.h out/lib/p10.h out/lib/prel0.h out/lib/ev0.h out/lib/bao0.h out/lib/uu0.h out/lib/rng0.h out/lib/q0.h out/lib/glob0.h out/lib/kanren0.h out/lib/overlay0.h out/lib/peg0.h out/lib/verbs0.h $(asm0_h)
 .PHONY: lib
 lib: $(lib_h) $(boot_h)
 lcat_love = $(love0) -l love/prel.l
@@ -71,7 +71,7 @@ cats_egg_items   = @out/lib/egg.h
 cats_p1_items    = @out/lib/p1.h
 cats_prel_items  = @out/lib/prel.h " " @out/lib/ev.h
 cats_post_items  = @out/lib/post.h
-cats_modsa_items = @out/lib/coin.h @out/lib/rng.h @out/lib/q.h @out/lib/glob.h \
+cats_modsa_items = @out/lib/rng.h @out/lib/q.h @out/lib/glob.h \
   @out/lib/kanren.h @out/lib/overlay.h @out/lib/uu.h
 cats_modsb_items = @out/lib/bao.h @out/lib/verbs.h @out/lib/scan.h @out/lib/re.h @out/lib/peg.h
 cats_z = out/lib/cat_egg_z.h out/lib/cat_p1_z.h out/lib/cat_prel_z.h out/lib/cat_post_z.h \
@@ -88,7 +88,7 @@ out/lib/cat_prel_z.h: out/lib/prel.h out/lib/ev.h tools/mkgz.l $(love0)
 	@$(lcat_love) tools/mkgz.l ai_cat_prel_z $(cats_prel_items) > $@
 out/lib/cat_post_z.h: out/lib/post.h tools/mkgz.l $(love0)
 	@$(lcat_love) tools/mkgz.l ai_cat_post_z $(cats_post_items) > $@
-out/lib/cat_modsa_z.h: out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/glob.h out/lib/kanren.h out/lib/overlay.h out/lib/uu.h tools/mkgz.l $(love0)
+out/lib/cat_modsa_z.h: out/lib/rng.h out/lib/q.h out/lib/glob.h out/lib/kanren.h out/lib/overlay.h out/lib/uu.h tools/mkgz.l $(love0)
 	@$(lcat_love) tools/mkgz.l ai_cat_mods_a_z $(cats_modsa_items) > $@
 out/lib/cat_modsb_z.h: out/lib/bao.h out/lib/verbs.h out/lib/scan.h out/lib/re.h out/lib/peg.h tools/mkgz.l $(love0)
 	@$(lcat_love) tools/mkgz.l ai_cat_mods_b_z $(cats_modsb_items) > $@
@@ -173,7 +173,7 @@ $(ho)/love.o: out/lib/love_version.h
 # the lcat'd headers the frontends bake inline -- src/cats.c takes the egg and the module
 # set, src/main.c the CLI and the glaze. one roster for both: the mooncc twin and the HCC
 # link below read the same name, and three spellings is how they drift.
-baked_h = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/glob.h out/lib/kanren.h out/lib/overlay.h out/lib/scan.h out/lib/re.h out/lib/peg.h out/lib/uu.h out/lib/verbs.h out/lib/distlist.h $(holo_h) $(glaze_h)
+baked_h = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/rng.h out/lib/q.h out/lib/glob.h out/lib/kanren.h out/lib/overlay.h out/lib/scan.h out/lib/re.h out/lib/peg.h out/lib/uu.h out/lib/verbs.h out/lib/distlist.h $(holo_h) $(glaze_h)
 $(ho)/src/main.o $(ho)/src/cats.o: $(baked_h)
 $(ho)/src/cats.o: $(cats_z)
 # the carried-blob reader both the first boot and the kernel's ram fs decode with

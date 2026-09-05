@@ -11,9 +11,7 @@
 ;   string  <-> string
 ;   array   <-> list, and `[]` is plain ()
 ;   object  <-> tablet
-(use 'coin)
-
-(: json-die   {0 'json-bool}
+(: json-die   (die 'json-bool {})
    json-true  (coin json-die 1)
    json-false (coin json-die 0)
    ; `&&` is value-preserving, so the bare conjunction answers () and not the bit a
@@ -23,7 +21,7 @@
 
    ; null, on its own die -- payload 0 so it nets blue like the nothing it is, but
    ; never `=` json-false.
-   json-null-die  {0 'json-null}
+   json-null-die  (die 'json-null {})
    json-null      (coin json-null-die 0)
    (json-null? v) !!(coin? v && (= (die-of v) json-null-die))
 

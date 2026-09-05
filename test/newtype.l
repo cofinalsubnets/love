@@ -3,18 +3,19 @@
 ; routes to the khot lane where the coin is intercepted and the die's plus/times
 ; run over the loaded payloads. () stays the +/* identity for free (the mint hoist
 ; sits above the matrix); net/=/</show default over the payload in the C core.
-; `coin`/`load`/`coin?`/`die-of` are the raw primitives; `ring`/`monoid` the builders.
+; `coin`/`load`/`coin?`/`die-of` are the raw primitives; `die` names the slots, `lift` a method.
 
-(: ; Z/5Z -- a ring: add and multiply the residues mod 5
-   z5 (ring 'z5 (\ x y ((x + y) % 5)) (\ x y ((x * y) % 5)))
+(: ; Z/5Z -- add and multiply the residues mod 5
+   z5 (coin (die 'z5 (z \ {'+ (lift z (\ x y ((x + y) % 5)))
+                          '* (lift z (\ x y ((x * y) % 5)))})))
    a  (z5 3)
    b  (z5 4)
-   ; a sum monoid -- a plus but no times (a monoid has no product)
-   sm (monoid 'sm (\ x y (x + y)))
+   ; a sum -- a plus but no times
+   sm (coin (die 'sm (z \ {'+ (lift z (\ x y (x + y)))})))
    smp (sm 2)
    smq (sm 3)
-   ; a counted kind -- net-mode 1 (slot 6): nets by tally, not by content
-   cntd {0 'cnt 6 1}
+   ; a counted kind -- nets by tally, not by content
+   cntd (die 'cnt {'net 'tally})
    (cnt p) (coin cntd p)
    (assert
     ; --- what a coin is ---
@@ -42,7 +43,7 @@
     (() = () * a)                ; ... and *'s zero: it annihilates
     (() = a * ())
 
-    ; --- a monoid has a +, but no * ---
+    ; --- a die with a +, but no * ---
     (sm 5 = smp + smq)         ; 2 + 3 = 5
     !(smp * smq)             ; no times slot -> nil, like an undefined matrix cell
 
@@ -97,7 +98,7 @@
     (q 1 2 = 1 - q 1 2)
     (nil? (q 1 2 - ()))          ; () is absent to -, so there is nothing to compute
     (nil? (() - q 1 2))          ; ... either side
-    !(a - z5 1)                ; a die without slot 5 -> nil, like a monoid's *
+    !(a - z5 1)                ; a die without - -> nil, like sm's *
     !(a - sm 3)                ; distinct dies never combine
 
     ; --- `/` rides slot 8: q pins it (invert and multiply); zero has no reciprocal ---
@@ -172,6 +173,6 @@
     !(lit? (q 1 2))          ; a rational is data -- a value, not a reference (like a number)
     !(lit? a)                ; a mod-n residue too
     !(lit? (sm 5))
-    !(lit? (coin {0 'd} 5))  ; a plain die -> data
-    (lit? (coin {0 'h 4 1} 5))     ; ... but a die with DieHot (slot 4) strikes lit coins
+    !(lit? (coin (die 'd {}) 5))       ; a plain die -> data
+    (lit? (coin (die 'h {'hot 1}) 5))  ; ... but a hot die strikes lit coins
     ))

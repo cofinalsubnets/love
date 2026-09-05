@@ -31,8 +31,8 @@ static const char src_post[] =
 ;
 static const char boot_ai[] =
   "(use 'uu) (: uu (from 'uu))"   // the library layers, ALL modules (registered by src_mods just
-  "(use 'coin)"                   //   below; the corpus asserts on each): the uu kernel keeps its
-  "(use 'rng)"                    //   one-name surface, then coin, rng, q, kanren in the old eval order
+  "(use 'rng)"                    //   below; the corpus asserts on each): the uu kernel keeps its
+                                  //   one-name surface, then rng, q, kanren in the old eval order
   "(use 'q)"
   "(use 'kanren)"
   "(use 'bao)"                    // the shell core, last and spliced, as src/main.c has it:
@@ -41,8 +41,6 @@ static const char boot_ai[] =
 // (module 'nm ..), so evaling this registers the lot and boot_ai's uses are splices.
 static const char src_mods[] =
 #include "uu.h"
-" "
-#include "coin.h"
 " "
 #include "rng.h"
 " "

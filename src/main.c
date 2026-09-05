@@ -271,7 +271,6 @@ static char const
  , cli[] =
 #include "cli0.h"
  , src0_mods[] =
-#include "coin0.h"
 #include "rng0.h"
 #include "q0.h"
 #include "glob0.h"
@@ -327,7 +326,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
   g = ai_evals_(g, "(use 'bao)(use 'holo)");
   g = ai_unsplice_(g);
   g = ai_evals_(g,
-    "(use 'uu)(: uu (from 'uu))(use 'coin)(use 'rng)(use 'q)(use 'kanren)"
+    "(use 'uu)(: uu (from 'uu))(use 'rng)(use 'q)(use 'kanren)"
     "(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0)"
     "   (c0read p) (: q (open p \"r\")"
     "               (? q (: s (slurp q) _ (close q) s)"
@@ -440,7 +439,6 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
   g = ai_cats_egg(g);                                    // prel then ev's half, and the printer with `@`
   g = ai_cats_mods(g);                                   // register every baked module; the uses below are splices
   g = ai_evals_(g,
-    "(use 'coin)"
     "(use 'rng)"
     "(use 'q)"
     "(use 'kanren)"
