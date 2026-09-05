@@ -62,10 +62,10 @@ try 1 'cannot open'       /nonexistent.l
 try 1 'cannot open'       -l /nonexistent.l -e 1
 
 # the VERB rail answers a charm and the rail leaves with it -- the one lane whose
-# status is a value rather than a literal. ⚠ NOT `bake`/`wake`: those are the PRIME
-# verbs, taken by main.c before this file is ever evaluated (its run_program), so
-# their status says nothing about the rail here. `verbs` is one that does reach it.
-try 0 bake verbs                          # the rail's own listing, off the tab
+# status is a value rather than a literal. bake/wake are C's alone, one argv chain
+# before this file is evaluated, so they are no rows here and the listing has
+# neither; `verbs` is a row, and naming itself is the check that cannot rot.
+try 0 verbs verbs                         # the rail's own listing, off the tab
 
 [ $fails -eq 0 ] || { echo "FAIL cli ($fails)"; exit 1; }
 echo "cli: every exit lane keeps its status -- 0 working, 1 unopenable, 2 malformed, and the verb's own"
