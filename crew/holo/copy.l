@@ -33,7 +33,7 @@
    (oc-lma id segs off)
     (: (go ps) (? !(two? ps) (scare 'copy-unmapped-section off)
                   (: p <ps
-                     (? ((<p <= off) && (off < (<p + at p 1))) (at p 2 + (off - <p))
+                     (? ((<p <= off) && (off < (<p + p 1))) (p 2 + (off - <p))
                         (go >ps))))
        (go segs))
 
@@ -78,11 +78,11 @@
    (oc-bin s secs)
     (: (go l pos acc)
         (? !(two? l) (rev acc)
-           (: c <l a <c o (at c 1) n (at c 2)
+           (: c <l a <c o (c 1) n (c 2)
               _ (? (a < pos) (scare 'copy-overlap a) 0)
               (go >l (a + n)
                   (snip s o (o + n) >< (? (pos < a) (ld-zeros (a - pos) >< acc) acc)))))
-       (go secs (at <secs 0) ()))
+       (go secs (<secs 0) ()))
 
    ;; -- Intel hex: ":" ll AAAA tt dd.. CC, every byte two ASCII hex digits, CC the
    ;; two's complement of the sum of all before it. 01 is the end, and an entry of 0
@@ -118,7 +118,7 @@
               m (? (16 < left) 16 left)
               n (? (room < m) room m)
               (go (a + n) (o + n) (left - n) ([a o n] >< acc))))
-       (rev (foldl (\ acc c (go <c (at c 1) (at c 2) acc)) () secs)))
+       (rev (foldl (\ acc c (go <c (c 1) (c 2) acc)) () secs)))
    (oc-b02 nb) (oc-rec 2 0 [((nb >> 12) & 255) ((nb >> 4) & 255)])
    (oc-b04 nb) (oc-rec 4 0 [((nb >> 24) & 255) ((nb >> 16) & 255)])
    ;; base is the 64K window in force, sg whether a segment base is standing in it
@@ -138,7 +138,7 @@
               b2 (? new? nb base)
               (go >l b2 (? new? !lin? sg)
                   (oc-rec 0 (a - b2)
-                          (map (\ k (s (at c 1 + k))) (jot (at c 2))) >< acc2))))
+                          (map (\ k (s (c 1 + k))) (jot (c 2))) >< acc2))))
        (go (oc-chunks secs) 0 () ()))
 
    ;; -- the applet. GNU's objcopy names itself when it complains and exits 1, and a
@@ -148,7 +148,7 @@
    (objcopy as)
     (? !(tally as = 4) (oc-die "usage: objcopy -O binary|ihex IN OUT")
        (: fmt (? (<as = "-O") <>as (oc-die ("unrecognized option " + <as)))
-          src (at as 2) dst (at as 3)
+          src (as 2) dst (as 3)
           _ (? (member? fmt '("binary" "ihex")) 0 (oc-die ("unknown output format " + fmt)))
           r (uread src)
           _ (? (two? r) 0 (oc-die ("cannot open " + src)))

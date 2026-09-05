@@ -250,7 +250,7 @@
       ("cvtsd2ss"    "f20f5ac8"               ((cvtsd2ss f1 f0)))       ; cvtsd2ss xmm1,xmm0 (double->single)
       ("stss"        "f30f114208"             ((stss r2 8 f0)))         ; movss [rdx+8],xmm0
       ("ldss"        "f30f100b"               ((ldss f1 r3 0))))        ; movss xmm1,[rbx]
-   _ (foldl (\ _ t (chk (at t 0) (at t 1) (at t 2))) 0 tests)
+   _ (foldl (\ _ t (chk (t 0) (t 1) (t 2))) 0 tests)
 
    ;; -- label addresses are exposed on the assemble result, for a loader/linker to read. --
    loopres (assemble 'x64 '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret)))
@@ -316,11 +316,11 @@
    elfprog '((li r0 60) (li r6 0) (sys))
    elfres  (elf64 'x64 (\ a elfprog) '(65 66 67))
    elfimg  (peep elfres 'bytes 0)
-   _ (chk-eq "elf.magic"   127     (at elfimg 0))        ; \x7f E L F
-   _ (chk-eq "elf.machine" 62      (at elfimg 18))       ; e_machine = x86-64
+   _ (chk-eq "elf.magic"   127     (elfimg 0))        ; \x7f E L F
+   _ (chk-eq "elf.machine" 62      (elfimg 18))       ; e_machine = x86-64
    _ (chk-eq "elf.entry"   4194424 (peep elfres 'entry 0))
    _ (chk-eq "elf.size"    (120 + (tally (holo-bytes 'x64 elfprog) + 3)) (tally elfimg))
-   _ (chk-eq "elf.a64-machine" 183 (at (peep (elf64 'a64 (\ a elfprog) ()) 'bytes 0) 18))
+   _ (chk-eq "elf.a64-machine" 183 ((peep (elf64 'a64 (\ a elfprog) ()) 'bytes 0) 18))
 
    ;; ..and the ELF32 twin: a 52-byte header + a 32-byte phdr. the two facts a width knob
    ;; would have gotten wrong are pinned here -- p_flags sits seventh in an Elf32_Phdr (at 76,
@@ -329,14 +329,14 @@
    t32prog '((li r0 42) (li r7 1) (sys))
    e32     (elf32 'thumb2 (\ a t32prog) ())
    e32img  (peep e32 'bytes 0)
-   _ (chk-eq "elf32.class"      1  (at e32img 4))          ; elfclass32
-   _ (chk-eq "elf32.machine"    40 (at e32img 18))         ; EM_ARM
-   _ (chk-eq "elf32.thumb-bit"  1  (at e32img 24 & 1))     ; e_entry bit 0: enter in Thumb state
-   _ (chk-eq "elf32.eabi5"      5  (at e32img 39))         ; e_flags top byte: eabi version 5
-   _ (chk-eq "elf32.ehsize"     52 (at e32img 40))
-   _ (chk-eq "elf32.phentsize"  32 (at e32img 42))
-   _ (chk-eq "elf32.p-offset"   0  (at e32img 56))         ; the 64-bit order would put p_flags here
-   _ (chk-eq "elf32.p-flags"    7  (at e32img 76))         ; ..and it sits here instead
+   _ (chk-eq "elf32.class"      1  (e32img 4))          ; elfclass32
+   _ (chk-eq "elf32.machine"    40 (e32img 18))         ; EM_ARM
+   _ (chk-eq "elf32.thumb-bit"  1  (e32img 24 & 1))     ; e_entry bit 0: enter in Thumb state
+   _ (chk-eq "elf32.eabi5"      5  (e32img 39))         ; e_flags top byte: eabi version 5
+   _ (chk-eq "elf32.ehsize"     52 (e32img 40))
+   _ (chk-eq "elf32.phentsize"  32 (e32img 42))
+   _ (chk-eq "elf32.p-offset"   0  (e32img 56))         ; the 64-bit order would put p_flags here
+   _ (chk-eq "elf32.p-flags"    7  (e32img 76))         ; ..and it sits here instead
    _ (chk-eq "elf32.size" (84 + tally (holo-bytes 'thumb2 t32prog)) (tally e32img))
 
    ;; -- `refix`, the linker's door onto the same encoders (link.l's ldarm goes through it and
@@ -576,7 +576,7 @@
       ("a64.shl128v"  "f00301cb1024d09a5120c19a310210aa3f0000f15100919a300001d11020d09a3f0001f10222919a0020c19ae023809a" ((shl128v)))
       ("a64.shr128v"  "f00301cb5020d09a1124c19a310210aa3f0000f11100919a300001d15024d09a3f0001f10022919a4224c19ae223829a" ((shr128v)))
       ("a64.sar128v"  "f00301cb5020d09a1124c19a310210aa3f0000f11100919a300001d15028d09a3f0001f10022919a51fc7f934228c19a2222829a" ((sar128v))))
-   _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'a64 (at t 2))) 0 a64tests)
+   _ (foldl (\ _ t (chk2 (t 0) (t 1) 'a64 (t 2))) 0 a64tests)
 
    ;; -- the thumb2 backend: the same neutral IR, a third target -- armv7e-m (Cortex-M7, the Teensy
    ;; 4.1 / Playdate device CPU). mixed 16/32-bit little-endian, a 32-bit word laid hi-halfword
@@ -708,7 +708,7 @@
                      ((udivll)))
       ("t2.uremll"  "4df8044d4df8045d4df8046d4df8047d40f2000440f2000540f2400612eb020253eb030354eb040455eb050504d2b4eb000775eb010705d3b4eb000475eb010502f20102a6f20106b6f1000fe6d1204629465df8047b5df8046b5df8045b5df8044b"
                      ((uremll))))
-   _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'thumb2 (at t 2))) 0 t2tests)
+   _ (foldl (\ _ t (chk2 (t 0) (t 1) 'thumb2 (t 2))) 0 t2tests)
 
    ;; -- the thumb1 backend: the same neutral IR, a fourth target -- armv6-M (Cortex-M0/M0+, the
    ;; rp2040 CPU). 16-bit Thumb-1: two-address, low-registers, no MOVW/MOVT (so `li` byte-builds
@@ -810,7 +810,7 @@
                  ((div r1 r1 r0)))                                    ; |a|,|b| ; qsign=sa^sb ; core ; refix
       ("t1.rem"  "ca17c3175140891a5840c01a04b40022202349005241824201d3121a491c5b1ef7d108bc11005940c91a"
                  ((rem r1 r1 r0 r3))))                                ; |a|,|b| ; core ; sign=sa ; refix
-   _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'thumb1 (at t 2))) 0 t1tests)
+   _ (foldl (\ _ t (chk2 (t 0) (t 1) 'thumb1 (t 2))) 0 t1tests)
 
    ;; -- the riscv backend: the same neutral IR, a fifth target -- rv64imfd (the pine64 ox64's
    ;; c906, qemu -M virt). fixed 32-bit little-endian, three-address, and no flags register:
@@ -979,7 +979,7 @@
       ("rv.fset.ab"  "d39fa5a27e85"      ((ucomisd f0 f1) (set above r0)))       ; flt.d t6,fa1,fa0 ; mv a0,t6
       ("rv.fset.be"  "d39fa5a213b51f00"  ((ucomisd f0 f1) (set be r0)))          ; flt.d ; seqz a0,t6
       ("rv.tp"       "1285"              ((tp r0))))                   ; mv a0, tp (the thread pointer)
-   _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'rv64 (at t 2))) 0 rvtests)
+   _ (foldl (\ _ t (chk2 (t 0) (t 1) 'rv64 (t 2))) 0 rvtests)
 
    ;; -- summary; nonzero exit on any miss, so `make`-style gates see the failure. --
    np (peep pass 0 0) nf (peep fail 0 0)

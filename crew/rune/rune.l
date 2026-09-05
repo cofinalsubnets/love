@@ -250,7 +250,6 @@
    (ivmul a b) (tally a ?
                 (ivadd (ivscale <a b) (fvshift 1 (ivmul >a b))))
    (rng a b) (a <= b ? (a . rng (a + 1) b))
-   (lat l i) (i = 0 ? <l (lat >l (i - 1)))
    (tovec f) (: n (pdeg f)
                 (co i) (: ms (filter (m2 \ i = <(mkey m2)) f)
                           (0 = tally ms ? 0 (mco <ms)))
@@ -275,13 +274,13 @@
                                       (go a b))
                       (go col rs done pivs)
                       (? (col = n) [done pivs]
-                         (: hits (filter (r \ 0 != lat r col) rs)
+                         (: hits (filter (r \ 0 != r col) rs)
                             (? (0 = tally hits) (go (col + 1) rs done pivs)
                                (: pv <hits
                                   rest (: (d1 l) (tally l ?  (<l = pv ? >l (<l . d1 >l)))
                                         (d1 rs))
-                                  pvn (rowsc (finv m (lat pv col)) pv)
-                                  (relim r) (: c (lat r col)
+                                  pvn (rowsc (finv m (pv col)) pv)
+                                  (relim r) (: c (r col)
                                                (? (0 = c) r (rowsub r (rowsc c pvn))))
                                   (go (col + 1) (map relim rest)
                                       (map relim done + [pvn])
@@ -289,7 +288,7 @@
                       (go 0 rows () ()))
    (nullsp m n R pivs) (: (pfind pv rr i j)
                           (? (0 = tally pv) 0
-                             (? (<pv = i) (zmod m (0 - lat <rr j))
+                             (? (<pv = i) (zmod m (0 - <rr j))
                                           (pfind >pv >rr i j)))
                           (mk j) (map (\ i (? (i = j) 1 (pfind pivs R i j)))
                                       (rng 0 (n - 1)))

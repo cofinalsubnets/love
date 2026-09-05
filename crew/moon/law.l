@@ -729,15 +729,14 @@
 ; smoke, which needs the holo book + the system linker). ---
 (: (cob src) (: r (cparse <>(clex src))
                 (? (okv? r) (cgen-obj <>r <>>r <>>>r <>>>>r () 'x64) ()))
-   (el l i) (? (< i 1) <l (el >l (- i 1)))
    ob (cob "int f(int x) { return x; } int g = 5; int main() { return f(g); }")
    (assert
       (two? ob)                                             ; (1 text data funcnames globnames)
-      (= (el ob 3) '("f" "main"))                           ; the defined functions -> global func symbols
-      (= (el ob 4) '("g"))                                  ; the global variables -> global object symbols
-      (member? '(label f) (el ob 1))                        ; a function label lives in TEXT
-      (member? '(label g) (el ob 2))                        ; a global label lives in data
-      !(member? '(call main) (el ob 1))                     ; no _start/crt0 in an object (the linker's crt calls main)
+      (= (ob 3) '("f" "main"))                           ; the defined functions -> global func symbols
+      (= (ob 4) '("g"))                                  ; the global variables -> global object symbols
+      (member? '(label f) (ob 1))                        ; a function label lives in TEXT
+      (member? '(label g) (ob 2))                        ; a global label lives in data
+      !(member? '(call main) (ob 1))                     ; no _start/crt0 in an object (the linker's crt calls main)
       (two? (cob "int only(int x) { return x + 1; }"))      ; a library TU (no main) still emits an object
       (gripe? (cob "int main() { return nope; }"))))        ; an undeclared name refuses, now naming it (rung 1)
 
@@ -751,13 +750,12 @@
 ; xtra, so this needs the variant that carries the parser's section table. ---
 (: (cobx src)
     (: r (cparse <>(clex src))
-       (? (okv? r) (cgen-obj (el r 1) (el r 2) (el r 3) (el r 4)
-                             [(el r 5) (el r 6) (el r 7) (el r 8) (el r 9)] 'x64) ()))
-   (el l i) (? (< i 1) <l (el >l (- i 1)))
+       (? (okv? r) (cgen-obj (r 1) (r 2) (r 3) (r 4)
+                             [(r 5) (r 6) (r 7) (r 8) (r 9)] 'x64) ()))
    ob (cobx "__attribute__((used, section(\".vectors\"))) static volatile long m = 7;
              __attribute__((section(\".vectors_tail\"))) static volatile long e = 1;
              long plain = 3; int main() { return (int) (m + e + plain); }")
-   xs (el ob 8)
+   xs (ob 8)
    (assert
       (= (tally xs) 2)                                   ; two extra sections, one per NAME
       ; ..in declaration order: a program that brackets a run reads the two in the
@@ -766,22 +764,22 @@
       (= <<>xs ".vectors_tail")
       (member? '(label m) <><xs)                          ; the global's bytes land there
       (member? '(label e) <><>xs)
-      !(member? '(label m) (el ob 2))                     ; ..and not in .data
-      !(member? '(label e) (el ob 2))
-      (member? '(label plain) (el ob 2))                  ; an unattributed global still does
+      !(member? '(label m) (ob 2))                     ; ..and not in .data
+      !(member? '(label e) (ob 2))
+      (member? '(label plain) (ob 2))                  ; an unattributed global still does
       ; a braced bitfield images its unit's bits, not a placement apiece: {0,1} is bit 1
       ; alone, and 5 with 21 above it is 5 + 21*8. two placements at one offset used to
       ; lay the second after the first -- four bytes of struct imaged eight wide
-      (= (el (cobx "struct B { unsigned a:1; unsigned b:1; } g = {0,1}; int main(){return 0;}") 2)
+      (= ((cobx "struct B { unsigned a:1; unsigned b:1; } g = {0,1}; int main(){return 0;}") 2)
          '((label g) (raw (2 0 0 0 0 0 0 0))))
-      (= (el (cobx "struct C { unsigned a:3; unsigned b:5; } h = {5,21}; int main(){return 0;}") 2)
+      (= ((cobx "struct C { unsigned a:3; unsigned b:5; } h = {5,21}; int main(){return 0;}") 2)
          '((label h) (raw (173 0 0 0 0 0 0 0))))
       ; the unit overlays what shares its bytes -- pre lives in byte 0 of the same word
-      (= (el (cobx "struct E { unsigned char pre; unsigned a:3; unsigned b:5; } e = {200,5,21}; int main(){return 0;}") 2)
+      (= ((cobx "struct E { unsigned char pre; unsigned a:3; unsigned b:5; } e = {200,5,21}; int main(){return 0;}") 2)
          '((label e) (raw (200 173 0 0 0 0 0 0))))
       ; the two special names keep their own streams and stay out of the extras
-      (= (el (cobx "__attribute__((section(\"love_nifs\"))) static long n = 1; int main() { return 0; }") 8) ())
-      (= (el (cobx "__attribute__((section(\".love.image\"))) static long i = 1; int main() { return 0; }") 8) ())))
+      (= ((cobx "__attribute__((section(\"love_nifs\"))) static long n = 1; int main() { return 0; }") 8) ())
+      (= ((cobx "__attribute__((section(\".love.image\"))) static long i = 1; int main() { return 0; }") 8) ())))
 
 ; --- the preprocessor (stage 5): object/function macros, rescan, hidesets,
 ; # stringize, ## paste, variadics, and #if/#ifdef conditional const-expr eval.
@@ -898,8 +896,7 @@
 (: (cgt src tgt)
     (: r (cparse-t <>(clex src) tgt)
        (? (okv? r) (cgen-obj <>r <>>r <>>>r <>>>>r () tgt) ()))
-   (el l i) (? (i < 1) <l (el >l (i - 1)))
-   (gmsg g) (el g 4)
+   (gmsg g) (g 4)
    vla "int s(int n){ int a[n]; a[0]=1; return a[0]; }"
    big "struct b { long a,b,c,d,e; };\n"
    (assert

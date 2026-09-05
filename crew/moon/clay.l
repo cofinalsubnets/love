@@ -63,7 +63,6 @@
    ; lex.l's copies sit in a different module layer and cannot clobber these.
    ; `el` has no caller left in this file and is not dead: a use splices it, and
    ; src/mx.l and src/nifs.l -- the generators behind mx.h, kinds.h and nifs.h -- read it.
-   (el l i) (? (i < 1) <l (el >l (i - 1)))
    join (foldl (+) "")
    (sepby s l) (l @ (a . u) (foldl (a \ x \ a + s + x) a u) "")
    nl (string 10)

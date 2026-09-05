@@ -21,7 +21,6 @@
 (use 'holo)
 
 (:
- (nthl l i) (? (i = 0) <l (nthl >l (i - 1)))
  (trim s) (: n (tally s)
              (a i) (? ((i < n) && (((s i) = 32) || ((s i) = 9))) (a (i + 1)) i)
              (b j) (? ((0 < j) && (((s (j - 1)) = 32) || ((s (j - 1)) = 9))) (b (j - 1)) j)
@@ -88,7 +87,7 @@
                             (foldl (\ b o (: pk (ir + " " + o)
                                              (b + [[[(intern ir) (intern o) 'r7] (ir + " " + o + ", x7") pk]
                                                    [[(intern ir) (intern o) 'zr] (ir + " " + o) pk]])))
-                                   a (table (nthl row 1)))))
+                                   a (table (row 1)))))
                 out '(("tlbi" "a64-tlbi-ops") ("ic" "a64-ic-ops")
                       ("dc" "a64-dc-ops") ("at" "a64-at-ops")))
      out (foldl (\ a imm (a + [[['brk imm] ("brk #" + show imm) ()]
@@ -219,37 +218,37 @@
   (: cs (? (arch = "a64") (cases-a64 0) (arch = "rv64") (cases-rv 0) (cases-x64 0))
      _ (puts ("\n=== holo " + arch + " system-lane differential vs llvm-mc ===\n"))
      tgt (? (arch = "a64") 'a64 (arch = "rv64") 'rv64 'x64)
-     ref (llvm arch (map (\ c (nthl c 1)) cs))
+     ref (llvm arch (map (\ c (c 1)) cs))
      seen (tablet 0)
-     _ (map (\ c (? ((nthl c 2) = ()) 0
-                    (? (peep seen (intern (nthl c 2)) -1) 0 (pin seen (intern (nthl c 2)) 0))))
+     _ (map (\ c (? ((c 2) = ()) 0
+                    (? (peep seen (intern (c 2)) -1) 0 (pin seen (intern (c 2)) 0))))
             cs)
      (one c r st)                                         ; st = [npass nskip fails]
-      (: ir <c asm (nthl c 1) pair (nthl c 2)
-         want <r why (nthl r 1)
+      (: ir <c asm (c 1) pair (c 2)
+         want <r why (r 1)
          got (holo-hex tgt [ir])
          (? (want = ())
-            (? ((has? why ro-reject) && (4 <= tally asm) && ((snip asm 0 4) = "msr ")) [<st (nthl st 1 + 1) (nthl st 2)]
-               !(pair = ()) [<st (nthl st 1 + 1) (nthl st 2)]
-               [<st (nthl st 1) ((nthl st 2) + [[ir asm got ("llvm-mc reject: " + why)]])])
+            (? ((has? why ro-reject) && (4 <= tally asm) && ((snip asm 0 4) = "msr ")) [<st (st 1 + 1) (st 2)]
+               !(pair = ()) [<st (st 1 + 1) (st 2)]
+               [<st (st 1) ((st 2) + [[ir asm got ("llvm-mc reject: " + why)]])])
             (? (got = want)
                (: _ (? (pair = ()) 0 (pin seen (intern pair) 1))
-                  [(<st + 1) (nthl st 1) (nthl st 2)])
-               [<st (nthl st 1) ((nthl st 2) + [[ir asm got ("want " + want)]])])))
+                  [(<st + 1) (st 1) (st 2)])
+               [<st (st 1) ((st 2) + [[ir asm got ("want " + want)]])])))
      st (: (go m rs st) (? !(two? m) st (go >m >rs (one <m <rs st)))
            (go cs ref [0 0 ()]))
      ; a pair whose spellings llvm-mc both refused hides a table typo -- fail it
-     fails ((nthl st 2)
-            + (foldl (\ a c (: pk (nthl c 2)
+     fails ((st 2)
+            + (foldl (\ a c (: pk (c 2)
                                (? (pk = ()) a
                                   (? (peep seen (intern pk) 0) a
                                      (: _ (pin seen (intern pk) 1)
                                         (a + [[pk pk () "llvm-mc took NEITHER spelling"]]))))))
                      () cs))
      _ (puts ("  " + show <st + " match  " + show (tally fails) + " fail  "
-              + show (nthl st 1) + " skipped (read-only / wrong-arity spelling)\n"))
-     _ (map (\ f (puts ("  " + show <f + "\n      as " + nthl f 1 + " got=" + ("" + nthl f 2)
-                        + " :: " + nthl f 3 + "\n")))
+              + show (st 1) + " skipped (read-only / wrong-arity spelling)\n"))
+     _ (map (\ f (puts ("  " + show <f + "\n      as " + f 1 + " got=" + ("" + f 2)
+                        + " :: " + f 3 + "\n")))
             fails)
      (? (two? fails) 1 0))
 

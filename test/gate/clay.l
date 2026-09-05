@@ -26,7 +26,6 @@
    cshow (from 'clay 'clay-show)
    cok? (from 'clay 'clay-ok?)
    nl (string 10)
-   (el l i) (? (i < 1) <l (el >l (i - 1)))
    (say1 s) (puts (s + nl))
    (dotc? s) (: n (tally s) (&& (2 < n) (&& ((s (n - 2)) = 46) ((s (n - 1)) = 99))))
 
@@ -78,10 +77,10 @@
              (v = 'reparse) (go >l ok df ix np (rp + 1) bs (link ['reparse f] bad))
              (go >l ok df ix np rp (bs + 1) (link ['badshape f] bad)))))
    r (go files 0 0 0 0 0 0 ())
-   ok (el r 0) df (el r 1) ix (el r 2) np (el r 3) rp (el r 4) bs (el r 5)
-   bad (el r 6)
+   ok (r 0) df (r 1) ix (r 2) np (r 3) rp (r 4) bs (r 5)
+   bad (r 6)
 
-   _ (each bad (\ b (say1 ("clay-g1: " + (string <b) + " " + (el b 1)))))
+   _ (each bad (\ b (say1 ("clay-g1: " + (string <b) + " " + (b 1)))))
    _ (say1 ("clay-g1: " + (show ok) + " round-trip, " + (show ix) + " inexpressible, "
             + (show np) + " unparsed, " + (show (tally files)) + " files"))
    ; a vacuous pass is a fail. this file lived under test/ for one commit's worth

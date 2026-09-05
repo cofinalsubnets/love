@@ -12,11 +12,10 @@
 ; jobs / fg / bg; a trailing & runs the pipeline unwaited as a 'running job.
 ; signal numbers are the Linux/x86 charms (the repo's home ABI; the BSDs
 ; take them through nolibc's permutation). also here: the shared floor
-; (sh-rev sh-nth sh-int sh-unwords) and the shell state (sh-jobs sh-status sh-tty).
+; (sh-rev sh-int sh-unwords) and the shell state (sh-jobs sh-status sh-tty).
 
 (module 'lush
 (: (sh-rev l) (foldl (\ a x (x . a)) () l)
-   (sh-nth l i) (? (i = 0) <l (sh-nth >l (i - 1)))
 
    sig-int 2 sig-quit 3 sig-tstp 20 sig-cont 18 sig-ttou 22 sig-ttin 21
    sh-jobs (tablet 0)
@@ -172,7 +171,7 @@
    (sh-addjob pids state cmd)
      (: n (1 + (sh-njob ())) _ (pin sh-njob () n) _ (pin sh-jobs n [pids state cmd]) n)
    (sh-jobline n j)
-     ("[" + ((show n) + ("] " + ((show (sh-nth j 1)) + ("  " + ((sh-nth j 2) + "\n"))))))
+     ("[" + ((show n) + ("] " + ((show (j 1)) + ("  " + ((j 2) + "\n"))))))
    (sh-stopped? sts) (foldl (\ a x (? a a (charm? x && 255 < x))) 0 sts)
    ; wait a foreground job; a stop registers + reports it instead of hanging the prompt
    (sh-waitfg pids cmd)
@@ -192,12 +191,12 @@
      (each (keys sh-jobs)
        (\ n (: j (sh-jobs n)
                (? !j 0
-                  (: ps (sh-unpid (sh-nth j 0) pid)
-                     (? (ps = (sh-nth j 0)) 0
+                  (: ps (sh-unpid (j 0) pid)
+                     (? (ps = (j 0)) 0
                         !ps (: _ (? (sh-tty ())          ; notices are the tty's; scripts stay quiet
-                                    (puts ("[" + ((show n) + ("] done  " + ((sh-nth j 2) + "\n"))))) 0)
+                                    (puts ("[" + ((show n) + ("] done  " + ((j 2) + "\n"))))) 0)
                                (pull sh-jobs n 0))
-                        (pin sh-jobs n [ps (sh-nth j 1) (sh-nth j 2)])))))))
+                        (pin sh-jobs n [ps (j 1) (j 2)])))))))
    (sh-reapbg _)
      (: r (glean 0) (? (two? r) (: _ (sh-bgnote <r) (sh-reapbg 0)) 0))
    ; job addressing: "fg 2" by number, bare "fg" the latest
@@ -210,7 +209,7 @@
    (sh-fg n)
      (: j (sh-jobs n)
         (? !j (: _ (puts "fg: no such job\n") 0)
-           (: pids (sh-nth j 0) cmd (sh-nth j 2)
+           (: pids (j 0) cmd (j 2)
               _ (pull sh-jobs n 0)
               _ (? (sh-tty ()) (ttyfg <pids) 0)        ; the job's group gets the terminal first
               _ (each pids (\ p (still p sig-cont)))
@@ -218,8 +217,8 @@
    (sh-bg n)
      (: j (sh-jobs n)
         (? !j (: _ (puts "bg: no such job\n") 0)
-           (: _ (each (sh-nth j 0) (\ p (still p sig-cont)))
-              _ (pin sh-jobs n [(sh-nth j 0) 'running (sh-nth j 2)])
+           (: _ (each (j 0) (\ p (still p sig-cont)))
+              _ (pin sh-jobs n [(j 0) 'running (j 2)])
               _ (puts (sh-jobline n (sh-jobs n)))
               0))))
 ) ; module 'lush

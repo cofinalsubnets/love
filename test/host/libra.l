@@ -113,14 +113,13 @@
 ; eight
 "
    cs (lint-cmts src)
-   (nthl l k) (? (k = 0) <l (nthl >l (k - 1)))
    _ (assert
       (6 = tally cs)                                    ; six, and the string holds none
       ('(1 1 "/usr/bin/env -S love -l" bang) = <cs)     ; the introducer's own spot
-      ('(2 1 " two" semi) = (nthl cs 1))                ; the text is what follows `;`
-      ('(5 1 " five" semi) = (nthl cs 3))               ; the blank line is counted
-      ('(6 27 " six, to the right" semi) = (nthl cs 4)) ; past the string, at its own column
-      ('(8 1 " eight" semi) = (nthl cs 5)))
+      ('(2 1 " two" semi) = (cs 1))                ; the text is what follows `;`
+      ('(5 1 " five" semi) = (cs 3))               ; the blank line is counted
+      ('(6 27 " six, to the right" semi) = (cs 4)) ; past the string, at its own column
+      ('(8 1 " eight" semi) = (cs 5)))
    0)
 
 ; the header: a seat line, an indented display, a blank inside, an indented
@@ -156,11 +155,10 @@
 ; the body under it
 (: x 1)
 "))
-   (nth l k) (? (k = 0) <l (nth >l (k - 1)))
    _ (assert
       (2 = tally d)
       ('(head 2 ((text "a banner"))) = <d)
-      ('(para ((text "the body under it"))) = (nth d 1)))
+      ('(para ((text "the body under it"))) = (d 1)))
    0)
 
 ; the law, on files nobody wrote for this test: the document keeps every letter
@@ -172,20 +170,20 @@
 ; of the tree's 378 tracked .l files (the other ten have no header) and the three
 ; named here are the hardest: all begin with a banner. (hue.l and eval.l have no
 ; doc/*.md at all, which is the gap the doc verb exists to close.)
-(: (nthl l k) (? (k = 0) <l (nthl >l (k - 1)))
+(:
    (alnum? c) (((48 <= c) && (c <= 57)) || ((65 <= c) && (c <= 90)) || ((97 <= c) && (c <= 122)))
    (bare s) ((: (g i acc) (? (i < tally s) (g (i + 1) (? (alnum? (s i)) (acc + string (s i)) acc)) acc))
              0 "")
    (itext l) (foldl (+) "" (map (\ x (: t <x
                                         (? (t = 'text) <>x
                                            (t = 'code) <>x
-                                           (t = 'link) (itext <>x + nthl x 2)
+                                           (t = 'link) (itext <>x + x 2)
                                            ((t = 'strong) || (t = 'em)) (itext <>x)
                                            ""))) l))
    (btext b) (: t <b
-                (? (t = 'head)  (itext (nthl b 2))
+                (? (t = 'head)  (itext (b 2))
                    (t = 'para)  (itext <>b)
-                   (t = 'fence) (nthl b 2)
+                   (t = 'fence) (b 2)
                    (t = 'quote) (dtext <>b)
                    ((t = 'bullets) || (t = 'numbers)) (foldl (+) "" (map itext <>b))
                    (t = 'deflist) (foldl (+) "" (map (\ it (itext <it + itext <>it)) <>b))
@@ -239,13 +237,12 @@
 ; a heading its sections hang off, which is what papel reads a page's title,
 ; anchors and contents nav from.
 (: (rd f) (: q (open f "r") (? (hot? q) (slurp q) ""))
-   (nth l k) (? (k = 0) <l (nth >l (k - 1)))
    d (mdread ("# crew/lapiz/lapiz.l\n\n" + ldoc-md (rd "crew/lapiz/lapiz.l")))
    heads (filter (\ b (<b = 'head)) d)
    _ (assert
       (3 < tally heads)
       ('(head 1 ((text "crew/lapiz/lapiz.l"))) = <heads)   ; the file names the page
-      (2 = <>(nth heads 1))                               ; ..and its banners are sections
+      (2 = <>(heads 1))                               ; ..and its banners are sections
       (0 < tally (filter (\ b (<b = 'fence)) d)))       ; the diagrams survived as displays
    0)
 

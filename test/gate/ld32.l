@@ -14,13 +14,13 @@
       secs (peep ob 'secs 0)
       tx (peep (peep ob 'lanes 0) 'text ())
       _ (? (two? tx) 0 (scare 'ld32-no-text p))
-      _ (? (0 < (at (peep secs <tx ()) 2)) 0 (scare 'ld32-empty-text p))
+      _ (? (0 < ((peep secs <tx ()) 2)) 0 (scare 'ld32-empty-text p))
       syms (peep ob 'syms 0) nsym (peep ob 'nsym 0)
       ; a defined func's st_value carries the thumb bit. lose it and the caller
       ; enters arm state, which an M-profile part does not have: an instant fault.
       (swalk i nf nu)
        (? (nsym <= i) [nf nu]
-          (: v (peep syms i ()) nm (at v 0) ty (at v 2) sx (at v 3) val (at v 4)
+          (: v (peep syms i ()) nm (v 0) ty (v 2) sx (v 3) val (v 4)
              fn? (&& (ty = 2) (0 < sx))
              _ (? fn? (? (1 = (val & 1)) 0 (scare 'ld32-thumb-bit nm)) 0)
              (swalk (i + 1) (nf + (? fn? 1 0))
@@ -33,7 +33,7 @@
       ; set means the writer grew one the reader was never told about.
       (each ts m)
        (? !(two? ts) m
-          (: t <ts k (at t 1) ad (at t 3)
+          (: t <ts k (t 1) ad (t 3)
              _ (? (member? k '(2 10)) 0 (scare 'ld32-reloc-kind k))
              _ (? (two? ad) (scare 'ld32-rel-addend k) 0)
              (each >ts (m + 1))))

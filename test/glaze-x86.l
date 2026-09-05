@@ -29,7 +29,7 @@
    jit (G 'jit)  jit2 (G 'jit2)  jitf (G 'jitf)  jitfgrid (G 'jitfgrid)  jitfr (G 'jitfr)
    jitgroupir (G 'jitgroupir)  jitgroupirx (G 'jitgroupirx)  jitir (G 'jitir)  jitloop-n (G 'jitloop-n)  jitn (G 'jitn)
    jitnir (G 'jitnir)  jitsum (G 'jitsum)  jitcalloutsum (G 'jitcalloutsum)  jitcalloutx (G 'jitcalloutx)  calloutir (G 'calloutir)  calloutframeir (G 'calloutframeir)  loopcode (G 'loopcode)  loopinfo (G 'loopinfo)
-   loopinfo-n (G 'loopinfo-n)  mkhir (G 'mkhir)  mkouterir (G 'mkouterir)  nthl (G 'nthl)
+   loopinfo-n (G 'loopinfo-n)  mkhir (G 'mkhir)  mkouterir (G 'mkouterir)
    occurs? (G 'occurs?)  plift (G 'plift)  qualfr (G 'qualfr)  twolow (G 'twolow)
    nif (G 'nif))                                 ; the C install seam, a glaze member: every boot pulls it off the book
 (assert (lit? base-ev) (lit? autogroup) (lit? jitgroupir) (lit? assemble))
@@ -632,7 +632,7 @@
                P '(add (mul (add (mul (add (mul (lit 2) (var)) (lit 3)) (var)) (lit 5)) (var)) (lit 7))
                (run n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (ev1 P i))) a)) 0 0)  (run 1000))
        (&& !(= (autogroup sp) sp) (500001505000 = (ev sp)) (= (base-ev sp) (ev sp))         ; sum P(i) i<1000, native == interp
-           (! (occurs? 'ev1 (nthl (autospec sp) 6)))))   ; ... and the interpreter ev1 folds away: the run body (elt 6) is pure Horner arithmetic, no dispatch -- guards specialization actually firing (the value tests above pass even if autospec degrades to a no-op)
+           (! (occurs? 'ev1 ((autospec sp) 6)))))   ; ... and the interpreter ev1 folds away: the run body (elt 6) is pure Horner arithmetic, no dispatch -- guards specialization actually firing (the value tests above pass even if autospec degrades to a no-op)
     ; a different static program (a mul of two sub-exprs) specializes to its own residual -- == interp (soundness breadth)
     (: sp2 '(: (ev1 nd x) (? (= (cap nd) 'lit) (caup nd)  (= (cap nd) 'var) x
                              (= (cap nd) 'add) (+ (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))

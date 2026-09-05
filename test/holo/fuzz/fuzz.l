@@ -24,7 +24,6 @@
 
 (:
  ; ---- the small string kit (this file loads only holo, so it carries its own) ----
- (nthl l i) (? (i = 0) <l (nthl >l (i - 1)))
  (trim s) (: n (tally s)
              (a i) (? ((i < n) && (((s i) = 32) || ((s i) = 9))) (a (i + 1)) i)
              (b j) (? ((0 < j) && (((s (j - 1)) = 32) || ((s (j - 1)) = 9))) (b (j - 1)) j)
@@ -68,7 +67,7 @@
                   (? (v = ()) () (? neg (0 - v) v)))))
  ; exact big division: int on an inexact big ratio rides a gem and drops digits
  (divp v d) (int ((v - (% v d)) / d))
- (show0x n) (: (h v acc) (? (v = 0) acc (h (divp v 16) ((nthl '(48 49 50 51 52 53 54 55 56 57 97 98 99 100 101 102) (% v 16)) >< acc)))
+ (show0x n) (: (h v acc) (? (v = 0) acc (h (divp v 16) (('(48 49 50 51 52 53 54 55 56 57 97 98 99 100 101 102) (% v 16)) >< acc)))
                (? (n = 0) "0x0" ("0x" + string (h n ()))))
  M64 18446744073709551616
  (mask64 x) (% ((% x M64) + M64) M64)
@@ -79,7 +78,7 @@
  (rseed s) (pin RS 0 (wheel s))
  (rnd n) (: r (random (peep RS 0 0) n) _ (pin RS 0 >r) <r)   ; [0, n)
  (rint a b) (a + rnd (b - a + 1))                            ; [a, b] inclusive
- (pick l) (nthl l (rnd (tally l)))
+ (pick l) (l (rnd (tally l)))
  (coin _) (rnd 2)
  (pick-n l k) (? (k = 0) ()                                  ; k distinct draws
                  (: x (pick l) (x >< pick-n (filter (\ y !(y = x)) l) (k - 1))))
@@ -104,7 +103,7 @@
  ; ---- decoded instruction records: [mnem ops nbytes bad] ----
  (i-mnem i) <i
  (i-ops i) <>i
- (i-bad i) (nthl i 3)
+ (i-bad i) (i 3)
  (dump-ins ins) (foldl (\ a i (a + "; " + i-mnem i + " " + i-ops i)) "" ins)
 
  ; objdump folds a redundant prefix into a pseudo-mnemonic -- peel to the real op
@@ -123,10 +122,10 @@
       (? !(two? m) (rev acc)
          (: fs (fields <m 9)
             (? ((tally fs) < 3) (go >m acc)
-               (: ts (strip-pfx (toks (nthl fs 2)))
+               (: ts (strip-pfx (toks (fs 2)))
                   (? !(two? ts) (go >m acc)
                      (go >m ([(cap ts) (foldl (\ a t (? (a = "") t (a + " " + t))) "" >ts)
-                              (tally (toks (nthl fs 1))) (has? <m "(bad)")] >< acc)))))))
+                              (tally (toks (fs 1))) (has? <m "(bad)")] >< acc)))))))
      (go (lines (rdf (tmpd + "/.fuzz.out"))) ()))
 
  ; a64/riscv: llvm-mc --disassemble. a fixed-width lane gets full consumption for free
@@ -185,7 +184,7 @@
                    rest ((snip in 0 ib) + (snip in (st + 2) (tally in)))
                    [ixs (s2i scs) rest])
                 [() 1 in])
-           ix <r sc <>r in2 (nthl r 2)
+           ix <r sc <>r in2 (r 2)
            ; the trailing displacement: +0x../-N at the end
            n2 (tally in2)
            de (: (dk j) (? ((0 < j) && (: c (in2 (j - 1)) ((hexd? c) || (c = 120)))) (dk (j - 1)) j) (dk n2))
@@ -193,7 +192,7 @@
                  (: v (s2i (snip in2 de n2))
                     [(? ((in2 (de - 1)) = 45) (0 - v) v) (snip in2 0 (de - 1))])
                  [0 in2])
-           dsp <r2 in3 (nthl r2 1)
+           dsp <r2 in3 (r2 1)
            bts (filter (\ t (0 < tally t)) (map trim (fields in3 43)))
            [(? (two? bts) (trim <bts) ()) ix sc dsp])))
 
@@ -263,31 +262,31 @@
  ; (the riscv lane's law); the others read a prefix.
  (chk1 got w)
   (: k <w
-     (? (k = 'r) (? (= (a-abs got) (nthl w 1)) () ("reg " + got + " != " + string (nthl w 1)))
-        (k = 'rw) (? !(= (a-abs got) (nthl w 1)) ("reg " + got + " != " + string (nthl w 1))
-                       !(= (arm-width got) (nthl w 2)) ("width " + got + " != " + string (nthl w 2))
+     (? (k = 'r) (? (= (a-abs got) (w 1)) () ("reg " + got + " != " + string (w 1)))
+        (k = 'rw) (? !(= (a-abs got) (w 1)) ("reg " + got + " != " + string (w 1))
+                       !(= (arm-width got) (w 2)) ("width " + got + " != " + string (w 2))
                        ())
         (k = 'i) (: v (a-imm got)
-                      (? (v = (nthl w 1)) () ("imm " + got + " != " + show0x (mask64 (nthl w 1)))))
+                      (? (v = (w 1)) () ("imm " + got + " != " + show0x (mask64 (w 1)))))
         (k = 'x) (: t (trim got)
-                      (? ((pfx? t "xmm") && ((snip t 3 (tally t)) = show (nthl w 1))) ()
-                         ("xmm " + got + " != xmm" + show (nthl w 1))))
-        (k = 'lit) (? ((trim got) = (nthl w 1)) () ("op " + got + " != " + (nthl w 1)))
+                      (? ((pfx? t "xmm") && ((snip t 3 (tally t)) = show (w 1))) ()
+                         ("xmm " + got + " != xmm" + show (w 1))))
+        (k = 'lit) (? ((trim got) = (w 1)) () ("op " + got + " != " + (w 1)))
         (: m (a-mem got)
            (? !(two? m) ("not a mem operand: " + got)
-              !(= (a-abs <m) (nthl w 1)) ("mem base " + <m + " != " + string (nthl w 1))
-              !((nthl m 3) = (nthl w 2)) ("mem disp " + show0x (mask64 (nthl m 3)) + " != " + show0x (mask64 (nthl w 2)))
+              !(= (a-abs <m) (w 1)) ("mem base " + <m + " != " + string (w 1))
+              !((m 3) = (w 2)) ("mem disp " + show0x (mask64 (m 3)) + " != " + show0x (mask64 (w 2)))
               (k = 'm) ()
-              (: ix (nthl m 1)
-                 (? (!(string? ix) || !(= (a-abs ix) (nthl w 3))) ("mem index != " + string (nthl w 3))
-                    !((nthl m 2) = (nthl w 4)) ("mem scale " + show (nthl m 2) + " != " + show (nthl w 4))
+              (: ix (m 1)
+                 (? (!(string? ix) || !(= (a-abs ix) (w 3))) ("mem index != " + string (w 3))
+                    !((m 2) = (w 4)) ("mem scale " + show (m 2) + " != " + show (w 4))
                     ()))))))
  (run-spec ins spec strict)
   (? (any i-bad ins) "undecodable/bad byte"
      ((tally ins) != (tally spec)) ((show (tally ins)) + " insns, expected " + show (tally spec) + ":" + dump-ins ins)
      (: (goi is sp)
          (? !(two? is) ()
-            (: i <is mns (cap <sp) cks (nthl <sp 1)
+            (: i <is mns (cap <sp) cks (<sp 1)
                o (a-ops (i-ops i))
                (? !(member? (i-mnem i) mns) ("mnem " + i-mnem i + " unexpected (" + i-ops i + ")")
                   (strict && ((tally o) != (tally cks))) (i-mnem i + ": " + show (tally o) + " ops != " + show (tally cks))
@@ -338,7 +337,7 @@
    ["st" (\ _ (: b (rrand 0) o (disp-any 0) s (rrand 0)
                  [[['st b o s]] (spec1 '("mov") [['m b o] ['r s]])]))]
    ["ld_sized" (\ _ (: row (pick x64-sized-ld) d (rrand 0) b (rrand 0) o (disp-any 0)
-                       [[[(intern <row) d b o]] (spec1 (nthl row 1) [['r d] ['m b o]])]))]
+                       [[[(intern <row) d b o]] (spec1 (row 1) [['r d] ['m b o]])]))]
    ["st_sized" (\ _ (: op (pick '("st1" "st2" "st4")) b (rrand 0) o (disp-any 0) s (rrand 0)
                        [[[(intern op) b o s]] (spec1 '("mov") [['m b o] ['r s]])]))]
    ["pushpop" (\ _ (? (coin 0)
@@ -358,17 +357,17 @@
                    [[['leax d b ix sc dp]] (spec1 '("lea") [['r d] ['mx b dp ix sc]])]))]
    ["shiftv" (\ _ (: row (pick '(("shlv" "shl") ("shrv" "shr") ("sarv" "sar")))
                      d (pick (filter (\ r !(r = 'r1)) gpregs))
-                     [[[(intern <row) d 'r1]] (spec1 [(nthl row 1)] [['r d] ['lit "cl"]])]))]
+                     [[[(intern <row) d 'r1]] (spec1 [(row 1)] [['r d] ['lit "cl"]])]))]
    ["flagalu" (\ _ (: row (pick '(("adds" "add") ("subs" "sub"))) d (rrand 0)
                       (? (coin 0)
-                         (: b (rrand 0) [[[(intern <row) d d b]] (spec1 [(nthl row 1)] [['r d] ['r b]])])
-                         (: imm (imm-s32 0) [[[(intern <row) d d imm]] (spec1 [(nthl row 1)] [['r d] ['i (mask64 imm)]])]))))]
+                         (: b (rrand 0) [[[(intern <row) d d b]] (spec1 [(row 1)] [['r d] ['r b]])])
+                         (: imm (imm-s32 0) [[[(intern <row) d d imm]] (spec1 [(row 1)] [['r d] ['i (mask64 imm)]])]))))]
    ["setcc" (\ _ (: row (pick x64-setcc) d (rrand 0)
                     [[['set <row d]]
                      (\ ins (? (any i-bad ins) "undecodable/bad byte"
                                ((tally ins) != 2) ((show (tally ins)) + " insns, want setcc+movzx:" + dump-ins ins)
-                               (: a <ins b (nthl ins 1)
-                                  r1 (run-spec [a] [[[(nthl row 1)] [['r d]]]] 0)
+                               (: a <ins b (ins 1)
+                                  r1 (run-spec [a] [[[(row 1)] [['r d]]]] 0)
                                   (? (string? r1) r1
                                      (run-spec [b] [['("movzx") [['r d]]]] 0)))))]))]
    ["jmpr" (\ _ (: d (rrand 0) [[['jmpr d]] (spec1 '("jmp") [['r d]])]))]
@@ -402,7 +401,7 @@
                   (? !(= (abs-arm <o) d) ()
                      (: hi (idx-of (i-ops i) "lsl #")
                         sh (? (charm? hi) (s2i (snip (i-ops i) (hi + 5) (tally (i-ops i)))) 0)
-                        imm (? (1 < tally o) (: v (imm-arm (nthl o 1)) (? (nil? v) 0 v)) 0)
+                        imm (? (1 < tally o) (: v (imm-arm (o 1)) (? (nil? v) 0 v)) 0)
                         mn (i-mnem i)
                         (? ((mn = "mov") || (mn = "movz")) (go >m (mask64 (imm * pow2 sh)))
                            (mn = "movk") (go >m (mask64 ((mask64 (val - (% (divp val (pow2 sh)) 65536) * pow2 sh)) + (% imm 65536) * pow2 sh)))
@@ -423,7 +422,7 @@
                                   (got != mask64 imm) ("li value " + show0x got + " != " + show0x (mask64 imm))
                                   ()))))]))]
    ["alu_rr" (\ _ (: row (pick arm-alu) d (nrand 0) a (nrand 0) b (nrand 0)
-                     [[[(intern <row) d a b]] (spec1 [(nthl row 1)] [['r d] ['r a] ['r b]])]))]
+                     [[[(intern <row) d a b]] (spec1 [(row 1)] [['r d] ['r a] ['r b]])]))]
    ["alu_imm" (\ _ (: op (pick '("add" "sub")) d (rrand 0) a (rrand 0) imm (rnd 4096)
                       [[[(intern op) d a imm]] (spec1 [op] [['r d] ['r a] ['i imm]])]))]
    ["cmp" (\ _ (: a (nrand 0)
@@ -435,11 +434,11 @@
    ["st" (\ _ (: b (rrand 0) o (arm-disp 0) s (nrand 0)
                  [[['st b o s]] (spec1 '("str" "stur") [['rw s 'x] ['m b o]])]))]
    ["ld_sized" (\ _ (: row (pick arm-sized-ld) d (nrand 0) b (rrand 0) o (arm-disp 0)
-                       [[[(intern <row) d b o]] (spec1 (nthl row 1) [['rw d (nthl row 2)] ['m b o]])]))]
+                       [[[(intern <row) d b o]] (spec1 (row 1) [['rw d (row 2)] ['m b o]])]))]
    ["st_sized" (\ _ (: row (pick '(("st1" ("strb" "sturb")) ("st2" ("strh" "sturh")) ("st4" ("str" "stur"))))
                        b (rrand 0) o (arm-disp 0) s (nrand 0)
-                       [[[(intern <row) b o s]] (spec1 (nthl row 1) [['rw s 'w] ['m b o]])]))]
-   ["pushpop" (\ _ (: base-sp? (\ ins (: m (mem-arm (nthl (ops-arm (i-ops <ins)) 1))
+                       [[[(intern <row) b o s]] (spec1 (row 1) [['rw s 'w] ['m b o]])]))]
+   ["pushpop" (\ _ (: base-sp? (\ ins (: m (mem-arm ((ops-arm (i-ops <ins)) 1))
                                           (? (!(two? m) || !((abs-arm <m) = 'sp)) "base != sp" ())))
                       (? (coin 0)
                          (: s (nrand 0)
@@ -451,7 +450,7 @@
                              (\ ins (: r (run-spec ins [['("ldr") [['r d]]]] 0)
                                        (? (string? r) r (base-sp? ins))))]))))]
    ["shift" (\ _ (: row (pick '(("shl" "lsl") ("shr" "lsr") ("sar" "asr"))) d (nrand 0) c (rnd 64)
-                    allowed (? (c = 0) '("lsl" "lsr" "asr") [(nthl row 1)])
+                    allowed (? (c = 0) '("lsl" "lsr" "asr") [(row 1)])
                     [[[(intern <row) d c]] (spec1 allowed [['r d] ['r d] ['i c]])]))]
    ["unary" (\ _ (: op (pick '("neg" "not" "inc" "dec")) d (nrand 0)
                     (? ((op = "neg") || (op = "not"))
@@ -460,9 +459,9 @@
    ["jmpr" (\ _ (: d (nrand 0) [[['jmpr d]] (spec1 '("br") [['r d]])]))]
    ["callr" (\ _ (: d (nrand 0) [[['callr d]] (spec1 '("blr") [['r d]])]))]
    ["setcc" (\ _ (: row (pick arm-cc) d (nrand 0)
-                    [[['set <row d]] (spec1 '("cset") [['r d] ['lit (nthl row 1)]])]))]
+                    [[['set <row d]] (spec1 '("cset") [['r d] ['lit (row 1)]])]))]
    ["sx" (\ _ (: row (pick '(("sx1" "sxtb") ("sx2" "sxth") ("sx4" "sxtw"))) d (nrand 0)
-                 [[[(intern <row) d]] (spec1 [(nthl row 1)] [['rw d 'x] ['rw d 'w]])]))]]
+                 [[[(intern <row) d]] (spec1 [(row 1)] [['rw d 'x] ['rw d 'w]])]))]]
 
  ; ================================================================ riscv lane
  rv-gpregs '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 sp fp lr)
@@ -495,19 +494,19 @@
                                             ("li value " + show0x (mask64 val) + " != " + show0x (mask64 imm)))
                                (: i <m o (ops-comma (i-ops i)) mn (i-mnem i)
                                   (? !(= (abs-rv <o) d) ("li dest " + <o + " != " + string d)
-                                     (: v2 (? (mn = "li") (imm-rv (nthl o 1))
-                                              (mn = "lui") (: v (* (imm-rv (nthl o 1)) 4096)
+                                     (: v2 (? (mn = "li") (imm-rv (o 1))
+                                              (mn = "lui") (: v (* (imm-rv (o 1)) 4096)
                                                               (? (2147483648 <= v) (v - 4294967296) v))
-                                              (mn = "addiw") (: s (% (mask64 (val + imm-rv (nthl o 2))) 4294967296)
+                                              (mn = "addiw") (: s (% (mask64 (val + imm-rv (o 2))) 4294967296)
                                                                 (? (2147483648 <= s) (s - 4294967296) s))
-                                              (mn = "addi") (val + imm-rv (nthl o 2))
-                                              (mn = "slli") (val * pow2 (imm-rv (nthl o 2)))
+                                              (mn = "addi") (val + imm-rv (o 2))
+                                              (mn = "slli") (val * pow2 (imm-rv (o 2)))
                                               'bad)
                                         (? (v2 = 'bad) ("li unexpected mnem " + mn)
                                            (go >m v2))))))
                            (go ins 0))))]))]
    ["alu_rr" (\ _ (: row (pick rv-alu) d (rv-rand 0) a (rv-rand 0) b (rv-rand 0)
-                     [[[(intern <row) d a b]] (rv-spec [[[(nthl row 1)] [['r d] ['r a] ['r b]]]])]))]
+                     [[[(intern <row) d a b]] (rv-spec [[[(row 1)] [['r d] ['r a] ['r b]]]])]))]
    ["alu_imm" (\ _ (: op (pick '("add" "sub" "and" "or" "xor")) d (rv-rand 0) a (rv-rand 0)
                       i0 (rint 1 2046)
                       imm (? ((op = "and") && (i0 = 255)) 254 i0)
@@ -515,14 +514,14 @@
                       want (? (op = "sub") (0 - imm) imm)
                       [[[(intern op) d a imm]] (rv-spec [[[mn] [['r d] ['r a] ['i want]]]])]))]
    ["cmpbr" (\ _ (: row (pick rv-hop) a (rv-rand 0) b (rv-rand 0)
-                    x (? (nthl row 2) b a) y (? (nthl row 2) a b)
+                    x (? (row 2) b a) y (? (row 2) a b)
                     [[['cmp a b] ['br <row 'l] ['label 'l]]
-                     (rv-spec [[[(nthl row 1)] [['r x] ['r y] ['i 8]]] ['("j") [['i 4]]]])]))]
+                     (rv-spec [[[(row 1)] [['r x] ['r y] ['i 8]]] ['("j") [['i 4]]]])]))]
    ["cmpbr_imm" (\ _ (: row (pick rv-hop) a (rv-rand 0) imm (rint 1 2047)
-                        x (? (nthl row 2) 't5 a) y (? (nthl row 2) a 't5)
+                        x (? (row 2) 't5 a) y (? (row 2) a 't5)
                         [[['cmp a imm] ['br <row 'l] ['label 'l]]
                          (rv-spec [['("li") [['r 't5] ['i imm]]]
-                                   [[(nthl row 1)] [['r x] ['r y] ['i 8]]]
+                                   [[(row 1)] [['r x] ['r y] ['i 8]]]
                                    ['("j") [['i 4]]]])]))]
    ["setcc" (\ _ (: cond (pick '(eq ne lt ge gt le below above ae be s ns))
                     a (rv-rand 0) b (rv-rand 0) d (rv-rand 0)
@@ -541,9 +540,9 @@
                             ([['("sub") [['r 't6] ['r a] ['r b]]] ['("sltz") [['r d] ['r 't6]]]] + x1))
                     [[['cmp a b] ['set cond d]] (rv-spec spec)]))]
    ["ld" (\ _ (: row (pick rv-ld) d (rv-rand 0) b (rv-rand 0) o (rv-imm12 0)
-                 [[[(intern <row) d b o]] (rv-spec [[[(nthl row 1)] [['r d] ['m b o]]]])]))]
+                 [[[(intern <row) d b o]] (rv-spec [[[(row 1)] [['r d] ['m b o]]]])]))]
    ["st" (\ _ (: row (pick rv-st) b (rv-rand 0) o (rv-imm12 0) s (rv-rand 0)
-                 [[[(intern <row) b o s]] (rv-spec [[[(nthl row 1)] [['r s] ['m b o]]]])]))]
+                 [[[(intern <row) b o s]] (rv-spec [[[(row 1)] [['r s] ['m b o]]]])]))]
    ["ld_far" (\ _ (: d (rv-rand 0) b (rv-rand 0)
                      off ((? (coin 0) 1 -1) * rint 2048 2147479552)
                      l0 (% (mask64 off) 4096)
@@ -566,7 +565,7 @@
                              ['("add") [['r 't6] ['r 't6] ['r b]]]
                              ['("sd") [['r s] ['m 't6 dp]]]])]))]
    ["shift" (\ _ (: row (pick '(("shl" "slli") ("shr" "srli") ("sar" "srai"))) d (rv-rand 0) c (rint 1 63)
-                    [[[(intern <row) d c]] (rv-spec [[[(nthl row 1)] [['r d] ['r d] ['i c]]]])]))]
+                    [[[(intern <row) d c]] (rv-spec [[[(row 1)] [['r d] ['r d] ['i c]]]])]))]
    ["rot" (\ _ (: op (pick '("rol" "ror")) d (rv-rand 0) c (rint 1 63)
                   k (? (op = "ror") c (% (64 - c) 64))
                   [[[(intern op) d c]]
@@ -575,7 +574,7 @@
                              ['("or") [['r d] ['r d] ['r 't6]]]])]))]
    ["shiftv" (\ _ (: row (pick '(("shlv" "sll") ("shrv" "srl") ("sarv" "sra")))
                      d (pick (filter (\ r !(r = 'r1)) rv-gpregs))
-                     [[[(intern <row) d 'r1]] (rv-spec [[[(nthl row 1)] [['r d] ['r d] ['r 'r1]]]])]))]
+                     [[[(intern <row) d 'r1]] (rv-spec [[[(row 1)] [['r d] ['r d] ['r 'r1]]]])]))]
    ["unary" (\ _ (: op (pick '("neg" "not" "inc" "dec")) d (rv-rand 0)
                     spec (? (op = "neg") [['("neg") [['r d] ['r d]]]]
                             (op = "not") [['("not") [['r d] ['r d]]]]
@@ -583,15 +582,15 @@
                             [['("addi") [['r d] ['r d] ['i -1]]]])
                     [[[(intern op) d]] (rv-spec spec)]))]
    ["sxzx" (\ _ (: row (pick '(("sx1" 56 "srai") ("sx2" 48 "srai") ("zx2" 48 "srli") ("zx4" 32 "srli")))
-                   d (rv-rand 0) c (nthl row 1)
+                   d (rv-rand 0) c (row 1)
                    [[[(intern <row) d]]
                     (rv-spec [['("slli") [['r d] ['r d] ['i c]]]
-                              [[(nthl row 2)] [['r d] ['r d] ['i c]]]])]))]
+                              [[(row 2)] [['r d] ['r d] ['i c]]]])]))]
    ["divrem" (\ _ (: row (pick '(("div" "div") ("udiv" "divu") ("rem" "rem") ("urem" "remu")))
                      d (rv-rand 0) a (rv-rand 0) b (rv-rand 0) t (rv-rand 0)
                      ir (? ((<row = "div") || (<row = "udiv")) [[(intern <row) d a b]]
                            [[(intern <row) d a b t]])
-                     [ir (rv-spec [[[(nthl row 1)] [['r d] ['r a] ['r b]]]])]))]
+                     [ir (rv-spec [[[(row 1)] [['r d] ['r a] ['r b]]]])]))]
    ["jmpr" (\ _ (: d (rv-rand 0)
                    [[['jmpr d]]
                     (? (d = 'lr) (\ ins (run-spec ins [['("ret") ()]] 0))
@@ -606,7 +605,7 @@
                                                ['("addi") [['r 'sp] ['r 'sp] ['i 16]]]])])))]
    ["fp3" (\ _ (: row (pick '(("addsd" "fadd.d") ("subsd" "fsub.d") ("mulsd" "fmul.d") ("divsd" "fdiv.d")))
                   d (rv-frand 0) s (rv-frand 0)
-                  [[[(intern <row) d s]] (rv-spec [[[(nthl row 1)] [['r d] ['r d] ['r s]]]])]))]
+                  [[[(intern <row) d s]] (rv-spec [[[(row 1)] [['r d] ['r d] ['r s]]]])]))]
    ["fmov" (\ _ (: d (rv-frand 0) s (rv-frand 0)
                    [[['movsd d s]] (rv-spec [['("fmv.d") [['r d] ['r s]]]])]))]
    ["fcvt" (\ _ (: which (pick '("cvtsi2sd" "cvttsd2si" "movqxr" "movqrx"))
@@ -621,7 +620,7 @@
                        (\ ins (: r (run-spec ins [['("fcvt.l.d") [['r g] ['r f]]]] 0)
                                  (? (string? r) r
                                     (: o (ops-comma (i-ops <ins))
-                                       (? (((tally o) = 3) && ((nthl o 2) = "rtz")) ()
+                                       (? (((tally o) = 3) && ((o 2) = "rtz")) ()
                                           "fcvt.l.d rm != rtz")))))])))]
    ["fldst" (\ _ (: which (pick '("ldsd" "stsd" "ldss" "stss"))
                     f (rv-frand 0) b (rv-rand 0) o (rv-imm12 0)
@@ -630,12 +629,12 @@
                        (which = "ldss") [[['ldss f b o]] (rv-spec [['("flw") [['r f] ['m b o]]]])]
                        [[['stss b o f]] (rv-spec [['("fsw") [['r f] ['m b o]]]])])))]
    ["fcmpbr" (\ _ (: row (pick rv-fhop) a (rv-frand 0) b (rv-frand 0)
-                     x (? (nthl row 2) b a) y (? (nthl row 2) a b)
+                     x (? (row 2) b a) y (? (row 2) a b)
                      [[['ucomisd a b] ['br <row 'l] ['label 'l]]
-                      (rv-spec [[[(nthl row 1)] [['r 't6] ['r x] ['r y]]]
-                                [[(nthl row 3)] [['r 't6] ['i 8]]]
+                      (rv-spec [[[(row 1)] [['r 't6] ['r x] ['r y]]]
+                                [[(row 3)] [['r 't6] ['i 8]]]
                                 ['("j") [['i 4]]]])]))]
-   ["mulo" (\ _ (: rs (pick-n rv-gpregs 4) d <rs a (nthl rs 1) b (nthl rs 2) t (nthl rs 3)
+   ["mulo" (\ _ (: rs (pick-n rv-gpregs 4) d <rs a (rs 1) b (rs 2) t (rs 3)
                    [[['mulo d a b t 'l] ['label 'l]]
                     (rv-spec [['("mulh") [['r t] ['r a] ['r b]]]
                               ['("mul") [['r d] ['r a] ['r b]]]
@@ -655,19 +654,19 @@
  fz-arch ("" + getenv "FUZZ_ARCH")
 
  (run-lane row)
-  (: nm <row tgt (nthl row 1) gens (nthl row 2)
-     _ (pin AR 'ops (nthl row 4)) _ (pin AR 'mem (nthl row 5))
-     _ (pin AR 'abs (nthl row 6)) _ (pin AR 'imm (nthl row 7))
-     llvm2 ((nthl row 8) && (tool? "llvm-mc"))
+  (: nm <row tgt (row 1) gens (row 2)
+     _ (pin AR 'ops (row 4)) _ (pin AR 'mem (row 5))
+     _ (pin AR 'abs (row 6)) _ (pin AR 'imm (row 7))
+     llvm2 ((row 8) && (tool? "llvm-mc"))
      _ (rseed fz-seed)
      _ (puts ("\n=== holo " + nm + " encoder fuzz: seed " + show fz-seed + ", " + show fz-n + "/class ===\n"))
-     (class cl) (: cn <cl gen (nthl cl 1)
+     (class cl) (: cn <cl gen (cl 1)
                    (go k p fl)
                     (? (fz-n <= k) [p fl]
-                       (: s (gen 0) ir <s chk (nthl s 1)
+                       (: s (gen 0) ir <s chk (s 1)
                           hx (holo-hex tgt ir)
                           r (? !(string? hx) "holo produced no output"
-                               (: ins ((nthl row 3) hx)
+                               (: ins ((row 3) hx)
                                   r1 (chk ins)
                                   (? (string? r1) r1
                                      (llvm2 && !(llvm-ok? hx)) "llvm-mc reject"
@@ -689,8 +688,8 @@
            (: ls (filter (\ r (<r = fz-arch)) arches)
               (? (two? ls) ls (scare 'fuzz-arch fz-arch)))
            arches)
- bad (foldl (\ a r (? (tool? (nthl r 9)) (a + run-lane r)
-                      (: _ (puts ("  (" + <r + " skipped: no " + nthl r 9 + ")\n")) a)))
+ bad (foldl (\ a r (? (tool? (r 9)) (a + run-lane r)
+                      (: _ (puts ("  (" + <r + " skipped: no " + r 9 + ")\n")) a)))
             0 lanes)
  _ (puts ("\nholo fuzz: " + (? (0 < bad) ((show bad) + " FAILURES\n") "all classes green\n")))
  (? (0 < bad) (quit 1) (quit 0)))

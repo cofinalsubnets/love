@@ -84,7 +84,7 @@
        (? (tag = 'eol)
            (each a (o \ line ("syn match " + g + " \"" + o + ".*$\" contains=LoveTodo")))
           (tag = 'span)
-           (: q (string a) e (string (hue-nth (hue-rule r) 2))
+           (: q (string a) e (string ((hue-rule r) 2))
               (line ("syn region " + g + " start='" + q + "' skip='" + e + e + e + e
                      + "\\|" + e + e + q + "' end='" + q + "'")))
           (tag = 'mark)
@@ -128,9 +128,9 @@
             (cyan        magenta1      blue         darkslateblue)
             (magenta     purple1       darkmagenta  darkviolet))
    (levline i l k)
-    (line ("    hi def LoveLevel" + (show i) + " ctermfg=" + (string (hue-nth l k))
-           + (: p (13 - #(string (hue-nth l k))) (: (sp j) (? (j < 1) "" (" " + (sp (j - 1)))) (sp p)))
-           + "guifg=" + (string (hue-nth l (k + 1)))))
+    (line ("    hi def LoveLevel" + (show i) + " ctermfg=" + (string (l k))
+           + (: p (13 - #(string (l k))) (: (sp j) (? (j < 1) "" (" " + (sp (j - 1)))) (sp p)))
+           + "guifg=" + (string (l (k + 1)))))
    (levels-of k) (: (go l i) (one? l ? () (levline i <l k, go >l (i + 1))) (go levels 0))
 
    pgroup (grp <(hue-tagged 'delim))

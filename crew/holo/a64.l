@@ -104,7 +104,7 @@
    (a64-addsub-imm op d a imm)                              ; a negative immediate flips the op (add<->sub, adds<->subs)
       (: pos  (? (imm < 0) (0 - imm) imm)
          fop  (? (imm < 0) (? (op = 'add) 'sub (op = 'sub) 'add (op = 'adds) 'subs 'adds) op)
-         base (at (peep a64-alu fop 0) 1)                   ; the (flipped) op's immediate base word (slot 1 of its alu row)
+         base ((peep a64-alu fop 0) 1)                   ; the (flipped) op's immediate base word (slot 1 of its alu row)
          (? (pos <= 4095) (alu-rri base d a pos)
             ((pos <= 16777215) && member? fop '(add sub))     ; hi12 shifted (LSL #12, bit 22), then the low tail off d
              (catall [(alu-rri (base | 0x400000) d a (pos >> 12))                    ; (the S-forms stay single: a split
@@ -141,7 +141,7 @@
    (a64-logimm-base op) (? (op = 'and) 0x92000000 (op = 'or) 0xB2000000 (op = 'xor) 0xD2000000 (scare 'badlog op))
    (a64-logical-imm op d a b) (: dn (rn d) an (rn a) (le32 (a64-logimm-base op | (bitmask-field b | ((an << 5) | dn)))))
    (a64-aluop op d a b)
-      (: meta (peep a64-alu op 0) rrb (at meta 0) rib (at meta 1)
+      (: meta (peep a64-alu op 0) rrb (meta 0) rib (meta 1)
          (? (reg? b)    (alu-rrr rrb d a b)
             (rib = 0)   (a64-logical-imm op d a b)               ; and/or/xor #imm via the bitmask encoder
             (a64-addsub-imm op d a b)))

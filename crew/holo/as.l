@@ -21,9 +21,9 @@
    as-regs (tablet 0)
    (as-reg! nm e w) (pin as-regs (intern nm) [e w])
    _ (foldl (\ _ row
-               (: e (at row 0)
-                  _ (as-reg! (at row 1) e 8) _ (as-reg! (at row 2) e 4)
-                  _ (as-reg! (at row 3) e 2) _ (as-reg! (at row 4) e 1) 0))
+               (: e (row 0)
+                  _ (as-reg! (row 1) e 8) _ (as-reg! (row 2) e 4)
+                  _ (as-reg! (row 3) e 2) _ (as-reg! (row 4) e 1) 0))
         0 '((0 "rax" "eax" "ax" "al")  (1 "rcx" "ecx" "cx" "cl")
              (2 "rdx" "edx" "dx" "dl")  (3 "rbx" "ebx" "bx" "bl")
              (4 "rsp" "esp" "sp" "spl") (5 "rbp" "ebp" "bp" "bpl")
@@ -109,8 +109,8 @@
                (: fs (as-split inner 44) k #fs        ; ... everywhere else, a number
                   d (? (0 = #disp) 0 (as-imm disp))
                   (? (k > 3) (scare 'as-memform t)
-                     ['mem (as-mreg <fs) (? (k < 2) -1 (as-mreg (at fs 1)))
-                           (? (k < 3) 1 (as-imm (at fs 2))) d]))))
+                     ['mem (as-mreg <fs) (? (k < 2) -1 (as-mreg (fs 1)))
+                           (? (k < 3) 1 (as-imm (fs 2))) d]))))
          (t 0 = 37) ('rg >< as-reglook (snip t 1 #t))        ; %reg
          (t 0 = 36) ['im (as-imm (snip t 1 #t))]              ; $imm
          (as-num? t) ['im (as-num t)]                               ; a bare number
@@ -249,13 +249,13 @@
                ext (mn @ 'neg 3 'not 2 'inc 0 1)
                (w @ 0 (scare 'as-nowidth [mn a]) (as-emit w frc [(as-opw opc w)] ext a)))
             (k = 'ind)                                       ; call/jmp through a register or memory
-            (: o (at a 1)
+            (: o (a 1)
                (mn @ 'call (as-emit 0 0 '(255) 2 o)
                      'jmp  (as-emit 0 0 '(255) 4 o)
                      (scare 'as-op1 mn)))
             (member? mn '(call jmp))
-            (: sym (at a 1) (mn @ 'call [232 (fix 4 'rel32 sym 0)] [233 (fix 4 'rel32 sym 0)]))
-            (as-cc mn) (: sym (at a 1) [15 (peep as-cc mn 0) (fix 4 'rel32 sym 0)])
+            (: sym (a 1) (mn @ 'call [232 (fix 4 'rel32 sym 0)] [233 (fix 4 'rel32 sym 0)]))
+            (as-cc mn) (: sym (a 1) [15 (peep as-cc mn 0) (fix 4 'rel32 sym 0)])
             (scare 'as-op1 mn)))
    ;; --- the nullaries, in both spellings. at&T names the sign-extend family c<from>t<to> and
    ;; Intel names it c<from><to>, which puts the two halves of it one letter apart under names
@@ -305,7 +305,7 @@
                            (go >lines addr items)                ; M1: single .text section, ignore layout dirs
                            (scare 'as-directive mn)))
                      (: mw (as-mnw (as-mnem raw))
-                        r (revonto (as-instr <mw (at mw 1) (as-ops (as-rest raw))) items 0)
+                        r (revonto (as-instr <mw (mw 1) (as-ops (as-rest raw))) items 0)
                         (go >lines (addr + <r) >r)))))
          (go (as-lines src) 0 ()))
 

@@ -123,7 +123,6 @@
                  (pv? t ")") (go >ts (depth - 1) (t >< cur) args)
                  (go >ts depth (t >< cur) args))))
        (go ts 1 () ()))
-   (argn args i) (: (go l k) (? !(two? l) () (k < 1) <l (go >l (k - 1))) (go args i))
    (paramidx params name) (: (go l i) (? !(two? l) -1 (<l = name) i (go >l (i + 1)))
                              (go params 0))
 
@@ -154,21 +153,21 @@
    ; sibling :-local gets shadowed by boxfix's shared cell, so the macro-body
    ; array rides as `mb`, a nom bound nowhere else, and its ## check is inlined.)
    (subst mb params args var? line macs)
-    (: (adjh i) ((0 < i && pv? (argn mb (i - 1)) "##") ||
-                 (i + 1 < tally mb && pv? (argn mb (i + 1)) "##"))
+    (: (adjh i) ((0 < i && pv? (mb (i - 1)) "##") ||
+                 (i + 1 < tally mb && pv? (mb (i + 1)) "##"))
        (go i acc)
         (? (tally mb <= i) (rev acc)
-           (: t (argn mb i)
+           (: t (mb i)
               (? (pv? t "#" && i + 1 < tally mb)        ; # param -> stringize
-                  (: p (argn mb (i + 1))
+                  (: p (mb (i + 1))
                      pi (? (idt? p) (paramidx params (vof p)) -1)
                      va (var? && idv? p "__VA_ARGS__")
                      (? (-1 < pi || va)
-                        (go (i + 2) (tok 'str (spellcat (? va (vaargs args params) (argn args pi))) line >< acc))
+                        (go (i + 2) (tok 'str (spellcat (? va (vaargs args params) (args pi))) line >< acc))
                         (go (i + 1) (t >< acc))))
                  (idt? t && -1 < paramidx params (vof t))       ; a named parameter
                   (: pi (paramidx params (vof t))
-                     raw (argn args pi)
+                     raw (args pi)
                      ; an empty argument beside a ## is a placemarker, not nothing
                      sub (? !(adjh i) (expand raw macs)
                             (two? raw) raw
@@ -176,8 +175,8 @@
                      (go (i + 1) (revcat sub acc)))
                  (var? && idv? t "__VA_ARGS__")                 ; the variadic tail
                   (: va (vaargs args params)
-                     prevhh ((0 < i) && pv? (argn mb (i - 1)) "##")
-                     commahh ((prevhh && (1 < i)) && pv? (argn mb (i - 2)) ",")
+                     prevhh ((0 < i) && pv? (mb (i - 1)) "##")
+                     commahh ((prevhh && (1 < i)) && pv? (mb (i - 2)) ",")
                      (? commahh                                 ; GNU `, ## __VA_ARGS__` elision: the ## is a marker, not a paste
                          (: acc2 >acc                       ; drop the ## already emitted (no join)
                             (? (two? va) (go (i + 1) (revcat (expand va macs) acc2))         ; args present: keep the comma

@@ -55,7 +55,6 @@
 (module 'holo
 (: ;; -- a 0-based list accessor (prel has none; `nth` is not bound -- it absorbs as the zero
    ;; point). instruction forms read their operands through this. --
-   (at l k) (? (k = 0) <l (at >l (k - 1)))
 
    ;; -- bytes, little-endian: the leaves a backend emits immediates with. byte/le16/le32 ride the
    ;; fast &/>> path (their inputs are always < 2^31, where & is exact). le64 must not: a movabs
@@ -81,10 +80,10 @@
    ;; instruction word there, its branch offset being a bitfield within the word, not bytes. --
    (fix w kind label aux) ['fix w kind label aux]
    (fix? x)   (? (two? x) (<x = 'fix) 0)
-   (fix-w x)  (at x 1)
-   (fix-k x)  (at x 2)
-   (fix-l x)  (at x 3)
-   (fix-a x)  (at x 4)
+   (fix-w x)  (x 1)
+   (fix-k x)  (x 2)
+   (fix-l x)  (x 3)
+   (fix-a x)  (x 4)
    (item-len x) (? (fix? x) (fix-w x) 1)              ; a byte is 1; a fixup is its field width
    ;; -- fold a freshly lowered chunk onto the reversed item stream, answering (len . items).
    ;; measure-then-rev-then-append walks the chunk three times and conses it twice; this walks
@@ -220,9 +219,9 @@
       (? !(two? prog) (rev items >< labels)
          (: ins <prog
             (? (<ins = 'label)
-               (: _ (pin labels (at ins 1) addr) (lay >prog be addr items labels))
+               (: _ (pin labels (ins 1) addr) (lay >prog be addr items labels))
                (<ins = 'align)
-               (: r (revonto (pad-to be addr (at ins 1)) items 0)
+               (: r (revonto (pad-to be addr (ins 1)) items 0)
                   (lay >prog be (addr + <r) >r labels))
                (: r (revonto (lower-with be ins) items 0)
                   (lay >prog be (addr + <r) >r labels)))))
@@ -267,10 +266,10 @@
                (? !(two? p) (rev acc)
                   (: ins <p
                      (? (<ins = 'label)
-                        (: _ (pin spots (at ins 1) addr) _ (pin eras (at ins 1) era)
+                        (: _ (pin spots (ins 1) addr) _ (pin eras (ins 1) era)
                            (plumb >p addr era ((0 >< ()) >< acc)))
                         (<ins = 'align)
-                        (: r (revonto (pad-to be addr (at ins 1)) () 0)
+                        (: r (revonto (pad-to be addr (ins 1)) () 0)
                            (plumb >p (addr + <r) (era + 1) (r >< acc)))
                         (: r (revonto (lower-with be ins) () 0)
                            (plumb >p (addr + <r) era (r >< acc))))))
@@ -292,13 +291,13 @@
                (? !(two? p) (rev items >< labels)
                   (: ins <p  k <<cs  c ><cs
                      (? (<ins = 'label)
-                        (: _ (pin labels (at ins 1) fa) (stitch >p >cs pa fa era items))
+                        (: _ (pin labels (ins 1) fa) (stitch >p >cs pa fa era items))
                         (<ins = 'align)
-                        (: pad (pad-to be fa (at ins 1))
+                        (: pad (pad-to be fa (ins 1))
                            (stitch >p >cs (pa + k) (fa + tally pad) (era + 1)
                                    (rev pad + items)))
                         (member? <ins '(jmp br))
-                        (: t (tgt-of (? (<ins = 'jmp) (at ins 1) (at ins 2)) era)
+                        (: t (tgt-of (? (<ins = 'jmp) (ins 1) (ins 2)) era)
                            sc (? (imm? t) (short-of ins (rev c) (t - pa)) ())
                            (? (two? sc)
                               (: r (revonto sc items 0)          ; bytes, not elements: one

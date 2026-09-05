@@ -112,7 +112,6 @@
                    v (th ()) _ (pin arlive 0 old) v)
    (ar-ws s n i) (i < n && (s i = 32 || s i = 9 || s i = 10) ? (ar-ws s n (1 + i)) i)
    (ar-at s n i t) (: m #t ((i + m) <= n && (snip s i (i + m)) = t))
-   (ar-nth l k) (? !(two? l) () (k = 0) <l (ar-nth >l (k - 1)))
    (ar-has? l t) (any (\ x (x = t)) l)
    ; --- numbers: 0x hex, leading-0 octal, else decimal
    (ar-hexv b) (? (sh-digit? b) (b - 48)
@@ -211,7 +210,7 @@
      (: j (ar-ws s n >r)
         o (ar-op s n j)
         (? !(string? o) r
-           !(ar-has? (ar-nth arlv k) o) r
+           !(ar-has? (arlv k) o) r
            (: j2 (j + tally o)
               sc (o = "&&" || o = "||")
               rt? (o = "**")                    ; the one right-associating rung
@@ -298,7 +297,7 @@
                                ""))))
             "" segs)
    (sh-voptext text) (sh-textof (sh-wordize text))
-   (sh-vopseg sg) (: p >sg (sh-vop (sh-nth p 0) (sh-nth p 1) (sh-nth p 2)))
+   (sh-vopseg sg) (: p >sg (sh-vop (p 0) (p 1) (p 2)))
    (sh-vop nm op text)
      (? (op = "len") (show #(sh-vval nm))
         (: g (sh-vget nm)
@@ -366,11 +365,11 @@
    (dqat inner st)
      (? !(two? inner) st
         (: sg <inner k <sg
-           d (sh-nth st 0) r (sh-nth st 1)
+           d (st 0) r (st 1)
            (? (= k 'var && (>sg = "@"))
               (: ps (sh-pos ())
                  st2 (? !(two? ps) st
-                        (foldl (\ a p (: dd (sh-nth a 0) rr (sh-nth a 1) sn2 (sh-nth a 2)
+                        (foldl (\ a p (: dd (a 0) rr (a 1) sn2 (a 2)
                                          (? sn2 [(rr . dd) (addrun () p 0) 1]
                                             [dd (addrun () p 0) 1])))
                                [d (addrun r (? (two? ps) <ps "") 0) 1]
@@ -387,7 +386,7 @@
                                  0)
                        1]))))
    (wseg sg st)
-     (: d (sh-nth st 0) r (sh-nth st 1) sn (sh-nth st 2)
+     (: d (st 0) r (st 1) sn (st 2)
         k <sg v >sg
         (? (= k 'lit) [d (addrun r v 1) 1]
            (= k 'sq)  [d (addrun r v 0) 1]
@@ -430,6 +429,6 @@
            [t]))
    (sh-fields segs)
      (: st (wsegs (sh-tilde segs) [() () 0])
-        fs (sh-rev (closef (sh-nth st 0) (sh-nth st 1) (sh-nth st 2)))
+        fs (sh-rev (closef (st 0) (st 1) (st 2)))
         (catmap sh-field1 fs)))
 ) ; module 'lush

@@ -54,7 +54,6 @@
    hue-sigils "@#$~.!?%^*+/<>=|&-"
 
    ; --- reading the table -----------------------------------------------------
-   (hue-nth l k) (? (k < 1) <l (hue-nth >l (k - 1)))
    (hue-cls r)  <r
    (hue-grp r)  <>r
    (hue-rule r) <>>r
@@ -68,7 +67,7 @@
    hue-quo  (hue-arg (hue-one 'mark))
    hue-sep  (hue-arg (hue-one 'sep))                       ; the byte the grammar splits at
    hue-str  (hue-arg (hue-one 'span))                      ; the quote byte
-   hue-esc  (hue-nth (hue-rule (hue-one 'span)) 2)         ; the escape byte
+   hue-esc  ((hue-rule (hue-one 'span)) 2)         ; the escape byte
    ; a token ends only on whitespace, a bracket, or a reader operator
    hue-stop (hue-brk + "\"';,")
 
@@ -239,7 +238,7 @@
    (hue-byte t k) ((hue-hx (t k)) * 16 + (hue-hx (t (k + 1))))
    (hue-faces fs) (foldl (\ a f (a + (? (= f 'bold) "1;" "3;"))) "" fs)
    (hue-pen row deep)
-    (: n (hue-nth row 1) g (hue-nth row 2) fs (hue-nth row 3)
+    (: n (row 1) g (row 2) fs (row 3)
        ("\e[" + hue-faces fs
         + (? deep ("38;2;" + show (hue-byte g 1) + ";" + show (hue-byte g 3)
                            + ";" + show (hue-byte g 5))

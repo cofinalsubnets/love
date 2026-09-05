@@ -17,7 +17,6 @@
                     _ (puts (+ "FAIL " nm)) (putc 10)))
 
    ;; -- list / constellation helpers --
-   (nth l k)  (? (= k 0) <l (nth >l (- k 1)))
    (lprod l)  (? (two? l) (* <l (lprod >l)) 1)
    (lall l)   (? (two? l) (? <l (lall >l) 0) 1)
    (ncells v) (? (tray? v) (lprod (shape v)) 1)
@@ -38,12 +37,12 @@
    ;; fwd : a list of leaf nodes -> the scalar loss node
    (loss-at fwd xs) (: _ (tl-reset 0) (tl-val (fwd (map glass xs))))
    (numgrad fwd ins p k)
-     (/ (- (loss-at fwd (setnth ins p (bump (nth ins p) k eps)))
-           (loss-at fwd (setnth ins p (bump (nth ins p) k (- 0 eps)))))
+     (/ (- (loss-at fwd (setnth ins p (bump (ins p) k eps)))
+           (loss-at fwd (setnth ins p (bump (ins p) k (- 0 eps)))))
         (* 2 eps))
    (okp fwd ins ag p)                               ; every cell of input p matches
-     (lall (map (\ k (close? (numgrad fwd ins p k) (gcell (nth ag p) k)))
-                (jot (ncells (nth ins p)))))
+     (lall (map (\ k (close? (numgrad fwd ins p k) (gcell (ag p) k)))
+                (jot (ncells (ins p)))))
    (gradcheck nm ins fwd)
      (: _ (tl-reset 0)
         leaves (map glass ins)
@@ -65,25 +64,25 @@
    w23 (gem-tray (quote (2 3)) (quote (0.1 -0.2 0.3 0.4 -0.5 0.6)))
 
    ;; -- the cases (loss is always a scalar via sum) --
-   _ (gradcheck "sum(v)"                [v3]      (\ ls (sum (nth ls 0))))
-   _ (gradcheck "sum(a+b)"              [v3 w3]   (\ ls (sum (add (nth ls 0) (nth ls 1)))))
-   _ (gradcheck "sum(a*b)"             [v3 w3]   (\ ls (sum (mul (nth ls 0) (nth ls 1)))))
-   _ (gradcheck "sum(s*v) scalar bcast" [2.0 v3]  (\ ls (sum (mul (nth ls 0) (nth ls 1)))))
-   _ (gradcheck "sum((a+b)*b) fan-out"  [v3 w3]   (\ ls (sum (mul (add (nth ls 0) (nth ls 1)) (nth ls 1)))))
-   _ (gradcheck "sum(mm(A,B))"          [m23 m32] (\ ls (sum (mm (nth ls 0) (nth ls 1)))))
-   _ (gradcheck "sum(mm+mm) fan-out"    [m23 m32] (\ ls (sum (add (mm (nth ls 0) (nth ls 1))
-                                                                    (mm (nth ls 0) (nth ls 1))))))
+   _ (gradcheck "sum(v)"                [v3]      (\ ls (sum (ls 0))))
+   _ (gradcheck "sum(a+b)"              [v3 w3]   (\ ls (sum (add (ls 0) (ls 1)))))
+   _ (gradcheck "sum(a*b)"             [v3 w3]   (\ ls (sum (mul (ls 0) (ls 1)))))
+   _ (gradcheck "sum(s*v) scalar bcast" [2.0 v3]  (\ ls (sum (mul (ls 0) (ls 1)))))
+   _ (gradcheck "sum((a+b)*b) fan-out"  [v3 w3]   (\ ls (sum (mul (add (ls 0) (ls 1)) (ls 1)))))
+   _ (gradcheck "sum(mm(A,B))"          [m23 m32] (\ ls (sum (mm (ls 0) (ls 1)))))
+   _ (gradcheck "sum(mm+mm) fan-out"    [m23 m32] (\ ls (sum (add (mm (ls 0) (ls 1))
+                                                                    (mm (ls 0) (ls 1))))))
 
    ;; -- Stage 2: activations, loss, the bias un-broadcast (colsum sumto) --
-   _ (gradcheck "sum(relu(x))"          [r4]      (\ ls (sum (relu (nth ls 0)))))
-   _ (gradcheck "sum(sig(x))"           [v3]      (\ ls (sum (sig (nth ls 0)))))
-   _ (gradcheck "sum(tanh(x))"          [v3]      (\ ls (sum (tanh (nth ls 0)))))
-   _ (gradcheck "sum(a-b)"              [v3 w3]   (\ ls (sum (sub (nth ls 0) (nth ls 1)))))
-   _ (gradcheck "mean(x)"               [v3]      (\ ls (mean (nth ls 0))))
-   _ (gradcheck "mse(p,t)"              [v3 t3]   (\ ls (mse (nth ls 0) (nth ls 1))))
-   _ (gradcheck "bias bcast sumto"      [b3]      (\ ls (sum (add m23 (nth ls 0)))))
+   _ (gradcheck "sum(relu(x))"          [r4]      (\ ls (sum (relu (ls 0)))))
+   _ (gradcheck "sum(sig(x))"           [v3]      (\ ls (sum (sig (ls 0)))))
+   _ (gradcheck "sum(tanh(x))"          [v3]      (\ ls (sum (tanh (ls 0)))))
+   _ (gradcheck "sum(a-b)"              [v3 w3]   (\ ls (sum (sub (ls 0) (ls 1)))))
+   _ (gradcheck "mean(x)"               [v3]      (\ ls (mean (ls 0))))
+   _ (gradcheck "mse(p,t)"              [v3 t3]   (\ ls (mse (ls 0) (ls 1))))
+   _ (gradcheck "bias bcast sumto"      [b3]      (\ ls (sum (add m23 (ls 0)))))
    _ (gradcheck "linear+sig layer"      [x22 w23 b3]
-       (\ ls (sum (sig (add (mm (nth ls 0) (nth ls 1)) (nth ls 2))))))
+       (\ ls (sum (sig (add (mm (ls 0) (ls 1)) (ls 2))))))
 
    ;; -- Stage 3: nn modules, optim, end-to-end training --
    ;; param collection: a 2-layer seq has 4 param glasses (2 linears x {W,b})

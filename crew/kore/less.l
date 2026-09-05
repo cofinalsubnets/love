@@ -103,7 +103,6 @@
                            (go >r (i + 1) ln)))
        (go rw 0 -1))
    ; the k-th element, or () -- a list does not index by application here
-   (pgat l i) (? !(two? l) () (i < 1) <l (pgat >l (i - 1)))
    ; the rows from 'top, walked on from the last answer when the view did not move
    ; back. without it every frame re-walks the buffer from its head, which is a
    ; whole 50k-row list per keystroke once you are near the end of one
@@ -207,7 +206,7 @@
     (: fs (st 'files) k (st 'fi + d)
        (? (k < 0) (pgmsg st "no previous file")
           (#fs <= k) (pgmsg st "no next file")
-          (: _ (pin st 'fi k) _ (pin st 'doe [(pgat fs k)]) st)))
+          (: _ (pin st 'fi k) _ (pin st 'doe [(fs k)]) st)))
 
    ; -- the step ----------------------------------------------------------------
    (pgcnt st d) (: c (st 'cnt) (? (0 < #c) (uatoi c) d))
@@ -270,7 +269,7 @@
    ; the last visible source line -- the tail of the window, or the buffer's end
    (pglast st)
     (: b (pgbody st) top (st 'top) k (top + b)
-       r (pgat (pgfrom st) (? (st 'nr < k) ((st 'nr - top) - 1) (b - 1)))
+       r ((pgfrom st) (? (st 'nr < k) ((st 'nr - top) - 1) (b - 1)))
        (? (two? r) (<>r + 1) (st 'nl)))
    (pgstat st)
     (: b (pgbody st) nl (st 'nl)

@@ -23,11 +23,11 @@
    (rvg-main av)
     (? (4 <= tally av)
        (: srcs (map rvg-read [<av <>av <>>av])
-          dst (at av 3)
+          dst (av 3)
           ; ldkern answers (header . pieces), which ld-write is what lays down
           k (ldkern 'rv64 "rvboot" rvg-base 0 srcs)
           _ (ld-write dst (<k >< >k))
-          (say out ("RVBOOT\t" + (at av 3) + "\n")))
+          (say out ("RVBOOT\t" + (av 3) + "\n")))
        (rvg-die "usage: rvboot.l BOOT.o DTB.o GATE.o OUT.elf"))
 
    (rvg-main >argv))

@@ -307,8 +307,8 @@
                    (? !(two? hq) (lx (i + 1) "" 0 () tks hq bods k)
                       (: (coll j q bs)                 ; owed bodies, in arrival order
                            (q @ (h . rest)
-                              (sh-hdlines s n j (sh-nth h 1) (sh-nth h 3) @ (body . j2)
-                                 (coll j2 rest ((sh-nth h 0 . (sh-nth h 2 . body)) . bs)))
+                              (sh-hdlines s n j (h 1) (h 3) @ (body . j2)
+                                 (coll j2 rest ((h 0 . (h 2 . body)) . bs)))
                               (j . bs))
                          (coll (i + 1) (sh-rev hq) bods @
                           (j . bs) (lx j "" 0 () tks () bs k)

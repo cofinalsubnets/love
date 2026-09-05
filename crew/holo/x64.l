@@ -96,7 +96,7 @@
    ;; insn was free, and at ipc ~3.7 the corpus is frontend/layout-bound, not
    ;; instruction-starved (exp-1's lesson again). don't retry as written.
    (emit-alu op d a b)
-      (: meta (peep x64-alu op 0) rr (at meta 0) ext (at meta 1) comm (at meta 2)
+      (: meta (peep x64-alu op 0) rr (meta 0) ext (meta 1) comm (meta 2)
          (? (reg-eq d a)                  (alu-step rr ext d b)
             (reg? b && reg-eq d b)    (? comm (alu-step rr ext d a) (scare 'alias-dst [op d a b]))
             (emit-mov d a + alu-step rr ext d b)))
@@ -410,7 +410,7 @@
    x64-sse (tabof x64-sse-rows)
    (xrex w r b) (? ((w = 1) || (r >= 8) || (b >= 8)) [(rex w (hi r) 0 (hi b))] ())      ; REX only when needed
    (emit-sse op d s)                                                                     ; xmm <- xmm two-address
-      (: meta (peep x64-sse op 0) pfx (at meta 0) opc (at meta 1) dn (xrn d) sn (xrn s)
+      (: meta (peep x64-sse op 0) pfx (meta 0) opc (meta 1) dn (xrn d) sn (xrn s)
          (catall [(? (pfx = 0) () [pfx]) (xrex 0 dn sn) [15 opc (modrm 3 dn sn)]]))
    (emit-cmppd d s imm) (: dn (xrn d) sn (xrn s)                                         ; 66 0F c2 /r ib  (predicate imm: 1=LT 2=LE)
       (catall ['(102) (xrex 0 dn sn) [15 194 (modrm 3 dn sn) (byte imm)]]))

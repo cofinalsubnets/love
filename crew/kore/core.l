@@ -915,7 +915,7 @@
               (bl? (ln i)) (go (i + 1) -1 (? (st < 0) acc (snip ln st i >< acc)))
               (go (i + 1) (? (st < 0) i st) acc))
           (go 0 -1 ())))
-   (unth l k) (? ((k < 1) || !(two? l)) () (k = 1) <l (unth >l (k - 1)))
+   (unth l k) (k < 1 ? () (l (k - 1)))
    (join-main as)
     (: t {'f1 1 'f2 1 'sep () 'a1 0 'a2 0 'v1 0 'v2 0}
        (fl a fs)

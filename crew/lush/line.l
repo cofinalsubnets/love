@@ -91,7 +91,7 @@
      (sh-uniq (sort (+ (filter (sh-prefix? w) sh-builtins)
                        (catmap (\ d (filter (sh-prefix? w) (readdir d)))
                                (sh-pathdirs ("" + (getenv "PATH")))))))
-   (sh-dirp q) (: st (stat q) (two? st && (16384 = (61440 & (sh-nth st 2)))))
+   (sh-dirp q) (: st (stat q) (two? st && (16384 = (61440 & (st 2)))))
    (sh-unfold w)                                ; ~/x -> $HOME/x (stat wants the real path)
      (? (tally w && ((w 0) = 126)) (("" + (getenv "HOME")) + (snip w 1 #w)) w)
    (sh-fileca w)                                ; pathname candidates: glob w*, ~ refolded

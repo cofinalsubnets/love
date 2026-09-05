@@ -106,7 +106,7 @@
 
    ; keep only those that compress, paired with their C word
    pairs (foldl (\ a w (: c (rvc-of w)
-                           (? (two? c) ([w ((at c 0) | ((at c 1) << 8))] >< a) a))) () words)
+                           (? (two? c) ([w ((c 0) | ((c 1) << 8))] >< a) a))) () words)
    npair (tally pairs)
 
    _ (? (tool? "llvm-mc") 0
@@ -115,7 +115,7 @@
         (: _ (say err "FAIL test_rvc: the sweep compressed nothing -- is rvc-of wired in?\n") (quit 1)))
 
    _ (wrf (tmpd + "/.rvc32.s") (foldl (\ a p (a + (bytes-of <p 4) + "\n")) "" pairs))
-   _ (wrf (tmpd + "/.rvc16.s") (foldl (\ a p (a + (bytes-of (at p 1) 2) + "\n")) "" pairs))
+   _ (wrf (tmpd + "/.rvc16.s") (foldl (\ a p (a + (bytes-of (p 1) 2) + "\n")) "" pairs))
    mc "llvm-mc --disassemble --triple=riscv64 --mattr=+m,+f,+d,+c"
    _ (sh (mc + " < " + tmpd + "/.rvc32.s > " + tmpd + "/.rvc32.out 2>/dev/null"))
    _ (sh (mc + " < " + tmpd + "/.rvc16.s > " + tmpd + "/.rvc16.out 2>/dev/null"))
@@ -141,10 +141,10 @@
         (: _ (say err ("FAIL test_rvc: llvm-mc decoded " + show (tally d16)
                         + " of " + show npair + " compressed words -- an unencodable C form?\n")) (quit 1)))
 
-   bad (foldl (\ a i (: x (demv (at d32 i)) y (norm (at d16 i))
-                         (? (x = y) a ([(at (at pairs i) 0) x y] >< a)))) () (jot npair))
-   _ (foldl (\ _ b (: _ (say err ("  word " + show (at b 0) + ": 32-bit `" + (at b 1)
-                                   + "` vs C `" + (at b 2) + "`\n")) 0)) 0 (firstn 12 bad))
+   bad (foldl (\ a i (: x (demv (d32 i)) y (norm (d16 i))
+                         (? (x = y) a ([((pairs i) 0) x y] >< a)))) () (jot npair))
+   _ (foldl (\ _ b (: _ (say err ("  word " + show (b 0) + ": 32-bit `" + (b 1)
+                                   + "` vs C `" + (b 2) + "`\n")) 0)) 0 (firstn 12 bad))
    _ (? !(two? bad) 0
         (: _ (say err ("FAIL test_rvc: " + show (tally bad) + " of " + show npair
                         + " compressions change meaning\n")) (quit 1)))
@@ -158,23 +158,23 @@
    cjrels (map (\ i ((i * 2) - 2048)) (upto 2047))       ; every even offset cj reaches
    cbrels (map (\ i ((i * 2) - 256)) (upto 255))         ; and every even offset cb reaches
    cbcases (flat (map (\ r (flat (map (\ f3 (map (\ rl [r f3 rl]) cbrels)) '(0 1)))) pregs))
-   cjw (map (\ i (rv-patch 'cj ((i * 2) + (at cjrels i)) (i * 2) 2 0xA001)) (jot (tally cjrels)))
-   cbw (map (\ i (: c (at cbcases i)
-                     (rv-patch 'cb ((i * 2) + (at c 2)) (i * 2) 2
-                               (rv-cbase (bform (at c 1) (at c 0) 0) (at c 2)))))
+   cjw (map (\ i (rv-patch 'cj ((i * 2) + (cjrels i)) (i * 2) 2 0xA001)) (jot (tally cjrels)))
+   cbw (map (\ i (: c (cbcases i)
+                     (rv-patch 'cb ((i * 2) + (c 2)) (i * 2) 2
+                               (rv-cbase (bform (c 1) (c 0) 0) (c 2)))))
             (jot (tally cbcases)))
    want (map (\ r ("j " + show r)) cjrels
-          + map (\ c ((? ((at c 1) = 0) "beqz " "bnez ") + ((at abin ((at c 0) - 8))
-                        + (", " + show (at c 2))))) cbcases)
+          + map (\ c ((? ((c 1) = 0) "beqz " "bnez ") + ((abin ((c 0) - 8))
+                        + (", " + show (c 2))))) cbcases)
    _ (wrf (tmpd + "/.cbr.s") (foldl (\ a b (a + (bhex b) + "\n")) "" (cjw + cbw)))
    _ (sh (mc + " < " + tmpd + "/.cbr.s > " + tmpd + "/.cbr.out 2>/dev/null"))
    dbr (map norm (lines (rdf (tmpd + "/.cbr.out"))))
    _ (? ((tally dbr) = tally want) 0
         (: _ (say err ("FAIL test_rvc: llvm-mc decoded " + show (tally dbr) + " of "
                         + show (tally want) + " compressed branches\n")) (quit 1)))
-   bbad (foldl (\ a i (? ((at dbr i) = (at want i)) a ([(at want i) (at dbr i)] >< a)))
+   bbad (foldl (\ a i (? ((dbr i) = (want i)) a ([(want i) (dbr i)] >< a)))
                () (jot (tally want)))
-   _ (foldl (\ _ b (: _ (say err ("  wanted `" + (at b 0) + "` got `" + (at b 1) + "`\n")) 0))
+   _ (foldl (\ _ b (: _ (say err ("  wanted `" + (b 0) + "` got `" + (b 1) + "`\n")) 0))
             0 (firstn 12 bbad))
    _ (? !(two? bbad) 0
         (: _ (say err ("FAIL test_rvc: " + show (tally bbad) + " of " + show (tally want)
@@ -182,7 +182,7 @@
    ;; the domain: rv-cbase must refuse what cb cannot say -- out of reach either way, a
    ;; register outside the window, a second source, a compare that is not beq/bne.
    nocb '((0 8 0 256) (0 8 0 -258) (0 7 0 100) (0 16 0 100) (0 8 9 100) (4 8 0 100) (6 8 0 100))
-   loose (foldl (\ a c (? (imm? (rv-cbase (bform (at c 0) (at c 1) (at c 2)) (at c 3)))
+   loose (foldl (\ a c (? (imm? (rv-cbase (bform (c 0) (c 1) (c 2)) (c 3)))
                           (c >< a) a)) () nocb)
    _ (? !(two? loose) 0
         (: _ (say err ("FAIL test_rvc: rv-cbase took " + show (tally loose)

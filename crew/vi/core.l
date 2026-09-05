@@ -571,9 +571,8 @@
                       (? (two? c && (<c = st 'hlgen)) <>c
                          (: k (hue-carry bk ls) _ (pin st 'hlcar [(st 'hlgen) k]) k)))
               ())
-       (vcar l i) (? !(two? l) 0 (i < 1) <l (vcar >l (i - 1)))
        (lay i) (: ln (clip (ls i))
-                  (? paint (hue-line (st 'pens) bk ln (vcar car i)) ln))
+                  (? paint (hue-line (st 'pens) bk ln (car i)) ln))
        (rows i acc)
         (? ((top + body) <= i) acc
            (rows (i + 1) (acc + (? (i < nl) (lay i) "~") + e + "[K" + "\r\n")))

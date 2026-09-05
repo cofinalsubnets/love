@@ -157,7 +157,7 @@
  _ (map (nm \ (: sg (w2-sigof lux-sigs nm)
                  ps (cup (cap (w2-find nm cforms)))
                  ks (cap (cup sg))
-                 res (w2-mty (w2-rk nm (w2-nthl sg 2)))
+                 res (w2-mty (w2-rk nm (sg 2)))
                  ((uu 'defn) (caup (assoc nm amap))
                    (w2-pi ps ks ['paths res (link (w2-gen nm) ps) (link (mname nm) ps)])
                    (w2-lams ps ['idpath (link (mname nm) ps)]))))

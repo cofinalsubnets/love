@@ -174,7 +174,7 @@
       ("rip.push"     "ff3500000000c3"        "pushq t(%rip)\nt:\n ret")
       ("rip.call.ind" "ff1500000000c3"        "call *t(%rip)\nt:\n ret"))
 
-   _ (foldl (\ _ t (chk (at t 0) (at t 1) (at t 2))) 0 tests)
+   _ (foldl (\ _ t (chk (t 0) (t 1) (t 2))) 0 tests)
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (sayln $ "test/holo/as: " + show np + " passed, " + show nf + " failed\n")
    _ (? (0 = nf) 0 (quit 1)))

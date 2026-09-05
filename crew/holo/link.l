@@ -511,7 +511,7 @@
    ; (object order, then header order) -- the one order layout and emit both walk.
    (ld-nlanes objs home)
     (: seen {}
-       (nhome ob l) (at (peep (peep ob 'secs 0) <(peep (peep ob 'lanes 0) l ()) ()) 4)
+       (nhome ob l) ((peep (peep ob 'secs 0) <(peep (peep ob 'lanes 0) l ()) ()) 4)
        (go os acc)
         (? !(two? os) (rev acc)
            (: ob <os
@@ -530,7 +530,7 @@
    ; when it is empty (every object carries a zero-size .image), so "does this set
    ; use the lane at all?" has to weigh the bytes, not count the sections.
    (ld-lanesz ob lane)
-    (foldl (\ a i (a + at (peep (peep ob 'secs 0) i ()) 2))
+    (foldl (\ a i (a + (peep (peep ob 'secs 0) i ()) 2))
            0 (peep (peep ob 'lanes 0) lane ()))
 
    ; assign every section its load address: header first (hdrsz reserves the ELF
@@ -780,8 +780,8 @@
    ; than landing in undef. mksym/esz are the class's entry writer and its
    ; stride -- the walk is one, and only the wire shape differs. -> (bytes strs nlocal)
    (ldstab objs glo lanesx mksym esz)
-    (: (lx se) (? (o-has? lanesx (at se 0)) (peep lanesx (at se 0) 0)
-                  (peep lanesx (at se 4) 0))
+    (: (lx se) (? (o-has? lanesx (se 0)) (peep lanesx (se 0) 0)
+                  (peep lanesx (se 4) 0))
        (one ob acc)
         (: bs (peep ob 'base 0) secs (peep ob 'secs 0) syms (peep ob 'syms 0)
            (go i a)
@@ -800,16 +800,16 @@
                          ; own address (glo holds the winner; a global twin would be a lie,
                          ; but an unnamed span makes nm/vmret charge the bytes to whatever
                          ; symbol precedes them)
-                         (0 < bind && !won) ([nm 0 typ (lx se) ad (at sy 5)] . a)
-                         ([nm bind typ (lx se) ad (at sy 5)] . a)))))
+                         (0 < bind && !won) ([nm 0 typ (lx se) ad (sy 5)] . a)
+                         ([nm bind typ (lx se) ad (sy 5)] . a)))))
            (go 1 acc))
        all (foldl (\ a ob (one ob a)) () objs)
        locs (filter (e \ <>e = 0) all)
        ord (locs + filter (e \ 0 < <>e) all)
        str (o-strtab (map cap ord))
        ; index 0 is the reserved NULL entry, and it counts as a local
-       [(ld-zeros esz + catall (o-mapi (\ i e (mksym (at <>str i) (at e 1) (at e 2)
-                                                        (at e 3) (at e 4) (at e 5)))
+       [(ld-zeros esz + catall (o-mapi (\ i e (mksym (<>str i) (e 1) (e 2)
+                                                        (e 3) (e 4) (e 5)))
                                          ord))
         <str (1 + tally locs)])
 
@@ -958,7 +958,7 @@
        ; that one being a section our linker invents outright.
        shstr (o-strtab '(".text" ".rodata" ".data" ".love.nifs" ".love.rela" ".bss" ".love.image"
                          ".symtab" ".strtab" ".shstrtab" ".comment" ".love.README" ".note.netbsd.ident"))
-       (snm k) (at <>shstr k)
+       (snm k) (<>shstr k)
        symo (ld-align 8 endf) symz #<st
        stro (symo + symz) strz #<>st
        ssto (stro + strz) sstz #<shstr
@@ -977,7 +977,7 @@
                     (ld-shdr (snm 4) 1 2 r0 (r0 - base) (r1 - r0) 0 0 16 0)          ; love_rela, the -pie table (empty non-pie)
                     (ld-shdr (snm 5) 8 3 r1 (r1 - base) (bend - r1) 0 0 16 0)        ; NOBITS: an offset, no bytes
                     (ld-shdr (snm 6) 1 3 iaddr ioff isz 0 0 16 0)                    ; .image, the grow slot -- its own segment
-                    (ld-shdr (snm 7) 2 0 0 symo symz 9 (at st 2) 8 24)               ; link=.strtab info=first global
+                    (ld-shdr (snm 7) 2 0 0 symo symz 9 (st 2) 8 24)               ; link=.strtab info=first global
                     (ld-shdr (snm 8) 3 0 0 stro strz 0 0 1 0)
                     (ld-shdr (snm 9) 3 0 0 ssto sstz 0 0 1 0)
                     (ld-shdr (snm 10) 1 48 0 cmto cmtz 0 0 1 1)                     ; .comment: merge|strings, no alloc
@@ -1084,7 +1084,7 @@
        st (ldstab objs glo lanesx ld-sym 24)
        shstr (o-strtab '(".note.pvh" ".boot" ".text" ".rodata"
                          ".data" ".bss" ".symtab" ".strtab" ".shstrtab"))
-       (snm k) (at <>shstr k)
+       (snm k) (<>shstr k)
        symo (ld-align 8 fsz) symz (tally <st)
        stro (symo + symz) strz (tally <>st)
        ssto (stro + strz) sstz (tally <shstr)
@@ -1096,7 +1096,7 @@
                     (ld-shdr (snm 3) 1 2 o0 (fo o0) (o1 - o0) 0 0 4096 0)
                     (ld-shdr (snm 4) 1 3 d0 (fo d0) (i1 - d0) 0 0 4096 0)         ; .data, the nifs and image runs with it
                     (ld-shdr (snm 5) 8 3 i1 (fo i1) (kend - i1) 0 0 16 0)         ; NOBITS: an offset, no bytes
-                    (ld-shdr (snm 6) 2 0 0 symo symz 8 (at st 2) 8 24)            ; link=.strtab info=first global
+                    (ld-shdr (snm 6) 2 0 0 symo symz 8 (st 2) 8 24)            ; link=.strtab info=first global
                     (ld-shdr (snm 7) 3 0 0 stro strz 0 0 1 0)
                     (ld-shdr (snm 8) 3 0 0 ssto sstz 0 0 1 0)])
        hdr (elf64-hdrn 2 <e mach [shto 10 9] (map (foldl id elf64-phdr) phs))
@@ -1218,7 +1218,7 @@
                 () maplanes)
        _ (foldl (\ _ l (member? l maplanes ? 0 (scare 'link-unmapped-lane l)))
                 0 (ld-uselanes objs))
-       org (at <lruns 1)
+       org (<lruns 1)
        foff (4096 + (org % 4096))               ; ..the header's page, and the congruence
        ; -- the layout pass, run by run and lane by lane in the map's own order.
        ; lpos records each lane's (vaddr fileoff size) as it goes -- the section
@@ -1228,7 +1228,7 @@
        lpos (tablet 0)
        plan (: (go rs cur fpos copied acc)
                 (? !(two? rs) (rev acc)
-                   (: r <rs kind <r start (at r 1) ls (ld-runlanes r) fl (ld-runflags r)
+                   (: r <rs kind <r start (r 1) ls (ld-runlanes r) fl (ld-runflags r)
                       copy? (kind == 'copy)
                       _ (!copy? && kind !== 'at ? (scare 'link-run-kind kind))
                       _ (copied && !copy? ? (scare 'link-run-after-copy start))
@@ -1299,7 +1299,7 @@
                    (: r <rs
                       pad (fp < r 2 ? [(ld-zeros (r 2 - fp))])
                       e (foldl (a \ l \ ldemit cx l <a objs >a)
-                               [(at r 1)] (filter (!== 'bss) (r 5)))
+                               [(r 1)] (filter (!== 'bss) (r 5)))
                       (go >rs (r 2 + r 3) (acc + pad + >e))))
                (go plan foff ()))
        fend <body  pieces <>body
@@ -1320,9 +1320,9 @@
                     + o-mapi (\ i l (: q (peep lpos l '(0 0 0))
                                        (ld-shdr32 (snm i) (l == 'bss ? 8 1)
                                                   (ld-secflags (ld-homeof objs l))
-                                                  <q <>q (at q 2) 0 0 4 0)))
+                                                  <q <>q (q 2) 0 0 4 0)))
                              shl
-                    + [(ld-shdr32 (snm nl) 2 0 0 symo symz (nl + 2) (at st 2) 4 16)    ; link=.strtab
+                    + [(ld-shdr32 (snm nl) 2 0 0 symo symz (nl + 2) (st 2) 4 16)    ; link=.strtab
                        (ld-shdr32 (snm (nl + 1)) 3 0 0 stro strz 0 0 1 0)
                        (ld-shdr32 (snm (nl + 2)) 3 0 0 ssto sstz 0 0 1 0)]))
        hdr (elf32-hdrn 2 ent mach [shto (nl + 4) (nl + 3)]

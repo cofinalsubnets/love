@@ -80,11 +80,11 @@
               ((1 < #a) && ((a 0) = 45))
                 (: fw (sh-flagw a >args)
                    (? !(two? fw) (sh-file a >args)          ; a letter not ours: a name
-                      (sh-nth fw 1)
-                        (: r (sh-nth fw 2)
+                      (fw 1)
+                        (: r (fw 2)
                            (? r (sh-c <r >r)
                               (: _ (say err "lush: -c needs a command\n") (quit 2))))
-                      (sh-main (sh-nth fw 2))))            ; flags only: read on
+                      (sh-main (fw 2))))            ; flags only: read on
               (sh-file a >args)))))
    ; the interactive entry: ignore the tty's job signals (children reset them),
    ; then probe with (raw 1): () = a tty (interactive), an errno = not a tty

@@ -104,7 +104,7 @@
    rv-alu (tabof rv-alu-rows)
    (rv-alu-rrr f3 f7 dn an bn) (rv-r f7 bn an f3 dn 0x33)
    (rv-aluop op d a b)
-      (: meta (peep rv-alu op 0) f3 (at meta 0) f7 (at meta 1)
+      (: meta (peep rv-alu op 0) f3 (meta 0) f7 (meta 1)
          dn (rvn d) an (rvn a)
          (? (reg? b) (rv-alu-rrr f3 f7 dn an (rvn b))
             ;; immediate: sub flips to addi -imm; add/and/or/xor ride the I-form; else via x31.
@@ -192,30 +192,30 @@
    ;; (br cond label): the inverted fused branch hops the wide jal (thumb1's shape). s/ns re-derive
    ;; the sign of a-b through x31; vs/vc read the adds/subs overflow register.
    (rv-br cond label)
-      (: st (rv-flag-read 'br) an (at st 0) bn (at st 1)
+      (: st (rv-flag-read 'br) an (st 0) bn (st 1)
          jal [(fix 4 'j21 label 0x6F)]                                       ; jal x0, label
-         (? (at st 2)                                                        ; fp memory
+         (? (st 2)                                                        ; fp memory
             (: p (rv-fp-pred cond an bn)
-               (catall [(at p 0)
-                         (rv-b (? (at p 1) 0 1) 31 0 8)                      ; hop: beqz/bnez x31, +8
+               (catall [(p 0)
+                         (rv-b (? (p 1) 0 1) 31 0 8)                      ; hop: beqz/bnez x31, +8
                          jal]))
             (member? cond '(s ns))
             (catall [(rv-alu-rrr 0 32 31 an bn)                              ; x31 = a - b (the SF bit)
                       (rv-b (? (cond = 's) 5 4) 31 0 8)                      ; hop: bgez/bltz x31, +8
                       jal])
             (member? cond '(vs vc))
-            (: v (at st 3) _ (? (v < 0) (scare 'rv-no-overflow cond) 0)
+            (: v (st 3) _ (? (v < 0) (scare 'rv-no-overflow cond) 0)
                (catall [(rv-b (? (cond = 'vs) 5 4) v 0 8) jal]))
             (: t (rv-int-b cond an bn)
-               (catall [(rv-b (at t 0 ^ 1) (at t 1) (at t 2) 8) jal]))))
+               (catall [(rv-b (t 0 ^ 1) (t 1) (t 2) 8) jal]))))
 
    ;; (set cond d): the compare-into-register forms. eq/ne against x0 collapse to seqz/snez.
    (rv-set cond d)
-      (: st (rv-flag-read 'set) an (at st 0) bn (at st 1) dn (rvn d)
-         (? (at st 2)
+      (: st (rv-flag-read 'set) an (st 0) bn (st 1) dn (rvn d)
+         (? (st 2)
             (: p (rv-fp-pred cond an bn)
-               (catall [(at p 0)
-                         (? (at p 1) (rv-i 0 31 0 dn 0x13)                   ; d = x31
+               (catall [(p 0)
+                         (? (p 1) (rv-i 0 31 0 dn 0x13)                   ; d = x31
                             (rv-i 1 31 3 dn 0x13))]))                        ; d = (x31 < 1)  (seqz)
             (member? cond '(eq ne))
             (: xs (? (bn = 0) () (rv-alu-rrr 4 0 31 an bn))                  ; x31 = a ^ b
@@ -227,13 +227,13 @@
                       (rv-alu-rrr 2 0 dn 31 0)                               ; slt d, x31, x0
                       (? (cond = 's) () (rv-i 1 dn 4 dn 0x13))])             ; xori d, d, 1
             (member? cond '(vs vc))
-            (: v (at st 3) _ (? (v < 0) (scare 'rv-no-overflow cond) 0)
+            (: v (st 3) _ (? (v < 0) (scare 'rv-no-overflow cond) 0)
                (catall [(rv-alu-rrr 2 0 dn v 0)
                          (? (cond = 'vs) () (rv-i 1 dn 4 dn 0x13))]))
             (: neg (member? cond '(ge le ae be))                             ; the complement conds
                t (rv-int-b (? (cond = 'ge) 'lt (cond = 'le) 'gt
                               (cond = 'ae) 'below (cond = 'be) 'above cond) an bn)
-               (catall [(rv-alu-rrr (? (at t 0 = 4) 2 3) 0 dn (at t 1) (at t 2))      ; slt/sltu
+               (catall [(rv-alu-rrr (? (t 0 = 4) 2 3) 0 dn (t 1) (t 2))      ; slt/sltu
                          (? neg (rv-i 1 dn 4 dn 0x13) ())]))))               ; xori d, d, 1
 
    ;; -- memory: one core, sd/ld and every sized/fp face a spelling of it. a 12-bit offset rides
@@ -408,9 +408,9 @@
    (rv-shorten bs label rel)
       (: n (tally bs)
          (? (n < 5) ()
-            !(fix? (at bs (n - 1))) ()                  ; the tail must BE the jal fixup
-            (: w ((at bs (n - 5)) | (((at bs (n - 4)) << 8)
-                   | (((at bs (n - 3)) << 16) | ((at bs (n - 2)) << 24))))
+            !(fix? (bs (n - 1))) ()                  ; the tail must BE the jal fixup
+            (: w ((bs (n - 5)) | (((bs (n - 4)) << 8)
+                   | (((bs (n - 3)) << 16) | ((bs (n - 2)) << 24))))
                (? !((w & 127) = 0x63) ()                ; and the word before it a B-form hop
                   (: base ((w & 0x1FFF07F) ^ 0x1000)    ; keep rs2/rs1/funct3/op, flip the cc bit
                      cb (rv-cbase base rel)
@@ -642,7 +642,7 @@
     (? !(two? bs) bs
        !(imm? <bs) (<bs >< rvc-squeeze >bs)          ; a fixup: its own width, never squeezed
        !(rvc-4? bs) bs                               ; a ragged tail cannot be an instruction
-       (: c (rvc-of ((at bs 0) | (((at bs 1) << 8) | (((at bs 2) << 16) | ((at bs 3) << 24)))))
+       (: c (rvc-of ((bs 0) | (((bs 1) << 8) | (((bs 2) << 16) | ((bs 3) << 24)))))
           ((? (two? c) c (rv-first 4 bs)) + rvc-squeeze >>>>bs)))
 
    (rv-lower ins) (: f lower-via
@@ -685,12 +685,12 @@
            (? !((tally c) = 1) ()                 ; the chunk must BE that jal
               !(fix? <c) ()
               !(= (fix-k <c) 'j21) ()
-              (rvj-fits? rel) [(fix 2 'cj (at ins 1) 0xA001)]
+              (rvj-fits? rel) [(fix 2 'cj (ins 1) 0xA001)]
               ())
            !(= <ins 'br) ()
            (: pre ((tally c) - 5)
               (? ((pre < 0) || !(rvb-fits? (rel - pre))) ()
-                 (rv-shorten c (at ins 2) (rel - pre)))))))
+                 (rv-shorten c (ins 2) (rel - pre)))))))
    ;; the ('align n) filler unit: C.NOP 0001 LE. two bytes, not the wide nop's four -- pad-to
    ;; cycles one unit and lays a partial one at the end, and a compressed instruction puts the
    ;; next address at 2 mod 4, where a torn wide nop leaves 0013: low bits 11, so a decoder

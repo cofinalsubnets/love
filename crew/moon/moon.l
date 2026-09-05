@@ -183,7 +183,6 @@
                    h2 (peep vb k2 ())
                    (? (string? h2) [1 h2 (\ n2 s2 (incload vb is (cdir k2) n2 s2)) k2]
                       ()))))))
-   (el l i) (? (i < 1) <l (el >l (i - 1)))
    ; a -D definition as #define text: the first = becomes the space, so
    ; -dx -> "X" (defined 1 below), -dx=v -> "X v", -df(x)=x -> "F(x) x"
    ; (the glued ( survives the lex, so it stays function-like).
@@ -380,8 +379,8 @@
    ; either way a fatal exit 1.
    (ccdie val src plain)
     (? (gripe? val)
-       (: file (: f (el val 1) (? f f src))
-          ln (el val 2) col (el val 3) msg (el val 4)
+       (: file (: f (val 1) (? f f src))
+          ln (val 2) col (val 3) msg (val 4)
           loc (file + (? ln (":" + show ln) "") + (? col (":" + show col) ""))
           (udie 1 ("cc: " + loc + ": " + msg)))
        (udie 1 plain))
@@ -585,7 +584,7 @@
    ; no identity, no cache: the digest is the only door, and a love with no image
    ; in reach does not open it.
    ; read at each call, never bound -- mhome's law, for mhome's reason.
-   (sdir? st) ((two? st) && (16384 = (& (el st 2) 61440)))
+   (sdir? st) ((two? st) && (16384 = (& (st 2) 61440)))
    ; the cache seat is the build tree's own out/, never a home directory. who wants it:
    ; tools/mkrt.l under love0, which carries no archives of its own (22 s of member
    ; compiles against 0.2 s), and a toolchain tree edited past the carried stamp. both
@@ -724,7 +723,7 @@
        ; that cannot say which generations are dead can still say which shapes are.
        _ (foldl (\ a f (? (dota? f || dotcid? f) a (: _ (unlink (d + f)) a))) 0 (readdir d))
        (ages pk) (foldl (\ a f (: st (stat (d + f))
-                                  (? (pk f && two? st) (a + [[(el st 1) f]]) a)))
+                                  (? (pk f && two? st) (a + [[(st 1) f]]) a)))
                         () (readdir d))
        (go l k) (? !(two? l) 0
                    (: e <l

@@ -99,7 +99,6 @@
    (cf-unit m i)   (: (go j) (? (j < m) ((? (j = i) 1 0) . go (j + 1)) ()) (go 0))      ; e_i in dim m
    (cf-const m k)  ((cf-zeros (m - 1)) + [k])                                             ; [0..0 k]
    (cf-idx l v)    (: (go xs i) (? (cf-nul? xs) -1 (= <xs v) i (go >xs (i + 1))) (go l 0))
-   (cf-nth l i)    (? (i = 0) <l (cf-nth >l (i - 1)))
    (cf-dot a b)    (? (cf-nul? a) 0 ((<a * <b) + (cf-dot >a >b)))
    (cf-rowf f a b) (? (cf-nul? a) () (f <a <b . cf-rowf f >a >b))  ; elementwise
    (cf-scale k r)  (map (x \ k * x) r)
@@ -131,8 +130,8 @@
    (cf-canon? lam vs ups test inits)                                                        ; counter c -> exactly n trips (the lambda param)?
     ((two? test) && (= <test '<) && (3 = #test) && (= <>>test <>lam)
      && (: c <>test i (cf-idx vs c)
-           ((i >= 0) && ((cf-nth inits i) = 0)
-            && (: u (cf-nth ups i) (two? u && (= <u '+) && 3 = #u && (= <>u c) && <>>u = 1)))))
+           ((i >= 0) && ((inits i) = 0)
+            && (: u (ups i) (two? u && (= <u '+) && 3 = #u && (= <>u c) && <>>u = 1)))))
    ; matrix power if linear+canonical, else the caller's own deopt target `interp` -- never
    ; (base-ev lam) here, which under the natjit hook would re-enter ala
    (cf-deopt lam vs ups test result inits interp)
@@ -358,7 +357,7 @@
    (cbsay? x)   (string? x || (two? x && (= <x 'string) && 2 = #x)) ; already string-valued -> say x as-is
    (cbcall? e g ar) (two? e && (= <e g) && #>e = ar)             ; e a self-call (g ..) of arity ar
    (cbset l i v) (? (i = 0) (v . >l) (<l . cbset >l (i - 1) v))  ; l with index i replaced by v
-   (cbnotelse? s as si) (foldl (\ a j (a && (? (j = si) 1 !(occurs? s (nthl as j))))) 1 (rangeL 0 #as))   ; s in no arg but si
+   (cbnotelse? s as si) (foldl (\ a j (a && (? (j = si) 1 !(occurs? s (as j))))) 1 (rangeL 0 #as))   ; s in no arg but si
    (cbacc nf)                                                                        ; -> (si X g q COND RECUR recur-is-then?) on a match, else ()
     (? !(named-let? nf) ()
        (: nl <nf inits >nf gnf <>nl g <gnf q >gnf B <>>nl    ; B = the loop body
@@ -444,7 +443,6 @@
    (ho-posn x l i) (? (atom? l) -1 (= <l x) i (ho-posn x >l (i + 1)))
    (ho-dedup l) (? (atom? l) () (ho-memb <l >l) (ho-dedup >l) (<l . ho-dedup >l))
    (ho-assq k l) (? (atom? l) () (= <<l k) <l (ho-assq k >l))                ; entry (k . rest) by car
-   (ho-nth l i) (? (i = 0) <l (ho-nth >l (-1 + i)))
    (ho-fpm nm hm) (: e (ho-assq nm hm) (? (two? e) >>e ()))                                  ; nm's func-param mask
    (ho-rf nm hm) (: e (ho-assq nm hm) (? (two? e) <>e 0))                                    ; nm returns a function?
    (ho-ar nm info) (: e (ho-assq nm info) (? (two? e) #<>e -1))                       ; nm's arity, -1 if not a group fn
@@ -452,7 +450,7 @@
     (ho-dedup ((: (walk e acc) (? !(two? e) acc
                   (: hd <e a0 (? (ho-memb hd fp) (ho-posn hd fp 0 . acc) acc)            ; (p ..) -> p applied as a fn
                      gm (ho-fpm hd hm)
-                     a1 (? (atom? gm) a0 (foldl (\ ac j (: arg (ho-nth >e j) (? (ho-memb arg fp) (ho-posn arg fp 0 . ac) ac))) a0 gm))   ; our param at a callee's func-pos
+                     a1 (? (atom? gm) a0 (foldl (\ ac j (: arg (>e j) (? (ho-memb arg fp) (ho-posn arg fp 0 . ac) ac))) a0 gm))   ; our param at a callee's func-pos
                      (foldl (\ ac x (walk x ac)) a1 >e)))) body ()))
    (ho-ret? e fp fpm info hm)                                                                     ; does e yield a function?
     (? (atom? e) (ho-memb e fp && ho-memb (ho-posn e fp 0) fpm)                               ; a func-typed param
@@ -461,7 +459,7 @@
        (: hd <e ar (ho-ar hd info) (? (ar < 0) 0 (#>e < ar) 1 (ho-rf hd hm))))    ; non-group->0; partial->fn; full->g's result
    (ho-fn fp body info hm) (: fpm (ho-walkfp fp body hm) ((? (ho-ret? body fp fpm info hm) 1 0) . fpm))
    (ho-sz hm) (foldl (\ a e (a + <>e + #>>e)) 0 hm)                            ; monotone measure (rflags + |fpmask|)
-   (ho-fix info hm) (monofix hm (st \ map (f \ <f . ho-fn (ho-nth f 1) (ho-nth f 2) info st) info) ho-sz)   ; higher-order lattice (ascending: rflags+|fpmask|) over the shared harness (prel)
+   (ho-fix info hm) (monofix hm (st \ map (f \ <f . ho-fn (f 1) (f 2) info st) info) ho-sz)   ; higher-order lattice (ascending: rflags+|fpmask|) over the shared harness (prel)
    (dehof form)
     (? !(two? form && (= <form ':) && !(atom? >form)) form
        (: parsed (anat-defs >form) pairs <parsed body <>parsed
@@ -916,10 +914,10 @@
              (= op '?)       (4 = #e && groupok? cm pm icands cps pps ps <>e && vok? cm pm icands vcands cps pps ps <>>e && vok? cm pm icands vcands cps pps ps <>>>e)
              0))
        0)
-   (chps body ps) (filter (k \ cuse? body (nthl ps k)) (rangeL 0 #ps))                ; chain-param indices: params used in cap/cup/two? (cuse? from emit.l)
+   (chps body ps) (filter (k \ cuse? body (ps k)) (rangeL 0 #ps))                ; chain-param indices: params used in cap/cup/two? (cuse? from emit.l)
    (grpok-1 fns cm pm icands vcands vnames c) (: p (afind (q \ (= <<q <c)) fns)
-                                cps (map (k \ nthl ><p k) (cmlook <c cm))      ; this fn's chain-param names (its index list -> names)
-                                pps (map (k \ nthl ><p k) (cmlook <c pm))      ; ... and its point-param names (same alist shape)
+                                cps (map (k \ ><p k) (cmlook <c cm))      ; this fn's chain-param names (its index list -> names)
+                                pps (map (k \ ><p k) (cmlook <c pm))      ; ... and its point-param names (same alist shape)
                                 (? (member? <c vnames) (vok? cm pm icands vcands cps pps ><p >p)   ; a value fn -> value grammar
                                    (groupok? cm pm icands cps pps ><p >p)))      ; an int fn -> int grammar, over the int candidates only
    ; the group-membership fixpoint as a descending projection of the shared `monofix` (prel): each step
@@ -933,7 +931,7 @@
        tally)
    (grpfix fns cands) (: cm (map (f \ <<f . chps >f ><f) fns)   ; (name . chain-param-index-list) for every candidate fn
                          pm (map (f \ (: fps ><f cix (chps >f fps)              ; (name . point-param-index-list): point-compared ((P = <..)), never chain-used
-                                         (<<f . filter (k \ nuse? >f (nthl fps k) && !(member? k cix)) (rangeL 0 #fps)))) fns)
+                                         (<<f . filter (k \ nuse? >f (fps k) && !(member? k cix)) (rangeL 0 #fps)))) fns)
                          vnames (map (f \ <<f) (filter (f \ hasl >f) fns))    ; the value-typed candidate names (body conses)
                          (gfix fns cm pm vnames cands))
    (rewrite-bindings bl gnames gdefs) (? (atom? >bl) bl                                  ; the trailing body form -> keep
@@ -1031,8 +1029,8 @@
    ;     callee params picks which params are twin. bit-exact: z*z's imag rides re*im+im*re = 2*re*im,
    ;     and scaling a rounded product by 2 is exact. runs before autonat.
    (twolow form)
-    (: (nthl2 l i) (? (i = 0) <l (nthl2 >l (i - 1)))
-       (op2 e i)  (nthl2 >e i)
+    (:
+       (op2 e i)  (>e i)
        (memq x l) (? (atom? l) 0 (= <l x) 1 (memq x >l))
        (negf x)   ['- 0.0 x]
        (zero0? x) (gem? x && x = 0.0)
@@ -1115,7 +1113,7 @@
                 (? !(two? recp) form                          ; no float recurrence found
                    (: recnm <<recp recps ><recp
                       (>recp @ ['? ['&& ['< _ lim] [cmpop testexpr bound]] then _]
-                         (: cl (classify recps >then) fvars <cl updates <>cl invs (nthl cl 2)
+                         (: cl (classify recps >then) fvars <cl updates <>cl invs (cl 2)
                             looppairs (filter (q \ !(= q recp)) pairs)             ; the loop defs
                             callees (map anat-callee looppairs)
                             outerp (afind (q \ !(member? <<q callees)) looppairs)   ; the loop no loop calls
@@ -1124,8 +1122,8 @@
                                   D #chain M #invs N #fvars
                                   (? !(two? chain && member? cmpop '(< <= > >=) && 0 < N && (M + N) < 7 && D < 7) form
                                      (: cnames (map cap chain) dims (map caup chain)
-                                        margs (nthl (last chain) 2)
-                                        invd (map (iv \ nthl margs (posof iv recps 0)) invs)
+                                        margs ((last chain) 2)
+                                        invd (map (iv \ margs (posof iv recps 0)) invs)
                                         glam ['\ '_ form]        ; faithful interp nest (deopt fallback / =-show)
                                         ng (jitfgridn glam cnames dims invs invd fvars updates testexpr cmpop bound lim arch)
                                         (? (lit? ng) (': . anat-rebind >form <<outerp ng) form))))))

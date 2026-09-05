@@ -9,14 +9,13 @@
 ; definition cannot ride a shared one (two TUs, one symbol), and a static table in a
 ; header no TU reads sits unread under -Werror. mx.h keeps the same rule.
 (: _ (use "crew/moon/clay.l")
-   (q-at l k) (? (k = 0) <l (q-at >l (k - 1)))
    ; 0..15: the standard sixteen, as xterm sets them
    q-base '(0 8388608 32768 8421376 128 8388736 32896 12632256
             8421504 16711680 65280 16776960 255 16711935 65535 16777215)
    q-lv '(0 95 135 175 215 255)                       ; the cube's six levels
-   q-cube (map (\ i (: r (q-at q-lv (i // 36))
-                       g (q-at q-lv ((i // 6) % 6))
-                       b (q-at q-lv (i % 6))
+   q-cube (map (\ i (: r (q-lv (i // 36))
+                       g (q-lv ((i // 6) % 6))
+                       b (q-lv (i % 6))
                        (((r * 65536) + (g * 256)) + b)))
                (jot 216))                             ; 16..231
    q-grey (map (\ i (: v ((10 * i) + 8)

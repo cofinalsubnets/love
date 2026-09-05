@@ -22,7 +22,7 @@
 
    (kproject pie bootb out arch)
    (: kp (kparams arch)
-      tgt (at kp 0) kbase (at kp 1) entnm (at kp 2)
+      tgt (kp 0) kbase (kp 1) entnm (kp 2)
       mach (peep elf-machines tgt 0)
 
       ; --- the pie, parsed: program headers, the named sections, the symtab --
@@ -59,8 +59,8 @@
       (va2off v) ((: (go l)                      ; a vaddr's file offset, through its load
                       (? (one? l) (scare 'kproject-va v)
                          (: g <l
-                            (at g 0 <= v && v < at g 0 + at g 2
-                             ? (v - at g 0 + at g 1)
+                            (g 0 <= v && v < g 0 + g 2
+                             ? (v - g 0 + g 1)
                                (go >l))))) loads)
 
       ; --- boot.o, laid below the image: ldkern's own head, one object -------
@@ -73,7 +73,7 @@
       bootend (ldlayn 'bss (ldlay1 'bss d1 objs) objs)
       bias (ld-align 4096 bootend)
       top ((: (go l m) (? (one? l) m
-                          (go >l (: e (bias + at <l 0 + at <l 3) (m < e ? e m)))))
+                          (go >l (: e (bias + <l 0 + <l 3) (m < e ? e m)))))
            loads 0)
       glo (ldsyms objs)
       ; the pie's globals join the book (boot's own definitions stand), so a
@@ -95,7 +95,7 @@
       ; takes the image's far edge -- ascending, for the one-pass surgery below
       ; (the table already lays ascending; the walk reverses it back)
       (ins s l) (? (one? l) [s]
-                   (at <l 0 < at s 0) (<l . ins s >l)
+                   (<l 0 < s 0) (<l . ins s >l)
                    (s . l))
       sites (ins [(pie-sym "k_image_top") top]
                  (rev ((: (go k acc)
@@ -107,9 +107,9 @@
       (spliced go0 va fsz ss)
        ((: (go c l acc)
             (? (one? l) (rev (snip pie c (go0 + fsz) . acc))
-               (: o (go0 + (at <l 0 - va))
-                  (go (o + 8) >l (le64 (at <l 1) . snip pie c o . acc)))))
-        go0 (filter (s \ va <= at s 0 && at s 0 < va + fsz) ss) ())
+               (: o (go0 + (<l 0 - va))
+                  (go (o + 8) >l (le64 (<l 1) . snip pie c o . acc)))))
+        go0 (filter (s \ va <= s 0 && s 0 < va + fsz) ss) ())
 
       ; --- the output shape: ldkern's -- header page (ehdr, phdrs, the note),
       ; boot at its page, then the re-based image; symtab past the bytes ------
@@ -119,8 +119,8 @@
       _ (4096 < hdrsz + nsz ? (scare 'kproject-headers hdrsz))
       (fo a) ((a - kbase) + 4096)
       phs (: bs [1 7 (fo b0) b0 b0 (d1 - b0) (bootend - b0) 4096]
-             ps (map (g \ [1 (at g 4) (fo (bias + at g 0)) (bias + at g 0)
-                            (bias + at g 0) (at g 2) (at g 3) 4096])
+             ps (map (g \ [1 (g 4) (fo (bias + g 0)) (bias + g 0)
+                            (bias + g 0) (g 2) (g 3) 4096])
                      loads)
              (0 < nsz ? ([4 4 hdrsz kbase kbase nsz nsz 4] . bs . ps)
                         (bs . ps)))
@@ -138,9 +138,9 @@
       ; the image bytes, each load at its congruent file spot
       body ((: (go l c acc)
                 (? (one? l) [c acc]
-                   (: g <l o (fo (bias + at g 0))
-                      (go >l (o + at g 2)
-                          (acc + ([(ld-zeros (o - c))] + spliced (at g 1) (at g 0) (at g 2) sites))))))
+                   (: g <l o (fo (bias + g 0))
+                      (go >l (o + g 2)
+                          (acc + ([(ld-zeros (o - c))] + spliced (g 1) (g 0) (g 2) sites))))))
            loads (fo d1) ())
       fsz <body
       ; the symtab, values slid: the uefi loader reads `kboot` out of exactly this
@@ -155,7 +155,7 @@
                             ((snip pie e (e + 24)) . acc))))))
            symo ())
       shstr (o-strtab '(".symtab" ".strtab" ".shstrtab"))
-      (snm k) (at <>shstr k)
+      (snm k) (<>shstr k)
       syo (ld-align 8 fsz)
       sto (syo + symz) ssto (sto + strz) sstz #<shstr
       shto (ld-align 8 (ssto + sstz))
@@ -164,8 +164,8 @@
                    (ld-shdr (snm 1) 3 0 0 sto strz 0 0 1 0)
                    (ld-shdr (snm 2) 3 0 0 ssto sstz 0 0 1 0)])
       hdr (elf64-hdrn 2 eaddr mach [shto 4 3]
-                      (map (g \ elf64-phdr <g (at g 1) (at g 2) (at g 3)
-                                           (at g 4) (at g 5) (at g 6) (at g 7))
+                      (map (g \ elf64-phdr <g (g 1) (g 2) (g 3)
+                                           (g 4) (g 5) (g 6) (g 7))
                            phs))
       (ld-write out
         (hdr . (>en + [(ld-zeros (4096 - (hdrsz + nsz)))] + >ed
@@ -179,7 +179,7 @@
    ; a def, so the outer `:` stays define-mode and `kproject` survives the
    ; read -- the call below is its own form.
    (kdrive as)
-    (#as = 4 ? (kproject <>(kread <as) <>(kread <>as) (at as 2) (at as 3))
+    (#as = 4 ? (kproject <>(kread <as) <>(kread <>as) (as 2) (as 3))
                0))
 
 (kdrive >argv)

@@ -529,7 +529,7 @@
        (? (m && !(member? h bnd)) (cprop (m >x) se fl op bnd pb)                  ; structural macro (a two?/cap probe) must see them
           (: as (mapi (e \ cprop e se fl 0 bnd pb) >x)
              hr (nom? h ? (: e (assq h se) (atom? e ? h <>e)) (cprop h se fl 1 bnd pb)) ; head is consumed -> op 1
-             h2 (nom? h ? h hr)                                                 ; the emitted head: a nom stays a nom (ana resolves it);
+             h2 (nom? h ? (propk? hr ? hr h) hr)                                ; the emitted head: a const-bound nom is its value, any other nom stays (ana resolves it)
              hk (kconst hr)                                                       ; the head's own value, when it has one
              (? (0 < fl && lambp hr && two? as)
                  (? (entg? (last hr))                   ; an entangled : in the body -> no bsub lane is sound;

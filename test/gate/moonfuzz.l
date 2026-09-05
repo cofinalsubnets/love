@@ -32,7 +32,6 @@
    cshow (from 'clay 'clay-show)
    cok? (from 'clay 'clay-ok?)
    nl (string 10)
-   (el l i) (? (i < 1) <l (el >l (i - 1)))
    (say1 s) (puts (s + nl))
    (dotc? s) (: n (tally s) (&& (2 < n) (&& ((s (n - 2)) = 46) ((s (n - 1)) = 99))))
    (mn a b) (? (a < b) a b)
@@ -102,22 +101,22 @@
     (: _ (unscared ())
        r (front txt)
        sc (scared? ())
-       ; the scare's stage is 'late when the front end still answered -- (el r 1)
+       ; the scare's stage is 'late when the front end still answered -- (r 1)
        ; there is the whole AST, and it is a census key. a red run has to stay
        ; readable, so a tree never becomes one.
-       (? sc ['scare (? (<r = 'bad) (el r 1) 'late)]
+       (? sc ['scare (? (<r = 'bad) (r 1) 'late)]
           (<r = 'bad)
-          (: st (el r 1) cy (el r 2)
+          (: st (r 1) cy (r 2)
              (? (gripe? cy) ['named st] ['bare st]))
           ; it parsed. the clay leg -- G1 over a tree the corpus never had.
-          (: a (el r 1)
+          (: a (r 1)
              v (cok? a)
              (? (! (= v 1)) ['badshape 'clay]
                 (: t (cshow a)
                    (? (gripe? t) ['inexpr 'clay]
                       (: b (front t)
                          (? (! (<b = 'ok)) ['reparse 'clay]
-                            ((el b 1) = a) ['ok 'clay]
+                            ((b 1) = a) ['ok 'clay]
                             ['diff 'clay]))))))))
 
    files (filter dotc? (readdir "test/cc"))
@@ -141,7 +140,7 @@
              (go j st) (? (muts <= j) 0
                 (: mr (mut src st)
                    v (one <mr)
-                   _ (bump <v (el v 1))
+                   _ (bump <v (v 1))
                    _ (? (member? <v '(scare diff badshape reparse))
                         (sin <v (f + ":" + (show j))) 0)
                    (go (j + 1) >mr)))

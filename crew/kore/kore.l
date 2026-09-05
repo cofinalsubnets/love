@@ -170,7 +170,7 @@
                                 (die "ld: --readme wants a path"))
            (go >a (<a >< fs) o pie org tgt rd))
        r (go as () () 0 () 'x64 ())
-       fs <r o <>r pie <>>r org (at r 3) tgt (at r 4) rdme (at r 5)
+       fs <r o <>r pie <>>r org (r 3) tgt (r 4) rdme (r 5)
        _ (? (two? fs) () (die "usage: kore ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"))
        _ (? (tally o) () (die "ld: no -o OUT"))
        srcs (map (\ f (: r2 (uread f) (? (two? r2) [f <>r2] (die ("ld: cannot open " + f))))) fs)
@@ -197,13 +197,13 @@
                    (go (w - 1) ""))
    (nm-low t) (: c (t 0) (? ((65 <= c) && (c <= 90)) (string (c + 32)) t))
    (nm-let sy)
-    (: x (at sy 3) sec (at sy 6)
+    (: x (sy 3) sec (sy 6)
        u (? (x = 0) "U" (x = 65521) "A" (x = 65522) "C"
             !(two? sec) "?"
-            (: ty (at sec 1) fl (at sec 2)
+            (: ty (sec 1) fl (sec 2)
                (? (ty = 8) "B" (0 < (fl & 4)) "T" (0 < (fl & 1)) "D" "R")))
-       (? (at sy 1 = 2) (? (x = 0) "w" "W")
-          (at sy 1 = 0) (nm-low u)
+       (? (sy 1 = 2) (? (x = 0) "w" "W")
+          (sy 1 = 0) (nm-low u)
           u))
    (nm-file p wide g u srt)
     (: r (uread p) _ (? (two? r) () (die ("nm: cannot open " + p)))
@@ -211,16 +211,16 @@
        w (? (b 4 = 2) 16 8)
        ; a section or file symbol names no value of the program's -- nm shows
        ; neither, and an empty name is the null-ish filler a section symbol leaves
-       all (filter (\ sy (? (nil? (tally <sy)) () (member? (at sy 2) '(3 4)) () 1))
+       all (filter (\ sy (? (nil? (tally <sy)) () (member? (sy 2) '(3 4)) () 1))
                    (ld-syms p b))
        ; "no symbols" is the file's fact, asked before the flags narrow: a -u that
        ; comes back empty says the lanes are all ours, which is an answer, not a lack
        _ (? (two? all) () (: _ (say err ("nm: " + p + ": no symbols")) _ (put err 10) 1))
-       keep (filter (\ sy (? (g && (at sy 1 = 0)) () (u && !(at sy 3 = 0)) () 1)) all)
+       keep (filter (\ sy (? (g && (sy 1 = 0)) () (u && !(sy 3 = 0)) () 1)) all)
        ord (? srt keep (sortby (\ a b (<a <= <b)) keep))
        _ (? wide (: _ (puts ("\n" + p + ":\n")) 0) 0)
        ; foldl is the printing walk: it answers the accumulator, so nothing is built
-       _ (foldl (\ _ sy (puts ((? (at sy 3 = 0) (nm-sp w) (nm-hex (at sy 4) w))
+       _ (foldl (\ _ sy (puts ((? (sy 3 = 0) (nm-sp w) (nm-hex (sy 4) w))
                                + " " + nm-let sy + " " + <sy + "\n")))
                 0 ord)
        (two? all))
@@ -239,7 +239,7 @@
             (: f (nm-flags <a 1 g u srt) (go >a <f <>f <>>f fs))
            (go >a g u srt (<a >< fs)))
        r (go as () () () ())
-       fs (at r 3)
+       fs (r 3)
        _ (? (two? fs) () (die "usage: kore nm [-g] [-u] [-p] FILE.."))
        wide (two? >fs)
        any (foldl (\ a p (? (nm-file p wide <r <>r <>>r) 1 a)) () fs)

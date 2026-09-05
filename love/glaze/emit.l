@@ -992,7 +992,6 @@
    ; allocate from the working pool, are freed at last use, and are reused in place where an
    ; operand dies.
    (snoc l x) (l + (list x))
-   (nthl l i) (i = 0 ? <l (nthl >l (i - 1)))
    (dfind nd dag i) (? (atom? dag) -1 (nd = <dag) i (dfind nd >dag (i + 1)))   ; cse: an existing node?
    (dadd nd dag) (: i (dfind nd dag 0) (-1 < i ? [i dag] [#dag (snoc dag nd)]))
    (vnum e dag) (two? e ? (: ra (vnum <>e dag) rb (vnum <>>e <>ra)
@@ -1125,7 +1124,7 @@
        accb ('((movqrx r0 f4) (adds r8 r8 r0) (br vc cont0)) + deopt                     ; acc += count.lane0 ; guard
              + '((label cont0) (movhlps f6 f4) (movqrx r0 f6) (adds r8 r8 r0) (br vc cont1)) + deopt + '((label cont1)))   ; acc += count.lane1 ; guard
        cell (derives + zerof + '((xorpd f4 f4) (pcmpeqd f5 f5) (li r7 0)) + iter + accb)   ; count=0; alive=ones; k=0; loop; acc
-       (loop-nest ci body) (: p (nthl cregs ci) cr (gr p) b (nthl dims ci)               ; counted loops outer->inner; innermost steps by 2
+       (loop-nest ci body) (: p (cregs ci) cr (gr p) b (dims ci)               ; counted loops outer->inner; innermost steps by 2
           tp (intern ("lt" + (show ci))) en (intern ("le" + (show ci)))
           inner (? (ci = (D - 1)) body (loop-nest (ci + 1) body))
           step  (? (ci = (D - 1)) [['add cr cr 2]] [['inc cr]])

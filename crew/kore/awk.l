@@ -682,7 +682,6 @@
                   (aw-sn? v) <>>v
                   (aw-numstr v (peep (aw-g E) "OFMT" "%.6g")))
    (aw-nrn E nm) (aw-trunc (aw-numv (peep (aw-g E) nm 0)))
-   (aw-nth l k) (two? l && (k = 0 ? <l (aw-nth >l (k - 1))))
    (aw-local? E nm) (: l (E 'loc) (tablet? l && peep l nm 'nope != 'nope))
    (aw-get E nm)
     (: l (E 'loc)
@@ -766,13 +765,12 @@
    (aw-fl E)
     (: fl (E 'flds)
        (fl !== 'none ? fl (: t (tablet 0) (pin E 'flds t, t))))
-   (aw-nthf l k) (l @ (a . u) (k = 0 ? a (aw-nthf u (k - 1))) ())
    (aw-nf E) (: _ (aw-raws E) (aw-trunc (aw-numv (peep (aw-g E) "NF" 0))))
    ; the value at k as it stands, cooked or raw -- what $0 is rebuilt from
    (aw-fldv E k)
     (: fl (E 'flds)
        v (fl == 'none ? 'nope (peep fl k 'nope))
-       (v !== 'nope ? v (aw-nthf (aw-raws E) (k - 1))))
+       (v !== 'nope ? v ((aw-raws E) (k - 1))))
    (aw-rebuild E)
     (: ofs (aw-sv E (peep (aw-g E) "OFS" " "))
        n (aw-nf E) o (jug 0)
@@ -798,7 +796,7 @@
           (: fl (E 'flds)
              v (fl == 'none ? 'nope (peep fl k 'nope))
              (v !== 'nope ? v
-                (: c (aw-mk (aw-nthf (aw-raws E) (k - 1)))
+                (: c (aw-mk ((aw-raws E) (k - 1)))
                    (pin (aw-fl E) k c, c))))))
    ; $0 as text: aw-str and aw-pv both answer a strnum's own spelling, so the
    ; record needs no cooking where only its letters are wanted
@@ -980,7 +978,7 @@
        (go 0 0))
    (aw-anbi nm as)
     (: cnt #as
-       (an k) (: nd (aw-nth as k) (two? nd ? (aw-an nd) (E \ ())))
+       (an k) (: nd (as k) (two? nd ? (aw-an nd) (E \ ())))
        a0 (an 0) a1 (an 1) a2 (an 2)
        (s0 E) (aw-sv E (a0 E))
        (s1 E) (aw-sv E (a1 E))
@@ -988,7 +986,7 @@
        (x1 E) (aw-numv (a1 E))
        (nm @ "length"
            (? (cnt = 0) (E \ #(aw-rec E))
-              (: nd (aw-nth as 0)
+              (: nd (as 0)
                  vnm (<nd == 'var ? <>nd ())
                  (E \ #(: cur (aw-nil? vnm ? () (aw-get E vnm))
                           (tablet? cur ? (aw-akeys cur) (s0 E))))))
@@ -1004,10 +1002,10 @@
                                (peep (aw-g E) "CONVFMT" "%.6g"))))
           "split"
            (? (cnt < 2) (aw-err "split wants a string and an array")
-              (: nd (aw-nth as 1)
+              (: nd (as 1)
                  _ (<nd != 'var ? (aw-err "split wants an array name"))
                  anm <>nd
-                 pf (? (2 < cnt) (aw-anfs (aw-nth as 2))
+                 pf (? (2 < cnt) (aw-anfs (as 2))
                        (E \ (aw-sv E (peep (aw-g E) "FS" " "))))
                  (E \ (: a (aw-arr E anm)
                          _ (: (clr l) (two? l ? (pin a <l 'nope, clr >l)) (clr (keys a)))
@@ -1017,16 +1015,16 @@
                          (go ps 1)))))
           ("sub" || "gsub")
            (? (cnt < 2) (aw-err (nm + " wants a pattern and a replacement"))
-              (: lv (? (2 < cnt) (aw-nth as 2) ['field ['num 0]])
+              (: lv (? (2 < cnt) (as 2) ['field ['num 0]])
                  _ (? (aw-lval? lv) 0 (aw-err (nm + " wants a variable to change")))
                  lp (aw-anl lv) get <lp put <>lp
-                 pf (aw-anpat (aw-nth as 0))
+                 pf (aw-anpat (as 0))
                  glob (nm = "gsub" ? 1 0)
                  (E \ (: r (aw-subst E (pf E) (aw-sv E (get E)) (s1 E) glob)
                          _ (? (0 < <>r) (put E <r) 0)
                          <>r))))
           "match"
-           (: pf (aw-anpat (aw-nth as 1))
+           (: pf (aw-anpat (as 1))
               (E \ (refindm (pf E) (s0 E) 0 @ [_ st en _]
                      (pin (aw-g E) "RSTART" (st + 1),
                       pin (aw-g E) "RLENGTH" (en - st),

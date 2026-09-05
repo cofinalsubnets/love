@@ -2933,7 +2933,7 @@
    (varel ty) <>ty                             ; the element type (const-sized)
    (varn ty) <>>ty                             ; the dim expression (an AST)
    ; the 4th element by reader ops, not by `at`: `at` is holo's, and gen.l is cat'd without
-   ; holo for the laws, where an unbound `at` is no error but a silent no-op -- (at ty 3) reads
+   ; holo for the laws, where an unbound `at` is no error but a silent no-op -- (ty 3) reads
    ; ((0 ty) 3) = (1 3) = 3, so every VLA site would share one slot index.
    (varix ty) <>>>ty                                ; a decl's slot index (4-long only)
    ; park a VALUE rec as a double-pair temp -> (off forms srcty) | 'bad
@@ -5625,8 +5625,7 @@
    (elval it) (member? <it '(dfield didx) ? <>>it it)   ; the value of an item
    (fidx fields name) (: (go l i) (? (atom? l) 0 (<<l = name) i (go >l (i + 1)))
                           (go fields 0))
-   (nthfield fields i) (: (go l k) (? !(two? l) 'bad (k < 1) <l (go >l (k - 1)))
-                           (go fields i))
+   (nthfield fields i) (0 <= i && i < #fields ? (fields i) 'bad)
 
    ; -- brace elision (C 6.7.9): a flat run of items fills a nested subaggregate whose brace was
    ; omitted -- int a[2][2] = {1,2,3,4} means {{1,2},{3,4}}. the init tree normalizes up front

@@ -132,10 +132,10 @@
    (mx-ors l) (atom? >l ? (mx-defd <l) ['lor (mx-defd <l) (mx-ors >l)])
    (mx-knob nm rows)
     (: (arms l) (two? l ?
-                   (: r <l (two? (el r 2) ? ([(mx-ors (el r 2)) [['cpp-def nm <>r]]] >< arms >l)
+                   (: r <l (two? (r 2) ? ([(mx-ors (r 2)) [['cpp-def nm <>r]]] >< arms >l)
                             (arms >l))))
        (els l) (atom? l ? (scare 'mx-knob nm)
-                  (: r <l (two? (el r 2) ? (els >l) [['cpp-def nm <>r]])))
+                  (: r <l (two? (r 2) ? (els >l) [['cpp-def nm <>r]])))
        ['cpp-if [[['un 'not (mx-defd nm)] [['cpp-if (arms rows) (els rows)]]]]])
    mx-nl (string 10)
    (mx-tile base stride p)                        ; one KEEP per rep, each slot pinned
