@@ -977,10 +977,12 @@
      ; captures, so it wants v's slot at construction, before that slot exists.
      (reach v) (member? v (grow (catmap anyname (take (lidx v nm) nm))))
      (filter (\ v (? (near v) 1 (lambp (cup (assoc v prs))) 0 (reach v))) nm))
-   (mkcs bx) (map (\ v (link v (link (nom 0) (nom v)))) bx)
+   (mkcs bx) (map (\ v (link v (link (mint 0) v))) bx)
    (cellbinds cs) (map (\ c (caup c >< list tablet 0)) cs)
    ; the cell read boxfix emits. a filled cell answers its value; a pre-fill read is a map miss, so
-   ; the missing condition carries the binding-site nom and the help's result is the value there.
+   ; the missing condition carries the binder's own name and the help's result is the value there.
+   ; that name is the cell's only key -- cellbinds gives each binder a private one-entry tablet --
+   ; and it reaches the emitted read quoted, so it is a datum there and never a forward reference.
    ; with no help heard it answers the zero point instead of raising -- a cell miss stays
    ; survivable. `sent` is minted once and closure-private, so nothing a cell holds poses as absence.
    cellread (: sent (mint 0)

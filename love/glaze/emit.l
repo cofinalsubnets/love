@@ -152,7 +152,7 @@
    (caargir tgt e coff)
     (: A (greg tgt 'acc) S (greg tgt 'sp) T (greg tgt 'tmp)
        (bin a b fin) ((caargir tgt a coff) + [['push A]] + (caargir tgt b coff) + fin)
-       (? (name? e) [['ld A S coff]]                                                                          ; the counter, raw
+       (? (nom? e) [['ld A S coff]]                                                                          ; the counter, raw
           (whole? e) [['li A e]]
           (e @ ('? c t f) (: el (mint 0) en (mint 0)
                              ((caargir tgt c coff) + [['cmp A 0] ['br 'le el]] + (caargir tgt t coff)
@@ -167,7 +167,7 @@
    ; counter tags directly (a loop index is always a valid fixnum); a computed arg anchors the machine
    ; sp first, and both its guards and the tag overflow go to `deopt`.
    (caarg tgt arg) (: A (greg tgt 'acc) SP (greg tgt 'sp) T (greg tgt 'tmp) AN (greg tgt 'anchor)
-      (name? arg ? [['ld T SP 8] ['leax T T T 1 1] ['st SP -32 T]]                                         ; bare counter: F[0] = tag(i)
+      (nom? arg ? [['ld T SP 8] ['leax T T T 1 1] ['st SP -32 T]]                                         ; bare counter: F[0] = tag(i)
          ([['lea AN 'sp 0]]                                                                                     ; anchor the machine sp for the arg-expr deopt unwind
           + (caargir tgt arg 8)                                                                                   ; A = arg(counter) raw ; guards/overflow -> deopt
           + [['adds A A A] ['br 'vs 'deopt] ['or A A 1] ['st SP -32 A]])))                                   ; F[0] = tag(ARG) ; tag overflow -> deopt
@@ -208,12 +208,12 @@
            ['ld A SP 48]                                       ; A = Stwin (R[5] @ Sp+48) -- before restoring Sp
            ['add SP SP 56]                                     ; Sp = entry (R+48); Sp[0] = the original tagged n
            ['mov IP A] ['ld A IP 0] ['jmpr A]]               ; Continue into twin, applied to Sp[0] = n
-        + (name? arg ? () (caargdeopt tgt))))                  ; the computed-arg `deopt` label, only when arg is an expr
+        + (nom? arg ? () (caargdeopt tgt))))                  ; the computed-arg `deopt` label, only when arg is an expr
    (jitcalloutsum clos) (jitcalloutx clos ['\ 'n 0] '+ 'i 'i 'x64)
    (jitcalloutx clos src op iv arg tgt)
     (: fop (id? op '* ? (*) (+))  a0 (foldinit op)                             ; the fold op as a value -- a bare `* +` mid-list mis-factors -- and its identity
-       argfn (name? arg ? 0 (ev ['\ iv arg]))                               ; a computed arg -> a closure (\ counter ARG); a bare one needs none
-       twin (name? arg ? (n \ (: (go i a) (i < n ? (go (i + 1) (fop a (clos i))) a)) 0 a0)            ; bare: clos applied to the counter
+       argfn (nom? arg ? 0 (ev ['\ iv arg]))                               ; a computed arg -> a closure (\ counter ARG); a bare one needs none
+       twin (nom? arg ? (n \ (: (go i a) (i < n ? (go (i + 1) (fop a (clos i))) a)) 0 a0)            ; bare: clos applied to the counter
                          (n \ (: (go i a) (i < n ? (go (i + 1) (fop a (clos (argfn i)))) a)) 0 a0))   ; computed: clos applied to arg(counter)
        (nifx (emit (asmt tgt (calloutir tgt op arg))) twin src 1 clos))   ; value[1] = the twin (image-revert-clean); clos = the extras slot; value[-1]=src
    ; --- the captured / multi-arg call-out ------------------------------------------------------
@@ -261,7 +261,7 @@
            ['ld T SP 48]                                       ; T = Se (= e, R[5] @ Sp+48) -- before restoring Sp
            ['add SP SP 56]                                     ; Sp = E (frame intact for e's body)
            ['lea IP T 16] ['ld T IP 0] ['jmpr T]]            ; enter e's body (a>=2: e+16), saturated frame on Sp
-        + (name? arg ? () (caargdeopt tgt))))                 ; the computed-arg `deopt` label, only when arg is an expr
+        + (nom? arg ? () (caargdeopt tgt))))                 ; the computed-arg `deopt` label, only when arg is an expr
    (njit-calloutframe src Fidx Nidx a e op arg tgt)
     (nif (emit (asmt tgt (calloutframeir tgt Fidx Nidx a op arg))) e src a)   ; value[1] = e (the bytecode twin, deopt target -- source-shaped, so op- AND arg-correct); arity a ; src for =/show
    ; --- amble: the boring-tier translator ------------------------------------------------------
@@ -294,7 +294,7 @@
    (aop2? op) (member? op '(+ - * // % & | ^ < <= > >= = id? link))
    (acmp? op) (member? op '(< <= > >= =))
    (aquote? e) (two? e && id? <e '\ && 2 = #e)            ; the reader's quote: (\ X) at exactly two -- a datum constant
-   (aqnom? e) (aquote? e && name? <>e)                          ; a quoted nom: a point, so (a = 'sym) is raw identity
+   (aqnom? e) (aquote? e && nom? <>e)                          ; a quoted nom: a point, so (a = 'sym) is raw identity
    (amemq x l) (atom? l ? 0  (id? x <l) 1  (amemq x >l))     ; id?-membership: interp's quote answers the source node, so two
    (aposq x l i) (id? x <l ? i (aposq x >l (i + 1)))         ; =-equal quote nodes stay distinct slots
    (aq e acc) (? (aquote? e) (amemq e acc ? acc (e . acc))          ; collect quote nodes; never walk into quoted data
@@ -304,7 +304,7 @@
    (ahascall? env go e)                                                  ; does e contain a call (any non-op head)? the bisect knob's test
     (? (aquote? e) 0
        (two? e) (: op <e
-          ((name? op && !(id? op go) && !(member? op aopheads))
+          ((nom? op && !(id? op go) && !(member? op aopheads))
            || (foldl (\ a x (a || ahascall? env go x)) 0 >e)))
        0)
    ; aheads: collect the free call heads of e, the global-callee candidates. within the accepted
@@ -317,7 +317,7 @@
     (? (aquote? e) acc
        (two? e)
         (: op <e                                                    ; a2, not a rebind of acc: a `:` is one scope, so `acc (.. acc ..)`
-           a2 (? ((name? op) && !(id? op go) && !(member? op env) && !(member? op acc)
+           a2 (? ((nom? op) && !(id? op go) && !(member? op env) && !(member? op acc)
                   && !(member? op aopheads))
                  (op . acc) acc)                                      ; would read the unpinned local
            (foldl (\ ac x (aheads env go x ac)) a2 >e))
@@ -326,7 +326,7 @@
    ; global call heads, go/k = the loop name + its arity (0 outside a loop), tl = tail position
    ; ((go ..) is a jump, so it is only sound where its value IS the loop's value).
    (amble-ok? env gn go k tl e)
-    (? (name? e) (member? e env)
+    (? (nom? e) (member? e env)
        (aconst? e) 1
        (nom? e) (member? e env)                                                      ; a mint: an inlined callee's let-bound arg
        (aquote? e) 1
@@ -346,7 +346,7 @@
               (id? op '|| && !(member? op env)) (2 <= n && all (x \ amble-ok? env gn go k 0 x) as)
               (id? op amble-lam) (all (v \ member? v env) >>as)                 ; an inner lambda site: its imports are frame reads
               (id? op go) (tl && n = k && all (x \ amble-ok? env gn go k 0 x) as)
-              (name? op) ((0 < n) && (member? op env || member? op gn)
+              (nom? op) ((0 < n) && (member? op env || member? op gn)
                           && (all (x \ amble-ok? env gn go k 0 x) as))
               0))
        0)
@@ -374,9 +374,9 @@
    ; whose result is the fired loop, moon's lexer spelling.  -> (go vars GB inits) | 0
    (amble-let1 S inits)
     (S @ (': D1 D2)
-         (? (two? D1 && name? <D1 && all name? >D1 && 0 < #>D1)
+         (? (two? D1 && nom? <D1 && all nom? >D1 && 0 < #>D1)
               [<D1 >D1 D2 inits]
-            (name? D1 && two? D2 && id? <D2 '\ && two? >D2 && two? >>D2)
+            (nom? D1 && two? D2 && id? <D2 '\ && two? >D2 && two? >>D2)
               [D1 (init >D2) (last >D2) inits]
             0)
        0)
@@ -428,7 +428,7 @@
        ; wreck amble would then compile as the constant \
        (atom? >e) (adesug env ti ta <e)
        (: op0 <e
-          vn (name? op0 || two? op0 ? 0 (aopn op0 aopv))
+          vn (nom? op0 || two? op0 ? 0 (aopn op0 aopv))
           op (vn && !(member? vn env) ? vn op0)
           as >e
           (? (id? op 'list && 0 < #as && !(member? op env))
@@ -476,14 +476,14 @@
                               (gol >>l (member? p a2 ? a2 (p . a2)) (p . en))))))))
             >e acc enc))
        (foldl (\ ac x (alt x ac enc)) acc e))
-   ; adrv?: does e contain a driver call -- a self-call or an applied frame/loop name? the
+   ; adrv?: does e contain a driver call -- a self-call or an applied frame/loop nom? the
    ; non-loop cost gate: a body whose only calls go to resolvable globals is a one-shot
    ; wrapper, whose compile is nearly always a waste, where a body that drives a parameter
    ; (a walker's f) or itself amortizes like a loop.
    (adrv? env sf e)
     (? (aquote? e) 0
        (two? e) (: op <e
-          ((name? op && (id? op sf || (member? op env && two? >e)))
+          ((nom? op && (id? op sf || (member? op env && two? >e)))
            || (foldl (\ a x (a || adrv? env sf x)) 0 >e)))
        0)
    ; ainl: rewrite every inner lambda (\ q.. B) whose creation ala recorded -- inl is this
@@ -580,7 +580,7 @@
        cx   (op \ (? (id? op self) ni (member? op cn) #(cimp op) 0))
        nd   (drok ? (amax (amble-depth go cx body) (foldl (\ acd i (amax acd (amble-depth 0 cx i))) 0 inits)) 0)
        kn   (sfq ? (self . (gn + cn)) (gn + cn))         ; every resolvable free head + the self name (amble-ok?'s membership test)
-       lpok (lp ? ((all name? vars) && (adistinct vars) && (k = #inits)
+       lpok (lp ? ((all nom? vars) && (adistinct vars) && (k = #inits)
                    && !(member? go vars) && !(member? go ps)) 1)
        ; the restart law. a deopt restarts: Sp goes back and the twin re-runs from the restart
        ; point, so every call-out the native already made is made again -- faithful only where
@@ -616,7 +616,7 @@
                     (id? op amble-lam) (two? >>as ? (aguard cl) cl)            ; the site's room guard, over frame reads
                     (member? op '(cap cup link + - * // % & | ^ < <= > >= =)) (aguard (aseq cl as))
                     (: c2 (aseq cl as) (id? c2 'bad ? 'bad 1))))))             ; a call: its args, then the call
-       ok ((two? s) && (two? >s) && (all name? ps) && (adistinct ps)
+       ok ((two? s) && (two? >s) && (all nom? ps) && (adistinct ps)
            && (a = #ps) && (0 < a) && lpok && drok && !(id? lts 'bad) && (two? body)
            && (getenv "LOVE_AMBLE_NOCALL" ? !(ahascall? env go body) 1)                ; the call-lane bisect knob: splits the call machinery from the rest
            && (all lit? gvals) && (nd < 48) && ((k + #gn + #cn + nq + nin + nl) < 48)   ; slots are cheap once the prologue guards the room (below)
@@ -818,7 +818,7 @@
                        (sfq && (id? op self) && (#as = (a - ni))) (aselfgo as d)
                        (acg e d))))
              (acg e d)
-              (? (name? e) [['ld A SP (voff e)]]
+              (? (nom? e) [['ld A SP (voff e)]]
                  (whole? e) [['li A ((2 * e) + 1)]]
                  (id? e amble-nil) [['ld A SP gbo]]
                  (nom? e) [['ld A SP (voff e)]]

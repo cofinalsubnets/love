@@ -25,7 +25,7 @@
  (mkrule spec) (: ts (map termify spec) (link (cap ts) (cup ts)))         ; (head . body)
 
  ; ---- substitution + unify, occurs check OPTIONAL (occ) ----
- bot (nom 'fail)
+ bot (mint 0)
  (fail? s) (id? s bot)
  (look s k) (? (atom? s) 0 (: p (cap s) (? (id? k (cap p)) p (look (cup s) k))))
  (ext s k v) (link (link k v) s)

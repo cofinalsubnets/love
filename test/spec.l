@@ -263,7 +263,7 @@
 ; only. mixed bands degenerate (the associativity law): a number against a symbol, a string,
 ; or a chain arrives as that band's unit and the other operand answers whole -- the byte law
 ; and the element-adjoin law could never associate and are gone; (string c) and (l + [x])
-; spell them. a symbol inherits the string lane (acts as its spelling, re-interns; demotes on
+; spell them. a spelled symbol inherits the string lane (acts as its name, re-interns; demotes on
 ; a string operand -- the spelling is a monoid hom, so that crossing is lawful). `*` is
 ; repeated `+`: a sequence times a count repeats it, and the count saturates.
 (assert
@@ -481,9 +481,13 @@
  (: p (pin (link 1 2) 0 'X) ('X = <p && 2 = >p))                                 ; ... the tail is whatever was there: an improper one rides too
  (294 = $'(a b c)) (3 = #'(a b c)))         ; net sums spellings; tally counts the spine
 
-; --- strings, symbols & mints --- a symbol is interned; (mint 0) adjoins a fresh nameless point
-; (materially empty, applies const-1); a nom is a named point (its own kind); () is the core -- the one
-; true nothing (serial-0 mint, printed ()), distinct from 0 and "" though all net 0;
+; --- strings, symbols & mints --- a symbol is an identifier: interned by its name, or anonymous
+; when it has none, and equal to nothing but itself. `nom?` asks; `name?` and `mint?` split it by
+; whether it is spelled. a spelled one re-interns, so 'x read twice is one object; (mint 0) adjoins
+; a fresh anonymous one (materially empty, applies const-1) and no two are ever equal. either kind
+; binds -- a mint is the gensym a macro expands through. () is the core -- the one true nothing
+; (a serial-0 mint by representation, printed (), and no symbol: it binds nothing and `nom?`
+; declines it), distinct from 0 and "" though all net 0;
 ; absence reads it; `$` clamps the net measure, `tally` counts; snip/+/string.
 ; a string indexes by a charm -- negatives from the end, out of range the unit 1 -- and
 ; juxtaposes by a string: (s t) is s then t, C's adjacent-literal law with the literal
@@ -496,21 +500,23 @@
 (assert
  (() = (:)) !(nom? ()) !(name? ()) !(mint? ()) (0 != ()) (() = (intern "")) (0 = $()) !() !!$'x
  ("()" = show ())
- (nom? (mint 0)) !(name? (mint 0)) (mint? (mint 0)) (0 = $(mint 0)) !(mint 0)   ; the fresh point: nom? (a real point) but not name? (anonymous), materially empty
- ; name? and mint? partition nom?: every real point is one or the other, () is neither,
+ (nom? (mint 0)) !(name? (mint 0)) (mint? (mint 0)) (0 = $(mint 0)) !(mint 0)   ; the fresh symbol: nom? but not name? (anonymous), materially empty
+ ; name? and mint? partition nom?: every symbol is one or the other, () is neither,
  ; and nothing else is either. `string` cannot tell them apart -- a mint spells "".
- (: m (mint 0) s (nom 'x)
+ ; the line the predicates draw is binding: a mint binds and captures like a spelled symbol
+ ; ((: m 5 (1 + m)) is 6 through a minted m), () binds nothing and reads back as itself.
+ (: m (mint 0) s (nom "x")
     (&& (&& (mint? m) !(name? m)) (&& (name? s) !(mint? s))))
  (&& !(mint? 'x) (&& !(mint? "x") (&& !(mint? 0) !(mint? '(1 2)))))
- (&& ("" = (string (mint 0))) ("" = (string ())))   ; both nameless points spell empty
+ (&& ("" = (string (mint 0))) ("" = (string ())))   ; the anonymous ones spell empty
  !((mint 0) 5) (121 = ('xyz 1))                  ; an anonymous point holds nothing; a named one indexes its spelling
  ((mint 0) != (mint 0)) (: m (mint 0) (m = m))                 ; distinct always; itself only
- (nom? (nom 'x)) (name? (nom 'x)) !(mint? (nom 'x)) (name? 'x) !(two? (nom 'x)) ("x" = (string (nom 'x)))  ; a nom is a named point (nom? AND name?, an ATOM, NOT a chain); its name comes via `string`
- (: a (nom 'x) b (nom 'x) (&& (a < b) !(b < a) !(a = b)))   ; same-name noms order by serial (distinct points)
- ((mint 0) < (nom 'x))                           ; within the mint band: a bare mint below a named symbol
- ((mint 0) < 0)                                  ; the blue floor: every point sits below the numbers (true-blue)
- (: a (nom 'k) b (nom 'k) t (tablet 0) _ (pin t a 1) _ (pin t b 2)
-    (&& (1 = (t a)) (2 = (t b)) (2 = $t)))      ; same-name noms are distinct map keys
+ (nom? (nom "x")) (name? (nom "x")) !(mint? (nom "x")) (name? 'x) !(two? (nom "x"))   ; `nom` answers an interned symbol: nom? AND name?, an ATOM, never a chain
+ ('x = (nom "x")) ('x = (nom 'x)) ('x = (2 nom "x"))  ; nom interns: an idempotent projection to the kind
+ ((mint 0) < 'x)                                 ; within the symbol band: an anonymous one below a spelled one
+ ((mint 0) < 0)                                  ; the blue floor: every symbol sits below the numbers (true-blue)
+ (: a (mint 0) b (mint 0) t (tablet 0) _ (pin t a 1) _ (pin t b 2)
+    (&& (1 = (t a)) (2 = (t b)) (2 = $t)))      ; distinct mints are distinct map keys
  (97 = ("abc" 0)) (294 = $"abc") (3 = #"abc") (4 = $3.9) (0 = $-3.9) (7 = $@(3 4)) (5 = (abs -5)) (5.0 = (abs @(3 4)))
  !(string 0) !!(string 1) (1 = #(string 0))          ; a NUL nets nothing: the chain of nothings reaches the bytes, and (string 0) is one of them
  !(snip ("a" + 0) 1 2) (97 = $("a" + 0))        ; ... an all-NUL text is nothing, and the NUL byte appends for free
@@ -527,7 +533,7 @@
  ("aXcd" = (pin "abcd" 1 88)) (: s "abcd" _ (pin s 1 88) ("abcd" = s))   ; pin answers a fresh text; the original is untouched
  ("abcd" = (pin "abcd" 9 88)) ("abcd" = (pin "abcd" -1 88)) ("abcd" = (pin "abcd" 1 'x))  ; out of range / a non-byte is the no-op (from-the-end is APPLY's alone)
  ("ab" = ("ab" "")) ("ab" = ("" "ab")) ("" = ("" "")) ("abcd" = ("ab" 'cd)) !("ab" '(1 2))         ; "" is the unit; a point is text; a non-text operand is ()
- ('asdf = (intern "asdf")) !((nom 0) = (nom 0)) ("asdf" = (string 'asdf))
+ ('asdf = (intern "asdf")) !((mint 0) = (mint 0)) ("asdf" = (string 'asdf))
  ('xy = (intern (string 'xy)))                   ; ..so intern . string is the identity on an interned symbol
  ("\"a\\nb\"" = show "a\nb"))
 

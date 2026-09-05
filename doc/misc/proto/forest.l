@@ -26,7 +26,7 @@
 ;                                                       RETURNS a value, does not halt, so eyeball the shown forms)
 ; strict: cat test/00-init.l doc/misc/proto/forest.l | out/host/love   (00-init makes `assert` enforce -- the real gate)
 ;
-; HYGIENE: the step's element/acc binders are fresh gensym noms ((nom 'e)/(nom 'a)) -- unforgeable, so
+; HYGIENE: the step's element/acc binders are fresh gensym noms ((mint 0)/(mint 0)) -- unforgeable, so
 ; the naive symbol substitution `sub` can never capture a name in the user's stage source (which only
 ; ever SEES those vars as the values passed to it). NB the house nil-trap: end-of-list is the SPINE
 ; test (two?/`nul?` below), never (! l) -- `!` reads the NET, and a list of falsy cells nets to nothing.
@@ -68,21 +68,21 @@
  ; --- consumer drivers. each names a fresh step over its base body, peels the chain, reassembles. ---
  (deffold x tag)                                        ; (foldl/foldr c z P)
    (: as (cup x) c (cap as) z (caup as) P (caup (cup as))
-      e (nom 'e) a (nom 'a)
+      e (mint 0) a (mint 0)
       B0 (? (id? tag 'foldl) (ap2 c a e) (ap2 c e a))   ; foldl: (c acc elem); foldr: (c elem acc)
       r  (peel B0 e a P)
       hd (? (id? tag 'foldl) (lam2 a e (cap r)) (lam2 e a (cap r)))
       [tag hd (forest z) (caup r)])
  (defeach x)                                            ; (each l f) -- effect; skip-value is ()
    (: as (cup x) l (cap as) f (caup as)
-      e (nom 'e)  r (peel (ap1 f e) e () l)
+      e (mint 0)  r (peel (ap1 f e) e () l)
       ['each (caup r) (lam1 e (cap r))])
  (defaa x tag unit)                                     ; (all/any q P) -- skip-value is the short-circuit unit
    (: as (cup x) q (cap as) P (caup as)
-      e (nom 'e)  r (peel (ap1 q e) e unit P)
+      e (mint 0)  r (peel (ap1 q e) e unit P)
       [tag (lam1 e (cap r)) (caup r)])
  (defto x)                                              ; a bare producer chain -> one foldr/link pass
-   (: e (nom 'e) a (nom 'a)
+   (: e (mint 0) a (mint 0)
       r (peel (ap2 'link e a) e a x)
       ['foldr (lam2 e a (cap r)) () (caup r)])
 

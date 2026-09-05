@@ -32,7 +32,7 @@
                        (e @ (op a b) (member? op '(+ - * // % & | ^ < <= > >= =) && exprn ps a && exprn ps b)
                             ('? c a b) (exprn ps c && exprn ps a && exprn ps b)
                             0))
-       (opnd-ok? ps e) (? (two? e) (all (opnd-ok? ps) >e)  (name? e) (member? e ps)  1)   ; every operand leaf a frame param: jgir has no slot for a free capture
+       (opnd-ok? ps e) (? (two? e) (all (opnd-ok? ps) >e)  (nom? e) (member? e ps)  1)   ; every operand leaf a frame param: jgir has no slot for a free capture
        (gdefs-ok? gds) (all (gd \ opnd-ok? ><gd >gd) gds)                             ; ... and per def body, over that def's own params
        ; e = the bytecode entry (the deopt target), s = the surface (\ frame.. body), a = arity, gv = ala's
        ; folded global resolver (the book is mopped post-egg), farq = the letrec-local predicate (a farq name
@@ -42,7 +42,7 @@
        ; markers, inl = the inner-closure record ((exp src-tail cell)..) amble's site reads
        (natjit e s a gv farq lams nm ti ta inl)
         (: ps (init >s)  body (last >s)                                                ; the frame [imps args] + the surface body
-           (? !(all name? ps) e                                                       ; a mint frame (bsub's binders, boxfix's cells) declines every lane
+           (? !(all nom? ps) e                                                       ; a frame that is not all points (a pattern binder) declines every lane
               (two? s && two? >>s && exprn ps body)                                   ; the leaf: >=1 param, a body in the grammar
               (hit (nif (emit (peep (asm arch (coreir arch ps body (deoptir arch (a = 1 ? 0 1)))) 'bytes 0)) e s a))
               (qualfr s) (hit (jitfrx s arch e))                                      ; the float-result leaf boxes a gem; deopt to e, never (ev s), which re-enters ala
@@ -57,7 +57,7 @@
                        ; a synthetic ((__outer . frame) . tail) entry. post-feel every def is name (\ p.. B)
                        (: pd (? (two? body && id? <body ':) (anat-defs >body) ())
                           dds (? pd <pd ())  tail (? pd <>pd ())
-                          okshape (pd && two? tail && all (dd \ dd @ (n . '\ . _ . _) (name? n) 0) dds)
+                          okshape (pd && two? tail && all (dd \ dd @ (n . '\ . _ . _) (nom? n) 0) dds)
                           gdefs (? okshape (map (dd \ (<dd . init >>dd) . last >>dd) dds) ())     ; ((name p..) . B)
                           gnames (map caap gdefs)
                           flat? (okshape && member? <tail gnames && >tail = ps)                     ; the tail is (entry frame..)

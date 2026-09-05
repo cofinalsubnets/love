@@ -1,16 +1,14 @@
 
-(: s0 (nom 0)
-   s1 (nom 0)
-   s2 (nom 0)
+(: s0 (mint 0)
+   s1 (mint 0)
+   s2 (mint 0)
  (assert !(= s0 s1)
          !(= s0 s2)
          !(= s1 s2)
          (= 'asdf (intern "asdf"))          ; intern: string -> the interned symbol
          (= 'asdf (intern 'asdf))           ; ...identity on any non-string arg
-         !(= 'asdf (nom "asdf"))         ; a fresh nom (its own kind, KNom): never the interned symbol
-         !(= (nom "asdf") (nom "asdf")) ; ...nor another nom (distinct serials)
-         (= "asdf" (string (nom "asdf")))  ; the name via `string` -- the explicit bridge (a nom is not a chain)
-         (= "asdf" (string (nom 'asdf)))   ; ...same for a symbol arg (string'd on the way in)
+         (= 'asdf (nom "asdf"))             ; nom on a string is that same interning
+         (= 'asdf (2 nom "asdf"))           ; ...so it is a projection to the kind: idempotent
          (= "asdf" (string 'asdf))))
 (:
  t (tablet 0)

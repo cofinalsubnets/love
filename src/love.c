@@ -668,18 +668,11 @@ static lvm(lvm_mint) {
   Ip += 1,
   Continue(); }
 
-// (nom n) -> a fresh, uninterned named point: a string names it, a symbol lends
-// its spelling, anything else falls to a bare mint. two (nom 'x) are distinct --
-// the gensym-with-a-name.
+// (nom n) -> the name a string spells, a name itself, a fresh mint for anything else.
+// interning, so idempotent: (nom "x") = (nom 'x) = 'x; `mint` is the one fresh constructor.
 static lvm(lvm_nomctor) {
- Have(Width(struct ai_nom));                    // >= Width(struct ai_mint), so the bare-mint fallback fits too
- word n = Sp[0];                                // re-read post-GC (the stack is rooted)
- struct ai_str *nm = strp(n) ? str(n) : nom_str(g, n);   // a string is the name; a sym lends its spelling
- if (!nm) ai_musttail return Ap(lvm_mint, g);               // no name -> a bare mint
- struct ai_nom *y = (struct ai_nom*) Hp;
- Hp += Width(struct ai_nom);
- ini_nom(y, word(nm), ++g->next_serial, nom_dig(word(nm)));
- ai_musttail return Answer(word(y)); }
+ if (strp(Sp[0]) || namep(Sp[0])) ai_musttail return Ap(lvm_intern, g);
+ ai_musttail return Ap(lvm_mint, g); }
 
 struct ai *intern(struct ai*g) {
  if (!ai_ok(g)) return g;                        // intern_reserve reads g, and ai_have's guard is

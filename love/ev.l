@@ -2,13 +2,13 @@
 ; (apx nary head . args) nodes -- and ana, which dispatches on them. top-level globals, not
 ; ev-block locals, so they stay out of ev's captured frame (an ap closing over a sibling that
 ; captured iop/apx would drag both in dead -- see .feels).
-(: iop (nom 'iop)
-   apx (nom 'apx))
+(: iop (mint 0)
+   apx (mint 0))
 
 ; gone: avw's not-in-book sentinel (the `(peep book x gone)` default). a top-level global for
 ; the same reason as iop/apx, and one more: it folds into avw as a kim constant at compile time,
 ; and only a global resolves identically in every bootstrap generation.
-(: gone (nom 'gone))
+(: gone (mint 0))
 
 ; gv: the layered global read -- (books ()) is the live chain of books, walked head-first with
 ; `gone` as the per-layer miss sentinel (a stored () SHADOWS, never falls through), answering d on
