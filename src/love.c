@@ -5,7 +5,6 @@
 struct ai_chain;
 // this file's own, forward-declared so order within it does not matter.
 static char *add_emit(struct ai *g, char *w, word x);
-static int stringrank(struct ai *g, word x);
 static intptr_t seq_byte(word x);
 // the nifs.h table lands mid-file and names these, so the whole set is declared up here
 // (lvm_subn's body comes out of avm_slow, which carries no storage class of its own).
@@ -881,8 +880,7 @@ static lvm(lvm_sub) {
  avm_unit(a, b);
  if (coinp(a) || coinp(b)) ai_musttail return Ap(lvm_sub_coin, g);
  ai_musttail return Ap(lvm_subn, g); }
-// lvm_mul + its kind matrix live after the `+` string lane (they reuse nom_str /
-// stringrank for the symbol-repetition case), below.
+// lvm_mul + its kind matrix live after the `+` string lane, below.
 
 // `+` on sequences is order-preserving concatenation, a scalar lifting into the
 // sequence on the side it appears:
@@ -956,12 +954,6 @@ lvm(lvm_add_seq) {
 struct ai_str *nom_str(struct ai *g, word x) {   // symbol -> name string, or 0 (a bare mint / the zero point / a non-symbol)
  return namep(x) ? str(nom(x)->name) : 0; }  // a named point (KNom) carries its name; a bare mint is nameless
 
-static ai_inline int stringrank(struct ai *g, word x) {    // str 0 / mint 1 / named-sym|num 2
- if (strp(x)) return 0;
- if (namep(x)) return 2;          // a named symbol: result re-interns (the min pulls a string operand to 0 -> demote)
- if (mintp(x)) return 1;          // a bare mint / the zero point: an uninterned (fresh) symbol
- return 2; }                      // a number contributes one byte (rank 2)
-
 static ai_inline uintptr_t stringlen(struct ai *g, word x) {  // bytes x contributes to a concat
  if (strp(x)) return len(x);
  if (nomp(x)) { struct ai_str *n = nom_str(g, x); return n ? n->len : 0; }
@@ -980,31 +972,24 @@ struct ai_str *seq_cat(struct ai *g, void *w, word a, word b) {
 lvm(lvm_add_string) {
  word a = Sp[0], b = Sp[1];
  if (trayp(a) || trayp(b)) ai_musttail return Push(ZeroPoint); // array <-> string: undefined
- if ((!strp(a) && !nomp(a) && seq_byte(a) < 0) ||
-     (!strp(b) && !nomp(b) && seq_byte(b) < 0)) ai_musttail return Push(ZeroPoint);
- int rank = min(stringrank(g, a), stringrank(g, b));
+ if ((!strp(a) && seq_byte(a) < 0) || (!strp(b) && seq_byte(b) < 0)) ai_musttail return Push(ZeroPoint);
  uintptr_t n = stringlen(g, a) + stringlen(g, b);
- if (!n) ai_musttail return Push(rank ? ZeroPoint : EmptyString);   // the empty spelling is the zero point (cf. lvm_intern), not the zero charm
+ if (!n) ai_musttail return Push(EmptyString);
  uintptr_t req = str_width(n);
  Have(req);
  a = Sp[0], b = Sp[1];                                  // re-read post-GC
  struct ai_str *z = seq_cat(g, Hp, a, b);                     // a's bytes then b's, in order
  Hp += req;
  *++Sp = word(z);
- return rank == 0 ? (Ip++, Continue())                  // string
-      : rank == 1 ? Ap(lvm_mint, g)                  // uninterned symbol (fresh)
-                  : Ap(lvm_intern, g); }               // interned symbol
+ Ip++; ai_musttail return Continue(); }
 lvm(lvm_0) {                             // unsupported mix (array <-> string)
  ai_musttail return Push(ZeroPoint); }
 // the unit lane: a bare mint rides through +/*. the dispatchers early-out a mint
 // first, so these cells are belt and braces -- but they say the true thing, so
 // the matrix stands correct on its own (mx.v checks the whole square).
-lvm(lvm_bin_unit) {
+lvm(lvm_bin_unit) {                       // a point is the identity; of two, the later stands (lvm_add's fast path says the same)
  word a = Sp[0], b = Sp[1];
- if (a == ZeroPoint) ai_musttail return Push(b);
- if (b == ZeroPoint) ai_musttail return Push(a);
- if (mintp(a) && mintp(b)) ai_musttail return Push(a == b ? a : ZeroPoint);
- ai_musttail return Push(mintp(a) ? b : a); }
+ ai_musttail return Push(nomp(a) ? b : a); }
 // the degenerate lane: a mixed pair with no lawful crossing answers the higher
 // band's operand whole -- the foreigner arrives as that band's unit, since the
 // only hom a group has into a free monoid is trivial. this is what restores +

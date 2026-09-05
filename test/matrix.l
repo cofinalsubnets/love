@@ -105,9 +105,9 @@
  ; --- add_string lane: text x text; a number (tray included) arrives as the unit
  ;     and the text answers whole. the crossings the spec states once, the orders
  ;     it does not, and the reps it has no room for: ---
- ("efab" = (+ 'ef "ab"))                       ; sym + str demotes (the rank min pulls to string)
+ ("ab" = (+ 'ef "ab"))                         ; a name is a point: the identity against text
  (= "ab" (+ @(1 2) "ab"))   (= "ab" (+ "ab" @(1 2)))   ; a tray is number-band against text, either side
- ('ef = (+ @(1 2) 'ef))
+ ("@(1 2)" = show (+ @(1 2) 'ef))              ; ..and against a tray
  (= "ab" (+ mx-big "ab"))                     ; a bignum is a number like any other
 
  ; --- add_seq lane: a list against text (chain wins); a number degenerates ---

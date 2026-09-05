@@ -239,7 +239,9 @@
  (10 = ((\ q ((\ i (: q 7 (+ i q))) q)) 3))      ; capture-avoiding: a : binder shadowing the arg does not capture it (i stays 3, local q 7)
  (8  = ((\ q ((\ i (: i 5 (+ i q))) q)) 3))      ; a : rebinding the lambda param shadows it -- the subst drops, not lands on the binder
  (99 = ((\ tuple (tuple 1 2 3)) (\ a b c 99)))   ; a binder shadows a same-spelled macro: the macro must not fire (tuple is a prel macro)
- (5  = (: let (\ x 5) (let 9))))                 ; likewise for a : binder named like a macro
+ (5  = (: let (\ x 5) (let 9)))                  ; likewise for a : binder named like a macro
+ (43 = ((\ p (: p (+ p 1) p)) 42))               ; a : value binding shadows its name only after its right side is
+ (2  = (: v 1 (: v (+ v 1) v))))                 ; evaluated, so that side reads the outer binding, a param or an enclosing :
 
 ; --- string answers a string --- the one total coercion. four kinds the nif spells itself:
 ; a charm is its byte (not its digits -- (string 10) is a newline, which the tree writes
@@ -260,24 +262,23 @@
     ("1.5" = 2 string 1.5)))                                        ; ..so it is idempotent
 
 ; --- + and * are generic --- `+` adds numbers, concatenates strings, appends lists; `-` numeric
-; only. mixed bands degenerate (the associativity law): a number against a symbol, a string,
-; or a chain arrives as that band's unit and the other operand answers whole -- the byte law
-; and the element-adjoin law could never associate and are gone; (string c) and (l + [x])
-; spell them. a spelled symbol inherits the string lane (acts as its name, re-interns; demotes on
-; a string operand -- the spelling is a monoid hom, so that crossing is lawful). `*` is
+; only. mixed bands degenerate (the associativity law): a number against a string or a chain
+; arrives as that band's unit and the other operand answers whole -- the byte law and the
+; element-adjoin law could never associate and are gone; (string c) and (l + [x]) spell them.
+; a name is a point like a mint: the identity under + in every lane, and between two points
+; the later stands; absent under * (a spelling is `string`'s, not +'s). `*` is
 ; repeated `+`: a sequence times a count repeats it, and the count saturates.
 (assert
- ("abcd" = "ab" + "cd") ("x" = "x" + 66) ('efef = 'ef + 'ef) ("abef" = "ab" + 'ef)
+ ("abcd" = "ab" + "cd") ("x" = "x" + 66) ('ef = 'ef + 'ef) ('ab = 'ef + 'ab) ('ef = 'ab + 'ef) ("ab" = "ab" + 'ef)
  ("x" = "x" + 66.0) ("x" = "x" + 1.5) ("x" = "x" + -66) ("x" = "x" + 256)   ; a number degenerates against text
  ('(1 2 3 4) = '(1 2) + '(3 4)) ('(1 2) = 5 + '(1 2)) !("a" - "b")
  ('(3) = '(3) + ()) ('(3) = () + '(3)) ('(1 2) = '(1 2) + (mint 0))   ; a bare mint -- the zero point () too -- is +'s
  ("ab" = "ab" + ()) ("ab" = () + "ab") (5 = 5 + ()) (5 = () + 5)      ; identity in every lane, not just on lists:
  ((1 ~ 2) = () + (1 ~ 2)) ("@(1 2 3)" = show (() + @(1 2 3))) (() = () + ())  ; string/number/complex/array pass through
- (('ef + '(1 2)) = '(101 102 1 2)) ('ef = 'ef + 5)  ; a named symbol takes the string lane against a list too -- its
-                                              ; spelling splices; a number degenerates against it
- ('ef = 65 + 'ef) ('ef = 'ef + @(1 2)) ('ef = @(1 2) + 'ef)  ; ..either side, and a tray is number-band the same way
+ ('(1 2) = 'ef + '(1 2)) (5 = 'ef + 5) (5 = 65 + 'ef + -60)   ; a name is the identity against every band,
+ ("@(1 2)" = show ('ef + @(1 2))) ("@(1 2)" = show (@(1 2) + 'ef))  ; ..either side, a tray included
  ((\ x x) = () + (\ x x)) (2 = (((\ x x) + (\ x x)) (\ n (+ n 1)) 0))   ; the top lane too: () + hot = hot, and
- ("ababab" = "ab" * 3) ('xyxy = 'xy * 2) ('(1 2 1 2) = '(1 2) * 2) !("ab" * "cd")   ; sym * count re-interns; + on two hots is church add (id+id acts as 2)
+ ("ababab" = "ab" * 3) (() = 'xy * 2) ('(1 2 1 2) = '(1 2) * 2) !("ab" * "cd")   ; a name is absent under *; + on two hots is church add (id+id acts as 2)
  ("ababab" = "ab" * -3) !("ab" * 2.5) !('(1 2) * 0)         ; a count acts by |magnitude| when exact (the one hom
  (() = () * 5) (() = 5 * ()) (() = "ab" * ()) (() = () * "ab")   ; over the sign crossing); an inexact count is no count.
  (() = '(1 2) * mint 0) (() = () * ()) (() = () * @(1 2 3))    ; () is the zero and the zero annihilates * (the

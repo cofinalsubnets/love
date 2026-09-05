@@ -17,10 +17,10 @@ static lvm_t lvm_band_slow, lvm_bor_slow, lvm_bxor_slow, lvm_mul_cart, lvm_mul_r
 // composes: (x * 2.5) * 2 and x * (2.5 * 2 = 5.0) both land ()).
 static lvm(lvm_mul_rep) {
  word a = Sp[0], b = Sp[1];
- bool aseq = strp(a) || chainp(a) || namep(a);       // a string / list / named symbol repeats
+ bool aseq = strp(a) || chainp(a);                   // a string / list repeats
  word seq = aseq ? a : b, cnt = aseq ? b : a;
- if ((!strp(seq) && !chainp(seq) && !namep(seq)) || (!charmp(cnt) && !bigp(cnt)))
-  ai_musttail return Push(ZeroPoint);             // seq not a sequence/symbol, or count not exact
+ if ((!strp(seq) && !chainp(seq)) || (!charmp(cnt) && !bigp(cnt)))
+  ai_musttail return Push(ZeroPoint);             // seq not a sequence, or count not exact
  uintptr_t n;
  if (charmp(cnt)) {
    intptr_t v = getcharm(cnt);
@@ -37,20 +37,18 @@ static lvm(lvm_mul_rep) {
    for (word l = seq; chainp(l); l = B(l), w++) ini_chain(w, A(l), word(w + 1));
   (w - 1)->b = ZeroPoint;                            // list terminator () (zero-ontology)
   ai_musttail return Push(word(base)); }
- // string / symbol spelling -> repeat the bytes; a symbol re-interns the result
- bool sym = namep(seq);
- struct ai_str *src = sym ? str(nom(seq)->name) : str(seq);
+ // string -> repeat the bytes
+ struct ai_str *src = str(seq);
  uintptr_t sl = src->len, total = sl * n;
- if (!total) ai_musttail return Push(sym ? ZeroPoint : EmptyString);  // 0 copies: () for a sym, "" for a string
+ if (!total) ai_musttail return Push(EmptyString);   // 0 copies: ""
  uintptr_t req = str_width(total);
  Have(req);
- word sw = sym ? (namep(Sp[0]) ? Sp[0] : Sp[1]) : (strp(Sp[0]) ? Sp[0] : Sp[1]);  // re-read post-GC
- src = sym ? str(nom(sw)->name) : str(sw);
+ src = str(strp(Sp[0]) ? Sp[0] : Sp[1]);             // re-read post-GC
  struct ai_str *z = ini_str(str(Hp), total);
  Hp += req;
  for (uintptr_t i = 0; i < n; i++) memcpy(txt(z) + i * sl, txt(src), sl);
  *++Sp = word(z);
- return sym ? Ap(lvm_intern, g) : (Ip++, Continue()); }
+ Ip++; ai_musttail return Continue(); }
 
 // `*` cartesian lane: chain * chain -> the ordered cartesian product (tally is
 // the homomorphism; the outer loop ranges the left operand so right-
@@ -179,14 +177,12 @@ lvm(lvm_add) {
      && !__builtin_add_overflow((intptr_t) getcharm(a), (intptr_t) getcharm(b), &t)
      && t >= mincharm && t <= maxcharm)
   ai_musttail return Push(putcharm(t));
- // ZeroPoint first, and this must mirror lvm_bin_unit exactly -- it is that
- // matrix lane's fast path, nothing more. () is a mint, so folding these into the
- // distinct-mints rule makes `() + m` answer () where the matrix answers m.
- if (a == ZeroPoint) ai_musttail return Push(b);
- if (b == ZeroPoint) ai_musttail return Push(a);
- if (mintp(a) && mintp(b)) ai_musttail return Push(a == b ? a : ZeroPoint);
- if (mintp(a)) ai_musttail return Push(b);
- if (mintp(b)) ai_musttail return Push(a);
+ // a point -- (), a bare mint, a name -- is the identity on either side, and between
+ // two points the later one stands: that keeps + associative ((p + q) + q = p + (q + q)),
+ // where distinct points annihilating did not. this must mirror lvm_bin_unit exactly --
+ // it is that matrix lane's fast path, nothing more.
+ if (nomp(a)) ai_musttail return Push(b);
+ if (nomp(b)) ai_musttail return Push(a);
  ai_musttail return Ap(ai_add_mx[ai_kind(a)][ai_kind(b)], g); }
 
 lvm(lvm_mul) {
@@ -195,10 +191,10 @@ lvm(lvm_mul) {
   if (!__builtin_mul_overflow((intptr_t) getcharm(a), (intptr_t) getcharm(b), &t)
       && t >= mincharm && t <= maxcharm)
    ai_musttail return Push(putcharm(t)); }
- // a bare mint is absent, and * repeats: a sequence taken an absent number of times
+ // a point is absent, and * repeats: a sequence taken an absent number of times
  // is nothing, so it annihilates. the matrix says the same thing (lvm_0), so this
  // stays a fast path.
- if (mintp(a) || mintp(b)) ai_musttail return Push(ZeroPoint);
+ if (nomp(a) || nomp(b)) ai_musttail return Push(ZeroPoint);
  ai_musttail return Ap(ai_mul_mx[ai_kind(a)][ai_kind(b)], g); }
 
 avm_div(fquot, /)                               // `//` fixnum fast path: truncating quotient

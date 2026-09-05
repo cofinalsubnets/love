@@ -25,7 +25,7 @@
    (var x) (x . nom 0)                         ; (label . fresh-nom) -- identity by the nom
    ; the tail is the nom, and the test says so: a nom anywhere else in a term -- an atom
    ; under `tie`, say -- is data, not a variable. `?`, not &&: a predicate owes a bit.
-   (var? x) (? (two? x) (mint? >x) 0)
+   (var? x) (? (two? x) (nom? >x) 0)
    (walk s u) (? (nil? (var? u)) u (: t (has_s s u) (? (two? t) (walk s <t) u)))
    ufail (nom 0)
    (ufail? x) (= x ufail)

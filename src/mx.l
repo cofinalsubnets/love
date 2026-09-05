@@ -32,36 +32,34 @@
    ; precedence, high to low: lambda > tablet > chain > text > number (incl. tray).
    mx-rows
     '(; `+`: numbers add, lists and text concatenate, lambdas and maps Church-add.
-      ;      () and every bare mint is the identity in every lane, so () + x = x, and the
-      ;      dispatchers early-out on a mint before the table and must agree. mixed bands
-      ;      degenerate: the lower band arrives as its unit and the other answers whole.
-      ;      the order is NUM < NOM < STR < CHAIN, and nom+str keeps the spelling hom.
+      ;      () and every point -- a bare mint or a name -- is the identity in every lane, so
+      ;      () + x = x, and between two points the later stands (associativity); the
+      ;      dispatchers early-out on a point before the table and must agree. mixed bands
+      ;      degenerate: the lower band arrives as its unit and the other answers whole. the
+      ;      order is NUM < STR < CHAIN.
       (ADD_MINT  lvm_bin_unit   lvm_bin_unit lvm_bin_unit   lvm_bin_unit   lvm_bin_unit lvm_bin_unit lvm_bin_unit)
-      (ADD_NUM   lvm_addn       lvm_bin_unit lvm_bin_b      lvm_bin_b      lvm_bin_b    lvm_addh     lvm_addh)
-      ; a symbol takes the string algebra under +: spellings cat and re-intern, and nom+str
-      ; demotes to a string. nom+chain still adjoins.
-      (ADD_STR   lvm_bin_a      lvm_bin_unit lvm_add_string lvm_add_string lvm_add_seq  lvm_addh     lvm_addh)
-      (ADD_NOM   lvm_bin_a      lvm_bin_unit lvm_add_string lvm_add_string lvm_add_seq  lvm_addh     lvm_addh)
-      (ADD_TWO   lvm_bin_a      lvm_bin_unit lvm_add_seq    lvm_add_seq    lvm_add_seq  lvm_addh     lvm_addh)
-      (ADD_H     lvm_addh       lvm_bin_unit lvm_addh       lvm_addh       lvm_addh     lvm_addh     lvm_addh)
+      (ADD_NUM   lvm_addn       lvm_bin_unit lvm_bin_unit   lvm_bin_b      lvm_bin_b    lvm_addh     lvm_addh)
+      (ADD_STR   lvm_bin_a      lvm_bin_unit lvm_bin_unit   lvm_add_string lvm_add_seq  lvm_addh     lvm_addh)
+      (ADD_TWO   lvm_bin_a      lvm_bin_unit lvm_bin_unit   lvm_add_seq    lvm_add_seq  lvm_addh     lvm_addh)
+      (ADD_H     lvm_addh       lvm_bin_unit lvm_bin_unit   lvm_addh       lvm_addh     lvm_addh     lvm_addh)
       ; `*`: the semiring product whose `+` is the lane above. numbers multiply, sequence *
       ;      count repeats, lambdas and maps compose (Church mul). () is the zero and
       ;      annihilates, so a collapse to lvm_0 propagates rather than vanishing.
       (MUL_MINT  lvm_0          lvm_0        lvm_0          lvm_0          lvm_0        lvm_0        lvm_0)
-      (MUL_NUM   lvm_muln       lvm_0        lvm_mul_rep    lvm_mul_rep    lvm_mul_rep  lvm_mulh     lvm_mulh)
-      ; str*str and nom*nom stay lvm_0, the absorbing zero; a number against either repeats
+      (MUL_NUM   lvm_muln       lvm_0        lvm_0          lvm_mul_rep    lvm_mul_rep  lvm_mulh     lvm_mulh)
+      ; str*str stays lvm_0, the absorbing zero; a number against a string repeats it
       (MUL_REP   lvm_mul_rep    lvm_0        lvm_0          lvm_0          lvm_0        lvm_mulh     lvm_mulh)
       ; MUL_REP with one cell changed: chain*chain is the cartesian product, which makes the
       ; list lane a semiring rather than a monoid.
       (MUL_CHAIN lvm_mul_rep    lvm_0        lvm_0          lvm_0          lvm_mul_cart lvm_mulh     lvm_mulh)
-      (MUL_H     lvm_mulh       lvm_0        lvm_mulh       lvm_mulh       lvm_mulh     lvm_mulh     lvm_mulh))
+      (MUL_H     lvm_mulh       lvm_0        lvm_0          lvm_mulh       lvm_mulh     lvm_mulh     lvm_mulh))
 
    ; --- which row each kind takes. a KTablet or KCoin operand wins over everything, so their
    ; rows and columns are both the Church lanes: a tablet is a lookup lambda here.
-   mx-add-of '((ADD_MINT KMint) (ADD_NOM KNom)
+   mx-add-of '((ADD_MINT KMint KNom)
                (ADD_NUM KCharm KSun KGem KTwin KBig KTrayZ KTrayR KTrayC KTrayO)
                (ADD_STR KString) (ADD_TWO KChain) (ADD_H KTablet KCoin))
-   mx-mul-of '((MUL_MINT KMint) (MUL_REP KNom KString)
+   mx-mul-of '((MUL_MINT KMint KNom) (MUL_REP KString)
                (MUL_NUM KCharm KSun KGem KTwin KBig KTrayZ KTrayR KTrayC KTrayO)
                (MUL_CHAIN KChain) (MUL_H KTablet KCoin))
 

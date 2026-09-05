@@ -123,24 +123,24 @@
               (= <x '*) ("(ulmul " + tul <>x + " " + tul <>>x + ")")
               ("(ulop " + tul <>x + " " + tul <>>x + ")"))
 
-   ; -- text as spelling: symbols and strings are byte lists under + (concat) and * (repeat);
+   ; -- text as spelling: strings are byte lists under + (concat) and * (repeat); a symbol is
+   ;    a point under both, the identity and the absorber, and stays out of this lane.
    ;    equality is band-guarded (a symbol never = a string, whatever the spelling)
    (qnom? x) (two? x && (= <x bs) && un2? x && nom? <>x)     ; 'ef
-   (txt? x) (? (string? x) 1  (qnom? x) 1
+   (txt? x) (? (string? x) 1
                (atom? x) 0
                (<x @ ('+ && len3? x) (txt? <>x && txt? <>>x)
                      ('* && len3? x) (txt? <>x && charm? <>>x)
-                     (('intern || 'string) && un2? x) (txt? <>x)
+                     ('string && un2? x) (txt? <>x)
                      0))
-   (tband x) (? (string? x) 1  (qnom? x) 0
-                (<x @ '+ (tband <>x = 0 ? (tband <>>x) 1)   ; symbol+symbol stays symbol, a string wins
+   (tband x) (? (string? x) 1
+                (<x @ '+ (tband <>x = 0 ? (tband <>>x) 1)   ; a string wins
                       '* (tband <>x)
-                      'intern 0  1))                        ; intern -> symbol, string -> string
+                      1))
    (ttl x) (? (string? x) ("[" + joinb x 0 + "]")
-              (qnom? x)   ("[" + joinb (string <>x) 0 + "]")
               (<x @ '+ ("(" + ttl <>x + " ++ " + ttl <>>x + ")")
                     '* ("(srep (Z.abs_nat " + tv <>>x + ") " + ttl <>x + ")")
-                    (ttl <>x)))                             ; intern / string: the spelling itself
+                    (ttl <>x)))                             ; string: the spelling itself
 
    ; -- gaussian twins: exact complex over Z as (re im) pairs -- conj negates im, the
    ;    unit rides + and - (under * it annihilates, out of this band's reach), and
