@@ -33,7 +33,7 @@
             link cap cup caap caup cuap cuup
             dig lidx assoc member? last rev cat
             charm? nom? two? tablet? lit? string? nil? gem? twin? atom?
-            snip string intern
+            snip string
             re im conj arg gem twin
             sin cos tan atan atan2 exp sqrt log fpow))
    (foldl (\ t s (: v (gv s ()) (? v (pin t v 1) t))) {} names)))

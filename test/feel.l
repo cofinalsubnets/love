@@ -34,7 +34,7 @@
 
  ; --- ... and the walk is the head VALUE's purity, not text: a point and a numeral fold too ---
  (= 256 (: (f x) (3 2 x) (f 2)))              ; (3 2) is the charm 8, folded; the unknown tail rides on
- (nil? (: (f x) ('sym 5 x) (f 9)))            ; a point indexes its spelling; 5 is past "sym" -> ()
+ ('sym = (: (f x) ('sym 5 x) (f 9)))          ; a point applied answers itself, so the fold answers the point
  (nil? (: (f x) (() 5 x) (f 9)))             ; () folds too -- nom? is false of it, so it is named apart
  (= 5   (0 0 5)) (= 262144 (2 3 4))           ; const of const is id; the tower, both charm-sized
  (= 1.0 (: (f x) (2 1.5 x) (f 1)))            ; (2 1.5) is the gem 2.25 -- charm-sized, so it folds

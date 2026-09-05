@@ -145,8 +145,8 @@
                       (& (p1-cls (cap tok)) 64) (? (two? (cup tok)) (cap (cup tok)) 0)
                       (cap tok))
               (? (? (p1-dig? lead) 1 (= lead 46))
-                 (: f (gem s) (? (gem? f) f (name s)))
-                 (name s)))))
+                 (: f (gem s) (? (gem? f) f (nom s)))
+                 (nom s)))))
 
    ; --- strings -------------------------------------------------------------
    (p1-esc c) (? (= c 110) 10 (= c 116) 9 (= c 114) 13 (= c 101) 27 (= c 48) 0 c)
@@ -197,14 +197,14 @@
                  (& (p1-cls c) 16) (p1-open (? (= c 91) 'list 'hash) r)
                  (& (p1-cls c) 32) ()
                  (= c 34) (p1-str r ())
-                 (= c 39) (p1-lift (name "\\") r head)
+                 (= c 39) (p1-lift (nom "\\") r head)
                  ; @ glued to an operator char is an operator run (@- and friends), not the
                  ; tuple sigil: a datum cannot start with one. the run's own shed rule keeps
                  ; @-5 a number, exactly as it keeps !-5.
                  (= c 64) (? (? (two? r) (p1-opc? (cap r)) ()) (p1-op cl)
                              (p1-glued? r) (p1-lift 'tuple r head)
-                             (. (name "@") r))
-                 (= c 44) (. (name ",") r)
+                             (. (nom "@") r))
+                 (= c 44) (. (nom ",") r)
                  (? (p1-opc? c) (nil? numlead) ()) (p1-op cl)
                  (p1-dig? c) (p1-nop cl)
                  (: tr (p1-tok cl ())
@@ -237,7 +237,7 @@
      (: rr (p1-run cl ())
         run (string (cap rr))
         rest (cup rr)
-        sym (name run)
+        sym (nom run)
         shed (? (two? rest) (= (cap rest) 45) ())    ; p1-run put a sign back: glued
         (? (= run "\\") (. sym rest)
            (nil? (? shed 1 (p1-glued? rest))) (. sym rest)
@@ -260,7 +260,7 @@
         (? (nil? (nom? a)) (. a rest)                  ; a numeral: untouched
            (nil? (< 0 k)) (. a rest)                   ; no sigil: a plain name-led token
            (nil? (p1-glued? r)) (. a rest)             ; run ends the form: the plain symbol
-           (: sym (name (string (p1-take tok k ())))
+           (: sym (nom (string (p1-take tok k ())))
               d (p1-read1 r ())
               (? (nil? (two? d)) 'torn
                  (. (. 'mono (. (. sym (. (cap d) ())) ())) (cup d))))))

@@ -13,11 +13,9 @@
  (= 2 (1 2))                                  ; (1 2) = 2 ** 1
  (= 1 (2 1))                                  ; (2 1) = 1 ** 2
  (= 9 ((\ f n (f n)) 2 3))                    ; (2 3) = 3 ** 2
- (= 97 ('abc 0))                              ; a named point indexes its spelling, the sequence
- (= 99 ('abc 2))                              ;   it already is to tally, net and `+`
- (nil? ('abc 9))                              ; past the spelling: nothing there
- (= 'abcx ('abc 'x))                          ; two named points join to a point
- (nil? ((mint 0) 5))                          ; an anonymous point has no spelling: nothing there
+ ('abc = ('abc 0))                            ; a point is its own constant: applied, it answers itself
+ ('abc = ('abc 'x))                           ;   whatever the operand
+ (: m (mint 0) (id? m (m 5)))                 ; an anonymous one too
  (= 8 (3 2))                                  ; (3 2) = 2 ** 3
  (= 13 ((3 (+ 1)) 10)))                       ; non-numeric operand -> (+ 1) composed 3 times on 10
 ; the whole numeric tower is a Church numeral, not just fixnums (data.c data_num_apply

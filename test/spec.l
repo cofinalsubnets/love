@@ -509,7 +509,7 @@
     (&& (&& (mint? m) !(name? m)) (&& (name? s) !(mint? s))))
  (&& !(mint? 'x) (&& !(mint? "x") (&& !(mint? 0) !(mint? '(1 2)))))
  (&& ("" = (string (mint 0))) ("" = (string ())))   ; the anonymous ones spell empty
- !((mint 0) 5) (121 = ('xyz 1))                  ; an anonymous point holds nothing; a named one indexes its spelling
+ (: m (mint 0) (id? m (m 5))) ('xyz = ('xyz 1))   ; a point applied answers itself, named or not
  ((mint 0) != (mint 0)) (: m (mint 0) (m = m))                 ; distinct always; itself only
  (nom? (nom "x")) (name? (nom "x")) !(mint? (nom "x")) (name? 'x) !(two? (nom "x"))   ; `nom` answers an interned symbol: nom? AND name?, an ATOM, never a chain
  ('x = (nom "x")) ('x = (nom 'x)) ('x = (2 nom "x"))  ; nom interns: an idempotent projection to the kind

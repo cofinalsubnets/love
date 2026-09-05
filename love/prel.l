@@ -7,7 +7,7 @@
    (co f x y) (f y x)                ; the argument-transpose
    flip co
    link? two?
-   intern name
+   name nom intern nom mint nom
    saturate sat
    link . >< .)                     ; the infix cons: (a >< b) and (a . b) are (. a b); glued ><x stays the cup-cap accessor (valence)
 (: : () ? () \ ())

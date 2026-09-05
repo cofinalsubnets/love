@@ -644,7 +644,7 @@ void code_fin(struct ai *g) {
 // ============================================================================
 // sym
 // ============================================================================
-// (intern s) -> the interned symbol named by string s; identity on any other arg.
+// the interning half of nom: string s -> the symbol it spells; identity on any other arg.
 // the empty spelling names nothing: (intern "") is ().
 lvm(lvm_intern) {
  if (strp(Sp[0])) {

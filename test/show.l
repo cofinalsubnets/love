@@ -29,7 +29,7 @@
   (: m (mint 0) ((show m) = (show m)))             ; stable: same mint, same face
   (: a (mint 0) b (mint 0) !((show a) = (show b))) ; distinct mints, distinct faces
   (nom? (mint 0))
-  (= "(mint " (snip (show (mint 'bar)) 0 6))       ; (mint 'bar) ignores its arg -- still a bare mint
+  ('bar = (mint 'bar))                             ; mint is nom: a name answers itself
 
   ; quote sugar: a chain (` x) prints as 'x
   (= "'foo"      (show ''foo))

@@ -48,8 +48,6 @@
       (nif_snip          "snip"          3 lvm_snip)
       (nif_sound0        "sound0"        1 lvm_sound0)
       (nif_string        "string"        1 lvm_string)
-      (nif_intern        "name"          1 lvm_intern)
-      (nif_mint          "mint"          1 lvm_mint)
       (nif_nomctor       "nom"           1 lvm_nomctor)
       (nif_spin          "spin"          1 lvm_spin)
       (nif_peek          "peek"          2 lvm_peek)

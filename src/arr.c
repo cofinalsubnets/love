@@ -115,9 +115,10 @@ lvm(data_string_apply) {
 // applying a point: a named point acts as its spelling, so it rides the text lane whole.
 // an anonymous point -- a gensym, and () -- has no spelling to act as, so nothing is
 // there to answer with: (). name? and mint? partition nom? and () is in neither.
+// (p x): a point is its own constant -- a name or a mint answers itself, () stays ()
 lvm(data_sym_apply) {
- if (namep(word(Ip))) ai_musttail return Ap(data_string_apply, g);
- Ip = cell(*++Sp), *Sp = ZeroPoint;
+ word self = word(Ip);
+ Ip = cell(*++Sp), *Sp = self;
  ai_musttail return Continue(); }
 
 // (n x): church-numeral application for the boxed tower -- the same
