@@ -46,12 +46,12 @@
  ; --- naive symbol substitution: replace symbol `old` by expr `new` throughout B. `old` is a fresh
  ;     gensym, so it never appears as a binder -- a leaf rewrite is fully hygienic. it RECURSES into a
  ;     previously-inserted `new` (which contains old), so stacked maps compose: (g (f e)). ---
- (sub old new B) (? (id? B old) new
+ (sub old new B) (? (= B old) new
                     (two? B)    (link (sub old new (cap B)) (sub old new (cup B)))
                     B)
 
  ; --- stage recognizers over source ---
- (head? x h) (&& (two? x) (id? (cap x) h))
+ (head? x h) (&& (two? x) (= (cap x) h))
  (map? P)    (head? P 'map)
  (filt? P)   (head? P 'filter)
  (prod? P)   (|| (map? P) (filt? P))
@@ -69,9 +69,9 @@
  (deffold x tag)                                        ; (foldl/foldr c z P)
    (: as (cup x) c (cap as) z (caup as) P (caup (cup as))
       e (mint 0) a (mint 0)
-      B0 (? (id? tag 'foldl) (ap2 c a e) (ap2 c e a))   ; foldl: (c acc elem); foldr: (c elem acc)
+      B0 (? (= tag 'foldl) (ap2 c a e) (ap2 c e a))   ; foldl: (c acc elem); foldr: (c elem acc)
       r  (peel B0 e a P)
-      hd (? (id? tag 'foldl) (lam2 a e (cap r)) (lam2 e a (cap r)))
+      hd (? (= tag 'foldl) (lam2 a e (cap r)) (lam2 e a (cap r)))
       [tag hd (forest z) (caup r)])
  (defeach x)                                            ; (each l f) -- effect; skip-value is ()
    (: as (cup x) l (cap as) f (caup as)
@@ -96,13 +96,13 @@
  ;     (incl. every '(..) source-list literal) is left whole. NB beta here assumes the stage lambda
  ;     does not SHADOW its own param -- sound for the simple element fns map/filter take; a general
  ;     pass would alpha-rename. the equivalence asserts run the residual through ev and would catch it. ---
- (special? h) (|| (id? h '?) (id? h '\) (id? h ':))
+ (special? h) (|| (= h '?) (= h '\) (= h ':))
  (simp x)
    (? (atom? x)                              x
-      (&& (id? (cap x) '\) (2 = (tally x)))  x                         ; (\ datum) -> quote, leave
+      (&& (= (cap x) '\) (2 = (tally x)))  x                         ; (\ datum) -> quote, leave
       (: y (link (simp (cap x)) (map simp (cup x))) h (cap y) as (cup y)
          (? (atom? h)                                            y
-            (&& (id? (cap h) '\) (&& (3 = (tally h)) (1 = (tally as))))  ; ((\ p B) arg) -> beta
+            (&& (= (cap h) '\) (&& (3 = (tally h)) (1 = (tally as))))  ; ((\ p B) arg) -> beta
                (simp (sub (caup h) (cap as) (cap (cuup h))))
             (&& (atom? (cap h)) (! (special? (cap h))))               ; ((op a..) x..) -> flatten
                (simp (link (cap h) (cat (cup h) as)))
@@ -125,7 +125,7 @@
  ;     noredex?: no lambda sits in operator position (the residual is FIRST-ORDER -- glaze-ready). ---
  (alls l)   (? (nul? l) 1 (? (cap l) (alls (cup l)) 0))
  (clean? x) (? (atom? x) 1 (prod? x) 0 (alls (map clean? x)))
- (noredex? x) (? (atom? x) 1 (&& (two? (cap x)) (id? (cap (cap x)) '\)) 0 (alls (map noredex? x)))
+ (noredex? x) (? (atom? x) 1 (&& (two? (cap x)) (= (cap (cap x)) '\)) 0 (alls (map noredex? x)))
  (firstorder? x) (&& (clean? x) (noredex? x))
 
  ; ============================ self-checks ============================

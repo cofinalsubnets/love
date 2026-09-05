@@ -53,20 +53,20 @@
                              ())
                         ; the refusal is asked by identity: `nil?` is a truth test, and
                         ; the digit 0 answers it as readily as a miss does
-                        (? (id? d ()) () (go (i + 1) (acc << 4 | d)))))
+                        (? (= d ()) () (go (i + 1) (acc << 4 | d)))))
        (go 0 0))
    (cpio-pad n) ((4 - n % 4) % 4)           ; the NULs after a name or a body
    (cpio-nuls k) (: (go i acc) (? (k <= i) acc (go (i + 1) (acc + string 0))) (go 0 ""))
 
    ; --- the kind, which lives in the mode here --------------------------------
-   (cpio-kmode k) (? (id? k 'dir) 16384 (id? k 'link) 40960 32768)
+   (cpio-kmode k) (? (= k 'dir) 16384 (= k 'link) 40960 32768)
    (cpio-kind m) (: t (m & 61440)
                     (? (t = 16384) 'dir (t = 40960) 'link 'file))
 
    ; --- writing ---------------------------------------------------------------
    (cpio-body e)                            ; what the member carries: a link says its target
     (: k (peep e 'kind 'file)
-       (? (id? k 'link) (peep e 'to "") (id? k 'dir) "" (peep e 'body "")))
+       (? (= k 'link) (peep e 'to "") (= k 'dir) "" (peep e 'body "")))
    (cpio-head ino nom mode mtime uid gid nb)
     (: nz (#nom + 1)
        h (cask 110)
@@ -89,7 +89,7 @@
            b (cpio-body e)
            nb #b
            mode (cpio-kmode (peep e 'kind 'file)
-                 | peep e 'mode (id? (peep e 'kind 'file) 'dir ? 493 420))
+                 | peep e 'mode (= (peep e 'kind 'file) 'dir ? 493 420))
            _ (say o (cpio-head i nom mode (peep e 'mtime 0)
                                (peep e 'uid 0) (peep e 'gid 0) nb))
            _ (say o (nom + string 0))
@@ -116,7 +116,7 @@
           nb (cpio-hex s (o + 54))
           uid (cpio-hex s (o + 22)) gid (cpio-hex s (o + 30))
           nz (cpio-hex s (o + 94))
-          (? (id? mode () || id? nb () || id? nz ()) ()
+          (? (= mode () || (= nb ()) || (= nz ())) ()
              (n < o + 110 + nz) ()
              (: nom (snip s (o + 110) (o + 110 + nz - 1))
                 b0 (o + 110 + nz + cpio-pad (110 + nz))
@@ -124,16 +124,16 @@
                    (n < b0 + nb) ()
                    (: kind (cpio-kind mode)
                       body (snip s b0 (b0 + nb))
-                      e (tar-entry nom kind (id? kind 'link ? "" body))
+                      e (tar-entry nom kind (= kind 'link ? "" body))
                       _ (pin e 'mode (mode & 4095))
                       _ (pin e 'mtime mtime)
                       _ (pin e 'uid uid) _ (pin e 'gid gid)
-                      _ (id? kind 'link && pin e 'to body)
+                      _ (= kind 'link && pin e 'to body)
                       [1 e (b0 + nb + cpio-pad nb)]))))))
    (cpio-unpack s)
     (: n #s
        (go o acc) (: r (cpio-read1 s n o)
-                     (? (id? r 'end) [1 (rev acc)]
+                     (? (= r 'end) [1 (rev acc)]
                         !r ()
                         (go <>>r (<>r . acc))))
        (go 0 ()))
@@ -159,10 +159,10 @@
               p (#nom ? (#root ? (root + "/" + nom) nom) root)
               kind (peep e 'kind 'file)
               _ (cpio-mkp p)
-              skip (!u && !(id? kind 'dir) && cpio-newer? p (peep e 'mtime 0))
+              skip (!u && !(= kind 'dir) && cpio-newer? p (peep e 'mtime 0))
               ok (? skip 1
-                    (id? kind 'dir) (: _ (mkdir p (peep e 'mode 493)) (cpio-there? p))
-                    (id? kind 'link) (: _ (cpio-there? p && unlink p)
+                    (= kind 'dir) (: _ (mkdir p (peep e 'mode 493)) (cpio-there? p))
+                    (= kind 'link) (: _ (cpio-there? p && unlink p)
                                          _ (symlink (peep e 'to "") p)
                                          (string? (readlink p)))
                     (: q (open p "w")

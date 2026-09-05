@@ -71,7 +71,7 @@
    acc ((: (g acc cl first)
           (: r (sound cl)
              (? (two? r) (g (first ? (show <r) (acc + " " + show <r)) >r 0)
-                (id? r 'torn) (say err "lcat: unfinished form in input", quit 1)
+                (= r 'torn) (say err "lcat: unfinished form in input", quit 1)
                 acc)))
         "" (slurp p) 1)
    _ (put out 34)                                      ; opening "

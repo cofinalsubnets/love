@@ -140,7 +140,7 @@
         (: lns (linesof s)
            (go rest acc)
             (: r (sound rest)
-               (? (id? r 'torn) acc
+               (? (= r 'torn) acc
                   (nil? (two? r)) acc
                   (: d <r rs >r a2 (cat acc (rev (hits d ())))
                      (? (two? rs) (go rs a2) a2))))

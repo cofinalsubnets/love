@@ -55,7 +55,7 @@
                        ; the group lane: a first-order mutually recursive arith group under the frame, its tail
                        ; either (entry frame..) -- flat, no indirection -- or any arith over group calls, through
                        ; a synthetic ((__outer . frame) . tail) entry. post-feel every def is name (\ p.. B)
-                       (: pd (? (two? body && id? <body ':) (anat-defs >body) ())
+                       (: pd (? (two? body && (= <body ':)) (anat-defs >body) ())
                           dds (? pd <pd ())  tail (? pd <>pd ())
                           okshape (pd && two? tail && all (dd \ dd @ (n . '\ . _ . _) (nom? n) 0) dds)
                           gdefs (? okshape (map (dd \ (<dd . init >>dd) . last >>dd) dds) ())     ; ((name p..) . B)

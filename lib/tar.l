@@ -154,7 +154,7 @@
                      hd (tar-head e)
                      (? !hd ()
                         (: _ (sha256-feed h hd)
-                           ok (? (id? (tar-get e 'kind 'file) 'file) (tar-feed h buf e) 1)
+                           ok (? (= (tar-get e 'kind 'file) 'file) (tar-feed h buf e) 1)
                            (ok && go >xs)))))
        (go es ? (sha256-feed h (string (cask (tar-blk * 2))),
                  sha256-done h)))
@@ -169,7 +169,7 @@
                      h (tar-head e)
                      (? !h ()
                         (: _ (say j h)
-                           _ (? (id? (tar-get e 'kind 'file) 'file)
+                           _ (? (= (tar-get e 'kind 'file) 'file)
                                 (: body (tar-get e 'body "")
                                    (? #body (say j (tar-pad body)) 0))
                                 0)

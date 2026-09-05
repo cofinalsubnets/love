@@ -64,7 +64,7 @@
     (: (out! _) (: _ (flush out) (flush err))
        (trap (\ _ (: r (f as) _ (out! ()) (? (charm? r) r 0))) ()
              (\ a b (: _ (out! ())
-                       (? (id? a 'leave) b
+                       (? (= a 'leave) b
                           (: _ (say err ";; ") _ (print err a) _ (say err " ")
                              _ (print err b) _ (put err 10) _ (flush err) 1))))))
    ; complain on err and leave through the exit door with code c

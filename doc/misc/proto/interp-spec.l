@@ -28,10 +28,10 @@
 ;
 ; run:  out/host/love doc/misc/proto/interp-spec.l
 ((\ pd
-  (: (ev1 nd x) (? (id? (cap nd) 'lit) (caup nd)
-                   (id? (cap nd) 'var) x
-                   (id? (cap nd) 'add) (+ (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))
-                   (id? (cap nd) 'mul) (* (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))
+  (: (ev1 nd x) (? (= (cap nd) 'lit) (caup nd)
+                   (= (cap nd) 'var) x
+                   (= (cap nd) 'add) (+ (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))
+                   (= (cap nd) 'mul) (* (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))
                    0)
      P '(add (mul (add (mul (add (mul (lit 2) (var)) (lit 3)) (var)) (lit 5)) (var)) (lit 7))
      N 1000000

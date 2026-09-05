@@ -7,7 +7,7 @@
 ; excluded -- (tablet 0) must yield a fresh hash on every call under both compilers.
 (assert
  ; --- impure / identity-minting heads are not folded (fresh each call) ---
- (: (f _) (tablet 0) (nil? (id? (f 0) (f 0))))    ; `table` excluded -> distinct hashes
+ (: (f _) (tablet 0) (nil? (= (f 0) (f 0))))    ; `table` excluded -> distinct hashes
 
  ; --- arithmetic / numeric folds are correct (nested, bottom-up) ---
  (= 7  (+ 1 (* 2 3)))
@@ -47,7 +47,7 @@
  (= "aXcd" (: (f x) (pin "abcd" 1 x) (f 88)))     ; pin on text -- the functional update, folded whole
  (= '(1 X 3) (: (f x) (pin '(1 2 3) 1 x) (f 'X)))  ; ... and on a chain
  (= 8 (: (f x) (peep '(7 8 9) x 0) (f 1)))        ; peep reads a known chain at compile time
- (: (f _) (pin (tablet 0) 1 2) (nil? (id? (f 0) (f 0))))   ; a tablet is mutable: pin there is a write, never folded
+ (: (f _) (pin (tablet 0) 1 2) (nil? (= (f 0) (f 0))))   ; a tablet is mutable: pin there is a write, never folded
  (= 256 (: (f x) ('(7 8 9) 1 x) (f 2)))       ; ... and indexes: ('(7 8 9) 1) folds to 8, leaving (8 x)
  (nil? (: (f x) ((link 1 2) x) (f (\ a b (a + b)))))  ; a lambda operand takes the default action
  ; and a numeral whose answer outgrows a charm stays residual rather than baking into the image:
@@ -110,7 +110,7 @@
     (: _ (pin bs-ctr 0 0) r (bs-drop (bs-bump 0) 7)
        (&& (= 7 r) (= 1 (peep bs-ctr 0 0))))
     ; identity-minting arg: bound once, so the two reads see one mint
-    (: (bs-same t) (id? t t) (bs-same (tablet 0)))
+    (: (bs-same t) (= t t) (bs-same (tablet 0)))
     ; under-saturated + impure: declined -- the partial's effect fires at build time, once
     (: _ (pin bs-ctr 0 0) p (bs-mix 3 (bs-bump 0))
        (&& (= 9 (p 5)) (= 1 (peep bs-ctr 0 0))))

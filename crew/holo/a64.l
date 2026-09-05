@@ -545,7 +545,7 @@
         [('ivac >< sreg 1 0 7 6 1) ('zva >< sreg 1 3 7 4 1) ('cvac >< sreg 1 3 7 10 1)
           ('cvau >< sreg 1 3 7 11 1) ('civac >< sreg 1 3 7 14 1)])
    a64-at-ops (tabof [('s1e1r >< sreg 1 0 7 8 0) ('s1e1w >< sreg 1 0 7 8 1)])
-   (a64-sysrt t) (? (id? t 'zr) 31 (rn t))
+   (a64-sysrt t) (? (= t 'zr) 31 (rn t))
    (a64-sys tab bad op t) (le32 (0xD5000000 | (look tab op bad | a64-sysrt t)))
 
    ;; exception generation: one shape, Dxxx | (imm16 << 5) | ll. `dbrk` is a64's hlt -- the

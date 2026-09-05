@@ -129,10 +129,10 @@
                 rglyphs))
 
 ; --- normalizing an inl: adjacent texts are one text (the AST is the fixed point, so this matters) ---
-(: (mrg l) (? (atom? l) () (: h <l (id? <h 'text && 0 = tally <>h)) (mrg >l)     ; a \& contributes an empty text: drop it
+(: (mrg l) (? (atom? l) () (: h <l (= <h 'text && 0 = tally <>h)) (mrg >l)     ; a \& contributes an empty text: drop it
               (atom? >l) (<l . ())
               (: a <l b <>l
-               (id? <a 'text && id? <b 'text ? (mrg (['text (<>a + <>b)] . >>l))
+               (= <a 'text && (= <b 'text) ? (mrg (['text (<>a + <>b)] . >>l))
                 (a . mrg >l))))
    ; ..and the same at block level: two adjacent lists of one kind are one list. markdown's
    ; own loose-list rule says so (`- a` blank `- b` is one list), html would spell them as two
@@ -143,7 +143,7 @@
    (bmrg l) (? (atom? l) ()
                (atom? >l) (<l . ())
                (: a <l b <>l
-                  (? (id? <a <b && member? <a '(bullets numbers deflist))
+                  (? (= <a <b && member? <a '(bullets numbers deflist))
                      (bmrg ([<a (<>a + <>b)] . >>l))
                      (a . bmrg >l))))
    plain (strcat * map caup)                        ; an inl of pure texts back to a string
@@ -427,7 +427,7 @@
               (".RI" (text em) 0) (".SB" (strong) 1) (".SM" (text) 1) (".B" (strong) 1) (".I" (em) 1))
    (macinfo m) ((: (g l) (? (atom? l) () (<<l = m) (>(<l)) (g >l))) fontmacs)
    (wrapf f l) (f @ ('strong || 'em) [[f l]] l)
-   (allplain? l) (? (atom? l) 1 (id? <<l 'text) (allplain? >l) 0)
+   (allplain? l) (? (atom? l) 1 (= <<l 'text) (allplain? >l) 0)
    (argl a f)    (: l (rfinl a) (? (allplain? l) (wrapf f l) l))     ; an explicit \f inside the arg wins
    (argls as fs i sp) (? (atom? as) ()
                          (: h (argl <as (fs (i % tally fs)))
@@ -481,7 +481,7 @@
 ; one and a shower from the other, so the table is the whole of it. a fourth surface adds
 ; a row and nothing else.
 (: surfaces [['md mdread mdshow] ['ht htread htshow] ['rf rfread rfshow]]
-   (srow k)   ((: (g l) (? (atom? l) () (id? <<l k) <l (g >l))) surfaces)
+   (srow k)   ((: (g l) (? (atom? l) () (= <<l k) <l (g >l))) surfaces)
    (reader-of k) <>(srow k)
    (shower-of k) <>>(srow k)
    (convert from to s) ((shower-of to) ((reader-of from) s))

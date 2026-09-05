@@ -24,7 +24,7 @@
 ; the free name is the instrument (bleaf), and file mode's help quits on every scare:
 ; a missing read answers the zero point and the case runs on, everything else stops the file
 (: fzhelp (heard ())
-   _ (hear (\ a b (id? a 'missing ? () (fzhelp a b)))))
+   _ (hear (\ a b (= a 'missing ? () (fzhelp a b)))))
 
 (: (gfz0 i) (i + 1)                                ; globals the call-out lane can resolve: two arithmetic,
    (gfz1 i) (i * 2)                                ; two handing back a value the integer lane cannot hold

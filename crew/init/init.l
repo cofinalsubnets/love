@@ -37,7 +37,7 @@
    (u-name u) (u 0)   (u-kind u) (u 1)   (u-cmd u) (u 2)
    (u-restart u) (u 3) (u-deps u) (u 4)
    (find units name) (? !units ()                    ; the unit with this name, or ()
-                        (? (id? (u-name (cap units)) name) (cap units)
+                        (? (= (u-name (cap units)) name) (cap units)
                            (find (cup units) name)))
    (rev l) (foldl (\ a x (link x a)) () l)            ; prepend-fold = reverse
 
@@ -45,7 +45,7 @@
    ; 'down). mutable (a book), the one place state is shared while units come and go;
    ; `snap` reads it back to the honest list for the checkpoint. a unit is "started"
    ; once it is up (a service running) or done (a oneshot that completed).
-   (up? reg name) (: s (peep reg name 'down) (? (id? s 'up) 1 (id? s 'done)))
+   (up? reg name) (: s (peep reg name 'down) (? (= s 'up) 1 (= s 'done)))
 
    ; --- the watchdog: supervise one service (Restart=) --- twirl the thunk (the modeled
    ; process); if it faults, the `help` below welps the task to (), so `catch` comes back
@@ -58,7 +58,7 @@
         r (catch p)
         (? r 1                                        ; clean -> running
            (: n (+ 1 (peep cnt name 0)) _ (pin cnt name n)
-              (? (? (id? policy 'no) 0 (< n tries-cap))
+              (? (? (= policy 'no) 0 (< n tries-cap))
                  (: _ (note (+ "    " (+ (show name) (+ " crashed -> restart #" (show n)))))
                     (supervise name thunk policy cnt))
                  (: _ (note (+ "    " (+ (show name) " gave up"))) ())))))
@@ -69,7 +69,7 @@
    ; unit's status pinned.
    (start1 reg cnt u)
      (: name (u-name u)
-        (? (id? (u-kind u) 'oneshot)
+        (? (= (u-kind u) 'oneshot)
              (: res  (hark (u-cmd u))                  ; real child (src/main.c fork+exec+wait)
                 code (cap res)  text (cup res)         ; (exit . stdout)
                 _    (note (+ "  [oneshot] " (+ (show name) (+ " -> \"" (+ text (+ "\" (exit " (+ (show code) ")")))))))
@@ -130,7 +130,7 @@
                    u  (find units nm)
                    n  (+ 1 (peep tries nm 0))  _ (pin tries nm n)
                    _  (note (+ "  exit " (+ (show nm) (+ " status=" (show st)))))
-                   (? (? (= st 0) 0 (? (id? (u-restart u) 'on-fail) (< n tries-cap) 0))
+                   (? (? (= st 0) 0 (? (= (u-restart u) 'on-fail) (< n tries-cap) 0))
                         (: _ (note (+ "    restart " (+ (show nm) (+ " #" (show n)))))
                            _ (rstart pids u)
                            (rloop units pids tries live (- steps 1)))         ; still live
@@ -166,7 +166,7 @@
               u  (find units nm)
               n  (+ 1 (peep tries nm 0))  _ (pin tries nm n)
               _  (note (+ "  glean " (+ (show nm) (+ " status=" (show st)))))
-              (? (? (= st 0) 0 (? (id? (u-restart u) 'on-fail) (< n tries-cap) 0))
+              (? (? (= st 0) 0 (? (= (u-restart u) 'on-fail) (< n tries-cap) 0))
                    (: _ (note (+ "    restart " (show nm))) _ (rstart pids u)
                       (harvest units pids tries live))
                    (harvest units pids tries (- live 1))))))
@@ -176,8 +176,8 @@
      (? (< live 1) (note "  all services settled")
         (: _  (await sig)                                ; park -- cooperative; merges with the heartbeat
            ev (sigtake sig)
-           (? (id? (cap ev) sig-term) (note "  SIGTERM: a queued EVENT, not a kill -> shut down")
-              (id? (cap ev) sig-chld) (watch sig units pids tries (harvest units pids tries live))
+           (? (= (cap ev) sig-term) (note "  SIGTERM: a queued EVENT, not a kill -> shut down")
+              (= (cap ev) sig-chld) (watch sig units pids tries (harvest units pids tries live))
               (watch sig units pids tries live))))
 
    (perceive _)
@@ -218,7 +218,7 @@
         _ (: d "/sys/fs/cgroup/love.demo"
              _ (mkdir d 493)
              r (cg-write (+ d "/cgroup.procs") (+ (show (getpid 0)) "\n"))
-             (note (+ "  place self in " (+ d (? (id? r 'ok) " -> ok" " -> needs root / a delegated subtree")))))
+             (note (+ "  place self in " (+ d (? (= r 'ok) " -> ok" " -> needs root / a delegated subtree")))))
         0))
 
 ; --- boot as PID 1 (a container) ------------------------------------------------

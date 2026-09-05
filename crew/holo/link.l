@@ -1239,7 +1239,7 @@
                       w (foldl (\ a l (: c <a f <>a
                                          n (ldlay1 l c objs)
                                          _ (pin lpos l [c f (n - c)])
-                                         [n (? (id? l 'bss) f (f + n - c))]))
+                                         [n (? (= l 'bss) f (f + n - c))]))
                                [start fo] ls)
                       (go >rs (? copy? cur <w) <>w (copied || copy?)
                           ([kind start fo (<>w - fo) (<w - start) ls fl] . acc))))

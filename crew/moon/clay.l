@@ -260,7 +260,7 @@
         ('cast ty x)
          (: dflt ("(" + cty ty "" + ") " + ce x 90)
             (x @ ('num v && 0 <= v)
-                 (: sfx (? (id? ty 'uint && v <= 4294967295) "u" (id? ty 'ulong) "ul" ())
+                 (: sfx (? (= ty 'uint && v <= 4294967295) "u" (= ty 'ulong) "ul" ())
                     (? sfx (cnum v + sfx) dflt))
                  dflt))
         ('szof x) ("sizeof(" + (? (ctype? x) (cty x "") (ce x 0)) + ")")
@@ -268,7 +268,7 @@
         ('call f as) (ce f 100 + "(" + sepby ", " (map (\ x (ce x 21)) as) + ")")
         ; (dot (deref x) "f") is what `x->f` parses to, so print the arrow back --
         ; unless the deref is an index, where `a[i].f` has already spent it
-        ('dot t f) (? (two? t && id? <t 'deref && !(cidx? t)) (ce <>t 100 + "->" + f)
+        ('dot t f) (? (two? t && (= <t 'deref) && !(cidx? t)) (ce <>t 100 + "->" + f)
                       (ce t 100 + "." + f))
         ('init _) (cinit e 0)
         ('clit ty x) ("(" + cty ty "" + ") " + craw x)
@@ -321,7 +321,7 @@
    ; copen lays a header line and the body under it; cclose lays the closer, and its
    ; tail is what lets `}` keep company -- ` else` and ` while (c);` hang off the same
    ; brace. a non-block body has no brace, so the tail falls to its own line.
-   (blk? s) (two? s && id? <s 'blk)
+   (blk? s) (two? s && (= <s 'blk))
    (copen n pre hdr s)
     (? (blk? s) (line n (pre + hdr + " {") + join (map (\ x (cstmt x (n + 1))) <>s))
        (line n (pre + hdr) + cstmt s (n + 1)))
@@ -375,8 +375,8 @@
    ; a for's first clause carries no `;`, and arrives wrapped as a statement node --
    ; `(decl ..)` or `(expr ..)` -- so both are unwrapped here. an empty clause is ().
    (cfor a) (? !(two? a) ""
-               (id? <a 'decl) (cdecls <>a)
-               (id? <a 'expr) (ce <>a 0)
+               (= <a 'decl) (cdecls <>a)
+               (= <a 'expr) (ce <>a 0)
                (ce a 0))
    (casmop l) (? !(two? l) " :"
                  (" : " + sepby ", " (map (\ o (cstrlit <o + "(" + ce <>o 0 + ")")) l)))
@@ -422,7 +422,7 @@
         ('edef nm ks)
          (line 0 ("enum " + (? (string? nm || name? nm) (ctag nm + " ") "") + "{ "
                   + sepby ", " (map cconst ks) + " };"))
-        ('sdef nm fs u) (csdef nm fs (id? u 'union ? "union" "struct"))
+        ('sdef nm fs u) (csdef nm fs (= u 'union ? "union" "struct"))
         ('sdef nm fs) (csdef nm fs "struct")
         ('sassert e msg)
          (line 0 ("_Static_assert(" + ce e 21 + ", " + cstrlit (ctag msg) + ");"))
@@ -448,7 +448,7 @@
    (citems l) (: (go m) (? !(two? m) "" (cseq (ctop1 <m) (go >m)))
                  (go l))
    ; the top-level dispatch, shared by clay-show and by a cpp arm's body
-   (ctop1 x) (? (two? x && id? <x 'fn && (2 < tally >x)) (cfn x) (ctop x))
+   (ctop1 x) (? (two? x && (= <x 'fn) && (2 < tally >x)) (cfn x) (ctop x))
 
    ; --- what cannot be said ------------------------------------------------------
    ; the forms carrying strictly less than C needs, found in one pass up front so
@@ -466,33 +466,33 @@
    (clay-unsaid c)
     (: (go x)
         (? !(two? x) ()
-           (id? <x 'tdef && !(two? >x))
+           (= <x 'tdef && !(two? >x))
             (gripe "(tdef) carries nothing -- a typedef, struct or _Static_assert cparse could not keep")
            (member? <x '(decl sdecl) && !(two? <>x))
             (gripe ("(" + string <x + " ()) declared no object -- the tag or the function name is not in the node"))
-           (id? <x 'vastart && !(two? >>x))
+           (= <x 'vastart && !(two? >>x))
             (gripe "(vastart ap) lost va_start's last named parameter at parse")
-           (id? <x 'struct && !(cident? <>x))
+           (= <x 'struct && !(cident? <>x))
             (gripe ("(struct " + show <>x + ") -- an anonymous tag is not a C identifier"))
-           (id? <x 'flo && !(cfinite? <>x))
+           (= <x 'flo && !(cfinite? <>x))
             (gripe ("(flo " + show <>x + ") -- C has no literal for an infinity or a nan"))
            ; C has no empty enum: `enum q { };` is a syntax error, not a thin lattice
-           (id? <x 'edef && !(two? <>>x))
+           (= <x 'edef && !(two? <>>x))
             (gripe ("(edef " + show <>x + " ()) has no constants -- C has no empty enum"))
            ; ..and no empty struct either, for the same reason
-           (id? <x 'sdef && !(two? <>>x))
+           (= <x 'sdef && !(two? <>>x))
             (gripe ("(sdef " + show <>x + " ()) has no members -- C has no empty struct"))
-           (id? <x 'sdef && !(cident? <>x))
+           (= <x 'sdef && !(cident? <>x))
             (gripe ("(sdef " + show <>x + ") -- an anonymous tag is not a C identifier"))
            ; a macro is named by an identifier, and `#if` with no arm is a syntax
            ; error rather than a group that is always off
            (member? <x '(cpp-def cpp-undef) && !(cident? <>x))
             (gripe ("(" + string <x + " " + show <>x + ") -- a macro name is an identifier"))
-           (id? <x 'cpp-if && !(two? <>x))
+           (= <x 'cpp-if && !(two? <>x))
             (gripe "(cpp-if ()) has no arms -- C has no #if without a condition")
            ; restrict qualifies a pointer or nothing; anywhere else the shower would
            ; have to drop it in silence, which is pretending.
-           (id? <x 'restrict && !(cptr? <>x))
+           (= <x 'restrict && !(cptr? <>x))
             (gripe "(restrict t) -- C restricts only a pointer")
            (: (kids l) (? !(two? l) ()
                           (: e <l v (? (two? e) (? (name? <e) (go e) (kids e)) ())
@@ -508,7 +508,7 @@
     (: u (clay-unsaid c)
        (? u u
           !(two? c) (gripe "clay-show wants a form")
-          (id? <c 'prog) (citems <>c)
+          (= <c 'prog) (citems <>c)
           (ctop1 c)))
    ; (fn name params body [ret [attrs]]) -- the trailing two are clay's and cparse
    ; hands three, so the three real spellings are three arms over one layout. an

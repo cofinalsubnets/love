@@ -149,7 +149,7 @@
    ; `use 'forge` costs ~24 ms of parse and eval and a tar member is a few hundred bytes,
    ; so below the floor the twin is the better program and the finder must not reach for
    ; the kernel at all. Above it, having reached once, the answer is cached.
-   _ (? (id? (gz-finder (gz-floor - 1)) gz-find) 0 (die "a small input forged anyway"))
-   _ (? (id? (gz-finder (gz-floor + 1)) nat) 0 (die "the forged finder is not cached"))
+   _ (? (= (gz-finder (gz-floor - 1)) gz-find) 0 (die "a small input forged anyway"))
+   _ (? (= (gz-finder (gz-floor + 1)) nat) 0 (die "the forged finder is not cached"))
    _ (say out "gzfind: 0 failed\n")
    0)

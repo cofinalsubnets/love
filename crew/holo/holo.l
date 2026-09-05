@@ -184,7 +184,7 @@
                       (scare 'arity-skew op))
    (lower-via ems ins)
       (: op <ins  r (peep ems op 'no)
-         _ (? (id? r 'no) (scare 'bad-op op) 0)
+         _ (? (= r 'no) (scare 'bad-op op) 0)
          (feed >r >ins <r op))
 
    ;; -- the backend registry. a backend is a tablet { 'lower 'patch }, plus 'refix where the

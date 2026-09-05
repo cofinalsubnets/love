@@ -43,83 +43,83 @@
    shov '((sub sp sp 8) (st sp 0 r0))
    shpo '((ld r1 sp 0) (add sp sp 8))
    (cv e env)
-    (? (id? <e 'k) [['li 'r0 <>e]]
-       (id? <e 'v) (: s (site <>e env)
-                      (? (id? <>s 'home) [['mov 'r0 <>>s]] [['ld 'r0 'r4 <>>s]]))
-       (id? <e 'bin) ((cv <>>e env) + shov + (cv <>>>e env) + shpo + [[<>e 'r0 'r1 'r0]])
-       (id? <e 'rel) ((cv <>>e env) + shov + (cv <>>>e env) + shpo
+    (? (= <e 'k) [['li 'r0 <>e]]
+       (= <e 'v) (: s (site <>e env)
+                      (? (= <>s 'home) [['mov 'r0 <>>s]] [['ld 'r0 'r4 <>>s]]))
+       (= <e 'bin) ((cv <>>e env) + shov + (cv <>>>e env) + shpo + [[<>e 'r0 'r1 'r0]])
+       (= <e 'rel) ((cv <>>e env) + shov + (cv <>>>e env) + shpo
                       + [['cmp 'r1 'r0] ['set <>e 'r0]])
-       (id? <e 'and) (: lf (nlab 0) l2 (nlab 0)
+       (= <e 'and) (: lf (nlab 0) l2 (nlab 0)
                         ((cv <>e env) + [['cmp 'r0 0] ['br 'eq lf]] + (cv <>>e env)
                          + [['cmp 'r0 0] ['br 'eq lf] ['li 'r0 1] ['jmp l2]
                              ['label lf] ['li 'r0 0] ['label l2]]))
-       (id? <e 'call) ((argcv <>>e '(r6 r5) env) + [['call <>e]])
+       (= <e 'call) ((argcv <>>e '(r6 r5) env) + [['call <>e]])
        [['bad]])
    (argcv as ss env) (? !(two? as) ()
                         ((cv <as env) + [['mov <ss 'r0]] + (argcv >as >ss env)))
    (cvs s env)                                     ; statements: asn / if / ret
-    (? (id? <s 'asn)
+    (? (= <s 'asn)
        (: lv <>s
-          (? (id? <lv 'loc)
+          (? (= <lv 'loc)
              (: e9 (site <>lv env)
                 ((cv <>>s env)
-                 + (? (id? <>e9 'home) [['mov <>>e9 'r0]] [['st 'r4 <>>e9 'r0]])))
+                 + (? (= <>e9 'home) [['mov <>>e9 'r0]] [['st 'r4 <>>e9 'r0]])))
              ((cv <>lv env) + shov + (cv <>>s env) + shpo + [['st 'r1 <>>lv 'r0]])))
-       (id? <s 'if)
+       (= <s 'if)
        (: cf (cv <>s env) le (nlab 0) ld (nlab 0)
           (cf + [['cmp 'r0 0] ['br 'eq le]] + (cvs <>>s env)
               + [['jmp ld] ['label le]] + (cvs <>>>s env) + [['label ld]]))
-       (id? <s 'ret) ((cv <>s env) + [['ret]])
+       (= <s 'ret) ((cv <>s env) + [['ret]])
        [['bad]])
 
    ; --- ck: the destination generator. the die is ev's k defunctionalized; rd9 is
    ; karg/kim fusion worn by a register machine (an operand that already sits
    ; somewhere costs zero forms). a subexpression only ever writes its own die and
    ; scratches strictly below it in the pool -- the alsafe? discipline's shape. ---
-   (negrel r) (? (id? r 'lt) 'ge (id? r 'ge) 'lt (id? r 'le) 'gt
-                 (id? r 'gt) 'le (id? r 'eq) 'ne 'eq)
+   (negrel r) (? (= r 'lt) 'ge (= r 'ge) 'lt (= r 'le) 'gt
+                 (= r 'gt) 'le (= r 'eq) 'ne 'eq)
    (brto rel lt lf)
-    (? (id? lf 'fall) [['br rel lt]]
-       (id? lt 'fall) [['br (negrel rel) lf]]
+    (? (= lf 'fall) [['br rel lt]]
+       (= lt 'fall) [['br (negrel rel) lf]]
        [['br rel lt] ['jmp lf]])
    (rd9 e env pool)                                ; operand read -> (x forms)
-    (? (id? <e 'k) [<>e ()]
-       (id? <e 'v) (: s9 (site <>e env)
-                      (? (id? <>s9 'home) [<>>s9 ()]
+    (? (= <e 'k) [<>e ()]
+       (= <e 'v) (: s9 (site <>e env)
+                      (? (= <>s9 'home) [<>>s9 ()]
                          (: s <pool [s [['ld s 'r4 <>>s9]]])))
        (: s <pool [s (ck e env >pool ['reg s])]))
    (ck e env pool w)
-    (? (id? w 'tail)
-       (? (id? <e 'call) ((argck <>>e '(r6 r5) env pool) + [['jmp <>e]])
+    (? (= w 'tail)
+       (? (= <e 'call) ((argck <>>e '(r6 r5) env pool) + [['jmp <>e]])
           ((ck e env pool ['reg 'r0]) + [['ret]]))
        (: w9 (? (two? w) w ['reg 'r0])
-          (? (id? <w9 'reg)
+          (? (= <w9 'reg)
              (: r <>w9
-                (? (id? <e 'k) [['li r <>e]]
-                   (id? <e 'v) (: s9 (site <>e env)
-                                  (? (id? <>s9 'home)
-                                     (? (id? <>>s9 r) () [['mov r <>>s9]])
+                (? (= <e 'k) [['li r <>e]]
+                   (= <e 'v) (: s9 (site <>e env)
+                                  (? (= <>s9 'home)
+                                     (? (= <>>s9 r) () [['mov r <>>s9]])
                                      [['ld r 'r4 <>>s9]]))
-                   (id? <e 'bin) (: pb (rd9 <>>>e env pool)
+                   (= <e 'bin) (: pb (rd9 <>>>e env pool)
                                     ((ck <>>e env pool ['reg r]) + <>pb + [[<>e r r <pb]]))
-                   (id? <e 'rel) (: pa (rd9 <>>e env pool) pb (rd9 <>>>e env >pool)
+                   (= <e 'rel) (: pa (rd9 <>>e env pool) pb (rd9 <>>>e env >pool)
                                     (<>pa + <>pb + [['cmp <pa <pb] ['set <>e r]]))
-                   (id? <e 'call) ((argck <>>e '(r6 r5) env pool) + [['call <>e]]
-                                   + (? (id? r 'r0) () [['mov r 'r0]]))
+                   (= <e 'call) ((argck <>>e '(r6 r5) env pool) + [['call <>e]]
+                                   + (? (= r 'r0) () [['mov r 'r0]]))
                    [['bad]]))
-             (id? <w9 'mem)
+             (= <w9 'mem)
              (: b <>w9 o <>>w9
-                (? (id? <e 'k) [['si b o <>e]]
-                   (id? <e 'v) (: s9 (site <>e env)
-                                  (? (id? <>s9 'home) [['st b o <>>s9]]
+                (? (= <e 'k) [['si b o <>e]]
+                   (= <e 'v) (: s9 (site <>e env)
+                                  (? (= <>s9 'home) [['st b o <>>s9]]
                                      (: s <pool
                                         ((ck e env >pool ['reg s]) + [['st b o s]]))))
                    (: s <pool ((ck e env >pool ['reg s]) + [['st b o s]]))))
-             (id? <w9 'br)
+             (= <w9 'br)
              (: lt <>w9 lf <>>w9
-                (? (id? <e 'rel) (: pa (rd9 <>>e env pool) pb (rd9 <>>>e env >pool)
+                (? (= <e 'rel) (: pa (rd9 <>>e env pool) pb (rd9 <>>>e env >pool)
                                     (<>pa + <>pb + [['cmp <pa <pb]] + (brto <>e lt lf)))
-                   (id? <e 'and) ((ck <>e env pool ['br 'fall lf]) + (ck <>>e env pool w9))
+                   (= <e 'and) ((ck <>e env pool ['br 'fall lf]) + (ck <>>e env pool w9))
                    (: pa (rd9 e env pool)
                       (<>pa + [['cmp <pa 0]] + (brto 'ne lt lf)))))
              [['bad]])))
@@ -127,24 +127,24 @@
                              ((ck <as env pool ['reg <ss]) + (argck >as >ss env pool)))
    (base9 lv env pool)                             ; a store's base: a homed obj ALIASES
     (: obj <>lv                                    ; its home -- zero forms
-       (? (id? <obj 'v) (: s8 (site <>obj env)
-                           (? (id? <>s8 'home) [<>>s8 ()]
+       (? (= <obj 'v) (: s8 (site <>obj env)
+                           (? (= <>s8 'home) [<>>s8 ()]
                               (: s <pool [s [['ld s 'r4 <>>s8]]])))
           (: s <pool [s (ck obj env >pool ['reg s])])))
    (cks s env pool)
-    (? (id? <s 'asn)
+    (? (= <s 'asn)
        (: lv <>s
-          (? (id? <lv 'loc)
+          (? (= <lv 'loc)
              (: e9 (site <>lv env)
-                (? (id? <>e9 'home) (ck <>>s env pool ['reg <>>e9])
+                (? (= <>e9 'home) (ck <>>s env pool ['reg <>>e9])
                    (ck <>>s env pool ['mem 'r4 <>>e9])))
              (: b9 (base9 lv env pool)
                 (<>b9 + (ck <>>s env >pool ['mem <b9 <>>lv])))))
-       (id? <s 'if)
+       (= <s 'if)
        (: le (nlab 0) ld (nlab 0)
           ((ck <>s env pool ['br 'fall le]) + (cks <>>s env pool)
            + [['jmp ld] ['label le]] + (cks <>>>s env pool) + [['label ld]]))
-       (id? <s 'ret) (ck <>s env pool 'tail)
+       (= <s 'ret) (ck <>s env pool 'tail)
        [['bad]])
    P '(r10 r11))                                   ; the scratch pool (clear of seats/homes)
 
@@ -183,8 +183,8 @@
 (: s4 '(ret (call f ((v x) (k 3)))) e4 '((x home r8)))
 (: a4 (cvs s4 e4)
    _ (assert (= 6 (tally a4))
-             (id? 'ret (cap (last a4)))
-             (id? 'call (cap (cap (cup (rev a4)))))
+             (= 'ret (cap (last a4)))
+             (= 'call (cap (cap (cup (rev a4)))))
              (= (cks s4 e4 P) '((mov r6 r8) (li r5 3) (jmp f)))))
 
 ; --- law: the degenerate die. () wants the protocol register, so a leaf compiles

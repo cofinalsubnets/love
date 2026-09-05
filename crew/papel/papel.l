@@ -131,13 +131,13 @@
 ; --- reading the middle: the site-level facts of one page ------------------------------
 ; every one of these is a walk over the AST, which is the point of having one.
 (: (itext l) (strcat (map (\ x (: t <x
-                                  (? (id? t 'text) <>x
-                                     (id? t 'code) <>x
-                                     (id? t 'strong || id? t 'em || id? t 'link) (itext <>x)
+                                  (? (= t 'text) <>x
+                                     (= t 'code) <>x
+                                     (= t 'strong || (= t 'em) || (= t 'link)) (itext <>x)
                                      ""))) l))
-   (head? b)  (id? <b 'head)
-   (pmeta d)  (: m (filter (\ b (id? <b 'meta)) d) (? (two? m) (<>(<m)) ()))
-   (pbody d)  (filter (\ b !(id? <b 'meta)) d)
+   (head? b)  (= <b 'head)
+   (pmeta d)  (: m (filter (\ b (= <b 'meta)) d) (? (two? m) (<>(<m)) ()))
+   (pbody d)  (filter (\ b !(= <b 'meta)) d)
    ; the heads, each with its deduped slug: ((level slug label) ..). one parse feeds both
    ; the anchors in the body and the toc beside it, so the two cannot drift apart.
    (pheads d) ((: (g l seen acc)
@@ -163,7 +163,7 @@
                  (? (t <= n) s
                     (: b ((: (f i) (? ((0 < i) && !(s (i - 1) = 32)) (f (i - 1)) i)) n)
                        (snip s 0 (? (0 < b) (b - 1) n) + "..."))))
-   (blurb d)  (: ps (filter (\ b (id? <b 'para)) d)
+   (blurb d)  (: ps (filter (\ b (= <b 'para)) d)
                  (? (two? ps) [['text (clip (itext (<>(<ps))) 160)]] ())))
 
 ; --- cross-links: .md becomes .html, but only inside the site --------------------------

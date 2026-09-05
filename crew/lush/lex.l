@@ -271,7 +271,7 @@
            (started || two? sg ? (('w . sh-rev sg) . toks) toks))
       ; substitute each heredoc placeholder word with its collected body
       (fixw t bods)
-        (id? <t 'w && two? >t && id? <<>t 'hd ?
+        (= <t 'w && two? >t && (= <<>t 'hd) ?
          (: e (sh-alook bods ><>t)
           ('w . (<e ? [('sq . >e)] [('dq . sh-dollarize >e)])))
          t)

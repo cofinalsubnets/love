@@ -173,7 +173,7 @@
                         (go >ds))))
        r (go dirs)
        (? (two? r) r
-          (id? vb ()) ()
+          (= vb ()) ()
           ; the carried source: the quote form beside its includer, then our
           ; headers -- the disk walk's own order
           (: k1 (pnorm (srcdir + name))
@@ -234,7 +234,7 @@
        (? (nom? n) (toos n)
           (udie 2 "cc: cannot tell which kernel this is -- name one with -os")))
    (osdefs os0)
-    (: os (id? os0 () ? (host-os 0) os0)
+    (: os (= os0 () ? (host-os 0) os0)
        (os @ 'none    ()
              'freebsd '("__FreeBSD__=14" "__unix__" "__unix")   ; stable/14, whose syscall.h the tables speak
              'netbsd  '("__NetBSD__" "__unix__" "__unix")
@@ -248,7 +248,7 @@
    (featdefs tgt)
     ('("__STDC_NO_ATOMICS__=1" "__STDC_NO_THREADS__=1"
        "__STDC_UTF_16__=1" "__STDC_UTF_32__=1")
-     + (? (id? tgt 'x64) () '("__STDC_NO_COMPLEX__=1"))
+     + (? (= tgt 'x64) () '("__STDC_NO_COMPLEX__=1"))
      + (? (member? tgt '(x64 a64)) () '("__STDC_NO_VLA__=1")))
    ; the gcc-shaped predefine table (doc/misc/moon-c-gaps: the predefine surface) --
    ; the <stdint>/<limits>/<float.h> family a library config reads instead of
@@ -369,7 +369,7 @@
    ; unsigned int on a64/arm32 (AAPCS) -- gcc's values, so a header's typedef
    ; lays the same type a gcc object carries.
    (wchdefs tgt)
-    (? (id? tgt 'a64 || arm32? tgt)
+    (? (= tgt 'a64 || arm32? tgt)
        '("__WCHAR_TYPE__=unsigned int" "__WCHAR_MAX__=0xffffffffU" "__WCHAR_MIN__=0U" "__WCHAR_WIDTH__=32")
        '("__WCHAR_TYPE__=int" "__WCHAR_MAX__=0x7fffffff" "__WCHAR_MIN__=(-__WCHAR_MAX__ - 1)" "__WCHAR_WIDTH__=32"))
    (stddefs tgt) ((? (arm32? tgt) stdt32 stdlp64) + wchdefs tgt + stdcommon)
@@ -397,7 +397,7 @@
                  ; surface on every kernel it serves -- so a source asking what it
                  ; may call asks this, never which kernel it is standing on.
                  + '("AiNolibc=1")
-                 + (? (id? dia 'moon) '("__moon__=1") ())   ; the dialect's own macro: extensions on
+                 + (? (= dia 'moon) '("__moon__=1") ())   ; the dialect's own macro: extensions on
                  +   ; ds9, not ds: a :-local shadows the param over the whole scope (the boxfix cell trap)
                  (? (member? tgt '(x64 a64)) ("__SIZEOF_INT128__=16" >< ds) ds))     ; the wide pair (gen's d128 lane); love.c's limb seam reads it, and gcc says the same on both
        ; `-` is read here and nowhere else, so every door onto a TU gets stdin for
@@ -408,7 +408,7 @@
        r (? (src = "-") [1 (slurp in)]
             (: q (uread src)
                (? (two? q) q
-                  (id? vb ()) ()
+                  (= vb ()) ()
                   (: h (peep vb src ()) (? (string? h) [1 h] ())))))
        _ (? (two? r) () (udie 1 ("cc: cannot open " + src)))
        lx (clexat (deftext ds9 + <>r) (1 - tally ds9))
@@ -761,8 +761,8 @@
    ; so os.c reads -os and only linux has an answer -- the BSDs there owe a compile, which
    ; refuses by #error rather than quietly linking linux's.
    (rtcarried home tgt os)
-    (? (id? os 'none) ()                                     ; freestanding owes no runtime
-       (id? tgt 'rv64 && member? os '(freebsd netbsd)) ()
+    (? (= os 'none) ()                                     ; freestanding owes no runtime
+       (= tgt 'rv64 && member? os '(freebsd netbsd)) ()
        (: nm (? (member? tgt '(x64 a64 rv64)) (string tgt) ())
           (? (! (string? nm)) ()
              (: z (runtime-gz nm)
@@ -859,12 +859,12 @@
        ; the old message led with the absent toolchain and prescribed "install the
        ; nest", which is the wrong repair for a program whose label is misspelled,
        ; and the two conditions read identically from here.
-       _ (? (two? owed && (!(string? home) && (id? vb ())))
+       _ (? (two? owed && (!(string? home) && (= vb ())))
             (udie 1 ("cc: undefined reference to " + qfew owed
                      + "; no runtime in reach to supply it either (looked in "
                      + mfew (mroots ()) + ") -- check the spelling, then the nest"))
             0)
-       (? (nostd || ((!(string? home)) && (id? vb ()))) ()
+       (? (nostd || ((!(string? home)) && (= vb ()))) ()
           (: pr (arpull "moon-runtime" (rtarch home tgt os vb) dt owed mach)
              ; the owe at termination is the answer: no member defines anything
              ; left in it, so it is exactly the set nothing anywhere defines --
@@ -876,7 +876,7 @@
                           'nostd nostd 'vb vb 'ni ni 'rdme rdme}))
     ; -os freebsd links on x64 only (the one lane with a table + mksys twin);
     ; any other tgt under it is refused rather than half-built.
-    (: _ (? (id? os 'freebsd && ! (id? tgt 'x64))
+    (: _ (? (= os 'freebsd && ! (= tgt 'x64))
             (udie 1 "cc: -os freebsd links x64 only for now") ())
        ars (filter dota? ins)
        srcs (map (\ f (? (dotc? f) [f (string (cc-objbytes f t))]
@@ -1122,7 +1122,7 @@
    ; nonsense sentence over every usage error and flatten its 2 to a 1.
    (moon-run as)
     (trap (\ x (: r (moon-cc x) (? (charm? r) r 0))) as
-          (\ a b (? (id? a 'leave) b
+          (\ a b (? (= a 'leave) b
                     (say err ("cc: internal error: " + show a + " " + show b + "\n"),
                      flush err,
                      1))))

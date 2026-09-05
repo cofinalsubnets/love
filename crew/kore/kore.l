@@ -84,7 +84,7 @@
           _ (? (hot? q) () (die ("as: cannot open " + src)))
           (rd x acc) (: r (sound x)
                       (? (two? r) (rd >r (<r >< acc))
-                         (id? r 'torn) (die ("as: unfinished form in " + src))
+                         (= r 'torn) (die ("as: unfinished form in " + src))
                          (rev acc)))
           ir (rd (slurp q) ())
           _ (? (two? ir) () (die ("as: no IR forms in " + src)))

@@ -21,15 +21,15 @@
 
 (assert
  ; --- a bounded join-semilattice, exhaustively over uk-codes ---
- (uk-all  (\ a     (id? (uk-jj a a) a)))                              ; idempotent
- (uk-all2 (\ a b   (id? (uk-jj a b) (uk-jj b a))))                    ; commutative
- (uk-all3 (\ a b c (id? (uk-jj (uk-jj a b) c) (uk-jj a (uk-jj b c))))) ; associative
- (uk-all  (\ a (&& (id? (uk-jj uk-bot a) a) (id? (uk-jj a uk-bot) a)))) ; bot the identity
- (uk-all  (\ a (&& (id? (uk-jj uk-top a) uk-top) (id? (uk-jj a uk-top) uk-top)))) ; top absorbs
+ (uk-all  (\ a     (= (uk-jj a a) a)))                              ; idempotent
+ (uk-all2 (\ a b   (= (uk-jj a b) (uk-jj b a))))                    ; commutative
+ (uk-all3 (\ a b c (= (uk-jj (uk-jj a b) c) (uk-jj a (uk-jj b c))))) ; associative
+ (uk-all  (\ a (&& (= (uk-jj uk-bot a) a) (= (uk-jj a uk-bot) a)))) ; bot the identity
+ (uk-all  (\ a (&& (= (uk-jj uk-top a) uk-top) (= (uk-jj a uk-top) uk-top)))) ; top absorbs
  ; --- str (the last code) is the incomparable branch: it joins up to top against
  ;     any numeric, so it is not the spine's max (that is the whole point of str) ---
- (id? (vof 0 '(numq 6)) (vof 0 'false))            ; str is not numeric
- (id? (uk-jj 6 1) uk-top))                         ; str `join` charm = top, not str
+ (= (vof 0 '(numq 6)) (vof 0 'false))            ; str is not numeric
+ (= (uk-jj 6 1) uk-top))                         ; str `join` charm = top, not str
 
 ; --- the bridge: kinds.l's four driver cases as uu idpath lemmas. these are real
 ;     kernel proof terms (paths over a computing join), so they export axiom-free

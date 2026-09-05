@@ -106,7 +106,7 @@
                                                     _ (say c (show v + "\n"))
                                                     _ (flush c)
                                                     (h >r))
-                                        (id? r 'torn) (go cl)
+                                        (= r 'torn) (go cl)
                                         (go ()))))
                         (pend + cl))))
        (go ()))

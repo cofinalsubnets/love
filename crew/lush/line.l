@@ -58,7 +58,7 @@
            (: prt (open p "r")
               (go acc)
                 (: ln (sh-getline prt)
-                   (? (id? ln 'eof) acc
+                   (? (= ln 'eof) acc
                       #ln (go (sh-expl ln . acc))
                       (go acc)))
               r (go ())
@@ -133,12 +133,12 @@
      (: _ (? #buf 0 (sh-reapbg 0))
         _ (say out (? #buf "> " ((cwd 0) + "$ ")))  _ (flush out)
         line (sh-getline in)
-        (? (id? line 'eof)
+        (? (= line 'eof)
            (: _ (? #buf (say err "lush: unexpected eof\n") 0) (puts "\n"))
            (: full (? #buf (buf + ("\n" + line)) line)
               pr (sh-parse-line full)
-              (? (id? <pr 'more) (sh-cooked full)
-                 (id? <pr 'err)
+              (? (= <pr 'more) (sh-cooked full)
+                 (= <pr 'err)
                    (: _ (say err ("lush: " + (>pr + "\n")))
                       _ (pin sh-status () 2) (sh-cooked ""))
                  (: _ (sh-eval-top full >pr) (sh-cooked ""))))))
@@ -148,13 +148,13 @@
    (sh-loop buf hist)
      (: _ (? #buf 0 (sh-reapbg 0))
         r (edlnc in (? #buf "> " (sh-prompt 0)) hist sh-complete)
-        (? (id? r 'eof) (: _ (raw 0) (puts "\n"))                 ; cooked, newline, end
+        (? (= r 'eof) (: _ (raw 0) (puts "\n"))                 ; cooked, newline, end
            (: line (slurp (tap <r)) nhist >r
               _ (? #line (sh-histput line) 0)
               full (? #buf (buf + ("\n" + line)) line)
               pr (sh-parse-line full)
-              (? (id? <pr 'more) (sh-loop full nhist)
-                 (id? <pr 'err)
+              (? (= <pr 'more) (sh-loop full nhist)
+                 (= <pr 'err)
                    (: _ (raw 0)
                       _ (say err ("lush: " + (>pr + "\n")))
                       _ (pin sh-status () 2)

@@ -37,11 +37,11 @@
    r (hark ["out/host/love" "wake" img drv])
    _ (assert (two? r) (<r = 0) (>r = "4242"))
 
-   ; ..and what the hash-cons did to the pair of each kind
+   ; ..and what the hash-cons did to the pair of casks: two equal casks stay two objects,
+   ; which a pin on one shows (the deduped lists cannot be told apart, and need not be)
    _ (: p (open drv "w")
-        _ (say p "(: _ (pin bake-dedup-c1 0 65) ok (? (id? bake-dedup-l1 bake-dedup-l2) ")
-        _ (say p "(? (id? bake-dedup-c1 bake-dedup-c2) 0 ")
-        _ (say p "((peep bake-dedup-c1 0 -1) = 65 && (peep bake-dedup-c2 0 -1) = 0) 1 0) 0) ")
+        _ (say p "(: _ (pin bake-dedup-c1 0 65) ok (? (= bake-dedup-l1 bake-dedup-l2) ")
+        _ (say p "(? ((peep bake-dedup-c1 0 -1) = 65 && (peep bake-dedup-c2 0 -1) = 0) 1 0) 0) ")
         _ (say p "_ (putn ok) (quit 0))")
         (close p))
    r2 (hark ["out/host/love" "wake" img drv])

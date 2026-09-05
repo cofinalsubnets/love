@@ -58,7 +58,7 @@
        (? (! (two? p)) 'noparse
           (: a <>p
              v (cok? a)
-             (? (! (id? v 1)) 'badshape
+             (? (! (= v 1)) 'badshape
                 (: t (cshow a)
                    (? (gripe? t) 'inexpr
                       (: b (front2 t)

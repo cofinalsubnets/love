@@ -75,7 +75,7 @@
    (sh-asn? segs)
      (? !(two? segs) ()
         (: h <segs
-           (? !(id? <h 'lit) ()
+           (? !(= <h 'lit) ()
               (: t >h p (sh-eqpos t 0)
                  (? !p ()
                     !(sh-asnname? (snip t 0 p)) ()
@@ -205,7 +205,7 @@
                         (? ((mn = "moon-run") || !ur) f (\ as (ur f as))))
    (sh-assoc w l) (? !(two? l) 0 (w = <<l) <l (sh-assoc w >l))
    (sh-imgfn w) (: v (peep sh-imgc w 'no)
-                   (? !(id? v 'no) v
+                   (? !(= v 'no) v
                       (: f (sh-imgask w) _ (pin sh-imgc w f) f)))
    ; --- the fork lane: an external word whose PATH winner is this binary runs in
    ; a forked child -- the warm heap rides, no exec, no wake. the img list's three
@@ -225,7 +225,7 @@
                      (&& (sh-cliline ()) (sh-ours? w)) 1
                      0)
    (sh-forkfn w) (: v (peep sh-forkc w 'no)
-                    (? !(id? v 'no) v
+                    (? !(= v 'no) v
                        (: f (sh-forkask w) _ (pin sh-forkc w f) f)))
    ; ..and three shapes the word alone cannot answer for, so they are asked per
    ; command. all three are settled before a heap exists, which is the one thing a
@@ -250,7 +250,7 @@
      (: args2 (? (two? args && (<args = "-r")) >args args)
         nms (? (two? args2) args2 ["REPLY"])
         ln (sh-getline in)
-        (? (id? ln 'eof) 1 (: _ (sh-readset nms ln 0 #ln) 0)))
+        (? (= ln 'eof) 1 (: _ (sh-readset nms ln 0 #ln) 0)))
    (sh-readset nms ln i n)
      (: i2 (skifs ln i n)
         (? !(two? >nms) (sh-setvar <nms (sh-rtrim (snip ln i2 n)))
@@ -361,7 +361,7 @@
         src (sh-unwords (? q >args args))
         (? !#src 0
            (: r (sh-loveval src)
-              (? (id? <r 'err) (sh-lovesay >r)
+              (? (= <r 'err) (sh-lovesay >r)
                  (: v >r
                     _ (? q 0 (puts ((sh-lovetext v) + "\n")))
                     (? v 0 1))))))
@@ -421,7 +421,7 @@
    ; a body is a plan (a closure), so two? cannot tell one from absence -- peep
    ; names the miss with a mint no stored value can pose as (spec.l's total test)
    (sh-fnof nm) (peep sh-funcs nm sh-nofn)
-   (sh-fn? nm) !(id? sh-nofn (sh-fnof nm))
+   (sh-fn? nm) !(= sh-nofn (sh-fnof nm))
 
    ; --- stage expansion + the spawn engines ------------------------------------
    (sh-makepipes n) (? (n < 1) () (pipe 0 . sh-makepipes (n - 1)))
@@ -432,7 +432,7 @@
    (sh-stagex cmds acc)
      (? !cmds [1 (sh-rev acc)]
         (: c <cmds
-           (? !(id? <c 'cmd)
+           (? !(= <c 'cmd)
               (sh-stagex >cmds ['a c () () () . acc])
               (: pk (sh-peel (sh-nth c 1) ())
                  argv (catmap sh-fields >pk)
@@ -440,7 +440,7 @@
                         (sh-bi? <argv) (sh-fn? <argv))
                     (sh-stagex >cmds ['a c () () () . acc])
                     (: rm (sh-rdmap (sh-nth c 2))
-                       (? (id? <rm 'err) (: _ (stclean acc) rm)
+                       (? (= <rm 'err) (: _ (stclean acc) rm)
                           (sh-stagex >cmds
                                      ['x argv (sh-nth rm 1) (sh-nth rm 2) (sh-nth rm 3) . acc]))))))))
    (stclean acc) (each acc (\ st (each (sh-nth st 3) close)))
@@ -451,7 +451,7 @@
    ; capture -- whatever we still hold would land after bytes it was said before.
    (sh-spawn1 st base allclose pg fgi)
      (: _ (flush out) _ (flush err)
-        (? (id? (sh-nth st 0) 'x)
+        (? (= (sh-nth st 0) 'x)
            (: w <(sh-nth st 1)
               fk (? (sh-forkok? (sh-nth st 1)) (sh-forkfn w) 0)
               (? fk
@@ -472,7 +472,7 @@
                           _ (signal sig-ttou 0) _ (signal sig-ttin 0)
                           ; any scare is the child's death, never a second shell:
                           ; 'leave carries the tool's status, the rest die at 1
-                          _ (hear (\ a b (? (id? a 'leave) (quit b)
+                          _ (hear (\ a b (? (= a 'leave) (quit b)
                                             (: _ (say err ";; ") _ (print err a)
                                                _ (say err " ") _ (print err b)
                                                _ (put err 10) (quit 1)))))
@@ -493,7 +493,7 @@
                     _ (each base (\ e (dup2 >e <e)))
                     _ (each allclose (\ fd (? (2 < fd) (close fd) 0)))
                     s (sh-eval (sh-nth st 1))
-                    (quit (? (charm? s) s (? (id? <s 'ret) >s 0))))
+                    (quit (? (charm? s) s (? (= <s 'ret) >s 0))))
                  p))))
    ; stage 0 may lead a pgrp + take the tty, the rest join; base map = pipe
    ; wiring, a stage's own redirects land after. lastout >= 0 sends the last
@@ -512,7 +512,7 @@
         (sh-leave st) st)
    (sh-pipeline cmds bg)
      (: sx (sh-stagex cmds ())
-        (? (id? <sx 'err) (cmderr >sx)
+        (? (= <sx 'err) (cmderr >sx)
            (: sts (sh-nth sx 1)
               n (#sts - 1)
               pipes (sh-makepipes n)
@@ -553,7 +553,7 @@
    (sh-withrs rs th)
      (? !(two? rs) (th ())
         (: rm (sh-rdmap rs)
-           (? (id? <rm 'err) (cmderr >rm)
+           (? (= <rm 'err) (cmderr >rm)
               (: fdmap (sh-nth rm 1) opens (sh-nth rm 2) wrs (sh-nth rm 3)
                  _ (sh-hwrite wrs)
                  saves (map (\ e (<e . dup <e)) fdmap)
@@ -568,7 +568,7 @@
    (sh-simple2 argv rs)
      (: _ (? (sh-xflag ()) (say err ("+ " + ((sh-unwords argv) + "\n"))) 0)
         fn (sh-fnof <argv)
-        (? !(id? sh-nofn fn) (sh-withrs rs (\ _ (sh-fncall fn argv)))
+        (? !(= sh-nofn fn) (sh-withrs rs (\ _ (sh-fncall fn argv)))
            (sh-bi? <argv)
              (: b (sh-withrs rs (\ _ (sh-builtin argv)))
                 (? (two? b) b                            ; brk/cnt/ret ride out
@@ -582,7 +582,7 @@
                 _ (pin sh-status () st)
                 (sh-echk st))
            (: rm (sh-rdmap rs)
-              (? (id? <rm 'err) (cmderr >rm)
+              (? (= <rm 'err) (cmderr >rm)
                  (: opens (sh-nth rm 2) wrs (sh-nth rm 3)
                     _ (flush out) _ (flush err)      ; see sh-spawn1: the child writes the fd straight
                     ; the redirects are already open, which is where a shell answers an
@@ -602,7 +602,7 @@
         _ (pin sh-pos () >argv)
         s (body ())
         _ (pin sh-pos () op)
-        (? (two? s && id? <s 'ret)
+        (? (two? s && (= <s 'ret))
            (: st >s _ (pin sh-status () st) st)
            s))
 
@@ -623,51 +623,51 @@
    (sh-plan a)
      (? !a (\ _ (sh-status ()))
         (: k <a
-           (? (id? k 'seq)
+           (? (= k 'seq)
                 (: p (sh-plan (sh-nth a 1)) q (sh-plan (sh-nth a 2))
                    (\ _ (: s (p ()) (? (two? s) s (q ())))))
-              (id? k 'and)
+              (= k 'and)
                 (: p (sh-plan (sh-nth a 1)) q (sh-plan (sh-nth a 2))
                    (\ _ (: s (sh-guarded p) (? (two? s) s (s = 0) (q ()) s))))
-              (id? k 'or)
+              (= k 'or)
                 (: p (sh-plan (sh-nth a 1)) q (sh-plan (sh-nth a 2))
                    (\ _ (: s (sh-guarded p) (? (two? s) s (s = 0) s (q ())))))
-              (id? k 'not)
+              (= k 'not)
                 (: p (sh-plan (sh-nth a 1))
                    (\ _ (: s (sh-guarded p)
                            (? (two? s) s
                               (: ns (? (s = 0) 1 0) _ (pin sh-status () ns) ns)))))
-              (id? k 'bg)                        ; a lone command backgrounds as a
+              (= k 'bg)                        ; a lone command backgrounds as a
                 (: b (sh-nth a 1)                ; pipeline of one
-                   cmds (? (id? <b 'pipe) (sh-nth b 1) [b])
+                   cmds (? (= <b 'pipe) (sh-nth b 1) [b])
                    (\ _ (sh-pipeline cmds 1)))
-              (id? k 'pipe) (: cmds (sh-nth a 1) (\ _ (sh-pipeline cmds 0)))
-              (id? k 'cmd)  (: pk (sh-peel (sh-nth a 1) ()) rs (sh-nth a 2)
+              (= k 'pipe) (: cmds (sh-nth a 1) (\ _ (sh-pipeline cmds 0)))
+              (= k 'cmd)  (: pk (sh-peel (sh-nth a 1) ()) rs (sh-nth a 2)
                                (\ _ (sh-simple pk rs)))
-              (id? k 'if)
+              (= k 'if)
                 (: cls (map (\ c (sh-plan <c . sh-plan >c)) (sh-nth a 1))
                    els (? (two? (sh-nth a 2)) (sh-plan (sh-nth a 2)) sh-zero)
                    (\ _ (sh-if cls els)))
-              (id? k 'while)
+              (= k 'while)
                 (: c (sh-plan (sh-nth a 1)) b (sh-plan (sh-nth a 2))
                    (\ _ (sh-wloop 0 c b 0)))
-              (id? k 'until)
+              (= k 'until)
                 (: c (sh-plan (sh-nth a 1)) b (sh-plan (sh-nth a 2))
                    (\ _ (sh-wloop 1 c b 0)))
-              (id? k 'for)                       ; the words re-expand each run
+              (= k 'for)                       ; the words re-expand each run
                 (: nm (sh-nth a 1) ws (sh-nth a 2) b (sh-plan (sh-nth a 3))
                    (\ _ (sh-floop nm (catmap sh-fields ws) b 0)))
-              (id? k 'case)                      ; a bodyless arm takes the zero at
+              (= k 'case)                      ; a bodyless arm takes the zero at
                 (: w (sh-nth a 1)                ; plan time -- an AST tells its own
                    its (map (\ it (link <it      ; absence by two?, a plan cannot
                                         (? (two? >it) (sh-plan >it) sh-zero)))
                             (sh-nth a 2))
                    (\ _ (sh-citems (sh-textof w) its)))
-              (id? k 'group) (sh-plan (sh-nth a 1))
-              (id? k 'subsh) (: b (sh-plan (sh-nth a 1)) (\ _ (sh-subsh b)))
-              (id? k 'fun)   (: nm (sh-nth a 1) b (sh-plan (sh-nth a 2))
+              (= k 'group) (sh-plan (sh-nth a 1))
+              (= k 'subsh) (: b (sh-plan (sh-nth a 1)) (\ _ (sh-subsh b)))
+              (= k 'fun)   (: nm (sh-nth a 1) b (sh-plan (sh-nth a 2))
                                 (\ _ (: _ (pin sh-funcs nm b) 0)))
-              (id? k 'rdr)   (: b (sh-plan (sh-nth a 1)) rs (sh-nth a 2)
+              (= k 'rdr)   (: b (sh-plan (sh-nth a 1)) rs (sh-nth a 2)
                                 (\ _ (sh-rdr b rs)))
               (\ _ (cmderr "unknown form")))))
    (sh-if clauses els)
@@ -685,8 +685,8 @@
                  (: b (body ())
                     (? (two? b)
                        (: kk <b nn >b
-                          (? (id? kk 'brk) (? (1 < nn) ('brk . (nn - 1)) (sh-zero ()))
-                             (id? kk 'cnt) (? (1 < nn) ('cnt . (nn - 1))
+                          (? (= kk 'brk) (? (1 < nn) ('brk . (nn - 1)) (sh-zero ()))
+                             (= kk 'cnt) (? (1 < nn) ('cnt . (nn - 1))
                                               (sh-wloop inv cond body last))
                              b))
                        (sh-wloop inv cond body b)))))))
@@ -696,8 +696,8 @@
            b (body ())
            (? (two? b)
               (: kk <b nn >b
-                 (? (id? kk 'brk) (? (1 < nn) ('brk . (nn - 1)) (sh-zero ()))
-                    (id? kk 'cnt) (? (1 < nn) ('cnt . (nn - 1)) (sh-floop nm >fs body last))
+                 (? (= kk 'brk) (? (1 < nn) ('brk . (nn - 1)) (sh-zero ()))
+                    (= kk 'cnt) (? (1 < nn) ('cnt . (nn - 1)) (sh-floop nm >fs body last))
                     b))
               (sh-floop nm >fs body b))))
    (sh-anymatch t pats)
@@ -720,7 +720,7 @@
            (? (p = 0) (: _ (wear ())         ; the child's stdio is its fds, never a jug this task wears
                          _ (sh-dropcaps ())  ; ...and it is inside no capture of ours
                          s (b ())
-                         (quit (? (charm? s) s (? (id? <s 'ret) >s 0))))
+                         (quit (? (charm? s) s (? (= <s 'ret) >s 0))))
               (nom? p) (cmderr "cannot fork")
               (: _ (sh-waitfg [p] (sh-curline ())) (sh-echk (sh-status ()))))))
    ; the roster sh-subback puts back is the subshell's contract, so it has to ride
@@ -736,7 +736,7 @@
    ; run in-process (a `done < file` loop keeps its variables), swap back
    (sh-rdr b rs)
      (: rm (sh-rdmap rs)
-        (? (id? <rm 'err) (cmderr >rm)
+        (? (= <rm 'err) (cmderr >rm)
            (: fdmap (sh-nth rm 1) opens (sh-nth rm 2) wrs (sh-nth rm 3)
               _ (sh-hwrite wrs)                       ; a heredoc body fits the pipe
               saves (map (\ e (<e . dup <e)) fdmap)
@@ -752,9 +752,9 @@
    ; an all-external pipeline spawns with the last stdout on our pipe; drain
    ; through fdopen, then reap -- any body size flows, and nothing forks.
    (sh-capsimple a wfd)                        ; -> pids, unwaited
-     (: cmds (? (id? <a 'pipe) (sh-nth a 1) [a])
+     (: cmds (? (= <a 'pipe) (sh-nth a 1) [a])
         sx (sh-stagex cmds ())
-        (? (id? <sx 'err) (: _ (cmderr >sx) ())
+        (? (= <sx 'err) (: _ (cmderr >sx) ())
            (: sts (sh-nth sx 1)
               n (#sts - 1)
               pipes (sh-makepipes n)
@@ -787,7 +787,7 @@
    (sh-barelit w)                              ; a word that is already its own text, or ()
      (? (!(two? w) || two? >w) ()
         (: h <w
-           (? !(id? <h 'lit) ()
+           (? !(= <h 'lit) ()
               (: t >h
                  (? (!#t || ((t 0) = 126) || sh-anyglob t) () t)))))
    (sh-cmdname a)                              ; a 'cmd's bare name, or () if it has none to read
@@ -796,11 +796,11 @@
            !(two? >pk) ()
            (sh-barelit <>pk)))
    (sh-extcmd? c)                              ; a stage sh-stagex would spawn as it stands
-     (? !(id? <c 'cmd) ()
+     (? !(= <c 'cmd) ()
         (: nm (sh-cmdname c) (? !nm () (&& !(sh-bi? nm) !(sh-fn? nm)))))
    (sh-lane a)
-     (? (id? <a 'pipe) (? (all sh-extcmd? (sh-nth a 1)) 'ext 'sub)
-        !(id? <a 'cmd) 'sub
+     (? (= <a 'pipe) (? (all sh-extcmd? (sh-nth a 1)) 'ext 'sub)
+        !(= <a 'cmd) 'sub
         (: nm (sh-cmdname a)
            (? !nm 'sub
               (sh-fn? nm) 'sub
@@ -816,7 +816,7 @@
                  (? (&& (two? w) (two? >w) (two? >>w)) <>>w ())]))
    (sh-capstat st)                             ; a plan's answer read as a $( ) status
      (? (charm? st) st
-        ((two? st) && ((id? <st 'ret) || (id? <st 'xit))) >st
+        ((two? st) && ((= <st 'ret) || (= <st 'xit))) >st
         0)
    ; the re-seat is minded: a scare under the body leaves this task wearing a jug
    ; nobody drains, and every later word the shell says lands in it instead of the
@@ -934,10 +934,10 @@
                                          _ (flush out) _ (flush err)
                                          (sh-subback sv)))))
                       ()
-                      (\ a b (? (id? a 'sh-exit) (? (charm? b) b 1)
+                      (\ a b (? (= a 'sh-exit) (? (charm? b) b 1)
                                 (: _ (say err ";; ") _ (print err a) _ (say err " ")
                                    _ (print err b) _ (put err 10) _ (flush err) 1))))
-              [1 (? (two? r) (? (id? <r 'more)
+              [1 (? (two? r) (? (= <r 'more)
                                    (: _ (say err "lush: unexpected eof in a recipe line")
                                       _ (put err 10) 2)
                                    (? (charm? >r) >r 1))
@@ -983,13 +983,13 @@
    (sh-cmdsub text)
      (: _ (pin sh-substat () 1)
         lx (sh-lex text)
-        (? (id? <lx 'more) (: _ (cmderr "unterminated $( ) body") "")
+        (? (= <lx 'more) (: _ (cmderr "unterminated $( ) body") "")
            (: pr (sh-parse >lx)
-              (? !(id? <pr 'ok) (: _ (cmderr "bad $( ) body") "")
+              (? !(= <pr 'ok) (: _ (cmderr "bad $( ) body") "")
                  !>pr (: _ (pin sh-substat () 0) "")           ; $( ) is a clean nothing
                  (: a >pr ln (sh-lane a)
-                    (? (id? ln 'jug) (sh-capjug a)
-                       (id? ln 'sub) (sh-capsub a)
+                    (? (= ln 'jug) (sh-capjug a)
+                       (= ln 'sub) (sh-capsub a)
                        (: pp (pipe 0)
                           (? (nom? pp) ""
                              (: rfd <pp wfd >pp
@@ -1009,7 +1009,7 @@
    ; --- the script lane + the line entries --------------------------------------
    (sh-lines port buf)
      (: line (sh-getline port)
-        (? (id? line 'eof)
+        (? (= line 'eof)
            (? #buf
               (: _ (say err "lush: unexpected eof\n") _ (pin sh-status () 2) 0)
               0)
@@ -1023,7 +1023,7 @@
                  (sh-lines port "")))))
    (sh-parse-line src)
      (: lx (sh-lex src)
-        (? (id? <lx 'more) lx (sh-parse >lx)))
+        (? (= <lx 'more) lx (sh-parse >lx)))
    (sh-eval-top src a)
      (: _ (pin sh-curline () src)
         s (sh-eval a)
@@ -1031,13 +1031,13 @@
            ; a `return` that reached the top: flag it so the reading loop stops
            ; its file (POSIX dot-return; sh-lines clears the flag) -- $? is the
            ; return's own. a stray brk/cnt still swallows.
-           (two? s && id? <s 'ret)
+           (two? s && (= <s 'ret))
              (: _ (pin sh-retf () 1) _ (pin sh-status () >s) >s)
            0))
    (sh-line src)
      (: pr (sh-parse-line src)
-        (? (id? <pr 'more) pr
-           (id? <pr 'err)
+        (? (= <pr 'more) pr
+           (= <pr 'err)
              (: _ (say err ("lush: " + (>pr + "\n"))) _ (pin sh-status () 2) 2)
            (sh-eval-top src >pr))))
 ) ; module 'lush

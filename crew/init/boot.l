@@ -41,7 +41,7 @@
    (harvest shpid)
      (: ev (glean 0)
         (? (two? ev)
-             (? (id? (cap ev) shpid)
+             (? (= (cap ev) shpid)
                   (: _ (say1 "  [init] console exited -> respawn")
                      (harvest (spawn (console 0))))
                   (: _ (say1 "  [init] reaped a reparented orphan") (harvest shpid)))

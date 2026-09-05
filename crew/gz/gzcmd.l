@@ -238,7 +238,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
                  (w 1 = 45)
                   (: r (gzc-long t (snip w 2 n))
                      (? !r (: _ (gzc-moan t ("unknown option " + w)) ())
-                        (id? r 'val) (two? >a ? (: _ (pin t 'suf <>a) (go >>a fs))
+                        (= r 'val) (two? >a ? (: _ (pin t 'suf <>a) (go >>a fs))
                                                  (: _ (gzc-moan t "--suffix wants a suffix") ()))
                         (go >a fs)))
                  (: (cl k rest)

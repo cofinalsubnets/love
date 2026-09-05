@@ -1246,7 +1246,7 @@
    ; the same answer off one pointer where = walks the generic table. noms and
    ; nothing else: = on a charm is numeric across the band (5 matches the gem 5.0),
    ; and id? would quietly narrow that to one representation.
-   (weq d v) (? (nom? d) [['id? (lit d) v]] [['= (lit d) v]])
+   (weq d v) [['= (lit d) v]]
    wnil [() () ()]
    (wts ts) [ts () ()]
    (wgd g) [() () [g]]
@@ -1267,7 +1267,7 @@
    ; (nom access) pairs its body binds, and the guards, which are neither.
    (pw p v)
      (? (nom? p) (? (= p '_) wnil [() [[p v]] ()])
-        (id? p ()) (wts [['id? () v]])                        ; () is the empty list, and asks for it
+        (id? p ()) (wts [['= () v]])                        ; () is the empty list, and asks for it
         (! (link? p)) (wts [['= p v]])
         (: h (opword <p) as >p                     ; opfix's glued heads are values; opword names them
            (? (= h '?) (? (! (two? as)) (wlist p v)           ; a guard: (? g1 .. gn pat), or (? g)
@@ -1348,11 +1348,11 @@
                     (wcat (wts (warity (n - 1) ['cup v])) (wskip >ps ['cup v] end))))))
    (wskip ps v end) (? (two? ps) (wcat (pw <ps ['cap v]) (wskip >ps ['cup v] end))
                        (end v))
-   (wlist as v) (wrun as v (\ r (wts [['id? () r]])))
+   (wlist as v) (wrun as v (\ r (wts [['= () r]])))
    (wrest ps t v) (wrun ps v (\ r (pw t r)))
    (wkv as v) (? (two? >as)
                  (: g ['peep v <as (lit gone)]
-                    (wcat (wcat (wts [['! ['id? (lit gone) g]]]) (pw <>as g))
+                    (wcat (wcat (wts [['! ['= (lit gone) g]]]) (pw <>as g))
                           (wkv (cuup as) v)))
                  wnil)
    (widx as v i) (? (two? as) (wcat (pw <as ['peep v i ()]) (widx >as v (i + 1))) wnil)

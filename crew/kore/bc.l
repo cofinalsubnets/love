@@ -250,9 +250,9 @@
    (bc-prim ts)
     (? !(two? ts) (bc-syn "unexpected end of program")
        (: t <ts k <t v <>t r >ts
-          (? (id? k 'num) [['num v] r]
-             (id? k 'str) (bc-syn "a string is not an expression")
-             (id? k 'name)
+          (? (= k 'num) [['num v] r]
+             (= k 'str) (bc-syn "a string is not an expression")
+             (= k 'name)
               ; `b[]` is the whole array, and only a call has any use for one --
               ; a subscript that is not there is not an empty one
               (? (bc-op? r "[")
@@ -263,7 +263,7 @@
                   (bc-args (bc-nl >r) () @ [es r2]
                     [['call v es] (bc-want r2 ")" "expected ) after the arguments")] ())
                  [['var v] r])
-             (id? k 'kw)
+             (= k 'kw)
               ; `scale` is both: the register, and the function when a ( follows.
               ; the register arm has to come second or scale(x) never reads
               (? ((member? v '("length" "sqrt")) || ((v = "scale") && bc-op? r "("))
@@ -595,7 +595,7 @@
    ; one input item at a time, so a runtime error costs its own statement and the
    ; source walks on -- and so `quit` in a file is never read past
    (bc-guard st f)
-    (trap f () (\ a b (? (id? a 'bc-err)
+    (trap f () (\ a b (? (= a 'bc-err)
                          (: _ (flush out) _ (say err ("bc: " + b))
                             _ (put err 10) _ (flush err) 0)
                          (scare a b))))
@@ -629,7 +629,7 @@
                   _ (go ts)
                   (flush out)))
           ()
-          (\ a b (? (id? a 'bc-syn)
+          (\ a b (? (= a 'bc-syn)
                     (: _ (flush out) _ (say err ("bc: " + b)) _ (put err 10)
                        _ (flush err) 0)
                     (scare a b))))

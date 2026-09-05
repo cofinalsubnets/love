@@ -18,14 +18,14 @@
    json-false (coin json-die 0)
    ; `&&` is value-preserving, so the bare conjunction answers () and not the bit a
    ; predicate owes; `!!` is the clamp. same for json-null? below.
-   (json-bool? v) !!(coin? v && id? (die-of v) json-die)
+   (json-bool? v) !!(coin? v && (= (die-of v) json-die))
    (json-bool v)  (v ? json-true json-false)
 
    ; null, on its own die -- payload 0 so it nets blue like the nothing it is, but
    ; never `=` json-false.
    json-null-die  {0 'json-null}
    json-null      (coin json-null-die 0)
-   (json-null? v) !!(coin? v && id? (die-of v) json-null-die)
+   (json-null? v) !!(coin? v && (= (die-of v) json-null-die))
 
    ; --- reading --------------------------------------------------------------------
    (jws s i n)  (i < n && member? (s i) '(32 9 10 13) ? (jws s (i + 1) n) i)

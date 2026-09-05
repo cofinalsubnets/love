@@ -265,14 +265,14 @@
           (op = "-r") (0 < (& m 292))
           (op = "-w") (0 < (& m 146))
           (0 < (& m 73))))
-   (t-not v) (? (id? v 'no) 'no !v)
+   (t-not v) (? (= v 'no) 'no !v)
    (t-eval as)                                 ; a bit, or 'no for a malformed expression
     (: n (tally as)
        (? (0 = n) 0
           ((1 < n) && (<as = "!")) (t-not (t-eval >as))
           (1 = n) (0 < tally <as)
           (2 = n) (: op <as p <>as r (t-file op p)
-                     (? !(id? r 'no) r
+                     (? !(= r 'no) r
                         (op = "-z") (0 = tally p)
                         (op = "-n") (0 < tally p)
                         'no))
@@ -288,7 +288,7 @@
                                     (op = "-gt") (q < p)  (q <= p)))))))
           'no))
    (test-main as) (: v (t-eval as)
-                     (? (id? v 'no) (udie 2 "test: bad expression") (? v 0 1)))
+                     (? (= v 'no) (udie 2 "test: bad expression") (? v 0 1)))
    (t-clip l) (? !(two? >l) () (<l >< t-clip >l))    ; every element but the last
    (bracket-main as)                           ; `[` is test that insists on its bracket
     (: n (tally as)
@@ -703,15 +703,15 @@
        (rd l order)
         (? !(two? l) (rev order)
            (: a (name <l) b (name <>l)
-              o1 (? (id? (peep deg a ()) ()) (: _ (pin deg a 0) (a >< order)) order)
-              o2 (? (id? (peep deg b ()) ()) (: _ (pin deg b 0) (b >< o1)) o1)
-              _ (? (id? a b) 0                       ; a pair of one is a node, not an edge
+              o1 (? (= (peep deg a ()) ()) (: _ (pin deg a 0) (a >< order)) order)
+              o2 (? (= (peep deg b ()) ()) (: _ (pin deg b 0) (b >< o1)) o1)
+              _ (? (= a b) 0                       ; a pair of one is a node, not an edge
                    (: _ (pin succ a (b >< (peep succ a ())))
                       (pin deg b ((peep deg b 0) + 1))))
               (rd >>l o2)))
        order (rd ws ())
        (loose l) (? !(two? l) () ((peep deg <l 0) = 0) [1 <l] (loose >l))
-       (ts-drop x l) (? !(two? l) () (id? <l x) >l (<l >< ts-drop x >l))
+       (ts-drop x l) (? !(two? l) () (= <l x) >l (<l >< ts-drop x >l))
        (emit k) (: _ (say out (string k)) _ (put out 10)
                    (foldl (\ _ b (pin deg b ((peep deg b 0) - 1))) 0 (peep succ k ())))
        (go l bad)
@@ -1036,7 +1036,7 @@
        ad (peep t 'ad 111) ty (peep t 'ty '(o 2 6))
        lim (peep t 'lim ()) skip (peep t 'skip 0) v? (peep t 'v 0)
        kd <ty sz <>ty wd <>>ty
-       byte? ((id? kd 'c) || (id? kd 'a))
+       byte? ((= kd 'c) || (= kd 'a))
        step (? byte? 1 sz)
        ; the named operands are one stream, which is what makes the offsets run
        ; through -- and a row at a time off it, never the stream itself. every
@@ -1061,12 +1061,12 @@
                                                ((* 8 i) 2)))))
            (go 0 0))
        (cell blk k)
-        (? (id? kd 'c) (upad 3 (uodesc (blk k)))
-           (id? kd 'a) (upad 3 (uodname (blk k)))
+        (? (= kd 'c) (upad 3 (uodesc (blk k)))
+           (= kd 'a) (upad 3 (uodname (blk k)))
            (: raw (val blk k)
-              v (? ((id? kd 'd) && !(raw < (((* 8 sz) - 1) 2))) (raw - ((* 8 sz) 2)) raw)
-              (? (id? kd 'x) (uzpad wd (uradix v 16))
-                 (id? kd 'o) (uzpad wd (uradix v 8))
+              v (? ((= kd 'd) && !(raw < (((* 8 sz) - 1) 2))) (raw - ((* 8 sz) 2)) raw)
+              (? (= kd 'x) (uzpad wd (uradix v 16))
+                 (= kd 'o) (uzpad wd (uradix v 8))
                  (upad wd (show v)))))
        (rowof blk cnt)
         (: items (? byte? cnt (// ((cnt + sz) - 1) sz))

@@ -217,7 +217,7 @@
        ; box asks for exactly as much as a bare `love seed`. the word is eaten either
        ; way, or the arch would go on to be read as the directory.
        xa0 (? ((two? as1) && (seed-arch? <as1)) (arch-nom <as1) ())
-       xa (? ((nom? xa0) && (id? xa0 (seed-native 0))) () xa0)
+       xa (? ((nom? xa0) && (= xa0 (seed-native 0))) () xa0)
        as (nom? xa0 ? >as1 as1)
        dir (two? as ? <as ".")
        _ (src-dash? dir ? (src-not-dir "seed" dir))

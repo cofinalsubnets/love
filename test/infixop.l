@@ -47,7 +47,7 @@
 
  ; the curry law: operands missing at the end of a list fold to the partial
  ; application
- (3 = ((1 +) 2)) (id? nil? (!)))
+ (3 = ((1 +) 2)) (= nil? (!)))
 
 ; structural incompleteness still pends: an unclosed list comes back torn.
 ; a trailing operator does not pend -- "1 +" is two complete datums whose factor
@@ -69,7 +69,7 @@
   ('(3 5) = (3 >< 5))                             ; infix: captures the left operand
   ('(7 (3 5)) = (7 >< 3 >< 5))                    ; nests right-associatively
   ('(9 (3 5)) = [9 (3 >< 5)])                    ; works inside a list
-  (nom? '><) (id? >< (><))                        ; no left operand / escaped: the plain symbol
+  (nom? '><) (= >< (><))                        ; no left operand / escaped: the plain symbol
   ("(>< 3 5)" = (show (opfix '(3 >< 5))))))     ; a folded infix form is the clause -- splices up, no wrapper (like (1 + 2))
 
 ; opfix does not rearrange a binding form: a `:` keeps its binder names (a symbol

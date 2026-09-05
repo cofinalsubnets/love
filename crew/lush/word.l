@@ -287,14 +287,14 @@
    ; --- ${name<op>text}: the word text re-enters through sh-wordize ------------
    (sh-textof segs)                             ; segs -> one string (no split/glob)
      (foldl (\ a sg (: k <sg
-                       (+ a (? (id? k 'lit) >sg
-                               (id? k 'sq) >sg
-                               (id? k 'dq) (sh-textof >sg)
-                               (id? k 'var) (sh-vval >sg)
-                               (id? k 'vop) (sh-vopseg sg)
-                               (id? k 'sub) (sh-runsub >sg)
-                               (id? k 'ari) (sh-arith >sg)
-                               (id? k 'lov) (sh-lovseg >sg)
+                       (+ a (? (= k 'lit) >sg
+                               (= k 'sq) >sg
+                               (= k 'dq) (sh-textof >sg)
+                               (= k 'var) (sh-vval >sg)
+                               (= k 'vop) (sh-vopseg sg)
+                               (= k 'sub) (sh-runsub >sg)
+                               (= k 'ari) (sh-arith >sg)
+                               (= k 'lov) (sh-lovseg >sg)
                                ""))))
             "" segs)
    (sh-voptext text) (sh-textof (sh-wordize text))
@@ -318,16 +318,16 @@
    ; ${v#pat} ${v##pat} ${v%pat} ${v%%pat}: shortest/longest prefix/suffix strip
    (sh-patmask segs)                            ; segs -> (text . mask), quotes inert
      (foldl (\ a sg (: k <sg
-                       t (? (id? k 'lit) >sg
-                            (id? k 'sq) >sg
-                            (id? k 'dq) (sh-textof >sg)
-                            (id? k 'var) (sh-vval >sg)
-                            (id? k 'vop) (sh-vopseg sg)
-                            (id? k 'sub) (sh-runsub >sg)
-                            (id? k 'ari) (sh-arith >sg)
-                            (id? k 'lov) (sh-lovseg >sg)
+                       t (? (= k 'lit) >sg
+                            (= k 'sq) >sg
+                            (= k 'dq) (sh-textof >sg)
+                            (= k 'var) (sh-vval >sg)
+                            (= k 'vop) (sh-vopseg sg)
+                            (= k 'sub) (sh-runsub >sg)
+                            (= k 'ari) (sh-arith >sg)
+                            (= k 'lov) (sh-lovseg >sg)
                             "")
-                       live (? (id? k 'sq || id? k 'dq || id? k 'lov) "0" "1")
+                       live (? (= k 'sq || (= k 'dq) || (= k 'lov)) "0" "1")
                        ((<a + t) . (>a + (sh-mrep #t live)))))
             ("" . "") segs)
    (sh-vstrip v o text)
@@ -367,7 +367,7 @@
      (? !(two? inner) st
         (: sg <inner k <sg
            d (sh-nth st 0) r (sh-nth st 1)
-           (? (id? k 'var && (>sg = "@"))
+           (? (= k 'var && (>sg = "@"))
               (: ps (sh-pos ())
                  st2 (? !(two? ps) st
                         (foldl (\ a p (: dd (sh-nth a 0) rr (sh-nth a 1) sn2 (sh-nth a 2)
@@ -377,38 +377,38 @@
                                >ps))
                  (dqat >inner st2))
               (dqat >inner
-                    [d (addrun r (? (id? k 'lit) >sg
-                                      (id? k 'var) (sh-vval >sg)
-                                      (id? k 'vop) (sh-vopseg sg)
-                                      (id? k 'sub) (sh-runsub >sg)
-                                      (id? k 'ari) (sh-arith >sg)
-                                      (id? k 'lov) (sh-lovseg >sg)
+                    [d (addrun r (? (= k 'lit) >sg
+                                      (= k 'var) (sh-vval >sg)
+                                      (= k 'vop) (sh-vopseg sg)
+                                      (= k 'sub) (sh-runsub >sg)
+                                      (= k 'ari) (sh-arith >sg)
+                                      (= k 'lov) (sh-lovseg >sg)
                                       "")
                                  0)
                        1]))))
    (wseg sg st)
      (: d (sh-nth st 0) r (sh-nth st 1) sn (sh-nth st 2)
         k <sg v >sg
-        (? (id? k 'lit) [d (addrun r v 1) 1]
-           (id? k 'sq)  [d (addrun r v 0) 1]
+        (? (= k 'lit) [d (addrun r v 1) 1]
+           (= k 'sq)  [d (addrun r v 0) 1]
            ; ${(..)} is one field, quiet like "${x}": a love answer is a value,
            ; not a chomped byte stream, so nothing here splits it on IFS or reads
            ; it for glob chars. splitting can be bought later; unsplitting cannot.
-           (id? k 'lov) [d (addrun r (sh-lovseg v) 0) 1]
+           (= k 'lov) [d (addrun r (sh-lovseg v) 0) 1]
            ; "": a real (seen) field even empty -- except a lone "$@" over zero
            ; positionals, which contributes nothing (dqat's glue lane sets seen)
-           (id? k 'dq)  (dqat v [d r (? (two? v) sn 1)])
-           (id? k 'var) (: t (sh-vval v) (spl t 0 #t d r sn))
-           (id? k 'vop) (: t (sh-vopseg sg) (spl t 0 #t d r sn))
-           (id? k 'sub) (: t (sh-runsub v) (spl t 0 #t d r sn))
-           (id? k 'ari) (: t (sh-arith v) (spl t 0 #t d r sn))
+           (= k 'dq)  (dqat v [d r (? (two? v) sn 1)])
+           (= k 'var) (: t (sh-vval v) (spl t 0 #t d r sn))
+           (= k 'vop) (: t (sh-vopseg sg) (spl t 0 #t d r sn))
+           (= k 'sub) (: t (sh-runsub v) (spl t 0 #t d r sn))
+           (= k 'ari) (: t (sh-arith v) (spl t 0 #t d r sn))
            st))
    (wsegs segs st) (? !segs st (wsegs >segs (wseg <segs st)))
 
    ; ~ / ~/rest at the word's head -> $HOME, shielded (never split, never glob);
    ; the rest of the run stays live so ~/*.l still globs
    (sh-tilde segs)
-     (? (&& (two? segs) (id? <<segs 'lit)
+     (? (&& (two? segs) (= <<segs 'lit)
             #><segs ((><segs 0) = 126))
         (: t ><segs h ("" + (getenv "HOME"))
            (? (t = "~") (('sq . h) . >segs)

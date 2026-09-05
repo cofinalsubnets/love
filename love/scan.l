@@ -47,7 +47,7 @@
    ; arguments off the instruction pointer. sc is the scratch and is here for the
    ; same reason -- r0 is free on x64 and is `g` on a64.
    ;                            g   ip  sp  scratch
-   (abi tgt) (? (id? tgt 'a64) '(r0 r1 r3 r4) '(r6 r5 r1 r0))
+   (abi tgt) (? (= tgt 'a64) '(r0 r1 r3 r4) '(r6 r5 r1 r0))
    ; r7..r14 are free of the ABI on both and are spelled: r7 = the charm, r8 = the
    ; cursor, r9 = the bytes, r10 = n, r11 = the charm in all eight lanes, r12 = ones,
    ; r13 = highs, r14 = ~w. r11..r14 are callee-saved on x64 (x86's r12..r15) so

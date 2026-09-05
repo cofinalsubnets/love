@@ -630,7 +630,7 @@
        _ (foldl (\ i b (: _ (pin c i b) (+ i 1))) 0 bs)
        (nif c fb '(\ q (q)) ar))
    (fbcpk nv)                                               ; -> (bcp conf dec), or () when they can't build
-    (? (! (&& (lit? nif) (id? (intern love-arch) 'x64))) ()
+    (? (! (&& (lit? nif) (= (intern love-arch) 'x64))) ()
        (: hit (peep fkers nv ())
           (? (two? hit) hit
              (: ks [(fnif (fbcp-ir nv) fbcp3 3)
@@ -779,27 +779,27 @@
    (fcdcl formula nvars)
     (: s (fmk formula nvars)
        (? (= 1 (peep s 'bad 0)) 'unsat
-          (: r (fsearch s) (? (id? r 'unsat) 'unsat (fextract s nvars)))))
+          (: r (fsearch s) (? (= r 'unsat) 'unsat (fextract s nvars)))))
    (count-fcdcl formula nvars)                              ; #SAT by blocking clauses, on the flat engine
-    ((: (go fm c) (: r (fcdcl fm nvars) (? (id? r 'unsat) c (go (link (block r) fm) (+ c 1))))) formula 0)
+    ((: (go fm c) (: r (fcdcl fm nvars) (? (= r 'unsat) c (go (link (block r) fm) (+ c 1))))) formula 0)
    (fdiff seed n m)                                         ; flat CDCL == the DPLL oracle (and models check)
     (: f (gen-formula seed n m) d (solve f n) c (fcdcl f n)
-       dsat (! (id? d 'unsat)) csat (! (id? c 'unsat))
+       dsat (! (= d 'unsat)) csat (! (= c 'unsat))
        (? (! (= dsat csat)) 0  (! csat) 1  (sat? c f)))
    (ffuzz k n m) (all (\ i (= 1 (fdiff (+ 1009 (* i 7919)) n m))) (jot k))
    (fboth f n)                                              ; kernels and twins agree, verdict for verdict
     (: _ (pin fknob 0 1) a (fcdcl f n) _ (pin fknob 0 0) b (fcdcl f n)
-       (? (id? a 'unsat) (id? b 'unsat) (&& (! (id? b 'unsat)) (sat? b f))))
+       (? (= a 'unsat) (= b 'unsat) (&& (! (= b 'unsat)) (sat? b f))))
 
  ; --- the gate: the flat engine answers exactly like the oracle, kernels == twins
  _ (assert
     ; tiny SAT / UNSAT
-    (: f '((1 2) (-1 3) (-2 -3)) m (fcdcl f 3) (&& (! (id? m 'unsat)) (sat? m f)))
-    (id? (fcdcl '((1) (-1)) 1) 'unsat)
-    (id? (fcdcl '((1 2) (1 -2) (-1 2) (-1 -2)) 2) 'unsat)
-    (id? (fcdcl '((1 2 3) (1 2 -3) (1 -2 3) (1 -2 -3) (-1)) 3) 'unsat)
+    (: f '((1 2) (-1 3) (-2 -3)) m (fcdcl f 3) (&& (! (= m 'unsat)) (sat? m f)))
+    (= (fcdcl '((1) (-1)) 1) 'unsat)
+    (= (fcdcl '((1 2) (1 -2) (-1 2) (-1 -2)) 2) 'unsat)
+    (= (fcdcl '((1 2 3) (1 2 -3) (1 -2 3) (1 -2 -3) (-1)) 3) 'unsat)
     ; cyclic: SAT, the model checks, and #SAT == Lucas (solver-independent)
-    (: f (cyclic 12) m (fcdcl f 12) (&& (! (id? m 'unsat)) (sat? m f)))
+    (: f (cyclic 12) m (fcdcl f 12) (&& (! (= m 'unsat)) (sat? m f)))
     (= (count-fcdcl (cyclic 8) 8) (lucas 8))
     (= (count-fcdcl (cyclic 10) 10) (lucas 10))
     ; differential fuzz vs the DPLL oracle, mixed SAT/UNSAT near the phase transition
@@ -812,11 +812,11 @@
     (fboth (php 4) (php-vars 4))
     (fboth (php 5) (php-vars 5))
     ; pigeonhole PHP(5): UNSAT + resolution-hard (learning, restarts, arena growth end to end)
-    (id? (fcdcl (php 5) (php-vars 5)) 'unsat)
+    (= (fcdcl (php 5) (php-vars 5)) 'unsat)
     ; force the learnt-DB REDUCTION path hard (a tiny cap -> compaction every few restarts)
     ; and re-run the differential battery through it, both engines
     (: _ (pin fmaxl0 0 24)
-       ok (&& (id? (fcdcl (php 5) (php-vars 5)) 'unsat)
+       ok (&& (= (fcdcl (php 5) (php-vars 5)) 'unsat)
               (&& (ffuzz 30 12 50) (fboth (php 4) (php-vars 4))))
        _ (pin fmaxl0 0 2000) ok))
  _ (say err (+ "crew/sat/flat: ok -- flat-arena CDCL == DPLL on 150 fuzzed + PHP(5) + #SAT==Lucas"

@@ -15,7 +15,7 @@
  (= 9 ((\ f n (f n)) 2 3))                    ; (2 3) = 3 ** 2
  ('abc = ('abc 0))                            ; a point is its own constant: applied, it answers itself
  ('abc = ('abc 'x))                           ;   whatever the operand
- (: m (mint 0) (id? m (m 5)))                 ; an anonymous one too
+ (: m (mint 0) (= m (m 5)))                 ; an anonymous one too
  (= 8 (3 2))                                  ; (3 2) = 2 ** 3
  (= 13 ((3 (+ 1)) 10)))                       ; non-numeric operand -> (+ 1) composed 3 times on 10
 ; the whole numeric tower is a Church numeral, not just fixnums (data.c data_num_apply

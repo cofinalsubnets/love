@@ -56,7 +56,7 @@
    (keep s) (: h (sha256 s) _ (lay (".sb/blob/" + h) s) h)
    (patch id) (form (".sb/patch/" + id))
    (fld f k) (: (go m) (? !(two? m) ()                        ; a patch field's tail
-                             (two? <m && id? <<m k) ><m
+                             (two? <m && (= <<m k)) ><m
                              (go >m))
                    (go >f))
 

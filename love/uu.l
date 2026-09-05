@@ -66,7 +66,7 @@
    (comp t)
    (? (charm? t) (en \ t)
       (nom? t) (? (memq t '(UU nat bool unit empty tt true false)) (en \ t)
-                  (id? t 'zero) (en \ 0)
+                  (= t 'zero) (en \ 0)
                   (en \ vof-sym en t))
       ; a pattern is the TERM grammar, so this dispatch now reads like the header's own
       ; list of shapes. It costs the arity guards, and here they are nearly free: comp runs
@@ -114,8 +114,10 @@
 
    ; the scrutinee is a pair, which is why this one stays a `?`: an arm reads both
    ; sides, and a pattern would build the [a b] per call to say less than the tests do.
-   ; the two atom arms are guards -- equal charms and equal noms are id? above, so
-   ; reaching one means unequal, and it keeps `<a` off a non-list below.
+   ; id?, the one use outside the egg: same object -> 1 at once, else the arms convert.
+   ; `=` cannot stand in -- on two different terms it walks their closures, and the
+   ; shared environments make that exponential. the atom arm is a guard: reaching it
+   ; means unequal, and it keeps `<a` off a non-list below.
    (conv d a b)
    (? (id? a b) 1
       (atom? a || atom? b) 0
@@ -305,7 +307,7 @@
    (u2 t bs)
    (? (charm? t) t
       (nom? t)
-      (? (id? t 'zero) 0
+      (? (= t 'zero) 0
          (memq t '(UU nat bool unit empty tt true false)) (qlit t)
          (memq t bs) t
          (qlit (uglo t)))

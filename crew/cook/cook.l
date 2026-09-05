@@ -260,7 +260,7 @@
    ; a green one, so it is said rather than assumed.
    (jobwait p)
    (: v (peep verdicts p 'no)
-      (? !(id? v 'no) (: _ (pull verdicts p 0) v)
+      (? !(= v 'no) (: _ (pull verdicts p 0) v)
          (0 = $running) (: _ (say err ("cook: lost the job for pid " + show p))
                             _ (put err 10) (quit 1))
          (: _ (jobreap 0) (jobwait p))))
@@ -323,7 +323,7 @@
    ; "would spawning this land on us?" -- is lush's, not ours.
    (inimg sh)
    (: v (peep cookbox 'inimg 'no)
-       (? !(id? v 'no) v
+       (? !(= v 'no) v
           (: ours (from 'lush 'sh-ours?) one (from 'lush 'sh-oneline)
              f (? ((lit? ours) && (lit? one) && (ours sh)) one 0)
              _ (pin cookbox 'inimg f)
@@ -1441,7 +1441,7 @@
                  (: _ (register-makefile (slurp q)) (cook-all 0))
                  ((: (g x) (: r (sound x)
                                   (? (two? r) (: _ (ev 'ev <r) (g >r))
-                                     (id? r 'torn)
+                                     (= r 'torn)
                                        (: _ (say err ("cook: unfinished form in " + file))
                                           _ (put err 10) (quit 1))
                                      0)))

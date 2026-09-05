@@ -48,8 +48,8 @@
  (9 = (vof 0 '(apon (lam k 7) (chg 3 7 9) 3)))
  (7 = (vof 0 '(apon (lam k 7) (chg 3 7 9) 5)))
  ((vof 0 '(chg 3 7 9)) = (vof 0 '(invert (invert (chg 3 7 9)))))
- (id? (vof 0 'true)  (vof 0 '(valid (lam k 5) (chg 3 5 9))))
- (id? (vof 0 'false) (vof 0 '(valid (lam k 5) (chg 3 4 9))))
+ (= (vof 0 'true)  (vof 0 '(valid (lam k 5) (chg 3 5 9))))
+ (= (vof 0 'false) (vof 0 '(valid (lam k 5) (chg 3 4 9))))
  ((vof 0 '(commute (chg 3 0 1) (chg 5 0 2)))
   = (vof 0 '(ii1 (tpair (chg 5 0 2) (chg 3 0 1)))))
  ((vof 0 '(commute (chg 3 0 1) (chg 3 1 2))) = (vof 0 '(ii2 tt))))
@@ -362,8 +362,8 @@
           (maponpaths nat nat (lam w (add a w)) (add b c) (add c b) (natpluscomm b c))
           (pathsinv0 nat (add (add a c) b) (add a (add c b)) (natplusassoc a c b))))))))
  ; the computed face
- (id? (vof 0 'false) (vof 0 '(natgtb 4 (add 4 3))))
- (id? (vof 0 '5) (vof 0 '(natminus (add 5 3) 3))))
+ (= (vof 0 'false) (vof 0 '(natgtb 4 (add 4 3))))
+ (= (vof 0 '5) (vof 0 '(natminus (add 5 3) 3))))
 
 ; --- the list kit: how take, drop and append fuse. all at nlist, uulay.l's
 ; --- vocabulary (ltake/ldrop/lapp/lapptakedrop/ldroplen/lnil0 load before
@@ -2135,7 +2135,7 @@
         (hcommute-sound p q q2 p2 s h hb1 hc1 hb2 hc2)))))))))))))))
 (:
  ; --- the l3a witness computes: the after-pair agrees in both orders ---
- (heq a b) (? (&& (atom? a) (atom? b)) (id? a b)
+ (heq a b) (? (&& (atom? a) (atom? b)) (= a b)
               (|| (atom? a) (atom? b)) 0
               (&& (heq (cap a) (cap b)) (heq (cup a) (cup b))))
  s0 '(ncons 1 (ncons 2 (ncons 3 (ncons 4 nnil))))
@@ -2190,11 +2190,11 @@
    (pi n nat nat)
    (lam n (pr2 (unpair n))))
  ; the pairing computes: the diagonal walk inverts the triangle climb
- (id? (vof 0 '0) (vof 0 '(npair 0 0)))
- (id? (vof 0 '1) (vof 0 '(npair 1 0)))
- (id? (vof 0 '2) (vof 0 '(npair 0 1)))
- (id? (vof 0 '4) (vof 0 '(upa (npair 4 2))))
- (id? (vof 0 '2) (vof 0 '(upb (npair 4 2)))))
+ (= (vof 0 '0) (vof 0 '(npair 0 0)))
+ (= (vof 0 '1) (vof 0 '(npair 1 0)))
+ (= (vof 0 '2) (vof 0 '(npair 0 1)))
+ (= (vof 0 '4) (vof 0 '(upa (npair 4 2))))
+ (= (vof 0 '2) (vof 0 '(upb (npair 4 2)))))
 
 ; --- the walk inverts the climb, one diagonal step at a time. npairhead:
 ; --- the (0 b) corner jumps to the next diagonal's head. npairdiag: an
@@ -2244,7 +2244,7 @@
               (maponpaths nat nat (lam w (succ w)) (npair (upa k) (upb k)) k IH))))
         n)))
  ; the round trip computes both ways on closed nats
- (id? (vof 0 '9) (vof 0 '(npair (upa 9) (upb 9)))))
+ (= (vof 0 '9) (vof 0 '(npair (upa 9) (upb 9)))))
 
 ; --- the beta ladder: unpair undoes npair. the head/diag steps re-read the
 ; --- walk one rung down through the una/unb components (each close is
@@ -2556,7 +2556,7 @@
                 m))))
         f)))
  ; the code and its walk agree on a closed list
- (id? (vof 0 '(lcode (ncons 1 (ncons 2 nnil)))) (vof 0 '20))
+ (= (vof 0 '(lcode (ncons 1 (ncons 2 nnil)))) (vof 0 '20))
  ((vof 0 '(ncons 1 (ncons 2 nnil))) = (vof 0 '(ldec 20 20))))
 
 ; --- the tree itself. enode pairs a label with its kids' code; elabel and
@@ -2601,14 +2601,14 @@
    isdeceqnat)
  ; the tree computes: a leaf is its label's triangle, the zero leaf is 0,
  ; and eta reads any nat as a node -- 5 is (enode 0 (ncons 1 nnil))
- (id? (vof 0 '28) (vof 0 '(enode 7 nnil)))
- (id? (vof 0 '0) (vof 0 '(enode 0 nnil)))
- (id? (vof 0 '2) (vof 0 '(enode 0 (ncons (enode 0 nnil) nnil))))
- (id? (vof 0 '5) (vof 0 '(elabel (enode 5 (ncons 1 (ncons 2 nnil))))))
+ (= (vof 0 '28) (vof 0 '(enode 7 nnil)))
+ (= (vof 0 '0) (vof 0 '(enode 0 nnil)))
+ (= (vof 0 '2) (vof 0 '(enode 0 (ncons (enode 0 nnil) nnil))))
+ (= (vof 0 '5) (vof 0 '(elabel (enode 5 (ncons 1 (ncons 2 nnil))))))
  ((vof 0 '(ncons 1 (ncons 2 nnil))) = (vof 0 '(ekids (enode 5 (ncons 1 (ncons 2 nnil))))))
- (id? (vof 0 '0) (vof 0 '(elabel 5)))
+ (= (vof 0 '0) (vof 0 '(elabel 5)))
  ((vof 0 '(ncons 1 nnil)) = (vof 0 '(ekids 5)))
- (id? (vof 0 '5) (vof 0 '(enode (elabel 5) (ekids 5)))))
+ (= (vof 0 '5) (vof 0 '(enode (elabel 5) (ekids 5)))))
 
 
 ; ============================================================================
@@ -2697,13 +2697,13 @@
           (pr2 l)
           k))))
  ; the primitives compute, edges included (an out-of-range lay rides through)
- (id? (vof 0 '2) (vof 0 '(occ 7 (ncons 7 (ncons 3 (ncons 7 nnil))))))
- (id? (vof 0 '1) (vof 0 '(ffind 3 (ncons 7 (ncons 3 (ncons 7 nnil))))))
+ (= (vof 0 '2) (vof 0 '(occ 7 (ncons 7 (ncons 3 (ncons 7 nnil))))))
+ (= (vof 0 '1) (vof 0 '(ffind 3 (ncons 7 (ncons 3 (ncons 7 nnil))))))
  ((vof 0 '(ncons 7 (ncons 9 (ncons 5 nnil)))) = (vof 0 '(lay (ncons 7 (ncons 3 (ncons 5 nnil))) 1 9)))
  ((vof 0 '(ncons 7 nnil)) = (vof 0 '(lay (ncons 7 nnil) 5 9)))
- (id? (vof 0 '5) (vof 0 '(lget 2 (ncons 7 (ncons 3 (ncons 5 nnil))))))
+ (= (vof 0 '5) (vof 0 '(lget 2 (ncons 7 (ncons 3 (ncons 5 nnil))))))
  ; at tree grain: count a subtree among a node's kids
- (id? (vof 0 '1) (vof 0 '(occ (enode 0 nnil) (ekids (enode 1 (ncons (enode 0 nnil) nnil)))))))
+ (= (vof 0 '1) (vof 0 '(occ (enode 0 nnil) (ekids (enode 1 (ncons (enode 0 nnil) nnil)))))))
 
 ; --- the lemma kit, patch.v's seven mirrored. laylen and laylay are pure
 ; --- walks; layget subsumes lay_id with no hypothesis (out of range both
@@ -3148,8 +3148,8 @@
             (pr2 l)
             k)))))
  ; the kit computes end to end: an absent element laid in is found at its seat
- (id? (vof 0 '1) (vof 0 '(ffind 9 (lay (ncons 7 (ncons 3 nnil)) 1 9))))
- (id? (vof 0 '1) (vof 0 '(occ 9 (lay (ncons 7 (ncons 3 nnil)) 1 9))))
+ (= (vof 0 '1) (vof 0 '(ffind 9 (lay (ncons 7 (ncons 3 nnil)) 1 9))))
+ (= (vof 0 '1) (vof 0 '(occ 9 (lay (ncons 7 (ncons 3 nnil)) 1 9))))
  ((vof 0 '(ncons 7 (ncons 3 nnil))) = (vof 0 '(lay (lay (ncons 7 (ncons 3 nnil)) 1 9) 1 3))))
 
 
@@ -5919,7 +5919,7 @@
                                 (natmaxgel (add (hi p) (nlen (ho p))) (add (hi q) (nlen (ho q)))))
                               h))))))))))))))
  ; the bubble contracts the hull to one seat: length off the hull alone
- (id? (vof 0 '2) (vof 0 '(nlen (splice (ncons 1 (ncons 2 (ncons 3 (ncons 4 nnil)))) 0 3 (ncons 9 nnil)))))
+ (= (vof 0 '2) (vof 0 '(nlen (splice (ncons 1 (ncons 2 (ncons 3 (ncons 4 nnil)))) 0 3 (ncons 9 nnil)))))
  ; and padding commutes with rendering
  ((vof 0 '(lapp (ncons 7 nnil) (lapp (splice (ncons 1 (ncons 2 (ncons 3 nnil))) 1 1 (ncons 5 nnil)) (ncons 8 nnil))))
   = (vof 0 '(splice (lapp (ncons 7 nnil) (lapp (ncons 1 (ncons 2 (ncons 3 nnil))) (ncons 8 nnil))) 2 1 (ncons 5 nnil)))))
@@ -5981,11 +5981,11 @@
                 p))))
         d)))
  ; the coding computes, and a leaf codes the same at every depth
- (id? (vof 0 '2) (vof 0 '(tcode 0 (latom 1))))
- (id? (vof 0 '1) (vof 0 '(tcode 0 (lmv 0))))
- (id? (vof 0 '(tcode 0 (latom 1))) (vof 0 '(tcode 1 (matom 0 1))))
- (id? (vof 0 '(tcode 0 (lmv 3))) (vof 0 '(tcode 1 (mmv 0 3))))
- (id? (vof 0 '52) (vof 0 '(tcode 1 (mcell 0 (latom 1) (lmv 0))))))
+ (= (vof 0 '2) (vof 0 '(tcode 0 (latom 1))))
+ (= (vof 0 '1) (vof 0 '(tcode 0 (lmv 0))))
+ (= (vof 0 '(tcode 0 (latom 1))) (vof 0 '(tcode 1 (matom 0 1))))
+ (= (vof 0 '(tcode 0 (lmv 3))) (vof 0 '(tcode 1 (mmv 0 3))))
+ (= (vof 0 '52) (vof 0 '(tcode 1 (mcell 0 (latom 1) (lmv 0))))))
 
 ; --- the substitution: a duo-list (key, code), first hit wins -- the walk
 ; --- is occ's shape at duo grain; sqside is the option's no-confusion
@@ -6096,9 +6096,9 @@
   = (vof 0 '(ii2 tt)))
  ((vof 0 '(mtch 1 (mcell 0 (lmv 0) (latom 0)) (tcode 0 (latom 1)) snil)) = (vof 0 '(ii2 tt)))
  ; instantiation computes: soundness by eye, and a free metavariable rides
- (id? (vof 0 '(inst 1 (mcell 0 (lmv 0) (lmv 0)) (scons (tpair 0 (tcode 0 (latom 1))) snil)))
+ (= (vof 0 '(inst 1 (mcell 0 (lmv 0) (lmv 0)) (scons (tpair 0 (tcode 0 (latom 1))) snil)))
       (vof 0 '(tcode 1 (mcell 0 (latom 1) (latom 1)))))
- (id? (vof 0 '(tcode 0 (lmv 4))) (vof 0 '(inst 0 (lmv 4) snil))))
+ (= (vof 0 '(tcode 0 (lmv 4))) (vof 0 '(inst 0 (lmv 4) snil))))
 
 ; --- bindings only grow: what a match step bound stays bound, unchanged
 ; --- (patch.v's mtch_mono). the leaf rung carries the verdict convoys --
@@ -6714,7 +6714,7 @@
       (lam p
         (lam g (lam sf (lam e (mtch-sound-ext d p g snil sf e sf (lam v (lam t (lam h3 h3))))))))))
  ; the headline in the small: match, instantiate, come home
- (id? (vof 0 '(inst 1 (mcell 0 (lmv 0) (latom 0)) (scons (tpair 0 (tcode 0 (latom 1))) snil)))
+ (= (vof 0 '(inst 1 (mcell 0 (lmv 0) (latom 0)) (scons (tpair 0 (tcode 0 (latom 1))) snil)))
       (vof 0 '(tcode 1 (mcell 0 (latom 1) (latom 0))))))
 
 ; --- the re-aim at address grain: the schematic swallow moves a deep
@@ -7013,8 +7013,8 @@
           (maponpaths nat nat (lam w (upb w)) (upa (npair (npair a b) 2)) (npair a b)
             (upabeta (npair a b) 2))
           (upbbeta a b)))))
- (id? (vof 0 '3) (vof 0 '(gka (gcell 3 1))))
- (id? (vof 0 '1) (vof 0 '(gkb (gcell 3 1)))))
+ (= (vof 0 '3) (vof 0 '(gka (gcell 3 1))))
+ (= (vof 0 '1) (vof 0 '(gkb (gcell 3 1)))))
 
 (assert
  (defn gsub

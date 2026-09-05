@@ -24,20 +24,20 @@
  (pk p) (cap (cup p))                                     ; the slot it touches
  (pa p) (cap (cup (cup p)))                               ; its context (old value)
  (pb p) (cap (cup (cup (cup p))))                         ; the new value
- (tget t k) (? (atom? t) 0 (: c (cap t) (? (id? k (cap c)) (cup c) (tget (cup t) k))))
+ (tget t k) (? (atom? t) 0 (: c (cap t) (? (= k (cap c)) (cup c) (tget (cup t) k))))
  (tset t k v) (link (link k v) t)                         ; newest shadows; a missing slot reads 0
- (valid t p) (id? (tget t (pk p)) (pa p))                 ; a patch belongs iff its context matches
+ (valid t p) (= (tget t (pk p)) (pa p))                 ; a patch belongs iff its context matches
  (apon t p) (tset t (pk p) (pb p))                        ; lay the patch's new value
  (applall t ps) (foldl apon t ps)                         ; fold a whole frontier onto a tree
  (invert p) (chg (pk p) (pb p) (pa p))                    ; the groupoid inverse (unpull)
- (commute p q) (? (id? (pk p) (pk q)) 0 (link q (link p 0)))  ; partial: 0 = a dependency
+ (commute p q) (? (= (pk p) (pk q)) 0 (link q (link p 0)))  ; partial: 0 = a dependency
 
  ; --- spec-local equality: deep-structural (patches are lists), and tree agreement
  ;     at a witness key set (trees are maps -> compare pointwise, as the .v does) ---
- (leq a b) (? (&& (atom? a) (atom? b)) (id? a b)
+ (leq a b) (? (&& (atom? a) (atom? b)) (= a b)
               (|| (atom? a) (atom? b)) 0
               (&& (leq (cap a) (cap b)) (leq (cup a) (cup b))))
- (teq a b ks) (? (atom? ks) 1 (&& (id? (tget a (cap ks)) (tget b (cap ks))) (teq a b (cup ks))))
+ (teq a b ks) (? (atom? ks) 1 (&& (= (tget a (cap ks)) (tget b (cap ks))) (teq a b (cup ks))))
  (cat2 a b) (? (atom? a) b (link (cap a) (cat2 (cup a) b)))
 
  ; --- witnesses ---
@@ -101,7 +101,7 @@
  (hcat a b) (? (atom? a) b (link (cap a) (hcat (cup a) b)))
  (seg s i n) (htake (hdrop s i) n)                        ; the n elements from index i
  (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (+ i c))))
- (heq a b) (? (&& (atom? a) (atom? b)) (id? a b)
+ (heq a b) (? (&& (atom? a) (atom? b)) (= a b)
               (|| (atom? a) (atom? b)) 0
               (&& (heq (cap a) (cap b)) (heq (cup a) (cup b))))
  (valid s p) (&& (<= (+ (hi p) (tally (ho p))) (tally s)) ; in range -- the round-trip bound
@@ -203,10 +203,10 @@
  ; --- the model: rung 1's trees and patches, plus the clash cell ---
  (chg k a b) (link 'chg (link k (link a (link b ()))))
  (pk p) (cap (cup p)) (pa p) (cap (cup (cup p))) (pb p) (cap (cup (cup (cup p))))
- (tget t k) (? (atom? t) 0 (: c (cap t) (? (id? k (cap c)) (cup c) (tget (cup t) k))))
+ (tget t k) (? (atom? t) 0 (: c (cap t) (? (= k (cap c)) (cup c) (tget (cup t) k))))
  (tset t k v) (link (link k v) t)
  (invert p) (chg (pk p) (pb p) (pa p))
- (heq a b) (? (&& (atom? a) (atom? b)) (id? a b)
+ (heq a b) (? (&& (atom? a) (atom? b)) (= a b)
               (|| (atom? a) (atom? b)) 0
               (&& (heq (cap a) (cap b)) (heq (cup a) (cup b))))
  (teq a b ks) (? (atom? ks) 1 (&& (heq (tget a (cap ks)) (tget b (cap ks)))
@@ -351,7 +351,7 @@
  (seg s i n) (htake (hdrop s i) n)
  (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (+ i c))))
  (nth s j) (cap (hdrop s j))
- (heq a b) (? (&& (atom? a) (atom? b)) (id? a b)
+ (heq a b) (? (&& (atom? a) (atom? b)) (= a b)
               (|| (atom? a) (atom? b)) 0
               (&& (heq (cap a) (cap b)) (heq (cup a) (cup b))))
 
@@ -385,7 +385,7 @@
  (rel P Q d) (? (&& (atom? P) (atom? Q)) '(same)
                 (atom? P) (link 'inq (link (cap Q) (link d ())))
                 (atom? Q) (link 'inp (link (cap P) (link d ())))
-                (id? (cap P) (cap Q)) (rel (cup P) (cup Q) (+ d 1))
+                (= (cap P) (cap Q)) (rel (cup P) (cup Q) (+ d 1))
                 '(apart))
 
  ; --- commute: four lanes, two kinds of re-aim (index at 'same, PATH at the
@@ -507,7 +507,7 @@
  (seg s i n) (htake (hdrop s i) n)
  (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (+ i c))))
  (nth s j) (cap (hdrop s j))
- (heq a b) (? (&& (atom? a) (atom? b)) (id? a b)
+ (heq a b) (? (&& (atom? a) (atom? b)) (= a b)
               (|| (atom? a) (atom? b)) 0
               (&& (heq (cap a) (cap b)) (heq (cup a) (cup b))))
  (tnav t path) (? (atom? path) t (tnav (nth t (cap path)) (cup path)))
@@ -535,7 +535,7 @@
  (rel P Q d) (? (&& (atom? P) (atom? Q)) '(same)
                 (atom? P) (link 'inq (link (cap Q) (link d ())))
                 (atom? Q) (link 'inp (link (cap P) (link d ())))
-                (id? (cap P) (cap Q)) (rel (cup P) (cup Q) (+ d 1))
+                (= (cap P) (cap Q)) (rel (cup P) (cup Q) (+ d 1))
                 '(apart))
 
  ; --- the matching kit: a subtree's occurrences, counted and found at every
@@ -731,7 +731,7 @@
  (hcat a b) (? (atom? a) b (link (cap a) (hcat (cup a) b)))
  (seg s i n) (htake (hdrop s i) n)
  (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (+ i c))))
- (heq a b) (? (&& (atom? a) (atom? b)) (id? a b)
+ (heq a b) (? (&& (atom? a) (atom? b)) (= a b)
               (|| (atom? a) (atom? b)) 0
               (&& (heq (cap a) (cap b)) (heq (cup a) (cup b))))
  (hunk i o n) (link 'hunk (link i (link o (link n ()))))
@@ -964,7 +964,7 @@
  (seg s i n) (htake (hdrop s i) n)
  (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (+ i c))))
  (nth s j) (cap (hdrop s j))
- (heq a b) (? (&& (atom? a) (atom? b)) (id? a b)
+ (heq a b) (? (&& (atom? a) (atom? b)) (= a b)
               (|| (atom? a) (atom? b)) 0
               (&& (heq (cap a) (cap b)) (heq (cup a) (cup b))))
  (tnav t path) (? (atom? path) t (tnav (nth t (cap path)) (cup path)))
@@ -986,20 +986,20 @@
  (rel P Q d) (? (&& (atom? P) (atom? Q)) '(same)
                 (atom? P) (link 'inq (link (cap Q) (link d ())))
                 (atom? Q) (link 'inp (link (cap P) (link d ())))
-                (id? (cap P) (cap Q)) (rel (cup P) (cup Q) (+ d 1))
+                (= (cap P) (cap Q)) (rel (cup P) (cup Q) (+ d 1))
                 '(apart))
 
  ; --- the pattern kit: metavariables, match, instantiate. a (mv v) cell is
  ;     a variable (data by discipline: ground content never spells one) ---
  (mv? x) (? (atom? x) 0 ((cap x) = 'mv))
  (mvname x) (cap (cup x))
- (asq k s) (? (atom? s) () (: c (cap s) (? (id? k (cap c)) (link (cup c) ()) (asq k (cup s)))))
+ (asq k s) (? (atom? s) () (: c (cap s) (? (= k (cap c)) (link (cup c) ()) (asq k (cup s)))))
  (mtch p g s)                                              ; one-sided unification:
    (? (s = 'no) 'no                                      ; pattern vs ground, the
       (mv? p) (: r (asq (mvname p) s)                      ; substitution threading --
                  (? (atom? r) (link (link (mvname p) g) s) ; a rebound variable must
                     (? (heq (cap r) g) s 'no)))            ; agree (the kanren move)
-      (&& (atom? p) (atom? g)) (? (id? p g) s 'no)
+      (&& (atom? p) (atom? g)) (? (= p g) s 'no)
       (|| (atom? p) (atom? g)) 'no
       (mtch (cup p) (cup g) (mtch (cap p) (cap g) s)))
  (inst p s) (? (mv? p) (: r (asq (mvname p) s) (? (atom? r) p (cap r)))
@@ -1019,11 +1019,11 @@
  ; --- the variable's seats: count and address in a pattern segment ---
  (mvn f v) (? (atom? f) 0
                (: h (cap f)
-                  (+ (? (atom? h) 0 (&& (mv? h) (id? (mvname h) v)) 1 (mvn h v))
+                  (+ (? (atom? h) 0 (&& (mv? h) (= (mvname h) v)) 1 (mvn h v))
                      (mvn (cup f) v))))
  (mvat f v) (? (atom? f) ()
                 (: h (cap f)
-                   (? (&& (! (atom? h)) (&& (mv? h) (id? (mvname h) v))) '(0)
+                   (? (&& (! (atom? h)) (&& (mv? h) (= (mvname h) v))) '(0)
                       (: r (? (atom? h) () (mvat h v))
                          (? (! (atom? r)) (link 0 r)
                             (: d (mvat (cup f) v)
@@ -1189,7 +1189,7 @@
  (hcat a b) (? (atom? a) b (link (cap a) (hcat (cup a) b)))
  (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (+ i c))))
  (nth s j) (cap (hdrop s j))
- (heq a b) (? (&& (atom? a) (atom? b)) (id? a b)
+ (heq a b) (? (&& (atom? a) (atom? b)) (= a b)
               (|| (atom? a) (atom? b)) 0
               (&& (heq (cap a) (cap b)) (heq (cup a) (cup b))))
  (tnav t path) (? (atom? path) t (tnav (nth t (cap path)) (cup path)))
@@ -1199,13 +1199,13 @@
               (link (tlay (nth t (cap path)) (cup path) s2) ())))
  (mv? x) (? (atom? x) 0 ((cap x) = 'mv))
  (mvname x) (cap (cup x))
- (asq k s) (? (atom? s) () (: c (cap s) (? (id? k (cap c)) (link (cup c) ()) (asq k (cup s)))))
+ (asq k s) (? (atom? s) () (: c (cap s) (? (= k (cap c)) (link (cup c) ()) (asq k (cup s)))))
  (mtch p g s)
    (? (s = 'no) 'no
       (mv? p) (: r (asq (mvname p) s)
                  (? (atom? r) (link (link (mvname p) g) s)
                     (? (heq (cap r) g) s 'no)))
-      (&& (atom? p) (atom? g)) (? (id? p g) s 'no)
+      (&& (atom? p) (atom? g)) (? (= p g) s 'no)
       (|| (atom? p) (atom? g)) 'no
       (mtch (cup p) (cup g) (mtch (cap p) (cap g) s)))
  (inst p s) (? (mv? p) (: r (asq (mvname p) s) (? (atom? r) p (cap r)))

@@ -27,7 +27,7 @@
  ('no = (@ 5 (a >< t) a 'no))
  ('no = (@ '(1) (a >< b >< t) t 'no))      ; ..and every step still owes a two?
  ('(1 2) = (@ '(1 2) (h >< t) (h >< t)))   ; the law: one text, matching and building
- (id? link ><)                             ; ..and >< is link, but only the sigils tag a pattern
+ (= link ><)                             ; ..and >< is link, but only the sigils tag a pattern
  ; ..so a bracket stays closed: [a b >< t] is ([a b] >< t) is (>< (list a b) t)
  ('yes = (@ '((1 2) 3) [a b >< t] 'yes 'no))
  ('yes = (@ '((1 2) 3) ([a b] >< t) 'yes 'no))

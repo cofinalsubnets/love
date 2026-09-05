@@ -65,7 +65,7 @@
    ; nothing and paints its assert dot green. redden here instead. the empty seat is
    ; `id? ()` and not `!`: a term of 0 is a legal def (a code table's first row) and
    ; falsy, so truthiness would redden it.
-   _ (map (\ e (? (<e = 'def && (id? (e 3) ()) || !(peep GLOB (e 1) 0))
+   _ (map (\ e (? (<e = 'def && (= (e 3) ()) || !(peep GLOB (e 1) 0))
                   (puts "MALFORMED-OR-UNPINNED-DEF ", puts (string (e 1)), quit 1)
                   0))
         ents)

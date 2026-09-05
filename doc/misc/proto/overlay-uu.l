@@ -8,7 +8,7 @@
 ; against a length-3 signature because UU computes 2+1=3, and a length-9 claim is
 ; flagged. This is the overlay's `norm`/`okr` slot connected to uu (memory
 ; pluggable-types, the Phase-2 "dial up to uu" rung).
-(: uunorm (\ d (? (&& (two? d) (id? (cap d) 'vec) (= 3 (tally d)))
+(: uunorm (\ d (? (&& (two? d) (= (cap d) 'vec) (= 3 (tally d)))
                   ['vec (caup d) (vof () (cap (cup (cup d))))]      ; length index -> uu normal form (a charm)
                   d))
    vdom {'dice '(meters) 'ctors '(pair vec succ zero add)

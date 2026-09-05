@@ -135,7 +135,7 @@
     (: n  #src
        ; no config at all -- lint-scan's () -- is balance alone, the contract vi's
        ; cat and the fixtures ride. singleton is on by default under any other.
-       sg (? (id? conf ()) 0 (lint-yes? conf 'singleton))
+       sg (? (= conf ()) 0 (lint-yes? conf 'singleton))
        dp (conf 'deprecated)
        ; a token just ended at i, having started at ti/tc. a no-op until a config asks
        (lend line tc ti i warns)
@@ -151,17 +151,17 @@
        (w i st stk line col sl sc it ti tc warns)
         (? (n <= i)
             (: w0 (? it (lend line tc ti i warns) warns)
-               w1 (id? st 'str ? ([sl sc "unclosed string" 'balance] . w0) w0)
+               w1 (= st 'str ? ([sl sc "unclosed string" 'balance] . w0) w0)
                (rev (foldl (\ a o (o @ {'cl cl 'ln ln 'co co}
                             ([ln co ("unclosed " + string (lopen cl)) 'balance] . a)))
                      w1 stk)))
            (: c (src i)
-              (? (id? st 'str)                                    ; inside "..."
+              (? (= st 'str)                                    ; inside "..."
                   (? (c = 92) (w (i + 2) 'str stk line (col + 2) sl sc 0 ti tc warns)   ; \ escape: skip next
                      (c = 34) (w (i + 1) 'code stk line (col + 1) sl sc 0 ti tc warns)
                      (c = 10) (w (i + 1) 'str stk (line + 1) 1 sl sc 0 ti tc warns)
                      (w (i + 1) 'str stk line (col + 1) sl sc 0 ti tc warns))
-                 (id? st 'cmt)                                    ; ; comment to eol
+                 (= st 'cmt)                                    ; ; comment to eol
                   (? (c = 10) (w (i + 1) 'code stk (line + 1) 1 sl sc 0 ti tc warns)
                      (w (i + 1) 'cmt stk line (col + 1) sl sc 0 ti tc warns))
                  (c = 59)                                                      ; ; -- start comment
@@ -196,10 +196,10 @@
                            w1 (foldl (\ a p (: wr >p (<p = f 'ne ? (wr . a) a)))
                                      w0 (f 'pd))
                            sw (sg && lsing src n f)
-                           (? (id? sw ()) (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc w1)
+                           (? (= sw ()) (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc w1)
                               (f 'am)     (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc w1)   ; match arms: silent
                               (: dh (ldefer src n rest)
-                                 (? (id? dh ())
+                                 (? (= dh ())
                                      (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc (sw . w1))
                                     (w (i + 1) 'code (lpend rest <dh <>dh sw) line (col + 1) sl sc 0 ti tc w1)))))))
                  (c < 33)                                                      ; space, tab, the rest
@@ -219,14 +219,14 @@
     (: n #src
        (shut i cl cc ti ck acc) ([cl cc (snip src ti i) ck] . acc)
        (w i st line col cl cc ti ck acc)
-        (? (n <= i) (rev (id? st 'cmt ? (shut i cl cc ti ck acc) acc))
+        (? (n <= i) (rev (= st 'cmt ? (shut i cl cc ti ck acc) acc))
            (: c (src i)
-              (? (id? st 'str)
+              (? (= st 'str)
                   (? (c = 92) (w (i + 2) 'str line (col + 2) cl cc ti ck acc)
                      (c = 34) (w (i + 1) 'code line (col + 1) cl cc ti ck acc)
                      (c = 10) (w (i + 1) 'str (line + 1) 1 cl cc ti ck acc)
                      (w (i + 1) 'str line (col + 1) cl cc ti ck acc))
-                 (id? st 'cmt)
+                 (= st 'cmt)
                   (? (c = 10) (w (i + 1) 'code (line + 1) 1 cl cc ti ck (shut i cl cc ti ck acc))
                      (w (i + 1) 'cmt line (col + 1) cl cc ti ck acc))
                  (c = 59)  (w (i + 1) 'cmt line (col + 1) line col (i + 1) 'semi acc)

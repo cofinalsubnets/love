@@ -43,7 +43,7 @@
    (nb-tab i acc) (? (i < 0) acc (nb-tab (i - 1) (['svcn i] >< (['ret] >< acc))))
    ; the bytes alone -- moon.l's runtime pull lays sys in-memory through this
    (mksys-bytes arch)
-    (: ir (? (id? arch 'x64)
+    (: ir (? (= arch 'x64)
          '(
          ; -- __ai_sys: SysV args (rdi rsi rdx rcx r8 r9 [rsp+8]) -> the kernel's
          ;    (rax rdi rsi rdx r10 r8 r9). each mov reads a slot the previous one
@@ -200,7 +200,7 @@
          (li r0 1)                   ; exit
          (sys))
 
-         (id? arch 'a64)
+         (= arch 'a64)
          ; one expression: the written leaves ++ the generated netbsd table.
          ; the a64 lane: same four leaves on the asm-generic table. registers are
          ; holo's a64 file, rN = xN one-to-one (plus fp/lr/sp by name). the jmp_buf
@@ -567,9 +567,9 @@
        ; neither it nor the netbsd pair -- nothing has laid that tail, which is
        ; the whole of what impl.h's AiOsTranslate says to the C.
        (objelf arch ir ()
-               (? (id? arch 'x64)
+               (? (= arch 'x64)
                   '("__ai_sys" "__ai_sys7" "__sigsetjmp" "siglongjmp" "__ai_sigret" "__ai_nb_sigtramp")
-                  (id? arch 'a64)
+                  (= arch 'a64)
                   '("__ai_sys" "__ai_sys7" "__sigsetjmp" "siglongjmp" "__ai_sigret"
                     "__ai_nb_sigtramp" "__ai_nbp20" "__ai_nbp202")
                   '("__ai_sys" "__sigsetjmp" "siglongjmp" "__ai_sigret"))

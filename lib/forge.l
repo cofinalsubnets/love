@@ -156,7 +156,7 @@
    forge-seam (from 'glaze 'nif)
    forge-seamx (from 'glaze 'nifx)                  ; the same door, one extras slot wider
    forge-arch love-arch
-   forge-abi? (id? forge-arch 'x64)               ; the targets the kit above spells
+   forge-abi? (= forge-arch 'x64)               ; the targets the kit above spells
    forge-asm (from 'holo 'assemble)
    ; assemble one kernel -> its bytes | (). the deopt tail is the module's, because it is
    ; arity-determined and mechanical; the epilogue is the kernel's, because only the kernel
@@ -171,7 +171,7 @@
                 () (\ a b (: _ (forge-no a nom) 'raised)))
        ; the raise arm answers a nom, not (): a decline must be counted once, and a bare ()
        ; here reads as "assembled to nothing" and tallies the miss a second time under its name.
-       (? (two? bs) bs  (id? bs 'raised) ()  (forge-no 'no-bytes nom)))
+       (? (two? bs) bs  (= bs 'raised) ()  (forge-no 'no-bytes nom)))
    ; the whole roster: lay every kernel, then install every kernel. the two halves are
    ; separate on purpose -- see the batch note in the header.
    ; a decline is not a failure and never a raise: the twin is the definition, so a
@@ -185,7 +185,7 @@
           (foldl (\ n lr
              (: r <lr  bs <>lr  nom <r  ar <>r  twin <>>>r  xt <>>>>r
                 (? !(two? bs) n
-                   (: j (? (id? xt 'none) (forge-seam (cask bs) twin ['\ 'q '(q)] ar)
+                   (: j (? (= xt 'none) (forge-seam (cask bs) twin ['\ 'q '(q)] ar)
                            (forge-seamx (cask bs) twin ['\ 'q '(q)] ar xt))
                       (? !(lit? j) (: _ (forge-no 'declined nom) n)
                          (: _ (pin forge-fits nom j) _ (pin forge-nat nom 1) (n + 1)))))))

@@ -161,10 +161,10 @@
  _ (assert ('(+ (* (+ (* (+ (* 2 x) 3) x) 5) x) 7) = (reify (mix '(ev1 nd x) envP)))
            "ev1 specialized to P == the straight-line Horner residual")
  ; the residual computes the SAME function as the interpreter, across a spread of inputs:
- (ev1 nd x) (? (id? (cap nd) 'lit) (caup nd)
-               (id? (cap nd) 'var) x
-               (id? (cap nd) 'add) (+ (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))
-               (id? (cap nd) 'mul) (* (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))
+ (ev1 nd x) (? (= (cap nd) 'lit) (caup nd)
+               (= (cap nd) 'var) x
+               (= (cap nd) 'add) (+ (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))
+               (= (cap nd) 'mul) (* (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))
                0)
  ev1P (resid '(ev1 nd x) envP 'x)
  _ (assert (alls (map (\ v (= (ev1P v) (ev1 P v))) '(0 1 2 5 9 12 100))) "residual matches interp on every input")

@@ -78,7 +78,7 @@
                    (: ds (deps f)
                       lam (ev $ !ds ? f (['\] + ds + [f]))
                       vs (map (d \ cell? d ? (worth sh d) (string d)) ds)
-                      (? (foldl (\ a v (id? v whirl ? 1 a)) 0 vs)
+                      (? (foldl (\ a v (= v whirl ? 1 a)) 0 vs)
                          whirl                          ; a whirl dep taints (it would ride as the unit)
                          (foldl id lam vs)))))
  ; a visiting-hit bumps the whirl count; any cell whose evaluation window saw
@@ -86,10 +86,10 @@
  ; the loop (a bare whirl is a mint -- the unit -- and would otherwise ride
  ; through the arithmetic and let a circle quietly converge).
  (worth sh n) (: v (peep (sh 1) n none)
-                 (? !(id? v none) v
+                 (? !(= v none) v
                   (peep (sh 2) n 0) (pin sh 3 (1 + peep sh 3 0), whirl)
                   (: s (peep (sh 0) n none)
-                     (? (id? s none) ()                 ; an empty cell is the unit
+                     (? (= s none) ()                 ; an empty cell is the unit
                       (: _ (pin (sh 2) n 1)
                          c0 (peep sh 3 0)
                          v1 (worth1 sh s)
@@ -114,15 +114,15 @@
                          r (sound t)
                          d (two? r ? <r)
                          (close p,
-                          two? d && id? <d 'manifest ?  (map (pr \ cell! sh <pr <>pr) >d),
+                          two? d && (= <d 'manifest) ?  (map (pr \ cell! sh <pr <>pr) >d),
                           sh))))
 
  ; --- faces: how a worth looks in its 9 columns ---
  ; ..the guard is the wide case: n * " " takes |n|, so an over-long s would pad, not cut
  (padl s w) (tally s < w ? ((w - tally s) * " " + s) (snip s 0 w))
  (padr s w) (tally s < w ? (s + (w - tally s) * " ") (snip s 0 w))
- (face v) (? (id? v whirl) "cycle!"
-             (id? v ()) ""
+ (face v) (? (= v whirl) "cycle!"
+             (= v ()) ""
              (string? v) v
              (show v))
 
@@ -199,7 +199,7 @@
           (? (= k 1066) 1 (= k 106)) (go sh path r c cx (min2 98 (+ cy 1)) top2 ())      ; down
           (? (= k 1067) 1 (= k 108)) (go sh path r c (min2 (- nc 1) (+ cx 1)) cy top2 ()); right
           (? (= k 1068) 1 (= k 104)) (go sh path r c (max2 0 (- cx 1)) cy top2 ())       ; left
-          (= k 13) (go sh path r c cx cy top2 (: s (cell sh (cnom cx cy)) (? (id? s ()) "" s)))
+          (= k 13) (go sh path r c cx cy top2 (: s (cell sh (cnom cx cy)) (? (= s ()) "" s)))
           (= k 61) (go sh path r c cx cy top2 "")
           (= k 120) (: _ (cell! sh (cnom cx cy) "") (go sh path r c cx cy top2 ()))
           (= k 119) (: _ (? (tally path) (stow sh path) 0) (go sh path r c cx cy top2 ()))

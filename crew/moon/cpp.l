@@ -487,7 +487,7 @@
                  sbody (? (two? sline) >>sline ())
                  (? (member? dir '("if" "ifdef" "ifndef" "elif" "else" "endif"))
                      (: cond2 (docond dir sbody sline macs cond)
-                        (? (id? cond2 'err) (gripeat sline ("#" + dir + " without #if"))   ; unbalanced -- fatal, not empty
+                        (? (= cond2 'err) (gripeat sline ("#" + dir + " without #if"))   ; unbalanced -- fatal, not empty
                            (cppgo rest macs cond2 () out1 incf)))
                     !(condactive cond) (cppgo rest macs cond () out1 incf)      ; skipped: ignore non-cond directives
                     (dir = "define") (defmacro macs body, cppgo rest macs cond () out1 incf)
@@ -521,7 +521,7 @@
                     ; `#` is the null directive (C11 6.10.7), and a numeric one is
                     ; gcc -E's line marker.
                     (member? dir '("pragma" "ident" "sccs" "assert" "unassert") ||
-                        !(two? >line) || id? dirk 'num)
+                        !(two? >line) || (= dirk 'num))
                      (cppgo rest macs cond () out1 incf)
                     ; ..and anything else is a directive we do not implement, where
                     ; ignoring it drops whatever it would have done in silence --

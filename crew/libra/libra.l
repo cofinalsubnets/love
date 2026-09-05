@@ -40,7 +40,7 @@
 
    ; balance alone fails. the other rules speak -- an editing aid, read by hand --
    ; and nothing promotes one, so libra never refuses a file over a habit.
-   (fatal? w) (id? <>>>w 'balance)
+   (fatal? w) (= <>>>w 'balance)
    (tally-fatal ws) (foldl (\ a w (? (fatal? w) (a + 1) a)) 0 ws)
 
    (libra-check-files conf fs bad)
@@ -82,7 +82,7 @@
               a (? (two? c) (dalone <ls c) ())      ; the line's own sentence, if it is one
               (? !(two? a) (? (dblank? <ls) (g >ls (k + 1) ("" . acc))
                                (drtrim (rev acc))) ; ..else this line is code: the header ends
-                 (id? <>>>c 'bang) (g >ls (k + 1) acc)             ; the seat line says nothing
+                 (= <>>>c 'bang) (g >ls (k + 1) acc)             ; the seat line says nothing
                  (g >ls (k + 1) (<>a . acc)))))
        (g (linesof src) 1 ()))
 
@@ -155,11 +155,11 @@
                 (? !(0 < tally body)
                     (: _ (say err (<fs + ": no header comment\n"))
                        (libra-doc-files >fs surf (bad + 1)))
-                   (: _ (say out (? (id? surf 'md) md
-                                     ((from 'lapiz (? (id? surf 'ht) 'md->ht 'md->rf)) md)))
+                   (: _ (say out (? (= surf 'md) md
+                                     ((from 'lapiz (? (= surf 'ht) 'md->ht 'md->rf)) md)))
                       (libra-doc-files >fs surf bad)))))))
    (libra-doc fs surf)
-    (: _ (? (id? surf 'md) 0 (use 'lapiz))
+    (: _ (? (= surf 'md) 0 (use 'lapiz))
        n (libra-doc-files fs surf 0)
        (? (0 < n) (quit 1) 0))
 

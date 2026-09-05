@@ -30,7 +30,7 @@
  (: b (cask 4) _ (pour b 0 "ABCD" 0 4) (= "AB" (snip b 0 2)))
  (: b (cask 4) _ (pour b 0 "ABCD" 0 4) (string? (snip b 0 2)))
  (: b (cask 4) _ (pour b 0 "ABCD" 0 4) (= "ABCD" (snip b -9 99)))   ; clamps like a string snip
- (: b (cask 4) (id? "" (snip b 2 2)))                               ; an empty range is the empty string
+ (: b (cask 4) (= "" (snip b 2 2)))                               ; an empty range is the empty string
  ; ... and the snapshot is taken, not aliased
  (: b (cask 2) _ (pour b 0 "AB" 0 2) s (snip b 0 2) _ (pin b 0 90) (= "AB" s))
 

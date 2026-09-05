@@ -22,7 +22,7 @@
        (ov-look env x) (env @ ((ap . up) . env') (x == ap ? up (ov-look env' x)) 'bot)
        (ov2-var? dom d) (nom? d && !(member? d (dom 'dice)) && !(member? d (dom 'ctors)))   ; a sig variable: not concrete, not a constructor
        (ov2-vars dom d acc) (atom? d ? (ov2-var? dom d && !(member? d acc) ? (d . acc) acc) (foldl (flip $ ov2-vars dom) acc d))
-       (ov2-lk vm d)      (? (atom? vm) d (id? d <<vm) ><vm (ov2-lk >vm d))   ; ><vm is glued: cuap, not the cons
+       (ov2-lk vm d)      (? (atom? vm) d (= d <<vm) ><vm (ov2-lk >vm d))   ; ><vm is glued: cuap, not the cons
        (ov2-term vm d)    (? (atom? d) (ov2-lk vm d) (map (ov2-term vm) d))
        (ov2-uall ps as s) (? (atom? ps || atom? as) s
                              (member? <as '(top bot)) (ov2-uall >ps >as s)   ; an unknown arg is gradual: consistent with any param, binds nothing

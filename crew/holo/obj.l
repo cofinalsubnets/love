@@ -488,9 +488,9 @@
    ; from -- but writes no file bytes, which is the whole meaning of .bss.
    (objsecs target0 secs funcnames globnames wknames locnames)
     (: target (arch-nom target0)
-       a64 (id? target 'a64)
-       rv (id? target 'rv64)
-       _ (? (id? target 'x64 || a64 || rv) 0 (scare 'obj-target target))
+       a64 (= target 'a64)
+       rv (= target 'rv64)
+       _ (? (= target 'x64 || a64 || rv) 0 (scare 'obj-target target))
        ; the in-place-resolvable kinds (translation-invariant). riscv's both label
        ; kinds are pure byte deltas (auipc is byte pc-relative by nature -- no page
        ; math), so intra-.text la/call/jmp all resolve inside the .o.

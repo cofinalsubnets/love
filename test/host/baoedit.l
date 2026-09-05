@@ -36,9 +36,9 @@
    ; end after HOME: a, HOME, end, b c, Enter -> "abc" (END returns to line tail)
    (= abc (edraw (keys [97 27 91 72 27 91 70 98 99 13]) ""))
    ; ^D -> the EOF sentinel (bao-private), never a stray line
-   (id? eof (edraw (keys [4]) ""))
+   (= eof (edraw (keys [4]) ""))
    ; port EOF (empty input) -> the same sentinel
-   (id? eof (edraw (keys 0) ""))))
+   (= eof (edraw (keys 0) ""))))
 
 ; --- edln: edraw plus command history. returns (line . nhist), or 'eof at EOF
 ; (a public symbol, not edraw's private sentinel). same editing primitives; up/

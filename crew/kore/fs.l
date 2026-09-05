@@ -87,7 +87,7 @@
           (: src <rest dst (udest src <>rest)
              e (rename src dst)
              (? !e 0
-                (id? e 'exdev) (: _ (ucopy "mv" src dst) _ (unlink src) 0)  ; the long way
+                (= e 'exdev) (: _ (ucopy "mv" src dst) _ (unlink src) 0)  ; the long way
                 (udie 1 ("mv: cannot move " + src))))))
 
    ; -- rm: unlink, -r walks a tree bottom-up, -f keeps quiet about misses --
@@ -276,7 +276,7 @@
                  _ (put err 10) 0)
               (: p <>r
                  want (? m? () (? e? p (udir p)))    ; what has to be there to answer
-                 (? ((id? want ()) || (two? (stat want)))
+                 (? ((= want ()) || (two? (stat want)))
                     (: _ (say out p) _ (put out 10) ok)
                     (: _ (say err ("realpath: " + q + ": No such file or directory"))
                        _ (put err 10) 0)))))

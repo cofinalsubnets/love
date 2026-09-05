@@ -23,15 +23,13 @@
     !(coin? "s")
     (3 = load a)                 ; load reads the payload
     (7 = load 7)                 ; load of a non-coin is itself
-    (id? (die-of a) (die-of (z5 3)))   ; every z5 coin shares one die
+    (= (die-of a) (die-of (z5 3)))   ; every z5 coin shares one die
     (nil? (die-of 5))              ; a non-coin has no die
 
     ; --- value equality: same die + eqv payloads ---
     (a = z5 3)                   ; by value, not identity
     (nil? (a = z5 4))            ; different payload
     (nil? (a = sm 3))            ; different die (even with equal payload)
-    (id? a a)                      ; id? stays identity-sharp
-    (nil? (id? a (z5 3)))          ; ... distinct objects
 
     ; --- + and * run the die's methods over the payloads ---
     (z5 2 = a + b)             ; (3+4) mod 5 = 2

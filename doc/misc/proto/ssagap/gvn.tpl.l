@@ -62,7 +62,7 @@
        rd (rdsp f)
        fresh ("f" + show i)
        (? (ctl? op) [rg sf sc mem]
-          (member? op bars || id? rd 'bar) [{} {} {} ("m" + show i)]
+          (member? op bars || (= rd 'bar)) [{} {} {} ("m" + show i)]
           (member? op '(li la mov) || member? op comps || member? op addrs || member? op lds)
            (: _ (pin rg <>f (vkey f rg sf sc mem c)) [rg sf sc mem])
           (op = 'push) (: _ (pin sc (c - 8) (vk rg <>f)) [rg sf sc mem])
@@ -148,7 +148,7 @@
            _ ((: (cen i) (? (<>s < i) 0
                            (: f (peep bt i ()) rd (rdsp2 f)
                               _ (? (two? f && member? <f sts) (pin dc 'st 1) 0)
-                              _ (? (id? rd 'bar) (pin dc 'bar 1)
+                              _ (? (= rd 'bar) (pin dc 'bar 1)
                                    (foldl (\ _ d (pin dc d (1 + peep dc d 0))) 0 <>rd))
                               (cen (i + 1))))
                  cen) <s)
@@ -159,7 +159,7 @@
                (: f (peep bt i ()) op (two? f ? <f ()) rd (rdsp2 f)
                   (rin? r) (: p (peep ldef r ())
                               (? (nil? p) (0 = peep dc r 0) (peep inv p 0)))
-                  ok (!(peep dc 'bar 0) && !(id? rd 'bar) &&
+                  ok (!(peep dc 'bar 0) && !(= rd 'bar) &&
                       (member? op '(li la) || member? op comps || member? op addrs || member? op lds) &&
                       !(vany (\ r !(rin? r)) <rd) &&
                       (!(member? op lds) || !stored))
@@ -168,7 +168,7 @@
                        (: _ (putx ['L tu nm (member? op '(li la) ? 'li (cat-of op)) i (vwt spans i)])
                           (putc 10))
                        0)
-                  _ (? (id? rd 'bar) 0 (foldl (\ _ d (pin ldef d i)) 0 <>rd))
+                  _ (? (= rd 'bar) 0 (foldl (\ _ d (pin ldef d i)) 0 <>rd))
                   (go (i + 1))))
            (go <s))
        (foldl (\ _ s (span s)) 0 spans))

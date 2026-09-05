@@ -59,7 +59,7 @@
     (gem? (3.0 2))               ; 2^3.0 -> float
 
     ; --- the math.h spellings name the same functions ---
-    (id? sin sine) (id? cos cosine) (id? tan tangent) (id? fabs abs)
+    (= sin sine) (= cos cosine) (= tan tangent) (= fabs abs)
     (= 3.0 (sqrt 9.0)) (very-near e (exp 1))
     ; one exponent, three spellings -- and it is the tower, not the inexact leaf `fpow`
     ; underneath it: exact on whole exponents, elementwise on an array one.

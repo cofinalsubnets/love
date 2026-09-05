@@ -58,7 +58,7 @@
        (udirp f) 'dir
        (: r (uread f) (? (two? r) [1 (<>r + "")] ())))
    (sum-nope who f r)
-    (: _ (say err (who + ": " + f + (? (id? r 'dir) ": is a directory" ": cannot open")))
+    (: _ (say err (who + ": " + f + (? (= r 'dir) ": is a directory" ": cannot open")))
        (put err 10))
 
    ; --- the two output faces -------------------------------------------------

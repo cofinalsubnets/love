@@ -47,12 +47,12 @@
    (fat-sec f cl) (f 3 + (cl * 4 // 512))
    (fat@ f cl)                                        ; the entry, 28 bits
     (: lba (fat-sec f cl)
-       s (id? lba (f 9) ? (f 10)
+       s (= lba (f 9) ? (f 10)
           (: t (rd1 f lba) (pin f 9 lba, pin f 10 t, t)))
        (u32 s (cl * 4 % 512) & 0x0FFFFFFF))
    (fat! f cl v)                                      ; write, both copies, top nibble kept
     (: lba (fat-sec f cl)
-       s (id? lba (f 9) ? (f 10) (rd1 f lba))
+       s (= lba (f 9) ? (f 10) (rd1 f lba))
        b (cask 512) _ (bcopy b 0 s)
        off (cl * 4 % 512)
        _ (w32 b off ((u32 s off & 0xF0000000) + (v & 0x0FFFFFFF)))

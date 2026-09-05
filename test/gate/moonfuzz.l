@@ -112,7 +112,7 @@
           ; it parsed. the clay leg -- G1 over a tree the corpus never had.
           (: a (el r 1)
              v (cok? a)
-             (? (! (id? v 1)) ['badshape 'clay]
+             (? (! (= v 1)) ['badshape 'clay]
                 (: t (cshow a)
                    (? (gripe? t) ['inexpr 'clay]
                       (: b (front t)

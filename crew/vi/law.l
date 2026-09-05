@@ -310,8 +310,8 @@
       !(member? "argv" (hue-words 'names))
       !(member? "argv" (hue-words 'values))
       ; earlier row wins in the one tablet, exactly as the table reads top-down
-      (: b (hue-book ()) (id? (b "assert") 'macro && id? (b "tau") 'const &&
-                          id? (b "map") 'book)))
+      (: b (hue-book ()) (= (b "assert") 'macro && (= (b "tau") 'const) &&
+                          (= (b "map") 'book))))
 
 ; --- the pens: molokayo, and every class has one -----------------------------
    _ (assert
@@ -319,7 +319,7 @@
       (= (hue-pen '(Statement 161 "#F92672" (bold)) ()) "\e[1;38;5;161m")
       (= (hue-pen '(Statement 161 "#F92672" (bold)) 1) "\e[1;38;2;249;38;114m")
       (: ps (hue-pens hue-theme ()) (all (\ c (string? (ps (hue-cls c)))) hue-classes))
-      (all (\ r (any (\ c (id? (hue-grp c) <r)) hue-classes)) hue-theme))
+      (all (\ r (any (\ c (= (hue-grp c) <r)) hue-classes)) hue-theme))
 
 ; --- paint invariance: colour adds colour and moves nothing. this is what keeps
 ;     every byte-exact frame law above meaningful once the paint exists -------

@@ -1872,9 +1872,9 @@
       (lam m false)
       (lam k (lam IH (lam m (nat_rect (lam r bool) true (lam j (lam u (IH j))) m))))
       n)))
- (id? (vof 0 'true) (vof 0 '(natgtb 5 3)))
- (id? (vof 0 'false) (vof 0 '(natgtb 3 5)))
- (id? (vof 0 'false) (vof 0 '(natgtb 4 4)))
+ (= (vof 0 'true) (vof 0 '(natgtb 5 3)))
+ (= (vof 0 'false) (vof 0 '(natgtb 3 5)))
+ (= (vof 0 'false) (vof 0 '(natgtb 4 4)))
  (defn natgth (pi n nat (pi m nat hProp))
    (lam n (lam m (tpair (paths bool (natgtb n m) true)
                          (isasetbool (natgtb n m) true)))))
@@ -1975,8 +1975,8 @@
             (natgthandplusr (mul (succ p) n) (mul (succ p) m) n IH)
             (natgthandplusl n m (mul (succ p) m) g))))
         k))))))
- (id? (vof 0 'true) (vof 0 '(natgtb (add 3 5) (add 3 2))))
- (id? (vof 0 'true) (vof 0 '(natgtb (mul 2 5) (mul 2 2)))))
+ (= (vof 0 'true) (vof 0 '(natgtb (add 3 5) (add 3 2))))
+ (= (vof 0 'true) (vof 0 '(natgtb (mul 2 5) (mul 2 2)))))
 
 ; naturalnumbers round 18 -- the order is decidable and total. natlth/natgeh are
 ; natgth/natleh flipped; natleh is "natgtb is false" (the hProp, by isasetbool) --
@@ -2000,8 +2000,8 @@
         (natgtb n m)))))
  ; the dichotomy decides and computes: coprod_rect reads the chosen branch back
  ; out -- 5>3 lands left (true), 3<5 lands right (false).
- (id? (vof 0 'true)  (vof 0 '(coprod_rect (lam c bool) (lam l true) (lam r false) (natgthorleh 5 3))))
- (id? (vof 0 'false) (vof 0 '(coprod_rect (lam c bool) (lam l true) (lam r false) (natgthorleh 3 5)))))
+ (= (vof 0 'true)  (vof 0 '(coprod_rect (lam c bool) (lam l true) (lam r false) (natgthorleh 5 3))))
+ (= (vof 0 'false) (vof 0 '(coprod_rect (lam c bool) (lam l true) (lam r false) (natgthorleh 3 5)))))
 
 ; naturalnumbers round 19 -- natleh is a partial order, on its "natgtb is false"
 ; carrier (the false mirror of round 16's true-direction laws). isreflnatleh is
@@ -2142,8 +2142,8 @@
            (lam j (lam u (natlehsucc (natminus k j) k (IHn j))))
            m))))
       n)))
- (id? (vof 0 '2) (vof 0 '(natminus 5 3)))
- (id? (vof 0 '0) (vof 0 '(natminus 2 5))))
+ (= (vof 0 '2) (vof 0 '(natminus 5 3)))
+ (= (vof 0 '0) (vof 0 '(natminus 2 5))))
 
 ; naturalnumbers round 22 -- the subtraction order law. natminusplusnmm: when
 ; m <= n, (n - m) + m = n -- subtraction is a genuine left inverse of +m below
@@ -2177,7 +2177,7 @@
                    (maponpaths nat nat (lam w (succ w)) (add (natminus n' m') m') n' (IHn m' h))))))
              m))))
         n)))
- (id? (vof 0 '7) (vof 0 '(add (natminus 7 3) 3))))   ; (7-3)+3 computes to 7
+ (= (vof 0 '7) (vof 0 '(add (natminus 7 3) 3))))   ; (7-3)+3 computes to 7
 
 ; naturalnumbers round 23 -- natminus is monotone in the order: a triple rect
 ; (n, m, k) down natminus's shape, the n=0 corner free (0-k is 0, natgtb 0 _ is

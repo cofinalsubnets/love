@@ -32,7 +32,7 @@
       ; gulp boundary and spins on () forever. `once` memoizes, so re-forcing is free.
       (frc x) (lit? x ? (x ()) x)
       (upto a b n) (: aa (frc a) bb (frc b)
-                      (? (id? aa bb) n
+                      (? (= aa bb) n
                          (two? aa)   (upto (cup aa) bb (n + 1))
                          n))
       ; with no window both endings are honest -- they can only mean the stream itself ended
@@ -56,7 +56,7 @@
            inhand p ? (pin box 0 #pre, step (cat pre (feed ())) 0 z)
                       (walk (cat pre (trickle p)) z)))
       ; never rebind `in` -- this identity folded at egg-compile, so a fresh port fails it in silence
-      (? (id? p in) (start () 0) (walk (flow p) 0))))
+      (? (= p in) (start () 0) (walk (flow p) 0))))
 (: (forms p)
    ((: (g cl acc) (sound cl @ 'torn (scare 'unfinished-form p)
                               (a . b) (g b (a . acc))
@@ -180,7 +180,7 @@
    (edesc x)
     (? !(91 = getc 0) 0
      (: c (getc 0) e (peep arrow c 0)
-      (? !(id? e 0) e
+      (? !(= e 0) e
        (c @ 49 (edesc1 (getc 0))
             55 (getc 0, -5)
             (52 || 56) (getc 0, -6)
@@ -189,7 +189,7 @@
 
    (edev x)
     (: c (getc 0) e (peep evk c 0)
-     (? !(id? e 0) e
+     (? !(= e 0) e
         (c = 27) (edesc 0)
         (32 <= c < 127 ? c)))
 
@@ -297,7 +297,7 @@
          59  (see ip, peep arrow (see ip) 0)) ;   the plain finals
    (besc ip) (see ip != 91 ? 0
     (: c (see ip) e (peep arrow c 0)
-     (? !(id? e 0) e
+     (? !(= e 0) e
       (c @ 49        (besc1 ip (see ip))
            55        (see ip, -5)
            (52 || 56) (see ip, -6)
@@ -306,7 +306,7 @@
    ; the `see` comes first and exactly once -- evk is indexed by the byte, so peeping before
    ; reading has nothing to peep with
    (bev ip) (: c (see ip) e (peep evk c 0)
-               (? !(id? e 0) e
+               (? !(= e 0) e
                   (c @ 27 (besc ip)
                        9  -13          ; Tab -> the completion event (edlnc's; others ignore)
                        (32 <= c < 127 ? c))))

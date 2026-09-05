@@ -35,11 +35,11 @@
    (pick a nvars) ((: (go v) (? (> v nvars) 0 (= 0 (aget a v)) v (go (+ v 1)))) 1)   ; first free var, 0 if none
    (dpll a formula nvars)                                    ; -> a satisfying alist, or 'unsat
     (: a2 (bcp a formula)
-       (? (id? a2 'conflict) 'unsat
+       (? (= a2 'conflict) 'unsat
           (: v (pick a2 nvars)
              (? (= v 0) a2
                 (: r (dpll (put-lit a2 v) formula nvars)
-                   (? (id? r 'unsat) (dpll (put-lit a2 (neg v)) formula nvars) r))))))
+                   (? (= r 'unsat) (dpll (put-lit a2 (neg v)) formula nvars) r))))))
    (solve formula nvars) (dpll () formula nvars)             ; top-level: '() assignment in, model or 'unsat out
    ; --- model counting (enumerate all satisfying assignments) -- a self-check ---
    (count-models formula nvars)
@@ -105,7 +105,7 @@
     (? (= 1 (taut? c0)) 0                                                        ; tautology -> always satisfied, skip
        (: c (dedup-lits c0)
           (? (atom? c) (pin s 'bad 1)                                            ; empty clause -> UNSAT
-             (atom? >c) (: cid (add-clause s c) (? (id? (enqueue s <c cid) 'conflict) (pin s 'bad 1) 0))             ; unit -> level-0 fact
+             (atom? >c) (: cid (add-clause s c) (? (= (enqueue s <c cid) 'conflict) (pin s 'bad 1) 0))             ; unit -> level-0 fact
              (: cid (add-clause s c) (watch2 s cid <c <>c)))))                   ; >=2 distinct lits -> watch the first two
    (find-watch s cid wo)                                    ; a literal of clause cid other than wo and not currently false, else 0
     ((: (go ls) (? (atom? ls) 0 (: l <ls (? (!(= l wo) && !(= (lit-val s l) -1)) l (go >ls))))) (peep (vmap s 'cls) cid ()))
@@ -211,12 +211,12 @@
    (extract-model s nvars) (map (\ v (v >< val-of s v)) (rng 1 (+ nvars 1)))
    (cdcl formula nvars) (: s (mk formula nvars)
                            (? (= 1 (peep s 'bad 0)) 'unsat                       ; empty clause / contradictory units at construction
-                              (: r (search s) (? (id? r 'unsat) 'unsat (extract-model s nvars)))))
+                              (: r (search s) (? (= r 'unsat) 'unsat (extract-model s nvars)))))
    ; --- model counting via the CDCL solver: solve, block the model, repeat until UNSAT. a real #SAT
    ;     technique; the count is solver-independent (a fact), so count-cdcl (cyclic n) == Lucas n. -----
    (block model) (map (\ vv (neg (* >vv <vv))) model)                  ; clause excluding exactly this model
    (count-cdcl formula nvars)
-    ((: (go fm c) (: r (cdcl fm nvars) (? (id? r 'unsat) c (go (block r >< fm) (+ c 1))))) formula 0)
+    ((: (go fm c) (: r (cdcl fm nvars) (? (= r 'unsat) c (go (block r >< fm) (+ c 1))))) formula 0)
    ; --- random 3-SAT generator (deterministic LCG) for the differential fuzz ----
    (lcg-next x)  (% (+ (* x 1103515245) 12345) 2147483648)
    (lit-from x n) (: v (+ 1 (% (// x 16) n)) (? (= 0 (% x 2)) v (- 0 v)))
@@ -227,7 +227,7 @@
               (go (+ i 1) x3 ((lit-from x1 n >< (lit-from x2 n >< (lit-from x3 n >< ()))) >< acc))))) 0 seed ())
    (diff-test seed n m)                                     ; DPLL and CDCL agree (and CDCL's model checks when SAT)
     (: f (gen-formula seed n m) d (solve f n) c (cdcl f n)
-       dsat !(id? d 'unsat) csat !(id? c 'unsat)
+       dsat !(= d 'unsat) csat !(= c 'unsat)
        (? !(= dsat csat) 0  !csat 1  (sat? c f)))
    (fuzz k n m) (all (\ i (= 1 (diff-test (+ 1009 (* i 7919)) n m))) (jot k))
 
@@ -235,27 +235,27 @@
  _ (assert
     ; a tiny SAT instance -- the returned model really satisfies it
     (: f '((1 2) (-1 3) (-2 -3)) m (solve f 3)
-       (!(id? m 'unsat) && sat? m f))
+       (!(= m 'unsat) && sat? m f))
     ; a tiny UNSAT instance -- (x)(-x)
-    (id? (solve '((1) (-1)) 1) 'unsat)
+    (= (solve '((1) (-1)) 1) 'unsat)
     ; the cyclic instance is SAT and the model checks out
-    (: f (cyclic 10) m (solve f 10) (!(id? m 'unsat) && sat? m f))
+    (: f (cyclic 10) m (solve f 10) (!(= m 'unsat) && sat? m f))
     ; DPLL model count == Lucas(n) for the cycle, several n (combinatorial oracle)
     (= (count-models (cyclic 5) 5)  (lucas 5))      ; 11
     (= (count-models (cyclic 8) 8)  (lucas 8))      ; 47
     (= (count-models (cyclic 10) 10) (lucas 10))    ; 123
     ; a fully-assigned conflicting clause is a conflict; an unsatisfiable unit pair propagates to it
-    (id? (bcp () '((1) (-1))) 'conflict)
+    (= (bcp () '((1) (-1))) 'conflict)
     (= 123 (lucas 10)))
  _ (assert    ; --- Stage 2: CDCL agrees with DPLL, learns + backjumps, models check ---
     ; tiny SAT / UNSAT
-    (: f '((1 2) (-1 3) (-2 -3)) m (cdcl f 3) (!(id? m 'unsat) && sat? m f))
-    (id? (cdcl '((1) (-1)) 1) 'unsat)
-    (id? (cdcl '((1 2) (1 -2) (-1 2) (-1 -2)) 2) 'unsat)                       ; all 4 clauses over 2 vars -> UNSAT
+    (: f '((1 2) (-1 3) (-2 -3)) m (cdcl f 3) (!(= m 'unsat) && sat? m f))
+    (= (cdcl '((1) (-1)) 1) 'unsat)
+    (= (cdcl '((1 2) (1 -2) (-1 2) (-1 -2)) 2) 'unsat)                       ; all 4 clauses over 2 vars -> UNSAT
     ; the cyclic instance: SAT, model checks, and the model count matches DPLL/Lucas
-    (: f (cyclic 12) m (cdcl f 12) (!(id? m 'unsat) && sat? m f))
+    (: f (cyclic 12) m (cdcl f 12) (!(= m 'unsat) && sat? m f))
     ; CDCL really learns: a unit clause forces propagation, a conflict at level 0 is UNSAT
-    (id? (cdcl '((1 2 3) (1 2 -3) (1 -2 3) (1 -2 -3) (-1)) 3) 'unsat)          ; forces 1=0 then UNSAT under the first four
+    (= (cdcl '((1 2 3) (1 2 -3) (1 -2 3) (1 -2 -3) (-1)) 3) 'unsat)          ; forces 1=0 then UNSAT under the first four
     ; differential fuzz: 60 random 3-SAT instances, CDCL == DPLL (SAT/UNSAT) + valid models
     (fuzz 60 8 30)                                                            ; near phase transition (m/n ~ 3.75), mixed SAT/UNSAT
     (fuzz 40 10 30)
@@ -268,9 +268,9 @@
     (fuzz 20 14 58)                                                           ; harder ratio (m/n ~ 4.1)
     ; pigeonhole php(5): UNSAT and resolution-hard -> hundreds of conflicts, so this exercises the
     ; learning + restart path end to end (climit starts at 100; PHP(5) blows past it)
-    (id? (cdcl (php 5) (php-vars 5)) 'unsat)
+    (= (cdcl (php 5) (php-vars 5)) 'unsat)
     ; a larger satisfiable instance (cyclic n=80) solved, model checked
-    (: f (cyclic 80) m (cdcl f 80) (!(id? m 'unsat) && sat? m f))
+    (: f (cyclic 80) m (cdcl f 80) (!(= m 'unsat) && sat? m f))
     ; #SAT via blocking clauses == the combinatorial Lucas count (solver-independent)
     (= (count-cdcl (cyclic 8) 8) (lucas 8))                                   ; 47
     (= (count-cdcl (cyclic 10) 10) (lucas 10)))                               ; 123

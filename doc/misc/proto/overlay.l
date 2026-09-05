@@ -182,29 +182,29 @@
 (: subst (from 'kanren 'subst)  nthl (from 'glaze 'nthl)  base-ev (from 'glaze 'base-ev))
 
 (: ; --- the KINDS domain, as a value (reproduces kinds.l) ---
-   (rank k)  (? (id? k 'bot) 0 (id? k 'charm) 1 (id? k 'whole) 2 (id? k 'real) 3 (id? k 'cplx) 4 (id? k 'top) 5 -1)
+   (rank k)  (? (= k 'bot) 0 (= k 'charm) 1 (= k 'whole) 2 (= k 'real) 3 (= k 'cplx) 4 (= k 'top) 5 -1)
    (num? k)  (: r (rank k) (&& (< 0 r) (< r 5)))                 ; charm..cplx = the numeric lane
-   (joink a b) (? (id? a 'bot) b (id? b 'bot) a (id? a b) a
+   (joink a b) (? (= a 'bot) b (= b 'bot) a (= a b) a
                  (&& (num? a) (num? b)) (? (< (rank a) (rank b)) b a)
                  'top)
-   (tnumk a b) (? (|| (id? a 'bot) (id? b 'bot)) 'bot
-                 (&& (num? a) (num? b)) (: j (joink a b) (? (id? j 'charm) 'whole j))   ; +/* may overflow charm
+   (tnumk a b) (? (|| (= a 'bot) (= b 'bot)) 'bot
+                 (&& (num? a) (num? b)) (: j (joink a b) (? (= j 'charm) 'whole j))   ; +/* may overflow charm
                  'top)
    (litk e)  (? (charm? e) 'charm (string? e) 'str 'top)
    kdom  {'join joink  'tr (\ op a b (tnumk a b))  'litdie litk  'dice '(bot charm whole real cplx top str)}
 
    ; --- the generic engine: kinds.l's fix/kindof, now parameterised on `dom` ---
-   (look env x)        (? (atom? env) 'bot (: p (cap env) (? (id? x (cap p)) (cup p) (look (cup env) x))))
+   (look env x)        (? (atom? env) 'bot (: p (cap env) (? (= x (cap p)) (cup p) (look (cup env) x))))
    (joininto dom env x k) (link (link x ((dom 'join) (look env x) k)) env)              ; monotone shadow-update
-   (sig-of sigs nm)    (? (atom? sigs) () (id? nm (caap sigs)) (cap sigs) (sig-of (cup sigs) nm))   ; -> (name (dies..) result) | ()
+   (sig-of sigs nm)    (? (atom? sigs) () (= nm (caap sigs)) (cap sigs) (sig-of (cup sigs) nm))   ; -> (name (dies..) result) | ()
    (kindof dom sigs env e) (? (nom? e)  (look env e)
                           (atom? e) ((dom 'litdie) e)                                    ; litdie handles every atom
                           (: h (cap e) as (map (\ s (kindof dom sigs env s)) (cup e))
                              (? (member? h '(+ *)) ((dom 'tr) h (cap as) (cap (cup as)))
-                                (&& (id? h '?) (= 4 (tally e))) ((dom 'join) (cap (cup as)) (cap (cup (cup as))))  ; (? c a b) -> join branches
+                                (&& (= h '?) (= 4 (tally e))) ((dom 'join) (cap (cup as)) (cap (cup (cup as))))  ; (? c a b) -> join branches
                                 (: sg (sig-of sigs h) (? (two? sg) (inst dom (bindv dom (caup sg) as) (nthl sg 2)) 'top)))))  ; typed callee -> result-die, die-VARS instantiated from arg dies
    (pairs bs)   (? (atom? bs) 0 (atom? (cup bs)) 0 (link (link (cap bs) (cap (cup bs))) (pairs (cup (cup bs)))))
-   (alle a b)   (? (atom? a) 1 (: p (cap a) (&& (id? (cup p) (look b (cap p))) (alle (cup a) b))))
+   (alle a b)   (? (atom? a) 1 (: p (cap a) (&& (= (cup p) (look b (cap p))) (alle (cup a) b))))
    (enveq a b)  (&& (alle a b) (alle b a))
    (step dom sigs ps env) (foldl (\ env p (joininto dom env (cap p) (kindof dom sigs env (cup p)))) env ps)
    (fix dom sigs ps env)  (: e2 (step dom sigs ps env) (? (enveq env e2) env (fix dom sigs ps e2)))
@@ -230,19 +230,19 @@
    (zipenv ps ds) (? (atom? ps) 0 (link (link (cap ps) (cap ds)) (zipenv (cup ps) (cup ds))))
    (clashes dom sigs env e) (? (atom? e) 0                                               ; body subexprs whose die is `clash`
                               (: d (kindof dom sigs env e) sub (catmap (\ s (clashes dom sigs env s)) (cup e))
-                                 (? (id? d 'clash) (link e sub) sub)))
+                                 (? (= d 'clash) (link e sub) sub)))
    (check dom sigs prog) (catmap (\ p (: nm (caap p) ps (cuap p) body (cup p) sg (sig-of sigs nm)   ; p = ((f params) . body)
                                         (? (! (two? sg)) 0                               ; untyped fn -> not checked (gradual)
                                            (: env (zipenv ps (caup sg)) cl (clashes dom sigs env body)
                                               bd (kindof dom sigs env body) decl (nthl sg 2)          ; body die vs DECLARED result
-                                              ok (&& (atom? cl) (id? ((dom 'join) bd decl) decl))      ; no clash AND bd <= decl
+                                              ok (&& (atom? cl) (= ((dom 'join) bd decl) decl))      ; no clash AND bd <= decl
                                               (? ok 0 [(link nm (? (atom? cl) ['result bd decl] cl))])))))       ; clash sites OR (result bd decl)
                                  (filter (\ p (! (atom? (cap p)))) (pairs (cup prog))))  ; strip `:`; function defs only
    ; the UNITS domain -- user-supplied: meters/seconds/area; `clash` = provably-wrong, `bot` = scalar/neutral
-   (ujoin a b) (? (id? a 'bot) b (id? b 'bot) a (id? a b) a (|| (id? a 'clash) (id? b 'clash)) 'clash 'top)
-   (utr op a b) (? (|| (id? a 'clash) (id? b 'clash)) 'clash
-                   (id? op '+) (? (id? a b) a (id? a 'bot) b (id? b 'bot) a 'clash)      ; + : units must match (scalar rides), else CLASH
-                   (id? op '*) (? (id? a 'bot) b (id? b 'bot) a (&& (id? a 'meters) (id? b 'meters)) 'area 'top)  ; m*m -> area
+   (ujoin a b) (? (= a 'bot) b (= b 'bot) a (= a b) a (|| (= a 'clash) (= b 'clash)) 'clash 'top)
+   (utr op a b) (? (|| (= a 'clash) (= b 'clash)) 'clash
+                   (= op '+) (? (= a b) a (= a 'bot) b (= b 'bot) a 'clash)      ; + : units must match (scalar rides), else CLASH
+                   (= op '*) (? (= a 'bot) b (= b 'bot) a (&& (= a 'meters) (= b 'meters)) 'area 'top)  ; m*m -> area
                    'top)
    (ulit e) (? (charm? e) 'bot 'top)                                                     ; a bare numeral is unit-neutral
    udom {'join ujoin 'tr utr 'litdie ulit 'dice '(bot meters seconds area top clash)}
@@ -268,7 +268,7 @@
    (vard? dom d)     (! (member? d (dom 'dice)))
    (bindv dom ps as) (? (atom? ps) 0 (: rest (bindv dom (cup ps) (cup as))
                                         (? (vard? dom (cap ps)) (link (link (cap ps) (cap as)) rest) rest)))
-   (sub-look sub v)  (? (atom? sub) v (id? v (cap (cap sub))) (cup (cap sub)) (sub-look (cup sub) v))   ; v if unbound
+   (sub-look sub v)  (? (atom? sub) v (= v (cap (cap sub))) (cup (cap sub)) (sub-look (cup sub) v))   ; v if unbound
    (inst dom sub d)  (? (vard? dom d) (sub-look sub d) d)
    (checked-ev dom sigs form) (: rep (check dom sigs form)                               ; OBSERVE-ONLY: report, then run UNCHANGED
                                  _ (? (two? rep) (: _ (puts ";;   overlay flags ") _ (puts (show (map cap rep))) (putc 10)) 0)
@@ -296,7 +296,7 @@
    (ov2-var? dom d)     (&& (nom? d) (! (member? d (dom 'dice))) (! (member? d (dom 'ctors))))
    (ov2-vars dom d acc) (? (atom? d) (? (&& (ov2-var? dom d) (! (member? d acc))) (link d acc) acc)
                            (foldl (\ a s (ov2-vars dom s a)) acc d))
-   (ov2-lk vm d)        (? (atom? vm) d (id? d (cap (cap vm))) (cup (cap vm)) (ov2-lk (cup vm) d))   ; d unchanged if not a var
+   (ov2-lk vm d)        (? (atom? vm) d (= d (cap (cap vm))) (cup (cap vm)) (ov2-lk (cup vm) d))   ; d unchanged if not a var
    (ov2-term vm d)      (? (atom? d) (ov2-lk vm d) (map (\ s (ov2-term vm s)) d))                    ; die term -> unify term
    (ov2-uall ps as s)   (? (atom? ps) s (: s1 (unify s (cap ps) (cap as)) (? (ufail? s1) ufail (ov2-uall (cup ps) (cup as) s1))))
    (ov2-inst dom sig args)                                                                           ; sig = (PARAM-DIES RESULT-DIE)
@@ -305,8 +305,8 @@
        s  (ov2-uall (map (\ p (ov2-term vm p)) params) args '(()))        ; unify param patterns (fresh vars) vs arg dies AS-IS (a caller's rigid symbol is a constant -- no capture)
        (? (ufail? s) 'clash ((dom 'norm) (subst s (ov2-term vm result)))))                           ; reify + normalize (dependent index)
    ; a VEC domain: type-level Peano `add` normalizer -> a length-indexed (dependent) vector die
-   (vadd x y)  (? (id? x 'z) y (&& (two? x) (id? (cap x) 's)) ['s (vadd (caup x) y)] ['add x y])
-   (vnorm d)   (? (atom? d) d (&& (id? (cap d) 'add) (= 3 (tally d))) (vadd (vnorm (caup d)) (vnorm (cap (cup (cup d))))) (map vnorm d))
+   (vadd x y)  (? (= x 'z) y (&& (two? x) (= (cap x) 's)) ['s (vadd (caup x) y)] ['add x y])
+   (vnorm d)   (? (atom? d) d (&& (= (cap d) 'add) (= 3 (tally d))) (vadd (vnorm (caup d)) (vnorm (cap (cup (cup d))))) (map vnorm d))
    vdom {'dice '(meters seconds) 'ctors '(pair vec s z add) 'norm vnorm}
    _ (: _ (puts ";; P2 structured unify -- swap : (pair a b) -> (pair b a)\n")
         _ (chk "swap (pair meters seconds) -> (pair seconds meters)" '(pair seconds meters)

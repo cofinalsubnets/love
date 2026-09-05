@@ -62,19 +62,19 @@
    ; `phi` stands for the golden ratio wherever a number would go.
    (lux-arg a i d) (: (go l k) (? !(two? l) d
                                   (0 < k) (go >l (k - 1))
-                                  (: v <l (id? v 'phi ? lux-phi (constellation? v ? v d))))
+                                  (: v <l (= v 'phi ? lux-phi (constellation? v ? v d))))
                       (go a i))
    (lux-lay-of sp)
     (: h (two? sp ? <sp sp) a (two? sp ? >sp ())
-       (? (id? h 'rtall)   (resizable-tall (lux-arg a 0 1) (lux-arg a 1 0.02) (lux-arg a 2 0.5))
-          (id? h 'tall)    (tall (lux-arg a 0 1))
-          (id? h 'dwindle) (dwindle (lux-arg a 0 lux-phi))
-          (id? h 'full)    full
+       (? (= h 'rtall)   (resizable-tall (lux-arg a 0 1) (lux-arg a 1 0.02) (lux-arg a 2 0.5))
+          (= h 'tall)    (tall (lux-arg a 0 1))
+          (= h 'dwindle) (dwindle (lux-arg a 0 lux-phi))
+          (= h 'full)    full
           ()))
-   (lux-wrap-of w inner) (? (id? w 'minimize)    (minimize inner)
-                            (id? w 'smart)       (smart-borders inner)
-                            (id? w 'toggle-full) (toggle-full inner)
-                            (id? w 'mirror)      (mirror inner)
+   (lux-wrap-of w inner) (? (= w 'minimize)    (minimize inner)
+                            (= w 'smart)       (smart-borders inner)
+                            (= w 'toggle-full) (toggle-full inner)
+                            (= w 'mirror)      (mirror inner)
                             inner)
    lux-lays (filter two? (map lux-lay-of
                               (conf-roster lux-conf 'layout '((rtall 1 0.02 0.5) (dwindle phi)))))

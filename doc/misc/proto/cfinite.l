@@ -44,7 +44,7 @@
  (zeros m)      (? (= m 0) () (link 0 (zeros (- m 1))))
  (unitrow m i)  (: (go j) (? (< j m) (link (? (= j i) 1 0) (go (+ j 1))) ()) (go 0))   ; e_i in dim m
  (constrow m k) (cat (zeros (- m 1)) [k])               ; [0..0 k] -- a constant as a row's last coeff
- (idx l v)      (: (go xs i) (? (nul? xs) -1 (id? (cap xs) v) i (go (cup xs) (+ i 1))) (go l 0))
+ (idx l v)      (: (go xs i) (? (nul? xs) -1 (= (cap xs) v) i (go (cup xs) (+ i 1))) (go l 0))
  (vdot a b)      (? (nul? a) 0 (+ (* (cap a) (cap b)) (vdot (cup a) (cup b))))
  (row2 f a b)   (? (nul? a) () (link (f (cap a) (cap b)) (row2 f (cup a) (cup b))))    ; elementwise binop
  (rowscale k r) (map (\ x (* k x)) r)
@@ -59,8 +59,8 @@
         (name? e)  (: i (idx vars e) (? (< i 0) () (unitrow m i)))   ; a state var -> e_i ; ELSE (e.g. n) decline
         (&& (two? e) (member? (cap e) '(+ -)) (= 3 (tally e)))
           (: a (lclin vars (caup e)) b (lclin vars (cap (cuup e)))
-             (? (|| (nul? a) (nul? b)) () (row2 (? (id? (cap e) '+) (\ x y (+ x y)) (\ x y (- x y))) a b)))
-        (&& (two? e) (id? (cap e) '*) (= 3 (tally e)))   ; a product is linear only if a side is constant
+             (? (|| (nul? a) (nul? b)) () (row2 (? (= (cap e) '+) (\ x y (+ x y)) (\ x y (- x y))) a b)))
+        (&& (two? e) (= (cap e) '*) (= 3 (tally e)))   ; a product is linear only if a side is constant
           (: a (lclin vars (caup e)) b (lclin vars (cap (cuup e)))
              (? (|| (nul? a) (nul? b)) ()
                 (rowconst? a) (rowscale (last a) b)
@@ -102,10 +102,10 @@
 
  ; --- an INDEPENDENT naive reference: interpret the updates step by step, O(n), no matrix ----------
  (zipenv ks vs) (? (nul? ks) () (link (link (cap ks) (cap vs)) (zipenv (cup ks) (cup vs))))
- (elook env nm) (? (nul? env) 0 (id? (cap (cap env)) nm) (cup (cap env)) (elook (cup env) nm))
+ (elook env nm) (? (nul? env) 0 (= (cap (cap env)) nm) (cup (cap env)) (elook (cup env) nm))
  (aev env e)    (? (whole? e) e (name? e) (elook env e)
                    (: op (cap e) a (aev env (caup e)) b (aev env (cap (cuup e)))
-                      (? (id? op '+) (+ a b) (id? op '-) (- a b) (* a b))))
+                      (? (= op '+) (+ a b) (= op '-) (- a b) (* a b))))
  (cf-naive vars updates inits R n)
   (: (go k vals) (? (< k n) (go (+ k 1) (map (\ u (aev (zipenv vars vals) u)) updates)) (aev (zipenv vars vals) R))
      (go 0 inits))
@@ -153,17 +153,17 @@
  _ (assert (= (pelll 20) (cf-naive V pelU '(0 0 1) 'a 20))  "encoding: cf-naive interpreter == hand loop (pell)")
 
  ; --- the UNIFICATION: nilpotency dispatch separates the polynomial (O(1)) from the C-finite case ---
- _ (assert (id? 'cfinite (cf-kind V fibU))                  "dispatch: fib -> 'cfinite (M not unipotent)")
- _ (assert (id? 'cfinite (cf-kind V pelU))                  "dispatch: pell -> 'cfinite")
- _ (assert (id? 'poly (cf-kind '(i s) '((+ i 1) (+ s i))))  "dispatch: Σi (s<-s+i) -> 'poly (M unipotent: close.l's lane)")
+ _ (assert (= 'cfinite (cf-kind V fibU))                  "dispatch: fib -> 'cfinite (M not unipotent)")
+ _ (assert (= 'cfinite (cf-kind V pelU))                  "dispatch: pell -> 'cfinite")
+ _ (assert (= 'poly (cf-kind '(i s) '((+ i 1) (+ s i))))  "dispatch: Σi (s<-s+i) -> 'poly (M unipotent: close.l's lane)")
  ; ... and matrix-power closes the polynomial case too (just O(log n) where close.l is O(1)): Σ_{i<n} i = n(n-1)/2
  _ (assert (= 4950 (cf-closed '(i s) '((+ i 1) (+ s i)) '(0 0) 's 100)) "poly: Σ_{i<100} i = 4950 via M^n (close.l does this O(1))")
 
  ; soundness: a NON-linear update (a*a) is DECLINED -- the loop is left alone, never mis-closed.
- _ (assert (id? 'decline (cf-kind '(i a) '((+ i 1) (* a a)))) "sound: nonlinear update (a*a) declines, not mis-closed")
+ _ (assert (= 'decline (cf-kind '(i a) '((+ i 1) (* a a)))) "sound: nonlinear update (a*a) declines, not mis-closed")
  _ (assert (nul? (cf-closed '(i a) '((+ i 1) (* a a)) '(0 1) 'a 5)) "sound: ... cf-closed returns () (the loop stays a loop)")
  ; ... as does an update that references the bound n (not a state var): linear in n, but n isn't in the state.
- _ (assert (id? 'decline (cf-kind '(i a) '((+ i 1) (+ a n)))) "sound: update over the bound n declines (n not a state var)")
+ _ (assert (= 'decline (cf-kind '(i a) '((+ i 1) (+ a n)))) "sound: update over the bound n declines (n not a state var)")
 
  ; the SOURCE recognizer, end to end: the bench's iterative-fib \-form -> a closed-form closure of n.
  fibsrc '(\ n ((: (go i a b) (? (< i n) (go (+ i 1) b (+ a b)) a)) 0 0 1))

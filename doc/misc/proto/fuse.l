@@ -38,7 +38,7 @@
  pvars '(f g x z a b)                                       ; the pattern metavariables
 
  ; --- set membership over a list, by identity (symbols) ---
- (inset s l) (? (atom? l) 0 (? (id? s (cap l)) 1 (inset s (cup l))))
+ (inset s l) (? (atom? l) 0 (? (= s (cap l)) 1 (inset s (cup l))))
 
  ; --- env: an assoc of (var frag) 2-lists; a miss reads `none` ---
  (lookv env v) (? (atom? env) none
@@ -47,9 +47,9 @@
  ; --- the structural matcher: pattern x subject x env -> env | none -------------
  ;     a metavar binds (or must agree); a literal atom must be `=`; a pair recurses.
  (match pat subj env) (?
-   (id? env none) none                                     ; a prior failure propagates
+   (= env none) none                                     ; a prior failure propagates
    (inset pat pvars) (: b (lookv env pat)
-                       (? (id? b none) (link [pat subj] env)     ; fresh -> bind
+                       (? (= b none) (link [pat subj] env)     ; fresh -> bind
                           (= b subj) env                          ; bound -> must agree
                           none))                                  ; ... or conflict -> fail
    (atom? pat) (? (= pat subj) env none)                   ; a literal atom (head, op, ())
@@ -59,15 +59,15 @@
 
  ; --- instantiate a rhs template against a match env (binders left untouched) ---
  (subst tpl env) (?
-   (inset tpl pvars) (: b (lookv env tpl) (? (id? b none) tpl b))
+   (inset tpl pvars) (: b (lookv env tpl) (? (= b none) tpl b))
    (atom? tpl) tpl
    (link (subst (cap tpl) env) (subst (cup tpl) env)))
 
  ; --- one rule, then the whole table ---
  (fuse1 rule subj) (: m (match (cap rule) subj ())
-                    (? (id? m none) none (subst (cap (cup rule)) m)))
+                    (? (= m none) none (subst (cap (cup rule)) m)))
  (fuse rules subj) (? (atom? rules) none
-   (: r (fuse1 (cap rules) subj) (? (id? r none) (fuse (cup rules) subj) r)))
+   (: r (fuse1 (cap rules) subj) (? (= r none) (fuse (cup rules) subj) r)))
 
  ; --- the law TABLE: (lhs-pattern  rhs-template) -------------------------------
  ;     1. fold/map fusion  (the catamorphism)        foldl(+) . map g  ==>  one foldl
@@ -83,7 +83,7 @@
 
  ; --- driver: fuse a subject, ev BOTH, check they agree on the binary ----------
  (run1 nm subj) (: f (fuse laws subj)
-   (? (id? f none) (: _ (puts ";; ") _ (puts nm) (puts "   NO MATCH\n"))
+   (? (= f none) (: _ (puts ";; ") _ (puts nm) (puts "   NO MATCH\n"))
       (: vo (ev subj) vf (ev f) ok (= vo vf)
         (: _ (puts ";; ") _ (puts nm) _ (puts (? ok "  ok    " "  FAIL  "))
            _ (puts "orig=") _ (puts (show vo)) _ (puts "  fused=") _ (puts (show vf)) _ (putc 10)

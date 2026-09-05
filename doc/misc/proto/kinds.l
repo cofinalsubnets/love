@@ -12,19 +12,19 @@
 (:
  ; --- the kinds-lattice abstract domain: the tier spine N<Z<R<C, str/list as
  ;     incomparable branches that join UP to top; bot = unreached/unknown. ---
- (rank k) (? (id? k 'bot) 0 (id? k 'charm) 1 (id? k 'whole) 2 (id? k 'real) 3 (id? k 'cplx) 4 (id? k 'top) 5 -1)
+ (rank k) (? (= k 'bot) 0 (= k 'charm) 1 (= k 'whole) 2 (= k 'real) 3 (= k 'cplx) 4 (= k 'top) 5 -1)
  (num? k) (: r (rank k) (&& (< 0 r) (< r 5)))               ; charm..cplx are the numeric lane
- (join a b) (? (id? a 'bot) b (id? b 'bot) a (id? a b) a
+ (join a b) (? (= a 'bot) b (= b 'bot) a (= a b) a
               (&& (num? a) (num? b)) (? (< (rank a) (rank b)) b a)   ; higher tier wins
               'top)                                          ; mixed branches -> top
 
  ; --- transfer functions: a kind for an op given its operands' kinds ---
- (tnum a b) (? (|| (id? a 'bot) (id? b 'bot)) 'bot          ; an operand not yet known -> stay bot
-              (&& (num? a) (num? b)) (: j (join a b) (? (id? j 'charm) 'whole j))  ; +/* may OVERFLOW charm -> whole
+ (tnum a b) (? (|| (= a 'bot) (= b 'bot)) 'bot          ; an operand not yet known -> stay bot
+              (&& (num? a) (num? b)) (: j (join a b) (? (= j 'charm) 'whole j))  ; +/* may OVERFLOW charm -> whole
               'top)                                          ; non-numeric +/* (cat/generic) -> give up
 
  ; --- env: an assoc (name . kind); a missing name reads bot ---
- (look env x) (? (atom? env) 'bot (: p (cap env) (? (id? x (cap p)) (cup p) (look (cup env) x))))
+ (look env x) (? (atom? env) 'bot (: p (cap env) (? (= x (cap p)) (cup p) (look (cup env) x))))
  (joininto env x k) (link (link x (join (look env x) k)) env)   ; monotone shadow-update (look finds newest)
 
  ; --- kindof: abstract-evaluate an expression under env ---
@@ -34,13 +34,13 @@
    (nom? e) (look env e)                                     ; a variable reference
    (atom? e) 'top
    (: h (cap e) a (cap (cup e)) b (cap (cup (cup e)))
-     (? (|| (id? h '+) (id? h '*)) (tnum (kindof env a) (kindof env b))
-        (id? h '?) (join (kindof env b) (kindof env (cap (cup (cup (cup e))))))   ; (? c a b) -> join the branches
+     (? (|| (= h '+) (= h '*)) (tnum (kindof env a) (kindof env b))
+        (= h '?) (join (kindof env b) (kindof env (cap (cup (cup (cup e))))))   ; (? c a b) -> join the branches
         'top)))                                              ; lambda / unknown form -> top
 
  ; --- the seminaive FIXPOINT over the flat (n1 e1 n2 e2 ..) binding list ---
  (pairs bs) (? (atom? bs) 0 (atom? (cup bs)) 0 (link (link (cap bs) (cap (cup bs))) (pairs (cup (cup bs)))))
- (alle a b) (? (atom? a) 1 (: p (cap a) (&& (id? (cup p) (look b (cap p))) (alle (cup a) b))))
+ (alle a b) (? (atom? a) 1 (: p (cap a) (&& (= (cup p) (look b (cap p))) (alle (cup a) b))))
  (enveq a b) (&& (alle a b) (alle b a))                      ; same name->kind both ways = fixpoint
  (step ps env) (foldl (\ env p (joininto env (cap p) (kindof env (cup p)))) env ps)
  (fix ps env) (: e2 (step ps env) (? (enveq env e2) env (fix ps e2)))
@@ -49,7 +49,7 @@
  ; --- devirt: collect +/* sites whose operands are statically numeric ---
  (sites env e) (? (atom? e) 0
    (: h (cap e) sub (catmap (\ s (sites env s)) (cup e))
-      (? (&& (|| (id? h '+) (id? h '*))
+      (? (&& (|| (= h '+) (= h '*))
              (num? (kindof env (cap (cup e)))) (num? (kindof env (cap (cup (cup e))))))
          (link e sub) sub)))
 

@@ -68,11 +68,11 @@
                  (: r <l (? (member? k >r) <r (go >l))))
        (go asg))
    (mx-lane rw c)                                     ; the lane at (row rw, column c)
-    (: r (: (go l) (? (! (two? l)) () (: e <l (? (id? <e rw) >e (go >l)))))
+    (: r (: (go l) (? (! (two? l)) () (: e <l (? (= <e rw) >e (go >l)))))
        v (r mx-rows)
        (? (member? c mx-numk) (mx-el v 0)
-          (id? c 'KMint) (mx-el v 1) (id? c 'KNom) (mx-el v 2) (id? c 'KString) (mx-el v 3)
-          (id? c 'KChain) (mx-el v 4) (id? c 'KTablet) (mx-el v 5) (mx-el v 6)))
+          (= c 'KMint) (mx-el v 1) (= c 'KNom) (mx-el v 2) (= c 'KString) (mx-el v 3)
+          (= c 'KChain) (mx-el v 4) (= c 'KTablet) (mx-el v 5) (mx-el v 6)))
    ; the whole square of lane noms, in enum order: mx2coq.l derives the band partition from
    ; it, and the C lays it out.
    (mx-grid asg) (map (\ k (map (\ c (mx-lane (mx-rowof asg k) c)) mx-kinds)) mx-kinds)
@@ -122,7 +122,7 @@
    mx-sections '((byname 0 ("__wasm__"))
                  (tiled  1 ()))
    (mx-stride cls) (: (go l) (atom? l ? (scare 'mx-stride cls)
-                              (: r <l (id? <r cls ? <>r (go >l))))
+                              (: r <l (= <r cls ? <>r (go >l))))
                       (go mx-strides))
    ; --- and the same classes laid as C, through clay's rung 2 ---------------------
    ; a knob: `#ifndef NAME` over an `#if defined(..) / #elif / #else` on the classes, so the
@@ -193,5 +193,5 @@
        c (clay-ok? kinds-clay)
        d (clay-ok? reps-clay)
        e (clay-ok? repq-clay)
-       f (foldl (\ a x (a && id? (clay-ok? x) 1)) 1 slots-clay)
+       f (foldl (\ a x (a && (= (clay-ok? x) 1))) 1 slots-clay)
        (a = b = c = d = e = f = 1)))

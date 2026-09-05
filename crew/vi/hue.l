@@ -60,7 +60,7 @@
    (hue-rule r) <>>r
    (hue-tag r)  <(hue-rule r)
    (hue-arg r)  <>(hue-rule r)
-   (hue-tagged tag) (filter (\ r (id? (hue-tag r) tag)) hue-classes)
+   (hue-tagged tag) (filter (\ r (= (hue-tag r) tag)) hue-classes)
    (hue-one tag) <(hue-tagged tag)
 
    hue-eols (hue-arg (hue-one 'eol))                       ; the comment openers
@@ -126,9 +126,9 @@
                      (!(lit? v) &&
                       (constellation? v || string? v || nom? v)))
    (hue-words a)
-    (? (id? a 'names)  (sort (map string (filter hue-name? (filter hue-verb? (names ())))))
-       (id? a 'macros) (sort (map string (macro-names ())))
-       (id? a 'values) (sort (map string (filter hue-name? (filter hue-const? (names ())))))
+    (? (= a 'names)  (sort (map string (filter hue-name? (filter hue-verb? (names ())))))
+       (= a 'macros) (sort (map string (macro-names ())))
+       (= a 'values) (sort (map string (filter hue-name? (filter hue-const? (names ())))))
        a)
 
    ; one tablet, token -> class, filled in reverse table order so an earlier row
@@ -237,7 +237,7 @@
    hue-off "\e[0m"
    (hue-hx c) (? ((48 <= c) && (c <= 57)) (c - 48) ((65 <= c) && (c <= 70)) (c - 55) (c - 87))
    (hue-byte t k) ((hue-hx (t k)) * 16 + (hue-hx (t (k + 1))))
-   (hue-faces fs) (foldl (\ a f (a + (? (id? f 'bold) "1;" "3;"))) "" fs)
+   (hue-faces fs) (foldl (\ a f (a + (? (= f 'bold) "1;" "3;"))) "" fs)
    (hue-pen row deep)
     (: n (hue-nth row 1) g (hue-nth row 2) fs (hue-nth row 3)
        ("\e[" + hue-faces fs
@@ -270,7 +270,7 @@
    ; thing for a theme file to mean, so the question is whether it opened -- not
    ; whether it had bytes. a row that is not a row is simply not a row: a bad
    ; theme must not take the editor down with it.
-   (hue-over rows r) (? (two? r) (map (\ o (? (id? <o <r) r o)) rows) rows)
+   (hue-over rows r) (? (two? r) (map (\ o (? (= <o <r) r o)) rows) rows)
    (hue-rows x)
     (: h (getenv "HOME")
        q (? (string? h) (open (h + hue-theme-file) "r") ())

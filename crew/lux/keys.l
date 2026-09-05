@@ -64,11 +64,11 @@
                       (#nm = 1) (nm 0)                                      ; one char is its ascii keysym
                       (: hit (afind (r \ <r = nm) xk-names)
                          (two? hit ? <>hit ())))))                             ; unknown name -> () (no keysym is 0, so nothing is lost)
-   (kmod-of m modm) (? (id? m 'sup || id? m 'super || id? m 'mod4) supm
-                       (id? m 'alt || id? m 'mod1) altm
-                       (id? m 'ctrl || id? m 'control) ctrlm
-                       (id? m 'shift) shiftm
-                       (id? m 'mod) modm                                         ; `mod` follows whatever the config chose
+   (kmod-of m modm) (? (= m 'sup || (= m 'super) || (= m 'mod4)) supm
+                       (= m 'alt || (= m 'mod1)) altm
+                       (= m 'ctrl || (= m 'control)) ctrlm
+                       (= m 'shift) shiftm
+                       (= m 'mod) modm                                         ; `mod` follows whatever the config chose
                        ())
    ; a spec -> (mods keysym), or () if any field is unknown. the mask accumulates
    ; through a `(1 mask)` wrapper: a bare mask of 0 (no modifiers) is a legitimate
@@ -85,7 +85,7 @@
    ;     ((spawn "rofi" "-show" "drun")) and nested in a binding row, so they are
    ;     the two the reader re-wraps; every other action is already its own shape. ---
    (kb-act-of a) (? !(two? a) a
-                    (id? <a 'spawn || id? <a 'exec) [<a >a]
+                    (= <a 'spawn || (= <a 'exec)) [<a >a]
                     a)
    (keys-rows modm rows)                                                         ; ((spec action) ..) -> binding rows; an unreadable spec is dropped
     (foldr (\ r acc (: k (two? r ? (kspec modm <r) ())

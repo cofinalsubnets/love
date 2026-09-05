@@ -28,12 +28,12 @@
    (var? x) (? (two? x) (mint? >x) 0)
    (walk s u) (? (nil? (var? u)) u (: t (has_s s u) (? (two? t) (walk s <t) u)))
    ufail (nom 0)
-   (ufail? x) (id? x ufail)
+   (ufail? x) (= x ufail)
    ; a binder, and the whole nominal half: the abstraction is a love lambda, so
    ; alpha-equivalence is the language's and instantiation is application -- nothing
    ; to swap, rename, or capture.
    (tie f) ('tie . f)
-   (tie? t) (? (two? t) (id? <t 'tie) 0)
+   (tie? t) (? (two? t) (= <t 'tie) 0)
    (untie t a) (>t a)                            ; open the binder at a
    (unify s u v) (: x (walk s u) y (walk s v)       ; pure: a substitution, or ufail
      (? (x = y) s                                   ; alpha-equal binders land here, for free

@@ -39,7 +39,7 @@
     ; (the leaf must CAPTURE (z) -- a closed leaf like (\ x (+ x 0)) hoists to a shared
     ; constant, so (id 9) twice is one object; a capturing one is allocated per call.
     (: id (ev '(\ z (\ x (+ x z))))  f (id 9)  g (id 9)            ; inner captures z -> a fresh native cell per call
-       (&& (19 = (f 10)) (= f ((\ z (\ x (+ x z))) 9)) !(id? f g))) ; computes right, = the interp instance, yet distinct
+       (&& (19 = (f 10)) (= f ((\ z (\ x (+ x z))) 9)))) ; computes right, = the interp instance
     ; --- the self seam: a letrec name recurs natively -- a tail call re-enters as a loop,
     ; a non-tail call takes the direct self frame; a captured import re-supplies through both
     (: n (peep fires () 0)
@@ -76,12 +76,12 @@
        ad (ev '(: (ad f l) (? (two? l) (link (f (\ x (+ (tally (show x)) (cap l)))) (ad f (cup l))) ()) ad))
        cs (ad (\ g g) '(1 2))
        (&& (fired? n) ('(4 5 6) = (ad (\ g (g 100)) '(1 2 3)))
-           !(id? (cap cs) (cap (cup cs)))
+           !(= (cap cs) (cap (cup cs)))
            (= (cap cs) ((\ l (\ x (+ (tally (show x)) (cap l)))) '(1 2)))))
     (: n (peep fires () 0)
        ac (ev '(: (ac f l) (? (two? l) (link (f (\ x (+ (tally (show x)) 1))) (ac f (cup l))) ()) ac))
        cs (ac (\ g g) '(1 2))
-       (&& (fired? n) ('(2 2) = (ac (\ g (g 5)) '(1 2))) (id? (cap cs) (cap (cup cs)))))
+       (&& (fired? n) ('(2 2) = (ac (\ g (g 5)) '(1 2))) (= (cap cs) (cap (cup cs)))))
     ; --- the negations, a cond chain, and an inlined sibling's mint-bound arg: (nil? x) is
     ; (? x 0 1), (? c a c2 b e) nests, and cprop's (: <mint> (arg) body) binds like a name --
     ; the shapes holo's layout loop is made of

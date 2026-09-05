@@ -18,7 +18,7 @@
 (:
  ; ---- terms: a var is (v . name); consts are syms/nums; atoms are lists ----
  (vr n) ['v n]
- (var? x) (&& (two? x) (id? (cap x) 'v))
+ (var? x) (&& (two? x) (= (cap x) 'v))
  (nm x) (caup x)
  (vsym? x) (&& (nom? x) (: c ((string x) 0) (&& (<= 65 c) (<= c 90))))   ; UPPER -> var
  (termify t) (? (atom? t) (? (vsym? t) (vr t) t) (map termify t))
@@ -26,17 +26,17 @@
 
  ; ---- substitution + unify, occurs check OPTIONAL (occ) ----
  bot (mint 0)
- (fail? s) (id? s bot)
- (look s k) (? (atom? s) 0 (: p (cap s) (? (id? k (cap p)) p (look (cup s) k))))
+ (fail? s) (= s bot)
+ (look s k) (? (atom? s) 0 (: p (cap s) (? (= k (cap p)) p (look (cup s) k))))
  (ext s k v) (link (link k v) s)
  (walk s t) (? (var? t) (: p (look s (nm t)) (? (two? p) (walk s (cup p)) t)) t)
  (occurs s k t) (: wt (walk s t)            ; fresh name: a body-`:` binding does NOT
-                  (? (var? wt) (id? (nm wt) k)   ; read the param of the same name (one scope)
+                  (? (var? wt) (= (nm wt) k)   ; read the param of the same name (one scope)
                      (two? wt) (|| (occurs s k (cap wt)) (occurs s k (cup wt)))
                      0))
  (unify s a b occ) (:
    wa (walk s a) wb (walk s b)
-   (? (&& (var? wa) (var? wb) (id? (nm wa) (nm wb))) s
+   (? (&& (var? wa) (var? wb) (= (nm wa) (nm wb))) s
       (var? wa) (? (&& occ (occurs s (nm wa) wb)) bot (ext s (nm wa) wb))
       (var? wb) (? (&& occ (occurs s (nm wb) wa)) bot (ext s (nm wb) wa))
       (&& (two? wa) (two? wb)) (: s1 (unify s (cap wa) (cap wb) occ)
@@ -47,7 +47,7 @@
  ; ---- cycle-safe reification (greatest-fixpoint walk; (mu n) on a back-edge) ----
  (reify s t path) (?
    (var? t) (: w (walk s t)
-               (? (id? w t) t
+               (? (= w t) t
                   (member? (nm t) path) ['mu (nm t)]
                   (reify s w (link (nm t) path))))
    (two? t) (link (reify s (cap t) path) (reify s (cup t) path))
@@ -79,7 +79,7 @@
  (cot edb rules top) (: nxt (step rules (cat edb top))
                         (? (seteq top nxt) top (cot edb rules nxt)))
 
- (only tag facts) (filter (\ f (id? (cap f) tag)) facts)
+ (only tag facts) (filter (\ f (= (cap f) tag)) facts)
  (say lbl v) (: _ (puts lbl) _ (dot v) _ (putc 10) 0)
 
  ; ============ demo A: transitive closure over a CYCLIC graph ============

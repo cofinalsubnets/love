@@ -36,9 +36,9 @@
    (uv2-msr n)
     (: iv (im n)                                          ; () off the complex band
        ['tpair (uv2-rea (uv2-twice n))
-               (uv2-rea (id? iv () ? 0 (uv2-twice iv)))])
+               (uv2-rea (= iv () ? 0 (uv2-twice iv)))])
    ; a leaf wears its tag: () is the unit atom, everything else its measure
-   (uv2-atm x) (id? x () ? ['ii1 'tt] ['ii2 (uv2-msr (net x))])
+   (uv2-atm x) (= x () ? ['ii1 'tt] ['ii2 (uv2-msr (net x))])
    (uv2-ht x) (? (two? x) (1 + (uv2-max (uv2-ht <x) (uv2-ht >x))) 0)
    ; the tree at a given height bound: a leaf spells the same at every height, so
    ; the shallow limb of a pair costs nothing to raise

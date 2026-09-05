@@ -81,7 +81,7 @@
   (= '((e (lam A (lam B (lam x (lam y x)))))) R2)          ; K combinator
   (= '((e h)) R3)                                          ; the hypothesis h
   (= '((e (idpath 2))) R4)                                 ; reflexivity at 2
-  (id? () R5)                                              ; 2=3 is not reflexive -> no proof (correctly empty)
+  (= () R5)                                              ; 2=3 is not reflexive -> no proof (correctly empty)
   (member? '(e n) R6)                                      ; the hypothesis n : nat
   (member? '(e (s (s (s n)))) R6)                          ; ... and s applied thrice (backward-chained)
   (= '((e (lam a1 a1))) R7)                                ; the minted name reifies canonically..

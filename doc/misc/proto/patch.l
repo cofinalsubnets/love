@@ -158,12 +158,12 @@
 
  ; --- the tree: an assoc (k . v), newest shadows, a missing slot reads 0 (a
  ;     nothing -- the nil-is-0 floor). ---
- (tget t k) (? (atom? t) 0 (: c (cap t) (? (id? k (cap c)) (cup c) (tget (cup t) k))))
+ (tget t k) (? (atom? t) 0 (: c (cap t) (? (= k (cap c)) (cup c) (tget (cup t) k))))
  (tset t k v) (link (link k v) t)
 
  ; --- apply: a patch belongs on t only if its context matches (valid); apon
  ;     lays the new value. applall folds a frontier onto the empty tree. ---
- (valid t p) (id? (tget t (pk p)) (pa p))
+ (valid t p) (= (tget t (pk p)) (pa p))
  (apon t p) (tset t (pk p) (pb p))
  (applall t ps) (foldl apon t ps)
 
@@ -176,7 +176,7 @@
  ;     merge, cherry-pick, and unpull are all built on this. here the swapped
  ;     patches are unchanged because named slots do not SHIFT; with positional or
  ;     form-tree patches q' is a genuine re-aim (the rewrite/unifier lane). ---
- (commute p q) (? (id? (pk p) (pk q)) 0 (link q (link p 0)))
+ (commute p q) (? (= (pk p) (pk q)) 0 (link q (link p 0)))
  (depends p q) (atom? (commute p q))                        ; q needs p iff they don't commute
 
  ; --- report helpers ---
@@ -243,11 +243,11 @@
       (cins x rs) (? (atom? rs) (link x ())
                      (: h (cap rs) (? (= x h) rs (< x h) (link x rs)
                                       (link h (cins x (cup rs))))))
-      (clash? v) (? (atom? v) 0 (id? (cap v) 'clash))
+      (clash? v) (? (atom? v) 0 (= (cap v) 'clash))
       (pull t p)                                            ; total merge-application
         (: k (pk p) a (pa p) b (pb p) v (tget t k)
-           (? (id? v a) (tset t k b)                        ; context matches: plain
-              (id? v b) t                                   ; same edit again: settled
+           (? (= v a) (tset t k b)                        ; context matches: plain
+              (= v b) t                                   ; same edit again: settled
               (clash? v) (tset t k (clash a (cins b (cap (cup (cup v)))))) ; join
               (tset t k (clash a (cins b (cins v ()))))))   ; a rival landed first
       mp (chg 'x 1 2) mq (chg 'x 1 3)                       ; two branches, one base
@@ -331,7 +331,7 @@
       (hdr s n) (? (< n 1) s (hdr (cup s) (- n 1)))
       (hct a b) (? (atom? a) b (link (cap a) (hct (cup a) b)))
       (spl s i c news) (hct (htk s i) (hct news (hdr s (+ i c))))
-      (heq a b) (? (&& (atom? a) (atom? b)) (id? a b)
+      (heq a b) (? (&& (atom? a) (atom? b)) (= a b)
                    (|| (atom? a) (atom? b)) 0
                    (&& (heq (cap a) (cap b)) (heq (cup a) (cup b))))
       (hstr h s i n) (? (= i n) h (hstr (% (+ (* h 33) (s i)) 4294967296) s (+ i 1) n))
@@ -357,17 +357,17 @@
       (hdr s n) (? (< n 1) s (hdr (cup s) (- n 1)))
       (hct a b) (? (atom? a) b (link (cap a) (hct (cup a) b)))
       (spl s i c news) (hct (htk s i) (hct news (hdr s (+ i c))))
-      (heq a b) (? (&& (atom? a) (atom? b)) (id? a b)
+      (heq a b) (? (&& (atom? a) (atom? b)) (= a b)
                    (|| (atom? a) (atom? b)) 0
                    (&& (heq (cap a) (cap b)) (heq (cup a) (cup b))))
-      (mv? x) (? (atom? x) 0 (id? (cap x) 'mv))
-      (asq k s) (? (atom? s) () (: c (cap s) (? (id? k (cap c)) (link (cup c) ()) (asq k (cup s)))))
+      (mv? x) (? (atom? x) 0 (= (cap x) 'mv))
+      (asq k s) (? (atom? s) () (: c (cap s) (? (= k (cap c)) (link (cup c) ()) (asq k (cup s)))))
       (mtch p g s)
-        (? (id? s 'no) 'no
+        (? (= s 'no) 'no
            (mv? p) (: r (asq (cap (cup p)) s)
                       (? (atom? r) (link (link (cap (cup p)) g) s)
                          (? (heq (cap r) g) s 'no)))
-           (&& (atom? p) (atom? g)) (? (id? p g) s 'no)
+           (&& (atom? p) (atom? g)) (? (= p g) s 'no)
            (|| (atom? p) (atom? g)) 'no
            (mtch (cup p) (cup g) (mtch (cap p) (cap g) s)))
       (inst p s) (? (mv? p) (: r (asq (cap (cup p)) s) (? (atom? r) p (cap r)))

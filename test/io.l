@@ -46,7 +46,7 @@
   ; the raw words of whatever it was handed. every drain lands text.
   (= "" (slurp 42))   (string? (slurp 42))
   (= "" (slurp ()))
-  (id? (slurp (tap "")) (slurp 42))
+  (= (slurp (tap "")) (slurp 42))
 
   ; file roundtrip: say a string to /tmp, read it back byte-by-byte, compare. the payload
   ; is (show (clock 0)) so a stale file from a previous run cannot pass. gated to hosted
@@ -149,7 +149,7 @@
      ; x is compared by identity, not by `=`: its own tail is the next promise, so
      ; (= '(98) x) is false -- the printer shows it as (98) because it stops at a tail
      ; that is not a cons, the one place a flow does not look like a list.
-     (&& (lit? t) (&& (= 98 <x) (id? x y))))
+     (&& (lit? t) (&& (= 98 <x) (= x y))))
 
   ; --- sound: one datum per call, off text ---
   ; sound takes a charlist and answers three ways: the datum consed onto what is left,

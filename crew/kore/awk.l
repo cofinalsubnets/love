@@ -408,14 +408,14 @@
    (aw-e-prim ts ng)
     (? !(two? ts) (aw-err "unexpected end of program")
        (: t <ts k <t v <>t r >ts
-          (? (id? k 'num) [['num v] r]
-             (id? k 'str) [['str v] r]
-             (id? k 'ere) [['ere v] r]
-             (id? k 'name)
+          (? (= k 'num) [['num v] r]
+             (= k 'str) [['str v] r]
+             (= k 'ere) [['ere v] r]
+             (= k 'name)
               (? (aw-op? r "[") (aw-subs >r @ [es r2] [['idx v es] r2] ())
                  (member? v aw-bis) [['bi v ()] r]
                  [['var v] r])
-             (id? k 'fname)
+             (= k 'fname)
               (: r2 (aw-want r "(" "expected (")
                  (? (aw-op? r2 ")")
                     [(? (member? v aw-bis) ['bi v ()] ['call v ()]) >r2]
@@ -423,7 +423,7 @@
                       (: r4 (aw-want r3 ")" "expected ) after the arguments")
                          [(? (member? v aw-bis) ['bi v es] ['call v es]) r4])
                       ())))
-             (id? k 'kw) (aw-err ("`" + v + "' is not an expression"
+             (= k 'kw) (aw-err ("`" + v + "' is not an expression"
                                   + (? (v = "getline") " (getline is out of dialect)" "")))
              (aw-op? ts "$") (aw-e-prim r ng @ [e r2] [['field e] r2] ())
              (aw-op? ts "!") (aw-e-un r ng @ [e r2] [['not e] r2] ())
@@ -1104,7 +1104,7 @@
    (aw-call E nm gs vs)
     (: fns (peep E 'fn ())
        f (peep fns nm 'none)
-       _ (? (id? f 'none) (aw-err ("calling an undefined function " + nm)) 0)
+       _ (? (= f 'none) (aw-err ("calling an undefined function " + nm)) 0)
        ps <f body <>f
        loc (tablet 0)
        (bind l a)
@@ -1362,7 +1362,7 @@
                            _ (aw-anfns rk fns)
                            [(map (aw-anitem rk) is) rk]))
                   ()
-                  (\ a b (? (id? a 'awk-err) (blow b) (scare a b))))
+                  (\ a b (? (= a 'awk-err) (blow b) (scare a b))))
         items <anp
         feed (<>anp ? aw-feedt aw-feed)
         _ (? (aw-nil? fs) 0 (pin (aw-g E) "FS" (aw-unesc fs)))
@@ -1370,12 +1370,12 @@
         ; exit outside end still runs the end rules -- POSIX, and the whole
         ; reason the phase is tracked; an exit inside them is the end of it
         (ending b)
-         (: _ (? (id? (peep E 'ph 'end) 'end) 0
+         (: _ (? (= (peep E 'ph 'end) 'end) 0
                  (: _ (pin E 'ph 'end)
                     (trap (\ _ (aw-phase E items 'end))
                           ()
-                          (\ a2 b2 (? (id? a2 'awk-exit) 0
-                                      (id? a2 'awk-err) (blow b2)
+                          (\ a2 b2 (? (= a2 'awk-exit) 0
+                                      (= a2 'awk-err) (blow b2)
                                       (scare a2 b2))))))
             (? (aw-nil? b) 0 b))
         code
@@ -1390,11 +1390,11 @@
                               r3 (aw-phase E items 'end)
                               (aw-exi? r3 && !(aw-nil? <>r3) ? <>r3 0)))))))
           ()
-          (\ a b (? (id? a 'awk-err) (blow b)
-                    (id? a 'awk-exit) (ending b)
+          (\ a b (? (= a 'awk-err) (blow b)
+                    (= a 'awk-exit) (ending b)
                     (scare a b))))
         _ (: (shut l) (? (two? l) (: p (peep (peep E 'ports ()) <l 'none)
-                                     _ (? (id? p 'none) 0 (close p))
+                                     _ (? (= p 'none) 0 (close p))
                                      (shut >l))
                           0)
              (shut (keys (peep E 'ports ()))))

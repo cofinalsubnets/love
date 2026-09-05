@@ -210,7 +210,7 @@
  (strike g m) (: dm (1 + roll (g 'sb) 3)
                  _ (pin m 'hp (m 'hp - dm))
                  (? (0 < m 'hp) (note g $ "you strike the " + m 'nm + " (" + show dm + ")")
-                  (pin g 'ms (filter (\ o !(id? o m)) (g 'ms)),
+                  (pin g 'ms (filter (\ o !(= o m)) (g 'ms)),
                    note g ("the " + m 'nm + " is done for"))))
  (take g i it)
   (pull (g 'loot) i (),
@@ -286,9 +286,9 @@
                 say out "\e[?1049h\e[?25l\e[2J",
                 note g "the hold is dark; the pearl waits three decks down")
              (sail _) (: _ (say out (crawl-frame g))
-                         (? (g 'over) (id? (g 'over) 'fled ? () (rest 1200))
+                         (? (g 'over) (= (g 'over) 'fled ? () (rest 1200))
                           (: k (helm ())
-                             (? (k = 113 || id? k 'esc || id? k 'quit)
+                             (? (k = 113 || (= k 'esc) || (= k 'quit))
                               (pin g 'over 'fled, ())
                               (crawl-turn g k, sail ())))))
              (sail (),

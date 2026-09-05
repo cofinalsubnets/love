@@ -23,7 +23,7 @@
                     (atom? d) 1                              ; a number / () : closed
                     (&& (closed? (cap d)) (closed? (cup d))))
    (dim-norm d) (? (closed? d) (vof () d) d)                ; closed -> uu computes; open -> leave symbolic
-   mat-dims (\ d (? (&& (two? d) (id? (cap d) 'mat) (= 3 (tally d)))
+   mat-dims (\ d (? (&& (two? d) (= (cap d) 'mat) (= 3 (tally d)))
                     ['mat (dim-norm (cap (cup d))) (dim-norm (cap (cup (cup d))))] d))
    mat-dom  {'dice () 'ctors '(mat add succ zero)
              'join (\ a b (? (= (mat-dims a) (mat-dims b)) a 'top))

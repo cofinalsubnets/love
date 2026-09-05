@@ -681,13 +681,13 @@
    ;; the prefix ahead of the hop (fp predicate, or the s/ns subtract) is plain words, never a
    ;; fixup, so its element count is its byte count -- which is what puts the branch at pa + pre.
    _ (pin rv 'short (\ ins c rel
-        (? (id? <ins 'jmp)                        ; the lone jal, and pa is its address
+        (? (= <ins 'jmp)                        ; the lone jal, and pa is its address
            (? !((tally c) = 1) ()                 ; the chunk must BE that jal
               !(fix? <c) ()
-              !(id? (fix-k <c) 'j21) ()
+              !(= (fix-k <c) 'j21) ()
               (rvj-fits? rel) [(fix 2 'cj (at ins 1) 0xA001)]
               ())
-           !(id? <ins 'br) ()
+           !(= <ins 'br) ()
            (: pre ((tally c) - 5)
               (? ((pre < 0) || !(rvb-fits? (rel - pre))) ()
                  (rv-shorten c (at ins 2) (rel - pre)))))))

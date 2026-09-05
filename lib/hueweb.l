@@ -57,9 +57,9 @@
    ; --- the stylesheet -------------------------------------------------------
    ; one rule per class, coloured by the group that class names. a class whose
    ; group the theme does not carry gets no rule at all rather than a guess.
-   (hw-row g) (:- (f hue-theme) (f l) (? (atom? l) () (id? <<l g) <l (f >l)))
-   (hw-faces l) (hw-cat (map (f \ ? (id? f 'bold) ";font-weight:700"
-                                    (id? f 'italic) ";font-style:italic" "") l))
+   (hw-row g) (:- (f hue-theme) (f l) (? (atom? l) () (= <<l g) <l (f >l)))
+   (hw-faces l) (hw-cat (map (f \ ? (= f 'bold) ";font-weight:700"
+                                    (= f 'italic) ";font-style:italic" "") l))
    (hw-rule r) (: t (hw-row (hue-grp r))
                   (? !(two? t) ""
                      (".hue .l-" + string (hue-cls r) + "{color:" + (t 2)

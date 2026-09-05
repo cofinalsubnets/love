@@ -60,8 +60,8 @@ p cnf 3 3
 1 2 0
 -1 3 0
 -2 -3 0
-") f <r nv >r m (cdcl f nv) (!(id? m 'unsat) && sat? m f))   ; SAT -- model checks
-     (id? (cdcl <(dimacs "p cnf 1 2
+") f <r nv >r m (cdcl f nv) (!(= m 'unsat) && sat? m f))   ; SAT -- model checks
+     (= (cdcl <(dimacs "p cnf 1 2
 1 0
 -1 0
 ") 1) 'unsat))                                                             ; (x)(-x) -> UNSAT

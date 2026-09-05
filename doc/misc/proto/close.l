@@ -89,8 +89,8 @@
  ; forest.l hands us (foldl (+) z (map F SRC)); we close it when SRC is a jot, optionally guarded by
  ; the odd-filter. F is ev'd to its closure and SAMPLED -- the rewrite never reads F's body. the
  ; residual is the literal (z + the closed sum): O(1), exactly what SCEV emits, reached one case past it.
- (head? x h)  (&& (two? x) (id? (cap x) h))
- (plus? f)    (? (id? f '+) 1 (&& (two? f) (&& (id? (cap f) '+) (nul? (cup f)))))   ; + or (+)
+ (head? x h)  (&& (two? x) (= (cap x) h))
+ (plus? f)    (? (= f '+) 1 (&& (two? f) (&& (= (cap f) '+) (nul? (cup f)))))   ; + or (+)
  (jot? s)     (head? s 'jot)
  (oddf? s)    (&& (head? s 'filter) (head? (cap (cuup s)) 'jot))                    ; (filter _ (jot N))
  (jotn s)     (caup s)                                                              ; (jot N) -> N

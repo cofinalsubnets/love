@@ -27,7 +27,7 @@
         ; the domain test is the closed star (the fixpoint minus coins): star?
         ; is open now, and an open star as an (n d) component would drag gcd
         ; off the tower it terminates on -- a coin is never a coefficient.
-        (nstar? v) (? (coin? v) 0 (id? v (net v)))
+        (nstar? v) (? (coin? v) 0 (= v (net v)))
         (ok? v) (? (nstar? v) 1
                    (two? v) (nstar? <v && nstar? <>v)
                    0)

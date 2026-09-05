@@ -83,8 +83,8 @@
 ; wants from a tablet is presence, and peep answers that totally: a fresh (mint 0)
 ; is unique, so no stored value can pose as it.
 (assert (: t {1 0} s (mint 0)
-           (&& !(id? s (peep t 1 s))               ; a pinned 0 is present, not absent
-               (id? s (peep t 9 s))                ; an absent key is absent
+           (&& !(= s (peep t 1 s))               ; a pinned 0 is present, not absent
+               (= s (peep t 9 s))                ; an absent key is absent
                ((:) = (peep t 9 ())))))          ; ... and the caller may still name absence ()
 
 (hear test-strict)   ; the empty slot is this file's subject; the corpus resumes strict

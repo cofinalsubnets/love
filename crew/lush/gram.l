@@ -18,9 +18,9 @@
 ; own closer by name. an empty rest where a compound needs more is 'more.
 
 (module 'lush
-(: (tk-op? t o) (id? <t 'op && (>t = o))
-   (tk-w? t) (id? <t 'w)
-   (tk-rd? t) (id? <t 'rd)
+(: (tk-op? t o) (= <t 'op && (>t = o))
+   (tk-w? t) (= <t 'w)
+   (tk-rd? t) (= <t 'rd)
    (tk-nl? t) (tk-op? t "nl")
    (skipnl ts) (? (ts && tk-nl? <ts) (skipnl >ts) ts)
    (skipsep ts) (? (two? ts && (tk-op? <ts ";" || tk-nl? <ts))
@@ -28,7 +28,7 @@
    (bad? r) !(two? <r)
    ; the bare text of a plain unquoted one-segment word, "" otherwise
    (litw t) (? (&& (two? t) (tk-w? t) (two? >t) !>>t
-                  (id? <<>t 'lit))
+                  (= <<>t 'lit))
                ("" + ><>t) "")
    (rw? t w) (tally (litw t) && (w = (litw t)))
    stopw '("then" "else" "elif" "fi" "do" "done" "esac" "}")
@@ -37,7 +37,7 @@
      (: ts2 (skipnl ts)
         (? !ts2 ('ok . ())
            (: r (plist ts2)
-              (? (id? <r 'stop)
+              (? (= <r 'stop)
                    (: t <>r w (litw t)
                       ('err . ("unexpected " + (? #w w ("" + >t)))))
                  (bad? r) r
@@ -56,7 +56,7 @@
      (: ts2 (skipnl ts)
         (? !(two? ts2) (a . ())
            (: r (plist ts2)
-              (? (id? <r 'stop) (a . >r)                ; a closer: the list ends here
+              (? (= <r 'stop) (a . >r)                ; a closer: the list ends here
                  (bad? r) r
                  ['seq a <r . >r]))))
 
@@ -126,12 +126,12 @@
 
    (pif ts)
      (: c (plist (skipnl ts))
-        (? (id? <c 'stop) ('err . "if: empty condition")
+        (? (= <c 'stop) ('err . "if: empty condition")
            (bad? c) c
            (: t1 (expw >c "then" "if wants `then`")
               (? !(charm? <t1) t1
                  (: b (plist (skipnl >t1))
-                    (? (id? <b 'stop) ('err . "if: empty body")
+                    (? (= <b 'stop) ('err . "if: empty body")
                        (bad? b) b
                        (pifrest [(<c . <b)] >b)))))))
    (pifrest clauses ts)
@@ -156,7 +156,7 @@
                  ('err . "if wants `fi`")))))
    (ploop k ts)
      (: c (plist (skipnl ts))
-        (? (id? <c 'stop) ('err . "loop: empty condition")
+        (? (= <c 'stop) ('err . "loop: empty condition")
            (bad? c) c
            (: d (expw >c "do" "loop wants `do`")
               (? !(charm? <d) d
@@ -223,7 +223,7 @@
                        ('err . "case wants `;;` or `esac`")))))))
    (pgroup ts)
      (: b (plist (skipnl ts))
-        (? (id? <b 'stop) (pgend () >b)              ; { } empty? no: the closer ends it
+        (? (= <b 'stop) (pgend () >b)              ; { } empty? no: the closer ends it
            (bad? b) b
            (pgend <b >b)))
    (pgend body ts)

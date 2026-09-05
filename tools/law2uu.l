@@ -60,7 +60,7 @@
    (join l) (foldl (+) "" l)
    (pl s) (puts (s + nl))
    (idxin x l k) (? (! (two? l)) -1 (<l = x) k (idxin x >l (k + 1)))
-   (look k tbl) (? (! (two? tbl)) () (id? <<tbl k) <tbl (look k >tbl))
+   (look k tbl) (? (! (two? tbl)) () (= <<tbl k) <tbl (look k >tbl))
    (zero? e) (charm? e && e = 0)
    (one? e) (charm? e && e = 1)
    (same? a b) ((show a) = (show b))
@@ -69,7 +69,7 @@
    (is? x s) (nom? x && (string x) = s)
    (hd? e s) (two? e && is? <e s)
    bs (intern "\\")
-   (unq x) (? (two? x && id? <x bs) (x 1) x)     ; reads shows a quote as (\ ..)
+   (unq x) (? (two? x && (= <x bs)) (x 1) x)     ; reads shows a quote as (\ ..)
 
    ; --- the tower, as a type oracle: the levels, and the rung between each pair ---
    lv-order '(bool nat zed rea msr val)
@@ -78,8 +78,8 @@
    dn-rungs '((val vnet msr) (msr mre rea) (rea rceil zed) (zed zsat nat) (nat natbit bool))
    to-val   '((msr vnum) (rea rval) (zed zval) (nat nval) (bool bval))
    (co t f g)
-    (? (id? f g) t
-       (id? g 'val) [((look f to-val) 1) t]
+    (? (= f g) t
+       (= g 'val) [((look f to-val) 1) t]
        ((ht f) < (ht g)) (: r (look f up-rungs) (co [(r 1) t] (r 2) g))
        (: r (look f dn-rungs) (co [(r 1) t] (r 2) g)))
 
@@ -111,8 +111,8 @@
        (? (! (won? A)) A (! (won? B)) B
           (: la (A 2) lb (B 2) L (? ((ht la) < (ht lb)) lb la)
              ta (co (A 1) la L) tb (co (B 1) lb L)
-             (? (id? L 'bool) (ok ['beqb ta tb] 'bool)
-                (id? L 'nat)  (ok ['nateqb ta tb] 'bool)
+             (? (= L 'bool) (ok ['beqb ta tb] 'bool)
+                (= L 'nat)  (ok ['nateqb ta tb] 'bool)
                 (ok ['veq (co ta L 'val) (co tb L 'val)] 'bool)))))
    ; a guard the tower can read stays: it becomes the implication it was
    (guard-orb e env)
@@ -131,7 +131,7 @@
    (tx e env)
     (? (charm? e) (ok e 'nat)
        (nom? e) (: p (look e env) (? (two? p) (ok (p 1) (p 2)) (bad (show e))))
-       (id? e ()) (ok 'vnilv 'val)                       ; the empty list is the model's ()
+       (= e ()) (ok 'vnilv 'val)                       ; the empty list is the model's ()
        (! (two? e)) (bad (show e))
        (: h <e n #e w (look h wordmap) w2 (look h wordmap2)
         (? (n = 2 && two? w) (un1 (e 1) env (w 1) (\ t [(w 2) t]) (w 3))
@@ -171,11 +171,11 @@
                  L (? ((ht la) < (ht lb)) lb la)
                  ta (co (A 1) la L) tb (co (B 1) lb L)
                  ; at val the claim is veq's; below it the carrier is canonical
-                 (? (id? L 'val) (: q ['veq ta tb] [1 ['paths 'bool q 'true] q])
+                 (? (= L 'val) (: q ['veq ta tb] [1 ['paths 'bool q 'true] q])
                     [1 ['paths L ta tb] ta]))))
        ; anything else the tower reads as a bool is the claim "..and it is true"
        (: r (tx b env)
-          (? (won? r && id? (r 2) 'bool) [1 ['paths 'bool (r 1) 'true] (r 1)]
+          (? (won? r && (= (r 2) 'bool)) [1 ['paths 'bool (r 1) 'true] (r 1)]
              (won? r) (bad ("a claim at the " + (string (r 2)) + " rung"))
              (bad (? (hd? b ":") "a (: ..) binding the tower cannot follow"
                      (two? b) (show <b)
@@ -207,11 +207,11 @@
    ; --- the kernel, live: a strategy is tried, not asserted ---
    dq (uu 'defq)
    _ (hear (\ p e (: h (peep HELPC () 0) (? h (h p e) 0))))
-   (checks? nm ty tm) (id? 'accepted (rejects (\ z (dq nm ty tm))))
+   (checks? nm ty tm) (= 'accepted (rejects (\ z (dq nm ty tm))))
 
    ; --- the rows ---
    fs (forms (open "test/law.l" "r"))
-   (findb l) (? (! (two? l)) () (id? <l 'law-rows) (l 1) (findb >l))
+   (findb l) (? (! (two? l)) () (= <l 'law-rows) (l 1) (findb >l))
    rows >(findb >(cap fs))
    (qstrip s) (: (go i) (? (i = tally s) ""
                             ((? (s i = 63) "q" (s i = 61) "eq" (string (s i))) + go (i + 1)))
@@ -222,13 +222,13 @@
    ; --- or [nm () reason] ---
    (row1 r0)
     (: r (unglue (opfix r0)) nm (unq (r 1)) lm (r 2)
-       (? (! (two? lm) || ! (id? <lm bs) || ! (nom? (lm 1))) [nm () "not a lambda"]
+       (? (! (two? lm) || ! (= <lm bs) || ! (nom? (lm 1))) [nm () "not a lambda"]
         (: x (lm 1) b0 (lm 2)
            g (peel b0 [[x (quote v) (quote val)]]) b (g 0)
            (? (one? b) [nm () "trivially 1"]
               (: rg (range? b0 [[x 'v 'val]])
                  (? (nom? rg) [nm 'range (string rg)]
-                  (? (surface? b && (id? (g 1) ())) [nm () "the sigil lane: (= e e) after opfix"]
+                  (? (surface? b && (= (g 1) ())) [nm () "the sigil lane: (= e e) after opfix"]
                    (: cl (claim b [[x 'v 'val]])
                       (? (! (won? cl)) [nm () ("off the model: " + (cl 1))]
                        (: ty ['pi 'v 'val (cl 1)]
@@ -250,7 +250,7 @@
                                    [nm () "no proof found"])))))))))))))
 
    done (map row1 rows)
-   (rng? d) (id? (d 1) 'range)
+   (rng? d) (= (d 1) 'range)
    proved (filter (\ d (two? (d 1))) done)
    ranged (filter rng? done)
    missed (filter (\ d (! (two? (d 1)) && ! (rng? d))) done)
@@ -281,14 +281,14 @@
    ; obligation again at (nval n), and reading them stacked is the point
    (proofof d)
     (: p (d 3)
-       (? (! (id? (d 4) 'cases)) ("   " + (show p) + ")")
+       (? (! (= (d 4) 'cases)) ("   " + (show p) + ")")
           (: nr (p 2)
              (join ["   (lam v (nat_rect " (show (nr 1)) nl
                     "                     " (show (nr 2)) nl
                     "                     " (show (nr 3)) nl
                     "                     " (show (nr 4)) ")))"]))))
-   (howof d) (? (id? (d 4) 'conv)  "by conversion"
-                (id? (d 4) 'cases) "by cases on the saturated measure"
+   (howof d) (? (= (d 4) 'conv)  "by conversion"
+                (= (d 4) 'cases) "by cases on the saturated measure"
                 "by the lemma the model names")
    ; a val-rung claim is veq's, because a guarded row needs a decidable one --
    ; an orb takes a bool and a path is not one. where the guard erased and the
@@ -296,9 +296,9 @@
    ; is mechanical: the same law, as an equality rather than a decision.
    (veqclaim? ty)
     (: c (ty 3)
-       (#c = 4 && id? (c 0) 'paths && id? (c 1) 'bool
-        && id? (c 3) 'true
-        && (: q (c 2) (two? q && #q = 3 && id? (q 0) 'veq))))
+       (#c = 4 && (= (c 0) 'paths) && (= (c 1) 'bool)
+        && (= (c 3) 'true)
+        && (: q (c 2) (two? q && #q = 3 && (= (q 0) 'veq)))))
    (twinof d)
     (? (! (veqclaim? (d 2))) 0
        (: q (((d 2) 3) 2) ta (q 1) tb (q 2)
@@ -309,7 +309,7 @@
           (pl ("   " + (show ['lam 'v ['uv-veq-paths ta tb [g 'v]]]) + ")"))))
    _ (map (\ d (: _ (pl (join [" ; " (show (d 0)) "   " (srcof d)]))
                   _ (pl (join [" ; " (howof d)
-                               (? (id? (d 5) ()) "" ("; the guard " + (d 5) + " erases"))]))
+                               (? (= (d 5) ()) "" ("; the guard " + (d 5) + " erases"))]))
                   _ (pl (" (defq law-" + (qstrip (show (d 0)))))
                   _ (pl ("   " + (show (d 2))))
                   _ (pl (proofof d))
