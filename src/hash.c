@@ -217,10 +217,7 @@ ai_noinline static struct ai *host_crc32(struct ai *g) {
    g->sp[0] = putcharm(crc32_of((const uint8_t*) s->bytes, (uintptr_t) s->len)); }
  return g; }
 static lvm(lvm_crc32) {
- Pack(g); g = host_crc32(g);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- Unpack(g);
- ai_musttail return Next(1); }
+ LvmCall(g, host_crc32) }
 
 // --- cksum (POSIX: not reflected, polynomial 0x04c11db7, the length folded in) -----
 // a different crc from the one above in every part: the register runs the other way,

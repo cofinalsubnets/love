@@ -417,12 +417,7 @@ ai_noinline static struct ai *hv_shore(struct ai *g, word pw) {
 
 // FIXME what is this?
 static lvm(lvm_shore) {
- Pack(g);
- g = hv_shore(g, g->sp[0]);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- Unpack(g);
- Sp[1] = Sp[0];
- ai_musttail return Nextp(1, 1); }
+ LvmCallp(g, 1, hv_shore, g->sp[0]) }
 
 static union u const nif_shore[] = {{lvm_shore}, {lvm_ret0}};
 AiNif("shore", nif_shore);

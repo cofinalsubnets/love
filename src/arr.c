@@ -257,9 +257,7 @@ lvm(lvm_bsr) {
   ai_musttail return Ap(lvm_vbin, g); }
  if (!intp(a) || !intp(b))
   ai_musttail return Push(ZeroPoint);
- Pack(g); g = ai_big_shift(g, vop_bsr);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- ai_musttail return Resume(); }
+ LvmResume(g, ai_big_shift, vop_bsr) }
 
 // << : x * 2^k, so it promotes rather than dropping the bits off the top. the word
 // lane is taken only where shifting back gives x again -- that is the whole test for
@@ -271,9 +269,7 @@ lvm(lvm_bsl) { word a = Sp[0], b = Sp[1], _res;
  if (charmp(a) && charmp(b)) { intptr_t x = getcharm(a), k = getcharm(b);
   if (k >= 0 && k < Bits) { intptr_t r = (intptr_t) ((uintptr_t) x << k);
    if ((r >> k) == x) { Have(box_req); emit_int(_res, r); ai_musttail return Push(_res); } } }
- Pack(g); g = ai_big_shift(g, vop_bsl);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- ai_musttail return Resume(); }
+ LvmResume(g, ai_big_shift, vop_bsl) }
 
 op(lvm_charmp, 1, oddp(Sp[0]) ? putcharm(1) : zero)   // (charm? x): a fixnum -- a charm, the tagged odd word
 // (nil? x): the falsy predicate, ($ x <= 0) -- every negative is nil, not just
@@ -932,10 +928,7 @@ static struct ai *obin_run(struct ai *g, int op) {
 
 lvm(lvm_obin) {
  int op = (int) g->b;
- Pack(g);
- g = obin_run(g, op);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- ai_musttail return Resume(); }
+ LvmResume(g, obin_run, op) }
 
 // ai_O reduction body (kind: 0 sum, 1 prod, 2 max, 3 min). g->sp[0] is the array.
 struct ai *ored(struct ai *g, int kind) {

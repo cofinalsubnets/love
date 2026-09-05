@@ -6,9 +6,7 @@
 
 lvm(lvm_gc) {
  uintptr_t n = (uintptr_t) g->b;                // Have's ask, left in the scratch slot
- Pack(g);
- if (!ai_ok(g = ai_please(g, n))) ai_musttail return Ap(_lvm_ghelp, g);
- ai_musttail return Resume(); }
+ LvmResume(g, ai_please, n) }
 
 static ai_noinline word gcp(struct ai*, struct ai_gcx*, word);
 

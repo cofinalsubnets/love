@@ -281,16 +281,9 @@ ai_noinline static struct ai *chug_fd(struct ai *g, intptr_t fd) {
 
 lvm(lvm_chug) {
  if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
- if (charmp(Sp[0])) {
-  Pack(g); g = chug_fd(g, getcharm(Sp[0]));
-  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
-  Unpack(g);
-  ai_musttail return Next(1); }
+ if (charmp(Sp[0])) LvmCall(g, chug_fd, getcharm(Sp[0]))
  if (!iop(Sp[0])) { Sp[0] = EmptyString; ai_musttail return Next(1); }
- Pack(g); g = chug_str(g, (struct ai_io*) Sp[0]);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- Unpack(g);
- ai_musttail return Next(1); }
+ LvmCall(g, chug_str, (struct ai_io*) Sp[0]) }
 
 // (inhand port): how many bytes this port holds ready -- the count `chug` would hand over.
 // the borrowed run counts, so a reader can ask whether anyone else has drawn on the port

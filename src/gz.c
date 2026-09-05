@@ -243,10 +243,7 @@ ai_noinline static struct ai *host_inflate(struct ai *g) {
  return g; }
 
 static lvm(lvm_inflate) {
- Pack(g); g = host_inflate(g);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- Unpack(g);
- ai_musttail return Next(1); }
+ LvmCall(g, host_inflate) }
 
 static union u const nif_inflate[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_inflate}, {lvm_ret0}};
 AiNif("inflate", nif_inflate);

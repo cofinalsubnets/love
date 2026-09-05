@@ -108,10 +108,16 @@
 #define Unpack(g) ((void)0)
 #endif
 #define lvm(n) ai_noinline ai_noicf _lvm(n)
-// the pack/call/unpack most nifs wear: hand the stack to a C helper that may collect,
-// take its answer back, step one. LvmWrap is the whole op where the body is nothing else.
-#define LvmCall(g, f) {\
- Pack(g); if (!ai_ok(g = f(g))) ai_musttail return Ap(_lvm_ghelp, g); Unpack(g); ai_musttail return Next(1); }
+// the pack/call/unpack most nifs wear: hand the stack to a C helper that may collect
+// (any arguments past g ride along), ghelp a not-ok answer, then the tail: LvmCall takes
+// the stack back and steps one; LvmCallp also lifts the answer over k operands; LvmResume
+// re-enters where the helper pointed g->ip. LvmWrap is the whole op where the body is
+// nothing but an LvmCall.
+#define LvmPack(g, f, ...) \
+ Pack(g); if (!ai_ok(g = f(g, ##__VA_ARGS__))) ai_musttail return Ap(_lvm_ghelp, g)
+#define LvmCall(g, f, ...) { LvmPack(g, f, ##__VA_ARGS__); Unpack(g); ai_musttail return Next(1); }
+#define LvmCallp(g, k, f, ...) { LvmPack(g, f, ##__VA_ARGS__); Unpack(g); Sp[k] = Sp[0]; ai_musttail return Nextp(1, k); }
+#define LvmResume(g, f, ...) { LvmPack(g, f, ##__VA_ARGS__); ai_musttail return Resume(); }
 #define LvmWrap(n, f) lvm(n) LvmCall(g, f)
 
 typedef intptr_t ai_word;

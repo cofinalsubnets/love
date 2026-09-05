@@ -195,21 +195,13 @@ ai_noinline static struct ai *host_harkdrain(struct ai *g) {
  return g; }
 
 static lvm(lvm_hark) {
- Pack(g);
- g = host_harkstart(g, 0);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- Unpack(g);
- ai_musttail return Next(1); }
+ LvmCall(g, host_harkstart, 0) }
 
 // (herald argv) -- hark, teeing: identical to (hark argv), same (status . output)
 // answer, but the child's stdout is relayed as it arrives instead of only at
 // exit. for a caller that just reprints what it captured; see the `tee` note above.
 static lvm(lvm_herald) {
- Pack(g);
- g = host_harkstart(g, 1);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- Unpack(g);
- ai_musttail return Next(1); }
+ LvmCall(g, host_harkstart, 1) }
 
 // the shared second ap. it parks -- Ip unadvanced, so the whole op re-runs on
 // reschedule and reads its state back off the stack.
@@ -235,23 +227,14 @@ ai_noinline static struct ai *host_exec(struct ai *g) {
  return ai_push(g, 1, ai_err(g, errno)); }                  // exec failed -> its nom
 
 static lvm(lvm_exec) {
- Pack(g);
- g = host_exec(g);                                         // returns only on failure
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- Unpack(g);
- Sp[1] = Sp[0];                                            // the errno nom over argv
- ai_musttail return Nextp(1, 1); }
+ LvmCallp(g, 1, host_exec) }   // returns only on failure; the errno nom over argv
 
 // (getenv name) -> string, or zero if unset / misused. zero = absent, not an error.
 // the name goes to getenv where it lies: a love string's bytes[len] is always a NUL.
 static lvm(lvm_getenv) {
  char const *v = strp(Sp[0]) ? getenv(txt(Sp[0])) : NULL;
  if (!v) { Sp[0] = ZeroPoint; ai_musttail return Next(1); }
- Pack(g);
- if (!ai_ok(g = ai_strof(g, v))) ai_musttail return Ap(_lvm_ghelp, g);
- Unpack(g);
- Sp[1] = Sp[0];
- ai_musttail return Nextp(1, 1); }
+ LvmCallp(g, 1, ai_strof, v) }
 
 static lvm(lvm_getpid) {
   if (__ai_osv < 0) ai_musttail return Ap(k_lvm_getpid, g);

@@ -763,9 +763,7 @@ lvm(lvm_defglob) {
 // lvm_index (the late-bound global read) is defined below lvm_scare: its
 // miss path is the missing condition and borrows the whole help apparatus.
 
-lvm(lvm_eval) { Ip++; Pack(g);
- if (!ai_ok(g = c0(g, lvm_jump))) ai_musttail return Ap(_lvm_ghelp, g);
- ai_musttail return Resume(); }
+lvm(lvm_eval) { Ip++; LvmResume(g, c0, lvm_jump) }
 
 // ai_evals_ lives with the boot stitch it shares its machinery with, at the
 // foot of the reader section.
@@ -1798,9 +1796,7 @@ static intptr_t ai_saturate(struct ai *g, word x) {
   return i + (re > (ai_flo_t) i ? 1 : 0); }
 
 lvm(lvm_saturate) {
- if (ai_ratio_exact(g, Sp[0])) { Pack(g); g = ai_ratio_rung(g, 2);
-  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
-  ai_musttail return Resume(); }
+ if (ai_ratio_exact(g, Sp[0])) LvmResume(g, ai_ratio_rung, 2)
  Sp[0] = putcharm(ai_saturate(g, Sp[0])); Ip += 1; ai_musttail return Continue(); }
 
 // the tower's third rung: ceil(re(net x)) -- the measure retracted onto the integers, where
@@ -1816,7 +1812,5 @@ static intptr_t ai_ceilnet(struct ai *g, word x) {
   return i + (re > (ai_flo_t) i ? 1 : 0); }
 
 lvm(lvm_ceil) {
- if (ai_ratio_exact(g, Sp[0])) { Pack(g); g = ai_ratio_rung(g, 1);
-  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
-  ai_musttail return Resume(); }
+ if (ai_ratio_exact(g, Sp[0])) LvmResume(g, ai_ratio_rung, 1)
  Sp[0] = putcharm(ai_ceilnet(g, Sp[0])); Ip += 1; ai_musttail return Continue(); }

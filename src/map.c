@@ -211,10 +211,7 @@ lvm(lvm_pin) {
  word x = Sp[0], n;                              // coll
  if (tabp(x)) {
   Sp[0] = Sp[1], Sp[1] = Sp[2], Sp[2] = x;       // ai_mapput wants (sp0,sp1,sp2)=(key,val,coll)
-  Pack(g);
-  if (!ai_ok(g = ai_mapput(g))) ai_musttail return Ap(_lvm_ghelp, g);
-  Unpack(g);
-  ai_musttail return Next(1); }
+  LvmCall(g, ai_mapput) }
  if (caskp(x)) {
   if (charmp(Sp[1]) && charmp(Sp[2]) && (n = getcharm(Sp[1])) >= 0 && n < (word) len(cask(x)->str))
    txt(cask(x)->str)[n] = (char) getcharm(Sp[2]);    // index = key = Sp[1], val = Sp[2]

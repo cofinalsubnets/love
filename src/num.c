@@ -691,17 +691,10 @@ lvm(lvm_bmul_start) {
  // through ai_big_binop. (na <= chunk/nb keeps na*nb from overflowing a 32-bit int.)
  word a = Sp[0], b = Sp[1];
  int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2;
- if (na <= bmul_chunk / nb) {
-  Pack(g); g = ai_big_binop(g, vop_mul);
-  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
-  ai_musttail return Resume(); }
+ if (na <= bmul_chunk / nb) LvmResume(g, ai_big_binop, vop_mul)
  if (bigp(a) && bigp(b) && na == nb) {           // equal-length large: subquadratic Karatsuba
-  Pack(g); g = ai_kmul_setup(g);
-  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
-  ai_musttail return Resume(); }
- Pack(g); g = ai_bmul_setup(g);                  // unequal-length large: chunked schoolbook
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- ai_musttail return Resume(); }
+  LvmResume(g, ai_kmul_setup) }
+ LvmResume(g, ai_bmul_setup) }   // unequal-length large: chunked schoolbook
 
 static lvm(lvm_bmul) {
  int i = (int) getcharm(Sp[0]);
@@ -775,13 +768,8 @@ lvm(lvm_bdiv_start) {
  word a = Sp[0], b = Sp[1];
  int m = bigp(a) ? big_nlimbs(a) : wlimbs, n = bigp(b) ? big_nlimbs(b) : wlimbs;
  // one-shot the cheap cases: |a|<|b| (q=0), single-limb divisor, or a short quotient.
- if (m < n || n < 2 || m - n < (int) (bdiv_chunk / (uintptr_t) n)) {
-  Pack(g); g = ai_big_binop(g, vop);
-  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
-  ai_musttail return Resume(); }
- Pack(g); g = ai_bdiv_setup(g, vop == vop_rem);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- ai_musttail return Resume(); }
+ if (m < n || n < 2 || m - n < (int) (bdiv_chunk / (uintptr_t) n)) LvmResume(g, ai_big_binop, vop)
+ LvmResume(g, ai_bdiv_setup, vop == vop_rem) }
 
 static lvm(lvm_bdiv) {
  ai_limb *ws = (ai_limb*) txt(cask(Sp[1])->str);
@@ -933,10 +921,7 @@ struct ai *ored(struct ai *g, int kind);   // kind: 0 sum, 1 prod, 2 max, 3 min
 lvm(lvm_asum) {
  word x = Sp[0];
  if (!packp(x)) ai_musttail return Next(1);        // scalar: (asum 5) = 5
- if (tray(x)->type == ai_O) {
-  Pack(g); g = ored(g, 0);
-  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
-  ai_musttail return Resume(); }
+ if (tray(x)->type == ai_O) LvmResume(g, ored, 0)
  if (tray(x)->type == ai_C) {                   // complex sum -> a complex box
   struct ai_tray *v = tray(x); uintptr_t n = tray_nelem(v);  // K=4 accumulators (see aprod)
   ai_flo_t *fp = tray_data(v);                   // read all parts before Have (no alloc here)
@@ -968,10 +953,7 @@ lvm(lvm_asum) {
 lvm(lvm_aprod) {
  word x = Sp[0];
  if (!packp(x)) ai_musttail return Next(1);
- if (tray(x)->type == ai_O) {
-  Pack(g);
-  if (!ai_ok(g = ored(g, 1))) ai_musttail return Ap(_lvm_ghelp, g);
-  ai_musttail return Resume(); }
+ if (tray(x)->type == ai_O) LvmResume(g, ored, 1)
  if (tray(x)->type == ai_C) {                   // complex product -> a complex box
   // K=4 independent accumulators break the multiply latency chain (~3x);
   // reassociation is sound -- fp differs only in last-bit rounding per grouping
@@ -1012,10 +994,7 @@ static lvm(lvm_aextreme) {
  int kind = (int) g->b;
  word x = Sp[0];
  if (!packp(x)) ai_musttail return Next(1);
- if (tray(x)->type == ai_O) {
-  Pack(g); g = ored(g, kind);
-  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
-  ai_musttail return Resume(); }
+ if (tray(x)->type == ai_O) LvmResume(g, ored, kind)
  if (tray(x)->type == ai_C) ai_musttail return Answer(ZeroPoint);   // complex: unordered
  struct ai_tray *v = tray(x);
  uintptr_t n = tray_nelem(v);

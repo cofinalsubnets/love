@@ -736,9 +736,7 @@ op11(lvm_setp, trayp(Sp[0]) ? putcharm(1) : zero)
 // rungs (the bare cast wrapped above 2^62 -- UB read as 0); an exact-ratio coin
 // truncates by long division; everything else passes through.
 static lvm(lvm_intf) {
- if (ai_ratio_exact(g, Sp[0])) { Pack(g); g = ai_ratio_rung(g, 0);
-  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
-  ai_musttail return Resume(); }
+ if (ai_ratio_exact(g, Sp[0])) LvmResume(g, ai_ratio_rung, 0)
  if (gemp(Sp[0])) { ai_flo_t v = gem_get(Sp[0]);
   Sp[0] = putcharm(v >= (ai_flo_t) maxcharm ? maxcharm
                  : v <= (ai_flo_t) mincharm ? mincharm
@@ -852,9 +850,7 @@ lvm(lvm_quotn) {
    word _res; Have(box_req);                                        // inexact -> promote to float
    emit_gem(_res, (ai_flo_t) av / (ai_flo_t) bv);
    ai_musttail return Push(_res); } }
- Pack(g); g = ai_big_quot_true(g);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- ai_musttail return Resume(); }
+ LvmResume(g, ai_big_quot_true) }
 
 // `-`: fixnum fast path, the () unit, then coins (`-` has no kind matrix, so the
 // interception lives here), then the numeric slow lane

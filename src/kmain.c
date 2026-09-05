@@ -1170,10 +1170,7 @@ ai_noinline static struct ai *k_disk_read(struct ai *g) {
   return g->sp[2] = g->sp[0], g->sp += 2, g; }
 
 static lvm(lvm_disk_read) {
- Pack(g); g = k_disk_read(g);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- Unpack(g);
- ai_musttail return Next(1); }
+ LvmCall(g, k_disk_read) }
 
 ai_noinline static ai_word k_disk_write(ai_word lw, ai_word sw) {
  intptr_t lba = (lw & 1) ? getcharm(lw) : -1;
@@ -1220,10 +1217,7 @@ ai_noinline static struct ai *k_svm_run(struct ai *g) {
   return g->sp[1] = word(c), g->sp += 1, g; }
 
 static lvm(lvm_svm_run) {
-  Pack(g); g = k_svm_run(g);
-  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
-  Unpack(g);
-  ai_musttail return Next(1); }
+  LvmCall(g, k_svm_run) }
 
 // ..and its Intel twin (src/x64_vmx.c). (vmx-run ())
 // answers FOUR numbers where the SVM door answers three: the last is the
@@ -1252,10 +1246,7 @@ ai_noinline static struct ai *k_vmx_run(struct ai *g) {
   c = ini_chain(bump(g, Width(struct ai_chain)), putcharm(reason), word(c));
   return g->sp[1] = word(c), g->sp += 1, g; }
 static lvm(lvm_vmx_run) {
-  Pack(g); g = k_vmx_run(g);
-  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
-  Unpack(g);
-  ai_musttail return Next(1); }
+  LvmCall(g, k_vmx_run) }
 #endif
 
 // --- rung 2: the writable tree -- mkdir, rmdir, unlink, rename, chdir/cwd, chmod, utime.
