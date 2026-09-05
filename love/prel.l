@@ -11,27 +11,16 @@
    saturate sat
    link . >< .)                     ; the infix cons: (a >< b) and (a . b) are (. a b); glued ><x stays the cup-cap accessor (valence)
 (: : () ? () \ ())
-(: pi 3.141592653589793
-   tau (* 2 pi)
-   e 2.718281828459045
-   true 1 false 0
+(: e 2.718281828459045
    i (twin 0 1) ;; FIXME up top
-   ; the long spellings, synonyms of the math.h nifs. `pow` waits for `**`, below.
-   sine sin cosine cos tangent tan fabs abs
-   star-tray (tray 0) gem-tray (tray 0.0) twin-tray (tray (twin 0 0)) top-tray (tray ())  ; the four typed-tray ctors (witness baked in)
-   (tier v) (? (tray? v) (: c (atype v) (? (= c 0) star-tray (= c 1) gem-tray (= c 2) twin-tray top-tray)) ())  ; a tray's tier is its ctor; nil off a tray
-   zero? nil?
+
    (one? x) (nil? (two? x))
    atom? one?
    ; a fresh layer: its own macro table at key 0, the pre-enter chain and name at charm key 31337.
    ; a charm key cannot collide with a name. (enter ()) is anonymous.
    (enter nm) (: F (tablet 0) _ (pin F 0 (tablet 0)) _ (pin F 31337 (link (books ()) nm))
                  _ (setbooks (link F (books ()))) ())
-   ; use: splice a registered module just below the head, so its names resolve on the walk but
-   ; never shadow yours. a missing name scares -- a silent ()-splice would be a silent no-op.
-   (use m)    (: b (? (tablet? m) m
-                      (: r (peep (mods ()) m ()) (? (nil? r) (scare (\ no-module) m) r)))
-                 (setbooks (link (cap (books ())) (link b (cup (books ()))))))
+
    ; unwind to the pre-enter chain, register the layer under its name, answer the book.
    ; a bare leave -- never entered, so no charm -- pops whatever sits below the head instead.
    (leave _)  (: F (cap (books ())) s (peep F 31337 ())
@@ -39,25 +28,14 @@
                     (: _ (pull F 31337 0) _ (setbooks (cap s))
                        _ (? (nil? (cup s)) 0 (pin (mods ()) (cup s) F)) F)
                     (setbooks (link F (cup (cup (books ())))))))
-   ; from: a module is its tablet. currying reaches a member because a tablet already indexes
-   ; itself, so (from 'holo 'assemble) reads the same as ever; `keys` is the ordinary function,
-   ; not a reserved key; (from ()) lists the registry; a missing module answers ().
-   ; the tablet is the real one -- pin it and you are doing surgery on a live runtime, which is
-   ; yours to do. it was never a safety wrapper: a module's members are folded into its consumers
-   ; at their compile, so gutting one changes nothing already compiled and everything compiled
-   ; after -- the hazard is divergence, and no closure here could have caught it.
-   (from k)   (? (nil? k) (keys (mods ())) (peep (mods ()) k ()))
+
    (caap x) (cap (cap x)) (caup x) (cap (cup x))
    (cuap x) (cup (cap x)) (cuup x) (cup (cup x))
-   (caaap x) (cap (cap (cap x))) (caaup x) (cap (cap (cup x)))
-   (cauap x) (cap (cup (cap x))) (cauup x) (cap (cup (cup x)))
-   (cuaap x) (cup (cap (cap x))) (cuaup x) (cup (cap (cup x)))
-   (cuuap x) (cup (cup (cap x))) (cuuup x) (cup (cup (cup x))))
+
+ (cuuup x) (cup (cup (cup x))))
 (: (gcd a b) (? (= b 0) (? (< a 0) (- 0 a) a) (gcd b (% a b)))
    (modpow b k m) (? (< k 1) 1 (: h (modpow b (// k 2) m) h2 (% (* h h) m)
                                  (? (= 0 (% k 2)) h2 (% (* h2 b) m)))))
-(:
-   )
 ; `::` defines a macro in the head layer's table -- the same book a plain `:` defglobs to, so
 ; prel's macros land in orth during boot, a script's in the session layer, a module's in the module.
 (: ; look a macro up across the layer chain -- the twin of love.c's macroget, kept in step with
@@ -69,10 +47,8 @@
                  (go (books ())))
    (:: a b) (: F (cap (books ())) m (peep F 0 ())
                (pin (? (tablet? m) m (: t (tablet 0) _ (pin F 0 t) t)) a b))
-   putc (put out)
-   puts (say out)
-   (putn n) (putbn out n 10)
-   (getc _) (see in))
+
+)
 ; numfn lays the n-fold thread with spin/poke, so applying a fixnum never re-enters the compiler:
 ; n quote-f's then n ap's, cell 0 the printer's source, entry at cell 1.
 ; the helpers pass th/f/n explicitly: a closure over the forward-bound th miscompiles under c0.
@@ -185,19 +161,14 @@
    negate (- 0)
    reciprocal (/ 1)
    (fraction x) (% x 1)
-   neg negate recip reciprocal frac fraction        ; the short spellings (`sat` is up top, before saturate's users)
    (bit x) (nil? (nil? x))
    == id?
    (!== a b) (nil? (== a b))
    ; a star is the fixpoint of net. id?, not `=`: a number comes back unchanged where a tray's
    ; net is a fresh sum, so star? and galaxy? stay disjoint.
    (star? x) (id? x (net x))
-   ; galaxy? keys on the cells, not the tier code, so an object tray of bignums still counts
-   (galaxy? x) (? (tray? x) (? (nil? (= top-tray (tier x))) 1 (star? (peep x 0 0))) 0))
-(: (foldl1 f l) (foldl f (cap l) (cup l))
-   (foldr1 f l) (foldr f (last l) (init l))
-   ap (foldl id)
-   (filter p l) (? (two? l) (: m (filter p (cup l)) (? (p (cap l)) (link (cap l) m) m)))
+)
+(: (filter p l) (? (two? l) (: m (filter p (cup l)) (? (p (cap l)) (link (cap l) m) m)))
    (init l) (? (two? (cup l)) (link (cap l) (init (cup l))))
    (last l) (? (two? (cup l)) (last (cup l)) (cap l))
    (each l f) (? (two? l) (: _ (f (cap l)) (each (cup l) f)))
@@ -217,13 +188,9 @@
    (cat a b) (foldr link b a))
 ; (sort l) is the C lane -- a stable bottom-up merge by the total order, no lisp re-entry;
 ; descending is (rev (sort l)). an arbitrary predicate takes this lisp merge sort instead.
-(: (merge le a b) (? (one? a) b (one? b) a
-                     (le (cap a) (cap b)) (link (cap a) (merge le (cup a) b))
-                     (link (cap b) (merge le a (cup b))))
-   (sortsplit l) (? (one? l) (link l ()) (one? (cup l)) (link l ())
+(: (sortsplit l) (? (one? l) (link l ()) (one? (cup l)) (link l ())
                     (: r (sortsplit (cuup l)) (link (link (cap l) (cap r)) (link (caup l) (cup r)))))
-   (sortby le l) (? (one? l) l (one? (cup l)) l
-                  (: s (sortsplit l) (merge le (sortby le (cap s)) (sortby le (cup s))))))
+)
 (: catmap (compose (flip foldr ()) (compose cat))
    (assoc x l) (? (two? l) (? (= x (caap l)) (cap l) (assoc x (cup l))))
    (lidx x) ((: (f n l) (? (two? l) (? (= x (cap l)) n (f (+ 1 n) (cup l))) -1)) 0)
@@ -233,12 +200,7 @@
    ; every nom on the layer chain, deduped through a tablet. noms only -- a layer's keys also hold
    ; the macro table and the unwind chain. it sits down here so catmap/foldl are already bound.
    (names _) (filter nom? (keys (foldl (\ t k (pin t k 1)) (tablet 0) (catmap keys (books ())))))
-   ; the macro twin: each layer keeps its table at its nil key, so this walks the chain `macros`
-   ; looks up through. same placement rule as `names`, and its `books` folds at compile time.
-   (macro-names _) (filter nom? (keys (foldl (\ t k (pin t k 1)) (tablet 0)
-                                             (catmap (\ b (: m (peep b 0 ())
-                                                             (? (tablet? m) (keys m) ())))
-                                                     (books ())))))
+
    ; the range 0..x-1 (iota its array twin), and lifted over a list so the glued run
    ; composes: ^^3 is (jot (jot 3)), a list of lists, since a run factors greedily.
    ; no glued sigil in here -- this sits above the operators table, where infix is not
@@ -246,56 +208,8 @@
    (jot x) (? (two? x) (map jot x) (: n (saturate x) (go i) (? (< i n) (link i (go (+ i 1)))) (go 0)))
    (drop n l) (? n (drop (- n 1) (cup l)) l)
    (take n l) (? n (? (two? l) (link (cap l) (take (- n 1) (cup l)))))   ; stop at end-of-list (else it pads past it)
-   (part p) (foldr (\ a m (? (p a) (link (link a (cap m)) (cup m))
-                                        (link (cap m) (link a (cup m))))) '(())))
-; the port head is three words -- ap, vt, ungetc -- and both languages know it: love.h declares
-; it, these build it. each poke answers the cell it wrote, so `poke -1` walks backwards. the vt
-; is the port's whole kind, so these stamp the one they mean; C hands the address over as ci-vt
-; and to-vt, the way it hands over lvm_quote, and the egg mops both noms.
-(: (tap cl)
- (poke -1 (peek 0 in) (poke -1 ci-vt (poke -1 -1 (poke 3 cl (spin 4)))))
- (jug _)                                          ; the output dual of `tap`: say into it, slurp it back out
-  ; the backing starts empty, and that is the whole isolation: a literal here is
-  ; one string every jug would share, and to_writen fills a backing in place -- two
-  ; live jugs then write over each other until the first one grows.
-  (poke -1 (peek 0 in) (poke -1 to-vt (poke -1 -1 (poke -1 "" (poke 4 0 (spin 5))))))
- ; hot? names the zoo (a buf or a port), the head's ap word the species -- the recognition C's iop
- ; does. hot? goes first so the peek only ever lands on a heap cell.
- (port? o) (? (hot? o) (id? (peek 0 o) (peek 0 in)) 0)   ; the else arm is the bit: a two-armed ? answers the zero point
- ; drain a vessel to a value: a jug reads its backing buffer, everything else a gulp at a time.
- ; the drain accumulates, it does not recurse -- a recursion's stack depth is the gulp count, and
- ; on a parking port every task switch copies that stack.
- ; `see` is what makes the loop terminate: it is the one door that touches the device (chug
- ; never does), so every turn either lands its byte in the jug or reads the end. the byte goes
- ; to the jug rather than back to the vessel because a raw fd holds no pushback of its own.
- (slurp o) (? (? (port? o) (id? to-vt (peek 1 o))) (snip (peek 3 o) 0 (peek 4 o))   ; a jug by its vt: a buffered fd port's word 3 is a string too
-              (: j (jug 0)
-                 (go u) (: c (see o) (? (= c -1) (slurp j)
-                                        (: _ (put j c) _ (say j (chug o)) (go ()))))
-                 (go ())))
- ; the promise, through a tablet -- the mutation door this tree sanctions. the answer is wrapped
- ; (1 v) and read with two?: a promise of nothing is ordinary (eof gives ()), and a bare pin would
- ; leave the slot reading like an unforced one, so f would re-run forever.
- (once f) (: t (tablet 0)
-             (\ u (: v (peep t 0 ())
-                     (? (two? v) (cup v) (: w (f ()) _ (pin t 0 (link 1 w)) w)))))
- ; a port is a charlist: the run just gulped is realized, the tail a promise for the next.
- ; the tail must be a `once` -- p1 forces a position twice, and a re-drinking tail would lose the
- ; bytes between. one chug per gulp, and the run is whatever the port has in hand; the `see` is
- ; what refills, since chug never touches the device.
- (flow p) (: (gulp tl) (: c (see p)
-                          (? (= c -1) tl
-                             (: _ (unsee p c)
-                                t (chug p)
-                                (go k l) (? (nil? (< 0 k)) l (: j (- k 1) (go j (link (t j) l))))
-                                (go (tally t) tl))))
-             c (see p)
-             (? (= c -1) () (: _ (unsee p c) (gulp (once (\ u (flow p)))))))
- ; flow at one byte per force, for taking a port slowly where a whole run would read too far
- ; ahead. `in` already flows that way: it holds nothing in hand -- and still holds nothing
- ; where the device gulps behind it (chug asks the port, which is the static, not the run
- ; borrowed under it), so this stays the only door that reads stdin exactly.
- (trickle p) (: c (see p) (? (= c -1) () (link c (once (\ u (trickle p)))))))
+)
+
 (: l (foldr (\ a l (link link (link a (link l ())))) ()) (:: 'list l))
 ; the false answer is the unit, not 0: (&& a ..) expands to (? a .. ()) and ||'s exhausted tail
 ; reads (). test a result with ? or id?, not arithmetic.
@@ -311,75 +225,22 @@
 ; @ carries a subject the other two lack, so @- moves the second argument, not the
 ; first: (x @- dflt p v ..) is (x @ p v .. dflt), and the subject stays where it reads.
 (:: '@- (\ a (link '@ (link (cap a) (cat (cup (cup a)) (link (cap (cup a)) ()))))))
-(:: '>>= (\ l (link (last l) (init l))))
-(:: '<=< (\ g (: y (nom 0) (list '\ y (foldr (\ f x (list f x)) y g)))))
+
 ; (pins t k v ..): pin each pair onto an existing tablet -- the mutable-accumulator twin of {..},
 ; which mints a fresh one. an odd trailing operand is dropped (no lone key).
 (:: 'pins (\ l (: (go t r) (? (two? (cup r)) (go (list pin t (cap r) (caup r)) (cuup r)) t)
                   (go (cap l) (cup l)))))
 
-(: (** a b) (b a) pow ** power **                        ; prefix: infix is not live until seal-hook 4
+(: (** a b) (b a)  
    $ 1 ! nil?  (!= a b) (nil? (= a b)))                  ; the exponent answers to all three spellings
 
 ; lisp compatibility synonyms
-(: car cap cdr cup cons link
-   seqx (\ l (>< ': (foldr (\ l r (>< '_ (>< l r))) (list (last l)) (init l))))
+(: seqx (\ l (>< ': (foldr (\ l r (>< '_ (>< l r))) (list (last l)) (init l))))
    ifx (>< '?) letx (>< ':) lamx (>< '\ )
    _ (:: ', seqx) _ (:: 'do seqx) _ (:: 'begin seqx) _ (:: 'progn seqx)
    _ (:: 'let letx)
    _ (:: 'cond ifx) _ (:: 'if ifx)
    _ (:: 'quote lamx) _ (:: 'lambda lamx))
-
-; --- the loader: use on a path ------------------------------------------------
-; the `use` up top splices a module the runtime already holds; here it also loads one
-; from a PATH the caller writes out. the loader invents no path of its own, so a NAME
-; it lacks is a miss and the splice raises by name: what a frontend baked, and what a
-; cat registered, is the whole of what a name can mean.
-; a load is one fresh layer: enter, read-eval, leave registers it under the file's
-; basename -- and a file that made its own (module nm ..) keeps that registration, the
-; wrapper going out with the name it never wrote to.
-; the same path twice reads once, and the PATH is what marks it: a basename cannot,
-; because several files register one module (sb's parts, lush's, tls's) and a name-keyed
-; mark would drop every part after the first. it also reads what it is pointed at -- a
-; tree's own file over a baked older copy of it, which is what papel's want asks for.
-; `open` is captured by peep, so a fs-less frontend holds () there and every path misses.
-(: use
-   (: prior use
-      ; read-eval every form of a module source; a torn form scares.
-      ; `flow`, never `slurp`: slurp conses the bytes, reverses, re-strings, and sound would cons
-      ; them again -- four copies of the module.
-      (rdev q) ((: (go cl) (: r (sound cl)
-                              (? (two? r) (: _ (ev 'ev (cap r)) (go (cup r)))
-                                 (id? r 'torn) (scare 'unfinished-form q)
-                                 0)))
-                (flow q))
-      ; a layer holding no nom of its own is not a module: the file wrapped itself in a
-      ; (module nm ..) and registered elsewhere. the charm keys (0 the macros, 31337 the
-      ; parent chain) sit in every layer and are not noms.
-      (bare? t) ((: (go ks) (? (two? ks) (? (nom? (cap ks)) 0 (go (cup ks))) 1)) (keys t))
-      (mname s) (: n (tally s)
-                   b ((: (go k r) (? (< k n) (go (+ k 1) (? (= 47 (peep s k 0)) (+ k 1) r)) r)) 0 0)
-                   e (? (? (< 2 (- n b)) (= ".l" (snip s (- n 2) n)) 0) (- n 2) n)
-                   (intern (snip s b e)))
-      fsopen (peep book 'open ())      ; the host's open nif, by peep -- see above
-      (\ m (? (tablet? m) (prior m)
-              (string? m)
-              (: nm (mname m)
-                 (? (peep (mods ()) m ()) (prior nm)          ; read already -- the path is the mark
-                    (: q (? (nil? fsopen) () (fsopen m "r"))
-                       (? (nil? (hot? q)) (prior m)
-                          ; a file whose own (module nm ..) registered wins: keep its tablet
-                          ; over the loader's wrapper layer, which leave would pin over it.
-                          ; the mark goes down before the read, so a file naming itself stops.
-                          ; t is read after the eval, so it holds either claim on the name --
-                          ; the file's, or a module that already stood there. a bare wrapper
-                          ; with neither is no module: pull the name and answer ().
-                          (: _ (pin (mods ()) m 1)
-                             _ (enter nm) _ (rdev q) t (peep (mods ()) nm ()) w (leave ())
-                             _ (? (nil? t) 0 (pin (mods ()) nm t))
-                             (? (&& (nil? t) (bare? w)) (: _ (pull (mods ()) nm 0) ())
-                                (prior nm)))))))
-              (prior m)))))
 
 ; --- module: filesystem-free definition --------------------------------------
 ; (module 'nm form ..): open nm's layer -- the registered tablet on a reopen, a
@@ -415,17 +276,6 @@
     (:: 'module (\ l (: h (cap l)
                         n (? (two? h) (? (id? (cap h) '\) (cap (cup h)) h) h)
                         (list mrun (list '\ n) (list '\ (cup l))))))))
-
-; a module's macros in the head layer, without its names. a macro rides its own
-; layer's table, which `macros` walks, so a consumer reaching a module through
-; `from` rather than a splice has no other way to spell one. ks names them, ()
-; takes the lot; a macro table is a module's key 0, the one the export prune keeps.
-(: (hoist m ks)
-   (: M (peep (from m) 0 ())
-      (? (tablet? M)
-         (each (? (two? ks) ks (keys M)) (\ k (: v (peep M k 0) (? v (:: k v) 0))))
-         0)))
-
 
 ; --- reader operators: the operators tablet + the opfix factor pass ---------
 (: operators (pins (tablet 0)
@@ -842,45 +692,16 @@
 ; three ways (cook, clay, cpp), lines twice (kore/text, cook), findsub twice
 ; (cook, sb/http), nth four times where list application already indexes. one copy
 ; here, `sep` first so a partial application reads, and -1 for absent.
-(: (chars s) (map (\ i (s i)) ^#s)                      ; a string is an atom, so map needs the indices
-   (fsub s sub i)                                       ; first index >= i of sub in s, or -1
+(: (fsub s sub i)                                       ; first index >= i of sub in s, or -1
     (? (i + #sub > #s) -1 (snip s i (i + #sub) = sub) i (fsub s sub (i + 1)))
-   (findsub s sub) (#sub = 0 ? 0 (fsub s sub 0))        ; -1 when absent
-   (has? s sub)    (0 <= findsub s sub)
-   (starts? s p)   (#p <= #s && snip s 0 #p = p ? 1 0)          ; a ?-name owes a bit, and && gives ()
-   (ends? s p)     (#p <= #s && snip s (#s - #p) #s = p ? 1 0)
+
    (join sep l)    (two? l ? (foldl (a \ x \ a + sep + x) <l >l) "")
    (split sep s)                                        ; always >= 1 piece; "" splits nowhere
     (: (go i) (: j (fsub s sep i)
                  (? (#sep = 0 || j < 0) [(snip s i #s)] (snip s i j . go (j + #sep))))
        (go 0))
-   (replace s from to) (#from = 0 ? s (join to (split from s)))
-   (ws? c)  (c = 32 || c = 9 || c = 10 || c = 13 ? 1 0)
-   (lstrip s) (: (go i) (i < #s && ws? (s i) ? (go (i + 1)) i) (snip s (go 0) #s))
-   (rstrip s) (: (go j) (0 < j && ws? (s (j - 1)) ? (go (j - 1)) j) (snip s 0 (go #s)))
-   (strip s)  (lstrip (rstrip s))       ; not `trim`: that name is ev.l's port op, mopped by egg.l
-   (lines s) (split "\n" (#s && s (#s - 1) = 10 ? (snip s 0 (#s - 1)) s))
-   (words s) (: (go i st acc)                           ; whitespace runs, so no empty pieces
-                 (: shut (st < i ? (snip s st i . acc) acc)
-                    (? (i >= #s) (rev shut)
-                       (ws? (s i)) (go (i + 1) (i + 1) shut)
-                       (go (i + 1) st acc)))
-                (go 0 0 ()))
-   (upper s) (string (map (c \ 97 <= c <= 122 ? (c - 32) c) (chars s)))
-   (lower s) (string (map (c \ 65 <= c <= 90 ? (c + 32) c) (chars s)))
-   (padl s n) (#s >= n ? s (padl (" " + s) n))
-   (padr s n) (#s >= n ? s (padr (s + " ") n))
-   (cats ls) (foldr (+) () ls)                          ; the band-general fold: net is its number case
-   (uniq l)  (: (go seen l) (? (one? l) () (peep seen <l 0) (go seen >l)
-                              (<l . go (pin seen <l 1) >l))
-                (go (tablet 0) l))
-   (count p l) (foldl (\ a x (p x ? (a + 1) a)) 0 l))    ; (a + 1 a) would read as a + (1 a)
 
-; --- assert / suite: the strict checkers, baked so they work with no harness ---
-;;; FIXME how are these used at the moment?
-(:: 'assert (\ l (. 'do (map (\ e (list '? e 0 (list 'scare (list '\ 'assert) (list '\ e)))) l))))
-(:: 'suite (\ l (. 'do (. (. 'assert (cup l)) (list (list 'puts (cap l)) (list 'puts ": ok\n"))))))
-
+)    ; (a + 1 a) would read as a + (1 a)
 
 ; --- array element-type inference + shape coercion (shared by `tuple` and `array`).
 ; a-type answers a witness star of the highest tier present -- an inhabitant, not a code, since
@@ -908,7 +729,7 @@
 ; the elements are ordinary trailing args and `array` curries them one at a time.
 (: (a-coll sh n acc) (n < 1 ? (: d (rev acc) (tray (a-type d) sh d))
                               (\ x (a-coll sh (n - 1) (x . acc))))
-   (array s) (: sh (a-shape s) (a-coll sh (foldl (*) 1 sh) 0)))
+)
 
 ; recursive-value boxing for `:` -- the letrec* "capture by location" fix. a reference at-or-before
 ; its own binding is forward, and indirects through a cell keyed by the binding site's nom, so a
@@ -986,65 +807,13 @@
                              !(heard ()) ()
                              (scare 'missing nm))))))
 
-;;; FIXME help/io setters below here. redesign the API with more structure
-; binary?: does f take exactly two operands? read two ways -- the arity off the n-ary closure
-; marker, else the param count off the source a compiled lambda stashes. one-sided on purpose:
-; a shape neither reads (a nif, a partial) passes.
-; the marker is read off a known binary rather than named: `peek`'s nom dies at the hatch but
-; the folded reference lives. and it must be lvm_cur -- the ap table has it. binding lvm_ret0
-; the same way (to catch a one-armed nif) segfaults the image bake, so the nif case stays open.
-(: hcur (peek 0 (\ a b a))
-   (binary? f) (? (charm? f) 0                      ; a charm is no handler at all
-                  (id? hcur (peek 0 f)) (2 = peek 1 f)
-                  (: s (lamsrc f) (? (two? s) (4 = #s) 1)))
-   (hear f) (? !f (seal-hook 5 f)                   ; every nothing uninstalls
-               (binary? f) (seal-hook 5 f)
-               (scare 'help-arity f)))
-; the stdio door, the help's twin: (wear (i o e)) re-seats in/out/err for this task,
-(: (wear l) (seal-hook 6 l))
-; trap -- (f x) under a help that escapes: the value on a clean run, (n a b) when a
-; scare landed here.
-; all three operands, always: two hand back a closure, which is truthy, and f never runs at
-; all. n's own arity is checked (binary?) before f runs -- so the refusal lands under the
-; ambient help, not inside the raise this form exists to catch.
-; nothing unwinds: the escape jumps past every pending restore between the raise and here, so
-; a cleanup belongs in n, never inside f -- or in `mind`'s c, which is the same cleanup owned by
-; the resource instead of by the catcher.
-(: (trap f x n)
-     (: _ (? (binary? n) 0 (scare 'help-arity n))   ; refuse before f runs, under the ambient help
-        prev (heard ())
-        home (myself ())
-        r (call-cc (\ k (: _ (hear (\ a b (? (id? (myself ()) home) (k (\ _ (n a b)))
-                                             (: _ (hear prev) (scare a b)))))
-                           v (f x)
-                           (\ _ v))))
-        _ (hear prev)
-        (r ())))
-; mind -- (f x) with c minded on the way out: c fires exactly once, clean or raised, the
-; condition rides on to the help outside, and the answer is f's. so a helper holds its own
-; port or its own restore, however far under a catcher it sits.
-; the n hands back a marked condition rather than re-raising in place, so the one (c ())
-; below serves both paths -- re-raise inside the n and a help that answers (the shell's
-; default, welp, any plain (hear f)) returns through it and the tail fires c a second time.
-; `mark` is minted once and closure-private, so no value f answers can pose as the raise.
-; all three operands, like trap, and c is a thunk fired with the unit.
-; raises only: a scare is what reaches a help, so a bare (k v) into a continuation
-; captured outside jumps clean past every c between there and here.
-; c runs with the displaced help back, so its own raise belongs to the trap outside --
-; and replaces the condition c was firing for, which is the one way out of a lost raise.
-(: mind (: mark (mint 0)
-           (\ f x c
-              (: r (trap f x (\ a b (mark . [a b])))
-                 _ (c ())
-                 (? (two? r && id? <r mark) (scare <>r <>>r) r)))))
 ; boxfix-core: same prep, rewriting refs via sub/subl since c0 has no analysis-time redirect.
 ; the law: eager reads see let*, closures see letrec*. a bare read before its name's pin
 ; keeps the plain nom -- a boxed name's own binding is renamed _, so the nom resolves
 ; outward, and (: s (trim s)) under a param s reads the param. a read under a \ takes the
 ; cell, filled by the time the closure runs (or the cell-miss door when it runs early).
 ; pn is the pinned-so-far set; u is 1 under a \.
-(: (boxfix-core prs body) (:
-   (rmc cs ns) (filter (\ p !(member? <p ns)) cs)
+(: (boxfix-core prs body) (: (rmc cs ns) (filter (\ p !(member? <p ns)) cs)
    ; bnd: the lexical binder set, seeded with the scope's own names, so a locally-bound name is
    ; an ordinary variable and never a macro head.
    (sub cs x bnd pn u) (?
@@ -1074,56 +843,20 @@
 ; the flat-list adapter: a `:` binding list -> the rewritten list, or the input unchanged.
 ; love.c interns "boxfix" and calls it off the book, so c0 compiles prel through this. it must
 ; exist before ev.l does, and both compilers share the one pass.
-(: (boxfix fs) (:
-   (ev l) (? (one? l) 1 (one? >l) 0 (ev >>l))
+(: (boxfix fs) (: (ev l) (? (one? l) 1 (one? >l) 0 (ev >>l))
    (bpr fs) (? (one? >fs) (0 . <fs)
                (: r (bpr >>fs) ((dsug <fs <>fs . <r) . >r)))
    (? (ev fs) fs
     (: pb (bpr fs) r (boxfix-core <pb >pb)
        (? r (catmap (p \ list <p >p) <r + list >r) fs)))))
 
-; the ISA vocabulary, and it is one word per machine: 'x64 'a64 'rv64, with the
-; embedded targets keeping theirs. Every other spelling anyone says -- a -t flag, a `seed`
-; argument, uname's answer, a gnu triple's head -- comes through `archof` and leaves
-; canonical, so nothing downstream normalizes a second time.
-; here because no crew file sits under all the readers: moon, holo, kore, source, forge
-; and sat share only the prel, which is also where love-arch is pinned.
-(: arch-canon {'x64 'x64  'amd64 'x64  'x86_64 'x64  'x86-64 'x64
-               'a64 'a64  'arm64 'a64  'aarch64 'a64
-               'rv64 'rv64  'riscv 'rv64  'riscv64 'rv64
-               'thumb1 'thumb1  'cortex-m0 'thumb1
-               'thumb2 'thumb2  'cortex-m7 'thumb2
-               'thumb2sp 'thumb2sp  'playdate 'thumb2sp}
-   ; the word the world outside says: uname's machine, and the head of a gnu triple. the
-   ; embedded targets answer () -- no kernel is ever asked their name.
-   arch-uname {'x64 "x86_64" 'a64 "aarch64" 'rv64 "riscv64"}
-   ; any spelling -> the canonical nom, () for one nobody here knows. takes a nom or a
-   ; string, since a flag arrives as text where a table key is a nom.
-   archof (arch-canon * name)
-   ; the total face: a spelling nobody here knows rides through as its own nom, so
-   ; whoever refuses it names what it was handed
-   (arch-nom s) (: s (name s) (peep arch-canon s s))
-   arch-mach arch-uname)
-
 ; --- scheme and common lisp spellings ---------------------------------------
 ; a name you half-remember should work. every row here is the same function under
 ; another name, so nothing below can drift; where the lisp semantics differ from
 ; love's -- memq/assq/member answer a tail where member? answers a bit, for-each
 ; takes its function first -- it is a definition and not an alias, and says so.
-(: car cap cdr cup cons link
-   caar caap cadr caup cdar cuap cddr cuup
-   caaar caaap caadr caaup cadar cauap caddr cauup
-   cdaar cuaap cdadr cuaup cddar cuuap cdddr cuuup
-   eq? id? length tally pair? two? atom atom? identity id
-   reverse rev append + constantly const ceiling ceil
-   fold-left foldl fold-right foldr append-map catmap flat-map catmap
-   every all some any delete-duplicates uniq butlast init
-   (for-each f l) (each l f)                     ; scheme takes the function first
-   ; the -q trio walks by identity and answers what it found, () for a miss --
-   ; `member?`/`assoc` above stay love's, a bit and a pair by `=`.
-   (memq x l)   (? (two? l) (? (id? x (cap l)) l (memq x (cup l))))
-   (assq x l)   (? (two? l) (? (id? x (caap l)) (cap l) (assq x (cup l))))
-   (member x l) (? (two? l) (? (= x (cap l)) l (member x (cup l)))))
+(: (assq x l)   (? (two? l) (? (id? x (caap l)) (cap l) (assq x (cup l))))
+)
 ; pat -- @ : pattern matching, one macro and no special form. a post-egg layer,
 ; not part of the language: prel stays minimal and each frontend includes the
 ; layers it wants (the host, love0, wasm and the kernel do, since love/uu.l is
