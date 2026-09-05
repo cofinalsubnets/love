@@ -34,7 +34,7 @@
       ;; ALU, register source
       ("add.rr"      "4801d8"                ((add r0 r0 r3)))
       ("sub.rr"      "4829c8"                ((sub r0 r0 r1)))
-      ("xor.zero"    "4831c0"                ((xor r0 r0 r0)))
+      ("xor.zero"    "31c0"                ((xor r0 r0 r0)))
       ("or.rr"       "4809c8"                ((or  r0 r0 r1)))
       ("and.rr"      "4821c8"                ((and r0 r0 r1)))
       ;; ALU, immediate source (0x81 group)
@@ -61,8 +61,8 @@
       ("ld1.rbp"     "480fbe45f8"            ((ld1 r0 r4 -8)))      ; movsx  rax, byte [rbp-8]
       ("ld2.sp"      "480fbf5c2410"          ((ld2 r3 sp 16)))      ; movsx  rbx, word [rsp+16]
       ("ld4.rbp"     "4c63459c"              ((ld4 r7 r4 -100)))    ; movsxd r8, DWORD [rbp-100]
-      ("st1.rbp"     "408845f8"              ((st1 r4 -8 r0)))      ; mov byte [rbp-8], al
-      ("st2.sp"      "6640895c2410"          ((st2 sp 16 r3)))      ; mov word [rsp+16], bx
+      ("st1.rbp"     "8845f8"              ((st1 r4 -8 r0)))      ; mov byte [rbp-8], al
+      ("st2.sp"      "66895c2410"          ((st2 sp 16 r3)))      ; mov word [rsp+16], bx
       ("st4.rbp"     "4489459c"              ((st4 r4 -100 r7)))    ; mov DWORD [rbp-100], r8d
       ("sx1"         "480fbec0"              ((sx1 r0)))            ; movsx rax, al
       ("sx2.hi"      "4d0fbfc0"              ((sx2 r7)))            ; movsx r8, r8w
@@ -72,7 +72,7 @@
       ("ldu4.rbp"    "448b459c"              ((ldu4 r7 r4 -100)))   ; mov r8d, DWORD [rbp-100] (unsigned int, zero-extends)
       ("zx1"         "480fb6c0"              ((zx1 r0)))            ; movzx rax, al
       ("zx2.hi"      "4d0fb7c0"              ((zx2 r7)))            ; movzx r8, r8w
-      ("zx4"         "408bdb"                ((zx4 r3)))            ; mov ebx, ebx (zero-extends)
+      ("zx4"         "8bdb"                ((zx4 r3)))            ; mov ebx, ebx (zero-extends)
       ;; port i/o: the dx-port forms, and the rep-prefixed string walks
       ("io.in"       "ec66eded"              ((inb) (inw) (inl)))
       ("io.out"      "ee66efef"              ((outb) (outw) (outl)))
@@ -125,7 +125,7 @@
       ;; cas: lock cmpxchg, the accumulator operand wired to r0 (rax)
       ("cas.rsi"     "f0480fb10e"            ((cas r0 r1 r5)))      ; lock cmpxchg [rsi], rcx
       ("cas.hi"      "f04d0fb111"            ((cas r0 r9 r8)))      ; lock cmpxchg [r9], r10
-      ("cas4.rdi"    "f0400fb10f"            ((cas4 r0 r1 r6)))     ; lock cmpxchg DWORD [rdi], ecx
+      ("cas4.rdi"    "f00fb10f"            ((cas4 r0 r1 r6)))     ; lock cmpxchg DWORD [rdi], ecx
       ("cas4.rbp"    "f0440fb15500"          ((cas4 r0 r9 r4)))     ; lock cmpxchg DWORD [rbp], r10d (forced 0 disp)
       ("udiv"        "52564889d831d248f734244883c4085a4889c3"      ((udiv r3 r3 r5)))    ; xor rdx + div (unsigned)
       ("urem"        "52564889d831d248f734244889d04883c4085a4889c3" ((urem r3 r3 r5 r2)))   ; unsigned rem (rdx; the scratch t is rdx's job here, ignored)
@@ -163,7 +163,7 @@
       ("ldx.s8.d8"   "4b8b44d808"            ((ldx r0 r7 r10 8 8)))    ; mov rax,[r8+r11*8+8]
       ("stx.scale4"  "48890c98"              ((stx r0 r3 4 0 r1)))     ; mov [rax+rbx*4],rcx
       ("ldxb.s1.d16" "480fb6440310"          ((ldxb r0 r3 r0 1 16)))   ; movzx rax,byte [rbx+rax*1+16]  (the string-lane peep read)
-      ("stxb.s1.d16" "4088440310"            ((stxb r3 r0 1 16 r0)))   ; mov byte [rbx+rax*1+16],al     (the cask-lane pin store)
+      ("stxb.s1.d16" "88440310"            ((stxb r3 r0 1 16 r0)))   ; mov byte [rbx+rax*1+16],al     (the cask-lane pin store)
       ;; unary in-place
       ("neg"         "48f7d8"                ((neg r0)))
       ("not"         "48f7d3"                ((not r3)))
@@ -232,7 +232,7 @@
       ("c128.gt"     "482b0424481b5424080f9cc0480fb6c0" ((c128 gt sp)))
       ;; a whole program: write(1, buf, 13); exit(0)  -- r0=rax carries the syscall number
       ("syscall.prog"
-        "b801000000bf01000000be00100000ba0d0000000f05b83c000000bf000000000f05"
+        "b801000000bf01000000be00100000ba0d0000000f05b83c00000031ff0f05"
         ((li r0 1) (li r6 1) (li r5 4096) (li r2 13) (sys) (li r0 60) (li r6 0) (sys)))
       ;; sse2 / double lane (the float glaze). reg-reg binops, gp<->xmm moves, and the xmm<->[mem]
       ;; spill/box ops + ucomisd that the glaze's float-result lane uses. objdump-verified (-M intel).

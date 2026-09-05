@@ -105,7 +105,12 @@
    ;; instruction-starved (exp-1's lesson again). don't retry as written.
    (emit-alu op d a b)
       (: meta (peep x64-alu op 0) rr (meta 0) ext (meta 1) comm (meta 2)
-         (? (reg-eq d a)                  (alu-step rr ext d b)
+         ;; xor d,d,d is the zeroing idiom. the 32-bit form clears the whole register (a
+         ;; 32-bit write zeroes the top half), so it wants no REX.W: two bytes, where the
+         ;; 64-bit spelling takes three and a `mov $0` takes five.
+         (? (op = 'xor && reg-eq d a && reg? b && reg-eq d b)
+              (: dn (rn d) (mrex 0 () dn 0 dn + [49 (modrm 3 dn dn)]))
+            (reg-eq d a)                  (alu-step rr ext d b)
             (reg? b && reg-eq d b)    (? comm (alu-step rr ext d a) (scare 'alias-dst [op d a b]))
             (emit-mov d a + alu-step rr ext d b)))
 
@@ -599,6 +604,13 @@
    x64 {'lower x64-lower
         'patch x64-patch
         'nop '(144)
+        ;; the zero idiom is worth it here (2 bytes against 5) so holo may rewrite (li d 0)
+        ;; to (xor d d d) where the flags are free. flagr reads them, flagw lands a fresh
+        ;; set over whatever stood: inc/dec keep CF and the shifts keep everything at count
+        ;; 0, so neither writes for this purpose, and imul/idiv leave some undefined.
+        'zeroxor 1
+        'flagr '(br set adc sbb)
+        'flagw '(cmp cmpm cmprm test add sub and or xor adds subs neg mulo ucomisd)
         ;; branch relaxation: rel8 measures from the end of the 2-byte short form, so the distance
         ;; from the instruction itself is two more than the field carries. this RE-LOWERS rather than
         ;; rewriting its chunk -- an x86 short jump shares no bytes with its long twin.
