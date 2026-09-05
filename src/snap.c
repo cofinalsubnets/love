@@ -166,9 +166,11 @@ static intptr_t image_imm_index(word v) {
 // build lays out differently. the code segment leads with [raw length, deflated?] so it
 // describes itself -- the header says how many bytes are stored, these two what they hold.
 #define CodeSegHead (2 * sizeof(uint64_t))
+// the root table is sized from the core itself: symbols, tasks, then every word of v0..end
+#define AiImgRoots (2 + (__builtin_offsetof(struct ai, end) - __builtin_offsetof(struct ai, v0)) / sizeof(uint64_t))
 struct image_hdr {
  uint64_t magic, wordsize, nwords, arch, anchor, nroot, rsv1, nstream, next_serial, ncode;
- uint64_t root_tag[24], root_val[24]; };     // symbols, tasks, then the entire v0..end region walked
+ uint64_t root_tag[AiImgRoots], root_val[AiImgRoots]; };   // symbols, tasks, then the entire v0..end region walked
                                              // GENERICALLY -- a new v0 field rides with no codec change
 
 // an image is wholly symbolic: every word encodes as a heap offset, an lvm index, an
@@ -835,7 +837,6 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
  // field added to struct ai's v0 region is serialized automatically, no codec edit (cf. the GC's v0..end loop).
  uintptr_t nv = ptr(g->end) - ptr(&g->v0), nr = 2 + nv;
  Why(5);
- if (nr > countof(H.root_tag)) { g->alloc(g, blob, 0); return NULL; }    // grew past the header table -> bump root_tag[]
  image_root_enc(x, g->symbols,      &H.root_tag[0], &H.root_val[0]);
  image_root_enc(x, (word) g->tasks, &H.root_tag[1], &H.root_val[1]);
  for (uintptr_t i = 0; i < nv; i++) image_root_enc(x, ((word*) &g->v0)[i], &H.root_tag[2 + i], &H.root_val[2 + i]);

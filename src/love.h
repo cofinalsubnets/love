@@ -243,6 +243,9 @@ struct ai {
      hot_show,    // 7: show a value as a string
      mods,        // the module registry book: name -> module-book
      errs,        // errno vocabulary: canonical number -> its nom; ai_err reads it
+     kinds,       // the kind roster: enum q row -> its nom (kinds.h); `kind` reads it
+     kreg,        // the named kinds: name -> (serial . table), pinned by post.l's `coin`
+     knom[16],    // the kind table's keys and the built-in coins' names (the Kn rows)
      inport;      // the buffered stdin port, or 0
    union {
     ai_word x;
@@ -505,7 +508,7 @@ lvm(lvm_gc);                                    // takes its word count in g->b
 ai_word ai_err(struct ai*, int);
 #define ai_badarg(g) ai_err(g, -1)
 uintptr_t hash(struct ai*, word), ai_tray_bytes(struct ai_tray*);
-// any value -> its enum q: KCharm for a fixnum, KHot for a non-data heap pointer,
+// any value -> its enum q: KCharm for a fixnum, KCoin for a non-data heap pointer,
 // else ai_typ's rep, a tray refined by element tier (KTrayZ..KTrayO).
 // both the +/* matrices and the apply sentinels dispatch on this.
 enum q ai_kind(word);
@@ -723,7 +726,7 @@ lvm_t lvm_kcall,
  lvm_putn, lvm_seal, lvm_heard, lvm_worn, lvm_myself,
  lvm_nilp, lvm_putc, lvm_intern,
  lvm_saturate, lvm_ceil, lvm_peep, lvm_lamsrc, lvm_nifnom, lvm_cask, lvm_bcopy,
- lvm_coin, lvm_coinmk, lvm_load, lvm_dieof, lvm_coinp, lvm_sub_coin, lvm_quot_coin,   // newtypes: a coin (die + payload), a typed hot riding KHot
+ lvm_coin, lvm_coinmk, lvm_load, lvm_coinp, lvm_kind, lvm_sub_coin, lvm_quot_coin,   // coins: a kind's values, typed hots on the KCoin row
  lvm_charmp, lvm_tabp, lvm_band, lvm_bor, lvm_gem, lvm_gemp,
  lvm_sin, lvm_cos, lvm_tan, lvm_atan, lvm_atan2, lvm_exp, lvm_sqrt, lvm_log, lvm_pow,
  lvm_twin, lvm_twinp, lvm_re, lvm_im, lvm_conj, lvm_abs, lvm_carg,   // complex; lvm_twin_bin declared apart below
@@ -813,27 +816,27 @@ word
 struct ai *ai_mapput(struct ai*), *map_new(struct ai*);
 // the byte ops read from a string or a cask; both resolve to a ai_str of bytes.
 static ai_inline struct ai_str *bytes_of(word x) { return caskp(x) ? cask(x)->str : str(x); }
-// a coin: a newtype value, a typed hot [lvm_coin, die, payload] -- a plain thread,
-// no bespoke evac. ai_kind reads KHot, so +/* route every coin combination to
-// lvm_addh/mulh, where a coin operand is intercepted. the die (a map keyed by the
-// slot fixnums below) is the type descriptor; every coin of a type is struck from one die.
-struct ai_coin { lvm_t *ap; word die; word payload; };
+// a coin of a kind of its own: a typed hot [lvm_coin, kind, payload], a plain thread, no
+// bespoke evac. ai_kind reads KCoin, so +/* route every coin combination to lvm_addh/mulh,
+// where a struck operand is intercepted. the kind is a tablet keyed by the noms below
+// (interned at boot into g->knom); every coin of a kind is struck from one table, and a
+// named one is registered in g->kreg (name -> (serial . table)) by love/post.l's `coin`.
+struct ai_coin { lvm_t *ap; word kind; word payload; };
 static ai_inline bool coinp(word _) { return lamp(_) && cell(_)->ap == lvm_coin; }
-static ai_inline word coin_die(word x) { return ((struct ai_coin*) x)->die; }
+static ai_inline word coin_kind(word x) { return ((struct ai_coin*) x)->kind; }
 static ai_inline word coin_load(word x) { return ((struct ai_coin*) x)->payload; }
-// die slots (fixnum keys). add/mul/apply are closures run inside the VM; net/=/<
-// /show/tally default over the payload in pure C. hot truthy = the die's coins are
-// lit? (references); absent = fresh data. net is a mode fixnum, never a closure --
-// ai_net is pure C under every truth test and must not re-enter the VM.
-enum { DieName = 0, DieAdd = 1, DieMul = 2, DieApply = 3, DieHot = 4, DieSub = 5,
-       DieNet = 6,    // net mode, a fixnum: absent/0 = net of payload; 1 = net by tally (the
-                       // count); 2 = ratio (an (n d)-of-reals payload nets n/d, sign exact)
-       DieStar = 7,   // truthy = the die's coins are numeric: numeral application powers them
-                       // through their own * (prel num-ap reads this slot; C never does)
-       DieDiv = 8 };  // `/` -- like `-` it has no kind matrix, so lvm_quot intercepts coins itself
-// read a die slot, or () if absent / the die is not a map.
-static ai_inline word die_get(struct ai *g, word die, intptr_t slot) {
- return tabp(die) ? ai_mapget(g, zero, putcharm(slot), die) : zero; }
+// the kind table's keys, by index into g->knom. + * - / and ap are closures run inside the
+// VM; net/=/</show/tally default over the payload in pure C. hot truthy = the kind's coins
+// are lit? (references); absent = fresh data. star truthy = numeric: a numeral powers them
+// through their own * (prel's num-ap reads it; C never does). net is a mode nom, never a
+// closure -- ai_net is pure C under every truth test and must not re-enter the VM: absent =
+// net of the payload, tally = the count, ratio = an (n d)-of-reals payload as n/d.
+// the tail names are `kind`'s answers for the built-in coins.
+enum { KnName, KnAdd, KnMul, KnApply, KnHot, KnSub, KnNet, KnStar, KnDiv,
+       KnPayload, KnTally, KnRatio, KnLambda, KnCask, KnPort, KnN };
+// read a kind table's slot, or () if absent / the kind is not a tablet.
+static ai_inline word kind_get(struct ai *g, word kind, intptr_t i) {
+ return tabp(kind) ? ai_mapget(g, zero, ai_core_of(g)->knom[i], kind) : zero; }
 // arbitrary-precision integer, its own sentinel kind: flat raw limbs, moved by
 // memcpy (a thread sound would misread even-and-in-pool limb words). slen = signed
 // limb count, little-endian, top limb nonzero; zero always demotes, so slen is

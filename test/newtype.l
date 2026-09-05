@@ -1,22 +1,22 @@
-; newtypes -- a die strikes coins: user-defined kinds that ride the generic +/*.
-; a coin is a typed hot (die + payload) reading khot, so every +/* combination
-; routes to the khot lane where the coin is intercepted and the die's plus/times
-; run over the loaded payloads. () stays the +/* identity for free (the mint hoist
-; sits above the matrix); net/=/</show default over the payload in the C core.
-; `coin`/`load`/`coin?`/`die-of` are the raw primitives; `die` names the slots, `lift` a method.
+; coins -- user-defined kinds that ride the generic +/*. a struck coin is a typed hot
+; (kind + payload) on the coin row, so every +/* combination routes to the coin lane where
+; it is intercepted and the kind's plus/times run over the loaded payloads. () stays the
+; +/* identity for free (the mint hoist sits above the matrix); net/=/</show default over
+; the payload in the C core. `strike`/`load`/`kind`/`kreg` are the raw primitives; `coin`
+; builds and registers a kind, `lift` a method, `kinds` reads the registry.
 
 (: ; Z/5Z -- add and multiply the residues mod 5
-   z5 (coin (die 'z5 (z \ {'+ (lift z (\ x y ((x + y) % 5)))
-                          '* (lift z (\ x y ((x * y) % 5)))})))
+   z5 (coin 'z5 (z \ {'+ (lift z (\ x y ((x + y) % 5)))
+                     '* (lift z (\ x y ((x * y) % 5)))}))
    a  (z5 3)
    b  (z5 4)
    ; a sum -- a plus but no times
-   sm (coin (die 'sm (z \ {'+ (lift z (\ x y (x + y)))})))
+   sm (coin 'sm (z \ {'+ (lift z (\ x y (x + y)))}))
    smp (sm 2)
    smq (sm 3)
    ; a counted kind -- nets by tally, not by content
-   cntd (die 'cnt {'net 'tally})
-   (cnt p) (coin cntd p)
+   cnt (coin 'cnt {'net 'tally})
+   (tail-from k l) (? (one? l) () (<l = k) l (tail-from k >l))
    (assert
     ; --- what a coin is ---
     (coin? a)                      ; a is a coin
@@ -24,15 +24,26 @@
     !(coin? "s")
     (3 = load a)                 ; load reads the payload
     (7 = load 7)                 ; load of a non-coin is itself
-    (= (die-of a) (die-of (z5 3)))   ; every z5 coin shares one die
-    (nil? (die-of 5))              ; a non-coin has no die
+    (= (kind a) (kind (z5 3)))     ; every z5 coin names one kind
+    (nil? (kinds (kind 5)))        ; a built-in kind has no table
 
-    ; --- value equality: same die + eqv payloads ---
+    ; --- kind: the name a value dispatches as; the coin row refined ---
+    ('z5 = kind a)
+    ('coin = kind (strike {} 5))   ; an unnamed table keeps the row
+    ('charm = kind 5)  ('mint = kind ())  ('mint = kind (nom 0))  ('nom = kind 'a)
+    ('string = kind "s")  ('chain = kind [1 2])  ('tablet = kind {})
+    ('lambda = kind (\ x x))  ('port = kind out)  ('cask = kind (cask 4))
+    ; --- the registry: a kind's table by name, and the names in registration order ---
+    ('lambda = kind ((kinds 'z5) '+))
+    (: l (tail-from 'z5 (kinds ())) ('(z5 sm) = [<l <>l]))
+    ([(z5 1) (sm 1)] = sort [(sm 1) (z5 1)])   ; distinct kinds order by registration
+
+    ; --- value equality: same kind + eqv payloads ---
     (a = z5 3)                   ; by value, not identity
     (nil? (a = z5 4))            ; different payload
-    (nil? (a = sm 3))            ; different die (even with equal payload)
+    (nil? (a = sm 3))            ; different kind (even with equal payload)
 
-    ; --- + and * run the die's methods over the payloads ---
+    ; --- + and * run the kind's methods over the payloads ---
     (z5 2 = a + b)             ; (3+4) mod 5 = 2
     (z5 2 = a * b)             ; (3*4) mod 5 = 2
     (z5 0 = z5 2 + z5 3)   ; wraps to 0
@@ -43,7 +54,7 @@
     (() = () * a)                ; ... and *'s zero: it annihilates
     (() = a * ())
 
-    ; --- a die with a +, but no * ---
+    ; --- a kind with a +, but no * ---
     (sm 5 = smp + smq)         ; 2 + 3 = 5
     !(smp * smq)             ; no times slot -> nil, like an undefined matrix cell
 
@@ -67,7 +78,7 @@
     ; --- two distinct newtypes have no canonical +/* -> nil (like string*string) ---
     !(a + sm 3)            ; z5 coin + sm coin
     !(a * sm 3)
-    (sm 5 = sm 2 + sm 3)   ; ... but same-die still combines
+    (sm 5 = sm 2 + sm 3)   ; ... but same-kind still combines
 
     ; --- tally delegates to the payload ---
     (3 = (tally (sm [7 8 9])))    ; a coin over a 3-list tallies its payload
@@ -98,8 +109,8 @@
     (q 1 2 = 1 - q 1 2)
     (nil? (q 1 2 - ()))          ; () is absent to -, so there is nothing to compute
     (nil? (() - q 1 2))          ; ... either side
-    !(a - z5 1)                ; a die without - -> nil, like sm's *
-    !(a - sm 3)                ; distinct dies never combine
+    !(a - z5 1)                ; a kind without - -> nil, like sm's *
+    !(a - sm 3)                ; distinct kinds never combine
 
     ; --- `/` rides slot 8: q pins it (invert and multiply); zero has no reciprocal ---
     (q 3 2 = q 1 2 / q 1 3)    ; (1/2) / (1/3) = 3/2
@@ -110,8 +121,8 @@
     !(q 1 2 / 0)               ; ... the bare zero too
     (nil? (q 1 2 / ()))          ; ... and absent to / as well
     (nil? (() / q 1 2))          ; ... either side
-    !(a / z5 2)                ; a die without slot 8 -> nil
-    !(a / sm 3)                ; distinct dies never combine
+    !(a / z5 2)                ; a kind without slot 8 -> nil
+    !(a / sm 3)                ; distinct kinds never combine
 
     ; --- a method owns its domain: off it (no star / (n d)-of-stars face), () ---
     !(q 1 2 + [(q 1 1) (q 0 1)])    ; a chain of coins is not an (n d)
@@ -121,7 +132,7 @@
 
     ; --- an open star (slot 7): q declares its coins numeric, so a numeral
     ;     powers them through their own * (exact squaring) instead of composing ---
-    (q 1 4 = 2 (q 1 2))            ; (n x) = x**n, through the die
+    (q 1 4 = 2 (q 1 2))            ; (n x) = x**n, through the kind
     (q 8 27 = 3 (q 2 3))
     (q 1 4 = q 1 2 ** 2)         ; the apply operator rides the same law
     (q 1 2 = 1 (q 1 2))            ; the identity numeral
@@ -131,7 +142,7 @@
     (q 9 4 = q 2 3 ** -2)        ; the apply operator rides the same law
     !(-1 (q 0 1))                ; zero has no reciprocal power
     !((1 / 2) (q 4 1))           ; a non-whole exponent off the tower: ()
-    !(coin? (2 (sm 3)))          ; an unflagged coin still composes (a closure)
+    ('lambda = kind (2 (sm 3)))  ; an unflagged coin still composes (a closure)
 
     ; --- net-mode 2 (RATIO): a rational's truth is its VALUE's sign, exactly ---
     !(q -1 2)                    ; a negative rational is nothing: red by value
@@ -169,10 +180,10 @@
     !(star? (sm 3))
     (q 5 6 = +[(q 1 2) (q 1 3)])    ; additivity lands in the ring: an exact rational sum
 
-    ; --- a coin's lit?-ness is its die's call: fresh data by default ---
+    ; --- a coin's lit?-ness is its kind's call: fresh data by default ---
     !(lit? (q 1 2))          ; a rational is data -- a value, not a reference (like a number)
     !(lit? a)                ; a mod-n residue too
     !(lit? (sm 5))
-    !(lit? (coin (die 'd {}) 5))       ; a plain die -> data
-    (lit? (coin (die 'h {'hot 1}) 5))  ; ... but a hot die strikes lit coins
+    !(lit? ((coin 'd ()) 5))          ; a plain kind -> data
+    (lit? ((coin 'h {'hot 1}) 5))     ; ... but a hot kind strikes lit coins
     ))

@@ -11,7 +11,7 @@ static intptr_t seq_byte(word x);
 // (lvm_subn's body comes out of avm_slow, which carries no storage class of its own).
 static lvm_t
  lvm_apof, lvm_bigp, lvm_books, lvm_cap, lvm_casknew, lvm_chainp, lvm_clock, lvm_cup,
- lvm_gauge, lvm_intf, lvm_key, lvm_link, lvm_mint, lvm_mintp, lvm_mods, lvm_namep,
+ lvm_gauge, lvm_intf, lvm_key, lvm_kreg, lvm_link, lvm_mint, lvm_mintp, lvm_mods, lvm_namep,
  lvm_nclock, lvm_nomctor, lvm_nomp, lvm_packp, lvm_please, lvm_setbooks, lvm_setp,
  lvm_snip, lvm_strp, lvm_sub, lvm_subn, lvm_sunp, lvm_tune, _lvm_help_scare, _lvm_yield_c;
 static struct ai
@@ -215,6 +215,23 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
    for (uintptr_t n = countof(ai_errnames); ai_ok(g) && n--;)
     g = ai_mapput(ai_push(intern(ai_strof(g, ai_errnames[n].n)), 1, putcharm(ai_errnames[n].v)));
    if (ai_ok(g)) g->errs = ai_pop1(g); }
+  // the kind roster (g->kinds): enum q row -> its nom, `kind`'s answer for a built-in
+  if (ai_ok(g = map_new(g))) {
+   char const *p = ai_kind_names;
+   for (intptr_t i = 0; ai_ok(g) && *p; i++) {
+    while (*p == ' ') p++;
+    char nm[16], *q = nm;
+    while (*p && *p != ' ') *q++ = *p++;
+    *q = 0;
+    g = ai_mapput(ai_push(intern(ai_strof(g, nm)), 1, putcharm(i))); }
+   if (ai_ok(g)) g->kinds = ai_pop1(g); }
+  // the kind table's keys and the built-in coins' names (g->knom, love.h's Kn rows), and
+  // the registry of named kinds (g->kreg): name -> (serial . table), pinned by post.l's `coin`
+  { char const *const ns[KnN] = { "name", "+", "*", "ap", "hot", "-", "net", "star", "/",
+                                  "payload", "tally", "ratio", "lambda", "cask", "port" };
+    for (int i = 0; ai_ok(g) && i < KnN; i++)
+     if (ai_ok(g = intern(ai_strof(g, ns[i])))) g->knom[i] = ai_pop1(g); }
+  if (ai_ok(g = map_new(g))) g->kreg = ai_pop1(g);
   // the 'missing tag needs nothing here (the raise sites mint it); the reader owns
   // no operator tables -- book['operators] is seeded by the prel and factored at compile time
  }
@@ -750,6 +767,7 @@ op11(lvm_cap, chainp(Sp[0]) ? A(Sp[0]) : Sp[0])
 op11(lvm_cup, chainp(Sp[0]) ? B(Sp[0]) : ZeroPoint)   // cup of an atom -> the const () (ZeroPoint), not the moving core (which had serial g->ip, not 0)
 op11(lvm_books, g->book)   // the live layer chain (the abyss) -- runtime-internal, mopped at birth; ev.l's gv walks it
 op11(lvm_setbooks, (g->book = Sp[0], zero))   // set the layer chain: the scope-layer door (open/use/close ride it); runtime-internal, mopped at birth
+op11(lvm_kreg, ai_core_of(g)->kreg)   // (kreg _): the named-kind registry; post.l's coin/kinds read and pin it
 op11(lvm_mods, g->mods)   // (mods _): the module registry book; runtime-internal, mopped at birth
 // push a fresh writable layer at the head of the book chain -- the runtime's
 // enter: the session's scope, every defglob's target

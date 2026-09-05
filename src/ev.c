@@ -994,49 +994,49 @@ lvm(lvm_mulh) {
  dst[0] = fa, dst[1] = h, dst[2] = ga, dst[3] = ret;
  Sp = dst; Ip = (union u*) numap_drive; ai_musttail return Continue(); }
 
-// coin +/*/-//: run the coin's die method over the raw operands via numap_drive.
-// two distinct dies have no canonical combination -> zero (the method never sees
+// coin +/*/-//: run the coin's kind method over the raw operands via numap_drive.
+// two distinct kinds have no canonical combination -> zero (the method never sees
 // a foreign payload); a missing method is zero too. the ()-identity never
 // reaches here -- the dispatchers hoist the mint case. Ip is still the opcode
 // (Ap preserves it), so word(Ip + 1) is the true return.
 static lvm(lvm_coin_op) {
- intptr_t slot = g->b;                              // the die slot, off the scratch
+ intptr_t slot = g->b;                              // the kind slot, off the scratch
  word a = Sp[0], b = Sp[1];
- if (coinp(a) && coinp(b) && coin_die(a) != coin_die(b))
+ if (coinp(a) && coinp(b) && coin_kind(a) != coin_kind(b))
   ai_musttail return Push(ZeroPoint);             // two distinct newtypes: no canonical +/*
- word f = die_get(g, coinp(a) ? coin_die(a) : coin_die(b), slot);
+ word f = kind_get(g, coinp(a) ? coin_kind(a) : coin_kind(b), slot);
  if (ai_nilp(g, f)) ai_musttail return Push(ZeroPoint);   // no method -> zero
  Have(2);
  a = Sp[0], b = Sp[1];                              // re-read post-GC
- f = die_get(g, coinp(a) ? coin_die(a) : coin_die(b), slot);
+ f = kind_get(g, coinp(a) ? coin_kind(a) : coin_kind(b), slot);
  word *dst = Sp - 2, ret = word(Ip + 1);
  dst[0] = a, dst[1] = f, dst[2] = b, dst[3] = ret;
  Sp = dst; Ip = (union u*) numap_drive; ai_musttail return Continue(); }
-static lvm(lvm_add_coin) { g->b = (ai_word) (DieAdd); ai_musttail return Ap(lvm_coin_op, g); }
-static lvm(lvm_mul_coin) { g->b = (ai_word) (DieMul); ai_musttail return Ap(lvm_coin_op, g); }
+static lvm(lvm_add_coin) { g->b = (ai_word) (KnAdd); ai_musttail return Ap(lvm_coin_op, g); }
+static lvm(lvm_mul_coin) { g->b = (ai_word) (KnMul); ai_musttail return Ap(lvm_coin_op, g); }
 // `-` and `/` have no kind matrix; lvm_sub/lvm_quot intercept coins themselves and land here.
-lvm(lvm_sub_coin) { g->b = (ai_word) (DieSub); ai_musttail return Ap(lvm_coin_op, g); }
-lvm(lvm_quot_coin) { g->b = (ai_word) (DieDiv); ai_musttail return Ap(lvm_coin_op, g); }
+lvm(lvm_sub_coin) { g->b = (ai_word) (KnSub); ai_musttail return Ap(lvm_coin_op, g); }
+lvm(lvm_quot_coin) { g->b = (ai_word) (KnDiv); ai_musttail return Ap(lvm_coin_op, g); }
 
-// applying a coin: run the die's apply closure as `((f self) arg)`; absent, a coin
+// applying a coin: run the kind's ap closure as `((f self) arg)`; absent, a coin
 // is an opaque handle -- nothing to answer with, () -- like a cask/port. self is the value at Ip (the apply
 // trampoline sets Ip = the applied object); arg/ret are on the stack.
 lvm(lvm_coin) {
- if (ai_nilp(g, die_get(g, coin_die(word(Ip)), DieApply))) {   // default opaque-apply: ()
+ if (ai_nilp(g, kind_get(g, coin_kind(word(Ip)), KnApply))) {   // default opaque-apply: ()
   Ip = cell(*++Sp); *Sp = ZeroPoint; ai_musttail return Continue(); }
  Have(2);
- word self = word(Ip), f = die_get(g, coin_die(self), DieApply);
+ word self = word(Ip), f = kind_get(g, coin_kind(self), KnApply);
  word arg = Sp[0], ret = Sp[1], *dst = Sp - 2;
  dst[0] = self, dst[1] = f, dst[2] = arg, dst[3] = ret;
  Sp = dst; Ip = (union u*) numap_drive; ai_musttail return Continue(); }
 
-// (coin die payload) -> a fresh coin struck from the die over the payload.
+// (strike kind payload) -> a fresh coin of the kind over the payload.
 lvm(lvm_coinmk) {
  Have(Width(struct ai_coin) + Width(struct ai_tag));
  union u *k = (union u*) Hp;
  Hp += Width(struct ai_coin) + Width(struct ai_tag);
  ((struct ai_coin*) k)->ap = lvm_coin;
- ((struct ai_coin*) k)->die = Sp[0];
+ ((struct ai_coin*) k)->kind = Sp[0];
  ((struct ai_coin*) k)->payload = Sp[1];
  tagthread(k, Width(struct ai_coin));
  ai_musttail return Push(word(k)); }
@@ -1044,8 +1044,18 @@ lvm(lvm_coinmk) {
 lvm(lvm_load) {
  Sp[0] = coinp(Sp[0]) ? coin_load(Sp[0]) : Sp[0];
  ai_musttail return Next(1); }
-op11(lvm_dieof, coinp(Sp[0]) ? coin_die(Sp[0]) : zero)   // (die-of x): a coin's die, else ()
-op11(lvm_coinp, coinp(Sp[0]) ? putcharm(1) : zero)   // (coin? x)
+// (kind x) -> the nom of the kind x dispatches as: the roster row's (g->kinds), refined
+// inside the coin row -- a struck coin's own name, else lambda, cask, port
+lvm(lvm_kind) {
+ word x = Sp[0], n = zero;
+ struct ai *c = ai_core_of(g);
+ if (coinp(x)) n = kind_get(g, coin_kind(x), KnName);
+ else if (caskp(x)) n = c->knom[KnCask];
+ else if (iop(x)) n = c->knom[KnPort];
+ else if (ai_kind(x) == KCoin) n = c->knom[KnLambda];
+ Sp[0] = ai_nilp(g, n) ? ai_mapget(g, zero, putcharm(ai_kind(x)), c->kinds) : n;
+ ai_musttail return Next(1); }
+op11(lvm_coinp, ai_kind(Sp[0]) == KCoin ? putcharm(1) : zero)   // (coin? x): the coin row, struck or not
 
 // apply function to one argument
 lvm(lvm_ap) {
@@ -1736,10 +1746,10 @@ struct ai_zn ai_net(struct ai *g, word x) {
     return zn(t, 0); }
   if (tabp(x)) return zn((ai_flo_t) map_len(x), 0);              // table: key count
   if (coinp(x)) {                                              // a coin nets its payload (the monoid hom), unless
-    word mode = die_get(g, coin_die(x), DieNet);              // its die pins a net mode.
-    if (mode == putcharm(1))                                   // mode 1: net by tally, the count -- never negative,
+    word mode = kind_get(g, coin_kind(x), KnNet), *kn = ai_core_of(g)->knom;   // its kind pins a net mode.
+    if (mode == kn[KnTally])                                   // mode 1: net by tally, the count -- never negative,
       return zn((ai_flo_t) ai_count(g, coin_load(x)), 0);      // so truth is "has any"
-    if (mode == putcharm(2)) {                                 // mode 2: ratio -- an (n d)-of-reals payload nets
+    if (mode == kn[KnRatio]) {                                 // mode 2: ratio -- an (n d)-of-reals payload nets
       word p = coin_load(x);                                   // n/d, the sign exact (value truth for rationals):
       if (chainp(p) && chainp(B(p))) {                         // the division's sign is IEEE-true, and the two
         struct ai_zn n = ai_net(g, A(p)), d = ai_net(g, A(B(p)));  // loss lanes below restore it from the

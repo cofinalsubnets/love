@@ -162,12 +162,12 @@ lvm(data_pair_apply) {
 #include "mx.h"
 
 // any value -> the kind it dispatches as (enum q, love.h): fixnum -> KCharm,
-// non-data heap pointer -> KTablet/KHot, else the rep's kind. a tray is the one rep
+// non-data heap pointer -> KTablet/KCoin, else the rep's kind. a tray is the one rep
 // that dispatches four ways, by element tier. exported so the apply sentinels share
 // it; it sits under mx.h for ai_kind_of_d, the rep -> kind crossing.
 enum q ai_kind(word x) {
  if (charmp(x)) return KCharm;
- if (!datp(x)) return tabp(x) ? KTablet : KHot;
+ if (!datp(x)) return tabp(x) ? KTablet : KCoin;
  enum d r = typ(x);
  if (r == DTray) return (enum q) (KTrayZ + tray(x)->type);
  return ai_kind_of_d[r]; }
@@ -677,7 +677,7 @@ static bool eqv_at(struct ai *g, word a, word b, word *base) {
   if (a != b) {
    // coins: equal iff same die and eqv payloads
    if (coinp(a) || coinp(b)) {
-    if (coinp(a) && coinp(b) && coin_die(a) == coin_die(b)) {
+    if (coinp(a) && coinp(b) && coin_kind(a) == coin_kind(b)) {
      a = coin_load(a), b = coin_load(b); continue; }
     return false; }
    // function values: equality up to the beta the runtime already ran (the

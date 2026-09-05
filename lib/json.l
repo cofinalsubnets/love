@@ -11,19 +11,19 @@
 ;   string  <-> string
 ;   array   <-> list, and `[]` is plain ()
 ;   object  <-> tablet
-(: json-die   (die 'json-bool {})
-   json-true  (coin json-die 1)
-   json-false (coin json-die 0)
+(: jbool      (coin 'json-bool ())
+   json-true  (jbool 1)
+   json-false (jbool 0)
    ; `&&` is value-preserving, so the bare conjunction answers () and not the bit a
    ; predicate owes; `!!` is the clamp. same for json-null? below.
-   (json-bool? v) !!(coin? v && (= (die-of v) json-die))
+   (json-bool? v) !!(kind v = 'json-bool)
    (json-bool v)  (v ? json-true json-false)
 
    ; null, on its own die -- payload 0 so it nets blue like the nothing it is, but
    ; never `=` json-false.
-   json-null-die  (die 'json-null {})
-   json-null      (coin json-null-die 0)
-   (json-null? v) !!(coin? v && (= (die-of v) json-null-die))
+   jnull          (coin 'json-null ())
+   json-null      (jnull 0)
+   (json-null? v) !!(kind v = 'json-null)
 
    ; --- reading --------------------------------------------------------------------
    (jws s i n)  (i < n && member? (s i) '(32 9 10 13) ? (jws s (i + 1) n) i)

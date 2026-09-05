@@ -111,9 +111,9 @@
         ; instead -- one closure, O(1) cells, the same function.
         (nfloop n f x) (? (< n 1) x (nfloop (+ -1 n) f (f x)))
         nfcap 1024
-        ; an open star: a coin whose die pins slot 7 is numeric by declaration, so a numeral powers
+        ; an open star: a coin whose kind pins star is numeric by declaration, so a numeral powers
         ; it through its own * (ipow is generic). no size to read, so this lane keeps the count cap.
-        (starred? x) (? (coin? x) (= 1 (die-of x 7)) 0)
+        (starred? x) (? (coin? x) (: e (kreg 0 (kind x)) (? (two? e) (= 1 ((cup e) 'star)) 0)) 0)
         (num-ap n x) (? (constellation? x) (powg x n)
                         (starred? x)
                         (? (whole? n) (: m (abs n)
@@ -143,17 +143,19 @@
    ; link plus one revcat keeps it linear.
    (revcat l acc) (? (two? l) (revcat (cup l) (link (cap l) acc)) acc))   ; no `!` here: not bound yet
 ; the monadic words behind the glued sigils. net is the content measure -- `+` turned inward --
-; and a coin's lane is by declaration: die slot 7 nets itself (so additivity lands in the die's
-; own ring), else its tally under net-mode 1, else its payload signed.
+; and a coin's lane is by declaration: a starred kind nets itself (so additivity lands in the
+; kind's own ring), else its tally under net-mode tally, else its payload signed.
 ; one walk, tail-recursive: the spine's cars and then the tail, which a dotted link
 ; carries and `()` nets away -- so net(link a b) = net a + net b at every link.
 (: (netsum a l) (? (two? l) (netsum (+ a (net (cap l))) (cup l)) (+ a (net l)))
    (net x) (? (tray? x) (asum x)
               (constellation? x) x
               (two? x) (netsum 0 x)
-              (coin? x) (? (= 1 (peep (die-of x) 7 0)) x
-                           (= 1 (peep (die-of x) 6 0)) (tally x)
-                           (net (load x)))
+              (coin? x) (: p (load x) e (kreg 0 (kind x)) t (? (two? e) (cup e) ())
+                           (? (= 1 (t 'star)) x                 ; starred: the fixpoint
+                              (= 'tally (t 'net)) (tally x)
+                              (= p x) (saturate x)              ; a native loads as itself
+                              (net p)))
               (saturate x))
    (prod x) (? (tray? x) (aprod x)
                (two? x) (foldl (\ a e (* a (prod e))) 1 x)

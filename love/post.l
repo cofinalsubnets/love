@@ -211,20 +211,22 @@
 
 (: (array s) (: sh (a-shape s) (a-coll sh (foldl (*) 1 sh) 0)))
 
-; --- die: a newtype descriptor. the mechanism is C (coin/coin?/die-of/load, the KHot lane
-; in +/*): a coin carries a die, the {slot method} tablet the C side reads, and this is its
-; name->slot face. (die 'nm spec) -> the die, its constructor (coin d). spec is a tablet keyed
-; by these symbols (a raw slot charm passes), or a function of the constructor when a method
-; strikes its own kind: (z \ {'+ ..}). a method takes both operands raw; (lift z f) lowers
-; them and re-strikes f's answer. slot 6 is a mode, never a closure -- the nets table names it.
-(: dieslots {'name 0 '+ 1 '* 2 'ap 3 'hot 4 '- 5 'net 6 'star 7 '/ 8}
-   dienets  {'payload 0 'tally 1 'ratio 2}
-   (dieslot k) (charm? k ? k (: v (peep dieslots k -1) (v < 0 ? (scare 'die-slot k) v)))
-   (dienet v)  (charm? v ? v (: n (peep dienets v -1) (n < 0 ? (scare 'die-net v) n)))
-   (die nm spec)
-    (: d {0 nm}
-       s (tablet? spec ? spec (spec (coin d)))      ; the die is bound before a method names it back
-       (foldl (\ d k (pin d (dieslot k) (k = 'net ? (dienet (s k)) (s k)))) d (keys s)))
+; --- coin: a kind of the coin row -- a table of what its values answer to, keyed by the
+; noms the C side reads (love.h's Kn rows): name + * ap hot - net star /, net one of
+; payload tally ratio. (coin 'nm spec) registers the kind and answers its constructor; spec
+; is a tablet, or a function of the constructor when a method strikes its own kind:
+; (z \ {'+ ..}). a method takes both operands raw; (lift z f) lowers them and re-strikes
+; f's answer. the registry orders kinds by registration, which is their order under sort;
+; (kinds ()) lists the names in that order, (kinds 'nm) answers the table.
+(: (coin nm spec)
+    (: t {'name nm} z (strike t)
+       s (tablet? spec ? spec (nil? spec ? () (spec z)))
+       _ (tablet? s ? (foldl (\ t k (pin t k (s k))) t (keys s)) 0)
+       r (kreg 0) e (r nm)
+       _ (pin r nm ((two? e ? <e #(keys r)) . t))   ; a re-registration keeps its serial
+       z)
+   (kinds k) (name? k ? (: e (kreg 0 k) (two? e ? >e ()))
+                        (: r (kreg 0) (map (\ p <>p) (sort (map (\ n [<(r n) n]) (keys r))))))
    (lift z f) (\ a b (z (f (load a) (load b)))))
 
 ;;; FIXME help/io setters below here. redesign the API with more structure
@@ -454,13 +456,13 @@
                                 (go >l 0)) 0)
        (? !(two? ks) (say o "{}") (: _ (put o 123) _ (go ks 1) (put o 125)))))
 
-  ; --- coins show as (name 'payload): the die's name applied
+  ; --- coins show as (name 'payload): the kind's name applied
   ; to what it was given, so the form evals back to an equal coin when the name is a
   ; bound ctor. the payload is quoted where it would otherwise re-evaluate -- a chain
   ; reads as an application and a nom as a variable. without that (q (1 2)) read back as
   ; q applied to 2, which is not the number and was never a coin.
-  (pcoin o x sn) (: nm (peep (die-of x) 0 ()) p (load x)
-    (put o 40, nil? nm ? (say o "coin") (px o nm sn),
+  (pcoin o x sn) (: p (load x)
+    (put o 40, px o (kind x) sn,
      put o 32, two? p || nom? p ? (put o 39) 0,
      px o p sn, put o 41))
 
@@ -518,7 +520,7 @@
                       (: _ (put o 92) (pnum o (abs (dig v)))))))))))   ; opaque: a distinguisher, nothing more -- C spelled the address here, this is the digest, which at least survives a collection
 
   (px o x sn) (? (charm? x) (pnum o x)
-                (coin? x) (pcoin o x sn)
+                (coin? x && !(x = load x)) (pcoin o x sn)   ; struck: a native loads as itself
                 (tablet? x) (pmap o x sn)
                 (lit? x) (pfn o x sn)
                 (id? x ()) (say o "()")

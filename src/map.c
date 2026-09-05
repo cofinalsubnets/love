@@ -150,10 +150,10 @@ op11(lvm_tabp, tabp(Sp[0]) ? putcharm(1) : zero)
 // FIXME this predicate is confusing, let's try and remove it
 // (lit? x): the upper segment of the lattice, ai_kind >= KTablet -- tablets and the
 // tops above (closures, nifs, cask/port), never the fresh value-data below. a
-// coin's die decides (DieHot truthy = lit): lit? is the lattice cut, not storage.
+// coin's kind decides (hot truthy = lit): lit? is the lattice cut, not storage.
 lvm(lvm_litp) {
  word x = Sp[0];
- bool lit = coinp(x) ? !ai_nilp(g, die_get(g, coin_die(x), DieHot))   // a coin: its die decides
+ bool lit = coinp(x) ? !ai_nilp(g, kind_get(g, coin_kind(x), KnHot))   // a coin: its kind decides
                      : ai_kind(x) >= KTablet;                             // else the lattice cut
  Sp[0] = lit ? putcharm(1) : zero;
  ai_musttail return Next(1); }

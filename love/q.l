@@ -10,7 +10,7 @@
         ; off the tower it terminates on -- a coin is never a coefficient.
         (nstar? v) ((nil? * coin?) v && v = +v)
         (ok? v) (nstar? v || (two? v && all nstar? v))
-        st (die 'q (z \ {'star 1 'net 'ratio                   ; a rational is a star; C truth by value
+        c (coin 'q (z \ {'star 1 'net 'ratio                   ; a rational is a star; C truth by value
          '+ (\ a b (: x (load a) y (load b)                    ; (n1 d1) + (n2 d2)
              (? (ok? x && ok? y)
               (: p (parts x) r (parts y)
@@ -27,7 +27,7 @@
              (? (ok? x && ok? y && <y != 0)                  ; multiply; by zero -> () (no inf in Q; cap of a bare star is itself)
               (: p (parts x) r (parts y)
                (z (reduce (<p * <>r) (<>p * <r)))))))}))
-        (\ n (two? n ? (coin st (reduce <n <>n))              ; (q (n d)) -- the show form
-                       (coin st * reduce n)))))               ; (q n d) -- the ergonomic curried form
+        (\ n (two? n ? (c (reduce <n <>n))                    ; (q (n d)) -- the show form
+                       (c * reduce n)))))                     ; (q n d) -- the ergonomic curried form
 
 ) ; module q

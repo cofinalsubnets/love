@@ -447,7 +447,7 @@ struct ai *ai_big_shift(struct ai *g, int vop) {
 // domain: a net-mode-2 coin over (n d), both exact integers, d nonzero (a zero
 // divisor keeps the float lane's inf/sign story).
 bool ai_ratio_exact(struct ai *g, word x) {
- if (!coinp(x) || die_get(g, coin_die(x), DieNet) != putcharm(2)) return false;
+ if (!coinp(x) || kind_get(g, coin_kind(x), KnNet) != ai_core_of(g)->knom[KnRatio]) return false;
  word p = coin_load(x);
  if (!chainp(p) || !chainp(B(p))) return false;
  word n = A(p), d = A(B(p));
@@ -1203,9 +1203,9 @@ static ai_inline int cmp_rank(struct ai *g, word x) {
  if (k == KTrayO) return 3;                         // object tray: above the numbers, below chain
  if (k == KChain) return 4;                        // chain: the grammar substrate -- high, just under book (only book's mutability seats it above)
  if (k == KTablet) return 5;                          // tablet: above chain
- if (coinp(x) && die_get(g, coin_die(x), DieNet) == putcharm(2))
+ if (coinp(x) && kind_get(g, coin_kind(x), KnNet) == ai_core_of(g)->knom[KnRatio])
   return 2;                                        // a ratio coin seats in the number band, by its value
- return 6; }                                       // KHot -- thread/function, the ceiling (the only kind left)
+ return 6; }                                       // KCoin -- the ceiling (the only kind left)
 static ai_inline intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb, uintptr_t lb) {
  uintptr_t n = la < lb ? la : lb;
  int c = n ? memcmp(pa, pb, n) : 0;
@@ -1304,6 +1304,10 @@ static ai_inline bool ratio_xcmp(int64_t n1, int64_t d1, int64_t n2, int64_t d2,
 // floats collapse NaN to "equal" here (a structural total order can't carry IEEE
 // unorderedness); the scalar lane below keeps NaN unordered at the top level. hash
 // is alloc-free + GC-stable, so the lambda case is safe to call mid-comparison.
+// a coin's kind's registry serial (g->kreg: name -> (serial . table)), else ()
+static word kind_serial(struct ai *g, word x) {
+ word e = ai_mapget(g, zero, kind_get(g, coin_kind(x), KnName), ai_core_of(g)->kreg);
+ return chainp(e) ? A(e) : zero; }
 static intptr_t cmp3(struct ai *g, word a, word b) {
  int ra = cmp_rank(g, a), rb = cmp_rank(g, b);
  if (ra != rb) return ra < rb ? -1 : 1;                    // cross-kind: the true-blue lattice (cmp_rank)
@@ -1337,8 +1341,10 @@ static intptr_t cmp3(struct ai *g, word a, word b) {
   return ai_big_cmp(a, b); }                                // exact fix/box/big tower
  if (strp(a)) return bytes_cmp(txt(a), len(a), txt(b), len(b));
  if (chainp(a)) { intptr_t c = cmp3(g, A(a), A(b)); return c ? c : cmp3(g, B(a), B(b)); }  // chain: car, then cdr
- if (coinp(a) && coinp(b) && coin_die(a) == coin_die(b))  // same die: order by payload
-  return cmp3(g, coin_load(a), coin_load(b));
+ if (coinp(a) && coinp(b)) {
+  if (coin_kind(a) == coin_kind(b)) return cmp3(g, coin_load(a), coin_load(b));   // one kind: by payload
+  word sa = kind_serial(g, a), sb = kind_serial(g, b);                             // two: by registration
+  if (charmp(sa) && charmp(sb) && sa != sb) return getcharm(sa) < getcharm(sb) ? -1 : 1; }
  uintptr_t ha = hash(g, a), hb = hash(g, b);               // lambda/map/port/cask: by repr hash
  return ha < hb ? -1 : ha > hb ? 1 : 0; }
 

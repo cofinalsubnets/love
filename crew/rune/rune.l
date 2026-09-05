@@ -619,7 +619,7 @@
    (pmeth z f) (\ a b (: x (load a) y (load b)
                        (? (pok? x y && pok? y x) (z (f (plift x y) (plift y x))))))
    (zface v w) (? (star? v) (? (polyish? w) (0 = tally w) 0) 0)
-   polyd (die 'poly (z \ {'net 'tally 'star 1
+   mk (coin 'poly (z \ {'net 'tally 'star 1
                           '+ (pmeth z padd)
                           '* (: mulm (pmeth z pmul)
                                (\ a b (: x (load a) y (load b)
@@ -627,7 +627,7 @@
                                            (zface y x) (z ())
                                            (mulm a b)))))
                           '- (pmeth z psub)}))
-   (poly p) (? (polyish? p) (coin polyd p) ()))
+   (poly p) (? (polyish? p) (mk p) ()))
 
 ; --- the eval bridge: a poly compiles to a live closure ---------------------
 ; pemit renders a poly (raw or coin) as core source over the given variable
