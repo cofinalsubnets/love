@@ -862,6 +862,9 @@ static ai_inline uintptr_t tray_nelem(struct ai_tray *v) {
  return n; }
 static ai_inline struct ai_tray *ini_tray(struct ai_tray *v, enum ai_tray_type t, uintptr_t rank) {
  return v->ap = lvm_tray, v->type = t, v->rank = rank, v; }
+// the footprint of a rank-R array of n elements of type t
+static ai_inline uintptr_t tray_bytes(enum ai_tray_type t, uintptr_t R, uintptr_t n) {
+ return sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[t]; }
 // read element i of v as a double / as an integer (sign-extending the narrow
 // integer types; truncating a float toward zero for the int reader). the int
 // reader is only used on integer-typed arrays in practice.
@@ -1256,7 +1259,7 @@ struct ai
  *gen_major(struct ai *g, uintptr_t req0, bool *tight),
  *ored(struct ai *g, int kind), *zflush(struct ai*g);
 uintptr_t
- bshape_n(word a, word b),
+ bshape(word a, word b, uintptr_t *R),
  shash(struct ai *g, word x, struct arib *env, word *base),
  hash_at(struct ai *g, intptr_t x, word *base),
  map_probe(struct ai *g, word m, word k, bool *found);
@@ -1273,9 +1276,22 @@ void
  *ai_libc_alloc(struct ai*g, void *p, size_t n),
  bshape_put(uintptr_t *shape, uintptr_t R, word a, word b),
  bstride(struct ai_tray *v, uintptr_t R, intptr_t *c),
- odo_step(intptr_t *idx, uintptr_t R, uintptr_t const *shape),
  gen_wb(struct ai *g, word src, word p),
  gen_wb_cell(struct ai *g, void *cl, word v);
+// the broadcast walk every elementwise lane runs: an odometer over the result shape
+// (rightmost axis fastest) carrying each operand's flat offset, oa and ob, by that
+// operand's stride on the axis (0 on a scalar, or an axis of size 1). the arrays sit
+// in the fill's own frame, so an lvm wrapper stays a leaf and its tail a jump.
+struct bcast { uintptr_t R; uintptr_t const *shape; intptr_t oa, ob, ca[maxrank], cb[maxrank], idx[maxrank]; };
+static ai_inline void bc_open(struct bcast *w, struct ai_tray *va, struct ai_tray *vb,
+                              uintptr_t R, uintptr_t const *shape) {
+ w->R = R, w->shape = shape, w->oa = w->ob = 0;
+ for (uintptr_t j = 0; j < R; j++) w->idx[j] = 0;
+ bstride(va, R, w->ca), bstride(vb, R, w->cb); }
+static ai_inline void bc_step(struct bcast *w) {          // one tick: an axis advances, the ones past it wrap
+ for (intptr_t j = (intptr_t) w->R - 1; j >= 0; j--) {
+  if (++w->idx[j] < (intptr_t) w->shape[j]) { w->oa += w->ca[j], w->ob += w->cb[j]; return; }
+  w->idx[j] = 0, w->oa -= ((intptr_t) w->shape[j] - 1) * w->ca[j], w->ob -= ((intptr_t) w->shape[j] - 1) * w->cb[j]; } }
 ai_flo_t vop_flo(int op, ai_flo_t a, ai_flo_t b);
 bool
  bio_rpending(struct ai_bio *b),

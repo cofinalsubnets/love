@@ -320,7 +320,7 @@ static lvm(lvm_please) {
 // derive: mortality = (n_seen - n_evac)/n_seen ; copy-amp = n_evac/max_heap
 static lvm(lvm_gauge) {
  enum { N = 16 };
- uintptr_t const bytes = sizeof(struct ai_tray) + 1 * sizeof(word) + N * ai_T[ai_Z];
+ uintptr_t const bytes = tray_bytes(ai_Z, 1, N);
  Have(b2w(bytes));
  struct ai_tray *v = (struct ai_tray*) Hp;
  Hp += b2w(bytes);
@@ -357,7 +357,7 @@ static lvm(lvm_gauge) {
 // does not carry them: a woken image tunes again (host's LOVE_BUDGET_MB does exactly that).
 static lvm(lvm_tune) {
  enum { N = 4 };
- uintptr_t const bytes = sizeof(struct ai_tray) + 1 * sizeof(word) + N * ai_T[ai_Z];
+ uintptr_t const bytes = tray_bytes(ai_Z, 1, N);
  Have(b2w(bytes));
  word x = Sp[0];                             // read post-Have: a collection forwards the operand
  struct ai_tray *v = (struct ai_tray*) Hp;
@@ -1004,7 +1004,7 @@ size_t const ai_T[] = {
  [ai_O] = Bytes, };       // object: one tagged l word per element
 
 uintptr_t ai_tray_bytes(struct ai_tray *v) {
- return sizeof(struct ai_tray) + v->rank * sizeof(word) + ai_T[v->type] * tray_nelem(v); }
+ return tray_bytes(v->type, v->rank, tray_nelem(v)); }
 
 // these are love.h's data-apply shims: one TU has to hold the body.
 #if ai_data_section

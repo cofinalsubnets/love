@@ -863,7 +863,7 @@ static struct ai *tray_to_obj(struct ai *g, int slot) {
  struct ai_tray *src = tray(g->sp[slot]);
  uintptr_t R = src->rank, n = 1;
  for (uintptr_t i = 0; i < R; i++) n *= src->shape[i];
- uintptr_t bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[ai_O];
+ uintptr_t bytes = tray_bytes(ai_O, R, n);
  if (!ai_ok(g = ai_have(g, b2w(bytes)))) return g;
  src = tray(g->sp[slot]);
  struct ai_tray *dst = (struct ai_tray*) g->hp; g->hp += b2w(bytes);
@@ -895,24 +895,20 @@ static struct ai *obin_run(struct ai *g, int op) {
  if (atray && tray(a)->type != ai_O) { if (!ai_ok(g = tray_to_obj(g, 0))) return g; }
  if (btray && tray(b)->type != ai_O) { if (!ai_ok(g = tray_to_obj(g, 1))) return g; }
  a = g->sp[0], b = g->sp[1], atray = trayp(a), btray = trayp(b);
- uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0,
-           R = ra > rb ? ra : rb, n = bshape_n(a, b), shp[maxrank];
+ uintptr_t R, n = bshape(a, b, &R), shp[maxrank];
  if (n == (uintptr_t) -1) {                                    // non-conforming -> zero
   g->sp[1] = zero, g->sp++, g->ip = (union u*) g->ip + 1; return g; }
  bshape_put(shp, R, a, b);
- uintptr_t bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[ai_O];
+ uintptr_t bytes = tray_bytes(ai_O, R, n);
  if (!ai_ok(g = ai_have(g, b2w(bytes)))) return g;
  struct ai_tray *r = (struct ai_tray*) g->hp; g->hp += b2w(bytes);
  ini_tray(r, ai_O, R);
  for (uintptr_t k = 0; k < R; k++) r->shape[k] = shp[k];
  for (uintptr_t p = 0; p < n; p++) tray_put_obj(r, p, zero);     // zero-fill before any GC
  if (!ai_ok(g = ai_push(g, 1, word(r)))) return g;               // sp: [0]=r [1]=a [2]=b
- intptr_t ca[maxrank], cb[maxrank], idx[maxrank];
- for (uintptr_t j = 0; j < R; j++) idx[j] = 0;
- bstride(atray ? tray(g->sp[1]) : 0, R, ca), bstride(btray ? tray(g->sp[2]) : 0, R, cb);
- for (uintptr_t p = 0; p < n; p++) {
-  intptr_t oa = 0, ob = 0;
-  for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
+ struct bcast w; bc_open(&w, atray ? tray(g->sp[1]) : 0, btray ? tray(g->sp[2]) : 0, R, shp);
+ for (uintptr_t p = 0; p < n; p++, bc_step(&w)) {
+  intptr_t oa = w.oa, ob = w.ob;
   word ae = atray ? tray_get_obj(tray(g->sp[1]), oa) : g->sp[1],  // scalar operand re-read each step
        be = btray ? tray_get_obj(tray(g->sp[2]), ob) : g->sp[2],
        res = obin_elem(&g, op, ae, be);
@@ -921,8 +917,7 @@ static struct ai *obin_run(struct ai *g, int op) {
   // and barrier it: a minor mid-loop promotes the result array while its
   // elements stay young -- an edge the rem set must carry, or the next minor
   // frees an element still in the array
-  gen_wb(g, g->sp[0], res);
-  odo_step(idx, R, shp); }
+  gen_wb(g, g->sp[0], res); }
  g->sp[2] = g->sp[0], g->sp += 2, g->ip += 1;
  return g; }
 
@@ -1002,16 +997,13 @@ static ai_noinline void cbin_fill(struct ai_tray *r, word a, word b, int op, boo
  uintptr_t R = r->rank, n = tray_nelem(r);
  bool atray = trayp(a), btray = trayp(b);
  struct ai_tray *va = atray ? tray(a) : 0, *vb = btray ? tray(b) : 0;
- intptr_t ca[maxrank], cb[maxrank], idx[maxrank];
- for (uintptr_t j = 0; j < R; j++) idx[j] = 0;
- bstride(va, R, ca), bstride(vb, R, cb);
+ struct bcast w; bc_open(&w, va, vb, R, r->shape);
  ai_flo_t sar = 0, sai = 0, sbr = 0, sbi = 0;
  if (!atray) { if (twinp(a)) sar = twin_re(a), sai = twin_im(a); else sar = toflo(a); }
  if (!btray) { if (twinp(b)) sbr = twin_re(b), sbi = twin_im(b); else sbr = toflo(b); }
  ai_flo_t *rf = cmp ? 0 : tray_data(r);
- for (uintptr_t p = 0; p < n; p++) {
-  intptr_t oa = 0, ob = 0;
-  for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
+ for (uintptr_t p = 0; p < n; p++, bc_step(&w)) {
+  intptr_t oa = w.oa, ob = w.ob;
   ai_flo_t ar, ai, br, bi, re, im;
   cbin_part(atray, va, sar, sai, oa, &ar, &ai);
   cbin_part(btray, vb, sbr, sbi, ob, &br, &bi);
@@ -1025,8 +1017,7 @@ static ai_noinline void cbin_fill(struct ai_tray *r, word a, word b, int op, boo
    tray_put_int(r, p, t ? 1 : 0); }
   else {
    twin_op(op, ar, ai, br, bi, &re, &im);
-   rf[2*p] = re; rf[2*p+1] = im; }
-  odo_step(idx, R, r->shape); } }
+   rf[2*p] = re; rf[2*p+1] = im; } } }
 
 lvm(lvm_cbin) {
  int op = (int) g->b;
@@ -1038,15 +1029,13 @@ lvm(lvm_cbin) {
      || op == vop_rem || op == vop_fquot)
   ai_musttail return Push(op == vop_eq ? zero : ZeroPoint);   // `=` is boolean: undefined face -> 0, not ()
  bool cmp = op >= vop_lt;
- uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0,
-           R = ra > rb ? ra : rb, n = bshape_n(a, b);
+ uintptr_t R, n = bshape(a, b, &R);
  if (n == (uintptr_t) -1) ai_musttail return Push(op == vop_eq ? zero : ZeroPoint);   // non-conformant `=` -> 0
  enum ai_tray_type rt = cmp ? ai_Z : ai_C;              // compare -> i64 mask, else packed complex
- uintptr_t bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[rt];
+ uintptr_t bytes = tray_bytes(rt, R, n);
  Have(b2w(bytes));
  a = Sp[0], b = Sp[1];                                 // re-read post-Have
- struct ai_tray *r = (struct ai_tray*) Hp; Hp += b2w(bytes);
- ini_tray(r, rt, R);
+ struct ai_tray *r = ini_tray((struct ai_tray*) Hp, rt, R); Hp += b2w(bytes);
  bshape_put(r->shape, R, a, b);
  cbin_fill(r, a, b, op, cmp);
  ai_musttail return Push(word(r)); }
@@ -1139,17 +1128,13 @@ static ai_noinline void twin_build_fill(struct ai_tray *r, word a, word b) {
  uintptr_t R = r->rank, n = tray_nelem(r);
  bool atray = trayp(a), btray = trayp(b);
  struct ai_tray *va = atray ? tray(a) : 0, *vb = btray ? tray(b) : 0;
- intptr_t ca[maxrank], cb[maxrank], idx[maxrank];
- for (uintptr_t j = 0; j < R; j++) idx[j] = 0;
- bstride(va, R, ca), bstride(vb, R, cb);
+ struct bcast w; bc_open(&w, va, vb, R, r->shape);
  ai_flo_t sa = atray ? 0 : toflo(a), sb = btray ? 0 : toflo(b),
           *rf = tray_data(r);
- for (uintptr_t p = 0; p < n; p++) {
-  intptr_t oa = 0, ob = 0;
-  for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
+ for (uintptr_t p = 0; p < n; p++, bc_step(&w)) {
+  intptr_t oa = w.oa, ob = w.ob;
   rf[2*p]   = atray ? tray_get_flo(va, oa) : sa;
-  rf[2*p+1] = btray ? tray_get_flo(vb, ob) : sb;
-  odo_step(idx, R, r->shape); } }
+  rf[2*p+1] = btray ? tray_get_flo(vb, ob) : sb; } }
 
 // (twin re im): scalars -> a complex box; a real array operand -> a packed ai_C
 // array (so arg stays elementwise); complex/object array or non-numeric -> zero
@@ -1160,15 +1145,13 @@ lvm(lvm_twin) {
   if ((atray && tray(a)->type >= ai_C) || (btray && tray(b)->type >= ai_C)
       || (!atray && !isnum(a)) || (!btray && !isnum(b)))
    ai_musttail return Push(ZeroPoint);
-  uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0,
-            R = ra > rb ? ra : rb, n = bshape_n(a, b);
+  uintptr_t R, n = bshape(a, b, &R);
   if (n == (uintptr_t) -1) ai_musttail return Push(ZeroPoint);
-  uintptr_t bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[ai_C];
+  uintptr_t bytes = tray_bytes(ai_C, R, n);
   Have(b2w(bytes));
   a = Sp[0], b = Sp[1];                                     // re-read post-Have
-  struct ai_tray *r = (struct ai_tray*) Hp;
+  struct ai_tray *r = ini_tray((struct ai_tray*) Hp, ai_C, R);
   Hp += b2w(bytes);
-  ini_tray(r, ai_C, R);
   bshape_put(r->shape, R, a, b);
   twin_build_fill(r, a, b);
   ai_musttail return Push(word(r)); }
@@ -1197,11 +1180,10 @@ static lvm(lvm_cpart) {
  struct ai_tray *v = tray(Sp[0]);
  enum ai_tray_type rt = off < 0 ? ai_Z : ai_R;
  uintptr_t R = v->rank, n = tray_nelem(v),
-           bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[rt];
+           bytes = tray_bytes(rt, R, n);
  Have(b2w(bytes));
  v = tray(Sp[0]);                                           // re-read post-Have
- struct ai_tray *r = (struct ai_tray*) Hp; Hp += b2w(bytes);
- ini_tray(r, rt, R);
+ struct ai_tray *r = ini_tray((struct ai_tray*) Hp, rt, R); Hp += b2w(bytes);
  for (uintptr_t i = 0; i < R; i++) r->shape[i] = v->shape[i];
  cpart_fill(r, v, off);
  ai_musttail return Answer(word(r)); }
@@ -1241,11 +1223,10 @@ lvm(lvm_im) {
 static lvm(lvm_cconj) {
  struct ai_tray *v = tray(Sp[0]);
  uintptr_t R = v->rank, n = tray_nelem(v),
-           bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[ai_C];
+           bytes = tray_bytes(ai_C, R, n);
  Have(b2w(bytes));
  v = tray(Sp[0]);                                           // re-read post-Have
- struct ai_tray *r = (struct ai_tray*) Hp; Hp += b2w(bytes);
- ini_tray(r, ai_C, R);
+ struct ai_tray *r = ini_tray((struct ai_tray*) Hp, ai_C, R); Hp += b2w(bytes);
  for (uintptr_t i = 0; i < R; i++) r->shape[i] = v->shape[i];
  ai_flo_t *rf = tray_data(r), *fp = tray_data(v);
  for (uintptr_t p = 0; p < n; p++) rf[2*p] = fp[2*p], rf[2*p + 1] = -fp[2*p + 1];
@@ -1352,11 +1333,10 @@ lvm(lvm_carg) {
   if (v->type == ai_O) ai_musttail return Answer(ZeroPoint);   // object array -> zero
   uintptr_t R = v->rank, n = 1;
   for (uintptr_t i = 0; i < R; i++) n *= v->shape[i];
-  uintptr_t bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[ai_R];
+  uintptr_t bytes = tray_bytes(ai_R, R, n);
   Have(b2w(bytes));
   v = tray(Sp[0]);                                           // re-read post-Have
-  struct ai_tray *r = (struct ai_tray*) Hp; Hp += b2w(bytes);
-  ini_tray(r, ai_R, R);
+  struct ai_tray *r = ini_tray((struct ai_tray*) Hp, ai_R, R); Hp += b2w(bytes);
   for (uintptr_t i = 0; i < R; i++) r->shape[i] = v->shape[i];
   carg_fill(r, v);
   ai_musttail return Answer(word(r)); }
