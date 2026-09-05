@@ -635,15 +635,10 @@ int main(int argc, char const **argv) {
   if (!g) g = ai_ini();
   g = env_budget(g);                               // the LOVE_BUDGET_MB cap, on whichever g won (fresh or woken image)
   bool argp = argc - skip > 1;
-  if (!bake) {
-    // FIXME why do we call this twice? build one chain, the other is a tail of it
-    g = argv_chain(g, argv, argc, 0);               // cmdline, first: it ends up deeper
-    g = argv_chain(g, argv, argc, skip); }          // argv, on top -- sp[0]
+  if (!bake) g = argv_chain(g, argv, argc, skip);   // the line past the primes -- sp[0]
   if (ai_ok(g)) {
     g = ai_defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
     if (!bake) {
-      g = ai_defv(g, "argv");
-      if (ai_ok(g)) g->sp++;            // the book holds argv; the line is sp[0] now
       g = ai_defv(g, "cmdline");
       if (ai_ok(g)) g->sp++; }          // the book holds it now
     if (image_load_path && ai_ok(g = ai_defv(ai_strof(g, image_load_path), "love-image"))) g->sp++;

@@ -385,7 +385,7 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
    ; image runs a tool by handing it (link "kore" "ls" "-l") and reading the charm.
    ; two doors: a list handed in is scanned, () means "the line I was started with".
    (kore-main a)
-    (: s (? (two? a) ((from 'verbs 'scan) mynames a) ((from 'verbs 'fire) mynames))
+    (: s (? (two? a) ((from 'verbs 'seatof) mynames a) ((from 'verbs 'fire) mynames))
        (? !(two? s) ()
           (: f0 (applets (intern (bn <s)))
              (? f0 (urun f0 >s)

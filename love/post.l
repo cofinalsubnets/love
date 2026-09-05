@@ -18,7 +18,11 @@
 (: pi 3.141592653589793
    tau (2 * pi)
    true 1 false 0
-   ; the long spellings, synonyms of the math.h nifs. `pow` waits for `**`, below.
+   (caaap x) <<<x (caaup x) <<>x
+   (cauap x) <><x (cauup x) <>>x
+   (cuaap x) ><<x (cuaup x) ><>x
+   (cuuap x) >><x
+   stdin in stdout out stderr err
    sine sin cosine cos tangent tan fabs abs
    star-tray (tray 0) gem-tray (tray 0.0) twin-tray (tray (twin 0 0)) top-tray (tray ())  ; the four typed-tray ctors (witness baked in)
    (tier v) (tray? v ? (: c (atype v) (? (c = 0) star-tray (c = 1) gem-tray (c = 2) twin-tray top-tray)))  ; a tray's tier is its ctor; nil off a tray
@@ -35,11 +39,7 @@
    ; yours to do. it was never a safety wrapper: a module's members are folded into its consumers
    ; at their compile, so gutting one changes nothing already compiled and everything compiled
    ; after -- the hazard is divergence, and no closure here could have caught it.
-   (from k)   (? k (mods () k) (keys (mods ())))
-   (caaap x) <<<x (caaup x) <<>x
-   (cauap x) <><x (cauup x) <>>x
-   (cuaap x) ><<x (cuaup x) ><>x
-   (cuuap x) >><x)
+   (from k)   (? k (mods () k) (keys (mods ()))))
 
 (: putc (put out)
    puts (say out)

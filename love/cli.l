@@ -99,11 +99,9 @@
  (cli-line ln tty)
    (: (charm0 x) (charm? x ? x 0)
       V  (from 'verbs)
-      up (V 'unprime)
-      av (up ? (<ln . up >ln) ln)   ; the program's view: argv[0], then past the primes
-      _  (ev [': 'cmdline ['\ ln] 'argv ['\ av] ])
+      _  (ev [': 'cmdline ['\ ln] 'argv ['\ ln] ])   ; C's line is already past the primes
       f  (V 'seat <ln)
       (? f          (quit * charm0 $ f >ln)
-         (two? >av) (cli-rail av)
+         (two? >ln) (cli-rail ln)
          tty        (from 'bao 'bao 0)   ; the baked shell core is define-only; this fires it
          (reads in))))                     ; non-tty stdin: bao's stream face drinks the in port
