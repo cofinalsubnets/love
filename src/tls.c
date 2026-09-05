@@ -148,7 +148,7 @@ static void po_mac(const uint8_t *key, const uint8_t *msg, uintptr_t n,
 // str0 can collect, so the result is allocated first and the arguments re-read
 // off the stack after it: the pointers a C local held are stale across the bump.
 // FIXME why is this noinline?
-ai_noinline static struct ai *host_chacha20(struct ai *g) {
+static ai_inline struct ai *host_chacha20(struct ai *g) {
  ai_word kw = g->sp[0], nw = g->sp[1], cw = g->sp[2], tw = g->sp[3];
  if (!strp(kw) || !strp(nw) || !strp(tw) || !oddp(cw)
      || len(kw) != 32 || len(nw) != 12 || getcharm(cw) < 0) {

@@ -273,7 +273,7 @@ lvm(lvm_keys) {
 // `base` is where this walk's worklist starts, on the eqv_at pattern: a leaf that is
 // a lambda hashes its source, and that source can hold a quote to walk as data -- the
 // re-entrant call scratches above the elements still pending here.
-ai_noinline uintptr_t hash_two(struct ai *g, word x, word *base) {
+static ai_noinline uintptr_t hash_two(struct ai *g, word x, word *base) {
  word *top = off_pool(g) + g->len, *w = base;
  for (uintptr_t h = mix;; x = *--w) {
   while (chainp(x)) {

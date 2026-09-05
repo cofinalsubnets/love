@@ -453,7 +453,9 @@ static lvm(lvm_posix_signal) {
  Sp[1] = host_posix_signal(g, Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
 
-ai_noinline static ai_word host_chdir(struct ai *g, ai_word arg) {
+// a host inlines into its wrapper unless its frame holds a buffer or an address-taken
+// local -- those stay ai_noinline, off the frame the musttail has to leave behind
+static ai_inline ai_word host_chdir(struct ai *g, ai_word arg) {
  char const *buf = str_c(arg);
  if (!buf) return ai_badarg(g);
  return chdir(buf) ? ai_err(g, errno) : ZeroPoint; }
@@ -608,7 +610,7 @@ static lvm(lvm_getgid) { Sp[0] = putcharm(getgid()); ai_musttail return Next(1);
 // to the reader loop (doc/misc/posix.md's open question, answered conservatively:
 // the child owns a full copy-on-write address space, so the GC is fine; the
 // discipline is all in the caller -- flush out/err before, child = eval+quit).
-ai_noinline static ai_word host_fork(struct ai *g) {
+static ai_inline ai_word host_fork(struct ai *g) {
  fflush(NULL);
  pid_t pid = fork();
  return pid < 0 ? ai_err(g, errno) : putcharm(pid); }
@@ -618,14 +620,14 @@ static lvm(lvm_fork) { Sp[0] = host_fork(g); ai_musttail return Next(1); }
 // laying its own fdmap, a compound's `done < file` swap).
 // (dup fd) -> a fresh fd duplicating fd (>= 3, clear of stdio) | a nom. the
 // save half of the swap.
-ai_noinline static ai_word host_dup2(struct ai *g, ai_word sw, ai_word dw) {
+static ai_inline ai_word host_dup2(struct ai *g, ai_word sw, ai_word dw) {
  return !charmp(sw) || !charmp(dw) ? ai_badarg(g) :
         dup2((int) getcharm(sw), (int) getcharm(dw)) < 0 ? ai_err(g, errno) :
         ZeroPoint; }
 
 static lvm(lvm_dup2) { Sp[1] = host_dup2(g, Sp[0], Sp[1]); Sp += 1; ai_musttail return Next(1); }
 
-ai_noinline static ai_word host_dup(struct ai *g, ai_word w) {
+static ai_inline ai_word host_dup(struct ai *g, ai_word w) {
  if (!charmp(w)) return ai_badarg(g);
  int fd = fcntl((int) getcharm(w), F_DUPFD, 3);
  return fd < 0 ? ai_err(g, errno) : putcharm(fd); }
@@ -648,7 +650,7 @@ static lvm(lvm_mkdir) {
  ai_musttail return Nextp(1, 1); }
 
 #if defined(AiHaveMount)
-ai_noinline static ai_word host_mount(struct ai *g, ai_word a, ai_word b, ai_word c) {
+static ai_inline ai_word host_mount(struct ai *g, ai_word a, ai_word b, ai_word c) {
  char const *src = str_c(a), *tgt = str_c(b), *typ = str_c(c);
  if (!src || !tgt || !typ) return ai_badarg(g);
  return mount(src, tgt, typ, 0, NULL) ? ai_err(g, errno) : ZeroPoint; }
@@ -746,7 +748,7 @@ static lvm(lvm_posix_lstat) {
 static lvm(lvm_posix_stat) {
  LvmCall(g, host_posix_stat) }
 
-ai_noinline static struct ai *host_posix_readdir(struct ai *g) {
+static ai_inline struct ai *host_posix_readdir(struct ai *g) {
  char const *p = str_c(g->sp[0]);
  if (!p) return g->sp[0] = ai_badarg(g), g;
  DIR *d = opendir(p);
@@ -767,7 +769,7 @@ ai_noinline static struct ai *host_posix_readdir(struct ai *g) {
 static lvm(lvm_posix_readdir) {
  LvmCall(g, host_posix_readdir) }
 
-ai_noinline static ai_word host_posix_unlink(struct ai *g, ai_word arg) {
+static ai_inline ai_word host_posix_unlink(struct ai *g, ai_word arg) {
  char const *p = str_c(arg);
  if (!p) return ai_badarg(g);
  return unlink(p) ? ai_err(g, errno) : ZeroPoint; }
@@ -780,7 +782,7 @@ static lvm(lvm_posix_unlink) {
 // (the absence lane: (setenv n ()) clears n from the environment).
 // (environ _)       -> the environment as a list of "name=value" strings (the raw
 //                      POSIX shape -- split at the first '=' in love; no order promised).
-ai_noinline static ai_word host_posix_setenv(struct ai *g, ai_word nw, ai_word vw) {
+static ai_inline ai_word host_posix_setenv(struct ai *g, ai_word nw, ai_word vw) {
  char const *n = str_c(nw), *v = str_c(vw);
  if (!n) return ai_badarg(g);
  if (!v) return unsetenv(n) ? ai_err(g, errno) : ZeroPoint;
@@ -790,7 +792,7 @@ static lvm(lvm_posix_setenv) {
  ai_musttail return Nextp(1, 1); }
 
 extern char **environ;
-ai_noinline static struct ai *host_posix_environ(struct ai *g) {
+static ai_inline struct ai *host_posix_environ(struct ai *g) {
  g->sp[0] = ZeroPoint;                                        // the accumulator, over the dummy arg
  for (char **e = environ; e && *e; e++) {
   if (!ai_ok(g = ai_strof(g, *e))) return g;                  // pushes: entry over acc
@@ -803,7 +805,7 @@ ai_noinline static struct ai *host_posix_environ(struct ai *g) {
 static lvm(lvm_posix_environ) {
  LvmCall(g, host_posix_environ) }
 
-ai_noinline static ai_word host_posix_lseek(struct ai *g, ai_word fdw, ai_word offw, ai_word whw) {
+static ai_inline ai_word host_posix_lseek(struct ai *g, ai_word fdw, ai_word offw, ai_word whw) {
  if (!charmp(fdw) || !charmp(offw) || !charmp(whw)) return ai_badarg(g);
  intptr_t w = getcharm(whw);
  // the three by name, a platform's numbers being its own; anything else goes down
@@ -896,7 +898,7 @@ AiNif("environ", nif_posix_environ);
 //   (hardlink old new)    -> () | a nom | 'badarg  (link(2); `link` the word is
 //                            the chain ctor, the most spoken name in the prel,
 //                            so the nif wears the long form)
-ai_noinline static ai_word host_posix_rename(struct ai *g, ai_word ow, ai_word nw) {
+static ai_inline ai_word host_posix_rename(struct ai *g, ai_word ow, ai_word nw) {
  char const *o = str_c(ow), *n = str_c(nw);
  if (!o || !n) return ai_badarg(g);
  return rename(o, n) ? ai_err(g, errno) : ZeroPoint; }
@@ -904,7 +906,7 @@ static lvm(lvm_posix_rename) {
  Sp[1] = host_posix_rename(g, Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
 
-ai_noinline static ai_word host_posix_symlink(struct ai *g, ai_word tw, ai_word pw) {
+static ai_inline ai_word host_posix_symlink(struct ai *g, ai_word tw, ai_word pw) {
  char const *t = str_c(tw), *p = str_c(pw);
  if (!t || !p) return ai_badarg(g);
  return symlink(t, p) ? ai_err(g, errno) : ZeroPoint; }
@@ -924,7 +926,7 @@ ai_noinline static struct ai *host_posix_readlink(struct ai *g) {
 static lvm(lvm_posix_readlink) {
  LvmCall(g, host_posix_readlink) }
 
-ai_noinline static ai_word host_posix_chmod(struct ai *g, ai_word pw, ai_word mw) {
+static ai_inline ai_word host_posix_chmod(struct ai *g, ai_word pw, ai_word mw) {
  char const *p = str_c(pw);
  if (!p || !charmp(mw)) return ai_badarg(g);
  return chmod(p, (mode_t) getcharm(mw)) ? ai_err(g, errno) : ZeroPoint; }
@@ -932,7 +934,7 @@ static lvm(lvm_posix_chmod) {
  Sp[1] = host_posix_chmod(g, Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
 
-ai_noinline static ai_word host_posix_chown(struct ai *g, ai_word pw, ai_word uw, ai_word gw) {
+static ai_inline ai_word host_posix_chown(struct ai *g, ai_word pw, ai_word uw, ai_word gw) {
  char const *p = str_c(pw);
  if (!p || !charmp(uw) || !charmp(gw)) return ai_badarg(g);
  return chown(p, (uid_t) getcharm(uw), (gid_t) getcharm(gw)) ? ai_err(g, errno) : ZeroPoint; }
@@ -955,13 +957,13 @@ static lvm(lvm_posix_utime) {
  Sp[1] = host_posix_utime(g, Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
 
-ai_noinline static ai_word host_posix_rmdir(struct ai *g, ai_word pw) {
+static ai_inline ai_word host_posix_rmdir(struct ai *g, ai_word pw) {
  char const *p = str_c(pw);
  if (!p) return ai_badarg(g);
  return rmdir(p) ? ai_err(g, errno) : ZeroPoint; }
 static lvm(lvm_posix_rmdir) { Sp[0] = host_posix_rmdir(g, Sp[0]); ai_musttail return Next(1); }
 
-ai_noinline static ai_word host_posix_hardlink(struct ai *g, ai_word ow, ai_word nw) {
+static ai_inline ai_word host_posix_hardlink(struct ai *g, ai_word ow, ai_word nw) {
  char const *o = str_c(ow), *n = str_c(nw);
  if (!o || !n) return ai_badarg(g);
  return link(o, n) ? ai_err(g, errno) : ZeroPoint; }

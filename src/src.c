@@ -15,13 +15,13 @@
 __attribute__((weak)) const unsigned char ai_srcgz[1] = {0};
 __attribute__((weak)) const uintptr_t ai_srcgz_len = 0;
 
-// FIXME this should probably be ai_inline, i don't see why it would break TCO
-ai_noinline static struct ai *host_srcgz(struct ai *g) {
+// inlined into their wrappers: no buffer and nothing address-taken, so the tail still jumps
+static ai_inline struct ai *host_srcgz(struct ai *g) {
  const unsigned char *p = ai_srcgz;
  uintptr_t n = ai_srcgz_len;
  if (!n) return g->sp[0] = ZeroPoint, g;
  if (!ai_ok(g = str0(g, n))) return g;             // pushes: the archive over the arg
- if (n) memcpy(txt(g->sp[0]), p, (size_t) n);      // .rodata: no re-read after the collect
+ memcpy(txt(g->sp[0]), p, (size_t) n);             // .rodata: no re-read after the collect
  g->sp[1] = g->sp[0];
  g->sp += 1;
  return g; }
@@ -44,8 +44,7 @@ __attribute__((weak)) const uintptr_t ai_rtgz_rv64_len = 0;
 __attribute__((weak)) const unsigned char ai_rtgz_id[1] = {0};
 __attribute__((weak)) const uintptr_t ai_rtgz_id_len = 0;
 
-// FIXME this should also probably be ai_inline, no obvious TCO hazards
-ai_noinline static struct ai *host_rtgz(struct ai *g) {
+static ai_inline struct ai *host_rtgz(struct ai *g) {
  const unsigned char *p = 0;
  uintptr_t n = 0;
  word a = g->sp[0];

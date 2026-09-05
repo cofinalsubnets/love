@@ -3,9 +3,7 @@
 #include "love.h"
 // this file's own, forward-declared so order within it does not matter.
 static ai_noinline double strtod_wrap(struct ai*g, word x);
-static ai_noinline struct ai
- *chug_str(struct ai *g, struct ai_io *i),
- *p0text(struct ai *g);
+static ai_noinline struct ai *p0text(struct ai *g);
 static bool
  bio_wpending(struct ai_bio *b),
  is_dec_int(char const *s, uintptr_t n),
@@ -252,7 +250,7 @@ uintptr_t ai_io_unread(struct ai *g, struct ai_io *i, intptr_t n) {
 // if there is one, then the run. it never touches the device and never parks, so the gulp
 // is: `see` the first byte (which refills and parks if it must), unsee it, chug the rest.
 // "" is the ordinary answer, so a caller draws with `see` rather than spinning here.
-ai_noinline static struct ai *chug_str(struct ai *g, struct ai_io *i) {
+static ai_inline struct ai *chug_str(struct ai *g, struct ai_io *i) {
  uintptr_t u = getcharm(i->ungetc_buf) != EOF ? 1 : 0;
  struct ai_port_vt const *vt = i->vt;
  g->io = i;                                   // athand reads it, as readn does
@@ -458,7 +456,7 @@ static struct ai*ioputn(struct ai *g, intptr_t n, uint8_t b) {
 // stopped and there is nobody to run it. this spells the shapes a condition wears -- name,
 // text, number, list -- and hands every other kind its address. no allocation, so it is
 // safe on an exhausted heap.
-struct ai *facex(struct ai *g, word x, int d) {
+static struct ai *facex(struct ai *g, word x, int d) {
  if (charmp(x)) return ioputn(g, getcharm(x), 10);
  if (x == ZeroPoint) return ioputs(g, "()");
  struct ai_str *nm = nom_str(g, x);
@@ -672,7 +670,7 @@ struct ai *grbufg(struct ai *g, uintptr_t len) {
   g->sp++;
  return g; }
 
-ai_noinline double strtod_wrap(struct ai*g, word x) {
+static ai_noinline double strtod_wrap(struct ai*g, word x) {
  struct ai_str *s = str(x);
  if (!strp(x) || !s->len) return NAN;
  char *e, *b = off_pool(g);

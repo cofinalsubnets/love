@@ -211,7 +211,7 @@ static uint32_t crc32_of(const uint8_t *p, uintptr_t n) {
  for (; n; p++, n--) c = crc_t[0][(c ^ *p) & 0xff] ^ (c >> 8);
  return c ^ 0xffffffff; }
 
-ai_noinline static struct ai *host_crc32(struct ai *g) {
+static ai_inline struct ai *host_crc32(struct ai *g) {
  if (!strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
  { struct ai_str *s = (struct ai_str*) g->sp[0];
    g->sp[0] = putcharm(crc32_of((const uint8_t*) s->bytes, (uintptr_t) s->len)); }

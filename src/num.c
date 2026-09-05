@@ -51,7 +51,6 @@ static void
             ai_limb const *b, int nb, bool negb, bool subtract),
  mag_add_off(ai_limb *r, int rn, ai_limb const *s, int sn, int off),
  mag_mul_kara(ai_limb *r, ai_limb const *a, ai_limb const *b, int n, ai_limb *t);
-void ratio_mag_mul(uint64_t a, uint64_t b, uint64_t *hi, uint64_t *lo);
 // ============================================================================
 // big
 // ============================================================================
@@ -131,7 +130,7 @@ static ai_noinline int mag_mul_add_small(ai_limb *a, int n, ai_limb mul, ai_limb
 
 // 128/64 -> quotient + remainder, caller guarantees the quotient fits a limb
 // (hi < d): the hardware divq on x86-64, never __udivti3
-ai_inline ai_limb div2by1(ai_limb hi, ai_limb lo, ai_limb d, ai_limb *rem) {
+static ai_inline ai_limb div2by1(ai_limb hi, ai_limb lo, ai_limb d, ai_limb *rem) {
 #if defined(__x86_64__) && limb_bits == 64 && defined(__GNUC__)
  // gcc/clang take the one-divq asm; mooncc compiles the C face below natively
  // (its u128/u64 divide is the same two-step divq dance, emitted whole)
@@ -143,7 +142,7 @@ ai_inline ai_limb div2by1(ai_limb hi, ai_limb lo, ai_limb d, ai_limb *rem) {
 #endif
 }
 // 128/64 -> full quotient + remainder for the q-hat step, as two divq-safe steps
-ai_inline ai_dlimb div128by64(ai_limb hi, ai_limb lo, ai_limb d, ai_limb *rem) {
+static ai_inline ai_dlimb div128by64(ai_limb hi, ai_limb lo, ai_limb d, ai_limb *rem) {
  ai_limb qhi = hi / d, r1 = hi % d;
  ai_limb qlo = div2by1(r1, lo, d, rem);
  return ((ai_dlimb) qhi << limb_bits) | qlo; }
@@ -1270,7 +1269,7 @@ static ai_inline bool ratio_iview(word x, int64_t *n, int64_t *d) {
 #if !defined(__SIZEOF_INT128__)
 // u64 x u64 -> 128-bit magnitude product from 32-bit half-word partials -- the exact
 // cross-multiply for builds without __int128 (mooncc's love-raw; the thumb ports).
-ai_inline void ratio_mag_mul(uint64_t a, uint64_t b, uint64_t *hi, uint64_t *lo) {
+static ai_inline void ratio_mag_mul(uint64_t a, uint64_t b, uint64_t *hi, uint64_t *lo) {
  uint64_t mask = 0xFFFFFFFFu,
           a0 = a & mask, a1 = a >> 32, b0 = b & mask, b1 = b >> 32,
           p00 = a0 * b0, p01 = a0 * b1, p10 = a1 * b0, p11 = a1 * b1,
