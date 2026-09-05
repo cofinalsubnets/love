@@ -49,6 +49,14 @@
    (hi n) (n >> 3)                                                  ; the REX extension bit of a reg
    (lo n) (n & 7)                                                   ; its low 3 bits (the ModRM field)
    (rn r) (look x64-regs r 'badreg)
+   ;; the prefix only when it says something: REX.W, an extended register, or -- for
+   ;; 0x88, the one face whose ModRM.reg is a byte register -- a source in 4..7, where
+   ;; the prefix is what spells spl/bpl/sil/dil instead of ah/ch/dh/bh. a bare 0x40
+   ;; encodes nothing, so every other w=0 form goes without.
+   (mrex w opc r x b)
+      (w = 1 || r >= 8 || x >= 8 || b >= 8 || bytesrc? opc r
+       ? [(rex w (hi r) (hi x) (hi b))] ())
+   (bytesrc? opc r) (opc = '(136) && 4 <= r <= 7)
 
    ;; -- reg<-reg and reg<-imm32 forms, shared by mov/the ALU/cmp. --
    ;; alu-rr: opcode /r with Modrm.reg = source, Modrm.rm = dest (the AT&T `op %src,%dst`).
@@ -144,12 +152,12 @@
    ;; the indexed family's shared core, REX.W + opcode per face (as x64-mem below).
    (x64-memx w opc regf base index scale disp)
       (: fn (rn regf) bn (rn base) ixn (rn index)
-         ((rex w (hi fn) (hi ixn) (hi bn) >< opc) + memx fn base index scale disp))
+         (mrex w opc fn ixn bn + opc + memx fn base index scale disp))
    (emit-ldx d base index scale disp)  (x64-memx 1 '(139) d base index scale disp)     ; 8B    mov r64, [base+index*scale+disp]
    (emit-stx base index scale disp s)  (x64-memx 1 '(137) s base index scale disp)     ; 89    mov [base+index*scale+disp], r64
    (emit-leax d base index scale disp) (x64-memx 1 '(141) d base index scale disp)     ; 8D    lea r64, [base+index*scale+disp]
    (emit-ldxb d base index scale disp) (x64-memx 1 '(15 182) d base index scale disp)  ; 0F B6 movzx r64, BYTE (zero-extend)
-   (emit-stxb base index scale disp s) (x64-memx 0 '(136) s base index scale disp)     ; 88    mov BYTE, sl (REX.W=0; REX present forces spl/sil.. not ah/ch.. for s 4-7)
+   (emit-stxb base index scale disp s) (x64-memx 0 '(136) s base index scale disp)     ; 88    mov BYTE, sl (REX.W=0; mrex forces the prefix for s 4-7: spl/sil.., not ah/ch..)
 
    ;; a memory operand [base+disp]: Modrm (+ SIB for an rsp/r12 base) (+ displacement). picks the
    ;; shortest disp form, and forces a 0-disp byte for an rbp/r13 base (its disp-less slot is taken).
@@ -163,7 +171,7 @@
    ;; bytes -- each face below is a partial spelling of it (mnemonics in the comments).
    (x64-mem pfx w opc regf base off)
       (: fn (rn regf) bn (rn base)
-         (pfx + ((rex w (hi fn) 0 (hi bn) >< opc) + mem fn base off)))
+         (pfx + mrex w opc fn 0 bn + opc + mem fn base off))
    (emit-ld d base off)   (x64-mem () 1 '(139) d base off)      ; 8B     mov r64, [base+off]
    (emit-st base off s)   (x64-mem () 1 '(137) s base off)      ; 89     mov [base+off], r64
    (emit-lea d base off)  (x64-mem () 1 '(141) d base off)      ; 8D     lea r64, [base+off]
@@ -175,7 +183,7 @@
    (emit-ldu1 d base off) (x64-mem () 1 '(15 182) d base off)   ; 0F B6  movzx r64, BYTE
    (emit-ldu2 d base off) (x64-mem () 1 '(15 183) d base off)   ; 0F b7  movzx r64, WORD
    (emit-ldu4 d base off) (x64-mem () 0 '(139) d base off)      ; 8B     mov r32, DWORD (zero-extends)
-   (emit-st1 base off s)  (x64-mem () 0 '(136) s base off)      ; 88     mov BYTE, s8 (REX present: spl/sil, never ah/ch)
+   (emit-st1 base off s)  (x64-mem () 0 '(136) s base off)      ; 88     mov BYTE, s8 (mrex forces it for s 4-7: spl/sil, never ah/ch)
    (emit-st2 base off s)  (x64-mem '(102) 0 '(137) s base off)  ; 66 89  mov WORD, s16
    (emit-st4 base off s)  (x64-mem () 0 '(137) s base off)      ; 89     mov DWORD, s32
    ;; cmp against memory (the load-op fusion): (cmpm base off y) is the flags of [base+off] - y,
@@ -301,7 +309,7 @@
       (: dn (rn d)
          (w @ 1 ([(rex 1 (hi dn) 0 (hi dn)) 15 182] + [(modrm 3 (lo dn) (lo dn))])
               2 ([(rex 1 (hi dn) 0 (hi dn)) 15 183] + [(modrm 3 (lo dn) (lo dn))])
-                ([(rex 0 (hi dn) 0 (hi dn)) 139]    + [(modrm 3 (lo dn) (lo dn))])))
+                ((hi dn = 0 ? () [(rex 0 1 0 1)]) + [139 (modrm 3 (lo dn) (lo dn))])))
    ;; shifts by a register count: d3 /ext, the count in cl -- so the IR contract
    ;; pins the count register to r1 (rcx) on every backend; d must differ.
    (emit-shiftv op d c)
@@ -408,7 +416,7 @@
           '(cvtss2sd 243 90) '(cvtsd2ss 242 90)                                       ; f3/F2 0F 5A /r  widen/narrow single<->double (the `float` lane)
           '(ucomisd 102 46)]                                                          ; 66 0F 2E /r  ucomisd xmm,xmm (sets flags)
    x64-sse (tabof x64-sse-rows)
-   (xrex w r b) (? ((w = 1) || (r >= 8) || (b >= 8)) [(rex w (hi r) 0 (hi b))] ())      ; REX only when needed
+   (xrex w r b) (mrex w () r 0 b)                                                       ; the xmm faces: no index, no byte source
    (emit-sse op d s)                                                                     ; xmm <- xmm two-address
       (: meta (peep x64-sse op 0) pfx (meta 0) opc (meta 1) dn (xrn d) sn (xrn s)
          (catall [(? (pfx = 0) () [pfx]) (xrex 0 dn sn) [15 opc (modrm 3 dn sn)]]))
