@@ -1210,13 +1210,12 @@ ai_noinline static struct ai *host_reap(struct ai *g, ai_word pidw) {
  intptr_t pid = charmp(pidw) ? getcharm(pidw) : 0;
  int st;
  pid_t r = waitpid((pid_t) pid, &st, WNOHANG);
- if (r == 0) { g->sp[0] = ZeroPoint; return g; }          // still running
- if (r < 0)  { g->sp[0] = ai_err(g, errno); return g; }   // waitpid error
+ if (r == 0) return g->sp[0] = ZeroPoint, g;         // still running
+ if (r < 0) return g->sp[0] = ai_err(g, errno), g;   // waitpid error
  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
- struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                                 putcharm(proc_status(st)), ZeroPoint);   // a real ()-tailed list, not the charm-0 fossil
- g->sp[0] = word(w);
- return g; }
+ struct ai_chain *w = ini_chain(bump(g, Width(struct ai_chain)),
+                                putcharm(proc_status(st)), ZeroPoint);
+ return g->sp[0] = word(w), g; }
 
 // (reap pid): non-blocking wait. a reaped child returns its decoded status as a
 // one-element list so the result is a present chain even at status 0 -- a caller

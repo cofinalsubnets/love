@@ -28,7 +28,9 @@ static int
  big_nlimbs(word x),
  cmp_rank(struct ai *g, word x),
  load_int_mag(word x, ai_limb scratch[wlimbs], ai_limb const **out, bool *neg),
- mag_copy(ai_limb *dst, ai_limb const *src, int n);
+ mag_copy(ai_limb *dst, ai_limb const *src, int n),
+ mag_dnorm(ai_limb *un, ai_limb *vn, ai_limb const *u, int m, ai_limb const *v, int n);
+static void mag_ddenorm(ai_limb *r, ai_limb const *un, int n, int s);
 static intptr_t
  bytes_cmp(const char *pa, uintptr_t la, const char *pb, uintptr_t lb),
  galaxy_tie(struct ai_tray *va, struct ai_tray *vb),
@@ -146,45 +148,59 @@ ai_inline ai_dlimb div128by64(ai_limb hi, ai_limb lo, ai_limb d, ai_limb *rem) {
  ai_limb qlo = div2by1(r1, lo, d, rem);
  return ((ai_dlimb) qhi << limb_bits) | qlo; }
 
-// knuth Algorithm D long division (Hacker's Delight divmnu): u (m limbs) / v (n
-// limbs, m >= n) -> q (m-n+1 limbs), r (n limbs); un/vn are normalization scratch.
-static ai_noinline void mag_divmod(ai_limb *q, ai_limb *r,
-  ai_limb const *u, int m, ai_limb const *v, int n, ai_limb *un, ai_limb *vn) {
- ai_dlimb const B = limb_base;
- if (n == 1) {                                  // single-limb divisor: simple
-  ai_limb rem = 0;
-  for (int j = m - 1; j >= 0; j--) { ai_limb rr; q[j] = div2by1(rem, u[j], v[0], &rr); rem = rr; }
-  r[0] = rem; return; }
- int s = limb_clz(v[n-1]);                       // normalize so v[n-1] has its top bit set
+// knuth Algorithm D long division (Hacker's Delight divmnu), in three pieces so the
+// one-shot below and the resumable lane (lvm_bdiv) grind the same arithmetic.
+// normalize u (m limbs) and v (n >= 2 limbs) so v's top bit is set, into un (m+1
+// limbs) and vn (n limbs); answers the shift
+static int mag_dnorm(ai_limb *un, ai_limb *vn, ai_limb const *u, int m, ai_limb const *v, int n) {
+ int s = limb_clz(v[n-1]);
  for (int i = n - 1; i > 0; i--) vn[i] = (v[i] << s) | (s ? (ai_dlimb) v[i-1] >> (limb_bits - s) : 0);
  vn[0] = v[0] << s;
  un[m] = s ? (ai_dlimb) u[m-1] >> (limb_bits - s) : 0;
  for (int i = m - 1; i > 0; i--) un[i] = (u[i] << s) | (s ? (ai_dlimb) u[i-1] >> (limb_bits - s) : 0);
  un[0] = u[0] << s;
- for (int j = m - n; j >= 0; j--) {
-  ai_limb rr;                                   // 128/64 q-hat: divq-safe two-step, no __udivti3
-  ai_dlimb qhat = div128by64(un[j+n], un[j+n-1], vn[n-1], &rr), rhat = rr;
-  while (qhat >= B || qhat * vn[n-2] > ((rhat << limb_bits) | un[j+n-2])) {
-   qhat--; rhat += vn[n-1];
-   if (rhat >= B) break; }
-  ai_sdlimb borrow = 0;                          // multiply and subtract qhat*v
-  for (int i = 0; i < n; i++) {
-   ai_dlimb p = (ai_dlimb) (ai_limb) qhat * vn[i];   // qhat < B here: a limb, so 64x64->128 not 128x128
-   ai_sdlimb sub = (ai_sdlimb) un[i+j] - borrow - (ai_sdlimb) (ai_limb) p;
-   un[i+j] = (ai_limb) sub;
-   borrow = (ai_sdlimb) (p >> limb_bits) - (sub >> limb_bits); }
-  ai_sdlimb sub = (ai_sdlimb) un[j+n] - borrow;
-  un[j+n] = (ai_limb) sub;
-  q[j] = (ai_limb) qhat;
-  if (sub < 0) {                                // qhat was one too big: add back
-   q[j]--;
-   ai_dlimb carry = 0;
-   for (int i = 0; i < n; i++) {
-     ai_dlimb t = (ai_dlimb) un[i+j] + vn[i] + carry;
-     un[i+j] = (ai_limb) t;
-     carry = t >> limb_bits; }
-   un[j+n] = (ai_limb) (un[j+n] + carry); } }
+ return s; }
+
+// one quotient limb: q-hat off un's top three limbs at j, then qhat*vn multiplied
+// and subtracted out of un[j..j+n], added back once if the guess ran one high
+static ai_inline ai_limb mag_divstep(ai_limb *un, ai_limb const *vn, int n, int j) {
+ ai_dlimb const B = limb_base;
+ ai_limb rr;                                   // 128/64 q-hat: divq-safe two-step, no __udivti3
+ ai_dlimb qhat = div128by64(un[j+n], un[j+n-1], vn[n-1], &rr), rhat = rr;
+ while (qhat >= B || qhat * vn[n-2] > ((rhat << limb_bits) | un[j+n-2])) {
+  qhat--; rhat += vn[n-1];
+  if (rhat >= B) break; }
+ ai_sdlimb borrow = 0;
+ for (int i = 0; i < n; i++) {
+  ai_dlimb p = (ai_dlimb) (ai_limb) qhat * vn[i];   // qhat < B here: a limb, so 64x64->128 not 128x128
+  ai_sdlimb sub = (ai_sdlimb) un[i+j] - borrow - (ai_sdlimb) (ai_limb) p;
+  un[i+j] = (ai_limb) sub;
+  borrow = (ai_sdlimb) (p >> limb_bits) - (sub >> limb_bits); }
+ ai_sdlimb sub = (ai_sdlimb) un[j+n] - borrow;
+ un[j+n] = (ai_limb) sub;
+ if (sub >= 0) return (ai_limb) qhat;
+ ai_dlimb carry = 0;                            // qhat was one too big: add back
+ for (int i = 0; i < n; i++) {
+  ai_dlimb t = (ai_dlimb) un[i+j] + vn[i] + carry;
+  un[i+j] = (ai_limb) t;
+  carry = t >> limb_bits; }
+ un[j+n] = (ai_limb) (un[j+n] + carry);
+ return (ai_limb) qhat - 1; }
+
+// the remainder is un's low n limbs, shifted back out of normal form
+static void mag_ddenorm(ai_limb *r, ai_limb const *un, int n, int s) {
  for (int i = 0; i < n; i++) r[i] = s ? (un[i] >> s) | ((ai_dlimb) un[i+1] << (limb_bits - s)) : un[i]; }
+
+// u (m limbs) / v (n limbs, m >= n) -> q (m-n+1 limbs), r (n limbs); un/vn are scratch
+static ai_noinline void mag_divmod(ai_limb *q, ai_limb *r,
+  ai_limb const *u, int m, ai_limb const *v, int n, ai_limb *un, ai_limb *vn) {
+ if (n == 1) {                                  // single-limb divisor: simple
+  ai_limb rem = 0;
+  for (int j = m - 1; j >= 0; j--) { ai_limb rr; q[j] = div2by1(rem, u[j], v[0], &rr); rem = rr; }
+  r[0] = rem; return; }
+ int s = mag_dnorm(un, vn, u, m, v, n);
+ for (int j = m - n; j >= 0; j--) q[j] = mag_divstep(un, vn, n, j);
+ mag_ddenorm(r, un, n, s); }
 
 // --- operand loading + tier conversions -------------------------------------
 
@@ -740,12 +756,7 @@ static struct ai *ai_bdiv_setup(struct ai *g, int which) {
  g->hp += sreq;
  ai_limb *ws = (ai_limb*) txt(ws_s),
          *vn = ws + BdivHdr, *un = vn + n, *q = un + (m + 1);
- int s = limb_clz(lb[n-1]);                           // normalize so v[n-1]'s top bit is set
- for (int i = n-1; i > 0; i--) vn[i] = (lb[i] << s) | (s ? (ai_dlimb) lb[i-1] >> (limb_bits - s) : 0);
- vn[0] = lb[0] << s;
- un[m] = s ? (ai_dlimb) la[m-1] >> (limb_bits - s) : 0;
- for (int i = m-1; i > 0; i--) un[i] = (la[i] << s) | (s ? (ai_dlimb) la[i-1] >> (limb_bits - s) : 0);
- un[0] = la[0] << s;
+ int s = mag_dnorm(un, vn, la, m, lb, n);
  for (int i = 0; i < m - n + 1; i++) q[i] = 0;
  ws[0] = (ai_limb) m, ws[1] = (ai_limb) n, ws[2] = (ai_limb) s, ws[3] = (ai_limb) which;
  ws[4] = (ai_limb) nega, ws[5] = (ai_limb) negb;
@@ -777,28 +788,9 @@ static lvm(lvm_bdiv) {
  int m = (int) ws[0], n = (int) ws[1], s = (int) ws[2], which = (int) ws[3];
  bool nega = ws[4], negb = ws[5];
  ai_limb *vn = ws + BdivHdr, *un = vn + n, *q = un + (m + 1);
- ai_dlimb const B = limb_base;
  int j = (int) getcharm(Sp[0]),
      steps = max(1, (int) (bdiv_chunk / (uintptr_t) n));
- for (int c = 0; c < steps && j >= 0; c++, j--) {      // one Knuth-D quotient limb per iteration
-  ai_limb rr;
-  ai_dlimb qhat = div128by64(un[j+n], un[j+n-1], vn[n-1], &rr), rhat = rr;
-  while (qhat >= B || qhat * vn[n-2] > ((rhat << limb_bits) | un[j+n-2])) {
-   qhat--; rhat += vn[n-1]; if (rhat >= B) break; }
-  ai_sdlimb borrow = 0;                                // multiply and subtract qhat*v
-  for (int i = 0; i < n; i++) {
-   ai_dlimb p = (ai_dlimb) (ai_limb) qhat * vn[i];
-   ai_sdlimb sub = (ai_sdlimb) un[i+j] - borrow - (ai_sdlimb) (ai_limb) p;
-   un[i+j] = (ai_limb) sub;
-   borrow = (ai_sdlimb) (p >> limb_bits) - (sub >> limb_bits); }
-  ai_sdlimb sub = (ai_sdlimb) un[j+n] - borrow;
-  un[j+n] = (ai_limb) sub;
-  q[j] = (ai_limb) qhat;
-  if (sub < 0) {                                       // qhat one too big: add back
-   q[j]--;
-   ai_dlimb carry = 0;
-   for (int i = 0; i < n; i++) { ai_dlimb t = (ai_dlimb) un[i+j] + vn[i] + carry; un[i+j] = (ai_limb) t; carry = t >> limb_bits; }
-   un[j+n] = (ai_limb) (un[j+n] + carry); } }
+ for (int c = 0; c < steps && j >= 0; c++, j--) q[j] = mag_divstep(un, vn, n, j);
  if (j >= 0) { Sp[0] = putcharm(j); YieldCheck(); ai_musttail return Continue(); }
  // done: canonicalize the requested output. denormalize the remainder into vn (now
  // dead), not in place, so a GC-retry of this tail stays idempotent. persist j=-1
@@ -811,9 +803,7 @@ static lvm(lvm_bdiv) {
  bool rneg = which ? nega : (nega != negb);
  word ret = Sp[2], res;
  Pack(g);
- if (which) {
-  for (int i = 0; i < n; i++) vn[i] = s ? (un[i] >> s) | ((ai_dlimb) un[i+1] << (limb_bits - s)) : un[i];
-  res = ai_big_canon(&g->hp, vn, n, rneg); }
+ if (which) mag_ddenorm(vn, un, n, s), res = ai_big_canon(&g->hp, vn, n, rneg);
  else res = ai_big_canon(&g->hp, q, m - n + 1, rneg);
  Unpack(g);
  Sp += 2;
