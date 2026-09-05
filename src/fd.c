@@ -108,27 +108,11 @@ static struct ai *fd_writen(struct ai *g, unsigned char const *src, uintptr_t n)
                                  : ai_fd_write_all((int) fd, src, n);
   if (k < n && errno == EPIPE) console_hangup();
   return g->b = (intptr_t) k, g; }
- int fl = fcntl((int) fd, F_GETFL), off = fl >= 0 && !(fl & O_NONBLOCK);
- if (off) fcntl((int) fd, F_SETFL, fl | O_NONBLOCK);
- ssize_t k;
- do k = write((int) fd, src, n); while (k < 0 && errno == EINTR);
- if (off) fcntl((int) fd, F_SETFL, fl);
- return g->b = k > 0 ? (intptr_t) k
-             : (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : -1, g; }   // busy vs gone
+ return g->b = ai_fd_writen((int) fd, src, n), g; }   // >0 landed, 0 busy, -1 gone
 
 static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
  if (__ai_osv < 0) return k_port_readn(g, dst, n);
- intptr_t fd = ai_io_fd(g->io);
- ssize_t k;
- if (fd == STDIN_FILENO && ai_core_of(g)->inflag) k = read((int) fd, dst, n);   // the bit is already ours
- else {
-  int fl = fcntl((int) fd, F_GETFL), off = fl >= 0 && !(fl & O_NONBLOCK);
-  if (off) fcntl((int) fd, F_SETFL, fl | O_NONBLOCK);
-  k = read((int) fd, dst, n);
-  if (off) fcntl((int) fd, F_SETFL, fl); }
- return k > 0 ? (intptr_t) k
-      : k == 0 ? -1
-      : (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : -1; }
+ return ai_fd_readn(g, (int) ai_io_fd(g->io), dst, n); }
 
 struct ai_port_vt const ai_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
 

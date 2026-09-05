@@ -510,56 +510,14 @@ static bool salpha(struct ai *g, word a, word b, struct arib *env, word *scratch
    if (sw_kind(f->tag) == sw_app) { a = f->ra, b = f->rb; break; }
    env = ((struct arib*) sw_drop(sw, struct arib))->up; } } }  // a \-body: its value is the \'s, keep popping
 
-// α-invariant hash of a source \-expr, parallel to salpha: a bound variable hashes by its
-// binder coordinate (rib depth, position), a free variable by its symbol code, so α-equal
-// lambdas hash equal and the total order (cmp3, by repr hash) agrees with `=`.
-// the spine folds left, and the descents stack in the gap, as salpha's do.
-struct shf { uintptr_t h; word rest, tag; };                // rest: the spine past this descent
-uintptr_t shash(struct ai *g, word x, struct arib *env, word *base) {
- word *sw = base, *swend = off_pool(g) + g->len;
- uintptr_t h = mix, t;
- bool spine = false;
- for (;;) {
-  if (nomp(x)) {
-   int d = 0, i = -1;
-   struct arib *r = env;
-   for (; r; r = r->up, d++) if ((i = arib_pos(x, r->la, r->na)) >= 0) break;
-   t = r ? rot((uintptr_t) (d * 131 + i + 1) * mix)         // a bound variable: its binder coordinate
-         : hash_at(g, x, sw); }                            // a free one: its stable identity hash
-  else if (!chainp(x)) t = hash_at(g, x, sw);
-  else if (!ai_isbs(g, A(x))) {                             // structural: app / ? / :
-   struct shf *f = sw_take(sw, swend, struct shf);
-   *f = (struct shf) { h, B(x), sw_tag(sw_app, spine, 0) };
-   h = mix, spine = false, x = A(x);
-   continue; }
-  else {
-   word p = B(x);
-   if (!chainp(p) || !chainp(B(p))) t = hash_at(g, x, sw);  // one-operand \ = quote: data
-   else {
-    int n = 0;
-    word q = p;
-    for (; chainp(B(q)); q = B(q)) n++;
-    struct arib *r = sw_take(sw, swend, struct arib);
-    *r = (struct arib) { p, p, n, n, env };
-    struct shf *f = sw_take(sw, swend, struct shf);
-    *f = (struct shf) { h, 0, sw_tag(sw_lam, spine, n) };
-    env = r, h = mix, spine = false, x = A(q);
-    continue; } }
-  for (;;) {                                                // this term is hashed: fold it back
-   uintptr_t v = spine ? (h ^ t) * mix : t;
-   if (sw == base) return v;
-   struct shf *f = sw_drop(sw, struct shf);
-   h = f->h, spine = sw_spine(f->tag);
-   if (sw_kind(f->tag) == sw_app) { h = (h ^ (v * mix)) * mix, spine = true, x = f->rest; break; }
-   env = ((struct arib*) sw_drop(sw, struct arib))->up;
-   t = (mix * (uintptr_t) (sw_n(f->tag) + 7)) ^ (v * mix); } } }   // a \: wrapped by its binder count
+struct shf { uintptr_t h; word rest, tag; };                // a descent frame: rest is the spine past it
 
 // --- the beta bridge: a closure value compares up to the capture-substitution
 // ev already performed -- (adder 5) = (\ x (+ x 5)). done without allocating: the
 // base source is walked virtually, its leading binders split filled (resolve to
 // the captured value) and remaining (post-substitution de Bruijn coordinates).
 // sound by construction; a captured closure vs a source lambda stays unbridged
-// (conservative, but nf_hash mirrors shash so =-equal closures always hash equal).
+// (conservative, but shash is nf_hash with nothing filled, so =-equal closures hash equal).
 enum { nf_maxcap = 64 };                                  // cap the captured-arg count we bridge; deeper -> fall back
 struct clonf { word body, rem, fsyms; int nr, fn; word fv[nf_maxcap]; };  // residual: body, remaining-binder list (nr), filled-binder list (fn) + values
 
@@ -586,10 +544,13 @@ static bool clo_load(struct ai *c, word v, struct clonf *o) {
  o->body = A(t); o->rem = rem; o->nr = nb - na; o->fsyms = p; o->fn = na;
  return true; }
 
-// α-invariant hash of a residual's body, mirroring shash: a genuine binder by
-// coordinate, a filled binder by its captured value's hash, a free var by symbol
+// α-invariant hash of a source \-expr, parallel to salpha: a bound variable hashes by
+// its binder coordinate (rib depth, position), a free one by its symbol code, so α-equal
+// lambdas hash equal and the total order (cmp3, by repr hash) agrees with `=`. a binder
+// among the fn `fs` symbols is filled: it hashes as its captured value fv[i], the beta
+// bridge's residual. the spine folds left, and the descents stack in the gap, as salpha's do.
 static uintptr_t nf_hash(struct ai *g, word x, struct arib *env, word fs, int fn, word *fv, word *base) {
- word *sw = base, *swend = off_pool(g) + g->len;         // the same walk shash does
+ word *sw = base, *swend = off_pool(g) + g->len;
  uintptr_t h = mix, t;
  bool spine = false;
  for (;;) {
@@ -627,6 +588,10 @@ static uintptr_t nf_hash(struct ai *g, word x, struct arib *env, word fs, int fn
    if (sw_kind(f->tag) == sw_app) { h = (h ^ (v * mix)) * mix, spine = true, x = f->rest; break; }
    env = ((struct arib*) sw_drop(sw, struct arib))->up;
    t = (mix * (uintptr_t) (sw_n(f->tag) + 7)) ^ (v * mix); } } }
+
+// a plain source: nothing filled
+uintptr_t shash(struct ai *g, word x, struct arib *env, word *base) {
+ return nf_hash(g, x, env, 0, 0, NULL, base); }
 
 bool clo_nfhash(struct ai *g, word x, uintptr_t *out, word *base) {
  struct clonf o;
