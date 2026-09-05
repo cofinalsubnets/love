@@ -2,7 +2,7 @@
 ; mand/col/grid mandelbrot nest from bench/benches/float.l), recognize it with `grok`, glaze it
 ; to native, and time it the way the bench does. ordinary interpreted source, no hand-annotation.
 ;
-; run:  out/host/love -l love/glaze/emit.l tools/glaze-auto.l   (emit.l leaks grok/jitfgrid as globals)
+; run:  out/host/love -l src/core/boot/glaze/emit.l tools/glaze-auto.l   (emit.l leaks grok/jitfgrid as globals)
 
 (: ; the exact bodies from bench/benches/float.l -- quoted source the recognizer reads, so
    ; they stay verbatim: infixing one would change the datum grok matches on

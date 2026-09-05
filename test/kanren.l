@@ -1,4 +1,4 @@
-; kanren -- the machinery lives in love/kanren.l, a registered module (unify + its
+; kanren -- the machinery lives in src/core/boot/kanren.l, a registered module (unify + its
 ; ufail/ufail? contract and the macro-emitted var/s_plus/s_star/===/=/= stay global;
 ; walk/est/query/streams/rel ride the registry -- (from 'kanren) is the curried
 ; accessor). this file is the assert suite + the relational-algebra demo. one

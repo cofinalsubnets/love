@@ -23,7 +23,7 @@
  * the register pressure is load-bearing: with a short body the allocator never
  * wants the arrival register and the fault does not appear. keep the temps. */
 
-/* the exact shape from crew/moon/lib/math/am.c -- 64x64 -> 128 without
+/* the exact shape from src/apps/moon/lib/math/am.c -- 64x64 -> 128 without
  * __int128, four params, the last two out-pointers */
 static void mul64(unsigned long a, unsigned long b,
                   unsigned long *hi, unsigned long *lo)

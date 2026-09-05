@@ -3,7 +3,7 @@
 A version control system whose object is a **set** of patches, not a chain of snapshots.
 The tree is a pure function of the patch set, so order is not part of the state, "the state as
 of P" and "what I have plus P" differ only in the set you name, and a union in either direction
-just fills gaps. [`crew/sb/sb.l`](../crew/sb/sb.l) is the tool, `make test_sb` the
+just fills gaps. [`src/apps/sb/sb.l`](../src/apps/sb/sb.l) is the tool, `make test_sb` the
 gate; a hunk is test/patch.l's proven `chg` at file grain (slot = path, context = old content
 hash), and the store is content-addressed under `.sb/`.
 
@@ -51,7 +51,7 @@ That is what makes a release the unit you propagate rather than a local bookmark
 A *convergent* write (two nests reach the same content) is silent. Same-path divergence
 **merges**: the incoming hunk names the content hash it expected, so the common ancestor is
 already in the store and the three sides go to a diff3 line merge
-([`crew/sb/merge.l`](../crew/sb/merge.l)) — disjoint edits to one file both survive, and
+([`src/apps/sb/merge.l`](../src/apps/sb/merge.l)) — disjoint edits to one file both survive, and
 only a true overlap lands in `<<<<<<<` markers naming both patches, whereupon sync reports and
 exits 1. The resolution is an ordinary `record`, so no new verb: the fix is a patch like any
 other, and it settles the clash for good. A delete meeting an edit, or a binary file, cannot
@@ -114,7 +114,7 @@ composition. The smell to watch for is "install" or "upgrade" turning back into 
 The seed vault is not decoration; it names the model's two hardest invariants more accurately
 than "tree" or "reef" would. The tool was called `seed` first and is named for the vault now —
 which is the same metaphor said one level up, and it hands `seed` back to the word's other job
-here (the seed binary a bootstrap starts from, crew/build.mk's dist lane).
+here (the seed binary a bootstrap starts from, src/apps/build.mk's dist lane).
 
 - **Append-only cold storage is the inverse-patch law.** The core discipline is "removal is an
   inverse patch, never a deletion; the patch set only ever grows," which is what makes the
@@ -136,7 +136,7 @@ thing traded is that `tree` read as "version control" on sight; `svalbard` leans
 to carry that, and since the model isn't a tree, that's the right trade.
 
 The command is **`sb`** — two letters, and antimony beside mercury's `hg`. Everything typed or
-imported is `sb` (`crew/sb/`, `(use 'sb)`, `.sb/`, `make test_sb`); *svalbard* is the prose name,
+imported is `sb` (`src/apps/sb/`, `(use 'sb)`, `.sb/`, `make test_sb`); *svalbard* is the prose name,
 the way Mercurial is the project and `hg` is the thing you run.
 
 `hatch` is not a plant word, deliberately: egg / hatch / `born` is love's own bootstrap cluster,
@@ -153,5 +153,5 @@ bootstrap half; install is the two composed.
 
 ## where it lives
 
-`crew/sb/` + `lib/sb/` (the holo/kore all-the-way-down precedent). `sync`/`record` are the
+`src/apps/sb/` + `lib/sb/` (the holo/kore all-the-way-down precedent). `sync`/`record` are the
 DAG surface over the same store.

@@ -8,7 +8,7 @@
 ;
 ;   cat test/00-init.l test/host/rove.l | out/host/love
 
-(reads (open "crew/quay/rove.l" "r"))
+(reads (open "src/apps/rove/rove.l" "r"))
 
 (: (find h n i) (? (i + tally n < 1 + tally h)
                   (? (n = snip h i (i + tally n)) 1 (find h n (i + 1)))

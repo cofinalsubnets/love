@@ -72,13 +72,13 @@ until rung 6.
 
 - **rung 0 — the value layer, in-tree and law-bound.** Port the oracle's core
   (CFG, escape census, per-def chains, interval liveness) from
-  doc/misc/proto/ssagap/ssagap.py into love — crew/moon/val.l — over final
+  doc/misc/proto/ssagap/ssagap.py into love — src/apps/moon/val.l — over final
   forms. Laws pin it on hand shapes; the census re-reports the gauge numbers
   in-tree, DIFFERENTIALLY against the python oracle on the whole corpus (two
   implementations, one answer). No codegen change, no risk; this is the
   substrate every later rung reads. ⚠ determinism is a law here: the fixpoint's
   answer must not depend on tablet iteration order — the seed carries it.
-  **LANDED 2026-08-28**: crew/moon/val.l rides the moon module (the bake, the
+  **LANDED 2026-08-28**: src/apps/moon/val.l rides the moon module (the bake, the
   law-lane cat); laws pin the hand shapes in law.l; `differ.sh` proved 8,200
   rows byte-identical to the python oracle over 80 TUs, and the in-tree census
   re-reports the gauge numbers exactly (1,954 / 1,327 / 254 / 2). The chains
@@ -510,7 +510,7 @@ until rung 6.
   (superseded) rv64 pricing was BLOCKED before it started: the hosted cross binary
   (`make xa=rv64 out/x-rv64/love`) refuses in BOTH worlds on a
   pre-existing gap — "no lane for a variable-length array on rv64"
-  (src/image.c image_bake) — so there is no corpus lane to meter. The
+  (src/host/image.c image_bake) — so there is no corpus lane to meter. The
   rv64 flip decision waits on that lane (or on choosing a smaller
   representative corpus that runs under qemu-riscv64), not on the
   allocator.

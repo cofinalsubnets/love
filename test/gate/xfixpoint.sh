@@ -10,7 +10,7 @@
 # everywhere" asks for), and mooncc's output does not depend on the arch
 # mooncc runs on.
 #
-# ⚠ the TU flags MIRROR crew/build.mk's x-lane (AiHaveVersionH on love.o), the
+# ⚠ the TU flags MIRROR src/apps/build.mk's x-lane (AiHaveVersionH on love.o), the
 # fixpoint.sh drift trap wearing its cross face. this gate's first run caught the
 # version flag MISSING from the x-lane: the twin named itself "unknown".
 # ⚠ AND THE LIST IS THE ARTIFACT'S, kernel objects included: a gate that links a
@@ -61,9 +61,9 @@ for f in $gate_host_c; do
   b=$(basename "$f" .c)
   moon1 -D ai_tco="$tco" -I"$ho" -I. -Isrc -Iout/lib -c "$f" "$d/host_$b.o" || fail "love1 mooncc -c $f"
 done
-for f in crew/moon/lib/math/*.c; do
+for f in src/apps/moon/lib/math/*.c; do
   b=$(basename "$f" .c)
-  moon1 -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$d/m_$b.o" || fail "love1 mooncc -c $f"
+  moon1 -Isrc/apps/moon/lib/math -Isrc/apps/moon/include -c "$f" "$d/m_$b.o" || fail "love1 mooncc -c $f"
 done
 LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$ho/.mksys-cat.l" -q -e "((from 'moon '$mks) \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
 test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
@@ -72,12 +72,12 @@ test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 # and laid the same way. an arch with no seat carries none, and $gate_arch_c is
 # empty there -- the makefile draws that line with its own wildcard.
 if [ -n "$gate_arch_c" ]; then
-  kinc="-I$ho -I. -Isrc -Iout/lib -Icrew/quay -Icrew/moon/include"
-  for f in src/kmain.c src/blk.c src/sys.c $gate_arch_c crew/quay/paint.c \
-           crew/quay/cga_8x8.c crew/quay/moderndos_8x16.c; do
+  kinc="-I$ho -I. -Isrc -Iout/lib -Isrc/core/quay -Isrc/apps/moon/include"
+  for f in src/inle/kmain.c src/inle/blk.c src/inle/sys.c $gate_arch_c src/core/quay/paint.c \
+           src/core/quay/cga_8x8.c src/core/quay/moderndos_8x16.c; do
     b=$(basename "$f" .c)
     case "$f" in
-      crew/quay/*) o=$d/k_q_$b.o ;;
+      src/core/quay/*) o=$d/k_q_$b.o ;;
       *)           o=$d/k_$b.o ;;
     esac
     moon1 $kinc -c "$f" "$o" || fail "love1 mooncc -c $f"

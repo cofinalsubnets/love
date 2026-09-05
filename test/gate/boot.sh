@@ -74,15 +74,15 @@ for tool in $need; do
 done
 
 case $gate in
-  mps2)      $mk -C port/mps2 || fail "mps2 build" ;;
-  mps2_t1)   $mk -C port/mps2 mps2t1 || fail "mps2t1 build" ;;
-  mps2_wake) $mk -C port/mps2 img ../../out/mps2/waker.elf || fail "mps2 waker build"
+  mps2)      $mk -C src/port/mps2 || fail "mps2 build" ;;
+  mps2_t1)   $mk -C src/port/mps2 mps2t1 || fail "mps2t1 build" ;;
+  mps2_wake) $mk -C src/port/mps2 img ../../out/mps2/waker.elf || fail "mps2 waker build"
              # the image is baked ON qemu, so without qemu at bake time there is
              # nothing to wake -- a skip, not a failure
              test -s out/mps2/love.img || {
                echo "$name: empty image (no qemu at bake), skipped"; exit 0; } ;;
-  nucleo446_smoke) $mk -C port/nucleo446 smoke || fail "nucleo446 smoke build" ;;
-  virt)      $mk -C port/virt || fail "virt build" ;;
+  nucleo446_smoke) $mk -C src/port/nucleo446 smoke || fail "nucleo446 smoke build" ;;
+  virt)      $mk -C src/port/virt || fail "virt build" ;;
 esac
 
 # shellcheck disable=SC2086  # $qemu is a deliberate word list

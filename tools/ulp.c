@@ -1,4 +1,4 @@
-// tools/ulp.c -- the differential ulp harness: the math floor (crew/moon/lib/
+// tools/ulp.c -- the differential ulp harness: the math floor (src/apps/moon/lib/
 // math/am.c) vs the host libm oracle. deterministic sweeps (xorshift, fixed
 // seed) over per-function domains + hand-picked edges; reports max ulp +
 // where, and the >0.5/>1/>2 ulp counts. `make ulp` builds + runs it (hosted

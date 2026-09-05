@@ -4,20 +4,20 @@
 ; entry strings, because kore reads these and a divergence would be silent where an
 ; absence is loud (test/host/init.l holds the same laws against the real tree).
 ;
-; the initrd is flat -- rows for "lib/json.l" and none for "lib" -- so a directory
+; the initrd is flat -- rows for "src/apps/json/json.l" and none for "lib" -- so a directory
 ; is a prefix some path lies under, and the entries are the distinct next components
 ; of those paths. That is why the root lists "lib" once and never a path.
 ;
 ; kernel only -- test/kernel/all.l's roster, never $t: on the host these paths are
 ; the real tree.
-; It runs after ramfs.l, which owns lib/json.l's bytes; the write laws here take
-; lib/dns.l instead (a file the boot never loads) and put it back.
+; It runs after ramfs.l, which owns src/apps/json/json.l's bytes; the write laws here take
+; src/apps/dns/dns.l instead (a file the boot never loads) and put it back.
 ;
 ; the `:` has a body -- the assert itself -- so the helpers stay local; and each
 ; law is its own assert argument, since assert maps over its args and a `do` would
 ; report only the last one.
 
-(: f "lib/json.l" d "lib" g "lib/dns.l"
+(: f "src/apps/json/json.l" d "lib" g "src/apps/dns/dns.l"
    (rd p) (: q (open p "r") s (slurp q) _ (close q) s)
    (wr p s) (: q (open p "w") _ (say q s) (close q))
    st (stat f)

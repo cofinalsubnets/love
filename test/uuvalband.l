@@ -275,7 +275,7 @@
 
 ; --- the band. a value has three shapes and love's dispatch has fifteen kinds;
 ; --- these are the three the model carries, and the codes are named against
-; --- src/mx.l's own so the two notions cannot drift. () is the mint band, a
+; --- src/core/mx.l's own so the two notions cannot drift. () is the mint band, a
 ; --- number the numeric band, a link the chain band ---
 (assert
  (defn bUnit nat 0)

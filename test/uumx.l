@@ -1,4 +1,4 @@
-; test/uumx.l -- generated from src/mx.l by tools/mx2uu.l. Do not edit;
+; test/uumx.l -- generated from src/core/mx.l by tools/mx2uu.l. Do not edit;
 ; refresh with `make uumx`. love's `+` and `*` dispatch matrices as uu terms:
 ; a kind is its index in mx.l's enum roster (which IS the dispatch lattice), a
 ; lane its index in appearance order, a band its class id under row+column

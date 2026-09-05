@@ -38,9 +38,9 @@ case $target in
   x64)   name=moon-gzip       ; tflag=""            ; sub=moongzip
          mksys=mksys       ; backend=""               ; run=""            ; need="" ;;
   a64) name=moon-gzip-a64 ; tflag="-t a64"    ; sub=moongzip-a64
-         mksys=mksys-a64 ; backend=crew/holo/a64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
+         mksys=mksys-a64 ; backend=src/core/holo/a64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
   rv64) name=moon-gzip-rv64 ; tflag="-t rv64" ; sub=moongzip-rv
-         mksys=mksys-rv64 ; backend=crew/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
+         mksys=mksys-rv64 ; backend=src/core/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
   *) echo "moon-gzip.sh: unknown target $target (x64 | a64 | rv64)" >&2; exit 1 ;;
 esac
 
@@ -87,7 +87,7 @@ mv "$d/src/gzip.c.new" "$d/src/gzip.c"
 # right (an empty-after-cpp TU is a valid empty TU, not a failure).
 SRC="gzip zip deflate trees bits unzip inflate util crypt lzw unlzw unpack unlzh getopt"
 # exactly the DEFS its own configure writes on Linux.
-CFLAGS="-DSTDC_HEADERS=1 -DHAVE_UNISTD_H=1 -DDIRENT=1 -Icrew/moon/include -I$d/src"
+CFLAGS="-DSTDC_HEADERS=1 -DHAVE_UNISTD_H=1 -DDIRENT=1 -Isrc/apps/moon/include -I$d/src"
 
 echo "MOON-GZIP  $GZIPSRC  ($target: mooncc + nolibc + holo, no gcc/glibc/ld)"
 
@@ -99,16 +99,16 @@ done
 
 # the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO nolibc
 # object -- the link owes its symbols and the driver's runtime table pulls
-# crew/moon/lib/nolibc/ MEMBER BY NEED (src/build.mk says the same thing about love
+# src/apps/moon/lib/nolibc/ MEMBER BY NEED (src/build.mk says the same thing about love
 # itself). Naming an object would take every member instead.
-for f in crew/moon/lib/math/*.c; do
+for f in src/apps/moon/lib/math/*.c; do
   b=`basename "$f" .c`
-  $mc $tflag -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
+  $mc $tflag -Isrc/apps/moon/lib/math -Isrc/apps/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
 done
 # sys.o is LAID, not compiled -- and a CROSS lay needs holo's backend loaded
 # first (the host bake carries only the native one), exactly as raw.sh does it.
 { if [ -n "$backend" ]; then echo "(use 'holo)"; cat "$backend"; fi
-  cat crew/kore/text.l crew/kore/u.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
+  cat src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l src/core/holo/elf.l src/core/holo/obj.l src/apps/moon/lib/mksys.l
   echo "((from 'moon '$mksys) \"$d/sys.o\")"; } | $love || { echo "FAIL $mksys sys.o"; exit 1; }
 
 $mc $tflag $objs "$d"/m_*.o "$d/sys.o" -o "$d/gzip" || { echo "FAIL holo link gzip"; exit 1; }

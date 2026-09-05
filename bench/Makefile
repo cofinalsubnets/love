@@ -149,7 +149,7 @@ raw: $(call txt,$(PRESENT))
 # solvers on PHP(5..8). Cached like the language results -- re-run only when the
 # runner or the solver changes. `make satrace` to refresh it on its own.
 SATRACE := $(BDIR)/satrace.txt
-$(SATRACE): satrace.sh $(R)/crew/sat/sat.l $(GL) | $(BDIR)
+$(SATRACE): satrace.sh $(R)/src/apps/sat/sat.l $(GL) | $(BDIR)
 	@./satrace.sh $(TIMEOUT) > $@
 satrace: $(SATRACE)
 	@cat $(SATRACE)
@@ -173,7 +173,7 @@ setup: $(SETUP)
 # invalidated the cached nolibc archive on every run. Cached; `make ccbench` to refresh it
 # on its own. (mooncc is x86-64 only -- dnf elsewhere.)
 CCBENCH := $(BDIR)/ccbench.txt
-$(CCBENCH): ccbench.sh ccrypto.l cnifs.l ccgen.l $(GL) $(R)/src/love.c $(wildcard $(R)/host/*.c) | $(BDIR)
+$(CCBENCH): ccbench.sh ccrypto.l cnifs.l ccgen.l $(GL) $(R)/src/core/love.c $(wildcard $(R)/host/*.c) | $(BDIR)
 	@$(MAKE) -s -C $(R) host dist-seed
 	@LOVE_CFLAGS='$(ai_cflags)' CORPUS='$(t)' ./ccbench.sh $(TIMEOUT) $(SAMPLES) > $@
 ccbench: $(CCBENCH)

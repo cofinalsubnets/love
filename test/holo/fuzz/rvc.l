@@ -26,8 +26,8 @@
 ;
 ; exit 1 on any mismatch, naming the word, both spellings and the count.
 
-(reads (open "crew/holo/holo.l" "r"))
-(reads (open "crew/holo/rv64.l" "r"))
+(reads (open "src/core/holo/holo.l" "r"))
+(reads (open "src/core/holo/rv64.l" "r"))
 
 (: _ (use (name "holo"))
    ;; the rv64 backend's test door -- the squeeze, the fixup writer and the cb base. holo's

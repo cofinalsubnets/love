@@ -1,4 +1,4 @@
-; --- test/host/loader.l: use on a path, the loader (love/prel.l) ---
+; --- test/host/loader.l: use on a path, the loader (src/core/boot/prel.l) ---
 ; `use` answers a module two ways and only two: a NAME it already holds -- baked,
 ; catted, or loaded earlier -- and a PATH the caller writes out. it invents no
 ; paths of its own, so a name it lacks is a miss even when a file of that name is

@@ -8,7 +8,7 @@
 #
 # The kernel stays the one imported artifact (BZIMAGE, default the host's).
 
-# ⚠ THE CUT IS OURS END TO END NOW -- kore's find, lib/cpio.l and lib/gz.l where the
+# ⚠ THE CUT IS OURS END TO END NOW -- kore's find, src/apps/cpio/cpio.l and src/apps/gz/gz.l where the
 # host's find | cpio | gzip -9 stood. $(mabs) because the pack runs INSIDE a `cd`, and
 # $m is spelled relative to the tree root.
 mabs         = $(abspath $m)
@@ -29,19 +29,19 @@ BZIMAGE ?= /boot/vmlinuz-linux
 
 .PHONY: distro-initramfs distro-run distro-smoke
 distro-initramfs: $(distro_img)
-$(distro_img): crew/init/boot.l $(lushfiles) $(korefiles) $(distro_love)
+$(distro_img): src/apps/init/boot.l $(lushfiles) $(korefiles) $(distro_love)
 	@test -n "$(distro_love)" || { echo "distro: no out/host/love-raw -- run 'make test_raw' to lay it"; exit 1; }
 	@echo 'DISTRO	'$@ '(base: $(distro_love))'
 	@rm -rf $(distro_root)
 	@mkdir -p $(distro_root)/bin $(distro_root)/lib $(distro_root)/proc $(distro_root)/sys $(distro_root)/dev $(distro_root)/tmp
-	@cp crew/init/boot.l $(distro_root)/init && chmod 755 $(distro_root)/init
+	@cp src/apps/init/boot.l $(distro_root)/init && chmod 755 $(distro_root)/init
 	@cp $(distro_love) $(distro_root)/bin/love && chmod 755 $(distro_root)/bin/love
 	@cat $(lushfiles) > $(distro_root)/lib/sh.l
-# ⚠ lib/dns.l RIDES ALONG OR THE WHOLE TOOLBOX DIES: tools/ain.l, a korefiles member,
+# ⚠ src/apps/dns/dns.l RIDES ALONG OR THE WHOLE TOOLBOX DIES: src/apps/ain/ain.l, a korefiles member,
 # probes for the `dial` nif at load and says (use 'dns) when it is absent -- which it is
-# in love-raw -- and an initramfs with no /lib/dns.l answers that with a scare that takes
+# in love-raw -- and an initramfs with no /src/apps/dns/dns.l answers that with a scare that takes
 # the whole cat down. The symptom is every applet gone, not a quiet nc.
-	@cp lib/dns.l $(distro_root)/lib/dns.l
+	@cp src/apps/dns/dns.l $(distro_root)/src/apps/dns/dns.l
 	@{ echo '#!/bin/love'; cat $(korefiles); } > $(distro_root)/bin/kore && chmod 755 $(distro_root)/bin/kore
 	@for a in $(distro_applets); do ln -sf kore $(distro_root)/bin/$$a; done
 	@ln -sf kore $(distro_root)/bin/sh

@@ -1,4 +1,4 @@
-; --- test/host/clay.l: clay, the C shower (crew/moon/clay.l) ----------------
+; --- test/host/clay.l: clay, the C shower (src/apps/moon/clay.l) ----------------
 ; the authoring direction, which is the half G1 structurally cannot reach.
 ; test/clay.l round-trips clay that came out of cparse, so it exercises exactly
 ; the subset cparse can emit -- and every form clay adds on top (a return type, a
@@ -14,7 +14,7 @@
 ; run standalone from the repo root:
 ;   cat test/00-init.l test/host/clay.l | out/host/love
 
-(use "crew/moon/clay.l")
+(use "src/apps/moon/clay.l")
 
 (: cs (from 'clay 'clay-show)
    cok (from 'clay 'clay-ok?)

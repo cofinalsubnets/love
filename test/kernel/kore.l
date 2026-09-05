@@ -1,5 +1,5 @@
 ; kore's fs tools on the rung-2 tree -- doc/misc/inle.md's rung-2 gate: ls, cp, mv, rm,
-; mkdir, touch, pwd smoke on the kernel. crew/kore/{text,core,fs}.l load
+; mkdir, touch, pwd smoke on the kernel. src/apps/kore/{text,core,fs}.l load
 ; just before this file (test/kernel/all.l's roster), with kore0.l's identity `quit` pinned
 ; ahead of them, so a main answers its exit code instead of leaving; every effect
 ; is then proved on the tree itself, and unmade at the foot. (The tools print

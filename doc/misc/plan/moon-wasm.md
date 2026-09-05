@@ -3,7 +3,7 @@
 Drop emcc — the last foreign tool in a product path. What emcc actually supplies
 today is small and known: clang→wasm codegen, a libc (malloc, memcpy, clock,
 exit-as-throw), and the JS glue (`Module`, ccall/cwrap, heap views). The build is
-three TUs (`src/love.c`, `am.c`, `wasm/host.c`) with no FS, no asyncify, no
+three TUs (`src/core/love.c`, `am.c`, `src/port/wasm/host.c`) with no FS, no asyncify, no
 threads, a five-verb export API, and `-Dai_tco=0` — a lane that already exists
 and is already gated. The 32-bit port ledger (`wasm/32bit-findings.md`) is paid.
 The core already declines the JIT on `__wasm__`. So the *runtime* is ready; what
@@ -97,12 +97,12 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   feel it), the shadow stack for address-taken locals, `callr` via
   `call_indirect`. `stage.l` grows the dice the lane needs.
 - **rung 5 — the gate.** `test_ccwasm` beside cca64/ccrv64, the law corpus and
-  `wasm/test.mjs`'s bao ride through our module. Verification instrument: a
+  `src/port/wasm/test.mjs`'s bao ride through our module. Verification instrument: a
   foreign validator/engine at gate time only (node already sits there and already
   skips when absent) — same standing as qemu-user in dist_cross. The product
   path drops emcc; the gate may still borrow eyes.
 - **rung 6 — a splicer in the browser.** Off the AOT path, after the artifact
-  ships. Wasm forbids the native JIT by construction (`src/love.c` declines on
+  ships. Wasm forbids the native JIT by construction (`src/core/love.c` declines on
   `__wasm__`: a jump to a data address traps), so the browser love has no tier at
   all. A template splicer is the shape that works with no writable-executable page,
   because it builds a MODULE instead of patching code: read a thread back, take each
@@ -125,7 +125,7 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
 - dispatch loop before relooper — correctness first, shape later; the tree's own
   rule (ablate before you optimise).
 - `-Dai_tco=0` stays; `return_call` is an optimisation rung once engines earn it.
-- `wasm/love.js` (313 KB committed) gets rebuilt by our emitter behind the same
+- `src/port/wasm/love.js` (313 KB committed) gets rebuilt by our emitter behind the same
   `make wasm` door, and the emcc Makefile stays until the module passes the same
   gate — pays somewhere, regresses nowhere.
 

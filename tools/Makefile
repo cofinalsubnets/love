@@ -18,7 +18,7 @@ all: test_cook test_tele test_xor test_hue test_hueweb
 $(m):
 	@$(MAKE) -C $(R)/host
 
-# the syntax file is BUILT (crew/build.mk) out of crew/vi/hue.l's class table and the
+# the syntax file is BUILT (src/apps/build.mk) out of src/apps/vi/hue.l's class table and the
 # vocabulary the host answers to, so there is no checked-in second copy to drift from and
 # nothing left to diff -- a rename that moves (names ()) now just rebuilds it. What is
 # still worth asking is whether the generator ran to the END and meant what it emitted.
@@ -60,7 +60,7 @@ test_hueweb: | $(m)
 	  [ "$$n" -ge 10 ] || { echo "  FAIL: $$n class rules -- the table answered nothing"; exit 1; }; \
 	  grep -q '^\.hue \.l-comment{color:#' $$o/.hue.css \
 	    || { echo "  FAIL: no comment colour -- the theme join found nothing"; exit 1; }; \
-	  for f in crew/vi/hue.l crew/papel/papel.l crew/libra/libra.l tools/hue2web.l; do \
+	  for f in src/apps/vi/hue.l src/apps/papel/papel.l src/apps/libra/libra.l tools/hue2web.l; do \
 	    $(mr) tools/hue2web.l src $$f > $$o/.hue.html \
 	      || { echo "  FAIL $$f: the painter did not run"; exit 1; }; \
 	    grep -q '</html>' $$o/.hue.html \
@@ -96,7 +96,7 @@ test_cook: | $(m)
 # Through run.sh for the summary line: the exit code alone passes a reader that stopped early.
 test_tele: | $(m)
 	@echo TEST test/tele/grad.l
-	@cd $(R) && sh test/gate/run.sh -a tele "$(mr) -l crew/tele/tele.l" "tele tests pass" test/tele/grad.l
+	@cd $(R) && sh test/gate/run.sh -a tele "$(mr) -l src/apps/tele/tele.l" "tele tests pass" test/tele/grad.l
 
 # the integration gate over that same library: a 2-8-1 MLP learns XOR, seeded so it converges
 # identically every run -- autograd + nn + optim composed into a real net. test/tele/grad.l
@@ -108,7 +108,7 @@ test_tele: | $(m)
 test_xor: | $(m)
 	@echo TEST test/tele/xor.l
 	@cd $(R) && cat test/00-init.l test/tele/xor.l test/zz-fin.l > out/host/.test_xor.l; \
-	  $(mr) -l crew/tele/tele.l out/host/.test_xor.l </dev/null > out/host/.test_xor.out 2>&1; \
+	  $(mr) -l src/apps/tele/tele.l out/host/.test_xor.l </dev/null > out/host/.test_xor.out 2>&1; \
 	  r=$$?; cat out/host/.test_xor.out; \
 	  [ $$r -eq 0 ] || { echo "FAIL test_xor (exit $$r)"; exit 1; }; \
 	  grep -q "tests pass" out/host/.test_xor.out || { echo "FAIL test_xor (exit 0, no summary)"; exit 1; }

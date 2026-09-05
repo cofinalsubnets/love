@@ -1,4 +1,4 @@
-; --- test/host/serve.l: `love serve`'s hook (lib/serve.l) ---
+; --- test/host/serve.l: `love serve`'s hook (src/apps/kiosko/serve.l) ---
 ; not in the test/*.l corpus (it loads crew modules and splices them).
 ;
 ; the server half is kiosko's and gated there (test/host/kiosko.l drives a real
@@ -14,8 +14,8 @@
 ; run:
 ;   cat test/00-init.l test/host/serve.l | out/host/love
 
-(use "crew/vi/config.l")                    ; the theme: hue-theme
-(use "crew/vi/hue.l")                       ; the class table, read bare by hueweb
+(use "src/apps/vi/config.l")                    ; the theme: hue-theme
+(use "src/apps/vi/hue.l")                       ; the class table, read bare by hueweb
 (use 'lapiz)                                ; the document lens, read bare by serve
 (use 'libra)                                ; ..and the header lifter, likewise
 (use 'hueweb)

@@ -1,7 +1,7 @@
 ; --- test/host/overlay.l: the lux type overlay + the baked uu book, end to end ---
 ; not in the test/*.l corpus (the overlay + uu ride the HOST binary's post-egg
 ; layers; love0/kernel/wasm never load them). Three legs:
-;   1. crew/lux/sigs.l checks clean over the real core.l + layout.l sources
+;   1. src/apps/lux/sigs.l checks clean over the real core.l + layout.l sources
 ;      (read as DATA, checked pure with (overlay 'ov-check1) -- no install,
 ;      no eval, observe-only squared), and a deliberately wounded def is
 ;      flagged by name.
@@ -10,7 +10,7 @@
 ;   3. the uu book is baked and computes: (uu 'defn) type-checks a nat_rect
 ;      adder, (uu 'vof) normalizes 2+1=3 -- no concat, a bare binary.
 ;   4. the model vs the implementation: test/uu.l's verified StackSet mirror
-;      (its zins/zrow/zcount) computes the same answers as crew/lux/core.l's,
+;      (its zins/zrow/zcount) computes the same answers as src/apps/lux/core.l's,
 ;      on the same stacks, through an encode -> vof -> decode round trip.
 ;   5. the seeded fuzz: the whole op vocabulary walked at random through both
 ;      worlds, compared after every step, the proved invariant watched live.
@@ -22,8 +22,8 @@
 ;
 ;   cat test/00-init.l test/host/overlay.l | out/host/love
 
-(reads (open "crew/lux/sigs.l" "r"))
-(reads (open "crew/lux/core.l" "r"))
+(reads (open "src/apps/lux/sigs.l" "r"))
+(reads (open "src/apps/lux/core.l" "r"))
 
 (:    chk1 (overlay 'ov-check)
    ; opfix first, then unglue: `forms` reads the surface, the domain checker reads
@@ -33,8 +33,8 @@
    (sweep path) (foldl (\ a f (cat a (chk1 lux-dom lux-sigs (fix1 f)))) () (forms (open path "r")))
 
  ; leg 1: the shipped sources check clean...
- _ (assert (! (sweep "crew/lux/core.l"))
-           (! (sweep "crew/lux/layout.l")))
+ _ (assert (! (sweep "src/apps/lux/core.l"))
+           (! (sweep "src/apps/lux/layout.l")))
  ; ...and a known kind in the wrong seat is caught: zins wants (window zipper),
  ; the wound hands it a tag and a sheaf
  hurt (chk1 lux-dom (link '(oops (sheaf tag) top) lux-sigs)
@@ -137,7 +137,7 @@
 ; does. the translated terms live in the model's vocabulary, so stage 4's
 ; idpath bridges can tie gen-* to the proved ops.
 (reads (open "tools/wm2uu.l" "r"))
-(:    cforms (map (f \ unglue (opfix f)) (forms (open "crew/lux/core.l" "r")))   ; the surface factored to the core, as above
+(:    cforms (map (f \ unglue (opfix f)) (forms (open "src/apps/lux/core.l" "r")))   ; the surface factored to the core, as above
    gens (wm2uu cforms lux-sigs)
  _ (assert (= 10 #gens))
  _ (map (g \ (uu 'defn) (cap g) (g 1) (g 2)) gens)   ; the function: these args are computed
@@ -205,11 +205,11 @@
  (puts "overlay: ok"))
 
 ; leg 7 (the layout rung): test/uulay.l's tiling-ledger model vs the real
-; crew/lux/layout.l rt-tile -- for seeded random rows and master counts, the
+; src/apps/lux/layout.l rt-tile -- for seeded random rows and master counts, the
 ; window column of the actual placements, the model's rtwins, and the row
 ; itself must be one list (rtwinsrow, watched live against the implementation
 ; the model mirrors). geometry stays law.l's business; this leg pins the ledger.
-(reads (open "crew/lux/layout.l" "r"))
+(reads (open "src/apps/lux/layout.l" "r"))
 (: (rnd s) (% (+ (* s 1103515245) 12345) 2147483648)
    (encl l) (two? l ? ['ncons (cap l) (encl (cup l))] 'nnil)
    (decl v) (: (go vv acc) (two? vv ? (go (vv 2) (link (vv 1) acc)) (rev acc))

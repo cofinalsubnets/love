@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/kore.sh -- kore, the multi-call toolbox (crew/kore/), against GNU coreutils
+# test/gate/kore.sh -- kore, the multi-call toolbox (src/apps/kore/), against GNU coreutils
 # as the oracle. The laws first, then ~350 checks whose shape is almost always the same
 # one: run the system tool, run OUR applet the same way, and require byte-identical
 # stdout -- and, where the exit code carries meaning (grep's 0/1/2, sed's 1/2, xargs'
@@ -44,18 +44,18 @@ pipe() { n=$1; i=$2; shift 2
          same "$n"; }
 
 # ------------------------------------------------------------------- the laws
-echo "UTILS crew/kore/{text,core,fs,re,sed,awk,expr,bc,less,find,diff,patch,law}.l"
+echo "UTILS src/apps/kore/{text,core,fs,re,sed,awk,expr,bc,less,find,diff,patch,law}.l"
 out=$ho/.test_kore.out
 # ⚠ lush's job.l + glob.l ride along because find.l captures sh-match at its define
-{ cat test/00-init.l crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
-      crew/kore/sed.l crew/kore/awk.l crew/kore/expr.l crew/kore/bc.l crew/kore/proc.l crew/kore/less.l lib/lint.l crew/vi/config.l crew/vi/hue.l \
-      crew/vi/core.l crew/vi/vi.l crew/kore/diff.l crew/kore/patch.l crew/lush/job.l crew/lush/glob.l \
-      crew/kore/find.l; \
+{ cat test/00-init.l src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps/kore/fs.l src/apps/kore/re.l \
+      src/apps/kore/sed.l src/apps/kore/awk.l src/apps/kore/expr.l src/apps/kore/bc.l src/apps/kore/proc.l src/apps/kore/less.l src/apps/libra/lint.l src/apps/vi/config.l src/apps/vi/hue.l \
+      src/apps/vi/core.l src/apps/vi/vi.l src/apps/kore/diff.l src/apps/kore/patch.l src/apps/lush/job.l src/apps/lush/glob.l \
+      src/apps/kore/find.l; \
   echo "(use 'kore)"; \
-  cat crew/kore/law.l; } | "$m" > "$out" 2>&1
+  cat src/apps/kore/law.l; } | "$m" > "$out" 2>&1
 r=$?
 cat "$out"
-[ $r -eq 0 ] && grep -q "crew/kore/law: myers" "$out" || fail "utils (exit $r)"
+[ $r -eq 0 ] && grep -q "src/apps/kore/law: myers" "$out" || fail "utils (exit $r)"
 
 # ------------------------------------------- diff, argv0 dispatch, usage, as
 printf 'a\nb\nc\n' > "$ho/.au1"; printf 'a\nX\nc\n' > "$ho/.au2"
@@ -117,7 +117,7 @@ if [ "$(uname -m)" = x86_64 ]; then
   # and the archive as a LINK INPUT: `mooncc main.o libf.a` must bind the exe the
   # .o link binds, byte for byte -- which is the proof that members come in BY NEED
   # through the ranlib index, since the library also carries one nothing calls. our
-  # ar writes it, our linker reads it (crew/holo/link.l's ld-arsyms).
+  # ar writes it, our linker reads it (src/core/holo/link.l's ld-arsyms).
   printf 'int unused(void){return 99;}\n' > "$ho/.kore-arz.c"
   moonc -c "$ho/.kore-arz.c" "$ho/.kore-arz.o" >/dev/null 2>&1 || fail "kore ar: mooncc -c unused.c"
   rm -f "$ho/.kore-arl.a"
@@ -639,7 +639,7 @@ echo "kore: sh (lush aboard -- kore sh + the argv0 symlink) ok"
 
 # ------------------------------------------------------ the shell's fork lane
 # an external word whose PATH winner IS this binary FORKS instead of exec'ing
-# (crew/lush/eval.l sh-forkfn): the child rides the warm heap and no stage pays
+# (src/apps/lush/eval.l sh-forkfn): the child rides the warm heap and no stage pays
 # a second wake. fork-vs-spawn is not portably observable from out here (landed
 # against an execve trace: one exec for the shell, none for the stages) -- so
 # these assert the lane's PLUMBING with the winner self-symlinked, the distro's
@@ -654,7 +654,7 @@ fsh 'kore sh -c "kore echo deep"' | grep -qx deep || fail "fork lane nested sh"
 [ "$(fsh 'echo n=$(kore echo abc | kore wc -c)')" = "n=4" ] || fail "fork lane cmdsub"
 fsh 'kore seq 3 > '"$HO"'/.fork-r' ; [ "$(wc -l < "$HO/.fork-r")" = "3" ] || fail "fork lane redirect"
 # ..and the lane's reach is the BINARY, never a verb list: the child hands its whole
-# line to cli-line (love/cli.l), the very door an exec would have reached, so a word
+# line to cli-line (src/core/boot/cli.l), the very door an exec would have reached, so a word
 # that dispatches through argv[1] rides it too -- `love -e`, `love VERB`, and the
 # status either answers with.
 ln -sf "$K" "$fb/love"
@@ -859,7 +859,7 @@ echo "kore: od across the gulps (rows, -j, -N and the * run over 4096) ok"
 
 # -------------------------------------------------------------- the checksums
 # cksum, md5sum and sha256sum against GNU. these three are the tools whose entire
-# output is one number, so a single wrong byte in src/hash.c is a wrong line here and
+# output is one number, so a single wrong byte in src/host/hash.c is a wrong line here and
 # nowhere else. THE LENGTHS ARE THE POINT of the battery: a digest pads its last block
 # with the message length in the final 8 bytes, so 55/56 and 119/120 are where a pad
 # off by one shows, and 0 is where cksum's own length fold does (an empty file is
@@ -1381,7 +1381,7 @@ cmp -s "$pw/o/sub/f.txt" "$pw/new" || fail "kore patch: the re-applied .rej land
 echo "kore: patch (13 applications leaving the same tree GNU patch does -- offsets, creates, rejects, the newline) ok"
 
 # ----------------------------------------------------------------- the pager
-# `less` and `more` are ONE door (crew/kore/less.l). Its engine is lawed with the
+# `less` and `more` are ONE door (src/apps/kore/less.l). Its engine is lawed with the
 # rest above -- pgstep driven byte by byte, no tty in it -- and its face rides a
 # real pty below. What belongs here is the lane a script actually takes: stdout is
 # not a terminal, so the pager pours, and the pour has to be cat to the byte.
@@ -1411,7 +1411,7 @@ r=$?
 tail -1 "$o"
 
 # ------------------------------------------------------- the status charm
-# every main ANSWERS its status (crew/kore/core.l's urun) instead of quitting, so
+# every main ANSWERS its status (src/apps/kore/core.l's urun) instead of quitting, so
 # a caller staying in the image lives through a tool that fails -- the property the
 # seat hides, since the seat quits with the answer. one image, four tools whose
 # statuses are 1, 2 (a udie from deep inside), 0 and 0: the run must reach the last

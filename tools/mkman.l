@@ -1,4 +1,4 @@
-; tools/mkman.l -- markdown -> roff(man), through the lapiz lens (crew/lapiz/lapiz.l).
+; tools/mkman.l -- markdown -> roff(man), through the lapiz lens (src/apps/lapiz/lapiz.l).
 ; the man pages are written in doc/*.md and this generates doc's roff at build time, so
 ; there is only one source to keep true. run from the repo root:
 ;   love tools/mkman.l file.md [love_version.h]

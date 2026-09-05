@@ -3,7 +3,7 @@
 # system's, function by function, with gcc+glibc as the second opinion.
 #
 # each test/libc/*.c is built twice -- once by mooncc, which pulls
-# crew/moon/lib/nolibc.c by need, and once by gcc against glibc -- run, and the
+# src/apps/moon/lib/nolibc.c by need, and once by gcc against glibc -- run, and the
 # two OUTPUTS compared byte for byte. gcc is never trusted to be right, only to
 # be a second opinion; where the standard leaves a choice (the magnitude of a
 # comparison, an address, strerror's wording) the programs report the part that
@@ -80,7 +80,7 @@ done
 # ---------------------------------------------------------------------------
 # phase 2: the headers must not PROMISE what the library cannot deliver.
 #
-# every function crew/moon/include/{stdio,stdlib,string,ctype}.h declares is
+# every function src/apps/moon/include/{stdio,stdlib,string,ctype}.h declares is
 # referenced by a generated program; a name with no definition anywhere fails
 # the LINK and the gate says which. generated rather than listed, so it cannot
 # rot as the headers grow -- adding a declaration and forgetting the body is
@@ -91,7 +91,7 @@ done
 # mempcpy rawmemchr reallocarray bsearch strtoll getprogname), so a program
 # calling any of them built happily under gcc and died at the link under
 # CC=mooncc. gnulib's progname module reaches getprogname exactly that way.
-hdr=crew/moon/include
+hdr=src/apps/moon/include
 gen=$d/decls.c
 # a declaration is a line STARTING with a lowercase type word and naming
 # `ident(` -- which skips the #defines, the struct bodies and the extern data.

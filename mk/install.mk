@@ -16,7 +16,7 @@ DESTDIR ?= $(HOME)/
 # (Arch's extra/love owns /usr/bin/love and man1/love.1 outright). Nothing below hardcodes
 # the command name, so `make install BIN=lovelang` moves the binary, both shims, every
 # shebang and the man page together. ⚠ the PROJECT is still love: lib/love/, liblove,
-# src/love.h and love/*.l keep the name -- data paths, not PATH entries.
+# src/core/love.h and src/core/boot/*.l keep the name -- data paths, not PATH entries.
 BIN ?= love
 BINUP = $(shell echo '$(BIN)' | tr '[:lower:]' '[:upper:]')
 d = $(DESTDIR)/$(PREFIX)
@@ -89,10 +89,10 @@ $d/bin/$(BIN): $(ho)/love $(ho)/love.baked
 # (use 'salt), and (use 'lapiz) on the doc verb alone) and ride the baked image.
 # ⚠ each source sits FIRST on its own line: instool reads $<, and a prerequisite added on
 # the grouped line below lands ahead of it -- which installs the kore shim as `cook`.
-$d/bin/cook:    crew/cook/cook.l    $(ho)/love.baked
-$d/bin/papel:   crew/papel/papel.l  $(ho)/love.baked
-$d/bin/kiosko:  crew/kiosko/kiosko.l $(ho)/love.baked
-$d/bin/libra:   crew/libra/libra.l  $(ho)/love.baked
+$d/bin/cook:    src/apps/cook/cook.l    $(ho)/love.baked
+$d/bin/papel:   src/apps/papel/papel.l  $(ho)/love.baked
+$d/bin/kiosko:  src/apps/kiosko/kiosko.l $(ho)/love.baked
+$d/bin/libra:   src/apps/libra/libra.l  $(ho)/love.baked
 $d/bin/cook $d/bin/papel $d/bin/kiosko $d/bin/libra:
 	@echo $(instag)	$(abspath $@)
 	@mkdir -p $(@D)
@@ -101,7 +101,7 @@ $d/bin/cook $d/bin/papel $d/bin/kiosko $d/bin/libra:
 # ain, the netcat clone: the same shebang mechanism, but installed as a COPY rather than a
 # symlink, so it takes the rewrite unconditionally. At the default BIN the substitution is
 # an identity and the bytes are unchanged.
-$d/bin/ain: tools/ain.l $(ho)/love.baked
+$d/bin/ain: src/apps/ain/ain.l $(ho)/love.baked
 	@echo 'CP	'$(abspath $@)
 	@install -d $(@D)
 	@$(korecmd) sed '1s|env -S love|env -S $(BIN)|' $< > $@
@@ -150,14 +150,14 @@ $d/bin/mooncc: $(MAKEFILE_LIST)
 # lux, the window manager: its modules catted into one shebang script. Settings ride salt
 # (~/.love/etc/lux.l then ./.lux.l), which also names the display and the cookie when
 # DISPLAY/XAUTHORITY will not do; mod+q restarts in place by exec'ing this script.
-luxfiles = crew/lux/core.l crew/lux/layout.l crew/lux/wire.l crew/lux/ewmh.l crew/lux/manage.l crew/lux/keys.l crew/lux/config.l crew/lux/lux.l
+luxfiles = src/apps/lux/core.l src/apps/lux/layout.l src/apps/lux/wire.l src/apps/lux/ewmh.l src/apps/lux/manage.l src/apps/lux/keys.l src/apps/lux/config.l src/apps/lux/lux.l
 $d/bin/lux: $(luxfiles)
 	@echo 'CAT	'$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/usr/bin/env -S $(BIN) -l'; cat $(luxfiles); } > $@
 	@chmod 755 $@
 
-# bao, the interactive shell. Unlike cook and ain, love/bao.l is DEFINE-ONLY -- main.c
+# bao, the interactive shell. Unlike cook and ain, src/core/boot/bao.l is DEFINE-ONLY -- main.c
 # fires `(bao 0)` on a tty -- so the bin is a tiny launcher that fires it. ⚠ the module
 # rides the binary, so there is nothing to -l and no nest path to get wrong.
 $d/bin/bao: $(MAKEFILE_LIST)
@@ -182,7 +182,7 @@ $d/share/man/man1/cook.1 $d/share/man/man1/lush.1: $d/share/man/man1/%.1: $(ho)/
 	$(inst644)
 $v/ftdetect/love.vim $v/ftplugin/love.vim: $v/%/love.vim: assets/vim/%.vim
 	$(inst644)
-# the syntax is GENERATED (crew/build.mk) out of crew/vi/hue.l's class table and the
+# the syntax is GENERATED (src/apps/build.mk) out of src/apps/vi/hue.l's class table and the
 # vocabulary this host answers to, so it is installed from out/ like any other artifact.
 $v/syntax/love.vim: $(ho)/syntax.vim
 	$(inst644)

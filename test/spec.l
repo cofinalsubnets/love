@@ -809,7 +809,7 @@
 ; `hatched` asks presence, never born's net. The guard below means "is born bound", and
 ; born is a duration: a wake fast enough to answer 0 is blue, so a net test would read the
 ; post-egg runtime as pre-egg and pass every law under it vacuously. It measured 6 ms here
-; and 0 is one quiet machine away. which names the mop takes is love/egg.l's list and
+; and 0 is one quiet machine away. which names the mop takes is src/core/boot/egg.l's list and
 ; internal -- nothing on the surface names them, so nothing here asserts them.
 (: hatched (member? 'born (names ())))
 (hear welp)

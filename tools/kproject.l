@@ -4,13 +4,13 @@
 ; the love_rela table there (the same law nolibc's __ai_reloc runs at a hosted
 ; start -- run ahead of time, since on metal nobody is there to run it), lay
 ; and patch boot.o below the image, write k_image_top into the file, and emit
-; the flat ELF the doors have always eaten. cat after crew/holo/{elf,obj,link}.l:
+; the flat ELF the doors have always eaten. cat after src/core/holo/{elf,obj,link}.l:
 ;
 ;   love <cat> in.pie boot.o out.elf arch
 ;
 ; (kproject pie bootb out arch) is the callable half -- pie and boot.o as
 ; bytes -- which is how the `love kernel` verb projects the running binary
-; over a boot.o it laid itself (crew/source/source.l).
+; over a boot.o it laid itself (src/apps/source/source.l).
 
 (: (kparams arch)                       ; target, kernel base, entry symbol
     (? (arch = "x64")  ['x64   0x200000   "kmain"]
@@ -175,7 +175,7 @@
                            (ld-zeros (shto - (ssto + sstz))) sht])))))
 
    ; the file driver (kernel.mk's KPROJ). arity-gated: the `love kernel` verb
-   ; evals this file too (crew/source/source.l), and its argv is the verb's own.
+   ; evals this file too (src/apps/source/source.l), and its argv is the verb's own.
    ; a def, so the outer `:` stays define-mode and `kproject` survives the
    ; read -- the call below is its own form.
    (kdrive as)

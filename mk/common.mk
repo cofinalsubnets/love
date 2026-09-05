@@ -55,7 +55,7 @@ uname_rv64 = riscv64
 love_base := $(shell cat $R/VERSION 2>/dev/null || echo 0)
 
 # ⚠ IS THIS TREE A CHECKOUT OR AN UNPACKED RELEASE? `git -C DIR` walks UP, so the test is for
-# THIS tree's own .git and never an ancestor's (crew/build.mk learned that the hard way). One
+# THIS tree's own .git and never an ancestor's (src/apps/build.mk learned that the hard way). One
 # thing reads it: the DEFAULT GOAL -- a checkout wants the fast gate for its edit loop, an
 # unpacked release wants the product, because whoever unpacked it came for love and not for
 # our test binaries.
@@ -90,71 +90,67 @@ hsuf := $(if $(HCC),-cc,)$(if $(filter 0,$(tco)),-tco0,)
 # code, so they ride their own arch-guarded targets, never the arch-neutral corpus.
 t = $R/test/00-init.l $R/test/spec.l $R/test/uu.l $(filter-out %/00-init.l %/spec.l %/glaze-x86.l %/glaze-hook.l %/uu.l,$(sort $(wildcard $R/test/*.l)))
 
-# the runtime's own headers. named, not globbed: src/ holds the metal seat's k.h and the
-# per-ISA asmops beside these, and a touch on those must not rebuild every love object.
-love_h = $R/src/love.h $R/src/kinds.h $R/src/nifs.h $R/src/mx.h
+# the runtime's own headers, and src/core/ is the roster: these four live there and
+# nothing else does. the metal seat's k.h and the per-ISA asmops sit under src/inle/,
+# so a touch on one of those rebuilds no love object.
+love_h = $(wildcard $R/src/core/*.h)
 # the core rides with its math floor: our own transcendentals, no libm anywhere.
 # love.c broke into TUs so the biggest one is not the whole build's critical path;
-# src/love.h is what they share. the roster is mk/tu.mk, which wasm/Makefile reads too.
+# src/core/love.h is what they share. the roster is mk/tu.mk, which src/port/wasm/Makefile
+# reads too -- and it is a LINK ORDER, which is why it stays named where the rest glob.
 include $(R)/mk/tu.mk
-love_tu_c = $(patsubst %,$R/src/%,$(love_tu))
-love_c = $(love_tu_c) $R/crew/moon/lib/math/am.c
-# ..and the codecs snap.c reaches unconditionally, to pack and unpack an image's code
-# segment: a seat that links the runtime links these. the host globs them and the kernel
-# names them; this roster is for the bare ports, which link the runtime and nothing else.
+# ..and the codec snap.c reaches unconditionally, to pack and unpack an image's code
+# segment: a seat that links the runtime links it. wasm is the one that does not, and
+# it reads love_tu alone -- which is why the codec joins the roster here and not there.
 love_codec = gz.c
-# src/ is ONE folder, so these name the lanes a directory used to: the metal seat
-# (src/kernel.mk builds them) and the per-ISA files, which `a` picks by prefix.
-kernel_tu = kmain.c sys.c blk.c doom.c
-kernel_c = $(patsubst %,$R/src/%,$(kernel_tu))
-arch_c = $(wildcard $R/src/x64_*.c) $(wildcard $R/src/a64_*.c) \
-  $(wildcard $R/src/rv64_*.c) $(wildcard $R/src/uefi_*.c)
-# ..and the per-ISA set ONE machine's build takes. the rebuild gates link what the
-# artifact links, and that is the host's arch alone -- empty on an arch with no seat,
-# which is what those gates read to skip their kernel half.
-hosta_c = $(wildcard $R/src/$(hosta)_*.c)
-# ..and the host lane is the remainder, still a glob: drop a src/<app>.c in and its
-# nifs register with no rule edit, exactly as the old host/*.c wildcard promised.
-host_c = $(filter-out $(love_c) $(kernel_c) $(arch_c),$(wildcard $R/src/*.c))
+core_tu = $(love_tu) $(love_codec)
+love_tu_c = $(patsubst %,$R/src/core/%,$(core_tu))
+love_c = $(love_tu_c) $R/src/apps/moon/lib/math/am.c
+# the per-ISA set ONE machine's build takes, and the directory is the roster: empty on
+# an arch with no seat, which is what the rebuild gates read to skip their kernel half.
+hosta_c = $(wildcard $R/src/inle/$(hosta)/*.c)
+# ..and the host lane is a whole directory of its own: drop a src/host/<app>.c in and
+# its nifs register with no rule edit, exactly as the old host/*.c wildcard promised.
+host_c = $(wildcard $R/src/host/*.c)
 # the quay engine every seat carries. paint.c (32bpp) and nif.c (the love door) are
 # per-seat -- a 1-bit device wants neither, the host unity-includes nif.c -- so a seat that
 # wants one NAMES it rather than taking it here.
-f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/crew/quay/*.c))
+f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/src/core/quay/*.c))
 # inle's libc is nolibc's, named member by member; os.c is the map every syscall
 # reaches it through -- and a negative __ai_osv (written at kmain) takes the
-# __ai_inle arm, src/sys.c answering the canonical numbers in C. mooncc builds
+# __ai_inle arm, src/inle/sys.c answering the canonical numbers in C. mooncc builds
 # the kernel, so it builds
-# the kernel's libc too -- there is no second copy to drift. this is src/posix.c's
+# the kernel's libc too -- there is no second copy to drift. this is src/host/posix.c's
 # closure (plan A3) plus the members love.c's hosted compile reaches (plan C1:
 # the mmap family behind the W^X arena's runtime branch, refused -ENOSYS on
 # metal). core.c stays OUT -- it carries malloc, the process entry and the
-# std streams, every one of which the kernel owns; src/sys.c answers its four
+# std streams, every one of which the kernel owns; src/inle/sys.c answers its four
 # seat symbols (environ, stdout/stderr, the sigaction restorer) instead.
 # ⚠ NAMING A MEMBER HERE IS A DECISION, and stdio was the one weighed: printf and
-# friends write fd 1 themselves, and src/sys.c is seat-blind, so a seated task's
+# friends write fd 1 themselves, and src/inle/sys.c is seat-blind, so a seated task's
 # C-level printf reaches the console where its port reaches the pipe. That is the
-# documented divergence (src/sys.c) -- love code writes through ports, which seat.
-c_c = $(addprefix $R/crew/moon/lib/nolibc/string/,memchr.c memcmp.c memcpy.c memmove.c memset.c strlen.c) \
-  $(addprefix $R/crew/moon/lib/nolibc/sys/,read.c write.c \
+# documented divergence (src/inle/sys.c) -- love code writes through ports, which seat.
+c_c = $(addprefix $R/src/apps/moon/lib/nolibc/string/,memchr.c memcmp.c memcpy.c memmove.c memset.c strlen.c) \
+  $(addprefix $R/src/apps/moon/lib/nolibc/sys/,read.c write.c \
     chdir.c chmod.c chown.c clock_gettime.c close.c dup2.c fcntl.c fork.c fstat.c getcwd.c \
     getgid.c getpgrp.c getpid.c getuid.c ioctl.c kevent.c kill.c kqueue.c \
     link.c lseek.c lstat.c madvise.c mkdir.c mmap.c mount.c mprotect.c munmap.c open.c pipe.c poll.c raise.c readlink.c \
     rename.c rmdir.c setpgid.c setsid.c stat.c symlink.c sysconf.c sysctl.c umask.c \
     unlink.c unshare.c utimensat.c waitpid.c) \
-  $(addprefix $R/crew/moon/lib/nolibc/dirent/,closedir.c opendir.c readdir.c) \
-  $(addprefix $R/crew/moon/lib/nolibc/signal/,grantpt.c posix_openpt.c ptsname.c \
+  $(addprefix $R/src/apps/moon/lib/nolibc/dirent/,closedir.c opendir.c readdir.c) \
+  $(addprefix $R/src/apps/moon/lib/nolibc/signal/,grantpt.c posix_openpt.c ptsname.c \
     sigaction.c sigaddset.c sigemptyset.c signal.c signalfd.c sigprocmask.c \
     tcgetattr.c tcsetattr.c tcsetpgrp.c unlockpt.c) \
-  $(addprefix $R/crew/moon/lib/nolibc/proc/,atexit.c execv.c execvp.c exit.c) \
-  $(addprefix $R/crew/moon/lib/nolibc/env/,getenv.c setenv.c unsetenv.c) \
-  $(addprefix $R/crew/moon/lib/nolibc/stdio/,fflush.c femit.c pad.c semit.c) \
-  $R/crew/moon/lib/nolibc/fmt/fprintf.c \
-  $R/crew/moon/lib/nolibc/os.c
+  $(addprefix $R/src/apps/moon/lib/nolibc/proc/,atexit.c execv.c execvp.c exit.c) \
+  $(addprefix $R/src/apps/moon/lib/nolibc/env/,getenv.c setenv.c unsetenv.c) \
+  $(addprefix $R/src/apps/moon/lib/nolibc/stdio/,fflush.c femit.c pad.c semit.c) \
+  $R/src/apps/moon/lib/nolibc/fmt/fprintf.c \
+  $R/src/apps/moon/lib/nolibc/os.c
 
 # ⚠ CANCEL MAKE'S LEX RULE. `.l` is Lex's extension to make, so a built-in `%.c: %.l`
 # stands over every source file in this tree -- and where a `<name>.l` sits beside a real
 # `<name>.c`, make runs lex on it, fails, and DELETES THE C. An empty recipe unmakes the
-# rule. (crew/quay/ is the pair that found it; nothing here has ever wanted lex.)
+# rule. (src/core/quay/ is the pair that found it; nothing here has ever wanted lex.)
 %.c: %.l
 %.r: %.l
 %.ln: %.l
@@ -169,7 +165,7 @@ ai_cflags = -std=$(ai_std) -g -O2 -pipe $(EXTRA_CFLAGS) \
   -Wall -Wextra -Werror -Wstrict-prototypes -Wno-unused-parameter \
   -Wmissing-field-initializers -Wno-implicit-fallthrough\
   -falign-functions=16 -fno-stack-protector
-# ⚠ a strict -std sets __STRICT_ANSI__ and glibc then hides its POSIX half -- src/main.c
+# ⚠ a strict -std sets __STRICT_ANSI__ and glibc then hides its POSIX half -- src/host/main.c
 # owes clock_gettime and kill, so the level is asked for by name.
 # -fcf-protection (Intel CET) is x86-only; the non-x86 seats have no CET to turn off and
 # take it as a no-op.
@@ -182,9 +178,9 @@ ai_cflags += -fcf-protection=none
 ifeq ($(filter FreeBSD NetBSD,$(shell uname -s)),)
 ai_cflags += -D_POSIX_C_SOURCE=200809L
 endif
-# the data-sentinel tiling src/love.h's ai_typ reads (src/love.c's DSENT), on every ld/lld link.
-data_ld = -Wl,-T,$R/src/love_data.ld
-# ⚠ AN EMPTY BRACKET IS STILL A BRACKET. src/love.c indexes the host nif slice off
+# the data-sentinel tiling src/core/love.h's ai_typ reads (src/core/love.c's DSENT), on every ld/lld link.
+data_ld = -Wl,-T,$R/src/core/love_data.ld
+# ⚠ AN EMPTY BRACKET IS STILL A BRACKET. src/core/love.c indexes the host nif slice off
 # [__start_love_nifs, __stop_love_nifs), which the toolchain synthesises only where the
 # SECTION exists -- so an embedder registering its defs by hand owns no AiNif and the
 # pair goes undefined at the link. weak declarations do not answer it: ld leaves a weak

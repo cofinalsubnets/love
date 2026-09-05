@@ -38,7 +38,7 @@
 <span id="ink_chip" style="display:none" class="chip" data-run="ink ()">ink (screensaver demo)</span>
 <span id="rove_chip" style="display:none" class="chip" data-run="rove ()">rove (roguelike demo)</span>
 
-<script src="wasm/love.js"></script>
+<script src="src/port/wasm/love.js"></script>
 <script>
 (async () => {
   const status = document.getElementById('status');
@@ -73,7 +73,7 @@
   put(`;3 love ${ver} ${(performance.now() - t0).toFixed(0)}ms`, 'cnd');
   cmd.disabled = false; cmd.focus({preventScroll: true});
 
-  // quay: fetch the real engine (crew/quay/rove.l) and install a web driver.
+  // quay: fetch the real engine (src/apps/rove/rove.l) and install a web driver.
   // the tty runner (rove/sail/helm) references host words that don't exist in
   // the browser image (winsize/raw/cue?/rest/flush ride pty.c + bao.l, absent
   // from egg+prel+ev+uu) -- and a closure captures its free globals AT CREATION,
@@ -84,7 +84,7 @@
   // then `rove ()` just scares gracefully through the default help.)
   try {
     const [roveSrc, inkSrc] = await Promise.all(
-      ['crew/quay/rove.l', 'crew/quay/ink.l'].map(p => fetch(p).then(r => r.text())));
+      ['src/apps/rove/rove.l', 'src/apps/ink/ink.l'].map(p => fetch(p).then(r => r.text())));
     ev('(: winsize (\\ _ ()) raw (\\ _ ()) cue? (\\ _ 0) rest (\\ _ ()) flush (\\ _ ()))');
     ev(roveSrc); ev(inkSrc);
     // the launch verb + the per-app step protocol the driver below pumps:

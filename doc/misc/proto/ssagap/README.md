@@ -14,7 +14,7 @@ An instrument, not a gate (ccnif's rule). Three pieces:
   at 64 bits = cfoldir's domain now; GLOBAL = + the fixpoint. Unmodeled ops invalidate everything
   they touch, so every count is a floor. With `--rows` it prints canonical
   per-fn rows (C census cells, D dead stores, H per-def chains) instead.
-- `differ.sh` + `valdiff.tpl.l` -- the rung-0 differential: crew/moon/val.l
+- `differ.sh` + `valdiff.tpl.l` -- the rung-0 differential: src/apps/moon/val.l
   (the in-tree port) emits the same rows from the same forms, and the two
   outputs must be byte-identical. 2026-08-28: 8,200 rows over 80 TUs, OK.
 

@@ -1,18 +1,18 @@
-; tools/hue2web.l -- the build-time face of lib/hueweb.l: write the .l syntax
+; tools/hue2web.l -- the build-time face of src/apps/vi/hueweb.l: write the .l syntax
 ; stylesheet, and write one source file out as a painted page.
 ;
 ;   love tools/hue2web.l css        the stylesheet, on stdout
 ;   love tools/hue2web.l src file   that file as an annotated page, on stdout
 ;
-; the painting itself is lib/hueweb.l, which `love serve` also uses to paint the
+; the painting itself is src/apps/vi/hueweb.l, which `love serve` also uses to paint the
 ; same file at request time. one painter, two errands -- a build that wrote pages
 ; a server would paint differently is two answers to one question.
 ;
 ; LOVE_NO_IMAGE must be cleared by whoever runs this, and the Makefile does: the
 ; word lanes ask the running binary for its vocabulary, and under the egg boot
 ; that answer is the compiler's own internals rather than the language we ship.
-(use "crew/vi/config.l")
-(use "crew/vi/hue.l")
+(use "src/apps/vi/config.l")
+(use "src/apps/vi/hue.l")
 (use 'hueweb)
 
 (: (h2w-rdf p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, (string? s ? [1 s])))))

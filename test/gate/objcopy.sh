@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/objcopy.sh -- crew/holo/copy.l against the tool it replaces. objcopy's two
+# test/gate/objcopy.sh -- src/core/holo/copy.l against the tool it replaces. objcopy's two
 # output formats are a WIRE, not a taste: the .hex a Teensy loader accepts and the .bin
 # whose offsets are flash offsets. So the gate is a byte comparison with the real thing
 # over every ELF on hand, both formats, and nothing softer.
@@ -27,14 +27,14 @@ rm -rf "$d"; mkdir -p "$d"
 echo "OBJCOPY $d"
 
 { echo "(use 'holo)"
-  cat crew/kore/text.l crew/kore/u.l crew/kore/asbook.l crew/holo/thumb2.l \
-      crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/holo/copy.l
+  cat src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l src/core/holo/thumb2.l \
+      src/core/holo/elf.l src/core/holo/obj.l src/core/holo/link.l src/core/holo/copy.l
   echo "((from 'holo 'objcopy) >argv)"; } > "$d/ocopy.l"
 
 # the fixtures, ours end to end: mkfix.l lays one object and links it three ways
 { echo "(use 'holo)"
-  cat crew/kore/text.l crew/kore/u.l crew/kore/asbook.l crew/holo/thumb2.l \
-      crew/holo/elf.l crew/holo/obj.l crew/holo/link.l test/gate/objcopy.l
+  cat src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l src/core/holo/thumb2.l \
+      src/core/holo/elf.l src/core/holo/obj.l src/core/holo/link.l test/gate/objcopy.l
   echo "(mkfix \"$d\")"; } | "$ho/love" || { echo "FAIL objcopy fixtures"; exit 1; }
 
 n=0

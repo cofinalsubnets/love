@@ -66,4 +66,4 @@ The status of the last command; `exit N` and a script's final `$?` pass through.
 
 # SEE ALSO
 
-**love**(1), **kore**(1), **cook**(1), **sh**(1p). The lush sources live in *crew/lush/* of the love tree; *test/host/sh.l* is the executable gate.
+**love**(1), **kore**(1), **cook**(1), **sh**(1p). The lush sources live in *src/apps/lush/* of the love tree; *test/host/sh.l* is the executable gate.

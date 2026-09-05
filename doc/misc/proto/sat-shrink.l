@@ -19,7 +19,7 @@
 ; restart policy), not a transferable constant. the stronger variant (recursively
 ; minimizing the outside-level pulls instead of failing) is the open follow-up.
 ;
-; run: cat crew/sat/sat.l crew/sat/flat.l doc/misc/proto/sat-shrink.l - <<< "(: _ ... (pin s 'conf fconf5) ...)"
+; run: cat src/apps/sat/sat.l src/apps/sat/flat.l doc/misc/proto/sat-shrink.l - <<< "(: _ ... (pin s 'conf fconf5) ...)"
    (: (fconf5 fx ar wn confl)
     (: nv (getw fx 3) lvo (lvo-of nv) rso (rso-of nv) who (who-of nv)
        vao (vao-of nv) aco (aco-of nv) pho (pho-of nv) seo (seo-of nv)

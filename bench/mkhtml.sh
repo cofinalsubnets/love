@@ -67,7 +67,7 @@ cat <<'HEAD'
 </style>
 </head>
 <body>
-<nav class="topnav"><a href="../index.html">love</a> &nbsp;&middot;&nbsp; <a href="../language.html">language</a> &nbsp;&middot;&nbsp; <a href="../index.html#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="../crew/index.html">crew</a> &nbsp;&middot;&nbsp; <span class="here">bench</span></nav>
+<nav class="topnav"><a href="../index.html">love</a> &nbsp;&middot;&nbsp; <a href="../language.html">language</a> &nbsp;&middot;&nbsp; <a href="../index.html#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="../src/apps/index.html">crew</a> &nbsp;&middot;&nbsp; <span class="here">bench</span></nav>
 <h1>love benchmarks &mdash; milliseconds per iteration</h1>
 <p class="note">Lower is better. Each language self-times its inner loop (reps
 auto-scaled past a 200&nbsp;ms floor, so startup is excluded). The fastest cell
@@ -98,10 +98,10 @@ HEAD
 if [ -n "$2" ] && [ -s "$2" ]; then
 cat <<'SAT'
 <h2>SAT solvers &mdash; milliseconds to solve</h2>
-<p class="note">A separate field: love&rsquo;s own CDCL solver (<code>crew/sat/flat.l</code>:
+<p class="note">A separate field: love&rsquo;s own CDCL solver (<code>src/apps/sat/flat.l</code>:
 flat cask-resident state driven by four native kernels &mdash; propagation, the whole
 conflict handler, the decision, and the <code>fbva</code> grow step &mdash; each assembled
-through <code>crew/holo/</code> at solver-build time, specialized to the instance size)
+through <code>src/core/holo/</code> at solver-build time, specialized to the instance size)
 against reference C solvers.
 Two row families: PHP(<i>n</i>) &mdash; (<i>n</i>+1) pigeons into <i>n</i> holes, UNSAT
 and resolution-hard, where clause learning alone is <b>exponential</b> and love&rsquo;s
@@ -158,11 +158,11 @@ if [ -n "$3" ] && [ -s "$3" ]; then
 cat <<'CC'
 <h2>compilers &mdash; milliseconds to build love, and to test it</h2>
 <p class="note">A third field, love&rsquo;s C toolchain against the incumbents:
-<b>mooncc</b> is love&rsquo;s own C compiler (<code>crew/moon/</code>), and it builds
+<b>mooncc</b> is love&rsquo;s own C compiler (<code>src/apps/moon/</code>), and it builds
 <code>love</code> with <i>no gcc, glibc, or ld</i> &mdash; mooncc lays every object,
-<code>mksys</code> emits the syscall leaf, and our own linker (<code>crew/holo/</code>)
+<code>mksys</code> emits the syscall leaf, and our own linker (<code>src/core/holo/</code>)
 binds the executable. The <b>build</b> row is the wall-clock to compile every C
-translation unit (<code>src/love.c</code> + <code>host/*.c</code> + the <code>am</code> math
+translation unit (<code>src/core/love.c</code> + <code>host/*.c</code> + the <code>am</code> math
 floor) and link a working binary; the <b>test</b> row runs the full corpus (the same
 files <code>test_host</code>/<code>test_raw</code> feed) through the binary that build
 produced. All three lanes egg-boot (no baked image), so the corpus runs off the freshly
@@ -179,7 +179,7 @@ optimizing compilers is modest, and the binary it emits passes the identical cor
 <p class="note">The <b>chacha</b> and <b>poly1305</b> rows are single C functions rather
 than the whole corpus
 (<code>bench/ccrypto.l</code> drives the <code>chacha20</code> and <code>poly1305</code>
-nifs in <code>src/tls.c</code>), and they are here because an average can hide a
+nifs in <code>src/host/tls.c</code>), and they are here because an average can hide a
 lopsided one. <b>chacha</b> indexes a sixteen-word state <i>array</i> in its inner loop;
 <b>poly1305</b> keeps its five limbs as scalar <i>locals</i>. mooncc gives a register
 home to the second shape and not the first, so the two rows are a gauge: wide chacha

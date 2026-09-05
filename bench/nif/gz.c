@@ -1,4 +1,4 @@
-/* the GZIP floor -- src/gz.c, both directions, through mooncc, gcc and
+/* the GZIP floor -- src/core/gz.c, both directions, through mooncc, gcc and
  * clang, with the three reports diffed and the three builds timed. ccnif.sh
  * drives it.
  *
@@ -11,12 +11,12 @@
  *
  * ⚠ A ROUND TRIP IS NOT ENOUGH and it is worth saying why. inflate(deflate(x))
  * == x holds under a great many wrong deflates -- any legal stream decodes --
- * so the compressed BYTES are reported too. deflate is a twin held to lib/gz.l
+ * so the compressed BYTES are reported too. deflate is a twin held to src/apps/gz/gz.l
  * at the byte (test/host/gzc.l), so its output is a fixed answer and not a
  * licensed choice: a differing byte is a differing compiler.
  *
  * ⚠ THE SUMMARY IS THIS FILE'S OWN ARITHMETIC. an FNV-1a over the output, not
- * the crc32 next door in src/hash.c -- a summary computed by the code under
+ * the crc32 next door in src/host/hash.c -- a summary computed by the code under
  * test can agree with itself while both halves are wrong.
  *
  * ⚠ AND THE MALFORMED STREAMS ARE PART OF THE SUBJECT, not a robustness check.
@@ -24,7 +24,7 @@
  * describe a code -- first-writer-wins in the table, a zeroed symbol array --
  * so what it answers on garbage is as specified as what it answers on a valid
  * block, and the refusal paths are where the bit reader's edges live. */
-#include "../../src/gz.c"
+#include "../../src/core/gz.c"
 #include "stub.h"
 #include "say.h"
 

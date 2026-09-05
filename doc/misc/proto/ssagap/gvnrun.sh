@@ -8,9 +8,9 @@ S=$1
 mkdir -p "$S"
 : > "$S/gvn.txt"
 if [ $# -gt 0 ]; then files="$*"; else
-  files="src/*.c crew/moon/lib/math/am.c crew/moon/lib/nolibc/string/*.c \
-         crew/moon/lib/nolibc/stdio/*.c crew/moon/lib/nolibc/fmt/*.c \
-         crew/moon/lib/nolibc/os.c crew/moon/lib/nolibc/env/*.c crew/moon/lib/nolibc/proc/*.c"; fi
+  files="src/*.c src/apps/moon/lib/math/am.c src/apps/moon/lib/nolibc/string/*.c \
+         src/apps/moon/lib/nolibc/stdio/*.c src/apps/moon/lib/nolibc/fmt/*.c \
+         src/apps/moon/lib/nolibc/os.c src/apps/moon/lib/nolibc/env/*.c src/apps/moon/lib/nolibc/proc/*.c"; fi
 for f in $files; do
   sed "s|@FILE@|$f|" doc/misc/proto/ssagap/gvn.tpl.l > "$S/g1.l"
   out/host/love "$S/g1.l" >> "$S/gvn.txt" 2>&1 || echo "!! $f"

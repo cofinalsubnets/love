@@ -1,4 +1,4 @@
-; --- test/host/salt.l: salt, the config door (lib/salt.l) ------------------
+; --- test/host/salt.l: salt, the config door (src/apps/libra/salt.l) ------------------
 ; the files are the interesting part, so this writes real ones under out/ and
 ; reads them back. `salt-file` is the testable unit -- it takes the path, so a
 ; test never has to fake HOME or depend on whose machine it runs on. run

@@ -10,7 +10,7 @@
 ; the rv64 backend is read in rather than used: the host bakes its NATIVE encoder only,
 ; and the linker reaches back into the backend to re-encode a relocated field.
 
-(reads (open "crew/holo/rv64.l" "r"))
+(reads (open "src/core/holo/rv64.l" "r"))
 (use 'holo)
 
 (: (rvg-die m) (: _ (say err ("rvboot: " + m + "\n")) (quit 1))

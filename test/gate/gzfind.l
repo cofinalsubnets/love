@@ -1,4 +1,4 @@
-; test/gate/gzfind.l -- lib/gz.l's match finder has two presentations: `gz-find`, which is
+; test/gate/gzfind.l -- src/apps/gz/gz.l's match finder has two presentations: `gz-find`, which is
 ; the definition, and the holo IR beside it that says the same thing to a cpu. This gate is
 ; the differential between them, and it needs nothing outside the tree.
 ;
@@ -17,7 +17,7 @@
 ; module answers the twin everywhere, which is the design; what this gate owes is that the
 ; two agree, and that it says out loud which one it was comparing.
 (: _ (use 'gz)
-   _ (use "lib/forge.l")
+   _ (use "src/apps/forge/forge.l")
    (die m) (: _ (say err ("gzfind: " + m + "\n")) _ (flush err) (quit 1))
    (safe f) (trap (\ _ (f 0)) () (\ a b ['scared a]))
    (mk n f) (: b (cask n) (go i) (? (n <= i) (string b) (: _ (pin b i (f i)) (go (i + 1)))) (go 0))

@@ -87,8 +87,8 @@ for a in x64 a64; do
     a64) t=a64; ctarget=aarch64-none-elf ;;
   esac
   h=src/${a}_asmops.h
-  # -I src is arch-neutral now: src/asmops.h picks by the target's own predefine
-  inc="-I src -I crew/moon/include"
+  # -I src is arch-neutral now: src/inle/asmops.h picks by the target's own predefine
+  inc="-I src -I src/apps/moon/include"
 
   # 1. coverage, straight off the header
   for op in $(sed -n 's/^static inline [^(]* \**\(k_[A-Za-z0-9_]*\)(.*/\1/p' "$h"); do

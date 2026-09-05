@@ -5,7 +5,7 @@ parallel userland with the same job description. So the honest accounting runs o
 axes, and only one of them is LFS's own ladder:
 
 - **A — native equivalents.** Our code doing the package's job (kore, lush, cook, moon,
-  holo, `lib/gz.l`, `lib/tar.l`). This is where nearly all the distance is.
+  holo, `src/apps/gz/gz.l`, `src/apps/tar/tar.l`). This is where nearly all the distance is.
 - **B — LFS packages built by our toolchain.** Six, with repeatable harnesses:
   `tools/moon-{bzip2,gzip,lua,m4,sqlite,tar}.sh`, each with x86-64, a64 and riscv
   lanes (`make moon-tar`, `make moon-tar-a64`, …). ⚠ every one is **opt-in** — no tier
@@ -17,10 +17,10 @@ LFS spends two chapters here and calls it the hard part. It is the part we are d
 
 | LFS | ours | state |
 | --- | --- | --- |
-| binutils | `crew/holo/` — as, ld, ar+ranlib, nm, objcopy | byte-identical smokes vs GNU/llvm |
-| gcc | `crew/moon/` — mooncc, C11 freestanding | self-hosting, fixpoint-gated, x64 + a64 + riscv |
-| glibc | `crew/moon/lib/nolibc/` | by-need members, no host libc |
-| linux-headers | `crew/moon/include/` | our own minimal set, not the host's |
+| binutils | `src/core/holo/` — as, ld, ar+ranlib, nm, objcopy | byte-identical smokes vs GNU/llvm |
+| gcc | `src/apps/moon/` — mooncc, C11 freestanding | self-hosting, fixpoint-gated, x64 + a64 + riscv |
+| glibc | `src/apps/moon/lib/nolibc/` | by-need members, no host libc |
+| linux-headers | `src/apps/moon/include/` | our own minimal set, not the host's |
 
 Plus one rung LFS never attempts: `src/kernel.mk` builds a whole kernel with
 `KCC ?= mooncc` and our own linker, on two arches, with nothing foreign left.
@@ -35,12 +35,12 @@ naming it is most of what this section is for.
 Present natively — roughly **20 of ~85 chapter-8 packages**, several partial:
 
 coreutils (`kore`, 85 tools / 88 names, GNU-byte-identical smokes, `make test_kore`) ·
-bash (`lush`) · sed · grep · diffutils (diff, cmp) · make (`cook`) · tar (`lib/tar.l`,
-ustar both ways, `love tar`) · gzip (`lib/gz.l`, and `crew/gz/gzcmd.l` wears GNU's flags
-as `love gzip` / `gunzip` / `zcat`) · cpio (`lib/cpio.l` newc, `love cpio`) · zlib ·
-vim (`crew/vi`) · sysvinit
-(`crew/init/boot.l` as `/init`) · openssl-ish (`crew/tls`) · nc (`tools/ain.l`) ·
-**patch** (`crew/kore/patch.l`, unified diffs) · **bc** (`crew/kore/bc.l`, arbitrary
+bash (`lush`) · sed · grep · diffutils (diff, cmp) · make (`cook`) · tar (`src/apps/tar/tar.l`,
+ustar both ways, `love tar`) · gzip (`src/apps/gz/gz.l`, and `src/apps/gz/gzcmd.l` wears GNU's flags
+as `love gzip` / `gunzip` / `zcat`) · cpio (`src/apps/cpio/cpio.l` newc, `love cpio`) · zlib ·
+vim (`src/apps/vi`) · sysvinit
+(`src/apps/init/boot.l` as `/init`) · openssl-ish (`src/apps/tls`) · nc (`src/apps/ain/ain.l`) ·
+**patch** (`src/apps/kore/patch.l`, unified diffs) · **bc** (`src/apps/kore/bc.l`, arbitrary
 precision over love's bigints, `-l` and all) · **procps-ng** (kore's ps, free, uptime,
 pidof, pgrep, pkill, pwdx) and psmisc's killall.
 
@@ -48,7 +48,7 @@ The partials, stated: kore has no `df` (nothing here answers `statvfs`, so it wa
 nif and not an afternoon); sed is a deliberate subset (no hold space, no `\n` in
 replacements); `expr` has no `-o` output template and `od` takes one `-t` per run; our
 DEFLATE lands a few percent above `gzip -9` (it costs every block three ways and writes
-the cheapest -- lib/gz.l carries the numbers), and `gzip -d` reads one member per file
+the cheapest -- src/apps/gz/gz.l carries the numbers), and `gzip -d` reads one member per file
 where GNU reads a concatenation.
 
 ### what is absent, in the order it hurts
@@ -82,7 +82,7 @@ The gap between those two numbers is entirely *other people's build systems*.
 ## the ladder
 
 - **rung 0 — `find` and `awk` — BUILT** (`e015bf61`). Both are
-  `crew/kore/` applets on the u-floor, both in `make test_kore`: awk 39 checks
+  `src/apps/kore/` applets on the u-floor, both in `make test_kore`: awk 39 checks
   byte-identical to gawk plus a lawed pure floor, find 18 walks set-identical to the
   system find. awk is a POSIX awk (BEGIN/END, ranges, arrays, user functions with
   array parameters by reference, the builtins, `-F`/`-v`/`-f`) minus getline, output
@@ -94,12 +94,12 @@ The gap between those two numbers is entirely *other people's build systems*.
   digits** — `int` overflows to 0 at 1e20, so the exact integer comes back through
   love's bigints, glibc-identical even at 1e23.
 - **rung 1 — `patch`, and the coreutils stragglers — BUILT.** Thirteen applets: `patch`
-  (`crew/kore/patch.l`, unified diffs, `-pN -R -i -o --dry-run -s`, offsets and rejects),
-  `expr` (`crew/kore/expr.l`, its own file because `:` rides the BRE engine), `od paste
+  (`src/apps/kore/patch.l`, unified diffs, `-pN -R -i -o --dry-run -s`, offsets and rejects),
+  `expr` (`src/apps/kore/expr.l`, its own file because `:` rides the BRE engine), `od paste
   comm join split` in core.l, `stat du chown mktemp` in fs.l, `date id` in proc.l. All in
   `make test_kore`, all GNU-byte-identical where GNU has an opinion, plus laws over the
   pure floors — the calendar, the record floor, the report floor, expr's, patch's.
-  Three nifs grew with them (src/posix.c): **`stat`'s tuple gained
+  Three nifs grew with them (src/host/posix.c): **`stat`'s tuple gained
   `uid gid nlink blocks ino`** (append-only; the kernel's own stat still answers the
   first four, and the tail is asked by `tally`), a **`lstat`** beside it (du and stat owe
   the link's own blocks, not its target's), **`getgid`**, and `openfd` gained mode 3,
@@ -133,10 +133,10 @@ The gap between those two numbers is entirely *other people's build systems*.
     only mangles the high bit.
   Left deliberately: fmt, pr, csplit, ptx and numfmt (each its own layout language),
   dir/vdir (they are `ls -C`/`ls -l`), shuf (a seed decision first), the sha1/sha512
-  family (src/hash.c carries three digests), and who/users/logname (no utmp).
-- **rung 1c — gzip's face — BUILT.** `crew/gz/gzcmd.l`: `love gzip`, `love gunzip` and
+  family (src/host/hash.c carries three digests), and who/users/logname (no utmp).
+- **rung 1c — gzip's face — BUILT.** `src/apps/gz/gzcmd.l`: `love gzip`, `love gunzip` and
   `love zcat`, GNU's flag spelling (`-cdfklnNqrtv`, `-1..-9`, `-S SUF`, the long forms)
-  over lib/gz.l's two doors, registered as verbs the way `love tar` is. The in-place
+  over src/apps/gz/gz.l's two doors, registered as verbs the way `love tar` is. The in-place
   replace carries the mode and the mtime; `-l`'s listing is byte-identical to GNU's,
   ratio and all. Gated in `make test_gz` (test/gate/targz.sh section 4). Three things
   worth knowing:
@@ -149,7 +149,7 @@ The gap between those two numbers is entirely *other people's build systems*.
   * **one member per file** — gz-unzip reads the trailer off the tail, so a legal
     `cat a.gz b.gz` is refused whole rather than half-read. That belongs in gz.l when
     something here needs it.
-- **rung 1d — the /proc family — BUILT.** Eight applets in `crew/kore/proc.l`, and **no
+- **rung 1d — the /proc family — BUILT.** Eight applets in `src/apps/kore/proc.l`, and **no
   nif grew for any of them**: /proc is a filesystem, so the whole family is `uread` and a
   parser. `ps` (procps' rule — ours, same terminal — with `-e`/`-A`/`a`/`x` for all),
   `free` (used is total minus AVAILABLE, which is what procps prints), `uptime`, `pidof`,
@@ -173,10 +173,10 @@ The gap between those two numbers is entirely *other people's build systems*.
     word-splits, so the empty pattern it meant to test could never ride that list; both
     sides saw EOF and it passed while proving nothing. The empty pattern is its own row
     now.
-- **rung 2 — cpio, and the distro cuts itself — BUILT.** `lib/cpio.l` is the SVR4 newc
-  wire (pack, unpack, scatter) over lib/tar.l's own entries — the walk that fills them
+- **rung 2 — cpio, and the distro cuts itself — BUILT.** `src/apps/cpio/cpio.l` is the SVR4 newc
+  wire (pack, unpack, scatter) over src/apps/tar/tar.l's own entries — the walk that fills them
   is about a file and not about a format, which is why the second wire is short — and
-  `crew/cpio/cpiocmd.l` is `love cpio` (`-o -i -t`, `-H newc`, `-d -u -v`, `-F/-I/-O`,
+  `src/apps/cpio/cpiocmd.l` is `love cpio` (`-o -i -t`, `-H newc`, `-d -u -v`, `-F/-I/-O`,
   `--quiet`, the block count). `mk/distro.mk` now cuts the initramfs with
   **kore's find, our cpio and our gzip**, and `make distro-smoke` boots that image
   under qemu: love is pid 1, /proc is mounted, the kore userland answers. The wart at
@@ -192,11 +192,11 @@ The gap between those two numbers is entirely *other people's build systems*.
     comes back as copies. Half of that job would be worse than none — a reader that
     believes nlink waits for a body that never comes.
   * ⚠ and the bug the boot found, which the packer had nothing to do with:
-    **`lib/dns.l` has to ride into the initramfs**. tools/ain.l is a korefiles member
+    **`src/apps/dns/dns.l` has to ride into the initramfs**. src/apps/ain/ain.l is a korefiles member
     and probes for the `dial` nif at load, saying `(use 'dns)` when it is absent — which
-    it is in love-raw. With no `/lib/dns.l` that scare takes the whole cat down, and the
+    it is in love-raw. With no `/src/apps/dns/dns.l` that scare takes the whole cat down, and the
     symptom is every applet gone rather than a quiet `nc`.
-- **rung 2b — `bc` — BUILT.** `crew/kore/bc.l`, in `make test_kore`. A number is
+- **rung 2b — `bc` — BUILT.** `src/apps/kore/bc.l`, in `make test_kore`. A number is
   `[v s]` — the exact integer v over 10^s — so every digit is love's own bigint and
   nothing rounds; POSIX's six scale rules sit in a table at the head of the file, and
   they all truncate, which is what love's `//` (toward zero, never floored) already
@@ -208,7 +208,7 @@ The gap between those two numbers is entirely *other people's build systems*.
   at lex time. Byte-identical to GNU over the scale rules, both base directions, the
   language and the 68-column wrap; ~7,200 lines of seeded random arithmetic across
   bases and scales agree byte-for-byte, and the algebra (writer/reader inverse,
-  commutativity, `|a%b| < |b|`, `r² ≤ n < (r+ulp)²`) is lawed in `crew/kore/law.l`.
+  commutativity, `|a%b| < |b|`, `r² ≤ n < (r+ulp)²`) is lawed in `src/apps/kore/law.l`.
   Seven things the work taught, all now comments in the tree:
   * ⚠ **`?` SUMS what it is handed**, so it cannot ask whether a signal is there: a
     `['ret v]` carrying a NEGATIVE v read as false and the return was dropped on the

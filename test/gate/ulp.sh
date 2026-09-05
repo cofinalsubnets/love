@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/ulp.sh -- the MATH FLOOR differential: crew/moon/lib/math/am.c
+# test/gate/ulp.sh -- the MATH FLOOR differential: src/apps/moon/lib/math/am.c
 # measured against the host libm, and -- the half that matters -- measured
 # TWICE, once compiled by mooncc and once by the system cc, with the two
 # reports required to agree BYTE FOR BYTE.
@@ -57,7 +57,7 @@ if [ -z "${cc_g:-}" ]; then
   exit 0
 fi
 
-am=crew/moon/lib/math/am.c
+am=src/apps/moon/lib/math/am.c
 
 # -- the two objects: same source, same harness, different compiler --
 moonrun -c -o "$d/am_moon.o" "$am" > "$d/moon.build" 2>&1 \

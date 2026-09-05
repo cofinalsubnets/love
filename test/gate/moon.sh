@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/moon.sh -- mooncc's gate. Two halves: the LAWS (crew/moon/law.l, which
+# test/gate/moon.sh -- mooncc's gate. Two halves: the LAWS (src/apps/moon/law.l, which
 # runs anywhere) and, on x86-64 only, an END-TO-END battery against gcc as the oracle
 # -- mooncc compiles a program, gcc compiles the same program, and the two exit codes
 # must agree. gcc is never trusted to be right, only to be a second opinion; where a
@@ -18,39 +18,39 @@ love0=$3
 fail() { echo "FAIL $*" >&2; exit 1; }
 # the compiler under test: love's own mooncc verb (the crew layer, woken per invocation)
 moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
-# ..and the BOOTSTRAP one, the lane that compiles src/love.c: love0 waking mooncc0.image
+# ..and the BOOTSTRAP one, the lane that compiles src/core/love.c: love0 waking mooncc0.image
 moon0() { "$love0" wake out/host/mooncc0.image mooncc "$@"; }
 
 # ---------------------------------------------------------------- the laws
-echo "CC crew/moon/{lex,cpp,parse,gen,val,law}.l"
+echo "CC src/apps/moon/{lex,cpp,parse,gen,val,law}.l"
 out=$ho/.test_moon.out
 { echo "(use 'holo)"
-  cat test/00-init.l crew/kore/text.l crew/kore/u.l   # the kore floors register module 'kore
+  cat test/00-init.l src/apps/kore/text.l src/apps/kore/u.l   # the kore floors register module 'kore
   echo "(use 'kore)"                    # ..ambient: holo/text.l and law.l read `lines` bare
-  cat crew/moon/floor.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
-      crew/holo/text.l crew/moon/val.l crew/moon/gen.l
+  cat src/apps/moon/floor.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l \
+      src/core/holo/text.l src/apps/moon/val.l src/apps/moon/gen.l
   echo "(use 'moon)"                    # the cat re-laid module 'moon; law.l reads it bare
-  cat crew/moon/law.l
+  cat src/apps/moon/law.l
 } | "$m" > "$out" 2>&1
 r=$?
 cat "$out"
-[ $r -eq 0 ] && grep -q "crew/moon/law:" "$out" || fail "cc laws (exit $r)"
+[ $r -eq 0 ] && grep -q "src/apps/moon/law:" "$out" || fail "cc laws (exit $r)"
 
 # ----------------------------------------------- the template parser, under love0
 # ⚠ holo/text.l reaches the combinators through the bare name `post`, which each
 # frontend's boot binds to that module's accessor. a lane that leaves something else
 # there curries every combinator into a silent partial: no scare, no wrong answer,
 # just every template failing to parse. love0's build-tool lane is the one that
-# compiles src/love.c, and it is the only lane the laws above never walk.
-echo "CC crew/holo/text.l (love0 lane)"
-"$love0" -l crew/holo/text.l -e '(? (two? ((from (name "holo") (name "asm-text")) "li r0, 60")) (quit 0) (quit 1))' </dev/null \
+# compiles src/core/love.c, and it is the only lane the laws above never walk.
+echo "CC src/core/holo/text.l (love0 lane)"
+"$love0" -l src/core/holo/text.l -e '(? (two? ((from (name "holo") (name "asm-text")) "li r0, 60")) (quit 0) (quit 1))' </dev/null \
   || fail "asm-text under love0 -- is bare \`post\` the module accessor there?"
 
 # ---------------------------------------------- the pipeline's stage types
-# gen.l read as DATA and typed against crew/moon/stage.l's sig table (the
+# gen.l read as DATA and typed against src/apps/moon/stage.l's sig table (the
 # overlay leg): the post-choice chain composes in exactly one order, and a
 # clash names its innermost seam. nothing from stage.l rides any image.
-"$m" crew/moon/stage.l || fail "moon-stage (the ;; moon-stage line names the seam)"
+"$m" src/apps/moon/stage.l || fail "moon-stage (the ;; moon-stage line names the seam)"
 
 arch=$(uname -m)
 if [ "$arch" != x64 ]; then
@@ -155,7 +155,7 @@ printf '_Static_assert(0, "boom");' > "$ho/.feat.c"
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 && fail "a FAILING lone _Static_assert passed"
 
 # C11 6.5.16.1: an integer reaches a pointer only as a NULL POINTER CONSTANT, so
-# `return 1` from a T* is a constraint violation -- src/main.c carried one for years,
+# `return 1` from a T* is a constraint violation -- src/host/main.c carried one for years,
 # clang named it, and we took it in silence and handed back address 1
 printf 'struct s;\nstatic struct s *f(int x){ if (x) return 1; return 0; }\nint m(void){return 0;}\n' > "$ho/.feat.c"
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
@@ -524,9 +524,9 @@ done
 # gcc for the code gcc compiled rather than claiming the whole binary.
 # ⚠ ours is the BASE half of love-version and never the whole id, and that is a law:
 # the VCS suffix names the commit that built the COMPILER, so it would make love1 and
-# love2 differ and name a broken fixpoint (crew/holo/link.l says it at the door).
+# love2 differ and name a broken fixpoint (src/core/holo/link.l says it at the door).
 # read ./VERSION rather than writing 0.1 down -- a release bump must not fail here.
-cmt() { "$m" -l lib/elfsec.l \
+cmt() { "$m" -l src/core/holo/elfsec.l \
           -e "(: r (elfsec \"$1\" \".comment\") _ (? (two? r) (puts <r) 0) _ (flush out) (quit 0))"; }
 c=$(cmt "$ho/.fgnx" | tr '\0' ' ')
 case "$c" in

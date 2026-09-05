@@ -1,6 +1,6 @@
 # vi — the editor
 
-crew/vi/ orients here; the laws live in crew/vi/law.l, the gate is `make test_vi`, and every
+src/apps/vi/ orients here; the laws live in src/apps/vi/law.l, the gate is `make test_vi`, and every
 doubt settles by feeding `vstep` bytes.
 
 ## the shape
@@ -8,26 +8,26 @@ doubt settles by feeding `vstep` bytes.
 Five files, over the seeds the repo already had (bao's port-driven editor discipline, kore's
 re.l regex engine):
 
-* **crew/vi/core.l** — the PURE engine. A state tablet stepped one byte at a time:
+* **src/apps/vi/core.l** — the PURE engine. A state tablet stepped one byte at a time:
   `(vstep st byte) -> st`, `(vfeed st bytes)`, `(vframe st)` -> one full escape-sequence frame
   as text. No tty, no port, no file io — the ex commands leave a REQUEST on the state (`'dow`
   to write, `'doe` to read, both in uread's `(name)` shape) and flip `'quit`; whoever holds the
   state acts. That purity is the whole test story: the laws drive key sequences and read the
   tablet back, and the frame is lawed to the byte on a tiny screen.
-* **crew/vi/vi.l** — the face. Keys off `in` one byte at a time (arrows ESC[A-D decode to kjlh
+* **src/apps/vi/vi.l** — the face. Keys off `in` one byte at a time (arrows ESC[A-D decode to kjlh
   with a one-byte pushback so a bare ESC still interleaves), frames onto `out`, the alternate
   screen (?1049) so scrollback survives, `raw` for the tty (cooked restores at exit), winsize
   when there is one (80x24 on a pipe). It performs the engine's write/read requests. Port EOF
   quits — which is what makes `kore vi` fully drivable from a pipe: the smokes script whole
   sessions (`printf 'ihello\033:wq\n' | kore vi f`).
-* **crew/vi/hue.l** — the .l syntax written down once, for two readers: the painter in core.l's
+* **src/apps/vi/hue.l** — the .l syntax written down once, for two readers: the painter in core.l's
   `vframe`, and the vim syntax file, which tools/hue2vim.l generates from the same table, so the
   two readings cannot drift. `make syntax` builds it into `out/host/syntax.vim` and
   `make install` puts it in `~/.vim/syntax/love.vim`; it is never checked in, so there is no
   copy to keep up to date.
-* **crew/vi/config.l** — the theme (molokayo) as plain data, keyed by vim highlight group, so
+* **src/apps/vi/config.l** — the theme (molokayo) as plain data, keyed by vim highlight group, so
   the generated syntax file can emit `hi def link` lines rather than hardcoded colours.
-* **crew/vi/law.l** — the gate.
+* **src/apps/vi/law.l** — the gate.
 
 The pens are the face's to hand over: they want `$COLORTERM` and the user's theme file, and the
 engine reads neither.
@@ -60,5 +60,5 @@ lines); no horizontal scroll (long lines clip at the view's edge); no UTF-8 widt
 As need arises, in rough order: `.` (the repeat — record the last change's byte string, replay
 it), visual mode (a span-selection over the same operators), `:s` ranges over re.l (sed's engine
 is right there), named registers, tab-stop-aware rendering + horizontal scroll, and a pty smoke
-that drives the face under a real terminal via src/posix.c (as test/host/baoedit.l does for bao's
+that drives the face under a real terminal via src/host/posix.c (as test/host/baoedit.l does for bao's
 line editor).

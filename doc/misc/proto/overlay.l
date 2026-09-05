@@ -25,7 +25,7 @@
 ; ----------------------------------------------------------------------------
 ; PIECES WE ALREADY HAVE (reuse map)
 ; ----------------------------------------------------------------------------
-;   * monofix (love/prel.l) -- the shared monotone-fixpoint driver. The overlay's
+;   * monofix (src/core/boot/prel.l) -- the shared monotone-fixpoint driver. The overlay's
 ;     inference is just another client (like smfix / ho-fix / ale:propagate).
 ;   * doc/misc/proto/kinds.l -- a 67-line abstract KIND inference over `:` bindings via
 ;     a seminaive fixpoint (join / transfer / kindof / fix). The overlay is
@@ -177,7 +177,7 @@
 ; the lift is behaviour-preserving. `dom` is a map (a lookup fn): (dom 'join) etc.
 ; Run: out/host/love doc/misc/proto/overlay.l  (prints ok/FAIL per binding + a summary).
 ; ============================================================================
-; the kanren machinery rides the `kanren` MODULE book now (love/prel.l), and the
+; the kanren machinery rides the `kanren` MODULE book now (src/core/boot/prel.l), and the
 ; glaze helpers this spike leaned on ride the `glaze` book
 (: subst (from 'kanren 'subst)  nthl (from 'glaze 'nthl)  base-ev (from 'glaze 'base-ev))
 

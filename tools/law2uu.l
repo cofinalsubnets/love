@@ -15,7 +15,7 @@
 ; going up (nbit nzed zrea rmsr vnum, or one of the named val shortcuts nval zval
 ; rval bval) and the retractions going down -- so (net (net x)), whose inner net
 ; answers a measure where the outer wants a value, lifts to (vnet (vnum (vnet v)))
-; and needs no rule of its own. that is the whole type oracle: crew/lux/sigs.l does
+; and needs no rule of its own. that is the whole type oracle: src/apps/lux/sigs.l does
 ; this job for wm2uu, and here the tower is its own.
 ;
 ; the proof is searched, not transcribed. three strategies, tried in order

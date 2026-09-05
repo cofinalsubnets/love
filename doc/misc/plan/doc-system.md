@@ -2,7 +2,7 @@
 
 Docs from the source itself: libra reads them out of comments, lapiz shows them as
 markup. The premise needs one correction before anything else — **lapiz already
-exists** ([`crew/lapiz/lapiz.l`](../../crew/lapiz/lapiz.l), three surfaces md/ht/rf
+exists** ([`src/apps/lapiz/lapiz.l`](../../src/apps/lapiz/lapiz.l), three surfaces md/ht/rf
 over one AST, round-trip laws gated in `test/host/lapiz.l`), and so does the whole
 rendering stack above it (papel: titles, anchors, TOC, blurbs, cross-links, index;
 `make site`). The writing half of this arc is done. The arc is the *reading* half,
@@ -10,11 +10,11 @@ and the reading half has a real hole in the middle of it.
 
 ## the hole
 
-No reader in the tree keeps comments. `p0` (C, `src/love.c`) and `sound`
-(`love/p1.l`) both drop `;` lines on the floor by design, and libra's own header
+No reader in the tree keeps comments. `p0` (C, `src/core/love.c`) and `sound`
+(`src/core/boot/p1.l`) both drop `;` lines on the floor by design, and libra's own header
 says why its print-from-the-datum verbs are stdout-only: printing from the datum
 strips every comment. Two lexers *locate* comments without keeping them —
-`lib/lint.l` tracks a `'cmt` state (positions, no text), `crew/vi/hue.l` classifies
+`src/apps/libra/lint.l` tracks a `'cmt` state (positions, no text), `src/apps/vi/hue.l` classifies
 `'comment` runs (offsets per line). So the extractor cannot be a datum walk; it has
 to be a text walk that knows where the comments are.
 
@@ -36,7 +36,7 @@ fights the house style.**
 
 ## the ladder
 
-- **rung 0 — headers out, pages up.** A `libra doc` verb (or `crew/` member) that
+- **rung 0 — headers out, pages up.** A `libra doc` verb (or `src/apps/` member) that
   takes a `.l` file, lifts the leading comment block via lint.l's scanner, maps the
   prose to a lapiz AST, and shows it on any surface. Wire papel to accept `.l`
   sources (its `mdsof` seam is small) so `make site` grows a page per crew tool.
@@ -81,7 +81,7 @@ sources. that was wrong, and the rule that says so is one line: **parsing love
 code, including recognizing comments, is libra's job.** papel is lapiz + cook and
 should stay that -- it reads markdown and knows nothing else. so:
 
-- the extraction lives IN `crew/libra/libra.l`, beside the formatter and the
+- the extraction lives IN `src/apps/libra/libra.l`, beside the formatter and the
   infix pass. nothing else in the tree has to learn what a comment is.
 - `make site` runs `libra doc` over each crew tool into `out/toolmd/*.md`, and
   papel builds a site out of markdown exactly as it always has. papel's diff is
@@ -89,7 +89,7 @@ should stay that -- it reads markdown and knows nothing else. so:
 
 ### the pieces
 
-- **`lint-cmts`** (`lib/lint.l`) -- every comment in reading order, `(line col
+- **`lint-cmts`** (`src/apps/libra/lint.l`) -- every comment in reading order, `(line col
   text kind)`, the text after the introducer and the kind `'semi` / `'bang`.
   lint's fourth walk and its smallest: no stack, three states, so a `;` inside a
   string is not a comment. the two lexers that *located* comments are unchanged;
@@ -126,7 +126,7 @@ gate: `test/host/libra.l`, with the rest of libra's verbs.
 ### also swept
 
 the LSP server went (2026-08-16) -- `libra serve` and its json-rpc lane, which
-doc/misc/libra.md itself recorded as having no consumer. `lib/json.l` stays.
+doc/misc/libra.md itself recorded as having no consumer. `src/apps/json/json.l` stays.
 
 ## ✅ rung 1 landed
 
@@ -165,13 +165,13 @@ dashes, and a dash is not a letter.
 
 ## ✅ the annotated source, and its stylesheet
 
-a THIRD reader of `crew/vi/hue.l`'s class table, after the painter in vi's vframe
+a THIRD reader of `src/apps/vi/hue.l`'s class table, after the painter in vi's vframe
 and the vim syntax generator: `tools/hue2web.l`. it knows nothing about what a
 comment or a sigil is -- it asks hue, the way the other two do, so a class added
 to that table arrives in all three without anyone being told.
 
 the theme's own split is what made it cheap. hue.l says "a comment is a
-`Comment`"; `crew/vi/config.l` says "in molokayo a `Comment` is `#75715E`". the
+`Comment`"; `src/apps/vi/config.l` says "in molokayo a `Comment` is `#75715E`". the
 vim generator uses the first half and leaves the colour to the reader's
 colorscheme; a web page has no colorscheme, so this joins both halves and the
 site wears the editor's theme by construction.

@@ -2,7 +2,7 @@
 ; the multi-line line editor (ed*), the history zipper (uphist/downhist/mkframe/
 ; detach), joinln/flatten/splitat, and parseall used to be user-visible book globals
 ; only because the corpus (the old test/repl.l + test/replio.l) tested them by name.
-; They live inside bao's closure (love/bao.l), off the global book -- and the checks
+; They live inside bao's closure (src/core/boot/bao.l), off the global book -- and the checks
 ; live here, where checks belong, reaching them through bao's test door:
 ;
 ;   (bao 'parts) -- the editor primitives as a tablet, the shape `from`

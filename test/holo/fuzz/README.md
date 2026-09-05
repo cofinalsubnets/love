@@ -4,7 +4,7 @@
 > `test/proof/rocq/enc*.v`) and the roadmap for further slices live in
 > [``](../../../).
 
-The verification frontier stops at holo today: `crew/holo/` (the x86-64 + a64 assembler)
+The verification frontier stops at holo today: `src/core/holo/` (the x86-64 + a64 assembler)
 has no formal proof, only the frozen goldens in `test/holo/golden.l`/`test/holo/as.l`. Those goldens were
 each validated by hand — "emit the bytes, `objdump -d -M intel`, confirm the mnemonic" — over a
 few dozen forms. This harness **automates that exact round-trip and runs it over tens of
@@ -98,7 +98,7 @@ positions where the two backends would diverge — the fuzz analogue of respecti
   index slots (`irand`).
 - **a64**: encoding `31` is SP only in load/store-base and add/sub-immediate contexts; as a
   general data-processing or value operand it is XZR (the zero register). holo maps `sp`→31 and
-  uses it *only* as SP (per `crew/holo/a64.l`), so `(cmp x sp)`, `(jmpr sp)`, a loaded/stored
+  uses it *only* as SP (per `src/core/holo/a64.l`), so `(cmp x sp)`, `(jmpr sp)`, a loaded/stored
   value register of `sp`, etc. silently encode the zero register — diverging from x64 where
   `rsp` is a general operand. Generators use `nrand` (no-sp) for those positions and keep `sp`
   only for load/store base and add/sub-immediate (the reachable stack cases, verified).
@@ -117,7 +117,7 @@ barrier domain, a cache operation), so instead of disassembling holo's bytes it 
 intended text with `llvm-mc` and demands the same bytes** — byte-exact, in both directions of
 the encode/decode pair.
 
-It reads the op tables straight out of `crew/holo/a64.l` (`a64-sysregs`, `a64-pstate`,
+It reads the op tables straight out of `src/core/holo/a64.l` (`a64-sysregs`, `a64-pstate`,
 `a64-barrier-opts`, and the four SYS tables), so **a row added to holo is checked on the next
 run with no edit here** — the uncovered row is the one that ships wrong. The x86 side has no
 name tables (its operand space *is* the register file), so it enumerates: cr0–cr8 × every GPR ×
@@ -138,7 +138,7 @@ fails if `llvm-mc` takes neither, so a table typo cannot hide behind a skip.
 
 Status as of 2026-07-28: **910 system encodings, zero discrepancies** (743 x64, 167 a64). The
 one deliberate divergence is `int 3`: `llvm-mc` folds it to the one-byte `CC`, holo keeps `CD 03`
-(see `crew/holo/x64.l` — `trap` is the `CC` form).
+(see `src/core/holo/x64.l` — `trap` is the `CC` form).
 
 ## Extending
 

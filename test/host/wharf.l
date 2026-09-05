@@ -1,7 +1,7 @@
-; --- test/host/wharf.l: the laws of lib/wharf.l, quay's layout algebra ---
+; --- test/host/wharf.l: the laws of src/apps/berth/wharf.l, quay's layout algebra ---
 ; not in the test/*.l corpus, but for a different reason than its neighbours here:
 ; wharf needs no nifs at all -- it is arithmetic over lists, and would run happily
-; on love0, wasm and the kernel. what it needs is the loader: `use` finds lib/wharf.l
+; on love0, wasm and the kernel. what it needs is the loader: `use` finds src/apps/berth/wharf.l
 ; by the filesystem walk, and the corpus also runs where there is no filesystem. when
 ; a second seat bakes wharf behind its egg, these laws can move to the corpus whole.
 ;
@@ -9,7 +9,7 @@
 ;
 ; the vocabulary under test is rectangles in cells: (id row col rows cols), origins
 ; 0-based, and a bar is (dir row col len) with dir 'across or 'down.
-(use "lib/wharf.l")
+(use "src/apps/berth/wharf.l")
 
 ; --- the two standing laws, checked rather than trusted ---
 ; spans are half-open, so a zero-extent berth is inside everything and overlaps

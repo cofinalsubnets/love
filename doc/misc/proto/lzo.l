@@ -1,5 +1,5 @@
 ; doc/misc/proto/lzo.l -- LZO1X in love, both ways: the byte-token stream `lzo1x_1_compress`
-; writes and `lzo1x_decompress` reads. A spike, weighed against lib/gz.l for the source
+; writes and `lzo1x_decompress` reads. A spike, weighed against src/apps/gz/gz.l for the source
 ; blob the seed carries.
 ;
 ;   (lzo-compress s)       -> an LZO1X-1 stream, a string
@@ -24,7 +24,7 @@
 ; decoder to honour and never emitted.
 (:
    ; --- the growing byte buffer ---------------------------------------------
-   ; a cask that doubles, then one exact copy at the end -- lib/gz.l's, and for the
+   ; a cask that doubles, then one exact copy at the end -- src/apps/gz/gz.l's, and for the
    ; same reason on the decode side: a match copies out of what has already been
    ; produced, so the sink must be readable too.
    (lzo-buf n) (: b (tablet 0) _ (pin b 0 (cask (? (n < 64) 64 n))) _ (pin b 1 0) b)

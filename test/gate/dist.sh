@@ -58,7 +58,7 @@ smoke)
   run "$dist" -e '(? (2 = (1 + 1)) (quit 0) (quit 1))' || fail "-e still evals"
 
   # --- the docs verb rides the one image -----------------------------------------
-  run "$dist" libra doc lib/serve.l > "$s/libra.md" 2>&1 \
+  run "$dist" libra doc src/apps/kiosko/serve.l > "$s/libra.md" 2>&1 \
     || fail "libra did not wake"
   grep -q "love serve" "$s/libra.md" \
     || fail "libra woke but answered nothing: $(head -3 "$s/libra.md")"

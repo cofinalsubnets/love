@@ -33,7 +33,7 @@ went.
 | the boot drink | `test/kernel/all.l` through `k-run-file`, INSTEAD of the kore cat and the boot cmdline |
 | Makefile | `ksuf`, the `-test` odir, `-DK_TEST -Dai_tco=1`, four gates |
 
-`-Dai_tco=1` is redundant: `src/love.h:39` already defaults it to 1 and the
+`-Dai_tco=1` is redundant: `src/core/love.h:39` already defaults it to 1 and the
 shipped kernel takes the default.
 
 ## the rungs
@@ -71,7 +71,7 @@ names that already exist and both instruments have nowhere left to be special.
   and 2 are not special: a charm that reached `see` by mistake is misuse, and
   refusing the low three to catch it would forbid `say` to stdout by number,
   which is a thing to want.
-  The lanes are src/fd.c's, beside `ai_fd_write_all`, and they go at the ROW
+  The lanes are src/host/fd.c's, beside `ai_fd_write_all`, and they go at the ROW
   and not at read(2) -- `k_fd_read` folds busy and end into one 0, so a syscall
   read would take an idle pipe for its end. An fd spelled in love stays absolute
   (kmain's seat law), so a raw op is seat-blind where the port lane is not.
@@ -82,7 +82,7 @@ names that already exist and both instruments have nowhere left to be special.
   the contract's `()` for "absence or unreadability" was already the right
   answer for EBADF. `lstat` on a charm is the same thing: an fd names the thing
   itself and no link is in the way. It earns its place twice over -- the `fstat`
-  ROW had no love-level caller at all (src/image.c's two are the hosted
+  ROW had no love-level caller at all (src/host/image.c's two are the hosted
   file-load path, and the kernel wakes from memory), so its only exercise was
   the instrument written to exercise it. `(= (stat fd) (stat path))` holds on
   both seats, which is also a law about k_fd_stat and k_statat fabricating the
@@ -95,7 +95,7 @@ names that already exist and both instruments have nowhere left to be special.
   other two operands rather than a quiet SET.
 
 No new nif. `fdclose` went, seven nifs gained a kind and one lost a bug -- the
-three lanes those kinds ride are src/fd.c's, where the fd doors already live.
+three lanes those kinds ride are src/host/fd.c's, where the fd doors already live.
 
 **The subtraction. LANDED.** `syswrite`, `syscall` and `k_sys_nr` are out (-93
 lines over kmain.c and sys.c), and `test/kernel/sys.l` with them: 386 lines, 114
@@ -122,7 +122,7 @@ those keeps coverage through an ordinary nif -- dup issues fcntl, dup2 issues
 dup3, pipe issues pipe2, utime issues utimensat, rmdir issues unlinkat with
 AT_REMOVEDIR, readdir issues getdents64, stat issues newfstatat and now fstat --
 so what is lost is the argument values those rows refuse, defensive arms
-guarding against a caller that does not exist. src/sys.c says so above its
+guarding against a caller that does not exist. src/inle/sys.c says so above its
 dispatch rather than leaving them looking exercised. getpid's row is the one
 casualty: this seat has no getpid nif (love's answers the TASK pid, kmain's own
 door), so nothing in the tree reaches it -- nolibc's own C callers still do.
@@ -173,7 +173,7 @@ spelled in C to be reached from love. The falsifier is the uses commented out:
 `;; missing rand`, exit 2, so the layers are load-bearing and the corpus says so.
 
 **Rung 4 -- delete K_TEST. LANDED.** `ksuf`, the `-test` odir tree,
-`-DK_TEST -Dai_tco=1`, `tools/ccdb.l`'s copy of it, `src/x64_asmops.h`'s last
+`-DK_TEST -Dai_tco=1`, `tools/ccdb.l`'s copy of it, `src/inle/x64/asmops.h`'s last
 sentence, and both `#ifdef`s left in kmain. The `k_pie_in` fork reads plainly
 now: at the host's own arch project the shipped binary, everywhere else build the
 pie.
@@ -191,7 +191,7 @@ ramfs -- so the shipped kernel needed nothing added to run the corpus, which is
 the claim at the top of this plan, now demonstrated rather than argued.
 `tools/ktest.l` passes the append for the `-kernel` door; firmware carries no
 command line, so the ESP gets `love.cmd` beside `love.elf` and the loader reads
-it. That cost two fields in `src/uefi_loader.c`'s hand-kept `struct k_boot` copy,
+it. That cost two fields in `src/inle/uefi/loader.c`'s hand-kept `struct k_boot` copy,
 which was a PREFIX of the real one -- `date` and `cmdline` were missing, and a
 member the compiler cannot find is how mooncc says so (`cannot compile
 'kcmdline' (cause unnamed)`, which is the same face it wears for anything else).

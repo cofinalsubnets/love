@@ -42,13 +42,13 @@ that registers nothing. Nothing else moves. Gate: `make test`.
 
 **Rung 1 -- ai_defn's module target. CLIMBED.** The module is the CALL's, not
 the row's: ai_defn grew a fourth parameter (NULL = the book, so struct ai_def
-stays two words), and ai_modtab (src/love.c) pushes the found-or-made module
+stays two words), and ai_modtab (src/core/love.c) pushes the found-or-made module
 tablet where the book map would sit -- the binding loop is one loop either
 way. The registry is made C-side at boot (the drain runs BEFORE prel) and
 FOUND over a woken image, where the drain re-pins the current addresses (the
 same freshness the book lane always had). AiModNifs("mod", table) is the
 section spelling: one exported struct ai_mod row = one (module, def table) =
-one ai_defn call at the drain. The proof: src/mem.c's peepw/pinw moved into
+one ai_defn call at the drain. The proof: src/host/mem.c's peepw/pinw moved into
 module 'mem -- off the bare book everywhere -- and flat.l's presence probe
 collapsed from the out-of-band (names ()) dance to an ordinary `(from 'mem)`
 read. test/host/modnif.l holds the laws, including the C+.l one-module story:
@@ -103,7 +103,7 @@ doors), and a head there BROKE the egg lane's file loads (papel loads cook;
 grew the applets' home-module fallback (sh-imgask tries the book, then
 (from 'kore nm)) and the urun wrap door reads the module -- a miss absorbs
 to (), keeping the no-wrap lane. asbook.l stays bare on purpose: its ambient
-(use 'holo) is load-bearing for the cats' holo copies (src/main.c:966's
+(use 'holo) is load-bearing for the cats' holo copies (src/host/main.c:966's
 double-carry note) -- that ambience is holo's own wrap to dissolve.
 THE FIND: since rung 0 the module macro emitted `(\ ((f ..)))` -- ONE extra
 list level -- so a body's forms evaluated as ONE APPLICATION CHAIN: every
@@ -159,7 +159,7 @@ them. One environmental scare worth naming: the sb script's shebang takes
 `love` off PATH, and an installed pre-module love answers
 `;; missing module` -- that is the nest re-seat's business, not the wrap's.
 
-*Lush CLIMBED.* The eight parts wear `(module 'lush`; lib/lush.l's assembly
+*Lush CLIMBED.* The eight parts wear `(module 'lush`; src/apps/lush/lush.l's assembly
 and the catted bin register the same module, and the distro's /lib/sh.l lane
 reads it through boot.l's one-use -e. The consumers, sorted by DEFINER this
 time: kore.l's sh/lush rows read (from 'lush 'sh-main); find.l's fnmatch
@@ -179,12 +179,12 @@ vi.l lead with the scoped (use 'kore); config.l's ambient head DROPPED
 outright -- config reads no kore; the head had been serving the cat's
 downstream, and the one lane still leaning on it (test_kore's law cat)
 now echoes its own (use 'kore) before law.l, the moon.sh pattern. law.l and
-hue2vim.l lead with (use 'vi); lib/hueweb.l splices it for its own compile
+hue2vim.l lead with (use 'vi); src/apps/vi/hueweb.l splices it for its own compile
 (outside-image tools' two path-uses register the same module -- the loader
 re-pin); kore.l's vi row reads (from 'vi 'vi-main). Only the still-bare
 holo/asbook ambience remains -- holo's own wrap, rung 2's coda, dissolves it.
 
-*Holo CLIMBED -- the coda, and the last ambience dies.* The fourteen crew/holo
+*Holo CLIMBED -- the coda, and the last ambience dies.* The fourteen src/core/holo
 files wear `(module 'holo`, so the baked lib entry (holo + native backend +
 elf/obj/link as one source) and every cat REOPEN one tablet -- the double-carry
 is now a double-write into the same module, and defbackend's join is unchanged.
@@ -222,7 +222,7 @@ registers.
 **Rung 4 -- the walk retires. CLIMBED.** `libsrc` is gone: a NAME is a miss
 unless something registered it, with a file of that name sitting in `lib/`.
 Callers write the path out -- 40 sites -- and the slashed include went with the
-walk, so crew/tls's three parts took the `(module 'tls` wrap sb and lush
+walk, so src/apps/tls's three parts took the `(module 'tls` wrap sb and lush
 already wore. `lib/` is now a directory like any other; its seven crew
 symlinks and three subfolders have no user left in the tree. (The `kfs` ramfs
 that still keyed on the name went with K_TEST -- doc/misc/plan/one-kernel.md.)
@@ -238,7 +238,7 @@ it touches walks.
   module named for this file's basename registered? then splice it and skip the
   read" -- which is a cache keyed on the wrong thing the moment several files
   register one module, which is the normal shape here (sb's parts, lush's
-  eight, tls's three). `(use "crew/sb/sb.l")` after merge.l had registered `'sb`
+  eight, tls's three). `(use "src/apps/sb/sb.l")` after merge.l had registered `'sb`
   never opened the file, so selfpack lost `ign?`, `sp-keep?` said keep, and the
   cut packed `out/` and its own previous tarball: 478 MB where 2.7 MB was due.
   ⚠ THE BUILD STAYED GREEN -- exit 0, the entry count plausible; only the
@@ -253,7 +253,7 @@ it touches walks.
   file's, and a module that already stood there) and the pull fires only when
   neither exists.
 - **`love bake` snapshots a FRESH EGG, not this session.** The image load is
-  guarded by `!bake` (src/main.c), so a user-baked image carries the fourteen
+  guarded by `!bake` (src/host/main.c), so a user-baked image carries the fourteen
   core modules and no crew; the shipped image is `bake -l $(ho)/.dist-cat.l`.
   test_seat's "under a wake" case had been resting on the walk to hand libra
   its `lint` and `salt` -- true before this rung too, and invisible because the
@@ -318,7 +318,7 @@ Eight frontends lost their table and their ~20 `src_*` arrays for one
   at creation, so the scare lands at the define and the build walks on.
 - **glaze is the one text a flat cat cannot hold.** It folds `assemble` at its
   own compile, so holo must be SPLICED while it evals -- which the boot
-  arranges. It also declares itself in src/main.c rather than in emit.l or
+  arranges. It also declares itself in src/host/main.c rather than in emit.l or
   auto.l, because neither file is the module: the pair is.
 - **renumbering `image_immortals` is a wire-format change.** Dropping
   `ai_ti_vt` shifted every index after it, so `ImageMagic` moved to `AISNO05`.
@@ -333,6 +333,6 @@ Eight frontends lost their table and their ~20 `src_*` arrays for one
   compare before the move (out/lib/corpus.list's discipline), so a touch that
   changes no bytes now rewrites nothing and rebuilds nothing, where before it
   rewrote every header and relinked love0. The standing option should holo's
-  share ever matter: `crew/holo/holo.l` into `$(moonfiles)`, ahead of asbook.l
+  share ever matter: `src/core/holo/holo.l` into `$(moonfiles)`, ahead of asbook.l
   and the backends already there, so that cat carries its own core and holo
   leaves love0's text.

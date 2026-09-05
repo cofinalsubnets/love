@@ -1,5 +1,5 @@
 ; --- test/glaze-hook.l: the natjit creation-hook laws ---------------------------
-; the hook is love/glaze/hook.l -- ev.l's `ala` reads it via (gv 'natjit) on every closure
+; the hook is src/core/boot/glaze/hook.l -- ev.l's `ala` reads it via (gv 'natjit) on every closure
 ; built, top-level and embedded, and a qualifying leaf is native-backed at creation. these
 ; laws lived inside that source as an `_ (assert)` pair, so they ran at every egg boot and
 ; every bake; they are a test, and this is where a test goes.

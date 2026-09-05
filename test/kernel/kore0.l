@@ -1,4 +1,4 @@
-; the kore cat rides the corpus next (test/kernel/all.l's roster: crew/kore/{text,core,fs}.l,
+; the kore cat rides the corpus next (test/kernel/all.l's roster: src/apps/kore/{text,core,fs}.l,
 ; then test/kernel/kore.l drives the mains) -- but `quit`, the host's exit door,
 ; is absent on this seat, and 00-init.l's fallback for an absent nif answers ().
 ; a main folds its `quit` at compile, so the identity must be pinned before the

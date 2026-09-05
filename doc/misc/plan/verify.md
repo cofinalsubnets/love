@@ -5,7 +5,7 @@ names them all, keeps one, and says what happens to each of the others.
 
 ## the stance
 
-**the native uu prover (love/uu.l) is target number one.** a property worth
+**the native uu prover (src/core/boot/uu.l) is target number one.** a property worth
 holding is worth stating as a uu term; rocq and lean are EXPORT targets
 (tools/uu2coq.l, uu2lean.l -- both wired: test_uugen, test_uulean), not
 homes. the fuzz lanes (test/law.l, test/fuzz.l, the seeded walks) stay -- a
@@ -16,7 +16,7 @@ half of the same ladder, not separate programs.
 
 | angle | home | fate |
 |---|---|---|
-| uu kernel + UniMath corpus | love/uu.l, test/uu*.l | THE TARGET |
+| uu kernel + UniMath corpus | src/core/boot/uu.l, test/uu*.l | THE TARGET |
 | rocq export | uu2coq.l, spec2coq.l, mx2coq.l | keep: export leg |
 | lean export | uu2lean.l | keep: export leg |
 | verified lux (uuwm) | wm2uu.l, test/uuwm*.l | keep; FRESHENED 2026-08-16 |
@@ -52,17 +52,17 @@ still standing, not verification:
 
 - **tools/ccdb.py** -- compile_commands generator for clangd. dev-only;
   ports to love when touched next.
-- **port/rp2040/tools/py/{elf2uf2,pad_checksum}.py** -- flasher utilities on
+- **src/port/rp2040/tools/py/{elf2uf2,pad_checksum}.py** -- flasher utilities on
   a port lane. port to love with the next rp2040 ride.
 
 ## the uuwm freshen (landed 2026-08-16)
 
-crew/lux/core.l is written in the new style (glued accessors, infix, !=,
+src/apps/lux/core.l is written in the new style (glued accessors, infix, !=,
 bracket literals) and tools/wm2uu.l reads the post-opfix tree it makes:
 cap/cup chains where caup was, ></+ beside link/cat, != as = with the arms
 traded. the regenerated test/uuwm.l is BYTE-IDENTICAL to the pre-freshen
 artifact, so the uuwmlaw theorems and the ten idpath bridges hold unchanged.
-the whole crew/lux/ also dropped the backtick list sugar for [..] (a comment-
+the whole src/apps/lux/ also dropped the backtick list sugar for [..] (a comment-
 and string-aware love scanner did the sweep, proving (forms old) = (forms new)
 per file before writing).
 
@@ -122,7 +122,7 @@ test/uuvaldiff.l now, so the three sort model -> differential -> laws.)
   the level it answers; an argument at the wrong level is coerced along the
   sections going up and the retractions going down. so `(net (net x))`, whose
   inner net answers a measure where the outer wants a value, lifts to
-  `(vnet (vnum (vnet v)))` with no rule of its own. crew/lux/sigs.l is wm2uu's
+  `(vnet (vnum (vnet v)))` with no rule of its own. src/apps/lux/sigs.l is wm2uu's
   oracle; here the tower is its own.
 - the PROOF IS SEARCHED, not transcribed: the tool loads the kernel and the
   model and runs defq. by conversion first -- `(lam v (idpath LHS))`, which
@@ -193,7 +193,7 @@ link laws land.
 add-assoc / mul-assoc / mul-dist rest on the BAND LATTICE, which lived only in
 Rocq (test/proof/rocq/mx.v, from tools/mx2coq.l). it lives in uu now too:
 
-- **tools/mx2uu.l** -- mx2coq's uu twin, reading THE TABLE (src/mx.l, the same
+- **tools/mx2uu.l** -- mx2coq's uu twin, reading THE TABLE (src/core/mx.l, the same
   love datum love.c's mx.h is laid from) and deriving the band partition by the
   same rule -- kinds grouped by row+column equality across BOTH matrices at
   once -- so the two exports cannot disagree about what a band is.
@@ -217,7 +217,7 @@ Rocq (test/proof/rocq/mx.v, from tools/mx2coq.l). it lives in uu now too:
   identity. and flipping one cell of the generated table makes the kernel refuse
   a proof outright (uu-idpath-mismatch, exit 1).
 - gated by `make test_uumx` off the uu_corpus roster (regenerate + diff, so a
-  src/mx.l edit with no refresh reddens), and exported: all 28 mx entries
+  src/core/mx.l edit with no refresh reddens), and exported: all 28 mx entries
   re-check in Rocq and Lean 4. mx.l's shape now stands in three kernels, twice
   in Rocq by two independent roads.
 

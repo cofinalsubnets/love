@@ -1,7 +1,7 @@
 ; --- doc/misc/proto/spl.l: CALL vs SPLICE, modeled -- an ev.l inliner design spike ---
 ; ev.l inlines nothing above the nif level. this model is the license an inliner
 ; would need, said runnable: a stack machine in ev's emitter shape (an emitter is
-; (\ k ..) prepending onto the continuation's thread -- love/ev.l "THE EMISSION
+; (\ k ..) prepending onto the continuation's thread -- src/core/boot/ev.l "THE EMISSION
 ; INTERFACE" the design), and THREE ways to compile a call site,
 ; which are one body compiler `cb` handed three param READERS:
 ;

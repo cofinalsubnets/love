@@ -1,5 +1,5 @@
 ; test/uumxlaw.l -- the laws of love's `+` and `*` dispatch, proved of the
-; generated table (test/uumx.l, lifted from src/mx.l by tools/mx2uu.l; this file
+; generated table (test/uumx.l, lifted from src/core/mx.l by tools/mx2uu.l; this file
 ; loads after it by sort order, and the kernel + nat vocabulary live in
 ; test/uu.l). the theorems are hand-written over a table nobody typed, so a
 ; dispatch edit that breaks the band quotient, the mirror symmetry, or any cell

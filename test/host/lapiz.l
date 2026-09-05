@@ -244,6 +244,6 @@ some literal
       0)
 
  _ (test_fin ())
- _ (puts "crew/lapiz: ok -- the document lens (markdown/html/roff), laws 1 + 2 + the roff domain
+ _ (puts "src/apps/lapiz: ok -- the document lens (markdown/html/roff), laws 1 + 2 + the roff domain
 ")
  0)

@@ -1,5 +1,5 @@
 ; test/uuwmlaw.l -- the laws of the window-manager moves, over the ops that
-; test/uuwm.l generated from crew/lux/core.l (this file loads after it by sort
+; test/uuwm.l generated from src/apps/lux/core.l (this file loads after it by sort
 ; order; the substrate + kernel live in test/uu.l). This is the stage-5 lock:
 ; the theorems below are checked against terms compiled from the source, so a
 ; core.l edit that breaks an invariant fails a proof right here, on every

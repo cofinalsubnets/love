@@ -15,7 +15,7 @@
 ; .c files, so nothing here asks a version control system what the tree holds. what it
 ; writes carries absolute paths, so it is this machine's and rides in no archive.
 (use 'tar)
-(use "lib/json.l")
+(use "src/apps/json/json.l")
 
 (: root (cwd 0)
    (inc p) ("-I" + root + p)
@@ -26,17 +26,17 @@
    ; /core carries love.h and every lane names it bare, so a group that drops it
    ; parses nothing: the miss is fatal and the flood after it says nothing.
    host ["-std=gnu23" "-Dai_tco=1"
-         (inc "") (inc "/core") (inc "/out/lib") (inc "/out/host") (inc "/crew/quay")]
+         (inc "") (inc "/core") (inc "/out/lib") (inc "/out/host") (inc "/src/core/quay")]
    ; the freestanding kernel: its own libc, its own headers, nothing hosted.
    inle (["-std=gnu23" "-Dai_tco=1" "-ffreestanding" "-nostdinc"
-          (inc "") (inc "/core") (inc "/out/lib") (inc "/out/host") (inc "/crew/quay")]
-         + [(inc "/free") (inc "/crew/moon/include")])
+          (inc "") (inc "/core") (inc "/out/lib") (inc "/out/host") (inc "/src/core/quay")]
+         + [(inc "/free") (inc "/src/apps/moon/include")])
    ; moon's replacement libc -- compiled against its own headers, so glibc's
    ; declarations would conflict with the real ones.
-   moonlibc ["-std=gnu23" "-ffreestanding" "-nostdinc" (inc "/crew/moon/include") (inc "")]
+   moonlibc ["-std=gnu23" "-ffreestanding" "-nostdinc" (inc "/src/apps/moon/include") (inc "")]
    ; the playdate workbench takes its lcat'd cas.h out of out/playdate.
    playdate (host + ["-DTARGET_PLAYDATE=1" "-DTARGET_EXTENSION=1"
-                     (inc "/port/playdate") (inc "/out/playdate")])
+                     (inc "/src/port/playdate") (inc "/out/playdate")])
 
    ; two files reach for a vendor sdk outside the tree. point the database at it when the
    ; environment names one; otherwise the file stays out entirely and .clangd quiets it,
@@ -45,21 +45,21 @@
    emsdk (getenv "EMSDK")
 
    (flags-for rel)
-    (? (pre? rel "crew/moon/lib/") moonlibc
-       ; src/asmops.h picks the machine's set off a predefine, so only the a64
+    (? (pre? rel "src/apps/moon/lib/") moonlibc
+       ; src/inle/asmops.h picks the machine's set off a predefine, so only the a64
        ; lane needs saying -- the rest read as the host's.
        (pre? rel "src/a64_") (inle + ["--target=aarch64-unknown-none-elf"])
        (pre? rel "src/kmain" || pre? rel "src/sys" || pre? rel "src/blk"
         || pre? rel "src/doom" || pre? rel "src/x64_") inle
-       (pre? rel "port/playdate/") (#pd-sdk ? (playdate + [("-I" + pd-sdk + "/C_API")]) playdate)
+       (pre? rel "src/port/playdate/") (#pd-sdk ? (playdate + [("-I" + pd-sdk + "/C_API")]) playdate)
        (pre? rel "wasm/") (host + [("-I" + emsdk + "/upstream/emscripten/system/include")])
        host)
 
    ; rp2040 is a thumb1 cross target and this database models the host and freestanding
    ; lanes only, so its flags would be the wrong ones; .clangd quiets the path to match.
    (skip? rel)
-    (pre? rel "port/rp2040/"
-     || rel = "port/playdate/pdglue.c" && !#pd-sdk
+    (pre? rel "src/port/rp2040/"
+     || rel = "src/port/playdate/pdglue.c" && !#pd-sdk
      || pre? rel "wasm/" && !#emsdk)
 
    ; the walk prunes what is not source before it descends -- out/ and dl/ are gigabytes

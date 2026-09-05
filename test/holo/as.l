@@ -1,9 +1,9 @@
-; the gate for crew/holo/as.l, the real at&T x86-64 front. each golden below is the exact
+; the gate for src/core/holo/as.l, the real at&T x86-64 front. each golden below is the exact
 ; .text hex `/usr/bin/as` emits for the same source (assemble, `objcopy -O binary --only-section=.text`,
 ; hexdump) -- so this file is the frozen record of that byte-for-byte round-trip against the system
 ; assembler. if a golden drifts, either as.l broke or gas changed, and either is worth a look.
 ; regenerate a golden: printf '%s\n' 'src' | as --64 -o t.o - && objcopy -O binary -j .text t.o t.bin && xxd -p t.bin
-; run: cat crew/holo/{holo,x64,as}.l test/holo/as.l | out/host/love  (nonzero exit on any miss)
+; run: cat src/core/holo/{holo,x64,as}.l test/holo/as.l | out/host/love  (nonzero exit on any miss)
 ;
 ; scope: the straight-line battery -- register, immediate and memory operands at all four widths,
 ; the size suffix where a register carries none. branch relaxation (jmp/jcc to a near label) and the

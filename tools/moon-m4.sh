@@ -47,9 +47,9 @@ case $target in
   x64)   name=moon-m4       ; tflag=""         ; sub=moonm4
          mksys=mksys       ; backend=""              ; run=""            ; need="" ;;
   a64) name=moon-m4-a64 ; tflag="-t a64" ; sub=moonm4-a64
-         mksys=mksys-a64 ; backend=crew/holo/a64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
+         mksys=mksys-a64 ; backend=src/core/holo/a64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
   rv64) name=moon-m4-rv64 ; tflag="-t rv64" ; sub=moonm4-rv
-         mksys=mksys-rv64 ; backend=crew/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
+         mksys=mksys-rv64 ; backend=src/core/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
   *) echo "moon-m4.sh: unknown target $target (x64 | a64 | rv64)" >&2; exit 1 ;;
 esac
 
@@ -91,7 +91,7 @@ rm -rf "$d"; mkdir -p "$d"
 # minus stackovf.o (USE_STACKOVF off) and alloca.o (HAVE_ALLOCA: nolibc's).
 SRC="m4 builtin debug eval format freeze input macro output path symtab"
 LIB="regex getopt getopt1 error obstack xmalloc xstrdup"
-CFLAGS="-DSTDC_HEADERS=1 -DHAVE_CONFIG_H -Icrew/moon/include -I$M4SRC -I$M4SRC/src -I$M4SRC/lib"
+CFLAGS="-DSTDC_HEADERS=1 -DHAVE_CONFIG_H -Isrc/apps/moon/include -I$M4SRC -I$M4SRC/src -I$M4SRC/lib"
 
 echo "MOON-M4  $M4SRC  ($target: mooncc + nolibc + holo, no gcc/glibc/ld)"
 
@@ -107,16 +107,16 @@ done
 
 # the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO nolibc
 # object -- the link owes its symbols and the driver's runtime table pulls
-# crew/moon/lib/nolibc/ MEMBER BY NEED (src/build.mk says the same of love itself).
+# src/apps/moon/lib/nolibc/ MEMBER BY NEED (src/build.mk says the same of love itself).
 # Naming an object would take every member instead.
-for f in crew/moon/lib/math/*.c; do
+for f in src/apps/moon/lib/math/*.c; do
   b=`basename "$f" .c`
-  $mc $tflag -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
+  $mc $tflag -Isrc/apps/moon/lib/math -Isrc/apps/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
 done
 # sys.o is LAID, not compiled -- and a CROSS lay needs holo's backend loaded
 # first (the host bake carries only the native one), exactly as raw.sh does it.
 { if [ -n "$backend" ]; then echo "(use 'holo)"; cat "$backend"; fi
-  cat crew/kore/text.l crew/kore/u.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
+  cat src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l src/core/holo/elf.l src/core/holo/obj.l src/apps/moon/lib/mksys.l
   echo "((from 'moon '$mksys) \"$d/sys.o\")"; } | $love || { echo "FAIL $mksys sys.o"; exit 1; }
 
 $mc $tflag $objs "$d"/m_*.o "$d/sys.o" -o "$d/m4" || { echo "FAIL holo link m4"; exit 1; }

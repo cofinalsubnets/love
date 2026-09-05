@@ -14,10 +14,10 @@
 ;
 ; exit 1 on any failure; each failure names its class, IR, hex and reason.
 
-(reads (open "crew/holo/holo.l" "r"))
-(reads (open "crew/holo/x64.l" "r"))
-(reads (open "crew/holo/a64.l" "r"))
-(reads (open "crew/holo/rv64.l" "r"))
+(reads (open "src/core/holo/holo.l" "r"))
+(reads (open "src/core/holo/x64.l" "r"))
+(reads (open "src/core/holo/a64.l" "r"))
+(reads (open "src/core/holo/rv64.l" "r"))
 ; holo rides module 'holo: reading the source registers it, and the names come
 ; through the door rather than off this file's layer.
 (use 'holo)

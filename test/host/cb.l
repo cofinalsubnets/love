@@ -1,6 +1,6 @@
-; --- test/host/cb.l: a vttest-lite for quay's console screen (src/cb.c + crew/quay/quay.c) ---
+; --- test/host/cb.l: a vttest-lite for quay's console screen (src/host/cb.c + src/core/quay/quay.c) ---
 ; not in the test/*.l corpus on purpose: the screen nifs (screen/scribe/glass/gaze/reply)
-; live in src/cb.c, which the final `love` links but love0 does not -- and love0 bakes the
+; live in src/host/cb.c, which the final `love` links but love0 does not -- and love0 bakes the
 ; whole corpus, so a corpus test would read these names as missing and fail love0's
 ; self-test. So this is verified the host-nif way: standalone, against the built
 ; binary (the assert macro comes from test/00-init.l):

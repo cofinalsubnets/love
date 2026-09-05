@@ -4,7 +4,7 @@
 ;   love -l doc/misc/proto/lzo.l -l doc/misc/proto/zstd.l doc/misc/proto/lzobench.l LANE IN OUT [REPS]
 ;
 ; the lanes are lzoc / lzod (doc/misc/proto/lzo.l), zsc / zsd (doc/misc/proto/zstd.l) and
-; gzc / gzd (lib/gz.l), and each prints
+; gzc / gzd (src/apps/gz/gz.l), and each prints
 ;
 ;   LANE bytes-in bytes-out ms-per-rep
 ;
@@ -27,7 +27,7 @@
 ;   C    zstd -19     2283124    23.45%      3712 ms         12 ms
 ;
 ; ⚠ THE DEFLATE ROW MOVED, and it is the reason none of the others matter much. it
-; read 3515716 / 36.11% / 25364 ms / 8823 ms while lib/gz.l wrote one fixed-Huffman
+; read 3515716 / 36.11% / 25364 ms / 8823 ms while src/apps/gz/gz.l wrote one fixed-Huffman
 ; block. giving it a code of the block's own took it to 2984599 for no measurable pack
 ; time and a FASTER unpack, there being fewer bits to walk; refusing three-byte matches
 ; past 4096 took it to 2960320. that is 3.9% behind `gzip -9` where it was 23.4%
@@ -35,7 +35,7 @@
 ; match.
 ;
 ; ⚠ * AND THE PACK TIME MOVED AGAIN, AFTER THE TABLE WAS TAKEN. gz-find has a second
-; presentation now -- one holo IR program installed through lib/forge.l, an ablation
+; presentation now -- one holo IR program installed through src/apps/forge/forge.l, an ablation
 ; having said the coder was 92% match search -- and it is 2.7x for the same bytes out.
 ; The starred cell is left at what it read because the rest of that row was measured
 ; with it; the new number is 8619 ms, and it is on a LATER tarball (9784832 -> 2976421,
@@ -43,7 +43,7 @@
 ; `gzip -9` where it was 35x, and LZO's lead on the pack is 4.4x where it was 11.9x --
 ; which narrows what this file concluded without changing it.
 ;
-; ⚠ ** AND THE UNPACK MOVED FURTHER, AND OFF THIS FILE'S TERMS. src/gz.c is a C
+; ⚠ ** AND THE UNPACK MOVED FURTHER, AND OFF THIS FILE'S TERMS. src/core/gz.c is a C
 ; twin of gz-puff, so the `gzd` lane no longer times love at all where the artifact
 ; carries the nif -- it times C, 20 ms under gcc and 37 under mooncc against gz-puff's
 ; 6294 and 7377 on the later tarball. That is FASTER THAN `gzip -d`, which is the first
@@ -69,7 +69,7 @@
 ; that do not (a length floor that rises with the offset) measured 3773921, or 13.6%,
 ; against Huffman's 2.9%.
 ;
-; ⚠ AND THE TARBALL IS NOT ONLY A BLOB. crew/build.mk hands the same bytes to the
+; ⚠ AND THE TARBALL IS NOT ONLY A BLOB. src/apps/build.mk hands the same bytes to the
 ; download and to mksrc, which is what makes a seed rebuilt elsewhere byte-identical
 ; rather than merely equivalent. A blob in any format but gzip breaks that identity,
 ; and changing both hands a stranger an archive their gunzip cannot open.
