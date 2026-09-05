@@ -44,23 +44,30 @@ uintptr_t ai_ustar_link(unsigned char const *h, char *out, uintptr_t cap) {
  while (n < 100 && n < cap && h[157 + n]) out[n] = (char) h[157 + n], n++;
  return n; }
 
+intptr_t ai_path_canon(char *out, uintptr_t n, char const *p, uintptr_t pn, uintptr_t cap) {
+  for (uintptr_t i = 0; i < pn;) {
+    while (i < pn && p[i] == '/') i++;
+    uintptr_t j = i;
+    while (j < pn && p[j] != '/') j++;
+    uintptr_t k = j - i;
+    if (!k) break;
+    if (k == 1 && p[i] == '.') { i = j; continue; }
+    if (k == 2 && p[i] == '.' && p[i + 1] == '.') {
+      while (n && out[n - 1] != '/') n--;
+      if (n) n--;
+      i = j;
+      continue; }
+    if (n + k + 2 > cap) return -1;
+    if (n) out[n++] = '/';
+    memcpy(out + n, p + i, k), n += k;
+    i = j; }
+  return (intptr_t) n; }
+
 uintptr_t ai_lnk_canon(char const *at, char const *ln, char *out, uintptr_t cap) {
   uintptr_t n = 0;
   if (ln[0] != '/') {
     uintptr_t d = strlen(at);
     while (d && at[d - 1] != '/') d--;
     if (d && d <= cap) memcpy(out, at, n = d - 1); }        // dirname, no trailing slash
-  for (uintptr_t i = 0; ln[i];) {
-    while (ln[i] == '/') i++;
-    uintptr_t j = i;
-    while (ln[j] && ln[j] != '/') j++;
-    uintptr_t k = j - i;
-    if (!k) break;
-    if (k == 1 && ln[i] == '.') { i = j; continue; }
-    if (k == 2 && ln[i] == '.' && ln[i + 1] == '.') {
-      while (n && out[n - 1] != '/') n--;
-      if (n) n--;
-      i = j; continue; }
-    if (n && n < cap - 1) out[n++] = '/';
-    while (i < j && n < cap - 1) out[n++] = ln[i++]; }
-  return n; }
+  intptr_t r = ai_path_canon(out, n, ln, strlen(ln), cap);
+  return r < 0 ? 0 : (uintptr_t) r; }

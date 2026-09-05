@@ -591,29 +591,12 @@ static bool k_fs_init(void) {
 static char k_cwd[256];
 static uintptr_t k_cwd_n;
 
-// resolve a path against the cwd into out (cap 256): absolute starts at the root,
-// "." holds, ".." pops, doubled and trailing slashes fall away. -> the canonical
-// length (0 is the root), or -1 for one longer than any entry could carry.
+// resolve a path against the cwd into out (cap 256): absolute starts at the root.
+// -> the canonical length (0 is the root), or -1 for one longer than any entry could carry.
 static intptr_t k_canon(char const *p, uintptr_t pn, char *out) {
   uintptr_t n = 0;
   if (!(pn && p[0] == '/')) memcpy(out, k_cwd, n = k_cwd_n);
-  for (uintptr_t i = 0; i < pn;) {
-    while (i < pn && p[i] == '/') i++;
-    uintptr_t j = i;
-    while (j < pn && p[j] != '/') j++;
-    uintptr_t k = j - i;
-    if (!k) break;
-    if (k == 1 && p[i] == '.') { i = j; continue; }
-    if (k == 2 && p[i] == '.' && p[i + 1] == '.') {
-      while (n && out[n - 1] != '/') n--;
-      if (n) n--;
-      i = j;
-      continue; }
-    if (n + k + 2 > 256) return -1;
-    if (n) out[n++] = '/';
-    memcpy(out + n, p + i, k), n += k;
-    i = j; }
-  return (intptr_t) n; }
+  return ai_path_canon(out, n, p, pn, 256); }
 
 // one open file: which entry, where in it, and whether writes are allowed. rides
 // the k_source row's `state`; the close door frees it.

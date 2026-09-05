@@ -26,7 +26,14 @@ uintptr_t ai_ustar_name(unsigned char const *h, char *out, uintptr_t cap);
 // a symlink member's target, verbatim. -> the length.
 uintptr_t ai_ustar_link(unsigned char const *h, char *out, uintptr_t cap);
 
-// join a symlink's target against the link's own directory, "." and ".." squashed.
-// an explicit base and no cwd, because neither caller has one. -> the length.
+// walk a path (pn bytes) onto the canonical base already in out (n bytes, "" the root):
+// "." holds, ".." pops, doubled and trailing slashes fall away. -> the new length, or -1
+// for one longer than cap carries (a NUL counted). the ramfs cwd walk and the link join
+// below are both this.
+intptr_t ai_path_canon(char *out, uintptr_t n, char const *p, uintptr_t pn, uintptr_t cap);
+
+// join a symlink's target against the link's own directory. an explicit base and no cwd,
+// because neither caller has one. -> the length; 0 for a target too long to carry, so the
+// link resolves to nothing rather than to a truncated name.
 uintptr_t ai_lnk_canon(char const *at, char const *ln, char *out, uintptr_t cap);
 #endif
