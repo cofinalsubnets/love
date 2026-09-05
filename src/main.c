@@ -12,14 +12,11 @@
 #include <math.h>
 #include <stddef.h>      // offsetof (the struct ai_wait_fd / struct pollfd assert)
 #if defined(AiNolibc)
-extern long __ai_osv;    // which kernel this run met: 1 linux, 2 freebsd, 3 netbsd (love-os)
 #endif
-extern void host_spawn_guard(struct ai*, int);   // src/posix.c (exec-bound forks drop the pools)
 #include <stdnoreturn.h>
 #include <signal.h>
 #include <sys/wait.h>
 #include <sys/mman.h>    // the first boot's inflate buffer (mmap, no malloc)
-extern struct ai *ai_argv_marshal(struct ai*, char***);   // src/posix.c: argv -> char** in the heap gap
 
 // ai_clock lives in src/posix.c, one body for this frontend and the kernel's.
 // the fine clock's real source (the weak default in love.c degrades to ms*1e6)
@@ -58,7 +55,6 @@ static lvm(lvm_exit) {
  if (__ai_osv < 0) ai_musttail return Ap(k_lvm_quit, g);
  for (;;) stdin_give(g), exit(getcharm(Sp[0])); }
 
-extern uintptr_t ai_fd_write_all(int, unsigned char const*, uintptr_t);   // src/fd.c
                                                                           //
 static void stdin_hand(struct ai *g) {
  stdin_give(g);
@@ -269,13 +265,6 @@ static struct ai *env_budget(struct ai *g) {
         g->budget = kb * 1024 / 2 / sizeof(ai_word); } } }
   return g; }
 
-extern int image_bake(struct ai*),                       // src/image.c (the self-bake)
-           ai_baked_pick(void const**, uintptr_t*);      // the carried image, if one is baked in
-extern struct ai *image_load(char const*),
-                 *image_dump(struct ai*, char const*);   // src/image.c: `bake PATH`, rc in g->b
-extern uint64_t ai_baked_image[];
-extern uintptr_t ai_baked_image_len;
-
 #ifdef LoveBoot
 static char const
  runner[] = "(reads(tap(s2cl tests)))"   // the stream shell (love/bao.l) drinks the corpus
@@ -378,7 +367,6 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
 // the tty is one terminal, so its cooked baseline and its atexit live in posix.c, which
 // the (raw on) nif drives. the capture-once latch there is what makes a repl that raws
 // after bao already did restore the true baseline rather than a raw one.
-extern int ai_raw_mode(intptr_t on);
 #define raw_mode() ((void) ai_raw_mode(1))
 
 static char const cli[] =
@@ -394,7 +382,6 @@ static char const cli[] =
 #ifdef AiGlazed
 // the glaze's own source, deflated by tools/mkgz.l: 138 KB of text that only a `love bake`
 // reads, for 41 KB of .rodata. src_glaze_z is the bytes, src_glaze_z_raw the inflated size.
-extern intptr_t ai_inflate_raw(const unsigned char*, uintptr_t, unsigned char*, uintptr_t);
 #include "glaze_z.h"
 // LOVE_NO_GLAZE: a pure-interpreter session -- ev back to base-ev and the natjit hook
 // cleared. a session knob like LOVE_NO_IMAGE: it governs a run, never the artifact.
@@ -519,11 +506,7 @@ ai_noinline static struct ai *argv_chain(struct ai *g, char const **v, int argc,
   return g; }
 
 #if !defined(LoveBoot) && !defined(__wasm__)
-extern intptr_t ai_inflate_raw(const unsigned char*, uintptr_t, unsigned char*, uintptr_t);
 #include "ustar.h"
-extern const unsigned char ai_srcgz[];
-extern const uintptr_t ai_srcgz_len;
-extern size_t host_selfpath(char*, size_t);
 static char const src_distlist[] =
 #include "distlist.h"
  ;

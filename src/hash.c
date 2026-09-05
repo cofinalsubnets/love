@@ -182,6 +182,8 @@ static lvm(lvm_md5) LvmCall(g, host_md5)
 // tray reads per byte would cost eight times what one does.
 // the tables are built on the first call rather than laid in .rodata: 2048 entries
 // off a one-line recurrence, and nothing for a reader to check against the polynomial.
+// write-once and idempotent (every builder writes the same words), so the one thing a
+// second thread would need is the flag landing after the table. cksum's pair below too.
 static uint32_t crc_t[8][256];
 static int crc_ready;
 

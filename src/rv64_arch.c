@@ -6,14 +6,7 @@
 #include "asmops.h"                    // the privileged instructions, both spellings
 #include "k.h"                       // kboot, and kputc/kputs/kputn (src/kmain.c)
 
-// khhdm is the higher-half direct map offset the door left; kmain sets it
-// before archinit runs, so physical address P is reachable at khhdm+P.
-extern uintptr_t khhdm;
-extern uint64_t kticks;
-
 void kq(uint8_t);                      // kmain's input queue, one byte
-extern void fbdraw(void);
-extern uint8_t vectors[];              // the trap entry (mkvec.l)
 
 // --- QEMU 'virt' machine fixed MMIO layout ---------------------------
 // every device sits under the first gigabyte, inside the window mkboot.l's

@@ -349,6 +349,24 @@ void ai_fd_drain(int fd, void const*, uintptr_t);
 intptr_t ai_fd_readn(struct ai*, int fd, unsigned char *dst, uintptr_t);
 intptr_t ai_fd_writen(int fd, unsigned char const *src, uintptr_t);
 uintptr_t ai_fd_say(int fd, unsigned char const *src, uintptr_t);
+intptr_t ai_port_fd(ai_word);                         // the fd under a love port, or -1
+uintptr_t ai_fd_write_all(int, unsigned char const*, uintptr_t);   // land every byte, waiting
+
+// the seat's other doors, one definition each: src/posix.c..
+struct ai *ai_argv_marshal(struct ai*, char***);   // argv -> char** in the heap gap
+void host_spawn_guard(struct ai*, int);            // exec-bound forks drop the pools
+int ai_raw_mode(intptr_t on);                      // the (raw on) latch; main.c's repl too
+size_t host_selfpath(char*, size_t);               // the one selfpath door (per-OS ladder)
+// ..src/image.c, the carried image and the self-bake..
+int image_bake(struct ai*), ai_baked_pick(void const **blob, uintptr_t *blen);
+struct ai *image_load(char const*), *image_dump(struct ai*, char const*);
+extern uint64_t ai_baked_image[];
+extern uintptr_t ai_baked_image_len;
+// ..src/gz.c, and src/src.c's own source (weak zero without a blob)
+intptr_t ai_inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
+         ai_deflate_raw(struct ai*, unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
+extern unsigned char const ai_srcgz[];
+extern uintptr_t const ai_srcgz_len;
 
 uintptr_t ai_clock(void); // used by garbage collector
 intptr_t ai_nclock(void); // the fine interval clock (ns); weak ms-degraded default in love.c, hosts override with a real ns source

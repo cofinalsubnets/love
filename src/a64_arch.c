@@ -8,23 +8,7 @@
 #include "asmops.h"                    // the privileged instructions, both spellings
 #include "k.h"                       // kboot, and kputc/kputs/kputn (src/kmain.c)
 
-// khhdm is the higher-half direct map offset the door left; kmain sets it
-// before archinit runs, so physical address P is reachable at khhdm+P.
-// all device MMIO below goes through it.
-extern uintptr_t khhdm;
-extern uint64_t kticks;
-
-// kq (k/main.c) enqueues one input byte; cb_putc / fbdraw render the
-// console. fault reporting writes the framebuffer ring buffer (kcb) and
-// mirrors to serial, exactly as x64 does.
-void kq(uint8_t);
-struct cb;
-extern void cb_putc(struct cb*, char);
-extern struct cb *kcb;
-extern void fbdraw(void);
-
-// the exception vector table (mkvec.l).
-extern uint8_t vectors[];
+void kq(uint8_t);                      // kmain's input queue, one byte
 
 // --- QEMU 'virt' machine fixed MMIO layout ---------------------------
 // the virt machine's device addresses are stable across QEMU versions;

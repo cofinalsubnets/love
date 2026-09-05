@@ -6,7 +6,6 @@
 #include "love.h"
 #include "cats.h"
 
-extern intptr_t ai_inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
 #include "cat_egg_z.h"
 #include "cat_p1_z.h"
 #include "cat_prel_z.h"

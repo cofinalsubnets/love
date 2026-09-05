@@ -16,6 +16,19 @@ void kputc(int c), kputs(char const *s), kputn(uintptr_t n, int base);
 // khhdm -- the higher-half direct-map offset (physical P is reachable at
 // khhdm + P). Defined in kmain.c. 0 means identity-mapped.
 extern uintptr_t khhdm;
+extern uint64_t kticks;                // timer ticks, counted up by the arch's irq
+extern uint8_t vectors[];              // the trap entry (mkvec.l)
+void fbdraw(void);                     // kmain.c: paint the console ring to the framebuffer
+
+// the arch backend (src/<a>_arch.c) gives kmain these
+void archinit(void), serial_init(void), serial_putc(int), k_reset(void), k_fault_trigger(intptr_t n);
+uint64_t k_rtc(void);                  // the machine's own clock, unix seconds (0 = none)
+
+// the x64 virtualization doors (src/x64_svm.c, src/x64_vmx.c)
+uintptr_t k_svm_need(void), k_vmx_need(void);
+bool k_svm_ok(void), k_vmx_ok(void);
+int k_svm_spike(void *mem, uint64_t *code, uint64_t *rax, uint64_t *rip),
+    k_vmx_spike(void *mem, uint64_t *reason, uint64_t *rax, uint64_t *rip, uint64_t *err);
 
 #define k_boot_ram_max 64
 

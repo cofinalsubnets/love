@@ -166,8 +166,6 @@ static intptr_t image_imm_index(word v) {
 // build lays out differently. the code segment leads with [raw length, deflated?] so it
 // describes itself -- the header says how many bytes are stored, these two what they hold.
 #define CodeSegHead (2 * sizeof(uint64_t))
-extern intptr_t ai_inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
-extern intptr_t ai_deflate_raw(struct ai*, unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
 struct image_hdr {
  uint64_t magic, wordsize, nwords, arch, anchor, nroot, rsv1, nstream, next_serial, ncode;
  uint64_t root_tag[24], root_val[24]; };     // symbols, tasks, then the entire v0..end region walked

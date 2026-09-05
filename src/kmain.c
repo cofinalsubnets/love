@@ -64,10 +64,8 @@ static struct font const kfont = { .glyphs = (uint8_t*) moderndos_8x16, .w = 8, 
 
 
 
-void k_reset(void), archinit(void), fbdraw(void), serial_init(void), serial_putc(int),
-     k_fault_trigger(intptr_t n),
 // the seat hooks src/fd.c branches to on a negative osv (weak no-ops there)
-     k_row_close(int fd), k_sleep(uintptr_t ms), k_wait_fds(struct ai_wait_fd*, int, uintptr_t),
+void k_row_close(int fd), k_sleep(uintptr_t ms), k_wait_fds(struct ai_wait_fd*, int, uintptr_t),
      k_seat_init(void);                // src/sys.c: arm environ + the std streams
 bool k_ready(int fd, int events);
 
@@ -90,8 +88,6 @@ extern struct ai_def const __start_ai_knifs[], __stop_ai_knifs[];
 uintptr_t const k_image_top = 1;
 // the baked-image door (src/image.c): a pure read off two symbols the
 // projection re-bases, so the wake needs no finding on this seat either
-int ai_baked_pick(void const **blob, uintptr_t *blen);
-uint64_t k_rtc(void);                  // the machine's own clock, unix seconds (0 = none)
 
 #include "quay.h"
 #include <stdarg.h>
@@ -474,9 +470,6 @@ struct k_file { char const *path, *bytes; uintptr_t len, ms; };
 // point into the inflated block, which lives as long as the kernel does.
 static struct k_file const *k_bakes;
 static int k_bakes_n;
-extern const unsigned char ai_srcgz[];
-extern const uintptr_t ai_srcgz_len;           // src/src.c; weak zero without a blob
-extern intptr_t ai_inflate_raw(const unsigned char*, uintptr_t, unsigned char*, uintptr_t);
 #include "ustar.h"
 // one ustar pass: count on the first, fill on the second. paths re-home below the archive's
 // top, so the tree looks the same from inside as a checkout. plain files land whole; a
@@ -1189,9 +1182,6 @@ static lvm(lvm_disk_write) {
 // (svm-run ()) runs one guest, answering (exitcode rax rip) or (). nothing else asks for a
 // guest yet: these two rows prove a guest can run and that the exit lands back in plain C.
 #if defined(__x86_64__)
-uintptr_t k_svm_need(void);
-bool k_svm_ok(void);
-int k_svm_spike(void *mem, uint64_t *code, uint64_t *rax, uint64_t *rip);
 
 static lvm(lvm_svm) {
   Sp[0] = k_svm_ok() ? putcharm(1) : ZeroPoint;
@@ -1223,10 +1213,6 @@ static lvm(lvm_svm_run) {
 // answers FOUR numbers where the SVM door answers three: the last is the
 // VM-instruction error, which is the only thing a refused entry has to say and
 // is worth carrying out to where a human reads it.
-uintptr_t k_vmx_need(void);
-bool k_vmx_ok(void);
-int k_vmx_spike(void *mem, uint64_t *reason, uint64_t *rax, uint64_t *rip,
-                uint64_t *err);
 
 static lvm(lvm_vmx) {
   Sp[0] = k_vmx_ok() ? putcharm(1) : ZeroPoint;
@@ -1485,8 +1471,6 @@ static union u const k_exit_body[] = { {lvm_task_exit} };
 // wait for a collection -- and clear the yield intentions. the port is neutered as its row
 // goes, or io_close would shut the row a second time. a console row is nobody's to close.
 // -> nonzero when the task has a pid, so the wrapper knows which room it is in.
-extern word *task_io(struct ai*);        // src/ev.c: the running task's stdio slot
-extern bool iop(word);                   // src/io.c: is this word a port
 ai_noinline static int k_task_exit(struct ai *g) {
   if (!k_cur_pid(g)) return 0;
   word l = *task_io(g);
@@ -1602,7 +1586,6 @@ static char const src_korelist[] =
 #include "korelist.h"
 ;
 
-extern long __ai_osv;                  // nolibc's "which kernel" (os.c)
 void kmain(void) {
 #if defined(__x86_64__)
  // Enable x87/SSE before ANY other C runs -- a compiler vectorizes freely on

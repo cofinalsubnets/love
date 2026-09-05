@@ -20,7 +20,6 @@
 #define MAP_POPULATE 0
 #endif
 
-extern size_t host_selfpath(char*, size_t);       // src/posix.c: the one selfpath door (per-OS ladder)
 
 // the scratch beside a bake's target, per-process. two loves bake the same name
 // concurrently all the time under `make -jN`, and on one shared name they interleave into

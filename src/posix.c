@@ -119,7 +119,6 @@ struct ai *ai_argv_marshal(struct ai *g, char ***cavp) {
  cav[argc] = NULL;
  *cavp = cav;
  return g; }
-extern intptr_t ai_port_fd(ai_word);   // src/fd.c: the fd under a love port, or -1
 
 // a wait(2) status word -> the value a reaper hands back: the exit code, or
 // 128+signal for a signalled death (the shell convention), or -1 for the

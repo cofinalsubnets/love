@@ -15,17 +15,8 @@ struct k_frame {
            rdi, rsi, rdx, rcx, rbx, rax, rbp,
            vector, error, rip, cs, rflags, rsp, ss; };
 
-// panic-path console output. cb_putc stamps a char into the framebuffer
-// ring buffer (kcb); serial_putc mirrors it to COM1; fbdraw renders kcb
-// to the framebuffer. kputc/kputs/kputn take no l state, so they run
-// from a fault handler with no live `struct g` -- the old gput* path
-// dereferenced its (null here) f argument before reaching the console.
-struct cb;
-extern void cb_putc(struct cb*, char);
-extern void serial_putc(int);
-extern void fbdraw(void);
-extern struct cb *kcb;
-
+// panic-path console output rides kputc/kputs/kputn: no love state, so a fault
+// handler with nothing live can still say what happened
 
 static char const *const exc_name[32] = {
   [0]  = "#DE", [1]  = "#DB", [2]  = "NMI", [3]  = "#BP", [4]  = "#OF",
