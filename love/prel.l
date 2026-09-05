@@ -211,18 +211,18 @@
    ; the one constant-form recognizer. the answer is wrapped -- (1 . value) or () -- because a
    ; constant's value can itself be nothing. no `&&`: c0 is single-pass and it is defined later.
    (kconst e) (? (nom? e) ()                                                    ; a variable -> no fact
-                 (atom? e) (link 1 e)                                           ; a literal -> (1 . itself)
-                 (id? (cap e) '\) (? (atom? (cuup e)) (link 1 (caup e)) ())     ; (\ v) quote of an atom -> (1 . v); a real lambda -> no fact
+                 (one? e) (link 1 e)                                           ; a literal -> (1 . itself)
+                 (id? (cap e) '\) (? (one? (cuup e)) (link 1 (caup e)) ())     ; (\ v) quote of an atom -> (1 . v); a real lambda -> no fact
                  ())
    (cat a b) (foldr link b a))
 ; (sort l) is the C lane -- a stable bottom-up merge by the total order, no lisp re-entry;
 ; descending is (rev (sort l)). an arbitrary predicate takes this lisp merge sort instead.
-(: (merge le a b) (? (atom? a) b (atom? b) a
+(: (merge le a b) (? (one? a) b (one? b) a
                      (le (cap a) (cap b)) (link (cap a) (merge le (cup a) b))
                      (link (cap b) (merge le a (cup b))))
-   (sortsplit l) (? (atom? l) (link l ()) (atom? (cup l)) (link l ())
+   (sortsplit l) (? (one? l) (link l ()) (one? (cup l)) (link l ())
                     (: r (sortsplit (cuup l)) (link (link (cap l) (cap r)) (link (caup l) (cup r)))))
-   (sortby le l) (? (atom? l) l (atom? (cup l)) l
+   (sortby le l) (? (one? l) l (one? (cup l)) l
                   (: s (sortsplit l) (merge le (sortby le (cap s)) (sortby le (cup s))))))
 (: catmap (compose (flip foldr ()) (compose cat))
    (assoc x l) (? (two? l) (? (= x (caap l)) (cap l) (assoc x (cup l))))
@@ -580,10 +580,10 @@
    ; however that body was spelled -- and a wholly prefix `:` never reaches this fold, so no
    ; extant form moves.
    (op-cl-splice fs)
-    (? (atom? (cup fs))
+    (? (one? (cup fs))
        (: b (cap fs)
           (? (&& (two? b) (id? (cap b) ':)) (cup b) fs))
-       (>< (cap fs) (op-cl-splice (cup fs))))
+       (. (cap fs) (op-cl-splice (cup fs))))
    ; a chain, arity -2: (a < b <= c) is (a < b) and (b <= c), and the shared operand is evaluated
    ; once. the binds nest inside the conjunction so all three of python's promises hold at once --
    ; left to right, once each, and && still short-circuits, so a false first link never reaches c.
@@ -595,25 +595,25 @@
    ; fresh nom has no spelling, and a factored form carrying one is a form no text can say
    ; (the same reason the table's rows are noms). so (a < b < c) stays plain.
    (op-chn-rest pv r)                                        ; r = (op z op z ..), or a dangling op
-    (? (atom? r) 0
+    (? (one? r) 0
        (: op (cap r)
-          (? (atom? (cup r)) (>< op (>< pv ()))              ; a trailing operator: the curry law, per link
-             (: z (caup r) v (? (atom? z) z (nom 0))
-                e (>< op (>< pv (>< v ()))) t (op-chn-rest v (cuup r))
-                bd (? (two? t) (>< '&& (>< e (>< t ()))) e)
-                (? (id? v z) bd (>< ': (>< v (>< z (>< bd ())))))))))
+          (? (one? (cup r)) (. op (. pv ()))              ; a trailing operator: the curry law, per link
+             (: z (caup r) v (? (one? z) z (nom 0))
+                e (. op (. pv (. v ()))) t (op-chn-rest v (cuup r))
+                bd (? (two? t) (. '&& (. e (. t ()))) e)
+                (? (id? v z) bd (. ': (. v (. z (. bd ())))))))))
    ; the whole run wears a `bit`, because a comparison answers a bit and a chain is still one.
    ; `&&` hands back () for a false left and the failing operand otherwise, so a bare chain would
    ; answer () when the first link failed, 0 when a later one did, and 1 when none did -- three
    ; faces for one predicate. the clamp is outside the binds, so nothing about the short-circuit
    ; or the evaluation order moves; only the answer is normalized.
    (op-chn nm os)
-    (: a (cap os) b (caup os) u (? (atom? a) a (nom 0)) v (? (atom? b) b (nom 0))
-       e (>< nm (>< u (>< v ()))) t (op-chn-rest v (cuup os))
-       bd (? (two? t) (>< '&& (>< e (>< t ()))) e)
-       b2 (? (id? v b) bd (>< ': (>< v (>< b (>< bd ())))))
-       b3 (? (id? u a) b2 (>< ': (>< u (>< a (>< b2 ())))))
-       (>< 'bit (>< b3 ())))
+    (: a (cap os) b (caup os) u (? (one? a) a (nom 0)) v (? (one? b) b (nom 0))
+       e (. nm (. u (. v ()))) t (op-chn-rest v (cuup os))
+       bd (? (two? t) (. '&& (. e (. t ()))) e)
+       b2 (? (id? v b) bd (. ': (. v (. b (. bd ())))))
+       b3 (? (id? u a) b2 (. ': (. u (. a (. b2 ())))))
+       (. 'bit (. b3 ())))
    ; fold a frame with what it has: nothing collected gives the plain symbol, a shortfall the
    ; partial application -- the curry law, with no case of its own.
    ; kind tests throughout the walk, never truth -- an operand list like (0) or ("") nets zero.
@@ -621,23 +621,23 @@
    ; chain is the join's doing, and it shows as the interleaved operators the join left in `got`.
    (op-fold f) (? (atom? (op-frg f)) (op-fro f)
                   (: nm (op-frn f) os (rev (op-frg f))
-                     (? (id? nm '\) (op-core (>< '\ os))
-                        (id? nm ':) (op-core (>< ': (op-cl-splice os)))
+                     (? (id? nm '\) (op-core (. '\ os))
+                        (id? nm ':) (op-core (. ': (op-cl-splice os)))
                         (&& (two? (cup os)) (&& (two? (cuup os)) (op-chain? nm))) (op-chn nm os)
-                        (>< nm os))))
+                        (. nm os))))
    ; deliver datum d -> (out' . pend'). a collecting frame takes it; a filled infix frame extends
    ; its right operand into a span, since juxtaposition binds tighter: (a = b c) is (= a (b c)).
    ; the span state rides `need`: 0 = a lone datum, -1 = growing.
    (op-del d out pend)
-    (? (atom? pend) (>< (>< d out) pend)
+    (? (one? pend) (. (. d out) pend)
        (: f (cap pend) nd (op-frd f)
-          (? (= nd -2) (>< out (>< (op-frw f -2 (>< d (op-frg f))) (cup pend)))  ; n-ary: a new operand, always
-             (< 0 nd)  (>< out (>< (op-frw f (- nd 1) (>< d (op-frg f))) (cup pend)))
+          (? (= nd -2) (. out (. (op-frw f -2 (. d (op-frg f))) (cup pend)))  ; n-ary: a new operand, always
+             (< 0 nd)  (. out (. (op-frw f (- nd 1) (. d (op-frg f))) (cup pend)))
              (: op (cap (op-frg f))                          ; the frame's last (right) operand
-                nx (? (= 0 nd) (>< op (>< d ()))         ; lone -> wrap into (op d)
-                      (cat op (>< d ())))                  ; span -> append d
-                f2 (op-frw f -1 (>< nx (cup (op-frg f))))
-                (>< out (>< f2 (cup pend)))))))
+                nx (? (= 0 nd) (. op (. d ()))         ; lone -> wrap into (op d)
+                      (cat op (. d ())))                  ; span -> append d
+                f2 (op-frw f -1 (. nx (cup (op-frg f))))
+                (. out (. f2 (cup pend)))))))
    ; take a left operand for an incoming operator of band g and hand h -> (. (out' . pend')), or 0.
    ; against a filled top frame the incomer either steals its last operand or folds it and retries
    ; beneath. at equal band the incomer's hand decides: right-handed steals, left-handed yields.
@@ -652,11 +652,11 @@
           (? (< nd 1)
              (? (? h (<= g (op-frband f)) (< g (op-frband f)))
                 (: r (op-del (op-fold f) out (cup pend)) (op-steal g h (cap r) (cup r)))
-                (? (? (= nd -2) (atom? (cup (op-frg f))) 0) 0
-                   (>< (cap (op-frg f))
-                         (>< out (>< (op-frw f (? (= nd -2) -2 1) (cup (op-frg f))) (cup pend))))))
+                (? (? (= nd -2) (one? (cup (op-frg f))) 0) 0
+                   (. (cap (op-frg f))
+                         (. out (. (op-frw f (? (= nd -2) -2 1) (cup (op-frg f))) (cup pend))))))
              0))
-       (two? out) (>< (op-span out) (>< () pend))
+       (two? out) (. (op-span out) (. () pend))
        0)
    ; fold every pending frame tighter than an incoming (g,h) and answer (out . pend) -- the climb
    ; op-steal makes before it can take anything, split out so the chain join can see the frame it
@@ -666,10 +666,10 @@
    (op-climb g h out pend)
     (? (&& (two? pend) (&& (< (op-frd (cap pend)) 1)
                            (? h (<= g (op-frband (cap pend))) (< g (op-frband (cap pend))))))
-       (: r (op-del (op-fold (cap pend)) out (cup pend)) (op-climb g h (cap r) (cup r))) (>< out pend))
+       (: r (op-del (op-fold (cap pend)) out (cup pend)) (op-climb g h (cap r) (cup r))) (. out pend))
    ; drain at end of list: fold every pending frame innermost-out
    (op-drain out pend)
-    (? (atom? pend) (rev out)
+    (? (one? pend) (rev out)
        (: r (op-del (op-fold (cap pend)) out (cup pend))
           (op-drain (cap r) (cup r))))
    (op-w l out pend)
@@ -679,7 +679,7 @@
              ; a spaced sigil is one name -- an unrowed one takes the house band, and with no
              ; left operand the infix frame still folds to the plain symbol (op-fold's bare case)
              (: en0 (op-ent e)
-                en (? (two? en0) en0 (>< e (>< 95 (>< 0 2))))   ; fresh punct: (e house right . arity 2)
+                en (? (two? en0) en0 (. e (. 95 (. 0 2))))   ; fresh punct: (e house right . arity 2)
                 nm (cap en) gp (caup en) hd (cap (cuup en))
                 ; fresh noms: this `:` is one scope, so rebinding out/pend here would make the
                 ; op-climb call read its own later binding and raise `missing out`.
@@ -699,9 +699,9 @@
                        (&& (two? pd)
                            (&& (< (op-frd (cap pd)) 1)
                                (&& (= gp (op-frband (cap pd))) (op-chain? (op-frn (cap pd)))))))
-                    (op-w (cup l) ou (>< (op-frw (cap pd) 1 (>< nm (op-frg (cap pd)))) (cup pd)))
+                    (op-w (cup l) ou (. (op-frw (cap pd) 1 (. nm (op-frg (cap pd)))) (cup pd)))
                    (two? st) (op-w (cup l) (cap (cup st))
-                            (>< (op-fr e nm (? (= -1 (cup (cuup en))) -2 1) gp (>< (cap st) ()))   ; -2 = n-ary: the row's lane, so an alias inherits it
+                            (. (op-fr e nm (? (= -1 (cup (cuup en))) -2 1) gp (. (cap st) ()))   ; -2 = n-ary: the row's lane, so an alias inherits it
                                   (cup (cup st))))
                    (: r (op-del e ou pd)     ; no left operand: the plain symbol
                       (op-w (cup l) (cap r) (cup r)))))
@@ -710,17 +710,17 @@
    ; a `:` binds, it does not apply, so opfix must not rearrange it. binders stay verbatim and only
    ; each pair's value and the trailing body factor. the pairing matches eval's exactly.
    (op-colon fs)
-    (? (atom? fs) fs
-       (atom? (cup fs)) (>< (op-core (cap fs)) ())        ; a lone form is the body
+    (? (one? fs) fs
+       (one? (cup fs)) (. (op-core (cap fs)) ())        ; a lone form is the body
        (: r (op-dpb (cap fs))                             ; define-sugar binds a \ too: lower its patterns
-          (>< (cap r)                                     ; the name: verbatim, its params lowered
-                (>< (op-core (op-wrap (cup r) (caup fs))) ; the value: wrapped where they were, then factored
+          (. (cap r)                                     ; the name: verbatim, its params lowered
+                (. (op-core (op-wrap (cup r) (caup fs))) ; the value: wrapped where they were, then factored
                       (op-colon (cuup fs))))))              ; the rest: pairs on
    ; a \ lambda is a binder too: the args stay verbatim, only the body factors.
    ; (\ x) -- one operand -- is quote, kept whole by op-core's first clause.
    (op-lam fs)
-    (? (atom? (cup fs)) (>< (op-core (cap fs)) ())        ; the last operand is the body
-       (>< (cap fs) (op-lam (cup fs))))                    ; an arg: verbatim, recurse
+    (? (one? (cup fs)) (. (op-core (cap fs)) ())        ; the last operand is the body
+       (. (cap fs) (op-lam (cup fs))))                    ; an arg: verbatim, recurse
    ; a param that is not a nom is a pattern, and the body takes it apart: (\ [a b] x) is
    ; (\ v (@ v [a b] x)), v fresh. Nothing is displaced -- such a param used to bind nothing
    ; (the body read `missing a`), so no code can have meant anything by one.
@@ -729,21 +729,21 @@
    ; unbound `@` -- which is the seat's tiering answering, not this pass's business.
    ; and it runs before the nested-lambda flatten, so that pass still only ever sees noms
    ; and its shadow check stays a comparison of names. (\ [a b] (\ a x)) must not merge.
-   (op-wrap ws b) (? (atom? ws) b
-                     (op-wrap (cup ws) (>< (intern "@") (>< (cap (cap ws)) (>< (caup (cap ws))
-                                                       (>< b ()))))))
+   (op-wrap ws b) (? (one? ws) b
+                     (op-wrap (cup ws) (. (nom "@") (. (cap (cap ws)) (. (caup (cap ws))
+                                                       (. b ()))))))
    (op-depat ol ws)
-    (? (atom? (cup ol)) (>< (op-wrap ws (cap ol)) ())          ; the body: wrapped outermost-last
+    (? (one? (cup ol)) (. (op-wrap ws (cap ol)) ())          ; the body: wrapped outermost-last
        (: p (cap ol)
-          (? (nom? p) (>< p (op-depat (cup ol) ws))
-             (: v (nom 0) (>< v (op-depat (cup ol) (>< (>< v (>< p ())) ws)))))))
+          (? (nom? p) (. p (op-depat (cup ol) ws))
+             (: v (nom 0) (. v (op-depat (cup ol) (. (. v (. p ())) ws)))))))
    ; the same over a param list with no body -- answers (params . wraps), for the binder below.
    (op-dp ol ws)
-    (? (atom? ol) (>< () ws)
+    (? (one? ol) (. () ws)
        (: p (cap ol)
-          (? (nom? p) (: r (op-dp (cup ol) ws) (>< (>< p (cap r)) (cup r)))
-             (: v (nom 0) r (op-dp (cup ol) (>< (>< v (>< p ())) ws))
-                (>< (>< v (cap r)) (cup r))))))
+          (? (nom? p) (: r (op-dp (cup ol) ws) (. (. p (cap r)) (cup r)))
+             (: v (nom 0) r (op-dp (cup ol) (. (. v (. p ())) ws))
+                (. (. v (cap r)) (cup r))))))
    ; a define-sugar binder is a lambda: (: (f [a b]) V ..) is (: (f v) (@ v [a b] V) ..).
    ; position 0 is never a pattern -- it is the name, or (curried) the binder that carries it --
    ; so every later position at every level is a param and lowers. That is also why the two
@@ -751,56 +751,56 @@
    ; a curried binder's levels are separate argument positions, and the inner binder's params
    ; are the earlier arguments -- so its wraps go outside this level's. ws is innermost-first.
    (op-dpb b)
-    (? (atom? b) (>< b ())
+    (? (one? b) (. b ())
        (: hr (op-dpb (cap b)) pr (op-dp (cup b) ())
-          (>< (>< (cap hr) (cap pr)) (cat (cup pr) (cup hr)))))
+          (. (. (cap hr) (cap pr)) (cat (cup pr) (cup hr)))))
    ; flatten a directly-nested lambda body -- (\ a (\ b B)) -> (\ a b B) -- so neither compiler
    ; builds the extra closure. shadowing stays nested: (\ x (\ x x)) must not merge.
-   (op-mem? y l)      (? (atom? l) 0 (id? y (cap l)) 1 (op-mem? y (cup l)))
-   (op-disjoint? a b) (? (atom? b) 1 (op-mem? (cap b) a) 0 (op-disjoint? a (cup b)))
-   (op-params ol)     (? (atom? (cup ol)) () (>< (cap ol) (op-params (cup ol))))
+   (op-mem? y l)      (? (one? l) 0 (id? y (cap l)) 1 (op-mem? y (cup l)))
+   (op-disjoint? a b) (? (one? b) 1 (op-mem? (cap b) a) 0 (op-disjoint? a (cup b)))
+   (op-params ol)     (? (one? (cup ol)) () (. (cap ol) (op-params (cup ol))))
    ; the inner lambda lowers before the shadow check, never after the merge: a pattern carried up
    ; as a param binds nothing, and the check compares noms -- (\ [a b] (\ a x)) must not merge.
    (op-flat-ol ol seen)                                      ; -> the flattened operand list, body left raw (op-lam factors it after)
-    (? (atom? (cup ol))
+    (? (one? (cup ol))
        (: b (cap ol)
           (? (&& (two? b) (id? (cap b) '\) (two? (cuup b)))  ; (two? (cuup b)) = a real lambda, not quote
              (: ol2 (op-depat (cup b) ())
                 (? (op-disjoint? seen (op-params ol2)) (op-flat-ol ol2 seen) ol))   ; disjoint inner lambda -> merge its operands up
              ol))                                             ; else the body stays raw
-       (>< (cap ol) (op-flat-ol (cup ol) (>< (cap ol) seen))))   ; a param: keep + accumulate for the shadow check
+       (. (cap ol) (op-flat-ol (cup ol) (. (cap ol) seen))))   ; a param: keep + accumulate for the shadow check
    ; the comma layer, the loosest grouping, above infix. datums split at top-level commas and the
    ; whole becomes the `,` macro: (a, b c) -> (: _ a (b c)); empty clauses drop. the comma outranks
    ; `:`, so a binder spine splits like any list. the symbol is interned, never written literally.
-   (op-cm? l)   (? (atom? l) 0 (id? (cap l) ',) 1 (op-cm? (cup l)))
-   (op-take l)  (? (atom? l) () (id? (cap l) ',) () (>< (cap l) (op-take (cup l))))
-   (op-drop l)  (? (atom? l) () (id? (cap l) ',) (cup l) (op-drop (cup l)))
+   (op-cm? l)   (? (one? l) 0 (id? (cap l) ',) 1 (op-cm? (cup l)))
+   (op-take l)  (? (one? l) () (id? (cap l) ',) () (. (cap l) (op-take (cup l))))
+   (op-drop l)  (? (one? l) () (id? (cap l) ',) (cup l) (op-drop (cup l)))
    (op-split l) (: c (op-take l) r (? (op-cm? l) (op-split (op-drop l)) ())
-                   (? (two? c) (>< c r) r))
+                   (? (two? c) (. c r) r))
    ; op-core: the factor pass. quote interiors stay verbatim, binding forms keep their binders,
    ; everything else walks. idempotent. has-top-op? asks whether the original form carried a
    ; top-level operator -- only then may a lone folded operand splice up, since a bare
    ; list-of-one like ((mov r3 r12)) is data and stays wrapped.
-   (has-top-op? x) (? (atom? x) 0 (op-puncp (cap x)) 1 (has-top-op? (cup x)))
+   (has-top-op? x) (? (one? x) 0 (op-puncp (cap x)) 1 (has-top-op? (cup x)))
    (op-core x)
-    (? (atom? x) x
+    (? (one? x) x
        (: h (cap x)
-          (? (&& (id? h '\) (atom? (cuup x))) x              ; (\) / (\ x): quote, verbatim
+          (? (&& (id? h '\) (one? (cuup x))) x              ; (\) / (\ x): quote, verbatim
              (op-cm? (cup x))                                ; the comma layer (helpers above)
               (: cs (op-split x)
-                 (? (atom? cs) ()                            ; commas alone: nothing
-                    (atom? (cup cs)) (op-core (cap cs))      ; one clause: the commas composed away
-                    (>< (intern ",") (map op-core cs))))
-             (id? h '\) (>< '\ (op-lam (op-flat-ol (op-depat (cup x) ()) ())))   ; (\ a.. body): patterns to noms, flatten nested lambdas, factor the body
-             (id? h ':) (>< ': (op-colon (cup x)))         ; (: n v ..): binders verbatim
+                 (? (one? cs) ()                            ; commas alone: nothing
+                    (one? (cup cs)) (op-core (cap cs))      ; one clause: the commas composed away
+                    (. (nom ",") (map op-core cs))))
+             (id? h '\) (. '\ (op-lam (op-flat-ol (op-depat (cup x) ()) ())))   ; (\ a.. body): patterns to noms, flatten nested lambdas, factor the body
+             (id? h ':) (. ': (op-colon (cup x)))         ; (: n v ..): binders verbatim
              ; the reader's glued-run emission (mono (run d)): factor the run monadically around
              ; the (recursively opfixed) datum; an unfactorable run is the plain application (run d)
              (&& (id? h 'mono) (two? (cup x)) (two? (caup x)))
               (: p (caup x) r (cap p) d (op-core (caup p))
                  fs (? (nom? r) (monofactor r) 0)
-                 (? (two? fs) (op-fin fs d) (>< r (>< d ()))))
+                 (? (two? fs) (op-fin fs d) (. r (. d ()))))
              (: res (op-w x 0 0)                        ; splice a lone folded operand up (an infix/prefix-op form)
-                (? (&& (has-top-op? x) (two? res) (atom? (cup res)) (two? (cap res))) (cap res) res))))) ; (a = b) -> (= a b), not ((= a b))
+                (? (&& (has-top-op? x) (two? res) (one? (cup res)) (two? (cap res))) (cap res) res))))) ; (a = b) -> (= a b), not ((= a b))
    (opfix x) (op-core x)
 
    ; the grip door: the one sanctioned write into the compile table, and the only reach to
@@ -849,10 +849,10 @@
    (has? s sub)    (0 <= findsub s sub)
    (starts? s p)   (#p <= #s && snip s 0 #p = p ? 1 0)          ; a ?-name owes a bit, and && gives ()
    (ends? s p)     (#p <= #s && snip s (#s - #p) #s = p ? 1 0)
-   (join sep l)    (two? l ? (foldl (\ a x (a + sep + x)) <l >l) "")
+   (join sep l)    (two? l ? (foldl (a \ x \ a + sep + x) <l >l) "")
    (split sep s)                                        ; always >= 1 piece; "" splits nowhere
     (: (go i) (: j (fsub s sep i)
-                 (? (#sep = 0 || j < 0) [(snip s i #s)] (snip s i j >< go (j + #sep))))
+                 (? (#sep = 0 || j < 0) [(snip s i #s)] (snip s i j . go (j + #sep))))
        (go 0))
    (replace s from to) (#from = 0 ? s (join to (split from s)))
    (ws? c)  (c = 32 || c = 9 || c = 10 || c = 13 ? 1 0)
@@ -861,75 +861,75 @@
    (strip s)  (lstrip (rstrip s))       ; not `trim`: that name is ev.l's port op, mopped by egg.l
    (lines s) (split "\n" (#s && s (#s - 1) = 10 ? (snip s 0 (#s - 1)) s))
    (words s) (: (go i st acc)                           ; whitespace runs, so no empty pieces
-                 (: shut (st < i ? (snip s st i >< acc) acc)
+                 (: shut (st < i ? (snip s st i . acc) acc)
                     (? (i >= #s) (rev shut)
                        (ws? (s i)) (go (i + 1) (i + 1) shut)
                        (go (i + 1) st acc)))
                 (go 0 0 ()))
-   (upper s) (string (map (\ c (97 <= c <= 122 ? (c - 32) c)) (chars s)))
-   (lower s) (string (map (\ c (65 <= c <= 90 ? (c + 32) c)) (chars s)))
+   (upper s) (string (map (c \ 97 <= c <= 122 ? (c - 32) c) (chars s)))
+   (lower s) (string (map (c \ 65 <= c <= 90 ? (c + 32) c) (chars s)))
    (padl s n) (#s >= n ? s (padl (" " + s) n))
    (padr s n) (#s >= n ? s (padr (s + " ") n))
    (cats ls) (foldr (+) () ls)                          ; the band-general fold: net is its number case
-   (uniq l)  (: (go seen l) (? !(two? l) () (peep seen <l 0) (go seen >l)
-                              (<l >< go (pin seen <l 1) >l))
+   (uniq l)  (: (go seen l) (? (one? l) () (peep seen <l 0) (go seen >l)
+                              (<l . go (pin seen <l 1) >l))
                 (go (tablet 0) l))
    (count p l) (foldl (\ a x (p x ? (a + 1) a)) 0 l))    ; (a + 1 a) would read as a + (1 a)
 
 ; --- assert / suite: the strict checkers, baked so they work with no harness ---
 ;;; FIXME how are these used at the moment?
-(:: 'assert (\ l (>< 'do (map (\ e (list '? e 0 (list 'scare (list '\ 'assert) (list '\ e)))) l))))
-(:: 'suite (\ l (>< 'do (>< (>< 'assert (cup l)) (list (list 'puts (cap l)) (list 'puts ": ok\n"))))))
+(:: 'assert (\ l (. 'do (map (\ e (list '? e 0 (list 'scare (list '\ 'assert) (list '\ e)))) l))))
+(:: 'suite (\ l (. 'do (. (. 'assert (cup l)) (list (list 'puts (cap l)) (list 'puts ": ok\n"))))))
 
 
 ; --- array element-type inference + shape coercion (shared by `tuple` and `array`).
 ; a-type answers a witness star of the highest tier present -- an inhabitant, not a code, since
 ; the generic `tray` ctor reads the tier off a witness. past the numeric tower the whole array
 ; lifts to an object array. a shape dimension may be any numeric and saturates to a nat.
-(: (a-rank x) (? (gem? x) 1 (| (charm? x) (sun? x)) 0 (twin? x) 2 3)
-   (a-emax m x) (: k (a-rank x) (? (m < k) k m))
+(: (a-rank x) (? (gem? x) 1 (charm? x || sun? x) 0 (twin? x) 2 3)
+   (a-emax m x) (: k (a-rank x) (m < k ? k m))
    (a-type d) (: k (foldl a-emax 0 d) (? (k = 0) 0 (k = 1) 0.0 (k = 2) (twin 0 0) ()))   ; a witness star of the tier
-   (a-dim d) (? (two? d) (tally d) (saturate d))
-   (a-shape s) (? (two? s) (map a-dim s) (list (a-dim s))))
+   (a-dim d) (two? d ? #d $d)
+   (a-shape s) (two? s ? (map a-dim s) (list (a-dim s))))
 
 ;;; FIXME we new names for these. tuple isn't too bad but "hash" for the tablet constructor is wrong
 ; tuple/hash value constructors -- also the read-back targets of the printed @(…) / {…}
 (: (spread l) (tray (a-type l) (list (foldl (\ n _ (1 + n)) 0 l)) l))
-(:: 'tuple (\ a (list 'spread ('list >< a))))
+(:: 'tuple (\ a (list 'spread ('list . a))))
 ; (hash x) boxes any non-list: a fresh tablet pinning x at 0, so {5} = {0 5} and {} is {0}.
 ; an odd trailing operand lands in that 0 slot.
-(: (hashtx a) (? (atom? a) '(tablet 0)
-                 (atom? >a) (list 'pin (hashtx 0) () <a)
+(: (hashtx a) (? (one? a) '(tablet 0)
+                 (one? >a) (list 'pin (hashtx 0) () <a)
                  (list 'pin (hashtx >>a) <a <>a)))
 (:: 'hash (\ a (hashtx a)))
 
 ; (array shape elem…): the N-D constructor. shape is a dimension list or a lone number; the
 ; element type is inferred, so exactness is never silently lost. the shape fixes the count, so
 ; the elements are ordinary trailing args and `array` curries them one at a time.
-(: (a-coll sh n acc) (? (< n 1) (: d (rev acc) (tray (a-type d) sh d))
-                        (\ x (a-coll sh (n - 1) (x >< acc))))
+(: (a-coll sh n acc) (n < 1 ? (: d (rev acc) (tray (a-type d) sh d))
+                              (\ x (a-coll sh (n - 1) (x . acc))))
    (array s) (: sh (a-shape s) (a-coll sh (foldl (*) 1 sh) 0)))
 
 ; recursive-value boxing for `:` -- the letrec* "capture by location" fix. a reference at-or-before
 ; its own binding is forward, and indirects through a cell keyed by the binding site's nom, so a
 ; pre-fill read is a map miss = the missing condition. it emits nif values, not names, so the
 ; egg's mop cannot break it. 0 when nothing needs boxing, else (prs' . body').
-(: (lambp x) (? (two? x) (&& (id? '\ <x) (two? >>x))) ; \ with >=1 param (one-operand \ is quote)
-   (dsug n d) (? (atom? n) (link n d) (dsug <n (link '\ (>n + list d))))
-   (lp x) (: a >x (? (atom? >a) (0 >< <a) (init a >< last a)))
-   (ln bs) (? (atom? bs) 0 (atom? >bs) 0 (link <(dsug <bs 0) (ln >>bs)))
+(: (lambp x) (two? x && id? '\ <x && two? >>x) ; \ with >=1 param (one-operand \ is quote)
+   (dsug n d) (? (one? n) (n . d) (dsug <n ('\ . >n + list d)))
+   (lp x) (: a >x (one? >a ? (0 . <a) (init a . last a)))
+   (ln bs) (? (one? bs) 0 (one? >bs) 0 (<(dsug <bs 0) . ln >>bs))
    ; w/wl: does x / binding-list bs reference symbol v? \ and : shadow, one-operand \ is quote,
    ; macros expand. u tracks lambda depth; dm counts only references not under a lambda.
    (w v x bnd u dm) (?
     (nom? x) (&& (? dm !u 1) (id? x v) !(member? v bnd))
-    (atom? x) 0
+    (one? x) 0
     (: h <x (?
-      (id? h '\) (? (atom? >>x) 0 (: r (lp x) (w v >r (cat <r bnd) 1 dm)))
+      (id? h '\) (? (one? >>x) 0 (: r (lp x) (w v >r (<r + bnd) 1 dm)))
       (id? h ':) (wl v >x (cat (ln >x) bnd) u dm)
-      (: m (? (nom? h) (macros h) 0) (? (&& m !(member? h bnd)) (w v (m >x) bnd u dm) (any (\ e (w v e bnd u dm)) x))))))
+      (: m (nom? h ? (macros h) 0) (m && !(member? h bnd) ? (w v (m >x) bnd u dm) (any (e \ w v e bnd u dm) x))))))
    (wl v bs bnd u dm) (?
-    (atom? bs) 0
-    (atom? >bs) (w v <bs bnd u dm)
+    (one? bs) 0
+    (one? >bs) (w v <bs bnd u dm)
     (: nd (dsug <bs <>bs) (? (w v >nd bnd u dm) 1 (wl v >>bs bnd u dm))))
    ; a name wants a cell when something that runs before its slot is filled can read it. two
    ; doors: a direct read from a binding at or before it (for a lambda name, only one not
@@ -944,36 +944,36 @@
      ; a one-operand \ is quote, macros expand -- except a head this let binds, which is a
      ; variable and never a macro (boxfix-core's sub reads it the same way).
      (bref x bnd u acc) (?
-      (nom? x) (? (&& (member? x nm) !(member? x bnd)) (link (link x u) acc) acc)
-      (atom? x) acc
+      (nom? x) (member? x nm && !(member? x bnd) ? ((x . u) . acc) acc)
+      (one? x) acc
       (: h <x (?
-        (id? h '\) (? (atom? >>x) acc (: r (lp x) (bref >r (cat <r bnd) 1 acc)))
-        (id? h ':) (brefl >x (cat (ln >x) bnd) u acc)
+        (id? h '\) (one? >>x ? acc (: r (lp x) (bref >r (<r + bnd) 1 acc)))
+        (id? h ':) (brefl >x (ln >x + bnd) u acc)
         (: m (? (nom? h) (macros h) 0)
-           (? (&& m (nil? (member? h bnd)) (nil? (member? h nm))) (bref (m >x) bnd u acc)
-              (foldl (\ a e (bref e bnd u a)) acc x))))))
+           (? (m && !(member? h bnd) && !(member? h nm)) (bref (m >x) bnd u acc)
+              (foldl (a \ e \ bref e bnd u a) acc x))))))
      (brefl bs bnd u acc) (?
-      (atom? bs) acc
-      (atom? >bs) (bref <bs bnd u acc)
+      (one? bs) acc
+      (one? >bs) (bref <bs bnd u acc)
       (: nd (dsug <bs <>bs) (brefl >>bs bnd u (bref >nd bnd u acc))))
-     es (map (\ p (link <p (bref (cup p) 0 0 ()))) prs)   ; the read graph, source order
+     es (map (p \ <p . bref >p 0 0 ()) prs)   ; the read graph, source order
      (reads m) >(assoc m es)
      (anyname m) (map cap (reads m))                           ; read anywhere
-     (barename m) (map cap (filter (\ r (nil? >r)) (reads m)))   ; read not under a \
-     (grow s) (: s2 (foldl (\ a m (cat a (filter (\ k (nil? (member? k a))) (anyname m)))) s s)
-                  (? (= (tally s2) (tally s)) s (grow s2)))
+     (barename m) (map cap (filter (nil? * cup) (reads m)))   ; read not under a \
+     (grow s) (: s2 (foldl (a \ m \ a + filter (\ k !(member? k a)) (anyname m)) s s)
+                  (#s2 = #s ? s (grow s2)))
      ; near: a read from a binding at or before v. a lambda name takes only the bare ones --
      ; a call comes after the pin -- a value name every one.
      (near v) (: d (lambp >(assoc v prs))
-                 (any (\ m (member? v (? d (barename m) (anyname m))))
+                 (any (m \ member? v (? d (barename m) (anyname m)))
                       (take (1 + lidx v nm) nm)))
      ; reach: v is read from anywhere the bindings before it get to through the let's own
      ; names -- capture, not evaluation order. an earlier closure inherits a later sibling's
      ; captures, so it wants v's slot at construction, before that slot exists.
      (reach v) (member? v (grow (catmap anyname (take (lidx v nm) nm))))
-     (filter (\ v (? (near v) 1 (lambp (cup (assoc v prs))) 0 (reach v))) nm))
-   (mkcs bx) (map (\ v (link v (link (mint 0) v))) bx)
-   (cellbinds cs) (map (\ c (caup c >< list tablet 0)) cs)
+     (filter (\ v (? (near v) 1 (lambp >(assoc v prs)) 0 (reach v))) nm))
+   (mkcs bx) (map (v \ v . mint 0 . v) bx)
+   (cellbinds cs) (map (c \ <>c . list tablet 0) cs)
    ; the cell read boxfix emits. a filled cell answers its value; a pre-fill read is a map miss, so
    ; the missing condition carries the binder's own name and the help's result is the value there.
    ; that name is the cell's only key -- cellbinds gives each binder a private one-entry tablet --
@@ -1034,9 +1034,9 @@
 ; and replaces the condition c was firing for, which is the one way out of a lost raise.
 (: mind (: mark (mint 0)
            (\ f x c
-              (: r (trap f x (\ a b (mark >< [a b])))
+              (: r (trap f x (\ a b (mark . [a b])))
                  _ (c ())
-                 (? (&& (two? r) (id? <r mark)) (scare <>r <>>r) r)))))
+                 (? (two? r && id? <r mark) (scare <>r <>>r) r)))))
 ; boxfix-core: same prep, rewriting refs via sub/subl since c0 has no analysis-time redirect.
 ; the law: eager reads see let*, closures see letrec*. a bare read before its name's pin
 ; keeps the plain nom -- a boxed name's own binding is renamed _, so the nom resolves
@@ -1049,35 +1049,35 @@
    ; an ordinary variable and never a macro head.
    (sub cs x bnd pn u) (?
     (nom? x) (: p (assoc x cs)
-                (? !(two? p) x
+                (? (one? p) x
                    (|| u (member? x pn)) (list cellread <>p (list '\ >>p))
                    x))
     (atom? x) x
     (: h (cap x) (?
-      (id? h '\) (? (atom? >>x) x (: r (lp x) (link '\ (cat <r (list (sub (rmc cs <r) >r (cat <r bnd) pn 1))))))
-      (id? h ':) (: ns (ln >x) (': >< subl (rmc cs ns) >x (cat ns bnd) pn u))
-      (: m (macros h) (? (&& m !(member? h bnd)) (sub cs (m >x) bnd pn u) (map (\ e (sub cs e bnd pn u)) x))))))
+      (id? h '\) (one? >>x ? x (: r (lp x) ('\ . <r + list (sub (rmc cs <r) >r (<r + bnd) pn 1))))
+      (id? h ':) (: ns (ln >x) (': . subl (rmc cs ns) >x (cat ns bnd) pn u))
+      (: m (macros h) (? (&& m !(member? h bnd)) (sub cs (m >x) bnd pn u) (map (e \ sub cs e bnd pn u) x))))))
    (subl cs bs bnd pn u) (?
-    (atom? bs) bs
-    (atom? >bs) (list (sub cs <bs bnd pn u))
-    (: nd (dsug <bs <>bs) (<nd >< sub cs >nd bnd pn u >< subl cs >>bs bnd pn u)))
+    (one? bs) bs
+    (one? >bs) (list (sub cs <bs bnd pn u))
+    (: nd (dsug <bs <>bs) (<nd . sub cs >nd bnd pn u . subl cs >>bs bnd pn u)))
    (: bx (boxset prs)
       (? (id? () bx) ()
        (: cs (mkcs bx) ns0 (map cap prs)
           (one p pn) (: d (sub cs >p ns0 pn 0)
                         (? (member? <p bx)
-                           (: c (assoc <p cs) (link '_ (list pin <>c (list '\ >>c) d)))
-                           (link (cap p) d)))
-          (ones ps pn) (? (atom? ps) ()
-                          ((one <ps pn) >< ones >ps (<<ps >< pn)))
-          (cellbinds cs + ones prs () >< sub cs body ns0 ns0 0))))))
+                           (: c (assoc <p cs) ('_ . list pin <>c (list '\ >>c) d))
+                           (cap p . d)))
+          (ones ps pn) (? (one? ps) ()
+                          ((one <ps pn) . ones >ps (<<ps . pn)))
+          (cellbinds cs + ones prs () . sub cs body ns0 ns0 0))))))
 ; the flat-list adapter: a `:` binding list -> the rewritten list, or the input unchanged.
 ; love.c interns "boxfix" and calls it off the book, so c0 compiles prel through this. it must
 ; exist before ev.l does, and both compilers share the one pass.
 (: (boxfix fs) (:
-   (ev l) (? (atom? l) 1 (atom? >l) 0 (ev >>l))
-   (bpr fs) (? (atom? >fs) (0 >< <fs)
-               (: r (bpr >>fs) ((dsug <fs <>fs >< <r) >< >r)))
+   (ev l) (? (one? l) 1 (one? >l) 0 (ev >>l))
+   (bpr fs) (? (one? >fs) (0 . <fs)
+               (: r (bpr >>fs) ((dsug <fs <>fs . <r) . >r)))
    (? (ev fs) fs
     (: pb (bpr fs) r (boxfix-core <pb >pb)
        (? r (catmap (p \ list <p >p) <r + list >r) fs)))))
@@ -1250,28 +1250,28 @@
    wnil [() () ()]
    (wts ts) [ts () ()]
    (wgd g) [() () [g]]
-   (wcat x y) [(cat <x <y) (cat <>x <>y) (cat <>>x <>>y)]
+   (wcat x y) [(<x + <y) (<>x + <>y) (<>>x + <>>y)]
 
    ; `&&` is the guard, left to right: (p && g ..) is (? g .. p) and nothing else, so the
    ; one operand a pattern reads as an expression is the one after the `&&`.
    ; `&&` is right-handed, so a chain arrives nested -- (p && a && b) is (&& p (&& a b))
    ; -- and that inner `&&` is the chain, never a guard on its own. flatten it.
-   (gand? x) (? (link? x) (id? <x '&&) ())
-   (gchain as) (? (! (two? >as)) as
-                  (gand? <>as) (link <as (gchain (cup <>as)))
+   (gand? x) (two? x && id? <x '&&)
+   (gchain as) (? (one? >as) as
+                  (gand? <>as) (<as . gchain ><>as)
                   as)
-   (gwrap p gs) (? (two? gs) ['? <gs (gwrap p >gs)] p)   ; nested, so `arms` still distributes
-   (gnorm p) (: fl (gchain (cup p)) (gwrap <fl >fl))
+   (gwrap p gs) (two? gs ? ['? <gs (gwrap p >gs)] p)   ; nested, so `arms` still distributes
+   (gnorm p) (: fl (gchain >p) (gwrap <fl >fl))
 
    ; (pw p v) -- one walk, three answers: the tests over the access form v, the
    ; (nom access) pairs its body binds, and the guards, which are neither.
    (pw p v)
-     (? (nom? p) (? (= p '_) wnil [() [[p v]] ()])
+     (? (nom? p) (p = '_ ? wnil [() [[p v]] ()])
         (id? p ()) (wts [['= () v]])                        ; () is the empty list, and asks for it
-        (! (link? p)) (wts [['= p v]])
+        (one? p) (wts [['= p v]])
         (: h (opword <p) as >p                     ; opfix's glued heads are values; opword names them
-           (? (= h '?) (? (! (two? as)) (wlist p v)           ; a guard: (? g1 .. gn pat), or (? g)
-                          (! (two? >as)) (wgd <as)           ; ..one operand is the lone guard
+           (? (= h '?) (? (one? as) (wlist p v)           ; a guard: (? g1 .. gn pat), or (? g)
+                          (one? >as) (wgd <as)           ; ..one operand is the lone guard
                           (wq as v))                         ; ..else every one but the last guards
               ; the guard, in the spelling a hand reaches for: (c && 0 < c) is (? (0 < c) c).
               (h = '&&) (pw (gnorm p) v)
@@ -1282,11 +1282,11 @@
               ; so a nom in both is the ordinary non-linear nom, and dedup makes the second
               ; sighting an equality: ([a _] @ [_ a]) fits a pair of equals, for free.
               ; the everyday one is naming the whole while taking it apart: (v @ ['lam x b]).
-              (h = '@) (foldl wcat wnil (map (\ q (pw q v)) as))
+              (h = '@) (foldl wcat wnil (map (q \ pw q v) as))
               ; the pin (elixir's ^x, glued to jot by the operators table): not a binding but
               ; an equality against x read from outside -- the same shape a bare literal takes
               ; above, which is what a pin is. one operand only; anything else is a plain form.
-              ((h = 'jot) && (= 1 (tally as))) (wts [['= <as v]])
+              (h = 'jot && 1 = #as) (wts [['= <as v]])
               ; alternatives, anywhere: one test, the branches ||ed. each branch owns its own
               ; equalities and its own guards, so a disjunct is that branch entire.
               ; a nom lives at a different place in each branch, so it cannot be one access
@@ -1295,41 +1295,39 @@
               ; no nom and so asks nothing again, which is why the literal alternative -- the
               ; common one -- stays exactly one test with no second look.
               (h = '||)
-              (: ws (map (\ q (pw q v)) as)
-                 ds (map (\ w (dedup <>w ())) ws)
-                 ts (map (\ e (: w <e d <>e
-                                  (pand (cat (cat <w <d) (map (\ g (bind <>d g)) <>>w)))))
-                         (zip ws ds))
-                 bss (map (\ d <>d) ds)
-                 uni (foldl (\ u bs (adds u (map cap bs))) () bss)
-                 [[('|| >< ts)] (map (\ n [n (pick n bss ts)]) uni) ()])
-              (= h '\) (? (two? >as) (wlist p v) (wts (weq <as v)))      ; (\ x b) is a lambda, a form
-              (= h 'list) (wlist as v)
-              (h = '>< || h = '.) (? (= 2 (tally as))              ; one tag, two spellings; prefix
+              (: ws (map (q \ pw q v) as)
+                 ds (map (w \ dedup <>w ()) ws)
+                 ts (map (e \ two? e && two? >e ? (: w <e d <>e (pand (<w + <d + map (bind <>d) <>>w)))) (zip ws ds))
+                 bss (map caup ds)
+                 uni (foldl (u \ g \ adds u (map cap g)) () bss)
+                 [[('|| . ts)] (map (\ n [n (pick n bss ts)]) uni) ()])
+              (h = '\) (two? >as ? (wlist p v) (wts (weq <as v)))      ; (\ x b) is a lambda, a form
+              (h = 'list) (wlist as v)
+              (h = '>< || h = '.) (? (2 = #as)              ; one tag, two spellings; prefix
                                                                    ; `link` is the function, not a tag
                                         (wcat (wts [['two? v]])
                                               (wcat (pw <as ['cap v]) (pw <>as ['cup v])))
                                         (wlist p v))
-              (= h '+) (? (! (= 2 (tally as))) (wlist p v)      ; a split: the left run, then the rest
+              (h = '+) (? (2 != #as) (wlist p v)      ; a split: the left run, then the rest
                           (: l <as t <>as
-                             (? (? (link? l) (= <l 'list) ()) (wrest >l t v)
+                             (? (? (two? l) (= <l 'list) ()) (wrest >l t v)
                                 ; `+` is left-handed, so ([a b] + [c] + t) arrives as a + whose
                                 ; left is a +. cat is associative and so is the split: re-associate
                                 ; right and the ordinary rule reads it. this is the multi-split.
-                                (? (link? l) (= <l '+) ()) (pw ['+ <>l ['+ <>>l t]] v)
+                                (? (two? l) (= <l '+) ()) (pw ['+ <>l ['+ <>>l t]] v)
                                 (wlist p v))))
-              (= h 'hash) (wcat (wts [['tablet? v]]) (wkv as v))
-              (= h 'tuple) (wcat (wts [['tray? v] ['= (tally as) ['tally v]]])
+              (h = 'hash) (wcat (wts [['tablet? v]]) (wkv as v))
+              (h = 'tuple) (wcat (wts [['tray? v] ['= #as ['tally v]]])
                                  (widx as v 0))
               (wlist p v))))                               ; untagged: the form's own shape, exact
-   (wq as v) (? (two? >as) (wcat (wgd <as) (wq >as v)) (pw <as v))   ; guards, then the shape
+   (wq as v) (two? >as ? (wcat (wgd <as) (wq >as v)) (pw <as v))   ; guards, then the shape
    ; a nom's access across an alternative. the first branch that matches wins, and it
    ; supplies every nom -- one it does not bind reads (), it does not fall through to a
    ; later branch. Otherwise one body could wear bindings from two different shapes at
    ; once, and the arm would answer for a value no single branch described.
-   (pick n bss ts) (? (! (two? bss)) (lit ())
+   (pick n bss ts) (one? bss ? (lit ())
                       (: e (assoc n <bss)
-                         ['? <ts (? (atom? e) (lit ()) <>e) (pick n >bss >ts)]))
+                         ['? <ts (one? e ? (lit ()) <>e) (pick n >bss >ts)]))
    ; a pattern longer than its value must never reach a `cap`, so the whole run is
    ; claimed before any of it is read: `two?` on the head, then one `long?` for the rest
    ; of the depth. asking `two?` per step instead spends a cup, a load and a dispatch at
@@ -1341,38 +1339,36 @@
    ; the right pattern's own walk, wherever the run stopped.
    (warity k v) (? (k = 1) [['two? v]] [['long? k v]])   ; at one, two? is the same answer and fuses
    (wrun ps v end)
-     (? (! (two? ps)) (end v)
-        (: n (tally ps)
-           (wcat (wcat (wts [['two? v]]) (pw <ps ['cap v]))
-                 (? (n = 1) (end ['cup v])
-                    (wcat (wts (warity (n - 1) ['cup v])) (wskip >ps ['cup v] end))))))
-   (wskip ps v end) (? (two? ps) (wcat (pw <ps ['cap v]) (wskip >ps ['cup v] end))
-                       (end v))
-   (wlist as v) (wrun as v (\ r (wts [['= () r]])))
-   (wrest ps t v) (wrun ps v (\ r (pw t r)))
-   (wkv as v) (? (two? >as)
-                 (: g ['peep v <as (lit gone)]
-                    (wcat (wcat (wts [['! ['= (lit gone) g]]]) (pw <>as g))
-                          (wkv (cuup as) v)))
-                 wnil)
-   (widx as v i) (? (two? as) (wcat (pw <as ['peep v i ()]) (widx >as v (i + 1))) wnil)
+     (one? ps ? (end v)
+      (: n #ps
+       (wcat (wcat (wts [['two? v]]) (pw <ps ['cap v]))
+             (n = 1 ? (end ['cup v])
+              (wcat (wts (warity (n - 1) ['cup v])) (wskip >ps ['cup v] end))))))
+   (wskip ps v end) (one? ps ? (end v) (wcat (pw <ps ['cap v]) (wskip >ps ['cup v] end)))
+   (wlist as v) (wrun as v (r \ wts [['= () r]]))
+   (wrest ps t v) (wrun ps v (pw t))
+   (wkv as v) (one? >as ? wnil
+               (: g ['peep v <as (lit gone)]
+                (wcat (wcat (wts [['! ['= (lit gone) g]]]) (pw <>as g))
+                      (wkv >>as v))))
+   (widx as v i) (one? as ? wnil (wcat (pw <as ['peep v i ()]) (widx >as v (i + 1))))
 
    ; the non-linear pass: a nom already sighted becomes an `=` against the access
    ; form that first bound it, and drops out of the binder list.
    (dedup bs seen)
-     (? (! (two? bs)) wnil
-        (: b <bs e (assoc <b seen)
-           (wcat (? (atom? e) [() [b] ()] (wts [['= <>e <>b]]))
-                 (dedup >bs (? (atom? e) (link b seen) seen)))))
+    (? (one? bs) wnil
+     (: b <bs e (assoc <b seen)
+      (wcat (one? e ? [() [b] ()] (wts [['= <>e <>b]]))
+       (dedup >bs (one? e ? (b . seen) seen)))))
 
-   (pand ts) (? (! (two? ts)) 1  (! (two? >ts)) <ts  ('&& >< ts))
+   (pand ts) (? (one? ts) 1 (one? >ts) <ts  ('&& . ts))
 
    ; the wrapper is ev's to remove, not ours. a nom read once could have its accessor
    ; inlined here, and that is what love/ev.l's read-once refinement already does to the
    ; whole tree: a lone read of an effectful argument substitutes and the call is gone. A
    ; second copy in this macro measured 3.5 M on a 32.5 G corpus -- noise -- so the one
    ; mechanism lives in the compiler, where every caller gets it and not just `@`.
-   (bind bs body) (? (two? bs) (link (link '\ (cat (map cap bs) [body])) (map caup bs)) body)
+   (bind bs body) (one? bs ? body (('\ . map cap bs + [body]) . map caup bs))
 
    ; --- the decision tree -------------------------------------------------------
    ; a clause is [tests body]. compiled flat, every clause re-runs the tests it
@@ -1384,8 +1380,8 @@
    ; the else is then reached two ways and appears twice in the source, which is
    ; why this only fires for a small else -- a big one would double the code.
    ; and it is one level, never recursive: the duplication stays at exactly 2.
-   (same? a b) (? (link? a) (? (link? b) (? (same? <a <b) (same? >a >b) ()) ())
-                  (link? b) ()
+   (same? a b) (? (two? a) (? (two? b) (? (same? <a <b) (same? >a >b)))
+                  (two? b) ()
                   (id? a b))
    ; --- factoring, and its one safe shape --------------------------------------
    ; a full decision tree groups each level's clauses by their next test and recurses
@@ -1400,21 +1396,20 @@
    ; that is the whole win here anyway: uu's clauses share (two? v) and then differ
    ; by tag, so the tree has exactly one interior node to find.
    (cpx cs)                                         ; the test-prefix common to every clause
-     (? (! (two? cs)) ()
-        (! (two? <(<cs))) ()                        ; a clause with no tests left: stop
-        (: t <<(<cs)
-           (? (all (\ c (? (two? <c) (same? <<c t) ())) cs)
-              (link t (cpx (map (\ c [>(<c) <>c]) cs)))
-              ())))
-   (nodes x) (? (link? x) (foldl (\ n e (n + (nodes e))) 1 x) 1)
-   (flat cs els) (link '? ((catmap (\ c [(pand <c) <>c]) cs) + [els]))
+     (? (one? cs) ()
+        (one? <<cs) ()                        ; a clause with no tests left: stop
+        (: t <<<cs
+           (? (all (c \ two? <c && same? <<c t) cs)
+              (t . cpx (map (c \ [><c <>c]) cs)))))
+   (nodes x) (one? x ? 1 (foldl (\ n e (n + (nodes e))) 1 x))
+   (flat cs els) ('? . (catmap (\ c [(pand <c) <>c]) cs) + [els])
    ; two clauses or more, or there is nothing to discriminate: at one clause cpx eats
    ; all of its tests, so factoring would read (? p (? 1 body els) els) -- a vacuous test
    ; and the else written twice, for nothing. uu's hot sites are exactly that shape.
    (tree cs els)
      (: p (cpx cs)
-        (? (&& (two? >cs) (two? p) (< (nodes els) 40))   ; >=2 clauses, a prefix, a small else
-           ['? (pand p) (flat (map (\ c [(drop (tally p) <c) <>c]) cs) els) els]
+        (? (two? >cs && two? p && nodes els < 40)   ; >=2 clauses, a prefix, a small else
+           ['? (pand p) (flat (map (\ c [(drop #p <c) <>c]) cs) els) els]
            (flat cs els)))
    ; --- alternatives, and why they split two ways ------------------------------
    ; (p1 || p2) fits when either does -- `|` too, the way `><` and `link` are one tag.
@@ -1436,36 +1431,39 @@
    ; the arm, normalised: its branches, each with the guards standing over it. a guard
    ; wrapping an alternative belongs to every branch, so (? g (p1 || p2)) is two branches
    ; guarded alike -- the guard is written once and asked once per branch.
-   (arms p) (? (! (link? p)) [[p ()]]
+   (arms p) (? (one? p) [[p ()]]
                (: h <p as >p
                   (? (h = '||) (catmap arms as)
                      (h = '&&) (arms (gnorm p))                 ; the guard, normalised first
-                     ((h = '?) && (= 2 (tally as)))
-                       (map (\ b [<b (link <as <>b)]) (arms <>as))
+                     (h = '? && 2 = #as)
+                       (map (b \ [<b (<as . <>b)]) (arms <>as))
                      [[p ()]])))
    (wgds w gs) (foldl (\ x g (wcat x (wgd g))) w gs)
-   (adds u ns) (cat u (filter (\ n (! (member? n u))) ns))    ; u, then what it did not have
+   (adds u ns) (u + filter (\ n !(member? n u)) ns)    ; u, then what it did not have
    _ (:: '@ (\ a
        (: v (nom 0)
           ; the clause a walk answers: its tests, then its non-linear equalities, then its
           ; guards -- and a body bound over `uni`, whatever this branch did not bind reading ().
           (clofu w uni b)
             (: d (dedup <>w ())
-               bs (cat <>d (map (\ n [n (lit ())]) (filter (\ n (! (assoc n <>d))) uni)))
-               gs (map (\ g (bind bs g)) <>>w)
-               [(cat (cat <w <d) gs) (bind bs b)])
+               dd <>d
+               mf (n \ [n (lit ())])
+               ff (n \ !(assoc n dd))
+               bs (dd + map mf (filter ff uni))
+               gs (map (bind bs) <>>w)
+               [(<w + <d + gs) (bind bs b)])
           (clof w b) (clofu w () b)
           (arm p b)                                    ; the clauses one arm answers for
             (: qs (arms p)
-               (? (! (two? >qs)) [(clof (pw p v) b)]   ; one branch: pw takes any guard itself
-                  (: ws (map (\ q (wgds (pw <q v) <>q)) qs)
-                     (? (all (\ w (! (two? <>w))) ws) [(clof (pw p v) b)]   ; none binds: pw's one test
+               (? (one? >qs) [(clof (pw p v) b)]   ; one branch: pw takes any guard itself
+                  (: ws (map (q \ wgds (pw <q v) <>q) qs)
+                     (? (all (one? * caup) ws) [(clof (pw p v) b)]   ; none binds: pw's one test
                         (: uni (foldl (\ u w (adds u (map cap <>(dedup <>w ())))) () ws)
-                           (map (\ w (clofu w uni b)) ws))))))
-          (cls r) (? (! (two? r)) [() ()]              ; no clause and no else: the zero point
-                     (! (two? >r)) [() <r]             ; the odd tail is the else
-                     (: rest (cls (cuup r))
-                        [(cat (arm <r <>r) <rest) <>rest]))
+                           (map (w \ clofu w uni b) ws))))))
+          (cls r) (? (one? r) [() ()]              ; no clause and no else: the zero point
+                     (one? >r) [() <r]             ; the odd tail is the else
+                     (: rest (cls >>r)
+                        [(arm <r <>r + <rest) <>rest]))
           cl (cls >a)
           [['\ v (tree <cl <>cl)] <a])))
    ())
