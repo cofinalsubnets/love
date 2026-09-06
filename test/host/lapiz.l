@@ -214,7 +214,11 @@ some literal
        ((convert 'rf 'md ".SH hi\n") = "# hi\n")
        ((convert 'ht 'rf "<h1>hi</h1>") = ".SH hi\n")
        ((convert 'md 'ht "# hi") = (md->ht "# hi"))
-       ((md->rf "# NAME") = ".SH NAME\n"))
+       ((md->rf "# NAME") = ".SH NAME\n")
+       ; ..and the one undefined spot: no row for a format, on either side
+       ((convert 'md 'png "# hi") = 'nolens)
+       ((convert 'png 'md "# hi") = 'nolens)
+       (nom? (convert 'md 'png "# hi")))
     0)
 
  ; --- real documents through the lens, laws and all ---------------------------
