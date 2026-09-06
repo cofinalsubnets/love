@@ -1749,7 +1749,7 @@ struct ai_zn ai_net(struct ai *g, word x) {
   if (caskp(x)) { struct ai_str *b = cask(x)->str; ai_flo_t t = 0; // hot chars: Σ charms, like a string
     for (uintptr_t i = 0; i < b->len; i++) t += (uint8_t) b->bytes[i];
     return zn(t, 0); }
-  if (tabp(x)) return zn((ai_flo_t) map_len(x), 0);              // table: key count
+  if (tabp(x)) return zn(1, 0);                                   // table: a lookup lambda, and a lambda nets 1 -- mutable, so its truth is not its contents
   if (coinp(x)) {                                              // a coin nets its payload (the monoid hom), unless
     word mode = kind_get(g, coin_kind(x), KnNet), *kn = ai_core_of(g)->knom;   // its kind pins a net mode.
     if (mode == kn[KnTally])                                   // mode 1: net by tally, the count -- never negative,

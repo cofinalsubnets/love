@@ -376,7 +376,7 @@ table{border-collapse:collapse}
       ; cook's own `cook` prints its verdict; papel wants the number, so it takes the
       ; quiet entry. $ of a map is its key count, and cook marks an item shipped only when
       ; the recipe really advanced its mtime -- so this is exactly "files written".
-      n $(prepped 'site)
+      n #(prepped 'site)
       _ (? !(peep conf 'quiet 0)
          (puts $ "papel: " + (0 < n ? (show n + " written to " + out + "/\n")
                                       (out + "/ is up to date\n"))))

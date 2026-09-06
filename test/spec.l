@@ -54,9 +54,11 @@
 ; "negative is false" is the consequence of truth being a measure, not an extra clause. and the
 ; logical connective was never `*` anyway: `&&` is (and answers the UNIT on failure).
 (assert
- !0 !"" !(tablet 0) !@0 !() !0.0 !(0 ~ 0)        ; zero / empty -> false
+ !0 !"" !@0 !() !0.0 !(0 ~ 0)                    ; zero / empty -> false
  !-5 !-3.9 !(-3 ~ 4) !(0 ~ -1)                   ; <= 0 in the total order -> false (complex by re then im)
  !!5 !!"x" !!'a !!cap !!(3 ~ 4) !!(3 ~ -4)       ; positive / nonempty -> true (a twin gem by its RE)
+ !!(tablet 0) !!{} (1 = $(tablet 0)) (2 = #{1 2 3 4})   ; a tablet is a lookup lambda and nets 1 like one, empty or
+                                                 ; not -- mutable, its truth is not its contents; tally counts keys
  !'(() ()) !'(0 0) !'((0) (())) (0 = $'(() () ()))  ; a chain of nothings is nothing, recursively
  !'(-5) !@(-3 -4) !'(-2 1) !!'(0 1)              ; negatives net <= 0 at every rank; -2+1 < 0 < 0+1
  (3 = $'(1 () 2)) (6 = $'(1 2 3)) (7 = $@(3 4))  ; $ sums the nets, then clamps once
@@ -520,7 +522,7 @@
  ((mint 0) < 'x)                                 ; within the symbol band: an anonymous one below a spelled one
  ((mint 0) < 0)                                  ; the blue floor: every symbol sits below the numbers (true-blue)
  (: a (mint 0) b (mint 0) t (tablet 0) _ (pin t a 1) _ (pin t b 2)
-    (&& (1 = (t a)) (2 = (t b)) (2 = $t)))      ; distinct mints are distinct map keys
+    (&& (1 = (t a)) (2 = (t b)) (2 = #t)))      ; distinct mints are distinct map keys
  (97 = ("abc" 0)) (294 = $"abc") (3 = #"abc") (4 = $3.9) (0 = $-3.9) (7 = $@(3 4)) (5 = (abs -5)) (5.0 = (abs @(3 4)))
  !(string 0) !!(string 1) (1 = #(string 0))          ; a NUL nets nothing: the chain of nothings reaches the bytes, and (string 0) is one of them
  !(snip ("a" + 0) 1 2) (97 = $("a" + 0))        ; ... an all-NUL text is nothing, and the NUL byte appends for free
@@ -560,15 +562,15 @@
  (9 = (peep (pin '(1 2 3) 2 9) 2 0)) (9 = (peep (pin @(1 2 3) 0 9) 0 0))
  (5 = (pin 5 0 1)) (1.5 = (pin 1.5 0 1))         ; ...and the scalar exception: nothing to write
  (: b {0} (tablet? b && 1 = $b && 0 = peep b () 9 && (pin b () 7, 7 = b ())))
- (tablet? {}) (0 = ${}) !{}                      ; {} is the empty map: 0 keys, falsy
+ (tablet? {}) (0 = #{}) (? {})                    ; {} is the empty map: 0 keys, and truthy (a lambda nets 1)
  (: t {1 10 2 20} (20 = peep t 2 0 && 20 = t 2 && 99 = peep t 9 99))
  (: t {1 0} s (mint 0) (!(s = peep t 1 s) && s = peep t 9 s))              ; peep as the total presence test: a pinned 0 is present, an absent key is not
- (50 = (peep (pin (tablet 0) 5 50) 5 0)) (: t {1 10 2 20} _ (pull t 1 0) (1 = $t))
- (: t {1 10 2 20} v (pull t 2 0) (20 = v && 1 = $t && 99 = peep t 2 99 && -1 = pull t 9 -1))   ; pull: value or default, removes the key
+ (50 = (peep (pin (tablet 0) 5 50) 5 0)) (: t {1 10 2 20} _ (pull t 1 0) (1 = #t))
+ (: t {1 10 2 20} v (pull t 2 0) (20 = v && 1 = #t && 99 = peep t 2 99 && -1 = pull t 9 -1))   ; pull: value or default, removes the key
  ('(1 2) = (sort (keys {1 10 2 20}))) ((dig 'k) = (dig 'k)) (tablet? (tablet 0)) !(tablet? 5)
  ({1 10} != {1 10}) (: t {1 10} (t = t))         ; mutable -> identity =
- (: t (tablet 0) r (pins t 1 10 2 20) (r = t && 10 = t 1 && 20 = t 2 && 2 = $t))  ; pins: multi-pin onto a live tablet, returns it (the mutable twin of {..})
- (: t (pins (tablet 0) 1 10 2) (10 = t 1 && 1 = $t)))          ; an odd trailing key is dropped
+ (: t (tablet 0) r (pins t 1 10 2 20) (r = t && 10 = t 1 && 20 = t 2 && 2 = #t))  ; pins: multi-pin onto a live tablet, returns it (the mutable twin of {..})
+ (: t (pins (tablet 0) 1 10 2) (10 = t 1 && 1 = #t)))          ; an odd trailing key is dropped
 
 ; --- the empty spellings (the nothing surface) --- each kind's empty by its sigil: () the
 ; chain (the zero-point, DISTINCT from the number 0), "" the string, @() the array, {} the
@@ -578,10 +580,10 @@
 ; and the wrapped zero are told apart by tally, not by truth. every nothing is a mask;
 ; () the bare-ish floor.
 (assert
- !() !0 !"" !@() !{} !(0 ~ 0) !(cask 0)           ; every empty is false (blue)
+ !() !0 !"" !@() !(0 ~ 0) !(cask 0)               ; every empty is false (blue) -- but {}: a tablet is a lambda, and nets 1
  (() != 0)                                       ; () (zero-point) and 0 (number) are distinct, both nothing
  ("@()" = show @()) (1 = rank @()) (0 = #@()) (star-tray = tier @())               ; @() the empty array, round-trips
- (tablet? {}) (0 = ${}) ("{}" = show {})      ; {} the empty map, show round-trips it
+ (tablet? {}) (0 = #{}) ("{}" = show {})      ; {} the empty map, show round-trips it
  (tray? @0) (0 != @0) (1 = rank @0) (1 = #@0)            ; @0 wraps the VALUE 0 -> a one-cell array
  ("@(0)" = show @0) (0 = peep @0 0 -1)                  ; ...which shows and reads back as one
  (tablet? {0}) (1 = ${0}) !!{0})                       ; {0} wraps the VALUE 0 -> a box (present)

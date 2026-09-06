@@ -48,7 +48,7 @@
 (: cq (tablet 0)
    (cnote v) (: _ (pin cq (tally cq) v) v)
    (: r ((cnote 'a), (cnote 'b), (cnote 'c))
-      (assert ('c = r) ('a = (cq 0)) ('b = (cq 1)) ('c = (cq 2)) (3 = $cq))))
+      (assert ('c = r) ('a = (cq 0)) ('b = (cq 1)) ('c = (cq 2)) (3 = #cq))))
 ; quote interiors are data: the comma stays a plain symbol, and reading is
 ; structural -- a lone comma off a port is just the datum
 (assert (3 = (tally '(1 , 2))) (', = (caup '(1 , 2)))

@@ -21,15 +21,15 @@
  _ (Put 3 4)
  _ (Put 't 'f)
  _ (assert
-    (= 4 (sat t))
+    (= 4 (tally t))
     (= 4 (ln (keys t))))
  _ (Del 2)
  _ (Del 't)
  (assert
-    (= 2 (sat t))
+    (= 2 (tally t))
     (= 2 (ln (keys t)))
     (: (lll t) (foldl (\ l k (link k (link (Get k) l))) () (keys t))
-     (= (* 2 (sat t)) (ln (lll t))))))
+     (= (* 2 (tally t)) (ln (lll t))))))
 
 (:
  (stripPrefix p s) (? (= p (snip s 0 (tally p))) (snip s (tally p) (tally s)))

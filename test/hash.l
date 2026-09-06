@@ -32,7 +32,7 @@
  (= 100 (peep ht 1 0))
  (= 300 (peep ht 3 0))
  (tablet? (tablet 0))                              ; the empty hash
- !(tablet 0) !{}                                ; both the empty map (falsy); {} reads to (tablet 0)
+ (? (tablet 0)) (? {}) (0 = #(tablet 0)) (0 = #{})   ; the empty map is truthy (a lambda) and tallies 0; {} reads to (tablet 0)
  (= 50 (peep (pin (tablet 0) 5 50) 5 0))                ; the empty hash is mutable
  (= 3 (foldl (\ n _ (+ 1 n)) 0 (keys {1 10 2 20 3 30})))    ; splice builds all entries
  (= "{}" (show {}))                              ; {} is the empty map, and round-trips
