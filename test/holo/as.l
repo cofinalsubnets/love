@@ -175,6 +175,15 @@
       ("rip.call.ind" "ff1500000000c3"        "call *t(%rip)\nt:\n ret"))
 
    _ (foldl (\ _ t (chk (t 0) (t 1) (t 2))) 0 tests)
+   ;; -- the lens laws over the same battery (src/core/holo/dialect.l): each source reads to a
+   ;;    value both dialects show and read back unchanged, and the Intel spelling assembles to
+   ;;    the golden bytes -- the conversion is byte-exact. --
+   (law name want src)
+      (: v (att-read src)
+         _ (chk-eq (name + ".att") v (att-read (att-show v)))
+         _ (chk-eq (name + ".intel") v (intel-read (intel-show v)))
+         (chk-eq (name + ".intel.hex") want (as-hexv (intel-read (intel-show v)))))
+   _ (foldl (\ _ t (law (t 0) (t 1) (t 2))) 0 tests)
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (sayln $ "test/holo/as: " + show np + " passed, " + show nf + " failed\n")
    _ (? (0 = nf) 0 (quit 1)))

@@ -218,7 +218,11 @@ some literal
        ; ..and the one undefined spot: no row for a format, on either side
        ((convert 'md 'png "# hi") = 'nolens)
        ((convert 'png 'md "# hi") = 'nolens)
-       (nom? (convert 'md 'png "# hi")))
+       (nom? (convert 'md 'png "# hi"))
+       ; the second hub: the two x86 dialects convert into each other, and not into a document
+       ((convert 'att 'intel "\tmovl\t$5, -12(%rbp)\n") = "\t.intel_syntax noprefix\n\tmov\tDWORD PTR [rbp-12], 5\n")
+       ((convert 'intel 'att "\tmov\tDWORD PTR [rbp-12], 5\n") = "\tmovl\t$5, -12(%rbp)\n")
+       ((convert 'md 'att "# hi") = 'nolens))
     0)
 
  ; --- real documents through the lens, laws and all ---------------------------

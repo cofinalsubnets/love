@@ -253,7 +253,7 @@ distfiles = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps
             src/apps/kore/diff.l src/apps/kore/patch.l src/apps/dns/dns.l src/apps/ain/ain.l $(lushfiles) src/apps/kore/find.l \
             src/apps/cook/cook.l src/apps/kore/asbook.l \
             src/core/holo/x64.l src/core/holo/a64.l src/core/holo/thumb2.l src/core/holo/rv64.l \
-            src/core/holo/thumb1.l src/core/holo/text.l src/core/holo/gas.l src/core/holo/elf.l src/core/holo/obj.l \
+            src/core/holo/thumb1.l src/core/holo/text.l src/core/holo/gas.l src/core/holo/dialect.l src/core/holo/elf.l src/core/holo/obj.l \
             src/core/holo/link.l src/core/holo/copy.l src/apps/moon/floor.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l \
             src/apps/moon/val.l src/apps/moon/gen.l src/apps/moon/lib/mksys.l src/apps/moon/moon.l src/apps/kore/kore.l src/apps/sb/merge.l \
             src/apps/sb/http.l src/apps/sb/sb.l src/apps/kiosko/kiosko.l \

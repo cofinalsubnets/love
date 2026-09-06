@@ -11,9 +11,10 @@
 ; so md->ht is just (htshow (mdread s)). three surfaces make six conversions and there is no
 ; pairwise code for any of them: a conversion is one surface's reader and another's shower, so
 ; the `surfaces` table is the whole of it and a fourth adds a row. a row also names its hub,
-; the middle it reads into: today every row says 'doc, and `convert` composes only inside one
-; hub, answering the nom 'nolens across hubs or for a format it has no row for -- a second
-; middle (an image, say) adds rows under its own hub and the matrix grows a block, not a seam.
+; the middle it reads into: the documents say 'doc, and the two x86 assembler dialects
+; (src/core/holo/dialect.l) say 'x86. `convert` composes only inside one hub, answering the
+; nom 'nolens across hubs or for a format it has no row for, so a third middle adds rows under
+; its own hub and the matrix grows a block, not a seam.
 ; roff was added third and
 ; touched neither of the others -- except where it should, by pressing two nodes the middle was
 ; missing (meta, deflist), which then made markdown and html richer too. that is the trade a
@@ -481,11 +482,14 @@
    rfread (bmrg * runp (many r-block)))
 
 ; ---------------------------------------------------------------- the lens
-; three surfaces, six conversions -- but no pairwise code: a row is (format hub reader shower),
+; five surfaces under two hubs -- but no pairwise code: a row is (format hub reader shower),
 ; and a conversion is a reader from one row and a shower from another under the same hub, so
-; the table is the whole matrix. a fourth surface adds a row and nothing else; two rows with
+; the table is the whole matrix. a new surface adds a row and nothing else; two rows with
 ; different hubs, or a format with no row, meet at the one undefined spot: the nom 'nolens.
-(: surfaces [['md 'doc mdread mdshow] ['ht 'doc htread htshow] ['rf 'doc rfread rfshow]]
+; the x86 rows reach the holo book when called, so lapiz owes it nothing at bake.
+(: surfaces [['md 'doc mdread mdshow] ['ht 'doc htread htshow] ['rf 'doc rfread rfshow]
+             ['att 'x86 (s \ (from 'holo 'att-read) s) (v \ (from 'holo 'att-show) v)]
+             ['intel 'x86 (s \ (from 'holo 'intel-read) s) (v \ (from 'holo 'intel-show) v)]]
    (srow k) ((: (g l) (? (atom? l) () (= <<l k) <l (g >l))) surfaces)
    (convert from to s) (: a (srow from) b (srow to)
                           (? (two? a && two? b && (<>a = <>b)) (<>>>b (<>>a s)) 'nolens))

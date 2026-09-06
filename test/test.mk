@@ -891,14 +891,17 @@ test_holo: host
 	@cat src/core/holo/holo.l src/core/holo/x64.l src/core/holo/a64.l src/core/holo/thumb2.l \
 	    src/core/holo/rv64.l src/core/holo/thumb1.l src/core/holo/text.l src/core/holo/gas.l src/core/holo/elf.l \
 	    test/holo/golden.l | sh test/gate/run.sh holo "$m" ", 0 failed"
-# as.l -- the real AT&T x86-64 front over holo. test/holo/as.l's goldens are byte-identical
+# as.l -- the real x86-64 front over holo, either dialect through dialect.l's lens (the lens
+# laws ride test/holo/as.l; test/gate/dialect.sh judges it against gcc's own two outputs,
+# skipping without gcc). test/holo/as.l's goldens are byte-identical
 # to /usr/bin/as (frozen, no shell-out at gate time). Same sentinel gate as test_holo.
 # asrefuse.sh is the other half: what must RAISE, one love per case.
 test_as: host
 	@echo TEST test/holo/as.l
-	@cat src/core/holo/holo.l src/core/holo/x64.l src/core/holo/as.l test/holo/as.l \
+	@cat src/core/holo/holo.l src/core/holo/x64.l src/core/holo/dialect.l src/core/holo/as.l test/holo/as.l \
 	  | sh test/gate/run.sh as "$m" ", 0 failed"
 	@sh test/gate/asrefuse.sh "$m"
+	@sh test/gate/dialect.sh "$m" $(ho)
 # test_elf32 -- holo's ELF32 executable writer, judged by a real loader: both thumb backends
 # lay write+exit, Linux maps the segment and enters in Thumb state, and 42 must come back.
 # test/holo/golden.l pins the header fields; this pins the only opinion that counts. Needs qemu-arm
