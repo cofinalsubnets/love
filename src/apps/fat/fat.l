@@ -27,6 +27,11 @@
 ; FAT32 only, by the format's own law: under 65525 clusters the type flips to FAT16 by
 ; definition, so fat-mkfs refuses a device too small (~33 MB) -- absence, not divergence.
 
+; the module head is the export list, and it is not decoration: this file's own floor
+; is spelled u16, u32, w16, w32, bcopy, zeros, group, alias, cksum -- names a shared
+; layer would collide with on sight. only the surface at the top of this header leaves.
+(module (fat fat-mkfs fat-mount fat-ls fat-stat fat-read fat-write fat-mkdir fat-rm
+         fat-disk)
 (:
    ; --- little-endian scalars: strings index charms, casks pin them ---
    (u16 s i) (s i + (s (i + 1) << 8))
@@ -372,3 +377,4 @@
                    (: n (ev 'disk ())
                       (n ? [(ev 'disk-read) (ev 'disk-write) n]))
                    ()))
+) ; module 'fat

@@ -12,14 +12,14 @@
   test_as test_asmops test_bakerep test_big test_cca64 test_ccrv64 test_ccthumb1 \
   test_ccthumb2 test_clay test_cli test_cookdiff test_cpio test_cts test_cts_a64 \
   test_cts_rv64 test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb \
-  test_elf32 test_encver test_extra test_extract test_fat test_filemode test_fixpoint \
+  test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_front test_gc test_gcheck test_gcstress \
   test_gen test_glaze test_glazefuzz test_gz test_hdiff test_holo test_holofuzz test_hook \
   test_host test_hostegg test_hostnif test_inle test_kboot test_kernel_a64 test_kernel_rv64 test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_raw test_raw_a64 test_raw_bake test_raw_rv64 \
-  test_refuzz test_rv64 test_rp2040 test_rvboot test_sat test_sb test_seat test_seed \
+  test_refuzz test_root test_rv64 test_rp2040 test_rvboot test_sat test_sb test_seat test_seed \
   test_selfhost test_slow test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
@@ -45,7 +45,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_holofuzz test_glazefuzz test_encver test_lux test_kore test_refuzz test_sb test_vi \
 	test_moon test_clay test_moonfuzz test_forge \
 	test_cts test_libc test_ulp test_raw \
-	test_drv test_hdiff test_tco0 nettest test_wake test_gz test_cpio \
+	test_drv test_hdiff test_tco0 nettest test_wake test_gz test_cpio test_fat32 test_root \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
 	test_asmops test_dtb test_rvboot test_elf32 test_objcopy test_distboot test_fat test_wasm \
@@ -854,6 +854,26 @@ test_gz: host
 	@$m $R/test/gate/gzfind.l
 	@echo TEST test/gate/targz.sh
 	@sh test/gate/targz.sh $(ho)/love
+# test_root -- the privileged verbs: chroot, mount, umount, sync, mkfifo, mknod. Two
+# halves, and the second is the one that means something: the refusals as an ordinary
+# user, then test/gate/rootns.l, which makes itself root in an unprivileged USER
+# NAMESPACE and does the real thing -- a tmpfs mounted, a bind that shows the other
+# tree, both unmounted, and a chroot with a command running inside the new root. A
+# gate that only watched these answer 'eperm would pass against a stub.
+# ⚠ a kernel with unprivileged user namespaces off skips the second half with a word
+# and stays green: that is a machine's policy, not a fault in the code.
+test_root: host
+	@echo TEST test/gate/root.sh
+	@sh test/gate/root.sh $(ho) $(ho)/love
+# test_fat32 -- `love fat` + `love mkfs.vfat`, the command line over src/apps/fat/fat.l.
+# ⚠ NOT test_fat, which gates the fat CONTAINER (seed-universal U1) and shares only a
+# word. test/host/fat.l proves the filesystem's own laws over a cask, needing nothing
+# outside; this is the half only another implementation can say, and mtools is it --
+# their reader on our format, our reader on theirs, and our reader on an mformat image.
+# Skips the interop half where mtools is missing; the verbs still run.
+test_fat32: host
+	@echo TEST test/gate/fat32.sh
+	@sh test/gate/fat32.sh $(ho) $(ho)/love
 # test_cpio -- src/apps/cpio/cpio.l + its face against GNU cpio, both ways over newc. Separate
 # from test_gz for the same reason test_gz is separate from the laws: the system tool
 # is the only oracle that can catch a format two of our own functions agree on. This

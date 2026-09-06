@@ -71,6 +71,9 @@
    (udie c m) (: _ (say err m) _ (put err 10) (uleave c))
    ; left-pad with spaces to width w (a wider count never shrinks), and its mirror --
    ; the columns that count from the left (ps's TTY, free's label) want the other one
+   ; the month abbreviations, read by proc.l's date and fs.l's `ls -l` -- two files
+   ; on either side of the cat, so the table sits on the floor under both.
+   udt-mo '("Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug" "Sep" "Oct" "Nov" "Dec")
    (upad w s) (? (tally s < w) (upad w (" " + s)) s)
    (urpad w s) (? (tally s < w) (urpad w (s + " ")) s)
    ; join texts with single spaces

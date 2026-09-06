@@ -44,23 +44,185 @@
    ; -- pwd: where we stand --
    (pwd-main _) (: _ (say out (cwd ())) _ (put out 10) _ (flush out) 0)
 
+   ; -- sync: the writeback, scheduled. sync(2) answers nothing and cannot fail.
+   ; GNU's takes FILEs and fsyncs each; this one is the bare call only, since the
+   ; per-file lane wants an fsync nif and there is none -- taking the operands and
+   ; syncing everything instead would be a different thing wearing the same name.
+   (sync-main as)
+    (: _ (? (two? as) (udie 1 "sync: takes no operands here (no fsync nif)") ())
+       _ (? (member? 'sync (names ())) (sync 0) ())
+       0)
+
+   ; -- mkfifo and mknod: the two rows a /dev wants ------------------------------
+   ; mode carries the TYPE bits as well as the permissions, which is mknod(2)'s own
+   ; shape: S_IFIFO 4096, S_IFCHR 8192, S_IFBLK 24576.
+   ; linux packs a device number wide -- major in bits 8..19 and 44.., minor in 0..7
+   ; and 20.. -- so the obvious (major << 8) | minor is right only while both are small.
+   (umkdev maj mn)
+    (((& maj 4095) << 8) | (& mn 255) | ((maj >> 12) << 44) | ((mn >> 8) << 20))
+   (umknod who p md dev)
+    (? (member? 'mknod (names ())) (mknod p md dev) 'enosys)
+   (mkfifo-main as)
+    (: t (tablet 0)
+       o (uopts as t '(109) ())
+       _ (? (two? o) () (udie 1 "mkfifo: -m wants a mode"))
+       v (uoptv t 109)
+       md (? (string? v) (uoct v) 438)          ; 0666, the mode mkfifo(1) defaults to
+       fs <>>o
+       _ (? (two? fs) () (udie 1 "usage: mkfifo [-m MODE] NAME.."))
+       (go l ok) (? !(two? l) ok
+                    (: e (umknod "mkfifo" <l (md | 4096) 0)
+                       _ (? e (: _ (say err ("mkfifo: cannot create " + <l + ": " + (show e)))
+                                 (put err 10))
+                            ())
+                       (go >l (? e 0 ok))))
+       ok (go fs 1)
+       _ (flush err) (? ok 0 1))
+   (mknod-main as)
+    (: t (tablet 0)
+       o (uopts as t '(109) ())
+       _ (? (two? o) () (udie 1 "mknod: -m wants a mode"))
+       v (uoptv t 109)
+       md (? (string? v) (uoct v) 438)
+       fs <>>o
+       n #fs
+       _ (? (2 <= n) () (udie 1 "usage: mknod [-m MODE] NAME TYPE [MAJOR MINOR]"))
+       nm <fs ty <>fs
+       kind (? (ty = "p") 4096 (ty = "c") 8192 (ty = "u") 8192 (ty = "b") 24576
+               (udie 1 ("mknod: unknown type " + ty + " (want p, b, c or u)")))
+       _ (? ((kind = 4096) || (4 <= n)) ()
+            (udie 1 "mknod: a block or character node wants MAJOR and MINOR"))
+       dev (? (kind = 4096) 0 (umkdev (uatoi (fs 2)) (uatoi (fs 3))))
+       e (umknod "mknod" nm (md | kind) dev)
+       (? e (udie 1 ("mknod: cannot create " + nm + ": " + (show e))) 0))
+
    ; -- ls: a directory's entries, sorted, dotfiles held back (-a shows them);
    ; a file argument answers its own name --
+   ;   -a all   -A all but . and ..   -l long   -d the directory itself
+   ;   -r reverse   -t newest first
+   ;   -1 one per line, which is what this ls always does: GNU writes one name a line
+   ;      whenever stdout is not a terminal, and nothing here is one
+   ; several operands print GNU's `name:` headers, files before directories.
+   ; ⚠ THE LONG ROW'S CLOCK IS UTC. this tree carries no timezone database (see
+   ; date's own note), so `ls -l` reads local time only where local time is UTC, and
+   ; the gate that compares it to GNU sets TZ for that reason.
+   ; absent and said so: -C/-x columns, -R, -S, -h, -i, -F and --color.
+   uls-opts "aAldrt1"
+   ; GNU shows the clock for the last six months and the year outside them. six
+   ; months is 31556952/2 -- the average Gregorian year halved, coreutils' own
+   ; constant, not 180 days.
+   (uls-when s now)
+    (: ymd (ucivil (// s 86400)) secs (% s 86400)
+       mo (udt-mo (<>ymd - 1))
+       d (upad 2 (show <>>ymd))
+       (? (((now - 15778476) <= s) && (s <= now))
+          (mo + " " + d + " " + (uzpad 2 (show (// secs 3600)))
+              + ":" + (uzpad 2 (show (// (% secs 3600) 60))))
+          (mo + " " + d + "  " + (show <ymd))))
+   ; a name as the long row shows it -- a link wears its target, which is why every
+   ; stat here is an lstat: ls -l describes the link and not what it points at.
+   (uls-nom p nm md)
+    (? (40960 = (& md 61440))
+       (: t (readlink p) (? (string? t) (nm + " -> " + t) nm))
+       nm)
+   (uls-row p nm st now)                ; the six columns, as strings
+    [(ust-perm (st 2))
+     (? (charm? (ust-at st 6)) (show (st 6)) "?")
+     (? (charm? (ust-at st 4)) (uidname "/etc/passwd" (st 4)) "?")
+     (? (charm? (ust-at st 5)) (uidname "/etc/group" (st 5)) "?")
+     (show <st)
+     (uls-when (// (st 3) 1000000000) now)
+     (uls-nom p nm (st 2))]
+   (uls-wide rs k) (foldl (\ w r (: n #(r k) (? (w < n) n w))) 0 rs)
+   ; ⚠ the widths come from `ws` and not from `rs`. GNU sizes the command-line block's
+   ; columns over EVERY operand, directories included -- even though a directory
+   ; operand is listed further down as a block of its own and its row is never
+   ; printed here. `ls -l file dir` pads file's size to the width of dir's, and a
+   ; block sizing itself off its own rows silently loses that space.
+   (uls-emit rs ws0)                    ; the rows, columns aligned the way GNU aligns
+    (: wl (uls-wide ws0 1) wu (uls-wide ws0 2) wg (uls-wide ws0 3) ws (uls-wide ws0 4)
+       (go l) (? !(two? l) ()
+                 (: r <l
+                    _ (say out (<r + " " + (upad wl (r 1)) + " " + (urpad wu (r 2))
+                                   + " " + (urpad wg (r 3)) + " " + (upad ws (r 4))
+                                   + " " + (r 5) + " " + (r 6)))
+                    _ (put out 10)
+                    (go >l)))
+       (go rs))
+   ; the order: by name, or by mtime newest-first under -t with the name breaking a
+   ; tie. -r turns whichever of those around, which is why it is applied last and not
+   ; folded into the comparison.
+   (uls-sort es t? r?)
+    (: le (? t? (\ x y (: a (<>x 3) b (<>y 3) (? (= a b) (<x <= <y) (b < a))))
+              (\ x y (<x <= <y)))
+       s (sortby le es)
+       (? r? (rev s) s))
+   ; one entry: [name lstat] | () when it cannot be stat'd
+   (uls-ent dir nm)
+    (: p (? #dir (dir + "/" + nm) nm)
+       st (lstat p)
+       (? (two? st) [nm st p] ()))
    (ls-main as)
-    (: a? (two? as && (<as = "-a"))
-       fs (? a? >as as)
-       (one p ok)
-        (? !(two? (stat p))
-           (: _ (say err ("ls: cannot access " + p)) _ (put err 10) 0)
-           !(udirp p) (: _ (say out p) _ (put out 10) ok)
-           (: (go m) (? !(two? m) ok
-                        (: _ (? (!a? && (<m 0 = 46)) ()
-                                (: _ (say out <m) (put out 10)))
-                           (go >m)))
-              (go (sort (readdir p)))))
-       (go a ok) (? (two? a) (go >a (one <a ok))
-                    (: _ (flush out) (? ok 0 1)))
-       (go (? (two? fs) fs '(".")) 1))
+    (: t (tablet 0)
+       o (uopts as t '() ())
+       _ (? (two? o) () (udie 2 "ls: an option wants a value"))
+       ops <>>o
+       (opt? c) (: n #uls-opts
+                   (go k) (? (n <= k) 0 (uls-opts k = c) 1 (go (k + 1)))
+                   (go 0))
+       _ (map (\ k (? (opt? k) () (udie 2 ("ls: unknown option -- " + (string k)))))
+              (filter charm? (keys t)))
+       a? (peep t 97 0) aa? (peep t 65 0) l? (peep t 108 0) d? (peep t 100 0)
+       r? (peep t 114 0) tm? (peep t 116 0)
+       now (// (clock 0) 1000)
+       fs (? (two? ops) ops '("."))
+       hdr? (two? >fs)
+       (rows es) (map (\ e (uls-row (e 2) <e <>e now)) es)
+       (show1 es ws0)                    ; a run of entries, long or bare
+        (? l? (uls-emit (rows es) ws0)
+           (: (go l) (? !(two? l) ()
+                        (: e <l _ (say out <e) _ (put out 10) (go >l)))
+              (go es)))
+       ; a directory's own listing: the entries, with `total` ahead of a long one.
+       ; an EMPTY directory still owes its header and its `total 0`, so nothing here
+       ; returns early on the empty readdir.
+       (dirlist p first ok)
+        ; ⚠ readdir does NOT hand back . and .. -- it answers the names a walk wants.
+        ; `ls -a` owes both, so they are put back here rather than taught to readdir,
+        ; where every other caller would then have to take them out again.
+        (: ns (readdir p)
+           keep (? a? ("." >< (".." >< ns))
+                   aa? ns
+                   (filter (\ n !(n 0 = 46)) ns))
+           es (filter two? (map (\ n (uls-ent p n)) keep))
+           srt (uls-sort es tm? r?)
+           rs (? l? (rows srt) ())
+           _ (? hdr? (: _ (? first () (put out 10))
+                        _ (say out (p + ":")) (put out 10)) ())
+           _ (? l? (: blk (foldl (\ a e (: b (ust-at <>e 7) (? (charm? b) (a + b) a))) 0 es)
+                      _ (say out ("total " + (show (// blk 2)))) (put out 10)) ())
+           _ (show1 srt rs)
+           ok)
+       ; the operands, GNU's way round: the non-directories first as one listing,
+       ; then a listing per directory. -d makes every operand a non-directory.
+       (miss p) (: _ (say err ("ls: cannot access " + p)) _ (put err 10) 0)
+       bad (filter (\ p !(two? (lstat p))) fs)
+       good (filter (\ p (two? (lstat p))) fs)
+       _ (map miss bad)
+       plain (? d? good (filter (\ p !(udirp p)) good))
+       dirs (? d? () (filter udirp good))
+       pes (filter two? (map (\ p (uls-ent "" p)) plain))
+       aes (filter two? (map (\ p (uls-ent "" p)) good))
+       _ (? (two? pes) (show1 (uls-sort pes tm? r?) (rows aes)) ())
+       ; the directory operands go in name order (-r turns them around); -t orders
+       ; what is INSIDE a directory and is not claimed over the operands themselves.
+       dps (: s (sort dirs) (? r? (rev s) s))
+       (walk l first ok) (? !(two? l) ok (walk >l 0 (dirlist <l first ok)))
+       ok (walk dps !(two? pes) (? (two? bad) 0 1))
+       ; ⚠ GNU's ls answers 2 for "cannot access", not 1: 1 is a minor trouble
+       ; (an unreadable subdirectory under -R) and 2 is "the operand is not there",
+       ; which is the status a script's `ls x || ...` is reading.
+       _ (flush out) (? ok 0 2))
 
    ; -- cp and mv: a directory destination pulls the basename in beside --
    ; -f is taken and ignored, and that is not a silent lie: -f means "do not prompt",

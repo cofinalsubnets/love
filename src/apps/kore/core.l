@@ -149,27 +149,210 @@
             (: _ (say out (fmt [tl tw tb])) _ (say out " total") (put out 10)) ())
        _ (flush out) (? ok 0 1))
 
-   ; -- sort: the prel sort is byte order (the LC_ALL=C face); -r reverses, -u keeps firsts --
+   ; -- sort ----------------------------------------------------------------------
+   ; the prel sort is byte order (the LC_ALL=C face) and `sortby` under it is a stable
+   ; merge, which is what lets -s mean anything. flags: -b -f -n -r -s -u, -t SEP, and
+   ; -k F[,M][bfnr] as often as wanted. a key carrying any ordering letter of its own
+   ; uses those INSTEAD of the global ones, which is GNU's rule and not an addition to
+   ; them. equal keys fall to the last-resort compare -- the whole line, bytewise --
+   ; unless -s or -u, neither of which wants it.
+   ; absent, and said so rather than half-done: -k's .CHAR offsets, -c/-C, -o, -z,
+   ; and the -M -h -V -R orderings.
+   (usort-blank? c) ((c = 32) || (c = 9))
+   ; a line's fields as [start end] pairs. under the DEFAULT separator the blanks
+   ; BEFORE a run belong to the run -- GNU's rule, and the whole reason -b exists;
+   ; trailing blanks close no field. under -t the separator is one charm and belongs
+   ; to neither side, so an empty field is a real one.
+   (usort-flds ln sep)
+    (: n #ln
+       (run j) (? ((n <= j) || (usort-blank? (ln j))) j (run (j + 1)))
+       (bl st i) (? (n <= i) ()
+                    (usort-blank? (ln i)) (bl st (i + 1))
+                    (: e (run i) ([st e] . bl e e)))
+       (tt st i) (? (n <= i) [[st n]]
+                    (ln i = sep) ([st i] . tt (i + 1) (i + 1))
+                    (tt st (i + 1)))
+       (? (charm? sep) (tt 0 0) (bl 0 0)))
+   ; the text a key names: the start of field f through the end of field m, or the
+   ; line's end when m is absent. b? drops the leading blanks of the first field.
+   (usort-key ln flds f m b?)
+    (: nf #flds
+       (? ((f < 1) || (nf < f)) ""
+          (: st <(flds (f - 1))
+             en (? ((m < 1) || (nf < m)) #ln <>(flds (m - 1)))
+             (sk i) (? ((en <= i) || !(usort-blank? (ln i))) i (sk (i + 1)))
+             s2 (? b? (sk st) st)
+             (? (en <= s2) "" (snip ln s2 en)))))
+   (usort-up s) (: n #s o (jug 0)
+                   (go k) (? (n <= k) (slurp o)
+                             (: c (s k) _ (put o (? (97 <= c <= 122) (c - 32) c)) (go (k + 1))))
+                   (go 0))
+   ; -n reads a VALUE, and reads it exactly: 10000000000000000001 sorts above ...0
+   ; and no double can say so. the reading is the digits -- sign, then the integer
+   ; part's length, then its digits, then the fractions padded against each other.
+   (usort-num s)                               ; -> [neg int frac], both parts trimmed
+    (: n #s
+       (sk i) (? ((n <= i) || !(usort-blank? (s i))) i (sk (i + 1)))
+       i0 (sk 0)
+       neg ((i0 < n) && (s i0 = 45))
+       i1 (? neg (i0 + 1) i0)
+       (dig j) (? ((n <= j) || !(48 <= (s j) <= 57)) j (dig (j + 1)))
+       i2 (dig i1)
+       ip (snip s i1 i2)
+       dot ((i2 < n) && (s i2 = 46))
+       i3 (? dot (dig (i2 + 1)) i2)
+       fp (? dot (snip s (i2 + 1) i3) "")
+       (lead k) (? ((#ip <= k) || !(ip k = 48)) k (lead (k + 1)))
+       (trail k) (? ((k < 1) || !(fp (k - 1) = 48)) k (trail (k - 1)))
+       [neg (snip ip (lead 0) #ip) (snip fp 0 (trail #fp))])
+   (usort-cmpnum a b)                          ; -1 | 0 | 1
+    (: pa (usort-num a) pb (usort-num b)
+       ia <>pa fa <>>pa ib <>pb fb <>>pb
+       sa (? (!#ia && !#fa) 0 (<pa ? -1 1))
+       sb (? (!#ib && !#fb) 0 (<pb ? -1 1))
+       (lex k) (? (#ia <= k) 0 (ia k < ib k) -1 (ib k < ia k) 1 (lex (k + 1)))
+       (frc k) (? ((#fa <= k) && (#fb <= k)) 0
+                  (: ca (? (k < #fa) (fa k) 48) cb (? (k < #fb) (fb k) 48)
+                     (? (ca < cb) -1 (cb < ca) 1 (frc (k + 1)))))
+       ; ⚠ never `(? r r ..)` on a comparison: -1 is FALSY here (a predicate is the sign
+       ; of the net), so a "less than" would fall through to the next test as if equal.
+       m (? (#ia < #ib) -1 (#ib < #ia) 1 (: r (lex 0) (? (= r 0) (frc 0) r)))
+       (? (sa < sb) -1 (sb < sa) 1 (sa < 0) (0 - m) m))
+   (usort-cmpstr a b) (? (a < b) -1 (b < a) 1 0)
+   ; one key's reading of a line: the text, folded and/or numeric per its own letters
+   (usort-cmp1 ln1 ln2 k sep)
+    (: f <k m <>k b? (k 2) f? (k 3) n? (k 4) r? (k 5)
+       (txt ln) (? f (usort-key ln (usort-flds ln sep) f m b?)
+                   (? b? (: n #ln
+                            (sk i) (? ((n <= i) || !(usort-blank? (ln i))) i (sk (i + 1)))
+                            (snip ln (sk 0) n))
+                      ln))
+       a (txt ln1) b (txt ln2)
+       c (? n? (usort-cmpnum a b)
+            (usort-cmpstr (? f? (usort-up a) a) (? f? (usort-up b) b)))
+       (? r? (0 - c) c))
    (sort-main as)
-    (: (fl a r u) (? !(two? a) [r u a]
-                     (<a = "-r") (fl >a 1 u)
-                     (<a = "-u") (fl >a r 1)
-                     [r u a])
-       p (fl as 0 0)
-       r? <p u? <>p fs <>>p
+    (: (sdie m) (udie 2 ("sort: " + m))
+       ; the flag walk is sort's own: -k takes a value AND stacks, -t takes a charm
+       ; that may be glued or not, and uopts stacks only -e.
+       ; ⚠ every arm below sits inside the ONE `?`. a `(:` here reads `(w = "--")` as a
+       ; BINDING -- a define whose head is a call pattern -- and silently shadows w with
+       ; a two-parameter function, which is how the first draft of this walk answered a
+       ; closure where the file list belonged.
+       (fl a b? f? n? r? s? u? sep ks fs)
+        (? !(two? a) [b? f? n? r? s? u? sep (rev ks) (rev fs)]
+           (: w <a
+              (val g) (: v (snip w 2 #w)
+                         (? #v [v >a]
+                            (two? >a) [<>a >>a]
+                            (sdie (g + " wants a value"))))
+              ; the letters glue: -nr is two of them
+              (ltr j B F N R S U)
+               (? (#w <= j) (fl >a B F N R S U sep ks fs)
+                  ((w j) @
+                   98  (ltr (j + 1) 1 F N R S U)
+                   102 (ltr (j + 1) B 1 N R S U)
+                   110 (ltr (j + 1) B F 1 R S U)
+                   114 (ltr (j + 1) B F N 1 S U)
+                   115 (ltr (j + 1) B F N R 1 U)
+                   117 (ltr (j + 1) B F N R S 1)
+                   c   (sdie ("unknown option -- " + (string c)))))
+              (? (w = "--") [b? f? n? r? s? u? sep (rev ks) ((rev fs) + >a)]
+                 ((#w < 2) || !(w 0 = 45)) (fl >a b? f? n? r? s? u? sep ks (w . fs))
+                 (w = "-k") (: pv (val "-k") (fl <>pv b? f? n? r? s? u? sep (<pv . ks) fs))
+                 ((#w > 2) && (w 1 = 107))
+                    (fl >a b? f? n? r? s? u? sep ((snip w 2 #w) . ks) fs)
+                 (w = "-t") (: pv (val "-t")
+                               v <pv
+                               _ (? #v () (sdie "-t wants a separator"))
+                               (fl <>pv b? f? n? r? s? u? (v 0) ks fs))
+                 ((#w > 2) && (w 1 = 116)) (fl >a b? f? n? r? s? u? (w 2) ks fs)
+                 (ltr 1 b? f? n? r? s? u?))))
+       p (fl as 0 0 0 0 0 0 () () ())
+       b? <p f? <>p n? <>>p r? (p 3) s? (p 4) u? (p 5) sep (p 6) kt (p 7) fs (p 8)
+       ; a key spec: F[,M] with the ordering letters glued to either number
+       (kspec s)
+        (: n #s
+           (num i) (: (go j) (? ((n <= j) || !(48 <= (s j) <= 57)) j (go (j + 1))) (go i))
+           (opt i B F N R)                     ; the letters trailing a number
+            (? ((n <= i) || (s i = 44)) [i B F N R]
+               ((s i) @
+                98  (opt (i + 1) 1 F N R)
+                102 (opt (i + 1) B 1 N R)
+                110 (opt (i + 1) B F 1 R)
+                114 (opt (i + 1) B F N 1)
+                c   (sdie ("unknown key letter -- " + (string c)))))
+           e1 (num 0)
+           _ (? (e1 < 1) (sdie ("bad key -- " + s)) ())
+           f (uatoi (snip s 0 e1))
+           o1 (opt e1 0 0 0 0)
+           (? (#s <= <o1) [f 0 (o1 1) (o1 2) (o1 3) (o1 4)]
+              (: rest (snip s (<o1 + 1) n)
+                 nr #rest
+                 (num2 j) (? ((nr <= j) || !(48 <= (rest j) <= 57)) j (num2 (j + 1)))
+                 e2 (num2 0)
+                 _ (? (e2 < 1) (sdie ("bad key -- " + s)) ())
+                 m (uatoi (snip rest 0 e2))
+                 ; the second half's letters count for the whole key too, GNU-style
+                 (opt2 i B F N R)
+                  (? (nr <= i) [B F N R]
+                     ((rest i) @
+                      98  (opt2 (i + 1) 1 F N R)
+                      102 (opt2 (i + 1) B 1 N R)
+                      110 (opt2 (i + 1) B F 1 R)
+                      114 (opt2 (i + 1) B F N 1)
+                      c   (sdie ("unknown key letter -- " + (string c)))))
+                 ; ⚠ the two halves do NOT carry the same letters. n/r/f on either
+                 ; half order the whole key, but `b` names a POSITION: on the start
+                 ; spec it skips the field's leading blanks, on the end spec it is
+                 ; about where the key stops. so -k1b,1 strips and -k1,1b does not,
+                 ; and folding them together silently sorted `-k1,1b` on the wrong key.
+                 ; the end spec's b is read and dropped -- trailing blanks are not
+                 ; modelled here, and inventing a meaning for it would be worse.
+                 o2 (opt2 e2 0 (o1 2) (o1 3) (o1 4))
+                 [f m (o1 1) (o2 1) (o2 2) (o2 3)])))
+       ; a key with no letters of its own takes the global ones; one with any letter
+       ; takes only its own. that is GNU's rule, and it is why -k2,2 -n is not -k2,2n.
+       (glob k) (: own ((k 2) || (k 3) || (k 4) || (k 5))
+                   (? own k [<k <>k b? f? n? r?]))
+       keys (? (two? kt) (map (\ s (glob (kspec s))) kt) [[0 0 b? f? n? r?]])
        (rd a acc) (? !(two? a) acc
                      (: f <a
                         t (? (f = "-") (slurp in)
-                             (: x (uread f) (? (two? x) <>x
-                                               (udie 2 ("sort: cannot open " + f)))))
+                             (: x (uread f) (? (two? x) <>x (sdie ("cannot open " + f)))))
                         (rd >a (acc + lines t))))
+       ; the comparison: every key in turn, then the last-resort whole-line compare.
+       ; ⚠ -r is already inside each key (glob hands it down), so it must NOT also
+       ; reverse the output -- doing both is the identity, and the first draft of this
+       ; sorted correctly and then undid it. the last resort is the one place -r still
+       ; has to be applied by hand.
+       ; ⚠ -s and -u BOTH drop the last resort -- -s because that is what stable means
+       ; here, and -u because a dedupe reading the whole line would keep two lines that
+       ; the keys call equal, which is the opposite of what was asked.
+       (last a b) (: c (usort-cmpstr a b) (? r? (0 - c) c))
+       ; ⚠ the same falsy trap as usort-cmpnum's: `(? c c (go >ks))` sends every
+       ; less-than on to the next key, and `!(cmp ..)` calls it equal. both readings
+       ; have to ask `= 0` out loud.
+       (cmp a b) (: (go ks) (? !(two? ks) (? (s? || u?) 0 (last a b))
+                                (: c (usort-cmp1 a b <ks sep) (? (= c 0) (go >ks) c)))
+                    (go keys))
+       ; ⚠ an equal pair drops the SECOND, never the first: `(ded >a)` walks off the
+       ; head and leaves the run's LAST line standing, where GNU keeps its first.
        (ded a) (? !(two? a) ()
                   !(two? >a) a
-                  (<a = <>a) (ded >a)
+                  (= 0 (cmp <a <>a)) (ded (<a . >>a))
                   (<a >< ded >a))
-       s1 (sort (? (two? fs) (rd fs ()) (lines (slurp in))))
-       s2 (? u? (ded s1) s1)
-       _ (say out (unlines (? r? (rev s2) s2)))
+       ls (? (two? fs) (rd fs ()) (lines (slurp in)))
+       ; ⚠ prel's `sortby` is NOT a stable sort: `sortsplit` DEALS the list into two,
+       ; so element 1 lands right of element 2 and a merge preferring the left hands
+       ; them back swapped. every equal run therefore comes out in an order of its own,
+       ; which -u then picks a representative from -- and GNU picks the input's first.
+       ; the index rides along as the last tiebreak, which is stability stated outright
+       ; rather than hoped for from the sort underneath.
+       ix (: (go l k acc) (? !(two? l) (rev acc) (go >l (k + 1) ([k <l] . acc))) (go ls 0 ()))
+       s1 (map (\ p <>p)
+               (sortby (\ x y (: c (cmp <>x <>y) (? (= c 0) (<x <= <y) (c < 0)))) ix))
+       _ (say out (unlines (? u? (ded s1) s1)))
        _ (flush out) 0)
 
    ; -- uniq: adjacent runs to their firsts; -c wears the run count, width 7 --
@@ -628,24 +811,37 @@
    ; the output at 76 unless told another width, 0 for one long line.
    ub64set "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
    ub32set "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+   ; ⚠ val and go are lifted OUT of grp on purpose. Written inside it -- which is the
+   ; obvious shape, and was this coder's for a long time -- they are two closures minted
+   ; per THREE INPUT BYTES, and love has no pass that hoists a loop lambda out of
+   ; another loop's body. That alone was 3.5x of this function (539 ms -> 155 ms over
+   ; 512 KB, byte-identical), and it is why `base64` used to read ~600x busybox on
+   ; bench/korebench.sh where `tr`, the same kind of per-byte transform, reads ~48x.
+   ; ⚠ and it was not the two things it looked like: the tower computing 2^shift is
+   ; 5 ms per 3M, and the jug is 145 ms per 1.4M puts. Both were measured and neither
+   ; is the cost. `shf` below is still worth having -- one table beats gc towers a
+   ; group -- but it is the smaller half by far. doc/misc/kore-gauge.md carries the
+   ; numbers and the two dead ends.
    (ubenc set bits s)
     (: n (tally s) o (jug 0)
        gb (? (bits = 6) 3 5)                    ; bytes in a whole group
        gc (// (* gb 8) bits)                    ; charms in a whole group
        msk ((bits 2) - 1)
+       shf ((: (mk j a) (? (j < 0) a (mk (j - 1) (((* bits ((gc - 1) - j)) 2) . a))))
+            (gc - 1) ())                        ; the divisor per output charm, once
+       (val k have i acc) (? (gb <= i) acc
+                             (val k have (i + 1) ((* acc 256) + (? (i < have) (s (k + i)) 0))))
+       (go k v full j) (? (gc <= j) (grp (k + gb))
+                          (: _ (? (j < full)
+                                  (put o (set (& (// v (shf j)) msk)))
+                                  (put o 61))
+                             (go k v full (j + 1))))
        (grp k)
         (? (n <= k) (slurp o)
            (: have (? ((k + gb) <= n) gb (n - k))
-              (val i acc) (? (gb <= i) acc
-                             (val (i + 1) ((* acc 256) + (? (i < have) (s (k + i)) 0))))
-              v (val 0 0)
+              v (val k have 0 0)
               full (// (((* have 8) + bits) - 1) bits)   ; the charms carrying data
-              (go j) (? (gc <= j) (grp (k + gb))
-                        (: _ (? (j < full)
-                                (put o (set (& (// v ((* bits ((gc - 1) - j)) 2)) msk)))
-                                (put o 61))
-                           (go (j + 1))))
-              (go 0)))
+              (go k v full 0)))
        (grp 0))
    ; -w 0 closes nothing: GNU wraps at a width and ends the last line, but one long
    ; line arrives with no newline at all -- so a `base64 -w 0` piped into a compare is

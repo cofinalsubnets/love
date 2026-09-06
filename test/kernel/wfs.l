@@ -73,8 +73,12 @@
    (= "/src/apps/json" (cwd 0))
    (< 0 (tally (rd "json.l")))                  ; a relative path reads off the cwd
    (member? "json.l" (readdir "."))
-   !(chdir "..")                                ; and .. pops one component of it
-   (= "/src/apps" (cwd 0))
+   !(chdir "..")
+   (= "/src/apps" (cwd 0))                      ; .. unwinds ONE component
+   ; ⚠ the seat has to go back to / by hand. this file is one member of a corpus the
+   ; runner loads by RELATIVE path, so a cwd left anywhere else takes every member
+   ; after this one down with a no-corpus-member -- which reads as a missing file
+   ; and not as the walk that moved.
    !(chdir "/")
    (= "/" (cwd 0))
    (nom? (chdir f))                             ; a file is no seat

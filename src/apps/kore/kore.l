@@ -47,17 +47,18 @@
 (module (kore kore-main
         diff-main as-main ar-main ld-main nm-main
         arch-main awk-main base32-main base64-main basename-main bracket-main cat-main
-        chmod-main chomp chown-main cksum-main cmp-main cnames comm-main cp-main cut-main
+        chmod-main chomp chown-main chroot-main cksum-main cmp-main cnames comm-main cp-main cut-main
         date-main dirname-main dsplit du-main echo-main env-main expand-main expr-main
         factor-main false-main find-main fold-main free-main gfind grep-main groups-main
         head-main id-main install-main join-main killall-main kill-main lastn less-main lines link-main
-        ln-main ls-main md5sum-main mkdir-main mktemp-main mv-main myers nl-main nproc-main
+        ln-main ls-main md5sum-main mkdir-main mkfifo-main mknod-main mktemp-main mount-main
+        mv-main myers nl-main nproc-main
         od-main paste-main patch-main pgrep-main pidof-main pkill-main printenv-main
         printf-main ps-main pwd-main pwdx-main readlink-main realpath-main rebre refind refold
         rem reparse rev-main rmdir-main rm-main sed-main seq-main sha256sum-main sleep-main
-        sort-main sparse split-main srun stat-main tac-main tail-main tee-main test-main
+        sort-main sparse split-main srun stat-main sync-main tac-main tail-main tee-main test-main
         touch-main tr-main true-main tsort-main uatoi ubase uclk ucopy udie udiff udirp ujoin
-        uleave uname-main unexpand-main uniq-main unlines unlink-main uptime-main uread urun
+        uleave umount-main uname-main unexpand-main uniq-main unlines unlink-main uptime-main uread urun
         uset usplit ustatf utag utty uupsay wc-main whoami-main xargs-main yes-main)
 (use 'holo) ; the assembler module: elf64, arbytes, ld-syms, at -- as/ar/ld/nm read it
 (: (read-text p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) [1 t]) ()))    ; (1 text) | ()
@@ -292,6 +293,11 @@
             'vi (from 'vi 'vi-main)   ; the editor's wrap registered ahead in the cat
             'less less-main 'more less-main   ; one pager, and the two names it is asked for
             'env env-main 'printenv printenv-main 'sleep sleep-main
+            ; the privileged half: chroot is LFS chapter 7's own call, and mount,
+            ; umount, sync, mkfifo and mknod are what a root the distro builds
+            ; is filled and entered with
+            'chroot chroot-main 'mount mount-main 'umount umount-main
+            'sync sync-main 'mkfifo mkfifo-main 'mknod mknod-main
             'whoami whoami-main 'groups groups-main
             ; the /proc family -- no nif of their own, /proc is a filesystem
             'ps ps-main 'free free-main 'uptime uptime-main
@@ -331,6 +337,10 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   find [PATH..] [EXPR]   -name -path -type f|d|l -print -prune -exec CMD.. \\;
                          ( ) ! -a -o -maxdepth N -mindepth N   (PATH defaults to .)
   env printenv sleep kill xargs           the process tools (src/apps/kore/proc.l)
+  chroot DIR [CMD [ARG..]]                the root changed, then CMD in it
+  mount [-t TYPE] [-o OPTS] SRC TGT       ... or bare, to list /proc/self/mounts
+  umount TGT.. | sync                     ... and the two that undo and settle it
+  mkfifo [-m MODE] NAME.. | mknod [-m MODE] NAME p|b|c|u [MAJOR MINOR]
   whoami | groups | arch | nproc          the four one-line answers
   ps [-e] | free [-m|-g] | uptime         what /proc says about the machine
   pidof NAME.. | pgrep [-fx] PAT          .. and about who is running

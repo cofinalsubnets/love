@@ -204,7 +204,7 @@ until rung 6.
   the locals share and nominally buys half a point of cycles, inside the +-0.7%
   floor; the census meters carry the direction. The build row is flat (clean
   artifact builds 75.5/77.6 s against 75.4/78.3 s). test_slow green through
-  the seed fixpoint -- after one false FIXPOINT NOT OK from a torn artifact
+  the seed fixpoint -- after one false fixpoint failure from a torn artifact
   (knob-flavored timing builds left in out; the compiler itself proved
   deterministic across processes and across the seed's own binary).
 - **rung 5 — params join; the ride loop retires.** Arrivals are interval defs

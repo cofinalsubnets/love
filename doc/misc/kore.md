@@ -2,6 +2,15 @@
 
 src/apps/kore/ orients here; the laws live in src/apps/kore/law.l, the GNU-identical smokes in
 `make test_kore`, and every doubt settles by probing the built `kore`.
+Speed and adversarial inputs are a different page: doc/misc/kore-gauge.md, filled by
+`make -C bench korebench` (kore against busybox, uutils and GNU).
+
+⚠ **the inventory below names TOOLS, never their flag coverage**, and the two are not the
+same reach. A tool listed here answers to its name; which options it answers to is stated
+at the head of its own source, absences included. `make -C bench korebench` found the two
+worst of those absences by running the flags rather than reading the list — `sort` had no
+`-n` and `ls` no `-l`, each reading the flag as a filename — and both now carry a matrix
+against GNU (`test/gate/sortcmp.sh`, `test/gate/lscmp.sh`) inside `make test_kore`.
 
 kore is the distro's coreutils: the love-native POSIX environment over the Linux kernel is
 kernel + a static `love` + .l files, and kore is busybox's multi-call trick done natively.
@@ -27,7 +36,7 @@ The file discipline, two shapes:
   cat member.
 * **a toolbox** (core.l, fs.l): many mains, NO seat — kore is its door.
 
-## the inventory (93 tools, 96 names)
+## the inventory (99 tools, 102 names)
 
 | where | tools |
 | --- | --- |
@@ -53,6 +62,8 @@ The file discipline, two shapes:
 | find.l, the walk | find (-name -path -type -print -prune -exec; ( ) ! -a -o; the depths) |
 | proc.l, the processes and the world | env printenv sleep kill xargs date id whoami groups |
 | proc.l, the /proc family | ps free uptime pidof pgrep pkill killall pwdx |
+| proc.l, the privileged three | chroot (the root moved, then exec), mount (bare = /proc/self/mounts; `-t TYPE`, and the FLAG half of `-o` -- `size=`-style filesystem text is refused by name, not dropped), umount |
+| fs.l, what fills a /dev | sync mkfifo mknod (`p b c u`, `-m MODE`, linux's wide device encoding) |
 | src/apps/vi/ | vi |
 | src/apps/lush/ | sh / lush |
 
@@ -62,7 +73,8 @@ The file discipline, two shapes:
   real GNU tool in `make test_kore` (LC_ALL=C for sort/ls). The fussy faces are pinned
   deliberately: wc pads every field to the digit width of the byte TOTAL; uniq -c wears width
   7; nl is pad-6 + tab and a blank line is seven bare spaces; head/tail banner many files with
-  `==> name <==`; ls -a is GNU -A; `base64 -w 0` ends with no newline at all. Effects
+  `==> name <==`; `base64 -w 0` ends with no newline at all; `ls -l`'s date column has
+  two forms and the boundary is 31556952/2 seconds, coreutils' own half-year. Effects
   (cp/mv/rm/..) are smoked by acting and then verifying with the shell, and the encodings are
   smoked over a BINARY file, which is the only input that says anything.
 * **the u-floor.** The shared helpers leak u-prefixed from core.l and are lawed pure in law.l:
@@ -96,7 +108,10 @@ The file discipline, two shapes:
 
 * `show` is the decimal formatter; `string` of a number makes a ONE-CHARM text.
 * prel `sort` on strings IS lexicographic (probed via the "b"-vs-"ab" discriminator), which is
-  exactly LC_ALL=C — no comparator needed.
+  exactly LC_ALL=C. ⚠ but `sortby` under it is **not stable** — `sortsplit` deals the list
+  into two, so element 1 lands right of element 2 and a left-preferring merge swaps them.
+  `sort -u` picks a representative out of every equal run, so the applet carries the index
+  as its last tiebreak rather than hoping for stability from underneath.
 * a symlink TARGET resolves relative to the LINK's directory, not the cwd.
 * lines/unlines normalize an unterminated final line (the tool layer's ONE normalization); cat
   copies verbatim, head/tail/sort/uniq normalize like GNU sort does (GNU head does not — known,

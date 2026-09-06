@@ -191,8 +191,10 @@ struct _IO_FILE {
 #define NR_symlinkat       36
 #define NR_linkat          37
 #define NR_renameat        38
+#define NR_umount2         39
 #define NR_mount           40
 #define NR_ftruncate       46
+#define NR_sync            81
 #define NR_chdir           49
 #define NR_chroot          51
 #define NR_fchmod          52
@@ -310,7 +312,9 @@ struct _IO_FILE {
 #define NR_setpgid        109
 #define NR_setsid         112
 #define NR_getpgid        121
+#define NR_sync           162
 #define NR_mount          165
+#define NR_umount2        166
 #define NR_getdents64     217
 #define NR_clock_gettime  228
 #define NR_exit_group     231
