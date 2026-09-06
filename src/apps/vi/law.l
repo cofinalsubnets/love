@@ -91,6 +91,19 @@
       (= (at (vgob '("ab" "cd") [106 105 BS])) '(0 2))
       (= (at (vgob '("abc") [65 27])) '(0 2))                             ; esc steps left, fenced
       (= (st? (vgob '("a") [105 120 27]) 'mode) 'n))
+   ; the arrows in insert (edkey's -1 -2 -8 -9): the cursor may sit past the last
+   ; char, the fences are the line's ends, and up and down keep the goal column
+   _ (assert
+      (= (lns (vgob '("abc") [65 -1 120])) '("abxc"))                     ; A, left, x
+      (= (lns (vgob '("abc") [105 -2 -2 -2 -2 120])) '("abcx"))          ; i, right past the end
+      (= (at (vgob '("abc") [105 -2 -2 -2 -2])) '(0 3))
+      (= (at (vgob '("abc") [65 -1 -1 -1 -1])) '(0 0))                    ; left stops at 0
+      (= (lns (vgob '("abcdef" "de") [65 -9 120])) '("abcdef" "dex"))    ; down: col clamped to 2
+      (= (at (vgob '("abcdef" "de") [65 -9])) '(1 2))
+      (= (lns (vgob '("abcdef" "de") [65 -9 -8 120])) '("abcdefx" "de")) ; up again: the goal 6 returns
+      (= (at (vgob '("abcdef" "de") [65 -8])) '(0 6))                     ; up at the top: nothing
+      (= (at (vgob '("ab" "cd") [106 65 -9])) '(1 2))                     ; down at the foot: nothing
+      (= (st? (vgob '("abc") [65 -1 -9 -8]) 'mode) 'i))                  ; still inserting
 
 ; --- operators: x X D C s r J, dd yy cc, d+motion, spans ---
    _ (assert

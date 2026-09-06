@@ -369,6 +369,15 @@
           (c = 9 || 32 <= c)
            (: _ (vput st r (snip ln 0 col + string c + snip ln col len))
               (vgole st (col + 1)))
+          ; the arrows: insert's cursor may sit past the last char, so the fences are
+          ; the line's length, and up and down keep the goal column as j and k do
+          (c = -1) (vgole st (0 < col ? (col - 1) 0))
+          (c = -2) (vgole st (col < len ? (col + 1) len))
+          (c = -8 || c = -9)
+           (: k (c = -8 ? (r - 1) (r + 1))
+              (? (k < 0 || vnl st <= k) st
+                 (: _ (pin st 'row k) n (vlen st) g (st 'goal)
+                    (pin st 'col (g < n ? g n)))))
           st))
 
    ; -- the pending char-argument commands --
@@ -505,12 +514,11 @@
           st))
 
    ; -- the one door: state x key -> state. a key is a byte, or one of cli's edkey codes:
-   ; the arrows (h j k l here, a move in insert too), alt letters, home and end --
+   ; the arrows (h j k l in normal mode, insert's own), alt letters, home and end --
    (arrow c) (c @ -1 104 -2 108 -8 107 -9 106 c)
    (vstep st c)
     (: m (st 'mode)
-       (? (m = 'i) (? (c < 0) (: _ (pin st 'mode 'n) _ (vnorm st (arrow c)) (pin st 'mode 'i))
-                      (vins st c))
+       (? (m = 'i) (vins st c)
           (m = 'c || m = 's)
            ; the line is cli's editor; enter takes it, escape leaves, and a backspace on
            ; nothing leaves too
