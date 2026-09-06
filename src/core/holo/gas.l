@@ -3,8 +3,8 @@
 ; x64, ARM on a64, riscv, thumb), lowered to the neutral IR src/core/holo/holo.l assembles. where
 ; text.l reads holo's own mnemonics over abstract registers, this reads what clang and gcc read,
 ; so one template serves every compiler. it encodes nothing itself: every line lands on a backend
-; row, so the encodings stay where they are gated (test/holo/golden.l). (as.l is the other AT&T
-; reader -- a physical encoder for a whole .s file; this one is the inline-asm dialect front.)
+; row, so the encodings stay where they are gated (test/holo/golden.l). (as.l is the physical
+; encoder over the same x64 value; this one is the inline-asm dialect front.)
 ;
 ;   (gas-text tgt src)          ; text -> IR forms, tgt one of 'x64 'a64 'rv64 'thumb2 'thumb1
 ;   (gas-reg tgt r w mod)       ; the dialect's spelling of neutral register r at byte width w
@@ -16,67 +16,13 @@
 ; displacement memory, labels local to the template (GNU's `1:` / `1f` / `1b` included), and the
 ; system lane. x64's 32-bit forms ride the 64-bit op plus a zero-extend; the 8/16-bit register
 ; forms and indexed memory refuse. a line that fits nothing scares, so a typo never drops out.
-; a multi-instruction template separates on `\n` or `;`, as GNU does.
+; a multi-instruction template separates on `\n` or `;`, as GNU does. the x64 text is read by
+; src/core/holo/dialect.l's att-read -- the same parsed instruction as.l encodes and the Intel
+; dialect shows -- and only lowered here; the other dialects still parse their own lines.
 
 (module 'holo
-(: ;; -- the lexer: one line -> tokens (sym "s") (num n) (pct "reg") (lref n dir) (ch c) (op "<<"). --
-   (gws? c) (c = 32 || c = 9)
-   (gdig? c) (48 <= c <= 57)
-   (galpha? c) (97 <= c <= 122 || 65 <= c <= 90 || c = 95 || c = 46)
-   (gidc? c) (galpha? c || gdig? c)
-   (ghexd c) (? (gdig? c) (c - 48) (97 <= c <= 102) (c - 87) (65 <= c <= 70) (c - 55) -1)
-   (ghex? c) (ghexd c >= 0)
-   (gdecv s) (foldl (a \ i \ a * 10 + s i - 48) 0 ^#s)
-   (ghexv s) (foldl (a \ i \ a * 16 + ghexd (s i)) 0 ^#s)
-   (gtoks s) (: n #s
-      (span i p) ((: (g j) (? (j < n && p (s j)) (g (j + 1)) j)) i)
-      (go i acc)
-       (? (i >= n) (rev acc)
-          (: c (s i)
-             (? (gws? c) (go (i + 1) acc)
-                (c = 48 && i + 1 < n && (s (i + 1) = 120 || s (i + 1) = 88))
-                 (: j (span (i + 2) ghex?) (go j (['num (ghexv (snip s (i + 2) j))] . acc)))
-                (gdig? c)
-                 (: j (span i gdig?) v (gdecv (snip s i j))
-                    (? (j < n && (s j = 102 || s j = 98) && (j + 1 >= n || !(gidc? (s (j + 1)))))
-                       (go (j + 1) (['lref v (s j)] . acc))
-                       (go j (['num v] . acc))))
-                (galpha? c) (: j (span i gidc?) (go j (['sym (snip s i j)] . acc)))
-                (c = 37 && i + 1 < n && galpha? (s (i + 1)))
-                 (: j (span (i + 1) gidc?) (go j (['pct (snip s (i + 1) j)] . acc)))
-                ((c = 60 || c = 62) && i + 1 < n && s (i + 1) = c)
-                 (go (i + 2) (['op (snip s i (i + 2))] . acc))
-                (go (i + 1) (['ch c] . acc)))))
-      (go 0 ()))
-
-   ;; -- immediate expressions: C's operators over numbers, the way `$~(1 << 2)` and `#(3 << 20)`
-   ;; are written. each level answers (value . rest) | 'bad. --
-   (gbad? x) (= x 'bad)
-   (gprim ts) (? !(two? ts) 'bad
-       (: t <ts
-          (t @ ('num v) (v . >ts)
-               ('ch 40) (: r (gexpr >ts)
-                           (? (gbad? r || !(two? >r) || !(= <>r '(ch 41))) 'bad (<r . >>r)))
-               ('ch 126) (: r (gprim >ts) (? (gbad? r) 'bad ((<r ^ -1) . >r)))
-               ('ch 45) (: r (gprim >ts) (? (gbad? r) 'bad ((0 - <r) . >r)))
-               ('ch 43) (gprim >ts)
-               'bad)))
-   (gbinop t) (t @ ('ch 124) '(1 or) ('ch 94) '(2 xor) ('ch 38) '(3 and)
-                   ('op "<<") '(4 shl) ('op ">>") '(4 shr)
-                   ('ch 43) '(5 add) ('ch 45) '(5 sub)
-                   ('ch 42) '(6 mul) ('ch 47) '(6 div) ('ch 37) '(6 mod) ())
-   (gapply op a b) (op @ 'or (a | b) 'xor (a ^ b) 'and (a & b) 'shl (a << b) 'shr (a >> b)
-                        'add (a + b) 'sub (a - b) 'mul (a * b) 'div (a // b) (a % b))
-   (gclimb lhs ts minp)
-    (? !(two? ts) (lhs . ts)
-       (: b (gbinop <ts)
-          (? (!(two? b) || <b < minp) (lhs . ts)
-             (: r (gprim >ts)
-                (? (gbad? r) 'bad
-                   (: r2 (gclimb <r >r (<b + 1))
-                      (? (gbad? r2) 'bad (gclimb (gapply <>b lhs <r2) >r2 minp))))))))
-   (gexpr ts) (: r (gprim ts) (? (gbad? r) 'bad (gclimb <r >r 1)))
-   (gimm ts) (: r (gexpr ts) (? (gbad? r || two? >r) (scare 'gas-immediate ts) <r))   ; the whole run, or nothing
+(: ;; the lexer (gtoks) and the immediate expressions (gimm) sit in src/core/holo/dialect.l,
+   ;; shared with the x86 lens; the lines and local labels below are GNU's, for every dialect
 
    ;; -- lines. a template separates on newline or `;`; `//` comments everywhere, `#` where it is
    ;; not the immediate marker. GNU's numeric local labels resolve here, before any dialect looks:
@@ -172,28 +118,16 @@
           (= tgt 'rv64) (peep rv-names k ())
           (peep t32-names k ())))
 
-   ;; -- x64, the AT&T dialect: src before dst, %reg, $imm, disp(%base), the size suffix. --
-   ;; operands: (reg rN w) | (cr n) | (imm n) | (mem base disp) | (rip label) | (lab sym) | (ind o)
-   (gx-reg s) (: e (peep x64-regs (name s) ())
-                 (? (two? e) ['reg <e <>e]
-                    (: c (gx-cr s) (? (two? c) c (= s "rip") '(rip) (scare 'gas-x64-register s)))))
-   (gx-opnd toks)
-    (toks @ (('ch 36) . rest) ['imm (gimm rest)]
-            (('ch 42) . rest) ['ind (gx-opnd rest)]
-            (('pct s)) (gx-reg s)
-            (('sym s)) ['lab (name s)]
-            (: (mem l acc)                                          ; disp then (base)
-                (? !(two? l) (scare 'gas-x64-operand toks)
-                   (= <l '(ch 40))
-                    (: d (? (two? acc) (rev acc) '((num 0)))
-                       (>l @ (('pct b) ('ch 41))
-                              (? (= b "rip") (d @ (('sym s)) ['rip (name s)] (scare 'gas-x64-operand toks))
-                                 (: r (gx-reg b) (r @ ('reg x _) ['mem x (gimm d)] (scare 'gas-x64-base b))))
-                             (scare 'gas-x64-operand toks)))
-                   (mem >l (<l . acc)))
-               (mem toks ())))
-   (gx-w o) (o @ ('reg _ w) w 0)
-   (gx-width w os) (? (w > 0) w (: m (foldl (\ a o (? (gx-w o > a) (gx-w o) a)) 0 os) (? (m > 0) m 8)))
+   ;; -- x64: the AT&T text is read by src/core/holo/dialect.l (att-read) into the parsed
+   ;;    instruction -- (op mn w ops), destination first, physical registers -- and lowered here.
+   ;;    GNU's numeric local labels resolve over the read items first, the k-th `N:` becoming
+   ;;    lN.k, `Nf` the next one, `Nb` the last one. --
+   gx-neutral '(r0 r1 r2 r3 sp r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14)    ; the neutral file, by encoding
+   (gx-r o) (? (<o = 'rg && <>o < 16) (gx-neutral <>o) (scare 'gas-x64-register o))
+   (gx-rv o) (? (<o = 'im) <>o (gx-r o))                            ; a register or an immediate
+   (gx-imm o) (? (<o = 'im) <>o (scare 'gas-x64-operand o))
+   (gx-mem o) (? (<o = 'mem && (o 1) >= 0 && (o 2) < 0) [(gx-neutral (o 1)) (o 4)]    ; -> (base disp)
+                 (scare 'gas-x64-operand o))
    (gx-zx d w) (? (w = 4) [['zx4 d]] (w = 8) () (scare 'gas-x64-width w))
    (gx-lop w) (w @ 8 'ld 4 'ldu4 2 'ldu2 'ldu1)
    (gx-sop w) (w @ 8 'st 4 'st4 2 'st2 'st1)
@@ -210,73 +144,77 @@
                  (jb below) (jc below) (jnae below) (ja above) (jnbe above)
                  (jae ae) (jnb ae) (jnc ae) (jbe be) (jna be) (js s) (jns ns) (jo vs) (jno vc)))
    gx-mem2 '(vmxon vmclear vmptrld sgdt sidt lgdt lidt invlpg)
-   gx-known '(mov lea add sub and or xor imul cmp test shl sal shr sar rol ror not neg inc dec push pop div ltr)
-   gx-ext (gtab '((movzbl (1 zx1 ldu1)) (movzbq (1 zx1 ldu1)) (movzwl (2 zx2 ldu2)) (movzwq (2 zx2 ldu2))
-                  (movsbl (1 sx1 ld1)) (movsbq (1 sx1 ld1)) (movswl (2 sx2 ld2)) (movswq (2 sx2 ld2))
-                  (movslq (4 sx4 ld4))))
-   (gx-sfx m) (: s (show m) n #s c (s (n - 1))
-                 (? (n < 3) () (c @ 98 [(name (snip s 0 (n - 1))) 1] 119 [(name (snip s 0 (n - 1))) 2]
-                                     108 [(name (snip s 0 (n - 1))) 4] 113 [(name (snip s 0 (n - 1))) 8] ())))
-   (gx-ins m os)
-    (: k #os
+   gx-ext (gtab '((movzb (zx1 ldu1)) (movzw (zx2 ldu2)) (movsb (sx1 ld1)) (movsw (sx2 ld2)) (movsl (sx4 ld4))))
+   (gx-ins m w0 ops)
+    (: k #ops w (w0 > 0 ? w0 8)
+       d (k > 0 ? (ops 0) ()) s (k > 1 ? (ops 1) ())
        (? (ghas? gx-nils m) [[(gx-nils m)]]
           (two? (peep gx-ext m ()))
-           (: e (gx-ext m) s (os 0) d (os 1)
-              (d @ ('reg x _) (s @ ('reg y _) [['mov x y] [(e 1) x]]
-                                  ('mem b o) [[(e 2) x b o]]
-                                  (scare 'gas-x64-operand s))
-                 (scare 'gas-x64-operand d)))
-          (ghas? gx-cc m) [['br (gx-cc m) (<>(os 0))]]
-          (= m 'jmp) ((os 0) @ ('lab l) [['jmp l]] ('ind ('reg x _)) [['jmpr x]] (scare 'gas-x64-operand os))
-          (= m 'call) ((os 0) @ ('lab l) [['call l]] ('ind ('reg x _)) [['callr x]] (scare 'gas-x64-operand os))
-          (= m 'int) [['int (<>(os 0))]]
-          (member? m gx-mem2) ((os 0) @ ('mem b o) [[m b o]] (scare 'gas-x64-operand os))
-          (= m 'vmread) [['vmread (<>(os 1)) (<>(os 0))]]
-          (= m 'vmwrite) [['vmwrite (<>(os 1)) (<>(os 0))]]
-          (: sf (? (member? m gx-known) [m 0] (gx-sfx m))
-             _ (? (two? sf && member? <sf gx-known) 0 (scare 'gas-x64-op m))
-             m9 <sf
-             w (gx-width <>sf os)
-             (? (= m9 'mov)
-                 (: s (os 0) d (os 1)
-                    (? (= <d 'cr) [['stcr <>d <>s]]
-                       (= <s 'cr) [['ldcr <>d <>s]]
-                       (d @ ('reg x _)
-                             (s @ ('imm v) [['li x (? (w = 4) (v & 4294967295) (w = 8) v (scare 'gas-x64-width w))]]
-                                  ('reg y _) ([['mov x y]] + gx-zx x w)
-                                  ('mem b o) [[(gx-lop w) x b o]]
-                                  (scare 'gas-x64-operand s))
-                          ('mem b o)
-                             (s @ ('reg y _) [[(gx-sop w) b o y]]
-                                  ('imm v) [[(gx-iop w) b o v]]
-                                  (scare 'gas-x64-operand s))
-                          (scare 'gas-x64-operand d))))
-                (= m9 'lea) ((os 0) @ ('rip l) [['la (<>(os 1)) l]]
-                                     ('mem b o) [['lea (<>(os 1)) b o]]
-                                     (scare 'gas-x64-operand os))
-                (member? m9 gx-alu)
-                 (? (k = 3) [['imul (<>(os 2)) (<>(os 1)) (<>(os 0))]]
-                    (: s (os 0) d (os 1)
-                       (? (!(= <d 'reg) || !(member? <s '(reg imm))) (scare 'gas-x64-operand os)
-                          ([[m9 <>d <>d <>s]] + (? ((m9 = 'xor) && (<>s = <>d)) () (gx-zx <>d w))))))
-                (= m9 'cmp) [['cmp (<>(os 1)) (<>(os 0))]]
-                (= m9 'test) [['test (<>(os 1)) (<>(os 0))]]
-                (member? m9 '(shl sal shr sar rol ror))
-                 (: op (? (= m9 'sal) 'shl m9)
-                    d (os (k - 1))
-                    (? (k = 1) [[op <>d 1]]
-                       ((os 0) @ ('imm n) [[op <>d n]]
-                                ('reg r1 1) [[(name (show op + "v")) <>d 'r1]]
-                                (scare 'gas-x64-operand os))))
-                (member? m9 '(not neg inc dec push pop)) [[m9 (<>(os 0))]]
-                (= m9 'div) [[(? (w = 4) 'divl 'divq) (<>(os 0))]]
-                (= m9 'ltr) [['ltr (<>(os 0))]]
-                (scare 'gas-x64-op m)))))
-   (gx-line toks)
-    (: l (gline toks)
-       (l @ ('label s) [['label s]]
-            ('ins m os) (gx-ins m (map gx-opnd os))
-            ()))
+           (: e (gx-ext m) x (gx-r d)
+              (? (<s = 'rg) [['mov x (gx-r s)] [<e x]]
+                 (<s = 'mem) (: bm (gx-mem s) [[<>e x <bm <>bm]])
+                 (scare 'gas-x64-operand s)))
+          (ghas? gx-cc m) [['br (gx-cc m) <>d]]
+          (= m 'jmp) (? (<d = 'lbl) [['jmp <>d]] (<d = 'ind) [['jmpr (gx-r <>d)]] (scare 'gas-x64-operand ops))
+          (= m 'call) (? (<d = 'lbl) [['call <>d]] (<d = 'ind) [['callr (gx-r <>d)]] (scare 'gas-x64-operand ops))
+          (= m 'int) [['int (gx-imm d)]]
+          (member? m gx-mem2) (: bm (gx-mem d) [[m <bm <>bm]])
+          (= m 'vmread) [['vmread (gx-r d) (gx-r s)]]
+          (= m 'vmwrite) [['vmwrite (gx-r d) (gx-r s)]]
+          (= m 'mov)
+           (? (<d = 'cr) [['stcr <>d (gx-r s)]]
+              (<s = 'cr) [['ldcr (gx-r d) <>s]]
+              (<d = 'rg)
+               (: x (gx-r d)
+                  (? (<s = 'im) [['li x (? (w = 4) (<>s & 4294967295) (w = 8) <>s (scare 'gas-x64-width w))]]
+                     (<s = 'rg) ([['mov x (gx-r s)]] + gx-zx x w)
+                     (<s = 'mem) (: bm (gx-mem s) [[(gx-lop w) x <bm <>bm]])
+                     (scare 'gas-x64-operand s)))
+              (<d = 'mem)
+               (: bm (gx-mem d)
+                  (? (<s = 'rg) [[(gx-sop w) <bm <>bm (gx-r s)]]
+                     (<s = 'im) [[(gx-iop w) <bm <>bm <>s]]
+                     (scare 'gas-x64-operand s)))
+              (scare 'gas-x64-operand d))
+          (= m 'lea)
+           (? (<s = 'rip && <>>s = 0) [['la (gx-r d) <>s]]
+              (<s = 'mem) (: bm (gx-mem s) [['lea (gx-r d) <bm <>bm]])
+              (scare 'gas-x64-operand ops))
+          (member? m gx-alu)
+           (? (k = 3) [['imul (gx-r d) (gx-r s) (gx-imm (ops 2))]]
+              (: x (gx-r d) v (gx-rv s)
+                 ([[m x x v]] + (? (m = 'xor && v = x) () (gx-zx x w)))))
+          (= m 'cmp) [['cmp (gx-r d) (gx-rv s)]]
+          (= m 'test) [['test (gx-r d) (gx-rv s)]]
+          (member? m '(shl sal shr sar rol ror))
+           (: op (m = 'sal ? 'shl m) x (gx-r d)
+              (? (k = 1) [[op x 1]]
+                 (<s = 'im) [[op x <>s]]
+                 (<s = 'rg && <>s = 1 && <>>s = 1) [[(name (show op + "v")) x 'r1]]
+                 (scare 'gas-x64-operand ops)))
+          (member? m '(not neg inc dec push pop)) [[m (gx-r d)]]
+          (= m 'div) [[(w = 4 ? 'divl 'divq) (gx-r d)]]
+          (= m 'ltr) [['ltr (gx-r d)]]
+          (scare 'gas-x64-op m)))
+   (gx-locals items)
+    (: lc {}
+       (lref s) (: t (show s) n #t c (t (n - 1))                  ; "1f" / "1b" -> (n . dir), else ()
+                   (? (n > 1 && (c = 102 || c = 98) && xa-allof? (snip t 0 (n - 1)) xa-dig? 0)
+                      ((xa-num (snip t 0 (n - 1))) . c) ()))
+       (ref s) (: r (lref s) (? !(two? r) s (glabel <r (>r = 102 ? (1 + peep lc <r 0) (peep lc <r 0)))))
+       (fix o) (<o @ 'lbl ['lbl (ref <>o)] 'rip ['rip (ref <>o) <>>o] o)
+       (rev (foldl (\ acc it
+                      ((<it @ 'label (: t (show <>it)
+                                        (? (xa-allof? t xa-dig? 0)
+                                           (: n (xa-num t) k (1 + peep lc n 0) _ (pin lc n k) ['label (glabel n k)])
+                                           it))
+                            'op ['op (it 1) (it 2) (map fix (it 3))]
+                            it) . acc))
+                   () items)))
+   (gx-item it) (<it @ 'label [['label <>it]]
+                      'op (gx-ins (it 1) (it 2) (it 3))
+                      (scare 'gas-x64-line it))                    ; a directive has no place in a template
+   (gx-text src) (catmap gx-item (gx-locals (att-read src)))
 
    ;; -- a64, the ARM dialect: dst first, xN/wN/sp/xzr, #imm, [base, #off], b.cond. --
    ;; operands: (reg rN w) | zr | (imm n) | (mem base off) | (sym s) -- a sysreg, an option, a label
@@ -447,9 +385,8 @@
 
    ;; -- the front door: TEXT -> IR, by target. --
    (gas-text tgt src)
-    (: lc {}
-       hash? (member? tgt '(x64 rv64))
-       f (? (= tgt 'x64) gx-line (= tgt 'a64) ga-line (= tgt 'rv64) gr-line (gthumb? tgt) gt-line
-            (scare 'gas-target tgt))
-       (foldl (\ acc ln (acc + f (glocal (gtoks ln) lc))) () (glines src hash?))))
+    (? (= tgt 'x64) (gx-text src)
+       (: lc {}
+          f (? (= tgt 'a64) ga-line (= tgt 'rv64) gr-line (gthumb? tgt) gt-line (scare 'gas-target tgt))
+          (foldl (\ acc ln (acc + f (glocal (gtoks ln) lc))) () (glines src (= tgt 'rv64))))))
 ) ; module 'holo

@@ -28,7 +28,7 @@ out=$ho/.test_moon.out
   cat test/00-init.l src/apps/kore/text.l src/apps/kore/u.l   # the kore floors register module 'kore
   echo "(use 'kore)"                    # ..ambient: holo/text.l and law.l read `lines` bare
   cat src/apps/moon/floor.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l \
-      src/core/holo/text.l src/core/holo/gas.l src/apps/moon/val.l src/apps/moon/gen.l
+      src/core/holo/text.l src/core/holo/dialect.l src/core/holo/gas.l src/apps/moon/val.l src/apps/moon/gen.l
   echo "(use 'moon)"                    # the cat re-laid module 'moon; law.l reads it bare
   cat src/apps/moon/law.l
 } | "$m" > "$out" 2>&1

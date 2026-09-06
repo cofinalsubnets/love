@@ -3,7 +3,7 @@
 ; hexdump) -- so this file is the frozen record of that byte-for-byte round-trip against the system
 ; assembler. if a golden drifts, either as.l broke or gas changed, and either is worth a look.
 ; regenerate a golden: printf '%s\n' 'src' | as --64 -o t.o - && objcopy -O binary -j .text t.o t.bin && xxd -p t.bin
-; run: cat src/core/holo/{holo,x64,as}.l test/holo/as.l | out/love  (nonzero exit on any miss)
+; run: cat src/core/holo/{holo,x64,dialect,as}.l test/holo/as.l | out/love  (nonzero exit on any miss)
 ;
 ; scope: the straight-line battery -- register, immediate and memory operands at all four widths,
 ; the size suffix where a register carries none. branch relaxation (jmp/jcc to a near label) and the
@@ -184,6 +184,19 @@
          _ (chk-eq (name + ".intel") v (intel-read (intel-show v)))
          (chk-eq (name + ".intel.hex") want (as-hexv (intel-read (intel-show v)))))
    _ (foldl (\ _ t (law (t 0) (t 1) (t 2))) 0 tests)
+   ;; ..and the template shapes gas.l reads through the same door: a control register, an
+   ;; immediate expression, `;`-joined statements, a `//` comment -- law 1 on both surfaces, and
+   ;; the reading the lowering counts on
+   (law2 name want src)
+      (: v (att-read src)
+         _ (chk-eq name want v)
+         _ (chk-eq (name + ".att") v (att-read (att-show v)))
+         (chk-eq (name + ".intel") v (intel-read (intel-show v))))
+   _ (law2 "lens.cr" '((op mov 8 ((cr 3) (rg 7 8))) (op mov 8 ((rg 0 8) (cr 0)))) "mov %rdi, %cr3\nmov %cr0, %rax")
+   _ (law2 "lens.expr" '((op and 8 ((rg 0 8) (im -5))) (op or 8 ((rg 0 8) (im 1536))))
+           "and $~(1 << 2), %rax // clear\n or $((1 << 9) | (1 << 10)), %rax")
+   _ (law2 "lens.semi" '((op xor 4 ((rg 2 4) (rg 2 4))) (op mov 4 ((rg 0 4) (im 1))) (op div 4 ((rg 1 4))))
+           "xorl %edx,%edx; movl $1,%eax; divl %ecx;")
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (sayln $ "test/holo/as: " + show np + " passed, " + show nf + " failed\n")
    _ (? (0 = nf) 0 (quit 1)))

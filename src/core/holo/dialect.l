@@ -12,8 +12,11 @@
 ;                         the operands DESTINATION FIRST -- Intel's order, the manual's, and holo's
 ;   ('label sym)  ('globl sym)  ('dir name rest)     -- rest is the directive's tail, verbatim
 ; an operand:
-;   ('rg enc w)   a register, w in 1/2/4/8 (16 = an xmm register)
+;   ('rg enc w)   a register, w in 1/2/4/8 (16 = an xmm register; ah..bh sit at 20..23)   ('cr n)
 ;   ('im n)  ('ims sym)  ('lbl sym)  ('rip sym off)  ('ind o)  ('mem base index scale disp)
+; a statement ends at a newline or a `;`, a comment starts at `#` or `//`, and an immediate may
+; be a C expression over numbers (`$~(1 << 2)`) -- the GNU rules, so an inline-asm template
+; (src/core/holo/gas.l) reads through the same door as a whole .s file.
 ; a memory operand's absent register is -1. the stem folds away what the dialects disagree on:
 ; the at&T size suffix (movl -> mov, w 4), the sign/zero-extend family (movzbl / movzx eax, BYTE
 ; PTR -> movzb, w = the destination's), and the nullaries at&T names c<from>t<to> (cltq -> cdqe).
@@ -53,6 +56,9 @@
    (xa-reg nm) (: r (xa-regs (name nm)) (two? r ? ['rg <r <>r] ()))    ; a register operand, or ()
    (xa-regname o) (xa-names (<>o * 32 + <>>o))
    (xa-gpr? o) (<o = 'rg && <>>o < 16)
+   (xa-cr s) (#s = 3 && s 0 = 99 && s 1 = 114 && xa-dig? (s 2) ? ['cr (s 2 - 48)] ())   ; a control register
+   ;; an immediate written as a C expression, `~(1 << 2)` -- the lexer and gimm below evaluate it
+   (xa-expr? v) (#v > 0 && (v 0 = 40 || v 0 = 126 || ((v 0 = 45 || v 0 = 43) && #v > 1 && (v 1 = 40 || v 1 = 126))))
 
    ;; --- numerals: decimal, 0x-hex, optionally signed -- every byte, or it is not one. ---
    (xa-hexd c) (? (48 <= c <= 57)  (c - 48)
@@ -80,6 +86,65 @@
                        ((name (xa-unquote (snip s (i + 1) #s))) . (xa-num (snip s 0 i)))
                        ((name (xa-unquote (snip s 0 i))) . (xa-imm (snip s (s i = 43 ? (i + 1) i) #s)))))
 
+   ;; -- the lexer: one line -> tokens (sym "s") (num n) (pct "reg") (lref n dir) (ch c) (op "<<"). --
+   (gws? c) (c = 32 || c = 9)
+   (gdig? c) (48 <= c <= 57)
+   (galpha? c) (97 <= c <= 122 || 65 <= c <= 90 || c = 95 || c = 46)
+   (gidc? c) (galpha? c || gdig? c)
+   (ghexd c) (? (gdig? c) (c - 48) (97 <= c <= 102) (c - 87) (65 <= c <= 70) (c - 55) -1)
+   (ghex? c) (ghexd c >= 0)
+   (gdecv s) (foldl (a \ i \ a * 10 + s i - 48) 0 ^#s)
+   (ghexv s) (foldl (a \ i \ a * 16 + ghexd (s i)) 0 ^#s)
+   (gtoks s) (: n #s
+      (span i p) ((: (g j) (? (j < n && p (s j)) (g (j + 1)) j)) i)
+      (go i acc)
+       (? (i >= n) (rev acc)
+          (: c (s i)
+             (? (gws? c) (go (i + 1) acc)
+                (c = 48 && i + 1 < n && (s (i + 1) = 120 || s (i + 1) = 88))
+                 (: j (span (i + 2) ghex?) (go j (['num (ghexv (snip s (i + 2) j))] . acc)))
+                (gdig? c)
+                 (: j (span i gdig?) v (gdecv (snip s i j))
+                    (? (j < n && (s j = 102 || s j = 98) && (j + 1 >= n || !(gidc? (s (j + 1)))))
+                       (go (j + 1) (['lref v (s j)] . acc))
+                       (go j (['num v] . acc))))
+                (galpha? c) (: j (span i gidc?) (go j (['sym (snip s i j)] . acc)))
+                (c = 37 && i + 1 < n && galpha? (s (i + 1)))
+                 (: j (span (i + 1) gidc?) (go j (['pct (snip s (i + 1) j)] . acc)))
+                ((c = 60 || c = 62) && i + 1 < n && s (i + 1) = c)
+                 (go (i + 2) (['op (snip s i (i + 2))] . acc))
+                (go (i + 1) (['ch c] . acc)))))
+      (go 0 ()))
+
+   ;; -- immediate expressions: C's operators over numbers, the way `$~(1 << 2)` and `#(3 << 20)`
+   ;; are written. each level answers (value . rest) | 'bad. --
+   (gbad? x) (= x 'bad)
+   (gprim ts) (? !(two? ts) 'bad
+       (: t <ts
+          (t @ ('num v) (v . >ts)
+               ('ch 40) (: r (gexpr >ts)
+                           (? (gbad? r || !(two? >r) || !(= <>r '(ch 41))) 'bad (<r . >>r)))
+               ('ch 126) (: r (gprim >ts) (? (gbad? r) 'bad ((<r ^ -1) . >r)))
+               ('ch 45) (: r (gprim >ts) (? (gbad? r) 'bad ((0 - <r) . >r)))
+               ('ch 43) (gprim >ts)
+               'bad)))
+   (gbinop t) (t @ ('ch 124) '(1 or) ('ch 94) '(2 xor) ('ch 38) '(3 and)
+                   ('op "<<") '(4 shl) ('op ">>") '(4 shr)
+                   ('ch 43) '(5 add) ('ch 45) '(5 sub)
+                   ('ch 42) '(6 mul) ('ch 47) '(6 div) ('ch 37) '(6 mod) ())
+   (gapply op a b) (op @ 'or (a | b) 'xor (a ^ b) 'and (a & b) 'shl (a << b) 'shr (a >> b)
+                        'add (a + b) 'sub (a - b) 'mul (a * b) 'div (a // b) (a % b))
+   (gclimb lhs ts minp)
+    (? !(two? ts) (lhs . ts)
+       (: b (gbinop <ts)
+          (? (!(two? b) || <b < minp) (lhs . ts)
+             (: r (gprim >ts)
+                (? (gbad? r) 'bad
+                   (: r2 (gclimb <r >r (<b + 1))
+                      (? (gbad? r2) 'bad (gclimb (gapply <>b lhs <r2) >r2 minp))))))))
+   (gexpr ts) (: r (gprim ts) (? (gbad? r) 'bad (gclimb <r >r 1)))
+   (gimm ts) (: r (gexpr ts) (? (gbad? r || two? >r) (scare 'gas-immediate ts) <r))   ; the whole run, or nothing
+
    ;; --- string helpers over the byte string. ---
    (xa-has? s c) ((: (g i) (? (i >= #s) 0 (s i = c) 1 (g (i + 1)))) 0)
    (xa-idx s c)  ((: (g i) (? (i >= #s) -1 (s i = c) i (g (i + 1)))) 0)
@@ -93,15 +158,17 @@
    (xa-unquote s) (: j (#s >= 2 && s 0 = 34 ? (xa-idx (snip s 1 #s) 34) -1)
                      (j < 0 ? s (snip s 1 (j + 1) + snip s (j + 2) #s)))
    (xa-starts? s p) (#s >= #p && (snip s 0 #p) = p)
-   ;; '#' starts a comment to end of line -- outside a quoted string
+   ;; '#' or '//' starts a comment to end of line -- outside a quoted string
    (xa-decomment s) ((: (g i q) (? (i >= #s) s
                                     (s i = 34) (g (i + 1) !q)
-                                    (s i = 35 && !q) (snip s 0 i)
+                                    (!q && (s i = 35 || (s i = 47 && i + 1 < #s && s (i + 1) = 47))) (snip s 0 i)
                                     (g (i + 1) q))) 0 0)
+   ;; a statement ends at a newline or, outside quotes, at `;` -- as GNU has it
    (xa-lines s) (: n #s
-      ((: (g i st acc) (? (i >= n) (rev (snip s st n . acc))
-                          (s i = 10) (g (i + 1) (i + 1) (snip s st i . acc))
-                          (g (i + 1) st acc))) 0 0 ()))
+      ((: (g i st q acc) (? (i >= n) (rev (snip s st n . acc))
+                            (s i = 34) (g (i + 1) st !q acc)
+                            ((s i = 10) || (s i = 59 && !q)) (g (i + 1) (i + 1) 0 (snip s st i . acc))
+                            (g (i + 1) st q acc))) 0 0 0 ()))
    ;; split on a byte, trimming each field
    (xa-split s c) (: n #s
       ((: (g i st acc) (? (i >= n) (rev (xa-trim (snip s st n) . acc))
@@ -190,6 +257,12 @@
    (at-mreg f) (? (0 = #f) -1 <>(at-reglook (snip f 1 #f)))    ; a %reg field, or absent
    (at-operand t)
       (? (t 0 = 42) ['ind (at-operand (snip t 1 #t))]
+         (t 0 = 37) (: nm (snip t 1 #t) cr (xa-cr nm) (two? cr ? cr (at-reglook nm)))
+         (t 0 = 36) (: v (snip t 1 #t)
+                      (? (xa-num? v) ['im (xa-num v)]
+                         (xa-expr? v) ['im (gimm (gtoks v))]
+                         (xa-dig? (v 0) || xa-neg? v) (scare 'as-badnum v)
+                         ['ims (name (xa-unquote v))]))
          (xa-has? t 40)
          (: op (xa-idx t 40) inner (snip t (op + 1) (#t - 1)) disp (snip t 0 op)
             (? (inner = "%rip") (: so (xa-symoff disp) ['rip <so >so])
@@ -198,11 +271,6 @@
                   (? (k > 3) (scare 'as-memform t)
                      ['mem (at-mreg <fs) (k < 2 ? -1 (at-mreg (fs 1)))
                            (k < 3 ? 1 (xa-imm (fs 2))) d]))))
-         (t 0 = 37) (at-reglook (snip t 1 #t))
-         (t 0 = 36) (: v (snip t 1 #t)
-                      (? (xa-num? v) ['im (xa-num v)]
-                         (xa-dig? (v 0) || xa-neg? v) (scare 'as-badnum v)
-                         ['ims (name (xa-unquote v))]))
          (xa-num? t) ['im (xa-num t)]
          ['lbl (name (xa-unquote t))])
    ;; --- the mnemonic: a size suffix off a suffixable stem, the extend family, the nullaries ---
@@ -225,6 +293,7 @@
    (at-off n) (n = 0 ? "" ((n > 0 ? "+" "") + show n))
    (at-op o)
       (<o @ 'rg ("%" + xa-regname o)
+            'cr ("%cr" + show <>o)
             'im ("$" + show <>o)
             'ims ("$" + show <>o)
             'lbl (show <>o)
@@ -301,7 +370,9 @@
             (xa-has? t 91) (sz . (in-mem (snip t (#t - #tail) #t)))
             (sz > 0) (scare 'as-segment t)
             (xa-num? t) (0 . ['im (xa-num t)])
-            (: r (xa-reg t) (two? r ? (0 . r) (0 . ['lbl (name (xa-unquote t))])))))
+            (xa-expr? t) (0 . ['im (gimm (gtoks t))])
+            (: r (xa-reg t) cr (xa-cr t)
+               (? (two? r) (0 . r) (two? cr) (0 . cr) (0 . ['lbl (name (xa-unquote t))])))))
    (in-insn mn rest)
       (: l (name (lower mn)) prs (map in-operand (xa-ops rest))
          ops (map (p \ >p) prs)
@@ -335,6 +406,7 @@
          w)
    (in-op mn w o k)
       (<o @ 'rg (xa-regname o)
+            'cr ("cr" + show <>o)
             'im (show <>o)
             'ims ("OFFSET FLAT:" + show <>o)
             'lbl (show <>o)

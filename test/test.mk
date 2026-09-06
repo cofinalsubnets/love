@@ -889,7 +889,7 @@ test_cpio: host
 test_holo: host
 	@echo TEST test/holo/golden.l
 	@cat src/core/holo/holo.l src/core/holo/x64.l src/core/holo/a64.l src/core/holo/thumb2.l \
-	    src/core/holo/rv64.l src/core/holo/thumb1.l src/core/holo/text.l src/core/holo/gas.l src/core/holo/elf.l \
+	    src/core/holo/rv64.l src/core/holo/thumb1.l src/core/holo/text.l src/core/holo/dialect.l src/core/holo/gas.l src/core/holo/elf.l \
 	    test/holo/golden.l | sh test/gate/run.sh holo "$m" ", 0 failed"
 # as.l -- the real x86-64 front over holo, either dialect through dialect.l's lens (the lens
 # laws ride test/holo/as.l; test/gate/dialect.sh judges it against gcc's own two outputs,
