@@ -30,6 +30,21 @@
       (Operator   161 "#F92672" ())
       (Delimiter  241 "#8F8F8F" ()))
 
+   ; the page palettes: a role a row, `(role "#rrggbb")`, and a scheme is one palette or
+   ; a light/dark pair. hueweb spells each role as the css variable of the same name
+   ; (--bg, --fg ..), so a sheet built on hw-vars answers to the reader's theme by
+   ; construction, and every sheet in the tree reads its colours off this table.
+   hue-page
+    '((paper ((bg "#fffdf9") (fg "#1f1c19") (dim "#6f6862") (rule "#e6e0d6") (link "#8a4b2a") (pre "#f4f0e9"))
+             ((bg "#16151a") (fg "#e8e4dd") (dim "#9a938b") (rule "#2e2b33") (link "#e0a06a") (pre "#1e1d24")))
+      ; tokyo-night, the front page's: periwinkle on polar-night blue, dark only, and the
+      ; roles that page adds -- code text and its edge, the pre slab, muted heads, the
+      ; footer, the hover hash, the glow's rgb, the terminal's rim, the crew's lights
+      (tokyo-night ((bg "#04060e") (fg "#c0caf5") (dim "#565f89") (rule "#3b4261") (link "#7aa2f7") (pre "#1f2335")
+                    (code "#a9b1d6") (edge "#292e42") (slab "#16161e") (mute "#737aa2") (faint "#414868")
+                    (hash "#545c7e") (em "#9aa5ce") (glow "122,162,247") (rim "#34406e")
+                    (red "#f7768e") (cyan "#7dcfff") (teal "#73daca"))))
+
    ; the user's own rows, read as data (never evaled) at editor birth and folded
    ; over the above -- kore ships as a baked image, so editing this file is not a
    ; knob anyone downstream has. same row shape; a file with no rows in it means

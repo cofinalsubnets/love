@@ -69,7 +69,8 @@
                      (? (hot? q) (: _ (close q) _ (use (root + f)) 1)
                         (: _ (use nm) 1))))
    _ (want 'lapiz "lapiz/lapiz.l")
-   _ (want 'cook "cook/cook.l"))
+   _ (want 'cook "cook/cook.l")
+   _ (want 'hueweb "vi/hueweb.l"))
 
 ; --- the two seams -------------------------------------------------------------------
 ; from lapiz, the document surface (read a page, show a page) plus the three pieces the
@@ -226,11 +227,11 @@
 
 ; --- the stylesheet ---------------------------------------------------------------------
 ; one file, linked by every page, written by the same cook recipe machinery as the pages
-; (so editing this string rebuilds the site). it answers to the reader's theme.
+; (so editing this string rebuilds the site). the colours are config.l's paper palette
+; through hueweb's hw-vars, so this sheet and the painted sources' agree by construction.
 (: css
-   ":root{--bg:#fffdf9;--fg:#1f1c19;--dim:#6f6862;--rule:#e6e0d6;--link:#8a4b2a;--pre:#f4f0e9}
-@media (prefers-color-scheme:dark){:root{--bg:#16151a;--fg:#e8e4dd;--dim:#9a938b;--rule:#2e2b33;--link:#e0a06a;--pre:#1e1d24}}
-*{box-sizing:border-box}
+   (((from 'hueweb 'hw-vars) 'paper) +
+   "*{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-serif,Georgia,serif}
 header{border-bottom:1px solid var(--rule);padding:1rem 1.25rem;font-family:ui-sans-serif,system-ui,sans-serif}
 header a{color:var(--fg);text-decoration:none;font-weight:600;letter-spacing:.02em}
@@ -259,7 +260,7 @@ table{border-collapse:collapse}
 .toc .l3{padding-left:.9rem}
 .toc .l4,.toc .l5,.toc .l6{padding-left:1.8rem}
 @media (max-width:52rem){main{display:block}.toc{position:static;border-left:0;border-bottom:1px solid var(--rule);padding:0 0 1rem;margin-bottom:1.5rem}}
-")
+"))
 
 ; --- one page, and the index ------------------------------------------------------------
 (: (outname s) (: b (base s) (snip b 0 (tally b - 3) + ".html"))

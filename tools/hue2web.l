@@ -30,7 +30,7 @@
 
    (h2w-main as)
    (? (one? as) (h2w-usage 0)
-      (<as = "css") (say out (hw-css 0), 0)
+      (<as = "css") (say out (hw-css 'paper), 0)
       (<as = "src" && two? >as) (h2w-src <>as)
       (h2w-usage 0))
    _ (h2w-main >>cmdline))

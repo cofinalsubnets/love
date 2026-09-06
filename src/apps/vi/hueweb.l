@@ -4,8 +4,10 @@
 ; and this. nothing here knows what a comment or a sigil is -- it asks hue, the way the
 ; other two do, so a class added to that table arrives in all three unannounced.
 ;
-;   (hw-css)             the stylesheet: one rule per class, the frame, and just
-;                        enough prose styling for a rendered document -- `love
+;   (hw-vars scheme)     the :root block: config.l's hue-page palette of that name,
+;                        each role a css variable, the dark half under a media query
+;   (hw-css scheme)      the stylesheet over it: one rule per class, the frame, and
+;                        just enough prose styling for a rendered document -- `love
 ;                        serve` has no papel.css to lean on
 ;   (hw-body path src)   that source as a <pre>, one span per line
 ;   (hw-page ttl hrefs home body)   ..in a page, with its stylesheets and a home link
@@ -36,7 +38,7 @@
 ; first. the use below sits inside this module, so it splices vi for this file's
 ; compile alone: at a catted file's top level it would hand the session vi's ninety
 ; -odd names.
-(module (hueweb hw-css hw-body hw-page)
+(module (hueweb hw-vars hw-css hw-body hw-page)
 (use 'vi)
 (:
    (hw-cat l)   (foldl (+) "" l)
@@ -54,6 +56,16 @@
                                     (s i = 10) (g (i + 1) (i + 1) (snip s st i . acc))
                                     (g (i + 1) st acc)))
 
+   ; --- the palette ----------------------------------------------------------
+   ; a scheme off config.l's hue-page: one palette, or a light and a dark one. a role
+   ; is the variable of its own name, so the frame says var(--link) and the table
+   ; answers. an unknown scheme is an empty block, and the page wears the UA's colours.
+   (hw-vars nm)
+   (: s ((: (f l) (? (atom? l) () (= <<l nm) <l (f >l))) hue-page)
+      (roles p) (":root{" + hw-cat (map (r \ "--" + string <r + ":" + <>r + ";") p) + "}\n")
+      (? !(two? s) ""
+         (roles (s 1)) + (two? >>s ? ("@media (prefers-color-scheme:dark){" + roles (s 2) + "}\n") "")))
+
    ; --- the stylesheet -------------------------------------------------------
    ; one rule per class, coloured by the group that class names. a class whose
    ; group the theme does not carry gets no rule at all rather than a guess.
@@ -69,9 +81,7 @@
    ; the code alone. the page's own colours answer to the reader's theme; the
    ; syntax colours are molokayo either way, which is what the editor shows.
    hw-frame
-   ":root{--bg:#fffdf9;--fg:#1f1c19;--dim:#6f6862;--rule:#e6e0d6;--link:#8a4b2a;--pre:#f4f0e9}
-@media (prefers-color-scheme:dark){:root{--bg:#16151a;--fg:#e8e4dd;--dim:#9a938b;--rule:#2e2b33;--link:#e0a06a;--pre:#1e1d24}}
-.hue{background:var(--pre);padding:1rem 0;border-radius:6px;overflow-x:auto;counter-reset:ln;
+   ".hue{background:var(--pre);padding:1rem 0;border-radius:6px;overflow-x:auto;counter-reset:ln;
   font:.82rem/1.55 ui-monospace,Menlo,monospace}
 .hue .ln{display:block;padding:0 1rem 0 0;white-space:pre}
 .hue .ln::before{counter-increment:ln;content:counter(ln);display:inline-block;width:3.4rem;
@@ -96,7 +106,7 @@ dt{font-weight:600;margin-top:.8rem}
 dd{margin:0 0 .2rem 1.2rem;color:var(--dim)}
 hr{border:0;border-top:1px solid var(--rule);margin:2rem 0}
 "
-   (hw-css _) (hw-frame + hw-cat (map hw-rule hue-classes))
+   (hw-css nm) (hw-vars nm + hw-frame + hw-cat (map hw-rule hue-classes))
 
    ; --- one file, painted ----------------------------------------------------
    ; a line becomes its runs, in order, with the unclaimed gaps between them kept

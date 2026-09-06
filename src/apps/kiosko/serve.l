@@ -69,7 +69,7 @@
    (: hd? (sv-ends? p ".l.md")
       md? (sv-ends? p ".md")
       src (hd? ? (snip p 0 (#p - 3)) p)            ; "/x.l.md" -> "/x.l"
-      (? (p = "/hue.css") ["text/css; charset=utf-8" (hw-css 0)]
+      (? (p = "/hue.css") ["text/css; charset=utf-8" (hw-css 'paper)]
          !(md? || sv-ends? p ".l") ()
          (: f (root + src)
             r (sv-rdf f)
