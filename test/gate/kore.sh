@@ -578,6 +578,10 @@ korerun printenv | grep -v '^_=' | LC_ALL=C sort > "$o"; same "printenv print"
 [ "$(korerun whoami)" = "$(whoami)" ] || fail "kore whoami"
 [ "$(korerun groups)" = "$(groups)" ] || fail "kore groups"
 [ "$(korerun arch)" = "$(uname -m)" ] || fail "kore arch"
+# uname -s comes off love-os, not off /proc/sys -- that path is linux's spelling of
+# sysctl and the other three kernels have none, so a file read answered "Linux"
+# everywhere. This box is the linux arm of that; the inle arm is test/kernel/wfs.l.
+[ "$(korerun uname -s)" = "$(uname -s)" ] || fail "kore uname -s"
 [ "$(korerun nproc)" = "$(nproc --all)" ] || fail "kore nproc"
 echo "kore: process tools (env/printenv/sleep/kill/xargs/whoami/groups/arch/nproc) ok"
 

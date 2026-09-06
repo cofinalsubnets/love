@@ -1712,6 +1712,10 @@ void kmain(void) {
   // the seat text, both lanes: what this machine is that a host is not. over a woken book
   // these shadow the hosted bindings -- getenv reads envt here, not an empty environ.
   r = ai_evals_(r,
+ // which kernel this is. main.c pins the same name off __ai_osv on a hosted seat;
+ // here there is nothing to probe -- this IS the kernel -- so it is said outright.
+ // kore's uname respells it through the prel's os-uname.
+ "(: love-os 'inle)"
  // the environment (rung 2): a TABLET, the pairs on slot 0, closures over it
  // wearing the host's names and shapes -- getenv the value | () absent/misused,
  // setenv () | 'badarg misuse (a non-string value UNSETS, the absence lane),

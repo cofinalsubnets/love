@@ -309,11 +309,22 @@
    ; the machine is love-arch respelled, and the prel owns the respelling (arch-uname):
    ; uname says the world's word for this ISA where love-arch says ours.
    (u-mach _) (: m (arch-mach love-arch) (? (string? m) m (string love-arch)))
+   ; the kernel the same way, and it CANNOT be a file: /proc/sys is linux's spelling of
+   ; sysctl and the other three kernels have no such path, so the read below answered
+   ; "Linux" on freebsd, netbsd and inle alike. main.c pins `love-os` per run off
+   ; __ai_osv, which is the only thing that knows. read as data, not as a bare ref: a
+   ; baked ref would fold the bake session's own answer in forever (moon's host-os
+   ; reads it the same way). nothing pinned falls to the file, then to a refusal --
+   ; uname owes a name it was told, never one it guessed.
+   (u-os _)
+    (: n (? (member? 'love-os (names ())) (ev 'love-os) ())
+       s (? (nom? n) (peep os-uname n ()) ())
+       (? (string? s) s (u-1line "/proc/sys/kernel/ostype" "unknown")))
    (u-join ws) (? !(two? ws) "" !(two? >ws) <ws (<ws + " " + u-join >ws))
    (uname-main as)
     (: fl (? (two? as) as '("-s"))
        (want f) (? (member? "-a" fl) 1 (member? f fl))
-       ws ((? (want "-s") [(u-1line "/proc/sys/kernel/ostype" "Linux")] ())
+       ws ((? (want "-s") [(u-os ())] ())
            + (? (want "-n") [(u-1line "/proc/sys/kernel/hostname" "unknown")] ())
            + (? (want "-r") [(u-1line "/proc/sys/kernel/osrelease" "unknown")] ())
            + (? (want "-m") [(u-mach ())] ()))

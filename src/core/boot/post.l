@@ -299,6 +299,10 @@
    ; the word the world outside says: uname's machine, and the head of a gnu triple. the
    ; embedded targets answer () -- no kernel is ever asked their name.
    arch-uname {'x64 "x86_64" 'a64 "aarch64" 'rv64 "riscv64"}
+   ; and the same for the kernel. main.c pins `love-os` per run off __ai_osv, because
+   ; one binary meets four and the compile that made it cannot say which; this is only
+   ; the respelling, uname's capital where ours is a plain nom.
+   os-uname {'linux "Linux" 'freebsd "FreeBSD" 'netbsd "NetBSD" 'inle "Inle"}
    ; any spelling -> the canonical nom, () for one nobody here knows. takes a nom or a
    ; string, since a flag arrives as text where a table key is a nom.
    archof (arch-canon * name)

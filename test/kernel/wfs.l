@@ -101,6 +101,9 @@
    (= 1 (tally (environ 0)))
    ('badarg = (setenv 7 "x"))
    ((getenv 7) = ())
+   ; -- which kernel this is: the name a hosted seat probes for, said outright here --
+   (= 'inle love-os)
+   (= "Inle" (peep os-uname love-os ()))
    ; -- symlinks: a name for a name, and the one door /usr/bin is laid through --
    ; stat FOLLOWS and readlink does not, which is what lets a link be seen at all.
    (wr f "five!")
