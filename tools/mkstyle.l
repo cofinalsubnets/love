@@ -1,16 +1,31 @@
-/* laid by tools/mkstyle.l from src/apps/vi/config.l's tokyo-night -- edit those, not this.
+; tools/mkstyle.l -- the front page's stylesheet, laid from config.l's tokyo-night
+;
+;   love tools/mkstyle.l OUT.css
+;
+; the palette is src/apps/vi/config.l's hue-page table through hueweb's hw-vars, so the
+; page, `love serve` and the editor read one table; the layout below wears those roles
+; as var(--x). the eight colours that are not roles are the terminal's own ansi ink
+; and the three colour words of the glossary, which no theme moves.
+;
+; LOVE_NO_IMAGE must be cleared by whoever runs this (the Makefile does): hueweb rides
+; the vi module, which the baked image registers and the egg boot does not.
+(use "src/apps/vi/config.l")
+(use "src/apps/vi/hue.l")
+(use 'hueweb)
+
+(: head "/* laid by tools/mkstyle.l from src/apps/vi/config.l's tokyo-night -- edit those, not this.
    periwinkle on polar-night blue, green = a kept answer; the crew fly the name space in
    aurora teal/cyan. the quay bitmaps set everything: 8x16 cells, crisp at 16px native
    (so 32px is a clean 2x), and the 8x8 face beside it. both are laid by tools/mkfont.l. */
-:root{--bg:#04060e;--fg:#c0caf5;--dim:#565f89;--rule:#3b4261;--link:#7aa2f7;--pre:#1f2335;--code:#a9b1d6;--edge:#292e42;--slab:#16161e;--mute:#737aa2;--faint:#414868;--hash:#545c7e;--em:#9aa5ce;--glow:122,162,247;--rim:#34406e;--red:#f7768e;--cyan:#7dcfff;--teal:#73daca;}
-@font-face {
-  font-family: "Quay 16";
-  src: url("assets/fonts/quay16.woff") format("woff");
+"
+   frame "@font-face {
+  font-family: \"Quay 16\";
+  src: url(\"assets/fonts/quay16.woff\") format(\"woff\");
   font-display: swap;
 }
 @font-face {
-  font-family: "Quay 8";
-  src: url("assets/fonts/quay8.woff") format("woff");
+  font-family: \"Quay 8\";
+  src: url(\"assets/fonts/quay8.woff\") format(\"woff\");
   font-display: swap;
 }
 
@@ -18,7 +33,7 @@
 
 body {
   background: var(--bg); color: var(--fg);
-  font-family: "Quay 16", monospace;
+  font-family: \"Quay 16\", monospace;
   font-size: 32px; line-height: 1.5;
   max-width: 54em; margin: 0 auto; padding: 2em 1em 5em;
 }
@@ -34,7 +49,7 @@ h4 { margin: 1.2em 0 .3em; }
 h2 a, h3 a, .glossary dt a { color: inherit; }
 h2 a:hover, h3 a:hover, .glossary dt a:hover { text-decoration: none; }
 h2 a:hover::after, h3 a:hover::after,
-.glossary dt a:hover::after { content: " #"; color: var(--hash); }
+.glossary dt a:hover::after { content: \" #\"; color: var(--hash); }
 
 a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -52,7 +67,7 @@ p code, li code, dd code { font-family: inherit; font-size: 1em; }
 
 code { color: var(--code); background: var(--pre); border: 1px solid var(--edge);
        border-radius: 3px; padding: .05em .35em; white-space: pre-wrap;
-       font-family: "Quay 16", monospace; }
+       font-family: \"Quay 16\", monospace; }
 pre { background: var(--slab); border: 1px solid var(--rule); border-radius: 6px;
       padding: .9em 1em; margin: 1em 0; overflow-x: auto; line-height: 1.5; }
 pre code { white-space: pre; color: var(--em); }
@@ -77,7 +92,7 @@ footer { margin-top: 3.5em; color: var(--faint); font-size: .85em;
   background: #000000; border: 1px solid var(--rim); border-radius: 6px;
   box-shadow: 0 0 30px -4px rgba(var(--glow),.28), 0 0 90px -22px rgba(var(--glow),.22);
   padding: .8em; margin-top: 1em; display: flex; flex-direction: column;
-  font-family: "Quay 16", monospace;
+  font-family: \"Quay 16\", monospace;
 }
 .term[hidden], .app[hidden] { display: none; }
 .term { position: relative; color: #ffffff; cursor: text;
@@ -94,7 +109,7 @@ footer { margin-top: 3.5em; color: var(--faint); font-size: .85em;
 .clear:hover { border-color: var(--link); color: var(--fg); }
 .row { display: flex; align-items: flex-start; }
 .in { color: #aaaaaa; }
-.in::before, .row::before { content: "> "; color: #555555; }
+.in::before, .row::before { content: \"> \"; color: #555555; }
 .row::before { white-space: pre; }
 .ans { color: #55ff55; }
 .cnd { color: #ff55ff; }
@@ -140,3 +155,8 @@ footer { margin-top: 3.5em; color: var(--faint); font-size: .85em;
   code { overflow-wrap: anywhere; }
   td { word-break: break-word; }
 }
+"
+   (main args) (: q (open (args 0) "w")
+                  (? (hot? q) (: _ (say q (head + hw-vars 'tokyo-night + frame)) _ (close q) 0)
+                     (: _ (say err ("mkstyle: cannot open " + args 0 + "\n")) (quit 1))))
+   (main >argv))

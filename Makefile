@@ -10,7 +10,7 @@ endif
 # bootstrap interpreter
 love0 = out/love0
 
-.PHONY: all install uninstall clean distclean host kernel wasm love0 lint ulp fonts \
+.PHONY: all install uninstall clean distclean host kernel wasm love0 lint ulp fonts web \
   site site-serve valg disasm flame cat cata catav perf repl gdb bench cloc
 
 # an unpacked release builds the product; a checkout keeps the fast gate
@@ -931,8 +931,9 @@ distclean: clean
 valg: host
 	@cat $t > $(ho)/.valg-corpus.l
 	valgrind --error-exitcode=1 --suppressions=$R/tools/valgrind.supp $m $(ho)/.valg-corpus.l </dev/null
-# the site's faces, laid from the quay bitmaps and checked in: github pages serves
+# the site's faces and its stylesheet, laid and checked in: github pages serves
 # the tree as it is, so a generated file still has to be committed
+web: fonts assets/web/style.css
 fonts: assets/fonts/quay16.woff assets/fonts/quay8.woff
 assets/fonts/quay16.woff: src/core/quay/moderndos_8x16.c tools/mkfont.l $(ho)/.love.baked
 	@mkdir -p $(dir $@)
@@ -940,6 +941,10 @@ assets/fonts/quay16.woff: src/core/quay/moderndos_8x16.c tools/mkfont.l $(ho)/.l
 assets/fonts/quay8.woff: src/core/quay/cga_8x8.c tools/mkfont.l $(ho)/.love.baked
 	@mkdir -p $(dir $@)
 	@$m tools/mkfont.l $< 6 $@ "Quay 8"
+# ..and the front page's stylesheet: config.l's tokyo-night through hueweb, over the layout
+assets/web/style.css: tools/mkstyle.l src/apps/vi/config.l src/apps/vi/hueweb.l $(ho)/.love.baked
+	@mkdir -p $(dir $@)
+	@env -u LOVE_NO_IMAGE $m tools/mkstyle.l $@
 .PHONY: ulp
 ulp:
 	@mkdir -p out
