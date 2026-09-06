@@ -18,7 +18,7 @@
 ; at every fair yield, the session's own evals included -- so the page drains each one
 ; and asks host.c's ai_alive, never this file, whether the app lives.
 ; the tty words this seat has no device for: winsize is the screen's, raw is nothing
-; to do. an app run on the session's own task (a typed `rove ()`) reads the end of
+; to do. an app run on the session's own task (a typed `(rove-run ())`) reads the end of
 ; stdin at once (host.c) and steps ashore, since nothing could unpark it.
 (use 'story)                                        ; the engine, fed just before this file
 (: raw (\ _ ())
@@ -26,7 +26,7 @@
    (winsize _) (: s (peep web-scr () 0) (? s ((gaze s 1) . (gaze s 2)) ()))
    (web-boot nm c r) (: _ (scoop 0)                                 ; the last app's node, reaped
                         s (screen (cask (screen () r c)) r c)
-                        f (ev (nom nm))                          ; the runner, by its name
+                        f (nm @ "rove" (from 'rove 'rove-run) (ev (nom nm)))   ; the runner, by its name
                         _ (pin web-scr () s)
                         _ (pin web-task () (twirl (\ _ (f ())) 0))
                         ())

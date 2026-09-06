@@ -87,8 +87,9 @@
  ; the hatch, which is the crawl, called the same way
  (open-thing g t) (: f (t 'file)
                       vi (mod 'vi 'vi-main)
-                      (? (f = 'hatch) (? (member? 'rove (names ())) (ev 'rove (), say-to g "you climb back out of the hold.")
-                                         (say-to g "the hatch is sealed on this seat."))
+                      (? (f = 'hatch) (: run (from 'rove 'rove-run)
+                                         (? run (run (), say-to g "you climb back out of the hold.")
+                                            (say-to g "the hatch is sealed on this seat.")))
                          !f (say-to g "it does not open.")
                          !vi (say-to g "no editor on this seat.")
                          (: _ (vi [f]) (say-to g ("you close " + t 'name + ".")))))

@@ -10,11 +10,13 @@
 ; rats, crabs and morays below decks, grog and gold, the pearl three decks
 ; down -- pure state in, pure state out, one key per turn.
 ;
-; run: out/love -l src/apps/rove/rove.l -e '(rove ())'
+; run: love rove
 ; the engine core is pure love (delve/fov/paint/crawl-* run headless, gated by
-; test/host/rove.l); only rove itself ties the tty (raw/winsize/cue? ride
-; src/host/posix.c), so rove never joins the corpus.
-
+; test/host/rove.l); only rove-run ties the tty (raw/winsize/cue? ride
+; src/host/posix.c), so rove never joins the corpus. a module: the crawl's words are
+; its own, and story.l's hatch reaches rove-run by name.
+(module (rove rove-run rove-main dat open? dput delve fov clear? paint helm-dec helm
+         crawl-new crawl-turn crawl-frame note mob-new mob-at roll stock)
 (:
  ; --- the deck: tiles in a cask, (x y) indexed; 0 rock, 1 floor, 2 the hatch ---
  (dat d x y) (0 <= x < d 'w && 0 <= y < d 'h ? (peep (d 't) (x + (d 'w) * y) 0) 0)
@@ -278,7 +280,7 @@
                     (slurp j))
 
  ; --- rove: the crawl on the tty. any seed sails; q or esc steps ashore ---
- (rove _) (: ws (winsize 0)
+ (rove-run _) (: ws (winsize 0)
              r (two? ws && 7 < <ws ? (<ws - 2) 22)
              c (two? ws && 19 < <>ws ? <>ws 80)
              g (crawl-new (c < 100 ? c 100) r (wheel (clock 0)))
@@ -298,4 +300,7 @@
               puts (g 'over @ 'won  ("the pearl is yours -- and " + show (g 'p 'gold) + " gold besides")
                               'dead ("the hold keeps you, deck " + show (g 'lvl))
                                     ("ashore with " + show (g 'p 'gold) + " gold")),
-              (g 'p 'gold))))
+              (g 'p 'gold)))
+ (rove-main as) (rove-run ())
+ _ (pins (from 'verbs 'tab) 'rove rove-main))
+) ; module rove

@@ -8,7 +8,7 @@
 ;
 ;   cat test/00-init.l test/host/rove.l | out/love
 
-(reads (open "src/apps/rove/rove.l" "r"))
+(use 'rove)   ; the artifact's module, warm from the tree
 
 (: (find h n i) (? (i + tally n < 1 + tally h)
                   (? (n = snip h i (i + tally n)) 1 (find h n (i + 1)))

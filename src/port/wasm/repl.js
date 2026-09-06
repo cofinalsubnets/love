@@ -46,8 +46,8 @@ async function loveRepl(root) {
   // quay: the page's love side (src/port/wasm/web.l: the tty words this seat has no
   // device for), then the real engines (src/apps/rove, ink) -- a closure captures its
   // free globals at creation. web.l puts each app on a quay screen of the box's size and
-  // mirrors its frames out for cells.js to lay. (fetch fails on file://; then `rove ()`
-  // just scares gracefully through the default help.)
+  // mirrors its frames out for cells.js to lay. (fetch fails on file://; then the app
+  // chips stay hidden.)
   const mirror = M.cwrap('ai_mirror', 'number', []);
   const palette = M.cwrap('ai_palette', 'number', []);
   const unfold = M.cwrap('ai_unfold', 'number', ['number']);
