@@ -76,6 +76,20 @@ a
 b
 
 See [two](two.md), [the archive](archive/old.md), [the web](https://example.com/x.md).
+
+## Words
+
+Apply
+:   the verb. see [big](#big)
+
+Big
+:   a number
+
+Big
+:   again
+
+Shared Name
+:   spells a heading's slug
 ")
    _ (put-file "src/two.md" "---
 title: Two From Meta
@@ -150,12 +164,18 @@ Only a paragraph, so the title has to come from the meta block.
       (anchored? one) (anchored? two) (anchored? three)
       ; and it is not vacuous: page one really has a contents, with the head-1 left
       ; out of it (it became the title) and both duplicate headings in.
-      ((tally (finds one "href=\"#")) = 2)
       ; slugs: deduped, stable, and never repeated on a page
       (has? (finds one "id=\"") "one")
       (has? (finds one "id=\"") "shared-name")
       (has? (finds one "id=\"") "shared-name-1")
-      (uniq? (finds one "id=\"")))
+      (uniq? (finds one "id=\""))
+      ; the deflist: its terms anchored after the heads, deduped with them, the class its heading
+      (has? (finds one "id=\"") "apply")
+      (has? (finds one "id=\"") "big")
+      (has? (finds one "id=\"") "big-1")
+      (has? (finds one "id=\"") "shared-name-2")
+      (has? (finds one "class=\"") "words")
+      ((tally (finds one "href=\"#")) = 4))                  ; 3 in the toc + the entry's link
 
    ; --- relink: rewritten inside the site, untouched outside ------------------------
    hrefs (finds one "href=\"")

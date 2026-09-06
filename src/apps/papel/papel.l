@@ -23,9 +23,10 @@
 ;
 ; the index page is built the same way as any other: papel makes an AST (a head and a
 ; deflist of link/blurb pairs) and hands it to lapiz to show. there is no html in papel
-; except the page template and one line -- the anchored heading -- which is the single
-; node papel renders itself, because lapiz has nowhere to put an id. everything else is
-; `htb`, lapiz's own block shower.
+; except the page template and two nodes -- the anchored heading, and the deflist whose
+; terms are anchored and whose class is its heading -- which papel renders itself,
+; because lapiz has nowhere to put an id. everything else is `htb`, lapiz's own block
+; shower.
 ;
 ; usage:  papel [-o out] [-t title] [src ..]        (with the `papel` script on PATH)
 ;     or: love -l src/apps/papel/papel.l [-o out] [-r wasm] [src ..]
@@ -110,8 +111,8 @@
 
 ; --- slugs: a heading becomes an id ----------------------------------------------------
 ; lowercase, runs of anything-else collapsed to one dash, the ends trimmed. two headings
-; that spell the same slug are deduped by a counter, so an anchor is stable for a given
-; page even when its text is not unique.
+; (or terms) that spell the same slug are deduped by a counter, so an anchor is stable
+; for a given page even when its text is not unique.
 (: (down c)   (? ((65 <= c) && (c <= 90)) (c + 32) c)
    (alnum? c) (((48 <= c) && (c <= 57)) || ((65 <= c) && (c <= 90)) || ((97 <= c) && (c <= 122)))
    (squash s) ((: (g i acc prev) (? (i < tally s)
@@ -153,6 +154,15 @@
                               (g >l seen ([<>b sn lab] . acc)))
                            (g >l seen acc)))))
                d (tablet 0) ())
+   ; the deflist terms, each with its slug: one list per deflist, in document order, deduped
+   ; after the heads so a term and a heading never share an anchor. a glossary entry is
+   ; linkable the way a heading is, and a link to one is checked the same way.
+   (pterms d hs) (: seen (foldl (\ t h (: s0 (slug (h 2)) (pin t s0 (peep t s0 0 + 1)))) (tablet 0) hs)
+                    (one it) (: s0 (slug (itext <it))
+                                k (peep seen s0 0)
+                                _ (pin seen s0 (k + 1))
+                                (0 < k ? (s0 + "-" + show k) s0))
+                    (map (b \ map one <>b) (filter (b \ <b = 'deflist) d)))
    ; the title: the first head-1, else the meta `title`, else the caller's fallback.
    (ptitle d dflt) (: h1 (filter (\ b (head? b && (<>b = 1))) d)
                       mt (mget (pmeta d) 'title)
@@ -188,24 +198,34 @@
                    b)
    (relink f d) (map (b \ rlb f b) d))
 
-; --- showing: lapiz shows every block but one ------------------------------------------
-; the anchored head is the one node papel emits itself, because lapiz's html has nowhere
-; to put an id and inventing a node for it would push a site's concern into the lens. the
-; heads arrive already slugged, in document order, so the walk just consumes them in step.
+; --- showing: lapiz shows every block but two ------------------------------------------
+; the anchored head and the anchored deflist are the nodes papel emits itself, because
+; lapiz's html has nowhere to put an id or a class and inventing a node for them would push
+; a site's concern into the lens. a deflist wears the slug of the heading it sits under as
+; its class, so a page's glossary and its roster can style apart with no markup to say so.
+; the heads and terms arrive already slugged, in document order, so the walk just consumes
+; them in step.
 (: (hhead lev sl inl) (: h ("h" + show lev)
                          ("<" + h + " id=\"" + hq sl + "\">" + hti inl + "</" + h + ">"))
+   (hdl cls sls items)
+   (: (row sl it) ("<dt id=\"" + hq sl + "\">" + hti <it + "</dt>\n<dd>" + hti <>it + "</dd>")
+      (rows sls its) (? !(two? its) () (row <sls <its . rows >sls >its))
+      ("<dl" + (0 < #cls ? (" class=\"" + hq cls + "\"") "") + ">\n"
+       + joins (rows sls items) "\n" + "\n</dl>"))
    ; isle is html to lay after the head-1 (before everything, on a page without one), or ""
-   (pshow d hs isle)
+   (pshow d hs ts isle)
    (: h1? (two? (filter (b \ head? b && (<>b = 1)) d))
       want (0 < #isle)
-      ((: (g l hs acc i)
+      ((: (g l hs ts acc i cls)
           (? !(two? l) (joins (rev acc) "\n")
              (: b <l
-                (? !(head? b) (g >l hs (htb b . acc) i)
+                (? (head? b)
                    (: h (hhead <(<hs) (<>(<hs)) <>>b)
-                      (? (0 < #i && (<>b = 1)) (g >l >hs (i . h . acc) "")
-                         (g >l >hs (h . acc) i)))))))
-       d hs (want && !h1? ? [isle] ()) (want && h1? ? isle "")))
+                      (? (0 < #i && (<>b = 1)) (g >l >hs ts (i . h . acc) "" (<>(<hs)))
+                         (g >l >hs ts (h . acc) i (<>(<hs)))))
+                   (<b = 'deflist) (g >l hs >ts (hdl cls <ts <>b . acc) i cls)
+                   (g >l hs ts (htb b . acc) i cls)))))
+       d hs ts (want && !h1? ? [isle] ()) (want && h1? ? isle "") ""))
    ; the toc: the same heads, minus the one that became the title. a page with fewer than
    ; two of them gets none -- a one-item contents is furniture, not navigation.
    (ptoc d hs) (: rest (? (two? hs && (1 = <(<hs))) >hs hs)
@@ -290,7 +310,7 @@ table{border-collapse:collapse}
       ttl (ptitle body (base src))
       idx? (outname src = "index.html")
       _ (spitf dst (wrap conf ttl (pmetah (pmeta d)) (ptoc body hs)
-                         (pshow body hs (idx? ? (island conf) ""))
+                         (pshow body hs (pterms body hs) (idx? ? (island conf) ""))
                          (idx? ? (rscripts conf) "")))
       dst)
    ; the index is a page like any other: papel builds an AST -- a head, then a deflist of
@@ -302,7 +322,8 @@ table{border-collapse:collapse}
     [['head 1 [['text site]]] ['deflist rows]])
    (windex conf srcs dst)
    (: d (index-doc conf srcs)
-      _ (spitf dst (wrap conf (peep conf 'title "papel") "" "" (pshow d (pheads d) (island conf)) (rscripts conf)))
+      hs (pheads d)
+      _ (spitf dst (wrap conf (peep conf 'title "papel") "" "" (pshow d hs (pterms d hs) (island conf)) (rscripts conf)))
       dst))
 
 ; --- the sources, and the build -----------------------------------------------------------
