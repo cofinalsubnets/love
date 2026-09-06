@@ -219,9 +219,13 @@ should end the process the ICCCM way, which it does through WM_DELETE_WINDOW but
 `kill` of the server.
 
 **`love doom` from a love with no doom in it** (src/apps/doom/doom.l, doom-nest): lay this
-binary's source under `~/.love/love-<ver>/` with the seed verb, wget doomgeneric and the IWAD
-into its dl/, `cook host DOOM=1` there with the seed's own compiler and PATH choices, exec that
-binary's doom. the nest is kept, so the second run is one exec. ⚠ `make host DOOM=1` after a
+binary's source under `./love-<ver>/` (the source verb's lay, files only), wget doomgeneric and
+the IWAD into its dl/, `cook host DOOM=1` there once with this binary's own mooncc pinned as CC,
+exec that binary's doom. the nest is kept, so the second run is one exec, and nothing outside
+the current directory is written. ⚠ the first shape seeded (`love seed`: a full bootstrap and
+a fixpoint rebuild) and then re-probed the compiler for the doom build -- the love0 witness
+flipped and everything built twice; gwen saw the two `LD out/love0` lines. pinning CC is what
+makes it one build. ⚠ `make host DOOM=1` after a
 plain `make host` was a no-op -- the flag is a link input no timestamp sees -- and a doom-less
 love's `love doom` is the nest path, which a gate must never start: out/.doom.flag is the
 witness now, and test_doomx refuses a love without doom.

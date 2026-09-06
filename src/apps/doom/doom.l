@@ -3,9 +3,9 @@
 ;
 ;   love doom [-iwad FILE] [-display :N] [-frames N]
 ;
-; from a love with no doom in it, the verb lays a nest under ~/.love/love-<ver>/ with the
-; seed verb, fetches doomgeneric and the shareware IWAD there, builds DOOM=1 and runs that
-; binary (doom-nest below); from one built with DOOM=1 it is the window right away.
+; from a love with no doom in it, the verb lays this binary's source under ./love-<ver>/,
+; fetches doomgeneric and the shareware IWAD there, builds DOOM=1 once and runs that binary
+; (doom-nest below); from one built with DOOM=1 it is the window right away.
 ;
 ; the game is C, linked into this binary by the DOOM=1 lane (src/inle/doom.c's host
 ; doors: doom-start / doom-tick / doom-frame / doom-key); this file is the window.
@@ -105,13 +105,13 @@
                       (loop (n + drew))))
        (loop 0))
 
-   ; --- the nest: a love with doom in it, laid under ~/.love by `love seed` -----------
+   ; --- the nest: a love with doom in it, laid in ./love-<ver>/ off this binary's source --
    ; `love doom` from a binary that carries no doom lays this binary's source under
-   ; ~/.love/love-<ver>/ (the seed verb: lay, rebuild, check -- minutes, once), fetches
-   ; doomgeneric and the shareware IWAD into its dl/ with wget, builds `cook host DOOM=1`
-   ; there, and runs that binary's doom. the nest is kept, so the second `love doom` is
-   ; one exec. the compiler and PATH are set the way the seed verb sets them: an ambient
-   ; cc if one works, else this binary's own mooncc; our tools fill the gaps on PATH.
+   ; ./love-<ver>/ (the source verb's lay: files, no build), fetches doomgeneric and the
+   ; shareware IWAD into its dl/ with wget, builds `cook host DOOM=1` there ONCE -- this
+   ; binary's own mooncc is the compiler, no ambient probe, so the love0 witness never flips
+   ; and nothing builds twice -- and execs that binary's doom. the nest is kept, so the next
+   ; `love doom` is one exec. nothing outside the current directory is written.
    wad-url "https://raw.githubusercontent.com/Daivuk/PureDOOM/master/doom1.wad"
    dg-url "https://codeload.github.com/ozkl/doomgeneric/tar.gz/refs/heads/master"
    (note s) (say err (";; " + s + "\n"), flush err)
@@ -130,8 +130,8 @@
    (nest-args dl as) (? (any (\ a (a = "-iwad")) as) as ("-iwad" . ((dl + "/doom1.wad") . as)))
    (doom-nest as)
     (: exe (selfpath 0)
-       home (getenv "HOME" + "/.love")
-       nest (home + "/love-" + love-version)
+       here (cwd 0)
+       nest (here + "/love-" + love-version)
        bin (nest + "/out/love")
        dl (nest + "/dl")
        (fail s) (say err ("doom: " + s + "\n"), 1)
@@ -142,10 +142,11 @@
            (: _ (setenv "LOVE_DOOM_NEST" "1")
               e (exec (bin . ("doom" . (nest-args dl as))))
               (fail ("cannot run " + bin + " (" + show e + ")")))
-          (: _ (mkdir home 493)
-             _ (note ("seeding " + nest + " -- this builds love once, and it takes minutes"))
-             st (run-in home [exe "seed" home])
-             (? (!(st = 0) || !(two? (stat bin))) (fail ("the seed did not take under " + home))
+          (: _ (? (two? (stat (nest + "/Makefile"))) 0
+                  (: _ (note ("laying this love's source under " + nest))
+                     _ (run-in here [exe "source" here])                    ; the verb: its names are its own
+                     0))
+             (? !(two? (stat (nest + "/Makefile"))) (fail ("the source did not lay under " + here))
                 (: _ (mkdir dl 493)
                    r1 (fetch wad-url (dl + "/doom1.wad"))
                    r2 (? (two? (stat (dl + "/doomgeneric"))) 0
@@ -157,13 +158,10 @@
                                   _ (unlink (dl + "/pax_global_header"))              ; the tarball's pax row, laid as a file
                                   (two? (stat (dl + "/doomgeneric")) ? 0 1)))))
                    (? (!(r1 = 0) || !(r2 = 0)) (fail "the downloads did not land")
-                      (: S (from 'source)
-                         farm ((S 'src-farm) nest exe)
+                      (: farm ((from 'source 'src-farm) nest exe)                 ; our tools fill PATH's gaps
                          _ (setenv "PATH" (getenv "PATH" + ":" + farm))
-                         env (getenv "CC")
-                         amb (? (string? env) () ((S 'src-cc) (nest + "/out")))
-                         _ (? (string? env) 0 (two? amb) (setenv "CC" <>amb) (setenv "CC" (exe + " mooncc")))
-                         _ (note "building the nest's love with doom inside")
+                         _ (setenv "CC" (exe + " mooncc"))
+                         _ (note "building the nest's love with doom inside -- once, and it takes minutes")
                          st2 (run-in nest [exe "cook" "host" "DOOM=1"])
                          (? !(st2 = 0) (fail "the doom build failed")
                             (: _ (setenv "LOVE_DOOM_NEST" "1")
@@ -177,7 +175,7 @@
    (doom-usage _) (say err "usage: love doom [-iwad FILE] [-display :N] [-frames N]\n", 1)
    (doom-main as)
     (: (opt a k d) (? !(two? a) d ((<a = k) && (two? >a)) <>a (opt >a k d))
-       nestwad (getenv "HOME" + "/.love/love-" + love-version + "/dl/doom1.wad")
+       nestwad (cwd 0 + "/love-" + love-version + "/dl/doom1.wad")
        wad (opt as "-iwad" (? (two? (stat "dl/doom1.wad")) "dl/doom1.wad" nestwad))
        disp (opt as "-display" (getenv "DISPLAY"))
        frames (: f (opt as "-frames" ()) (string? f ? (digits f) 0))

@@ -654,19 +654,25 @@ k_qemu_rv64 = -M virt -serial stdio -display none
 k_qemu = qemu-system-$(uname_$a) -m 256M $(k_qemu_$a) $(k_kvm)
 k_fw = -drive if=pflash,unit=0,format=raw,file=dl/edk2-ovmf/ovmf-code-$(uname_$a).fd,readonly=on
 
+# the emulator is asked for FIRST: a missing qemu refuses before the kernel is built, not
+# after. a prerequisite, so every run door shares the one question.
+.PHONY: qemu-present
+qemu-present:
+	@command -v qemu-system-$(uname_$a) >/dev/null 2>&1 || \
+	  { echo "run: needs qemu-system-$(uname_$a) on PATH"; exit 1; }
 ifeq ($a,x64)
 run: run-$a
-run-$a: $(ko)/esp-$a/EFI/BOOT/$(k_efiname) $(ko)/esp-$a/love.elf dl/edk2-ovmf/ovmf-code-$(uname_$a).fd
+run-$a: qemu-present $(ko)/esp-$a/EFI/BOOT/$(k_efiname) $(ko)/esp-$a/love.elf dl/edk2-ovmf/ovmf-code-$(uname_$a).fd
 	exec $(k_qemu) $(k_fw) -drive format=raw,file=fat:rw:$(ko)/esp-$a
 else
 run: run-$a
-run-$a: $(k_elf)
+run-$a: qemu-present $(k_elf)
 	exec $(k_qemu) -kernel $<
 endif
 # the serial doors: no firmware, nothing downloaded, and a command line.
-run-sh: $(k_elf)
+run-sh: qemu-present $(k_elf)
 	exec $(k_qemu) -kernel $< -append "sh"
-run-headless: $(k_elf)
+run-headless: qemu-present $(k_elf)
 	exec $(k_qemu) -kernel $< -display none -no-reboot
 
 init-container: host
