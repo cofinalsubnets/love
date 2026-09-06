@@ -26,7 +26,7 @@
 ;   ~8x faster than interp (the 1st Futamura projection, measured). this benchmark is the yardstick;
 ;   mix.l is where pe reaches ~hand.
 ;
-; run:  out/host/love doc/misc/proto/interp-spec.l
+; run:  out/love doc/misc/proto/interp-spec.l
 ((\ pd
   (: (ev1 nd x) (? (= (cap nd) 'lit) (caup nd)
                    (= (cap nd) 'var) x

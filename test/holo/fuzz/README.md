@@ -52,7 +52,7 @@ python3 test/holo/fuzz/fuzz.py --arch x64 -n 250 --seed 3 --no-llvm    # faster,
 python3 test/holo/fuzz/fuzz.py --arch a64 --classes ld,st,li -n 500  # a subset
 ```
 
-Deterministic per seed. Needs `out/host/love` built, plus `objdump` (x64) / `llvm-mc` (a64, and
+Deterministic per seed. Needs `out/love` built, plus `objdump` (x64) / `llvm-mc` (a64, and
 x64 unless `--no-llvm`). Exit code is nonzero iff any sample fails.
 
 ## Coverage
@@ -144,6 +144,6 @@ one deliberate divergence is `int 3`: `llvm-mc` folds it to the one-byte `CC`, h
 
 Add a `g_<class>(rng) -> (ir_string, checker)` generator and register it in `GENS`. The checker
 receives the parsed objdump instruction list and raises `Fail(msg)` on any mismatch. Probe what
-holo actually emits first (`echo "(...)" | ... | out/host/love`, then `objdump` the bytes) so the
+holo actually emits first (`echo "(...)" | ... | out/love`, then `objdump` the bytes) so the
 checker matches reality rather than assumption — several classes lower to more than one machine
 instruction (e.g. `setcc` → setcc+movzx, three-address ALU with distinct dest → mov+op).

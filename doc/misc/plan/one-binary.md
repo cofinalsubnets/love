@@ -14,7 +14,7 @@ The end state, per environment:
 - **love0** (cc-built) -- unchanged: breaks the self-host circle, lcats the
   headers, bakes mooncc0.image, drives mooncc over the TUs, lays sys.o, runs
   its own corpus lane.
-- **out/host/love** -- the same link as today, but its bake is the LAYERED crew
+- **out/love** -- the same link as today, but its bake is the LAYERED crew
   bake (the dist chain: docs prefix, then the rest), so it answers `love kore`,
   `love mooncc`, `love sh` itself. kore, kore.image, mooncc, mooncc.image, the
   lush/sb shebang cats, the sh/diff symlinks: all retired.
@@ -35,7 +35,7 @@ per-stage wake, the chain came back out -- one plain image, `bake -l`.)
 ## the rungs
 
 **Rung 0 -- measure before moving. CLIMBED, and the numbers ruled.** The layered
-bake on a copy of out/host/love: **12.0 s** whole-chain (docs 7130 KB prefix ->
+bake on a copy of out/love: **12.0 s** whole-chain (docs 7130 KB prefix ->
 12464 B derived; rest 8012 KB whole; binary 9.2 MB against the plain bake's
 2.5), where a kore.image bake alone is 3.5 s -- so a kore-only edit pays 8.5 s
 more, and a compiler edit (already a ~2 min TU cascade) pays noise. Wakes,
@@ -50,7 +50,7 @@ the chain binary before any edit: `love kore sed`, `love mooncc t.c -o t`
 (exit 42), bare `-e` finds kore-main and moon-run on the book.
 
 **Rung 1 -- the collapse.** The docs/rest cats move to $(ho) and serve the host
-bake: love.baked's recipe becomes `$< bake -L .docs-cat.l:libra,help -L
+bake: .love.baked's recipe becomes `$< bake -L .docs-cat.l:libra,help -L
 .rest-cat.l` (the candidate lane rides the same pattern rule and MUST get the
 same layers). Retire $(ho)/kore, kore.image, mooncc, mooncc.image; test.mk's
 korerun/moonrun become `$(mw) kore` / `$(mw) mooncc` (⚠ the root exports
@@ -133,8 +133,8 @@ argv0 farm could point at the one binary once cli.l learns argv[0] dispatch.
   old one -- but a concurrent session's NEXT spawn gets the new binary. Same
   hazard class as a src/core/love.c edit today; now it includes .l edits.
 - **bundled_love must not see the tree's own binary.** After rung 1
-  out/host/love IS bundle-shaped, but the bundle test keys on ./bin/love
-  (a seed-laid tree), not on out/host -- keep it that way, or the tree's build
+  out/love IS bundle-shaped, but the bundle test keys on ./bin/love
+  (a seed-laid tree), not on out -- keep it that way, or the tree's build
   would try to compile itself with the binary it is rebuilding.
 - **the seats.** kore.l and lush's main.l fire on basename; the -L bake loads
   cats under a neutral name so seats stay quiet in the image. That is the dist

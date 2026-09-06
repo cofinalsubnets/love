@@ -9,7 +9,7 @@ include $(R)/mk/common.mk
 
 # the love spelled from the REPO ROOT, for the recipes that `cd $(R)` first
 # (where $(m)'s ../ prefix would point one level above the root).
-mr = out/host$(hsuf)/love
+mr = out$(hsuf)/love
 
 .PHONY: all test_cook test_tele test_xor test_hue test_hueweb
 all: test_cook test_tele test_xor test_hue test_hueweb
@@ -28,8 +28,8 @@ $(m):
 # it last -- and the two shape checks below are what a diff used to say the long way.
 test_hue: | $(m)
 	@echo TEST hue2vim.l
-	@$(MAKE) --no-print-directory -C $(R) out/host$(hsuf)/syntax.vim
-	@f=$(R)/out/host$(hsuf)/syntax.vim; \
+	@$(MAKE) --no-print-directory -C $(R) out$(hsuf)/syntax.vim
+	@f=$(R)/out$(hsuf)/syntax.vim; \
 	  grep -q '^let b:current_syntax = "love"$$' $$f \
 	    || { echo "  FAIL $$f: no terminal b:current_syntax -- the generator stopped short"; exit 1; }; \
 	  grep -n '^;;' $$f && { echo "  FAIL $$f: a scare printed into the syntax file"; exit 1; }; \
@@ -52,7 +52,7 @@ test_hue: | $(m)
 # it (a rule per class, no `;;` scare in the middle of the file).
 test_hueweb: | $(m)
 	@echo TEST hue2web.l
-	@cd $(R) && o=out/host$(hsuf); \
+	@cd $(R) && o=out$(hsuf); \
 	  $(mr) tools/hue2web.l css > $$o/.hue.css \
 	    || { echo "  FAIL: the css generator did not run"; exit 1; }; \
 	  grep -n '^;;' $$o/.hue.css && { echo "  FAIL: a scare printed into the stylesheet"; exit 1; }; \
@@ -77,17 +77,17 @@ test_hueweb: | $(m)
 # cook's Makefile-importer suite: test/host/cook.l writes fixture Makefiles to a temp dir and
 # runs cook on them as a subprocess, asserting over the captured output. Paths are relative
 # to the repo root, so it runs from there.
-# ⚠ the SHELL pair needs the BUILT lush (a fixture sets `SHELL := out/host/lush` to prove
+# ⚠ the SHELL pair needs the BUILT lush (a fixture sets `SHELL := out/lush` to prove
 # cook honors it), and that rule lives in the ROOT makefile -- so the prerequisite sits on
 # test_tools, not here. ⚠ and the built love goes on PATH FIRST: lush is a catted script
 # under `#!/usr/bin/env -S love`, so PATH picks the love, and without this the gate runs
-# whatever love is INSTALLED. a one-entry .bin/, NOT out/host itself -- that holds
+# whatever love is INSTALLED. a one-entry .bin/, NOT out itself -- that holds
 # `sh -> kore`, and shadowing /bin/sh costs the two .SHELLFLAGS tests.
 # Through run.sh for the summary line: the exit code alone passes a reader that stopped early.
 test_cook: | $(m)
 	@echo TEST test/host/cook.l
-	@mkdir -p $(R)/out/host$(hsuf)/.bin && ln -sf ../love $(R)/out/host$(hsuf)/.bin/love
-	@cd $(R) && PATH="$(abspath $(R)/out/host$(hsuf)/.bin):$$PATH" \
+	@mkdir -p $(R)/out$(hsuf)/.bin && ln -sf ../love $(R)/out$(hsuf)/.bin/love
+	@cd $(R) && PATH="$(abspath $(R)/out$(hsuf)/.bin):$$PATH" \
 	  sh test/gate/run.sh -a cook "$(mr)" "cook tests pass" test/host/cook.l
 
 # tele, the autograd library (pure love over the constellation algebra): test/tele/grad.l
@@ -107,8 +107,8 @@ test_tele: | $(m)
 # rather than through run.sh, because the subject is three files catted, not one handed over.
 test_xor: | $(m)
 	@echo TEST test/tele/xor.l
-	@cd $(R) && cat test/00-init.l test/tele/xor.l test/zz-fin.l > out/host/.test_xor.l; \
-	  $(mr) -l src/apps/tele/tele.l out/host/.test_xor.l </dev/null > out/host/.test_xor.out 2>&1; \
-	  r=$$?; cat out/host/.test_xor.out; \
+	@cd $(R) && cat test/00-init.l test/tele/xor.l test/zz-fin.l > out/.test_xor.l; \
+	  $(mr) -l src/apps/tele/tele.l out/.test_xor.l </dev/null > out/.test_xor.out 2>&1; \
+	  r=$$?; cat out/.test_xor.out; \
 	  [ $$r -eq 0 ] || { echo "FAIL test_xor (exit $$r)"; exit 1; }; \
-	  grep -q "tests pass" out/host/.test_xor.out || { echo "FAIL test_xor (exit 0, no summary)"; exit 1; }
+	  grep -q "tests pass" out/.test_xor.out || { echo "FAIL test_xor (exit 0, no summary)"; exit 1; }

@@ -11,7 +11,7 @@
 # and cannot be fetched (offline). NB no `set -e`: drat-trim's exit codes are
 # conventional, the verdict is the `s VERIFIED` line.
 R=../..
-GL=$R/out/host/love
+GL=$R/out/love
 export LOVE_NO_IMAGE=1   # the native kernels ride the `nif` seam the glazed image mops
 OUT=$R/out/drat
 mkdir -p "$OUT"

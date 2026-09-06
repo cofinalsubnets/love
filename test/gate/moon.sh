@@ -19,7 +19,7 @@ fail() { echo "FAIL $*" >&2; exit 1; }
 # the compiler under test: love's own mooncc verb (the crew layer, woken per invocation)
 moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 # ..and the BOOTSTRAP one, the lane that compiles src/core/love.c: love0 waking mooncc0.image
-moon0() { "$love0" wake out/host/mooncc0.image mooncc "$@"; }
+moon0() { "$love0" wake out/mooncc0.image mooncc "$@"; }
 
 # ---------------------------------------------------------------- the laws
 echo "CC src/apps/moon/{lex,cpp,parse,gen,val,law}.l"

@@ -100,9 +100,9 @@ kernel runs it by name -- there is nothing to bake and no second kernel to build
 
 ```sh
 cp <your-probe>.l test/kernel/probe.l      # anywhere in the tree the blob carries
-make -s out/free/love-x64.elf
+make -s out/love-x64.elf
 qemu-system-x86_64 -m 768M -M q35 -serial stdio -display none -no-reboot \
-  -kernel out/free/love-x64.elf -append test/kernel/probe.l \
+  -kernel out/love-x64.elf -append test/kernel/probe.l \
   -device isa-debug-exit,iobase=0xf4,iosize=0x04
 # -append test/kernel/all.l runs the whole corpus; no -append drops to the shell
 ```

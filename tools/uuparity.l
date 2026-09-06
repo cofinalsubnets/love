@@ -6,7 +6,7 @@
 ; anything else is an impostor and fails the audit. also reports coverage per
 ; published file -- the road to parity. a hand tool:
 ;
-;   out/host/love tools/uuparity.l          (exit 1 on impostors)
+;   out/love tools/uuparity.l          (exit 1 on impostors)
 ;
 ; skips with a note when UniMath is absent. the scan is textual on both sides
 ; (a commented-out defn still counts), the shape of the python it replaced.

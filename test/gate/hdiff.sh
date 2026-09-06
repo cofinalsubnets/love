@@ -32,8 +32,8 @@ command -v objdump > /dev/null 2>&1 || command -v llvm-objdump > /dev/null 2>&1 
 # ..and the cc has to be able to HONOUR ai_musttail. love.h refuses to build the
 # tail-threaded vm without it, so a cc that lacks it would look like "could not
 # build love" -- a failure report for a tree that is fine and a toolchain that is old.
-mtc=out/host/.hdiff-musttail.c
-mkdir -p out/host
+mtc=out/.hdiff-musttail.c
+mkdir -p out
 printf '%s\n' \
   '#if !defined(__clang__) && !(defined(__GNUC__) && __GNUC__ >= 15)' \
   '#error no musttail' \
@@ -49,7 +49,7 @@ for cc in "$@"; do
   echo "  $cc: building love (HCC=1, ai_tco=1)"
   make --no-print-directory HCC=1 CC="$cc" host > /dev/null 2>&1 \
     || fail "$cc could not build love"
-  b=out/host-cc/love
+  b=out/cc/love
   [ -x "$b" ] || fail "$cc laid no $b"
   # it answers: the corpus is the interpreter's business, this is the binary's.
   [ "$("$b" -e '(2 = 1 + 1)' 2>&1)" = 1 ] || fail "the $cc-built love does not answer"

@@ -15,7 +15,7 @@
 ;     (glean _) is the SIGCHLD core (waitpid(-1) -> (pid . status), restart per policy).
 ;     same supervisor shape, now over real children. (demos 0) ends by calling it.
 ; run either:
-;   out/host/love -l init/init.l -e "(demos 0)"      ; or "(real 0)"
+;   out/love -l init/init.l -e "(demos 0)"      ; or "(real 0)"
 ; (the file only DEFINES -- a plain load prints nothing; -l preloads it into the shared
 ; global scope so the -e call finds `demos`/`real`.)
 ;
@@ -153,7 +153,7 @@
 ; merge, now {signals, clock}, so the heartbeat ticks while the supervisor sleeps on
 ; the fd. on SIGCHLD we drain glean (it COALESCES, so loop) and restart per policy; a
 ; sigterm (blocked -> queued to the fd: a graceful EVENT, not a kill) ends the loop.
-; Linux signal numbers: SIGCHLD 17, sigterm 15. run: out/host/love -l init/init.l -e "(perceive 0)"
+; Linux signal numbers: SIGCHLD 17, sigterm 15. run: out/love -l init/init.l -e "(perceive 0)"
 (: sig-chld 17  sig-term 15
    (heart n ms) (? (< n 1) 0 (: _ (rest ms) _ (note "  . beat") (heart (- n 1) ms)))
 

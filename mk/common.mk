@@ -8,9 +8,9 @@ R ?= .
 # has to be a character echo passes through. Paths print relative to the tree; `make
 # install` is the exception, where the artifact lands outside it.
 
-m = $R/out/host$(hsuf)/love
+m = $R/out$(hsuf)/love
 # ⚠ the HOST's arch, which $a is NOT: a cross lane overrides $a on the command line, and
-# anything under out/host reading $a then lays a cross artifact into the host tree.
+# anything under out reading $a then lays a cross artifact into the host tree.
 # ⚠ AND `uname -m` IS NOT THE ISA. It answers the kernel's MACHINE, which only linux
 # spells the way free/<a>/, the mksys leaves and the holo backends do: the BSDs say
 # amd64 for x86_64, freebsd says arm64 and netbsd evbarm for aarch64. evbarm names a
@@ -68,7 +68,7 @@ in_git := $(wildcard $R/.git)
 # instead -- the one differential a foreign cc still gets, the kernel having none. It is the
 # only build that puts a foreign cc on the vm at ai_tco=1, where ai_musttail is live and where
 # a prototype mismatch our own sibcall pass waves through is refused (doc/misc/moon-c-gaps.md).
-# ⚠ ITS OWN TREE, because the two loves are the same path otherwise: out/host-cc keeps the
+# ⚠ ITS OWN TREE, because the two loves are the same path otherwise: out/cc keeps the
 # objects and the binary apart, and $m follows it so a test runs the one you asked for.
 override HCC := $(filter-out 0,$(HCC))
 
@@ -79,9 +79,9 @@ override HCC := $(filter-out 0,$(HCC))
 tco ?= 1
 
 # ⚠ tco EARNS A TREE THE SAME WAY HCC does, and for the same reason: a tco=0 love is a
-# different binary at the same path, so sharing out/host would make every following make
+# different binary at the same path, so sharing out would make every following make
 # rebuild the world, and a test would run whichever flavour was built last.
-hsuf := $(if $(HCC),-cc,)$(if $(filter 0,$(tco)),-tco0,)
+hsuf := $(if $(HCC),/cc,)$(if $(filter 0,$(tco)),/tco0,)
 
 # the corpus: 00-init's harness first, the spec second, then uu.l, then the rest. ⚠ uu.l is
 # front-loaded EXPLICITLY so its dependents (uukind*, uulay, uupatch, uuwm*) see it whatever

@@ -355,7 +355,7 @@ segfaulted for every |x| >= 2^19), `68ee440a` (u64->double converted signed, 160
 
 `make test` is the DEV gate (~20s, every edit) -- host + love0 must BOTH print the zz-fin
 summary, love0 exactly twice. `make test_slow` is the MERGE gate, before publishing only.
-between them, the individual `test_*` covering what you touched. `out/host/love
+between them, the individual `test_*` covering what you touched. `out/love
 src/apps/libra/libra.l <file>` on every .l -- silence is clean. never assert on `(show x)` as a
 value test. and watch the clock: a generator that crawls is a bug announcing itself.
 

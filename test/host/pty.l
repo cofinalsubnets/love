@@ -5,7 +5,7 @@
 ; fail love0's self-test. So this is verified the host-nif way: standalone, against
 ; the built binary. Run it (the assert macro comes from test/00-init.l):
 ;
-;   cat test/00-init.l test/host/pty.l | out/host/love      ; green dots = pass, exits 1 on fail
+;   cat test/00-init.l test/host/pty.l | out/love      ; green dots = pass, exits 1 on fail
 ;
 ; Mechanics are scriptable (here); full interactive wrapping is manual (cli.l).
 

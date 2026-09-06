@@ -10,7 +10,7 @@
 ;
 ; cli is baked (in the host egg), so this file needs no -l:
 ;
-;   cat test/00-init.l test/host/baotest.l | out/host/love
+;   cat test/00-init.l test/host/baotest.l | out/love
 ;
 ; (wired into `make test_hostnif`.) green dots = pass.
 ; k4/k7 pack the cps continuation's (u l r d [hu hd cur]) arguments into a

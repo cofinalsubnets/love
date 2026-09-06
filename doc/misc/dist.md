@@ -8,7 +8,7 @@ somebody who just downloaded one: *do you have a C toolchain?*
 | **source** | `love-<ver>.tar.gz` | sources only. `make` bootstraps through the machine's own cc. |
 | **seed** | `love` | one executable that carries its own source and **is** its own toolchain. |
 
-The seed is not a separate build: it **is** the tree's own `out/host/love`, baked —
+The seed is not a separate build: it **is** the tree's own `out/love`, baked —
 the default binary links its source blob and readme, so `make` produces `love0`
 (the bootstrap scaffold) and the seed, and nothing else.
 
@@ -85,7 +85,7 @@ byte for byte.
 
 ```
 make dist-source        # the tarball
-make dist-seed          # the seed: out/host/love, baked
+make dist-seed          # the seed: out/love, baked
 make dist               # both — a release
 make test_distboot
 ```

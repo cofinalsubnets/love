@@ -40,7 +40,7 @@
 # nothing needed to unpack it -- so its leg here was a third bootstrap proving what
 # the seed's already proves.
 #
-# ⚠ THE SEED IS THE TREE'S OWN out/host/love (seed-universal U2: the host build
+# ⚠ THE SEED IS THE TREE'S OWN out/love (seed-universal U2: the host build
 # subsumed, the love-<arch> names dissolved). Two consequences ride here: the
 # lean tree's binary embeds an archive it must RE-CUT from itself (selfpack --
 # leg 4's compare is what holds that re-cut to the byte), and the claim compare
@@ -64,7 +64,7 @@ trap 'rm -rf "$w"' EXIT
 fail() { echo "FAIL distboot: $*" >&2; exit 1; }
 
 # our own extractor, so the gate leans on nothing it is not already testing
-love=$R/out/host/love
+love=$R/out/love
 [ -x "$love" ] || fail "no $love"
 
 echo "distboot: two bootstraps and a self-rebuild, this takes a few minutes"
@@ -76,9 +76,9 @@ lean=$(echo "$w"/lean/love-*/)
 [ -d "$lean" ] || fail "the source tarball unpacked no love-<ver>/ directory"
 [ -f "$lean/VERSION" ] || fail "the source tarball carries no VERSION (the binary would stamp 'unknown')"
 [ ! -e "$lean/.git" ] || fail "the source tarball shipped a .git"
-( cd "$lean" && make -j"$(nproc 2>/dev/null || echo 4)" out/host/love ) > "$w/lean.log" 2>&1 \
+( cd "$lean" && make -j"$(nproc 2>/dev/null || echo 4)" out/love ) > "$w/lean.log" 2>&1 \
   || { tail -20 "$w/lean.log"; fail "the source artifact does not build"; }
-[ -x "$lean/out/host/love" ] || fail "the source build produced no love"
+[ -x "$lean/out/love" ] || fail "the source build produced no love"
 echo "  OK source: builds through the ambient cc"
 
 # ---- 2. SEED, which needs no tarball at all and no compiler ------------------
@@ -104,25 +104,25 @@ selfd=$(echo "$w"/self/love-*/)
 # claim anyway -- the toolchain chosen by a file existing rather than by anyone deciding.
 [ ! -e "$selfd/bin" ] || fail "'love source' laid a bin/ -- the tree is source, nothing else"
 # ⚠ THE BARE LINK, not `love seed`: the verb runs `make dist`, which BAKES, and leg 3
-# compares this against leg 1's unbaked out/host/love. So the target is named here and CC
+# compares this against leg 1's unbaked out/love. So the target is named here and CC
 # with it -- which is the seed verb's own fallback spelled by hand (src/apps/source/source.l names
 # `<selfpath> mooncc` where its probe finds no cc that works), and the same claim: this
 # tree builds with no ambient compiler anywhere.
 ( cd "$selfd" && PATH="$w/nocc:$PATH" LOVE_NO_IMAGE= \
-    make -j"$(nproc 2>/dev/null || echo 4)" CC="$w/self/love mooncc" out/host/love ) \
+    make -j"$(nproc 2>/dev/null || echo 4)" CC="$w/self/love mooncc" out/love ) \
   > "$w/selfb.log" 2>&1 \
   || { tail -20 "$w/selfb.log"; fail "the seed-laid tree does not build without an ambient compiler"; }
 grep -q "was called" "$w/selfb.log" && { grep "was called" "$w/selfb.log" | head -3; fail "the seed-laid build reached for an ambient compiler"; }
 echo "  OK seed: one binary lays its own source and builds it, no tar and no ambient cc"
 
 # ---- 3. THE CLAIM ------------------------------------------------------------
-# Both binaries here are the bare LINKS (the explicit out/host/love target, no
+# Both binaries here are the bare LINKS (the explicit out/love target, no
 # .baked asked) -- and each embeds its archive, so this one cmp also proves the
 # lean tree's selfpack re-cut the very bytes the seed carried.
-if cmp -s "$lean/out/host/love" "$selfd/out/host/love"; then
-  echo "  OK both artifacts answer the SAME binary ($(wc -c < "$lean/out/host/love") bytes)"
+if cmp -s "$lean/out/love" "$selfd/out/love"; then
+  echo "  OK both artifacts answer the SAME binary ($(wc -c < "$lean/out/love") bytes)"
 else
-  ls -l "$lean/out/host/love" "$selfd/out/host/love"
+  ls -l "$lean/out/love" "$selfd/out/love"
   fail "source and seed built DIFFERENT binaries -- the release claim is false"
 fi
 
@@ -133,7 +133,7 @@ fi
 # everything it was made from and nothing about the machine it was made on leaked in.
 # ⚠ AND THE DECISION RIDES HERE TOO. This leg is a real `love seed`, not an open-coded
 # `make dist` -- the verb's own -wait half IS this leg (build dist in the laid tree, then
-# compare selfpath against out/host/love), so running it whole costs a lay more and buys
+# compare selfpath against out/love), so running it whole costs a lay more and buys
 # the one thing legs 2 and 3 cannot say: that the seed PICKS its own mooncc when no
 # ambient compiler works. Legs 2 and 3 name CC by hand and so supply the answer.
 # ⚠ PATH IS THE POISON DIR ALONE, not $w/nocc:$PATH. src-cc walks every PATH entry for
@@ -159,7 +159,7 @@ grep -q "seeding with this binary" "$w/selfd.log" \
   || { grep -a '^;; seeding' "$w/selfd.log"; fail "no ambient cc works here, and the seed did not fall back to its own mooncc"; }
 grep -q "fixpoint ok" "$w/selfd.log" || fail "the seed did not answer its own fixpoint"
 circled=$(echo "$w"/circle/love-*/)
-again=$circled/out/host/love
+again=$circled/out/love
 [ -f "$again" ] || fail "the artifact rebuild produced no $again"
 if cmp -s "$seed" "$again"; then
   echo "  OK circle: no cc here works, so the seed took its own mooncc -- and rebuilt ITSELF byte-for-byte ($(sha256sum < "$again" | cut -c1-16)..)"

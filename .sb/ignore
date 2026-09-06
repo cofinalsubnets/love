@@ -25,7 +25,6 @@ test/proof/rocq/uugen.v
 test/proof/lean/uugen.lean
 
 # the clangd compilation database, written by the build
-compile_commands.json
 
 # editor and debugger leavings
 vgcore.*

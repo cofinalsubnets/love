@@ -47,7 +47,7 @@
 # net their sum (source to a tested and measured binary). A missing/failed lane
 # shows dnf.
 #
-# Requires `make host` first: the generated out/lib/*.h headers and out/host/love, which
+# Requires `make host` first: the generated out/lib/*.h headers and out/love, which
 # is also the ARTIFACT (the seed) -- the mooncc lane runs it and not an intermediate;
 # see the note on SEED.
 # x86-64 only (mooncc's native lane); off x86-64, or with no artifact built, the mooncc
@@ -64,7 +64,7 @@
 R=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 TIMEOUT=${1:-180}
 SAMPLES=${2:-3}
-ho=$R/out/host
+ho=$R/out
 WORK=$R/out/bench/cc
 rm -rf "$WORK"; mkdir -p "$WORK"
 
@@ -132,26 +132,26 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
 # spelling of this lane that measures the same thing twice. mooncc's link pulls
 # src/apps/moon/lib/nolibc/ MEMBER BY NEED and caches the archive under ~/.love/cache/moon,
 # keyed on the compiler, its stat, AND ITS IMAGE (moon.l's mcrtkey). An image FILE puts
-# that file's stat in the key, so while the lane ran out of out/host/mooncc -- whose
+# that file's stat in the key, so while the lane ran out of out/mooncc -- whose
 # .image this file's own make target rebuilt as a prerequisite -- every run missed and
 # paid a one-time libc BUILD inside a per-build row: 43.8 s against 20.1 s warm, 54% of
 # the number. A BAKED image keys as the word "<baked>" instead, so the entry survives
-# every rebuild of the intermediates (measured then: `touch out/host/mooncc.image
-# out/host/love` left it at 18.9 s). The one-binary change has since retired that image
+# every rebuild of the intermediates (measured then: `touch out/mooncc.image
+# out/love` left it at 18.9 s). The one-binary change has since retired that image
 # file, which closes the same hole from the other side -- but the artifact is still what
 # this should race, because it is what a user runs. ⚠ a one-line C file does NOT warm the
 # archive in its place: a program that needs no member pulls none.
 # ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads, the guard against an exported egg: an
 # egg-booted love has no verb table, so `mooncc` reads as a FILENAME.
-SEED=$R/out/host/love
+SEED=$R/out/love
 mc() { env LOVE_NO_IMAGE= "$SEED" mooncc "$@"; }
 build_mooncc() { # $1=binpath
   bin=$1; od=$WORK/mooncc; rm -rf "$od"; mkdir -p "$od"
   ( cd "$R" || exit 1
     for b in $love_tu; do
-      mc -D ai_tco=1 -D AiHaveVersionH -Iout/host -I. -Isrc -Iout/lib -c "src/$b.c" "$od/$b.o" || exit 1; done
+      mc -D ai_tco=1 -D AiHaveVersionH -Iout -I. -Isrc -Iout/lib -c "src/$b.c" "$od/$b.o" || exit 1; done
     for f in $host_cs; do b=$(basename "$f" .c)
-      mc -D ai_tco=1 -D AiHaveVersionH -Iout/host -I. -Isrc -Iout/lib -c "$f" "$od/host_$b.o" || exit 1; done
+      mc -D ai_tco=1 -D AiHaveVersionH -Iout -I. -Isrc -Iout/lib -c "$f" "$od/host_$b.o" || exit 1; done
     # no nolibc object: the link owes its symbols and the driver supplies them
     # member by need, so the dead areas never arrive. ⚠ ccsize/ccdead therefore
     # read mooncc's libc off the BINARY's complement, not off a nolibc.o.
@@ -210,7 +210,7 @@ drv_ms() { # $1=binpath $2=driver-file $3=driver-call $4=sentinel
 # ⚠ if this fails the inflate row is dnf and the other two are unaffected: a missing
 # stream must not read as a compiler that could not build.
 INF=$WORK/bench.deflate
-INFN=$(cd "$R" && out/host/love bench/ccgen.l src/core/love.c "$INF" 2>/dev/null)
+INFN=$(cd "$R" && out/love bench/ccgen.l src/core/love.c "$INF" 2>/dev/null)
 case $INFN in ''|*[!0-9]*) INFN=0;; esac
 
 # one compiler lane: build (timed once), verify, then time the corpus and the two

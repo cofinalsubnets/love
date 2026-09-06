@@ -2,7 +2,7 @@
 
 **THE CLAIM: K_TEST is not a build flag, it is a second kernel.** Twelve
 conditional blocks over 268 lines of C, plus thirteen Makefile sites and a
-parallel `out/free/<a>-test/` object tree, and what they buy is a machine that
+parallel `out/<a>-test/` object tree, and what they buy is a machine that
 diverges from the shipped one in exactly the three places the shipped one is
 least covered: it never walks the ramfs, never wakes an image, and never warms
 an egg from carried source. A green corpus therefore says nothing about any of
@@ -173,7 +173,7 @@ spelled in C to be reached from love. The falsifier is the uses commented out:
 `;; missing rand`, exit 2, so the layers are load-bearing and the corpus says so.
 
 **Rung 4 -- delete K_TEST. LANDED.** `ksuf`, the `-test` odir tree,
-`-DK_TEST -Dai_tco=1`, `tools/ccdb.l`'s copy of it, `src/inle/x64/asmops.h`'s last
+`-DK_TEST -Dai_tco=1`, `src/inle/x64/asmops.h`'s last
 sentence, and both `#ifdef`s left in kmain. The `k_pie_in` fork reads plainly
 now: at the host's own arch project the shipped binary, everywhere else build the
 pie.

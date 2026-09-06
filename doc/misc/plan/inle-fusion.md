@@ -1,7 +1,7 @@
 # plan: one binary, host and free
 
-**THE CLAIM: the tree builds two loves for one machine.** `out/host/love` and
-`out/free/love-x64.elf` share `src/core/love.c`, `am.c` and quay -- ~86% of the
+**THE CLAIM: the tree builds two loves for one machine.** `out/love` and
+`out/love-x64.elf` share `src/core/love.c`, `am.c` and quay -- ~86% of the
 kernel's text and 78% of the host's -- and then implement twenty-one of the same
 behaviours twice. `open`, `stat`, `readdir`, `lseek`, `mkdir`, `rename`, `pipe`,
 `dup`: each is one body in `src/host/posix.c` and a second in `src/inle/kmain.c`. The
@@ -211,7 +211,7 @@ host-only TUs): FOUR symbols remain defined on both sides -- `ai_fd_close`,
   kboot's real pipelines on the projected SHIPPED kernel, test_slow + the
   seed fixpoint.
 
-**THE ARTIFACT IS UNIFIED** (8e6f472c): `out/host/love` carries the shipped
+**THE ARTIFACT IS UNIFIED** (8e6f472c): `out/love` carries the shipped
 kernel -- kmain with the kore cats, the ramfs, the syscall door, the arch
 bring-up, the vector lay -- compiled through the MOON LANE (a seed builds the
 artifact before any $m exists), and the shipped kernel is the ARTIFACT'S OWN

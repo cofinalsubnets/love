@@ -64,7 +64,7 @@
    ;     * ? [ is a glob against the whole relative path -- `*` crosses `/`, so
    ;     `*.vo` catches one at any depth and wants no basename rule of its own.
    ;     every other rule is a path prefix at a segment boundary: `out` takes out
-   ;     and out/host/love, never output. blank lines and # comments are skipped.
+   ;     and out/love, never output. blank lines and # comments are skipped.
    ;     tools/selfpack.l reads these too, so the dist cut and the walk agree.
    igs0 '(".sb" ".git" "out")
    ig-glob? (from 'glob 'anyglob)

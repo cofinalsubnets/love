@@ -358,10 +358,10 @@ is the glue, ~120 lines, and the whole of what it needed:
   of doomgeneric and links them with our own linker, on the host and into the kernel alike.
   **Nothing foreign is in the build**: 83 DOOM + 27 MOON objects, the WAD blob, the runtime
   slices, the vector lay and the projection — and not one `CC` line in the log. The subtlety
-  worth naming is `out/host/love0`, the bootstrap that RUNS mooncc: a bare `make` builds it
+  worth naming is `out/love0`, the bootstrap that RUNS mooncc: a bare `make` builds it
   with the ambient cc, because a bare make has no love (Makefile's own note). It is not in the
   artifact — but the claim is only airtight if it need not be, so it was checked:
-  `make CC='out/host/love mooncc' love0` builds the bootstrap with our own compiler, and the
+  `make CC='out/love mooncc' love0` builds the bootstrap with our own compiler, and the
   kernel above was then rebuilt from it. gcc is nowhere in that chain.
   Three real bugs came out of the port, all fixed with gates:
   * a **block-scope `extern` declaration did not name the file-scope object** — it bound a

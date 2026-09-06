@@ -35,7 +35,7 @@
 ; vm_compute-able, the honest misses) and the universally-quantified laws. Untranslatable asserts are
 ; skipped and counted -- never silently dropped (the trailing comment reports it).
 ; Z not nat: (3 3 3) = 3^27 would blow up unary-nat vm_compute.
-; Reads test/spec.l, writes Coq to `out`.  Run: out/host/love tools/spec2coq.l > test/proof/rocq/gen.v
+; Reads test/spec.l, writes Coq to `out`.  Run: out/love tools/spec2coq.l > test/proof/rocq/gen.v
 
 (: join (foldl (+) "")                           ; join a list of strings with + (was `cat`, which shadowed the global dyadic cat)
    ; the four interning tables, hoisted to the head of the chain: bound down beside their

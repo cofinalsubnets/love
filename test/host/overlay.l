@@ -20,7 +20,7 @@
 ;      hand-proved model by idpath bridges: compiled-from-source == proved,
 ;      certified by conversion, so every model theorem transfers for free.
 ;
-;   cat test/00-init.l test/host/overlay.l | out/host/love
+;   cat test/00-init.l test/host/overlay.l | out/love
 
 (reads (open "src/apps/lux/sigs.l" "r"))
 (reads (open "src/apps/lux/core.l" "r"))

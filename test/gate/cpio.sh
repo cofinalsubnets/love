@@ -20,7 +20,7 @@
 # Skips cleanly where cpio is missing, and takes the love binary as $1.
 set -e
 
-love=${1:-out/host/love}
+love=${1:-out/love}
 [ -x "$love" ] || { echo "cpio: no $love -- run 'make host'"; exit 1; }
 command -v cpio >/dev/null 2>&1 || { echo "cpio: no system cpio, skipped"; exit 0; }
 r=$(pwd)

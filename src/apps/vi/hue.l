@@ -1,6 +1,6 @@
 ; src/apps/vi/hue.l -- the .l syntax, written down once, for two readers: the
 ; painter in src/apps/vi/core.l's vframe, and the vim syntax file, which tools/hue2vim.l
-; generates from the very table below -- built by make into out/host/syntax.vim and
+; generates from the very table below -- built by make into out/syntax.vim and
 ; never checked in, so the two readings cannot drift apart. (they had: the syntax
 ; used to carry a hand-curated copy of the vocabulary whose own comment asked a
 ; human to re-probe it on every rename.)

@@ -5,7 +5,7 @@
 ; self-test. So this is verified the host-nif way: standalone, against the built
 ; binary (the assert macro comes from test/00-init.l):
 ;
-;   cat test/00-init.l test/host/cb.l | out/host/love      ; exits 1 on fail, prints cb: ok
+;   cat test/00-init.l test/host/cb.l | out/love      ; exits 1 on fail, prints cb: ok
 ;
 ; the same struct cb is the kernel's framebuffer console, so every law asserted
 ; here holds under inle too -- this file is the emulator's executable spec.

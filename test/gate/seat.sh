@@ -10,8 +10,8 @@
 #
 # usage: sh test/gate/seat.sh LOVE
 set -u
-love=${1:-out/host/love}
-d=out/host/.seat && mkdir -p $d
+love=${1:-out/love}
+d=out/.seat && mkdir -p $d
 fails=0
 bad=$d/broken.l; printf '(: x (foo\n' > $bad
 
@@ -35,9 +35,9 @@ want='no markdown'  ; try "papel"                src/apps/papel/papel.l --nope
 # program's, so src/core/boot/post.l's `unprime` steps it and the app still seats itself.
 # the cat is not optional: a bare `bake` snapshots a fresh egg, which registers the
 # core modules and no crew, and libra reads lint and salt. -l CAT is how the shipped
-# image is baked too (Makefile's love.baked), so this wakes the shape love ships.
+# image is baked too (Makefile's .love.baked), so this wakes the shape love ships.
 img=$d/seat.image
-if "$love" bake -l out/host/.dist-cat.l "$img" >/dev/null 2>&1; then
+if "$love" bake -l out/.dist-cat.l "$img" >/dev/null 2>&1; then
   want='unclosed ('; try "libra (under a wake)" wake "$img" src/apps/libra/libra.l $bad
 else
   echo "FAIL seat: could not bake an image to test the prime lane"; fails=$((fails+1))

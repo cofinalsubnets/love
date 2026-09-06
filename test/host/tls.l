@@ -19,7 +19,7 @@
 ;   avalanche a one-bit change anywhere changes the tag. this is the assert that
 ;            fails if the conditional subtract at the end ever stops selecting.
 ;
-; run:  cat test/00-init.l test/host/tls.l | out/host/love
+; run:  cat test/00-init.l test/host/tls.l | out/love
 
 (use "src/apps/tls/tls.l")
 

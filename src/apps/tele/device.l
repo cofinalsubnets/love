@@ -7,7 +7,7 @@
 ; estimate for a named device (peak TFLOP/s + memory GB/s), so you can size the
 ; kernel decomposition (is this layer compute- or memory-bound?) before any silicon.
 ;
-;   Run:  cat src/apps/tele/tele.l src/apps/tele/device.l | out/host/love      # then (tl-use sim-dev)
+;   Run:  cat src/apps/tele/tele.l src/apps/tele/device.l | out/love      # then (tl-use sim-dev)
 ;
 ; a "kernel" here is coarse (one gemm / one elementwise / one reduce) -- roofline
 ; granularity, the right altitude to answer "how big a gpu do I need" without a

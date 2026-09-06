@@ -176,7 +176,7 @@
        (? (string? xa) (seed-cross root xa dst)
           ; the one artifact (seed-universal U2): the seed is the laid tree's own
           ; binary, and the rebuild must be this binary, byte for byte.
-          (: out (root + "/out/host/love")
+          (: out (root + "/out/love")
              (? (src-same? exe out)
                (puts (";; fixpoint ok -- " + out + "\n"), 0)
               (say err ";; FIXPOINT NOT OK\n", 1)))))

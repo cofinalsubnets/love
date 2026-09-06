@@ -65,7 +65,7 @@ pkgfind() {                        # pkgfind <dir-glob> <witness-file>
   return 0
 }
 
-ho=out/host
+ho=out
 mc="$ho/love mooncc"
 love=$ho/love
 M4SRC=${M4SRC:-$(pkgfind 'm4-1.4*' config.h)}

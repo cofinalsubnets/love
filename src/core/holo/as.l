@@ -13,7 +13,7 @@
 ;
 ; load after holo.l + x64.l (bare, dev/test context -- the encoder primitives le32/byte/fix/modrm..
 ; are still on the global book; the eventual host path reaches them through the `holo` book):
-;   out/host/love -l src/core/holo/holo.l -l src/core/holo/x64.l -l src/core/holo/as.l ...
+;   out/love -l src/core/holo/holo.l -l src/core/holo/x64.l -l src/core/holo/as.l ...
 
 (module 'holo
 (: ;; --- the physical register file: name -> (enc width-in-bytes). the low 8 have irregular

@@ -3,7 +3,7 @@
 ; the +/* dispatch matrices are love data now, and love.c's mx.h is laid from the
 ; same datum -- so this file and the C it models cannot drift, which is the whole
 ; reason rung 2 of doc/misc/clay.md exists. run it with the table catted ahead:
-;   cat mx.l tools/mx2coq.l | out/host/love > test/proof/rocq/mx.v   (gate: test_mx)
+;   cat mx.l tools/mx2coq.l | out/love > test/proof/rocq/mx.v   (gate: test_mx)
 ;
 ; it emits Coq where the tables' shape becomes machine-checked, the shape
 ; claude.md carries as prose:

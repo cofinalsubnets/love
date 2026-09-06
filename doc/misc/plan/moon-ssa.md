@@ -205,7 +205,7 @@ until rung 6.
   floor; the census meters carry the direction. The build row is flat (clean
   artifact builds 75.5/77.6 s against 75.4/78.3 s). test_slow green through
   the seed fixpoint -- after one false FIXPOINT NOT OK from a torn artifact
-  (knob-flavored timing builds left in out/host; the compiler itself proved
+  (knob-flavored timing builds left in out; the compiler itself proved
   deterministic across processes and across the seed's own binary).
 - **rung 5 — params join; the ride loop retires.** Arrivals are interval defs
   at entry; ride/shadow/pcs become allocation outcomes. The leaf lane's

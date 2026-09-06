@@ -175,7 +175,7 @@
 ; The KINDS domain below is exactly doc/misc/proto/kinds.l's hardwired lattice, now
 ; PASSED IN as a value; the engine reproduces kinds.l's four inferences, proving
 ; the lift is behaviour-preserving. `dom` is a map (a lookup fn): (dom 'join) etc.
-; Run: out/host/love doc/misc/proto/overlay.l  (prints ok/FAIL per binding + a summary).
+; Run: out/love doc/misc/proto/overlay.l  (prints ok/FAIL per binding + a summary).
 ; ============================================================================
 ; the kanren machinery rides the `kanren` MODULE book now (src/core/boot/prel.l), and the
 ; glaze helpers this spike leaned on ride the `glaze` book

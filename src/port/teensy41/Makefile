@@ -53,14 +53,14 @@ $(eval $(p_ocopy))
 
 $(R)/$(o)/love.elf: $(objs) $(R)/$(o)/tlink.l $(lv)
 	@echo HOLO	$@
-	@cd $(R) && out/host/love $(o)/tlink.l $(o)/love.elf $(objs:$(R)/%=%)
+	@cd $(R) && out/love $(o)/tlink.l $(o)/love.elf $(objs:$(R)/%=%)
 
 # .hex (Intel HEX) is what teensy_loader_cli / the Teensy Loader GUI flash. The .bin is the
 # verification surface: byte offsets ARE flash offsets.
 $(R)/$(o)/love.hex: $(R)/$(o)/love.elf $(R)/$(o)/ocopy.l
 	@echo LOVE	$@
-	@cd $(R) && out/host/love $(o)/ocopy.l -O ihex $(o)/love.elf $(o)/love.hex
-	@cd $(R) && out/host/love $(o)/ocopy.l -O binary $(o)/love.elf $(o)/love.bin
+	@cd $(R) && out/love $(o)/ocopy.l -O ihex $(o)/love.elf $(o)/love.hex
+	@cd $(R) && out/love $(o)/ocopy.l -O binary $(o)/love.elf $(o)/love.bin
 	@python3 -c "import sys,struct; b=open('$(R)/$(o)/love.bin','rb').read(); \
 	  fcfb=struct.unpack_from('<I',b,0)[0]; ivt=struct.unpack_from('<I',b,0x1000)[0]; \
 	  entry=struct.unpack_from('<I',b,0x1004)[0]; \
@@ -83,7 +83,7 @@ flashpsram: $(R)/$(o)/psram-test.hex
 
 $(R)/$(o)/psram-test.elf: $(pt_objs) $(R)/$(o)/tlink.l $(lv)
 	@echo HOLO	$@
-	@cd $(R) && out/host/love $(o)/tlink.l $(o)/psram-test.elf $(pt_objs:$(R)/%=%)
+	@cd $(R) && out/love $(o)/tlink.l $(o)/psram-test.elf $(pt_objs:$(R)/%=%)
 $(R)/$(o)/psram-test.hex: $(R)/$(o)/psram-test.elf $(R)/$(o)/ocopy.l
 	@echo LOVE	$@
-	@cd $(R) && out/host/love $(o)/ocopy.l -O ihex $(o)/psram-test.elf $(o)/psram-test.hex
+	@cd $(R) && out/love $(o)/ocopy.l -O ihex $(o)/psram-test.elf $(o)/psram-test.hex

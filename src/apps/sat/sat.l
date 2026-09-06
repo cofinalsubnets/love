@@ -4,7 +4,7 @@
 ; assignment a map var -> 1 (true) | -1 (false), absent = unassigned. The DPLL
 ; baseline below is the correctness oracle (Stage 1); the CDCL engine (Stages 2-3:
 ; two-watched-literals bcp, 1-uip clause learning, non-chronological backjump, VSIDS
-; + Luby restarts) is built on top, validated to agree with it. Run: out/host/love
+; + Luby restarts) is built on top, validated to agree with it. Run: out/love
 ; src/apps/sat/sat.l  (strict asserts self-gate). pure app -- no love.c / love.h / host edit.
 (:
    ; --- literals --------------------------------------------------------------

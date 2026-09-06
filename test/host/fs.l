@@ -3,7 +3,7 @@
 ; (love0 carries the whole host/*.c glob since the self-host promotion); this
 ; still runs standalone against the built binary, like test/host/init.l --
 ; not in test/*.l. Run (assert comes from test/00-init.l):
-;   cat test/00-init.l test/host/fs.l | out/host/love
+;   cat test/00-init.l test/host/fs.l | out/love
 ; the conventions under test are src/host/posix.c's posix_ lane: an effect op answers
 ; () ok | an errno nom | 'badarg misuse; a value op answers the value | () | a nom.
 

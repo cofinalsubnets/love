@@ -2,7 +2,7 @@
 ; deflated archive per hosted ISA, so a bare `love cc` links without compiling
 ; 197 members first (moon.l's rtcarried; src/host/src.c answers runtime-gz).
 ;
-;   love wake out/host/mooncc0.image tools/mkrt.l out.o [arch]
+;   love wake out/mooncc0.image tools/mkrt.l out.o [arch]
 ;
 ; the object holds, per name in {id, x64, a64, rv64}, mksrc.l's pair
 ; shape 8-aligned:
@@ -100,6 +100,6 @@
    (mkrt-main av)
     (: n #av
        (1 <= n ? (mkrt (2 <= n ? (name <>av) 'x64) <av)
-        (rt-die "usage: love wake out/host/mooncc0.image tools/mkrt.l OUT.o [ARCH]")))
+        (rt-die "usage: love wake out/mooncc0.image tools/mkrt.l OUT.o [ARCH]")))
 
    (mkrt-main >argv))

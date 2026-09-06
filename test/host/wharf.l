@@ -5,7 +5,7 @@
 ; by the filesystem walk, and the corpus also runs where there is no filesystem. when
 ; a second seat bakes wharf behind its egg, these laws can move to the corpus whole.
 ;
-;   cat test/00-init.l test/host/wharf.l | out/host/love   ; exits 1 on fail
+;   cat test/00-init.l test/host/wharf.l | out/love   ; exits 1 on fail
 ;
 ; the vocabulary under test is rectangles in cells: (id row col rows cols), origins
 ; 0-based, and a bar is (dir row col len) with dir 'across or 'down.

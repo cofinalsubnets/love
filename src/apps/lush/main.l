@@ -12,11 +12,11 @@
 ; gram.l (the AST), glob.l (fnmatch + pathnames), word.l (expansion),
 ; eval.l (the engine), line.l (the repl loops), main.l (this file: the entry
 ; + the seat). run it:
-;   out/host/lush                    ; interactive (or cooked when stdin is a pipe)
-;   out/host/lush -c "echo hi"       ; one command (multi-line strings fine)
-;   out/host/lush script.sh          ; a script file, continuations gathered
-;   out/host/lush --login ..         ; a login shell: /etc/profile + ~/.profile first
-;   out/host/love -l src/apps/lush/lush.l ..   ; the module road to the same seat
+;   out/lush                    ; interactive (or cooked when stdin is a pipe)
+;   out/lush -c "echo hi"       ; one command (multi-line strings fine)
+;   out/lush script.sh          ; a script file, continuations gathered
+;   out/lush --login ..         ; a login shell: /etc/profile + ~/.profile first
+;   out/love -l src/apps/lush/lush.l ..   ; the module road to the same seat
 ; the gate: test/host/sh.l reads the parts bare (cat order) and asserts on the
 ; sh-* names; the interactive loop is probed live under script(1).
 

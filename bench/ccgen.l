@@ -2,7 +2,7 @@
 ;
 ;   love ccgen.l SRC OUT    writes SRC deflated into OUT, prints SRC's byte count
 ;
-; ⚠ IT RUNS THROUGH THE ALREADY-BUILT out/host/love, never through a lane binary. The
+; ⚠ IT RUNS THROUGH THE ALREADY-BUILT out/love, never through a lane binary. The
 ; three binaries under test live in out/bench/cc with no module path, so src/apps/gz/gz.l is
 ; out of their reach and a DEFLATE stream cannot be made where it is used -- it has to
 ; arrive as a file, and the size has to arrive with it (the nif is handed the exact

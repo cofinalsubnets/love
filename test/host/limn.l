@@ -3,7 +3,7 @@
 ; and love0 links none of them. it needs the loader too, the way its neighbour
 ; test/host/wharf.l does -- `use` finds src/apps/berth/limn.l by the filesystem walk.
 ;
-;   cat test/00-init.l test/host/limn.l | out/host/love   ; exits 1 on fail
+;   cat test/00-init.l test/host/limn.l | out/love   ; exits 1 on fail
 ;
 ; the vocabulary under test: a grid of cb cells in, escapes out. origins are
 ; 0-based going in and 1-based on the wire, which is the one conversion here.

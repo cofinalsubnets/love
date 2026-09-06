@@ -2,7 +2,7 @@
 ; `[]` is plain () and null is the named coin: the empty array is the common value (a
 ; mapped or filtered list writes `[]` with no renaming step), null the weird one. run
 ; standalone from the repo root:
-;   cat test/00-init.l test/host/json.l | out/host/love
+;   cat test/00-init.l test/host/json.l | out/love
 
 (use "src/apps/json/json.l")
 

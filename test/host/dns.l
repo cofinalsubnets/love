@@ -5,7 +5,7 @@
 ; answers a canned response built with the module's own be16 helper. Nothing
 ; leaves the loopback and nothing here reads the machine's own /etc.
 ;
-;   out/host/love test/host/dns.l      ; green dots = pass, exits 1 on fail
+;   out/love test/host/dns.l      ; green dots = pass, exits 1 on fail
 ;
 ; driven from test/host/run.l under a timeout, like the other socket laws: a
 ; resolver that stops parking stops the whole vm, and a wedged gate is worse than
@@ -73,7 +73,7 @@
 ; --- law 4: /etc/hosts answers with no packet at all ---------------------------
 ; and a fixture is the only way to say that: pointing at the machine's own file
 ; would make the gate depend on the machine.
-(: dir "out/host/.dns-t"
+(: dir "out/.dns-t"
    _ (cap (hark ["mkdir" "-p" dir]))
    hp (dir + "/hosts")
    cp (dir + "/conf")
@@ -96,7 +96,7 @@
 ; --- law 5: an empty resolv.conf still names a server --------------------------
 ; musl's fallback and nolibc's: 127.0.0.1, so a machine with no config reaches a
 ; local stub instead of answering "no such host".
-(: ns (dns-servers "out/host/.dns-t/nope")
+(: ns (dns-servers "out/.dns-t/nope")
    _ (assert (two? ns) (<(cap ns) = 2130706433)))
 
 (: _ (say out "dns: ok") (putc 10))

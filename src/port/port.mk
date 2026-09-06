@@ -18,9 +18,9 @@ o = out/$(p_dir)
 # mooncc is love's own verb (the layered bake, doc/misc/plan/one-binary.md). MOONCC is the
 # command as run FROM $(R); mc is the file the verb needs, the baked-stamp's sibling.
 # ⚠ LOVE_NO_IMAGE= leads (the guard against an exported egg): an egg-booted love has no verbs.
-MOONCC = LOVE_NO_IMAGE= out/host/love mooncc
-mc = $(R)/out/host/love.baked
-lv = $(R)/out/host/love
+MOONCC = LOVE_NO_IMAGE= out/love mooncc
+mc = $(R)/out/.love.baked
+lv = $(R)/out/love
 
 # a failed recipe takes its half-written target with it -- else a 0-byte artifact carries a
 # fresh mtime and the next make calls it up to date. the root does not include these
@@ -37,7 +37,7 @@ clean:
 
 # ⚠ FORCE, never a bare prerequisite-less rule: that fires only when the target is MISSING,
 # so a stale header or binary is served forever. ⚠ and the explicit binary rules also block
-# make's builtin `%: %.o` -- out/host/love.o sits beside the binary, and a bare prerequisite
+# make's builtin `%: %.o` -- out/love.o sits beside the binary, and a bare prerequisite
 # let the builtin "relink" love from that lone object, then delete the half-made result.
 FORCE:
 # lib_hR is what an OBJECT depends on; p_hdrs only widens what gets delegated, for a
@@ -48,9 +48,9 @@ $(sort $(lib_hR) $(addprefix $(R)/,$(p_hdrs))): FORCE
 	@$(MAKE) -C $(R) $(patsubst $(R)/%,%,$@)
 endif
 $(lv): FORCE
-	@$(MAKE) -C $(R) out/host/love
+	@$(MAKE) -C $(R) out/love
 $(mc): FORCE
-	@$(MAKE) -C $(R) out/host/love.baked
+	@$(MAKE) -C $(R) out/.love.baked
 
 # the holo cats. ⚠ the backend text is named explicitly: a frontend bakes holo with the
 # NATIVE backend only, and a port must not care which machine it is building on.
@@ -125,7 +125,7 @@ $$(R)/$$(o)/$1.o: $2.l $$(p_be_l) $$(lay_l) $$(lv)
 	@mkdir -p $$(R)/$$(o)
 	@cd $$(R) && { echo "(use 'holo)"; cat $$(be_lc) $$(kore_lc); echo "(use 'kore)"; \
 	  cat $$(filter-out $$(kore_lc),$$(lay_lc)) port/$$(p_dir)/$2.l; \
-	  echo '($2 $3)'; } | out/host/love
+	  echo '($2 $3)'; } | out/love
 endef
 
 # p_link -- the link driver's cat. $1 its stem. ⚠ an explicit target, never a pattern rule:

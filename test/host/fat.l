@@ -2,7 +2,7 @@
 ; module the kernel mounts on its virtio disk (rung 5), proven here where the
 ; laws run in milliseconds and mtools can sit on the other side of the format.
 ; run standalone from the repo root:
-;   cat test/00-init.l test/host/fat.l | out/host/love
+;   cat test/00-init.l test/host/fat.l | out/love
 
 (use "src/apps/fat/fat.l")
 

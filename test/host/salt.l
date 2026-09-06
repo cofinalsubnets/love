@@ -3,12 +3,12 @@
 ; reads them back. `salt-file` is the testable unit -- it takes the path, so a
 ; test never has to fake HOME or depend on whose machine it runs on. run
 ; standalone from the repo root:
-;   cat test/00-init.l test/host/salt.l | out/host/love
+;   cat test/00-init.l test/host/salt.l | out/love
 
 (use 'salt)
 
-(: st-dir "out/host/.salt"
-   _ (mkdir "out" 493) _ (mkdir "out/host" 493) _ (mkdir st-dir 493)
+(: st-dir "out/.salt"
+   _ (mkdir "out" 493) _ (mkdir st-dir 493)
    (st-put nm text) (: p (st-dir + "/" + nm)
                        q (open p "w")
                        _ (say q text)

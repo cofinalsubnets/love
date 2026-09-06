@@ -22,7 +22,7 @@
 ;
 ; skips (exit 0, a note) without llvm-mc. run from the repo root:
 ;
-;   out/host/love test/holo/fuzz/rvc.l
+;   out/love test/holo/fuzz/rvc.l
 ;
 ; exit 1 on any mismatch, naming the word, both spellings and the count.
 
@@ -39,7 +39,7 @@
    rv-patch (peep parts 'rv-patch ())
    rv-cbase (peep parts 'rv-cbase ())
 
-   tmpd "out/host"
+   tmpd "out"
    (sh c) (: pid (spawn ["sh" "-c" c]) (? (nom? pid) 1 (wait pid)))
    (rdf p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) t) ""))
    (wrf p t) (: q (open p "w") _ (say q t) (close q))

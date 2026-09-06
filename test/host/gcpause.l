@@ -20,7 +20,7 @@
 ;   (core nifs, every frontend; the gate stays host-side for its pool appetite
 ;   -- megabytes of tenured casks -- not for its names)
 ;
-;   cat test/00-init.l test/host/gcpause.l | out/host/love
+;   cat test/00-init.l test/host/gcpause.l | out/love
 
 (: G_LEN 0 G_GC 3 G_EVAC 7 G_OLD 8 G_MINOR 11 G_MAJCAP 12 G_MINHI 14 G_MAJHI 15
    (gget i) (peep (gauge 0) i 0)

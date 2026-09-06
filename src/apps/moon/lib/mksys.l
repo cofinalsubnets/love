@@ -21,7 +21,7 @@
 ; src/core/holo/{elf,obj}.l in a cat (the mooncc prefix layers; the assembler itself
 ; rides the baked holo book):
 ;   { cat src/apps/kore/{text,core,asbook}.l src/core/holo/{elf,obj}.l src/apps/moon/lib/mksys.l;
-;     echo '(mksys-x64 "out/.../sys.o")'; } | out/host/love
+;     echo '(mksys-x64 "out/.../sys.o")'; } | out/love
 ; register vocabulary is holo's: r0=rax r1=rcx r2=rdx r3=rbx r4=rbp r5=rsi r6=rdi
 ; r7=r8 r8=r9 r9=r10 r10=r11 r11=r12 r12=r13 r13=r14 r14=r15.
 (module 'moon

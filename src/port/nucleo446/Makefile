@@ -42,19 +42,19 @@ $(eval $(p_ocopy))
 
 $(R)/$(o)/firm.elf: $(objs) $(R)/$(o)/nlink.l $(lv)
 	@echo HOLO	$@
-	@cd $(R) && out/host/love $(o)/nlink.l $(o)/firm.elf $(objs:$(R)/%=%) $(lg)
+	@cd $(R) && out/love $(o)/nlink.l $(o)/firm.elf $(objs:$(R)/%=%) $(lg)
 
 $(R)/$(o)/smoke.elf: $(qobjs) $(R)/$(o)/nlink.l $(lv)
 	@echo HOLO	$@
-	@cd $(R) && out/host/love $(o)/nlink.l $(o)/smoke.elf $(qobjs:$(R)/%=%) $(lg)
+	@cd $(R) && out/love $(o)/nlink.l $(o)/smoke.elf $(qobjs:$(R)/%=%) $(lg)
 
 # .bin byte offsets ARE flash offsets -- verify the boot surface: a valid initial SP inside
 # SRAM and a thumb-bit reset entry inside flash (the two words a bricked-looking board
 # always traces back to).
 $(R)/$(o)/firm.hex: $(R)/$(o)/firm.elf $(R)/$(o)/ocopy.l
 	@echo LOVE	$@
-	@cd $(R) && out/host/love $(o)/ocopy.l -O ihex $(o)/firm.elf $(o)/firm.hex
-	@cd $(R) && out/host/love $(o)/ocopy.l -O binary $(o)/firm.elf $(o)/firm.bin
+	@cd $(R) && out/love $(o)/ocopy.l -O ihex $(o)/firm.elf $(o)/firm.hex
+	@cd $(R) && out/love $(o)/ocopy.l -O binary $(o)/firm.elf $(o)/firm.bin
 	@python3 -c "import struct; b=open('$(R)/$(o)/firm.bin','rb').read(); \
 	  sp=struct.unpack_from('<I',b,0)[0]; entry=struct.unpack_from('<I',b,4)[0]; \
 	  ok = 0x20000000<sp<=0x20020000 and (entry&1)==1 and 0x08000000<entry<0x08080000; \

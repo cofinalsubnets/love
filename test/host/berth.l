@@ -3,7 +3,7 @@
 ; none of them). loads the berth library off disk with reads, berths real
 ; children, and reads the grid back through the glass:
 ;
-;   cat test/00-init.l test/host/berth.l | out/host/love
+;   cat test/00-init.l test/host/berth.l | out/love
 ;
 ; interactive berthing (raw tty, keys, repaint) stays a live probe -- this
 ; verifies the moor: pty -> parser -> grid, replies riding home, exit status.
@@ -77,7 +77,7 @@
                   (? (= n (snip h i (+ i (tally n)))) 1 (find h n (+ i 1)))
                   0)
  ; (the octal escapes ride through TWO love readers before sh: hence \\\\)
- md (tether ["out/host/love" "-l" "src/apps/berth/berth.l"
+ md (tether ["out/love" "-l" "src/apps/berth/berth.l"
            "-e" "(berth [\"sh\" \"-c\" \"printf 'x\\\\342\\\\224\\\\200y\\\\303\\\\251z'; sleep 1\"])"])
  outb (slurp (cup md))
  st (: (wf p) (: g2 (gather p) (? (two? g2) g2 (: _ (rest 2) (wf p)))) (wf (cap md)))
@@ -177,7 +177,7 @@
 (: (sub? h n i) (? (< (+ i (tally n)) (+ (tally h) 1))
                    (? (= n (snip h i (+ i (tally n)))) 1 (sub? h n (+ i 1)))
                    0)
- md (tether ["out/host/love" "-l" "src/apps/berth/berth.l"
+ md (tether ["out/love" "-l" "src/apps/berth/berth.l"
              "-e" "(berth [\"sh\" \"-c\" \"sleep 5\"])"])
  _ (assert (two? md))
  m (cup md)

@@ -5,7 +5,7 @@
 ; and fail love0's self-test. So this is verified the host-nif way: standalone,
 ; against the built binary. Run it (the assert macro comes from test/00-init.l):
 ;
-;   cat test/00-init.l test/host/net.l | out/host/love      ; green dots = pass, exits 1 on fail
+;   cat test/00-init.l test/host/net.l | out/love      ; green dots = pass, exits 1 on fail
 ;
 ; It runs a whole loopback in one process: a server task accepts and echoes a
 ; line, the main task connects as a client and checks the round trip. The two

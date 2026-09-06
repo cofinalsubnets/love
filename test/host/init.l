@@ -2,7 +2,7 @@
 ; spawn/glean/wait/still link into `love` but not love0 (which bakes the corpus), so this
 ; runs standalone against the built binary, like test/host/pty.l -- not in test/*.l. Run
 ; (assert comes from test/00-init.l):
-;   cat test/00-init.l test/host/init.l | out/host/love
+;   cat test/00-init.l test/host/init.l | out/love
 ; the full pid-1 story -- mounting proc, reaping a reparented orphan -- needs love to
 ; actually be pid 1: `make init-container` (a pid+user+mount namespace). Here we
 ; cover the glean nif's three distinct returns and the spawn/wait pair.

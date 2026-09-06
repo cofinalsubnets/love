@@ -8,7 +8,7 @@
 ; comes from test/00-init.l; $lovebin names the binary under test and $lesstestdir a
 ; scratch directory it may write in):
 ;
-;   lovebin=out/host/love lesstestdir=out/host sh -c "cat test/00-init.l test/host/less.l | out/host/love"
+;   lovebin=out/love lesstestdir=out sh -c "cat test/00-init.l test/host/less.l | out/love"
 ;
 ; the pty starts 0x0 until setwinsize lands, and the child may read its size before
 ; we push one -- so nothing here asks about geometry, only about what any window

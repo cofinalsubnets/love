@@ -10,7 +10,7 @@
 ; knobs ride the environment: fuzz_n (per class, default 8), fuzz_seed, fuzz_arch
 ; (x64|a64|riscv -- holo's own names, default all three). run from the repo root:
 ;
-;   out/host/love test/holo/fuzz/fuzz.l
+;   out/love test/holo/fuzz/fuzz.l
 ;
 ; exit 1 on any failure; each failure names its class, IR, hex and reason.
 
@@ -84,7 +84,7 @@
                  (: x (pick l) (x >< pick-n (filter (\ y !(y = x)) l) (k - 1))))
 
  ; ---- subprocess plumbing: sh with redirection; bytes laid via printf octal ----
- tmpd "out/host"
+ tmpd "out"
  (sh c) (: pid (spawn ["sh" "-c" c]) (? (nom? pid) 1 (wait pid)))
  (rdf p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) t) ""))
  (wrf p t) (: q (open p "w") _ (say q t) (close q))

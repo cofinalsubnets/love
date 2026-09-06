@@ -2,7 +2,7 @@
 // math/am.c) vs the host libm oracle. deterministic sweeps (xorshift, fixed
 // seed) over per-function domains + hand-picked edges; reports max ulp +
 // where, and the >0.5/>1/>2 ulp counts. `make ulp` builds + runs it (hosted
-// only -- the oracle is glibc); `./out/host/ulp reduce` prints the sin ulp
+// only -- the oracle is glibc); `./out/ulp reduce` prints the sin ulp
 // by magnitude band (the reduction scan).
 #include <stdio.h>
 #include <stdint.h>

@@ -260,7 +260,7 @@ owes a roster gate: on linux, assert the linux features are aboard.
     stay off the map: ENOSYS, loudly. Gate: test_freebsd's UV2 leg runs
     the ENTIRE rung2 battery from one default-lane binary, byte-identical
     text and status on both kernels. Standing evidence past the gate: the
-    tree's own out/host/love, branded by one dd byte, ran the repl and
+    tree's own out/love, branded by one dd byte, ran the repl and
     `love source` ON THE BOX — the tree laid whole, bin/love copied in by
     the runtime selfpath, and the laid love answered. The socket FAMILY
     LANDED 2026-08-18: sockaddr heads rebuilt through __ai_sain/__ai_saout
@@ -280,7 +280,7 @@ owes a roster gate: on linux, assert the linux features are aboard.
     exe is now BORN branded EI_OSABI=9 (the linux loader never reads the
     byte, freebsd's imgact refuses without it) — the on-box seed run forced
     the ruling: the whole build succeeded on freebsd and then its own
-    freshly-linked love failed exec, unbranded. out/host/love needs no dd
+    freshly-linked love failed exec, unbranded. out/love needs no dd
     anywhere now. LANDED 2026-08-18: the gate's `-os freebsd` build legs
     are DELETED (`-os` stays a mooncc cross dimension for foreign C, and
     the OS left love's artifact space: per-ISA bytes, every kernel); the
@@ -385,7 +385,7 @@ owes a roster gate: on linux, assert the linux features are aboard.
     this every refusal left in the BSD lanes is inherent (STKFLT/PWR
     have no twin; memfd/unshare/mount are linux's own words).
 - **rung U2 — the targets DISSOLVE.** Decided 2026-08-16 (chosen, revisable);
-  Landed 2026-08-17: ONE binary. The host build is subsumed — out/host/love
+  Landed 2026-08-17: ONE binary. The host build is subsumed — out/love
   links the source blob + readme and, baked, IS the artifact (`make` in a clean
   tree produces love0 and the seed, nothing else); love-x64/love-a64
   and the dist_cross twin are gone as products (`dist-seed` is the tree's

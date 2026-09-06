@@ -9,7 +9,7 @@
 ; can desync the other (the one-process attempt kept mis-reading geometry;
 ; a -displayfd handshake is the cure).
 ;
-;   cat test/00-init.l test/host/luxui.l | out/host/love
+;   cat test/00-init.l test/host/luxui.l | out/love
 ;
 ; no Xvfb on the box -> a polite skip (the sentinel still prints).
 
@@ -53,10 +53,10 @@
  ; HOME rides too, at a scratch seat: src/apps/lux/config.l reads ~/.love/etc/lux.l
  ; through salt, and the probe below drives named chords (super+space) against the
  ; stock layout -- so the box's own lux config must not reach this gate.
- luxhome "out/host/.luxui-home"
+ luxhome "out/.luxui-home"
  _ (mkdir luxhome 493)                                                          ; already there -> -EEXIST, which is the same good news
  ph (tether ["env" (+ "DISPLAY=:" (show dn)) (+ "HOME=" luxhome)
-           "out/host/love" "-l" "src/apps/lux/core.l" "-l" "src/apps/lux/layout.l"
+           "out/love" "-l" "src/apps/lux/core.l" "-l" "src/apps/lux/layout.l"
            "-l" "src/apps/lux/wire.l" "-l" "src/apps/lux/ewmh.l"
            "-l" "src/apps/lux/manage.l" "-l" "src/apps/lux/keys.l"
            "-l" "src/apps/lux/config.l" "-l" "src/apps/lux/lux.l"])
@@ -66,7 +66,7 @@
  ; the probe: its own process, its own streams; it waits for lux itself
  ; (_NET_SUPPORTED on the root), drives, asserts, and exits 0 or names its
  ; failure. Its pty is echoed either way -- a red run tells its story here.
- pr (tether ["out/host/love" "-l" "src/apps/lux/core.l" "-l" "src/apps/lux/layout.l"
+ pr (tether ["out/love" "-l" "src/apps/lux/core.l" "-l" "src/apps/lux/layout.l"
            "-l" "src/apps/lux/wire.l" "-l" "test/host/luxui-probe.l"
            "-e" (+ "(probe \"" (+ dpy "\")"))])
  _ (must 'probe-up (two? pr))

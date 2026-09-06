@@ -9,7 +9,7 @@
 ; /bin/kore (+ applet symlinks) and /lib/sh.l. boot line:
 ;   qemu ... -kernel <bzImage> -initrd initramfs.cpio.gz -append "console=ttys0 rdinit=/init"
 ;
-; safe to dry-run on the host: `out/host/love init/boot.l` sees getpid != 1, prints the
+; safe to dry-run on the host: `out/love init/boot.l` sees getpid != 1, prints the
 ; banner and returns -- no mounts, no shell handoff (so it never blocks a dev machine).
 (: (say1 s) (: _ (puts s) (puts "\n"))              ; a console line
 

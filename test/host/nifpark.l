@@ -3,7 +3,7 @@
 ; instead of stopping the whole vm inside a syscall. The device floor made every
 ; device entry point nonblocking; this is the layer where the caller is a nif.
 ;
-;   out/host/love test/host/nifpark.l      ; green dots = pass, exits 1 on fail
+;   out/love test/host/nifpark.l      ; green dots = pass, exits 1 on fail
 ;
 ; driven from test/host/run.l under a timeout, because most of these regressions
 ; are hangs rather than red asserts: a blocking `accept` with an empty backlog waits

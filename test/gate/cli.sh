@@ -16,8 +16,8 @@
 #
 # usage: sh test/gate/cli.sh LOVE
 set -u
-love=${1:-out/host/love}
-d=out/host/.cli && mkdir -p $d
+love=${1:-out/love}
+d=out/.cli && mkdir -p $d
 fails=0
 torn=$d/torn.l; printf '(: x (foo\n' > $torn
 

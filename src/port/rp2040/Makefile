@@ -46,7 +46,7 @@ $(eval $(p_ocopy))
 # Read back rather than trusted -- nothing here is both writable and executable.
 $(R)/$(o)/love.elf: $(objs) $(R)/$(o)/rlink.l $(lv)
 	@echo HOLO	$@
-	@cd $(R) && out/host/love $(o)/rlink.l $(o)/love.elf $(objs:$(R)/%=%) $(lg)
+	@cd $(R) && out/love $(o)/rlink.l $(o)/love.elf $(objs:$(R)/%=%) $(lg)
 	@python3 -c "import struct; b=open('$(R)/$(o)/love.elf','rb').read(); \
 	  po,pe,pn = struct.unpack_from('<I',b,28)[0], struct.unpack_from('<H',b,42)[0], struct.unpack_from('<H',b,44)[0]; \
 	  ph=[struct.unpack_from('<8I',b,po+i*pe) for i in range(pn)]; \
@@ -63,7 +63,7 @@ $(R)/$(o)/love.elf: $(objs) $(R)/$(o)/rlink.l $(lv)
 # three wrong and the board just sits there.
 $(R)/$(o)/love.bin: $(R)/$(o)/love.elf $(R)/$(o)/ocopy.l
 	@echo LOVE	$@
-	@cd $(R) && out/host/love $(o)/ocopy.l -O binary $(o)/love.elf $(o)/love.bin
+	@cd $(R) && out/love $(o)/ocopy.l -O binary $(o)/love.elf $(o)/love.bin
 	@python3 -c "import struct; b=open('$(R)/$(o)/love.bin','rb').read(); \
 	  crc=struct.unpack_from('<I',b,252)[0]; sp,e=struct.unpack_from('<II',b,256); \
 	  ok = crc==0x7a4eb274 and 0x20000000<sp<=0x20042000 and (e&1)==1 and 0x10000100<e<0x10200000; \

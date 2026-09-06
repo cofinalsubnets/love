@@ -49,13 +49,13 @@ BC=; BI=; BT=
 for conf in $CONFS; do
   env=$conf; [ "$conf" = base ] && env=
   # every configuration compiles all of love and must close the fixpoint
-  rm -rf out/host/moon out/host/fix
+  rm -rf out/moon out/fix
   if ! MOON_ABLATE=$env make test_fixpoint > "$WORK/fix.$conf.log" 2>&1; then
     printf '%-12s FAILS THE FIXPOINT (out/bench/ablate/fix.%s.log)\n' "$conf" "$conf"
     continue
   fi
   bin=$WORK/love1.$(printf '%s' "$conf" | tr , +)
-  cp out/host/fix/love1 "$bin"
+  cp out/fix/love1 "$bin"
   txt=$(size -A "$bin" | awk '$1==".text"{print $2}')
   set -- $(pmeasure "$bin")
   cyc=$1; ins=$2
@@ -66,7 +66,7 @@ for conf in $CONFS; do
            n, c, (c/bc-1)*100, i, (i/bi-1)*100, t, (t/bt-1)*100}'
 done
 echo "moon-ablate: deltas vs the FIRST row; +-0.7% is the cycle floor on this box (moon-gauge)"
-# the last configuration left out/host ablated: dirty the moon objects so the next
+# the last configuration left out ablated: dirty the moon objects so the next
 # make rebuilds clean -- a seed against an ablated artifact reads FIXPOINT NOT OK
-rm -rf "$R"/out/host/moon "$R"/out/host/fix
-echo "moon-ablate: out/host/moon cleared -- the next make rebuilds the artifact clean"
+rm -rf "$R"/out/moon "$R"/out/fix
+echo "moon-ablate: out/moon cleared -- the next make rebuilds the artifact clean"

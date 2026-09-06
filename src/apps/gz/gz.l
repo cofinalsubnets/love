@@ -400,9 +400,9 @@
    ; up, against the fifteen or so three literals cost -- so past some reach it is a
    ; loss, and a greedy parse takes it anyway and blocks the longer match one byte on.
    ; refusing them past 4096 pays everywhere measured: the source tarball 2984599 ->
-   ; 2960320, this tree's .l files 32094 -> 31862, out/host/love 1225045 -> 1216277.
+   ; 2960320, this tree's .l files 32094 -> 31862, out/love 1225045 -> 1216277.
    ; and refusing them outright does not. text likes it (the tarball goes on to
-   ; 2949504) and binaries do not -- out/host/love swells to 1275300, 4.6% worse.
+   ; 2949504) and binaries do not -- out/love swells to 1275300, 4.6% worse.
    gz-toofar 4096
    ; `fn` is the finder, handed down rather than read: gz-find above or the machine
    ; code that says the same thing, and which one is settled once per deflate.

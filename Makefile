@@ -8,9 +8,9 @@ CCACHE :=
 endif
 
 # bootstrap interpreter
-love0 = out/host/love0
+love0 = out/love0
 
-.PHONY: all install uninstall clean distclean host kernel wasm love0 lint ccdb ulp \
+.PHONY: all install uninstall clean distclean host kernel wasm love0 lint ulp \
   site site-serve valg disasm flame cat cata catav perf repl gdb bench cloc
 
 # an unpacked release builds the product; a checkout keeps the fast gate
@@ -87,7 +87,7 @@ out/lib/readme.bin: $(love0) $(R)/src/core/boot/post.l $(R)/VERSION
 	@$(love0) -h </dev/null >> $@
 	@echo 'LOVE	'$@
 
-ho = out/host$(hsuf)
+ho = out$(hsuf)
 h_o = $(love_c:$(R)/%.c=$(ho)/%.o)
 host_o = $(host_c:$(R)/%.c=$(ho)/%.o)
 hcc = LOVE_NO_IMAGE= $(CC) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Isrc/core -Isrc/host -Isrc/inle -Iout/lib
@@ -98,34 +98,34 @@ $(ho)/.hostcc: force_hostcc
 	@mkdir -p $(ho)
 	@tf=$@.$$$$.tmp; printf '%s\n' '$(CC) $(image_ldflags)' > $$tf; \
 	 $(note)
-host: $(ho)/love $(ho)/love.baked $(ho)/love.1 $(ho)/cook.1
+host: $(ho)/love $(ho)/.love.baked $(ho)/love.1 $(ho)/cook.1
 love0: $(love0)
 
-$(ho)/love.baked $(ho)/love.cand.baked: %.baked: % $(ho)/.dist-cat.l
+$(ho)/.love.baked $(ho)/.love.cand.baked: $(ho)/.%.baked: $(ho)/% $(ho)/.dist-cat.l
 	@echo 'LOVE	'$< "(bake)"
 	@$< bake -l $(ho)/.dist-cat.l
 	@touch $@
 
 .PHONY: candidate
-candidate: $(ho)/love.cand.baked
+candidate: $(ho)/.love.cand.baked
 
 $(ho)/liblove.a: $(h_o)
 	@echo 'AR	'$@
 	@mkdir -p $(dir $@)
 	@rm -f $@; ar rcs $@ $^
 
-# pinned to out/host/0, never $(ho)/0: love0 is one binary whatever HCC and tco say
-love0_o = $(patsubst $(R)/%.c,out/host/0/%.o,$(filter-out $(R)/src/host/cats.c,$(host_c)) $(love_c))
-out/host/0/src/host/main.o: out/lib/boot0.h
-out/host/0/src/host/cb.o: src/core/quay/quay.c src/core/quay/nif.c src/core/quay/quay.h
+# pinned to out/0, never $(ho)/0: love0 is one binary whatever HCC and tco say
+love0_o = $(patsubst $(R)/%.c,out/0/%.o,$(filter-out $(R)/src/host/cats.c,$(host_c)) $(love_c))
+out/0/src/host/main.o: out/lib/boot0.h
+out/0/src/host/cb.o: src/core/quay/quay.c src/core/quay/nif.c src/core/quay/quay.h
 boot_cc = $(CCACHE) $(CC) $(ai_cflags) -fPIE -DLoveBoot -Dai_tco=0 -Dai_data_section=0 -DAiVersion='"$(love_base)+bootstrap"' -I. -Isrc/core -Isrc/host -Isrc/inle -Iout/lib
 .PHONY: force_love0cc
 force_love0cc: ;
-out/host/0/.love0cc: force_love0cc
+out/0/.love0cc: force_love0cc
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; printf '%s\n' '$(boot_cc)' > $$tf; \
 	 $(note)
-out/host/0/%.o: $(R)/%.c $(love_h) out/host/0/.love0cc
+out/0/%.o: $(R)/%.c $(love_h) out/0/.love0cc
 	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(boot_cc) -c $< -o $@
@@ -134,7 +134,7 @@ $(love0): $(love0_o)
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(CC) $(ai_cflags) -pie -o $@ $(love0_o)
 
-# src/core/love.c -> out/host/*.o
+# src/core/love.c -> out/*.o
 $(ho)/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
 	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
@@ -151,8 +151,8 @@ $(ho)/src/host/main.o $(ho)/src/host/ustar.o: $(R)/src/host/ustar.h
 # src/host/cb.c rides the src/core/quay sources by unity include -- recompile when they move.
 $(ho)/src/host/cb.o: src/core/quay/quay.c src/core/quay/nif.c src/core/quay/quay.h
 
-moon0 = $(love0) wake out/host/mooncc0.image mooncc $(GCDBG)
-moon0_dep = out/host/mooncc0.image
+moon0 = $(love0) wake out/mooncc0.image mooncc $(GCDBG)
+moon0_dep = out/mooncc0.image
 # THE MOONCC OBJECT LANE: love's own C compiled by mooncc into one directory, worn twice --
 # at the host's arch, and at the cross arch $(xa) names. $(call moonlane,NAME,DIRVAR,CCVAR,
 # ARCHVAR), every argument but the first a variable NAME so the body stays deferred; the
@@ -180,10 +180,10 @@ $$($(2))/m_%.o: src/apps/moon/lib/math/%.c $$(moon0_dep)
 	@$$($(3)) -Isrc/apps/moon/lib/math -Isrc/apps/moon/include -c $$< $$@
 # the machine tail rides the host's own cat, one cut for every consumer; only the entry
 # names the arch.
-$$($(2))/sys.o: out/host/.mksys-cat.l $$(love0)
+$$($(2))/sys.o: out/.mksys-cat.l $$(love0)
 	@echo 'HOLO	'$$@
 	@mkdir -p $$(dir $$@)
-	@LOVE_NO_IMAGE= $$(love0) -l out/host/.mksys-cat.l -q -e "((from 'moon 'mksys-$$($(4))) \"$$@\")" && test -s $$@
+	@LOVE_NO_IMAGE= $$(love0) -l out/.mksys-cat.l -q -e "((from 'moon 'mksys-$$($(4))) \"$$@\")" && test -s $$@
 endef
 
 moon_d = $(ho)/moon
@@ -193,11 +193,11 @@ mksys_l = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l \
           src/core/holo/elf.l src/core/holo/obj.l src/apps/moon/lib/mksys.l
 .PHONY: force_dist_list
 force_dist_list: ;
-out/host/.mksys-cat.list: force_dist_list
+out/.mksys-cat.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(mksys_l)' > $$tf; \
 	 $(note)
-out/host/.mksys-cat.l: $(mksys_l) out/host/.mksys-cat.list
+out/.mksys-cat.l: $(mksys_l) out/.mksys-cat.list
 	@echo 'CAT	'$@
 	@mkdir -p $(dir $@)
 	@cat $(mksys_l) > $@
@@ -209,10 +209,10 @@ $(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/src/cor
 else
 nolibc_src = $(wildcard src/apps/moon/lib/nolibc/*.c src/apps/moon/lib/nolibc/*.h \
                         src/apps/moon/lib/nolibc/*/*.c src/apps/moon/lib/nolibc/*/*.h)
-$(ho)/love $(ho)/love.cand: $(moon_o) out/host/src.o out/host/rt.o out/lib/readme.bin $(nolibc_src)
+$(ho)/love $(ho)/love.cand: $(moon_o) out/src.o out/rt.o out/lib/readme.bin $(nolibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) $(kart_o) out/host/src.o out/host/rt.o -freadme=out/lib/readme.bin -o $@
+	@$(moon0) -pie $(moon_o) $(kart_o) out/src.o out/rt.o -freadme=out/lib/readme.bin -o $@
 endif
 
 $(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md tools/mkman.l src/apps/lapiz/lapiz.l out/lib/love_version.h $(ho)/love
@@ -239,9 +239,9 @@ $(ho)/sb $(ho)/lush:
 	@mkdir -p $(dir $@)
 	@{ echo '#!/usr/bin/env -S love'; cat $^; } > $@
 	@chmod 755 $@
-out/host/mooncc0.image: out/host/.mooncc-cat.l $(love0)
+out/mooncc0.image: out/.mooncc-cat.l $(love0)
 	@echo 'LOVE	'$@
-	@$(love0) -l out/host/.mooncc-cat.l -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
+	@$(love0) -l out/.mooncc-cat.l -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
 
 distfiles = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps/kore/fs.l src/apps/kore/sum.l src/apps/kore/re.l \
             src/apps/kore/sed.l src/apps/kore/awk.l src/apps/kore/expr.l src/apps/kore/bc.l src/apps/kore/proc.l src/apps/kore/less.l src/apps/libra/lint.l src/apps/vi/config.l src/apps/vi/hue.l \
@@ -278,7 +278,7 @@ ifneq ($(HCC),)
 dist-seed:
 	$(error dist: the HCC flavor is a differential, not the artifact -- drop HCC=)
 else
-dist-seed: $(ho)/love.baked
+dist-seed: $(ho)/.love.baked
 endif
 dist: dist-source dist-seed   # a release is both
 
@@ -294,16 +294,16 @@ $(dist_source): force_src $(love0)
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
 
-out/host/src.o: $(dist_source) tools/mksrc.l out/host/.mksys-cat.l $(love0)
-	@$(love0) -l out/host/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(hosta)
+out/src.o: $(dist_source) tools/mksrc.l out/.mksys-cat.l $(love0)
+	@$(love0) -l out/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(hosta)
 
 rt_slice = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h \
                       src/apps/moon/lib/*.l \
                       src/apps/moon/lib/nolibc/*.c src/apps/moon/lib/nolibc/*.h \
                       src/apps/moon/lib/nolibc/*/*.c src/apps/moon/lib/nolibc/*/*.h \
                       src/apps/moon/lib/math/*.c)
-out/host/rt.o: $(rt_slice) tools/mkrt.l out/host/mooncc0.image $(love0)
-	@$(love0) wake out/host/mooncc0.image tools/mkrt.l $@ $(hosta)
+out/rt.o: $(rt_slice) tools/mkrt.l out/mooncc0.image $(love0)
+	@$(love0) wake out/mooncc0.image tools/mkrt.l $@ $(hosta)
 
 xqemu_x64  = qemu-x86_64
 xqemu_a64 = qemu-aarch64
@@ -317,16 +317,16 @@ xd = out/x-$(xa)
 moonx = $(moon0) -t $(xa)
 $(eval $(call moonlane,x,xd,moonx,xa))
 
-$(xd)/src.o: $(dist_source) tools/mksrc.l out/host/.mksys-cat.l $(love0)
-	@$(love0) -l out/host/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(xa)
-$(xd)/rt.o: $(rt_slice) tools/mkrt.l out/host/mooncc0.image $(love0)
-	@$(love0) wake out/host/mooncc0.image tools/mkrt.l $@ $(xa)
+$(xd)/src.o: $(dist_source) tools/mksrc.l out/.mksys-cat.l $(love0)
+	@$(love0) -l out/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(xa)
+$(xd)/rt.o: $(rt_slice) tools/mkrt.l out/mooncc0.image $(love0)
+	@$(love0) wake out/mooncc0.image tools/mkrt.l $@ $(xa)
 $(xd)/love: $(x_o) $(xd)/src.o $(xd)/rt.o out/lib/readme.bin
 	@echo 'MOON	'$@
 	@$(moonx) -pie $(x_o) $(xkart_o) $(xd)/src.o $(xd)/rt.o -freadme=out/lib/readme.bin -o $@
 fat = out/dist/love-fat
 .PHONY: dist-fat
-dist-fat: $(ho)/love.baked $(xd)/love tools/fatpack.l
+dist-fat: $(ho)/.love.baked $(xd)/love tools/fatpack.l
 	@mkdir -p out/dist
 	@$(love0) tools/fatpack.l $(fat) $a $(ho)/love $(xa) $(xd)/love
 	@chmod +x $(fat)
@@ -360,7 +360,7 @@ distro_img   = $(distro_dir)/initramfs.cpio.gz
 # ⚠ the base love MUST be static -- a bare initramfs has no ld.so or glibc. love-raw is it:
 # gcc-free, our own linker over nolibc, and 935K against the baked love's ~11M, which is
 # what an initramfs wants carried into RAM. `make test_raw` lays it.
-distro_love    = $(wildcard out/host/love-raw)
+distro_love    = $(wildcard out/love-raw)
 # kore applets to expose as argv[0] symlinks (kore dispatches on the basename).
 distro_applets = ls cat head tail wc sort uniq grep sed awk find cut tr nl rev cp mv rm \
                  mkdir rmdir ln touch pwd chmod basename dirname seq yes true \
@@ -372,7 +372,7 @@ BZIMAGE ?= /boot/vmlinuz-linux
 .PHONY: distro-initramfs distro-run distro-smoke
 distro-initramfs: $(distro_img)
 $(distro_img): src/apps/init/boot.l $(lushfiles) $(korefiles) $(distro_love)
-	@test -n "$(distro_love)" || { echo "distro: no out/host/love-raw -- run 'make test_raw' to lay it"; exit 1; }
+	@test -n "$(distro_love)" || { echo "distro: no out/love-raw -- run 'make test_raw' to lay it"; exit 1; }
 	@echo 'DISTRO	'$@ '(base: $(distro_love))'
 	@rm -rf $(distro_root)
 	@mkdir -p $(distro_root)/bin $(distro_root)/lib $(distro_root)/proc $(distro_root)/sys $(distro_root)/dev $(distro_root)/tmp
@@ -418,7 +418,7 @@ distro-smoke: $(distro_img)
 	@grep -qE "kore ls /proc -> exit 0, [1-9]" $(distro_dir)/boot.log && echo "  OK kore userland runs (ls /proc, forked+captured)" || { echo "  FAIL userland self-check"; exit 1; }
 	@echo "-- distro smoke passed --"
 
-ko = out/free
+ko = out
 
 # the kernel's verbs; its gates are test/test.mk's.
 .PHONY: kmain_o run run-$a run-sh run-headless init-container uefi
@@ -427,7 +427,7 @@ ko = out/free
 # binary, so nothing foreign builds the kernel and there is no second cc to name.
 # LOVE_NO_IMAGE= leads: an egg-booted love has no verbs.
 mooncc = LOVE_NO_IMAGE= $(ho)/love mooncc
-mooncc_dep = $(ho)/love.baked
+mooncc_dep = $(ho)/.love.baked
 
 # this machine's metal files, and the three TUs only a kernel has a frontend for.
 k_arch_c = $(wildcard $(R)/src/inle/$a/*.c)
@@ -469,10 +469,10 @@ $(k_odir)/rt.o: $(rt_slice) tools/mkrt.l $m
 	@echo 'LOVE	'$@
 	@mkdir -p "$(dir $@)"
 	@$m tools/mkrt.l $@ $a
-$(k_odir)/src.o: $(dist_source) tools/mksrc.l out/host/.mksys-cat.l $m
+$(k_odir)/src.o: $(dist_source) tools/mksrc.l out/.mksys-cat.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $m -l out/host/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $a
+	@LOVE_NO_IMAGE= $m -l out/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $a
 $(k_pie): $(k_o) $m
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
@@ -579,10 +579,10 @@ $(k_odir)/doom/%.o: $(doom_d)/%.c $(mooncc_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
-$(k_odir)/doom/wad.o: $R/dl/doom1.wad tools/mkblob.l out/host/.mksys-cat.l $m
+$(k_odir)/doom/wad.o: $R/dl/doom1.wad tools/mkblob.l out/.mksys-cat.l $m
 	@echo 'MKBLOB	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $m -l out/host/.mksys-cat.l tools/mkblob.l $< $@ doom_wad $a
+	@LOVE_NO_IMAGE= $m -l out/.mksys-cat.l tools/mkblob.l $< $@ doom_wad $a
 # and the same set on the KART lane, which is where the host's own kernel is
 # built (plan C2: the artifact carries it) -- so `make kernel DOOM=1` at $(hosta)
 # rides these and the cross odir rides the rows above.
@@ -594,10 +594,10 @@ $(moon_d)/kd_%.o: $(doom_d)/%.c $(moon0_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
 	@$(moon0) $(kart_inc) -c $< $@
-$(moon_d)/kd_wad.o: $R/dl/doom1.wad tools/mkblob.l out/host/.mksys-cat.l $(love0)
+$(moon_d)/kd_wad.o: $R/dl/doom1.wad tools/mkblob.l out/.mksys-cat.l $(love0)
 	@echo 'MKBLOB	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $(love0) -l out/host/.mksys-cat.l tools/mkblob.l $< $@ doom_wad $(hosta)
+	@LOVE_NO_IMAGE= $(love0) -l out/.mksys-cat.l tools/mkblob.l $< $@ doom_wad $(hosta)
 endif
 
 $(ho)/love $(ho)/love.cand: $(kart_o)
@@ -624,10 +624,10 @@ $(k_lay_o) $(k_boot_o): $(k_odir)/$a/%.o: $(k_odir)/mk%.l $m
 
 # the machine tail rides the host's own cat (flavour-neutral, one cut for every
 # consumer); only the entry names the arch.
-$(k_tail_o): out/host/.mksys-cat.l $m
+$(k_tail_o): out/.mksys-cat.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@$m -l out/host/.mksys-cat.l -q -e "((from 'moon 'mksys-$a) \"$@\")" && test -s $@
+	@$m -l out/.mksys-cat.l -q -e "((from 'moon 'mksys-$a) \"$@\")" && test -s $@
 
 k_kvm = $(if $(and $(wildcard /dev/kvm),$(filter x64,$a),$(filter x64,$(hosta))),-enable-kvm -cpu host,)
 k_qemu_x64 = -M q35 -serial stdio
@@ -667,7 +667,7 @@ k_efiname_a64 = BOOTAA64.EFI
 k_efiname = $(k_efiname_$a)
 k_uefid = $(ko)/uefi-$a
 k_espd = $(ko)/esp-$a
-$(k_uefid)/loader.o: $R/src/inle/uefi/loader.c $(ho)/love.baked
+$(k_uefid)/loader.o: $R/src/inle/uefi/loader.c $(ho)/.love.baked
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(mooncc) -t $a -c $< $@
@@ -777,7 +777,7 @@ uninstall:
 # UNSTRIPPED deliberately: stripping drops the symbol table holo lays on purpose, for ~2%
 # of a baked binary. binutils strip IS safe on our ELF (every loaded byte has a covering
 # section header), so a user who wants it smaller can strip their own.
-$d/bin/$(BIN): $(ho)/love $(ho)/love.baked
+$d/bin/$(BIN): $(ho)/love $(ho)/.love.baked
 	@echo 'CP	'$(abspath $@)
 	@install -D -m 755 $< $@
 # the boot image travels INSIDE the binary (.image is an allocated PROGBITS section, the
@@ -792,10 +792,10 @@ $d/bin/$(BIN): $(ho)/love $(ho)/love.baked
 # (use 'salt), and (use 'lapiz) on the doc verb alone) and ride the baked image.
 # ⚠ each source sits FIRST on its own line: instool reads $<, and a prerequisite added on
 # the grouped line below lands ahead of it -- which installs the kore shim as `cook`.
-$d/bin/cook:    src/apps/cook/cook.l    $(ho)/love.baked
-$d/bin/papel:   src/apps/papel/papel.l  $(ho)/love.baked
-$d/bin/kiosko:  src/apps/kiosko/kiosko.l $(ho)/love.baked
-$d/bin/libra:   src/apps/libra/libra.l  $(ho)/love.baked
+$d/bin/cook:    src/apps/cook/cook.l    $(ho)/.love.baked
+$d/bin/papel:   src/apps/papel/papel.l  $(ho)/.love.baked
+$d/bin/kiosko:  src/apps/kiosko/kiosko.l $(ho)/.love.baked
+$d/bin/libra:   src/apps/libra/libra.l  $(ho)/.love.baked
 $d/bin/cook $d/bin/papel $d/bin/kiosko $d/bin/libra:
 	@echo $(instag)	$(abspath $@)
 	@mkdir -p $(@D)
@@ -804,7 +804,7 @@ $d/bin/cook $d/bin/papel $d/bin/kiosko $d/bin/libra:
 # ain, the netcat clone: the same shebang mechanism, but installed as a COPY rather than a
 # symlink, so it takes the rewrite unconditionally. At the default BIN the substitution is
 # an identity and the bytes are unchanged.
-$d/bin/ain: src/apps/ain/ain.l $(ho)/love.baked
+$d/bin/ain: src/apps/ain/ain.l $(ho)/.love.baked
 	@echo 'CP	'$(abspath $@)
 	@install -d $(@D)
 	@$(korecmd) sed '1s|env -S love|env -S $(BIN)|' $< > $@
@@ -873,7 +873,7 @@ $d/bin/bao: $(MAKEFILE_LIST)
 
 # the .TH command name follows BIN too (`man lovelang` should not head LOVE(1));
 # the other `love`s on that line are the PROJECT and the version string, so they stay.
-$d/share/man/man1/$(BIN).1: $(ho)/love.1 $(ho)/love.baked
+$d/share/man/man1/$(BIN).1: $(ho)/love.1 $(ho)/.love.baked
 	@echo 'CP	'$(abspath $@)
 	@install -d $(@D)
 	@$(korecmd) sed '1s|"LOVE"|"$(BINUP)"|' $< > $@
@@ -895,8 +895,6 @@ all: host kernel wasm dist
 lint: $(ho)/love
 	@$(ho)/love $R/src/apps/libra/libra.l $$(git ls-files '*.l') && echo "lint: parens balance"
 
-ccdb: $(ho)/love
-	@$(ho)/love $R/tools/ccdb.l
 
 crewtools = $(foreach d,$(wildcard src/apps/*),$(wildcard $d/$(notdir $d).l))
 sitetools = $(foreach f,$(crewtools),\
@@ -937,15 +935,15 @@ valg: host
 	valgrind --error-exitcode=1 --suppressions=$R/tools/valgrind.supp $m $(ho)/.valg-corpus.l </dev/null
 .PHONY: ulp
 ulp:
-	@mkdir -p out/host
-	@$(CC) -O2 -o out/host/ulp $R/tools/ulp.c $R/src/apps/moon/lib/math/am.c -lm
-	@out/host/ulp
-out/host/perf.data: host
+	@mkdir -p out
+	@$(CC) -O2 -o out/ulp $R/tools/ulp.c $R/src/apps/moon/lib/math/am.c -lm
+	@out/ulp
+out/perf.data: host
 	cat $t | perf record -o $@ $m
-perf: out/host/perf.data
+perf: out/perf.data
 	exec perf report -i $<
-flame: out/host/flamegraph.svg
-out/host/flamegraph.svg: out/host/perf.data
+flame: out/flamegraph.svg
+out/flamegraph.svg: out/perf.data
 	flamegraph -o $@ --perfdata $<
 repl: host
 	@exec $m

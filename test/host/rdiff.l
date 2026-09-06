@@ -1,7 +1,7 @@
 ; --- test/host/rdiff.l: the reader differential ---
 ; two readers, one text, one comparison -- the oracle rungs 5-6 were built against.
 ; run standalone from the repo root:
-;   cat test/00-init.l test/host/rdiff.l | out/host/love
+;   cat test/00-init.l test/host/rdiff.l | out/love
 ;
 ; the input set is the tree: every .l under the root, walked off readdir (not off
 ; git -- an untracked stray in the tree is still text the reader must read), read form by

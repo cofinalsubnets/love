@@ -220,7 +220,7 @@ suffix names the commit that built *the compiler*, so it would make `love1` — 
 mooncc — and `love2` — built by love1's — differ at `e_shoff` and name a broken fixpoint where
 the two compilers agree on every byte they *emit*. The base moves with a release, which both
 generations share; `love0` is stamped `$(love_base)+bootstrap` for exactly this, and
-`out/host/0/.love0cc` content-stamps that compile line so a `./VERSION` bump rebuilds it (make
+`out/0/.love0cc` content-stamps that compile line so a `./VERSION` bump rebuilds it (make
 tracks files, not flag strings, and a stale love0 would fail the fixpoint at a byte offset with
 nothing to say about the cause). A reader wanting the commit reads `love-version` in `.rodata`.
 
@@ -468,7 +468,7 @@ one of those would print nonsense over every usage error and flatten its 2 to a 
 boot with no `moon-main`, so never mix builds by hand.
 
 ⚠ A catted app is `#!/usr/bin/env -S love` plus the cat, so a bare `mooncc` runs on the PATH
-`love` — a STALE install mis-runs it. Probe the repo cat with `./out/host/love out/host/mooncc`,
+`love` — a STALE install mis-runs it. Probe the repo cat with `./out/love out/mooncc`,
 never a bare `mooncc`, until `make install` refreshes the PATH binary.
 
 ## testing

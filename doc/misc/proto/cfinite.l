@@ -33,9 +33,9 @@
 ; should deopt to THIS (O(log n) fast-doubling on huge numbers), not to the naive O(n) interpreted
 ; bignum loop it falls back to today. so this is a generality + worst-case-regime win, not a bench cell.
 ;
-; run:    out/host/love doc/misc/proto/cfinite.l                         (the demo; standalone `assert` is
+; run:    out/love doc/misc/proto/cfinite.l                         (the demo; standalone `assert` is
 ;                                                                lenient -- eyeball the shown forms)
-; strict: cat test/00-init.l doc/misc/proto/cfinite.l | out/host/love    (00-init makes `assert` enforce)
+; strict: cat test/00-init.l doc/misc/proto/cfinite.l | out/love    (00-init makes `assert` enforce)
 
 (:
  (nul? l) (! (two? l))                                  ; end-of-list = spine test, not the net (the house nil-trap)

@@ -8,7 +8,7 @@
 ;   (G tu fn cat i wt)  cat: alu addr load       wt: 8^min(depth,3)
 ;   (L tu fn cat i wt)  cat: li alu addr load
 (: _ (use 'moon)
-   is9 ["out/host/" "./" "src/" "out/lib/" "src/apps/moon/lib/math/" "src/apps/moon/include/"]
+   is9 ["out/" "./" "src/" "out/lib/" "src/apps/moon/lib/math/" "src/apps/moon/include/"]
    src "@FILE@"
    lin9 0                      ; 1: the LINEAR mode -- every label starts empty (no joins), the in-block floor
    comps '(add sub and or xor imul shl shr sar rol ror ror4 neg not sx1 sx2 sx4 zx1 zx2 zx4)

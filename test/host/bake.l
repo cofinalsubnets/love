@@ -5,7 +5,7 @@
 ; PATH prog.l` boots a session carrying every global pinned before the bake.
 ; host-only (the nif + hark + wake), so it runs standalone against the built
 ; binary like test/host/fs.l:
-;   cat test/00-init.l test/host/bake.l | out/host/love
+;   cat test/00-init.l test/host/bake.l | out/love
 ; the marker the woken child reads back. its own top-level body-less `:`, so it leaks to the
 ; session scope and the snapshot carries it -- `book` is off the book on every boot now, and
 ; a binding inside the body-having `:` below would be local to that form.
@@ -34,7 +34,7 @@
 
    ; the woken child reads the marker this session pinned before its bake
    _ (: p (open drv "w") _ (say p "(: _ (putn bake-smoke-marker) (quit 0))") (close p))
-   r (hark ["out/host/love" "wake" img drv])
+   r (hark ["out/love" "wake" img drv])
    _ (assert (two? r) (<r = 0) (>r = "4242"))
 
    ; ..and what the hash-cons did to the pair of casks: two equal casks stay two objects,
@@ -44,7 +44,7 @@
         _ (say p "(? ((peep bake-dedup-c1 0 -1) = 65 && (peep bake-dedup-c2 0 -1) = 0) 1 0) 0) ")
         _ (say p "_ (putn ok) (quit 0))")
         (close p))
-   r2 (hark ["out/host/love" "wake" img drv])
+   r2 (hark ["out/love" "wake" img drv])
    _ (assert (two? r2) (<r2 = 0) (>r2 = "1"))
 
    ; ..and the native: still native in the child, and the same answer
@@ -52,7 +52,7 @@
    _ (: p (open drv "w")
         _ (say p "(: _ (putn (? (nat? bake-native) (bake-native 100000) -1)) (quit 0))")
         (close p))
-   r3 (hark ["out/host/love" "wake" img drv])
+   r3 (hark ["out/love" "wake" img drv])
    _ (assert (two? r3) (<r3 = 0) (>r3 = "4999950000"))
 
    _ (unlink img) _ (unlink drv)

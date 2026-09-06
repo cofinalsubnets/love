@@ -49,7 +49,7 @@
 #   reps    passes over the timed corpus per run (default 24)
 #   samples timed runs per row, median reported (default 3)
 #
-# x86-64 only -- mooncc emits x64 here. Needs `make host` first (out/host/love IS
+# x86-64 only -- mooncc emits x64 here. Needs `make host` first (out/love IS
 # the compiler under test) and whichever of gcc/clang are on PATH.
 set -u
 
@@ -57,7 +57,7 @@ R=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 REPS=${1:-24}
 SAMPLES=${2:-3}
 W=$R/out/bench/nif
-m=$R/out/host/love
+m=$R/out/love
 
 # a distro often symlinks gcc/clang through ccache; the time rows are the compiled
 # CODE and not the compile, but the build times below would clock a cache hit

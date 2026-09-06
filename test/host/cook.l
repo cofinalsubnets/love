@@ -1,6 +1,6 @@
 ; the gate for cook's Makefile importer (src/apps/cook/cook.l).
 ;
-; Run on the host binary:  out/host/love test/host/cook.l
+; Run on the host binary:  out/love test/host/cook.l
 ; (wired into the build as `make test_cook`, part of `make test`).
 ;
 ; cook reads a real Makefile -- variable expansion, the make functions,
@@ -11,7 +11,7 @@
 ; the pattern-rule tests build real files and check they appear.
 
 (: dir "/tmp/cooktest"
-   love  "out/host/love"                          ; run from the project root (where make runs)
+   love  "out/love"                          ; run from the project root (where make runs)
 
    ; -- a tiny assert harness (this file is standalone, not in the corpus) --
    pass (tablet 0) fail (tablet 0)
@@ -46,7 +46,7 @@
 
    ; ---------------------------------------------------------------- expansion
    ev (run-cook (mk '("R := ."
-                      "ho = out/host"
+                      "ho = out"
                       "love_c = $R/core/love.c $R/data.c"
                       "h_o = $(love_c:$(R)/%.c=$(ho)/%.o)"
                       "suf = $(love_c:.c=.o)"
@@ -54,9 +54,9 @@
                       "\techo \"E1[$(h_o)]\""
                       "\techo \"E2[$(suf)]\""
                       "\techo \"E3[$R/$(ho)]\"")) "all")
-   _ (ok "nested-paren + pattern subst-ref" (has ev "E1[out/host/core/love.o out/host/data.o]"))
+   _ (ok "nested-paren + pattern subst-ref" (has ev "E1[out/core/love.o out/data.o]"))
    _ (ok "suffix subst-ref"                 (has ev "E2[./core/love.o ./data.o]"))
-   _ (ok "single-char $R + $(VAR)"          (has ev "E3[./out/host]"))
+   _ (ok "single-char $R + $(VAR)"          (has ev "E3[./out]"))
 
    ; ---------------------------------------------------------------- functions
    fn (run-cook (mk '("files = a.c b.c sub/c.c"
@@ -380,7 +380,7 @@
    ; the repo's own shell is the fixture's shell: make-with-lush, the rung-4
    ; distro loop closed. $(wildcard) is lush's pure glob at the repo root
    ; (sorted; a no-match pattern contributes nothing -- nullglob).
-   shl (run-cook (mk '("SHELL := out/host/lush"
+   shl (run-cook (mk '("SHELL := out/lush"
                        "all:"
                        "\t@echo \"L1[$$0]\""
                        "\t@echo \"L2[$(shell echo $$0)]\""))

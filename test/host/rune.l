@@ -10,7 +10,7 @@
 ;      F(0 0 -1/4) = F(1 -3/2 13/2) = F(-1 3/2 13/2) = (-1/4 0 0).
 ; a with either of B/C contradicts the conjecture's conclusion for F.
 ;
-;   cat test/00-init.l test/host/rune.l | out/host/love
+;   cat test/00-init.l test/host/rune.l | out/love
 
 (use "src/apps/rune/rune.l")                  ; the loader: one layer, registered, spliced
 

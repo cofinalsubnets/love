@@ -23,7 +23,7 @@ set -e
 # mooncc and kore are love's own verbs (the layered bake); MOONCC/KORE still override.
 # ⚠ `env`, not a bare assignment prefix: $mc expands AFTER assignment-recognition, so a
 # literal `LOVE_NO_IMAGE=` in the expansion would run as a command name.
-love=${LOVE:-out/host/love}
+love=${LOVE:-out/love}
 mc=${MOONCC:-env LOVE_NO_IMAGE= $love mooncc}
 kore=${KORE:-env LOVE_NO_IMAGE= $love kore}
 gcc=${GCC:-gcc}

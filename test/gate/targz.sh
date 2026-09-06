@@ -21,7 +21,7 @@
 # Skips cleanly where either tool is missing, and takes the love binary as $1.
 set -e
 
-love=${1:-out/host/love}
+love=${1:-out/love}
 [ -x "$love" ] || { echo "targz: no $love -- run 'make host'"; exit 1; }
 command -v tar  >/dev/null 2>&1 || { echo "targz: no system tar, skipped";  exit 0; }
 command -v gzip >/dev/null 2>&1 || { echo "targz: no system gzip, skipped"; exit 0; }

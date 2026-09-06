@@ -7,7 +7,7 @@
 ; per clause that justifies it -- the stream is a semiring, not a set). The point is that #SAT
 ; needs no bespoke code here: the same `+`/`*` that add numbers and append lists express it.
 ; over n boolean vars x0..x(n-1), clauses (x_i | x_(i+1)) cyclically -- "no two adjacent 0s".
-; Run: out/host/love src/apps/sat/kanren-count.l   ->   6726 (n=10).
+; Run: out/love src/apps/sat/kanren-count.l   ->   6726 (n=10).
 (: (boolean x) (x === 0 + x === 1)
    scount (from 'kanren 'scount)                   ; count the stream without materializing it
    st0 (from 'kanren 'st0)                         ; the empty state: substitution + constraints

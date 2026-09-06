@@ -50,8 +50,6 @@ the standing rule (gwen, 2026-08-16). done 2026-08-16:
 
 still standing, not verification:
 
-- **tools/ccdb.py** -- compile_commands generator for clangd. dev-only;
-  ports to love when touched next.
 - **src/port/rp2040/tools/py/{elf2uf2,pad_checksum}.py** -- flasher utilities on
   a port lane. port to love with the next rp2040 ride.
 

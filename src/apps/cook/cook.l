@@ -1193,7 +1193,7 @@
       ; not here. they match every target there is, and GNU only dares them under
       ; conditions this resolver does not model (it will not apply one to a target
       ; that already has any rule, nor to an intermediate). without those conditions
-      ; `%: %.o` hijacks a real link: this tree's own `out/host/love` has love.o
+      ; `%: %.o` hijacks a real link: this tree's own `out/love` has love.o
       ; sitting right there, so the builtin links that alone and the host objects and
       ; the math floor never reach the command -- a wall of undefined references from
       ; a rule nobody wrote. the narrow %.o: rules above cannot do that: their target

@@ -6,7 +6,7 @@
 # and anything cook cannot drive -- qemu, a tty repl, a sub-make, perf, since cook's `run`
 # captures stdout and waits -- passes straight through to make below.
 
-LOVE := out/host/love
+LOVE := out/love
 # ⚠ cook reads the Makefile ITSELF, never a transpiled snapshot: a snapshot freezes the
 # $(wildcard) lists at emit time, so it goes quietly stale the next time a source lands.
 COOK := $(LOVE) -l src/apps/cook/cook.l -f Makefile

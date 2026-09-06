@@ -47,8 +47,8 @@ case $gate in
              qemu="qemu-system-arm -M netduinoplus2 -semihosting -nographic"
              why="nucleo446 QSMOKE self-check"
              done_msg="the -D QSMOKE twin boots on qemu Cortex-M4 -- self-checks hold and mkboot.l's sh_exit carries the tally out, exit 28" ;;
-  rvboot)    banner="RVBOOT out/free/rv64/rvboot.elf" ; need=qemu-system-riscv64
-             elf=out/free/rv64/rvboot.elf          ; tmo=120 ; want=42
+  rvboot)    banner="RVBOOT out/rv64/rvboot.elf" ; need=qemu-system-riscv64
+             elf=out/rv64/rvboot.elf          ; tmo=120 ; want=42
              qemu="qemu-system-riscv64 -M virt -m 128M -nographic -append rv-gate"
              why="riscv bring-up"
              done_msg="inle's riscv bring-up holds on a hart: sv39 on, the hhdm window reaches ram, and the tree qemu built reads back through it, exit 42" ;;

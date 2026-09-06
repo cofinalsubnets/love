@@ -17,7 +17,7 @@
 ; Sigma carrier. Defs are `noncomputable` -- we certify the terms, never run them, so
 ; the code generator (which rejects bare recursors) is irrelevant.
 ;
-; Run: out/host/love tools/uu2lean.l > test/proof/lean/uugen.lean   then  lean test/proof/lean/uugen.lean
+; Run: out/love tools/uu2lean.l > test/proof/lean/uugen.lean   then  lean test/proof/lean/uugen.lean
 
 (: _ (reads (open "test/uu.l" "r"))
    _ (reads (open "test/uuhom.l" "r"))

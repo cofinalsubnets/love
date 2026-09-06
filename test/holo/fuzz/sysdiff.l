@@ -10,7 +10,7 @@
 ; space IS the register file), so it enumerates. SYSDIFF_ARCH=x64|a64|rv64 narrows;
 ; default all three.
 ;
-;   out/host/love test/holo/fuzz/sysdiff.l          (exit 1 on any disagreement)
+;   out/love test/holo/fuzz/sysdiff.l          (exit 1 on any disagreement)
 
 (reads (open "src/core/holo/holo.l" "r"))
 (reads (open "src/core/holo/x64.l" "r"))
@@ -44,7 +44,7 @@
  (sh c) (: pid (spawn ["sh" "-c" c]) (? (nom? pid) 1 (wait pid)))
  (rdf p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) t) ""))
  (wrf p t) (: q (open p "w") _ (say q t) (close q))
- tmpd "out/host"
+ tmpd "out"
 
  ; --- the ('key >< ..) rows of a `name (tabof ...)` form in a64.l, source order ---
  a64src (rdf "src/core/holo/a64.l")

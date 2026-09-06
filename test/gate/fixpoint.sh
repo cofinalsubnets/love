@@ -1,6 +1,6 @@
 #!/bin/sh
 # test/gate/fixpoint.sh -- the SELF-REGENERATION fixpoint (self-host rung 2).
-# The default out/host/love is mooncc-built already (love0 waking mooncc0.image
+# The default out/love is mooncc-built already (love0 waking mooncc0.image
 # compiles every TU, holo links -pie). This gate closes the loop: relink that
 # generation as love1, let love1 bake its OWN mooncc image and rebuild every TU
 # with itself, link love2 the same way, and assert love1 == love2 TO THE BYTE.
@@ -93,7 +93,7 @@ if [ -n "$gate_arch_c" ]; then
     esac
     moon1 $kinc -c "$f" "$o" || fail "love1 mooncc -c $f"
   done
-  LOVE_NO_IMAGE=1 "$d/love1" -l "out/free/$ha/mkvec.l" -q -e "(lay-vec \"$d/kvec.o\" \"$ha\")" \
+  LOVE_NO_IMAGE=1 "$d/love1" -l "out/$ha/mkvec.l" -q -e "(lay-vec \"$d/kvec.o\" \"$ha\")" \
     || fail "love1 lay-vec"
   test -s "$d/kvec.o" || fail "love1 lay-vec laid an empty kvec.o"
 fi

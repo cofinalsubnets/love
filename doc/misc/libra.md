@@ -42,7 +42,7 @@ and libra implements none of them.
 $ libra doc src/apps/vi/hue.l | head -3
 src/apps/vi/hue.l -- the .l syntax, written down ONCE, for two readers: the
 painter in src/apps/vi/core.l's vframe, and the vim syntax file, which tools/hue2vim.l
-GENERATES from the very table below -- built by make into out/host/syntax.vim and
+GENERATES from the very table below -- built by make into out/syntax.vim and
 ```
 
 **the prose's own structure is read, never rewritten.** the corpus was not
