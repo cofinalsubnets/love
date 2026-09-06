@@ -1,13 +1,15 @@
 ; --- test/host/story.l: rove's fiction engine, headless ---
-; not in the test/*.l corpus (it loads a crew file and reads the tree). the engine is
-; pure love, so everything but the tty runner gates here: a turn (look, go, read, a bare
-; exit, a refusal), the frame (title bar, the log, the prompt, wrapping), and the
-; library lifted from src/apps -- a room per wing, a book per file, a book's text
-; libra's lift of its header. the runner, vi through the door and the hatch stay
-; live probes: `love -l src/apps/rove/story.l -e '(library-story ())'`.
+; not in the test/*.l corpus (it reads the tree). the engine is pure love, so everything
+; but the tty runner gates here: the level file read into play and written back the
+; same; a turn (the keys move @, a wall stops it, a thing opens its window); the window
+; (a say pages its words, enter steps, esc closes; the prompt's interpreter answers
+; read, look, help and a love form into the window); the frame (the map with @ and the
+; things, the box over it, the status line); and the library lifted from src/apps -- a
+; shelf per wing whose books read through libra. the runner, vi and the hatch stay live
+; probes: `love story`, `love story src/apps`.
 ;   cat test/00-init.l test/host/story.l | out/love
 
-(use 'story)   ; the artifact's module: the gate's love is warm from the tree
+(use 'story)   ; the artifact's module, warm from the tree
 
 (: (find h n i) (? (i + tally n < 1 + tally h)
                   (? (n = snip h i (i + tally n)) 1 (find h n (i + 1)))
@@ -20,57 +22,64 @@
                                         (c = 27) (g (i + 1) acc 1)
                                         (g (i + 1) (acc + string c) 0)))
                                   acc)) 0 "" 0)
+   (keys! g s) (each (map (i \ s i) ^#s) (c \ story-key g c))
 
-   ; --- turns on the demo level, loaded from its file ---
-   L0 (load-level "src/apps/rove/levels/lighthouse.l")
-   _ (assert L0 ('lamp = (L0 'start)) (3 = tally (keys (L0 'rooms)))
-             (= (data-of (level-of <(sound (level-text L0)))) (data-of L0)))   ; a shown level reads back
-   g (story-new L0)
-   _ (describe g)
-   _ (assert ('lamp = (g 'at)) (has? <(g 'log) "exits: down") (has? (g 'log 1) "the lamp"))
-   _ (story-turn g "down")
-   _ (assert ('stair = (g 'at)) (has? <(g 'log) "exits: down, up"))
-   _ (story-turn g "read sign")
-   _ (assert (has? <(g 'log) "no sign here"))
-   _ (story-turn g "down")
-   _ (story-turn g "read sign")
-   _ (assert ('door = (g 'at)) (has? <(g 'log) "KEEPER OUT"))
-   _ (story-turn g "open sign")
-   _ (assert (has? <(g 'log) "does not open"))
-   _ (story-turn g "dance")
-   _ (assert (has? <(g 'log) "cannot dance"))
-   _ (story-turn g "go sideways")
-   _ (assert (has? <(g 'log) "cannot go sideways"))
-   _ (story-turn g "up")
-   _ (assert ('stair = (g 'at)) !(g 'over))
-   _ (story-turn g "q")
+   ; --- the level file, and its round trip ---
+   L (load-level "src/apps/rove/levels/lighthouse.l")
+   _ (assert L (9 = (L 'w)) (12 = (L 'h)) (4 = (L 'sx)) (8 = (L 'sy))
+             (= '(lamp sign) (sort (keys (L 'things))))
+             ("*" = (L 'things 'lamp 'gl))
+             (= (data-of (level-of <(sound (level-text L)))) (data-of L)))   ; a shown level reads back
+   _ (assert (35 = tile L 0 0) (46 = tile L 1 1) (35 = tile L -1 5) (35 = tile L 4 99))   ; off the map is wall
+
+   ; --- the map: moves, walls, a thing ---
+   g (story-new L)
+   _ (keys! g "l")
+   _ (assert (5 = (g 'x)) (8 = (g 'y)) !(g 'win))
+   _ (keys! g "jjjj")                                 ; the south wall stops you
+   _ (assert (10 = (g 'y)))
+   _ (keys! g "h")                                    ; under the sign
+   _ (assert (4 = (g 'x)) (10 = (g 'y)) !(g 'win))
+   _ (keys! g "k")                                    ; bump: the sign opens, you stay
+   _ (assert (g 'win) ("the sign" = (g 'win 'title)) (10 = (g 'y)) (has? <(g 'win 'lines) "KEEPER OUT"))
+   _ (keys! g "\r")                                   ; enter: the next page
+   _ (assert (has? (g 'win 'lines 1) "NEXT TIDE"))
+   _ (keys! g "\r")                                   ; ..and past the last step the window closes
+   _ (assert !(g 'win))
+   _ (keys! g "\e")
    _ (assert ('quit = (g 'over)))
 
-   ; --- the frame: a title bar, the log with the newest at the foot, the prompt ---
-   f (plain (story-frame g 40 8))
-   rows (split "\r\n" f)
-   _ (assert (8 = tally rows)
-             (has? (rows 0) "the lighthouse -- the stair")
-             (40 = tally (rows 0))                                 ; the bar spans the width
-             (has? (rows 7) "> ")                                  ; the prompt is the last row
-             (has? f "> q"))
-   ; wrapping: a long line breaks at the width, never mid-word
-   w (wrap "the quick brown fox jumps over the lazy dog" 12)
-   _ (assert (4 = tally w) ("the quick" = <w) (all (l \ #l <= 12) w))
-
-   ; --- the library: this tree's crew ---
-   L (library "src/apps")
-   rooms (L 'rooms)
-   _ (assert ('hall = (L 'start)) (10 < tally (keys rooms)) (peep rooms 'rove 0) (peep rooms 'lapiz 0))
+   ; --- the frame: @ where you stand, the things, the status line; the box over it ---
    g2 (story-new L)
-   _ (describe g2)
-   _ (assert (has? (g2 'log 2) "lapiz"))                          ; the hall's text names its wings
-   _ (story-turn g2 "rove")
-   _ (assert ('rove = (g2 'at)) (has? <(g2 'log) "exits: out") (has? (g2 'log 1) "story"))
-   _ (story-turn g2 "read story")
-   _ (assert (has? <(g2 'log) "fiction engine"))                   ; libra's lift of this file's header
-   _ (story-turn g2 "out")
-   _ (assert ('hall = (g2 'at)))
+   f (plain (story-frame g2 30 14))
+   rows (split "\r\n" f)
+   _ (assert (14 = tally rows) (64 = (rows 8) 4) (42 = (rows 2) 4) (63 = (rows 9) 4)
+             (has? (rows 13) "the lighthouse") (has? (rows 13) "@ 4,8"))
+   _ (keys! g2 "kkkkkk")                              ; up the shaft to the lamp
+   _ (assert (g2 'win) ("the lamp" = (g2 'win 'title)))
+   f2 (plain (story-frame g2 70 20))
+   _ (assert (has? f2 "+-the lamp ") (has? f2 "| a fresnel lens") (has? f2 "-- enter --") (has? f2 "esc closes"))
+
+   ; --- the library: a shelf per wing, its books through libra, the interpreter ---
+   LB (library "src/apps")
+   _ (assert (10 < tally (keys (LB 'things))) (LB 'things 'rove) (LB 'things 'lapiz) (LB 'things 'hatch)
+             ("|" = (LB 'things 'rove 'gl)) (LB 'things 'rove 'books 'story))
+   g3 (story-new LB)
+   sh (LB 'things 'rove)
+   _ (open-window g3 sh)
+   _ (assert (g3 'win) (has? <(g3 'win 'lines) "rove") !(g3 'win 'prompt))
+   _ (keys! g3 "\r")                                  ; the say pages out; then (ask) opens the prompt
+   _ (assert (g3 'win 'prompt))
+   _ (keys! g3 "look\r")
+   _ (assert (has? (last (g3 'win 'lines)) "story"))   ; the shelf's books, the newest line
+   _ (keys! g3 "read story\r")
+   _ (assert (has? (joins (g3 'win 'lines) " ") "fiction engine"))   ; libra's lift of this file's header
+   _ (keys! g3 "(+ 1 2)\r")
+   _ (assert ("3" = last (g3 'win 'lines)))             ; a love form, evaluated into the window
+   _ (keys! g3 "dance\r")
+   _ (assert (has? (last (g3 'win 'lines)) "cannot dance"))
+   _ (keys! g3 "\e")
+   _ (assert !(g3 'win))
    _ (test_fin ())
-   _ (puts "story: ok -- turns, the frame, and the library lifted from the tree\n")
+   _ (puts "story: ok -- the level, the map, the window and its interpreter, the library\n")
    0)

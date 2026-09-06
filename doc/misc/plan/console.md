@@ -57,23 +57,25 @@ that is a compiler.
   the page unchanged through web.l -- their tty runners, keys as the bytes a terminal
   sends. and the cli's leaves became answers: cli-line answers a status charm and
   the frontend quits with it, so nothing in src/core spells a host word.
-- **rung 2 -- rove as the fiction engine.** ✅ LANDED, src/apps/rove/story.l + design.l.
-  a level is a datum in a file (src/apps/rove/levels) the reader and printer round-trip:
-  rooms with a name, a map cell, text, exits and things; a thing a book to read or a
-  file to open. story.l carries no story: the turn (look, go, read, open, exits, help,
-  quit, or a bare exit), a pure painter (title bar, the log newest at the foot, the
-  prompt, wrapped) so turns and frames gate headless, load-level/save-level, and the
-  library -- `(library "src/apps")`, a hall with a door per wing, a room per crew
-  module whose text is libra's lift of its header, a book per file whose read is its
-  own header and whose open is vi called in place; the hatch runs the crawl the same
-  way, so the crawl is one level among others. the designer, design.l: the level's
-  rooms as boxes on a map of cells, every edit a key on the box under the cursor
-  (place, name, an exit linked by moving the cursor to its target, a thing, the start,
-  remove), saved as the datum story plays; `v` saves and opens the file in vi for the
-  words, `p` saves and plays it. keys and frames are pure, so it gates headless
-  (test/host/design.l). the page walks the lighthouse from its fetched datum. OPEN: a
-  level's own logic (hooks on enter/read/open) once a level wants some; the page's
-  library catalogue, laid by make web.
+- **rung 2 -- rove as the fiction engine.** ✅ LANDED, src/apps/rove/story.l + design.l,
+  and the shape is gwen's, not the plan's: not a text adventure but a roguelike map to
+  walk with @ on it, and RPG-maker dialog windows over the map for the words. a level
+  is a datum in a file (src/apps/rove/levels) the reader and printer round-trip: a map
+  of tiles (# wall), a start, and things on tiles with a glyph, a name and a dialog --
+  (say TEXT ..) pages, (ask) a prompt, (hatch) the crawl. bumping a thing opens its
+  window; the prompt is the one place the words go free: an interpreter takes a line
+  (read X, open X, look, help, or a love form, evaluated) and answers into the window.
+  story.l carries no story. the library: `(library ROOT)` lays a hall with a shelf
+  per crew module, its dialog libra's lift of the module's header, its books the
+  files; `read` a book is its header, `open` is vi called in place, the hatch runs the
+  crawl (rove.l, a module now). the designer, design.l: the map painted at the
+  cursor (# and . tiles, a thing placed in three prompts, the start), saved as the
+  datum story plays; `v` saves and opens the file in vi for the words, `p` plays.
+  keys and frames are pure on both, so both gate headless (test/host/story.l,
+  design.l); the page walks the lighthouse from its fetched datum. verbs: `love
+  story [LEVEL | ROOT]`, `love design [LEVEL]`, `love rove`. OPEN: a level's own
+  logic (a dialog step that runs level code) once a level wants some; the page's
+  library catalogue, laid by make web; scrolling a map bigger than the screen.
 - **rung 3 -- the wasm backend**, doc/misc/plan/moon-wasm.md rungs 0-5: the module
   writer, control flow by dispatch loop, the type law, the environment (a nolibc face
   where the handful of system calls are imports the page supplies, and a loader of a

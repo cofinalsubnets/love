@@ -101,17 +101,20 @@ await beat(); ok(pump(), 'ink rests a beat and swims on');
 // a key lands while ink sleeps: sleeping is not runnable, so it is seen on the next beat
 key(32); pump(); await beat(); ok(!pump(), 'any key: ink steps ashore on the next beat');
 
-// the story: a line-driven app -- the typed line rides the key ring, enter turns it
-ev('(web-boot "lighthouse" 60 12)');
+// the story: a map to walk, and a window to type in -- the typed line rides the key ring
+ev('(web-boot "lighthouse" 60 14)');
 ok(pump(), 'the lighthouse boots and lives');
-{ const { hdr } = view(); ok(hdr[0] === 12 && hdr[1] === 60, `story screen ${hdr[0]}x${hdr[1]}`);
-  ok(row(0, 60).startsWith('the lighthouse -- the lamp room'), 'the title bar: ' + JSON.stringify(row(0, 60).trim()));
-  ok(row(11, 60).startsWith('> '), 'the prompt is the last row'); }
-for (const c of 'down\r') key(c.charCodeAt(0));
-ok(pump(), 'a typed line turns');
-ok(row(0, 60).startsWith('the lighthouse -- the stair'), 'the line moved us: ' + JSON.stringify(row(0, 60).trim()));
-for (const c of 'q\r') key(c.charCodeAt(0));
-ok(!pump(), 'quit lands the story');
+{ const { hdr } = view(); ok(hdr[0] === 14 && hdr[1] === 60, `story screen ${hdr[0]}x${hdr[1]}`);
+  ok(row(8, 60)[4] === '@', 'you stand on the map: ' + JSON.stringify(row(8, 60).slice(0, 12)));
+  ok(row(13, 60).startsWith(' the lighthouse'), 'the status line: ' + JSON.stringify(row(13, 60).trim())); }
+key(107); ok(pump(), 'a key moves you');
+ok(row(7, 60)[4] === '@', 'up one: ' + JSON.stringify(row(7, 60).slice(0, 12)));
+for (const c of 'kkkkk') key(c.charCodeAt(0));
+ok(pump(), 'into the lamp: a window opens');
+ok(view().cells.length && Array.from({ length: 14 }, (_, r) => row(r, 60)).join('\n').includes('the lamp'), 'the window names the thing');
+key(27); ok(pump(), 'esc closes it');
+await beat();                                       // the runner rests a beat after an escape
+key(113); ok(!pump(), 'q lands the story');
 
 if (fails) { console.error(`WASM SCREEN FAILED (${fails})`); process.exit(1); }
 console.log('  screen: ok -- the mirror, the face, the lay, and rove, ink and a story as tasks on the page console');
