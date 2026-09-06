@@ -126,6 +126,8 @@
        (: _ (note ("fetching " + url))
           rc ((from 'kore 'wget-main) ["-q" "-O" path url])
           (? (rc = 0) 0 (: _ (unlink path) rc))))
+   ; the nest's IWAD rides the exec unless the caller named one: the nest's cwd is the caller's
+   (nest-args dl as) (? (any (\ a (a = "-iwad")) as) as ("-iwad" . ((dl + "/doom1.wad") . as)))
    (doom-nest as)
     (: exe (selfpath 0)
        home (getenv "HOME" + "/.love")
@@ -138,7 +140,7 @@
            (fail ("the nest's love carries no doom either: `cook host DOOM=1` under " + nest))
           (two? (stat bin))
            (: _ (setenv "LOVE_DOOM_NEST" "1")
-              e (exec (bin . ("doom" . as)))
+              e (exec (bin . ("doom" . (nest-args dl as))))
               (fail ("cannot run " + bin + " (" + show e + ")")))
           (: _ (mkdir home 493)
              _ (note ("seeding " + nest + " -- this builds love once, and it takes minutes"))
@@ -152,6 +154,7 @@
                                (: _ ((from 'tarcmd 'tar-main) ["xzf" (dl + "/doomgeneric.tgz") dl])
                                   _ (rename (dl + "/doomgeneric-master") (dl + "/doomgeneric"))
                                   _ (unlink (dl + "/doomgeneric.tgz"))
+                                  _ (unlink (dl + "/pax_global_header"))              ; the tarball's pax row, laid as a file
                                   (two? (stat (dl + "/doomgeneric")) ? 0 1)))))
                    (? (!(r1 = 0) || !(r2 = 0)) (fail "the downloads did not land")
                       (: S (from 'source)
@@ -164,7 +167,7 @@
                          st2 (run-in nest [exe "cook" "host" "DOOM=1"])
                          (? !(st2 = 0) (fail "the doom build failed")
                             (: _ (setenv "LOVE_DOOM_NEST" "1")
-                               e (exec (bin . ("doom" . as)))
+                               e (exec (bin . ("doom" . (nest-args dl as))))
                                (fail ("cannot run " + bin + " (" + show e + ")")))))))))))
 
    (digits s) (: n #s
@@ -174,7 +177,8 @@
    (doom-usage _) (say err "usage: love doom [-iwad FILE] [-display :N] [-frames N]\n", 1)
    (doom-main as)
     (: (opt a k d) (? !(two? a) d ((<a = k) && (two? >a)) <>a (opt >a k d))
-       wad (opt as "-iwad" "dl/doom1.wad")
+       nestwad (getenv "HOME" + "/.love/love-" + love-version + "/dl/doom1.wad")
+       wad (opt as "-iwad" (? (two? (stat "dl/doom1.wad")) "dl/doom1.wad" nestwad))
        disp (opt as "-display" (getenv "DISPLAY"))
        frames (: f (opt as "-frames" ()) (string? f ? (digits f) 0))
        (? (any (\ a (a = "-h" || a = "--help")) as) (doom-usage 0)
