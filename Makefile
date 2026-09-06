@@ -435,7 +435,7 @@ mooncc_dep = $(ho)/.love.baked
 
 # this machine's metal files, and the three TUs only a kernel has a frontend for.
 k_arch_c = $(wildcard $(R)/src/inle/$a/*.c)
-k_free_c = $R/src/inle/kmain.c $R/src/inle/blk.c $R/src/inle/sys.c
+k_free_c = $R/src/inle/kmain.c $R/src/inle/blk.c $R/src/inle/hda.c $R/src/inle/sys.c
 # the whole kernel compile, in link order: the runtime and its math floor, the console
 # engine with its two fonts, nolibc, the metal, the free trio -- and $(host_c) itself,
 # because the kernel runs the same frontend the host does. taking that roster rather than
@@ -540,7 +540,7 @@ $(1)_h = $$(love_h) $$R/src/inle/k.h $$R/src/host/ustar.h $$(wildcard $$R/src/in
 $(1)_arch_o = $$(patsubst $$R/src/inle/$$($(4))/%.c,$$($(2))/ka_%.o,$$(wildcard $$R/src/inle/$$($(4))/*.c))
 # the console's painter and its fonts: kernel-only draws the host link never had
 $(1)_quay_o = $$(patsubst %,$$($(2))/k_q_%.o,paint cga_8x8 moderndos_8x16)
-$(1)_o = $$(if $$($(1)_arch_o),$$($(2))/k_kmain.o $$($(2))/k_blk.o $$($(2))/k_sys.o \
+$(1)_o = $$(if $$($(1)_arch_o),$$($(2))/k_kmain.o $$($(2))/k_blk.o $$($(2))/k_hda.o $$($(2))/k_sys.o \
   $$($(1)_arch_o) $$($(1)_quay_o) $$($(2))/kvec.o,)
 $(1)_lay_l = $$R/src/apps/kore/text.l $$R/src/apps/kore/u.l $$R/src/apps/kore/asbook.l \
   $$R/src/core/holo/$$($(4)).l $$R/src/core/holo/elf.l $$R/src/core/holo/obj.l
@@ -577,8 +577,8 @@ doom_d = $R/dl/doomgeneric/doomgeneric
 doom_drop = $(wildcard $(doom_d)/doomgeneric_*.c $(doom_d)/i_allegro*.c $(doom_d)/i_sdl*.c)
 doom_c = $(filter-out $(doom_drop),$(wildcard $(doom_d)/*.c))
 k_doom_o = $(patsubst $(doom_d)/%.c,$(k_odir)/doom/%.o,$(doom_c)) $(k_odir)/doom/wad.o
-k_free_c += $R/src/inle/doom.c
-kcppflags += -I$(doom_d)
+k_free_c += $R/src/inle/doom.c $R/src/inle/doomsnd.c
+kcppflags += -I$(doom_d) -I$R/src/inle/doom -DFEATURE_SOUND
 $(k_odir)/doom/%.o: $(doom_d)/%.c $(mooncc_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
@@ -590,9 +590,9 @@ $(k_odir)/doom/wad.o: $R/dl/doom1.wad tools/mkblob.l out/.mksys-cat.l $m
 # and the same set on the KART lane, which is where the host's own kernel is
 # built (plan C2: the artifact carries it) -- so `make kernel DOOM=1` at $(hosta)
 # rides these and the cross odir rides the rows above.
-kart_inc += -I$(doom_d)
+kart_inc += -I$(doom_d) -I$R/src/inle/doom -DFEATURE_SOUND
 kart_doom_o = $(patsubst $(doom_d)/%.c,$(moon_d)/kd_%.o,$(doom_c)) \
-  $(moon_d)/kd_wad.o $(moon_d)/k_doom.o
+  $(moon_d)/kd_wad.o $(moon_d)/k_doom.o $(moon_d)/k_doomsnd.o
 kart_o += $(kart_doom_o)
 $(moon_d)/kd_%.o: $(doom_d)/%.c $(moon0_dep)
 	@echo 'DOOM	'$@
@@ -634,7 +634,11 @@ $(k_tail_o): out/.mksys-cat.l $m
 	@$m -l out/.mksys-cat.l -q -e "((from 'moon 'mksys-$a) \"$@\")" && test -s $@
 
 k_kvm = $(if $(and $(wildcard /dev/kvm),$(filter x64,$a),$(filter x64,$(hosta))),-enable-kvm -cpu host,)
-k_qemu_x64 = -M q35 -serial stdio
+# the sound card: an HDA controller with one output codec, on the host's own audio.
+# QAUDIO names qemu's backend (`qemu-system-x86_64 -audiodev help`); none is silent.
+QAUDIO ?= pipewire
+k_qemu_x64 = -M q35 -serial stdio -device intel-hda -device hda-output,audiodev=snd \
+  -audiodev $(QAUDIO),id=snd
 k_qemu_a64 = -M virt,gic-version=2 -cpu cortex-a72 -serial stdio -semihosting \
   -device ramfb -device qemu-xhci -device usb-kbd -device usb-mouse
 k_qemu_rv64 = -M virt -serial stdio -display none

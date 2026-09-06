@@ -2,7 +2,7 @@
 // answered off the kernel's own framebuffer, scancode tap and clock, plus the
 // nif that starts it.
 //
-//   (doom)        run it. answers when the game quits -- which on this machine
+//   (doom ())     run it. answers when the game quits -- which on this machine
 //                 means doom's exit() reached (quit), so it resets.
 //
 // OPT-IN and not in any default build: `make run DOOM=1` wants the vendored

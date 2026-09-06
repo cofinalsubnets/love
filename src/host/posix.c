@@ -1371,7 +1371,8 @@ static lvm(lvm_close) {
   if (cell(Sp[0])->ap == lvm_port_io) {
     struct ai_io *io = (struct ai_io*) Sp[0];
     intptr_t fd = ai_io_fd(io);
-    if (fd >= 0) {
+    bool horn = io->vt == &ai_horn_vt;       // its device shuts its own way, after the run lands
+    if (fd >= 0 || horn) {
       g->io = io;
       Pack(g);
       g = ai_io_wflush(g, io);   // buffered bytes land before the fd dies
@@ -1384,7 +1385,7 @@ static lvm(lvm_close) {
         g->next_wake_at = ai_clock() + 1;
         ai_musttail return Ap(lvm_yield_sw, g); }
       Unpack(g);
-      close(fd);
+      if (horn) ai_horn_close((struct ai_io*) Sp[0]); else close(fd);
       ((struct ai_io*) Sp[0])->vt = &ai_closed_vt; } }   // re-read: wflush may collect
   Sp[0] = ZeroPoint;
   ai_musttail return Next(1); }

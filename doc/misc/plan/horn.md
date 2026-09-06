@@ -152,3 +152,47 @@ gate cannot listen. Hearing it is a human's job, once.
 * **whether the mixer is love or C.** doom needs the C face regardless. A love-side mixer would
   be the nicer artifact and would make `horn` useful to anything else in the tree; it is also
   the part where a per-sample loop in love has to be measured before it is believed.
+
+## what landed (2026-09-06)
+
+**rung 0 is the shape, and it is `src/host/horn.c`.** `(horn rate chans)` answers a heap port
+wearing `ai_horn_vt`, which io.c takes for a bio (bio_of and ai_io_fd know two doors now), so the
+write run buffers, a refused write keeps its residue and the writer parks on the 1 ms poll every
+heap port has. `(horn-lag p)` reads frames queued and unplayed. the device under the door is
+picked per seat: inle takes the C face; linux and freebsd open a card; `HORN=none` is a sink that
+keeps time and discards, and `HORN=<path>` names a device. a mono port is doubled to stereo on the
+way down, so every device is stereo s16. test/horn.l is the gate, on the fast corpus and the
+kernel corpus both (it sets HORN itself).
+
+**⚠ the laptop rung is HDA, not AC'97.** no laptop of the last fifteen years has an AC'97
+controller; the dev box carries two Ryzen HDA functions (class 04.03), and qemu offers
+`intel-hda` beside AC97. so rung 3 became `src/inle/hda.c`: PCI class walk, BAR0, CORB/RIRB (the
+immediate registers are optional silicon and qemu has none), a codec walk that routes every wired
+output pin back to a DAC through selectors and mixers, one output stream over a 128K ring under
+a 32-entry BDL, the play head off the DMA position buffer (LPIB until it writes one). polled;
+k_horn_poll rides the idle wait and silences what has played, so a writer that stops leaves
+silence. the two snoop quirks the linux driver carries (intel TCSEL/NOSNOOP, the ATI SB450 bit)
+are in, because a laptop with them unset plays garbage. the PM capability is walked to D0.
+qemu's codec speaks 16k..96k; the laptop's may not speak 11025, so the mixer resamples.
+
+**rung 2 is smaller than feared:** write(2) on a pcm node IS `WRITEI_FRAMES` (pcm_native.c's
+file write op), so the handshake is one `HW_PARAMS` ioctl and a `PREPARE`, then the fd port's
+own write path. the buffer is 4096..32768 frames and the kernel picks the least, ~85 ms at 48k.
+device order is card order and nothing wiser -- this box's first node is its HDMI port, so
+`HORN=/dev/snd/pcmC1D0p` names the speakers.
+
+**rung 1 is freebsd only.** netbsd's `/dev/dsp` is libossaudio, a userspace shim over
+`AUDIO_SETINFO`; the OSS ioctls are not kernel ioctls there, so that seat answers 'enodev until
+someone writes the native handshake. the freebsd lane is written and not yet run on the box.
+
+**rung 5 is `src/inle/doomsnd.c`**, ~150 lines: eight channels of DMX lumps, linear resampling to
+48k, doom's own pan law, clipped into s16 stereo, topped up to a 100 ms lead every frame. music
+is a silent door. `DOOM=1` builds it with `-DFEATURE_SOUND`.
+
+**dropped:** AC'97 (qemu-only hardware), virtio-sound (no seat needs a64 audio yet), NetBSD OSS
+(not native), the position buffer's per-controller quirks (LPIB fallback covers the ones seen).
+
+**open, still:** hearing it on the laptop. the codec walk is generic and unmutes every amp on the
+path at 0 dB; a codec that needs vendor coefficient verbs to reach its speaker amp (some Realtek
+and Cirrus parts) will play through the headphone jack and not the speakers. that is a bug
+report with a codec id in it, when it comes.
