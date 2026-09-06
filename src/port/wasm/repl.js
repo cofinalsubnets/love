@@ -1,14 +1,18 @@
-// src/port/wasm/repl.js -- the front page's repl: love.js's module driven from the
-// page -- the shell in #term, and the quay tty apps repainted into #app's cell grid.
-// index.html links it after love.js; nothing here is generated.
+// src/port/wasm/repl.js -- the repl island: love.js's module driven from a page --
+// the shell in .term, and the quay tty apps repainted into .app's cell grid.
+// loveRepl(root) drives one island, its parts found by class under root: .status,
+// .term (.scroll .out .row .cmd .clear), .app (.screen .appbar .appname .apphint) and
+// the .chip spans. every .repl on the page mounts itself at load, so a page carries the
+// markup and this script and no glue. index.html links it after love.js.
 
-(async () => {
-  const status = document.getElementById('status');
-  const out = document.getElementById('out');
-  const cmd = document.getElementById('cmd');
-  const term = document.getElementById('term');
-  const scroll = document.getElementById('scroll');
-  const clear = document.getElementById('clear');
+async function loveRepl(root) {
+  const q = s => root.querySelector(s);
+  const status = q('.status');
+  const out = q('.out');
+  const cmd = q('.cmd');
+  const term = q('.term');
+  const scroll = q('.scroll');
+  const clear = q('.clear');
 
   const t0 = performance.now();
   const M = await Love();
@@ -60,8 +64,8 @@
      + ' (ink-web-boot c r sd) (: _ (pin sbox () (ink-scene r c)) _ (pin tbox () 0) ((peep sbox () 0) 0.0))'
      + ' (ink-web-tick _) (: t (+ 1 (peep tbox () 0)) _ (pin tbox () t) ((peep sbox () 0) (* t 0.06))))');
     ev('(: rove (\\ _ (play "rove")) ink (\\ _ (play "ink")))');
-    document.getElementById('rove_chip').style.display = 'inline-block';
-    document.getElementById('ink_chip').style.display = 'inline-block';
+    q('[data-chip=rove]').style.display = 'inline-block';
+    q('[data-chip=ink]').style.display = 'inline-block';
   } catch (e) {
   }
 
@@ -142,17 +146,17 @@
              cmd.setRangeText(t, cmd.selectionStart, cmd.selectionEnd, 'end'); fit(); }
   });
 
-  document.querySelectorAll('.chip').forEach(ch =>
+  root.querySelectorAll('.chip').forEach(ch =>
     ch.addEventListener('click', () => { run(ch.dataset.run); cmd.focus(); }));
 
   // --- the app screen: a quay tty app, driven one step per key ------------
   // the frames are the app's own ANSI (256-color SGR + cursor home/erase); we
   // parse that into a cell grid. style.css owns only the container chrome --
   // the app owns every colour and glyph inside it.
-  const app = document.getElementById('app');
-  const screen = document.getElementById('screen');
-  const appname = document.getElementById('appname');
-  const apphint = document.getElementById('apphint');
+  const app = q('.app');
+  const screen = q('.screen');
+  const appname = q('.appname');
+  const apphint = q('.apphint');
   // 'key': step on each keydown, quit on the app's sentinel. 'anim': step on a
   // timer, any key steps ashore. reserve = rows the app spends on chrome (rove's
   // header + status bar), subtracted from the grid so the frame fits the box.
@@ -162,7 +166,7 @@
   };
 
   // the grid, fit to the live box: measure one cell in the app font (a run of
-  // full blocks), then divide #screen's client box by it.
+  // full blocks), then divide .screen's client box by it.
   function measureCell() {
     const p = document.createElement('span');
     p.style.cssText = 'visibility:hidden;position:absolute;white-space:pre';
@@ -258,4 +262,6 @@
     window.removeEventListener('keydown', onKey); onKey = null;
     app.hidden = true; term.hidden = false; cmd.focus();
   }
-})();
+}
+
+document.querySelectorAll('.repl').forEach(loveRepl);

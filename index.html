@@ -12,21 +12,22 @@
 
 <nav class="topnav"><a href="#language">language</a> &nbsp;&middot;&nbsp; <a href="#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="#crew">crew</a></nav>
 
-<p id="status">loading the image...</p>
+<div class="repl">
+<p class="status">loading the image...</p>
 
-<div id="term">
-  <button id="clear" title="clear the session">clear</button>
-  <div id="scroll">
-    <div id="out"></div>
-    <div id="row"><textarea id="cmd" rows="1" spellcheck="false" autocomplete="off" disabled></textarea></div>
+<div class="term">
+  <button class="clear" title="clear the session">clear</button>
+  <div class="scroll">
+    <div class="out"></div>
+    <div class="row"><textarea class="cmd" rows="1" spellcheck="false" autocomplete="off" disabled></textarea></div>
   </div>
 </div>
 <!-- the app screen: quay's tty apps repaint one full-screen ANSI frame per
      step; the driver (src/port/wasm/repl.js) parses that frame (CSI H/K + 256-color SGR) into a
      cell grid. hidden until an app launches; q/esc steps back to the repl. -->
-<div id="app" hidden tabindex="0">
-  <pre id="screen"></pre>
-  <div id="appbar"><span id="appname"></span><span id="apphint"></span></div>
+<div class="app" hidden tabindex="0">
+  <pre class="screen"></pre>
+  <div class="appbar"><span class="appname"></span><span class="apphint"></span></div>
 </div>
 <span class="chip" data-run='."hello world :3\n"'>hello world</span>
 <span class="chip" data-run='15 (\ n (.((n % 3 ? () "fizz") + (n % 5 ? () "buzz") || n), ."\n", n + 1)) 1'>fizzbuzz</span>
@@ -35,8 +36,9 @@
 <span class="chip" data-run="(1 / 2) 2">(1 / 2) 2</span>
 <span class="chip" data-run="(1 / 2) -1">(1 / 2) -1</span>
 <span class="chip" data-run="(i * pi) e">(i * pi) e</span>
-<span id="ink_chip" style="display:none" class="chip" data-run="ink ()">ink (screensaver demo)</span>
-<span id="rove_chip" style="display:none" class="chip" data-run="rove ()">rove (roguelike demo)</span>
+<span data-chip="ink" style="display:none" class="chip" data-run="ink ()">ink (screensaver demo)</span>
+<span data-chip="rove" style="display:none" class="chip" data-run="rove ()">rove (roguelike demo)</span>
+</div>
 
 <script src="src/port/wasm/love.js"></script>
 <script src="src/port/wasm/repl.js"></script>
