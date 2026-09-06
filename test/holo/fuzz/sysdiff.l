@@ -165,7 +165,10 @@
  ; --- llvm-mc assembling: two passes (an error would slide the encodings) ---
  ro-reject "expected writable system register"
  (llvm arch asms)
-  (: triple (? (arch = "a64") "a64" (arch = "rv64") "rv64" "x64")
+  ; the triple is LLVM's word, never ours: arch-uname is the tree's table for exactly
+  ; that (uname's machine, and the head of a gnu triple). llvm-mc refuses an unknown
+  ; target outright, so a nom that reached it here would read as 0 encodings.
+  (: triple (peep arch-uname (archof arch) "x86_64")
      mattr (? (arch = "rv64") " -mattr=+m,+f,+d,+zicsr,+zifencei" "")
      nhead (? (arch = "x64") 1 0)
      head (? (arch = "x64") ".intel_syntax noprefix\n" "")
