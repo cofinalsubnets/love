@@ -218,10 +218,13 @@ test/host/luxui-probe.l's XTEST FakeInput is the way to add one); mouse; a windo
 should end the process the ICCCM way, which it does through WM_DELETE_WINDOW but not on a
 `kill` of the server.
 
-**next, as asked:** `wget` in kore -- and since nothing worth fetching speaks plain http any
-more, a TLS 1.3 client over the chacha/poly/sha256 the tree already carries; then `love doom`
-laying `~/.love/love-<ver>/` through `love seed`, fetching doomgeneric and the shareware IWAD
-there, building with DOOM=1 and running that binary.
+**`love doom` from a love with no doom in it** (src/apps/doom/doom.l, doom-nest): lay this
+binary's source under `~/.love/love-<ver>/` with the seed verb, wget doomgeneric and the IWAD
+into its dl/, `cook host DOOM=1` there with the seed's own compiler and PATH choices, exec that
+binary's doom. the nest is kept, so the second run is one exec. ⚠ `make host DOOM=1` after a
+plain `make host` was a no-op -- the flag is a link input no timestamp sees -- and a doom-less
+love's `love doom` is the nest path, which a gate must never start: out/.doom.flag is the
+witness now, and test_doomx refuses a love without doom.
 
 ## wget, and the TLS under it (2026-09-06, evening)
 
