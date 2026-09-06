@@ -2177,5 +2177,5 @@
       (charm0 (? f          (f >ln)
                  (two? >ln) (cli-rail ln)
                  tty        (shell 0)
-                 (reads in)))))            ; non-tty stdin: the stream face drinks the in port
+                 (reads in, 0)))))         ; non-tty stdin: the stream face drinks the in port
 ) ; module cli
