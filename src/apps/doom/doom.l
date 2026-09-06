@@ -108,10 +108,11 @@
    ; --- the nest: a love with doom in it, laid in ./love-<ver>/ off this binary's source --
    ; `love doom` from a binary that carries no doom lays this binary's source under
    ; ./love-<ver>/ (the source verb's lay: files, no build), fetches doomgeneric and the
-   ; shareware IWAD into its dl/ with wget, builds `cook host DOOM=1` there ONCE -- this
-   ; binary's own mooncc is the compiler, no ambient probe, so the love0 witness never flips
-   ; and nothing builds twice -- and execs that binary's doom. the nest is kept, so the next
-   ; `love doom` is one exec. nothing outside the current directory is written.
+   ; shareware IWAD into its dl/ with wget, builds `cook host DOOM=1 LOVE=<this binary>`
+   ; there ONCE -- the artifact is the toolchain: its egg lane stands in for love0, its own
+   ; mooncc compiles every object, and no bootstrap love is built -- and execs that binary's
+   ; doom. the nest is kept, so the next `love doom` is one exec. nothing outside the
+   ; current directory is written.
    wad-url "https://raw.githubusercontent.com/Daivuk/PureDOOM/master/doom1.wad"
    dg-url "https://codeload.github.com/ozkl/doomgeneric/tar.gz/refs/heads/master"
    (note s) (say err (";; " + s + "\n"), flush err)
@@ -161,8 +162,8 @@
                       (: farm ((from 'source 'src-farm) nest exe)                 ; our tools fill PATH's gaps
                          _ (setenv "PATH" (getenv "PATH" + ":" + farm))
                          _ (setenv "CC" (exe + " mooncc"))
-                         _ (note "building the nest's love with doom inside -- once, and it takes minutes")
-                         st2 (run-in nest [exe "cook" "host" "DOOM=1"])
+                         _ (note "building the nest's love with doom inside -- this binary is the toolchain")
+                         st2 (run-in nest [exe "cook" "host" "DOOM=1" ("LOVE=" + exe)])
                          (? !(st2 = 0) (fail "the doom build failed")
                             (: _ (setenv "LOVE_DOOM_NEST" "1")
                                e (exec (bin . ("doom" . (nest-args dl as))))

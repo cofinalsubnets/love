@@ -220,9 +220,13 @@ should end the process the ICCCM way, which it does through WM_DELETE_WINDOW but
 
 **`love doom` from a love with no doom in it** (src/apps/doom/doom.l, doom-nest): lay this
 binary's source under `./love-<ver>/` (the source verb's lay, files only), wget doomgeneric and
-the IWAD into its dl/, `cook host DOOM=1` there once with this binary's own mooncc pinned as CC,
-exec that binary's doom. the nest is kept, so the second run is one exec, and nothing outside
-the current directory is written. ⚠ the first shape seeded (`love seed`: a full bootstrap and
+the IWAD into its dl/, `cook host DOOM=1 LOVE=<this binary>` there once, exec that binary's
+doom. the nest is kept, so the second run is one exec, and nothing outside the current
+directory is written. **`LOVE=` makes the artifact its own bootstrap** (the Makefile knob):
+out/love0 becomes a two-line script onto the binary, its mooncc is the moon, the mooncc image
+is never baked and no love0 is compiled -- the whole tree, doom objects included, is built by
+the binary that carried it. ⚠ `moonrun` was already a name in test/test.mk (`$m mooncc`) and
+the collision hid the knob for a build: the mkrt driver is `rtlove`. ⚠ the first shape seeded (`love seed`: a full bootstrap and
 a fixpoint rebuild) and then re-probed the compiler for the doom build -- the love0 witness
 flipped and everything built twice; gwen saw the two `LD out/love0` lines. pinning CC is what
 makes it one build. ⚠ `make host DOOM=1` after a

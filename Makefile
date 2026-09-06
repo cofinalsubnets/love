@@ -129,11 +129,6 @@ out/0/%.o: $(R)/%.c $(love_h) out/0/.love0cc
 	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(boot_cc) -c $< -o $@
-$(love0): $(love0_o)
-	@echo 'LD	'$@
-	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= $(CC) $(ai_cflags) -pie -o $@ $(love0_o)
-
 # src/core/love.c -> out/*.o
 $(ho)/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
 	@echo 'CC	'$@
@@ -153,6 +148,31 @@ $(ho)/src/host/cb.o: src/core/quay/quay.c src/core/quay/nif.c src/core/quay/quay
 
 moon0 = $(love0) wake out/mooncc0.image mooncc $(GCDBG)
 moon0_dep = out/mooncc0.image
+# A DRIVING LOVE (`love doom` names itself in LOVE): the artifact IS the bootstrap. out/love0
+# becomes a two-line script onto it (image awake: every cat a recipe preloads reopens modules
+# the image carries, the kernel verb's own shape), its own mooncc is the moon, the mooncc
+# image is never baked and no love0 is compiled -- the tree builds with nothing but the
+# binary that carried it. lcat runs on it bare: the prel is already there. rtlove is the
+# love that runs a moon-side tool (mkrt) either way.
+ifdef LOVE
+moon0 = $(LOVE) mooncc $(GCDBG)
+moon0_dep =
+rtlove = $(LOVE)
+rtlove_dep =
+lcat_love = $(LOVE)
+$(love0):
+	@echo 'SH	'$@
+	@mkdir -p $(dir $@)
+	@printf '#!/bin/sh\nexec %s "$$@"\n' '$(LOVE)' > $@
+	@chmod 755 $@
+else
+rtlove = $(love0) wake out/mooncc0.image
+rtlove_dep = out/mooncc0.image
+$(love0): $(love0_o)
+	@echo 'LD	'$@
+	@mkdir -p $(dir $@)
+	@LOVE_NO_IMAGE= $(CC) $(ai_cflags) -pie -o $@ $(love0_o)
+endif
 # THE MOONCC OBJECT LANE: love's own C compiled by mooncc into one directory, worn twice --
 # at the host's arch, and at the cross arch $(xa) names. $(call moonlane,NAME,DIRVAR,CCVAR,
 # ARCHVAR), every argument but the first a variable NAME so the body stays deferred; the
@@ -308,8 +328,8 @@ rt_slice = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h \
                       src/apps/moon/lib/nolibc/*.c src/apps/moon/lib/nolibc/*.h \
                       src/apps/moon/lib/nolibc/*/*.c src/apps/moon/lib/nolibc/*/*.h \
                       src/apps/moon/lib/math/*.c)
-out/rt.o: $(rt_slice) tools/mkrt.l out/mooncc0.image $(love0)
-	@$(love0) wake out/mooncc0.image tools/mkrt.l $@ $(hosta)
+out/rt.o: $(rt_slice) tools/mkrt.l $(rtlove_dep) $(love0)
+	@$(rtlove) tools/mkrt.l $@ $(hosta)
 
 xqemu_x64  = qemu-x86_64
 xqemu_a64 = qemu-aarch64
@@ -325,8 +345,8 @@ $(eval $(call moonlane,x,xd,moonx,xa))
 
 $(xd)/src.o: $(dist_source) tools/mksrc.l out/.mksys-cat.l $(love0)
 	@$(love0) -l out/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(xa)
-$(xd)/rt.o: $(rt_slice) tools/mkrt.l out/mooncc0.image $(love0)
-	@$(love0) wake out/mooncc0.image tools/mkrt.l $@ $(xa)
+$(xd)/rt.o: $(rt_slice) tools/mkrt.l $(rtlove_dep) $(love0)
+	@$(rtlove) tools/mkrt.l $@ $(xa)
 $(xd)/love: $(x_o) $(xd)/src.o $(xd)/rt.o out/lib/readme.bin
 	@echo 'MOON	'$@
 	@$(moonx) -pie $(x_o) $(xkart_o) $(xd)/src.o $(xd)/rt.o -freadme=out/lib/readme.bin -o $@
