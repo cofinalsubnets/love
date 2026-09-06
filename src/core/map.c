@@ -118,10 +118,10 @@ static ai_noinline word ai_mapdel(struct ai *g, word m, word k, word dflt) {
 // C-callable fresh empty map, pushed on sp[0]. same shape as lvm_tablet.
 struct ai *map_new(struct ai *g) {
  uintptr_t cap = map_min_cap, nb = 4 + 2 * cap;
- if (!ai_ok(g = ai_have(g, nb + 3))) return g;
+ if (!ai_ok(g = ai_have(g, nb + map_head))) return g;
  union u *b = map_fill_back(cell(g->hp), cap), *h = cell(g->hp + nb);
- h[0].ap = lvm_map_lookup, h[1].x = (word) b, tagthread(h, 2);
- g->hp += nb + 3;
+ h[0].ap = lvm_map_lookup, h[1].x = (word) b, h[2].x = putcharm(++g->next_serial), tagthread(h, 3);
+ g->hp += nb + map_head;
  return ai_push(g, 1, (word) h); }
 
 // (tablet n): a fresh empty map; n is a size hint (presized below the 0.75 load
@@ -132,12 +132,12 @@ lvm(lvm_tablet) {
            cap = map_min_cap;
  while (cap * 3 <= hint * 4) cap *= 2;                        // grow to hold `hint` below the 0.75 load factor
  uintptr_t nb = 4 + 2 * cap;
- Have(nb + 3);
+ Have(nb + map_head);
  union u *b = map_fill_back(cell(Hp), cap),
          *h = cell(Hp + nb);
- h[0].ap = lvm_map_lookup, h[1].x = (word) b, tagthread(h, 2);
+ h[0].ap = lvm_map_lookup, h[1].x = (word) b, h[2].x = putcharm(++g->next_serial), tagthread(h, 3);
  Sp[0] = (word) h;
- Hp += nb + 3; ai_musttail return Next(1); }
+ Hp += nb + map_head; ai_musttail return Next(1); }
 
 // (m k): map application is lookup, () if absent; unwinds like self-quote
 lvm(lvm_map_lookup) {

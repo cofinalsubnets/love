@@ -796,10 +796,12 @@ static ai_inline bool nomp(word x) { return lamp(x) && (cell(x)->ap == lvm_sym |
 // free. earned by the build tools that back-patch an image in place.
 static ai_inline bool caskp(word _) { return lamp(_) && cell(_)->ap == lvm_cask; }
 // a map is a lookup-lambda with stable identity across growth: a fixed header
-// [lvm_map_lookup, backing, <tag>] callers hold, and an open-addressed backing
+// [lvm_map_lookup, backing, serial, <tag>] callers hold, and an open-addressed backing
 // [lvm_map_data, len, cap, k0,v0, .., <tag>] -- growth swaps header[1], so aliased
 // references (ev's scopes) see later inserts. both are plain threads, no bespoke
 // GC. empty slots hold map_gap, a unique out-of-pool address. (m k) -> value, () absent.
+// the serial (a charm, drawn from the mint stream) is the order key: a tablet is
+// mutable, so its order is its identity and never its contents.
 lvm_t lvm_map_lookup, lvm_map_data;
 static ai_inline bool tabp(word _) { return lamp(_) && cell(_)->ap == lvm_map_lookup; }
 extern const word ai_map_gap_cell;   // one definition: map_gap is its ADDRESS
@@ -807,6 +809,8 @@ extern const word ai_map_gap_cell;   // one definition: map_gap is its ADDRESS
 #define map_min_cap 4
 #define map_hint_max (1u << 24)        // the `(tablet n)` size hint saturates to this bounded green charm
 static ai_inline word map_back(word m) { return cell(m)[1].x; }
+static ai_inline uintptr_t map_serial(word m) { return getcharm(cell(m)[2].x); }
+enum { map_head = 4 };   // the header's words, tag included
 static ai_inline word *map_slots(word m) { return &cell(map_back(m))[3].x; }
 static ai_inline uintptr_t map_len(word m) { return getcharm(cell(map_back(m))[1].x); }
 static ai_inline uintptr_t map_cap(word m) { return getcharm(cell(map_back(m))[2].x); }

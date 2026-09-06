@@ -127,8 +127,8 @@ static void gen_fz_relocate(struct ai *g) {
 static word major_symbols_rebuild(struct ai *g, struct ai_gcx *X, word om) {
  if (!om) return 0;
  uintptr_t cap = map_cap(om), mask = cap - 1, n = 0;
- union u *b = map_fill_back(gbump(g, 4 + 2 * cap), cap), *hd = gbump(g, 3);
- hd[0].ap = lvm_map_lookup, hd[1].x = (word) b, tagthread(hd, 2);
+ union u *b = map_fill_back(gbump(g, 4 + 2 * cap), cap), *hd = gbump(g, map_head);
+ hd[0].ap = lvm_map_lookup, hd[1].x = (word) b, hd[2].x = cell(om)[2].x, tagthread(hd, 3);
  word *os = map_slots(om), *ns = &b[3].x;
  word const *lo = X->to_lo, *hi = X->to_hi;
  for (uintptr_t j = 0; j < cap; j++) {

@@ -505,8 +505,15 @@ static struct ai *img_canon_symbols(struct ai *g) {
 
 // canonical serial order: the live serials keep session order, packed 1..k. a name
 // carries no serial -- interned, its spelling is its order -- so only the nameless
-// (mints, pids) are ranked, and session order is canonical for those.
-// assign ranks 1..k to the marked serials; answers k. slots are word offsets.
+// (mints, tablets, pids) are ranked, and session order is canonical for those.
+// a slot is a word offset; SlotCharm marks one that holds its serial as a charm (a
+// tablet's head, like a task's pid) where a mint's rides raw.
+#define SlotCharm ((uintptr_t) 1 << (8 * sizeof(uintptr_t) - 1))
+static ai_inline uintptr_t slot_serial(word const *blob, uintptr_t s) {
+ word v = blob[s & ~(uintptr_t) SlotCharm]; return s & SlotCharm ? (uintptr_t) getcharm(v) : (uintptr_t) v; }
+static ai_inline void slot_put(word *blob, uintptr_t s, uintptr_t r) {
+ blob[s & ~(uintptr_t) SlotCharm] = s & SlotCharm ? putcharm(r) : (word) r; }
+// assign ranks 1..k to the marked serials; answers k.
 static uintptr_t img_rank_assign(word *rank, uintptr_t nser) {
  uintptr_t k = 0;
  for (uintptr_t i = 1; i < nser; i++) if (rank[i]) rank[i] = ++k;
@@ -748,7 +755,7 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
    case DChain: blob[off + 1] = img_encode(x, A(p));
                 blob[off + 2] = img_encode(x, B(p)); break;
    case DNom:   blob[off + 1] = img_encode(x, (intptr_t) nom(p)->name); break;   // dig rides raw
-   case DMint:  slots[nslot++] = off + 1; break;         // the serial word, canonicalized below
+   case DMint:  slots[nslot++] = off + 1; break;         // the serial word, canonicalized below (raw)
    case DTray:   if (tray(p)->type == ai_O) {
                  word *e = ptr(tray_data(tray(p)));
                  uintptr_t ne = tray_nelem(tray(p)), eo = (uintptr_t)(e - ptr(p));
@@ -760,7 +767,8 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
                                  w * sizeof(word) - n);
                    break; }
    default: break; }                                     // DMint/DBig/DGem/DSun/DTwin: flat leaves
-  else for (uintptr_t i = 1; i < sz; i++) blob[off + i] = img_encode(x, ptr(p)[i]);   // thread interior + terminator
+  else { for (uintptr_t i = 1; i < sz; i++) blob[off + i] = img_encode(x, ptr(p)[i]);   // thread interior + terminator
+         if (p->ap == lvm_map_lookup) slots[nslot++] = (off + 2) | SlotCharm; }        // a tablet's serial, a charm
   p = cell(ptr(p) + sz); }
  if (x->ct) g->alloc(g, x->ct, 0);
  *cseg = x->cseg, *ncode = x->cn;
@@ -777,7 +785,7 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
  Why(11);
  memset(rank, 0, nser * sizeof(word));
  for (uintptr_t i = 0; i < nslot; i++)
-  if ((uintptr_t) blob[slots[i]] < nser) rank[blob[slots[i]]] = 1;
+  { uintptr_t v = slot_serial(blob, slots[i]); if (v < nser) rank[v] = 1; }
  for (union u *n = g->tasks, *st = n; n; n = n->m == st ? NULL : n->m) {
   uintptr_t pid = getcharm(n[2].x);
   if (pid < nser) rank[pid] = 1; }
@@ -788,7 +796,7 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
  rank[0] = 0;                                            // the immortal ()'s, never drawn, never moved
  kser = img_rank_assign(rank, nser);
  for (uintptr_t i = 0; i < nslot; i++)
-  if ((uintptr_t) blob[slots[i]] < nser) blob[slots[i]] = rank[blob[slots[i]]];
+  { uintptr_t v = slot_serial(blob, slots[i]); if (v < nser) slot_put(blob, slots[i], rank[v]); }
  for (union u *n = g->tasks, *st = n; n; n = n->m == st ? NULL : n->m) {
   uintptr_t off = (uintptr_t)(ptr(n) - base), pid = getcharm(n[2].x);
   if (ptr(n) >= base && ptr(n) < hp && pid < nser) blob[off + 2] = putcharm(rank[pid]); }

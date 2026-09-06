@@ -1190,7 +1190,7 @@ intptr_t vcmp_int(int op, intptr_t a, intptr_t b) {
 // operand compares elementwise via lvm_vbin instead -- the mask). within a band:
 // numbers by value across the tower (complex lexicographic by (re, im), NaN
 // unordered), strings lex, symbols by name then serial, chains lex recursively,
-// lambdas/maps by repr hash (GC-stable). only < and <= are implemented; > and >=
+// tablets by serial, lambdas by repr hash (GC-stable). only < and <= are implemented; > and >=
 // reverse the operands (right for NaN: swap, never negate). a total preorder:
 // hash-colliding lambdas compare equal but are not =. the compare order is
 // decoupled from the enum dispatch order -- cmp_rank remaps, the matrices untouched.
@@ -1338,7 +1338,9 @@ static intptr_t cmp3(struct ai *g, word a, word b) {
   if (coin_kind(a) == coin_kind(b)) return cmp3(g, coin_load(a), coin_load(b));   // one kind: by payload
   word sa = kind_serial(g, a), sb = kind_serial(g, b);                             // two: by registration
   if (charmp(sa) && charmp(sb) && sa != sb) return getcharm(sa) < getcharm(sb) ? -1 : 1; }
- uintptr_t ha = hash(g, a), hb = hash(g, b);               // lambda/map/port/cask: by repr hash
+ if (tabp(a) && tabp(b)) { uintptr_t sa = map_serial(a), sb = map_serial(b);   // tablet: by serial -- mutable, so
+  return sa < sb ? -1 : sa > sb ? 1 : 0; }                                        // its identity orders it, never its contents
+ uintptr_t ha = hash(g, a), hb = hash(g, b);               // lambda/port/cask: by repr hash
  return ha < hb ? -1 : ha > hb ? 1 : 0; }
 
 // (sort l): stable ascending merge by cmp3 -- one reservation up front (n result
