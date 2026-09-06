@@ -933,7 +933,7 @@ valg: host
 	valgrind --error-exitcode=1 --suppressions=$R/tools/valgrind.supp $m $(ho)/.valg-corpus.l </dev/null
 # the site's faces and its stylesheet, laid and checked in: github pages serves
 # the tree as it is, so a generated file still has to be committed
-web: fonts assets/web/style.css index.html
+web: fonts assets/web/style.css assets/web/favicon.png index.html
 fonts: assets/fonts/quay16.woff assets/fonts/quay8.woff
 assets/fonts/quay16.woff: src/core/quay/moderndos_8x16.c tools/mkfont.l $(ho)/.love.baked
 	@mkdir -p $(dir $@)
@@ -945,6 +945,10 @@ assets/fonts/quay8.woff: src/core/quay/cga_8x8.c tools/mkfont.l $(ho)/.love.bake
 assets/web/style.css: web/style.l src/apps/vi/config.l src/apps/vi/hueweb.l $(ho)/.love.baked
 	@mkdir -p $(dir $@)
 	@env -u LOVE_NO_IMAGE $m web/style.l $@
+# ..the favicon: cp437's heart off the 8x8 face, in the palette's red
+assets/web/favicon.png: src/core/quay/cga_8x8.c tools/mkicon.l src/apps/vi/config.l $(ho)/.love.baked
+	@mkdir -p $(dir $@)
+	@env -u LOVE_NO_IMAGE $m tools/mkicon.l $< 3 32 $@
 # ..and the front page itself, its island the fragment repl.js drives
 index.html: web/index.l src/port/wasm/repl.html $(ho)/.love.baked
 	@$m web/index.l $@

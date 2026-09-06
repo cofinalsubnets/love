@@ -323,16 +323,19 @@ test_cli: host
 	@echo TEST test/gate/cli.sh "(the cli exit-status lane)"
 	@sh test/gate/cli.sh $m
 
-# the front page and its sheet are laid (web/index.l, web/style.l) and checked in for github
-# pages: a lay that differs from the tree means someone edited a source without `make web`.
+# the front page, its sheet and its icon are laid (web/index.l, web/style.l, tools/mkicon.l)
+# and checked in for github pages: a lay that differs from the tree means someone edited a
+# source without `make web`.
 test_web: host
-	@echo TEST web/index.l web/style.l
+	@echo TEST web/index.l web/style.l tools/mkicon.l
 	@mkdir -p out/.web
 	@$m web/index.l out/.web/index.html
 	@env -u LOVE_NO_IMAGE $m web/style.l out/.web/style.css
+	@env -u LOVE_NO_IMAGE $m tools/mkicon.l src/core/quay/cga_8x8.c 3 32 out/.web/favicon.png 2>/dev/null
 	@cmp -s out/.web/index.html index.html && cmp -s out/.web/style.css assets/web/style.css \
-	  || { echo "  FAIL: index.html or style.css is behind web/ -- run make web and commit"; exit 1; }
-	@echo "  web: ok -- index.html and style.css are what web/ lays"
+	  && cmp -s out/.web/favicon.png assets/web/favicon.png \
+	  || { echo "  FAIL: index.html, style.css or favicon.png is behind web/ -- run make web and commit"; exit 1; }
+	@echo "  web: ok -- index.html, style.css and favicon.png are what web/ lays"
 test_sb: host out$(hsuf)/sb
 	@echo TEST src/apps/sb/sb.l + test/host/sb.l
 	@rm -rf out/.sbtest

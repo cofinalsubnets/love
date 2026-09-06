@@ -5,7 +5,8 @@
 ; html as written -- it is our file. what the lay adds is the one property a hand page
 ; loses: every link on the page to an anchor on the page is checked, and a dead one fails
 ; the lay rather than shipping. the island is src/port/wasm/repl.html, slurped, so the
-; markup repl.js drives has one copy; the sheet is web/style.l's; the fonts tools/mkfont.l's.
+; markup repl.js drives has one copy; the sheet is web/style.l's, the fonts tools/mkfont.l's,
+; the icon tools/mkicon.l's.
 
 ; --- the little dsl: the lay of each element. first, since a value binds in order and the
 ; data below calls these as it binds.
