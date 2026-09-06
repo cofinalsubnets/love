@@ -55,7 +55,7 @@ async function loveRepl(root) {
   const face = cellsFace(M.HEAPU32.subarray(palette() >> 2, (palette() >> 2) + 256), unfold);
   try {
     const srcs = await Promise.all(
-      ['src/apps/console/console.l', 'src/port/wasm/web.l', 'src/apps/rove/rove.l', 'src/apps/ink/ink.l'].map(p => fetch(p).then(r => r.text())));
+      ['src/apps/console/console.l', 'src/port/wasm/web.l', 'src/apps/rove/rove.l', 'src/apps/rove/story.l', 'src/apps/ink/ink.l'].map(p => fetch(p).then(r => r.text())));
     for (const t of srcs) ev(t);
     for (const ch of root.querySelectorAll('[data-app]')) ch.style.display = 'inline-block';
   } catch (e) {
@@ -156,6 +156,7 @@ async function loveRepl(root) {
   const alive = M.cwrap('ai_alive', 'number', []);
   const HINTS = {
     rove: ' · hjkl yubn/arrows move · > descend · q/esc ashore',
+    lighthouse: ' · look, go <exit>, read <thing> · help · quit',
     ink:  ' · any key steps ashore',
   };
 

@@ -75,7 +75,7 @@ const pump = () => { let acc = drain();
   for (let k = 0; acc && k < 4; k++) { ev('(web-show ' + aiStr(acc) + ')'); acc = drain(); }
   return alive() === 1; };
 const row = (r, cols) => { const { cells } = view(); return Array.from(cells.subarray(r * cols, r * cols + cols), c => face.glyph[c & 255]).join(''); };
-evs(src('src/apps/console/console.l')); evs(src('src/port/wasm/web.l')); evs(src('src/apps/rove/rove.l')); evs(src('src/apps/ink/ink.l'));   // the door, the stubs, then the apps: a closure captures its globals at creation
+evs(src('src/apps/console/console.l')); evs(src('src/port/wasm/web.l')); evs(src('src/apps/rove/rove.l')); evs(src('src/apps/rove/story.l')); evs(src('src/apps/ink/ink.l'));   // the door, the stubs, then the apps: a closure captures its globals at creation
 ok(evs('(puts (show (rest 0)))').trim() !== '', 'a rest of nothing yields');
 ok(evs('(puts (show (door-task (\\ _ 7))))').trim() === '7', 'the door\'s task lane, from a task that can park');
 ev('(web-boot "rove" 80 24)');
@@ -100,5 +100,17 @@ await beat(); ok(pump(), 'ink rests a beat and swims on');
 // a key lands while ink sleeps: sleeping is not runnable, so it is seen on the next beat
 key(32); pump(); await beat(); ok(!pump(), 'any key: ink steps ashore on the next beat');
 
+// the story: a line-driven app -- the typed line rides the key ring, enter turns it
+ev('(web-boot "lighthouse" 60 12)');
+ok(pump(), 'the lighthouse boots and lives');
+{ const { hdr } = view(); ok(hdr[0] === 12 && hdr[1] === 60, `story screen ${hdr[0]}x${hdr[1]}`);
+  ok(row(0, 60).startsWith('the lighthouse -- the lamp room'), 'the title bar: ' + JSON.stringify(row(0, 60).trim()));
+  ok(row(11, 60).startsWith('> '), 'the prompt is the last row'); }
+for (const c of 'down\r') key(c.charCodeAt(0));
+ok(pump(), 'a typed line turns');
+ok(row(0, 60).startsWith('the lighthouse -- the stair'), 'the line moved us: ' + JSON.stringify(row(0, 60).trim()));
+for (const c of 'q\r') key(c.charCodeAt(0));
+ok(!pump(), 'quit lands the story');
+
 if (fails) { console.error(`WASM SCREEN FAILED (${fails})`); process.exit(1); }
-console.log('  screen: ok -- the mirror, the face, the lay, and rove and ink as tasks on the page console');
+console.log('  screen: ok -- the mirror, the face, the lay, and rove, ink and a story as tasks on the page console');

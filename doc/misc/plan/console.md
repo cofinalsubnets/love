@@ -56,11 +56,20 @@ that is a compiler.
   ink run on the page UNCHANGED through web.l -- their tty runners, keys as the bytes a
   terminal sends. gates: test/host/door.l (both lanes, forked here), screen.mjs (both
   apps as tasks). rove's library level calls the door and nothing else to open a file.
-- **rung 2 -- rove as the fiction engine.** levels as data with a designer; rooms,
-  exits, things, text -- the zork half over the rogue half. no combat, mobs or procgen
-  at first: the crawl becomes one level among others or goes. the library level:
-  a room per crew module, a book per file, reading = libra's document, and "read the
-  source" = rung 1 into vi. frames keep gating headless on every seat.
+- **rung 2 -- rove as the fiction engine.** ✅ the engine and the library LANDED,
+  src/apps/rove/story.l: levels as data (rooms with text, exits and things; a thing a
+  book to read or a file to open), a line-driven turn (look, go, read, open, exits,
+  help, quit, or a bare exit), a pure painter (title bar, the log newest at the foot,
+  the prompt; wrapped at the width) so turns and frames gate headless
+  (test/host/story.l). the library: `(library "src/apps")` -- a hall with a door per
+  wing, a room per crew module whose text is libra's lift of its header, a book per
+  file whose `read` is its own header and whose `open` is vi through the door; the
+  hatch in the hall opens the crawl (rove.l) through the door, so the crawl is one
+  level among others. the crew modules are asked for by name at the call, so the file
+  loads on a seat that lacks them and says so. the page walks the demo level
+  (`lighthouse`; a chip). OPEN: a level designer (levels are hand-written data for
+  now), and the page's library -- it has no tree to read, so its catalogue wants to
+  be laid by `make web` the way the site is.
 - **rung 3 -- the wasm backend**, doc/misc/plan/moon-wasm.md rungs 0-5: the module
   writer, control flow by dispatch loop, the type law, the environment (a nolibc face
   where the handful of system calls are imports the page supplies, and a loader of a

@@ -295,7 +295,7 @@
               say out "\e[0m\e[?25h\e[?1049l",
               flush out,
               raw 0,
-              puts $ g 'over @ 'won  ("the pearl is yours -- and " + show (g 'p 'gold) + " gold besides")
-                               'dead ("the hold keeps you, deck " + show (g 'lvl))
-                                     ("ashore with " + show (g 'p 'gold) + " gold")),
-             (g 'p 'gold)))
+              puts (g 'over @ 'won  ("the pearl is yours -- and " + show (g 'p 'gold) + " gold besides")
+                              'dead ("the hold keeps you, deck " + show (g 'lvl))
+                                    ("ashore with " + show (g 'p 'gold) + " gold")),
+              (g 'p 'gold))))
