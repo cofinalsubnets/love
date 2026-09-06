@@ -2,6 +2,7 @@
 ; (door f) runs a tty app on this console and answers its charm. a terminal forks,
 ; inle and the page run a task -- and this is a terminal, so `door` takes the fork lane
 ; here; the task lane is called by name. not in the test/*.l corpus: it forks.
+; the module is src/apps/console/console.l, catted into the artifact.
 ; run:  cat test/00-init.l test/host/door.l | out/love
 (: _ (use 'console)
    D (from 'console)

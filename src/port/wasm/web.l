@@ -1,14 +1,15 @@
 ; src/port/wasm/web.l -- the page's love side: the quay tty apps on the page's console,
-; unchanged. repl.js feeds this through ai_eval BEFORE rove.l and ink.l -- a closure
-; captures its free globals at creation, so the tty words an app asks for must stand
-; first -- and src/port/wasm/screen.mjs runs it under node the same way.
+; unchanged. repl.js feeds this through ai_eval after src/apps/console/console.l and
+; BEFORE rove.l and ink.l -- a closure captures its free globals at creation, so the tty
+; words an app asks for must stand first -- and src/port/wasm/screen.mjs runs it under
+; node the same way.
 ;
 ; the seat is a console with no fds: stdin is a ring of key bytes the page pushes
 ; (host.c's ai_key), so `see in` parks the reading task until the next push and `cue?`
 ; asks the ring; stdout is the buffer the page drains after each eval. an app runs as a
 ; task -- twirled here, never through the door's catch, since the session's own task
-; must stay awake to pump it -- and inside it the console door (post.l's `door`) is the
-; task lane, so an app opening another parks the way it would anywhere. the page pumps:
+; must stay awake to pump it -- and inside it the console door (src/apps/console) is
+; the task lane, so an app opening another parks the way it would anywhere. the page pumps:
 ;   (web-boot nm cols rows)   the screen, and the app named nm on it as a task
 ;   (web-step)                the app's turn -- one time slice; the page steps until
 ;                             host.c's ai_runnable says the app parked, sleeps or landed
@@ -20,7 +21,7 @@
 ; the tty words this seat has no device for: winsize is the screen's, raw is nothing
 ; to do. an app run on the session's own task (a typed `rove ()`) reads the end of
 ; stdin at once (host.c) and steps ashore, since nothing could unpark it.
-(use 'console)                                      ; the door, for an app opening another
+(use 'console)                                      ; the door, fed just before this file
 (: raw (\ _ ())
    web-scr {} web-task {}
    (winsize _) (: s (peep web-scr () 0) (? s ((gaze s 1) . (gaze s 2)) ()))

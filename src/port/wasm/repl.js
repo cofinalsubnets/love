@@ -43,8 +43,10 @@ async function loveRepl(root) {
   put(`;3 love ${ver} ${(performance.now() - t0).toFixed(0)}ms`, 'cnd');
   cmd.disabled = false; cmd.focus({preventScroll: true});
 
-  // quay: the real engines (src/apps/rove, src/apps/ink) and the page's love side
-  // (src/port/wasm/web.l), which puts each app on a quay screen of the box's size and
+  // quay: the console door, the page's love side (src/port/wasm/web.l: the tty words
+  // this seat has no device for), then the real engines (src/apps/rove, ink) -- a
+  // closure captures its free globals at creation. web.l puts each app on a quay
+  // screen of the box's size and
   // mirrors its frames out for cells.js to lay. (fetch fails on file://; then `rove ()`
   // just scares gracefully through the default help.)
   const mirror = M.cwrap('ai_mirror', 'number', []);
@@ -53,7 +55,7 @@ async function loveRepl(root) {
   const face = cellsFace(M.HEAPU32.subarray(palette() >> 2, (palette() >> 2) + 256), unfold);
   try {
     const srcs = await Promise.all(
-      ['src/port/wasm/web.l', 'src/apps/rove/rove.l', 'src/apps/ink/ink.l'].map(p => fetch(p).then(r => r.text())));
+      ['src/apps/console/console.l', 'src/port/wasm/web.l', 'src/apps/rove/rove.l', 'src/apps/ink/ink.l'].map(p => fetch(p).then(r => r.text())));
     for (const t of srcs) ev(t);
     for (const ch of root.querySelectorAll('[data-app]')) ch.style.display = 'inline-block';
   } catch (e) {

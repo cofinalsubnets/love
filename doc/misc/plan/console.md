@@ -45,7 +45,7 @@ that is a compiler.
   src/port/wasm/screen.mjs under test_wasm -- a hand frame's cells and its lay, and rove
   and ink booted on a page screen. what it found on the way: the wasm function-table
   trap in c0's peephole (src/port/wasm/32bit-findings.md).
-- **rung 1 -- the console door.** ✅ LANDED. `(door f)`, module 'console in post.l:
+- **rung 1 -- the console door.** ✅ LANDED. `(door f)`, module 'console (src/apps/console/console.l, a crew file: the core spells no host word):
   one verb, two bodies. a seat that can fork (a terminal) forks -- the app owns the
   tty, the parent waits, its own state untouched -- and a seat that cannot (inle, the
   page) twirls the app as a task and catches it. fork, wait and quit are read late, so
