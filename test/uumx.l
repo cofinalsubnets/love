@@ -26,18 +26,18 @@
  (defn mxKString nat 11)
  (defn mxKChain nat 12)
  (defn mxKTablet nat 13)
- (defn mxKHot nat 14)
+ (defn mxKCoin nat 14)
  (defn mxLbin_unit nat 0)
- (defn mxLadd_string nat 1)
- (defn mxLbin_a nat 2)
- (defn mxLadd_seq nat 3)
- (defn mxLaddh nat 4)
- (defn mxLbin_b nat 5)
- (defn mxLaddn nat 6)
+ (defn mxLaddn nat 1)
+ (defn mxLbin_b nat 2)
+ (defn mxLaddh nat 3)
+ (defn mxLbin_a nat 4)
+ (defn mxLadd_string nat 5)
+ (defn mxLadd_seq nat 6)
  (defn mxL0 nat 7)
- (defn mxLmul_rep nat 8)
- (defn mxLmulh nat 9)
- (defn mxLmuln nat 10)
+ (defn mxLmuln nat 8)
+ (defn mxLmul_rep nat 9)
+ (defn mxLmulh nat 10)
  (defn mxLmul_cart nat 11)
  (defn mxnk nat 15)
  (defn mxnl nat 12)
@@ -83,33 +83,33 @@
    ; KMint
    (mcons (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 nnil)))))))))))))))
    ; KNom
-   (mcons (ncons 0 (ncons 1 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 1 (ncons 3 (ncons 4 (ncons 4 nnil)))))))))))))))
+   (mcons (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 nnil)))))))))))))))
    ; KCharm
-   (mcons (ncons 0 (ncons 5 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 5 (ncons 5 (ncons 4 (ncons 4 nnil)))))))))))))))
+   (mcons (ncons 0 (ncons 0 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 2 (ncons 2 (ncons 3 (ncons 3 nnil)))))))))))))))
    ; KSun
-   (mcons (ncons 0 (ncons 5 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 5 (ncons 5 (ncons 4 (ncons 4 nnil)))))))))))))))
+   (mcons (ncons 0 (ncons 0 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 2 (ncons 2 (ncons 3 (ncons 3 nnil)))))))))))))))
    ; KGem
-   (mcons (ncons 0 (ncons 5 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 5 (ncons 5 (ncons 4 (ncons 4 nnil)))))))))))))))
+   (mcons (ncons 0 (ncons 0 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 2 (ncons 2 (ncons 3 (ncons 3 nnil)))))))))))))))
    ; KTwin
-   (mcons (ncons 0 (ncons 5 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 5 (ncons 5 (ncons 4 (ncons 4 nnil)))))))))))))))
+   (mcons (ncons 0 (ncons 0 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 2 (ncons 2 (ncons 3 (ncons 3 nnil)))))))))))))))
    ; KBig
-   (mcons (ncons 0 (ncons 5 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 5 (ncons 5 (ncons 4 (ncons 4 nnil)))))))))))))))
+   (mcons (ncons 0 (ncons 0 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 2 (ncons 2 (ncons 3 (ncons 3 nnil)))))))))))))))
    ; KTrayZ
-   (mcons (ncons 0 (ncons 5 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 5 (ncons 5 (ncons 4 (ncons 4 nnil)))))))))))))))
+   (mcons (ncons 0 (ncons 0 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 2 (ncons 2 (ncons 3 (ncons 3 nnil)))))))))))))))
    ; KTrayR
-   (mcons (ncons 0 (ncons 5 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 5 (ncons 5 (ncons 4 (ncons 4 nnil)))))))))))))))
+   (mcons (ncons 0 (ncons 0 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 2 (ncons 2 (ncons 3 (ncons 3 nnil)))))))))))))))
    ; KTrayC
-   (mcons (ncons 0 (ncons 5 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 5 (ncons 5 (ncons 4 (ncons 4 nnil)))))))))))))))
+   (mcons (ncons 0 (ncons 0 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 2 (ncons 2 (ncons 3 (ncons 3 nnil)))))))))))))))
    ; KTrayO
-   (mcons (ncons 0 (ncons 5 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 6 (ncons 5 (ncons 5 (ncons 4 (ncons 4 nnil)))))))))))))))
+   (mcons (ncons 0 (ncons 0 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 2 (ncons 2 (ncons 3 (ncons 3 nnil)))))))))))))))
    ; KString
-   (mcons (ncons 0 (ncons 1 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 1 (ncons 3 (ncons 4 (ncons 4 nnil)))))))))))))))
+   (mcons (ncons 0 (ncons 0 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 5 (ncons 6 (ncons 3 (ncons 3 nnil)))))))))))))))
    ; KChain
-   (mcons (ncons 0 (ncons 3 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 3 (ncons 3 (ncons 4 (ncons 4 nnil)))))))))))))))
+   (mcons (ncons 0 (ncons 0 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 6 (ncons 6 (ncons 3 (ncons 3 nnil)))))))))))))))
    ; KTablet
-   (mcons (ncons 0 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 nnil)))))))))))))))
-   ; KHot
-   (mcons (ncons 0 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 (ncons 4 nnil)))))))))))))))
+   (mcons (ncons 0 (ncons 0 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 nnil)))))))))))))))
+   ; KCoin
+   (mcons (ncons 0 (ncons 0 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 (ncons 3 nnil)))))))))))))))
     mnil))))))))))))))))
 
  ; `*`: 15 kinds square, 225 cells
@@ -117,69 +117,69 @@
    ; KMint
    (mcons (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 nnil)))))))))))))))
    ; KNom
-   (mcons (ncons 7 (ncons 7 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 7 (ncons 7 (ncons 9 (ncons 9 nnil)))))))))))))))
+   (mcons (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 nnil)))))))))))))))
    ; KCharm
-   (mcons (ncons 7 (ncons 8 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 8 (ncons 8 (ncons 9 (ncons 9 nnil)))))))))))))))
+   (mcons (ncons 7 (ncons 7 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 9 (ncons 9 (ncons 10 (ncons 10 nnil)))))))))))))))
    ; KSun
-   (mcons (ncons 7 (ncons 8 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 8 (ncons 8 (ncons 9 (ncons 9 nnil)))))))))))))))
+   (mcons (ncons 7 (ncons 7 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 9 (ncons 9 (ncons 10 (ncons 10 nnil)))))))))))))))
    ; KGem
-   (mcons (ncons 7 (ncons 8 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 8 (ncons 8 (ncons 9 (ncons 9 nnil)))))))))))))))
+   (mcons (ncons 7 (ncons 7 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 9 (ncons 9 (ncons 10 (ncons 10 nnil)))))))))))))))
    ; KTwin
-   (mcons (ncons 7 (ncons 8 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 8 (ncons 8 (ncons 9 (ncons 9 nnil)))))))))))))))
+   (mcons (ncons 7 (ncons 7 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 9 (ncons 9 (ncons 10 (ncons 10 nnil)))))))))))))))
    ; KBig
-   (mcons (ncons 7 (ncons 8 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 8 (ncons 8 (ncons 9 (ncons 9 nnil)))))))))))))))
+   (mcons (ncons 7 (ncons 7 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 9 (ncons 9 (ncons 10 (ncons 10 nnil)))))))))))))))
    ; KTrayZ
-   (mcons (ncons 7 (ncons 8 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 8 (ncons 8 (ncons 9 (ncons 9 nnil)))))))))))))))
+   (mcons (ncons 7 (ncons 7 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 9 (ncons 9 (ncons 10 (ncons 10 nnil)))))))))))))))
    ; KTrayR
-   (mcons (ncons 7 (ncons 8 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 8 (ncons 8 (ncons 9 (ncons 9 nnil)))))))))))))))
+   (mcons (ncons 7 (ncons 7 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 9 (ncons 9 (ncons 10 (ncons 10 nnil)))))))))))))))
    ; KTrayC
-   (mcons (ncons 7 (ncons 8 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 8 (ncons 8 (ncons 9 (ncons 9 nnil)))))))))))))))
+   (mcons (ncons 7 (ncons 7 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 9 (ncons 9 (ncons 10 (ncons 10 nnil)))))))))))))))
    ; KTrayO
-   (mcons (ncons 7 (ncons 8 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 8 (ncons 8 (ncons 9 (ncons 9 nnil)))))))))))))))
+   (mcons (ncons 7 (ncons 7 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 9 (ncons 9 (ncons 10 (ncons 10 nnil)))))))))))))))
    ; KString
-   (mcons (ncons 7 (ncons 7 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 7 (ncons 7 (ncons 9 (ncons 9 nnil)))))))))))))))
+   (mcons (ncons 7 (ncons 7 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 7 (ncons 7 (ncons 10 (ncons 10 nnil)))))))))))))))
    ; KChain
-   (mcons (ncons 7 (ncons 7 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 8 (ncons 7 (ncons 11 (ncons 9 (ncons 9 nnil)))))))))))))))
+   (mcons (ncons 7 (ncons 7 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 7 (ncons 11 (ncons 10 (ncons 10 nnil)))))))))))))))
    ; KTablet
-   (mcons (ncons 7 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 nnil)))))))))))))))
-   ; KHot
-   (mcons (ncons 7 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 (ncons 9 nnil)))))))))))))))
+   (mcons (ncons 7 (ncons 7 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 nnil)))))))))))))))
+   ; KCoin
+   (mcons (ncons 7 (ncons 7 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 (ncons 10 nnil)))))))))))))))
     mnil))))))))))))))))
 
  ; the band partition, DERIVED by row+column equality over both squares
  (defn mxbandtbl nlist
-   (ncons 0 (ncons 1 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 2 (ncons 1 (ncons 3 (ncons 4 (ncons 4 nnil))))))))))))))))
+   (ncons 0 (ncons 0 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 1 (ncons 2 (ncons 3 (ncons 4 (ncons 4 nnil))))))))))))))))
 
  ; mirror: the argument swap's action on lanes, in code order
  (defn mxmirtbl nlist
-   (ncons 0 (ncons 1 (ncons 5 (ncons 3 (ncons 4 (ncons 2 (ncons 6 (ncons 7 (ncons 8 (ncons 9 (ncons 10 (ncons 11 nnil)))))))))))))
+   (ncons 0 (ncons 1 (ncons 4 (ncons 3 (ncons 2 (ncons 5 (ncons 6 (ncons 7 (ncons 8 (ncons 9 (ncons 10 (ncons 11 nnil)))))))))))))
 
  ; `+` on the band quotient, 25 cells
  (defn mxaddbgrid mlist
    ; band 0 -- KMint
    (mcons (ncons 0 (ncons 0 (ncons 0 (ncons 0 (ncons 0 nnil)))))
-   ; band 1 -- KNom
-   (mcons (ncons 0 (ncons 1 (ncons 2 (ncons 3 (ncons 4 nnil)))))
-   ; band 2 -- KCharm
-   (mcons (ncons 0 (ncons 5 (ncons 6 (ncons 5 (ncons 4 nnil)))))
+   ; band 1 -- KCharm
+   (mcons (ncons 0 (ncons 1 (ncons 2 (ncons 2 (ncons 3 nnil)))))
+   ; band 2 -- KString
+   (mcons (ncons 0 (ncons 4 (ncons 5 (ncons 6 (ncons 3 nnil)))))
    ; band 3 -- KChain
-   (mcons (ncons 0 (ncons 3 (ncons 2 (ncons 3 (ncons 4 nnil)))))
+   (mcons (ncons 0 (ncons 4 (ncons 6 (ncons 6 (ncons 3 nnil)))))
    ; band 4 -- KTablet
-   (mcons (ncons 0 (ncons 4 (ncons 4 (ncons 4 (ncons 4 nnil)))))
+   (mcons (ncons 0 (ncons 3 (ncons 3 (ncons 3 (ncons 3 nnil)))))
     mnil))))))
 
  ; `*` on the band quotient, 25 cells
  (defn mxmulbgrid mlist
    ; band 0 -- KMint
    (mcons (ncons 7 (ncons 7 (ncons 7 (ncons 7 (ncons 7 nnil)))))
-   ; band 1 -- KNom
-   (mcons (ncons 7 (ncons 7 (ncons 8 (ncons 7 (ncons 9 nnil)))))
-   ; band 2 -- KCharm
-   (mcons (ncons 7 (ncons 8 (ncons 10 (ncons 8 (ncons 9 nnil)))))
+   ; band 1 -- KCharm
+   (mcons (ncons 7 (ncons 8 (ncons 9 (ncons 9 (ncons 10 nnil)))))
+   ; band 2 -- KString
+   (mcons (ncons 7 (ncons 9 (ncons 7 (ncons 7 (ncons 10 nnil)))))
    ; band 3 -- KChain
-   (mcons (ncons 7 (ncons 7 (ncons 8 (ncons 11 (ncons 9 nnil)))))
+   (mcons (ncons 7 (ncons 9 (ncons 7 (ncons 11 (ncons 10 nnil)))))
    ; band 4 -- KTablet
-   (mcons (ncons 7 (ncons 9 (ncons 9 (ncons 9 (ncons 9 nnil)))))
+   (mcons (ncons 7 (ncons 10 (ncons 10 (ncons 10 (ncons 10 nnil)))))
     mnil))))))
 
  ; --- and the six lookups they carry ---

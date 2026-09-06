@@ -57,13 +57,18 @@
  (defq mx-numerics-one-band
    (paths bool (mxall 9 (lam i (nateqb (mxband (add mxKCharm i)) (mxband mxKCharm)))) true)
    (idpath true))
- ; a symbol takes the string algebra under +, so KNom and kstring are one band
- (defq mx-nom-is-text
-   (paths nat (mxband mxKNom) (mxband mxKString)) (idpath (mxband mxKString)))
- ; and kmint is its own, the unit lane whole -- so nothing rests on the
- ; dispatchers' early-out, which is the fast path and not the semantics
- (defq mx-mint-alone
-   (paths bool (mxall 14 (lam k (negb (nateqb (mxband (succ k)) (mxband mxKMint))))) true)
+ ; a symbol is a POINT, not text: it shares kmint's lane, is the identity under +
+ ; and annihilates under *. the string algebra is reached by pulling the name out
+ ; and re-interning with nom, never by a nom arriving where text is expected
+ (defq mx-nom-is-point
+   (paths nat (mxband mxKNom) (mxband mxKMint)) (idpath (mxband mxKMint)))
+ ; and the points are alone in that lane -- kmint and KNom and nothing else. this is
+ ; a faithfulness guard on the model, not a fact about the algebra: the dispatchers
+ ; early-out on a point BEFORE the table, so a kind sharing the point lane would be
+ ; told apart by that early-out and not by the matrix this corpus models. alone, the
+ ; matrix decides the whole lane and the early-out stays the fast path
+ (defq mx-points-alone
+   (paths bool (mxall 13 (lam k (negb (nateqb (mxband (add mxKCharm k)) (mxband mxKMint))))) true)
    (idpath true)))
 
 ; --- () is the unit under + and the zero under *, in every lane at once ---
@@ -80,8 +85,9 @@
 (assert
  (defq mx-diag-mint-add (paths nat (mxadd mxKMint mxKMint) mxLbin_unit) (idpath mxLbin_unit))
  (defq mx-diag-mint-mul (paths nat (mxmul mxKMint mxKMint) mxL0) (idpath mxL0))
- (defq mx-diag-text-add (paths nat (mxadd mxKNom mxKNom) mxLadd_string) (idpath mxLadd_string))
- (defq mx-diag-text-mul (paths nat (mxmul mxKNom mxKNom) mxL0) (idpath mxL0))
+ ; kstring is the text band's representative -- KNom used to be, and is a point now
+ (defq mx-diag-text-add (paths nat (mxadd mxKString mxKString) mxLadd_string) (idpath mxLadd_string))
+ (defq mx-diag-text-mul (paths nat (mxmul mxKString mxKString) mxL0) (idpath mxL0))
  (defq mx-diag-num-add (paths nat (mxadd mxKCharm mxKCharm) mxLaddn) (idpath mxLaddn))
  (defq mx-diag-num-mul (paths nat (mxmul mxKCharm mxKCharm) mxLmuln) (idpath mxLmuln))
  (defq mx-diag-chain-add (paths nat (mxadd mxKChain mxKChain) mxLadd_seq) (idpath mxLadd_seq))
@@ -97,23 +103,27 @@
  ; and the other operand answers whole, positionally
  (defq mx-num-str-degenerates (paths nat (mxadd mxKCharm mxKString) mxLbin_b) (idpath mxLbin_b))
  (defq mx-str-num-degenerates (paths nat (mxadd mxKString mxKCharm) mxLbin_a) (idpath mxLbin_a))
- ; nom+str keeps the spelling hom -- it demotes to a string, it does not degenerate
- (defq mx-nom-str-spells (paths nat (mxadd mxKNom mxKString) mxLadd_string) (idpath mxLadd_string))
- ; nom+chain still adjoins: foo stays foo
- (defq mx-nom-chain-adjoins (paths nat (mxadd mxKNom mxKChain) mxLadd_seq) (idpath mxLadd_seq))
+ ; a nom against text does not spell itself: it is a point, so it is the identity and
+ ; the string answers whole. pull the name out and re-intern to reach the text algebra
+ (defq mx-nom-str-is-unit (paths nat (mxadd mxKNom mxKString) mxLbin_unit) (idpath mxLbin_unit))
+ ; and a nom against a list no longer adjoins either -- the same point lane, the list
+ ; answering whole. these two cells are where "a name is text" used to be readable
+ (defq mx-nom-chain-is-unit (paths nat (mxadd mxKNom mxKChain) mxLbin_unit) (idpath mxLbin_unit))
  ; str*str is the absorbing zero; a number against either repeats it
  (defq mx-str-str-is-zero (paths nat (mxmul mxKString mxKString) mxL0) (idpath mxL0))
  (defq mx-num-str-repeats (paths nat (mxmul mxKCharm mxKString) mxLmul_rep) (idpath mxLmul_rep))
- ; a tablet or a lambda wins over everything but a mint -- row and column both the
- ; Church lane, a tablet being a lookup lambda here
+ ; a tablet or a lambda wins over everything but a point -- row and column both the
+ ; Church lane, a tablet being a lookup lambda here. "point" is the band, not the
+ ; kind: a mint and a nom are both excused, by one predicate
+ (defn mxpoint (pi k nat bool) (lam k (nateqb (mxband k) (mxband mxKMint))))
  (defq mx-tablet-dominates
    (paths bool
-     (mxall mxnk (lam b (orb (nateqb b mxKMint) (nateqb (mxadd mxKTablet b) mxLaddh))))
+     (mxall mxnk (lam b (orb (mxpoint b) (nateqb (mxadd mxKTablet b) mxLaddh))))
      true)
    (idpath true))
  (defq mx-hot-dominates
    (paths bool
-     (mxall mxnk (lam b (orb (nateqb b mxKMint) (nateqb (mxmul mxKHot b) mxLmulh))))
+     (mxall mxnk (lam b (orb (mxpoint b) (nateqb (mxmul mxKCoin b) mxLmulh))))
      true)
    (idpath true)))
 
@@ -129,13 +139,13 @@
         (two? (peep GLOB 'idfun 0)))
 (assert
  (defn mxLcompose nat mxLmulh)                     ; the lane uuhom's homcomp spells
- (defq mx-compose-diag (paths nat (mxmul mxKHot mxKHot) mxLcompose) (idpath mxLcompose))
+ (defq mx-compose-diag (paths nat (mxmul mxKCoin mxKCoin) mxLcompose) (idpath mxLcompose))
  ; ..and the mint at that cell is the zero, not the monoid's unit. uuhom's unit is
  ; idfun, itself a lambda and so a khot -- it rides the compose lane like any other
- (defq mx-compose-zero (paths nat (mxmul mxKHot mxKMint) mxL0) (idpath mxL0))
+ (defq mx-compose-zero (paths nat (mxmul mxKCoin mxKMint) mxL0) (idpath mxL0))
  ; the Church sum is the band's other lane: uuhom's monoid is the multiplicative
  ; half of a two-operation band, and the two lanes are distinct
- (defq mx-church-add-diag (paths nat (mxadd mxKHot mxKHot) mxLaddh) (idpath mxLaddh))
+ (defq mx-church-add-diag (paths nat (mxadd mxKCoin mxKCoin) mxLaddh) (idpath mxLaddh))
  (defq mx-church-lanes-apart (paths bool (nateqb mxLaddh mxLcompose) false) (idpath false)))
 
 ; --- the planted faults. a bounded forall that came back `true` for the wrong
@@ -161,8 +171,8 @@
     (idpath true)))))
  ; the compose cell is the mul lane, not the Church sum -- a band with one
  ; operation would make uuhom's monoid the whole story, and it is half of it
- ('accepted = (rejects (\ z (defq mx-ok-compose (paths nat (mxmul mxKHot mxKHot) mxLmulh) (idpath mxLmulh)))))
- ('rejected = (rejects (\ z (defq mx-bad-compose (paths nat (mxmul mxKHot mxKHot) mxLaddh) (idpath mxLaddh)))))
+ ('accepted = (rejects (\ z (defq mx-ok-compose (paths nat (mxmul mxKCoin mxKCoin) mxLmulh) (idpath mxLmulh)))))
+ ('rejected = (rejects (\ z (defq mx-bad-compose (paths nat (mxmul mxKCoin mxKCoin) mxLaddh) (idpath mxLaddh)))))
  ; ..and the mint annihilates there rather than uniting
- ('rejected = (rejects (\ z (defq mx-bad-compose-unit (paths nat (mxmul mxKHot mxKMint) mxLmulh) (idpath mxLmulh))))))
+ ('rejected = (rejects (\ z (defq mx-bad-compose-unit (paths nat (mxmul mxKCoin mxKMint) mxLmulh) (idpath mxLmulh))))))
 (hear test-strict)
