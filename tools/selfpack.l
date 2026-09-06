@@ -4,7 +4,7 @@
 ;
 ; the one cutter, every world: the tree on disk is the source, checkout and
 ; seed-laid tree alike. pack it under top (love-<ver>) -- everything sb ignores
-; (.sb/ignore + its built-ins, so the vcs walk and this cut read ONE list and a
+; (.sbignore + its built-ins, so the vcs walk and this cut read ONE list and a
 ; generated file named there leaves both), plus this cut's own structural skips:
 ; bin/ dl/, everything hidden at the root (.git .sb .claude .cache .gitignore ..)
 ; is the machine's and the checkout's and never the source's, doc/misc is the
@@ -45,13 +45,13 @@
 (use "src/apps/sb/merge.l")
 (use "src/apps/dns/dns.l")
 (use "src/apps/sb/http.l")
-(use "src/apps/sb/sb.l")   ; for the ignore law only -- .sb/ignore is sb's file
+(use "src/apps/sb/sb.l")   ; for the ignore law only -- .sbignore is sb's file
 
 (: (sp-die m) (say err ("selfpack: " + m + "\n"), quit 1)
    (sp-read p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, [1 (s + "")]))))
    (sp-write p s) (: q (open p "w")
                      (!(hot? q) ? (sp-die ("cannot write " + p)), say q s, close q))
-   ; the rules, and sb owns them: .sb/ignore plus sb's own built-ins, so the vcs
+   ; the rules, and sb owns them: .sbignore plus sb's own built-ins, so the vcs
    ; walk and the dist cut cannot disagree about what this tree is -- one law, one
    ; file, and a generated file named there drops out of both. then the cut's own
    ; structural skips, which no ignore file may take away: `.*` is hidden at the

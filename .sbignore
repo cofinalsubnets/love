@@ -1,4 +1,4 @@
-# svalbard's ignore list: one rule a line, read by sb's walk and by the dist cut
+# svalbard's ignore list, one rule a line, read by sb's walk and by the dist cut
 # (tools/selfpack.l). a rule holding * ? [ is a glob over the whole relative path
 # and `*` crosses `/`; every other rule is a path prefix at a segment boundary.
 # the built-ins .sb .git out need no line here.
@@ -24,7 +24,10 @@ test/proof/rocq/gen.v
 test/proof/rocq/uugen.v
 test/proof/lean/uugen.lean
 
-# the clangd compilation database, written by the build
+# the project's web page and what it alone links: generated, committed for github
+# pages, never shipped
+index.html
+assets
 
 # editor and debugger leavings
 vgcore.*

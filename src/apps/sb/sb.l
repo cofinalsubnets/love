@@ -60,7 +60,7 @@
                              (go >m))
                    (go >f))
 
-   ; --- ignores: one rule a line in .sb/ignore, over the built-ins. a rule holding
+   ; --- ignores: one rule a line in .sbignore, over the built-ins. a rule holding
    ;     * ? [ is a glob against the whole relative path -- `*` crosses `/`, so
    ;     `*.vo` catches one at any depth and wants no basename rule of its own.
    ;     every other rule is a path prefix at a segment boundary: `out` takes out
@@ -70,7 +70,7 @@
    ig-glob? (from 'glob 'anyglob)
    ig-match (from 'glob 'match)
    (ig-live? l) ((0 < tally l) && !((l 0) = 35))
-   (igs _) (: t (look ".sb/ignore")
+   (igs _) (: t (look ".sbignore")
                  (? (two? t) (igs0 + filter ig-live? (lines <>t))
                     igs0))
    (ign1? p g) (: n #g

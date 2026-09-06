@@ -282,12 +282,10 @@ dist-seed: $(ho)/.love.baked
 endif
 dist: dist-source dist-seed   # a release is both
 
-# what a release is not: the benches, the board and wasm seats, and the project's own
-# web page -- index.html with the stylesheet and fonts it alone links, which serve a
-# reader of the site and never a build. assets/vim STAYS: `make install` in an unpacked
-# release lays those two hand-written files, and a release that cannot install is no
-# release. each nom is matched as a path prefix at a segment boundary (tools/selfpack.l).
-dist_drop = bench src/port index.html assets/web assets/fonts
+# what a release is not: the benches and the board and wasm seats. the web page and
+# its assets are .sbignore's to drop, which selfpack reads too. each nom is matched
+# as a path prefix at a segment boundary (tools/selfpack.l).
+dist_drop = bench src/port
 .PHONY: force_src
 force_src: ;
 $(dist_source): force_src $(love0)
@@ -883,7 +881,7 @@ $d/share/man/man1/$(BIN).1: $(ho)/love.1 $(ho)/.love.baked
 # patterns: an implicit rule would make these intermediate.
 $d/share/man/man1/cook.1 $d/share/man/man1/lush.1: $d/share/man/man1/%.1: $(ho)/%.1
 	$(inst644)
-$v/ftdetect/love.vim $v/ftplugin/love.vim: $v/%/love.vim: assets/vim/%.vim
+$v/ftdetect/love.vim $v/ftplugin/love.vim: $v/%/love.vim: vim/%.vim
 	$(inst644)
 # the syntax is GENERATED (the Makefile) out of src/apps/vi/hue.l's class table and the
 # vocabulary this host answers to, so it is installed from out/ like any other artifact.

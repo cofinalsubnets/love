@@ -22,7 +22,7 @@
    _ (mkdir "junk" 493)
    _ (lay "junk/x" "never\n")
    _ (mk ())
-   _ (lay ".sb/ignore" "junk\npr\nnest2\nmrg\n")   ; junk/ + the nests we sync with
+   _ (lay ".sbignore" "junk\npr\nnest2\nmrg\n")   ; junk/ + the nests we sync with
    p1 (sb-record "first")
    s1 (snap ())
    again (sb-record "again"))
@@ -30,9 +30,9 @@
 (assert
  (64 = tally p1)                                       ; a real content address
  (seq (tips ()) [p1])                               ; the one tip
- (2 = tally s1)                                        ; junk/ stayed out
- ("a.txt" = <<s1)                                      ; path-sorted
- (blob <><s1 = "one\ntwo\nthree\n")                 ; the blob rides its hash
+ (3 = tally s1)                                        ; junk/ stayed out; .sbignore is a file like any other
+ (".sbignore" = <<s1)                                  ; path-sorted
+ (blob <>(s1 1) = "one\ntwo\nthree\n")               ; the blob rides its hash
  !again                                                ; a clean tree records nothing
  (p1 = sha256 <>(look (".sb/patch/" + p1))))      ; the id is the file's hash
 
