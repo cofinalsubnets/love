@@ -16,7 +16,7 @@
    (udirp (d + "/a/b"))
    (wr (d + "/f") "hi kore")
    (= 0 (ls-main [d]))
-   (= 1 (ls-main ["/tmp/l-kore-ghost"]))        ; a miss says so and exits 1
+   (= 2 (ls-main ["/tmp/l-kore-ghost"]))        ; a miss says so and exits 2, GNU's status
    (= 0 (cp-main [(d + "/f") (d + "/a")]))      ; a dir destination pulls the name in
    (= "hi kore" (rd (d + "/a/f")))
    (= 0 (touch-main [(d + "/t")]))              ; be there, and be now

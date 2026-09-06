@@ -41,7 +41,7 @@
    (= 16384 (& 61440 <>>(stat e)))
    ((readdir e) = ())                         ; empty, told from absent by stat
    ('eexist = (mkdir e 493))                  ; again
-   ('eexist = (mkdir "lib" 493))             ; a baked prefix is a directory too
+   ('eexist = (mkdir "src" 493))             ; a baked prefix is a directory too
    ('enotdir = (mkdir (f + "/x") 493))       ; under a file
    ('enoent = (mkdir "/hole/x" 493))         ; under a hole
    ('badarg = (mkdir 7 493))
@@ -69,11 +69,17 @@
    ('einval = (rename d (d + "/in")))        ; a real einval: the name parts it from 'badarg
    ; -- chdir/cwd: the cwd is a kernel string; "/" is the boot seat --
    (= "/" (cwd 0))
-   !(chdir "lib")
-   (= "/lib" (cwd 0))
+   !(chdir "src/apps/json")
+   (= "/src/apps/json" (cwd 0))
    (< 0 (tally (rd "json.l")))                  ; a relative path reads off the cwd
    (member? "json.l" (readdir "."))
    !(chdir "..")
+   (= "/src/apps" (cwd 0))                      ; .. unwinds ONE component
+   ; ⚠ the seat has to go back to / by hand. this file is one member of a corpus the
+   ; runner loads by RELATIVE path, so a cwd left anywhere else takes every member
+   ; after this one down with a no-corpus-member -- which reads as a missing file
+   ; and not as the walk that moved.
+   !(chdir "/")
    (= "/" (cwd 0))
    (nom? (chdir f))                             ; a file is no seat
    (nom? (chdir "/nope"))

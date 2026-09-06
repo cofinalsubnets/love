@@ -58,7 +58,9 @@ where GNU reads a concatenation.
   This, not the compiler, is what axis B actually runs into.
 - **the rest of the shell floor** — less, xz, bzip2, file.
 - **the admin layer** — util-linux, shadow, e2fsprogs, kmod, iproute2, kbd. (procps and
-  psmisc are half here: the /proc readers landed, `top`/`vmstat`/`pmap` did not.)
+  psmisc are half here: the /proc readers landed, `top`/`vmstat`/`pmap` did not.
+  dosfstools is here now: `love mkfs.vfat` / `mkdosfs` and the `love fat` verbs over
+  `src/apps/fat/fat.l`, gated against mtools in `make test_fat32`.)
 - **docs** — groff, man-db, texinfo, ncurses, readline.
 
 ## chapters 9–10 — config partial, kernel imported

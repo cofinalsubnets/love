@@ -305,7 +305,18 @@ sectors — mkfs, mount, ls/stat/read/write/mkdir/rm, LFN both directions, prese
   definition, so `fat-mkfs` refuses a device under ~33 MB — absence, not divergence.
 * **The disk does NOT mount under the ramfs paths** (the plan's one dropped clause): `open` is
   a C nif and the fs is love, so a C row cannot call it. The disk speaks through the module's
-  own verbs — `(fat-mount (fat-disk ()))` — which is what kore-level tooling can wrap later.
+  own verbs — `(fat-mount (fat-disk ()))`.
+* **The kore-level wrap this section used to defer is built**: `src/apps/fat/fatcmd.l` is
+  `love fat {ls|stat|cat|get|put|mkdir|rm|mkfs}` plus busybox's `mkfs.vfat` / `mkdosfs`, over
+  an image FILE rather than a disk. The device it hands `fat-mount` is the whole image in one
+  cask — the same shape `test/host/fat.l` drives the laws through, so there is no second code
+  path — which also means a 64 MB image is 64 MB of heap and a whole-file rewrite per mutating
+  verb. Positioned reads would want a `pread` nif; nothing here has one. *gate:*
+  `make test_fat32` (⚠ **not** `test_fat`, which is the seed-universal fat *container* and
+  shares only a word).
+* ⚠ `src/apps/fat/fat.l` is `(module (fat ..))` now, not a bare `(:`. Its own floor is spelled
+  `u16 u32 w16 w32 bcopy zeros group alias cksum` — names that would collide on sight with a
+  shared layer, and it had to join the dist cat beside the wrap.
 * Metal still wants AHCI or NVMe — the same fs over a driver 3–4× the size, a later rung.
 * *gate:* `test/host/fat.l` — the fs laws over a cask dev plus **mtools interop** (mdir/mtype
   read what we format and write; we read what mcopy writes) — `test/kernel/disk.l` (the raw

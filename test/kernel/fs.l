@@ -4,9 +4,9 @@
 ; entry strings, because kore reads these and a divergence would be silent where an
 ; absence is loud (test/host/init.l holds the same laws against the real tree).
 ;
-; the initrd is flat -- rows for "src/apps/json/json.l" and none for "lib" -- so a directory
-; is a prefix some path lies under, and the entries are the distinct next components
-; of those paths. That is why the root lists "lib" once and never a path.
+; the initrd is flat -- rows for "src/apps/json/json.l" and none for "src" -- so a
+; directory is a prefix some path lies under, and the entries are the distinct next
+; components of those paths. That is why the root lists "src" once and never a path.
 ;
 ; kernel only -- test/kernel/all.l's roster, never $t: on the host these paths are
 ; the real tree.
@@ -17,7 +17,7 @@
 ; law is its own assert argument, since assert maps over its args and a `do` would
 ; report only the last one.
 
-(: f "src/apps/json/json.l" d "lib" g "src/apps/dns/dns.l"
+(: f "src/apps/json/json.l" d "src/apps/json" g "src/apps/dns/dns.l"
    (rd p) (: q (open p "r") s (slurp q) _ (close q) s)
    (wr p s) (: q (open p "w") _ (say q s) (close q))
    st (stat f)
@@ -40,28 +40,28 @@
    (= 16384 (& 61440 <>>(stat d)))
    (< 1600000000000 <>(stat d))
    ; absence is the real (), never an empty tray of fields
-   ((stat "lib/no-such-thing.l") = 'enoent)
-   (! (charm? (stat "lib/no-such-thing.l")))
+   ((stat "src/apps/json/no-such-thing.l") = 'enoent)
+   (! (charm? (stat "src/apps/json/no-such-thing.l")))
    ; readdir hands over the baked names as strings
    (member? "json.l" (readdir d))
    (string? (cap (readdir d)))
    ; "" and "." are both the root, as they are on the host: the tree's own top
    ; names, each deduped across every row beneath it, plus tmp -- the scratch the
    ; rung-2 tree seeds at boot, which no row carries
-   (member? "lib" (readdir "."))
-   (member? "lib" (readdir ""))
+   (member? "src" (readdir "."))
+   (member? "src" (readdir ""))
    (member? "test" (readdir ""))
    (member? "tmp" (readdir ""))
    !(member? f (readdir ""))                     ; components, never whole paths
    ; a file is no directory, and neither is a prefix nothing lies under
    ((readdir f) = 'enotdir)
-   ((readdir "lib/nope") = 'enoent)
+   ((readdir "src/apps/nope") = 'enoent)
    ; lseek rides the raw openfd lane: end is the size, set and cur the arithmetic
    (: fd (openfd f 0)
       (&& (= sz (lseek fd 0 2)) (= 1 (lseek fd 1 0)) (= 3 (lseek fd 2 1))
           !(close fd)))
    ('ebadf = (lseek -1 0 0))                   ; a bad fd is its nom, never a seek
-   ('enoent = (openfd "lib/no-such-thing.l" 0))  ; and so is an absent path
+   ('enoent = (openfd "src/apps/json/no-such-thing.l" 0))  ; and so is an absent path
    ; a whence no seat knows is the row's 'einval and moves nothing -- read as SET
    ; it would have seeked to 0 and called that success
    (: fd (openfd f 0)

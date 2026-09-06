@@ -12,7 +12,7 @@
   test_as test_asmops test_bakerep test_big test_cca64 test_ccrv64 test_ccthumb1 \
   test_ccthumb2 test_clay test_cli test_cookdiff test_cpio test_cts test_cts_a64 \
   test_cts_rv64 test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb \
-  test_elf32 test_encver test_extra test_extract test_fat test_filemode test_fixpoint \
+  test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_front test_gc test_gcheck test_gcstress \
   test_gen test_glaze test_glazefuzz test_gz test_hdiff test_holo test_holofuzz test_hook \
   test_host test_hostegg test_hostnif test_inle test_kboot test_kernel_a64 test_kernel_rv64 test_kore \
@@ -45,7 +45,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_holofuzz test_glazefuzz test_encver test_lux test_kore test_refuzz test_sb test_vi \
 	test_moon test_clay test_moonfuzz test_forge \
 	test_cts test_libc test_ulp test_raw \
-	test_drv test_hdiff test_tco0 nettest test_wake test_gz test_cpio \
+	test_drv test_hdiff test_tco0 nettest test_wake test_gz test_cpio test_fat32 \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
 	test_asmops test_dtb test_rvboot test_elf32 test_objcopy test_distboot test_fat test_wasm \
@@ -841,6 +841,15 @@ test_gz: host
 	@$m $R/test/gate/gzfind.l
 	@echo TEST test/gate/targz.sh
 	@sh test/gate/targz.sh $(ho)/love
+# test_fat32 -- `love fat` + `love mkfs.vfat`, the command line over src/apps/fat/fat.l.
+# ⚠ NOT test_fat, which gates the fat CONTAINER (seed-universal U1) and shares only a
+# word. test/host/fat.l proves the filesystem's own laws over a cask, needing nothing
+# outside; this is the half only another implementation can say, and mtools is it --
+# their reader on our format, our reader on theirs, and our reader on an mformat image.
+# Skips the interop half where mtools is missing; the verbs still run.
+test_fat32: host
+	@echo TEST test/gate/fat32.sh
+	@sh test/gate/fat32.sh $(ho) $(ho)/love
 # test_cpio -- src/apps/cpio/cpio.l + its face against GNU cpio, both ways over newc. Separate
 # from test_gz for the same reason test_gz is separate from the laws: the system tool
 # is the only oracle that can catch a format two of our own functions agree on. This
