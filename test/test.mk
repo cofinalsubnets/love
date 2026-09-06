@@ -212,7 +212,7 @@ test_front: $(ho)/front
 # Host-nif smoke tests: the host lane's nifs link into `love` but NOT love0, so they live under
 # test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
 # AND a "<name>: ok"; a cold lane opts in via hostnif_cold.
-hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/serve.l test/host/sbhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l test/host/gzc.l test/host/hash.l test/host/story.l test/host/design.l test/host/helm.l
+hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/serve.l test/host/sbhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l test/host/gzc.l test/host/hash.l test/host/story.l test/host/design.l test/host/helm.l test/host/wget.l
 # out/lush: test/host/sh.l drives the BUILT shell end to end, via out/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
@@ -1145,6 +1145,11 @@ test_disk: host $(R)/tools/ktest.l
 	@$m $(R)/tools/ktest.l $(k_elf) - $a
 	@$m $(R)/tools/ktest.l $(k_elf) - $a "disk: fat kept across the reset"
 	@echo "test_disk: the machine remembered"
+
+# wget against a live https peer: opt-in, it needs the internet (test/host/wgetnet.l)
+test_wgetnet: host
+	@echo TEST test/host/wgetnet.l "(wget over TLS 1.3 to a live peer)"
+	@cat test/00-init.l test/host/wgetnet.l | sh test/gate/run.sh wgetnet "$m" "wgetnet: ok"
 
 # doom in an X window, the DOOM=1 build under an Xvfb (src/apps/doom/doom.l): opt-in --
 # it wants the vendored source and the IWAD, and rebuilds the artifact with doom inside

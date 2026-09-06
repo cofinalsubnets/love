@@ -44,7 +44,7 @@
 ; every path answers a charm through core.l's urun, so an in-image caller lives through
 ; a tool that would have quit (the SEAT below is the one site that quits).
 ; a main here leaves deep through `die`, never `quit`.
-(module (kore kore-main
+(module (kore kore-main wget-main wg-digits wg-find wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
         diff-main as-main ar-main ld-main nm-main
         arch-main awk-main base32-main base64-main basename-main bracket-main cat-main
         chmod-main chomp chown-main chroot-main cksum-main cmp-main cnames comm-main cp-main cut-main
@@ -288,6 +288,7 @@
             'expr expr-main 'date date-main 'id id-main
             'bc bc-main
             'patch patch-main
+            'wget wget-main
             'grep grep-main 'sed sed-main
             'awk awk-main 'find find-main
             'vi (from 'vi 'vi-main)   ; the editor's wrap registered ahead in the cat

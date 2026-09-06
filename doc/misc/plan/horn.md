@@ -222,3 +222,21 @@ should end the process the ICCCM way, which it does through WM_DELETE_WINDOW but
 more, a TLS 1.3 client over the chacha/poly/sha256 the tree already carries; then `love doom`
 laying `~/.love/love-<ver>/` through `love seed`, fetching doomgeneric and the shareware IWAD
 there, building with DOOM=1 and running that binary.
+
+## wget, and the TLS under it (2026-09-06, evening)
+
+`kore wget [-q] [-O FILE] URL` (src/apps/kore/wget.l): a GET with Connection: close, eight
+redirects, chunked bodies unchunked, exit codes wget's own. https rides **src/apps/tls/client.l,
+a TLS 1.3 client** over the ciphers the tree already had: x25519 on the bignums (RFC 7748's
+ladder by `%` and `//`), HKDF-SHA256 over the sha256 nif, chacha20-poly1305 records off
+chacha.l and poly1305.l. one suite, one group, one version; ⚠ the peer is NOT verified -- the
+certificate rides the transcript and is believed, and wget says so once per fetch. the RFC
+vectors (7748 6.1, 4231 case 1) and an aead round trip are in test/host/wget.l beside a
+kiosko-served http pull; test_wgetnet (opt-in) pulls a live front page. the two downloads
+`love doom` wants both answer through it: the shareware IWAD (Daivuk/PureDOOM's raw file,
+byte-identical to dl/doom1.wad) and the doomgeneric tarball off codeload.
+
+⚠ two reader lessons, paid twice each: a multi-parameter lambda is `(\ a b body)`, never
+`(\ (a b) body)` (that destructures one list); and an over-closed inner letrec reads as
+";; missing <name>" at LOAD, not at the call -- bisect by loading the file's bindings one at
+a time (cut at every `   (` line).

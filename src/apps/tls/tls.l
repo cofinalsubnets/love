@@ -5,3 +5,4 @@
 (use "src/apps/tls/bytes.l")
 (use "src/apps/tls/chacha.l")
 (use "src/apps/tls/poly1305.l")
+(use "src/apps/tls/client.l")
