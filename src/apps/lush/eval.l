@@ -212,7 +212,7 @@
    ; disqualifiers are a child's own business: a quit is its exit status, kept
    ; state is a copy, a block has a pid for ^C and `kill %1` to name. no verb table
    ; is read here and none is wanted: the child hands its whole line to `cli-line`,
-   ; src/core/boot/cli.l's own tail, which is the very thing the exec would have reached --
+   ; src/core/boot/post.l's own tail, which is the very thing the exec would have reached --
    ; argv[0] door, rail, and the registry lookup inside it. a foreign binary spawns
    ; as ever, and so does a slashed or .l word: an explicit path is a demand.
    ; decided once per word, sh-imgc's shape -- and cli-line is absent on a frontend

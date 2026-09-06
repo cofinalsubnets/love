@@ -17,7 +17,7 @@
 ; the optional layers the corpus asserts on, and only it: a booting kernel wants no
 ; random stream, no rationals and no unifier, so they are `use`d here rather
 ; than spliced at boot. baked modules, so `use` finds them without a filesystem read.
-(use 'rng) (use 'q) (use 'kanren)
+(use 'kanren)
 
 ; ⚠ a member that will not open SCARES rather than skipping: a typo in the roster
 ; would otherwise drop a whole file's laws and leave the gate green.

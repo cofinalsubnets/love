@@ -1,5 +1,5 @@
-; --- test/host/baoedit.l: a smoke test for cli's raw-line editor (src/core/boot/cli.l `edraw`) ---
-; edraw lives in src/core/boot/cli.l, now the baked shell core (in the host egg), so edraw is
+; --- test/host/baoedit.l: a smoke test for cli's raw-line editor (src/core/boot/post.l `edraw`) ---
+; edraw lives in src/core/boot/post.l, now the baked shell core (in the host egg), so edraw is
 ; a book global -- but it reads love forms (it's the editor), so it can't be a corpus
 ; test (love0 bakes the corpus and would run edraw on the test stream). edraw reads
 ; from a port arg (here a (tap ..), not stdin), so the bare stdin runner drives it:

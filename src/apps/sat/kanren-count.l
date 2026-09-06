@@ -2,7 +2,7 @@
 ; demo (NOT the solver -- see sat.l for the real CDCL engine; NOT a bench -- it's love-only and
 ; exponential). a cnf formula is literally a product of sums of unification literals: `*` is the
 ; semiring product (conjunction), `+` the sum (disjunction), over kanren's `===`/`var`/`load`
-; (a registered module: src/core/boot/kanren.l). The solution stream is counted tail-recursively (scount), never
+; (a registered module: src/core/boot/post.l). The solution stream is counted tail-recursively (scount), never
 ; materialized, so ram stays flat; the count carries search multiplicity (a model re-derived once
 ; per clause that justifies it -- the stream is a semiring, not a set). The point is that #SAT
 ; needs no bespoke code here: the same `+`/`*` that add numbers and append lists express it.

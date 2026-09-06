@@ -1,5 +1,5 @@
 ; text -- a human-writable TEXT front-end for the neutral assembler, parsed with the parser
-; combinators (src/core/boot/peg.l, the same set cook and sat use). it turns lines like
+; combinators (src/core/boot/post.l, the same set cook and sat use). it turns lines like
 ;     li   r0, 60        ; a comment
 ;     add  r0, r0, r1
 ;     label loop
@@ -15,7 +15,7 @@
 ; and on the baked host alike:
 ;   out/host/love -l src/core/holo/text.l ...
 
-; the combinators (src/core/boot/peg.l). the use is its own top-level form -- a `:` body compiles
+; the combinators (src/core/boot/post.l). the use is its own top-level form -- a `:` body compiles
 ; as one unit, so a use inside the form below would run too late to serve it.
 (module 'holo
 (use 'peg)

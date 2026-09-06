@@ -14,7 +14,7 @@
 # named on the console; `make test_virt` at the root gates exactly that).
 p_tgt = rv64
 p_be  = rv64
-lib_h = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/love_version.h
+lib_h = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/love_version.h
 include ../port.mk
 
 virt_cc = $(MOONCC) -t rv64 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Icore -Iout/lib

@@ -30,26 +30,10 @@ static const char src_post[] =
 #include "post.h"
 ;
 static const char boot_ai[] =
-  "(use 'uu) (: uu (from 'uu))"   // the library layers, ALL modules (registered by src_mods just
-  "(use 'rng)"                    //   below; the corpus asserts on each): the uu kernel keeps its
-                                  //   one-name surface, then rng, q, kanren in the old eval order
-  "(use 'q)"
+  "(use 'uu) (: uu (from 'uu))"   // the library layers ride post; the uu kernel keeps its one-name surface
   "(use 'kanren)"
   "(use 'cli)"                    // the shell core, last and spliced, as src/host/main.c has it:
 ;                                 //   read/reads/welp are reached bare (test/help.l's floor handler)
-// THE BAKED MODULES, one text (see src/host/main.c): each opens with its own
-// (module 'nm ..), so evaling this registers the lot and boot_ai's uses are splices.
-static const char src_mods[] =
-#include "uu.h"
-" "
-#include "rng.h"
-" "
-#include "q.h"
-" "
-#include "kanren.h"
-" "
-#include "cli.h"
-;
 
 // 256K: a single ai_eval can emit a lot before the page drains it -- the
 // whole test corpus (test_wasm) runs in one eval and prints ~25K of dots +
@@ -137,7 +121,6 @@ int ai_init(void) {
   F = ai_defn(F, d, countof(d));
   if (!ai_ok(F)) return ai_code_of(F);
   F = ai_egg_(F, src_egg, src_p1, src_corpus, src_post);
-  F = ai_evals_(F, src_mods);                 // register every baked module
   F = ai_evals_(F, boot_ai);
   // THE SESSION: a fresh writable layer, C-side -- everything the page ever
   // feeds through ai_eval defglobs here, never in the base.

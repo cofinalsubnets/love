@@ -267,11 +267,10 @@ static struct ai *env_budget(struct ai *g) {
 
 #ifdef LoveBoot
 #include "boot0.h"                                   // src0_<name>[]: one literal per boot file, laid by sed
-static char const runner[] = "(reads(tap(s2cl tests)))";   // the stream shell (src/core/boot/cli.l) drinks the corpus
+static char const runner[] = "(reads(tap(s2cl tests)))";   // the stream shell (src/core/boot/post.l) drinks the corpus
 // the groups love0 evaluates as ONE text apiece: a text is read whole before its first
 // form runs, so joining at boot keeps that seam where the pasted headers had it.
-static char const *const mods0[] = { src0_rng, src0_q, src0_glob, src0_kanren, src0_overlay, src0_uu,
-  src0_holo, src0_x64, src0_a64, src0_cli, src0_verbs, src0_peg, NULL };
+static char const *const mods0[] = { src0_holo, src0_x64, src0_a64, NULL };
 static char const *const prelpost0[] = { src0_prel, src0_post, NULL };
 static char const *const prelev0[] = { src0_prel, src0_ev, NULL };
 // one NUL-terminated buffer off the heap, so a collect mid-eval cannot move it; the caller frees
@@ -317,7 +316,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
   g = ai_evals_(g, "(use 'cli)(use 'holo)");
   g = ai_unsplice_(g);
   g = ai_evals_(g,
-    "(use 'uu)(: uu (from 'uu))(use 'rng)(use 'q)(use 'kanren)"
+    "(use 'uu)(: uu (from 'uu))(use 'kanren)"
     "(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0)"
     "   (c0read p) (: q (open p \"r\")"
     "               (? q (: s (slurp q) _ (close q) s)"
@@ -355,7 +354,7 @@ static char const glaze_off[] = "";
 // the session layer: boot is over and the base is never the head again, so a top-level
 // definition lands here. never popped -- its lifetime is the session, which is what lets a
 // catted app's files share one vocabulary; the egg boot and the image wake both converge.
-// src/core/boot/cli.l's `cli-line` is this tail entire, spliced with its module: the argv[0] verb
+// src/core/boot/post.l's `cli-line` is this tail entire, spliced with its module: the argv[0] verb
 // door, the positional rail, the repl, the stdin drink. the isatty answer is all C still owns.
 static struct ai *run_program(struct ai *g, bool replp) {
   if (replp) raw_mode();
@@ -390,8 +389,6 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
   g = ai_cats_egg(g);                                    // prel then ev's half, and the printer with `@`
   g = ai_cats_mods(g);                                   // register every baked module; the uses below are splices
   g = ai_evals_(g,
-    "(use 'rng)"
-    "(use 'q)"
     "(use 'kanren)"
     "(use 'overlay)"
     "(: overlay (from 'overlay)"

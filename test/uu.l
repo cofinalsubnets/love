@@ -1,7 +1,7 @@
-; uu -- the UniMath theorem corpus over the uu kernel (src/core/boot/uu.l, baked into
+; uu -- the UniMath theorem corpus over the uu kernel (src/core/boot/post.l, baked into
 ; every corpus target and swept into the `uu` book). the kernel: MLTT with the
 ; Preamble's seven inductives, bidirectional checking, NbE conversion,
-; type-in-type -- see src/core/boot/uu.l for the term grammar and the machinery. this file
+; type-in-type -- see src/core/boot/post.l for the term grammar and the machinery. this file
 ; (and the test/uu*.l ladder above it in sort order) is the corpus half: every
 ; definition and theorem below is type-checked by the baked kernel at corpus
 ; time, then re-certified by Rocq + Lean via tools/uu2coq.l / uu2lean.l.
@@ -2243,7 +2243,7 @@
 ; --- and a universe variable living only in a definition's body would strand
 ; --- the Lean export on an unsolvable metavariable. a stack always has a
 ; --- focus (Swierstra's Stack -- core.l's () empty case lives outside the
-; --- model). the ops wear core.l's names; boot/overlay.l runs the model
+; --- model). the ops wear core.l's names; boot/post.l runs the model
 ; --- against the implementation, and the theorems export via uu2coq/uu2lean.
 (assert
  (defn nvec (pi n nat UU)

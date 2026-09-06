@@ -9,7 +9,7 @@
 ; else included); =/!= case through bool_rect on nateqb; local (: ..) chains
 ; become definitional lets; znub's filter shape is nfilt; zdel answers the
 ; model's Maybe (a zipper result wraps ii2, the bare () becomes ii1 tt).
-; The output defn-certifies in the kernel (boot/overlay.l leg 6), answers the
+; The output defn-certifies in the kernel (boot/post.l leg 6), answers the
 ; seeded fuzz exactly as core.l does, and lands convertible with the hand
 ; model -- stage 4's idpath bridges ride that. (wm2uu forms sigs) answers
 ; ((gen-name uu-type uu-term) ..) for the twelve ops in w2-want.

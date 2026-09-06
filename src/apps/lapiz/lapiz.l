@@ -15,7 +15,7 @@
 ; missing (meta, deflist), which then made markdown and html richer too. that is the trade a
 ; surface is allowed to ask for; anything else it must do alone.
 ;
-; both readers are built from the parser combinators in src/core/boot/peg.l (a parser
+; both readers are built from the parser combinators in src/core/boot/post.l (a parser
 ; is (\ s y n): a string s, a success continuation y = (rest payload), a failure continuation
 ; n = rest; payloads are lists that `seq` concatenates -- love has no regex, so the leaves are
 ; `lit`, `one` and `span`). cook and sat/dimacs share that same set; lapiz adds the handful it
@@ -78,7 +78,7 @@
 (module (lapiz mdread mdshow htread htshow rfread rfshow
          md->ht ht->md md->rf rf->md convert  htb hti hq mget)
 
-; the combinators (src/core/boot/peg.l) -- lapiz wants only the lenient `runp`. inside the
+; the combinators (src/core/boot/post.l) -- lapiz wants only the lenient `runp`. inside the
 ; module, so peg splices for this compile alone.
 (use 'peg)
 

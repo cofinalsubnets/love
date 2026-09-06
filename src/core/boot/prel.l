@@ -861,7 +861,7 @@
 )
 ; pat -- @ : pattern matching, one macro and no special form. a post-egg layer,
 ; not part of the language: prel stays minimal and each frontend includes the
-; layers it wants (the host, love0, wasm and the kernel do, since src/core/boot/uu.l is
+; layers it wants (the host, love0, wasm and the kernel do, since src/core/boot/post.l is
 ; written in it). its `use`
 ; must precede every reader's compile -- a macro is only in the chain once its
 ; layer is spliced, and a consumer folds its refs at its own compile.

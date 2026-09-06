@@ -22,13 +22,8 @@ if (argv[0] === '--love') {
 }
 const files = argv;
 if (!files.length) { console.error('usage: test.mjs [--love <love.js>] <corpus.l...>'); process.exit(2); }
-const { default: Love } = await import(mod);
-// The shim bakes only prel+ev (the page feeds the REPL through ai_eval),
-// but the native runner has the shell core baked too -- and the corpus tests its
-// surface (zev/charms). cli.l is that core (repl.l was consolidated into it), so
-// load it first so the wasm test sees the same full stack.
-const src = [readFileSync('src/core/boot/cli.l', 'utf8'),
-             ...files.map(f => readFileSync(f, 'utf8'))].join('\n');
+// The shim bakes post too, so the shell core the corpus tests (zev/charms) is already aboard.
+const src = files.map(f => readFileSync(f, 'utf8')).join('\n');
 
 const m = await Love();
 const init = m.ccall('ai_init', 'number', [], []);

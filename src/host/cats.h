@@ -18,8 +18,8 @@
 // warm the egg from its four texts -- prel carries ev's half spliced after its own.
 struct ai *ai_cats_egg(struct ai *g);
 
-// register every module this build carries: eval them once and each later `use` is a
-// pure splice.
+// register the arch's holo (scan riding it), so each later `use` is a pure splice; the
+// rest of the registry is post's, and rides the egg.
 struct ai *ai_cats_mods(struct ai *g);
 
 // the glaze: a no-op on an unglazed build, so every eval site stands unconditional

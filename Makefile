@@ -81,7 +81,7 @@ out/lib/love_version.h: $(R)/VERSION
 	@printf '#define AiVersion "%s"\n' "$$(cat $(R)/VERSION)" > $@
 	@echo 'SH	'$@
 
-out/lib/readme.bin: $(love0) $(R)/src/core/boot/cli.l $(R)/VERSION
+out/lib/readme.bin: $(love0) $(R)/src/core/boot/post.l $(R)/VERSION
 	@mkdir -p out/lib
 	@printf 'love %s\n' "$$(cat $(R)/VERSION)" > $@
 	@$(love0) -h </dev/null >> $@
@@ -860,7 +860,7 @@ $d/bin/lux: $(luxfiles)
 	@{ echo '#!/usr/bin/env -S $(BIN) -l'; cat $(luxfiles); } > $@
 	@chmod 755 $@
 
-# bao, the interactive shell. Unlike cook and ain, src/core/boot/cli.l is DEFINE-ONLY -- main.c
+# bao, the interactive shell. Unlike cook and ain, src/core/boot/post.l is DEFINE-ONLY -- main.c
 # fires `(shell 0)` on a tty -- so the bin is a tiny launcher that fires it. ⚠ the module
 # rides the binary, so there is nothing to -l and no nest path to get wrong.
 $d/bin/bao: $(MAKEFILE_LIST)

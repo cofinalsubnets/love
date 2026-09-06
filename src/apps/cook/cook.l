@@ -49,7 +49,7 @@
 ; loader keeps a file's own registration over its wrapper layer (prel's t re-pin).
 (module 'cook
 
-; the combinators (src/core/boot/peg.l) -- the wrap's first form, so the names walk
+; the combinators (src/core/boot/post.l) -- the wrap's first form, so the names walk
 ; before anything below compiles against them, scoped to this module's compile.
 (use 'peg)
 
@@ -388,7 +388,7 @@
 ; cook reads a Cookfile (ordinary love source) -- but it can also read a real
 ; Makefile directly, the same dependency idea wearing make's notation. The reader
 ; is built on the parser combinators (after the gw.js style) now shared from the
-; src/core/boot/peg.l: a parser is (\ s y n) over a string s, with a success
+; src/core/boot/post.l: a parser is (\ s y n) over a string s, with a success
 ; continuation y = rest parsed and a failure continuation n = rest; the parsed
 ; payload is a list that `seq` concatenates. love has no regex, so the leaves are
 ; `lit` (a literal prefix), `one` (one char by predicate) and `span` (a maximal
@@ -427,7 +427,7 @@
    ; resolved cards can be shown back as a Cookfile (see emit-cookfile below).
    emitp (tablet 0)
 
-   ; -- the combinators (eps/lit/one/span/alt/seq/seqs/opt/skip/pmap/many/parse) come from src/core/boot/peg.l,
+   ; -- the combinators (eps/lit/one/span/alt/seq/seqs/opt/skip/pmap/many/parse) come from src/core/boot/post.l,
    ;    spliced by the (use 'peg) above; this body-having `:` reads them bare down the walk.
 
    ; -- character classes and string utilities --

@@ -654,7 +654,7 @@ fsh 'kore sh -c "kore echo deep"' | grep -qx deep || fail "fork lane nested sh"
 [ "$(fsh 'echo n=$(kore echo abc | kore wc -c)')" = "n=4" ] || fail "fork lane cmdsub"
 fsh 'kore seq 3 > '"$HO"'/.fork-r' ; [ "$(wc -l < "$HO/.fork-r")" = "3" ] || fail "fork lane redirect"
 # ..and the lane's reach is the BINARY, never a verb list: the child hands its whole
-# line to cli-line (src/core/boot/cli.l), the very door an exec would have reached, so a word
+# line to cli-line (src/core/boot/post.l), the very door an exec would have reached, so a word
 # that dispatches through argv[1] rides it too -- `love -e`, `love VERB`, and the
 # status either answers with.
 ln -sf "$K" "$fb/love"

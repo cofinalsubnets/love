@@ -1,4 +1,4 @@
-; src/apps/kore/re.l -- grep, over the regex engine in src/core/boot/re.l. the engine moved out
+; src/apps/kore/re.l -- grep, over the regex engine in src/core/boot/post.l. the engine moved out
 ; (it is pure and had no kore couplings); this half is the one that reads files,
 ; so it keeps the u-floor (uread, udie) and text.l's lines. smoked byte-identical
 ; against GNU in `make test_kore`. a toolbox file, no seat -- kore.l is its door.

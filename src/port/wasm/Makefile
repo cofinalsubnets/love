@@ -48,12 +48,7 @@ all: love.js
 ../../../out/lib/p1.h: ../../../src/core/boot/p1.l
 ../../../out/lib/prel.h: ../../../src/core/boot/prel.l
 ../../../out/lib/ev.h: ../../../src/core/boot/ev.l
-../../../out/lib/uu.h: ../../../src/core/boot/uu.l
-../../../out/lib/rng.h: ../../../src/core/boot/rng.l
-../../../out/lib/q.h: ../../../src/core/boot/q.l
-../../../out/lib/kanren.h: ../../../src/core/boot/kanren.l
-../../../out/lib/cli.h: ../../../src/core/boot/cli.l
-../../../out/lib/egg.h ../../../out/lib/post.h ../../../out/lib/p1.h ../../../out/lib/prel.h ../../../out/lib/ev.h ../../../out/lib/uu.h ../../../out/lib/rng.h ../../../out/lib/q.h ../../../out/lib/kanren.h ../../../out/lib/cli.h ../../../out/lib/love_version.h:
+../../../out/lib/egg.h ../../../out/lib/post.h ../../../out/lib/p1.h ../../../out/lib/prel.h ../../../out/lib/ev.h ../../../out/lib/love_version.h:
 	$(MAKE) -C $(R) out/lib/$(notdir $@)
 
 # love.c bakes the version string (its __has_include of love_version.h), so recompile it
@@ -82,7 +77,7 @@ $(o)/love.js: $(objs)
 .PHONY: gate
 gate: $(o)/love.js
 
-$(o)/host.o: host.c ../../../out/lib/egg.h ../../../out/lib/post.h ../../../out/lib/p1.h ../../../out/lib/prel.h ../../../out/lib/ev.h ../../../out/lib/uu.h ../../../out/lib/rng.h ../../../out/lib/q.h ../../../out/lib/kanren.h ../../../out/lib/cli.h $(g_h)
+$(o)/host.o: host.c ../../../out/lib/egg.h ../../../out/lib/post.h ../../../out/lib/p1.h ../../../out/lib/prel.h ../../../out/lib/ev.h $(g_h)
 	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
 	@$(emcc) $(CFLAGS) -c $< -o $@

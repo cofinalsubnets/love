@@ -35,7 +35,7 @@
 ; (module 'nm ..) head registers it as it loads, which is all a later `use` needs.
 ; the order is the dependency order: kore's text+diff floor under sb, dns under sb's http.
 ;
-; a path, never `-l`: `-l FILE` whose basename names a verb seats it (src/core/boot/verbs.l's
+; a path, never `-l`: `-l FILE` whose basename names a verb seats it (src/core/boot/post.l's
 ; seatof -- the installed shebang's lane), so `-l src/apps/sb/sb.l` runs sb instead of
 ; loading it. `use` on a string touches no command line.
 (use "src/apps/tar/tar.l")

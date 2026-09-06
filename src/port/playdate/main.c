@@ -137,14 +137,8 @@ void *_sbrk(intptr_t n) { return (void *) -1; }
 static void *pd_alloc(struct ai *g, void *p, size_t n) {
   return n ? pdg_realloc(NULL, n) : (pdg_realloc(p, 0), NULL); }
 
-// THE BAKED MODULES, one text: q is rune's coefficient field, kanren its matcher's
-// unifier (subst through the registry, unify/ufail?/var down the splice). q and kanren
-// declare themselves; rune does not, so the wrapper is here.
+// THE BAKED MODULE: rune does not declare itself, so the wrapper is here; q and kanren ride post.
 static char const src_mods[] =
-#include "q.h"
-" "
-#include "kanren.h"
-" "
 "(module 'rune "
 #include "rune.h"
 ")"
@@ -195,8 +189,6 @@ void love_init(void) {
 #include "post.h"
     );
   K.g = ai_evals_(K.g, src_mods);
-  K.g = ai_evals_(K.g,
-    "(use 'q)"
     " "
     "(use 'kanren)"
     " "

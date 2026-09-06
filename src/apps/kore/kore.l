@@ -354,7 +354,7 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
    ; -- the dispatch (this form's body) --
    ; the spellings kore answers to: itself, its file, and every applet -- the symlink
    ; lane is just an applet name in the program seat, so the table is the list. the
-   ; scan is src/core/boot/verbs.l's `seatof` (over the list we are handed, never a command
+   ; scan is src/core/boot/post.l's `seatof` (over the list we are handed, never a command
    ; line: the in-image door dispatches (link "kore" "ls" "-l")), which drops the -l
    ; pairs and answers (SEAT-WORD . rest), () when the seat is someone else's -- so a
    ; bake loading the cat as `love -l .kore-cat.l -e ..` stays quiet.

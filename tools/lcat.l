@@ -135,19 +135,16 @@
      ['ai_cat_p1_z ['p1]]
      ['ai_cat_prel_z ['prel " " 'ev]]                     ; prel carries ev's half spliced after its own
      ['ai_cat_post_z ['post]]
-     ; the module registry, in dependency order: overlay's body reads (from 'kanren ..) as
-     ; it registers, so the blobs go a, holo, b. holo rides a blob per arch because the
-     ; backend does; an arch with no backend registers neither, the one shape that leaves
-     ; AiCatModsH unset.
-     ['ai_cat_mods_a_z ['rng 'q 'glob 'kanren 'overlay 'uu]]
+     ; holo, one blob per arch because the backend is; an arch with no backend registers
+     ; none, the one shape that leaves AiCatModsH unset. scan rides it: it lays a native
+     ; kernel through holo at load. every other module is post's.
      "#if defined(__x86_64__)" "#define AiCatModsH 1"
-     ['ai_cat_mods_h_z ['holo 'x64]]
+     ['ai_cat_mods_h_z ['holo 'x64 'scan]]
      "#elif defined(__aarch64__)" "#define AiCatModsH 1"
-     ['ai_cat_mods_h_z ['holo 'a64]]
+     ['ai_cat_mods_h_z ['holo 'a64 'scan]]
      "#elif defined(__riscv)" "#define AiCatModsH 1"
-     ['ai_cat_mods_h_z ['holo 'rv64]]
+     ['ai_cat_mods_h_z ['holo 'rv64 'scan]]
      "#endif"
-     ['ai_cat_mods_b_z ['cli 'verbs 'scan 're 'peg]]
      ; the glaze, one text: emit.l (the native emitter) then auto.l (ev's source
      ; recognizer, which reads emit's names bare), so the order here is the module and the
      ; pair declares it. holo leads because the glaze folds `assemble` at its own compile;

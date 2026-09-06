@@ -46,7 +46,7 @@ mc_flags = -t thumb2sp -D ai_tco=1 -D __STDC_HOSTED__=0 -D TARGET_PLAYDATE=1 -D 
 
 # the lcat lib headers this frontend bakes (produced by the root's rules on
 # love0, delegated below so a standalone make works from a clean tree)
-lib_hs = $(patsubst %,$(R)/out/lib/%.h,egg prel ev q kanren rune)
+lib_hs = $(patsubst %,$(R)/out/lib/%.h,egg prel ev rune)
 pd_h = $(love_h) $(wildcard $(R)/src/core/quay/*.h) $(o)/cas.h $(lib_hs)
 
 # the split: mooncc carries src/core/love.c + am + quay + main.c; gcc carries pdglue.c

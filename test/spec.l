@@ -835,8 +835,8 @@
 ; guard: `lit?` is true of a tablet even when empty and false of (), so it is the one honest
 ; test), and (from ()) lists the registered names.
 (assert
-  (lit? (from 'rng)) (lit? (from 'kanren))                      ; boot-loaded, registered
-  (member? 'kanren (from ())) (member? 'rng (from ()))          ; the registry lists them
+  (lit? (from 'uu)) (lit? (from 'kanren))                      ; boot-loaded, registered
+  (member? 'kanren (from ())) (member? 'uu (from ()))          ; the registry lists them
   !(from 'spec-nope)                                            ; the presence guard
   (tablet? (from 'kanren))                                      ; a module is its tablet
   (member? 'walk (keys (from 'kanren)))                         ; so `keys` introspects it

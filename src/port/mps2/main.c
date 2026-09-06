@@ -238,20 +238,16 @@ int main(void) {
 // the offender log rides the BAKER'S OWN frame -- the guard is told which object carries
 // each absolute, so naming them needs nothing of the core's. quads: obj-off, val, obj-hot.
 static void sh_puts(const char *s) { while (*s) sh_putc(*s++); }
-// THE BAKED MODULE, the one this baker wants: the boot evals it to register the layer,
-// so the woken image serves ((from 'cli 'shell) 0) -- the teensy and nucleo launchers.
-// the source strings carry no absolutes, so the absguard stays satisfied.
-// bao declares itself; rune does not, so the wrapper is here -- rune is a plain text
-// that every consumer loads through `use`, and this is the frontend that names it.
-// bao is written in @, and its eval lands after the mop, so the MODULE has to be here
-// for the macro to be live.
+// THE BAKED MODULE, the one this baker wants: rune is a plain text every consumer loads
+// through `use`, so the wrapper is here -- the shell core rides post now. the source
+// strings carry no absolutes, so the absguard stays satisfied.
 static char const src_mods[] =
 #ifdef BAKER_RUNE
 "(module 'rune "
 #include "rune.h"
 ")"
 #else
-#include "cli.h"
+""
 #endif
 ;
 int main(void) {
@@ -359,7 +355,6 @@ int main(void) {
 #include "post.h"
     );
   r = ai_evals_(r,
-#include "cli.h"
     // the driver tail: application-as-power, currying through map, the net
     // measure, and the hatched ev -- each a spec.l law, alive on the M7.
     "(: ok (&& ((3 2) = 8)"

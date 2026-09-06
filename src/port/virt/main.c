@@ -186,7 +186,6 @@ int main(void) {
 #include "post.h"
     );
   r = ai_evals_(r,
-#include "cli.h"
     // the driver tail: application-as-power, currying through map, the net
     // measure, and the hatched ev -- each a spec.l law, alive on the hart.
     "(: ok (&& ((3 2) = 8)"

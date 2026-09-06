@@ -1,6 +1,6 @@
 # kanren — unification, search, and the constraint rung
 
-Companions: `src/core/boot/kanren.l` (the module), `test/kanren.l` (the gate), `doc/misc/proto/kanren-prove.l`
+Companions: `src/core/boot/post.l` (the module), `test/kanren.l` (the gate), `doc/misc/proto/kanren-prove.l`
 (the proof producer), `src/apps/sat/kanren-count.l` (#SAT out of the ring), `doc/misc/proto/datalog.l`
 (one that rolled its own unifier).
 
@@ -156,7 +156,7 @@ because that search is intractable.
 
 `unify s u v` answers a substitution or `ufail`, purely, under that global name.
 `src/apps/rune/rune.l` calls it directly (its gate verifies the 2026 jacobian-conjecture disproof),
-and `src/core/boot/overlay.l` reads `subst` through the registry. **The constraint store rides BESIDE it** —
+and `src/core/boot/post.l` reads `subst` through the registry. **The constraint store rides BESIDE it** —
 it does not change `unify`'s signature, and a goal's state is where the store lives. Chosen,
 revisable: the moment a constraint is worth threading through `unify` itself, this line is the
 thing to argue with.

@@ -6,7 +6,7 @@
 ; time and nothing changes at run time (the overlay law: erasable). Gradual:
 ; an unknown (a cap/cup harvest, a local) rides through; only a known kind in
 ; the wrong seat clashes. Install with (overlay-set lux-dom lux-sigs), or check
-; a form pure with ((overlay 'ov-check1) lux-dom lux-sigs form) -- boot/overlay.l
+; a form pure with ((overlay 'ov-check1) lux-dom lux-sigs form) -- boot/post.l
 ; gates core.l + layout.l clean against this table, and the deliberate wound
 ; flagged. This is rung 1 of typing lux; the uu-proved StackSet laws ride
 ; on top of it (memory: the verified-xmonad ladder).

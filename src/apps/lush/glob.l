@@ -5,7 +5,7 @@
 ; '1'/'0' bytes, '1' where the char came in unquoted (glob-live), '0' where a
 ; quote shielded it ('*' matches a literal star) -- absence-of-specialness
 ; carried out of band, the quoting law made byte-addressable.
-;   the matcher itself is src/core/boot/glob.l -- fmatch / match / anyglob / ones,
+;   the matcher itself is src/core/boot/post.l -- fmatch / match / anyglob / ones,
 ;   bound back to their sh- names below so every reader here is unchanged.
 ;   (sh-globby? t m)       -> any live * ? [ under the mask
 ;   (sh-glob t m)          -> sorted matching paths | () (caller keeps the word)
@@ -13,7 +13,7 @@
 ; pattern that spells the . itself.
 
 (module 'lush
-(: sh-anyglob (from 'glob 'anyglob)   ; the matcher moved to src/core/boot/glob.l; every love
+(: sh-anyglob (from 'glob 'anyglob)   ; the matcher moved to src/core/boot/post.l; every love
    sh-fmatch (from 'glob 'fmatch)     ; carries it now, this one included. the sh- names
    sh-match (from 'glob 'match)       ; stay -- word.l, eval.l, line.l, cook and kore's
    sh-ones (from 'glob 'ones)         ; find all read them, some through (from 'lush ..)

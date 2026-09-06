@@ -37,14 +37,12 @@ struct ai *ai_cats_egg(struct ai *g) {
   g->alloc(g, e, 0), g->alloc(g, p, 0), g->alloc(g, r, 0), g->alloc(g, o, 0);
   return g; }
 
-// a, holo, b: overlay's body reads (from 'kanren ..) as it registers. ai_evals_ reads
-// form by form and each module is one form, so three calls are the one call.
+// the arch's holo, scan riding it; every other module registers as post is sat
 struct ai *ai_cats_mods(struct ai *g) {
-  g = CatEval(g, ai_cat_mods_a_z);
 #ifdef AiCatModsH
   g = CatEval(g, ai_cat_mods_h_z);
 #endif
-  return CatEval(g, ai_cat_mods_b_z); }
+  return g; }
 
 #ifdef AiGlazed
 // 138 KB of text that only a `love bake` reads, for 41 KB of .rodata

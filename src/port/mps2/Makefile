@@ -9,7 +9,7 @@
 # gates exactly that).
 p_tgt  = thumb2
 p_be   = thumb2
-lib_h  = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/love_version.h
+lib_h  = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/love_version.h
 p_hdrs = out/lib/rune.h
 include ../port.mk
 

@@ -12,7 +12,7 @@
 ; keys: space f ^F ^V forward a screen, b ^B back one, return j e ^N ^E down a
 ; line, k y ^Y ^P up one, d ^D half down, u ^U half up, g < top, G > end, p %
 ; a percentage, a count prefix on any of them (5j, 100g, 50p), / and ? search
-; (ERE, over src/core/boot/re.l), n and N repeat forward and reversed, = ^G the position,
+; (ERE, over src/core/boot/post.l), n and N repeat forward and reversed, = ^G the position,
 ; : then n or p or q the file walk and the exit, h the help, q Q zz quit.
 ; flags: -N line numbers, -i case-blind search, -s runs of blank lines squeezed
 ; to one, -e quit at the end rather than hold there; +N opens at line N and

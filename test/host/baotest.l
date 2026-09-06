@@ -2,7 +2,7 @@
 ; the multi-line line editor (ed*), the history zipper (uphist/downhist/mkframe/
 ; detach), joinln/flatten/splitat, and parseall used to be user-visible book globals
 ; only because the corpus (the old test/repl.l + test/replio.l) tested them by name.
-; They are cli's exports (src/core/boot/cli.l), and the checks live here, where checks belong,
+; They are cli's exports (src/core/boot/post.l), and the checks live here, where checks belong,
 ; reaching them through the module tablet:
 ;
 ;   (from 'cli) -- the module as a tablet, the shape `from`

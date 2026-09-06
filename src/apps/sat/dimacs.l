@@ -1,4 +1,4 @@
-; dimacs -- a dimacs cnf reader for the sat solver, built from the parser combinators in src/core/boot/peg.l
+; dimacs -- a dimacs cnf reader for the sat solver, built from the parser combinators in src/core/boot/post.l
 ; (a parser is (\ s y n): a string s, a success continuation y = (rest payload), a failure
 ; continuation n = rest; payloads are lists that `seq` concatenates). peg shares that set
 ; (eps/lit/span/alt/seq/seqs/skip/many/runp) with cook; here we add only a signed-int leaf `pint` (love
@@ -6,12 +6,12 @@
 ; `p cnf N M` header for N, parse the body integers, split them into clauses at each terminating 0.
 ; The self-tests below read `cdcl` for the parse->solve leg, so this file is run behind the solver:
 ; cat src/apps/sat/sat.l src/apps/sat/dimacs.l | out/host/love.
-; the combinators (src/core/boot/peg.l) -- its own top-level form; this reader is all lenient `runp`.
+; the combinators (src/core/boot/post.l) -- its own top-level form; this reader is all lenient `runp`.
 (use 'peg)
 
 (:
    ; -- the parser combinators (eps/lit/span/alt/seq/seqs/skip/many + the lenient runner runp) come from
-   ;    src/core/boot/peg.l via the (use 'peg) above -- shared with cook, not re-derived here.
+   ;    src/core/boot/post.l via the (use 'peg) above -- shared with cook, not re-derived here.
    ; -- character classes + the signed-integer leaf --
    (ws? c)   (c @ (32 || 9 || 13 || 10) 1 0)     ; space/tab/cr/lf -- a ?-name owes a bit
    (dig? c)  (47 < c < 58)                 ; '0'..'9'
