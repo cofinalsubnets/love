@@ -101,6 +101,31 @@
    (= 1 (tally (environ 0)))
    ('badarg = (setenv 7 "x"))
    ((getenv 7) = ())
+   ; -- symlinks: a name for a name, and the one door /usr/bin is laid through --
+   ; stat FOLLOWS and readlink does not, which is what lets a link be seen at all.
+   (wr f "five!")
+   !(symlink f (d + "/ln"))
+   (= "five!" (rd (d + "/ln")))                 ; open follows
+   (= 5 <(stat (d + "/ln")))                    ; and so does stat
+   (= f (readlink (d + "/ln")))                 ; readlink does not
+   ('einval = (readlink f))                     ; a plain file is not a link
+   ('enoent = (readlink (d + "/nope")))
+   ('eexist = (symlink f (d + "/ln")))          ; one name, laid once
+   (member? "ln" (readdir d))
+   ; a target that is not there is still a link: the name resolves, the open does not
+   !(symlink (d + "/gone") (d + "/dangle"))
+   (= (d + "/gone") (readlink (d + "/dangle")))
+   ('enoent = (stat (d + "/dangle")))
+   ; a link onto a link, and a pair that name each other
+   !(symlink (d + "/ln") (d + "/ln2"))
+   (= "five!" (rd (d + "/ln2")))
+   !(symlink (d + "/loopb") (d + "/loopa"))
+   !(symlink (d + "/loopa") (d + "/loopb"))
+   ('eloop = (stat (d + "/loopa")))
+   !(unlink (d + "/ln")) !(unlink (d + "/ln2")) !(unlink (d + "/dangle"))
+   !(unlink (d + "/loopa")) !(unlink (d + "/loopb"))
+   ('enoent = (stat (d + "/ln")))
+   (= "five!" (rd f))                           ; unlinking the link left the file
    ; -- and the tree (and the tablet) go back the way they came --
    !(setenv "WFS" ())
    !(unlink f)

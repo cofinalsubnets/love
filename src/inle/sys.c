@@ -39,10 +39,13 @@ extern int
  k_fs_rmdir(char const *p, uintptr_t pn),
  k_fs_unlink(char const *p, uintptr_t pn),
  k_fs_rename(char const *o, uintptr_t on, char const *n, uintptr_t nn),
+ k_fs_symlink(char const *t, uintptr_t tn, char const *p, uintptr_t pn),
  k_fs_chdir(char const *p, uintptr_t pn),
  k_fs_getcwd(char *b, uintptr_t n),
  k_fs_chmod(char const *p, uintptr_t pn, uintptr_t mode),
  k_fs_utime(char const *p, uintptr_t pn, uintptr_t ms);
+// readlink alone answers a COUNT and not a status, so it stands outside the block.
+extern intptr_t k_fs_readlink(char const *p, uintptr_t pn, char *b, uintptr_t n);
 extern uintptr_t k_clock_ms(void);     // ms since the epoch, the kernel's one scale
 
 // the fd faces (kmain.c), g-free by construction: rows, pipe queues and the dents cursor
@@ -140,6 +143,15 @@ long __ai_inle(long n, long a, long b, long c, long d, long e, long f) {
    return (c & AT_REMOVEDIR)
     ? k_fs_rmdir((char const*) b, strlen((char const*) b))
     : k_fs_unlink((char const*) b, strlen((char const*) b));
+  case NR_symlinkat:                          // (target, dfd, linkpath)
+   if (!a) return -EFAULT;
+   if ((r = at_ok(b, (char const*) c))) return r;
+   return k_fs_symlink((char const*) a, strlen((char const*) a),
+                       (char const*) c, strlen((char const*) c));
+  case NR_readlinkat:                         // (dfd, path, buf, size) -> the byte count
+   if ((r = at_ok(a, (char const*) b))) return r;
+   if (!c) return -EFAULT;
+   return k_fs_readlink((char const*) b, strlen((char const*) b), (char*) c, (uintptr_t) d);
   case NR_renameat:
    if ((r = at_ok(a, (char const*) b)) || (r = at_ok(c, (char const*) d))) return r;
    return k_fs_rename((char const*) b, strlen((char const*) b),

@@ -558,6 +558,9 @@ struct k_ent {
   unsigned char *bytes;
   uintptr_t len, cap, ms, mode;     // mode is the permission bits; stat lays the kind over them
   int refs;                         // open fds; an unlinked entry frees at the last close
+  char const *to;                   // a symlink's target, canonical and heap; NULL is not one.
+                                    // no flag beside it: a link's target is never empty, so
+                                    // the pointer is the presence bit `own` could not be.
   bool own, heap, dir, live;
 };
 static struct k_ent *k_ents;
@@ -642,6 +645,26 @@ static int k_find(char const *p, uintptr_t n) {
         && strlen(k_ents[i].path) == n && !memcmp(k_ents[i].path, p, n)) return i;
   return -1; }
 
+// follow a symlink at the END of a canonical path, in place. LEAF ONLY: a link
+// standing mid-path is not resolved, this tree having no directory that is a link.
+// bounded, because a link may name another and a pair may name each other.
+// -> the new length, or -ELOOP. a path that is not a link comes back untouched.
+#define k_hops 8
+static intptr_t k_deref(char *cp, intptr_t cn) {
+  for (int hop = 0; hop < k_hops; hop++) {
+    int i = cn > 0 ? k_find(cp, (uintptr_t) cn) : -1;
+    if (i < 0 || !k_ents[i].to) return cn;
+    // the target is held as WRITTEN, so it is canonicalized here and not at the
+    // store: relative to the link's own directory, absolute from the root, and
+    // either way losing the leading slash every entry path is spelled without.
+    char nx[256];
+    uintptr_t n = ai_lnk_canon(cp, k_ents[i].to, nx, sizeof nx);
+    if (n >= sizeof nx) return -ELOOP;
+    memcpy(cp, nx, n);
+    cp[n] = 0;
+    cn = (intptr_t) n; }
+  return -ELOOP; }
+
 // a slot for a fresh entry: a retired one first, else the table doubles. -1 is a
 // refusal the caller reads.
 static int k_ent_slot(void) {
@@ -668,6 +691,7 @@ static void k_ent_gc(int i) {
   if (e->live || e->refs || !e->path) return;
   if (e->own) kfree(e->bytes);
   if (e->heap) kfree((void*) e->path);
+  if (e->to) kfree((void*) e->to);
   *e = (struct k_ent) {0}; }
 
 // a fresh live entry at canonical path p -- rung 2's create. the caller has
@@ -819,6 +843,7 @@ ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   char cp[256];
   intptr_t cn = k_canon(p, pn, cp);
   if (cn < 0) return -ENAMETOOLONG;
+  if ((cn = k_deref(cp, cn)) < 0) return (int) cn;
   if (!cn) return -EISDIR;                       // the root is a directory
   int i = k_find(cp, (uintptr_t) cn);
   if (i >= 0 && k_ents[i].dir) return -EISDIR;
@@ -877,7 +902,8 @@ ai_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st) {
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
   if ((cn = k_canon(p, pn, cp)) < 0) return -ENOENT;
-  int i = k_find(cp, (uintptr_t) cn);
+  if ((cn = k_deref(cp, cn)) < 0) return (int) cn;  // stat(2), not lstat: readlink
+  int i = k_find(cp, (uintptr_t) cn);               // is the door to the link itself
   uintptr_t kid;
   *st = (struct k_st) { 0, 0, 0 };
   if (i >= 0 && !k_ents[i].dir)
@@ -1267,6 +1293,43 @@ ai_noinline int k_fs_unlink(char const *p, uintptr_t pn) {
   k_ents[i].live = false;                        // an open fd keeps the bytes; the
   k_ent_gc(i);                                   // last close frees them
   return 0; }
+
+// (symlink target path): an entry that is a name for another name. the target is
+// stored as GIVEN -- relative or absolute, the way readlink(2) owes it back -- and
+// canonicalized against the link's own place only when k_deref follows it.
+ai_noinline int k_fs_symlink(char const *t, uintptr_t tn, char const *p, uintptr_t pn) {
+  char cp[256];
+  intptr_t cn;
+  if (!k_fs_init()) return -ENOMEM;
+  if (!tn || tn >= 256) return -ENAMETOOLONG;
+  if ((cn = k_canon(p, pn, cp)) < 0) return -ENAMETOOLONG;
+  uintptr_t junk;
+  if (!cn || k_find(cp, (uintptr_t) cn) >= 0 || k_kids(cp, (uintptr_t) cn, &junk))
+    return -EEXIST;
+  int e = k_parent_ok(cp, (uintptr_t) cn);
+  if (e) return e;
+  char *q = k_strdup(t, tn);
+  if (!q) return -ENOMEM;
+  int i = k_create(cp, (uintptr_t) cn, false, 0777);
+  if (i < 0) return kfree(q), -ENOMEM;
+  k_ents[i].to = q;
+  return 0; }
+
+// (readlink path): the target, unfollowed and untruncated -- the byte count back, as
+// readlink(2) answers it, and -EINVAL where the path is not a link at all.
+ai_noinline intptr_t k_fs_readlink(char const *p, uintptr_t pn, char *b, uintptr_t n) {
+  char cp[256];
+  intptr_t cn;
+  if (!k_fs_init()) return -ENOMEM;
+  if ((cn = k_canon(p, pn, cp)) < 0) return -ENOENT;
+  int i = cn > 0 ? k_find(cp, (uintptr_t) cn) : -1;
+  if (i < 0) return -ENOENT;
+  if (!k_ents[i].to) return -EINVAL;
+  uintptr_t tn = strlen(k_ents[i].to);
+  if (!n) return -EINVAL;
+  if (tn > n) tn = n;                            // readlink(2) truncates and does not say so
+  memcpy(b, k_ents[i].to, tn);
+  return (intptr_t) tn; }
 
 // (rename old new): a file moves whole, a target file unlinked under it; a
 // directory carries everything beneath it -- every live path at or under the
@@ -1780,7 +1843,7 @@ void kmain(void) {
   r = ai_evals_(r,
    "(: (raw m) () (signal n h) ())"
    "(map (\\ n (? (member? n (names ())) () (ev [': [n 'x] ()])))"
-   "     '(symlink hardlink readlink spawn spawnmap fork exec herald wait still"
+   "     '(hardlink spawn spawnmap fork exec herald wait still"
    "       getpid getuid seal ttyfg glean pipe fdopen dup dup2 connect listen"
    "       accept udp-bind udp-send udp-recv hark winsize))");
   // then the kore cat through the stream shell, quietly: the line is seatless here, so every
