@@ -22,17 +22,16 @@ cat <<'HEAD'
 <title>love benchmarks</title>
 <style>
   /* tokyo-night, matching the site (style.css): periwinkle on polar-night blue,
-     the self-hosted DOS/V bitmap font, green = a kept (fastest) answer. */
+     the quay bitmap face, green = a kept (fastest) answer. */
   @font-face {
-    font-family: "Web437 DOS/V TWN16";
-    src: url("../assets/fonts/Web437_DOS-V_TWN16.woff2") format("woff2"),
-         url("../assets/fonts/Web437_DOS-V_TWN16.woff") format("woff");
+    font-family: "Quay 16";
+    src: url("../assets/fonts/quay16.woff") format("woff");
     font-display: swap;
   }
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
   body { background: #04060e; color: #a9b1d6;
-         font-family: "Web437 DOS/V TWN16", "Px437 IBM VGA8", "DejaVu Sans Mono",
+         font-family: "Quay 16", "Px437 IBM VGA8", "DejaVu Sans Mono",
                       ui-monospace, Menlo, Consolas, monospace;
          font-size: 16px; line-height: 1.5; font-variant-ligatures: none;
          -webkit-font-smoothing: none; font-smooth: never;
