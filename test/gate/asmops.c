@@ -1,9 +1,9 @@
 // the probe test_asmops compiles: one call to every inline in the kernel's
-// per-arch asmops.h, so mooncc has to parse the header and hand each GNU
-// template to holo's dialect front. the gate then disassembles the object and
+// asmops.h, so mooncc has to parse the header, take the __mooncc__ half, and
+// hand each NEUTRAL template to holo. the gate then disassembles the object and
 // demands the privileged instructions it expects, which is what proves the
 // templates encode to what they say rather than to something that merely
-// assembled -- and, with clang present, that both readers agree.
+// assembled -- and, with clang present, that the GNU half says the same.
 //
 // this file is deliberately NOT under src/inle/<a>/ -- the Makefile globs that
 // directory for the seat, and a probe living there would join the kernel build.

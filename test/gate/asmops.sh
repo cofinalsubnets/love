@@ -1,10 +1,13 @@
 #!/bin/sh
 # test/gate/asmops.sh -- the inline-asm SEAM gate.
 #
-# src/inle/<a>/asmops.h says every privileged instruction the kernel needs
-# ONCE, in GNU's template: clang reads it natively, mooncc lowers the same text
-# through src/core/holo/gas.l. one spelling, two readers -- and the reader that
-# rots quietly is ours, so:
+# src/inle/asmops.h says every privileged instruction the kernel needs twice:
+# holo's neutral text under __mooncc__ (one dialect for every machine), and
+# GNU's per-arch template in src/inle/<a>/asmops.h for every other compiler --
+# which mooncc reads too (src/core/holo/gas.l), so the gate can hold the two
+# spellings to each other. two spellings of one operation is the shape that
+# rots quietly -- edit one half, ship, and nothing notices until the other
+# compiler runs -- so:
 #
 #   1. COVERAGE. every `static inline k_*` the header defines is called by
 #      test/gate/asmops.c. derived from the header itself, so adding an op and
@@ -13,15 +16,15 @@
 #      to make it EXIST, since a static inline whose calls are all inlined is
 #      dead and a compiler is right to drop it.
 #   2. MOONCC TAKES IT. the probe compiles with `mooncc -t <arch> -nostdinc`.
-#      that alone exercises the whole seam: -nostdinc keeps glibc's headers out
-#      of a freestanding compile, and each template goes through the GNU-dialect
-#      front and holo's encoder (an unknown op or a bad operand SCARES, it does
-#      not shrug).
-#   3. THE TWO READERS AGREE. with clang present, compile the same probe with
+#      that alone exercises the whole seam: the __mooncc__ predefine picks the
+#      neutral half, -nostdinc keeps glibc's headers out of a freestanding
+#      compile, and each template goes through holo's text reader and encoder
+#      (an unknown op or a bad operand SCARES, it does not shrug).
+#   3. THE TWO HALVES AGREE. with clang present, compile the same probe with
 #      it and compare the two objects op by op: same privileged mnemonics, same
 #      symbolic operands, same order, inside the same function. this is rung 5's
 #      compiler-vs-compiler differential in miniature, and it is the only check
-#      that can catch our reading of a template drifting from GNU's.
+#      that can catch one half of the header drifting from the other.
 #
 # what the comparison deliberately does NOT compare: register allocation (the
 # two compilers pick different ones and both are right) and the plain
@@ -174,5 +177,5 @@ for a in x64 a64 rv64; do
   fi
 done
 
-[ $rc = 0 ] && echo "asmops: mooncc and clang read every template alike, on all three arches"
+[ $rc = 0 ] && echo "asmops: both spellings agree, on all three arches"
 exit $rc

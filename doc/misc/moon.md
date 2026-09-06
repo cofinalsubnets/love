@@ -409,9 +409,11 @@ predefined on x64 alone (gen's d128 lane), which is what love.c's limb seam read
 
 The GNU statement form, in the GNU dialect: the template is what clang and gcc read for the
 target — AT&T on x64, ARM on a64, riscv, thumb — and `src/core/holo/gas.l` lowers it to the
-neutral IR the baked assembler encodes. So a header says each instruction ONCE and every
-compiler reads it (the kernel's `src/inle/<a>/asmops.h` carry no `#ifdef __mooncc__` at all);
-no new encoder exists anywhere, every line lands on a backend row test/holo/golden.l froze.
+neutral IR the baked assembler encodes. So a header written for clang reads as it stands
+(the kernel's `src/inle/<a>/asmops.h` carry no `#ifdef` at all); no new encoder exists
+anywhere, every line lands on a backend row test/holo/golden.l froze. The kernel's own door,
+`src/inle/asmops.h`, keeps the neutral spelling under one `#ifdef __mooncc__` -- one dialect
+for every machine -- and test/gate/asmops.sh holds the two spellings to each other.
 
     asm [volatile] ("mov $40, %0" : "=r"(v) : "r"(x), "i"(3) : "memory");
     __attribute__((holo)) asm ("li %0, 40" : "=r"(v));    // holo's neutral text instead
