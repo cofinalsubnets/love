@@ -1,14 +1,10 @@
-// asmops -- the x64 privileged instructions, one static inline each.
-//
-// the kernel is the last place in the tree that talks to the machine in
-// assembler, and it says each thing ONCE, in GNU's AT&T template: clang reads
-// it natively, and mooncc lowers the same text to holo's neutral IR
-// (src/core/holo/gas.l -- the registers, `$` immediates, disp(%base) memory,
-// the `1:`/`1f` local labels and the size suffix all read as GNU does). so the
-// spelling lives HERE, once per operation, every call site says the operation's
-// NAME, and the clang build stays alive as the differential twin: both
-// compilers compile the same kernel from the same lines (test/gate/asmops.sh
-// compares the two objects op by op).
+// asmops -- the x64 privileged instructions in GNU's AT&T template, one static
+// inline each: the half of src/inle/asmops.h every compiler but mooncc takes
+// (mooncc reads holo's neutral spelling there). the kernel is the last place in
+// the tree that talks to the machine in assembler, and this is what keeps the
+// clang build alive as the differential twin: mooncc reads these lines too
+// (src/core/holo/gas.l), and test/gate/asmops.sh compares the two halves op by
+// op, so every call site says the operation's NAME and neither spelling drifts.
 //
 // worth knowing before editing: an operand's register spells at its C type's
 // width (a uint8_t is %al, a uint16_t %dx), so the register-contracted ops

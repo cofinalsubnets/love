@@ -1,15 +1,9 @@
-// asmops -- the a64 privileged instructions, one static inline each. the x64
-// twin (src/inle/x64/asmops.h) opens with the why; the short version is that
-// the kernel says each thing once, in GNU's ARM template, and mooncc lowers the
-// same text to holo's neutral IR (src/core/holo/gas.l): xN/sp/xzr, `#`
-// immediates, [base, #off] memory, b.cond, the sysreg and sys-op names as ARM
-// spells them. so the spelling lives here and the call sites say the NAME.
-//
-// two things the lowering does under the text: `mov` to or from sp is the
-// ADD-immediate form (encoding 31 reads as XZR in the ORR form -- `mov x9, sp`
-// would assemble as x9 <- 0 there), and a whole-system `tlbi` takes the
-// zero-register slot holo's one SYS encoding carries. a multi-instruction
-// template separates on `\n` or `;`.
+// asmops -- the a64 privileged instructions in GNU's ARM template, one static
+// inline each: the half of src/inle/asmops.h every compiler but mooncc takes.
+// the x64 twin (src/inle/x64/asmops.h) opens with the why; the short version is
+// that mooncc reads these lines too (src/core/holo/gas.l: xN/sp/xzr, `#`
+// immediates, [base, #off] memory, the sysreg and sys-op names as ARM spells
+// them), and test/gate/asmops.sh compares them against the neutral half.
 #pragma once
 #include <stdint.h>
 

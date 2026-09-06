@@ -1,9 +1,9 @@
-// asmops -- the rv64 privileged instructions, one static inline each. the x64
-// twin (src/inle/x64/asmops.h) opens with the why; the short version is that
-// the kernel says each thing once, in GNU's template, and mooncc lowers the
-// same text to holo's neutral IR (src/core/holo/gas.l): the ABI register names,
-// off(base) memory, the csr pseudos by name. so the spelling lives here and the
-// call sites say the NAME. a multi-instruction template separates on `\n` or `;`.
+// asmops -- the rv64 privileged instructions in GNU's template, one static
+// inline each: the half of src/inle/asmops.h every compiler but mooncc takes.
+// the x64 twin (src/inle/x64/asmops.h) opens with the why; the short version is
+// that mooncc reads these lines too (src/core/holo/gas.l: the ABI register
+// names, off(base) memory, the csr pseudos by name), and test/gate/asmops.sh
+// compares them against the neutral half.
 #pragma once
 #include <stdint.h>
 
