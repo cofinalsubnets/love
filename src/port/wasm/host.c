@@ -104,6 +104,31 @@ struct ai_port_vt const ai_fd_port_vt = { _flush, fd_writen, fd_readn, NULL };
 static noreturn lvm(lvm_exit) { exit(getcharm(Sp[0])); }
 static union u const nif_exit[] = {{lvm_exit}, {lvm_ret0}};
 
+// --- the console: quay's screen, and the page's mirror of it ---------------
+// the engine and its love door ride along by unity include, as src/host/cb.c has them;
+// the palette is the .rodata table paint.c spends, so the page's colours are the
+// framebuffer's. (mirror scr) copies a screen's head and cells here for the page to lay
+// (src/port/wasm/cells.js) -- a copy, since the cask moves with the heap and the page
+// reads after the eval returns. answers the cell count, or () for a screen too big.
+#include "quay/quay.c"
+#include "quay/nif.c"
+#include "quay/xterm256.h"
+enum { mir_head = 4, mir_max = 1 << 16 };
+static uint32_t mir[mir_head + mir_max];   // rows cols cursor flag, then the cells
+static lvm(lvm_mirror) {
+  struct cb *c = scr_ok(Sp[0]);
+  uintptr_t n = c ? (uintptr_t) c->rows * c->cols : 0;
+  if (c && n <= mir_max) {
+    mir[0] = c->rows, mir[1] = c->cols, mir[2] = c->wpos, mir[3] = c->flag;
+    memcpy(mir + mir_head, c->cb, n * 4);
+    Sp[0] = putcharm(n); }
+  else Sp[0] = ZeroPoint;
+  Ip += 1; ai_musttail return Continue(); }
+static union u const nif_mirror[] = {{lvm_mirror}, {lvm_ret0}};
+EMSCRIPTEN_KEEPALIVE uint32_t*       ai_mirror(void)  { return mir; }
+EMSCRIPTEN_KEEPALIVE uint32_t const* ai_palette(void) { return xterm256; }
+EMSCRIPTEN_KEEPALIVE uint32_t        ai_unfold(uint32_t g_) { return g_ < 256 ? cb_unfold((uint8_t) g_) : 0; }
+
 // --- exported entry points ------------------------------------------------
 static struct ai *F;
 
@@ -117,7 +142,11 @@ int ai_init(void) {
   // a quarter of the ceiling, like every other bounded seat: the transient peak while a
   // resize holds both halves is double the budget.
   if (ai_ok(F)) ai_core_of(F)->budget = (2048u << 20) / sizeof(ai_word) / 4;
-  struct ai_def d[] = {{"exit", (ai_word) nif_exit}};
+  struct ai_def d[] = {{"exit", (ai_word) nif_exit},
+    {"screen", (ai_word) nif_screen}, {"scribe", (ai_word) nif_scribe},
+    {"glass", (ai_word) nif_glass},   {"gaze", (ai_word) nif_gaze},
+    {"reply", (ai_word) nif_reply},   {"unfold", (ai_word) nif_unfold},
+    {"wet", (ai_word) nif_damage},    {"mirror", (ai_word) nif_mirror}};
   F = ai_defn(F, d, countof(d));
   if (!ai_ok(F)) return ai_code_of(F);
   F = ai_egg_(F, src_egg, src_p1, src_corpus, src_post);

@@ -32,6 +32,7 @@
    wasm        "src/port/wasm"                                       ; as the page links it
    (island _)  (slurpf (wasm + "/repl.html")
                 + "\n<script src=\"" + wasm + "/love.js\"></script>\n"
+                + "<script src=\"" + wasm + "/cells.js\"></script>\n"
                 + "<script src=\"" + wasm + "/repl.js\"></script>\n")
 
    ; --- the glossary: id, emoji, the term as shown, the body; 'gray for a word that wears

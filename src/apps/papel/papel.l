@@ -261,7 +261,7 @@
    (rfrag conf)    (: r (rdir conf) (0 < #r ? (peep conf 'out "out/site" + "/" + r + "/repl.html") ""))
    (island conf)   (: f (rfrag conf) (0 < #f ? (slurpf f) ""))
    (rscripts conf) (: r (rdir conf)
-                      (0 < #r ? ("<script src=\"" + r + "/love.js\"></script>\n<script src=\"" + r + "/repl.js\"></script>\n") "")))
+                      (0 < #r ? (strcat (map (f \ "<script src=\"" + r + "/" + f + "\"></script>\n") '("love.js" "cells.js" "repl.js"))) "")))
 
 ; --- the stylesheet ---------------------------------------------------------------------
 ; one file, linked by every page, written by the same cook recipe machinery as the pages
@@ -390,8 +390,8 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
   -t, --title NAME  the site name, used in the header and on the index (default papel)
   -q, --quiet       write the site and say nothing
   -s, --serve PORT  build, then hand OUT to kiosko and serve it on PORT
-  -r, --repl DIR    lay the repl island on the index: DIR holds love.js, repl.js and
-                    repl.html, spelled as the index page links it (src/port/wasm)
+  -r, --repl DIR    lay the repl island on the index: DIR holds love.js, cells.js,
+                    repl.js and repl.html, spelled as the index page links it (src/port/wasm)
   SRC               a .md file or a directory of them; with none, README.md and doc/
 ")
                 (quit 0))

@@ -33,12 +33,18 @@ that is a compiler.
 
 ## the ladder
 
-- **rung 0 -- the console in the page.** the wasm build exposes the cell buffer (a
-  frame is one cask) and repl.js blits it: one span per run of like-coloured cells, in
-  the quay face, the grid fitted the way the app screen fits today. ansiToHtml retires.
-  gate: the same frame cask -> the same DOM, and the inle lane's painter over the same
-  cask -> the pixels the page shows, glyph for glyph. vi, less and rove draw into the
-  buffer unchanged.
+- **rung 0 -- the console in the page.** ✅ LANDED. the wasm seat carries quay's
+  engine and its love door (host.c unity-includes quay.c + nif.c, as src/host/cb.c does)
+  plus one nif of its own, `(mirror scr)`, which copies a screen's head and cells to a
+  buffer the page reads through `ai_mirror`; `ai_palette` hands out the xterm256 table
+  paint.c spends and `ai_unfold` the cp437 fold, so the page owns no second recipe.
+  src/port/wasm/web.l is the page's love side: each app boots on a screen of the box's
+  size and scribes its frames into it; cells.js lays the mirror as text, one span per
+  run of like-penned cells, paint.c's reading of bold/reverse/underline; repl.js pumps
+  the steps and blits. ansiToHtml, pal256 and the JS cp437 table are gone. gate:
+  src/port/wasm/screen.mjs under test_wasm -- a hand frame's cells and its lay, and rove
+  and ink booted on a page screen. what it found on the way: the wasm function-table
+  trap in c0's peephole (src/port/wasm/32bit-findings.md).
 - **rung 1 -- the console door.** one verb: run a tty app on the current console,
   answer when it exits. terminal: the fork lane. inle and the page: a task on the same
   buffer, the caller parked until the callee yields it back. rove's library level

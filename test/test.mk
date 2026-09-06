@@ -1207,9 +1207,10 @@ test_wasm:
 	@echo "test_wasm: skipped (needs emcc + node)"
 else
 test_wasm:
-	@$(MAKE) -s -C $(R)/wasm gate
-	@echo TEST out/src/port/wasm/love.js "(node)"
-	@$(NODE) $(R)/src/port/wasm/test.mjs --love $(R)/out/src/port/wasm/love.js $t
+	@$(MAKE) -s -C $(R)/src/port/wasm gate
+	@echo TEST out/wasm/love.js "(node)"
+	@$(NODE) $(R)/src/port/wasm/test.mjs --love $(R)/out/wasm/love.js $t
+	@$(NODE) $(R)/src/port/wasm/screen.mjs --love $(R)/out/wasm/love.js
 endif
 
 # --- the two binary-shape gates, both skipping when their tool is absent ---

@@ -31,7 +31,7 @@ EMFLAGS = \
   -sMODULARIZE=1 -sEXPORT_NAME=Love \
 	-sASSERTIONS -sSINGLE_FILE=1 \
   -sINITIAL_MEMORY=16MB -sALLOW_MEMORY_GROWTH=1 \
-  -sEXPORTED_FUNCTIONS=_ai_init,_ai_eval,_ai_out_ptr,_ai_out_len,_ai_out_reset,_malloc,_free \
+  -sEXPORTED_FUNCTIONS=_ai_init,_ai_eval,_ai_out_ptr,_ai_out_len,_ai_out_reset,_ai_mirror,_ai_palette,_ai_unfold,_malloc,_free \
   -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString,stringToUTF8,lengthBytesUTF8,HEAPU8,HEAPU32
 
 # a failed recipe takes its half-written target with it -- else a 0-byte artifact carries a

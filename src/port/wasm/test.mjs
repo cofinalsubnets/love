@@ -5,7 +5,7 @@
 // override (sentinel-ap data kinds, no flat code-address space).
 //
 // Usage: node src/port/wasm/test.mjs [--love <love.js>] <corpus.l...>
-//   (the Makefile passes out/src/port/wasm/love.js and $t, in order)
+//   (the Makefile passes out/wasm/love.js and $t, in order)
 //
 // The module path is a PARAMETER because the gate must not build over the
 // committed src/port/wasm/love.js -- see ../Makefile. Default is the gate's own build;
@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 const argv = process.argv.slice(2);
-let mod = new URL('../out/src/port/wasm/love.js', import.meta.url).href;
+let mod = new URL('../../../out/wasm/love.js', import.meta.url).href;
 if (argv[0] === '--love') {
   if (argv.length < 2) { console.error('--love wants a path'); process.exit(2); }
   mod = pathToFileURL(argv[1]).href;
@@ -25,6 +25,7 @@ if (!files.length) { console.error('usage: test.mjs [--love <love.js>] <corpus.l
 // The shim bakes post too, so the shell core the corpus tests (zev/charms) is already aboard.
 const src = files.map(f => readFileSync(f, 'utf8')).join('\n');
 
+const { default: Love } = await import(mod);
 const m = await Love();
 const init = m.ccall('ai_init', 'number', [], []);
 if (init !== 0) { console.error(`ai_init failed (code ${init})`); process.exit(1); }

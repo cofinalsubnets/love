@@ -503,10 +503,15 @@ static Ana(c0_cond_r) { return
 static struct ai *ana_ap_r2l(struct ai *g, struct env **c, word x);
 static struct ai *ana_ap(struct ai *g, struct env **c, intptr_t x) {
  if (!ai_ok(g)) return g;
+ // a quoted cell is read below as a nif's code (ap, [1].ap, [3].ap) -- so it must be a
+ // nif: a static table, never a heap value. a chain's cap, a closure's second word and a
+ // partial's argument are payload, and on a seat where a function pointer is a small
+ // table index (wasm) an odd index IS a charm, so `[1].ap == lvm_ret0` would hold of
+ // '(3 ..) or a lambda and inline it as an instruction
  bool imfp =
   g->sp[0] == (word) c1_ix &&
   g->sp[1] == (word) lvm_quote &&
-  lamp(g->sp[2]);
+  lamp(g->sp[2]) && !in_data(cell(g->sp[2])->ap) && !in_heap(g, g->sp[2]);
  intptr_t
   ca = llen(x),
   va =

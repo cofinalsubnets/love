@@ -26,6 +26,19 @@ is `wint = (< (32 2) max-charm)` (true on the full 64-bit hosted builds).
 
 ## Fixed
 
+- **A function pointer is a small table index, and an odd one IS a charm.** c0's
+  saturated-call peephole (`ana_ap`, src/core/ev.c) read a quoted operator as a nif's
+  code table -- `[1].ap == lvm_ret0` -- which on a native word can never hold of a
+  payload, and on wasm holds whenever `lvm_ret0`'s slot is `2k+1` and the quoted value
+  (a chain, a lambda, a partial) carries the charm `k` there. p1's letrec then compiled
+  wrong, its `seal-hook` never ran, and the egg trapped applying the unsealed hook. Which
+  slot `lvm_ret0` gets depends on link order, so any change to host.c flipped it. Now the
+  peephole asks for a static table (`!in_data && !in_heap`) before reading one.
+- **`#0` is the number 0, not a box.** the page driver's `qbox #0` idiom pinned into a
+  charm, silently; the boxes are tablets (src/port/wasm/web.l).
+- **test.mjs had lost its `import` of the module** and the gate's paths still spelled
+  the pre-move `wasm/` directory: test_wasm had not run since the tree move.
+
 - **`turn` truncated the 64-bit RNG on a 32-bit word.** The state was
   always 256 bits (raw-byte limbs, a C/8-byte array on a 32-bit word), but the
   *output* was masked with `fix_max` -- word-dependent (2^62-1 native, 2^30-1
