@@ -1,35 +1,15 @@
-// cats.c -- the baked source, one copy for the whole link: the egg's four texts and the
-// module registry, each DEFLATED (tools/mkgz.l). src/host/main.c and src/inle/kmain.c both warm
-// from these through the two calls below; see src/host/cats.h.
+// cats.c -- the baked source, one copy for the whole link: the egg's four texts, the
+// module registry, the glaze and the CLI driver, laid by tools/lcat.l into one header, the
+// texts DEFLATED. src/host/main.c and src/inle/kmain.c both warm from these through the
+// calls below; see src/host/cats.h.
 // only a love with no image to wake reads any of it, so the inflate lands on the lane
 // that was already warming an egg -- never on a shipped boot.
 #include "love.h"
 #include "cats.h"
-
-#include "cat_egg_z.h"
-#include "cat_p1_z.h"
-#include "cat_prel_z.h"
-#include "cat_post_z.h"
-
-// ONE registry, every frontend and every face. the order is the dependency order:
-// overlay's body reads (from 'kanren ..) as it registers, so the blobs go a, holo, b --
-// ai_evals_ reads form by form and each module is one form, so three calls are the one
-// call. `from` on an unregistered module answers () rather than scaring, so a short
-// registry is a silent wrong binding, and every build takes the whole set.
-// holo rides a blob per arch because the backend does; an arch with no backend registers
-// neither, which is the one shape that leaves AiCatModsH unset.
-#include "cat_modsa_z.h"
-#if defined(__x86_64__)
-#define AiCatModsH 1
-#include "cat_mods_x64_z.h"
-#elif defined(__aarch64__)
-#define AiCatModsH 1
-#include "cat_mods_a64_z.h"
-#elif defined(__riscv)
-#define AiCatModsH 1
-#include "cat_mods_rv64_z.h"
-#endif
-#include "cat_modsb_z.h"
+// ONE registry, every frontend and every face: the roster and its order are the
+// header's, and every build takes the whole set -- `from` on an unregistered module
+// answers () rather than scaring, so a short registry is a silent wrong binding.
+#include "baked.h"
 
 // a blob to a NUL-terminated buffer off the heap, so a collect mid-eval cannot move it.
 // NULL on refusal, which leaves the caller's g untouched and the boot to fail where it
@@ -57,9 +37,20 @@ struct ai *ai_cats_egg(struct ai *g) {
   g->alloc(g, e, 0), g->alloc(g, p, 0), g->alloc(g, r, 0), g->alloc(g, o, 0);
   return g; }
 
+// a, holo, b: overlay's body reads (from 'kanren ..) as it registers. ai_evals_ reads
+// form by form and each module is one form, so three calls are the one call.
 struct ai *ai_cats_mods(struct ai *g) {
   g = CatEval(g, ai_cat_mods_a_z);
 #ifdef AiCatModsH
   g = CatEval(g, ai_cat_mods_h_z);
 #endif
   return CatEval(g, ai_cat_mods_b_z); }
+
+#ifdef AiGlazed
+// 138 KB of text that only a `love bake` reads, for 41 KB of .rodata
+struct ai *ai_cats_glaze(struct ai *g) { return CatEval(g, src_glaze_z); }
+#else
+struct ai *ai_cats_glaze(struct ai *g) { return g; }
+#endif
+
+struct ai *ai_cats_cli(struct ai *g) { return ai_evals_(g, ai_src_cli); }

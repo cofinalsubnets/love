@@ -341,47 +341,17 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
   return ai_evals_(g, runner); }                      // pass 2: corpus via the self-hosted ev
 
 #else
-// the full love: raw terminal mode for the interactive REPL, and the CLI driver as the
-// canonicalized lcat header. ai_tco gates too: the glaze emits the tail-threaded lvm shape
-// (g, Ip, Hp, Sp), so a trampoline build calling into it jumps with the wrong ABI. the
-// arch answers whether a JIT exists, ai_tco whether this vm can call one.
-#if (defined(__x86_64__) || defined(__aarch64__)) && ai_tco
-#define AiGlazed 1                                      // the native JIT exists on this arch
-#endif
-// the tty is one terminal, so its cooked baseline and its atexit live in posix.c, which
-// the (raw on) nif drives. the capture-once latch there is what makes a repl that raws
-// after bao already did restore the true baseline rather than a raw one.
+// the full love: raw terminal mode for the interactive REPL, and the CLI driver and the
+// glaze off src/host/cats.c. the tty is one terminal, so its cooked baseline and its atexit
+// live in posix.c, which the (raw on) nif drives. the capture-once latch there is what makes
+// a repl that raws after bao already did restore the true baseline rather than a raw one.
 #define raw_mode() ((void) ai_raw_mode(1))
-
-static char const cli[] =
-#include "cli.h"
-;
-
-// the glaze, in one text: emit.l (the native emitter) then auto.l (ev's source recognizer,
-// which reads emit's names bare), so the order here is the module and the pair declares it.
-// holo leads because the glaze folds `assemble` at its own compile; orth and the ala
-// creation hook trail it, and hook.l leaks natjit/fires/fired?/bake so it stays outside.
-// not in src_mods: an unglazed build must not pay for it, and the empty twins below let
-// every eval site stand unconditional.
-#ifdef AiGlazed
-// the glaze's own source, deflated by tools/mkgz.l: 138 KB of text that only a `love bake`
-// reads, for 41 KB of .rodata. src_glaze_z is the bytes, src_glaze_z_raw the inflated size.
-#include "glaze_z.h"
 // LOVE_NO_GLAZE: a pure-interpreter session -- ev back to base-ev and the natjit hook
 // cleared. a session knob like LOVE_NO_IMAGE: it governs a run, never the artifact.
+#ifdef AiGlazed
 static char const glaze_off[] = "(: ev (from 'glaze 'base-ev) natjit ())";
-// inflate, eval, hand the buffer back: ai_evals_ keeps none of it, and the buffer is
-// off-heap, so a collect mid-eval cannot move it.
-static struct ai *eval_glaze(struct ai *g) {
-  char *t = g->alloc(g, NULL, src_glaze_z_raw + 1);
-  if (!t) return g;
-  if (ai_inflate_raw(src_glaze_z, sizeof src_glaze_z - 1,
-                     (unsigned char*) t, src_glaze_z_raw) == (intptr_t) src_glaze_z_raw)
-    t[src_glaze_z_raw] = 0, g = ai_evals_(g, t);
-  return g->alloc(g, t, 0), g; }
 #else
 static char const glaze_off[] = "";
-#define eval_glaze(g) (g)
 #endif
 
 // the session layer: boot is over and the base is never the head again, so a top-level
@@ -394,7 +364,7 @@ static struct ai *run_program(struct ai *g, bool replp, bool owed) {
   if (replp) raw_mode();
   g = ai_layer_(g);
   if (getenv("LOVE_NO_GLAZE")) g = ai_evals_(g, glaze_off);
-  if (owed) g = ai_evals_(g, cli);
+  if (owed) g = ai_cats_cli(g);
   return ai_evals_(g, replp ? "(cli-line cmdline 1)" : "(cli-line cmdline 0)"); }
 
 // read-eval one .l file into the booting session, loudly: a bake's cat has no shell help,
@@ -450,7 +420,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     "   ufail? (from 'kanren 'ufail?)  var (from 'kanren 'var)"
     "   s_plus (from 'kanren 's_plus)  s_star (from 'kanren 's_star)"
     "   === (from 'kanren '===)  =/= (from 'kanren '=/=))");
-  g = eval_glaze(g);                                     // a no-op on an unglazed arch
+  g = ai_cats_glaze(g);                                     // a no-op on an unglazed arch
 #ifdef AiGlazed
   g = ai_unsplice_(g);                                   // holo back to non-ambient
 #endif
@@ -474,7 +444,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     // the CLI driver rides the image too, last so it sits over the crew as the
     // session-layer eval it replaces did. pure definition: cli-line reads argv and the
     // verb registry when called, so nothing of this session is folded in.
-    g = ai_evals_(g, cli);
+    g = ai_cats_cli(g);
     int rc = *bake ? (int) ai_core_of(g = image_dump(g, bake))->b : image_bake(g);
     if (rc) fprintf(stderr, "love: bake failed (rc=%d)\n", rc);
     exit(rc ? 1 : 0); }

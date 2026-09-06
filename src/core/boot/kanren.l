@@ -1,6 +1,6 @@
 ; kanren -- first-order unification + a lazy-colist search monad.
 ; a post-egg layer like src/core/boot/q.l: prel stays the language, this rides its own
-; out/lib/kanren.h. needs src/core/boot/prel.l and pat's @. src/core/boot/overlay.l reads unify/ufail?/var
+; text in out/lib/baked.h. needs src/core/boot/prel.l and pat's @. src/core/boot/overlay.l reads unify/ufail?/var
 ; from here and reaches the rest through the registry, so this must be evaled and
 ; registered before overlay -- cat order.
 ;

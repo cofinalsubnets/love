@@ -23,9 +23,6 @@ endif
 # avoid creating empty artifacts with fresh mtime
 .DELETE_ON_ERROR:
 
-lib_h = $(patsubst src/core/boot/%.l,out/lib/%.h,$(wildcard src/core/boot/*.l))
-holo_h = out/lib/holo.h  out/lib/x64.h  out/lib/a64.h  out/lib/rv64.h
-glaze_h = out/lib/emit.h out/lib/auto.h out/lib/hook.h out/lib/walk.h
 # love0's boot text: one header, one src0_<name>[] literal per file, laid by sed alone --
 # love0 is what runs lcat, so nothing love-made can sit under it. every boot file rides;
 # src/host/main.c names the ones love0 evaluates.
@@ -38,7 +35,7 @@ out/lib/boot0.h: $(boot0_l)
 	@for f in $(boot0_l); do n=$${f##*/}; printf 'static char const src0_%s[] =\n' $${n%.l}; \
 	   LOVE_NO_IMAGE= $(sed_lit) $$f || exit 1; echo ';'; done > $@
 .PHONY: lib
-lib: $(lib_h) out/lib/boot0.h
+lib: out/lib/boot0.h out/lib/baked.h
 lcat_love = $(love0) -l src/core/boot/prel.l
 # A FORCED WITNESS KEEPS ITS MTIME, and that is the whole point: make cannot depend on a
 # variable's VALUE, so a roster change has to be noticed some other way. Depending on the
@@ -47,52 +44,30 @@ lcat_love = $(love0) -l src/core/boot/prel.l
 note = if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo 'SH	'$@; fi
 # every header below is written straight to $@. .DELETE_ON_ERROR (above) takes the
 # half-written one away when a generator dies, which is the whole of the guarantee.
-$(lib_h): out/lib/%.h: src/core/boot/%.l tools/lcat.l   # + $(love0), stated below
+# the baked source: one header, one love0 run. tools/lcat.l carries the roster -- which
+# files, in which blobs, with what glue -- so a roster change edits a file this depends on.
+baked_l = $(wildcard src/core/boot/*.l) \
+  src/core/boot/glaze/emit.l src/core/boot/glaze/auto.l src/core/boot/glaze/hook.l src/core/boot/glaze/walk.l \
+  src/core/holo/holo.l src/core/holo/x64.l src/core/holo/a64.l src/core/holo/rv64.l
+out/lib/baked.h: $(baked_l) tools/lcat.l $(love0)
+	@echo 'LOVE	'$@
+	@mkdir -p out/lib
+	@$(lcat_love) tools/lcat.l > $@
+# one file as one literal: the ports and test/front paste these in expression position
+lib_h = $(patsubst src/core/boot/%.l,out/lib/%.h,$(wildcard src/core/boot/*.l))
+holo_h = out/lib/holo.h out/lib/x64.h out/lib/a64.h out/lib/rv64.h
+$(lib_h): out/lib/%.h: src/core/boot/%.l tools/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
 	@$(lcat_love) tools/lcat.l $< > $@
-$(holo_h): out/lib/%.h: src/core/holo/%.l tools/lcat.l
+$(holo_h): out/lib/%.h: src/core/holo/%.l tools/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
 	@$(lcat_love) tools/lcat.l $< > $@
-out/lib/rune.h: src/apps/rune/rune.l tools/lcat.l
+out/lib/rune.h: src/apps/rune/rune.l tools/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
 	@$(lcat_love) tools/lcat.l $< > $@
-$(glaze_h): out/lib/%.h: src/core/boot/glaze/%.l
-	@echo 'LOVE	'$@
-	@mkdir -p out/lib
-	@$(lcat_love) tools/lcat.l $< > $@
-glaze_items = "(use 'holo)(module 'glaze " @out/lib/emit.h @out/lib/auto.h ")" \
-  "(: ev (from 'glaze 'ev) member? (from 'glaze 'member?))" \
-  @out/lib/hook.h @out/lib/walk.h @out/lib/holo.h @out/lib/x64.h @out/lib/a64.h
-cats_egg_items   = @out/lib/egg.h
-cats_p1_items    = @out/lib/p1.h
-cats_prel_items  = @out/lib/prel.h " " @out/lib/ev.h
-cats_post_items  = @out/lib/post.h
-cats_modsa_items = @out/lib/rng.h @out/lib/q.h @out/lib/glob.h \
-  @out/lib/kanren.h @out/lib/overlay.h @out/lib/uu.h
-cats_modsb_items = @out/lib/bao.h @out/lib/verbs.h @out/lib/scan.h @out/lib/re.h @out/lib/peg.h
-cats_z = out/lib/cat_egg_z.h out/lib/cat_p1_z.h out/lib/cat_prel_z.h out/lib/cat_post_z.h \
-  out/lib/cat_modsa_z.h out/lib/cat_modsb_z.h \
-  out/lib/cat_mods_x64_z.h out/lib/cat_mods_a64_z.h out/lib/cat_mods_rv64_z.h
-# mkgz names its own symbol and sizes on err, so these carry no echo of their own.
-out/lib/glaze_z.h: $(glaze_h) $(holo_h) tools/mkgz.l $(love0)
-	@$(lcat_love) tools/mkgz.l src_glaze_z $(glaze_items) > $@
-out/lib/cat_egg_z.h: out/lib/egg.h tools/mkgz.l $(love0)
-	@$(lcat_love) tools/mkgz.l ai_cat_egg_z $(cats_egg_items) > $@
-out/lib/cat_p1_z.h: out/lib/p1.h tools/mkgz.l $(love0)
-	@$(lcat_love) tools/mkgz.l ai_cat_p1_z $(cats_p1_items) > $@
-out/lib/cat_prel_z.h: out/lib/prel.h out/lib/ev.h tools/mkgz.l $(love0)
-	@$(lcat_love) tools/mkgz.l ai_cat_prel_z $(cats_prel_items) > $@
-out/lib/cat_post_z.h: out/lib/post.h tools/mkgz.l $(love0)
-	@$(lcat_love) tools/mkgz.l ai_cat_post_z $(cats_post_items) > $@
-out/lib/cat_modsa_z.h: out/lib/rng.h out/lib/q.h out/lib/glob.h out/lib/kanren.h out/lib/overlay.h out/lib/uu.h tools/mkgz.l $(love0)
-	@$(lcat_love) tools/mkgz.l ai_cat_mods_a_z $(cats_modsa_items) > $@
-out/lib/cat_modsb_z.h: out/lib/bao.h out/lib/verbs.h out/lib/scan.h out/lib/re.h out/lib/peg.h tools/mkgz.l $(love0)
-	@$(lcat_love) tools/mkgz.l ai_cat_mods_b_z $(cats_modsb_items) > $@
-out/lib/cat_mods_%_z.h: out/lib/holo.h out/lib/%.h tools/mkgz.l $(love0)
-	@$(lcat_love) tools/mkgz.l ai_cat_mods_h_z @out/lib/holo.h @out/lib/$*.h > $@
 .PHONY: force_corpus_list
 force_corpus_list: ;
 # love0 reads this at runtime to find the corpus. $t is a glob, so it is written
@@ -112,7 +87,6 @@ out/lib/readme.bin: $(love0) $(R)/src/core/boot/cli.l $(R)/VERSION
 	@$(love0) -h </dev/null >> $@
 	@echo 'LOVE	'$@
 
-$(lib_h) $(holo_h) $(glaze_h) out/lib/rune.h: $(love0)
 ho = out/host$(hsuf)
 h_o = $(love_c:$(R)/%.c=$(ho)/%.o)
 host_o = $(host_c:$(R)/%.c=$(ho)/%.o)
@@ -168,13 +142,10 @@ $(ho)/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
 
 # l.o carries the version string; recompile it when the id changes. love0's twin is
 # deliberately not here -- see the -DAiVersion note on boot_cc.
+# the baked source rides src/host/cats.c; main.c bakes the dist roster for the first boot
+$(ho)/src/host/cats.o: out/lib/baked.h
+$(ho)/src/host/main.o: out/lib/distlist.h
 $(ho)/src/core/love.o: out/lib/love_version.h
-# the lcat'd headers the frontends bake inline -- src/host/cats.c takes the egg and the module
-# set, src/host/main.c the CLI and the glaze. one roster for both: the mooncc twin and the HCC
-# link below read the same name, and three spellings is how they drift.
-baked_h = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/rng.h out/lib/q.h out/lib/glob.h out/lib/kanren.h out/lib/overlay.h out/lib/scan.h out/lib/re.h out/lib/peg.h out/lib/uu.h out/lib/verbs.h out/lib/distlist.h $(holo_h) $(glaze_h)
-$(ho)/src/host/main.o $(ho)/src/host/cats.o: $(baked_h)
-$(ho)/src/host/cats.o: $(cats_z)
 # the carried-blob reader both the first boot and the kernel's ram fs decode with
 $(ho)/src/host/main.o $(ho)/src/host/ustar.o: $(R)/src/host/ustar.h
 # src/host/cb.c rides the src/core/quay sources by unity include -- recompile when they move.
@@ -200,9 +171,8 @@ $$($(2))/host_%.o: $$(R)/src/host/%.c $$(love_h) $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
 	@$$($(3)) -D ai_tco=$$(tco) -I$$(ho) -I. -Isrc/core -Isrc/host -Isrc/inle -Iout/lib -c $$< $$@
-$$($(2))/host_main.o $$($(2))/host_cats.o: $$(baked_h)
-$$($(2))/host_main.o: out/lib/glaze_z.h
-$$($(2))/host_cats.o: $$(cats_z)
+$$($(2))/host_main.o: out/lib/distlist.h
+$$($(2))/host_cats.o: out/lib/baked.h
 $$($(2))/host_cb.o: src/core/quay/quay.c src/core/quay/nif.c src/core/quay/quay.h
 $$($(2))/m_%.o: src/apps/moon/lib/math/%.c $$(moon0_dep)
 	@echo 'MOON	'$$@
@@ -232,7 +202,7 @@ out/host/.mksys-cat.l: $(mksys_l) out/host/.mksys-cat.list
 	@mkdir -p $(dir $@)
 	@cat $(mksys_l) > $@
 ifneq ($(HCC),)
-$(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/src/core/love_data.ld $(baked_h)
+$(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/src/core/love_data.ld
 	@echo 'LD	'$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -o $@ $(host_o) $(ho)/liblove.a $(image_ldflags) $(data_ld)
@@ -346,7 +316,6 @@ endif
 xd = out/x-$(xa)
 moonx = $(moon0) -t $(xa)
 $(eval $(call moonlane,x,xd,moonx,xa))
-$(ho)/src/host/main.o: out/lib/glaze_z.h
 
 $(xd)/src.o: $(dist_source) tools/mksrc.l out/host/.mksys-cat.l $(love0)
 	@$(love0) -l out/host/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(xa)
@@ -543,7 +512,7 @@ out/lib/korelist.h: Makefile
 	 $(note)
 
 # every $(k_c) source, wherever in the tree it lives, lands under $(k_odir) by its path.
-$(k_odir)/%.o: $(R)/%.c $(k_h) $(mooncc_dep) $(baked_h) $(cats_z) out/lib/korelist.h
+$(k_odir)/%.o: $(R)/%.c $(k_h) $(mooncc_dep) out/lib/baked.h out/lib/distlist.h out/lib/korelist.h
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@

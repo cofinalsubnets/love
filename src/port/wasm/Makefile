@@ -54,7 +54,7 @@ all: love.js
 ../../../out/lib/kanren.h: ../../../src/core/boot/kanren.l
 ../../../out/lib/bao.h: ../../../src/core/boot/bao.l
 ../../../out/lib/egg.h ../../../out/lib/post.h ../../../out/lib/p1.h ../../../out/lib/prel.h ../../../out/lib/ev.h ../../../out/lib/uu.h ../../../out/lib/rng.h ../../../out/lib/q.h ../../../out/lib/kanren.h ../../../out/lib/bao.h ../../../out/lib/love_version.h:
-	$(MAKE) -C .. out/lib/$(notdir $@)
+	$(MAKE) -C $(R) out/lib/$(notdir $@)
 
 # love.c bakes the version string (its __has_include of love_version.h), so recompile it
 # when ./VERSION moves -- else the browser banner keeps whatever id love.o last saw.
