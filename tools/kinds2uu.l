@@ -8,7 +8,7 @@
 ; the encoding is derived from kinds.l's own `rank`: each kind symbol takes its
 ; rank as its nat code (bot 0 .. top 5), and `str` -- the incomparable branch, off
 ; rank's table -- takes the next code up. so `rank` folds to identity here, and the
-; translation is otherwise structural: ? -> nested bool_rect, id? -> nateqb,
+; translation is otherwise structural: ? -> nested bool_rect, = (and id?) -> nateqb,
 ; < -> natgtb (swapped), && -> andb, num? -> the emitted numq, a `:` -> a let.
 ; kind symbols appear only quoted in kinds.l ('bot ..), so a bare nom is a variable.
 ;
@@ -23,7 +23,7 @@
    ; --- the code map, read off kinds.l's `rank` (its ? pairs), then str on top ---
    (k2-rankmap body) (: (go cs) (? (one? >cs) ()             ; the trailing -1 else: stop
                           (: c <cs r <>cs
-                             sym (k2-qdat (c 2))             ; c = (id? k 'SYM)
+                             sym (k2-qdat (c 2))             ; c = (= k 'SYM)
                              ([sym r] . go >>cs)))
                         (go >body))
    (k2-max l) (foldl (\ a x (a < x ? x a)) 0 l)
@@ -40,7 +40,10 @@
        (: h <e
           (? (h = '?)    (k2-cond km >e ty)
              (h = ':)    (k2-lets km >e ty)
-             (h = 'id?)  ['nateqb (k2-tx km (e 1) 'nat) (k2-tx km (e 2) 'nat)]
+             ; `=` and id? both: kinds.l compares points, and the sweep that made
+             ; every such id? an `=` left this reading only the old spelling.
+             (h = 'id? || h = '=)
+                         ['nateqb (k2-tx km (e 1) 'nat) (k2-tx km (e 2) 'nat)]
              (h = '<)    ['natgtb (k2-tx km (e 2) 'nat) (k2-tx km (e 1) 'nat)]
              (h = '&&)   ['andb (k2-tx km (e 1) 'bool) (k2-tx km (e 2) 'bool)]
              (h = 'rank) (k2-tx km (e 1) ty)     ; code is rank -- fold
