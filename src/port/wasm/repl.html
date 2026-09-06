@@ -1,152 +1,31 @@
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>love (wasm)</title>
-  <style>
-    body { font-family: monospace; max-width: 60em; margin: 2em auto; padding: 0 1em; }
-    h1 { margin-bottom: .25em; }
-    header p { margin-top: 0; color: #555; }
-    #terminal { border: 1px solid #ccc; padding: .75em; min-height: 20em; }
-    #output { white-space: pre-wrap; }
-    .entry { margin-bottom: .5em; }
-    .src { color: #06c; }
-    .src::before { content: "> "; color: #888; }
-    .val { color: #080; }
-    .err { color: #c00; }
-    #input-row { display: flex; align-items: flex-start; }
-    #input-row::before { content: "> "; color: #888; padding-right: .25em; }
-    #input { flex: 1; border: none; font-family: inherit; font-size: inherit;
-             resize: none; overflow: hidden; line-height: 1.5; outline: none; }
-    #status { color: #888; font-size: .9em; }
-    .banner { color: #888; margin-bottom: .5em; }
-  </style>
-  <script src="love.js"></script>
-</head>
-<body>
-  <header>
-    <h1>love (wasm)</h1>
-    <p id="status">loading…</p>
-  </header>
+<!-- src/port/wasm/repl.html -- the repl island: the markup src/port/wasm/repl.js drives,
+     its parts found by class. a page carries this block and then love.js and repl.js;
+     papel lays it on the index page of a site built with -r, and the tree's own
+     index.html carries the same block until papel lays that page too. -->
+<div class="repl">
+<p class="status">loading the image...</p>
 
-  <div id="terminal">
-    <div id="output"></div>
-    <div id="input-row">
-      <textarea id="input" rows="1" autofocus spellcheck="false"
-                autocomplete="off" disabled></textarea>
-    </div>
+<div class="term">
+  <button class="clear" title="clear the session">clear</button>
+  <div class="scroll">
+    <div class="out"></div>
+    <div class="row"><textarea class="cmd" rows="1" spellcheck="false" autocomplete="off" disabled></textarea></div>
   </div>
-
-  <script>
-  (async () => {
-    const status = document.getElementById('status');
-    const output = document.getElementById('output');
-    const input  = document.getElementById('input');
-
-    const t0 = performance.now();
-    const M = await Love();
-    const init  = M.cwrap('ai_init',      'number', []);
-    const eval_ = M.cwrap('ai_eval',      'number', ['string']);
-    const oPtr  = M.cwrap('ai_out_ptr',   'number', []);
-    const oLen  = M.cwrap('ai_out_len',   'number', []);
-    const oRst  = M.cwrap('ai_out_reset', null,     []);
-
-    const s = init();
-    if (s !== 0) { status.textContent = 'init failed (status ' + s + ')'; return; }
-    status.textContent = `ready (${(performance.now()-t0).toFixed(0)} ms)`;
-    input.disabled = false; input.focus();
-
-    const dec = new TextDecoder();
-    function drain() {
-      const p = oPtr(), n = oLen();
-      const bytes = M.HEAPU8.slice(p, p + n);  // slice, not subarray: firefox's TextDecoder refuses a resizable-memory view
-      const text = dec.decode(bytes);
-      oRst();
-      return text;
-    }
-
-    // banner: the running version, read from the live image (love-version) so
-    // it tracks the build rather than a hardcoded string. `. ` prints the raw
-    // string bytes; drain reads them back.
-    eval_('(. love-version)');
-    const ver = drain().trim();
-    if (ver) {
-      const banner = document.createElement('div');
-      banner.className = 'banner';
-      banner.textContent = `love ${ver}`;
-      output.appendChild(banner);
-    }
-
-    const hist = [];
-    let histIdx = -1, draft = '';
-
-    function balanced(s) {
-      let depth = 0, str = false;
-      for (let i = 0; i < s.length; i++) {
-        const c = s[i];
-        if (str)            { if (c === '\\') i++; else if (c === '"') str = false; }
-        else if (c === ';') { while (i+1 < s.length && s[i+1] !== '\n') i++; }
-        else if (c === '"') str = true;
-        else if (c === '(') depth++;
-        else if (c === ')') { if (--depth < 0) return true; }
-      }
-      return depth === 0 && !str;
-    }
-
-    function resize() {
-      input.style.height = 'auto';
-      input.style.height = input.scrollHeight + 'px';
-    }
-
-    function run(src) {
-      const entry = document.createElement('div');
-      entry.className = 'entry';
-
-      const srcEl = document.createElement('div');
-      srcEl.className = 'src';
-      srcEl.textContent = src;
-      entry.appendChild(srcEl);
-
-      const st = eval_('(. ' + src + ')');
-      const out = drain();
-
-      const resEl = document.createElement('div');
-      resEl.className = st === 0 ? 'val' : 'err';
-      resEl.textContent = st === 0
-        ? out
-        : (out ? out + '\n' : '') + ['ok','oom','err','eof'][st];
-      entry.appendChild(resEl);
-      output.appendChild(entry);
-      window.scrollTo(0, document.body.scrollHeight);
-    }
-
-    input.addEventListener('input', resize);
-    input.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        const src = input.value.trim();
-        if (!src) { e.preventDefault(); return; }
-        if (!balanced(src)) return;
-        e.preventDefault();
-        hist.unshift(src);
-        histIdx = -1; draft = '';
-        run(src);
-        input.value = ''; resize();
-      } else if (e.key === 'ArrowUp') {
-        if (input.value.slice(0, input.selectionStart).includes('\n')) return;
-        e.preventDefault();
-        if (histIdx === -1) draft = input.value;
-        if (histIdx < hist.length - 1) { input.value = hist[++histIdx]; resize(); }
-      } else if (e.key === 'ArrowDown') {
-        if (input.value.slice(input.selectionEnd).includes('\n')) return;
-        e.preventDefault();
-        if (histIdx > 0)       { input.value = hist[--histIdx]; resize(); }
-        else if (histIdx === 0) { histIdx = -1; input.value = draft; resize(); }
-      }
-    });
-
-    input.value = '(: (fib n) (? (< n 3) 1 (+ (fib (- n 1)) (fib (- n 2)))) (fib 32))';
-    resize();
-  })();
-  </script>
-</body>
-</html>
+</div>
+<!-- the app screen: quay's tty apps repaint one full-screen ANSI frame per
+     step; the driver (src/port/wasm/repl.js) parses that frame (CSI H/K + 256-color SGR) into a
+     cell grid. hidden until an app launches; q/esc steps back to the repl. -->
+<div class="app" hidden tabindex="0">
+  <pre class="screen"></pre>
+  <div class="appbar"><span class="appname"></span><span class="apphint"></span></div>
+</div>
+<span class="chip" data-run='."hello world :3\n"'>hello world</span>
+<span class="chip" data-run='15 (\ n (.((n % 3 ? () "fizz") + (n % 5 ? () "buzz") || n), ."\n", n + 1)) 1'>fizzbuzz</span>
+<span class="chip" data-run="1 2 3 4">1 2 3 4</span>
+<span class="chip" data-run="map (net * jot * (+ 2)) $ jot (3 3)">map (net * jot * (+ 2)) $ jot (3 3)</span>
+<span class="chip" data-run="(1 / 2) 2">(1 / 2) 2</span>
+<span class="chip" data-run="(1 / 2) -1">(1 / 2) -1</span>
+<span class="chip" data-run="(i * pi) e">(i * pi) e</span>
+<span data-chip="ink" style="display:none" class="chip" data-run="ink ()">ink (screensaver demo)</span>
+<span data-chip="rove" style="display:none" class="chip" data-run="rove ()">rove (roguelike demo)</span>
+</div>

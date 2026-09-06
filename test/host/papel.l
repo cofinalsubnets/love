@@ -184,6 +184,50 @@ Only a paragraph, so the title has to come from the meta block.
                 ((slug "  --- ") = "section")            ; nothing left -> a name, never ""
                 ((slug "A") = (slug "a"))))
 
+   ; --- the repl island: on the index, and only there --------------------------------
+   ; -r names the wasm directory as the index links it; under out, that is also where
+   ; the island markup lives. a papel-made index and a site's own index.md both get it,
+   ; no other page does, and editing the fragment rewrites the index alone.
+   (at s t)  (: m (tally t) n (tally s)
+                ((: (g i) (? ((i + m) <= n) (? ((snip s i (i + m)) = t) i (g (i + 1))) -1)) 0))
+   (sub? s t) (0 <= at s t)
+   (slurp-path f) (: q (open f "r") (? (hot? q) (slurp q) ""))
+   (siteconf out src repl) (: t (tablet 0)
+                              _ (pin t 'out (dir + "/" + out))
+                              _ (pin t 'title "Fixture")
+                              _ (pin t 'src [(dir + "/" + src)])
+                              _ (pin t 'self "src/apps/papel/papel.l")
+                              _ (pin t 'quiet 1)
+                              _ (pin t 'repl repl)
+                              t)
+   _ (mkdir (dir + "/wasm") 493)
+   _ (put-file "wasm/repl.html" "<div class=\"repl\"><p class=\"status\">loading</p></div>\n")
+   iconf (siteconf "isle" "src" "../wasm")
+   i1 (build iconf)
+   _ (rest 5)
+   _ (put-file "wasm/repl.html" "<div class=\"repl\"><p class=\"status\">loading..</p></div>\n")
+   i2 (build iconf)
+   iidx (get-file "isle/index.html")
+   ione (get-file "isle/one.html")
+   _ (assert (i1 = 5) (i2 = 1)
+             (sub? iidx "<div class=\"repl\">") (sub? iidx "loading..")
+             (sub? iidx "<script src=\"../wasm/love.js\">") (sub? iidx "<script src=\"../wasm/repl.js\">")
+             (at iidx "</h1>" < at iidx "class=\"repl\"")           ; after the title
+             (at iidx "class=\"repl\"" < at iidx "<script")           ; the scripts last
+             !(sub? ione "class=\"repl\"") !(sub? ione "<script")
+             !(sub? idx "class=\"repl\""))                            ; and none without -r
+   ; a site's own index.md: the same island, after its head-1
+   _ (mkdir (dir + "/own") 493)
+   _ (put-file "own/index.md" "# Front\n\nthe door.\n\n## Inside\n\nmore.\n")
+   _ (build (siteconf "ownsite" "own" "../wasm"))
+   oidx (get-file "ownsite/index.html")
+   _ (assert (sub? oidx "<div class=\"repl\">") (sub? oidx "../wasm/repl.js")
+             (at oidx "</h1>" < at oidx "class=\"repl\"") (anchored? oidx))
+   ; ..and the tree's index.html carries the fragment's block byte for byte, until papel lays it
+   frag (slurp-path "src/port/wasm/repl.html")
+   blk (snip frag (at frag "<div class=\"repl\">") (tally frag))
+   _ (assert (0 < tally blk) (sub? (slurp-path "index.html") blk))
+
    ; --- the real thing: this tree's own docs -----------------------------------------
    ; every markdown page in the tree through the whole pipe, and the anchor property has
    ; to hold on all of them. readme.md is deliberately in: it is the widest markdown here.
@@ -208,6 +252,6 @@ Only a paragraph, so the title has to come from the meta block.
         0)
 
    _ (test_fin ())
-   _ (puts "src/apps/papel: ok -- the static site (anchors, slugs, relink, titles, freshness)
+   _ (puts "src/apps/papel: ok -- the static site (anchors, slugs, relink, titles, freshness, the island)
 ")
    0)
