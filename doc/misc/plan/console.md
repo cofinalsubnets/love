@@ -73,9 +73,13 @@ that is a compiler.
   datum story plays; `v` saves and opens the file in vi for the words, `p` plays.
   keys and frames are pure on both, so both gate headless (test/host/story.l,
   design.l); the page walks the lighthouse from its fetched datum. verbs: `love
-  story [LEVEL | ROOT]`, `love design [LEVEL]`, `love rove`. OPEN: a level's own
-  logic (a dialog step that runs level code) once a level wants some; the page's
-  library catalogue, laid by make web; scrolling a map bigger than the screen.
+  story [LEVEL | ROOT]`, `love design [LEVEL]`, `love rove`. the hand is vi's: `:`
+  opens a command line at the foot, :q leaves and nothing else does, esc backs out
+  of anything; a map bigger than the screen scrolls under you, a margin in from the
+  edges. OPEN: a level's own logic (a dialog step that runs level code); tiles with
+  a colour of their own (quay carries fg and bg per cell; fonts too, but a tty
+  cannot show those, so fonts wait); transparent walls for outdoor maps; the page's
+  library catalogue, laid by make web.
 - **rung 3 -- the wasm backend**, doc/misc/plan/moon-wasm.md rungs 0-5: the module
   writer, control flow by dispatch loop, the type law, the environment (a nolibc face
   where the handful of system calls are imports the page supplies, and a loader of a

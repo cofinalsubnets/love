@@ -8,7 +8,9 @@
 ; thing's steps -- (say TEXT ..) pages of words, (ask) a prompt -- and the prompt is
 ; where the words go free: an interpreter takes a line (read X, open X, look, help, or a
 ; love form, evaluated) and answers into the window. only inside a window; on the map
-; the keys are the roguelike's, hjkl yubn and the arrows, @ for you.
+; the keys are the roguelike's, hjkl yubn and the arrows, @ for you, and the hand is
+; vi's: `:` opens a command line at the foot -- :q leaves, nothing else does -- and esc
+; backs out of anything. a map wider or taller than the screen scrolls under you.
 ;
 ; the engine is pure -- a turn is (story-key g c), a frame (story-frame g w h) into any
 ; port -- so it gates headless (test/host/story.l); only story-run ties the tty.
@@ -56,8 +58,16 @@
                          (two? r && two? <r && <<r = 'level ? (level-of <r) ()))))
  (save-level p lvl) (: q (open p "w") (hot? q ? (say q (level-text lvl), close q, 1) 0))
 
- ; --- the state: where you stand, and the window if one is open ------------------
- (story-new lvl) {'lvl lvl 'x (lvl 'sx) 'y (lvl 'sy) 'win () 'over 0 'msg ""}
+ ; --- the state: where you stand, the view's corner, the window if one is open, the
+ ; command line if it is -- 'mode is 'map or 'cmd, 'cmd its text --------------------
+ (story-new lvl) {'lvl lvl 'x (lvl 'sx) 'y (lvl 'sy) 'vx 0 'vy 0 'win () 'over 0 'msg "" 'mode 'map 'cmd ""}
+ ; one line editor for the window's prompt and the command line: k names the slot the
+ ; text lives in (a tablet and a key), enter takes the line, esc is the caller's
+ (edit-line t k c enter esc) (: l (t k)
+   (c @ 27 (esc ())
+        (13 || 10) (pin t k "", 0 < #l ? (enter l))
+        (127 || 8) (0 < #l ? (pin t k (snip l 0 (#l - 1))))
+        (32 <= c < 127 ? (pin t k (l + string c)))))
  (words s) (filter (w \ 0 < #w) (split " " s))
  (joins l sp) (? (one? l) "" (one? >l) <l (<l + sp + joins >l sp))
  (wrap s w) (: (go ws cur acc) (? (one? ws) (rev (cur . acc))
@@ -119,27 +129,29 @@
            ("help" || "?") (window-say g "read <book>, open <book>, look -- or a love form in parens. esc closes.")
            (window-say g ("you cannot " + ln + ".")))))
 
- ; --- one key: the map's, or the window's ----------------------------------------
+ ; --- one key: the map's, the window's, or the command line's ---------------------
  (move g dx dy) (: lvl (g 'lvl) nx (g 'x + dx) ny (g 'y + dy) t (thing-at lvl nx ny)
                    (? t (open-window g t)
                       (wall? lvl nx ny) g
                       (pins g 'x nx 'y ny)))
+ ; the command line: :q leaves; anything else is not a command
+ (command g l) (l @ "q" (pin g 'over 'quit)
+                   (pin g 'msg ("not a command: " + l)))
  (story-key g c) (: w (g 'win)
-   _ (? !w (c @ (104 || 68) (move g -1 0)  (108 || 67) (move g 1 0)
-              (107 || 65) (move g 0 -1)  (106 || 66) (move g 0 1)
-              121 (move g -1 -1) 117 (move g 1 -1) 98 (move g -1 1) 110 (move g 1 1)
-              (113 || 27) (pin g 'over 'quit)
-              63 (open-window g (thing 'help 0 0 "?" "help" '((say "hjkl yubn and the arrows move you. walk into a thing to talk to it. q leaves."))))
-              g)
-      (w 'prompt) (c @ 27 (pin g 'win ())
-                       (13 || 10) (: l (w 'line) (pin w 'line "", 0 < #l ? (interp g l)))
-                       (127 || 8) (: l (w 'line) (0 < #l ? (pin w 'line (snip l 0 (#l - 1)))))
-                       (32 <= c < 127 ? (pin w 'line (w 'line + string c))))
-      (c @ (27 || 113) (pin g 'win ())
-           (13 || 10 || 32) (step g)
-           107 (0 < w 'top ? (pin w 'top (w 'top - 1)))
-           106 (w 'top + page-rows g < #(w 'lines) ? (pin w 'top (w 'top + 1)))
-           g))
+   _ (? (g 'mode = 'cmd) (edit-line g 'cmd c (l \ (pin g 'mode 'map, command g l)) (\ _ (pins g 'mode 'map 'cmd "")))
+        !w (c @ (104 || 68) (move g -1 0)  (108 || 67) (move g 1 0)
+                (107 || 65) (move g 0 -1)  (106 || 66) (move g 0 1)
+                121 (move g -1 -1) 117 (move g 1 -1) 98 (move g -1 1) 110 (move g 1 1)
+                58 (pins g 'mode 'cmd 'cmd "" 'msg "")
+                63 (open-window g (thing 'help 0 0 "?" "help" '((say "hjkl yubn and the arrows move you. walk into a thing to talk to it. esc closes a window; :q leaves."))))
+                27 (pin g 'msg "")
+                g)
+        (w 'prompt) (edit-line w 'line c (l \ interp g l) (\ _ (pin g 'win ())))
+        (c @ 27 (pin g 'win ())
+             (13 || 10 || 32) (step g)
+             107 (0 < w 'top ? (pin w 'top (w 'top - 1)))
+             106 (w 'top + page-rows g < #(w 'lines) ? (pin w 'top (w 'top + 1)))
+             g))
    g)
 
  ; --- the frame: the map with @ on it, the window over it, a status line --------------
@@ -147,8 +159,17 @@
  ; sees one composed frame; the pens are quay's 256 (rove's palette)
  (pad s n) (#s < n ? (s + ((n - #s) (\ t (t + " ")) "")) (snip s 0 n))
  (pen n) ("\e[38;5;" + show n + "m")
+ ; the view follows you: its corner slides so you stay a margin in from its edges,
+ ; and never past the map's own -- a map inside the view sits at the corner
+ (follow g w h) (: lvl (g 'lvl) m 3
+                   (clamp v p span len) (: lo (0 < len - span ? (len - span) 0)
+                                           v2 (? (p - m < v) (p - m) (v + span - 1 - m < p) (p - span + 1 + m) v)
+                                           (? (v2 < 0) 0 (lo < v2) lo v2))
+                   (pins g 'vx (clamp (g 'vx) (g 'x) w (lvl 'w)) 'vy (clamp (g 'vy) (g 'y) h (lvl 'h))))
  (story-frame g w h) (: j (jug 0) lvl (g 'lvl) win (g 'win)
    mh (h - 1)
+   _ (follow g w mh)
+   vx (g 'vx) vy (g 'vy)
    ; the map row by row: a wall, a floor, a thing, you -- each cell a glyph and a pen
    spot (foldl (\ t id (: th (lvl 'things id) (pin t [(th 'x) (th 'y)] th))) {} (keys (lvl 'things)))
    (cell x y) (? (x = g 'x && y = g 'y) [64 228]
@@ -156,7 +177,7 @@
                  !(y < lvl 'h && x < #((lvl 'rows) y)) [32 0]           ; past the map: nothing
                  (wall? lvl x y) [35 242]
                  [46 238])
-   (row y) (: (go x p acc) (? (x < w) (: c (cell x y) p2 <>c
+   (row y) (: (go x p acc) (? (x < w) (: c (cell (vx + x) (vy + y)) p2 <>c
                                           (go (x + 1) p2 (acc + (p2 = p ? "" (pen p2)) + string <c)))
                               acc)
               (go 0 -1 ""))
@@ -180,8 +201,9 @@
                             (rows i)))
                     (jot mh))))
    _ (each rows2 (r \ say j (r + "\e[0m\e[K\r\n")))
-   _ (say j ("\e[7m" + pad (" " + lvl 'title + "  @ " + show (g 'x) + "," + show (g 'y) + "  " + g 'msg
-                            + (win ? "  esc closes" "  ? help  q quits")) w + "\e[0m\e[K"))
+   _ (say j (? (g 'mode = 'cmd) (pad (":" + g 'cmd) w + "\e[K")
+               ("\e[7m" + pad (" " + lvl 'title + "  @ " + show (g 'x) + "," + show (g 'y) + "  " + g 'msg
+                               + (win ? "  esc closes" "  ? help  :q leaves")) w + "\e[0m\e[K")))
    ("\e[H" + slurp j))
  ; the first n cells of a painted row: pens have no width, so count the glyphs
  (snip-cells r n) (: (past i) (r i = 109 ? (i + 1) (past (i + 1)))          ; the byte after an SGR's m

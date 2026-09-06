@@ -114,7 +114,9 @@ ok(pump(), 'into the lamp: a window opens');
 ok(view().cells.length && Array.from({ length: 14 }, (_, r) => row(r, 60)).join('\n').includes('the lamp'), 'the window names the thing');
 key(27); ok(pump(), 'esc closes it');
 await beat();                                       // the runner rests a beat after an escape
-key(113); ok(!pump(), 'q lands the story');
+key(113); ok(pump(), 'q alone does nothing');
+for (const c of ':q\r') key(c.charCodeAt(0));
+ok(!pump(), ':q lands the story');
 
 if (fails) { console.error(`WASM SCREEN FAILED (${fails})`); process.exit(1); }
 console.log('  screen: ok -- the mirror, the face, the lay, and rove, ink and a story as tasks on the page console');

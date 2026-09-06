@@ -158,7 +158,7 @@ async function loveRepl(root) {
   const alive = M.cwrap('ai_alive', 'number', []);
   const HINTS = {
     rove: ' · hjkl yubn/arrows move · > descend · q/esc ashore',
-    lighthouse: ' · look, go <exit>, read <thing> · help · quit',
+    lighthouse: ' · hjkl move · walk into things · esc closes a window · :q leaves',
     ink:  ' · any key steps ashore',
   };
 

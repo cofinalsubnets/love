@@ -46,7 +46,15 @@
    _ (assert (has? (g 'win 'lines 1) "NEXT TIDE"))
    _ (keys! g "\r")                                   ; ..and past the last step the window closes
    _ (assert !(g 'win))
+   _ (keys! g "q\e")                                 ; q alone is nothing, esc alone is nothing
+   _ (assert !(g 'over))
+   _ (keys! g ":wq")                                  ; the command line, and esc backs out of it
+   _ (assert ('cmd = (g 'mode)) ("wq" = (g 'cmd)))
    _ (keys! g "\e")
+   _ (assert ('map = (g 'mode)) !(g 'over))
+   _ (keys! g ":dance\r")
+   _ (assert ('map = (g 'mode)) (has? (g 'msg) "not a command") !(g 'over))
+   _ (keys! g ":q\r")
    _ (assert ('quit = (g 'over)))
 
    ; --- the frame: @ where you stand, the things, the status line; the box over it ---
@@ -59,6 +67,26 @@
    _ (assert (g2 'win) ("the lamp" = (g2 'win 'title)))
    f2 (plain (story-frame g2 70 20))
    _ (assert (has? f2 "+-the lamp ") (has? f2 "| a fresnel lens") (has? f2 "-- enter --") (has? f2 "esc closes"))
+   ; the command line shows at the foot in place of the status
+   _ (keys! g2 "\e:q")
+   _ (assert (has? (plain (story-frame g2 70 20)) "\r\n:q"))
+   _ (keys! g2 "\e")
+
+   ; --- the view scrolls: a map wider and taller than the screen follows you ---
+   big (level "wide" 1 1 (map (\ y (: (go x acc) (? (x < 60) (go (x + 1) (acc + (? (y = 0 || y = 29 || x = 0 || x = 59) "#" "."))) acc) (go 0 ""))) (jot 30)) {})
+   g4 (story-new big)
+   f4 (plain (story-frame g4 20 10))
+   r4 (split "\r\n" f4)
+   _ (assert (0 = (g4 'vx)) (0 = (g4 'vy)) (64 = (r4 1) 1))               ; the corner: @ at 1,1 of the view
+   _ (keys! g4 "llllllllllllllllllll")                                   ; twenty east: x 21
+   f5 (plain (story-frame g4 20 10))
+   _ (assert (21 = (g4 'x)) (5 = (g4 'vx)) (64 = (split "\r\n" f5) 1 16))  ; the view slid; @ sits a margin in
+   _ (keys! g4 "jjjjjjjjjjjjjjjjjjjjjjjjjjj")                           ; to the south wall: y 28
+   f6 (plain (story-frame g4 20 10))
+   _ (assert (28 = (g4 'y)) (21 = (g4 'vy)) (64 = (split "\r\n" f6) 7 16))   ; the view stops at the map's edge
+   _ (keys! g4 "llllllllllllllllllllllllllllllllllllllllllllll")          ; to the east wall: x 58
+   _ (story-frame g4 20 10)                                               ; the view follows at the lay
+   _ (assert (58 = (g4 'x)) (40 = (g4 'vx)))
 
    ; --- the library: a shelf per wing, its books through libra, the interpreter ---
    LB (library "src/apps")
