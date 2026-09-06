@@ -48,8 +48,26 @@ Definition rex (dest src:reg) : byte :=
 Definition modrm (dest src:reg) : byte :=
   192 + (src mod 8) * 8 + (dest mod 8).
 
+(* REX with W=0. The zeroing idiom below is the only form here that wants it. *)
+Definition rex0 (dest src:reg) : byte :=
+  64 + (if 7 <? src then 4 else 0) + (if 7 <? dest then 1 else 0).
+
+(* the zeroing peephole (holo's x64.l, emit-alu): `xor r,r` clears the WHOLE 64-bit
+   register through the 32-bit form, a 32-bit write zero-extending into the top half.
+   So W drops to 0, and with W gone the REX byte itself goes for r<8 -- a bare 0x40
+   encodes nothing. Two bytes where the 64-bit spelling takes three.
+   `op` carries no width in this model, so the short form names the same (Oxor,r,r)
+   the long one did; that erasure is what makes the peephole expressible here, and
+   grounding the widths against the real ISA stays the fuzz rung's job. *)
+Definition zeroing (o:op) (dest src:reg) : bool :=
+  op_eqb o Oxor && (dest =? src).
+
 Definition encode (o:op) (dest src:reg) : list byte :=
-  [ rex dest src ; opcode o ; modrm dest src ].
+  if zeroing o dest src
+  then (if 7 <? dest
+        then [ rex0 dest src ; opcode o ; modrm dest src ]
+        else [ opcode o ; modrm dest src ])
+  else [ rex dest src ; opcode o ; modrm dest src ].
 
 (* --- decoder (a small auditable model of the same encoding rules) --- *)
 Definition decode_op (b:byte) : option op :=
@@ -58,8 +76,18 @@ Definition decode_op (b:byte) : option op :=
   else if b =? 9  then Some Oor  else if b =? 49 then Some Oxor
   else if b =? 57 then Some Ocmp else None.
 
+(* the REX-less arm: two bytes are the zeroing form, both register fields the same
+   and both low. The three-byte arm below never read W, so it already inverts a
+   W=0 prefix -- only the missing byte is new. *)
 Definition decode (bs:list byte) : option (op * reg * reg) :=
   match bs with
+  | [oc; mr] =>
+    match decode_op oc with
+    | None => None
+    | Some o =>
+      let m := mr - 192 in
+      Some (o, m mod 8, (m / 8) mod 8)
+    end
   | [r; oc; mr] =>
     match decode_op oc with
     | None => None
