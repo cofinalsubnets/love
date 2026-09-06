@@ -266,24 +266,27 @@ static struct ai *env_budget(struct ai *g) {
   return g; }
 
 #ifdef LoveBoot
-static char const
- runner[] = "(reads(tap(s2cl tests)))"   // the stream shell (src/core/boot/bao.l) drinks the corpus
- , cli[] =
-#include "cli0.h"
- , src0_mods[] =
-#include "rng0.h"
-#include "q0.h"
-#include "glob0.h"
-#include "kanren0.h"
-#include "overlay0.h"
-#include "uu0.h"
-#include "holo0.h"
-#include "x640.h"
-#include "a640.h"
-#include "bao0.h"
-#include "verbs0.h"
-#include "peg0.h"
-;
+#include "boot0.h"                                   // src0_<name>[]: one literal per boot file, laid by sed
+static char const runner[] = "(reads(tap(s2cl tests)))";   // the stream shell (src/core/boot/bao.l) drinks the corpus
+// the groups love0 evaluates as ONE text apiece: a text is read whole before its first
+// form runs, so joining at boot keeps that seam where the pasted headers had it.
+static char const *const mods0[] = { src0_rng, src0_q, src0_glob, src0_kanren, src0_overlay, src0_uu,
+  src0_holo, src0_x64, src0_a64, src0_bao, src0_verbs, src0_peg, NULL };
+static char const *const prelpost0[] = { src0_prel, src0_post, NULL };
+static char const *const prelev0[] = { src0_prel, src0_ev, NULL };
+// one NUL-terminated buffer off the heap, so a collect mid-eval cannot move it; the caller frees
+static char *join0(struct ai *g, char const *const *v) {
+  uintptr_t n = 0;
+  for (int i = 0; v[i]; i++) n += strlen(v[i]);
+  char *t = g->alloc(g, NULL, n + 1), *p = t;
+  if (!t) return NULL;
+  for (int i = 0; v[i]; i++) { uintptr_t l = strlen(v[i]); memcpy(p, v[i], l); p += l; }
+  return *p = 0, t; }
+static struct ai *evals0(struct ai *g, char const *const *v) {
+  char *t = join0(g, v);
+  if (!t) return g;
+  g = ai_evals_(g, t);
+  return g->alloc(g, t, 0), g; }
 
 // FIXME this seems confabulated. is there a reason why this split is actually necessary?
 // love0 is never interactive -- a build tool or the self-test -- so replp is the full
@@ -293,7 +296,7 @@ static char const
 // cli0 already on it -- and every build-time object compile is one wake of it.
 static struct ai *run_program(struct ai *g, bool replp, bool owed) {
   g = ai_layer_(g);
-  if (owed) g = ai_evals_(g, cli);
+  if (owed) g = ai_evals_(g, src0_cli);
   return ai_evals_(g, "(cli-line cmdline 0)"); }
 
 // with args, run the build tool (lcat / gen_data) through the CLI driver.
@@ -303,26 +306,16 @@ static struct ai *run_program(struct ai *g, bool replp, bool owed) {
 // serves both lanes.
 static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load) {
   if (argp) {
-    g = ai_evals_(g,
-#include "p10.h"
-    );
-    g = ai_evals_(g,
-#include "prel0.h"
-#include "post0.h"
-    );
-    g = ai_evals_(g, src0_mods);
+    g = ai_evals_(g, src0_p1);
+    g = evals0(g, prelpost0);
+    g = evals0(g, mods0);
     g = ai_evals_(g, "(use 'bao)(use 'kanren)(use 'verbs)");
     g = ai_unsplice_(g);
-    g = ai_evals_(g, cli);
+    g = ai_evals_(g, src0_cli);
     return ai_evals_(g, "(cli-line cmdline 0)"); }
-  g = ai_evals_(g,                                    // its own call: readtext picks its reader
-#include "p10.h"                                     // once per text, and p1 seals hook 0 only
-  );                                                 // when this call evaluates
-  g = ai_evals_(g,
-#include "prel0.h"
-#include "post0.h"
-  );
-  g = ai_evals_(g, src0_mods);
+  g = ai_evals_(g, src0_p1);                         // its own call: readtext picks its reader once per
+  g = evals0(g, prelpost0);                          // text, and p1 seals hook 0 only when this call evaluates
+  g = evals0(g, mods0);
   g = ai_evals_(g, "(use 'bao)(use 'holo)");
   g = ai_unsplice_(g);
   g = ai_evals_(g,
@@ -343,16 +336,8 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     "                       _ (put err 10) (quit 1)))"
     "   tests (foldl (\\ a f (a + c0read f)) \"\" fs))");
   g = ai_evals_(g, runner);          // pass 1: corpus via ev = the c0 nif
-  g = ai_egg_(g,                                      // bootstrap: install the self-hosted ev
-#include "egg0.h"
-    ,
-#include "p10.h"
-    ,
-#include "prel0.h"
-#include "ev0.h"
-    ,
-#include "post0.h"
-);
+  char *corpus = join0(g, prelev0);                   // bootstrap: install the self-hosted ev
+  if (corpus) g = ai_egg_(g, src0_egg, src0_p1, corpus, src0_post), g->alloc(g, corpus, 0);
   return ai_evals_(g, runner); }                      // pass 2: corpus via the self-hosted ev
 
 #else

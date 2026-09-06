@@ -25,13 +25,20 @@ endif
 
 lib_h = $(patsubst src/core/boot/%.l,out/lib/%.h,$(wildcard src/core/boot/*.l))
 holo_h = out/lib/holo.h  out/lib/x64.h  out/lib/a64.h  out/lib/rv64.h
-asm0_h = out/lib/holo0.h out/lib/x640.h out/lib/a640.h
 glaze_h = out/lib/emit.h out/lib/auto.h out/lib/hook.h out/lib/walk.h
+# love0's boot text: one header, one src0_<name>[] literal per file, laid by sed alone --
+# love0 is what runs lcat, so nothing love-made can sit under it. every boot file rides;
+# src/host/main.c names the ones love0 evaluates.
 sed_lit = sed \
   -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/'
-boot_h = out/lib/cli0.h out/lib/egg0.h out/lib/post0.h out/lib/p10.h out/lib/prel0.h out/lib/ev0.h out/lib/bao0.h out/lib/uu0.h out/lib/rng0.h out/lib/q0.h out/lib/glob0.h out/lib/kanren0.h out/lib/overlay0.h out/lib/peg0.h out/lib/verbs0.h $(asm0_h)
+boot0_l = $(wildcard src/core/boot/*.l) src/core/holo/holo.l src/core/holo/x64.l src/core/holo/a64.l
+out/lib/boot0.h: $(boot0_l)
+	@echo 'SED	'$@
+	@mkdir -p out/lib
+	@for f in $(boot0_l); do n=$${f##*/}; printf 'static char const src0_%s[] =\n' $${n%.l}; \
+	   LOVE_NO_IMAGE= $(sed_lit) $$f || exit 1; echo ';'; done > $@
 .PHONY: lib
-lib: $(lib_h) $(boot_h)
+lib: $(lib_h) out/lib/boot0.h
 lcat_love = $(love0) -l src/core/boot/prel.l
 # A FORCED WITNESS KEEPS ITS MTIME, and that is the whole point: make cannot depend on a
 # variable's VALUE, so a roster change has to be noticed some other way. Depending on the
@@ -56,14 +63,6 @@ $(glaze_h): out/lib/%.h: src/core/boot/glaze/%.l
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
 	@$(lcat_love) tools/lcat.l $< > $@
-$(asm0_h): out/lib/%0.h: src/core/holo/%.l
-	@echo 'SED	'$@
-	@mkdir -p out/lib
-	@LOVE_NO_IMAGE= $(sed_lit) $< > $@
-out/lib/%0.h: src/core/boot/%.l
-	@echo 'SED	'$@
-	@mkdir -p out/lib
-	@LOVE_NO_IMAGE= $(sed_lit) $< > $@
 glaze_items = "(use 'holo)(module 'glaze " @out/lib/emit.h @out/lib/auto.h ")" \
   "(: ev (from 'glaze 'ev) member? (from 'glaze 'member?))" \
   @out/lib/hook.h @out/lib/walk.h @out/lib/holo.h @out/lib/x64.h @out/lib/a64.h
@@ -143,7 +142,7 @@ $(ho)/liblove.a: $(h_o)
 
 # pinned to out/host/0, never $(ho)/0: love0 is one binary whatever HCC and tco say
 love0_o = $(patsubst $(R)/%.c,out/host/0/%.o,$(filter-out $(R)/src/host/cats.c,$(host_c)) $(love_c))
-out/host/0/src/host/main.o: $(boot_h)
+out/host/0/src/host/main.o: out/lib/boot0.h
 out/host/0/src/host/cb.o: src/core/quay/quay.c src/core/quay/nif.c src/core/quay/quay.h
 boot_cc = $(CCACHE) $(CC) $(ai_cflags) -fPIE -DLoveBoot -Dai_tco=0 -Dai_data_section=0 -DAiVersion='"$(love_base)+bootstrap"' -I. -Isrc/core -Isrc/host -Isrc/inle -Iout/lib
 .PHONY: force_love0cc
