@@ -1779,7 +1779,7 @@ void kmain(void) {
   // always being a raw tty, and signal accepts and ignores; lush's entry rides both.
   r = ai_evals_(r,
    "(: (raw m) () (signal n h) ())"
-   "(map (\\ n (? (member? n (names ())) () (ev `(': `(n 'x) ()))))"
+   "(map (\\ n (? (member? n (names ())) () (ev [': [n 'x] ()])))"
    "     '(symlink hardlink readlink spawn spawnmap fork exec herald wait still"
    "       getpid getuid seal ttyfg glean pipe fdopen dup dup2 connect listen"
    "       accept udp-bind udp-send udp-recv hark winsize))");
