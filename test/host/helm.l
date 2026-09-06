@@ -14,6 +14,12 @@
 ;             service that exits nonzero is restarted to its cap and then 'failed,
 ;             one that exits 0 is left alone.
 ;   MOOR      a love form in over the socket, its value back out.
+;   UNDERLAY  the verb table laid as a directory of links onto selfpath, and a
+;             child resolving `ls` through it with that directory as its whole PATH.
+;   SCATTER   the carried source archive inflated to a tree, re-homed below the
+;             archive's top the way src/inle/kmain.c's k_untar does it.
+; the mount half of both is pid 1's and root's, and is not asserted here: hunderlay
+; answers the errno and lays in place, which is the lane this runs.
 (use "src/apps/helm/unit.l")
 (use "src/apps/helm/sup.l")
 (use "src/apps/helm/moor.l")
@@ -126,6 +132,33 @@
    _ (assert (has? (rdline 0) "oneshot"))
    _ (close c)
    _ (unlink sock)
+
+   ; --- UNDERLAY -------------------------------------------------------------------
+   ; every registered verb becomes a link onto this binary, and the count is the
+   ; registry's own -- a roster spelled out here would drift from what love can do.
+   ubd "out/.helm-underlay"
+   n   (hunderlay ubd)
+   ws  (keys (from 'verbs 'tab))
+   _   (assert (= n (1 + tally ws)))                  ; every verb, and `love` itself
+   _   (assert (= (readlink (ubd + "/ls")) (selfpath 0)))
+   _   (assert (member? 'ls ws) (string? (readlink (ubd + "/love"))))
+   ; the point of the directory: a child with nothing but it on PATH has a userland.
+   r   (hark [(ubd + "/sh") "-c" ("PATH=" + ubd + "; ls " + ubd + "/ls")])
+   _   (assert (= 0 <r) (has? <>r "ls"))
+   _   (each ws (\ w (unlink (ubd + "/" + string w))))
+   _   (unlink (ubd + "/love"))
+   _   (rmdir ubd)
+
+   ; --- SCATTER --------------------------------------------------------------------
+   ; the same blob inle boots on. re-homed: the tree reads from inside as a checkout,
+   ; so its own files are where this file says they are.
+   scd "out/.helm-scatter"
+   k   (hscatter scd)
+   _   (assert (0 < k))
+   _   (assert (two? (stat (scd + "/src/apps/helm/helm.l"))))
+   _   (assert (!(two? (stat (scd + "/love-0.1")))))  ; the top is dropped, not laid
+   _   (hark [(selfpath 0) "rm" "-rf" scd])           ; 13M of tree, and out/ is not a nest
+
    _ (unlink good) _ (unlink bad) _ (unlink stamp)
    _ (test_fin ())
    0)

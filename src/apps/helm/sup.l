@@ -87,7 +87,7 @@
        _    (string? d ? (chdir d) 0)
        pid  (henv-with (peep u 'env []) (\ _ (spawnmap argv fm cl 0 0)))
        _    (string? d ? (chdir old) 0)
-       _    (each cl (\ f (fdclose f)))
+       _    (each cl (\ f (close f)))
        pid)
 
    ; --- act: one unit up ------------------------------------------------------
