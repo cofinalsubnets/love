@@ -38,7 +38,7 @@
    xa-regs  (tablet 0)
    xa-names (tablet 0)
    ;; the prefix words a line may open with, each its own item ahead of the instruction
-   xa-prefix (tabof [('lock . 'lock) ('rep . 'rep) ('repe . 'rep) ('repz . 'rep) ('repne . 'repne) ('repnz . 'repne)])
+   xa-prefix {'lock 'lock 'rep 'rep 'repe 'rep 'repz 'rep 'repne 'repne 'repnz 'repne}
    (xa-reg! nm e w) (pin xa-regs (name nm) [e w], pin xa-names (e * 32 + w) nm)
    _ (foldl (\ _ row
                (: e (row 0)
@@ -211,24 +211,22 @@
                 imul mul div idiv adc sbb sal shl shr sar rol ror shld shrd xchg bswap bsr bsf
                 movabs cvttsd2si cvttss2si cvtsd2si cvtss2si cvtsi2sd cvtsi2ss)
    ;; the nullaries at&T spells c<from>t<to>, and Intel c<from><to>; the middle keeps Intel's
-   xa-att-nil (tabof [('cltq . 'cdqe) ('cltd . 'cdq) ('cqto . 'cqo) ('cwtl . 'cwde)
-                      ('cbtw . 'cbw) ('cwtd . 'cwd) ('retq . 'ret) ('leaveq . 'leave) ('xlatb . 'xlat)])
-   xa-nil-att (tabof [('cdqe . 'cltq) ('cdq . 'cltd) ('cqo . 'cqto) ('cwde . 'cwtl)
-                      ('cbw . 'cbtw) ('cwd . 'cwtd)])
+   xa-att-nil {'cltq 'cdqe  'cltd 'cdq  'cqto 'cqo  'cwtl 'cwde  'cbtw 'cbw  'cwtd 'cwd
+               'retq 'ret  'leaveq 'leave  'xlatb 'xlat}
+   xa-nil-att {'cdqe 'cltq  'cdq 'cltd  'cqo 'cqto  'cwde 'cwtl  'cbw 'cbtw  'cwd 'cwtd}
    ;; the memory operand size an SSE mnemonic (and an indirect branch) implies: Intel spells it
    ;; as a PTR, at&T not at all, and neither makes it the operand size
    ;; the string ops: Intel's names in the middle; at&T spells the 4-byte ones with an l
-   xa-strl (tabof [('movsl . 'movsd) ('cmpsl . 'cmpsd) ('stosl . 'stosd) ('lodsl . 'lodsd) ('scasl . 'scasd)])
-   xa-strd (tabof [('movsd . 'movsl) ('cmpsd . 'cmpsl) ('stosd . 'stosl) ('lodsd . 'lodsl) ('scasd . 'scasl)])
-   xa-ptrfix (tabof
-        [('movsd . 8) ('movss . 4) ('movq . 8) ('movd . 4) ('movaps . 16) ('movapd . 16)
-          ('movdqa . 16) ('movdqu . 16) ('movups . 16) ('movupd . 16)
-          ('addsd . 8) ('subsd . 8) ('mulsd . 8) ('divsd . 8) ('sqrtsd . 8) ('maxsd . 8) ('minsd . 8)
-          ('addss . 4) ('subss . 4) ('mulss . 4) ('divss . 4) ('sqrtss . 4) ('maxss . 4) ('minss . 4)
-          ('ucomisd . 8) ('comisd . 8) ('ucomiss . 4) ('comiss . 4)
-          ('xorpd . 16) ('xorps . 16) ('andpd . 16) ('andps . 16) ('andnpd . 16) ('orpd . 16) ('pxor . 16)
-          ('cvtss2sd . 4) ('cvtsd2ss . 8) ('cvttsd2si . 8) ('cvttss2si . 4) ('cvtsd2si . 8) ('cvtss2si . 4)
-          ('call . 8) ('jmp . 8)])
+   xa-strl {'movsl 'movsd 'cmpsl 'cmpsd 'stosl 'stosd 'lodsl 'lodsd 'scasl 'scasd}
+   xa-strd {'movsd 'movsl 'cmpsd 'cmpsl 'stosd 'stosl 'lodsd 'lodsl 'scasd 'scasl}
+   xa-ptrfix {'movsd 8 'movss 4 'movq 8 'movd 4 'movaps 16 'movapd 16
+          'movdqa 16 'movdqu 16 'movups 16 'movupd 16
+          'addsd 8 'subsd 8 'mulsd 8 'divsd 8 'sqrtsd 8 'maxsd 8 'minsd 8
+          'addss 4 'subss 4 'mulss 4 'divss 4 'sqrtss 4 'maxss 4 'minss 4
+          'ucomisd 8 'comisd 8 'ucomiss 4 'comiss 4
+          'xorpd 16 'xorps 16 'andpd 16 'andps 16 'andnpd 16 'orpd 16 'pxor 16
+          'cvtss2sd 4 'cvtsd2ss 8 'cvttsd2si 8 'cvttss2si 4 'cvtsd2si 8 'cvtss2si 4
+          'call 8 'jmp 8}
    (xa-branch? mn) (member? mn '(call jmp))
    ;; push/pop of an immediate or memory are 64-bit unless sized: at&T writes pushq $5, Intel push 5
    (xa-w64 mn w) (w = 0 && member? mn '(push pop) ? 8 w)

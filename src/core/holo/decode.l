@@ -34,19 +34,19 @@
    dc-grp2 '(rol ror rcl rcr shl shr shl sar)
    dc-grp3 '(test test not neg mul imul div idiv)
    ;; the SSE2 integer lane, 66 0F xx, xmm <- xmm/m128
-   dc-p66 (tabof
-        [(96 . 'punpcklbw) (97 . 'punpcklwd) (98 . 'punpckldq) (99 . 'packsswb)
-          (100 . 'pcmpgtb) (101 . 'pcmpgtw) (102 . 'pcmpgtd) (103 . 'packuswb)
-          (104 . 'punpckhbw) (105 . 'punpckhwd) (106 . 'punpckhdq) (107 . 'packssdw)
-          (108 . 'punpcklqdq) (109 . 'punpckhqdq) (116 . 'pcmpeqb) (117 . 'pcmpeqw) (118 . 'pcmpeqd)
-          (212 . 'paddq) (213 . 'pmullw) (218 . 'pminub) (219 . 'pand) (222 . 'pmaxub) (223 . 'pandn)
-          (224 . 'pavgb) (227 . 'pavgw) (228 . 'pmulhuw) (229 . 'pmulhw) (234 . 'pminsw) (235 . 'por)
-          (238 . 'pmaxsw) (239 . 'pxor) (244 . 'pmuludq) (245 . 'pmaddwd)
-          (248 . 'psubb) (249 . 'psubw) (250 . 'psubd) (251 . 'psubq)
-          (252 . 'paddb) (253 . 'paddw) (254 . 'paddd)])
+   dc-p66 {96 'punpcklbw  97 'punpcklwd  98 'punpckldq  99 'packsswb
+           100 'pcmpgtb  101 'pcmpgtw  102 'pcmpgtd  103 'packuswb
+           104 'punpckhbw  105 'punpckhwd  106 'punpckhdq  107 'packssdw
+           108 'punpcklqdq  109 'punpckhqdq  116 'pcmpeqb  117 'pcmpeqw  118 'pcmpeqd
+           212 'paddq  213 'pmullw  218 'pminub  219 'pand  222 'pmaxub  223 'pandn
+           224 'pavgb  227 'pavgw  228 'pmulhuw  229 'pmulhw  234 'pminsw  235 'por
+           238 'pmaxsw  239 'pxor  244 'pmuludq  245 'pmaddwd
+           248 'psubb  249 'psubw  250 'psubd  251 'psubq
+           252 'paddb  253 'paddw  254 'paddd}
    ;; ..and its shifts by an immediate: 66 0F 71/72/73 /digit ib
-   dc-pshift (tabof [(113 . '(() () psrlw () psraw () psllw ())) (114 . '(() () psrld () psrad () pslld ()))
-                     (115 . '(() () psrlq psrldq () () psllq pslldq))])
+   dc-pshift {113 '(() () psrlw () psraw () psllw ())
+              114 '(() () psrld () psrad () pslld ())
+              115 '(() () psrlq psrldq () () psllq pslldq)}
    (pf p k) (peep p k 0)
    ;; the value's w: the GPR operand's width, else 0 (the SSE lane, branches)
    (dc-vw wr wm) (? (wr < 16) wr (wm < 16) wm 0)
