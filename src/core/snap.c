@@ -7,7 +7,6 @@ struct ai_chain; struct hc; struct image_hdr; struct img_ord;
 static ai_noinline intptr_t img_decode_cold(intptr_t v, char *code);
 static int
  img_lt_pair(struct img_ord const *o, uintptr_t i, uintptr_t j),
- img_lt_rank(struct img_ord const *o, uintptr_t i, uintptr_t j),
  img_lt_word(struct img_ord const *o, uintptr_t i, uintptr_t j),
  img_nom_before(word a, word b),
  img_tok(word const *key, uint16_t const *tk, word v);
@@ -33,8 +32,7 @@ static uintptr_t
  image_objsize(struct ai *g, union u *p),
  img_dict(word *sorted, uintptr_t nw, word *dict, uintptr_t *cnt),
  img_hash(word v),
- img_rank_assign(struct ai *g, word const *blob, uintptr_t const *slots, uintptr_t nslot,
-                 word *rank, uintptr_t nser),
+ img_rank_assign(word *rank, uintptr_t nser),
  img_stream(unsigned char *out, word const *blob, uintptr_t nw, word const *key,
             uint16_t const *tk);
 static unsigned char const *img_expand(word *out, uintptr_t nw, unsigned char const *p,
@@ -371,14 +369,12 @@ static uintptr_t img_hash(word v) {
  uintptr_t h = (uintptr_t) v;
  return h ^= h >> 17, h *= 0x9e3779b1u, h ^= h >> 13; }
 
-// one heapsort for the codec's three orders (dictionary words, intern pairs, serial ranks):
-// lt and stride are the caller's, the walk is shared. no recursion, no scratch, no worst case.
+// one heapsort for the codec's two orders (dictionary words, intern pairs): lt and
+// stride are the caller's, the walk is shared. no recursion, no scratch, no worst case.
 struct img_ord {
  int (*lt)(struct img_ord const*, uintptr_t, uintptr_t);
  word *a;
- uintptr_t stride;
- word const *blob;
- uintptr_t const *nm; };
+ uintptr_t stride; };
 
 static void img_ord_swap(struct img_ord const *o, uintptr_t i, uintptr_t j) {
  for (uintptr_t k = 0; k < o->stride; k++) {
@@ -402,7 +398,7 @@ static int img_lt_word(struct img_ord const *o, uintptr_t i, uintptr_t j) {
 // images differ in every token (test_bakerep), and approximate counters have a tie order.
 static uintptr_t img_dict(word *sorted, uintptr_t nw, word *dict, uintptr_t *cnt) {
  uintptr_t nd = 0;
- struct img_ord o = { img_lt_word, sorted, 1, NULL, NULL };
+ struct img_ord o = { img_lt_word, sorted, 1 };
  img_sort(&o, nw);
  for (uintptr_t i = 0; i < nw; ) {
   uintptr_t j = i;
@@ -497,7 +493,7 @@ static struct ai *img_canon_symbols(struct ai *g) {
  if (!pairs) return encode(g, ai_status_scare);
  for (uintptr_t j = 0; j < cap; j++)
   if (s[2 * j] != map_gap) pairs[2 * n] = s[2 * j], pairs[2 * n + 1] = s[2 * j + 1], n++;
- { struct img_ord o = { img_lt_pair, pairs, 2, NULL, NULL };
+ { struct img_ord o = { img_lt_pair, pairs, 2 };
    img_sort(&o, n); }
  for (uintptr_t j = 0; j < cap; j++) s[2 * j] = map_gap, s[2 * j + 1] = zero;
  for (uintptr_t k = 0; k < n; k++) {
@@ -507,36 +503,14 @@ static struct ai *img_canon_symbols(struct ai *g) {
  g->alloc(g, pairs, 0);
  return g; }
 
-// canonical serial order: mints keep session order, named noms order by spelling with ties
-// by session order. session order alone is not canonical, since a weak drop plus a re-intern
-// hands a name a fresh serial at a GC-chosen moment; `code` is only an order key behind the
-// name, so sorting by spelling preserves every comparison. nm[serial] is the name string's
-// blob byte offset, 0 for the nameless -- a blob string still wears the ai_str shape, so
-// img_nom_before reads the same either side of the encode.
-static int img_lt_rank(struct img_ord const *o, uintptr_t i, uintptr_t j) {
- uintptr_t a = (uintptr_t) o->a[i], b = (uintptr_t) o->a[j], na = o->nm[a], nb = o->nm[b];
- if (!na || !nb) return na == nb ? a < b : !na;
- word x = (word)((char const*) o->blob + na), y = (word)((char const*) o->blob + nb);
- return img_nom_before(x, y) ? 1 : img_nom_before(y, x) ? 0 : a < b; }
-
-// assign ranks 1..k to the marked serials; answers k, or -1 on oom. slots are
-// (word-offset << 1 | named); a named slot's word -1 is the encoded name.
-static uintptr_t img_rank_assign(struct ai *g, word const *blob, uintptr_t const *slots,
-                                 uintptr_t nslot, word *rank, uintptr_t nser) {
- uintptr_t *nm = g->alloc(g, NULL, nser * sizeof(uintptr_t)),
-           *live = g->alloc(g, NULL, nser * sizeof(uintptr_t)),
-           n = 0, k;
- if (!nm || !live) { g->alloc(g, nm, 0); g->alloc(g, live, 0); return (uintptr_t) -1; }
- memset(nm, 0, nser * sizeof(uintptr_t));
- for (uintptr_t i = 0; i < nslot; i++) {
-  uintptr_t v = (uintptr_t) blob[slots[i] >> 1];
-  if (v < nser && (slots[i] & 1)) nm[v] = (uintptr_t) blob[(slots[i] >> 1) - 1]; }
- for (uintptr_t i = 1; i < nser; i++) if (rank[i]) live[n++] = i;
- struct img_ord o = { img_lt_rank, (word*) live, 1, blob, nm };
- img_sort(&o, n);
- for (k = 0; k < n; k++) rank[live[k]] = k + 1;
- g->alloc(g, nm, 0), g->alloc(g, live, 0);
- return n; }
+// canonical serial order: the live serials keep session order, packed 1..k. a name
+// carries no serial -- interned, its spelling is its order -- so only the nameless
+// (mints, pids) are ranked, and session order is canonical for those.
+// assign ranks 1..k to the marked serials; answers k. slots are word offsets.
+static uintptr_t img_rank_assign(word *rank, uintptr_t nser) {
+ uintptr_t k = 0;
+ for (uintptr_t i = 1; i < nser; i++) if (rank[i]) rank[i] = ++k;
+ return k; }
 
 // --- the bake-time hash-cons (doc/misc/snapshot.md) ----------------------------
 // two structurally equal chains are one value wearing two addresses. a chain's fields are
@@ -773,9 +747,8 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
   if (in_data(p->ap)) switch (ai_typ(p)) {
    case DChain: blob[off + 1] = img_encode(x, A(p));
                 blob[off + 2] = img_encode(x, B(p)); break;
-   case DNom:   blob[off + 1] = img_encode(x, (intptr_t) nom(p)->name);
-                slots[nslot++] = (off + 2) << 1 | 1; break;   // the serial word, canonicalized below (tagged: named)
-   case DMint:  slots[nslot++] = (off + 1) << 1; break;  // mints and missings (one shape, one ap)
+   case DNom:   blob[off + 1] = img_encode(x, (intptr_t) nom(p)->name); break;   // dig rides raw
+   case DMint:  slots[nslot++] = off + 1; break;         // the serial word, canonicalized below
    case DTray:   if (tray(p)->type == ai_O) {
                  word *e = ptr(tray_data(tray(p)));
                  uintptr_t ne = tray_nelem(tray(p)), eo = (uintptr_t)(e - ptr(p));
@@ -804,7 +777,7 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
  Why(11);
  memset(rank, 0, nser * sizeof(word));
  for (uintptr_t i = 0; i < nslot; i++)
-  if ((uintptr_t) blob[slots[i] >> 1] < nser) rank[blob[slots[i] >> 1]] = 1;
+  if ((uintptr_t) blob[slots[i]] < nser) rank[blob[slots[i]]] = 1;
  for (union u *n = g->tasks, *st = n; n; n = n->m == st ? NULL : n->m) {
   uintptr_t pid = getcharm(n[2].x);
   if (pid < nser) rank[pid] = 1; }
@@ -813,10 +786,9 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
    uintptr_t pid = getcharm(n[2].x);
    if (pid < nser) rank[pid] = 1; }
  rank[0] = 0;                                            // the immortal ()'s, never drawn, never moved
- kser = img_rank_assign(g, blob, slots, nslot, rank, nser);
- if (kser == (uintptr_t) -1) { g->alloc(g, rank, 0); g->alloc(g, slots, 0); g->alloc(g, blob, 0); return NULL; }
+ kser = img_rank_assign(rank, nser);
  for (uintptr_t i = 0; i < nslot; i++)
-  if ((uintptr_t) blob[slots[i] >> 1] < nser) blob[slots[i] >> 1] = rank[blob[slots[i] >> 1]];
+  if ((uintptr_t) blob[slots[i]] < nser) blob[slots[i]] = rank[blob[slots[i]]];
  for (union u *n = g->tasks, *st = n; n; n = n->m == st ? NULL : n->m) {
   uintptr_t off = (uintptr_t)(ptr(n) - base), pid = getcharm(n[2].x);
   if (ptr(n) >= base && ptr(n) < hp && pid < nser) blob[off + 2] = putcharm(rank[pid]); }
@@ -975,7 +947,7 @@ static struct ai *img_wake(void const *buf, uintptr_t len, void *(*al)(struct ai
    switch (ai_typ(p)) {
     case DChain: base[off + 1] = (word) img_decode((intptr_t) s[1], base, code);
                  base[off + 2] = (word) img_decode((intptr_t) s[2], base, code); break;
-    case DNom:   base[off + 1] = (word) img_decode((intptr_t) s[1], base, code); break;   // code + dig ride raw
+    case DNom:   base[off + 1] = (word) img_decode((intptr_t) s[1], base, code); break;   // dig rides raw
     case DTray:  if (tray(p)->type == ai_O) { word *e = (word*) tray_data(tray(p)); uintptr_t ne = tray_nelem(tray(p));
                   for (uintptr_t i = 0; i < ne; i++) e[i] = img_decode(e[i], base, code); }
                  break;

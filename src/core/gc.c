@@ -417,7 +417,7 @@ static ai_inline word copy_data(struct ai *g, union u *src) {
    return word(s->ap = (void*) d); }
   case DNom: {
    struct ai_nom *s = nom(src), *d = gbump(g, nom_req);
-   ini_nom(d, s->name, s->code, s->dig);
+   ini_nom(d, s->name, s->dig);
    return word(s->ap = (void*) d); }
   case DString: {
    struct ai_str *s = str(src), *d;

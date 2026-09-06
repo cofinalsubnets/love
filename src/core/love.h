@@ -144,12 +144,12 @@ struct ai_cask { lvm_t *ap; struct ai_str *str; };
 struct ai_mint {
  lvm_t *ap;
  uintptr_t serial; };   // the order key; () is serial 0, every fresh mint ++next_serial
-// a nom: a named point, a flat 4-word leaf. code = serial (the order key on a name
-// tie); dig caches the spelling hash -- content, so bucket order never depends on
-// intern history, which is the reproducible-build law.
+// a nom: a named point, a flat 3-word leaf. interned, so its spelling is its identity
+// and its order; dig caches the spelling hash -- content, so bucket order never depends
+// on intern history, which is the reproducible-build law.
 struct ai_nom {
  lvm_t *ap;
- uintptr_t name, code, dig; };
+ uintptr_t name, dig; };
 
 struct ai_port_vt;   // the port's kind, in its head; spelled out below
 
@@ -1145,8 +1145,8 @@ static ai_inline uintptr_t nom_dig(uintptr_t name) {
  while (n--) h ^= (uint8_t) *bs++, h *= mix;
  return h; }
 
-static ai_inline struct ai_nom *ini_nom(struct ai_nom *y, uintptr_t name, uintptr_t code, uintptr_t dig) {
- return y->ap = lvm_nom, y->name = name, y->code = code, y->dig = dig, y; }
+static ai_inline struct ai_nom *ini_nom(struct ai_nom *y, uintptr_t name, uintptr_t dig) {
+ return y->ap = lvm_nom, y->name = name, y->dig = dig, y; }
 
 static ai_inline struct ai_str *ini_str(struct ai_str *s, uintptr_t len) {
  s->ap = lvm_str, s->len = len;

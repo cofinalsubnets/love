@@ -726,7 +726,7 @@ ai_noinline word intern_checked(struct ai *g, struct ai_str *b) {
   nb[1].x = putcharm(nlen);
   cell(m)[1].x = (word) nb;                              // swap backing; header identity stable
   i = map_probe(g, m, word(b), &found); }
- struct ai_nom *y = ini_nom(bump(g, Width(struct ai_nom)), word(b), ++g->next_serial, nom_dig(word(b)));  // the canonical KNom: name + serial + cached spelling hash
+ struct ai_nom *y = ini_nom(bump(g, Width(struct ai_nom)), word(b), nom_dig(word(b)));  // the canonical KNom: name + serial + cached spelling hash
  word *slots = map_slots(m);
  slots[2 * i] = word(b), slots[2 * i + 1] = word(y);
  cell(map_back(m))[1].x = putcharm(map_len(m) + 1);

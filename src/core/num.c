@@ -1211,18 +1211,15 @@ static ai_inline intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb
  int c = n ? memcmp(pa, pb, n) : 0;
  return c ? (c < 0 ? -1 : 1) : la < lb ? -1 : la > lb ? 1 : 0; }
 // the floor band (cmp_rank 0): bare mints (KMint, by serial) < named points (KNom, by
-// name lex then serial). () is the bare mint of serial 0 -- every fresh mint takes
-// ++next_serial -- so it seats least of all by the same rule, no guard.
+// spelling -- interned, so one spelling is one nom and there is no tie to break). ()
+// is the bare mint of serial 0 -- every fresh mint takes ++next_serial -- so it seats
+// least of all by the same rule, no guard.
 static ai_inline intptr_t mint_cmp(struct ai *g, word a, word b) {
  if (a == b) return 0;
  bool na = namep(a), nb = namep(b);
  if (na != nb) return na ? 1 : -1;                       // bare mint < named symbol
- if (na) {                                               // both named (KNom): name first, then the serial
-  struct ai_str *sa = str(nom(a)->name), *sb = str(nom(b)->name);
-  intptr_t c = bytes_cmp(txt(sa), len(sa), txt(sb), len(sb));
-  if (c) return c;
-  uintptr_t ma = nom(a)->code, mb = nom(b)->code;
-  return ma < mb ? -1 : ma > mb ? 1 : 0; }
+ if (na) { struct ai_str *sa = str(nom(a)->name), *sb = str(nom(b)->name);
+  return bytes_cmp(txt(sa), len(sa), txt(sb), len(sb)); }
  uintptr_t ca = sym(a)->serial, cb = sym(b)->serial;     // both bare: by serial
  return ca < cb ? -1 : ca > cb ? 1 : 0; }
 intptr_t ai_mint_cmp(struct ai *g, word a, word b) { return mint_cmp(g, a, b); }  // the point order, for +'s join
