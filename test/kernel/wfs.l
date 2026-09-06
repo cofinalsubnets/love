@@ -41,7 +41,7 @@
    (= 16384 (& 61440 <>>(stat e)))
    ((readdir e) = ())                         ; empty, told from absent by stat
    ('eexist = (mkdir e 493))                  ; again
-   ('eexist = (mkdir "lib" 493))             ; a baked prefix is a directory too
+   ('eexist = (mkdir "src" 493))             ; a baked prefix is a directory too
    ('enotdir = (mkdir (f + "/x") 493))       ; under a file
    ('enoent = (mkdir "/hole/x" 493))         ; under a hole
    ('badarg = (mkdir 7 493))
@@ -69,11 +69,13 @@
    ('einval = (rename d (d + "/in")))        ; a real einval: the name parts it from 'badarg
    ; -- chdir/cwd: the cwd is a kernel string; "/" is the boot seat --
    (= "/" (cwd 0))
-   !(chdir "lib")
-   (= "/lib" (cwd 0))
+   !(chdir "src/apps/json")
+   (= "/src/apps/json" (cwd 0))
    (< 0 (tally (rd "json.l")))                  ; a relative path reads off the cwd
    (member? "json.l" (readdir "."))
-   !(chdir "..")
+   !(chdir "..")                                ; and .. pops one component of it
+   (= "/src/apps" (cwd 0))
+   !(chdir "/")
    (= "/" (cwd 0))
    (nom? (chdir f))                             ; a file is no seat
    (nom? (chdir "/nope"))

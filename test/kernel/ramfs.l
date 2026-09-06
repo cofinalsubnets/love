@@ -29,9 +29,9 @@
    (= orig (rd f))
    ; an unbaked path is absent for a read; a write creates it now (rung 2 --
    ; wfs.l holds those laws), so here it is unmade the moment it is proved
-   (! (port? (open "lib/no-such-thing.l" "r")))
-   (: q (open "lib/no-such-thing.l" "w")
-      (&& (port? q) (: _ (close q) !(unlink "lib/no-such-thing.l"))))
+   (! (port? (open "src/apps/json/no-such-thing.l" "r")))
+   (: q (open "src/apps/json/no-such-thing.l" "w")
+      (&& (port? q) (: _ (close q) !(unlink "src/apps/json/no-such-thing.l"))))
    ; the write copies the blob out of .rodata, and the next open sees it
    (wr f "hi" "w")
    (= "hi" (rd f))
