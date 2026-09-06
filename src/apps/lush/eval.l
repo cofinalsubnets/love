@@ -94,6 +94,36 @@
         (nm . old))
    (sh-tmprestore e) (setenv <e >e)             ; () old unsets -- the absence lane
 
+   ; --- the four lanes, and what must be TRUE of a word to take each ------------
+   ; a command becomes a process only when it must. cheapest first, and the one
+   ; question each rung asks before it may be taken:
+   ;
+   ;   builtin   no process, and no binary consulted: the word is the shell's own
+   ;             (sh-binames), so PATH never enters into it.
+   ;   in-image  no process. "is running it HERE the same as running it THERE?"
+   ;             three kinds of main answer no and each is a silent wrong answer:
+   ;             one that QUITS (it would end its caller), one that KEEPS state a
+   ;             single run owns, one that BLOCKS (in here ^C kills the shell and
+   ;             `kill %1` has no pid to name). the roster below argues each.
+   ;   fork      a process, but no exec and no second image wake. "is the thing we
+   ;             would exec the thing we already hold?" -- and that is ALL it asks,
+   ;             because the three above are a child's own business: its quit is an
+   ;             exit status, its state is a copy, its block has a pid to name.
+   ;   spawn     a process and an exec. everything else, and the only lane always
+   ;             correct: a foreign binary, an explicit path, an ask that was
+   ;             settled before a heap existed.
+   ;
+   ; `ours?` is the question the two middle rungs share -- the two that reach for a
+   ; binary at all -- and it is strict: PATH's winner must stat as the running
+   ; binary. an
+   ; installed twin of our own name is somebody else's build, and a word with a `/`
+   ; is a demand -- both spawn. asked once per word per session.
+   ; ⚠ a rung is only as reachable as the SHAPE allows, and two shapes cannot see
+   ; the whole ladder: a pipeline stage skips in-image (a stage has to be a process
+   ; to be concurrent, so it starts at fork), and a $( ) body reaches the jug lane
+   ; or the stage path and never in-image -- so `$(basename x)` forks where a plain
+   ; `basename x` does not. neither is a safety verdict; both are reach.
+   ;
    ; --- the in-image lane: a tool whose main rides this image -------------------
    ; a main in this image runs here -- no fork, no exec, no image wake -- and answers
    ; its status as a charm (src/apps/kore/u.l's urun, the door every kore tool and
@@ -127,14 +157,12 @@
    ; its own arguments, waiting on no fd it did not open. That is what the list below is,
    ; and it is most of a build -- 152 of the 249 self-execs one seed-only bootstrap spent.
    ; one more class stays out and it is not in the three above: the tools that read
-   ; STDIN when handed no file operand (cat head tail wc sort uniq cut tr nl rev grep sed
-   ; tee xargs). Those are the next tier and they wait on the stdin story, which is a
-   ; question about ^C and a terminal rather than about anything in this file.
-   ; measured 2026-08-16, and the number says wait. Over a host build -- 228 simple
-   ; foreground commands, lush as make's SHELL -- the tier was seven (4 cat, 3 sed)
-   ; against the 159 the list below already takes, and every one of the seven named a
-   ; file operand, so asking each tool "are these args safe in here?" would have
-   ; admitted all of them and bought 3%. and on a host the lane is not even live:
+   ; STDIN when handed no file operand (cat head tail wc sort uniq cut tr nl rev grep
+   ; sed tee xargs). they want the stdin story -- a question about ^C and a terminal
+   ; rather than about anything in this file -- and nothing about the wake waits on
+   ; it: a word that misses this list still takes the fork lane below, warm heap and
+   ; no exec. running one in here would buy the fork and nothing else.
+   ; and on a host the lane is not even live:
    ; cook asks `sh-ours? SHELL` first, /bin/sh is dash, so every recipe line spawns.
    ; The payoff is the distro's, where /bin/sh is us. Measure there, not here.
    ; the checksums are the one row here that reads STDIN when handed no file operand,
@@ -208,10 +236,9 @@
                    (? !(= v 'no) v
                       (: f (sh-imgask w) _ (pin sh-imgc w f) f)))
    ; --- the fork lane: an external word whose PATH winner is this binary runs in
-   ; a forked child -- the warm heap rides, no exec, no wake. the img list's three
-   ; disqualifiers are a child's own business: a quit is its exit status, kept
-   ; state is a copy, a block has a pid for ^C and `kill %1` to name. no verb table
-   ; is read here and none is wanted: the child hands its whole line to `cli-line`,
+   ; a forked child -- the warm heap rides, no exec, no wake. it asks `ours?` and
+   ; nothing else about the main, for the reason the ladder above gives.
+   ; no verb table is read here and none is wanted: the child hands its line to `cli-line`,
    ; src/core/boot/post.l's own tail, which is the very thing the exec would have reached --
    ; argv[0] door, rail, and the registry lookup inside it. a foreign binary spawns
    ; as ever, and so does a slashed or .l word: an explicit path is a demand.
@@ -227,19 +254,57 @@
    (sh-forkfn w) (: v (peep sh-forkc w 'no)
                     (? !(= v 'no) v
                        (: f (sh-forkask w) _ (pin sh-forkc w f) f)))
-   ; ..and three shapes the word alone cannot answer for, so they are asked per
-   ; command. all three are settled before a heap exists, which is the one thing a
-   ; fork can never redo: `bake` and `wake` are read in C ahead of any love (wake
-   ; picks which heap there is, bake must snapshot before the session layer), and
-   ; LOVE_NO_IMAGE asks for a boot this process already made the other way. the
-   ; bare word goes too -- with nothing past it a line may want a terminal, and the
-   ; repl is the caller's isatty answer to give, not a pipeline stage's.
-   (sh-forkok? av)
-     (: a >av
-        (? !(two? a) 0
-           (|| (<a = "bake") (<a = "wake")) 0
+   ; ..and the shapes the word alone cannot answer for, so they are asked per
+   ; command. bake, wake and LOVE_NO_IMAGE are settled before a heap exists, which
+   ; is the one thing a fork can never redo: `bake` and `wake` are read in C ahead
+   ; of any love (wake picks which heap there is, bake must snapshot before the
+   ; session layer), and LOVE_NO_IMAGE asks for a boot this process already made
+   ; the other way.
+   ; the bare word is the fourth, and it is asked of the STAGE and not of the word:
+   ; the fear is that a word with nothing past it reaches a repl, and the child is
+   ; handed tty=0 and would drink stdin where the exec'd twin would have prompted.
+   ; a pipe or a `<` laying fd 0 settles it -- that is every `| cat`, `| sort`,
+   ; `| tee` there is. ⚠ the shell's OWN stdin cannot stand in for the stage's: a
+   ; script is not interactive and still leaves the terminal on fd 0, so a bare word
+   ; that lays nothing spawns, and lets love make its own isatty answer.
+   (sh-fd0? fdmap) (? !(two? fdmap) 0 (= <<fdmap 0) 1 (sh-fd0? >fdmap))
+   (sh-forkok? av fdmap)
+     (: a >av                                    ; cap is total, so a bare word reads () here
+        (? (|| (<a = "bake") (<a = "wake")) 0
            ((0 < tally (getenv "LOVE_NO_IMAGE")) && (member? 'love-image (names ()))) 0
-           1))
+           (two? a) 1
+           (sh-fd0? fdmap) 1
+           0))
+   ; the fork child itself, shared by the pipeline stage and the simple foreground
+   ; command. answers the pid in the parent (or fork's own nom) and never answers
+   ; in the child. every line of it is child hygiene -- copy the whole thing, not
+   ; parts, if love code is ever forked anywhere else.
+   (sh-fork1 argv fdmap allclose)
+     (: p (fork 0)
+        (? (p = 0)
+           (: _ (wear ())               ; a child wears the console: its fds are the dup2 below
+              _ (sh-dropcaps ())        ; ...and it is inside no capture of ours
+              ; the five tty ignores are the SHELL's (main.l): a spawned child sheds
+              ; them through exec, this one by hand -- or a forked `sleep` would
+              ; shrug off the very ^C that names it
+              _ (signal sig-int 0) _ (signal sig-quit 0) _ (signal sig-tstp 0)
+              _ (signal sig-ttou 0) _ (signal sig-ttin 0)
+              ; any scare is the child's death, never a second shell:
+              ; 'leave carries the tool's status, the rest die at 1
+              _ (hear (\ a b (? (= a 'leave) (quit b)
+                                (: _ (say err ";; ") _ (print err a)
+                                   _ (say err " ") _ (print err b)
+                                   _ (put err 10) (quit 1)))))
+              _ (each fdmap (\ e (dup2 >e <e)))
+              _ (each allclose (\ fd (? (2 < fd) (close fd) 0)))
+              ; 0: a child has a shell already. cli-line's ANSWER is not a status and
+              ; must not be quit with -- every status it carries it quits with itself
+              ; (the verb door, and cli-leave for the rail's own exits), so a normal
+              ; return only means the line finished. reading it as one exits `love -e
+              ; EXPR` with the newline that printed the answer. main.c discards it too.
+              _ ((sh-cliline ()) argv 0)
+              (quit 0))
+           p))
 
    ; --- builtins: a charm status, a control pair (brk/cnt/ret), or 'nope --------
    sh-binames '("exit" "cd" "export" "pwd" "jobs" "fg" "bg" ":" "true" "false" "command"
@@ -453,39 +518,21 @@
      (: _ (flush out) _ (flush err)
         (? (= (st 0) 'x)
            (: w <(st 1)
-              fk (? (sh-forkok? (st 1)) (sh-forkfn w) 0)
+              fm (base + (st 2))
+              fk (? (sh-forkok? (st 1) fm) (sh-forkfn w) 0)
               (? fk
                  ; ours: fork, no exec -- the child runs the whole line through
                  ; cli-line on this warm heap and quits with its status: a real
                  ; pid, so the pipeline's bookkeeping and the job table read it
                  ; like any spawn. pg/fg are not taken (the 'a lane's stance): the child
                  ; stays in the shell's group, which keeps the tty for a
-                 ; foreground job, and sheds the group's ignores below.
-                 (: p (fork 0)
-                    (? (p = 0)
-                       (: _ (wear ())               ; a child wears the console: its fds are the dup2 below
-                          _ (sh-dropcaps ())        ; ...and it is inside no capture of ours
-                          ; the five tty ignores are the SHELL's (main.l): a spawned
-                          ; child sheds them through exec, this one by hand -- or a
-                          ; forked `sleep` would shrug off the very ^C that names it
-                          _ (signal sig-int 0) _ (signal sig-quit 0) _ (signal sig-tstp 0)
-                          _ (signal sig-ttou 0) _ (signal sig-ttin 0)
-                          ; any scare is the child's death, never a second shell:
-                          ; 'leave carries the tool's status, the rest die at 1
-                          _ (hear (\ a b (? (= a 'leave) (quit b)
-                                            (: _ (say err ";; ") _ (print err a)
-                                               _ (say err " ") _ (print err b)
-                                               _ (put err 10) (quit 1)))))
-                          _ (each (base + (st 2)) (\ e (dup2 >e <e)))
-                          _ (each allclose (\ fd (? (2 < fd) (close fd) 0)))
-                          r ((sh-cliline ()) (st 1) 0)   ; 0: a child has a shell already
-                          (quit (? (charm? r) r 0)))
-                       p))
+                 ; foreground job, and sheds the group's ignores in sh-fork1.
+                 (sh-fork1 (st 1) fm allclose)
                  ; foreign, or an explicit path: spawned as ever -- its 127 is the
                  ; child's own and the pipeline's status bookkeeping wants a real
                  ; pid; only the word is ours to say
                  (: _ (? (sh-known? w) 0 (sh-saynf w))
-                    (spawnmap (st 1) (base + (st 2)) allclose pg fgi))))
+                    (spawnmap (st 1) fm allclose pg fgi))))
            (: p (fork 0)
               (? (p = 0)
                  (: _ (wear ())                   ; a child wears the console: its fds are the dup2 below, and a jug is not one
@@ -584,12 +631,20 @@
            (: rm (sh-rdmap rs)
               (? (= <rm 'err) (cmderr >rm)
                  (: opens (rm 2) wrs (rm 3)
+                    ac (opens + (map cap wrs))
                     _ (flush out) _ (flush err)      ; see sh-spawn1: the child writes the fd straight
+                    ; ours, but not safe to run in THIS process: fork the warm heap
+                    ; rather than exec a second wake. the list above asks "is running
+                    ; it here the same thing as running it there?" and a word that
+                    ; fails that is still ours to fork -- a quit is the child's exit,
+                    ; kept state is a copy, a block has a pid to name. same lane a
+                    ; pipeline stage takes, and pg/fg are likewise not taken: the
+                    ; child stays in the shell's group, which keeps it the terminal.
+                    fk (? (sh-forkok? argv (rm 1)) (sh-forkfn <argv) 0)
                     ; the redirects are already open, which is where a shell answers an
                     ; unfindable word from -- `nope > f` still makes f, then says so
-                    pid (? (sh-known? <argv)
-                           (spawnmap argv (rm 1) (opens + (map cap wrs))
-                                     (sh-pgm 0) (sh-fgm 0))
+                    pid (? fk (sh-fork1 argv (rm 1) ac)
+                           (sh-known? <argv) (spawnmap argv (rm 1) ac (sh-pgm 0) (sh-fgm 0))
                            ())
                     _ (each opens close)
                     _ (sh-hwrite wrs)
