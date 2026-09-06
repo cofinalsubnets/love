@@ -1124,10 +1124,10 @@ test_kverb: host
 test_kboot: host $(R)/tools/kboot.l
 	@$(MAKE) -s $(k_elf)
 	@echo TEST $(k_elf) "(the kore cat off cmdline; 4 boots, ceiling 420s each)"
-	@$m $(R)/tools/kboot.l $(k_elf) "kore ls lib" "json.l"
+	@$m $(R)/tools/kboot.l $(k_elf) "kore ls src/apps/json" "json.l"
 	@$m $(R)/tools/kboot.l $(k_elf) "kore wc src/apps/json/json.l" "src/apps/json/json.l" $$(wc -c < $(R)/src/apps/json/json.l)
-	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"cd lib; pwd\"" "/lib"
-	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"kore ls lib | kore wc -l\"" $$(ls $(R)/lib | wc -l)
+	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"cd src/apps/json; pwd\"" "/src/apps/json"
+	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"kore ls src/apps/json | kore wc -l\"" $$(ls $(R)/src/apps/json | wc -l)
 else
 test_disk test_kboot:
 	@echo "$@: skipped (host arch $a is not x64)"
