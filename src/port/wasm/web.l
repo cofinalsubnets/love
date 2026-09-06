@@ -20,6 +20,7 @@
 ; the tty words this seat has no device for: winsize is the screen's, raw is nothing
 ; to do. an app run on the session's own task (a typed `rove ()`) reads the end of
 ; stdin at once (host.c) and steps ashore, since nothing could unpark it.
+(use 'story)                                        ; the engine, fed just before this file
 (: raw (\ _ ())
    web-scr {} web-task {}
    (winsize _) (: s (peep web-scr () 0) (? s ((gaze s 1) . (gaze s 2)) ()))
@@ -31,6 +32,6 @@
                         ())
    ; the demo story: its level is a datum the page fetched (src/apps/rove/levels) and
    ; bound as lighthouse-data; the engine's load-level reads a file, which this seat lacks
-   (lighthouse _) (story (level-of lighthouse-data))
+   (lighthouse _) (story-run (level-of lighthouse-data))
    (web-step _) (: _ (rest 0) ())                 ; a rest of nothing: the other tasks' turn
    (web-show f) (: s (peep web-scr () 0) _ (scribe s f) _ (mirror s) ()))

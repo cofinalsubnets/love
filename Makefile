@@ -255,7 +255,8 @@ distfiles = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps
             src/apps/sb/http.l src/apps/sb/sb.l src/apps/kiosko/kiosko.l \
             src/apps/gz/gz.l src/apps/tar/tar.l src/apps/tar/tarcmd.l src/apps/gz/gzcmd.l src/apps/cpio/cpio.l \
             src/apps/cpio/cpiocmd.l src/apps/source/source.l src/apps/lapiz/lapiz.l \
-            src/apps/libra/salt.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/serve.l
+            src/apps/libra/salt.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/serve.l \
+            src/apps/rove/story.l src/apps/rove/design.l
 $(ho)/.dist.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \

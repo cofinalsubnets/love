@@ -6,8 +6,8 @@
 ; vi on the file and play stay live probes.
 ;   cat test/00-init.l test/host/design.l | out/love
 
-(reads (open "src/apps/rove/story.l" "r"))
-(reads (open "src/apps/rove/design.l" "r"))
+(use 'story)
+(use 'design)
 
 (: S "/tmp/designtest.l"
    (find h n i) (? (i + tally n < 1 + tally h)

@@ -12,11 +12,12 @@
 ;   p  save and play the level   q  quit
 ;
 ; every key is a pure step on the state and every frame a pure lay into a port, so
-; the designer gates headless (test/host/design.l); only `design` ties the tty. the
-; engine's words -- room, thing, level, load-level, save-level, story -- are story.l's,
-; loaded first.
-; usage: out/love -l src/apps/rove/story.l -l src/apps/rove/design.l -e '(design "src/apps/rove/levels/lighthouse.l")'
-
+; the designer gates headless (test/host/design.l); only design-run ties the tty. the
+; engine's words -- room, thing, level, load-level, save-level, story-run -- are the
+; story module's.
+; usage: love design [LEVEL.l]      the file to lay out (default src/apps/rove/levels/lighthouse.l)
+(module (design design-main design-run design-new design-key design-frame room-at)
+(use 'story)
 (:
  ; --- the map: cells of cw x ch, a room a box in its cell -----------------------
  cw 14 ch 4
@@ -136,7 +137,7 @@
    (slurp j))
 
  ; --- the runner: the designer on the tty ------------------------------------------
- (design p) (: ws (winsize 0)
+ (design-run p) (: ws (winsize 0)
                h (two? ws && 7 < <ws ? <ws 24)
                w (two? ws && 19 < <>ws ? <>ws 80)
                lvl (: l (load-level p) (l ? l (level p {} ())))
@@ -148,8 +149,11 @@
                  113 (d 'mode = 'map ? () (design-key d 113, loop ()))
                  118 (d 'mode = 'map ? (save d, (? vi (vi [p], reload d) (tell d "no editor on this seat")), loop ())
                                        (design-key d 118, loop ()))
-                 112 (d 'mode = 'map ? (save d, story (d 'lvl), say out "\e[?25l\e[2J", loop ())
+                 112 (d 'mode = 'map ? (save d, story-run (d 'lvl), say out "\e[?25l\e[2J", loop ())
                                        (design-key d 112, loop ()))
                  c (design-key d c, loop ()))
                (raw 1, say out "\e[?1049h\e[?25l\e[2J", loop (),
-                say out "\e[0m\e[?25h\e[?1049l", flush out, raw 0, 0)))
+                say out "\e[0m\e[?25h\e[?1049l", flush out, raw 0, 0))
+ (design-main as) (design-run (two? as ? <as "src/apps/rove/levels/lighthouse.l"))
+ _ (pins (from 'verbs 'tab) 'design design-main))
+) ; module design

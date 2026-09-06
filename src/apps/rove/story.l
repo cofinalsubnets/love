@@ -15,12 +15,14 @@
 ; and opening one is vi, called in place -- on a seat that has vi. the hatch in the
 ; hall runs the crawl (rove.l) the same way.
 ;
-; usage: out/love -l src/apps/rove/story.l -e '(story-main ["src/apps/rove/levels/lighthouse.l"])'
-;        out/love -l src/apps/rove/story.l -e '(library-story ())'   the tree's library
+; usage: love story [LEVEL.l | ROOT]      a level file (default src/apps/rove/levels/lighthouse.l),
+;                                         or a root to lift the library from (src/apps)
 ; only the tty runner ties the tty (raw/winsize ride src/host/posix.c); the crew
-; modules it reaches for -- vi, libra -- are asked by name at the call, so this file
-; loads on a seat that lacks them and says so instead.
-
+; modules it reaches for -- vi, libra, rove -- are asked by name at the call, so this
+; file loads on a seat that lacks them and says so instead. a module: the words here
+; are the story's, not the session's, and design.l uses them.
+(module (story story-main story-run story-new story-turn story-frame describe wrap joins
+         level room thing level-of data-of level-text load-level save-level library)
 (:
  ; --- levels as data ------------------------------------------------------------
  ; in play: room {'name 'text 'exits {word id ..} 'things {word thing ..} 'x 'y}, thing
@@ -85,7 +87,8 @@
  ; the hatch, which is the crawl, called the same way
  (open-thing g t) (: f (t 'file)
                       vi (mod 'vi 'vi-main)
-                      (? (f = 'hatch) (ev 'rove (), (say-to g "you climb back out of the hold."))
+                      (? (f = 'hatch) (? (member? 'rove (names ())) (ev 'rove (), say-to g "you climb back out of the hold.")
+                                         (say-to g "the hatch is sealed on this seat."))
                          !f (say-to g "it does not open.")
                          !vi (say-to g "no editor on this seat.")
                          (: _ (vi [f]) (say-to g ("you close " + t 'name + ".")))))
@@ -161,7 +164,7 @@
    (level "the library" rooms 'hall))
 
  ; --- the runner: the story on the tty, a line at a time ----------------------------
- (story lvl) (: ws (winsize 0)
+ (story-run lvl) (: ws (winsize 0)
                 h (two? ws && 7 < <ws ? <ws 24)
                 w (two? ws && 19 < <>ws ? <>ws 80)
                 g (story-new lvl)
@@ -175,8 +178,9 @@
                                     (line ())))
                 (sail _) (show(), line () @ 'quit () l (story-turn g l, g 'over ? () (sail ())))
                 (sail (), say out "\e[0m\e[?25h\e[?1049l", flush out, raw 0, 0))
- (library-story _) (story (library "src/apps"))
- ; a level file, or the library under a root: `story-main` is the verb, the page has its own
+ ; the verb: a level file, or the library under a root; the page has its own door (web.l)
  (story-main as) (: p (two? as ? <as "src/apps/rove/levels/lighthouse.l")
                      lvl (? (two? (readdir p)) (library p) (load-level p))
-                     (? lvl (story lvl) (say err ("story: not a level: " + p + "\n"), 1))))
+                     (? lvl (story-run lvl) (say err ("story: not a level: " + p + "\n"), 1)))
+ _ (pins (from 'verbs 'tab) 'story story-main))
+) ; module story

@@ -7,7 +7,7 @@
 ; live probes: `love -l src/apps/rove/story.l -e '(library-story ())'`.
 ;   cat test/00-init.l test/host/story.l | out/love
 
-(reads (open "src/apps/rove/story.l" "r"))
+(use 'story)   ; the artifact's module: the gate's love is warm from the tree
 
 (: (find h n i) (? (i + tally n < 1 + tally h)
                   (? (n = snip h i (i + tally n)) 1 (find h n (i + 1)))
