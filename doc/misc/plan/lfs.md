@@ -45,9 +45,7 @@ precision over love's bigints, `-l` and all) · **procps-ng** (kore's ps, free, 
 pidof, pgrep, pkill, pwdx) and psmisc's killall.
 
 The partials, stated: kore has no `df` (nothing here answers `statvfs`, so it wants a
-nif and not an afternoon); **`sort` has no `-n` and `ls` no `-l`** — both take a flag or
-two and die on the rest, which `make -C bench korebench` found and doc/misc/kore-gauge.md
-records; sed is a deliberate subset (no hold space, no `\n` in
+nif and not an afternoon); sed is a deliberate subset (no hold space, no `\n` in
 replacements); `expr` has no `-o` output template and `od` takes one `-t` per run; our
 DEFLATE lands a few percent above `gzip -9` (it costs every block three ways and writes
 the cheapest -- src/apps/gz/gz.l carries the numbers), and `gzip -d` reads one member per file

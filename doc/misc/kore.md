@@ -6,8 +6,11 @@ Speed and adversarial inputs are a different page: doc/misc/kore-gauge.md, fille
 `make -C bench korebench` (kore against busybox, uutils and GNU).
 
 ⚠ **the inventory below names TOOLS, never their flag coverage**, and the two are not the
-same reach: `sort` takes `-r -u` and dies on `-n`, `ls` takes `-a` and dies on `-l`. A
-tool listed here answers to its name; which options it answers to is in its own source.
+same reach. A tool listed here answers to its name; which options it answers to is stated
+at the head of its own source, absences included. `make -C bench korebench` found the two
+worst of those absences by running the flags rather than reading the list — `sort` had no
+`-n` and `ls` no `-l`, each reading the flag as a filename — and both now carry a matrix
+against GNU (`test/gate/sortcmp.sh`, `test/gate/lscmp.sh`) inside `make test_kore`.
 
 kore is the distro's coreutils: the love-native POSIX environment over the Linux kernel is
 kernel + a static `love` + .l files, and kore is busybox's multi-call trick done natively.

@@ -228,6 +228,13 @@ cmp -s "$g" "$o" || fail "kore wc: the total row over two operands"
 echo "kore: line tools (sort/uniq/head/tail/wc/cat/tac/seq/echo/basename/tee GNU-identical) ok"
 echo "kore: the gulp seams (a line past 4096, no final newline, empty, boundary-exact) ok"
 
+# sort's and ls's own flag matrices, each its own file: the matrix IS the test, and a
+# matrix reads badly inlined between two unrelated checks. both set their own LC_ALL
+# (and lscmp its own TZ) -- neither can be compared under a collation or a clock this
+# tree does not carry.
+sh test/gate/sortcmp.sh "$K" || fail "kore sort: the flag matrix diverges from GNU"
+sh test/gate/lscmp.sh "$K"   || fail "kore ls: the flag matrix diverges from GNU"
+
 # ------------------------------------------------------------ the field tools
 printf 'a:b:c\nnodelim\nx:y\n' > "$ho/.fu1"
 both "cut -f"    cut -d: -f1,3    "$ho/.fu1"
@@ -338,8 +345,9 @@ korerun ln "$P/f1" "$P/h1" && [ "$P/h1" -ef "$P/f1" ] || fail "kore ln"
 korerun touch "$P/new" "$P/.hidden" && [ -f "$P/new" ] && [ -f "$P/.hidden" ] || fail "kore touch"
 korerun chmod 600 "$P/f1" && [ "$(stat -c %a "$P/f1")" = 600 ] || fail "kore chmod"
 LC_ALL=C ls -1 "$P" > "$g"; korerun ls "$P" > "$o"; same "ls"
-# ours shows dotfiles but never . / .. , which is GNU's -A
-LC_ALL=C ls -A -1 "$P" > "$g"; korerun ls -a "$P" > "$o"; same "ls -a vs GNU -A"
+# -a carries . and .. the way GNU's does; -A is the one that leaves them out
+LC_ALL=C ls -a -1 "$P" > "$g"; korerun ls -a "$P" > "$o"; same "ls -a"
+LC_ALL=C ls -A -1 "$P" > "$g"; korerun ls -A "$P" > "$o"; same "ls -A"
 [ "$(korerun pwd)" = "$(pwd)" ] || fail "kore pwd"
 korerun rm "$P/f3" && [ ! -e "$P/f3" ] || fail "kore rm"
 korerun rm -r "$P/a" && [ ! -e "$P/a" ] || fail "kore rm -r"

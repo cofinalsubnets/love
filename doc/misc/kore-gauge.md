@@ -194,14 +194,39 @@ and `tr` instead of a hundred times past them.
 body is minted every turn, and love has no pass that hoists it. Worth a look wherever a
 `(: ... (go 0))` sits inside a recursive step.
 
-### 3. `sort` has no `-n`, and `ls` has no `-l`
+### 3. `sort` had no `-n`, and `ls` no `-l` — both fixed
 
-Both turned up in the answers table rather than a timing: `sort -n` dies with
-`sort: cannot open -n` — it reads the flag as a filename — and `ls -l` prints
-`ls: cannot access -l` and then the bare names. `sort-main` (`src/apps/kore/core.l`) takes
-`-r` and `-u` and nothing else; `ls-main` (`src/apps/kore/fs.l`) takes `-a` and nothing
-else. Both absences are ordinary in a shell script and neither is written down in
-`doc/misc/kore.md`'s inventory, which lists both tools without qualification.
+Both turned up in the answers table rather than a timing: `sort -n` died with
+`sort: cannot open -n` — it read the flag as a filename — and `ls -l` printed
+`ls: cannot access -l` and then the bare names. `sort-main` took `-r -u` and nothing
+else; `ls-main` took `-a` and nothing else. Neither absence was written down anywhere:
+`doc/misc/kore.md`'s inventory lists tools, not flags.
+
+Both now carry a matrix against GNU inside `make test_kore` — `test/gate/sortcmp.sh`
+(75 rows) and `test/gate/lscmp.sh` (29 rows), byte-identical. What the matrices cost,
+which is the part worth keeping:
+
+* **`?` on a comparison is the falsy trap again.** `-1` is false here (a predicate is
+  the sign of the net), so `(? c c (go >ks))` sent every *less-than* on to the next sort
+  key as though the keys had tied, and `!(cmp a b)` called it equal. Both readings have
+  to ask `= 0` out loud. This is the same shape `bc` hit with `['ret v]`.
+* **prel's `sortby` is not a stable sort.** `sortsplit` *deals* the list into two, so
+  element 1 lands to the right of element 2 and a left-preferring merge hands them back
+  swapped. `sort -u` then keeps an arbitrary representative of each equal run where GNU
+  keeps the input's first. The repair is to carry the index as the last tiebreak, which
+  states stability instead of hoping for it from the sort underneath.
+* **`-k1,1b` and `-k1b,1` are different keys.** `n`/`r`/`f` on either half order the
+  whole key, but `b` names a *position*: on the start spec it skips the field's leading
+  blanks, on the end spec it is about where the key stops. Folding the two halves'
+  letters together sorts `-k1,1b` on the wrong key, quietly.
+* **GNU's `ls -l` sizes the command-line block's columns over every operand**,
+  directories included — even though a directory operand is listed further down as its
+  own block and its row is never printed. `ls -l file dir` pads *file*'s size to the
+  width of *dir*'s.
+* **`readdir` does not hand back `.` and `..`**, so `ls -a` owed both. They are put back
+  in `ls`, not in `readdir`, where every other caller would have to take them out again.
+  The old gate had asserted the divergence — it compared our `-a` against GNU's `-A` —
+  which is how an absence stays invisible for a year. `-A` is now its own flag.
 
 ### 4. what the shapes did *not* find, which is most of them
 

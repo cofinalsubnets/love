@@ -103,7 +103,8 @@
    ; +format, or GNU's C-locale default when none is given.
    udt-wd '("Sun" "Mon" "Tue" "Wed" "Thu" "Fri" "Sat")
    udt-wdl '("Sunday" "Monday" "Tuesday" "Wednesday" "Thursday" "Friday" "Saturday")
-   udt-mo '("Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug" "Sep" "Oct" "Nov" "Dec")
+   ; udt-mo lives in u.l: ls -l's date column reads it too, and fs.l is catted ahead
+   ; of this file, so the one table has to sit under both of them.
    udt-mol '("January" "February" "March" "April" "May" "June" "July" "August"
              "September" "October" "November" "December")
    (udatef fmt ms)
