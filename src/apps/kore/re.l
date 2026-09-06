@@ -109,13 +109,28 @@
                  (lp 1 hit 0))))
        ; `bad`, not `err`: err is the port, and a shadow here would say into a charm
        st (tablet 0) _ (pin st 'hit 0) _ (pin st 'bad 0)
-       _ (ureachm (\ f (: _ (say err ("grep: " + f + ": No such file or directory"))
-                          _ (put err 10) _ (pin st 'bad 1) 0))
-                  (\ f first rd
-                     (: _ (pin st 'hit (dof (? (f = "-") "(standard input)" f) rd
-                                            (peep st 'hit 0)))
-                        1))
-                  fs)
+       ; ⚠ ONE trap for the whole run, not one per line. the engine is a greedy
+       ; backtracker (src/core/boot/post.l), so a repeat whose atom can match a span two
+       ; ways -- (a|aa)+ -- is exponential in the run's length; the engine spends a
+       ; step budget on exactly those and scares when it runs out. this is where the
+       ; scare becomes a sentence and a status instead of a stack. any other scare is
+       ; re-raised: swallowing it here would turn a real fault into "too costly".
+       _ (trap (\ _ (ureachm (\ f (: _ (say err ("grep: " + f + ": No such file or directory"))
+                                     _ (put err 10) _ (pin st 'bad 1) 0))
+                             (\ f first rd
+                                (: _ (pin st 'hit (dof (? (f = "-") "(standard input)" f) rd
+                                                       (peep st 'hit 0)))
+                                   1))
+                             fs))
+               ()
+               (\ a b (? (id? a 'regex-too-costly)
+                         (: _ (flush out)
+                            _ (say err ("grep: the pattern needs more than " + (show b)
+                                        + " backtracking steps on one line -- it is the"))
+                            _ (put err 10)
+                            _ (say err "grep: kind an automaton walks in one pass and this engine does not (a repeat over an alternation)")
+                            _ (put err 10) _ (flush err) (uleave 2))
+                         (scare a b))))
        _ (flush out) _ (flush err)
        (? (peep st 'bad 0) 2 (peep st 'hit 0) 0 1)))
 ) ; module 'kore

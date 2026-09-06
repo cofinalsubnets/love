@@ -800,24 +800,37 @@
    ; the output at 76 unless told another width, 0 for one long line.
    ub64set "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
    ub32set "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+   ; ⚠ val and go are lifted OUT of grp on purpose. Written inside it -- which is the
+   ; obvious shape, and was this coder's for a long time -- they are two closures minted
+   ; per THREE INPUT BYTES, and love has no pass that hoists a loop lambda out of
+   ; another loop's body. That alone was 3.5x of this function (539 ms -> 155 ms over
+   ; 512 KB, byte-identical), and it is why `base64` used to read ~600x busybox on
+   ; bench/korebench.sh where `tr`, the same kind of per-byte transform, reads ~48x.
+   ; ⚠ and it was not the two things it looked like: the tower computing 2^shift is
+   ; 5 ms per 3M, and the jug is 145 ms per 1.4M puts. Both were measured and neither
+   ; is the cost. `shf` below is still worth having -- one table beats gc towers a
+   ; group -- but it is the smaller half by far. doc/misc/kore-gauge.md carries the
+   ; numbers and the two dead ends.
    (ubenc set bits s)
     (: n (tally s) o (jug 0)
        gb (? (bits = 6) 3 5)                    ; bytes in a whole group
        gc (// (* gb 8) bits)                    ; charms in a whole group
        msk ((bits 2) - 1)
+       shf ((: (mk j a) (? (j < 0) a (mk (j - 1) (((* bits ((gc - 1) - j)) 2) . a))))
+            (gc - 1) ())                        ; the divisor per output charm, once
+       (val k have i acc) (? (gb <= i) acc
+                             (val k have (i + 1) ((* acc 256) + (? (i < have) (s (k + i)) 0))))
+       (go k v full j) (? (gc <= j) (grp (k + gb))
+                          (: _ (? (j < full)
+                                  (put o (set (& (// v (shf j)) msk)))
+                                  (put o 61))
+                             (go k v full (j + 1))))
        (grp k)
         (? (n <= k) (slurp o)
            (: have (? ((k + gb) <= n) gb (n - k))
-              (val i acc) (? (gb <= i) acc
-                             (val (i + 1) ((* acc 256) + (? (i < have) (s (k + i)) 0))))
-              v (val 0 0)
+              v (val k have 0 0)
               full (// (((* have 8) + bits) - 1) bits)   ; the charms carrying data
-              (go j) (? (gc <= j) (grp (k + gb))
-                        (: _ (? (j < full)
-                                (put o (set (& (// v ((* bits ((gc - 1) - j)) 2)) msk)))
-                                (put o 61))
-                           (go (j + 1))))
-              (go 0)))
+              (go k v full 0)))
        (grp 0))
    ; -w 0 closes nothing: GNU wraps at a width and ends the last line, but one long
    ; line arrives with no newline at all -- so a `base64 -w 0` piped into a compare is

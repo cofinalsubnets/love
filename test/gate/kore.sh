@@ -235,6 +235,25 @@ echo "kore: the gulp seams (a line past 4096, no final newline, empty, boundary-
 sh test/gate/sortcmp.sh "$K" || fail "kore sort: the flag matrix diverges from GNU"
 sh test/gate/lscmp.sh "$K"   || fail "kore ls: the flag matrix diverges from GNU"
 
+# ⚠ THE BACKTRACKER'S CLIFF, and it is timed on purpose. `(a|aa)+` over a run of a's
+# is exponential in this engine -- it tries every split -- and before the step budget
+# landed this line did not return AT ALL. What is gated is that it comes back, with
+# the status and the sentence: a `grep` that hangs on a pattern a person can type is a
+# different kind of defect from a wrong answer, and only a clock can see it.
+awk 'BEGIN { s = ""; for (i = 0; i < 40; i++) s = s "a"; print s }' > "$ho/.rebt"
+t0=$(date +%s)
+korerun grep -E '^(a|aa)+b$' "$ho/.rebt" > /dev/null 2>&1
+rc=$?
+t1=$(date +%s)
+[ "$rc" = 2 ] || fail "kore grep: the backtracker's budget must answer 2, got $rc"
+[ $((t1 - t0)) -lt 20 ] || fail "kore grep: the budget did not bound the backtracking"
+# and the budget must not fire on an ordinary repeat over the same text
+korerun grep -E '^a+$' "$ho/.rebt" > /dev/null || fail "kore grep: a plain repeat must still match"
+korerun grep -E '^(a|b)+$' "$ho/.rebt" > /dev/null \
+  || fail "kore grep: an alternation of single charms must still match"
+rm -f "$ho/.rebt"
+echo "kore: grep's step budget (the (a|aa)+ cliff answers 2 in seconds, plain repeats untouched) ok"
+
 # ------------------------------------------------------------ the field tools
 printf 'a:b:c\nnodelim\nx:y\n' > "$ho/.fu1"
 both "cut -f"    cut -d: -f1,3    "$ho/.fu1"

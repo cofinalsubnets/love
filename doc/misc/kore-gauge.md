@@ -153,26 +153,50 @@ what makes the constant factors above merely a cost rather than a trap.
 
 ## what the first fill found
 
-Four, in the order they matter. None of them is "kore is slower than C".
+Four, in the order they matter. None of them is "kore is slower than C". **All four are
+closed** — the tables above are the fill that found them, and re-running
+`make -C bench korebench` now shows `base64` at ~135× rather than ~600× and the
+backtracker answering in under a second instead of not at all. The numbers were left as
+they were measured rather than refreshed: a gauge's first fill is the record of what it
+caught, and overwriting it hides that.
 
-### 1. `grep -E` backtracks catastrophically — the one unbounded row
+### 1. `grep -E` backtracked catastrophically — now bounded
 
-`grep -E '^(a|aa)+b$'` against forty-one `a`s does not finish in sixty seconds; busybox
-and GNU both answer in two milliseconds. The engine is `module 're` in
+`grep -E '^(a|aa)+b$'` against forty `a`s did not finish in sixty seconds; busybox and
+GNU both answer in two milliseconds. The engine is `module 're` in
 `src/core/boot/post.l`, and its own header says what it is: *"matching is greedy
 backtracking in continuation style"*. On a repeated alternation that is exponential in
 the input length — it tries every way to split the run — while GNU builds an automaton
 and walks the string once.
 
-This is a property of the design and not a bug in the code, but it has a consequence the
-design note does not draw: **a pattern from an untrusted source is a hang**, and so is an
-innocent-looking one a person types. Nothing else in this tree has an unbounded input
-today; `grep` does. The repairs, in increasing order of work: a step budget that gives up
-and says so, memoizing (position, node) pairs to make it polynomial, or a Thompson
-construction for the subset of patterns that has no backreferences. None is scoped here —
-the finding is that the cliff is real and reachable from one line of shell.
+That is a property of the design, not a bug in the code. But it had a consequence the
+design note did not draw: **a pattern from an untrusted source was a hang**, and so was
+an innocent-looking one a person types. It was the only unbounded input in the tree.
 
-### 2. `base64` is ~600× busybox, and 3.5× of that is closure minting
+The repair is a **step budget**, which is what this engine can afford — the other two
+routes (memoizing `(position, node)` pairs, or a Thompson construction for the
+backreference-free subset) are a different engine, not a fix. The same line now answers
+in 0.4 s with a sentence and exit 2. Three things make it cost nothing anywhere else:
+
+* **the choice is made at compile time.** `renests?` asks whether a repeat's *atom* can
+  match one span two ways — an alternation, or another repeat. `[0-9]+`, `.*` and
+  `a\{2,5\}` cannot, so they compile to exactly the loop they always did and their inner
+  loop never reads a counter. Only the dangerous shape gets the counting twin.
+* **the counter is born in the closure**, one per entry to that repeat — per starting
+  position for a top-level one. There is no module-level cell to bake, to reset per
+  find, or to share with a nested match.
+* ⚠ **and it could not have been a module-level value binding.** `relimit 200000` at the
+  top of module `'re` floods love0's boot with `;; missing relimit`: post.l's own module
+  is walked while post.l is still loading, so a value binding there is read before the
+  letrec reaches it. The built love, whose image already holds the module, is perfectly
+  happy — and so is a module of one's own loaded afterwards, which is why the shape is
+  easy to get wrong. `(relimit _) 200000` defers and is fine.
+
+`make test_kore` gates it, and gates it *on the clock*: a grep that hangs on a pattern a
+person can type is a different kind of defect from a wrong answer, and only a timer sees
+it.
+
+### 2. `base64` was ~600× busybox, and 3.5× of that was closure minting
 
 Alone among the line tools, `base64` is two orders of magnitude off its neighbours:
 21.3 s for 8 MB where `tr` — a comparable per-byte transform — takes 1.0 s. The scaling
@@ -184,15 +208,16 @@ afternoon again: the tower `((* bits ((gc - 1) - j)) 2)` computing 2^shift per o
 charm is **not** the cost (3M towers = 5 ms), and neither is the jug (1.4M `put`s =
 145 ms, ~6% of the row).
 
-What is: `ubenc` in `src/apps/kore/core.l` defines `val` and `go` **inside** `grp`, so
-two closures are minted per three input bytes. Lifting both to the enclosing scope and
-precomputing the four shift divisors — no other change, byte-identical output — takes
-539 ms to 155 ms on the same input, a **3.5×**. That would put the row in line with `cut`
-and `tr` instead of a hundred times past them.
+What was: `ubenc` in `src/apps/kore/core.l` defined `val` and `go` **inside** `grp`, so
+two closures were minted per three input bytes. Lifting both to the enclosing scope and
+precomputing the four shift divisors — no other change, byte-identical output — took
+539 ms to 155 ms on the same input, a **3.5×**. Landed; the row went from 592× busybox
+to 135×, which is `tr`'s neighbourhood rather than a hundred times past it.
 
-⚠ the shape generalizes past this one applet: a loop lambda born inside another loop's
-body is minted every turn, and love has no pass that hoists it. Worth a look wherever a
-`(: ... (go 0))` sits inside a recursive step.
+⚠ **the shape generalizes past this one applet.** A loop lambda born inside another
+loop's body is minted every turn, and love has no pass that hoists it. Worth a look
+wherever a `(: ... (go 0))` sits inside a recursive step — this is the single cheapest
+thing the gauge has found, and there is no reason to think `base64` was the only place.
 
 ### 3. `sort` had no `-n`, and `ls` no `-l` — both fixed
 

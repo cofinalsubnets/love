@@ -1548,6 +1548,36 @@
                       (: sc ((from 'scan 'scanner) ())      ; at compile time: never at a
                          (\ s i n (: j (sc s c i)          ; module binding, which bakes
                                      (j < 0 ? n j)))))])
+   ; -- the budget, and the one shape that needs it -------------------------------
+   ; ⚠ THIS ENGINE'S ONE UNBOUNDED INPUT. matching is greedy backtracking in
+   ; continuation style, so a repeat whose atom can match one span MORE THAN ONE WAY
+   ; -- (a|aa)+ , (a*)* -- tries every split of a run and is exponential in its
+   ; length: `grep -E '^(a|aa)+b$'` against forty a's does not finish. GNU builds an
+   ; automaton and walks the string once; this does not, and making it do so is a
+   ; different engine, not a repair.
+   ; the budget is what this one can afford: a step count spent ONLY by the repeats
+   ; that can nest, reset once per find, and a scare when it runs out. A pattern that
+   ; says "too costly" out loud beats one that never comes back.
+   ; ⚠ the cost lands on nothing else. `renests?` asks at COMPILE time, so an
+   ; ordinary repeat -- [0-9]+, .*, a\{2,5\} -- compiles to the same rrepc it always
+   ; did and its inner loop never reads the cell. `recomp`'s fourth word says whether
+   ; a matcher spends the budget at all, so the drivers do not even reset it for one
+   ; that cannot.
+   ; ⚠ one cell, so a nested find (sed's s/// inside a walk that is itself matching)
+   ; shares it. the reset is per top-level find and the only cost of sharing is an
+   ; early "too costly" in a corner that is already pathological.
+   ; ⚠ A FUNCTION, not `relimit 200000`. module 're is walked while post.l is itself
+   ; still loading, so a VALUE binding here is read before the letrec reaches it and
+   ; love0's boot floods `;; missing relimit` -- while the built love, whose image
+   ; already holds the module, is perfectly happy. A call defers, which is the same
+   ; rule a catted crew file lives under. (A module of one's own, loaded after the
+   ; boot, shows none of this: the shape only bites inside post.l.)
+   (relimit _) 200000
+   (renests? nd)                                 ; can this ATOM match a span two ways?
+    (nd @ ['alt _]     1
+          ['rep _ _ _] 1
+          ['grp _ sub] (any renests? sub)
+          0)
    ; the charm a match must open with, or (). only ever answered for a first node
    ; that has to consume one -- a repeat that can take nothing answers (), so the
    ; skip never steps over a match. nil? is zero?, so a NUL needle reads as absent
@@ -1593,8 +1623,19 @@
                                   (l @ (b . more)
                                      (b s i sp (\ j sp2 (tail s j sp2 k)) || try more))
                                  (try bs))))
+          ; the budgeted twin is chosen HERE, once, off the atom's shape -- so a
+          ; repeat that cannot nest is compiled to exactly the loop it always was
+          ; ⚠ the counter is born HERE, in the closure, so it is one per ENTRY to this
+          ; repeat -- per starting position for a top-level one -- and there is no
+          ; module-level cell to bake, to reset per find, or to share with a nested
+          ; match. A repeat inside another gets a fresh budget per outer step, which
+          ; is a looser bound than one counter would give and still a bound.
           ['rep a lo hi] (: ab (recompm [a])
-                            (\ s i sp k (rrepc ab lo hi tail s i sp k 0))))
+                            (? (renests? a)
+                               (\ s i sp k (: b (tablet 0)
+                                              _ (pin b 0 (relimit ()))
+                                              (rrepb b ab lo hi tail s i sp k 0)))
+                               (\ s i sp k (rrepc ab lo hi tail s i sp k 0)))))
    ; the repeat: try one more (progress required), else the tail once fed.
    ; an empty iteration cannot repeat -- that guard is what stops `\(\)*` spinning
    ; -- but it still satisfies the minimum, all at once. without that second half
@@ -1606,6 +1647,21 @@
                (ab s i sp
                    (\ j sp2 (j = i ? (cnt < lo ? (tail s j sp2 k))
                               (rrepc ab lo hi tail s j sp2 k (cnt + 1)))))
+               ())
+       (? more more
+          (cnt < lo) ()
+          (tail s i sp k)))
+   ; rrepc's twin, one step poorer each turn. the ONLY difference is the two lines
+   ; at the top -- the loop below them is rrepc's, kept side by side rather than
+   ; folded together with a flag, because a flag would be read on every step of
+   ; every ordinary pattern and that is the cost this whole arrangement avoids.
+   (rrepb b ab lo hi tail s i sp k cnt)
+    (: n (peep b 0 0)
+       _ (? (n < 1) (scare 'regex-too-costly (relimit ())) (pin b 0 (n - 1)))
+       more (? (!hi || cnt < hi)
+               (ab s i sp
+                   (\ j sp2 (j = i ? (cnt < lo ? (tail s j sp2 k))
+                              (rrepb b ab lo hi tail s j sp2 k (cnt + 1)))))
                ())
        (? more more
           (cnt < lo) ()
