@@ -197,6 +197,16 @@
            "and $~(1 << 2), %rax // clear\n or $((1 << 9) | (1 << 10)), %rax")
    _ (law2 "lens.semi" '((op xor 4 ((rg 2 4) (rg 2 4))) (op mov 4 ((rg 0 4) (im 1))) (op div 4 ((rg 1 4))))
            "xorl %edx,%edx; movl $1,%eax; divl %ecx;")
+   ;; -- the decoder (src/core/holo/decode.l) over the same battery: the golden bytes read back
+   ;;    to the value the source reads to (labels aside -- a decoded target is an address), and
+   ;;    re-encode to the golden bytes through the relabelled rows. --
+   (hexv c) (? (48 <= c <= 57) (c - 48) (97 <= c <= 102) (c - 87) (c - 55))
+   (unhex h) (string (map (\ i (hexv (h (2 * i)) * 16 + hexv (h (2 * i + 1)))) ^(#h // 2)))
+   (law3 name want src)
+      (: rows (x64-disasm (unhex want) 0)
+         _ (? (has? src ":") 0 (chk-eq (name + ".decode") (att-read src) (catmap (r \ r 2) rows)))
+         (chk-eq (name + ".decode.hex") want (as-hexv (x64-relabel rows))))
+   _ (foldl (\ _ t (law3 (t 0) (t 1) (t 2))) 0 tests)
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (sayln $ "test/holo/as: " + show np + " passed, " + show nf + " failed\n")
    _ (? (0 = nf) 0 (quit 1)))
