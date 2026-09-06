@@ -48,6 +48,21 @@ every row below it and every `find -exec` loop in a build script; it is measured
 never folded into an applet's number. ⚠ On any input under a megabyte this number *is*
 the measurement, which is why the work corpus is eight.
 
+It is compute, not I/O: `love -e 0` is 220.6M instructions, 469 page faults and 34
+syscalls, flat across `LOVE_BUDGET_MB` from 16 to 1024. Under `perf` 94% of it is the
+image — `img_wake` 46%, `img_expand` 39%, `inf_run` 4%, `img_decode_cold` 4% — and
+`LOVE_NO_IMAGE=1` is 1,648 ms, so the image is emphatically earning its keep. The whole
+25 ms is love waking, not kore loading: `love kore cat /dev/null` costs what `love -e 0`
+costs, and the applet registry is free.
+
+⚠ **this row is a per-process cost, and a shell is what decides how many processes there
+are.** Under **lush**(1) with the distro's shadow PATH a whole session pays it once: a word
+whose PATH winner is this binary either runs in the shell's own process or forks without
+exec'ing, so the child rides the heap that is already warm. Measured on the shadow PATH,
+five `cat FILE` commands cost 31 ms together rather than 5 × 35 ms, and `ls | wc -l` five
+times over — ten love processes — costs 43 ms. So the number above is what an applet costs
+when something *else* spawns it; it is not what a kore pipeline costs.
+
 ### work — the ordinary corpus
 
 | row | kore | busybox | uutils | gnu |
