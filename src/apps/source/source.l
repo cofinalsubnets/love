@@ -179,7 +179,7 @@
           (: out (root + "/out/love")
              (? (src-same? exe out)
                (puts (";; fixpoint ok -- " + out + "\n"), 0)
-              (say err ";; FIXPOINT NOT OK\n", 1)))))
+              (say err ";; fixpoint failed\n", 1)))))
 
    ; the cross door: we are a cross compiler carrying our own source, so a seed
    ; lays a seed for a machine it is not -- which is the portability story now
