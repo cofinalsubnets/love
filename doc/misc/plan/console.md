@@ -76,10 +76,15 @@ that is a compiler.
   story [LEVEL | ROOT]`, `love design [LEVEL]`, `love rove`. the hand is vi's: `:`
   opens a command line at the foot, :q leaves and nothing else does, esc backs out
   of anything; a map bigger than the screen scrolls under you, a margin in from the
-  edges. OPEN: a level's own logic (a dialog step that runs level code); tiles with
-  a colour of their own (quay carries fg and bg per cell; fonts too, but a tty
-  cannot show those, so fonts wait); transparent walls for outdoor maps; the page's
-  library catalogue, laid by make web.
+  edges. a level carries a palette, (tiles (CH GLYPH FG BG SOLID) ..): each map
+  character names a kind with the glyph it shows, its two pens (xterm's 256, -1 the
+  terminal's own) and whether it stops you -- so a solid tile that shows nothing is
+  the outdoors' unseen edge, and the sea is a wall with pens. things carry pens too.
+  the designer paints with a brush (1-9 the palette's, # and ., `a` a new kind in one
+  line, `c` the pens of the brush or of the thing here, space paints) and moves like
+  the map, yubn included. OPEN: a level's own logic (a dialog step that runs level
+  code); fonts per cell (quay carries them; a tty cannot show them, so they wait for
+  the page's console); the page's library catalogue, laid by make web.
 - **rung 3 -- the wasm backend**, doc/misc/plan/moon-wasm.md rungs 0-5: the module
   writer, control flow by dispatch loop, the type law, the environment (a nolibc face
   where the handful of system calls are imports the page supplies, and a loader of a

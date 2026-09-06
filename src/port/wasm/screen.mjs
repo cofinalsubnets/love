@@ -105,10 +105,10 @@ key(32); pump(); await beat(); ok(!pump(), 'any key: ink steps ashore on the nex
 ev('(web-boot "lighthouse" 60 14)');
 ok(pump(), 'the lighthouse boots and lives');
 { const { hdr } = view(); ok(hdr[0] === 14 && hdr[1] === 60, `story screen ${hdr[0]}x${hdr[1]}`);
-  ok(row(8, 60)[4] === '@', 'you stand on the map: ' + JSON.stringify(row(8, 60).slice(0, 12)));
+  ok(row(8, 60)[6] === '@', 'you stand on the map: ' + JSON.stringify(row(8, 60).slice(0, 14)));
   ok(row(13, 60).startsWith(' the lighthouse'), 'the status line: ' + JSON.stringify(row(13, 60).trim())); }
 key(107); ok(pump(), 'a key moves you');
-ok(row(7, 60)[4] === '@', 'up one: ' + JSON.stringify(row(7, 60).slice(0, 12)));
+ok(row(7, 60)[6] === '@', 'up one: ' + JSON.stringify(row(7, 60).slice(0, 14)));
 for (const c of 'kkkkk') key(c.charCodeAt(0));
 ok(pump(), 'into the lamp: a window opens');
 ok(view().cells.length && Array.from({ length: 14 }, (_, r) => row(r, 60)).join('\n').includes('the lamp'), 'the window names the thing');

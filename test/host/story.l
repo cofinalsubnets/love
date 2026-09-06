@@ -26,20 +26,28 @@
 
    ; --- the level file, and its round trip ---
    L (load-level "src/apps/rove/levels/lighthouse.l")
-   _ (assert L (9 = (L 'w)) (12 = (L 'h)) (4 = (L 'sx)) (8 = (L 'sy))
+   _ (assert L (13 = (L 'w)) (14 = (L 'h)) (6 = (L 'sx)) (8 = (L 'sy))
              (= '(lamp sign) (sort (keys (L 'things))))
-             ("*" = (L 'things 'lamp 'gl))
+             ("*" = (L 'things 'lamp 'gl)) (220 = (L 'things 'lamp 'fg))
              (= (data-of (level-of <(sound (level-text L)))) (data-of L)))   ; a shown level reads back
-   _ (assert (35 = tile L 0 0) (46 = tile L 1 1) (35 = tile L -1 5) (35 = tile L 4 99))   ; off the map is wall
+   ; the palette: the space is a wall that shows nothing, the water a wall with pens, the
+   ; floor a floor; a character the palette lacks is a floor drawn as itself
+   _ (assert (4 = tally (keys (L 'tiles))) (wall? L 0 0) (" " = (kind-of L 32) 'gl) (wall? L 0 12) (27 = (kind-of L 126) 'fg)
+             !(wall? L 3 1) (wall? L 2 0) (wall? L -1 5) (wall? L 4 99)      ; off the map is wall
+             !((kind-of L 120) 'solid) ("x" = (kind-of L 120) 'gl))
 
    ; --- the map: moves, walls, a thing ---
    g (story-new L)
    _ (keys! g "l")
-   _ (assert (5 = (g 'x)) (8 = (g 'y)) !(g 'win))
+   _ (assert (7 = (g 'x)) (8 = (g 'y)) !(g 'win))
    _ (keys! g "jjjj")                                 ; the south wall stops you
    _ (assert (10 = (g 'y)))
    _ (keys! g "h")                                    ; under the sign
-   _ (assert (4 = (g 'x)) (10 = (g 'y)) !(g 'win))
+   _ (assert (6 = (g 'x)) (10 = (g 'y)) !(g 'win))
+   _ (keys! g "y")                                    ; a diagonal up and west, and back down
+   _ (assert (5 = (g 'x)) (9 = (g 'y)))
+   _ (keys! g "n")
+   _ (assert (6 = (g 'x)) (10 = (g 'y)))
    _ (keys! g "k")                                    ; bump: the sign opens, you stay
    _ (assert (g 'win) ("the sign" = (g 'win 'title)) (10 = (g 'y)) (has? <(g 'win 'lines) "KEEPER OUT"))
    _ (keys! g "\r")                                   ; enter: the next page
@@ -61,8 +69,12 @@
    g2 (story-new L)
    f (plain (story-frame g2 30 14))
    rows (split "\r\n" f)
-   _ (assert (14 = tally rows) (64 = (rows 8) 4) (42 = (rows 2) 4) (63 = (rows 9) 4)
-             (has? (rows 13) "the lighthouse") (has? (rows 13) "@ 4,8"))
+   _ (assert (14 = tally rows) (64 = (rows 8) 6) (42 = (rows 2) 6) (63 = (rows 9) 6)
+             (32 = (rows 0) 0) (35 = (rows 0) 2) (126 = (rows 12) 0)             ; the unseen wall, the seen, the water
+             (has? (rows 13) "the lighthouse") (has? (rows 13) "@ 6,8"))
+   ; the pens: the water's fg and bg, the floor's fg with the terminal's own bg
+   fp (story-frame g2 30 14)
+   _ (assert (has? fp "\e[38;5;27m\e[48;5;17m~") (has? fp "\e[38;5;240m\e[49m."))
    _ (keys! g2 "kkkkkk")                              ; up the shaft to the lamp
    _ (assert (g2 'win) ("the lamp" = (g2 'win 'title)))
    f2 (plain (story-frame g2 70 20))
@@ -73,7 +85,7 @@
    _ (keys! g2 "\e")
 
    ; --- the view scrolls: a map wider and taller than the screen follows you ---
-   big (level "wide" 1 1 (map (\ y (: (go x acc) (? (x < 60) (go (x + 1) (acc + (? (y = 0 || y = 29 || x = 0 || x = 59) "#" "."))) acc) (go 0 ""))) (jot 30)) {})
+   big (level "wide" 1 1 (map (\ y (: (go x acc) (? (x < 60) (go (x + 1) (acc + (? (y = 0 || y = 29 || x = 0 || x = 59) "#" "."))) acc) (go 0 ""))) (jot 30)) {} {})
    g4 (story-new big)
    f4 (plain (story-frame g4 20 10))
    r4 (split "\r\n" f4)

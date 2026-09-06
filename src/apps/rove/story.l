@@ -2,9 +2,13 @@
 ;
 ; a level is a datum in a file (src/apps/rove/levels) the reader and printer round-trip,
 ; so the designer (design.l) edits what this file plays:
-;   (level TITLE (start X Y) (map ROW ..) (things (ID X Y GLYPH NAME STEP ..) ..))
-; the map's rows are tiles: # a wall, anything else floor. a thing sits on a tile with
-; a glyph, and bumping it opens its dialog: a window over the map that plays the
+;   (level TITLE (start X Y) (map ROW ..)
+;     (tiles (CH GLYPH FG BG SOLID) ..) (things (ID X Y GLYPH FG BG NAME STEP ..) ..))
+; the map's rows are characters, and the palette says what each is: the glyph it
+; shows, its pens (xterm's 256; -1 the terminal's own), and whether it stops you --
+; a solid tile that shows nothing is a wall you cannot see, the outdoors' edge. a
+; character the palette lacks is # a wall or a floor drawn as itself. a thing sits on
+; a tile with a glyph and pens, and bumping it opens its dialog: a window over the map that plays the
 ; thing's steps -- (say TEXT ..) pages of words, (ask) a prompt -- and the prompt is
 ; where the words go free: an interpreter takes a line (read X, open X, look, help, or a
 ; love form, evaluated) and answers into the window. only inside a window; on the map
@@ -23,35 +27,44 @@
 ; usage: love story [LEVEL.l | ROOT]      a level file (default src/apps/rove/levels/lighthouse.l),
 ;                                         or a root to lift the library from (src/apps)
 (module (story story-main story-run story-new story-key story-frame open-window window-say
-         level thing level-of data-of level-text load-level save-level library
-         tile thing-at wrap joins)
+         level kind thing level-of data-of level-text load-level save-level library
+         tile kind-of wall? thing-at pen wrap joins)
 (:
  ; --- levels as data ------------------------------------------------------------
- ; in play: level {'title 'rows (strings) 'w 'h 'sx 'sy 'things {id thing ..}}; a thing
- ; {'id 'x 'y 'gl 'name 'steps (the dialog) 'books {word file ..}} -- books are the
- ; library's, a hand level's things carry none
- (level title sx sy rows things) (: w (foldl (\ a r (#r < a ? a #r)) 0 rows)
-                                    {'title title 'sx sx 'sy sy 'rows rows 'w w 'h #rows 'things things})
- (thing id x y gl nm steps) {'id id 'x x 'y y 'gl gl 'name nm 'steps steps 'books {}}
+ ; in play: level {'title 'rows (strings) 'w 'h 'sx 'sy 'tiles {ch kind ..} 'things {id
+ ; thing ..}}; a kind {'ch 'gl 'fg 'bg 'solid}; a thing {'id 'x 'y 'gl 'fg 'bg 'name
+ ; 'steps (the dialog) 'books {word file ..}} -- books are the library's, a hand
+ ; level's things carry none
+ (level title sx sy rows tiles things) (: w (foldl (\ a r (#r < a ? a #r)) 0 rows)
+                                          {'title title 'sx sx 'sy sy 'rows rows 'w w 'h #rows 'tiles tiles 'things things})
+ (kind ch gl fg bg solid) {'ch ch 'gl gl 'fg fg 'bg bg 'solid solid}
+ (thing id x y gl fg bg nm steps) {'id id 'x x 'y y 'gl gl 'fg fg 'bg bg 'name nm 'steps steps 'books {}}
+ ; the palette's defaults: # a wall, anything else a floor drawn as itself
+ (kind-of lvl c) (: k (lvl 'tiles c)
+                    (? k k (c = 35) (kind 35 "#" 242 -1 1) (kind c (string c) 238 -1 ())))
  (tile lvl x y) (: rows (lvl 'rows)
                    (? (0 <= y < lvl 'h && 0 <= x < #(rows y)) ((rows y) x) 35))   ; off the map is wall
- (wall? lvl x y) (tile lvl x y = 35)
+ (wall? lvl x y) (: k (kind-of lvl (tile lvl x y)) (? (k 'solid) 1 0))
  (thing-at lvl x y) (: ts (filter (id \ lvl 'things id 'x = x && lvl 'things id 'y = y) (keys (lvl 'things)))
                        (two? ts ? (lvl 'things <ts) ()))
 
  ; the file's datum -> the level in play, and back. a shown level is a legal file.
  (part k l) (: p (filter (x \ two? x && <x = k) l) (two? p ? ><p ()))
  (level-of d) (: st (part 'start >d)
-                 things (foldl (\ t r (pin t <r (thing <r (r 1) (r 2) (r 3) (r 4) (drop 5 r)))) {} (part 'things >d))
-                 (level (d 1) (? (two? st) <st 1) (? (two? st) (st 1) 1) (part 'map >d) things))
- (data-of lvl) (: (row id) (: t (lvl 'things id) ([id (t 'x) (t 'y) (t 'gl) (t 'name)] + (t 'steps)))
+                 tiles (foldl (\ t r (pin t (<r 0) (kind (<r 0) (r 1) (r 2) (r 3) (? (r 4) 1 ())))) {} (part 'tiles >d))
+                 things (foldl (\ t r (pin t <r (thing <r (r 1) (r 2) (r 3) (r 4) (r 5) (r 6) (drop 7 r)))) {} (part 'things >d))
+                 (level (d 1) (? (two? st) <st 1) (? (two? st) (st 1) 1) (part 'map >d) tiles things))
+ (data-of lvl) (: (trow c) (: k (lvl 'tiles c) [(string c) (k 'gl) (k 'fg) (k 'bg) (k 'solid ? 'wall ())])
+                  (row id) (: t (lvl 'things id) ([id (t 'x) (t 'y) (t 'gl) (t 'fg) (t 'bg) (t 'name)] + (t 'steps)))
                   ['level (lvl 'title) ['start (lvl 'sx) (lvl 'sy)] ('map . lvl 'rows)
+                   ('tiles . map trow (sort (keys (lvl 'tiles))))
                    ('things . map row (sort (keys (lvl 'things))))])
- ; the map one row per line and a thing per line, so the file reads as a level
+ ; the map one row per line, a tile and a thing per line, so the file reads as a level
  (level-text lvl) (: d (data-of lvl)
+                     (block k) (joins (map (r \ "   " + show r) >(d k)) "\n")
                      ("(level " + show (d 1) + " " + show (d 2) + "\n  (map\n"
-                      + joins (map (r \ "   " + show r) (lvl 'rows)) "\n" + ")\n  (things\n"
-                      + joins (map (r \ "   " + show r) >(d 4)) "\n" + "))\n"))
+                      + joins (map (r \ "   " + show r) (lvl 'rows)) "\n" + ")\n  (tiles\n"
+                      + block 4 + ")\n  (things\n" + block 5 + "))\n"))
  (load-level p) (: q (open p "r")
                    (? !(hot? q) ()
                       (: s (slurp q) _ (close q) r (sound s)
@@ -143,7 +156,7 @@
                 (107 || 65) (move g 0 -1)  (106 || 66) (move g 0 1)
                 121 (move g -1 -1) 117 (move g 1 -1) 98 (move g -1 1) 110 (move g 1 1)
                 58 (pins g 'mode 'cmd 'cmd "" 'msg "")
-                63 (open-window g (thing 'help 0 0 "?" "help" '((say "hjkl yubn and the arrows move you. walk into a thing to talk to it. esc closes a window; :q leaves."))))
+                63 (open-window g (thing 'help 0 0 "?" 220 -1 "help" '((say "hjkl yubn and the arrows move you. walk into a thing to talk to it. esc closes a window; :q leaves."))))
                 27 (pin g 'msg "")
                 g)
         (w 'prompt) (edit-line w 'line c (l \ interp g l) (\ _ (pin g 'win ())))
@@ -158,7 +171,10 @@
  ; a grid of rows is laid as glyphs then the window is written over it, so the port
  ; sees one composed frame; the pens are quay's 256 (rove's palette)
  (pad s n) (#s < n ? (s + ((n - #s) (\ t (t + " ")) "")) (snip s 0 n))
- (pen n) ("\e[38;5;" + show n + "m")
+ ; a pen is a pair (fg bg); -1 is the terminal's own colour on that side
+ (pen p) (: fg <p bg <>p
+            ((fg < 0 ? "\e[39m" ("\e[38;5;" + show fg + "m")) + (bg < 0 ? "\e[49m" ("\e[48;5;" + show bg + "m"))))
+ pen0 '(-1 -1)
  ; the view follows you: its corner slides so you stay a margin in from its edges,
  ; and never past the map's own -- a map inside the view sits at the corner
  (follow g w h) (: lvl (g 'lvl) m 3
@@ -170,17 +186,16 @@
    mh (h - 1)
    _ (follow g w mh)
    vx (g 'vx) vy (g 'vy)
-   ; the map row by row: a wall, a floor, a thing, you -- each cell a glyph and a pen
+   ; the map row by row: the tile's glyph and pens, a thing's, yours -- each cell (glyph . pen)
    spot (foldl (\ t id (: th (lvl 'things id) (pin t [(th 'x) (th 'y)] th))) {} (keys (lvl 'things)))
-   (cell x y) (? (x = g 'x && y = g 'y) [64 228]
-                 (peep spot [x y] 0) (: th (spot [x y]) [((th 'gl) 0) 220])
-                 !(y < lvl 'h && x < #((lvl 'rows) y)) [32 0]           ; past the map: nothing
-                 (wall? lvl x y) [35 242]
-                 [46 238])
-   (row y) (: (go x p acc) (? (x < w) (: c (cell (vx + x) (vy + y)) p2 <>c
-                                          (go (x + 1) p2 (acc + (p2 = p ? "" (pen p2)) + string <c)))
+   (cell x y) (? (x = g 'x && y = g 'y) ["@" 228 -1]
+                 (peep spot [x y] 0) (: th (spot [x y]) [(th 'gl) (th 'fg) (th 'bg)])
+                 !(y < lvl 'h && x < #((lvl 'rows) y)) [" " -1 -1]        ; past the map: nothing
+                 (: k (kind-of lvl (tile lvl x y)) [(k 'gl) (k 'fg) (k 'bg)]))
+   (row y) (: (go x p acc) (? (x < w) (: c (cell (vx + x) (vy + y)) p2 >c
+                                          (go (x + 1) p2 (acc + (= p2 p ? "" (pen p2)) + <c)))
                               acc)
-              (go 0 -1 ""))
+              (go 0 () ""))
    rows (map row (jot mh))
    ; the window: a box of the dialog's lines, its title in the top border, a prompt or
    ; a more-mark at the foot, laid over the rows it covers
@@ -197,7 +212,7 @@
                (map (\ i (? (y0 <= i < y0 + #box)
                             (: r (rows i) b (box (i - y0))
                                ; the pen resets around the box, so the map's colour does not bleed in
-                               (snip-cells r x0 + "\e[0m" + pen 252 + b + pen 238 + (x0 + ww < w ? "" "")))
+                               (snip-cells r x0 + "\e[0m" + pen '(252 -1) + b))
                             (rows i)))
                     (jot mh))))
    _ (each rows2 (r \ say j (r + "\e[0m\e[K\r\n")))
@@ -236,13 +251,13 @@
    (shelf i d) (: p (root + "/" + d)
                   fs (sort (filter (f \ ends? f ".l") (readdir p)))
                   txt (: t (head-of (p + "/" + d + ".l")) (0 < #t ? t ("the " + d + " shelf. source, bound.")))
-                  th (thing (nom d) (3 + 4 * (i % cols)) (2 + 3 * (i // cols)) "|" (d + "'s shelf")
+                  th (thing (nom d) (3 + 4 * (i % cols)) (2 + 3 * (i // cols)) "|" 220 -1 (d + "'s shelf")
                             [['say txt ("books: " + joins (map (f \ snip f 0 (#f - 2)) fs) ", ") "read one, open one, or look."] '(ask)])
                   _ (pin th 'books (foldl (\ t f (pin t (nom (snip f 0 (#f - 2))) (p + "/" + f))) {} fs))
                   th)
    things (foldl (\ t i (: th (shelf i (dirs i)) (pin t (th 'id) th))) {} (jot n))
-   _ (pin things 'hatch (thing 'hatch (w // 2) (h - 2) ">" "the hatch" '((say "a grating in the floor, and the hold below.") (hatch))))
-   (level "the library" 1 1 rows things))
+   _ (pin things 'hatch (thing 'hatch (w // 2) (h - 2) ">" 220 -1 "the hatch" '((say "a grating in the floor, and the hold below.") (hatch))))
+   (level "the library" 1 1 rows {} things))
 
  ; --- the runner: the story on the tty, a key a turn ---------------------------------
  (story-run lvl) (: ws (winsize 0)
