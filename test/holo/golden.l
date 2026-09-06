@@ -1036,6 +1036,52 @@
       ("rv.tp"       "1285"              ((tp r0))))                   ; mv a0, tp (the thread pointer)
    _ (foldl (\ _ t (chk2 (t 0) (t 1) 'rv64 (t 2))) 0 rvtests)
 
+   ;; -- the wasm module writer (src/core/holo/wasm.l): instruction forms -> bytes, each row the
+   ;;    bytes binaryen's wasm-as lays for the same text (memory64 on). the whole-module shape is
+   ;;    test/holo/wasm.l's, run under node by test_holowasm. --
+   wtests '(
+      ("w.i64.const.-1"   "427f"                   ((i64.const -1)))
+      ("w.i64.const.128"  "428001"                 ((i64.const 128)))
+      ("w.i64.const.-129" "42ff7e"                 ((i64.const -129)))
+      ("w.i64.const.max"  "42ffffffffffffffffff00" ((i64.const 9223372036854775807)))
+      ("w.i64.const.min"  "428080808080808080807f" ((i64.const -9223372036854775808)))
+      ("w.i64.const.u64"  "427f"                   ((i64.const 18446744073709551615)))   ; a u64 pattern reads as its i64
+      ("w.i32.const.u32"  "417f"                   ((i32.const 4294967295)))
+      ("w.f64.const"      "44000000000000f83f"     ((f64.const 4609434218613702656)))    ; 1.5's bits
+      ("w.store8.off"     "3c00ac02"               ((i64.store8 0 300)))
+      ("w.ld.st"          "3703082903081100001000" ((i64.store 3 8) (i64.load 3 8) (call_indirect 0 0) (call 0)))
+      ("w.locals.add"     "200020017c"             ((local.get 0) (local.get 1) (i64.add)))
+      ("w.br_table"       "0e02010000"             ((br_table (1 0) 0)))
+      ("w.blocks"         "02400340047e050b"       ((block) (loop) (if i64) (else) (end)))
+      ("w.memory"         "3f004000"               ((memory.size) (memory.grow)))
+      ("w.fc"             "fc0b00fc0a0000fc02"     ((memory.fill) (memory.copy) (i32.trunc_sat_f64_s)))
+      ("w.tail"           "12030000"               ((return_call 3) (unreachable) (unreachable))))
+   _ (foldl (\ _ t (chk-eq (t 0) (t 1) (wins-hex (t 2)))) 0 wtests)
+   ;; the container: leb, names, a memory64 limit, a data segment's i64 offset
+   _ (chk-eq "w.uleb" '(172 2) (uleb 300))
+   _ (chk-eq "w.sleb" '(192 0) (sleb 64))
+   _ (chk-eq "w.name" "03616464" (hexs (wname "add")))
+   _ (chk-eq "w.module.empty" "0061736d01000000" (wasm-hex {}))
+   _ (chk-eq "w.module.mem64" "0061736d010000000504010501040b08010042080b026869"
+             (wasm-hex {'memory '(1 4) 'data '((8 104 105))}))
+   _ (chk-eq "w.module.func" "0061736d0100000001070160027e7e017e030201000707010361646400000a09010700200020017c0b"
+             (wasm-hex {'types '(((i64 i64) (i64))) 'funcs '((0 () ((local.get 0) (local.get 1) (i64.add))))
+                        'exports '(("add" func 0))}))
+   ;; rung 1, the dispatch loop off holo's IR: the skeleton with no label, and with one -- the
+   ;; entry falls into it, the jmp sets the label local and branches to the loop at depth k-j
+   _ (chk-eq "w.fn.skeleton"
+             '(((29 i64) (1 i32) (3 i64) (22 f64))
+               (i32.const 0) (local.set 29) (loop) (block) (local.get 29) (br_table (0) 0)
+               (end) (i64.const 5) (local.set 0) (local.get 0) (return) (end) (unreachable))
+             (wasm-fn '((li r0 5) (ret)) 0 {}))
+   _ (chk-eq "w.fn.label"
+             '(((28 i64) (1 i32) (3 i64) (22 f64))
+               (i32.const 0) (local.set 29) (loop) (block) (block) (local.get 29) (br_table (0 1) 0)
+               (end) (local.get 0) (local.set 30) (i64.const 0) (local.set 31)
+               (end) (local.get 30) (local.get 31) (i64.eq) (if) (i32.const 1) (local.set 29) (br 1) (end)
+               (i32.const 1) (local.set 29) (br 0) (end) (unreachable))
+             (wasm-fn '((cmp r0 0) (label top) (br eq top) (jmp top)) 1 {}))
+
    ;; -- summary; nonzero exit on any miss, so `make`-style gates see the failure. --
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (sayln $ "test/holo/golden: " + show np + " passed, " + show nf + " failed\n")

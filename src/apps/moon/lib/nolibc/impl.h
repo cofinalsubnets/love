@@ -55,7 +55,7 @@ extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
  * lays x64 and arm64). Where it is absent netbsd's sigaction refuses BY NAME
  * rather than register a trampoline that is not there; freebsd on the same arch
  * is unaffected. */
-#if !defined(__riscv)
+#if !defined(__riscv) && !defined(__wasm__)   /* wasm's one kernel is the page's loader */
 # define AiOsTranslate 1        /* os.c's tables, and the leaves they call */
 # define AiNbTramp 1            /* netbsd's signal return path */
 #endif

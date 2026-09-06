@@ -7,7 +7,11 @@
 // REPL feeds source through ai_eval, not the stdin port). boot.l is
 // embedded and evaluated once by ai_init.
 #include "love.h"
+#ifdef __EMSCRIPTEN__
 #include <emscripten.h>
+#else
+#define EMSCRIPTEN_KEEPALIVE      // moon's lane exports every extern function; the loader is src/port/wasm/loader.js
+#endif
 #include <time.h>
 #include <stdlib.h>
 #include <string.h>

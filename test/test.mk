@@ -9,12 +9,12 @@
   moon-bzip2 moon-bzip2-a64 moon-bzip2-rv64 moon-gzip moon-gzip-a64 moon-gzip-rv64 \
   moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
-  test_as test_asmops test_bakerep test_big test_cca64 test_ccrv64 test_ccthumb1 \
+  test_as test_asmops test_bakerep test_big test_cca64 test_ccrv64 test_ccwasm test_ccthumb1 \
   test_ccthumb2 test_clay test_cli test_cookdiff test_cpio test_cts test_cts_a64 \
   test_cts_rv64 test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_front test_gc test_gcheck test_gcstress \
-  test_gen test_glaze test_glazefuzz test_gz test_hdiff test_holo test_holofuzz test_hook \
+  test_gen test_glaze test_glazefuzz test_gz test_hdiff test_holo test_holofuzz test_holowasm test_hook \
   test_host test_hostegg test_hostnif test_inle test_kboot test_kernel_a64 test_kernel_rv64 test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
@@ -41,7 +41,7 @@ test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpu
 # really slow gate
 test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_uulean test_uuwm \
 	test_uukind test_gc test_gcheck test_gcstress test_extract test_big test_mx \
-	test_tools test_web test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as \
+	test_tools test_web test_hostnif test_doc test_glaze test_hook test_sat test_holo test_holowasm test_as \
 	test_holofuzz test_glazefuzz test_encver test_lux test_kore test_refuzz test_sb test_vi \
 	test_moon test_clay test_moonfuzz test_forge \
 	test_cts test_libc test_ulp test_raw \
@@ -49,7 +49,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
 	test_asmops test_dtb test_rvboot test_elf32 test_objcopy test_distboot test_fat test_wasm \
-	test_rv64 test_cca64 test_ccrv64 test_ccthumb1 test_ccthumb2 test_cts_a64 test_cts_rv64 \
+	test_rv64 test_cca64 test_ccrv64 test_ccwasm test_ccthumb1 test_ccthumb2 test_cts_a64 test_cts_rv64 \
 	test_raw_a64 test_raw_rv64 \
 	test_virt test_thumb1 test_thumb2 test_thumb2sp \
 	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446 test_nucleo446_smoke \
@@ -493,6 +493,9 @@ test_cca64: host
 	@sh test/gate/ccarch.sh a64 $(ho) $m
 test_ccrv64: host
 	@sh test/gate/ccarch.sh rv64 $(ho) $m
+# test_ccwasm -- the same battery on the WASM target, node as the machine (ccwasm.sh)
+test_ccwasm: host
+	@sh test/gate/ccwasm.sh $(ho) $m
 # test_ccthumb1 / test_ccthumb2 -- the same battery on the DEVICE CPUs, where ccarch.sh's
 # procedure cannot reach: M-profile has no qemu-user lane and is ILP32, so x64 is neither
 # runnable nor the right oracle. arm-none-eabi-gcc's build of the same source, on the same
@@ -894,7 +897,7 @@ test_holo: host
 	@echo TEST test/holo/golden.l
 	@cat src/core/holo/holo.l src/core/holo/x64.l src/core/holo/a64.l src/core/holo/thumb2.l \
 	    src/core/holo/rv64.l src/core/holo/thumb1.l src/core/holo/text.l src/core/holo/gas.l src/core/holo/elf.l \
-	    test/holo/golden.l | sh test/gate/run.sh holo "$m" ", 0 failed"
+	    src/core/holo/wasm.l src/core/holo/wasmfn.l test/holo/golden.l | sh test/gate/run.sh holo "$m" ", 0 failed"
 # as.l -- the real AT&T x86-64 front over holo. test/holo/as.l's goldens are byte-identical
 # to /usr/bin/as (frozen, no shell-out at gate time). Same sentinel gate as test_holo.
 # asrefuse.sh is the other half: what must RAISE, one love per case.
@@ -1247,6 +1250,26 @@ test_wasm:
 	@echo TEST out/wasm/love.js "(node)"
 	@$(NODE) $(R)/src/port/wasm/test.mjs --love $(R)/out/wasm/love.js $t
 	@$(NODE) $(R)/src/port/wasm/screen.mjs --love $(R)/out/wasm/love.js
+endif
+
+# the wasm module writer and the IR lowering (src/core/holo/wasm.l) under a foreign engine:
+# love lays three modules (the writer's by hand, the program's off holo IR, a mock of the
+# artifact's face), binaryen validates them where the box has one, node instantiates and
+# runs them -- the third through src/port/wasm/loader.js, the artifact's own environment.
+# skips without node.
+WASMOPT ?= $(shell command -v wasm-opt 2>/dev/null)
+wasmopt_flags = --enable-memory64 --enable-bulk-memory --enable-nontrapping-float-to-int
+holo_wasm = out/.holo.wasm out/.holo2.wasm out/.holo3.wasm
+ifeq ($(NODE),)
+test_holowasm:
+	@echo "test_holowasm: skipped (needs node)"
+else
+test_holowasm: host
+	@echo TEST test/holo/wasm.l
+	@cat src/core/holo/holo.l src/core/holo/wasm.l src/core/holo/wasmfn.l test/holo/wasm.l | $m
+	@$(if $(WASMOPT),for w in $(holo_wasm); do $(WASMOPT) $(wasmopt_flags) $$w -o /dev/null 2>/dev/null || exit 1; done && echo "  wasm-opt: all valid",echo "  wasm-opt: absent, node alone validates")
+	@$(NODE) test/holo/wasm.mjs out/.holo.wasm out/.holo2.wasm
+	@$(NODE) test/holo/loader.mjs out/.holo3.wasm
 endif
 
 # --- the two binary-shape gates, both skipping when their tool is absent ---

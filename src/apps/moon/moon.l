@@ -209,6 +209,7 @@
    (archdefs tgt)
    (tgt @ 'a64                          '("__aarch64__")
           'rv64                        '("__riscv")
+          'wasm                        '("__wasm__" "__wasm64__")
           ('thumb2 || 'thumb2sp || 'thumb1) '("__arm__" "__arm")
                                           '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
    ; the OS predefines, the driver's like the arch's: -os picks, and unnamed is
@@ -435,8 +436,10 @@
    (cc-objbytes src (t @ {'ni ni 'tgt tgt}))
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs]
+       ; wasm rides gen's rv64 lane whole (src/core/holo/wasmfn.l is the machine under it) and
+       ; lays no ELF: its object is the gen tuple as text, read back by the wasm link
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni] tgt)
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni] (? (= tgt 'wasm) 'rv64 tgt))
           _ (? (okv? ob) () (ccdie ob src ("cc: codegen error in " + src)))
           (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns]
              (: xs (map (\ [nm forms ro] (objsec-named nm forms ro)) xsecs
@@ -444,7 +447,9 @@
                 ; the two writers, one shape: the standard set for the width, plus whatever
                 ; the TU named. arm32 has no .image lane and no local func symbols for
                 ; statics -- objsecs3 refuses the first, and `lnames` simply doesn't ride.
-                (? (arm32? tgt)
+                (? (= tgt 'wasm)
+                   (show [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks])
+                   (arm32? tgt)
                    (objsecs32 tgt (objsecs3 tgt tforms dforms nforms iforms bforms rforms + xs)
                               fnames gnames weaks)
                    (objsecs tgt (objsecs4 tforms dforms nforms iforms bforms rforms + xs)
@@ -874,7 +879,65 @@
              ; scares about first.
              _ (? (two? <>pr) (undie <>pr) 0)
              <pr)))
-   (cc-link ins dst (t @ {'is is 'ds ds 'tgt tgt 'os os 'pie pie 'org org 'dorg dorg
+   ; -- the wasm link (src/core/holo/wasmfn.l): the objects are gen tuples as text, the
+   ; runtime the same members compiled for wasm and pulled by need, and one function
+   ; imported -- __ai_sys, the syscall door the page's loader answers. crt0 hands nolibc's
+   ; __ai_start a stack laid in data (argc 1, an argv, empty envp and auxv) and exits with
+   ; its answer through the import; the weak default calls main outright.
+   (wasm-tu text) (: r (sound text) (? (two? r && two? <r) <r (udie 1 "cc: not a wasm object")))
+   crt0-wasm '(((label _start) (la r0 __ai_osstack) (call __ai_start) (mov r1 r0) (li r0 231) (call __ai_sys) (ret)
+                (label __ai_start) (push lr) (lea r1 r0 8) (ld r0 r0 0) (call main) (pop lr) (ret))
+               ((label __ai_osstack) (raw (1 0 0 0 0 0 0 0 (fix 8 abs64 __ai_argv0 0) 0 0 0 0 0 0 0 0
+                                           0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
+                (label __ai_argv0) (raw (97 46 111 117 116 0)))
+               ("_start" "__ai_start") ("__ai_osstack") () () () () () () () ("__ai_start"))
+   ; the runtime for wasm: rtmems' members under the wasm target (text objects), cached
+   ; whole as one text under the same key law as the ELF archives -> ((name text) ..)
+   (wasm-rt home os vb)
+    (: id (? (string? home) (mcid home) ())
+       cd (? (string? id) (mcdir ()) ())
+       k (? (string? cd && string? id) (sha256 $ id + "\nwasm\n" + show os) ())
+       hit (? (string? k) (mcget cd (k + ".wrt") "wrt1\n") ())
+       _ (? (two? hit) (utime (cd + k + ".wrt") (clock ())) 0)
+       txt (? (two? hit) (snip <>hit 5 (tally <>hit))
+              (: s (show (rtmems home 'wasm os vb))
+                 _ (? (string? k) (mcput cd (k + ".wrt") ("wrt1\n" + s)) 0)
+                 s))
+       <(sound txt))
+   (cc-wasm ins dst (t @ {'tgt tgt 'os os 'nostd nostd 'vb vb}))
+    (: os9 (? (= os ()) 'linux os)                    ; the loader speaks linux's numbers
+       t9 (pin t 'os os9)
+       tus (map (\ f (? (dotc? f) (wasm-tu (cc-objbytes f t9))
+                        (doto? f) (: r (uread f) (? (two? r) (wasm-tu <>r) (udie 1 ("cc: cannot open " + f))))
+                        (udie 2 ("cc: not a .c/.o input for wasm: " + f))))
+                ins)
+       ; the runtime by need: a member whose defs meet an owed name joins, and its own
+       ; wants join the owe, until nothing more is owed or nothing more answers
+       ledger (\ tus (: defs {} refs {}
+                        _ (map (\ tu (: s (wasm-tu-syms tu)
+                                        _ (map (\ d (pin defs d 1)) <s)
+                                        (map (\ r (pin refs r 1)) >s)))
+                               tus)
+                        (filter (\ r !(peep defs r 0)) (keys refs))))
+       ; crt0 rides when an input defines main; a module with a face of its own (the wasm
+       ; seat's host.c, which the page enters at ai_init) links without an entry
+       base (? (foldl (\ a tu (a || member? "main" (tu 2))) 0 tus) (crt0-wasm . tus) tus)
+       owed0 (ledger base)
+       home (? (two? owed0 && !nostd) (mhome ()) ())
+       rt (? (two? owed0 && !nostd) (wasm-rt home os9 vb) ())
+       mems (map (\ m [(m 0) (wasm-tu (m 1)) (<(wasm-tu-syms (wasm-tu (m 1))))]) rt)
+       (pull set owed)
+        (: hit (filter (\ m (foldl (\ a d (a || member? d owed)) 0 (m 2))) mems)
+           new (filter (\ m !(member? m set)) hit)
+           (? !(two? new) set
+              (: set2 (set + new) (pull set2 (ledger (base + map (\ m (m 1)) set2))))))
+       picked (pull () owed0)
+       all (base + map (\ m (m 1)) picked)
+       m (wasm-link all {'imports '("__ai_sys") 'exports 'all})
+       nw (write-bytes dst (wasm-emit m))
+       0)
+   (cc-link ins dst t) (? (= (peep t 'tgt ()) 'wasm) (cc-wasm ins dst t) (cc-link-elf ins dst t))
+   (cc-link-elf ins dst (t @ {'is is 'ds ds 'tgt tgt 'os os 'pie pie 'org org 'dorg dorg
                           'nostd nostd 'vb vb 'ni ni 'rdme rdme}))
     ; -os freebsd links on x64 only (the one lane with a table + mksys twin);
     ; any other tgt under it is refused rather than half-built.
@@ -1145,6 +1208,8 @@
        ; consumers now take `f` itself -- so a `dirn` applied on the way out of one reader
        ; would leave every other consumer holding the raw list. one pin, before anything reads.
        _ (pin f 'is (map dirn (peep f 'is ())))
+       ; wasm's kernel is the page's loader, which speaks linux's numbers: the os unless named
+       _ (? ((= (peep f 'tgt ()) 'wasm) && (= (peep f 'os ()) ())) (pin f 'os 'linux) 0)
        ; no nest on disk anywhere: the carried source answers, in memory --
        ; pinned once here so every TU and the runtime share the one inflate.
        _ (? (string? (mhome ())) 0 (pin f 'vb (mblob ())))
