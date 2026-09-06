@@ -933,7 +933,7 @@ valg: host
 	valgrind --error-exitcode=1 --suppressions=$R/tools/valgrind.supp $m $(ho)/.valg-corpus.l </dev/null
 # the site's faces and its stylesheet, laid and checked in: github pages serves
 # the tree as it is, so a generated file still has to be committed
-web: fonts assets/web/style.css
+web: fonts assets/web/style.css index.html
 fonts: assets/fonts/quay16.woff assets/fonts/quay8.woff
 assets/fonts/quay16.woff: src/core/quay/moderndos_8x16.c tools/mkfont.l $(ho)/.love.baked
 	@mkdir -p $(dir $@)
@@ -941,10 +941,13 @@ assets/fonts/quay16.woff: src/core/quay/moderndos_8x16.c tools/mkfont.l $(ho)/.l
 assets/fonts/quay8.woff: src/core/quay/cga_8x8.c tools/mkfont.l $(ho)/.love.baked
 	@mkdir -p $(dir $@)
 	@$m tools/mkfont.l $< 6 $@ "Quay 8"
-# ..and the front page's stylesheet: config.l's tokyo-night through hueweb, over the layout
-assets/web/style.css: tools/mkstyle.l src/apps/vi/config.l src/apps/vi/hueweb.l $(ho)/.love.baked
+# ..the front page's stylesheet: config.l's tokyo-night through hueweb, over the layout
+assets/web/style.css: web/style.l src/apps/vi/config.l src/apps/vi/hueweb.l $(ho)/.love.baked
 	@mkdir -p $(dir $@)
-	@env -u LOVE_NO_IMAGE $m tools/mkstyle.l $@
+	@env -u LOVE_NO_IMAGE $m web/style.l $@
+# ..and the front page itself, its island the fragment repl.js drives
+index.html: web/index.l src/port/wasm/repl.html $(ho)/.love.baked
+	@$m web/index.l $@
 .PHONY: ulp
 ulp:
 	@mkdir -p out

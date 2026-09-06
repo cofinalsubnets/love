@@ -12,6 +12,9 @@
 
 <nav class="topnav"><a href="#language">language</a> &nbsp;&middot;&nbsp; <a href="#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="#crew">crew</a></nav>
 
+<!-- src/port/wasm/repl.html -- the repl island: the markup src/port/wasm/repl.js drives,
+     its parts found by class. a page carries this block and then love.js and repl.js:
+     web/index.l lays it on the front page, papel on the index of a site built with -r. -->
 <div class="repl">
 <p class="status">loading the image...</p>
 
@@ -95,24 +98,23 @@ don't automatically construct a list for you.</p>
   <dt id="g-book"><a href="#g-book">📒 book</a></dt>
     <dd>aka tablet. a mutable hash table</dd>
   <dt id="g-box"><a href="#g-box">📦 box</a></dt>
-  <dd>a <a href="#g-book">book</a> used as a mutable container for another value</dd>
+    <dd>a <a href="#g-book">book</a> used as a mutable container for another value</dd>
   <dt id="g-cap"><a href="#g-cap">🧢 cap</a></dt>
-  <dd>contents of the above part of the product. aka <code>car</code>/<code>fst</code>/<code>hd</code>. see also: <a href="#g-cup">cup</a> <a href="#g-chain">chain</a> <a href="#g-link">link</a></dd>
+    <dd>contents of the above part of the product. aka <code>car</code>/<code>fst</code>/<code>hd</code>. see also: <a href="#g-cup">cup</a> <a href="#g-chain">chain</a> <a href="#g-link">link</a></dd>
   <dt id="g-chain"><a href="#g-chain">⛓️ chain</a></dt>
-  <dd>a free binary product, aka pair or cons cell. used for lists per lisp usual. indexes its elements (<code>('(7 8 9) -1)</code> is <code>9</code>), joins on another chain (<code>('(1 2) '(3 4))</code> is <code>(1 2 3 4)</code>). see also: <a href="#g-link">link</a> <a href="#g-cap">cap</a> <a href="#g-cup">cup</a>.</dd>
+    <dd>a free binary product, aka pair or cons cell. used for lists per lisp usual. indexes its elements (<code>('(7 8 9) -1)</code> is <code>9</code>), joins on another chain (<code>('(1 2) '(3 4))</code> is <code>(1 2 3 4)</code>). see also: <a href="#g-link">link</a> <a href="#g-cap">cap</a> <a href="#g-cup">cup</a>.</dd>
   <dt id="g-charm"><a href="#g-charm">🧿 charm</a></dt>
     <dd>a register-allocated fixed-width integer, aka fixnum. a type of <a href="#g-star">star</a></dd>
   <dt id="g-church"><a href="#g-church">⛪ church numeral</a></dt>
-    <dd>natural numbers interpreted as iterators. for example, <code>(0 x) = 1</code>, <code>(1 x) = x</code>, <code>(2 x y) = x (x y)</code>, etc.
-      numeral-on-numeral application corresponds to exponentiation. numeral composition corresponds to multiplication.</dd>
+    <dd>natural numbers interpreted as iterators. for example, <code>(0 x) = 1</code>, <code>(1 x) = x</code>, <code>(2 x y) = x (x y)</code>, etc. numeral-on-numeral application corresponds to exponentiation. numeral composition corresponds to multiplication.</dd>
   <dt id="g-coin"><a href="#g-coin">🪙 coin</a></dt>
     <dd>a value of a newtype. see also: <a href="#g-die">die</a></dd>
   <dt id="g-color"><a href="#g-color">🌈 color</a></dt>
     <dd>the sign of a value's <a href="#g-net">net</a>: <span class="hi red"><a href="#g-red">red</a></span>, <span class="hi green"><a href="#g-green">green</a></span> or <span class="hi blue"><a href="#g-blue">blue</a></span></dd>
   <dt id="g-constellation"><a href="#g-constellation">✨ constellation</a></dt>
-  <dd>any numeric type. a <a href="#g-star">star</a> or <a href="#g-galaxy">galaxy</a></dd>
+    <dd>any numeric type. a <a href="#g-star">star</a> or <a href="#g-galaxy">galaxy</a></dd>
   <dt id="g-cup"><a href="#g-cup">🧋 cup</a></dt>
-  <dd>contents of the underneath part of the product. aka <code>cdr</code>/<code>snd</code>/<code>tl</code>. see also: <a href="#g-cap">cap</a> <a href="#g-chain">chain</a> <a href="#g-link">link</a></dd>
+    <dd>contents of the underneath part of the product. aka <code>cdr</code>/<code>snd</code>/<code>tl</code>. see also: <a href="#g-cap">cap</a> <a href="#g-chain">chain</a> <a href="#g-link">link</a></dd>
   <dt id="g-curry"><a href="#g-curry">🍛 curry</a></dt>
     <dd>(verb) to unroll a multi-argument function into a sequence of one-argument functions. see also: <a href="#g-apply">apply</a></dd>
   <dt id="g-die"><a href="#g-die">🎲 die</a></dt>
@@ -124,7 +126,7 @@ don't automatically construct a list for you.</p>
   <dt id="g-green"><a href="#g-green">🟢 green</a></dt>
     <dd><a href="#g-color">color</a> of a value whose net is positive: <code>1 "hi" '(2 3 -1) (\ x x)</code>. boolean true.</dd>
   <dt id="g-hot"><a href="#g-hot">🔥 hot</a></dt>
-  <dd>an opaque internal or external runtime object. conceptually and positionally dual to <a href="#g-mint">mints</a> on the <a href="#g-lattice">lattice</a></dd>
+    <dd>an opaque internal or external runtime object. conceptually and positionally dual to <a href="#g-mint">mints</a> on the <a href="#g-lattice">lattice</a></dd>
   <dt id="g-kind"><a href="#g-kind">🃏 kind</a></dt>
     <dd>a value's type classification under the <a href="#g-lattice">lattice</a></dd>
   <dt id="g-lattice"><a href="#g-lattice">🔷 lattice</a></dt>
@@ -132,29 +134,17 @@ don't automatically construct a list for you.</p>
   <dt id="g-link"><a href="#g-link">🔗 link</a></dt>
     <dd>the <a href="#g-chain">chain</a> constructor, aka <code>cons</code>/<code>(,)</code></dd>
   <dt id="g-mint"><a href="#g-mint">🍬 mint</a></dt>
-  <dd>an otherwise empty unique identifier, aka gensym. conceptually, the non-zero mints fill a plane
-    directly above <span class="hi gray"><a href="#g-nil"><code>()</code></a></span> in the
-    <a href="#g-lattice">lattice</a>.</dd>
+    <dd>an otherwise empty unique identifier, aka gensym. conceptually, the non-zero mints fill a plane directly above <span class="hi gray"><a href="#g-nil"><code>()</code></a></span> in the <a href="#g-lattice">lattice</a>.</dd>
   <dt id="g-name"><a href="#g-name">🪪 name</a></dt>
-    <dd>aka a lisp symbol or erlang atom.
-      formally considered as a <a href="#g-die">die</a> over a <a href="#g-chain">chain</a> of <a href="#g-string">string</a> and <a href="#g-mint">mint</a>.
-    inherits algebra from strings.</dd>
+    <dd>aka a lisp symbol or erlang atom. formally considered as a <a href="#g-die">die</a> over a <a href="#g-chain">chain</a> of <a href="#g-string">string</a> and <a href="#g-mint">mint</a>. inherits algebra from strings.</dd>
   <dt id="g-net"><a href="#g-net">🌐 net (<code>+</code>)</a></dt>
     <dd>a value's content measure, a <a href="#g-star">star</a></dd>
   <dt id="g-nil"><span class="hi gray"><a href="#g-nil">🈚 nil</a></span></dt>
-  <dd>the initial <a href="#g-mint">mint</a>, acting as a global <span class="hi gray">empty</span> element <code>()</code>. <span class="hi blue"><a href="#g-blue">blue</a></span>, algebraically neutral, conceptually the lowest inhabited point of the <a href="#g-lattice">lattice</a>.</dd>
+    <dd>the initial <a href="#g-mint">mint</a>, acting as a global <span class="hi gray">empty</span> element <code>()</code>. <span class="hi blue"><a href="#g-blue">blue</a></span>, algebraically neutral, conceptually the lowest inhabited point of the <a href="#g-lattice">lattice</a>.</dd>
   <dt id="g-red"><a href="#g-red">🔴 red</a></dt>
     <dd><a href="#g-color">color</a> of a value whose net is negative: <code>-1 '(1 2 3 -99999)</code>. boolean false.</dd>
   <dt id="g-sat"><a href="#g-sat">🌊 saturate (<code>$</code>)</a></dt>
-  <dd>retraction of a value's <a href="#g-net">net</a> (a <a href="#g-star">star</a>-typed value)
-    onto the <span class="hi blue"><a href="#g-blue">blue</a></span>-<span class="hi green"><a href="#g-green">green</a></span>
-    <a href="#g-charm">charms</a>, ie. an integer in the interval [0, max-charm].
-    overflow and underflow go to the limit instead of wrapping (saturation).
-    thus <span class="hi green"><a href="#g-green">green</a></span>
-    saturates to <span class="hi green"><a href="#g-green">green</a></span>
-    while both <span class="hi red"><a href="#g-red">red</a></span>
-    and <span class="hi blue"><a href="#g-blue">blue</a></span>
-    saturate to <span class="hi blue"><a href="#g-blue">blue</a></span>.</dd>
+    <dd>retraction of a value's <a href="#g-net">net</a> (a <a href="#g-star">star</a>-typed value) onto the <span class="hi blue"><a href="#g-blue">blue</a></span>-<span class="hi green"><a href="#g-green">green</a></span> <a href="#g-charm">charms</a>, ie. an integer in the interval [0, max-charm]. overflow and underflow go to the limit instead of wrapping (saturation). thus <span class="hi green"><a href="#g-green">green</a></span> saturates to <span class="hi green"><a href="#g-green">green</a></span> while both <span class="hi red"><a href="#g-red">red</a></span> and <span class="hi blue"><a href="#g-blue">blue</a></span> saturate to <span class="hi blue"><a href="#g-blue">blue</a></span>.</dd>
   <dt id="g-star"><a href="#g-star">🌟 star</a></dt>
     <dd>a scalar fixpoint of <a href="#g-net">net</a>: <a href="#g-charm">charm</a>, <a href="#g-sun">sun</a>, <a href="#g-big">big</a>, <a href="#g-gem">gem</a> or <a href="#g-twin">twin</a>.</dd>
   <dt id="g-string"><a href="#g-string">🧵 string</a></dt>
@@ -168,8 +158,7 @@ don't automatically construct a list for you.</p>
   <dt id="g-tray"><a href="#g-tray">📥 tray</a></dt>
     <dd>a shaped array. see also <a href="#g-chain">chain</a>, <a href="#g-galaxy">galaxy</a></dd>
   <dt id="g-truth"><a href="#g-truth">⚖️ truth value</a></dt>
-    <dd>given by the <a href="#g-color">color</a> of a value's <a href="#g-sat">saturated</a> <a href="#g-net">net</a>:
-    <span class="hi blue"><a href="#g-blue">blue</a></span> false, <span class="hi green"><a href="#g-green">green</a></span> true.</dd>
+    <dd>given by the <a href="#g-color">color</a> of a value's <a href="#g-sat">saturated</a> <a href="#g-net">net</a>: <span class="hi blue"><a href="#g-blue">blue</a></span> false, <span class="hi green"><a href="#g-green">green</a></span> true.</dd>
   <dt id="g-twin"><a href="#g-twin">💠 twin</a></dt>
     <dd>a <a href="#g-gem">gem</a>-based complex number, written <code>~(re im)</code>. a type of <a href="#g-star">star</a></dd>
   <dt id="g-unit"><span class="hi gray"><a href="#g-unit">1️⃣ unit</a></span></dt>

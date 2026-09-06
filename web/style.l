@@ -1,6 +1,6 @@
-; tools/mkstyle.l -- the front page's stylesheet, laid from config.l's tokyo-night
+; web/style.l -- the front page's stylesheet, assets/web/style.css, laid from config.l's tokyo-night
 ;
-;   love tools/mkstyle.l OUT.css
+;   love web/style.l OUT.css
 ;
 ; the palette is src/apps/vi/config.l's hue-page table through hueweb's hw-vars, so the
 ; page, `love serve` and the editor read one table; the layout below wears those roles
@@ -13,7 +13,7 @@
 (use "src/apps/vi/hue.l")
 (use 'hueweb)
 
-(: head "/* laid by tools/mkstyle.l from src/apps/vi/config.l's tokyo-night -- edit those, not this.
+(: head "/* laid by web/style.l from src/apps/vi/config.l's tokyo-night -- edit those, not this.
    periwinkle on polar-night blue, green = a kept answer; the crew fly the name space in
    aurora teal/cyan. the quay bitmaps set everything: 8x16 cells, crisp at 16px native
    (so 32px is a clean 2x), and the 8x8 face beside it. both are laid by tools/mkfont.l. */
@@ -158,5 +158,5 @@ footer { margin-top: 3.5em; color: var(--faint); font-size: .85em;
 "
    (main args) (: q (open (args 0) "w")
                   (? (hot? q) (: _ (say q (head + hw-vars 'tokyo-night + frame)) _ (close q) 0)
-                     (: _ (say err ("mkstyle: cannot open " + args 0 + "\n")) (quit 1))))
+                     (: _ (say err ("style: cannot open " + args 0 + "\n")) (quit 1))))
    (main >argv))

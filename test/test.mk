@@ -41,7 +41,7 @@ test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpu
 # really slow gate
 test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_uulean test_uuwm \
 	test_uukind test_gc test_gcheck test_gcstress test_extract test_big test_mx \
-	test_tools test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as \
+	test_tools test_web test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as \
 	test_holofuzz test_glazefuzz test_encver test_lux test_kore test_refuzz test_sb test_vi \
 	test_moon test_clay test_moonfuzz test_forge \
 	test_cts test_libc test_ulp test_raw \
@@ -323,6 +323,16 @@ test_cli: host
 	@echo TEST test/gate/cli.sh "(the cli exit-status lane)"
 	@sh test/gate/cli.sh $m
 
+# the front page and its sheet are laid (web/index.l, web/style.l) and checked in for github
+# pages: a lay that differs from the tree means someone edited a source without `make web`.
+test_web: host
+	@echo TEST web/index.l web/style.l
+	@mkdir -p out/.web
+	@$m web/index.l out/.web/index.html
+	@env -u LOVE_NO_IMAGE $m web/style.l out/.web/style.css
+	@cmp -s out/.web/index.html index.html && cmp -s out/.web/style.css assets/web/style.css \
+	  || { echo "  FAIL: index.html or style.css is behind web/ -- run make web and commit"; exit 1; }
+	@echo "  web: ok -- index.html and style.css are what web/ lays"
 test_sb: host out$(hsuf)/sb
 	@echo TEST src/apps/sb/sb.l + test/host/sb.l
 	@rm -rf out/.sbtest
