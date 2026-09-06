@@ -383,6 +383,7 @@ void ai_sleep(uintptr_t ticks); // per-frontend deep wait for at most `ticks` ai
 struct ai
  *ai_ini(void),
  *ai_ini_m(void*(*)(struct ai*, void*, size_t)),
+ *ai_evals(struct ai*, const char*),      // ..keeping the last form's value at sp[0]
  *ai_evals_(struct ai*, const char*),
  *ai_egg_(struct ai*, char const*, char const*, char const*, char const*),  // (egg, p1, corpus, post)
  *ai_defn(struct ai*, struct ai_def const*, uintptr_t),                // immortal values only

@@ -19,7 +19,7 @@ static intptr_t
  ci_readn(struct ai *g, unsigned char *dst, uintptr_t n);
 static struct ai
  *to_writen(struct ai *g, unsigned char const *src, uintptr_t n),
- *applyq(struct ai *g, char const *driver),
+ *applyq(struct ai *g, char const *driver), *applyq_(struct ai *g, char const *driver),
  *bio_wgrow(struct ai *g),
  *facex(struct ai *g, word x, int d),
  *io_refill(struct ai *g),
@@ -958,19 +958,25 @@ static struct ai *qtop(struct ai *g) {                // x on top -> 'x
  return gxl(pushq(gxr(push0(g)))); }                 // (x), then (\ x)
 
 // apply a one-form driver text (pure lisp, p0-read) to the quoted list on top of
-// the stack: (<driver> '(list))
+// the stack: (<driver> '(list)). the answer stays at sp[0]; applyq_ drops it.
 static struct ai *applyq(struct ai *g, char const *driver) {
  g = p0onto(gxr(push0(qtop(g))), driver);            // ('(list)), then (driver '(list))
- return ai_pop(ai_eval_(g), 1); }
+ return ai_eval_(g); }
+static struct ai *applyq_(struct ai *g, char const *driver) {
+ return ai_pop(applyq(g, driver), 1); }
 
 // the plain eval fold: run a list of forms in order, answer the last one's
 // value. `ev` is read late so one text drives both of love0's passes.
 static char const evfold[] = "((:(e a b)(? b(e(ev 'ev(cap b))(cup b))a)e)0)";
 
-// every top-level form of a text, evaluated in order -- the frontends' door for
-// a boot tail, a CLI driver, a corpus runner.
-ai_noinline struct ai *ai_evals_(struct ai *g, char const *s) {
+// every top-level form of a text, evaluated in order -- the frontends' door for a
+// boot tail, a CLI driver, a corpus runner. ai_evals keeps the last form's value at
+// sp[0] (a program's status, for the frontend to answer with); ai_evals_ is the same
+// with the value dropped -- sequence and sequence_.
+ai_noinline struct ai *ai_evals(struct ai *g, char const *s) {
  return applyq(readtext(g, s), evfold); }
+ai_noinline struct ai *ai_evals_(struct ai *g, char const *s) {
+ return ai_pop(ai_evals(g, s), 1); }
 
 // the egg takes two corpora: `corpus` is sat twice (ev compiles itself), `post`
 // once, after the hatch and before the mop -- the seat for love that needs the
@@ -978,7 +984,7 @@ ai_noinline struct ai *ai_evals_(struct ai *g, char const *s) {
 ai_noinline struct ai *ai_egg_(struct ai *g, char const *egg, char const *p1,
                                char const *corpus, char const *post) {
  g = p0onto(ai_push(g, 1, ZeroPoint), p1);           // p1's forms, by p0 ..
- g = applyq(g, evfold);                              // .. and c0 evals them: p1 is live
+ g = applyq_(g, evfold);                             // .. and c0 evals them: p1 is live
  g = gxr(push0(qtop(p1text(g, post))));              // ('post), parked under the corpus
  g = p1text(g, corpus);                              // prel + ev, through the reader in love
  g = p0onto(g, p1);                                  // and p1 at the head of the corpus

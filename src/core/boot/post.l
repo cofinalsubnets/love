@@ -1719,13 +1719,9 @@
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist
           detach emptybuf mkframe parses joinln flatten splitat parseall)
 (: (read s) (sound (hot? s ? (flow s) s) @ (x . _) (ev x)))
-; reads: the stream shell -- reads and evals every form of a port, the value the last
-; form's; ev late-binds ((ev 'ev r)) so one definition drives both of love0's passes.
-; the two endings differ: a clean end comes between forms, `torn` inside one -- and torn
-; is a scare, the reader having drunk for itself and found the end.
 (: (reads p)
    (: (walk cl z) (sound cl @ 'torn (scare 'unfinished-form p)
-                              (a . b) (walk b (ev 'ev a))
+                              (a . b) (walk b (ev a))
                               z)
       ; the shared lane, for `in`: gulp for speed, hold nothing across an eval. box slot 0 counts
       ; every byte drawn off p, so the walk can put the port where it belongs. no window on purpose:
@@ -1760,7 +1756,7 @@
                     ; one byte short on purpose -- the byte-exact lane runs one ahead, and test_stdincorpus diffs it
                     _ (drop (0 < rem ? (rem - 1) 0))
                     h (inhand p)
-                    v (ev 'ev a)
+                    v (ev a)
                     (h = inhand p ? (drop 0, step b w2 v)
                                     (start (two? b ? [<b]) v)))
          (drop 0, z))
@@ -1994,13 +1990,10 @@
    ; no-op () returning scare handler
    (welp a b) ()
 
-   ; the face a raise wears -- ;; a b
+   ; the face a raise wears -- ;; a b. a program's raise wears no help at all: it leaves
+   ; the eval as a scare, and the frontend prints the same face and quits 1
    (hface a b) (say err ";; ", print err a, say err " ", print err b, put err 10)
    (shell-help a b) (hface a b, welp a b)
-   ; the welp after the quit is not dead -- a frontend with no quit nif folds it, and welp answers
-   (file-help a b) (hface a b, quit 1, welp a b)
-
-   _ (!(heard ()) ? (hear file-help))
    (shell _)
     (hear shell-help,             ; the prompt survives every raise; a script must not
      raw 1,
@@ -2091,10 +2084,11 @@
 ; program's view before (run ()) fires, which a loaded program reads.
 ;
 ; the exit door: every leave -- a bad -m, a missing operand, an unopenable file, a
-; torn -e, a verb's own status -- scares 'cli-leave, and the trap handler is the only
-; `quit`. that lets a caller in the same image put its own trap on and get a charm where a
-; spawn hands it a dead process. the handler is written twice because a leave lands in
-; either of two spans, `pre` and `run`, and the defglob has to sit between them.
+; torn -e, a verb's own status -- scares 'cli-leave, and the trap handler answers its
+; charm: the rail's answer is the status, and the frontend quits with it (or a caller in
+; the same image reads it, where a spawn would hand it a dead process). nothing here
+; quits -- the core spells no host word. the handler is written twice because a leave
+; lands in either of two spans, `pre` and `run`, and the defglob has to sit between them.
 (: (cli-rail ln)
  (: (charm0 x) (charm? x ? x 0)
     cli2
@@ -2161,26 +2155,27 @@
     k <p
     av (k @ ('eval || 'evalq || 'verb) >>p >p)   ; the program's view of argv
     run (\ _
-      (k @ 'eval  (puts * show $ eval1 <>p, putc 10)  ; -e answers out loud through `show`, the
-           'evalq (eval1 <>p)         ; repl's face, not dot's raw one; -q mutes
+      (k @ 'eval  (puts * show $ eval1 <>p, putc 10, 0)  ; -e answers out loud through `show`, the
+           'evalq (eval1 <>p, 0)      ; repl's face, not dot's raw one; -q mutes
            'verb  (: r (<>p >>>p)     ; a verb takes the args after its name and answers a status,
                      (cli-leave $ charm0 r))  ; out the one door
-           'file  (load1 <>p)
-           'none  ()                  ; the flags did their printing; leaving is the answer
-           (reads in)))
+           'file  (load1 <>p, 0)
+           'none  0                   ; the flags did their printing; leaving is the answer
+           (reads in, 0)))
     [av run]))
-       () (\ a b (a == 'cli-leave ? (quit $ charm0 b) (scare a b))))
- (ev [': 'argv ['\ <cli2]], ; the program's view, before the run
-  trap (\ x (<>cli2 ()))    ; (run ()): dispatch, argv now the program's view
-   () (\ a b (a == 'cli-leave ? (quit $ charm0 b) (scare a b)))))
+       () (\ a b (a == 'cli-leave ? (charm0 b) (scare a b))))
+ (? (charm? cli2) cli2                  ; a leave in pre: the status is the answer
+    (ev [': 'argv ['\ <cli2]], ; the program's view, before the run
+     trap (\ x (<>cli2 ()))    ; (run ()): dispatch, argv now the program's view
+      () (\ a b (a == 'cli-leave ? (charm0 b) (scare a b))))))
 
  (cli-line ln tty)
    (: (charm0 x) (charm? x ? x 0)
       V  (from 'verbs)
       _  (ev [': 'cmdline ['\ ln] 'argv ['\ ln] ])   ; C's line is already past the primes
       f  (V 'seat <ln)
-      (? f          (quit * charm0 $ f >ln)
-         (two? >ln) (cli-rail ln)
-         tty        (shell 0)
-         (reads in))))                     ; non-tty stdin: the stream face drinks the in port
+      (charm0 (? f          (f >ln)
+                 (two? >ln) (cli-rail ln)
+                 tty        (shell 0)
+                 (reads in)))))            ; non-tty stdin: the stream face drinks the in port
 ) ; module cli

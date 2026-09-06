@@ -295,7 +295,7 @@ static struct ai *evals0(struct ai *g, char const *const *v) {
 // cli0 already on it -- and every build-time object compile is one wake of it.
 static struct ai *run_program(struct ai *g, bool replp) {
   g = ai_layer_(g);
-  return ai_evals_(g, "(cli-line cmdline 0)"); }
+  return ai_evals(g, "(cli-line cmdline 0)"); }
 
 // with args, run the build tool (lcat / gen_data) through the CLI driver.
 // with no args, self-test: eval prel, load bao (the shell core) as a module, and run
@@ -309,7 +309,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     g = evals0(g, mods0);
     g = ai_evals_(g, "(use 'cli)(use 'kanren)(use 'verbs)");
     g = ai_unsplice_(g);
-    return ai_evals_(g, "(cli-line cmdline 0)"); }
+    return ai_evals(g, "(cli-line cmdline 0)"); }
   g = ai_evals_(g, src0_p1);                         // its own call: readtext picks its reader once per
   g = evals0(g, prelpost0);                          // text, and p1 seals hook 0 only when this call evaluates
   g = evals0(g, mods0);
@@ -360,7 +360,7 @@ static struct ai *run_program(struct ai *g, bool replp) {
   if (replp) raw_mode();
   g = ai_layer_(g);
   if (getenv("LOVE_NO_GLAZE")) g = ai_evals_(g, glaze_off);
-  return ai_evals_(g, replp ? "(cli-line cmdline 1)" : "(cli-line cmdline 0)"); }
+  return ai_evals(g, replp ? "(cli-line cmdline 1)" : "(cli-line cmdline 0)"); }
 
 // read-eval one .l file into the booting session, loudly: a bake's cat has no shell help,
 // so a raise in it must end the bake rather than seal a half-built artifact.
@@ -609,5 +609,10 @@ int main(int argc, char const **argv) {
     g = image_load_path ? run_program(g, !argp && isatty(STDIN_FILENO))
                         : boot(g, argp, bake, bake_load); }
   if (ai_code_of(g) == ai_status_scare) ai_scare_face_(g);
+  // the program's status is cli-line's answer, a charm, left at sp[0] by ai_evals: the
+  // process answers with it. a scare answers 1 through ai_fin, ahead of it.
+  int rc = (image_load_path || argp) && ai_ok(g) && charmp(ai_core_of(g)->sp[0])
+         ? (int) (getcharm(ai_core_of(g)->sp[0]) & 255) : 0;
   stdin_give(g);
-  return ai_fin(g); }
+  enum ai_status s = ai_fin(g);
+  return s ? (int) s : rc; }
