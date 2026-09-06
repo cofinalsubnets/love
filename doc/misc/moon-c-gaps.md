@@ -155,7 +155,8 @@ and 145-attrpos.c hold both to gcc):
 - an `__attribute__((..))` run TRAILING a local declarator, a parameter, or a struct member —
   the leading position was always skipped, and the kernel writes `__maybe_unused`/`__packed` in
   all four. The skip takes `__attribute__` alone: `int x __asm__("y")` still refuses, because
-  dropping an asm name renames an object in silence. ⚠ what is skipped is DROPPED, so an
+  dropping an asm name renames an object in silence (`register long v asm("rdx")` is the other
+  thing an asm name means, and that one is READ: the pin inline asm's operands honor). ⚠ what is skipped is DROPPED, so an
   `aligned` or `packed` ask on one MEMBER lays the member where its type says — the same
   silence the leading spelling has always kept (the alignment row below), and an ABI question
   rather than a missed optimization. A `packed` on the struct BODY is read, and stays read.

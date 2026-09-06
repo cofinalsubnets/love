@@ -1,9 +1,9 @@
 // the probe test_asmops compiles: one call to every inline in the kernel's
-// per-arch asmops.h, so mooncc has to parse the header, take the __mooncc__
-// half of every #ifdef, and hand each NEUTRAL template to holo. the gate then
-// disassembles the object and demands the privileged instructions it expects,
-// which is what proves the templates encode to what they say rather than to
-// something that merely assembled.
+// per-arch asmops.h, so mooncc has to parse the header and hand each GNU
+// template to holo's dialect front. the gate then disassembles the object and
+// demands the privileged instructions it expects, which is what proves the
+// templates encode to what they say rather than to something that merely
+// assembled -- and, with clang present, that both readers agree.
 //
 // this file is deliberately NOT under src/inle/<a>/ -- the Makefile globs that
 // directory for the seat, and a probe living there would join the kernel build.
@@ -133,6 +133,30 @@ void const *const k_asmops_keep[] = {
   (void const*) k_rd_ttbr1_el1,
   (void const*) k_rd_cntfrq_el0,
   (void const*) k_at_s1e1w_par
+};
+
+#elif defined(__riscv)
+uint64_t k_asmops_probe(uintptr_t p, uint64_t bits) {
+  k_wait();
+  k_fence();
+  k_wr_stvec(p);
+  k_sie_set(bits);
+  k_sie_on();
+  k_sie_off();
+  k_ebreak();
+  k_unimp();
+  return k_rd_time() + (uint64_t) k_sbi(SBI_TIME, 0, bits, 0); }
+void const *const k_asmops_keep[] = {
+  (void const*) k_wait,
+  (void const*) k_fence,
+  (void const*) k_wr_stvec,
+  (void const*) k_sie_set,
+  (void const*) k_sie_on,
+  (void const*) k_sie_off,
+  (void const*) k_ebreak,
+  (void const*) k_unimp,
+  (void const*) k_rd_time,
+  (void const*) k_sbi
 };
 
 #else

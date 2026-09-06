@@ -291,6 +291,7 @@
    ;; the one-operand unsigned divide (the divq the bignum kernel's inline asm speaks):
    ;; rdx:rax / r -> rax quotient, rdx remainder. F7 /6. caller stages rdx:rax itself.
    (emit-divq s) (: sn (rn s) [(rex 1 0 0 (hi sn)) 247 (modrm 3 6 sn)])
+   (emit-divl s) (: sn (rn s) (mrex 0 () 0 0 sn + [247 (modrm 3 6 sn)]))   ; the 32-bit twin: edx:eax / r32
    ;; the thread pointer (the TLS base): x64 keeps it in fs, and the ABI lays
    ;; the pointer itself as the first word of its own block, so (tp d) is one
    ;; segment-prefixed load -- mov d, fs:[0]. (a64's face would be mrs tpidr_el0.)
@@ -510,7 +511,7 @@
           ('mw128r . emit-mw128r) ('c128r . emit-c128r)
           ('shl128 . emit-shl128) ('shr128 . emit-shr128) ('sar128 . emit-sar128)
           ('c128 . emit-c128)
-          ('divq . emit-divq) ('dv128 . emit-dv128) ('rm128 . emit-rm128)
+          ('divq . emit-divq) ('divl . emit-divl) ('dv128 . emit-dv128) ('rm128 . emit-rm128)
           ('inc128 . '(72 131 192 1  72 131 210 0))             ; add rax,1; adc rdx,0
           ('dec128 . '(72 131 232 1  72 131 218 0))             ; sub rax,1; sbb rdx,0
           ('sx128 . '(72 153))                                  ; cqo: rdx:rax <- sign rax
