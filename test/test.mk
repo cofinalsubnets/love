@@ -1146,6 +1146,13 @@ test_disk: host $(R)/tools/ktest.l
 	@$m $(R)/tools/ktest.l $(k_elf) - $a "disk: fat kept across the reset"
 	@echo "test_disk: the machine remembered"
 
+# doom in an X window, the DOOM=1 build under an Xvfb (src/apps/doom/doom.l): opt-in --
+# it wants the vendored source and the IWAD, and rebuilds the artifact with doom inside
+test_doomx: $(R)/test/host/doomx.l
+	@$(MAKE) -s host DOOM=1
+	@echo TEST test/host/doomx.l "(doom on X, 120 frames under Xvfb)"
+	@cat test/00-init.l test/host/doomx.l | sh test/gate/run.sh doomx "$m" "doomx: ok"
+
 test_kverb: host
 	@$(MAKE) -s $(k_elf)
 	@echo TEST love kernel "(the projection verb; byte-identical to make's)"

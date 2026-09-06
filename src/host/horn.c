@@ -179,6 +179,32 @@ static uintptr_t sink_land(struct ai_horn *h, uintptr_t frames) {
  h->wpos = putcharm((intptr_t) (wpos + frames));
  return frames; }
 
+// --- the C face on this seat --------------------------------------------------------
+// one device for a program with no heap in hand (doom's mixer): the kernel's under
+// inle, else the host's card, opened here and kept -- the singleton the C face is.
+static int horn_c_fd = -1;
+
+int ai_horn_open(int rate) {
+ if (__ai_osv < 0) return k_horn_open(rate);
+ if (horn_c_fd >= 0) close(horn_c_fd);
+ char const *dev = getenv("HORN");
+ int err = 0;
+ horn_c_fd = dev && !strcmp(dev, "none") ? -1 : dev_open(dev, rate, &err);
+ return horn_c_fd < 0 ? -1 : 0; }
+
+intptr_t ai_horn_write(unsigned char const *src, uintptr_t n) {
+ if (__ai_osv < 0) return k_horn_write(src, n);
+ return horn_c_fd < 0 ? -1 : dev_land(horn_c_fd, src, n & ~(uintptr_t) 3); }
+
+uintptr_t ai_horn_lag(void) {
+ if (__ai_osv < 0) return k_horn_lag();
+ return horn_c_fd < 0 ? 0 : dev_lag(horn_c_fd); }
+
+void ai_horn_close(void) {
+ if (__ai_osv < 0) { k_horn_close(); return; }
+ if (horn_c_fd >= 0) close(horn_c_fd);
+ horn_c_fd = -1; }
+
 // --- the door -------------------------------------------------------------------
 // a stereo run goes down as it is; a mono one is doubled through a stack frame,
 // and what the device took is answered in the caller's bytes.
@@ -214,7 +240,7 @@ static void horn_fin(struct ai *g, void *p) {
  h->kind = putcharm(horn_sink); }
 
 // `close` on a horn (src/host/posix.c): the same shutting, outside GC
-void ai_horn_close(struct ai_io *io) { horn_fin(NULL, io); }
+void ai_horn_shut(struct ai_io *io) { horn_fin(NULL, io); }
 
 // (horn rate chans) -> the port at sp[2], over the two args
 ai_noinline static struct ai *horn_open(struct ai *g) {

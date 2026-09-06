@@ -1385,7 +1385,7 @@ static lvm(lvm_close) {
         g->next_wake_at = ai_clock() + 1;
         ai_musttail return Ap(lvm_yield_sw, g); }
       Unpack(g);
-      if (horn) ai_horn_close((struct ai_io*) Sp[0]); else close(fd);
+      if (horn) ai_horn_shut((struct ai_io*) Sp[0]); else close(fd);
       ((struct ai_io*) Sp[0])->vt = &ai_closed_vt; } }   // re-read: wflush may collect
   Sp[0] = ZeroPoint;
   ai_musttail return Next(1); }

@@ -196,3 +196,29 @@ is a silent door. `DOOM=1` builds it with `-DFEATURE_SOUND`.
 path at 0 dB; a codec that needs vendor coefficient verbs to reach its speaker amp (some Realtek
 and Cirrus parts) will play through the headphone jack and not the speakers. that is a bug
 report with a codec id in it, when it comes.
+
+## the hosted door (2026-09-06, later the same day)
+
+**doom runs on the host in an X window, off the same C.** src/inle/doom.c's doors went
+seat-aware: under inle they are the kernel's (framebuffer, scancode tap, clock), on the host a
+frame flag, a 64-deep key queue and ai_clock, driven a tick at a time by four nifs
+(`doom-start` / `doom-tick` / `doom-frame` / `doom-key`). src/apps/doom/doom.l is the window: it
+speaks lux's X wire -- src/apps/lux/wire.l is the `xwire` module now, every name exported, and
+lux's own files `(use 'xwire)` -- creates one 640x400 window at the root's depth, pushes each
+frame as four PutImage bands (256000 bytes apiece, under the 65535-word ceiling with no
+BIG-REQUESTS to negotiate), polls the socket with `cue?` between ticks and respells KeyPress/
+KeyRelease keysyms into doomkeys.h's codes. `love doom [-iwad F] [-display :N] [-frames N]` is
+the verb (`make host DOOM=1` puts the game in the binary); the mixer reaches the host's card
+through love.h's seat-neutral `ai_horn_*` face, so `HORN=/dev/snd/pcmC1D0p love doom` has sound
+and `HORN=none` is silent. `make test_doomx` is the gate: an Xvfb, 120 frames, the count read
+back. the title screen was checked by eye off an xwd of the Xvfb.
+
+**still to do on this door:** the key path was not driven by a gate (no xdotool on the box;
+test/host/luxui-probe.l's XTEST FakeInput is the way to add one); mouse; a window that closes
+should end the process the ICCCM way, which it does through WM_DELETE_WINDOW but not on a
+`kill` of the server.
+
+**next, as asked:** `wget` in kore -- and since nothing worth fetching speaks plain http any
+more, a TLS 1.3 client over the chacha/poly/sha256 the tree already carries; then `love doom`
+laying `~/.love/love-<ver>/` through `love seed`, fetching doomgeneric and the shareware IWAD
+there, building with DOOM=1 and running that binary.

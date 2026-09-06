@@ -28,6 +28,7 @@
 ; execs the script in place (same pid; the adoption sweep keeps every
 ; window). The live socket is the one that accepts; dead generations'
 ; leftovers are swept at moor start (lux-sweep).
+(use 'xwire)   ; the X wire, src/apps/lux/wire.l
 (: lux-cell {}
    (lux-st u) (peep lux-cell 'st ())
    ; a change queues; the driver's loop drains at its next X event. On a live

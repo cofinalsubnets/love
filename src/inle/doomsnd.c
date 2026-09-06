@@ -1,6 +1,7 @@
-// src/inle/doomsnd.c -- doom's sound on inle: the sound_module_t doomgeneric asks
-// for, mixed in software and handed to the horn's C face (src/inle/hda.c). rides
-// the DOOM=1 lane beside doom.c and is otherwise not built.
+// src/inle/doomsnd.c -- doom's sound: the sound_module_t doomgeneric asks for, mixed
+// in software and handed to the horn's C face (love.h's ai_horn_*: src/inle/hda.c
+// under inle, the host's card otherwise). rides the DOOM=1 lane beside doom.c and is
+// otherwise not built.
 //
 // eight channels of DMX lumps (8-bit unsigned mono, mostly 11025 Hz, behind an
 // 8-byte header and 16 bytes of padding each side) resampled linearly to the
@@ -19,10 +20,10 @@
 #include "m_misc.h"
 
 // the horn's C face (love.h)
-int k_horn_open(int rate);
-intptr_t k_horn_write(unsigned char const*, uintptr_t);
-uintptr_t k_horn_lag(void);
-void k_horn_close(void);
+int ai_horn_open(int rate);
+intptr_t ai_horn_write(unsigned char const*, uintptr_t);
+uintptr_t ai_horn_lag(void);
+void ai_horn_close(void);
 
 #define ds_rate 48000
 #define ds_lead 4800                 // 100 ms ahead of the head: latency, by ear
@@ -56,12 +57,12 @@ static struct ds_sample const *sample_of(sfxinfo_t *sfx) {
 // --- the module --------------------------------------------------------------
 static boolean ds_init(boolean use_sfx_prefix) {
  ds.prefix = use_sfx_prefix;
- ds.on = k_horn_open(ds_rate) == 0;
+ ds.on = ai_horn_open(ds_rate) == 0;
  fprintf(stderr, "doomsnd: %s\n", ds.on ? "the horn is open at 48000 Hz" : "no horn, silent");
  return ds.on; }
 
 static void ds_shutdown(void) {
- if (ds.on) k_horn_close();
+ if (ds.on) ai_horn_close();
  ds.on = 0; }
 
 static int ds_lump(sfxinfo_t *sfx) {
@@ -114,12 +115,12 @@ static void mix(int16_t *out, uint32_t frames) {
 static void ds_update(void) {
  if (!ds.on) return;
  int16_t buf[2 * ds_chunk];
- uintptr_t lag = k_horn_lag();
+ uintptr_t lag = ai_horn_lag();
  while (lag < ds_lead) {
   uint32_t n = (uint32_t) (ds_lead - lag);
   if (n > ds_chunk) n = ds_chunk;
   mix(buf, n);
-  if (k_horn_write((unsigned char const*) buf, n * 4) < (intptr_t) (n * 4)) break;
+  if (ai_horn_write((unsigned char const*) buf, n * 4) < (intptr_t) (n * 4)) break;
   lag += n; } }
 
 static void ds_cache(sfxinfo_t *sounds, int n) { }

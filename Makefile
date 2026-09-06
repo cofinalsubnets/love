@@ -261,7 +261,8 @@ distfiles = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps
             src/apps/cpio/cpiocmd.l src/apps/fat/fat.l src/apps/fat/fatcmd.l \
             src/apps/source/source.l src/apps/lapiz/lapiz.l \
             src/apps/libra/salt.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/serve.l \
-            src/apps/rove/rove.l src/apps/rove/story.l src/apps/rove/design.l
+            src/apps/rove/rove.l src/apps/rove/story.l src/apps/rove/design.l \
+            src/apps/lux/wire.l src/apps/doom/doom.l
 $(ho)/.dist.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \

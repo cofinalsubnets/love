@@ -317,7 +317,7 @@ extern struct ai_port_vt const ai_closed_vt;
 // without horn.c still stands.
 extern struct ai_port_vt const ai_horn_vt;
 struct ai *ai_horn_writen(struct ai*, unsigned char const*, uintptr_t);
-void ai_horn_close(struct ai_io*);              // `close` on one: shut the device under it
+void ai_horn_shut(struct ai_io*);               // `close` on one: shut the device under it
 // the C face of the same device, for a program linked into the image with no love
 // heap in hand (src/inle/doom.c reaches k_fb the same way). 16-bit stereo, the rate
 // rides the open: open -> 0 | -1 no device; write -> bytes landed, 0 full, -1 gone;
@@ -327,6 +327,12 @@ int k_horn_open(int rate);
 intptr_t k_horn_write(unsigned char const*, uintptr_t);
 uintptr_t k_horn_lag(void);
 void k_horn_close(void);
+// ..and the same face on whichever seat this is: k_horn_* under inle, the host's own
+// card otherwise (src/host/horn.c keeps that one open). what src/inle/doomsnd.c calls.
+int ai_horn_open(int rate);
+intptr_t ai_horn_write(unsigned char const*, uintptr_t);
+uintptr_t ai_horn_lag(void);
+void ai_horn_close(void);
 
 // close an OS fd backing a heap port; weak no-op default, the host overrides
 // with close(2). called by ai_io_alloc's finalizer.

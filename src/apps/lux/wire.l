@@ -1,13 +1,26 @@
 ; src/apps/lux/wire.l -- the x11 wire protocol: connect, the setup handshake, request
 ; writers, the substructure redirect, keyboard mapping/grabs, and the event
 ; decoder. Host-only (needs the connectu nif, src/host/sock.c). Every op takes the
-; socket port `s` explicitly -- so these leak as globals with no closure over a
-; free `s` and no nif shadow (the codec's byte writers call the real `put`/`get`
-; nifs, never a wm helper). a body-less `:` -- all of it leaks to the driver.
+; socket port `s` explicitly -- no closure over a free `s` and no nif shadow (the
+; codec's byte writers call the real `put`/`get` nifs, never a wm helper).
 ;
 ; The screen record `(x-setup s)` returns: (root wpx hpx minkc maxkc idbase).
 ; The event record `(x-next s)` returns: (code detail window state) -- enough for
 ; MapRequest/DestroyNotify/ConfigureRequest/MapNotify/KeyPress; () at EOF.
+;
+; module 'xwire: every name below is exported, and a file that speaks X says
+; (use 'xwire) -- lux's own (ewmh, manage, config, lux) and the doom driver
+; (src/apps/doom/doom.l), which is why this is a module and not a leak.
+(module '(xwire
+  x-w8 x-w16 x-w32 x-flush x-r8 x-r16 x-r32 x-skip
+  x-rstr x-pad4 x-wname x-rbytes u16 u32 evq x-reply
+  x-connect x-wpad x-setup scr-root scr-w scr-h scr-mink scr-maxk
+  scr-idbase scr-cmap scr-visual scr-depth x-cwa-events x-configure x-map x-unmap
+  x-focus x-border x-intern x-getprop x-atoms-of x-getprop-atoms x-has-atom x-getclass
+  x-transient x-getgeom x-raise x-lower x-kill x-wmdel x-confnotify x-delprop
+  x-grabbtn x-replay x-allow-async x-grabptr x-ungrabptr x-querytree x-attrs x-manageable?
+  x-redirect x-keymap x-grab x-ungrabkeys x-color x-borderpix x-cursor xauth-parse
+  xauth-cookie x-decode x-next ev-code ev-detail ev-window ev-state ev-raw)
 (:
    ; --- byte IO over the socket (little-endian) ---
    (x-w8 s v)  (put s v)
@@ -269,3 +282,4 @@
                 (x-decode pkt)))))))
    (ev-code e) <e  (ev-detail e) <>e  (ev-window e) (e 2)  (ev-state e) (e 3)
    (ev-raw e) (e 4))                                                        ; the 32 raw bytes (ConfigureRequest reads its geometry here)
+) ; module xwire

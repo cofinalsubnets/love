@@ -12,6 +12,7 @@
 ; on top of it (memory: the verified-xmonad ladder).
 ;
 ; a body-less `:` -- lux-dom/lux-sigs leak; neither shadows a nif.
+(use 'xwire)   ; the X wire, src/apps/lux/wire.l
 (:
    (lux-join a b) (a = b ? a 'top)
    (lux-tr op a b) 'top

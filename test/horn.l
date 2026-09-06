@@ -6,8 +6,8 @@
 ; real driver (src/inle/hda.c) where the machine has a controller, and its absence
 ; on the other seats is the errno nom.
 
-(: host? !(love-os = 'inle)
-   _ (? host? (setenv "HORN" "none") ())          ; the seat reads no policy word
+(: hosted !(love-os = 'inle)
+   _ (? hosted (setenv "HORN" "none") ())          ; the seat reads no policy word
    h (horn 48000 2)
    _ (assert ('badarg = horn 100 2) ('badarg = horn 48000 3) ('badarg = horn "a" 2))
    _ (? (nom? h)
@@ -35,4 +35,4 @@
            ; and a horn is not the reader
            _ (assert (= (quote (5)) (sound "5")))
            ; the policy word goes, so the environ laws downstream count what they always did
-           (? host? (setenv "HORN" ()) ()))))
+           (? hosted (setenv "HORN" ()) ()))))
