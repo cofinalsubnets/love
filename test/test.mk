@@ -577,9 +577,9 @@ test_hdiff: host
 # stay loud (-shared usage-refuses, -nostdlib names its undefined references). In test_slow.
 test_drv: host
 	@sh test/gate/drv.sh $(ho) $(ai_cflags)
-# the kernel's inline-asm SEAM: src/inle/asmops.h says every privileged instruction twice --
-# holo's neutral text for mooncc, GNU's per-arch template for clang -- so the gate compiles
-# one probe with both and compares op by op. Skips without llvm-objdump.
+# the kernel's inline-asm SEAM: src/inle/<a>/asmops.h says every privileged instruction
+# once, in GNU's template, and mooncc reads it through holo/gas.l -- so the gate compiles one
+# probe with mooncc and clang and compares op by op. Skips without llvm-objdump.
 test_asmops: host
 	@sh test/gate/asmops.sh $(ho)
 # test_dtb -- src/inle/dtb.h, the walk both device-tree doors ride (a64_dtb.c and
