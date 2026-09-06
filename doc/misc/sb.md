@@ -114,7 +114,7 @@ composition. The smell to watch for is "install" or "upgrade" turning back into 
 The seed vault is not decoration; it names the model's two hardest invariants more accurately
 than "tree" or "reef" would. The tool was called `seed` first and is named for the vault now —
 which is the same metaphor said one level up, and it hands `seed` back to the word's other job
-here (the seed binary a bootstrap starts from, src/apps/build.mk's dist lane).
+here (the seed binary a bootstrap starts from, the Makefile's dist lane).
 
 - **Append-only cold storage is the inverse-patch law.** The core discipline is "removal is an
   inverse patch, never a deletion; the patch set only ever grows," which is what makes the

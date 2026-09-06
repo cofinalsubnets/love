@@ -18,7 +18,7 @@ all: test_cook test_tele test_xor test_hue test_hueweb
 $(m):
 	@$(MAKE) -C $(R)/host
 
-# the syntax file is BUILT (src/apps/build.mk) out of src/apps/vi/hue.l's class table and the
+# the syntax file is BUILT (the Makefile) out of src/apps/vi/hue.l's class table and the
 # vocabulary the host answers to, so there is no checked-in second copy to drift from and
 # nothing left to diff -- a rename that moves (names ()) now just rebuilds it. What is
 # still worth asking is whether the generator ran to the END and meant what it emitted.

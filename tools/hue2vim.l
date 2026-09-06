@@ -1,6 +1,6 @@
 ; tools/hue2vim.l -- write the vim syntax for .l out of src/apps/vi/hue.l's class table
 ; and the vocabulary the running binary answers to. `make syntax` runs it, into
-; out/host/syntax.vim (src/apps/build.mk), and mk/install.mk installs that:
+; out/host/syntax.vim (the Makefile), and the Makefile installs that:
 ;
 ;   cat src/apps/vi/config.l src/apps/vi/hue.l tools/hue2vim.l | out/host/love
 ;

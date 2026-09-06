@@ -69,7 +69,7 @@ to shave disappear, and one plain image is simpler everywhere.)
 ## the section is GROWN, not reserved
 
 `.image` is laid LAST — alone in the highest `PT_LOAD`, above `.bss`
-(`-Wl,--section-start=.image=0x2000000`, src/build.mk) — so the bake APPENDS the blob at the
+(`-Wl,--section-start=.image=0x2000000`, the Makefile) — so the bake APPENDS the blob at the
 first page past every other allocated byte and rewrites the one phdr and one shdr that name it,
 relaying the non-allocated tail (symtab/strtab/shstrtab) after it. No vaddr moves, so the
 two-anchor stamp holds by construction. This is why there is no fixed reserve to bump whenever

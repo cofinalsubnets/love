@@ -70,7 +70,7 @@ struct ai *image_dump(struct ai *g, char const *path) {
 // one phdr and shdr that name it are rewritten. no reserve, no ceiling, and no vaddr moves.
 // bake_tail reads that requirement off the binary's own section headers rather than a build
 // flag, and it is one thing: .image ends the segment carrying it -- true of a section alone
-// in the highest PT_LOAD (src/build.mk's --section-start) and of one riding the tail of the
+// in the highest PT_LOAD (the Makefile's --section-start) and of one riding the tail of the
 // single segment holo lays. any other link is refused loudly: there is nowhere to grow.
 // the in-binary home of the post-boot heap image (doc/misc/snapshot.md): the binary loads
 // its own dump at startup, identical layout by construction, so the codec's same-binary

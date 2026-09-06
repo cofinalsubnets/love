@@ -174,7 +174,7 @@
                  + (esy + [(snip pie stro (stro + strz)) <shstr
                            (ld-zeros (shto - (ssto + sstz))) sht])))))
 
-   ; the file driver (kernel.mk's KPROJ). arity-gated: the `love kernel` verb
+   ; the file driver (the Makefile's KPROJ). arity-gated: the `love kernel` verb
    ; evals this file too (src/apps/source/source.l), and its argv is the verb's own.
    ; a def, so the outer `:` stays define-mode and `kproject` survives the
    ; read -- the call below is its own form.

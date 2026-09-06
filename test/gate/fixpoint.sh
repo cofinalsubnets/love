@@ -25,7 +25,7 @@ cat=$ho/.mooncc-cat.l
 
 # any arch a seed can be laid for owes this invariant (doc/misc/plan/seed-universal.md
 # U0); an arch off the roster skips, it does not fail. the mksys leaf is the
-# host's own (the twin roster, src/apps/build.mk).
+# host's own (the twin roster, the Makefile).
 # ⚠ the spelling arrives as $(hosta), never from `uname -m` here: on the BSDs those two
 # disagree (amd64, evbarm), and a gate that spells the arch itself is a second authority.
 case "$ha" in
@@ -55,7 +55,7 @@ LOVE_NO_IMAGE=1 "$d/love1" -l "$cat" -e "(? ((bake \"$d/mooncc1.image\") = 1) (q
 
 # ...and rebuilds every TU with it, in the exact order make links them
 moon1() { "$d/love1" wake "$d/mooncc1.image" mooncc "$@"; }
-# ⚠ src/core/love.c's flags must MIRROR make's ($(moon_d)/love.o in src/build.mk), not just its
+# ⚠ src/core/love.c's flags must MIRROR make's ($(moon_d)/love.o in the Makefile), not just its
 # order: -D AiHaveVersionH is what puts the version id in this TU, and love1 was linked
 # from make's object. Drop it here and love2 carries "unknown" -- the compare fails at the
 # string, naming a broken fixpoint where the only difference is a build flag.
@@ -76,7 +76,7 @@ done
 LOVE_NO_IMAGE=1 "$d/love1" -l "$ho/.mksys-cat.l" -e "((from 'moon '$mks) \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
 test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 
-# the kernel the artifact carries (src/kernel.mk's $(kart_o)): the link takes it,
+# the kernel the artifact carries (the Makefile's $(kart_o)): the link takes it,
 # so the rebuild owes it. ⚠ a gate that links what make links and compiles less
 # still answers love1 == love2 -- it just answers it about a shorter binary than
 # anyone ships. an arch with no seat carries none, and $gate_arch_c is empty there.

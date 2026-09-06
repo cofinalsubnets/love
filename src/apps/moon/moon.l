@@ -33,6 +33,9 @@
                   (go i last) (? (n <= i) last (path i = 47) (go (i + 1) (i + 1)) (go (i + 1) last))
                   d (go 0 0)
                   (? (0 < d) (snip path 0 d) ""))
+   ; the toolchain slice's place in the tree, spelled once: the roots below and
+   ; the carried-blob filter both read it, and the filter reads its length too.
+   mtree "src/apps/moon/"
    ; the toolchain root -- where our own headers and the runtime sources live.
    ; two rungs, tried in order: the dev tree off the cwd, then the installed
    ; nest through the seat (src/core/boot/prel.l's own walk -- selfpath,
@@ -48,7 +51,7 @@
    ; hard way (the installed love walked out/lib instead of its own nest).
    (mseat _) (: x (selfpath 0)
                 (? (string? x) (cdir x + "../lib/love/moon/") ()))
-   (mroots _) (: s (mseat ()) (? (string? s) ["src/apps/moon/" s] '("src/apps/moon/")))
+   (mroots _) (: s (mseat ()) (? (string? s) [mtree s] [mtree]))
    ; the runtime home: the first root that actually carries the sources. by
    ; read, not by a name test -- presence is the wrapper (uread answers
    ; (1 text), an absent file the zero point), and an empty core.c would be
@@ -125,7 +128,7 @@
                         (go (o + 512 + (* 512 (// (sz + 511) 512))) acc2)))
        (go 0 ()))
    ; no nest on disk, but a love carries its whole tree (source-gz): the
-   ; toolchain slice -- include/ and lib/, what install.mk ships -- as an
+   ; toolchain slice -- include/ and lib/, what the Makefile ships -- as an
    ; in-memory table, key the nest-relative path, value the bytes. nothing is
    ; written anywhere: the resolver and the runtime walk read the table where
    ; they would have read the nest. () when there is nothing to carry (love0),
@@ -136,8 +139,8 @@
        (? (! (string? u)) ()
           (foldl (\ a e
                    (: rel (strip1 <e)
-                      (? (!(pfx? rel "src/apps/moon/")) a
-                         (: sub (snip rel 10 (tally rel))
+                      (? (!(pfx? rel mtree)) a
+                         (: sub (snip rel #mtree (tally rel))
                             (? (!(pfx? sub "include/") && !(pfx? sub "lib/")) a
                                (: _ (pin a sub <>e) a))))))
                  (tablet 0) (tarfiles u))))
@@ -1041,7 +1044,7 @@
              ; the same string love answers, because they are one artifact: mooncc is a
              ; verb on the love binary, not a separate program, and a build that reported
              ; two versions would be reporting a thing that cannot happen. `love-version`
-             ; is that one id (mk/lib.mk computes it: ./VERSION plus a VCS suffix).
+             ; is that one id (the Makefile computes it: ./VERSION plus a VCS suffix).
              ((a = "--version") || (a = "-v"))
               (: _ (puts ("mooncc " + love-version)) _ (putc 10) (quit 0))
              (a = "-pie") (flags r (pin t 'pie 1))

@@ -69,7 +69,7 @@
 ; that do not (a length floor that rises with the offset) measured 3773921, or 13.6%,
 ; against Huffman's 2.9%.
 ;
-; ⚠ AND THE TARBALL IS NOT ONLY A BLOB. src/apps/build.mk hands the same bytes to the
+; ⚠ AND THE TARBALL IS NOT ONLY A BLOB. the Makefile hands the same bytes to the
 ; download and to mksrc, which is what makes a seed rebuilt elsewhere byte-identical
 ; rather than merely equivalent. A blob in any format but gzip breaks that identity,
 ; and changing both hands a stranger an archive their gunzip cannot open.

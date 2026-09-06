@@ -267,7 +267,7 @@
    ; the flat image a boot door eats, from nothing but what it already carries.
    ; the boot stub is laid here, not stored: mkboot.l rides the source blob and
    ; holo is baked, so the lay's cat (kore text/u/asbook, then mkboot, then
-   ; kproject) evals off the in-memory tar, exactly the shape kernel.mk cats
+   ; kproject) evals off the in-memory tar, exactly the shape the Makefile cats
    ; from the tree. the arch is the binary's own -- e_machine says it, and a
    ; projection of self can be nothing else.
    (kern-pick es top nm)

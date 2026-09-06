@@ -1,7 +1,6 @@
 #!/bin/sh
 # moon-reject.sh -- the REFUSAL battery: C that gcc rejects, put to mooncc, and
-# the two verdicts set side by side.'s "the battery" section is
-# this script's output, read once and written down.
+# the two verdicts set side by side.
 #
 # moon-sweep.sh measures C that SHOULD compile and doesn't. This measures C that
 # should NOT compile and does -- the other failure of a front end, and the one no

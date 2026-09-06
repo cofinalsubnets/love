@@ -101,7 +101,7 @@
    ; the thing we already hold: PATH's winner for the word must be this very binary,
    ; which stat answers through the symlink (size mode mtime-ns -- the distro's shadow
    ; lane is one artifact on PATH wearing every tool's name). an installed twin of our
-   ; own name is the skew src/apps/build.mk warns about wearing a friendly face, so it
+   ; own name is the skew the Makefile warns about wearing a friendly face, so it
    ; spawns like anything else; so does a word with a / (an explicit path is a demand).
    ; the verdict is decided once per word and kept: the PATH walk is a session cost.
    ; these are not builtins -- sh-bi? drives sh-stagex's fork decision, and a stage

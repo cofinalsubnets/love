@@ -8,7 +8,7 @@ kernel + a static `love` + .l files, and kore is busybox's multi-call trick done
 
 ## the shape
 
-ONE roster — the `$(korefiles)` list in src/apps/build.mk: kore's own toolboxes, src/apps/libra/lint.l,
+ONE roster — the `$(korefiles)` list in the Makefile: kore's own toolboxes, src/apps/libra/lint.l,
 src/apps/vi/, src/apps/ain/ain.l, the lush files, src/apps/cook/cook.l and the holo linker files. The
 crew rides IN the default binary's own layered image (doc/misc/plan/one-binary.md), so the
 build tree's spelling is `love kore TOOL` and the installed `bin/kore` is a two-line verb
@@ -222,7 +222,7 @@ action gets `-print`, exactly as GNU does.
 * **symlinks are not followed** (GNU's `-P`, the default). The `stat` nif follows, so the type
   read asks `readlink` FIRST — a link answers `l` whatever it points at, and the walk does not
   descend through it. A dangling link is still visited.
-* it loads late in the cat because it captures `sh-match` at its define; src/apps/build.mk says so.
+* it loads late in the cat because it captures `sh-match` at its define; the Makefile says so.
 
 ## expr, and the record tools (src/apps/kore/expr.l, src/apps/kore/core.l)
 

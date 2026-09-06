@@ -98,7 +98,7 @@ every hardware question to rung 5.
   as `kmain.c`'s law asks, and a failed grow leaves the console standing.
 * **Not here: create.** `open path "w"` on an unbaked path refuses, which is absence and not
   divergence; the writable tree is rung 2.
-* *gate:* `test/kernel/ramfs.l` (kernel-only, via `kernel.mk`'s `kt`) — open a baked path, read
+* *gate:* `test/kernel/ramfs.l` (kernel-only, via test/test.mk's kernel lane) — open a baked path, read
   it, write it, append, truncate, grow it past the baked blob, put it back, and `use` it.
 
 **The rung-1 payoff came with it, free.** `use` resolves `lib/<x>.l` off the ramfs on the

@@ -22,7 +22,7 @@ LFS spends two chapters here and calls it the hard part. It is the part we are d
 | glibc | `src/apps/moon/lib/nolibc/` | by-need members, no host libc |
 | linux-headers | `src/apps/moon/include/` | our own minimal set, not the host's |
 
-Plus one rung LFS never attempts: `src/kernel.mk` builds a whole kernel with
+Plus one rung LFS never attempts: `the Makefile` builds a whole kernel with
 `KCC ?= mooncc` and our own linker, on two arches, with nothing foreign left.
 
 **The one structural hole: no C++.** Real gcc and binutils need a C++ compiler to build
@@ -64,7 +64,7 @@ where GNU reads a concatenation.
 ## chapters 9–10 — config partial, kernel imported
 
 lush reads `/etc/profile` and `~/.profile`; libra owns `~/.love/etc`. The kernel is
-still the one imported artifact — `mk/distro.mk` says `BZIMAGE ?= /boot/vmlinuz-linux`.
+still the one imported artifact — `the Makefile` says `BZIMAGE ?= /boot/vmlinuz-linux`.
 No GRUB.
 
 The image is cut by **kore's `find`, `love cpio` and `love gzip`** — no host tool in the
@@ -177,7 +177,7 @@ The gap between those two numbers is entirely *other people's build systems*.
   wire (pack, unpack, scatter) over src/apps/tar/tar.l's own entries — the walk that fills them
   is about a file and not about a format, which is why the second wire is short — and
   `src/apps/cpio/cpiocmd.l` is `love cpio` (`-o -i -t`, `-H newc`, `-d -u -v`, `-F/-I/-O`,
-  `--quiet`, the block count). `mk/distro.mk` now cuts the initramfs with
+  `--quiet`, the block count). `the Makefile` now cuts the initramfs with
   **kore's find, our cpio and our gzip**, and `make distro-smoke` boots that image
   under qemu: love is pid 1, /proc is mounted, the kore userland answers. The wart at
   the top of this page is closed. Gated by name in `make test_cpio` (GNU cpio both

@@ -897,7 +897,7 @@ test_tools: host out/host$(hsuf)/lush
 # â  the shared unsuffixed prerequisites are named HERE so the PARENT makes them once.
 # both debug lanes recurse, and a target two sub-makes each decide to remake is a partial
 # file to whoever reads it meanwhile -- a half-written mooncc0.image wakes with no verb
-# table and `mooncc` then reads as a filename (src/build.mk). test_fixpoint names them
+# table and `mooncc` then reads as a filename (the Makefile). test_fixpoint names them
 # for the same reason.
 test_gcheck: host $(love0) out/host/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DAiGcCheck test_host

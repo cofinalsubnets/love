@@ -366,7 +366,7 @@
 
    ; --------------------------------------------------- modifiers via expansion
    ; make reads the @/-/+ prefixes after expansion (the `Q = @` verbose-build
-   ; idiom; mk/lib.mk's lcat_h leads with @ from inside the variable) -- an
+   ; idiom; the Makefile's lcat_h leads with @ from inside the variable) -- an
    ; expanded @ silences the line, it never reaches the shell as a word.
    qm (run-cook (mk '("Q = @"
                       "all:"

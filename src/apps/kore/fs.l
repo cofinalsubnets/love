@@ -19,7 +19,7 @@
    (udest src dst) (? (udirp dst) (dst + "/" + ubase src "") dst)
    ; copy bytes + permission bits (cp's heart; mv's cross-device leg)
    ; the bytes, by whichever door this love has. kore runs in two worlds and they do not
-   ; carry the same nifs: src/kernel.mk bakes this whole cat verbatim (korecat) and the
+   ; carry the same nifs: the Makefile bakes this whole cat verbatim (korecat) and the
    ; kernel compiles no host/*.c, so `copyfile` is hosted-only and the slurp stays as the
    ; freestanding leg. asked at the call, never bound at the top: the kernel's image is
    ; baked by a host love, so a load-time answer would freeze this world's nif set into

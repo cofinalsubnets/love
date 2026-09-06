@@ -6,7 +6,7 @@
 //                 means doom's exit() reached (quit), so it resets.
 //
 // OPT-IN and not in any default build: `make run DOOM=1` wants the vendored
-// source at dl/doomgeneric and the IWAD at dl/doom1.wad (src/kernel.mk's doom
+// source at dl/doomgeneric and the IWAD at dl/doom1.wad (the Makefile's doom
 // lane says how). This file is the tree's own 0BSD glue; what it includes is
 // not, so nothing here builds unless someone put that source there on purpose.
 //

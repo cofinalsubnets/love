@@ -39,7 +39,7 @@ Not because we engineered it. Because of the shape the bootstrap already has:
 local cc  ──builds──▶  love0  ──wakes──▶  mooncc0.image  ──compiles──▶  every shipped object
 ```
 
-`$(CC)` builds **`love0` and nothing else** (src/build.mk). Every object in the
+`$(CC)` builds **`love0` and nothing else** (the Makefile). Every object in the
 binary you end up running is mooncc's. The bootstrap compiler is a scaffold that
 leaves no trace in the product — so which compiler held the scaffold cannot show in
 the result.
@@ -151,5 +151,5 @@ baseline to re-extract and to diff a local tree against.
 ⚠ **keep the install-owned copy separate from a development checkout.** If one
 directory is both, an install fights your working tree.
 
-Related: `mk/lib.mk` (the version stamp), `src/apps/build.mk` (the recipes),
+Related: `the Makefile` (the version stamp), `the Makefile` (the recipes),
 `test/gate/distboot.sh` (the claim) (what builds the packages).

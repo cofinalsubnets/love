@@ -8,7 +8,7 @@
 ; about the code. a database carries an absolute directory per entry, so the paths land
 ; where they mean.
 ;
-; the flag groups mirror the real builds: src/build.mk (hcc) and src/kernel.mk
+; the flag groups mirror the real builds: the Makefile (hcc) and the Makefile
 ; (kcflags + kcppflags). they are few and they are stable; when one moves, move it here.
 ;
 ; the tree is the source: the same pruned walk selfpack cuts the archive with finds the

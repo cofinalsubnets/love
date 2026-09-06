@@ -79,7 +79,7 @@ What the climb taught: (1) `(: _ (use 'x) ..)` serves LATER BINDINGS in the
 same form -- compile is per-binding -- so a one-form -e reads a module through
 one use; the macro-needs-the-next-FORM rule is macros only. (2) The consumers
 were exactly the -e/-l lanes: the sys.o recipes and package harnesses spell
-`((from 'moon '<mksys>) ..)` (ten sh sites + src/build.mk), moon.sh's warm
+`((from 'moon '<mksys>) ..)` (ten sh sites + the Makefile), moon.sh's warm
 lane binds moon-run by `from`, and the three in-process gates (gate/clay.l,
 moonfuzz.l, clay-g2.l) lead with (use 'moon) -- moon.sh's law cat echoes the
 same line between gen.l and law.l. (3) The one QUIET regression was lush's

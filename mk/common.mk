@@ -55,7 +55,7 @@ uname_rv64 = riscv64
 love_base := $(shell cat $R/VERSION 2>/dev/null || echo 0)
 
 # ⚠ IS THIS TREE A CHECKOUT OR AN UNPACKED RELEASE? `git -C DIR` walks UP, so the test is for
-# THIS tree's own .git and never an ancestor's (src/apps/build.mk learned that the hard way). One
+# THIS tree's own .git and never an ancestor's (the Makefile learned that the hard way). One
 # thing reads it: the DEFAULT GOAL -- a checkout wants the fast gate for its edit loop, an
 # unpacked release wants the product, because whoever unpacked it came for love and not for
 # our test binaries.
@@ -96,9 +96,9 @@ t = $R/test/00-init.l $R/test/spec.l $R/test/uu.l $(filter-out %/00-init.l %/spe
 love_h = $(wildcard $R/src/core/*.h)
 # the core rides with its math floor: our own transcendentals, no libm anywhere.
 # love.c broke into TUs so the biggest one is not the whole build's critical path;
-# src/core/love.h is what they share. the roster is mk/tu.mk, which src/port/wasm/Makefile
-# reads too -- and it is a LINK ORDER, which is why it stays named where the rest glob.
-include $(R)/mk/tu.mk
+# src/core/love.h is what they share. this roster is a LINK ORDER, so it stays named
+# where the other sets glob -- $(wildcard) answers readdir order, not link order.
+love_tu = love.c gc.c ev.c io.c map.c snap.c num.c arr.c
 # ..and the codec snap.c reaches unconditionally, to pack and unpack an image's code
 # segment: a seat that links the runtime links it. wasm is the one that does not, and
 # it reads love_tu alone -- which is why the codec joins the roster here and not there.

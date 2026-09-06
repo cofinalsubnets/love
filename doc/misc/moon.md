@@ -238,7 +238,7 @@ the runtime sources the implicit link pulls — are found through three rungs, t
 1. **the dev tree**, `src/apps/moon/` off the cwd;
 2. **the installed nest**, `<seat>/../lib/love/moon/` — the loader's own seat walk, the
    `selfpath` nif. So `~/.love/bin/love` finds `~/.love/lib/love/moon/`, and a distro's
-   `/usr/bin/love` finds `/usr/lib/love/moon/`. `mk/install.mk` lays them there.
+   `/usr/bin/love` finds `/usr/lib/love/moon/`. `the Makefile` lays them there.
 3. **the carried source, in memory** — a bare binary with no nest anywhere inflates its own
    embedded archive (`source-gz`) and reads the toolchain slice out of a table: the resolver
    and the runtime walk take the table where they would have read the nest. Nothing is written

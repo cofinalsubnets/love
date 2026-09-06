@@ -514,7 +514,7 @@
        (exec? s) (0 < s 2 & 4)
        ; the relaxing layout -- obj.l is tree-fresh in the kore/mooncc cats while the holo
        ; book rides the running binary's bake, and the build pairs them structurally (the
-       ; wake shims exec the sibling love; src/apps/build.mk). a bake too old to carry laylax
+       ; wake shims exec the sibling love; the Makefile). a bake too old to carry laylax
        ; means a hand-mixed script/binary combo: scare loud, never lay quietly long.
        ; the relaxer is the executable section's -- shortening a branch is only ever
        ; sound where the branch may resolve internally in the first place.

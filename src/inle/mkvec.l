@@ -9,7 +9,7 @@
 ;                            save/restore path, the fault report path
 ;   (lay-vec dst "rv64")  the one direct-mode trap entry: save, k_trap, restore, sret
 ;
-; runs after src/core/holo/{elf,obj}.l in a (use 'holo) cat; src/kernel.mk drives it. register
+; runs after src/core/holo/{elf,obj}.l in a (use 'holo) cat; the Makefile drives it. register
 ; vocabulary is holo's -- x86: r0=rax r1=rcx r2=rdx r3=rbx r4=rbp r5=rsi r6=rdi r7..r14=
 ; r8..r15; a64: rN = xN; riscv: r0..r7 = a0..a7, r8..r12 = t0..t4, lr = ra.
 ; x86 port i/o is register-contracted (dx the port, al the datum),

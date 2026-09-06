@@ -869,7 +869,7 @@
        sn (shname as)
        quiet? (0 < tally (peep as ".SILENT" ""))
        ; make reads the @/-/+ modifiers after expansion too (the $(Q)-as-@
-       ; verbose-build idiom; mk/lib.mk's lcat_h leads with @ from inside the
+       ; verbose-build idiom; the Makefile's lcat_h leads with @ from inside the
        ; variable) -- so re-strip the expanded line and fold its flags in.
        ; expand once, and keep the whole parse. Both the oneshell test below and the
        ; per-line lane want the expanded text, and expanding twice ran every $(shell ..)

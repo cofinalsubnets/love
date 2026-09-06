@@ -67,11 +67,11 @@ cats (today's out/dist twins retire), so the seed is: relink + src blob +
 readme + the identical bake. distfiles remains THE roster; docsfiles its
 prefix. Gate: test_dist + test_distboot smoke.
 
-**Rung 3 -- install and distro flatten.** mk/install.mk drops
+**Rung 3 -- install and distro flatten.** the Makefile drops
 lib/love/{kore,mooncc}.image and the wake shims: bin/kore, bin/mooncc, bin/sh
 and the applet farm become argv-shims (or symlinks, if cli.l learns argv[0]
 dispatch -- a separate, optional rung) onto the ONE installed binary.
-mk/distro.mk's bin/ points at love the same way. Gate: make install into a
+the Makefile's bin/ points at love the same way. Gate: make install into a
 scratch prefix + the distro smoke.
 
 **Rung 4 -- the gates and the edges.** test_wake/test_imgchain re-aim at the

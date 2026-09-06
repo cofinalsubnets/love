@@ -10,7 +10,7 @@
 # everywhere" asks for), and mooncc's output does not depend on the arch
 # mooncc runs on.
 #
-# ⚠ the TU flags MIRROR src/apps/build.mk's x-lane (AiHaveVersionH on love.o), the
+# ⚠ the TU flags MIRROR the Makefile's x-lane (AiHaveVersionH on love.o), the
 # fixpoint.sh drift trap wearing its cross face. this gate's first run caught the
 # version flag MISSING from the x-lane: the twin named itself "unknown".
 # ⚠ AND THE LIST IS THE ARTIFACT'S, kernel objects included: a gate that links a
@@ -68,7 +68,7 @@ done
 LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$ho/.mksys-cat.l" -q -e "((from 'moon '$mks) \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
 test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 
-# the kernel the artifact carries (src/kernel.mk's $(xkart_o)), rebuilt native
+# the kernel the artifact carries (the Makefile's $(xkart_o)), rebuilt native
 # and laid the same way. an arch with no seat carries none, and $gate_arch_c is
 # empty there -- the makefile draws that line with its own wildcard.
 if [ -n "$gate_arch_c" ]; then

@@ -18,7 +18,7 @@
 ;
 ; runs after src/core/holo/{elf,obj}.l in a (use 'holo) cat, with the target's
 ; backend text joined (a frontend bakes holo with the NATIVE backend only);
-; src/kernel.mk drives it. register vocabulary is holo's -- x86: r0=rax
+; the Makefile drives it. register vocabulary is holo's -- x86: r0=rax
 ; r1=rcx r2=rdx r3=rbx r5=rsi r6=rdi; a64: rN = xN.
 (:
    (b-rep n x) (? (n < 1) () (x >< (b-rep (n - 1) x)))

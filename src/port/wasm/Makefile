@@ -7,10 +7,12 @@ emcc = $(CCACHE) $(EMCC)
 # This frontend's build output directory under the top-level out/.
 o = ../../../out/wasm
 
-# the whole core, off the one roster: a list spelled again here goes stale the next time a
-# TU is added, and a short g_c compiles a fraction of the core into a link that still works
-# until it does not. g_h is src/ whole, so every object here keeps a header dependency.
-include ../../../mk/tu.mk
+# the whole core, off the one roster: a list spelled again here goes stale the next time
+# a TU is added, and a short g_c compiles a fraction of the core into a link that still
+# works until it does not. common.mk carries love_tu, so this reads the membership the
+# rest of the tree reads. g_h is src/core whole, so every object keeps a header dep.
+R := ../../..
+include $(R)/mk/common.mk
 g_c = $(patsubst %,../../../src/core/%,$(love_tu)) ../../../src/apps/moon/lib/math/am.c
 g_h = $(wildcard ../../../src/core/*.h)
 

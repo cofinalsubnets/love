@@ -6,7 +6,7 @@
 # toolchain, and touches no ambient compiler at all. Both answer the same bytes.
 #
 # ⚠ WHY THAT IS EVEN POSSIBLE, and it is not something we engineered for this gate:
-# the local cc builds `love0` and NOTHING else (src/build.mk). Every object in the
+# the local cc builds `love0` and NOTHING else (the Makefile). Every object in the
 # shipped binary is mooncc's, compiled by love0 waking mooncc0.image. The bootstrap
 # compiler is a scaffold that leaves no trace in the product -- which is the same
 # property test_fixpoint asserts within one tree, and whose DDC leg (a foreign

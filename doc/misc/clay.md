@@ -387,7 +387,7 @@ tells about moon. state it this way or not at all.
    `kinds.h` is laid from the same roster the grid is, and `KN` is the roster's own length
    rather than a number someone counted. the generated line came out BYTE-IDENTICAL to the
    hand-written one. cost: one new clay form, `(edef NAME (CONSTS..))`, emit-only.
-   ⚠ the embedding surface is TWO files now -- `mk/install.mk` ships `kinds.h` beside
+   ⚠ the embedding surface is TWO files now -- `the Makefile` ships `kinds.h` beside
    `love.h`, and an install missing it does not compile.
 2c. **the rep roster, split off the dispatch one.** `enum q` was answering two questions;
    only nine members were ever `ai_typ` answers. now `enum d` is laid from its own roster,

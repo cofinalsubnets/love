@@ -13,7 +13,7 @@
    ; message. gripe? guards it; the driver (moon.l ccdie) formats it, else falls
    ; back to today's generic line so unconverted stages don't regress. a gripe is
    ; a chain, so okv? -- a real stage result -- excludes it explicitly. it lives
-   ; here, the first moon file in both load orders (src/apps/build.mk, test/test.mk),
+   ; here, the first moon file in both load orders (the Makefile, test/test.mk),
    ; so every later stage can answer one.
    (gripe file line col msg) ['gripe file line col msg]
    (gripe? ('gripe . _)) 1

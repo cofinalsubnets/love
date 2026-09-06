@@ -5,7 +5,7 @@
 ; kernel actually execs as process 1 out of the initramfs: mount the fhs filesystems,
 ; then hand the console to lush (src/apps/lush, catted to /lib/sh.l) and never exit (pid 1 leaving panics the kernel).
 ;
-; packaged by mk/distro.mk as /init (this file, shebang -> /bin/love), beside /bin/love,
+; packaged by the Makefile as /init (this file, shebang -> /bin/love), beside /bin/love,
 ; /bin/kore (+ applet symlinks) and /lib/sh.l. boot line:
 ;   qemu ... -kernel <bzImage> -initrd initramfs.cpio.gz -append "console=ttys0 rdinit=/init"
 ;
