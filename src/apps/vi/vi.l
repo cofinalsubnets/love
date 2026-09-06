@@ -4,13 +4,9 @@
 ; loads after core.l/re.l/vi core in the kore cat and rides the u-floor (uread,
 ; udie) and text.l's lines/unlines.
 ;
-; keys: one byte at a time via (see in); ESC [ A/B/C/D decode to k/j/l/h, ESC y/u/b/n
-; -- alt with the letter, as a terminal sends it -- to the diagonals 200..203, any
-; other post-ESC byte is delivered after the bare 27 (a one-byte pushback), so
-; `ESC x` interleaves right. port EOF quits -- a piped script (the smoke lane)
-; ends with :wq and never dangles. the tty raws via the `raw` nif (cooked
-; restores at exit, bao's atexit); the frame lives on the alternate screen,
-; so the session's scrollback survives the visit.
+; the visit is cli's `stage`: raw tty, the alternate screen, one key a step through
+; cli's edkey (arrows, alt letters, a bare escape after a beat), and port EOF leaves --
+; a piped script (the smoke lane) ends with :wq and never dangles.
 (module 'vi
 (use 'kore) ; the text/u floors
 (:
@@ -22,11 +18,6 @@
        ; the pens are the face's to hand over -- they want $colorterm and the
        ; user's own theme file, and the engine reads neither
        _ (pin st 'pens (hue-wake ()))
-       ws (winsize 0)
-       _ (? (two? ws) (: _ (pin st 'h <ws) (pin st 'w >ws)) ())
-       e (string 27)
-       _ (raw 1)
-       _ (puts (+ e "[?1049h"))
        ; the ex write requests: (name) means write, "" means the buffer's file
        (dow s2)
         (: rq (s2 'dow)
@@ -55,31 +46,8 @@
                  _ (vload s2 (? (two? r) (lines <>r) ()) nm)
                  (vmsg s2 (? (two? r) (nm + ": " + show (tally (s2 'lines)) + " lines")
                               (nm + ": new file"))))))
-       ; one key, arrows and alt decoded, with the one-byte pushback: (byte next-pend).
-       ; an escape waits a beat for its tail: none, and it is the key itself
-       (rd pend)
-        (? (<= 0 pend) [pend -1]
-           (: c (see in)
-              (? !(= c 27) [c -1]
-                 !(: _ (rest 1) (cue? 0)) [27 -1]
-                 (: c2 (see in)
-                    (? (= c2 91)
-                       (: c3 (see in)
-                          [(? (= c3 65) 107 (= c3 66) 106
-                              (= c3 67) 108 (= c3 68) 104 27) -1])
-                       (= c2 121) [200 -1] (= c2 117) [201 -1]     ; alt-y alt-u
-                       (= c2 98) [202 -1] (= c2 110) [203 -1]      ; alt-b alt-n
-                       [27 c2])))))
-       (fin _) (: _ (puts (e + "[0m" + e + "[?1049l")) _ (flush out) (quit 0))
-       (go pend)
-        (: _ (puts (vframe st)) _ (flush out)
-           kr (rd pend)
-           c <kr
-           (? (< c 0) (fin ())
-              (: _ (vstep st c)
-                 _ (dow st)
-                 _ (doe st)
-                 (? (st 'quit) (fin ())
-                    (go <>kr)))))
-       (go -1)))
+       ; the stage hides the cursor; vi's frame places it, so the frame shows it
+       (stage (\ w h (pins st 'w w 'h h, "\e[?25h" + vframe st))
+              (\ c (vstep st c, dow st, doe st))
+              (\ _ (st 'quit)))))
 ) ; module 'vi

@@ -40,6 +40,10 @@
    g (story-new L)
    _ (keys! g "l")
    _ (assert (7 = (g 'x)) (8 = (g 'y)) !(g 'win))
+   _ (story-key g -1)                                  ; the left arrow, as edkey hands it in
+   _ (assert (6 = (g 'x)))
+   _ (story-key g -2)
+   _ (assert (7 = (g 'x)))
    _ (keys! g "jjjj")                                 ; the south wall stops you
    _ (assert (10 = (g 'y)))
    _ (keys! g "h")                                    ; under the sign
@@ -57,7 +61,7 @@
    _ (keys! g "q\e")                                 ; q alone is nothing, esc alone is nothing
    _ (assert !(g 'over))
    _ (keys! g ":wq")                                  ; the command line, and esc backs out of it
-   _ (assert ('cmd = (g 'mode)) ("wq" = (g 'cmd)))
+   _ (assert ('cmd = (g 'mode)) ("wq" = (edtext (g 'cmd))))
    _ (keys! g "\e")
    _ (assert ('map = (g 'mode)) !(g 'over))
    _ (keys! g ":dance\r")

@@ -9,17 +9,18 @@
 ;   a  a new tile kind: "CH GLYPH FG BG [wall]" in one line, and it is the brush
 ;   c  the pens of what is here -- a thing, else the brush's kind: "FG BG"
 ;   t  a thing here: its id, then its glyph, then its name      x  remove the thing here
-;   m  the start is here   v  save and open the file in vi   p  save and play   s  save   q  quit
+;   m  the start is here   v  save and open the file in vi   p  save and play   s  save
+;   :  a command line: :w saves, :q leaves, :wq both -- q alone is nothing
 ;
 ; every key is a pure step on the state and every frame a pure lay into a port, so
-; the designer gates headless (test/host/design.l); only design-run ties the tty. the
-; engine's words -- level, kind, thing, kind-of, load-level, save-level, story-run, pen --
-; are the story module's.
+; the designer gates headless (test/host/design.l); only design-run ties the tty, on
+; cli's stage, and the prompts are cli's editor. the engine's words -- level, kind,
+; thing, kind-of, load-level, save-level, story-run, pen -- are the story module's.
 ; usage: love design [LEVEL.l]      the file to lay out (default src/apps/rove/levels/lighthouse.l)
 (module (design design-main design-run design-new design-key design-frame)
 (use 'story)
 (:
- (design-new lvl p) {'lvl lvl 'path p 'cx (lvl 'sx) 'cy (lvl 'sy) 'mode 'map 'buf "" 'msg "" 'new () 'brush 46 'dirty 0}
+ (design-new lvl p) {'lvl lvl 'path p 'cx (lvl 'sx) 'cy (lvl 'sy) 'mode 'map 'buf (ednew ()) 'msg "" 'new () 'brush 46 'dirty 0 'over 0 'want ()}
  (tell d s) (pin d 'msg s)
  (touch d) (pin d 'dirty 1)
  (nat n) (0 <= n ? n 0)
@@ -71,8 +72,8 @@
  ; --- one key: the mode says what a key means -------------------------------------
  ; map: the cursor and the edits. a prompt collects a line into buf; a thing takes
  ; three in turn (id, glyph, name). esc backs out.
- (prompt d m) (pins d 'mode m 'buf "")
- (commit d) (: b (d 'buf) m (d 'mode)
+ (prompt d m) (pins d 'mode m 'buf (ednew ()))
+ (commit d) (: b (edtext (d 'buf)) m (d 'mode)
                _ (pin d 'mode 'map)
                (? !(0 < #b) (tell d "nothing entered")
                   (m @ 'id    (: n {} _ (pin n 'id b) (pin d 'new n, prompt d 'glyph))
@@ -80,22 +81,31 @@
                        'name  (pin (d 'new) 'name b, add-thing d)
                        'tile  (add-kind d b)
                        'pens  (set-pens d b)
+                       'cmd   (command d b)
                        d)))
+ ; the command line: :q leaves, :w saves, :wq both; anything else is not a command
+ (command d l) (l @ "q" (pin d 'over 'quit)
+                   "w" (save d)
+                   "wq" (save d, pin d 'over 'quit)
+                   (tell d ("not a command: " + l)))
  (design-key d c) (: m (d 'mode)
    (? (m = 'map)
-      (c @ (104 || 68) (move d -1 0)   (108 || 67) (move d 1 0)
-           (107 || 65) (move d 0 -1)   (106 || 66) (move d 0 1)
-           121 (move d -1 -1) 117 (move d 1 -1) 98 (move d -1 1) 110 (move d 1 1)
+      (c @ (104 || -1) (move d -1 0)   (108 || -2) (move d 1 0)
+           (107 || -8) (move d 0 -1)   (106 || -9) (move d 0 1)
+           (121 || 377) (move d -1 -1) (117 || 373) (move d 1 -1)
+           (98 || 354) (move d -1 1) (110 || 366) (move d 1 1)
            32 (set-tile d (d 'brush))
            35 (pin d 'brush 35, set-tile d 35)  46 (pin d 'brush 46, set-tile d 46)
            (49 <= c < 58 ? (pick d (c - 49))
-            (c @ 97 (prompt d 'tile)  99 (prompt d 'pens)
+            (c @ 97 (prompt d 'tile)  99 (prompt d 'pens)  58 (prompt d 'cmd)
                  116 (prompt d 'id)  120 (drop-thing d)  109 (set-start d)  115 (save d)
+                 118 (pin d 'want 'vi)  112 (pin d 'want 'play)   ; the runner's: they leave the stage
                  d)))
-      (c @ (13 || 10) (commit d)
-           27 (pin d 'mode 'map, tell d "")
-           (127 || 8) (: b (d 'buf) (0 < #b ? (pin d 'buf (snip b 0 (#b - 1))) d))
-           (32 <= c < 127 ? (pin d 'buf (d 'buf + string c)) d))))
+      ; a prompt is cli's editor: enter commits, escape backs out
+      (: t (d 'buf) _ (edstep t c)
+         (t 'ev @ 10 (commit d)
+                  27 (pin d 'mode 'map, tell d "")
+                  d))))
 
  ; --- the frame: the map with the cursor on it, the tile and thing under it, the help --
  (design-frame d w h) (: j (jug 0) lvl (d 'lvl)
@@ -121,30 +131,24 @@
           + "   brush: " + string (d 'brush) + " " + (bk 'solid ? "wall" "floor") + " " + show (bk 'fg) + "/" + show (bk 'bg)
           + "   palette: " + joins (map string (palette d)) " ")
    _ (say j (pad about w " " + "\e[K\r\n"))
-   _ (say j (pad " hjkl yubn move  space paint  1-9 # . brush  a tile  c pens  t thing  x remove  m start  v vi  p play  s save  q quit" w " " + "\e[K\r\n"))
-   _ (say j (d 'mode @ 'map (pad (d 'msg) w " " + "\e[K")
-                       (show (d 'mode) + ": " + d 'buf + "\e[K")))
+   _ (say j (pad " hjkl yubn move  space paint  1-9 # . brush  a tile  c pens  t thing  x remove  m start  v vi  p play  :w save  :q leave" w " " + "\e[K\r\n"))
+   _ (say j (d 'mode @ 'map (pad (d 'msg) w " " + "\e[K\e[?25l")
+                       'cmd (":" + edtext (d 'buf) + "\e[K\e[?25h")
+                       (show (d 'mode) + ": " + edtext (d 'buf) + "\e[K\e[?25h")))
    (slurp j))
 
- ; --- the runner: the designer on the tty ------------------------------------------
- (design-run p) (: ws (winsize 0)
-                   h (two? ws && 7 < <ws ? <ws 24)
-                   w (two? ws && 19 < <>ws ? <>ws 80)
-                   lvl (: l (load-level p) (l ? l (level p 1 1 ["#####" "#...#" "#####"] {} {})))
+ ; --- the runner: the designer on cli's stage --------------------------------------
+ (design-run p) (: lvl (: l (load-level p) (l ? l (level p 1 1 ["#####" "#...#" "#####"] {} {})))
                    d (design-new lvl p)
                    vi (from 'vi 'vi-main)
-                   (show _) (say out (design-frame d w h))
-                   (key _) (see in @ 27 (rest 1, cue? 0 ? (see in @ 91 (see in) c (unsee in c, 27)) 27) c c)
-                   (loop _) (show (), key () @
-                     (3 || -1) ()
-                     113 (d 'mode = 'map ? () (design-key d 113, loop ()))
-                     118 (d 'mode = 'map ? (save d, (? vi (vi [p], reload d) (tell d "no editor on this seat")), loop ())
-                                           (design-key d 118, loop ()))
-                     112 (d 'mode = 'map ? (save d, story-run (d 'lvl), say out "\e[?25l\e[2J", loop ())
-                                           (design-key d 112, loop ()))
-                     c (design-key d c, loop ()))
-                   (raw 1, say out "\e[?1049h\e[?25l\e[2J", loop (),
-                    say out "\e[0m\e[?25h\e[?1049l", flush out, raw 0, 0))
+                   ; vi on the level's file and a play of the level are stages of their own:
+                   ; each leaves the screen and the tty as it found them, so this one re-arms
+                   (visit f) (: _ (save d) _ (f ()) _ (raw 1) (say out "\e[?1049h"))
+                   (step c) (: _ (design-key d c)
+                              (d 'want @ 'vi (pin d 'want (), (? vi (visit (\ _ (vi [p])), reload d) (tell d "no editor on this seat")))
+                                       'play (pin d 'want (), visit (\ _ (story-run (d 'lvl))))
+                                       ()))
+                   (stage (w \ h \ design-frame d w h) step (\ _ (d 'over))))
  (design-main as) (design-run (two? as ? <as "src/apps/rove/levels/lighthouse.l"))
  _ (pins (from 'verbs 'tab) 'design design-main))
 ) ; module design

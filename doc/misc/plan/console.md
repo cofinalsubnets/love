@@ -82,9 +82,19 @@ that is a compiler.
   the outdoors' unseen edge, and the sea is a wall with pens. things carry pens too.
   the designer paints with a brush (1-9 the palette's, # and ., `a` a new kind in one
   line, `c` the pens of the brush or of the thing here, space paints) and moves like
-  the map, yubn included. OPEN: a level's own logic (a dialog step that runs level
-  code); fonts per cell (quay carries them; a tty cannot show them, so they wait for
-  the page's console); the page's library catalogue, laid by make web.
+  the map, yubn included. THE FACE IS ONE: cli (src/core/boot/post.l) carries the
+  key reader (`edkey`: a byte, -7 at eof, arrows/home/end/del as the negative codes,
+  alt+letter as 256 + the letter, a bare escape after a beat), the line editor as a
+  tablet (`ednew`, `(edstep t key)` answers the tablet with 'ev the key it left to the
+  caller -- the repl's edline, lush's edlnc, vi's `:` and `/` lines, the story's
+  prompts and the designer's are all it), and `(stage show step over?)`, the
+  full-screen runner (raw, the alternate screen, eof leaves; a frame places or hides
+  the cursor). vi, story, design and rove ride all three; vi's diagonals are alt
+  letters (377 373 354 366), arrows are h j k l in every app, and a stage nests (the
+  designer's `v` and `p` re-arm the screen after). OPEN: a level's own logic (a
+  dialog step that runs level code); fonts per cell (quay carries them; a tty cannot
+  show them, so they wait for the page's console); the page's library catalogue, laid
+  by make web.
 - **rung 3 -- the wasm backend**, doc/misc/plan/moon-wasm.md rungs 0-5: the module
   writer, control flow by dispatch loop, the type law, the environment (a nolibc face
   where the handful of system calls are imports the page supplies, and a loader of a

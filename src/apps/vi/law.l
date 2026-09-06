@@ -35,19 +35,20 @@
       (= (at (vgo '("a" "b" "c") "Ggg")) '(0 0))
       (= (at (vgo '("a" "b" "c") "3gg")) '(2 0)))
 
-; --- the diagonals: alt-y u b n arrive as 200..203, a vertical then a horizontal, the
-; count on both; fenced like their halves; not a range, so an operator is dropped ---
+; --- the diagonals: alt-y u b n arrive as 256 + the letter, a vertical then a
+; horizontal, the count on both; fenced like their halves; not a range, so an
+; operator is dropped ---
    _ (assert
-      (= (at (vgob '("abc" "def" "ghi") (bytes "l" + [202]))) '(1 0))        ; alt-b: down-left
-      (= (at (vgob '("abc" "def" "ghi") [203])) '(1 1))                      ; alt-n: down-right
-      (= (at (vgob '("abc" "def" "ghi") [203 203])) '(2 2))
-      (= (at (vgob '("abc" "def" "ghi") [203 203 200])) '(1 1))              ; alt-y: up-left
-      (= (at (vgob '("abc" "def" "ghi") [203 201])) '(0 2))                  ; alt-u: up-right
-      (= (at (vgob '("abc" "def" "ghi") (bytes "2" + [203]))) '(2 2))        ; the count rides both halves
-      (= (at (vgob '("abc" "def" "ghi") [200])) '(0 0))                      ; the fences hold
-      (= (at (vgob '("abcdef" "ab") [203])) '(1 1))                          ; the short line clamps
-      (= ((vgob '("abc" "def") (bytes "d" + [203])) 'lines) '("abc" "def"))  ; d then a diagonal: nothing cut
-      (= (at (vgob '("abc" "def") (bytes "d" + [203]))) '(0 0)))             ; ..and nothing moves either
+      (= (at (vgob '("abc" "def" "ghi") (bytes "l" + [354]))) '(1 0))        ; alt-b: down-left
+      (= (at (vgob '("abc" "def" "ghi") [366])) '(1 1))                      ; alt-n: down-right
+      (= (at (vgob '("abc" "def" "ghi") [366 366])) '(2 2))
+      (= (at (vgob '("abc" "def" "ghi") [366 366 377])) '(1 1))              ; alt-y: up-left
+      (= (at (vgob '("abc" "def" "ghi") [366 373])) '(0 2))                  ; alt-u: up-right
+      (= (at (vgob '("abc" "def" "ghi") (bytes "2" + [366]))) '(2 2))        ; the count rides both halves
+      (= (at (vgob '("abc" "def" "ghi") [377])) '(0 0))                      ; the fences hold
+      (= (at (vgob '("abcdef" "ab") [366])) '(1 1))                          ; the short line clamps
+      (= ((vgob '("abc" "def") (bytes "d" + [366])) 'lines) '("abc" "def"))  ; d then a diagonal: nothing cut
+      (= (at (vgob '("abc" "def") (bytes "d" + [366]))) '(0 0)))             ; ..and nothing moves either
 
 ; --- words: w e b across lines ---
    _ (assert

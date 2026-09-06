@@ -1715,9 +1715,10 @@
 ; must be up before this compiles: @ reads here, and a macro reaches a reader only once its
 ; layer is spliced.
 
-(module '(cli read reads forms shell welp edraw edln edlnc cli-rail cli-line
-          edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist
-          detach emptybuf mkframe parses joinln flatten splitat parseall)
+(module '(cli read reads forms shell welp edraw edln edlnc cli-rail cli-line stage edkey
+          ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
+          edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
+          joinln splitat parseall)
 (: (read s) (sound (hot? s ? (flow s) s) @ (x . _) (ev x)))
 (: (reads p)
    (: (walk cl z) (sound cl @ 'torn (scare 'unfinished-form p)
@@ -1789,15 +1790,15 @@
                    [a] [a]                         ; one datum: as-is (leading monadic preserved)
                    ds  (two? ds ? [ds]))           ; many: the application; a blank line: ()
 
-   ; --- editor ---
+   ; --- the editor: one buffer in a tablet, one key at a time -------------------------
+   ; the buffer is a zipper of charlists: 'u the lines above (reversed), 'l the cursor's
+   ; left (reversed), 'r its right, 'd the lines below. every motion and edit is a
+   ; function of the tablet that answers it, so a caller with a loop of its own -- vi's
+   ; `:` line, a game's prompt -- drives the editor the repl does, a key at a time
 
    ; intersperse a list of charlists with newlines, in order
    (joinln ls)
     (ls @ (a . b) (atom? b ? a (a + (10 . joinln b))))
-
-   ; flatten the editor state into one charlist suitable for parseall
-   (flatten u l r d)
-     (joinln (revcat u (revcat l r . d)))
 
    ; walk xs forward taking n chars into acc (reversed); when done
    ; call k with (rev (take n xs)) and (drop n xs). stops cleanly at
@@ -1809,108 +1810,129 @@
    ; map non-printables to space; otherwise pass through
    (prc c) (putc $ 32 <= c < 127 ? c 32)
 
-   ; line editor buffer zipper arguments
-   ; u up (reversed), l left (reversed), r right, d down
-   (edleft k u l r d)
-    (l @ (al . ul) (k u ul (al . r) d)
-     (u @ (au . uu) (k uu (rev au) () (revcat l r . d))
-      (k u l r d)))
-   (edright k u l r d)
-    (r @ (ar . ur) (k u (ar . l) ur d)
-     (d @ (ad . ud) (k (revcat l r . u) () ad ud)
-      (k u l r d)))
-   (edbsp k u l r d)
-    (l @ (_ . ul) (k u ul r d)
-     (u @ (au . uu) (k uu (rev au) r d)
-      (k u l r d)))
-   (eddel k u l r d)
-    (r @ (_ . ur) (k u l ur d)
-     (d @ (ad . ud) (k u l ad ud)
-      (k u l r d)))
-   (edhome k u l r d) (k u () (revcat l r) d)
-   (edend  k u l r d) (k u (revcat r l) () d)
+   (ednew _) {'u () 'l () 'r () 'd () 'ev 0}
+   (edleft t) (: l (t 'l) u (t 'u)
+     (? (two? l) (pins t 'l >l 'r (<l . t 'r))
+        (two? u) (pins t 'u >u 'l (rev <u) 'r () 'd (revcat l (t 'r) . t 'd))
+        t))
+   (edright t) (: r (t 'r) d (t 'd)
+     (? (two? r) (pins t 'l (<r . t 'l) 'r >r)
+        (two? d) (pins t 'u (revcat (t 'l) r . t 'u) 'l () 'r <d 'd >d)
+        t))
+   (edbsp t) (: l (t 'l) u (t 'u)
+     (? (two? l) (pin t 'l >l)
+        (two? u) (pins t 'u >u 'l (rev <u))
+        t))
+   (eddel t) (: r (t 'r) d (t 'd)
+     (? (two? r) (pin t 'r >r)
+        (two? d) (pins t 'r <d 'd >d)
+        t))
+   (edhome t) (pins t 'l () 'r (revcat (t 'l) (t 'r)))
+   (edend t) (pins t 'l (revcat (t 'r) (t 'l)) 'r ())
+   ; edtop / edbot jump across the whole buffer: the start of the topmost line, the end
+   ; of the bottommost. on a single-line buffer they are edhome / edend
+   (edtop t) (rev (t 'u) @ (au . uu) (pins t 'u () 'l () 'r au 'd (uu + (revcat (t 'l) (t 'r) . t 'd)))
+                (edhome t))
+   (edbot t) (rev (t 'd) @ (ad . ud) (pins t 'u (ud + (revcat (t 'l) (t 'r) . t 'u)) 'l (rev ad) 'r () 'd ())
+                (edend t))
+   ; up and down keep the column, clamped to the line
+   (edup t) (t 'u @ (au . uu) (splitat (\ lz rr (pins t 'u uu 'l lz 'r rr 'd (revcat (t 'l) (t 'r) . t 'd))) () #(t 'l) au)
+             t)
+   (eddown t) (t 'd @ (ad . ud) (splitat (\ lz rr (pins t 'u (revcat (t 'l) (t 'r) . t 'u) 'l lz 'r rr 'd ud)) () #(t 'l) ad)
+               t)
+   (edput t c) (pin t 'l (c . t 'l))                       ; insert at the cursor
+   (ednl t) (pins t 'u (rev (t 'l) . t 'u) 'l ())           ; break the line at the cursor
+   (edclear t) (pins t 'u () 'l () 'r () 'd ())
+   (edempty? t) !(edchars t)
+   (edchars t) (joinln (revcat (t 'u) (revcat (t 'l) (t 'r) . t 'd)))   ; the whole buffer, one charlist
+   (edtext t) (string (edchars t))
+   (edcol t) (tally (t 'l))
+   (edparses? t) (two? (parseall (edchars t)))
+   (edframe t) ((t 'u) . (t 'l) . (t 'r) . (t 'd))           ; the buffer packed for history
+   (edload t f) (pins t 'u <f 'l <>f 'r <>>f 'd >>>f)
 
-   ; edtop / edbot jump across the whole buffer: cursor at the start of
-   ; the topmost line / end of the bottommost line. on a single-line
-   ; buffer they degenerate to edhome / edend.
-   (edtop k u l r d)
-    (rev u @ (au . uu) (k () () au (uu + (revcat l r . d)))
-     (k u () (revcat l r) d))
-   (edbot k u l r d)
-    (rev d @ (ad . ud) (k (ud + (revcat l r . u)) (revcat ad ()) () ())
-     (k u (revcat r l) () d))
-   (edup k u l r d)
-    (u @ (au . uu)(splitat (\ lz rr (k uu lz rr (revcat l r . d))) () #l au)
-     (k u l r d))
-   (eddown k u l r d)
-    (d @ (ad . ud) (splitat (\ lz rr (k (revcat l r . u) lz rr ud)) () #l ad)
-     (k u l r d))
+   ; --- the history zipper, on the same tablet ---------------------------------------
+   ; 'hu the older frames, 'hd the newer, 'cur a pristine recall: an edit gives it back
+   ; to 'hu first, so the original survives. on a pop the buffer goes to the other side
+   ; (skipped when empty); on a real recall with no further side, the buffer is pushed
+   ; and a fresh empty line opens, as long as it parses
+   (eddetach t) (? (two? (t 'cur)) (pins t 'hu (t 'cur . t 'hu) 'cur ()) t)
+   (uphist t) (: hu (t 'hu)
+     (? (two? hu) (: _ (edempty? t ? () (pin t 'hd (edframe t . t 'hd)))
+                     (pins (edload t <hu) 'hu >hu 'cur <hu))
+        (two? (t 'cur) && edparses? t) (: _ (pin t 'hd (edframe t . t 'hd)) (pin (edclear t) 'cur ()))
+        t))
+   (downhist t) (: hd (t 'hd)
+     (? (two? hd) (: _ (edempty? t ? () (pin t 'hu (edframe t . t 'hu)))
+                     (pins (edload t <hd) 'hd >hd 'cur <hd))
+        (two? (t 'cur) && edparses? t) (: _ (pin t 'hu (edframe t . t 'hu)) (pin (edclear t) 'cur ()))
+        t))
 
-   ; --- history zipper ---
+   ; --- one key into the buffer ------------------------------------------------------
+   ; motions and edits are taken here; what the editor does not decide -- enter (13 reads
+   ; as 10), escape, tab, ^C, ^D, eof, up and down past the buffer -- is left in 'ev for
+   ; the caller, 0 when the key was taken
+   (edstep t c)
+     (: (took f) (pin (f t) 'ev 0)
+        (edit f) (took (\ b (f (eddetach b))))
+        (? (32 <= c < 127) (edit (\ b (edput b c)))
+           (c = -1) (took edleft)  (c = -2) (took edright)
+           (c = 127 || c = 8 || c = -3) (edit edbsp)  (c = -4) (edit eddel)
+           (c = 1 || c = -5) (took edhome)  (c = 5 || c = -6) (took edend)
+           (c = -10) (took edtop)  (c = -11) (took edbot)
+           (c = -8 && two? (t 'u)) (took edup)  (c = -9 && two? (t 'd)) (took eddown)
+           (pin t 'ev (c = 13 ? 10 c))))
 
-   ; pack the buffer's four halves into one slot for history storage.
-   (mkframe u l r d) (u . l . r . d)
-
-   ; if cur holds a pristine recall, restore it at its slot in hu;
-   ; called before any mutating edit so the original survives.
-   (detach hu cur) (two? cur ? (cur . hu) hu)
-
-   (emptybuf u l r d) (!u && !l && !r && !d)
-   (parses u l r d)   (two? (parseall (flatten u l r d)))
-
-   ; up/down through the history zipper. on a normal pop, push the
-   ; current buffer onto the other side (skipping if empty); if the
-   ; other side is empty (hu or hd) but we're on a real recall (cur
-   ; non-nil) and the buffer parses, push and scroll into a fresh
-   ; empty line.
-   (uphist k u l r d hu hd cur)
-     (? (two? hu)
-        (: e <hu
-           nhd (? (emptybuf u l r d) hd (mkframe u l r d . hd))
-           (k <e <>e <>>e >>>e >hu nhd e))
-        (two? cur && parses u l r d)
-        (: nhd (mkframe u l r d . hd)
-           (k () () () () hu nhd ()))
-        (k u l r d hu hd cur))
-   (downhist k u l r d hu hd cur)
-     (? (two? hd)
-        (: e <hd
-           nhu (? (emptybuf u l r d) hu (mkframe u l r d . hu))
-           (k <e <>e <>>e >>>e nhu >hd e))
-        (two? cur && parses u l r d)
-        (: nhu (mkframe u l r d . hu)
-           (k () () () () nhu hd ()))
-        (k u l r d hu hd cur))
-
+   ; --- the key reader ---------------------------------------------------------------
+   ; one key off port p: a byte as itself, -7 at eof, and the escape family decoded. a
+   ; bare escape (no tail within a beat) is 27, the CSI arrows and jumps are the codes
+   ; in the tables, alt with a letter is 256 + the letter. any other byte after an
+   ; escape goes back for the next read, so esc x is two keys. an unknown sequence is 0
    ; 0 is the miss, read with id? -- an event code nets red, so truth cannot tell hit from miss
    arrow    {68 -1 67 -2 65 -8 66 -9 72 -5 70 -6}    ; ESC [ F -- the plain finals
    modarrow {68 -1 67 -2 65 -8 66 -9 72 -10 70 -11}  ; ESC [ 1 ; M F -- modified home/end jump the buffer
-   evk      {-1 -7 4 -7 3 -12 13 10 10 10 8 -3 127 -3 1 -5 5 -6}   ; the raw control bytes
-   (edesc1 c) (? (c = 126) -5
-                 (c = 59)  (getc 0, peep modarrow (getc 0) 0))
-   (edesc x)
-    (? !(91 = getc 0) 0
-     (: c (getc 0) e (peep arrow c 0)
-      (? !(= e 0) e
-       (c @ 49 (edesc1 (getc 0))
-            55 (getc 0, -5)
-            (52 || 56) (getc 0, -6)
-            51 (getc 0, -4)
-            0))))
+   (edcsi p) (: c (see p) e (peep arrow c 0)
+               (? !(= e 0) e
+                  (c @ 49 (see p @ 126 -5  59 (see p, peep modarrow (see p) 0)  0)
+                       55 (see p, -5)
+                       (52 || 56) (see p, -6)
+                       51 (see p, -4)
+                       0)))
+   (edkey p) (: c (see p)
+               (? (c = -1) -7
+                  !(c = 27) c
+                  !(rest 1, cue? p) 27
+                  (: c2 (see p)
+                     (? (c2 = 91) (edcsi p)
+                        (97 <= c2 <= 122) (256 + c2)
+                        (c2 = -1) 27
+                        (unsee p c2, 27)))))
 
-   (edev x)
-    (: c (getc 0) e (peep evk c 0)
-     (? !(= e 0) e
-        (c = 27) (edesc 0)
-        (32 <= c < 127 ? c)))
+   ; --- the stage: a full-screen tty app ---------------------------------------------
+   ; show answers the frame for a screen w by h, step takes a key, over? says when to
+   ; leave. the frame lives on the alternate screen (the scrollback survives the visit),
+   ; the tty is raw for the visit and cooked after, and eof leaves too. a frame places or
+   ; hides the cursor itself; it comes back shown
+   (stage show step over?)
+     (: (loop _) (: ws (winsize 0)
+                    h (two? ws && 7 < <ws ? <ws 24)
+                    w (two? ws && 19 < <>ws ? <>ws 80)
+                    _ (say out (show w h))
+                    _ (flush out)
+                    c (edkey in)
+                    (? (c = -7) ()
+                       (step c, over? () ? () (loop ()))))
+        (raw 1, say out "\e[?1049h", loop (),
+         say out "\e[0m\e[?25h\e[?1049l", flush out, raw 0, 0))
 
    ; redraw the buffer in place. pra is rows above the cursor from the previous
    ; render -- move up that many first, so we land back on the prompt's row. all
    ; motion is relative, so terminal scrolling never desyncs us. pl is the prompt's
    ; column; the topmost line shares it, later lines start at column 0.
    (csi n f) (putc 27, putc 91, putn n, putc f)   ; ESC [ n f -- the one cursor verb
-   (edrender pl pra u l r d)
-     (: _ (0 < pra ? (csi pra 65),
+   (edrender pl pra t)
+     (: u (t 'u) l (t 'l) r (t 'r) d (t 'd)
+        _ (0 < pra ? (csi pra 65),
            putc 13,
            0 < pl ? (csi pl 67),
            putc 27, putc 91, putc 74, ; clear to end of screen
@@ -1930,47 +1952,31 @@
    ; so `pl` below stays (tally ps1) and the cursor math is undisturbed.
    ps1c (string 27 + "[38;5;117m" + ps1 + string 27 + "[39m")
 
-   ; print the prompt, then dispatch events until ^D or a submitted buffer.
+   ; print the prompt, then dispatch keys until ^D or a submitted buffer.
    ; returns eofsym on ^D, else (vs . nhu) so the repl can thread history.
    (edline hu hd)
-     (: pr ps1
+     (: pl (tally ps1)
         _ (puts ps1c)
-        pl (tally pr)
-        (loop pra u l r d hu hd cur)
-          (: _ (edrender pl pra u l r d)
-             npra (tally u)
-             (kloop uu lz rr dd) (loop npra uu lz rr dd hu hd cur)
-             (kedit uu lz rr dd) (loop npra uu lz rr dd (detach hu cur) hd ())
-             (khist uu lz rr dd nhu nhd ncur) (loop npra uu lz rr dd nhu nhd ncur)
-             ; the dispatch stays a chain, not a table: every arm runs a different
-             ; continuation over the live buffer, so a table would hold closures
-             ; built per keystroke. the tables above work because their arms are constants.
-             (edev 0 @
-              -7 eofsym
-              ; enter cashes the buffer as long as it parses complete
-              10 (parseall (flatten u l r d) @
-                  ^m (loop npra (rev l . u) () r d (detach hu cur) hd ())
-                  vs (two? d ? (csi (tally d) 66) (),
-                      putc 10,
-                      [vs (!vs ? (revcat hd (detach hu cur))
-                           (take 100 (mkframe u l r d . revcat hd (detach hu cur)))) ]))
-              (c && 0 < c) (loop npra u (c . l) r d (detach hu cur) hd ())
-              -1 (edleft  kloop u l r d)
-              -2 (edright kloop u l r d)
-              -3 (edbsp   kedit u l r d)
-              -4 (eddel   kedit u l r d)
-              -5 (edhome  kloop u l r d)
-              -6 (edend   kloop u l r d)
-              -8 (two? u ? (edup    kloop u l r d)
-                           (uphist   khist u l r d hu hd cur))
-              -9 (two? d ? (eddown  kloop u l r d)
-                           (downhist khist u l r d hu hd cur))
-              -10 (edtop kloop u l r d)
-              -11 (edbot kloop u l r d)
-              -12 (puts "^C\n", emptybuf u l r d ? eofsym (edline hu hd))
-              (loop npra u l r d hu hd cur)))
-        (loop 0 () () () () hu hd ()))
-
+        t (pins (ednew ()) 'hu hu 'hd hd 'cur ())
+        (loop pra)
+          (: _ (edrender pl pra t)
+             npra (tally (t 'u))
+             _ (edstep t (edkey in))
+             (t 'ev @ 0 (loop npra)
+                (-7 || 4) eofsym
+                ; enter cashes the buffer as long as it parses complete
+                10 (parseall (edchars t) @
+                    ^m (ednl (eddetach t), loop npra)
+                    vs (: _ (eddetach t)
+                          h (revcat (t 'hd) (t 'hu))
+                          (two? (t 'd) ? (csi (tally (t 'd)) 66) (),
+                           putc 10,
+                           [vs (!vs ? h (take 100 (edframe t . h)))])))
+                -8 (uphist t, loop npra)
+                -9 (downhist t, loop npra)
+                3 (puts "^C\n", edempty? t ? eofsym (edline (t 'hu) (t 'hd)))
+                (loop npra)))
+        (loop 0))
    ; evaluate a single parsed datum cooperatively.
    (do_eval v)
      (: pid (twirl ev v)
@@ -2000,81 +2006,46 @@
      puts $ ";3 love " love-version "\n",
      repl 0 0)
 
-   (besc1 ip c)
-    (c @ 126 -5                               ; a line reader never jumps the buffer:
-         59  (see ip, peep arrow (see ip) 0)) ;   the plain finals
-   (besc ip) (see ip != 91 ? 0
-    (: c (see ip) e (peep arrow c 0)
-     (? !(= e 0) e
-      (c @ 49        (besc1 ip (see ip))
-           55        (see ip, -5)
-           (52 || 56) (see ip, -6)
-           51        (see ip, -4)
-           0))))
-   ; the `see` comes first and exactly once -- evk is indexed by the byte, so peeping before
-   ; reading has nothing to peep with
-   (bev ip) (: c (see ip) e (peep evk c 0)
-               (? !(= e 0) e
-                  (c @ 27 (besc ip)
-                       9  -13          ; Tab -> the completion event (edlnc's; others ignore)
-                       (32 <= c < 127 ? c))))
-
-   ; (edraw ip pr) -- read one line off port `ip`, with in-line editing
+   ; (edraw ip pr) -- read one line off port `ip`, with in-line editing: the charlist, or eofsym
    (edraw ip pr)
-     (: pl (tally (puts pr))
-        (loop l r)
-          (: _ (edrender pl 0 () l r ())
-             (km uu ll rr dd) (loop ll rr)         ; motion: edleft/.. give (k u l r d), keep l r
-           (bev ip @
-            -7 eofsym
-            10 (putc 10, revcat l r)
-            (c && 0 < c) (loop (c . l) r)            ; insert a printable
-            -1 (edleft  km () l r ())
-            -2 (edright km () l r ())
-            -3 (edbsp   km () l r ())
-            -4 (eddel   km () l r ())
-            -5 (edhome  km () l r ())
-            -6 (edend   km () l r ())
-            (loop l r)))
-        (loop () ()))
+     (: pl (tally (puts pr)) t (ednew ())
+        (loop _) (: _ (edrender pl 0 t)
+                    _ (edstep t (edkey ip))
+                    (t 'ev @ 0 (loop ())
+                       (-7 || 4) eofsym
+                       10 (putc 10, revcat (t 'l) (t 'r))
+                       (loop ())))
+        (loop ()))
 
-   ; the shell line reader: edraw + command history
+   ; the shell line reader: edraw + command history + tab completion
    (edlnc ip pr hist comp)
-     (: pl (tally (puts pr)) hn (tally hist)
+     (: pl (tally (puts pr)) hn (tally hist) t (ednew ())
         (hnth k) <(drop k hist)                       ; hist[k], 0-based (k < hn)
-        (loop l r i draft)
-          (: _ (edrender pl 0 () l r ())
-             (km uu ll rr dd) (loop ll rr i draft)     ; motion: index + draft kept
-             (recall ni)                               ; jump to view index ni (0 = the draft)
-               (: nd (i = 0 ? (revcat l r) draft)    ; save the live draft once, the instant up leaves it
-                  ln (ni = 0 ? nd (hnth (ni - 1)))
-                  (loop (rev ln) () ni nd))
-
-             (bev ip @ -7 'eof
-                10 (: ln (putc 10, revcat l r)
+        (recall i ni draft)                           ; jump to view index ni (0 = the draft)
+          (: nd (i = 0 ? (revcat (t 'l) (t 'r)) draft)  ; save the live draft once, the instant up leaves it
+             _ (pins t 'l (rev (ni = 0 ? nd (hnth (ni - 1)))) 'r ())
+             (loop ni nd))
+        (loop i draft)
+          (: _ (edrender pl 0 t)
+             _ (edstep t (edkey ip))
+             (t 'ev @ 0 (loop i draft)
+                (-7 || 4) 'eof
+                10 (: ln (putc 10, revcat (t 'l) (t 'r))
                       nh (!ln ? hist (take 100 (ln . hist)))
                     (ln . nh))
-                (c && 0 < c) (loop (c . l) r i draft)
-                -12 (puts "^C\n", () . hist)   ; ^C: abandon the line, hist untouched
-                -13
-                  (? !comp (loop l r i draft)
-                     (: t (comp (revcat l ()))
-                        (? !(two? t) (loop l r i draft)
-                           (: l2 (foldl (a \ ch \ ch . a) l <t)
-                              cs >t
+                3 (puts "^C\n", () . hist)   ; ^C: abandon the line, hist untouched
+                9 (? !comp (loop i draft)
+                     (: cl (comp (revcat (t 'l) ()))
+                        (? !(two? cl) (loop i draft)
+                           (: _ (pin t 'l (foldl (a \ ch \ ch . a) (t 'l) <cl))
+                              cs >cl
                             (two? cs && two? >cs ?
                               (puts $ "\n" + foldl (a \ s \ 0 = #a ? s (a + "  " + s)) "" cs + "\n"),
-                             loop l2 r i draft)))))
-                -1 (edleft  km () l r ())
-                -2 (edright km () l r ())
-                -3 (edbsp   km () l r ())
-                -4 (eddel   km () l r ())
-                -5 (edhome  km () l r ())
-                -6 (edend   km () l r ())
-                -8 (recall (i >= hn ? i (i + 1)))   ; up: older
-                -9 (recall (0 >= i  ? i (i - 1)))    ; down: newer
-                (loop l r i draft)))
-        (loop () () 0 ()))
+                             loop i draft)))))
+                -8 (recall i (i >= hn ? i (i + 1)) draft)   ; up: older
+                -9 (recall i (0 >= i  ? i (i - 1)) draft)    ; down: newer
+                (loop i draft)))
+        (loop 0 ()))
    (edln ip pr hist) (edlnc ip pr hist ())
 )
 

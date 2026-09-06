@@ -73,17 +73,15 @@
    (peep (hd 'seen) (1 + 9 * 1) 0)
    (peep (hd 'seen) (6 + 9 * 2) 0))))
 
-; --- the helm decoder: arrows, the sailor's keys, the words ---
+; --- the helm: arrows, the sailor's keys, alt letters; anything else is itself ---
 (assert
- ('(0 -1) = helm-dec 27 91 65) ('(0 1) = helm-dec 27 91 66)
- ('(1 0) = helm-dec 27 91 67) ('(-1 0) = helm-dec 27 91 68)
- ('esc = (helm-dec 27 -1 -1))
- ('(-1 0) = helm-dec 104 -1 -1) ('(0 1) = helm-dec 106 -1 -1)
- ('(0 -1) = helm-dec 107 -1 -1) ('(1 0) = helm-dec 108 -1 -1)
- ('(-1 -1) = helm-dec 121 -1 -1) ('(1 -1) = helm-dec 117 -1 -1)
- ('(-1 1) = helm-dec 98 -1 -1) ('(1 1) = helm-dec 110 -1 -1)
- ('quit = (helm-dec -1 -1 -1))
- (113 = helm-dec 113 -1 -1))
+ ('(0 -1) = steer -8) ('(0 1) = steer -9) ('(1 0) = steer -2) ('(-1 0) = steer -1)
+ (27 = (steer 27))
+ ('(-1 0) = steer 104) ('(0 1) = steer 106) ('(0 -1) = steer 107) ('(1 0) = steer 108)
+ ('(-1 -1) = steer 121) ('(1 -1) = steer 117) ('(-1 1) = steer 98) ('(1 1) = steer 110)
+ ('(-1 -1) = steer 377) ('(1 1) = steer 366)
+ (62 = (steer 62))
+ (113 = (steer 113)))
 
 ; --- the crawl on a hand deck: every verb of the game, deterministic ---
 (: (hand-g _) (: hd {'w 9 'h 5 't (cask 45) 'seen (cask 45) 'rooms [[1 1 3 3] [5 1 3 3]]}

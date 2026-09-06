@@ -24,9 +24,9 @@
 ; could not say "no cache"), 'hlgen (bumped by the three line mutators -- vput,
 ; vsplice, vrest -- and nothing else touches 'lines).
 ;
-; the dialect: motions h j k l 0 ^ $ w b e f F t T G gg, counts, the diagonals alt-y
-; u b n (the face hands them in as 200..203: a k or j then an h or l, the count on
-; both, and never under an operator), operators
+; the dialect: motions h j k l 0 ^ $ w b e f F t T G gg, counts, the arrows as h j k l,
+; the diagonals alt-y u b n (cli's edkey hands an alt letter in as 256 + the letter: a k
+; or j then an h or l, the count on both, and never under an operator), operators
 ; d c y (doubled = linewise; with j/k/G/gg linewise, else within the line),
 ; x X D C s r J, i a I a o O, p P (lin + chr), u and ^R, / ? n N (BRE, over
 ; re.l), : with w [NAME] e[!] [NAME] o [NAME] q q! wq x hl and a line number,
@@ -320,7 +320,7 @@
        (0 = tally nm) (vmsg st "no file name")
        (pin st 'doe [nm]))
    (vex st)
-    (: s (st 'cmd)
+    (: s (edtext (st 'cmd))
        n #s
        dig? (: (go i) (? (n <= i) (0 < n) (48 <= s i <= 57) (go (i + 1)) ()) (go 0))
        _ (pin st 'mode 'n)
@@ -440,8 +440,8 @@
                                    (two? o && (<o = 99))))
                               101 c)                              ; ... so cw rides e
                           n rawc))
-          (c = 200) (diag 107 104)  (c = 201) (diag 107 108)         ; alt-y alt-u: up-left, up-right
-          (c = 202) (diag 106 104)  (c = 203) (diag 106 108)         ; alt-b alt-n: down-left, down-right
+          (c = 377) (diag 107 104)  (c = 373) (diag 107 108)         ; alt-y alt-u: up-left, up-right
+          (c = 354) (diag 106 104)  (c = 366) (diag 106 108)         ; alt-b alt-n: down-left, down-right
           (member? c '(102 70 116 84))                            ; f F t T
            (: _ (pin st 'cnt n)
               (pin st 'pc (? (c = 102) 'f (c = 70) 'F (c = 116) 't 'T)))
@@ -495,43 +495,50 @@
           (c = 80) (vpaste st () n)                             ; P
           (c = 117) (vundo st)                                  ; u
           (c = 18) (vredo st)                                   ; ^R
-          (c = 58) (: _ (pin st 'cmd "") (pin st 'mode 'c))     ; :
+          (c = 58) (: _ (pin st 'cmd (ednew ())) (pin st 'mode 'c))     ; :
           ((c = 47) || (c = 63))                                ; / ?
-           (: _ (pin st 'cmd "") _ (pin st 'dir (? (c = 47) 1 -1)) (pin st 'mode 's))
+           (: _ (pin st 'cmd (ednew ())) _ (pin st 'dir (? (c = 47) 1 -1)) (pin st 'mode 's))
           (c = 110) (? (two? (st 'pat)) (vhunt st (st 'dir)) (vmsg st "no previous search"))
           (c = 78) (? (two? (st 'pat)) (vhunt st (0 - st 'dir)) (vmsg st "no previous search"))
           (c = 6) (page 1) (c = 2) (page -1)                    ; ^F ^B
           (c = 4) (page 1) (c = 21) (page -1)                   ; ^D ^U (half via `page`)
           st))
 
-   ; -- the one door: state x byte -> state --
+   ; -- the one door: state x key -> state. a key is a byte, or one of cli's edkey codes:
+   ; the arrows (h j k l here, a move in insert too), alt letters, home and end --
+   (arrow c) (c @ -1 104 -2 108 -8 107 -9 106 c)
    (vstep st c)
     (: m (st 'mode)
-       (? (m = 'i) (vins st c)
+       (? (m = 'i) (? (c < 0) (: _ (pin st 'mode 'n) _ (vnorm st (arrow c)) (pin st 'mode 'i))
+                      (vins st c))
           (m = 'c || m = 's)
-           (: s (st 'cmd)
-              (? (c = 27) (pins st 'cmd "" 'mode 'n)
-                 (c = 13 || c = 10)
-                  (? (m = 'c) (vmsg st "", vex st)
-                     (: _ (pin st 'mode 'n)
-                        _ (vmsg st "")
-                        (? (s = "") (two? (st 'pat) ? (vhunt st (st 'dir)) st)
-                           (: b (rebre s)
-                              (? (two? b)
-                                 (pins st 'pat <>b 'pattx s,
-                                  vhunt st (st 'dir))
-                                 (vmsg st $ "bad pattern: " + s))))))
-                 (c = 8 || c = 127)
-                  (? (s = "") (pins st 'cmd "" 'mode 'n)
-                   (pin st 'cmd (snip s 0 (tally s - 1))))
-                 (c = 9 || 32 <= c) (pin st 'cmd (s + string c))
-                 st))
+           ; the line is cli's editor; enter takes it, escape leaves, and a backspace on
+           ; nothing leaves too
+           (: t (st 'cmd)
+              (? ((c = 127 || c = 8 || c = -3) && edempty? t) (pin st 'mode 'n)
+                 (: _ (edstep t c)
+                    e (t 'ev)
+                    (? (e = 0) st
+                       (e = 27) (pin st 'mode 'n)
+                       (e = 9) (edput t 9, st)
+                       (e = 10)
+                        (: s (edtext t)
+                           _ (pin st 'mode 'n)
+                           _ (vmsg st "")
+                           (? (m = 'c) (vex st)
+                              (s = "") (two? (st 'pat) ? (vhunt st (st 'dir)) st)
+                              (: b (rebre s)
+                                 (? (two? b)
+                                    (pins st 'pat <>b 'pattx s,
+                                     vhunt st (st 'dir))
+                                    (vmsg st $ "bad pattern: " + s)))))
+                       st))))
           ; normal
           (? (st 'pc) (vpc st c)
              (48 <= c <= 57 && (48 < c || 0 < st 'cnt))
               (pin st 'cnt (10 * st 'cnt + c - 48))
              (c = 27) (pins st 'cnt 0 'op (), vmsg st "")
-             (vmsg st "", vnorm st c))))
+             (vmsg st "", vnorm st (arrow c)))))
    (vfeed st bs) (bs @ (a . u) (vfeed (vstep st a) u) st)
 
    ; -- birth --
@@ -584,16 +591,14 @@
        (rows i acc)
         (? ((top + body) <= i) acc
            (rows (i + 1) (acc + (? (i < nl) (lay i) "~") + e + "[K" + "\r\n")))
-       status (? (st 'mode = 'c) (":" + st 'cmd)
-                 (st 'mode = 's) ((? (0 < st 'dir) "/" "?") + st 'cmd)
+       status (? (st 'mode = 'c) (":" + edtext (st 'cmd))
+                 (st 'mode = 's) ((? (0 < st 'dir) "/" "?") + edtext (st 'cmd))
                  (0 < tally (st 'msg)) (st 'msg)
                  ((? (0 < tally (st 'file)) (st 'file) "[no name]") + (? (st 'dirty) " [+]" "") + (? (st 'mode = 'i) " -- INSERT --" "") + "  " + show (st 'row + 1) + "," + show (st 'col + 1)))
        ; in ex and search mode you are typing on the status line, so that is
-       ; where the cursor goes -- one past what you have typed, prefix included.
-       ; it used to stay back in the text, which made `:` look like it had not
-       ; taken: the line grew with no cursor on it.
+       ; where the cursor goes: after the prefix, at the editor's column
        said? ((st 'mode = 'c) || (st 'mode = 's))
        cr (? said? h ((st 'row - top) + 1))
-       cc (: k (? said? (tally status + 1) (st 'col + 1)) (? (w < k) w k))
+       cc (: k (? said? (edcol (st 'cmd) + 2) (st 'col + 1)) (? (w < k) w k))
        (e + "[H" + rows top "" + clipl status + e + "[K" + e + "[" + show cr + ";" + show cc + "H")))
 ) ; module 'vi

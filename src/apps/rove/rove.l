@@ -5,17 +5,17 @@
 ; rng threaded through so a seed reproduces the deck -- with a seen cask
 ; remembering what the lantern has shown. fov is line-of-sight over bresenham
 ; strides (walls light up as line endpoints); the painter says one frame of
-; painted cells into any port, so frames gate headless; the helm decodes raw
-; keys (hjkl + yubn + arrows). the crawl is the proving game riding it all:
+; painted cells into any port, so frames gate headless; the helm turns a key into a
+; steer (hjkl + yubn + arrows). the crawl is the proving game riding it all:
 ; rats, crabs and morays below decks, grog and gold, the pearl three decks
 ; down -- pure state in, pure state out, one key per turn.
 ;
 ; run: love rove
 ; the engine core is pure love (delve/fov/paint/crawl-* run headless, gated by
-; test/host/rove.l); only rove-run ties the tty (raw/winsize/cue? ride
+; test/host/rove.l); only rove-run ties the tty (cli's stage over
 ; src/host/posix.c), so rove never joins the corpus. a module: the crawl's words are
 ; its own, and story.l's hatch reaches rove-run by name.
-(module (rove rove-run rove-main dat open? dput delve fov clear? paint helm-dec helm
+(module (rove rove-run rove-main dat open? dput delve fov clear? paint steer
          crawl-new crawl-turn crawl-frame note mob-new mob-at roll stock)
 (:
  ; --- the deck: tiles in a cask, (x y) indexed; 0 rock, 1 floor, 2 the hatch ---
@@ -144,19 +144,12 @@
     say j "\e[0m", say j bar, say j "\e[K",
     j))
 
- ; --- the helm: raw key bytes -> one steer ---
- ; the pure decoder maps a byte (and the two that may trail an escape) to a
- ; steer: a move pair, a plain charm, or a word; helm reads the tty for rove.
- (helm-dec a b c) ; h j k l y u b n
-  (a @ 104 '(-1 0)  106 '(0 1)  107 '(0 -1) 108 '(1 0)
-       121 '(-1 -1) 117 '(1 -1) 98  '(-1 1) 110 '(1 1) -1 'quit
-       27 (b @ 91 (c @ 65 '(0 -1) 66 '(0 1) 67 '(1 0) 68 '(-1 0) 'esc) 'esc)
-       a)
- (helm _) (: a (see in)
-             (? (a = 27) (: _ (rest 1)                        ; let the tail of a sequence land
-                 (? (cue? 0) (: b (see in) (? (cue? 0) (helm-dec a b (see in)) (helm-dec a b -1)))
-                  'esc))
-              (helm-dec a -1 -1)))
+ ; --- the helm: a key (cli's edkey: a byte, an arrow code, an alt letter) -> one steer,
+ ; a move pair; any other key answers as itself ---
+ (steer k)
+  (k @ (104 || -1) '(-1 0)  (106 || -9) '(0 1)  (107 || -8) '(0 -1)  (108 || -2) '(1 0)
+       (121 || 377) '(-1 -1) (117 || 373) '(1 -1) (98 || 354) '(-1 1) (110 || 366) '(1 1)
+       k)
 
  ; --- the crawl: the proving game. state in a tablet, one key per turn ---
  ; the hold's fauna: a kind is (glyph hue hp bite), deeper decks bare more teeth
@@ -279,25 +272,17 @@
                             (g 'p >< g 'ms) (g 'msg) (crawl-bar g))
                     (slurp j))
 
- ; --- rove: the crawl on the tty. any seed sails; q or esc steps ashore ---
+ ; --- rove: the crawl on cli's stage. any seed sails; q or esc steps ashore ---
  (rove-run _) (: ws (winsize 0)
              r (two? ws && 7 < <ws ? (<ws - 2) 22)
              c (two? ws && 19 < <>ws ? <>ws 80)
              g (crawl-new (c < 100 ? c 100) r (wheel (clock 0)))
-             _ (raw 1,
-                say out "\e[?1049h\e[?25l\e[2J",
-                note g "the hold is dark; the pearl waits three decks down")
-             (sail _) (: _ (say out (crawl-frame g))
-                         (? (g 'over) (= (g 'over) 'fled ? () (rest 1200))
-                          (: k (helm ())
-                             (? (k = 113 || (= k 'esc) || (= k 'quit))
-                              (pin g 'over 'fled, ())
-                              (crawl-turn g k, sail ())))))
-             (sail (),
-              say out "\e[0m\e[?25h\e[?1049l",
-              flush out,
-              raw 0,
-              puts (g 'over @ 'won  ("the pearl is yours -- and " + show (g 'p 'gold) + " gold besides")
+             _ (note g "the hold is dark; the pearl waits three decks down")
+             ; an end shows its frame for a beat before the stage is left
+             (turn k) (? (k = 113 || k = 27) (pin g 'over 'fled)
+                         (crawl-turn g (steer k), g 'over ? (say out (crawl-frame g), flush out, rest 1200)))
+             _ (stage (w \ h \ crawl-frame g) turn (\ _ (g 'over)))
+             (puts (g 'over @ 'won  ("the pearl is yours -- and " + show (g 'p 'gold) + " gold besides")
                               'dead ("the hold keeps you, deck " + show (g 'lvl))
                                     ("ashore with " + show (g 'p 'gold) + " gold")),
               (g 'p 'gold)))
