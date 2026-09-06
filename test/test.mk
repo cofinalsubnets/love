@@ -1155,7 +1155,7 @@ test_wgetnet: host
 # it wants the vendored source and the IWAD, and rebuilds the artifact with doom inside
 test_doomx: $(R)/test/host/doomx.l
 	@$(MAKE) -s host DOOM=1
-	@echo TEST test/host/doomx.l "(doom on X, 120 frames under Xvfb)"
+	@echo TEST test/host/doomx.l "(doom on X, 300 frames under Xvfb, a held key)"
 	@cat test/00-init.l test/host/doomx.l | sh test/gate/run.sh doomx "$m" "doomx: ok"
 
 test_kverb: host

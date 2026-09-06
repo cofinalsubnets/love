@@ -12,8 +12,9 @@
 ; one 640x400 InputOutput window at the root's depth, the frame pushed as four
 ; PutImage bands (a band is 100 rows: 256000 bytes, under the 65535-word request
 ; ceiling with no BIG-REQUESTS to negotiate), the keyboard read as KeyPress/
-; KeyRelease and respelled from keysyms to doomkeys.h's codes. the socket is
-; polled between frames (cue?), never waited on: doom's own tick keeps the clock.
+; KeyRelease and respelled from keysyms to doomkeys.h's codes, with XKB's detectable
+; autorepeat on so a held key is not a release every 40 ms. the socket is polled
+; between frames (cue?), never waited on: doom's own tick keeps the clock.
 ; sound rides the horn's C face inside the mixer, so `HORN=none love doom` is a
 ; silent game and HORN=/dev/snd/pcmC1D0p names a card (src/host/horn.c).
 ; -frames N ends the game after N drawn frames: the gate's door, and nobody else's.
@@ -43,6 +44,23 @@
     (: pr (x-intern s "WM_PROTOCOLS")
        (x-w8 s 18, x-w8 s 0, x-w16 s 7, x-w32 s win, x-w32 s pr, x-w32 s 4,
         x-w8 s 32, x-w8 s 0, x-w16 s 0, x-w32 s 1, x-w32 s dl))
+   ; a held key, by default, is a release and a press every 40 ms after the server's delay,
+   ; and doom reads every one of those releases as the key going up: the player stops
+   ; walking after half a second. XKB's detectable autorepeat turns a held key into
+   ; presses only. QueryExtension for the opcode, XkbUseExtension, then PerClientFlags
+   ; (UseCoreKbd, change and value both the DetectableAutoRepeat bit). a server without
+   ; XKB answers no opcode, and the keys stay as they were.
+   (x-autorepeat s)
+    (: n #"XKEYBOARD"
+       _ (x-w8 s 98, x-w8 s 0, x-w16 s (2 + ((n + x-pad4 n) // 4)), x-w16 s n, x-w16 s 0, x-wpad s "XKEYBOARD", x-flush s)
+       hdr (x-reply s)
+       op (<hdr = 1 ? (hdr 9) 0)
+       (? (op < 1) 0
+          (: _ (x-w8 s op, x-w8 s 0, x-w16 s 2, x-w16 s 1, x-w16 s 0, x-flush s)
+             _ (x-reply s)
+             _ (x-w8 s op, x-w8 s 21, x-w16 s 7, x-w16 s 256, x-w16 s 0, x-w32 s 1, x-w32 s 1, x-w32 s 0, x-w32 s 0, x-w32 s 0, x-flush s)
+             _ (x-reply s)
+             1)))
    ; one band of rows out of the frame cask: ZPixmap at the window's depth, 32 bpp
    (x-putband s win gc depth buf y rows)
     (: n (rows * 2560)
@@ -195,6 +213,7 @@
                          _ (x-protocols s win (x-intern s "WM_DELETE_WINDOW"))
                          _ (x-map s win)
                          _ (x-flush s)
+                         _ (x-autorepeat s)
                          _ (? (doom-start wad) 0 (say err "doom: would not start\n", quit 1))
                          n (drive s sc win gc wad frames)
                          _ (puts ("doom: " + show n + " frames\n"))
