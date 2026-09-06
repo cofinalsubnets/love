@@ -7,7 +7,8 @@
 ; (.sbignore + its built-ins, so the vcs walk and this cut read ONE list and a
 ; generated file named there leaves both), plus this cut's own structural skips:
 ; bin/ dl/, everything hidden at the root (.git .sb .claude .cache .gitignore ..)
-; is the machine's and the checkout's and never the source's, doc/misc is the
+; is the machine's and the checkout's and never the source's -- except .sbignore,
+; which cut the archive and has to be there to cut it again -- doc/misc is the
 ; design record rather than the product, and each drop nom is left out by name
 ; -- with a sorted walk and every mtime pinned to stamp, so
 ; the same files answer the same bytes wherever they sit. test_distboot
@@ -55,7 +56,8 @@
    ; walk and the dist cut cannot disagree about what this tree is -- one law, one
    ; file, and a generated file named there drops out of both. then the cut's own
    ; structural skips, which no ignore file may take away: `.*` is hidden at the
-   ; root, the machine's and the checkout's and never the source's; doc/misc is
+   ; root, the machine's and the checkout's and never the source's, save the one
+   ; hidden file the seeded tree needs to cut itself the same way; doc/misc is
    ; the design record rather than the product (doc/ itself stays -- the man pages
    ; are written in doc/{love,cook,lush}.md and `make install` in an unpacked
    ; release generates all three from them); and each drop nom by name.
@@ -65,7 +67,7 @@
    ; handed to the walk, not run after it: what the archive will not carry is never
    ; read (out/ and dl/ are gigabytes on a build box, and a rejected directory is
    ; never descended into at all).
-   (sp-keep? rules nom) !(sp-ign? nom rules)
+   (sp-keep? rules nom) ((nom = ".sbignore") || !(sp-ign? nom rules))
    ; re-home the kept entries under top -- the walk is already sorted, so order
    ; is preserved.
    (sp-take es top acc)
