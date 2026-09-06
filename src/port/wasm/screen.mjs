@@ -75,9 +75,8 @@ const pump = () => { let acc = drain();
   for (let k = 0; acc && k < 4; k++) { ev('(web-show ' + aiStr(acc) + ')'); acc = drain(); }
   return alive() === 1; };
 const row = (r, cols) => { const { cells } = view(); return Array.from(cells.subarray(r * cols, r * cols + cols), c => face.glyph[c & 255]).join(''); };
-evs(src('src/apps/console/console.l')); evs(src('src/port/wasm/web.l')); evs(src('src/apps/rove/rove.l')); evs(src('src/apps/rove/story.l')); evs(src('src/apps/ink/ink.l'));   // the door, the stubs, then the apps: a closure captures its globals at creation
+evs(src('src/port/wasm/web.l')); evs(src('src/apps/rove/rove.l')); evs(src('src/apps/rove/story.l')); evs(src('src/apps/ink/ink.l'));   // the stubs first: a closure captures its globals at creation
 ok(evs('(puts (show (rest 0)))').trim() !== '', 'a rest of nothing yields');
-ok(evs('(puts (show (door-task (\\ _ 7))))').trim() === '7', 'the door\'s task lane, from a task that can park');
 ev('(web-boot "rove" 80 24)');
 ok(pump(), 'rove boots and lives');
 {

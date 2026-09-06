@@ -4,18 +4,18 @@
 ; or a file to open. the turn is a line -- look, go, read, open, quit -- and the
 ; painter says one frame of the room, its exits, the log and the prompt into any
 ; port, so turns and frames gate headless (test/host/story.l). no combat, mobs or
-; procgen: the crawl (rove.l) is a hatch in the hall, opened through the console door.
+; procgen: the crawl (rove.l) is a hatch in the hall, and opening it runs it.
 ;
 ; the library: a room per crew module under a root, a book per file in it. a room's
 ; text is the module's header as libra lifts it, reading a book is its own header,
-; and opening one is vi through the door (src/apps/console) -- on a seat that has vi.
+; and opening one is vi, called in place -- on a seat that has vi.
 ; the page has no tree to read, so it walks the demo level (src/port/wasm/web.l).
 ;
 ; usage: out/love -l src/apps/rove/story.l -e '(library-story ())'   the tree's library
 ;        out/love -l src/apps/rove/story.l -e '(lighthouse ())'      the demo level
 ; only the tty runner ties the tty (raw/winsize ride src/host/posix.c); the crew
-; modules it reaches for -- vi, libra, console -- are asked by name at the call, so
-; this file loads on a seat that lacks them and says so instead.
+; modules it reaches for -- vi, libra -- are asked by name at the call, so this file
+; loads on a seat that lacks them and says so instead.
 
 (:
  ; --- levels as data ------------------------------------------------------------
@@ -62,16 +62,14 @@
                             (? !(hot? q) (say-to g ("the book is missing: " + f))
                                (: s (slurp q) _ (close q) md (lift s)
                                   (say-to g (0 < #md ? md "the pages are blank.")))))))
- ; open: the file in vi, through the console door -- or the hatch, which is the crawl
+ ; open: the file in vi, called in place -- it takes the tty and gives it back -- or
+ ; the hatch, which is the crawl, called the same way
  (open-thing g t) (: f (t 'file)
-                      door (mod 'console 'door)
                       vi (mod 'vi 'vi-main)
-                      (? (= f 'hatch) (? door (: _ (door (ev 'rove)) (say-to g "you climb back out of the hold."))
-                                         (say-to g "the hatch is sealed on this seat."))
+                      (? (= f 'hatch) (: _ ((ev 'rove) ()) (say-to g "you climb back out of the hold."))
                          !f (say-to g "it does not open.")
-                         !door (say-to g "no door on this seat.")
                          !vi (say-to g "no editor on this seat.")
-                         (: _ (door (\ _ (vi [f]))) (say-to g ("you close " + t 'name + ".")))))
+                         (: _ (vi [f]) (say-to g ("you close " + t 'name + ".")))))
 
  ; one turn: a line becomes a verb and a noun; the log says what came of it
  (story-turn g ln) (:

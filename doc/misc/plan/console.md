@@ -45,17 +45,18 @@ that is a compiler.
   src/port/wasm/screen.mjs under test_wasm -- a hand frame's cells and its lay, and rove
   and ink booted on a page screen. what it found on the way: the wasm function-table
   trap in c0's peephole (src/port/wasm/32bit-findings.md).
-- **rung 1 -- the console door.** ✅ LANDED. `(door f)`, module 'console (src/apps/console/console.l, a crew file: the core spells no host word):
-  one verb, two bodies. a seat that can fork (a terminal) forks -- the app owns the
-  tty, the parent waits, its own state untouched -- and a seat that cannot (inle, the
-  page) twirls the app as a task and catches it. fork, wait and quit are read late, so
-  it compiles on every seat. the page's half (host.c): stdin is a ring of key bytes the
-  page pushes, a dry read parks the reading task (and answers the end on the session's
-  own task, so a typed `rove ()` can never park the page); a key arms the parked sweep;
-  ai_runnable/ai_alive let the page yield until the app parks, sleeps or lands. rove and
-  ink run on the page UNCHANGED through web.l -- their tty runners, keys as the bytes a
-  terminal sends. gates: test/host/door.l (both lanes, forked here), screen.mjs (both
-  apps as tasks). rove's library level calls the door and nothing else to open a file.
+- **rung 1 -- the console door.** ✅ answered, and the answer is that there is no door:
+  a tty app is a function that takes the console and gives it back, so an app opening
+  another calls it -- `(vi-main [f])` from a story -- and on every seat the caller's
+  own task is the one that parks on `in`. no fork (that is lush's job-control lane, a
+  shell's concern), no verb, no module. what the rung really needed was the page's
+  half, in host.c: stdin is a ring of key bytes the page pushes, a dry read parks the
+  reading task (and answers the end on the session's own task, so a typed `rove ()`
+  can never park the page); a key arms the parked sweep; ai_runnable/ai_alive let the
+  page yield the app its turns until it parks, sleeps or lands. rove and ink run on
+  the page unchanged through web.l -- their tty runners, keys as the bytes a terminal
+  sends. and the cli's leaves became answers: cli-line answers a status charm and
+  the frontend quits with it, so nothing in src/core spells a host word.
 - **rung 2 -- rove as the fiction engine.** ✅ the engine and the library LANDED,
   src/apps/rove/story.l: levels as data (rooms with text, exits and things; a thing a
   book to read or a file to open), a line-driven turn (look, go, read, open, exits,
@@ -63,9 +64,9 @@ that is a compiler.
   the prompt; wrapped at the width) so turns and frames gate headless
   (test/host/story.l). the library: `(library "src/apps")` -- a hall with a door per
   wing, a room per crew module whose text is libra's lift of its header, a book per
-  file whose `read` is its own header and whose `open` is vi through the door; the
-  hatch in the hall opens the crawl (rove.l) through the door, so the crawl is one
-  level among others. the crew modules are asked for by name at the call, so the file
+  file whose `read` is its own header and whose `open` is vi, called in place; the
+  hatch in the hall runs the crawl (rove.l) the same way, so the crawl is one level
+  among others. the crew modules are asked for by name at the call, so the file
   loads on a seat that lacks them and says so. the page walks the demo level
   (`lighthouse`; a chip). OPEN: a level designer (levels are hand-written data for
   now), and the page's library -- it has no tree to read, so its catalogue wants to

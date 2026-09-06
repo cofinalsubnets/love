@@ -58,10 +58,10 @@
    ; --- the library: this tree's crew ---
    L (library "src/apps")
    rooms (L 'rooms)
-   _ (assert ('hall = (L 'start)) (10 < tally (keys rooms)) (peep rooms 'rove 0) (peep rooms 'console 0))
+   _ (assert ('hall = (L 'start)) (10 < tally (keys rooms)) (peep rooms 'rove 0) (peep rooms 'lapiz 0))
    g2 (story-new L)
    _ (describe g2)
-   _ (assert (has? (g2 'log 2) "console"))                        ; the hall's text names its wings
+   _ (assert (has? (g2 'log 2) "lapiz"))                          ; the hall's text names its wings
    _ (story-turn g2 "rove")
    _ (assert ('rove = (g2 'at)) (has? <(g2 'log) "exits: out") (has? (g2 'log 1) "story"))
    _ (story-turn g2 "read story")
