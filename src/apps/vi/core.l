@@ -24,7 +24,9 @@
 ; could not say "no cache"), 'hlgen (bumped by the three line mutators -- vput,
 ; vsplice, vrest -- and nothing else touches 'lines).
 ;
-; the dialect: motions h j k l 0 ^ $ w b e f F t T G gg, counts, operators
+; the dialect: motions h j k l 0 ^ $ w b e f F t T G gg, counts, the diagonals alt-y
+; u b n (the face hands them in as 200..203: a k or j then an h or l, the count on
+; both, and never under an operator), operators
 ; d c y (doubled = linewise; with j/k/G/gg linewise, else within the line),
 ; x X D C s r J, i a I a o O, p P (lin + chr), u and ^R, / ? n N (BRE, over
 ; re.l), : with w [NAME] e[!] [NAME] o [NAME] q q! wq x hl and a line number,
@@ -428,12 +430,18 @@
                    (vclampn st))
        rawc (st 'cnt)
        _ (pin st 'cnt 0)
+       ; a diagonal is its two halves, each a plain motion of the count; an operator
+       ; pending is dropped -- a diagonal is not a range
+       (diag vc hc) (? (two? (st 'op)) (pin st 'op ())
+                       (: _ (mv1 (vmot st vc n rawc)) (mv1 (vmot st hc n rawc))))
        (? (member? c '(104 108 48 94 36 119 101 98 106 107 71))   ; h l 0 ^ $ w e b j k G
            (motion (vmot st (? ((c = 119) &&                      ; the vi special case:
                                 (: o (st 'op)                     ; cw changes the word only,
                                    (two? o && (<o = 99))))
                               101 c)                              ; ... so cw rides e
                           n rawc))
+          (c = 200) (diag 107 104)  (c = 201) (diag 107 108)         ; alt-y alt-u: up-left, up-right
+          (c = 202) (diag 106 104)  (c = 203) (diag 106 108)         ; alt-b alt-n: down-left, down-right
           (member? c '(102 70 116 84))                            ; f F t T
            (: _ (pin st 'cnt n)
               (pin st 'pc (? (c = 102) 'f (c = 70) 'F (c = 116) 't 'T)))
