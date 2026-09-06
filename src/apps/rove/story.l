@@ -1,48 +1,67 @@
 ; story -- rove's fiction engine: the zork half over the rogue half.
 ;
-; a level is data: rooms with text, exits and things, and a thing is a book to read
-; or a file to open. the turn is a line -- look, go, read, open, quit -- and the
-; painter says one frame of the room, its exits, the log and the prompt into any
-; port, so turns and frames gate headless (test/host/story.l). no combat, mobs or
-; procgen: the crawl (rove.l) is a hatch in the hall, and opening it runs it.
+; a level is data in a file (src/apps/rove/levels), one datum the reader and printer
+; round-trip, so the designer (design.l) edits what this file plays:
+;   (level TITLE START
+;     (room ID NAME X Y TEXT (exits (WORD ID) ..) (things (WORD NAME TEXT FILE) ..)) ..)
+; a thing is a book to read (its text) or a file to open. the turn is a line -- look,
+; go, read, open, quit -- and the painter says one frame of the room, its exits, the
+; log and the prompt into any port, so turns and frames gate headless
+; (test/host/story.l). no combat, mobs or procgen, and no story in this file: the
+; words are the levels'.
 ;
 ; the library: a room per crew module under a root, a book per file in it. a room's
 ; text is the module's header as libra lifts it, reading a book is its own header,
-; and opening one is vi, called in place -- on a seat that has vi.
-; the page has no tree to read, so it walks the demo level (src/port/wasm/web.l).
+; and opening one is vi, called in place -- on a seat that has vi. the hatch in the
+; hall runs the crawl (rove.l) the same way.
 ;
-; usage: out/love -l src/apps/rove/story.l -e '(library-story ())'   the tree's library
-;        out/love -l src/apps/rove/story.l -e '(lighthouse ())'      the demo level
+; usage: out/love -l src/apps/rove/story.l -e '(story-main ["src/apps/rove/levels/lighthouse.l"])'
+;        out/love -l src/apps/rove/story.l -e '(library-story ())'   the tree's library
 ; only the tty runner ties the tty (raw/winsize ride src/host/posix.c); the crew
 ; modules it reaches for -- vi, libra -- are asked by name at the call, so this file
 ; loads on a seat that lacks them and says so instead.
 
 (:
  ; --- levels as data ------------------------------------------------------------
- ; room: {'name 'text 'exits {word id ..} 'things {word thing ..}}
- ; thing: {'name 'text 'file}: text is what `read` shows, file what `open` opens
- (room nm txt exits things) {'name nm 'text txt 'exits exits 'things things}
+ ; in play: room {'name 'text 'exits {word id ..} 'things {word thing ..} 'x 'y}, thing
+ ; {'name 'text 'file} (text is what `read` shows, file what `open` opens), level
+ ; {'title 'rooms {id room ..} 'start}. x y are the designer's map cell; play ignores them.
+ (room nm txt exits things) {'name nm 'text txt 'exits exits 'things things 'x 0 'y 0}
  (thing nm txt f) {'name nm 'text txt 'file f}
  (level title rooms start) {'title title 'rooms rooms 'start start}
 
- demo-level
-  (level "the lighthouse"
-   {'lamp  (room "the lamp room" "glass on every side, and the sea below. the lamp turns.\nstairs lead down."
-                 {'down 'stair} {'lamp (thing "the lamp" "a fresnel lens the size of a rowboat, humming." ())})
-    'stair (room "the stair" "a spiral of iron steps. up is light; down is the door."
-                 {'up 'lamp 'down 'door} {})
-    'door  (room "the door" "the keeper's door, ajar on the rocks. the stair climbs back up."
-                 {'up 'stair} {'sign (thing "the sign" "KEEPER OUT. BACK BY THE NEXT TIDE." ())})}
-   'lamp)
+ ; the file's datum -> the level in play, and back. a shown level is a legal file.
+ (level-of d) (: (part k l) (: p (filter (x \ two? x && <x = k) l) (two? p ? ><p ()))
+                 (room-of r) (: id (r 1) nm (r 2) x (r 3) y (r 4) txt (r 5)
+                                 ex (foldl (\ t e (pin t <e (e 1))) {} (part 'exits (drop 6 r)))
+                                 th (foldl (\ t e (pin t <e (thing (e 1) (e 2) (e 3)))) {} (part 'things (drop 6 r)))
+                                 rm (room nm txt ex th)
+                                 (pins rm 'x x 'y y, [id rm]))
+                 rooms (foldl (\ t r (pin t <r <>r)) {} (map room-of (filter (x \ two? x && <x = 'room) (drop 3 d))))
+                 (level (d 1) rooms (d 2)))
+ (data-of lvl) (: (row id) (: r (lvl 'rooms id)
+                              ['room id (r 'name) (r 'x) (r 'y) (r 'text)
+                               ('exits . map (k \ [k (r 'exits k)]) (sort (keys (r 'exits))))
+                               ('things . map (k \ (: t (r 'things k) [k (t 'name) (t 'text) (t 'file)])) (sort (keys (r 'things))))])
+                  ('level . (lvl 'title) . (lvl 'start) . map row (sort (keys (lvl 'rooms)))))
+ ; one room per line, so the file reads and diffs as a level and not as a datum
+ (level-text lvl) (: d (data-of lvl)
+                     ("(level " + show (d 1) + " " + show (d 2) + "\n"
+                      + joins (map (r \ "  " + show r) (drop 3 d)) "\n" + ")\n"))
+ (load-level p) (: q (open p "r")
+                   (? !(hot? q) ()
+                      (: s (slurp q) _ (close q) r (sound s)
+                         (two? r && two? <r && <<r = 'level ? (level-of <r) ()))))
+ (save-level p lvl) (: q (open p "w") (hot? q ? (say q (level-text lvl), close q, 1) 0))
 
  ; --- the state: where you are, what was said ------------------------------------
  (story-new lvl) {'lvl lvl 'at (lvl 'start) 'log () 'over 0 'line ""}
  (here g) (peep (g 'lvl 'rooms) (g 'at) 0)
  (say-to g s) (pin g 'log (s . g 'log))
  (words s) (filter (w \ 0 < #w) (split " " s))
- (joins l sp) (? !(two? l) "" !(two? >l) <l (<l + sp + joins >l sp))
+ (joins l sp) (? (one? l) "" (one? >l) <l (<l + sp + joins >l sp))
  (exits-of r) (joins (map show (sort (keys (r 'exits)))) ", ")
- (things-of r) (joins (map (k \ (peep (r 'things) k 0) 'name) (sort (keys (r 'things)))) ", ")
+ (things-of r) (joins (map (k \ peep (r 'things) k 0 'name) (sort (keys (r 'things)))) ", ")
  (describe g) (: r (here g)
                  _ (say-to g ("-- " + r 'name + " --"))
                  _ (say-to g (r 'text))
@@ -66,7 +85,7 @@
  ; the hatch, which is the crawl, called the same way
  (open-thing g t) (: f (t 'file)
                       vi (mod 'vi 'vi-main)
-                      (? (= f 'hatch) (: _ ((ev 'rove) ()) (say-to g "you climb back out of the hold."))
+                      (? (f = 'hatch) (ev 'rove (), (say-to g "you climb back out of the hold."))
                          !f (say-to g "it does not open.")
                          !vi (say-to g "no editor on this seat.")
                          (: _ (vi [f]) (say-to g ("you close " + t 'name + ".")))))
@@ -94,11 +113,11 @@
  ; --- the painter: one frame into a port -----------------------------------------
  ; the title bar, then the log from the top with the newest at the foot, the prompt
  ; last; long lines wrap at the width. the port is any jug, so frames gate headless.
- (wrap s w) (: (go ws cur acc) (? !(two? ws) (rev (cur . acc))
+ (wrap s w) (: (go ws cur acc) (? (one? ws) (rev (cur . acc))
                                   (: nx (0 < #cur ? (cur + " " + <ws) <ws)
                                      (? (#nx <= w) (go >ws nx acc)
                                         (0 < #cur) (go ws "" (cur . acc))
-                                        (go >ws "" ((snip nx 0 w) . acc)))))
+                                        (go >ws "" (snip nx 0 w . acc)))))
                (go (words s) "" ()))
  (concat ls) (foldl (\ a l (cat a l)) () ls)               ; cat is the pairwise append
  (lines-of s w) (concat (map (l \ wrap l w) (split "\n" s)))
@@ -109,11 +128,11 @@
                         ls (concat (map (s \ lines-of s w) (rev (g 'log))))
                         n #ls
                         shown (n <= body ? ls (drop (n - body) ls))
-                        _ (say j ("\e[H\e[0m\e[7m" + bar + "\e[0m\e[K\r\n"))
-                        _ (each shown (l \ say j (l + "\e[K\r\n")))
-                        _ ((body - #shown) (\ _ (say j "\e[K\r\n")) ())
-                        _ (say j ("> " + g 'line + "\e[K"))
-                        (slurp j))
+                      (say j ("\e[H\e[0m\e[7m" + bar + "\e[0m\e[K\r\n"),
+                       each shown (l \ say j (l + "\e[K\r\n")),
+                       (body - #shown) (_ \ say j "\e[K\r\n") (),
+                       say j ("> " + g 'line + "\e[K"),
+                       slurp j))
 
  ; --- the library: a room per crew module under root, a book per file -----------
  (base p) (: n #p (go k r) (k < n ? (go (k + 1) (p k = 47 ? (k + 1) r)) (snip p r n)) (go 0 0))
@@ -125,7 +144,7 @@
                                   (go >l acc))
                     (go ls ""))
  (head-of f) (: q (open f "r") lift (mod 'libra 'ldoc-md)
-                (? (hot? q && lift) (: s (slurp q) _ (close q) (first-para (lift s))) ""))
+                (hot? q && lift ? (: s (slurp q) (close q, first-para (lift s))) ""))
  (library root) (:
    dirs (sort (filter (d \ two? (readdir (root + "/" + d))) (readdir root)))
    (wing d) (: p (root + "/" + d)
@@ -148,16 +167,16 @@
                 g (story-new lvl)
                 _ (raw 1, say out "\e[?1049h\e[?25l\e[2J", describe g)
                 (show _) (say out (story-frame g w h))
-                (line _) (: c (see in)
-                            (? (c = 13 || c = 10) (: l (g 'line) _ (pin g 'line "") l)
-                               (c = 27 || c = 3 || c = -1) 'quit
-                               (c = 127 || c = 8) (: l (g 'line) _ (0 < #l ? (pin g 'line (snip l 0 (#l - 1)))) (show (), line ()))
-                               (32 <= c < 127) (pin g 'line (g 'line + string c), show (), line ())
-                               (line ())))
-                (sail _) (: _ (show ())
-                            l (line ())
-                            (? (= l 'quit) () (: _ (story-turn g l) (? (g 'over) () (sail ())))))
+                (line _) (see in @
+                 (27 || 3 || -1) 'quit
+                 (13 || 10)      (: l (g 'line) (pin g 'line "", l))
+                 (127 || 8)      (: l (g 'line) (0 < #l ? (pin g 'line (snip l 0 (#l - 1))), show (), line ()))
+                 c (32 <= c < 127 ? (pin g 'line (g 'line + string c), show (), line ())
+                                    (line ())))
+                (sail _) (show(), line () @ 'quit () l (story-turn g l, g 'over ? () (sail ())))
                 (sail (), say out "\e[0m\e[?25h\e[?1049l", flush out, raw 0, 0))
- (lighthouse _) (story demo-level)                    ; the demo, by the name the page boots it
  (library-story _) (story (library "src/apps"))
- (story-main as) (story (two? as ? (library <as) demo-level)))
+ ; a level file, or the library under a root: `story-main` is the verb, the page has its own
+ (story-main as) (: p (two? as ? <as "src/apps/rove/levels/lighthouse.l")
+                     lvl (? (two? (readdir p)) (library p) (load-level p))
+                     (? lvl (story lvl) (say err ("story: not a level: " + p + "\n"), 1))))

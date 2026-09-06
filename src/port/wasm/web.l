@@ -1,7 +1,8 @@
 ; src/port/wasm/web.l -- the page's love side: the quay tty apps on the page's console,
-; unchanged. repl.js feeds this through ai_eval BEFORE rove.l, story.l and ink.l -- a
-; closure captures its free globals at creation, so the tty words an app asks for must
-; stand first -- and src/port/wasm/screen.mjs runs it under node the same way.
+; unchanged. repl.js feeds this through ai_eval after story.l and BEFORE rove.l and
+; ink.l -- a closure captures its free globals at creation, so the tty words an app asks
+; for must stand first, and story's words must stand before the demo below -- and
+; src/port/wasm/screen.mjs runs it under node the same way.
 ;
 ; the seat is a console with no fds: stdin is a ring of key bytes the page pushes
 ; (host.c's ai_key), so `see in` parks the reading task until the next push and `cue?`
@@ -28,5 +29,8 @@
                         _ (pin web-scr () s)
                         _ (pin web-task () (twirl (\ _ (f ())) 0))
                         ())
+   ; the demo story: its level is a datum the page fetched (src/apps/rove/levels) and
+   ; bound as lighthouse-data; the engine's load-level reads a file, which this seat lacks
+   (lighthouse _) (story (level-of lighthouse-data))
    (web-step _) (: _ (rest 0) ())                 ; a rest of nothing: the other tasks' turn
    (web-show f) (: s (peep web-scr () 0) _ (scribe s f) _ (mirror s) ()))

@@ -57,20 +57,23 @@ that is a compiler.
   the page unchanged through web.l -- their tty runners, keys as the bytes a terminal
   sends. and the cli's leaves became answers: cli-line answers a status charm and
   the frontend quits with it, so nothing in src/core spells a host word.
-- **rung 2 -- rove as the fiction engine.** ✅ the engine and the library LANDED,
-  src/apps/rove/story.l: levels as data (rooms with text, exits and things; a thing a
-  book to read or a file to open), a line-driven turn (look, go, read, open, exits,
-  help, quit, or a bare exit), a pure painter (title bar, the log newest at the foot,
-  the prompt; wrapped at the width) so turns and frames gate headless
-  (test/host/story.l). the library: `(library "src/apps")` -- a hall with a door per
-  wing, a room per crew module whose text is libra's lift of its header, a book per
-  file whose `read` is its own header and whose `open` is vi, called in place; the
-  hatch in the hall runs the crawl (rove.l) the same way, so the crawl is one level
-  among others. the crew modules are asked for by name at the call, so the file
-  loads on a seat that lacks them and says so. the page walks the demo level
-  (`lighthouse`; a chip). OPEN: a level designer (levels are hand-written data for
-  now), and the page's library -- it has no tree to read, so its catalogue wants to
-  be laid by `make web` the way the site is.
+- **rung 2 -- rove as the fiction engine.** ✅ LANDED, src/apps/rove/story.l + design.l.
+  a level is a datum in a file (src/apps/rove/levels) the reader and printer round-trip:
+  rooms with a name, a map cell, text, exits and things; a thing a book to read or a
+  file to open. story.l carries no story: the turn (look, go, read, open, exits, help,
+  quit, or a bare exit), a pure painter (title bar, the log newest at the foot, the
+  prompt, wrapped) so turns and frames gate headless, load-level/save-level, and the
+  library -- `(library "src/apps")`, a hall with a door per wing, a room per crew
+  module whose text is libra's lift of its header, a book per file whose read is its
+  own header and whose open is vi called in place; the hatch runs the crawl the same
+  way, so the crawl is one level among others. the designer, design.l: the level's
+  rooms as boxes on a map of cells, every edit a key on the box under the cursor
+  (place, name, an exit linked by moving the cursor to its target, a thing, the start,
+  remove), saved as the datum story plays; `v` saves and opens the file in vi for the
+  words, `p` saves and plays it. keys and frames are pure, so it gates headless
+  (test/host/design.l). the page walks the lighthouse from its fetched datum. OPEN: a
+  level's own logic (hooks on enter/read/open) once a level wants some; the page's
+  library catalogue, laid by make web.
 - **rung 3 -- the wasm backend**, doc/misc/plan/moon-wasm.md rungs 0-5: the module
   writer, control flow by dispatch loop, the type law, the environment (a nolibc face
   where the handful of system calls are imports the page supplies, and a loader of a

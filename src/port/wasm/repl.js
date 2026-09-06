@@ -54,8 +54,11 @@ async function loveRepl(root) {
   const face = cellsFace(M.HEAPU32.subarray(palette() >> 2, (palette() >> 2) + 256), unfold);
   try {
     const srcs = await Promise.all(
-      ['src/port/wasm/web.l', 'src/apps/rove/rove.l', 'src/apps/rove/story.l', 'src/apps/ink/ink.l'].map(p => fetch(p).then(r => r.text())));
-    for (const t of srcs) ev(t);
+      ['src/apps/rove/story.l', 'src/apps/rove/levels/lighthouse.l', 'src/port/wasm/web.l', 'src/apps/rove/rove.l', 'src/apps/ink/ink.l']
+        .map(p => fetch(p).then(r => r.text())));
+    ev(srcs[0]);
+    ev('(: lighthouse-data <(sound ' + aiStr(srcs[1]) + '))');   // the level's datum, read not run
+    for (const t of srcs.slice(2)) ev(t);
     for (const ch of root.querySelectorAll('[data-app]')) ch.style.display = 'inline-block';
   } catch (e) {
   }

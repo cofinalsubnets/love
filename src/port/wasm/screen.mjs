@@ -33,6 +33,10 @@ const face = cellsFace(M.HEAPU32.subarray(palette() >> 2, (palette() >> 2) + 256
 // app is not the app's end but a runaway
 ev('(hear (\\ a b (: _ (puts ";; ") _ (putx a) _ (puts " ") _ (putx b) _ (putc 10) ())))'); drain();
 let fails = 0;
+// a love string literal: " and \ and controls ride \xHH (as repl.js spells it)
+const aiStr = t => '"' + Array.from(t, ch => { const o = ch.codePointAt(0);
+  return ch === '"' || ch === '\\' || (o < 32 && ch !== '\n' && ch !== '\t') ? '\\x' + o.toString(16).padStart(2, '0')
+       : ch === '\n' ? '\\n' : ch === '\t' ? '\\t' : ch; }).join('') + '"';
 const ok = (c, what) => { if (!c) { fails++; console.error('  FAIL: ' + what); } };
 const src = f => readFileSync(new URL(f, tree), 'utf8');
 const evs = s => { const st = ev(s); ok(st === 0, `eval ${JSON.stringify(s.slice(0, 40))} -> ${st}: ${drain().trim()}`); return drain(); };
@@ -63,10 +67,6 @@ ok(evs('(puts (show (mirror s)))').trim() === '24', 'mirror answers the cell cou
 }
 
 // --- the apps, through web.l, as tasks on a page-sized console ---
-// a love string literal for a frame: " and \ and controls ride \xHH (as repl.js spells it)
-const aiStr = t => '"' + Array.from(t, ch => { const o = ch.codePointAt(0);
-  return ch === '"' || ch === '\\' || (o < 32 && ch !== '\n' && ch !== '\t') ? '\\x' + o.toString(16).padStart(2, '0')
-       : ch === '\n' ? '\\n' : ch === '\t' ? '\\t' : ch; }).join('') + '"';
 const key = b => M.ccall('ai_key', 'number', ['number'], [b]);
 // one pump, repl.js's: the app's turn, its drawing scribed and mirrored, and whether it lives
 const runnable = M.cwrap('ai_runnable', 'number', []), alive = M.cwrap('ai_alive', 'number', []);
@@ -75,7 +75,9 @@ const pump = () => { let acc = drain();
   for (let k = 0; acc && k < 4; k++) { ev('(web-show ' + aiStr(acc) + ')'); acc = drain(); }
   return alive() === 1; };
 const row = (r, cols) => { const { cells } = view(); return Array.from(cells.subarray(r * cols, r * cols + cols), c => face.glyph[c & 255]).join(''); };
-evs(src('src/port/wasm/web.l')); evs(src('src/apps/rove/rove.l')); evs(src('src/apps/rove/story.l')); evs(src('src/apps/ink/ink.l'));   // the stubs first: a closure captures its globals at creation
+evs(src('src/apps/rove/story.l'));
+evs('(: lighthouse-data <(sound ' + aiStr(src('src/apps/rove/levels/lighthouse.l')) + '))');   // the level's datum, read not run
+evs(src('src/port/wasm/web.l')); evs(src('src/apps/rove/rove.l')); evs(src('src/apps/ink/ink.l'));   // the stubs before the apps: a closure captures its globals at creation
 ok(evs('(puts (show (rest 0)))').trim() !== '', 'a rest of nothing yields');
 ev('(web-boot "rove" 80 24)');
 ok(pump(), 'rove boots and lives');

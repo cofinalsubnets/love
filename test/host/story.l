@@ -21,8 +21,11 @@
                                         (g (i + 1) (acc + string c) 0)))
                                   acc)) 0 "" 0)
 
-   ; --- turns on the demo level ---
-   g (story-new demo-level)
+   ; --- turns on the demo level, loaded from its file ---
+   L0 (load-level "src/apps/rove/levels/lighthouse.l")
+   _ (assert L0 ('lamp = (L0 'start)) (3 = tally (keys (L0 'rooms)))
+             (= (data-of (level-of <(sound (level-text L0)))) (data-of L0)))   ; a shown level reads back
+   g (story-new L0)
    _ (describe g)
    _ (assert ('lamp = (g 'at)) (has? <(g 'log) "exits: down") (has? (g 'log 1) "the lamp"))
    _ (story-turn g "down")
