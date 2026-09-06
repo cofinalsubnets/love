@@ -338,7 +338,7 @@
  (:
 
   ; --- integers: the digits of a non-negative charm/sun/big, most significant first
-  (dch n a) (: q (n // 10) d (48 + (n - (q * 10))) (? (0 < q) (dch q (d >< a)) (d >< a)))
+  (dch n a) (: q (n // 10) d (48 + (n - (q * 10))) (? (0 < q) (dch q (d . a)) (d . a)))
   (dstr n) (string (dch n ()))
   (ndig n) (: q (n // 10) (? (0 < q) (1 + (ndig q)) 1))          ; the count, without building the list
   (pnum o n) (? (n < 0) (: _ (put o 45) (say o (dstr (0 - n)))) (say o (dstr n)))
@@ -368,7 +368,7 @@
   ; the search an interval far too narrow.
   (norm m e) (? (p53 <= m) (norm (m / 2.0) (1 + e))
                 (m < p52 && emin < e) (norm (m * 2.0) (e - 1))
-                (int m >< e))
+                (int m . e))
   ; inside the rounding interval? a midpoint counts only for an even mantissa --
   ; round-to-nearest-even is what reads it back.
   (fits c lo hi evn) ((lo < c ? 1 (evn && c = lo)) &&
@@ -434,8 +434,8 @@
   ; --- trays. rank 1 is @(…); past that (array '(shape) elem…), since @ has no
   ; shape spelling. an object tray quotes what would otherwise re-evaluate.
   ; a tray is read by coordinate, so walk the flat index back into one, row-major
-  (coord sh i) (? !(two? >sh) (i >< ())
-                  (: r (foldl (*) 1 >sh) q (i // r) (q >< coord >sh (i - (q * r)))))
+  (coord sh i) (? !(two? >sh) (i . ())
+                  (: r (foldl (*) 1 >sh) q (i // r) (q . coord >sh (i - (q * r)))))
   (ptray o v sn) (: ty (atype v) sh (shape v) n (foldl (*) 1 sh)
     (pel i) (: e (peep v (coord sh i) 0)
                _ (? (ty = 3 && (nom? e || two? e)) (put o 39) 0) (px o e sn))
@@ -450,7 +450,7 @@
   ; mutable and can hold itself, so the path is carried and matched by identity.
   (onpath? x l) (? !(two? l) 0 (id? x <l) 1 (onpath? x >l))
   (pmap o m sn) (? (onpath? m sn) (say o "<cycle>")
-    (: ks (keys m) s2 (m >< sn)
+    (: ks (keys m) s2 (m . sn)
        (go l f) (? (two? l) (: _ (? f 0 (put o 32))
                                 _ (px o <l s2) _ (put o 32) _ (px o (peep m <l ()) s2)
                                 (go >l 0)) 0)
@@ -470,7 +470,7 @@
 
   ; --- closures. a partial's every unc cell holds its arg at [1] and the link at
   ; [2], so the base value sits at link-2.
-  (partp v) (id? unc (peek 0 v) || (id? cur (peek 0 v) && id? unc (peek 2 v)))
+  (partp v) (id? unc (peek 0 v) || id? cur (peek 0 v) && id? unc (peek 2 v))
   (unc0 v) (? (id? cur (peek 0 v)) (seek 2 v) v)
   (nargs v) (: (go u n) (: l (peek 2 u) (? (id? unc (peek 0 l)) (go l (1 + n)) n)) (go (unc0 v) 1))
   (fbase v) (: (go u) (: l (peek 2 u) (? (id? unc (peek 0 l)) (go l) (seek -2 l))) (go (unc0 v)))
@@ -481,7 +481,7 @@
   (inq x l) (? !(two? l) 0 (id? x <l) 1 (inq x >l))
   ; the shortlex letters: a b .. z aa ab .. , one-based so the digits carry no zero
   (sxch n a) (: q ((n - 1) // 26) c (97 + ((n - 1) % 26))
-              (? (0 < q) (sxch q (c >< a)) (c >< a)))
+              (? (0 < q) (sxch q (c . a)) (c . a)))
   (lnom i) (name (string (sxch (1 + i) ())))
   ; a binder takes the next letter not spelled free anywhere in the source -- a name kept
   ; as written is a name a rename would capture, and skipping it is the whole guard.
@@ -539,11 +539,11 @@
 
 ; the surface. `dot` takes a string or cask verbatim and everything else in external
 ; form; it answers its operand, so it drops into any sequence.
-(: (print o x) (: _ (px o x ()) x)
-   (show x) (: o (jug 0) _ (px o x ()) (slurp o))
-   (dot x) (: _ (? (string? x || hot? x && !(port? x)) (say out x) (px out x ())) _ (flush out) x))
-(: putx (print out)
-   _ (seal-hook 7 show))                           ; `string` coerces through it from here on
+(: (print o x) (px o x (), x)
+   (show x) (: o (jug 0) (px o x (), slurp o))
+   (dot x) (string? x || hot? x && !(port? x) ? (say out x) (px out x ()), flush out, x)
+   putx (print out))
+(seal-hook 7 show)
 (: (red? x) (+x < 0) (blue? x) (+x = 0) (green? x) (+x > 0))
 
 ; --- the library layers, sat here with post so every seat carries them: rng and q are
@@ -812,7 +812,7 @@
    (query n ks g) (:
     (walk_star s u path) (?                          ; cycle-safe: (mu label) on a back-edge
      (var? u) (: t (has_s s u)
-                 (? (atom? t) u
+                 (? (one? t) u
                     (member? u path) ['mu <u]
                     (walk_star s <t (u . path))))
      (tie? u) (: a (nom 0) ['tie a (walk_star s (untie u a) path)])
@@ -821,7 +821,7 @@
     ; the noms an answer carries -- a tie's binder, an atom a relation minted -- are
     ; renamed a1 a2 .. in first-sight order, so an answer reads back and compares.
     (noms t acc) (? (var? t) acc
-                    (mint? t) (? (member? t acc) acc (t . acc))
+                    (mint? t) (member? t acc ? acc (t . acc))
                     (two? t) (noms >t (noms <t acc))
                     acc)
     (renom d t) (? (var? t) t
@@ -830,8 +830,8 @@
                    t)
     (dename t) (: ns (rev (noms t ()))
                   (? (two? ns)
-                     (renom (foldl (\ d p (dict_set d <p <>p)) empty_dict
-                                   (zip ns (map (\ i (intern (+ "a" (show (i + 1))))) (jot (tally ns)))))
+                     (renom (foldl (d \ p \ dict_set d <p <>p) empty_dict
+                                   (zip ns (map (i \ nom $ "a" + show (i + 1)) ^#ns)))
                             t)
                      t))
     (keyvar keys k) (? (atom? keys) 0 (: kv <keys (? (k = <kv) kv (keyvar >keys k))))
@@ -1469,7 +1469,7 @@
               (? (c = 42) (? (repable acc)
                              (pseq (i + 1) (['rep <acc 0 ()] . >acc) lvl gi)
                              (nofit i acc lvl gi 42 1))
-                 (c = 46) (pseq (i + 1) ('(any) >< acc) lvl gi)
+                 (c = 46) (pseq (i + 1) ('(any) . acc) lvl gi)
                  (c = 94 && bol? acc) (pseq (i + 1) ('(bol) . acc) lvl gi)
                  (c = 36 && eol? i) (pseq (i + 1) ('(eol) . acc) lvl gi)
                  (c = 91)
@@ -1488,7 +1488,7 @@
        (palt i lvl gi)
         (: (go j g acc)
             (pseq j () lvl g @ [nds j2 g2 why]
-              (: acc2 (nds >< acc)
+              (: acc2 (nds . acc)
                  (? (why = 'bar) (go j2 g2 acc2)
                     (: brs (rev acc2)
                        [(two? >brs ? [['alt brs]] <brs) j2 g2 why]))))
@@ -1553,35 +1553,28 @@
    ; skip never steps over a match. nil? is zero?, so a NUL needle reads as absent
    ; here and simply declines the skip
    (refirst ns)
-    (ns @ (nd >< _)
-       (nd @ ['chr c]       c
-             ['grp _ sub]   (refirst sub)
-             ['rep a lo hi] (0 < lo ? (refirst [a]) ())
-             ['alt brs]     (: cs (map refirst brs)         ; every branch, or nothing
-                               (? (any nil? cs) ()
-                                  (all (\ c (c = <cs)) cs) <cs
-                                  ()))
-             ())
-       ())
+    (ns @ (nd . _) (nd @
+     ['chr c]       c
+     ['grp _ sub]   (refirst sub)
+     ['rep a lo hi] (0 < lo && refirst [a])
+     ['alt brs]     (: cs (map refirst brs) k <cs
+                     (all (c \ c @ ^k $c) cs && k))))
    (recompm ns)
-    (ns @ (nd >< rest) (renode nd (recompm rest))
-          (\ s i sp k (k i sp)))
+    (ns @- (\ s i sp k (k i sp)) (nd . rest) (renode nd (recompm rest)))
    ; anchored: a leading `^`, or a shape whose every path opens with one. a `^`
    ; anywhere else is not the head of this list and answers 0, which is the walk
    (reanch ns)
-    (ns @ (nd >< _)
+    (ns @ (nd . _)
        (nd @ ['bol]       1
              ['grp _ sub] (reanch sub)
-             ['alt brs]   (all reanch brs)
-             0)
-       0)
+             ['alt brs]   (all reanch brs)))
    (renode nd tail)
     (nd @ ['chr c]      (\ s i sp k (i < #s && s i = c ? (tail s (i + 1) sp k)))
-          ['any]        (\ s i sp k (i < #s ? (tail s (i + 1) sp k)))
+          ['any]        (\ s i sp k (i < #s && tail s (i + 1) sp k))
           ['cls neg rs] (: p (recls neg rs)
                            (\ s i sp k (i < #s && p (s i) ? (tail s (i + 1) sp k))))
-          ['bol]        (\ s i sp k (i = 0 ? (tail s i sp k)))
-          ['eol]        (\ s i sp k (i = #s ? (tail s i sp k)))
+          ['bol]        (\ s i sp k (i = 0 && tail s i sp k))
+          ['eol]        (\ s i sp k (i = #s && tail s i sp k))
           ['grp gi sub] (: b (recompm sub)
                            (\ s i sp k
                               (b s i sp (\ j sp2 (tail s j ([gi i j] . sp2) k)))))
@@ -1591,7 +1584,7 @@
                            (\ s i sp k
                               (: (try l)
                                   (l @ (b . more)
-                                     (b s i sp (\ j sp2 (tail s j sp2 k)) || try more))
+                                   (b s i sp (\ j sp2 (tail s j sp2 k)) || try more))
                                  (try bs))))
           ['rep a lo hi] (: ab (recompm [a])
                             (\ s i sp k (rrepc ab lo hi tail s i sp k 0))))
@@ -1604,9 +1597,8 @@
    (rrepc ab lo hi tail s i sp k cnt)
     (: more (? (!hi || cnt < hi)
                (ab s i sp
-                   (\ j sp2 (j = i ? (cnt < lo ? (tail s j sp2 k))
-                              (rrepc ab lo hi tail s j sp2 k (cnt + 1)))))
-               ())
+                   (\ j sp2 (j = i ? (cnt < lo && tail s j sp2 k)
+                             (rrepc ab lo hi tail s j sp2 k (cnt + 1))))))
        (? more more
           (cnt < lo) ()
           (tail s i sp k)))
@@ -1620,7 +1612,7 @@
        (jump i) (: j (sk s i n)                   ; only the positions that could open
                    (? (n <= j) ()
                       (? (f s j () (\ e sp [1 e])) 1 (jump (j + 1)))))
-       ((nil? sk || <>m) ? (from 0) (jump 0)))
+       (nil? sk || <>m ? (from 0) (jump 0)))
    ; the node-list faces: they compile and then match, for a caller with one text to
    ; ask about. a caller with many -- grep, sed, awk -- holds the matcher instead
    (rehas ns s) (rehasm (recomp ns) s)
@@ -1775,20 +1767,20 @@
                               (rev acc)))
     (flow p) ()))
 
-(: m (nom 0) eofsym (nom 0)
+(: no (nom 0) eofsym (nom 0)
 
    (want n) (member? n (names ()) ? (ev n) ())
    raw (want 'raw)
 
 
    (rdall cl acc)
-    (sound cl @ 'torn m                            ; unfinished shape -> more
+    (sound cl @ 'torn no                           ; unfinished shape -> more
                 (a . b) (rdall b (a . acc))
                 (rev acc))                         ; a clean end -> the datums, in order
-   (parseall cl)
-    (rdall cl () @ ^m  m                           ; unfinished shape
-                   [a] [a]                         ; one datum: as-is (leading monadic preserved)
-                   ds  (two? ds ? [ds]))           ; many: the application; a blank line: ()
+   (parseall cl) (rdall cl () @
+    ^no  no ; unfinished shape
+    ((_ . ()) @ a) a                         ; one datum: as-is (leading monadic preserved)
+    ((_ . _)  @ d) [d])           ; many: the application; a blank line: ()
 
    ; --- the editor: one buffer in a tablet, one key at a time -------------------------
    ; the buffer is a zipper of charlists: 'u the lines above (reversed), 'l the cursor's
@@ -1966,7 +1958,7 @@
                 (-7 || 4) eofsym
                 ; enter cashes the buffer as long as it parses complete
                 10 (parseall (edchars t) @
-                    ^m (ednl (eddetach t), loop npra)
+                    ^no (ednl (eddetach t), loop npra)
                     vs (: _ (eddetach t)
                           h (revcat (t 'hd) (t 'hu))
                           (two? (t 'd) ? (csi (tally (t 'd)) 66) (),
