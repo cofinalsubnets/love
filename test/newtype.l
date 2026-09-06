@@ -91,97 +91,98 @@
     (3 = +[(cnt [1]) (cnt [1 1])])      ; counts flow through the list sum: 1+2
     (-4 = +(sm [1 -5]))      ; mode absent: the payload hom, signed, as ever
 
-    ; --- rationals (q): a multi-field coin; +/*/=/show all work. (a coin nets its
-    ;     payload, so q's truth/sort go by representation, not value -- not asserted.) ---
-    (q 5 6 = q 1 2 + q 1 3)    ; 1/2 + 1/3 = 5/6
-    (q 1 2 = q 2 3 * q 3 4)    ; 2/3 * 3/4 = 1/2
-    (q 1 2 = q 2 4)                ; reduced on construction
-    (q 1 2 = q [1 2])             ; the 2-list form (what show reads back)
+    ; --- rationals (///): a multi-field coin; +/*/=/show all work. (a coin nets its
+    ;     payload, so a rational's truth/sort go by representation, not value -- not asserted.) ---
+    (5 /// 6 = 1 /// 2 + 1 /// 3)    ; 1/2 + 1/3 = 5/6
+    (1 /// 2 = 2 /// 3 * 3 /// 4)    ; 2/3 * 3/4 = 1/2
+    (1 /// 2 = 2 /// 4)                ; reduced on construction
+    (1 /// 2 = (/// [1 2]))             ; the 2-list form (what show reads back)
     ; show is reduced, and reparsable -- which wants the payload quoted: a bare (1 2)
-    ; in a form is an application, so the old (q (1 2)) read back as q applied to 2.
-    ("(q '(1 2))" = show (q 2 4))
-    (q 1 2 = ev (cap (sound (show (q 2 4)))))   ; ..and that is the whole claim, checked
+    ; in a form is an application, so the old (q (1 2)) read back as q applied to 2; now the
+    ; rational wears the operator, which reads back as itself.
+    ("(1 /// 2)" = show (2 /// 4))
+    (1 /// 2 = ev (cap (sound (show (2 /// 4)))))   ; ..and that is the whole claim, checked
 
     ; --- `-` rides slot 5: q pins it (cross-multiply, reduce); the unit still rides ---
-    (q 1 6 = q 1 2 - q 1 3)    ; 1/2 - 1/3 = 1/6
-    (q -1 1 = q 1 2 - q 3 2)   ; goes red exactly
-    (q 1 2 = q 3 2 - 1)          ; an integer rides cap/mint, either side
-    (q 1 2 = 1 - q 1 2)
-    (nil? (q 1 2 - ()))          ; () is absent to -, so there is nothing to compute
-    (nil? (() - q 1 2))          ; ... either side
+    (1 /// 6 = 1 /// 2 - 1 /// 3)    ; 1/2 - 1/3 = 1/6
+    (-1 /// 1 = 1 /// 2 - 3 /// 2)   ; goes red exactly
+    (1 /// 2 = 3 /// 2 - 1)          ; an integer rides cap/mint, either side
+    (1 /// 2 = 1 - 1 /// 2)
+    (nil? (1 /// 2 - ()))          ; () is absent to -, so there is nothing to compute
+    (nil? (() - 1 /// 2))          ; ... either side
     !(a - z5 1)                ; a kind without - -> nil, like sm's *
     !(a - sm 3)                ; distinct kinds never combine
 
     ; --- `/` rides slot 8: q pins it (invert and multiply); zero has no reciprocal ---
-    (q 3 2 = q 1 2 / q 1 3)    ; (1/2) / (1/3) = 3/2
-    (q 1 4 = q 1 2 / 2)          ; an integer rides cap/mint, either side
-    (q 2 1 = 1 / q 1 2)          ; ... so 1 / (1/2) is the reciprocal, exact
-    (q -3 2 = q 1 2 / q -1 3)  ; the sign lands on the numerator, reduced
-    !(q 1 2 / q 0 1)         ; by zero -> (): Q holds no inf
-    !(q 1 2 / 0)               ; ... the bare zero too
-    (nil? (q 1 2 / ()))          ; ... and absent to / as well
-    (nil? (() / q 1 2))          ; ... either side
+    (3 /// 2 = 1 /// 2 / 1 /// 3)    ; (1/2) / (1/3) = 3/2
+    (1 /// 4 = 1 /// 2 / 2)          ; an integer rides cap/mint, either side
+    (2 /// 1 = 1 / 1 /// 2)          ; ... so 1 / (1/2) is the reciprocal, exact
+    (-3 /// 2 = 1 /// 2 / -1 /// 3)  ; the sign lands on the numerator, reduced
+    !(1 /// 2 / 0 /// 1)         ; by zero -> (): Q holds no inf
+    !(1 /// 2 / 0)               ; ... the bare zero too
+    (nil? (1 /// 2 / ()))          ; ... and absent to / as well
+    (nil? (() / 1 /// 2))          ; ... either side
     !(a / z5 2)                ; a kind without slot 8 -> nil
     !(a / sm 3)                ; distinct kinds never combine
 
     ; --- a method owns its domain: off it (no star / (n d)-of-stars face), () ---
-    !(q 1 2 + [(q 1 1) (q 0 1)])    ; a chain of coins is not an (n d)
-    !(q 1 2 * ['x])                 ; nor a chain of symbols
-    !(q 1 2 - "s")                   ; nor text
-    (q 1 1 = q 1 2 + [1 2])           ; ... but a bare (n d) of stars reads as n/d
+    !(1 /// 2 + [(1 /// 1) (0 /// 1)])    ; a chain of coins is not an (n d)
+    !(1 /// 2 * ['x])                 ; nor a chain of symbols
+    !(1 /// 2 - "s")                   ; nor text
+    (1 /// 1 = 1 /// 2 + [1 2])           ; ... but a bare (n d) of stars reads as n/d
 
     ; --- an open star (slot 7): q declares its coins numeric, so a numeral
     ;     powers them through their own * (exact squaring) instead of composing ---
-    (q 1 4 = 2 (q 1 2))            ; (n x) = x**n, through the kind
-    (q 8 27 = 3 (q 2 3))
-    (q 1 4 = q 1 2 ** 2)         ; the apply operator rides the same law
-    (q 1 2 = 1 (q 1 2))            ; the identity numeral
-    (1 = 0 (q 5 7))                  ; the zero numeral: x**0 = 1
-    (q 1 2 = -1 (q 2 1))           ; a reciprocal power rides coin / (slot 8)
-    (q 9 4 = -2 (q 2 3))           ; (2/3)**-2 = 9/4: ipow, then invert
-    (q 9 4 = q 2 3 ** -2)        ; the apply operator rides the same law
-    !(-1 (q 0 1))                ; zero has no reciprocal power
-    !((1 / 2) (q 4 1))           ; a non-whole exponent off the tower: ()
+    (1 /// 4 = 2 (1 /// 2))            ; (n x) = x**n, through the kind
+    (8 /// 27 = 3 (2 /// 3))
+    (1 /// 4 = 1 /// 2 ** 2)         ; the apply operator rides the same law
+    (1 /// 2 = 1 (1 /// 2))            ; the identity numeral
+    (1 = 0 (5 /// 7))                  ; the zero numeral: x**0 = 1
+    (1 /// 2 = -1 (2 /// 1))           ; a reciprocal power rides coin / (slot 8)
+    (9 /// 4 = -2 (2 /// 3))           ; (2/3)**-2 = 9/4: ipow, then invert
+    (9 /// 4 = 2 /// 3 ** -2)        ; the apply operator rides the same law
+    !(-1 (0 /// 1))                ; zero has no reciprocal power
+    !((1 / 2) (4 /// 1))           ; a non-whole exponent off the tower: ()
     ('lambda = kind (2 (sm 3)))  ; an unflagged coin still composes (a closure)
 
     ; --- net-mode 2 (RATIO): a rational's truth is its VALUE's sign, exactly ---
-    !(q -1 2)                    ; a negative rational is nothing: red by value
-    !!(q 1 2)              ; a positive one is something
-    !(q 0 5)                     ; zero is the blue floor
-    (1 = $(q 1 2))                ; $ ceils the magnitude: 1/2 -> 1
-    (2 = $(q 3 2))                ; ceil 3/2
-    (0 = $(q -7 2))               ; ... and clamps red to the floor
-    !!(q 1 2 - q 1 3)     ; the subtract-and-test sign idiom holds: 1/2 - 1/3 is green
-    !(q 1 3 - q 1 2)            ; ... and 1/3 - 1/2 is red: nothing
-    !!(q 1 (1000 10))      ; a 10^1000 denominator underflows the double --
-    !(q -1 (1000 10))            ; ... the sign survives it, both ways
+    !(-1 /// 2)                    ; a negative rational is nothing: red by value
+    !!(1 /// 2)              ; a positive one is something
+    !(0 /// 5)                     ; zero is the blue floor
+    (1 = $(1 /// 2))                ; $ ceils the magnitude: 1/2 -> 1
+    (2 = $(3 /// 2))                ; ceil 3/2
+    (0 = $(-7 /// 2))               ; ... and clamps red to the floor
+    !!(1 /// 2 - 1 /// 3)     ; the subtract-and-test sign idiom holds: 1/2 - 1/3 is green
+    !(1 /// 3 - 1 /// 2)            ; ... and 1/3 - 1/2 is red: nothing
+    !!(/// 1 (1000 10))      ; a 10^1000 denominator underflows the double --
+    !(/// -1 (1000 10))            ; ... the sign survives it, both ways
 
     ; --- the order half: a ratio coin seats in the number band, by VALUE ---
-    (q 1 3 < q 1 2)                ; value order, not payload order
-    !(q 1 2 < q 1 3)
-    !(q 1 2 < q 2 4)         ; equal values tie (either side)
-    !(q 2 4 < q 1 2)
-    (q 1 2 < 1)                      ; ... interleaved with the closed tower
-    (0 < q 1 2)
-    (q -1 2 < 0)
-    (1 < q 3 2)
-    (q 3 2 >= 1)                     ; the reversed faces ride the same lane
-    (q 1 2 <= q 2 4)
-    (1 < q 9007199254740993 9007199254740992)   ; 1 + 2^-53: the double quotient ties at 1.0;
+    (/// 1 3 < 1 /// 2)                ; value order, not payload order
+    !(/// 1 2 < 1 /// 3)
+    !(/// 1 2 < 2 /// 4)         ; equal values tie (either side)
+    !(/// 2 4 < 1 /// 2)
+    (/// 1 2 < 1)                      ; ... interleaved with the closed tower
+    (0 < 1 /// 2)
+    (/// -1 2 < 0)
+    (1 < 3 /// 2)
+    (/// 3 2 >= 1)                     ; the reversed faces ride the same lane
+    (/// 1 2 <= 2 /// 4)
+    (1 < 9007199254740993 /// 9007199254740992)   ; 1 + 2^-53: the double quotient ties at 1.0;
                                        ; the exact cross-multiply tier does not
-    ([(q -1 2) (q 1 3) (q 1 2) 1 (q 3 2) 2] =
-     (sort [2 (q 1 2) 1 (q 3 2) (q 1 3) (q -1 2)]))    ; sort interleaves by value
-    (q 9 1 < cnt [1])             ; a non-ratio coin keeps the coin band, above the numbers
+    ([(-1 /// 2) (1 /// 3) (1 /// 2) 1 (3 /// 2) 2] =
+     (sort [2 (1 /// 2) 1 (3 /// 2) (1 /// 3) (-1 /// 2)]))    ; sort interleaves by value
+    (/// 9 1 < cnt [1])             ; a non-ratio coin keeps the coin band, above the numbers
 
     ; --- rung 2: a declared star self-nets, so the vocabulary follows the flag ---
-    (q 1 2 = +(q 1 2))          ; net answers the coin itself (the fixpoint, by declaration)
-    (star? (q 1 2))                    ; ... so star? holds with no coin branch of its own
+    (1 /// 2 = +(1 /// 2))          ; net answers the coin itself (the fixpoint, by declaration)
+    (star? (1 /// 2))                    ; ... so star? holds with no coin branch of its own
     !(star? a)                   ; an undeclared coin still nets its payload: no star
     !(star? (sm 3))
-    (q 5 6 = +[(q 1 2) (q 1 3)])    ; additivity lands in the ring: an exact rational sum
+    (5 /// 6 = +[(1 /// 2) (1 /// 3)])    ; additivity lands in the ring: an exact rational sum
 
     ; --- a coin's lit?-ness is its kind's call: fresh data by default ---
-    !(lit? (q 1 2))          ; a rational is data -- a value, not a reference (like a number)
+    !(lit? (1 /// 2))          ; a rational is data -- a value, not a reference (like a number)
     !(lit? a)                ; a mod-n residue too
     !(lit? (sm 5))
     !(lit? ((coin 'd ()) 5))          ; a plain kind -> data

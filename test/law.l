@@ -1,7 +1,7 @@
 ; --- test/law.l: claude.md's laws, quantified ---
 ; a law written with a free `x` means "forall x, this is 1".
 (: law-flat (list 0 1 2 5 -1 -5 2.5 -2.5 0.0 () "" "a" "ab" 'sym '(1 2) '(-2 1)
-                  (twin 3 4) (twin -1 2) (twin 0 3) @() @(1 2) @(1 2 3) (q 7 2) (q -7 2) cap 'x)
+                  (twin 3 4) (twin -1 2) (twin 0 3) @() @(1 2) @(1 2 3) (7 /// 2) (-7 /// 2) cap 'x)
    law-jot (list ^0 ^1 ^2 ^4 ^5 ^^0 ^^1 ^^2 ^^4 ^^5 ^^^0 ^^^1 ^^^2 ^^^3 ^^^4 ^^^^3)
    law-corpus (law-flat + law-jot)
    ; a law is (nom . closure); it holds when every value answers the charm 1
@@ -49,10 +49,10 @@
       ; rounds there, which is why ceil-net's corpus keeps its ratios small.
       ['ratio-rungs (\ _ (: b ((60 2) + 1)
                             s (word ? 1 (32 2))
-                            (all (\ p (: n <p d <>p c (ceil (q n d))
-                                         ((int (q n d) = n // d)
+                            (all (\ p (: n <p d <>p c (ceil (/// n d))
+                                         ((int (/// n d) = n // d)
                                           && (c = (n // d) + (? (0 < n && 0 != n % d) 1 0))
-                                          && (saturate (q n d) = (? (0 < c) c 0)))))
+                                          && (saturate (/// n d) = (? (0 < c) c 0)))))
                                  [[7 2] [-7 2] [0 5] [b (3 * s)] [-b (3 * s)]
                                   [b s] [(b * b) (b * s)]])))]
       ['add-assoc

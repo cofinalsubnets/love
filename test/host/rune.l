@@ -18,7 +18,7 @@
 (assert
  (member? 'rune (from ()))                ; the registry lists it
  (member? 'deriv (keys (from 'rune)))      ; keys introspects the layer
- (1 = ((from 'rune 'cnorm) (q 3 3)))      ; the opaque accessor reaches a member
+ (1 = ((from 'rune 'cnorm) (3 /// 3)))      ; the opaque accessor reaches a member
  (lit? (from 'rune))                      ; presence: the accessor is a closure
  (! (from 'ruin)))                        ; a missing module answers ()
 
@@ -69,7 +69,7 @@
 (assert
  ((pgcd (pmul g1 g2) (pmul g1 g3)) = g1)         ; the common factor, monic
  ((pgcd (pmul (gc 2) g1) (pmul (gc 4) g1)) = g1) ; units divide out
- ((pgcd (pmul (gc (q 1 2)) g1) g1) = g1)         ; ... ratio units too
+ ((pgcd (pmul (gc (1 /// 2)) g1) g1) = g1)         ; ... ratio units too
  ((pgcd g1 g2) = (gc 1))                         ; coprime -> the 1 poly
  ((pgcd (pmul g1 g1) (pmul g1 g2)) = g1)         ; a square shares one factor
  ((pgcd (pmul g1 gn) (pmul gn gn)) = gn)         ; a red constant rides: x - 1
@@ -113,7 +113,7 @@
  ((mgcd u1 u2) = (pconst 3 1))                   ; coprime -> the 1 poly
  ((mgcd (pconst 3 5) u1) = (pconst 3 1))         ; a constant is a unit
  ((mgcd (pmul (pconst 3 2) u1) (pmul (pconst 3 4) u1)) = u1)   ; units divide out
- ((mgcd (pmul (pconst 3 (q 1 2)) u1) u1) = u1)   ; ... ratio units too
+ ((mgcd (pmul (pconst 3 (1 /// 2)) u1) u1) = u1)   ; ... ratio units too
  ((mgcd (pmul rx ry) (pmul rx rz)) = rx)         ; a monomial factor
  ((mgcd (pmul ry rz) (pmul ry ry)) = ry)         ; a gcd free of x: the content path
  ((mgcd (psub (pmul rx rx) (pmul ry ry)) (pmul u1 u1)) = u1)   ; x^2-y^2 meets (x+y)^2:
@@ -133,9 +133,9 @@
  ((proots (pmul g1 g2)) = [-2 -1])               ; the roots, ascending
  ((proots (pmul g1 g1)) = [-1 -1])               ; multiplicity rides psff
  ((proots (pmul gx g1)) = [-1 0])                ; the zero root joins in
- ((proots (padd (pmul (gc 2) gx) (gc 1))) = [(q -1 2)])    ; a coin root, exact
+ ((proots (padd (pmul (gc 2) gx) (gc 1))) = [(-1 /// 2)])    ; a coin root, exact
  ((proots (padd (pmul (gc 6) (pmul gx gx)) (padd (pmul (gc 5) gx) (gc 1))))
-  = [(q -1 2) (q -1 3)])                         ; 6x^2+5x+1: both fractions found
+  = [(-1 /// 2) (-1 /// 3)])                         ; 6x^2+5x+1: both fractions found
  ((proots (pmul (gc 3) (pmul g1 g2))) = [-2 -1]) ; roots are unit-blind
  ((proots (padd (pmul gx gx) (gc -2))) = ())     ; x^2-2: no rational roots
  ((proots gm) = ())                              ; m is a rootless cubic: irreducible
@@ -180,7 +180,7 @@
  ((pfac (padd (pmul gx (pmul gx (pmul gx gx))) (padd gx (gc 1))))
   = [(padd (pmul gx (pmul gx (pmul gx gx))) (padd gx (gc 1)))])    ; x^4+x+1 too
  ((pfac (padd (pmul (gc 2) (pmul gx gx)) gx))
-  = [(gc 2) gx (padd gx (gc (q 1 2)))])          ; the zero root keeps x canonical
+  = [(gc 2) gx (padd gx (gc (1 /// 2)))])          ; the zero root keeps x canonical
  (: bigz (pmul (gc 6) (pmul q1 (pmul q3 g1)))
     ((refac (pfac bigz)) = bigz)))               ; constant + two quadratics + linear:
                                                  ; the whole pipeline, rebuilt exact
@@ -205,7 +205,7 @@
  (4 = (pdeg (pmul lc1 lc2)))                     ; ... and degree 4, so pdeep runs
  ((proots (pmul lc1 lc2)) = ())                  ; no rational roots: nothing strips before pdeep
  ((pfac (pmul lc1 lc2))
-  = [(gc 6) (padd (pmul gx gx) (gc (q 3 2))) (padd (pmul gx gx) (gc (q 2 3)))])   ; 6(x^2+3/2)(x^2+2/3)
+  = [(gc 6) (padd (pmul gx gx) (gc (3 /// 2))) (padd (pmul gx gx) (gc (2 /// 3)))])   ; 6(x^2+3/2)(x^2+2/3)
  ((refac (pfac (pmul lc1 lc2))) = (pmul lc1 lc2)))  ; the exponent's guard: a wrong L power
                                                  ; rebuilds to something else entirely
 
@@ -252,7 +252,7 @@
  ((pfac (psub (pmul by by) (bc 1)))
   = [(padd by (bc 1)) (psub by (bc 1))])         ; a pure-y poly routes univariate
  ((pfac (pmul (bc 2) (pmul (padd (pmul (bc 2) bx) by) b2)))
-  = [(bc 4) b2 (padd bx (pmul (bc (q 1 2)) by))])    ; a constant lead normalizes
+  = [(bc 4) b2 (padd bx (pmul (bc (1 /// 2)) by))])    ; a constant lead normalizes
                                                  ; monic, the 4 squares the product
  (: bigl (pmul by (pmul (padd (pmul by bx) (bc 1)) (pmul b1 b1)))
     ((refac2 (pfac bigl)) = bigl)))              ; y-content + poly lead + squared
@@ -295,23 +295,23 @@
 ; cnorm keeps them canonical: an integer-valued coin demotes to its integer,
 ; so Z[x..] sits inside Q[x..] structurally -- halves that sum whole land
 ; integer coefficients, = crosses Z and Q, and the zero-drop stays (c = 0).
-(: qh (pconst 3 (q 1 2))
+(: qh (pconst 3 (1 /// 2))
    qp (padd (pmul qh rx) ry)                     ; x/2 + y
-   qd1 [(pconst 2 (q 1 2)) ()]
+   qd1 [(pconst 2 (1 /// 2)) ()]
    qd2 [() (pconst 2 2)])
 (assert
  ((padd qh qh) = (pconst 3 1))                   ; 1/2 + 1/2 demotes to the integer 1
  ((padd qp qp) = (padd rx (pmul (pconst 3 2) ry)))   ; doubles to x + 2y, all integer
  (0 = tally (psub qp qp))                        ; q coefficients vanish exactly
- ((pmul qh (pconst 3 (q 2 3))) = (pconst 3 (q 1 3)))  ; 1/2 * 2/3 = 1/3, reduced
+ ((pmul qh (pconst 3 (2 /// 3))) = (pconst 3 (1 /// 3)))  ; 1/2 * 2/3 = 1/3, reduced
  ((pmul (pconst 3 2) qh) = (pconst 3 1))         ; ... and demotes through mmul too
  ((pd (pmul qh (psq rx)) 0) = rx)                ; d/dx x^2/2 = x: the 2 cancels the half
- ((pconst 3 (q 0 1)) = ())                       ; a value-zero coin is no constant
- ((pconst 3 (q 4 2)) = (pconst 3 2))             ; an integer-valued coin enters demoted
+ ((pconst 3 (0 /// 1)) = ())                       ; a value-zero coin is no constant
+ ((pconst 3 (4 /// 2)) = (pconst 3 2))             ; an integer-valued coin enters demoted
  ((pdet [qd1 qd2]) = (pconst 2 1))               ; det diag(1/2 2) = 1: q entries, integer det
  ((- (poly qp) (poly qp)) = (poly ()))           ; the coin face rides the same ring
- ((q 3 2) = ((pfn qp '(x y z)) 1 1 0))           ; compiled: 1/2 + 1 = 3/2
- ((q 4 1) = ((pfn qp '(x y z)) 2 3 0)))          ; a mixed evaluation lands a coin: (q 4 1), not 4
+ ((3 /// 2) = ((pfn qp '(x y z)) 1 1 0))           ; compiled: 1/2 + 1 = 3/2
+ ((4 /// 1) = ((pfn qp '(x y z)) 2 3 0)))          ; a mixed evaluation lands a coin: (4 /// 1), not 4
 
 ; --- the poly coin: polynomials first-class under + - * and ! ---------------
 ; the zero polynomial is the coin over (); ! reads "is the zero polynomial"
@@ -335,7 +335,7 @@
  (! zp)                                ; the zero polynomial is nothing
  (nil? (! pp2))                        ; red content, still something -- the !p law, closed
  (2 = (sat pp2))                       ; $ counts monomials
- (nil? (+ pp1 (q 1 2)))                ; distinct dies never combine
+ (nil? (+ pp1 (1 /// 2)))                ; distinct dies never combine
  (nil? (* pp1 "s"))                    ; a method owns its domain
  ((* 5 zp) = zp)                       ; star times the zero poly is the zero poly (no arity needed)
  ((* zp 5) = zp)
@@ -349,11 +349,11 @@
  ((net [pp1 pp1]) = (+ pp1 pp1)))      ; net of a list of polys is their sum -- the hom in the ring
 
 ; --- the field: Q[x]/(x^2 - 2), where root-two squares to two --------------
-(: sq2xd [(q 2 1) (q 0 1)]                      ; x^2 == 2
-   sq2 [(q 0 1) (q 1 1)])
+(: sq2xd [(2 /// 1) (0 /// 1)]                      ; x^2 == 2
+   sq2 [(0 /// 1) (1 /// 1)])
 (assert
  ((kmul sq2xd sq2 sq2) = (knum 2 2))
- ((kmul sq2xd (vadd sq2 (knum 2 1)) (vadd sq2 (vscale (q -1 1) (knum 2 1))))
+ ((kmul sq2xd (vadd sq2 (knum 2 1)) (vadd sq2 (vscale (-1 /// 1) (knum 2 1))))
   = (knum 2 1)))                                ; (1+r2)(r2-1) = 1
 
 ; --- the disproof, part A: det J F = -2 ------------------------------------
@@ -375,23 +375,23 @@
 ; m = 129x^3 + 49x - 6 is squarefree (disc = -76881936), so it has three
 ; distinct roots; P(x) = (x, y(x), z(x)) below satisfies F(P(x)) == (1 -5 3)
 ; identically in Q[x]/(m), so each root is a distinct preimage.
-(: jxd [(q 6 129) (q -49 129) (q 0 1)]          ; x^3 == (6 - 49x)/129
+(: jxd [(6 /// 129) (-49 /// 129) (0 /// 1)]          ; x^3 == (6 - 49x)/129
    jdisc ((0 - ((4 * 129) * ((49 * 49) * 49))) - (27 * ((129 * 129) * 36)))
-   kx [(q 0 1) (q 1 1) (q 0 1)]
-   ky [(q -2533 386) (q 387 386) (q -6192 386)]
-   kz [(q -2172963 1544) (q -336303 772) (q -5446251 1544)]
+   kx [(0 /// 1) (1 /// 1) (0 /// 1)]
+   ky [(-2533 /// 386) (387 /// 386) (-6192 /// 386)]
+   kz [(-2172963 /// 1544) (-336303 /// 772) (-5446251 /// 1544)]
    kxy (kmul jxd kx ky)
    ku (vadd (knum 3 1) kxy)
    ku2 (kmul jxd ku ku)
    ku3 (kmul jxd ku2 ku)
    ky2 (kmul jxd ky ky)
    kx2 (kmul jxd kx kx)
-   kw (vadd (knum 3 4) (vscale (q 3 1) kxy))
+   kw (vadd (knum 3 4) (vscale (3 /// 1) kxy))
    kg1 (vadd (kmul jxd ku3 kz) (kmul jxd (kmul jxd ky2 ku) kw))
-   kg2 (vadd (vadd (vpad ky 3) (vscale (q 3 1) (kmul jxd (kmul jxd kx ku2) kz)))
-             (vscale (q 3 1) (kmul jxd (kmul jxd kx ky2) kw)))
-   kg3 (vadd (vadd (vscale (q 2 1) kx) (vscale (q -3 1) (kmul jxd kx2 ky)))
-             (vscale (q -1 1) (kmul jxd (kmul jxd kx2 kx) kz))))
+   kg2 (vadd (vadd (vpad ky 3) (vscale (3 /// 1) (kmul jxd (kmul jxd kx ku2) kz)))
+             (vscale (3 /// 1) (kmul jxd (kmul jxd kx ky2) kw)))
+   kg3 (vadd (vadd (vscale (2 /// 1) kx) (vscale (-3 /// 1) (kmul jxd kx2 ky)))
+             (vscale (-1 /// 1) (kmul jxd (kmul jxd kx2 kx) kz))))
 (assert
  (! (jdisc = 0))
  (kg1 = (knum 3 1))
@@ -409,22 +409,22 @@
       [(+ (* (* us uu) zz) (* (* ys uu) ww))
        (+ yy (+ (* 3 (* (* xx us) zz)) (* 3 (* (* xx ys) ww))))
        (+ (* 2 xx) (+ (* -3 (* xs yy)) (* -1 (* (* xs xx) zz))))])
-   cin1 [(q 0 1) (q 0 1) (q -1 4)]
-   cin2 [(q 1 1) (q -3 2) (q 13 2)]
-   cin3 [(q -1 1) (q 3 2) (q 13 2)]
-   cimg [(q -1 4) (q 0 1) (q 0 1)])
+   cin1 [(0 /// 1) (0 /// 1) (-1 /// 4)]
+   cin2 [(1 /// 1) (-3 /// 2) (13 /// 2)]
+   cin3 [(-1 /// 1) (3 /// 2) (13 /// 2)]
+   cimg [(-1 /// 4) (0 /// 1) (0 /// 1)])
 (assert
  (! (cin1 = cin2)) (! (cin2 = cin3)) (! (cin1 = cin3))
- ((feval (q 0 1) (q 0 1) (q -1 4)) = cimg)
- ((feval (q 1 1) (q -3 2) (q 13 2)) = cimg)
- ((feval (q -1 1) (q 3 2) (q 13 2)) = cimg))
+ ((feval (0 /// 1) (0 /// 1) (-1 /// 4)) = cimg)
+ ((feval (1 /// 1) (-3 /// 2) (13 /// 2)) = cimg)
+ ((feval (-1 /// 1) (3 /// 2) (13 /// 2)) = cimg))
 
 ; --- the eval bridge: polys compile to live closures ------------------------
 ; folded dyadic + * ** (the bound base-first power, exact through DieStar),
-; so one closure computes over integers and q coins alike. the flagship: f1 and f3 of the counterexample,
+; so one closure computes over integers and rational coins alike. the flagship: f1 and f3 of the counterexample,
 ; compiled, evaluated at the published collision point -- the same -1/4 and 0
 ; the modular certificate proved, now through ev'd code. a mixed evaluation
-; lands a coin, so zero reads (q 0 1), never the fixnum 0.
+; lands a coin, so zero reads (0 /// 1), never the fixnum 0.
 (: xyz '(x y z)
    ef1 (pfn pp1 xyz)                       ; x+y, from the coin face
    ef2 (pfn (pd (load pp2) 0) xyz)         ; d(x-2y)/dx = 1
@@ -435,14 +435,14 @@
    eF3 (pfn pf3 xyz))
 (assert
  (5 = (ef1 2 3 0))
- ((q 5 6) = (ef1 (q 1 2) (q 1 3) 0))       ; rationals ride the same closure
+ ((5 /// 6) = (ef1 (1 /// 2) (1 /// 3) 0))       ; rationals ride the same closure
  (1 = (ef2 9 9 9))
  (12 = (ef3 2 3 0))                        ; 4*3
- ((q 3 4) = (ef3 (q 1 2) 3 0))             ; a power over a coin stays total
+ ((3 /// 4) = (ef3 (1 /// 2) 3 0))             ; a power over a coin stays total
  (-2 = (efd 5 7 11))
  (0 = (efz 1 2 3))
- ((q -1 4) = (eF1 1 (q -3 2) (q 13 2)))    ; compiled f1 at the collision point
- ((q 0 1) = (eF3 1 (q -3 2) (q 13 2))))    ; compiled f3 there: exactly zero
+ ((-1 /// 4) = (eF1 1 (-3 /// 2) (13 /// 2)))    ; compiled f1 at the collision point
+ ((0 /// 1) = (eF3 1 (-3 /// 2) (13 /// 2))))    ; compiled f3 there: exactly zero
 
 ; --- the matcher: laws as data, rewritten to a fixpoint ----------------------
 ; patterns are terms with kanren vars; unify matches, so a var shared across
@@ -457,7 +457,7 @@
          (rule '(a) '(- a a) 0)
          (rule '(a) '(+ (* (sin a) (sin a)) (* (cos a) (cos a))) 1)]
    dbl (rule '(a) '(+ a a) '(* 2 a))
-   hlf (rule '(a) ['* 'a (q 1 2)] ['/ 'a 2]))
+   hlf (rule '(a) ['* 'a (1 /// 2)] ['/ 'a 2]))
 (assert
  ((rewrite srules '(+ x 0)) = 'x)
  ((rewrite srules '(* (+ x 0) 1)) = 'x)                    ; inner rewrite feeds the root
@@ -468,7 +468,7 @@
  ((rewrite srules '(+ (* (sin t) (sin t)) (* (cos t) (cos t)))) = 1)  ; pythagoras, structurally
  ((match '(+ 1 2) '(+ 1 3)) = ())                        ; a miss is ()
  ((rw1 [dbl] '(+ (sin u) (sin u))) = '(* 2 (sin u)))     ; the bound var fills the template
- ((rw1 [hlf] ['* 'z (q 2 4)]) = '(/ z 2))                ; a coin literal matches by VALUE
+ ((rw1 [hlf] ['* 'z (2 /// 4)]) = '(/ z 2))                ; a coin literal matches by VALUE
  ((rw1 [(rule '(a b) '(+ a b) '(+ b a))] (pemit (padd rx ry) '(x y z)))
   = '(+ y x)))                                           ; terms are pemit's language
 
@@ -478,14 +478,14 @@
 (assert
  (6 = (simp '(+ (* 2 3) (* x 0))))                    ; fold meets annihilation
  (0 = (simp '(- (* 3 4) (* 4 3))))                    ; folds, then x - x
- ((simp ['+ 'x ['* 2 (q 1 2)]]) = '(+ x 1))           ; a coin folds and demotes to its integer
+ ((simp ['+ 'x ['* 2 (1 /// 2)]]) = '(+ x 1))           ; a coin folds and demotes to its integer
  (0 = (simp '(* (+ 1 2) (- x x))))
  ((simp '(sin (+ 0 x))) = '(sin x))                   ; simplifies under any head
  ((simp '(/ x 1)) = 'x)                               ; division simplifies by law...
- ((simp '(/ 1 2)) = (q 1 2))                          ; ... and a ground quotient folds
+ ((simp '(/ 1 2)) = (1 /// 2))                          ; ... and a ground quotient folds
                                                       ; exactly: Q the codomain, never a gem
  (2 = (simp '(/ 6 3)))                                ; a whole quotient demotes
- ((simp '(/ -1 4)) = (q -1 4))                        ; the sign lands on the numerator
+ ((simp '(/ -1 4)) = (-1 /// 4))                        ; the sign lands on the numerator
  ((simp '(/ 1 0)) = '(/ 1 0))                         ; a zero divisor keeps its term
  (1.5 = (simp '(/ 3.0 2)))                            ; a gem quotient stays in its band
  (1 = (simp '(+ (* (sin (+ y 0)) (sin y)) (* (cos y) (cos y)))))  ; the inner fix
@@ -496,14 +496,14 @@
  (0 = (simp '(log 1)))
  ((simp '(* x (+ y z))) = '(* x (+ y z)))             ; simp never grows -- expand does
  (8 = (simp '(** 2 3)))                               ; a ground power folds by application...
- ((simp ['** (q 1 2) 2]) = (q 1 4))                   ; ... exactly, through the die
+ ((simp ['** (1 /// 2) 2]) = (1 /// 4))                   ; ... exactly, through the die
  ((simp '(** x 1)) = 'x)                              ; the power units
  (1 = (simp '(** x 0)))
  (1 = (simp '(** 1 x)))
  ((simp '(** x 2)) = '(** x 2))                       ; a symbolic base stays
- ((simp '(** 2 -1)) = (q 1 2))                        ; a negative exponent folds into Q too
- ((simp '(** 2 -3)) = (q 1 8))
- ((simp ['** (q 2 3) -2]) = (q 9 4))                  ; ... the die's own reciprocal power
+ ((simp '(** 2 -1)) = (1 /// 2))                        ; a negative exponent folds into Q too
+ ((simp '(** 2 -3)) = (1 /// 8))
+ ((simp ['** (2 /// 3) -2]) = (9 /// 4))                  ; ... the die's own reciprocal power
  ((simp '(** 0 -2)) = '(** 0 -2))                     ; zero has no reciprocal: the term stays
  ((simp '(/ (sin x) (cos x))) = '(tan x))             ; tan by definition
  ((simp '(tan (atan x))) = 'x)                        ; ... and through its inverse
@@ -524,20 +524,20 @@
  (0 = (simp '(sin pi)))                               ; pi enters: the value table
  (-1 = (simp '(cos pi)))
  (0 = (simp '(sin (* 2 pi))))                         ; ... the full turn
- (1 = (simp ['sin ['* (q 1 2) 'pi]]))                 ; ... the quarter turns, angles
- (0 = (simp ['cos ['* (q 1 2) 'pi]]))                 ;     spelled coefficient-first
- ((simp ['sin ['* (q 1 4) 'pi]]) = ['* (q 1 2) '(sqrt 2)])
- ((simp ['sin ['* (q 1 6) 'pi]]) = (q 1 2))           ; ... the schoolbook halves
- ((simp ['cos ['* (q 1 3) 'pi]]) = (q 1 2))
- ((simp '(asin 1)) = ['* (q 1 2) 'pi])                ; the arcs answer in pi
+ (1 = (simp ['sin ['* (1 /// 2) 'pi]]))                 ; ... the quarter turns, angles
+ (0 = (simp ['cos ['* (1 /// 2) 'pi]]))                 ;     spelled coefficient-first
+ ((simp ['sin ['* (1 /// 4) 'pi]]) = ['* (1 /// 2) '(sqrt 2)])
+ ((simp ['sin ['* (1 /// 6) 'pi]]) = (1 /// 2))           ; ... the schoolbook halves
+ ((simp ['cos ['* (1 /// 3) 'pi]]) = (1 /// 2))
+ ((simp '(asin 1)) = ['* (1 /// 2) 'pi])                ; the arcs answer in pi
  ((simp '(acos -1)) = 'pi)
- ((simp '(atan 1)) = ['* (q 1 4) 'pi])
+ ((simp '(atan 1)) = ['* (1 /// 4) 'pi])
  (0 = (simp '(asin 0)))
  (0 = (simp '(acos 1)))
  (1 = (simp '(sin (asin 1))))                         ; asin 1 -> pi/2 -> sin -> 1: the
                                                       ; table closes on itself
  (1 = (simp '(/ pi pi)))                              ; pi is manifestly nonzero
- (1 = (expand ['sin ['* 'pi (q 1 2)]]))               ; a backwards spelling reaches the
+ (1 = (expand ['sin ['* 'pi (1 /// 2)]]))               ; a backwards spelling reaches the
                                                       ; table through collect
  (1 = (simp '(log e)))                                ; e enters: log e = 1
  ((simp '(exp 1)) = 'e)                               ; ... and exp 1 answers e
@@ -606,7 +606,7 @@
  ((collect '(+ (+ x 1) (+ x 2))) = '(+ (* 2 x) 3))    ; constants merge, and sit last
  ((collect '(+ (* 2 x) (* 3 x))) = '(* 5 x))          ; coefficients add
  ((collect '(+ (* 2 x) (* -2 x))) = 0)                ; ... and cancel to the empty sum
- ((collect ['+ ['+ 'x (q 1 2)] ['+ 'x (q 1 2)]])
+ ((collect ['+ ['+ 'x (1 /// 2)] ['+ 'x (1 /// 2)]])
   = '(+ (* 2 x) 1))                                   ; exact halves merge whole
  ((collect '(* 3 (* x 2))) = '(* 6 x))                ; ground factors gather up front
  ((collect '(* x (* 2 (* y (* 3 z))))) = '(* 6 (* x (* y z))))
@@ -637,7 +637,7 @@
  ((simp '(/ (* x (exp y)) (exp y))) = 'x)             ; cancellation, certified
  ((simp '(/ (* (exp y) x) (exp y))) = 'x)             ; ... either side
  ((simp '(/ (* x y) y)) = '(/ (* x y) y))             ; uncertified: stays
- (1 = (simp ['/ (q 1 2) (q 2 4)]))                    ; a coin pair matches by VALUE, nonzero
+ (1 = (simp ['/ (1 /// 2) (2 /// 4)]))                    ; a coin pair matches by VALUE, nonzero
  ((simp '(/ (* x (** (exp z) 2)) (** (exp z) 2))) = 'x))  ; nz? climbs the power
 
 ; --- assume: the assumptions context -----------------------------------------
@@ -694,7 +694,7 @@
  ((deriv '(cos x) 'x) = '(- 0 (sin x)))
  ((deriv '(sin (* 2 x)) 'x) = '(* 2 (cos (* 2 x))))   ; the chain rule, coefficient first
  ((deriv '(/ 1 x) 'x) = '(/ -1 (** x 2)))         ; the quotient rule, folded red
- ((deriv '(/ x 2) 'x) = (q 1 2))                  ; ... and a ground answer lands in Q
+ ((deriv '(/ x 2) 'x) = (1 /// 2))                  ; ... and a ground answer lands in Q
  ((deriv '(exp x) 'x) = '(exp x))                 ; exp is its own derivative
  ((deriv '(exp (* 2 x)) 'x) = '(* 2 (exp (* 2 x))))
  ((deriv '(log x) 'x) = '(/ 1 x))
@@ -722,7 +722,7 @@
  ((deriv '(** x x) 'x) = '(d (** x x) x))         ; a symbolic exponent fails the
                                                   ; guard and stays, honestly
  ((deriv '(f x) 'x) = '(d (f x) x))               ; an unknown derivative stays symbolic
- ((deriv ['+ ['sin 'x] ['* 'x (q 1 2)]] 'x) = ['+ '(cos x) (q 1 2)])      ; exact halves ride
+ ((deriv ['+ ['sin 'x] ['* 'x (1 /// 2)]] 'x) = ['+ '(cos x) (1 /// 2)])      ; exact halves ride
  ((simp '(+ z z)) = '(* 2 z))                     ; the collect law that tidies d
  ((deriv (pemit (psq rx) '(x y z)) 'x)
   = (pemit (pd (psq rx) 0) '(x y z))))            ; d agrees with pd through the bridge
@@ -732,7 +732,7 @@
 ; (opfix (unfix t)) = t is the round-trip law, over the corpus below.
 (: tcorp ['(+ (* 2 x) 1) '(* 2 (+ x 1)) '(- (- 10 4) 3) '(- 10 (- 4 3))
           '(+ (sin x) 1) '(* 2 (sin (+ x 1))) '(f (+ x 1) y) '(+ (f x y) 1)
-          '(* (** 2 x) (+ y 1)) ['+ 'x (q 1 2)] '(f (g x) y) '(* (+ a b) (+ c d))
+          '(* (** 2 x) (+ y 1)) ['+ 'x (1 /// 2)] '(f (g x) y) '(* (+ a b) (+ c d))
           '(+ (log x) (* 2 (exp x)))
           (pemit (padd (pmul rx rx) ry) '(x y z))])
 (assert

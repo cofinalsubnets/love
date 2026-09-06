@@ -1,6 +1,6 @@
 ; rune -- the symbolic algebra engine (a wee CAS): exact multivariate
 ; polynomials over the integers, plus univariate arithmetic in Q[x]/(m)
-; riding the q coin. pure love, no nifs; the gate is test/host/rune.l,
+; riding the rational coin. pure love, no nifs; the gate is test/host/rune.l,
 ; whose corpus verifies the 2026 jacobian-conjecture disproof whole
 ; (det J symbolically, the collision certificates in exact arithmetic).
 ;
@@ -9,13 +9,13 @@
 ; sitting inside it structurally) then one exponent per variable -- keys
 ; lex-descending, no zero coefficients, all polys in one expression
 ; sharing an arity. the zero polynomial is (): the empty sum is nothing.
-; cnorm keeps coefficients canonical: an integer-valued coin ((q n 1))
+; cnorm keeps coefficients canonical: an integer-valued coin ((/// n 1))
 ; demotes to its integer numerator, so halves that sum whole land an
 ; integer, = stays structural across Z and Q, and the zero-drop is the
 ; plain (c = 0) -- a value-zero coin demotes to the fixnum 0 first.
 ; (! can never test a coefficient: a red one nets nothing.)
 ;
-; a K-ELEMENT of Q[x]/(m), deg m = d, is an ascending list of d q coins.
+; a K-ELEMENT of Q[x]/(m), deg m = d, is an ascending list of d rational coins.
 ; the field is given not by m but by xd -- x^d rewritten as an element --
 ; so reduction folds top powers down with no division anywhere.
 
@@ -73,11 +73,11 @@
 ; cancellation is the ring's own, exact -- and pgcd euclids until the zero
 ; poly, then normalizes monic (unique in Q[x]; units divide out). cinv is
 ; the exact reciprocal of a coefficient star: a coin through its die, an
-; integer through the q ctor. psff is yun's algorithm: the ascending list
+; integer through the /// ctor. psff is yun's algorithm: the ascending list
 ; (a1 a2 ..) of monic squarefree factors, monic p = a1^1 * a2^2 * .. --
 ; empty slots hold the 1 poly, a constant has no factors. both faces load:
 ; raw monomial lists and poly coins alike; answers are raw.
-(: (cinv c) (? (coin? c) (-1 c) (q 1 c))
+(: (cinv c) (? (coin? c) (-1 c) (/// 1 c))
    (pdeg p) <(mkey <p)
    (pmonic p) (? (0 = tally p) ()
                  (: v (cinv (mco <p))
@@ -163,7 +163,7 @@
    (divs n) (: m (n < 0 ? -n n)
                (go i acc) (? (i * i > m) acc
                              (0 = (m % i))
-                             (go (i + 1) (i . (cnorm (q m i) . acc)))
+                             (go (i + 1) (i . (cnorm (/// m i) . acc)))
                              (go (i + 1) acc))
                (go 1 ()))
    (flat ls) (tally ls ? (<ls + flat >ls))
@@ -176,7 +176,7 @@
                     (0 < <(mkey (plast g))) (0 . rroots (pquot g [(1 . '(1))]))
                     (: cds (: ns (divs (mco (plast g)))
                               ds (divs (mco <g))
-                              rs (flat (map (nn \ map (dd \ cnorm (q nn dd)) ds) ns))
+                              rs (flat (map (nn \ map (dd \ cnorm (/// nn dd)) ds) ns))
                               (rs + map (r \ cnorm -r) rs))
                        (go cs h acc)
                        (? (0 = tally cs) acc
@@ -308,7 +308,7 @@
          (bsplit p r >vs (go 0 fs))))
    (bk p f) (: n (fvdeg f)
                (pw e) (? (e = 0) '(1)
-                         (0 = (% e 2)) (: h (pw (cnorm (q e 2)))
+                         (0 = (% e 2)) (: h (pw (cnorm (/// e 2)))
                                           (fvrem p (fvmul p h h) f))
                          (fvrem p (fvmul p '(0 1) (pw (e - 1))) f))
                xp (pw p)
@@ -328,7 +328,7 @@
                       t <>>e3
                       (go pk gg hh)
                       (? (P <= pk) [gg hh]
-                         (: ep (vtrim (map (c \ zmod p (cnorm (q c pk)))
+                         (: ep (vtrim (map (c \ zmod p (cnorm (/// c pk)))
                                            (ivsub f (ivmul gg hh))))
                             dm (fvdm p (fvmul p t ep) gp)
                             w (fvadd p (fvmul p s ep) (fvmul p hp <dm))
@@ -339,7 +339,7 @@
    (hliftn P p f gs)
    (? (1 = tally gs) [(vtrim (map (c \ zmod P c) f))]
       (: t #gs
-         hn (cnorm (q (t - (t % 2)) 2))
+         hn (cnorm (/// (t - (t % 2)) 2))
          ga (ltake hn gs)
          gb (ldrop hn gs)
          gh (hl2 P p f (fvprod p ga) (fvprod p gb))
@@ -474,7 +474,7 @@
                      (go 1 (a1to2 0 G) (a1to2 0 H)))
    (hliftn2 K g us) (? (1 = tally us) [(ytrunc K g)]
                        (: t2 #us
-                          hn (cnorm (q (t2 - (% t2 2)) 2))
+                          hn (cnorm (/// (t2 - (% t2 2)) 2))
                           ua (ltake hn us)
                           ub (ldrop hn us)
                           (prodl l) (? (1 = tally l) <l (pmul <l (prodl >l)))
@@ -552,7 +552,7 @@
    (mrg D k) (0 = tally >>k ? [((<k * D) + <>k)] (<k . mrg D >k))
    (vpack x D) (map (m2 \ mco m2 . mrg D (mkey m2)) x)
    (vunpk g D) (map (\ m2 (: (go l) (0 = tally >l ?
-                                     [(cnorm (q (<l - (<l % D)) D)) (<l % D)]
+                                     [(cnorm (/// (<l - (<l % D)) D)) (<l % D)]
                                      (<l . go >l))
                            (mco m2 . go (mkey m2)))) g)
    (lastk k) (? (0 = tally >k) <k (lastk >k))
@@ -635,7 +635,7 @@
 ; never (+ a b c), which is application, and never (e x) numeral power, which
 ; composes a non-numeric operand -- a power rides ('** s e): ** is the bound
 ; base-first power, exact through every DieStar operand (integers, bignums,
-; gems, q coins). pfn wraps the emission in \ and hands it to ev: a real
+; gems, rational coins). pfn wraps the emission in \ and hands it to ev: a real
 ; curried closure, glaze-eligible; args arrive in syms order.
 (: (mulfold l) (1 = tally l ? <l ['* <l (mulfold >l)])
    (mfacts key syms) (? (0 = tally key) ()
@@ -717,11 +717,11 @@
 ; never expands; `expand` does (each pass pushes a * inside a +, or a log/exp
 ; through its operand, so that fixpoint lands too -- collected on the way).
 ; fold1 computes a ground node: (op a b) for op in + - * ** / with both
-; operands stars (the open star: integers, gems, q coins, poly coins alike)
+; operands stars (the open star: integers, gems, rational coins, poly coins alike)
 ; folds to its value, cnormed so an integer-valued coin lands the integer.
 ; a power folds by application -- (b a) is a**b -- on a whole exponent.
 ; Q is the fold codomain: a ground quotient or negative power folds exactly
-; through the q coin ((/ 1 2) and (** 2 -1) both land (q 1 2), (/ 6 3) demotes
+; through the rational coin ((/ 1 2) and (** 2 -1) both land (1 /// 2), (/ 6 3) demotes
 ; to 2) -- never to a gem. a zero divisor/base (nz? again) or a slot-less die
 ; keeps its term. `simpw` drives a rule table + fold bottom-up to a
 ; fixpoint, the same shape as rewrite (noms are atoms, never walked into);
@@ -783,18 +783,18 @@
           (rule () '(tan pi) 0)
           (rule () '(sin (* 2 pi)) 0)
           (rule () '(cos (* 2 pi)) 1)
-          (rule () ['sin ['* (q 1 2) 'pi]] 1)
-          (rule () ['cos ['* (q 1 2) 'pi]] 0)
-          (rule () ['sin ['* (q 1 4) 'pi]] ['* (q 1 2) '(sqrt 2)])
-          (rule () ['cos ['* (q 1 4) 'pi]] ['* (q 1 2) '(sqrt 2)])
-          (rule () ['sin ['* (q 1 6) 'pi]] (q 1 2))
-          (rule () ['cos ['* (q 1 6) 'pi]] ['* (q 1 2) '(sqrt 3)])
-          (rule () ['sin ['* (q 1 3) 'pi]] ['* (q 1 2) '(sqrt 3)])
-          (rule () ['cos ['* (q 1 3) 'pi]] (q 1 2))
-          (rule () '(asin 1) ['* (q 1 2) 'pi])
-          (rule () '(acos 0) ['* (q 1 2) 'pi])
+          (rule () ['sin ['* (1 /// 2) 'pi]] 1)
+          (rule () ['cos ['* (1 /// 2) 'pi]] 0)
+          (rule () ['sin ['* (1 /// 4) 'pi]] ['* (1 /// 2) '(sqrt 2)])
+          (rule () ['cos ['* (1 /// 4) 'pi]] ['* (1 /// 2) '(sqrt 2)])
+          (rule () ['sin ['* (1 /// 6) 'pi]] (1 /// 2))
+          (rule () ['cos ['* (1 /// 6) 'pi]] ['* (1 /// 2) '(sqrt 3)])
+          (rule () ['sin ['* (1 /// 3) 'pi]] ['* (1 /// 2) '(sqrt 3)])
+          (rule () ['cos ['* (1 /// 3) 'pi]] (1 /// 2))
+          (rule () '(asin 1) ['* (1 /// 2) 'pi])
+          (rule () '(acos 0) ['* (1 /// 2) 'pi])
           (rule () '(acos -1) 'pi)
-          (rule () '(atan 1) ['* (q 1 4) 'pi])
+          (rule () '(atan 1) ['* (1 /// 4) 'pi])
           (rule () '(sqrt 0) 0)
           (rule () '(sqrt 1) 1)
           (rule '(a) '(** (sqrt a) 2) 'a)
@@ -840,12 +840,12 @@
                       (? !(whole? b) t
                          (: v (? (0 <= b) (b a)
                                  !(nz? a) ()
-                                 (whole? a) (q 1 ((0 - b) a))
+                                 (whole? a) (/// 1 ((0 - b) a))
                                  (b a))
                             (? (star? v) (cnorm v) t)))
                       (<t = '/)
                       (? !(nz? b) t
-                         (: v (? (whole? a && whole? b) (q a b) (a / b))
+                         (: v (? (whole? a && whole? b) (/// a b) (a / b))
                             (? (star? v) (cnorm v) t)))
                       (cnorm (? (<t = '+) (a + b) (<t = '-) (a - b) (a * b))))))
    (simpw rs t) (: y (? (nom? t) t (two? t) (map (simpw rs) t) t)
@@ -1019,12 +1019,12 @@
 ; --- the field Q[x]/(m) ----------------------------------------------------
 (: (vmax a b) (? (a < b) b a)
    (vpad v n) (? (n = 0) ()
-                 (0 = tally v) (q 0 1 . vpad () (n - 1))
+                 (0 = tally v) (/// 0 1 . vpad () (n - 1))
                  (<v . vpad >v (n - 1)))
    (vzip a b) (? (0 = tally a) () ((<a + <b) . vzip >a >b))
    (vadd a b) (: n (vmax #a #b) (vzip (vpad a n) (vpad b n)))
    (vscale c v) (map (* c) v)
-   (vshift v n) (? (n = 0) v (q 0 1 . vshift v (n - 1)))
+   (vshift v n) (? (n = 0) v (/// 0 1 . vshift v (n - 1)))
    (vmul a b) (? (0 = tally a) () (vadd (vscale <a b) (vshift (vmul >a b) 1)))
    (vlast v) (? (1 = tally v) <v (vlast >v))
    (vinit v) (? (1 = tally v) () (<v . vinit >v))
@@ -1032,4 +1032,4 @@
                   (vrem xd (vadd (vinit v)
                                  (vshift (vscale (vlast v) xd) (tally v - (tally xd + 1))))))
    (kmul xd a b) (vrem xd (vmul a b))
-   (knum d c) (vpad [(q c 1)] d))
+   (knum d c) (vpad [(/// c 1)] d))

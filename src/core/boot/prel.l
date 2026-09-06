@@ -294,6 +294,7 @@
  2 (pins (tablet 0)                                 ; --- arity 2: spaced. a left operand and a right
  '~ '(twin 99)                                      ; the twin, tightest -- above house, so a complex
                                                     ; literal binds before any operator, coined ones too
+ '/// 99                                           ; the rational, the twin's peer: a literal too
  '** 70
  '* -60 '/ -60 '% -60 '// -60                       ; multiplicative, left -- the minus is the hand
  '+ -50 '- -50                                      ; additive

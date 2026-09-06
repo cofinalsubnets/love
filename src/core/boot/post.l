@@ -460,11 +460,13 @@
   ; to what it was given, so the form evals back to an equal coin when the name is a
   ; bound ctor. the payload is quoted where it would otherwise re-evaluate -- a chain
   ; reads as an application and a nom as a variable. without that (q (1 2)) read back as
-  ; q applied to 2, which is not the number and was never a coin.
+  ; q applied to 2, which is not the number and was never a coin. a rational wears the
+  ; twin's face instead, (n /// d), which reads back through the operator.
   (pcoin o x sn) (: p (load x)
-    (put o 40, px o (kind x) sn,
+    (? (kind x = '/// && two? p) (put o 40, px o <p sn, say o " /// ", px o <>p sn, put o 41)
+       (put o 40, px o (kind x) sn,
      put o 32, two? p || nom? p ? (put o 39) 0,
-     px o p sn, put o 41))
+     px o p sn, put o 41)))
 
   ; --- closures. a partial's every unc cell holds its arg at [1] and the link at
   ; [2], so the base value sits at link-2.
@@ -575,8 +577,9 @@
               (pin rng-box () >r,
                constellation? n && 0 < n ? (n * <r) <r)))
 
-; q -- rationals: an exact field as a coin over reduced (num den)
-(: q (: (reduce n d)
+; /// -- rationals: an exact field as a coin over reduced (num den). the twin's peer: 3 /// 4
+; builds one, and one prints that way
+(: /// (: (reduce n d)
          (0 = n ? [0 1]                           ; gcd out, sign on num, den > 0
           (: g (gcd (abs n) (abs d)) s (? (d < 0) -1 1)
            [(s * n // g) (s * d // g)]))
@@ -586,7 +589,7 @@
         ; off the tower it terminates on -- a coin is never a coefficient.
         (nstar? v) ((nil? * coin?) v && v = +v)
         (ok? v) (nstar? v || (two? v && all nstar? v))
-        c (coin 'q (z \ {'star 1 'net 'ratio                   ; a rational is a star; C truth by value
+        c (coin '/// (z \ {'star 1 'net 'ratio                   ; a rational is a star; C truth by value
          '+ (\ a b (: x (load a) y (load b)                    ; (n1 d1) + (n2 d2)
              (? (ok? x && ok? y)
               (: p (parts x) r (parts y)
@@ -603,8 +606,8 @@
              (? (ok? x && ok? y && <y != 0)                  ; multiply; by zero -> () (no inf in Q; cap of a bare star is itself)
               (: p (parts x) r (parts y)
                (z (reduce (<p * <>r) (<>p * <r)))))))}))
-        (\ n (two? n ? (c (reduce <n <>n))                    ; (q (n d)) -- the show form
-                       (c * reduce n)))))                     ; (q n d) -- the ergonomic curried form
+        (\ n (two? n ? (c (reduce <n <>n))                    ; (/// (n d)) -- the list form
+                       (c * reduce n)))))                     ; (/// n d) -- the curried form, and 3 /// 4 spaced
 
 
 ; glob -- fnmatch, pure love and no filesystem. the pattern law only: pathname

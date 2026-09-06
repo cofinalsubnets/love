@@ -62,7 +62,7 @@
     (list 0 1 2 5 -1 -5 2.5 -2.5 0.0 () "" "a" "ab" 'sym 'x cap
           '(1 2) '(-2 1) '(2.5 -1) '((1 2) (3)) '(1 (2 (3 (4))))
           (twin 3 4) (twin -1 2) (twin 0 3) @() @(1 2) @(1 2 3)
-          (q 7 2) (q -7 2) {} {'a 1} ^3 ^^2)
+          (7 /// 2) (-7 /// 2) {} {'a 1} ^3 ^^2)
 
    ; a row holds when all four lanes agree; a miss names the value and the lane
    (uv2-row x)
@@ -90,7 +90,7 @@
  (0 = (uv2-sat '(-2 1)))                                  ; the net goes negative, the clamp bites
  (3 = (uv2-ceil 2.5))
  (-2 = (uv2-ceil -2.5))
- (4 = (uv2-ceil (q 7 2)))
+ (4 = (uv2-ceil (7 /// 2)))
  (3 = (uv2-ceil (twin 3 4)))                              ; re drops the imaginary rung
  ; the ceiling bites at the model's width, which is the whole of what it says
  (7 = (uv2-satc 9))
