@@ -20,6 +20,10 @@ extern uint64_t kticks;                // timer ticks, counted up by the arch's 
 extern uint8_t vectors[];              // the trap entry (mkvec.l)
 void fbdraw(void);                     // kmain.c: paint the console ring to the framebuffer
 
+// the sound card (src/inle/hda.c): probe at boot with one DMA block, and the poll the
+// idle wait rides -- it reads the play position and silences what has played
+void k_hda_init(void *dma), k_horn_poll(void);
+
 // the arch backend (src/<a>_arch.c) gives kmain these
 void archinit(void), serial_init(void), serial_putc(int), k_reset(void), k_fault_trigger(intptr_t n);
 uint64_t k_rtc(void);                  // the machine's own clock, unix seconds (0 = none)

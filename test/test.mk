@@ -212,7 +212,7 @@ test_front: $(ho)/front
 # Host-nif smoke tests: the host lane's nifs link into `love` but NOT love0, so they live under
 # test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
 # AND a "<name>: ok"; a cold lane opts in via hostnif_cold.
-hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/serve.l test/host/sbhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l test/host/gzc.l test/host/hash.l test/host/story.l test/host/design.l test/host/lupa.l test/host/helm.l
+hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/serve.l test/host/sbhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l test/host/gzc.l test/host/hash.l test/host/story.l test/host/design.l test/host/lupa.l test/host/helm.l test/host/wget.l
 # out/lush: test/host/sh.l drives the BUILT shell end to end, via out/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
@@ -388,7 +388,7 @@ test_seed: $(ho)/.love.baked
 # stdin, frames onto a captured stdout, :wq writes), driven through the crew layer.
 test_vi: host
 	@echo TEST src/apps/vi/{hue,core,law}.l
-	@cat test/00-init.l src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps/kore/re.l src/apps/libra/lint.l \
+	@cat test/00-init.l src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps/kore/re.l src/apps/kore/sed.l src/apps/libra/lint.l \
 	    src/apps/vi/config.l src/apps/vi/hue.l src/apps/vi/core.l src/apps/vi/law.l \
 	  | sh test/gate/run.sh vi "$m" "src/apps/vi/law:"
 	@rm -f $(ho)/.vi1; \
@@ -404,7 +404,11 @@ test_vi: host
 	  printf 'AX\033u:wq\n' | $(korerun) vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
 	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi1)" = "" ]; } \
 	    || { echo "FAIL kore vi undo (exit $$r)"; exit 1; }; \
-	  echo "kore: vi (laws + piped create/dd/q!/undo end-to-end) ok"
+	  printf 'ione\ntwo\nthree\033:1,$$s/o/0/g\n:2,3m0\n:wq\n' \
+	    | $(korerun) vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
+	  { [ $$r -eq 0 ] && [ "$$(tr '\n' ' ' < $(ho)/.vi1)" = "tw0 three 0ne " ]; } \
+	    || { echo "FAIL kore vi ex :s + :m (exit $$r)"; exit 1; }; \
+	  echo "kore: vi (laws + piped create/dd/q!/undo/ex end-to-end) ok"
 # The C compiler (src/apps/moon/, doc/misc/moon.md): the pure pipeline's goldens, then stage-0 end
 # to end through the real `mooncc` -- compile, run, exit 42, against a gcc -O0 differential
 # on the same source. Drives the crew layer warm (~0.68s -> ~0.1s per compile, 88 of them).
@@ -1150,6 +1154,18 @@ test_disk: host $(R)/tools/ktest.l
 	@$m $(R)/tools/ktest.l $(k_elf) - $a
 	@$m $(R)/tools/ktest.l $(k_elf) - $a "disk: fat kept across the reset"
 	@echo "test_disk: the machine remembered"
+
+# wget against a live https peer: opt-in, it needs the internet (test/host/wgetnet.l)
+test_wgetnet: host
+	@echo TEST test/host/wgetnet.l "(wget over TLS 1.3 to a live peer)"
+	@cat test/00-init.l test/host/wgetnet.l | sh test/gate/run.sh wgetnet "$m" "wgetnet: ok"
+
+# doom in an X window, the DOOM=1 build under an Xvfb (src/apps/doom/doom.l): opt-in --
+# it wants the vendored source and the IWAD, and rebuilds the artifact with doom inside
+test_doomx: $(R)/test/host/doomx.l
+	@$(MAKE) -s host DOOM=1
+	@echo TEST test/host/doomx.l "(doom on X, 300 frames under Xvfb, a held key)"
+	@cat test/00-init.l test/host/doomx.l | sh test/gate/run.sh doomx "$m" "doomx: ok"
 
 test_kverb: host
 	@$(MAKE) -s $(k_elf)

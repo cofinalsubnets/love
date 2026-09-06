@@ -43,7 +43,9 @@
            ["-M" "virt,gic-version=2" "-cpu" "cortex-a72" "-semihosting"]
            (arch = "rv64")
            ["-M" "virt"]
-           ["-M" "q35" "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"])
+           ["-M" "q35" "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
+            ; the sound card, silent: test/horn.l drives src/inle/hda.c against it
+            "-device" "intel-hda" "-device" "hda-output,audiodev=snd" "-audiodev" "none,id=snd"])
    ; the two virts carry their disk on virtio-mmio; q35 on pci
    mmio? (arch = "a64" || arch = "rv64")
    ; 768M + 420s. the corpus outgrew 256M (a silent death mid-corpus) and then

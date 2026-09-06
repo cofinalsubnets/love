@@ -5,6 +5,7 @@
 ; leaks, and no single form grows big enough to stress the whole-form compiler.
 
 ; --- the zipper laws ---
+(use 'xwire)   ; the X wire, src/apps/lux/wire.l
 (: z3 (zmk 2 '(1) '(3))                                                          ; row (1 2 3), 2 focused
    (assert
       (zrow (zfrom '(1 2 3)) = '(1 2 3)) !(zfrom ()) !(zrow ())

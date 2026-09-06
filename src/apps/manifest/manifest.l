@@ -37,7 +37,7 @@
  ; --- the book of known names, laid once on first use: a name off this
  ; book and off the sheet is a label and binds to its own spelling ---
  known {}
- (knowns _) (!known ?
+ (knowns _) (0 = #known ?
                   (map (\ n (pin known n 1)) (names ()),
                    ; the reader-emitted noms ride formulas but sit off the book (the egg mops
                    ; them): @(..) reads as (tuple ..), backtick as (list ..), the printer round-

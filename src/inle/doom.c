@@ -1,18 +1,24 @@
-// src/inle/doom.c -- doom on inle: the four doors doomgeneric asks a platform for,
-// answered off the kernel's own framebuffer, scancode tap and clock, plus the
-// nif that starts it.
+// src/inle/doom.c -- doom on both seats: the doors doomgeneric asks a platform for,
+// and the nifs that drive it.
 //
-//   (doom)        run it. answers when the game quits -- which on this machine
-//                 means doom's exit() reached (quit), so it resets.
+// on inle the doors are the kernel's own -- framebuffer, scancode tap, clock -- and
+//   (doom ())      runs the game whole; it answers when doom quits, which on this
+//                  machine means exit() reached (quit), so it resets.
+// on the host the doors are a frame flag, a key queue and ai_clock, and love drives
+// the loop from src/apps/doom/doom.l over an X window:
+//   (doom-start wad)      set up, with the IWAD at that path -> 1 | 0 (already running)
+//   (doom-tick ())        one frame of the game -> 1 when a frame was drawn, else 0
+//   (doom-frame cask)     copy the frame (640x400 BGRX) into the cask -> bytes copied
+//   (doom-key k pressed)  queue a key (doomkeys.h's codes) -> ()
 //
-// OPT-IN and not in any default build: `make run DOOM=1` wants the vendored
-// source at dl/doomgeneric and the IWAD at dl/doom1.wad (the Makefile's doom
-// lane says how). This file is the tree's own 0BSD glue; what it includes is
+// OPT-IN and not in any default build: `make host DOOM=1` / `make run DOOM=1` want
+// the vendored source at dl/doomgeneric and the IWAD at dl/doom1.wad (the Makefile's
+// doom lane says how). this file is the tree's own 0BSD glue; what it includes is
 // not, so nothing here builds unless someone put that source there on purpose.
 //
-// ⚠ the WAD is a BAKED FILE, not a disk one: k_baked hands the ramfs a row for
-// it (kmain.c's hook), so doom's own fopen/fread reach it through src/inle/sys.c
-// with no filesystem mounted anywhere.
+// ⚠ on inle the WAD is a BAKED FILE, not a disk one: k_baked hands the ramfs a row
+// for it (kmain.c's hook), so doom's own fopen/fread reach it through src/inle/sys.c
+// with no filesystem mounted anywhere. the host opens the path it was handed.
 #include "love.h"
 #include <stdint.h>
 #include <string.h>
@@ -39,18 +45,30 @@ int k_baked(struct k_file *rows, int cap) {
   rows[0] = (struct k_file) { "doom1.wad", (char const *) doom_wad, doom_wad_len, 0 };
  return 1; }
 
-// --- the four doors -------------------------------------------------------
+// --- the doors ------------------------------------------------------------
 
-static uintptr_t dg_epoch;
+static bool hosted(void) { return __ai_osv >= 0; }
+
+// the host seat's state: doom keeps its own globals, so this is the one place
+// the doors and the nifs meet
+#define dh_keys 64
+static struct {
+ uintptr_t epoch;
+ int keys[dh_keys];                  // pressed << 8 | key
+ unsigned kh, kt;
+ int frame, started;
+ char wad[256];
+} dh;
 
 void DG_Init(void) {
- dg_epoch = k_clock_ms();
- k_scan_arm(1); }
+ dh.epoch = hosted() ? ai_clock() : k_clock_ms();
+ if (!hosted()) k_scan_arm(1); }
 
 // blit the 640x400 frame into the middle of whatever the door handed over. no
 // scaling: a GOP mode smaller than the frame simply shows the part that fits,
-// which is honest where a stretch would hide the mode.
+// which is honest where a stretch would hide the mode. the host only marks it.
 void DG_DrawFrame(void) {
+ if (hosted()) { dh.frame = 1; return; }
  volatile uint32_t *fb;
  int w, h, pitch;
  if (!k_fb(&fb, &w, &h, &pitch)) return;
@@ -62,9 +80,10 @@ void DG_DrawFrame(void) {
   uint32_t const *s = DG_ScreenBuffer + (uintptr_t) y * DOOMGENERIC_RESX;
   for (int x = 0; x < cw; x++) d[x] = s[x]; } }
 
-void DG_SleepMs(uint32_t ms) { k_sleep(ms); }
+void DG_SleepMs(uint32_t ms) { if (hosted()) ai_sleep(ms); else k_sleep(ms); }
 
-uint32_t DG_GetTicksMs(void) { return (uint32_t) (k_clock_ms() - dg_epoch); }
+uint32_t DG_GetTicksMs(void) {
+ return (uint32_t) ((hosted() ? ai_clock() : k_clock_ms()) - dh.epoch); }
 
 void DG_SetWindowTitle(char const *t) { }
 
@@ -103,6 +122,10 @@ static unsigned char sc_key(int sc) {
  return 0; }
 
 int DG_GetKey(int *pressed, unsigned char *key) {
+ if (hosted()) {
+  if (dh.kh == dh.kt) return 0;
+  int v = dh.keys[dh.kh++ % dh_keys];
+  return *pressed = v >> 8 & 1, *key = (unsigned char) v, 1; }
  for (;;) {
   int c = k_scan_pop();
   if (c < 0) return 0;
@@ -110,16 +133,66 @@ int DG_GetKey(int *pressed, unsigned char *key) {
   if (!k) continue;
   return *pressed = !(c & 0x80), *key = k, 1; } }
 
-// --- the nif --------------------------------------------------------------
+// --- the nifs -------------------------------------------------------------
 
-static char *dg_argv[] = { (char *) "doom", (char *) "-iwad", (char *) "doom1.wad", 0 };
+// doom keeps argv for the run, so it is filled here and never the heap's
+static char *dg_argv[4];
+static void dg_create(void) {
+ dg_argv[0] = (char*) "doom", dg_argv[1] = (char*) "-iwad", dg_argv[2] = dh.wad, dg_argv[3] = 0;
+ doomgeneric_Create(3, dg_argv); }
 
 static void doom_run(void) {
- for (doomgeneric_Create(3, dg_argv);;) doomgeneric_Tick(); }
+ memcpy(dh.wad, "doom1.wad", 10);
+ for (dg_create();;) doomgeneric_Tick(); }
 
 static lvm(lvm_doom) {
  doom_run();
  ai_musttail return Next(1); }
 
-static union u const nif_doom[] = {{lvm_doom}, {lvm_ret0}};
+// (doom-start wad): the IWAD path is doom's for the run, so it is copied out of the heap
+static lvm(lvm_doom_start) {
+ word x = Sp[0];
+ if (dh.started || !hosted() || !strp(x) || len(str(x)) >= sizeof dh.wad)
+  ai_musttail return Answer(putcharm(0));
+ memcpy(dh.wad, txt(str(x)), len(str(x)));
+ dh.wad[len(str(x))] = 0;
+ dh.started = 1;
+ dg_create();
+ ai_musttail return Answer(putcharm(1)); }
+
+static lvm(lvm_doom_tick) {
+ if (!dh.started) ai_musttail return Answer(putcharm(0));
+ dh.frame = 0;
+ doomgeneric_Tick();
+ ai_musttail return Answer(putcharm(dh.frame)); }
+
+static lvm(lvm_doom_frame) {
+ word x = Sp[0];
+ uintptr_t n = 0;
+ if (dh.started && caskp(x) && DG_ScreenBuffer) {
+  struct ai_str *s = cask(x)->str;
+  n = len(s) < DOOMGENERIC_RESX * DOOMGENERIC_RESY * 4 ? len(s) : DOOMGENERIC_RESX * DOOMGENERIC_RESY * 4;
+  memcpy(txt(s), DG_ScreenBuffer, n); }
+ ai_musttail return Answer(putcharm((intptr_t) n)); }
+
+// (doom-key k pressed): a full queue drops the oldest -- a key held through a stall
+// is a worse stall than one lost
+static lvm(lvm_doom_key) {
+ word k = Sp[0], p = Sp[1];
+ if (charmp(k)) {
+  if (dh.kt - dh.kh == dh_keys) dh.kh++;
+  dh.keys[dh.kt++ % dh_keys] = (int) (getcharm(k) & 0xff) | (p != ZeroPoint && (!charmp(p) || getcharm(p))) << 8; }
+ Sp[1] = ZeroPoint;
+ ai_musttail return Nextp(1, 1); }
+
+static union u const
+ nif_doom[] = {{lvm_doom}, {lvm_ret0}},
+ nif_doom_start[] = {{lvm_doom_start}, {lvm_ret0}},
+ nif_doom_tick[] = {{lvm_doom_tick}, {lvm_ret0}},
+ nif_doom_frame[] = {{lvm_doom_frame}, {lvm_ret0}},
+ nif_doom_key[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_doom_key}, {lvm_ret0}};
 AiNif("doom", nif_doom);
+AiNif("doom-start", nif_doom_start);
+AiNif("doom-tick", nif_doom_tick);
+AiNif("doom-frame", nif_doom_frame);
+AiNif("doom-key", nif_doom_key);

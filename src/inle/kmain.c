@@ -309,6 +309,7 @@ void k_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
       fds[i].revents = r ? fds[i].events : 0;
       any |= r; }
     if (any || (ms && kticks >= deadline)) return;
+    k_horn_poll();
     k_wait(); } }
 
 // milliseconds since the epoch: one scale for the scheduler's deadlines, for (clock t) and
@@ -323,6 +324,7 @@ void k_sleep(uintptr_t ms) {
   uintptr_t deadline = kticks + k_ticks_for(ms);
   for (;;) {
     if (ms && kticks >= deadline) break;
+    k_horn_poll();
     k_wait(); } }
 
 static const uint8_t
@@ -1662,6 +1664,9 @@ void kmain(void) {
   // the disk (rung 5): probe the bus, and hand the driver its one DMA block --
   // kmallocw memory, so pa = va - khhdm holds for everything the device reads.
   k_blk_init(kmallocw(b2w(352)));
+  // the sound card: the command rings, the buffer list and the position buffer in one
+  // block, 128-aligned inside (hda.c lays it); the sample ring is its own
+  k_hda_init(kmallocw(b2w(4096 + 128)));
   // the wake (phase D): the projection carries the artifact's baked image at its re-based
   // address, and ai_baked_pick reads it off the same two symbols the hosted start does.
   // any problem answers NULL and the egg bakes from source below, the host's own law.

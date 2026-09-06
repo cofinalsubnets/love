@@ -64,10 +64,14 @@ word io_route(struct ai *g, word x) {
  else if (x == (word) &ai_stderr) s = chainp(B(l)) && chainp(BB(l)) ? A(BB(l)) : zero;
  else return x;
  return iop(s) ? s : x; }
+// the two doors whose port is a bio: the fd port, and the horn wearing its shape
+static ai_inline bool bio_vt(struct ai_port_vt const *vt) {
+ return vt == &ai_fd_port_vt || vt == &ai_horn_vt; }
+
 // the descriptor, and the only way to it: the vt says whether there is one, so a
 // port whose door is not a device answers -1 and no cast is ever taken on faith.
 intptr_t ai_io_fd(struct ai_io const *i) {
- return i->vt == &ai_fd_port_vt ? getcharm(((struct ai_fio const*) i)->fd) : -1; }
+ return bio_vt(i->vt) ? getcharm(((struct ai_fio const*) i)->fd) : -1; }
 
 // --- the buffered lanes (generic, above the vt) ---
 // a heap fd port is an ai_bio (love.h), dressed lazily; bio_of is the one guard, and
@@ -75,7 +79,7 @@ intptr_t ai_io_fd(struct ai_io const *i) {
 // readn gulp, and that order is the park law: a port holding bytes is readable however
 // quiet its fd is, a dry gulp answers IoWouldBlock. a read drains pending writes first.
 struct ai_bio *bio_of(struct ai *g, struct ai_io *i) {
- return i->vt == &ai_fd_port_vt && in_live_pool(ai_core_of(g), (word const*) i)
+ return bio_vt(i->vt) && in_live_pool(ai_core_of(g), (word const*) i)
       ? (struct ai_bio*) i : NULL; }
 
 bool bio_rpending(struct ai_bio *b) {
@@ -350,10 +354,15 @@ static struct ai *to_writen(struct ai *g, unsigned char const *src, uintptr_t n)
  g->sp++;
  return g->b = 0, g; }
 
+// the horn's door is the host's (src/host/horn.c); a link without one has a horn that is gone
+__attribute__((weak)) struct ai *ai_horn_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
+ return g->b = -1, g; }
+
 struct ai_port_vt const
  ai_to_vt     = { noop_flush, to_writen, NULL,     NULL },       // a string sink: prel's `jug`
  ai_closed_vt = { noop_flush, NULL,      NULL,     NULL },       // what `close` leaves behind
- ai_ci_vt     = { noop_flush, NULL,      ci_readn, ci_athand };  // a charlist: prel's `tap`
+ ai_ci_vt     = { noop_flush, NULL,      ci_readn, ci_athand },  // a charlist: prel's `tap`
+ ai_horn_vt   = { noop_flush, ai_horn_writen, NULL, NULL };      // PCM out: the horn
 
 // (fputc port byte) — write byte to port; return byte. a charm operand is a raw
 // fd and the byte goes straight at the row -- nothing to buffer, nothing to flush.

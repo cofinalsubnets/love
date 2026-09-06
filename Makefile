@@ -129,11 +129,6 @@ out/0/%.o: $(R)/%.c $(love_h) out/0/.love0cc
 	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(boot_cc) -c $< -o $@
-$(love0): $(love0_o)
-	@echo 'LD	'$@
-	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= $(CC) $(ai_cflags) -pie -o $@ $(love0_o)
-
 # src/core/love.c -> out/*.o
 $(ho)/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
 	@echo 'CC	'$@
@@ -153,6 +148,31 @@ $(ho)/src/host/cb.o: src/core/quay/quay.c src/core/quay/nif.c src/core/quay/quay
 
 moon0 = $(love0) wake out/mooncc0.image mooncc $(GCDBG)
 moon0_dep = out/mooncc0.image
+# A DRIVING LOVE (`love doom` names itself in LOVE): the artifact IS the bootstrap. out/love0
+# becomes a two-line script onto it (image awake: every cat a recipe preloads reopens modules
+# the image carries, the kernel verb's own shape), its own mooncc is the moon, the mooncc
+# image is never baked and no love0 is compiled -- the tree builds with nothing but the
+# binary that carried it. lcat runs on it bare: the prel is already there. rtlove is the
+# love that runs a moon-side tool (mkrt) either way.
+ifdef LOVE
+moon0 = $(LOVE) mooncc $(GCDBG)
+moon0_dep =
+rtlove = $(LOVE)
+rtlove_dep =
+lcat_love = $(LOVE)
+$(love0):
+	@echo 'SH	'$@
+	@mkdir -p $(dir $@)
+	@printf '#!/bin/sh\nexec %s "$$@"\n' '$(LOVE)' > $@
+	@chmod 755 $@
+else
+rtlove = $(love0) wake out/mooncc0.image
+rtlove_dep = out/mooncc0.image
+$(love0): $(love0_o)
+	@echo 'LD	'$@
+	@mkdir -p $(dir $@)
+	@LOVE_NO_IMAGE= $(CC) $(ai_cflags) -pie -o $@ $(love0_o)
+endif
 # THE MOONCC OBJECT LANE: love's own C compiled by mooncc into one directory, worn twice --
 # at the host's arch, and at the cross arch $(xa) names. $(call moonlane,NAME,DIRVAR,CCVAR,
 # ARCHVAR), every argument but the first a variable NAME so the body stays deferred; the
@@ -221,7 +241,7 @@ $(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md tools/mkman.l src/ap
 	@$(ho)/love tools/mkman.l doc/$*.md out/lib/love_version.h > $@
 
 lushfiles = src/apps/lush/job.l src/apps/lush/lex.l src/apps/lush/gram.l src/apps/lush/glob.l src/apps/lush/word.l src/apps/lush/eval.l src/apps/lush/line.l src/apps/lush/main.l
-korefiles =src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps/kore/fs.l src/apps/kore/sum.l src/apps/kore/re.l src/apps/kore/sed.l src/apps/kore/awk.l src/apps/kore/expr.l src/apps/kore/bc.l src/apps/kore/proc.l src/apps/kore/less.l src/apps/libra/lint.l src/apps/vi/config.l src/apps/vi/hue.l src/apps/vi/core.l src/apps/vi/vi.l src/apps/kore/diff.l src/apps/kore/patch.l src/apps/dns/dns.l src/apps/ain/ain.l $(lushfiles) src/apps/kore/find.l src/apps/cook/cook.l src/apps/kore/asbook.l src/core/holo/elf.l src/core/holo/obj.l src/core/holo/link.l src/core/holo/copy.l src/apps/kore/kore.l
+korefiles =src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps/kore/fs.l src/apps/kore/sum.l src/apps/kore/re.l src/apps/kore/sed.l src/apps/kore/awk.l src/apps/kore/expr.l src/apps/kore/bc.l src/apps/kore/proc.l src/apps/kore/less.l src/apps/libra/lint.l src/apps/vi/config.l src/apps/vi/hue.l src/apps/vi/core.l src/apps/vi/vi.l src/apps/kore/diff.l src/apps/kore/patch.l src/apps/dns/dns.l src/apps/ain/ain.l $(lushfiles) src/apps/kore/find.l src/apps/cook/cook.l src/apps/kore/asbook.l src/core/holo/elf.l src/core/holo/obj.l src/core/holo/link.l src/core/holo/copy.l src/apps/tls/bytes.l src/apps/tls/chacha.l src/apps/tls/poly1305.l src/apps/tls/client.l src/apps/kore/wget.l src/apps/kore/kore.l
 moonfiles = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l src/core/holo/x64.l src/core/holo/a64.l src/core/holo/thumb2.l src/core/holo/rv64.l src/core/holo/thumb1.l src/core/holo/text.l src/core/holo/dialect.l src/core/holo/gas.l src/core/holo/elf.l src/core/holo/obj.l src/core/holo/link.l src/apps/moon/floor.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l src/apps/moon/val.l src/apps/moon/gen.l src/apps/moon/lib/mksys.l src/apps/moon/moon.l
 $(ho)/.mooncc-cat.list: force_dist_list
 	@mkdir -p $(dir $@)
@@ -255,13 +275,15 @@ distfiles = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps
             src/core/holo/x64.l src/core/holo/a64.l src/core/holo/thumb2.l src/core/holo/rv64.l \
             src/core/holo/thumb1.l src/core/holo/text.l src/core/holo/dialect.l src/core/holo/decode.l src/core/holo/gas.l src/core/holo/elf.l src/core/holo/obj.l \
             src/core/holo/link.l src/core/holo/copy.l src/apps/moon/floor.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l \
-            src/apps/moon/val.l src/apps/moon/gen.l src/apps/moon/lib/mksys.l src/apps/moon/moon.l src/apps/kore/kore.l src/apps/sb/merge.l \
+            src/apps/moon/val.l src/apps/moon/gen.l src/apps/moon/lib/mksys.l src/apps/moon/moon.l \
+            src/apps/tls/bytes.l src/apps/tls/chacha.l src/apps/tls/poly1305.l src/apps/tls/client.l src/apps/kore/wget.l src/apps/kore/kore.l src/apps/sb/merge.l \
             src/apps/sb/http.l src/apps/sb/sb.l src/apps/kiosko/kiosko.l \
             src/apps/gz/gz.l src/apps/tar/tar.l src/apps/tar/tarcmd.l src/apps/gz/gzcmd.l src/apps/cpio/cpio.l \
             src/apps/cpio/cpiocmd.l src/apps/fat/fat.l src/apps/fat/fatcmd.l \
             src/apps/source/source.l src/apps/lapiz/lapiz.l \
             src/apps/libra/salt.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/serve.l \
-            src/apps/rove/rove.l src/apps/rove/story.l src/apps/rove/design.l src/apps/lupa/lupa.l
+            src/apps/rove/rove.l src/apps/rove/story.l src/apps/rove/design.l \
+            src/apps/lux/wire.l src/apps/doom/doom.l src/apps/lupa/lupa.l
 $(ho)/.dist.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \
@@ -306,8 +328,8 @@ rt_slice = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h \
                       src/apps/moon/lib/nolibc/*.c src/apps/moon/lib/nolibc/*.h \
                       src/apps/moon/lib/nolibc/*/*.c src/apps/moon/lib/nolibc/*/*.h \
                       src/apps/moon/lib/math/*.c)
-out/rt.o: $(rt_slice) tools/mkrt.l out/mooncc0.image $(love0)
-	@$(love0) wake out/mooncc0.image tools/mkrt.l $@ $(hosta)
+out/rt.o: $(rt_slice) tools/mkrt.l $(rtlove_dep) $(love0)
+	@$(rtlove) tools/mkrt.l $@ $(hosta)
 
 xqemu_x64  = qemu-x86_64
 xqemu_a64 = qemu-aarch64
@@ -323,8 +345,8 @@ $(eval $(call moonlane,x,xd,moonx,xa))
 
 $(xd)/src.o: $(dist_source) tools/mksrc.l out/.mksys-cat.l $(love0)
 	@$(love0) -l out/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(xa)
-$(xd)/rt.o: $(rt_slice) tools/mkrt.l out/mooncc0.image $(love0)
-	@$(love0) wake out/mooncc0.image tools/mkrt.l $@ $(xa)
+$(xd)/rt.o: $(rt_slice) tools/mkrt.l $(rtlove_dep) $(love0)
+	@$(rtlove) tools/mkrt.l $@ $(xa)
 $(xd)/love: $(x_o) $(xd)/src.o $(xd)/rt.o out/lib/readme.bin
 	@echo 'MOON	'$@
 	@$(moonx) -pie $(x_o) $(xkart_o) $(xd)/src.o $(xd)/rt.o -freadme=out/lib/readme.bin -o $@
@@ -435,7 +457,7 @@ mooncc_dep = $(ho)/.love.baked
 
 # this machine's metal files, and the three TUs only a kernel has a frontend for.
 k_arch_c = $(wildcard $(R)/src/inle/$a/*.c)
-k_free_c = $R/src/inle/kmain.c $R/src/inle/blk.c $R/src/inle/sys.c
+k_free_c = $R/src/inle/kmain.c $R/src/inle/blk.c $R/src/inle/hda.c $R/src/inle/sys.c
 # the whole kernel compile, in link order: the runtime and its math floor, the console
 # engine with its two fonts, nolibc, the metal, the free trio -- and $(host_c) itself,
 # because the kernel runs the same frontend the host does. taking that roster rather than
@@ -540,7 +562,7 @@ $(1)_h = $$(love_h) $$R/src/inle/k.h $$R/src/host/ustar.h $$(wildcard $$R/src/in
 $(1)_arch_o = $$(patsubst $$R/src/inle/$$($(4))/%.c,$$($(2))/ka_%.o,$$(wildcard $$R/src/inle/$$($(4))/*.c))
 # the console's painter and its fonts: kernel-only draws the host link never had
 $(1)_quay_o = $$(patsubst %,$$($(2))/k_q_%.o,paint cga_8x8 moderndos_8x16)
-$(1)_o = $$(if $$($(1)_arch_o),$$($(2))/k_kmain.o $$($(2))/k_blk.o $$($(2))/k_sys.o \
+$(1)_o = $$(if $$($(1)_arch_o),$$($(2))/k_kmain.o $$($(2))/k_blk.o $$($(2))/k_hda.o $$($(2))/k_sys.o \
   $$($(1)_arch_o) $$($(1)_quay_o) $$($(2))/kvec.o,)
 $(1)_lay_l = $$R/src/apps/kore/text.l $$R/src/apps/kore/u.l $$R/src/apps/kore/asbook.l \
   $$R/src/core/holo/$$($(4)).l $$R/src/core/holo/elf.l $$R/src/core/holo/obj.l
@@ -577,8 +599,8 @@ doom_d = $R/dl/doomgeneric/doomgeneric
 doom_drop = $(wildcard $(doom_d)/doomgeneric_*.c $(doom_d)/i_allegro*.c $(doom_d)/i_sdl*.c)
 doom_c = $(filter-out $(doom_drop),$(wildcard $(doom_d)/*.c))
 k_doom_o = $(patsubst $(doom_d)/%.c,$(k_odir)/doom/%.o,$(doom_c)) $(k_odir)/doom/wad.o
-k_free_c += $R/src/inle/doom.c
-kcppflags += -I$(doom_d)
+k_free_c += $R/src/inle/doom.c $R/src/inle/doomsnd.c
+kcppflags += -I$(doom_d) -I$R/src/inle/doom -DFEATURE_SOUND
 $(k_odir)/doom/%.o: $(doom_d)/%.c $(mooncc_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
@@ -590,9 +612,9 @@ $(k_odir)/doom/wad.o: $R/dl/doom1.wad tools/mkblob.l out/.mksys-cat.l $m
 # and the same set on the KART lane, which is where the host's own kernel is
 # built (plan C2: the artifact carries it) -- so `make kernel DOOM=1` at $(hosta)
 # rides these and the cross odir rides the rows above.
-kart_inc += -I$(doom_d)
+kart_inc += -I$(doom_d) -I$R/src/inle/doom -DFEATURE_SOUND
 kart_doom_o = $(patsubst $(doom_d)/%.c,$(moon_d)/kd_%.o,$(doom_c)) \
-  $(moon_d)/kd_wad.o $(moon_d)/k_doom.o
+  $(moon_d)/kd_wad.o $(moon_d)/k_doom.o $(moon_d)/k_doomsnd.o
 kart_o += $(kart_doom_o)
 $(moon_d)/kd_%.o: $(doom_d)/%.c $(moon0_dep)
 	@echo 'DOOM	'$@
@@ -604,7 +626,14 @@ $(moon_d)/kd_wad.o: $R/dl/doom1.wad tools/mkblob.l out/.mksys-cat.l $(love0)
 	@LOVE_NO_IMAGE= $(love0) -l out/.mksys-cat.l tools/mkblob.l $< $@ doom_wad $(hosta)
 endif
 
-$(ho)/love $(ho)/love.cand: $(kart_o)
+$(ho)/love $(ho)/love.cand: $(kart_o) out/.doom.flag
+
+# the DOOM flag is a link input no timestamp can see: a witness that changes with it, so
+# `make host DOOM=1` after a plain `make host` relinks (and the other way round)
+out/.doom.flag: force_dist_list
+	@mkdir -p out
+	@tf=$@.$$$$.tmp; echo 'DOOM=$(DOOM)' > $$tf; \
+	 $(note)
 
 $(k_odir)/src/core/love.o: out/lib/love_version.h
 $(k_odir)/src/core/love.o: kcppflags += -DAiHaveVersionH
@@ -634,26 +663,36 @@ $(k_tail_o): out/.mksys-cat.l $m
 	@$m -l out/.mksys-cat.l -q -e "((from 'moon 'mksys-$a) \"$@\")" && test -s $@
 
 k_kvm = $(if $(and $(wildcard /dev/kvm),$(filter x64,$a),$(filter x64,$(hosta))),-enable-kvm -cpu host,)
-k_qemu_x64 = -M q35 -serial stdio
+# the sound card: an HDA controller with one output codec, on the host's own audio.
+# QAUDIO names qemu's backend (`qemu-system-x86_64 -audiodev help`); none is silent.
+QAUDIO ?= pipewire
+k_qemu_x64 = -M q35 -serial stdio -device intel-hda -device hda-output,audiodev=snd \
+  -audiodev $(QAUDIO),id=snd
 k_qemu_a64 = -M virt,gic-version=2 -cpu cortex-a72 -serial stdio -semihosting \
   -device ramfb -device qemu-xhci -device usb-kbd -device usb-mouse
 k_qemu_rv64 = -M virt -serial stdio -display none
 k_qemu = qemu-system-$(uname_$a) -m 256M $(k_qemu_$a) $(k_kvm)
 k_fw = -drive if=pflash,unit=0,format=raw,file=dl/edk2-ovmf/ovmf-code-$(uname_$a).fd,readonly=on
 
+# the emulator is asked for FIRST: a missing qemu refuses before the kernel is built, not
+# after. a prerequisite, so every run door shares the one question.
+.PHONY: qemu-present
+qemu-present:
+	@command -v qemu-system-$(uname_$a) >/dev/null 2>&1 || \
+	  { echo "run: needs qemu-system-$(uname_$a) on PATH"; exit 1; }
 ifeq ($a,x64)
 run: run-$a
-run-$a: $(ko)/esp-$a/EFI/BOOT/$(k_efiname) $(ko)/esp-$a/love.elf dl/edk2-ovmf/ovmf-code-$(uname_$a).fd
+run-$a: qemu-present $(ko)/esp-$a/EFI/BOOT/$(k_efiname) $(ko)/esp-$a/love.elf dl/edk2-ovmf/ovmf-code-$(uname_$a).fd
 	exec $(k_qemu) $(k_fw) -drive format=raw,file=fat:rw:$(ko)/esp-$a
 else
 run: run-$a
-run-$a: $(k_elf)
+run-$a: qemu-present $(k_elf)
 	exec $(k_qemu) -kernel $<
 endif
 # the serial doors: no firmware, nothing downloaded, and a command line.
-run-sh: $(k_elf)
+run-sh: qemu-present $(k_elf)
 	exec $(k_qemu) -kernel $< -append "sh"
-run-headless: $(k_elf)
+run-headless: qemu-present $(k_elf)
 	exec $(k_qemu) -kernel $< -display none -no-reboot
 
 init-container: host

@@ -239,7 +239,7 @@
    (jobstart item steps)
    (? (!(two? steps)) 0                                     ; a pure aggregate runs nothing: no job, and no drain either
       (!((1 < jobw ()) && (jobforkable? steps))) (: _ (jobdrain 0) _ (recur item steps) 0)
-      (: _ (? (jobw () <= $running) (jobreap 0) 0)          ; wait for a slot
+      (: _ (? (jobw () <= #running) (jobreap 0) 0)          ; wait for a slot
          _ (flush out) _ (flush err)
          p (fork 0)
          (? (0 = p) (: _ (recur item steps) (quit 0))       ; the child: run it and go
@@ -261,11 +261,11 @@
    (jobwait p)
    (: v (peep verdicts p 'no)
       (? !(= v 'no) (: _ (pull verdicts p 0) v)
-         (0 = $running) (: _ (say err ("cook: lost the job for pid " + show p))
+         (0 = #running) (: _ (say err ("cook: lost the job for pid " + show p))
                             _ (put err 10) (quit 1))
          (: _ (jobreap 0) (jobwait p))))
 
-   (jobdrain _) (? (0 < $running) (: _ (jobreap 0) (jobdrain 0)) 0)
+   (jobdrain _) (? (0 < #running) (: _ (jobreap 0) (jobdrain 0)) 0)
 
    ; a job came home red. the child already printed which command failed and with what
    ; status; this adds the item, which is the half that goes missing when jobs
@@ -352,7 +352,7 @@
 
 ; prep item up to date, quietly, and answer the tablet of items whose recipe actually
 ; advanced their file. `cook` prints a verdict off it; a caller that wants the number
-; takes `$` of it (papel's build does).
+; tallies it (papel's build does) -- a tablet nets 1, like the lambda it is.
 (: (prepped item)
    (: done (tablet 0) shipped (tablet 0) pending (tablet 0)
       _ (prep item done shipped pending)
@@ -362,8 +362,8 @@
    (cook item)                                ; prep item up to date and report
    (? !item (: _ (say err "cook: nothing to cook") _ (put err 10) (quit 1))
       (: shipped (prepped item)
-         ; $ of a map is its key count: how many items actually ran a recipe.
-         (? (0 < $shipped)
+         ; the key count: how many items actually ran a recipe.
+         (? (0 < #shipped)
             (: _ (puts ("cook: cooked " + show item)) (putc 10))
             (: _ (puts ("cook: " + show item + " is already up to date")) (putc 10)))))
 

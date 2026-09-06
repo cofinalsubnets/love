@@ -29,11 +29,17 @@
 ; or j then an h or l, the count on both, and never under an operator), operators
 ; d c y (doubled = linewise; with j/k/G/gg linewise, else within the line),
 ; x X D C s r J, i a I a o O, p P (lin + chr), u and ^R, / ? n N (BRE, over
-; re.l), : with w [NAME] e[!] [NAME] o [NAME] q q! wq x hl and a line number,
-; zz, ^F ^B ^D ^U paging.
-; out of scope, documented: visual mode, named registers, ., macros, :s
-; (sed exists), tabs render raw (the terminal's stops, not ours), no
-; horizontal scroll (long lines clip at the view's edge).
+; re.l), zz, ^F ^B ^D ^U paging.
+;
+; the ex line is a real one: [range] command [args], where an address is
+; N . $ /re/ ?re? with +N / -N offsets, joined by , or ; and % for 1,$. the
+; commands are s (over sed's own usub, so & and \1 read the same there as
+; here), g and v, d y m t co j p nu = , and the file half w [NAME] e[!] [NAME]
+; o [NAME] q q! wq x hl lint. a bare range moves the cursor.
+; out of scope, documented: visual mode, named registers, ., macros, marks and
+; :r, > and < (a shiftwidth is a config question this file has no table for),
+; tabs render raw (the terminal's stops, not ours), no horizontal scroll (long
+; lines clip at the view's edge).
 (module 'vi
 (use 'kore) ; the text/u floors
 (use 'lint)  ; lint-scan, spliced for this module's compile
@@ -307,7 +313,208 @@
                        + show <w1 + "," + show <>w1 + " " + <>>w1)))))
 
 
-   ; -- the ex line --
+   ; -- the ex line -----------------------------------------------------------
+   ; a line reads [range] command [args]. an address is N . $ /re/ ?re? with any
+   ; run of +N / -N after it; two of them join with , or ; (`;` moves dot to the
+   ; first before reading the second) and % is 1,$. rows answer 0-based, so
+   ; address 0 is -1 -- the "before the first line" m and t take as a destination.
+   ; a search address that finds nothing answers 'bad, which is not (): "no
+   ; address here" and "an address that failed" have to part company, or
+   ; :/nomatch/d silently deletes the current line.
+
+   (vexskip s i) (: n #s (go k) (? (k < n && (s k = 32 || s k = 9)) (go (k + 1)) k) (go i))
+   (vextrim s)
+    (: n #s
+       (fw k) (? (k < n && (s k = 32 || s k = 9)) (fw (k + 1)) k)
+       (bw k) (? (0 < k && (s (k - 1) = 32 || s (k - 1) = 9)) (bw (k - 1)) k)
+       a (fw 0) b (bw n)
+       (a < b ? (snip s a b) ""))
+   (vexhas? s c) (: n #s (go i) (? (n <= i) () (s i = c) 1 (go (i + 1))) (go 0))
+   (vexbad? st a b) (: nl (vnl st) (a < 0 || nl <= b || b < a))
+   (vexlast l) (? (two? >l) (vexlast >l) <l)
+   (vexgo st r) (: nl (vnl st) k (? (r < 0) 0 (nl <= r) (nl - 1) r)
+                   (pin st 'row k, vgole st (vink (vln st)), st))
+
+   ; text up to the next unescaped dl -> [next-index text]. only the delimiter
+   ; unescapes: \( and \1 have to reach the regex and the replacement whole
+   (vexdelim s i dl)
+    (: n #s
+       (go j acc)
+        (? (n <= j) [j acc]
+           (s j = 92 && (j + 1) < n && s (j + 1) = dl) (go (j + 2) (acc + string dl))
+           (s j = dl) [(j + 1) acc]
+           (go (j + 1) (acc + string (s j))))
+       (go i ""))
+
+   ; a pattern text -> [1 nodes]; "" reuses the last search. the wrapper is not
+   ; decoration -- the empty pattern's nodes are legitimately ()
+   (vexpat st tx)
+    (? (0 < #tx) (rebre tx @ [_ nds _] [1 nds] ())
+       (0 < #(st 'pattx)) [1 (st 'pat)]
+       ())
+
+   ; the next row matching nds from r in dir, wrapping; () when none does
+   (vexfind st nds r dir)
+    (: ls (st 'lines) nl #ls
+       (go i steps)
+        (? (nl < steps) ()
+           (: k (((i % nl) + nl) % nl)
+              (? (two? (refind nds (ls k) 0)) k (go (k + dir) (steps + 1)))))
+       (go (r + dir) 1))
+
+   (vaddr st s i dot)                              ; one address at i -> [j row] | 'bad | ()
+    (: n #s
+       (dig? k) (k < n && 48 <= s k <= 57)
+       (num k acc) (? (dig? k) (num (k + 1) (10 * acc + (s k - 48))) [k acc])
+       (base k)
+        (? (dig? k) (num k 0 @ [j v] [j (v - 1)])
+           (n <= k) ()
+           (s k = 46) [(k + 1) dot]
+           (s k = 36) [(k + 1) (vnl st - 1)]
+           (s k = 47 || s k = 63)
+            (vexdelim s (k + 1) (s k) @ [j tx]
+              (: cp (vexpat st tx)
+                 (? !(two? cp) 'bad
+                    (: _ (? (0 < #tx) (pins st 'pat <>cp 'pattx tx) ())
+                       r (vexfind st <>cp dot (s k = 47 ? 1 -1))
+                       (charm? r ? [j r] 'bad)))))
+           ())
+       (offs k r)                                  ; the +N / -N tail
+        (? (k < n && (s k = 43 || s k = 45))
+           (: sg (s k = 43 ? 1 -1)
+              (num (k + 1) 0 @ [j v] (offs j (r + sg * (j = (k + 1) ? 1 v)))))
+           [k r])
+       b (base i)
+       (? (b = 'bad) 'bad
+          (two? b) (offs <b <>b)
+          (i < n && (s i = 43 || s i = 45)) (offs i dot)
+          ()))
+
+   ; [range] -> [next-index r1 r2 given?] | () when an address failed. % and a
+   ; bare , are both 1,$; nothing at all is dot,dot, ungiven
+   (vrange st s i)
+    (: n #s dot (st 'row) last (vnl st - 1)
+       (pair j a)
+        (: dot2 (s j = 59 ? a dot)
+           b (vaddr st s (j + 1) dot2)
+           (? (b = 'bad) ()
+              (two? b) [<b a <>b 1]
+              [(j + 1) a a 1]))
+       (? (i < n && s i = 37) [(i + 1) 0 last 1]
+          (i < n && s i = 44) [(i + 1) 0 last 1]
+          (: a (vaddr st s i dot)
+             (? (a = 'bad) ()
+                !(two? a) [i dot dot ()]
+                (: j <a r <>a
+                   (? (j < n && (s j = 44 || s j = 59)) (pair j r) [j r r 1]))))))
+
+   ; -- substitute --
+   ; `/pat/rep/flags` at i -> [1 matcher rep g?] | (). a fresh pattern also
+   ; becomes the last search, which is where ex leaves it for n
+   (vexspec st s i)
+    (: n #s
+       (? (n <= i) ()
+          (: dl (s i)
+             (vexdelim s (i + 1) dl @ [j pat]
+               (vexdelim s j dl @ [k rep]
+                 (: cp (vexpat st pat)
+                    (? !(two? cp) ()
+                       (: _ (? (0 < #pat) (pins st 'pat <>cp 'pattx pat) ())
+                          [1 (recomp <>cp) rep (vexhas? (snip s k n) 103)]))))))))
+   (vexsubs st m rep a b g?)                       ; ((row text)..) for the rows that change
+    (: (go r acc) (? (b < r) (rev acc)
+                     (: res (usub m rep (st 'lines r) g?)
+                        (go (r + 1) (<res ? ([r <>res] >< acc) acc))))
+       (go a ()))
+   (vexlay st ps)                                  ; apply ((row text)..), answer the last row
+    (: (go l lr) (? !(two? l) lr (: h <l _ (vput st <h <>h) (go >l <h)))
+       (go ps 0))
+   (vexdrop st rows)                               ; delete rows, given descending
+    (: (go l) (? !(two? l) () (: _ (vsplice st <l <l ()) (go >l)))
+       (go rows))
+   (vexsub st s i r1 r2)
+    (: sp (vexspec st s i)
+       (? !(two? sp) (vmsg st "bad substitution")
+          (vexbad? st r1 r2) (vmsg st "out of range")
+          (: hits (vexsubs st <>sp <>>sp r1 r2 <>>>sp)
+             (? !(two? hits) (vmsg st $ "not found: " + st 'pattx)
+                (: _ (vsnap st)
+                   lr (vexlay st hits)
+                   _ (vexgo st lr)
+                   (vmsg st (show #hits + (1 = #hits ? " line" " lines") + " changed")))))))
+
+   ; -- global --
+   ; g/v collect the matching rows, then run the body on each from the last up,
+   ; so a delete never moves a row still to be visited. the body is one of d, s
+   ; and p -- the three that mean anything a line at a time.
+   (vexgbody st body)
+    (: w (0 < #body ? (body 0) 112)
+       (? (w = 100) ['d]
+          (w = 112) ['p]
+          (w = 115) (vexspec st body 1 @ [_ m rep g?] ['s m rep g?] ())
+          ()))
+   (vexhits st nds a b inv?)                       ; the matching rows, descending
+    (: (go r acc)
+        (? (b < r) acc
+           (: m? (two? (refind nds (st 'lines r) 0))
+              (go (r + 1) ((inv? ? !m? m?) ? (r >< acc) acc))))
+       (go a ()))
+   (vexplan st rows sp)                            ; the body, dry: what it would touch
+    (? (<sp = 's)
+       (: (go l acc) (? !(two? l) acc
+                        (: r <l res (usub <>sp <>>sp (st 'lines r) <>>>sp)
+                           (go >l (<res ? ([r <>res] >< acc) acc))))
+          (go rows ()))
+       rows)
+   (vexglob st s i r1 r2 got? inv?)
+    (: n #s
+       a (got? ? r1 0) b (got? ? r2 (vnl st - 1))
+       (? (n <= i) (vmsg st "no pattern")
+          (vexbad? st a b) (vmsg st "out of range")
+          (: dl (s i)
+             (vexdelim s (i + 1) dl @ [j pat]
+               (: cp (vexpat st pat)
+                  (? !(two? cp) (vmsg st $ "bad pattern: " + pat)
+                     (: _ (? (0 < #pat) (pins st 'pat <>cp 'pattx pat) ())
+                        sp (vexgbody st (vextrim (snip s j n)))
+                        (? !(two? sp) (vmsg st "not a global command")
+                           (: rows (vexhits st <>cp a b inv?)
+                              (? !(two? rows) (vmsg st $ "not found: " + st 'pattx)
+                                 (<sp = 'p)
+                                  (: _ (vexgo st (vexlast rows))
+                                     (vmsg st (show #rows + " lines")))
+                                 (: plan (vexplan st rows sp)
+                                    (? !(two? plan) (vmsg st "not found")
+                                       (: _ (vsnap st)
+                                          _ (? (<sp = 'd) (vexdrop st plan) (vexlay st plan))
+                                          _ (vexgo st (<sp = 'd ? (vexlast rows) <(vexlast plan)))
+                                          (vmsg st (show #plan +
+                                                    (<sp = 'd ? " fewer lines" " lines changed"))))))))))))))))
+
+   ; -- move, copy, join --
+   ; the destination is one address after the verb, and 0 (row -1) is the line
+   ; before the first
+   (vexmove st s i r1 r2 copy?)
+    (: d (vaddr st s (vexskip s i) (st 'row))
+       nl (vnl st)
+       (? !(two? d) (vmsg st "no destination")
+          (: dr <>d
+             (? (vexbad? st r1 r2) (vmsg st "out of range")
+                (dr < -1 || nl <= dr) (vmsg st "out of range")
+                (!copy? && (r1 - 1) <= dr <= r2) (vmsg st "destination inside the range")
+                (: blk (vtake st r1 r2) k #blk
+                   _ (vsnap st)
+                   _ (vsplice st (dr + 1) dr blk)
+                   _ (? copy? ()
+                        (dr < r1) (vsplice st (r1 + k) (r2 + k) ())
+                        (vsplice st r1 r2 ()))
+                   _ (vexgo st (? copy? (dr + k) (dr < r1) (dr + k) dr))
+                   (vmsg st (show k + (1 = k ? " line" " lines") +
+                             (copy? ? " copied" " moved"))))))))
+   (vexjoin st r1 r2)
+    (? (vexbad? st r1 r2) (vmsg st "out of range")
+       (: _ (pin st 'row r1) n (r2 - r1 + 1) (vjoin st (n < 2 ? 2 n))))
+
    ; :e / :o -- put another file in the buffer. this file touches no io, so the
    ; ex line leaves a request ('doe, uread's shape) exactly the way :w leaves
    ; 'dow, and the face performs it and calls vload. `!` forces over a dirty
@@ -319,33 +526,59 @@
         (vmsg st "no write since last change (e! overrides)")
        (0 = tally nm) (vmsg st "no file name")
        (pin st 'doe [nm]))
+
+   ; -- the dispatch --
+   (vexword s i)                                   ; the command name at i
+    (: n #s
+       (go k) (? (k < n && 97 <= s k <= 122) (go (k + 1)) k)
+       k2 (go i)
+       (? (i < k2) [k2 (snip s i k2)]
+          (n <= i) [i ""]
+          [(i + 1) (string (s i))]))
+   (vexcmd st s i r1 r2 got?)
+    (vexword s i @ [j w]
+      (: n #s
+         bang (j < n && s j = 33)
+         k (bang ? (j + 1) j)
+         arg (vextrim (snip s k n))
+         nm (0 < #arg ? arg (st 'file))
+         (? (w = "s") (vexsub st s k r1 r2)
+            (w = "g" || w = "global") (vexglob st s k r1 r2 got? ())
+            (w = "v") (vexglob st s k r1 r2 got? 1)
+            (w = "d" || w = "delete")
+             (? (vexbad? st r1 r2) (vmsg st "out of range") (vopl st 100 r1 r2))
+            (w = "y" || w = "yank")
+             (? (vexbad? st r1 r2) (vmsg st "out of range") (vopl st 121 r1 r2))
+            (w = "m" || w = "move") (vexmove st s k r1 r2 ())
+            (w = "t" || w = "co" || w = "copy") (vexmove st s k r1 r2 1)
+            (w = "j" || w = "join") (vexjoin st r1 r2)
+            ; there is no printing to do on a screen, so these land the cursor
+            ; on the range's last line. `l` is not among them -- it promises to
+            ; spell control characters, and this frame does not
+            (w = "p" || w = "print" || w = "nu" || w = "number" || w = "#")
+             (? (vexbad? st r1 r2) (vmsg st "out of range")
+                (: _ (vexgo st r2) (vmsg st (show (r2 - r1 + 1) + " lines"))))
+            (w = "=") (vmsg st (show (r2 + 1)))
+            (w = "q") (? (bang || !(st 'dirty)) (pin st 'quit 1)
+                         (vmsg st "no write since last change (q! overrides)"))
+            (w = "w") (pin st 'dow [nm])
+            (w = "wq" || w = "x") (: _ (pin st 'dow [nm]) (pin st 'quit 1))
+            (w = "e" || w = "o" || w = "edit") (vedit st nm bang)
+            (w = "hl") (: _ (pin st 'hl (st 'hl ? () 1))
+                          (vmsg st (st 'hl ? "syntax on" "syntax off")))
+            (w = "lint") (vlint st)                    ; libra's scan, on the buffer
+            (vmsg st $ "not an ex command: " + w))))
    (vex st)
     (: s (edtext (st 'cmd))
        n #s
-       dig? (: (go i) (? (n <= i) (0 < n) (48 <= s i <= 57) (go (i + 1)) ()) (go 0))
        _ (pin st 'mode 'n)
-       (? (s = "q") (? (st 'dirty) (vmsg st "no write since last change (q! overrides)")
-                       (pin st 'quit 1))
-          (s = "q!") (pin st 'quit 1)
-          (s = "w") (pin st 'dow [(st 'file)])
-          ((s = "wq") || (s = "x")) (: _ (pin st 'dow [(st 'file)]) (pin st 'quit 1))
-          (2 < n && s 0 = 119 && s 1 = 32)                  ; w NAME
-           (pin st 'dow [(snip s 2 n)])
-          (s = "e" || s = "o") (vedit st (st 'file) ())    ; reload this file
-          (s = "e!") (vedit st (st 'file) 1)
-          (2 < n && (s 0 = 101 || s 0 = 111) && s 1 = 32)                ; e NAME | o NAME
-           (vedit st (snip s 2 n) ())
-          (3 < n && (s 0 = 101 || s 0 = 111) && s 1 = 33 && s 2 = 32)          ; e! NAME
-           (vedit st (snip s 3 n) 1)
-          (s = "hl") (: _ (pin st 'hl (st 'hl ? () 1))
-                        (vmsg st (st 'hl ? "syntax on" "syntax off")))
-          (s = "lint") (vlint st)                             ; libra's scan, on the buffer
-          (s = "$") (: _ (pin st 'row (vnl st - 1)) (vgole st 0))
-          dig? (: t (uatoi s - 1) nl (vnl st)
-                       _ (pin st 'row (? (t < 0) 0 (t < nl) t (nl - 1)))
-                       (vgole st (vink (vln st))))
-          (s = "") st
-          (vmsg st ("not an ex command: " + s))))
+       r (vrange st s 0)
+       (? (n < 1) st
+          !(two? r) (vmsg st "no match")
+          (: i <r r1 <>r r2 <>>r got? <>>>r
+             j (vexskip s i)
+             (? (n <= j) (got? ? (vexgo st r2) st)
+                (vexcmd st s j r1 r2 got?)))))
 
    ; -- insert mode --
    (vins st c)

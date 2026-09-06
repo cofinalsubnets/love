@@ -16,4 +16,4 @@
      (pre = [(a < b) (b < c) (() < a)]))
   ; the serial is the mint's hash: distinct mints key a map apart, stably
   (: t (tablet 0) _ (pin t a 'one) _ (pin t b 'two)
-     (&& ('one = (t a)) ('two = (t b)) (2 = $t)))))
+     (&& ('one = (t a)) ('two = (t b)) (2 = #t)))))

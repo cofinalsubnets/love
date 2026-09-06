@@ -18,6 +18,7 @@
 ; <||> sits in the logical band with ||, -?> just under it, both right-handed. the
 ; leading 2 is the lane -- a left operand and a right, which is what an infix one takes;
 ; the band is a bare charm, positive for the right hand these two want.
+(use 'xwire)   ; the X wire, src/apps/lux/wire.l
 (grip 2 '<||> 30)
 (grip 2 '-?> 25)
 (:
