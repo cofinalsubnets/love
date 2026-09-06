@@ -3,6 +3,10 @@
 ;
 ;   love doom [-iwad FILE] [-display :N] [-frames N]
 ;
+; from a love with no doom in it, the verb lays a nest under ~/.love/love-<ver>/ with the
+; seed verb, fetches doomgeneric and the shareware IWAD there, builds DOOM=1 and runs that
+; binary (doom-nest below); from one built with DOOM=1 it is the window right away.
+;
 ; the game is C, linked into this binary by the DOOM=1 lane (src/inle/doom.c's host
 ; doors: doom-start / doom-tick / doom-frame / doom-key); this file is the window.
 ; one 640x400 InputOutput window at the root's depth, the frame pushed as four
@@ -101,6 +105,68 @@
                       (loop (n + drew))))
        (loop 0))
 
+   ; --- the nest: a love with doom in it, laid under ~/.love by `love seed` -----------
+   ; `love doom` from a binary that carries no doom lays this binary's source under
+   ; ~/.love/love-<ver>/ (the seed verb: lay, rebuild, check -- minutes, once), fetches
+   ; doomgeneric and the shareware IWAD into its dl/ with wget, builds `cook host DOOM=1`
+   ; there, and runs that binary's doom. the nest is kept, so the second `love doom` is
+   ; one exec. the compiler and PATH are set the way the seed verb sets them: an ambient
+   ; cc if one works, else this binary's own mooncc; our tools fill the gaps on PATH.
+   wad-url "https://raw.githubusercontent.com/Daivuk/PureDOOM/master/doom1.wad"
+   dg-url "https://codeload.github.com/ozkl/doomgeneric/tar.gz/refs/heads/master"
+   (note s) (say err (";; " + s + "\n"), flush err)
+   (run-in dir argv)                                                          ; spawn in dir, wait -> status
+    (: here (cwd 0)
+       _ (chdir dir)
+       p (spawn argv)
+       _ (chdir here)
+       (charm? p ? (wait p) 1))
+   (fetch url path)
+    (? (two? (stat path)) 0
+       (: _ (note ("fetching " + url))
+          rc ((from 'kore 'wget-main) ["-q" "-O" path url])
+          (? (rc = 0) 0 (: _ (unlink path) rc))))
+   (doom-nest as)
+    (: exe (selfpath 0)
+       home (getenv "HOME" + "/.love")
+       nest (home + "/love-" + love-version)
+       bin (nest + "/out/love")
+       dl (nest + "/dl")
+       (fail s) (say err ("doom: " + s + "\n"), 1)
+       (? !(string? exe) (fail "cannot find this binary's path")
+          ((0 < tally (getenv "LOVE_DOOM_NEST")) && (two? (stat bin)))
+           (fail ("the nest's love carries no doom either: `cook host DOOM=1` under " + nest))
+          (two? (stat bin))
+           (: _ (setenv "LOVE_DOOM_NEST" "1")
+              e (exec (bin . ("doom" . as)))
+              (fail ("cannot run " + bin + " (" + show e + ")")))
+          (: _ (mkdir home 493)
+             _ (note ("seeding " + nest + " -- this builds love once, and it takes minutes"))
+             st (run-in home [exe "seed" home])
+             (? (!(st = 0) || !(two? (stat bin))) (fail ("the seed did not take under " + home))
+                (: _ (mkdir dl 493)
+                   r1 (fetch wad-url (dl + "/doom1.wad"))
+                   r2 (? (two? (stat (dl + "/doomgeneric"))) 0
+                         (: r (fetch dg-url (dl + "/doomgeneric.tgz"))
+                            (? !(r = 0) r
+                               (: _ ((from 'tarcmd 'tar-main) ["xzf" (dl + "/doomgeneric.tgz") dl])
+                                  _ (rename (dl + "/doomgeneric-master") (dl + "/doomgeneric"))
+                                  _ (unlink (dl + "/doomgeneric.tgz"))
+                                  (two? (stat (dl + "/doomgeneric")) ? 0 1)))))
+                   (? (!(r1 = 0) || !(r2 = 0)) (fail "the downloads did not land")
+                      (: S (from 'source)
+                         farm ((S 'src-farm) nest exe)
+                         _ (setenv "PATH" (getenv "PATH" + ":" + farm))
+                         env (getenv "CC")
+                         amb (? (string? env) () ((S 'src-cc) (nest + "/out")))
+                         _ (? (string? env) 0 (two? amb) (setenv "CC" <>amb) (setenv "CC" (exe + " mooncc")))
+                         _ (note "building the nest's love with doom inside")
+                         st2 (run-in nest [exe "cook" "host" "DOOM=1"])
+                         (? !(st2 = 0) (fail "the doom build failed")
+                            (: _ (setenv "LOVE_DOOM_NEST" "1")
+                               e (exec (bin . ("doom" . as)))
+                               (fail ("cannot run " + bin + " (" + show e + ")")))))))))))
+
    (digits s) (: n #s
                  (go i a) (? (n <= i) a
                              (: c (s i) (? ((47 < c) && (c < 58)) (go (i + 1) ((a * 10) + (c - 48))) a)))
@@ -112,7 +178,7 @@
        disp (opt as "-display" (getenv "DISPLAY"))
        frames (: f (opt as "-frames" ()) (string? f ? (digits f) 0))
        (? (any (\ a (a = "-h" || a = "--help")) as) (doom-usage 0)
-          !(member? 'doom-start (names ())) (say err "doom: this love was not built with DOOM=1\n", 1)
+          !(member? 'doom-start (names ())) (doom-nest as)
           !(two? (stat wad)) (say err ("doom: no IWAD at " + wad + "\n"), 1)
           (: dn (dispof (string? disp ? disp ""))
              s (x-connect ("/tmp/.X11-unix/X" + dn))

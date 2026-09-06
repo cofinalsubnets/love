@@ -4,7 +4,11 @@
 ; frame count. no Xvfb on the box -> a polite skip. wants a DOOM=1 love and the IWAD
 ; (test_doomx builds the first; the Makefile's doom lane says where the second goes).
 ;   cat test/00-init.l test/host/doomx.l | out/love
-(: xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "800x600x24" "-nolisten" "tcp"])
+; a love without doom in it would take the verb's NEST path -- a seed and a build under
+; $HOME -- which no gate may start: the door is DOOM=1, and this says so instead.
+(: _ (? (member? 'doom-start (names ())) 0
+        (: _ (puts "doomx: FAIL -- this love carries no doom (build with DOOM=1)") _ (putc 10) (quit 1)))
+   xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "800x600x24" "-nolisten" "tcp"])
    (wfx p) (: g2 (gather p) (? (two? g2) g2 (: _ (rest 2) (wfx p))))
    _ (? !(two? xv) (: _ (puts "doomx: ok (no Xvfb, skipped)") (quit 0)) 0)
    (rdnum p) ((: (go n st) (: c (see p)

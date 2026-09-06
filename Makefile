@@ -606,7 +606,14 @@ $(moon_d)/kd_wad.o: $R/dl/doom1.wad tools/mkblob.l out/.mksys-cat.l $(love0)
 	@LOVE_NO_IMAGE= $(love0) -l out/.mksys-cat.l tools/mkblob.l $< $@ doom_wad $(hosta)
 endif
 
-$(ho)/love $(ho)/love.cand: $(kart_o)
+$(ho)/love $(ho)/love.cand: $(kart_o) out/.doom.flag
+
+# the DOOM flag is a link input no timestamp can see: a witness that changes with it, so
+# `make host DOOM=1` after a plain `make host` relinks (and the other way round)
+out/.doom.flag: force_dist_list
+	@mkdir -p out
+	@tf=$@.$$$$.tmp; echo 'DOOM=$(DOOM)' > $$tf; \
+	 $(note)
 
 $(k_odir)/src/core/love.o: out/lib/love_version.h
 $(k_odir)/src/core/love.o: kcppflags += -DAiHaveVersionH
