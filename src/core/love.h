@@ -143,7 +143,7 @@ struct ai_cask { lvm_t *ap; struct ai_str *str; };
 // a mint: a bare nameless point -- just the hot and its serial
 struct ai_mint {
  lvm_t *ap;
- uintptr_t code; };
+ uintptr_t serial; };   // the order key; () is serial 0, every fresh mint ++next_serial
 // a nom: a named point, a flat 4-word leaf. code = serial (the order key on a name
 // tie); dig caches the spelling hash -- content, so bucket order never depends on
 // intern history, which is the reproducible-build law.
@@ -852,6 +852,7 @@ uintptr_t ai_big_bytes(struct ai_big*);
 word ai_big_canon(ai_word **hp, ai_limb const *limb, int n, bool neg);
 ai_flo_t ai_big_to_flo(word);                 // bignum -> double (used by toflo)
 int ai_big_cmp(word, word);                  // -1/0/1 over two integer operands
+intptr_t ai_mint_cmp(struct ai*, word, word); // -1/0/1 over two points: () < bare mints < names
 bool ai_ratio_exact(struct ai*, word);  // int/ceil/saturate's exact-ratio domain: a net-mode-2 coin over integer (n d)
 struct ai
  *ai_ratio_rung(struct ai*, int),     // ..and the lane: long-divide the parts (0 int, 1 ceil, 2 saturate), packed
@@ -1133,8 +1134,8 @@ static ai_inline union u *clip(struct ai *g, union u *k) {
 
 
 
-static ai_inline struct ai_mint *ini_missing(struct ai_mint *y, uintptr_t code) {
- return y->ap = lvm_sym, y->code = code, y; }
+static ai_inline struct ai_mint *ini_missing(struct ai_mint *y, uintptr_t serial) {
+ return y->ap = lvm_sym, y->serial = serial, y; }
 
 // the spelling hash a fresh nom caches in its `dig` slot (same fnv walk as the
 // KString lane in hash(), so a nom and its name string hash alike)

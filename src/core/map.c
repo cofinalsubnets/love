@@ -308,7 +308,7 @@ uintptr_t hash_at(struct ai *g, intptr_t x, word *base) {
    return r; }
  switch (typ(x)) {
    case DChain: return hash_two(g, x, base);
-   case DMint: return sym(x)->code;
+   case DMint: return sym(x)->serial;
    case DNom: return nom(x)->dig;                  // the cached spelling hash -- a serial would key
                                                    // bucket order to intern history (a reproducible-
                                                    // build leak); same-spelled noms collide, `=` separates

@@ -549,8 +549,10 @@ Proof. exact (st_eta (Var 6)). Qed.
    of the nets. Mixed-band + DEGENERATES (the associativity law): a number
    against a sequence arrives as that band's unit, so the sequence answers whole
    -- the byte law and the element-adjoin law are RETIRED, which is what lets
-   gplus_assoc below quantify with no side conditions. NAMED-symbol-`+` (named
-   symbols took the string algebra) and string-`-` (numeric only) stay nil. *)
+   gplus_assoc below quantify with no side conditions. A NAMED symbol is a point
+   like the mint: the identity in every lane, and two points JOIN -- the greater
+   in love's order stands, () the bottom (GNom, gnom_* below), a semilattice, so
+   the point lane is commutative as well. string-`-` (numeric only) stays nil. *)
 
 Open Scope Z_scope.
 
@@ -609,12 +611,19 @@ Proof. intros A a b s. unfold smul, mcount. rewrite Zabs2Nat.inj_mul. apply srep
    (smul_hom's action law), sequence-by-sequence * is the cartesian product
    (each pair a 2-list, why the carrier NESTS), and undefined mixes answer () --
    lawful here, where () absorbs, in a way it never was for +. *)
-Inductive gval := GUnit | GNum (z : Z) | GSeq (xs : list gval).
+(* a point is GNom n, n its seat in love's order (a bare mint by serial, a name by
+   spelling then serial, every name above every bare mint). () is the bare mint of
+   serial 0 -- love's ai_mint_zero, .code = 0, and every fresh mint takes
+   ++next_serial -- so it is GNom 0 and not a constructor of its own: the unit laws
+   below are the join at its bottom, not a separate row, in Rocq as in mint_cmp. *)
+Inductive gval := GNum (z : Z) | GSeq (xs : list gval) | GNom (n : nat).
+Definition GUnit := GNom 0.
 
 Definition gplus (a b : gval) : gval :=
   match a, b with
-  | GUnit,   _       => b
-  | _,       GUnit   => a
+  | GNom m,  GNom n  => GNom (Nat.max m n)          (* two points join: the greater stands *)
+  | GNom _,  _       => b                           (* a point is the identity in every lane *)
+  | _,       GNom _  => a
   | GNum m,  GNum n  => GNum (m + n)
   | GSeq xs, GSeq ys => GSeq (xs ++ ys)
   | GNum _,  GSeq ys => GSeq ys                    (* DEGENERATE: 5 + '(1 2) = '(1 2) *)
@@ -623,8 +632,8 @@ Definition gplus (a b : gval) : gval :=
 
 Definition gtimes (a b : gval) : gval :=
   match a, b with
-  | GUnit,   _       => GUnit                      (* the zero annihilates *)
-  | _,       GUnit   => GUnit
+  | GNom _,  _       => GUnit                      (* a point is absent under *: the zero annihilates *)
+  | _,       GNom _  => GUnit
   | GNum m,  GNum n  => GNum (m * n)
   | GNum n,  GSeq ys => GSeq (srep (Z.abs_nat n) ys)             (* repeat: |count| copies *)
   | GSeq xs, GNum n  => GSeq (srep (Z.abs_nat n) xs)
@@ -632,10 +641,10 @@ Definition gtimes (a b : gval) : gval :=
   end.
 
 (* the + monoid's identity, the SAME () token on either side: () + x = x = x + () *)
-Theorem gunit_plus_l  : forall x, gplus GUnit x = x.   Proof. reflexivity. Qed.
-Theorem gunit_plus_r  : forall x, gplus x GUnit = x.   Proof. intro x; destruct x; reflexivity. Qed.
+Theorem gunit_plus_l  : forall x, gplus GUnit x = x.   Proof. intro x; destruct x; reflexivity. Qed.
+Theorem gunit_plus_r  : forall x, gplus x GUnit = x.   Proof. intro x; destruct x; cbn; try reflexivity. f_equal; lia. Qed.
 (* *'s zero, that same token: () * x = () = x * () *)
-Theorem gunit_times_l : forall x, gtimes GUnit x = GUnit.  Proof. reflexivity. Qed.
+Theorem gunit_times_l : forall x, gtimes GUnit x = GUnit.  Proof. intro x; destruct x; reflexivity. Qed.
 Theorem gunit_times_r : forall x, gtimes x GUnit = GUnit.  Proof. intro x; destruct x; reflexivity. Qed.
 
 (* () is still NOT the number 0: on a string, 0 counts (0 copies = "", the kind's
@@ -644,13 +653,26 @@ Theorem gunit_times_r : forall x, gtimes x GUnit = GUnit.  Proof. intro x; destr
 Theorem gzero_annihilates : forall ys, gtimes (GNum 0) (GSeq ys) = GSeq [].
 Proof. intros ys. cbn. reflexivity. Qed.
 Theorem gunit_ne_zero : gtimes GUnit (GSeq [GNum 1]) <> gtimes (GNum 0) (GSeq [GNum 1]).
-Proof. cbn. congruence. Qed.
+Proof. cbv. discriminate. Qed.
 
 (* THE LAW ITSELF: + associates over the WHOLE carrier, no side conditions --
    this is what retiring the adjoin bought (5 + '(1 2) = '(5 1 2) broke it). *)
 Theorem gplus_assoc : forall x y z, gplus (gplus x y) z = gplus x (gplus y z).
 Proof. intros x y z. destruct x, y, z; cbn; try reflexivity.
-  f_equal; lia. f_equal; apply cat_assoc. Qed.
+  f_equal; lia. f_equal; apply cat_assoc. f_equal; lia. Qed.
+
+(* the point lane on its own: a bounded semilattice. commutative (the one lane of +
+   that is), idempotent, () the bottom -- and absent under *, like (). *)
+Theorem gnom_plus_comm : forall m n, gplus (GNom m) (GNom n) = gplus (GNom n) (GNom m).
+Proof. intros. cbn. f_equal. lia. Qed.
+Theorem gnom_plus_idem : forall n, gplus (GNom n) (GNom n) = GNom n.
+Proof. intros. cbn. f_equal. lia. Qed.
+Theorem gnom_unit_num : forall n z, gplus (GNom n) (GNum z) = GNum z /\ gplus (GNum z) (GNom n) = GNum z.
+Proof. split; reflexivity. Qed.
+Theorem gnom_unit_seq : forall n xs, gplus (GNom n) (GSeq xs) = GSeq xs /\ gplus (GSeq xs) (GNom n) = GSeq xs.
+Proof. split; reflexivity. Qed.
+Theorem gnom_times_l : forall n x, gtimes (GNom n) x = GUnit. Proof. intros n x. destruct x; reflexivity. Qed.
+Theorem gnom_times_r : forall n x, gtimes x (GNom n) = GUnit. Proof. intros n x. destruct x; reflexivity. Qed.
 
 (* ... and * associates wherever the cartesian is not engaged: the annihilating
    () and the |count| action law close every mixed shape. (chain*chain, the

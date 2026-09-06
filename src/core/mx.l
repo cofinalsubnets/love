@@ -33,7 +33,8 @@
    mx-rows
     '(; `+`: numbers add, lists and text concatenate, lambdas and maps Church-add.
       ;      () and every point -- a bare mint or a name -- is the identity in every lane, so
-      ;      () + x = x, and between two points the later stands (associativity); the
+      ;      () + x = x, and two points join -- the greater in love's order stands, () the
+      ;      bottom -- a semilattice, associative and commutative; the
       ;      dispatchers early-out on a point before the table and must agree. mixed bands
       ;      degenerate: the lower band arrives as its unit and the other answers whole. the
       ;      order is NUM < STR < CHAIN.

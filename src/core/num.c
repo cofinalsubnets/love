@@ -1210,16 +1210,11 @@ static ai_inline intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb
  uintptr_t n = la < lb ? la : lb;
  int c = n ? memcmp(pa, pb, n) : 0;
  return c ? (c < 0 ? -1 : 1) : la < lb ? -1 : la > lb ? 1 : 0; }
-// the floor band (cmp_rank 0): () < bare mints (KMint, by serial) < named points
-// (KNom, by name lex then serial). () is the serial-0 point, seated least of all by
-// an identity guard; a named point outranks every bare mint (the na/nb split below).
+// the floor band (cmp_rank 0): bare mints (KMint, by serial) < named points (KNom, by
+// name lex then serial). () is the bare mint of serial 0 -- every fresh mint takes
+// ++next_serial -- so it seats least of all by the same rule, no guard.
 static ai_inline intptr_t mint_cmp(struct ai *g, word a, word b) {
  if (a == b) return 0;
- word core = ZeroPoint;                       // () is the nameless serial-0 point: least of all
- if (a == core) return -1;                               // (a != b, so b is some other mint above it)
- if (b == core) return 1;                                // -- guarded by identity, its atom slots are never read
- // a named point is a KNom; a bare mint is the nameless atom. bare mints rank below
- // every named symbol; within a band, named by (name lex, then serial), bare by serial.
  bool na = namep(a), nb = namep(b);
  if (na != nb) return na ? 1 : -1;                       // bare mint < named symbol
  if (na) {                                               // both named (KNom): name first, then the serial
@@ -1228,8 +1223,9 @@ static ai_inline intptr_t mint_cmp(struct ai *g, word a, word b) {
   if (c) return c;
   uintptr_t ma = nom(a)->code, mb = nom(b)->code;
   return ma < mb ? -1 : ma > mb ? 1 : 0; }
- uintptr_t ca = sym(a)->code, cb = sym(b)->code;         // both bare: by serial
+ uintptr_t ca = sym(a)->serial, cb = sym(b)->serial;     // both bare: by serial
  return ca < cb ? -1 : ca > cb ? 1 : 0; }
+intptr_t ai_mint_cmp(struct ai *g, word a, word b) { return mint_cmp(g, a, b); }  // the point order, for +'s join
 // two galaxies of equal net: a strict tiebreak so cmp3 stays antisymmetric --
 // shape lexicographically (rank, then dims), then cell content (re, then im),
 // row-major. reached only from the number band below, both operands galaxies.

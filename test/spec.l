@@ -265,11 +265,14 @@
 ; only. mixed bands degenerate (the associativity law): a number against a string or a chain
 ; arrives as that band's unit and the other operand answers whole -- the byte law and the
 ; element-adjoin law could never associate and are gone; (string c) and (l + [x]) spell them.
-; a name is a point like a mint: the identity under + in every lane, and between two points
-; the later stands; absent under * (a spelling is `string`'s, not +'s). `*` is
+; a name is a point like a mint: the identity under + in every lane, and two points join --
+; the greater in love's order stands, () the bottom, so + on points is a semilattice, commutative
+; as well as associative; absent under * (a spelling is `string`'s, not +'s). `*` is
 ; repeated `+`: a sequence times a count repeats it, and the count saturates.
 (assert
- ("abcd" = "ab" + "cd") ("x" = "x" + 66) ('ef = 'ef + 'ef) ('ab = 'ef + 'ab) ('ef = 'ab + 'ef) ("ab" = "ab" + 'ef)
+ ("abcd" = "ab" + "cd") ("x" = "x" + 66) ('ef = 'ef + 'ef) ('ef = 'ef + 'ab) ('ef = 'ab + 'ef) ("ab" = "ab" + 'ef)
+ ('ef = 'ef + ()) ('ef = () + 'ef) ('ef = mint 0 + 'ef) ('ef = 'ef + mint 0)   ; () and a bare mint sit below every name
+ (('ab + 'ab) + 'ef = 'ab + ('ab + 'ef)) (('ef + 'ab) + 'ab = 'ef + ('ab + 'ab))  ; the triples that annihilation could not close
  ("x" = "x" + 66.0) ("x" = "x" + 1.5) ("x" = "x" + -66) ("x" = "x" + 256)   ; a number degenerates against text
  ('(1 2 3 4) = '(1 2) + '(3 4)) ('(1 2) = 5 + '(1 2)) !("a" - "b")
  ('(3) = '(3) + ()) ('(3) = () + '(3)) ('(1 2) = '(1 2) + (mint 0))   ; a bare mint -- the zero point () too -- is +'s

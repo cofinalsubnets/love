@@ -177,11 +177,12 @@ lvm(lvm_add) {
      && !__builtin_add_overflow((intptr_t) getcharm(a), (intptr_t) getcharm(b), &t)
      && t >= mincharm && t <= maxcharm)
   ai_musttail return Push(putcharm(t));
- // a point -- (), a bare mint, a name -- is the identity on either side, and between
- // two points the later one stands: that keeps + associative ((p + q) + q = p + (q + q)),
- // where distinct points annihilating did not. this must mirror lvm_bin_unit exactly --
- // it is that matrix lane's fast path, nothing more.
- if (nomp(a)) ai_musttail return Push(b);
+ // a point -- (), a bare mint, a name -- is the identity on either side, and two points
+ // join: the greater under love's order stands, () the bottom. a bounded semilattice, so
+ // + is associative and commutative here (distinct points annihilating could not
+ // associate). this must mirror lvm_bin_unit exactly -- it is that matrix lane's fast
+ // path, nothing more.
+ if (nomp(a)) ai_musttail return Push(nomp(b) && ai_mint_cmp(g, a, b) > 0 ? a : b);
  if (nomp(b)) ai_musttail return Push(a);
  ai_musttail return Ap(ai_add_mx[ai_kind(a)][ai_kind(b)], g); }
 

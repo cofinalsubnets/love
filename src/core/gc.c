@@ -413,7 +413,7 @@ static ai_inline word copy_data(struct ai *g, union u *src) {
    return word(s->ap = memcpy(d, s, bytes)); }
   case DMint: {
    struct ai_mint *s = sym(src), *d = gbump(g, mint_req);
-   ini_missing(d, s->code); // FIXME missing???
+   ini_missing(d, s->serial);
    return word(s->ap = (void*) d); }
   case DNom: {
    struct ai_nom *s = nom(src), *d = gbump(g, nom_req);

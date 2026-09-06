@@ -30,7 +30,7 @@ static uintptr_t stringlen(struct ai *g, word x);
 #endif
 word const ai_map_gap_cell = 0; // FIXME why do we need 0 as a constant :/
 struct ai_str0 const ai_str_empty = { .ap = lvm_str, .len = 0 };
-struct ai_mint const ai_mint_zero = { .ap = lvm_sym, .code = 0 };
+struct ai_mint const ai_mint_zero = { .ap = lvm_sym, .serial = 0 };
 // ============================================================================
 // g
 // ============================================================================
@@ -987,9 +987,9 @@ lvm(lvm_0) {                             // unsupported mix (array <-> string)
 // the unit lane: a bare mint rides through +/*. the dispatchers early-out a mint
 // first, so these cells are belt and braces -- but they say the true thing, so
 // the matrix stands correct on its own (mx.v checks the whole square).
-lvm(lvm_bin_unit) {                       // a point is the identity; of two, the later stands (lvm_add's fast path says the same)
+lvm(lvm_bin_unit) {                       // a point is the identity; two points join, the greater stands (lvm_add's fast path says the same)
  word a = Sp[0], b = Sp[1];
- ai_musttail return Push(nomp(a) ? b : a); }
+ ai_musttail return Push(nomp(a) ? (nomp(b) && ai_mint_cmp(g, a, b) > 0 ? a : b) : a); }
 // the degenerate lane: a mixed pair with no lawful crossing answers the higher
 // band's operand whole -- the foreigner arrives as that band's unit, since the
 // only hom a group has into a free monoid is trivial. this is what restores +
