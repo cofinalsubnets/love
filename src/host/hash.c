@@ -427,9 +427,9 @@ ai_noinline static ai_word host_ck_done(ai_word x) {
 
 // cksum streams with no block and no remainder: its walk is a byte at a time, so the
 // whole state is the register and the count.
-static lvm(lvm_ck_init) {
+static lvm(lvm_ck_init) {                      // (cksum-init b) -> b zeroed | (): the cask, never a pointer into it
  struct ai_str *s = dig_cask(Sp[0], CkSt);
- Sp[0] = !s ? ZeroPoint : word(memset(s->bytes, 0, CkSt));
+ if (!s) Sp[0] = ZeroPoint; else memset(s->bytes, 0, CkSt);
  ai_musttail return Next(1); }
 
 static lvm(lvm_ck_feed) {

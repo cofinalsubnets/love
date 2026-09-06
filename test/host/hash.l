@@ -127,6 +127,9 @@
    dig-sha (\ _ [sha-st sha256-init sha256-feed sha256-done])
    dig-md5 (\ _ [md5-st  md5-init    md5-feed    md5-done])
    dig-ck  (\ _ [ck-st   cksum-init  cksum-feed  cksum-done])
+   ; init and feed answer the cask itself: a value the collector can walk, held live
+   ; across a collection by whoever binds it
+   (dig-gc d s) (: b (cask <d) _ (<>d b) _ (<>>d b s) _ (please 1) (<>>>d b))
    (sha-stream s k) (dig-stream (dig-sha 0) s k)
    (md5-stream s k) (dig-stream (dig-md5 0) s k)
    (ck-stream s k)  (dig-stream (dig-ck 0) s k)
@@ -151,6 +154,10 @@
  ((sha-stream "abc" 1) = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
  ((sha-stream hash-56 1) = (sha256 hash-56))
  ((sha-stream hash-112 7) = (sha256 hash-112))
+ ; the state outlives a collection with init's answer still bound
+ ((dig-gc (dig-sha 0) "abc") = (sha256 "abc"))
+ ((dig-gc (dig-md5 0) "abc") = (md5 "abc"))
+ ((dig-gc (dig-ck 0) "abc") = (cksum "abc"))
  ; 0..130 by every chunking: the block, the two pad boundaries, and past them
  (sha-sweep 0 130)
  ; a body that outruns any one feed, at a chunk size that is not a block multiple
