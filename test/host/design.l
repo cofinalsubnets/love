@@ -75,6 +75,9 @@
    ; the frame: the title bar, what is under the cursor, the brush, the help
    f (plain (design-frame d 60 12))
    _ (assert (has? f "design: a test") (has? f "4,1 # wall") (has? f "brush: .") (has? f "palette: ~") (has? f "hjkl yubn move"))   ; past the row's end is wall
+   ; ..and no line of a frame is wider than the screen: one that wrapped would scroll the
+   ; frame up a row, and every key would redraw the whole map
+   _ (assert (foldl (\ a l (a && #l <= 41)) 1 (split "\n" (plain (design-frame d 40 12)))))
    _ (test_fin ())
    _ (puts "design: ok -- a map from keys alone, its palette and pens, saved as the datum story plays\n")
    0)
