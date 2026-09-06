@@ -112,7 +112,7 @@ txt = $(addprefix $(BDIR)/,$(addsuffix .txt,$(1)))
 # alone (the root does not include it), so it says so itself. see ../Makefile.
 .DELETE_ON_ERROR:
 
-.PHONY: all bench run raw html clean satrace setup ccbench ccsize ccdead ccnif $(ALL_LANGS)
+.PHONY: all bench run raw html clean satrace setup ccbench ccsize ccdead ccnif korebench $(ALL_LANGS)
 .DEFAULT_GOAL := bench
 
 # Build/refresh the host binary via the root Makefile.
@@ -199,12 +199,26 @@ REPS ?= 24
 ccnif: $(GL)
 	@./ccnif.sh $(REPS) $(SAMPLES)
 
+# kore's applets against busybox, uutils and GNU coreutils on one generated corpus:
+# answers (GNU the oracle -- a divergence is a bug), the fixed per-invocation start
+# cost, and the per-corpus work. Not cached and not a gate, for the same reason ccnif
+# is not: a development instrument, run while working in src/apps/kore/. The doc it
+# fills is doc/misc/kore-gauge.md. `make korebench MB=32 SAMPLES=5` for a quieter
+# reading; a lane not on PATH drops out of every table.
+MB ?= 8
+KOREBENCH := $(BDIR)/korebench.txt
+korebench: $(GL)
+	@RAW=$(KOREBENCH) ./korebench.sh $(MB) $(SAMPLES)
+
 # Self-contained results page: bench/bench.html, the full roster as columns
 # (a present-but-empty language shows a dotted column), with a transpose button
-# and a viewport-chosen initial orientation, plus the SAT-solver + compiler tables.
-# Regenerate after a fresh `make all` (and `make satrace`/`make setup`/`make ccbench` for fresh times).
+# and a viewport-chosen initial orientation, plus the SAT-solver, compiler and
+# userland tables. The last three are skipped when their result file is absent, so a
+# page built without them is short rather than broken.
+# Regenerate after a fresh `make all` (and `make satrace`/`make setup`/`make ccbench`/
+# `make korebench` for fresh times).
 html: $(call txt,$(PRESENT)) $(SATRACE) $(SETUP) $(CCBENCH) mkhtml.sh | $(BDIR)
-	@cat $(call txt,$(PRESENT)) $(SETUP) | ./mkhtml.sh "$(ALL_LANGS)" "$(SATRACE)" "$(CCBENCH)" > bench.html
+	@cat $(call txt,$(PRESENT)) $(SETUP) | ./mkhtml.sh "$(ALL_LANGS)" "$(SATRACE)" "$(CCBENCH)" "$(KOREBENCH)" > bench.html
 	@echo "wrote bench/bench.html"
 
 clean:

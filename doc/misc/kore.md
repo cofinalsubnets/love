@@ -2,6 +2,12 @@
 
 src/apps/kore/ orients here; the laws live in src/apps/kore/law.l, the GNU-identical smokes in
 `make test_kore`, and every doubt settles by probing the built `kore`.
+Speed and adversarial inputs are a different page: doc/misc/kore-gauge.md, filled by
+`make -C bench korebench` (kore against busybox, uutils and GNU).
+
+⚠ **the inventory below names TOOLS, never their flag coverage**, and the two are not the
+same reach: `sort` takes `-r -u` and dies on `-n`, `ls` takes `-a` and dies on `-l`. A
+tool listed here answers to its name; which options it answers to is in its own source.
 
 kore is the distro's coreutils: the love-native POSIX environment over the Linux kernel is
 kernel + a static `love` + .l files, and kore is busybox's multi-call trick done natively.

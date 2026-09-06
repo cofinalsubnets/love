@@ -222,6 +222,62 @@ awk '
 echo "</div>"
 fi
 
+# -- the FOURTH extra table: the USERLAND shootout (arg 4 = a korebench.sh RAW file,
+# "<row> <lane> <ms>" lines). Rows the nine korebench picks for the page, columns the
+# four userlands in a FIXED order -- kore, busybox, uutils, gnu. No ranking and no net
+# row here, unlike the compiler table: uutils is coreutils only, so it has a cell on
+# three of the nine rows, and both a net and a sort would read its four absences as
+# slowness rather than as absence. Rendered STATIC. Skipped if no file. --
+if [ -n "${4:-}" ] && [ -s "$4" ]; then
+cat <<'KO'
+<h2>userland &mdash; milliseconds per job, against three other coreutils</h2>
+<p class="note">A fourth field, and the one where love is the <i>application</i> rather
+than the compiler: <b>kore</b> is love&rsquo;s userland (<code>src/apps/kore/</code>),
+about ninety POSIX tools written in love and run by love&rsquo;s own interpreter, beside
+<b>busybox</b> and <b>GNU coreutils</b> (both C) and <b>uutils</b> (Rust). Every row is
+one job over one generated corpus, and the numbers are wall clock including process
+start &mdash; which for kore means loading a baked image and waking a heap before the
+first byte is read, a fixed cost the C lanes do not pay. Read the table with that in
+mind: on a small input that constant <i>is</i> the measurement.</p>
+<p class="note">The interesting cells are the ones that are not uniform. <b>gzip</b> and
+the checksums run the same C in all four lanes (love calls DEFLATE and SHA-256 through
+nifs), so they sit near parity and mark the floor everything else should be read
+against. <b>bc</b> is love&rsquo;s own arbitrary-precision arithmetic over its bigints
+and is competitive with GNU&rsquo;s. The line tools are where the interpreter shows,
+and the point of measuring them is not the ratio but its <i>shape</i>: a constant factor
+is the price of writing a userland in a high-level language, while an exponent is a
+defect. <code>bench/korebench.sh</code> prints two further tables that separate the two
+&mdash; the same tools on adversarial inputs (one line with no newline in it, a million
+one-byte lines, an ERE built to make a backtracking matcher explode), and a growth
+reading at n, 2n and 4n with the start cost subtracted out. That is where a pathology
+shows; this table is the summary. <code>doc/misc/kore-gauge.md</code> carries the
+findings.</p>
+<div class="wrap">
+KO
+awk '
+  # whole milliseconds, unlike the compiler table above: korebench times a whole
+  # process per cell, so a fractional ms would be printing the shell'"'"'s own jitter
+  function fmt(x){ return sprintf("%d", x + 0.5) }
+  BEGIN { nc = split("kore busybox uutils gnu", cord, " ") }
+  { rw=$1; ln=$2; ms=$3
+    if(!(rw in ri)){rord[++nr]=rw; ri[rw]=1}
+    val[rw,ln]=ms }
+  END{
+    for(i=1;i<=nr;i++){m=1e18; for(j=1;j<=nc;j++){v=val[rord[i],cord[j]]; if(v!="dnf"&&v!="to"&&v!="-"&&v!=""&&v+0<m)m=v+0} minr[rord[i]]=m}
+    printf "<table><thead><tr><th>job</th>"
+    for(j=1;j<=nc;j++){c=cord[j]; printf "<th%s>%s</th>", (c=="kore"?" class=\047ai\047":""), c}
+    print "</tr></thead><tbody>"
+    for(i=1;i<=nr;i++){rw=rord[i]; printf "<tr><th>%s</th>", rw
+      for(j=1;j<=nc;j++){c=cord[j]; v=val[rw,c]; cl=(c=="kore"?"love ":"")
+        if(v==""||v=="-"){printf "<td class=\047%smiss\047>·</td>",cl}
+        else if(v=="dnf"||v=="to"){printf "<td class=\047%sto\047>%s</td>",cl,v}
+        else{f=(v+0==minr[rw]?"fast ":""); printf "<td class=\047%s%s\047>%s</td>",cl,f,fmt(v+0)}}
+      print "</tr>"}
+    print "</tbody></table>"
+  }' "$4"
+echo "</div>"
+fi
+
 echo "<script>"
 
 awk -v langs="$roster" '
