@@ -297,13 +297,11 @@
                                    _ (put err 10) (quit 1)))))
               _ (each fdmap (\ e (dup2 >e <e)))
               _ (each allclose (\ fd (? (2 < fd) (close fd) 0)))
-              ; 0: a child has a shell already. cli-line's ANSWER is not a status and
-              ; must not be quit with -- every status it carries it quits with itself
-              ; (the verb door, and cli-leave for the rail's own exits), so a normal
-              ; return only means the line finished. reading it as one exits `love -e
-              ; EXPR` with the newline that printed the answer. main.c discards it too.
-              _ ((sh-cliline ()) argv 0)
-              (quit 0))
+              ; 0: a child has a shell already. cli-line ANSWERS the line's status, a
+              ; charm, and the process answers with it -- as main.c does for the exec'd
+              ; twin (`kore false` answers 1 and quits nothing); anything else is 0
+              r ((sh-cliline ()) argv 0)
+              (quit (charm? r ? (r & 255) 0)))
            p))
 
    ; --- builtins: a charm status, a control pair (brk/cnt/ret), or 'nope --------

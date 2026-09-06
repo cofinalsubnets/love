@@ -242,7 +242,7 @@ $(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md tools/mkman.l src/ap
 
 lushfiles = src/apps/lush/job.l src/apps/lush/lex.l src/apps/lush/gram.l src/apps/lush/glob.l src/apps/lush/word.l src/apps/lush/eval.l src/apps/lush/line.l src/apps/lush/main.l
 korefiles =src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps/kore/fs.l src/apps/kore/sum.l src/apps/kore/re.l src/apps/kore/sed.l src/apps/kore/awk.l src/apps/kore/expr.l src/apps/kore/bc.l src/apps/kore/proc.l src/apps/kore/less.l src/apps/libra/lint.l src/apps/vi/config.l src/apps/vi/hue.l src/apps/vi/core.l src/apps/vi/vi.l src/apps/kore/diff.l src/apps/kore/patch.l src/apps/dns/dns.l src/apps/ain/ain.l $(lushfiles) src/apps/kore/find.l src/apps/cook/cook.l src/apps/kore/asbook.l src/core/holo/elf.l src/core/holo/obj.l src/core/holo/link.l src/core/holo/copy.l src/apps/tls/bytes.l src/apps/tls/chacha.l src/apps/tls/poly1305.l src/apps/tls/client.l src/apps/kore/wget.l src/apps/kore/kore.l
-moonfiles = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l src/core/holo/x64.l src/core/holo/a64.l src/core/holo/thumb2.l src/core/holo/rv64.l src/core/holo/thumb1.l src/core/holo/wasm.l src/core/holo/wasmfn.l src/core/holo/text.l src/core/holo/gas.l src/core/holo/elf.l src/core/holo/obj.l src/core/holo/link.l src/apps/moon/floor.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l src/apps/moon/val.l src/apps/moon/gen.l src/apps/moon/lib/mksys.l src/apps/moon/moon.l
+moonfiles = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l src/core/holo/x64.l src/core/holo/a64.l src/core/holo/thumb2.l src/core/holo/rv64.l src/core/holo/thumb1.l src/core/holo/wasm.l src/core/holo/wasmfn.l src/core/holo/text.l src/core/holo/dialect.l src/core/holo/gas.l src/core/holo/elf.l src/core/holo/obj.l src/core/holo/link.l src/apps/moon/floor.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l src/apps/moon/val.l src/apps/moon/gen.l src/apps/moon/lib/mksys.l src/apps/moon/moon.l
 $(ho)/.mooncc-cat.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(moonfiles)' > $$tf; \
@@ -273,7 +273,7 @@ distfiles = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps
             src/apps/kore/diff.l src/apps/kore/patch.l src/apps/dns/dns.l src/apps/ain/ain.l $(lushfiles) src/apps/kore/find.l \
             src/apps/cook/cook.l src/apps/kore/asbook.l \
             src/core/holo/x64.l src/core/holo/a64.l src/core/holo/thumb2.l src/core/holo/rv64.l \
-            src/core/holo/thumb1.l src/core/holo/wasm.l src/core/holo/wasmfn.l src/core/holo/text.l src/core/holo/gas.l src/core/holo/elf.l src/core/holo/obj.l \
+            src/core/holo/thumb1.l src/core/holo/wasm.l src/core/holo/wasmfn.l src/core/holo/text.l src/core/holo/dialect.l src/core/holo/decode.l src/core/holo/gas.l src/core/holo/elf.l src/core/holo/obj.l \
             src/core/holo/link.l src/core/holo/copy.l src/apps/moon/floor.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l \
             src/apps/moon/val.l src/apps/moon/gen.l src/apps/moon/lib/mksys.l src/apps/moon/moon.l \
             src/apps/tls/bytes.l src/apps/tls/chacha.l src/apps/tls/poly1305.l src/apps/tls/client.l src/apps/kore/wget.l src/apps/kore/kore.l src/apps/sb/merge.l \
@@ -283,7 +283,7 @@ distfiles = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps
             src/apps/source/source.l src/apps/lapiz/lapiz.l \
             src/apps/libra/salt.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/serve.l \
             src/apps/rove/rove.l src/apps/rove/story.l src/apps/rove/design.l \
-            src/apps/lux/wire.l src/apps/doom/doom.l
+            src/apps/lux/wire.l src/apps/doom/doom.l src/apps/lupa/lupa.l
 $(ho)/.dist.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \

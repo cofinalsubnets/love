@@ -212,7 +212,7 @@ test_front: $(ho)/front
 # Host-nif smoke tests: the host lane's nifs link into `love` but NOT love0, so they live under
 # test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
 # AND a "<name>: ok"; a cold lane opts in via hostnif_cold.
-hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/serve.l test/host/sbhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l test/host/gzc.l test/host/hash.l test/host/story.l test/host/design.l test/host/helm.l test/host/wget.l
+hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/serve.l test/host/sbhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l test/host/gzc.l test/host/hash.l test/host/story.l test/host/design.l test/host/lupa.l test/host/helm.l test/host/wget.l
 # out/lush: test/host/sh.l drives the BUILT shell end to end, via out/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
@@ -896,16 +896,21 @@ test_cpio: host
 test_holo: host
 	@echo TEST test/holo/golden.l
 	@cat src/core/holo/holo.l src/core/holo/x64.l src/core/holo/a64.l src/core/holo/thumb2.l \
-	    src/core/holo/rv64.l src/core/holo/thumb1.l src/core/holo/text.l src/core/holo/gas.l src/core/holo/elf.l \
+	    src/core/holo/rv64.l src/core/holo/thumb1.l src/core/holo/text.l src/core/holo/dialect.l src/core/holo/gas.l src/core/holo/elf.l \
 	    src/core/holo/wasm.l src/core/holo/wasmfn.l test/holo/golden.l | sh test/gate/run.sh holo "$m" ", 0 failed"
-# as.l -- the real AT&T x86-64 front over holo. test/holo/as.l's goldens are byte-identical
+# as.l -- the real x86-64 front over holo, either dialect through dialect.l's lens (the lens
+# laws ride test/holo/as.l; test/gate/dialect.sh judges it against gcc's own two outputs,
+# skipping without gcc), and decode.l reads the bytes back (its battery laws ride the same
+# file; test/gate/decode.sh judges it against objdump). test/holo/as.l's goldens are byte-identical
 # to /usr/bin/as (frozen, no shell-out at gate time). Same sentinel gate as test_holo.
 # asrefuse.sh is the other half: what must RAISE, one love per case.
 test_as: host
 	@echo TEST test/holo/as.l
-	@cat src/core/holo/holo.l src/core/holo/x64.l src/core/holo/as.l test/holo/as.l \
+	@cat src/core/holo/holo.l src/core/holo/x64.l src/core/holo/dialect.l src/core/holo/decode.l src/core/holo/as.l test/holo/as.l \
 	  | sh test/gate/run.sh as "$m" ", 0 failed"
 	@sh test/gate/asrefuse.sh "$m"
+	@sh test/gate/dialect.sh "$m" $(ho)
+	@sh test/gate/decode.sh "$m" $(ho)
 # test_elf32 -- holo's ELF32 executable writer, judged by a real loader: both thumb backends
 # lay write+exit, Linux maps the segment and enters in Thumb state, and 42 must come back.
 # test/holo/golden.l pins the header fields; this pins the only opinion that counts. Needs qemu-arm

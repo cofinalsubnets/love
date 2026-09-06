@@ -30,6 +30,9 @@
 
  ; --- the tiles: a row grows to reach the cursor, and the map grows a row ------------
  (pad s n c) (#s < n ? (s + ((n - #s) (\ t (t + c)) "")) s)
+ ; a status line is cut to the screen: one wider would wrap, scroll the frame up a row, and
+ ; every key would redraw the whole map
+ (fit s n c) (pad (#s > n ? (snip s 0 n) s) n c)
  (set-tile d c) (: lvl (d 'lvl) x (d 'cx) y (d 'cy)
                    rows (lvl 'rows + map (\ _ "") (jot (nat (y + 1 - lvl 'h))))
                    r (pad (rows y) (x + 1) " ")
@@ -120,7 +123,7 @@
                                  (go (x + 1) p2 (acc + (= p2 p ? "" (pen p2)) + (cur? ? ("\e[7m" + <c + "\e[27m") <c))))
                               acc)
               (go 0 () ""))
-   _ (say j ("\e[H\e[0m\e[7m" + pad (" design: " + lvl 'title + " -- " + d 'path + (d 'dirty ? " [+]" "")) w " " + "\e[0m\e[K\r\n"))
+   _ (say j ("\e[H\e[0m\e[7m" + fit (" design: " + lvl 'title + " -- " + d 'path + (d 'dirty ? " [+]" "")) w " " + "\e[0m\e[K\r\n"))
    _ (each (jot mh) (\ y (say j (row y + "\e[0m\e[K\r\n"))))
    t (thing-at lvl (d 'cx) (d 'cy))
    k (kind-of lvl (tile lvl (d 'cx) (d 'cy)))
@@ -130,11 +133,11 @@
                  (string (k 'ch) + " " + (k 'solid ? "wall" "floor") + " " + show (k 'fg) + "/" + show (k 'bg)))
           + "   brush: " + string (d 'brush) + " " + (bk 'solid ? "wall" "floor") + " " + show (bk 'fg) + "/" + show (bk 'bg)
           + "   palette: " + joins (map string (palette d)) " ")
-   _ (say j (pad about w " " + "\e[K\r\n"))
-   _ (say j (pad " hjkl yubn move  space paint  1-9 # . brush  a tile  c pens  t thing  x remove  m start  v vi  p play  :w save  :q leave" w " " + "\e[K\r\n"))
-   _ (say j (d 'mode @ 'map (pad (d 'msg) w " " + "\e[K\e[?25l")
-                       'cmd (":" + edtext (d 'buf) + "\e[K\e[?25h")
-                       (show (d 'mode) + ": " + edtext (d 'buf) + "\e[K\e[?25h")))
+   _ (say j (fit about w " " + "\e[K\r\n"))
+   _ (say j (fit " hjkl yubn move  space paint  1-9 # . brush  a tile  c pens  t thing  x remove  m start  v vi  p play  :w save  :q leave" w " " + "\e[K\r\n"))
+   _ (say j (d 'mode @ 'map (fit (d 'msg) w " " + "\e[K\e[?25l")
+                       'cmd (fit (":" + edtext (d 'buf)) w "" + "\e[K\e[?25h")
+                       (fit (show (d 'mode) + ": " + edtext (d 'buf)) w "" + "\e[K\e[?25h")))
    (slurp j))
 
  ; --- the runner: the designer on cli's stage --------------------------------------
