@@ -17,7 +17,11 @@ async function loveRepl(root) {
   const t0 = performance.now();
   const M = await Love();
   const init = M.cwrap('ai_init', 'number', []);
-  const ev   = M.cwrap('ai_eval', 'number', ['string']);
+  // through the heap, not ccall's 'string': that lands the text on the wasm stack, and
+  // a frame or a fetched source is bigger than the stack cares to hold
+  const evp = M.cwrap('ai_eval', 'number', ['number']);
+  const ev = s => { const n = M.lengthBytesUTF8(s) + 1, p = M._malloc(n);
+                    M.stringToUTF8(s, p, n); const r = evp(p); M._free(p); return r; };
   const optr = M.cwrap('ai_out_ptr', 'number', []);
   const olen = M.cwrap('ai_out_len', 'number', []);
   const dec = new TextDecoder();
@@ -49,10 +53,9 @@ async function loveRepl(root) {
   const face = cellsFace(M.HEAPU32.subarray(palette() >> 2, (palette() >> 2) + 256), unfold);
   try {
     const srcs = await Promise.all(
-      ['src/apps/rove/rove.l', 'src/apps/ink/ink.l', 'src/port/wasm/web.l'].map(p => fetch(p).then(r => r.text())));
+      ['src/port/wasm/web.l', 'src/apps/rove/rove.l', 'src/apps/ink/ink.l'].map(p => fetch(p).then(r => r.text())));
     for (const t of srcs) ev(t);
-    q('[data-chip=rove]').style.display = 'inline-block';
-    q('[data-chip=ink]').style.display = 'inline-block';
+    for (const ch of root.querySelectorAll('[data-app]')) ch.style.display = 'inline-block';
   } catch (e) {
   }
 
@@ -100,8 +103,6 @@ async function loveRepl(root) {
     hist.push(src); hi = hist.length;
     const s = ev('(puts (show (webln ' + aiStr(src) + ')))');
     const o = drain();
-    const play = o.match(/\x1b_play:(\w+)\x1b\\/);
-    if (play) { enterApp(play[1]); return; }   // a launch swallows its output
     for (const ln of o.split('\n')) if (ln.length) put(ln, ln.startsWith('# ') ? 'cnd' : 'ans');
     if (s !== 0) put('# the image stopped (status ' + s + ') -- reload to reboot', 'cnd');
     scroll.scrollTop = scroll.scrollHeight;
@@ -133,23 +134,27 @@ async function loveRepl(root) {
              cmd.setRangeText(t, cmd.selectionStart, cmd.selectionEnd, 'end'); fit(); }
   });
 
+  // a chip runs its line; an app chip opens its app on the screen instead
   root.querySelectorAll('.chip').forEach(ch =>
-    ch.addEventListener('click', () => { run(ch.dataset.run); cmd.focus(); }));
+    ch.addEventListener('click', () => { ch.dataset.app ? enterApp(ch.dataset.app) : run(ch.dataset.run); cmd.focus(); }));
 
-  // --- the app screen: a quay tty app, driven one step per key ------------
-  // the app draws into quay's screen (web.l); each step we read the mirror -- the
-  // screen's head and cells -- and lay it as text. style.css owns only the container
-  // chrome: the app owns every colour and glyph inside it, through the engine's tables.
+  // --- the app screen: a quay tty app, running as a task on the page's console ----
+  // web.l puts the app on a quay screen and twirls it; we pump it -- a step yields it
+  // the turn, whatever it drew is handed back to be scribed and mirrored -- and lay the
+  // mirror as text. keys go into stdin's ring (ai_key) as the bytes a terminal would
+  // send, so the app's own key decoding runs unchanged. style.css owns only the
+  // container chrome: the app owns every colour and glyph inside it, through the
+  // engine's tables.
   const app = q('.app');
   const screen = q('.screen');
   const appname = q('.appname');
   const apphint = q('.apphint');
-  // 'key': step on each keydown, quit on the app's sentinel. 'anim': step on a
-  // timer, any key steps ashore. what an app keeps for its chrome is its own affair
-  // (web.l): the screen is the whole box.
-  const APPS = {
-    rove: { mode: 'key',  hint: ' · hjkl yubn/arrows move · > descend · q/esc ashore' },
-    ink:  { mode: 'anim', fps: 20, hint: ' · any key steps ashore' },
+  const key = M.cwrap('ai_key', 'number', ['number']);
+  const runnable = M.cwrap('ai_runnable', 'number', []);
+  const alive = M.cwrap('ai_alive', 'number', []);
+  const HINTS = {
+    rove: ' · hjkl yubn/arrows move · > descend · q/esc ashore',
+    ink:  ' · any key steps ashore',
   };
 
   // the grid, fit to the live box: measure one cell in the app font (a run of
@@ -167,51 +172,56 @@ async function loveRepl(root) {
              rows: Math.max(8, Math.floor(screen.clientHeight / h)) };
   }
 
-  // arrows fold onto hjkl; every other single char rides its byte (h j k l y u
-  // b n for moves, q quit, > descend, . wait); anything else is ignored.
-  const ARROW = { ArrowLeft: 104, ArrowDown: 106, ArrowUp: 107, ArrowRight: 108, Escape: 27 };
-  const keyByte = e => e.key in ARROW ? ARROW[e.key]
-                     : e.key.length === 1 ? e.key.codePointAt(0) : -1;
+  // a key as the bytes a terminal sends: arrows as CSI sequences, escape alone, a
+  // printable as itself; anything else is not a key
+  const CSI = { ArrowUp: 'A', ArrowDown: 'B', ArrowRight: 'C', ArrowLeft: 'D' };
+  const keyBytes = e => e.key in CSI ? [27, 91, CSI[e.key].charCodeAt(0)]
+                      : e.key === 'Escape' ? [27]
+                      : e.key === 'Enter' ? [13]
+                      : e.key.length === 1 ? [e.key.codePointAt(0)] : [];
 
   // the mirror, read after each step: rows cols cursor flag, then the cells
-  const step = () => {
+  const blit = () => {
     const p = mirror() >> 2, hdr = Array.from(M.HEAPU32.subarray(p, p + 4));
     screen.innerHTML = cellsHtml(face, hdr, M.HEAPU32.subarray(p + 4, p + 4 + hdr[0] * hdr[1]));
   };
+  // one pump: the app's turns until it parks, sleeps or lands (a yield is one time
+  // slice, so a frame may take several), everything it drew scribed and mirrored, and
+  // whether it lives. an eval's out is drained right after it -- the next eval resets it,
+  // and the app runs at any fair yield, so any eval's drain may be the app's
+  const pump = () => {
+    let acc = drain();
+    // ..bounded twice: an app that never parks gets its slices on the next beat, and
+    // what it drew meanwhile is shown as it goes rather than hoarded
+    for (let n = 0; n < 256 && acc.length < 65536; n++) { ev('(web-step)'); acc += drain(); if (!runnable()) break; }
+    for (let k = 0; acc && k < 4; k++) { ev('(web-show ' + aiStr(acc) + ')'); acc = drain(); }
+    blit();
+    return alive();
+  };
 
-  let onKey = null, timer = null, onResize = null;
+  let onKey = null, timer = null;
   function enterApp(name) {
-    const spec = APPS[name] || { mode: 'key', hint: '' };
     appname.textContent = name;
-    apphint.textContent = spec.hint || '';
+    apphint.textContent = HINTS[name] || '';
     term.hidden = true; app.hidden = false; app.focus();
-    const boot = () => {   // measure the now-visible box, then seed a fresh screen
-      const { cols, rows } = fitGrid();
-      ev(`(puts (${name}-web-boot ${cols} ${rows} ${Date.now() & 0x7fffffff}))`);
-      step();
+    const { cols, rows } = fitGrid();
+    ev(`(web-boot ${JSON.stringify(name)} ${cols} ${rows})`);
+    if (!pump()) return exitApp();
+    // the clock: an app that rests between frames (ink's swim, rove's last look) wakes
+    // on a pump, so the page pumps on a beat as well as on every key
+    timer = setInterval(() => { if (!pump()) exitApp(); }, 50);
+    onKey = e => {
+      const bs = keyBytes(e); if (!bs.length) return;
+      e.preventDefault();
+      for (const b of bs) key(b);
+      if (!pump()) exitApp();
     };
-    boot();
-    if (spec.mode === 'anim') {
-      timer = setInterval(() => { ev(`(puts (${name}-web-tick ()))`); step(); }, 1000 / spec.fps);
-      onKey = e => { e.preventDefault(); exitApp(); };          // any key -> shore
-      onResize = boot;   // stateless shimmer: re-fit and re-seed on a resize
-      window.addEventListener('resize', onResize);
-    } else {
-      onKey = e => {
-        const n = keyByte(e); if (n < 0) return;
-        e.preventDefault();
-        ev(`(puts (${name}-web-key ${n}))`);
-        if (/\x1b_quit\x1b\\/.test(drain())) return exitApp();
-        step();
-      };
-    }
-    // defer past the launching keystroke: the Enter that ran `ink ()` is still
-    // bubbling, and anim's "any key -> exit" would otherwise fire on it at once.
+    // defer past the launching click or keystroke, still bubbling: ink's "any key ->
+    // shore" would otherwise fire on it at once.
     setTimeout(() => { if (onKey) window.addEventListener('keydown', onKey); }, 0);
   }
   function exitApp() {
     if (timer) { clearInterval(timer); timer = null; }
-    if (onResize) { window.removeEventListener('resize', onResize); onResize = null; }
     window.removeEventListener('keydown', onKey); onKey = null;
     app.hidden = true; term.hidden = false; cmd.focus();
   }

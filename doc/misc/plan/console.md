@@ -45,10 +45,17 @@ that is a compiler.
   src/port/wasm/screen.mjs under test_wasm -- a hand frame's cells and its lay, and rove
   and ink booted on a page screen. what it found on the way: the wasm function-table
   trap in c0's peephole (src/port/wasm/32bit-findings.md).
-- **rung 1 -- the console door.** one verb: run a tty app on the current console,
-  answer when it exits. terminal: the fork lane. inle and the page: a task on the same
-  buffer, the caller parked until the callee yields it back. rove's library level
-  calls this and nothing else to open a file in vi.
+- **rung 1 -- the console door.** ✅ LANDED. `(door f)`, module 'console in post.l:
+  one verb, two bodies. a seat that can fork (a terminal) forks -- the app owns the
+  tty, the parent waits, its own state untouched -- and a seat that cannot (inle, the
+  page) twirls the app as a task and catches it. fork, wait and quit are read late, so
+  it compiles on every seat. the page's half (host.c): stdin is a ring of key bytes the
+  page pushes, a dry read parks the reading task (and answers the end on the session's
+  own task, so a typed `rove ()` can never park the page); a key arms the parked sweep;
+  ai_runnable/ai_alive let the page yield until the app parks, sleeps or lands. rove and
+  ink run on the page UNCHANGED through web.l -- their tty runners, keys as the bytes a
+  terminal sends. gates: test/host/door.l (both lanes, forked here), screen.mjs (both
+  apps as tasks). rove's library level calls the door and nothing else to open a file.
 - **rung 2 -- rove as the fiction engine.** levels as data with a designer; rooms,
   exits, things, text -- the zork half over the rogue half. no combat, mobs or procgen
   at first: the crawl becomes one level among others or goes. the library level:

@@ -34,6 +34,15 @@ is `wint = (< (32 2) max-charm)` (true on the full 64-bit hosted builds).
   wrong, its `seal-hook` never ran, and the egg trapped applying the unsealed hook. Which
   slot `lvm_ret0` gets depends on link order, so any change to host.c flipped it. Now the
   peephole asks for a static table (`!in_data && !in_heap`) before reading one.
+- **A `'string'` through ccall rides the wasm stack.** an eval of a frame (rove's 2K,
+  ink's 5K, more when several accumulate) through `cwrap('ai_eval', .., ['string'])`
+  overflowed it -- "memory access out of bounds" anywhere in the VM, intermittently,
+  as the stack's tenant varied. every eval now marshals through the heap (test.mjs
+  had learned this for the corpus; repl.js and screen.mjs follow).
+- **A scare in a task with no help installed is a runaway, not an end.** rove's
+  runner scares at its tail (`;; missing g`, its own bug); under the page's `hear` that
+  prints and lands, under no help the task drew frames forever. the gate installs
+  the page's handler before an app boots.
 - **`#0` is the number 0, not a box.** the page driver's `qbox #0` idiom pinned into a
   charm, silently; the boxes are tablets (src/port/wasm/web.l).
 - **test.mjs had lost its `import` of the module** and the gate's paths still spelled

@@ -1,35 +1,34 @@
-; src/port/wasm/web.l -- the page's love side: the quay tty apps on the page's screen.
-; repl.js fetches this after rove.l and ink.l and feeds it through ai_eval; the tests
-; run it under node the same way (src/port/wasm/screen.mjs).
+; src/port/wasm/web.l -- the page's love side: the quay tty apps on the page's console,
+; unchanged. repl.js feeds this through ai_eval BEFORE rove.l and ink.l -- a closure
+; captures its free globals at creation, so the tty words an app asks for must stand
+; first -- and src/port/wasm/screen.mjs runs it under node the same way.
 ;
-; the tty runners (rove/sail/helm) reference host words the browser image lacks
-; (winsize/raw/cue?/rest/flush ride pty.c + bao.l), and a closure captures its free
-; globals at creation, so those defs would raise as they bind: the five are stubbed
-; (never called). the pure engines are all the page touches.
-;
-; the screen is quay's, a cask (src/core/quay/nif.c): an app's frame is scribed into
-; it and `mirror` (host.c) hands the cells to the page, which lays them as text
-; (cells.js). the page never parses an escape. the protocol repl.js pumps:
-;   <name>-web-boot cols rows seed  -> mirrors the first frame; rows/cols are the screen
-;   <name>-web-key byte             -> mirrors the next / answers the quit sentinel  (key apps)
-;   <name>-web-tick ()              -> mirrors the next                             (anim apps)
-; `<name> ()` at the repl answers the play sentinel the driver catches.
-(: winsize (\ _ ()) raw (\ _ ()) cue? (\ _ 0) rest (\ _ ()) flush (\ _ ())
-   (play nm) (: _ (puts ("\e_play:" + nm + "\e\\")) ())
-   web-quit "\e_quit\e\\"
-   web-scr {} qbox {} sbox {} tbox {}
-   ; a fresh screen of the page's size, and a frame onto it
-   (web-open r c) (: s (screen (cask (screen () r c)) r c) _ (pin web-scr () s) s)
-   (web-show f) (: s (peep web-scr () 0) _ (scribe s f) _ (mirror s) "")
-   ; rove keeps two rows for its message line and its bar
-   (rove-web-boot c r sd) (: _ (web-open r c)
-                             g (crawl-new (c < 100 ? c 100) (r - 2) (wheel sd))
-                             _ (pin qbox () g)
-                             (web-show (crawl-frame g)))
-   (rove-web-key n) (? (n = 113 || n = 27) web-quit
-                       (: g (peep qbox () 0) _ (crawl-turn g (helm-dec n -1 -1)) (web-show (crawl-frame g))))
-   (ink-web-boot c r sd) (: _ (web-open r c) _ (pin sbox () (ink-scene r c)) _ (pin tbox () 0)
-                            (web-show ((peep sbox () 0) 0.0)))
-   (ink-web-tick _) (: t (1 + peep tbox () 0) _ (pin tbox () t) (web-show ((peep sbox () 0) (t * 0.06))))
-   rove (\ _ (play "rove"))
-   ink (\ _ (play "ink")))
+; the seat is a console with no fds: stdin is a ring of key bytes the page pushes
+; (host.c's ai_key), so `see in` parks the reading task until the next push and `cue?`
+; asks the ring; stdout is the buffer the page drains after each eval. an app runs as a
+; task -- twirled here, never through the door's catch, since the session's own task
+; must stay awake to pump it -- and inside it the console door (post.l's `door`) is the
+; task lane, so an app opening another parks the way it would anywhere. the page pumps:
+;   (web-boot nm cols rows)   the screen, and the app named nm on it as a task
+;   (web-step)                the app's turn -- one time slice; the page steps until
+;                             host.c's ai_runnable says the app parked, sleeps or landed
+;   (web-show frame)          what the app drew, scribed onto the screen and mirrored out
+;                             (host.c) for cells.js to lay
+; the app's drawing is whatever the page drains from out after ANY eval -- a task runs
+; at every fair yield, the session's own evals included -- so the page drains each one
+; and asks host.c's ai_alive, never this file, whether the app lives.
+; the tty words this seat has no device for: winsize is the screen's, raw is nothing
+; to do. an app run on the session's own task (a typed `rove ()`) reads the end of
+; stdin at once (host.c) and steps ashore, since nothing could unpark it.
+(use 'console)                                      ; the door, for an app opening another
+(: raw (\ _ ())
+   web-scr {} web-task {}
+   (winsize _) (: s (peep web-scr () 0) (? s ((gaze s 1) . (gaze s 2)) ()))
+   (web-boot nm c r) (: _ (scoop 0)                                 ; the last app's node, reaped
+                        s (screen (cask (screen () r c)) r c)
+                        f (ev (nom nm))                          ; the runner, by its name
+                        _ (pin web-scr () s)
+                        _ (pin web-task () (twirl (\ _ (f ())) 0))
+                        ())
+   (web-step _) (: _ (rest 0) ())                 ; a rest of nothing: the other tasks' turn
+   (web-show f) (: s (peep web-scr () 0) _ (scribe s f) _ (mirror s) ()))

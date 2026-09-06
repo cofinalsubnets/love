@@ -77,10 +77,30 @@ static struct ai *fd_writen(struct ai *g, unsigned char const *src, uintptr_t n)
   return g->b = (intptr_t) k, g; }
 static struct ai *_flush(struct ai *g) { return g; }
 
-// No real stdin: every read is at the end (-1), never merely quiet -- the page
-// feeds source through ai_eval, not the stdin port, so nothing is coming.
+// stdin is a ring of key bytes the page pushes (ai_key): a read lands what is queued,
+// and a dry read answers 0 -- busy, the port protocol's "would block" -- so a task
+// reading in parks on fd 0 and comes back when the page has pushed again. it is never
+// at the end: the page can always type. only a task may park: the session's own eval
+// must never read stdin, since nothing else could run to unpark it.
+enum { key_n = 256 };
+static unsigned char keys[key_n];
+static uint32_t key_rd, key_wr;
+// ..except on the session's own task: alone in the ring, nothing could ever unpark it, so
+// a dry read there is the end -- a tty app typed at the repl steps ashore at once.
 static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
-  return (void) g, (void) dst, (void) n, -1; }
+  uintptr_t k = 0;
+  while (k < n && key_rd != key_wr) dst[k++] = keys[key_rd++ % key_n];
+  if (!k && g->tasks->m == g->tasks && !g->parked) return -1;
+  return (intptr_t) k; }
+// the readiness the scheduler asks: fd 0 has keys or has not; an output fd always.
+bool ai_ready(int fd, int events) { return fd ? true : key_rd != key_wr; }
+// ..and a wait on fds cannot be had: only the page can push a key, and it does so
+// between evals, so a wait naming fds answers at once and the parked task is asked again
+// on the next eval. a wait on the clock alone (sleepers, no fds) still sleeps: a task
+// resting while its parent catches it is the corpus's own timing law.
+void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ticks) {
+  if (!n && ticks) ai_sleep(ticks);
+  (void) fds; }
 
 // fd values are nominal: all I/O routes through the vtable regardless.
 struct ai_fio ai_stdin  = { { .ap = lvm_port_io, .vt = &ai_fd_port_vt,
@@ -132,6 +152,16 @@ EMSCRIPTEN_KEEPALIVE uint32_t        ai_unfold(uint32_t g_) { return g_ < 256 ? 
 // --- exported entry points ------------------------------------------------
 static struct ai *F;
 
+// (ai_key b): one key byte into stdin's ring. a full ring drops the byte and says so.
+// a key owes the parked reader a look: the scheduler sweeps parked fds only every
+// sweep_interval fair yields, so the push arms the sweep and the page's next step --
+// a fair yield -- asks fd 0 at once rather than sixteen steps later.
+EMSCRIPTEN_KEEPALIVE int ai_key(int b) {
+  if (key_wr - key_rd >= key_n) return 0;
+  keys[key_wr++ % key_n] = (unsigned char) b;
+  if (F && ai_ok(F)) ai_core_of(F)->sweep_ctr = sweep_interval;
+  return 1; }
+
 EMSCRIPTEN_KEEPALIVE
 int ai_init(void) {
   F = ai_ini();
@@ -163,6 +193,25 @@ int ai_eval(const char *src) {
   if (out_full) out_note();
   return ai_code_of(F); }
 
+// (ai_runnable): is a task other than the session's runnable now -- in the run ring,
+// not landed, its wake (if any) due? a fair yield is one time slice, so the page yields
+// until this says no: the app has parked on stdin, or sleeps, or is done.
+EMSCRIPTEN_KEEPALIVE int ai_runnable(void) {
+  struct ai *g = ai_core_of(F);
+  uintptr_t now = ai_clock();
+  for (union u *n = g->tasks->m; n != g->tasks; n = n->m) {
+    if (n[1].m->ap == lvm_task_exit) continue;
+    uintptr_t wake = (uintptr_t) getcharm(n[3].x);
+    if (!wake || wake <= now) return 1; }
+  return 0; }
+// (ai_alive): does a task other than the session's live -- in the run ring and not
+// landed, or parked? the page's app and whatever it opened through the door.
+EMSCRIPTEN_KEEPALIVE int ai_alive(void) {
+  struct ai *g = ai_core_of(F);
+  if (g->parked) return 1;
+  for (union u *n = g->tasks->m; n != g->tasks; n = n->m)
+    if (n[1].m->ap != lvm_task_exit) return 1;
+  return 0; }
 EMSCRIPTEN_KEEPALIVE char*    ai_out_ptr(void) { return out_buf; }
 EMSCRIPTEN_KEEPALIVE uint32_t ai_out_len(void) { return out_len; }
 EMSCRIPTEN_KEEPALIVE void     ai_out_reset(void) { out_len = 0; }
