@@ -215,27 +215,38 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   ⚠ `distfiles` in the Makefile is the image's roster, a second list beside
   `moonfiles`: a holo file in one and not the other is a compiler that works from the
   cat and a `love mooncc` that says `missing`.
-- **rung 5 — the gate.** `test_ccwasm` landed with rung 4; what remains is the law
-  corpus through `src/port/wasm/test.mjs` over our module, and the `make wasm` door.
-  **Where it stands (2026-09-06):** love's own TUs (the core, gz.c, am.c, host.c, at
-  `-Dai_tco=0`) go through `mooncc -t wasm` and link to a 1.29 MB module; it boots under
-  the loader (`ai_init` 3.6 s, the egg from source) and answers the repl; the whole
-  corpus runs to the end — **4709 laws pass in 30 s, 69 fail**, in three classes:
-  the ten horn laws the emcc lane fails too; some fifteen laws that need an OS (`hark`,
-  `getenv`, a real file), which the emcc lane skips only because its 32-bit word makes
-  `wint` false — this lane is 64-bit, so the corpus wants a host predicate that is not a
-  word width; and some thirty-five in the uu typechecker (`rejects` refusing definitions
-  it accepts elsewhere, then everything downstream of `vlink` unbound), a genuine
-  difference of this machine still to be found — the equal-reals trap above was found
-  the same way, by naming the function in the trap and decoding its body to the
-  instruction (a `name` section rides the module now). The mixed-kind `=` fault it found
-  is fixed: a `test` after a `ucomisd` hands the flags back to the ALU. Two link laws
-  came with it: a weak reference nothing defines is null, and crt0 rides only when an
-  input defines `main` (the seat's host.c has a face of its own). Verification
-  instrument: a foreign validator/engine at gate time only (node already sits there and
-  already skips when absent; binaryen's wasm-opt and wasm-shell are a second, non-V8
-  reader) — same standing as qemu-user in dist_cross. The product path drops emcc; the
-  gate may still borrow eyes.
+- **rung 5 — the gate. ✅ LANDED (2026-09-06).** `test_wasm` now rides moon's own
+  module: `make wasm` lays `out/wasm/love.wasm` (love's TUs plus the horn and the seat's
+  host.c through `mooncc -t wasm`, `-Dai_tco=0`), and the gate runs the whole love corpus
+  (**4765 laws**), the console apps (`screen.mjs`), and the horn's PCM into WebAudio
+  (`horn.mjs`) over it under node — no emcc anywhere in the gate. The three failure
+  classes the survey named are all closed:
+  - **the OS/word-width tangle.** The wasm64 module is a **64-bit** word build
+    (`max-charm` = 2^62−1, reals f64, bignums, RNG full-width), so `word` is *true* here
+    and stops being the "not-wasm" proxy the 32-bit emcc lane made it. Two new predicates
+    in `test/00-init.l` say what each law actually needs: `hosted` (an OS underneath —
+    processes, an environ; false on inle and wasm) gates `run.l`'s `hark`/`getenv`;
+    `files` (a filesystem — true on native *and* inle's ramfs, false only on wasm) gates
+    `io.l`'s file roundtrips. `word` keeps only the numeric/real laws, which now *run and
+    pass* on the module (it is native's equal). The seat pins `love-os` to `wasm` in
+    host.c, as main.c pins the kernel's.
+  - **the horn.** The port runs on the wasm seat: `horn.c`'s doorless seats open the sink
+    (the ring that keeps time), so `(horn ..)`/`horn-lag`/`close` answer their laws with
+    no device. And it makes *sound*: a weak `ai_horn_tap` lets the sink hand its accepted
+    PCM to host.c's ring, three exports (`ai_horn_rate`/`chans`/`drain`) let the loader
+    read it, and `loader.js` schedules it through WebAudio (node has none, so it is a
+    no-op there and `horn.mjs` proves the path with a stub AudioContext).
+    `src/port/wasm/horn.html` is a demo: love writes a square-wave tone, the browser plays it.
+  - **the uu "typechecker" reds were a file-order artifact, not a miscompile.** The gate
+    evals the corpus in one string in byte order; a helper listed the files under a locale
+    sort, which put `uuval.l` before its band files. In byte order (`LC_ALL=C`, as the
+    Makefile's `$t` uses) the uu corpus is green. No machine difference remained.
+  The screen gate's one flake (`:q` after an escape) was a real ESC-vs-escape-sequence
+  timing race in the test, fixed by resolving the parked escape before the next key.
+  The mixed-kind `=` fault (a `test` after `ucomisd`) and the two link laws (a weak
+  undefined ref is null; crt0 only when an input defines `main`) stand as before. The
+  emcc build survives as `make wasm-emcc` (its love.js still drives the committed site),
+  now with horn.c in its roster so it builds and carries the horn exports too.
 - **rung 5a — `return_call`.** Tail calls shipped in every engine; once the module
   passes rung 5 at `ai_tco=0`, `ai_musttail` lowers to `return_call` and the wasm seat
   stops being the one build without TCO. An optimisation rung, measured, not assumed.

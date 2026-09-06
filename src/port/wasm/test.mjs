@@ -25,8 +25,10 @@ if (!files.length) { console.error('usage: test.mjs [--love <love.js>] <corpus.l
 // The shim bakes post too, so the shell core the corpus tests (zev/charms) is already aboard.
 const src = files.map(f => readFileSync(f, 'utf8')).join('\n');
 
-const { default: Love } = await import(mod);
-const m = await Love();
+// a .wasm path is moon's own module, run under loader.js; anything else is a love.js
+const wasm = mod.endsWith('.wasm') ? mod : null;
+const { default: Love } = await import(wasm ? new URL('./loader.js', import.meta.url).href : mod);
+const m = await Love(wasm ? { wasm: new URL(wasm) } : {});
 const init = m.ccall('ai_init', 'number', [], []);
 if (init !== 0) { console.error(`ai_init failed (code ${init})`); process.exit(1); }
 

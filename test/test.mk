@@ -1245,16 +1245,18 @@ test_kernel_rv64: host $(R)/tools/ktest.l
 endif
 
 NODE ?= $(shell command -v node 2>/dev/null)
-EMCC ?= $(or $(shell command -v emcc 2>/dev/null),/usr/lib/emscripten/emcc)
-ifeq ($(and $(NODE),$(wildcard $(EMCC))),)
+# test_wasm rides moon's OWN module (make wasm -> out/wasm/love.wasm) under the loader,
+# no emcc: the whole love corpus, the console apps, and the horn's PCM into WebAudio.
+# the emcc build is opt-in now (make wasm-emcc); its love.js is not in any gate.
+ifeq ($(NODE),)
 test_wasm:
-	@echo "test_wasm: skipped (needs emcc + node)"
+	@echo "test_wasm: skipped (needs node)"
 else
-test_wasm:
-	@$(MAKE) -s -C $(R)/src/port/wasm gate
-	@echo TEST out/wasm/love.js "(node)"
-	@$(NODE) $(R)/src/port/wasm/test.mjs --love $(R)/out/wasm/love.js $t
-	@$(NODE) $(R)/src/port/wasm/screen.mjs --love $(R)/out/wasm/love.js
+test_wasm: wasm
+	@echo TEST out/wasm/love.wasm "(node)"
+	@$(NODE) $(R)/src/port/wasm/test.mjs --love $(R)/out/wasm/love.wasm $t
+	@$(NODE) $(R)/src/port/wasm/screen.mjs --love $(R)/out/wasm/love.wasm
+	@$(NODE) $(R)/src/port/wasm/horn.mjs --love $(R)/out/wasm/love.wasm
 endif
 
 # the wasm module writer and the IR lowering (src/core/holo/wasm.l) under a foreign engine:

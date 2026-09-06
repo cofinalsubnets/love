@@ -49,9 +49,9 @@
   (= (slurp (tap "")) (slurp 42))
 
   ; file roundtrip: say a string to /tmp, read it back byte-by-byte, compare. the payload
-  ; is (show (clock 0)) so a stale file from a previous run cannot pass. gated to hosted
-  ; builds -- the wasm shim stubs fd ports to EOF, so a real file cannot round-trip.
-  (? word (: txt (show (clock 0))
+  ; is (show (clock 0)) so a stale file from a previous run cannot pass. gated on files --
+  ; native and inle have a filesystem, the wasm shim stubs fd ports to EOF.
+  (? files (: txt (show (clock 0))
      wp (open "/tmp/l-io-test" "w")
      _ (say wp txt)
      _ (close wp)
@@ -65,7 +65,7 @@
   ; unchug rewinds rpos, which is at once the reader's position and what ai_io_pending
   ; counts, so bytes given back are bytes stdin's seek-back sees again.
   ; on a file, never on `in`: a real read of `in` eats the corpus feeding this suite.
-  (? word (: pth "/tmp/l-io-unchug"
+  (? files (: pth "/tmp/l-io-unchug"
      wp (open pth "w") _ (say wp "abcdefghij") _ (close wp)
      p (open pth "r")
      c (see p) _ (unsee p c)

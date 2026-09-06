@@ -13,9 +13,9 @@
 ; These children are chosen so none reads stdin: under the test harness the
 ; child inherits l's stdin (the test-corpus pipe), and a reader would eat it.
 
-; hark/getenv are host-only (subprocess + environment); the browser shim has
-; neither, so skip the whole file there (word = the hosted builds).
-(? word (assert
+; hark/getenv are host-only (subprocess + environment); inle and the browser have
+; neither, so skip the whole file there (hosted, test/00-init.l).
+(? hosted (assert
   ; --- ran successfully: a chain, exit 0, and (here) no output ---
   (two? (hark ["true"]))
   (= 0 (cap (hark ["true"])))

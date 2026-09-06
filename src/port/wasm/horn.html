@@ -1,0 +1,59 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>love · the horn</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem;
+         color: #ddd; background: #16161e; }
+  h1 { font-weight: 600; font-size: 1.3rem; }
+  button { font: inherit; padding: .5rem 1rem; margin: .2rem .3rem .2rem 0; border: 0; border-radius: 6px;
+           background: #7aa2f7; color: #16161e; cursor: pointer; }
+  button:disabled { opacity: .4; cursor: default; }
+  code { background: #1f2335; padding: .1rem .3rem; border-radius: 4px; }
+  #log { white-space: pre-wrap; color: #9aa; margin-top: 1rem; }
+  .note { color: #7a7; }
+</style>
+<h1>the horn, on wasm</h1>
+<p>love writes 16-bit PCM to a <code>(horn ..)</code> port. moon's wasm module runs it in
+your browser, the sink taps the samples, and this page plays them through WebAudio. No
+emscripten &mdash; the module is <code>make wasm</code>'s own.</p>
+<p>
+  <button id="beep" disabled>a 444 Hz tone</button>
+  <button id="chord" disabled>three notes</button>
+</p>
+<div id="log">loading the module&hellip;</div>
+<script type="module">
+import Love from './loader.js';
+const log = (s) => { document.getElementById('log').textContent = s; };
+// the module: make wasm lays it at out/wasm/love.wasm; serve the repo root
+const M = await Love({ wasm: new URL('../../../out/wasm/love.wasm', import.meta.url) });
+if (M.ccall('ai_init', 'number', [], []) !== 0) { log('the image failed to boot'); throw 0; }
+
+const ev = (s) => { const n = M.lengthBytesUTF8(s) + 1, p = M._malloc(n);
+  M.stringToUTF8(s, p, n); M.ccall('ai_eval', 'number', ['number'], [p]); M._free(p);
+  const o = M.UTF8ToString(M.ccall('ai_out_ptr', 'number', [], []), M.ccall('ai_out_len', 'number', [], []));
+  M.ccall('ai_out_reset', 'null', [], []); return o; };
+
+// the square-wave voice, in love: a period in samples sets the pitch, integer PCM so the
+// bytes stay clean. `note` opens a horn, writes `secs` of it, and flushes.
+ev(`(: (i16 s) (: u (? (s < 0) (65536 + s) s) [(u % 256) ((u // 256) % 256)])
+     (sq period amp i) (? ((i % period) < (period // 2)) amp (0 - amp))
+     (voice period amp secs) (: n (8000 * secs)
+       (go i acc) (? (i < 0) acc (: b (i16 (sq period amp i)) (go (i - 1) ((b 0) . (b 1) . acc))))
+       (string (go (n - 1) ())))
+     (note period secs) (: h (horn 8000 1) _ (say h (voice period 7000 secs)) (flush h)))`);
+
+const draw = () => { M.horn.pull(); requestAnimationFrame(draw); };
+let started = false;
+const start = () => { if (started) return; started = true; M.horn.resume(); requestAnimationFrame(draw); };
+
+// a period in samples for a pitch at 8 kHz: 8000 / freq
+const per = (hz) => Math.round(8000 / hz);
+const beep = document.getElementById('beep'), chord = document.getElementById('chord');
+beep.onclick = () => { start(); ev(`(note ${per(444)} 1)`); log('a 444 Hz tone — one second of square wave, written by love'); };
+chord.onclick = () => { start();
+  // A, C#, E as a quick arpeggio: each note writes onto the horn's ring in turn
+  ev(`(: _ (note ${per(440)} 0.4) _ (note ${per(554)} 0.4) (note ${per(659)} 0.5))`);
+  log('three notes — A, C#, E, each a second of love-written PCM'); };
+beep.disabled = chord.disabled = false;
+log('ready — click a button (a gesture is what lets a page make sound)');
+</script>

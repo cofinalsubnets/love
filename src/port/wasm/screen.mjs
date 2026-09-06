@@ -15,8 +15,9 @@ const here = new URL('.', import.meta.url);
 const tree = new URL('../../../', import.meta.url);
 const { cellsFace, cellsHtml } = createRequire(import.meta.url)(new URL('cells.js', here).pathname);
 
-const { default: Love } = await import(mod);
-const M = await Love();
+const wasm = mod.endsWith('.wasm') ? mod : null;
+const { default: Love } = await import(wasm ? new URL('./loader.js', import.meta.url).href : mod);
+const M = await Love(wasm ? { wasm: new URL(wasm) } : {});
 if (M.ccall('ai_init', 'number', [], []) !== 0) { console.error('ai_init failed'); process.exit(1); }
 const evp = M.cwrap('ai_eval', 'number', ['number']);   // through the heap: a 'string' rides the wasm stack
 const ev = s => { const n = M.lengthBytesUTF8(s) + 1, p = M._malloc(n); M.stringToUTF8(s, p, n); const r = evp(p); M._free(p); return r; };
@@ -112,8 +113,11 @@ ok(row(7, 60)[6] === '@', 'up one: ' + JSON.stringify(row(7, 60).slice(0, 14)));
 for (const c of 'kkkkk') key(c.charCodeAt(0));
 ok(pump(), 'into the lamp: a window opens');
 ok(view().cells.length && Array.from({ length: 14 }, (_, r) => row(r, 60)).join('\n').includes('the lamp'), 'the window names the thing');
-key(27); ok(pump(), 'esc closes it');
-await beat();                                       // the runner rests a beat after an escape
+key(27); ok(pump(), 'esc: the runner takes it');
+// the escape parks on its 1ms disambiguation rest (ESC alone vs ESC-sequence); let the
+// beat pass and pump once so it resolves as a plain esc and closes the window -- BEFORE
+// the next key, or that key is read as the escape's tail (alt-q, not q).
+await beat(); ok(pump(), 'esc closes the window');
 key(113); ok(pump(), 'q alone does nothing');
 for (const c of ':q\r') key(c.charCodeAt(0));
 ok(!pump(), ':q lands the story');

@@ -43,6 +43,15 @@ async function loveRepl(root) {
   put(`;3 love ${ver} ${(performance.now() - t0).toFixed(0)}ms`, 'cnd');
   cmd.disabled = false; cmd.focus({preventScroll: true});
 
+  // the horn: a browser plays the PCM the sink taps. the AudioContext starts suspended
+  // (autoplay), so resume on the first gesture, then pull the ring every frame.
+  if (M.horn) {
+    const wake = () => M.horn.resume();
+    window.addEventListener('keydown', wake); window.addEventListener('pointerdown', wake);
+    const draw = () => { M.horn.pull(); requestAnimationFrame(draw); };
+    requestAnimationFrame(draw);
+  }
+
   // quay: the page's love side (src/port/wasm/web.l: the tty words this seat has no
   // device for), then the real engines (src/apps/rove, ink) -- a closure captures its
   // free globals at creation. web.l puts each app on a quay screen of the box's size and

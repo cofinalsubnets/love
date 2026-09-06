@@ -39,7 +39,7 @@ struct ai_horn { struct ai_bio b; ai_word kind, rate, chans, wpos, t0; };
 #define sink_ms 250
 
 // --- linux: ALSA by ioctl ---------------------------------------------------------
-#if defined(__linux__)
+#if defined(__linux__) && !defined(__wasm__)
 // sound/asound.h's shapes, the ones the handshake needs and no more. an interval's
 // four flag bits ride one word: openmin 1, openmax 2, integer 4, empty 8.
 struct snd_interval { uint32_t min, max, flags; };
@@ -156,9 +156,14 @@ static uintptr_t dev_lag(int fd) {
 
 // --- anywhere else: no device door, the sink alone ---------------------------------
 #else
+#define horn_doorless 1
 static int dev_open(char const *name, int rate, int *err) { return *err = ENODEV, -1; }
 static intptr_t dev_land(int fd, unsigned char const *src, uintptr_t n) { return -1; }
 static uintptr_t dev_lag(int fd) { return 0; }
+#endif
+// a seat with a door opens the sink only by HORN=none; a doorless one has nothing else
+#ifndef horn_doorless
+#define horn_doorless 0
 #endif
 
 // --- the sink: a ring that keeps time --------------------------------------------
@@ -200,6 +205,12 @@ uintptr_t ai_horn_lag(void) {
  if (__ai_osv < 0) return k_horn_lag();
  return horn_c_fd < 0 ? 0 : dev_lag(horn_c_fd); }
 
+// a seat may tap the sink's accepted PCM -- the browser feeds it to WebAudio. the
+// default takes nothing, so every native seat keeps discarding at the sink.
+__attribute__((weak)) void ai_horn_tap(unsigned char const *pcm, uintptr_t frames,
+                                       uintptr_t chans, uintptr_t rate) {
+ (void) pcm, (void) frames, (void) chans, (void) rate; }
+
 void ai_horn_close(void) {
  if (__ai_osv < 0) { k_horn_close(); return; }
  if (horn_c_fd >= 0) close(horn_c_fd);
@@ -224,8 +235,12 @@ struct ai *ai_horn_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
  uintptr_t fb = 2 * (uintptr_t) getcharm(h->chans);
  if (n < fb) return g->b = (intptr_t) n, g;        // a stray partial frame is noise: taken, unplayed
  n -= n % fb;
- intptr_t k = getcharm(h->kind) == horn_sink ? (intptr_t) (sink_land(h, n / fb) * fb)
-            : horn_land(h, src, n);
+ intptr_t k;
+ if (getcharm(h->kind) == horn_sink) {
+  uintptr_t got = sink_land(h, n / fb);              // frames the ring took at the rate
+  ai_horn_tap(src, got, (uintptr_t) getcharm(h->chans), (uintptr_t) getcharm(h->rate));
+  k = (intptr_t) (got * fb); }
+ else k = horn_land(h, src, n);
  return g->b = k, g; }
 
 // the finalizer, inside GC: shut the device. the fd lane's fd is io_close's too, but
@@ -254,7 +269,7 @@ ai_noinline static struct ai *horn_open(struct ai *g) {
   kind = horn_seat; }
  else {
   char const *dev = getenv("HORN");
-  if (!dev || strcmp(dev, "none")) {
+  if (!horn_doorless && (!dev || strcmp(dev, "none"))) {
    fd = dev_open(dev, (int) rate, &err);
    if (fd < 0) return g->sp[1] = ai_err(g, err), g->sp += 1, g;
    kind = horn_dev; } }

@@ -42,7 +42,14 @@
    ; word: a full 64-bit-word build (native, kernel) -- which is also where reals
    ; are f64, libm is glibc's, a filesystem exists, and the RNG runs full-width.
    ; false only on the 32-bit wasm shim; gates the asserts that need any of those.
-   word (< (32 2) max-charm))
+   word (< (32 2) max-charm)
+   ; hosted: a kernel underneath -- processes (hark), an environ, a filesystem. false on
+   ; inle and in the browser, where love-os says so; gates the laws that reach the OS.
+   hosted (love-os @ ('linux || 'freebsd || 'netbsd) 1 0)
+   ; files: a real filesystem underneath -- native AND inle (a ramfs), not the browser.
+   ; word was this proxy while the wasm shim was 32-bit; the wasm64 module is 64-bit, so
+   ; word is true there now and a filesystem law needs its own predicate.
+   files !(love-os = 'wasm))
 (:: 'assert (\ l
 (:
  (report x v) (do

@@ -101,6 +101,34 @@ export default async function Love(opts = {}) {
               get HEAPU32() { return new Uint32Array(memory.buffer); },
               get HEAP32() { return new Int32Array(memory.buffer); } };
   for (const k of Object.keys(ex)) if (typeof ex[k] === 'function' && !(('_' + k) in M)) M['_' + k] = ex[k];
+
+  // the horn, in a browser: the sink taps its accepted PCM (host.c ai_horn_tap), and
+  // this drains the ring and schedules it just ahead of the AudioContext clock. node
+  // has no AudioContext, so M.horn.pull is a no-op there and the ring just cycles.
+  const AC = typeof AudioContext !== 'undefined' ? AudioContext
+           : typeof webkitAudioContext !== 'undefined' ? webkitAudioContext : null;
+  let ctx = null, playhead = 0, pcmBuf = 0, pcmCap = 0;
+  const horn = {
+    // start (or resume, past the autoplay gate) the audio clock -- call from a gesture
+    resume() { if (!AC) return false; ctx = ctx || new AC(); if (ctx.state === 'suspended') ctx.resume(); return true; },
+    // drain what the horn has written and queue it; call each animation frame
+    pull() {
+      if (!ctx || ctx.state !== 'running') return 0;
+      const rate = ccall('ai_horn_rate', 'number', [], []); if (!rate) return 0;
+      const chans = ccall('ai_horn_chans', 'number', [], []) || 2, want = rate;   // up to a second per pull
+      if (pcmCap < want) { if (pcmBuf) _free(pcmBuf); pcmBuf = _malloc(want * 2); pcmCap = want; }
+      const got = ccall('ai_horn_drain', 'number', ['number', 'number'], [pcmBuf, want]);
+      if (!got) return 0;
+      const frames = (got / chans) | 0; if (!frames) return 0;
+      const pcm = new Int16Array(memory.buffer, Number(pcmBuf), frames * chans);
+      const ab = ctx.createBuffer(chans, frames, rate);
+      for (let c = 0; c < chans; c++) { const ch = ab.getChannelData(c);
+        for (let i = 0; i < frames; i++) ch[i] = pcm[i * chans + c] / 32768; }
+      const src = ctx.createBufferSource(); src.buffer = ab; src.connect(ctx.destination);
+      const now = ctx.currentTime, at = Math.max(now + 0.02, playhead);   // a small lead over the clock
+      src.start(at); playhead = at + frames / rate;
+      return frames; } };
+  M.horn = horn;
   return M; }
 
 if (typeof globalThis !== 'undefined') globalThis.Love = Love;

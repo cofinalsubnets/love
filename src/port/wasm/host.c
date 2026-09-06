@@ -128,6 +128,27 @@ struct ai_port_vt const ai_fd_port_vt = { _flush, fd_writen, fd_readn, NULL };
 static noreturn lvm(lvm_exit) { exit(getcharm(Sp[0])); }
 static union u const nif_exit[] = {{lvm_exit}, {lvm_ret0}};
 
+// (close p) -> (): a port's write run lands, a horn shuts its device, and the closed
+// vt goes in -- posix.c's close less the fd, which this seat has none of
+static lvm(lvm_close) {
+  if (!charmp(Sp[0]) && cell(Sp[0])->ap == lvm_port_io) {
+    struct ai_io *io = (struct ai_io*) Sp[0];
+    bool horn = io->vt == &ai_horn_vt;
+    g->io = io;
+    Pack(g);
+    g = ai_io_wflush(g, io);
+    if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+    if (ai_io_wpending(g, (struct ai_io*) g->sp[0])) {   // the run did not all land: park, re-run
+      Unpack(g);
+      g->next_wake_at = ai_clock() + 1;
+      ai_musttail return Ap(lvm_yield_sw, g); }
+    Unpack(g);
+    if (horn) ai_horn_shut((struct ai_io*) Sp[0]);
+    ((struct ai_io*) Sp[0])->vt = &ai_closed_vt; }
+  Sp[0] = ZeroPoint;
+  ai_musttail return Next(1); }
+static union u const nif_close[] = {{lvm_close}, {lvm_ret0}};
+
 // --- the console: quay's screen, and the page's mirror of it ---------------
 // the engine and its love door ride along by unity include, as src/host/cb.c has them;
 // the palette is the .rodata table paint.c spends, so the page's colours are the
@@ -176,15 +197,20 @@ int ai_init(void) {
   // a quarter of the ceiling, like every other bounded seat: the transient peak while a
   // resize holds both halves is double the budget.
   if (ai_ok(F)) ai_core_of(F)->budget = (2048u << 20) / sizeof(ai_word) / 4;
-  struct ai_def d[] = {{"exit", (ai_word) nif_exit},
+  struct ai_def d[] = {{"exit", (ai_word) nif_exit}, {"close", (ai_word) nif_close},
     {"screen", (ai_word) nif_screen}, {"scribe", (ai_word) nif_scribe},
     {"glass", (ai_word) nif_glass},   {"gaze", (ai_word) nif_gaze},
     {"reply", (ai_word) nif_reply},   {"unfold", (ai_word) nif_unfold},
     {"wet", (ai_word) nif_damage},    {"mirror", (ai_word) nif_mirror}};
   F = ai_defn(F, d, countof(d));
   if (!ai_ok(F)) return ai_code_of(F);
+  // the AiNif slice of every linked TU (the horn), as main.c drains it
+  F = ai_defn(F, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
+  if (!ai_ok(F)) return ai_code_of(F);
   F = ai_egg_(F, src_egg, src_p1, src_corpus, src_post);
   F = ai_evals_(F, boot_ai);
+  // the seat's name, where main.c pins the kernel's: the corpus gates its OS laws on it
+  if (ai_ok(F = ai_defv(intern(ai_strof(F, "wasm")), "love-os"))) ai_core_of(F)->sp++;
   // THE SESSION: a fresh writable layer, C-side -- everything the page ever
   // feeds through ai_eval defglobs here, never in the base.
   F = ai_layer_(F);
@@ -216,6 +242,26 @@ EMSCRIPTEN_KEEPALIVE int ai_alive(void) {
   for (union u *n = g->tasks->m; n != g->tasks; n = n->m)
     if (n[1].m->ap != lvm_task_exit) return 1;
   return 0; }
+// --- the horn's PCM, for the page's WebAudio ------------------------------------
+// the sink taps its accepted frames here (src/host/horn.c ai_horn_tap); the loader
+// drains the ring and schedules it. a ring of int16 samples, interleaved as written.
+enum { hpcm_n = 1u << 16 };            // 64K samples ~ .68 s stereo at 48k; the sink caps depth
+static int16_t hpcm[hpcm_n];
+static uint32_t hpcm_rd, hpcm_wr, hpcm_rate, hpcm_chans;
+void ai_horn_tap(unsigned char const *pcm, uintptr_t frames, uintptr_t chans, uintptr_t rate) {
+  hpcm_rate = (uint32_t) rate, hpcm_chans = (uint32_t) chans;
+  int16_t const *s = (int16_t const*) pcm;
+  for (uintptr_t i = 0, n = frames * chans; i < n; i++) {
+    if (hpcm_wr - hpcm_rd >= hpcm_n) hpcm_rd++;        // full: drop the oldest sample
+    hpcm[hpcm_wr++ % hpcm_n] = s[i]; } }
+EMSCRIPTEN_KEEPALIVE uint32_t ai_horn_rate(void)  { return hpcm_rate; }
+EMSCRIPTEN_KEEPALIVE uint32_t ai_horn_chans(void) { return hpcm_chans ? hpcm_chans : 2; }
+// drain up to max int16 samples into dst; answers the count moved
+EMSCRIPTEN_KEEPALIVE uint32_t ai_horn_drain(int16_t *dst, uint32_t max) {
+  uint32_t k = 0;
+  while (k < max && hpcm_rd != hpcm_wr) dst[k++] = hpcm[hpcm_rd++ % hpcm_n];
+  return k; }
+
 EMSCRIPTEN_KEEPALIVE char*    ai_out_ptr(void) { return out_buf; }
 EMSCRIPTEN_KEEPALIVE uint32_t ai_out_len(void) { return out_len; }
 EMSCRIPTEN_KEEPALIVE void     ai_out_reset(void) { out_len = 0; }

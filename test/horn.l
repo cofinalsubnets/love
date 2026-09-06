@@ -6,8 +6,7 @@
 ; real driver (src/inle/hda.c) where the machine has a controller, and its absence
 ; on the other seats is the errno nom.
 
-(: hosted !(love-os = 'inle)
-   _ (? hosted (setenv "HORN" "none") ())          ; the seat reads no policy word
+(: _ (? hosted (setenv "HORN" "none") ())        ; inle and the browser read no policy word
    h (horn 48000 2)
    _ (assert ('badarg = horn 100 2) ('badarg = horn 48000 3) ('badarg = horn "a" 2))
    _ (? (nom? h)

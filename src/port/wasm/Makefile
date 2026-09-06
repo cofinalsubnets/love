@@ -13,7 +13,8 @@ o = ../../../out/wasm
 # rest of the tree reads. g_h is src/core whole, so every object keeps a header dep.
 R := ../../..
 include $(R)/mk/common.mk
-g_c = $(patsubst %,../../../src/core/%,$(love_tu)) ../../../src/apps/moon/lib/math/am.c
+g_c = $(patsubst %,../../../src/core/%,$(love_tu)) ../../../src/apps/moon/lib/math/am.c \
+      ../../../src/host/horn.c
 g_h = $(wildcard ../../../src/core/*.h)
 
 # One object per source, so an edit recompiles just that TU and ccache can cache each.
@@ -31,7 +32,7 @@ EMFLAGS = \
   -sMODULARIZE=1 -sEXPORT_NAME=Love \
 	-sASSERTIONS -sSINGLE_FILE=1 \
   -sINITIAL_MEMORY=16MB -sALLOW_MEMORY_GROWTH=1 \
-  -sEXPORTED_FUNCTIONS=_ai_init,_ai_eval,_ai_out_ptr,_ai_out_len,_ai_out_reset,_ai_mirror,_ai_palette,_ai_unfold,_ai_key,_ai_runnable,_ai_alive,_malloc,_free \
+  -sEXPORTED_FUNCTIONS=_ai_init,_ai_eval,_ai_out_ptr,_ai_out_len,_ai_out_reset,_ai_mirror,_ai_palette,_ai_unfold,_ai_key,_ai_runnable,_ai_alive,_ai_horn_rate,_ai_horn_chans,_ai_horn_drain,_malloc,_free \
   -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString,stringToUTF8,lengthBytesUTF8,HEAPU8,HEAPU32
 
 # a failed recipe takes its half-written target with it -- else a 0-byte artifact carries a

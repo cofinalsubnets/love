@@ -964,7 +964,17 @@ SITEPORT ?= 8080
 site-serve: host out/toolmd.stamp
 	@$(ho)/love -l src/apps/papel/papel.l -t love -o out/site -s $(SITEPORT) README.md doc out/toolmd
 
-wasm:
+# the wasm artifact, moon's own: love's TUs (plus the horn and the seat's host.c)
+# through mooncc -t wasm, linked to one module -- no emcc, no C toolchain. the loader
+# (src/port/wasm/loader.js) is the runtime under it. the emcc build stays as wasm-emcc
+# until the module drives the shipped page.
+wasm_c = $(love_c) $(R)/src/host/horn.c $(R)/src/port/wasm/host.c
+out/wasm/love.wasm: $(wasm_c) $(lib_h) out/lib/love_version.h host
+	@mkdir -p $(dir $@)
+	@echo 'WASM	'$@
+	@$(mooncc) -t wasm -Dai_tco=0 -I. -Isrc/core -Isrc/host -Iout/lib -o $@ $(wasm_c)
+wasm: out/wasm/love.wasm
+wasm-emcc:
 	@$(MAKE) -C src/port/wasm
 
 clean:
