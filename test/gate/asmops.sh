@@ -1,10 +1,10 @@
 #!/bin/sh
 # test/gate/asmops.sh -- the inline-asm SEAM gate.
 #
-# src/<a>_asmops.h says every privileged instruction the kernel needs
-# TWICE: holo's neutral template for mooncc, GNU's AT&T/ARM string for clang.
-# two spellings of one operation is exactly the shape that rots quietly -- edit
-# one half, ship, and nothing notices until the other compiler runs. so:
+# src/inle/<a>/asmops.h says every privileged instruction the kernel needs
+# ONCE, in GNU's template: clang reads it natively, mooncc lowers the same text
+# through src/core/holo/gas.l. one spelling, two readers -- and the reader that
+# rots quietly is ours, so:
 #
 #   1. COVERAGE. every `static inline k_*` the header defines is called by
 #      test/gate/asmops.c. derived from the header itself, so adding an op and
@@ -13,15 +13,15 @@
 #      to make it EXIST, since a static inline whose calls are all inlined is
 #      dead and a compiler is right to drop it.
 #   2. MOONCC TAKES IT. the probe compiles with `mooncc -t <arch> -nostdinc`.
-#      that alone exercises the whole seam: the __mooncc__ predefine picks the
-#      neutral half of every #ifdef, -nostdinc keeps glibc's headers out of a
-#      freestanding compile, and each template goes through holo's text reader
-#      and encoder (an unknown op or a bad operand SCARES, it does not shrug).
-#   3. THE TWO HALVES AGREE. with clang present, compile the same probe with
+#      that alone exercises the whole seam: -nostdinc keeps glibc's headers out
+#      of a freestanding compile, and each template goes through the GNU-dialect
+#      front and holo's encoder (an unknown op or a bad operand SCARES, it does
+#      not shrug).
+#   3. THE TWO READERS AGREE. with clang present, compile the same probe with
 #      it and compare the two objects op by op: same privileged mnemonics, same
 #      symbolic operands, same order, inside the same function. this is rung 5's
 #      compiler-vs-compiler differential in miniature, and it is the only check
-#      that can catch one half of the header drifting from the other.
+#      that can catch our reading of a template drifting from GNU's.
 #
 # what the comparison deliberately does NOT compare: register allocation (the
 # two compilers pick different ones and both are right) and the plain
@@ -42,11 +42,11 @@ moonc() { LOVE_NO_IMAGE= "$ho/love" mooncc "$@"; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
-# the ONE declared divergence, and why it is one: k_divzero only has to FAULT.
-# clang's AT&T half divides 32-bit (divl), the neutral half 64-bit (divq) --
-# holo's surface has no 32-bit divide and #DE does not care which raised it.
-divergent_x64="k_divzero"
+# declared divergences, per arch: none. a name here is an op the two readers
+# are allowed to disagree on, with its reason beside it.
+divergent_x64=""
 divergent_a64=""
+divergent_rv64=""
 
 # the privileged sequence of each function in an object: mnemonic and symbolic
 # operands, registers normalized away. k_asmops_probe itself is skipped -- it is
@@ -73,22 +73,26 @@ seq() {
             line !~ /^(sgdt|sidt|lgdt|lidt)q?( |$)/ &&
             line !~ /%cr[0-9]/ && line !~ /^(and|or)[qlw]? \$/) next
         gsub(/%r[a-z0-9]+|%e[a-z]+|%[a-d][lh]/, "R", line)
-      } else {
+      } else if (arch == "a64") {
         if (line !~ /^(isb|dsb|dmb|wfi|wfe|eret|mrs|msr|at|tlbi|ic|dc|brk|udf|hlt|hvc|smc)( |$)/) next
         gsub(/ [xw][0-9]+/, " R", line); gsub(/,[xw][0-9]+/, ",R", line)
+      } else {
+        if (line !~ /^(wfi|fence|ecall|ebreak|unimp|sfence\.vma|csr[a-z]*|rd(time|cycle|instret))( |$)/) next
+        gsub(/ (a[0-7]|t[0-6]|s[0-9]+|ra|sp)/, " R", line); gsub(/,(a[0-7]|t[0-6]|s[0-9]+|ra|sp)/, ",R", line)
       }
       print "  " line
     }'
 }
 
-for a in x64 a64; do
+for a in x64 a64 rv64; do
   case $a in
-    x64)  t=x64;   ctarget=x86_64-none-elf ;;
-    a64) t=a64; ctarget=aarch64-none-elf ;;
+    x64)  t=x64;  ctarget=x86_64-none-elf ;;
+    a64)  t=a64;  ctarget=aarch64-none-elf ;;
+    rv64) t=rv64; ctarget=riscv64-none-elf ;;
   esac
-  h=src/${a}_asmops.h
-  # -I src is arch-neutral now: src/inle/asmops.h picks by the target's own predefine
-  inc="-I src -I src/apps/moon/include"
+  h=src/inle/$a/asmops.h
+  # -I src/inle is arch-neutral: src/inle/asmops.h picks by the target's own predefine
+  inc="-I src/inle -I src/apps/moon/include"
 
   # 1. coverage, straight off the header
   for op in $(sed -n 's/^static inline [^(]* \**\(k_[A-Za-z0-9_]*\)(.*/\1/p' "$h"); do
@@ -106,10 +110,12 @@ for a in x64 a64; do
   seq "$work/$a-moon.o" $t > "$work/$a-moon.seq"
   # every op the object carries must have emitted at least one privileged
   # instruction -- a template that assembled to nothing is a silent no-op.
-  awk '/^@/ { if (name != "" && n == 0) print name; name=substr($0,2); n=0; next }
-       { n++ }
-       END { if (name != "" && n == 0) print name }' "$work/$a-moon.seq" |
-    while read -r empty; do fail "$a: $empty emitted no privileged instruction"; done
+  # (a `for`, not a piped `while`: a fail inside a pipeline's subshell never
+  # reaches rc, and the gate read green over a red.)
+  empties=$(awk '/^@/ { if (name != "" && n == 0) print name; name=substr($0,2); n=0; next }
+                 { n++ }
+                 END { if (name != "" && n == 0) print name }' "$work/$a-moon.seq")
+  for empty in $empties; do fail "$a: $empty emitted no privileged instruction"; done
 
   # 3. the two halves against each other
   if ! have clang; then
@@ -168,5 +174,5 @@ for a in x64 a64; do
   fi
 done
 
-[ $rc = 0 ] && echo "asmops: both spellings agree, on both arches"
+[ $rc = 0 ] && echo "asmops: mooncc and clang read every template alike, on all three arches"
 exit $rc

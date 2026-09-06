@@ -5,7 +5,7 @@
 ; disassembler. the sources are cat'd in rather than `use`d because the host bakes its native
 ; backend only -- the other four reach these goldens no other way (test/holo.l is the in-corpus
 ; smoke over the baked module).
-; run: cat src/core/holo/{holo,x64,a64,thumb2,riscv,thumb1,text,elf}.l test/holo/golden.l
+; run: cat src/core/holo/{holo,x64,a64,thumb2,riscv,thumb1,text,gas,elf}.l test/holo/golden.l
 ;      | out/love   (nonzero exit on any miss)
 
 (use 'holo) ; the cat's wrapped sources just registered the module
@@ -201,6 +201,7 @@
       ("rem"         "524150489948f73c244889d04883c4085a"             ; ... mov rax,rdx (remainder) ...
                        ((rem r0 r0 r7 r4)))
       ("divq"        "48f7f6"                 ((divq r5)))           ; div rsi (rn r5 = rsi): f7 /6
+      ("divl"        "f7f1"                   ((divl r1)))           ; div ecx: the 32-bit twin, no REX.W
       ("dv128"       "4889c1488b0424488b54240848890c244889c14889d031d248f73424489148f734244889ca" ((dv128 sp)))
       ("rm128"       "4889c1488b0424488b54240848890c244889c14889d031d248f73424489148f734244889d031d2" ((rm128 sp)))
       ;; the 128-bit pair kit (hi rdx : lo rax, left operand at [rsp] lo / [rsp+8] hi)
@@ -311,6 +312,60 @@
    _ (chk-eq "text.sys.rv64"
         (holo-hex 'rv64 '((csrr r0 mstatus) (csrw stvec r0) (sfence zr zr) (fencei) (sret)))
         (holo-hex 'rv64 (asm-text "csrr r0, mstatus\ncsrw stvec, r0\nsfence zr, zr\nfencei\nsret")))
+
+   ;; -- the GNU-dialect front (src/core/holo/gas.l) lowers what clang and gcc read -- AT&T, ARM,
+   ;; riscv, thumb -- to the same IR, so every line here is a form the tables above already froze.
+   ;; this is the seam mooncc's inline asm parses through: the kernel's asmops.h templates land here.
+   _ (chk-eq "gas.x64.cr"
+        '((ldcr r0 0) (and r0 r0 -5) (or r0 r0 1536) (stcr 0 r0))
+        (gas-text 'x64 "mov %cr0, %rax\n and $~(1 << 2), %rax\n or $((1 << 9) | (1 << 10)), %rax\n mov %rax, %cr0"))
+   _ (chk-eq "gas.x64.semi"                        ; `;` separates, 32-bit forms ride the 64-bit op
+        '((xor r2 r2 r2) (li r0 1) (xor r1 r1 r1) (divl r1))
+        (gas-text 'x64 "xorl %edx,%edx; movl $1,%eax; xorl %ecx,%ecx; divl %ecx"))
+   _ (chk-eq "gas.x64.labels"                      ; GNU's numeric local labels: 1: / 1f / 2f
+        '((mov r0 sp) (li r1 27668) (vmwrite r1 r0) (la r0 l1.1) (li r10 1) (vmlaunch) (jmp l2.1)
+          (label l1.1) (mov r9 r0) (li r10 0) (label l2.1))
+        (gas-text 'x64 "movq %rsp, %rax\nmovq $0x6c14, %rcx\nvmwrite %rax, %rcx\nleaq 1f(%rip), %rax\nmovq $1, %r11\nvmlaunch\njmp 2f\n1:\nmovq %rax, %r10\nmovq $0, %r11\n2:"))
+   _ (chk-eq "gas.x64.contracted"                  ; register-contracted ops drop their named operands
+        '((outb) (inl) (rdmsr) (vmrun) (vmread r9 r10) (sgdt r10 0) (vmxon sp 8) (trap) (int 3) (divq r1) (sys))
+        (gas-text 'x64 "outb %al, %dx\n inl %dx, %eax\n rdmsr\n vmrun %rax\n vmread %r11, %r10\n sgdt (%r11)\n vmxon 8(%rsp)\n int3\n int $3\n divq %rcx\n syscall"))
+   _ (chk-eq "gas.x64.core"
+        '((lgdt r6 0) (stcr 3 r6) (ld r1 r0 0) (ldu4 r1 r0 4) (st r0 8 r1) (ldu1 r1 r0 0) (add sp sp 8)
+          (cmp r1 r0) (br ne l1.0) (shl r0 3) (shrv r2 r1) (not r0) (push r3) (pop r3) (callr r0) (ret))
+        (gas-text 'x64 "lgdt (%rdi)\nmov %rdi, %cr3\nmov (%rax), %rcx\nmovl 4(%rax), %ecx\nmov %rcx, 8(%rax)\nmovzbl (%rax), %ecx\nadd $8, %rsp\ncmp %rax, %rcx\njne 1b\nshl $3, %rax\nshr %cl, %rdx\nnot %rax\npush %rbx\npop %rbx\ncall *%rax\nret"))
+   _ (chk-eq "gas.x64.mov32"                       ; movl zero-extends: the 64-bit mov, then zx4
+        '((mov r1 r0) (zx4 r1) (li r0 4294967295))
+        (gas-text 'x64 "movl %eax, %ecx\nmovl $-1, %eax"))
+   _ (chk-eq "gas.a64.sys"
+        '((msri daifset 15) (tlbi vmalle1is zr) (dsb ish) (lea r9 sp 0) (msri spsel 1) (lea sp r9 0)
+          (mrs r9 cpacr_el1) (or r9 r9 3145728) (msr cpacr_el1 r9) (isb) (brk 0) (udf 0) (dbrk 61440) (hvc 0)
+          (at s1e1w r1) (dc cvau r0) (ic ivau r0) (msr vbar_el1 r0) (wfi) (mrs r0 ctr_el0))
+        (gas-text 'a64 "msr daifset, #0xf\n tlbi vmalle1is\n dsb ish\n mov x9, sp\n msr spsel, #1\n mov sp, x9\n mrs x9, cpacr_el1\n orr x9, x9, #(3 << 20)\n msr cpacr_el1, x9\n isb\n brk #0\n udf #0\n hlt #0xf000\n hvc #0\n at s1e1w, x1\n dc cvau, x0\n ic ivau, x0\n msr vbar_el1, x0\n wfi\n mrs x0, ctr_el0"))
+   _ (chk-eq "gas.a64.core"
+        '((add r0 r1 4) (sub r0 r0 r2) (cmp r0 0) (br eq l1.1) (ld r1 r0 8) (st4 r0 0 r1) (ldu1 r2 r0 1) (jmp l2.1)
+          (label l1.1) (li r0 7) (ret) (label l2.1) (sys) (xor r3 r3 r3) (shl r0 3) (neg r1))
+        (gas-text 'a64 "add x0, x1, #4\n sub x0, x0, x2\n cmp x0, #0\n b.eq 1f\n ldr x1, [x0, #8]\n str w1, [x0]\n ldrb w2, [x0, #1]\n b 2f\n1:\n mov x0, #7\n ret\n2:\n svc #0\n eor x3, x3, x3\n lsl x0, x0, #3\n neg x1, x1"))
+   _ (chk-eq "gas.rv64"
+        '((csrr r0 time) (csrw stvec r0) (csrs sie r0) (csrsi sstatus 2) (csrci sstatus 2) (sys) (trap) (csrw cycle zr)
+          (fence) (wfi) (sfence zr zr) (sfence r0 r1) (li r0 5) (mov r1 r0) (add sp sp -16) (ld r2 sp 8) (st sp 0 r2)
+          (cmp r0 r1) (br eq l1.1) (jmp l2.1) (label l1.1) (ret) (label l2.1) (nop))
+        (gas-text 'rv64 "csrr a0, time\n csrw stvec, a0\n csrs sie, a0\n csrsi sstatus, 2\n csrci sstatus, 2\n ecall\n ebreak\n unimp\n fence\n wfi\n sfence.vma\n sfence.vma a0, a1\n li a0, 5\n mv a1, a0\n addi sp, sp, -16\n ld a2, 8(sp)\n sd a2, 0(sp)\n beq a0, a1, 1f\n j 2f\n1:\n ret\n2:\n nop"))
+   _ (chk-eq "gas.thumb"
+        '((trap) (brk 3) (nop) (wfi) (li r0 5) (add r0 r0 r1) (ld r1 r0 4) (ret))
+        (gas-text 'thumb2 "bkpt #0\n bkpt #3\n nop\n wfi\n mov r0, #5\n add r0, r0, r1\n ldr r1, [r0, #4]\n bx lr"))
+   ;; ..and the spellings the substitution hands a template: a register at a width (with GNU's
+   ;; modifier letter), an immediate, a memory operand, and the way back from a clobber's name
+   _ (chk-eq "gas.spell.x64" '("%rax" "%r8d" "%dx" "%al" "%r11w" "%rsp" "$3" "3" "(%r11)")
+        [(gas-reg 'x64 'r0 8 0) (gas-reg 'x64 'r7 4 0) (gas-reg 'x64 'r2 2 0) (gas-reg 'x64 'r0 1 0)
+         (gas-reg 'x64 'r10 8 119) (gas-reg 'x64 'sp 8 0) (gas-imm 'x64 3 0) (gas-imm 'x64 3 99) (gas-mem 'x64 'r10)])
+   _ (chk-eq "gas.spell.arm" '("x0" "w9" "x9" "sp" "a0" "t0" "r3" "3" "#3" "[x1]" "0(a1)")
+        [(gas-reg 'a64 'r0 8 0) (gas-reg 'a64 'r9 4 0) (gas-reg 'a64 'r9 4 120) (gas-reg 'a64 'sp 8 0)
+         (gas-reg 'rv64 'r0 8 0) (gas-reg 'rv64 'r8 8 0) (gas-reg 'thumb2 'r3 4 0)
+         (gas-imm 'a64 3 0) (gas-imm 'thumb2 3 0) (gas-mem 'a64 'r1) (gas-mem 'rv64 'r1)])
+   _ (chk-eq "gas.regname" '(r0 r14 r2 sp () r9 r0 r7 () r5)
+        [(gas-regname 'x64 "rax") (gas-regname 'x64 "r15") (gas-regname 'x64 "edx") (gas-regname 'x64 "rsp")
+         (gas-regname 'x64 "nope") (gas-regname 'a64 "x9") (gas-regname 'a64 "x0") (gas-regname 'rv64 "a7")
+         (gas-regname 'rv64 "t6") (gas-regname 'thumb2 "r5")])
 
    ;; -- the ELF linker (src/core/holo/elf.l) wraps assembled bytes in a well-formed static executable. --
    elfprog '((li r0 60) (li r6 0) (sys))

@@ -6028,6 +6028,18 @@
    ; for a home. a homed local keeps its slot as the spill shadow and binds (reg rN) in the env,
    ; so a read is a zero-form borrow and its init lands with a mov. the seq must be
    ; deterministic across ubuild's attempts: same walk, and splices don't tick. --
+   ; -- the inline-asm register file (cgasm below; cgdecl reads it for a register variable's pin):
+   ; the picks, and the callee-saved seats a clobber may name beyond them, pushed around the body --
+   asmregs '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10)
+   asmpick '(r10 r9 r8 r7 r6 r5 r2 r1 r0)
+   asmnames (foldl (\ t i (: s9 ("r" + show i) (pin t (name s9) s9))) {} ^11)
+   (asmreg? g r9) (member? r9 asmregs || (a64? g && (= r9 'r4)))
+   ; the registers past the asm file a clobber may still name: callee-saved seats the body has to
+   ; leave as it found them, so they are pushed and popped around it
+   (asmsave? g r9) (? (x64t? g) (member? r9 csx64)
+                      (a64? g) (member? r9 '(r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28))
+                      (rv64? g) (member? r9 '(r11 r12 r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26))
+                      (member? r9 '(r5 r6 r7 r8 r9 r10 r11 r12)))
    (cgdecl g env pairs)
     (: ; -- the C99 VLA local: free any prior instance from this site first (a loop re-runs the
        ; decl; sp = ptr + rounded size also frees everything younger), evaluate the dim, stash the
@@ -6063,7 +6075,10 @@
               p <ps
               ty <>p
               init <>>p
-              (? (gvarr? ty)
+              ; a `register T v asm("reg")` local naming a register the asm surface cannot
+              (? (two? >>>p && (: r9 (gas-regname (peep g 'tgt 'x64) <>>>p) !(nom? r9 && asmreg? g r9)))
+                  (nolane g ("no lane for a register variable in " + <>>>p + ontgt g))
+                 (gvarr? ty)
                   (? (two? init)
                       (nolane g "a variable-length array cannot take an initializer")
                      !(member? (peep g 'tgt 'x64) '(x64 a64 rv64))
@@ -6093,8 +6108,11 @@
                                    'lrec ([sq off ty <p] . g 'lrec))
                          lht (g 'lhome)
                          (? lht (lht sq) ())))
+              ; a `register T v asm("reg")` local: the pin rides the env entry's fourth slot
+              ; for cgasm (a register the asm surface cannot name refused above)
+              apin (? (two? >>>p) (gas-regname (peep g 'tgt 'x64) <>>>p) ())
               ; a d128's home is a pair (lo hi) off the cs pool -- ulloc packs two seats
-              env3 ([<p (? (two? hreg) ['regw hreg] hreg ['reg hreg] off) ty] . env2)
+              env3 (([<p (? (two? hreg) ['regw hreg] hreg ['reg hreg] off) ty] + (? (nom? apin) [apin] ())) . env2)
               ; a callee-saved home stays off g 'homes: no call wrap (the callee preserves it),
               ; no sib peel, and ezarg must never read its never-written shadow slot
               _ (? (hreg && !(two? hreg) && !(member? hreg (cspool g)))
@@ -6169,33 +6187,41 @@
        (one pairs env))
 
    ; stmt -> forms | 'bad
-   ; -- inline asm (the 'asm statement): the template is holo neutral TEXT (asm-text parses it),
-   ; %0..%9 the operands (outputs first, GNU numbering), %% a literal %. the body assembles to
-   ; bytes right here and splices as one opaque ('raw ..), so the IR passes barrier on it,
-   ; template labels stay local, and a4ize never rewrites inside. operands stage through the
-   ; machine stack: every input evaluates and pushes, then pops into its register; outputs push
-   ; after the body and store back through clval in reverse, so the store scratch can never
-   ; trample an unstored output. constraints: "=r"/"+r"/"r" pick a register, "=rN"/"+rN"/"rN" pin
-   ; one, "i" an immediate; clobbers are validated only -- an asm fn's homing is off (g 'hasasm),
-   ; so nothing lives in a register across the statement. x64 refuses r4 (the frame) and the
-   ; callee-saved r11-r14; a64 adds r4 (x4, an argument register there). --
-   asmregs '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10)
-   asmpick '(r10 r9 r8 r7 r6 r5 r2 r1 r0)
-   asmnames (foldl (\ t i (: s9 ("r" + show i) (pin t (name s9) s9))) {} ^11)
-   (asmreg? g r9) (member? r9 asmregs || (a64? g && (= r9 'r4)))
-   ; a constraint's register part: "r" -> 'pick, "i" -> 'imm, "rN" -> the nom;
-   ; the x86 letters "a"/"d" pin rax/rdx (the divq protocol), "rm" reads as "r"
-   ;; "m" is a memory operand, and the neutral surface has no such addressing mode as one token:
-   ;; holo spells memory as a base and a displacement, two operands. So a "m" input lowers to the
-   ;; address of its expression in a picked register and substitutes as `rN, 0` -- two tokens where
-   ;; the others substitute one, which is exactly what `vmxon %0` needs to read as `vmxon r3, 0`.
-   ;; Input only: "=m" would want a store the body cannot be asked to make.
-   (asmc c9) (: n #c9
-                (? (n < 1) 'bad
-                   (n = 1) (c9 0 @ 114 'pick 105 'imm 109 'mem 97 'r0  100 'r2 'bad)
-                   (c9 = "rm") 'pick
-                   (name c9)))
-   ; %-substitute the template: al the operand texts, GNU order
+   ; -- inline asm (the 'asm statement): the template is the target's own GNU dialect -- AT&T on
+   ; x64, ARM on a64, riscv, thumb -- lowered by src/core/holo/gas.l, so one template serves every
+   ; compiler; `__attribute__((holo)) asm(..)` says holo's neutral TEXT instead (asm-text). %0..%9
+   ; the operands (outputs first, GNU numbering; the b/w/k/q/c and w/x modifiers), %% a literal %.
+   ; the body assembles to bytes right here and splices as one opaque ('raw ..), so the IR passes
+   ; barrier on it, template labels stay local, and a4ize never rewrites inside. operands stage
+   ; through the machine stack: every input evaluates and pushes, then pops into its register;
+   ; outputs push after the body and store back through clval in reverse, so the store scratch can
+   ; never trample an unstored output. constraints: "r"/"=r"/"+r" pick a register, "rN" pins a
+   ; neutral one, x86's a/b/c/d/S/D letters (and "Nd") pin theirs, a digit ties an input to that
+   ; output's register, a `register T v asm("x0")` variable pins wherever it is named, "i" an
+   ; immediate, "m" a memory operand. clobbers: a callee-saved register is pushed around the body,
+   ; the rest need nothing -- an asm fn's homing is off (g 'hasasm), so nothing lives in a register
+   ; across the statement. x64 refuses r4 (the frame); a64 adds r4 (x4, an argument register). --
+   ; a constraint's register part: "r" (and q/g/rm) -> 'pick, "i"/"n" -> 'imm, "m" -> 'mem, a
+   ; digit -> ('tie n), "rN" -> the nom, x86's letters by name (a rax, b rbx, c rcx, d rdx,
+   ; S rsi, D rdi, Nd dx), "ir" -> 'either (an immediate where the operand is a constant)
+   (asmc g c9)
+    (: n #c9
+       c0 (? (n > 0) (c9 0) 0)
+       x86 (x64t? g)
+       (? (n < 1) 'bad
+          (n = 1 && 48 <= c0 <= 57) ['tie (c0 - 48)]
+          (n = 1) (c0 @ 114 'pick 113 'pick 103 'pick 105 'imm 110 'imm 109 'mem
+                      97 (x86 ? 'r0 'bad) 98 (x86 ? 'r3 'bad) 99 (x86 ? 'r1 'bad)
+                      100 (x86 ? 'r2 'bad) 83 (x86 ? 'r5 'bad) 68 (x86 ? 'r6 'bad) 'bad)
+          ((c9 = "rm") || (c9 = "mr")) 'pick
+          ((c9 = "Nd") || (c9 = "dN")) (x86 ? 'r2 'bad)
+          ((c9 = "ir") || (c9 = "ri") || (c9 = "in") || (c9 = "ni")) 'either
+          (name c9)))
+   ; a `register T v asm("reg")` variable named as an operand: its pin, else ()
+   (asmvpin g env e)
+    (e @ ('var nm) (: en (assoc nm env) (? (two? en && two? >>>en) <>>>en ()))
+         ())
+   ; %-substitute the template: al the operand printers (a modifier letter, 0 for none -> text | 'bad)
    (asmsub tm al)
     (: n #tm
        (go i acc)
@@ -6204,44 +6230,55 @@
               (? !(c = 37) (go (i + 1) (acc + string c))
                  (i + 1 < n)
                   (: d (tm (i + 1))
+                     md (? (member? d '(98 119 107 113 99 120) && i + 2 < n && 48 <= (tm (i + 2)) <= 57) d 0)
+                     dx (? md (tm (i + 2)) d)
                      (? (d = 37) (go (i + 2) (acc + "%"))
-                        (48 <= d <= 57)
-                         (: ix (d - 48)
-                            (? (ix < #al) (go (i + 2) (acc + al ix)) 'bad))
+                        (48 <= dx <= 57)
+                         (: ix (dx - 48)
+                            (? (ix < #al)
+                               (: sub ((al ix) md) (? (bad? sub) 'bad (go (i + (? md 3 2)) (acc + sub))))
+                               'bad))
                         'bad))
                  'bad)))
        (go 0 ""))
+   ; an operand's byte width, off its type by static peek (a register spells by it on x64)
+   (asmw g env e) (: ty (peekty g env e)
+                     (? (bad? ty) 8 (: n (tsz g ty) (? (member? n '(1 2 4 8)) n 8))))
    asmhb holo-bytes                                 ; bare: the cat leads with (use 'holo) (asbook.l), so this folds at compile
    (cgasm g env s)
     (: _ (pin g 'hasasm 1)
        tmpl <>s
-       ; one operand list, GNU order: ('o|'x reg expr) an output (x in-out),
-       ; ('i reg expr) a register input, ('b reg (addr expr)) a memory input, ('m imm) an immediate
+       tgt (peep g 'tgt 'x64)
+       neutral? (two? >>>>>s)                       ; the holo attribute: the template is neutral text
+       ; one operand list, GNU order: ('o|'x reg expr w) an output (x in-out), ('i reg expr w) a
+       ; register input, ('b reg (addr expr) 0) a memory input, ('m imm 0 0) an immediate
+       (pinof k e) (? (= k 'pick) (: p (asmvpin g env e) (? (nom? p) p k)) k)
        (oconv l acc)
         (? !(two? l) (rev acc)
            (: c <<l n #c
               h (0 < n ? (c 0) 0)
-              k (h @ (61 || 43) (asmc (snip c 1 n)) 'bad)
-              (k @ ('bad || 'imm || 'mem) 'bad
-                 (oconv >l ([(h @ 43 'x 'o) k <><l] . acc)))))
+              c2 (? (1 < n && c 1 = 38) (snip c 2 n) (snip c 1 n))    ; "=&r": the early clobber is the picking rule already
+              k (h @ (61 || 43) (asmc g c2) 'bad)
+              (? (bad? k || member? k '(imm mem either) || two? k) 'bad
+                 (oconv >l ([(h @ 43 'x 'o) (pinof k <><l) <><l (asmw g env <><l)] . acc)))))
        (iconv l acc)
         (? !(two? l) (rev acc)
-           (: k (asmc <<l) e <><l
+           (: k (asmc g <<l) e <><l
+              const? (two? e && (= <e 'num) && charm? <>e)
               (k @ 'bad 'bad
-                   'imm
-                    (two? e && (= <e 'num) && charm? <>e ?
-                     (iconv >l (['m <>e] . acc)) 'bad)
-                   'mem (iconv >l (['b 'pick ['addr e]] . acc))
-                   (iconv >l (['i k e] . acc)))))
+                   'imm (const? ? (iconv >l (['m <>e 0 0] . acc)) 'bad)
+                   'either (? const? (iconv >l (['m <>e 0 0] . acc)) (iconv >l (['i (pinof 'pick e) e (asmw g env e)] . acc)))
+                   'mem (iconv >l (['b 'pick ['addr e] 0] . acc))
+                   (iconv >l (['i (pinof k e) e (asmw g env e)] . acc)))))
        os (oconv <>>s ())
        is9 (iconv <>>>s ())
        (? (bad? os || bad? is9) 'bad
           (: ops9 (os + is9)
-             ; pinned registers: validated, a duplicate refuses
+             ; pinned registers: validated, a duplicate refuses; a tie takes its output's
              (pinset l acc)
               (? !(two? l) acc
                  (: e2 <l k <>e2
-                    (? (= <e2 'm || (= k 'pick)) (pinset >l acc)
+                    (? (= <e2 'm || (= k 'pick) || two? k) (pinset >l acc)
                        !(asmreg? g k) 'bad
                        (member? k acc) 'bad
                        (pinset >l (k . acc)))))
@@ -6251,25 +6288,36 @@
                     (? !(two? l) (rev acc)
                        (: e2 <l k <>e2
                           (? (= <e2 'm) (assign >l fr (k . acc))
+                             (two? k) (? (<>k < #acc) (: r9 ((rev acc) <>k) (assign >l fr (r9 . acc))) 'bad)
                              (= k 'pick)
                               (? (two? fr) (assign >l >fr (<fr . acc)) 'bad)
                              (assign >l fr (k . acc)))))
                    asgn (assign ops9 (filter (\ r9 !(member? r9 pinned)) asmpick) ())
-                   (cok? l) (? !(two? l) 1
-                               (: c <l
-                                  (? ((c = "memory") || (c = "cc")) (cok? >l)
-                                     (asmreg? g (intern c)) (cok? >l)
-                                     ())))
-                   (? (bad? asgn || !(cok? <>>>>s)) 'bad
-                      (: ; the operand texts, walked against their kinds: an immediate prints as a
-                         ; number, a register as its name, and a "m" operand as `rN, 0` -- the base
-                         ; and displacement holo's memory operands are spelled with.
+                   ; the clobbers: "memory"/"cc" and the asm file need nothing; a callee-saved
+                   ; register the dialect can name is saved around the body; anything else refuses
+                   (clobs l acc)
+                    (? !(two? l) (rev acc)
+                       (: c <l
+                          (? ((c = "memory") || (c = "cc")) (clobs >l acc)
+                             (: r9 (? neutral? (intern c) (gas-regname tgt c))
+                                (? !(nom? r9) 'bad
+                                   (asmreg? g r9) (clobs >l acc)
+                                   (asmsave? g r9) (clobs >l (r9 . acc))
+                                   'bad)))))
+                   saves (clobs <>>>>s ())
+                   (? (bad? asgn || bad? saves) 'bad
+                      (: ; the operand printers, walked against their kinds: an immediate prints as a
+                         ; number, a register in the dialect's spelling at the operand's width, a "m"
+                         ; operand as the dialect's memory form (neutral: `rN, 0`, base and displacement)
+                         (rtext a9 w) (\ md (? neutral? (md ? 'bad (peep asmnames a9 "r?")) (gas-reg tgt a9 w md)))
+                         (itext v) (\ md (? neutral? (md ? 'bad (show v)) (gas-imm tgt v md)))
+                         (mtext a9) (\ md (? md 'bad neutral? ((peep asmnames a9 "r?") + ", 0") (gas-mem tgt a9)))
                          (optext l al acc)
                           (? !(two? l) (rev acc)
-                             (: a9 <al
-                                (optext >l >al ((? (charm? a9) (show a9)
-                                                   (= <<l 'b) ((peep asmnames a9 "r?") + ", 0")
-                                                   (peep asmnames a9 "r?")) . acc))))
+                             (: e2 <l a9 <al
+                                (optext >l >al ((? (= <e2 'm) (itext a9)
+                                                   (= <e2 'b) (mtext a9)
+                                                   (rtext a9 <>>>e2)) . acc))))
                          txt (asmsub tmpl (optext ops9 asgn ()))
                          (? (bad? txt) 'bad
                             (: ; inputs (and in-out outputs) evaluate and push..
@@ -6290,8 +6338,11 @@
                                          (? (member? <<l '(x i b))
                                             (pops >l >al (spop <al + acc))
                                             (pops >l >al acc)))
-                                     ; the body: text -> IR forms -> bytes, one opaque raw
-                                     body [['raw (asmhb (peep g 'tgt 'x64) (asm-text txt))]]
+                                     ; the body: text -> IR forms -> bytes, one opaque raw, the saved
+                                     ; clobbers pushed around it
+                                     body ((map (\ r9 ['push r9]) saves)
+                                           + [['raw (asmhb tgt (? neutral? (asm-text txt) (gas-text tgt txt)))]]
+                                           + map (\ r9 ['pop r9]) (rev saves))
                                      ; outputs: push each register, store back reverse
                                      (opush l al acc)
                                       (? !(two? l) acc
@@ -7115,7 +7166,7 @@
            (: p <ps
               nn (fresh <p)
               env2 ([<p nn] . env)
-              (rps >ps env2 ([nn (re <>p env2) (re <>>p env2)] . acc))))
+              (rps >ps env2 (([nn (re <>p env2) (re <>>p env2)] + >>>p) . acc))))   ; + a register variable's pin
        (rsl items env acc)                          ; a statement run: decls extend env for their siblings
         (? !(two? items) (rev acc)
            (: s <items

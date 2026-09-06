@@ -1119,33 +1119,40 @@
       (two? (cgn "int f(int x){return x;} typedef int (*fp)(int); fp t[1] = { &f }; int main(){ return t[0](1); }"))
       (refused? (cgn "int main(){ return (long)&nope; }"))))
 
-; -- inline asm (the statement): the template is holo neutral TEXT, %N the
-; operands (outputs first), adjacent template strings concatenate, and the
-; body assembles at cg time into one opaque ('raw ..) between the staging
-; forms. the picks come off asmpick front-first (r10 the first), so the
-; one-output golden's bytes are exactly (li r10 40) assembled. constraint
-; refusals: a letter outside r/i/rN, a duplicate pin, x64's frame r4, a
-; float operand -- each () out of cgen, never fudged bytes.
+; -- inline asm (the statement): the template is the target's GNU dialect (src/core/holo/gas.l
+; lowers it; AT&T here on x64), %N the operands (outputs first), adjacent template strings
+; concatenate, and the body assembles at cg time into one opaque ('raw ..) between the staging
+; forms. the picks come off asmpick front-first (r10 the first), so the one-output golden's
+; bytes are exactly (li r10 40) assembled. `__attribute__((holo)) asm(..)` says holo's neutral
+; text instead, and a `register T v asm("reg")` local pins wherever the asm names it.
+; constraint refusals: a letter outside the surface, a duplicate pin, x64's frame r4, a float
+; operand, a clobber of the stack pointer -- each () out of cgen, never fudged bytes.
 (: (cast src) <>(cparse <>(clex src))
    hb (from 'holo 'holo-bytes)
-   g1 (cgn "int main() { long v; asm(\"li %0, 40\" : \"=r\"(v)); return v + 2; }")
+   (hasraw fs want) (? !(two? fs) ()
+                       (: f2 <fs
+                          (? (two? f2 && (= <f2 'raw) && (= <>f2 want)) 1 (hasraw >fs want))))
    want (hb 'x64 (asm-text "li r10, 40"))
-   (hasraw fs) (? !(two? fs) ()
-                  (: f2 <fs
-                     (? (two? f2 && (= <f2 'raw) && (= <>f2 want)) 1 (hasraw >fs))))
-   g2 (cgn "void o(unsigned char v, unsigned short p) { asm volatile(\"outb\" : : \"r0\"(v), \"r2\"(p)); } int main() { o(1, 2); return 0; }")
+   g1 (cgn "int main() { long v; asm(\"mov $40, %0\" : \"=r\"(v)); return v + 2; }")
+   g1h (cgn "int main() { long v; __attribute__((holo)) asm(\"li %0, 40\" : \"=r\"(v)); return v + 2; }")
+   ; the port I/O ops (musl's bits/io.h rides them): register-contracted like `syscall`, so
+   ; the operands only pin and the assembled body is exactly the opcode byte
    want2 (hb 'x64 (asm-text "outb"))
-   (hasraw2 fs) (? !(two? fs) ()
-                   (: f2 <fs
-                      (? (two? f2 && (= <f2 'raw) && (= <>f2 want2)) 1 (hasraw2 >fs))))
-   ;; the "m" operand: an address in a picked register, substituted as the base and the
-   ;; zero displacement holo spells a memory operand with -- so `vmxon %0` has to read
-   ;; back as `vmxon r10, 0`, two tokens where every other constraint substitutes one.
-   g3 (cgn "void f(unsigned long *p) { asm volatile(\"vmxon %0\" : : \"m\"(*p) : \"memory\"); } int main() { return 0; }")
+   g2 (cgn "void o(unsigned char v, unsigned short p) { asm volatile(\"outb %0, %1\" : : \"a\"(v), \"Nd\"(p)); } int main() { o(1, 2); return 0; }")
+   ;; the "m" operand: an address in a picked register, spelled as the dialect's memory form
+   ;; -- so `vmxon %0` reads back as `vmxon (%r11)`, which is holo's `vmxon r10, 0`.
    want3 (hb 'x64 (asm-text "vmxon r10, 0"))
-   (hasraw3 fs) (? !(two? fs) ()
-                   (: f2 <fs
-                      (? (two? f2 && (= <f2 'raw) && (= <>f2 want3)) 1 (hasraw3 >fs))))
+   g3 (cgn "void f(unsigned long *p) { asm volatile(\"vmxon %0\" : : \"m\"(*p) : \"memory\"); } int main() { return 0; }")
+   ; a tied input rides its output's register; a 32-bit operand spells at its width (%r11d),
+   ; and the 32-bit op lands as the 64-bit one plus the zero-extend
+   want4 (hb 'x64 '((add r10 r10 2) (zx4 r10)))
+   g4 (cgn "int main() { unsigned a = 40, b; asm(\"addl $2, %0\" : \"=r\"(b) : \"0\"(a)); return b; }")
+   ; a register variable pins the operand; a callee-saved clobber is pushed around the body
+   want5 (hb 'x64 (asm-text "add r2, r2, 2"))
+   g5 (cgn "int main() { register long v asm(\"rdx\") = 40; asm(\"addq $2, %%rdx\" : \"+r\"(v) :: \"r12\"); return v; }")
+   (hassaved fs want) (? !(two? fs) ()
+                         (fs @ (('push 'r11) . ('raw ^want) . ('pop 'r11) . _) 1
+                               (hassaved >fs want)))
    (assert
       (= (cast "void f() { asm(\"sys\"); }")
          '(prog ((fn "f" () (blk ((asm "sys" () () ())))))))
@@ -1165,18 +1172,28 @@
                                   (asm "li %0, 40" (("=r" (var "v")))
                                        (("r" (var "v")) ("i" (num 3)))
                                        ("memory"))))))))
-      (two? g1) (hasraw <>g1)
-      ; the port I/O ops (musl's bits/io.h rides them): register-contracted
-      ; like `sys`, so the template is bare and the operands only pin -- the
-      ; assembled body is exactly the opcode bytes
-      (two? g2) (hasraw2 <>g2)
-      (two? g3) (hasraw3 <>g3)
+      ; the holo attribute rides the statement as its fifth element; a register variable's
+      ; pin rides the declarator as its fourth -- and only under `register`
+      (= (cast "void f() { long v; __attribute__((holo)) asm(\"li %0, 4\" : \"=r\"(v)); }")
+         '(prog ((fn "f" () (blk ((decl (("v" long ())))
+                                  (asm "li %0, 4" (("=r" (var "v"))) () () holo)))))))
+      (= (cast "void f() { register long v asm(\"rcx\") = 5; }")
+         '(prog ((fn "f" () (blk ((decl (("v" long (num 5) "rcx")))))))))
+      (= (cast "void f() { long v asm(\"rcx\") = 5; }") ())
+      (two? g1) (hasraw <>g1 want)
+      (two? g1h) (hasraw <>g1h want)
+      (two? g2) (hasraw <>g2 want2)
+      (two? g3) (hasraw <>g3 want3)
+      (two? g4) (hasraw <>g4 want4)
+      (two? g5) (hassaved <>g5 want5)
       ; "=m" is refused: an output to memory wants a store the body cannot be asked to make
       (refused? (cgn "int main() { long v; asm(\"sys\" : \"=m\"(v)); return 0; }"))
-      (refused? (cgn "int main() { long v; asm(\"li %0, 1\" : \"=q\"(v)); return 0; }"))
-      (refused? (cgn "int main() { asm(\"sys\" : : \"r0\"(1), \"r0\"(2)); return 0; }"))
-      (refused? (cgn "int main() { asm(\"sys\" : : \"r4\"(1)); return 0; }"))
-      (refused? (cgn "int main() { double d; asm(\"sys\" : : \"r\"(d)); return 0; }"))))
+      (refused? (cgn "int main() { long v; asm(\"mov $1, %0\" : \"=f\"(v)); return 0; }"))
+      (refused? (cgn "int main() { asm(\"syscall\" : : \"r0\"(1), \"r0\"(2)); return 0; }"))
+      (refused? (cgn "int main() { asm(\"syscall\" : : \"r4\"(1)); return 0; }"))
+      (refused? (cgn "int main() { double d; asm(\"syscall\" : : \"r\"(d)); return 0; }"))
+      (refused? (cgn "int main() { asm(\"syscall\" ::: \"rsp\"); return 0; }"))
+      (refused? (cgn "int main() { register long v asm(\"rsp\") = 1; asm(\"\" : \"+r\"(v)); return v; }"))))
 
 ; -- the alive pass (per-call wrap filtering): a non-leaf fn's homed params
 ; spill/reload only around calls they are live across. `wraps` counts stores

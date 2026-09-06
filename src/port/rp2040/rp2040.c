@@ -17,12 +17,12 @@ int main(void);
 // hardware stacked. ⚠ this handler used to select MSP/PSP and copy that frame
 // into a struct, which wants `naked` plus mrs/tst -- neither in holo's thumb1
 // lane. The frame is still on the stack for the debugger; only the copy is gone.
-void isr_hardfault(void) { for (;;) asm volatile("trap"); }
+void isr_hardfault(void) { for (;;) asm volatile("bkpt #0"); }
 
 // ⚠ the templates here are holo's NEUTRAL mnemonics, not ARM's: `trap` is the
 // BKPT this backend lays (src/core/holo/thumb1.l). wfe/wfi have no thumb1 row yet,
 // so an idle handler spins instead of parking.
-static void default_handler(void) { for (;;) asm volatile("trap"); }
+static void default_handler(void) { for (;;) asm volatile("bkpt #0"); }
 
 // --- crt0 / reset ---------------------------------------------------------
 // boot2 has already loaded SP from vectors[0] and handed control here. Copy
@@ -34,7 +34,7 @@ __attribute__((used, noreturn)) void reset_handler(void) {
   for (uint32_t *b = __bss_start__; b < __bss_end__; b++) *b = 0;
   clocks_init();
   main();
-  for (;;) asm volatile("trap"); }
+  for (;;) asm volatile("bkpt #0"); }
 
 // --- vector table (at 0x10000100) -----------------------------------------
 // Only the M0+ system vectors; no peripheral IRQs are enabled, so the rest

@@ -409,9 +409,9 @@ test_vi: host
 # to end through the real `mooncc` -- compile, run, exit 42, against a gcc -O0 differential
 # on the same source. Drives the crew layer warm (~0.68s -> ~0.1s per compile, 88 of them).
 moonrun = $m mooncc
-# love0 rides along for the inline-asm checks: templates parse through holo/text.l, whose
-# combinators come off the bare `post` each frontend's boot binds ITSELF, so the bootstrap
-# lane can lose the feature while this one keeps it.
+# love0 rides along for the inline-asm checks: neutral templates parse through holo/text.l,
+# whose combinators come off the bare `post` each frontend's boot binds ITSELF, so the
+# bootstrap lane can lose the feature while this one keeps it.
 test_moon: host $(love0)
 	@sh test/gate/moon.sh $(ho) $m $(love0)
 # the COMMITTED GENERATED artifacts, laid from the tables that define them (src/core/mx.l the +/*
@@ -577,9 +577,9 @@ test_hdiff: host
 # stay loud (-shared usage-refuses, -nostdlib names its undefined references). In test_slow.
 test_drv: host
 	@sh test/gate/drv.sh $(ho) $(ai_cflags)
-# the kernel's inline-asm SEAM: src/inle/<a>/asmops.h says every
-# privileged instruction twice -- holo's neutral template for mooncc, GNU's for clang -- so
-# the gate compiles one probe with both and compares op by op. Skips without llvm-objdump.
+# the kernel's inline-asm SEAM: src/inle/<a>/asmops.h says every privileged instruction
+# once, in GNU's template, and mooncc reads it through holo/gas.l -- so the gate compiles one
+# probe with mooncc and clang and compares op by op. Skips without llvm-objdump.
 test_asmops: host
 	@sh test/gate/asmops.sh $(ho)
 # test_dtb -- src/inle/dtb.h, the walk both device-tree doors ride (a64_dtb.c and
@@ -889,7 +889,7 @@ test_cpio: host
 test_holo: host
 	@echo TEST test/holo/golden.l
 	@cat src/core/holo/holo.l src/core/holo/x64.l src/core/holo/a64.l src/core/holo/thumb2.l \
-	    src/core/holo/rv64.l src/core/holo/thumb1.l src/core/holo/text.l src/core/holo/elf.l \
+	    src/core/holo/rv64.l src/core/holo/thumb1.l src/core/holo/text.l src/core/holo/gas.l src/core/holo/elf.l \
 	    test/holo/golden.l | sh test/gate/run.sh holo "$m" ", 0 failed"
 # as.l -- the real AT&T x86-64 front over holo. test/holo/as.l's goldens are byte-identical
 # to /usr/bin/as (frozen, no shell-out at gate time). Same sentinel gate as test_holo.

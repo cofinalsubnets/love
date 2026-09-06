@@ -216,6 +216,7 @@
    ; every call -- the ai_pagesize bug).
    (leadstatic? ps ts) (leadkw? ps ts 'static)
    (leadextern? ps ts) (leadkw? ps ts 'extern)
+   (leadregister? ps ts) (leadkw? ps ts 'register)
    ; `const` in the specifier run. it names the object only when the declarator
    ; adds no pointer of its own, which cobj? decides per declarator.
    (leadconst? ps ts) (leadkw? ps ts 'const)
@@ -1638,6 +1639,7 @@
        ; doom's d_net.c says `extern boolean advancedemo;` inside a function, and the
        ; object it tested was not the one d_main.c writes.
        ext (leadextern? ps ts)
+       regv (leadregister? ps ts)
        (? !(two? br) ()
           (: base <br ts0 <>br
              bq (qspec ps ts base)   ; the run's const/volatile -- _Generic's, staged below
@@ -1653,7 +1655,14 @@
                                    (: ix (peep ps 'vlan 0)
                                       _ (pin ps 'vlan (ix + 1))
                                       (ty0 + [ix])))
-                             ts3 (pattr <>dr)                  ; a trailing __attribute__((..)) on a local declarator
+                             ts30 (pattr <>dr)                 ; a trailing __attribute__((..)) on a local declarator
+                             ; `register T v asm("x0")`: GNU's register variable. the name rides
+                             ; the declarator as a fourth element, the pin gen's inline asm reads
+                             ap (? (regv && two? ts30 && asmid? <ts30 && peekp >ts30 "(" &&
+                                    strat? >>ts30 && peekp >>>ts30 ")")
+                                   [(tkv <>>ts30) >>>>ts30] ())
+                             pinl (? (two? ap) [<ap] ())
+                             ts3 (? (two? ap) <>ap ts30)
                              ; stage the marked type for the bind that follows; bindloc
                              ; consumes it, so a mark cannot outlive its declaration
                              _ (? bq (pin (ps 'qstage) name (qmark bq ty)) 0)
@@ -1674,8 +1683,8 @@
                                 (: r (pinit ps >ts3)
                                    (? !(two? r) ()
                                       (: ini <r
-                                         [[name (fillarr ps ty ini) ini] <>r])))   ; [] local: infer size
-                                [[name ty ()] ts3]))))
+                                         [([name (fillarr ps ty ini) ini] + pinl) <>r])))   ; [] local: infer size
+                                [([name ty ()] + pinl) ts3]))))
                    (more ts2 acc)
                     (: r (one ts2)
                        (? !(two? r) ()
@@ -1742,13 +1751,13 @@
                                rest (? (two? r9) (want r9 ";") ())
                                (? (two? rest) [['asm <tr <s1 <s2 <s3] rest] ()))))))))))
 
-   ; a statement-position __attribute__((..)) run skips (fallthrough..) -- except musttail,
-   ; the one whose semantic we owe: it lands in the ret's pre slot (clay's (ret e PRE)) and
-   ; gen's sibcall pass spells the marked tail jump or refuses the compile. on any statement
-   ; but a value-carrying return the annotation refuses -- never honored is never skipped
-   ; in silence.
-   (mustin a b) (? (= a b) ()                     ; a `musttail` token before the b spine?
-                   ((idv? <a "musttail") || mustin >a b))
+   ; a statement-position __attribute__((..)) run skips (fallthrough..) -- except the two
+   ; whose semantic we owe: musttail lands in the ret's pre slot (clay's (ret e PRE)) and
+   ; gen's sibcall pass spells the marked tail jump or refuses the compile; holo marks an
+   ; asm statement's template as holo's neutral text (gen's cgasm). on any other statement
+   ; either annotation refuses -- never honored is never skipped in silence.
+   (attrin a b nm) (? (= a b) ()                  ; a `nm` token before the b spine?
+                      ((idv? <a nm) || attrin >a b nm))
    ; a bare non-zero integer constant returned where the enclosing sig says pointer.
    ; the literal alone: a cast (or any expression) says the program means it
    (intptr? ps e)
@@ -1763,11 +1772,14 @@
        (: ts (pattr ts0)
           (? !(two? ts) ()
              (: r (? (sassert? ts) (pstatic ps ts) (pstmt2 ps ts))
-                (? !(mustin ts0 ts) r
+                mt (attrin ts0 ts "musttail")
+                ho (attrin ts0 ts "holo")
+                (? (!mt && !ho) r
                    !(two? r) ()
                    (: st <r
-                      (? !(= <st 'ret && two? <>st) ()
-                         [(st + '("__attribute__((musttail))")) <>r])))))))
+                      (? (mt && (= <st 'ret && two? <>st)) [(st + '("__attribute__((musttail))")) <>r]
+                         (ho && !mt && (= <st 'asm)) [(st + '(holo)) <>r]
+                         ())))))))
    ; a label is a flat marker (see pstmt2's rule) so a block can splice it beside the statement it
    ; labels. an ARM -- an if/while/do/for body without braces -- has no list to splice into, and
    ; the marker alone would BE the arm, leaving its statement to fall out past the arm's join.
