@@ -28,7 +28,7 @@ out=$ho/.test_moon.out
   cat test/00-init.l src/apps/kore/text.l src/apps/kore/u.l   # the kore floors register module 'kore
   echo "(use 'kore)"                    # ..ambient: holo/text.l and law.l read `lines` bare
   cat src/apps/moon/floor.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l \
-      src/core/holo/text.l src/apps/moon/val.l src/apps/moon/gen.l
+      src/core/holo/text.l src/core/holo/gas.l src/apps/moon/val.l src/apps/moon/gen.l
   echo "(use 'moon)"                    # the cat re-laid module 'moon; law.l reads it bare
   cat src/apps/moon/law.l
 } | "$m" > "$out" 2>&1
@@ -53,7 +53,7 @@ echo "CC src/core/holo/text.l (love0 lane)"
 "$m" src/apps/moon/stage.l || fail "moon-stage (the ;; moon-stage line names the seam)"
 
 arch=$(uname -m)
-if [ "$arch" != x64 ]; then
+if [ "$arch" != x64 ] && [ "$arch" != x86_64 ]; then
   echo "mooncc: cc (laws only -- x64 e2e skipped on $arch) ok"
   exit 0
 fi
@@ -170,9 +170,12 @@ moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
 printf 'int m(void){ int x __asm__("y"); return x; }\n' > "$ho/.feat.c"
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
   && fail "an asm NAME on a local was skipped as decoration"
-printf 'int m(void){ register long sp asm("rsp"); return (int)sp; }\n' > "$ho/.feat.c"
+printf 'int m(void){ register long sp asm("rsp"); asm("" : "+r"(sp)); return (int)sp; }\n' > "$ho/.feat.c"
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
-  && fail "a register variable pinned by asm() was accepted"
+  && fail "a register variable pinned to the stack pointer was accepted"
+printf 'int m(void){ register long v asm("rcx") = 5; asm("" : "+r"(v)); return (int)v; }\n' > "$ho/.feat.c"
+moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
+  || fail "a register variable pinned by asm() to a nameable register refused"
 # C11 6.8.1p3: a label is unique to its FUNCTION. two of a name laid one mangled label
 # twice and every goto took the first. ⚠ gcc COMPILES this one, __label__ making the two
 # distinct -- a refusal, so it costs no right answer.
@@ -289,22 +292,43 @@ moonrun -I "$ho/.flginc" -D BONUS=12 -o "$ho/.flg" "$ho/.flg.c" > /dev/null 2>&1
 [ $a -eq 42 ] || fail "mooncc -I/-D/-o run (got $a want 42)"
 
 # ------------------------------------------------------------------ inline asm
-printf 'int main() { long v; asm("li %%0, 40" : "=r"(v)); return v + 2; }\n' > "$ho/.casm1.c"
+printf 'int main() { long v; asm("mov $40, %%0" : "=r"(v)); return v + 2; }\n' > "$ho/.casm1.c"
 moonrun "$ho/.casm1.c" "$ho/.casm1" > /dev/null 2>&1 || fail "mooncc asm compile"
 "$ho/.casm1"; a=$?
 [ $a -eq 42 ] || fail "mooncc asm output operand (got $a want 42)"
 
-printf 'int main() { asm volatile("sys" : : "r0"(60), "r6"(42)); return 0; }\n' > "$ho/.casm2.c"
+printf 'int main() { asm volatile("syscall" : : "a"(60), "D"(42)); return 0; }\n' > "$ho/.casm2.c"
 moonrun "$ho/.casm2.c" "$ho/.casm2" > /dev/null 2>&1 || fail "mooncc asm syscall compile"
 "$ho/.casm2"; a=$?
 [ $a -eq 42 ] || fail "mooncc asm pinned-reg syscall (got $a want 42)"
 
-printf 'int main() { long x = 30; asm("add %%0, %%0, %%1" : "+r"(x) : "r"(12L)); return x; }\n' > "$ho/.casm3.c"
+printf 'int main() { long x = 30; asm("add %%1, %%0" : "+r"(x) : "r"(12L)); return x; }\n' > "$ho/.casm3.c"
 moonrun "$ho/.casm3.c" "$ho/.casm3" > /dev/null 2>&1 || fail "mooncc asm in-out compile"
 "$ho/.casm3"; a=$?
 [ $a -eq 42 ] || fail "mooncc asm in-out (got $a want 42)"
 
-moonrun -t a64 -o "$ho/.casm1a" "$ho/.casm1.c" > /dev/null 2>&1 || fail "mooncc asm a64 compile"
+# the GNU forms clang would also take: a tied input ("0"), a register variable, a 32-bit
+# operand spelled at its width, a callee-saved clobber (saved around the body)
+printf 'int main() { unsigned a = 40, b; asm("addl $2, %%0" : "=r"(b) : "0"(a)); return b; }\n' > "$ho/.casm4.c"
+moonrun "$ho/.casm4.c" "$ho/.casm4" > /dev/null 2>&1 || fail "mooncc asm tied-operand compile"
+"$ho/.casm4"; a=$?
+[ $a -eq 42 ] || fail "mooncc asm tied operand (got $a want 42)"
+printf 'long f(long x) { register long v asm("rdx") = x; asm("addq $2, %%%%rdx\\n addq $1, %%%%r12" : "+r"(v) :: "r12"); return v; }\nint main() { return f(40); }\n' > "$ho/.casm5.c"
+moonrun "$ho/.casm5.c" "$ho/.casm5" > /dev/null 2>&1 || fail "mooncc asm register-variable compile"
+"$ho/.casm5"; a=$?
+[ $a -eq 42 ] || fail "mooncc asm register variable + saved clobber (got $a want 42)"
+
+# holo's neutral text, under the attribute that names it
+printf 'int main() { long v; __attribute__((holo)) asm("li %%0, 40" : "=r"(v)); return v + 2; }\n' > "$ho/.casm6.c"
+moonrun "$ho/.casm6.c" "$ho/.casm6" > /dev/null 2>&1 || fail "mooncc holo asm compile"
+"$ho/.casm6"; a=$?
+[ $a -eq 42 ] || fail "mooncc holo asm output operand (got $a want 42)"
+
+moonrun -t a64 -o "$ho/.casm1a" "$ho/.casm6.c" > /dev/null 2>&1 || fail "mooncc asm a64 compile"
+printf 'int main() { long v; asm("mov %%0, #40" : "=r"(v)); return v + 2; }\n' > "$ho/.casm7.c"
+moonrun -t a64 -o "$ho/.casm7a" "$ho/.casm7.c" > /dev/null 2>&1 || fail "mooncc asm a64 GNU compile"
+printf 'int main() { long v; asm("li %%0, 40" : "=r"(v)); return v + 2; }\n' > "$ho/.casm8.c"
+moonrun -t rv64 -o "$ho/.casm8r" "$ho/.casm8.c" > /dev/null 2>&1 || fail "mooncc asm rv64 GNU compile"
 
 # the same template through the BOOTSTRAP compiler. every check above rides the
 # default love, and inline asm is the one feature whose front end (the combinators

@@ -407,39 +407,47 @@ predefined on x64 alone (gen's d128 lane), which is what love.c's limb seam read
 
 ## inline asm
 
-The GNU statement form, with ONE deliberate twist: the template is holo's neutral TEXT
-(`src/core/holo/text.l`'s `asm-text` parses it, the baked assembler encodes it), not AT&T — so one
-template rides both targets wherever it sticks to the neutral surface, and no new assembler
-exists anywhere.
+The GNU statement form, in the GNU dialect: the template is what clang and gcc read for the
+target — AT&T on x64, ARM on a64, riscv, thumb — and `src/core/holo/gas.l` lowers it to the
+neutral IR the baked assembler encodes. So a header says each instruction ONCE and every
+compiler reads it (the kernel's `src/inle/<a>/asmops.h` carry no `#ifdef __mooncc__` at all);
+no new encoder exists anywhere, every line lands on a backend row test/holo/golden.l froze.
 
-    asm [volatile] ("li %0, 40" : "=r"(v) : "r"(x), "i"(3) : "memory");
+    asm [volatile] ("mov $40, %0" : "=r"(v) : "r"(x), "i"(3) : "memory");
+    __attribute__((holo)) asm ("li %0, 40" : "=r"(v));    // holo's neutral text instead
 
-* Registers are the neutral file: x64 r0=rax r1=rcx r2=rdx r3=rbx r4=rbp (the frame) r5=rsi
-  r6=rdi r7..r14=r8..r15; a64 rN=xN. So a raw x64 syscall is
-  `asm("sys" : : "r0"(nr), "r6"(a0), "r5"(a1), "r2"(a2))`.
-* Constraints: `"r"`/`"=r"`/`"+r"` pick a register, `"rN"` forms pin one, `"i"` an immediate
-  (parse-time constant). `%0..%9` substitute (outputs first), `%%` a literal `%`. Adjacent
-  template strings concatenate.
+* Registers spell as the dialect does, at the operand's C width on x64 (a `uint8_t` is `%al`,
+  a `uint16_t` `%dx`; the `%b0 %w0 %k0 %q0` modifiers override, `%c0` prints an immediate bare;
+  a64's `%w0`/`%x0` pick w/x). The neutral file under `holo` is x64 r0=rax r1=rcx r2=rdx r3=rbx
+  r4=rbp (the frame) r5=rsi r6=rdi r7..r14=r8..r15; a64 rN=xN; rv64 r0..r7=a0..a7.
+* Constraints: `"r"`/`"=r"`/`"+r"` (and `q`/`g`/`rm`) pick a register, `"rN"` pins a neutral
+  one, x86's `a`/`b`/`c`/`d`/`S`/`D` letters pin theirs and `"Nd"` is dx, a digit `"0"` ties an
+  input to that output's register, `"i"`/`"n"` an immediate (parse-time constant; `"ir"` picks by
+  whether the operand is one), `"m"` a memory operand (the address in a register, spelled as the
+  dialect's base form). A `register T v asm("x0")` local pins wherever the asm names it — the
+  a64/riscv way of pinning, and the only one those dialects have. `%0..%9` substitute (outputs
+  first), `%%` a literal `%`; adjacent template strings concatenate.
+* What a line may say is what the neutral IR carries: the 64-bit register ops, immediates
+  (C expressions: `$~(1 << 2)`, `#(3 << 20)`), base + displacement memory, GNU's `1:`/`1f`/`1b`
+  local labels, the system lane (control registers, msr, cpuid, in/out, SVM, VMX, the descriptor
+  tables; mrs/msr/tlbi/dc/ic/at/brk/hvc; the csr pseudos, ecall/ebreak/unimp). x64's 32-bit forms
+  ride the 64-bit op plus a zero-extend (`movl`, `addl`, `xorl`); the 8/16-bit register forms and
+  indexed memory refuse. A template separates on `\n` or `;`, as GNU does. A line that fits
+  nothing SCARES (`cc: internal error: gas-x64-op ..`) rather than dropping out.
 * The body assembles AT CODEGEN into one opaque `('raw bytes)`: the IR passes barrier on raw,
   labels inside a template stay LOCAL to it, and no pass ever rewrites user instructions.
   External symbols cannot be named in a template — reach values through operands (`"r"(&x)`
   works, and the address-taken local also fences deadst).
 * Operands stage through the machine stack, so calls inside operand expressions are safe, and
   any scalar lvalue output works (`*p`, `a[i]`). Float/struct/bitfield operands refuse.
-* Allowed registers (operands + clobbers): x64 r0-r3 + r5-r10 (r3 rides every prologue's -8
-  slot; r4 is the frame and refuses), a64 adds r4 (x4, an argument register there — 5+-arg
-  syscalls need it). `sp` and the callee-saved r11-r14 refuse. Clobbers
-  (`"memory"`/`"cc"`/register names) are validated but need no action: an asm-containing function
-  turns register HOMING off (`g 'hasasm`), so nothing lives in a register across any statement.
-* ⚠ **A multi-instruction template separates on `\n`, NEVER `;`** — the neutral reader takes `;`
-  as a comment to end of line, so a `;`-joined template assembles its first instruction and
-  SILENTLY DROPS the rest. `\n` is also what GNU wants, so it is the separator that serves a
-  two-spelling header.
-* The first consumer is the kernel's `free/<a>/asmops.h`, which
-  carries both spellings behind the `__mooncc__` predefine. Worth reading for how far the two
-  dialects agree: a bare mnemonic and a `mnemonic op, op` line are the SAME text in both.
-* Deferred until a consumer demands them: an AT&T template front-end, `"f"` float operands, asm
-  goto, named `[sym]` operands, top-level asm.
+* Registers an operand may take: x64 r0-r3 + r5-r10 (r3 rides every prologue's -8 slot; r4 is
+  the frame and refuses), a64 adds r4 (x4, an argument register there). Clobbers: `"memory"`,
+  `"cc"` and those registers need no action — an asm-containing function turns register HOMING
+  off (`g 'hasasm`), so nothing lives in a register across any statement; a CALLEE-SAVED
+  register (x64 r12-r15, a64 x11-x28, rv64's s-file) is pushed around the body; the stack and
+  frame pointers refuse.
+* Deferred until a consumer demands them: `"f"` float operands, asm goto, named `[sym]`
+  operands, top-level asm, indexed memory operands.
 
 ## the installed shape
 

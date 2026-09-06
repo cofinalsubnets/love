@@ -88,7 +88,7 @@
       (edef 2 2) (sdef 2 3) (sassert 2 2) (cpp-def 1 2) (cpp-undef 1 1) (cpp-if 1 2)
       (blk 1 1) (decl 1 1) (sdecl 1 1) (ret 1 2) (if 2 3) (while 2 2) (for 4 4)
       (do 2 2) (switch 2 2) (case 1 1) (dflt 0 0) (brk 0 0) (cont 0 0) (goto 1 1)
-      (lbl 1 1) (expr 1 1) (nop 0 0) (asm 4 4)
+      (lbl 1 1) (expr 1 1) (nop 0 0) (asm 4 5)
       (num 1 1) (flo 1 1) (str 1 1) (chr 1 1) (var 1 1) (bin 3 3) (un 2 2) (asn 2 2)
       ; ('rmw op lv rhs) -- `lv op= rhs` kept whole, because the desugar to
       ; (asn lv (bin op lv rhs)) would evaluate lv twice (parse.l's calm?)
@@ -299,10 +299,12 @@
    ; one `decl` is one C declaration and may carry several declarators (`int a, *b;`),
    ; sharing a base and each growing its own; split, they would come back two nodes
    (cstor st) (? !(two? st) "" (sepby " " (map string st) + " "))
+   ; a fourth element is a register variable's asm("reg") pin, and `register` leads its run
    (cdtor1 d) (: nm <d t <>d v <>>d
-                 (cty-dtor t nm 0 + (? !(two? v) "" (" = " + cinit v 0))))
+                 (cty-dtor t nm 0 + (? (two? >>>d) (" asm(" + cstrlit <>>>d + ")") "")
+                  + (? !(two? v) "" (" = " + cinit v 0))))
    (cdecls ds) (: b (cty-base <><ds)
-                  (b + " " + sepby ", " (map cdtor1 ds)))
+                  ((? (foldl (\ a d (a || two? >>>d)) () ds) "register " "") + b + " " + sepby ", " (map cdtor1 ds)))
 
    ; --- statements ---------------------------------------------------------------
    ; one space per level, love.c's own indent
@@ -361,7 +363,7 @@
             (copen n "" hdr b + cclose n b ""))
         ['switch c items] (line n ("switch (" + ce c 0 + ") {")
                            + join (map (x \ cstmt x (n + 1)) items) + line n "}")
-        ['asm t o1 o2 cl] (line n ("__asm__ (" + cstrlit t + casmop o1 + casmop o2
+        ['asm t o1 o2 cl . more] (line n ((two? more ? "__attribute__((holo)) " "") + "__asm__ (" + cstrlit t + casmop o1 + casmop o2
                                    + (two? cl ? (" : " + sepby ", " (map cstrlit cl)) "") + ");"))
         (line n (ce s 0 + ";"))))
    ; the else-if chain kept flat: an else whose whole body is another `if` prints as
