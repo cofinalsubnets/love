@@ -63,20 +63,20 @@
     (: neg (s a = 45)
        i1 (s a = 45 || s a = 43 ? (a + 1) a)
        (mant k acc sc dot)
-        (? (b <= k) [acc sc]
-           (: c (s k)
-              (? (c = 46) (mant (k + 1) acc sc 1)
-                 (aw-dig? c) (mant (k + 1) (10 * acc + c - 48) (dot ? (sc * 10) sc) dot)
-                 [acc sc])))
+        (b <= k ? [acc sc]
+         (: c (s k)
+            (?- [acc sc]
+             (c = 46) (mant (k + 1) acc sc 1)
+             (aw-dig? c) (mant (k + 1) (10 * acc + c - 48) (dot ? (sc * 10) sc) dot))))
        (fnd k) (? (b <= k) b (s k = 101 || s k = 69) k (fnd (k + 1)))
        e (fnd i1)
        m (mant i1 0 1 0)
        base (<m / <>m)
-       ex (? (e = b) 0
-             (: t (snip s (e + 1) b)
-                (? (0 < #t && t 0 = 45) -(uatoi (snip t 1 #t))
-                   (0 < #t && t 0 = 43) (uatoi (snip t 1 #t))
-                   (uatoi t))))
+       ex (e = b ? 0
+           (: t (snip s (e + 1) b)                ; a sign, or the whole text
+              ((0 < #t && t 0) @ 45 -(uatoi (snip t 1 #t))
+                                43 (uatoi (snip t 1 #t))
+                                (uatoi t))))
        v (ex = 0 ? base (base * 10 ** ex))
        (neg ? -v v))
    ; awk's string->number: the longest numeric prefix, blanks first, 0 for none
@@ -94,7 +94,7 @@
        a (sp 0) b (bk n)
        (a >= b ? 0 (aw-nspan s a b = b)))
    ; a text off the input -> the value it should behave as
-   (aw-mk s) (? (aw-looks-num? s) ['sn (aw-s2n s) s] s)
+   (aw-mk s) (aw-looks-num? s ? ['sn (aw-s2n s) s] s)
    (aw-numv v) (? (aw-nil? v) 0 (string? v) (aw-s2n v) (aw-sn? v) <>v v)
    (aw-bool v) (? (aw-nil? v) 0
                   (string? v) (0 < #v)
@@ -132,37 +132,37 @@
        y (a * (** 10 nd))
        ; past a charm the value is integral already, so its exact digits plus nd
        ; zeros are the fixed spelling
-       (? !(y < 9.0e18)
+       (!(y < 9.0e18) ?
           (: s ((neg ? "-" "") + aw-intstr a)
-             (? (nd < 1) s (s + "." + aw-zeros nd)))
+             (nd < 1 ? s (s + "." + aw-zeros nd)))
           (: r (int (y + 0.5))
              s (show r)
              body (nd < 1 ? s
                      (: p (aw-lpad (nd + 1) s)
                         m #p
                         (snip p 0 (m - nd) + "." + snip p (m - nd) m)))
-             (? neg ("-" + body) body))))
+             (neg ? ("-" + body) body))))
    ; %.<nd>e
    (aw-expo x nd)
     (: neg (x < 0)
        a (abs x)
-       sg (? neg "-" "")
+       sg (neg ? "-" "")
        (tl e) (: d (show (e < 0 ? -e e))
                  ("e" + (e < 0 ? "-" "+") + (#d < 2 ? ("0" + d) d)))
        (a = 0 ? (sg + aw-fixed 0 nd + tl 0)
           (: e (aw-exp10 a)
              m (a / 10 ** e)
              carry (m >= 10 - 0.5 / 10 ** nd)   ; the round can carry to 10.0
-             e2 (? carry (e + 1) e)
-             ms (aw-fixed (? carry (a / 10 ** e2) m) nd)
+             e2 (carry ? (e + 1) e)
+             ms (aw-fixed (carry ? (a / 10 ** e2) m) nd)
              (sg + ms + tl e2))))
    ; drop the trailing zeros of a fraction, then a bare trailing point
    (aw-strip s)
     (: n #s
        (dot k) (? (n <= k) -1 (s k = 46) k (dot (k + 1)))
        d (dot 0)
-       (? (d < 0) s
-          (: (bk k) (? (d < k && s (k - 1) = 48) (bk (k - 1)) k)
+       (d < 0 ? s
+          (: (bk k) (d < k && s (k - 1) = 48 ? (bk (k - 1)) k)
              b (bk n)
              (snip s 0 (b - 1 = d ? d b)))))
    ; %.<np>g -- e-form outside [-4, np), f-form inside, trailing zeros dropped
@@ -170,9 +170,9 @@
     (: np (np0 < 1 || np0)
        neg (x < 0)
        a (abs x)
-       (? (a = 0) "0"
+       (a = 0 ? "0"
           (: e (aw-exp10 a)
-             (? ((e < -4) || !(e < np))
+             (e < -4 || !(e < np) ?
                 (: s (aw-expo x (np - 1))
                    n #s
                    (ep k) (? (n <= k) n (s k = 101 || s k = 69) k (ep (k + 1)))
@@ -201,18 +201,18 @@
    ; -- sprintf --------------------------------------------------------------
    (aw-sp-int x) (aw-intstr x)
    (aw-base n b caps)
-    (: dg (? caps "0123456789ABCDEF" "0123456789abcdef")
-       (go v acc) (? (v = 0) acc (go (// v b) ((string (dg (% v b))) + acc)))
-       (? (n = 0) "0" (go n "")))
+    (: dg (caps ? "0123456789ABCDEF" "0123456789abcdef")
+       (go v acc) (v = 0 ? acc (go (// v b) (string (dg (% v b)) + acc)))
+       (n = 0 ? "0" (go n "")))
    ; a conversion's flags, width and precision -> (minus zero plus space w prec k)
    (aw-spec f n k0)
     (: (fl k m z p sp)
-        (? (n <= k) [m z p sp 0 -1 k]
-           (: c (f k)
-              (? (c = 45) (fl (k + 1) 1 z p sp)
-                 (c = 48) (fl (k + 1) m 1 p sp)
-                 (c = 43) (fl (k + 1) m z 1 sp)
-                 (c = 32) (fl (k + 1) m z p 1)
+        (n <= k ? [m z p sp 0 -1 k]
+         (: c (f k)
+            (c @ 45 (fl (k + 1) 1 z p sp)
+                 48 (fl (k + 1) m 1 p sp)
+                 43 (fl (k + 1) m z 1 sp)
+                 32 (fl (k + 1) m z p 1)
                  (: (num j acc got) (j < n && aw-dig? (f j) ?
                                        (num (j + 1) (10 * acc + f j - 48) 1)
                                        [acc got j])
@@ -233,41 +233,41 @@
    ; one conversion at f k (which is a %) -> (next-k args-left), the text said into o
    (aw-conv o f n k l cf)
     (aw-spec f n (k + 1) @ [m z pl spc w pr j]
-     (? (n <= j) (: _ (put o 37) [(k + 1) l])
+     (n <= j ? (put o 37, [(k + 1) l])
         (: d (f j)
            v (two? l && <l)
            rest (two? l ? >l l)
            num (aw-numv v)
            done [(j + 1) rest]
-           (? (d = 37) (put o 37, [(j + 1) l])
-              (d = 99)
+           (d @ 37 (put o 37, [(j + 1) l])
+              99
                (: t (? (aw-nil? v) "" (string? v) v (aw-sn? v) <>>v ())
                   s (string? t ? (0 < #t ? (string (t 0)) "")
                        (string (aw-trunc num)))
                   (say o (aw-pad m 0 w s), done))
-              (d = 115)
+              115
                (: s0 (aw-str v cf)
                   s (pr < 0 ? s0 (snip s0 0 (#s0 < pr ? #s0 pr)))
                   (say o (aw-pad m 0 w s), done))
-              (d = 100 || d = 105)
+              (100 || 105)
                (: s (aw-sgn pl spc (aw-sp-int num))
                   (say o (aw-pad m z w s), done))
-              (d = 111 || d = 120 || d = 88 || d = 117)
+              (111 || 120 || 88 || 117)
                (: x (aw-trunc num)
                   y (abs x)
-                  s0 (? (d = 111) (aw-base y 8 0)
-                        (d = 117) (show y)
-                        (aw-base y 16 (d = 88)))
+                  s0 (d @ 111 (aw-base y 8 0)
+                         117 (show y)
+                         (aw-base y 16 (d = 88)))
                   s (x < 0 ? ("-" + s0) s0)
                   (say o (aw-pad m z w s), done))
-              (d = 102 || d = 70)
+              (102 || 70)
                (: s (aw-sgn pl spc (aw-fixed num (pr < 0 ? 6 pr)))
                   (say o (aw-pad m z w s), done))
-              (d = 101 || d = 69)
+              (101 || 69)
                (: s0 (aw-expo num (pr < 0 ? 6 pr))
                   s (aw-sgn pl spc (d = 69 ? (aw-up s0) s0))
                   (say o (aw-pad m z w s), done))
-              (d = 103 || d = 71)
+              (103 || 71)
                (: s0 (aw-gen num (pr < 0 ? 6 pr))
                   s (aw-sgn pl spc (d = 71 ? (aw-up s0) s0))
                   (say o (aw-pad m z w s), done))
@@ -305,7 +305,7 @@
             "*" "/" "%" "^" "!" ">" "<" "|" "?" ":" "~" "$" "=")
    (aw-op-at s n k)                              ; -> [text next] | ()
     (: (has t) (: m #t (k + m <= n && t = snip s k (k + m)))
-       (try (w . u)) (has w ? (: nm (? (w = "**") "^" (w = "**=") "^=" w)
+       (try (w . u)) (has w ? (: nm (w @ "**" "^" "**=" "^=" w)
                                  [nm (k + #w)])
                       (try u))
        (try aw-ops))
@@ -316,63 +316,63 @@
     (: o (jug 0)
        (go k) (n <= k ? (aw-err "unterminated string")
                (: c (s k)
-                (? (c = 34) [(slurp o) (k + 1)]
-                   (c = 92 && k + 1 < n)
-                    (: d (s (k + 1))
-                       (48 <= d <= 55 ?
-                          (: (oct j v cnt)
-                              (cnt < 3 && j < n && 48 <= s j <= 55 ?
-                                 (oct (j + 1) (8 * v + s j - 48) (cnt + 1))
-                                 [v j])
-                             (oct (k + 1) 0 0 @ [v j] (put o v, go j) ()))
-                          (put o (aw-esc d), go (k + 2))))
-                   (put o c, go (k + 1)))))
+                (c @- (put o c, go (k + 1))
+                 34 [(slurp o) (k + 1)]
+                 (92 && k + 1 < n)
+                  (: d (s (k + 1))
+                     (48 <= d <= 55 ?
+                        (:- (oct (k + 1) 0 0 @ [v j] (put o v, go j) ())
+                         (oct j v cnt)
+                          (cnt < 3 && j < n && 48 <= s j <= 55 ?
+                             (oct (j + 1) (8 * v + s j - 48) (cnt + 1))
+                             [v j]))
+                        (put o (aw-esc d), go (k + 2)))))))
        (go i))
    ; a /.../ body from i -> [text next]; only \/ is eaten, the rest is the engine's
    (aw-erelit s n i)
     (: o (jug 0)
        (go k) (n <= k ? (aw-err "unterminated regex")
                (: c (s k)
-                (? (c = 47) [(slurp o) (k + 1)]
-                   (c = 10) (aw-err "newline in regex")
-                   (c = 92 && k + 1 < n)
-                    (: d (s (k + 1))
-                       (d = 47 ? (put o 47, go (k + 2))
-                        (put o 92, put o d, go (k + 2))))
-                   (put o c, go (k + 1)))))
+                (c @- (put o c, go (k + 1))
+                 47 [(slurp o) (k + 1)]
+                 10 (aw-err "newline in regex")
+                 (92 && k + 1 < n)
+                  (: d (s (k + 1))
+                     (d = 47 ? (put o 47, go (k + 2))
+                      (put o 92, put o d, go (k + 2)))))))
        (go i))
    (aw-lex src)
-    (: n (tally src)
+    (: n #src
        (eol j) (j < n && src j != 10 ? (eol (j + 1)) j)
        (wd j) (j < n && aw-aln? (src j) ? (wd (j + 1)) j)
        (go k prev acc)
         (n <= k ? (rev (['eof ""] . acc))
          (: c (src k)
-          (? (c = 32 || c = 9 || c = 13) (go (k + 1) prev acc)
-             (c = 35) (go (eol k) prev acc)
-             ; a backslash-newline is a continuation: neither token nor break
-             (c = 92) (go (k + 1 < n && src (k + 1) = 10 ? (k + 2) (k + 1)) prev acc)
-             (c = 10) (: t ['nl ""] (go (k + 1) t (t . acc)))
-             (c = 34) (aw-strlit src n (k + 1) @ [s j]
-                        (: t ['str s] (go j t (t . acc))) ())
-             (c = 47 && !(aw-div? prev))
-              (aw-erelit src n (k + 1) @ [s j]
-                (: t ['ere s] (go j t (t . acc))) ())
-             (aw-dig? c || (c = 46 && k + 1 < n && aw-dig? (src (k + 1))))
-              (: e (aw-nspan src k n)
-                 t ['num (aw-parse src k e)]
-                 (go e t (t . acc)))
-             (aw-alp? c)
-              (: e (wd k)
-                 w (snip src k e)
-                 ; a ( GLUED to the name is a call; spaced, it is concatenation
-                 t (? (aw-kw? w) ['kw w]
-                      (e < n && src e = 40) ['fname w]
-                      ['name w])
-                 (go e t (t . acc)))
-             (aw-op-at src n k @ [w j]
-               (: t ['op w] (go j t (t . acc)))
-               (aw-err ("unexpected character " + string c))))))
+          (c @ (32 || 9 || 13) (go (k + 1) prev acc)
+               35 (go (eol k) prev acc)
+               ; a backslash-newline is a continuation: neither token nor break
+               92 (go (k + 1 < n && src (k + 1) = 10 ? (k + 2) (k + 1)) prev acc)
+               10 (: t ['nl ""] (go (k + 1) t (t . acc)))
+               34 (aw-strlit src n (k + 1) @ [s j]
+                    (: t ['str s] (go j t (t . acc))) ())
+               (?- (aw-op-at src n k @ [w j]
+                     (: t ['op w] (go j t (t . acc)))
+                     (aw-err ("unexpected character " + string c)))
+                (c = 47 && !(aw-div? prev))
+                 (aw-erelit src n (k + 1) @ [s j]
+                   (: t ['ere s] (go j t (t . acc))) ())
+                (aw-dig? c || (c = 46 && k + 1 < n && aw-dig? (src (k + 1))))
+                 (: e (aw-nspan src k n)
+                    t ['num (aw-parse src k e)]
+                    (go e t (t . acc)))
+                (aw-alp? c)
+                 (: e (wd k)
+                    w (snip src k e)
+                    ; a ( glued to the name is a call; spaced, it is concatenation
+                    t (? (aw-kw? w) ['kw w]
+                         (e < n && src e = 40) ['fname w]
+                         ['name w])
+                    (go e t (t . acc)))))))
        (go 0 () ()))
 
    ; -- the parser ----------------------------------------------------------
@@ -406,36 +406,36 @@
     (aw-elist ts 0 () @ [es r]
       [es (aw-want r "]" "expected ] after a subscript")] ())
    (aw-e-prim ts ng)
-    (? !(two? ts) (aw-err "unexpected end of program")
-       (: t <ts k <t v <>t r >ts
-          (? (= k 'num) [['num v] r]
-             (= k 'str) [['str v] r]
-             (= k 'ere) [['ere v] r]
-             (= k 'name)
+    (one? ts ? (aw-err "unexpected end of program")
+     (: t <ts k <t v <>t r >ts
+        (k @ 'num [['num v] r]
+             'str [['str v] r]
+             'ere [['ere v] r]
+             'name
               (? (aw-op? r "[") (aw-subs >r @ [es r2] [['idx v es] r2] ())
                  (member? v aw-bis) [['bi v ()] r]
                  [['var v] r])
-             (= k 'fname)
+             'fname
               (: r2 (aw-want r "(" "expected (")
-                 (? (aw-op? r2 ")")
-                    [(? (member? v aw-bis) ['bi v ()] ['call v ()]) >r2]
+                 (aw-op? r2 ")" ?
+                    [(member? v aw-bis ? ['bi v ()] ['call v ()]) >r2]
                     (aw-elist (aw-nl r2) 0 () @ [es r3]
                       (: r4 (aw-want r3 ")" "expected ) after the arguments")
-                         [(? (member? v aw-bis) ['bi v es] ['call v es]) r4])
+                         [(member? v aw-bis ? ['bi v es] ['call v es]) r4])
                       ())))
-             (= k 'kw) (aw-err ("`" + v + "' is not an expression"
-                                  + (? (v = "getline") " (getline is out of dialect)" "")))
-             (aw-op? ts "$") (aw-e-prim r ng @ [e r2] [['field e] r2] ())
-             (aw-op? ts "!") (aw-e-un r ng @ [e r2] [['not e] r2] ())
-             ((aw-op? ts "++") || (aw-op? ts "--"))
-              (aw-e-prim r ng @ [e r2]
-                (? (aw-lval? e) [['pre v e] r2] (aw-err "++ wants a variable")) ())
-             (aw-op? ts "(")
-              (aw-elist (aw-nl r) 0 () @ [es r2]
-                (: r3 (aw-want r2 ")" "expected )")
-                   (? (two? >es) [['glist es] r3] [['grp <es] r3]))
-                ())
-             (aw-err ("unexpected `" + (? (string? v) v "") + "'")))))
+             'kw (aw-err ("`" + v + "' is not an expression"
+                          + (v @ "getline" " (getline is out of dialect)" "")))
+             (?- (aw-err ("unexpected `" + (string? v ? v "") + "'"))
+              (aw-op? ts "$") (aw-e-prim r ng @ [e r2] [['field e] r2] ())
+              (aw-op? ts "!") (aw-e-un r ng @ [e r2] [['not e] r2] ())
+              (aw-op? ts "++" || aw-op? ts "--")
+               (aw-e-prim r ng @ [e r2]
+                 (aw-lval? e ? [['pre v e] r2] (aw-err "++ wants a variable")) ())
+              (aw-op? ts "(")
+               (aw-elist (aw-nl r) 0 () @ [es r2]
+                 (: r3 (aw-want r2 ")" "expected )")
+                    (two? >es ? [['glist es] r3] [['grp <es] r3]))
+                 ())))))
    (aw-e-post ts ng)
     (aw-e-prim ts ng @ [e r]
       ((aw-op? r "++" || aw-op? r "--") && aw-lval? e ?
@@ -548,34 +548,29 @@
        (aw-op? ts "|") (aw-err "output pipes are out of dialect")
        [() ts])
    (aw-prargs ts)                                ; print's list -> [args redir rest]
-    (? (aw-k? ts 'nl || aw-op? ts ";" || aw-op? ts "}" || aw-eof? ts
-        || aw-op? ts ">" || aw-op? ts ">>")
+    (aw-k? ts 'nl || aw-op? ts ";" || aw-op? ts "}" || aw-eof? ts
+     || aw-op? ts ">" || aw-op? ts ">>" ?
        (aw-redir ts @ [rd r] [() rd r] ())
        (aw-elist ts 1 () @ [es r]
          ; `print (a, b)` is the whole list in brackets, not one grouped operand
-         (: es2 (!(two? >es) && <<es == 'glist ? <><es es)
+         (: es2 (one? >es && <<es == 'glist ? <><es es)
             (aw-redir r @ [rd r2] [es2 rd r2] ()))
          ()))
    (aw-simple ts)                                ; a statement with no body of its own
     (: t <ts k <t v <>t r >ts
-       (? (aw-kwd? ts "print")
-           (aw-prargs r @ [es rd r2] [['print es rd] r2] ())
-          (aw-kwd? ts "printf")
-           (aw-prargs r @ [es rd r2]
-             (? (two? es) [['printf es rd] r2] (aw-err "printf wants a format")) ())
-          (aw-kwd? ts "next") [['next] r]
-          (aw-kwd? ts "break") [['break] r]
-          (aw-kwd? ts "continue") [['cont] r]
-          (aw-kwd? ts "exit")
-           (aw-starts? r ? (aw-expr r @ [e r2] [['exit e] r2] ()) [['exit ()] r])
-          (aw-kwd? ts "return")
-           (aw-starts? r ? (aw-expr r @ [e r2] [['ret e] r2] ()) [['ret ()] r])
-          (aw-kwd? ts "delete")
-           (? !(aw-k? r 'name) (aw-err "delete wants an array")
-              (aw-op? >r "[")
-               (aw-subs >>r @ [es r2] [['del <><r es] r2] ())
-              [['delall <><r] >r])
-          (aw-expr ts @ [e r2] [['expr e] r2] ())))
+       ((k == 'kw && v) @- (aw-expr ts @ [e r2] [['expr e] r2] ())   ; a keyword's text, or not one
+        "print" (aw-prargs r @ [es rd r2] [['print es rd] r2] ())
+        "printf" (aw-prargs r @ [es rd r2]
+                   (two? es ? [['printf es rd] r2] (aw-err "printf wants a format")) ())
+        "next" [['next] r]
+        "break" [['break] r]
+        "continue" [['cont] r]
+        "exit" (aw-starts? r ? (aw-expr r @ [e r2] [['exit e] r2] ()) [['exit ()] r])
+        "return" (aw-starts? r ? (aw-expr r @ [e r2] [['ret e] r2] ()) [['ret ()] r])
+        "delete"
+         (? !(aw-k? r 'name) (aw-err "delete wants an array")
+            (aw-op? >r "[") (aw-subs >>r @ [es r2] [['del <><r es] r2] ())
+            [['delall <><r] >r])))
    (aw-stmt ts)
     (? (aw-op? ts "{") (aw-block ts @ [ss r] [['blk ss] r] ())
        (aw-op? ts ";") [['nop] >ts]
@@ -585,7 +580,7 @@
              (: r3 (aw-want r2 ")" "expected ) after the if condition")
                 (aw-body r3 @ [a r4]
                   (: r5 (aw-term r4)
-                     (? (aw-kwd? r5 "else")
+                     (aw-kwd? r5 "else" ?
                         (aw-body >r5 @ [b r6] [['if c a b] r6] ())
                         [['if c a ()] r4]))
                   ()))
@@ -610,7 +605,7 @@
    (aw-for ts)
     (: r (aw-want ts "(" "expected ( after for")
        (aw-k? r 'name && aw-kwd? >r "in" ?
-          (? !(aw-k? >>r 'name) (aw-err "for .. in wants an array")
+          (!(aw-k? >>r 'name) ? (aw-err "for .. in wants an array")
              (: nm <><r arr <><>>r
                 r2 (aw-want >>>r ")" "expected ) after for .. in")
                 (aw-body r2 @ [b r3] [['forin nm arr b] r3] ())))
@@ -666,10 +661,10 @@
    ; a program has touched, 'fs the separator it arrived under, 're the regex
    ; cache, 'ports the open redirections, 'ranges the pattern ranges that are on
    (aw-new fns)
-    (: E (tablet 0) g (tablet 0)
+    (: E {} g {}
        _ (pins E 'g g  'fn fns  'loc ()
-                 'flds 'none  'raws 'none  'fs " "  'rec ""  're (tablet 0)
-                 'ports (tablet 0)  'ranges (tablet 0)  'ph 'begin)
+                 'flds 'none  'raws 'none  'fs " "  'rec ""  're {}
+                 'ports {}  'ranges {}  'ph 'begin)
        (pins g "FS" " "  "OFS" " "  "ORS" "\n"
                "NR" 0  "NF" 0  "FNR" 0
                "SUBSEP" (string 28)  "CONVFMT" "%.6g"  "OFMT" "%.6g"
@@ -685,28 +680,25 @@
    (aw-local? E nm) (: l (E 'loc) (tablet? l && peep l nm 'nope != 'nope))
    (aw-get E nm)
     (: l (E 'loc)
-       (? (tablet? l) (: v (peep l nm 'nope) (v == 'nope ? (aw-g E nm) v))
+       (tablet? l ? (peep l nm 'nope @ 'nope (aw-g E nm) v v)
           (aw-g E nm)))
    (aw-put E nm v)
     (aw-local? E nm ? (pin (E 'loc) nm v, v)
-       (nm = "NF" ?
-          (: _ (aw-raws E)                       ; the split it is about to resize
-             _ (pin (aw-g E) nm v)
-             (aw-setnf E (aw-trunc (aw-numv v)), v))
-          (pin (aw-g E) nm v, v)))
+     (nm @- (pin (aw-g E) nm v, v) "NF"
+      (aw-raws E,                       ; the split it is about to resize
+       pin (aw-g E) nm v,
+       aw-setnf E (aw-trunc (aw-numv v)),
+       v)))
    (aw-arr E nm)
-    (: v (aw-get E nm) (tablet? v ? v (: t (tablet 0) (aw-put E nm t, t))))
+    (: v (aw-get E nm) (tablet? v ? v (: t {} (aw-put E nm t, t))))
    ; a deleted element stays in the tablet wearing 'nope -- there is no unpin, and
    ; `delete a` inside a function must empty the caller's array, which a fresh
    ; tablet would not do
-   (aw-akeys a)
-    (: (go l acc) (l @ (k . u) (go u (peep a k 'nope == 'nope ? acc (k . acc)))
-                       (rev acc))
-       (go (keys a) ()))
+   (aw-akeys a) (:- (go (keys a) ())
+    (go l acc) (l @- (rev acc) (k . u) (go u (peep a k 'nope == 'nope ? acc (k . acc)))))
    (aw-key E subs)
     (: ss (aw-sv E (peep (aw-g E) "SUBSEP" (string 28)))
-       (go l acc first) (l @ (s . u) (go u (first ? (aw-sv E s) (acc + ss + aw-sv E s)) 0)
-                              acc)
+       (go l acc first) (l @- acc (s . u) (go u (first ? (aw-sv E s) (acc + ss + aw-sv E s)) 0))
        (go subs "" 1))
    (aw-recomp E pat)
     (: c (E 're)
@@ -721,16 +713,16 @@
    (aw-splitw t)                                 ; the default fs: runs of blank
     (: n #t
        (go i st acc)
-        (n <= i ? (rev (st < 0 ? acc ((snip t st i) . acc)))
+        (n <= i ? (rev (st < 0 ? acc (snip t st i . acc)))
          (: c (t i)
-          (aw-blank? c ? (go (i + 1) -1 (st < 0 ? acc ((snip t st i) . acc)))
+          (aw-blank? c ? (go (i + 1) -1 (st < 0 ? acc (snip t st i . acc)))
              (go (i + 1) (st < 0 ? i st) acc))))
        (go 0 -1 ()))
    (aw-splitc t c)                               ; a single charm, literally
     (: n #t
        (n = 0 ? ()
-        (: (go from k acc) (? (n <= k) (rev ((snip t from k) . acc))
-                              (t k = c) (go (k + 1) (k + 1) ((snip t from k) . acc))
+        (: (go from k acc) (? (n <= k) (rev (snip t from k . acc))
+                              (t k = c) (go (k + 1) (k + 1) (snip t from k . acc))
                               (go from (k + 1) acc))
            (go 0 0 ()))))
    (aw-splitre E t pat)
@@ -738,9 +730,9 @@
        (n = 0 ? ()
         (: (go i acc)
             (refindm nds t i @ [_ st en _]
-              (en <= st ? (rev ((snip t i n) . acc))          ; an empty match cannot walk
-                 (go en ((snip t i st) . acc)))
-              (rev ((snip t i n) . acc)))
+              (en <= st ? (rev (snip t i n . acc))          ; an empty match cannot walk
+                 (go en (snip t i st . acc)))
+              (rev (snip t i n . acc)))
            (go 0 ()))))
    (aw-fields E t fs)
     (? (fs = " ") (aw-splitw t)
@@ -758,14 +750,12 @@
     (: r (E 'raws)
        (r !== 'none ? r
         (: fs (aw-fields E (peep E 'rec "") (peep E 'fs " "))
-           _ (pin E 'raws fs)
-           _ (pin (aw-g E) "NF" #fs)
-           fs)))
+           (pin E 'raws fs, pin (aw-g E) "NF" #fs, fs))))
    ; the tablet holds only the slots a program has read or written
    (aw-fl E)
     (: fl (E 'flds)
-       (fl !== 'none ? fl (: t (tablet 0) (pin E 'flds t, t))))
-   (aw-nf E) (: _ (aw-raws E) (aw-trunc (aw-numv (peep (aw-g E) "NF" 0))))
+       (fl !== 'none ? fl (: t {} (pin E 'flds t, t))))
+   (aw-nf E) (aw-raws E, aw-trunc (aw-numv (peep (aw-g E) "NF" 0)))
    ; the value at k as it stands, cooked or raw -- what $0 is rebuilt from
    (aw-fldv E k)
     (: fl (E 'flds)
@@ -786,8 +776,8 @@
        (fill from))
    (aw-setnf E k)
     (: n (aw-nf E)
-       _ (n < k && aw-grow E (n + 1) k)
-       (pin (aw-g E) "NF" k,
+       (n < k && aw-grow E (n + 1) k,
+        pin (aw-g E) "NF" k,
         aw-rebuild E))
    (aw-getfld E k)
     (? (k < 0) (aw-err "a field index cannot be negative")
@@ -805,8 +795,8 @@
     (? (k < 0) (aw-err "a field index cannot be negative")
        (k = 0) (aw-setrec E (aw-sv E v), v)
        (: n (aw-nf E)
-          _ (n < k && (aw-grow E (n + 1) k, pin (aw-g E) "NF" k))
-          (pin (aw-fl E) k v,
+          (n < k && (aw-grow E (n + 1) k, pin (aw-g E) "NF" k),
+           pin (aw-fl E) k v,
            aw-rebuild E,
            v)))
 
@@ -864,48 +854,48 @@
           'glist (aw-err "a parenthesised list is only usable before `in'")
           (aw-err "internal: an expression shape with no analyser"))
    ; nf is owed by the lazy split, so reading it opens the record first
-   (aw-anvar nm)
-    (nm = "NF" ? (E \ (aw-raws E, aw-get E nm)) (E \ (aw-get E nm)))
+   (aw-anvar nm) (nm @- (E \ aw-get E nm) "NF" (E \ (aw-raws E, aw-get E nm)))
    (aw-idx E nm key)
-    (: a (aw-arr E nm) v (peep a key 'nope)
-       (v == 'nope ? (pin a key (), ()) v))
+    (: a (aw-arr E nm) (peep a key 'nope @ 'nope (pin a key (), ()) v v))
    ; a field index: a literal one is folded, so $1 costs a tablet read and no more
    (aw-anfldk ke)
     (<ke @ 'num (: k (aw-trunc <>ke) (E \ k))
-            (: f (aw-an ke) (E \ (aw-trunc (aw-numv (f E))))))
+     (: f (aw-an ke) (E \ aw-trunc (aw-numv (f E)))))
    (aw-anfld ke)
-    (<ke @ 'num (: k (aw-trunc <>ke) (E \ (aw-getfld E k)))
-            (: f (aw-an ke) (E \ (aw-getfld E (aw-trunc (aw-numv (f E)))))))
+    (<ke @ 'num (: k (aw-trunc <>ke) (E \ aw-getfld E k))
+     (: f (aw-an ke) (E \ aw-getfld E (aw-trunc (aw-numv (f E))))))
    ; the subscripts of a[i,j] -> one lambda answering the subsep-joined key
    (aw-ankey es)
     (: fs (map aw-an es)
-       (!(two? >fs) ? (: f <fs (E \ (aw-sv E (f E))))
-          (E \ (aw-key E (map (\ f (f E)) fs)))))
+       (one? >fs ? (: f <fs (E \ aw-sv E (f E)))
+          (E \ aw-key E (map (f \ f E) fs))))
    ; an lvalue -> [read write], both lambdas of E
+   d0 "division by zero"
+   d0m "division by zero in %"
    (aw-anl lv)
-    (<lv @ 'var (: nm <>lv [(aw-anvar nm) (\ E v (aw-put E nm v))])
+    (<lv @ 'var (: nm <>lv [(aw-anvar nm) (E \ v \ aw-put E nm v)])
            'field (: kf (aw-anfldk <>lv)
-                     [(E \ (aw-getfld E (kf E))) (\ E v (aw-setfld E (kf E) v))])
+                     [(E \ aw-getfld E (kf E)) (E \ v \ aw-setfld E (kf E) v)])
            (: nm <>lv k (aw-ankey <>>lv)
-              [(E \ (aw-idx E nm (k E)))
-               (\ E v (pin (aw-arr E nm) (k E) v, v))]))
-   (aw-anbin op a b)
-    (: f (op @ "+" (\ x y (x + y))
-               "-" (\ x y (x - y))
-               "*" (\ x y (x * y))
-               "/" (\ x y (y = 0 ? (aw-err "division by zero") (x / y)))
-                   (\ x y (y = 0 ? (aw-err "division by zero in %")
-                                   (x - y * aw-trunc (x / y)))))
-       (E \ (f (aw-numv (a E)) (aw-numv (b E)))))
+              [(E \ aw-idx E nm (k E))
+               (E \ v \ (pin (aw-arr E nm) (k E) v, v))]))
+   (aw-anbin op a b) (:- (E \ f (g E) (h E))
+   h (aw-numv * b)
+   g (aw-numv * a)
+   f (op @ "+" (x \ y \ x + y)
+           "-" (x \ y \ x - y)
+           "*" (x \ y \ x * y)
+           "/" (x \ y \ y = 0 && aw-err d0 || x / y)
+               (x \ y \ y = 0 && aw-err d0m || x - y * aw-trunc (x / y))))
    ; the strnum rule: two numeric-ish values compare as numbers, anything else as
    ; text -- so each op is analysed into its pair of faces
    (aw-ancmp op a b)
-    (: p (op @ "<" [(\ x y (x < y)) (\ x y (aw-slt x y))]
-               "<=" [(\ x y (x <= y)) (\ x y !(aw-slt y x))]
-               ">" [(\ x y (y < x)) (\ x y (aw-slt y x))]
-               ">=" [(\ x y (y <= x)) (\ x y !(aw-slt x y))]
-               "==" [(\ x y (x = y)) (\ x y (x = y))]
-                    [(\ x y (x != y)) (\ x y (x != y))])
+    (: p (op @ "<" [(x \ y \ x < y) aw-slt]
+               "<=" [(x \ y \ x <= y) (nil? * flip aw-slt)]
+               ">" [(x \ y \ y < x) (flip aw-slt)]
+               ">=" [(x \ y \ y <= x) (nil? * aw-slt)]
+               "==" [(x \ y \ x = y) (=)]
+                    [(x \ y \ x != y) (!=)])
        n <p t <>p
        (E \ (: u (a E) v (b E)
                (aw-numeric? u && aw-numeric? v ? (n (aw-numv u) (aw-numv v))
@@ -921,29 +911,28 @@
           (E \ (rehasm (g E) (aw-sv E (a E)) ? 1 0))))
    (aw-anassign op lp rhs)
     (: get <lp put <>lp
-       (? (op = "=") (\ E (put E (rhs E)))
-          (: f (op @ "+=" (\ x y (x + y))
-                     "-=" (\ x y (x - y))
-                     "*=" (\ x y (x * y))
-                     "/=" (\ x y (y = 0 ? (aw-err "division by zero") (x / y)))
-                     "%=" (\ x y (y = 0 ? (aw-err "division by zero in %")
-                                          (x - y * aw-trunc (x / y))))
-                        (\ x y (x ** y)))
-             (\ E (: y (aw-numv (rhs E)) (put E (f (aw-numv (get E)) y)))))))
+       (op = "=" ? (E \ put E (rhs E))
+          (: f (op @ "+=" (x \ y \ x + y)
+                     "-=" (x \ y \ x - y)
+                     "*=" (x \ y \ x * y)
+                     "/=" (x \ y \ y = 0 && aw-err d0 || x / y)
+                     "%=" (x \ y \ y = 0 && aw-err d0m || x - y * aw-trunc (x / y))
+                          (x \ y \ x ** y))
+             (E \ aw-numv (rhs E) @ y (put E (f (aw-numv (get E)) y))))))
    (aw-anstep op lp post)
-    (: get <lp put <>lp d (op = "++" ? 1 -1)
-       (post ? (\ E (: old (aw-numv (get E)) (put E (old + d), old)))
-          (\ E (: nv (aw-numv (get E) + d) (put E nv)))))
+    (: get <lp put <>lp d (op @ "++" 1 -1)
+     (post ? (E \ aw-numv (get E) @ old (put E (old + d), old))
+             (E \ put E (aw-numv (get E) + d))))
 
    ; -- the builtins ----------------------------------------------------------
    ; a start under 1 clamps and the length is not docked for it -- gnu's reading,
    ; not POSIX's: substr("hello",0,3) is "hel" there and "he" by the standard
    (aw-substr s m n has)
     (: len #s
-       st (? (m < 1) 1 m)
+       st (m < 1 ? 1 m)
        en0 (? has (st + n) (len + 1))
-       en (? (len + 1 < en0) (len + 1) en0)
-       (? (en <= st) "" (snip s (st - 1) (en - 1))))
+       en (len + 1 < en0 ? (len + 1) en0)
+       (en <= st ? "" (snip s (st - 1) (en - 1))))
    (aw-index s t)
     (: n #s m #t
        (go k) (? (n - m < k) 0
@@ -952,77 +941,71 @@
        (m = 0 ? (n != 0) (go 0)))
    ; & in a replacement is the matched text; \& is a literal &
    (aw-repl rep matched)
-    (: n (tally rep) o (jug 0)
-       (go k) (n <= k ? (slurp o)
-               (: c (rep k)
-                (? (c = 92 && k + 1 < n)
-                   (: d (rep (k + 1))
-                      (? (d = 38) (put o 38, go (k + 2))
-                         (d = 92) (put o 92, go (k + 2))
-                         (put o 92, go (k + 1))))
-                   (c = 38) (say o matched, go (k + 1))
-                   (put o c, go (k + 1)))))
-       (go 0))
+    (:- (go 0) n #rep o (jug 0)
+     (go k) (n <= k ? (slurp o)
+      (: c (rep k)
+       (c @- (put o c, go (k + 1))
+        38 (say o matched, go (k + 1))
+        (92 && k + 1 < n) (rep (k + 1) @
+         38 (put o 38, go (k + 2))
+         92 (put o 92, go (k + 2))
+            (put o 92, go (k + 1)))))))
    (aw-subst E nds s rep glob)                   ; -> [text count]
-    (: n (tally s) o (jug 0)
-       (go i cnt)
-        (? (n < i) [(slurp o) cnt]
-           (refindm nds s i @ [_ st en _]
-             (: _ (say o (snip s i st))
-                _ (say o (aw-repl rep (snip s st en)))
-                (? !glob (: _ (say o (snip s en n)) [(slurp o) (cnt + 1)])
-                   (en = st) (: _ (? (st < n) (put o (s st)) 0)
-                                (go (st + 1) (cnt + 1)))
-                   (go en (cnt + 1))))
-             (: _ (say o (snip s i n)) [(slurp o) cnt])))
-       (go 0 0))
+    (:- (go 0 0) n #s o (jug 0)
+     (go i cnt) (n < i ? [(slurp o) cnt]
+       (refindm nds s i @-
+        (say o (snip s i n), [(slurp o) cnt])
+        [_ st en _]
+         (say o (snip s i st),
+          say o (aw-repl rep (snip s st en)),
+          (?- (go en (cnt + 1))
+           !glob     (say o (snip s en n), [(slurp o) (cnt + 1)])
+           (en = st) (st < n && put o (s st), go (st + 1) (cnt + 1)))))))
    (aw-anbi nm as)
     (: cnt #as
-       (an k) (: nd (as k) (two? nd ? (aw-an nd) (E \ ())))
+       (an k) (as k @- (E \ ()) ((_ . _) @ nd) (aw-an nd))
        a0 (an 0) a1 (an 1) a2 (an 2)
        (s0 E) (aw-sv E (a0 E))
        (s1 E) (aw-sv E (a1 E))
        (x0 E) (aw-numv (a0 E))
        (x1 E) (aw-numv (a1 E))
        (nm @ "length"
-           (? (cnt = 0) (E \ #(aw-rec E))
+           (cnt = 0 ? (E \ #(aw-rec E))
               (: nd (as 0)
                  vnm (<nd == 'var ? <>nd ())
                  (E \ #(: cur (aw-nil? vnm ? () (aw-get E vnm))
                           (tablet? cur ? (aw-akeys cur) (s0 E))))))
           "substr"
-           (? (cnt < 2) (aw-err "substr wants two arguments")
+           (cnt < 2 ? (aw-err "substr wants two arguments")
               (: has (2 < cnt)
                  (E \ (aw-substr (s0 E) (aw-trunc (x1 E))
                                  (aw-trunc (aw-numv (a2 E))) has))))
           "index" (E \ (aw-index (s0 E) (s1 E)))
           "sprintf"
            (: rest (map aw-an >as)
-              (E \ (aw-sprintf (s0 E) (map (\ f (f E)) rest)
+              (E \ (aw-sprintf (s0 E) (map (f \ f E) rest)
                                (peep (aw-g E) "CONVFMT" "%.6g"))))
           "split"
-           (? (cnt < 2) (aw-err "split wants a string and an array")
+           (cnt < 2 ? (aw-err "split wants a string and an array")
               (: nd (as 1)
                  _ (<nd != 'var ? (aw-err "split wants an array name"))
                  anm <>nd
-                 pf (? (2 < cnt) (aw-anfs (as 2))
-                       (E \ (aw-sv E (peep (aw-g E) "FS" " "))))
+                 pf (2 < cnt && aw-anfs (as 2) || (E \ aw-sv E (peep (aw-g E) "FS" " ")))
                  (E \ (: a (aw-arr E anm)
-                         _ (: (clr l) (two? l ? (pin a <l 'nope, clr >l)) (clr (keys a)))
+                         _ (:- (clr (keys a)) (clr l) (two? l && (pin a <l 'nope, clr >l)))
                          ps (aw-fields E (s0 E) (pf E))
                          (go l k) (two? l ? (pin a (show k) (aw-mk <l), go >l (k + 1))
                                      (k - 1))
                          (go ps 1)))))
           ("sub" || "gsub")
-           (? (cnt < 2) (aw-err (nm + " wants a pattern and a replacement"))
-              (: lv (? (2 < cnt) (as 2) ['field ['num 0]])
-                 _ (? (aw-lval? lv) 0 (aw-err (nm + " wants a variable to change")))
+           (cnt < 2 ? (aw-err (nm + " wants a pattern and a replacement"))
+              (: lv (2 < cnt ? (as 2) ['field ['num 0]])
+                 _ (aw-lval? lv || aw-err (nm + " wants a variable to change"))
                  lp (aw-anl lv) get <lp put <>lp
                  pf (aw-anpat (as 0))
                  glob (nm = "gsub" ? 1 0)
                  (E \ (: r (aw-subst E (pf E) (aw-sv E (get E)) (s1 E) glob)
-                         _ (? (0 < <>r) (put E <r) 0)
-                         <>r))))
+                         (0 < <>r && put E <r, <>r)))))
           "match"
            (: pf (aw-anpat (as 1))
               (E \ (refindm (pf E) (s0 E) 0 @ [_ st en _]
@@ -1032,22 +1015,22 @@
                      (pin (aw-g E) "RSTART" 0,
                       pin (aw-g E) "RLENGTH" -1,
                       0))))
-          "int" (E \ (aw-trunc (x0 E)))
-          "sqrt" (E \ ((1 / 2) (x0 E)))
-          "exp" (E \ (** e (x0 E)))
-          "log" (E \ (log (x0 E)))
-          "sin" (E \ (sine (x0 E)))
-          "cos" (E \ (cosine (x0 E)))
+          "int" (E \ aw-trunc (x0 E))
+          "sqrt" (E \ (1 / 2) (x0 E))
+          "exp" (E \ e ** x0 E)
+          "log" (E \ log (x0 E))
+          "sin" (E \ sine (x0 E))
+          "cos" (E \ cosine (x0 E))
           "atan2" (E \ (aw-atan2 (x0 E) (x1 E)))
-          "rand" (E \ (randf ()))
+          "rand" randf
           "srand" (E \ (: old (peep E 'seed 0)
-                          v (? (0 < cnt) (aw-trunc (x0 E)) 0)
+                          v (0 < cnt ? (aw-trunc (x0 E)) 0)
                           (pin E 'seed v, rng-set v, old)))
-          "tolower" (E \ (aw-down (s0 E)))
-          "toupper" (E \ (aw-up (s0 E)))
-          "system" (E \ (: _ (flush out) _ (flush err)
-                           p (spawn ["/bin/sh" "-c" (s0 E)])
-                           (nom? p ? 127 (wait p))))
+          "tolower" (E \ aw-down (s0 E))
+          "toupper" (E \ aw-up (s0 E))
+          "system" (E \ (: p (flush out, flush err,
+                              spawn ["/bin/sh" "-c" (s0 E)])
+                         (nom? p ? 127 (wait p))))
           "close"
            (E \ (: ps (E 'ports) nm2 (s0 E) q (peep ps nm2 'none)
                    (q == 'none ? -1 (close q, pin ps nm2 'none, 0))))
@@ -1057,9 +1040,9 @@
     (<nd @ 'ere (: p <>nd (E \ p)) (: f (aw-an nd) (E \ (aw-sv E (f E)))))
    ; atan2 off the arc tangent love carries, quadrant by quadrant
    (aw-atan2 y x)
-    (: at (\ t (: s (abs t)
-                  a (aw-atan1 s)
-                  (t < 0 ? -a a)))
+    (: (at t) (: s (abs t)
+                 a (aw-atan1 s)
+                 (t < 0 ? -a a))
        (? (0 < x) (at (y / x))
           (x < 0) (y < 0 ? (at (y / x) - pi) (at (y / x) + pi))
           (0 < y) (pi / 2)
@@ -1068,7 +1051,7 @@
    ; arctan on [0,inf) by bisecting tangent -- love carries tangent, not its inverse
    (aw-atan1 t)
     (: (go lo hi k)
-        (? (k < 1) ((lo + hi) / 2)
+        (k < 1 ? ((lo + hi) / 2)
            (: m ((lo + hi) / 2)
               (tangent m < t ? (go m hi (k - 1)) (go lo m (k - 1)))))
        (go 0 (pi / 2) 60))
@@ -1079,37 +1062,35 @@
    ; way. `rk` below says whether any function can do this; where it cannot, not
    ; one trap is armed for the whole run
    (aw-esc sig)
-    (? (sig == 'nxt) (scare 'awk-next ())
-       (sig == 'brk) (scare 'awk-break ())
-       (sig == 'cnt) (scare 'awk-cont ())
-       (scare 'awk-exit <>sig))
+    (sig @ 'nxt (scare 'awk-next ())
+         'brk (scare 'awk-break ())
+         'cnt (scare 'awk-cont ())
+         (scare 'awk-exit <>sig))
    (aw-exi? r) (two? r && <r == 'exi)
    ; does any function body carry a statement that can leave it?
    (aw-flow? x)
-    (? (two? x) (aw-flow? <x || aw-flow? >x)
+    (two? x ? (aw-flow? <x || aw-flow? >x)
        (x == 'break || x == 'cont || x == 'next))
    (aw-risky? fns)
-    (: (go l) (l @ (nm . u) (: f (peep fns nm ()) (aw-flow? <>f || go u)) 0)
-       (go (keys fns)))
+    (:- (go (keys fns))
+     (go l) (l @ (nm . u) (: f (peep fns nm ()) (aw-flow? <>f || go u)) 0))
    (aw-anarg nd)
     (<nd @ 'var (: nm <>nd f (aw-anvar nm)
                    (E \ (: cur (aw-get E nm) (tablet? cur ? cur (f E)))))
             (aw-an nd))
    (aw-ancall nm as)
     (: gs (map aw-anarg as)
-       vs (map (\ nd (<nd == 'var ? <>nd ())) as)
+       vs (map (nd \ <nd == 'var ? <>nd ()) as)
        (E \ (aw-call E nm gs vs)))
    (aw-call E nm gs vs)
     (: fns (peep E 'fn ())
        f (peep fns nm 'none)
-       _ (? (= f 'none) (aw-err ("calling an undefined function " + nm)) 0)
+       _ (f == 'none && aw-err ("calling an undefined function " + nm))
        ps <f body <>f
-       loc (tablet 0)
+       loc {}
        (bind l a)
-        (? !(two? l) 0
-           (: v (two? a ? (<a E) ())
-              _ (pin loc <l v)
-              (bind >l (two? a ? >a a))))
+        (two? l && (: v (two? a ? (<a E) ())
+                      (pin loc <l v, bind >l (two? a ? >a a))))
        _ (bind ps gs)
        old (peep E 'loc ())
        _ (pin E 'loc loc)
@@ -1124,7 +1105,7 @@
        ; iff the callee subscripted it -- awk decides late, so the answer only
        ; exists now. carry the tablet back to the caller's name
        _ (: (back l a)
-             (!(two? l) || !(two? a) ? 0
+             (one? l || one? a ? 0
                 (: vnm <a
                    v (loc <l)
                    (!(aw-nil? vnm) && tablet? v && !(tablet? (aw-get E vnm))
@@ -1156,13 +1137,13 @@
    (aw-anprint es rd)
     (: pf (aw-anport rd)
        (two? es ? (: fs (map aw-an es)
-                     (E \ (aw-do-print E (map (\ f (f E)) fs) (pf E))))
+                     (E \ (aw-do-print E (map (f \ f E) fs) (pf E))))
           (E \ (aw-do-print E [(aw-rec E)] (pf E)))))
    (aw-anprintf es rd)
     (: pf (aw-anport rd) f0 (aw-an <es) rest (map aw-an >es)
-       (E \ (: _ (say (pf E) (aw-sprintf (aw-sv E (f0 E)) (map (\ g (g E)) rest)
-                                         (peep (aw-g E) "CONVFMT" "%.6g")))
-               0)))
+       (E \ (say (pf E) (aw-sprintf (aw-sv E (f0 E)) (map (g \ g E) rest)
+                                    (peep (aw-g E) "CONVFMT" "%.6g")),
+             0)))
    ; a statement answers its completion instead of throwing it: 0 falls through,
    ; 'brk 'cnt 'nxt are the bare ones and ['ret v] ['exi c] carry a value. every
    ; construct absorbs what it owns and hands the rest up, so a loop that cannot
@@ -1170,39 +1151,39 @@
    ; paying one per record, per iteration and per call
    (aw-anlist rk ss)
     (: fs (map (aw-ax rk) ss)
-       (? !(two? fs) (\ _ 0)
-          !(two? >fs) <fs
+       (? (one? fs) (_ \ 0)
+          (one? >fs) <fs
           (E \ (: (go l) (l @ (f . u) (: r (f E) (r == 0 ? (go u) r)) 0)
                   (go fs)))))
    ; one turn of a loop: 1 go round again, 0 the break came through, else the
    ; signal is not this loop's to keep
    (aw-turn E b)
     (: r (b E)
-       (? (r == 0) 1  (r == 'cnt) 1  (r == 'brk) 0  r))
+       (r @ (0 || 'cnt) 1  'brk 0  r))
    ; the guarded turn, armed only where a call can throw one of these out
    (aw-turnt E b)
     (trap (_ \ (aw-turn E b))
           ()
-          (\ a c (a @ 'awk-break  0 'awk-cont 1 (scare a c))))
+          (a \ c \ a @ 'awk-break  0 'awk-cont 1 (scare a c)))
    (aw-loop E turn c b st)
-    (? !(aw-bool (c E)) 0
+    (aw-bool (c E) ?
        (: t (turn E b)
-          (? (t == 1) (: r (st E) (r == 0 ? (aw-loop E turn c b st) r))
-             (t == 0) 0
-             t)))
+          (t @ 1 (: r (st E) (r == 0 ? (aw-loop E turn c b st) r))
+               0 0
+               t))
+       0)
    (aw-forin E turn nm arr b)
     (: a (aw-arr E arr)
        (go l)
         (l @ (al . ul)
-           (: _ (aw-put E nm (aw-mk al))
-              t (turn E b)
-              (? (t == 1) (go ul)  (t == 0) 0  t))
+           (aw-put E nm (aw-mk al),
+            turn E b @ 1 (go ul)  0 0  t t)
            0)
        (go (aw-akeys a)))
    (aw-ax rk s)
     (: turn (rk ? aw-turnt aw-turn)
      (<s @ 'blk (aw-anlist rk <>s)
-          'nop (\ _ 0)
+          'nop (_ \ 0)
           'expr (: f (aw-an <>s) (E \ (f E, 0)))
           'print (aw-anprint <>s <>>s)
           'printf (aw-anprintf <>s <>>s)
@@ -1210,34 +1191,33 @@
                  (aw-nil? <>>>s ? (E \ (aw-bool (c E) ? (a E) 0))
                     (: b (aw-ax rk <>>>s) (E \ (aw-bool (c E) ? (a E) (b E))))))
           'while (: c (aw-an <>s) b (aw-ax rk <>>s)
-                    (E \ (aw-loop E turn c b (\ _ 0))))
+                    (E \ (aw-loop E turn c b (_ \ 0))))
           'do (: b (aw-ax rk <>s) c (aw-an <>>s)
-                 (E \ (: (again _)
-                          (: t (turn E b)
-                             (? (t == 1) (aw-bool (c E) ? (again 0) 0)
-                                (t == 0) 0
-                                t))
-                         (again 0))))
-          'for (: ini (aw-nil? <>s ? (\ _ 0) (aw-ax rk <>s))
-                  c (aw-nil? <>>s ? (\ _ 1) (aw-an <>>s))
-                  st (aw-nil? <>>>s ? (\ _ 0) (aw-ax rk <>>>s))
+                 (E \ (:- (again 0)
+                        (again _)
+                         (turn E b @ 1 (aw-bool (c E) ? (again 0) 0)
+                                       0 0
+                                       t t))))
+          'for (: ini (aw-nil? <>s ? (_ \ 0) (aw-ax rk <>s))
+                  c (aw-nil? <>>s ? (_ \ 1) (aw-an <>>s))
+                  st (aw-nil? <>>>s ? (_ \ 0) (aw-ax rk <>>>s))
                   b (aw-ax rk <>>>>s)
                   (E \ (: r (ini E) (r == 0 ? (aw-loop E turn c b st) r))))
           'forin (: nm <>s arr <>>s b (aw-ax rk <>>>s)
                     (E \ (aw-forin E turn nm arr b)))
-          'next (\ _ 'nxt)
-          'break (\ _ 'brk)
-          'cont (\ _ 'cnt)
-          'exit (aw-nil? <>s ? (\ _ ['exi ()])
+          'next (_ \ 'nxt)
+          'break (_ \ 'brk)
+          'cont (_ \ 'cnt)
+          'exit (aw-nil? <>s ? (_ \ ['exi ()])
                    (: f (aw-an <>s)
                       (E \ ['exi (aw-trunc (aw-numv (f E)))])))
-          'ret (aw-nil? <>s ? (\ _ ['ret ()])
+          'ret (aw-nil? <>s ? (_ \ ['ret ()])
                   (: f (aw-an <>s) (E \ ['ret (f E)])))
           'del (: nm <>s k (aw-ankey <>>s)
                   (E \ (pin (aw-arr E nm) (k E) 'nope, 0)))
           'delall (: nm <>s
                      (E \ (: a (aw-arr E nm)
-                             (go l) (? (two? l) (: _ (pin a <l 'nope) (go >l)) 0)
+                             (go l) (two? l ? (pin a <l 'nope, go >l) 0)
                              (go (keys a)))))))
 
    ; -- the record loop -------------------------------------------------------
@@ -1250,39 +1230,38 @@
             'item ['item (aw-nil? <>it ? () (aw-an <>it)) (aw-anact rk <>>it)]
             ['range (aw-an <>it) (aw-an <>>it) (aw-anact rk <>>>it)])
    (aw-anfns rk fns)
-    (: (go l) (l @ (nm . u)
-                (: f (peep fns nm ())
-                   _ (pin fns nm [<f (aw-anlist rk <>f)])
-                   (go u))
-                0)
-       (go (keys fns)))
+    (:- (go (keys fns))
+     (go l) (l @ (nm . u)
+              (: f (peep fns nm ())
+                 (pin fns nm [<f (aw-anlist rk <>f)], go u))
+              0))
    (aw-range E it i)
     (: rs (E 'ranges)
        b <>>>it
-       (? (peep rs i 0)
+       (peep rs i 0 ?
           (aw-bool (<>>it E) && pin rs i 0, b E)
           (aw-bool (<>it E) ?
              (aw-bool (<>>it E) || pin rs i 1, b E)
              0)))
    (aw-record E items line)
-    (: _ (pins (aw-g E) "NR" (aw-nrn E "NR" + 1)
-                       "FNR" (aw-nrn E "FNR" + 1),
-          aw-setrec E line)
-       (go l i)
-        (l @ (it . u)
-           (: r (it @ ['item a b] ((aw-nil? a || aw-bool (a E)) ? (b E) 0)
-                       ('range . _) (aw-range E it i)
-                       0)                        ; a begin/end item is not this walk's
-              (r == 0 ? (go u (i + 1)) r))
-           0)
-       (go items 0))
+    (:- (pins (aw-g E) "NR" (aw-nrn E "NR" + 1)
+                        "FNR" (aw-nrn E "FNR" + 1),
+         aw-setrec E line,
+         go items 0)
+     (go l i)
+      (l @ (it . u)
+         (: r (it @ ['item a b] (aw-nil? a || aw-bool (a E) ? (b E) 0)
+                     ('range . _) (aw-range E it i)
+                     0)                          ; a begin/end item is not this walk's
+            (r == 0 ? (go u (i + 1)) r))
+         0))
    ; 'nxt is the record's own; an exit walks out past the loop
    (aw-feed E items line)
     (: r (aw-record E items line) (r == 'nxt ? 0 r))
    (aw-feedt E items line)                       ; where a call can throw one
-    (trap (\ _ (aw-feed E items line))
+    (trap (_ \ aw-feed E items line)
           ()
-          (\ a b (a == 'awk-next ? 0 (scare a b))))
+          (a \ b \ a == 'awk-next ? 0 (scare a b)))
    (aw-cmdas? a)
     (: n #a
        (go k) (? (n <= k) 0
@@ -1306,96 +1285,90 @@
    ; wants the whole input, and uread + lines held four copies of it to hand over
    ; the first one
    (aw-input E items as feed)
-    (: (one f)
-        (: q (? (f = "-") in
-                (: p (open f "r") (? (hot? p) p (aw-err ("cannot open " + f)))))
-           _ (pin (aw-g E) "FILENAME" (? (f = "-") "" f))
-           _ (pin (aw-g E) "FNR" 0)
-           rd (urd q)
-           (go _) (: l (urd-line rd)
-                     (two? l ? (: r (feed E items <l) (r == 0 ? (go 0) r)) 0))
-           r (go 0)
-           _ (? (f = "-") 0 (close q))
-           r)
-       (go l any)
-        (? (atom? l) (? any 0 (one "-"))
-           (aw-cmdas? <l) (aw-cmdas E <l, go >l any)
-           (: r (one <l) (r == 0 ? (go >l 1) r)))
-       (go as 0))
+    (:- (go as 0)
+     (one f)
+      (: q (f = "-" ? in
+            (: p (open f "r") (hot? p ? p (aw-err ("cannot open " + f)))))
+         _ (pin (aw-g E) "FILENAME" (f = "-" ? "" f), pin (aw-g E) "FNR" 0)
+         rd (urd q)
+         (go _) (: l (urd-line rd)
+                   (two? l ? (: r (feed E items <l) (r == 0 ? (go 0) r)) 0))
+         r (go 0)
+         (f = "-" || close q, r))
+     (go l any)
+      (? (atom? l) (any ? 0 (one "-"))
+         (aw-cmdas? <l) (aw-cmdas E <l, go >l any)
+         (: r (one <l) (r == 0 ? (go >l 1) r))))
    (aw-phase E items which)
-    (: (go l) (l @ (a . u) (: r (<a == which ? (<>a E) 0) (r == 0 ? (go u) r)) 0)
-       (go items))
+    (:- (go items)
+     (go l) (l @ (a . u) (: r (<a == which ? (<>a E) 0) (r == 0 ? (go u) r)) 0))
    (aw-needs? items)
-    (: (go (a . u)) (<a != 'begin || go u) (go items))
+    (: (go (a . u)) (<a != 'begin || go u) (go items))   ; a pattern head keeps the plain :
 
    ; -- the tool --------------------------------------------------------------
    (aw-flags a fs vs pfs)
-    (? !(two? a) [fs (rev vs) (rev pfs) a]
-       (: w <a n (tally w)
-          glued (2 < n ? (snip w 2 n))
-          (? (w = "--") [fs (rev vs) (rev pfs) >a]
-             (w = "-F") (two? >a ? (aw-flags >>a <>a vs pfs) (udie 2 "awk: -F wants a separator"))
-             (w = "-v") (two? >a ? (aw-flags >>a fs (<>a . vs) pfs) (udie 2 "awk: -v wants var=value"))
-             (w = "-f") (two? >a ? (aw-flags >>a fs vs (<>a . pfs)) (udie 2 "awk: -f wants a file"))
-             (2 < n && w 0 = 45 && w 1 = 70) (aw-flags >a glued vs pfs)
-             (2 < n && w 0 = 45 && w 1 = 118) (aw-flags >a fs (glued . vs) pfs)
-             (2 < n && w 0 = 45 && w 1 = 102) (aw-flags >a fs vs (glued . pfs))
-             [fs (rev vs) (rev pfs) a])))
+    (one? a ? [fs (rev vs) (rev pfs) a]
+     (: w <a n #w
+        glued (2 < n ? (snip w 2 n))
+        (w @ "--" [fs (rev vs) (rev pfs) >a]
+             "-F" (two? >a ? (aw-flags >>a <>a vs pfs) (udie 2 "awk: -F wants a separator"))
+             "-v" (two? >a ? (aw-flags >>a fs (<>a . vs) pfs) (udie 2 "awk: -v wants var=value"))
+             "-f" (two? >a ? (aw-flags >>a fs vs (<>a . pfs)) (udie 2 "awk: -f wants a file"))
+             ;; a glued -Fx -vx -fx: the letter after the dash, or nothing
+             ((2 < n && w 0 = 45 && w 1) @ 70 (aw-flags >a glued vs pfs)
+                                          118 (aw-flags >a fs (glued . vs) pfs)
+                                          102 (aw-flags >a fs vs (glued . pfs))
+                                          [fs (rev vs) (rev pfs) a]))))
    (awk-main as)
     (aw-flags as () () () @ [fs vs pfs rest]
-     (: fns (tablet 0)
-        src (? (two? pfs)
-               (: (cat l acc) (? !(two? l) acc
-                                 (: r (uread <l)
-                                    (? (two? r) (cat >l (acc + <>r + "\n"))
-                                       (udie 2 ("awk: cannot open " + <l)))))
-                  (cat pfs ""))
-               (? (two? rest) <rest
+     (: fns {}
+        src (two? pfs ?
+               (:- (cat pfs "")
+                (cat l acc) (one? l ? acc
+                             (: r (uread <l)
+                                (two? r ? (cat >l (acc + <>r + "\n"))
+                                   (udie 2 ("awk: cannot open " + <l))))))
+               (two? rest ? <rest
                   (udie 2 "usage: awk [-F FS] [-v var=val].. 'PROGRAM' [FILE..]")))
-        files (? (two? pfs) rest (? (two? rest) >rest ()))
+        files (two? pfs ? rest (two? rest ? >rest ()))
         E (aw-new fns)
-        (blow m) (: _ (say err ("awk: " + m)) _ (put err 10) (uleave 2))
-        anp (trap (\ _ (: is (aw-program (aw-lex src) fns ())
-                           rk (aw-risky? fns ? 1 0)
-                           _ (aw-anfns rk fns)
-                           [(map (aw-anitem rk) is) rk]))
+        (blow m) (say err ("awk: " + m), put err 10, uleave 2)
+        anp (trap (_ \ (: is (aw-program (aw-lex src) fns ())
+                          rk (aw-risky? fns ? 1 0)
+                          (aw-anfns rk fns, [(map (aw-anitem rk) is) rk])))
                   ()
-                  (\ a b (? (= a 'awk-err) (blow b) (scare a b))))
+                  (a \ b \ a @ 'awk-err (blow b) (scare a b)))
         items <anp
         feed (<>anp ? aw-feedt aw-feed)
-        _ (? (aw-nil? fs) 0 (pin (aw-g E) "FS" (aw-unesc fs)))
-        _ (map (\ v (aw-cmdas E v)) vs)
+        _ (aw-nil? fs || pin (aw-g E) "FS" (aw-unesc fs))
+        _ (map (v \ aw-cmdas E v) vs)
         ; exit outside end still runs the end rules -- POSIX, and the whole
         ; reason the phase is tracked; an exit inside them is the end of it
         (ending b)
-         (: _ (? (= (peep E 'ph 'end) 'end) 0
-                 (: _ (pin E 'ph 'end)
-                    (trap (\ _ (aw-phase E items 'end))
-                          ()
-                          (\ a2 b2 (? (= a2 'awk-exit) 0
-                                      (= a2 'awk-err) (blow b2)
-                                      (scare a2 b2))))))
-            (? (aw-nil? b) 0 b))
+         (peep E 'ph 'end == 'end
+          || (pin E 'ph 'end,
+              trap (_ \ aw-phase E items 'end)
+                   ()
+                   (a2 \ b2 \ a2 @ 'awk-exit 0
+                                    'awk-err (blow b2)
+                                    (scare a2 b2))),
+          (aw-nil? b ? 0 b))
         code
          (trap
-          (\ _ (: r1 (aw-phase E items 'begin)
-                  (? (aw-exi? r1) (ending <>r1)
-                     (: r2 (? (aw-needs? items)
-                              (: _ (pin E 'ph 'main)
-                                 (aw-input E items files feed)) 0)
-                        (? (aw-exi? r2) (ending <>r2)
-                           (: _ (pin E 'ph 'end)
-                              r3 (aw-phase E items 'end)
-                              (aw-exi? r3 && !(aw-nil? <>r3) ? <>r3 0)))))))
+          (_ \ (: r1 (aw-phase E items 'begin)
+                 (aw-exi? r1 ? (ending <>r1)
+                  (: r2 (aw-needs? items ? (pin E 'ph 'main, aw-input E items files feed) 0)
+                     (aw-exi? r2 ? (ending <>r2)
+                      (pin E 'ph 'end,
+                       (: r3 (aw-phase E items 'end)
+                          (aw-exi? r3 && !(aw-nil? <>r3) ? <>r3 0))))))))
           ()
-          (\ a b (? (= a 'awk-err) (blow b)
-                    (= a 'awk-exit) (ending b)
-                    (scare a b))))
-        _ (: (shut l) (? (two? l) (: p (peep (peep E 'ports ()) <l 'none)
-                                     _ (? (= p 'none) 0 (close p))
-                                     (shut >l))
-                          0)
-             (shut (keys (peep E 'ports ()))))
+          (a \ b \ a @ 'awk-err (blow b)
+                        'awk-exit (ending b)
+                        (scare a b)))
+        _ (:- (shut (keys (peep E 'ports ())))
+           (shut l) (two? l && (: p (peep (peep E 'ports ()) <l 'none)
+                                  (p == 'none || close p, shut >l))))
         _ (flush out)
         code)
      2))
