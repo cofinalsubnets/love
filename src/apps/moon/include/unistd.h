@@ -57,6 +57,7 @@ long pathconf(char const*, int);
 long fpathconf(int, int);
 int  fsync(int);
 int  fdatasync(int);
+void sync(void);
 int  unlinkat(int, char const*, int);
 unsigned int sleep(unsigned int);
 int  usleep(unsigned int);

@@ -44,6 +44,58 @@
    ; -- pwd: where we stand --
    (pwd-main _) (: _ (say out (cwd ())) _ (put out 10) _ (flush out) 0)
 
+   ; -- sync: the writeback, scheduled. sync(2) answers nothing and cannot fail.
+   ; GNU's takes FILEs and fsyncs each; this one is the bare call only, since the
+   ; per-file lane wants an fsync nif and there is none -- taking the operands and
+   ; syncing everything instead would be a different thing wearing the same name.
+   (sync-main as)
+    (: _ (? (two? as) (udie 1 "sync: takes no operands here (no fsync nif)") ())
+       _ (? (member? 'sync (names ())) (sync 0) ())
+       0)
+
+   ; -- mkfifo and mknod: the two rows a /dev wants ------------------------------
+   ; mode carries the TYPE bits as well as the permissions, which is mknod(2)'s own
+   ; shape: S_IFIFO 4096, S_IFCHR 8192, S_IFBLK 24576.
+   ; linux packs a device number wide -- major in bits 8..19 and 44.., minor in 0..7
+   ; and 20.. -- so the obvious (major << 8) | minor is right only while both are small.
+   (umkdev maj mn)
+    (((& maj 4095) << 8) | (& mn 255) | ((maj >> 12) << 44) | ((mn >> 8) << 20))
+   (umknod who p md dev)
+    (? (member? 'mknod (names ())) (mknod p md dev) 'enosys)
+   (mkfifo-main as)
+    (: t (tablet 0)
+       o (uopts as t '(109) ())
+       _ (? (two? o) () (udie 1 "mkfifo: -m wants a mode"))
+       v (uoptv t 109)
+       md (? (string? v) (uoct v) 438)          ; 0666, the mode mkfifo(1) defaults to
+       fs <>>o
+       _ (? (two? fs) () (udie 1 "usage: mkfifo [-m MODE] NAME.."))
+       (go l ok) (? !(two? l) ok
+                    (: e (umknod "mkfifo" <l (md | 4096) 0)
+                       _ (? e (: _ (say err ("mkfifo: cannot create " + <l + ": " + (show e)))
+                                 (put err 10))
+                            ())
+                       (go >l (? e 0 ok))))
+       ok (go fs 1)
+       _ (flush err) (? ok 0 1))
+   (mknod-main as)
+    (: t (tablet 0)
+       o (uopts as t '(109) ())
+       _ (? (two? o) () (udie 1 "mknod: -m wants a mode"))
+       v (uoptv t 109)
+       md (? (string? v) (uoct v) 438)
+       fs <>>o
+       n #fs
+       _ (? (2 <= n) () (udie 1 "usage: mknod [-m MODE] NAME TYPE [MAJOR MINOR]"))
+       nm <fs ty <>fs
+       kind (? (ty = "p") 4096 (ty = "c") 8192 (ty = "u") 8192 (ty = "b") 24576
+               (udie 1 ("mknod: unknown type " + ty + " (want p, b, c or u)")))
+       _ (? ((kind = 4096) || (4 <= n)) ()
+            (udie 1 "mknod: a block or character node wants MAJOR and MINOR"))
+       dev (? (kind = 4096) 0 (umkdev (uatoi (fs 2)) (uatoi (fs 3))))
+       e (umknod "mknod" nm (md | kind) dev)
+       (? e (udie 1 ("mknod: cannot create " + nm + ": " + (show e))) 0))
+
    ; -- ls: a directory's entries, sorted, dotfiles held back (-a shows them);
    ; a file argument answers its own name --
    ;   -a all   -A all but . and ..   -l long   -d the directory itself

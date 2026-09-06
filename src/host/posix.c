@@ -654,10 +654,54 @@ static ai_inline ai_word host_mount(struct ai *g, ai_word a, ai_word b, ai_word 
  if (!src || !tgt || !typ) return ai_badarg(g);
  return mount(src, tgt, typ, 0, NULL) ? ai_err(g, errno) : ZeroPoint; }
 static lvm(lvm_mount) { Sp[2] = host_mount(g, Sp[0], Sp[1], Sp[2]); Sp += 2; ai_musttail return Next(1); }
+// (mountf src tgt type flags) -> () | a nom. the same call carrying linux's MS_ word,
+// which is what ro, bind, remount and the nosuid family are. It stands BESIDE mount
+// rather than replacing it: src/apps/init/boot.l calls the three-argument one, a nif's
+// arity is fixed, and an early boot is not where an arity change wants finding out.
+// ⚠ the DATA argument stays NULL, so an -o that is filesystem text rather than a flag
+// (tmpfs's size=, a uid= on vfat) has nowhere to go and the face refuses it by name.
+static ai_inline ai_word host_mountf(struct ai *g, ai_word a, ai_word b, ai_word c, ai_word f) {
+ char const *src = str_c(a), *tgt = str_c(b), *typ = str_c(c);
+ if (!src || !tgt || !typ) return ai_badarg(g);
+ return mount(src, tgt, typ, (unsigned long) getcharm(f), NULL) ? ai_err(g, errno) : ZeroPoint; }
+static lvm(lvm_mountf) {
+  Sp[3] = host_mountf(g, Sp[0], Sp[1], Sp[2], Sp[3]); Sp += 3; ai_musttail return Next(1); }
+// (umount tgt) -> () | a nom. linux's umount2 at flags 0; freebsd spells it unmount
+// with another shape, so it stands beside mount under the same guard and for the
+// same reason.
+static lvm(lvm_umount) {
+  char const *t = str_c(Sp[0]);
+  Sp[0] = !t ? ai_badarg(g) : (umount(t) ? ai_err(g, errno) : ZeroPoint);
+  ai_musttail return Next(1); }
 #else
 // the call is there; our mount speaks a shape this kernel does not answer.
 static lvm(lvm_mount) { Sp[2] = ai_err(g, ENOSYS); Sp += 2; ai_musttail return Next(1); }
+static lvm(lvm_mountf) { Sp[3] = ai_err(g, ENOSYS); Sp += 3; ai_musttail return Next(1); }
+static lvm(lvm_umount) { Sp[0] = ai_err(g, ENOSYS); ai_musttail return Next(1); }
 #endif
+
+// (chroot dir) -> () | a nom. the LFS chapter-7 call, and the one every root the
+// distro builds is entered through. it needs privilege and says so through errno
+// like any other row -- 'eperm is an answer, not a crash.
+static lvm(lvm_chroot) {
+  char const *p = str_c(Sp[0]);
+  Sp[0] = !p ? ai_badarg(g) : (chroot(p) ? ai_err(g, errno) : ZeroPoint);
+  ai_musttail return Next(1); }
+
+// (sync _) -> (). sync(2) answers nothing and cannot fail -- the kernel schedules
+// the writeback and returns -- so this is the one effect op here with no errno lane.
+static lvm(lvm_sync) { sync(); Sp[0] = ZeroPoint; ai_musttail return Next(1); }
+
+// (mknod path mode dev) -> () | a nom. mode carries the TYPE bits (S_IFIFO, S_IFCHR,
+// S_IFBLK) as well as the permissions, exactly as mknod(2) takes them; dev is the
+// encoded device number and is ignored for a fifo. mkfifo is this call with S_IFIFO
+// and dev 0, so it is not a second nif.
+static lvm(lvm_mknod) {
+  char const *p = str_c(Sp[0]);
+  intptr_t mode = getcharm(Sp[1]), dev = getcharm(Sp[2]);
+  Sp[2] = !p ? ai_badarg(g)
+             : (mknod(p, (mode_t) mode, (dev_t) dev) ? ai_err(g, errno) : ZeroPoint);
+  Sp += 2; ai_musttail return Next(1); }
 
 #if defined(AiHaveNamespaces)
 static int ns_write(char const *path, char const *s) {
@@ -839,6 +883,11 @@ static union u const
   nif_dup[]     = {{lvm_dup}, {lvm_ret0}},
   nif_mkdir[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_mkdir}, {lvm_ret0}},
   nif_mount[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_mount}, {lvm_ret0}},
+  nif_mountf[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_mountf}, {lvm_ret0}},
+  nif_umount[]  = {{lvm_umount}, {lvm_ret0}},
+  nif_chroot[]  = {{lvm_chroot}, {lvm_ret0}},
+  nif_sync[]    = {{lvm_sync}, {lvm_ret0}},
+  nif_mknod[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_mknod}, {lvm_ret0}},
   nif_newns[]   = {{lvm_newns}, {lvm_ret0}},
   nif_posix_stat[]    = {{lvm_posix_stat}, {lvm_ret0}},
   nif_posix_lstat[]   = {{lvm_posix_lstat}, {lvm_ret0}},
@@ -873,6 +922,11 @@ AiNif("dup2", nif_dup2);
 AiNif("dup", nif_dup);
 AiNif("mkdir", nif_mkdir);
 AiNif("mount", nif_mount);
+AiNif("mountf", nif_mountf);
+AiNif("umount", nif_umount);
+AiNif("chroot", nif_chroot);
+AiNif("sync", nif_sync);
+AiNif("mknod", nif_mknod);
 AiNif("newns", nif_newns);
 AiNif("stat",    nif_posix_stat);
 AiNif("lstat",   nif_posix_lstat);

@@ -30,6 +30,42 @@ themselves, so axis B cannot reach LFS's own chapters 5–6 at any effort short 
 front end. That is a different order of work from everything else on this page, and
 naming it is most of what this section is for.
 
+## chapter 7's own call — `chroot`, and the four beside it
+
+LFS chapter 7 *is* `chroot`, and until 2026-09-06 nothing here could make one. Six
+applets now can: **`chroot`** (`src/apps/kore/proc.l`, the root moved, the cwd carried
+into it, then exec), **`mount`** (bare, it is `/proc/self/mounts` formatted; with
+operands, `-t TYPE` and the flag half of `-o`), **`umount`**, **`sync`**, **`mkfifo`**
+and **`mknod`** (`src/apps/kore/fs.l`) — the last two being what fills a `/dev`.
+
+Five nifs grew with them (`src/host/posix.c`): `chroot`, `umount`, `sync`, `mknod`, and
+`mountf` — the last standing *beside* `mount` rather than replacing it, because a nif's
+arity is fixed and `src/apps/init/boot.l` calls the three-argument one at pid 1, which
+is not where an arity change wants finding out. Two nolibc members grew too
+(`sys/umount.c`, `sys/sync.c`); `chroot`, `mknod`, `mkfifo` and `mount` were already
+there.
+
+*gate:* `make test_root`, and its second half is the point. The privileged verbs cannot
+be smoked as an ordinary user, and a gate that only watched them answer `eperm` would
+pass just as well against a stub — so `test/gate/rootns.l` uses the `newns` nif to make
+itself root in an unprivileged **user namespace** and then does the real thing: a tmpfs
+mounted, a bind that really shows the other tree, both unmounted, a fifo made, and a
+`chroot` with a command running inside the new root.
+
+Three things the work taught:
+
+* ⚠ **`chroot(2)` moves the root and leaves the cwd where it was** — outside the new
+  tree — so a relative path then walks straight out of the jail. The `chdir("/")` after
+  it is not tidiness.
+* ⚠ **a user namespace is not enough for a device node.** `mknod(2)` wants `CAP_MKNOD`
+  in the *initial* user namespace, so a userns root cannot make one however root it
+  looks. The gate asserts the refusal instead, which is the half it can honestly say.
+* **`-o` carries two different kinds of thing.** `ro`, `bind`, `remount` and the
+  `nosuid` family are bits in `mount(2)`'s flags word; `size=` on a tmpfs and `uid=` on
+  a vfat are filesystem *text* riding the `data` argument, which no nif here passes. The
+  second kind is refused by name rather than taken and dropped, because an `-o` that was
+  accepted and ignored is a lie about what got mounted.
+
 ## chapters 7–8, the final system
 
 Present natively — roughly **20 of ~85 chapter-8 packages**, several partial:
@@ -57,10 +93,12 @@ where GNU reads a concatenation.
   gettext, pkg-config. Every real LFS package demands these *before* it compiles a line.
   This, not the compiler, is what axis B actually runs into.
 - **the rest of the shell floor** — less, xz, bzip2, file.
-- **the admin layer** — util-linux, shadow, e2fsprogs, kmod, iproute2, kbd. (procps and
-  psmisc are half here: the /proc readers landed, `top`/`vmstat`/`pmap` did not.
-  dosfstools is here now: `love mkfs.vfat` / `mkdosfs` and the `love fat` verbs over
-  `src/apps/fat/fat.l`, gated against mtools in `make test_fat32`.)
+- **the admin layer** — shadow, e2fsprogs, kmod, iproute2, kbd. Three of its packages
+  are part-here now: **util-linux**'s `mount`/`umount`/`mkfifo`/`mknod` and coreutils'
+  `chroot`/`sync` (the section above), **dosfstools** as `love mkfs.vfat` / `mkdosfs`
+  and the `love fat` verbs over `src/apps/fat/fat.l` (`make test_fat32`, mtools the
+  oracle), and **procps/psmisc** half — the /proc readers landed, `top`/`vmstat`/`pmap`
+  did not.
 - **docs** — groff, man-db, texinfo, ncurses, readline.
 
 ## chapters 9–10 — config partial, kernel imported

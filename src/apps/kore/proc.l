@@ -225,6 +225,81 @@
        _ (put out 10) _ (flush out) 0)
 
 
+   ; ---- chroot, mount and umount: the three the distro's own boot asks for -------
+   ; every one of them needs privilege and says so through errno like any other row:
+   ; 'eperm is an answer, not a crash, which is what makes them safe to smoke unprivileged.
+
+   ; chroot DIR [CMD [ARG..]] -- LFS chapter 7 is this call. the root changes, the cwd
+   ; follows it to /, and the command REPLACES us, so the only thing that returns here
+   ; is a failure. no CMD runs $SHELL, GNU's default, and /bin/sh when there is none.
+   (chroot-main as)
+    (: _ (? (two? as) () (udie 1 "usage: chroot DIR [CMD [ARG..]]"))
+       d <as
+       _ (? (member? 'chroot (names ())) () (udie 1 "chroot: no chroot on this seat"))
+       e (chroot d)
+       _ (? e (udie 1 ("chroot: cannot change root to " + d + ": " + (show e))) ())
+       ; ⚠ the chdir is not tidiness. chroot moves the ROOT and leaves the cwd where it
+       ; was -- outside the new tree -- and a relative path then walks out of the jail.
+       _ (? (chdir "/") (udie 1 "chroot: cannot enter the new root") ())
+       cmd (? (two? >as) >as
+              (: sh (getenv "SHELL") [(? (string? sh) sh "/bin/sh") "-i"]))
+       r (exec cmd)
+       (udie 127 ("chroot: cannot run " + <cmd + ": " + (show r))))
+
+   ; the -o words that are FLAGS. anything else an -o can carry is filesystem text
+   ; (tmpfs's size=, vfat's uid=) and rides mount(2)'s data argument, which no nif
+   ; here passes -- so it is refused by name rather than taken and dropped.
+   umnt-flags '(("ro" 1) ("nosuid" 2) ("nodev" 4) ("noexec" 8) ("sync" 16)
+                ("remount" 32) ("noatime" 1024) ("nodiratime" 2048) ("bind" 4096)
+                ("move" 8192) ("rec" 16384) ("relatime" 2097152)
+                ("rw" 0) ("suid" 0) ("dev" 0) ("exec" 0) ("async" 0) ("defaults" 0))
+   (umnt-opt w)
+    (: r (assoc w umnt-flags) (? (two? r) <>r ()))
+   (umnt-bits ws acc)
+    (? !(two? ws) acc
+       (: b (umnt-opt <ws)
+          _ (? (charm? b) () (udie 1 ("mount: -o " + <ws + " is not a flag this mount can carry")))
+          (umnt-bits >ws (acc | b))))
+
+   ; bare `mount` reads /proc/self/mounts, which is where the kernel keeps the answer.
+   ; there is no /etc/mtab here and writing one would be a second truth to keep.
+   (mount-list _)
+    (: r (uread "/proc/self/mounts")
+       _ (? (two? r) () (udie 1 "mount: cannot read /proc/self/mounts"))
+       (go l) (? !(two? l) ()
+                 (: w (uwords <l)
+                    _ (? (4 <= #w) (: _ (say out ((w 0) + " on " + (w 1) + " type " + (w 2)
+                                                  + " (" + (w 3) + ")"))
+                                      (put out 10))
+                         ())
+                    (go >l)))
+       _ (go (filter (\ s #s) (lines <>r)))
+       _ (flush out) 0)
+   (mount-main as)
+    (? !(two? as) (mount-list ())
+       (: t (tablet 0)
+          o (uopts as t '(116 111) ())
+          _ (? (two? o) () (udie 1 "mount: -t and -o each want a value"))
+          ty (: v (uoptv t 116) (? (string? v) v "auto"))
+          ob (: v (uoptv t 111) (? (string? v) (umnt-bits (usplit 44 v) 0) 0))
+          fs <>>o
+          _ (? (two? >fs) () (udie 1 "usage: mount [-t TYPE] [-o OPTS] SRC TGT   (or bare, to list)"))
+          src <fs tgt <>fs
+          _ (? (member? 'mountf (names ())) () (udie 1 "mount: no mount on this seat"))
+          e (mountf src tgt ty ob)
+          (? e (udie 1 ("mount: cannot mount " + src + " on " + tgt + ": " + (show e))) 0)))
+   (umount-main as)
+    (: _ (? (two? as) () (udie 1 "usage: umount TARGET.."))
+       _ (? (member? 'umount (names ())) () (udie 1 "umount: no umount on this seat"))
+       (go l ok) (? !(two? l) ok
+                    (: e (umount <l)
+                       _ (? e (: _ (say err ("umount: cannot unmount " + <l + ": " + (show e)))
+                                 (put err 10))
+                            ())
+                       (go >l (? e 0 ok))))
+       ok (go as 1)
+       _ (flush err) (? ok 0 1))
+
    ; ---- the /proc family: ps, free, uptime, pidof, pgrep, pkill, killall, pwdx ----
    ; no nif grew for any of these. /proc is a filesystem, so the whole family is
    ; `uread` and a parser -- which is also why a world without one (the kernel's own
