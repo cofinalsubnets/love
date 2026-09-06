@@ -388,7 +388,7 @@ test_seed: $(ho)/.love.baked
 # stdin, frames onto a captured stdout, :wq writes), driven through the crew layer.
 test_vi: host
 	@echo TEST src/apps/vi/{hue,core,law}.l
-	@cat test/00-init.l src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps/kore/re.l src/apps/libra/lint.l \
+	@cat test/00-init.l src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps/kore/re.l src/apps/kore/sed.l src/apps/libra/lint.l \
 	    src/apps/vi/config.l src/apps/vi/hue.l src/apps/vi/core.l src/apps/vi/law.l \
 	  | sh test/gate/run.sh vi "$m" "src/apps/vi/law:"
 	@rm -f $(ho)/.vi1; \
@@ -404,7 +404,11 @@ test_vi: host
 	  printf 'AX\033u:wq\n' | $(korerun) vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
 	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi1)" = "" ]; } \
 	    || { echo "FAIL kore vi undo (exit $$r)"; exit 1; }; \
-	  echo "kore: vi (laws + piped create/dd/q!/undo end-to-end) ok"
+	  printf 'ione\ntwo\nthree\033:1,$$s/o/0/g\n:2,3m0\n:wq\n' \
+	    | $(korerun) vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
+	  { [ $$r -eq 0 ] && [ "$$(tr '\n' ' ' < $(ho)/.vi1)" = "tw0 three 0ne " ]; } \
+	    || { echo "FAIL kore vi ex :s + :m (exit $$r)"; exit 1; }; \
+	  echo "kore: vi (laws + piped create/dd/q!/undo/ex end-to-end) ok"
 # The C compiler (src/apps/moon/, doc/misc/moon.md): the pure pipeline's goldens, then stage-0 end
 # to end through the real `mooncc` -- compile, run, exit 42, against a gcc -O0 differential
 # on the same source. Drives the crew layer warm (~0.68s -> ~0.1s per compile, 88 of them).

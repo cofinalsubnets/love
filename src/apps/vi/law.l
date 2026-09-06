@@ -2,7 +2,7 @@
 ; below drives the pure engine (vstep, one byte at a time) and reads the
 ; tablet back -- no tty, no port, no file. the cat (`make test_vi`):
 ;
-;   cat test/00-init.l src/apps/kore/text.l src/apps/kore/core.l src/apps/kore/re.l src/apps/libra/lint.l \
+;   cat test/00-init.l src/apps/kore/text.l src/apps/kore/core.l src/apps/kore/re.l src/apps/kore/sed.l src/apps/libra/lint.l \
 ;       src/apps/vi/config.l src/apps/vi/hue.l src/apps/vi/core.l src/apps/vi/law.l | out/love
 ;
 ; (vgo lines keys) births a buffer, feeds the TEXT's bytes (27 spelled \e via
@@ -205,7 +205,8 @@
       !(st? (vgob '("a") ((bytes "x:e other") + [CR])) 'doe)                    ; dirty refuses ...
       (= (st? (vgob '("a") ((bytes "x:e! other") + [CR])) 'doe) '("other"))     ; ... and ! overrides
       (= (st? (vgob '("a") ((bytes "x:e!") + [CR])) 'doe) '("t"))
-      !(st? (vgob '("a") ((bytes ":e ") + [CR])) 'doe))                         ; no name, no request
+      ; a trailing blank is just blank: `:e ` reloads the way a bare `:e` does
+      (= (st? (vgob '("a") ((bytes ":e ") + [CR])) 'doe) '("t")))
    _ (assert
       ; the swap starts the file over -- and re-decides the paint from the new name
       (: q (vgo '("a" "b") "jx") _ (vload q '("x" "y" "z") "n.l")
@@ -225,6 +226,85 @@
       ; an unclosed opener reports where it opened, so the jump lands on the cause
       (: q (ex '("(f x)" "(: a 1" "(g y)") "lint")
          ((= (at q) '(1 0)) && (= (q 'msg) "1 warning: 2,1 unclosed ("))))
+
+; --- the ex language: addresses, then the commands that read a range ---
+; every line below goes in through the same `:` the hand does, so what is lawed
+; is the parse as well as the edit.
+   ab5 '("aa" "bb" "cc" "dd" "ee")
+   _ (assert
+      ; addresses: N . $ , ; % and the +N / -N offsets
+      (= (at (ex ab5 "3")) '(2 0))
+      (= (at (ex ab5 "$")) '(4 0))
+      (= (at (ex ab5 "+2")) '(2 0))
+      (= (at (ex ab5 "$-1")) '(3 0))
+      (= (at (ex ab5 ".+1")) '(1 0))
+      (= (at (ex ab5 "2+")) '(2 0))                          ; a bare + steps one
+      (= (at (ex ab5 "/cc/")) '(2 0))
+      (= (at (ex ab5 "?bb?")) '(1 0))                        ; ? hunts backward, wrapping
+      (= (at (ex ab5 "/aa/")) '(0 0))                        ; and the hunt wraps
+      (= (st? (ex ab5 "/zz/") 'msg) "no match")              ; a failed address is an error ...
+      (= (lns (ex ab5 "/zz/d")) ab5)                         ; ... and never a silent :d
+      (= (at (ex ab5 "0")) '(0 0))                           ; a goto fences, it does not fail
+      (= (at (ex ab5 "99")) '(4 0)))
+
+   _ (assert
+      ; d y m t j -- the range commands
+      (= (lns (ex ab5 "2d")) '("aa" "cc" "dd" "ee"))
+      (= (lns (ex ab5 "2,3d")) '("aa" "dd" "ee"))
+      (= (lns (ex ab5 "%d")) '(""))                          ; the buffer is never empty
+      (= (lns (ex ab5 ",d")) '(""))                          ; a bare , is 1,$ too
+      (= (lns (ex ab5 "d")) '("bb" "cc" "dd" "ee"))          ; no range is dot
+      (= (lns (ex ab5 "/cc/d")) '("aa" "bb" "dd" "ee"))
+      (= (lns (ex ab5 "1,2m4")) '("cc" "dd" "aa" "bb" "ee"))
+      (= (lns (ex ab5 "4,5m0")) '("dd" "ee" "aa" "bb" "cc")) ; 0 is before the first line
+      (= (lns (ex ab5 "1t2")) '("aa" "bb" "aa" "cc" "dd" "ee"))
+      (= (lns (ex ab5 "1,2j")) '("aa bb" "cc" "dd" "ee"))
+      (= (lns (ex ab5 "1,3j")) '("aa bb cc" "dd" "ee"))
+      (= (st? (ex ab5 "2,1d") 'msg) "out of range")          ; a backward range refuses
+      (= (st? (ex ab5 "2m2") 'msg) "destination inside the range")
+      (= (lns (ex ab5 "2y")) ab5)                            ; y leaves the text alone ...
+      (= (st? (ex ab5 "2y") 'reg) '(lin ("bb"))))            ; ... and fills the register
+
+   _ (assert
+      ; :s -- over sed's own usub, so & and \1 read the same in both
+      (= (lns (ex '("a b a") "s/a/X/")) '("X b a"))
+      (= (lns (ex '("a b a") "s/a/X/g")) '("X b X"))
+      (= (lns (ex '("ab" "ab") "%s/b/Y/")) '("aY" "aY"))
+      (= (lns (ex '("ab" "cd") "s/./X/")) '("Xb" "cd"))      ; no range is dot only
+      (= (lns (ex '("xy") "s/x/[&]/")) '("[x]y"))            ; & is the whole match
+      (= (lns (ex '("ab") "s/\\(a\\)\\(b\\)/\\2\\1/")) '("ba"))
+      (= (lns (ex '("a,b") "s,\\,,-,")) '("a-b"))            ; any delimiter, escaped in
+      (= (lns (ex '("xbz") "s/x*/-/g")) '("-b-z-"))          ; the POSIX empty-match rule
+      (= (lns (ex '("ab") "s/q/X/")) '("ab"))
+      (= (st? (ex '("ab") "s/q/X/") 'msg) "not found: q")
+      (= (st? (ex '("ab") "s/a/X/") 'msg) "1 line changed")
+      ; a fresh :s pattern is the last search, which is where n picks it up
+      (: q (ex '("ab" "cd" "ab") "s/ab/zz/") (= (q 'pattx) "ab")))
+
+   _ (assert
+      ; :g and :v -- the body runs from the last row up, so a delete never
+      ; moves a row still to be visited, and the whole sweep is one undo
+      (= (lns (ex ab5 "g/[bd]/d")) '("aa" "cc" "ee"))
+      (= (lns (ex ab5 "v/[bd]/d")) '("bb" "dd"))
+      (= (lns (ex '("a1" "b2" "a3") "g/a/s/[0-9]/X/")) '("aX" "b2" "aX"))
+      (= (lns (ex ab5 "1,3g/./d")) '("dd" "ee"))             ; g takes a range too
+      (= (st? (ex ab5 "g/zz/d") 'msg) "not found: zz")
+      (= (lns (ex ab5 "g/zz/d")) ab5)
+      ; one u puts the whole global back
+      (: q (ex ab5 "g/[bd]/d") _ (vfeed q (bytes "u")) (= (lns q) ab5))
+      (: q (ex '("a1" "b2" "a3") "g/a/s/[0-9]/X/") _ (vfeed q (bytes "u"))
+         (= (lns q) '("a1" "b2" "a3"))))
+
+   _ (assert
+      ; the file half still answers, now through the one dispatch
+      (= (st? (ex '("a") "w") 'dow) '("t"))
+      (= (st? (ex '("a") "w other") 'dow) '("other"))
+      (= (st? (ex '("a") "q") 'quit) 1)
+      (= (st? (ex '("a") "=") 'msg) "1")
+      (= (st? (ex ab5 "$=") 'msg) "5")
+      (= (st? (ex '("a") "zz") 'msg) "not an ex command: zz")
+      ; a no-op line is a no-op, not a complaint
+      (= (st? (ex '("a") "") 'msg) ""))
 
 ; --- the status line clips from the left: its tail is the news ---------------
    (miniw ls ks m) (: st (vgo ls ks) _ (vmsg st m) _ (pin st 'w 8) _ (pin st 'h 4)
