@@ -7,7 +7,7 @@
 ;
 ;   cat test/00-init.l test/host/pty.l | out/host/love      ; green dots = pass, exits 1 on fail
 ;
-; Mechanics are scriptable (here); full interactive wrapping is manual (bao.l).
+; Mechanics are scriptable (here); full interactive wrapping is manual (cli.l).
 
 ; gather is non-blocking (WNOHANG): a child can EOF its master a hair before it
 ; becomes a zombie, so a poll right then reads 0 "still running". That gap is
@@ -105,7 +105,7 @@
 ; scriptable with two ptys: one plays the keyboard (echo OFF so escape bytes
 ; arrive raw -- with echo on, the line discipline renders ESC as `^[` and the
 ; arrow never decodes), one is the child.
-(: edraw (from 'bao 'edraw)
+(: edraw (from 'cli 'edraw)
    (pump src dst) (: ch (see src)
                      (? (ch = -1) 0 (: _ (put dst ch) _ (flush dst) (pump src dst))))
    (feedlines ip m)

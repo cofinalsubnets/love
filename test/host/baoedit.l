@@ -1,5 +1,5 @@
-; --- test/host/baoedit.l: a smoke test for bao's raw-line editor (src/core/boot/bao.l `edraw`) ---
-; edraw lives in src/core/boot/bao.l, now the baked shell core (in the host egg), so edraw is
+; --- test/host/baoedit.l: a smoke test for cli's raw-line editor (src/core/boot/cli.l `edraw`) ---
+; edraw lives in src/core/boot/cli.l, now the baked shell core (in the host egg), so edraw is
 ; a book global -- but it reads love forms (it's the editor), so it can't be a corpus
 ; test (love0 bakes the corpus and would run edraw on the test stream). edraw reads
 ; from a port arg (here a (tap ..), not stdin), so the bare stdin runner drives it:
@@ -17,8 +17,8 @@
 ; eof = the sentinel edraw returns at ^D / port EOF: captured by reading it back
 ; off an empty port (the sentinel is bao-private now -- the editor no longer leaks
 ; its `eofsym` global, so we name it by what edraw produces, not by its binding).
-(: edraw (from 'bao 'edraw)              ; the editor primitives ride the bao module now
-   edln (from 'bao 'edln)
+(: edraw (from 'cli 'edraw)              ; the editor primitives ride the bao module now
+   edln (from 'cli 'edln)
    (keys l) (tap l)
    abc [97 98 99]
    eof (edraw (keys 0) ""))

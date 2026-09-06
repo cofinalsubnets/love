@@ -126,38 +126,37 @@
                (? (string? s) s (: m (minify (slurp-file (path n))) _ (pin cache n m) m)))
 
    ; the baked source (src/host/cats.c), row by row: a string lays as it is -- the arch
-   ; guards -- and a list is [symbol how items], how being z (deflated, with the _raw twin)
-   ; or t (a plain literal). an item is a symbol, one boot file by name, or a string, glue
-   ; laid between two files. a group is ONE text: ai_evals_ reads a text whole before its
-   ; first form runs, so the grouping here is part of the boot's meaning.
+   ; guards -- and a list is [symbol items], laid deflated with the _raw twin. an item is a
+   ; symbol, one boot file by name, or a string, glue laid between two files. a group is ONE
+   ; text: ai_evals_ reads a text whole before its first form runs, so the grouping here is
+   ; part of the boot's meaning.
    rows
-    [['ai_src_cli 't ['cli]]                              ; the CLI driver, evaluated by every unbaked session
-     ['ai_cat_egg_z 'z ['egg]]
-     ['ai_cat_p1_z 'z ['p1]]
-     ['ai_cat_prel_z 'z ['prel " " 'ev]]                  ; prel carries ev's half spliced after its own
-     ['ai_cat_post_z 'z ['post]]
+    [['ai_cat_egg_z ['egg]]
+     ['ai_cat_p1_z ['p1]]
+     ['ai_cat_prel_z ['prel " " 'ev]]                     ; prel carries ev's half spliced after its own
+     ['ai_cat_post_z ['post]]
      ; the module registry, in dependency order: overlay's body reads (from 'kanren ..) as
      ; it registers, so the blobs go a, holo, b. holo rides a blob per arch because the
      ; backend does; an arch with no backend registers neither, the one shape that leaves
      ; AiCatModsH unset.
-     ['ai_cat_mods_a_z 'z ['rng 'q 'glob 'kanren 'overlay 'uu]]
+     ['ai_cat_mods_a_z ['rng 'q 'glob 'kanren 'overlay 'uu]]
      "#if defined(__x86_64__)" "#define AiCatModsH 1"
-     ['ai_cat_mods_h_z 'z ['holo 'x64]]
+     ['ai_cat_mods_h_z ['holo 'x64]]
      "#elif defined(__aarch64__)" "#define AiCatModsH 1"
-     ['ai_cat_mods_h_z 'z ['holo 'a64]]
+     ['ai_cat_mods_h_z ['holo 'a64]]
      "#elif defined(__riscv)" "#define AiCatModsH 1"
-     ['ai_cat_mods_h_z 'z ['holo 'rv64]]
+     ['ai_cat_mods_h_z ['holo 'rv64]]
      "#endif"
-     ['ai_cat_mods_b_z 'z ['bao 'verbs 'scan 're 'peg]]
+     ['ai_cat_mods_b_z ['cli 'verbs 'scan 're 'peg]]
      ; the glaze, one text: emit.l (the native emitter) then auto.l (ev's source
      ; recognizer, which reads emit's names bare), so the order here is the module and the
      ; pair declares it. holo leads because the glaze folds `assemble` at its own compile;
      ; orth and the ala creation hook trail it, and hook.l leaks natjit/fires/fired?/bake
      ; so it stays outside. not a module blob: an unglazed build must not pay for it.
      "#ifdef AiGlazed"
-     ['src_glaze_z 'z ["(use 'holo)(module 'glaze " 'emit 'auto ")"
-                       "(: ev (from 'glaze 'ev) member? (from 'glaze 'member?))"
-                       'hook 'walk 'holo 'x64 'a64]]
+     ['src_glaze_z ["(use 'holo)(module 'glaze " 'emit 'auto ")"
+                    "(: ev (from 'glaze 'ev) member? (from 'glaze 'member?))"
+                    'hook 'walk 'holo 'x64 'a64]]
      "#endif"]
    (text items) (foldl (\ a i (a + (string? i ? i (file i)))) "" items)
    (lay-z sym s)
@@ -166,11 +165,9 @@
        _ (say out ("static unsigned char const " + sym + "[] =\n"))
        _ (zrows z 0 #z)
        (say out (";\nstatic uintptr_t const " + sym + "_raw = " + show #s + ";\n")))
-   (lay-t sym s) (say out ("static char const " + sym + "[] =\n\"" + clit s + "\";\n"))
    (lay-row r)
     (? (string? r) (say out (r + "\n"))
-       (: sym (show (r 0)) s (text (r 2))
-          (? ((r 1) = 'z) (lay-z sym s) (lay-t sym s)))))
+       (lay-z (show (r 0)) (text (r 1)))))
 
 ; argv leads with this script's own path: one file after it is the one-file door
 (: as >argv

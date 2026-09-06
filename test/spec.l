@@ -829,7 +829,7 @@
 ; head instead, no new layer, no registration. test/host/loader.l is the load law in anger (fs
 ; fixtures, so it lives outside this corpus); here the boot-loaded modules prove the registry
 ; surface, since every corpus frontend registers rng and kanren (bao too, except the wasm
-; shim, whose test harness feeds bao.l bare -- the page is its own repl).
+; shim, whose test harness feeds cli.l bare -- the page is its own repl).
 ; (from 'name) is the module's tablet -- currying reaches a member because a tablet indexes
 ; itself, `keys` introspects it like any other, a missing module answers () (the presence
 ; guard: `lit?` is true of a tablet even when empty and false of (), so it is the one honest

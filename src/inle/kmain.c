@@ -1642,7 +1642,7 @@ void kmain(void) {
     // own names as they load, and the boot cmdline's program seat reads the registry.
     "(use 'verbs)"
     "(use 'uu) (: uu (from 'uu))"                         // the uu kernel: the corpus's uu files drive it through the
-    "(use 'bao)"); }                                      //   one-name `uu` surface on this target too
+    "(use 'cli)"); }                                      //   one-name `uu` surface on this target too
   // FIXME waaaaay too much code in here, old style too. also, this gets eval'd by c0, right? not ideal.
   // FIXME again, waaaaaaaaaaaaaaaaaaaaaaaaaaay too much code in string literals! ridiculous!
   //
@@ -1815,7 +1815,7 @@ void kmain(void) {
    "           (: _ (say err (+ (cap bootargv) \": not found\")) _ (put err 10) 127))"
    "      (quit (? (charm? r) r 0)))"
    "   0)");
-  r = ai_evals_(r, "((from 'bao 'shell) 0)");
+  r = ai_evals_(r, "((from 'cli 'shell) 0)");
   // a terminal scare gets the honest face on the serial console before reset
   if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
   ai_fin(r); }

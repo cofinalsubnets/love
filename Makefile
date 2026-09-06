@@ -860,15 +860,15 @@ $d/bin/lux: $(luxfiles)
 	@{ echo '#!/usr/bin/env -S $(BIN) -l'; cat $(luxfiles); } > $@
 	@chmod 755 $@
 
-# bao, the interactive shell. Unlike cook and ain, src/core/boot/bao.l is DEFINE-ONLY -- main.c
-# fires `(bao 0)` on a tty -- so the bin is a tiny launcher that fires it. ⚠ the module
+# bao, the interactive shell. Unlike cook and ain, src/core/boot/cli.l is DEFINE-ONLY -- main.c
+# fires `(shell 0)` on a tty -- so the bin is a tiny launcher that fires it. ⚠ the module
 # rides the binary, so there is nothing to -l and no nest path to get wrong.
 $d/bin/bao: $(MAKEFILE_LIST)
 	@echo 'CAT	'$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$(readlink -f -- "$$0")")" && pwd)'; \
-	   echo 'exec "$$h/$(BIN)" -e "((from '\''bao '\''bao) 0)" "$$@"'; } > $@
+	   echo 'exec "$$h/$(BIN)" -e "((from '\''cli '\''shell) 0)" "$$@"'; } > $@
 	@chmod 755 $@
 
 # the .TH command name follows BIN too (`man lovelang` should not head LOVE(1));

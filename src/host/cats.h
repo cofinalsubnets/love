@@ -25,8 +25,5 @@ struct ai *ai_cats_mods(struct ai *g);
 // the glaze: a no-op on an unglazed build, so every eval site stands unconditional
 struct ai *ai_cats_glaze(struct ai *g);
 
-// the CLI driver (src/core/boot/cli.l): pure definition, evaluated wherever a session or a
-// bake needs cli-line
-struct ai *ai_cats_cli(struct ai *g);
 
 #endif

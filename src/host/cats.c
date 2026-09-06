@@ -53,4 +53,3 @@ struct ai *ai_cats_glaze(struct ai *g) { return CatEval(g, src_glaze_z); }
 struct ai *ai_cats_glaze(struct ai *g) { return g; }
 #endif
 
-struct ai *ai_cats_cli(struct ai *g) { return ai_evals_(g, ai_src_cli); }

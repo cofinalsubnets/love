@@ -14,7 +14,7 @@ Where it stops being enough is named at the foot, with what it would cost.
 ## where inle is today
 
 `kmain.c` boots (two doors: `-kernel`, UEFI), lays a heap over the memory map, draws a
-framebuffer console through quay, decodes PS/2 scancodes, and runs `((from 'bao 'shell) 0)`.
+framebuffer console through quay, decodes PS/2 scancodes, and runs `((from 'cli 'shell) 0)`.
 Interrupts, the timer, cooperative tasks (`twirl`/`catch`), and fd-parking all work.
 
 It also has a filesystem now — the ramfs over a `.rodata` initrd, with the read surface whole
@@ -208,7 +208,7 @@ whole toolbox: `-append "kore ls lib"` runs the tool, `-append "sh"` boots lush,
   does not get the row: a failing assert's `(quit 1)` would reset mid-corpus and eat the summary,
   so 00-init.l's no-op pin keeps serving there and `exit` stays its one door out.
 * ⚠ **The quit nif re-armed bao's file-help, instructively.** file-help folds `quit` at *bao's*
-  define — the wasm note in bao.l, live here: with no quit nif the `(quit 1)` was a no-op and a
+  define — the wasm note in cli.l, live here: with no quit nif the `(quit 1)` was a no-op and a
   load-scare welped through; with a real one, the FIRST absent-nif mention in the cat (fs.l's
   `hardlink`) printed one `;;` face and reset the machine. The fix is 00-init.l's own move made
   kernel-side: pin a no-op fallback for every host nif the cat mentions and this seat lacks

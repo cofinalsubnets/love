@@ -267,11 +267,11 @@ static struct ai *env_budget(struct ai *g) {
 
 #ifdef LoveBoot
 #include "boot0.h"                                   // src0_<name>[]: one literal per boot file, laid by sed
-static char const runner[] = "(reads(tap(s2cl tests)))";   // the stream shell (src/core/boot/bao.l) drinks the corpus
+static char const runner[] = "(reads(tap(s2cl tests)))";   // the stream shell (src/core/boot/cli.l) drinks the corpus
 // the groups love0 evaluates as ONE text apiece: a text is read whole before its first
 // form runs, so joining at boot keeps that seam where the pasted headers had it.
 static char const *const mods0[] = { src0_rng, src0_q, src0_glob, src0_kanren, src0_overlay, src0_uu,
-  src0_holo, src0_x64, src0_a64, src0_bao, src0_verbs, src0_peg, NULL };
+  src0_holo, src0_x64, src0_a64, src0_cli, src0_verbs, src0_peg, NULL };
 static char const *const prelpost0[] = { src0_prel, src0_post, NULL };
 static char const *const prelev0[] = { src0_prel, src0_ev, NULL };
 // one NUL-terminated buffer off the heap, so a collect mid-eval cannot move it; the caller frees
@@ -294,9 +294,8 @@ static struct ai *evals0(struct ai *g, char const *const *v) {
 // image file (its own mooncc0.image bake); the .image self-patch is the full binary's.
 // mooncc0.image is the `bake` nif's, called from a -e, so it seals the session layer with
 // cli0 already on it -- and every build-time object compile is one wake of it.
-static struct ai *run_program(struct ai *g, bool replp, bool owed) {
+static struct ai *run_program(struct ai *g, bool replp) {
   g = ai_layer_(g);
-  if (owed) g = ai_evals_(g, src0_cli);
   return ai_evals_(g, "(cli-line cmdline 0)"); }
 
 // with args, run the build tool (lcat / gen_data) through the CLI driver.
@@ -309,14 +308,13 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     g = ai_evals_(g, src0_p1);
     g = evals0(g, prelpost0);
     g = evals0(g, mods0);
-    g = ai_evals_(g, "(use 'bao)(use 'kanren)(use 'verbs)");
+    g = ai_evals_(g, "(use 'cli)(use 'kanren)(use 'verbs)");
     g = ai_unsplice_(g);
-    g = ai_evals_(g, src0_cli);
     return ai_evals_(g, "(cli-line cmdline 0)"); }
   g = ai_evals_(g, src0_p1);                         // its own call: readtext picks its reader once per
   g = evals0(g, prelpost0);                          // text, and p1 seals hook 0 only when this call evaluates
   g = evals0(g, mods0);
-  g = ai_evals_(g, "(use 'bao)(use 'holo)");
+  g = ai_evals_(g, "(use 'cli)(use 'holo)");
   g = ai_unsplice_(g);
   g = ai_evals_(g,
     "(use 'uu)(: uu (from 'uu))(use 'rng)(use 'q)(use 'kanren)"
@@ -357,14 +355,12 @@ static char const glaze_off[] = "";
 // the session layer: boot is over and the base is never the head again, so a top-level
 // definition lands here. never popped -- its lifetime is the session, which is what lets a
 // catted app's files share one vocabulary; the egg boot and the image wake both converge.
-// src/core/boot/cli.l defines rather than runs, and `cli-line` is this tail entire: the argv[0] verb
-// door, the positional rail, the repl, the stdin drink. the isatty answer is all C still
-// owns. the bake carries it compiled, so `owed` is the egg lane alone.
-static struct ai *run_program(struct ai *g, bool replp, bool owed) {
+// src/core/boot/cli.l's `cli-line` is this tail entire, spliced with its module: the argv[0] verb
+// door, the positional rail, the repl, the stdin drink. the isatty answer is all C still owns.
+static struct ai *run_program(struct ai *g, bool replp) {
   if (replp) raw_mode();
   g = ai_layer_(g);
   if (getenv("LOVE_NO_GLAZE")) g = ai_evals_(g, glaze_off);
-  if (owed) g = ai_cats_cli(g);
   return ai_evals_(g, replp ? "(cli-line cmdline 1)" : "(cli-line cmdline 0)"); }
 
 // read-eval one .l file into the booting session, loudly: a bake's cat has no shell help,
@@ -405,7 +401,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     "(use 'holo)"
   );
   g = ai_unsplice_(g);
-  g = ai_evals_(g, "(use 'bao)(use 'verbs)");
+  g = ai_evals_(g, "(use 'cli)(use 'verbs)");
   g = ai_unsplice_(g);
   // kanren, overlay and uu come off: the latter two already have their accessor bound
   // above, so the splice bought only ambient names -- `C`, `Q`, `src`, `glob`, `walk`,
@@ -414,7 +410,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
   // on: read/reads for cli, `@` for every later compile.
   for (int i = 0; i < 4; i++) g = ai_unsplice_(g);       // bao, uu, overlay, kanren
   // FIXME what is this even doing? we just used bao a couple of lines ago? what is "hoist"?
-  g = ai_evals_(g, "(use 'bao)"
+  g = ai_evals_(g, "(use 'cli)"
     "(hoist 'kanren ())"                                 // \\\, &&&, |||, zz -- macros, not names
     "(: unify (from 'kanren 'unify)  ufail (from 'kanren 'ufail)"
     "   ufail? (from 'kanren 'ufail?)  var (from 'kanren 'var)"
@@ -441,14 +437,10 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
 
   if (bake) {                                            // the bake verb: snapshot the post-warm heap, then exit
     if (bake_load && !ai_ok(g = bake_eval_file(g, bake_load))) return g;
-    // the CLI driver rides the image too, last so it sits over the crew as the
-    // session-layer eval it replaces did. pure definition: cli-line reads argv and the
-    // verb registry when called, so nothing of this session is folded in.
-    g = ai_cats_cli(g);
     int rc = *bake ? (int) ai_core_of(g = image_dump(g, bake))->b : image_bake(g);
     if (rc) fprintf(stderr, "love: bake failed (rc=%d)\n", rc);
     exit(rc ? 1 : 0); }
-  return run_program(g, !argp && isatty(STDIN_FILENO), 1); }
+  return run_program(g, !argp && isatty(STDIN_FILENO)); }
 #endif
 
 ai_noinline static struct ai *argv_chain(struct ai *g, char const **v, int argc, int skip) {
@@ -617,7 +609,7 @@ int main(int argc, char const **argv) {
       if (ai_ok(g)) ai_core_of(g)->sp++; }
     if (!bake) g = stdin_take(g);
     // an egg warm, or a woken image straight to the program -- the wake skips the warm
-    g = image_load_path ? run_program(g, !argp && isatty(STDIN_FILENO), 0)
+    g = image_load_path ? run_program(g, !argp && isatty(STDIN_FILENO))
                         : boot(g, argp, bake, bake_load); }
   if (ai_code_of(g) == ai_status_scare) ai_scare_face_(g);
   stdin_give(g);

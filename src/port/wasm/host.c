@@ -35,7 +35,7 @@ static const char boot_ai[] =
                                   //   one-name surface, then rng, q, kanren in the old eval order
   "(use 'q)"
   "(use 'kanren)"
-  "(use 'bao)"                    // the shell core, last and spliced, as src/host/main.c has it:
+  "(use 'cli)"                    // the shell core, last and spliced, as src/host/main.c has it:
 ;                                 //   read/reads/welp are reached bare (test/help.l's floor handler)
 // THE BAKED MODULES, one text (see src/host/main.c): each opens with its own
 // (module 'nm ..), so evaling this registers the lot and boot_ai's uses are splices.
@@ -48,7 +48,7 @@ static const char src_mods[] =
 " "
 #include "kanren.h"
 " "
-#include "bao.h"
+#include "cli.h"
 ;
 
 // 256K: a single ai_eval can emit a lot before the page drains it -- the

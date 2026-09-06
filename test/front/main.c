@@ -194,8 +194,8 @@ uintptr_t ai_fd_say(int fd, unsigned char const *src, uintptr_t n) {
 // ⚠ no scratch on an lvm_ frame (CLAUDE.md, the tail-threaded VM): the bodies
 // that need one go through an ai_noinline helper, and the ones here need none.
 
-// (quit n) -- the frontend nif bao's scare tail reaches for (src/core/boot/bao.l). Without
-// it `(use 'bao)` compiles a form naming an unbound global and raises missing.
+// (quit n) -- the frontend nif cli's scare tail reaches for (src/core/boot/cli.l). Without
+// it `(use 'cli)` compiles a form naming an unbound global and raises missing.
 static lvm(lvm_quit) {
   fflush(stdout);
   for (;;) exit((int) getcharm(Sp[0]));
@@ -325,7 +325,7 @@ static struct ai_def const defs[] = {
 // love0). bao rides along so a law can reach `reads` -- the colist lane under it
 // (flow/trickle) is prel's now, and sits on top of the would-block park.
 static char const src_mods[] =
-#include "bao.h"
+#include "cli.h"
  ;
 
 static ai_noinline char *slurp(char const *path) {
@@ -360,7 +360,7 @@ int main(int argc, char const **argv) {
 #include "post.h"
     );
   g = ai_evals_(g, src_mods);        // register bao; the use below is a splice
-  g = ai_evals_(g, "(use 'bao)");
+  g = ai_evals_(g, "(use 'cli)");
   g = ai_layer_(g);                  // the session layer: one load, one layer
   for (int i = 1; i < argc && ai_ok(g); i++) g = ai_evals_(g, slurp(argv[i]));
   if (ai_code_of(g) == ai_status_scare) ai_scare_face_(g);   // the honest face: ";; a b", or ";; oom@len=N" bare

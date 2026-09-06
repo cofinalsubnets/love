@@ -7,7 +7,7 @@
 // port's UART0 console (USB CDC is a TODO, see README). The arch backend
 // (teensy41.c) owns the FlexSPI boot image, startup, clocks, LPUART, GPT
 // timer, and GPIO; this file is just the love glue plus a few GPIO nifs. The
-// shell line editor (src/core/boot/bao.l, the baked shell core) drives the console
+// shell line editor (src/core/boot/cli.l, the baked shell core) drives the console
 // exactly as it drives the kernel's.
 #include "../../../src/core/love.h"
 #include "teensy41.h"
@@ -205,7 +205,7 @@ static uintptr_t pool[384 * (1 << 10) / sizeof(uintptr_t)];   // word-typed: nat
 // bao is written in @, and its eval lands after the mop, so the MODULE has to be here
 // for the macro to be live.
 static char const src_mods[] =
-#include "bao.h"
+#include "cli.h"
 ;
 
 int main(void) {
@@ -270,7 +270,7 @@ int main(void) {
   // the bake/wake, so its `puts` marks the exact moment love is up.
 #define TE_TAIL(banner) \
     "(: _ (gpio_init 3) _ (gpio_dir 3 1) _ (gpio_put 3 0)" \
-    "    _ (putc 10) _ (puts \"" banner "\") _ (putc 10) ((from 'bao 'shell) 0))"
+    "    _ (putc 10) _ (puts \"" banner "\") _ (putc 10) ((from 'cli 'shell) 0))"
   if (!woke) {
     // the on-device egg bake: bao is a MODULE, registered by the eval below and
     // then spliced. a woken image (the mps2 baker's) carries the load already.
@@ -286,7 +286,7 @@ int main(void) {
 #include "post.h"
     );
     g = ai_evals_(g, src_mods);
-    g = ai_evals_(g, "(use 'bao) 0"); }
+    g = ai_evals_(g, "(use 'cli) 0"); }
   // THE SESSION: a fresh writable layer, C-side -- the shell's defglobs land
   // here, never in the base (bakes carry none; every boot or wake pushes its own).
   g = ai_layer_(g);

@@ -1203,7 +1203,7 @@ static lvm(lvm_ptyecho) {
 // `on` puts the tty in raw mode (no ICANON/ECHO/ISIG, VMIN=1) so bao's editor is
 // the sole echo; on = 0 / () restores the cooked termios captured at the first
 // raw-on. bao's (shell _) calls (raw 1) because the bin/bao launch
-// (love -l bao.l -e "(bao 0)") passes argv, so main.c's argp path never raws --
+// (love -l cli.l -e "((from 'cli 'shell) 0)") passes argv, so main.c's argp path never raws --
 // without this the kernel tty echo doubles every line the editor draws. () on
 // success, a nom on failure ('enotty: stdin is no tty).
 // one terminal, so one saved baseline and one atexit -- main.c's repl calls this too

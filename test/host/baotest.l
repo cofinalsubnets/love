@@ -2,15 +2,13 @@
 ; the multi-line line editor (ed*), the history zipper (uphist/downhist/mkframe/
 ; detach), joinln/flatten/splitat, and parseall used to be user-visible book globals
 ; only because the corpus (the old test/repl.l + test/replio.l) tested them by name.
-; They live inside bao's closure (src/core/boot/bao.l), off the global book -- and the checks
-; live here, where checks belong, reaching them through bao's test door:
+; They are cli's exports (src/core/boot/cli.l), and the checks live here, where checks belong,
+; reaching them through the module tablet:
 ;
-;   (bao 'parts) -- the editor primitives as a tablet, the shape `from`
-;   hands back for a module. (B 'edleft) reaches one, (keys B) lists them. Nothing
-;   is defined globally to make this work, and the battery reads as ordinary asserts.
+;   (from 'cli) -- the module as a tablet, the shape `from`
+;   hands back for a module. (B 'edleft) reaches one, (keys B) lists them.
 ;
-; bao is the baked shell core (in the host egg) and `bao` is public, so this file
-; needs no -l:
+; cli is baked (in the host egg), so this file needs no -l:
 ;
 ;   cat test/00-init.l test/host/baotest.l | out/host/love
 ;
@@ -18,7 +16,7 @@
 ; k4/k7 pack the cps continuation's (u l r d [hu hd cur]) arguments into a
 ; comparable list, exactly as the old test/repl.l did.
 
-(: B ((from 'bao 'bao) 'parts)
+(: B (from 'cli)
    edleft (B 'edleft)     edright (B 'edright)   edbsp (B 'edbsp)       eddel (B 'eddel)
    edhome (B 'edhome)     edend (B 'edend)       edtop (B 'edtop)       edbot (B 'edbot)
    edup (B 'edup)         eddown (B 'eddown)     uphist (B 'uphist)     downhist (B 'downhist)

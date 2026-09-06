@@ -239,7 +239,7 @@ int main(void) {
 // each absolute, so naming them needs nothing of the core's. quads: obj-off, val, obj-hot.
 static void sh_puts(const char *s) { while (*s) sh_putc(*s++); }
 // THE BAKED MODULE, the one this baker wants: the boot evals it to register the layer,
-// so the woken image serves ((from 'bao 'shell) 0) -- the teensy and nucleo launchers.
+// so the woken image serves ((from 'cli 'shell) 0) -- the teensy and nucleo launchers.
 // the source strings carry no absolutes, so the absguard stays satisfied.
 // bao declares itself; rune does not, so the wrapper is here -- rune is a plain text
 // that every consumer loads through `use`, and this is the frontend that names it.
@@ -251,7 +251,7 @@ static char const src_mods[] =
 #include "rune.h"
 ")"
 #else
-#include "bao.h"
+#include "cli.h"
 #endif
 ;
 int main(void) {
@@ -284,7 +284,7 @@ int main(void) {
     " "
 #include "cas.h"
 #else
-    "(use 'bao)"
+    "(use 'cli)"
 #endif
     "(: _ (putc 10) _ (puts \"; corpus baked -- dumping\") _ (putc 10) 0)");
   if (!ai_ok(r)) {
@@ -359,7 +359,7 @@ int main(void) {
 #include "post.h"
     );
   r = ai_evals_(r,
-#include "bao.h"
+#include "cli.h"
     // the driver tail: application-as-power, currying through map, the net
     // measure, and the hatched ev -- each a spec.l law, alive on the M7.
     "(: ok (&& ((3 2) = 8)"
