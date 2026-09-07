@@ -296,6 +296,20 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   module runs on it: of the 2.39× against emcc on the corpus, return_call can reach
   for up to that much. Worth the rung; measure it on ccwasm and test_wasm's corpus
   time when it lands, since wasm's call cost is its own.
+- **the locals-roster lever: MEASURED, DOES NOT PAY (2026-09-07).** The reading after
+  ccwasm's first fill was that the array-heavy rows lose on wasm locals because the lane
+  inherits rv64's 27-register roster where wasm has unlimited locals. Ablated before
+  building: over the 839 functions of love.wasm, **none uses all 19 of r8..r26** (the most
+  is 16, in two functions; the median is 3), and sha_block uses 21 distinct locals of the
+  47 the convention lays — nothing spills for want of a register, so a wider roster has
+  nothing to buy. And binaryen's `-O3` over our module (locals, masks, redundant traffic
+  optimised, the control shape kept) runs sha256 **828 → 887 ms** and deflate 604 → 682:
+  the local-level code is not the gap either. What every one of the 839 functions carries
+  is rung 1's **dispatch loop** — one `loop`, a `br_table` over its blocks, and every
+  branch a `local.set` of the label, a `br` to the head and a 20-way table — so a 64-round
+  inner loop never reads as a loop to the engine. **That is the lever: a relooper**, real
+  `block`/`loop`/`br_if` nesting from gen's CFG where it is reducible, the dispatch kept
+  only where it is not. Priced on ccwasm's sha256 and deflate rows and the corpus.
 - **rung 6 — a splicer in the browser.** Off the AOT path, after the artifact
   ships. Wasm forbids the native JIT by construction (`src/core/love.c` declines on
   `__wasm__`: a jump to a data address traps), so the browser love has no tier at
