@@ -1,0 +1,16 @@
+; sortby: N (key . idx) records ordered by a user comparator on a derived key (key%4096, then key);
+; checksum = rolling hash of the idx sequence.
+(load "lib/bench.ss")
+(define N 5000)
+(define (gen n)
+  (let loop ((i 0) (x 1) (acc '()))
+    (if (< i n)
+        (let ((nx (modulo (* 16807 x) 2147483647))) (loop (+ i 1) nx (cons (cons nx i) acc)))
+        (reverse acc))))
+(define (less a b)
+  (let ((ma (modulo (car a) 4096)) (mb (modulo (car b) 4096)))
+    (or (< ma mb) (and (= ma mb) (< (car a) (car b))))))
+(define (hsh l)
+  (let loop ((l l) (h 0))
+    (if (pair? l) (loop (cdr l) (modulo (+ (* h 31) (cdar l)) 1000000007)) h)))
+(bench "sortby" (lambda () (hsh (list-sort less (gen N)))))
