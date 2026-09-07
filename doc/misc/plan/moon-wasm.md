@@ -354,8 +354,10 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   r9 with `nhome` 4. **The corpus 22.1 → 20.1 s**, the nif rows within noise of the pool
   fill (sha256 400 ms = 2.90× emcc -O2, deflate 1.28×, the rest 1.14–1.32×), the module
   1,187,329 bytes. Together, 25.8 → 20.1 s (1.28×) and the corpus sits at **1.14× emcc**.
-  x64's object byte-identical; a64 untouched (its pops still stage through x9 — the same
-  `fpop?` door would take it, unpriced); riscv's own gates green under qemu.
+  x64's object byte-identical; riscv's own gates green under qemu. Then a64's pops took
+  the same door (every arm target pops a double off sp into its f-register; the gp scratch
+  was x64's only and is gone with `psc`): x64, rv64 and thumb2 objects byte-identical,
+  a64's gates green under qemu.
 - **the locals-roster lever: MEASURED, DOES NOT PAY (2026-09-07).** The reading after
   ccwasm's first fill was that the array-heavy rows lose on wasm locals because the lane
   inherits rv64's 27-register roster where wasm has unlimited locals. Ablated before

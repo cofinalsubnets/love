@@ -465,16 +465,14 @@
    (ngp g) (? (a8? g) 8 (t32? g) 4 6)
    (pkr g) (? (a64? g) 'r15 (t32? g) 'r12 (rv64? g) 'r12 'r3)   ; the callr park (x64 rbx; a64 x15; thumb2 r12/IP -- x3/r3 is the 4th ARG register; riscv t4, clear of args and its pool)
    (ip2 g) (? (a8? g) 'r1 'r2)                      ; an int-pair aggregate's second register (rax:rdx / x0:x1 / a0:a1); thumb2 unused for M1 scalar
-   (psc g) (? (a64? g) 'r9 'r0)                     ; the xmm-arg pop scratch (a64 r0 IS arg 0; a pool reg is dead at a call)
-   (fpop? g) (t32? g || rv64? g)                    ; a double pops straight into its f-register (fld), no gp scratch
    (ovb g) (? (a8? g) 32 (v6m? g) 12 (t32? g) 8 16)   ; overflow params above the push cells: x64 [ret+rbp]=16; a64/riscv 2x16; thumb2 lr+fp=8; v6m lr+fp+r4=12
    ; the a64 HOME pool: caller-saved, never an argument register (x0..x7 all stage args, so no
    ; positional alignment with the incoming regs -- every home takes one prologue mov), and clear
-   ; of the staging scratches (x9 the xmm pop scratch, x15 the callr park, x16 holo's far offset).
+   ; of the staging scratches (x15 the callr park, x16 holo's far offset).
    hregs-a64 '(r10 r11 r12 r13 r14)
    hregs-t32 '(r5 r6 r7 r8)                          ; thumb2 callee-saved home pool (inert while nhome=0)
    ; the riscv HOME pool, a64's shape: caller-saved temporaries, never an argument register,
-   ; clear of the scratches (t4 = r12 the callr park, t5/t6 holo's); t1 last, the coldest seat
+   ; clear of the callr park (t4 = r12) and holo's t5/t6; t1 last, the coldest seat
    hregs-rv64 '(r8 r10 r11 r9)
    (hregs g) (? (a64? g) hregs-a64 (rv64? g) hregs-rv64 (t32? g) hregs-t32 opool)   ; the home pool (x64 rides opool, positionally arg-aligned)
    (nhome g) (? (a64? g) 5 (rv64? g) 4 (t32? g) 0 6)      ; how many gp positions can home (thumb2: none yet -- spill all params)
@@ -2801,9 +2799,7 @@
                                                       (<l2 . acc2) acc2)))
                     (go2 kr ()))                          ; pushing register entries, reversed (pops run forward)
              (pushcat l3 acc3) (? !(two? l3) acc3 (pushcat >l3 (acc3 + <><l3)))
-             ; the xmm pops stage through a gp scratch: r0 on x64 (no arg rides it), a pool
-             ; register on a64 (r0 IS arg 0 there, and no pool value lives across a call)
-             px (psc g)
+             ; an arm double pops straight into its f-register off sp; x64 stages through r0
              pops (: (go4 l4 acc4)
                       (? !(two? l4) acc4
                          (: kc <<l4
@@ -2817,29 +2813,21 @@
                                         '((ld r0 sp 0) (ld r1 sp 4)
                                            (ld r2 sp 8) (ld r3 sp 12)
                                            (add sp sp 16))
-                                       ('x && fpop? g)    ; a t32/riscv double pops straight into its f-reg
-                                        [['ldsd (xmmreg <>kc) 'sp 0] '(add sp sp 16)]
                                        'x2   ; the struct pair: re then im (a natural 16-byte cell)
-                                        (? (fpop? g)   ; t32/riscv pop straight into the f-pair
+                                        (? (arm? g)
                                            [['ldsd (xmmreg <>kc) 'sp 0] ['ldsd (xmmreg (<>kc + 1)) 'sp 8]
-                                            '(add sp sp 16)]
-                                           (a8? g)
-                                           [['ld px 'sp 0] ['movqxr (xmmreg <>kc) px]
-                                            ['ld px 'sp 8] ['movqxr (xmmreg (<>kc + 1)) px]
                                             '(add sp sp 16)]
                                            ['(pop r0) ['movqxr (xmmreg <>kc) 'r0]
                                              '(pop r0) ['movqxr (xmmreg (<>kc + 1)) 'r0]])
                                        'p2   ; a general two-eightbyte struct: eb0 (top) then eb1, each into its gp/xmm target
                                         (? (a8? g)
-                                           ((<>kc @ 'g [['ld (argr g <>>kc) 'sp 0]]
-                                                    (fpop? g ? [['ldsd (xmmreg <>>kc) 'sp 0]] [['ld px 'sp 0] ['movqxr (xmmreg <>>kc) px]]))
-                                            + (<>>>kc @ 'g [['ld (argr g <>>>>kc) 'sp 8]]
-                                                      (fpop? g ? [['ldsd (xmmreg <>>>>kc) 'sp 8]] [['ld px 'sp 8] ['movqxr (xmmreg <>>>>kc) px]]))
+                                           ((<>kc @ 'g [['ld (argr g <>>kc) 'sp 0]] [['ldsd (xmmreg <>>kc) 'sp 0]])
+                                            + (<>>>kc @ 'g [['ld (argr g <>>>>kc) 'sp 8]] [['ldsd (xmmreg <>>>>kc) 'sp 8]])
                                             + '((add sp sp 16)))
                                            ((<>kc @ 'g [['pop (argr g <>>kc)]] ['(pop r0) ['movqxr (xmmreg <>>kc) 'r0]])
                                             + (<>>>kc @ 'g [['pop (argr g <>>>>kc)]] ['(pop r0) ['movqxr (xmmreg <>>>>kc) 'r0]])))
-                                       (fpop? g ? [['ldsd (xmmreg <>kc) 'sp 0] '(add sp sp 16)]
-                                          (spop px + [['movqxr (xmmreg <>kc) px]]))))))))
+                                       (? (arm? g) [['ldsd (xmmreg <>kc) 'sp 0] '(add sp sp 16)]   ; a lone double
+                                          (spop 'r0 + [['movqxr (xmmreg <>kc) 'r0]]))))))))
                      (go4 kr ()))
              nxmm (: (go5 l5 n5) (? !(two? l5) n5
                                     (go5 >l5 (: ce <<l5 kk <ce
