@@ -57,12 +57,10 @@ i = 0.5 -1                   ; built in complex
 ### fizzbuzz
 
 ```
-(100
- (\ n (: f (n % 3 = 0 ? "fizz")
-         b (n % 5 = 0 ? "buzz")
-       (puts $ (f || b ? (f + b) (show n)) + "\n",
-        n + 1)))
- 1)
+; this example uses lambda def sugar, pattern matching, and church exponentiation
+(: (s n) (n % 3 . n % 5 @- (show n) (0 . 0) "fizzbuzz" (0 . _) "fizz" (_ . 0) "buzz")
+   (fb n) (puts $ s n + "\n", n + 1)
+ (100 fb 1))
 ```
 
 ### license

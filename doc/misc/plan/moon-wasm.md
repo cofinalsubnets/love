@@ -279,6 +279,19 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
 - **rung 5a — `return_call`.** Tail calls shipped in every engine; once the module
   passes rung 5 at `ai_tco=0`, `ai_musttail` lowers to `return_call` and the wasm seat
   stops being the one build without TCO. An optimisation rung, measured, not assumed.
+  **The bound, natively (2026-09-07):** the host built `tco=0` (test_tco0's flavour,
+  out/tco0/love) against the default, the ccbench corpus (1.23 MB) through each, medians
+  of 5 on a quiet box:
+
+  | x86-64 host | tco=1 | tco=0 | tco=0 / tco=1 |
+  |---|---:|---:|---:|
+  | corpus, egg-booted (full − boot) | 7,425 ms | 11,035 ms | 1.49× |
+  | corpus on the baked image | 8,281 ms | 10,975 ms | 1.33× |
+
+  So the trampoline is a third to a half of the VM's corpus time natively, and the
+  module runs on it: of the 2.39× against emcc on the corpus, return_call can reach
+  for up to that much. Worth the rung; measure it on ccwasm and test_wasm's corpus
+  time when it lands, since wasm's call cost is its own.
 - **rung 6 — a splicer in the browser.** Off the AOT path, after the artifact
   ships. Wasm forbids the native JIT by construction (`src/core/love.c` declines on
   `__wasm__`: a jump to a data address traps), so the browser love has no tier at
