@@ -380,10 +380,7 @@
                               + [(? (s? || u?) (? dir (0 - i) i) <l) <l]) . acc)))
                     (go l 0 ()))
        (clast p) (? (two? >p) (clast >p) <p)
-       ; ⚠ prel's `sortby` is NOT a stable sort: `sortsplit` DEALS the list into two,
-       ; so element 1 lands right of element 2 and a merge preferring the left hands
-       ; them back swapped. every equal run therefore comes out in an order of its own,
-       ; which -u then picks a representative from -- and GNU picks the input's first.
+       ; -u picks a representative of each equal run, and GNU picks the input's first:
        ; the index rides along as the last tiebreak, which is stability stated outright
        ; rather than hoped for from the sort underneath.
        (deco l) (: (go l k acc)

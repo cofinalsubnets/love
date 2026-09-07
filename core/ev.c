@@ -811,6 +811,79 @@ lvm(lvm_calloutdrive) { ai_musttail return Answer(putcharm((intptr_t) callout_dr
 // blob's raw out-of-pool base, and lvm_resume jumps base+offset. relocation-safe.
 static union u const callout_resume[] = { {lvm_ap}, {.ap = lvm_resume} };
 lvm(lvm_calloutresume) { ai_musttail return Answer(putcharm((intptr_t) callout_resume)); }
+// --- (sortby le l): the merge sort with a love comparator, as one C loop that hands each
+// compare back to the VM. the values ride two object trays (the comparator may collect, so
+// nothing lives in the gap), the merge's cursors ride the stack as charms, and a compare is
+// the numap frame [x, le, y] under a drive whose tail re-enters the step with the answer at
+// Sp[0]; a comparator that is a cur of arity two takes the apn frame straight into its body,
+// no partial minted per compare. contiguous runs, the left taken when (le x y): stable for a
+// comparator that answers 1 on ties. the spine is laid once at the end, the way sort lays its own.
+enum { sb_va = 1, sb_vb, sb_w, sb_lo, sb_x, sb_y, sb_o, sb_hi, sb_n, sb_pend, sb_le, sb_k };   // off Sp; Sp[0] = the answer, sb_k the caller's next op
+static lvm_t sortby_step;
+static union u const sortby_drive[] = { {lvm_ap}, {.ap = ap_next}, {.ap = sortby_step} };
+static union u const sortby_text[] = { {.ap = sortby_step} };
+static struct ai *sortby_setup(struct ai *g) {
+ uintptr_t n = (uintptr_t) ai_count(g, g->sp[1]), words = b2w(tray_bytes(ai_O, 1, n));
+ if (!ai_ok(g = ai_have(g, 2 * words + sb_k + 1))) return g;
+ word le = g->sp[0], l = g->sp[1];                                  // re-read past the reservation
+ struct ai_tray *a = (struct ai_tray*) g->hp; g->hp += words; ini_tray(a, ai_O, 1); a->shape[0] = n;
+ struct ai_tray *b = (struct ai_tray*) g->hp; g->hp += words; ini_tray(b, ai_O, 1); b->shape[0] = n;
+ uintptr_t i = 0;
+ for (word p = l; chainp(p); p = B(p)) tray_put_obj(a, i++, A(p));
+ for (i = 0; i < n; i++) tray_put_obj(b, i, zero);
+ word k = word(g->ip + 1);                                            // a nif runs inline: its continuation is the caller's next op
+ g->sp -= sb_k - 1;                                                   // [le l ..] -> [ans state.. le k ..]
+ word *s = g->sp;
+ s[0] = zero, s[sb_va] = word(a), s[sb_vb] = word(b);
+ s[sb_w] = putcharm(1), s[sb_lo] = putcharm(0), s[sb_x] = putcharm(0), s[sb_y] = putcharm(min(1, n));
+ s[sb_o] = putcharm(0), s[sb_hi] = putcharm(min(2, n)), s[sb_n] = putcharm(n), s[sb_pend] = zero, s[sb_le] = le, s[sb_k] = k;
+ g->ip = (union u*) sortby_text;
+ return g; }
+static lvm(sortby_step) {
+ uintptr_t n = getcharm(Sp[sb_n]), w = getcharm(Sp[sb_w]), lo = getcharm(Sp[sb_lo]),
+           x = getcharm(Sp[sb_x]), y = getcharm(Sp[sb_y]), o = getcharm(Sp[sb_o]), hi = getcharm(Sp[sb_hi]),
+           m = min(lo + w, n);
+ if (Sp[sb_pend] != zero) {                                          // the answer to (le a[x] a[y]): the left when true
+  bool left = !ai_nilp(g, Sp[0]);
+  word v = tray_get_obj(tray(Sp[sb_va]), left ? x++ : y++);
+  tray_put_obj(tray(Sp[sb_vb]), o++, v);
+  gen_wb(g, Sp[sb_vb], v); }                                         // b may have aged under a collection the comparator ran
+ for (;;) {
+  if (x < m && y < hi) {                                             // the next compare: save the cursors, lay [x le y], run the drive
+   word xv = tray_get_obj(tray(Sp[sb_va]), x), yv = tray_get_obj(tray(Sp[sb_va]), y);
+   Sp[sb_w] = putcharm(w), Sp[sb_lo] = putcharm(lo), Sp[sb_hi] = putcharm(hi);
+   Sp[sb_x] = putcharm(x), Sp[sb_y] = putcharm(y), Sp[sb_o] = putcharm(o), Sp[sb_pend] = putcharm(1);
+   word le = Sp[sb_le];
+   union u *k = oddp(le) ? 0 : cell(le);
+   if (k && k[0].ap == lvm_cur && k[1].x == putcharm(2)) {         // a cur of arity two: the apn frame [x y ret], straight into its body
+    Sp -= 2, Sp[0] = xv, Sp[1] = yv, Sp[2] = word(sortby_drive + 2);
+    Ip = k + 2;
+    ai_musttail return Continue(); }
+   Sp -= 2, Sp[0] = xv, Sp[1] = le, Sp[2] = yv;                    // anything else curries through the drive
+   Ip = (union u*) sortby_drive;
+   ai_musttail return Continue(); }
+  while (x < m) { word v = tray_get_obj(tray(Sp[sb_va]), x++); tray_put_obj(tray(Sp[sb_vb]), o++, v); gen_wb(g, Sp[sb_vb], v); }
+  while (y < hi) { word v = tray_get_obj(tray(Sp[sb_va]), y++); tray_put_obj(tray(Sp[sb_vb]), o++, v); gen_wb(g, Sp[sb_vb], v); }
+  lo += 2 * w;
+  if (lo >= n) {                                                     // a pass done: the runs swap trays and double
+   word t = Sp[sb_va]; Sp[sb_va] = Sp[sb_vb], Sp[sb_vb] = t;
+   w *= 2, lo = 0;
+   if (w >= n) break; }
+  x = o = lo, m = min(lo + w, n), y = m, hi = min(lo + 2 * w, n); }
+ Have(n * Width(struct ai_chain));                                    // the spine, laid from the sorted tray (re-read post-GC)
+ struct ai_tray *a = tray(Sp[sb_va]);
+ struct ai_chain *spine = (struct ai_chain*) Hp;
+ Hp += n * Width(struct ai_chain);
+ for (uintptr_t i = 0; i < n; i++) ini_chain(spine + i, tray_get_obj(a, i), word(spine + i + 1));
+ spine[n - 1].b = ZeroPoint;
+ Ip = (union u*) Sp[sb_k];
+ Sp += sb_k;                                                          // [ans state.. le k ..] -> [spine ..]: two operands in, one answer out
+ Sp[0] = word(spine);
+ ai_musttail return Continue(); }
+lvm(lvm_sortby) {
+ word l = Sp[1];
+ if (nomp(l) || !chainp(l) || !chainp(B(l))) ai_musttail return Push(l);   // under two elements: the list itself
+ LvmResume(g, sortby_setup) }
 // the addresses a native reads off g (love.h's JkX): the kind sentinels its guards
 // compare against and the two drives -- a blob carries none of them, so it rides an image
 void jk_ini(struct ai *g) {

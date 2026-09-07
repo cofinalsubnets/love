@@ -74,13 +74,3 @@
        natjit)                                                            ; the inner : answers the closure; its aliases stay private
    (fired? n) (n < peep fires () 0))                                       ; did the hook fire since count n?
 
-; sortby re-declared past the hook: post.l's merge sort is egg-baked, so every comparator call
-; ran interpreted. minted here the three ride the amble (a body with a call never restarts: its
-; guards fall back to the op's own value), the comparator a call-out per compare.
-(: sortby0 sortby)
-(: sortby (? (0 < love-tco)
-             (ev '(: (merge le a b) (? (one? a) b (one? b) a (le <a <b) (<a . merge le >a b) (<b . merge le a >b))
-                     (sortsplit l) (? (one? l) (l . ()) (one? >l) (l . ()) (: r (sortsplit >>l) ((<l . <r) . (<>l . >r))))
-                     (sortby le l) (? (one? l) l (one? >l) l (: s (sortsplit l) (merge le (sortby le <s) (sortby le >s))))
-                     sortby))
-             sortby0))

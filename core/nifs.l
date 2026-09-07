@@ -44,6 +44,7 @@
       (nif_car           "cap"           1 lvm_cap)
       (nif_cdr           "cup"           1 lvm_cup)
       (nif_sort          "sort"          1 lvm_sort)
+      (nif_sortby        "sortby"        2 lvm_sortby)
       (nif_tally         "tally"         1 lvm_tally)
       (nif_longp         "long?"         2 lvm_longp)
       (nif_snip          "snip"          3 lvm_snip)

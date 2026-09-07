@@ -755,7 +755,7 @@ lvm_t lvm_kcall,
  lvm_twin, lvm_twinp, lvm_re, lvm_im, lvm_conj, lvm_abs, lvm_carg,   // complex; lvm_twin_bin declared apart below
  lvm_bxor, lvm_bsr, lvm_bsl, lvm_puts,
  lvm_string, lvm_lt,     lvm_le,   lvm_eq,     lvm_same, lvm_gt,  lvm_ge,
- lvm_sort,  lvm_tally, lvm_longp,
+ lvm_sort,  lvm_sortby, lvm_tally, lvm_longp,
  lvm_pin, lvm_pull, lvm_tablet,   lvm_keys,  lvm_dig,
  lvm_unc, lvm_poke, lvm_peek,
  lvm_seek,  lvm_trim,   lvm_spin,   lvm_add,

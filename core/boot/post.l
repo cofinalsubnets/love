@@ -52,12 +52,6 @@
    (foldr1 f l) (foldr f (last l) (init l))
    ap (foldl id))
 
-(: (merge le a b) (? (one? a) b (one? b) a
-                     (le <a <b) (<a . merge le >a b)
-                     (<b . merge le a >b))
-   (sortby le l) (? (one? l) l (one? >l) l
-                  (: s (sortsplit l) (merge le (sortby le <s) (sortby le >s)))))
-
 (: ; the macro twin: each layer keeps its table at its nil key, so this walks the chain `macros`
    ; looks up through. same placement rule as `names`, and its `books` folds at compile time.
    (macro-names _) (filter nom? (keys (foldl (\ t k (pin t k 1)) {}
