@@ -1380,7 +1380,7 @@ lvm(lvm_sort) {
  if (!chainp(l) || !chainp(B(l))) ai_musttail return Next(1);
  uintptr_t n = 0;
  for (word p = l; chainp(p); p = B(p)) n++;
- uintptr_t req = n * Width(struct ai_chain) + 2 * n;
+ uintptr_t req = n * Width(struct ai_chain) + 2 * n + 256;   // words: spine + 2n scratch + a radix count table
  Have(req);
  l = Sp[0];                                        // re-read post-GC
  struct ai_chain *spine = (struct ai_chain*) Hp;
@@ -1390,7 +1390,19 @@ lvm(lvm_sort) {
  for (word p = l; chainp(p); p = B(p)) a[i++] = A(p);
  for (i = 0; i < n; i++) if (!charmp(a[i])) break;   // all-fixnum fast path: a tagged fixnum (v<<1|1)
  bool allfix = i == n;                               // orders as a signed word, so skip the generic cmp3
- for (uintptr_t w = 1; w < n; w *= 2) {            // bottom-up stable merge
+ if (allfix && n >= 64) {                            // LSD radix, a byte a pass over the key span: linear, branch-free
+  intptr_t lo = (intptr_t) a[0], hi = lo;
+  for (i = 1; i < n; i++) { intptr_t v = (intptr_t) a[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
+  uintptr_t span = ((uintptr_t) hi - (uintptr_t) lo) >> 1;   // the tag bit never differs
+  int bits = span ? 64 - __builtin_clzll((unsigned long long) span) : 0;
+  uintptr_t *cnt = (uintptr_t*) (b + n);              // past both scratch halves, still in the gap
+  for (int sh = 0; sh < bits; sh += 8) {
+   for (uintptr_t k = 0; k < 256; k++) cnt[k] = 0;
+   for (i = 0; i < n; i++) cnt[((a[i] - (uintptr_t) lo) >> (sh + 1)) & 255]++;
+   for (uintptr_t k = 0, s = 0; k < 256; k++) { uintptr_t c = cnt[k]; cnt[k] = s; s += c; }
+   for (i = 0; i < n; i++) b[cnt[((a[i] - (uintptr_t) lo) >> (sh + 1)) & 255]++] = a[i];
+   word *t = a; a = b; b = t; } }
+ else for (uintptr_t w = 1; w < n; w *= 2) {       // bottom-up stable merge
   for (uintptr_t lo = 0; lo < n; lo += 2 * w) {
    uintptr_t m = min(lo + w, n), hi = min(lo + 2 * w, n), x = lo, y = m, o = lo;
    if (allfix) while (x < m && y < hi) b[o++] = (intptr_t) a[y] < (intptr_t) a[x] ? a[y++] : a[x++];   // branch once per segment, not per compare
