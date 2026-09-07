@@ -36,10 +36,10 @@
    (rt-zeros k acc) (k < 1 ? acc (rt-zeros (k - 1) (0 . acc)))
 
    ; the fan's width, cook's own down the environment -- a hint about the machine, and
-   ; with no jobserver no claim on its pool. FLOOR 3: the three archives were cut at once
-   ; from before there were members to slice, and a serial cook keeps that. CEILING 6,
-   ; measured -- 1/6/16 wide cost 450/496/510 G instructions for 74/100/132 s of cpu, and
-   ; the wall stops paying for the width past 6. what a worker adds is not the fork, which
+   ; with no jobserver no claim on its pool. only a width ABOVE ONE is a signal: cook
+   ; answers 1 whenever no -j was given, and a plain make exports nothing at all, so
+   ; either way read the machine here rather than let the fan be narrower than the box
+   ; merely because of how it was driven. what a worker adds is not the fork, which
    ; is free, but mooncc warming per process -- rtwarm hands out contiguous runs to hold
    ; that down, and a member's first compile in a fresh process still costs twice the rest.
    (rt-width _)
@@ -49,7 +49,17 @@
                    ((w k < 48) || (57 < w k)) 0
                    (go (k + 1) (a * 10 + (w k) - 48)))
        v (? (0 < n) (go 0 0) 0)
-       (? (6 <= v) 6 (3 < v) v 3))
+       (? (1 < v) v (rt-cores 0)))
+   ; half the cores /proc/cpuinfo names, plus one -- the same width rule cook's bare -j
+   ; takes. no /proc (the BSDs) is 1, the serial fan.
+   (rt-cores _)
+    (: q (open "/proc/cpuinfo" "r")
+       (? !(hot? q) 1
+          (: s (slurp q)
+             _ (close q)
+             n (foldl (\ a l ((9 <= tally l) && (snip l 0 9 = "processor") ? (a + 1) a))
+                      0 (lines s))
+             (? (0 < n) (n // 2 + 1) 1))))
    ; ~600 member compiles across the three archives and none reads another, so a pool of
    ; children fills the member cache and `one` below indexes the archives out of it,
    ; every member a hit. the cache IS the join -- without one a child's work dies with

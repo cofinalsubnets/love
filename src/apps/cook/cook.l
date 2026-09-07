@@ -1347,9 +1347,10 @@
    ; order and treats every non-flag word as a recipe to build:
    ;   -f, --file file   the build file (a Makefile or a Cookfile); else discovered
    ;   -j, --jobs [N]    run up to N recipes at once (default 1). a BARE -j is not
-   ;                     make's "unlimited" here but this machine's width -- cores off
-   ;                     /proc/cpuinfo, bounded by MemAvailable at 512 MB a job, since a
-   ;                     mooncc TU peaks near 350 MB. no /proc answers 1.
+   ;                     make's "unlimited" here but this machine's width -- half the
+   ;                     cores off /proc/cpuinfo plus one, bounded by MemAvailable at
+   ;                     512 MB a job, since a mooncc TU peaks near 350 MB. no /proc
+   ;                     answers 1.
    ;                     the width does not travel: there is no jobserver, so a
    ;                     recursive $(MAKE) runs at -j1 unless its own line says otherwise.
    ;   --emit            transpile a Makefile to a resolved Cookfile on stdout, then exit
@@ -1390,9 +1391,11 @@
                        seen a
                        (go (k + 1) a 0))
       (go 0 0 0))
-   ; a bare -j: what this machine can carry at once, cores AND memory. one mooncc TU
-   ; peaks near 350 MB, so 512 a job leaves room and the smaller of the two answers
-   ; wins. no /proc (the BSDs) is 1 -- what a bare -j answered before, so nothing slows.
+   ; a bare -j: what this machine can carry at once, cores AND memory. HALF THE CORES
+   ; PLUS ONE -- 1 on 1 core, 2 on 2 -- since the wall stops paying for width well before
+   ; the last core while every worker still costs a whole mooncc heap. one TU peaks near
+   ; 350 MB, so 512 a job leaves room and the smaller of the two answers wins. no /proc
+   ; (the BSDs) is 1 -- what a bare -j answered before, so nothing slows.
    (jobauto _)
    (: (rows p w) (: ls (jobfile p)
                     (? !(two? ls) 0
@@ -1405,7 +1408,8 @@
               (foldl (\ a l ((13 <= tally l) && (snip l 0 13 = "MemAvailable:")
                              ? (jobnum (snip l 13 #l)) a)) 0 mls))
       room (? (0 < free) (free // 524288) 0)               ; kB -> 512 MB slots
-      n (? (0 = cpus) 1 (0 = room) cpus (room < cpus) room cpus)
+      want (? (0 < cpus) (cpus // 2 + 1) 0)
+      n (? (0 = want) 1 (0 = room) want (room < want) room want)
       (? (0 < n) n 1))
    ; a job count: all digits and above zero, or the run ends here. `-j0` and `-j x`
    ; are the same mistake and get the same word.
