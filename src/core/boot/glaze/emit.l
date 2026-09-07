@@ -291,7 +291,7 @@
    ; can: a big literal (or one folding left behind) would be laid truncated, silently.
    (afix? e) (whole? e && (-4611686018427387904 <= e <= 4611686018427387903))
    (aconst? e) (afix? e || (= e amble-nil))
-   (aop2? op) (member? op '(+ - * // % & | ^ < <= > >= = id? link))
+   (aop2? op) (member? op '(+ - * // % & | ^ < <= > >= = id? link .))
    (acmp? op) (member? op '(< <= > >= =))
    (aquote? e) (two? e && (= <e '\) && 2 = #e)            ; the reader's quote: (\ X) at exactly two -- a datum constant
    (aqnom? e) (aquote? e && nom? <>e)                          ; a quoted nom: a point, so (a = 'sym) is raw identity
@@ -300,7 +300,7 @@
    (aq e acc) (? (aquote? e) (amemq e acc ? acc (e . acc))          ; collect quote nodes; never walk into quoted data
                  (two? e) (foldl (\ ac x (aq x ac)) acc e)
                  acc)
-   aopheads '(? : two? cap cup + - * // % & | ^ < <= > >= = id? link)   ; the heads that are ops, not calls
+   aopheads '(? : two? cap cup + - * // % & | ^ < <= > >= = id? link .)   ; the heads that are ops, not calls
    (ahascall? env go e)                                                  ; does e contain a call (any non-op head)? the bisect knob's test
     (? (aquote? e) 0
        (two? e) (: op <e
@@ -578,21 +578,29 @@
        nq   #qs
        eqv  (gv '= 0)                                       ; the = value: aeq2's generic lane drives it off an extras slot
        cx   (op \ (? (= op self) ni (member? op cn) #(cimp op) 0))
-       nd   (drok ? (amax (amble-depth go cx body) (foldl (\ acd i (amax acd (amble-depth 0 cx i))) 0 inits)) 0)
+       ; a body with a call never restarts: past the first call a deopt would re-run it, so in
+       ; that body every guard on an arith op, a compare, cap/cup, a cons or a truth test jumps a
+       ; stub that drives the op's own value over the operands and resumes -- the answer is the
+       ; interpreter's, and nothing is replayed. the values ride extras slots past the inner entries
+       fbk  (drok && (ahascall? env go body || foldl (\ ac i (ac || ahascall? env go i)) 0 inits))
+       ovs  (fbk ? '(+ - * // % & | ^ < <= > >= = cap cup . bit) ())
+       ovals (map (o \ gv o 0) ovs)
+       nd0  (drok ? (amax (amble-depth go cx body) (foldl (\ acd i (amax acd (amble-depth 0 cx i))) 0 inits)) 0)
+       nd   (nd0 + (fbk ? 1 0))                                  ; the stubs read the right operand off one spill past its op
        kn   (sfq ? (self . (gn + cn)) (gn + cn))         ; every resolvable free head + the self name (amble-ok?'s membership test)
        lpok (lp ? ((all nom? vars) && (adistinct vars) && (k = #inits)
                    && !(member? go vars) && !(member? go ps)) 1)
        ; the restart law. a deopt restarts: Sp goes back and the twin re-runs from the restart
        ; point, so every call-out the native already made is made again -- faithful only where
-       ; the callee is pure, which the grammar cannot ask. so no deopting op may sit after a
-       ; call. asafe walks acg's own evaluation order carrying "a call has run", answering that
-       ; flag onward or 'bad where a guard follows one. the restart point is the arg slots: a
+       ; the callee is pure, which the grammar cannot ask. so in a body with a call (fbk) the
+       ; guards on arith, compares, cap/cup, a cons and the truth test do not deopt at all: each
+       ; jumps a stub that drives the op's own value and resumes (fb1/fb2/atruth). what still
+       ; restarts -- the map lanes' guards and an inner site's room guard -- may not sit after a
+       ; call: asafe walks acg's own evaluation order carrying "a call has run", answering that
+       ; flag onward or 'bad where such a guard follows one. the restart point is the arg slots: a
        ; saturated tail self-call rewrites them before the jump, so the flag clears at that back
-       ; edge and only the running iteration can replay; a named-let's vars live in reserved
-       ; slots the twin never sees, so its restart is the whole invocation and a call poisons
-       ; every later iteration -- (go ..) under a set flag declines. the lanes that drive rather
-       ; than guard -- =, tally -- resolve book primitives at compile, and two?/id? carry no
-       ; guard at all, so none of them sets the flag.
+       ; edge. the lanes that drive rather than guard -- =, tally -- resolve book primitives at
+       ; compile, and two?/id? carry no guard at all, so none of them sets the flag.
        (asafe tl cl ex)
         (: (aseq c l) (foldl (\ ac x (asafe 0 ac x)) c l)                      ; the children, in order
            (aguard c) (? (= c 'bad) 'bad  c 'bad  0)                         ; then the node's own guard
@@ -602,30 +610,31 @@
               (: op <ex  as >ex
                  (? (= op ':) ((: (gol l c) (atom? >l ? (asafe tl c <l) (gol >>l (asafe 0 c <>l)))) as cl)
                     (= op '?)
-                     (: ct (aguard (asafe 0 cl <as))
+                     (: ct (fbk ? (asafe 0 cl <as) (aguard (asafe 0 cl <as)))
                         (? (= ct 'bad) 'bad
                            (: ca (asafe tl 0 <>as)  cb (asafe tl 0 <>>as)      ; the arms are alternatives; either call poisons the sequel
                               (? (= ca 'bad || (= cb 'bad)) 'bad (ca || cb)))))
                     (sfq && tl && (= op self) && (#as = (a - ni)))
                      (: c2 (aseq cl as) (= c2 'bad ? 'bad 0))                ; the self back edge
-                    (= op go) (aguard (aseq cl as))                          ; the named-let back edge
+                    (= op go) (fbk ? (aseq cl as) (aguard (aseq cl as)))     ; the named-let back edge
                     (member? op '(two? id?)) (aseq cl as)
                     (= op '= && (aqnom? <as || aqnom? <>as || lit? eqv)) (aseq cl as)
                     (= op 'tally && !(member? 'tally env) && member? 'tally gn && atom? >as) (aseq cl as)
-                    (= op '|| && !(member? op env) && two? >as) (aguard (aseq cl as))
+                    (= op '|| && !(member? op env) && two? >as) (fbk ? (aseq cl as) (aguard (aseq cl as)))
                     (= op amble-lam) (two? >>as ? (aguard cl) cl)            ; the site's room guard, over frame reads
-                    (member? op '(cap cup link + - * // % & | ^ < <= > >= = mpeep peep)) (aguard (aseq cl as))   ; reads: a guard, never a call-out
+                    (member? op '(cap cup link . + - * // % & | ^ < <= > >= =)) (fbk ? (aseq cl as) (aguard (aseq cl as)))   ; stubs in fallback mode
+                    (member? op '(mpeep peep)) (aguard (aseq cl as))         ; reads: a guard, never a call-out
                     (: c2 (aseq cl as) (= c2 'bad ? 'bad 1))))))             ; a call: its args, then the call
        ok ((two? s) && (two? >s) && (all nom? ps) && (adistinct ps)
            && (a = #ps) && (0 < a) && lpok && drok && !(= lts 'bad) && (two? body)
            && (getenv "LOVE_AMBLE_NOCALL" ? !(ahascall? env go body) 1)                ; the call-lane bisect knob: splits the call machinery from the rest
-           && (all lit? gvals) && (nd < 48) && ((k + #gn + #cn + nq + nin + nl) < 48)   ; slots are cheap once the prologue guards the room (below)
+           && (all lit? gvals) && (all lit? ovals) && (nd < 48) && ((k + #gn + #cn + nq + nin + nl + #ovs) < 48)   ; slots are cheap once the prologue guards the room (below)
            && (all (i \ amble-ok? ps kn 0 0 0 i) inits)
            && (amble-ok? env kn go k 1 body)
            && !(= (asafe 1 (foldl (\ ac i (asafe 0 ac i)) 0 inits) body) 'bad))   ; the restart law, over the gated body
        (? ok
           (: _ (getenv "LOVE_AMBLE_TRACE" ? (puts ("amble: " + show s + "\n")) 0)   ; the compile trace: names every ambled source
-             ng (1 + #gn + #cn + nq + (lit? eqv ? 1 0) + nin)   ; extras = [() | globals | sibling entries | quoted data | = | inner entries]:
+             ng (1 + #gn + #cn + nq + (lit? eqv ? 1 0) + nin + #ovs)   ; extras = [() | globals | sibling entries | quoted data | = | inner entries | op values]:
                                                                 ; () is the empty mint -- li 1 would be the charm 0-fossil -- and entries and
                                                                 ; quotes are heap values, all riding the nifx chain into GC-walked slots
              R (k + 3 + ng + nd + nl)                       ; loopvars | Se | So | budget | extras | spills | lets
@@ -636,22 +645,36 @@
              (spill d) (spo + (8 * d))
              eqo (gbo + (8 * (1 + #gn + #cn + nq)))   ; the = value's extras slot (past globals, siblings, quotes)
              ino (eqo + (8 * (lit? eqv ? 1 0)))                    ; the inner entries' slots (past =)
+             ovo (ino + (8 * nin))                                  ; the op values' slots (past the inner entries), fallback mode only
+             (opslot o) (ovo + (8 * (posof o ovs 0)))
              lto (8 * (k + 3 + ng + nd))                    ; the let region, past the spills
              (lvo v) (lto + (8 * (posof v lts 0)))
              (fx2 lbl) [['mov X T] ['and X X A] ['test X 1] ['br 'eq lbl]]    ; both T and a fixnum, else lbl
-             (abin sa sb d fin) ((acg sa d) + [['st SP (spill d) A]] + (acg sb (d + 1)) + [['ld T SP (spill d)]] + fin)   ; T = a, A = b
+             (abin sa sb d fin) ((acg sa d) + [['st SP (spill d) A]] + (acg sb (d + 1))
+                                 + (fbk ? [['st SP (spill (d + 1)) A]] ()) + [['ld T SP (spill d)]] + fin)   ; T = a, A = b (b spilled too for a stub)
+             (refb seq fb) (map (i \ map (x \ (= x 'deopt ? fb x)) i) seq)                        ; a sequence's deopts retargeted to a stub
+             (fb2 op d fin) (? !fbk fin                                                            ; the two-operand stub: drive op's value over a (spill d) then b
+                              (: fb (mint 0) en (mint 0)                                          ; (spill d+1), the partial rolling through spill d, answer in A
+                                 ((refb fin fb) + [['jmp en] ['label fb] ['ld A SP (spill d)]] + (adrive (opslot op))
+                                  + [['st SP (spill d) A] ['ld A SP (spill (d + 1))]] + (adrive (spill d)) + [['label en]])))
+             (fb1 op fin) (? !fbk fin                                                              ; the one-operand stub: A still holds the operand at the guard
+                            (: fb (mint 0) en (mint 0)
+                               ((refb fin fb) + [['jmp en] ['label fb]] + (adrive (opslot op)) + [['label en]])))
+             (atruth _) (: fb (fbk ? (mint 0) 'deopt) tk (mint 0)                                     ; the truth guard and its stub: bit's value answers 0/1, back to the compare
+                         [[['test A 1] ['br 'eq fb] ['label tk]]
+                          (fbk ? ([['label fb]] + (adrive (opslot 'bit)) + [['jmp tk]]) ())])
              (aar op sa sb d)
-              (abin sa sb d
+              (abin sa sb d (fb2 op d
                (op @ '+ ((fx2 'deopt) + [['sub A A 1] ['adds A A T] ['br 'vs 'deopt]])         ; 2y + (2x+1) = tag(x+y)
                     '- ((fx2 'deopt) + [['subs T T A] ['br 'vs 'deopt] ['lea A T 1]])          ; 2(x-y) then tag
-                    ((fx2 'deopt) + [['sar A 1] ['sub T T 1] ['mulo A A T SC 'deopt] ['or A A 1]])))   ; y * 2x = 2xy, where mulo is the tag-range gate, then tag
-             (acmp2 op sa sb d) (abin sa sb d ((fx2 'deopt) + [['cmp T A] ['set (ccof op) A] ['leax A A A 1 1]]))
-             (adm op sa sb d) (abin sa sb d                                                        ; // %: untag, /-by-0 -> twin, divir (trunc toward zero), retag
+                    ((fx2 'deopt) + [['sar A 1] ['sub T T 1] ['mulo A A T SC 'deopt] ['or A A 1]]))))   ; y * 2x = 2xy, where mulo is the tag-range gate, then tag
+             (acmp2 op sa sb d) (abin sa sb d (fb2 op d ((fx2 'deopt) + [['cmp T A] ['set (ccof op) A] ['leax A A A 1 1]])))
+             (adm op sa sb d) (abin sa sb d (fb2 op d                                             ; // %: untag, /-by-0 -> twin, divir (trunc toward zero), retag
               ((fx2 'deopt) + [['sar T 1] ['sar A 1] ['test A A] ['br 'eq 'deopt]]                 ; (the adds gate catches most-negative // -1)
                + (divir tgt op)
-               + [['adds A A A] ['br 'vs 'deopt] ['or A A 1]]))
-             (abit op sa sb d) (abin sa sb d                                                       ; & | ride the tags whole (2x+1 op 2y+1 = tag(x op y)); ^ re-tags
-              ((fx2 'deopt) + (= op '^ ? [['xor A A T] ['or A A 1]] [[(bitop op) A A T]])))
+               + [['adds A A A] ['br 'vs 'deopt] ['or A A 1]])))
+             (abit op sa sb d) (abin sa sb d (fb2 op d                                            ; & | ride the tags whole (2x+1 op 2y+1 = tag(x op y)); ^ re-tags
+              ((fx2 'deopt) + (= op '^ ? [['xor A A T] ['or A A 1]] [[(bitop op) A A T]]))))
              ; aeq2: the generic =, total and never a deopt. equal fixnums and the same point
              ; answer 1; distinct fixnums, and a point against anything else, answer 0, since a
              ; point equals only itself. everything structural -- strings, gems (the numeric
@@ -680,20 +703,24 @@
               ((acg sx d) + [['li T 1] ['test A 1] ['br 'ne ln]
                               ['ld X A 0] (jk tgt A 0) ['cmp X A] ['br 'ne ln]
                               ['li T 3] ['label ln] ['mov A T]]))
-             (acap sx d off) ((acg sx d) + [['test A 1] ['br 'ne 'deopt]
+             (acap sx d off) ((acg sx d) + (fb1 (off = 8 ? 'cap 'cup)
+                                            [['test A 1] ['br 'ne 'deopt]
                                              ['ld X A 0] (jk tgt T 0) ['cmp X T] ['br 'ne 'deopt]
-                                             ['ld A A off]])
-             (alink sa sb d) (abin sa sb d [['lea X HP 88] ['cmp SP X] ['br 'below 'deopt]          ; room for 3w + floor, else deopt (no GC mid-native)
+                                             ['ld A A off]]))
+             (alink sa sb d) (abin sa sb d (fb2 '. d                                                ; room for 3w + floor, else deopt (no GC mid-native) -- or the
+                                             [['lea X HP 88] ['cmp SP X] ['br 'below 'deopt]         ; stub, whose cons collects
                                               (jk tgt X 0) ['st HP 0 X] ['st HP 8 T] ['st HP 16 A]
-                                              ['mov A HP] ['add HP HP 24]])
-             (acq st sth sel d) (: le (mint 0)  ln (mint 0)
-              ((acg st d) + [['test A 1] ['br 'eq 'deopt] ['cmp A 1] ['br 'le le]]                 ; heap truth -> net -> twin; tag(x)<=1 <=> x<=0
-               + (acg sth d) + [['jmp ln] ['label le]] + (acg sel d) + [['label ln]]))
+                                              ['mov A HP] ['add HP HP 24]]))
+             (acq st sth sel d) (: le (mint 0)  ln (mint 0)  tr (atruth 0)
+              ((acg st d) + <tr + [['cmp A 1] ['br 'le le]]                                       ; heap truth -> net -> twin, or the bit stub; tag(x)<=1 <=> x<=0
+               + (acg sth d) + [['jmp ln]] + <>tr + [['label le]] + (acg sel d) + [['label ln]]))
              (aor as d) (: en (mint 0)                                                                      ; (|| a..): the first truthy value, single-eval, short-circuit --
               (((: (go l) (atom? >l ? (acg <l d)                                                 ; each arg lands in A; charm truth keeps it (heap truth -> the twin,
-                             ((acg <l d)                                                                ; acq's bet); the last arg is the value either way
-                              + [['test A 1] ['br 'eq 'deopt] ['cmp A 1] ['br 'gt en]]
-                              + (go >l)))) as)
+                             (: tr (atruth 0) nx (mint 0)                                                 ; acq's bet); the last arg is the value either way
+                                ((acg <l d)
+                                 + <tr + [['cmp A 1] ['br 'gt en]]
+                                 + (fbk ? ([['jmp nx]] + <>tr + [['label nx]]) ())
+                                 + (go >l))))) as)
                + [['label en]]))
              (adrive cso) (: bb (mint 0)                                                                    ; apply the value at Sp[cso] to the arg in A, via the walkable resume:
               [['st SP -32 A] ['ld T SP cso] ['st SP -24 T]                                         ; frame [arg, callee, tag(bb-entry0), entry0] -- an odd charm + an out-of-
@@ -803,9 +830,9 @@
                + [['sub SP SP (8 * w)] ['jmp 'entry0]
                   ['label bb] ['ld A SP 0] ['add SP SP 8]]))
              (aselfgo as d) ((agous as 0 d) + (asmv (a - ni - 1) d) + [['jmp 'sgo]])               ; saturated tail self-call: new args (spilled first) over the arg slots (imports keep), jump the body top
-             (acqt st sth sel d) (: le (mint 0)  ln (mint 0)                                       ; acq, tails threaded
-              ((acg st d) + [['test A 1] ['br 'eq 'deopt] ['cmp A 1] ['br 'le le]]
-               + (acgt sth d) + [['jmp ln] ['label le]] + (acgt sel d) + [['label ln]]))
+             (acqt st sth sel d) (: le (mint 0)  ln (mint 0)  tr (atruth 0)                          ; acq, tails threaded
+              ((acg st d) + <tr + [['cmp A 1] ['br 'le le]]
+               + (acgt sth d) + [['jmp ln]] + <>tr + [['label le]] + (acgt sel d) + [['label ln]]))
              (acgt e d)                                                                             ; tail-position acg: thread tails through ? and let bodies so a saturated self-call jumps
               (? (aquote? e) (acg e d)
                  (atom? e) (acg e d)
@@ -873,7 +900,7 @@
                                                                                                             ; -> the twin runs it whole; a perma-deopting native heals to bytecode)
                    + initR + unpk + bodyir + epi + dpt
                    + ['(label d0) ['ld T IP 8]] + (a = 1 ? [['mov IP T]] [['lea IP T 16]]) + [['ld T IP 0] ['jmpr T]])
-             (nifx (emit (asmt tgt prog)) e s a (8 . (amble-nil . gvals + cvals + (map (q \ <>q) qs) + (lit? eqv ? [eqv] ()) + ins))))
+             (nifx (emit (asmt tgt prog)) e s a (8 . (amble-nil . gvals + cvals + (map (q \ <>q) qs) + (lit? eqv ? [eqv] ()) + ins + ovals))))
           0))
    ; --- the general tail-recursive counted loop, n loop vars ------------------------------------
    ; (\ n ((: (go v0..vk) (? TEST (go U0..Uk) RESULT)) I0..Ik)), up to 3 loop vars in the loopregs

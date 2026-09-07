@@ -120,6 +120,23 @@
        (6000000000000000000 = (f 4)))                            ; ... and one folding left behind in a loop
     (: f (ev '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a 6000000000000000000)) a)) 0 0)))
        (6000000000000000000 = (f 1)))
+    ; --- the fallback stubs: a body with a call never restarts, so the recursive list idiom --
+    ;     a call, then a cons, a sum or a truth test over its answer -- ambles, and a guard that
+    ;     fails past the call drives the op's own value in place: the bignum, the heap truth and
+    ;     the collected cons all come back right, and no call runs twice
+    (: n (peep fires () 0)
+       f (ev '(: (g h m) (? (< m 1) () ((h m) . (g h (- m 1)))) g))
+       (&& (fired? n) (= '(9 4 1) (f (\ x (* x x)) 3))))                   ; a cons after the non-tail self-call
+    (: n (peep fires () 0)
+       f (ev '(: (g h m) (? (< m 1) 0 (+ (h m) (g h (- m 1)))) g))
+       (&& (fired? n) (= 12000000000000000000 (f (\ _ 4000000000000000000) 3))))   ; the sum overflows past the call: the + stub answers the bignum
+    (: n (peep fires () 0)
+       f (ev '(: (g h m) (? (< m 1) 0 (? (h m) (+ 1 (g h (- m 1))) (g h (- m 1)))) g))
+       (&& (fired? n) (= 2 (f (\ x (? (= x 2) () (list x))) 3))))            ; a heap truth on the call's answer: the bit stub decides
+    (: o (jug 0) k {0}
+       f (ev '(: (g h m) (? (< m 1) 0 (+ (h m) (g h (- m 1)))) g))
+       _ (f (\ x (: _ (pin k 0 (+ 1 (peep k 0 0))) _ (put o (+ 97 x)) 4000000000000000000)) 3)
+       (&& (= 3 (peep k 0 0)) (= "dcb" (slurp o))))                          ; three calls, three effects -- the overflow past them replayed none
     ; ... and the lane keeps the calls no restart can reach -- nothing deopts after this one
     (: n (peep fires () 0)
        f (ev '(: (go i m a) (? (< i m) (go (+ i 1) m (tally (show (+ a i)))) a) go))
