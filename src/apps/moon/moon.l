@@ -882,13 +882,17 @@
    ; what a forked child runs. a child's whole answer is the entries it writes, so
    ; nothing is returned; the parent reads them back through rtmems. with no cache in
    ; reach there is nowhere to put the work, and the whole call is a no-op.
+   ; the residue is CONTIGUOUS RUNS, not one member in w: cpp.l's header memo keys on a
+   ; TU's first include and holds three, so roster neighbours hit it where a stride misses
+   ; -- 597 members cost 682 G instructions split sixteen ways, 490 G taken in runs.
    (rtwarm home tgts os vb w i)
-    (: id (? (string? home) (mcid home) ())
+    (: run 8                     ; long enough to keep the memo, short enough to spread
+       id (? (string? home) (mcid home) ())
        cd (? (string? id) (mcdir ()) ())
        (? !(string? cd) 0
           (each tgts
                 (\ t (: (go l k) (? !(two? l) 0
-                                    (: _ (? (i = (k % w)) (rtmem1 t os vb id cd <l) 0)
+                                    (: _ (? (i = (k // run % w)) (rtmem1 t os vb id cd <l) 0)
                                        (go >l (k + 1))))
                         (go (rtplan home t os vb) 0))))))
    (rtpull srcs tgt os nostd vb)

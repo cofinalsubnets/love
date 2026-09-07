@@ -38,10 +38,10 @@
    ; the fan's width, cook's own down the environment -- a hint about the machine, and
    ; with no jobserver no claim on its pool. FLOOR 3: the three archives were cut at once
    ; from before there were members to slice, and a serial cook keeps that. CEILING 6,
-   ; measured -- 1/3/6/12/16 wide run 76/31/23/19/19 s of wall for 69/88/109/174/196 s
-   ; of cpu. the ~8 s a worker adds is not the fork, which is free, but mooncc warming
-   ; per process: a member's first compile in a fresh one is 1.9 G instructions and
-   ; every one after it 0.97 G, so a worker re-pays what the parent already holds.
+   ; measured -- 1/6/16 wide cost 450/496/510 G instructions for 74/100/132 s of cpu, and
+   ; the wall stops paying for the width past 6. what a worker adds is not the fork, which
+   ; is free, but mooncc warming per process -- rtwarm hands out contiguous runs to hold
+   ; that down, and a member's first compile in a fresh process still costs twice the rest.
    (rt-width _)
     (: w ("" + getenv "COOKJOBS")
        n #w
