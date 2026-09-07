@@ -322,6 +322,24 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   32.7 s, noise): the VM's hot functions are small tail-threaded ops with little control
   flow of their own, so their cost is the calls and the memory, not the dispatch. The
   corpus's remaining 1.8× against emcc is the next question, and it is not this one.
+- **rung 5c — the riscv homes. ✅ LANDED (2026-09-07).** The profile after the relooper was
+  flat across the VM's ops (lvm_cur 8%, lvm_unc 7%, ai_net 7%, lvm_cond 6%, ...; 98% in
+  wasm), and joined per symbol with the same corpus under perf natively, the ops ran 1.3–2.3×
+  their native share. One op read: lvm_cur was 467 wasm instructions against ~60 native, and
+  the body **stored its four parameters into the frame on entry and reloaded them from memory
+  at every use**. Not the lane's doing: gen.l's parameter homing was off for riscv
+  (`nhome` 0, "spill all params"; x64 homes 6, a64 5), and the module rides riscv's lane
+  whole. Now riscv homes three, in t0 t2 t3 (`hregs-rv64`, a64's shape: caller-saved,
+  never an argument register, clear of the scratches), so g, Ip and Hp live in registers
+  for an op's whole body. **The corpus under node: 32.7 s → 25.8 s (1.27×)**, the module
+  1,217,518 → 1,205,690 bytes; x64's object byte-identical; the riscv lane's own gates all
+  green under qemu (the raw corpus, the battery against the cross gcc, the c-testsuite at
+  211 with no wrong answer), so native riscv takes the same win. The nif rows moved both
+  ways: deflate 310 → 294 ms, md5/crc32/cksum/inflate within noise, and **sha256 461 →
+  544 ms** — the homes hold two of riscv's six operand-pool registers, and sha_block's
+  temporaries pay; the callee-saved bank (s1 s2 s3) was tried and did not help the row and
+  broke the runtime build. The corpus is the target and the row is a lever gauge, so this
+  ships with the row on record; a fourth home (Sp) wants t1, the xmm pop scratch — open.
 - **the locals-roster lever: MEASURED, DOES NOT PAY (2026-09-07).** The reading after
   ccwasm's first fill was that the array-heavy rows lose on wasm locals because the lane
   inherits rv64's 27-register roster where wasm has unlimited locals. Ablated before

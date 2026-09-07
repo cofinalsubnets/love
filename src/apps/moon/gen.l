@@ -448,7 +448,9 @@
    ; prologue saves it. thumb2 (AAPCS32, Cortex-M7): a 32-bit WORD (wsize=4), args in r0..r3, the
    ; same lr-push + fp-base + `bx lr` frame shape as a64 (`arm?` covers both) -- r4 is
    ; callee-saved there, but riding fp keeps the a64 build/epilogue path verbatim.
-   ; register-homing is off there (nhome=0): every param spills to its frame slot. --
+   ; register-homing is off there (nhome=0): every param spills to its frame slot. riscv homes
+   ; three, in t0 t2 t3 -- the wasm module rides this lane whole, and there every reload of a
+   ; frame slot is a memory op the engine cannot lift. --
    (a64? {'tgt 'a64}) 1
    (t32? g) (member? (g 'tgt) '(thumb2 thumb2sp thumb1))   ; the 32-bit thumb ABI family (AAPCS32): armv7e-m + armv6-M share it
    (sp64? {'tgt 'thumb2sp}) 1       ; armv7e-m with an SP-ONLY fpu (the playdate's STM32F746): f64 arithmetic softens
@@ -470,8 +472,11 @@
    ; of the staging scratches (x9 the xmm pop scratch, x15 the callr park, x16 holo's far offset).
    hregs-a64 '(r10 r11 r12 r13 r14)
    hregs-t32 '(r5 r6 r7 r8)                          ; thumb2 callee-saved home pool (inert while nhome=0)
-   (hregs g) (? (a64? g) hregs-a64 (t32? g) hregs-t32 opool)   ; the home pool (x64 rides opool, positionally arg-aligned)
-   (nhome g) (? (a64? g) 5 (t32? g || rv64? g) 0 6)       ; how many gp positions can home (thumb2 + riscv: none yet -- spill all params)
+   ; the riscv HOME pool, a64's shape: caller-saved temporaries, never an argument register,
+   ; clear of the scratches (t1 = r9 the xmm pop scratch, t4 = r12 the callr park, t5/t6 holo's)
+   hregs-rv64 '(r8 r10 r11)
+   (hregs g) (? (a64? g) hregs-a64 (rv64? g) hregs-rv64 (t32? g) hregs-t32 opool)   ; the home pool (x64 rides opool, positionally arg-aligned)
+   (nhome g) (? (a64? g) 5 (rv64? g) 3 (t32? g) 0 6)      ; how many gp positions can home (thumb2: none yet -- spill all params)
    ; the x64 callee-saved pool (r11..r14 -> machine r12..r15): overflow homes for locals in
    ; non-leaf fns. a home here rides through calls unwrapped -- the callee preserves it -- at
    ; the price of one save/restore pair in the owner's frame (a64's x19+ rungs: unclimbed)

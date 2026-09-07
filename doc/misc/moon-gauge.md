@@ -89,14 +89,16 @@ that reaches the seat, so this is the wasm lowering's gauge the way gcc is x64's
 
 | ms (median of 5, 24 reps) | mooncc | emcc -O2 | emcc -O0 |
 |---|---:|---:|---:|
-| sha256 | 461 | 143 (3.22×) | 496 (0.93×) |
-| md5 | 159 | 142 (1.12×) | 197 (0.81×) |
-| crc32 | 57 | 45 (1.27×) | 60 (0.95×) |
-| cksum | 58 | 48 (1.21×) | 64 (0.91×) |
-| deflate | 310 | 204 (1.52×) | 404 (0.77×) |
-| inflate | 87 | 65 (1.34×) | 89 (0.98×) |
+| sha256 | 544 | 151 (3.60×) | 513 (1.06×) |
+| md5 | 170 | 147 (1.16×) | 204 (0.83×) |
+| crc32 | 57 | 51 (1.12×) | 64 (0.89×) |
+| cksum | 61 | 53 (1.15×) | 66 (0.92×) |
+| deflate | 294 | 215 (1.37×) | 429 (0.69×) |
+| inflate | 89 | 68 (1.31×) | 96 (0.93×) |
 
-Every lane answers the same bytes on every row. (2026-09-07, after the relooper, rung 5b;
+Every lane answers the same bytes on every row. (2026-09-07, after the relooper, rung 5b,
+and the riscv homes, rung 5c — the homes cost sha256 461 → 544 ms and bought deflate 310 →
+294, the corpus 21%; the relooper-only fill is this section's git history;
 the first fill, the same day on the dispatch loop, read sha256 819 ms = 5.15×, deflate 628
 = 2.88×, md5 1.73× — this section's git history.) The reading that fill suggested, spills
 for want of a roster, was ablated and found false (the plan says how); what the rows were
@@ -116,11 +118,13 @@ the formatter's neighbours. A size rung, if one is wanted, starts at the archive
 | mooncc, out/wasm/love.wasm (wasm64, tco=0) | 4765 | 42.2 s | 49.8 s | 2.8 GB |
 | mooncc, the same at tco=1 (return_call; rung 5a, 2026-09-07) | 4765 | 32.1 s | 38.0 s | 2.8 GB |
 | mooncc, tco=1 + the relooper (rung 5b, 2026-09-07) | 4765 | 32.7 s | — | 2.8 GB |
+| mooncc, + the riscv homes (rung 5c, 2026-09-07) | 4765 | 25.8 s | — | 2.8 GB |
 | emcc -O2, out/wasm/love.js (wasm32, tco=0) | 4731 | 17.7 s | 20.8 s | 0.49 GB |
 
-2.39× on the corpus on the trampoline, **1.81× with return_call**, and the relooper leaves it
+2.39× on the corpus on the trampoline, **1.81× with return_call**, the relooper leaves it
 there (the VM's ops are small tail-threaded functions; their cost is calls and memory, not
-control flow) — between the corpus's
+control flow), and **1.46× with the riscv homes** (the ops' parameters in registers instead
+of the frame) — between the corpus's
 native 1.19× and sha256's 5.15×, as love.c is the call-dense VM and the ciphers are the
 array floor. ⚠ not quite the same work: the emcc build is 32-bit (34 fewer laws run under
 `word`), still trampolined, and its heap is a sixth of ours.
