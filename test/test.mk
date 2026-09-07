@@ -35,7 +35,7 @@ test:
 	@$(MAKE) --no-print-directory $(test_phases)
 
 # slow gate
-test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_cookdiff test_dist test_seed
+test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_cookdiff test_dist test_seed test_moon
 
 
 # really slow gate
@@ -43,7 +43,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_uukind test_gc test_gcheck test_gcstress test_extract test_big test_mx \
 	test_tools test_web test_hostnif test_doc test_glaze test_hook test_sat test_holo test_holowasm test_as \
 	test_holofuzz test_glazefuzz test_encver test_lux test_kore test_refuzz test_sb test_vi \
-	test_moon test_clay test_moonfuzz test_forge \
+	test_clay test_moonfuzz test_forge \
 	test_cts test_libc test_ulp test_raw \
 	test_drv test_hdiff test_tco0 nettest test_wake test_gz test_cpio test_fat32 test_root \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
