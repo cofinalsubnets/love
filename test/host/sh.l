@@ -517,5 +517,68 @@
             "export p=$PATH; PATH=/nonexistent; LUSHFLAGS=-g sh -c 'tr 2>/dev/null; s=$?; PATH=$p; echo st=$s'; LUSHFLAGS=-g sh -a -c 'tr 2>/dev/null; echo st=$?'"])
    (assert (= "st=127\nst=2\n" (cup r))))
 
+; `which` and `type` -- one verdict (sh-verdict) walks sh-simple2's own ladder, so
+; what they name is what would run, and `command -v` reads the same answer. the
+; classifications first: a reserved word, a builtin and a function are all things
+; PATH cannot see, which is why these are builtins and not the external `which`.
+(assert (sh-bi? "which") (sh-bi? "where") (sh-bi? "type"))
+(: r (hark ["out/love" "out/lush" "-c"
+            "f() { :; }
+             type if; type cd; type f
+             which if; which cd; which f; command -v f"])
+   (assert (= "if is a shell reserved word\ncd is a shell builtin\nf is a shell function\nif\ncd\nf\nf\n"
+              (cup r))))
+; a miss is status 1 and a line on err for which/type, and silence for command -v
+; (POSIX's way, and the probe every configure-shaped script opens with). the status
+; over several operands is sticky, so one miss fails the command.
+(: r (hark ["out/love" "out/lush" "-c"
+            "which nosuchtool 2>/dev/null; echo st=$?
+             command -v nosuchtool; echo st=$?
+             type pwd nosuchtool 2>/dev/null; echo st=$?"])
+   (assert (= "st=1\nst=1\npwd is a shell builtin\nst=1\n" (cup r))))
+; ..and the mode is in the verdict. autonomous: a verb word is ours whatever PATH
+; holds, so an empty PATH still answers -- with the binary a spawn would exec
+; (sh-spawnv's seat), which is the one path that is true of it. -g hands the
+; question back to PATH, and an empty one finds nothing.
+(: r (hark ["out/love" "out/lush" "-c"
+            "PATH=/nonexistent
+             a=$(which tr); b=$(ev '(selfpath 0)')
+             [ \"$a\" = \"$b\" ] && echo seat || echo other
+             c=$(type tr); [ \"$c\" = \"tr is a verb of $b\" ] && echo verb || echo other
+             d=$(which -a tr); [ \"$d\" = \"$a\" ] && echo only || echo other
+             e=$(where tr); [ \"$e\" = \"$d\" ] && echo where || echo other"])
+   (assert (= "seat\nverb\nonly\nwhere\n" (cup r))))
+; `dir` is a second name on ls, registered beside it (kore.l) the way `more` rides
+; less, so it takes the in-image lane and the verdict reads it as ours
+(: r (hark ["out/love" "out/lush" "-c" "PATH=/nonexistent; dir /; type dir"])
+   (: s (hark ["out/love" "out/lush" "-c" "PATH=/nonexistent; ls /"])
+      (assert (= (cup s) (snip (cup r) 0 #(cup s)))
+              (member? 'verb (sh-verdict "dir")))))
+; (under -g even echo is PATH's, so the status crosses a variable and PATH comes back)
+(: r (hark ["out/love" "out/lush" "-g" "-c"
+            "p=$PATH; PATH=/nonexistent; which tr 2>/dev/null; s=$?; PATH=$p; echo st=$s"])
+   (assert (= "st=1\n" (cup r))))
+; the in-image lane, widened: the toolchain's other half plus the three crew tools
+; that answer a status instead of quitting. each is claimed by name, from its own
+; module where that is not the applets' home.
+(assert (all (\ w (two? (sh-imgfn w)))
+             '("nm" "ar" "ld" "as" "tar" "libra" "fat" "mkfs.vfat" "mkdosfs")))
+; ..and the stdin readers stay out: a filter with no file operand would drink the
+; terminal in here, where ^C kills the shell and no pid answers `kill %1`
+(assert (all (\ w !(two? (sh-imgfn w))) '("gzip" "gunzip" "zcat" "cpio" "cat" "sort")))
+; the door is what makes that safe. a tool that used to `quit` on its error path
+; would have taken the shell with it; now every failure is one command's status and
+; the line after it still runs.
+(: r (hark ["out/love" "out/lush" "-c"
+            "tar xzf /nonexistent.tgz . 2>/dev/null; echo t=$?
+             libra /nonexistent-xyz.l 2>/dev/null; echo l=$?
+             mkfs.vfat 2>/dev/null; echo m=$?
+             echo alive"])
+   (assert (= "t=1\nl=1\nm=2\nalive\n" (cup r))))
+; a capture of one takes the jug: no pipe, no fd, no child, which is the whole
+; point of `cc=$(which cc)`
+(: pr (sh-parse-line "which cc")
+   (assert (= 'jug (sh-lane >pr)) (= 'jug (sh-lane >(sh-parse-line "type cc")))))
+
 (test_fin ())
 (puts "sh: ok") (putc 10)

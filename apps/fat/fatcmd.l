@@ -32,7 +32,10 @@
 
 (: fatc-usage "usage: fat {ls|stat|cat|get|put|mkdir|rm|mkfs} IMG [PATH..]"
    (fatc-moan m) (: _ (say err ("fat: " + m)) _ (put err 10) _ (flush err) 1)
-   (fatc-die c m) (: _ (fatc-moan m) (quit c))
+   ; the exit door: a status raised, not a process ended, so a caller already in
+   ; this image gets a charm back; without kore aboard there is no catcher.
+   (fatc-leave c) (: u (from 'kore 'uleave) (? (lit? u) (u c) (quit c)))
+   (fatc-die c m) (: _ (fatc-moan m) (fatc-leave c))
    (fatc-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) [1 (s + "")])))
    (fatc-blurt p s) (: q (open p "w") (hot? q && (: _ (say q s) _ (close q) 1)))
 
@@ -133,7 +136,7 @@
     (: n #av
        (arg k) (? (n <= k) "" (av k))
        v <av img (arg 1) p (arg 2)
-       (? (n < 2) (: _ (say err (fatc-usage + "\n")) (quit 2))
+       (? (n < 2) (: _ (say err (fatc-usage + "\n")) 2)
           (v @
            "ls"    (fatc-ls img p)
            "stat"  (: _ (? #p () (fatc-die 2 "stat wants a path")) (fatc-stat img p))
@@ -144,17 +147,21 @@
            "rm"    (: _ (? #p () (fatc-die 2 "rm wants a path")) (fatc-rm img p))
            "mkfs"  (fatc-mkfs img (? #p (fatc-size p) ()))
            w       (: _ (say err ("fat: unknown verb " + w + "\n" + fatc-usage + "\n"))
-                      (quit 2)))))
+                      2))))
    ; busybox spells the format two ways and takes -C SIZE-IN-1K-BLOCKS after the name.
    ; the blocks are 1024 here, which is what mkfs.vfat's own BLOCKS means.
    (mkfsv-main av)
     (: as (? ((two? av) && (<av = "-C")) >av av)
-       (? !(two? as) (: _ (say err "usage: mkfs.vfat [-C] IMG [BLOCKS]\n") (quit 2))
+       (? !(two? as) (: _ (say err "usage: mkfs.vfat [-C] IMG [BLOCKS]\n") 2)
           (: img <as
              bl (? (two? >as) (fatc-size <>as) ())
              (fatc-mkfs img (? (charm? bl) (bl * 1024) ())))))
 
    T (from 'verbs 'tab)
-   _ (pins T 'fat fat-main 'mkfs.vfat mkfsv-main 'mkdosfs mkfsv-main))
+   ; the verb wraps in urun, kore.l's own shape for a main that leaves deep
+   (fatc-run f av) (: r (from 'kore 'urun) (? (lit? r) (r f av) (f av)))
+   _ (pins T 'fat       (av \ fatc-run fat-main av)
+            'mkfs.vfat  (av \ fatc-run mkfsv-main av)
+            'mkdosfs    (av \ fatc-run mkfsv-main av)))
 
 ) ; module 'fatcmd

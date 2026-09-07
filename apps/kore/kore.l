@@ -277,7 +277,8 @@
             'paste paste-main 'comm comm-main 'split split-main
             'join join-main 'od od-main
             'cksum cksum-main 'md5sum md5sum-main 'sha256sum sha256sum-main
-            'ls ls-main 'cp cp-main 'mv mv-main
+            'ls ls-main 'dir ls-main   ; one lister, and the name DOS and coreutils ask it by
+            'cp cp-main 'mv mv-main
             'rm rm-main 'mkdir mkdir-main 'rmdir rmdir-main
             'ln ln-main 'touch touch-main
             'pwd pwd-main 'chmod chmod-main

@@ -628,6 +628,9 @@
                ("" + ><>t) "")
    (rw? t w) (tally (litw t) && (w = (litw t)))
    stopw '("then" "else" "elif" "fi" "do" "done" "esac" "}")
+   ; the whole reserved set: stopw's closers plus the openers pcomm spells below.
+   ; `type` and `command -v` read it, and POSIX has them name a reserved word.
+   sh-resw (+ '("!" "{" "case" "for" "if" "in" "until" "while") stopw)
 
    (sh-parse ts)
      (: ts2 (skipnl ts)
@@ -1529,9 +1532,16 @@
    ; so the qualifying test is "cannot block, quits nothing, keeps nothing": bounded by
    ; its own arguments, waiting on no fd it did not open. That is what the list below is,
    ; and it is most of a build -- 152 of the 249 self-execs one seed-only bootstrap spent.
+   ; the quitting kind is the one of the three that is not a law: a tool can stop
+   ; quitting, and kore's applets already have -- they raise `uleave` and their
+   ; registration wraps them in `urun` (kore.l), which is the door mooncc rides too
+   ; (`moon-run` under a `moon-main` that only quits with what it answers). tar, libra
+   ; and fat took that door to get on this list; nm/ar/ld/as were already through it.
    ; one more class stays out and it is not in the three above: the tools that read
    ; STDIN when handed no file operand (cat head tail wc sort uniq cut tr nl rev grep
-   ; sed tee xargs). they want the stdin story -- a question about ^C and a terminal
+   ; sed tee xargs, and gzip gunzip zcat cpio -- a filter handed nothing drinks the
+   ; terminal, and cpio takes its names there always). they want the stdin story --
+   ; a question about ^C and a terminal
    ; rather than about anything in this file -- and nothing about the wake waits on
    ; it: a word that misses this list still takes the fork lane below, warm heap and
    ; no exec. running one in here would buy the fork and nothing else.
@@ -1542,15 +1552,24 @@
    ; a build spells (`sha256sum dist.tgz`, a -c over a list) always name one.
    sh-imgok '("mooncc" "cc"
               "test" "[" "true" "false" "echo" "printf" "uname" "pwd"
-              "basename" "dirname" "readlink" "seq" "ls" "cmp" "diff"
+              "basename" "dirname" "readlink" "seq" "ls" "dir" "cmp" "diff"
               "mkdir" "rmdir" "rm" "ln" "touch" "chmod" "mv" "cp" "install"
-              "objcopy" "cksum" "md5sum" "sha256sum")
-   ; nm/ar/ld/as are reachable now (module 'kore exports every <word>-main) but stay
-   ; off the list on the qualifying test alone: nothing measured wants them in-image.
+              "objcopy" "cksum" "md5sum" "sha256sum"
+              ; the toolchain's other half: each needs its operands (as wants three,
+              ; the rest a file), so none can sit on stdin
+              "nm" "ar" "ld" "as"
+              ; ..and the three crew tools that answer a status now instead of
+              ; quitting. each is bounded by the archive or image it is named, holds
+              ; nothing across a run, and reads no stdin
+              "tar" "libra" "fat" "mkfs.vfat" "mkdosfs")
    ; the words whose main is not spelled <word>-main. kore-main wants the whole argv
    ; (it reads its own program seat); the rest take the args after the name.
    sh-imgalias '(("mooncc" "moon-run" "moon") ("cc" "moon-run" "moon") ("kore" "kore-main")
-                 ("[" "bracket-main") ("objcopy" "objcopy" "holo"))
+                 ("[" "bracket-main") ("dir" "ls-main") ("objcopy" "objcopy" "holo")
+                 ; the crew tools live in their own modules, not the applets' home
+                 ("tar" "tar-main" "tarcmd") ("libra" "libra-main" "libra")
+                 ("fat" "fat-main" "fatcmd")
+                 ("mkfs.vfat" "mkfsv-main" "fatcmd") ("mkdosfs" "mkfsv-main" "fatcmd"))
    (sh-pathdirs _)
      (: p ("" + (getenv "PATH")) n #p
         (go from k acc) (? (n <= k) (sh-rev (snip p from k . acc))
@@ -1614,6 +1633,30 @@
                               (sh-verbw? w))
                           (exe . argv)
                           argv))
+   ; --- what would run: the answer `command -v`, `which` and `type` share -------
+   ; the verdict walks sh-simple2's own ladder, so the thing it names is the thing
+   ; that would run: ('resw) ('fn) ('bi) ('verb path) ('path path), or () for a
+   ; word nothing answers. the mode is in it -- autonomous mode's verb word is ours
+   ; whatever PATH holds, and a spawn of it execs this binary (sh-spawnv), so the
+   ; seat is the honest path to name. a seat with none (the kernel) never execs and
+   ; the registry is its only authority, sh-known?'s reading.
+   (sh-vseat? w) (&& (sh-verbw? w) (|| !(sh-greg? 0) (nil? (sh-seat ()))))
+   (sh-vpath w) (: s (sh-seat ()) (? (string? s) s w))
+   (sh-verdict w)
+     (? (sh-smem? w sh-resw) ['resw]
+        (sh-fn? w) ['fn]
+        (sh-bi? w) ['bi]
+        (sh-slashed? w) (? (two? (stat w)) ['path w] ())
+        (sh-vseat? w) ['verb (sh-vpath w)]
+        (: p (sh-whichp w) (? (two? p) ['path <>p] ())))
+   (sh-vname w v) (? (= <v 'path) (v 1) (= <v 'verb) (v 1) w)   ; `command -v`'s line
+   (sh-whichall w)                              ; every PATH hit for w, in order
+     (: (go l acc)
+         (? !(two? l) (sh-rev acc)
+            (: d (? #<l <l ".") p (d + ("/" + w))
+               (go >l (? (two? (stat p)) (p . acc) acc))))
+        (go (sh-pathdirs ()) ()))
+
    (sh-imgask w)
      (: al (sh-assoc w sh-imgalias)
         mn (? (two? al) <>al (w + "-main"))
@@ -1717,7 +1760,7 @@
    ; --- builtins: a charm status, a control pair (brk/cnt/ret), or 'nope --------
    sh-binames '("exit" "cd" "export" "pwd" "jobs" "fg" "bg" ":" "true" "false" "command"
                 "read" "set" "shift" "unset" "eval" "." "wait" "local"
-                "break" "continue" "return" "ev" "trap")
+                "break" "continue" "return" "ev" "trap" "which" "where" "type")
    (sh-bi? nm) (sh-smem? nm sh-binames)
    (sh-readb args)
      (: args2 (? (two? args && (<args = "-r")) >args args)
@@ -1802,6 +1845,49 @@
                                           #act (pin sh-traps c act)
                                           (pull sh-traps c 0)))))
                        0))))))
+   ; `which [-a] W ..` -- the path a spawn would land on, one line a word, spelled
+   ; as `command -v` spells it (a builtin, function or reserved word answers its own
+   ; name). it is a builtin because the answer is the shell's: PATH alone cannot see
+   ; a function, and in autonomous mode PATH does not decide the word at all -- the
+   ; line then names this binary, which is what would run. -a adds every other PATH
+   ; hit after it, which is how an installed twin of our own name shows itself.
+   ; `where W ..` is zsh's, and it is `which -a` under another name -- every answer,
+   ; not the first -- so it is the same walk with the flag already on.
+   (sh-whichb args)
+     (: all ((two? args) && (<args = "-a"))
+        (sh-which2 "which" "which [-a] name.." all (? all >args args)))
+   (sh-whereb args) (sh-which2 "where" "where name.." 1 args)
+   (sh-which2 nm use all ws)
+     (: pre ("lush: " + (nm + ": "))
+        (? !(two? ws) (cmderr (nm + (": usage: " + use)))
+           (foldl (\ st w
+                     (: v (sh-verdict w)
+                        (? !(two? v)
+                           (: _ (say err (pre + (w + ": not found\n"))) 1)
+                           (: _ (puts ((sh-vname w v) + "\n"))
+                              _ (? all (sh-whichrest w v) 0)
+                              st))))
+                  0 ws)))
+   (sh-whichrest w v)                           ; the PATH hits the verdict did not name
+     (each (sh-whichall w)
+           (\ p (? (&& (= <v 'path) (p = (v 1))) 0 (puts (p + "\n")))))
+   ; `type W ..` -- POSIX's classification, a sentence a word. the verb line names
+   ; the binary the word runs in rather than a path, since in autonomous mode PATH
+   ; is not what decided it.
+   (sh-typeb args)
+     (? !(two? args) (cmderr "type: usage: type name..")
+        (foldl (\ st w
+                  (: v (sh-verdict w)
+                     (? !(two? v)
+                        (: _ (say err ("lush: type: " + (w + ": not found\n"))) 1)
+                        (: _ (puts (w + ((sh-typesay v) + "\n"))) st))))
+               0 args))
+   (sh-typesay v)
+     (? (= <v 'resw) " is a shell reserved word"
+        (= <v 'fn) " is a shell function"
+        (= <v 'bi) " is a shell builtin"
+        (= <v 'verb) (" is a verb of " + (v 1))
+        (" is " + (v 1)))
    (sh-localb args)
      (: _ (each args (\ w (: p (sh-eqpos w 0)
                              (? !p (pin sh-vars w "")
@@ -1853,14 +1939,15 @@
            ; special builtin, so it was forking and answering ENOENT: 12 of them in one
            ; build, each reading as "the tool is absent". Absent is the honest answer for
            ; ccache and objdump, which is why nothing looked broken -- but a probe that is
-           ; wrong by accident is wrong. a builtin answers its own name; a PATH word its path.
+           ; wrong by accident is wrong. sh-verdict is the answer, so the probe sees what
+           ; the ladder sees; quiet on a miss, which is POSIX's and not `which`'s way.
            (cmd = "command")
              (: a >argv
                 (? ((two? a) && (<a = "-v"))
                    (: w (? (two? >a) <>a "")
                       (? (w = "") 1
-                         (sh-bi? w) (: _ (puts (w + "\n")) 0)
-                         (: p (sh-whichp w) (? (two? p) (: _ (puts (<>p + "\n")) 0) 1))))
+                         (: v (sh-verdict w)
+                            (? !(two? v) 1 (: _ (puts ((sh-vname w v) + "\n")) 0)))))
                    !(two? a) 1
                    (sh-simple2 a ())))                 ; `command W ..` -- run W, no function lookup
            (cmd = "pwd")  (: _ (puts ((cwd 0) + "\n")) 0)
@@ -1882,6 +1969,9 @@
                                 (: r (sh-line c) (? (two? r) (cmderr "eval: unexpected eof") r))
                                 0))
            (cmd = "ev")   (sh-loveb >argv)
+           (cmd = "which") (sh-whichb >argv)
+           (cmd = "where") (sh-whereb >argv)
+           (cmd = "type") (sh-typeb >argv)
            (cmd = ".")    (sh-dotb >argv)
            (cmd = "local") (sh-localb >argv)
            (cmd = "wait") (sh-waitb >argv)
@@ -2246,7 +2336,10 @@
    ; $( ) of its own, so it may happen once and only once) -- hence the bare
    ; literal: no ~, no glob, so the name is already its own text. an unreadable
    ; name is 'sub, the lane that holds anything.
-   sh-purebi '("pwd" ":" "true" "false")
+   ; which/where/type are here for the idiom they exist to serve -- `cc=$(which cc)`
+   ; takes the jug and pays no pipe. none can spawn, and their miss line is on err,
+   ; which the jug does not re-seat.
+   sh-purebi '("pwd" ":" "true" "false" "which" "where" "type")
    (sh-barelit w)                              ; a word that is already its own text, or ()
      (? (!(two? w) || two? >w) ()
         (: h <w
@@ -2577,7 +2670,7 @@
         (? (hot? o) (: _ (say o (ln + "\n")) _ (flush o) (close o)) 0))
 
    ; --- completion: (insert . candidates) off the text left of the cursor ------
-   sh-builtins '("cd" "exit" "export" "pwd" "jobs" "fg" "bg")
+   sh-builtins '("cd" "exit" "export" "pwd" "jobs" "fg" "bg" "which" "where" "type")
    (sh-prefix? p s) (: n #p ((n <= #s) && (p = (snip s 0 n))))
    (sh-comm2 a s)                               ; longest common prefix of two
      (: n (? (#a < #s) #a #s)

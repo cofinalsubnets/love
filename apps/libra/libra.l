@@ -53,7 +53,9 @@
                 _ (foldl (\ _ w (: _ (say err (warnline <fs w)) 0)) 0 bw)
                 (libra-check-files conf >fs (bad + tally-fatal bw))))))
 
-   (libra-check conf fs) (: n (libra-check-files conf fs 0) (? (0 < n) (quit 1) 0))
+   ; the count is the status, answered and not quit with: every arm below is
+   ; libra-main's own tail, so a caller already in this image reads it as a charm
+   (libra-check conf fs) (: n (libra-check-files conf fs 0) (? (0 < n) 1 0))
 
    (flag? x) ((0 < tally x) && (x 0 = 45))
    (files as) (filter (\ x !(flag? x)) as)
@@ -161,7 +163,7 @@
    (libra-doc fs surf)
     (: _ (? (= surf 'md) 0 (use 'lapiz))
        n (libra-doc-files fs surf 0)
-       (? (0 < n) (quit 1) 0))
+       (? (0 < n) 1 0))
 
    ; above its reader: only lambda-to-lambda recursion resolves lazily, so a
    ; closure over a later non-lambda binding of this `:` raises missing usage at load.
@@ -184,7 +186,7 @@
              (v = "doc")   (libra-doc (files r) (? (member? "-ht" r) 'ht
                                                    (member? "-rf" r) 'rf
                                                    'md))
-             (v = "")      (: _ (say err usage) (quit 1))     ; nothing named, nothing to weigh
+             (v = "")      (: _ (say err usage) 1)            ; nothing named, nothing to weigh
              ; no verb: the whole line is files. so an unknown verb reads as a
              ; filename and says "cannot open" rather than "no such verb"
              (libra-check conf (files as)))))
@@ -198,5 +200,6 @@
    ; quit, never return: the shebang's -l makes this a preload, so a path that
    ; merely answers leaves cli holding our arguments and loads the first as a
    ; program. the seat miss does return -- that arm is (use 'libra).
-   (? (two? s) (: _ (libra-main >s) (quit 0)) ()))
+   ; the status is libra-main's now, so the seat carries it out rather than 0.
+   (? (two? s) (: r (libra-main >s) (quit (? (charm? r) r 0))) ()))
 ) ; module libra
