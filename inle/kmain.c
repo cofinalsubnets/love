@@ -717,7 +717,7 @@ static int k_create(char const *p, uintptr_t n, bool dir, uintptr_t mode) {
                                .dir = dir, .live = true };
   return i; }
 
-// a directory can be a prefix: the initrd is flat ("apps/json/json.l" and no row for "lib"), so a
+// a directory can be a prefix: the initrd is flat ("apps/json.l" and no row for "lib"), so a
 // name baked paths lie under is a directory with no entry of its own -- synthesized, 0755,
 // wearing its newest child's date. mkdir is what gives one an entry of its own.
 

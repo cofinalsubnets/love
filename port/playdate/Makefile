@@ -10,7 +10,7 @@
 # ordinary host gcc shared object, so `make sim` runs with no cross tools.
 #
 # Both halves bake the same program: the egg bootstrap (out/lib lcat headers,
-# delegated to the root), apps/rune/ as a registered module, and cas.l (this
+# delegated to the root), apps/rune.l as a registered module, and cas.l (this
 # folder, lcat'd locally) driving the workbench. See main.c + pdglue.c.
 R := ../..
 include $(R)/mk/common.mk
@@ -79,7 +79,7 @@ clean:
 # each one needs FORCE: a rule with NO prerequisites fires only when its target
 # is MISSING, so an existing-but-STALE header was served forever and the root's
 # own up-to-date check never got asked. out/lib/rune.h froze that way -- nothing
-# else in the tree regenerates it -- and when apps/rune/rune.l grew the
+# else in the tree regenerates it -- and when apps/rune.l grew the
 # (leave ()) that registers the module, the baked image kept the sealless
 # header and the workbench died on `;; no-module rune`. the root decides
 # staleness; our job is only to ask it every time.

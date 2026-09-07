@@ -44,7 +44,7 @@
 (use "apps/kore/text.l")
 (use "apps/kore/diff.l")
 (use "apps/sb/merge.l")
-(use "apps/dns/dns.l")
+(use "apps/dns.l")
 (use "apps/sb/http.l")
 (use "apps/sb/sb.l")   ; for the ignore law only -- .sbignore is sb's file
 

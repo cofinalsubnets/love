@@ -27,9 +27,9 @@ try() {
 
 want='unclosed ('   ; try "libra (positional)"   apps/libra/libra.l $bad
 want='unclosed ('   ; try "libra (-l preload)"   -l apps/libra/libra.l $bad
-want='usage'        ; try "ain"                  apps/ain/ain.l
+want='usage'        ; try "ain"                  apps/ain.l
 want='not a directory'; try "kiosko"             apps/kiosko/kiosko.l --nope
-want='no markdown'  ; try "papel"                apps/papel/papel.l --nope
+want='no markdown'  ; try "papel"                apps/papel.l --nope
 
 # and the same seat UNDER A PRIME: `wake IMAGE` is the command line's word, not the
 # program's, so core/boot/post.l's `unprime` steps it and the app still seats itself.

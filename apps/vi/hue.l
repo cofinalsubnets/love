@@ -172,7 +172,7 @@
    ; (hue-lex bk s in keep) answers [runs out]: the classified runs over the one
    ; line s, each [class from to] with `to` exclusive, and the string state at
    ; the line's end -- 0 code, 1 still inside a string, which is what carries a
-   ; multi-line literal (apps/papel/papel.l's css is forty lines of one string)
+   ; multi-line literal (apps/papel.l's css is forty lines of one string)
    ; onto the next line.
    ;
    ; `keep` gates the emit and nothing else, so hue-carry below is literally this
@@ -229,7 +229,7 @@
 
    ; --- the pens --------------------------------------------------------------
    ; one finished escape per class, built once, so painting a frame is a lookup
-   ; and never string-building per token (apps/ink/ink.l's bargain). the theme
+   ; and never string-building per token (apps/ink.l's bargain). the theme
    ; is keyed by vim group and the class table joins the two, so swapping
    ; apps/vi/config.l's numbers for another colorscheme's moves the editor and
    ; leaves the generated syn file -- which links to the groups -- alone.

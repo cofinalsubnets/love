@@ -155,7 +155,7 @@ because that search is intractable.
 ## the invariant that must not move
 
 `unify s u v` answers a substitution or `ufail`, purely, under that global name.
-`apps/rune/rune.l` calls it directly (its gate verifies the 2026 jacobian-conjecture disproof),
+`apps/rune.l` calls it directly (its gate verifies the 2026 jacobian-conjecture disproof),
 and `core/boot/post.l` reads `subst` through the registry. **The constraint store rides BESIDE it** —
 it does not change `unify`'s signature, and a goal's state is where the store lives. Chosen,
 revisable: the moment a constraint is worth threading through `unify` itself, this line is the

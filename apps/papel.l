@@ -2,8 +2,8 @@
 ; papel -- the static site: a tree of markdown becomes a tree of html, and neither
 ; the rendering nor the rebuilding is papel's own idea.
 ;
-;   lapiz  reads each page into the AST and shows it as html      (apps/lapiz/lapiz.l)
-;   cook   decides which pages are stale and runs only those      (apps/cook/cook.l)
+;   lapiz  reads each page into the AST and shows it as html      (apps/lapiz.l)
+;   cook   decides which pages are stale and runs only those      (apps/cook.l)
 ;   papel  is what is left: the site -- titles, anchors, contents, cross-links, the page
 ;          template -- the things that are true of a page only because of the other pages.
 ;
@@ -29,7 +29,7 @@
 ; shower.
 ;
 ; usage:  papel [-o out] [-t title] [src ..]        (with the `papel` script on PATH)
-;     or: love -l apps/papel/papel.l [-o out] [-r wasm] [src ..]
+;     or: love -l apps/papel.l [-o out] [-r wasm] [src ..]
 ; src is a .md file or a directory of them; with none, this tree's own docs (README.md
 ; and doc/). out defaults to out/site. papel writes out/<name>.html per source, out/
 ; papel.css, and out/index.html -- the last only when no source is itself an index.md.
@@ -42,7 +42,7 @@
 ; be -l'd, since each one's seat would fire on the other's command line, so the `papel`
 ; script -l's this file alone. the crew root comes off our own seat word, which means an
 ; installed script pointing at the source tree finds its siblings wherever that tree is --
-; `want` hands the loader that PATH ((use "apps/lapiz/lapiz.l")), which loads it as a
+; `want` hands the loader that PATH ((use "apps/lapiz.l")), which loads it as a
 ; module and splices it. a module already registered (the gate, a host embedding) is
 ; left alone. `root` and `bn` are exactly the kind of name a leak makes dangerous, and
 ; they stay wherever this file's layer is -- never orth.
@@ -60,7 +60,7 @@
    ; and the siblings do not. readlink is what turns the link back into the source tree.
    root (: me (findme >cmdline)
            tgt (me ? (readlink me || me))
-         (tgt ? (up (dirof tgt)) "apps/"))                           ; apps/papel/papel.l -> apps/
+         (tgt ? (up (dirof tgt)) "apps/"))                           ; apps/papel.l -> apps/
    ; want: the sibling module, wherever this papel lives -- beside this file in
    ; the source tree (root came off our own seat), else by NAME off the registry
    ; an installed love baked. the tree lane probes first, so a tree papel running
@@ -330,7 +330,7 @@ table{border-collapse:collapse}
 (: (mdsof p) (? (dir? p) (map (f \ p + "/" + f) (sort (filter (f \ ends? f ".md") (readdir p))))
                 (ends? p ".md") [p])
    (sources conf) (foldl (+) () (map mdsof (peep conf 'src ())))
-   (conf0 _) {'out "out/site" 'title "papel" 'src () 'self "apps/papel/papel.l"}
+   (conf0 _) {'out "out/site" 'title "papel" 'src () 'self "apps/papel.l"}
    ; the build is a declaration, not a loop: one recipe per page, one for the stylesheet,
    ; one for the index, and a phony `site` over the lot -- then cook decides what is stale.
    ; every output also depends on this file, since the template and the stylesheet live in

@@ -159,7 +159,7 @@ them. One environmental scare worth naming: the sb script's shebang takes
 `love` off PATH, and an installed pre-module love answers
 `;; missing module` -- that is the nest re-seat's business, not the wrap's.
 
-*Lush CLIMBED.* The eight parts wear `(module 'lush`; apps/lush/lush.l's assembly
+*Lush CLIMBED.* The eight parts wear `(module 'lush`; apps/lush.l's assembly
 and the catted bin register the same module, and the distro's /lib/sh.l lane
 reads it through boot.l's one-use -e. The consumers, sorted by DEFINER this
 time: kore.l's sh/lush rows read (from 'lush 'sh-main); find.l's fnmatch

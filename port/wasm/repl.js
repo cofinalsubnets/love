@@ -76,7 +76,7 @@ async function loveRepl(root) {
   const face = cellsFace(M.HEAPU32.subarray(palette() >> 2, (palette() >> 2) + 256), unfold);
   try {
     const srcs = await Promise.all(
-      ['apps/rove/story.l', 'apps/rove/levels/lighthouse.l', 'port/wasm/web.l', 'apps/rove/rove.l', 'apps/ink/ink.l']
+      ['apps/rove/story.l', 'apps/rove/levels/lighthouse.l', 'port/wasm/web.l', 'apps/rove/rove.l', 'apps/ink.l']
         .map(p => fetch(p).then(r => r.text())));
     ev(srcs[0]);
     ev('(: lighthouse-data <(sound ' + aiStr(srcs[1]) + '))');   // the level's datum, read not run

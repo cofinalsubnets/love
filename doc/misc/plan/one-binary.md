@@ -102,7 +102,7 @@ dist lanes shared every seam -- and the re-aimed gates are the discovery story:
 - **test_hostnif had not run since the + flip, and it was a nest of byte-law
   riders**: test/host/net.l's rdline (its comment still CITED the retired law),
   manifest/cb/berth's rowtx folds, luxui-probe's `("" + ch)`, apps/lux/wire.l's
-  x-rstr + x-getclass, apps/berth/berth.l's reply fold, apps/json/json.l's ENTIRE
+  x-rstr + x-getclass, apps/berth/berth.l's reply fold, apps/json.l's ENTIRE
   writer (every quote/bracket/comma was a byte append -- json-show wrote "" for
   "[]"), apps/tls/bytes.l's hex, tools/hue2vim.l's vim-brk -- and TWO LINES
   cc9e84ee's perl had EATEN AN OPERAND from (apps/manifest's column letters,

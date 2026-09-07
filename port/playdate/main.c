@@ -7,7 +7,7 @@
 // prel's puts IS the screen and a scare face is visible. The heap rides the
 // SDK realloc through ai_ini_m. The bootstrap egg compiles the love compiler
 // with the C evaluator, recompiles it with itself, installs it, then
-// apps/rune/ bakes in as a registered module and cas.l (this folder) drives
+// apps/rune.l bakes in as a registered module and cas.l (this folder) drives
 // the demo: the C update just clears the console, fires (cas ()), and blits.
 //
 // This file is mooncc-compiled on device (-t thumb2sp: the STM32F746's FPU is

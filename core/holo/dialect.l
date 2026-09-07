@@ -2,7 +2,7 @@
 ; instruction, and this file is a reader and a shower for each over that one value. nothing here
 ; encodes: core/holo/as.l is the physical encoder and reads the value this file produces,
 ; so `as` takes either dialect and the two spellings can be converted through the middle
-; (apps/lapiz/lapiz.l lists both under the 'x86 hub).
+; (apps/lapiz.l lists both under the 'x86 hub).
 ;
 ;   (att-read s)  (att-show items)  (intel-read s)  (intel-show items)
 ;

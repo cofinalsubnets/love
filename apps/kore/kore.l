@@ -3,8 +3,8 @@
 ; argv[0] through a tool-named symlink, which is how the distro will shadow at will.
 ;
 ;   kore diff old new    unified diff (patience hunks); exit 0 same / 1 differ / 2 trouble
-;   kore nc host port    the netcat (apps/ain/ain.l); nc -l port listens
-;   kore make [F] [T..]  the build tool (apps/cook/cook.l)
+;   kore nc host port    the netcat (apps/ain.l); nc -l port listens
+;   kore make [F] [T..]  the build tool (apps/cook.l)
 ;   kore as tgt in out   assemble IR forms from in (x64|a64) into an ELF at out
 ;   kore objcopy -O binary|ihex in out   a linked ELF flattened (core/holo/copy.l)
 ;   kore nm [-gup] file..   an ELF's symbols, nm's three columns (core/holo/link.l)
@@ -31,7 +31,7 @@
 ;   kore vi [file]                   the editor (apps/vi/)
 ;   kore less|more [-Nise] [+N|+/P] [F..]   the pager (apps/kore/less.l; one pager,
 ;                                           two spellings, less's keys and its manners)
-;   kore sh [-c CMD | file]          the shell, lush (apps/lush/; also `lush`, and an sh symlink)
+;   kore sh [-c CMD | file]          the shell, lush (apps/lush.l; also `lush`, and an sh symlink)
 ; (the C compiler is NO LONGER here -- it split into its own app `mooncc`, doc/misc/moon.md.)
 ;
 ; loads last in the kore cat, when every tool main is already defined; the tool files'
@@ -350,7 +350,7 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   id [-u|-g|-G] [-n]                      who this process is
   vi [FILE]                               the editor (apps/vi/)
   less | more [-Nise] [+N|+/PAT] [F..]    the pager (apps/kore/less.l); h is its help
-  sh [-c CMD | FILE]                      the shell, lush (apps/lush/)
+  sh [-c CMD | FILE]                      the shell, lush (apps/lush.l)
   ls cp mv rm mkdir rmdir ln touch pwd chmod   the fs tools (apps/kore/fs.l)
   install readlink cmp                         ... the build's fs verbs
   realpath [-e|-m|-s] P.. | link F NEW | unlink F   ... the paths and the two calls

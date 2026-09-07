@@ -71,7 +71,7 @@
 ;   text with the url trailing in \(la..\(ra -- the man idiom for one.
 
 ; no brackets here: the runtime supplies the layer. a consumer says (use 'lapiz)
-; (the baked module) or hands the loader this file's path ((use "apps/lapiz/lapiz.l")
+; (the baked module) or hands the loader this file's path ((use "apps/lapiz.l")
 ; -- papel's want does), and reads bare down the splice, or reaches one member through
 ; the accessor: (from 'lapiz 'md->ht). the six faces are
 ; mdread/mdshow/htread/htshow/md->ht/ht->md; everything else is machinery,

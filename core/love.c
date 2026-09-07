@@ -201,6 +201,8 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   #define AiArch "a64"
 #elif defined(__riscv)
   #define AiArch "rv64"
+#elif defined(__wasm__)
+  #define AiArch "wasm"
 #else
   #define AiArch "other"
 #endif

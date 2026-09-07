@@ -7,7 +7,7 @@
 ; symlink to it on PATH (the user installs that), running `cook Cookfile [ticket]`
 ; execs `love -l <this-file> Cookfile [ticket]`: the -l loads cook, then Cookfile runs.
 ;
-; (this tool was first written as tools/bake.l; it was renamed to apps/cook/cook.l so
+; (this tool was first written as tools/bake.l; it was renamed to apps/cook.l so
 ; the file name does not collide with the other, unrelated sense of "bake" in this
 ; tree -- baking the heap image / the egg (core/boot/egg.l), the array-perf bake. the
 ; build verb here is `cook`; "bake" is reserved for the egg. the messages this tool
@@ -33,7 +33,7 @@
 ; is to prep it up to date by following its recipe over fresh ingredients.
 ;
 ; usage:  cook [-f file] [--emit] [recipe ..]  (with the symlink installed)
-;     or:  love -l apps/cook/cook.l [-f file] [recipe ..]
+;     or:  love -l apps/cook.l [-f file] [recipe ..]
 ; A Cookfile is ordinary love source that lays out the recipes (recipe ..) then
 ; drives them: (cook-all 0) builds every recipe named on the command line (or the
 ; default when none), and (cook (ticket 0)) builds just the first. cook can also
@@ -330,7 +330,7 @@
    ; make instead of one per line, and every other tool in this image (mooncc above
    ; all) is then in-image too, so a CC=mooncc build stops paying a wake per TU.
    ; asked through the module, never by a bare reference: cook runs standalone
-   ; as well (`love -l apps/cook/cook.l`), where lush's engine is not aboard and
+   ; as well (`love -l apps/cook.l`), where lush's engine is not aboard and
    ; the from-reads answer () -- the spawn lane, unchanged. the policy --
    ; "would spawning this land on us?" -- is lush's, not ours.
    (inimg sh)
@@ -411,14 +411,14 @@
 ; order-only prereqs, and the $@ $< $^ $* automatics. Each recipe line runs via
 ; ("sh" "-c" line). See test/host/cook.l.
 ;
-; $(wildcard) prefers pure love: lush's glob (apps/lush/lush.l, the mask law)
+; $(wildcard) prefers pure love: lush's glob (apps/lush.l, the mask law)
 ; over readdir/stat -- no /bin/sh underneath, so `kore make` globs before a
 ; shell exists. the glob rides module 'lush: a cat carrying the lush parts
 ; (kore's) registered it already, and a standalone -l load reads the file by
 ; name, here, before cook-glob folds its from-read. where neither lands (a dev
 ; binary run outside the tree), globw below keeps the POSIX shell-out lane.
 (? (tablet? (from 'lush)) 0
-   (two? (stat "apps/lush/lush.l")) (use "apps/lush/lush.l")  ; the one file registers module 'lush
+   (two? (stat "apps/lush.l")) (use "apps/lush.l")  ; the one file registers module 'lush
    0)
 ; cook-glob: the pathname glob, a closure when lush's glob is aboard, () when
 ; not (the importer then keeps its POSIX shell-out lane). the glob rides
@@ -1518,7 +1518,7 @@
 
    cook-main _)
 
-; the seat (apps/ain/ain.l's shape): fire cook-main iff this very file -- or the
+; the seat (apps/ain.l's shape): fire cook-main iff this very file -- or the
 ; installed `cook` symlink -- sits in the program seat of the real command line
 ; (positional program or a -l preload), taking the args after the seat. cmdline
 ; is the full C argv, never rebound, so the read is the same in both load

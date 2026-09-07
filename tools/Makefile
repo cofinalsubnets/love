@@ -60,7 +60,7 @@ test_hueweb: | $(m)
 	  [ "$$n" -ge 10 ] || { echo "  FAIL: $$n class rules -- the table answered nothing"; exit 1; }; \
 	  grep -q '^\.hue \.l-comment{color:#' $$o/.hue.css \
 	    || { echo "  FAIL: no comment colour -- the theme join found nothing"; exit 1; }; \
-	  for f in apps/vi/hue.l apps/papel/papel.l apps/libra/libra.l tools/hue2web.l; do \
+	  for f in apps/vi/hue.l apps/papel.l apps/libra/libra.l tools/hue2web.l; do \
 	    $(mr) tools/hue2web.l src $$f > $$o/.hue.html \
 	      || { echo "  FAIL $$f: the painter did not run"; exit 1; }; \
 	    grep -q '</html>' $$o/.hue.html \

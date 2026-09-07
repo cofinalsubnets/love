@@ -1,6 +1,6 @@
 # love on the playdate: the rune workbench
 
-the rune CAS (apps/rune/) riding the crank. crank (or left/right) picks a
+the rune CAS (apps/rune.l) riding the crank. crank (or left/right) picks a
 card, up/down turns the dial n, A differentiates the view, B factors it --
 Zassenhaus under a button, every answer exact. cas.l is the whole demo;
 main.c is the love frontend glue (the console is a quay cb, 50x30 cells of

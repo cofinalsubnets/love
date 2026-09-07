@@ -383,7 +383,7 @@ test_dist: $(ho)/.love.baked
 # running one's bytes (`love seed`). Minutes -- a whole bootstrap -- and the claim the
 # product makes, so it rides the slow gate. The scratch stays on a red for the autopsy.
 # ⚠ WHAT ONLY THIS GATE SAYS: the DEFAULT lane, where the seed probes for an ambient cc
-# that works and DEFERS to it (apps/source/source.l). test_distboot runs `love seed` too, but with
+# that works and DEFERS to it (apps/source.l). test_distboot runs `love seed` too, but with
 # every compiler poisoned, so it takes the fallback and can never exercise the deference.
 # That deference is the diverse-double-compiling leg -- a foreign compiler holding the
 # scaffold, the one thing a self build cannot say -- and it stopped working for eleven
@@ -491,7 +491,7 @@ test_clay: host
 test_moonfuzz: host
 	@echo TEST test/gate/moonfuzz.l "(moon refusal fuzz: 8 mutants per file over test/cc)"
 	@$m -l test/gate/moonfuzz.l < /dev/null
-# test_forge -- nifs WRITTEN IN LOVE (apps/forge/forge.l): a kernel's holo IR assembled for this cpu,
+# test_forge -- nifs WRITTEN IN LOVE (apps/forge.l): a kernel's holo IR assembled for this cpu,
 # installed through the `nif` seam, and required to agree with the twin it deopts into -- on the
 # monomorphic lane it says and on every lane it hands back.
 # ⚠ the twin here is the C nif itself, so a disagreement is one denotation answering two ways.
@@ -957,7 +957,7 @@ test_objcopy: host
 	@sh test/gate/objcopy.sh $(ho)
 # ain's two-process loopback gate: a server and a client over real TCP on 127.0.0.1,
 # full-duplex, each asserting it got what the other sent. The ONLY net gate driving the real
-# `love apps/ain/ain.l` cli path. In test_slow; override the port with `make nettest PORT=N`.
+# `love apps/ain.l` cli path. In test_slow; override the port with `make nettest PORT=N`.
 PORT ?= 7390
 nettest: host
 	@echo TEST $m "(127.0.0.1:$(PORT))"
@@ -1195,7 +1195,7 @@ test_wgetnet: host
 	@echo TEST test/host/wgetnet.l "(wget over TLS 1.3 to a live peer)"
 	@cat test/00-init.l test/host/wgetnet.l | sh test/gate/run.sh wgetnet "$m" "wgetnet: ok"
 
-# doom in an X window, the DOOM=1 build under an Xvfb (apps/doom/doom.l): opt-in --
+# doom in an X window, the DOOM=1 build under an Xvfb (apps/doom.l): opt-in --
 # it wants the vendored source and the IWAD, and rebuilds the artifact with doom inside
 test_doomx: $(R)/test/host/doomx.l
 	@$(MAKE) -s host DOOM=1
@@ -1213,10 +1213,10 @@ test_kverb: host
 test_kboot: host $(R)/tools/kboot.l
 	@$(MAKE) -s $(k_elf)
 	@echo TEST $(k_elf) "(the kore cat off cmdline; 4 boots, ceiling 420s each)"
-	@$m $(R)/tools/kboot.l $(k_elf) "kore ls apps/json" "json.l"
-	@$m $(R)/tools/kboot.l $(k_elf) "kore wc apps/json/json.l" "apps/json/json.l" $$(wc -c < $(R)/apps/json/json.l)
-	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"cd apps/json; pwd\"" "/apps/json"
-	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"kore ls apps/json | kore wc -l\"" $$(ls $(R)/apps/json | wc -l)
+	@$m $(R)/tools/kboot.l $(k_elf) "kore ls apps/kore" "kore.l"
+	@$m $(R)/tools/kboot.l $(k_elf) "kore wc apps/json.l" "apps/json.l" $$(wc -c < $(R)/apps/json.l)
+	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"cd apps/kore; pwd\"" "/apps/kore"
+	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"kore ls apps/kore | kore wc -l\"" $$(ls $(R)/apps/kore | wc -l)
 else
 test_disk test_kboot:
 	@echo "$@: skipped (host arch $a is not x64)"

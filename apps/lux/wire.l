@@ -10,7 +10,7 @@
 ;
 ; module 'xwire: every name below is exported, and a file that speaks X says
 ; (use 'xwire) -- lux's own (ewmh, manage, config, lux) and the doom driver
-; (apps/doom/doom.l), which is why this is a module and not a leak.
+; (apps/doom.l), which is why this is a module and not a leak.
 (module '(xwire
   x-w8 x-w16 x-w32 x-flush x-r8 x-r16 x-r32 x-skip
   x-rstr x-pad4 x-wname x-rbytes u16 u32 evq x-reply

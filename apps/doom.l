@@ -1,4 +1,4 @@
-; apps/doom/doom.l -- doom on the host, in an X window: the driver over the X wire
+; apps/doom.l -- doom on the host, in an X window: the driver over the X wire
 ; (apps/lux/wire.l) and the verb.
 ;
 ;   love doom [-iwad FILE] [-display :N] [-frames N]

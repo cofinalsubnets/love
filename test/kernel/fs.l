@@ -4,7 +4,7 @@
 ; entry strings, because kore reads these and a divergence would be silent where an
 ; absence is loud (test/host/init.l holds the same laws against the real tree).
 ;
-; the initrd is flat -- rows for "apps/json/json.l" and none for "apps/json" --
+; the initrd is flat -- rows for "apps/json.l" and none for "apps/kore" --
 ; so a directory is a prefix some path lies under, and the entries are the distinct next
 ; components of those paths. That is why the root lists "apps" once and never a path.
 ; the archive DOES carry directory members; ai_ustar_member takes typeflag 0 and 2 and
@@ -12,14 +12,14 @@
 ;
 ; kernel only -- test/kernel/all.l's roster, never $t: on the host these paths are
 ; the real tree.
-; It runs after ramfs.l, which owns apps/json/json.l's bytes; the write laws here take
-; apps/dns/dns.l instead (a file the boot never loads) and put it back.
+; It runs after ramfs.l, which owns apps/json.l's bytes; the write laws here take
+; apps/dns.l instead (a file the boot never loads) and put it back.
 ;
 ; the `:` has a body -- the assert itself -- so the helpers stay local; and each
 ; law is its own assert argument, since assert maps over its args and a `do` would
 ; report only the last one.
 
-(: f "apps/json/json.l" d "apps/json" g "apps/dns/dns.l"
+(: f "apps/json.l" d "apps" g "apps/dns.l"
    (rd p) (: q (open p "r") s (slurp q) _ (close q) s)
    (wr p s) (: q (open p "w") _ (say q s) (close q))
    st (stat f)

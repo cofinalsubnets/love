@@ -1,7 +1,7 @@
 ; apps/kore/find.l -- find: walk the trees under the named paths, test each name
 ; against an expression, act on what matches. a toolbox file, no seat -- kore
 ; (apps/kore/kore.l) is its door. it rides the u-floor (udie, ubase, uatoi) and
-; lush's fnmatch (`sh-match`, apps/lush/lush.l) for -name and -path, which is why
+; lush's fnmatch (`sh-match`, apps/lush.l) for -name and -path, which is why
 ; it loads late in the cat: a body captures its free names at its define, so the
 ; matcher has to be there first.
 ;

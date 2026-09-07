@@ -47,7 +47,7 @@ ai_noinline static struct ai *host_port(struct ai *g, int fd) {
 
 // a dotted quad and nothing else -> the address in host order, or -1. all `connect`
 // accepts: getaddrinfo has no nonblocking form and can burn fifteen seconds of dead vm,
-// so names resolve one layer up in love, where a lookup can park -- apps/dns/dns.l's `dial`.
+// so names resolve one layer up in love, where a lookup can park -- apps/dns.l's `dial`.
 static int quad(struct ai_str *hv, uint32_t *out) {
  if (hv->len < 7 || hv->len > 15) return -1;      // "0.0.0.0" .. "255.255.255.255"
  uint32_t a = 0;

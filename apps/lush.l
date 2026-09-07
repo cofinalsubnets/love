@@ -5,7 +5,7 @@
 
 ; --- lush 🐚 job control -- the shell state + the v3 job machinery ---
 ; every part rides module 'lush (the wrap): (use 'lush) assembles them via
-; apps/lush/lush.l, and the catted bin and the distro's /lib/sh.l register the same
+; apps/lush.l, and the catted bin and the distro's /lib/sh.l register the same
 ; module in cat order (job eval line main) -- each part a body-less `:` binding
 ; into the module, so later parts read earlier ones. the shell story is main.l's.
 ;
@@ -2694,7 +2694,7 @@
 ;   out/lush -a ..              ; autonomous, the default: our verbs run here whatever PATH holds
 ;   out/lush script.sh          ; a script file, continuations gathered
 ;   out/lush --login ..         ; a login shell: /etc/profile + ~/.profile first
-;   out/love -l apps/lush/lush.l ..   ; the module road to the same seat
+;   out/love -l apps/lush.l ..   ; the module road to the same seat
 ; the gate: test/host/sh.l reads the parts bare (cat order) and asserts on the
 ; sh-* names; the interactive loop is probed live under script(1).
 

@@ -35,7 +35,7 @@
 ; match.
 ;
 ; ⚠ * AND THE PACK TIME MOVED AGAIN, AFTER THE TABLE WAS TAKEN. gz-find has a second
-; presentation now -- one holo IR program installed through apps/forge/forge.l, an ablation
+; presentation now -- one holo IR program installed through apps/forge.l, an ablation
 ; having said the coder was 92% match search -- and it is 2.7x for the same bytes out.
 ; The starred cell is left at what it read because the rest of that row was measured
 ; with it; the new number is 8619 ms, and it is on a LATER tarball (9784832 -> 2976421,

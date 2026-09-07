@@ -202,7 +202,7 @@ report with a codec id in it, when it comes.
 **doom runs on the host in an X window, off the same C.** inle/doom.c's doors went
 seat-aware: under inle they are the kernel's (framebuffer, scancode tap, clock), on the host a
 frame flag, a 64-deep key queue and ai_clock, driven a tick at a time by four nifs
-(`doom-start` / `doom-tick` / `doom-frame` / `doom-key`). apps/doom/doom.l is the window: it
+(`doom-start` / `doom-tick` / `doom-frame` / `doom-key`). apps/doom.l is the window: it
 speaks lux's X wire -- apps/lux/wire.l is the `xwire` module now, every name exported, and
 lux's own files `(use 'xwire)` -- creates one 640x400 window at the root's depth, pushes each
 frame as four PutImage bands (256000 bytes apiece, under the 65535-word ceiling with no
@@ -218,7 +218,7 @@ test/host/luxui-probe.l's XTEST FakeInput is the way to add one); mouse; a windo
 should end the process the ICCCM way, which it does through WM_DELETE_WINDOW but not on a
 `kill` of the server.
 
-**`love doom` from a love with no doom in it** (apps/doom/doom.l, doom-nest): lay this
+**`love doom` from a love with no doom in it** (apps/doom.l, doom-nest): lay this
 binary's source under `./love-<ver>/` (the source verb's lay, files only), wget doomgeneric and
 the IWAD into its dl/, `cook host DOOM=1 LOVE=<this binary>` there once, exec that binary's
 doom. the nest is kept, so the second run is one exec, and nothing outside the current

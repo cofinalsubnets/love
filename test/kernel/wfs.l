@@ -69,10 +69,10 @@
    ('einval = (rename d (d + "/in")))        ; a real einval: the name parts it from 'badarg
    ; -- chdir/cwd: the cwd is a kernel string; "/" is the boot seat --
    (= "/" (cwd 0))
-   !(chdir "apps/json")
-   (= "/apps/json" (cwd 0))
-   (< 0 (tally (rd "json.l")))                  ; a relative path reads off the cwd
-   (member? "json.l" (readdir "."))
+   !(chdir "apps/kore")
+   (= "/apps/kore" (cwd 0))
+   (< 0 (tally (rd "kore.l")))                  ; a relative path reads off the cwd
+   (member? "kore.l" (readdir "."))
    !(chdir "..")
    (= "/apps" (cwd 0))                      ; .. unwinds ONE component
    ; ⚠ the seat has to go back to / by hand. this file is one member of a corpus the

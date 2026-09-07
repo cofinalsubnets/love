@@ -3,7 +3,7 @@
 ; the real bringup companion to init.l's (pid1 0) tour. where (pid1 0) mounts into
 ; /tmp/love-* demo paths and reaps a planted orphan to prove the shape, this is what the
 ; kernel actually execs as process 1 out of the initramfs: mount the fhs filesystems,
-; then hand the console to lush (apps/lush, catted to /lib/sh.l) and never exit (pid 1 leaving panics the kernel).
+; then hand the console to lush (apps/lush.l, catted to /lib/sh.l) and never exit (pid 1 leaving panics the kernel).
 ;
 ; packaged by the Makefile as /init (this file, shebang -> /bin/love), beside /bin/love,
 ; /bin/kore (+ applet symlinks) and /lib/sh.l. boot line:

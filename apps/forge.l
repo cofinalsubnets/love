@@ -1,6 +1,6 @@
-; apps/forge/forge.l -- nifs written in love. a kernel is a core/holo IR program plus an honest
+; apps/forge.l -- nifs written in love. a kernel is a core/holo IR program plus an honest
 ; interpreted twin. forge assembles the program for the cpu it is running on and installs it
-; through the `nif` seam; the twin is what runs everywhere the native cannot. `(use "apps/forge/forge.l")`:
+; through the `nif` seam; the twin is what runs everywhere the native cannot. `(use "apps/forge.l")`:
 ;
 ;   (forge-put nom arity mkir twin) -> register one kernel; mkir is a thunk, twin the fallback
 ;   (forge-fit ())                  -> assemble + install the whole roster -> the fitted count

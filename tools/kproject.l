@@ -10,7 +10,7 @@
 ;
 ; (kproject pie bootb out arch) is the callable half -- pie and boot.o as
 ; bytes -- which is how the `love kernel` verb projects the running binary
-; over a boot.o it laid itself (apps/source/source.l).
+; over a boot.o it laid itself (apps/source.l).
 
 (: (kparams arch)                       ; target, kernel base, entry symbol
     (? (arch = "x64")  ['x64   0x200000   "kmain"]
@@ -175,7 +175,7 @@
                            (ld-zeros (shto - (ssto + sstz))) sht])))))
 
    ; the file driver (the Makefile's KPROJ). arity-gated: the `love kernel` verb
-   ; evals this file too (apps/source/source.l), and its argv is the verb's own.
+   ; evals this file too (apps/source.l), and its argv is the verb's own.
    ; a def, so the outer `:` stays define-mode and `kproject` survives the
    ; read -- the call below is its own form.
    (kdrive as)

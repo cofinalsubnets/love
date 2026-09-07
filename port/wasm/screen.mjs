@@ -78,7 +78,7 @@ const pump = () => { let acc = drain();
 const row = (r, cols) => { const { cells } = view(); return Array.from(cells.subarray(r * cols, r * cols + cols), c => face.glyph[c & 255]).join(''); };
 evs(src('apps/rove/story.l'));
 evs('(: lighthouse-data <(sound ' + aiStr(src('apps/rove/levels/lighthouse.l')) + '))');   // the level's datum, read not run
-evs(src('port/wasm/web.l')); evs(src('apps/rove/rove.l')); evs(src('apps/ink/ink.l'));   // the stubs before the apps: a closure captures its globals at creation
+evs(src('port/wasm/web.l')); evs(src('apps/rove/rove.l')); evs(src('apps/ink.l'));   // the stubs before the apps: a closure captures its globals at creation
 ok(evs('(puts (show (rest 0)))').trim() !== '', 'a rest of nothing yields');
 ev('(web-boot "rove" 80 24)');
 ok(pump(), 'rove boots and lives');

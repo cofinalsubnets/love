@@ -1,4 +1,4 @@
-; apps/dns/dns.l -- the resolver, in love. `connect` takes a dotted quad and nothing else
+; apps/dns.l -- the resolver, in love. `connect` takes a dotted quad and nothing else
 ; (host/sock.c), because getaddrinfo is not a syscall with an O_NONBLOCK to set but a
 ; config read that may speak DNS, and there is no nonblocking form of it. so the name
 ; half lives up here instead, where a lookup can park like anything else:

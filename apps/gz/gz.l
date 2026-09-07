@@ -22,7 +22,7 @@
 ; choose: we must read whatever `gzip -9` wrote.
 ;
 ; the match finder has a second presentation -- gz-find's holo IR, installed through
-; apps/forge/forge.l on an input big enough to pay for loading it, and answering byte for byte
+; apps/forge.l on an input big enough to pay for loading it, and answering byte for byte
 ; what the twin answers or handing the call back. It is 2.7x on the whole coder, and it
 ; is here rather than in C for the reason the comment above it gives: `(s i)` is a VM
 ; apply and the compare wants an instruction. test/gate/gzfind.l is the differential.
@@ -255,11 +255,11 @@
        (go (gz-c32 head (gz-hash s i)) gz-chain 0 0))
    ; --- the same finder, in machine code -------------------------------------
    ; the twin above is the definition. this is one holo IR program that says the same
-   ; thing to a cpu, installed through apps/forge/forge.l's `nif` seam; every guard in it jumps
+   ; thing to a cpu, installed through apps/forge.l's `nif` seam; every guard in it jumps
    ; to `deopt`, which enters the twin with the arguments untouched. so a shape the IR
    ; does not say is not a bug -- it is the twin's turn.
    ;
-   ; and the reason is not "it is hot", which apps/forge/forge.l's own header says is not a
+   ; and the reason is not "it is hot", which apps/forge.l's own header says is not a
    ; reason. it is vocabulary: `(s i)` is a VM apply, and no compiler improvement hands
    ; love code an instruction the VM has no name for. the ablation, on core/love.c
    ; (461101 bytes), sweeping gz-chain to price the walk:
@@ -362,14 +362,14 @@
    ; the finder in force, resolved once per deflate and cached for the process.
    ; lazy, and gated on size, because `use 'forge` costs 24 ms of parse and eval and a
    ; tar member is usually a few hundred bytes -- below the floor the twin is simply the
-   ; better program. and trapped: a tree without apps/forge/forge.l, a build with no glaze
+   ; better program. and trapped: a tree without apps/forge.l, a build with no glaze
    ; module, a cpu with no holo backend all answer the twin, which is the whole design.
    gz-floor 65536
    gz-forged (tablet 0)
    (gz-finder n)
     (? (n < gz-floor) gz-find
        (peep gz-forged 0 ()) (peep gz-forged 0 ())
-       (: v (trap (\ _ (: _ (use "apps/forge/forge.l")
+       (: v (trap (\ _ (: _ (use "apps/forge.l")
                           putx (from 'forge 'forge-putx)
                           fit  (from 'forge 'forge-fit)
                           of   (from 'forge 'forge-of)

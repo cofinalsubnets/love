@@ -64,7 +64,7 @@ $(holo_h): out/lib/%.h: core/holo/%.l tools/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
 	@$(lcat_love) tools/lcat.l $< > $@
-out/lib/rune.h: apps/rune/rune.l tools/lcat.l $(love0)
+out/lib/rune.h: apps/rune.l tools/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
 	@$(lcat_love) tools/lcat.l $< > $@
@@ -238,12 +238,12 @@ $(ho)/love $(ho)/love.cand: out/rt.o $(moon_o) out/src.o out/lib/readme.bin $(no
 	@$(moon0) -pie $(moon_o) $(kart_o) out/src.o out/rt.o -freadme=out/lib/readme.bin -o $@
 endif
 
-$(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md tools/mkman.l apps/lapiz/lapiz.l out/lib/love_version.h $(ho)/love
+$(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md tools/mkman.l apps/lapiz.l out/lib/love_version.h $(ho)/love
 	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
 	@$(ho)/love tools/mkman.l doc/$*.md out/lib/love_version.h > $@
 
-lushfiles = apps/lush/lush.l
+lushfiles = apps/lush.l
 # THE CATS, IN PARTS. three rosters cover almost the same ground -- what kore carries,
 # what mooncc carries, what the artifact bakes -- and spelling each out in full is how
 # the three drift. the parts are named once here; each roster below is the order it
@@ -251,8 +251,8 @@ lushfiles = apps/lush/lush.l
 kore_head = apps/kore/text.l apps/kore/u.l apps/kore/core.l apps/kore/fs.l apps/kore/sum.l apps/kore/re.l \
   apps/kore/sed.l apps/kore/awk.l apps/kore/expr.l apps/kore/bc.l apps/kore/proc.l apps/kore/less.l \
   apps/libra/lint.l apps/vi/config.l apps/vi/hue.l apps/vi/core.l apps/vi/vi.l \
-  apps/kore/diff.l apps/kore/patch.l apps/dns/dns.l apps/ain/ain.l $(lushfiles) \
-  apps/kore/find.l apps/cook/cook.l apps/kore/asbook.l
+  apps/kore/diff.l apps/kore/patch.l apps/dns.l apps/ain.l $(lushfiles) \
+  apps/kore/find.l apps/cook.l apps/kore/asbook.l
 # the backends: one file per ISA, then the text faces they share
 holo_be = core/holo/x64.l core/holo/a64.l core/holo/thumb2.l core/holo/rv64.l \
   core/holo/thumb1.l core/holo/wasm.l core/holo/wasmfn.l core/holo/text.l core/holo/dialect.l
@@ -268,10 +268,10 @@ kore_net = apps/tls/bytes.l apps/tls/chacha.l apps/tls/poly1305.l apps/tls/clien
 crewfiles = apps/sb/merge.l apps/sb/http.l apps/sb/sb.l apps/kiosko/kiosko.l \
   apps/gz/gz.l apps/tar/tar.l apps/tar/tarcmd.l apps/gz/gzcmd.l apps/cpio/cpio.l \
   apps/cpio/cpiocmd.l apps/fat/fat.l apps/fat/fatcmd.l \
-  apps/source/source.l apps/lapiz/lapiz.l \
+  apps/source.l apps/lapiz.l \
   apps/libra/salt.l apps/libra/libra.l apps/vi/hueweb.l apps/kiosko/serve.l \
   apps/rove/rove.l apps/rove/story.l apps/rove/design.l \
-  apps/lux/wire.l apps/doom/doom.l apps/lupa/lupa.l
+  apps/lux/wire.l apps/doom.l apps/lupa.l
 korefiles = $(kore_head) $(holo_obj) core/holo/copy.l $(kore_net)
 moonfiles = apps/kore/text.l apps/kore/u.l apps/kore/asbook.l $(holo_be) core/holo/gas.l $(holo_obj) $(moon_mid)
 $(ho)/.mooncc-cat.list: force_dist_list
@@ -282,7 +282,7 @@ $(ho)/.mooncc-cat.l: $(moonfiles) $(ho)/.mooncc-cat.list
 	@echo 'CAT	'$@
 	@mkdir -p $(dir $@)
 	@cat $(moonfiles) > $@
-sbfiles = apps/kore/text.l apps/kore/diff.l apps/dns/dns.l apps/sb/merge.l apps/sb/http.l apps/sb/sb.l
+sbfiles = apps/kore/text.l apps/kore/diff.l apps/dns.l apps/sb/merge.l apps/sb/http.l apps/sb/sb.l
 # helm the supervisor -- a prototype init, catted the same way. member order is the
 # scope: the unit language, the supervisor over it, the socket over that, the driver last.
 helmfiles = apps/helm/unit.l apps/helm/sup.l apps/helm/moor.l apps/helm/helm.l
@@ -420,15 +420,15 @@ $(distro_img): apps/init/boot.l $(lushfiles) $(korefiles) $(distro_love)
 	@test -n "$(distro_love)" || { echo "distro: no out/love-raw -- run 'make test_raw' to lay it"; exit 1; }
 	@echo 'DISTRO	'$@ '(base: $(distro_love))'
 	@rm -rf $(distro_root)
-	@mkdir -p $(distro_root)/bin $(distro_root)/lib $(distro_root)/proc $(distro_root)/sys $(distro_root)/dev $(distro_root)/tmp
+	@mkdir -p $(distro_root)/bin $(distro_root)/lib $(distro_root)/proc $(distro_root)/sys $(distro_root)/dev $(distro_root)/tmp $(distro_root)/apps
 	@cp apps/init/boot.l $(distro_root)/init && chmod 755 $(distro_root)/init
 	@cp $(distro_love) $(distro_root)/bin/love && chmod 755 $(distro_root)/bin/love
 	@cat $(lushfiles) > $(distro_root)/lib/sh.l
-# ⚠ apps/dns/dns.l RIDES ALONG OR THE WHOLE TOOLBOX DIES: apps/ain/ain.l, a korefiles member,
+# ⚠ apps/dns.l RIDES ALONG OR THE WHOLE TOOLBOX DIES: apps/ain.l, a korefiles member,
 # probes for the `dial` nif at load and says (use 'dns) when it is absent -- which it is
-# in love-raw -- and an initramfs with no /apps/dns/dns.l answers that with a scare that takes
+# in love-raw -- and an initramfs with no /apps/dns.l answers that with a scare that takes
 # the whole cat down. The symptom is every applet gone, not a quiet nc.
-	@cp apps/dns/dns.l $(distro_root)/apps/dns/dns.l
+	@cp apps/dns.l $(distro_root)/apps/dns.l
 	@{ echo '#!/bin/love'; cat $(korefiles); } > $(distro_root)/bin/kore && chmod 755 $(distro_root)/bin/kore
 	@for a in $(distro_applets); do ln -sf kore $(distro_root)/bin/$$a; done
 	@ln -sf kore $(distro_root)/bin/sh
@@ -854,8 +854,8 @@ $d/bin/$(BIN): $(ho)/love $(ho)/.love.baked
 # (use 'salt), and (use 'lapiz) on the doc verb alone) and ride the baked image.
 # ⚠ each source sits FIRST on its own line: instool reads $<, and a prerequisite added on
 # the grouped line below lands ahead of it -- which installs the kore shim as `cook`.
-$d/bin/cook:    apps/cook/cook.l    $(ho)/.love.baked
-$d/bin/papel:   apps/papel/papel.l  $(ho)/.love.baked
+$d/bin/cook:    apps/cook.l    $(ho)/.love.baked
+$d/bin/papel:   apps/papel.l  $(ho)/.love.baked
 $d/bin/kiosko:  apps/kiosko/kiosko.l $(ho)/.love.baked
 $d/bin/libra:   apps/libra/libra.l  $(ho)/.love.baked
 $d/bin/cook $d/bin/papel $d/bin/kiosko $d/bin/libra:
@@ -866,7 +866,7 @@ $d/bin/cook $d/bin/papel $d/bin/kiosko $d/bin/libra:
 # ain, the netcat clone: the same shebang mechanism, but installed as a COPY rather than a
 # symlink, so it takes the rewrite unconditionally. At the default BIN the substitution is
 # an identity and the bytes are unchanged.
-$d/bin/ain: apps/ain/ain.l $(ho)/.love.baked
+$d/bin/ain: apps/ain.l $(ho)/.love.baked
 	@echo 'CP	'$(abspath $@)
 	@install -d $(@D)
 	@$(korecmd) sed '1s|env -S love|env -S $(BIN)|' $< > $@
@@ -958,7 +958,7 @@ lint: $(ho)/love
 	@$(ho)/love $R/apps/libra/libra.l $$(git ls-files '*.l') && echo "lint: parens balance"
 
 
-crewtools = $(foreach d,$(wildcard apps/*),$(wildcard $d/$(notdir $d).l))
+crewtools = $(wildcard apps/*.l) $(foreach d,$(wildcard apps/*),$(wildcard $d/$(notdir $d).l))
 sitetools = $(foreach f,$(crewtools),\
   $(if $(wildcard doc/$(notdir $(basename $f)).md doc/misc/$(notdir $(basename $f)).md),,$f))
 out/toolmd.stamp: $(sitetools) apps/libra/libra.l $(ho)/love
@@ -971,7 +971,7 @@ out/toolmd.stamp: $(sitetools) apps/libra/libra.l $(ho)/love
 # the source pages and their stylesheet, written into the site papel just built
 huesrc = $(crewtools) apps/vi/hue.l apps/vi/config.l tools/hue2web.l $(ho)/love
 site: host out/toolmd.stamp
-	@$(ho)/love -l apps/papel/papel.l -t love -o out/site README.md doc out/toolmd
+	@$(ho)/love -l apps/papel.l -t love -o out/site README.md doc out/toolmd
 	@$(MAKE) --no-print-directory out/site/hue.css
 out/site/hue.css: $(huesrc)
 	@env -u LOVE_NO_IMAGE $(ho)/love $R/tools/hue2web.l css > $@
@@ -981,7 +981,7 @@ out/site/hue.css: $(huesrc)
 	@echo "  hue2web: $(words $(crewtools)) sources painted -> out/site/*.src.html"
 SITEPORT ?= 8080
 site-serve: host out/toolmd.stamp
-	@$(ho)/love -l apps/papel/papel.l -t love -o out/site -s $(SITEPORT) README.md doc out/toolmd
+	@$(ho)/love -l apps/papel.l -t love -o out/site -s $(SITEPORT) README.md doc out/toolmd
 
 # the wasm artifact, moon's own: love's TUs (plus the horn and the seat's host.c)
 # through mooncc -t wasm, linked to one module -- no emcc, no C toolchain. tco=1: the

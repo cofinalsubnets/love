@@ -14,7 +14,7 @@
               0 0)
 
    ; the doc's own spelling: kore ls | kore wc -l, the line count = the tree's
-   r1 (sh-line "kore ls apps/json | kore wc -l > /tmp/l-sh-pipe")
+   r1 (sh-line "kore ls apps/kore | kore wc -l > /tmp/l-sh-pipe")
    s1 (rd "/tmp/l-sh-pipe")
    _  (unlink "/tmp/l-sh-pipe")
 
@@ -23,5 +23,5 @@
    s2 (rd "/tmp/l-sh-wc")
    _  (unlink "/tmp/l-sh-wc")
 
- (assert (= r1 0) (string? s1) (= (numof s1) (tally (readdir "apps/json")))
+ (assert (= r1 0) (string? s1) (= (numof s1) (tally (readdir "apps/kore")))
          (= r2 0) (= s2 "3\n")))

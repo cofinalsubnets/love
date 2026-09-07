@@ -75,7 +75,7 @@ bash (`lush`) · sed · grep · diffutils (diff, cmp) · make (`cook`) · tar (`
 ustar both ways, `love tar`) · gzip (`apps/gz/gz.l`, and `apps/gz/gzcmd.l` wears GNU's flags
 as `love gzip` / `gunzip` / `zcat`) · cpio (`apps/cpio/cpio.l` newc, `love cpio`) · zlib ·
 vim (`apps/vi`) · sysvinit
-(`apps/init/boot.l` as `/init`) · openssl-ish (`apps/tls`) · nc (`apps/ain/ain.l`) ·
+(`apps/init/boot.l` as `/init`) · openssl-ish (`apps/tls`) · nc (`apps/ain.l`) ·
 **patch** (`apps/kore/patch.l`, unified diffs) · **bc** (`apps/kore/bc.l`, arbitrary
 precision over love's bigints, `-l` and all) · **procps-ng** (kore's ps, free, uptime,
 pidof, pgrep, pkill, pwdx) and psmisc's killall.
@@ -232,9 +232,9 @@ The gap between those two numbers is entirely *other people's build systems*.
     comes back as copies. Half of that job would be worse than none — a reader that
     believes nlink waits for a body that never comes.
   * ⚠ and the bug the boot found, which the packer had nothing to do with:
-    **`apps/dns/dns.l` has to ride into the initramfs**. apps/ain/ain.l is a korefiles member
+    **`apps/dns.l` has to ride into the initramfs**. apps/ain.l is a korefiles member
     and probes for the `dial` nif at load, saying `(use 'dns)` when it is absent — which
-    it is in love-raw. With no `/apps/dns/dns.l` that scare takes the whole cat down, and the
+    it is in love-raw. With no `/apps/dns.l` that scare takes the whole cat down, and the
     symptom is every applet gone rather than a quiet `nc`.
 - **rung 2b — `bc` — BUILT.** `apps/kore/bc.l`, in `make test_kore`. A number is
   `[v s]` — the exact integer v over 10^s — so every digit is love's own bigint and

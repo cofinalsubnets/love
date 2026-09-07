@@ -5,7 +5,7 @@
 //   (doom ())      runs the game whole; it answers when doom quits, which on this
 //                  machine means exit() reached (quit), so it resets.
 // on the host the doors are a frame flag, a key queue and ai_clock, and love drives
-// the loop from apps/doom/doom.l over an X window:
+// the loop from apps/doom.l over an X window:
 //   (doom-start wad)      set up, with the IWAD at that path -> 1 | 0 (already running)
 //   (doom-tick ())        one frame of the game -> 1 when a frame was drawn, else 0
 //   (doom-frame cask)     copy the frame (640x400 BGRX) into the cask -> bytes copied

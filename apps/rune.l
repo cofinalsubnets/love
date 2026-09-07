@@ -20,7 +20,7 @@
 ; so reduction folds top powers down with no division anywhere.
 
 ; no brackets here: the runtime supplies the layer. a consumer hands the loader
-; this file's path ((use "apps/rune/rune.l")) and it loads as one fresh layer,
+; this file's path ((use "apps/rune.l")) and it loads as one fresh layer,
 ; leave registers it, the splice serves the bare names -- or, where a device
 ; baked the source, (use 'rune) answers off that registration; or one member
 ; comes through the accessor, (from 'rune 'deriv).

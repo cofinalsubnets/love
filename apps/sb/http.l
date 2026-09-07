@@ -1,5 +1,5 @@
 ; apps/sb/http.l -- the smallest HTTP/1.1 get that can walk a store, over the
-; `connect` socket floor (host/sock.c, the same one apps/ain/ain.l dials with).
+; `connect` socket floor (host/sock.c, the same one apps/ain.l dials with).
 ;
 ; it is a client only, and only get: an sb remote needs nothing else. the store
 ; is content-addressed and immutable, so every fetch is a plain cacheable get on

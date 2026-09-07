@@ -2,7 +2,7 @@
 
 Docs from the source itself: libra reads them out of comments, lapiz shows them as
 markup. The premise needs one correction before anything else — **lapiz already
-exists** ([`apps/lapiz/lapiz.l`](../../apps/lapiz/lapiz.l), three surfaces md/ht/rf
+exists** ([`apps/lapiz.l`](../../apps/lapiz.l), three surfaces md/ht/rf
 over one AST, round-trip laws gated in `test/host/lapiz.l`), and so does the whole
 rendering stack above it (papel: titles, anchors, TOC, blurbs, cross-links, index;
 `make site`). The writing half of this arc is done. The arc is the *reading* half,
@@ -126,7 +126,7 @@ gate: `test/host/libra.l`, with the rest of libra's verbs.
 ### also swept
 
 the LSP server went (2026-08-16) -- `libra serve` and its json-rpc lane, which
-doc/misc/libra.md itself recorded as having no consumer. `apps/json/json.l` stays.
+doc/misc/libra.md itself recorded as having no consumer. `apps/json.l` stays.
 
 ## ✅ rung 1 landed
 

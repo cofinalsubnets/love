@@ -234,7 +234,7 @@ doc/misc/plan/one-kernel.md's rung 2, so there is one filesystem),
 korecat is catted off the ramfs from a baked roster,
 and the baked fused artifact is 13.46 MB -- THE PRE-FUSION SIZE. the whole
 tree lands on metal, which is the metal seed's doorstep. and `love kernel
-OUT.elf` (apps/source/source.l) emits the boot image ANYWHERE from nothing but what
+OUT.elf` (apps/source.l) emits the boot image ANYWHERE from nothing but what
 the binary carries -- the boot stub laid from the blob's mkboot.l over baked
 holo, the arch read off its own e_machine -- gated by test_kverb, which
 demands BYTE-IDENTITY with make's own projection.

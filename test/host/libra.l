@@ -197,7 +197,7 @@
                    (1 < tally d)                         ; a document, not a line
                    (0 < tally (bare head))
                    ((bare head) = (bare (dtext d))))))   ; ..and it kept every letter
-          ["apps/vi/hue.l" "apps/lush/lush.l" "apps/libra/libra.l"])
+          ["apps/vi/hue.l" "apps/lush.l" "apps/libra/libra.l"])
    ; the surfaces come free, and that is the seam's whole promise: libra says
    ; markdown, lapiz says the rest.
    _ (: md (ldoc-md (slurpf "apps/vi/hue.l"))
@@ -237,11 +237,11 @@
 ; a heading its sections hang off, which is what papel reads a page's title,
 ; anchors and contents nav from.
 (: (rd f) (: q (open f "r") (? (hot? q) (slurp q) ""))
-   d (mdread ("# apps/lapiz/lapiz.l\n\n" + ldoc-md (rd "apps/lapiz/lapiz.l")))
+   d (mdread ("# apps/lapiz.l\n\n" + ldoc-md (rd "apps/lapiz.l")))
    heads (filter (\ b (<b = 'head)) d)
    _ (assert
       (3 < tally heads)
-      ('(head 1 ((text "apps/lapiz/lapiz.l"))) = <heads)   ; the file names the page
+      ('(head 1 ((text "apps/lapiz.l"))) = <heads)   ; the file names the page
       (2 = <>(heads 1))                               ; ..and its banners are sections
       (0 < tally (filter (\ b (<b = 'fence)) d)))       ; the diagrams survived as displays
    0)

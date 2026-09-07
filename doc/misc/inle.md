@@ -135,7 +135,7 @@ absence is loud.
   the mc146818 CMOS walk on x64 (BCD, 12-hour and update-in-progress all handled, bounded so
   an absent chip cannot hang the boot), one register of the PL031 on a64, which already sits
   inside the 2MiB block `mmio_map` lays for the UART. Both doors prove it in the gate.
-* ⚠ **A directory is a PREFIX.** The initrd is flat — a row for `apps/json/json.l` and none for `lib` —
+* ⚠ **A directory is a PREFIX.** The initrd is flat — a row for `apps/json.l` and none for `lib` —
   so `readdir` answers the distinct next components of every path under a prefix, and `stat` on
   one synthesizes the dir bits and its newest child's date. Nothing is stored for a directory and
   nothing can be; rung 2's writable tree is what gives one an existence of its own.
@@ -210,7 +210,7 @@ So `cmdline` is `("love")` while the cat loads, every seat sits out, and the foo
 boot pins the real line and hands the program word to `k-prog` — the same registry door
 rung 4's `spawn` uses. One dispatch on this machine, and an interactive lush gets the
 whole toolbox: `-append "kore ls lib"` runs the tool, `-append "sh"` boots lush,
-`-append "vi apps/json/json.l"` boots the editor, an empty line falls to the console shell.
+`-append "vi apps/json.l"` boots the editor, an empty line falls to the console shell.
 
 * ⚠ **There is no shebang lane on inle.** `kore TOOL ARGS` is a love call into the registry
   tablet, not an exec — the multi-call trick is doing all the work, and it is why kore was the
@@ -232,10 +232,10 @@ whole toolbox: `-append "kore ls lib"` runs the tool, `-append "sh"` boots lush,
   builtins (cd, pwd, export, read ..) ride the rung-2 tree, and a bare `ls lib | wc -l` is
   rung 4's spawn over the registry — no `/bin`, no PATH, the verb table IS the path.
 * *gate:* `make test_kboot` — four boots of the shipped x64 kernel through the PVH door,
-  each `-append` a real command line: `kore ls lib`, `kore wc apps/json/json.l` byte-exact against
+  each `-append` a real command line: `kore ls lib`, `kore wc apps/json.l` byte-exact against
   the host `wc`, `sh -c "cd lib; pwd"`, and a pipeline. Opt-in (a cold cat eval per boot);
   run it when the kernel or the cat moves. vi is the interactive smoke under `run-*`, and its
-  boot is proven headless — `-append "vi apps/json/json.l"` draws the hued file over serial. The
+  boot is proven headless — `-append "vi apps/json.l"` draws the hued file over serial. The
   a64 twin dispatches the same way through its DTB door (spot-proven; the gate lane is
   x64's).
 

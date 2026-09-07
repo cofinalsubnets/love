@@ -6,7 +6,7 @@
 ; beneath it gates headless here. the one file reads bare; its seat stays
 ; quiet under the corpus (no lush on cmdline).
 ; run: cat test/00-init.l test/host/sh.l | out/love
-(reads (open "apps/lush/lush.l" "r"))
+(reads (open "apps/lush.l" "r"))
 (use 'lush) ; the parts just registered module 'lush -- the laws below read it spliced
 
 ; the lexer: glued operators, io-numbers out of band ((), or (n) attached),
@@ -227,7 +227,7 @@
     (= () (sh-fields [(v "LUSH_NIL_ZZ")]))
     (= '("") (sh-fields [(link 'sq "")]))
     (= '("quay") (sh-fields [(link 'sub "echo quay")]))
-    (= '("apps/lush/lush.l") (sh-fields [(link 'lit "apps/lush/l*.l")]))
+    (= '("apps/lush.l") (sh-fields [(link 'lit "apps/lus*.l")]))
     (= '("apps/zz*qq") (sh-fields [(link 'lit "apps/zz*qq")]))
     (= '("apps/lush/j*.l") (sh-fields [(link 'sq "apps/lush/j*.l")]))))
 (: _ (pin sh-status () 7)
@@ -240,16 +240,16 @@
         (sh-match "[!a]bc" "zbc") (! (sh-match "[!a]bc" "abc"))     ; negation, both ways
         (sh-match "[^a]bc" "zbc") (! (sh-match "[abz]bc" "qbc"))    ; ^ is the same word
         (sh-match "a[bc" "a[bc")                                    ; unterminated [ is itself
-        (= '("apps/lush/lush.l") (sh-glob "apps/lush/l[t-v]sh.l" (sh-ones 19))))
+        (= '("apps/lush.l") (sh-glob "apps/l[t-v]sh.l" (sh-ones 19))))
 
 ; completion (rung 2): (insert . candidates) -- one path candidate lands its
 ; tail (+ " ", a directory its "/"), the common prefix otherwise; the helpers
-(: r (sh-complete (sh-expl "cat apps/lush/lu"))
-   (assert (two? r) (= "sh.l " (slurp (tap (cap r)))) (= '("apps/lush/lush.l") (cup r))))
 (: r (sh-complete (sh-expl "cat apps/lus"))
-   (assert (= "h/" (slurp (tap (cap r))))))              ; one DIR candidate: its /
+   (assert (two? r) (= "h.l " (slurp (tap (cap r)))) (= '("apps/lush.l") (cup r))))
+(: r (sh-complete (sh-expl "cat apps/ko"))
+   (assert (= "re/" (slurp (tap (cap r))))))              ; one DIR candidate: its /
 (: r (sh-complete (sh-expl "cat apps/lu"))
-   (assert (= '("apps/lupa" "apps/lush" "apps/lux") (cup r))))   ; three ways forward, listed
+   (assert (= '("apps/lupa.l" "apps/lush.l" "apps/lux") (cup r))))   ; three ways forward, listed
 (assert (= "ab" (sh-common '("abc" "abd" "ab")))
         (= "~" (sh-homely (+ "" (getenv "HOME")))))
 
@@ -299,8 +299,8 @@
    (assert (= 0 (cap r)) (= "A B\n" (cup r))))
 (: r (hark ["out/love" "out/lush" "-c" "false && echo no || echo yes"])
    (assert (= "yes\n" (cup r))))
-(: r (hark ["out/love" "out/lush" "-c" "echo $(echo hi | tr h H) apps/lush/l*.l"])
-   (assert (= "Hi apps/lush/lush.l\n" (cup r))))
+(: r (hark ["out/love" "out/lush" "-c" "echo $(echo hi | tr h H) apps/lus*.l"])
+   (assert (= "Hi apps/lush.l\n" (cup r))))
 (: r (hark ["out/love" "out/lush" "-c" "sh -c 'echo e >&2' 2>&1 | tr e E"])
    (assert (= "E\n" (cup r))))
 (: r (hark ["out/love" "out/lush" "-c" "exit 9"])

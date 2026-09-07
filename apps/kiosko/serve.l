@@ -117,7 +117,7 @@ toolchain), and that tree is the one served.
    ; the page's build, through our own make in DIR: only where DIR is the tree, and
    ; a refused build is said and stops the server -- a page half laid is not one
    (sv-tree? dir) (two? (stat (dir + "/Makefile")) && two? (stat (dir + "/web/index.l")))
-   ; autonomous throughout, as `seed -a` and `love doom` are (apps/source's src-arm):
+   ; autonomous throughout, as `seed -a` and `love doom` are (apps/source.l's src-arm):
    ; our verbs first on PATH, lush -a, CC our mooncc
    (sv-build dir)
    (: exe (selfpath 0)

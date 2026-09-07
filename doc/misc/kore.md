@@ -18,7 +18,7 @@ kernel + a static `love` + .l files, and kore is busybox's multi-call trick done
 ## the shape
 
 ONE roster — the `$(korefiles)` list in the Makefile: kore's own toolboxes, apps/libra/lint.l,
-apps/vi/, apps/ain/ain.l, the lush files, apps/cook/cook.l and the holo linker files. The
+apps/vi/, apps/ain.l, the lush files, apps/cook.l and the holo linker files. The
 crew rides IN the default binary's own layered image (doc/misc/plan/one-binary.md), so the
 build tree's spelling is `love kore TOOL` and the installed `bin/kore` is a two-line verb
 shim — re-evaling the cat per spawn costs ~1.3s, so only the distro, which has no image
@@ -30,7 +30,7 @@ will). The registry is a tablet, so tool names never collide with the globals th
 
 The file discipline, two shapes:
 
-* **a tool with a seat** (apps/ain/ain.l, apps/cook/cook.l): define-only, leaking
+* **a tool with a seat** (apps/ain.l, apps/cook.l): define-only, leaking
   one `<tool>-main`; a body-having tail fires it iff the file's own basename
   sits in the program seat — so the same file is a standalone tool AND a quiet
   cat member.
@@ -41,8 +41,8 @@ The file discipline, two shapes:
 | where | tools |
 | --- | --- |
 | kore.l (thin mains) | diff (the patience/myers engines), as (elf64 over the holo book), ar (GNU-shape archives + the ranlib index over ld-read, byte-identical smoke), ld (holo's static linker: -pie/-t/-Ttext, byte-identical to mooncc's own link), objcopy (a linked ELF flattened to `-O binary` or `-O ihex`, byte-identical to llvm/gnu objcopy on both) |
-| apps/ain/ain.l | nc / ain |
-| apps/cook/cook.l | make / cook |
+| apps/ain.l | nc / ain |
+| apps/cook.l | make / cook |
 | core.l, the line tools | cat tac echo head tail wc sort uniq tee |
 | core.l, the field tools | cut tr nl rev |
 | core.l, the column tools | fold expand unexpand (all three count COLUMNS, so a tab steps to the next stop) |
@@ -65,7 +65,7 @@ The file discipline, two shapes:
 | proc.l, the privileged three | chroot (the root moved, then exec), mount (bare = /proc/self/mounts; `-t TYPE`, and the FLAG half of `-o` -- `size=`-style filesystem text is refused by name, not dropped), umount |
 | fs.l, what fills a /dev | sync mkfifo mknod (`p b c u`, `-m MODE`, linux's wide device encoding) |
 | apps/vi/ | vi |
-| apps/lush/ | sh / lush |
+| apps/lush.l | sh / lush |
 
 ## the discipline (why this stays trustworthy)
 
