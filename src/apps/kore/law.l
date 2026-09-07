@@ -335,6 +335,35 @@
       (= (sc big 122 0) (tw big 122 0))                        ; absent over 5000 bytes
       (= (sc (big + "z") 122 0) 5000)))                        ; and present at the very last
 
+; --- the byte loops (src/apps/kore/core.l): the xlat nif and the kb64 kernel against
+; their love twins, the scan floor's shape: every length across the group and word
+; boundaries, bytes with the high bit set, and a table that drops, squeezes and maps at
+; once. kb64 is hand-written machine code, so this is its a64 gate too -- the register
+; roles differ there.
+(: kx xlat kb (kb64 0)
+   (mk o n k) (? (n <= 0) (slurp o) (: _ (put o (k % 256)) (mk o (n - 1) (k * 7 + 3))))
+   ; a-z up, digits dropped, 32 and 128..255 squeezed, the rest through
+   tbl (ktable (\ c (? (97 <= c <= 122) [(c - 32) 1]
+                       (48 <= c <= 57) [c 0]
+                       ((c = 32) || (127 < c)) [c 2]
+                       [c 1])))
+   (xagree s) (: d1 (cask (#s + 1)) d2 (cask (#s + 1))
+                 k1 (kx s tbl d1) k2 (kxlat-walk s tbl d2)
+                 ((k1 = k2) && (snip d1 0 k1 = snip d2 0 k2)))
+   (bagree s) (: m (+ 4 (* 4 (// (#s + 2) 3)))
+                 d1 (cask m) d2 (cask m)
+                 k1 (kb s ub64set d1) k2 (kb64-walk s ub64set d2)
+                 ((k1 = k2) && (snip d1 0 k1 = snip d2 0 k2)))
+   (sweep n) (? (n > 40) 1 (: s (mk (jug 0) n (n + 1)) ((xagree s) && (bagree s) && (sweep (n + 1)))))
+   big (mk (jug 0) 5000 9)
+   same (mk (jug 0) 300 0)                                    ; one byte: the squeeze's longest run
+   (assert
+      (sweep 0)
+      (xagree big) (bagree big) (xagree same) (bagree same)
+      (= (kb64-walk "abc" ub64set (cask 4)) 4)
+      (= (ubenc ub64set 6 "hello, world") "aGVsbG8sIHdvcmxk")   ; the coder over the kernel + tail
+      (= (ubenc ub64set 6 "hello") "aGVsbG8=")))
+
 ; --- the regex floor (src/apps/kore/re.l): the BRE faces, held by hand ---
 (: (ok p s) (: r (rebre p) (two? r && rehas <>r s))
    (no p s) (: r (rebre p) (two? r && !(rehas <>r s)))

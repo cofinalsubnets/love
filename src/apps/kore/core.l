@@ -205,9 +205,8 @@
        (lead k) (? ((#ip <= k) || !(ip k = 48)) k (lead (k + 1)))
        (trail k) (? ((k < 1) || !(fp (k - 1) = 48)) k (trail (k - 1)))
        [neg (snip ip (lead 0) #ip) (snip fp 0 (trail #fp))])
-   (usort-cmpnum a b)                          ; -1 | 0 | 1
-    (: pa (usort-num a) pb (usort-num b)
-       ia <>pa fa <>>pa ib <>pb fb <>>pb
+   (usort-cmpnum pa pb)                        ; two usort-num readings -> -1 | 0 | 1
+    (: ia <>pa fa <>>pa ib <>pb fb <>>pb
        sa (? (!#ia && !#fa) 0 (<pa ? -1 1))
        sb (? (!#ib && !#fb) 0 (<pb ? -1 1))
        (lex k) (? (#ia <= k) 0 (ia k < ib k) -1 (ib k < ia k) 1 (lex (k + 1)))
@@ -219,18 +218,19 @@
        m (? (#ia < #ib) -1 (#ib < #ia) 1 (: r (lex 0) (? (= r 0) (frc 0) r)))
        (? (sa < sb) -1 (sb < sa) 1 (sa < 0) (0 - m) m))
    (usort-cmpstr a b) (? (a < b) -1 (b < a) 1 0)
-   ; one key's reading of a line: the text, folded and/or numeric per its own letters
-   (usort-cmp1 ln1 ln2 k sep)
-    (: f <k m <>k b? (k 2) f? (k 3) n? (k 4) r? (k 5)
-       (txt ln) (? f (usort-key ln (usort-flds ln sep) f m b?)
-                   (? b? (: n #ln
-                            (sk i) (? ((n <= i) || !(usort-blank? (ln i))) i (sk (i + 1)))
-                            (snip ln (sk 0) n))
-                      ln))
-       a (txt ln1) b (txt ln2)
-       c (? n? (usort-cmpnum a b)
-            (usort-cmpstr (? f? (usort-up a) a) (? f? (usort-up b) b)))
-       (? r? (0 - c) c))
+   ; one key's reading of a line, taken ONCE per line and not per comparison: the
+   ; text, folded, or the numeric reading, per the key's own letters
+   (usort-keyof ln k sep)
+    (: f <k m <>k b? (k 2) f? (k 3) n? (k 4)
+       t (? f (usort-key ln (usort-flds ln sep) f m b?)
+            b? (: n #ln
+                  (sk i) (? ((n <= i) || !(usort-blank? (ln i))) i (sk (i + 1)))
+                  (snip ln (sk 0) n))
+            ln)
+       (? n? (usort-num t) f? (usort-up t) t))
+   (usort-cmp1 ka kb k)                        ; two readings under key k -> -1 | 0 | 1
+    (: c (? (k 4) (usort-cmpnum ka kb) (usort-cmpstr ka kb))
+       (? (k 5) (0 - c) c))
    (sort-main as)
     (: (sdie m) (udie 2 ("sort: " + m))
        ; the flag walk is sort's own: -k takes a value AND stacks, -t takes a charm
@@ -316,11 +316,13 @@
        (glob k) (: own ((k 2) || (k 3) || (k 4) || (k 5))
                    (? own k [<k <>k b? f? n? r?]))
        keys (? (two? kt) (map (\ s (glob (kspec s))) kt) [[0 0 b? f? n? r?]])
-       (rd a acc) (? !(two? a) acc
-                     (: f <a
-                        t (? (f = "-") (slurp in)
-                             (: x (uread f) (? (two? x) <>x (sdie ("cannot open " + f)))))
-                        (rd >a (acc + lines t))))
+       ; the lines off the reading floor: prel's `lines` walks a charm at a time and
+       ; costs more than the sort does. a miss has said its piece; sort still leaves
+       (rd fs) (: box (tablet 0)
+                  (dot ln term?) (: _ (pin box 'l (ln . (peep box 'l ()))) 1)
+                  st (ulines "sort" dot fs)
+                  _ (? (= st 0) 0 (uleave 2))
+                  (rev (peep box 'l ())))
        ; the comparison: every key in turn, then the last-resort whole-line compare.
        ; ⚠ -r is already inside each key (glob hands it down), so it must NOT also
        ; reverse the output -- doing both is the identity, and the first draft of this
@@ -330,29 +332,69 @@
        ; here, and -u because a dedupe reading the whole line would keep two lines that
        ; the keys call equal, which is the opposite of what was asked.
        (last a b) (: c (usort-cmpstr a b) (? r? (0 - c) c))
+       ; a line rides decorated: [index line readings], one reading per key, taken once.
        ; ⚠ the same falsy trap as usort-cmpnum's: `(? c c (go >ks))` sends every
        ; less-than on to the next key, and `!(cmp ..)` calls it equal. both readings
        ; have to ask `= 0` out loud.
-       (cmp a b) (: (go ks) (? !(two? ks) (? (s? || u?) 0 (last a b))
-                                (: c (usort-cmp1 a b <ks sep) (? (= c 0) (go >ks) c)))
-                    (go keys))
+       (cmp da db) (: (go ks xa xb) (? !(two? ks) (? (s? || u?) 0 (last (da 1) (db 1)))
+                                       (: c (usort-cmp1 <xa <xb <ks) (? (= c 0) (go >ks >xa >xb) c)))
+                      (go keys (da 2) (db 2)))
        ; ⚠ an equal pair drops the SECOND, never the first: `(ded >a)` walks off the
        ; head and leaves the run's LAST line standing, where GNU keeps its first.
+       (same? da db) (? plain? (= (da 1) (db 1)) (= 0 (cmp da db)))
        (ded a) (? !(two? a) ()
                   !(two? >a) a
-                  (= 0 (cmp <a <>a)) (ded (<a . >>a))
+                  (same? <a <>a) (ded (<a . >>a))
                   (<a >< ded >a))
-       ls (? (two? fs) (rd fs ()) (lines (slurp in)))
+       ls (rd fs)
+       ; no key and no letter is byte order, and that is prel's `sort` -- the C lane,
+       ; stable, and the whole line is the key so -r is the reverse; -u still dedupes
+       plain? (!(two? kt) && !b? && !f? && !n?)
+       ; the keyed C lane: prel's sort orders lists lexicographically, exactly (bigs)
+       ; and stably, so a line decorated [reading.. tiebreak] sorts under every key at
+       ; once. one direction has to serve the lot -- a numeric reading reverses by
+       ; negation, a text cannot -- so the text keys and the last resort pick it, and a
+       ; text key against the grain takes the merge lane below instead.
+       tkeys (filter (\ k !(k 4)) keys)
+       dir (? (two? tkeys) (<tkeys 5) (!(s? || u?)) r? 0)
+       clane? (&& (foldl (\ a k (a && (= (k 5) dir))) 1 tkeys)
+                  ((s? || u?) || (= r? dir)))
+       ; a numeric reading as a sortable triple: the sign class, the integer (negated
+       ; when negative), and the fraction's digits -- complemented when negative, so
+       ; the byte order of the trimmed digits is the numeric one either way
+       (ncomp s) (: n #s o (jug 0)
+                    (go k) (? (n <= k) (slurp o) (: _ (put o (105 - (s k))) (go (k + 1))))
+                    (go 0))
+       (ntrip p flip) (: neg <p ip <>p fp <>>p
+                         sc (? (!#ip && !#fp) 0 neg -1 1)
+                         iv (? #ip <(sound ip) 0)
+                         v (? neg (0 - iv) iv)
+                         fr (? neg (ncomp fp) fp)
+                         (? flip [(0 - sc) (0 - v) (ncomp fr)] [sc v fr]))
+       (creading ln k) (: r (usort-keyof ln k sep)
+                          (? (k 4) (ntrip r !(= (k 5) dir)) r))
+       (cdeco l) (: (go l i acc)
+                     (? !(two? l) (rev acc)
+                        (go >l (i + 1)
+                            (((map (\ k (creading <l k)) keys)
+                              + [(? (s? || u?) (? dir (0 - i) i) <l) <l]) . acc)))
+                    (go l 0 ()))
+       (clast p) (? (two? >p) (clast >p) <p)
        ; ⚠ prel's `sortby` is NOT a stable sort: `sortsplit` DEALS the list into two,
        ; so element 1 lands right of element 2 and a merge preferring the left hands
        ; them back swapped. every equal run therefore comes out in an order of its own,
        ; which -u then picks a representative from -- and GNU picks the input's first.
        ; the index rides along as the last tiebreak, which is stability stated outright
        ; rather than hoped for from the sort underneath.
-       ix (: (go l k acc) (? !(two? l) (rev acc) (go >l (k + 1) ([k <l] . acc))) (go ls 0 ()))
-       s1 (map (\ p <>p)
-               (sortby (\ x y (: c (cmp <>x <>y) (? (= c 0) (<x <= <y) (c < 0)))) ix))
-       _ (say out (unlines (? u? (ded s1) s1)))
+       (deco l) (: (go l k acc)
+                    (? !(two? l) (rev acc)
+                       (go >l (k + 1) ([k <l (map (\ key (usort-keyof <l key sep)) keys)] . acc)))
+                   (go l 0 ()))
+       s1 (? plain? (: s0 (sort ls) (? r? (rev s0) s0))
+             clane? (: s0 (map clast (sort (cdeco ls))) (? dir (rev s0) s0))
+             (map (\ p (p 1))
+                  (sortby (\ x y (: c (cmp x y) (? (= c 0) (<x <= <y) (c < 0)))) (deco ls))))
+       _ (say out (unlines (? u? (map (\ p (p 1)) (ded (deco s1))) s1)))
        _ (flush out) 0)
 
    ; -- uniq: adjacent runs to their firsts; -c wears the run count, width 7 --
@@ -615,6 +657,101 @@
        (dot ln term?) (: _ ((? fspec fieldline charline) ln) 1)
        (ulines "cut" dot fs))
 
+   ; ---- the byte loops, natively -------------------------------------------------
+   ; the interpreter's byte loop is ~700 instructions a byte (src/core/boot/scan.l
+   ; prices it), and tr and base64 are nothing but that loop. tr's is the `xlat` nif:
+   ; any byte map through a 512-byte table, one C body on every target, with the
+   ; love walk below as the oracle law.l holds it to. base64's group coder is its
+   ; own shape and used by nothing in the core, so it stays out of the roster: a holo
+   ; kernel, one IR for x64 and a64, with a twin that is the oracle and the engine
+   ; wherever the install declines (inle, wasm, rv64). the shape is scan.l's -- the
+   ; register roles, the deopt tail, the kind guards off g's jk table so the blob
+   ; names no C address.
+   ;                            g   ip  sp  scratch
+   (kabi tgt) (? (= tgt 'a64) '(r0 r1 r3 r4) '(r6 r5 r1 r0))
+   ; Sp[k] is a heap object of jk kind `kind` (1 a string, 6 a cask), or the twin's;
+   ; r7 and r8 are the scratch pair, and SC is left holding the object
+   (kguard SP G SC k kind)
+     [['ld SC SP (* 8 k)] ['test SC 1] '(br ne deopt)
+      ['ld 'r7 SC 0] ['ld 'r8 G ((jkoff 0) + (* 8 kind))] '(cmp r7 r8) '(br ne deopt)]
+   ; the deopt: arity >= 2, so Ip <- the twin, as scan.l lands it
+   (kdeopt IP) ['(label deopt) ['ld 'r7 IP 8] ['lea IP 'r7 16] ['ld 'r7 IP 0] '(jmpr r7)]
+   ; the answer: SC tagged as a charm onto Sp[0], then the cell's ret
+   (kanswer SP IP SC) [['shl SC 1] ['or SC SC 1] ['st SP 0 SC] ['add IP IP 16] ['ld 'r7 IP 0] '(jmpr r7)]
+   ; the xlat nif's contract, walked in love: (kxlat-walk s tbl dst) -> the count
+   ; written into dst. tbl is 512 bytes: c's image at c, its mode at 256 + c -- 0
+   ; dropped, 1 written, 2 written unless it repeats the byte written last. dst is a
+   ; cask of #s bytes at least.
+   (kxlat-walk s tbl dst)
+    (: n #s o (jug 0)
+       (go k prev cnt)
+        (? (n <= k) cnt
+           (: c (s k) m (tbl (256 + c))
+              (? (m = 0) (go (k + 1) prev cnt)
+                 (: v (tbl c)
+                    (? ((m = 2) && (v = prev)) (go (k + 1) prev cnt)
+                       (: _ (put o v) (go (k + 1) v (cnt + 1))))))))
+       cnt (go 0 -1 0)
+       _ (pour dst 0 (slurp o) 0 cnt)
+       cnt)
+   ; (kb64 s set dst) -> the count written: every whole 3-byte group of s as 4 charms
+   ; of set (64 charms at least); the short tail is the caller's. dst holds 4 bytes a
+   ; group, checked as 3 * #dst >= 4 * n. r9 = s, r10 = n, r11 = set, r12 = dst,
+   ; r8 = the cursor, r13 = the count, r7 = the group's 24 bits
+   (kb64-ir tgt)
+    (: rg (kabi tgt) G <rg IP <>rg SP <>>rg SC <>>>rg
+       (one sh d) [['mov SC 'r7] ['sar SC sh] ['and SC SC 63]   ; one sextet, as its charm
+                   ['ldxb SC 'r11 SC 1 0] ['stxb 'r12 'r13 1 d SC]]
+       ((kguard SP G SC 0 1)
+        + (kguard SP G SC 1 1) + [['ld 'r7 SC 8] '(cmp r7 64) '(br lt deopt)]
+        + (kguard SP G SC 2 6) + [['ld SC SC 8] ['ld 'r7 SC 8] '(mov r8 r7) '(shl r8 1) '(add r7 r7 r8)
+                                  ['ld 'r8 SP 0] '(ld r8 r8 8) '(shl r8 2) '(cmp r7 r8) '(br lt deopt)]
+        + '((push r11) (push r12) (push r13))
+        + [['ld 'r9 SP 0] '(ld r10 r9 8) '(lea r9 r9 16)
+           ['ld 'r11 SP 8] '(lea r11 r11 16)
+           ['ld 'r12 SP 16] '(ld r12 r12 8) '(lea r12 r12 16)
+           '(li r8 0) '(li r13 0)]
+        + ['(label lp) ['mov SC 'r8] ['add SC SC 3] ['cmp SC 'r10] '(br gt fin)
+           ['ldxb 'r7 'r9 'r8 1 0] '(shl r7 16)
+           ['ldxb SC 'r9 'r8 1 1] ['shl SC 8] ['or 'r7 'r7 SC]
+           ['ldxb SC 'r9 'r8 1 2] ['or 'r7 'r7 SC]]
+        + (one 18 0) + (one 12 1) + (one 6 2) + (one 0 3)
+        + ['(add r8 r8 3) '(add r13 r13 4) '(jmp lp)]
+        + ['(label fin) ['mov SC 'r13] '(pop r13) '(pop r12) '(pop r11)]
+        + (kanswer SP IP SC)
+        + (kdeopt IP)))
+   (kb64-walk s set dst)
+    (: n #s w (* 3 (// n 3)) o (jug 0)
+       (go k) (? (w <= k) 0
+                 (: v ((* 65536 (s k)) + ((* 256 (s (k + 1))) + (s (k + 2))))
+                    _ (put o (set (& (// v 262144) 63)))
+                    _ (put o (set (& (// v 4096) 63)))
+                    _ (put o (set (& (// v 64) 63)))
+                    _ (put o (set (& v 63)))
+                    (go (k + 3))))
+       _ (go 0)
+       cnt (// (* w 4) 3)
+       _ (pour dst 0 (slurp o) 0 cnt)
+       cnt)
+   ; build a kernel, or answer its twin. `nif` hands the twin back itself where the
+   ; install declines (inle's NX heap, wasm), so no fallback is arranged here; built
+   ; on first use and kept for the process, scan.l's shape and reason
+   (kmake ir twin arity)
+    (: h (from 'holo) g (from 'glaze)
+       (? (nil? h || nil? g || !(member? love-arch '(x64 a64))) twin
+          (: bs (peep ((h 'assemble) love-arch (ir love-arch)) 'bytes 0)
+             ((g 'nif) (cask bs) twin '(\ q (q)) arity))))
+   kbox (tablet 0)
+   (kernel nm ir twin arity)
+    (: k (peep kbox nm 'none)
+       (? !(= k 'none) k (: k2 (kmake ir twin arity) _ (pin kbox nm k2) k2)))
+   (kb64 _) (kernel 'b64 kb64-ir kb64-walk 3)
+   ; kxlat's table from tr's reading: (image mode) per charm, 512 bytes
+   (ktable f)
+    (: (go c acc) (? (c < 0) acc (go (c - 1) (<(f c) . acc)))
+       (mode c acc) (? (c < 0) acc (mode (c - 1) (<>(f c) . acc)))
+       (string (cask (go 255 (mode 255 ())))))
+
    ; -- tr: set1 set2 translates (SET2 pads with its last charm), -d deletes, -s
    ; squeezes same-charm runs; stdin only, like the real one --
    (tr-main as)
@@ -635,22 +772,15 @@
                      (go a b 0))
        src (slurp in)
        n (tally src)
-       o (jug 0)
-       _ (? d? (: dt (mem one)
-                  (go k) (? (n <= k) ()
-                            (: c (src k) _ (? (peep dt c 0) () (put o c)) (go (k + 1))))
-                  (go 0))
-            s? (: st (mem one)
-                  (go k prev) (? (n <= k) ()
-                                 (: c (src k)
-                                    _ (? ((c = prev) && peep st c 0) () (put o c))
-                                    (go (k + 1) c)))
-                  (go 0 -1))
-            !two (udie 2 "tr: SET2 wanted")
-            (: mt (tmap one two)
-               (go k) (? (n <= k) () (: c (src k) _ (put o (peep mt c c)) (go (k + 1))))
-               (go 0)))
-       _ (puts (slurp o)) _ (flush out) 0)
+       ; the reading as kxlat's table: -d drops the set, -s squeezes it, else the map
+       tbl (? d? (: dt (mem one) (ktable (\ c [c (? (peep dt c 0) 0 1)])))
+              s? (: st (mem one) (ktable (\ c [c (? (peep st c 0) 2 1)])))
+              !two (udie 2 "tr: SET2 wanted")
+              (: mt (tmap one two) (ktable (\ c [(peep mt c c) 1]))))
+       _ (? (0 < n)
+            (: dst (cask n) k (xlat src tbl dst) (say out (snip dst 0 k)))
+            0)
+       _ (flush out) 0)
 
    ; -- nl: number the lines that hold ink (pad 6, a tab after); a blank line wears
    ; seven spaces and no number, and the count carries across inputs --
@@ -822,7 +952,16 @@
    ; is the cost. `shf` below is still worth having -- one table beats gc towers a
    ; group -- but it is the smaller half by far. doc/misc/kore-gauge.md carries the
    ; numbers and the two dead ends.
+   ; base64 rides the kb64 kernel over the whole groups and the coder below over the
+   ; tail; base32 (5 bits) is the coder's alone
    (ubenc set bits s)
+    (: n (tally s) w (* 3 (// n 3))
+       (? ((bits = 6) && (2 < n))
+          (: dst (cask (* 4 (// (n + 2) 3)))
+             k ((kb64 0) s set dst)
+             ((snip dst 0 k) + (ubenc0 set bits (snip s w n))))
+          (ubenc0 set bits s)))
+   (ubenc0 set bits s)
     (: n (tally s) o (jug 0)
        gb (? (bits = 6) 3 5)                    ; bytes in a whole group
        gc (// (* gb 8) bits)                    ; charms in a whole group

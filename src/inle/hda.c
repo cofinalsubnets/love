@@ -290,10 +290,6 @@ static void hda_scan(void *dma) {
     hputs(" dac "); hputn((uint64_t) khda.dacs); hputs("\r\n");
     khda.mm = NULL; } }
 
-#else
-static void hda_scan(void *dma) { }
-#endif
-
 // --- the stream: the C face ------------------------------------------------
 // the play position as a running count: the position buffer's word, LPIB where it
 // is still zero, unwrapped against the last reading
@@ -415,3 +411,10 @@ void k_hda_init(void *dma) {
     hputs(" dac ");
     hputn((uint64_t) khda.pins);
     hputs(" pin\r\n"); } }
+
+#else
+// no PCI walk on this machine: no controller, and horn.c's weak k_horn_* faces
+// answer the port. only the two doors the kernel calls stand.
+void k_hda_init(void *dma) { (void) dma; }
+void k_horn_poll(void) { }
+#endif

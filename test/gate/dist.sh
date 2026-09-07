@@ -78,8 +78,10 @@ smoke)
   sabs=$(cd "$s" && pwd)
   mkdir -p "$sabs/bin" "$sabs/cbin" "$sabs/w/sub" "$sabs/refo"
   for n in sh mooncc cook; do ln -sf "$dabs" "$sabs/bin/$n"; done
-  # the reference lane's compiler: a COPY. same bytes, different file -- so the skew
-  # guard refuses the shortcut and every TU is exec'd, which is the old behaviour.
+  # the reference lane is gregarious (LUSHFLAGS=-g, what `love seed` sets), and
+  # its compiler a COPY: same bytes, different file -- so the skew guard refuses the
+  # shortcut and every TU is exec'd through a spawned /bin/sh. the other lane is lush's
+  # default, autonomous: a bare word this binary carries runs here whatever PATH holds.
   cp "$dabs" "$sabs/love-copy" && ln -sf "$sabs/love-copy" "$sabs/cbin/mooncc"
   i=1; while [ $i -le 4 ]; do printf 'int f%d(int x){return x+%d;}\n' $i $i > "$sabs/w/s$i.c"; i=$((i+1)); done
   cat > "$sabs/w/Makefile" <<'MK'
@@ -96,7 +98,7 @@ scope:
 	-exit 7
 	echo past-ignored
 MK
-  ( cd "$sabs/w" && SHELL=/bin/sh PATH=$sabs/cbin:/usr/bin:/bin run "$dabs" cook ) > "$sabs/ref.out" 2>&1
+  ( cd "$sabs/w" && LUSHFLAGS=-g SHELL=/bin/sh PATH=$sabs/cbin:/usr/bin:/bin run "$dabs" cook ) > "$sabs/ref.out" 2>&1
   echo "exit=$?" >> "$sabs/ref.out"
   ls "$sabs/w"/*.o >/dev/null 2>&1 || fail "the reference lane laid no objects"
   cp "$sabs/w"/*.o "$sabs/refo/" && rm -f "$sabs/w"/*.o
@@ -135,13 +137,18 @@ MK
   ( cd "$sabs/pw" && PATH=$sabs/bin:/usr/bin:/bin && export PATH && run "$dabs" cook ) > "$sabs/cp.out" 2>&1
   [ "$(sed -n 1p "$sabs/cp.out")" = "$(sed -n 2p "$sabs/cp.out")" ] \
     || fail "cook spawned a shell per recipe line where it could have run them here"
-  ( cd "$sabs/pw" && SHELL=/bin/sh PATH=/usr/bin:/bin && export PATH SHELL && run "$dabs" cook ) > "$sabs/cp2.out" 2>&1
+  ( cd "$sabs/pw" && LUSHFLAGS=-g SHELL=/bin/sh PATH=/usr/bin:/bin && export PATH SHELL LUSHFLAGS && run "$dabs" cook ) > "$sabs/cp2.out" 2>&1
   [ "$(sed -n 1p "$sabs/cp2.out")" = "$(sed -n 2p "$sabs/cp2.out")" ] \
-    && fail "cook ran its lines in-image while SHELL was a foreign /bin/sh"
-  # the skew guard, stated directly: same bytes, different file -> the shortcut is refused
-  ( PATH=$sabs/cbin:/usr/bin:/bin && export PATH \
+    && fail "cook ran its lines in-image under -g with a foreign /bin/sh on PATH"
+  # the skew guard, stated directly: under -g, same bytes in a different file -> the
+  # shortcut is refused. autonomous mode reads the verb registry and not PATH, so the
+  # same copy is simply never consulted there -- the lane engages either way.
+  ( LUSHFLAGS=-g PATH=$sabs/cbin:/usr/bin:/bin && export PATH LUSHFLAGS \
     && run "$dabs" -e '(: _ (use (name "lush")) (quit (? (two? (sh-imgfn "mooncc")) 1 0)))' ) \
-    || fail "the in-image lane engaged for a mooncc that is a DIFFERENT file"
+    || fail "the in-image lane engaged under -g for a mooncc that is a DIFFERENT file"
+  ( PATH=$sabs/cbin:/usr/bin:/bin && export PATH \
+    && run "$dabs" -e '(: _ (use (name "lush")) (quit (? (two? (sh-imgfn "mooncc")) 0 1)))' ) \
+    || fail "autonomous mode consulted PATH for a verb this binary carries"
 
   # a bare name we do NOT own must never go in-image, whatever rides this image
   ( cd "$sabs/w" && PATH=/usr/bin:/bin run "$dabs" sh -c 'ls Makefile' ) 2>&1 | grep -q Makefile \

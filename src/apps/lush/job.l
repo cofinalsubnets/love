@@ -131,6 +131,7 @@
    sh-pos {0}                                  ; the positionals, a list of strings
    sh-arg0 {0}                                 ; $0 (the script path, or the shell)
    sh-eflag {0} sh-uflag {0} sh-xflag {0}      ; set -e / -u / -x
+   sh-gflag (tablet 0)                         ; -g: gregarious, PATH decides (1), or autonomous (0); empty until sh-main pins it
    sh-lastbg {0}                               ; $!: the last background pid
    ; ambient on purpose, never a parameter: the guard is a dynamic extent every
    ; re-entry reads -- a function body, `eval`, a dot-file, and the forks under a

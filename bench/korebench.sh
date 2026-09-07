@@ -189,6 +189,20 @@ while [ $i -lt 300 ]; do printf 'file %d\n' $i > "$tree/f$(printf %03d $i)"; i=$
   i=0; while [ $i -lt 400 ]; do printf 'w%d ' $i; i=$((i + 1)); done
   printf '"\nfor r in 1 2 3 4 5 6 7 8 9 10; do for w in $ws; do n=$w; done; done\necho $n\n'
 } > "$W/loop.sh"
+# the `sh +cat` row: 200 turns each naming a tool by its bare word, so what is timed
+# is what one COMMAND costs a shell. lush is autonomous by default -- a word it
+# carries runs on its own warm heap, forked and never exec'd -- where ash and bash
+# fork and exec a cat. the busybox lane gets its own applet on PATH ($W/bb) so its
+# cat is busybox's; the others take the ambient PATH, which lush does not consult.
+printf 'i=0\nwhile [ $i -lt 200 ]; do cat /dev/null; i=$((i + 1)); done\n' > "$W/spawn.sh"
+mkdir -p "$W/bb"
+command -v busybox > /dev/null 2>&1 && ln -sf "$(command -v busybox)" "$W/bb/cat"
+# the bc and sh scaling programs: N, 2N, 4N turns of one loop, linear by construction,
+# so the row reads the evaluator's cost per turn -- and says so if it is not constant
+bcprog() { printf 's = 0\nfor (i = 0; i < %d; i++) s += i * i\ns\nquit\n' "$1"; }
+shprog() { printf 'n=0\ni=0\nwhile [ $i -lt %d ]; do n=$((n + i)); i=$((i + 1)); done\necho $n\n' "$1"; }
+bcprog $((SCALE * 1000)) > "$W/bc1"; bcprog $((SCALE * 2000)) > "$W/bc2"; bcprog $((SCALE * 4000)) > "$W/bc4"
+shprog $((SCALE * 1000)) > "$W/sh1"; shprog $((SCALE * 2000)) > "$W/sh2"; shprog $((SCALE * 4000)) > "$W/sh4"
 
 echo "korebench: lanes:$have   samples=$SAMPLES  timeout=${TO}s"
 echo "corpus: $bytes bytes, $lines lines"
@@ -464,6 +478,22 @@ for l in $have; do
   [ -n "$base" ] || base=$v
   emit sh "$l" "$v"; cell "$v" "$base" "$l"
 done
+echo
+
+# sh +cat: 200 commands naming a tool -- the price of a command, not of the shell's
+# evaluator. lush forks its warm heap and execs nothing; the others exec a cat each.
+printf '%-16s' "sh +cat"
+base=
+for l in $have; do
+  case $l in
+    kore)    v=$(med "$m" sh "$W/spawn.sh") ;;
+    busybox) v=$(PATH=$W/bb:$PATH med busybox ash "$W/spawn.sh") ;;
+    gnu)     command -v bash > /dev/null 2>&1 && v=$(med bash "$W/spawn.sh") || v=- ;;
+    *)       printf '%14s' "-"; continue ;;
+  esac
+  [ -n "$base" ] || base=$v
+  cell "$v" "$base" "$l"
+done
 echo; echo
 
 # ---------------------------------------------------------------- shapes
@@ -551,6 +581,10 @@ scale() {   # scale LABEL TOOL ARGS..
   IN=$W/s2; b=$(medin $(pfx kore "$t") "$@")
   # shellcheck disable=SC2046
   IN=$W/s4; c=$(medin $(pfx kore "$t") "$@")
+  slope "$lbl" "$a" "$b" "$c"
+}
+slope() {   # slope LABEL T1 T2 T4 -- the row, and the reading of t(4n)/t(n)
+  lbl=$1; a=$2; b=$3; c=$4
   printf '%-16s%10s%10s%10s' "$lbl" "$a" "$b" "$c"
   case "$a$b$c" in *to*|*dnf*) printf '%10s   %s\n' "-" "did not finish"; return ;; esac
   # ⚠ the floor is not fussiness. With start subtracted, a row costing 7 ms of real
@@ -584,6 +618,12 @@ scale sed       sed 's/alpha/ALPHA/g'
 scale awk       awk '{n += $1} END { print n }'
 scale sort      sort
 scale uniq      uniq -c
+# the two evaluators, on their own loop programs rather than the corpus: bc reads
+# its program on stdin, sh takes it as a file. the sizes are turns, not bytes.
+IN=$W/bc1; a=$(medin "$m" bc); IN=$W/bc2; b=$(medin "$m" bc); IN=$W/bc4; c=$(medin "$m" bc)
+slope "bc (turns)" "$a" "$b" "$c"
+a=$(med "$m" sh "$W/sh1"); b=$(med "$m" sh "$W/sh2"); c=$(med "$m" sh "$W/sh4")
+slope "sh (turns)" "$a" "$b" "$c"
 echo
 
 echo "korebench: a ratio is kore/that lane -- 1.0x is parity, 30.0x is thirty times the clock."

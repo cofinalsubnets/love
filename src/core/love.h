@@ -748,7 +748,7 @@ union u *map_fill_back(union u*, uintptr_t);
 lvm_t lvm_kcall,
  lvm_putn, lvm_seal, lvm_heard, lvm_worn, lvm_myself,
  lvm_nilp, lvm_putc, lvm_intern,
- lvm_saturate, lvm_ceil, lvm_peep, lvm_lamsrc, lvm_nifnom, lvm_cask, lvm_bcopy,
+ lvm_saturate, lvm_ceil, lvm_peep, lvm_lamsrc, lvm_nifnom, lvm_cask, lvm_bcopy, lvm_xlat,
  lvm_coin, lvm_coinmk, lvm_load, lvm_coinp, lvm_kind, lvm_sub_coin, lvm_quot_coin,   // coins: a kind's values, typed hots on the KCoin row
  lvm_charmp, lvm_tabp, lvm_band, lvm_bor, lvm_gem, lvm_gemp,
  lvm_sin, lvm_cos, lvm_tan, lvm_atan, lvm_atan2, lvm_exp, lvm_sqrt, lvm_log, lvm_pow,

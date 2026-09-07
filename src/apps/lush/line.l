@@ -87,10 +87,13 @@
                          (? ((s i) = 58) (go (i + 1) (i + 1) (snip s st i . acc))
                             (go (i + 1) st acc)))
         (go 0 0 ()))
+   (sh-verbnames _) (map string (keys (from 'verbs 'tab)))
    (sh-cmds w)                                  ; command candidates for prefix w
      (sh-uniq (sort (+ (filter (sh-prefix? w) sh-builtins)
-                       (catmap (\ d (filter (sh-prefix? w) (readdir d)))
-                               (sh-pathdirs ("" + (getenv "PATH")))))))
+                       ; autonomous mode: our verbs are commands whatever PATH holds
+                       (+ (? (sh-greg? 0) () (filter (sh-prefix? w) (sh-verbnames 0)))
+                          (catmap (\ d (filter (sh-prefix? w) (readdir d)))
+                                  (sh-pathdirs ("" + (getenv "PATH"))))))))
    (sh-dirp q) (: st (stat q) (two? st && (16384 = (61440 & (st 2)))))
    (sh-unfold w)                                ; ~/x -> $HOME/x (stat wants the real path)
      (? (tally w && ((w 0) = 126)) (("" + (getenv "HOME")) + (snip w 1 #w)) w)

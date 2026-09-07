@@ -14,6 +14,8 @@
 ; + the seat). run it:
 ;   out/lush                    ; interactive (or cooked when stdin is a pipe)
 ;   out/lush -c "echo hi"       ; one command (multi-line strings fine)
+;   out/lush -g ..              ; gregarious: a verb word is ours only when PATH says so
+;   out/lush -a ..              ; autonomous, the default: our verbs run here whatever PATH holds
 ;   out/lush script.sh          ; a script file, continuations gathered
 ;   out/lush --login ..         ; a login shell: /etc/profile + ~/.profile first
 ;   out/love -l src/apps/lush/lush.l ..   ; the module road to the same seat
@@ -58,7 +60,7 @@
         r (sh-line cmd)
         _ (? (two? r) (: _ (say err "lush: unexpected eof\n") (pin sh-status () 2)) 0)
         _ (sh-fire-exit 0) (quit (sh-status ())))
-   ; the flag word: c e u x, bundled or apart. `sh -ec CMD` is what a Makefile's
+   ; the flag word: a c e g u x, bundled or apart. `sh -ec CMD` is what a Makefile's
    ; .SHELLFLAGS writes and what every shell takes, so a bundle is not a courtesy --
    ; without it lush cannot be the SHELL of a make. answers (1 c? rest) with e/u/x
    ; already pinned, or () when a letter is not ours (then the word is not a flag).
@@ -67,6 +69,8 @@
         (go k c?) (? (n <= k) [1 c? rest]
                      (: ch (a k)
                         (? (ch = 99) (go (k + 1) 1)
+                           (ch = 97) (: _ (pin sh-gflag () 0) (go (k + 1) c?))    ; -a autonomous
+                           (ch = 103) (: _ (pin sh-gflag () 1) (go (k + 1) c?))   ; -g gregarious
                            (ch = 101) (: _ (pin sh-eflag () 1) (go (k + 1) c?))
                            (ch = 117) (: _ (pin sh-uflag () 1) (go (k + 1) c?))
                            (ch = 120) (: _ (pin sh-xflag () 1) (go (k + 1) c?))
@@ -74,9 +78,13 @@
         (go 1 0))
    (sh-main args)
      (: _ (sh-snapign 0)                        ; first: what our caller had turned off
-        (? !args (sh 0)
+        _ (pin sh-gflag () (sh-envflag 0))      ; the mode: LUSHFLAGS' now, a flag word's below
+        _ (sh-forget 0)                         ; a forked shell drops its parent's word verdicts
+        (sh-args args))
+   (sh-args args)                              ; the argv walk, once the seat is set up
+     (? !args (sh 0)
         (: a <args
-           (? (a = "--login") (: _ (pin sh-login () 1) (sh-main >args))
+           (? (a = "--login") (: _ (pin sh-login () 1) (sh-args >args))
               ((1 < #a) && ((a 0) = 45))
                 (: fw (sh-flagw a >args)
                    (? !(two? fw) (sh-file a >args)          ; a letter not ours: a name
@@ -84,8 +92,8 @@
                         (: r (fw 2)
                            (? r (sh-c <r >r)
                               (: _ (say err "lush: -c needs a command\n") (quit 2))))
-                      (sh-main (fw 2))))            ; flags only: read on
-              (sh-file a >args)))))
+                      (sh-args (fw 2))))            ; flags only: read on
+              (sh-file a >args))))
    ; the interactive entry: ignore the tty's job signals (children reset them),
    ; then probe with (raw 1): () = a tty (interactive), an errno = not a tty
    ; (the cooked fallback). interactively: hear lush-help as the floor if no
