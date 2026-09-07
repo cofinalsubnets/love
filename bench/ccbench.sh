@@ -90,15 +90,11 @@ fi
 # codegen or speed factor. Keeping it would bench a compiler's warning set, not its
 # throughput -- gcc's -Wall flags a benign construct in src/core/love.c (-Wmisleading-indentation)
 # that clang doesn't, and that shouldn't scratch it from a SPEED race.
-CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/src -I$R/out/lib"
-# the hosted TU roster, mk/common.mk's spelling: love.c is seven files now, and
-# src/ is one folder -- the host set is what is left after the love, kernel and
-# per-ISA lanes take theirs
-love_tu="love ev io map snap num arr"
-host_cs=$(for f in "$R"/src/*.c; do b=$(basename "$f" .c)
-  case " $love_tu kmain sys blk doom " in *" $b "*) continue;; esac
-  case "$b" in x64_*|a64_*|uefi_*) continue;; esac
-  printf '%s\n' "$f"; done)
+CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/src/core -I$R/src/host -I$R/src/inle -I$R/out/lib"
+# the hosted TU roster, mk/common.mk's spelling: the core (love_tu + the codec) under
+# src/core/, and the host set is src/host/ whole
+love_tu="love gc ev io map snap num arr gz"
+host_cs=$(ls "$R"/src/host/*.c)
 # mk/common.mk's $(data_ld), which a bench link owes exactly as a host link does: the data
 # sentinels' tiling IS src/core/love.h's ai_typ, and ld left to itself keeps each love.data.N an
 # orphan in first-encountered order -- gcc emits love.data.7 first, so lvm_str lands
@@ -119,7 +115,7 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
   rm -rf "$od"; mkdir -p "$od/host"
   ( cd "$R" || exit 1
     for b in $love_tu; do
-      $cc $CFLAGS $xf -c "src/$b.c" -o "$od/$b.o" || exit 1; done
+      $cc $CFLAGS $xf -c "src/core/$b.c" -o "$od/$b.o" || exit 1; done
     $cc $CFLAGS $xf -c src/apps/moon/lib/math/am.c -o "$od/am.o" || exit 1
     for f in $host_cs; do b=$(basename "$f" .c)
       $cc $CFLAGS $xf -c "$f" -o "$od/host/$b.o" || exit 1; done
@@ -149,9 +145,9 @@ build_mooncc() { # $1=binpath
   bin=$1; od=$WORK/mooncc; rm -rf "$od"; mkdir -p "$od"
   ( cd "$R" || exit 1
     for b in $love_tu; do
-      mc -D ai_tco=1 -D AiHaveVersionH -Iout -I. -Isrc -Iout/lib -c "src/$b.c" "$od/$b.o" || exit 1; done
+      mc -D ai_tco=1 -D AiHaveVersionH -Iout -I. -Isrc/core -Isrc/host -Isrc/inle -Iout/lib -c "src/core/$b.c" "$od/$b.o" || exit 1; done
     for f in $host_cs; do b=$(basename "$f" .c)
-      mc -D ai_tco=1 -D AiHaveVersionH -Iout -I. -Isrc -Iout/lib -c "$f" "$od/host_$b.o" || exit 1; done
+      mc -D ai_tco=1 -D AiHaveVersionH -Iout -I. -Isrc/core -Isrc/host -Isrc/inle -Iout/lib -c "$f" "$od/host_$b.o" || exit 1; done
     # no nolibc object: the link owes its symbols and the driver supplies them
     # member by need, so the dead areas never arrive. ⚠ ccsize/ccdead therefore
     # read mooncc's libc off the BINARY's complement, not off a nolibc.o.

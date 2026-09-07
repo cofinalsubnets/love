@@ -24,29 +24,33 @@ inflate and checks with crc32, every svalbard id is a sha256. They also span the
 shapes: crc32 carries no array across its loop, inflate is branches and a table, sha256
 is a 64-word array beside eight scalars.
 
-## the differentials (2026-08-28, x86-64, static musl on the native lanes)
+## the differentials (2026-09-06, x86-64, static musl on the native lanes)
 
 One quiet `make -C bench ccbench` fill, the shipped artifact (the one-build world) on
-the mooncc lane. ⚠ absolute ms are not comparable to older fills — the corpus grew with
-the merged suite and the inflate workload changed; the RATIOS are the record:
+the mooncc lane. ⚠ absolute ms are not comparable to older fills — the corpus grew
+again; the RATIOS are the record. ⚠ the harness had answered dnf on every lane since
+the src reorg (it spelled src/love.c and src/*.c); re-pointed this day, and a table of
+dnf is the harness, never the compilers (`ccbench.sh` says so at its LIVE check).
 
 | row | mooncc | gcc-musl | clang-musl | /gcc | /clang |
 |---|---:|---:|---:|---:|---:|
-| build | 18,003.0 ms | 10,141.6 | 6,416.6 | 1.78× | 2.81× |
-| corpus | 5,200.1 ms | 4,434.4 | 4,597.4 | **1.17×** | **1.13×** |
-| chacha20 | 685.0 ms | 283.2 | 190.9 | 2.42× | 3.59× |
-| poly1305 | 1,153.4 ms | 1,340.5 | 791.8 | **0.86×** | 1.46× |
-| inflate | 98.0 ms | 55.2 | 57.2 | 1.78× | 1.71× |
-| crc32 | 583.3 ms | 408.9 | 436.0 | 1.43× | 1.34× |
-| sha256 | 784.0 ms | 304.4 | 352.4 | 2.58× | 2.22× |
+| build | 20,963.4 ms | 11,537.6 | 7,756.2 | 1.82× | 2.70× |
+| corpus | 7,152.7 ms | 5,985.8 | 5,909.3 | **1.19×** | **1.21×** |
+| chacha20 | 766.6 ms | 254.5 | 189.0 | 3.01× | 4.06× |
+| poly1305 | 1,222.5 ms | 1,447.0 | 772.4 | **0.84×** | 1.58× |
+| inflate | 91.3 ms | 54.7 | 83.3 | 1.67× | 1.10× |
+| crc32 | 615.7 ms | 479.5 | 479.6 | 1.28× | 1.28× |
+| sha256 | 771.2 ms | 340.3 | 359.5 | 2.27× | 2.15× |
 
-**poly1305 beats gcc by 14% now** (0.95× → 0.86×), the corpus tightened from 1.21× to
-1.17×/1.13×, and sha256 came down 3.26× → 2.58× across the SSA arc (the 2026-08-23
-fill is this section's git history). ⚠ two optimizing compilers still disagree by ~7%
-on adjacent rows (crc32) — that is the scale of noise-plus-real-difference to hold in
-mind before reading a mooncc move of the same size.
+Against the 2026-08-28 fill (this section's git history): poly1305 still beats gcc
+(0.86× → 0.84×), sha256 tightened 2.58× → 2.27× and crc32 1.43× → 1.28×, the corpus
+loosened a little (1.17× → 1.19× on gcc, 1.13× → 1.21× on clang). ⚠ **chacha20 widened,
+2.42× → 3.01×** — mooncc's row rose 685 → 767 ms while gcc's fell 283 → 255, which is
+past the ±4% cross-layout lottery on both sides; the array-slot lane moved the wrong way
+between the two fills and is not chased here. clang's inflate row (57 → 83 ms) is the
+other outlier, one lane moving alone — hold both readings lightly until a second fill.
 
-## the same floors compiled STRAIGHT (ccnif, 2026-08-28)
+## the same floors compiled STRAIGHT (ccnif, 2026-09-06)
 
 `make -C bench ccnif` builds src/host/hash.c and src/core/gz.c with every lane
 and reads them three ways — answers (a divergence is a miscompile, the only thing in the
@@ -55,19 +59,19 @@ the loop; ~20 s, so it is the per-edit instrument where ccbench is the per-rung 
 
 | ms (median of 5) | mooncc | gcc -O2 | clang -O2 | gcc -O0 |
 |---|---:|---:|---:|---:|
-| sha256 | 224 | 89 (2.52×) | 101 (2.22×) | 447 (0.50×) |
-| md5 | 88 | 52 (1.69×) | 57 (1.54×) | 163 (0.54×) |
-| crc32 | 18 | 14 (1.29×) | 16 (1.12×) | 27 (0.67×) |
-| cksum | 19 | 16 (1.19×) | 16 (1.19×) | 27 (0.70×) |
-| deflate | 208 | 153 (1.36×) | 159 (1.31×) | 378 (0.55×) |
-| inflate | 29 | 20 (1.45×) | 18 (1.61×) | 47 (0.62×) |
+| sha256 | 192 | 81 (2.37×) | 89 (2.16×) | 424 (0.45×) |
+| md5 | 85 | 47 (1.81×) | 53 (1.60×) | 112 (0.76×) |
+| crc32 | 17 | 13 (1.31×) | 14 (1.21×) | 25 (0.68×) |
+| cksum | 18 | 14 (1.29×) | 14 (1.29×) | 25 (0.72×) |
+| deflate | 197 | 138 (1.43×) | 131 (1.50×) | 334 (0.59×) |
+| inflate | 25 | 19 (1.32×) | 16 (1.56×) | 46 (0.54×) |
 
-(2026-08-28, the one-build world.) mooncc beats gcc -O0 on every row, and every ratio
-tightened across the SSA arc — sha256 3.03× → 2.52×, crc32 1.42× → 1.29×, cksum
-1.38× → 1.19×, deflate 1.54× → 1.36× (the 2026-08-23 fill is this section's git
-history). .text whole-file (mooncc/gcc-O2/clang-O2): hash.c 9,284/9,636/8,187 ·
-deflate.c 9,727/9,749/15,259 · inflate.c 10,605/6,837/10,296 — **mooncc's hash.c and
-deflate.c are smaller than gcc -O2's now**.
+(2026-09-06, the one-build world; the 2026-08-28 fill is this section's git history.)
+mooncc beats gcc -O0 on every row. Against 08-28 the rows moved both ways and mostly
+inside noise — sha256 2.52× → 2.37×, inflate 1.45× → 1.32×, md5 1.69× → 1.81×, deflate
+1.36× → 1.43× — with no row past the lottery. .text whole-file (mooncc/gcc-O2/clang-O2):
+hash.c 8,788/9,284/7,725 · gz.c 18,450/16,954/26,027 (deflate and inflate are one file
+now) — **mooncc's hash.c is smaller than gcc -O2's, and its gz.c smaller than clang's**.
 
 ⚠ **only the whole-file .text number is a sound total** — gcc and clang inline statics out
 of existence (hash.c is 45 functions under mooncc, 34 under gcc), so summing shared names
