@@ -1,7 +1,7 @@
 #!/bin/sh
 # test/gate/cts.sh -- mooncc against an OUTSIDE corpus: c-testsuite's 220 single-file
-# programs, each with the stdout+stderr it must print. Three targets, one procedure
-# (ccarch.sh's shape).
+# programs, each with the stdout+stderr it must print. Four targets, one procedure
+# (ccarch.sh's shape; node is the wasm machine, as in ccwasm.sh).
 #
 # WHY THIS AND NOT MORE test/cc FILES. Every file in test/cc/ was written here, and
 # nearly all of them were written to pin a fault we had already tripped over -- so the
@@ -30,7 +30,7 @@
 # make owns the dependency graph; this owns the procedure.
 # NOT set -e: the checks report their own failures with context.
 #
-# usage: cts.sh ARCH OUTDIR LOVE     (ARCH: x64 | a64 | rv64)
+# usage: cts.sh ARCH OUTDIR LOVE     (ARCH: x64 | a64 | rv64 | wasm)
 set -u
 
 arch=$1
@@ -41,6 +41,7 @@ case $arch in
   x64)     name=test_cts       ; tflag=""           ; QEMU= ; qemu= ; pretty=x86-64 ;;
   a64)   name=test_cts_a64 ; tflag="-t a64"   ; qemu=qemu-aarch64 ; pretty=a64 ;;
   rv64) name=test_cts_rv64 ; tflag="-t rv64" ; qemu=qemu-riscv64 ; pretty=rv64 ;;
+  wasm) name=test_cts_wasm ; tflag="-t wasm" ; qemu= ; pretty=wasm ;;
   *) echo "cts.sh: unknown target $arch" >&2; exit 1 ;;
 esac
 
@@ -69,6 +70,15 @@ if [ "$arch" != x64 ]; then
 00140 no lane for a by-value composite argument on $arch (x64 carries it, named and anonymous)
 "
 fi
+# the wasm MACHINE's one line, not the compiler's: the loader's kernel has no filesystem
+# (open is ENOSYS, fopen answers NULL), so the program that writes a file and reads it
+# back compiles clean and answers wrong. Rostered wrong so the day the seat grows files
+# the gate says so.
+if [ "$arch" = wasm ]; then
+  roster_wrong="$roster_wrong
+00187 no filesystem under the loader's kernel: fopen answers NULL, and a NULL FILE does not trap on wasm
+"
+fi
 fail() { echo "FAIL $name: $*" >&2; exit 1; }
 moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 # the roster read two ways: which kind a number is on, and what its cause says
@@ -84,6 +94,12 @@ causeof() { printf '%s\n%s\n' "$roster_refuses" "$roster_wrong" | grep "^$1 " | 
 if [ -n "$qemu" ]; then
   QEMU=$(command -v "$qemu" 2>/dev/null || true)
   [ -n "$QEMU" ] || { echo "$name: skipped (need $qemu)"; exit 0; }
+fi
+# the wasm machine is node under the loader's kernel (run.mjs), in qemu's seat
+if [ "$arch" = wasm ]; then
+  NODE=$(command -v node 2>/dev/null || true)
+  [ -n "$NODE" ] || { echo "$name: skipped (need node)"; exit 0; }
+  QEMU="$NODE $PWD/src/port/wasm/run.mjs"
 fi
 
 # the corpus, first hit wins: an explicit CTSSRC, then the tree-local dl/, then the
@@ -128,9 +144,9 @@ for f in "$cts"/tests/single-exec/*.c; do
   # announcing that on stderr would read as the gate itself dying. ⚠ the trailing
   # `exit $?` is load-bearing -- a lone command in a subshell is exec'd into it, so
   # the SIGSEGV lands on the subshell and the parent does the announcing instead.
-  # ⚠ AND IN $d, not here: 00154 writes fred.txt beside itself and 00196/00199 read it
-  # back, so a run from the tree root litters the tree root (fred.txt was .gitignore'd
-  # rather than confined). the subshell's cd keeps the outer paths below unchanged.
+  # ⚠ AND IN $d, not here: 00187 writes fred.txt beside itself and reads it back, so a
+  # run from the tree root litters the tree root (fred.txt was .gitignore'd rather than
+  # confined). the subshell's cd keeps the outer paths below unchanged.
   ( cd "$d" && timeout 60 ${QEMU:-} "./$b.bin" > "$b.out" 2>&1; exit $? ) 2>/dev/null; r=$?
   [ $r -ne 124 ] || fail "$b: timed out"
   if [ $r -eq 0 ] && cmp -s "$f.expected" "$d/$b.out"; then

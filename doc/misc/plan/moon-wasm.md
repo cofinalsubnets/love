@@ -247,6 +247,19 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   undefined ref is null; crt0 only when an input defines `main`) stand as before. The
   emcc build survives as `make wasm-emcc` (its love.js still drives the committed site),
   now with horn.c in its roster so it builds and carries the horn exports too.
+- **rung 5b — the outside oracles. ✅ LANDED (2026-09-06).** Rung 5's `test_ccwasm`
+  held wasm to x64 — two of our targets over one front end, which the differentials
+  ledger says cannot see a shared fault. Two lanes fix that, both opt-in by name like the
+  other cross gates: `test_cts_wasm` runs c-testsuite's 220 programs through `mooncc -t
+  wasm` under node against the corpus's own answers (210 answer, the rv64 lane's 9
+  refusals, and one rostered wrong: 00187 writes a file and reads it back, and the
+  loader's kernel has no filesystem — a seat law, kept loud so the day the seat grows
+  files the gate says so); and `test_ccwasm` now cross-checks every test/cc program
+  against **emcc's wasm64** build (`-sMEMORY64`: clang and musl, nothing shared with us,
+  on the same node) in ccarch.sh's cross-gcc seat — 153 of 153 agree. The first run found
+  one seat bug, not a codegen one: the loader printed a write on ANY fd but 2 to stdout,
+  so a NULL `FILE` (which does not trap on wasm — address 0 is memory) wrote the file's
+  bytes to the page. `write` now answers EBADF off fds 1 and 2.
 - **rung 5a — `return_call`.** Tail calls shipped in every engine; once the module
   passes rung 5 at `ai_tco=0`, `ai_musttail` lowers to `return_call` and the wasm seat
   stops being the one build without TCO. An optimisation rung, measured, not assumed.

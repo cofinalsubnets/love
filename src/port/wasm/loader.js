@@ -47,8 +47,8 @@ export default async function Love(opts = {}) {
     switch (Number(n)) {
       case NR.write: {
         const fd = Number(a), p = Number(b), len = Number(c);
-        const s = dec.decode(u8().slice(p, p + len));
-        (fd === 2 ? printErr : print)(s);
+        if (fd !== 1 && fd !== 2) return BigInt(-EBADF);   // only the two the seat has: a stray fd must not land on the page
+        (fd === 2 ? printErr : print)(dec.decode(u8().slice(p, p + len)));
         return c; }
       case NR.writev: return BigInt(-EBADF);               // nolibc's kernel probe: -EBADF says linux
       case NR.close: case NR.mprotect: case NR.munmap: return 0n;

@@ -447,9 +447,13 @@ differed. That instrument costs nothing and nobody had pointed it at the tray op
 
 `test_cts` holds c-testsuite's 220 programs to the output they ship (doc/misc/moon.md). Its roster is
 **refusals only**, each loud and named — no program in the corpus compiles clean and answers
-wrong on any of the three targets. 212 answer on x64 and 8 refuse (9 on a64, 10 on rv64,
+wrong on any of the three native targets. 212 answer on x64 and 8 refuse (9 on a64, 10 on rv64,
 the target rows below). `roster_wrong` stays in the gate, empty, because the day one comes back
-it belongs there and `wrong` is the kind that must stay loud.
+it belongs there and `wrong` is the kind that must stay loud. The wasm lane (`test_cts_wasm`,
+node as the machine) answers 210 with rv64's 9 refusals and carries the roster's one `wrong`
+line — 00187, which writes a file and reads it back where the loader's kernel has no
+filesystem. That is the machine's line, not the compiler's, and it sits under `wrong` so the
+seat growing files is heard.
 
 ⚠ **A rostered line is a claim that goes stale in silence.** Four of them (`#if ||`'s dead arm,
 `int x[const *]`, a function-typed parameter, `_Generic`) had been fixed by earlier rungs and

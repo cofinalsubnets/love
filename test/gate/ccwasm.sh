@@ -6,6 +6,12 @@
 # target has no lane for must REFUSE, not skip, and the list is asserted (ccarch.sh says why).
 # skips whole without node. NOT set -e: the checks report their own failures with context.
 #
+# AND against emcc where the box has one, in ccarch.sh's cross-gcc seat: a foreign
+# compiler (clang) AND a foreign libc (musl) building the same source for the same
+# machine, wasm64 (-sMEMORY64, so long and pointers are 8 bytes as ours are). x64 pins the
+# shared model only where x64 has no lane of its own to route around it; emcc shares
+# nothing with us, so a fault the two targets agree on is loud here. `EMCC=` names one.
+#
 # usage: ccwasm.sh OUTDIR LOVE
 set -u
 
@@ -32,9 +38,13 @@ if [ "$(uname -m)" != x86_64 ]; then
   echo "$name: skipped (the reference build is native x86-64)"
   exit 0
 fi
+# the OPTIONAL extra oracle, found as src/port/wasm/Makefile finds it
+EMCC=${EMCC:-$(command -v emcc 2>/dev/null || true)}
+[ -n "$EMCC" ] || [ ! -x /usr/lib/emscripten/emcc ] || EMCC=/usr/lib/emscripten/emcc
 
 n=0
 nref=0
+nemcc=0
 for f in test/cc/*.c; do
   b=$(basename "$f" .c)
 
@@ -67,9 +77,32 @@ for f in test/cc/*.c; do
     fail "$b: our wasm codegen disagrees with our x86-64"
   fi
 
-  rm -f "$d/$b.wasm" "$d/$b.tout" "$d/$b.x" "$d/$b.xout" "$d/$b.xlog" "$d/$b.tlog"
+  # the same source through emcc, run by the same node: ours must answer what it answers
+  if [ -n "$EMCC" ]; then
+    # -w: the battery is about the ANSWERS, and clang warns about deliberate edges
+    if "$EMCC" -sMEMORY64=1 -O0 -w -o "$d/$b.e.js" "$f" > "$d/$b.elog" 2>&1; then
+      timeout 60 "$NODE" "$d/$b.e.js" > "$d/$b.eout" 2>&1; re=$?
+      [ $rt -eq $re ] || fail "$b: exit ours $rt, emcc $re (both wasm64 under node)"
+      cmp -s "$d/$b.tout" "$d/$b.eout" || {
+        echo "--- $b: ours vs emcc's wasm64 (first 20 lines) ---" >&2
+        diff "$d/$b.eout" "$d/$b.tout" 2>/dev/null | head -20 >&2
+        fail "$b: our wasm codegen and emcc's disagree"; }
+      nemcc=$((nemcc + 1))
+    else
+      cat "$d/$b.elog" >&2
+      fail "$b: emcc could not build it"
+    fi
+  fi
+
+  # a passed case is dead weight (ccarch.sh says why): a failing one keeps everything
+  rm -f "$d/$b.wasm" "$d/$b.tout" "$d/$b.x" "$d/$b.xout" "$d/$b.xlog" "$d/$b.tlog" \
+        "$d/$b.e.js" "$d/$b.e.wasm" "$d/$b.eout" "$d/$b.elog"
   n=$((n + 1))
 done
 
 [ $n -gt 0 ] || fail "no programs ran from test/cc/"
-echo "$name: $n programs answer on wasm under node exactly as on x86-64, and $nref unsupported ones refuse cleanly"
+if [ -n "$EMCC" ]; then
+  echo "$name: $n programs answer on wasm under node exactly as on x86-64, $nemcc of them cross-checked against emcc's wasm64, and $nref unsupported ones refuse cleanly"
+else
+  echo "$name: $n programs answer on wasm under node exactly as on x86-64 (no emcc here -- x64 is the oracle, and test_moon pins it), and $nref unsupported ones refuse cleanly"
+fi

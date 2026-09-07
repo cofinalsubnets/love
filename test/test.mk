@@ -11,7 +11,7 @@
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
   test_as test_asmops test_bakerep test_big test_cca64 test_ccrv64 test_ccwasm test_ccthumb1 \
   test_ccthumb2 test_clay test_cli test_cookdiff test_cpio test_cts test_cts_a64 \
-  test_cts_rv64 test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb \
+  test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_front test_gc test_gcheck test_gcstress \
   test_gen test_glaze test_glazefuzz test_gz test_hdiff test_holo test_holofuzz test_holowasm test_hook \
@@ -49,7 +49,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
 	test_asmops test_dtb test_rvboot test_elf32 test_objcopy test_distboot test_fat test_wasm \
-	test_rv64 test_cca64 test_ccrv64 test_ccwasm test_ccthumb1 test_ccthumb2 test_cts_a64 test_cts_rv64 \
+	test_rv64 test_cca64 test_ccrv64 test_ccwasm test_ccthumb1 test_ccthumb2 test_cts_a64 test_cts_rv64 test_cts_wasm \
 	test_raw_a64 test_raw_rv64 \
 	test_virt test_thumb1 test_thumb2 test_thumb2sp \
 	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446 test_nucleo446_smoke \
@@ -516,6 +516,8 @@ test_cts_a64: host
 	@sh test/gate/cts.sh a64 $(ho) $m
 test_cts_rv64: host
 	@sh test/gate/cts.sh rv64 $(ho) $m
+test_cts_wasm: host
+	@sh test/gate/cts.sh wasm $(ho) $m
 # the corpus itself -- 220 files, cloned once and kept in dl/ like OVMF, so `make clean`
 # leaves it and only `make distclean` asks the network again. NOTHING depends on this rule:
 # a gate that downloads is a gate that fails on a train.

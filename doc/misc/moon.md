@@ -488,7 +488,7 @@ never a bare `mooncc`, until `make install` refreshes the PATH binary.
   ⚠ Differential programs must be **UB-free**: `pick(++i,++i,++i)` is unsequenced, and gcc
   legitimately disagrees.
 * A seeded expression fuzz against gcc (`test_moonfuzz`).
-* **An OUTSIDE corpus, and its own answers** (`test_cts`, all three targets): c-testsuite's
+* **An OUTSIDE corpus, and its own answers** (`test_cts`, all three native targets and wasm under node): c-testsuite's
   220 single-file programs, each held to the stdout it ships. Every `test/cc` file was written
   here to pin a fault we had already met, so the battery says what we already know; these were
   written by people compiling other compilers, and their first run found **nine** programs
