@@ -326,10 +326,11 @@ dist-seed: $(ho)/.love.baked
 endif
 dist: dist-source dist-seed   # a release is both
 
-# what a release is not: the benches and the board and wasm seats. the web page and
-# its assets are .sbignore's to drop, which selfpack reads too. each nom is matched
-# as a path prefix at a segment boundary (tools/selfpack.l).
-dist_drop = bench port
+# what a release is not: the benches and the board seats. the wasm seat rides -- a
+# laid tree serves its own page (`love serve`) -- and the page's generated files are
+# .sbignore's to drop, which selfpack reads too. each nom is matched as a path prefix
+# at a segment boundary (tools/selfpack.l).
+dist_drop = bench port/mps2 port/virt port/teensy41 port/playdate port/rp2040 port/nucleo446 port/port.mk
 .PHONY: force_src
 force_src: ;
 $(dist_source): force_src $(love0)

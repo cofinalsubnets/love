@@ -92,19 +92,37 @@
 usage: love serve [-p PORT] [-n] [DIR]
   -p, --port PORT   the port to listen on (default 8080)
   -n, --no-build    serve DIR as it is
-  DIR               the directory to serve (default .)
-a .l is painted, a .md rendered, and x.l.md is x.l's header as a document. where DIR
-is the tree, the github page is laid first -- make web wasm site-wasm and the wasm inle
-seat -- and the machine is at /port/wasm/inle.html.
+  DIR               the tree to serve (default .)
+a .l is painted, a .md rendered, and x.l.md is x.l's header as a document. the github
+page is laid first -- make web wasm site-wasm and the wasm inle seat -- and the machine
+is at /port/wasm/inle.html. where DIR is no tree, this binary's own source is laid
+under it as `love seed -a` lays it (love-VERSION/, rebuilt there with our own
+toolchain), and that tree is the one served.
 ")
       (quit 0))
+
+   ; no tree at DIR: lay and seed one there, as `love seed -a DIR` does -- the source this
+   ; binary carries, rebuilt in place by its own mooncc and userland -- and answer its
+   ; root, which is `love source`'s: love-VERSION under DIR
+   (sv-root dir) ((dir = "." ? "" (dir + "/")) + "love-" + love-version)
+   (sv-seed dir)
+   (: exe (selfpath 0)
+      _ (string? exe ? 0 (say err "serve: can't find my own path\n", quit 1))
+      _ (say err (";; no tree at " + dir + ": laying " + sv-root dir + " and seeding it\n"))
+      p (spawn [exe "seed" "-a" dir])
+      st (charm? p && 0 <= p ? (wait p) 1)
+      _ (0 = st ? 0 (say err ("serve: the seed did not take (" + show st + ")\n"), quit 1))
+      (sv-root dir))
 
    ; the page's build, through our own make in DIR: only where DIR is the tree, and
    ; a refused build is said and stops the server -- a page half laid is not one
    (sv-tree? dir) (two? (stat (dir + "/Makefile")) && two? (stat (dir + "/web/index.l")))
+   ; autonomous throughout, as `seed -a` and `love doom` are (apps/source's src-arm):
+   ; our verbs first on PATH, lush -a, CC our mooncc
    (sv-build dir)
    (: exe (selfpath 0)
       _ (string? exe ? 0 (say err "serve: can't find my own path\n", quit 1))
+      _ ((from 'source 'src-arm) dir exe)
       _ (say err ";; laying the page: make web wasm site-wasm out/love-wasm.wasm\n")
       p (spawn [exe "make" "-C" dir "web" "wasm" "site-wasm" "out/love-wasm.wasm"])
       st (charm? p && 0 <= p ? (wait p) 1)
@@ -126,11 +144,17 @@ seat -- and the machine is at /port/wasm/inle.html.
                 (loop r port w build))))
       c (loop as 8080 "." 1)
       port <c
-      dir <>c
-      _ (<>>c && sv-tree? dir ? (sv-build dir) 0)
+      dir0 <>c
+      build? <>>c
+      ; the tree: DIR itself, or the one laid and seeded under it
+      dir (? (sv-tree? dir0) dir0
+             (sv-tree? (sv-root dir0)) (sv-root dir0)
+             build? (sv-seed dir0)
+             dir0)
+      _ (build? && sv-tree? dir ? (sv-build dir) 0)
       serve5 (from 'kiosko 'serve5)
       _ (nil? serve5 ? (say err "serve: no kiosko aboard\n", quit 1))
-      _ (sv-tree? dir ? (say err ("serve: the page is http://127.0.0.1:" + show port
+      _ (sv-tree? dir ? (say err ("serve: " + dir + " -- the page is http://127.0.0.1:" + show port
                                   + "/ and the machine /port/wasm/inle.html\n")) 0)
       _ (? (serve5 dir port 0 () (p \ sv-make dir box p)) 0
            (: _ (say err ("serve: cannot listen on :" + show port)) _ (put err 10) (quit 1)))

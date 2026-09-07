@@ -177,9 +177,7 @@
                                   _ (unlink (dl + "/pax_global_header"))              ; the tarball's pax row, laid as a file
                                   (two? (stat (dl + "/doomgeneric")) ? 0 1)))))
                    (? (!(r1 = 0) || !(r2 = 0)) (fail "the downloads did not land")
-                      (: farm ((from 'source 'src-farm) nest exe)                 ; our tools fill PATH's gaps
-                         _ (setenv "PATH" (getenv "PATH" + ":" + farm))
-                         _ (setenv "CC" (exe + " mooncc"))
+                      (: _ ((from 'source 'src-arm) nest exe)                     ; autonomous: ours throughout
                          _ (note "building the nest's love with doom inside -- this binary is the toolchain")
                          st2 (run-in nest [exe "cook" "host" "DOOM=1" ("LOVE=" + exe)])
                          (? !(st2 = 0) (fail "the doom build failed")

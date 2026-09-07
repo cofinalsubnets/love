@@ -99,6 +99,16 @@
         each (keys (from 'verbs 'tab))
              (k \ (d + "/" + string k @ p (unlink p, symlink exe p))),
         d))
+   ; the autonomous arming, what `seed -a` sets before its build: the farm of our verbs
+   ; first on PATH, lush autonomous, CC our mooncc. `love serve` and `love doom` build
+   ; under the same, so a nest or a page is ours throughout whatever PATH holds -- a
+   ; tree our mooncc built and an object the ambient cc made link neither way.
+   (src-arm root exe)
+    (: farm (src-farm root exe)
+       _ (setenv "PATH" (farm + ":" + getenv "PATH"))
+       _ (setenv "LUSHFLAGS" "-a")
+       _ (setenv "CC" (exe + " mooncc"))
+       farm)
    src-needs '("cc" "make" "sh" "sed" "grep" "tr" "cat" "mkdir" "mv" "rm" "ln"
                "test" "uname" "printf" "install" "cmp" "chmod" "touch" "echo")
    ; kore's ujoin is not in this layer -- src-dirs rolls its own split for the
@@ -329,10 +339,12 @@
        _ (puts (";; wrote " + out + " (" + arch + ")\n"))
        0)
 
-   (pins (from 'verbs 'tab)
-    'source source-main
-    'src    source-main
-    'seed   seed-main
-    'kernel kernel-main))
+   ; a binding, not a body: the letrec stays body-less, so every name above is the
+   ; module's -- (from 'source 'src-arm) for serve and doom -- and the pins still run at load
+   _ (pins (from 'verbs 'tab)
+      'source source-main
+      'src    source-main
+      'seed   seed-main
+      'kernel kernel-main))
 
 ) ; module 'source
