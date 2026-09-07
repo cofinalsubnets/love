@@ -1,9 +1,9 @@
 #!/bin/sh
 # test/gate/asmops.sh -- the inline-asm SEAM gate.
 #
-# src/inle/<a>/asmops.h says every privileged instruction the kernel needs
+# inle/<a>/asmops.h says every privileged instruction the kernel needs
 # ONCE, in GNU's template: clang reads it natively, mooncc lowers the same text
-# through src/core/holo/gas.l. one spelling, two readers -- and the reader that
+# through core/holo/gas.l. one spelling, two readers -- and the reader that
 # rots quietly is ours, so:
 #
 #   1. COVERAGE. every `static inline k_*` the header defines is called by
@@ -90,9 +90,9 @@ for a in x64 a64 rv64; do
     a64)  t=a64;  ctarget=aarch64-none-elf ;;
     rv64) t=rv64; ctarget=riscv64-none-elf ;;
   esac
-  h=src/inle/$a/asmops.h
-  # -I src/inle is arch-neutral: src/inle/asmops.h picks by the target's own predefine
-  inc="-I src/inle -I src/apps/moon/include"
+  h=inle/$a/asmops.h
+  # -I inle is arch-neutral: inle/asmops.h picks by the target's own predefine
+  inc="-I inle -I apps/moon/include"
 
   # 1. coverage, straight off the header
   for op in $(sed -n 's/^static inline [^(]* \**\(k_[A-Za-z0-9_]*\)(.*/\1/p' "$h"); do

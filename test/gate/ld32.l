@@ -4,7 +4,7 @@
 ; the 32-bit ones, and unexercised rows rot in silence.
 ; test_mps2_t1 binds a whole v6-M image through the back half; this names what a
 ; miss is -- the thumb bit on a func symbol, the two kinds, the empty addend slot.
-; run: cat src/core/holo/{thumb1,elf,obj,link}.l + the kore lay, then (ld32-check "<o>").
+; run: cat core/holo/{thumb1,elf,obj,link}.l + the kore lay, then (ld32-check "<o>").
 (: (ld32-check p)
    (: r (uread p)
       _ (? (two? r) 0 (scare 'ld32-no-object p))

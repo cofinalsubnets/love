@@ -1,9 +1,9 @@
 #!/bin/sh
 # test/gate/raw.sh -- the GCC-FREE fixpoint, for one target. Everything test_selfhost
-# builds, PLUS our own raw libc (src/apps/moon/lib/nolibc.c: raw-syscall wrappers, mini
-# stdio, mmap malloc), the math floor (src/apps/moon/lib/math/am.c, ours), and sys.o (the
-# syscall trampoline + our sigsetjmp/longjmp, laid by src/apps/moon/lib/mksys.l) -- then
-# OUR OWN static linker (src/core/holo/link.l, via `mooncc a.o..`) binds them. No gcc, no
+# builds, PLUS our own raw libc (apps/moon/lib/nolibc.c: raw-syscall wrappers, mini
+# stdio, mmap malloc), the math floor (apps/moon/lib/math/am.c, ours), and sys.o (the
+# syscall trampoline + our sigsetjmp/longjmp, laid by apps/moon/lib/mksys.l) -- then
+# OUR OWN static linker (core/holo/link.l, via `mooncc a.o..`) binds them. No gcc, no
 # glibc, no ld anywhere: the whole chain is love. Corpus green over the fresh egg.
 #
 # THREE targets, ONE procedure: x64 native, rv64 and a64 under qemu-user. They
@@ -32,10 +32,10 @@ case $target in
            out=.test_raw.out    ; mksys=mksys-x64    ; backend=""
            run=""               ; need=""            ; pretty=x64 ;;
   rv64) name=test_raw_rv64  ; tflag="-t rv64" ; sub=raw-rv64; bin=love-raw-rv64
-           out=.test_raw_rv.out ; mksys=mksys-rv64  ; backend=src/core/holo/rv64.l
+           out=.test_raw_rv.out ; mksys=mksys-rv64  ; backend=core/holo/rv64.l
            run=qemu-riscv64     ; need=qemu-riscv64  ; pretty=rv64 ;;
   a64)   name=test_raw_a64  ; tflag="-t a64"   ; sub=raw-a64 ; bin=love-raw-a64
-           out=.test_raw_a64.out; mksys=mksys-a64  ; backend=src/core/holo/a64.l
+           out=.test_raw_a64.out; mksys=mksys-a64  ; backend=core/holo/a64.l
            run=qemu-aarch64     ; need=qemu-aarch64  ; pretty=a64 ;;
   *) echo "raw.sh: unknown target $target" >&2; exit 1 ;;
 esac
@@ -65,15 +65,15 @@ moonc() { LOVE_NO_IMAGE= "$m" mooncc $tflag "$@"; }
 
 for f in $gate_love_c $gate_host_c; do
   b=$(basename "$f" .c)
-  moonc -D ai_tco=1 -I"$ho" -I. -Isrc/core -Isrc/host -Isrc/inle -Iout/lib -c "$f" "$d/$b.o" || fail "mooncc $tflag -c $f"
+  moonc -D ai_tco=1 -I"$ho" -I. -Icore -Ihost -Iinle -Iout/lib -c "$f" "$d/$b.o" || fail "mooncc $tflag -c $f"
 done
 
 # nolibc is NOT compiled here: the link below owes its symbols and the driver's
-# runtime table supplies them member by need (src/apps/moon/lib/nolibc/, test_drv's
+# runtime table supplies them member by need (apps/moon/lib/nolibc/, test_drv's
 # lane). Naming the objects would take every member, dead areas included.
-for f in src/apps/moon/lib/math/*.c; do
+for f in apps/moon/lib/math/*.c; do
   b=$(basename "$f" .c)
-  moonc -Isrc/apps/moon/lib/math -Isrc/apps/moon/include -c "$f" "$d/m_$b.o" || fail "mooncc $tflag -c $f"
+  moonc -Iapps/moon/lib/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || fail "mooncc $tflag -c $f"
 done
 
 # sys.o is laid by mksys.l rather than compiled: it is the syscall trampoline and
@@ -84,8 +84,8 @@ done
     echo "(use 'holo)"
     cat "$backend"
   fi
-  cat src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l \
-      src/core/holo/elf.l src/core/holo/obj.l src/apps/moon/lib/mksys.l
+  cat apps/kore/text.l apps/kore/u.l apps/kore/asbook.l \
+      core/holo/elf.l core/holo/obj.l apps/moon/lib/mksys.l
   echo "((from 'moon '$mksys) \"$d/sys.o\")"
 } | "$m" || fail "$mksys sys.o"
 

@@ -5,7 +5,7 @@
 ; chain-vs-int SOUNDNESS gate that came with the build (cap-into-arith).
 ;
 ; the standing fact (measured on this host, bench/): the benches where love trails the
-; compiled/JIT'd field are exactly the ones it runs INTERPRETED. the glaze (src/core/boot/glaze/) is prepended
+; compiled/JIT'd field are exactly the ones it runs INTERPRETED. the glaze (core/boot/glaze/) is prepended
 ; only for float/fib/tak/primes/strscan/deforest (bench/run.sh); everything else -- hash, tree,
 ; closure, sum, mapfilter, sort, strcat, bell -- rides the tree-threaded interpreter while its columns
 ; (chez/sbcl native, node/V8, luajit, pypy, clojure/JVM) are compiled. so those rows read "ai's
@@ -16,7 +16,7 @@
 ; recognizers don't match), while the same glaze is ~12x on primes (interp 15.25 -> glazed 1.28 ms/it).
 ; the glaze is worth an order of magnitude on the code it owns; tree and hash just aren't in its grammar.
 ;
-; --- WHY they aren't in the grammar --- the emitter (src/core/boot/glaze/auto.l) compiles E := var | int |
+; --- WHY they aren't in the grammar --- the emitter (core/boot/glaze/auto.l) compiles E := var | int |
 ; (OP E E) | (? E E E), OP arithmetic/comparison, with a first-order recursive-group extension (fib/
 ; tak/primes call each other; primes' named lets lambda-lift in). NOTHING in that grammar touches the
 ; heap as data. but tree is BUILT from `link` and walked by `cap`/`cup`/`two?`; hash is `pin`/`peep`
@@ -127,7 +127,7 @@
   ; glaze-read? (no allocators) is NECESSARY BUT NOT SUFFICIENT. (cap t) yields the TAGGED stored word
   ; putcharm(v), while the group compiler's body math runs on UNTAGGED ints -- so a chain word must
   ; never reach an arith/cmp operand ((+ (cap t) 0) would read 15 where 7 is meant). The real groupok?
-  ; (src/core/boot/glaze/auto.l) carries a chain-vs-int typing discipline; the model below reproduces its verdict.
+  ; (core/boot/glaze/auto.l) carries a chain-vs-int typing discipline; the model below reproduces its verdict.
   (cval? cps e) (? (member? e cps) 1  (&& (two? e) (member? (cap e) '(cap cup))) (cval? cps (caup e))  0)   ; e is a CHAIN word: a chain param, or cap/cup thereof
   (arith-on-chain? cps e) (? (atom? e) 0                                                                    ; a chain word feeding +/-/*/cmp -- the unsound shape glaze-read? misses
      (&& (member? (cap e) '(+ - * // % < <= > >= =)) (foldl (\ a x (? a 1 (cval? cps x))) 0 (cup e))) 1

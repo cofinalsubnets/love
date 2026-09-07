@@ -35,7 +35,7 @@ over `twirl`/`catch` (a process IS a task), per-pid stdio seats under the folded
 seat-aware `quit` — so lush runs real pipelines of kore tools.
 
 Since rung 5 it has the disk: virtio-blk (PCI on x64, virtio-mmio on a64; polled, one
-C file) under three raw nifs, and **FAT32 r/w written in love** (`src/apps/fat/fat.l`, off the ramfs)
+C file) under three raw nifs, and **FAT32 r/w written in love** (`apps/fat/fat.l`, off the ramfs)
 over them — a file written before a reset is there after it, and mtools reads what it writes.
 
 Missing: network.
@@ -55,10 +55,10 @@ Three mappings, all of them already half-built:
 ⚠ **The kernel links no `host/*.c` yet, and that is a rung rather than a rule** — `k_shared_c`
 is love.c + am.c + quay + libc. The nif MECHANISM is no longer a difference: `kmain.c`'s
 `defs[]` rides the `love_nifs` section and the kernel drains `[__start_love_nifs, __stop_love_nifs)`
-exactly as `src/host/main.c` does, so a `host/<app>.c` added to this build registers itself with
+exactly as `host/main.c` does, so a `host/<app>.c` added to this build registers itself with
 no edit. What is still written fresh is the nif BODIES, and `doc/misc/plan/inle-fusion.md` is the
-plan for retiring that: `src/inle/sys.c` answers `__ai_sys`, so nolibc — and everything written
-against it, `src/host/posix.c` included — can stand on this kernel instead of a hosted one.
+plan for retiring that: `inle/sys.c` answers `__ai_sys`, so nolibc — and everything written
+against it, `host/posix.c` included — can stand on this kernel instead of a hosted one.
 
 ⚠ **The conventions are `doc/misc/posix.md`'s, exactly.** An effect answers `()` | an errno
 nom | `'badarg` on misuse; a value answers the value | `()` absence | a nom. `stat` answers
@@ -123,7 +123,7 @@ absence is loud.
   the mc146818 CMOS walk on x64 (BCD, 12-hour and update-in-progress all handled, bounded so
   an absent chip cannot hang the boot), one register of the PL031 on a64, which already sits
   inside the 2MiB block `mmio_map` lays for the UART. Both doors prove it in the gate.
-* ⚠ **A directory is a PREFIX.** The initrd is flat — a row for `src/apps/json/json.l` and none for `lib` —
+* ⚠ **A directory is a PREFIX.** The initrd is flat — a row for `apps/json/json.l` and none for `lib` —
   so `readdir` answers the distinct next components of every path under a prefix, and `stat` on
   one synthesizes the dir bits and its newest child's date. Nothing is stored for a directory and
   nothing can be; rung 2's writable tree is what gives one an existence of its own.
@@ -198,7 +198,7 @@ So `cmdline` is `("love")` while the cat loads, every seat sits out, and the foo
 boot pins the real line and hands the program word to `k-prog` — the same registry door
 rung 4's `spawn` uses. One dispatch on this machine, and an interactive lush gets the
 whole toolbox: `-append "kore ls lib"` runs the tool, `-append "sh"` boots lush,
-`-append "vi src/apps/json/json.l"` boots the editor, an empty line falls to the console shell.
+`-append "vi apps/json/json.l"` boots the editor, an empty line falls to the console shell.
 
 * ⚠ **There is no shebang lane on inle.** `kore TOOL ARGS` is a love call into the registry
   tablet, not an exec — the multi-call trick is doing all the work, and it is why kore was the
@@ -220,10 +220,10 @@ whole toolbox: `-append "kore ls lib"` runs the tool, `-append "sh"` boots lush,
   builtins (cd, pwd, export, read ..) ride the rung-2 tree, and a bare `ls lib | wc -l` is
   rung 4's spawn over the registry — no `/bin`, no PATH, the verb table IS the path.
 * *gate:* `make test_kboot` — four boots of the shipped x64 kernel through the PVH door,
-  each `-append` a real command line: `kore ls lib`, `kore wc src/apps/json/json.l` byte-exact against
+  each `-append` a real command line: `kore ls lib`, `kore wc apps/json/json.l` byte-exact against
   the host `wc`, `sh -c "cd lib; pwd"`, and a pipeline. Opt-in (a cold cat eval per boot);
   run it when the kernel or the cat moves. vi is the interactive smoke under `run-*`, and its
-  boot is proven headless — `-append "vi src/apps/json/json.l"` draws the hued file over serial. The
+  boot is proven headless — `-append "vi apps/json/json.l"` draws the hued file over serial. The
   a64 twin dispatches the same way through its DTB door (spot-proven; the gate lane is
   x64's).
 
@@ -282,9 +282,9 @@ and `wait` is `catch`.
 
 PCI config-space enumeration (CF8/CFC), then **virtio-blk** — modern virtio-pci on x64,
 virtio-mmio on a64 (qemu virt's 32 fixed slots), one split virtqueue, polled, synchronous,
-all in `src/inle/blk.c` (~250 lines, the one part that had to be C). Over it three nifs —
+all in `inle/blk.c` (~250 lines, the one part that had to be C). Over it three nifs —
 `(disk _)` the sector count, `(disk-read l n)`, `(disk-write l s)` — and over those **FAT32
-r/w written in love**: `src/apps/fat/fat.l`, which rides the ramfs into every kernel via the module
+r/w written in love**: `apps/fat/fat.l`, which rides the ramfs into every kernel via the module
 walk, zero registration. The fs is device-parameterized (a dev is `(rd wr nsec)`), so the same
 module runs on the virtio disk, on a cask in host tests, and on anything else that answers
 sectors — mkfs, mount, ls/stat/read/write/mkdir/rm, LFN both directions, presence on the
@@ -306,7 +306,7 @@ sectors — mkfs, mount, ls/stat/read/write/mkdir/rm, LFN both directions, prese
 * **The disk does NOT mount under the ramfs paths** (the plan's one dropped clause): `open` is
   a C nif and the fs is love, so a C row cannot call it. The disk speaks through the module's
   own verbs — `(fat-mount (fat-disk ()))`.
-* **The kore-level wrap this section used to defer is built**: `src/apps/fat/fatcmd.l` is
+* **The kore-level wrap this section used to defer is built**: `apps/fat/fatcmd.l` is
   `love fat {ls|stat|cat|get|put|mkdir|rm|mkfs}` plus busybox's `mkfs.vfat` / `mkdosfs`, over
   an image FILE rather than a disk. The device it hands `fat-mount` is the whole image in one
   cask — the same shape `test/host/fat.l` drives the laws through, so there is no second code
@@ -314,7 +314,7 @@ sectors — mkfs, mount, ls/stat/read/write/mkdir/rm, LFN both directions, prese
   verb. Positioned reads would want a `pread` nif; nothing here has one. *gate:*
   `make test_fat32` (⚠ **not** `test_fat`, which is the seed-universal fat *container* and
   shares only a word).
-* ⚠ `src/apps/fat/fat.l` is `(module (fat ..))` now, not a bare `(:`. Its own floor is spelled
+* ⚠ `apps/fat/fat.l` is `(module (fat ..))` now, not a bare `(:`. Its own floor is spelled
   `u16 u32 w16 w32 bcopy zeros group alias cksum` — names that would collide on sight with a
   shared layer, and it had to join the dist cat beside the wrap.
 * Metal still wants AHCI or NVMe — the same fs over a driver 3–4× the size, a later rung.
@@ -362,7 +362,7 @@ If none of those is the goal, rung 6 is the end of the road and the machine is f
 `make run DOOM=1` boots the machine with doomgeneric linked in and `doom 0` at the console
 starts it: the title screen, the menus, and E1M1 on the framebuffer. It is **opt-in and in no
 default build** — the source is not ours and not in this tree, so the lane wants
-`dl/doomgeneric` and `dl/doom1.wad` and is otherwise absent (test_cts's posture). src/inle/doom.c
+`dl/doomgeneric` and `dl/doom1.wad` and is otherwise absent (test_cts's posture). inle/doom.c
 is the glue, ~120 lines, and the whole of what it needed:
 
 * **the compiler was the question, and it answered.** mooncc compiles all 83 translation units
@@ -391,7 +391,7 @@ is the glue, ~120 lines, and the whole of what it needed:
   the line editor wants a byte), and `k_clock_ms` was already milliseconds.
 * **the WAD is a baked file.** `k_baked` is kmain.c's hook for an object that wants a file in
   the tree: tools/mkblob.l lays the 4 MB IWAD into .rodata and doom's own `fopen`/`fseek`/
-  `fread` reach it through src/inle/sys.c with nothing mounted. That door is not doom's — it is
+  `fread` reach it through inle/sys.c with nothing mounted. That door is not doom's — it is
   the general one, and this is its first taker.
 * ⚠ **the ESP door only.** `qemu -kernel` hands over no framebuffer, so `run-sh` cannot show
   it; `make run DOOM=1` (UEFI) is the lane.
@@ -400,7 +400,7 @@ is the glue, ~120 lines, and the whole of what it needed:
 * **not finished:** the blit is a per-pixel loop into the GOP framebuffer with no double
   buffer, so a screenshot can catch a frame mid-copy (it costs ~4 ms of a ~260 fps loop, so
   the frame rate is not what wants fixing — the tear is). No sound: there is no audio door on
-  this machine at all, and an AC'97 twin of src/inle/blk.c is what one would cost.
+  this machine at all, and an AC'97 twin of inle/blk.c is what one would cost.
 
 ## what is cheaper than it looks, and why
 

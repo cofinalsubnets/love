@@ -2,9 +2,9 @@
 
 **THE CLAIM: one cell buffer, three seats, and the last foreign tool falls out at the
 end.** quay's console is core C: a cell buffer the tty apps draw into, a painter
-(src/core/quay/paint.c) that turns a cell into pixels off the xterm-256 table, and a
+(core/quay/paint.c) that turns a cell into pixels off the xterm-256 table, and a
 font that is a C array. inle runs that on a framebuffer. a real terminal runs the same
-apps through their own ANSI. the page runs neither: src/port/wasm/repl.js takes the
+apps through their own ANSI. the page runs neither: port/wasm/repl.js takes the
 ANSI frame an app would write to a terminal and re-lays it into spans, ignoring cursor
 motion. that is fine for rove, which repaints whole, and wrong for vi, which paints
 cells and moves a cursor. put the console itself in the wasm build and the page
@@ -18,11 +18,11 @@ that is a compiler.
 ## what stands already
 
 - **rove is a pure engine.** deck, fov and the painter run headless; frames gate; the
-  helm decodes keys; one key per turn, state in, state out (src/apps/rove/rove.l). an
+  helm decodes keys; one key per turn, state in, state out (apps/rove/rove.l). an
   interactive-fiction engine minus the fiction, and minus the crawl's rats.
 - **libra lifts a document off a file** (`libra doc`), and the site's tool pages are
   exactly that -- the library's books exist, they have no room yet.
-- **the console is core**, not host: quay's cb, painter and palette (src/core/quay/) are
+- **the console is core**, not host: quay's cb, painter and palette (core/quay/) are
   in every seat's link, the wasm one included; only the blit is missing there.
 - **the door has half its implementations.** on a terminal a tty app is a spawn, which
   lush's fork lane does on the warm heap; on inle it is a task (twirl). nothing yet says
@@ -34,17 +34,17 @@ that is a compiler.
 ## the ladder
 
 - **rung 0 -- the console in the page.** ✅ LANDED. the wasm seat carries quay's
-  engine and its love door (host.c unity-includes quay.c + nif.c, as src/host/cb.c does)
+  engine and its love door (host.c unity-includes quay.c + nif.c, as host/cb.c does)
   plus one nif of its own, `(mirror scr)`, which copies a screen's head and cells to a
   buffer the page reads through `ai_mirror`; `ai_palette` hands out the xterm256 table
   paint.c spends and `ai_unfold` the cp437 fold, so the page owns no second recipe.
-  src/port/wasm/web.l is the page's love side: each app boots on a screen of the box's
+  port/wasm/web.l is the page's love side: each app boots on a screen of the box's
   size and scribes its frames into it; cells.js lays the mirror as text, one span per
   run of like-penned cells, paint.c's reading of bold/reverse/underline; repl.js pumps
   the steps and blits. ansiToHtml, pal256 and the JS cp437 table are gone. gate:
-  src/port/wasm/screen.mjs under test_wasm -- a hand frame's cells and its lay, and rove
+  port/wasm/screen.mjs under test_wasm -- a hand frame's cells and its lay, and rove
   and ink booted on a page screen. what it found on the way: the wasm function-table
-  trap in c0's peephole (src/port/wasm/32bit-findings.md).
+  trap in c0's peephole (port/wasm/32bit-findings.md).
 - **rung 1 -- the console door.** ✅ answered, and the answer is that there is no door:
   a tty app is a function that takes the console and gives it back, so an app opening
   another calls it -- `(vi-main [f])` from a story -- and on every seat the caller's
@@ -56,11 +56,11 @@ that is a compiler.
   page yield the app its turns until it parks, sleeps or lands. rove and ink run on
   the page unchanged through web.l -- their tty runners, keys as the bytes a terminal
   sends. and the cli's leaves became answers: cli-line answers a status charm and
-  the frontend quits with it, so nothing in src/core spells a host word.
-- **rung 2 -- rove as the fiction engine.** ✅ LANDED, src/apps/rove/story.l + design.l,
+  the frontend quits with it, so nothing in core spells a host word.
+- **rung 2 -- rove as the fiction engine.** ✅ LANDED, apps/rove/story.l + design.l,
   and the shape is gwen's, not the plan's: not a text adventure but a roguelike map to
   walk with @ on it, and RPG-maker dialog windows over the map for the words. a level
-  is a datum in a file (src/apps/rove/levels) the reader and printer round-trip: a map
+  is a datum in a file (apps/rove/levels) the reader and printer round-trip: a map
   of tiles (# wall), a start, and things on tiles with a glyph, a name and a dialog --
   (say TEXT ..) pages, (ask) a prompt, (hatch) the crawl. bumping a thing opens its
   window; the prompt is the one place the words go free: an interpreter takes a line
@@ -82,7 +82,7 @@ that is a compiler.
   the outdoors' unseen edge, and the sea is a wall with pens. things carry pens too.
   the designer paints with a brush (1-9 the palette's, # and ., `a` a new kind in one
   line, `c` the pens of the brush or of the thing here, space paints) and moves like
-  the map, yubn included. THE FACE IS ONE: cli (src/core/boot/post.l) carries the
+  the map, yubn included. THE FACE IS ONE: cli (core/boot/post.l) carries the
   key reader (`edkey`: a byte, -7 at eof, arrows/home/end/del as the negative codes,
   alt+letter as 256 + the letter, a bare escape after a beat), the line editor as a
   tablet (`ednew`, `(edstep t key)` answers the tablet with 'ev the key it left to the
@@ -102,7 +102,7 @@ that is a compiler.
   and the heap views are the API to keep), gen.l's lane, the gate. its oracle is the
   one the other backends never had: node runs the emcc build and the moon build of
   the same core, so both corpora are a differential from day one.
-- **rung 4 -- emcc goes.** `make wasm` rides our emitter, src/port/wasm/Makefile's
+- **rung 4 -- emcc goes.** `make wasm` rides our emitter, port/wasm/Makefile's
   emcc lane is deleted once the module passes the same gate. pays somewhere,
   regresses nowhere.
 

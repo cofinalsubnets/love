@@ -17,7 +17,7 @@
 ; and the one stamp: the sha of the leveled tar is the tree's content id, kept
 ; in archive.sha. run every make (a force rule); the gzip is paid only when the
 ; tree's content actually moved -- a touch settles, a delete or rename is seen.
-; the walk prunes before it reads (sp-keep?), and the coder is src/core/gz.c
+; the walk prunes before it reads (sp-keep?), and the coder is core/gz.c
 ; through gz.l's door, so a full cut is seconds -- on a runner that carries the
 ; nifs; love0 carries none, which is why the recipe prefers the tree's own love.
 ;
@@ -31,22 +31,22 @@
 ; it is the cut that writes the sidecar, so what .sha names is always the archive
 ; that was written and never the pass that only looked.
 ; named as paths, not module names, because love0 has no image to carry them: it is
-; gcc-built from the src/core/boot/*.l headers alone, so `(use 'tar)` under it has no registered
+; gcc-built from the core/boot/*.l headers alone, so `(use 'tar)` under it has no registered
 ; tablet to find and the loader has no business inventing one. each file's own
 ; (module 'nm ..) head registers it as it loads, which is all a later `use` needs.
 ; the order is the dependency order: kore's text+diff floor under sb, dns under sb's http.
 ;
-; a path, never `-l`: `-l FILE` whose basename names a verb seats it (src/core/boot/post.l's
-; seatof -- the installed shebang's lane), so `-l src/apps/sb/sb.l` runs sb instead of
+; a path, never `-l`: `-l FILE` whose basename names a verb seats it (core/boot/post.l's
+; seatof -- the installed shebang's lane), so `-l apps/sb/sb.l` runs sb instead of
 ; loading it. `use` on a string touches no command line.
-(use "src/apps/tar/tar.l")
-(use "src/apps/gz/gz.l")
-(use "src/apps/kore/text.l")
-(use "src/apps/kore/diff.l")
-(use "src/apps/sb/merge.l")
-(use "src/apps/dns/dns.l")
-(use "src/apps/sb/http.l")
-(use "src/apps/sb/sb.l")   ; for the ignore law only -- .sbignore is sb's file
+(use "apps/tar/tar.l")
+(use "apps/gz/gz.l")
+(use "apps/kore/text.l")
+(use "apps/kore/diff.l")
+(use "apps/sb/merge.l")
+(use "apps/dns/dns.l")
+(use "apps/sb/http.l")
+(use "apps/sb/sb.l")   ; for the ignore law only -- .sbignore is sb's file
 
 (: (sp-die m) (say err ("selfpack: " + m + "\n"), quit 1)
    (sp-read p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, [1 (s + "")]))))

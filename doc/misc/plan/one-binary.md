@@ -86,10 +86,10 @@ The collapse landed whole -- rungs 1+2+3 in one motion, since install.mk and the
 dist lanes shared every seam -- and the re-aimed gates are the discovery story:
 
 - **the mw lane now judges the crew book, and it convicted.** Three findings, in
-  escalating order: (1) src/core/mx.l's generators under $(mw) captured KORE's
+  escalating order: (1) core/mx.l's generators under $(mw) captured KORE's
   two-arg `join` (mx-h came out a curried partial -> an EMPTY mx.h), so mxlay
   moved to the EGG lane -- core tables want the boot vocabulary. (2)
-  src/apps/moon/cpp.l's `(flush buf macs out)` shadowed the core port flush and
+  apps/moon/cpp.l's `(flush buf macs out)` shadowed the core port flush and
   broke bao's pty pump -- renamed tokflush. (3) test/spec.l's bit-law census now
   swept 120 crew predicates that follow the ()-false idiom -- scoped to the egg
   lane (love-image on the book is the woken marker). The remaining SHADOW
@@ -101,11 +101,11 @@ dist lanes shared every seam -- and the re-aimed gates are the discovery story:
   defglobbing when it wraps in modules -- doc/misc/plan/modules.md is that arc.
 - **test_hostnif had not run since the + flip, and it was a nest of byte-law
   riders**: test/host/net.l's rdline (its comment still CITED the retired law),
-  manifest/cb/berth's rowtx folds, luxui-probe's `("" + ch)`, src/apps/lux/wire.l's
-  x-rstr + x-getclass, src/apps/berth/berth.l's reply fold, src/apps/json/json.l's ENTIRE
+  manifest/cb/berth's rowtx folds, luxui-probe's `("" + ch)`, apps/lux/wire.l's
+  x-rstr + x-getclass, apps/berth/berth.l's reply fold, apps/json/json.l's ENTIRE
   writer (every quote/bracket/comma was a byte append -- json-show wrote "" for
-  "[]"), src/apps/tls/bytes.l's hex, tools/hue2vim.l's vim-brk -- and TWO LINES
-  cc9e84ee's perl had EATEN AN OPERAND from (src/apps/manifest's column letters,
+  "[]"), apps/tls/bytes.l's hex, tools/hue2vim.l's vim-brk -- and TWO LINES
+  cc9e84ee's perl had EATEN AN OPERAND from (apps/manifest's column letters,
   `(+ 97 cx)` -> `(+ 97 )`). All fixed with string spellings; hostnif ALL-GREEN.
 - **LOVE_NO_IMAGE discipline**: the root's corpus export means every verb site
   carries the `LOVE_NO_IMAGE=` clear -- mw has it, korerun/moonrun ride mw, the
@@ -131,7 +131,7 @@ argv0 farm could point at the one binary once cli.l learns argv[0] dispatch.
   compiler shim survives; after rung 1 any crew edit rebakes love itself. The
   in-place bake renames over a fresh inode so running sessions survive on the
   old one -- but a concurrent session's NEXT spawn gets the new binary. Same
-  hazard class as a src/core/love.c edit today; now it includes .l edits.
+  hazard class as a core/love.c edit today; now it includes .l edits.
 - **bundled_love must not see the tree's own binary.** After rung 1
   out/love IS bundle-shaped, but the bundle test keys on ./bin/love
   (a seed-laid tree), not on out -- keep it that way, or the tree's build

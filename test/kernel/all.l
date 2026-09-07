@@ -33,11 +33,11 @@
    roster (["test/00-init.l" "test/spec.l" "test/uu.l"] + host +
            ["test/kernel/ramfs.l" "test/kernel/fs.l" "test/kernel/wfs.l"
             "test/kernel/kore0.l"
-            "src/apps/kore/text.l" "src/apps/kore/u.l" "src/apps/kore/core.l" "src/apps/kore/fs.l"
+            "apps/kore/text.l" "apps/kore/u.l" "apps/kore/core.l" "apps/kore/fs.l"
             "test/kernel/kore.l" "test/kernel/pipe.l"
             "test/kernel/sh0.l"
-            "src/apps/lush/job.l" "src/apps/lush/lex.l" "src/apps/lush/gram.l"
-            "src/apps/lush/glob.l" "src/apps/lush/word.l" "src/apps/lush/eval.l"
+            "apps/lush/job.l" "apps/lush/lex.l" "apps/lush/gram.l"
+            "apps/lush/glob.l" "apps/lush/word.l" "apps/lush/eval.l"
             "test/kernel/sh.l"
             "test/kernel/disk.l" "test/kernel/svm.l" "test/kernel/vmx.l"
             "test/zz-fin.l"])

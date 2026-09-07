@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/dialect.sh -- the x86 dialect lens (src/core/holo/dialect.l) against gcc's own two
+# test/gate/dialect.sh -- the x86 dialect lens (core/holo/dialect.l) against gcc's own two
 # spellings: every test/cc file compiled with -masm=att and with -masm=intel must read to the
 # same value. gcc is the oracle for what each dialect says; test/holo/dialect.l is the judge.
 # skips without gcc.
@@ -20,6 +20,6 @@ for f in test/cc/*.c; do
   grep -q '%fs:\|%gs:' $d/att/$b.s && continue
   echo "$d/att/$b.s $d/intel/$b.s" >> $d/pairs
 done
-{ cat src/core/holo/holo.l src/core/holo/x64.l src/core/holo/dialect.l
+{ cat core/holo/holo.l core/holo/x64.l core/holo/dialect.l
   sed "s|@PAIRS@|$d/pairs|" test/holo/dialect.l
 } | $love

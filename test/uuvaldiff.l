@@ -9,7 +9,7 @@
 ; link (ii2 over a tpair, both limbs at the height below), an atom becomes a
 ; leaf carrying its measure. the leaf measure is read off love's own net -- that
 ; primitive is the one thing this lane cannot second-guess, the same standing gap
-; uuwm has with the C runtime under src/apps/lux/core.l. what is under test is
+; uuwm has with the C runtime under apps/lux/core.l. what is under test is
 ; everything above it: the fold over links, re, ceil, the clamp and the bit.
 ;
 ; the model's reals are the half-integers, so a measure that is neither whole nor

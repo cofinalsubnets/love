@@ -1,11 +1,11 @@
 ; test/holo/wasm.l -- rung 0 of the wasm lane (doc/misc/plan/moon-wasm.md): a module laid by
-; src/core/holo/wasm.l off hand-built forms, written to out/.holo.wasm for test/holo/wasm.mjs
+; core/holo/wasm.l off hand-built forms, written to out/.holo.wasm for test/holo/wasm.mjs
 ; to validate and RUN under an engine that is not ours. what it claims: a memory64 module with
 ; an import, a table, a data segment, i64 arithmetic, a 64-bit address store and load, a
 ; call_indirect -- one function laid by hand the way rung 1 lays every function (a label
 ; local, one loop, one br_table, each label's body ending in a branch back to the top), and
 ; five lowered from holo's IR by wasm-fn, rung 1 itself.
-; run: cat src/core/holo/holo.l src/core/holo/wasm.l test/holo/wasm.l | out/love
+; run: cat core/holo/holo.l core/holo/wasm.l test/holo/wasm.l | out/love
 
 (use 'holo)
 
@@ -109,7 +109,7 @@
    _ (wasm-write "out/.holo2.wasm" m2)
    _ (puts ("test/holo/wasm: wrote out/.holo2.wasm, " + show (tally (wasm-emit m2)) + " bytes\n"))
 
-   ;; rung 3, the environment: a mock of the artifact's face for src/port/wasm/loader.js --
+   ;; rung 3, the environment: a mock of the artifact's face for port/wasm/loader.js --
    ;; the verbs the page calls, over the one import, __ai_sys with linux's numbers. [16] is the
    ;; out buffer's length and 4096 the buffer; [24] the bump pointer malloc rides; ai_init asks
    ;; the clock (228) and the kernel probe (20, which must say linux: -EBADF); ai_eval copies

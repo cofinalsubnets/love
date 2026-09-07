@@ -10,7 +10,7 @@
 ; metavars are 'f 'g 'x 'z 'a 'b; the rhs binders (acc elt w) are chosen OUTSIDE that
 ; set so subst leaves them alone (no capture). run: out/love doc/misc/proto/fuse.l
 ;
-; --- fit with tele (autograd) --- this spike and src/apps/tele/tele.l are the two halves of
+; --- fit with tele (autograd) --- this spike and apps/tele/tele.l are the two halves of
 ; one categorical picture from opposite directions. fuse is the COMPILE-TIME symbolic
 ; rewrite (functor/nt laws, no eval, forward); tele is the RUNTIME define-by-run trace
 ; (AD as the category of LENSES, reverse). same frame -- differentiation IS a

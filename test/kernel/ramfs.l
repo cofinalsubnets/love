@@ -8,14 +8,14 @@
 ;
 ; kernel only -- test/kernel/all.l's roster, never $t: on the host `open` is the real
 ; filesystem and these laws would write the tree. The scratch is a real baked row on
-; purpose: src/apps/json/json.l is a file the boot never loads, and the write laws put its
+; purpose: apps/json/json.l is a file the boot never loads, and the write laws put its
 ; bytes back, so nothing downstream in the corpus sees a clobbered tree.
 ;
 ; the `:` has a body -- the assert itself -- so the helpers stay local; and each
 ; law is its own assert argument, since assert maps over its args and a `do` would
 ; report only the last one.
 
-(: f "src/apps/json/json.l"
+(: f "apps/json/json.l"
    ; slurp a path, closing behind -- () when it would not open, so presence rides
    ; `port?` and never the emptiness of what was read.
    (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
@@ -29,9 +29,9 @@
    (= orig (rd f))
    ; an unbaked path is absent for a read; a write creates it now (rung 2 --
    ; wfs.l holds those laws), so here it is unmade the moment it is proved
-   (! (port? (open "src/apps/json/no-such-thing.l" "r")))
-   (: q (open "src/apps/json/no-such-thing.l" "w")
-      (&& (port? q) (: _ (close q) !(unlink "src/apps/json/no-such-thing.l"))))
+   (! (port? (open "apps/json/no-such-thing.l" "r")))
+   (: q (open "apps/json/no-such-thing.l" "w")
+      (&& (port? q) (: _ (close q) !(unlink "apps/json/no-such-thing.l"))))
    ; the write copies the blob out of .rodata, and the next open sees it
    (wr f "hi" "w")
    (= "hi" (rd f))
@@ -49,10 +49,10 @@
    (= orig (rd f))))
 
 ; the payoff, and the end-to-end proof the rung is real: prel's module walk is gated
-; on the presence of `open` (src/core/boot/prel.l's fsopen, by peep), so with the row in
+; on the presence of `open` (core/boot/prel.l's fsopen, by peep), so with the row in
 ; defs[] `use` resolves lib/<x>.l off the ramfs with zero prel change -- json is in
 ; no baked ai_libs table on this seat, only in the initrd. it also reads the
 ; scratch back through the compiler, so it is the restore above proving itself byte
 ; for byte; it has to stay after those laws.
-(use "src/apps/json/json.l")
+(use "apps/json/json.l")
 (assert (member? 'json-read (names ())))

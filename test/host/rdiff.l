@@ -116,11 +116,11 @@
 ; divergence instead of the agreement. p1.l and egg.l are what p0 reads at boot;
 ; p0fix.l spans the grammar they are too thin to cover. a sigil creeping into any
 ; of the three fails here -- and prel.l is not among them: it rides p1 now.
-(: rd-p0 (rd-run sound0 ["test/host/p0fix.l" "src/core/boot/p1.l" "src/core/boot/egg.l"] 1)
+(: rd-p0 (rd-run sound0 ["test/host/p0fix.l" "core/boot/p1.l" "core/boot/egg.l"] 1)
    ; and the same rig pointed at a file outside the subset, which must go red:
    ; the proof this leg can fail, the rd-hurt discipline applied to a real reader
    ; rather than a spoiled one.
-   rd-p0x (rd-run sound0 ["src/core/boot/ev.l"] 0)
+   rd-p0x (rd-run sound0 ["core/boot/ev.l"] 0)
    ; p0 puts nesting on the C stack -- the trade that buys its size, and the one
    ; thing the stackless reader has over it. so pin the depth it reaches, far
    ; past the deepest form in the tree (38, test/uupatch.l).

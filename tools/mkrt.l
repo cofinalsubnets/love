@@ -1,6 +1,6 @@
 ; tools/mkrt.l -- lay the compiled nolibc runtime into an ELF object, one
 ; deflated archive per hosted ISA, so a bare `love cc` links without compiling
-; 197 members first (moon.l's rtcarried; src/host/src.c answers runtime-gz).
+; 197 members first (moon.l's rtcarried; host/src.c answers runtime-gz).
 ;
 ;   love wake out/mooncc0.image tools/mkrt.l out.o [arch]
 ;
@@ -11,7 +11,7 @@
 ;   ai_rtgz_<nm>       the bytes, right behind it (a .a under DEFLATE; `id`
 ;                      is moon.l's rtcid of the tree slice, plain text)
 ;
-; src/host/src.c declares every symbol weak, so a love carrying no runtime (love0)
+; host/src.c declares every symbol weak, so a love carrying no runtime (love0)
 ; answers nothing and the compile-from-source lane stands. determinism is
 ; load-bearing: arbytes and rtcid are all pure of the machine, so the
 ; seed's fixpoint carries this object unchanged.
@@ -27,7 +27,7 @@
    (rt-be arch)
     (? (lit? (from 'holo 'backends arch)) 0
        ; the backend file is the canonical arch word now -- one spelling, no map
-       (: f ("src/core/holo/" + string arch + ".l")
+       (: f ("core/holo/" + string arch + ".l")
           q (open f "r")
           (? (hot? q) (rt-rdev (flow q), close q)
              (rt-die ("no backend aboard and no text at " + f)))))
@@ -72,12 +72,12 @@
           ; THE PARENT'S OWN RESIDUE GOES BESIDE THEM, never after the wait: waiting
           ; first spends the children's cores and then runs one share alone, which is
           ; half the width for the whole second half.
-          _ (rtwarm "src/apps/moon/" ts 'linux () w 0)
+          _ (rtwarm "apps/moon/" ts 'linux () w 0)
           (foldl (\ _ p (wait p)) 0 ps)))
    (rt-kids rtwarm ts w i acc)
     (? (w <= i) acc
        (: p (fork 0)
-          (? (p = 0) (rtwarm "src/apps/moon/" ts 'linux () w i, quit 0)
+          (? (p = 0) (rtwarm "apps/moon/" ts 'linux () w i, quit 0)
              (0 < p) (rt-kids rtwarm ts w (i + 1) (p . acc))
              (rt-kids rtwarm ts w (i + 1) acc))))
 
@@ -99,8 +99,8 @@
        rtarch (from 'moon 'rtarch)
        rtwarm (from 'moon 'rtwarm)
        objelf (from 'holo 'objelf)
-       cid (rtcid "src/apps/moon/")
-       _ (!(string? cid) ? (rt-die "no src/apps/moon/ slice to hash -- run from the tree root"))
+       cid (rtcid "apps/moon/")
+       _ (!(string? cid) ? (rt-die "no apps/moon/ slice to hash -- run from the tree root"))
        ; through rtarch, so the runtime cache serves a repeat build (~instant)
        ; and only a real slice or compiler change recompiles the members --
        ; without this every seed and rebake paid three full runtime compiles.
@@ -108,7 +108,7 @@
        _ (rt-fan rtwarm cd '(x64 a64 rv64))
        ; deflated: ~1.5 MB of archive across the three ISAs becomes ~210 kB,
        ; and rtcarried pays one inflate for the ISA it wants.
-       (one tgt) (: a (rtarch "src/apps/moon/" tgt 'linux ())
+       (one tgt) (: a (rtarch "apps/moon/" tgt 'linux ())
                     _ (!(string? a) ? (rt-die (show tgt + ": no archive (a member refused?)")))
                     z (deflate a)
                     _ (!(string? z) ? (rt-die (show tgt + ": deflate refused the archive")))

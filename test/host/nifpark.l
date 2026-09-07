@@ -41,7 +41,7 @@
 
 ; --- law 2: udp-recv parks on a quiet socket ----------------------------------
 ; the same law on the datagram side. The peer address is (ipv4 << 16) | port --
-; 127.0.0.1 is 2130706433 -- which is how src/host/sock.c marshals a sockaddr into a
+; 127.0.0.1 is 2130706433 -- which is how host/sock.c marshals a sockaddr into a
 ; charm.
 (: p (udp-bind 7395)
    n (tablet 0)
@@ -99,7 +99,7 @@
 ; instantly with enetunreach and the law would pass straight over the bug. a syn
 ; the kernel drops is retried for about two minutes, which is the stall this needs.
 ;
-; so this law knows src/host/sock.c's `ai_listen_backlog` by VALUE, and has to: it
+; so this law knows host/sock.c's `ai_listen_backlog` by VALUE, and has to: it
 ; fills the queue that constant sizes. linux queues one more than asked (the test
 ; is `> max`), so backlog+1 arrivals fill it and the next is dropped. if the
 ; constant moves and this does not, the fill stops one short, the stalled connect

@@ -50,24 +50,24 @@
  _ (must 'stale-planted (any (\ n (= n stale)) (readdir rdir)))
 
  ; the real driver, the same module set bin/lux ships (DISPLAY rides env).
- ; HOME rides too, at a scratch seat: src/apps/lux/config.l reads ~/.love/etc/lux.l
+ ; HOME rides too, at a scratch seat: apps/lux/config.l reads ~/.love/etc/lux.l
  ; through salt, and the probe below drives named chords (super+space) against the
  ; stock layout -- so the box's own lux config must not reach this gate.
  luxhome "out/.luxui-home"
  _ (mkdir luxhome 493)                                                          ; already there -> -EEXIST, which is the same good news
  ph (tether ["env" (+ "DISPLAY=:" (show dn)) (+ "HOME=" luxhome)
-           "out/love" "-l" "src/apps/lux/core.l" "-l" "src/apps/lux/layout.l"
-           "-l" "src/apps/lux/wire.l" "-l" "src/apps/lux/ewmh.l"
-           "-l" "src/apps/lux/manage.l" "-l" "src/apps/lux/keys.l"
-           "-l" "src/apps/lux/config.l" "-l" "src/apps/lux/lux.l"])
+           "out/love" "-l" "apps/lux/core.l" "-l" "apps/lux/layout.l"
+           "-l" "apps/lux/wire.l" "-l" "apps/lux/ewmh.l"
+           "-l" "apps/lux/manage.l" "-l" "apps/lux/keys.l"
+           "-l" "apps/lux/config.l" "-l" "apps/lux/lux.l"])
  _ (must 'lux-up (two? ph))
  _ (enlist 'ph (cap ph))
 
  ; the probe: its own process, its own streams; it waits for lux itself
  ; (_NET_SUPPORTED on the root), drives, asserts, and exits 0 or names its
  ; failure. Its pty is echoed either way -- a red run tells its story here.
- pr (tether ["out/love" "-l" "src/apps/lux/core.l" "-l" "src/apps/lux/layout.l"
-           "-l" "src/apps/lux/wire.l" "-l" "test/host/luxui-probe.l"
+ pr (tether ["out/love" "-l" "apps/lux/core.l" "-l" "apps/lux/layout.l"
+           "-l" "apps/lux/wire.l" "-l" "test/host/luxui-probe.l"
            "-e" (+ "(probe \"" (+ dpy "\")"))])
  _ (must 'probe-up (two? pr))
  _ (enlist 'pr (cap pr))

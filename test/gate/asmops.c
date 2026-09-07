@@ -5,7 +5,7 @@
 // templates encode to what they say rather than to something that merely
 // assembled -- and, with clang present, that both readers agree.
 //
-// this file is deliberately NOT under src/inle/<a>/ -- the Makefile globs that
+// this file is deliberately NOT under inle/<a>/ -- the Makefile globs that
 // directory for the seat, and a probe living there would join the kernel build.
 #include <stdint.h>
 #include "asmops.h"

@@ -1,10 +1,10 @@
 ; --- test/host/tlsc.l: the C twins, held to the love ciphers ---
-; not in the test/*.l corpus: chacha20/poly1305 are host nifs (src/host/tls.c) and
+; not in the test/*.l corpus: chacha20/poly1305 are host nifs (host/tls.c) and
 ; the love side is a crew module, so neither is visible to the love0 bake.
 ;
 ; test/host/tls.l is where the RFC's own numbers live; this file asks the other
 ; question -- do the two implementations of each cipher answer the same bytes?
-; the love files are the oracle (src/apps/tls/chacha.l says so in its head), so a
+; the love files are the oracle (apps/tls/chacha.l says so in its head), so a
 ; disagreement is the C being wrong until proven otherwise.
 ;
 ;   vectors   the RFC's §2.4.2 ciphertext and §2.5.2 tag, off the C side, so a
@@ -24,7 +24,7 @@
 ;
 ; run:  cat test/00-init.l test/host/tlsc.l | out/love
 
-(use "src/apps/tls/tls.l")
+(use "apps/tls/tls.l")
 
 (assert
  (lit? chacha20)
@@ -94,6 +94,6 @@
     ((poly1305 ckey "") = (po-mac ckey ""))))
 
 (: _ (test_fin ())
-   _ (puts "src/apps/tls: ok -- the C twins agree with love (vectors, lengths, counters, misuse)
+   _ (puts "apps/tls: ok -- the C twins agree with love (vectors, lengths, counters, misuse)
 ")
    0)

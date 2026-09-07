@@ -44,7 +44,7 @@
            (arch = "rv64")
            ["-M" "virt"]
            ["-M" "q35" "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
-            ; the sound card, silent: test/horn.l drives src/inle/hda.c against it
+            ; the sound card, silent: test/horn.l drives inle/hda.c against it
             "-device" "intel-hda" "-device" "hda-output,audiodev=snd" "-audiodev" "none,id=snd"])
    ; the two virts carry their disk on virtio-mmio; q35 on pci
    mmio? (arch = "a64" || arch = "rv64")

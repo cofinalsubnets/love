@@ -61,9 +61,9 @@ for f in $gate_host_c; do
   b=$(basename "$f" .c)
   moon1 -D ai_tco="$tco" -I"$ho" -I. -Isrc -Iout/lib -c "$f" "$d/host_$b.o" || fail "love1 mooncc -c $f"
 done
-for f in src/apps/moon/lib/math/*.c; do
+for f in apps/moon/lib/math/*.c; do
   b=$(basename "$f" .c)
-  moon1 -Isrc/apps/moon/lib/math -Isrc/apps/moon/include -c "$f" "$d/m_$b.o" || fail "love1 mooncc -c $f"
+  moon1 -Iapps/moon/lib/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || fail "love1 mooncc -c $f"
 done
 LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$ho/.mksys-cat.l" -q -e "((from 'moon '$mks) \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
 test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
@@ -72,12 +72,12 @@ test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 # and laid the same way. an arch with no seat carries none, and $gate_arch_c is
 # empty there -- the makefile draws that line with its own wildcard.
 if [ -n "$gate_arch_c" ]; then
-  kinc="-I$ho -I. -Isrc -Iout/lib -Isrc/core/quay -Isrc/apps/moon/include"
-  for f in src/inle/kmain.c src/inle/blk.c src/inle/sys.c $gate_arch_c src/core/quay/paint.c \
-           src/core/quay/cga_8x8.c src/core/quay/moderndos_8x16.c; do
+  kinc="-I$ho -I. -Isrc -Iout/lib -Icore/quay -Iapps/moon/include"
+  for f in inle/kmain.c inle/blk.c inle/sys.c $gate_arch_c core/quay/paint.c \
+           core/quay/cga_8x8.c core/quay/moderndos_8x16.c; do
     b=$(basename "$f" .c)
     case "$f" in
-      src/core/quay/*) o=$d/k_q_$b.o ;;
+      core/quay/*) o=$d/k_q_$b.o ;;
       *)           o=$d/k_$b.o ;;
     esac
     moon1 $kinc -c "$f" "$o" || fail "love1 mooncc -c $f"

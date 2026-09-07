@@ -44,9 +44,9 @@ case $target in
   x64)   name=moon-lua       ; tflag=""         ; sub=moonlua
          mksys=mksys       ; backend=""              ; run=""            ; need="" ;;
   a64) name=moon-lua-a64 ; tflag="-t a64" ; sub=moonlua-a64
-         mksys=mksys-a64 ; backend=src/core/holo/a64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
+         mksys=mksys-a64 ; backend=core/holo/a64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
   rv64) name=moon-lua-rv64 ; tflag="-t rv64" ; sub=moonlua-rv
-         mksys=mksys-rv64 ; backend=src/core/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
+         mksys=mksys-rv64 ; backend=core/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
   *) echo "moon-lua.sh: unknown target $target (x64 | a64 | rv64)" >&2; exit 1 ;;
 esac
 
@@ -88,22 +88,22 @@ objs=""
 for f in "$LUASRC"/src/*.c; do
   b=$(basename "$f" .c)
   [ "$b" = luac ] && continue
-  $MC $tflag -Isrc/apps/moon/include -I"$LUASRC/src" -c "$f" "$d/$b.o" || { echo "FAIL mooncc -c src/$b.c"; exit 1; }
+  $MC $tflag -Iapps/moon/include -I"$LUASRC/src" -c "$f" "$d/$b.o" || { echo "FAIL mooncc -c src/$b.c"; exit 1; }
   objs="$objs $d/$b.o"
 done
 
 # the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO nolibc
 # object -- the link owes its symbols and the driver's runtime table pulls
-# src/apps/moon/lib/nolibc/ MEMBER BY NEED (the Makefile says the same of love itself).
+# apps/moon/lib/nolibc/ MEMBER BY NEED (the Makefile says the same of love itself).
 # Naming an object would take every member instead.
-for f in src/apps/moon/lib/math/*.c; do
+for f in apps/moon/lib/math/*.c; do
   b=$(basename "$f" .c)
-  $MC $tflag -Isrc/apps/moon/lib/math -Isrc/apps/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
+  $MC $tflag -Iapps/moon/lib/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
 done
 # sys.o is LAID, not compiled -- and a CROSS lay needs holo's backend loaded first
 # (the host bake carries only the native one), exactly as raw.sh does it.
 { if [ -n "$backend" ]; then echo "(use 'holo)"; cat "$backend"; fi
-  cat src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l src/core/holo/elf.l src/core/holo/obj.l src/apps/moon/lib/mksys.l
+  cat apps/kore/text.l apps/kore/u.l apps/kore/asbook.l core/holo/elf.l core/holo/obj.l apps/moon/lib/mksys.l
   echo "((from 'moon '$mksys) \"$d/sys.o\")"; } | $love || { echo "FAIL $mksys sys.o"; exit 1; }
 
 $MC $tflag $objs "$d"/m_*.o "$d/sys.o" -o "$d/lua" || { echo "FAIL holo link lua"; exit 1; }

@@ -20,7 +20,7 @@
 ; inexpressible file, and it does not fail on a file the parser itself refuses (a few
 ; in test/cc/ are there to be refused).
 (:
-   _ (use "src/apps/moon/clay.l")
+   _ (use "apps/moon/clay.l")
    _ (use 'moon)                       ; the front end (clex/cpp/cparse-t) is module 'moon
    _ (use 'kore)                       ; uread below is the u-floor's
    cshow (from 'clay 'clay-show)

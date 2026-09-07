@@ -1,7 +1,7 @@
 #!/bin/sh
 # test/gate/ccwasm.sh -- the C battery on the WASM target, ccarch.sh's procedure with node
 # as the machine: every test/cc/*.c built by `mooncc -t wasm`, run under node through
-# src/port/wasm/run.mjs (the loader is the kernel), and required to answer exactly what the
+# port/wasm/run.mjs (the loader is the kernel), and required to answer exactly what the
 # same source answers on x86-64 -- stdout and the exit status both. the programs this
 # target has no lane for must REFUSE, not skip, and the list is asserted (ccarch.sh says why).
 # skips whole without node. NOT set -e: the checks report their own failures with context.
@@ -38,7 +38,7 @@ if [ "$(uname -m)" != x86_64 ]; then
   echo "$name: skipped (the reference build is native x86-64)"
   exit 0
 fi
-# the OPTIONAL extra oracle, found as src/port/wasm/Makefile finds it
+# the OPTIONAL extra oracle, found as port/wasm/Makefile finds it
 EMCC=${EMCC:-$(command -v emcc 2>/dev/null || true)}
 [ -n "$EMCC" ] || [ ! -x /usr/lib/emscripten/emcc ] || EMCC=/usr/lib/emscripten/emcc
 
@@ -67,7 +67,7 @@ for f in test/cc/*.c; do
 
   moonrun -t wasm -o "$d/$b.wasm" "$f" > "$d/$b.tlog" 2>&1 \
     || { cat "$d/$b.tlog" >&2; fail "$b: mooncc -t wasm could not build it"; }
-  timeout 60 "$NODE" src/port/wasm/run.mjs "$d/$b.wasm" > "$d/$b.tout" 2>&1; rt=$?
+  timeout 60 "$NODE" port/wasm/run.mjs "$d/$b.wasm" > "$d/$b.tout" 2>&1; rt=$?
 
   [ $rt -ne 124 ] || fail "$b: our wasm module timed out under node"
   [ $rt -eq $rx ] || { head -20 "$d/$b.tout" >&2; fail "$b: exit wasm $rt, x86-64 $rx -- the same source, two of our targets"; }

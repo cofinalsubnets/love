@@ -1,10 +1,10 @@
 ; precedence (band) and associativity (hand) -- infix that binds like schoolbook math
-; (the table is src/core/boot/prel.l's). each operator's table entry carries a band and a hand; an incoming operator
+; (the table is core/boot/prel.l's). each operator's table entry carries a band and a hand; an incoming operator
 ; steals a pending filled operand iff its band beats the frame's, so a tighter operator climbs in,
 ; and equal band goes to the incomer's hand: right-handed steals (its band folds right), left-handed
 ; yields (its band folds left). arithmetic is left-handed -- (1 - 2 - 3) is -4, as everywhere else --
 ; and so are the shifts and the bitwise ops; everything else stays right, which is the flat fold
-; the surface started with. src/core/boot/prel.l holds the numbers and the asserts below hold the order,
+; the surface started with. core/boot/prel.l holds the numbers and the asserts below hold the order,
 ; which is all a band means. we assert both the factored tree (via the live `opfix`, the source pass both
 ; compilers run -- op-core proper is book-private) and the VALUE, on cases where the grouping is
 ; observable in the result.

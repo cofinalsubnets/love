@@ -1,7 +1,7 @@
 #!/bin/sh
 # ccbench.sh -- the COMPILER shootout (the page's FOURTH table). Builds the love host
 # binary with three C compilers and, for each, reports four wall-clock costs:
-#   build : compile every C translation unit (src/core/love.c + host/*.c + the am math floor)
+#   build : compile every C translation unit (core/love.c + host/*.c + the am math floor)
 #           and link a working `love` -- source to runnable binary. ⚠ the mooncc lane
 #           builds ONCE UNTIMED first; the note above that call says why, and the row read
 #           2.2x too high until it did.
@@ -10,7 +10,7 @@
 #           (subtracted) so it times the suite executing, not the compiler self-install.
 #   chacha / poly1305 : one C function each, same subtraction (bench/ccrypto.l).
 #           These are here because the corpus row averages a compiler's work over all
-#           of src/core/love.c, and the average is flattering: mooncc/clang reads ~1.1x there
+#           of core/love.c, and the average is flattering: mooncc/clang reads ~1.1x there
 #           and ~23x on chacha. chacha20 indexes a 16-word state ARRAY in its inner
 #           loop, poly1305 keeps five limbs as scalar LOCALS, and mooncc has register
 #           residency for the second shape only -- so the PAIR is the reading. Wide
@@ -26,9 +26,9 @@
 #           shapes in one function. A lane behind on inflate and level on crc32 is
 #           losing to branches, not to loads.
 # The three compilers, ALL THREE STATIC -- that is the whole point of the pairing:
-#   mooncc : love's OWN C compiler (src/apps/moon/), run out of THE SHIPPED ARTIFACT's own
+#   mooncc : love's OWN C compiler (apps/moon/), run out of THE SHIPPED ARTIFACT's own
 #            `mooncc` verb -- no gcc/glibc/ld anywhere: mooncc lays every .o, mksys emits
-#            the syscall leaf, our linker (src/core/holo/) binds.
+#            the syscall leaf, our linker (core/holo/) binds.
 #   gcc-musl / clang-musl : the same translation units at the host's real -O2 cflags,
 #            through the musl-gcc/musl-clang wrappers and linked -static. Also
 #            egg-boot -- no `bake`, so all three lanes run the identical corpus off
@@ -60,7 +60,7 @@
 #   build is timed once (a stable multi-second cost, and the artifact is reused);
 #   test subtracts two medians of `samples` runs each (corpus, then empty boot), default 3.
 # resolve the repo root ABSOLUTELY: the build lanes cd into it to reach the source
-# globs (src/core/love.c, host/*.c, src/apps/...), so every output/include path below must be absolute.
+# globs (core/love.c, host/*.c, apps/...), so every output/include path below must be absolute.
 R=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 TIMEOUT=${1:-180}
 SAMPLES=${2:-3}
@@ -88,18 +88,18 @@ if [ -z "$LOVE_CFLAGS" ]; then
 fi
 # drop -Werror: this table times compile+link, and -Werror is a lint GATE, not a
 # codegen or speed factor. Keeping it would bench a compiler's warning set, not its
-# throughput -- gcc's -Wall flags a benign construct in src/core/love.c (-Wmisleading-indentation)
+# throughput -- gcc's -Wall flags a benign construct in core/love.c (-Wmisleading-indentation)
 # that clang doesn't, and that shouldn't scratch it from a SPEED race.
-CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/src/core -I$R/src/host -I$R/src/inle -I$R/out/lib"
+CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/core -I$R/host -I$R/inle -I$R/out/lib"
 # the hosted TU roster, mk/common.mk's spelling: the core (love_tu + the codec) under
-# src/core/, and the host set is src/host/ whole
+# core/, and the host set is host/ whole
 love_tu="love gc ev io map snap num arr gz"
-host_cs=$(ls "$R"/src/host/*.c)
+host_cs=$(ls "$R"/host/*.c)
 # mk/common.mk's $(data_ld), which a bench link owes exactly as a host link does: the data
-# sentinels' tiling IS src/core/love.h's ai_typ, and ld left to itself keeps each love.data.N an
+# sentinels' tiling IS core/love.h's ai_typ, and ld left to itself keeps each love.data.N an
 # orphan in first-encountered order -- gcc emits love.data.7 first, so lvm_str lands
 # below lvm_sym and every string reads as a closure.
-LDFLAGS="-Wl,-T,$R/src/core/love_data.ld"
+LDFLAGS="-Wl,-T,$R/core/love_data.ld"
 
 # wall-clock (ms) of a command; echoes just the number. Runs in a subshell so a cd can't leak.
 wall() { t0=$(date +%s.%N); ( eval "$1" ) >/dev/null 2>&1; t1=$(date +%s.%N)
@@ -115,8 +115,8 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
   rm -rf "$od"; mkdir -p "$od/host"
   ( cd "$R" || exit 1
     for b in $love_tu; do
-      $cc $CFLAGS $xf -c "src/core/$b.c" -o "$od/$b.o" || exit 1; done
-    $cc $CFLAGS $xf -c src/apps/moon/lib/math/am.c -o "$od/am.o" || exit 1
+      $cc $CFLAGS $xf -c "core/$b.c" -o "$od/$b.o" || exit 1; done
+    $cc $CFLAGS $xf -c apps/moon/lib/math/am.c -o "$od/am.o" || exit 1
     for f in $host_cs; do b=$(basename "$f" .c)
       $cc $CFLAGS $xf -c "$f" -o "$od/host/$b.o" || exit 1; done
     $cc $CFLAGS $xf $LDFLAGS -o "$bin" "$od"/*.o "$od"/host/*.o ) || return 1
@@ -126,7 +126,7 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
 #    unit, mksys the syscall leaf, our linker binds. -I$ho picks up the lcat'd headers. --
 # ⚠ THE COMPILER IS THE SHIPPED ARTIFACT, and it is not a preference -- it is the only
 # spelling of this lane that measures the same thing twice. mooncc's link pulls
-# src/apps/moon/lib/nolibc/ MEMBER BY NEED and caches the archive under ~/.love/cache/moon,
+# apps/moon/lib/nolibc/ MEMBER BY NEED and caches the archive under ~/.love/cache/moon,
 # keyed on the compiler, its stat, AND ITS IMAGE (moon.l's mcrtkey). An image FILE puts
 # that file's stat in the key, so while the lane ran out of out/mooncc -- whose
 # .image this file's own make target rebuilt as a prerequisite -- every run missed and
@@ -145,23 +145,23 @@ build_mooncc() { # $1=binpath
   bin=$1; od=$WORK/mooncc; rm -rf "$od"; mkdir -p "$od"
   ( cd "$R" || exit 1
     for b in $love_tu; do
-      mc -D ai_tco=1 -D AiHaveVersionH -Iout -I. -Isrc/core -Isrc/host -Isrc/inle -Iout/lib -c "src/core/$b.c" "$od/$b.o" || exit 1; done
+      mc -D ai_tco=1 -D AiHaveVersionH -Iout -I. -Icore -Ihost -Iinle -Iout/lib -c "core/$b.c" "$od/$b.o" || exit 1; done
     for f in $host_cs; do b=$(basename "$f" .c)
-      mc -D ai_tco=1 -D AiHaveVersionH -Iout -I. -Isrc/core -Isrc/host -Isrc/inle -Iout/lib -c "$f" "$od/host_$b.o" || exit 1; done
+      mc -D ai_tco=1 -D AiHaveVersionH -Iout -I. -Icore -Ihost -Iinle -Iout/lib -c "$f" "$od/host_$b.o" || exit 1; done
     # no nolibc object: the link owes its symbols and the driver supplies them
     # member by need, so the dead areas never arrive. ⚠ ccsize/ccdead therefore
     # read mooncc's libc off the BINARY's complement, not off a nolibc.o.
-    for f in src/apps/moon/lib/math/*.c; do b=$(basename "$f" .c)
-      mc -Isrc/apps/moon/lib/math -Isrc/apps/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
-    { cat src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l \
-          src/core/holo/elf.l src/core/holo/obj.l src/apps/moon/lib/mksys.l
+    for f in apps/moon/lib/math/*.c; do b=$(basename "$f" .c)
+      mc -Iapps/moon/lib/math -Iapps/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
+    { cat apps/kore/text.l apps/kore/u.l apps/kore/asbook.l \
+          core/holo/elf.l core/holo/obj.l apps/moon/lib/mksys.l
       echo "((from 'moon 'mksys-x64) \"$od/sys.o\")"; } | env LOVE_NO_IMAGE= "$SEED" || exit 1
     mc "$od"/*.o -o "$bin" ) || return 1
 }
 
 # the corpus as ONE file, fed by REDIRECT. It arrives on stdin either way (which keeps
 # the one-global-scope property), but a redirect is seekable and a pipe is not, and only
-# a seekable fd 0 gets a read run (src/host/main.c). Piping still costs 953K reads over this
+# a seekable fd 0 gets a read run (host/main.c). Piping still costs 953K reads over this
 # corpus -- one per byte, which no pipe can be spared -- and syscall time is the SAME work
 # in all three lanes: kernel, not codegen, so it only dilutes what this table is seeing.
 CORPUS1=$WORK/corpus.l
@@ -200,13 +200,13 @@ drv_ms() { # $1=binpath $2=driver-file $3=driver-call $4=sentinel
   awk -v f="$full" -v b="$boot" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
 }
 
-# the inflate row's input, laid ONCE by the already-built host love -- src/apps/gz/gz.l is a
+# the inflate row's input, laid ONCE by the already-built host love -- apps/gz/gz.l is a
 # module and the lane binaries have no module path, so the stream cannot be made where
 # it is used. INFN is the inflated size, handed to the nif so it allocates once.
 # ⚠ if this fails the inflate row is dnf and the other two are unaffected: a missing
 # stream must not read as a compiler that could not build.
 INF=$WORK/bench.deflate
-INFN=$(cd "$R" && out/love bench/ccgen.l src/core/love.c "$INF" 2>/dev/null)
+INFN=$(cd "$R" && out/love bench/ccgen.l core/love.c "$INF" 2>/dev/null)
 case $INFN in ''|*[!0-9]*) INFN=0;; esac
 
 # one compiler lane: build (timed once), verify, then time the corpus and the two

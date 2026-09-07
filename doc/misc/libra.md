@@ -2,13 +2,13 @@
 
 the scales. libra weighs a `.l` file two ways and they are the same weighing:
 `libra` says what is wrong with it, and `libra doc` lifts its header out as a
-document. one scanner (`src/apps/libra/lint.l`) under both, so the gate and the doc lifter
+document. one scanner (`apps/libra/lint.l`) under both, so the gate and the doc lifter
 can never disagree about what a paren or a comment is. the tool is
-`src/apps/libra/libra.l`, the gate `make test_hostnif` (test/host/libra.l), and
+`apps/libra/libra.l`, the gate `make test_hostnif` (test/host/libra.l), and
 `make lint` runs it over every tracked `.l`.
 
 an LSP server lived here until 2026-08-16 -- `libra serve`, publishing the same
-scan as diagnostics over json-rpc. it never had a consumer, so it went; `src/apps/json/json.l`
+scan as diagnostics over json-rpc. it never had a consumer, so it went; `apps/json/json.l`
 stays, with no consumer of its own outside its gate.
 
 ## the verbs
@@ -30,18 +30,18 @@ layout.
 code is not; `doc` prints the comments and nothing else -- the leading block, the
 header that twelve of the nineteen crew tools have instead of a `doc/*.md`.
 
-the lifting is a TEXT walk over the same `src/apps/libra/lint.l` scanner (`lint-cmts`, which
+the lifting is a TEXT walk over the same `apps/libra/lint.l` scanner (`lint-cmts`, which
 reports every comment with its text): no reader in the tree keeps comments, so a
 datum walk would answer nothing. it lives in libra because reading `.l` is
 libra's beat and nothing else in the tree should have to learn what a comment is.
 what it hands out is MARKDOWN TEXT, and the showing is
-[lapiz](../src/apps/lapiz/lapiz.l)'s -- which is why one verb offers three surfaces
+[lapiz](../apps/lapiz/lapiz.l)'s -- which is why one verb offers three surfaces
 and libra implements none of them.
 
 ```
-$ libra doc src/apps/vi/hue.l | head -3
-src/apps/vi/hue.l -- the .l syntax, written down ONCE, for two readers: the
-painter in src/apps/vi/core.l's vframe, and the vim syntax file, which tools/hue2vim.l
+$ libra doc apps/vi/hue.l | head -3
+apps/vi/hue.l -- the .l syntax, written down ONCE, for two readers: the
+painter in apps/vi/core.l's vframe, and the vim syntax file, which tools/hue2vim.l
 GENERATES from the very table below -- built by make into out/syntax.vim and
 ```
 
@@ -67,7 +67,7 @@ title, its anchors and its whole contents nav off the headings.
 
 nothing is shielded or escaped any more. a `--- banner ---` used to stop mdread
 dead and take the rest of the header with it; lapiz's reader is
-[total](../src/apps/lapiz/lapiz.l) as of 2026-08-16, so the loss was fixed in the
+[total](../apps/lapiz/lapiz.l) as of 2026-08-16, so the loss was fixed in the
 lens rather than papered over here.
 
 **`make site` is built on it.** the crew tools that have no page here get one
@@ -177,7 +177,7 @@ same as two empty ones. an EMPTY config file means NO OVERRIDES, which is a
 perfectly good thing for a config file to mean -- so the question asked of it is
 whether it OPENED, never whether it had bytes.
 
-the machinery is `src/apps/libra/salt.l` (`(salt 'libra)`), which is not libra's: any crew
+the machinery is `apps/libra/salt.l` (`(salt 'libra)`), which is not libra's: any crew
 app can call `(salt 'its-own-name)` and get the same two-file overlay. see
 [salt](#salt-the-shared-door) below.
 
@@ -194,7 +194,7 @@ app can call `(salt 'its-own-name)` and get the same two-file overlay. see
 ⚠ `salt-all` cannot tell an ABSENT key from one written with no operand -- both
 are `()`. so a switch is `(singleton 1)`, never a bare `(singleton)`, and an
 app that wants "the EMPTY roster" spells it with an explicit `()` operand --
-`(startup ())` in `src/apps/lux/config.l`, the other salt consumer.
+`(startup ())` in `apps/lux/config.l`, the other salt consumer.
 
 ⚠ a repeated key REPLACES rather than appends, so a roster takes all its entries
 in ONE form. lux's `(bind (spec action) (spec action) ..)` is the shape.
@@ -203,6 +203,6 @@ in ONE form. lux's `(bind (spec action) (spec action) ..)` is the shape.
 settings live in `/usr/etc`, so config is the one thing a love program finds by
 the environment rather than by the seat walk. the module walk still reads none.
 
-`src/apps/libra/lint.l` takes a plain tablet and reads it with `peep`; it does NOT depend
+`apps/libra/lint.l` takes a plain tablet and reads it with `peep`; it does NOT depend
 on salt, because vi cats that file directly and a module it had to carry along
 would break the cat. salt fills the tablet, lint only reads it.

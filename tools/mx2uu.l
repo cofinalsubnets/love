@@ -1,5 +1,5 @@
 ; tools/mx2uu.l -- emit test/uumx.l: love's `+` and `*` dispatch matrices, read
-; from the table (src/core/mx.l) and lifted to uu terms, so the band lattice is a
+; from the table (core/mx.l) and lifted to uu terms, so the band lattice is a
 ; theorem in the tree's own prover and not only in Rocq. Run on the host binary:
 ;
 ;   love tools/mx2uu.l > test/uumx.l        (or: make uumx)
@@ -23,7 +23,7 @@
 ;
 ; load the table first, in its own top-level form: the next form's bare mx-kinds /
 ; mx-add / mx-mul references resolve at its compile, which must follow this run.
-(: _ (reads (open "src/core/mx.l" "r")) ())
+(: _ (reads (open "core/mx.l" "r")) ())
 
 (:
    (join l) (foldl (+) "" l)
@@ -77,7 +77,7 @@
    (rowsof m is js) (map (i \ map (j \ lcode (cell m i j)) js) is)
 
    ; --- the header ---
-   _ (pl "; test/uumx.l -- generated from src/core/mx.l by tools/mx2uu.l. Do not edit;")
+   _ (pl "; test/uumx.l -- generated from core/mx.l by tools/mx2uu.l. Do not edit;")
    _ (pl "; refresh with `make uumx`. love's `+` and `*` dispatch matrices as uu terms:")
    _ (pl "; a kind is its index in mx.l's enum roster (which IS the dispatch lattice), a")
    _ (pl "; lane its index in appearance order, a band its class id under row+column")

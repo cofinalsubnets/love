@@ -6,14 +6,14 @@
 ; beneath it gates headless here. the parts read bare in cat order; main.l's
 ; seat stays quiet under the corpus (no lush on cmdline).
 ; run: cat test/00-init.l test/host/sh.l | out/love
-(reads (open "src/apps/lush/job.l" "r"))
-(reads (open "src/apps/lush/lex.l" "r"))
-(reads (open "src/apps/lush/gram.l" "r"))
-(reads (open "src/apps/lush/glob.l" "r"))
-(reads (open "src/apps/lush/word.l" "r"))
-(reads (open "src/apps/lush/eval.l" "r"))
-(reads (open "src/apps/lush/line.l" "r"))
-(reads (open "src/apps/lush/main.l" "r"))
+(reads (open "apps/lush/job.l" "r"))
+(reads (open "apps/lush/lex.l" "r"))
+(reads (open "apps/lush/gram.l" "r"))
+(reads (open "apps/lush/glob.l" "r"))
+(reads (open "apps/lush/word.l" "r"))
+(reads (open "apps/lush/eval.l" "r"))
+(reads (open "apps/lush/line.l" "r"))
+(reads (open "apps/lush/main.l" "r"))
 (use 'lush) ; the parts just registered module 'lush -- the laws below read it spliced
 
 ; the lexer: glued operators, io-numbers out of band ((), or (n) attached),
@@ -234,9 +234,9 @@
     (= () (sh-fields [(v "LUSH_NIL_ZZ")]))
     (= '("") (sh-fields [(link 'sq "")]))
     (= '("quay") (sh-fields [(link 'sub "echo quay")]))
-    (= '("src/apps/lush/job.l") (sh-fields [(link 'lit "src/apps/lush/j*.l")]))
-    (= '("src/apps/zz*qq") (sh-fields [(link 'lit "src/apps/zz*qq")]))
-    (= '("src/apps/lush/j*.l") (sh-fields [(link 'sq "src/apps/lush/j*.l")]))))
+    (= '("apps/lush/job.l") (sh-fields [(link 'lit "apps/lush/j*.l")]))
+    (= '("apps/zz*qq") (sh-fields [(link 'lit "apps/zz*qq")]))
+    (= '("apps/lush/j*.l") (sh-fields [(link 'sq "apps/lush/j*.l")]))))
 (: _ (pin sh-status () 7)
    (assert (= '("7") (sh-fields [(link 'var "?")]))))
 
@@ -247,16 +247,16 @@
         (sh-match "[!a]bc" "zbc") (! (sh-match "[!a]bc" "abc"))     ; negation, both ways
         (sh-match "[^a]bc" "zbc") (! (sh-match "[abz]bc" "qbc"))    ; ^ is the same word
         (sh-match "a[bc" "a[bc")                                    ; unterminated [ is itself
-        (= '("src/apps/lush/job.l") (sh-glob "src/apps/lush/j[m-p]b.l" (sh-ones 19))))
+        (= '("apps/lush/job.l") (sh-glob "apps/lush/j[m-p]b.l" (sh-ones 19))))
 
 ; completion (rung 2): (insert . candidates) -- one path candidate lands its
 ; tail (+ " ", a directory its "/"), the common prefix otherwise; the helpers
-(: r (sh-complete (sh-expl "cat src/apps/lush/jo"))
-   (assert (two? r) (= "b.l " (slurp (tap (cap r)))) (= '("src/apps/lush/job.l") (cup r))))
-(: r (sh-complete (sh-expl "cat src/apps/lus"))
+(: r (sh-complete (sh-expl "cat apps/lush/jo"))
+   (assert (two? r) (= "b.l " (slurp (tap (cap r)))) (= '("apps/lush/job.l") (cup r))))
+(: r (sh-complete (sh-expl "cat apps/lus"))
    (assert (= "h/" (slurp (tap (cap r))))))              ; one DIR candidate: its /
-(: r (sh-complete (sh-expl "cat src/apps/lu"))
-   (assert (= '("src/apps/lupa" "src/apps/lush" "src/apps/lux") (cup r))))   ; three ways forward, listed
+(: r (sh-complete (sh-expl "cat apps/lu"))
+   (assert (= '("apps/lupa" "apps/lush" "apps/lux") (cup r))))   ; three ways forward, listed
 (assert (= "ab" (sh-common '("abc" "abd" "ab")))
         (= "~" (sh-homely (+ "" (getenv "HOME")))))
 
@@ -306,8 +306,8 @@
    (assert (= 0 (cap r)) (= "A B\n" (cup r))))
 (: r (hark ["out/love" "out/lush" "-c" "false && echo no || echo yes"])
    (assert (= "yes\n" (cup r))))
-(: r (hark ["out/love" "out/lush" "-c" "echo $(echo hi | tr h H) src/apps/lush/j*.l"])
-   (assert (= "Hi src/apps/lush/job.l\n" (cup r))))
+(: r (hark ["out/love" "out/lush" "-c" "echo $(echo hi | tr h H) apps/lush/j*.l"])
+   (assert (= "Hi apps/lush/job.l\n" (cup r))))
 (: r (hark ["out/love" "out/lush" "-c" "sh -c 'echo e >&2' 2>&1 | tr e E"])
    (assert (= "E\n" (cup r))))
 (: r (hark ["out/love" "out/lush" "-c" "exit 9"])
@@ -414,7 +414,7 @@
 ; the body cats the whole glob, not a named file: a source file's size is a moving
 ; target -- cutting one in half used to halve this body and quietly drop the volume
 ; this is here to carry.
-(: r (hark ["out/love" "out/lush" "-c" "f() { pwd; cat src/core/*.c; cat src/core/*.c; }; x=$(f); echo ${#x}"])
+(: r (hark ["out/love" "out/lush" "-c" "f() { pwd; cat core/*.c; cat core/*.c; }; x=$(f); echo ${#x}"])
    t (cup r)
    (assert (< 800000 (sh-int (snip t 0 (- (tally t) 1))))))
 

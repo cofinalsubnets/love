@@ -4,7 +4,7 @@
 # it is a development instrument, run by hand while working on gen.l, and what it
 # prints is three readings of the same source, not a verdict.
 #
-# THE SUBJECT is src/host/hash.c and src/core/gz.c -- sha-256, md5,
+# THE SUBJECT is host/hash.c and core/gz.c -- sha-256, md5,
 # crc32, cksum, DEFLATE and inflate. They are the widest C the tree owns and the
 # least like the rest of it: 32-bit rotates, a wrapping add carried over eight
 # registers, two table walks reading EIGHT INDEPENDENT lookups a step, a 64-bit
@@ -67,9 +67,9 @@ export CCACHE_DISABLE=1
 [ "$(uname -m)" = x86_64 ] || { echo "ccnif: x86-64 only (mooncc emits x64)" >&2; exit 1; }
 
 rm -rf "$W"; mkdir -p "$W"
-inc="-Isrc/core -Isrc/host -Isrc/inle -Itest/libc"
+inc="-Icore -Ihost -Iinle -Itest/libc"
 # the two subjects live in two folders now
-srcof() { case $1 in hash) echo src/host/hash.c;; gz) echo src/core/gz.c;; esac; }
+srcof() { case $1 in hash) echo host/hash.c;; gz) echo core/gz.c;; esac; }
 
 # the lanes, in report order; mooncc first so it is the numerator everywhere
 lanes="mooncc gcc-O2 clang-O2 gcc-O0"

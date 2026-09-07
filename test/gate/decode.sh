@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/decode.sh -- the x86 decoder (src/core/holo/decode.l) against objdump: every test/cc
+# test/gate/decode.sh -- the x86 decoder (core/holo/decode.l) against objdump: every test/cc
 # file compiled to an object at -O0 and -O2, its .text decoded by decode.l and disassembled by
 # objdump, and the two must agree on every instruction boundary and mnemonic. objdump is the
 # oracle for what the bytes say; test/holo/decode.l is the judge. skips without gcc or objdump.
@@ -22,6 +22,6 @@ for f in test/cc/*.c; do
     echo "$d/$b.$o.bin $d/$b.$o.dis" >> $d/pairs
   done
 done
-{ cat src/core/holo/holo.l src/core/holo/x64.l src/core/holo/dialect.l src/core/holo/decode.l
+{ cat core/holo/holo.l core/holo/x64.l core/holo/dialect.l core/holo/decode.l
   sed "s|@PAIRS@|$d/pairs|" test/holo/decode.l
 } | $love

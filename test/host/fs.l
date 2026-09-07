@@ -1,10 +1,10 @@
-; --- test/host/fs.l: smoke test for the fs nifs (src/host/posix.c) ---
+; --- test/host/fs.l: smoke test for the fs nifs (host/posix.c) ---
 ; rename/symlink/readlink/chmod/chown/utime/umask link into `love` and love0 now
 ; (love0 carries the whole host/*.c glob since the self-host promotion); this
 ; still runs standalone against the built binary, like test/host/init.l --
 ; not in test/*.l. Run (assert comes from test/00-init.l):
 ;   cat test/00-init.l test/host/fs.l | out/love
-; the conventions under test are src/host/posix.c's posix_ lane: an effect op answers
+; the conventions under test are host/posix.c's posix_ lane: an effect op answers
 ; () ok | an errno nom | 'badarg misuse; a value op answers the value | () | a nom.
 
 (: d "out/.fs-nif-smoke"

@@ -1,17 +1,17 @@
 #!/bin/sh
 # korebench.sh -- kore's applets against busybox, uutils and GNU, on generated
 # corpora. NOT A GATE and deliberately not wired into one: a development
-# instrument, run by hand while working in src/apps/kore/, printing four readings
+# instrument, run by hand while working in apps/kore/, printing four readings
 # of the same jobs rather than a verdict. The doc it fills is doc/misc/kore-gauge.md.
 #
-# THE SUBJECT is src/apps/kore/ -- love on the u-floor, interpreted, against three
+# THE SUBJECT is apps/kore/ -- love on the u-floor, interpreted, against three
 # C/Rust userlands. Being slower than all three is expected and is not the finding.
 # WHAT THIS LOOKS FOR IS THE SHAPE OF THE SLOWNESS, and that is why there are five
 # tables instead of one number:
 #
 #   answers -- every lane runs the same command line, outputs diffed against GNU.
 #              A divergence is a BUG and this is the only table where a tool can be
-#              said to be wrong. It is also the cheapest differential src/apps/kore/
+#              said to be wrong. It is also the cheapest differential apps/kore/
 #              has: three independent implementations of the same POSIX text, which
 #              will disagree with us in different places if we are wrong and in none
 #              if we are right. ⚠ LC_ALL=C throughout -- sort and tr have a locale,
@@ -209,7 +209,7 @@ echo "corpus: $bytes bytes, $lines lines"
 echo
 
 # ---------------------------------------------------------------- answers
-# the oracle is GNU: it is what src/apps/kore/'s gate smokes against, so a kore row
+# the oracle is GNU: it is what apps/kore/'s gate smokes against, so a kore row
 # disagreeing here is the same fault test_kore would name. busybox and uutils are
 # second opinions -- where all three of them agree with each other and not with GNU,
 # the fault is likelier GNU's dialect than anyone's bug.

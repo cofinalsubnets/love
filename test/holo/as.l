@@ -1,9 +1,9 @@
-; the gate for src/core/holo/as.l, the real at&T x86-64 front. each golden below is the exact
+; the gate for core/holo/as.l, the real at&T x86-64 front. each golden below is the exact
 ; .text hex `/usr/bin/as` emits for the same source (assemble, `objcopy -O binary --only-section=.text`,
 ; hexdump) -- so this file is the frozen record of that byte-for-byte round-trip against the system
 ; assembler. if a golden drifts, either as.l broke or gas changed, and either is worth a look.
 ; regenerate a golden: printf '%s\n' 'src' | as --64 -o t.o - && objcopy -O binary -j .text t.o t.bin && xxd -p t.bin
-; run: cat src/core/holo/{holo,x64,dialect,as}.l test/holo/as.l | out/love  (nonzero exit on any miss)
+; run: cat core/holo/{holo,x64,dialect,as}.l test/holo/as.l | out/love  (nonzero exit on any miss)
 ;
 ; scope: the straight-line battery -- register, immediate and memory operands at all four widths,
 ; the size suffix where a register carries none. branch relaxation (jmp/jcc to a near label) and the
@@ -175,7 +175,7 @@
       ("rip.call.ind" "ff1500000000c3"        "call *t(%rip)\nt:\n ret"))
 
    _ (foldl (\ _ t (chk (t 0) (t 1) (t 2))) 0 tests)
-   ;; -- the lens laws over the same battery (src/core/holo/dialect.l): each source reads to a
+   ;; -- the lens laws over the same battery (core/holo/dialect.l): each source reads to a
    ;;    value both dialects show and read back unchanged, and the Intel spelling assembles to
    ;;    the golden bytes -- the conversion is byte-exact. --
    (law name want src)
@@ -197,7 +197,7 @@
            "and $~(1 << 2), %rax // clear\n or $((1 << 9) | (1 << 10)), %rax")
    _ (law2 "lens.semi" '((op xor 4 ((rg 2 4) (rg 2 4))) (op mov 4 ((rg 0 4) (im 1))) (op div 4 ((rg 1 4))))
            "xorl %edx,%edx; movl $1,%eax; divl %ecx;")
-   ;; -- the decoder (src/core/holo/decode.l) over the same battery: the golden bytes read back
+   ;; -- the decoder (core/holo/decode.l) over the same battery: the golden bytes read back
    ;;    to the value the source reads to (labels aside -- a decoded target is an address), and
    ;;    re-encode to the golden bytes through the relabelled rows. --
    (hexv c) (? (48 <= c <= 57) (c - 48) (97 <= c <= 102) (c - 87) (c - 55))

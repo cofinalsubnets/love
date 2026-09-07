@@ -2,11 +2,11 @@
 
 The instrument is `bench/korebench.sh` (`make -C bench korebench`). It is not a gate and is
 not wired into one: like `ccnif.sh`, it is a development instrument, run by hand while
-working in `src/apps/kore/`.
+working in `apps/kore/`.
 
 ## the ratio is not the finding
 
-`src/apps/kore/` is ~90 POSIX tools written in love and run by love's interpreter. The
+`apps/kore/` is ~90 POSIX tools written in love and run by love's interpreter. The
 comparison lanes are **busybox** and **GNU coreutils** (C) and **uutils** (Rust). Being
 slower than all three is the premise, not the result — a tree that wanted C's numbers
 would have written the userland in C.
@@ -162,7 +162,7 @@ subtracted their real work is single-digit ms and the quotient would be two nois
 divided by each other. That guard is not fussiness: on the first fill, before it existed,
 `wc -l` read as **8.3× — QUADRATIC**, and it is linear. Raise `SCALE` to read those rows.
 
-**Every row that can be read is linear.** No applet in `src/apps/kore/` has a bad
+**Every row that can be read is linear.** No applet in `apps/kore/` has a bad
 exponent on ordinary input. That is the single most useful line on this page, and it is
 what makes the constant factors above merely a cost rather than a trap.
 
@@ -179,7 +179,7 @@ caught, and overwriting it hides that.
 
 `grep -E '^(a|aa)+b$'` against forty `a`s did not finish in sixty seconds; busybox and
 GNU both answer in two milliseconds. The engine is `module 're` in
-`src/core/boot/post.l`, and its own header says what it is: *"matching is greedy
+`core/boot/post.l`, and its own header says what it is: *"matching is greedy
 backtracking in continuation style"*. On a repeated alternation that is exponential in
 the input length — it tries every way to split the run — while GNU builds an automaton
 and walks the string once.
@@ -223,7 +223,7 @@ afternoon again: the tower `((* bits ((gc - 1) - j)) 2)` computing 2^shift per o
 charm is **not** the cost (3M towers = 5 ms), and neither is the jug (1.4M `put`s =
 145 ms, ~6% of the row).
 
-What was: `ubenc` in `src/apps/kore/core.l` defined `val` and `go` **inside** `grp`, so
+What was: `ubenc` in `apps/kore/core.l` defined `val` and `go` **inside** `grp`, so
 two closures were minted per three input bytes. Lifting both to the enclosing scope and
 precomputing the four shift divisors — no other change, byte-identical output — took
 539 ms to 155 ms on the same input, a **3.5×**. Landed; the row went from 592× busybox
@@ -319,10 +319,10 @@ the run-to-run noise.
 walk at ~684 instructions a byte and written the one kernel that finds a byte; `tr` and
 `base64` are nothing *but* that loop. `tr`'s is generic -- any byte map through a 512-byte
 table (image and mode per charm: drop, write, squeeze), three faces in one loop -- so it
-is a **nif**, `(xlat s tbl dst)` in `src/core/map.c` beside `pour`: one C body mooncc
+is a **nif**, `(xlat s tbl dst)` in `core/map.c` beside `pour`: one C body mooncc
 compiles for every target, no startup cost, reachable by any applet. `base64`'s group
 coder is its own shape and used by nothing in the core, so it stays out of the roster as
-a **holo kernel** in `src/apps/kore/core.l`: one IR for x64 and a64 in `scan.l`'s shape
+a **holo kernel** in `apps/kore/core.l`: one IR for x64 and a64 in `scan.l`'s shape
 (register roles, deopt tail, kind guards off g's jk table so the blob names no C
 address), coding every whole three-byte group and leaving the tail to the old coder.
 Both have a love twin that is the oracle `law.l` holds them to (every length 0-40,
@@ -339,7 +339,7 @@ reading and both are recorded so nobody tries them again: `ai_iobuf` 4096 -> 655
 the reads 16× and moved `tr` not at all while making `cut` **2× slower**; the gulp-list
 reader beats the jug by 24 vs 31 ms in steady state, not worth a floor primitive and a
 twelve-site sweep. (`strace` does show an `F_GETFL`/`F_SETFL` trio around every read of
-an inherited fd -- `src/host/fd.c`, the bit must not be left on a terminal -- but 6,150
+an inherited fd -- `host/fd.c`, the bit must not be left on a terminal -- but 6,150
 of them cost ~12 ms of kernel time, and a pipe on stdin takes the bit once for the
 session anyway.) So a stdin filter's clock reads: start 28 + first-touch ~45 + the
 work, and only the third term is the applet's. The trade between

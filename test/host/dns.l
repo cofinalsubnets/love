@@ -1,4 +1,4 @@
-; --- test/host/dns.l: the resolver's laws (src/apps/dns/dns.l) ------------------------
+; --- test/host/dns.l: the resolver's laws (apps/dns/dns.l) ------------------------
 ; hermetic and offline, which is the whole difficulty: a resolver's subject is a
 ; nameserver, and a gate that asks the real one is a gate that fails on a train.
 ; So the nameserver is a love task -- it binds a UDP port, waits for a query, and

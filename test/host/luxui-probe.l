@@ -16,7 +16,7 @@
 ;   closing the focused tile hands the keyboard to the survivor.
 ; Exits 0 iff every assertion held; any failure names itself and exits 1.
 ; Load order: core -> layout -> wire, then this file; test/host/luxui.l spawns it.
-(use 'xwire)   ; the X wire, src/apps/lux/wire.l
+(use 'xwire)   ; the X wire, apps/lux/wire.l
 (: (probe dpy)
    (: s (connectu dpy)
       sc (x-setup s ())

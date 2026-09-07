@@ -1,4 +1,4 @@
-; test/gate/forge.l -- src/apps/forge/forge.l's gate: a nif written in love, assembled through src/core/holo
+; test/gate/forge.l -- apps/forge/forge.l's gate: a nif written in love, assembled through core/holo
 ; for this cpu and installed through the `nif` seam, must agree with the twin it deopts into on
 ; every shape -- the lane it says natively and the lanes it hands back.
 ;
@@ -20,7 +20,7 @@
 ; gate whose subject never installed reads exactly like a gate that passed. So a zero has to
 ; come with a reason in `forge-why`, and a silent one is still red. Where nothing installs the
 ; roster still has to answer, so the twins are exercised either way.
-(: _ (use "src/apps/forge/forge.l")
+(: _ (use "apps/forge/forge.l")
    (die m) (: _ (say err ("forge-gate: " + m + "\n")) _ (flush err) (quit 1))
    fitted (forge-fit 0)
    ; read before the roster grows a deliberately-bogus kernel below, whose own decline

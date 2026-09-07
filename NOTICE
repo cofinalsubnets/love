@@ -17,5 +17,5 @@ test/uu.l, the ported section only (from "UniMath Foundations PartA")
 --- fonts ---
 
 assets/fonts/quay16.woff, quay8.woff
-  Nothing vendored: tools/mkfont.l lays both from the bitmaps in src/core/quay,
+  Nothing vendored: tools/mkfont.l lays both from the bitmaps in core/quay,
   which carry their own note on where they came from.

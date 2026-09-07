@@ -1,4 +1,4 @@
-; glaze-x86 -- the x86-64 native-codegen self-tests for the glaze (src/core/boot/glaze/{emit,auto}.l),
+; glaze-x86 -- the x86-64 native-codegen self-tests for the glaze (core/boot/glaze/{emit,auto}.l),
 ; the executing counterpart to the arch-neutral test/glaze.l. host-x86 only: these install and
 ; execute native machine code, so only the x86-guarded `make test_glaze` runs them, and
 ; mk/common.mk filters this file out of the arch-neutral corpus. it runs against the binary's
@@ -182,7 +182,7 @@
      ggrid '(? (< px 64) (grid (+ px 1) (+ acc (col px 0 0))) acc)
      ng (grok '(\ _ 0) '(cx cy zx zy it) gmand gcol ggrid 'x64)
      (= 87130 (ng 0))))
-    (say err "src/core/boot/glaze/emit: native codegen ok (arith + loop + D-dim float grid, transparent, deopt)\n"))
+    (say err "core/boot/glaze/emit: native codegen ok (arith + loop + D-dim float grid, transparent, deopt)\n"))
 ))
 
 ; call-out recognizer (natjit calloutinfo, hook.l): a counted sum whose per-step term calls a resolvable
@@ -739,7 +739,7 @@
     (: bclamp '(: (clamp i) (? (|| (< i 100) (> i 900)) (abs (- i 500)) 0)
                   (run n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (clamp i))) a)) 0 0) (run 1000))
        (&& !(= (autogroup bclamp) bclamp) (= (base-ev bclamp) (ev bclamp)))))                ; native == interp; clamp a glazed sibling
-   (say err "src/core/boot/glaze/auto: native codegen ok
+   (say err "core/boot/glaze/auto: native codegen ok
 ")))
 
 ; --- the neutral-IR retarget, leaf lane (jitir, emit.l) -- additive alongside the byte path.
@@ -849,7 +849,7 @@
       ; a64: the group assembles (data); the H saves lr + uses 16-byte slots + bl calls (llvm-mc-verified)
       (< 0 (tally (peep (assemble 'a64 (bcat [(mkouterir 'a64 1 'fib 1 0 () () () () ())
                 (mkhir 'a64 '(fib) 'fib '(n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))])) 'bytes 0))))
-   (say err "src/core/boot/glaze/emit-ir: neutral-IR leaf + n-ary + group lanes ok (x86 == interp; a64 assembles)\n")))
+   (say err "core/boot/glaze/emit-ir: neutral-IR leaf + n-ary + group lanes ok (x86 == interp; a64 assembles)\n")))
 
 ; --- delet soundness (auto.l): a value-let inlines only dup-cheap values. Two real miscompiles
 ;     shipped from the same line (found by the x11 wire-codec spike, doc/misc/proto/x11.l): a `_`-bound
@@ -869,7 +869,7 @@
       (0 = (dsleaf 20))
       (= (slurp j) (+ (string 1) (string 2)))                                                      ; both bytes, in order: the _-bound put kept
       (67305985 = v))                                                                              ; 0x04030201: the two dsr2 calls read in source order
-   (say err "src/core/boot/glaze/auto: delet keeps _-bound effects + call-binding order ok\n"))
+   (say err "core/boot/glaze/auto: delet keeps _-bound effects + call-binding order ok\n"))
 
 ; --- swheads reads opfixed source (auto.l): in raw source an infix (a op b) wears its left
 ;     operand as a head, so a free name in operand position -- spelled like a recorded global --
@@ -882,7 +882,7 @@
       (! (member? 'want9 h1)) (1 = (member? 'pm9 h1))                             ; a free operand is no head; the real call is
       (1 = (member? 'want9 h2))                                                   ; a called global still arrives
       (! (member? 'x h2)))                                                        ; ... and the binder set still filters
-   (say err "src/core/boot/glaze/auto: swheads reads opfixed source -- no operand fake heads\n"))
+   (say err "core/boot/glaze/auto: swheads reads opfixed source -- no operand fake heads\n"))
 
 ; --- the point-= grammar + the re-declared member?: the recognizer admits a point-guarded
 ;     key compared to a raw chain car ((= P (cap ..))), so the auto.l tail's member? is a
@@ -912,6 +912,6 @@
          (&& (1 = (pg 'b '(a b))) (0 = (pg 'z '(a b))) (0 = (pg 'z 7))))
       (< 0 (tally (peep (assemble 'a64 (bcat [(mkouterir 'a64 2 'pm3 2 0 () () () () '(0))     ; ... and the point-guarded outer assembles on a64
                 (mkhir 'a64 '(pm3) 'pm3 '(x l) '(? (two? l) (? (= x (cap l)) 1 (pm3 x (cup l))) 0))])) 'bytes 0))))
-   (say err "src/core/boot/glaze/emit: the point-= grammar -- member? group-native, admission + both deopt lanes ok\n"))
+   (say err "core/boot/glaze/emit: the point-= grammar -- member? group-native, admission + both deopt lanes ok\n"))
 
 (say err "test/glaze-x86: emit + auto + ir native codegen ok\n")

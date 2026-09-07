@@ -1,4 +1,4 @@
-; the gate for src/core/holo/decode.l against objdump: test/gate/decode.sh lays @PAIRS@, one
+; the gate for core/holo/decode.l against objdump: test/gate/decode.sh lays @PAIRS@, one
 ; `text.bin text.dis` pair per line -- the raw .text of a gcc object and objdump's reading of
 ; it. the judge decodes the bytes and holds two things per instruction: the boundary (objdump
 ; started an instruction at the same offset, and nowhere in between) and the mnemonic, with

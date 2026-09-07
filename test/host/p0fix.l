@@ -1,5 +1,5 @@
 ; test/host/p0fix.l -- p0's specimen. never evaluated (deliberately absent from
-; hostnif_tests): it is TEXT, read by rdiff's A/B leg. p1.l and src/core/boot/egg.l are the
+; hostnif_tests): it is TEXT, read by rdiff's A/B leg. p1.l and core/boot/egg.l are the
 ; only .l files p0 reads for real, and they are two forms between them -- too thin
 ; to measure agreement on, so this spans the subset p0 owns on purpose.
 

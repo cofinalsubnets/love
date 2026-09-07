@@ -8,7 +8,7 @@
 ;   ai_srcgz_len   an 8-byte little-endian length, at offset 0 (so it is 8-aligned)
 ;   ai_srcgz       the .tar.gz bytes, right behind it
 ;
-; src/host/src.c declares both weak and reads them, so an ordinary `love` links with no
+; host/src.c declares both weak and reads them, so an ordinary `love` links with no
 ; blob at all and answers nothing when asked -- only the dist link supplies one.
 ;
 ; no linker work buys this. `__start_/__stop_` brackets exist for a region packed
@@ -28,7 +28,7 @@
    ; text -> the byte list `raw` takes. Built from the tail so the walk is a tail call
    ; and the list comes out in order; ~0.25 s over a 3.6 MB archive.
    (mksrc-bytes s i acc) (i < 0 ? acc (mksrc-bytes s (i - 1) (s i . acc)))
-   ; a little-endian 8-byte word, the width src/host/src.c reads it at
+   ; a little-endian 8-byte word, the width host/src.c reads it at
    (mksrc-le8 v i acc) (i = 8 ? acc (mksrc-le8 (v >> 8) (i + 1) (acc + [(v & 255)])))
 
    ; a cross arch's backend joins at runtime (obj.l's law: registered, not
@@ -41,7 +41,7 @@
    (mksrc-be2 arch)
     (? (lit? (backends arch)) 0
        ; the backend file is the canonical arch word now -- one spelling, no map
-       (: f ("src/core/holo/" + string arch + ".l")
+       (: f ("core/holo/" + string arch + ".l")
           q (open f "r")
           (? q (mksrc-rdev (flow q), close q)
              (mksrc-die ("no backend aboard and no text at " + f)))))

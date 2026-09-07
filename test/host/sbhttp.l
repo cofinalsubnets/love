@@ -1,5 +1,5 @@
 ; --- test/host/sbhttp.l: svalbard pulling a store over a real socket ---
-; not in the test/*.l corpus: the socket nifs live in src/host/sock.c, which love0 does
+; not in the test/*.l corpus: the socket nifs live in host/sock.c, which love0 does
 ; not link, and this loads two crew files and splices their modules.
 ;
 ; the whole thing runs in one process, test/host/kiosko.l's shape: kiosko twirled

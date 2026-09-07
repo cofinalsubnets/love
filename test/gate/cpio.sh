@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/cpio.sh -- src/apps/cpio/cpio.l + src/apps/cpio/cpiocmd.l against the program they replace.
+# test/gate/cpio.sh -- apps/cpio/cpio.l + apps/cpio/cpiocmd.l against the program they replace.
 #
 # The newc archive is what the kernel unpacks an initramfs from, and `make
 # distro-initramfs` is the caller: `find | cpio -o -H newc | gzip -9`, all three of
@@ -132,4 +132,4 @@ diff -r "$t" "$w/x4" || fail "the image's tree differs"
 awk 'NR==1 && $0 != "." { exit 1 }' "$w/l1" || fail "the root entry is not first"
 echo "  OK the initramfs shape -- find's order kept, our cpio + our gzip, GNU unpacks it"
 
-echo "cpio: src/apps/cpio/cpio.l agrees with GNU cpio both ways over newc -- ok"
+echo "cpio: apps/cpio/cpio.l agrees with GNU cpio both ways over newc -- ok"

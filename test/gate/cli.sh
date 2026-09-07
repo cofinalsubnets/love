@@ -1,7 +1,7 @@
 #!/bin/sh
 # test/gate/cli.sh -- the CLI's EXIT STATUS, which nothing else pinned.
 #
-# src/core/boot/post.l's every failure lane ends in a status: 1 for a file it cannot open, 2
+# core/boot/post.l's every failure lane ends in a status: 1 for a file it cannot open, 2
 # for a malformed flag or a torn -e, 0 for -v/-h, and a verb's own charm for the
 # verb rail. Not one of them was gated -- test_seat drives the file seat and reads
 # what it SAYS, the corpus never runs the flags at all, and every other gate calls

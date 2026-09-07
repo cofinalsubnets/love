@@ -6,7 +6,7 @@
 ;
 ; ccsize.sh answers how many libc bytes a lane ships. This answers how many it can call,
 ; and the gap is what granularity buys: a libc that arrives as one object arrives whole,
-; where one compiled ~a function (musl) or ~an area (src/apps/moon/lib/nolibc/, pulled member
+; where one compiled ~a function (musl) or ~an area (apps/moon/lib/nolibc/, pulled member
 ; by need) sheds what the link never asks for.
 ;
 ; Method: walk call/jmp/lea targets out of `objdump -d`, seeded from _start and from every

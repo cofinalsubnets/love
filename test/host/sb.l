@@ -1,4 +1,4 @@
-; the svalbard gate (src/apps/sb/): a sandbox store driven end to end
+; the svalbard gate (apps/sb/): a sandbox store driven end to end
 ; (record / log / diff, tips + snap + deps + the content addresses). runs under
 ; `make test_sb`: cat test/00-init.l this | out/love -- host nifs
 ; (sha256, readdir, chdir), so it stays off the corpus like the other hostnif

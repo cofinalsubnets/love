@@ -1,4 +1,4 @@
-# mk/cook.mk -- a make-shaped front door to cook (src/apps/cook/cook.l over this tree's Makefile).
+# mk/cook.mk -- a make-shaped front door to cook (apps/cook/cook.l over this tree's Makefile).
 # `make -f mk/cook.mk <goal>` makes sure the love binary exists, then hands the goal to cook.
 #
 # The real Makefile stays the source of truth for the irreducible C bootstrap: cook RUNS on
@@ -9,7 +9,7 @@
 LOVE := out/love
 # ⚠ cook reads the Makefile ITSELF, never a transpiled snapshot: a snapshot freezes the
 # $(wildcard) lists at emit time, so it goes quietly stale the next time a source lands.
-COOK := $(LOVE) -l src/apps/cook/cook.l -f Makefile
+COOK := $(LOVE) -l apps/cook/cook.l -f Makefile
 
 .DEFAULT_GOAL := all
 

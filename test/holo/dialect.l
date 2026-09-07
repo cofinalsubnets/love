@@ -1,4 +1,4 @@
-; the gate for src/core/holo/dialect.l against gcc: test/gate/dialect.sh compiles every test/cc
+; the gate for core/holo/dialect.l against gcc: test/gate/dialect.sh compiles every test/cc
 ; file with -masm=att and -masm=intel, and both spellings of one program must read to one value
 ; -- labels, .globl and every instruction. the other directives compare by name only (gcc quotes
 ; symbols in its Intel output and not in its at&T). @PAIRS@ is the list the shell lays, one

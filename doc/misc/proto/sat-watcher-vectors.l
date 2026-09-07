@@ -1,5 +1,5 @@
 ; sat-watcher-vectors.l -- the minisat-style WATCHER-VECTOR + BLOCKING-LITERAL + binary-lane
-; experiment for src/apps/sat/flat.l, built and MEASURED 2026-07-02, then KEPT OUT: on this solver the
+; experiment for apps/sat/flat.l, built and MEASURED 2026-07-02, then KEPT OUT: on this solver the
 ; committed intrusive-NODE watch lists win everywhere we measured. warm kernels, same battery:
 ;   php6/7/8:            nodes 4/42/980 ms      vectors+blockers 6/57/981 ms
 ;   random 3-SAT n=1000: nodes 12-13 ms         vectors+blockers 22 ms
@@ -7,14 +7,14 @@
 ; vector's swap-remove + amortized segment growth (grow-by-abort lisp round trips, ~1k/solve
 ; on php7) + the reduce-time exact rebuild; the blocker only pays when a touched clause is
 ; ALREADY satisfied, which conflict-storm propagation rarely gives it. the binary-clause
-; watcher lane (src/apps/sat/unit/conflict without touching the arena) is real but rode the same
+; watcher lane (apps/sat/unit/conflict without touching the arena) is real but rode the same
 ; vector costs. the design is FAITHFUL minisat structure (blockers, in-watcher binaries,
 ; backward newest-first walk) and gates green -- differentially fuzzed vs DPLL, kernels ==
 ; twins -- so it is a sound base if a workload with high blocker hit rates ever shows up.
-; run: cat src/apps/sat/sat.l doc/misc/proto/sat-watcher-vectors.l | ai   (replaces flat.l wholesale)
+; run: cat apps/sat/sat.l doc/misc/proto/sat-watcher-vectors.l | ai   (replaces flat.l wholesale)
 ;
-; src/apps/sat/flat -- the CDCL solver over FLAT state, with THREE DOMAIN-SPECIFIC NATIVE
-; KERNELS: at solver-build time the hot loops are assembled through src/core/holo/ (neutral IR,
+; apps/sat/flat -- the CDCL solver over FLAT state, with THREE DOMAIN-SPECIFIC NATIVE
+; KERNELS: at solver-build time the hot loops are assembled through core/holo/ (neutral IR,
 ; section offsets baked as immediates -- each kernel is SPECIALIZED to the instance's
 ; nvars, cached per nv) and installed via the `nif` seam:
 ;   bcp  (fx ar wn)        two-watched-literal propagation      -> conflict cid | -1
@@ -30,7 +30,7 @@
 ; box forces the twins and `fboth` gates verdict equality. lisp keeps only the cold
 ; path: restarts, learnt-DB reduction, activity decay/rescale.
 ; Run AFTER sat.l (it reuses the leaked oracle + instances):
-;   cat src/apps/sat/sat.l src/apps/sat/flat.l | ai
+;   cat apps/sat/sat.l apps/sat/flat.l | ai
 ;
 ; a literal is ENCODED: +v -> 2v, -v -> 2v+1 (neg = xor 1, var = >>1). val[v] holds
 ; the TRUE encoded literal itself (0 = free) so lit-val is a load + a compare. VSIDS
@@ -50,7 +50,7 @@
 ; is [cap, (blocker, 2*cid+bin)..]; offset 0 = "empty, cap 0" (wv word 0 stays 0).
 ; the BLOCKER is a literal of the clause (kept fresh = the other watch): if it reads
 ; true the clause is satisfied and BCP never touches the arena. a BINARY clause
-; (bin bit set) stores the other literal AS the blocker, so src/apps/sat/unit/conflict all
+; (bin bit set) stores the other literal AS the blocker, so apps/sat/unit/conflict all
 ; resolve in the watcher alone -- the arena is only read by analyze. propagation
 ; compacts each vector in place (read i / write j). the kernels never grow a cask:
 ; a slide into a FULL vector aborts cleanly (compact the rest back, qhead-- so the
@@ -143,7 +143,7 @@
    ; -> conflict cid | -1 done | -2-el (el's vector is full: grow it and re-call).
    ; walks each false literal's watcher vector with read i / write j compaction. the
    ; BLOCKER fast path (val[blk] == blk -> keep, no arena touch) handles satisfied
-   ; clauses; a BINARY watcher (bin bit) resolves src/apps/sat/unit/conflict in the watcher
+   ; clauses; a BINARY watcher (bin bit) resolves apps/sat/unit/conflict in the watcher
    ; alone. bail commits the compaction (copy [i..n) down to j) so the vector stays
    ; exact on every exit; a grow-bail also rewinds qhead so f re-propagates (kept
    ; watchers re-check as satisfied -- idempotent).
@@ -819,5 +819,5 @@
        ok (&& (= (fcdcl (php 5) (php-vars 5)) 'unsat)
               (&& (ffuzz 30 12 50) (fboth (php 4) (php-vars 4))))
        _ (pin fmaxl0 0 2000) ok))
- _ (say err (+ "src/apps/sat/flat: ok -- flat-arena CDCL == DPLL on 150 fuzzed + PHP(5) + #SAT==Lucas"
+ _ (say err (+ "apps/sat/flat: ok -- flat-arena CDCL == DPLL on 150 fuzzed + PHP(5) + #SAT==Lucas"
                (? (two? (fbcpk 8)) " (native bcp+conf+dec kernels live)\n" " (interpreted twins)\n"))))

@@ -1,10 +1,10 @@
 # plan: one binary, host and free
 
 **THE CLAIM: the tree builds two loves for one machine.** `out/love` and
-`out/love-x64.elf` share `src/core/love.c`, `am.c` and quay -- ~86% of the
+`out/love-x64.elf` share `core/love.c`, `am.c` and quay -- ~86% of the
 kernel's text and 78% of the host's -- and then implement twenty-one of the same
 behaviours twice. `open`, `stat`, `readdir`, `lseek`, `mkdir`, `rename`, `pipe`,
-`dup`: each is one body in `src/host/posix.c` and a second in `src/inle/kmain.c`. The
+`dup`: each is one body in `host/posix.c` and a second in `inle/kmain.c`. The
 end state is one ELF per ISA that boots on metal or runs hosted, with inle a
 third seat beside host and wasm rather than a second application.
 
@@ -18,10 +18,10 @@ callable inside the kernel, which is what lets more of the crew run there.
 
 - **rung 0** (`4d0106ed`) -- one nif registration mechanism. `kmain.c`'s `defs[]`
   rides the `love_nifs` section and the kernel drains `[__start_love_nifs,
-  __stop_love_nifs)` like `src/host/main.c:1291` does. Three lines of code; it is the
+  __stop_love_nifs)` like `host/main.c:1291` does. Three lines of code; it is the
   gate for everything else, because the image indexes host nifs BY POSITION in
   that section.
-- **the syscall seam** (`67ab3584`, `46417cf5`) -- `src/inle/sys.c` answers
+- **the syscall seam** (`67ab3584`, `46417cf5`) -- `inle/sys.c` answers
   `__ai_sys` in C where a hosted seat has a mksys lay issuing `syscall`/`svc`.
   Four numbers: read, write, close, lseek. Gated by the ordinary nifs that issue
   them -- the rows have no instrument of their own any more.
@@ -31,7 +31,7 @@ callable inside the kernel, which is what lets more of the crew run there.
 - **one sign** -- every C face (`k_fs_*`, `k_fd_*`, `k_parent_ok`) answers 0 or
   a NEGATIVE errno, because that is what `__ai_sys` owes its caller (impl.h's
   `er()` reads an error as `(unsigned long) r > (unsigned long) -4096`), so
-  `src/inle/sys.c` forwards their answers untouched. ⚠ the love conventions are the
+  `inle/sys.c` forwards their answers untouched. ⚠ the love conventions are the
   `k_*` wrappers' business and did not move: positive for most doors, `()` for
   absence, and chdir's negative lane -- which makes chdir the one wrapper that
   does NOT flip.
@@ -47,7 +47,7 @@ callable inside the kernel, which is what lets more of the crew run there.
 
 | | |
 |---|---|
-| syscalls `src/host/posix.c` reaches | **34** (not 78 -- that is all of nolibc) |
+| syscalls `host/posix.c` reaches | **34** (not 78 -- that is all of nolibc) |
 | ..answered so far | **20**: read/write/close/lseek; the path family (openat, newfstatat, mkdirat, unlinkat, renameat, chdir, getcwd, fchmodat, utimensat); the fd family (pipe2, dup3, fcntl, fstat, getdents64); getpid + clock_gettime |
 | ..that inle simply lacks, and `-ENOSYS` already answers | ~9 (clone, wait4, kill, setpgid, setsid, mount, unshare, madvise, getpgid) |
 | `posix.c` changes needed to compile freestanding | **none** -- verified, it builds clean under the kernel's flags today |
@@ -61,7 +61,7 @@ Read these before re-opening one; each cost more than the code it justifies.
 **The seat is the PORT LAYER's, so a syscall is under it** (`cc555499`).
 `k_fd_eff` is reached from `fd_readn`, `fd_writen`, `ai_fd_close` and
 `k_procseat` and nowhere else; `k_fdopen` takes the fd it was handed. So an fd
-spelled in love is an absolute row, and `src/inle/sys.c` is seat-blind by that same
+spelled in love is an absolute row, and `inle/sys.c` is seat-blind by that same
 law -- as a syscall is on a real kernel, where the number the trap carries is
 already the caller's own. ⚠ the divergence: a SEATED task spelling
 `write(1, ..)` reaches row 1 where POSIX would reach what its parent seated.
@@ -69,11 +69,11 @@ Nothing does. Closing it means per-task row tables, never an ambient `g` -- `g`
 moves under collection.
 
 **The `__ai_sys` collision** -- in one binary both the mksys lay and
-`src/inle/sys.c` define it. `core.c`'s `__ai_start(long *sp, long osv)` already
+`inle/sys.c` define it. `core.c`'s `__ai_start(long *sp, long osv)` already
 takes the kernel identity FROM THE ENTRY (`__ai_osv = osv ? osv :
 __ai_osdetect()`); freebsd/aarch64 depends on it today because it SIGILLs any
 non-zero `svc` immediate and cannot be probed blind. So inle becomes another
-`__ai_osv` value: `__ai_sys` keeps one definition, `src/inle/sys.c`'s dispatch is
+`__ai_osv` value: `__ai_sys` keeps one definition, `inle/sys.c`'s dispatch is
 renamed, and `__ai_call` gains one arm on a value it already loads. Sufficient
 because `__ai_sys` has exactly three callers -- `__ai_call` (universal),
 `__ai_fb` (only v>=2), os.c's probe (only v==0). ⚠ ORDERING: `v >= 2` means "a
@@ -81,7 +81,7 @@ BSD, translate", so the inle test must come FIRST. ⚠ on metal `__ai_start` is
 not the entry, so metal WRITES `__ai_osv` rather than passing it.
 
 **The a64 entry.** x64 already carries two entries -- `e_entry` and the
-PVH note's, and `src/inle/mkboot.l` says so: "the ELF entry is kmain's; the PVH
+PVH note's, and `inle/mkboot.l` says so: "the ELF entry is kmain's; the PVH
 entry rides the note". a64 has one, and `qemu -kernel` uses it (measured:
 `e_entry` 0x40204000 vs load base 0x40200000, and `.boot` at the base is page
 tables, so an image-base entry would execute them). Our UEFI loader reads
@@ -96,7 +96,7 @@ behind the page tables) and either a relink or a 64-byte Image header.
 `(&ai_image_save - image_immortals) == H.anchor` -- a SAME-BINARY check, and a
 gap rather than two addresses precisely so ASLR cannot move it. One binary means
 it holds, so the existing `bake -L` produces an image the metal boot wakes. ⚠ do
-NOT build the `src/port/mps2` qemu-BAKER pipeline for this: that exists because the
+NOT build the `port/mps2` qemu-BAKER pipeline for this: that exists because the
 Playdate genuinely is a different binary.
 
 **Precise below, lossy above, never the reverse.** `k_fs_open` tells six
@@ -126,8 +126,8 @@ twenty-one behaviours stop existing twice.
   stays with the nif, where g is threaded. per-task fd tables, if ever, take
   identity as an explicit pid into pid-keyed kernel tables (k_seats' shape),
   never an ambient g.
-- A3 ✅ `src/host/posix.c` rides the kernel whole: 66 nolibc members named into
-  `c_c` (core.c stays out; src/inle/sys.c answers its four seat symbols -- environ,
+- A3 ✅ `host/posix.c` rides the kernel whole: 66 nolibc members named into
+  `c_c` (core.c stays out; inle/sys.c answers its four seat symbols -- environ,
   the unbuffered std streams, `__ai_sigret`), and kmain shed its SEVENTEEN
   posix twins in the same commit. `open`/`close` stay -- their host twins live
   in main.c, which fuses at C -- and `getpid` stays as the TASK pid. posix's
@@ -148,12 +148,12 @@ every runtime branch fusion needs becomes live and gated before anything merges.
   ⚠ the value is NEGATIVE by necessity: ~25 member sites read `v >= 2` as "a
   BSD" and ~5 read `v < 2` as "speak canonical linux", which inle does -- a
   positive value would take freebsd shapes. `__ai_call`'s first arm takes v<0
-  to `__ai_inle` (src/inle/sys.c's renamed dispatch); os.c carries a weak -ENOSYS
+  to `__ai_inle` (inle/sys.c's renamed dispatch); os.c carries a weak -ENOSYS
   default for links without the door; and the kernel links the REAL mksys tail
   (dead on metal, but it is the fused shape and it answers `__ai_sigret` and
   the netbsd leaves the stubs used to fake).
-- B2 ✅ `src/host/fd.c`, one TU both links carry: `ai_clock` is one
-  clock_gettime body (src/inle/sys.c's arm serves it from `k_clock_ms`);
+- B2 ✅ `host/fd.c`, one TU both links carry: `ai_clock` is one
+  clock_gettime body (inle/sys.c's arm serves it from `k_clock_ms`);
   `ai_fd_port_vt` + the statics exist once, the host bodies branching to
   kmain's exported `k_port_*` lanes on v<0 -- the port protocol keeps busy
   and end distinct, which read(2) cannot carry, so the vt branches ABOVE the
@@ -200,7 +200,7 @@ host-only TUs): FOUR symbols remain defined on both sides -- `ai_fd_close`,
   `kimage_end` stood, symtab slid (the UEFI loader reads `kboot` off it).
   klink.l retired; ldkern stays for the ports. with core.c aboard the LAST
   twins fell: errno and the streams are nolibc's (`k_seat_init` arms what a
-  hosted `__ai_start` would), malloc runs its mmap arenas over src/inle/sys.c's
+  hosted `__ai_start` would), malloc runs its mmap arenas over inle/sys.c's
   page arm -- kmallocw supplies pages like any kernel does, zeroed because
   MAP_ANONYMOUS promises that -- and quit/getpid branch to `k_lvm_` twins.
 - C3 ✅ absorbed by the projection: the projected ELF's `e_entry` IS `a64boot`,
@@ -234,7 +234,7 @@ doc/misc/plan/one-kernel.md's rung 2, so there is one filesystem),
 korecat is catted off the ramfs from a baked roster,
 and the baked fused artifact is 13.46 MB -- THE PRE-FUSION SIZE. the whole
 tree lands on metal, which is the metal seed's doorstep. and `love kernel
-OUT.elf` (src/apps/source/source.l) emits the boot image ANYWHERE from nothing but what
+OUT.elf` (apps/source/source.l) emits the boot image ANYWHERE from nothing but what
 the binary carries -- the boot stub laid from the blob's mkboot.l over baked
 holo, the arch read off its own e_machine -- gated by test_kverb, which
 demands BYTE-IDENTITY with make's own projection.

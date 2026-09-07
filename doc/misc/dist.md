@@ -90,10 +90,10 @@ make dist               # both — a release
 make test_distboot
 ```
 
-The archive is **ours end to end** — `src/apps/tar/tar.l` writes the ustar, `src/apps/gz/gz.l` the
+The archive is **ours end to end** — `apps/tar/tar.l` writes the ustar, `apps/gz/gz.l` the
 DEFLATE — so cutting a release needs neither `tar` nor `gzip` on the box.
 The coder blocks and costs three spellings (stored, fixed, its own code) and lands
-~4% above `gzip -9` (src/apps/gz/gz.l carries the measured numbers); src/core/gz.c is its
+~4% above `gzip -9` (apps/gz/gz.l carries the measured numbers); core/gz.c is its
 C twin, held to the same bytes, so cutting is cheap wherever the nifs are aboard.
 
 **Reproducible by construction.** The pack pins every mtime/uid/gid to `dist_stamp`
@@ -130,7 +130,7 @@ no switch, and the DDC leg is the DEFAULT rather than a thing you opt into: the 
 prefers a foreign compiler and falls back to itself only where none works.
 
 ⚠ **a release is cut from the TREE.** `selfpack` walks the root and skips only what
-is not source (`out bin dl`, everything hidden at the root, and `src/port` whole -- the board and wasm seats), so
+is not source (`out bin dl`, everything hidden at the root, and `port` whole -- the board and wasm seats), so
 every file on disk — tracked or not — is in the artifact, and the edit you just made
 is in what you just built. The cut runs every make and settles on its own stamp (the
 sha of the leveled tar, kept beside the archive), so a deleted or renamed file —

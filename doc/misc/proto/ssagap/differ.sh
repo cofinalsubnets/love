@@ -1,5 +1,5 @@
 #!/bin/sh
-# differ.sh -- the rung-0 differential: src/apps/moon/val.l against the python
+# differ.sh -- the rung-0 differential: apps/moon/val.l against the python
 # oracle over the whole corpus, row for row (C census, D dead, H chains).
 # needs a CURRENT bake (val.l rides the image). usage: sh differ.sh [outdir]
 set -e
@@ -7,9 +7,9 @@ S=$1
 [ -n "$S" ] || S=out/ssagap
 mkdir -p "$S"
 : > "$S/ir.txt"
-for f in src/*.c src/apps/moon/lib/math/am.c src/apps/moon/lib/nolibc/string/*.c \
-         src/apps/moon/lib/nolibc/stdio/*.c src/apps/moon/lib/nolibc/fmt/*.c \
-         src/apps/moon/lib/nolibc/os.c src/apps/moon/lib/nolibc/env/*.c src/apps/moon/lib/nolibc/proc/*.c; do
+for f in src/*.c apps/moon/lib/math/am.c apps/moon/lib/nolibc/string/*.c \
+         apps/moon/lib/nolibc/stdio/*.c apps/moon/lib/nolibc/fmt/*.c \
+         apps/moon/lib/nolibc/os.c apps/moon/lib/nolibc/env/*.c apps/moon/lib/nolibc/proc/*.c; do
   sed "s|@FILE@|$f|" doc/misc/proto/ssagap/valdiff.tpl.l > "$S/v1.l"
   out/love "$S/v1.l" >> "$S/ir.txt" || echo "!! $f"
 done

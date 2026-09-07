@@ -7,7 +7,7 @@ MOON_ABLATE keeps `ralloc tpool cs` only. Kept as the record of how the layer
 was priced.
 
 
-`src/apps/moon/gen.l` went 4,150 → 8,532 lines between 2026-07-19 and 2026-08-16, and the
+`apps/moon/gen.l` went 4,150 → 8,532 lines between 2026-07-19 and 2026-08-16, and the
 corpus row did not move across that span (1.21× clang on 2026-08-11, 1.19× on 2026-08-16).
 That reads as a month spent for nothing, and it is not what happened — chacha went ~23× →
 5.34× over the same period, which the corpus under-weights by construction. What actually
@@ -108,7 +108,7 @@ One entry there was already built twice.
   (chosen, revisable — what would reopen it: a survivor pricing at the floor on a future
   same-run census.)
 - **rung 6 — give the hot shapes somewhere else to go.** Where C plus residency cannot close
-  a gap, `gen.l` should not grow to chase it. `src/apps/sat/flat.l` is the pattern: hand-written
+  a gap, `gen.l` should not grow to chase it. `apps/sat/flat.l` is the pattern: hand-written
   kernels in holo's **neutral** IR (one body, five backends — `(assemble <target> ir)`), with
   interpreted twins as both deopt path and differential oracle. This is the release valve
   that keeps rung 5's answer honest — without it, every unclosed shape becomes another

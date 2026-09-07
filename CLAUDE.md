@@ -36,7 +36,7 @@
 ; - `make test` is the fast gate to check if something works (<1m)
 ; - `make test_slow` is the slow gate, before committing (<10m)
 ; - `make test_extra` is the really slow gate, before merging (qemu boots, cross-arch, boards)
-; - use libra `out/love src/apps/libra/libra.l <file>` to check paren balance
+; - use libra `out/love apps/libra/libra.l <file>` to check paren balance
 ; - don't trust comments without reading the code they're talking about
 ; - just because something was done on purpose doesn't mean it was for a good reason
 
@@ -47,7 +47,7 @@
 ;   is bidirectional and mechanical, and either image can generate the other.
 ; - mooncc compiles the artifact. the ambient cc is used to build love0, the bootstrap build of
 ;   love, which runs moon, which builds the finished product. 
-; - moon's libc is nolibc (src/apps/moon/lib/nolibc), statically linked. not glibc, not musl.
+; - moon's libc is nolibc (apps/moon/lib/nolibc), statically linked. not glibc, not musl.
 ;   if you are about to reach for a libc function, check that we have it
 ; - __STDC_HOSTED__ is 1 nearly everywhere -- mooncc predefines it. the seven port/
 ;   board lanes pass -D __STDC_HOSTED__=0 and are the only freestanding compiles; the

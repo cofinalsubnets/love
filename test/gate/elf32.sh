@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/elf32.sh -- holo's ELF32 executable writer (src/core/holo/elf.l elf32-at), judged by
+# test/gate/elf32.sh -- holo's ELF32 executable writer (core/holo/elf.l elf32-at), judged by
 # a real loader. Both thumb backends lay the same program; Linux maps the segment, enters at
 # e_entry in Thumb state, and the process must print its line and leave with 42.
 #
@@ -21,7 +21,7 @@ d=$ho/elf32
 mkdir -p "$d"
 
 for tgt in thumb1 thumb2; do
-  { cat src/core/holo/holo.l "src/core/holo/$tgt.l" src/core/holo/elf.l test/gate/elf32.l
+  { cat core/holo/holo.l "core/holo/$tgt.l" core/holo/elf.l test/gate/elf32.l
     echo "(elf32-write '$tgt \"$d/$tgt.elf\")"; } | "$ho/love" || fail "elf32-write $tgt"
   chmod +x "$d/$tgt.elf"
   out=$(qemu-arm "$d/$tgt.elf"); rc=$?

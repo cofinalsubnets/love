@@ -8,24 +8,24 @@ Linux. So the question "can the host have this too" is not a second implementati
 same door with a different fd under it.
 
 ⚠ **`sound` is TAKEN and it is not close.** `sound` is love's reader — one datum off text,
-`src/core/boot/p1.l`, and salt, dns, cli and bao all stand on it. There is a `sound0` nif beside it.
+`core/boot/p1.l`, and salt, dns, cli and bao all stand on it. There is a `sound0` nif beside it.
 Naming the audio door `sound` would shadow the reader in every file that uses both. **`horn`**
 is free and is what this plan spells; `reed`, `drum` and `chime` are free too if a better ear
 than mine prefers one.
 
 ## what already exists, and it is most of it
 
-* **the port vtable is the ring contract, verbatim.** `src/core/love.h`: *"writen: land up to n bytes
+* **the port vtable is the ring contract, verbatim.** `core/love.h`: *"writen: land up to n bytes
   in one motion: >0 landed, 0 no room now (caller keeps the residue), -1 the device is gone."*
   That is a DMA ring with backpressure, described without knowing it. A full audio buffer
   answers 0, the caller keeps the residue, and the scheduler's existing fd-park wakes it.
 * ⚠ **it must be a HEAP port, and the vtable says why:** *"only a door whose port keeps a write
   run may refuse; the static ports cannot park."* So the horn is `ai_io_alloc`'s, never a boot
   row — and that is the same sentence on both seats.
-* **an fd is a port on both seats already.** src/host/sock.c's whole method is "produce an OS fd,
+* **an fd is a port on both seats already.** host/sock.c's whole method is "produce an OS fd,
   hand it to `ai_io_alloc`, and read and write come free"; doc/misc/inle.md says `ai_io_alloc`
   is core, not host. Neither seat needs a new mechanism, only a new device.
-* **the PCI walk is written** (src/inle/blk.c, CF8/CFC) and so is virtio-mmio on a64. The disk
+* **the PCI walk is written** (inle/blk.c, CF8/CFC) and so is virtio-mmio on a64. The disk
   rung already paid for both transports.
 * **the flow doors are written** — spout/drip, backpressure, parking, the reader-bootstrap
   arc's whole rung 9. PCM is a byte stream that must not be dropped, which is the one shape
@@ -39,7 +39,7 @@ One device, two faces, the way the framebuffer already has two:
   the ordinary write path, and a full ring is backpressure rather than a dropped frame. Rate,
   channels and format are the ONE thing an fd cannot carry, so they ride the open.
 * **the C face** is a direct call (`k_horn_write`), for a program linked into the image that
-  has no love heap in hand — src/inle/doom.c reaches `k_fb` the same way today.
+  has no love heap in hand — inle/doom.c reaches `k_fb` the same way today.
 
 ⚠ **the door is a vtable, not an AC'97 shape.** qemu's a64 `virt` has no AC'97 (it offers
 virtio-sound), and the hosted seats have neither. If the second device is a rewrite, the first
@@ -88,7 +88,7 @@ bar on the ladder.
 `-device AC97`, and it is the friendly one: **two I/O-port BARs**, so none of the 64-bit-MMIO
 grief rung 5 hit under OVMF. A 32-entry buffer descriptor list of `kmallocw` buffers, the run
 bit set, and the current-index register read from the write path — **polled, no interrupt**,
-src/inle/blk.c's own posture and for blk.c's own reason.
+inle/blk.c's own posture and for blk.c's own reason.
 
 ⚠ `pa = va - khhdm` holds for heap memory and NOT for image statics — blk.c's warning, and the
 BDL and every sample buffer are subject to it. ⚠ every door's map stops at 4 GiB.
@@ -111,7 +111,7 @@ The work is a mixer, not plumbing: DMX lumps are 8-bit unsigned mono at 11025 Hz
 the device's rate. ⚠ `i_sdlsound.c` is 1076 lines and that number will mislead you — most of it
 is SDL_mixer, libsamplerate and caching that a 200-line mixer does not need.
 
-⚠ **it rides the C face**, like src/inle/doom.c's framebuffer: doom is linked into the image and has
+⚠ **it rides the C face**, like inle/doom.c's framebuffer: doom is linked into the image and has
 no love heap in hand at `I_UpdateSound`. **~2 days on top of any one device rung.**
 
 *gate:* the honest headless one — `-audiodev none` and assert the ring index advances, since a
@@ -155,7 +155,7 @@ gate cannot listen. Hearing it is a human's job, once.
 
 ## what landed (2026-09-06)
 
-**rung 0 is the shape, and it is `src/host/horn.c`.** `(horn rate chans)` answers a heap port
+**rung 0 is the shape, and it is `host/horn.c`.** `(horn rate chans)` answers a heap port
 wearing `ai_horn_vt`, which io.c takes for a bio (bio_of and ai_io_fd know two doors now), so the
 write run buffers, a refused write keeps its residue and the writer parks on the 1 ms poll every
 heap port has. `(horn-lag p)` reads frames queued and unplayed. the device under the door is
@@ -166,7 +166,7 @@ kernel corpus both (it sets HORN itself).
 
 **⚠ the laptop rung is HDA, not AC'97.** no laptop of the last fifteen years has an AC'97
 controller; the dev box carries two Ryzen HDA functions (class 04.03), and qemu offers
-`intel-hda` beside AC97. so rung 3 became `src/inle/hda.c`: PCI class walk, BAR0, CORB/RIRB (the
+`intel-hda` beside AC97. so rung 3 became `inle/hda.c`: PCI class walk, BAR0, CORB/RIRB (the
 immediate registers are optional silicon and qemu has none), a codec walk that routes every wired
 output pin back to a DAC through selectors and mixers, one output stream over a 128K ring under
 a 32-entry BDL, the play head off the DMA position buffer (LPIB until it writes one). polled;
@@ -185,7 +185,7 @@ device order is card order and nothing wiser -- this box's first node is its HDM
 `AUDIO_SETINFO`; the OSS ioctls are not kernel ioctls there, so that seat answers 'enodev until
 someone writes the native handshake. the freebsd lane is written and not yet run on the box.
 
-**rung 5 is `src/inle/doomsnd.c`**, ~150 lines: eight channels of DMX lumps, linear resampling to
+**rung 5 is `inle/doomsnd.c`**, ~150 lines: eight channels of DMX lumps, linear resampling to
 48k, doom's own pan law, clipped into s16 stereo, topped up to a 100 ms lead every frame. music
 is a silent door. `DOOM=1` builds it with `-DFEATURE_SOUND`.
 
@@ -199,11 +199,11 @@ report with a codec id in it, when it comes.
 
 ## the hosted door (2026-09-06, later the same day)
 
-**doom runs on the host in an X window, off the same C.** src/inle/doom.c's doors went
+**doom runs on the host in an X window, off the same C.** inle/doom.c's doors went
 seat-aware: under inle they are the kernel's (framebuffer, scancode tap, clock), on the host a
 frame flag, a 64-deep key queue and ai_clock, driven a tick at a time by four nifs
-(`doom-start` / `doom-tick` / `doom-frame` / `doom-key`). src/apps/doom/doom.l is the window: it
-speaks lux's X wire -- src/apps/lux/wire.l is the `xwire` module now, every name exported, and
+(`doom-start` / `doom-tick` / `doom-frame` / `doom-key`). apps/doom/doom.l is the window: it
+speaks lux's X wire -- apps/lux/wire.l is the `xwire` module now, every name exported, and
 lux's own files `(use 'xwire)` -- creates one 640x400 window at the root's depth, pushes each
 frame as four PutImage bands (256000 bytes apiece, under the 65535-word ceiling with no
 BIG-REQUESTS to negotiate), polls the socket with `cue?` between ticks and respells KeyPress/
@@ -218,7 +218,7 @@ test/host/luxui-probe.l's XTEST FakeInput is the way to add one); mouse; a windo
 should end the process the ICCCM way, which it does through WM_DELETE_WINDOW but not on a
 `kill` of the server.
 
-**`love doom` from a love with no doom in it** (src/apps/doom/doom.l, doom-nest): lay this
+**`love doom` from a love with no doom in it** (apps/doom/doom.l, doom-nest): lay this
 binary's source under `./love-<ver>/` (the source verb's lay, files only), wget doomgeneric and
 the IWAD into its dl/, `cook host DOOM=1 LOVE=<this binary>` there once, exec that binary's
 doom. the nest is kept, so the second run is one exec, and nothing outside the current
@@ -236,8 +236,8 @@ witness now, and test_doomx refuses a love without doom.
 
 ## wget, and the TLS under it (2026-09-06, evening)
 
-`kore wget [-q] [-O FILE] URL` (src/apps/kore/wget.l): a GET with Connection: close, eight
-redirects, chunked bodies unchunked, exit codes wget's own. https rides **src/apps/tls/client.l,
+`kore wget [-q] [-O FILE] URL` (apps/kore/wget.l): a GET with Connection: close, eight
+redirects, chunked bodies unchunked, exit codes wget's own. https rides **apps/tls/client.l,
 a TLS 1.3 client** over the ciphers the tree already had: x25519 on the bignums (RFC 7748's
 ladder by `%` and `//`), HKDF-SHA256 over the sha256 nif, chacha20-poly1305 records off
 chacha.l and poly1305.l. one suite, one group, one version; ⚠ the peer is NOT verified -- the

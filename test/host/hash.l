@@ -1,6 +1,6 @@
-; --- test/host/hash.l: the digests in src/host/hash.c, held to what publishes them ---
+; --- test/host/hash.l: the digests in host/hash.c, held to what publishes them ---
 ; not in the test/*.l corpus: sha256, md5 and cksum are host nifs, so none is visible
-; to the love0 bake. src/apps/kore's cksum, md5sum and sha256sum are these three plus a
+; to the love0 bake. apps/kore's cksum, md5sum and sha256sum are these three plus a
 ; line of output, and test/gate/kore.sh holds those to GNU coreutils -- so this file is
 ; the half of the rope that does not need another implementation on the box.
 ;

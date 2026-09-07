@@ -19,7 +19,7 @@
 # ⚠ GNU grep AND GNU sed DO NOT SHARE AN ERE DIALECT, which is why the atom sets
 # below are per-tool. `grep -E ')'` matches a literal paren; `sed -E 's/)/X/'`
 # quits with "Unmatched ) or \)". same for an unclosed `{`. our engine follows
-# GREP there (src/apps/kore/re.l's `loose`), so the sed lane simply does not draw the
+# GREP there (apps/kore/re.l's `loose`), so the sed lane simply does not draw the
 # two shapes -- rather than pretend one answer is right for both tools.
 #
 # ⚠ SEEDED, NOT RANDOM: the draw is a pure function of $seed, so a red run

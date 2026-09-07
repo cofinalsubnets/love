@@ -22,7 +22,7 @@ set -e
 
 ho=out
 mc="$ho/love mooncc"
-inc=src/apps/moon/include
+inc=apps/moon/include
 PKGSRC=${PKGSRC:-dl/gzip-1.13}
 [ $# -gt 0 ] && for a in "$@"; do case $a in PKGSRC=*) PKGSRC=${a#PKGSRC=} ;; esac; done
 

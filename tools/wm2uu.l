@@ -1,6 +1,6 @@
 ; tools/wm2uu.l -- stage 3 of the verified-lux ladder: the .l -> uu translator.
-; Reads src/apps/lux/core.l's zipper ops as data and emits uu terms in the model's
-; vocabulary, kind-directed by src/apps/lux/sigs.l (the overlay's boundary table is
+; Reads apps/lux/core.l's zipper ops as data and emits uu terms in the model's
+; vocabulary, kind-directed by apps/lux/sigs.l (the overlay's boundary table is
 ; the type oracle): a cap on a zipper is zfoc, on a row hd0; cap-of-cup is zup,
 ; cap-of-cup-of-cup is zdn (the glued <>z / <>>z factor to those chains);
 ; ></link and +/cat/rev are ncons/lapp/lrev; a two? test cases on a

@@ -1,5 +1,5 @@
 // test/gate/rvboot.c -- the riscv bring-up on a real hart: mkboot.l's sv39 lane and
-// src/inle/rv64/dtb.c's door, entered the way the kernel will be entered (qemu -M virt,
+// inle/rv64/dtb.c's door, entered the way the kernel will be entered (qemu -M virt,
 // OpenSBI, S-mode at the ELF's entry with a1 holding the tree) and asked whether the
 // world it built is the world it promised.
 //
@@ -72,7 +72,7 @@ void kmain(void) {
   *(volatile uint64_t *) (k_hhdm + (uintptr_t) &witness) = 0xf00dcafef00dcafeull;
   law("hhdm.writes", 0xf00dcafef00dcafeull, witness);
 
-  // 5. the tree qemu built, read by src/inle/dtb.h through that window: one bank, starting
+  // 5. the tree qemu built, read by inle/dtb.h through that window: one bank, starting
   // where the image ends rather than where RAM does (the firmware is down there and
   // still running), ending at the top of what -m gave us.
   law("ram_n", 1, kboot.ram_n);

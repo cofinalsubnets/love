@@ -1,10 +1,10 @@
-; --- test/host/json.l: the json module (src/apps/json/json.l) -- the wire mapping, exact both ways ---
+; --- test/host/json.l: the json module (apps/json/json.l) -- the wire mapping, exact both ways ---
 ; `[]` is plain () and null is the named coin: the empty array is the common value (a
 ; mapped or filtered list writes `[]` with no renaming step), null the weird one. run
 ; standalone from the repo root:
 ;   cat test/00-init.l test/host/json.l | out/love
 
-(use "src/apps/json/json.l")
+(use "apps/json/json.l")
 
 (: (json-rt s) (: r (json-read s) (? (two? r) (json-show <>r) 'no-parse)))
 

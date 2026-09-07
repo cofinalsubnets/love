@@ -99,7 +99,7 @@ fi
 if [ "$arch" = wasm ]; then
   NODE=$(command -v node 2>/dev/null || true)
   [ -n "$NODE" ] || { echo "$name: skipped (need node)"; exit 0; }
-  QEMU="$NODE $PWD/src/port/wasm/run.mjs"
+  QEMU="$NODE $PWD/port/wasm/run.mjs"
 fi
 
 # the corpus, first hit wins: an explicit CTSSRC, then the tree-local dl/, then the

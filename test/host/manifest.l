@@ -7,7 +7,7 @@
 ;
 ;   cat test/00-init.l test/host/manifest.l | out/love
 
-(reads (open "src/apps/manifest/manifest.l" "r"))
+(reads (open "apps/manifest/manifest.l" "r"))
 
 ; --- formulas, the unit, labels, functions as cargo ---
 (: sh (sheet 0)
@@ -87,7 +87,7 @@
    (rowtx s r) (: c (gaze s 2)
                 (foldl (\ a i (+ a (string (: ch (& 255 (glass s (+ (* r c) i))) (? (= 0 ch) 32 ch)))))
                        "" (jot c)))
- md (tether ["out/love" "-l" "src/apps/manifest/manifest.l" "-e" "(manifest ())"])
+ md (tether ["out/love" "-l" "apps/manifest/manifest.l" "-e" "(manifest ())"])
  m (cup md)
  ; a reader task gathers every painted byte into a box, so the test can
  ; handshake: keys sent before the child's raw-mode first frame would land

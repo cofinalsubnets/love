@@ -1,6 +1,6 @@
-; --- test/host/libra.l: libra ⚖, the .l balance tool (src/apps/libra/libra.l) ---
+; --- test/host/libra.l: libra ⚖, the .l balance tool (apps/libra/libra.l) ---
 ; two verbs over one scanner, and this gate is that claim: the check and the doc
-; lifter both read src/apps/libra/lint.l, so the two cannot disagree about what a paren or a
+; lifter both read apps/libra/lint.l, so the two cannot disagree about what a paren or a
 ; comment is. run standalone from the repo root:
 ;   cat test/00-init.l test/host/libra.l | out/love
 
@@ -197,10 +197,10 @@
                    (1 < tally d)                         ; a document, not a line
                    (0 < tally (bare head))
                    ((bare head) = (bare (dtext d))))))   ; ..and it kept every letter
-          ["src/apps/vi/hue.l" "src/apps/lush/eval.l" "src/apps/libra/libra.l"])
+          ["apps/vi/hue.l" "apps/lush/eval.l" "apps/libra/libra.l"])
    ; the surfaces come free, and that is the seam's whole promise: libra says
    ; markdown, lapiz says the rest.
-   _ (: md (ldoc-md (slurpf "src/apps/vi/hue.l"))
+   _ (: md (ldoc-md (slurpf "apps/vi/hue.l"))
         _ (assert (0 < tally (md->ht md))
                   (0 < tally (md->rf md)))
         0)
@@ -237,11 +237,11 @@
 ; a heading its sections hang off, which is what papel reads a page's title,
 ; anchors and contents nav from.
 (: (rd f) (: q (open f "r") (? (hot? q) (slurp q) ""))
-   d (mdread ("# src/apps/lapiz/lapiz.l\n\n" + ldoc-md (rd "src/apps/lapiz/lapiz.l")))
+   d (mdread ("# apps/lapiz/lapiz.l\n\n" + ldoc-md (rd "apps/lapiz/lapiz.l")))
    heads (filter (\ b (<b = 'head)) d)
    _ (assert
       (3 < tally heads)
-      ('(head 1 ((text "src/apps/lapiz/lapiz.l"))) = <heads)   ; the file names the page
+      ('(head 1 ((text "apps/lapiz/lapiz.l"))) = <heads)   ; the file names the page
       (2 = <>(heads 1))                               ; ..and its banners are sections
       (0 < tally (filter (\ b (<b = 'fence)) d)))       ; the diagrams survived as displays
    0)

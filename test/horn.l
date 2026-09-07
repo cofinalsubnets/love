@@ -3,7 +3,7 @@
 ; the writer parks and the scheduler runs on, what has played drains at the rate.
 ; on the host HORN=none picks the sink, a ring that keeps time and discards -- so
 ; the gate needs no card and wakes no speaker. under inle the same laws meet the
-; real driver (src/inle/hda.c) where the machine has a controller, and its absence
+; real driver (inle/hda.c) where the machine has a controller, and its absence
 ; on the other seats is the errno nom.
 
 (: _ (? hosted (setenv "HORN" "none") ())        ; inle and the browser read no policy word

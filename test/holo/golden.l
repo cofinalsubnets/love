@@ -1,11 +1,11 @@
-; the gate for src/core/holo/ -- the neutral assembler and every backend, the text front-end, and the
+; the gate for core/holo/ -- the neutral assembler and every backend, the text front-end, and the
 ; ELF linker. each golden is the exact hex the assembler emits, and every one was checked against
 ; the real toolchain (objdump / llvm-mc, the mnemonic in the trailing comment): this file is the
 ; frozen record of that round-trip, so a drifted golden is a broken encoder or a disagreeing
 ; disassembler. the sources are cat'd in rather than `use`d because the host bakes its native
 ; backend only -- the other four reach these goldens no other way (test/holo.l is the in-corpus
 ; smoke over the baked module).
-; run: cat src/core/holo/{holo,x64,a64,thumb2,riscv,thumb1,text,gas,elf}.l test/holo/golden.l
+; run: cat core/holo/{holo,x64,a64,thumb2,riscv,thumb1,text,gas,elf}.l test/holo/golden.l
 ;      | out/love   (nonzero exit on any miss)
 
 (use 'holo) ; the cat's wrapped sources just registered the module
@@ -295,7 +295,7 @@
    _ (holo-bytes 'a64 '((sub sp sp r0)))
    _ (chk-eq "a64.alu.sp.refused" 1 (peep spcaught 0 0))
 
-   ;; -- the text front-end (src/core/holo/text.l) parses to the same IR, so it assembles byte-identically. --
+   ;; -- the text front-end (core/holo/text.l) parses to the same IR, so it assembles byte-identically. --
    _ (chk-eq "text.basic" (holo-hex 'x64 '((li r0 60) (ret)))
                           (holo-hex 'x64 (asm-text "li r0, 60\nret")))
    _ (chk-eq "text.full"
@@ -313,7 +313,7 @@
         (holo-hex 'rv64 '((csrr r0 mstatus) (csrw stvec r0) (sfence zr zr) (fencei) (sret)))
         (holo-hex 'rv64 (asm-text "csrr r0, mstatus\ncsrw stvec, r0\nsfence zr, zr\nfencei\nsret")))
 
-   ;; -- the GNU-dialect front (src/core/holo/gas.l) lowers what clang and gcc read -- AT&T, ARM,
+   ;; -- the GNU-dialect front (core/holo/gas.l) lowers what clang and gcc read -- AT&T, ARM,
    ;; riscv, thumb -- to the same IR, so every line here is a form the tables above already froze.
    ;; this is the seam mooncc's inline asm parses through: the kernel's asmops.h templates land here.
    _ (chk-eq "gas.x64.cr"
@@ -367,7 +367,7 @@
          (gas-regname 'x64 "nope") (gas-regname 'a64 "x9") (gas-regname 'a64 "x0") (gas-regname 'rv64 "a7")
          (gas-regname 'rv64 "t6") (gas-regname 'thumb2 "r5")])
 
-   ;; -- the ELF linker (src/core/holo/elf.l) wraps assembled bytes in a well-formed static executable. --
+   ;; -- the ELF linker (core/holo/elf.l) wraps assembled bytes in a well-formed static executable. --
    elfprog '((li r0 60) (li r6 0) (sys))
    elfres  (elf64 'x64 (\ a elfprog) '(65 66 67))
    elfimg  (peep elfres 'bytes 0)
@@ -422,7 +422,7 @@
    _ (rfx 'bl '(255 247 255 255) 4096 256)                       ; ..the same bl two bytes further on
    _ (chk-eq "refix.addend.refused" 1 (peep rfcaught 0 0))
 
-   ;; -- the a64 backend (src/core/holo/a64.l): the same neutral IR, a second target. fixed 32-bit
+   ;; -- the a64 backend (core/holo/a64.l): the same neutral IR, a second target. fixed 32-bit
    ;; little-endian words; every golden checked vs llvm-mc / llvm-objdump. --
    a64tests '(
       ("a64.li"     "800780d2"          ((li r0 60)))
@@ -1036,7 +1036,7 @@
       ("rv.tp"       "1285"              ((tp r0))))                   ; mv a0, tp (the thread pointer)
    _ (foldl (\ _ t (chk2 (t 0) (t 1) 'rv64 (t 2))) 0 rvtests)
 
-   ;; -- the wasm module writer (src/core/holo/wasm.l): instruction forms -> bytes, each row the
+   ;; -- the wasm module writer (core/holo/wasm.l): instruction forms -> bytes, each row the
    ;;    bytes binaryen's wasm-as lays for the same text (memory64 on). the whole-module shape is
    ;;    test/holo/wasm.l's, run under node by test_holowasm. --
    wtests '(

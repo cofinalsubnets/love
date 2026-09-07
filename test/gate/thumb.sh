@@ -107,8 +107,8 @@ lane() { # lane TAG LIBSRC HARNESSSRC MOONFLAGS WANT TIMEOUT MSG TAIL
   fi
 }
 
-am=src/apps/moon/lib/math/am.c
-aminc="-Isrc/apps/moon/lib/math -Isrc/apps/moon/include"
+am=apps/moon/lib/math/am.c
+aminc="-Iapps/moon/lib/math -Iapps/moon/include"
 
 # ---- the smoke lane: written here because it IS the target's own feature list ----
 if [ "$tgt" = thumb1 ]; then
@@ -188,10 +188,10 @@ thumb1)
   # a whole link would only report in aggregate. test_mps2_t1 binds a v6-M image end
   # to end; this names what a miss actually is.
   { echo "(use 'holo)"
-    cat src/core/holo/thumb1.l src/apps/kore/text.l src/apps/kore/u.l
+    cat core/holo/thumb1.l apps/kore/text.l apps/kore/u.l
     echo "(use 'kore)"                 # ld32.l reads uread; the floors above register 'kore
-    cat src/apps/kore/asbook.l \
-        src/core/holo/elf.l src/core/holo/obj.l src/core/holo/link.l test/gate/ld32.l
+    cat apps/kore/asbook.l \
+        core/holo/elf.l core/holo/obj.l core/holo/link.l test/gate/ld32.l
     echo "(ld32-check \"$d/am.lib.o\")"; } | "$ho/love" || fail "ld-read of $d/am.lib.o"
   echo "test_thumb1: mooncc -t thumb1 -c -> ELF32/EM_ARM (R_ARM_THM_CALL + soft divide + la/R_ARM_ABS32 + 32-bit struct layout + leax + AAPCS32 varargs + 64-bit pairs + soft doubles + am.c bit-exact + aligned(N) section grain + composites vs gcc), ld binds, runs on qemu Cortex-M0; holo's own ld-read reads the object back" ;;
 thumb2)
@@ -203,7 +203,7 @@ thumb2)
     " = the seven transcendentals BIT-IDENTICAL to the host am floor, incl. the Payne-Hanek big-argument reduction"
   lane a  test/thumb2/liba.c  test/thumb2/harnessa.c  "" 6  30 "thumb2 aligned(N)" \
     " = every aligned(N) global lands on its N after the link; 100+n names the first miss -- see test/thumb2/harnessa.c. the pad inside a section is laid by mooncc either way, so a miss here is sh_addralign: objsecs3's data lanes handing the linker a grain narrower than the stream asked for"
-  lane z  test/thumb2/libz.c  test/thumb2/harnessz.c "-Isrc/apps/moon/include" 18 30 "thumb2 composites+varargs" \
+  lane z  test/thumb2/libz.c  test/thumb2/harnessz.c "-Iapps/moon/include" 18 30 "thumb2 composites+varargs" \
     " = HFA d-pairs + 8B blob + <=4B int one + the AAPCS32 word walk, gcc<->mooncc both directions; 100+n names the first miss -- see test/thumb2/harnessz.c"
   echo "test_thumb2: mooncc -t thumb2 -c -> ELF32/EM_ARM (la + pairs + VFP + am.c bit-exact + aligned(N) section grain + composites/varargs: 48+45+9+6+18 differential checks), ld binds, runs on qemu Cortex-M7" ;;
 thumb2sp)
@@ -211,7 +211,7 @@ thumb2sp)
     "; 100+n names the first miss -- soft f64 vs gcc's __aeabi"
   lane am "$am" test/thumb2/harnessam.c "$aminc" 9 60 "thumb2sp am.c" \
     " = BIT-identical through the shared __aeabi helpers"
-  lane z  test/thumb2/libz.c  test/thumb2/harnessz.c "-Isrc/apps/moon/include" 18 30 "thumb2sp composites+varargs" \
+  lane z  test/thumb2/libz.c  test/thumb2/harnessz.c "-Iapps/moon/include" 18 30 "thumb2sp composites+varargs" \
     ""
   echo "test_thumb2sp: mooncc -t thumb2sp (soft f64 over __aeabi) -> 45+9+18 differential checks vs gcc on qemu Cortex-M4" ;;
 esac

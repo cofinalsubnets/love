@@ -1,5 +1,5 @@
 ; --- test/kernel/disk.l: the disk (rung 5) -- the virtio driver's raw door,
-; then src/apps/fat/fat.l (off the ramfs, the module walk) mounted on the real device.
+; then apps/fat/fat.l (off the ramfs, the module walk) mounted on the real device.
 ; guarded on (disk ()): a door whose bus hides the disk skips with a word and
 ; stays green -- the driver already said why at boot, on the serial console.
 ; the raw probe writes sector 16: inside FAT32's reserved region, which the
@@ -20,7 +20,7 @@
             !(disk-write 3 "abc")               ; not whole sectors: refused
             !(disk-read 0 0))
          ())))
-(use "src/apps/fat/fat.l")
+(use "apps/fat/fat.l")
 (: dev (fat-disk ())
    (? (! (two? dev)) ()
       (: f0 (fat-mount dev)

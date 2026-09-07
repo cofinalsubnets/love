@@ -1,12 +1,12 @@
 ; the glaze's install seam, arch-neutral half: guards only, never an actual run (executing bytes
 ; is machine-specific) -- plus the decline laws below, which run everywhere and answer the same on
 ; every target by construction: that is the whole point of a lane that knows when to stand down.
-; The executing tests are test/glaze-x86.l; the mechanism, src/core/boot/glaze/readme.md.
+; The executing tests are test/glaze-x86.l; the mechanism, core/boot/glaze/readme.md.
 ; `nif` -- the codegen-backend install seam (love.c): (nif code interp src ..) wraps
 ; emitted bytes in a transparent applicable native closure. neutral here (no
-; install/run -- the bytes are x86-64; the real round-trip lives in src/core/boot/glaze/emit.l):
+; install/run -- the bytes are x86-64; the real round-trip lives in core/boot/glaze/emit.l):
 ; non-byte / empty code installs nothing.
-; by key, never bare: every boot pulls nif/nifx off the book (src/host/main.c), so raw byte
+; by key, never bare: every boot pulls nif/nifx off the book (host/main.c), so raw byte
 ; installation is reachable only through the glaze, which is the only thing that does it.
 ; a bare `nif` here would read the zero point and every claim below would answer 1.
 ; and under the presence guard: love0 and the kernel/wasm frontends carry no glaze, so

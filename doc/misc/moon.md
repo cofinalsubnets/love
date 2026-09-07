@@ -1,7 +1,7 @@
 # moon — the C compiler, in love
 
 `mooncc` is a C compiler written in love (chibicc was the seed), emitting through the holo books. With
-`src/core/holo/link.l` (our static linker) and `src/apps/moon/lib/` (our libc, math floor and machine
+`core/holo/link.l` (our static linker) and `apps/moon/lib/` (our libc, math floor and machine
 tail) it is a **complete C toolchain that borrows nothing**: love builds itself with no gcc, no
 glibc and no ld, and the kernel is built by it too.
 
@@ -42,7 +42,7 @@ The dialect is not "C11-ish" by taste — it is what the target demands:
 
 ## the architecture
 
-`src/apps/moon/`, the kore discipline: pure engines with law files, a thin driver, one gate per
+`apps/moon/`, the kore discipline: pure engines with law files, a thin driver, one gate per
 piece. ~14k lines of love (law.l beside them).
 
 * **floor.l** — the C type floor: the laws that are neither syntax nor codegen (the type shapes,
@@ -159,7 +159,7 @@ size, identical offsets.
 second is a licence to use an extension — under `-std=c` this is still mooncc and the
 extension is still refused.
 
-Anything without `-c` is a **link**, through `src/core/holo/link.l`.
+Anything without `-c` is a **link**, through `core/holo/link.l`.
 
 **The cc conventions** — `CC=mooncc` drives a gcc-shaped recipe unchanged:
 
@@ -224,7 +224,7 @@ generations share; `love0` is stamped `$(love_base)+bootstrap` for exactly this,
 tracks files, not flag strings, and a stale love0 would fail the fixpoint at a byte offset with
 nothing to say about the cause). A reader wanting the commit reads `love-version` in `.rodata`.
 
-Read it back without any binutils at all: `src/core/holo/elfsec.l`'s `(elfsec PATH ".comment")` answers the
+Read it back without any binutils at all: `core/holo/elfsec.l`'s `(elfsec PATH ".comment")` answers the
 `(1 bytes)` wrapper — an empty section is a real section. It works on gcc's objects and on every
 target mooncc emits, cross-machine, for the reason anything here does: a section table is a
 table. Gated by `test_moon`, both halves — the union over a foreign `.o`, and the exact string on
@@ -232,10 +232,10 @@ an all-ours link.
 
 ## the toolchain root
 
-mooncc's own files — our headers (`src/apps/moon/include/`, glibc-ABI-faithful but NOT glibc's) and
+mooncc's own files — our headers (`apps/moon/include/`, glibc-ABI-faithful but NOT glibc's) and
 the runtime sources the implicit link pulls — are found through three rungs, tried in order:
 
-1. **the dev tree**, `src/apps/moon/` off the cwd;
+1. **the dev tree**, `apps/moon/` off the cwd;
 2. **the installed nest**, `<seat>/../lib/love/moon/` — the loader's own seat walk, the
    `selfpath` nif. So `~/.love/bin/love` finds `~/.love/lib/love/moon/`, and a distro's
    `/usr/bin/love` finds `/usr/lib/love/moon/`. `the Makefile` lays them there.
@@ -266,7 +266,7 @@ Owing symbols with NO root in reach is its own diagnostic, naming the owed symbo
 searched — an absent toolchain and an incomplete link are different conditions and must not wear
 the same face.
 
-## the runtime (src/apps/moon/lib/)
+## the runtime (apps/moon/lib/)
 
 * **nolibc.c** — the raw libc over one `__ai_sys` trampoline: a mini stdio (a FILE is a fd plus
   a flush buffer), a K&R first-fit malloc over mmap arenas, dirent over getdents64, the
@@ -408,9 +408,9 @@ predefined on x64 alone (gen's d128 lane), which is what love.c's limb seam read
 ## inline asm
 
 The GNU statement form, in the GNU dialect: the template is what clang and gcc read for the
-target — AT&T on x64, ARM on a64, riscv, thumb — and `src/core/holo/gas.l` lowers it to the
+target — AT&T on x64, ARM on a64, riscv, thumb — and `core/holo/gas.l` lowers it to the
 neutral IR the baked assembler encodes. So a header says each instruction ONCE and every
-compiler reads it (the kernel's `src/inle/<a>/asmops.h` carry no `#ifdef __mooncc__` at all);
+compiler reads it (the kernel's `inle/<a>/asmops.h` carry no `#ifdef __mooncc__` at all);
 no new encoder exists anywhere, every line lands on a backend row test/holo/golden.l froze.
 
     asm [volatile] ("mov $40, %0" : "=r"(v) : "r"(x), "i"(3) : "memory");
@@ -481,7 +481,7 @@ never a bare `mooncc`, until `make install` refreshes the PATH binary.
 
 ## testing
 
-* Every pure piece is lawed in `src/apps/moon/law.l`: lexer goldens, cpp expansions, parser ASTs
+* Every pure piece is lawed in `apps/moon/law.l`: lexer goldens, cpp expansions, parser ASTs
   printed and compared, layout/alignment tables, gen goldens.
 * **The differential oracle is `gcc -O0`**: same source, run both, compare stdout + exit code.
   The battery lives in `test/cc/*.c` and ONLY grows — every bug fixed adds its regression.

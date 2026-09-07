@@ -1,5 +1,5 @@
 (: _ (use 'moon)
-   is9 ["out/" "./" "src/" "out/lib/" "src/apps/moon/lib/math/" "src/apps/moon/include/"]
+   is9 ["out/" "./" "src/" "out/lib/" "apps/moon/lib/math/" "apps/moon/include/"]
    src "@FILE@"
    r (cc-parse src {'is is9 'ds '("ai_tco=1" "AiHaveVersionH") 'tgt 'x64 'os 'linux 'vb () 'dia 'moon})
    _ (? !(okv? r) (puts ("!! parsefail " + src + "\n"))

@@ -50,21 +50,21 @@
    ; --- the roster: (file function hook why) ----------------------------------
    ; every wait in the tree, and the sentence that earns it.
    roster
-   [["src/core/ev.c" "wait_one" "ai_wait_fds"
+   [["core/ev.c" "wait_one" "ai_wait_fds"
      "the scheduler's one-fd shim -- an lvm_ frame may hold no scratch"]
-    ["src/core/ev.c" "lvm_yield_sw_mono" "wait_one"
+    ["core/ev.c" "lvm_yield_sw_mono" "wait_one"
      "the monotask scheduler, parked on one fd"]
-    ["src/core/ev.c" "lvm_yield_sw_mono" "ai_sleep"
+    ["core/ev.c" "lvm_yield_sw_mono" "ai_sleep"
      "the monotask scheduler, a timer and no fd"]
-    ["src/core/ev.c" "yield_sw_wait" "ai_wait_fds"
+    ["core/ev.c" "yield_sw_wait" "ai_wait_fds"
      "THE wait: every parked task and the nearest timer, one call"]
-    ["src/core/io.c" "io_close" "ai_fd_drain"
+    ["core/io.c" "io_close" "ai_fd_drain"
      "⚠ the finalizer: a dying port's unsent run. runs inside gc, where nothing can park -- the write side's one remaining unbounded wait"]
-    ["src/host/fd.c" "ai_fd_say" "ai_sleep"
+    ["host/fd.c" "ai_fd_say" "ai_sleep"
      "a raw fd carries no write run of love's to park behind, so the busy device is waited on -- bounded by its drain"]
     ["test/front/main.c" "ai_fd_say" "ai_sleep"
      "the test frontend's copy of that row, over a synthetic device whose stall arm counts down per call"]
-    ["src/port/teensy41/main.c" "main" "ai_sleep"
+    ["port/teensy41/main.c" "main" "ai_sleep"
      "the panic blink after a fatal shell exit -- nothing runs after it"]]
 
    ; --- character classes ------------------------------------------------------

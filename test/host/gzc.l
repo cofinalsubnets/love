@@ -1,10 +1,10 @@
 ; --- test/host/gzc.l: the C twins of gz.l, held to the love they shadow ---
-; not in the test/*.l corpus: `inflate` (src/core/gz.c) and `crc32` (src/host/hash.c) are
-; host nifs and src/apps/gz/gz.l is a lib module, so neither is visible to the love0 bake.
+; not in the test/*.l corpus: `inflate` (core/gz.c) and `crc32` (host/hash.c) are
+; host nifs and apps/gz/gz.l is a lib module, so neither is visible to the love0 bake.
 ;
-; test/host/gz.l is where src/apps/gz/gz.l's own laws live; this file asks the other question --
+; test/host/gz.l is where apps/gz/gz.l's own laws live; this file asks the other question --
 ; does the C answer what love answers, on the same stream? gz-puff is the oracle
-; (src/core/gz.c says so in its head), so a disagreement is the C being wrong until
+; (core/gz.c says so in its head), so a disagreement is the C being wrong until
 ; proven otherwise.
 ;
 ;   shapes    the round trip over the five that break coders, plus a long dist-1 run and
@@ -113,7 +113,7 @@
  (gzc-all (\ s (gzc-fuzz s 1)) gzc-fz)
  (gzc-fuzz gzc-noise 29))
 
-; --- crc32, the other twin in src/host/hash.c, against gz-crcwalk ---
+; --- crc32, the other twin in host/hash.c, against gz-crcwalk ---
 ; every length 0 through 129, because the C reads eight bytes at a time where the walk
 ; reads one: the tail is the only place the two can part and it is a different tail at
 ; every length mod eight. The published check value is asserted off the C side, so a twin
@@ -148,7 +148,7 @@
  ; ..and the empty stream is not a stream at all, at either lane
  (gzc-same "" 0))
 
-; --- deflate, the coder twin (src/core/gz.c): held to the bytes, not just the round
+; --- deflate, the coder twin (core/gz.c): held to the bytes, not just the round
 ;     trip -- same parse, same block costing, same Huffman tie-breaks, so `=` over the
 ;     streams is the law. the love lane is the oracle; a divergence is the C being
 ;     wrong until proven otherwise.

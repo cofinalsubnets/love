@@ -1,10 +1,10 @@
 ; --- test/host/less.l: the pager's face on a real terminal ---
-; the engine (src/apps/kore/less.l's pgstep/pgframe) is lawed in src/apps/kore/law.l with no
+; the engine (apps/kore/less.l's pgstep/pgframe) is lawed in apps/kore/law.l with no
 ; tty at all; what is left is the face -- raw mode, the alternate screen, the key
 ; loop, the frame blit, and the file the : commands ask for. That lane needs a
 ; terminal, so it gets one: `tether` spawns `kore less` on a pty, we type at the
 ; master and read the frames back off it. not in the test/*.l corpus -- tether and
-; winsize live in src/host/posix.c, which love0 does not link. Run it (the assert macro
+; winsize live in host/posix.c, which love0 does not link. Run it (the assert macro
 ; comes from test/00-init.l; $lovebin names the binary under test and $lesstestdir a
 ; scratch directory it may write in):
 ;

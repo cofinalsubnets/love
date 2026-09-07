@@ -1,7 +1,7 @@
 # kanren — unification, search, and the constraint rung
 
-Companions: `src/core/boot/post.l` (the module), `test/kanren.l` (the gate), `doc/misc/proto/kanren-prove.l`
-(the proof producer), `src/apps/sat/kanren-count.l` (#SAT out of the ring), `doc/misc/proto/datalog.l`
+Companions: `core/boot/post.l` (the module), `test/kanren.l` (the gate), `doc/misc/proto/kanren-prove.l`
+(the proof producer), `apps/sat/kanren-count.l` (#SAT out of the ring), `doc/misc/proto/datalog.l`
 (one that rolled its own unifier).
 
 Written 2026-08-12 as a plan for three missing rungs; rewritten 2026-08-16, when they were built.
@@ -125,9 +125,9 @@ nominal half could not have been built on top of that.
 
 It is not for the register allocator, and the evidence is on the record rather than assumed.
 
-The alias question in `src/apps/moon/gen.l` — may this register be renamed to that one here — looks
+The alias question in `apps/moon/gen.l` — may this register be renamed to that one here — looks
 search-shaped and is not. Its carrier is finite and small: 75 op shapes (one per op `rdsp` knows),
-at most two read positions each, 15 registers in the gp file. `src/apps/moon/law.l` **exhausts** it —
+at most two read positions each, 15 registers in the gp file. `apps/moon/law.l` **exhausts** it —
 390 forward renames through the real pass, 570 backward folds, every result judged by the real
 assembler — for no measurable cost, and it goes red on all three deliberate falsifications. A
 finite carrier is run, not searched. `test/uukindlaw.l` reached that first, in its own words: the
@@ -155,8 +155,8 @@ because that search is intractable.
 ## the invariant that must not move
 
 `unify s u v` answers a substitution or `ufail`, purely, under that global name.
-`src/apps/rune/rune.l` calls it directly (its gate verifies the 2026 jacobian-conjecture disproof),
-and `src/core/boot/post.l` reads `subst` through the registry. **The constraint store rides BESIDE it** —
+`apps/rune/rune.l` calls it directly (its gate verifies the 2026 jacobian-conjecture disproof),
+and `core/boot/post.l` reads `subst` through the registry. **The constraint store rides BESIDE it** —
 it does not change `unify`'s signature, and a goal's state is where the store lives. Chosen,
 revisable: the moment a constraint is worth threading through `unify` itself, this line is the
 thing to argue with.
@@ -172,5 +172,5 @@ thing to argue with.
   a name added there is hard to take back. Prefer the registry — `(from 'kanren 'absent)` — unless
   infix is genuinely wanted, and say why at the site if it is.
 * ⚠ kanren now compiles with `@`, so it needs pat spliced before it. Every frontend that loads
-  kanren already evaluates pat's text with post (see the boot comments in `src/host/main.c`,
-  `src/inle/kmain.c`, `src/port/wasm/host.c`, `src/port/playdate/main.c`) — but a new frontend must keep that order.
+  kanren already evaluates pat's text with post (see the boot comments in `host/main.c`,
+  `inle/kmain.c`, `port/wasm/host.c`, `port/playdate/main.c`) — but a new frontend must keep that order.

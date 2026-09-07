@@ -1,6 +1,6 @@
 # autogroup — when the glaze rewrites a file it did not need to
 
-`autogroup` (src/core/boot/glaze/auto.l) is the entry the ev-rebind hands every top-level `:`.
+`autogroup` (core/boot/glaze/auto.l) is the entry the ev-rebind hands every top-level `:`.
 It lowers the form through nine passes, looks for a glazeable group of first-order
 functions, and — if one survives — hands back **the lowered form** in place of the
 source. Two facts about that shape, taken together, turned an ordinary library into a
@@ -29,7 +29,7 @@ sub (\ e (dsimp (foldl (\ b pr (subst-sym <pr >pr b)) e lamcs)))
 
 A value substituted for a *later* lamc still names an *earlier* one — already spent in
 the fold, so never rewritten inside that text, and its binding already dropped. On
-src/apps/source/source.l six bindings left the form (`src-head src-lay-tgz src-lay-love src-lay
+apps/source/source.l six bindings left the form (`src-head src-lay-tgz src-lay-love src-lay
 src-ccworks? src-farm`) while `src-lay-love` was still called from `source-main`. The
 name then resolved against the book: `;; missing src-lay-love`.
 
@@ -79,12 +79,12 @@ test/glaze-x86.l.
 ## the method
 
 The failure looked like a letrec/global-name bug in c0's `ana_v` — a sibling reference
-emitted as `lvm_index`. It was not c0 at all: `-l` and `-e` compile through src/core/boot/ev.l,
+emitted as `lvm_index`. It was not c0 at all: `-l` and `-e` compile through core/boot/ev.l,
 and instrumenting every `ana_v` return lane gives byte-identical traces for the failing
 and the working session. One flag names the lane in a single run:
 
 ```sh
-LOVE_NO_GLAZE=1 love -l probe.l -l src/apps/gz/gz.l -l src/apps/tar/tar.l -l src/apps/source/source.l \
+LOVE_NO_GLAZE=1 love -l probe.l -l apps/gz/gz.l -l apps/tar/tar.l -l apps/source/source.l \
   -e "((peep (from 'verbs 'tab) 'src 0) (list \"/tmp/lay\"))"
 ```
 

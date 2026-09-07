@@ -114,18 +114,18 @@
      (: e (n < i + 20 ? n (i + 20))
       (say out ("\"" + string (row s i (e - 1) ()) + "\"\n"), zrows s e n)))
 
-   ; the boot files by name; the glaze's and holo's live beside src/core/boot
-   home {'emit "src/core/boot/glaze/" 'auto "src/core/boot/glaze/"
-         'hook "src/core/boot/glaze/" 'walk "src/core/boot/glaze/"
-         'holo "src/core/holo/" 'x64 "src/core/holo/" 'a64 "src/core/holo/" 'rv64 "src/core/holo/"}
-   (path n) (peep home n "src/core/boot/" + show n + ".l")
+   ; the boot files by name; the glaze's and holo's live beside core/boot
+   home {'emit "core/boot/glaze/" 'auto "core/boot/glaze/"
+         'hook "core/boot/glaze/" 'walk "core/boot/glaze/"
+         'holo "core/holo/" 'x64 "core/holo/" 'a64 "core/holo/" 'rv64 "core/holo/"}
+   (path n) (peep home n "core/boot/" + show n + ".l")
    (slurp-file p) (: q (open p "r") _ (!q ? (die ("cannot open " + p))) s (slurp q) _ (close q) s)
    ; a file's minified text, once: holo rides four blobs
    cache {}
    (file n) (: s (peep cache n ())
                (? (string? s) s (: m (minify (slurp-file (path n))) _ (pin cache n m) m)))
 
-   ; the baked source (src/host/cats.c), row by row: a string lays as it is -- the arch
+   ; the baked source (host/cats.c), row by row: a string lays as it is -- the arch
    ; guards -- and a list is [symbol items], laid deflated with the _raw twin. an item is a
    ; symbol, one boot file by name, or a string, glue laid between two files. a group is ONE
    ; text: ai_evals_ reads a text whole before its first form runs, so the grouping here is

@@ -1,6 +1,6 @@
 ; doc/misc/proto/zstd.l -- zstd in love (RFC 8878): the frame, its blocks, and the two
 ; entropy coders inside them -- FSE for the sequence codes, Huffman for the literals.
-; A spike, weighed against src/apps/gz/gz.l and doc/misc/proto/lzo.l for the source blob the seed
+; A spike, weighed against apps/gz/gz.l and doc/misc/proto/lzo.l for the source blob the seed
 ; carries.
 ;
 ;   (zs-decompress s)      -> (1 bytes) | ()    reads what the reference `zstd` writes

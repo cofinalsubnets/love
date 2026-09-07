@@ -4,7 +4,7 @@
 ; its chips, and each of those is data below with a small lay of its own. the prose is
 ; html as written -- it is our file. what the lay adds is the one property a hand page
 ; loses: every link on the page to an anchor on the page is checked, and a dead one fails
-; the lay rather than shipping. the island is src/port/wasm/repl.html, slurped, so the
+; the lay rather than shipping. the island is port/wasm/repl.html, slurped, so the
 ; markup repl.js drives has one copy; the sheet is web/style.l's, the fonts tools/mkfont.l's,
 ; the icon tools/mkicon.l's.
 
@@ -29,7 +29,7 @@
    (slurpf f)  (: q (open f "r")
                   (? (hot? q) (: s (slurp q) _ (close q) s)
                      (: _ (say err ("index: cannot open " + f + "\n")) (quit 1))))
-   wasm        "src/port/wasm"                                       ; as the page links it
+   wasm        "port/wasm"                                       ; as the page links it
    (island _)  (slurpf (wasm + "/repl.html")                       ; cells.js first: a module runs after it
                 + "\n<script src=\"" + wasm + "/cells.js\"></script>\n"
                 + "<script type=\"module\" src=\"" + wasm + "/repl.js\"></script>\n")

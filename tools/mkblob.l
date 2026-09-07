@@ -9,7 +9,7 @@
 ;   <sym>       the bytes, right behind it
 ;
 ; tools/mksrc.l is the same lay under two fixed names, for the one blob every
-; artifact carries; this is the door for the rest. src/inle/doom.c reads a pair.
+; artifact carries; this is the door for the rest. inle/doom.c reads a pair.
 ;
 ; no (use 'holo) here, for mksrc's reason: it resolves off a nest (~/.love),
 ; which a fresh seed tree does not have. make hands us holo the way it hands
@@ -33,7 +33,7 @@
    (mkblob-be2 arch)
     (? (lit? (backends arch)) 0
        ; the backend file is the canonical arch word now -- one spelling, no map
-       (: f ("src/core/holo/" + string arch + ".l")
+       (: f ("core/holo/" + string arch + ".l")
           q (open f "r")
           (? q (mkblob-rdev (flow q), close q)
            (mkblob-die ("no backend aboard and no text at " + f)))))

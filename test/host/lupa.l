@@ -1,5 +1,5 @@
 ; --- test/host/lupa.l: the magnifier, headless ---
-; the tool is a pure step and a pure frame (src/apps/lupa/lupa.l); this drives both over a
+; the tool is a pure step and a pure frame (apps/lupa/lupa.l); this drives both over a
 ; small raw program and over out/love itself -- an ELF with a .text and a symbol table -- and
 ; reads the frames back. run: cat test/00-init.l test/host/lupa.l | out/love
 (use 'lupa)
@@ -71,4 +71,4 @@
    0)
 
 (test_fin ())
-(puts "src/apps/lupa: ok -- hex and asm views, the cursor in both, find, the nibble edit, an ELF's .text and symbols\n")
+(puts "apps/lupa: ok -- hex and asm views, the cursor in both, find, the nibble edit, an ELF's .text and symbols\n")

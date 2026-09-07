@@ -1,7 +1,7 @@
 #!/bin/sh
 # test/gate/vec.sh -- the INTERRUPT gate.
 #
-# src/inle/mkvec.l lays the exception and IRQ entry points that used to be
+# inle/mkvec.l lays the exception and IRQ entry points that used to be
 # x64/x64.S and a64/a64.S. a green `make test_disk` already
 # proves most of that lay by running it: nothing boots without archinit's IDT,
 # and the corpus is FED over the serial line and CLOCKED by the timer, so

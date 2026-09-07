@@ -1,5 +1,5 @@
 ; --- test/host/wget.l: kore's wget over a real socket, and the tls floor under it ---
-; not in the test/*.l corpus: the socket nifs are src/host/sock.c's. kiosko is twirled onto
+; not in the test/*.l corpus: the socket nifs are host/sock.c's. kiosko is twirled onto
 ; a listener over a scratch directory and wget pulls a file back through it -- love
 ; serving love, test/host/sbhttp.l's shape. the https half is held to the RFC vectors
 ; the handshake stands on (x25519 from 7748, hmac from 4231): a live peer is
