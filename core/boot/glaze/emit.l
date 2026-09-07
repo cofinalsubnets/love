@@ -582,7 +582,8 @@
        ; a body with a call never restarts: past the first call a deopt would re-run it, so in
        ; that body every guard on an arith op, a compare, cap/cup, a cons or a truth test jumps a
        ; stub that drives the op's own value over the operands and resumes -- the answer is the
-       ; interpreter's, and nothing is replayed. the values ride extras slots past the inner entries
+       ; interpreter's, and nothing is replayed. the values ride the extras chain past the inner
+       ; entries, and a stub pulls its own into one slot -- the entry never copies them
        fbk  (drok && (ahascall? env go body || foldl (\ ac i (ac || ahascall? env go i)) 0 inits))
        ovs  (fbk ? '(+ - * // % & | ^ < <= > >= = cap cup . bit) ())
        ovals (map (o \ gv o 0) ovs)
@@ -629,16 +630,16 @@
        ok ((two? s) && (two? >s) && (all nom? ps) && (adistinct ps)
            && (a = #ps) && (0 < a) && lpok && drok && !(= lts 'bad) && (two? body)
            && (getenv "LOVE_AMBLE_NOCALL" ? !(ahascall? env go body) 1)                ; the call-lane bisect knob: splits the call machinery from the rest
-           && (all lit? gvals) && (all lit? ovals) && (nd < 48) && ((k + #gn + #cn + nq + nin + nl + #ovs) < 48)   ; slots are cheap once the prologue guards the room (below)
+           && (all lit? gvals) && (all lit? ovals) && (nd < 48) && ((k + #gn + #cn + nq + nin + nl + (fbk ? 1 0)) < 48)   ; slots are cheap once the prologue guards the room (below)
            && (all (i \ amble-ok? ps kn 0 0 0 i) inits)
            && (amble-ok? env kn go k 1 body)
            && !(= (asafe 1 (foldl (\ ac i (asafe 0 ac i)) 0 inits) body) 'bad))   ; the restart law, over the gated body
        (? ok
           (: _ (getenv "LOVE_AMBLE_TRACE" ? (puts ("amble: " + show s + "\n")) 0)   ; the compile trace: names every ambled source
-             ng (1 + #gn + #cn + nq + (lit? eqv ? 1 0) + nin + #ovs)   ; extras = [() | globals | sibling entries | quoted data | = | inner entries | op values]:
+             ng (1 + #gn + #cn + nq + (lit? eqv ? 1 0) + nin)   ; extras = [() | globals | sibling entries | quoted data | = | inner entries] (+ op values, chain-only):
                                                                 ; () is the empty mint -- li 1 would be the charm 0-fossil -- and entries and
                                                                 ; quotes are heap values, all riding the nifx chain into GC-walked slots
-             R (k + 3 + ng + nd + nl)                       ; loopvars | Se | So | budget | extras | spills | lets
+             R (k + 3 + ng + nd + nl + (fbk ? 1 0))         ; loopvars | Se | So | budget | extras | spills | lets | op value
              A (greg tgt 'acc)  T (greg tgt 'tmp)  X (greg tgt 'anchor)  SC (greg tgt 'scratch)
              SP (greg tgt 'sp)  IP (greg tgt 'ip)  HP (greg tgt 'hp)
              seo (8 * k)  soo (8 * (k + 1))  budo (8 * (k + 2))  gbo (8 * (k + 3))  spo (8 * (k + 3 + ng))  fro (8 * R)
@@ -646,8 +647,10 @@
              (spill d) (spo + (8 * d))
              eqo (gbo + (8 * (1 + #gn + #cn + nq)))   ; the = value's extras slot (past globals, siblings, quotes)
              ino (eqo + (8 * (lit? eqv ? 1 0)))                    ; the inner entries' slots (past =)
-             ovo (ino + (8 * nin))                                  ; the op values' slots (past the inner entries), fallback mode only
-             (opslot o) (ovo + (8 * (posof o ovs 0)))
+             ovo (8 * (k + 3 + ng + nd + nl))                       ; the one op-value slot, fallback mode only: a stub fills it off the chain
+             (ovload o) ([['ld T SP budo]]                          ; the chain from the budget cell: ng copied links, then the op values
+                         + ((: (go j) (j < (1 + ng + (posof o ovs 0)) ? (['ld T T 16] . go (j + 1)) ())) 0)
+                         + [['ld X T 8] ['st SP ovo X]])
              lto (8 * (k + 3 + ng + nd))                    ; the let region, past the spills
              (lvo v) (lto + (8 * (posof v lts 0)))
              (fx2 lbl) [['mov X T] ['and X X A] ['test X 1] ['br 'eq lbl]]    ; both T and a fixnum, else lbl
@@ -656,14 +659,14 @@
              (refb seq fb) (map (i \ map (x \ (= x 'deopt ? fb x)) i) seq)                        ; a sequence's deopts retargeted to a stub
              (fb2 op d fin) (? !fbk fin                                                            ; the two-operand stub: drive op's value over a (spill d) then b
                               (: fb (mint 0) en (mint 0)                                          ; (spill d+1), the partial rolling through spill d, answer in A
-                                 ((refb fin fb) + [['jmp en] ['label fb] ['ld A SP (spill d)]] + (adrive (opslot op))
+                                 ((refb fin fb) + [['jmp en] ['label fb]] + (ovload op) + [['ld A SP (spill d)]] + (adrive ovo)
                                   + [['st SP (spill d) A] ['ld A SP (spill (d + 1))]] + (adrive (spill d)) + [['label en]])))
              (fb1 op fin) (? !fbk fin                                                              ; the one-operand stub: A still holds the operand at the guard
                             (: fb (mint 0) en (mint 0)
-                               ((refb fin fb) + [['jmp en] ['label fb]] + (adrive (opslot op)) + [['label en]])))
+                               ((refb fin fb) + [['jmp en] ['label fb]] + (ovload op) + (adrive ovo) + [['label en]])))
              (atruth _) (: fb (fbk ? (mint 0) 'deopt) tk (mint 0)                                     ; the truth guard and its stub: bit's value answers 0/1, back to the compare
                          [[['test A 1] ['br 'eq fb] ['label tk]]
-                          (fbk ? ([['label fb]] + (adrive (opslot 'bit)) + [['jmp tk]]) ())])
+                          (fbk ? ([['label fb]] + (ovload 'bit) + (adrive ovo) + [['jmp tk]]) ())])   ; ovload spares A
              (aar op sa sb d)
               (abin sa sb d (fb2 op d
                (op @ '+ ((fx2 'deopt) + [['sub A A 1] ['adds A A T] ['br 'vs 'deopt]])         ; 2y + (2x+1) = tag(x+y)
