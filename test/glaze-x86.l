@@ -30,9 +30,10 @@
    jitgroupir (G 'jitgroupir)  jitgroupirx (G 'jitgroupirx)  jitir (G 'jitir)  jitloop-n (G 'jitloop-n)  jitn (G 'jitn)
    jitnir (G 'jitnir)  jitsum (G 'jitsum)  jitcalloutsum (G 'jitcalloutsum)  jitcalloutx (G 'jitcalloutx)  calloutir (G 'calloutir)  calloutframeir (G 'calloutframeir)  loopcode (G 'loopcode)  loopinfo (G 'loopinfo)
    loopinfo-n (G 'loopinfo-n)  mkhir (G 'mkhir)  mkouterir (G 'mkouterir)
-   occurs? (G 'occurs?)  plift (G 'plift)  qualfr (G 'qualfr)  twolow (G 'twolow)
+   occurs? (G 'occurs?)  plift (G 'plift)  qualfr (G 'qualfr)  twolow (G 'twolow)  canon (G 'canon)
    nif (G 'nif))                                 ; the C install seam, a glaze member: every boot pulls it off the book
 (assert (lit? base-ev) (lit? autogroup) (lit? jitgroupir) (lit? assemble))
+(: tw twin)                                            ; a synonym, for canon's law below
 
 (base-ev '(: ev base-ev
 (: (isum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (* i 7))) a)) 0 0)
@@ -422,6 +423,23 @@
        (&& !(= (twolow g2t) g2t)                                                    ; twolow rewrote the twin grid
            !(= (autonat (twolow g2t)) (twolow g2t))                                 ; ... and autonat then glazes the real-pair form
            (= 87130 (ev g2t)) (= (base-ev g2t) (ev g2t))))                            ; native == interp, same checksum as the plain-float g2
+    ; ... and as a bench spells it, (re ~ im) infix: auto-ev opfixes ahead of the lowering, so the
+    ; recognizer reads the same (twin ..) form -- the sigil moved once and this lane went dark
+    (: g2i '(: (mand c z it)
+                 (? (&& (< it 100) (<= (+ (* (re z) (re z)) (* (im z) (im z))) 4.0)) (mand c (+ (* z z) c) (+ it 1)) it)
+               (col px py acc) (? (< py 64) (col px (+ py 1) (+ acc (mand ((+ -2.0 (* px 0.046875)) ~ (+ -1.5 (* py 0.046875))) (0.0 ~ 0.0) 0))) acc)
+               (grid px acc) (? (< px 64) (grid (+ px 1) (+ acc (col px 0 0))) acc)
+             (grid 0 0))
+       (&& (= (twolow g2i) g2i) !(= (twolow (opfix g2i)) (opfix g2i))                 ; raw infix declines, opfixed lowers
+           (= 87130 (ev g2i)) (= (base-ev g2i) (ev g2i))))
+    ; ... and through a synonym: canon respells a free nom by its value, so `tw` meets twolow as twin
+    (: g2s '(: (mand c z it)
+                 (? (&& (< it 100) (<= (+ (* (re z) (re z)) (* (im z) (im z))) 4.0)) (mand c (+ (* z z) c) (+ it 1)) it)
+               (col px py acc) (? (< py 64) (col px (+ py 1) (+ acc (mand (tw (+ -2.0 (* px 0.046875)) (+ -1.5 (* py 0.046875))) (tw 0.0 0.0) 0))) acc)
+               (grid px acc) (? (< px 64) (grid (+ px 1) (+ acc (col px 0 0))) acc)
+             (grid 0 0))
+       (&& (= (twolow g2s) g2s) !(= (twolow (canon (opfix g2s))) (canon (opfix g2s)))
+           (= 87130 (ev g2s)) (= (base-ev g2s) (ev g2s))))
     ; recursive arithmetic: naive fib auto-glazed to a native call tree -- native == interp, and an
     ; int64-overflowing recursion (pow2) deopts to the interp fallback -> the exact bignum (sound)
     (: rf '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) (fib 25))

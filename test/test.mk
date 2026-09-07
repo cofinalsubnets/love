@@ -14,7 +14,7 @@
   test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_front test_gc test_gcheck test_gcstress \
-  test_gen test_glaze test_glazefuzz test_gz test_hdiff test_holo test_holofuzz test_holowasm test_hook \
+  test_gen test_glaze test_glazebench test_glazefuzz test_gz test_hdiff test_holo test_holofuzz test_holowasm test_hook \
   test_host test_hostegg test_hostnif test_inle test_kboot test_kernel_a64 test_kernel_rv64 test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
@@ -35,7 +35,7 @@ test:
 	@$(MAKE) --no-print-directory $(test_phases)
 
 # slow gate
-test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_cookdiff test_dist test_seed test_moon
+test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_cookdiff test_glazebench test_dist test_seed test_moon
 
 
 # really slow gate
@@ -255,6 +255,19 @@ test_hook: host
 else
 test_hook:
 	@echo "test_hook: skipped (the hook emits for x64 / a64; host arch is $a)"
+endif
+# test_glazebench -- the glaze PAYS on the benches, through the lanes a user runs: each bench
+# source as spelled (bench/bench.l + bench/benches/<b>.l), glazed against LOVE_NO_GLAZE=1, by
+# stdin and by file in turn, each ratio held to a floor near a third of the healthy speedup;
+# and the driver's ev is the live one. what test_glaze/test_hook cannot see: they hand (ev '..)
+# forms they spelled themselves. on the merge gate because both misses it caught rode one.
+ifneq ($(filter $a,x64 a64),)
+test_glazebench: host
+	@echo TEST test/gate/glazebench.sh "(the benches glaze through the driver)"
+	@sh test/gate/glazebench.sh $m $a
+else
+test_glazebench:
+	@echo "test_glazebench: skipped (the glaze emits for x64 / a64; host arch is $a)"
 endif
 # test_glazefuzz -- the glaze's DIFFERENTIAL fuzz (src/core/boot/glaze/fuzz.l): 3000 random closures
 # run TWICE against the SAME binary (plain, then LOVE_NO_GLAZE=1), stdouts byte-identical.

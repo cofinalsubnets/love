@@ -64,7 +64,7 @@
       (label end)))
    ; the param-kind probes: how does the group body use P? each answer picks the entry
    ; guard mkouterir lays for that arg slot.
-   (hasl e) (two? e ? (= <e 'link || foldl (\ a x (a || hasl x)) 0 >e) 0)   ; e contains a (link ..)? -> the group is value-typed
+   (hasl e) (two? e ? (= <e 'link || (= <e '.) || foldl (\ a x (a || hasl x)) 0 >e) 0)   ; e contains a cons? -> the group is value-typed
    (suse? e P) (? (atom? e) 0  (member? <e '(peep tally pin) && (= <>e P)) 1  (foldl (\ a x (a || suse? x P)) 0 >e))   ; a string: (peep P..)/(tally P)/(pin P..)
    (buse? e P) (? (atom? e) 0  (= <e 'pin && (= <>e P)) 1  (foldl (\ a x (a || buse? x P)) 0 >e))   ; a cask: (pin P..), so the guard wants the buf kind, not str
    (cuse? e P) (? (atom? e) 0  (member? <e '(cap cup two?) && (= <>e P)) 1  (foldl (\ a x (a || cuse? x P)) 0 >e))   ; a chain: <P />P /(two? P) -- raw, no entry guard, since two? is total
@@ -614,7 +614,7 @@
                     (= op 'tally && !(member? 'tally env) && member? 'tally gn && atom? >as) (aseq cl as)
                     (= op '|| && !(member? op env) && two? >as) (aguard (aseq cl as))
                     (= op amble-lam) (two? >>as ? (aguard cl) cl)            ; the site's room guard, over frame reads
-                    (member? op '(cap cup link + - * // % & | ^ < <= > >= =)) (aguard (aseq cl as))
+                    (member? op '(cap cup link + - * // % & | ^ < <= > >= = mpeep peep)) (aguard (aseq cl as))   ; reads: a guard, never a call-out
                     (: c2 (aseq cl as) (= c2 'bad ? 'bad 1))))))             ; a call: its args, then the call
        ok ((two? s) && (two? >s) && (all nom? ps) && (adistinct ps)
            && (a = #ps) && (0 < a) && lpok && drok && !(= lts 'bad) && (two? body)
@@ -833,7 +833,7 @@
                        (= op 'cap) (acap <as d 8)
                        (= op 'cup) (acap <as d 16)
                        (= op 'id?) (aid <as <>as d)
-                       (= op 'link) (alink <as <>as d)
+                       (= op 'link || (= op '.)) (alink <as <>as d)
                        (= op '= && (aqnom? <as || aqnom? <>as))
                         (aid <as <>as d)                                               ; (a = 'sym): a point equals only itself (the point-= law) -> raw identity, total
                        (= op '= && (lit? eqv)) (aeq2 <as <>as d)
@@ -1384,7 +1384,7 @@
          (member? e ps) (: R (argregir tgt (argix e ps 0)) [['leax A R R 1 1]])    ; a param: acc = 2*reg + 1
          (atom? e) ()
          (member? <e syms) (cggir tgt syms ps e)                                   ; a value-group call: cggir's call already answers the value
-         (e @ ('link a b) (bcat [(cggvir tgt syms ps a) [['push A]] (cggvir tgt syms ps b) [['pop T]] (consir tgt)])   ; A ; push ; B ; pop T(=A) ; cons(T,A)
+         (e @ (('link || '.) a b) (bcat [(cggvir tgt syms ps a) [['push A]] (cggvir tgt syms ps b) [['pop T]] (consir tgt)])   ; A ; push ; B ; pop T(=A) ; cons(T,A)
               ('? c t f) (: el (mint 0) en (mint 0)
                  (bcat [(cggir tgt syms ps c) [['cmp A 0] ['br 'le el]] (cggvir tgt syms ps t)
                         [['jmp en] ['label el]] (cggvir tgt syms ps f) [['label en]]]))
@@ -1445,7 +1445,7 @@
    ; not re-derive the grammar; it is the backstop for the natjit path, which has no recognizer.
    ; jgir-arity is the operand count cggir/cggvir read, form tally included, so a head at any other
    ; arity would have its extra operands silently dropped.
-   jgir-arity {'+ 3 '- 3 '* 3 '// 3 '% 3 '& 3 '| 3 '^ 3 '< 3 '<= 3 '> 3 '>= 3 '= 3 'link 3
+   jgir-arity {'+ 3 '- 3 '* 3 '// 3 '% 3 '& 3 '| 3 '^ 3 '< 3 '<= 3 '> 3 '>= 3 '= 3 'link 3 '. 3
                '? 4 'peep 4 'pin 4 'mpeep 4 'mpin 4
                'tally 2 'two? 2 'cap 2 'cup 2}
    (jgir-ops-ok? syms e)                                          ; every head in e is a group call or a supported op at its own arity

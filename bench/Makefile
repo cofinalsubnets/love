@@ -57,7 +57,7 @@ DEFAULT_LANGS := love go rust julia luajit pypy node
 
 # per-language: source extension, harness file (a result depends on it), the
 # interpreter binary (for the PATH presence check), and any extra prereq.
-EXT_ai := l
+EXT_love := l
 EXT_chez := ss
 EXT_sbcl := lisp
 EXT_elixir := exs
@@ -71,7 +71,7 @@ EXT_rust := rs
 EXT_lean := lean
 EXT_apl := apl
 
-HARN_ai := $(HARN)
+HARN_love := $(HARN)
 HARN_chez := lib/bench.ss
 HARN_sbcl := lib/bench.lisp
 HARN_elixir := lib/bench.exs
@@ -98,7 +98,7 @@ BIN_rust := rustc
 BIN_lean := lean
 BIN_apl := dyalogscript
 
-EXTRA_ai := $(GL)
+EXTRA_love := $(GL)
 
 # love is always available (we build it); others only if their binary is on PATH.
 present = $(if $(filter love,$(1)),$(1),$(if $(shell command -v $(BIN_$(1)) 2>/dev/null),$(1)))

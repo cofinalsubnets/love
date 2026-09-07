@@ -23,6 +23,7 @@
        asm (from 'holo 'assemble)                                         ; holo's post-hook build, pinned for the glaze: the cat's later reopen of holo never moves it
        _ (pin (G 'glazeasm) 'f asm)
        _ (pin (G 'glazeasm) 'at (from 'holo 'assemble-at))
+       gvbox (G 'gvbox)                                                     ; auto.l's canon reads globals through ala's gv, pinned here on the first closure
        (hit x) (pin fires () (1 + peep fires () 0), x)
        ; grp-ok? is the group gate: autogroup's own recognizer over the defs jitgroupirx compiles. jgir-ok?
        ; only says the ops are implemented -- a body past the grammar reaches cggir, whose ? chain ends in a
@@ -41,7 +42,8 @@
        ; letrec name being bound (0 anonymous: amble's self-call seam), ti/ta = ev.l's uninterned iop/apx
        ; markers, inl = the inner-closure record ((exp src-tail cell)..) amble's site reads
        (natjit e s a gv farq lams nm ti ta inl)
-        (: ps (init >s)  body (last >s)                                                ; the frame [imps args] + the surface body
+        (: _ (? (peep gvbox 0 0) 0 (pin gvbox 0 gv))
+           ps (init >s)  body (last >s)                                                ; the frame [imps args] + the surface body
            (? !(all nom? ps) e                                                       ; a frame that is not all points (a pattern binder) declines every lane
               (two? s && two? >>s && exprn ps body)                                   ; the leaf: >=1 param, a body in the grammar
               (hit (nif (emit (peep (asm arch (coreir arch ps body (deoptir arch (a = 1 ? 0 1)))) 'bytes 0)) e s a))

@@ -881,7 +881,8 @@ lvm(lvm_iota) {
  Hp += b2w(bytes);
  ini_tray(v, ai_Z, 1);
  v->shape[0] = n;
- for (uintptr_t i = 0; i < n; i++) tray_put_int(v, i, (intptr_t) i);
+ intptr_t *p = tray_data(v);                        // ai_Z: raw words, so no per-cell kind test
+ for (uintptr_t i = 0; i < n; i++) p[i] = (intptr_t) i;
  ai_musttail return Answer(word(v)); }
 
 // --- accessors -------------------------------------------------------------
@@ -943,9 +944,9 @@ lvm(lvm_asum) {
   for (; i < n; i++) a0 += tray_get_flo(v, i);
   emit_gem(_res, (a0+a1)+(a2+a3)); }
  else {                                         // K=4 (modular, Z/2^64 is a commutative ring -> assoc+exact)
-  uintptr_t a0=0,a1=0,a2=0,a3=0, i = 0;
-  for (; i + 4 <= n; i += 4) a0+=(uintptr_t)tray_get_int(v,i), a1+=(uintptr_t)tray_get_int(v,i+1), a2+=(uintptr_t)tray_get_int(v,i+2), a3+=(uintptr_t)tray_get_int(v,i+3);
-  for (; i < n; i++) a0 += (uintptr_t) tray_get_int(v, i);
+  uintptr_t *p = tray_data(v), a0=0,a1=0,a2=0,a3=0, i = 0;   // raw words: the kind test stays out of the loop
+  for (; i + 4 <= n; i += 4) a0 += p[i], a1 += p[i+1], a2 += p[i+2], a3 += p[i+3];
+  for (; i < n; i++) a0 += p[i];
   emit_int(_res, (intptr_t) ((a0+a1)+(a2+a3))); }
  ai_musttail return Answer(_res); }
 

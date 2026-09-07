@@ -1772,10 +1772,12 @@
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
           joinln splitat parseall)
-(: (read s) (sound (hot? s ? (flow s) s) @ (x . _) (ev x)))
+(: (read s) (sound (hot? s ? (flow s) s) @ (x . _) (ev 'ev x)))
+; ev late-binds -- (ev 'ev a): post is baked before the glaze rebinds ev, and a direct call would
+; keep the egg's interpreter for every form the driver runs
 (: (reads p)
    (: (walk cl z) (sound cl @ 'torn (scare 'unfinished-form p)
-                              (a . b) (walk b (ev a))
+                              (a . b) (walk b (ev 'ev a))
                               z)
       ; the shared lane, for `in`: gulp for speed, hold nothing across an eval. box slot 0 counts
       ; every byte drawn off p, so the walk can put the port where it belongs. no window on purpose:
@@ -1810,7 +1812,7 @@
                     ; one byte short on purpose -- the byte-exact lane runs one ahead, and test_stdincorpus diffs it
                     _ (drop (0 < rem ? (rem - 1) 0))
                     h (inhand p)
-                    v (ev a)
+                    v (ev 'ev a)
                     (h = inhand p ? (drop 0, step b w2 v)
                                     (start (two? b ? [<b]) v)))
          (drop 0, z))
@@ -2126,10 +2128,9 @@
                                (a . b)  (rdl b (a . acc))
                                (rev acc))
        (rdl s () @ ^m (say err "love: -e: unfinished form", cli-leave 2)
-                   (d @ (a . u)) (ev $ atom? u ? a d))) ; many datums fold to one application
-    (say1 s) (puts s, putc 10)             ; -v and -h each print and keep walking argv
-    (version _) ("love " + love-version)   ; _ arg: love has no nullary calls
-    (usage _)
+                   (d @ (a . u)) (ev 'ev (atom? u ? a d)))) ; many datums fold to one application
+    v-msg ("love " + love-version + "\n")   ; _ arg: love has no nullary calls
+    h-msg
     ("usage: love [wake IMAGE] [-l FILE] [-e EXPR] [-q] [-m SIZE] [-v] [-h] [--] [VERB|FILE] [ARG ...]\n" +
      "  -l, --load FILE   preload FILE (read-eval) before the program\n" +
      "  -e, --eval EXPR   eval EXPR as one expression (infix works), print the answer\n" +
@@ -2138,9 +2139,8 @@
      "  -v, --version     print the version\n" +
      "  -h, --help        print this help\n" +
      "  --                end of options; the rest are files, and none of them is stdin\n" +
-     "with no arguments at all love reads stdin; with arguments and no program it stops\n" +
-     "when the command line runs out, so -v and -h compose and neither is terminal.\n" +
-     "`love verbs` names the verbs this binary carries.\n")
+     "with no arguments then start a repl if on a tty else eval expressions from stdin\n" +
+     "try `love verbs` to see a list of commands\n")
     (need h '()) (say err $ "love: " + h + " needs an argument", cli-leave 2)
     K 1024 M 1048576 G 1073741824
     wordsz (charm? G ? 8 4)             ; 2^30 is a charm only where a fixnum is 62-bit
@@ -2163,8 +2163,8 @@
     ; terminal, so `love -v -h` prints both, reaches the end, and leaves 0.
     (pre a) (a @ (h . t)
       (h @ ("-l" || "--load")    (need h t, load1 <t, pre >t)
-           ("-v" || "--version") (say1 (version 0), pre t)
-           ("-h" || "--help")    (say1 (usage 0), pre t)
+           ("-v" || "--version") (puts v-msg, pre t)
+           ("-h" || "--help")    (puts h-msg, pre t)
            ("-e" || "--eval")    (need h t, 'eval . t)
            ("-q" || "--quiet")   (pre t @ ('eval . r) ('evalq . r) r r)
            ; slot 0 of a fresh `tune` read, so the other knobs ride and the last -m wins. it

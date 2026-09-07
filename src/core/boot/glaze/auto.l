@@ -910,7 +910,7 @@
        (member? e ps) 1
        (two? e) (: op <e ar (clook2 op vcands)
           (? (-1 < ar)         (#>e = ar && gargok? cm pm icands cps pps ps >e 0 op)   ; a value-group call (target in vcands)
-             (= op 'link)    (3 = #e && vok? cm pm icands vcands cps pps ps <>e && vok? cm pm icands vcands cps pps ps <>>e)
+             (= op 'link || (= op '.))    (3 = #e && vok? cm pm icands vcands cps pps ps <>e && vok? cm pm icands vcands cps pps ps <>>e)
              (= op '?)       (4 = #e && groupok? cm pm icands cps pps ps <>e && vok? cm pm icands vcands cps pps ps <>>e && vok? cm pm icands vcands cps pps ps <>>>e)
              0))
        0)
@@ -1142,6 +1142,45 @@
    ; float-result leaf are live, and only the float-grid lane and castbuild's cask-fill are x86-only --
    ; autogroup carries every source rewrite that lowers to the integer group, so fib/tak/primes glaze
    ; there too.
+   ; canon: a free nom respelled by the value it names, toward the canonical spelling -- (: add +)
+   ; reads +, link reads ., a twin alias reads twin -- so a synonym meets the recognizers, which
+   ; read source by name. gv is ala's global read, pinned into gvbox by hook.l's first closure;
+   ; before that, or for a lexically bound nom, the spelling stands. a tablet keys a function by
+   ; identity, so the value table is one peep.
+   gvbox {}
+   gone (mint 0)
+   canon-names '(+ - * // % & | ^ < <= > >= = twin re im cap cup . two? one? tally peep pin   ; the tree's canonical spellings, one per value:
+                 map filter foldl foldr jot iota net string list && ||)                       ; link reads ., atom? reads one?, ~ reads twin
+   ctab {}
+   (ctable gv) (? (peep ctab 'ok 0) ctab
+                  (: _ (each canon-names (n \ (: v (gv n gone) (? (= v gone) 0 (pin ctab v n)))))
+                     _ (pin ctab 'ok 1)
+                     ctab))
+   (canon e) (: gv (peep gvbox 0 0)
+                (? gv (: tab (ctable gv)
+                         ops '(+ - * // % & | ^ < <= > >= = . && ||)                                   ; infix spellings: an operand written so reads as infix
+                         (cnom x bnd hd) (? (member? x bnd) x
+                                            (: v (gv x gone) c (? (= v gone) 0 (peep tab v 0))
+                                               (? (nil? c) x  (hd || !(member? c ops)) c  x)))
+                         (cbinders bs) (? (atom? >bs) () (: b <bs ((? (two? b) <b b) . cbinders >>bs)))   ; a :'s names, sugared heads too
+                         (cw x bnd) (?
+                          (nom? x) (cnom x bnd 0)
+                          (atom? x) x
+                          (= <x '\) (? (atom? >>x) x                                           ; (\ v): a quote
+                                       (: ps (init >x) (link '\ (ps + [(cw (last x) (ps + bnd))]))))
+                          (= <x '@) (: (arms l) (? (atom? l) l (atom? >l) [(cw <l bnd)]            ; (@ x pat body ..): a pattern is the
+                                                    (<l . (cw <>l bnd) . arms >>l))               ; macro's to read, only the bodies respell
+                                       ('@ . (cw <>x bnd) . arms >>x))
+                          (= <x ':) (: bnd2 (cbinders >x + bnd)
+                                       (cbs bs) (? (atom? bs) bs
+                                                   (atom? >bs) [(cw <bs bnd2)]
+                                                   (: b <bs ps (? (two? b) >b ())
+                                                      (link b (link (cw <>bs (ps + bnd2)) (cbs >>bs)))))
+                                       (': . cbs >x))
+                          (nom? <x) ((cnom <x bnd 1) . map (y \ cw y bnd) >x)                       ; the head may take an operator spelling
+                          (map (y \ cw y bnd) x))
+                         (cw e ()))
+                   e))
    (auto-ev e) (? !x86? (? (qual e)  (memo e (l \ jitir l arch))        ; a64: integer + scalar-float lanes native
                                (qualn e) (memo e (l \ jitnir l arch))
                                (qualc e) (memo e (l \ jitnir (flatc l) arch))
@@ -1150,7 +1189,7 @@
                                   (? li (memo e (l \ njit-loop l <li <>li <>>li <>>>li (base-ev l)))
                                      (: ln (loopinfo-n e)
                                         (? ln (memo e (l \ njit-loop-n l <ln <>ln <>>ln <>>>ln <>>>>ln (base-ev l)))
-                                           (base-ev (autogroup (autonat (twolow e)))))))))   ; float-grid nest (scalar gridn, arch-aware) then group; castbuild (cask-fill) is x86-only so skipped
+                                           (base-ev (autogroup (autonat (twolow (canon (opfix e)))))))))))   ; float-grid nest (scalar gridn, arch-aware) then group; castbuild (cask-fill) is x86-only so skipped
                   (qual e)  (memo e (l \ jitir l arch))
                   (qualn e) (memo e (l \ jitnir l arch))
                   (qualc e) (memo e (l \ jitnir (flatc l) arch))
@@ -1161,7 +1200,7 @@
                            (? ln (memo e (l \ njit-loop-n l <ln <>ln <>>ln <>>>ln <>>>>ln (base-ev l)))
                               ; fall-through: cask-build a string-accumulator loop, lower a complex
                               ; grid to real pairs, then a float-grid nest or an arith group, else interp
-                              (base-ev (autogroup (autonat (twolow (castbuild e))))))))))
+                              (base-ev (autogroup (autonat (twolow (castbuild (canon (opfix e))))))))))))
    ; the auto-native ev under the module's own name: `ev` is orth, which a module layer cannot write,
    ; so the boot installs it as (: ev (from 'glaze 'ev)). a re-load hands the baked auto-ev straight
    ; back, and a trampoline build (love-tco 0) stays the interpreter -- glazed code Continues by
