@@ -256,7 +256,7 @@
 (: r (sh-complete (sh-expl "cat src/apps/lus"))
    (assert (= "h/" (slurp (tap (cap r))))))              ; one DIR candidate: its /
 (: r (sh-complete (sh-expl "cat src/apps/lu"))
-   (assert (= '("src/apps/lush" "src/apps/lux") (cup r))))       ; two ways forward, listed
+   (assert (= '("src/apps/lupa" "src/apps/lush" "src/apps/lux") (cup r))))   ; three ways forward, listed
 (assert (= "ab" (sh-common '("abc" "abd" "ab")))
         (= "~" (sh-homely (+ "" (getenv "HOME")))))
 
