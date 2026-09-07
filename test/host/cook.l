@@ -388,9 +388,9 @@
    _ (ok "SHELL: recipe lines ride lush"   (has shl "L1[lush]"))
    _ (ok "SHELL: $(shell) rides lush too"  (has shl "L2[lush]"))
    wld (run-cook (mk '("all:"
-                       "\t@echo \"WC[$(wildcard apps/lush/jo*.l apps/lush/zz-nope*.q)]\""))
+                       "\t@echo \"WC[$(wildcard apps/lush/lu*.l apps/lush/zz-nope*.q)]\""))
                  "all")
-   _ (ok "wildcard: pure-love glob, nullglob" (has wld "WC[apps/lush/job.l]"))
+   _ (ok "wildcard: pure-love glob, nullglob" (has wld "WC[apps/lush/lush.l]"))
 
    ; ------------------------------------------------------------------ -j jobs
    ; the job pool: under -j N a stale recipe runs in a forked child. the claim is

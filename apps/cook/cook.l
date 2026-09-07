@@ -411,14 +411,14 @@
 ; order-only prereqs, and the $@ $< $^ $* automatics. Each recipe line runs via
 ; ("sh" "-c" line). See test/host/cook.l.
 ;
-; $(wildcard) prefers pure love: lush's glob (apps/lush/glob.l, the mask law)
+; $(wildcard) prefers pure love: lush's glob (apps/lush/lush.l, the mask law)
 ; over readdir/stat -- no /bin/sh underneath, so `kore make` globs before a
 ; shell exists. the glob rides module 'lush: a cat carrying the lush parts
 ; (kore's) registered it already, and a standalone -l load reads the file by
 ; name, here, before cook-glob folds its from-read. where neither lands (a dev
 ; binary run outside the tree), globw below keeps the POSIX shell-out lane.
 (? (tablet? (from 'lush)) 0
-   (two? (stat "apps/lush/glob.l")) (use "apps/lush/glob.l")  ; the wrapped file registers module 'lush
+   (two? (stat "apps/lush/lush.l")) (use "apps/lush/lush.l")  ; the one file registers module 'lush
    0)
 ; cook-glob: the pathname glob, a closure when lush's glob is aboard, () when
 ; not (the importer then keeps its POSIX shell-out lane). the glob rides

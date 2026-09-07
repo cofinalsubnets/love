@@ -36,8 +36,7 @@
             "apps/kore/text.l" "apps/kore/u.l" "apps/kore/core.l" "apps/kore/fs.l"
             "test/kernel/kore.l" "test/kernel/pipe.l"
             "test/kernel/sh0.l"
-            "apps/lush/job.l" "apps/lush/lex.l" "apps/lush/gram.l"
-            "apps/lush/glob.l" "apps/lush/word.l" "apps/lush/eval.l"
+            "apps/lush/lush.l"
             "test/kernel/sh.l"
             "test/kernel/disk.l" "test/kernel/svm.l" "test/kernel/vmx.l"
             "test/zz-fin.l"])

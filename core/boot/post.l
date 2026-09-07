@@ -616,7 +616,7 @@
 
 
 ; glob -- fnmatch, pure love and no filesystem. the pattern law only: pathname
-; expansion (readdir, the dotfile rule at the directory scan) stays in apps/lush/glob.l,
+; expansion (readdir, the dotfile rule at the directory scan) stays in apps/lush/lush.l,
 ; where the substrate belongs. this half is a predicate over two strings, and more than
 ; the shell asks it -- lush's case patterns, kore's find -name, the sb ignore law, the
 ; selfpack walk. selfpack runs on love0, which carries no lush: that is why this is a

@@ -49,7 +49,7 @@ out=$ho/.test_kore.out
 # ⚠ lush's job.l + glob.l ride along because find.l captures sh-match at its define
 { cat test/00-init.l apps/kore/text.l apps/kore/u.l apps/kore/core.l apps/kore/fs.l apps/kore/re.l \
       apps/kore/sed.l apps/kore/awk.l apps/kore/expr.l apps/kore/bc.l apps/kore/proc.l apps/kore/less.l apps/libra/lint.l apps/vi/config.l apps/vi/hue.l \
-      apps/vi/core.l apps/vi/vi.l apps/kore/diff.l apps/kore/patch.l apps/lush/job.l apps/lush/glob.l \
+      apps/vi/core.l apps/vi/vi.l apps/kore/diff.l apps/kore/patch.l apps/lush/lush.l \
       apps/kore/find.l; \
   echo "(use 'kore)"; \
   cat apps/kore/law.l; } | "$m" > "$out" 2>&1
@@ -670,7 +670,7 @@ echo "kore: sh (lush aboard -- kore sh + the argv0 symlink) ok"
 
 # ------------------------------------------------------ the shell's fork lane
 # an external word whose PATH winner IS this binary FORKS instead of exec'ing
-# (apps/lush/eval.l sh-forkfn): the child rides the warm heap and no stage pays
+# (apps/lush/lush.l sh-forkfn): the child rides the warm heap and no stage pays
 # a second wake. fork-vs-spawn is not portably observable from out here (landed
 # against an execve trace: one exec for the shell, none for the stages) -- so
 # these assert the lane's PLUMBING with the winner self-symlinked, the distro's

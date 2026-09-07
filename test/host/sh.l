@@ -3,17 +3,10 @@
 ; list: doc/misc/posix.md step 4, signals arriving as conditions), and the built
 ; shell driven end to end through out/love (never env's PATH love). the
 ; interactive loop needs a pty (probed live, the berth pattern); everything
-; beneath it gates headless here. the parts read bare in cat order; main.l's
-; seat stays quiet under the corpus (no lush on cmdline).
+; beneath it gates headless here. the one file reads bare; its seat stays
+; quiet under the corpus (no lush on cmdline).
 ; run: cat test/00-init.l test/host/sh.l | out/love
-(reads (open "apps/lush/job.l" "r"))
-(reads (open "apps/lush/lex.l" "r"))
-(reads (open "apps/lush/gram.l" "r"))
-(reads (open "apps/lush/glob.l" "r"))
-(reads (open "apps/lush/word.l" "r"))
-(reads (open "apps/lush/eval.l" "r"))
-(reads (open "apps/lush/line.l" "r"))
-(reads (open "apps/lush/main.l" "r"))
+(reads (open "apps/lush/lush.l" "r"))
 (use 'lush) ; the parts just registered module 'lush -- the laws below read it spliced
 
 ; the lexer: glued operators, io-numbers out of band ((), or (n) attached),
@@ -234,7 +227,7 @@
     (= () (sh-fields [(v "LUSH_NIL_ZZ")]))
     (= '("") (sh-fields [(link 'sq "")]))
     (= '("quay") (sh-fields [(link 'sub "echo quay")]))
-    (= '("apps/lush/job.l") (sh-fields [(link 'lit "apps/lush/j*.l")]))
+    (= '("apps/lush/lush.l") (sh-fields [(link 'lit "apps/lush/l*.l")]))
     (= '("apps/zz*qq") (sh-fields [(link 'lit "apps/zz*qq")]))
     (= '("apps/lush/j*.l") (sh-fields [(link 'sq "apps/lush/j*.l")]))))
 (: _ (pin sh-status () 7)
@@ -247,12 +240,12 @@
         (sh-match "[!a]bc" "zbc") (! (sh-match "[!a]bc" "abc"))     ; negation, both ways
         (sh-match "[^a]bc" "zbc") (! (sh-match "[abz]bc" "qbc"))    ; ^ is the same word
         (sh-match "a[bc" "a[bc")                                    ; unterminated [ is itself
-        (= '("apps/lush/job.l") (sh-glob "apps/lush/j[m-p]b.l" (sh-ones 19))))
+        (= '("apps/lush/lush.l") (sh-glob "apps/lush/l[t-v]sh.l" (sh-ones 19))))
 
 ; completion (rung 2): (insert . candidates) -- one path candidate lands its
 ; tail (+ " ", a directory its "/"), the common prefix otherwise; the helpers
-(: r (sh-complete (sh-expl "cat apps/lush/jo"))
-   (assert (two? r) (= "b.l " (slurp (tap (cap r)))) (= '("apps/lush/job.l") (cup r))))
+(: r (sh-complete (sh-expl "cat apps/lush/lu"))
+   (assert (two? r) (= "sh.l " (slurp (tap (cap r)))) (= '("apps/lush/lush.l") (cup r))))
 (: r (sh-complete (sh-expl "cat apps/lus"))
    (assert (= "h/" (slurp (tap (cap r))))))              ; one DIR candidate: its /
 (: r (sh-complete (sh-expl "cat apps/lu"))
@@ -306,8 +299,8 @@
    (assert (= 0 (cap r)) (= "A B\n" (cup r))))
 (: r (hark ["out/love" "out/lush" "-c" "false && echo no || echo yes"])
    (assert (= "yes\n" (cup r))))
-(: r (hark ["out/love" "out/lush" "-c" "echo $(echo hi | tr h H) apps/lush/j*.l"])
-   (assert (= "Hi apps/lush/job.l\n" (cup r))))
+(: r (hark ["out/love" "out/lush" "-c" "echo $(echo hi | tr h H) apps/lush/l*.l"])
+   (assert (= "Hi apps/lush/lush.l\n" (cup r))))
 (: r (hark ["out/love" "out/lush" "-c" "sh -c 'echo e >&2' 2>&1 | tr e E"])
    (assert (= "E\n" (cup r))))
 (: r (hark ["out/love" "out/lush" "-c" "exit 9"])

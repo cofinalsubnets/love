@@ -166,7 +166,7 @@ time: kore.l's sh/lush rows read (from 'lush 'sh-main); find.l's fnmatch
 capture rides a scoped (use 'lush); cook's two runtime doors -- cook-glob and
 the in-image verdict -- became from-reads (a miss answers (), keeping the
 spawn lane), the standalone -l splice registering the module off
-lib/lush/glob.l; the host and kernel sh gates splice what their cats just
+lib/lush/lush.l; the host and kernel sh gates splice what their cats just
 registered. The climb caught what the QUIET class predicts, twice over:
 test_dist's own engagement probes read sh-oneline/sh-imgc/sh-imgfn bare in
 their -e forms -- the gate that exists to catch the silent spawn-fallback was

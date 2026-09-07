@@ -197,7 +197,7 @@
                    (1 < tally d)                         ; a document, not a line
                    (0 < tally (bare head))
                    ((bare head) = (bare (dtext d))))))   ; ..and it kept every letter
-          ["apps/vi/hue.l" "apps/lush/eval.l" "apps/libra/libra.l"])
+          ["apps/vi/hue.l" "apps/lush/lush.l" "apps/libra/libra.l"])
    ; the surfaces come free, and that is the seam's whole promise: libra says
    ; markdown, lapiz says the rest.
    _ (: md (ldoc-md (slurpf "apps/vi/hue.l"))

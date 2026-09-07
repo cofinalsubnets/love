@@ -243,7 +243,7 @@ $(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md tools/mkman.l apps/l
 	@mkdir -p $(dir $@)
 	@$(ho)/love tools/mkman.l doc/$*.md out/lib/love_version.h > $@
 
-lushfiles = apps/lush/job.l apps/lush/lex.l apps/lush/gram.l apps/lush/glob.l apps/lush/word.l apps/lush/eval.l apps/lush/line.l apps/lush/main.l
+lushfiles = apps/lush/lush.l
 # THE CATS, IN PARTS. three rosters cover almost the same ground -- what kore carries,
 # what mooncc carries, what the artifact bakes -- and spelling each out in full is how
 # the three drift. the parts are named once here; each roster below is the order it
