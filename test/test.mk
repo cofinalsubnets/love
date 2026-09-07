@@ -9,7 +9,7 @@
   moon-bzip2 moon-bzip2-a64 moon-bzip2-rv64 moon-gzip moon-gzip-a64 moon-gzip-rv64 \
   moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
-  test_as test_asmops test_bakerep test_big test_cca64 test_ccrv64 test_ccwasm test_ccthumb1 \
+  test_as test_asmops test_bakerep test_big test_boards test_cca64 test_ccrv64 test_ccwasm test_ccthumb1 \
   test_ccthumb2 test_clay test_cli test_cookdiff test_cpio test_cts test_cts_a64 \
   test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
@@ -17,13 +17,13 @@
   test_gen test_glaze test_glazebench test_glazefuzz test_gz test_hdiff test_holo test_holofuzz test_holowasm test_hook \
   test_host test_hostegg test_hostnif test_inle test_kboot test_kernel_a64 test_kernel_rv64 test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
-  test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
+  test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_raw test_raw_a64 test_raw_bake test_raw_rv64 \
   test_refuzz test_root test_rv64 test_rp2040 test_rvboot test_sat test_sb test_seat test_seed \
   test_selfhost test_slow test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
-  test_vec test_vi test_virt test_wake test_wasm test_xfixpoint uuhomgen uukind uumx uusplgen \
+  test_vec test_vi test_virt test_virt_build test_wake test_wasm test_xfixpoint uuhomgen uukind uumx uusplgen \
   uuvallaw uuwm vmret waits
 
 # THE THREE GATES. `make test` is the fast one an edit loop runs, test_slow the
@@ -35,7 +35,7 @@ test:
 	@$(MAKE) --no-print-directory $(test_phases)
 
 # slow gate
-test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_cookdiff test_glazebench test_dist test_seed test_moon
+test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_cookdiff test_glazebench test_dist test_seed test_moon test_boards
 
 
 # really slow gate
@@ -819,6 +819,23 @@ test_rp2040: host
 	   echo "test_rp2040: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
 	  $(MAKE) -C port/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }; \
 	  echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker and flatten, flash R|X, boot surface verified"
+# test_boards -- THE BUILD HALF of the ports, no emulator anywhere. the boot gates above
+# prove a port RUNS; this one proves it still COMPILES, and that is the half that rots
+# unwatched -- a path or a roster moves, nothing in the merge gate names a board, and the
+# lane stays dark until someone runs test_extra. they are prerequisites, not recipe lines,
+# so a wide make runs the four at once: ~10 s together against ~35 s in a row, since each
+# port's own make is single-threaded and only the four of them can overlap.
+# rp2040 and nucleo446 carry their own toolchain skips; mps2 and virt want nothing foreign
+# to BUILD, only to boot, so the build halves come out here as their own targets.
+# teensy41, playdate and wasm are OUT while their own breaks stand -- each is one word.
+test_boards: test_mps2_build test_virt_build test_rp2040 test_nucleo446
+	@echo "test_boards: four ports build and link -- mooncc and our linker, no emulator"
+test_mps2_build: host
+	@echo TEST out/mps2/love.elf '(build)'
+	@$(MAKE) -C port/mps2 || { echo "FAIL mps2 build"; exit 1; }
+test_virt_build: host
+	@echo TEST out/virt/love.elf '(build)'
+	@$(MAKE) -C port/virt || { echo "FAIL virt build"; exit 1; }
 # the userland packages: each built by mooncc + nolibc + the holo
 # linker -- no gcc/glibc/ld anywhere -- then RUN and held to the package's own answers:
 # tar 1.13 cf/xf + czf/xzf roundtrips and system-tar interop, m4 1.4's own 57-check suite,
