@@ -153,6 +153,7 @@
                _ (? (pos <= 4095) 0 (scare 'imm12-range b))
                (le32 (base | ((pos << 10) | (an << 5)))))))
 
+   (a64-mulh d a b) (: dn (rn d) an (rn a) bn (rn b) (le32 (0x9B407C00 | ((bn << 16) | ((an << 5) | dn)))))   ; smulh d, a, b: the high 64 of the signed product
    (a64-imul d a b)                                         ; madd d, a, b, xzr  (= mul); no imm form
       (? (reg? b) (: dn (rn d) an (rn a) bn (rn b) (le32 (0x9B007C00 | ((bn << 16) | ((an << 5) | dn)))))
          (scare 'a64-mul-imm ['imul d a b]))
@@ -575,7 +576,7 @@
           ('push >< a64-push) ('pop >< a64-pop)
           ('neg >< a64-neg) ('not >< a64-not) ('inc >< a64-inc) ('dec >< a64-dec)
           ('jmp >< a64-jmp) ('br >< a64-br) ('jmpr >< a64-jmpr) ('callr >< a64-callr)
-          ('mulo >< a64-mulo) ('set >< a64-set) ('test >< a64-test)
+          ('mulo >< a64-mulo) ('mulh >< a64-mulh) ('set >< a64-set) ('test >< a64-test)
           ('div >< a64-div) ('rem >< a64-rem) ('udiv >< a64-udiv) ('urem >< a64-urem)
           ('a128 >< a64-a128) ('s128 >< a64-s128)                ; -- the 128-bit pair kit --
           ('m128 >< a64-m128) ('mw128 >< a64-mw128)

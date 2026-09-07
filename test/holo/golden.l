@@ -196,6 +196,8 @@
       ("subs"        "4c29c0"                ((subs r0 r0 r7)))        ; sub rax,r8  (sets OF)
       ("mulo.prog"   "490fafc00f8005000000e902000000ffe6c3"           ; imul rax,r8 ; jo ovf ; jmp done ; jmp rsi ; ret
                        ((mulo r0 r0 r7 r4 ovf) (jmp done) (label ovf) (jmpr r5) (label done) (ret)))
+      ("mulh.reg"    "524c89c049f7eb4889d05a"  ((mulh r0 r7 r10)))   ; push rdx ; mov rax,r8 ; imul r11 ; mov rax,rdx ; pop rdx
+      ("mulh.mem"    "52524c89c048f72c244889d04883c4085a" ((mulh r0 r7 r2)))   ; b on the fixed pair: push rdx ; push rdx ; mov rax,r8 ; imul [rsp] ; mov rax,rdx ; add rsp,8 ; pop rdx
       ("div"         "524150489948f73c244883c4085a"                   ; push rdx;push r8;cqo;idiv [rsp];add rsp,8;pop rdx
                        ((div r0 r0 r7)))
       ("rem"         "524150489948f73c244889d04883c4085a"             ; ... mov rax,rdx (remainder) ...
@@ -439,6 +441,7 @@
       ("a64.cmp"    "1f0001eb"          ((cmp r0 r1)))
       ("a64.cmpi"   "1f1c00f1"          ((cmp r0 7)))
       ("a64.mul"    "207c029b"          ((imul r0 r1 r2)))
+      ("a64.mulh"   "a47c4a9b"          ((mulh r4 r5 r10)))                ; smulh x4, x5, x10
       ("a64.neg"    "e00300cb"          ((neg r0)))
       ("a64.not"    "e00320aa"          ((not r0)))               ; -> mvn
       ("a64.ldr"    "200040f9"          ((ld r0 r1 0)))
@@ -966,6 +969,7 @@
                       ((subs r0 r0 r1) (br vc l) (label l)))
       ;; mulo: mulh vs the low half's sign fill (t clobbered, != a,b,d), flag-free
       ("rv.mulo"     "b396c5023385c502935ff5436384f6016f004000" ((mulo r0 r1 r2 r3 l) (label l)))
+      ("rv.mulh"     "33977702" ((mulh r4 r5 r10)))                        ; mulh x14, x15, x7
       ;; control: jal wide jumps, the auipc pairs (one 8-byte pcrel fixup each), indirect jalr
       ("rv.jmp"      "6f00800013000000"  ((jmp l) (nop) (label l)))              ; j l ; nop
       ("rv.call"     "97000000e780c00013000000" ((call l) (nop) (label l)))      ; auipc ra,0 ; jalr 12(ra) ; nop

@@ -353,6 +353,7 @@
    ;; M: div/rem round toward zero like x86, but never trap -- /0 answers -1 (quot) or the
    ;; dividend (rem), and the caller already guards zero. t is a64's scratch shape, unused here.
    (rv-imul d a b) (rv-aluop 'imul d a b)
+   (rv-mulh d a b) (rv-alu-rrr 1 1 (rvn d) (rvn a) (rvn b))               ; mulh: the high 64 of the signed product
    (rv-div d a b)     (rv-alu-rrr 4 1 (rvn d) (rvn a) (rvn b))               ; div
    (rv-rem d a b t)   (rv-alu-rrr 6 1 (rvn d) (rvn a) (rvn b))               ; rem
    (rv-udiv d a b)    (rv-alu-rrr 5 1 (rvn d) (rvn a) (rvn b))               ; divu
@@ -502,7 +503,7 @@
           ('push >< rv-push) ('pop >< rv-pop)
           ('neg >< rv-neg) ('not >< rv-not) ('inc >< rv-inc) ('dec >< rv-dec)
           ('jmp >< rv-jmp) ('br >< rv-br) ('jmpr >< rv-jmpr) ('callr >< rv-callr)
-          ('mulo >< rv-mulo) ('set >< rv-set)
+          ('mulo >< rv-mulo) ('mulh >< rv-mulh) ('set >< rv-set)
           ('adds >< rv-addsub-s 'adds) ('subs >< rv-addsub-s 'subs)
           ('div >< rv-div) ('rem >< rv-rem) ('udiv >< rv-udiv) ('urem >< rv-urem)
           ('ldx >< rv-ldx) ('stx >< rv-stx) ('leax >< rv-leax)

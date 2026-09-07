@@ -158,6 +158,7 @@
                              ((caargir tgt c coff) + [['cmp A 0] ['br 'le el]] + (caargir tgt t coff)
                               + [['jmp en] ['label el]] + (caargir tgt f coff) + [['label en]]))
                (op a b) (? (member? op '(+ - *))       (bin a b ([['pop T]] + (arithir tgt op)))
+                           (member? op '(// %) && divc? b) ((caargir tgt a coff) + [['mov T A]] + (divk tgt op b))
                            (member? op '(// %))        (bin a b ([['test A A] '(br eq deopt) ['pop T]] + (divir tgt op)))
                            (member? op '(& | ^))       (bin a b [['pop T] [(bitop op) A A T]])
                            (member? op '(< <= > >= =)) (bin a b [['pop T] ['cmp T A] ['set (ccof op) A]])
@@ -670,8 +671,8 @@
                     ((fx2 'deopt) + [['sar A 1] ['sub T T 1] ['mulo A A T SC 'deopt] ['or A A 1]]))))   ; y * 2x = 2xy, where mulo is the tag-range gate, then tag
              (acmp2 op sa sb d) (abin sa sb d (fb2 op d ((fx2 'deopt) + [['cmp T A] ['set (ccof op) A] ['leax A A A 1 1]])))
              (adm op sa sb d) (abin sa sb d (fb2 op d                                             ; // %: untag, /-by-0 -> twin, divir (trunc toward zero), retag
-              ((fx2 'deopt) + [['sar T 1] ['sar A 1] ['test A A] ['br 'eq 'deopt]]                 ; (the adds gate catches most-negative // -1)
-               + (divir tgt op)
+              ((fx2 'deopt) + [['sar T 1] ['sar A 1]]                                              ; (the adds gate catches most-negative // -1)
+               + (divc? sb ? (divk tgt op sb) ([['test A A] ['br 'eq 'deopt]] + (divir tgt op)))
                + [['adds A A A] ['br 'vs 'deopt] ['or A A 1]])))
              (abit op sa sb d) (abin sa sb d (fb2 op d                                            ; & | ride the tags whole (2x+1 op 2y+1 = tag(x op y)); ^ re-tags
               ((fx2 'deopt) + (= op '^ ? [['xor A A T] ['or A A 1]] [[(bitop op) A A T]]))))
@@ -1221,6 +1222,32 @@
             ()))
    (divir tgt op) (: A (greg tgt 'acc) T (greg tgt 'tmp) SC (greg tgt 'scratch)   ; the caller emits the /-by-0 guard
       (op @ '// [['div A T A]]  '% [['rem A T A SC]]  ()))
+   ; divk: n in tmp, divided by the literal k >= 2 through its magic multiply (Hacker's Delight
+   ; 10-1, the signed 64-bit form): q = mulh(n, M) (+ n when M < 0) >> s, then + 1 for a negative
+   ; n so it truncates toward zero as idiv does; % is n - q*k. no divide, no /-by-0 guard.
+   (divc? b) (whole? b && b >= 2)
+   (magic k) (: two63 9223372036854775808  two64 18446744073709551616
+                anc (two63 - 1 - (two63 % k))
+                (go p q1 r1 q2 r2)
+                 (: p1 (p + 1)
+                    q1a (2 * q1) r1a (2 * r1)
+                    q1b (r1a >= anc ? (q1a + 1) q1a) r1b (r1a >= anc ? (r1a - anc) r1a)
+                    q2a (2 * q2) r2a (2 * r2)
+                    q2b (r2a >= k ? (q2a + 1) q2a) r2b (r2a >= k ? (r2a - k) r2a)
+                    delta (k - r2b)
+                    (? (|| (< q1b delta) (&& (= q1b delta) (= r1b 0))) (go p1 q1b r1b q2b r2b)
+                       (: M (q2b + 1) ((M >= two63 ? (M - two64) M) . (p1 - 64)))))
+                (go 63 (two63 // anc) (two63 - ((two63 // anc) * anc)) (two63 // k) (two63 - ((two63 // k) * k))))
+   (pow2 k) ((: (go j) (? (< (j 2) k) (go (j + 1)) (= (j 2) k) j 0)) 1)                  ; k = 2^j -> j, else 0
+   (divk tgt op k) (: A (greg tgt 'acc) T (greg tgt 'tmp) SC (greg tgt 'scratch) j (pow2 k)
+      (? j ([['mov A T] ['sar A 63] ['shr A (64 - j)] ['add A A T] ['sar A j]]                   ; a power of two: bias a negative n by k-1, then shift
+            + (op @ '% [['shl A j] ['sub T T A] ['mov A T]] ()))
+         (: m (magic k) M <m s >m
+            ([['li SC M] ['mulh A T SC]]
+             + (M < 0 ? [['add A A T]] ())
+             + (s > 0 ? [['sar A s]] ())
+             + [['mov SC T] ['shr SC 63] ['add A A SC]]
+             + (op @ '% [['li SC k] ['imul SC A SC] ['sub T T SC] ['mov A T]] ())))))
    ; cgir: an arith expr e over params ps -> IR ops accumulating in acc, a param fetched from its Sp
    ; slot. nested operands ride the machine stack, ? gets fresh mint labels, and one deopt label is
    ; shared. serves both the leaf (ps one param) and the n-ary lane.
@@ -1233,6 +1260,7 @@
                              ((cgir tgt ps c) + [['cmp A 0] ['br 'le el]] + (cgir tgt ps t)
                               + [['jmp en] ['label el]] + (cgir tgt ps f) + [['label en]]))
                (op a b) (? (member? op '(+ - *))       (bin a b ([['pop T]] + (arithir tgt op)))
+                           (member? op '(// %) && divc? b) ((cgir tgt ps a) + [['mov T A]] + (divk tgt op b))
                            (member? op '(// %))        (bin a b ([['test A A] '(br eq deopt) ['pop T]] + (divir tgt op)))
                            (member? op '(& | ^))       (bin a b [['pop T] [(bitop op) A A T]])
                            (member? op '(< <= > >= =)) (bin a b [['pop T] ['cmp T A] ['set (ccof op) A]])
@@ -1287,6 +1315,7 @@
                              ((cgvir tgt varld c d) + [['cmp A 0] ['br 'le el]] + (cgvir tgt varld t d)
                               + [['jmp en] ['label el]] + (cgvir tgt varld f d) + [['label en]]))
                (op a b) (? (member? op '(+ - *))       (bin a b ([['pop T]] + (arithl tgt op d)))
+                           (member? op '(// %) && divc? b) ((cgvir tgt varld a d) + [['mov T A]] + (divk tgt op b))
                            (member? op '(// %))        (bin a b (divl tgt op d))
                            (member? op '(& | ^))       (bin a b [['pop T] [(bitop op) A A T]])
                            (member? op '(< <= > >= =)) (bin a b [['pop T] ['cmp T A] ['set (ccof op) A]])
@@ -1353,6 +1382,7 @@
                        (pa && member? op '(+ *))   (bcat [(go b) (garith-r tgt op pa)])   ; (p op E): commute
                        (pimm? a && (= op '+))     (bcat [(go b) (garith-i tgt op a)])    ; (C + E): commute; an imm `*` has no a64 form, so it stays generic
                        (bcat [(go a) [['push A]] (go b) [['pop T]] (garith tgt op)])))   ; generic
+               (member? op '(// %) && divc? b) (bcat [(go a) [['mov T A]] (divk tgt op b)])
                (member? op '(// %))
                  (bcat [(go a) [['push A]] (go b) [['test A A] '(br eq OVF) ['pop T]] (divir tgt op)])
                (member? op '(& | ^))

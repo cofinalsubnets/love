@@ -385,6 +385,21 @@
    ;; product leaves signed-64, so a plain `jo` is exact -- the scratch `t` is unused on x86 (only
    ;; a64 needs it, for smulh).
    (emit-mulo d a b t lbl) (emit-imul d a b + [15 128 (fix 4 'rel32 lbl 0)])      ; <imul> ; 0F 80 jo rel32
+   ;; mulh: d <- the high 64 of the signed product a*b (the magic-divide's multiply). the one-operand
+   ;; imul is rdx:rax-fixed like idiv, so it takes idiv's dance: save rdx, stage b at [rsp], rax <- a,
+   ;; imul [rsp], the high half rdx -> rax, unstage, restore rdx, d <- rax. clobbers rax; d != r2.
+   (emit-mulh d a b)
+      (? (reg? b && !(reg-eq b 'r0) && !(reg-eq b 'r2))     ; b clear of the fixed pair: imul reg, the high half out of rdx
+         (: bn (rn b)
+            (catall ['(82)
+                     (? (reg-eq a 'r0) () (emit-mov 'r0 a))
+                     [(rex 1 0 0 (hi bn)) 247 (modrm 3 5 bn)]   ; imul b  (F7 /5)
+                     (emit-mov d 'r2) '(90)]))
+         (catall ['(82) (emit-push b)
+                  (? (reg-eq a 'r0) () (emit-mov 'r0 a))
+                  '(72 247 44 36)                             ; imul qword [rsp]  (F7 /5)
+                  '(72 137 208  72 131 196 8  90)             ; mov rax,rdx ; add rsp,8 ; pop rdx
+                  (? (reg-eq d 'r0) () (emit-mov d 'r0))]))
    ;; set: d <- (cond) ? 1 : 0 from the last cmp -- setcc dl (0F 9x /0) then movzx d,dl (0F B6 /r). a
    ;; REX (B for r8b+, a bare 0x40 for spl/bpl/sil/dil) forces the byte operand to be the low byte,
    ;; not ah/ch/dh/bh. setcc's opcode is the Jcc low byte + 0x10 (0F 84 je -> 0F 94 sete).
@@ -537,7 +552,7 @@
           ('neg . emit-un 247 3) ('not . emit-un 247 2) ('inc . emit-un 255 0) ('dec . emit-un 255 1)
           ('jmp . emit-jmp) ('br . emit-br) ('jmp8 . emit-jmp8) ('br8 . emit-br8)
           ('jmpr . emit-jmpr) ('callr . emit-callr)
-          ('mulo . emit-mulo) ('set . emit-set)
+          ('mulo . emit-mulo) ('mulh . emit-mulh) ('set . emit-set)
           ('div . emit-div 0 1) ('udiv . emit-div 0 0)
           ('rem . (\ d a b t (emit-div 1 1 d a b)))         ; (rem d a b t) -- the scratch t is rdx's job on x86
           ('urem . (\ d a b t (emit-div 1 0 d a b)))
