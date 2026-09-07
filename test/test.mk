@@ -1294,18 +1294,21 @@ test_wasm: wasm
 	@$(NODE) $(R)/port/wasm/horn.mjs --love $(R)/out/wasm/love.wasm
 endif
 
-# test_kernel_wasm -- the wasm inle seat (out/love-wasm.wasm) under node: the kernel corpus
-# off the ramfs on the boot line, the serial line captured, the (reset) that ends it read
-# as the exit -- what tools/ktest.l reads off qemu, with no qemu and no browser.
+# test_kernel_wasm -- the wasm inle seat (out/love-wasm.wasm) under node: the image baked
+# (the egg lane, `bake PATH` on the boot line), then the kernel corpus off the ramfs on the
+# woken image, the serial line captured, the (reset) that ends it read as the exit -- what
+# tools/ktest.l reads off qemu, with no qemu and no browser.
 ifeq ($(NODE),)
 test_kernel_wasm:
 	@echo "test_kernel_wasm: skipped (needs node)"
 else
 test_kernel_wasm: host
-	@$(MAKE) -s out/love-wasm.wasm
-	@echo TEST out/love-wasm.wasm "(node: the kernel corpus, serial, headless)"
-	@$(NODE) $(R)/port/wasm/inle.mjs $(R)/out/love-wasm.wasm test/kernel/all.l < /dev/null > out/wasm/kernel.log 2>&1; \
-	 grep -q "tests pass" out/wasm/kernel.log && ! grep -q "failed:" out/wasm/kernel.log \
+	@$(MAKE) -s out/wasm/love-wasm.image
+	@echo TEST out/love-wasm.wasm "(node: the kernel corpus on the woken image, serial, headless)"
+	@$(NODE) $(R)/port/wasm/inle.mjs --image out/wasm/love-wasm.image $(R)/out/love-wasm.wasm test/kernel/all.l \
+	   < /dev/null > out/wasm/kernel.log 2>&1; \
+	 grep -q "image awake" out/wasm/kernel.log \
+	   && grep -q "tests pass" out/wasm/kernel.log && ! grep -q "failed:" out/wasm/kernel.log \
 	   && ! grep -q "^0 tests pass" out/wasm/kernel.log \
 	   || { tail -20 out/wasm/kernel.log; echo "FAIL test_kernel_wasm"; exit 1; }
 	@grep "tests pass" out/wasm/kernel.log

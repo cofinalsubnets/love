@@ -74,7 +74,12 @@
       else if (m.fault) say('\n; fault: ' + m.fault + '\n'); };
     cpu.onerror = (e) => say('\n; worker: ' + e.message + '\n');
     const wasm = await (await fetch(new URL('../../out/love-wasm.wasm', import.meta.url))).arrayBuffer();
-    cpu.postMessage({ wasm, ring, ram: Number(q.get('ram') ?? 256), cmd, fb: { w: 640, h: 400, canvas: off } }, [wasm, off]);
+    // the heap image beside the module (`make wasm` bakes it): a wake is a moment where the
+    // egg boot is many seconds. absent, the kernel bakes the egg.
+    const image = await fetch(new URL('../../out/wasm/love-wasm.image', import.meta.url))
+      .then((r) => r.ok ? r.arrayBuffer() : null).catch(() => null);
+    cpu.postMessage({ wasm, ring, ram: Number(q.get('ram') ?? 256), cmd, fb: { w: 640, h: 400, canvas: off }, image },
+                    image ? [wasm, off, image] : [wasm, off]);
     canvas.focus(); }
 </script>
 </body>

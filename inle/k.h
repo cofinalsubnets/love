@@ -56,7 +56,11 @@ struct k_boot {
  // /chosen bootargs, and love.cmd beside love.elf on an ESP, firmware carrying
  // no line of its own). "" is a plain boot: the love-side split leaves cmdline
  // seatless and the console shell takes over.
- char cmdline[256]; };
+ char cmdline[256];
+ // a heap image the door carries (the wasm page fetches one beside the module and hands it
+ // over): kmain wakes it before it asks ai_baked_pick. 0 = none, ask.
+ void const *image;
+ uintptr_t image_len; };
 
 extern struct k_boot kboot;
 

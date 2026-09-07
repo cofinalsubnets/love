@@ -69,10 +69,13 @@ void k_fault_trigger(intptr_t n) { (void) n; __builtin_trap(); }
 void __ai_sigret(void) { }
 
 // the door: the worker grows the memory, then hands over the span above the module's
-// own data and shadow stack, and the boot line. a page with a canvas names its size, and
+// own data and shadow stack, the boot line, and the heap image it fetched, if any (laid
+// above the span; kmain copies it into the heap). a page with a canvas names its size, and
 // the framebuffer is carved off the top of that span; headless, the serial line is the
 // console (kmain's own law). never returns: kmain ends in k_reset.
-void k_start(uintptr_t lo, uintptr_t hi, uintptr_t w, uintptr_t h, char const *cmd) {
+void k_start(uintptr_t lo, uintptr_t hi, uintptr_t w, uintptr_t h, char const *cmd,
+             uintptr_t img, uintptr_t imgn) {
+  kboot.image = (void const *) img, kboot.image_len = imgn;
   if (w && h) {
     uintptr_t fb = (hi - w * h * 4) & ~(uintptr_t) 4095;
     kboot.fb.base = (void *) fb;

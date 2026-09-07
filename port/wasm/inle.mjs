@@ -6,24 +6,26 @@
 // machine has a framebuffer console too, and its pixels land in a PPM once a second --
 // what a gate can look at where a browser would show the canvas. --lift names a ramfs
 // file the machine's program leaves behind, and where to put it on this side, once the
-// program has quit (the reset).
+// program has quit (the reset). --image hands the machine a heap image to wake (the one
+// `bake PATH` on the boot line writes, lifted out: `make out/wasm/love-wasm.image`).
 //   usage: node port/wasm/inle.mjs [--fb WxH --dump screen.ppm] [--lift /in/machine:out/here]
-//                                  love-wasm.wasm [boot line ..]
+//                                  [--image love-wasm.image] love-wasm.wasm [boot line ..]
 import { Worker } from 'node:worker_threads';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { ring_n, ring_at, lift_n, lift_at, shared_n } from './cpu.mjs';
 
 const args = process.argv.slice(2);
-let fb = null, dump = null, liftReq = null;
+let fb = null, dump = null, liftReq = null, image = null;
 while (args[0]?.startsWith('--')) {
   const o = args.shift();
   if (o === '--fb') { const [w, h] = args.shift().split('x').map(Number); fb = { w, h }; }
   else if (o === '--dump') dump = args.shift();
   else if (o === '--lift') { const [from, to] = args.shift().split(':'); liftReq = { from, to: to ?? from.split('/').pop() }; }
+  else if (o === '--image') { const b = readFileSync(args.shift()); image = b.buffer.slice(b.byteOffset, b.byteOffset + b.length); }
   else { console.error('inle.mjs: unknown option ' + o); process.exit(2); } }
 if (fb) fb.dump = dump;
 const [wasm, ...cmd] = args;
-if (!wasm) { console.error('usage: inle.mjs [--fb WxH --dump screen.ppm] [--lift IN:OUT] love-wasm.wasm [boot line ..]'); process.exit(2); }
+if (!wasm) { console.error('usage: inle.mjs [--fb WxH --dump screen.ppm] [--lift IN:OUT] [--image IMG] love-wasm.wasm [boot line ..]'); process.exit(2); }
 
 const ring = new SharedArrayBuffer(shared_n);
 const ctl = new Int32Array(ring, 0, 4), kb = new Uint8Array(ring, ring_at, ring_n);
@@ -55,7 +57,7 @@ cpu.on('error', (e) => { process.stderr.write('\ninle: ' + e + '\n'); leave(1); 
 // word with a space in it is quoted back the way a shell had it
 const word = (a) => !/[\s"']/.test(a) ? a : !a.includes('"') ? '"' + a + '"' : "'" + a + "'";
 cpu.postMessage({ wasm: readFileSync(wasm), ring, ram: Number(process.env.INLE_RAM ?? 256),
-                  cmd: cmd.map(word).join(' '), fb });
+                  cmd: cmd.map(word).join(' '), fb, image });
 
 if (process.stdin.isTTY) process.stdin.setRawMode(true);
 process.stdin.on('data', (d) => { if (process.stdin.isTTY && d.includes(29)) leave(0); push(d); });

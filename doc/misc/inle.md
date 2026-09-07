@@ -46,9 +46,11 @@ hardware at all. The CPU under it is a worker (`port/wasm/cpu.mjs`) whose idle i
 `Atomics.wait` on a shared ring of key bytes, so the kernel really blocks; the terminals are
 `port/wasm/inle.mjs` under node (serial, the gate's lane) and `port/wasm/inle.html` in a
 browser (the framebuffer on a canvas, the keyboard as a serial terminal; `coi.js` makes a
-static host cross-origin isolated, which SharedArrayBuffer wants). Egg boot only so far: the
-image and the runtime archives are the two rungs not yet taken. `make test_kernel_wasm` runs
-the kernel corpus on it.
+static host cross-origin isolated, which SharedArrayBuffer wants). The seat wakes a heap
+image: `bake PATH` on any kernel's boot line writes the warm heap to the ramfs, the wasm lift
+carries it out (`make out/wasm/love-wasm.image`), and the page hands it to `k_start` as
+`kboot.image`. The runtime archives are not carried; mooncc compiles nolibc from the source
+the seat holds. `make test_kernel_wasm` bakes, then runs the kernel corpus on the wake.
 
 Missing: network.
 

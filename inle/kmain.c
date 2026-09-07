@@ -81,6 +81,9 @@ void kputn(uintptr_t n, int base) {
  while (i) kputc(buf[--i]); }
 // the kernel-only nif bracket (defs[] below); the linker synthesizes the pair
 extern struct ai_def const __start_ai_knifs[], __stop_ai_knifs[];
+// the bracket, for the image codec's nif slice (core/snap.c's weak default answers none)
+uintptr_t ai_knifs_slice(struct ai_def const **s) {
+  return *s = __start_ai_knifs, (uintptr_t)(__stop_ai_knifs - __start_ai_knifs); }
 // the metal image's far edge, PATCHED INTO THE FILE by the projection
 // (tools/kproject.l) -- the flat link's kimage_end, as a value the one binary
 // can carry. the sentinel is loud: unpatched, the memmap excludes nothing and
@@ -1198,6 +1201,22 @@ static lvm(lvm_disk_write) {
   Sp[1] = k_disk_write(Sp[0], Sp[1]);
   ai_musttail return Nextp(1, 1); }
 
+// the bake door: the heap as image bytes, written whole to one ramfs file
+static void k_bake(struct ai *g, char const *path) {
+  uintptr_t n = 0;
+  struct ai_image_bad bad = {0};
+  void *b = ai_image_save(g, &n, &bad);
+  int fd = b ? k_fs_open(path, strlen(path), 'w') : -1;
+  long w = fd < 0 ? -1 : k_fd_write(fd, b, (long) n);
+  if (fd >= 0) k_fd_close(fd);
+  if (w == (long) n) kputs("; inle -- baked\n");
+  else {                                          // the codec's step and its offending words
+    kputs("; inle -- bake refused: why "); kputn((uintptr_t) bad.why, 10);
+    kputs(" n "); kputn((uintptr_t) bad.n, 10);
+    for (int i = 0; i < 3 * bad.n && i < 6; i++) { kputs(" "); kputn(bad.q[i], 16); }
+    kputs(" fd "); kputn((uintptr_t) fd, 10); kputs(" w "); kputn((uintptr_t) w, 10); kputs("\n"); }
+  k_reset(); }
+
 // --- the SVM spike (x64 only; inle/x64/svm.c). (svm ()) is the capability and
 // (svm-run ()) runs one guest, answering (exitcode rax rip) or (). nothing else asks for a
 // guest yet: these two rows prove a guest can run and that the exit lands back in plain C.
@@ -1682,7 +1701,9 @@ void kmain(void) {
   struct ai *g = NULL;
   uintptr_t blen = 0;
   void const *bimg = NULL;
-  if (ai_baked_pick(&bimg, &blen)) g = ai_image_load(bimg, blen);
+  if (kboot.image_len) bimg = kboot.image, blen = kboot.image_len;
+  else if (!ai_baked_pick(&bimg, &blen)) blen = 0;
+  if (blen) g = ai_image_load(bimg, blen);
   bool woke = g != NULL;
   char const *s = woke ? "; inle -- image awake\n" : "; inle -- baking the egg\n";
   for (; *s; s++) serial_putc(*s);
@@ -1882,6 +1903,10 @@ void kmain(void) {
    "   korecat (kcat (kwords korelist 0 0 ())))");
   r = ai_evals_(r, "(reads (tap ((: (g i) (? (< i (tally korecat)) (link (peep korecat i 0) (g (+ 1 i))))) 0)))");
   }
+  // `bake PATH` on the boot line: the warm heap -- the crew in, the seat text run -- as an
+  // image file on the ramfs, then reset; a door that can carry a file out (the wasm lift)
+  // hands it to the next boot as kboot.image. the same bake the host's verb makes.
+  if (!memcmp(kboot.cmdline, "bake ", 5)) k_bake(r, kboot.cmdline + 5);
   // now the line wears its real shape and the program word dispatches off the
   // registry -- spawn's own door. a seated program quits with its status (the
   // reset door); an empty line falls to the console shell, the toolbox warm.

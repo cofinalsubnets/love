@@ -330,7 +330,7 @@ dist: dist-source dist-seed   # a release is both
 # laid tree serves its own page (`love serve`) -- and the page's generated files are
 # .sbignore's to drop, which selfpack reads too. each nom is matched as a path prefix
 # at a segment boundary (tools/selfpack.l).
-dist_drop = bench port/mps2 port/virt port/teensy41 port/playdate port/rp2040 port/nucleo446 port/port.mk
+dist_drop = bench
 .PHONY: force_src
 force_src: ;
 $(dist_source): force_src $(love0)
@@ -1005,7 +1005,7 @@ out/wasm/love.image: out/wasm/love.wasm port/wasm/bake.mjs port/wasm/loader.js
 ifeq ($(NODE),)
 wasm: out/wasm/love.wasm
 else
-wasm: out/wasm/love.wasm out/wasm/love.image
+wasm: out/wasm/love.wasm out/wasm/love.image out/wasm/love-wasm.image
 endif
 # the page's copy of the module and its image, beside the loader that fetches them. by
 # hand, as love.js was: a tracked 1.7 MB that every C edit would otherwise churn.
@@ -1017,7 +1017,7 @@ site-wasm: wasm
 # console painter with its fonts, inle/sys.c under nolibc, the host frontend whole -- with
 # inle/wasm/arch.c for the machine and the source blob as a wasm data object (mksrc.l's
 # text lane). one module beside out/love-$a.elf; the runtime rides in by need, and no
-# image yet: the egg bakes at boot. the CPU under it is port/wasm/inle.js, a worker;
+# the heap image is baked below. the CPU under it is port/wasm/cpu.mjs, a worker;
 # the terminals are port/wasm/inle.mjs (node) and port/wasm/inle.html (the page).
 kw_c = $(love_c) $R/core/quay/cga_8x8.c $R/core/quay/moderndos_8x16.c $R/core/quay/paint.c \
   $(k_free_c) $(host_c) $R/inle/wasm/arch.c
@@ -1033,6 +1033,14 @@ out/love-wasm.wasm: $(kw_c) $(kw_h) out/wasm/src.o out/lib/baked.h out/lib/distl
 	  -Icore/quay -Iapps/moon/include -o $@ $(kw_c) out/wasm/src.o
 wasm-emcc:                       # emcc's love, out/wasm/love.js: the foreign build ccwasm and test.mjs can take
 	@$(MAKE) -C port/wasm
+# the seat's heap image: the kernel booted once under node with `bake PATH` on the boot
+# line -- the egg, the modules and the korecat warm, the seat text run -- written to the
+# ramfs and lifted out at the reset. the page fetches it beside the module and the worker
+# hands it to k_start; a stale one is refused and the egg bakes, the host's own law.
+out/wasm/love-wasm.image: out/love-wasm.wasm port/wasm/cpu.mjs port/wasm/inle.mjs
+	@echo 'BAKE	'$@
+	@$(NODE) port/wasm/inle.mjs --lift /love.image:$@ out/love-wasm.wasm bake /love.image < /dev/null > out/wasm/bake.log 2>&1 \
+	   || { cat out/wasm/bake.log; exit 1; }
 
 clean:
 	rm -rf out

@@ -6,8 +6,9 @@
 // kmain writes __ai_osv = -1 and they take inle/sys.c -- so what comes through the one
 // import is inle/wasm/arch.c's five hypercalls, wearing linux's numbers.
 //
-//   in:  { wasm, ring, ram, cmd, fb }     the module's bytes, the shared ring, RAM in MiB,
-//                                         the boot line, and { w, h, canvas } or null
+//   in:  { wasm, ring, ram, cmd, fb,      the module's bytes, the shared ring, RAM in MiB,
+//          image }                        the boot line, { w, h, canvas } or null, and the
+//                                         heap image (`bake PATH` on the boot line) or null
 //   out: { serial }                       a run of the serial console's bytes, as text
 //        { reset }                        the kernel reset: the worker boots it again
 //        { fault }                        the module trapped: the message, and the worker stops
@@ -136,20 +137,23 @@ async function boot(msg) {
   memory = ex.mem ?? ex.memory;
   uni = Object.values(ex).some((f) => typeof f === 'function' && f.length === 16);
   // RAM is everything above the module's own pages: grow, and hand kmain the span. the
-  // boot line rides the top page of it, and a canvas's framebuffer is carved below that
-  // by k_start (inle/wasm/arch.c) -- the same sum here says where to blit from.
-  const lo = memory.buffer.byteLength;
-  if (memory.grow(BigInt(Math.ceil(msg.ram * 1048576 / 65536))) < 0n) throw new Error('memory.grow refused');
-  const hi = top = memory.buffer.byteLength - 4096;
+  // boot line rides the top page of it, the heap image (if the terminal brought one) sits
+  // below that, and a canvas's framebuffer is carved below those by k_start
+  // (inle/wasm/arch.c) -- the same sum here says where to blit from.
+  const lo = memory.buffer.byteLength, imgn = msg.image?.byteLength ?? 0;
+  if (memory.grow(BigInt(Math.ceil((msg.ram * 1048576 + imgn) / 65536))) < 0n) throw new Error('memory.grow refused');
+  let hi = top = memory.buffer.byteLength - 4096;
   const cmd = new TextEncoder().encode(msg.cmd ?? '');
   u8().set(cmd.subarray(0, 255), hi); u8()[hi + Math.min(cmd.length, 255)] = 0;
+  const img = imgn ? (hi - imgn) & ~7 : 0;
+  if (imgn) { u8().set(new Uint8Array(msg.image), img); hi = img & ~4095; }
   fb = msg.fb;
   if (fb) {
     fbAt = (hi - fb.w * fb.h * 4) & ~4095;
     if (fb.canvas) { fbCtx = fb.canvas.getContext('2d'); fbImg = fbCtx.createImageData(fb.w, fb.h); }
     else if (fb.dump && isNode) writeFileSync = (await import('node:fs')).writeFileSync; }
   seen = Atomics.load(ctl, 2);
-  call(ex.k_start, lo, hi, fb ? fb.w : 0, fb ? fb.h : 0, hi); }
+  call(ex.k_start, lo, hi, fb ? fb.w : 0, fb ? fb.h : 0, top, img, imgn); }
 
 // the terminals import the ring's shape from here, so this file also loads on a main
 // thread, where there is no port and nothing to do
