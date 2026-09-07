@@ -330,14 +330,19 @@ high-bit bytes, a 5000-byte sweep, the squeeze's longest run), and the kernel's 
 also its engine wherever the install declines -- inle, wasm, rv64. `(cask n)` + `snip` is
 the door either way: the native writes bytes, never allocates, and the caller copies the
 count out. Timed apart on the 8 MB corpus, `xlat` is 14 ms; `tr`'s other ~100 ms are
-the start (28) and `(slurp in)` (68). That slurp is not a byte at a time -- `strace`
-shows 2,050 reads of 4,096 -- but every read on an *inherited* fd is wrapped in an
-`F_GETFL`/`F_SETFL`/`F_SETFL` trio (`src/host/fd.c`: the bit must not be left on a
-terminal), 6,150 fcntls for 8 MB, and the ~33 µs a gulp costs is the love turn around
-each one. A pipe on stdin takes the bit once for the session (main.c's `inflag`) and
-pays none of that; a redirected file, which is what this gauge feeds, does not. The
-gulp size and that file case are the next lever for every stdin filter, not the
-transform. The trade between
+the start (28) and `(slurp in)` (68). That slurp was chased and it is **not the
+reader**: run first in a process it costs 68-93 ms, run second in the same process
+31 ms, and a different reader (the gulps consed, laid into one cask) swapped into
+first place takes the 75 instead. The first ~8 MB a process allocates is heap
+first-touch, whatever touches it. Two things were tried on the strength of the wrong
+reading and both are recorded so nobody tries them again: `ai_iobuf` 4096 -> 65536 cut
+the reads 16× and moved `tr` not at all while making `cut` **2× slower**; the gulp-list
+reader beats the jug by 24 vs 31 ms in steady state, not worth a floor primitive and a
+twelve-site sweep. (`strace` does show an `F_GETFL`/`F_SETFL` trio around every read of
+an inherited fd -- `src/host/fd.c`, the bit must not be left on a terminal -- but 6,150
+of them cost ~12 ms of kernel time, and a pipe on stdin takes the bit once for the
+session anyway.) So a stdin filter's clock reads: start 28 + first-touch ~45 + the
+work, and only the third term is the applet's. The trade between
 the two natives, since it came up: a nif costs a core rebuild
 (nifs.l is the compiler's business) and a roster entry; a kernel costs a hand-written IR
 per ISA, an assemble per process, and the riskiest code in the tree per line. Generic
@@ -400,7 +405,19 @@ jug put per byte -- so a byte lane that compiles pure index-and-compare loops wo
 on nothing here; what it could take (`tr`, `base64`, the scan) is already native. The
 lever left is the shape of the applets' own code: `rev` writes its output a byte at a
 time through the port (14% of its run), `cut` snips every field it does not print. Those
-are rewrites in love, not a compiler lane. Also open: `grep -E` is the backtracker;
+are rewrites in love, not a compiler lane.
+
+The `lvm_cur` + `lvm_unc` share is the currying: a call saturates into one n-ary apply
+only where the compiler knows the callee's arity at compile time -- a letrec lambda
+sibling, or a book global whose *value* it can read (`ev.l`'s `falook`/`napof`). Every
+call through a parameter or a looked-up value curries a partial per argument: `ulines`'s
+`dot`, `sortby`'s comparator, and the scanner reached as `(peep t 'sc ())` or a
+parameter -- two partials per line and per field in `cut`. The obvious cure was tried
+and does not work: binding the scanner as a top-level *value* in u.l so callers see its
+arity bakes it into the image as a plain closure (`nat?` answers 0 -- the walk, not the
+kernel), and `wc -l` went 103 -> 170 ms. Kernels must stay lazy, per process. What would
+saturate all of those sites at once is a runtime-arity-checked n-ary apply in the VM,
+not an applet edit; it is worth ~14% of `cut` and `sed`. Also open: `grep -E` is the backtracker;
 `sort`'s scaling row reads 7.7 with start subtracted, above n log n, and the C sort is
 ~1 µs an element on strings -- worth a look at the comparator; `tail -n1` reads the whole
 file where GNU seeks from the end.
