@@ -25,21 +25,21 @@
 (module 'holo
 (: ;; -- LEB128. unsigned rides // and % so a u64 past the fixnum stays exact; signed stops
    ;;    when the rest is the sign's own extension and the byte's bit 6 agrees. --
-   (uleb n) (: b (n % 128) r (n // 128) (? (r = 0) [b] (b + 128 . uleb r)))
+   (uleb n) (: b (n % 128) r (n // 128) (r @ 0 [b] (b + 128 . uleb r)))
    (sleb n) (: m (n % 128) b (? (m < 0) (m + 128) m) r ((n - b) // 128)
                (? ((r = 0 && b < 64) || (r = -1 && b >= 64)) [b] (b + 128 . sleb r)))
    (wrap64 n) (? (n > 9223372036854775807) (n - 18446744073709551616) n)   ; a u64 pattern as the signed i64 it encodes
    (wrap32 n) (? (n > 2147483647) (n - 4294967296) n)
-   (wbytes s) (map s (jot (tally s)))                 ; a string's bytes
-   (wname s) (uleb (tally s) + wbytes s)
-   (wvec items) (uleb (tally items) + catall items)   ; items: a list of byte lists
-   (wsect id bs) (id . uleb (tally bs) + bs)
+   (wbytes s) (map s ^#s)                 ; a string's bytes
+   (wname s) (uleb #s + wbytes s)
+   (wvec items) (uleb #items + catall items)   ; items: a list of byte lists
+   (wsect id bs) (id . uleb #bs + bs)
 
    ;; -- the types --
-   wasm-vt (tabof [('i32 >< 127) ('i64 >< 126) ('f32 >< 125) ('f64 >< 124) ('funcref >< 112)])
+   wasm-vt (tabof [('i32 . 127) ('i64 . 126) ('f32 . 125) ('f64 . 124) ('funcref . 112)])
    (vt t) (look wasm-vt t 'bad-valtype)
    (blocktype x) (? (= x ()) [64] (= x 'void) [64] (nom? x) [(vt x)] (sleb x))   ; a valtype, or a type index
-   wasm-kind (tabof [('func >< 0) ('table >< 1) ('memory >< 2) ('global >< 3)])
+   wasm-kind (tabof [('func . 0) ('table . 1) ('memory . 2) ('global . 3)])
    (kind k) (look wasm-kind k 'bad-kind)
 
    ;; -- the opcode table: op -> (code shape). code is a byte or, past the 0xfc prefix, the bytes;
@@ -96,69 +96,70 @@
      (i64.trunc_sat_f32_s (252 4) n) (i64.trunc_sat_f32_u (252 5) n)
      (i64.trunc_sat_f64_s (252 6) n) (i64.trunc_sat_f64_u (252 7) n)
      (memory.copy (252 10 0 0) n) (memory.fill (252 11 0) n))
-   wasm-ops (: t (tablet 0) _ (foldl (\ _ r (pin t <r >r)) 0 wasm-rows) t)
+   wasm-ops (foldl (t \ a . u \ pin t a u) {} wasm-rows)
 
    ;; -- one instruction form -> its bytes --
    (wins f)
-    (: r (peep wasm-ops <f ())
-       _ (? !(two? r) (scare 'bad-wasm-op <f) 0)
-       code (? (two? <r) <r [<r])
-       ((r 1) @
+    (: r (wasm-ops <f)
+       g <>f
+       _ (? (one? r) (scare 'bad-wasm-op <f) 0)
+       code (two? <r ? <r [<r])
+       (r 1 @
         'n    code
-        'u    (code + uleb (f 1))
-        'bt   (code + blocktype (? (two? >f) (f 1) 'void))
-        'brt  (code + wvec (map uleb (f 1)) + uleb (f 2))
-        'mem  (code + uleb (f 1) + uleb (f 2))
-        'i32c (code + sleb (wrap32 (f 1)))
-        'i64c (code + sleb (wrap64 (f 1)))
-        'f32c (code + le32 (f 1))
-        'f64c (code + le64 (f 1))
-        'ci   (code + uleb (f 1) + uleb (f 2))
+        'u    (code + uleb g)
+        'bt   (code + blocktype (two? >f ? g 'void))
+        'brt  (code + wvec (map uleb g) + uleb (f 2))
+        'mem  (code + uleb g + uleb <>>f)
+        'i32c (code + sleb (wrap32 g))
+        'i64c (code + sleb (wrap64 g))
+        'f32c (code + le32 g)
+        'f64c (code + le64 g)
+        'ci   (code + uleb g + uleb <>>f)
         'm0   (code + [0])
               (scare 'bad-wasm-shape <f)))
    (wexpr body) (catmap wins body + [11])           ; a body or an init expression, ended
 
    ;; -- the module --
-   (wlimits l is64) ((? (two? >l) 1 0) + (? is64 4 0) . uleb <l + (? (two? >l) (uleb (l 1)) ()))
-   (wfunctype t) (96 . wvec (map (\ x [(vt x)]) <t) + wvec (map (\ x [(vt x)]) (t 1)))
+   (wlimits l is64) (two? >l + (is64 ? 4 0) . uleb <l + (two? >l && uleb <>l))
+   (wfunctype t) (96 . wvec (map (\ x [(vt x)]) <t) + wvec (map (\ x [(vt x)]) <>t))
    (wdesc d is64)
     (<d @ 'func   (0 . uleb (d 1))
          'table  (1 112 . wlimits [(d 1) (d 1)] 0)
          'memory (2 . wlimits >d is64)
          'global [3 (vt (d 1)) (d 2)]
                  (scare 'bad-import-desc <d))
-   (wimport i is64) (wname <i + wname (i 1) + wdesc (i 2) is64)
+   (wimport i is64) (wname <i + wname <>i + wdesc <>>i is64)
    (wglobal g) ([(vt <g) (g 1)] + wexpr (g 2))
-   (wexport e) (wname <e + [(kind (e 1))] + uleb (e 2))
-   (wcode f) (: e (wvec (map (\ l (uleb <l + [(vt (l 1))])) (f 1)) + wexpr (f 2))
-                (uleb (tally e) + e))
-   (wdata d is64) (: bs (? (string? >d) (wbytes >d) >d)          ; (off byte ..), or (off . string)
-                     (0 . wexpr [[(? is64 'i64.const 'i32.const) <d]] + uleb (tally bs) + bs))
+   (wexport e) (wname <e + [(kind <>e)] + uleb (e 2))
+   (wcode f) (: e (wvec (map (a . b . _ \ uleb a + [(vt b)]) <>f) + wexpr <>>f)
+                (uleb #e + e))
+   (wdata d is64) (: bs (string? >d ? (wbytes >d) >d)          ; (off byte ..), or (off . string)
+                     (0 . wexpr [[(? is64 'i64.const 'i32.const) <d]] + uleb #bs + bs))
    ;; presence is two?, never nil?: nil? is the falsy test, a net over the whole value, and a
    ;; body carrying the minimum i64 nets negative -- a section would vanish in silence
-   (wsection id items f) (? !(two? items) () (wsect id (wvec (map f items))))
+   (wsection id items f) (two? items && wsect id (wvec (map f items)))
    (wasm-emit m)
     (: is64 (peep m 'mem64 1)
-       mem (peep m 'memory ())  tab (peep m 'table ())  start (peep m 'start -1)
-       elem (peep m 'elem ())
+       mem (m 'memory)  tab (m 'table)  start (peep m 'start -1)
+       elem (m 'elem)
        ([0 97 115 109 1 0 0 0]
-        + wsection 1 (peep m 'types ()) wfunctype
-        + wsection 2 (peep m 'imports ()) (\ i (wimport i is64))
-        + wsection 3 (peep m 'funcs ()) (\ f (uleb <f))
-        + (? (= tab ()) () (wsect 4 (wvec [(112 . wlimits [tab tab] 0)])))
-        + (? !(two? mem) () (wsect 5 (wvec [(wlimits mem is64)])))
-        + wsection 6 (peep m 'globals ()) wglobal
-        + wsection 7 (peep m 'exports ()) wexport
+        + wsection 1 (m 'types) wfunctype
+        + wsection 2 (m 'imports) (i \ wimport i is64)
+        + wsection 3 (m 'funcs) (f . _ \ uleb f)
+        + (tab != () && wsect 4 (wvec [(112 . wlimits [tab tab] 0)]))
+        + (two? mem && wsect 5 (wvec [(wlimits mem is64)]))
+        + wsection 6 (m 'globals) wglobal
+        + wsection 7 (m 'exports) wexport
         + (? (start < 0) () (wsect 8 (uleb start)))
-        + (? !(two? elem) () (wsect 9 (wvec [(0 . wexpr '((i32.const 0)) + wvec (map uleb elem))])))
-        + wsection 10 (peep m 'funcs ()) wcode
-        + wsection 11 (peep m 'data ()) (\ d (wdata d is64))
-        + (: ns (peep m 'names ())                   ; the "name" custom section: a trap's stack names its function
-             (? !(two? ns) ()
-                (: fm (wvec (map (\ n (uleb <n + wname (n 1))) ns))
-                   (wsect 0 (wname "name" + (1 . uleb (tally fm) + fm))))))))
+        + (two? elem && wsect 9 (wvec [(0 . wexpr '((i32.const 0)) + wvec (map uleb elem))]))
+        + wsection 10 (m 'funcs) wcode
+        + wsection 11 (m 'data) (d \ wdata d is64)
+        + (: ns (m 'names)                   ; the "name" custom section: a trap's stack names its function
+             (two? ns ?
+              (: fm (wvec (map (m . n . _ \ uleb m + wname n) ns))
+                 (wsect 0 (wname "name" + (1 . uleb #fm + fm))))))))
    (wasm-hex m) (hexs (wasm-emit m))
    (wins-hex body) (hexs (catmap wins body))
-   (wasm-write path m) (: q (open path "w") _ (say q (cask (wasm-emit m))) (close q))
+   (wasm-write path m) (: q (open path "w") (say q (cask (wasm-emit m)), close q))
 )
 ) ; module 'holo
