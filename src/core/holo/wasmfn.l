@@ -88,14 +88,14 @@
      + w-flags d 0)
    ;; mulo: d = a*b, the branch on signed overflow -- no wide multiply, so the quotient check,
    ;; guarded where the division itself would trap (-1 against the minimum)
-   (w-mulo d a b lbl dep)
+   (w-mulo-cond d a b)                               ; the overflow as an i32 on the stack
     (w-flags a b
      + [['local.get (w-A 0)] ['local.get (w-B 0)] '(i64.mul)] + w-set d
      + [['local.get (w-A 0)] '(i64.eqz) '(if i32) '(i32.const 0) '(else)
         ['local.get (w-A 0)] '(i64.const -1) '(i64.eq) '(if i32)
         ['local.get (w-B 0)] '(i64.const -9223372036854775808) '(i64.eq) '(else)]
-     + w-val d + [['local.get (w-A 0)] '(i64.div_s) ['local.get (w-B 0)] '(i64.ne) '(end) '(end) '(if)]
-     + w-jump lbl (dep + 1) + [['end]])
+     + w-val d + [['local.get (w-A 0)] '(i64.div_s) ['local.get (w-B 0)] '(i64.ne) '(end) '(end)])
+   (w-mulo d a b lbl dep) (w-mulo-cond d a b + '((if)) + w-jump lbl (dep + 1) + '((end)))
 
    ;; -- memory: (forms . memarg-offset); a negative displacement folds into the address --
    (w-mem base off) (? (off < 0) ((w-val base + [['i64.const off] '(i64.add)]) . 0) ((w-val base) . off))
@@ -226,19 +226,109 @@
               (? (<ins = 'label) (: _ (pin labs (ins 1) (k + 1)) (go >l () ((rev cur) . segs) (k + 1)))
                  (go >l (ins . cur) segs k))))
        ((go prog () () 0) . labs))
+   ;; -- the relooper (rung 5b): the function as basic blocks and their graph, and structured
+   ;;    control -- block, loop, br_if -- wherever the graph is reducible, so an engine sees a
+   ;;    loop as a loop. the dispatch loop stays for the irreducible rest, and whole under
+   ;;    MOON_ABLATE=reloop. the shape is Ramsey's (Beyond Relooper, 2022): a node's merge
+   ;;    children wear blocks, a loop header a loop, a branch to either is a br and any other
+   ;;    branch inlines its target, which only that branch reaches. --
+   ;; pass 1, in the IR's order -- the flags mode reads emission order, so every form is
+   ;; lowered here and the emission below only arranges. a block is [code kind target cond]:
+   ;; kind 'jmp (to a label), 'br (to a label on cond, an i32, else on to the next block),
+   ;; 'fall, 'end (cond the lowered exit: ret, a tail call, a trap)
+   (w-blocks prog)
+    (: labset (w-labels prog)
+       labs {}
+       (mk code kind tg cond) [(rev code) kind tg cond]
+       (go l cur acc)
+        (? (one? l) (rev (mk cur 'fall () () . acc))
+           (: f <l op <f
+              (? (op = 'label) (: bs (mk cur 'fall () () . acc) _ (pin labs (f 1) #bs) (go >l () bs))
+                 ((op = 'jmp || op = 'jmp8) && labset (f 1)) (go >l () (mk cur 'jmp (f 1) () . acc))
+                 (op = 'br || op = 'br8) (go >l () (mk cur 'br (f 2) (w-cond (f 1)) . acc))
+                 (op = 'mulo) (go >l () (mk cur 'br (f 5) (w-mulo-cond (f 1) (f 2) (f 3)) . acc))
+                 (member? op '(jmp jmp8 ret jmpr trap)) (go >l () (mk cur 'end () (w-ins f 0) . acc))
+                 (go >l (rev (w-ins f 0) + cur) acc))))
+       bs (go prog () ())
+       ((map (b \ [<b (b 1) ((b 1) @ ('jmp || 'br) (labs (b 2)) ()) (b 3)]) bs) . labs))
+   (w-abl? nm) (: s (getenv "MOON_ABLATE") t (show nm) n (string? s ? #s 0) m #t   ; gen's knob, its spelling
+                  (go i) (? (n < i + m) 0 (= (snip s i (i + m)) t) 1 (go (i + 1)))
+                  (n ? (go 0) 0))
+   ;; the body, or () where the graph is irreducible
+   (w-reloop prog)
+    (: bs <(w-blocks prog) n #bs
+       (succs i) (: b (bs i) nx (i + 1 < n ? [(i + 1)] ())
+                    ((b 1) @ 'jmp [(b 2)]
+                            'br  (member? (b 2) nx ? nx ((b 2) . nx))
+                            'fall nx
+                            ()))
+       ;; reverse postorder from the entry; what it misses is dead and never laid
+       seen {}
+       (visit i acc) (? (seen i) acc (: _ (pin seen i 1) (i . foldl (a \ j \ visit j a) acc (succs i))))
+       rpo (visit 0 ())
+       rpon (foldl (t \ k \ pin t (rpo k) k) {} ^#rpo)
+       (rk i) (peep rpon i -1)
+       pr (foldl (t \ i \ (map (j \ pin t j (i . t j)) (succs i), t)) {} rpo)
+       ;; dominators, the iterative way (Cooper, Harvey, Kennedy)
+       dm (pin {} 0 0)
+       (idom i) (peep dm i -1)
+       (inter a b) (? (a = b) a (rk a > rk b) (inter (idom a) b) (inter a (idom b)))
+       (step _) (foldl (\ ch v (? (v = 0) ch
+                                 (: ps (filter (p \ 0 <= idom p) (pr v))
+                                    nw (foldl inter <ps >ps)
+                                    (? (nw = idom v) ch (pin dm v nw, 1)))))
+                       0 rpo)
+       (fix _) (? (step 0) (fix 0) 0)
+       _ (fix 0)
+       (dom? v u) (? (u = v) 1 (u = 0) 0 (dom? v (idom u)))          ; v dominates u
+       ;; an edge back to a dominator is a loop's; any other edge against the order is
+       ;; irreducible, and the dispatch loop keeps that function
+       reducible (foldl (\ a u (a && foldl (\ a2 v (a2 && (rk u < rk v || dom? v u))) 1 (succs u))) 1 rpo)
+       hds (foldl (t \ v \ pin t v (foldl (\ a u (a || dom? v u)) 0 (pr v))) {} rpo)
+       mgs (foldl (t \ v \ pin t v (2 <= #(filter (u \ !(dom? v u)) (pr v)))) {} rpo)
+       (hd? v) (peep hds v 0)  (mg? v) (peep mgs v 0)
+       (merge-kids x) (filter (v \ v != 0 && mg? v && idom v = x) (rev rpo))   ; last in order outermost
+       ;; the emission. ctx: the labels open around the point, innermost first --
+       ;; (loop . h), (block . y), if
+       (depth e c k) (? (one? c) (scare 'wasm-reloop e) (= <c e) k (depth e >c (k + 1)))
+       (needs-br? x y) (y < n && (dom? y x || mg? y))
+       (br-to x y ctx) [['br (depth (dom? y x ? ('loop . y) ('block . y)) ctx 0)]]
+       (tree x ctx)
+        (: hd (hd? x) c2 (hd ? (('loop . x) . ctx) ctx)
+           body (within x (merge-kids x) c2)
+           (hd ? ('((loop)) + body + '((end))) body))
+       (within x ks ctx)
+        (? (two? ks) ('((block)) + within x >ks (('block . <ks) . ctx) + '((end)) + tree <ks ctx)
+           ((bs x) 0 + term x ctx))
+       (branch x y ctx) (? (n <= y) '((unreachable)) (needs-br? x y) (br-to x y ctx) (tree y ctx))
+       (term x ctx)
+        (: b (bs x) nx (x + 1)
+           ((b 1) @ 'jmp  (branch x (b 2) ctx)
+                   'fall (branch x nx ctx)
+                   'end  (b 3)
+                   'br   (: t (b 2) cc (b 3)
+                            (? (t = nx) (cc + '((drop)) + branch x nx ctx)
+                               (needs-br? x t) (cc + [['br_if (depth (dom? t x ? ('loop . t) ('block . t)) ctx 0)]] + branch x nx ctx)
+                               (needs-br? x nx) (cc + '((i32.eqz)) + [['br_if (depth (dom? nx x ? ('loop . nx) ('block . nx)) ctx 0)]] + tree t ctx)
+                               (cc + '((if)) + tree t ('if . ctx) + '((else)) + branch x nx ('if . ctx) + '((end)))))))
+       (? reducible (tree 0 () + '((unreachable))) ()))
    ;; -> (locals . body). mode: 'uni, or the parameter count of the per-arity lane
    (wasm-fn prog mode env)
     (: uni (= mode 'uni)
        _ (pin w-st 'uni (? uni 1 0)) _ (pin w-st 'fl 0) _ (pin w-st 'env env)
-       s (w-segs prog) segs <s k ((tally segs) - 1)
-       _ (pin w-st 'labs >s)
-       (seg j) (catmap (\ f (w-ins f (k - j))) (segs j))
-       ((w-locals (? uni 0 mode))
-        . [['i32.const 0] ['local.set (w-lab 0)] '(loop)]
-          + catmap (\ _ '((block))) (jot (k + 1))
-          + [['local.get (w-lab 0)] ['br_table (jot (k + 1)) 0]]
-          + catall (map (\ j ('((end)) + seg j)) (jot (k + 1)))
-          + '((end) (unreachable))))
+       _ (pin w-st 'labs {})
+       r (w-abl? 'reloop ? () (w-reloop prog))
+       (? (two? r) ((w-locals (? uni 0 mode)) . r)
+          (: _ (pin w-st 'fl 0)
+             s (w-segs prog) segs <s k ((tally segs) - 1)
+             _ (pin w-st 'labs >s)
+             (seg j) (catmap (\ f (w-ins f (k - j))) (segs j))
+             ((w-locals (? uni 0 mode))
+              . [['i32.const 0] ['local.set (w-lab 0)] '(loop)]
+                + catmap (\ _ '((block))) (jot (k + 1))
+                + [['local.get (w-lab 0)] ['br_table (jot (k + 1)) 0]]
+                + catall (map (\ j ('((end)) + seg j)) (jot (k + 1)))
+                + '((end) (unreachable))))))
 
    ;; -- the hand lane's program: functions by name, one type per arity in use. --
    ;;    p: {'imports ((mod name n) ..) 'fns ((name n prog) ..) 'exports (name ..)

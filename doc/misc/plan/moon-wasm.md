@@ -296,6 +296,32 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   module runs on it: of the 2.39× against emcc on the corpus, return_call can reach
   for up to that much. Worth the rung; measure it on ccwasm and test_wasm's corpus
   time when it lands, since wasm's call cost is its own.
+- **rung 5b — the relooper. ✅ LANDED (2026-09-07).** `w-reloop` in wasmfn.l: the function
+  as basic blocks (split at every label and terminator, lowered in the IR's own order so the
+  flags mode reads what it always read) and their graph; reverse postorder, dominators
+  (Cooper–Harvey–Kennedy), back edges, merge nodes; then Ramsey's shape (*Beyond
+  Relooper*, 2022) — a node's merge children wear `block`s (the last in order outermost), a
+  loop header a `loop`, a branch to either is a `br`/`br_if`, any other branch inlines its
+  target, which only that branch reaches. An irreducible graph keeps the dispatch loop for
+  that function (none in love.wasm: 839 of 839 reduce, 292 of 292 in the nif drivers), and
+  `MOON_ABLATE=reloop` is the old world whole. The gates: the hand lane's 23, `test_ccwasm`
+  153 + emcc, `test_cts_wasm` 210/9/1, `test_wasm`'s 4765 + screen + horn, and the page in
+  Firefox. **What it bought** (ccwasm, medians of 5):
+
+  | row | dispatch | relooped | vs emcc -O2 before → after | vs emcc -O0 now |
+  |---|---:|---:|---:|---:|
+  | sha256 | 819 ms | 461 ms | 5.15× → 3.22× | 0.93× |
+  | md5 | 249 | 159 | 1.73× → 1.12× | 0.81× |
+  | crc32 | 67 | 57 | 1.29× → 1.27× | 0.95× |
+  | cksum | 68 | 58 | 1.42× → 1.21× | 0.91× |
+  | deflate | 628 | 310 | 2.88× → 1.52× | 0.77× |
+  | inflate | 107 | 87 | 1.57× → 1.34× | 0.98× |
+
+  mooncc beats emcc -O0 on every row now, and the module is 9% smaller (1,343,565 →
+  1,217,518 bytes; the nif drivers 8–15% smaller). **The love corpus did not move** (32.1 →
+  32.7 s, noise): the VM's hot functions are small tail-threaded ops with little control
+  flow of their own, so their cost is the calls and the memory, not the dispatch. The
+  corpus's remaining 1.8× against emcc is the next question, and it is not this one.
 - **the locals-roster lever: MEASURED, DOES NOT PAY (2026-09-07).** The reading after
   ccwasm's first fill was that the array-heavy rows lose on wasm locals because the lane
   inherits rv64's 27-register roster where wasm has unlimited locals. Ablated before
