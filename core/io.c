@@ -354,7 +354,7 @@ static struct ai *to_writen(struct ai *g, unsigned char const *src, uintptr_t n)
  g->sp++;
  return g->b = 0, g; }
 
-// the horn's door is the host's (host/horn.c); a link without one has a horn that is gone
+// the horn's door is the host's (inle/horn.c); a link without one has a horn that is gone
 __attribute__((weak)) struct ai *ai_horn_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
  return g->b = -1, g; }
 

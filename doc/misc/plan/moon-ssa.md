@@ -510,7 +510,7 @@ until rung 6.
   (superseded) rv64 pricing was BLOCKED before it started: the hosted cross binary
   (`make xa=rv64 out/x-rv64/love`) refuses in BOTH worlds on a
   pre-existing gap — "no lane for a variable-length array on rv64"
-  (host/image.c image_bake) — so there is no corpus lane to meter. The
+  (inle/image.c image_bake) — so there is no corpus lane to meter. The
   rv64 flip decision waits on that lane (or on choosing a smaller
   representative corpus that runs under qemu-riscv64), not on the
   allocator.

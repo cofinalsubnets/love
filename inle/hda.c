@@ -1,5 +1,5 @@
 // hda -- the sound card: Intel HD Audio, polled, one output stream. the body of
-// love.h's k_horn_* C face on inle; host/horn.c's port stands over it, and
+// love.h's k_horn_* C face on inle; inle/horn.c's port stands over it, and
 // inle/doomsnd.c's mixer calls it directly.
 //
 // x64 finds the controller by PCI class (04.03 -- every laptop and desktop of the

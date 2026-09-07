@@ -1,4 +1,4 @@
-// host/image.c -- file I/O around the stdio-free image codec in snap.c (ai_image_save /
+// inle/image.c -- file I/O around the stdio-free image codec in snap.c (ai_image_save /
 // ai_image_load). that codec rides love_tu, which the port/ boards link with no stdio
 // aboard, so stdio stops here. main.c calls image_bake (lay the image back into the
 // binary's own .image section), image_dump (write a plain image file) and image_load.

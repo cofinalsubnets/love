@@ -1,7 +1,7 @@
 #!/bin/sh
 # ccbench.sh -- the COMPILER shootout (the page's FOURTH table). Builds the love host
 # binary with three C compilers and, for each, reports four wall-clock costs:
-#   build : compile every C translation unit (core/love.c + host/*.c + the am math floor)
+#   build : compile every C translation unit (core/love.c + inle/*.c + the am math floor)
 #           and link a working `love` -- source to runnable binary. ⚠ the mooncc lane
 #           builds ONCE UNTIMED first; the note above that call says why, and the row read
 #           2.2x too high until it did.
@@ -60,7 +60,7 @@
 #   build is timed once (a stable multi-second cost, and the artifact is reused);
 #   test subtracts two medians of `samples` runs each (corpus, then empty boot), default 3.
 # resolve the repo root ABSOLUTELY: the build lanes cd into it to reach the source
-# globs (core/love.c, host/*.c, apps/...), so every output/include path below must be absolute.
+# globs (core/love.c, inle/*.c, apps/...), so every output/include path below must be absolute.
 R=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 TIMEOUT=${1:-180}
 SAMPLES=${2:-3}
@@ -90,11 +90,11 @@ fi
 # codegen or speed factor. Keeping it would bench a compiler's warning set, not its
 # throughput -- gcc's -Wall flags a benign construct in core/love.c (-Wmisleading-indentation)
 # that clang doesn't, and that shouldn't scratch it from a SPEED race.
-CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/core -I$R/host -I$R/inle -I$R/out/lib"
+CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/core -I$R/inle -I$R/out/lib"
 # the hosted TU roster, mk/common.mk's spelling: the core (love_tu + the codec) under
-# core/, and the host set is host/ whole
+# core/, and the host set is inle/ less the kernel's own six
 love_tu="love gc ev io map snap num arr gz"
-host_cs=$(ls "$R"/host/*.c)
+host_cs=$(ls "$R"/inle/*.c | grep -v '/\(kmain\|blk\|hda\|sys\|doom\|doomsnd\)\.c$')
 # mk/common.mk's $(data_ld), which a bench link owes exactly as a host link does: the data
 # sentinels' tiling IS core/love.h's ai_typ, and ld left to itself keeps each love.data.N an
 # orphan in first-encountered order -- gcc emits love.data.7 first, so lvm_str lands
@@ -145,9 +145,9 @@ build_mooncc() { # $1=binpath
   bin=$1; od=$WORK/mooncc; rm -rf "$od"; mkdir -p "$od"
   ( cd "$R" || exit 1
     for b in $love_tu; do
-      mc -D ai_tco=1 -D AiHaveVersionH -Iout -I. -Icore -Ihost -Iinle -Iout/lib -c "core/$b.c" "$od/$b.o" || exit 1; done
+      mc -D ai_tco=1 -D AiHaveVersionH -Iout -I. -Icore -Iinle -Iout/lib -c "core/$b.c" "$od/$b.o" || exit 1; done
     for f in $host_cs; do b=$(basename "$f" .c)
-      mc -D ai_tco=1 -D AiHaveVersionH -Iout -I. -Icore -Ihost -Iinle -Iout/lib -c "$f" "$od/host_$b.o" || exit 1; done
+      mc -D ai_tco=1 -D AiHaveVersionH -Iout -I. -Icore -Iinle -Iout/lib -c "$f" "$od/host_$b.o" || exit 1; done
     # no nolibc object: the link owes its symbols and the driver supplies them
     # member by need, so the dead areas never arrive. ⚠ ccsize/ccdead therefore
     # read mooncc's libc off the BINARY's complement, not off a nolibc.o.
@@ -161,7 +161,7 @@ build_mooncc() { # $1=binpath
 
 # the corpus as ONE file, fed by REDIRECT. It arrives on stdin either way (which keeps
 # the one-global-scope property), but a redirect is seekable and a pipe is not, and only
-# a seekable fd 0 gets a read run (host/main.c). Piping still costs 953K reads over this
+# a seekable fd 0 gets a read run (inle/main.c). Piping still costs 953K reads over this
 # corpus -- one per byte, which no pipe can be spared -- and syscall time is the SAME work
 # in all three lanes: kernel, not codegen, so it only dilutes what this table is seeing.
 CORPUS1=$WORK/corpus.l

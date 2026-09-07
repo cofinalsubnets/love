@@ -51,7 +51,7 @@
    ; the hue-* bindings are dropped: they are in the book only because this
    ; generator loads hue.l to read its table. they are the tool, not the language.
    ; the book is only the language once it has been sealed, and `book` is the
-   ; tell: host/main.c pulls it -- with nif/nifx -- at the end of every boot, so a
+   ; tell: inle/main.c pulls it -- with nif/nifx -- at the end of every boot, so a
    ; run that can still see it is one where the seal did not happen. writing the
    ; compiler's own internals into the syntax file would be freezing build state
    ; and calling it the language, so this dies loudly rather than emit a file that

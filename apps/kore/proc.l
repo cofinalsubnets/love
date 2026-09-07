@@ -1,7 +1,7 @@
 ; apps/kore/proc.l -- the process and world tools of kore: env, printenv, sleep,
 ; kill, xargs, date, id, whoami, groups.
 ; a toolbox file, no seat -- kore is its door; loads after core.l and rides the
-; u-floor. no nifs of its own: environ/getenv/setenv (host/main.c + init.c),
+; u-floor. no nifs of its own: environ/getenv/setenv (inle/main.c + init.c),
 ; spawn/wait (init.c's posix lane -- spawn answers the pid or a NEGATIVE errno,
 ; a child that cannot exec _exit(127)s), still (pty.c's kill), rest (the core
 ; sleep, milliseconds). a body-less top-level `:` leaking one pure helper
@@ -46,7 +46,7 @@
                               (setp >a))
                          a)))
        ; the options come first: -i empties the environment, -u NAME drops one --
-       ; a non-string value unsets (host/main.c's setenv shape); then the assignments
+       ; a non-string value unsets (inle/main.c's setenv shape); then the assignments
        (unset-all e) (? !(two? e) 0 (: k <e i (eqat k) _ (setenv (? i (snip k 0 i) k) ()) (unset-all >e)))
        (opts a) (? !(two? a) a
                   (<a = "-i") (: _ (unset-all (environ 0)) (opts >a))

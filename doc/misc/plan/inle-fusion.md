@@ -4,7 +4,7 @@
 `out/love-x64.elf` share `core/love.c`, `am.c` and quay -- ~86% of the
 kernel's text and 78% of the host's -- and then implement twenty-one of the same
 behaviours twice. `open`, `stat`, `readdir`, `lseek`, `mkdir`, `rename`, `pipe`,
-`dup`: each is one body in `host/posix.c` and a second in `inle/kmain.c`. The
+`dup`: each is one body in `inle/posix.c` and a second in `inle/kmain.c`. The
 end state is one ELF per ISA that boots on metal or runs hosted, with inle a
 third seat beside host and wasm rather than a second application.
 
@@ -18,7 +18,7 @@ callable inside the kernel, which is what lets more of the crew run there.
 
 - **rung 0** (`4d0106ed`) -- one nif registration mechanism. `kmain.c`'s `defs[]`
   rides the `love_nifs` section and the kernel drains `[__start_love_nifs,
-  __stop_love_nifs)` like `host/main.c:1291` does. Three lines of code; it is the
+  __stop_love_nifs)` like `inle/main.c:1291` does. Three lines of code; it is the
   gate for everything else, because the image indexes host nifs BY POSITION in
   that section.
 - **the syscall seam** (`67ab3584`, `46417cf5`) -- `inle/sys.c` answers
@@ -47,7 +47,7 @@ callable inside the kernel, which is what lets more of the crew run there.
 
 | | |
 |---|---|
-| syscalls `host/posix.c` reaches | **34** (not 78 -- that is all of nolibc) |
+| syscalls `inle/posix.c` reaches | **34** (not 78 -- that is all of nolibc) |
 | ..answered so far | **20**: read/write/close/lseek; the path family (openat, newfstatat, mkdirat, unlinkat, renameat, chdir, getcwd, fchmodat, utimensat); the fd family (pipe2, dup3, fcntl, fstat, getdents64); getpid + clock_gettime |
 | ..that inle simply lacks, and `-ENOSYS` already answers | ~9 (clone, wait4, kill, setpgid, setsid, mount, unshare, madvise, getpgid) |
 | `posix.c` changes needed to compile freestanding | **none** -- verified, it builds clean under the kernel's flags today |
@@ -126,7 +126,7 @@ twenty-one behaviours stop existing twice.
   stays with the nif, where g is threaded. per-task fd tables, if ever, take
   identity as an explicit pid into pid-keyed kernel tables (k_seats' shape),
   never an ambient g.
-- A3 ✅ `host/posix.c` rides the kernel whole: 66 nolibc members named into
+- A3 ✅ `inle/posix.c` rides the kernel whole: 66 nolibc members named into
   `c_c` (core.c stays out; inle/sys.c answers its four seat symbols -- environ,
   the unbuffered std streams, `__ai_sigret`), and kmain shed its SEVENTEEN
   posix twins in the same commit. `open`/`close` stay -- their host twins live
@@ -152,7 +152,7 @@ every runtime branch fusion needs becomes live and gated before anything merges.
   default for links without the door; and the kernel links the REAL mksys tail
   (dead on metal, but it is the fused shape and it answers `__ai_sigret` and
   the netbsd leaves the stubs used to fake).
-- B2 ✅ `host/fd.c`, one TU both links carry: `ai_clock` is one
+- B2 ✅ `inle/fd.c`, one TU both links carry: `ai_clock` is one
   clock_gettime body (inle/sys.c's arm serves it from `k_clock_ms`);
   `ai_fd_port_vt` + the statics exist once, the host bodies branching to
   kmain's exported `k_port_*` lanes on v<0 -- the port protocol keeps busy

@@ -16,7 +16,7 @@
 ; autorepeat on so a held key is not a release every 40 ms. the socket is polled
 ; between frames (cue?), never waited on: doom's own tick keeps the clock.
 ; sound rides the horn's C face inside the mixer, so `HORN=none love doom` is a
-; silent game and HORN=/dev/snd/pcmC1D0p names a card (host/horn.c).
+; silent game and HORN=/dev/snd/pcmC1D0p names a card (inle/horn.c).
 ; -frames N ends the game after N drawn frames: the gate's door, and nobody else's.
 (module 'doom
 (use 'xwire)

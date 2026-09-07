@@ -1,4 +1,4 @@
-// host/src.c -- the artifact's own source, handed back out. auto-globbed and
+// inle/src.c -- the artifact's own source, handed back out. auto-globbed and
 // AiNif-registered, the fs.c discipline: (source-gz ()) -> the embedded
 // love-<ver>.tar.gz bytes | () when none is baked in. tools/mksrc.l lays the
 // archive as two .rodata symbols, the dist link pulls it in, core/boot/post.l's

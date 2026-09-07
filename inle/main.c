@@ -18,7 +18,7 @@
 #include <sys/wait.h>
 #include <sys/mman.h>    // the first boot's inflate buffer (mmap, no malloc)
 
-// ai_clock lives in host/posix.c, one body for this frontend and the kernel's.
+// ai_clock lives in inle/posix.c, one body for this frontend and the kernel's.
 // the fine clock's real source (the weak default in love.c degrades to ms*1e6)
 ai_noinline intptr_t ai_nclock(void) {
  struct timespec ts;
@@ -339,7 +339,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
 
 #else
 // the full love: raw terminal mode for the interactive REPL, and the CLI driver and the
-// glaze off host/cats.c. the tty is one terminal, so its cooked baseline and its atexit
+// glaze off inle/cats.c. the tty is one terminal, so its cooked baseline and its atexit
 // live in posix.c, which the (raw on) nif drives. the capture-once latch there is what makes
 // a repl that raws after bao already did restore the true baseline rather than a raw one.
 #define raw_mode() ((void) ai_raw_mode(1))
@@ -486,7 +486,7 @@ static unsigned char const *fb_find(unsigned char const *t, uintptr_t n,
   return NULL; }
 
 static void first_boot(char const **argv) {
-  if (ai_srcgz_len < 18) return;                     // host/src.c's weak zero: this link carries no source
+  if (ai_srcgz_len < 18) return;                     // inle/src.c's weak zero: this link carries no source
   // an env var because the state it guards spans an exec: the re-exec below sets it, so
   // the binary that comes back knows it already tried and a failed bake cannot loop.
   if (getenv("LOVE_FIRST_BOOT")) {
@@ -499,7 +499,7 @@ static void first_boot(char const **argv) {
   if (!t) {                                          // truncated or not gzip; or the mmap failed
     fprintf(stderr, "; first boot: the carried source will not inflate -- running from source\n");
     return; }
-  // per-process, for the reason the bake's scratch is (host/image.c): concurrent first
+  // per-process, for the reason the bake's scratch is (inle/image.c): concurrent first
   // boots on one name would write into and unlink each other's cat.
   snprintf(cat, sizeof cat, "%s.firstboot.%ld.l", exe, (long) getpid());
   int fd = open(cat, O_WRONLY | O_CREAT | O_TRUNC, 0600);

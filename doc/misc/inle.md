@@ -66,13 +66,11 @@ Three mappings, all of them already half-built:
 * **tasks are the processes.** `twirl` answers a pid, `catch` waits on one, and the scheduler
   already parks a task on an fd and wakes the ready one (``).
 
-⚠ **The kernel links no `host/*.c` yet, and that is a rung rather than a rule** — `k_shared_c`
-is love.c + am.c + quay + libc. The nif MECHANISM is no longer a difference: `kmain.c`'s
-`defs[]` rides the `love_nifs` section and the kernel drains `[__start_love_nifs, __stop_love_nifs)`
-exactly as `host/main.c` does, so a `host/<app>.c` added to this build registers itself with
-no edit. What is still written fresh is the nif BODIES, and `doc/misc/plan/inle-fusion.md` is the
-plan for retiring that: `inle/sys.c` answers `__ai_sys`, so nolibc — and everything written
-against it, `host/posix.c` included — can stand on this kernel instead of a hosted one.
+**host/ is inle/'s now** (2026-09-07): the hosted surface -- main.c, posix.c, sock.c, fd.c,
+image.c and the rest -- and the kernel are two sides of one seam, nolibc's `__ai_sys`, and one
+link carries both (`doc/misc/plan/inle-fusion.md`, phases A-D). The kernel links that surface
+whole: `host_c` is inle/ less the kernel's own six files, and a `inle/<app>.c` dropped in
+registers its nifs on every seat with no rule edit.
 
 ⚠ **The conventions are `doc/misc/posix.md`'s, exactly.** An effect answers `()` | an errno
 nom | `'badarg` on misuse; a value answers the value | `()` absence | a nom. `stat` answers

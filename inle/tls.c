@@ -1,4 +1,4 @@
-// host/tls.c -- the C twins of apps/tls's two ciphers, auto-globbed + AiNif-
+// inle/tls.c -- the C twins of apps/tls's two ciphers, auto-globbed + AiNif-
 // registered (no love.c/love.h/main.c edit), the hash.c discipline:
 //
 //   (chacha20 key nonce ctr txt) -> a string as long as txt   | () misuse

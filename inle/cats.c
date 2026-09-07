@@ -1,7 +1,7 @@
 // cats.c -- the baked source, one copy for the whole link: the egg's four texts, the
 // module registry, the glaze and the CLI driver, laid by tools/lcat.l into one header, the
-// texts DEFLATED. host/main.c and inle/kmain.c both warm from these through the
-// calls below; see host/cats.h.
+// texts DEFLATED. inle/main.c and inle/kmain.c both warm from these through the
+// calls below; see inle/cats.h.
 // only a love with no image to wake reads any of it, so the inflate lands on the lane
 // that was already warming an egg -- never on a shipped boot.
 #include "love.h"

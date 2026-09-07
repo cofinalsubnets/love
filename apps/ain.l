@@ -8,7 +8,7 @@
 ; stdout, both live at once. Two tasks, each parked in a port read on a different
 ; fd, interleave with no select loop: the cooperative scheduler poll()s the fd a
 ; parked task blocks on (ai_wait_fds) and wakes the ready one (get yields when
-; its fd is not ready -- see host/sock.c / love.c). So the whole program is just two
+; its fd is not ready -- see inle/sock.c / love.c). So the whole program is just two
 ; pump loops + a teardown discipline; the real work is the socket nifs in C.
 ;
 ; Run it straight (prel is ALREADY in the egg -- do NOT `-l core/boot/prel.l`; the egg mops
@@ -17,7 +17,7 @@
 ;   out/love apps/ain.l -l port
 ; or as the `nc` applet of the multi-call `kore` (apps/kore/kore.l -- the header's old
 ; "until the egg bakes ain into a multi-call binary" note, landed). The socket nifs
-; (connect/listen/accept/seal) live in host/sock.c; prel stays socket-free so the
+; (connect/listen/accept/seal) live in inle/sock.c; prel stays socket-free so the
 ; kernel/wasm frontends are unaffected.
 
 ; The whole tool is one define: a body-less top-level `:` leaks `ain-main` (args ->

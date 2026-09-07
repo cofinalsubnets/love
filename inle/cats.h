@@ -1,6 +1,6 @@
-// cats.h -- the baked source both frontends warm from. host/main.c (hosted) and
+// cats.h -- the baked source both frontends warm from. inle/main.c (hosted) and
 // inle/kmain.c (inle) run the same egg and register the same modules, and the artifact
-// carries BOTH of them -- so these are one definition (host/cats.c) rather than a static
+// carries BOTH of them -- so these are one definition (inle/cats.c) rather than a static
 // apiece, which is the whole prel said twice in every link.
 // ⚠ not love0's: it LAYS the header (tools/lcat.l), and its own boot rides out/lib/boot0.h.
 #ifndef AI_CATS_H
@@ -14,7 +14,7 @@
 #endif
 
 // the texts ride DEFLATED, so they are reached through calls rather than named: the
-// blobs and the inflate are host/cats.c's alone, and a frontend asks for the effect.
+// blobs and the inflate are inle/cats.c's alone, and a frontend asks for the effect.
 // warm the egg from its four texts -- prel carries ev's half spliced after its own.
 struct ai *ai_cats_egg(struct ai *g);
 

@@ -109,9 +109,9 @@ love_c = $(love_tu_c) $R/apps/moon/lib/math/am.c
 # the per-ISA set ONE machine's build takes, and the directory is the roster: empty on
 # an arch with no seat, which is what the rebuild gates read to skip their kernel half.
 hosta_c = $(wildcard $R/inle/$(hosta)/*.c)
-# ..and the host lane is a whole directory of its own: drop a host/<app>.c in and
-# its nifs register with no rule edit, exactly as the old host/*.c wildcard promised.
-host_c = $(wildcard $R/host/*.c)
+# ..and the hosted surface is inle/ less the kernel's own six (kmain, the syscall table,
+# the two drivers, doom): drop an inle/<app>.c in and its nifs register with no rule edit.
+host_c = $(filter-out $(addprefix $R/inle/,kmain.c blk.c hda.c sys.c doom.c doomsnd.c),$(wildcard $R/inle/*.c))
 # the quay engine every seat carries. paint.c (32bpp) and nif.c (the love door) are
 # per-seat -- a 1-bit device wants neither, the host unity-includes nif.c -- so a seat that
 # wants one NAMES it rather than taking it here.
@@ -120,7 +120,7 @@ f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/core/quay/*.c))
 # reaches it through -- and a negative __ai_osv (written at kmain) takes the
 # __ai_inle arm, inle/sys.c answering the canonical numbers in C. mooncc builds
 # the kernel, so it builds
-# the kernel's libc too -- there is no second copy to drift. this is host/posix.c's
+# the kernel's libc too -- there is no second copy to drift. this is inle/posix.c's
 # closure (plan A3) plus the members love.c's hosted compile reaches (plan C1:
 # the mmap family behind the W^X arena's runtime branch, refused -ENOSYS on
 # metal). core.c stays OUT -- it carries malloc, the process entry and the
@@ -165,7 +165,7 @@ ai_cflags = -std=$(ai_std) -g -O2 -pipe $(EXTRA_CFLAGS) \
   -Wall -Wextra -Werror -Wstrict-prototypes -Wno-unused-parameter \
   -Wmissing-field-initializers -Wno-implicit-fallthrough\
   -falign-functions=16 -fno-stack-protector
-# ⚠ a strict -std sets __STRICT_ANSI__ and glibc then hides its POSIX half -- host/main.c
+# ⚠ a strict -std sets __STRICT_ANSI__ and glibc then hides its POSIX half -- inle/main.c
 # owes clock_gettime and kill, so the level is asked for by name.
 # -fcf-protection (Intel CET) is x86-only; the non-x86 seats have no CET to turn off and
 # take it as a no-op.

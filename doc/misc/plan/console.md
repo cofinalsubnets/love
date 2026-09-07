@@ -34,7 +34,7 @@ that is a compiler.
 ## the ladder
 
 - **rung 0 -- the console in the page.** ✅ LANDED. the wasm seat carries quay's
-  engine and its love door (host.c unity-includes quay.c + nif.c, as host/cb.c does)
+  engine and its love door (host.c unity-includes quay.c + nif.c, as inle/cb.c does)
   plus one nif of its own, `(mirror scr)`, which copies a screen's head and cells to a
   buffer the page reads through `ai_mirror`; `ai_palette` hands out the xterm256 table
   paint.c spends and `ai_unfold` the cp437 fold, so the page owns no second recipe.

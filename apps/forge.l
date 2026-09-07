@@ -60,7 +60,7 @@
 ; vmas today. one arena for the batch is a change to that seam, and this shape is what feeds it.
 ;
 ; it needs the glaze module, not the glaze hook: the seal pulls `nif`/`nifx` off the book on
-; every boot (host/main.c) and `(from 'glaze 'nif)` is the one door left. LOVE_NO_GLAZE=1 clears
+; every boot (inle/main.c) and `(from 'glaze 'nif)` is the one door left. LOVE_NO_GLAZE=1 clears
 ; the jit hook and keeps the module, so a pure-interpreter session still forges.
 (:
    ; --- the ABI kit -------------------------------------------------------------------

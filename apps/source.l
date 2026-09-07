@@ -154,7 +154,7 @@
    ; a dirty tree still fails.
    ; the lay is an egg -- the crew arrives at bake and a bake means running the artifact,
    ; which this machine cannot do for another ISA. the egg carries its source and the dist
-   ; roster, and its first boot on the target bakes and patches it in place (host/main.c),
+   ; roster, and its first boot on the target bakes and patches it in place (inle/main.c),
    ; the same bytes a native `make dist` lays.
    (seed-cross root xa dst)
     (: made (root + "/out/x-" + (show (intern xa)) + "/love")

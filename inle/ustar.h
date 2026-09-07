@@ -1,4 +1,4 @@
-// ustar.h -- decoding the carried source blob (host/src.c's ai_srcgz): a gzip member
+// ustar.h -- decoding the carried source blob (inle/src.c's ai_srcgz): a gzip member
 // wrapping a ustar archive. two callers WALK it differently and decode it identically --
 // the first boot (main.c) mmaps and wants one member, the kernel's ram fs (kmain.c)
 // kmallocs and wants every one -- so the walk stays theirs and the header reading is here.

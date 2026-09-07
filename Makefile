@@ -25,7 +25,7 @@ endif
 
 # love0's boot text: one header, one src0_<name>[] literal per file, laid by sed alone --
 # love0 is what runs lcat, so nothing love-made can sit under it. every boot file rides;
-# host/main.c names the ones love0 evaluates.
+# inle/main.c names the ones love0 evaluates.
 sed_lit = sed \
   -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/'
 boot0_l = $(wildcard core/boot/*.l) core/holo/holo.l core/holo/x64.l core/holo/a64.l
@@ -90,7 +90,7 @@ out/lib/readme.bin: $(love0) $(R)/core/boot/post.l $(R)/VERSION
 ho = out$(hsuf)
 h_o = $(love_c:$(R)/%.c=$(ho)/%.o)
 host_o = $(host_c:$(R)/%.c=$(ho)/%.o)
-hcc = LOVE_NO_IMAGE= $(CC) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Icore -Ihost -Iinle -Iout/lib
+hcc = LOVE_NO_IMAGE= $(CC) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Icore -Iinle -Iout/lib
 image_ldflags = -Wl,--section-start=.love.image=0x2000000
 .PHONY: force_hostcc
 force_hostcc: ;
@@ -115,10 +115,10 @@ $(ho)/liblove.a: $(h_o)
 	@rm -f $@; ar rcs $@ $^
 
 # pinned to out/0, never $(ho)/0: love0 is one binary whatever HCC and tco say
-love0_o = $(patsubst $(R)/%.c,out/0/%.o,$(filter-out $(R)/host/cats.c,$(host_c)) $(love_c))
-out/0/host/main.o: out/lib/boot0.h
-out/0/host/cb.o: core/quay/quay.c core/quay/nif.c core/quay/quay.h
-boot_cc = $(CCACHE) $(CC) $(ai_cflags) -fPIE -DLoveBoot -Dai_tco=0 -Dai_data_section=0 -DAiVersion='"$(love_base)+bootstrap"' -I. -Icore -Ihost -Iinle -Iout/lib
+love0_o = $(patsubst $(R)/%.c,out/0/%.o,$(filter-out $(R)/inle/cats.c,$(host_c)) $(love_c))
+out/0/inle/main.o: out/lib/boot0.h
+out/0/inle/cb.o: core/quay/quay.c core/quay/nif.c core/quay/quay.h
+boot_cc = $(CCACHE) $(CC) $(ai_cflags) -fPIE -DLoveBoot -Dai_tco=0 -Dai_data_section=0 -DAiVersion='"$(love_base)+bootstrap"' -I. -Icore -Iinle -Iout/lib
 .PHONY: force_love0cc
 force_love0cc: ;
 out/0/.love0cc: force_love0cc
@@ -137,14 +137,14 @@ $(ho)/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
 
 # l.o carries the version string; recompile it when the id changes. love0's twin is
 # deliberately not here -- see the -DAiVersion note on boot_cc.
-# the baked source rides host/cats.c; main.c bakes the dist roster for the first boot
-$(ho)/host/cats.o: out/lib/baked.h
-$(ho)/host/main.o: out/lib/distlist.h
+# the baked source rides inle/cats.c; main.c bakes the dist roster for the first boot
+$(ho)/inle/cats.o: out/lib/baked.h
+$(ho)/inle/main.o: out/lib/distlist.h
 $(ho)/core/love.o: out/lib/love_version.h
 # the carried-blob reader both the first boot and the kernel's ram fs decode with
-$(ho)/host/main.o $(ho)/host/ustar.o: $(R)/host/ustar.h
-# host/cb.c rides the core/quay sources by unity include -- recompile when they move.
-$(ho)/host/cb.o: core/quay/quay.c core/quay/nif.c core/quay/quay.h
+$(ho)/inle/main.o $(ho)/inle/ustar.o: $(R)/inle/ustar.h
+# inle/cb.c rides the core/quay sources by unity include -- recompile when they move.
+$(ho)/inle/cb.o: core/quay/quay.c core/quay/nif.c core/quay/quay.h
 
 moon0 = $(love0) wake out/mooncc0.image mooncc $(GCDBG)
 moon0_dep = out/mooncc0.image
@@ -179,18 +179,18 @@ endif
 # kart shape below is the same idiom. Answers $(1)_love_o, _host_o, _math_o and $(1)_o.
 define moonlane
 $(1)_love_o = $$(core_tu:%.c=$$($(2))/%.o)
-$(1)_host_o = $$(host_c:$$(R)/host/%.c=$$($(2))/host_%.o)
+$(1)_host_o = $$(host_c:$$(R)/inle/%.c=$$($(2))/host_%.o)
 $(1)_math_o = $$(patsubst apps/moon/lib/math/%.c,$$($(2))/m_%.o,$$(wildcard apps/moon/lib/math/*.c))
 $(1)_o = $$($(1)_love_o) $$($(1)_host_o) $$($(1)_math_o) $$($(2))/sys.o
 $$($(1)_love_o): $$($(2))/%.o: $$(R)/core/%.c $$(love_h) $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
-	@$$($(3)) -D ai_tco=$$(tco) -D AiHaveVersionH -I$$(ho) -I. -Icore -Ihost -Iinle -Iout/lib -c $$< $$@
+	@$$($(3)) -D ai_tco=$$(tco) -D AiHaveVersionH -I$$(ho) -I. -Icore -Iinle -Iout/lib -c $$< $$@
 $$($(2))/love.o: out/lib/love_version.h        # only this TU carries the version id
-$$($(2))/host_%.o: $$(R)/host/%.c $$(love_h) $$(moon0_dep)
+$$($(2))/host_%.o: $$(R)/inle/%.c $$(love_h) $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
-	@$$($(3)) -D ai_tco=$$(tco) -I$$(ho) -I. -Icore -Ihost -Iinle -Iout/lib -c $$< $$@
+	@$$($(3)) -D ai_tco=$$(tco) -I$$(ho) -I. -Icore -Iinle -Iout/lib -c $$< $$@
 $$($(2))/host_main.o: out/lib/distlist.h
 $$($(2))/host_cats.o: out/lib/baked.h
 $$($(2))/host_cb.o: core/quay/quay.c core/quay/nif.c core/quay/quay.h
@@ -484,7 +484,7 @@ k_free_c = $R/inle/kmain.c $R/inle/blk.c $R/inle/hda.c $R/inle/sys.c
 k_c = $(love_c) \
   $R/core/quay/cga_8x8.c $R/core/quay/moderndos_8x16.c $R/core/quay/paint.c \
   $(c_c) $(k_arch_c) $(k_free_c) $(host_c)
-k_h = $(love_h) $(R)/inle/k.h $(R)/host/ustar.h $(wildcard $(R)/inle/$a/*.h)
+k_h = $(love_h) $(R)/inle/k.h $(R)/inle/ustar.h $(wildcard $(R)/inle/$a/*.h)
 
 k_odir = $(ko)/$a
 k_elf = $(ko)/love-$a.elf
@@ -502,14 +502,14 @@ k_o = $(k_c:$(R)/%.c=$(k_odir)/%.o) $(k_lay_o) $(k_tail_o) \
 
 kcppflags := \
   -I$(k_odir) \
-  -I. -Icore -Ihost -Iinle -Iout/lib -I$(R)/core/quay -I$(R) \
+  -I. -Icore -Iinle -Iout/lib -I$(R)/core/quay -I$(R) \
   -I$(R)/apps/moon/include \
   $(kcppflags)
 kcc = $(mooncc) $(kcppflags) -t $a
 
 kernel: $(k_elf)
 
-$(k_odir)/host/cb.o: core/quay/quay.c core/quay/nif.c core/quay/quay.h
+$(k_odir)/inle/cb.o: core/quay/quay.c core/quay/nif.c core/quay/quay.h
 $(k_odir)/rt.o: $(rt_slice) tools/mkrt.l $m
 	@echo 'LOVE	'$@
 	@mkdir -p "$(dir $@)"
@@ -571,13 +571,13 @@ kmain_o: $(k_free_o)
 # worn once per machine -- $(call kart,ROSTER,DIRVAR,CCVAR,ARCHVAR), every argument but
 # the first a variable NAME so the body stays deferred. an arch with no inle/<arch>/
 # carries no seat and its roster is empty.
-kart_inc = -I$(ho) -I. -Icore -Ihost -Iinle -Iout/lib -I$R \
+kart_inc = -I$(ho) -I. -Icore -Iinle -Iout/lib -I$R \
   -I$R/core/quay -I$R/apps/moon/include
-# kmain.c's own bake is the kore ROSTER now; the egg and the module set are host/cats.c's,
+# kmain.c's own bake is the kore ROSTER now; the egg and the module set are inle/cats.c's,
 # and that object rides the host lane above.
 kart_bake = out/lib/korelist.h
 define kart
-$(1)_h = $$(love_h) $$R/inle/k.h $$R/host/ustar.h $$(wildcard $$R/inle/$$($(4))/*.h)
+$(1)_h = $$(love_h) $$R/inle/k.h $$R/inle/ustar.h $$(wildcard $$R/inle/$$($(4))/*.h)
 $(1)_arch_o = $$(patsubst $$R/inle/$$($(4))/%.c,$$($(2))/ka_%.o,$$(wildcard $$R/inle/$$($(4))/*.c))
 # the console's painter and its fonts: kernel-only draws the host link never had
 $(1)_quay_o = $$(patsubst %,$$($(2))/k_q_%.o,paint cga_8x8 moderndos_8x16)
@@ -990,11 +990,11 @@ site-serve: host out/toolmd.stamp
 # (port/wasm/loader.js) is the runtime under it and the shipped page rides it
 # (port/wasm/love.wasm, refreshed by hand: `make site-wasm`, then commit). the emcc
 # build stays as wasm-emcc, a differential and nothing on the page.
-wasm_c = $(love_c) $(R)/host/horn.c $(R)/port/wasm/host.c
+wasm_c = $(love_c) $(R)/inle/horn.c $(R)/port/wasm/host.c
 out/wasm/love.wasm: $(wasm_c) $(lib_h) out/lib/love_version.h host
 	@mkdir -p $(dir $@)
 	@echo 'WASM	'$@
-	@$(mooncc) -t wasm -Dai_tco=1 -DAiHaveVersionH -I. -Icore -Ihost -Iout/lib -o $@ $(wasm_c)
+	@$(mooncc) -t wasm -Dai_tco=1 -DAiHaveVersionH -I. -Icore -Iinle -Iout/lib -o $@ $(wasm_c)
 # the module's heap image (rung 7): the egg booted once under node and written as bytes
 # the page fetches beside the module -- a wake is milliseconds where the boot is seconds,
 # and the woken heap is compact where the boot's arena is not. anchored to the module that
@@ -1021,7 +1021,7 @@ site-wasm: wasm
 # the terminals are port/wasm/inle.mjs (node) and port/wasm/inle.html (the page).
 kw_c = $(love_c) $R/core/quay/cga_8x8.c $R/core/quay/moderndos_8x16.c $R/core/quay/paint.c \
   $(k_free_c) $(host_c) $R/inle/wasm/arch.c
-kw_h = $(love_h) $R/inle/k.h $R/host/ustar.h $R/inle/asmops.h $R/inle/wasm/asmops.h
+kw_h = $(love_h) $R/inle/k.h $R/inle/ustar.h $R/inle/asmops.h $R/inle/wasm/asmops.h
 out/wasm/src.o: $(dist_source) tools/mksrc.l out/.mksys-cat.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
@@ -1029,7 +1029,7 @@ out/wasm/src.o: $(dist_source) tools/mksrc.l out/.mksys-cat.l $m
 out/love-wasm.wasm: $(kw_c) $(kw_h) out/wasm/src.o out/lib/baked.h out/lib/distlist.h \
   out/lib/korelist.h out/lib/love_version.h $(mooncc_dep)
 	@echo 'WASM	'$@
-	@$(mooncc) -t wasm -Dai_tco=1 -DAiHaveVersionH -I. -Icore -Ihost -Iinle -Iout/lib \
+	@$(mooncc) -t wasm -Dai_tco=1 -DAiHaveVersionH -I. -Icore -Iinle -Iout/lib \
 	  -Icore/quay -Iapps/moon/include -o $@ $(kw_c) out/wasm/src.o
 wasm-emcc:                       # emcc's love, out/wasm/love.js: the foreign build ccwasm and test.mjs can take
 	@$(MAKE) -C port/wasm

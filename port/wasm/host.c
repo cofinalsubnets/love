@@ -36,7 +36,7 @@ static const char src_post[] =
 static const char boot_ai[] =
   "(use 'uu) (: uu (from 'uu))"   // the library layers ride post; the uu kernel keeps its one-name surface
   "(use 'kanren)"
-  "(use 'cli)"                    // the shell core, last and spliced, as host/main.c has it:
+  "(use 'cli)"                    // the shell core, last and spliced, as inle/main.c has it:
 ;                                 //   read/reads/welp are reached bare (test/help.l's floor handler)
 
 // 256K: a single ai_eval can emit a lot before the page drains it -- the
@@ -154,14 +154,14 @@ static union u const nif_close[] = {{lvm_close}, {lvm_ret0}};
 AiNif("close", nif_close);
 
 // --- the console: quay's screen, and the page's mirror of it ---------------
-// the engine and its love door ride along by unity include, as host/cb.c has them;
+// the engine and its love door ride along by unity include, as inle/cb.c has them;
 // the palette is the .rodata table paint.c spends, so the page's colours are the
 // framebuffer's. (mirror scr) copies a screen's head and cells here for the page to lay
 // (port/wasm/cells.js) -- a copy, since the cask moves with the heap and the page
 // reads after the eval returns. answers the cell count, or () for a screen too big.
 #include "quay/quay.c"
 #include "quay/nif.c"
-AiNif("screen", nif_screen);      // the console's love door, on the slice as host/cb.c lays it
+AiNif("screen", nif_screen);      // the console's love door, on the slice as inle/cb.c lays it
 AiNif("scribe", nif_scribe);
 AiNif("glass", nif_glass);
 AiNif("gaze", nif_gaze);
@@ -283,7 +283,7 @@ EMSCRIPTEN_KEEPALIVE int ai_alive(void) {
     if (n[1].m->ap != lvm_task_exit) return 1;
   return 0; }
 // --- the horn's PCM, for the page's WebAudio ------------------------------------
-// the sink taps its accepted frames here (host/horn.c ai_horn_tap); the loader
+// the sink taps its accepted frames here (inle/horn.c ai_horn_tap); the loader
 // drains the ring and schedules it. a ring of int16 samples, interleaved as written.
 enum { hpcm_n = 1u << 16 };            // 64K samples ~ .68 s stereo at 48k; the sink caps depth
 static int16_t hpcm[hpcm_n];

@@ -1,7 +1,7 @@
 ; apps/kore/fs.l -- the fs tools of kore: ls, cp, mv, rm, mkdir, rmdir, ln,
 ; touch, pwd, chmod. every tool a <name>-main dispatched by kore (apps/kore/kore.l),
 ; same as core.l -- a toolbox, no seat, kore is its door. loads after core.l in the
-; cat and rides its u-floor (udie, uread, ubase); the effects ride host/posix.c's
+; cat and rides its u-floor (udie, uread, ubase); the effects ride inle/posix.c's
 ; posix_ lane (stat readdir unlink mkdir rename symlink hardlink rmdir
 ; chmod utime cwd), whose convention shapes every loop here: an effect op
 ; answers () ok or an errno nom, so !e is the success every loop below asks.
@@ -19,9 +19,8 @@
    (udest src dst) (? (udirp dst) (dst + "/" + ubase src "") dst)
    ; copy bytes + permission bits (cp's heart; mv's cross-device leg)
    ; the bytes, by whichever door this love has. kore runs in two worlds and they do not
-   ; carry the same nifs: the Makefile bakes this whole cat verbatim (korecat) and the
-   ; kernel compiles no host/*.c, so `copyfile` is hosted-only and the slurp stays as the
-   ; freestanding leg. asked at the call, never bound at the top: the kernel's image is
+   ; carry the same nifs: the Makefile bakes this whole cat verbatim (korecat), and a seat
+   ; without `copyfile` takes the slurp, the freestanding leg. asked at the call, never bound at the top: the kernel's image is
    ; baked by a host love, so a load-time answer would freeze this world's nif set into
    ; that one's.
    (ucopy-bytes src dst)
@@ -457,7 +456,7 @@
           (? !e 0 (udie 1 ("unlink: cannot unlink " + <as)))))
 
    ; ---- the reporting tools: stat, du -- and chown, mktemp ---------------------
-   ; these read the stat tail. host/posix.c's stat answers
+   ; these read the stat tail. inle/posix.c's stat answers
    ; (size mtime mode ns uid gid nlink blocks ino), append-only, and the kernel's own
    ; stat (inle/kmain.c) answers the first four alone -- an image tree has no ownership
    ; to tell about. so the tail is asked by tally and a world that does not carry it

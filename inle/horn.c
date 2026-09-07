@@ -1,4 +1,4 @@
-// host/horn.c -- the horn: PCM out as a port, on every seat (doc/misc/plan/horn.md).
+// inle/horn.c -- the horn: PCM out as a port, on every seat (doc/misc/plan/horn.md).
 //
 //   (horn rate chans)   open the sound device -> a port | an errno nom | 'badarg.
 //                       16-bit little-endian samples go out through the ordinary
@@ -254,7 +254,7 @@ static void horn_fin(struct ai *g, void *p) {
  h->b.f.fd = putcharm(-1);
  h->kind = putcharm(horn_sink); }
 
-// `close` on a horn (host/posix.c): the same shutting, outside GC
+// `close` on a horn (inle/posix.c): the same shutting, outside GC
 void ai_horn_shut(struct ai_io *io) { horn_fin(NULL, io); }
 
 // (horn rate chans) -> the port at sp[2], over the two args

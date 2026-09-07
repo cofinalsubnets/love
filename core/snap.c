@@ -279,7 +279,7 @@ static word image_root_dec(uint64_t tag, uint64_t val, word *base) {
 #define ImageNImm ((uintptr_t) countof(image_immortals))
 #define ImageCellW 16u   /* max nif-cell span (words) an interior link can sit in */
 // the bare-fn lane's width: one slot per nif cell whose code slot a thread can embed --
-// ai_def1's, then the host slice's (AiNif registers a cell too: host/main.c's nif_exit[]).
+// ai_def1's, then the host slice's (AiNif registers a cell too: inle/main.c's nif_exit[]).
 #define ImageNFn ((uintptr_t)(ai_def1_n + ImageNHost))
 // the lane floor: above any heap this codec encodes (1 TB on 64-bit, 128 MB on 32-bit;
 // a dump past it is refused rather than aliased) and below the absolute lane.

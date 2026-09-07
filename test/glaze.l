@@ -6,7 +6,7 @@
 ; emitted bytes in a transparent applicable native closure. neutral here (no
 ; install/run -- the bytes are x86-64; the real round-trip lives in core/boot/glaze/emit.l):
 ; non-byte / empty code installs nothing.
-; by key, never bare: every boot pulls nif/nifx off the book (host/main.c), so raw byte
+; by key, never bare: every boot pulls nif/nifx off the book (inle/main.c), so raw byte
 ; installation is reachable only through the glaze, which is the only thing that does it.
 ; a bare `nif` here would read the zero point and every claim below would answer 1.
 ; and under the presence guard: love0 and the kernel/wasm frontends carry no glaze, so

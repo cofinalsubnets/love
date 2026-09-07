@@ -14,7 +14,7 @@ o = ../../out/wasm
 R := ../..
 include $(R)/mk/common.mk
 g_c = $(patsubst %,../../core/%,$(love_tu)) ../../apps/moon/lib/math/am.c \
-      ../../host/horn.c
+      ../../inle/horn.c
 g_h = $(wildcard ../../core/*.h)
 
 # One object per source, so an edit recompiles just that TU and ccache can cache each.
@@ -26,7 +26,7 @@ objs = $(host_o) $(core_o)
 CFLAGS = -std=gnu2x -O2 -g0 -Dai_tco=0 \
   -Wall -Wno-unused-parameter -Wno-shift-negative-value \
   -fno-exceptions \
-  -I../.. -I../../core -I../../host -I../../out/lib
+  -I../.. -I../../core -I../../inle -I../../out/lib
 
 EMFLAGS = \
   -sMODULARIZE=1 -sEXPORT_NAME=Love \

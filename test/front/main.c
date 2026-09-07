@@ -6,7 +6,7 @@
 // The standing rule: love must not gain a feature whose only purpose is letting
 // a test break it -- the deleted LOVE_FAULT_EAGAIN hook is the recorded reason.
 // The port vt has always been the frontend's job --
-// the Makefile builds liblove.a from love.c ONLY and links host/*.c direct --
+// the Makefile builds liblove.a from love.c ONLY and links inle/*.c direct --
 // so a frontend that lies to the runtime is test code, not language surface.
 // Nothing in this file is compiled into `love`.
 //
@@ -175,7 +175,7 @@ struct ai_fio ai_stderr = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putc
 
 // --- the raw-fd rows -------------------------------------------------------
 // love's io ops take a charm as well as a port, so a frontend owes these two as
-// well as the vtable: host/fd.c has them on a hosted seat and port/fdrow.h on a
+// well as the vtable: inle/fd.c has them on a hosted seat and port/fdrow.h on a
 // board, and both are unreachable from here. the shape is fd.c's, over these
 // devices -- >0 landed, 0 busy, -1 gone, and a say that lands every byte.
 intptr_t ai_fd_readn(struct ai *g, int fd, unsigned char *dst, uintptr_t n) {

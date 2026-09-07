@@ -6,7 +6,7 @@
 ; it is its own file because of the compiler. mooncc's cat needs exactly five of these
 ; (ubase udie uread urun usplit) and nothing else in kore -- but core.l held all 53 names, so
 ; the whole toolbox sat in `moonfiles`, and editing the `ls` applet re-baked mooncc0.image and
-; recompiled love.c and every host/*.c behind it. ~95 s to move a printf. The floor moved out;
+; recompiled love.c and every inle/*.c behind it. ~95 s to move a printf. The floor moved out;
 ; the applets are no longer the compiler's business.
 ;
 ; a body-less top-level `:` -- these names leak on purpose, which is what makes them a floor.
@@ -198,8 +198,8 @@
    ; --- reading an input without holding it ----------------------------------
    ; uread + `lines` keeps four whole copies of the input alive at once -- `rev` of
    ; 50 MB wanted 1.09 GB of live set. These hand it over a gulp or a line at a time.
-   ; see/unsee/chug and not `swig`: kore runs in two worlds (see ucopy-bytes) and
-   ; the kernel image compiles no host/*.c. The gulp door is core's, so no probe.
+   ; see/unsee/chug and not `swig`: kore runs in two worlds (see ucopy-bytes), and
+   ; the gulp door is core's, so no probe.
    ; 'p is the unread cursor into the held bytes, 'm how far the newline scan has
    ; looked. the read-through prefix is dropped when a fill wants the room and not
    ; per line, so a line costs its own length instead of the tail behind it

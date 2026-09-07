@@ -155,7 +155,7 @@ printf '_Static_assert(0, "boom");' > "$ho/.feat.c"
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 && fail "a FAILING lone _Static_assert passed"
 
 # C11 6.5.16.1: an integer reaches a pointer only as a NULL POINTER CONSTANT, so
-# `return 1` from a T* is a constraint violation -- host/main.c carried one for years,
+# `return 1` from a T* is a constraint violation -- inle/main.c carried one for years,
 # clang named it, and we took it in silence and handed back address 1
 printf 'struct s;\nstatic struct s *f(int x){ if (x) return 1; return 0; }\nint m(void){return 0;}\n' > "$ho/.feat.c"
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
@@ -642,7 +642,7 @@ echo "mooncc: the warm compiler (moon-run answers, the image compiles on past a 
 # ⚠ A CLOCK ALONE CANNOT SAY IT WAS TAKEN: out/cache/moon's .a entries make the
 # member-compile lane fast too, so a warm cache passes this leg whether the archive was
 # read or refused, and a refusal can sit here green for as long as the cache lives. So ask
-# the BINARY what it carries -- host/src.c matches the arch word and its width, and a
+# the BINARY what it carries -- inle/src.c matches the arch word and its width, and a
 # miss there is silent -- then take the cache away and let the clock mean something.
 for a in x64 a64 rv64; do
   n=$(LOVE_NO_IMAGE= "$m" -q -e "(: _ (puts (show (tally (\"\" + runtime-gz \"$a\")))) 0)" | head -1)

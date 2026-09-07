@@ -1,9 +1,9 @@
-; --- test/host/run.l: smoke test for the hark / herald nifs (host/main.c) ---
+; --- test/host/run.l: smoke test for the hark / herald nifs (inle/main.c) ---
 ; (hark argv) forks, captures the child's stdout into a string, and answers
 ; (status . output). (herald argv) is the same answer, but relays each chunk to our
 ; stdout as it is read instead of holding it to the exit -- what make does, and
 ; what lets a long cook step show progress. The tee must not disturb the capture.
-; host-only (the nifs are host/*.c), so it runs standalone against the built
+; host-only (the nifs are inle/*.c), so it runs standalone against the built
 ; binary like test/host/bake.l:
 ;   cat test/00-init.l test/host/run.l | out/love
 ;
@@ -66,7 +66,7 @@
 ;   rather than hanging, so this reddens as a slow run, not a wedged gate.
 ; 2. an ignored disposition survives exec, so a child that inherited it is a
 ;   `yes | head` that never stops. every fork site resets it: main.c's two exec
-;   sites by hand, and host/posix.c's sig_dfl_job for spawn/spawnio/spawnmap/tether.
+;   sites by hand, and inle/posix.c's sig_dfl_job for spawn/spawnio/spawnmap/tether.
 ;   the law below reaches `hark`'s door only -- the posix.c half is lush's, and
 ;   shares the one line.
 ; the status has to come out of the pipeline, and $? there is head's, so love's

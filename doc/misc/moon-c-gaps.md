@@ -70,7 +70,7 @@ test/gate/moon.sh), and the deliberate readings in them:
 - **`int f(int), a;`** — `one`/`more` hoisted out of the dispatch's inner scope, so the
   function-first list reaches the object lane mproto cannot take.
 - **bare `typeof`**, and an attribute run **before** a struct/union tag.
-- **an integer where a pointer is owed** — the §4 row that took `host/main.c`'s `return 1` in
+- **an integer where a pointer is owed** — the §4 row that took `inle/main.c`'s `return 1` in
   silence and handed back address 1. `return <non-zero literal>` from a `T *` now refuses and
   says so; a cast still passes, because a cast says the program means it.
 - **`_Generic` over QUALIFIED types** (test/cc/143-genericqual.c) — the row below, and the last

@@ -64,7 +64,7 @@ static struct font const kfont = { .glyphs = (uint8_t*) moderndos_8x16, .w = 8, 
 
 
 
-// the seat hooks host/fd.c branches to on a negative osv (weak no-ops there)
+// the seat hooks inle/fd.c branches to on a negative osv (weak no-ops there)
 void k_row_close(int fd), k_sleep(uintptr_t ms), k_wait_fds(struct ai_wait_fd*, int, uintptr_t),
      k_seat_init(void);                // inle/sys.c: arm environ + the std streams
 bool k_ready(int fd, int events);
@@ -89,7 +89,7 @@ uintptr_t ai_knifs_slice(struct ai_def const **s) {
 // can carry. the sentinel is loud: unpatched, the memmap excludes nothing and
 // the heap eats the kernel at once.
 uintptr_t const k_image_top = 1;
-// the baked-image door (host/image.c): a pure read off two symbols the
+// the baked-image door (inle/image.c): a pure read off two symbols the
 // projection re-bases, so the wake needs no finding on this seat either
 
 #include "quay.h"
@@ -248,7 +248,7 @@ intptr_t k_row_write(int fd, unsigned char const *src, uintptr_t n) {
  for (uintptr_t k = 0; k < n; k++) s->putc(fd, src[k]);
  return (intptr_t) n; }
 
-// the port lanes ai_fd_port_vt (host/fd.c) takes on a negative osv: the seat
+// the port lanes ai_fd_port_vt (inle/fd.c) takes on a negative osv: the seat
 // translation, then the rows -- a protocol read(2) cannot carry (busy and end
 // are distinct answers), which is why these do not ride the syscall door.
 intptr_t k_port_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
@@ -283,7 +283,7 @@ struct ai *k_port_flush(struct ai *g) {
  if (s && s->flush) s->flush(fd);
  return g; }
 
-// ai_fd_close's inle lane (host/fd.c): close through k_sources[fd].
+// ai_fd_close's inle lane (inle/fd.c): close through k_sources[fd].
 // Statics (stdin/stdout) have NULL close -- nothing to release.
 void k_row_close(int fd) {
  struct k_source *s = k_source(fd);
@@ -322,7 +322,7 @@ void k_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
     k_wait(); } }
 
 // milliseconds since the epoch: one scale for the scheduler's deadlines, for (clock t) and
-// for every mtime. ai_clock is one body (host/posix.c) and inle/sys.c's arm serves it from
+// for every mtime. ai_clock is one body (inle/posix.c) and inle/sys.c's arm serves it from
 // here. the date rides kboot, and where nobody knew it this degrades to milliseconds since
 // boot and says so by reading as 1970.
 uintptr_t k_clock_ms(void) {
@@ -890,7 +890,7 @@ ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   *s = (struct k_source) { .readn = ram_readn, .writen = ram_writen,
                            .ready = ram_ready, .close = ram_close, .state = h };
   return fd; }
-// the open/close nifs are host/posix.c's now (plan C2): its open(2)/close(2)
+// the open/close nifs are inle/posix.c's now (plan C2): its open(2)/close(2)
 // land in inle/sys.c's arms, so the ramfs answers the same door -- and a
 // directory opens as a dents row there, where the old ramfs-only nif said ().
 
@@ -1154,7 +1154,7 @@ long k_fd_stat(int fd, struct k_st *st) {
   return 0; }
 
 // (getpid _) -> the running task's pid, a charm; the main task reads 0. the
-// TASK pid: host/main.c's getpid nif branches here on a negative osv, where
+// TASK pid: inle/main.c's getpid nif branches here on a negative osv, where
 // its own answer would be the machine's constant 1.
 lvm(k_lvm_getpid) {
   Sp[0] = putcharm(k_cur_pid(g));
@@ -1560,7 +1560,7 @@ ai_noinline static int k_task_exit(struct ai *g) {
   g->next_wait_fd = -1;
   return 1; }
 
-// host/main.c's quit nif branches here on a negative osv: the task/machine door.
+// inle/main.c's quit nif branches here on a negative osv: the task/machine door.
 lvm(k_lvm_quit) {
   if (k_task_exit(g)) {
     // the love-machine _exit: the stack becomes just [code] and Ip a task-exit
@@ -1636,7 +1636,7 @@ static struct ai_def const __attribute__((section("ai_knifs"), used)) defs[] = {
   {"draw", (intptr_t) nif_draw},
   {"key", (intptr_t) nif_key},
   {"fault", (intptr_t) nif_fault},
-  // the posix surface, open/close/quit/getpid included, is host/posix.c's and host/main.c's,
+  // the posix surface, open/close/quit/getpid included, is inle/posix.c's and inle/main.c's,
   // linked whole: their nifs land in this section, libc calls bottom out in inle/sys.c's
   // table, and quit and getpid branch to k_lvm_quit / k_lvm_getpid on a negative osv. what
   // stays below has no host twin.
@@ -1861,7 +1861,7 @@ void kmain(void) {
  "      fdm (- 0 1) (- 0 1) (- 0 1))"
  "   (wait p) (catch p))"
   );
-  // a woken image's crew captured the seat-doors wrappers (host/main.c), which
+  // a woken image's crew captured the seat-doors wrappers (inle/main.c), which
   // read the live door off the tablet -- aim them at this seat's task shim, so
   // a baked lush or cook spawns tasks here. the egg book has no tablet (its cat
   // captures the shim directly below), and the probe answers that.

@@ -64,7 +64,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 # (-Dai_tco=0, the trampoline lane too), so it must print TWO "tests pass" summaries: a
 # reader stop drops the rest of the stream and exits 0. Status rides `.rc` -- no pipefail.
 # ⚠ corpus.list IS A RUNTIME INPUT NOW, not only a stamp: love0 reads it to find the corpus
-# (host/main.c), so it has to EXIST before love0 runs. It used to be pulled in as tests0.h's
+# (inle/main.c), so it has to EXIST before love0 runs. It used to be pulled in as tests0.h's
 # prerequisite; with the corpus off the bootstrap's dependency graph, nothing else asks for it,
 # and a fresh tree died with `love0: corpus: cannot open out/lib/corpus.list` -- which the
 # unpacked-release path found and no in-tree run could, out/lib always being warm here.
@@ -555,7 +555,7 @@ test_selfhost: host
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/selfhost; mkdir -p $$d; rm -f $$d/*.o; \
 	  for f in $(love_tu_c) $(host_c); do b=`basename $$f .c`; \
-	    $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Icore -Ihost -Iinle -Iout/lib -c $$f $$d/$$b.o \
+	    $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Icore -Iinle -Iout/lib -c $$f $$d/$$b.o \
 	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
 	  $(moonrun) -Iapps/moon/include -c apps/moon/lib/math/am.c $$d/am.o \
 	    || { echo "FAIL mooncc -c am.c"; exit 1; }; \
@@ -622,7 +622,7 @@ rvboot_o = $(ko)/rv64/rv64/boot.o $(ko)/rv64/inle/rv64/dtb.o $(ko)/rv64/rvboot.o
 $(ko)/rv64/rvboot.o: test/gate/rvboot.c $(love_h) $(R)/inle/k.h $(R)/inle/dtb.h $(mooncc_dep)
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
-	@$(mooncc) -I$(ko)/rv64 -I. -Icore -Ihost -Iinle -I$(ho) -Iout/lib -I$R -I$R/apps/moon/include \
+	@$(mooncc) -I$(ko)/rv64 -I. -Icore -Iinle -I$(ho) -Iout/lib -I$R -I$R/apps/moon/include \
 	  -t rv64 -c $< -o $@
 $(ko)/rv64/rvboot.elf: $(rvboot_o) test/gate/rvboot.l $m
 	@echo 'RVLINK	'$@

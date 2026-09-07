@@ -1,5 +1,5 @@
 // port/wasm/horn.mjs -- the horn under the loader: love writes PCM to a (horn ..)
-// port, the sink taps its accepted frames (host/horn.c ai_horn_tap -> host.c's ring),
+// port, the sink taps its accepted frames (inle/horn.c ai_horn_tap -> host.c's ring),
 // and the loader drains that ring into WebAudio. node has no AudioContext, so this stubs
 // one and proves the whole path: the tapped samples reach a scheduled buffer at the rate.
 // usage: node port/wasm/horn.mjs [--love <love.wasm>]

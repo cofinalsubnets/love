@@ -172,5 +172,5 @@ thing to argue with.
   a name added there is hard to take back. Prefer the registry — `(from 'kanren 'absent)` — unless
   infix is genuinely wanted, and say why at the site if it is.
 * ⚠ kanren now compiles with `@`, so it needs pat spliced before it. Every frontend that loads
-  kanren already evaluates pat's text with post (see the boot comments in `host/main.c`,
+  kanren already evaluates pat's text with post (see the boot comments in `inle/main.c`,
   `inle/kmain.c`, `port/wasm/host.c`, `port/playdate/main.c`) — but a new frontend must keep that order.

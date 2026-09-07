@@ -339,7 +339,7 @@ reading and both are recorded so nobody tries them again: `ai_iobuf` 4096 -> 655
 the reads 16× and moved `tr` not at all while making `cut` **2× slower**; the gulp-list
 reader beats the jug by 24 vs 31 ms in steady state, not worth a floor primitive and a
 twelve-site sweep. (`strace` does show an `F_GETFL`/`F_SETFL` trio around every read of
-an inherited fd -- `host/fd.c`, the bit must not be left on a terminal -- but 6,150
+an inherited fd -- `inle/fd.c`, the bit must not be left on a terminal -- but 6,150
 of them cost ~12 ms of kernel time, and a pipe on stdin takes the bit once for the
 session anyway.) So a stdin filter's clock reads: start 28 + first-touch ~45 + the
 work, and only the third term is the applet's. The trade between

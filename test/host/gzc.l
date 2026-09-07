@@ -1,5 +1,5 @@
 ; --- test/host/gzc.l: the C twins of gz.l, held to the love they shadow ---
-; not in the test/*.l corpus: `inflate` (core/gz.c) and `crc32` (host/hash.c) are
+; not in the test/*.l corpus: `inflate` (core/gz.c) and `crc32` (inle/hash.c) are
 ; host nifs and apps/gz/gz.l is a lib module, so neither is visible to the love0 bake.
 ;
 ; test/host/gz.l is where apps/gz/gz.l's own laws live; this file asks the other question --
@@ -113,7 +113,7 @@
  (gzc-all (\ s (gzc-fuzz s 1)) gzc-fz)
  (gzc-fuzz gzc-noise 29))
 
-; --- crc32, the other twin in host/hash.c, against gz-crcwalk ---
+; --- crc32, the other twin in inle/hash.c, against gz-crcwalk ---
 ; every length 0 through 129, because the C reads eight bytes at a time where the walk
 ; reads one: the tail is the only place the two can part and it is a different tail at
 ; every length mod eight. The published check value is asserted off the C side, so a twin

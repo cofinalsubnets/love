@@ -1,6 +1,6 @@
 ; --- test/host/manifest.l: the spreadsheet, engine and tui, end to end ---
 ; not in the test/*.l corpus (the tui rides raw/winsize; the pty harness
-; rides tether -- all host/*.c). the engine itself is pure core, probed here
+; rides tether -- all inle/*.c). the engine itself is pure core, probed here
 ; against the loaded app; the tui is driven over a real pty and its painted
 ; screen read back through the cb glass -- the emulator built for berth is
 ; the spreadsheet's witness:

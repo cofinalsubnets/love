@@ -2,7 +2,7 @@
  * clang, with the three reports diffed and the three builds timed. ccnif.sh
  * drives it.
  *
- * WHY THIS FILE. this is the widest C in host/ and the least like the
+ * WHY THIS FILE. this is the widest C in inle/ and the least like the
  * rest of the tree: a 64-bit bit accumulator shifted by a runtime count, a
  * table indexed by a masked window, a greedy match finder walking a hash chain,
  * an insertion sort over packed keys, and an eight-in-order copy that is
@@ -16,7 +16,7 @@
  * licensed choice: a differing byte is a differing compiler.
  *
  * ⚠ THE SUMMARY IS THIS FILE'S OWN ARITHMETIC. an FNV-1a over the output, not
- * the crc32 next door in host/hash.c -- a summary computed by the code under
+ * the crc32 next door in inle/hash.c -- a summary computed by the code under
  * test can agree with itself while both halves are wrong.
  *
  * ⚠ AND THE MALFORMED STREAMS ARE PART OF THE SUBJECT, not a robustness check.

@@ -138,7 +138,7 @@ struct ai_str {
  uintptr_t len;        // byte count; bytes[len] is always a NUL, so C may read bytes as a string
  char bytes[]; };
 // a cask: mutable bytes behind a 2-word wrapper, recognized by ap like ports.
-// public so a host nif can wrap a C struct's bytes (host/cb.c).
+// public so a host nif can wrap a C struct's bytes (inle/cb.c).
 struct ai_cask { lvm_t *ap; struct ai_str *str; };
 // a mint: a bare nameless point -- just the hot and its serial
 struct ai_mint {
@@ -262,7 +262,7 @@ struct ai_def { char const *n; intptr_t x; };
 
 // host nif auto-registration: AiNif("name", fn) lands the entry in the love_nifs section
 // and boot drains [__start_love_nifs, __stop_love_nifs) through ai_defn, so an app adds nifs
-// in its own host/<app>.c. no linker script -- the toolchain defines the bracket symbols.
+// in its own inle/<app>.c. no linker script -- the toolchain defines the bracket symbols.
 // a nif rides the image as an index off this bracket, so nothing here is ever a kept absolute.
 extern struct ai_def const __start_love_nifs[], __stop_love_nifs[];
 #define AiNif(nm, fn) \
@@ -311,7 +311,7 @@ extern struct ai_port_vt const ai_fd_port_vt;
 // what a closed port wears: every door a no-op, and no fd behind it. a frontend
 // owning `close` swaps this in -- that swap is the close, there is no other mark.
 extern struct ai_port_vt const ai_closed_vt;
-// the horn: PCM out as a heap port (host/horn.c). it wears the fd port's shape --
+// the horn: PCM out as a heap port (inle/horn.c). it wears the fd port's shape --
 // bio_of and ai_io_fd take it as one, so the write run buffers and parks -- and its
 // own door, which is where the device lives. the writen is weak here so a link
 // without horn.c still stands.
@@ -328,7 +328,7 @@ intptr_t k_horn_write(unsigned char const*, uintptr_t);
 uintptr_t k_horn_lag(void);
 void k_horn_close(void);
 // ..and the same face on whichever seat this is: k_horn_* under inle, the host's own
-// card otherwise (host/horn.c keeps that one open). what inle/doomsnd.c calls.
+// card otherwise (inle/horn.c keeps that one open). what inle/doomsnd.c calls.
 int ai_horn_open(int rate);
 intptr_t ai_horn_write(unsigned char const*, uintptr_t);
 uintptr_t ai_horn_lag(void);
@@ -368,7 +368,7 @@ struct ai
 // dying port through it. weak no-op default; the host overrides with write(2).
 void ai_fd_drain(int fd, void const*, uintptr_t);
 
-// the raw-fd lanes (host/fd.c): what an io op does when its operand is a charm
+// the raw-fd lanes (inle/fd.c): what an io op does when its operand is a charm
 // rather than a port. no buffer, no seat, one motion each, and the port protocol
 // on the answer -- >0 landed, 0 busy, -1 gone. `say` lands the whole run, waiting.
 intptr_t ai_fd_readn(struct ai*, int fd, unsigned char *dst, uintptr_t);
@@ -377,17 +377,17 @@ uintptr_t ai_fd_say(int fd, unsigned char const *src, uintptr_t);
 intptr_t ai_port_fd(ai_word);                         // the fd under a love port, or -1
 uintptr_t ai_fd_write_all(int, unsigned char const*, uintptr_t);   // land every byte, waiting
 
-// the seat's other doors, one definition each: host/posix.c..
+// the seat's other doors, one definition each: inle/posix.c..
 struct ai *ai_argv_marshal(struct ai*, char***);   // argv -> char** in the heap gap
 void host_spawn_guard(struct ai*, int);            // exec-bound forks drop the pools
 int ai_raw_mode(intptr_t on);                      // the (raw on) latch; main.c's repl too
 size_t host_selfpath(char*, size_t);               // the one selfpath door (per-OS ladder)
-// ..host/image.c, the carried image and the self-bake..
+// ..inle/image.c, the carried image and the self-bake..
 int image_bake(struct ai*), ai_baked_pick(void const **blob, uintptr_t *blen);
 struct ai *image_load(char const*), *image_dump(struct ai*, char const*);
 extern uint64_t ai_baked_image[];
 extern uintptr_t ai_baked_image_len;
-// ..core/gz.c, and host/src.c's own source (weak zero without a blob)
+// ..core/gz.c, and inle/src.c's own source (weak zero without a blob)
 intptr_t ai_inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
          ai_deflate_raw(struct ai*, unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
 extern unsigned char const ai_srcgz[];
@@ -501,12 +501,12 @@ extern const struct ai_str0 { lvm_t *ap; uintptr_t len; char bytes[8]; } ai_str_
 extern const struct ai_mint ai_mint_zero;
 #define ZeroPoint ((word) &ai_mint_zero)
 // one parked fd. the layout is poll(2)'s struct pollfd, so the host polls the block
-// directly (host/main.c static-asserts the match). the scheduler fills .fd/.events and
+// directly (inle/main.c static-asserts the match). the scheduler fills .fd/.events and
 // zeroes .revents, then reads .revents back: nonzero = ready, taken instead of re-asking
 // the kernel per fd. filling it is optional -- all-zero is "nothing to say".
 struct ai_wait_fd { int fd; short events, revents; };
 
-// the two park directions, in poll(2)'s own bit values (host/main.c static-asserts
+// the two park directions, in poll(2)'s own bit values (inle/main.c static-asserts
 // them). never OR them and ask as one: a socket is almost always writable, so a reader
 // polled for both would spin.
 #define ai_wait_in  1

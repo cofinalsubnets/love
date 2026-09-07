@@ -1,4 +1,4 @@
-// host/hash.c -- digests over a string's bytes. auto-globbed and AiNif-registered,
+// inle/hash.c -- digests over a string's bytes. auto-globbed and AiNif-registered,
 // the fs.c discipline; value ops, so absence or misuse answers ().
 //   (sha256 str) / (md5 str)  -> the lowercase hex digest
 //   (crc32 str)               -> the IEEE crc32, a charm

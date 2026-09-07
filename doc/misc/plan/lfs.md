@@ -38,7 +38,7 @@ into it, then exec), **`mount`** (bare, it is `/proc/self/mounts` formatted; wit
 operands, `-t TYPE` and the flag half of `-o`), **`umount`**, **`sync`**, **`mkfifo`**
 and **`mknod`** (`apps/kore/fs.l`) — the last two being what fills a `/dev`.
 
-Five nifs grew with them (`host/posix.c`): `chroot`, `umount`, `sync`, `mknod`, and
+Five nifs grew with them (`inle/posix.c`): `chroot`, `umount`, `sync`, `mknod`, and
 `mountf` — the last standing *beside* `mount` rather than replacing it, because a nif's
 arity is fixed and `apps/init/boot.l` calls the three-argument one at pid 1, which
 is not where an arity change wants finding out. Two nolibc members grew too
@@ -139,7 +139,7 @@ The gap between those two numbers is entirely *other people's build systems*.
   comm join split` in core.l, `stat du chown mktemp` in fs.l, `date id` in proc.l. All in
   `make test_kore`, all GNU-byte-identical where GNU has an opinion, plus laws over the
   pure floors — the calendar, the record floor, the report floor, expr's, patch's.
-  Three nifs grew with them (host/posix.c): **`stat`'s tuple gained
+  Three nifs grew with them (inle/posix.c): **`stat`'s tuple gained
   `uid gid nlink blocks ino`** (append-only; the kernel's own stat still answers the
   first four, and the tail is asked by `tally`), a **`lstat`** beside it (du and stat owe
   the link's own blocks, not its target's), **`getgid`**, and `openfd` gained mode 3,
@@ -173,7 +173,7 @@ The gap between those two numbers is entirely *other people's build systems*.
     only mangles the high bit.
   Left deliberately: fmt, pr, csplit, ptx and numfmt (each its own layout language),
   dir/vdir (they are `ls -C`/`ls -l`), shuf (a seed decision first), the sha1/sha512
-  family (host/hash.c carries three digests), and who/users/logname (no utmp).
+  family (inle/hash.c carries three digests), and who/users/logname (no utmp).
 - **rung 1c — gzip's face — BUILT.** `apps/gz/gzcmd.l`: `love gzip`, `love gunzip` and
   `love zcat`, GNU's flag spelling (`-cdfklnNqrtv`, `-1..-9`, `-S SUF`, the long forms)
   over apps/gz/gz.l's two doors, registered as verbs the way `love tar` is. The in-place

@@ -22,7 +22,7 @@ than mine prefers one.
 * ⚠ **it must be a HEAP port, and the vtable says why:** *"only a door whose port keeps a write
   run may refuse; the static ports cannot park."* So the horn is `ai_io_alloc`'s, never a boot
   row — and that is the same sentence on both seats.
-* **an fd is a port on both seats already.** host/sock.c's whole method is "produce an OS fd,
+* **an fd is a port on both seats already.** inle/sock.c's whole method is "produce an OS fd,
   hand it to `ai_io_alloc`, and read and write come free"; doc/misc/inle.md says `ai_io_alloc`
   is core, not host. Neither seat needs a new mechanism, only a new device.
 * **the PCI walk is written** (inle/blk.c, CF8/CFC) and so is virtio-mmio on a64. The disk
@@ -155,7 +155,7 @@ gate cannot listen. Hearing it is a human's job, once.
 
 ## what landed (2026-09-06)
 
-**rung 0 is the shape, and it is `host/horn.c`.** `(horn rate chans)` answers a heap port
+**rung 0 is the shape, and it is `inle/horn.c`.** `(horn rate chans)` answers a heap port
 wearing `ai_horn_vt`, which io.c takes for a bio (bio_of and ai_io_fd know two doors now), so the
 write run buffers, a refused write keeps its residue and the writer parks on the 1 ms poll every
 heap port has. `(horn-lag p)` reads frames queued and unplayed. the device under the door is

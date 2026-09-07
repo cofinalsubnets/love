@@ -1,4 +1,4 @@
-// host/posix.c -- the POSIX surface, in one place: process (spawn/reap/wait/
+// inle/posix.c -- the POSIX surface, in one place: process (spawn/reap/wait/
 // signal, the pid-1 supervisor's primitives and the shell's job control), fs
 // effects and values (stat/readdir/rename/chmod/..), the environment, pipes and
 // raw-fd plumbing, and the pty wrapper (bao's rlwrap/debugger muscle). host-only,
@@ -471,7 +471,7 @@ static lvm(lvm_cwd) {
 // (selfpath _) -> the path of the running binary, or () where the seat cannot say.
 // the one door for it: the prel's library walk, the seed's bin/love, moon's include
 // root, lux's re-exec, lush's am-I-that-tool test and the self-bake's re-open
-// (host/image.c) all start here.
+// (inle/image.c) all start here.
 // no argv[0] fallback, and not for want of argv[0] -- the book has it as `cmdline`.
 // it is that a bare `cmdline` read from baked code folds to the bake's line, and the
 // callers here are baked, so the operand would arrive already wrong. a seat with no

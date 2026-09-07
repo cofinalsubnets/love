@@ -1,5 +1,5 @@
 ; --- test/host/luxui.l: lux end to end under a headless X ---
-; not in the test/*.l corpus (connectu/tether are host/*.c). Spawns an Xvfb,
+; not in the test/*.l corpus (connectu/tether are inle/*.c). Spawns an Xvfb,
 ; sails the real lux driver (the same seven modules `make install` cats into
 ; bin/lux) as one child, then a probe (test/host/luxui-probe.l) as another: the
 ; probe drives synthetic input -- xtest FakeInput for the super+drags, SendEvent

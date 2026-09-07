@@ -15,7 +15,7 @@
 ;
 ; built on first use, not at a module binding -- and the reason is the registry,
 ; not the bake. this module's text is evaluated inside the boot's own module registry
-; (host/cats.c), which runs before the boot says (use 'holo): assembling there takes
+; (inle/cats.c), which runs before the boot says (use 'holo): assembling there takes
 ; the whole registry down with it, and the symptom is a bare ";; no-module bao", the
 ; first module anyone asks for afterwards. so the assemble and the install both wait
 ; for a caller. one holo run and one arena blob per process, and never again.

@@ -52,7 +52,7 @@ other outlier, one lane moving alone — hold both readings lightly until a seco
 
 ## the same floors compiled STRAIGHT (ccnif, 2026-09-06)
 
-`make -C bench ccnif` builds host/hash.c and core/gz.c with every lane
+`make -C bench ccnif` builds inle/hash.c and core/gz.c with every lane
 and reads them three ways — answers (a divergence is a miscompile, the only thing in the
 script that says a compiler is *wrong*), .text, wall clock. No love runtime, no libc in
 the loop; ~20 s, so it is the per-edit instrument where ccbench is the per-rung one.
