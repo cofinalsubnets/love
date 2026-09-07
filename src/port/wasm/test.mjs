@@ -14,10 +14,15 @@ import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 const argv = process.argv.slice(2);
-let mod = new URL('../../../out/wasm/love.js', import.meta.url).href;
+let mod = new URL('../../../out/wasm/love.js', import.meta.url).href, image = null;
 if (argv[0] === '--love') {
   if (argv.length < 2) { console.error('--love wants a path'); process.exit(2); }
   mod = pathToFileURL(argv[1]).href;
+  argv.splice(0, 2);
+}
+if (argv[0] === '--image') {                            // wake this heap image instead of booting the egg
+  if (argv.length < 2) { console.error('--image wants a path'); process.exit(2); }
+  image = readFileSync(argv[1]);
   argv.splice(0, 2);
 }
 const files = argv;
@@ -29,8 +34,11 @@ const src = files.map(f => readFileSync(f, 'utf8')).join('\n');
 const wasm = mod.endsWith('.wasm') ? mod : null;
 const { default: Love } = await import(wasm ? new URL('./loader.js', import.meta.url).href : mod);
 const m = await Love(wasm ? { wasm: new URL(wasm) } : {});
-const init = m.ccall('ai_init', 'number', [], []);
+const t0 = performance.now();
+if (image && !m.wake(image)) { console.error('the image was refused -- a stale bake?'); process.exit(1); }
+const init = image ? 0 : m.ccall('ai_init', 'number', [], []);
 if (init !== 0) { console.error(`ai_init failed (code ${init})`); process.exit(1); }
+console.log(`${image ? 'woke' : 'booted'} in ${(performance.now() - t0).toFixed(0)} ms`);
 
 m.ccall('ai_out_reset', 'null', [], []);
 // Marshal the corpus through the HEAP, not ccall('string') -- that copies onto

@@ -127,6 +127,9 @@ struct ai_port_vt const ai_fd_port_vt = { _flush, fd_writen, fd_readn, NULL };
 // emscripten maps exit() to an ExitStatus the JS caller catches (see test.mjs).
 static noreturn lvm(lvm_exit) { exit(getcharm(Sp[0])); }
 static union u const nif_exit[] = {{lvm_exit}, {lvm_ret0}};
+AiNif("exit", nif_exit);
+static union u const nif_quit[] = {{lvm_exit}, {lvm_ret0}};   // the crew's verb tail (moon-main), as main.c has it
+AiNif("quit", nif_quit);
 
 // (close p) -> (): a port's write run lands, a horn shuts its device, and the closed
 // vt goes in -- posix.c's close less the fd, which this seat has none of
@@ -148,6 +151,7 @@ static lvm(lvm_close) {
   Sp[0] = ZeroPoint;
   ai_musttail return Next(1); }
 static union u const nif_close[] = {{lvm_close}, {lvm_ret0}};
+AiNif("close", nif_close);
 
 // --- the console: quay's screen, and the page's mirror of it ---------------
 // the engine and its love door ride along by unity include, as src/host/cb.c has them;
@@ -157,6 +161,13 @@ static union u const nif_close[] = {{lvm_close}, {lvm_ret0}};
 // reads after the eval returns. answers the cell count, or () for a screen too big.
 #include "quay/quay.c"
 #include "quay/nif.c"
+AiNif("screen", nif_screen);      // the console's love door, on the slice as src/host/cb.c lays it
+AiNif("scribe", nif_scribe);
+AiNif("glass", nif_glass);
+AiNif("gaze", nif_gaze);
+AiNif("reply", nif_reply);
+AiNif("unfold", nif_unfold);
+AiNif("wet", nif_damage);
 #include "quay/xterm256.h"
 enum { mir_head = 4, mir_max = 1 << 16 };
 static uint32_t mir[mir_head + mir_max];   // rows cols cursor flag, then the cells
@@ -170,6 +181,7 @@ static lvm(lvm_mirror) {
   else Sp[0] = ZeroPoint;
   Ip += 1; ai_musttail return Continue(); }
 static union u const nif_mirror[] = {{lvm_mirror}, {lvm_ret0}};
+AiNif("mirror", nif_mirror);
 EMSCRIPTEN_KEEPALIVE uint32_t*       ai_mirror(void)  { return mir; }
 EMSCRIPTEN_KEEPALIVE uint32_t const* ai_palette(void) { return xterm256; }
 EMSCRIPTEN_KEEPALIVE uint32_t        ai_unfold(uint32_t g_) { return g_ < 256 ? cb_unfold((uint8_t) g_) : 0; }
@@ -187,8 +199,11 @@ EMSCRIPTEN_KEEPALIVE int ai_key(int b) {
   if (F && ai_ok(F)) ai_core_of(F)->sweep_ctr = sweep_interval;
   return 1; }
 
+// the seat's nifs ride the love_nifs slice (AiNif), as main.c's do: the image codec
+// names a nif by its place in that slice, so a baked heap can carry them.
+// the base: the egg boot, the page's boot text, the seat's name. a bake seals this.
 EMSCRIPTEN_KEEPALIVE
-int ai_init(void) {
+int ai_boot(void) {
   F = ai_ini();
   if (!ai_ok(F)) return ai_code_of(F);
   // BOUND the collector (the Appel knob): wasm32 has a HARD 2 GB ceiling and
@@ -197,24 +212,49 @@ int ai_init(void) {
   // a quarter of the ceiling, like every other bounded seat: the transient peak while a
   // resize holds both halves is double the budget.
   if (ai_ok(F)) ai_core_of(F)->budget = (2048u << 20) / sizeof(ai_word) / 4;
-  struct ai_def d[] = {{"exit", (ai_word) nif_exit}, {"close", (ai_word) nif_close},
-    {"screen", (ai_word) nif_screen}, {"scribe", (ai_word) nif_scribe},
-    {"glass", (ai_word) nif_glass},   {"gaze", (ai_word) nif_gaze},
-    {"reply", (ai_word) nif_reply},   {"unfold", (ai_word) nif_unfold},
-    {"wet", (ai_word) nif_damage},    {"mirror", (ai_word) nif_mirror}};
-  F = ai_defn(F, d, countof(d));
-  if (!ai_ok(F)) return ai_code_of(F);
-  // the AiNif slice of every linked TU (the horn), as main.c drains it
+  // the AiNif slice of every linked TU (this seat, the console, the horn), as main.c drains it
   F = ai_defn(F, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
   if (!ai_ok(F)) return ai_code_of(F);
   F = ai_egg_(F, src_egg, src_p1, src_corpus, src_post);
   F = ai_evals_(F, boot_ai);
   // the seat's name, where main.c pins the kernel's: the corpus gates its OS laws on it
   if (ai_ok(F = ai_defv(intern(ai_strof(F, "wasm")), "love-os"))) ai_core_of(F)->sp++;
-  // THE SESSION: a fresh writable layer, C-side -- everything the page ever
-  // feeds through ai_eval defglobs here, never in the base.
+  return ai_code_of(F); }
+
+// THE SESSION: a fresh writable layer, C-side -- everything the page ever feeds
+// through ai_eval defglobs here, never in the base. the egg boot and the image
+// wake both end here, as main.c's run_program does.
+EMSCRIPTEN_KEEPALIVE
+int ai_init(void) {
+  int rc = ai_boot();
+  if (rc) return rc;
   F = ai_layer_(F);
   return ai_code_of(F); }
+
+// (ai_wake buf len): boot from a heap image the page fetched beside the module --
+// the native seat's .love.image, as a file. answers 0 woken, else the caller boots
+// the egg: a stale image (another module build moved a symbol) is refused by the
+// codec's anchor, never half-loaded. the nifs are re-seated as main.c does after a wake.
+EMSCRIPTEN_KEEPALIVE
+int ai_wake(void const *buf, uintptr_t len) {
+  struct ai *g = ai_image_load(buf, len);
+  if (!g) return -1;
+  F = g;
+  ai_core_of(F)->budget = (2048u << 20) / sizeof(ai_word) / 4;
+  F = ai_defn(F, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
+  if (!ai_ok(F)) return ai_code_of(F);
+  F = ai_layer_(F);
+  return ai_code_of(F); }
+
+// (ai_bake): the booted base as image bytes, for the page's love.image -- the
+// buffer's address; ai_bake_len its length, 0 for a refused bake.
+static uintptr_t bake_len;
+EMSCRIPTEN_KEEPALIVE
+void *ai_bake(void) {
+  bake_len = 0;
+  return ai_ok(F) ? ai_image_save(ai_core_of(F), &bake_len, NULL) : NULL; }
+EMSCRIPTEN_KEEPALIVE
+uintptr_t ai_bake_len(void) { return bake_len; }
 
 EMSCRIPTEN_KEEPALIVE
 int ai_eval(const char *src) {

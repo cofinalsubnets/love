@@ -388,12 +388,33 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   resolved by name — which also drops the in-process-only constraint. Open: the
   per-splice Module+Instance cost, and synchronous instantiation being size-capped on
   the main thread. Prior art for the skeleton: Mono's jiterpreter.
-- **rung 7 — the image rides the module.** Open, off the path. The wasm seat boots the
-  egg from source at every `ai_init` (host.c's `ai_egg_` over the four texts) while
-  every native seat wakes a baked image. The writer's data section can carry
-  `.love_image` the way the ELF does; what has to be said first is how an image whose
-  aps are table indices survives a relink (image_extra_aps carries an ap as its index
-  already). Worth a measurement of the page's boot before it is worth a rung.
+- **rung 7 — the image rides beside the module. ✅ LANDED (2026-09-07).** The wasm seat
+  booted the egg from source at every `ai_init` (host.c's `ai_egg_` over the four texts)
+  while every native seat wakes a baked image. Measured first, under node: the boot is
+  **1.7 s**, and it leaves a **948 MB** arena behind it. Now `make wasm` bakes the booted
+  base once (src/port/wasm/bake.mjs: `ai_boot`, then `ai_bake` = `ai_image_save` through
+  the seat's export) and lays **out/wasm/love.image, 494 kB (317 kB gzipped)** beside the
+  module; the page fetches it and `ai_wake`s (`ai_image_load`, the nifs re-seated, the
+  session layer pushed, as main.c's wake does), and the egg boots only when the fetch
+  misses or the codec refuses. **The wake is 13 ms, and the woken heap is 23 MB**; the page's own boot line reads
+  144 ms in a headless Firefox where it read 3933. No
+  relink question arose: the image is a file, not a data segment, and the codec's anchor
+  (a gap between two symbols — on wasm a table index against a data address, the same
+  number for one module build) refuses a bake from any other build, so a stale image is
+  an egg boot, never a half-loaded heap. The seat's nifs moved onto the love_nifs slice
+  (AiNif) so the codec can name them by index. `test_wasm` runs the corpus twice, booted
+  and woken; the tracked copy is `make site-wasm`'s, beside love.wasm.
+  **The crew in the browser** (the question behind the rung): baked with holo.l, x64.l,
+  a64.l and the dist cat prepended, the image is **5.2 MB (3.3 MB gzipped), wakes in 78
+  ms into 95 MB**, and in it `(cli-line ["love" "kore" "echo" "hi"] 0)` answers and
+  `love cc --version` says `mooncc 0.1` — moon runs where it stands. A compile stops one
+  step in: `cc: internal error: missing selfpath` — the bare cc door reads its per-ISA
+  runtime archives out of the native binary's own file, and this seat has no file to be.
+  So a love binary built in the browser is two rungs off, neither taken here: the runtime
+  archives riding the image or the module (~210 kB deflated), and a source/output door
+  wider than the 256-byte key ring (a memory filesystem, or inle's ramfs in the seat).
+  Not shipped in the page: the egg image is what the site's apps need, and 3.3 MB on
+  every visit for a compiler nobody can hand a file to is the wrong default.
 
 ## choices (revisable)
 

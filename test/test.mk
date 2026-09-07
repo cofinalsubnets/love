@@ -1257,6 +1257,8 @@ else
 test_wasm: wasm
 	@echo TEST out/wasm/love.wasm "(node)"
 	@$(NODE) $(R)/src/port/wasm/test.mjs --love $(R)/out/wasm/love.wasm $t
+	@echo TEST out/wasm/love.image "(node, the woken heap)"
+	@$(NODE) $(R)/src/port/wasm/test.mjs --love $(R)/out/wasm/love.wasm --image $(R)/out/wasm/love.image $t
 	@$(NODE) $(R)/src/port/wasm/screen.mjs --love $(R)/out/wasm/love.wasm
 	@$(NODE) $(R)/src/port/wasm/horn.mjs --love $(R)/out/wasm/love.wasm
 endif

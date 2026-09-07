@@ -124,6 +124,10 @@ the formatter's neighbours. A size rung, if one is wanted, starts at the archive
 | mooncc, + the fourth home (rung 5d, 2026-09-07) | 4765 | 20.1 s | — | 2.8 GB |
 | emcc -O2, out/wasm/love.js (wasm32, tco=0) | 4731 | 17.7 s | 20.8 s | 0.49 GB |
 
+**The page's boot** (rung 7, 2026-09-07): the egg boot under node is 1.7 s and leaves a
+948 MB arena; the woken image (out/wasm/love.image, 494 kB, 317 kB gzipped) is 13 ms and
+23 MB (the page's boot line: 3.9 s → 144 ms in Firefox). The crew image (holo + the dist cat) is 5.2 MB / 3.3 MB gzipped, 78 ms, 95 MB.
+
 2.39× on the corpus on the trampoline, **1.81× with return_call**, the relooper leaves it
 there (the VM's ops are small tail-threaded functions; their cost is calls and memory, not
 control flow), **1.46× with the riscv homes** (the ops' parameters in registers instead

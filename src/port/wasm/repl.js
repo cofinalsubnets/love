@@ -37,7 +37,12 @@ async function loveRepl(root) {
   // module's resizable memory; a fresh copy decodes everywhere
   const drain = () => dec.decode(M.HEAPU8.slice(optr(), optr() + olen()));
 
-  if (init() !== 0) { status.textContent = 'the image failed to boot.'; return; }
+  // the heap image beside the module (bake.mjs, `make wasm`): a wake is milliseconds where
+  // the egg boot is seconds. missing or stale (refused by the module), the egg boots as before
+  let woke = false;
+  try { const r = await fetch(new URL('love.image', import.meta.url)); if (r.ok) woke = M.wake(await r.arrayBuffer()); }
+  catch (e) { woke = false; }
+  if (!woke && init() !== 0) { status.textContent = 'the image failed to boot.'; return; }
   // the shell's default help: a condition prints ";; a b" and answers (), so
   // the session survives every raise -- the same law as the native shell.
   ev("(hear (\\ a b (: _ (puts \";; \") _ (putx a) _ (puts \" \") _ (putx b) _ (putc 10) ())))");

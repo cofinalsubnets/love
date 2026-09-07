@@ -29,6 +29,7 @@ test/proof/lean/uugen.lean
 index.html
 assets
 src/port/wasm/love.wasm
+src/port/wasm/love.image
 
 # editor and debugger leavings
 vgcore.*

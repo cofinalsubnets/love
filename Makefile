@@ -976,12 +976,24 @@ out/wasm/love.wasm: $(wasm_c) $(lib_h) out/lib/love_version.h host
 	@mkdir -p $(dir $@)
 	@echo 'WASM	'$@
 	@$(mooncc) -t wasm -Dai_tco=1 -DAiHaveVersionH -I. -Isrc/core -Isrc/host -Iout/lib -o $@ $(wasm_c)
+# the module's heap image (rung 7): the egg booted once under node and written as bytes
+# the page fetches beside the module -- a wake is milliseconds where the boot is seconds,
+# and the woken heap is compact where the boot's arena is not. anchored to the module that
+# baked it (a stale one is refused and the egg boots), so the two are laid together.
+out/wasm/love.image: out/wasm/love.wasm src/port/wasm/bake.mjs src/port/wasm/loader.js
+	@echo 'BAKE	'$@
+	@$(NODE) src/port/wasm/bake.mjs --love out/wasm/love.wasm -o $@
+ifeq ($(NODE),)
 wasm: out/wasm/love.wasm
-# the page's copy of the module, beside the loader that fetches it. by hand, as love.js
-# was: a tracked 1.3 MB that every C edit would otherwise churn.
-site-wasm: out/wasm/love.wasm
+else
+wasm: out/wasm/love.wasm out/wasm/love.image
+endif
+# the page's copy of the module and its image, beside the loader that fetches them. by
+# hand, as love.js was: a tracked 1.7 MB that every C edit would otherwise churn.
+site-wasm: wasm
 	@cp out/wasm/love.wasm src/port/wasm/love.wasm
-	@echo 'SITE	src/port/wasm/love.wasm'
+	@cp out/wasm/love.image src/port/wasm/love.image
+	@echo 'SITE	src/port/wasm/love.wasm src/port/wasm/love.image'
 wasm-emcc:                       # emcc's love, out/wasm/love.js: the foreign build ccwasm and test.mjs can take
 	@$(MAKE) -C src/port/wasm
 

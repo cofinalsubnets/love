@@ -96,7 +96,16 @@ export default async function Love(opts = {}) {
     try { const r = f(...vs); return fromWasm(ret, Array.isArray(r) ? r[0] : r); } finally { frees.forEach(_free); } };
   const cwrap = (name, ret, types) => (...args) => ccall(name, ret, types, args);
 
-  const M = { ccall, cwrap, UTF8ToString, stringToUTF8, lengthBytesUTF8, _malloc, _free, memory,
+  // (wake bytes): boot from a heap image (love.image, `make wasm`'s bake) -- true if the
+  // module took it; false says boot the egg (ai_init) instead, as a stale image is refused
+  const wake = (bytes) => {
+    if (!bytes || !ex.ai_wake) return false;
+    const b = new Uint8Array(bytes), p = _malloc(b.length);
+    u8().set(b, p);
+    const rc = ccall('ai_wake', 'number', ['number', 'number'], [p, b.length]);
+    if (rc) _free(p);                                   // a woken heap keeps reading the bytes
+    return rc === 0; };
+  const M = { ccall, cwrap, UTF8ToString, stringToUTF8, lengthBytesUTF8, _malloc, _free, memory, wake,
               get HEAPU8() { return new Uint8Array(memory.buffer); },
               get HEAPU32() { return new Uint32Array(memory.buffer); },
               get HEAP32() { return new Int32Array(memory.buffer); } };
