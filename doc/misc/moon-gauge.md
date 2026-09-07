@@ -89,16 +89,17 @@ that reaches the seat, so this is the wasm lowering's gauge the way gcc is x64's
 
 | ms (median of 5, 24 reps) | mooncc | emcc -O2 | emcc -O0 |
 |---|---:|---:|---:|
-| sha256 | 544 | 151 (3.60×) | 513 (1.06×) |
-| md5 | 170 | 147 (1.16×) | 204 (0.83×) |
-| crc32 | 57 | 51 (1.12×) | 64 (0.89×) |
-| cksum | 61 | 53 (1.15×) | 66 (0.92×) |
-| deflate | 294 | 215 (1.37×) | 429 (0.69×) |
-| inflate | 89 | 68 (1.31×) | 96 (0.93×) |
+| sha256 | 400 | 138 (2.90×) | 476 (0.84×) |
+| md5 | 156 | 137 (1.14×) | 188 (0.83×) |
+| crc32 | 56 | 47 (1.19×) | 57 (0.98×) |
+| cksum | 55 | 43 (1.28×) | 59 (0.93×) |
+| deflate | 259 | 202 (1.28×) | 399 (0.65×) |
+| inflate | 82 | 62 (1.32×) | 88 (0.93×) |
 
 Every lane answers the same bytes on every row. (2026-09-07, after the relooper, rung 5b,
-and the riscv homes, rung 5c — the homes cost sha256 461 → 544 ms and bought deflate 310 →
-294, the corpus 21%; the relooper-only fill is this section's git history;
+the riscv homes, rung 5c, and rung 5d's pool + fourth home — 5c alone cost sha256 461 → 544
+ms for want of a pool, 5d's wider pool answered it at 433 and the fourth home is noise on
+these rows; the earlier fills are this section's git history;
 the first fill, the same day on the dispatch loop, read sha256 819 ms = 5.15×, deflate 628
 = 2.88×, md5 1.73× — this section's git history.) The reading that fill suggested, spills
 for want of a roster, was ablated and found false (the plan says how); what the rows were
@@ -106,8 +107,8 @@ paying for was rung 1's dispatch loop, and with real loops **mooncc beats emcc -
 row** and sits at 1.1–1.5× of -O2 everywhere but sha256, which at 3.22× is now the wasm
 twin of its native 2.37× — the array-slot residual, the same as on x64.
 
-**The module is big.** sum.c is 172,204 bytes as our module against emcc -O2's 13,703
-(12.6×) and gz.c 197,934 against 26,911 (7.4×): mooncc's text runs ~4× gcc's natively
+**The module is big.** sum.c is 169,627 bytes as our module against emcc -O2's 13,703
+(12.4×) and gz.c 195,872 against 26,911 (7.3×): mooncc's text runs ~4× gcc's natively
 (ccsize) and the link pulls nolibc members whole, so a driver that wants printf carries
 the formatter's neighbours. A size rung, if one is wanted, starts at the archive's grain.
 
@@ -119,12 +120,14 @@ the formatter's neighbours. A size rung, if one is wanted, starts at the archive
 | mooncc, the same at tco=1 (return_call; rung 5a, 2026-09-07) | 4765 | 32.1 s | 38.0 s | 2.8 GB |
 | mooncc, tco=1 + the relooper (rung 5b, 2026-09-07) | 4765 | 32.7 s | — | 2.8 GB |
 | mooncc, + the riscv homes (rung 5c, 2026-09-07) | 4765 | 25.8 s | — | 2.8 GB |
+| mooncc, + the riscv pool a5..a7 (rung 5d, 2026-09-07) | 4765 | 22.1 s | — | 2.8 GB |
+| mooncc, + the fourth home (rung 5d, 2026-09-07) | 4765 | 20.1 s | — | 2.8 GB |
 | emcc -O2, out/wasm/love.js (wasm32, tco=0) | 4731 | 17.7 s | 20.8 s | 0.49 GB |
 
 2.39× on the corpus on the trampoline, **1.81× with return_call**, the relooper leaves it
 there (the VM's ops are small tail-threaded functions; their cost is calls and memory, not
-control flow), and **1.46× with the riscv homes** (the ops' parameters in registers instead
-of the frame) — between the corpus's
+control flow), **1.46× with the riscv homes** (the ops' parameters in registers instead
+of the frame), and **1.14× with the pool widened and all four homed** — between the corpus's
 native 1.19× and sha256's 5.15×, as love.c is the call-dense VM and the ciphers are the
 array floor. ⚠ not quite the same work: the emcc build is 32-bit (34 fewer laws run under
 `word`), still trampolined, and its heap is a sixth of ours.

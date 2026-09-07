@@ -340,6 +340,22 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   temporaries pay; the callee-saved bank (s1 s2 s3) was tried and did not help the row and
   broke the runtime build. The corpus is the target and the row is a lever gauge, so this
   ships with the row on record; a fourth home (Sp) wants t1, the xmm pop scratch — open.
+- **rung 5d — the pool, and the fourth home. ✅ LANDED (2026-09-07).** Pricing the fourth
+  home found the sha256 regression's real cause: riscv's operand pool was **t0..t3 only**
+  (`tpool`), so three homes left one register for every expression in a three-parameter
+  function, and a fourth would have left none. a64 pools x5..x7 beside its temporaries —
+  an argument register is dead once the prologue has spilled or homed it, and a pool value
+  never lives across a call — and riscv's a5..a7 are the same shape, so the pool is now
+  t0..t3 + a5..a7. That alone: **the corpus 25.8 → 22.1 s**, sha256 544 → 433 ms (under
+  the 461 it read before the homes), deflate 294 → 276, the module −1%. Then the fourth
+  home: t1 was the xmm pop scratch, the gp register a popped double stages through on
+  its way to an f-register — riscv has `fld` off sp as thumb2 has `vldr`, so the a8 pops
+  take the t32 shape there (`fpop?`), the scratch is a64-only, and `hregs-rv64` ends in
+  r9 with `nhome` 4. **The corpus 22.1 → 20.1 s**, the nif rows within noise of the pool
+  fill (sha256 400 ms = 2.90× emcc -O2, deflate 1.28×, the rest 1.14–1.32×), the module
+  1,187,329 bytes. Together, 25.8 → 20.1 s (1.28×) and the corpus sits at **1.14× emcc**.
+  x64's object byte-identical; a64 untouched (its pops still stage through x9 — the same
+  `fpop?` door would take it, unpriced); riscv's own gates green under qemu.
 - **the locals-roster lever: MEASURED, DOES NOT PAY (2026-09-07).** The reading after
   ccwasm's first fill was that the array-heavy rows lose on wasm locals because the lane
   inherits rv64's 27-register roster where wasm has unlimited locals. Ablated before

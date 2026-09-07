@@ -449,7 +449,7 @@
    ; same lr-push + fp-base + `bx lr` frame shape as a64 (`arm?` covers both) -- r4 is
    ; callee-saved there, but riding fp keeps the a64 build/epilogue path verbatim.
    ; register-homing is off there (nhome=0): every param spills to its frame slot. riscv homes
-   ; three, in t0 t2 t3 -- the wasm module rides this lane whole, and there every reload of a
+   ; four, in t0 t2 t3 t1 -- the wasm module rides this lane whole, and there every reload of a
    ; frame slot is a memory op the engine cannot lift. --
    (a64? {'tgt 'a64}) 1
    (t32? g) (member? (g 'tgt) '(thumb2 thumb2sp thumb1))   ; the 32-bit thumb ABI family (AAPCS32): armv7e-m + armv6-M share it
@@ -465,7 +465,8 @@
    (ngp g) (? (a8? g) 8 (t32? g) 4 6)
    (pkr g) (? (a64? g) 'r15 (t32? g) 'r12 (rv64? g) 'r12 'r3)   ; the callr park (x64 rbx; a64 x15; thumb2 r12/IP -- x3/r3 is the 4th ARG register; riscv t4, clear of args and its pool)
    (ip2 g) (? (a8? g) 'r1 'r2)                      ; an int-pair aggregate's second register (rax:rdx / x0:x1 / a0:a1); thumb2 unused for M1 scalar
-   (psc g) (? (a8? g) 'r9 'r0)                      ; the xmm-arg pop scratch (a64/riscv r0 IS arg 0; a pool reg is dead at a call)
+   (psc g) (? (a64? g) 'r9 'r0)                     ; the xmm-arg pop scratch (a64 r0 IS arg 0; a pool reg is dead at a call)
+   (fpop? g) (t32? g || rv64? g)                    ; a double pops straight into its f-register (fld), no gp scratch
    (ovb g) (? (a8? g) 32 (v6m? g) 12 (t32? g) 8 16)   ; overflow params above the push cells: x64 [ret+rbp]=16; a64/riscv 2x16; thumb2 lr+fp=8; v6m lr+fp+r4=12
    ; the a64 HOME pool: caller-saved, never an argument register (x0..x7 all stage args, so no
    ; positional alignment with the incoming regs -- every home takes one prologue mov), and clear
@@ -473,10 +474,10 @@
    hregs-a64 '(r10 r11 r12 r13 r14)
    hregs-t32 '(r5 r6 r7 r8)                          ; thumb2 callee-saved home pool (inert while nhome=0)
    ; the riscv HOME pool, a64's shape: caller-saved temporaries, never an argument register,
-   ; clear of the scratches (t1 = r9 the xmm pop scratch, t4 = r12 the callr park, t5/t6 holo's)
-   hregs-rv64 '(r8 r10 r11)
+   ; clear of the scratches (t4 = r12 the callr park, t5/t6 holo's); t1 last, the coldest seat
+   hregs-rv64 '(r8 r10 r11 r9)
    (hregs g) (? (a64? g) hregs-a64 (rv64? g) hregs-rv64 (t32? g) hregs-t32 opool)   ; the home pool (x64 rides opool, positionally arg-aligned)
-   (nhome g) (? (a64? g) 5 (rv64? g) 3 (t32? g) 0 6)      ; how many gp positions can home (thumb2: none yet -- spill all params)
+   (nhome g) (? (a64? g) 5 (rv64? g) 4 (t32? g) 0 6)      ; how many gp positions can home (thumb2: none yet -- spill all params)
    ; the x64 callee-saved pool (r11..r14 -> machine r12..r15): overflow homes for locals in
    ; non-leaf fns. a home here rides through calls unwrapped -- the callee preserves it -- at
    ; the price of one save/restore pair in the owner's frame (a64's x19+ rungs: unclimbed)
@@ -2816,10 +2817,10 @@
                                         '((ld r0 sp 0) (ld r1 sp 4)
                                            (ld r2 sp 8) (ld r3 sp 12)
                                            (add sp sp 16))
-                                       ('x && t32? g)     ; a t32 double pops straight into its d-reg
+                                       ('x && fpop? g)    ; a t32/riscv double pops straight into its f-reg
                                         [['ldsd (xmmreg <>kc) 'sp 0] '(add sp sp 16)]
                                        'x2   ; the struct pair: re then im (a natural 16-byte cell)
-                                        (? (t32? g)   ; t32 pops straight into the d-pair
+                                        (? (fpop? g)   ; t32/riscv pop straight into the f-pair
                                            [['ldsd (xmmreg <>kc) 'sp 0] ['ldsd (xmmreg (<>kc + 1)) 'sp 8]
                                             '(add sp sp 16)]
                                            (a8? g)
@@ -2830,12 +2831,15 @@
                                              '(pop r0) ['movqxr (xmmreg (<>kc + 1)) 'r0]])
                                        'p2   ; a general two-eightbyte struct: eb0 (top) then eb1, each into its gp/xmm target
                                         (? (a8? g)
-                                           ((<>kc @ 'g [['ld (argr g <>>kc) 'sp 0]] [['ld px 'sp 0] ['movqxr (xmmreg <>>kc) px]])
-                                            + (<>>>kc @ 'g [['ld (argr g <>>>>kc) 'sp 8]] [['ld px 'sp 8] ['movqxr (xmmreg <>>>>kc) px]])
+                                           ((<>kc @ 'g [['ld (argr g <>>kc) 'sp 0]]
+                                                    (fpop? g ? [['ldsd (xmmreg <>>kc) 'sp 0]] [['ld px 'sp 0] ['movqxr (xmmreg <>>kc) px]]))
+                                            + (<>>>kc @ 'g [['ld (argr g <>>>>kc) 'sp 8]]
+                                                      (fpop? g ? [['ldsd (xmmreg <>>>>kc) 'sp 8]] [['ld px 'sp 8] ['movqxr (xmmreg <>>>>kc) px]]))
                                             + '((add sp sp 16)))
                                            ((<>kc @ 'g [['pop (argr g <>>kc)]] ['(pop r0) ['movqxr (xmmreg <>>kc) 'r0]])
                                             + (<>>>kc @ 'g [['pop (argr g <>>>>kc)]] ['(pop r0) ['movqxr (xmmreg <>>>>kc) 'r0]])))
-                                       (spop px + [['movqxr (xmmreg <>kc) px]])))))))
+                                       (fpop? g ? [['ldsd (xmmreg <>kc) 'sp 0] '(add sp sp 16)]
+                                          (spop px + [['movqxr (xmmreg <>kc) px]]))))))))
                      (go4 kr ()))
              nxmm (: (go5 l5 n5) (? !(two? l5) n5
                                     (go5 >l5 (: ce <<l5 kk <ce
@@ -7835,9 +7839,9 @@
        n0 (peep g 'n 0) strs0 (g 'strs) sts0 (g 'statics)   ; snapshot the accumulators for ubuild's retry
        ; the operand pool is empty on t32: aapcs32 keeps r4-r11 callee-saved and the thumb2
        ; frame saves only lr+fp, while r0-r3/r12 are args and scratch -- there is no free
-       ; caller-saved register to pool. riscv's own pool is t0..t3 (r8..r11), caller-saved and
-       ; never args; opool's names land on riscv arg registers, so it can't ride there.
-       tpool (? (abl? g 'tpool) () (t32? g) () (rv64? g) '(r8 r9 r10 r11) opool)
+       ; caller-saved register to pool. riscv's own pool is t0..t3 (r8..r11) and then a5..a7,
+       ; as a64 pools x5..x7: an arg register is dead once the prologue has spilled or homed it.
+       tpool (? (abl? g 'tpool) () (t32? g) () (rv64? g) '(r8 r9 r10 r11 r5 r6 r7) opool)
        _ (pins g 'pool0 tpool 'pool tpool)
        ; v6-M memory return: this fn's >4B composite result fills the address the caller
        ; passed as the implicit first arg (r0) -- save it in its own slot, params start at
