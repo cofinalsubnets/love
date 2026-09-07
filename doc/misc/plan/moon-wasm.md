@@ -416,6 +416,22 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   Not shipped in the page: the egg image is what the site's apps need, and 3.3 MB on
   every visit for a compiler nobody can hand a file to is the wrong default.
 
+## closed (2026-09-07)
+
+The arc is closed. `mooncc -t wasm` lays the artifact: gen's rv64 lane under `__wasm__`,
+wasmfn.l's machine and whole-program link, loader.js as the kernel. emcc is out of every
+gate and the tracked love.js is gone; `make wasm-emcc` keeps the foreign build as an
+instrument. The gauge at the close: the whole corpus under node at **1.14× emcc -O2**
+(20.1 s against 17.7), every nif row ahead of emcc -O0 and 1.1–2.9× behind -O2 with
+sha256 the array floor it is natively; the module 1.19 MB, the image 494 kB, the page
+booting in 144 ms. What remains is the seat's shape, not a lever: the universal call type,
+the shadow stack, and wasm64's explicit bounds checks against emcc's wasm32 guard pages —
+each a design change with a reason on the other side. Two rungs are named and not taken:
+the crew's runtime archives riding the image, and a file door wider than the key ring,
+which together would build a native love in the browser. The compiler grew ~770 lines
+for the arc (wasmfn.l 539, wasm.l 165, moon.l 65), gen.l ended three lines shorter, and
+the seat is ~340 lines of JavaScript and C.
+
 ## choices (revisable)
 
 - whole-program module, no wasm `.o`/linker — one consumer (the love build)
@@ -425,9 +441,8 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
 - `-Dai_tco=1` since rung 5a: the module's tails are `return_call`; tco=0 was rung 5's.
 - the writer's instruction is a form and the module a tablet — love data the way
   holo's IR is, so a lane hands it lists and a gate quotes them.
-- `src/port/wasm/love.js` (313 KB committed) gets rebuilt by our emitter behind the same
-  `make wasm` door, and the emcc Makefile stays until the module passes the same
-  gate — pays somewhere, regresses nowhere.
+- the emcc build stayed until the module passed the same gate — pays somewhere,
+  regresses nowhere; then love.js went, and `make wasm-emcc` keeps emcc as an instrument.
 
 ## difficulty
 
