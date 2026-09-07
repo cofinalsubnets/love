@@ -966,15 +966,21 @@ site-serve: host out/toolmd.stamp
 
 # the wasm artifact, moon's own: love's TUs (plus the horn and the seat's host.c)
 # through mooncc -t wasm, linked to one module -- no emcc, no C toolchain. the loader
-# (src/port/wasm/loader.js) is the runtime under it. the emcc build stays as wasm-emcc
-# until the module drives the shipped page.
+# (src/port/wasm/loader.js) is the runtime under it and the shipped page rides it
+# (src/port/wasm/love.wasm, refreshed by hand: `make site-wasm`, then commit). the emcc
+# build stays as wasm-emcc, a differential and nothing on the page.
 wasm_c = $(love_c) $(R)/src/host/horn.c $(R)/src/port/wasm/host.c
 out/wasm/love.wasm: $(wasm_c) $(lib_h) out/lib/love_version.h host
 	@mkdir -p $(dir $@)
 	@echo 'WASM	'$@
-	@$(mooncc) -t wasm -Dai_tco=0 -I. -Isrc/core -Isrc/host -Iout/lib -o $@ $(wasm_c)
+	@$(mooncc) -t wasm -Dai_tco=0 -DAiHaveVersionH -I. -Isrc/core -Isrc/host -Iout/lib -o $@ $(wasm_c)
 wasm: out/wasm/love.wasm
-wasm-emcc:
+# the page's copy of the module, beside the loader that fetches it. by hand, as love.js
+# was: a tracked 1.3 MB that every C edit would otherwise churn.
+site-wasm: out/wasm/love.wasm
+	@cp out/wasm/love.wasm src/port/wasm/love.wasm
+	@echo 'SITE	src/port/wasm/love.wasm'
+wasm-emcc:                       # emcc's love, out/wasm/love.js: the foreign build ccwasm and test.mjs can take
 	@$(MAKE) -C src/port/wasm
 
 clean:

@@ -231,7 +231,8 @@ Only a paragraph, so the title has to come from the meta block.
    ione (get-file "isle/one.html")
    _ (assert (i1 = 5) (i2 = 1)
              (sub? iidx "<div class=\"repl\">") (sub? iidx "loading..")
-             (sub? iidx "<script src=\"../wasm/love.js\">") (sub? iidx "<script src=\"../wasm/repl.js\">")
+             (sub? iidx "<script src=\"../wasm/cells.js\">") (sub? iidx "<script type=\"module\" src=\"../wasm/repl.js\">")
+             !(sub? iidx "love.js")                                    ; the module, not the emcc build
              (at iidx "</h1>" < at iidx "class=\"repl\"")           ; after the title
              (at iidx "class=\"repl\"" < at iidx "<script")           ; the scripts last
              !(sub? ione "class=\"repl\"") !(sub? ione "<script")

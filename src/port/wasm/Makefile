@@ -40,7 +40,7 @@ EMFLAGS = \
 # so it is said here. see ../../../Makefile.
 .DELETE_ON_ERROR:
 
-all: love.js
+all: $(o)/love.js
 
 # these are serialized from src/core/boot/*.l by the top-level lcat rule; host.c assembles them into
 # the bootstrap via G_EGG_PRE/POST -- no repl here, the browser feeds it through ai_eval.
@@ -60,14 +60,9 @@ all: love.js
 $(o)/src/core/love.o: ../../../out/lib/love_version.h
 
 # the link is multi-input, so ccache cannot cache it -- bare $(EMCC), and EMFLAGS apply only
-# here. spelled once for two places: `love.js` is the committed artifact refreshed by hand,
-# $(o)/love.js the same bytes under out/, which is what test_wasm runs -- a gate must not
-# rewrite the working tree.
+# here. the page rides moon's own module now (src/port/wasm/love.wasm over loader.js), so
+# this build lands under out/ only: the differential beside ours, never the artifact.
 emlink = $(EMCC) $(CFLAGS) $(EMFLAGS) $(objs) -o $@
-
-love.js: $(objs)
-	@echo 'LD	'$@
-	@$(emlink)
 
 $(o)/love.js: $(objs)
 	@echo 'LD	'$@
@@ -91,8 +86,6 @@ $(o)/%.o: ../../../%.c $(g_h)
 serve: all
 	python3 -m http.server 8000
 
-# clean takes only the build intermediates: love.js is tracked and refreshed by hand, so
-# deleting it here would leave a spurious `D src/port/wasm/love.js` after every top-level clean.
 # SINGLE_FILE=1 embeds the wasm into love.js, so no standalone .wasm is ever emitted.
 clean:
 	rm -rf $(o)

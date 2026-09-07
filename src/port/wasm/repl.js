@@ -1,9 +1,14 @@
-// src/port/wasm/repl.js -- the repl island: love.js's module driven from a page --
+// src/port/wasm/repl.js -- the repl island: moon's wasm module driven from a page --
 // the shell in .term, and the quay tty apps repainted into .app's cell grid.
 // loveRepl(root) drives one island, its parts found by class under root: .status,
 // .term (.scroll .out .row .cmd .clear), .app (.screen .appbar .appname .apphint) and
 // the .chip spans. every .repl on the page mounts itself at load, so a page carries the
-// markup and this script and no glue. index.html links it after love.js and cells.js.
+// markup and this script and no glue. index.html links it as a module after cells.js;
+// the loader fetches love.wasm beside this file, so the page rides http, not file://.
+import Love from './loader.js';
+
+// the module is wasm64: an engine without memory64 says so instead of failing in silence
+const memory64 = () => WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 5, 3, 1, 4, 0]));
 
 async function loveRepl(root) {
   const q = s => root.querySelector(s);
@@ -15,7 +20,10 @@ async function loveRepl(root) {
   const clear = q('.clear');
 
   const t0 = performance.now();
-  const M = await Love();
+  if (!memory64()) { status.textContent = 'this browser has no wasm memory64; the image cannot boot here.'; return; }
+  let M;
+  try { M = await Love(); }
+  catch (e) { status.textContent = `the module did not load (${e.message}); the page needs to be served over http.`; return; }
   const init = M.cwrap('ai_init', 'number', []);
   // through the heap, not ccall's 'string': that lands the text on the wasm stack, and
   // a frame or a fetched source is bigger than the stack cares to hold
@@ -37,7 +45,7 @@ async function loveRepl(root) {
   // top-level datum; ONE datum evaluates as-is, MANY become the application
   // (a b c).
   ev("(: webln (\\ s (: (go x acc) (: r (sound x) (? (two? r) (go (cup r) (link (cap r) acc)) (id? r 'torn) () (rev acc))) ds (go s ()) (? !(two? ds) () !(two? (cup ds)) (ev (cap ds)) (ev ds)))))");
-  ev("(. love-version)");
+  ev("(puts love-version)");
   const ver = drain();
   status.style.display = 'none';
   put(`;3 love ${ver} ${(performance.now() - t0).toFixed(0)}ms`, 'cnd');

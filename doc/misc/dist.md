@@ -130,7 +130,7 @@ no switch, and the DDC leg is the DEFAULT rather than a thing you opt into: the 
 prefers a foreign compiler and falls back to itself only where none works.
 
 ⚠ **a release is cut from the TREE.** `selfpack` walks the root and skips only what
-is not source (`out bin dl`, everything hidden at the root, and `src/port/wasm/love.js`), so
+is not source (`out bin dl`, everything hidden at the root, and `src/port` whole -- the board and wasm seats), so
 every file on disk — tracked or not — is in the artifact, and the edit you just made
 is in what you just built. The cut runs every make and settles on its own stamp (the
 sha of the leveled tar, kept beside the archive), so a deleted or renamed file —

@@ -4,12 +4,12 @@
 // binary and the love0 bootstrap -- this one exercises wasm's <data.h>
 // override (sentinel-ap data kinds, no flat code-address space).
 //
-// Usage: node src/port/wasm/test.mjs [--love <love.js>] <corpus.l...>
-//   (the Makefile passes out/wasm/love.js and $t, in order)
+// Usage: node src/port/wasm/test.mjs [--love <love.wasm | love.js>] <corpus.l...>
+//   (the gate passes out/wasm/love.wasm and $t, in order)
 //
-// The module path is a PARAMETER because the gate must not build over the
-// committed src/port/wasm/love.js -- see ../Makefile. Default is the gate's own build;
-// point --love at src/port/wasm/love.js to exercise the artifact that actually ships.
+// The module path is a PARAMETER: a .wasm rides loader.js (moon's own build, what the
+// page ships as src/port/wasm/love.wasm), a .js is emcc's (out/wasm/love.js, `make
+// wasm-emcc`) -- the same corpus over either, so the two builds can be held to each other.
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 

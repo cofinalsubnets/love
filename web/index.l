@@ -30,10 +30,9 @@
                   (? (hot? q) (: s (slurp q) _ (close q) s)
                      (: _ (say err ("index: cannot open " + f + "\n")) (quit 1))))
    wasm        "src/port/wasm"                                       ; as the page links it
-   (island _)  (slurpf (wasm + "/repl.html")
-                + "\n<script src=\"" + wasm + "/love.js\"></script>\n"
-                + "<script src=\"" + wasm + "/cells.js\"></script>\n"
-                + "<script src=\"" + wasm + "/repl.js\"></script>\n")
+   (island _)  (slurpf (wasm + "/repl.html")                       ; cells.js first: a module runs after it
+                + "\n<script src=\"" + wasm + "/cells.js\"></script>\n"
+                + "<script type=\"module\" src=\"" + wasm + "/repl.js\"></script>\n")
 
    ; --- the glossary: id, emoji, the term as shown, the body; 'gray for a word that wears
    ; the empty colour. a body names another entry through the dsl, never by hand, so the

@@ -264,6 +264,18 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   floors through `mooncc -t wasm` against emcc's wasm64 under one node. sha256 5.15× and
   deflate 2.88× against emcc -O2 (1.05–1.54× against its -O0), the corpus 2.39×: the
   array-heavy shapes lose twice over on wasm locals. Rung 5a is measured against that table.
+- **the page rides the module. ✅ LANDED (2026-09-07).** index.html (web/index.l) and
+  papel's `-r` island link cells.js and then repl.js as a module over loader.js, which
+  fetches `src/port/wasm/love.wasm` beside it — the tracked copy of `make wasm`'s module,
+  refreshed by hand with `make site-wasm` as love.js was. love.js is gone from the tree;
+  `make wasm-emcc` lays emcc's build under out/ only, the differential. Verified in a real
+  browser (Firefox 154 headless over WebDriver BiDi, the page served by http): the image
+  boots in ~6 s, a form evaluates, the app chips fetch, and rove runs. The two flaws that
+  run found: the loader's `node && process.env.LOVE_WASM` is `false` in a browser and `??`
+  keeps false, so the page fetched `/false` and validated a 404 as wasm; and the banner's
+  `(. love-version)` printed nothing — `.` stopped being a printer, `puts` says it. ⚠ the
+  page needs http (a module fetch fails on file://) and an engine with memory64 (Chrome
+  133, Firefox 134, Safari 26); repl.js says which is missing instead of failing quietly.
 - **rung 5a — `return_call`.** Tail calls shipped in every engine; once the module
   passes rung 5 at `ai_tco=0`, `ai_musttail` lowers to `return_call` and the wasm seat
   stops being the one build without TCO. An optimisation rung, measured, not assumed.

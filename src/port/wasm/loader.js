@@ -25,7 +25,7 @@ export class ExitStatus extends Error {
 async function bytesOf(wasm) {
   if (wasm instanceof Uint8Array || wasm instanceof ArrayBuffer) return wasm;
   const node = typeof process !== 'undefined' && process.versions?.node;
-  const at = wasm ?? (node && process.env.LOVE_WASM) ?? new URL('love.wasm', import.meta.url);   // a gate names the module
+  const at = wasm ?? (node ? process.env.LOVE_WASM : undefined) ?? new URL('love.wasm', import.meta.url);   // a gate names the module; ⚠ `node && ..` is false in a browser, and ?? keeps false
   if (node) {
     const { readFile } = await import('node:fs/promises');
     const { fileURLToPath } = await import('node:url');

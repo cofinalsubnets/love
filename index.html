@@ -13,7 +13,7 @@
 <nav class="topnav"><a href="#language">language</a> &nbsp;&middot;&nbsp; <a href="#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="#crew">crew</a></nav>
 
 <!-- src/port/wasm/repl.html -- the repl island: the markup src/port/wasm/repl.js drives,
-     its parts found by class. a page carries this block, then love.js, cells.js, repl.js:
+     its parts found by class. a page carries this block, then cells.js and repl.js (a module):
      web/index.l lays it on the front page, papel on the index of a site built with -r. -->
 <div class="repl">
 <p class="status">loading the image...</p>
@@ -44,9 +44,8 @@
 <span data-app="lighthouse" style="display:none" class="chip">lighthouse (a story)</span>
 </div>
 
-<script src="src/port/wasm/love.js"></script>
 <script src="src/port/wasm/cells.js"></script>
-<script src="src/port/wasm/repl.js"></script>
+<script type="module" src="src/port/wasm/repl.js"></script>
 
 <h2 id="language"><a href="#language">🎨 language</a></h2>
 <p>
