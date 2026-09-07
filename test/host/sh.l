@@ -509,5 +509,20 @@
 (: r (hark ["out/love" "out/lush" "-c" "PATH=$PWD/out:$PATH love -e '1 + 2'"])
    (assert (= "3\n" (cup r))))
 
+; the mode. autonomous (the default): a bare verb word is ours whatever PATH holds --
+; the stage forks the warm heap, and a bare word that must spawn spawns this binary
+; under the word (tr with no operands: its own usage, status 2). -g is PATH's rule
+; again, and an empty PATH finds nothing (127). LUSHFLAGS carries the choice into a
+; child shell, and a flag word on its own line overrides it.
+(assert !(sh-greg? 0))
+(: r (hark ["out/love" "out/lush" "-c" "PATH=/nonexistent; printf abc | tr a-c A-C; echo; tr 2>/dev/null; echo st=$?"])
+   (assert (= "ABC\nst=2\n" (cup r))))
+; (under -g even echo is PATH's, so the status crosses a variable and PATH comes back)
+(: r (hark ["out/love" "out/lush" "-g" "-c" "p=$PATH; PATH=/nonexistent; tr 2>/dev/null; s=$?; PATH=$p; echo st=$s"])
+   (assert (= "st=127\n" (cup r))))
+(: r (hark ["out/love" "out/lush" "-c"
+            "export p=$PATH; PATH=/nonexistent; LUSHFLAGS=-g sh -c 'tr 2>/dev/null; s=$?; PATH=$p; echo st=$s'; LUSHFLAGS=-g sh -a -c 'tr 2>/dev/null; echo st=$?'"])
+   (assert (= "st=127\nst=2\n" (cup r))))
+
 (test_fin ())
 (puts "sh: ok") (putc 10)

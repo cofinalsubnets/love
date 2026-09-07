@@ -162,17 +162,30 @@
    ; would make a working script a syntax error rather than a portable one.
    arlv '(("||") ("&&") ("|") ("^") ("&") ("==" "!=") ("<=" ">=" "<" ">")
           ("<<" ">>") ("+" "-") ("*" "/" "%") ("**"))
-   arops '("**" "<<" ">>" "<=" ">=" "==" "!=" "&&" "||" "+" "-" "*" "/" "%"
-           "<" ">" "&" "^" "|")
-   (ar-op s n i) (foldl (\ a t (? (string? a) a (ar-at s n i t) t a)) () arops)
-   ; the assignment operators, longest first. a lone = only when the next byte
-   ; is not one, or `a == b` would assign.
-   arasn '("<<=" ">>=" "*=" "/=" "%=" "+=" "-=" "&=" "^=" "|=")
+   ; the operator at i, read off its first byte or two: every rung asks this of
+   ; every primary, so a walk over the operator list with a snip per try was most
+   ; of what an expression cost
+   (ar-op s n i)
+     (? (n <= i) ()
+        (: b (s i) b2 (? ((1 + i) < n) (s (1 + i)) 0)
+           (? (b = 42) (? (b2 = 42) "**" "*")
+              (b = 60) (? (b2 = 60) "<<" (b2 = 61) "<=" "<")
+              (b = 62) (? (b2 = 62) ">>" (b2 = 61) ">=" ">")
+              (b = 61) (? (b2 = 61) "==" ())
+              (b = 33) (? (b2 = 61) "!=" ())
+              (b = 38) (? (b2 = 38) "&&" "&")
+              (b = 124) (? (b2 = 124) "||" "|")
+              (b = 43) "+" (b = 45) "-" (b = 47) "/" (b = 37) "%" (b = 94) "^"
+              ())))
+   ; the assignment operators: <<= >>= and the <op>= family, then a lone = when
+   ; the next byte is not one, or `a == b` would assign.
    (ar-asnop s n i)
-     (: r (foldl (\ a t (? (string? a) a (ar-at s n i t) t a)) () arasn)
-        (? (string? r) (r . (i + tally r))
-           (i < n && s i = 61 && !((1 + i) < n && s (1 + i) = 61)) ("=" . (1 + i))
-           ()))
+     (? (n <= i) ()
+        (: b (s i) b2 (? ((1 + i) < n) (s (1 + i)) 0) b3 (? ((2 + i) < n) (s (2 + i)) 0)
+           (? (b = 61) (? (b2 = 61) () ("=" . (1 + i)))
+              ((b = 60 || b = 62) && b2 = b && b3 = 61) ((snip s i (3 + i)) . (3 + i))
+              (b2 = 61 && (member? b '(42 47 37 43 45 38 94 124))) ((snip s i (2 + i)) . (2 + i))
+              ())))
    ; --- the walk
    (ar-expr s n i d)
      (: i0 (ar-ws s n i)

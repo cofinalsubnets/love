@@ -276,6 +276,152 @@ classic ways a text tool degenerates are all absent here. That is worth recordin
 plainly as the failures: the constant factors on this page are a price, not a trap, and
 they are the price of a userland written in love.
 
+## the second fill (2026-09-07)
+
+Same machine, same lanes, median of 3, 8 MB. Three rows were added and four things
+were changed on the strength of the first fill; the numbers above stay as the record of
+what it caught, these are what the tree does now.
+
+### the rows added
+
+`bc` and `sh` were on the tools table but not on the scaling one, and a calculator and
+a shell are exactly the two tools whose cost is per *turn* rather than per byte. Both now
+run a loop program at N, 2N and 4N turns (`SCALE * 1000` per step): `bc` sums squares,
+`sh` counts with `[ ]` and `$(( ))`. And one more tools row, **`sh +cat`**: two hundred
+commands each naming a tool by its bare word, which is what a *command* costs a shell
+rather than what its evaluator costs.
+
+| row | kore | busybox | gnu | what it reads |
+| --- | ---: | ---: | ---: | --- |
+| sh +cat (200 commands) | 314 | 59 (5.3×) | 127 (2.5×) | lush forks its warm heap; ash and bash fork+exec a cat |
+| sh (turns), 4k/8k/16k | 617 / 956 / 1716 | | | 2.9, linear -- ~0.1 ms a turn |
+| bc (turns), 4k/8k/16k | 45 / 98 / 164 | | | too fast at this scale |
+
+### the readings, before and after
+
+| row | first fill | now | busybox | gnu | how |
+| --- | ---: | ---: | ---: | ---: | --- |
+| base64 | 4,598 | **121** | 37 (3.3×) | 9 (13.4×) | the `kb64` kernel |
+| tr a-z A-Z | 1,359 | **88** | 23 (3.8×) | 7 (12.6×) | the `xlat` nif |
+| sort | 5,359 | **710** | 516 (1.4×) | 36 (19.7×) | prel's C sort again, lines off the reading floor |
+| cut -f2 | 1,362 | 1,164 | 129 (9.0×) | 13 (89.5×) | `usplit` finds each separator on the scan floor |
+| sh (turns), 16k | 3,628 | 1,716 | | | the arithmetic's operator read |
+| high-bit bytes, base64 | 53 | 36 | 6 (6.0×) | 3 (12.0×) | |
+| one 1 MB line, tr | 38 | 32 | 5 (6.4×) | 2 (16.0×) | |
+
+`base64` and `tr` now sit at the md5sum ratio -- the floor -- which is what a row reads
+when its inner loop is native in every lane. Everything not in this table moved within
+the run-to-run noise.
+
+### what it found
+
+**1. the byte loop went native, two ways.** `scan.l` had already priced the interpreter's
+walk at ~684 instructions a byte and written the one kernel that finds a byte; `tr` and
+`base64` are nothing *but* that loop. `tr`'s is generic -- any byte map through a 512-byte
+table (image and mode per charm: drop, write, squeeze), three faces in one loop -- so it
+is a **nif**, `(xlat s tbl dst)` in `src/core/map.c` beside `pour`: one C body mooncc
+compiles for every target, no startup cost, reachable by any applet. `base64`'s group
+coder is its own shape and used by nothing in the core, so it stays out of the roster as
+a **holo kernel** in `src/apps/kore/core.l`: one IR for x64 and a64 in `scan.l`'s shape
+(register roles, deopt tail, kind guards off g's jk table so the blob names no C
+address), coding every whole three-byte group and leaving the tail to the old coder.
+Both have a love twin that is the oracle `law.l` holds them to (every length 0-40,
+high-bit bytes, a 5000-byte sweep, the squeeze's longest run), and the kernel's twin is
+also its engine wherever the install declines -- inle, wasm, rv64. `(cask n)` + `snip` is
+the door either way: the native writes bytes, never allocates, and the caller copies the
+count out. Timed apart on the 8 MB corpus, `xlat` is 14 ms; `tr`'s other ~100 ms are
+the start (28) and `(slurp in)` (68). That slurp was chased and it is **not the
+reader**: run first in a process it costs 68-93 ms, run second in the same process
+31 ms, and a different reader (the gulps consed, laid into one cask) swapped into
+first place takes the 75 instead. The first ~8 MB a process allocates is heap
+first-touch, whatever touches it. Two things were tried on the strength of the wrong
+reading and both are recorded so nobody tries them again: `ai_iobuf` 4096 -> 65536 cut
+the reads 16× and moved `tr` not at all while making `cut` **2× slower**; the gulp-list
+reader beats the jug by 24 vs 31 ms in steady state, not worth a floor primitive and a
+twelve-site sweep. (`strace` does show an `F_GETFL`/`F_SETFL` trio around every read of
+an inherited fd -- `src/host/fd.c`, the bit must not be left on a terminal -- but 6,150
+of them cost ~12 ms of kernel time, and a pipe on stdin takes the bit once for the
+session anyway.) So a stdin filter's clock reads: start 28 + first-touch ~45 + the
+work, and only the third term is the applet's. The trade between
+the two natives, since it came up: a nif costs a core rebuild
+(nifs.l is the compiler's business) and a roster entry; a kernel costs a hand-written IR
+per ISA, an assemble per process, and the riskiest code in the tree per line. Generic
+earns the roster; one applet's shape does not.
+
+**2. `sort` had gone to 5.4 s, and it was the shape, not a bug.** The `-k` matrix moved
+every sort onto prel's `sortby` -- a lisp merge with a closure compare, at ~1 µs a
+comparison -- and read each line's fields *per comparison*. Three moves: a sort with no
+key and no letter is byte order, which is prel's `sort` (the C lane, stable) and `-r`
+its reverse; a keyed sort decorates each line ONCE with its readings and sorts the
+decorated lists on the same C lane, since it orders lists lexicographically and bigs
+exactly -- a numeric reading becomes `[sign int frac]` with the fraction's digits
+complemented under a minus so byte order is numeric order, and a key against the grain
+reverses by negation, so only a *text* key against the grain still takes the merge;
+and the lines come off the reading floor, because prel's `lines` walks a charm at a
+time and cost 688 ms of the 1128 -- more than the sort did. `-k2` reads 3.7 s and `-n`
+4.1 s now, from 6.1 and 8.9; what is left there is field splitting and number reading
+in love, per line.
+
+**3. the shell's arithmetic read every operator at every rung.** `$(( ))` is a
+precedence climb over twelve rungs, and at each rung it asked `ar-op`, which folded over
+nineteen operators with a `snip` per try -- 228 allocations to evaluate `1`. It reads the
+operator off its first byte or two now: `i=$((i + 1))` went from 334 µs to 45, and a
+`while [ ]` turn from 0.27 ms to 0.1. `[ ]` is the other half of that turn and it is
+the lexer and expander, not the in-image call, which is ~1 µs.
+
+**4. what one command costs, and where the payoff is.** The `sh +cat` row is the one to
+read against lush's lanes, measured apart (200 turns, ms):
+
+| the command | lush | bash | the lane |
+| --- | ---: | ---: | --- |
+| `basename /x/y` | 45 | 128 | in-image: no process at all |
+| `cat /dev/null` | 308 | 135 | fork, no exec: the warm heap's page tables, ~1.3 ms |
+| `echo x \| cat` | 353 | 173 | a pipeline stage, forked |
+| `x=$(echo x)` | 235 | 71 | the forkless capture |
+
+So the fork lane -- one image wake saved -- still costs twice what bash pays to exec a
+C cat, because forking a process with a heap that size is a page-table copy. The
+in-image lane is where a command becomes free, and its allow list is short on purpose
+(the stdin story, **lush**(1)). That is the row autonomous mode is about: under `-g` on a
+host whose PATH is not us, the same loop costs 1,143 ms, since every `cat` *and every
+`[`* is a spawn.
+
+**5. what is left is the interpreter, not a loop.** `cut`, `rev` and `sed` were profiled
+on the corpus (`perf record`, top symbols, self time) to ask whether a glaze lane for
+byte loops would have a corpus. It would not. No applet function appears; the top of
+every profile is the evaluator's own dispatch and allocation:
+
+| symbol | cut | rev | sed | what it is |
+| --- | ---: | ---: | ---: | --- |
+| `lvm_cur` | 8.1% | 10.7% | 13.3% | currying a call to saturation |
+| `lvm_argap` + `lvm_qap` + `lvm_aap` | 11.7% | 16.4% | 17.0% | argument application |
+| `gcp` | 7.3% | 6.7% | 6.0% | the collector |
+| `lvm_unc` | 4.8% | 3.3% | 7.7% | uncurrying |
+| `memcpy` + `lvm_snip` | 6.8% | 4.1% | 2.9% | the snips |
+| `lvm_fputc` + `ioputc` + `to_writen` | | 14.2% | | rev's byte-at-a-time output |
+
+The per-element loops in these tools allocate -- a snip per field, a cons per line, a
+jug put per byte -- so a byte lane that compiles pure index-and-compare loops would fire
+on nothing here; what it could take (`tr`, `base64`, the scan) is already native. The
+lever left is the shape of the applets' own code: `rev` writes its output a byte at a
+time through the port (14% of its run), `cut` snips every field it does not print. Those
+are rewrites in love, not a compiler lane.
+
+The `lvm_cur` + `lvm_unc` share is the currying: a call saturates into one n-ary apply
+only where the compiler knows the callee's arity at compile time -- a letrec lambda
+sibling, or a book global whose *value* it can read (`ev.l`'s `falook`/`napof`). Every
+call through a parameter or a looked-up value curries a partial per argument: `ulines`'s
+`dot`, `sortby`'s comparator, and the scanner reached as `(peep t 'sc ())` or a
+parameter -- two partials per line and per field in `cut`. The obvious cure was tried
+and does not work: binding the scanner as a top-level *value* in u.l so callers see its
+arity bakes it into the image as a plain closure (`nat?` answers 0 -- the walk, not the
+kernel), and `wc -l` went 103 -> 170 ms. Kernels must stay lazy, per process. What would
+saturate all of those sites at once is a runtime-arity-checked n-ary apply in the VM,
+not an applet edit; it is worth ~14% of `cut` and `sed`. Also open: `grep -E` is the backtracker;
+`sort`'s scaling row reads 7.7 with start subtracted, above n log n, and the C sort is
+~1 µs an element on strings -- worth a look at the comparator; `tail -n1` reads the whole
+file where GNU seeks from the end.
+
 ## choices (revisable)
 
 - **GNU is the oracle, busybox and uutils are second opinions.** `make test_kore` already

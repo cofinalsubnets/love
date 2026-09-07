@@ -67,6 +67,7 @@
       (nif_dig           "dig"           1 lvm_dig)
       (nif_casknew       "cask"          1 lvm_casknew)
       (nif_bcopy         "pour"          5 lvm_bcopy)
+      (nif_xlat          "xlat"          3 lvm_xlat)
       (nif_chainp        "two?"          1 lvm_chainp)
       (nif_strp          "string?"       1 lvm_strp)
       (nif_gem           "gem"           1 lvm_gem)

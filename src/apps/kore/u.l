@@ -136,12 +136,18 @@
                 (: z (e b0) (? (z = 0) "/" (snip p 0 z)))))))
    ; split at charm c, every piece kept -- "a:" is ("a" ""), "" is ("") (cut's face,
    ; where lines would drop the empty tail)
+   ; the scan floor finds each separator natively; the charm walk stands in where
+   ; the floor is not aboard
    (usplit c s)
     (: n (tally s)
+       sc (from 'scan 'scanner)
        (go from k acc) (? (n <= k) (rev (snip s from k >< acc))
                           (s k = c) (go (k + 1) (k + 1) (snip s from k >< acc))
                           (go from (k + 1) acc))
-       (go 0 0 ()))
+       (fast f from acc) (: k (f s c from)
+                            (? (k < 0) (rev (snip s from n >< acc))
+                               (fast f (k + 1) (snip s from k >< acc))))
+       (? (lit? sc) (fast (sc ()) 0 ()) (go 0 0 ())))
    ; join with charm c between
    (ujoinc c ls)
     (: o (jug 0)

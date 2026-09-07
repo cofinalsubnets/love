@@ -431,3 +431,26 @@ lvm(lvm_bcopy) {
   if (soff + n > sl) n = sl - soff;
   if (n > 0) memmove(txt(d) + doff, txt(s) + soff, n); }
  ai_musttail return Answerp(4, dst); }
+
+// (xlat s tbl dst): every byte of s through a 512-byte table into cask dst, answering
+// the count written -- tbl[c] is c's image, tbl[256 + c] its mode: 0 dropped, 1
+// written, 2 written unless it repeats the byte written last. tr's three faces in one
+// loop, and any byte map's. () when the shapes are wrong; dst must hold #s.
+lvm(lvm_xlat) {
+ word s = Sp[0], t = Sp[1], d = Sp[2];
+ if (!(strp(s) || caskp(s)) || !(strp(t) || caskp(t)) || !caskp(d))
+  ai_musttail return Answerp(2, ZeroPoint);
+ struct ai_str *ss = bytes_of(s), *ts = bytes_of(t), *ds = cask(d)->str;
+ uintptr_t n = len(ss);
+ if (len(ts) < 512 || len(ds) < n) ai_musttail return Answerp(2, ZeroPoint);
+ unsigned char const *sp = (unsigned char const*) txt(ss), *tb = (unsigned char const*) txt(ts);
+ unsigned char *dp = (unsigned char*) txt(ds);
+ uintptr_t k = 0;
+ int last = -1;
+ for (uintptr_t i = 0; i < n; i++) {
+  unsigned c = sp[i], m = tb[256 + c];
+  if (!m) continue;
+  unsigned v = tb[c];
+  if (m == 2 && (int) v == last) continue;
+  dp[k++] = (unsigned char) v, last = (int) v; }
+ ai_musttail return Answerp(2, putcharm((intptr_t) k)); }

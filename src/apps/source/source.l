@@ -203,15 +203,16 @@
    (seed-native _) love-arch
 
    (seed-usage _)
-    (puts ("usage: love seed [--self] [ARCH] [DIR]\n"
+    (puts ("usage: love seed [-a] [ARCH] [DIR]\n"
            + "  lay this binary's source under DIR (default .) and rebuild it there;\n"
            + "  the result has to BE this binary, byte for byte.\n"
            + "  ARCH    x64 | a64 | rv64 -- an egg for that machine instead\n"
-           + "  --self  build with nothing ambient: our own mooncc, our own userland\n"))
+           + "  -a      autonomous: our own mooncc and userland throughout, whatever PATH\n"
+           + "          holds; without it the ambient cc and tools build, ours fill the gaps\n"))
 
    (seed-lay as0)
     (: _ ((two? as0) && (src-help? <as0) ? (seed-usage 0, quit 0))
-       self? (two? as0 ? (<as0 = "--self") 0)
+       self? (two? as0 ? (<as0 = "-a") 0)
        as1 (self? ? >as0 as0)
        ; naming this machine is a native seed, fixpoint and all: the cross lane
        ; exists for a machine we are not, and the fixpoint is scoped to where the
@@ -230,9 +231,12 @@
        _ (string? exe ? 0 (src-die "can't find seed path"))
        farm (src-farm root exe)
        path ("" + getenv "PATH")
-       ; ours last fills the gaps only; --self puts them first, so ours win wherever
-       ; we carry a tool of that name.
+       ; ours last fills the gaps only; -a puts them first, so ours win wherever we
+       ; carry a tool of that name. the build's shells read the same choice off
+       ; LUSHFLAGS: -g (gregarious) makes a bare word PATH's business (the bootstrap through an
+       ; ambient cc and userland), -a keeps lush autonomous, where PATH decides nothing
        _ (setenv "PATH" (self? ? (farm + ":" + path) (path + ":" + farm)))
+       _ (setenv "LUSHFLAGS" (self? ? "-a" "-g"))
        env (getenv "CC")
        amb (!self? && !(string? env) ? (src-cc $ root + "/out"))
        ; something has to be named. the tree carries no love, so an unnamed CC is the

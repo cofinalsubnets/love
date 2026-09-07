@@ -114,10 +114,11 @@
    ;             settled before a heap existed.
    ;
    ; `ours?` is the question the two middle rungs share -- the two that reach for a
-   ; binary at all -- and it is strict: PATH's winner must stat as the running
-   ; binary. an
-   ; installed twin of our own name is somebody else's build, and a word with a `/`
-   ; is a demand -- both spawn. asked once per word per session.
+   ; binary at all. autonomous mode (the default) answers it from the verb registry:
+   ; a bare word this binary carries is ours whatever PATH holds. -g (gregarious) is strict: PATH's
+   ; winner must stat as the running binary, so an installed twin of our own name is
+   ; somebody else's build and spawns. a word with a `/` is a demand and spawns in
+   ; either mode. asked once per word per session.
    ; ⚠ a rung is only as reachable as the SHAPE allows, and two shapes cannot see
    ; the whole ladder: a pipeline stage skips in-image (a stage has to be a process
    ; to be concurrent, so it starts at fork), and a $( ) body reaches the jug lane
@@ -162,9 +163,8 @@
    ; rather than about anything in this file -- and nothing about the wake waits on
    ; it: a word that misses this list still takes the fork lane below, warm heap and
    ; no exec. running one in here would buy the fork and nothing else.
-   ; and on a host the lane is not even live:
-   ; cook asks `sh-ours? SHELL` first, /bin/sh is dash, so every recipe line spawns.
-   ; The payoff is the distro's, where /bin/sh is us. Measure there, not here.
+   ; cook asks `sh-ours? SHELL` first: autonomous mode answers yes to a bare `sh`
+   ; anywhere `love make` runs, -g only where PATH's sh is us (the distro).
    ; the checksums are the one row here that reads STDIN when handed no file operand,
    ; and they are in anyway: named a file they are bounded like the rest, and the words
    ; a build spells (`sha256sum dist.tgz`, a -c over a list) always name one.
@@ -203,15 +203,45 @@
                   (: d (? #<l <l ".") p (d + ("/" + w))
                      (? (two? (stat p)) (sh-self? p) (go >l))))
         (go (sh-pathdirs ())))
+   ; does this binary carry the word as a verb? the registry's own answer, PATH aside
+   (sh-verbw? w) (: f (from 'verbs 'word) (? (lit? f) !(nil? (f w)) 0))
+   ; --- the mode: autonomous or gregarious ---------------------------------
+   ; autonomous (the default, -a): a bare word naming a verb this binary carries is
+   ; ours whatever PATH holds -- it runs in-image or on the forked warm heap, and the
+   ; shapes that must spawn spawn this binary under the word. gregarious (-g):
+   ; ours only when PATH's winner stats as this binary, which is what a bootstrap
+   ; through ambient tools wants (`love seed` sets it). the flag word wins, else
+   ; LUSHFLAGS in the environment (its last a or g), so a build's every shell reads
+   ; the seed's choice. the shell's entry pins the box once (so a prefix assignment
+   ; on a command line changes the CHILD's mode, not this shell's); an unseated
+   ; caller -- cook, a -e -- reads the environment at the ask and pins nothing, or
+   ; a bake would carry the baking process's answer into the image.
+   (sh-envflag _) (: s ("" + (getenv "LUSHFLAGS")) n #s
+                     (go k v) (? (n <= k) v (go (k + 1) ((s k) @ 97 0 103 1 _ v)))
+                     (go 0 0))
+   (sh-greg? _) (: v (peep sh-gflag () 'no)       ; peep: a pinned 0 is a verdict, not an absence
+                    (? (= v 'no) (sh-envflag 0) v))
    ; would spawning this word land on the binary we are already running? the one
    ; policy question behind every in-image lane -- lush's own, and cook's.
-   (sh-ours? w) (? (sh-slashed? w) (sh-self? w) (sh-onpath? w))
+   (sh-ours? w) (? (sh-slashed? w) (sh-self? w)
+                   (sh-greg? 0) (sh-onpath? w)
+                   (sh-verbw? w) 1
+                   (sh-onpath? w))
    ; can this seat run the word at all? PATH answers wherever there is a seat to
    ; exec -- a hosted love resolves a word to a file. a seat with none never execs:
    ; the kernel's spawn hands the word to the verb registry, so that is the authority
-   ; there, and asking PATH would call every tool it carries missing.
-   (sh-verbw? w) (: f (from 'verbs 'word) (? (lit? f) !(nil? (f w)) 0))
-   (sh-known? w) (? (nil? (sh-seat ())) (sh-verbw? w) (two? (sh-whichp w)))
+   ; there, and asking PATH would call every tool it carries missing. autonomous
+   ; mode knows its own verbs the same way.
+   (sh-known? w) (? (nil? (sh-seat ())) (sh-verbw? w)
+                    (!(sh-greg? 0) && (sh-verbw? w)) 1
+                    (two? (sh-whichp w)))
+   ; the argv a spawn execs: autonomous mode spawns this binary under a bare verb
+   ; word, so PATH decides nothing there either; anything else runs as spelled
+   (sh-spawnv argv) (: w <argv exe (sh-seat ())
+                       (? (&& !(sh-greg? 0) (string? exe) !(sh-slashed? w) !(sh-dotl? w)
+                              (sh-verbw? w))
+                          (exe . argv)
+                          argv))
    (sh-imgask w)
      (: al (sh-assoc w sh-imgalias)
         mn (? (two? al) <>al (w + "-main"))
@@ -254,6 +284,10 @@
    (sh-forkfn w) (: v (peep sh-forkc w 'no)
                     (? !(= v 'no) v
                        (: f (sh-forkask w) _ (pin sh-forkc w f) f)))
+   ; a shell starting on a forked heap inherits its parent's verdicts, and its own
+   ; mode may differ: sh-main drops them, and each word is asked again
+   (sh-forget _) (: (clear t) (each (keys t) (\ k (pull t k 0)))
+                    _ (clear sh-imgc) (clear sh-forkc))
    ; ..and the shapes the word alone cannot answer for, so they are asked per
    ; command. bake, wake and LOVE_NO_IMAGE are settled before a heap exists, which
    ; is the one thing a fork can never redo: `bake` and `wake` are read in C ahead
@@ -530,7 +564,7 @@
                  ; child's own and the pipeline's status bookkeeping wants a real
                  ; pid; only the word is ours to say
                  (: _ (? (sh-known? w) 0 (sh-saynf w))
-                    (spawnmap (st 1) fm allclose pg fgi))))
+                    (spawnmap (sh-spawnv (st 1)) fm allclose pg fgi))))
            (: p (fork 0)
               (? (p = 0)
                  (: _ (wear ())                   ; a child wears the console: its fds are the dup2 below, and a jug is not one
@@ -642,7 +676,7 @@
                     ; the redirects are already open, which is where a shell answers an
                     ; unfindable word from -- `nope > f` still makes f, then says so
                     pid (? fk (sh-fork1 argv (rm 1) ac)
-                           (sh-known? <argv) (spawnmap argv (rm 1) ac (sh-pgm 0) (sh-fgm 0))
+                           (sh-known? <argv) (spawnmap (sh-spawnv argv) (rm 1) ac (sh-pgm 0) (sh-fgm 0))
                            ())
                     _ (each opens close)
                     _ (sh-hwrite wrs)
