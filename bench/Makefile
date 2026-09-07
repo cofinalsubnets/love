@@ -112,7 +112,7 @@ txt = $(addprefix $(BDIR)/,$(addsuffix .txt,$(1)))
 # alone (the root does not include it), so it says so itself. see ../Makefile.
 .DELETE_ON_ERROR:
 
-.PHONY: all bench run raw html clean satrace setup ccbench ccsize ccdead ccnif korebench $(ALL_LANGS)
+.PHONY: all bench run raw html clean satrace setup ccbench ccsize ccdead ccnif ccwasm korebench $(ALL_LANGS)
 .DEFAULT_GOAL := bench
 
 # Build/refresh the host binary via the root Makefile.
@@ -198,6 +198,12 @@ ccdead: $(CCBENCH)
 REPS ?= 24
 ccnif: $(GL)
 	@./ccnif.sh $(REPS) $(SAMPLES)
+
+# the same floors on the WASM target: `mooncc -t wasm` against emcc's wasm64 (clang +
+# musl), every lane under node. ccnif's shape and ccnif's caveats; needs node, and emcc
+# for the foreign lanes. `make ccwasm REPS=64 SAMPLES=5` for a quieter reading.
+ccwasm: $(GL)
+	@./ccwasm.sh $(REPS) $(SAMPLES)
 
 # kore's applets against busybox, uutils and GNU coreutils on one generated corpus:
 # answers (GNU the oracle -- a divergence is a bug), the fixed per-invocation start

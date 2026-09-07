@@ -80,6 +80,47 @@ prints per-function ratios instead, worst first; `sha_block` stays the widest ce
 clang's bytes beside the 3.03× clock — the static and dynamic readings name the same
 function).
 
+## the same floors on wasm: mooncc against emcc (ccwasm, 2026-09-06)
+
+`make -C bench ccwasm` is ccnif's shape on the wasm target: the two nif drivers built by
+`mooncc -t wasm` and by emcc (clang + musl, `-sMEMORY64` so long and pointers are ours),
+every lane run by the same node, answers checked first. emcc is the one other compiler
+that reaches the seat, so this is the wasm lowering's gauge the way gcc is x64's.
+
+| ms (median of 5, 24 reps) | mooncc | emcc -O2 | emcc -O0 |
+|---|---:|---:|---:|
+| sha256 | 819 | 159 (5.15×) | 531 (1.54×) |
+| md5 | 249 | 144 (1.73×) | 213 (1.17×) |
+| crc32 | 67 | 52 (1.29×) | 64 (1.05×) |
+| cksum | 68 | 48 (1.42×) | 65 (1.05×) |
+| deflate | 628 | 218 (2.88×) | 421 (1.49×) |
+| inflate | 107 | 68 (1.57×) | 99 (1.08×) |
+
+Every lane answers the same bytes on every row. Read beside ccnif's native table: crc32,
+cksum, md5 and inflate sit where they sit on x64 (1.3–1.7×), but **sha256 is 5.15× against
+emcc -O2 where it is 2.37× against gcc, and deflate 2.88× against 1.43×** — the array-heavy
+shapes lose twice over on wasm. The lane is gen's rv64 lowering laid as wasm locals, so
+every array slot the native lane keeps in a register is a memory op through the shadow
+stack here, and there is no register allocation to hide it; -O0 emcc, which also spills
+everything, is the fairer floor and mooncc is 1.05–1.54× of it. That is the reading rung
+5a and the optimisation rungs after it are measured against.
+
+**The module is big.** sum.c is 186,189 bytes as our module against emcc -O2's 13,703
+(13.6×) and gz.c 214,683 against 26,911 (8.0×): mooncc's text runs ~4× gcc's natively
+(ccsize) and the link pulls nolibc members whole, so a driver that wants printf carries
+the formatter's neighbours. A size rung, if one is wanted, starts at the archive's grain.
+
+**The whole corpus, both builds under node** (the gate's own command, `test.mjs --love`):
+
+| build | laws | corpus | wall | rss |
+|---|---:|---:|---:|---:|
+| mooncc, out/wasm/love.wasm (wasm64) | 4765 | 42.2 s | 49.8 s | 2.8 GB |
+| emcc -O2, out/wasm/love.js (wasm32) | 4731 | 17.7 s | 20.8 s | 0.49 GB |
+
+2.39× on the corpus — between the corpus's native 1.19× and sha256's 5.15×, as love.c is
+the call-dense VM and the ciphers are the array floor. ⚠ not quite the same work: the
+emcc build is 32-bit (34 fewer laws run under `word`) and its heap is a sixth of ours.
+
 ## where the build's ~18 s goes (measured 2026-08-22, before love.c split into seven TUs — the shape holds, the per-file split is finer now)
 
 Direct per-step timing, not subtraction: `src/core/love.c` is 68% of the build, and 88% of

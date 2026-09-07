@@ -260,6 +260,10 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   one seat bug, not a codegen one: the loader printed a write on ANY fd but 2 to stdout,
   so a NULL `FILE` (which does not trap on wasm — address 0 is memory) wrote the file's
   bytes to the page. `write` now answers EBADF off fds 1 and 2.
+  And the seat has its GAUGE now: `make -C bench ccwasm` (doc/misc/moon-gauge.md) — the nif
+  floors through `mooncc -t wasm` against emcc's wasm64 under one node. sha256 5.15× and
+  deflate 2.88× against emcc -O2 (1.05–1.54× against its -O0), the corpus 2.39×: the
+  array-heavy shapes lose twice over on wasm locals. Rung 5a is measured against that table.
 - **rung 5a — `return_call`.** Tail calls shipped in every engine; once the module
   passes rung 5 at `ai_tco=0`, `ai_musttail` lowers to `return_call` and the wasm seat
   stops being the one build without TCO. An optimisation rung, measured, not assumed.
