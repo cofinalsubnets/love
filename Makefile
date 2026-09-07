@@ -965,7 +965,9 @@ site-serve: host out/toolmd.stamp
 	@$(ho)/love -l src/apps/papel/papel.l -t love -o out/site -s $(SITEPORT) README.md doc out/toolmd
 
 # the wasm artifact, moon's own: love's TUs (plus the horn and the seat's host.c)
-# through mooncc -t wasm, linked to one module -- no emcc, no C toolchain. the loader
+# through mooncc -t wasm, linked to one module -- no emcc, no C toolchain. tco=1: the
+# vm's tails are return_call, the engines' tail-call law (node 26, firefox 121, chrome
+# 112, safari 18), and the corpus runs 1.31x faster than on the trampoline. the loader
 # (src/port/wasm/loader.js) is the runtime under it and the shipped page rides it
 # (src/port/wasm/love.wasm, refreshed by hand: `make site-wasm`, then commit). the emcc
 # build stays as wasm-emcc, a differential and nothing on the page.
@@ -973,7 +975,7 @@ wasm_c = $(love_c) $(R)/src/host/horn.c $(R)/src/port/wasm/host.c
 out/wasm/love.wasm: $(wasm_c) $(lib_h) out/lib/love_version.h host
 	@mkdir -p $(dir $@)
 	@echo 'WASM	'$@
-	@$(mooncc) -t wasm -Dai_tco=0 -DAiHaveVersionH -I. -Isrc/core -Isrc/host -Iout/lib -o $@ $(wasm_c)
+	@$(mooncc) -t wasm -Dai_tco=1 -DAiHaveVersionH -I. -Isrc/core -Isrc/host -Iout/lib -o $@ $(wasm_c)
 wasm: out/wasm/love.wasm
 # the page's copy of the module, beside the loader that fetches it. by hand, as love.js
 # was: a tracked 1.3 MB that every C edit would otherwise churn.

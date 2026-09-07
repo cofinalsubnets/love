@@ -114,12 +114,14 @@ the formatter's neighbours. A size rung, if one is wanted, starts at the archive
 
 | build | laws | corpus | wall | rss |
 |---|---:|---:|---:|---:|
-| mooncc, out/wasm/love.wasm (wasm64) | 4765 | 42.2 s | 49.8 s | 2.8 GB |
-| emcc -O2, out/wasm/love.js (wasm32) | 4731 | 17.7 s | 20.8 s | 0.49 GB |
+| mooncc, out/wasm/love.wasm (wasm64, tco=0) | 4765 | 42.2 s | 49.8 s | 2.8 GB |
+| mooncc, the same at tco=1 (return_call; rung 5a, 2026-09-07) | 4765 | 32.1 s | 38.0 s | 2.8 GB |
+| emcc -O2, out/wasm/love.js (wasm32, tco=0) | 4731 | 17.7 s | 20.8 s | 0.49 GB |
 
-2.39× on the corpus — between the corpus's native 1.19× and sha256's 5.15×, as love.c is
-the call-dense VM and the ciphers are the array floor. ⚠ not quite the same work: the
-emcc build is 32-bit (34 fewer laws run under `word`) and its heap is a sixth of ours.
+2.39× on the corpus on the trampoline, **1.81× with return_call** — between the corpus's
+native 1.19× and sha256's 5.15×, as love.c is the call-dense VM and the ciphers are the
+array floor. ⚠ not quite the same work: the emcc build is 32-bit (34 fewer laws run under
+`word`), still trampolined, and its heap is a sixth of ours.
 
 ## where the build's ~18 s goes (measured 2026-08-22, before love.c split into seven TUs — the shape holds, the per-file split is finer now)
 

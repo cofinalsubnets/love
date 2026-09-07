@@ -276,9 +276,13 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   `(. love-version)` printed nothing — `.` stopped being a printer, `puts` says it. ⚠ the
   page needs http (a module fetch fails on file://) and an engine with memory64 (Chrome
   133, Firefox 134, Safari 26); repl.js says which is missing instead of failing quietly.
-- **rung 5a — `return_call`.** Tail calls shipped in every engine; once the module
-  passes rung 5 at `ai_tco=0`, `ai_musttail` lowers to `return_call` and the wasm seat
-  stops being the one build without TCO. An optimisation rung, measured, not assumed.
+- **rung 5a — `return_call`. ✅ LANDED (2026-09-07).** The lowering was already in the
+  lane (a `jmp` to a function under the universal type is `return_call`, a `jmpr`
+  `return_call_indirect`), so the rung was the flip: `make wasm` builds at `ai_tco=1`
+  and every VM tail is a real tail call. The corpus under node: **42.2 s → 32.1 s
+  (1.31×)**, the module 3% bigger (1,343,565 bytes); screen, horn and the whole 4765-law
+  corpus green, and the page boots and runs rove in Firefox on it. Against emcc's tco=0
+  build the corpus row is 1.81× now (was 2.39×). The native bound below predicted it.
   **The bound, natively (2026-09-07):** the host built `tco=0` (test_tco0's flavour,
   out/tco0/love) against the default, the ccbench corpus (1.23 MB) through each, medians
   of 5 on a quiet box:
@@ -321,7 +325,7 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   doesn't pay for a relocatable story.
 - dispatch loop before relooper — correctness first, shape later; the tree's own
   rule (ablate before you optimise).
-- `-Dai_tco=0` stays through rung 5; `return_call` is rung 5a.
+- `-Dai_tco=1` since rung 5a: the module's tails are `return_call`; tco=0 was rung 5's.
 - the writer's instruction is a form and the module a tablet — love data the way
   holo's IR is, so a lane hands it lists and a gate quotes them.
 - `src/port/wasm/love.js` (313 KB committed) gets rebuilt by our emitter behind the same
