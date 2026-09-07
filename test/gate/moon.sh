@@ -638,10 +638,19 @@ echo "mooncc: the warm compiler (moon-run answers, the image compiles on past a 
 # ------------------------------------------------ the carried runtime is KERNEL-NEUTRAL
 # one archive per ISA, all three cut under -os linux -- and that pin does not reach the
 # bytes, because impl.h parts the kernels at RUN time on __ai_osv. so every hosted kernel
-# must take the CARRIED archive, and the way to see that it did is the clock: falling
-# back to compiling ~197 members is ~9 s where a carried read is well under one.
-# ⚠ THIS LEG IS THE ONE THAT WOULD CATCH A RE-REFUSAL. `-os freebsd` spent 9 s here
-# reproducing the carried bytes to the byte, and nothing said so.
+# must take the CARRIED archive.
+# ⚠ A CLOCK ALONE CANNOT SAY IT WAS TAKEN: out/cache/moon's .a entries make the
+# member-compile lane fast too, so a warm cache passes this leg whether the archive was
+# read or refused, and a refusal can sit here green for as long as the cache lives. So ask
+# the BINARY what it carries -- src/host/src.c matches the arch word and its width, and a
+# miss there is silent -- then take the cache away and let the clock mean something.
+for a in x64 a64 rv64; do
+  n=$(LOVE_NO_IMAGE= "$m" -q -e "(: _ (puts (show (tally (\"\" + runtime-gz \"$a\")))) 0)" | head -1)
+  case $n in ''|*[!0-9]*) n=0;; esac
+  [ "$n" -gt 1000 ] \
+    || fail "carried runtime: this binary carries no $a archive (runtime-gz answered $n bytes)"
+done
+rm -f out/cache/moon/*.a                      # the clock below must measure the carried read
 printf '#include <stdio.h>\nint main(void){ printf("os lane\\n"); return 0; }\n' > "$ho/.os.c"
 for os in linux freebsd netbsd; do
   s0=$(date +%s)

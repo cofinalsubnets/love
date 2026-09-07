@@ -51,9 +51,10 @@ static ai_inline struct ai *host_rtgz(struct ai *g) {
  if (strp(a)) {
   const char *s = (const char*) txt(a);
   uintptr_t sl = len(a);
-  // the canonical ISA words (src/core/boot/prel.l's arch-canon); name and width both match
-  if      (sl == 5 && !memcmp(s, "x64", 5)) p = ai_rtgz_x64, n = ai_rtgz_x64_len;
-  else if (sl == 5 && !memcmp(s, "a64", 5)) p = ai_rtgz_a64, n = ai_rtgz_a64_len;
+  // the canonical ISA words (src/core/boot/prel.l's arch-canon); the width is spelled
+  // beside the name and has to travel with it -- a shorter word here answers nothing
+  if      (sl == 3 && !memcmp(s, "x64",   3)) p = ai_rtgz_x64,   n = ai_rtgz_x64_len;
+  else if (sl == 3 && !memcmp(s, "a64",   3)) p = ai_rtgz_a64,   n = ai_rtgz_a64_len;
   else if (sl == 4 && !memcmp(s, "rv64",  4)) p = ai_rtgz_rv64,  n = ai_rtgz_rv64_len;
   else if (sl == 2 && !memcmp(s, "id",    2)) p = ai_rtgz_id,    n = ai_rtgz_id_len; }
  if (!n) return g->sp[0] = ZeroPoint, g;

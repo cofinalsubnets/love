@@ -14,14 +14,15 @@ interpreter, toolchain, and userland.
 
 ## language
 
-the love programming language is a dynamically typed lisp superset with syntactic
-extensions mimicking features of haskell and apl, allowing the majority of parens to
-be omitted. features:
-- three special forms: `\ : ?` lambda let cond; quote is a special case of lambda
+the love programming language is a dynamically typed lisp superset extended with
+syntactic sugar for infix notation, which allows an overall haskell-like level of
+parentheses, and reader levels prefix notation, which gives compact spellings of many
+common operations. other features include
 - every value is a function and every function is curried
-- every function is total unless you loop
-- infix/prefix notation (desugars to lisp)
-- pattern matching (implemented as a macro)
+- every built in function is generic and total
+- closures, pattern matching, mutable maps, macros, modules, call/cc
+- three special forms: `\ : ?` lambda let cond; quote is a special case of lambda
+- pattern matching with `@` (a macro)
 
 
 ### booleans
@@ -58,6 +59,7 @@ i = 0.5 -1                   ; built in complex
 
 ```
 ; this example uses lambda def sugar, pattern matching, and church exponentiation
+; : is the let form, @ is pattern matching; :-/@- variants place the default branch first
 (:- (100 fb 1 )
  (fb n) (puts $ s n + "\n", n + 1)
  (s n) (n % 3 . n % 5 @- (show n) (0 . 0) "fizzbuzz" (0 . _) "fizz" (_ . 0) "buzz"))
