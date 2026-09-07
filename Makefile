@@ -229,7 +229,10 @@ $(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/src/cor
 else
 nolibc_src = $(wildcard src/apps/moon/lib/nolibc/*.c src/apps/moon/lib/nolibc/*.h \
                         src/apps/moon/lib/nolibc/*/*.c src/apps/moon/lib/nolibc/*/*.h)
-$(ho)/love $(ho)/love.cand: $(moon_o) out/src.o out/rt.o out/lib/readme.bin $(nolibc_src)
+# out/rt.o LEADS: a job pool fills in prerequisite order, and this one is the long pole
+# (three ISAs' runtime members, ~30 s cold) -- behind the TU list it starts as they finish
+# and runs alone. ahead of them it rides beside them, and -j loses that time outright.
+$(ho)/love $(ho)/love.cand: out/rt.o $(moon_o) out/src.o out/lib/readme.bin $(nolibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(moon0) -pie $(moon_o) $(kart_o) out/src.o out/rt.o -freadme=out/lib/readme.bin -o $@
@@ -342,6 +345,7 @@ rt_slice = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h \
                       src/apps/moon/lib/nolibc/*/*.c src/apps/moon/lib/nolibc/*/*.h \
                       src/apps/moon/lib/math/*.c)
 out/rt.o: $(rt_slice) tools/mkrt.l $(rtlove_dep) $(love0)
+	@echo 'LOVE	'$@
 	@$(rtlove) tools/mkrt.l $@ $(hosta)
 
 xqemu_x64  = qemu-x86_64
@@ -359,6 +363,7 @@ $(eval $(call moonlane,x,xd,moonx,xa))
 $(xd)/src.o: $(dist_source) tools/mksrc.l out/.mksys-cat.l $(love0)
 	@$(love0) -l out/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(xa)
 $(xd)/rt.o: $(rt_slice) tools/mkrt.l $(rtlove_dep) $(love0)
+	@echo 'LOVE	'$@
 	@$(rtlove) tools/mkrt.l $@ $(xa)
 $(xd)/love: $(x_o) $(xd)/src.o $(xd)/rt.o out/lib/readme.bin
 	@echo 'MOON	'$@

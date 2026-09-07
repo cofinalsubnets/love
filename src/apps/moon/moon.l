@@ -608,6 +608,7 @@
    (doto? p) (: n (tally p) (2 < n && p (n - 2) = 46 && p (n - 1) = 111))
    (dotim? p) (: n (tally p) (6 < n && snip p (n - 6) n = ".image"))
    (dotcid? p) (: n (tally p) (4 < n && snip p (n - 4) n = ".cid"))
+   (dotrto? p) (: n (tally p) (4 < n && snip p (n - 4) n = ".rto"))
    ; the build tree keeps the images in the love's own directory, an installed
    ; nest one rung over in lib/love/ -- the two seats mseat already knows.
    ; not point-free: the mapped lambda reads `d` to build the path it hashes, so dropping
@@ -723,23 +724,29 @@
    ; in favour of the ones you minted once.
    (mcsweep d)
     (: mckeep 32                                       ; ~400K each, so ~13M held.
+       ; a member object is a rung finer and there are ~600 to a generation, so its
+       ; own room is two of those -- the state you are on and the one you flip back
+       ; to. ~2.5K each, so ~3M held.
+       mckeepo 1200
        ; the live set is one generation per (worktree, lane, target) -- a tree
        ; carries the shim's love+mooncc.image and the build's love0+mooncc0.image
        ; as two distinct compilers -- so the room here is deliberate, not slack.
-       ; two shapes are kept -- the archives, and the .cid memos naming the compiler
-       ; that cut them -- each bounded on its own count. Anything else goes: a pass
-       ; that cannot say which generations are dead can still say which shapes are.
-       _ (foldl (\ a f (? (dota? f || dotcid? f) a (: _ (unlink (d + f)) a))) 0 (readdir d))
+       ; three shapes are kept -- the archives, the members they index, and the .cid
+       ; memos naming the compiler that cut them -- each bounded on its own count.
+       ; Anything else goes: a pass that cannot say which generations are dead can
+       ; still say which shapes are.
+       _ (foldl (\ a f (? (dota? f || dotcid? f || dotrto? f) a (: _ (unlink (d + f)) a))) 0 (readdir d))
        (ages pk) (foldl (\ a f (: st (stat (d + f))
                                   (? (pk f && two? st) (a + [[(st 1) f]]) a)))
                         () (readdir d))
-       (go l k) (? !(two? l) 0
-                   (: e <l
-                      _ (? (mckeep <= k) (unlink (d + <>e)) 0)
-                      (go >l (k + 1))))
-       (old pk) (go (sortby (\ a b (<b <= <a)) (ages pk)) 0)
-       _ (old dota?)
-       (old dotcid?))
+       (go l k cap) (? !(two? l) 0
+                       (: e <l
+                          _ (? (cap <= k) (unlink (d + <>e)) 0)
+                          (go >l (k + 1) cap)))
+       (old pk cap) (go (sortby (\ a b (<b <= <a)) (ages pk)) 0 cap)
+       _ (old dota? mckeep)
+       _ (old dotrto? mckeepo)
+       (old dotcid? mckeep))
    ; the compiled runtime as one archive: the cache when it can answer, the
    ; compiler otherwise -- and the compile is what fills the cache. a cache that
    ; cannot open is invisible, and the link is the one that happens today, at
@@ -800,21 +807,20 @@
              hit (? (string? k) (mcget cd (k + ".a") "!<arch>\n") ())
              _ (? (two? hit) (utime (cd + k + ".a") (clock ())) 0)   ; the sweep orders by use
              bs (? (two? hit) <>hit
-                   (: b (arbytes (rtmems home tgt os vb))
+                   (: b (arbytes (rtmems home tgt os vb id))
                       _ (? (string? k) (mcput cd (k + ".a") b) 0)
                       b))
              _ (? (string? cd) (mcsweep cd) 0)
              bs)))
-   ; every member compiled, ready to index. the implicit runtime compiles like
-   ; everything else: our own sources reaching only our own headers.
-   ; nolibc is a tree: every .c directly under lib/nolibc/ and
-   ; every .c one level down (string/, ..), one function to a file where the
-   ; file-scope state allows. a link owing no calendar takes no calendar
-   ;. one level, not a walk -- the depth is the
-   ; vocabulary, and a deeper tree would say nothing. the member names flatten
-   ; that tree with _ and the math ones wear m_: time.c and sys/time.c are two
-   ; members of one basename, and an archive resolves by name alone.
-   (rtmems home tgt os vb)
+   ; the roster, ahead of any compile: [name source includes] a member, an empty source
+   ; naming the one that is laid rather than compiled. apart from the compile so a
+   ; warmer can take a slice of it where the archive lane takes all of it.
+   ; nolibc is a tree: every .c directly under lib/nolibc/ and every .c one level down
+   ; (string/, ..), one function to a file where the file-scope state allows. one level,
+   ; not a walk -- the depth is the vocabulary, and a deeper tree would say nothing. the
+   ; member names flatten that tree with _ and the math ones wear m_: time.c and
+   ; sys/time.c are two members of one basename, and an archive resolves by name alone.
+   (rtplan home tgt os vb)
     (: disk (string? home)                ; () home = the blob lane: paths are vb keys
        ndir (? disk (home + "lib/nolibc/") "lib/nolibc/")
        mdir (? disk (home + "lib/math/") "lib/math/")
@@ -844,14 +850,47 @@
               (foldl (\ a k (: sub (snip k (tally mdir) (tally k))
                                (? (dotc? sub) (a + [sub]) a)))
                      () (sort (filter (\ k (pfx? k mdir)) (keys vb)))))
-       ; the members compile under the link's os (impl.h's table opens on it),
-       ; and the sys leaf is the os's own -- freebsd rides the x64 machine.
-       (f9 is9) (pin (pin (pin (fseed tgt 'moon) 'os os) 'is is9) 'vb vb)
-       ((map ((a b) \ [a (string (cc-objbytes b (f9 [inc])))])
-             (nlmems ndir))
-        + map (\ f [("m_" + dotobj f) (string (cc-objbytes (mdir + f) (f9 [mdir inc])))])
-              mfs
-        + (? (member? tgt '(x64 a64 rv64)) [["mksys.o" (string (mksys-bytes tgt))]] ())))
+       ((map ((a b) \ [a b [inc]]) (nlmems ndir))
+        + map (\ f [("m_" + dotobj f) (mdir + f) [mdir inc]]) mfs
+        + (? (member? tgt '(x64 a64 rv64)) [["mksys.o" "" ()]] ())))
+   ; the members compile under the link's os (impl.h's table opens on it), and the sys
+   ; leaf is the os's own -- freebsd rides the x64 machine.
+   (rtflags tgt os vb is) (pin (pin (pin (fseed tgt 'moon) 'os os) 'is is) 'vb vb)
+   ; ONE MEMBER, through a cache cut a rung finer than the archive's: the same tree id
+   ; and target, plus the member's own name. what that buys is a fan -- ~600 compiles
+   ; that read nothing of each other, so any number of children can fill this and the
+   ; parent reads every one of them back. an edit anywhere in the slice still moves the
+   ; id and so every member, which is the archive key's law kept, not loosened.
+   (rtmem1 tgt os vb id cd e)
+    (: nm (e 0) src (e 1) is (e 2)
+       k (? (string? cd && string? id)
+            (sha256 $ id + "\n" + nm + "\n" + show tgt + "\n" + show os) ())
+       hit (? (string? k) (mcget cd (k + ".rto") "rto1\n") ())
+       _ (? (two? hit) (utime (cd + k + ".rto") (clock ())) 0)   ; the sweep orders by use
+       (? (two? hit) [nm (snip <>hit 5 (tally <>hit))]
+          (: b (? (0 = tally src) (string (mksys-bytes tgt))
+                  (string (cc-objbytes src (rtflags tgt os vb is))))
+             _ (? (string? k) (mcput cd (k + ".rto") ("rto1\n" + b)) 0)
+             [nm b])))
+   ; every member compiled, ready to index -- the implicit runtime compiles like
+   ; everything else, our own sources reaching only our own headers. the id is the
+   ; caller's: it already cut one to key the archive, and mcid walks the slice.
+   (rtmems home tgt os vb id)
+    (: cd (? (string? id) (mcdir ()) ())
+       (map (\ e (rtmem1 tgt os vb id cd e)) (rtplan home tgt os vb)))
+   ; fill the member cache for one residue of the roster, over every target named --
+   ; what a forked child runs. a child's whole answer is the entries it writes, so
+   ; nothing is returned; the parent reads them back through rtmems. with no cache in
+   ; reach there is nowhere to put the work, and the whole call is a no-op.
+   (rtwarm home tgts os vb w i)
+    (: id (? (string? home) (mcid home) ())
+       cd (? (string? id) (mcdir ()) ())
+       (? !(string? cd) 0
+          (each tgts
+                (\ t (: (go l k) (? !(two? l) 0
+                                    (: _ (? (i = (k % w)) (rtmem1 t os vb id cd <l) 0)
+                                       (go >l (k + 1))))
+                        (go (rtplan home t os vb) 0))))))
    (rtpull srcs tgt os nostd vb)
     (: mach (peep elf-machines tgt 0)
        lg (ldledger srcs mach) dt <lg owed <>lg
@@ -900,7 +939,7 @@
        hit (? (string? k) (mcget cd (k + ".wrt") "wrt1\n") ())
        _ (? (two? hit) (utime (cd + k + ".wrt") (clock ())) 0)
        txt (? (two? hit) (snip <>hit 5 (tally <>hit))
-              (: s (show (rtmems home 'wasm os vb))
+              (: s (show (rtmems home 'wasm os vb id))
                  _ (? (string? k) (mcput cd (k + ".wrt") ("wrt1\n" + s)) 0)
                  s))
        <(sound txt))

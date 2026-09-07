@@ -35,23 +35,39 @@
    (rt-le8 v i acc) (i = 8 ? acc (rt-le8 (v >> 8) (i + 1) (acc + [(v & 255)])))
    (rt-zeros k acc) (k < 1 ? acc (rt-zeros (k - 1) (0 . acc)))
 
-   ; the archives are three independent mooncc runs -- a cold one is ~45 s and
-   ; nothing in it reads another -- so build them at once and let the runtime
-   ; cache be the join: a child's whole output is the entry it writes, which is
-   ; what `one` below reads back. no cache directory, no fan-out: the work
-   ; would die with the child. a fork we asked for and did not get leaves its
-   ; target to `one`, one archive slower.
-   (rt-fan rtarch cd ts)
+   ; the fan's width, cook's own down the environment -- a hint about the machine, and
+   ; with no jobserver no claim on its pool. FLOOR 3: the three archives were cut at once
+   ; from before there were members to slice, and a serial cook keeps that. CEILING 6,
+   ; measured -- a worker costs ~8 s of cpu before it compiles anything (its share of the
+   ; woken heap), so 3/6/12/16 wide run 28.8/21.7/17.3/18.8 s for 74/94/155/180 s of cpu.
+   (rt-width _)
+    (: w ("" + getenv "COOKJOBS")
+       n #w
+       (go k a) (? (n <= k) a
+                   ((w k < 48) || (57 < w k)) 0
+                   (go (k + 1) (a * 10 + (w k) - 48)))
+       v (? (0 < n) (go 0 0) 0)
+       (? (6 <= v) 6 (3 < v) v 3))
+   ; ~600 member compiles across the three archives and none reads another, so a pool of
+   ; children fills the member cache and `one` below indexes the archives out of it,
+   ; every member a hit. the cache IS the join -- without one a child's work dies with
+   ; it; a fork refused leaves its residue to `one`, that much slower.
+   (rt-fan rtwarm cd ts)
     (? !(string? cd) ()
-       (: _ (flush out, flush err)
-          ps (rt-kids rtarch ts ())
+       (: w (rt-width 0)
+          _ (flush out, flush err)
+          ps (rt-kids rtwarm ts w 1 ())
+          ; THE PARENT'S OWN RESIDUE GOES BESIDE THEM, never after the wait: waiting
+          ; first spends the children's cores and then runs one share alone, which is
+          ; half the width for the whole second half.
+          _ (rtwarm "src/apps/moon/" ts 'linux () w 0)
           (foldl (\ _ p (wait p)) 0 ps)))
-   (rt-kids rtarch ts acc)
-    (? (one? ts) acc
+   (rt-kids rtwarm ts w i acc)
+    (? (w <= i) acc
        (: p (fork 0)
-          (? (p = 0) (rtarch "src/apps/moon/" <ts 'linux (), quit 0)
-             (0 < p) (rt-kids rtarch >ts (p . acc))
-             acc)))
+          (? (p = 0) (rtwarm "src/apps/moon/" ts 'linux () w i, quit 0)
+             (0 < p) (rt-kids rtwarm ts w (i + 1) (p . acc))
+             (rt-kids rtwarm ts w (i + 1) acc))))
 
    ; one member: label len, label bytes, zero-padded so the next len lands
    ; 8-aligned (a riscv core may trap an unaligned word; the pad is free)
@@ -69,6 +85,7 @@
     (: _ (rt-be 'x64, rt-be 'a64, rt-be 'rv64, rt-be arch)
        rtcid (from 'moon 'rtcid)
        rtarch (from 'moon 'rtarch)
+       rtwarm (from 'moon 'rtwarm)
        objelf (from 'holo 'objelf)
        cid (rtcid "src/apps/moon/")
        _ (!(string? cid) ? (rt-die "no src/apps/moon/ slice to hash -- run from the tree root"))
@@ -76,26 +93,29 @@
        ; and only a real slice or compiler change recompiles the members --
        ; without this every seed and rebake paid three full runtime compiles.
        cd ((from 'moon 'mcdir) ())
-       _ (rt-fan rtarch cd '(x64 a64 rv64))
+       _ (rt-fan rtwarm cd '(x64 a64 rv64))
        ; deflated: ~1.5 MB of archive across the three ISAs becomes ~210 kB,
        ; and rtcarried pays one inflate for the ISA it wants.
        (one tgt) (: a (rtarch "src/apps/moon/" tgt 'linux ())
                     _ (!(string? a) ? (rt-die (show tgt + ": no archive (a member refused?)")))
                     z (deflate a)
                     _ (!(string? z) ? (rt-die (show tgt + ": deflate refused the archive")))
-                    _ (say out $ "MKRT\t" + show tgt + " " + show #a + " -> " + show #z + "\n")
                     z)
+       zx (one 'x64)
+       za (one 'a64)
+       zr (one 'rv64)
        forms ((rt-forms "id" cid)
-              + (rt-forms "x64" (one 'x64))
-              + (rt-forms "a64" (one 'a64))
-              + (rt-forms "rv64" (one 'rv64)))
+              + (rt-forms "x64" zx)
+              + (rt-forms "a64" za)
+              + (rt-forms "rv64" zr))
        xs '("ai_rtgz_id" "ai_rtgz_id_len"
             "ai_rtgz_x64" "ai_rtgz_x64_len"
             "ai_rtgz_a64" "ai_rtgz_a64_len"
             "ai_rtgz_rv64" "ai_rtgz_rv64_len")
        ob (objelf arch () () () xs () () () () () forms)
        _ ((from 'holo 'write-bytes) dst ob)     ; ob is a byte list, not a string
-       (say out ("MKRT\t" + dst + "\n")))
+       (say out ("  x64 a64 rv64 nolibc, deflated to "
+                 + show (#zx + #za + #zr) + " bytes\n")))
 
    (mkrt-main av)
     (: n #av

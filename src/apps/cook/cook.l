@@ -159,19 +159,26 @@
             (: ingredients <r orderonly <>r steps >>r
                _ (each ingredients (\ d (prep d done shipped pending)))
                _ (each orderonly (\ d (prep d done shipped pending)))  ; order-only: built if missing, never makes us stale
-               _ (each ingredients (\ d (jobland d done shipped pending)))
-               _ (each orderonly (\ d (jobland d done shipped pending)))
-               ta0 (date item)
-               fresh (any (\ d (peep shipped d 0)) ingredients)   ; a prerequisite's file changed
-               older (any (\ d (: da (peep done d ())     ; a prerequisite is newer
-                                  (? !da 1 (? !ta0 1 (da > ta0))))) ingredients)
-               stale (!ta0 || fresh || older)
-               ; run the recipe when stale -- as a job where there is room to fork one,
-               ; else right here. a job's item settles when it lands; everything else
-               ; settles now.
-               j (? stale (jobstart item steps) 0)
-               (? j (: _ (pin pending item (link j (link ta0 steps))) ta0)
-                    (settle item ta0 (? stale steps ()) done shipped)))
+               ; A PURE AGGREGATE OWES NO AGE, so it need not wait here -- and waiting
+               ; is what put a phony's whole subtree in front of the sibling beside it
+               ; (`dist: dist-source dist-seed` sat out the tarball before it so much as
+               ; looked at the compiler). park the land under the item instead: the
+               ; parent calls jobland on the way past, so every job still comes home.
+               (? !(two? steps)
+                  (: _ (pin pending item (link 'agg (link (ingredients + orderonly) ()))) ())
+                  (: _ (each ingredients (\ d (jobland d done shipped pending)))
+                     _ (each orderonly (\ d (jobland d done shipped pending)))
+                     ta0 (date item)
+                     fresh (any (\ d (peep shipped d 0)) ingredients)   ; a prerequisite's file changed
+                     older (any (\ d (: da (peep done d ())     ; a prerequisite is newer
+                                        (? !da 1 (? !ta0 1 (da > ta0))))) ingredients)
+                     stale (!ta0 || fresh || older)
+                     ; run the recipe when stale -- as a job where there is room to fork
+                     ; one, else right here. a job's item settles when it lands;
+                     ; everything else settles now.
+                     j (? stale (jobstart item steps) 0)
+                     (? j (: _ (pin pending item (link j (link ta0 steps))) ta0)
+                          (settle item ta0 (? stale steps ()) done shipped)))))
             ; no card: a source leaf. it must already exist on disk.
             (: ta (date item)
                _ (? ta 0 (: _ (say err ("cook: no recipe to make " + show item))
@@ -190,10 +197,15 @@
       nw)
 
    ; a prerequisite's job must land before its age can be read. () for an item that
-   ; never took one, which is every item at -j1.
+   ; never took one, which is every item at -j1. an aggregate parked its own
+   ; prerequisites here rather than waiting on them in prep, so landing it lands those;
+   ; the pull leads, so a card that reaches itself cannot circle.
    (jobland item done shipped pending)
    (: v (peep pending item 0)
       (? !(two? v) ()
+         (= <v 'agg) (: _ (pull pending item 0)
+                        _ (each <>v (\ d (jobland d done shipped pending)))
+                        (settle item () () done shipped))
          (: st (jobwait <v)
             _ (pull pending item 0)
             _ (? (0 = st) 0 (jobdie item st))
@@ -1334,9 +1346,10 @@
    ; non-flag; cook reads the rest via mk-args). Like make, it takes flags in any
    ; order and treats every non-flag word as a recipe to build:
    ;   -f, --file file   the build file (a Makefile or a Cookfile); else discovered
-   ;   -j, --jobs N      run up to N recipes at once (default 1). N is required -- a
-   ;                     bare -j is make's "unlimited", and one translation unit here
-   ;                     peaks at 2.3 GB, so the number is the caller's to say.
+   ;   -j, --jobs [N]    run up to N recipes at once (default 1). a BARE -j is not
+   ;                     make's "unlimited" here but this machine's width -- cores off
+   ;                     /proc/cpuinfo, bounded by MemAvailable at 512 MB a job, since a
+   ;                     mooncc TU peaks near 350 MB. no /proc answers 1.
    ;                     the width does not travel: there is no jobserver, so a
    ;                     recursive $(MAKE) runs at -j1 unless its own line says otherwise.
    ;   --emit            transpile a Makefile to a resolved Cookfile on stdout, then exit
@@ -1350,9 +1363,9 @@
    ; with -f, every positional word is a recipe.
    (bye s) (: _ (puts s) _ (putc 10) _ (flush out) (quit 0))
    (version _) (bye ("cook (love " + love-version + ")"))
-   (usage _) (bye ("usage: cook [-f FILE] [-j N] [--emit] [-v] [-h] [VAR=VAL ...] [RECIPE ...]\n"
+   (usage _) (bye ("usage: cook [-f FILE] [-j [N]] [--emit] [-v] [-h] [VAR=VAL ...] [RECIPE ...]\n"
                    + "  -f, --file FILE   the build file (Makefile or Cookfile); else discovered\n"
-                   + "  -j, --jobs N      run up to N recipes at once (default 1)\n"
+                   + "  -j, --jobs [N]    run up to N recipes at once (default 1; bare -j = this machine)\n"
                    + "      --emit        transpile a Makefile to a resolved Cookfile, then exit\n"
                    + "  -v, --version     print the version and exit\n"
                    + "  -h, --help        print this help and exit\n"
@@ -1360,6 +1373,40 @@
                    + "  RECIPE ...        the items to build (default: the first recipe declared)\n"
                    + "a Makefile (Makefile/makefile/GNUmakefile/*.mk) is imported and cooked; any other build file is a Cookfile of ordinary love source."))
    (need-arg h r) (? (two? r) 0 (: _ (say err ("cook: " + h + " needs an argument")) _ (put err 10) (quit 2)))
+   ; is this word the count, or the next argument? all digits and at least one.
+   (jobword? w)
+   (: n #w
+      (go k) (? (n <= k) 1 (!(digitp (w k))) 0 (go (k + 1)))
+      ((0 < n) && (go 0)))
+   ; a file's lines, or () where there is none -- /proc is the only door in reach here.
+   (jobfile p)
+   (: q (open p "r")
+      (? !(hot? q) () (: s (slurp q) _ (close q) (lines s))))
+   ; the leading number in a line, 0 where there is none: MemAvailable's kB field.
+   (jobnum l)
+   (: n #l
+      (go k a seen) (? (n <= k) (seen ? a 0)
+                       (digitp (l k)) (go (k + 1) (a * 10 + (l k) - 48) 1)
+                       seen a
+                       (go (k + 1) a 0))
+      (go 0 0 0))
+   ; a bare -j: what this machine can carry at once, cores AND memory. one mooncc TU
+   ; peaks near 350 MB, so 512 a job leaves room and the smaller of the two answers
+   ; wins. no /proc (the BSDs) is 1 -- what a bare -j answered before, so nothing slows.
+   (jobauto _)
+   (: (rows p w) (: ls (jobfile p)
+                    (? !(two? ls) 0
+                       (foldl (\ a l (: k #w
+                                        ((k <= tally l) && (snip l 0 k = w) ? (a + 1) a)))
+                              0 ls)))
+      cpus (rows "/proc/cpuinfo" "processor")
+      mls (jobfile "/proc/meminfo")
+      free (? !(two? mls) 0
+              (foldl (\ a l ((13 <= tally l) && (snip l 0 13 = "MemAvailable:")
+                             ? (jobnum (snip l 13 #l)) a)) 0 mls))
+      room (? (0 < free) (free // 524288) 0)               ; kB -> 512 MB slots
+      n (? (0 = cpus) 1 (0 = room) cpus (room < cpus) room cpus)
+      (? (0 < n) n 1))
    ; a job count: all digits and above zero, or the run ends here. `-j0` and `-j x`
    ; are the same mistake and get the same word.
    (jobn w)
@@ -1381,7 +1428,9 @@
    ((: (loop ws opt) (? !(two? ws) opt
        (: w <ws r >ws
           (? ((w = "-f") || (w = "--file")) (: _ (need-arg w r) _ (pin opt 'file <r) (loop >r opt))
-             ((w = "-j") || (w = "--jobs"))  (: _ (need-arg w r) _ (pin opt 'jobs (jobn <r)) (loop >r opt))
+             ((w = "-j") || (w = "--jobs"))
+                (? ((two? r) && (jobword? <r)) (: _ (pin opt 'jobs (jobn <r)) (loop >r opt))
+                   (: _ (pin opt 'jobs (jobauto 0)) (loop r opt)))
              ((2 < tally w) && ("-j" = snip w 0 2))          ; glued: -j8
                                              (: _ (pin opt 'jobs (jobn (snip w 2 #w))) (loop r opt))
              ((w = "-n") || (w = "--dry-run") || (w = "--just-print"))
@@ -1414,6 +1463,10 @@
       _ (? (peep opt 'ver 0) (version 0) 0)
       _ (pin clivars 0 (peep opt 'var ()))                   ; the VAR=VAL words, for seed-defaults
       _ (pin jobs 0 (peep opt 'jobs 1))                      ; the -j width; 1 is the serial cook
+      ; ..and the width goes down the environment, for a recipe that forks on its own
+      ; account (tools/mkrt.l's member pool). NOT a jobserver: nothing is handed back,
+      ; so it is a hint about the machine and no claim on this pool.
+      _ (setenv "COOKJOBS" (show (jobw ())))
       _ (pin dryrun 0 (peep opt 'dry 0))                     ; -n: say the steps, run none
       emit? (peep opt 'emit 0)
       pos (peep opt 'pos ())

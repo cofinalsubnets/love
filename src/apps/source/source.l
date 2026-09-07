@@ -168,8 +168,10 @@
        here (cwd 0)
        _ (? !(chdir root) 0 (src-die ("can't enter " + root)))
        xm (? (string? xa) (show (intern xa)) ())     ; make's word for it
-       s (herald (string? xa ? [exe "make" ("xa=" + xm) ("out/x-" + xm + "/love")]
-                              [exe "make" "dist"]))
+       ; -j with no count: cook reads this machine's width, and answers 1 where it
+       ; cannot -- so the seed is as wide as the box and never wider.
+       s (herald (string? xa ? [exe "make" "-j" ("xa=" + xm) ("out/x-" + xm + "/love")]
+                              [exe "make" "-j" "dist"]))
        st (two? s ? <s s)
        _ (chdir here)
        _ (0 != st ? (src-die ("the build failed (exit " + show st + ")")))
