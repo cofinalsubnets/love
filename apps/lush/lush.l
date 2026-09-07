@@ -1650,7 +1650,11 @@
    sh-forkc (tablet 0)                          ; word -> 1 | 0, decided once
    (sh-dotl? w) (: n #w ?((2 < n) && (snip w (n - 2) n = ".l")))
    (sh-cliline _) (? (member? 'cli-line (names ())) (ev 'cli-line) ())   ; a bare global, read at the call
+   ; a seat with no fork: inle runs a process as a task (kmain's shim, the spawnmap
+   ; lane below), and the fork it pins is a no-op -- so no word forks there
+   (sh-forkseat? _) (? (member? 'love-os (names ())) !(member? (ev 'love-os) '(inle wasm)) 1)
    (sh-forkask w) (? (|| (sh-slashed? w) (sh-dotl? w)) 0
+                     !(sh-forkseat? 0) 0
                      (&& (sh-cliline ()) (sh-ours? w)) 1
                      0)
    (sh-forkfn w) (: v (peep sh-forkc w 'no)

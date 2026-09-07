@@ -205,6 +205,11 @@
                 + "Content-Type: " + ctype + "\r\n"
                 + "Content-Length: " + show #body + "\r\n"
                 + "Cache-Control: no-cache\r\n"
+                ; the two isolation headers: a page served here may use SharedArrayBuffer
+                ; (port/wasm/inle.html's machine), and a static page loads nothing
+                ; cross-origin that they would refuse
+                + "Cross-Origin-Opener-Policy: same-origin\r\n"
+                + "Cross-Origin-Embedder-Policy: require-corp\r\n"
                 + "Connection: close\r\n\r\n"))
       _ (!head? ? (say c body))
       _ (flush c)

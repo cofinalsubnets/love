@@ -6,4 +6,6 @@
 #include "a64/asmops.h"
 #elif defined(__riscv)
 #include "rv64/asmops.h"
+#elif defined(__wasm__)
+#include "wasm/asmops.h"
 #endif

@@ -144,6 +144,10 @@
      ['ai_cat_mods_h_z ['holo 'a64 'scan]]
      "#elif defined(__riscv)" "#define AiCatModsH 1"
      ['ai_cat_mods_h_z ['holo 'rv64 'scan]]
+     ; wasm is gen's rv64 lane under another writer (core/holo/wasmfn.l), so the
+     ; machine under that seat's holo is rv64's
+     "#elif defined(__wasm__)" "#define AiCatModsH 1"
+     ['ai_cat_mods_h_z ['holo 'rv64 'scan]]
      "#endif"
      ; the glaze, one text: emit.l (the native emitter) then auto.l (ev's source
      ; recognizer, which reads emit's names bare), so the order here is the module and the

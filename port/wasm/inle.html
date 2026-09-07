@@ -1,0 +1,81 @@
+<!doctype html>
+<!-- port/wasm/inle.html -- love-wasm.wasm as a machine in the page: the kernel runs in a
+     worker (cpu.mjs), the canvas is its framebuffer, the keyboard its serial line. serve
+     the tree root (`make serve`) and open /port/wasm/inle.html; the module is read from
+     out/love-wasm.wasm, so `make out/love-wasm.wasm` first. coi.js makes the page
+     cross-origin isolated on a static host, which SharedArrayBuffer wants. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>inle</title>
+<script src="coi.js"></script>
+<style>
+  html, body { margin: 0; background: #111; color: #ccc; font: 14px/1.4 monospace; }
+  main { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px; }
+  canvas { image-rendering: pixelated; width: 1280px; max-width: 100%; outline: none; background: #000; }
+  pre { width: 1280px; max-width: 100%; max-height: 12em; overflow: auto; margin: 0; color: #888; white-space: pre-wrap; }
+  .hint { color: #666; }
+</style>
+</head>
+<body>
+<main>
+  <canvas id="fb" width="640" height="400" tabindex="0"></canvas>
+  <div class="hint">click the screen, then type. the boot line: <code id="boot"></code></div>
+  <div class="hint">lift a file out of the machine: <input id="path" size="40" placeholder="/tmp/love-x64.elf"> <button id="lift">lift</button> <span id="lifted"></span></div>
+  <pre id="serial"></pre>
+</main>
+<script type="module">
+  import { ring_n, ring_at, lift_n, lift_at, shared_n } from './cpu.mjs';
+  const $ = (id) => document.getElementById(id);
+  const serial = $('serial'), canvas = $('fb');
+  const say = (s) => { serial.textContent = (serial.textContent + s).slice(-8000); serial.scrollTop = serial.scrollHeight; };
+  if (!window.crossOriginIsolated) { say('not cross-origin isolated: SharedArrayBuffer is unavailable, reloading under coi.js..\n'); }
+  else {
+    const q = new URLSearchParams(location.search);
+    const cmd = q.get('boot') ?? 'sh';
+    $('boot').textContent = cmd || '(the console shell)';
+    const ring = new SharedArrayBuffer(shared_n);
+    const ctl = new Int32Array(ring, 0, 4), kb = new Uint8Array(ring, ring_at, ring_n);
+    // the way out: the path goes into the shared buffer, the worker reads the file off the
+    // ramfs at its next idle, and the bytes come back as a download
+    $('lift').addEventListener('click', () => {
+      const p = new TextEncoder().encode($('path').value.trim()).subarray(0, lift_n - 1);
+      if (!p.length) return;
+      const raw = new Uint8Array(ring, lift_at, lift_n); raw.fill(0); raw.set(p);
+      Atomics.store(ctl, 3, 1); Atomics.add(ctl, 2, 1); Atomics.notify(ctl, 2);
+      $('lifted').textContent = 'asked..'; });
+    const push = (bytes) => {
+      let tail = Atomics.load(ctl, 1);
+      for (const b of bytes) { const n = (tail + 1) % ring_n; if (n === Atomics.load(ctl, 0)) break; kb[tail] = b; tail = n; }
+      Atomics.store(ctl, 1, tail); Atomics.add(ctl, 2, 1); Atomics.notify(ctl, 2); };
+    // a key as the bytes a serial terminal sends: CR for Enter, DEL for Backspace, ESC
+    // sequences for the arrows and home/end, the control letters as themselves
+    const keys = { Enter: [13], Backspace: [127], Tab: [9], Escape: [27], Delete: [27, 91, 51, 126],
+                   ArrowUp: [27, 91, 65], ArrowDown: [27, 91, 66], ArrowRight: [27, 91, 67], ArrowLeft: [27, 91, 68],
+                   Home: [27, 91, 72], End: [27, 91, 70], PageUp: [27, 91, 53, 126], PageDown: [27, 91, 54, 126] };
+    canvas.addEventListener('keydown', (e) => {
+      let b = keys[e.key];
+      if (!b && e.key.length === 1) {
+        const c = e.key.codePointAt(0);
+        b = e.ctrlKey && c >= 64 && c < 128 ? [c & 31] : e.ctrlKey || e.metaKey || e.altKey ? null : [...new TextEncoder().encode(e.key)]; }
+      if (!b) return;
+      e.preventDefault(); push(b); });
+    const off = canvas.transferControlToOffscreen();
+    const cpu = new Worker(new URL('./cpu.mjs', import.meta.url), { type: 'module' });
+    cpu.onmessage = ({ data: m }) => {
+      if (m.serial !== undefined) say(m.serial);
+      else if (m.lift !== undefined) {
+        if (m.error) { $('lifted').textContent = `${m.lift}: errno ${m.error}`; return; }
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([m.bytes])); a.download = m.lift.split('/').pop();
+        a.textContent = `${a.download} (${m.bytes.length} bytes)`;
+        $('lifted').replaceChildren(a); a.click(); }
+      else if (m.reset) say('\n; reset\n');
+      else if (m.fault) say('\n; fault: ' + m.fault + '\n'); };
+    cpu.onerror = (e) => say('\n; worker: ' + e.message + '\n');
+    const wasm = await (await fetch(new URL('../../out/love-wasm.wasm', import.meta.url))).arrayBuffer();
+    cpu.postMessage({ wasm, ring, ram: Number(q.get('ram') ?? 256), cmd, fb: { w: 640, h: 400, canvas: off } }, [wasm, off]);
+    canvas.focus(); }
+</script>
+</body>
+</html>

@@ -38,6 +38,18 @@ Since rung 5 it has the disk: virtio-blk (PCI on x64, virtio-mmio on a64; polled
 C file) under three raw nifs, and **FAT32 r/w written in love** (`apps/fat/fat.l`, off the ramfs)
 over them — a file written before a reset is there after it, and mtools reads what it writes.
 
+And it has a fourth seat, wasm: the same kernel (`kmain.c`, the ramfs off the source
+blob, the console painter, `inle/sys.c` under nolibc, the host frontend whole) links
+through `mooncc -t wasm` to `out/love-wasm.wasm`, with `inle/wasm/arch.c` for the
+machine — five hypercalls through the module's one import, wearing linux's numbers, and no
+hardware at all. The CPU under it is a worker (`port/wasm/cpu.mjs`) whose idle is an
+`Atomics.wait` on a shared ring of key bytes, so the kernel really blocks; the terminals are
+`port/wasm/inle.mjs` under node (serial, the gate's lane) and `port/wasm/inle.html` in a
+browser (the framebuffer on a canvas, the keyboard as a serial terminal; `coi.js` makes a
+static host cross-origin isolated, which SharedArrayBuffer wants). Egg boot only so far: the
+image and the runtime archives are the two rungs not yet taken. `make test_kernel_wasm` runs
+the kernel corpus on it.
+
 Missing: network.
 
 ## the shape it grows into

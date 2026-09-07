@@ -299,8 +299,14 @@ bool k_ready(int fd, int events) {
 // waking every tick. record which source answered rather than returning on the first: the
 // scheduler reads `revents` back and skips re-asking about every fd it names, so a sweep
 // costs one flag read per source and saves a walk of the ring per parked task.
+// the tick count is the timer's, and a machine with no timer interrupt (wasm) catches
+// it up off its clock instead -- here, before any deadline or reading is taken off it,
+// so a spin on (clock) with no idle in it still sees time move. metal has nothing to do.
+__attribute__((weak)) void k_tick_sync(void) { }
+
 void k_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
   if (n <= 0) { k_sleep(ms); return; }
+  k_tick_sync();
   uintptr_t deadline = kticks + k_ticks_for(ms);
   for (;;) {
     int any = 0;
@@ -316,11 +322,14 @@ void k_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
 // for every mtime. ai_clock is one body (host/posix.c) and inle/sys.c's arm serves it from
 // here. the date rides kboot, and where nobody knew it this degrades to milliseconds since
 // boot and says so by reading as 1970.
-uintptr_t k_clock_ms(void) { return (uintptr_t) (kboot.date * 1000 + kticks * k_tick_ms); }
+uintptr_t k_clock_ms(void) {
+  k_tick_sync();
+  return (uintptr_t) (kboot.date * 1000 + kticks * k_tick_ms); }
 
 // Pure time-wait. ms=0 means infinite (caller is expected to chain with an
 // input wait via ai_in->wait, so this should only be hit when no I/O is intended).
 void k_sleep(uintptr_t ms) {
+  k_tick_sync();
   uintptr_t deadline = kticks + k_ticks_for(ms);
   for (;;) {
     if (ms && kticks >= deadline) break;

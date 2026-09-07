@@ -1012,6 +1012,24 @@ site-wasm: wasm
 	@cp out/wasm/love.wasm port/wasm/love.wasm
 	@cp out/wasm/love.image port/wasm/love.image
 	@echo 'SITE	port/wasm/love.wasm port/wasm/love.image'
+# the wasm inle seat: the kernel the three metal seats link -- kmain and the ramfs, the
+# console painter with its fonts, inle/sys.c under nolibc, the host frontend whole -- with
+# inle/wasm/arch.c for the machine and the source blob as a wasm data object (mksrc.l's
+# text lane). one module beside out/love-$a.elf; the runtime rides in by need, and no
+# image yet: the egg bakes at boot. the CPU under it is port/wasm/inle.js, a worker;
+# the terminals are port/wasm/inle.mjs (node) and port/wasm/inle.html (the page).
+kw_c = $(love_c) $R/core/quay/cga_8x8.c $R/core/quay/moderndos_8x16.c $R/core/quay/paint.c \
+  $(k_free_c) $(host_c) $R/inle/wasm/arch.c
+kw_h = $(love_h) $R/inle/k.h $R/host/ustar.h $R/inle/asmops.h $R/inle/wasm/asmops.h
+out/wasm/src.o: $(dist_source) tools/mksrc.l out/.mksys-cat.l $m
+	@echo 'HOLO	'$@
+	@mkdir -p "$(dir $@)"
+	@LOVE_NO_IMAGE= $m -l out/.mksys-cat.l tools/mksrc.l $(dist_source) $@ wasm
+out/love-wasm.wasm: $(kw_c) $(kw_h) out/wasm/src.o out/lib/baked.h out/lib/distlist.h \
+  out/lib/korelist.h out/lib/love_version.h $(mooncc_dep)
+	@echo 'WASM	'$@
+	@$(mooncc) -t wasm -Dai_tco=1 -DAiHaveVersionH -I. -Icore -Ihost -Iinle -Iout/lib \
+	  -Icore/quay -Iapps/moon/include -o $@ $(kw_c) out/wasm/src.o
 wasm-emcc:                       # emcc's love, out/wasm/love.js: the foreign build ccwasm and test.mjs can take
 	@$(MAKE) -C port/wasm
 

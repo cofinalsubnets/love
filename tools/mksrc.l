@@ -49,8 +49,17 @@
     (sound cl @ 'torn (mksrc-die "torn backend text")
                 (a . u) (ev a, mksrc-rdev u))
 
+   ; a wasm object is the gen tuple as text (apps/moon/moon.l), and the link's data lane
+   ; reads the same label/raw forms objelf takes -- so this one is the forms in the data
+   ; slot, the two names in the globals slot, and nothing else. no backend to join.
+   (mksrc-wasm dst forms)
+    (: q (open dst "w")
+       _ (!(hot? q) ? (mksrc-die ("cannot write " + dst)))
+       _ (say q (show [() forms () '("ai_srcgz" "ai_srcgz_len") () () () () () () () ()]))
+       (close q))
+
    (mksrc arch src dst)
-    (: _ (mksrc-be arch)
+    (: _ (arch = 'wasm ? 0 (mksrc-be arch))
        g (mksrc-slurp src)
        _ (one? g ? (mksrc-die ("cannot read " + src)))
        s <>g
@@ -58,8 +67,8 @@
        _ (n < 1 ? (mksrc-die (src + " is empty")))
        forms ['(label ai_srcgz_len) ['raw (mksrc-le8 n 0 ())]
               '(label ai_srcgz)     ['raw (mksrc-bytes s (n - 1) ())]]
-       ob (objelf arch () () () '("ai_srcgz" "ai_srcgz_len") () () () () () forms)
-       _ (write-bytes dst ob)
+       _ (arch = 'wasm ? (mksrc-wasm dst forms)
+          (write-bytes dst (objelf arch () () () '("ai_srcgz" "ai_srcgz_len") () () () () () forms)))
        (say out $ "MKSRC\t" + dst + " (" + show n + " bytes)\n"))
 
    ; `argv` is a list and its head is this script's own path, so the arguments

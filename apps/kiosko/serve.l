@@ -19,9 +19,16 @@
 ; no papel here, so a rendered .md is the document and not a site page: no title,
 ; anchors, contents nav or cross-link rewriting. `make site` still builds a site.
 ;
-; kiosko is read bare, never through `from`: in the artifact it is catted rather than
-; registered, so an accessor would answer (), and () applied to operands is 1 -- a miss
-; that reads as success. the rest are modules, asked for by name inside this one.
+; and the github page: its files are generated -- make web lays index.html and assets/,
+; make wasm the module and its image, site-wasm copies them beside the loader, and the
+; wasm inle seat (port/wasm/inle.html) is its own module -- and .sbignore drops every one
+; from the source, so a checkout serves nothing of it until they are laid. where DIR is
+; the tree (a Makefile and web/index.l), this lays them through our own make first; the
+; two isolation headers kiosko's reply sends are what let inle.html's machine run here
+; without its service worker.
+;
+; kiosko is a module: `from` is the reach, and its miss is checked by name -- () applied
+; to operands is 1, a miss that would read as a server that started.
 (module (serve serve-main sv-make)
 (use 'libra)
 (use 'hueweb)
@@ -82,12 +89,26 @@
 
    (sv-usage _)
    (: _ (say err "love serve -- the tree in a browser, painted on the way out
-usage: love serve [-p PORT] [DIR]
+usage: love serve [-p PORT] [-n] [DIR]
   -p, --port PORT   the port to listen on (default 8080)
+  -n, --no-build    serve DIR as it is
   DIR               the directory to serve (default .)
-a .l is painted, a .md rendered, and x.l.md is x.l's header as a document.
+a .l is painted, a .md rendered, and x.l.md is x.l's header as a document. where DIR
+is the tree, the github page is laid first -- make web wasm site-wasm and the wasm inle
+seat -- and the machine is at /port/wasm/inle.html.
 ")
       (quit 0))
+
+   ; the page's build, through our own make in DIR: only where DIR is the tree, and
+   ; a refused build is said and stops the server -- a page half laid is not one
+   (sv-tree? dir) (two? (stat (dir + "/Makefile")) && two? (stat (dir + "/web/index.l")))
+   (sv-build dir)
+   (: exe (selfpath 0)
+      _ (string? exe ? 0 (say err "serve: can't find my own path\n", quit 1))
+      _ (say err ";; laying the page: make web wasm site-wasm out/love-wasm.wasm\n")
+      p (spawn [exe "make" "-C" dir "web" "wasm" "site-wasm" "out/love-wasm.wasm"])
+      st (charm? p && 0 <= p ? (wait p) 1)
+      (0 = st ? 0 (say err ("serve: the page did not build (" + show st + ")\n"), quit 1)))
 
    (sv-num s) (:- (g 0 0)
                   (g i acc) (? (i < #s && 48 <= s i <= 57)
@@ -95,18 +116,22 @@ a .l is painted, a .md rendered, and x.l.md is x.l's header as a document.
 
    (serve-main as)
    (: box (tablet 0)
-      (loop ws port dir)
-       (? !(two? ws) [port dir]
+      (loop ws port dir build)
+       (? !(two? ws) [port dir build]
           (: w <ws r >ws
              (? (w = "-p" || w = "--port")
-                 (two? r ? (loop >r (sv-num <r) dir) (sv-usage 0))
+                 (two? r ? (loop >r (sv-num <r) dir build) (sv-usage 0))
+                (w = "-n" || w = "--no-build") (loop r port dir 0)
                 (w = "-h" || w = "--help") (sv-usage 0)
-                (loop r port w))))
-      c (loop as 8080 ".")
+                (loop r port w build))))
+      c (loop as 8080 "." 1)
       port <c
       dir <>c
-      ; bare, never (from 'kiosko ..) -- a `from` miss here answers () and reads as
-      ; a server that started, so the command would exit 0 having listened on nothing
+      _ (<>>c && sv-tree? dir ? (sv-build dir) 0)
+      serve5 (from 'kiosko 'serve5)
+      _ (nil? serve5 ? (say err "serve: no kiosko aboard\n", quit 1))
+      _ (sv-tree? dir ? (say err ("serve: the page is http://127.0.0.1:" + show port
+                                  + "/ and the machine /port/wasm/inle.html\n")) 0)
       _ (? (serve5 dir port 0 () (p \ sv-make dir box p)) 0
            (: _ (say err ("serve: cannot listen on :" + show port)) _ (put err 10) (quit 1)))
       (quit 0))

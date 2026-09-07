@@ -45,7 +45,15 @@
                               _ (setenv (snip s 0 i) (snip s (i + 1) (tally s)))
                               (setp >a))
                          a)))
-       rest (setp as)
+       ; the options come first: -i empties the environment, -u NAME drops one --
+       ; a non-string value unsets (host/main.c's setenv shape); then the assignments
+       (unset-all e) (? !(two? e) 0 (: k <e i (eqat k) _ (setenv (? i (snip k 0 i) k) ()) (unset-all >e)))
+       (opts a) (? !(two? a) a
+                  (<a = "-i") (: _ (unset-all (environ 0)) (opts >a))
+                  (<a = "-u") (? (two? >a) (: _ (setenv <>a ()) (opts >>a)) (udie 1 "env: -u needs a name"))
+                  (<a = "--") >a
+                  a)
+       rest (setp (opts as))
        (? (two? rest)
           (: p (spawn rest)
              (? (nom? p) (udie 127 ("env: cannot run " + <rest))

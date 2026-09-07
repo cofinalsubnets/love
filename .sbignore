@@ -34,3 +34,10 @@ port/wasm/love.image
 # editor and debugger leavings
 vgcore.*
 .gdb_history
+
+# the web page and its assets: generated (make web, make wasm, site-wasm) and tracked
+# only for the github page -- `love serve` lays them again, so the source carries none
+index.html
+assets
+port/wasm/love.wasm
+port/wasm/love.image

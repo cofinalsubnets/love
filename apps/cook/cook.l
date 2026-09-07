@@ -1364,7 +1364,8 @@
    ; with -f, every positional word is a recipe.
    (bye s) (: _ (puts s) _ (putc 10) _ (flush out) (quit 0))
    (version _) (bye ("cook (love " + love-version + ")"))
-   (usage _) (bye ("usage: cook [-f FILE] [-j [N]] [--emit] [-v] [-h] [VAR=VAL ...] [RECIPE ...]\n"
+   (usage _) (bye ("usage: cook [-C DIR] [-f FILE] [-j [N]] [--emit] [-v] [-h] [VAR=VAL ...] [RECIPE ...]\n"
+                   + "  -C, --directory DIR  cook in DIR\n"
                    + "  -f, --file FILE   the build file (Makefile or Cookfile); else discovered\n"
                    + "  -j, --jobs [N]    run up to N recipes at once (default 1; bare -j = this machine)\n"
                    + "      --emit        transpile a Makefile to a resolved Cookfile, then exit\n"
@@ -1432,6 +1433,7 @@
    ((: (loop ws opt) (? !(two? ws) opt
        (: w <ws r >ws
           (? ((w = "-f") || (w = "--file")) (: _ (need-arg w r) _ (pin opt 'file <r) (loop >r opt))
+             ((w = "-C") || (w = "--directory")) (: _ (need-arg w r) _ (pin opt 'dir <r) (loop >r opt))
              ((w = "-j") || (w = "--jobs"))
                 (? ((two? r) && (jobword? <r)) (: _ (pin opt 'jobs (jobn <r)) (loop >r opt))
                    (: _ (pin opt 'jobs (jobauto 0)) (loop r opt)))
@@ -1465,6 +1467,10 @@
       opt (parse-args as)
       _ (? (peep opt 'help 0) (usage 0) 0)
       _ (? (peep opt 'ver 0) (version 0) 0)
+      ; -C DIR: the cook runs there -- discovery, the build file, every recipe -- as make's does
+      _ (: d (peep opt 'dir 0)
+           (? (!d || !(nom? (chdir d))) 0
+              (: _ (say err ("cook: cannot cd to " + d)) _ (put err 10) (quit 2))))
       _ (pin clivars 0 (peep opt 'var ()))                   ; the VAR=VAL words, for seed-defaults
       _ (pin jobs 0 (peep opt 'jobs 1))                      ; the -j width; 1 is the serial cook
       ; ..and the width goes down the environment, for a recipe that forks on its own

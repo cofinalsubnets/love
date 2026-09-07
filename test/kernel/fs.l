@@ -6,7 +6,7 @@
 ;
 ; the initrd is flat -- rows for "apps/json/json.l" and none for "apps/json" --
 ; so a directory is a prefix some path lies under, and the entries are the distinct next
-; components of those paths. That is why the root lists "src" once and never a path.
+; components of those paths. That is why the root lists "apps" once and never a path.
 ; the archive DOES carry directory members; ai_ustar_member takes typeflag 0 and 2 and
 ; not 5, so they are skipped and every directory here is synthesized.
 ;
@@ -50,8 +50,8 @@
    ; "" and "." are both the root, as they are on the host: the tree's own top
    ; names, each deduped across every row beneath it, plus tmp -- the scratch the
    ; rung-2 tree seeds at boot, which no row carries
-   (member? "src" (readdir "."))
-   (member? "src" (readdir ""))
+   (member? "apps" (readdir "."))
+   (member? "apps" (readdir ""))
    (member? "test" (readdir ""))
    (member? "tmp" (readdir ""))
    !(member? f (readdir ""))                     ; components, never whole paths

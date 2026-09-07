@@ -41,7 +41,7 @@
    (= 16384 (& 61440 <>>(stat e)))
    ((readdir e) = ())                         ; empty, told from absent by stat
    ('eexist = (mkdir e 493))                  ; again
-   ('eexist = (mkdir "src" 493))             ; a baked prefix is a directory too
+   ('eexist = (mkdir "apps" 493))             ; a baked prefix is a directory too
    ('enotdir = (mkdir (f + "/x") 493))       ; under a file
    ('enoent = (mkdir "/hole/x" 493))         ; under a hole
    ('badarg = (mkdir 7 493))

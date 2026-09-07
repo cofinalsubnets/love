@@ -15,7 +15,7 @@
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_front test_gc test_gcheck test_gcstress \
   test_gen test_glaze test_glazebench test_glazefuzz test_gz test_hdiff test_holo test_holofuzz test_holowasm test_hook \
-  test_host test_hostegg test_hostnif test_inle test_kboot test_kernel_a64 test_kernel_rv64 test_kore \
+  test_host test_hostegg test_hostnif test_inle test_kboot test_kernel_a64 test_kernel_rv64 test_kernel_wasm test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_raw test_raw_a64 test_raw_bake test_raw_rv64 \
@@ -35,7 +35,7 @@ test:
 	@$(MAKE) --no-print-directory $(test_phases)
 
 # slow gate
-test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_cookdiff test_glazebench test_dist test_seed test_moon test_boards
+test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_cookdiff test_glazebench test_dist test_seed test_moon test_boards test_kernel_wasm
 
 
 # really slow gate
@@ -1253,7 +1253,8 @@ test_inle:
 	@$(MAKE) -s test_kernel_a64
 	@$(MAKE) -s test_uefi_a64
 	@$(MAKE) -s test_kernel_rv64
-	@echo "test_inle: boot, disk, command line, firmware -- all three arches"
+	@$(MAKE) -s test_kernel_wasm
+	@echo "test_inle: boot, disk, command line, firmware -- the three arches and the wasm seat"
 
 ifeq ($(QEMU_A64),)
 test_kernel_a64:
@@ -1291,6 +1292,23 @@ test_wasm: wasm
 	@$(NODE) $(R)/port/wasm/test.mjs --love $(R)/out/wasm/love.wasm --image $(R)/out/wasm/love.image $t
 	@$(NODE) $(R)/port/wasm/screen.mjs --love $(R)/out/wasm/love.wasm
 	@$(NODE) $(R)/port/wasm/horn.mjs --love $(R)/out/wasm/love.wasm
+endif
+
+# test_kernel_wasm -- the wasm inle seat (out/love-wasm.wasm) under node: the kernel corpus
+# off the ramfs on the boot line, the serial line captured, the (reset) that ends it read
+# as the exit -- what tools/ktest.l reads off qemu, with no qemu and no browser.
+ifeq ($(NODE),)
+test_kernel_wasm:
+	@echo "test_kernel_wasm: skipped (needs node)"
+else
+test_kernel_wasm: host
+	@$(MAKE) -s out/love-wasm.wasm
+	@echo TEST out/love-wasm.wasm "(node: the kernel corpus, serial, headless)"
+	@$(NODE) $(R)/port/wasm/inle.mjs $(R)/out/love-wasm.wasm test/kernel/all.l < /dev/null > out/wasm/kernel.log 2>&1; \
+	 grep -q "tests pass" out/wasm/kernel.log && ! grep -q "failed:" out/wasm/kernel.log \
+	   && ! grep -q "^0 tests pass" out/wasm/kernel.log \
+	   || { tail -20 out/wasm/kernel.log; echo "FAIL test_kernel_wasm"; exit 1; }
+	@grep "tests pass" out/wasm/kernel.log
 endif
 
 # the wasm module writer and the IR lowering (core/holo/wasm.l) under a foreign engine:
