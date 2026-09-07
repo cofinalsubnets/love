@@ -214,7 +214,7 @@ slibrow() {
     lst=$(awk '$1=="%"{exit} /^[cp]/{next} {for(j=1;j<=NF;j++){ if($j=="0"){printf ") "; o=0} else {if(!o){printf "("; o=1}; printf "%s ", $j}}}' "$f")
     printf '(: f (\\ (%s)) _ (? (peep W 0 0) 0 (fcdcl f %s)) t0 (clock 0) r (fcdcl f %s) _ (pin MS 0 (+ (peep MS 0 0) (- (clock 0) t0))) _ (pin SG 0 (+ (peep SG 0 "") (? (id? r (\\ unsat)) "u" "s"))) _ (pin W 0 1))\n' "$lst" "$n" "$n"
   done)
-  out=$({ printf '(: MS #0 SG #(0 "") W #0)\n'
+  out=$({ printf '(: MS {} SG {} W {})\n'
           printf '%s\n' "$drv"
           printf '(: _ (puts (+ "RESULT " (+ (show (peep MS 0 0)) (+ " " (+ (peep SG 0 "") "\n"))))))\n'; } \
         | cat "$R/src/apps/sat/sat.l" "$R/src/apps/sat/flat.l" - | timeout "$TIMEOUT" "$GL" 2>/dev/null | grep -a '^RESULT' || true)
