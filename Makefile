@@ -241,8 +241,36 @@ $(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md tools/mkman.l src/ap
 	@$(ho)/love tools/mkman.l doc/$*.md out/lib/love_version.h > $@
 
 lushfiles = src/apps/lush/job.l src/apps/lush/lex.l src/apps/lush/gram.l src/apps/lush/glob.l src/apps/lush/word.l src/apps/lush/eval.l src/apps/lush/line.l src/apps/lush/main.l
-korefiles =src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps/kore/fs.l src/apps/kore/sum.l src/apps/kore/re.l src/apps/kore/sed.l src/apps/kore/awk.l src/apps/kore/expr.l src/apps/kore/bc.l src/apps/kore/proc.l src/apps/kore/less.l src/apps/libra/lint.l src/apps/vi/config.l src/apps/vi/hue.l src/apps/vi/core.l src/apps/vi/vi.l src/apps/kore/diff.l src/apps/kore/patch.l src/apps/dns/dns.l src/apps/ain/ain.l $(lushfiles) src/apps/kore/find.l src/apps/cook/cook.l src/apps/kore/asbook.l src/core/holo/elf.l src/core/holo/obj.l src/core/holo/link.l src/core/holo/copy.l src/apps/tls/bytes.l src/apps/tls/chacha.l src/apps/tls/poly1305.l src/apps/tls/client.l src/apps/kore/wget.l src/apps/kore/kore.l
-moonfiles = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l src/core/holo/x64.l src/core/holo/a64.l src/core/holo/thumb2.l src/core/holo/rv64.l src/core/holo/thumb1.l src/core/holo/wasm.l src/core/holo/wasmfn.l src/core/holo/text.l src/core/holo/dialect.l src/core/holo/gas.l src/core/holo/elf.l src/core/holo/obj.l src/core/holo/link.l src/apps/moon/floor.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l src/apps/moon/val.l src/apps/moon/gen.l src/apps/moon/lib/mksys.l src/apps/moon/moon.l
+# THE CATS, IN PARTS. three rosters cover almost the same ground -- what kore carries,
+# what mooncc carries, what the artifact bakes -- and spelling each out in full is how
+# the three drift. the parts are named once here; each roster below is the order it
+# wants them in, and a new file joins one part rather than three lists.
+kore_head = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps/kore/fs.l src/apps/kore/sum.l src/apps/kore/re.l \
+  src/apps/kore/sed.l src/apps/kore/awk.l src/apps/kore/expr.l src/apps/kore/bc.l src/apps/kore/proc.l src/apps/kore/less.l \
+  src/apps/libra/lint.l src/apps/vi/config.l src/apps/vi/hue.l src/apps/vi/core.l src/apps/vi/vi.l \
+  src/apps/kore/diff.l src/apps/kore/patch.l src/apps/dns/dns.l src/apps/ain/ain.l $(lushfiles) \
+  src/apps/kore/find.l src/apps/cook/cook.l src/apps/kore/asbook.l
+# the backends: one file per ISA, then the text faces they share
+holo_be = src/core/holo/x64.l src/core/holo/a64.l src/core/holo/thumb2.l src/core/holo/rv64.l \
+  src/core/holo/thumb1.l src/core/holo/wasm.l src/core/holo/wasmfn.l src/core/holo/text.l src/core/holo/dialect.l
+# the object floor every reader of a backend goes out through
+holo_obj = src/core/holo/elf.l src/core/holo/obj.l src/core/holo/link.l
+# the compiler over them
+moon_mid = src/apps/moon/floor.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l \
+  src/apps/moon/val.l src/apps/moon/gen.l src/apps/moon/lib/mksys.l src/apps/moon/moon.l
+# the tls stack and the multi-call door that ends kore's cat
+kore_net = src/apps/tls/bytes.l src/apps/tls/chacha.l src/apps/tls/poly1305.l src/apps/tls/client.l \
+  src/apps/kore/wget.l src/apps/kore/kore.l
+# the crew the artifact carries past kore and mooncc
+crewfiles = src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/sb.l src/apps/kiosko/kiosko.l \
+  src/apps/gz/gz.l src/apps/tar/tar.l src/apps/tar/tarcmd.l src/apps/gz/gzcmd.l src/apps/cpio/cpio.l \
+  src/apps/cpio/cpiocmd.l src/apps/fat/fat.l src/apps/fat/fatcmd.l \
+  src/apps/source/source.l src/apps/lapiz/lapiz.l \
+  src/apps/libra/salt.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/serve.l \
+  src/apps/rove/rove.l src/apps/rove/story.l src/apps/rove/design.l \
+  src/apps/lux/wire.l src/apps/doom/doom.l src/apps/lupa/lupa.l
+korefiles = $(kore_head) $(holo_obj) src/core/holo/copy.l $(kore_net)
+moonfiles = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l $(holo_be) src/core/holo/gas.l $(holo_obj) $(moon_mid)
 $(ho)/.mooncc-cat.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(moonfiles)' > $$tf; \
@@ -267,23 +295,8 @@ out/mooncc0.image: out/.mooncc-cat.l $(love0)
 	@echo 'LOVE	'$@
 	@$(love0) -l out/.mooncc-cat.l -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
 
-distfiles = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps/kore/fs.l src/apps/kore/sum.l src/apps/kore/re.l \
-            src/apps/kore/sed.l src/apps/kore/awk.l src/apps/kore/expr.l src/apps/kore/bc.l src/apps/kore/proc.l src/apps/kore/less.l src/apps/libra/lint.l src/apps/vi/config.l src/apps/vi/hue.l \
-            src/apps/vi/core.l src/apps/vi/vi.l \
-            src/apps/kore/diff.l src/apps/kore/patch.l src/apps/dns/dns.l src/apps/ain/ain.l $(lushfiles) src/apps/kore/find.l \
-            src/apps/cook/cook.l src/apps/kore/asbook.l \
-            src/core/holo/x64.l src/core/holo/a64.l src/core/holo/thumb2.l src/core/holo/rv64.l \
-            src/core/holo/thumb1.l src/core/holo/wasm.l src/core/holo/wasmfn.l src/core/holo/text.l src/core/holo/dialect.l src/core/holo/decode.l src/core/holo/gas.l src/core/holo/elf.l src/core/holo/obj.l \
-            src/core/holo/link.l src/core/holo/copy.l src/apps/moon/floor.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l \
-            src/apps/moon/val.l src/apps/moon/gen.l src/apps/moon/lib/mksys.l src/apps/moon/moon.l \
-            src/apps/tls/bytes.l src/apps/tls/chacha.l src/apps/tls/poly1305.l src/apps/tls/client.l src/apps/kore/wget.l src/apps/kore/kore.l src/apps/sb/merge.l \
-            src/apps/sb/http.l src/apps/sb/sb.l src/apps/kiosko/kiosko.l \
-            src/apps/gz/gz.l src/apps/tar/tar.l src/apps/tar/tarcmd.l src/apps/gz/gzcmd.l src/apps/cpio/cpio.l \
-            src/apps/cpio/cpiocmd.l src/apps/fat/fat.l src/apps/fat/fatcmd.l \
-            src/apps/source/source.l src/apps/lapiz/lapiz.l \
-            src/apps/libra/salt.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/serve.l \
-            src/apps/rove/rove.l src/apps/rove/story.l src/apps/rove/design.l \
-            src/apps/lux/wire.l src/apps/doom/doom.l src/apps/lupa/lupa.l
+distfiles = $(kore_head) $(holo_be) src/core/holo/decode.l src/core/holo/gas.l \
+            $(holo_obj) src/core/holo/copy.l $(moon_mid) $(kore_net) $(crewfiles)
 $(ho)/.dist.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \
