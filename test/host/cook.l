@@ -1,7 +1,7 @@
 ; the gate for cook's Makefile importer (apps/cook.l).
 ;
 ; Run on the host binary:  out/love test/host/cook.l
-; (wired into the build as `make test_cook`, part of `make test`).
+; (wired into the build as one of test_hostnif's rows).
 ;
 ; cook reads a real Makefile -- variable expansion, the make functions,
 ; conditionals, include, pattern + static-pattern rules -- so these tests build
@@ -9,6 +9,9 @@
 ; as a subprocess (the host `hark` nif), and assert over its captured stdout. The
 ; recipes mostly `echo` a computed value, so the assertion is a substring check;
 ; the pattern-rule tests build real files and check they appear.
+
+; driven bare -- no test/00-init.l ahead of it -- so the posix door is borrowed here.
+(? (cite 'posix) (borrow 'posix) ())
 
 (: dir "/tmp/cooktest"
    love  "out/love"                          ; run from the project root (where make runs)
@@ -380,10 +383,15 @@
    ; the repo's own shell is the fixture's shell: make-with-lush, the rung-4
    ; distro loop closed. $(wildcard) is lush's pure glob at the repo root
    ; (sorted; a no-match pattern contributes nothing -- nullglob).
-   shl (run-cook (mk '("SHELL := out/lush"
-                       "all:"
-                       "\t@echo \"L1[$$0]\""
-                       "\t@echo \"L2[$(shell echo $$0)]\""))
+   ; out/lush is a love script, so naming it as SHELL runs it through its shebang --
+   ; the nest's love on PATH, not the tree's. the shim spells the tree's out/love out
+   ; loud, the way sh.l does, so the law reads the shell this build made.
+   _ (write-file (+ dir "/lushsh") "#!/bin/sh\nexec out/love out/lush \"$@\"\n")
+   _ (sh (+ "chmod +x " (+ dir "/lushsh")))
+   shl (run-cook (mk [(+ "SHELL := " (+ dir "/lushsh"))
+                      "all:"
+                      "\t@echo \"L1[$$0]\""
+                      "\t@echo \"L2[$(shell echo $$0)]\""])
                  "all")
    _ (ok "SHELL: recipe lines ride lush"   (has shl "L1[lush]"))
    _ (ok "SHELL: $(shell) rides lush too"  (has shl "L2[lush]"))
@@ -453,4 +461,5 @@
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (puts (+ (show np) (+ " cook tests pass" (? (< 0 nf) (+ ", " (+ (show nf) " FAIL")) ""))))
    _ (putc 10)
+   _ (? (< 0 nf) 0 (puts "cook: ok\n"))
    (? (< 0 nf) (quit 1) 0))
