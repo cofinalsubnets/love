@@ -240,21 +240,33 @@ long __ai_sigfb(long s) { return (s >= 0 && s < 32) ? os_sigfb[s] : -1; }
 long __ai_sigcan(long s) { return (s >= 0 && s < 32) ? os_sigcan[s] : s; }
 
 /* the native siginfo heads. freebsd keeps linux's signo/errno/code order and
- * then parts (pid uid status before the address); netbsd swaps code and errno
- * and lands the address where linux does. neither is read past what the
- * canonical shape can hold. */
+ * then lays every lane flat (pid uid status, then the address); netbsd swaps
+ * code and errno and unions the lanes where linux does. neither is read past
+ * what the canonical shape can hold. */
 struct __fb_siginfo { int signo, err, code, pid; unsigned uid; int status; void *addr; };
-struct __nb_siginfo { int signo, code, err, pad; void *addr; };
+struct __nb_siginfo { int signo, code, err, pad;
+  union { void *addr; struct { int pid; unsigned uid; int status; } chld; } u; };
+/* which lane a record carries, by canonical number. the lanes overlap on two of
+ * the three kernels, so the question is asked once here rather than by every
+ * handler downstairs. */
+static int os_faultsig(int s) {
+  return s == SIGILL || s == SIGTRAP || s == SIGFPE || s == SIGBUS || s == SIGSEGV; }
 void __ai_sicanon(void const *n, siginfo_t *o) {
   memset(o, 0, sizeof *o);
   if (__ai_osv == 2) {
     struct __fb_siginfo const *f = n;
     o->si_signo = (int) __ai_sigcan(f->signo), o->si_errno = f->err;
-    o->si_code = f->code, o->si_addr = f->addr; }
+    o->si_code = f->code;    /* the fault codes agree everywhere; the sender band does not */
+    if (os_faultsig(o->si_signo)) o->si_addr = f->addr;
+    else { o->si_pid = f->pid, o->si_uid = f->uid;
+           if (o->si_signo == SIGCHLD) o->si_status = f->status; } }
   else if (__ai_osv == 3) {
     struct __nb_siginfo const *b = n;
     o->si_signo = (int) __ai_sigcan(b->signo), o->si_errno = b->err;
-    o->si_code = b->code, o->si_addr = b->addr; }
+    o->si_code = b->code;
+    if (os_faultsig(o->si_signo)) o->si_addr = b->u.addr;
+    else { o->si_pid = b->u.chld.pid, o->si_uid = b->u.chld.uid;
+           if (o->si_signo == SIGCHLD) o->si_status = b->u.chld.status; } }
   else memcpy(o, n, sizeof *o); }         /* linux: the native record IS canonical */
 
 /* a mask, bit (sig-1), both spellings in the low word (signals 1..31); the
