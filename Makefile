@@ -987,9 +987,10 @@ site-serve: host out/toolmd.stamp
 # through mooncc -t wasm, linked to one module -- no emcc, no C toolchain. tco=1: the
 # vm's tails are return_call, the engines' tail-call law (node 26, firefox 121, chrome
 # 112, safari 18), and the corpus runs 1.31x faster than on the trampoline. the loader
-# (port/wasm/loader.js) is the runtime under it and the shipped page rides it
-# (port/wasm/love.wasm, refreshed by hand: `make site-wasm`, then commit). the emcc
-# build stays as wasm-emcc, a differential and nothing on the page.
+# (port/wasm/loader.js) is the runtime under it. NOTHING ON THE SITE READS IT any more --
+# the front page carries the machine (the kernel module below) -- so it is laid, not
+# tracked: papel's -r island and horn.html want it, test_wasm and horn.html read out/.
+# the emcc build stays as wasm-emcc, a differential and nothing on the page.
 wasm_c = $(love_c) $(R)/inle/horn.c $(R)/port/wasm/host.c
 out/wasm/love.wasm: $(wasm_c) $(lib_h) out/lib/love_version.h host
 	@mkdir -p $(dir $@)
@@ -1007,12 +1008,15 @@ wasm: out/wasm/love.wasm
 else
 wasm: out/wasm/love.wasm out/wasm/love.image out/wasm/love-wasm.image
 endif
-# the page's copy of the module and its image, beside the loader that fetches them. by
-# hand, as love.js was: a tracked 1.7 MB that every C edit would otherwise churn.
+# the page's copies, beside the loader that fetches them. by hand, as love.js was: bytes
+# every C edit would otherwise churn. only the MACHINE's pair is tracked -- it is what the
+# front page boots; the hosted pair is laid here and gitignored, for papel -r and the horn.
 site-wasm: wasm
 	@cp out/wasm/love.wasm port/wasm/love.wasm
 	@cp out/wasm/love.image port/wasm/love.image
-	@echo 'SITE	port/wasm/love.wasm port/wasm/love.image'
+	@cp out/love-wasm.wasm port/wasm/love-wasm.wasm
+	@cp out/wasm/love-wasm.image port/wasm/love-wasm.image
+	@echo 'SITE	port/wasm/love{,-wasm}.{wasm,image}'
 # the wasm inle seat: the kernel the three metal seats link -- kmain and the ramfs, the
 # console painter with its fonts, inle/sys.c under nolibc, the host frontend whole -- with
 # inle/wasm/arch.c for the machine and the source blob as a wasm data object (mksrc.l's
@@ -1070,7 +1074,7 @@ assets/web/favicon.png: core/quay/cga_8x8.c tools/mkicon.l apps/vi/config.l $(ho
 	@mkdir -p $(dir $@)
 	@env -u LOVE_NO_IMAGE $m tools/mkicon.l $< 3 32 $@
 # ..and the front page itself, its island the fragment repl.js drives
-index.html: web/index.l port/wasm/repl.html $(ho)/.love.baked
+index.html: web/index.l port/wasm/machine.html $(ho)/.love.baked
 	@$m web/index.l $@
 .PHONY: ulp
 ulp:

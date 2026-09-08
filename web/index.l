@@ -4,9 +4,10 @@
 ; its chips, and each of those is data below with a small lay of its own. the prose is
 ; html as written -- it is our file. what the lay adds is the one property a hand page
 ; loses: every link on the page to an anchor on the page is checked, and a dead one fails
-; the lay rather than shipping. the island is port/wasm/repl.html, slurped, so the
-; markup repl.js drives has one copy; the sheet is web/style.l's, the fonts tools/mkfont.l's,
-; the icon tools/mkicon.l's.
+; the lay rather than shipping. the island is port/wasm/machine.html, slurped, so the
+; markup machine.js drives has one copy; the sheet is web/style.l's, the fonts tools/mkfont.l's,
+; the icon tools/mkicon.l's. the island is inle itself -- the kernel in a worker, painting a
+; canvas -- so the page carries coi.js too, and the two artifacts site-wasm lays.
 
 ; --- the little dsl: the lay of each element. first, since a value binds in order and the
 ; data below calls these as it binds.
@@ -30,9 +31,8 @@
                   (? (hot? q) (: s (slurp q) _ (close q) s)
                      (: _ (say err ("index: cannot open " + f + "\n")) (quit 1))))
    wasm        "port/wasm"                                       ; as the page links it
-   (island _)  (slurpf (wasm + "/repl.html")                       ; cells.js first: a module runs after it
-                + "\n<script src=\"" + wasm + "/cells.js\"></script>\n"
-                + "<script type=\"module\" src=\"" + wasm + "/repl.js\"></script>\n")
+   (island _)  (slurpf (wasm + "/machine.html")
+                + "\n<script type=\"module\" src=\"" + wasm + "/machine.js\"></script>\n")
 
    ; --- the glossary: id, emoji, the term as shown, the body; 'gray for a word that wears
    ; the empty colour. a body names another entry through the dsl, never by hand, so the
@@ -192,6 +192,10 @@ don't automatically construct a list for you.</p>
 <title>love</title>
 <link rel=\"icon\" type=\"image/png\" href=\"assets/web/favicon.png\">
 <link rel=\"stylesheet\" href=\"assets/web/style.css\">
+<!-- the machine's shared ring wants an isolated page, and a static host sends no headers:
+     this asks for them with a service worker and one reload. first, so the reload is
+     cheap; inert where the server sends them itself (kiosko does). -->
+<script src=\"" + wasm + "/coi.js\"></script>
 </head>
 <body>
 <h1 id=\"love_title\">🌑 <a href=\"https://github.com/cofinalsubnets/love\">love</a> 🔭</h1>
