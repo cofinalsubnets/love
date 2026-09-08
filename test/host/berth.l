@@ -124,6 +124,8 @@
  ; 21 columns divide 10 + bar + 10, and every pty is told what it now has.
  hb2 (mkhb 10 21 ["sh" "-c" "sleep 30"])
  _ (hsplit hb2 'beside)
+ ; both pids, before hshut drops the panes that hold them
+ p1 (hpid (hpane hb2 1)) p2 (hpid (hpane hb2 2))
  lay (hb2 'lay)
  _ (assert
     (2 = (tally lay))
@@ -166,6 +168,7 @@
     (() = (hb2 'plan))                    ; the empty wharf ends berth's swim
     (() = (wharf-berths (hb2 'plan)))
     (() = (hb2 'focus)))
+ _ (waitfor p1) _ (waitfor p2)            ; hshut hangs their ptys up; reap, or they outlive the file
  (map (\ t (? (landed? t) (catch t) (freeze t))) (hb2 'jobs)))
 
 ; --- C-a v, on a real berth, over a real pty -------------------------------
