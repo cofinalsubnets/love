@@ -243,21 +243,28 @@
  (head-of f) (: q (open f "r") lift (mod 'libra 'ldoc-md)
                 (hot? q && lift ? (: s (slurp q) (close q, first-para (lift s))) ""))
  (library root) (:
-   dirs (sort (filter (d \ two? (readdir (root + "/" + d))) (readdir root)))
-   n #dirs
+   es (readdir root)
+   dirs (filter (d \ two? (readdir (root + "/" + d))) es)
+   lone (map (f \ snip f 0 (#f - 2)) (filter (f \ ends? f ".l") es))   ; a one-file wing: ROOT/x.l
+   wings (sort (dirs + lone))
+   n #wings
    cols 6 rowsn ((n + cols - 1) // cols)
    ; the hall: a shelf every 4 columns and 3 rows, a border of wall, the hatch at the foot
    w (2 + 4 * cols + 1) h (3 + 3 * rowsn + 2)
    (line y) (: (go x acc) (? (x < w) (go (x + 1) (acc + (? (y = 0 || y = h - 1 || x = 0 || x = w - 1) "#" "."))) acc) (go 0 ""))
    rows (map line (jot h))
+   ; a wing is a folder of files or one lone file; b is where its books lie, and its
+   ; header is b/<name>.l either way (ROOT/d/d.l or ROOT/d.l)
    (shelf i d) (: p (root + "/" + d)
-                  fs (sort (filter (f \ ends? f ".l") (readdir p)))
-                  txt (: t (head-of (p + "/" + d + ".l")) (0 < #t ? t ("the " + d + " shelf. source, bound.")))
+                  dir? (two? (readdir p))
+                  b (dir? ? p root)
+                  fs (dir? ? (sort (filter (f \ ends? f ".l") (readdir p))) [(d + ".l")])
+                  txt (: t (head-of (b + "/" + d + ".l")) (0 < #t ? t ("the " + d + " shelf. source, bound.")))
                   th (thing (nom d) (3 + 4 * (i % cols)) (2 + 3 * (i // cols)) "|" 220 -1 (d + "'s shelf")
                             [['say txt ("books: " + joins (map (f \ snip f 0 (#f - 2)) fs) ", ") "read one, open one, or look."] '(ask)])
-                  _ (pin th 'books (foldl (\ t f (pin t (nom (snip f 0 (#f - 2))) (p + "/" + f))) {} fs))
+                  _ (pin th 'books (foldl (\ t f (pin t (nom (snip f 0 (#f - 2))) (b + "/" + f))) {} fs))
                   th)
-   things (foldl (\ t i (: th (shelf i (dirs i)) (pin t (th 'id) th))) {} (jot n))
+   things (foldl (\ t i (: th (shelf i (wings i)) (pin t (th 'id) th))) {} (jot n))
    _ (pin things 'hatch (thing 'hatch (w // 2) (h - 2) ">" 220 -1 "the hatch" '((say "a grating in the floor, and the hold below.") (hatch))))
    (level "the library" 1 1 rows {} things))
 
