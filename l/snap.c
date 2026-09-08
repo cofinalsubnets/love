@@ -770,8 +770,13 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
  // `code` is an order key, so rank-order assignment preserves every comparison, and serial
  // 0 stays the immortal ()'s. the session keeps its own serials -- the rename touches the
  // blob alone -- and a pid charm copied into user data keeps its old number across a bake.
- uintptr_t nslot = 0, *slots = g->alloc(g, NULL, (nw / 2 + 1) * sizeof(uintptr_t));
+ // nw/2 + 1 is the bound by construction: a mint carries its serial at off+1 so it is
+ // two words at least, a tablet's sits at off+2 so it is three, and the densest heap is
+ // all mints. the cap is carried anyway -- this walk writes scratch it sized itself, and
+ // a serializer that runs past its own buffer corrupts the heap it is reading.
+ uintptr_t nslot = 0, ncap = nw / 2 + 1, *slots = g->alloc(g, NULL, ncap * sizeof(uintptr_t));
  if (!slots) { g->alloc(g, blob, 0); return NULL; }
+ bool slotover = false;
  // every field spelled: a designated initializer leans on the compiler to zero the rest
  struct img_ctx X = { g, base, hp, 0, 0, 0, {0}, 0, 0, 0, 0, 0, 0, 0 }, *x = &X;
  for (union u *p = cell(base); ptr(p) < hp; ) {   // walk the live heap (ttag works on it), encode into blob
@@ -793,7 +798,8 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
    case DChain: blob[off + 1] = img_encode(x, A(p));
                 blob[off + 2] = img_encode(x, B(p)); break;
    case DNom:   blob[off + 1] = img_encode(x, (intptr_t) nom(p)->name); break;   // dig rides raw
-   case DMint:  slots[nslot++] = off + 1; break;         // the serial word, canonicalized below (raw)
+   case DMint:  if (nslot < ncap) slots[nslot++] = off + 1; else slotover = true;
+                break;                                  // the serial word, canonicalized below (raw)
    case DTray:   if (tray(p)->type == ai_O) {
                  word *e = ptr(tray_data(tray(p)));
                  uintptr_t ne = tray_nelem(tray(p)), eo = (uintptr_t)(e - ptr(p));
@@ -806,12 +812,15 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
                    break; }
    default: break; }                                     // DMint/DBig/DGem/DSun/DTwin: flat leaves
   else { for (uintptr_t i = 1; i < sz; i++) blob[off + i] = img_encode(x, ptr(p)[i]);   // thread interior + terminator
-         if (p->ap == lvm_map_lookup) slots[nslot++] = (off + 2) | SlotCharm; }        // a tablet's serial, a charm
+         if (p->ap == lvm_map_lookup) {                                                // a tablet's serial, a charm
+          if (nslot < ncap) slots[nslot++] = (off + 2) | SlotCharm; else slotover = true; } }
   p = cell(ptr(p) + sz); }
  if (x->ct) g->alloc(g, x->ct, 0);
  *cseg = x->cseg, *ncode = x->cn;
  Why(4);
  if (x->fail) { img_bad_out(x, bad); g->alloc(g, slots, 0); g->alloc(g, blob, 0); return NULL; }   // an unencodable word -> refuse (caller boots normally)
+ // the bound above did not hold: refuse rather than serialize off a truncated slot list
+ if (slotover) { Why(12); g->alloc(g, slots, 0); g->alloc(g, blob, 0); return NULL; }
  // the rename: mark live serials (the collected nom/mint slots read raw off the
  // blob -- scalars rode the memcpy -- plus the pids of both task rings), rank
  // them 1..k in img_rank_assign's canonical order, rewrite in place. rings walk
