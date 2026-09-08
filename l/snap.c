@@ -176,8 +176,10 @@ static intptr_t image_imm_index(word v) {
 // build lays out differently. the code segment leads with [raw length, deflated?] so it
 // describes itself -- the header says how many bytes are stored, these two what they hold.
 #define CodeSegHead (2 * sizeof(uint64_t))
-// the root table is sized from the core itself: symbols, tasks, then every word of v0..end
-#define AiImgRoots (2 + (__builtin_offsetof(struct ai, end) - __builtin_offsetof(struct ai, v0)) / sizeof(uint64_t))
+// the root table is sized from the core itself: symbols, tasks, then every WORD of v0..end,
+// in this target's word. the enc and dec loops take their bound from here too, so the table's
+// length and the count written into it cannot be spelled in two units and disagree.
+#define AiImgRoots (2 + (__builtin_offsetof(struct ai, end) - __builtin_offsetof(struct ai, v0)) / sizeof(word))
 struct image_hdr {
  uint64_t magic, wordsize, nwords, arch, anchor, nroot, rsv1, nstream, next_serial, ncode;
  uint64_t root_tag[AiImgRoots], root_val[AiImgRoots]; };   // symbols, tasks, then the entire v0..end region walked
@@ -862,7 +864,7 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
  g->alloc(g, rank, 0);
  // roots = symbols + tasks (live outside v0), then the whole GC-traced v0..end block, generically: any
  // field added to struct ai's v0 region is serialized automatically, no codec edit (cf. the GC's v0..end loop).
- uintptr_t nv = ptr(g->end) - ptr(&g->v0), nr = 2 + nv;
+ uintptr_t nv = AiImgRoots - 2, nr = AiImgRoots;
  Why(5);
  image_root_enc(x, g->symbols,      &H.root_tag[0], &H.root_val[0]);
  image_root_enc(x, (word) g->tasks, &H.root_tag[1], &H.root_val[1]);
@@ -1017,8 +1019,8 @@ static struct ai *img_wake(void const *buf, uintptr_t len, void *(*al)(struct ai
    base[off + k] = (word) p + ai_thread_tag;                                      // the terminator, decoded by hand: its head went live
    sz = k + 1; }
   off += sz; }
- uintptr_t nv = (word*) g->end - (word*) &g->v0;                         // same struct/binary (anchor-checked) -> same layout
- if (H.nroot != 2 + nv) goto no;                                         // root count mismatch -> stale/foreign image -> normal boot
+ uintptr_t nv = AiImgRoots - 2;                                          // same struct/binary (anchor-checked) -> same layout
+ if (H.nroot != AiImgRoots) goto no;                                     // root count mismatch -> stale/foreign image -> normal boot
  g->symbols = image_root_dec(H.root_tag[0], H.root_val[0], base);
  g->tasks   = (union u*) image_root_dec(H.root_tag[1], H.root_val[1], base);
  // the parked ring is not in the image: an fd means nothing in a new process,
