@@ -7,6 +7,14 @@
    l (genl 1 3000)
    (recs ks i) (? (one? ks) () (((% <ks 7) . i) . recs >ks (+ i 1)))   ; (key . position)
    rs (recs (genl 3 400) 0)
+   ; the spine is reserved after the merge, and that reservation collects like any other --
+   ; which re-enters the step at its top, where the last compare's answer is still pending.
+   ; the law wants that collection, so it sorts under a budget tight enough to force one
+   ; (tune's units are words; the knobs are put back before anything else reads them).
+   k0 (tune ())
+   _ (tune @(1048576 8192 65536 24))
+   tight (sortby (\ a b (: _ (list a b (show a)) (< a b))) l)
+   _ (tune k0)
  (assert
   (() = (sortby (<) ()))
   ('(5) = (sortby (<) '(5)))
@@ -27,6 +35,7 @@
       (ok byk)) = 1)
   ; a comparator that allocates: collections run under the sort, and the trays move with them
   ((sort l) = (sortby (\ a b (: _ (list a b (show a)) (< a b))) l))
+  ((sort l) = tight)                                                ; ... and the same under a budget that collects at the spine
   ; a comparator that sorts: the frames nest
   ((sort l) = (sortby (\ a b (? (< (tally (sortby (<) (list a b a))) 4) (< a b) 0)) l))
   ; the answer is read as a truth, not a bit: a list answers by its net

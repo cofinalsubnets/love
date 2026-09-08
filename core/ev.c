@@ -819,6 +819,11 @@ lvm(lvm_calloutresume) { ai_musttail return Answer(putcharm((intptr_t) callout_r
 // no partial minted per compare. contiguous runs, the left taken when (le x y): stable for a
 // comparator that answers 1 on ties. the spine is laid once at the end, the way sort lays its own.
 enum { sb_va = 1, sb_vb, sb_w, sb_lo, sb_x, sb_y, sb_o, sb_hi, sb_n, sb_pend, sb_le, sb_k };   // off Sp; Sp[0] = the answer, sb_k the caller's next op
+// sb_pend: () before the first compare, 1 with a compare's answer waiting, sb_done once the
+// merge is over. the spine's reservation collects like any other, and a collection re-enters
+// the step at its top, where a stale 1 consumed the last answer a second time and re-ran the
+// last pass over the swapped trays -- an answer of two sorted runs, and not a permutation.
+#define sb_done putcharm(2)
 static lvm_t sortby_step;
 static union u const sortby_drive[] = { {lvm_ap}, {.ap = ap_next}, {.ap = sortby_step} };
 static union u const sortby_text[] = { {.ap = sortby_step} };
@@ -843,6 +848,7 @@ static lvm(sortby_step) {
  uintptr_t n = getcharm(Sp[sb_n]), w = getcharm(Sp[sb_w]), lo = getcharm(Sp[sb_lo]),
            x = getcharm(Sp[sb_x]), y = getcharm(Sp[sb_y]), o = getcharm(Sp[sb_o]), hi = getcharm(Sp[sb_hi]),
            m = min(lo + w, n);
+ if (Sp[sb_pend] == sb_done) goto spine;                             // a collection at the reservation below re-entered the step: the merge is over
  if (Sp[sb_pend] != zero) {                                          // the answer to (le a[x] a[y]): the left when true
   bool left = !ai_nilp(g, Sp[0]);
   word v = tray_get_obj(tray(Sp[sb_va]), left ? x++ : y++);
@@ -870,6 +876,8 @@ static lvm(sortby_step) {
    w *= 2, lo = 0;
    if (w >= n) break; }
   x = o = lo, m = min(lo + w, n), y = m, hi = min(lo + 2 * w, n); }
+ Sp[sb_pend] = sb_done;                                              // the merge is over: nothing below may re-run it
+spine:
  Have(n * Width(struct ai_chain));                                    // the spine, laid from the sorted tray (re-read post-GC)
  struct ai_tray *a = tray(Sp[sb_va]);
  struct ai_chain *spine = (struct ai_chain*) Hp;
