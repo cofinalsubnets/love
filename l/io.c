@@ -483,7 +483,9 @@ static struct ai *facex(struct ai *g, word x, int d) {
  return ioputn(ioputc(g, '\\'), (intptr_t) x, 36); }
 
 // the terminal scare face (love.h): stashed condition data prints ";; a b" on err;
-// the bare scare (oom) prints ";; oom@len=N". best-effort.
+// the bare scare (oom) prints ";; oom@len=N". best-effort. N is the MAIN POOL's length
+// in words -- what the heap had, not what the refused allocation asked for. reading it
+// as the ask sends you hunting an oversized request when the story is usually the pool.
 void ai_scare_face_(struct ai *g) {
  if (!(g = ai_core_of(g))) return;
  g->io = &ai_stderr.io;
