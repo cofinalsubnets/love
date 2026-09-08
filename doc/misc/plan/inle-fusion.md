@@ -96,7 +96,7 @@ behind the page tables) and either a relink or a 64-byte Image header.
 `(&ai_image_save - image_immortals) == H.anchor` -- a SAME-BINARY check, and a
 gap rather than two addresses precisely so ASLR cannot move it. One binary means
 it holds, so the existing `bake -L` produces an image the metal boot wakes. ⚠ do
-NOT build the `port/mps2` qemu-BAKER pipeline for this: that exists because the
+NOT build the `inle/mps2` qemu-BAKER pipeline for this: that exists because the
 Playdate genuinely is a different binary.
 
 **Precise below, lossy above, never the reverse.** `k_fs_open` tells six

@@ -1341,7 +1341,7 @@ static intptr_t cmp3(struct ai *g, word a, word b) {
   if (charmp(sa) && charmp(sb) && sa != sb) return getcharm(sa) < getcharm(sb) ? -1 : 1; }
  if (tabp(a) && tabp(b)) { uintptr_t sa = map_serial(a), sb = map_serial(b);   // tablet: by serial -- mutable, so
   return sa < sb ? -1 : sa > sb ? 1 : 0; }                                        // its identity orders it, never its contents
- uintptr_t ha = hash(g, a), hb = hash(g, b);               // lambda/port/cask: by repr hash
+ uintptr_t ha = hash(g, a), hb = hash(g, b);               // lambda/inle/cask: by repr hash
  return ha < hb ? -1 : ha > hb ? 1 : 0; }
 
 // (sort l): stable ascending merge by cmp3 -- one reservation up front (n result

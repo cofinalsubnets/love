@@ -3,12 +3,12 @@
 Drop emcc — the last foreign tool in a product path. What emcc actually supplies
 today is small and known: clang→wasm codegen, a libc (malloc, memcpy, clock,
 exit-as-throw), and the JS glue (`Module`, ccall/cwrap, heap views). The build is
-the core's TU roster (`love_tu` in mk/common.mk) plus `am.c` and `port/wasm/host.c`,
+the core's TU roster (`love_tu` in mk/common.mk) plus `am.c` and `inle/wasm/host.c`,
 which carries quay by unity include — no FS, no asyncify, no threads, twelve exported
 verbs plus malloc/free (the five of the repl, and the console arc's mirror, palette,
 unfold, key, runnable, alive), and `-Dai_tco=0` — a lane that already exists and is
 already gated (`test_wasm`, node over the emcc build). The 32-bit port ledger
-(`port/wasm/32bit-findings.md`) is paid. The core already declines the JIT on
+(`inle/wasm/32bit-findings.md`) is paid. The core already declines the JIT on
 `__wasm__`. So the *runtime* is ready; what does not exist is the compiler half.
 
 ## why this is not a sixth `defbackend`
@@ -152,7 +152,7 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   ⚠ `nil?` is the falsy test, a net over the WHOLE value: a function list carrying the
   minimum i64 nets negative and a `(? (nil? items) ..)` presence check dropped the
   function section in silence. The writer asks `two?` or `(= x ())`, never `nil?`.
-- **rung 3 — the environment. ✅ LANDED** (`port/wasm/loader.js`, ~110 lines).
+- **rung 3 — the environment. ✅ LANDED** (`inle/wasm/loader.js`, ~110 lines).
   `Love({wasm, print, printErr})` instantiates love.wasm and answers the Module the page
   already drives: `ccall`/`cwrap`, `UTF8ToString`/`stringToUTF8`/`lengthBytesUTF8`,
   `_malloc`/`_free`, the `HEAPU8`/`HEAPU32` views (getters, so a grown memory is never
@@ -203,7 +203,7 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   members compiled for wasm, cached whole under the archive's key law and pulled by
   need off a (defs . refs) ledger; crt0 hands moonlibc's `__ai_start` a stack laid in
   data (argc 1, an argv, empty envp and auxv) and exits with its answer through the
-  import. moonlibc's BSD translate lane stays off under `__wasm__`. `port/wasm/run.mjs`
+  import. moonlibc's BSD translate lane stays off under `__wasm__`. `inle/wasm/run.mjs`
   runs such a module the way a shell runs an executable.
   **The gate is `test_ccwasm`**: ccarch.sh's procedure with node as the machine, the
   158 programs of test/cc — 153 answering exactly as x86-64 does, stdout and exit
@@ -236,7 +236,7 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
     PCM to host.c's ring, three exports (`ai_horn_rate`/`chans`/`drain`) let the loader
     read it, and `loader.js` schedules it through WebAudio (node has none, so it is a
     no-op there and `horn.mjs` proves the path with a stub AudioContext).
-    `port/wasm/horn.html` is a demo: love writes a square-wave tone, the browser plays it.
+    `inle/wasm/horn.html` is a demo: love writes a square-wave tone, the browser plays it.
   - **the uu "typechecker" reds were a file-order artifact, not a miscompile.** The gate
     evals the corpus in one string in byte order; a helper listed the files under a locale
     sort, which put `uuval.l` before its band files. In byte order (`LC_ALL=C`, as the
@@ -266,7 +266,7 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   array-heavy shapes lose twice over on wasm locals. Rung 5a is measured against that table.
 - **the page rides the module. ✅ LANDED (2026-09-07).** index.html (web/index.l) and
   papel's `-r` island link cells.js and then repl.js as a module over loader.js, which
-  fetches `port/wasm/love.wasm` beside it — the tracked copy of `make wasm`'s module,
+  fetches `inle/wasm/love.wasm` beside it — the tracked copy of `make wasm`'s module,
   refreshed by hand with `make site-wasm` as love.js was. love.js is gone from the tree;
   `make wasm-emcc` lays emcc's build under out/ only, the differential. Verified in a real
   browser (Firefox 154 headless over WebDriver BiDi, the page served by http): the image
@@ -392,7 +392,7 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   booted the egg from source at every `ai_init` (host.c's `ai_egg_` over the four texts)
   while every native seat wakes a baked image. Measured first, under node: the boot is
   **1.7 s**, and it leaves a **948 MB** arena behind it. Now `make wasm` bakes the booted
-  base once (port/wasm/bake.mjs: `ai_boot`, then `ai_bake` = `ai_image_save` through
+  base once (inle/wasm/bake.mjs: `ai_boot`, then `ai_bake` = `ai_image_save` through
   the seat's export) and lays **out/wasm/love.image, 494 kB (317 kB gzipped)** beside the
   module; the page fetches it and `ai_wake`s (`ai_image_load`, the nifs re-seated, the
   session layer pushed, as main.c's wake does), and the egg boots only when the fetch

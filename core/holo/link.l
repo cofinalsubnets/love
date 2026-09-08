@@ -874,7 +874,7 @@
        ; nothing is ever two of them at once. but only where an OS enforces it. `org`
        ; is the bare-metal lane: the MMU is off, the image is copied by p_paddr, and
        ; the port owns its own map, so it keeps the one segment it always had. and it
-       ; must: the header reserve sits below the text address, so port/virt asks for
+       ; must: the header reserve sits below the text address, so inle/virt asks for
        ; 0x80000000 - hdrsz by hand -- one segment more here silently moves the hart's
        ; first instruction. .image, when the set has one, takes a segment too. the
        ; reserve is the ELF header plus one phdr per segment, and every caller reads it

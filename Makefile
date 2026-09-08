@@ -986,11 +986,11 @@ site-serve: host out/toolmd.stamp
 # through mooncc -t wasm, linked to one module -- no emcc, no C toolchain. tco=1: the
 # vm's tails are return_call, the engines' tail-call law (node 26, firefox 121, chrome
 # 112, safari 18), and the corpus runs 1.31x faster than on the trampoline. the loader
-# (port/wasm/loader.js) is the runtime under it. NOTHING ON THE SITE READS IT any more --
+# (inle/wasm/loader.js) is the runtime under it. NOTHING ON THE SITE READS IT any more --
 # the front page carries the machine (the kernel module below) -- so it is laid, not
 # tracked: papel's -r island and horn.html want it, test_wasm and horn.html read out/.
 # the emcc build stays as wasm-emcc, a differential and nothing on the page.
-wasm_c = $(love_c) $(R)/inle/horn.c $(R)/port/wasm/host.c
+wasm_c = $(love_c) $(R)/inle/horn.c $(R)/inle/wasm/host.c
 out/wasm/love.wasm: $(wasm_c) $(lib_h) out/lib/love_version.h host
 	@mkdir -p $(dir $@)
 	@echo 'WASM	'$@
@@ -999,9 +999,9 @@ out/wasm/love.wasm: $(wasm_c) $(lib_h) out/lib/love_version.h host
 # the page fetches beside the module -- a wake is milliseconds where the boot is seconds,
 # and the woken heap is compact where the boot's arena is not. anchored to the module that
 # baked it (a stale one is refused and the egg boots), so the two are laid together.
-out/wasm/love.image: out/wasm/love.wasm port/wasm/bake.mjs port/wasm/loader.js
+out/wasm/love.image: out/wasm/love.wasm inle/wasm/bake.mjs inle/wasm/loader.js
 	@echo 'BAKE	'$@
-	@$(NODE) port/wasm/bake.mjs --love out/wasm/love.wasm -o $@
+	@$(NODE) inle/wasm/bake.mjs --love out/wasm/love.wasm -o $@
 ifeq ($(NODE),)
 wasm: out/wasm/love.wasm
 else
@@ -1011,20 +1011,20 @@ endif
 # every C edit would otherwise churn. only the MACHINE's pair is tracked -- it is what the
 # front page boots; the hosted pair is laid here and gitignored, for papel -r and the horn.
 site-wasm: wasm
-	@echo '$(t_cp)	'port/wasm/love.wasm
-	@cp out/wasm/love.wasm port/wasm/love.wasm
-	@echo '$(t_cp)	'port/wasm/love.image
-	@cp out/wasm/love.image port/wasm/love.image
-	@echo '$(t_cp)	'port/wasm/love-wasm.wasm
-	@cp out/love-wasm.wasm port/wasm/love-wasm.wasm
-	@echo '$(t_cp)	'port/wasm/love-wasm.image
-	@cp out/wasm/love-wasm.image port/wasm/love-wasm.image
+	@echo '$(t_cp)	'inle/wasm/love.wasm
+	@cp out/wasm/love.wasm inle/wasm/love.wasm
+	@echo '$(t_cp)	'inle/wasm/love.image
+	@cp out/wasm/love.image inle/wasm/love.image
+	@echo '$(t_cp)	'inle/wasm/love-wasm.wasm
+	@cp out/love-wasm.wasm inle/wasm/love-wasm.wasm
+	@echo '$(t_cp)	'inle/wasm/love-wasm.image
+	@cp out/wasm/love-wasm.image inle/wasm/love-wasm.image
 # the wasm inle seat: the kernel the three metal seats link -- kmain and the ramfs, the
 # console painter with its fonts, inle/sys.c under moonlibc, the host frontend whole -- with
 # inle/wasm/arch.c for the machine and the source blob as a wasm data object (mksrc.l's
 # text lane). one module beside out/love-$a.elf; the runtime rides in by need, and no
-# the heap image is baked below. the CPU under it is port/wasm/cpu.mjs, a worker;
-# the terminals are port/wasm/inle.mjs (node) and port/wasm/inle.html (the page).
+# the heap image is baked below. the CPU under it is inle/wasm/cpu.mjs, a worker;
+# the terminals are inle/wasm/inle.mjs (node) and inle/wasm/inle.html (the page).
 kw_c = $(love_c) $R/core/quay/cga_8x8.c $R/core/quay/moderndos_8x16.c $R/core/quay/paint.c \
   $(k_free_c) $(host_c) $R/inle/wasm/arch.c
 kw_h = $(love_h) $R/inle/k.h $R/inle/ustar.h $R/inle/asmops.h $R/inle/wasm/asmops.h
@@ -1038,20 +1038,20 @@ out/love-wasm.wasm: $(kw_c) $(kw_h) out/wasm/src.o out/lib/baked.h out/lib/distl
 	@$(mooncc) -t wasm -Dai_tco=1 -DAiHaveVersionH -I. -Icore -Iinle -Iout/lib \
 	  -Icore/quay -Iapps/moon/include -o $@ $(kw_c) out/wasm/src.o
 wasm-emcc:                       # emcc's love, out/wasm/love.js: the foreign build ccwasm and test.mjs can take
-	@$(MAKE) -C port/wasm
+	@$(MAKE) -C inle/wasm
 # the seat's heap image: the kernel booted once under node with `bake PATH` on the boot
 # line -- the egg, the modules and the korecat warm, the seat text run -- written to the
 # ramfs and lifted out at the reset. the page fetches it beside the module and the worker
 # hands it to k_start; a stale one is refused and the egg bakes, the host's own law.
-out/wasm/love-wasm.image: out/love-wasm.wasm port/wasm/cpu.mjs port/wasm/inle.mjs
+out/wasm/love-wasm.image: out/love-wasm.wasm inle/wasm/cpu.mjs inle/wasm/inle.mjs
 	@echo 'BAKE	'$@
-	@$(NODE) port/wasm/inle.mjs --lift /love.image:$@ out/love-wasm.wasm bake /love.image < /dev/null > out/wasm/bake.log 2>&1 \
+	@$(NODE) inle/wasm/inle.mjs --lift /love.image:$@ out/love-wasm.wasm bake /love.image < /dev/null > out/wasm/bake.log 2>&1 \
 	   || { cat out/wasm/bake.log; exit 1; }
 
 clean:
 	rm -rf out
 	@rm -f test/proof/rocq/*.vo test/proof/rocq/*.vok test/proof/rocq/*.vos test/proof/rocq/*.glob test/proof/rocq/.*.aux
-	@[ -d port/wasm ] && $(MAKE) -C port/wasm clean || :
+	@[ -d inle/wasm ] && $(MAKE) -C inle/wasm clean || :
 distclean: clean
 	rm -rf dl
 valg: host
@@ -1076,7 +1076,7 @@ assets/web/favicon.png: core/quay/cga_8x8.c tools/mkicon.l apps/vi/config.l $(ho
 	@mkdir -p $(dir $@)
 	@env -u LOVE_NO_IMAGE $m tools/mkicon.l $< 3 32 $@
 # ..and the front page itself, its island the fragment repl.js drives
-index.html: web/index.l port/wasm/machine.html $(ho)/.love.baked
+index.html: web/index.l inle/wasm/machine.html $(ho)/.love.baked
 	@$m web/index.l $@
 .PHONY: ulp
 ulp:

@@ -245,7 +245,7 @@ Only a paragraph, so the title has to come from the meta block.
    _ (assert (sub? oidx "<div class=\"repl\">") (sub? oidx "../wasm/repl.js")
              (at oidx "</h1>" < at oidx "class=\"repl\"") (anchored? oidx))
    ; ..and the tree's index.html carries the fragment's block byte for byte, until papel lays it
-   frag (slurp-path "port/wasm/repl.html")
+   frag (slurp-path "inle/wasm/repl.html")
    blk (snip frag (at frag "<div class=\"repl\">") (tally frag))
    _ (assert (0 < tally blk) (sub? (slurp-path "index.html") blk))
 

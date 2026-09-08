@@ -1,6 +1,6 @@
 // inle/fd.c -- love's ports over OS file descriptors: ai_fd_port_vt and the ai_fd_* family
 // beneath it, plus the readiness and wait primitives the scheduler parks on. the bare-board
-// counterpart is port/fdrow.h, which this file is poll.h and signal.h deeper than.
+// counterpart is inle/fdrow.h, which this file is poll.h and signal.h deeper than.
 // inle/main.c's binary and the inle kernel both link it, so what lives here exists once
 // rather than twice. the bodies bottom out in libc calls, and on inle those land in
 // inle/sys.c's arms (__ai_call's negative-osv door), so most need no branch of their own.

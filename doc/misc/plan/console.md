@@ -4,7 +4,7 @@
 end.** quay's console is core C: a cell buffer the tty apps draw into, a painter
 (core/quay/paint.c) that turns a cell into pixels off the xterm-256 table, and a
 font that is a C array. inle runs that on a framebuffer. a real terminal runs the same
-apps through their own ANSI. the page runs neither: port/wasm/repl.js takes the
+apps through their own ANSI. the page runs neither: inle/wasm/repl.js takes the
 ANSI frame an app would write to a terminal and re-lays it into spans, ignoring cursor
 motion. that is fine for rove, which repaints whole, and wrong for vi, which paints
 cells and moves a cursor. put the console itself in the wasm build and the page
@@ -38,13 +38,13 @@ that is a compiler.
   plus one nif of its own, `(mirror scr)`, which copies a screen's head and cells to a
   buffer the page reads through `ai_mirror`; `ai_palette` hands out the xterm256 table
   paint.c spends and `ai_unfold` the cp437 fold, so the page owns no second recipe.
-  port/wasm/web.l is the page's love side: each app boots on a screen of the box's
+  inle/wasm/web.l is the page's love side: each app boots on a screen of the box's
   size and scribes its frames into it; cells.js lays the mirror as text, one span per
   run of like-penned cells, paint.c's reading of bold/reverse/underline; repl.js pumps
   the steps and blits. ansiToHtml, pal256 and the JS cp437 table are gone. gate:
-  port/wasm/screen.mjs under test_wasm -- a hand frame's cells and its lay, and rove
+  inle/wasm/screen.mjs under test_wasm -- a hand frame's cells and its lay, and rove
   and ink booted on a page screen. what it found on the way: the wasm function-table
-  trap in c0's peephole (port/wasm/32bit-findings.md).
+  trap in c0's peephole (inle/wasm/32bit-findings.md).
 - **rung 1 -- the console door.** ✅ answered, and the answer is that there is no door:
   a tty app is a function that takes the console and gives it back, so an app opening
   another calls it -- `(vi-main [f])` from a story -- and on every seat the caller's
@@ -102,7 +102,7 @@ that is a compiler.
   and the heap views are the API to keep), gen.l's lane, the gate. its oracle is the
   one the other backends never had: node runs the emcc build and the moon build of
   the same core, so both corpora are a differential from day one.
-- **rung 4 -- emcc goes.** `make wasm` rides our emitter, port/wasm/Makefile's
+- **rung 4 -- emcc goes.** `make wasm` rides our emitter, inle/wasm/Makefile's
   emcc lane is deleted once the module passes the same gate. pays somewhere,
   regresses nowhere.
 

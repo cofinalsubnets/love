@@ -2,7 +2,7 @@
 ; the bytes a flash tool takes. `-O binary` is the image as it lies from the lowest
 ; load address, `-O ihex` that same image in Intel hex, which is what teensy_loader_cli
 ; and the Teensy Loader gui read. between them they were the last foreign tool on the
-; thumb boards (port/{teensy41,nucleo446,rp2040}/Makefile); `kore objcopy` is the applet.
+; thumb boards (inle/{teensy41,nucleo446,rp2040}/Makefile); `kore objcopy` is the applet.
 ;
 ; a section's sh_addr is where it runs, and the flasher wants where it is stored --
 ; different numbers for a lane held in flash and copied into RAM at boot. so every

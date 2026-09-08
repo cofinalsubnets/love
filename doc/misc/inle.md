@@ -42,9 +42,9 @@ And it has a fourth seat, wasm: the same kernel (`kmain.c`, the ramfs off the so
 blob, the console painter, `inle/sys.c` under moonlibc, the host frontend whole) links
 through `mooncc -t wasm` to `out/love-wasm.wasm`, with `inle/wasm/arch.c` for the
 machine — five hypercalls through the module's one import, wearing linux's numbers, and no
-hardware at all. The CPU under it is a worker (`port/wasm/cpu.mjs`) whose idle is an
+hardware at all. The CPU under it is a worker (`inle/wasm/cpu.mjs`) whose idle is an
 `Atomics.wait` on a shared ring of key bytes, so the kernel really blocks; the terminals are
-`port/wasm/inle.mjs` under node (serial, the gate's lane) and `port/wasm/inle.html` in a
+`inle/wasm/inle.mjs` under node (serial, the gate's lane) and `inle/wasm/inle.html` in a
 browser (the framebuffer on a canvas, the keyboard as a serial terminal; `coi.js` makes a
 static host cross-origin isolated, which SharedArrayBuffer wants). The seat wakes a heap
 image: `bake PATH` on any kernel's boot line writes the warm heap to the ramfs, the wasm lift

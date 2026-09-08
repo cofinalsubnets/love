@@ -371,7 +371,7 @@ static ai_inline intptr_t img_decode(intptr_t v, word *base, char *code) {
 #define ImageNPlain (ImageNShift + 7u)                /* 248..255 a plain 1..8-byte one */
 #define ImageDHash 4096u  /* the encoder's value -> token map (open-addressed, 0xffff = free) */
 // the encoder's tables ride the allocator, never the frame: they are kilobytes together, and
-// an arm32 load has 12 bits of displacement -- port/mps2 refused them on the stack.
+// an arm32 load has 12 bits of displacement -- inle/mps2 refused them on the stack.
 struct img_dic { word dict[ImageNAll], key[ImageDHash]; uint16_t tk[ImageDHash];
                  uintptr_t cnt[ImageNAll]; };   /* cnt is the selection's, too big for a frame */
 

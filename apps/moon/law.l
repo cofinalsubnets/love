@@ -744,7 +744,7 @@
 ; three names have a meaning the object writer knows -- love_nifs (bracketed by
 ; the linker for main()'s boot drain), .love.image (laid last, for the bake) and
 ; .data (where an unattributed global goes). every other name rides out as its
-; own section, because where those bytes land is the point: port/rp2040's
+; own section, because where those bytes land is the point: inle/rp2040's
 ; .vectors is read by the core before an instruction runs, and a vector table
 ; quietly sitting in .data is a part that never boots. cob passes no
 ; xtra, so this needs the variant that carries the parser's section table. ---

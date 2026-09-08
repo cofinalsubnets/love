@@ -426,7 +426,7 @@
    ; both targets: obj.l picks the reloc vocabulary by tgt.
    ; ..plus one section per other __attribute__((section(NAME))) name the TU
    ; used, appended in declaration order (cgen-obj's tail). a section named at all
-   ; is a section whose address is the point -- port/rp2040's .vectors is read by
+   ; is a section whose address is the point -- inle/rp2040's .vectors is read by
    ; the core before an instruction runs -- so both its existence and its order are
    ; the program's to fix, never ours. objsecs is the door that takes them.
    ; the two wide tuples are named once, here -- parse.l's `tops` answers fourteen fields
@@ -1192,7 +1192,7 @@
              ; hosted program that simply supplies its own runtime, and test_raw
              ; is exactly that. freestanding also has no OS, so it pins -os none
              ; (a later explicit -os wins, pin over pin -- nothing under free/
-             ; or port/ reads an OS macro, so the kernel and the boards lose a
+             ; or inle/ reads an OS macro, so the kernel and the boards lose a
              ; __linux__ they never asked for).
              (a = "-ffreestanding")
               (flags r (pin (pin (fpush t 'ds "__STDC_HOSTED__=0") 'nostd 1) 'os 'none))

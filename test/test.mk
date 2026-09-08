@@ -739,11 +739,11 @@ test_thumb1: host
 test_thumb2: host
 	@sh test/gate/thumb.sh thumb2 $(ho)
 # test_virt -- LOVE ITSELF on the bare rv64 hart: the whole runtime compiled end to end
-# by mooncc -t rv64 (port/virt/), start.o laid from holo IR, OUR linker binds -- no
+# by mooncc -t rv64 (inle/virt/), start.o laid from holo IR, OUR linker binds -- no
 # foreign toolchain ANYWHERE. Bakes the egg, asserts, exits 42; 98 = a machine trap.
 test_virt: host
 	@sh test/gate/boot.sh virt "$(MAKE)"
-# test_mps2 -- LOVE ITSELF on the M7: the whole runtime by mooncc -t thumb2 (port/mps2/),
+# test_mps2 -- LOVE ITSELF on the M7: the whole runtime by mooncc -t thumb2 (inle/mps2/),
 # start.o laid from holo IR, ldbare32 binding one RWX segment at 0 -- no foreign toolchain
 # ANYWHERE, the second port after virt to reach that. On qemu's Cortex-M7 it bakes the egg
 # FROM SOURCE and asserts spec laws over the hatched image; exits 42, and 98 = fault.
@@ -773,7 +773,7 @@ test_playdate: host
 	@echo TEST out/playdate/love.pdx
 	@if [ -z "$$PLAYDATE_SDK_PATH" ] || ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   echo "test_playdate: no PLAYDATE_SDK_PATH / arm-none-eabi toolchain, skipped"; exit 0; fi; \
-	  $(MAKE) -C port/playdate || { echo "FAIL playdate build"; exit 1; }; \
+	  $(MAKE) -C inle/playdate || { echo "FAIL playdate build"; exit 1; }; \
 	  u=`llvm-readelf -s out/playdate/pdex.elf | grep -c "UND [a-zA-Z_]"`; \
 	  [ "$$u" -eq 0 ] || { echo "FAIL pdex.elf has $$u undefined symbols"; exit 1; }; \
 	  llvm-readelf -s out/playdate/pdex.elf | grep -qw eventHandler || { echo "FAIL no eventHandler"; exit 1; }; \
@@ -787,7 +787,7 @@ test_playdate: host
 # 0x1000, thumb-bit entry). So this one never skips; test_mps2 is the runtime (no RT1062 qemu).
 test_teensy41: host
 	@echo TEST out/teensy41/love.hex
-	@$(MAKE) -C port/teensy41 || { echo "FAIL teensy41 build (the boot-image verify is inside)"; exit 1; }
+	@$(MAKE) -C inle/teensy41 || { echo "FAIL teensy41 build (the boot-image verify is inside)"; exit 1; }
 	@echo "test_teensy41: love (all-mooncc thumb2), OUR linker, flatten and boot image -- nothing foreign"
 # test_nucleo446 -- the Nucleo-F446RE firmware BUILD gate: mooncc -t thumb2sp compiles,
 # nlink.l binds (no ld, no linker script -- the F4's memory map is the map in that file),
@@ -800,7 +800,7 @@ test_nucleo446: host
 	@echo TEST out/nucleo446/firm.hex
 	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   echo "test_nucleo446: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
-	  $(MAKE) -C port/nucleo446 || { echo "FAIL nucleo446 build (the boot-image verify is inside)"; exit 1; }; \
+	  $(MAKE) -C inle/nucleo446 || { echo "FAIL nucleo446 build (the boot-image verify is inside)"; exit 1; }; \
 	  echo "test_nucleo446: firmware (all-mooncc thumb2sp), OUR linker and flatten, no linker script, boot image verified"
 # test_nucleo446_smoke -- the same port RUN, not read: the -D QSMOKE twin on qemu's Cortex-M4,
 # its exit code the self-check tally carried out through mkboot.l's sh_exit. The only lane that
@@ -819,7 +819,7 @@ test_rp2040: host
 	@echo TEST out/rp2040/love.bin
 	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   echo "test_rp2040: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
-	  $(MAKE) -C port/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }; \
+	  $(MAKE) -C inle/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }; \
 	  echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker and flatten, flash R|X, boot surface verified"
 # test_boards -- THE BUILD HALF of the ports, no emulator anywhere. the boot gates above
 # prove a port RUNS; this one proves it still COMPILES, and that is the half that rots
@@ -834,10 +834,10 @@ test_boards: test_mps2_build test_virt_build test_rp2040 test_nucleo446
 	@echo "test_boards: four ports build and link -- mooncc and our linker, no emulator"
 test_mps2_build: host
 	@echo TEST out/mps2/love.elf '(build)'
-	@$(MAKE) -C port/mps2 || { echo "FAIL mps2 build"; exit 1; }
+	@$(MAKE) -C inle/mps2 || { echo "FAIL mps2 build"; exit 1; }
 test_virt_build: host
 	@echo TEST out/virt/love.elf '(build)'
-	@$(MAKE) -C port/virt || { echo "FAIL virt build"; exit 1; }
+	@$(MAKE) -C inle/virt || { echo "FAIL virt build"; exit 1; }
 # the userland packages: each built by mooncc + moonlibc + the holo
 # linker -- no gcc/glibc/ld anywhere -- then RUN and held to the package's own answers:
 # tar 1.13 cf/xf + czf/xzf roundtrips and system-tar interop, m4 1.4's own 57-check suite,
@@ -1289,11 +1289,11 @@ test_wasm:
 else
 test_wasm: wasm
 	@echo TEST out/wasm/love.wasm "(node)"
-	@$(NODE) $(R)/port/wasm/test.mjs --love $(R)/out/wasm/love.wasm $t
+	@$(NODE) $(R)/inle/wasm/test.mjs --love $(R)/out/wasm/love.wasm $t
 	@echo TEST out/wasm/love.image "(node, the woken heap)"
-	@$(NODE) $(R)/port/wasm/test.mjs --love $(R)/out/wasm/love.wasm --image $(R)/out/wasm/love.image $t
-	@$(NODE) $(R)/port/wasm/screen.mjs --love $(R)/out/wasm/love.wasm
-	@$(NODE) $(R)/port/wasm/horn.mjs --love $(R)/out/wasm/love.wasm
+	@$(NODE) $(R)/inle/wasm/test.mjs --love $(R)/out/wasm/love.wasm --image $(R)/out/wasm/love.image $t
+	@$(NODE) $(R)/inle/wasm/screen.mjs --love $(R)/out/wasm/love.wasm
+	@$(NODE) $(R)/inle/wasm/horn.mjs --love $(R)/out/wasm/love.wasm
 endif
 
 # test_kernel_wasm -- the wasm inle seat (out/love-wasm.wasm) under node: the image baked
@@ -1307,7 +1307,7 @@ else
 test_kernel_wasm: host
 	@$(MAKE) -s out/wasm/love-wasm.image
 	@echo TEST out/love-wasm.wasm "(node: the kernel corpus on the woken image, serial, headless)"
-	@$(NODE) $(R)/port/wasm/inle.mjs --image out/wasm/love-wasm.image $(R)/out/love-wasm.wasm test/kernel/all.l \
+	@$(NODE) $(R)/inle/wasm/inle.mjs --image out/wasm/love-wasm.image $(R)/out/love-wasm.wasm test/kernel/all.l \
 	   < /dev/null > out/wasm/kernel.log 2>&1; \
 	 grep -q "image awake" out/wasm/kernel.log \
 	   && grep -q "tests pass" out/wasm/kernel.log && ! grep -q "failed:" out/wasm/kernel.log \
@@ -1319,7 +1319,7 @@ endif
 # the wasm module writer and the IR lowering (core/holo/wasm.l) under a foreign engine:
 # love lays three modules (the writer's by hand, the program's off holo IR, a mock of the
 # artifact's face), binaryen validates them where the box has one, node instantiates and
-# runs them -- the third through port/wasm/loader.js, the artifact's own environment.
+# runs them -- the third through inle/wasm/loader.js, the artifact's own environment.
 # skips without node.
 WASMOPT ?= $(shell command -v wasm-opt 2>/dev/null)
 wasmopt_flags = --enable-memory64 --enable-bulk-memory --enable-nontrapping-float-to-int

@@ -173,4 +173,4 @@ thing to argue with.
   infix is genuinely wanted, and say why at the site if it is.
 * ⚠ kanren now compiles with `@`, so it needs pat spliced before it. Every frontend that loads
   kanren already evaluates pat's text with post (see the boot comments in `inle/main.c`,
-  `inle/kmain.c`, `port/wasm/host.c`, `port/playdate/main.c`) — but a new frontend must keep that order.
+  `inle/kmain.c`, `inle/wasm/host.c`, `inle/playdate/main.c`) — but a new frontend must keep that order.

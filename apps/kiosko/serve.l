@@ -22,7 +22,7 @@
 ;
 ; and the github page: its files are generated -- make web lays index.html and assets/,
 ; make wasm the module and its image, site-wasm copies them beside the loader, and the
-; wasm inle seat (port/wasm/inle.html) is its own module -- and .sbignore drops every one
+; wasm inle seat (inle/wasm/inle.html) is its own module -- and .sbignore drops every one
 ; from the source, so a checkout serves nothing of it until they are laid. where DIR is
 ; the tree (a Makefile and web/index.l), this lays them through our own make first; the
 ; two isolation headers kiosko's reply sends are what let inle.html's machine run here
@@ -119,7 +119,7 @@ usage: love serve [-p PORT] [-n] [DIR]
   DIR               the tree to serve (default .)
 a .l is painted, a .md rendered, and x.l.md is x.l's header as a document. the github
 page is laid first -- make web wasm site-wasm and the wasm inle seat -- and the machine
-is at /port/wasm/inle.html. where DIR is no tree, this binary's own source is laid
+is at /inle/wasm/inle.html. where DIR is no tree, this binary's own source is laid
 under it as `love seed -a` lays it (love-VERSION/, rebuilt there with our own
 toolchain), and that tree is the one served.
 ")
@@ -179,7 +179,7 @@ toolchain), and that tree is the one served.
       serve5 (from 'kiosko 'serve5)
       _ (nil? serve5 ? (say err "serve: no kiosko aboard\n", quit 1))
       _ (sv-tree? dir ? (say err ("serve: " + dir + " -- the page is http://127.0.0.1:" + show port
-                                  + "/ and the machine /port/wasm/inle.html\n")) 0)
+                                  + "/ and the machine /inle/wasm/inle.html\n")) 0)
       _ (? (serve5 dir port 0 () (sv-make dir box)) 0
            (: _ (say err ("serve: cannot listen on :" + show port)) _ (put err 10) (quit 1)))
       (quit 0))

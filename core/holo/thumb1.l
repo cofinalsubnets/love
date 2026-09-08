@@ -394,7 +394,7 @@
    ;; it bit-for-bit), and a v6-M image can carry a v7-M object whose MOVW/MOVT pair
    ;; still has to resolve. so there is one arm32 re-encoder, it lives in thumb2.l,
    ;; and core/holo/link.l asks for it by family -- which is what lets a cat that only
-   ;; lays v6-M code (port/rp2040's boot2) carry this file alone.
+   ;; lays v6-M code (inle/rp2040's boot2) carry this file alone.
 
    t1 {'lower t1-lower 'patch t1-patch 'nop '(0 191)}  ; the ('align n) filler unit: NOP (16-bit) bf00 LE
    (defbackend 'thumb1 t1))

@@ -50,7 +50,7 @@ the standing rule (gwen, 2026-08-16). done 2026-08-16:
 
 still standing, not verification:
 
-- **port/rp2040/tools/py/{elf2uf2,pad_checksum}.py** -- flasher utilities on
+- **inle/rp2040/tools/py/{elf2uf2,pad_checksum}.py** -- flasher utilities on
   a port lane. port to love with the next rp2040 ride.
 
 ## the uuwm freshen (landed 2026-08-16)

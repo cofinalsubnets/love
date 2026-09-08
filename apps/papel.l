@@ -252,8 +252,8 @@
        + tail + "</body>\n</html>\n")))
 
 ; --- the repl island ---------------------------------------------------------------------
-; conf 'repl names the wasm port's directory the way the page links it (port/wasm from
-; a page at the tree root, ../../port/wasm from out/site), so one spelling is both the
+; conf 'repl names the wasm port's directory the way the page links it (inle/wasm from
+; a page at the tree root, ../../inle/wasm from out/site), so one spelling is both the
 ; script hrefs and, under out, the path of repl.html -- the island markup repl.js drives.
 ; the island rides the index page alone: a site has one front door. the scripts go last,
 ; since repl.js mounts every .repl it finds as it loads.
@@ -392,7 +392,7 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
   -s, --serve PORT  build, then hand OUT to kiosko and serve it on PORT
   -r, --repl DIR    lay the repl island on the index: DIR holds cells.js, repl.js (a module
                     over loader.js and love.wasm) and repl.html, spelled as the index page
-                    links it (port/wasm)
+                    links it (inle/wasm)
   SRC               a .md file or a directory of them; with none, README.md and doc/
 ")
                 (quit 0))

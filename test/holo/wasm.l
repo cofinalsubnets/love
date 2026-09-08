@@ -109,7 +109,7 @@
    _ (wasm-write "out/.holo2.wasm" m2)
    _ (puts ("test/holo/wasm: wrote out/.holo2.wasm, " + show (tally (wasm-emit m2)) + " bytes\n"))
 
-   ;; rung 3, the environment: a mock of the artifact's face for port/wasm/loader.js --
+   ;; rung 3, the environment: a mock of the artifact's face for inle/wasm/loader.js --
    ;; the verbs the page calls, over the one import, __ai_sys with linux's numbers. [16] is the
    ;; out buffer's length and 4096 the buffer; [24] the bump pointer malloc rides; ai_init asks
    ;; the clock (228) and the kernel probe (20, which must say linux: -EBADF); ai_eval copies

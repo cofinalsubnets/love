@@ -1,8 +1,8 @@
 # the HOSTED wasm module and its heap image: `make site-wasm` lays them for papel's -r
 # island and the horn page, and nothing on the site reads them -- the front page carries
-# the machine (port/wasm/love-wasm.*), which is tracked. test_wasm and horn.html read out/.
-port/wasm/love.wasm
-port/wasm/love.image
+# the machine (inle/wasm/love-wasm.*), which is tracked. test_wasm and horn.html read out/.
+inle/wasm/love.wasm
+inle/wasm/love.image
 vgcore.*
 .gdb_history
 .claude/

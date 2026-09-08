@@ -1,7 +1,7 @@
 // wasm architecture-specific C: the door, the serial line, the clocks, the idle and the
 // reset. this is the wasm counterpart of x64/arch.c -- same contract (archinit,
 // serial_init, serial_putc, k_reset, k_rtc, k_fault_trigger), no hardware at all: the
-// machine is the worker running the module (port/wasm/inle.js), and each face below is
+// machine is the worker running the module (inle/wasm/inle.js), and each face below is
 // one hypercall through __ai_sys, the module's one import, wearing linux's number for
 // the nearest thing -- write is the serial line, read the keys, nanosleep the idle,
 // clock_gettime the two clocks, reboot the reset. moonlibc's own calls never reach that

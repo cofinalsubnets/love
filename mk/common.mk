@@ -1,5 +1,5 @@
 # Shared variables for the host, kernel and board builds. An includer sets R to the
-# project root first (the root Makefile sets R := ., a port/ makefile its own way up), so
+# project root first (the root Makefile sets R := ., a inle/ makefile its own way up), so
 # these resolve from any cwd; per-frontend output lands in $R/out/<frontend>/.
 R ?= .
 

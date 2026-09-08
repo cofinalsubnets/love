@@ -49,7 +49,7 @@
 ;   love, which runs moon, which builds the finished product. 
 ; - moon's libc is moonlibc (apps/moon/lib/moonlibc), statically linked. not glibc, not musl.
 ;   if you are about to reach for a libc function, check that we have it
-; - __STDC_HOSTED__ is 1 nearly everywhere -- mooncc predefines it. the seven port/
+; - __STDC_HOSTED__ is 1 nearly everywhere -- mooncc predefines it. the seven inle/
 ;   board lanes pass -D __STDC_HOSTED__=0 and are the only freestanding compiles; the
 ;   kernel and wasm are both hosted
 ; - which artifacts compile a file is a question for the build, not for a comment or a
