@@ -177,13 +177,16 @@ void free(void *p) {
 #define SH_READ  0x06
 #define SH_FLEN  0x0C
 static void sh_puts(const char *s) { while (*s) sh_putc(*s++); }
+// the arena starts OFF the baker's base, so a woken value that secretly depends on where
+// the baker's pool sat dies here and not on silicon. an OFFSET, not a half: the wake wants
+// the image expanded plus half again, and the read buffer besides, so a corpus that fits
+// the bake must fit the wake.
+#define WAKE_OFF (1u << 20)
 int main(void) {
   sh_puts("\n; l/mps2 waker -- cross-binary wake\n");
-  // arena at +8MB: BREAK the baker-twin address luck -- a woken value that
-  // secretly depends on the baker's pool base must die here, not on silicon
-  freelist = (struct mem*) (POOL + (8u << 20));
+  freelist = (struct mem*) (POOL + WAKE_OFF);
   freelist->next = NULL;
-  freelist->len = ((8u << 20) - 64) / sizeof(uintptr_t);
+  freelist->len = (POOL_BYTES - WAKE_OFF) / sizeof(uintptr_t);
 #ifdef BAKER_RUNE
   static const char impath[] = "out/mps2/love-pd.img";
 #else
@@ -196,8 +199,8 @@ int main(void) {
   uintptr_t len = sh_call(SH_FLEN, (uintptr_t) fl);
   sh_puts("; image bytes "); sh_hex(len); sh_putc('\n');
   // carve the read buffer off the TOP of the pool; the freelist keeps the rest
-  char *buf = (char*) POOL + (8u << 20) + (8u << 20) - ((len + 63u) & ~63u);
-  freelist->len = ((8u << 20) - 64 - ((len + 63u) & ~63u)) / sizeof(uintptr_t);
+  char *buf = (char*) POOL + POOL_BYTES - ((len + 63u) & ~63u);
+  freelist->len = (POOL_BYTES - WAKE_OFF - ((len + 63u) & ~63u)) / sizeof(uintptr_t);
   uintptr_t rd[3] = { (uintptr_t) fd, (uintptr_t) buf, len };
   if (sh_call(SH_READ, (uintptr_t) rd)) { sh_puts("; short read\n"); m7_exit(4); }
   uintptr_t cl[1] = { (uintptr_t) fd };
