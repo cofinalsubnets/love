@@ -38,7 +38,13 @@
    _ (spit "/d.md" "# a head\n\nsome *prose*.\n")
    _ (spit "/plain.txt" "not mine\n")
    box (tablet 0)
-   (mk p) (sv-make dir box p)
+   ; the maker takes the request HEAD as well as the path: a browser navigating to a
+   ; .l wants the painted page, a fetch() wants the source. an arity short of that does
+   ; not fail -- it answers a PARTIAL, which is not two?, so every claim reads as refused.
+   nav "GET / HTTP/1.1\r\nHost: x\r\nsec-fetch-dest: document\r\n\r\n"
+   fet "GET / HTTP/1.1\r\nHost: x\r\nsec-fetch-dest: empty\r\n\r\n"
+   (mk p)    (sv-make dir box p nav)
+   (fetch p) (sv-make dir box p fet)
    (sub? s t) (: n (tally s) m (tally t)
                  ((: (g i) (? ((i + m) <= n) (? ((snip s i (i + m)) = t) 1 (g (i + 1))) 0)) 0))
 
@@ -87,6 +93,21 @@
       (() = (mk "/plain.txt"))                       ; a file it does not claim
       (() = (mk "/"))                                ; the listing stays kiosko's
       (() = (mk "/nothing.l")))                      ; ..and a .l that is not there
+
+   ; --- navigating, and fetching -----------------------------------------------
+   ; the same path answers differently by head. handing a fetch() html is how the
+   ; island ate a `<!doctype` and wedged, so the source is what a fetch gets.
+   _ (: r (fetch "/x.l")
+        _ (assert
+           (two? r)
+           (<r = "text/plain; charset=utf-8")
+           (sub? <>r "; a comment")                ; the file itself
+           !(sub? <>r "class=\"l-comment\""))      ; ..not the painting
+        0)
+   ; ..but a .l.md is a rendering with no file behind it, so it is made either way
+   _ (: r (fetch "/x.l.md")
+        _ (assert (two? r) (<r = "text/html; charset=utf-8"))
+        0)
 
    ; --- the cache --------------------------------------------------------------
    ; keyed by the file's mtime and size, in memory, never on disk. the second ask

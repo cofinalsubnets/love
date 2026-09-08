@@ -61,9 +61,13 @@
    ; never get to run), then serve1 answers one request. it stops on a flag rather than a
    ; count, so adding an assert below does not silently hang the run.
    stop (tablet 0)
-   (mk p) (? (p = "/made") '("text/plain" "made on the way out")
-             (p = "/a.txt") '("text/plain" "the hook wins over the file")
-             ())
+   ; ..and it takes TWO: the decoded path and the request head, which is what serve1
+   ; hands it. an arity short of that curries instead of failing -- the answer gets
+   ; INDEXED by the head and reads as "not mine", so every claim quietly becomes a 404.
+   (mk p head) (? (p = "/made") '("text/plain" "made on the way out")
+                  (p = "/a.txt") '("text/plain" "the hook wins over the file")
+                  (p = "/echo") ["text/plain" head]
+                  ())
    srv (twirl (\ _ ((: (g k) (: _ (await l)
                                 c (accept l)
                                 ; the maker hook: it claims /made and says "not mine" for
@@ -89,6 +93,7 @@
       ("200" = (code (get "/made")))
       (sub? (get "/made") "made on the way out")
       (sub? (get "/a.txt") "the hook wins over the file")     ; ..even when the file exists
+      (sub? (get "/echo") "GET /echo")                        ; ..the head is the second argument
       ("404" = (code (get "/nope"))))                         ; ..and () is still a 404
 
    ; --- the guard, first ------------------------------------------------------------------
