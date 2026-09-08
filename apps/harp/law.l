@@ -21,7 +21,7 @@
                              (filter onset? (p (qi a) (qi b)))))
 
    ; --- cycle time: what harp leans on the tree's rationals for --------------
-   ; not a re-test of `///` (love/boot/post.l owns that) -- these are the four
+   ; not a re-test of `///` (l/boot/post.l owns that) -- these are the four
    ; properties the algebra would break without, stated where they can be read.
    _ (assert ; exact, so a third of a cycle survives being multiplied back
              (((1 /// 3) * 3) = (1 /// 1))

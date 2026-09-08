@@ -32,7 +32,7 @@
   ctl with named hit note n gain pan speed cut room legato mini matom lrev cmap)
 (:
    ; --- exact cycle time -----------------------------------------------------
-   ; the tree's own rationals (love/boot/post.l): `3 /// 4` builds one, + - * / and
+   ; the tree's own rationals (l/boot/post.l): `3 /// 4` builds one, + - * / and
    ; < <= = are exact over them and over bignums, `sort` orders them, and `load`
    ; answers (num den). only the two operations the coin does not carry are here.
    ;
