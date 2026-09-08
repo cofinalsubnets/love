@@ -1,7 +1,7 @@
 ; --- test/net.l: a runnable smoke test for ain's socket nifs (inle/sock.c) ---
 ; the socket nifs (connect/listen/accept/seal) live in inle/sock.c, which love0 links
 ; as surely as the final `love` does -- love0_o is the whole host glob -- so these are
-; corpus laws. it still reads standalone (assert comes from test/00-init.l):
+; corpus laws. it still reads standalone (test comes from test/00-init.l):
 ;
 ;   cat test/00-init.l test/net.l | out/love      ; green dots = pass, exits 1 on fail
 ;
@@ -22,7 +22,7 @@
   ; --- listen / accept / connect / get / say / seal over 127.0.0.1 ---
   (: port 7391
    l (listen port)
-   _ (assert
+   _ (test
       (lit? l)                              ; the listener is a heap port
       (hot? l))                             ; ... an opaque hot, like any fd port
    ; server task: accept one client, echo its line back, half-close, close.
@@ -32,15 +32,15 @@
                       _ (seal c 1)
                       _ (close c) 1)) 0)
    c (connect "127.0.0.1" port)
-   _ (assert
+   _ (test
       (lit? c)                              ; the client side is a heap port too
       (hot? c))
    _ (say c "neko\n")
    echo (rdline c)
-   _ (assert
+   _ (test
       (= echo "neko"))                      ; the round trip: what went out came back
    ; (seal s how) returns the port (chainable); a no-op on a non-port arg.
-   _ (assert
+   _ (test
       (lit? (seal c 1))                     ; returns the port
       (= 5 (seal 5 1)))                     ; misuse: returns the arg unchanged
    _ (catch srv)                             ; catch the server task -- no orphan
@@ -50,7 +50,7 @@
   ; --- every failure lane answers the unit (never a stray fixnum / hang) ---
   ; a failure is a nom, and the nom says which failure: refused is not a bad
   ; argument, and the two operator problems a () could never part now read apart.
-  (: _ (assert
+  (: _ (test
       ('badarg = (listen -1))                       ; bad port: refused up here
       ('econnrefused = (connect "127.0.0.1" 7392))  ; nothing listening on 7392
       ('badarg = (connect 12345 80))                ; non-string host
@@ -78,7 +78,7 @@
    _ (each [104 105] (\ b (put c b)))       ; held in the write run, not sent
    _ (seal c 1)                             ; ... and the fin it sends is the server's EOF
    _ (catch srv)
-   _ (assert
+   _ (test
       ((peep got 0 0) = 2))                 ; both bytes crossed the half-close
    _ (close c)
    _ (close l))
@@ -101,7 +101,7 @@
    _ (catch srv)
    ms (clock t0)
    _ (close l)
-   _ (assert
+   _ (test
       ((peep got 0 0) = 160000)             ; every byte
       (ms < 3000)))                         ; the recursive form sat here for 25 seconds
 

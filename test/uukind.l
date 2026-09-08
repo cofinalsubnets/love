@@ -4,7 +4,7 @@
 ; (str the branch off the spine). test/uukindlaw.l proves the semilattice laws
 ; of these terms at corpus time -- a law-breaking kinds.l edit fails a check.
 ; Substrate: test/uu.l (natgtb / nateqb / andb / bool_rect).
-(assert
+(test
  (defn numq
    (pi k nat bool)
    (lam k (let r k (andb (natgtb r 0) (natgtb 5 r)))))

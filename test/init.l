@@ -1,6 +1,6 @@
 ; --- test/init.l: smoke test for the init (pid1 supervisor) nifs (inle/posix.c) ---
 ; spawn/glean/wait/still link into love0 as well as `love`, so these are corpus laws.
-; it still reads standalone (assert comes from test/00-init.l):
+; it still reads standalone (test comes from test/00-init.l):
 ;   cat test/00-init.l test/init.l | out/love
 ; the full pid-1 story -- mounting proc, reaping a reparented orphan -- needs love to
 ; actually be pid 1: `make init-container` (a pid+user+mount namespace). Here we
@@ -15,7 +15,7 @@
 (? hosted (do
   (: (glean-until n)                                   ; glean, paced, to a (pid . status) pair (or steps out)
        (: ev (glean 0) (? (two? ev) ev (< n 1) () (: _ (rest 2) (glean-until (- n 1)))))
-     _ (assert
+     _ (test
          ; spawn is non-blocking: a real live pid, the child runs on
          (: p (spawn ["sleep" "5"])
             (&& (charm? p) (< 0 p)
@@ -43,7 +43,7 @@
      ; write 5 bytes through the port lane, then measure with stat
      _ (: p (open f "w") _ (say p "hello") _ (flush p) (close p))
      st (stat f)
-     (assert
+     (test
       ; stat: (size mtime mode) -- 5 bytes, an mtime on the (clock t) ms scale, a file mode
       (two? st) (= 5 (cap st))
       (< 1600000000000 (caup st))                     ; ms, not seconds (a 2020s stamp)
@@ -87,7 +87,7 @@
   (: pp (pipe 0) rfd (cap pp) wfd (cup pp)
      _ (say wfd "through the door") _ (put wfd 33) _ (close wfd)
      s (slurp rfd) _ (close rfd)
-     (assert (= "through the door!" s)))
+     (test (= "through the door!" s)))
 
   ; see draws one byte, chug takes what the row still has in hand, and both answer
   ; the empty end -- see is the door that tells a quiet row from an ended one, so it
@@ -100,7 +100,7 @@
      e (see rfd)
      y (chug rfd)
      _ (close rfd)
-     (assert (= 97 a) (= "bcdef" x) (= -1 e) (= "" y)))
+     (test (= 97 a) (= "bcdef" x) (= -1 e) (= "" y)))
 
   ; a file reads the same bytes both ways, gulp boundaries and all
   (: d "out/.fd-lane-probe" f (+ d "/x")
@@ -109,11 +109,11 @@
      fd (openfd f 0) a (slurp fd) _ (close fd)
      p (open f "r") b (slurp p) _ (close p)
      _ (unlink f)
-     (assert (= a b) (= 16000 (tally a))))
+     (test (= a b) (= 16000 (tally a))))
 
   ; a row that is not there swallows and reads as the end: a closed seat's output
   ; must not fault a task that cannot know it is closed
-  (assert (= "into the void" (say 4096 "into the void"))
+  (test (= "into the void" (say 4096 "into the void"))
           (= -1 (see 4096)) (= "" (slurp 4096))
           (= 4096 (flush 4096)))                      ; nothing of love's is pending
 

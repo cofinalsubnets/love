@@ -1,7 +1,7 @@
 ; --- test/fs.l: smoke test for the fs nifs (inle/posix.c) ---
 ; rename/symlink/readlink/chmod/chown/utime/umask link into `love` and love0 alike
 ; (love0 carries the whole inle/*.c glob since the self-host promotion), so these
-; are corpus laws. it still reads standalone (assert comes from test/00-init.l):
+; are corpus laws. it still reads standalone (test comes from test/00-init.l):
 ;   cat test/00-init.l test/fs.l | out/love
 ; the conventions under test are inle/posix.c's posix_ lane: an effect op answers
 ; () ok | an errno nom | 'badarg misuse; a value op answers the value | () | a nom.
@@ -17,7 +17,7 @@
    _ (: p (open a "w") _ (say p "five!") (close p))
 
    ; rename: the file moves whole -- old gone, new wears the same size
-   _ (assert
+   _ (test
        !(rename a b)                                ; ok is ()
        ((stat a) = 'enoent) (= 5 (cap (stat b)))
        ('enoent = (rename a (+ d "/x")))          ; a missing source is a live errno
@@ -27,7 +27,7 @@
    ; resolves relative to the link's directory, so a link beside its file names
    ; it bare. readlink answers that string verbatim; on a non-link (or a miss)
    ; it is nothing. stat follows the link, so through l it sees the file whole.
-   _ (assert
+   _ (test
        !(symlink "b" l)
        (= (readlink l) "b")
        (= 5 (cap (stat l))) (= 32768 (& 61440 (cauup (stat l))))
@@ -35,7 +35,7 @@
 
    ; chmod: the permission bits land exactly (0600 = 384); utime: the mtime
    ; lands on the stat scale (MILLISECONDS), and a non-charm ms reads "now"
-   _ (assert
+   _ (test
        !(chmod b 384)
        (= 384 (- (cauup (stat b)) 32768))
        !(utime b 1600000000000)
@@ -46,18 +46,18 @@
        ('badarg = (chmod b "rw")))                ; misuse: a non-charm mode
 
    ; chown: a no-op self-chown succeeds (-1 -1 leaves both ids alone); misuse einvals
-   _ (assert
+   _ (test
        !(chown b -1 -1)
        ('badarg = (chown b "x" 0)))
 
    ; umask: always answers the previous mask, so set-read-restore round-trips
    _ (: m0 (umask 18)
-        (assert (charm? m0) (= 18 (umask m0)) (= m0 (umask m0))))
+        (test (charm? m0) (= 18 (umask m0)) (= m0 (umask m0))))
 
    ; rmdir: the empty-directory unlink -- full is a live errno, empty goes
    _ (: e (+ d "/sub")
         _ (mkdir e 493)
-        (assert
+        (test
           ('enotempty = (rmdir d))                 ; d holds b and l still
           !(rmdir e)
           ((stat e) = 'enoent)
@@ -68,7 +68,7 @@
    ; survivor keeps it when the first name unlinks
    _ (: h (+ d "/h")
         _ (unlink h)
-        (assert
+        (test
           !(hardlink b h)
           (= 5 (cap (stat h)))
           ('eexist = (hardlink b h))               ; the name is taken
@@ -81,7 +81,7 @@
    _ (: c (+ d "/c") z (+ d "/z")
         _ (: p (open c "w") _ (say p "five!") (close p))
         _ (: p (open z "w") (close p))
-        (assert
+        (test
           (= 5 (copyfile c (+ d "/c2")))
           (= 5 (cap (stat (+ d "/c2"))))
           (= 0 (copyfile z (+ d "/z2")))            ; empty in, empty out, and 0 is the count
@@ -94,7 +94,7 @@
    ; from. no cwd and no argv here -- an absolute path at a real regular file is
    ; the whole contract, and it is what the per-OS doors have to agree on.
    _ (: s (selfpath 0)
-        (assert
+        (test
           (string? s)
           (= 47 (peep s 0 0))                       ; absolute, whatever the cwd was
           (= 32768 (& 61440 (cauup (stat s))))      ; s_ifreg: a file, not the /proc link
@@ -106,7 +106,7 @@
    ; errno (nobody mounts "" on / as no-such-fs). sigfd's twin assert lives in
    ; test/host/sh.l. forks on the OS when a second one joins.
    _ (: e (mount "" "/" "no-such-fs")
-        (assert (nom? e) (! (e = 'enosys))))
+        (test (nom? e) (! (e = 'enosys))))
 
    _ (unlink l) _ (unlink b)
    _ (test_fin ())

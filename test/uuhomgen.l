@@ -6,7 +6,7 @@
 ; br9 jmp10 label11 call12 ret13 push14 pop15 (the sp shuttle rides push/pop).
 ; Each source form is printed over its term. Laws: test/uuhomlaw.l; substrate:
 ; test/uuhom.l over test/uu.l (the kernel).
-(assert
+(test
  ; ds1cv  (mov r0 r9)
  ; ds1cv  (push r0)
  ; ds1cv  (li r0 7)

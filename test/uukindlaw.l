@@ -10,7 +10,7 @@
 ; guard: the uu kernel (test/uu.l -- vof/defn/kjoin/...) must load before these laws. $t front-loads
 ; it, but a locale-sorted corpus glob puts uukind* first and the laws would run against an unloaded
 ; kernel (a cryptic ;; missing vof -> BADJJ). Fail loudly and by name instead if that ever recurs.
-(assert (member? 'vof (names ())))
+(test (member? 'vof (names ())))
 (:
    (uk-jj a b) (vof 0 ['kjoin a b])                          ; kjoin a b, run in the kernel
    (uk-all f)  (foldl (\ acc x (&& acc (f x))) 1 uk-codes)   ; forall over the carrier
@@ -19,7 +19,7 @@
    uk-bot (cap uk-codes)                                     ; the floor  (bot, code 0)
    uk-top (cap (cup (rev uk-codes))))                        ; the ceiling (top, below str)
 
-(assert
+(test
  ; --- a bounded join-semilattice, exhaustively over uk-codes ---
  (uk-all  (\ a     (= (uk-jj a a) a)))                              ; idempotent
  (uk-all2 (\ a b   (= (uk-jj a b) (uk-jj b a))))                    ; commutative
@@ -34,7 +34,7 @@
 ; --- the bridge: kinds.l's four driver cases as uu idpath lemmas. these are real
 ;     kernel proof terms (paths over a computing join), so they export axiom-free
 ;     through tools/uu2coq.l + uu2lean.l to Rocq and Lean alongside the uu corpus. ---
-(assert
+(test
  (defq kjoin-tier-wins  (paths nat (kjoin 1 4) 4) (idpath 4))   ; A. higher tier wins
  (defq kjoin-bot-unit   (paths nat (kjoin 0 3) 3) (idpath 3))   ; B. bot is the unit
  (defq kjoin-top-cap    (paths nat (kjoin 4 5) 5) (idpath 5))   ; C. top caps the spine

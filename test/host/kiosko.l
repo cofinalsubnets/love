@@ -21,7 +21,7 @@
 
 (borrow 'kiosko)                                 ; the baked module, spliced
 
-(assert
+(test
  (member? 'kiosko (cite ()))
  (member? 'serve1 (keys (cite 'kiosko)))
  (lit? (cite 'kiosko 'kiosko-main))
@@ -55,7 +55,7 @@
    ; there is no framing to get wrong on this side.
    port 7431
    l (listen port)
-   _ (assert (lit? l))
+   _ (test (lit? l))
    ; the server task is kiosko's own accept loop in miniature -- `await` parks it on the
    ; listener (a bare `accept` would BLOCK the whole process, and the client below would
    ; never get to run), then serve1 answers one request. it stops on a flag rather than a
@@ -89,7 +89,7 @@
    ; it is asked first, before the file on disk, which is the whole point: `love serve`
    ; paints a .l that is sitting right there. a hook that answers () is the ordinary
    ; static server, and every case below proves that half.
-   _ (assert
+   _ (test
       ("200" = (code (get "/made")))
       (sub? (get "/made") "made on the way out")
       (sub? (get "/a.txt") "the hook wins over the file")     ; ..even when the file exists
@@ -97,7 +97,7 @@
       ("404" = (code (get "/nope"))))                         ; ..and () is still a 404
 
    ; --- the guard, first ------------------------------------------------------------------
-   _ (assert
+   _ (test
       ((code (get "/../../etc/passwd")) = "403")
       ((code (get "/sub/../../etc/passwd")) = "403")
       ((code (get "/%2e%2e/%2e%2e/etc/passwd")) = "403")   ; ..the form that is actually tried
@@ -108,7 +108,7 @@
 
    ; --- methods ---------------------------------------------------------------------------
    hd (ask "HEAD /index.html HTTP/1.1\r\nHost: x\r\n\r\n")
-   _ (assert
+   _ (test
       ((code (get "/index.html")) = "200")
       ((code hd) = "200")
       (sub? hd "Content-Length: 13")     ; head reports the body it does not send
@@ -122,7 +122,7 @@
    ; request that arrives in pieces (swig answers 0 mid-request and only a `see` can park
    ; for the rest). both would wedge the connection rather than fail an assert, so they are
    ; here -- a hang is the failure mode, and the gate has to be the thing that finds it.
-   _ (assert ((code (ask "GET /index.html HTTP/1.1\nHost: x\n\n")) = "200"))     ; lf only
+   _ (test ((code (ask "GET /index.html HTTP/1.1\nHost: x\n\n")) = "200"))     ; lf only
    split (: c (connect "127.0.0.1" port)
             _ (say c "GET /index.htm")
             _ (flush c)
@@ -131,10 +131,10 @@
             r (slurp c)
             _ (close c)
             r)
-   _ (assert ((code split) = "200") (sub? split "<h1>root</h1>"))
+   _ (test ((code split) = "200") (sub? split "<h1>root</h1>"))
 
    ; --- paths ------------------------------------------------------------------------------
-   _ (assert
+   _ (test
       ((code (get "/")) = "200")                       ; the root directory's index.html
       (sub? (get "/") "<h1>root</h1>")
       (sub? (get "/index.html?v=2") "<h1>root</h1>")   ; a query string is cut
@@ -149,7 +149,7 @@
    bigr (get "/big.txt")
    _ (: i ((: (g k) (? (&& (k < tally bigr) (! ((snip bigr k (k + 4)) = "\r\n\r\n"))) (g (k + 1)) k)) 0)
         body (snip bigr (i + 4) (tally bigr))
-        _ (assert ((tally big) = 192000)                       ; the fixture is really 3 chunks
+        _ (test ((tally big) = 192000)                       ; the fixture is really 3 chunks
                   (sub? bigr "Content-Length: 192000")
                   ((tally body) = (tally big))
                   (body = big)))                               ; ..and byte-for-byte, not just as long
@@ -172,7 +172,7 @@
                       i ((: (g k) (? (&& (k < n) (! ((snip r k (k + 4)) = "\r\n\r\n"))) (g (k + 1)) k)) 0)
                       (snip r (i + 4) n))
         u (get "/under.txt") o (get "/over.txt")
-        (assert ((tally under) = 131064) ((tally over) = 131080)  ; really either side of 131072
+        (test ((tally under) = 131064) ((tally over) = 131080)  ; really either side of 131072
                 ((bodyof u) = under)                              ; the copy lane
                 ((bodyof o) = over)                               ; the cask lane
                 (sub? u "Content-Length: 131064")
@@ -191,12 +191,12 @@
         r (: q (open "/proc/self/environ" "r") (slurp q))
         big (gulp "/proc/cpuinfo")
         bigr (: q (open "/proc/cpuinfo" "r") (slurp q))
-        (assert (0 < tally e)
+        (test (0 < tally e)
                 (e = r)                                   ; byte for byte, through the loop
                 ((tally big) = (tally bigr))))            ; ..and nothing truncated at 4096
 
    ; --- content types -------------------------------------------------------------------
-   _ (assert
+   _ (test
       (sub? (get "/index.html") "Content-Type: text/html")
       (sub? (get "/a.css") "Content-Type: text/css")
       (sub? (get "/blob.zzz") "Content-Type: application/octet-stream")
@@ -206,7 +206,7 @@
 
    ; raise the flag, then one last request to let the loop see it and return
    _ (pin stop 0 1)
-   _ (assert ((code (get "/index.html")) = "200"))
+   _ (test ((code (get "/index.html")) = "200"))
    _ (catch srv)                                       ; no orphan task
    _ (close l)
 

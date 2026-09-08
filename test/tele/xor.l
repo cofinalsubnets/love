@@ -6,9 +6,9 @@
 ;   run:  cat test/00-init.l test/tele/xor.l test/zz-fin.l | out/love -l apps/tele/tele.l
 ;
 ; corpus-shaped but not in the corpus: tele is no module (no lib/tele.l, nothing registered),
-; so it arrives on -l and this file cannot ride the test/*.l glob. 00-init.l brings `assert`,
-; zz-fin.l the "N tests pass" line -- the one thing an assert cannot say for itself, since a
-; reader that stops early leaves every assert below it unrun and exits 0.
+; so it arrives on -l and this file cannot ride the test/*.l glob. 00-init.l brings `test`,
+; zz-fin.l the "N tests pass" line -- the one thing a test cannot say for itself, since a
+; reader that stops early leaves every test below it unrun and exits 0.
 ;
 ; the net: 2 -> H (tanh) -> 1 (sigmoid), trained full-batch by sgd on mse. XOR is the
 ; classic not-linearly-separable problem -- a single linear layer cannot solve it, the
@@ -49,8 +49,8 @@
    _ (puts $ "11 -> " + show (cell 3) + "\n")
    _ (puts $ "final loss " + show final + " (ceiling " + show ceil + ")\n")
 
-   ;; bound to _: a bare assert in a binding slot is define-sugar and never runs.
+   ;; bound to _: a bare test in a binding slot is define-sugar and never runs.
    ;; both halves -- the four rows round right and the loss actually fell, since rounding
    ;; alone passes a net that merely leans the right way.
-   _ (assert (yes 0 0) (yes 1 1) (yes 2 1) (yes 3 0) (final < ceil))
+   _ (test (yes 0 0) (yes 1 1) (yes 2 1) (yes 3 0) (final < ceil))
    0)

@@ -13,18 +13,18 @@
 ;
 ; what this cannot see, and the fuzz must: that a lane nom names the C function it
 ; says it does. the table is the interface; love.c is the other side of it.
-(assert (member? 'vof (names ())))
+(test (member? 'vof (names ())))
 
 ; --- the roster every forall below ranges over. a kind added or a lane merged
 ; --- moves these numbers first ---
-(assert
+(test
  (15 = (vof 0 'mxnk))
  (12 = (vof 0 'mxnl))
  (5 = (vof 0 'mxnb)))
 
 ; --- the band lattice: the 225-cell squares carry no information beyond the
 ; --- quotient. a 5x5 band matrix plus the band assignment is the whole table ---
-(assert
+(test
  (defq mx-add-factors-through-bands
    (paths bool
      (mxsq (lam a (lam b (nateqb (mxadd a b) (mxaddband (mxband a) (mxband b))))))
@@ -39,7 +39,7 @@
 ; --- dispatch commutes up to mirror: a symmetric lane orients itself, the
 ; --- positional bin_a/bin_b pair carries orientation in the name, and the table
 ; --- adds none of its own. mirror being an involution is half the claim ---
-(assert
+(test
  (defq mx-mirror-involutive
    (paths bool (mxall mxnl (lam l (nateqb (mxmirror (mxmirror l)) l))) true)
    (idpath true))
@@ -51,7 +51,7 @@
    (idpath true)))
 
 ; --- the partition, named: the numeric band, the text band, and kmint alone ---
-(assert
+(test
  ; the nine numeric kinds -- the scalar gem tower and the parallel tray tower --
  ; route identically. that is "every numeric kind is one band"
  (defq mx-numerics-one-band
@@ -72,7 +72,7 @@
    (idpath true)))
 
 ; --- () is the unit under + and the zero under *, in every lane at once ---
-(assert
+(test
  (defq mx-mint-is-the-unit
    (paths bool (mxall mxnk (lam b (nateqb (mxadd mxKMint b) mxLbin_unit))) true)
    (idpath true))
@@ -82,7 +82,7 @@
 
 ; --- the diagonal reads the lattice: one add/mul lane pair per band, the algebra
 ; --- ladder. these five rows are the five bands ---
-(assert
+(test
  (defq mx-diag-mint-add (paths nat (mxadd mxKMint mxKMint) mxLbin_unit) (idpath mxLbin_unit))
  (defq mx-diag-mint-mul (paths nat (mxmul mxKMint mxKMint) mxL0) (idpath mxL0))
  ; kstring is the text band's representative -- KNom used to be, and is a point now
@@ -98,7 +98,7 @@
  (defq mx-diag-hot-mul (paths nat (mxmul mxKTablet mxKTablet) mxLmulh) (idpath mxLmulh)))
 
 ; --- and the cells the narrative names one at a time ---
-(assert
+(test
  ; mixed bands degenerate: a number against a string arrives as that band's unit
  ; and the other operand answers whole, positionally
  (defq mx-num-str-degenerates (paths nat (mxadd mxKCharm mxKString) mxLbin_b) (idpath mxLbin_b))
@@ -134,10 +134,10 @@
 ; --- unit there instead of the zero, fails a proof rather than quietly leaving
 ; --- uuhom a monoid about nothing. the guard fails by name if uuhom's terms are
 ; --- not up: they load earlier by sort order and the citation must not dangle ---
-(assert (two? (peep GLOB 'homcomp 0))
+(test (two? (peep GLOB 'homcomp 0))
         (two? (peep GLOB 'hom-assoc 0))
         (two? (peep GLOB 'idfun 0)))
-(assert
+(test
  (defn mxLcompose nat mxLmulh)                     ; the lane uuhom's homcomp spells
  (defq mx-compose-diag (paths nat (mxmul mxKCoin mxKCoin) mxLcompose) (idpath mxLcompose))
  ; ..and the mint at that cell is the zero, not the monoid's unit. uuhom's unit is
@@ -153,7 +153,7 @@
 ; --- every theorem above green, so each load-bearing claim gets its false twin
 ; --- and the kernel must refuse that one. every negative takes its positive. ---
 (hear (\ p e (: h (peep HELPC () 0) (? h (h p e) 0))))
-(assert
+(test
  ; the cartesian cell is not the zero
  ('accepted = (rejects (\ z (defq mx-ok-cart
     (paths nat (mxmul mxKChain mxKChain) mxLmul_cart) (idpath mxLmul_cart)))))

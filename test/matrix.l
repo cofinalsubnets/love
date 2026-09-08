@@ -39,7 +39,7 @@
 ; laws themselves are spec.l's (chains, strings, points); the church rows are
 ; functions.l's whole numeric tower. What is left here is the cells no band law
 ; reaches.
-(assert
+(test
  ; --- row kchain: a chain is a sequence, the text law one lattice rung up. it was the
  ;     Church eliminator ((p f) == (f (a p) (B p))) until the tree was checked and nothing
  ;     at all applied a chain to a function -- so a lambda takes the default action, and
@@ -73,7 +73,7 @@
 ; ============================================================================
 ; addn lane (numeric tower & arrays): the matrix routes here for any arith x
 ; arith chain; the lane then refines by representation. Each rep pairing:
-(assert
+(test
  ; --- scalar tower: fix / float / wide int / bignum / complex, every mix ---
  (= 7 (+ 5 2))                                ; fix + fix (overflow-free fast path)
  (= 7.5 (+ 5 2.5))   (= 7.5 (+ 2.5 5))        ; fix + float (both orders)
@@ -126,7 +126,7 @@
 ; `*` matrix (g_mul_mx): the multiplicative analog (semiring product of `+`)
 ; ============================================================================
 ; muln (arith), mul_rep (seq x count), lvm_0 (seq x seq -> nil), mull (compose).
-(assert
+(test
  ; --- muln: scalar tower + arrays ---
  (= 6 (* 2 3))                                ; fix * fix
  (= 7.5 (* 3 2.5))                            ; fix * float
@@ -159,7 +159,7 @@
 ; the other dyadic generic ops (lane aps, not explicit tables): -, /, %,
 ; comparisons, =. Same lattice; these had no consolidated matrix test.
 ; ============================================================================
-(assert
+(test
  ; --- subtraction `-` is numeric only (text/list/lambda operands -> nil) ---
  (= 3 (- 5 2))   (= 2.5 (- 5 2.5))            ; fix/float tower
  (= (100 2) (- (+ (100 2) 5) 5))        ; bignum
@@ -225,7 +225,7 @@
  !(= "ab" 'ab))                            ; cross-kind -> not equal
 
 ; --- inner (+.x contraction) & outer (o.x) products ---------------------------
-(assert
+(test
  (11.0 = (inner @(1.0 2.0) @(3.0 4.0)))            ; float dot
  (11.0 = (inner @(1 2) @(3.0 4.0))) (gem? (inner @(1 2) @(3.0 4.0)))  ; mixed z.r widens to r
  (: A (star-tray '(2 3) '(1 2 3 4 5 6)) B (star-tray '(3 2) '(7 8 9 10 11 12)) C (inner A B)

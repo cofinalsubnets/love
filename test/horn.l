@@ -8,10 +8,10 @@
 
 (: _ (? hosted (setenv "HORN" "none") ())        ; inle and the browser read no policy word
    h (horn 48000 2)
-   _ (assert ('badarg = horn 100 2) ('badarg = horn 48000 3) ('badarg = horn "a" 2))
+   _ (test ('badarg = horn 100 2) ('badarg = horn 48000 3) ('badarg = horn "a" 2))
    _ (? (nom? h)
         ; no device: only inle on a machine with no HDA controller may say so
-        (assert (h = 'enodev) (love-os = 'inle) !(love-arch = 'x64))
+        (test (h = 'enodev) (love-os = 'inle) !(love-arch = 'x64))
         (: ; one second of silence, 4K at a time: the sink holds a quarter second, the
            ; card's ring under two thirds, so the loop must WAIT for most of it -- and
            ; while it waits another task gets to run
@@ -22,16 +22,16 @@
            _ (: (go n) (? (n = 0) () (: _ (say h z) (go (n - 1)))) (go 47))
            dt (clock t0)
            lag (horn-lag h)
-           _ (assert (hot? h) (dt >= 200) (dt < 5000) (0 < lag) (lag <= 48000) (box 'ran))
+           _ (test (hot? h) (dt >= 200) (dt < 5000) (0 < lag) (lag <= 48000) (box 'ran))
            ; mono: a frame is two bytes, and the lag counts the caller's frames (plus a lead)
            m (horn 48000 1)
-           _ (assert (hot? m) (0 = horn-lag m))
+           _ (test (hot? m) (0 = horn-lag m))
            _ (say m (snip z 0 2000))
            _ (flush m)
-           _ (assert (0 < (horn-lag m) < 4096))       ; the card counts its prefetch lead too
+           _ (test (0 < (horn-lag m) < 4096))       ; the card counts its prefetch lead too
            ; close lands the run and shuts the device; a closed horn has no lag
-           _ (assert !(close m) !(horn-lag m) !(close h) !(horn-lag h))
+           _ (test !(close m) !(horn-lag m) !(close h) !(horn-lag h))
            ; and a horn is not the reader
-           _ (assert (= (quote (5)) (sound "5")))
+           _ (test (= (quote (5)) (sound "5")))
            ; the policy word goes, so the environ laws downstream count what they always did
            (? hosted (setenv "HORN" ()) ()))))

@@ -14,9 +14,9 @@
 ; erased the row gets its paths twin over the pinned carrier beside it, by
 ; uuval.l's bridge. Substrate: test/uuval.l over test/uu.l.
 
-(assert (member? 'vof (names ())))
+(test (member? 'vof (names ())))
 
-(assert
+(test
  ; cap-total   (\ x (? (two? x) 1 (= x (cap x))))
  ; by the lemma the model names
  (defq law-cap-total

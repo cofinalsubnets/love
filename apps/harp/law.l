@@ -23,7 +23,7 @@
    ; --- cycle time: what harp leans on the tree's rationals for --------------
    ; not a re-test of `///` (l/boot/post.l owns that) -- these are the four
    ; properties the algebra would break without, stated where they can be read.
-   _ (assert ; exact, so a third of a cycle survives being multiplied back
+   _ (test ; exact, so a third of a cycle survives being multiplied back
              (((1 /// 3) * 3) = (1 /// 1))
              (((1 /// 3) + (1 /// 6)) = (1 /// 2))
              ; ordered by value and not by shape: (1 3) and (1 6) compare on 1/3
@@ -42,7 +42,7 @@
              (0.25 = qnum (1 /// 4)))
 
    ; --- the floor of the algebra ---------------------------------------------
-   _ (assert ((evs (pure 'a) 0 1) = [[0 1 'a]])
+   _ (test ((evs (pure 'a) 0 1) = [[0 1 'a]])
              ((evs (pure 'a) 0 3) = [[0 1 'a] [1 2 'a] [2 3 'a]])
              ((evs hush 0 4) = ())
              ((evs (fastcat [(pure 'a) (pure 'b)]) 0 1) = [[0 0.5 'a] [0.5 1 'b]])
@@ -56,7 +56,7 @@
    ; fast and slow undo each other, and rev is its own inverse -- the two laws a
    ; change of variable has to keep or the times have drifted
    pp (fastcat [(pure 'a) (pure 'b) (pure 'c)])
-   _ (assert ((evs (fast (qi 3) (slow (qi 3) pp)) 0 2) = (evs pp 0 2))
+   _ (test ((evs (fast (qi 3) (slow (qi 3) pp)) 0 2) = (evs pp 0 2))
              ((evs (rev (rev pp)) 0 2) = (evs pp 0 2))
              ((evs (late (1 /// 4) (early (1 /// 4) pp)) 0 2) = (evs pp 0 2))
              ((vals (rev pp) 0 1) = ['c 'b 'a])
@@ -68,17 +68,17 @@
    ; through the next -- which is exactly the onset test, and the only thing that
    ; keeps a player from re-triggering a long note every cycle.
    sl (slow (qi 2) (pure 'a))
-   _ (assert (1 = cnt sl 0 1)  (1 = cnt sl 1 2)
+   _ (test (1 = cnt sl 0 1)  (1 = cnt sl 1 2)
              (onset? ((sl (qi 0) (qi 1)) 0))  !(onset? ((sl (qi 1) (qi 2)) 0))
              ((ons sl 0 2) = [[0 2 'a]])
              (1 = cnt (pure 'a) 0 1))
    ; a query that starts mid-cycle cuts the part and never the whole
    hev  ((pure 'a) (1 /// 2) (qi 1))
-   _ (assert (1 = #hev)  !(onset? (hev 0))
+   _ (test (1 = #hev)  !(onset? (hev 0))
              ((qnum (evwb (hev 0))) = 0)  ((qnum (evpb (hev 0))) = 0.5))
 
    ; --- weights, windows, and the euclidean lane -----------------------------
-   _ (assert ((evs (timecat [((qi 3) . (pure 'a)) ((qi 1) . (pure 'b))]) 0 1)
+   _ (test ((evs (timecat [((qi 3) . (pure 'a)) ((qi 1) . (pure 'b))]) 0 1)
               = [[0 0.75 'a] [0.75 1 'b]])
              ((evs (squeeze (1 /// 4) (1 /// 2) (pure 'a)) 0 1) = [[0.25 0.5 'a]])
              ; bjorklund's own answer for the three everybody knows
@@ -91,7 +91,7 @@
    ; --- the cycle-indexed transforms -----------------------------------------
    ; every 2 fires on cycle 0 and not on cycle 1
    e2 (every 2 (fast (qi 2)) (pure 'a))
-   _ (assert (2 = cnt e2 0 1)  (1 = cnt e2 1 2)  (2 = cnt e2 2 3)
+   _ (test (2 = cnt e2 0 1)  (1 = cnt e2 1 2)  (2 = cnt e2 2 3)
              ; iter rotates the sequence one step per cycle
              ((vals (iter 4 pp) 0 1) = ['a 'b 'c])
              ((vals (iter 4 pp) 1 2) = ['b 'c 'a])
@@ -105,14 +105,14 @@
    ; --- chance is a place, not a moment --------------------------------------
    ; the same span asked twice must answer the same, or a live loop stutters
    dg (degby 0.5 (fast (qi 16) (pure 'a)))
-   _ (assert ((evs dg 0 4) = (evs dg 0 4))
+   _ (test ((evs dg 0 4) = (evs dg 0 4))
              (0 < #(evs dg 0 8))  (#(evs dg 0 8) < 128)
              ; and two `?`s in one sequence must not agree by construction
              ((#(evs (mini "a? b? c? d? e? f? g? h?") 0 8)) < 64))
 
    ; --- controls: tablets that merge -----------------------------------------
    hv ((hit (pure "bd")) (qi 0) (qi 1))
-   _ (assert (tablet? (evv (hv 0)))  ("bd" = (peep (evv (hv 0)) 's ()))
+   _ (test (tablet? (evv (hv 0)))  ("bd" = (peep (evv (hv 0)) 's ()))
              ; # takes structure from the left and the value from the right
              ((: r ((pset (hit (pure "bd")) (note (pure 7))) (qi 0) (qi 1))
                  [(peep (evv (r 0)) 's ()) (peep (evv (r 0)) 'note ())])
@@ -125,7 +125,7 @@
    ; --- mini-notation --------------------------------------------------------
    (m s) (map (\ x [(qnum (evwb x)) (qnum (evwe x)) (evv x)])
               (filter onset? ((mini s) (qi 0) (qi 1))))
-   _ (assert ((m "bd sn")     = [[0 0.5 "bd"] [0.5 1 "sn"]])
+   _ (test ((m "bd sn")     = [[0 0.5 "bd"] [0.5 1 "sn"]])
              ((m "bd*2 sn")   = [[0 0.25 "bd"] [0.25 0.5 "bd"] [0.5 1 "sn"]])
              ((m "[bd bd] sn") = [[0 0.25 "bd"] [0.25 0.5 "bd"] [0.5 1 "sn"]])
              ((m "bd ~ sn ~") = [[0 0.25 "bd"] [0.5 0.75 "sn"]])
@@ -156,7 +156,7 @@
            q (open w "r")
            s (? (hot? q) (: b (slurp q) _ (close q) (b + "")) "")
            ; a canonical 44-byte riff header over exactly one cycle of stereo frames
-           _ (assert (("RIFF" = snip s 0 4)  ("WAVE" = snip s 8 12)
+           _ (test (("RIFF" = snip s 0 4)  ("WAVE" = snip s 8 12)
                       ("data" = snip s 36 40)
                       (#s = (44 + (spc * 4)))))
            ; the energy has to land where the pattern put it: a kick at 0 and at a
@@ -168,7 +168,7 @@
                                       u (? (v > 32767) (65536 - v) v)
                                       (go (i + 4) (? (u > m) u m))))
                        (go (44 + (a * 4)) 0))
-           _ (assert ((pk 0 2000) > 1000)                            ; kick
+           _ (test ((pk 0 2000) > 1000)                            ; kick
                      ((pk (spc // 4) 2000) > 1000)                   ; kick
                      ((pk ((spc * 3) // 4) 2000) > 1000)             ; snare
                      ; the `~` is a rest, not a silence: the second kick is still
@@ -179,7 +179,7 @@
            t0 (clock 0)
            _ (harp-horn p 0 2 24000 2 0 20000.0)
            dt (clock t0)
-           _ (assert (dt >= 400) (dt < 8000))
+           _ (test (dt >= 400) (dt < 8000))
            (setenv "HORN" ()))))
 
 ; the sentinel the gate reads

@@ -10,7 +10,7 @@
 ; - elementwise transcendentals (sqrt) over an array
 ; - print round-trip; non-conforming / non-numeric -> nil
 
-(assert
+(test
  ; --- constructor + accessors ---
  (= 2 (rank (star-tray '(2 3) 0)))
  (= 6 (tally (star-tray '(2 3) 0)))
@@ -155,7 +155,7 @@
 ; filled one element out of an empty operand), and empty reductions answer
 ; their monoid units: the floor appears as the values of empty reductions.
 (: e (star-tray '(0) 0)
- (assert
+ (test
   ("@()" = (show e)) ('(0) = (shape e)) (1 = (rank e)) (0 = (tally e))   ; empty rank-1 prints @()
   (0 = (net e)) (1 = (prod e)) (aall e)        ; the units: empty sum 0, empty product 1, empty conjunction true
   !e (0 = $e)                                    ; an empty nets nothing

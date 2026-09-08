@@ -17,7 +17,7 @@
 ; equality of trees is pointwise (no funext anywhere), exactly the .v's rule.
 
 ; --- the model: patch, tree, apply, validity, inverse, commute ---
-(assert
+(test
  (defn patch UU (total2 k nat (total2 a nat nat)))
  (defn chg (pi k nat (pi a nat (pi b nat patch)))
    (lam k (lam a (lam b (tpair k (tpair a b))))))
@@ -58,7 +58,7 @@
 ; --- recorded refusal is never a success); the ii1 lane rides maponpaths of
 ; --- "re-commute the carried pair", so the involution is the algebra: commute
 ; --- q p computes straight to ii1 (p,q) once the keys are known distinct ---
-(assert
+(test
  (defn cmside (pi c (coprod ppair unit) UU)
    (lam c (coprod_rect (lam x UU) (lam x empty) (lam x unit) c)))
  (defq commute-involutive
@@ -111,7 +111,7 @@
 ; --- then unpull restores every slot -- pointwise, quantifying the key like
 ; --- the .v does; validity opened by one convoy on its own decision, the main
 ; --- case abstracting both apon layers' shared scrutinee at once ---
-(assert
+(test
  (defq invert-roundtrip
    (pi t tree (pi p patch (pi hv (paths bool (valid t p) true)
       (pi q nat (paths nat (apon (apon t p) (invert p) q) (t q))))))
@@ -149,7 +149,7 @@
 ; --- disequality; commute-sound ties it to the primitive: a successful commute
 ; --- witnesses order-freedom. the double convoy cases each decision once,
 ; --- abstracting all its occurrences on both sides ---
-(assert
+(test
  (defq apon-comm
    (pi p patch (pi q patch (pi ne (pi e (paths nat (pk p) (pk q)) empty)
       (pi t tree (pi r nat
@@ -228,7 +228,7 @@
 ; --- exactly apon-comm under the fold. meaning is order-free, so the
 ; --- (unordered) patch set is a sound version identity -- the reproducibility
 ; --- tie, now machine-checked in three kernels ---
-(assert
+(test
  (defn pvec (pi n nat UU)
    (lam n (nat_rect (lam q UU) unit (lam k (lam r (total2 h patch r))) n)))
  (defn plist UU (total2 n nat (pvec n)))
@@ -311,7 +311,7 @@
 ; --- the order and the truncated minus) and a take/drop/append fusion kit.
 ; --- every succ-succ step of natgtb and natminus is definitional, so the
 ; --- cancellation laws are one induction each, steps landing on their IH ---
-(assert
+(test
  (defq natlehnplusnm
    (pi a nat (pi b nat (paths bool (natgtb a (add a b)) false)))
    (lam a (lam b (nat_rect (lam q (paths bool (natgtb q (add q b)) false))
@@ -368,7 +368,7 @@
 ; --- the list kit: how take, drop and append fuse. all at nlist, uulay.l's
 ; --- vocabulary (ltake/ldrop/lapp/lapptakedrop/ldroplen/lnil0 load before
 ; --- this file by sort order); every induction walks the vector like uulay's ---
-(assert
+(test
  (defq ldropnil
    (pi k nat (paths nlist (ldrop k nnil) nnil))
    (lam k (nat_rect (lam q (paths nlist (ldrop q nnil) nnil))
@@ -517,7 +517,7 @@
 ; --- dichotomy carries the bool-path evidence into every branch, the same
 ; --- convoy the named-slot slice built on isdeceqnat. refusal (overlap OR
 ; --- touch: strict, the darcs seam) is the unit summand ---
-(assert
+(test
  (defn hunk UU (total2 i nat (total2 o nlist nlist)))
  (defn mkh (pi i nat (pi o nlist (pi n nlist hunk)))
    (lam i (lam o (lam n (tpair i (tpair o n))))))
@@ -555,7 +555,7 @@
 ; --- index slides home. the carried pair rides the same maponpaths trick as
 ; --- the named-slot slice; the arithmetic is the natgtbplusr cancellation
 ; --- through natminusplusnmm's recomposition, once per branch ---
-(assert
+(test
  (defn hcmside (pi c (coprod hpair unit) UU)
    (lam c (coprod_rect (lam x UU) (lam x empty) (lam x unit) c)))
  (defq hcommute-involutive
@@ -757,7 +757,7 @@
 ; --- end) and matching, apply-then-unpull is the identity. splice is
 ; --- definitionally take/append/drop, so the whole proof is the seams
 ; --- decomposition s = A ++ o ++ W laid twice through the fusion kit ---
-(assert
+(test
  (defq hinv-roundtrip
    (pi s nlist (pi p hunk
       (pi hb (paths bool (natgtb (add (hi p) (nlen (ho p))) (nlen s)) false)
@@ -831,7 +831,7 @@
 ; --- exactly why defq seals), so each intermediate path is its own defq and
 ; --- every use is a stuck neutral. seams is the one decomposition law all the
 ; --- slices lean on: a valid (i, o) window splits s as A ++ o ++ W ---
-(assert
+(test
  (defq seams
    (pi s nlist (pi i nat (pi o nlist
       (pi hb (paths bool (natgtb (add i (nlen o)) (nlen s)) false)
@@ -996,7 +996,7 @@
 ; --- the re-aimed index, located on the seams; then the four take/drop reads
 ; --- (the ORIGINAL order's two, the RE-AIMED order's two), the re-aimed
 ; --- state's normal form, and the assembly ---
-(assert
+(test
  (defq after-j2v
    (pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat
       (pi g (paths bool (natgtb j (add i (nlen n1))) true)
@@ -1254,7 +1254,7 @@
 
 ; --- the re-aimed state's normal form, its two reads at p's window, and the
 ; --- assembly: both orders land A ++ n1 ++ M ++ n2 ++ Z ---
-(assert
+(test
  (defq after-nf2
    (pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist (pi n2 nlist
       (pi g (paths bool (natgtb j (add i (nlen n1))) true)
@@ -1432,7 +1432,7 @@
 ; --- the before branch: q aims strictly ahead of p, so p slides forward by
 ; --- q's delta. the state decomposes B ++ o2 ++ C ++ o1 ++ W; the same sealed
 ; --- ladder, with A's own seams carrying the front half ---
-(assert
+(test
  (defq before-leh-ja
    (pi s nlist (pi i nat (pi o1 nlist (pi j nat (pi o2 nlist
       (pi g2 (paths bool (natgtb i (add j (nlen o2))) true)
@@ -1520,7 +1520,7 @@
 ; --- the slid index, all nat (tower lengths named by the guards' arithmetic,
 ; --- so conv never re-walks a take/drop tower); then the re-aimed state's
 ; --- normal form, its two reads, and the assembly ---
-(assert
+(test
  (defq before-i2v
    (pi i nat (pi j nat (pi o2 nlist (pi n2 nlist
       (pi g2 (paths bool (natgtb i (add j (nlen o2))) true)
@@ -1825,7 +1825,7 @@
 ; --- carried pair through the same maponpaths as L1; each branch closes by
 ; --- its splice lemma. then (L3b): states are data, so the frontier is one
 ; --- maponpaths -- the fold's tail rides the two-patch agreement ---
-(assert
+(test
  (defn hvec (pi n nat UU)
    (lam n (nat_rect (lam q UU) unit (lam k (lam r (total2 x hunk r))) n)))
  (defn hlist UU (total2 n nat (hvec n)))
@@ -1843,7 +1843,7 @@
                         (hcons (mkh 3 (ncons 3 nnil) (ncons 9 nnil)) hnil))
                  (ncons 1 (ncons 2 (ncons 3 (ncons 4 nnil))))))
   = (vof 0 '(ncons 7 (ncons 8 (ncons 2 (ncons 9 (ncons 4 nnil))))))))
-(assert
+(test
  (defq hcommute-sound
    (pi
      p
@@ -2118,7 +2118,7 @@
                        (natgthorleh (hi p) (add (hi q) (nlen (ho q)))))
                      h)))
                (natgthorleh (hi q) (add (hi p) (nlen (hn p))))))))))))
-(assert
+(test
  (defq hfold-swap
    (pi p hunk (pi q hunk (pi q2 hunk (pi p2 hunk (pi s nlist (pi post hlist
       (pi h (paths (coprod hpair unit) (hcommute p q) (ii1 (tpair q2 p2)))
@@ -2142,7 +2142,7 @@
  p0 '(mkh 0 (ncons 1 nnil) (ncons 7 (ncons 8 nnil)))
  q0 '(mkh 3 (ncons 3 nnil) (ncons 9 nnil))
  q0p '(mkh 2 (ncons 3 nnil) (ncons 9 nnil))
- _ (assert
+ _ (test
     ((vof 0 ['hap ['hap s0 p0] q0]) = (vof 0 ['hap ['hap s0 q0p] p0]))
     ((vof 0 ['hcommute p0 q0]) = (vof 0 ['ii1 ['tpair q0p p0]])))
  0)
@@ -2161,7 +2161,7 @@
 ; --- diagonal (a duo-valued nat_rect: at (0 b) jump to (succ b, 0), else
 ; --- step (npred a, succ b) -- una/unb the two step components, niszero/
 ; --- npred the case machinery, so every branch is definitional). ---
-(assert
+(test
  (defn tri
    (pi n nat nat)
    (lam n (nat_rect (lam q nat) 0 (lam k (lam r (add (succ k) r))) n)))
@@ -2200,7 +2200,7 @@
 ; --- the (0 b) corner jumps to the next diagonal's head. npairdiag: an
 ; --- interior step slides down it. npairstep fuses them through una/unb
 ; --- (each branch definitional), npairunpair closes by one induction. ---
-(assert
+(test
  (defq npairhead
    (pi b nat (paths nat (npair (succ b) 0) (succ (npair 0 b))))
    (lam b
@@ -2252,7 +2252,7 @@
 ; --- rides the double induction (diagonal d outside, the walk down it
 ; --- inside), the equation convoys carrying a+b = d exactly like
 ; --- isdeceqnat's; both projections travel together in one total2. ---
-(assert
+(test
  (defq unpbheadu
    (pi d nat
       (pi ha (paths nat (upa (npair 0 d)) 0)
@@ -2428,7 +2428,7 @@
 ; --- rides inside the pair, so upb never grows: upble + istransnatleh feed
 ; --- the guard convoys), the house fuel pattern at nateqb's one-call-per-
 ; --- level shape. round trips sealed both ways. ---
-(assert
+(test
  (defn lcode
    (pi l nlist nat)
    (lam l
@@ -2563,7 +2563,7 @@
 ; --- ekids read a node back (ekids fuelled by the code it decodes). beta
 ; --- both ways and eta close from the two round trips, and nat's decidable
 ; --- equality is the tree's -- the swal guards' Aeq, for free. ---
-(assert
+(test
  (defn etree
    UU
    nat)
@@ -2623,7 +2623,7 @@
 ; ============================================================================
 ; --- nateqb closes its own diagonal, and a true verdict is an identification
 ; --- (the corpus had symm; refl + soundness complete the little theory) ---
-(assert
+(test
  (defq nateqbrefl
    (pi x nat (paths bool (nateqb x x) true))
    (lam x (nat_rect (lam q (paths bool (nateqb q q) true)) (idpath true) (lam k (lam IH IH)) x)))
@@ -2649,7 +2649,7 @@
 ; --- the four primitives: the occ head contribution rides outside the fold
 ; --- (one recursive call per level, nateqb's eager-NbE shape); lay and lget
 ; --- carry the seat as a pi so it decrements alongside the walk ---
-(assert
+(test
  (defn occ
    (pi x nat (pi l nlist nat))
    (lam x
@@ -2709,7 +2709,7 @@
 ; --- walks; layget subsumes lay_id with no hypothesis (out of range both
 ; --- sides are the list, sigma-eta closes the cons); the occ movers carry
 ; --- the seat guard + the nateqb verdicts patch.v's Aeq destructs carried ---
-(assert
+(test
  (defq laylen
    (pi l nlist (pi k nat (pi w nat (paths nat (nlen (lay l k w)) (nlen l)))))
    (lam l
@@ -3163,7 +3163,7 @@
 ; single bool. the L1 law: swal through the groupoid inverse comes home.
 ; ============================================================================
 ; --- two nat facts the re-aim arithmetic leans on ---
-(assert
+(test
  (defq natlehplusminus
    (pi i nat
       (pi j nat (pi h (paths bool (natgtb i j) false) (paths nat (add i (natminus j i)) j))))
@@ -3231,7 +3231,7 @@
 ; --- the model: the deep patch, its inverse, the result pair, and swal
 ; --- itself -- one bool_rect on the folded guard, the payload re-aiming
 ; --- the deep edit at the survivor's seat (ffind under the four counts) ---
-(assert
+(test
  (defn epatch
    UU
    (total2 j nat (total2 a nat nat)))
@@ -3288,7 +3288,7 @@
 ; --- laid seat, ffindlay pins the survivor), the payload ties by laylay +
 ; --- layget + the minus cancellations, and one maponpaths over the folded
 ; --- guard fires the tower. sealed as its own defq (the eager-NbE law) ---
-(assert
+(test
  (defq swal-f1
    (pi i nat
       (pi O nlist
@@ -4177,7 +4177,7 @@
 ; --- the counts (1 = 0 is succ-on-zero absurd), ii1 injects through a
 ; --- coprod_rect projection, and one transport carries the goal from the
 ; --- computed pair to the hypothesis' -- sigma-eta does the records ---
-(assert
+(test
  (defq swal-involutive
    (pi p epatch
       (pi s hunk
@@ -4523,7 +4523,7 @@
 ; --- the order tail: asymmetry, gtb-to-noteq, trichotomy, and the mixed
 ; --- transitivity the head ordering needs -- each a convoy or one triple
 ; --- rect on the existing istransnatgth/isantisymmnatleh floor ---
-(assert
+(test
  (defq natgthtoneg
    (pi a nat (pi b nat (pi g (paths bool (natgtb a b) true) (paths bool (natgtb b a) false))))
    (lam a
@@ -4624,7 +4624,7 @@
 ; --- min and max, recursive (succ-succ definitional), with comm and the
 ; --- two bounds the hull arithmetic reads; natminusswap re-associates a
 ; --- double truncated-minus through the two cancellations ---
-(assert
+(test
  (defn natmin
    (pi a nat (pi b nat nat))
    (lam a
@@ -4743,7 +4743,7 @@
 ; --- reduction rungs (dedup / new head / skip) make every comm/absorb leaf
 ; --- a short chain; comm's case tree rides the order tail exactly where
 ; --- patch.v's destructs rode lia ---
-(assert
+(test
  (defn cins
    (pi x nat (pi l nlist nlist))
    (lam x
@@ -5553,7 +5553,7 @@
 ; --- the bubble model: sseg cuts the hull, rend lays a rival inside it,
 ; --- scell packs hull base + the cins-canonical rival set. hash rides as
 ; --- a pi-bound function -- lcode instantiates it in the demos ---
-(assert
+(test
  (defn sseg
    (pi s nlist (pi i nat (pi n nat nlist)))
    (lam s (lam i (lam n (ltake n (ldrop i s))))))
@@ -5693,7 +5693,7 @@
 ; --- conflicted hull contracts to one seat, so the merged length reads
 ; --- off the hull alone -- every downstream seat determinate before
 ; --- anyone resolves ---
-(assert
+(test
  (defq splice-pad
    (pi pl nlist
       (pi pr nlist
@@ -5945,7 +5945,7 @@
 ; --- the pattern family and its coding: leaves live at every depth (the
 ; --- left summand), cells one rung down, so any two patterns share a depth;
 ; --- tcode lays a pattern onto the element grain the states speak ---
-(assert
+(test
  (defn tmleaf
    UU
    (coprod nat nat))
@@ -5990,7 +5990,7 @@
 ; --- the substitution: a duo-list (key, code), first hit wins -- the walk
 ; --- is occ's shape at duo grain; sqside is the option's no-confusion
 ; --- family (a miss is never a hit) ---
-(assert
+(test
  (defn svec
    (pi n nat UU)
    (lam n (nat_rect (lam q UU) unit (lam k (lam r (total2 h duo r))) n)))
@@ -6028,7 +6028,7 @@
 ; --- binds), the cell lane is guarded by the ground's tag -- upa/upb read
 ; --- the ground's kids, and npairunpair will reassemble them; mvside is
 ; --- the result option's no-confusion family ---
-(assert
+(test
  (defn mleaf
    (pi p tmleaf (pi g nat (pi s slist (coprod slist unit))))
    (lam p
@@ -6106,7 +6106,7 @@
 ; --- untouched, and a fresh bind's shadowing cons reads through nateqb's
 ; --- decision (agreeing keys land in sqside's empty lane); the cell rung
 ; --- threads the two ihs through the remembered intermediate ---
-(assert
+(test
  (defq mleaf-mono
    (pi p tmleaf
       (pi g nat
@@ -6385,7 +6385,7 @@
 ; --- the cell rung reassembles the ground from its kids -- the two ihs,
 ; --- npairunpair twice, and the tag verdict slid home. then the headline
 ; --- at the empty substitution ---
-(assert
+(test
  (defq mleaf-sound
    (pi p tmleaf
       (pi g nat
@@ -6721,7 +6721,7 @@
 ; --- patch's path from the variable's olds seat to its news seat by
 ; --- prefix surgery, the rule riding unchanged; swapping the seats back
 ; --- is home -- L1 for the metavariable lane, two ldroplenapp reads ---
-(assert
+(test
  (defn reaim
    (pi a nlist (pi b nlist (pi p nlist nlist)))
    (lam a (lam b (lam p (lapp b (ldrop (nlen a) p))))))
@@ -6766,7 +6766,7 @@
 ; ============================================================================
 ; --- the canonical identity: fold the frontier through cins; an adjacent
 ; --- swap and a stutter vanish before the fold even lands (H1 / H2) ---
-(assert
+(test
  (defn foldc
    (pi hs nlist (pi acc nlist nlist))
    (lam hs
@@ -6844,7 +6844,7 @@
 
 ; --- the digest is faithful: natgtb closes its own diagonal, so a code
 ; --- decodes on its own fuel -- lcode is injective, the real digest ---
-(assert
+(test
  (defq natgtbnn
    (pi n nat (paths bool (natgtb n n) false))
    (lam n
@@ -6868,7 +6868,7 @@
 ; --- the repo: a store from digests, put at raw-key grain, get through the
 ; --- identity -- a version stored once is found under every presentation
 ; --- of its set, and a miss rides through to the older book ---
-(assert
+(test
  (defn store
    UU
    (pi k nat (coprod nat unit)))
@@ -6989,7 +6989,7 @@
 ; closed demos ride lof -- vof pays the unary grind on cell codes, lof does
 ; not (24ms vs 5s), and test/uu.l's differential battery ties the two.
 ; ============================================================================
-(assert
+(test
  ; the cell code carries its tag in the second seat -- (npair pair 2), not
  ; (npair 2 pair) -- so the charm never meets add/tri's unfolding loop and a
  ; cell at open args stays one small stuck node instead of a succ tower that
@@ -7016,7 +7016,7 @@
  (= (vof 0 '3) (vof 0 '(gka (gcell 3 1))))
  (= (vof 0 '1) (vof 0 '(gkb (gcell 3 1)))))
 
-(assert
+(test
  (defn gsub
    (pi p nlist (pi g nat nat))
    (lam p
@@ -7052,7 +7052,7 @@
             g)))))
  1)
 
-(assert
+(test
  (defq gsubput-stepa
    (pi k nat
       (pi vv (nvec k)
@@ -7137,7 +7137,7 @@
         (pr2 p))))
  1)
 
-(assert
+(test
  (defq gsubputab-stepa
    (pi k nat
       (pi vv (nvec k)
@@ -7264,7 +7264,7 @@
             (pr2 w))))))
  1)
 
-(assert
+(test
  (defq gsubputba-stepa
    (pi k nat
       (pi vv (nvec k)
@@ -7391,7 +7391,7 @@
             (pr2 w))))))
  1)
 
-(assert
+(test
  (defq gputcomm-cellz
    (pi A nat (pi B nat (pi ra nlist (pi rb nlist (pi x nat (pi y nat
       (paths nat (gcell (gka (gcell (gput ra A x) B)) (gput rb (gkb (gcell (gput ra A x) B)) y)) (gcell (gput ra (gka (gcell A (gput rb B y))) x) (gkb (gcell A (gput rb B y)))))))))))
@@ -7449,7 +7449,7 @@
         (pr2 w))))))
  1)
 
-(assert
+(test
  ; the slice in the small, at lof speed: the write lands where the read
  ; looks, the diverging orders land one tree, the other side's read rides
  ((lof '(gsub (ncons 1 (ncons 0 nnil)) (gput (ncons 1 (ncons 0 nnil)) (gcell 0 (gcell 1 0)) 2))) = 2)

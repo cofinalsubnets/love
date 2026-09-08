@@ -28,14 +28,14 @@
 ; --- crc32 --- the check value every crc32 implementation publishes is the one for
 ; "123456789", and it is the whole point of naming a polynomial: two crc32s that
 ; disagree here are different functions wearing one name.
-(assert
+(test
  (3421780262 = (gz-crc32 "123456789"))          ; 0xcbf43926
  (0 = (gz-crc32 ""))                            ; the empty message hashes to the seed
  !((gz-crc32 "a") = (gz-crc32 "b"))
  ((gz-crc32 "abc") = (gz-crc32 ("ab" + "c"))))  ; it reads bytes, not strings
 
 ; --- deflate and inflate --- ours against ours, over the five shapes.
-(assert
+(test
  (gz-all gz-rt gz-shapes)
  (gz-all gz-crt gz-shapes)
  ; a run of one byte is the overlapping copy: the match source is still being
@@ -62,7 +62,7 @@
 (: tz-e (tar-entry "dir/file.txt" 'file "hello")
    _ (pin tz-e 'mode 420) _ (pin tz-e 'mtime 1234)
    tz-h (tar-head tz-e))
-(assert
+(test
  (512 = (tally tz-h))
  (100 = (tz-h 0))                               ; name starts at offset 0: 'd'
  ((tz-h 156) = 48)                              ; typeflag '0', a regular file
@@ -87,7 +87,7 @@
    tz-a (tar-pack tz-es)
    tz-r (tar-unpack tz-a)
    tz-back (? (! tz-r) () (<(>tz-r))))
-(assert
+(test
  (0 = (% (tally tz-a) 512))                     ; an archive is whole blocks, always
  ((tally tz-a) = 3584)                          ; 3 headers + 2 bodies + 2 zero blocks
  (two? tz-r)
@@ -111,7 +111,7 @@
 ; is a wrong archive that looks right until something extracts it.
 (: tz-long (: (go i a) (? (12 <= i) a (go (i + 1) (a + "0123456789/"))) (go 0 ""))
    tz-deep (tz-long + "leaf.txt"))
-(assert
+(test
  (: sp (tar-split "short.txt") (&& ("" = <sp) ("short.txt" = <(>sp))))
  (: sp (tar-split tz-deep) (&& (two? sp) ((tally <(>sp)) < 101)))
  ; 200 characters with no "/" at all: no split can exist, and none is invented
@@ -125,7 +125,7 @@
    tgz-z (gz-zip tgz-a "archive.tar" 0)
    tgz-u (gz-unzip tgz-z)
    tgz-back (? (! tgz-u) () (tar-unpack (<(>tgz-u)))))
-(assert
+(test
  ((tally tgz-z) < (tally tgz-a))                ; it actually compressed
  (two? tgz-u)
  (two? tgz-back)

@@ -5,7 +5,7 @@
 ; "fires" checks can't live in this cross-compiler suite (they're verified out of band).
 ; What can be asserted here: fold correctness, and that identity-minting heads stay
 ; excluded -- (tablet 0) must yield a fresh hash on every call under both compilers.
-(assert
+(test
  ; --- impure / identity-minting heads are not folded (fresh each call) ---
  (: (f _) (tablet 0) (nil? (= (f 0) (f 0))))    ; `table` excluded -> distinct hashes
 
@@ -84,7 +84,7 @@
 (: pg-ctr (cask 1)
    (pg-bump _) (: v (peep pg-ctr 0 0) _ (pin pg-ctr 0 (+ v 1)) (+ v 1))
    (pg-dbl x) (x + x)                                ; names its param twice -- the duplication site
-   (assert
+   (test
     (: _ (pin pg-ctr 0 0) r (pg-dbl (pg-bump 0))
        (&& (= 2 r) (= 1 (peep pg-ctr 0 0))))))       ; evaluated once: 1+1, counter at 1
 
@@ -99,7 +99,7 @@
    (bs-ord a b) (b - a)                    ; reads its args in reverse; eval stays call order
    (bs-drop a b) b                         ; drops its first param; the effect must still run
    (bs-esc n) (\ x (x + n))                ; a lambda body -> escapes at value position
-   (assert
+   (test
     ; mixed: the constants substitute and the one impure arg binds -- value and trace as the call
     (: _ (pin bs-ctr 0 0) r (bs-mix 3 (bs-bump 0) 4)
        (&& (= 8 r) (= 1 (peep bs-ctr 0 0))))
@@ -128,7 +128,7 @@
    (r1-mix a b c) (a + c + b)               ; b read once -> substitutes; a c fold
    (r1-two a b) (a + a + b)                 ; a read twice -> binds; b once -> substitutes
    (r1-iff p b) (? p b 0)                   ; b read under ? -> declines; still runs once
-   (assert
+   (test
     ; read-once: the effect still fires exactly once, value as the call
     (: _ (pin r1-c1 0 0) r (r1-mix 3 (r1-b1 0) 4)
        (&& (= 8 r) (= 1 (peep r1-c1 0 0))))
@@ -148,7 +148,7 @@
 (: (usadd a b) (a + b)
    (us3 a b c) (a + b + c)
    (ustw f x) (f (f x))
-   (assert
+   (test
     (15 = (: (g i) ((ustw (usadd i)) i) (g 5)))          ; the doc's promise: collapses to first-order
     (7 = ((ustw (us3 1 2)) 1))                           ; two params short, then cascaded
     (9 = (: h (usadd 4) (h (h 1))))))                    ; value position: the partial reverts, still right
@@ -157,7 +157,7 @@
 ; nested two, and the same meaning either way. shadowing and capture are the gates: an inner
 ; name that collides with an outer one, or that an outer def reads, keeps its own frame.
 (: (lf-h n) (? (n = 0) 4 (lf-h (n - 1)))         ; recursive, so cprop neither folds nor inlines it
-   (assert
+   (test
     (3 = (: a 1 (: b 2 (a + b))))                   ; the plain splice
     (6 = (: a 1 (: b 2 (: c 3 (a + b + c)))))       ; a chain of any depth lands in one frame
     (2 = (: a 1 (: a 2 a)))                         ; a collision -- the inner still shadows
@@ -170,7 +170,7 @@
 (: (oa2 a b) (? (a = 0) (\ c (b + c)) (oa2 (a - 1) b))
    (oa3 a b c) (? (a = 0) [b c] (oa3 (a - 1) b c))
    (oan x) (? (x = 0) 3 (oan (x - 1)))              ; an operand no fold knows -- 3
-   (assert
+   (test
     (7 = (oa2 1 3 4))                               ; arity 2, three args
     (7 = ((oa2 1 3) 4))                             ; ... the same, spelled split
     (8 = (oa3 1 9 8 1))                             ; arity 3, four args -- [9 8] indexed at 1
@@ -189,7 +189,7 @@
 (: (oas-w a b) (? (two? a) (oas-w >a b) b)              ; the outer oas-w: arity 2
    (oas-in l) (: (oas-w x y z) (? (two? x) (oas-w >x y z) (y + z))   ; shadows it at arity 3
                  (oas-w l 1 2))
-   (assert
+   (test
     (3 = (oas-in [1 2 3]))                              ; the inner arity is the one that runs
     (3 = (oas-in ()))                                   ; ..including where the walk ends at once
     (9 = (oas-w [1 2] 9))))                             ; and the outer still answers for itself

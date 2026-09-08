@@ -7,12 +7,12 @@
 ; duplicates); zinsane is Swierstra's insert invariant.
 
 ; --- the specification: sanity is a duplicate-free row ---
-(assert
+(test
  (defn zsane (pi z stk bool) (lam z (nodupb (zrow z)))))
 
 ; --- the moves compute: rows, counts, focus motion (the wrap included),
 ; --- the master reorder, the swaps, and all four delete faces ---
-(assert
+(test
  (4 = (vof 0 '(zcount (zmk 5 (ncons 2 nnil) (ncons 7 (ncons 9 nnil))))))
  (5 = (vof 0 '(zcount (zins 4 (zmk 5 (ncons 2 nnil) (ncons 7 (ncons 9 nnil)))))))
  ((vof 0 'true)  = (vof 0 '(zsane (zmk 5 (ncons 2 nnil) (ncons 7 (ncons 9 nnil))))))
@@ -48,7 +48,7 @@
 ; --- zinsane -- Swierstra's insert invariant -- is nodupmid instantiated
 ; --- at the row's split, since zrow (zins w z) is lapp (lrev up)
 ; --- (ncons w (ncons f dn)) by computation ---
-(assert
+(test
  (defn zrevrev (pi z stk (paths stk (zrev (zrev z)) z))
    (lam z (idpath z)))
  (defn zfocins (pi w nat (pi z stk (paths nat (zfoc (zins w z)) w)))

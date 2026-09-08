@@ -202,8 +202,8 @@
                 (go (tablet 0) l))
    (count p l) (foldl (\ a x (p x ? (a + 1) a)) 0 l))
 
-; --- assert / suite: the strict checkers, baked so they work with no harness ---
-;;; FIXME how are these used at the moment?
+; --- assert / suite: the strict checkers, baked so they work with no harness.
+; a failure scares and the program dies; test/00-init.l's `test` records instead. ---
 (:: 'assert (\ l (. 'do (map (\ e (list '? e 0 (list 'scare (list '\ 'assert) (list '\ e)))) l))))
 
 (:: 'suite (\ l (. 'do (. (. 'assert (cup l)) (list (list 'puts (cap l)) (list 'puts ": ok\n"))))))

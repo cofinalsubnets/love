@@ -327,7 +327,7 @@
     "btz3di9muow8ppmb4rf29u02dk98tgywmvgx02932cvwma2azhhjh7l3cc4qdxuhajevxqstiuqd6y27ky2an3gkk9r3emtrtgkbmapr1tksc78n6otj5ytffis8tyjyb8cvdxlfvx55atvqicl6r8b7qgcui6s1fw72krzt2mobtja8z8xa63pdc038z4are3jpu3f88x1m4ditopbuj65v39y411gipo6f95d5lm30hr6rq3arfvfws01waq73tuly3i2a5x8cbs6fy2xh5b5"
     "mi8h4wpnceb9ujej8gucr6ak2zyxl1e1en7ptpbzh04w72nw5c3ch498aggxpe8cm8fc0fgcwh6vaw8mkh51sn9yrvcl6jgutdyk62mwsm78cms5p8plrrna9qfg667uzepm8uu6wmr6hd9c8bgtdvrubg85rmzj0ch0829vv5zw5ysh0ddv2nz03ksab4dydj6sh50yvcdo5njnu1v8ivvmpr7h3j3lgchduhq8asn7it2lg8jxlfm66id8xlknzgglg9wlcauq4zsgk5ppmwci"
    )
- (assert
+ (test
   ; the Bell numbers themselves, decimal, cross-checked vs oeis a000110
   (= 1 (bell 0)) (= 1 (bell 1)) (= 2 (bell 2)) (= 5 (bell 3)) (= 15 (bell 4))
   (= 52 (bell 5)) (= 203 (bell 6)) (= 877 (bell 7)) (= 4140 (bell 8))

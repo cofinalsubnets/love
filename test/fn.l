@@ -11,7 +11,7 @@
 ; so a closure is also asserted intensionally below ((adder 5) = (\ x (+ x 5))). General beta/eta
 ; stay unbridged (the line: `=` surfaces the beta ev ALREADY ran, it does not reduce on its own).
 (: (rt x) (ev (cap (sound (show x))))
- (assert
+ (test
   (= "\+" (show (+)))
   (= "." (show link))
   (= "(\\ a a)" (show (\ x x)))

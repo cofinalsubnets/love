@@ -2,7 +2,7 @@
 (: s0 (mint 0)
    s1 (mint 0)
    s2 (mint 0)
- (assert !(= s0 s1)
+ (test !(= s0 s1)
          !(= s0 s2)
          !(= s1 s2)
          (= 'asdf (intern "asdf"))          ; intern: string -> the interned symbol
@@ -20,12 +20,12 @@
  _ (Put 2 3)
  _ (Put 3 4)
  _ (Put 't 'f)
- _ (assert
+ _ (test
     (= 4 (tally t))
     (= 4 (ln (keys t))))
  _ (Del 2)
  _ (Del 't)
- (assert
+ (test
     (= 2 (tally t))
     (= 2 (ln (keys t)))
     (: (lll t) (foldl (\ l k (link k (link (Get k) l))) () (keys t))
@@ -39,7 +39,7 @@
  (cats a b y n) (a (\ s l (b (\ s m (y s (cat l m))) n s)) n)
  (alt a b y n) (a y (b y n))
  (rep a y n s) ((opt (cats a (rep a))) y n s)
- (assert
+ (test
   (= "xx" (+ "xx" ""))
   (= "xx" (+ "x" "x"))
   (= "xx" (+ "" "xx"))

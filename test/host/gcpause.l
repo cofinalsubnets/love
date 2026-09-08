@@ -76,7 +76,7 @@
    t3 (tenure 192) r3 (churn 8) _ (row t3 r3)
    _ (tally <>>t1 + tally <>>t2 + tally <>>t3)       ; every cask list live past the last minor
 
-   _ (assert
+   _ (test
       (8 = <>>r1) (8 = <>>r2) (8 = <>>r3)     ; every churn collection was a minor, one each
       (0 < <r1)                               ; the minors did real work (the claim isn't vacuous)
       (<r2 < <r1 + 1024)                      ; the flat line: 12x the tenured set moves the

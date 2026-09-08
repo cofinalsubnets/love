@@ -23,14 +23,14 @@
 
 (borrow "apps/tls/tls.l")
 
-(assert
+(test
  (member? 'tls (cite ()))
  (member? 'cc-block (keys (cite 'tls)))
  (member? 'po-mac (keys (cite 'tls)))
  (lit? (cite 'tls 'cc-xor)))
 
 ; --- bytes ------------------------------------------------------------------------
-(assert
+(test
  (66051 = (le32 (unhex "03020100") 0))         ; 0x00010203 little-endian
  (258 = (be16 (unhex "0102") 0))               ; ..and big-endian is the other way
  ("deadbeef" = (hex (unhex "deadbeef")))
@@ -45,12 +45,12 @@
 
 ; --- block: §2.3.2, the first four words of the 20-round block ---------------------
 (: b232 (cc-block (cc-init rfckey n232 1 1))
-   (assert
+   (test
     (3840405776 = (wd b232 0 0)) (358169553 = (wd b232 1 0))
     (534581072 = (wd b232 2 0))  (3295748259 = (wd b232 3 0))))
 
 ; --- stream: one block is 64 bytes, and a batch is its blocks ---------------------
-(assert
+(test
  (64 = (tally (cc-stream rfckey n232 1 1)))
  (256 = (tally (cc-stream rfckey n232 1 4)))
  ; the counter varies down the galaxy: block 2 of a 4-batch is the 1-batch at
@@ -64,7 +64,7 @@
 (: pt242 ("Ladies and Gentlemen of the class of '99: If I could offer you only "
           + "one tip for the future, sunscreen would be it.")
    ct242 (cc-xor rfckey n242 1 pt242)
-   (assert
+   (test
     (114 = (tally ct242))
     ((hex ct242) = ("6e2e359a2568f98041ba0728dd0d6981e97e7aec1d4360c20a27afccfd9fae0b"
                     + "f91b65c5524733ab8f593dabcd62b3571639d624e65152ab8f530c359f0861d8"
@@ -77,7 +77,7 @@
 
 ; --- mac: §2.5.2, and the block edges ---------------------------------------------
 (: k252 (unhex "85d6be7857556d337f4452fe42d506a80103808afb0db2fd4abff6af4149f51b")
-   (assert
+   (test
     ((hex (po-mac k252 "Cryptographic Forum Research Group"))
      = "a8061dc1305136c6c22b8baf0c0127a9")
     (16 = (tally (po-mac k252 "anything at all")))
@@ -100,7 +100,7 @@
 (: allone 67108863                                    ; 2^26 - 1
    (fin l0) (hex (po-fin (list l0 allone allone allone allone) rfckey))
    sbytes "101112131415161718191a1b1c1d1e1f"          ; s alone, the key's second half
-   (assert
+   (test
     ; h = p reduces to 0, so the tag is s -- the same tag the empty message gives,
     ; by a completely different route.
     ((fin 67108859) = sbytes)
@@ -118,7 +118,7 @@
    k0 rfckey
    k1 (bytes 32 (\ i (? (i = 0) 1 i)))             ; one bit of r
    k2 (bytes 32 (\ i (? (i = 16) 17 i)))           ; one bit of s
-   (assert
+   (test
     (! ((po-mac k0 m0) = (po-mac k0 m1)))
     (! ((po-mac k0 m0) = (po-mac k1 m0)))
     (! ((po-mac k0 m0) = (po-mac k2 m0)))

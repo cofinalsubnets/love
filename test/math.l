@@ -6,7 +6,7 @@
    (near a b)       (near? a b (? word 1e-12 1e-5))   ; f32 reals (wasm) need a looser eps
    (very-near a b)  (near? a b (? word 1e-15 1e-5))
 
-   (assert
+   (test
     ; --- pi from boot.l, basic identities ---
     (= 1.0 (cosine 0))
     (= 0.0 (sine 0))

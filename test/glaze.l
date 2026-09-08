@@ -13,7 +13,7 @@
 ; there is no seam there to hold to its word -- (cite 'glaze) answers () and this stands down.
 (: G (cite 'glaze)
    (? G (: N (G 'nif)
-           (assert (lit? N)
+           (test (lit? N)
                    !(N 5 0 0 1) !(N 'x 0 0 1) !(N () 0 0 1) !(N "" 0 0 1)))
       0))
 
@@ -36,7 +36,7 @@
    (scar-dash z) (: (g j) (? (j < 1) "" ("-" + (g (j - 1)))) (g (tally z)))           ; ..the argument-applying twin
    (scar-lit n)  (: (go k acc) (? (k < 1) acc (go (k - 1) "Q")) (go n 0))             ; a bare string constant
    (scar-link n) (: (go k acc) (? (k < 1) acc (go (k - 1) (link acc 1))) (go n 0))    ; a cons
-   _ (assert
+   _ (test
       ("   " = (scar-sp 3))                                  ; was 6  -- the triangular sum of k
       ("--" = (scar-dash "ab"))                              ; was 1
       ("Q" = (scar-lit 2))                                   ; was 0
@@ -49,7 +49,7 @@
 ; name binds it itself -- sugared head and explicit lambda alike -- so the fold passes
 ; such a pair by. driven through `ev`: only a bare top-level letrec meets autogroup, and
 ; on a glazeless frontend `ev` is the base evaluator answering the same by definition.
-(assert
+(test
     (3  = (ev '(: (x f) f  f 2  (x 3))))
     (7  = (ev '(: (x f y) (+ f y)  f 2  (x 3 4))))
     (3  = (ev '(: f 2  (x f) f  (x 3))))

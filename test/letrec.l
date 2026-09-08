@@ -4,7 +4,7 @@
 ; a sibling def used to hand the site its own value. both compilers now mint such a
 ; binder before analysis -- ev.l's cplam and c0_lambda hold the same law -- and every
 ; shape here answered wrongly without it, under either.
-(assert
+(test
     ; a sibling's param shadows the name a later sibling captures; reads and calls both ways
     (5 = ((\ a (: (h a) (go a) (go b) (* b a) (h 5))) 1))
     (5 = ((\ a (: h (\ a (go a)) go (\ b (* b a)) (h 5))) 1))

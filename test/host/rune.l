@@ -17,7 +17,7 @@
 (borrow "apps/rune.l")                  ; the loader: one layer, registered, spliced
 
 ; --- the module seam: rune registered, the splice + accessor both reach ----
-(assert
+(test
  (member? 'rune (cite ()))                ; the registry lists it
  (member? 'deriv (keys (cite 'rune)))      ; keys introspects the layer
  (1 = ((cite 'rune 'cnorm) (3 /// 3)))      ; the opaque accessor reaches a member
@@ -29,7 +29,7 @@
 ; (): x - x vanishes to nothing, the empty sum.
 (: rx (pvar 3 0) ry (pvar 3 1) rz (pvar 3 2)
    (psq p) (pmul p p))
-(assert
+(test
  ((padd rx ry) = (padd ry rx))
  ((pmul rx (pmul ry rz)) = (pmul (pmul rx ry) rz))
  ((pmul rx (padd ry rz)) = (padd (pmul rx ry) (pmul rx rz)))
@@ -40,7 +40,7 @@
 ; --- the derivative: linear, and the product rule ---------------------------
 (: dp (padd (psq rx) (pmul ry rz))
    dq (padd rx (pconst 3 5)))
-(assert
+(test
  ((pd (padd dp dq) 0) = (padd (pd dp 0) (pd dq 0)))
  ((pd (pmul dp dq) 0) = (padd (pmul dp (pd dq 0)) (pmul (pd dp 0) dq)))
  ((pd (pconst 3 7) 1) = ()))
@@ -52,7 +52,7 @@
    dd1 [rx () ()]
    dd2 [() ry ()]
    dd3 [() () rz])
-(assert
+(test
  ((pdet [done]) = (pconst 3 2))
  ((pdet [drow drow drow3]) = ())                 ; equal rows kill it
  ((pdet [dd1 dd2 dd3]) = (pmul rx (pmul ry rz))))
@@ -68,7 +68,7 @@
    g3 (padd gx (gc 3))
    gn (padd gx (gc -1))
    gm (padd (pmul (gc 129) (pmul gx (pmul gx gx))) (padd (pmul (gc 49) gx) (gc -6))))
-(assert
+(test
  ((pgcd (pmul g1 g2) (pmul g1 g3)) = g1)         ; the common factor, monic
  ((pgcd (pmul (gc 2) g1) (pmul (gc 4) g1)) = g1) ; units divide out
  ((pgcd (pmul (gc (1 /// 2)) g1) g1) = g1)         ; ... ratio units too
@@ -89,7 +89,7 @@
 (: (rebuild fs) (: (go i r) (? (0 = tally r) (gc 1)
                                (pmul (load (i (poly <r))) (go (i + 1) >r)))
                    (go 1 fs)))
-(assert
+(test
  ((psff (pmul g1 g2)) = [(pmul g1 g2)])          ; squarefree: one factor, itself
  ((psff (pmul g1 (pmul g1 g2))) = [g2 g1])       ; (x+1)^2 (x+2): (x+2)^1 (x+1)^2
  ((psff (pmul (gc 3) (pmul g1 g1))) = [(gc 1) g1])    ; the unit drops, slot 1 empty
@@ -108,7 +108,7 @@
 (: u1 (padd rx ry)
    u2 (padd rx rz)
    u3 (padd ry rz))
-(assert
+(test
  ((mgcd (pmul u1 u2) (pmul u1 u3)) = u1)         ; the common factor x+y
  ((mgcd (pmul u1 (pmul u1 u2)) (pmul u1 (pmul u1 u3)))
   = (pmul u1 u1))                                ; ... squared, still whole
@@ -131,7 +131,7 @@
 ; certified irreducible over Q -- and the disproof's modulus m is exactly
 ; that: a rootless cubic, so Q[x]/(m) really is a field.
 (: (refac fs) (? (0 = tally fs) (gc 1) (pmul <fs (refac >fs))))
-(assert
+(test
  ((proots (pmul g1 g2)) = [-2 -1])               ; the roots, ascending
  ((proots (pmul g1 g1)) = [-1 -1])               ; multiplicity rides psff
  ((proots (pmul gx g1)) = [-1 0])                ; the zero root joins in
@@ -169,7 +169,7 @@
    x6 (padd (pmul gx (pmul gx (pmul gx (pmul gx (pmul gx gx))))) (gc -1))
    phi5 (padd (pmul gx (pmul gx (pmul gx gx)))
               (padd (pmul gx (pmul gx gx)) (padd (pmul gx gx) (padd gx (gc 1))))))
-(assert
+(test
  ((pfac (pmul q1 q2)) = [q2 q1])                 ; a quartic splits into two
                                                  ; irreducible quadratics -- invisible
                                                  ; to rational roots, found mod p
@@ -202,7 +202,7 @@
 ; (n-1+e gives 6(x^4 + 2808x^2 + 1)), which the rebuild law below catches.
 (: lc1 (padd (pmul (gc 2) (pmul gx gx)) (gc 3))   ; 2x^2 + 3, irreducible over Q
    lc2 (padd (pmul (gc 3) (pmul gx gx)) (gc 2)))  ; 3x^2 + 2, ditto
-(assert
+(test
  (6 = (mco <(pmul lc1 lc2)))                     ; the lc really is 6 -- not content pint would strip
  (4 = (pdeg (pmul lc1 lc2)))                     ; ... and degree 4, so pdeep runs
  ((proots (pmul lc1 lc2)) = ())                  ; no rational roots: nothing strips before pdeep
@@ -228,7 +228,7 @@
    b3 (padd bx (pmul by by))                     ; x+y^2
    bq (padd (pmul bx bx) (padd by (bc 1)))       ; x^2+y+1
    (refac2 fs) (? (0 = tally fs) (bc 1) (pmul <fs (refac2 >fs))))
-(assert
+(test
  ((pfac (psub (pmul bx bx) (pmul by by)))
   = [(psub bx by) b1])                           ; the classic: x^2-y^2 = (x-y)(x+y)
  ((pfac (pmul b1 b2)) = [b2 b1])                 ; a mixed pair splits
@@ -273,7 +273,7 @@
    t1 (padd tcx (padd tcy tcz))                  ; x+y+z
    t2 (padd tcx (pmul tcy tcz))                  ; x+yz
    (refac3 fs) (? (0 = tally fs) (tcc 1) (pmul <fs (refac3 >fs))))
-(assert
+(test
  ((pfac (pmul t1 t2)) = [t1 t2])                 ; the trivariate flagship:
                                                  ; (x+y+z)(x+yz), split exactly
  ((refac3 (pfac (pmul t1 t2))) = (pmul t1 t2))
@@ -301,7 +301,7 @@
    qp (padd (pmul qh rx) ry)                     ; x/2 + y
    qd1 [(pconst 2 (1 /// 2)) ()]
    qd2 [() (pconst 2 2)])
-(assert
+(test
  ((padd qh qh) = (pconst 3 1))                   ; 1/2 + 1/2 demotes to the integer 1
  ((padd qp qp) = (padd rx (pmul (pconst 3 2) ry)))   ; doubles to x + 2y, all integer
  (0 = tally (psub qp qp))                        ; q coefficients vanish exactly
@@ -322,7 +322,7 @@
 (: zp (poly ())
    pp1 (poly (padd rx ry))
    pp2 (poly (psub rx (pmul (pconst 3 2) ry))))    ; x - 2y: content sums red
-(assert
+(test
  (coin? pp1)
  ((+ pp1 pp1) = (poly (pmul (pconst 3 2) (padd rx ry))))
  ((* (poly rx) (poly ry)) = (poly (pmul rx ry)))
@@ -353,7 +353,7 @@
 ; --- the field: Q[x]/(x^2 - 2), where root-two squares to two --------------
 (: sq2xd [(2 /// 1) (0 /// 1)]                      ; x^2 == 2
    sq2 [(0 /// 1) (1 /// 1)])
-(assert
+(test
  ((kmul sq2xd sq2 sq2) = (knum 2 2))
  ((kmul sq2xd (vadd sq2 (knum 2 1)) (vadd sq2 (vscale (-1 /// 1) (knum 2 1))))
   = (knum 2 1)))                                ; (1+r2)(r2-1) = 1
@@ -371,7 +371,7 @@
    pf3 (psub (psub (pmul (pconst 3 2) rx) (pmul (pconst 3 3) (pmul (psq rx) ry)))
              (pmul (pmul (psq rx) rx) rz))
    jrows (map (\ f (map (pd f) '(0 1 2))) [pf1 pf2 pf3]))
-(assert ((pdet jrows) = (pconst 3 -2)))
+(test ((pdet jrows) = (pconst 3 -2)))
 
 ; --- part B: three distinct points over (1 -5 3) ---------------------------
 ; m = 129x^3 + 49x - 6 is squarefree (disc = -76881936), so it has three
@@ -394,7 +394,7 @@
              (vscale (3 /// 1) (kmul jxd (kmul jxd kx ky2) kw)))
    kg3 (vadd (vadd (vscale (2 /// 1) kx) (vscale (-3 /// 1) (kmul jxd kx2 ky)))
              (vscale (-1 /// 1) (kmul jxd (kmul jxd kx2 kx) kz))))
-(assert
+(test
  (! (jdisc = 0))
  (kg1 = (knum 3 1))
  (kg2 = (knum 3 -5))
@@ -415,7 +415,7 @@
    cin2 [(1 /// 1) (-3 /// 2) (13 /// 2)]
    cin3 [(-1 /// 1) (3 /// 2) (13 /// 2)]
    cimg [(-1 /// 4) (0 /// 1) (0 /// 1)])
-(assert
+(test
  (! (cin1 = cin2)) (! (cin2 = cin3)) (! (cin1 = cin3))
  ((feval (0 /// 1) (0 /// 1) (-1 /// 4)) = cimg)
  ((feval (1 /// 1) (-3 /// 2) (13 /// 2)) = cimg)
@@ -435,7 +435,7 @@
    efz (pfn (poly ()) xyz)                 ; the zero poly compiles to 0
    eF1 (pfn pf1 xyz)
    eF3 (pfn pf3 xyz))
-(assert
+(test
  (5 = (ef1 2 3 0))
  ((5 /// 6) = (ef1 (1 /// 2) (1 /// 3) 0))       ; rationals ride the same closure
  (1 = (ef2 9 9 9))
@@ -460,7 +460,7 @@
          (rule '(a) '(+ (* (sin a) (sin a)) (* (cos a) (cos a))) 1)]
    dbl (rule '(a) '(+ a a) '(* 2 a))
    hlf (rule '(a) ['* 'a (1 /// 2)] ['/ 'a 2]))
-(assert
+(test
  ((rewrite srules '(+ x 0)) = 'x)
  ((rewrite srules '(* (+ x 0) 1)) = 'x)                    ; inner rewrite feeds the root
  ((rewrite srules '(+ (* x 0) (* 1 y))) = 'y)              ; two rules meet at the root
@@ -477,7 +477,7 @@
 ; --- the simplifier: laws + ground folding, bottom-up to a fixpoint ----------
 ; the shipped `laws` table plus fold1 (a ground + - * node computes, cnormed);
 ; division never folds -- exactness is kept symbolic.
-(assert
+(test
  (6 = (simp '(+ (* 2 3) (* x 0))))                    ; fold meets annihilation
  (0 = (simp '(- (* 3 4) (* 4 3))))                    ; folds, then x - x
  ((simp ['+ 'x ['* 2 (1 /// 2)]]) = '(+ x 1))           ; a coin folds and demotes to its integer
@@ -551,7 +551,7 @@
 ; --- expand: the growing laws -- distribution and the log/exp splits ---------
 ; xlaws rides the same driver on top of laws, so every expansion is folded
 ; and collected on the way.
-(assert
+(test
  ((expand '(* x (+ y z))) = '(+ (* x y) (* x z)))     ; a * pushes inside a +
  ((expand '(* (+ x y) z)) = '(+ (* x z) (* y z)))     ; ... either side
  ((expand '(* (+ x y) (+ x y)))
@@ -592,7 +592,7 @@
 ; repeated factors power-collect into (** u n), and sums order by degree
 ; descending. structural order, so equal terms meet whatever their
 ; spelling; / is left alone.
-(assert
+(test
  ((collect '(* x x)) = '(** x 2))                     ; repeated factors power up...
  ((collect '(* x (* x x))) = '(** x 3))               ; ... across the assoc nesting
  ((collect '(* x (** x 2))) = '(** x 3))              ; a factor joins its power
@@ -628,7 +628,7 @@
 ; nonzero" certificate: a value-nonzero ground star (the square-sat test, so
 ; a red star certifies), an exp form, a power of one. no certificate, no
 ; rewrite: a/a simplifies by proof, never by assumption.
-(assert
+(test
  (1 = (simp '(/ 3 3)))                                ; ground nonzero: fires
  (1 = (simp '(/ -5 -5)))                              ; a red star certifies (the square test)
  ((simp '(/ x x)) = '(/ x x))                         ; symbolic: x might be 0 -- stays
@@ -647,7 +647,7 @@
 ; (assume c t) simps t with those facts in force: the guarded laws build
 ; over context-aware certifiers (nzc, posc), so a declared fact certifies
 ; what the bare term cannot. simp stays assume-nothing.
-(assert
+(test
  (1 = (assume '((nz x)) '(/ x x)))                    ; the declared fact certifies
  (1 = (assume '((pos x)) '(/ x x)))                   ; positive is nonzero
  (1 = (assume '((neg x)) '(/ x x)))                   ; ... and so is negative
@@ -685,7 +685,7 @@
 ; v); (d a a) -> 1 the nonlinear pattern; sum/product/quotient/chain plain
 ; patterns. deriv drives the result through simp and collect, so answers
 ; land canonical: coefficient first, powers powered, degree order.
-(assert
+(test
  (0 = (deriv 'y 'x))                              ; free of x: the guarded base
  (0 = (deriv 5 'x))
  (1 = (deriv 'x 'x))                              ; d x/dx: the nonlinear rule
@@ -737,7 +737,7 @@
           '(* (** 2 x) (+ y 1)) ['+ 'x (1 /// 2)] '(f (g x) y) '(* (+ a b) (+ c d))
           '(+ (log x) (* 2 (exp x)))
           (pemit (padd (pmul rx rx) ry) '(x y z))])
-(assert
+(test
  ((unfix '(+ (* 2 x) 1)) = '(2 * x + 1))
  ((unfix '(* 2 (+ x 1))) = '(2 * (x + 1)))            ; a looser right child wraps
  ((unfix '(- (- 10 4) 3)) = '(10 - 4 - 3))            ; the additive band folds left, so a left child rides bare

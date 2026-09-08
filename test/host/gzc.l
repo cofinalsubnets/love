@@ -28,7 +28,7 @@
 ; run:  cat test/00-init.l test/host/gzc.l | out/love
 (borrow 'gz)
 
-(assert
+(test
  (lit? inflate)
  (lit? crc32)
  ; the presence probe itself, on a name no build carries. This is the line that would
@@ -83,7 +83,7 @@
                    (? (! (two? r)) 0 (= <>r s) 1 0)))
 
 ; --- the shapes ---
-(assert
+(test
  (gzc-all gzc-rt gzc-shapes)
  (gzc-all gzc-hint gzc-shapes)
  (gzc-all gzc-door gzc-shapes))
@@ -94,7 +94,7 @@
    (gzc-torn d k step)
     (: (go i) (? (k <= i) 1 (! (gzc-same (gzc-cut d i) 400)) 0 (go (i + step)))
        (go 0)))
-(assert (gzc-torn gzc-td (tally gzc-td) 7))
+(test (gzc-torn gzc-td (tally gzc-td) 7))
 
 ; --- fuzz: one flipped bit, over two streams and every bit of the smaller ---
 (: (gzc-flip d k)
@@ -109,7 +109,7 @@
    ; speed -- so the streams here are small on purpose. the shapes, not the sizes, are
    ; what the fuzz is for: a dynamic block (text), a stored one (noise), a fixed one (one).
    gzc-fz [gzc-text gzc-run gzc-one])
-(assert
+(test
  (gzc-all (\ s (gzc-fuzz s 1)) gzc-fz)
  (gzc-fuzz gzc-noise 29))
 
@@ -124,7 +124,7 @@
                  (! (gzc-crc (gzc-mk i (\ j (((j * 2654435761) >> 11) & 255))))) 0
                  (go (i + 1)))
        (go 0)))
-(assert
+(test
  (3421780262 = (crc32 "123456789"))              ; 0xcbf43926, what every crc32 publishes
  (gzc-crclen 129)
  (gzc-all gzc-crc gzc-shapes)
@@ -135,7 +135,7 @@
  (charm? (crc32 (gzc-mk 300 (\ i 0)))))
 
 ; --- misuse: a value op, so a wrong shape answers () and decodes nothing ---
-(assert
+(test
  (! (charm? (crc32 7)))
  (! (charm? (crc32 ())))
  (! (charm? (crc32 (cask 8))))
@@ -158,7 +158,7 @@
                    i (inflate c (tally s))
                    (? ((two? l) & (string? i) & (= (<(>l)) s) & (= i s)) 1 0))
    gzd-corp [gzc-empty gzc-one gzc-run gzc-long gzc-per gzc-near gzc-text]
-   _ (assert
+   _ (test
       (lit? deflate)
       (gzc-all gzd-same gzd-corp)                       ; the bytes, corpus-wide
       (gzc-all gzd-trip gzd-corp)                       ; ..and both inflates read them

@@ -15,7 +15,7 @@
    _ (tune @(1048576 8192 65536 24))
    tight (sortby (\ a b (: _ (list a b (show a)) (< a b))) l)
    _ (tune k0)
- (assert
+ (test
   (() = (sortby (<) ()))
   ('(5) = (sortby (<) '(5)))
   ('(1 2) = (sortby (<) '(2 1)))

@@ -25,11 +25,11 @@
 ; carrier, the second by the bridge and one line each.
 ;
 ; substrate: test/uu.l and test/uuval.l (both load before this by sort order).
-(assert (member? 'vof (names ())) (two? (peep GLOB 'vlink 0)))
+(test (member? 'vof (names ())) (two? (peep GLOB 'vlink 0)))
 
 ; --- zsucc and zpred are inverse, each way. the two nat cases are where the
 ; --- sign crosses: zpred (ii1 0) is -1 and zsucc (ii2 0) is 0 ---
-(assert
+(test
  (defq uv-zsucc-pred (pi z zed (paths zed (zsucc (zpred z)) z))
    (lam z (coprod_rect (lam w (paths zed (zsucc (zpred w)) w))
              (lam n (nat_rect (lam q (paths zed (zsucc (zpred (ii1 q))) (ii1 q)))
@@ -49,7 +49,7 @@
 
 ; --- a step on the right argument of + comes out front. no induction: each arm
 ; --- is one definitional equation, or one of the two inverses above ---
-(assert
+(test
  (defq uv-zadd-succ
    (pi a zed (pi b zed (paths zed (zadd a (zsucc b)) (zsucc (zadd a b)))))
    (lam a (lam b
@@ -78,7 +78,7 @@
 ; --- ..and so + associates. the induction is on the right argument alone: each
 ; --- step peels one zsucc or zpred, the lemma above carries it across a, and
 ; --- the hypothesis closes the rest ---
-(assert
+(test
  (defq uv-zadd-assoc
    (pi a zed (pi b zed (pi c zed (paths zed (zadd (zadd a b) c) (zadd a (zadd b c))))))
    (lam a (lam b (lam c
@@ -129,7 +129,7 @@
 
 ; --- a step on the left argument comes out front too. this is the one the half
 ; --- bit's carry needs: two halves make a whole, and the whole must travel ---
-(assert
+(test
  (defq uv-zadd-lsucc
    (pi a zed (pi b zed (paths zed (zadd (zsucc a) b) (zsucc (zadd a b)))))
    (lam a (lam b
@@ -162,7 +162,7 @@
 
 ; --- the three integer shapes the carry asks for, named once so the eight cases
 ; --- below read as the case analysis they are ---
-(assert
+(test
  (defq uv-zsl
    (pi p zed (pi q zed (pi r zed
       (paths zed (zsucc (zadd (zadd p q) r)) (zadd p (zsucc (zadd q r)))))))
@@ -201,7 +201,7 @@
 ; --- ..and the half-integers associate. eight cases on the three half bits: the
 ; --- carry fires wherever two of them meet, and each firing is one of the three
 ; --- shapes above ---
-(assert
+(test
  (defn uv-rac (pi p zed (pi x bool (pi q zed (pi y bool (pi r zed (pi z bool UU))))))
    (lam p (lam x (lam q (lam y (lam r (lam z
       (paths rea (radd (radd (rmk p x) (rmk q y)) (rmk r z))
@@ -277,7 +277,7 @@
 ; --- these are the three the model carries, and the codes are named against
 ; --- l/mx.l's own so the two notions cannot drift. () is the mint band, a
 ; --- number the numeric band, a link the chain band ---
-(assert
+(test
  (defn bUnit nat 0)
  (defn bNum  nat 1)
  (defn bSeq  nat 2)
@@ -295,7 +295,7 @@
 ; --- is what buys associativity with no side conditions. append walks the left
 ; --- spine and replaces its tail whatever the tail is: love answers (1 3) for
 ; --- ((link 1 2) + '(3)), and so does this ---
-(assert
+(test
  (defn vappd (pi d nat (pi t (vtre d) (pi w val val)))
    (lam d (nat_rect (lam q (pi t (vtre q) (pi w val val)))
              (lam t (lam w w))
@@ -355,7 +355,7 @@
 ; --- pads what appending on the right does not. the pad is invisible to append
 ; --- for the same reason it is invisible to veq -- one induction each -- and the
 ; --- three-way composition is what veq's transitivity is for ---
-(assert
+(test
  (defq uv-vapp-padl
    (pi a nat (pi b nat (pi t (vtre a) (pi w val
       (paths bool (veq (vappd (mx2 a b) (padl a b t) w) (vappd a t w)) true)))))
@@ -458,7 +458,7 @@
 ; --- vadd takes is the lane mx.l's `+` matrix dispatches to. nine pairs, checked
 ; --- against the table love.c's mx.h is laid from, so a dispatch edit that moved
 ; --- a lane out from under this model fails a proof here ---
-(assert
+(test
  (defn mxkof (pi i nat nat)
    (lam i (bool_rect (lam x nat) mxKMint
              (bool_rect (lam y nat) mxKCharm mxKChain (nateqb i bNum))
@@ -485,7 +485,7 @@
 ; --- tells conv nothing, where a tree with a head reduces the whole dispatch.
 ; --- so all but the right unit are one idpath, and that one is a case analysis
 ; --- with no induction in it ---
-(assert
+(test
  (defq uv-vadd-lunit (pi v val (paths val (vadd vnilv v) v)) (lam v (idpath v)))
  ; the right unit is a veq law and not a paths one: () + () answers the () the
  ; right operand spells, which sits at height 0 where the left one may not
@@ -556,7 +556,7 @@
 ; --- sides reduce to the same value, which is exactly what the degeneration
 ; --- buys -- and the two that carry mathematics are the numeric cell (the
 ; --- measure's own monoid) and the chain cell (append) ---
-(assert
+(test
  (defn uv-aa (pi u val (pi v val (pi w val UU)))
    (lam u (lam v (lam w
       (paths bool (veq (vadd (vadd u v) w) (vadd u (vadd v w))) true)))))
@@ -655,7 +655,7 @@
 ; --- shaped at all: a generic crossing quantified over three neutral values
 ; --- carries the whole unreduced vadd dispatch, with pin unfolded inside every
 ; --- one of its leaves, and conv pays for that twice ---
-(assert
+(test
  (defn uv-paa (pi u val (pi v val (pi w val UU)))
    (lam u (lam v (lam w
       (paths pval (pin (vadd (vadd u v) w)) (pin (vadd u (vadd v w))))))))
@@ -785,7 +785,7 @@
 ; --- and off it -- a measure carrying a half -- `*` leaves the carrier and the
 ; --- model does not follow. an exact `*` everywhere wants the dyadic rung, and
 ; --- that is a different carrier, not a lemma about this one ---
-(assert
+(test
  (defn znegof (pi n nat zed)
    (lam n (nat_rect (lam q zed) (ii1 0) (lam k (lam r (ii2 k))) n)))
  (defn zabs (pi z zed nat)
@@ -814,7 +814,7 @@
 ; --- the two chain cells: a number repeats a chain |count| times, and two
 ; --- chains take the cartesian -- each pair a 2-list, which is why the carrier
 ; --- nests, and what makes this lane a semiring rather than a monoid ---
-(assert
+(test
  (defn vrep (pi n nat (pi c val val))
    (lam n (lam c (nat_rect (lam q val) vnilv (lam k (lam r (vapp c r))) n))))
  (defn vrowd (pi d nat (pi t (vtre d) (pi x val val)))
@@ -859,7 +859,7 @@
 ; --- the laws * owes. the zero annihilates from either side -- and unlike +'s
 ; --- unit it needs no case on the shape, since both arms of the outer test
 ; --- already answer () ---
-(assert
+(test
  (defq uv-vmul-lzero (pi v val (paths val (vmul vnilv v) vnilv)) (lam v (idpath vnilv)))
  (defq uv-vmul-rzero (pi v val (paths val (vmul v vnilv) vnilv))
    (lam v (bool_rect (lam X (paths val (bool_rect (lam x val) vnilv vnilv X) vnilv))
@@ -888,7 +888,7 @@
    (lam a (lam b (idpath vnilv)))))
 
 ; --- the demos: * computes, and the cartesian is the shape love answers ---
-(assert
+(test
  (= (vof 0 'true) (vof 0 '(veq (vmul (nval 2) (nval 3)) (nval 6))))
  (= (vof 0 'true) (vof 0 '(veq (vmul (zval (ii2 1)) (nval 3)) (zval (ii2 5)))))
  (= (vof 0 'true) (vof 0 '(veq (vmul vnilv (vlink (nval 1) vnilv)) vnilv)))
@@ -912,7 +912,7 @@
 ; --- and + associating, computed. the append is the interesting one: the two
 ; --- bracketings build the same chain at different heights, which is the whole
 ; --- of what the law says and the whole of what veq is for ---
-(assert
+(test
  (= (vof 0 'true)
       (vof 0 '(veq (vadd (vadd (vlink (nval 1) vnilv) (vlink (nval 2) vnilv))
                          (vlink (nval 3) vnilv))
@@ -949,7 +949,7 @@
 ; --- nothing, so each load-bearing claim gets its false twin and the kernel must
 ; --- refuse that one. every negative takes its positive. ---
 (hear (\ p e (: h (peep HELPC () 0) (? h (h p e) 0))))
-(assert
+(test
  ; the integers really do associate -- and zsucc really does travel
  ('accepted = (rejects (\ z (defq uv-ok-zsucc
     (pi a zed (paths zed (zadd a (zsucc zzero)) (zsucc a)))

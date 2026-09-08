@@ -8,7 +8,7 @@
 ; which is all a band means. we assert both the factored tree (via the live `opfix`, the source pass both
 ; compilers run -- op-core proper is book-private) and the VALUE, on cases where the grouping is
 ; observable in the result.
-(assert
+(test
  ; --- the tree: opfix factors a quoted form; quote interiors stay data, so '(2 * 3 + 4) is the raw
  ; datum list and (opfix ..) is the factored tree itself (a lone folded clause splices up, no wrapper). ---
  ((opfix '(2 * 3 + 4)) = '(+ (* 2 3) 4))            ; * tighter than + -- schoolbook
@@ -135,7 +135,7 @@
  (!(catch (\ _ (grip 2 'plain 60))))                  ; and the name must be an all-punct sigil
  ((opfix '(x ^^ y ^^ z)) = '(^^ x (^^ y z))))         ; the table survived all four intact
 
-(assert
+(test
  ; --- chaining, arity -2: a comparison run is the conjunction of its links, and the operand two
  ; links share is evaluated once. the binds nest inside the && rather than sitting in front of it,
  ; so all three of python's promises hold together -- left to right, once each, and the && still
@@ -170,7 +170,7 @@
     (bump v) (: _ (pin t 0 999) 9)
     r (2 < 1 < (bump ()))
     (&& !r (0 = (peep t 0 0)))))
-(assert
+(test
  (!(catch (\ _ (grip 7 '^^ 60))))                   ; ..and a lane with no key is refused, never minted
 
  ; --- the glued lane through the same door: arity 0, where a row is the word the sigil names.

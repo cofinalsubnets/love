@@ -40,7 +40,7 @@
    _ (puts "\n; opcodes pushk0 pusha1 pushl2 pushs3 setl4 sets5 add6 emit7, operands raw.")
    _ (puts "\n; Each source op prints over its term. Laws: test/uuspllaw.l; substrate:")
    _ (puts "\n; test/uuhom.l's stack machine over test/uu.l (the kernel).")
-   _ (puts "\n(assert")
+   _ (puts "\n(test")
    _ (each progs emit1)
    _ (puts ")\n")
    0)

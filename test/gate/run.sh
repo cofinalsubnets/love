@@ -26,12 +26,12 @@ r=$?
 cat "$o"
 [ $r -eq 0 ] || { echo "FAIL $n (exit $r)"; exit 1; }
 
-# THE X IS THE OTHER HALF OF THE SENTINEL. test/00-init.l's assert RECORDS a failure and
+# THE X IS THE OTHER HALF OF THE SENTINEL. test/00-init.l's `test` RECORDS a failure and
 # carries on, so a gate that never calls (test_fin ()) prints a red X and still says "ok" at
-# exit 0. The X cannot be forgotten -- assert writes it, not the gate -- so reading it HERE
+# exit 0. The X cannot be forgotten -- `test` writes it, not the gate -- so reading it HERE
 # guards every gate, present and future, instead of 34 files each remembering to.
 esc=$(printf '\033')
-! grep -qF "$esc[31mX" "$o" || { echo "FAIL $n (exit 0, but a recorded assert failure -- the X above)"; exit 1; }
+! grep -qF "$esc[31mX" "$o" || { echo "FAIL $n (exit 0, but a recorded test failure -- the X above)"; exit 1; }
 ! grep -q '^FAILED:' "$o" || { echo "FAIL $n (exit 0, but test_fin listed failures)"; exit 1; }
 
 IFS='|'

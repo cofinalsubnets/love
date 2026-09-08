@@ -11,10 +11,10 @@
 ; forall states of both machines's "one design, two machines"
 ; as one law. exports to Rocq + Lean with the corpus.
 ; guard: substrate + generated terms must land in glob first; fail by name if not.
-(assert (member? 'vof (names ())) (two? (peep GLOB 'srun 0)) (two? (peep GLOB 'sp0call 0)))
+(test (member? 'vof (names ())) (two? (peep GLOB 'srun 0)) (two? (peep GLOB 'sp0call 0)))
 
 ; --- the license: the splice observes as the call, value and trace, forall states ---
-(assert
+(test
  (defq sl-lic-0
    (pi A hst (pi S hst (pi L hst (pi E hst (pi T hst
       (paths nat (stos (srun sp0bind A (smk S 0 L E T 0)))
@@ -36,7 +36,7 @@
    (lam A (lam S (lam L (lam E (lam T (idpath (A 0)))))))))
 
 ; --- order: the arg's effect precedes the body's, call and splice alike ---
-(assert
+(test
  (defq sl-ord-bind
    (pi A hst (pi S hst (pi L hst (pi E hst (pi T hst
       (paths nat (strat 0 (srun sp3bind A (smk S 0 L E T 0))) (A 0)))))))
@@ -52,7 +52,7 @@
 
 ; --- the flip: substitution under an effectful arg read twice -- the VALUE
 ; --- stays equal (R cannot convict) and the trace doubles (the trace can) ---
-(assert
+(test
  (defq sl-flip-value
    (pi A hst (pi S hst (pi L hst (pi E hst (pi T hst
       (paths nat (stos (srun sp2subst A (smk S 0 L E T 0)))
@@ -70,7 +70,7 @@
 ; --- the substitution license, the pure face: an effect-free arg substitutes --
 ; --- value and trace as the call (the lane ev.l's cprop ships for pure args;
 ; --- the impure args take the binding splice, sl-lic) ---
-(assert
+(test
  (defq sl-sub-0
    (pi A hst (pi S hst (pi L hst (pi E hst (pi T hst
       (paths nat (stos (srun sp0subst A (smk S 0 L E T 0)))
@@ -102,7 +102,7 @@
 ; --- the cross-machine theorem: one source (y + 1), two machines, one value --
 ; --- the stack machine's binding splice meets the register machine's de5bck
 ; --- forall states of both ---
-(assert
+(test
  (defq sl-cross
    (pi v nat (pi A hst (pi S hst (pi L hst (pi E hst (pi T hst
       (pi R hst (pi F hst (pi K hst

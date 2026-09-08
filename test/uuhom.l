@@ -6,9 +6,9 @@
 ; differential foot ties homcomp to the binary's `*` at a numeral (vof/lof, the
 ; corpus's own gate). exports to Rocq + Lean with the corpus (uu2coq/uu2lean).
 ; guard: the uu kernel (test/uu.l) must load first -- $t front-loads it; fail by name if not.
-(assert (member? 'vof (names ())))
+(test (member? 'vof (names ())))
 
-(assert
+(test
  ; love's `*` on the top band, spelled in uu: (homcomp f g) x = f (g x) -- prel.l's
  ; (compose f g x) (f (g x)), argument order and all (funcomp is the diagram-order twin)
  (defn homcomp
@@ -32,7 +32,7 @@
 ; the differential foot: one composite, three lanes -- vof, lof, the binary's `*` --
 ; meeting at a numeral
 (: hc '(homcomp nat nat nat (lam y (succ y)) (lam x (succ (succ x))) 3)
- (assert
+ (test
   (6 = (vof 0 hc))
   ((vof 0 hc) = (lof hc))
   ((vof 0 hc) = (((\ y (+ y 1)) * (\ x (+ x 2))) 3))))
@@ -42,7 +42,7 @@
 ; --- to pay; the laws say why it may decline: every object is iso to R on the
 ; --- carried value (carry + retract), a mov is invisible off its endpoints
 ; --- (frame), and composition in the skeleton is homcomp -- one monoid, worn twice.
-(assert
+(test
  (defn hst UU (pi l nat nat))
  (defn hupd (pi l nat (pi v nat (pi s hst hst)))
    (lam l (lam v (lam s (lam q (bool_rect (lam x nat) v (s q) (nateqb q l)))))))
@@ -62,7 +62,7 @@
 ; --- (regs, frame, stack cells, sp) -- sp concrete (starts 0, moves by
 ; --- push/pop only), which is what lets a balanced shuttle compute under a
 ; --- neutral state. an operand is parity-tagged: reg r = 2r, imm k = 2k+1.
-(assert
+(test
  (defn isodd (pi n nat bool)
    (lam n (nat_rect (lam q bool) false (lam k (lam r (negb r))) n)))
  (defn half (pi n nat nat)
@@ -89,7 +89,7 @@
 ; --- one step, then the walker. opcodes: li 0, mov 1, ld 2, st 3, si 4, add 5,
 ; --- push 14, pop 15; anything else (the control ops) denotes the identity --
 ; --- a program holding one is only ever read syntactically (opsof).
-(assert
+(test
  (defn istep (pi o nat (pi d nat (pi a nat (pi b nat (pi s mst mst)))))
    (lam o (lam d (lam a (lam b (lam s
       (bool_rect (lam q mst) (msetr (half d) (rdop a s) s)
@@ -133,7 +133,7 @@
 
 ; --- the machine pinned before the corpus rides it: li lands its immediate,
 ; --- and the push/pop shuttle carries r0 to r1 forall states
-(assert
+(test
  (defq drun-li
    (pi R hst (pi F hst (pi K hst
       (paths nat (mrg (drun (ncons 0 (ncons 0 (ncons 15 (ncons 0 nnil)))) (mmk R F K 0)) 0) 7))))
@@ -153,7 +153,7 @@
 ; --- 2 nats (op x): pushk 0, pusha 1, pushl 2, pushs 3, setl 4, sets 5,
 ; --- add 6, emit 7 -- emit appends tos to the trace and keeps the stack, so
 ; --- an effect is visible only in the trace: the observation R cannot carry.
-(assert
+(test
  (defn sst UU (total2 s hst (total2 p nat (total2 l hst (total2 e hst (total2 t hst nat))))))
  (defn smk (pi s hst (pi p nat (pi l hst (pi e hst (pi t hst (pi n nat sst))))))
    (lam s (lam p (lam l (lam e (lam t (lam n (tpair s (tpair p (tpair l (tpair e (tpair t n))))))))))))
@@ -202,7 +202,7 @@
 
 ; --- pinned before the corpus rides it: a push lands at tos, and emit writes
 ; --- the trace without moving the stack
-(assert
+(test
  (defq srun-push
    (pi A hst (pi S hst (pi L hst (pi E hst (pi T hst
       (paths nat (stos (srun (ncons 0 (ncons 7 nnil)) A (smk S 0 L E T 0))) 7))))))

@@ -8,6 +8,6 @@
    rc (wget ["-q" "-O" out1 "https://github.com/"])
    got (: p (open out1 "r") (? (hot? p) (: s (slurp p) _ (close p) s) ""))
    ; the page opens with a few blank lines before its doctype
-   (assert (0 = rc) (< 10000 (tally got)) (<= 0 ((cite 'kore 'wg-find) (snip got 0 200) "<!DOCTYPE html>" 0))))
+   (test (0 = rc) (< 10000 (tally got)) (<= 0 ((cite 'kore 'wg-find) (snip got 0 200) "<!DOCTYPE html>" 0))))
 
 (: _ (test_fin ()) _ (puts "wgetnet: ok") _ (putc 10) 0)

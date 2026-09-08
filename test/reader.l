@@ -22,7 +22,7 @@
 ; datum can perfectly well be a nothing (reading "()" answers (() . rest)).
 ; and the residue is a charlist whichever went in: the string is spread once at
 ; the door, so the two doors meet after the first datum and never diverge.
-(assert
+(test
  (: r (sound '(49)) (&& (two? r) (1 = (cap r)) (nil? (cup r))))  ; a datum, nothing after
  (nil? (sound ()))                                    ; a clean end -- the blue floor
  ('torn = (sound '(40)))                            ; the text ran out inside a shape
@@ -34,7 +34,7 @@
 ; text is a string or a charlist and the reader spreads the first itself -- every
 ; caller had been writing that spread by hand. an empty string is a clean end, and
 ; a value with no text in it (a number, a name) has no datum in it either.
-(assert
+(test
  (: r (sound "(1 2) 3")
     (&& ('(1 2) = (cap r)) (3 = (cap (sound (cup r))))))  ; ...and the residue resumes
  (: r (sound "1") (&& (two? r) (1 = (cap r))))
@@ -61,7 +61,7 @@
    (rdr-doors s) (: cl (map s (jot (tally s)))      ; string, charlist and port agree
                     d (rdr-all s)
                     (&& (d = (rdr-all cl)) (d = (rdr-all (tap cl))))))
-(assert
+(test
  (: p (tap (map "(1 2) 3" (jot 7))) r (sound p)
     (&& ('(1 2) = (cap r)) (3 = (cap (sound (cup r))))))   ; a port, and its residue resumes
  (nil? (sound (tap ())))                            ; a spent port is a clean end
@@ -80,7 +80,7 @@
 ; the prime inside it (the kebab law); a punctuation-led token is a sigil -- a
 ; maximal run of operator chars. the kebab law is about the inside of a
 ; name-led token: it never governed a token that starts with punctuation.
-(assert
+(test
  ('old-thing = (rdr "old-thing"))                     ; - inside a name
  ('nl->sp = (rdr "nl->sp"))                           ; ...and -> inside one too
  ('x? = (rdr "x?")) ('x! = (rdr "x!"))
@@ -89,7 +89,7 @@
 
 ; --- comments ------------------------------------------------------------------
 ; `;` runs to end of line; `#!` is a shebang line. there are no block comments.
-(assert
+(test
  (7 = (rdr "; nope
 7"))
  (7 = (rdr "#! nope ( ( \"
@@ -97,7 +97,7 @@
 
 ; --- strings -------------------------------------------------------------------
 ; "..." is the only string, with \ escapes. an unterminated one is `more`.
-(assert
+(test
  ("hi" = (rdr "\"hi\""))
  ("a\"b" = (rdr "\"a\\\"b\""))
  ("" = (rdr "\"\""))
@@ -110,7 +110,7 @@
 ; ai_big_read_dec/_hex/_oct), and the predicates are exhaustive over what a base-0
 ; strtol accepted whole, so the reader never calls it. a float goes by am_strtod, which
 ; is ours and correctly rounded on every target.
-(assert
+(test
  (3 = (rdr "3")) (-3 = (rdr "-3")) (3 = (rdr "+3"))
  (16 = (rdr "0x10")) (255 = (rdr "0xff")) (255 = (rdr "0XFF"))  ; hex, either case
  (-255 = (rdr "-0xff")) (255 = (rdr "+0xff"))
@@ -135,7 +135,7 @@
 ; exhaustive set -- the list wears the bracket […] and the map the brace {…},
 ; and the twin is the infix `~`. a list operand splices into the call rather than
 ; being wrapped, and the empty collections go to a direct one-arg nif.
-(assert
+(test
  ('(\ x) = (rdr "'x"))
  ('(hash a b) = (rdr "{a b}"))
  ('(tuple 1 2) = (rdr "@(1 2)"))
@@ -155,7 +155,7 @@
 ; the next datum emits (mono (run datum)); spaced it emits the plain symbol and
 ; opfix decides later. only : and ? are suppressed at head (they take the whole
 ; list); \ never fuses.
-(assert
+(test
  ('(mono (< x)) = (rdr "<x"))
  ('(f (mono (< x))) = (rdr "(f <x)"))
  ('(mono (<> b)) = (rdr "<>b"))
@@ -170,7 +170,7 @@
 ; with !x. the two doubled forms arrive by different paths -- --5 sheds its trailing -
 ; before the digit and reads (mono (- -5)), while ++5 has no shed and reads (mono (++ 5))
 ; for opfix to split -- so both are asserted, or a later change breaks one lane silently.
-(assert
+(test
  ('(mono (- -5)) = (rdr "--5"))       (5 = --5)
  ('(mono (++ 5)) = (rdr "++5"))       (5 = ++5)
  ('(mono (-- -5)) = (rdr "---5"))     (-5 = ---5)
@@ -190,7 +190,7 @@
 ; the three closers are one: ) ] } each only end the open form, so a crossed pair
 ; reads the opener's wrap in silence -- matching them is libra's, not the reader's.
 ; the empty form is the zero point, not the number 0.
-(assert
+(test
  ('(list a b) = (rdr "[a b]"))          ('(hash a b) = (rdr "{a b}"))
  ('(list) = (rdr "[]"))                 ('(tablet 0) = (rdr "{}"))
  ('(list (list a b) (list c d)) = (rdr "[[a b] [c d]]"))   ; the nest is the whole point
@@ -208,7 +208,7 @@
 ; form (list a b) quoted, and a sigil over a sigil still stacks ('@(1 2) is unchanged).
 ; @ reads glue, and it alone: spaced it is the plain symbol -- the head of the
 ; match form, which is why a tray never wears a space.
-(assert
+(test
  ((rdr "@(1 2 3)") = (rdr "@[1 2 3]")) ((rdr "@()") = (rdr "@[]"))
  ((rdr "@(a b)") = (rdr "@{a b}"))
  ((rdr "@(1 2)") = (rdr "@[1 2]"))

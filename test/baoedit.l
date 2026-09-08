@@ -4,7 +4,7 @@
 ; from: a port arg (here a (tap ..), never stdin). that is what keeps it clear of the
 ; corpus stream love0 reads, and why it can ride test/*.l at all.
 ; the piped forms read-eval off stdin (a pipe is the bare filter) while each edraw
-; consumes its own sip. Run (assert comes from test/00-init.l):
+; consumes its own sip. Run (test comes from test/00-init.l):
 ;
 ;   cat test/00-init.l test/baoedit.l | out/love
 ;
@@ -24,7 +24,7 @@
    eof (edraw (ed-keys 0) ""))
 
 ; submit, edit, and EOF -- all returning the raw bytes (no parseall), prompt "".
-(: _ (assert
+(: _ (test
    ; plain: a b c Enter -> "abc"
    (= abc (edraw (ed-keys [97 98 99 13]) ""))
    ; insert mid-line: a c, left, b, Enter -> "abc"
@@ -43,7 +43,7 @@
 ; --- edln: edraw plus command history. returns (line . nhist), or 'eof at EOF
 ; (a public symbol, not edraw's private sentinel). same editing primitives; up/
 ; down (ESC [ A / ESC [ B) recall through hist (past lines, most-recent first).
-(: _ (assert
+(: _ (test
    ; the editing primitives carry over -- the line is now (cap r):
    (= abc (cap (edln (ed-keys [97 98 99 13]) "" ())))               ; a b c -> "abc"
    (= abc (cap (edln (ed-keys [97 99 27 91 68 98 13]) "" ())))      ; a c, left, b -> "abc"

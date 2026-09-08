@@ -17,7 +17,7 @@
    ; a counted kind -- nets by tally, not by content
    cnt (coin 'cnt {'net 'tally})
    (tail-from k l) (? (one? l) () (<l = k) l (tail-from k >l))
-   (assert
+   (test
     ; --- what a coin is ---
     (coin? a)                      ; a is a coin
     !(coin? 5)               ; a plain value is not

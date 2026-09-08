@@ -13,7 +13,7 @@
    (cnear z w)      (? (near (re z) (re w)) (near (im z) (im w)) 0)
    B100 (100 2))
 
-(assert
+(test
  ; --- printer: (re ~ im) form, parenthesized so it reads back by re-evaluation ---
  (= "(0.0 ~ 1.0)" (show i))
  (= "(2.0 ~ 3.0)" (show (2 ~ 3)))
@@ -114,7 +114,7 @@
    ca-r @((1 ~ 0) (0 ~ 1))                     ; `@` reader infers c too
    ca-m (array '(2 2) (1 ~ 0) (0 ~ 1) (2 ~ 0) (0 ~ 2)))  ; rank-2 complex
 
-(assert
+(test
  ; --- construction / type / shape ---
  (= twin-tray (tier ca-v))   (= twin-tray (tier ca-z))   (= twin-tray (tier ca-a))
  (= twin-tray (tier ca-r))   (= twin-tray (tier ca-m))

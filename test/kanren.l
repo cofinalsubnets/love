@@ -13,7 +13,7 @@
    sun (K 'sun)
    (unord_eq a b) (&& (= (sat a) (sat b)) (all (flip member? a) b))
 
- _ (assert
+ _ (test
  (unord_eq '(1 2 3) '(2 1 3))
  (unord_eq '(2 1 3) (stake 3 (sX 1 (sX 2 (sX 3 sno)))))
  (unord_eq '(6 4 2) (slist (smap (* 2) (sX 1 (sX 2 (sX 3 sno))))))
@@ -98,7 +98,7 @@
                  + ((a === 'angiosperms)    * (b === 'eudicots)))     ;   monocots | eudicots
    (descends a c) (rel (\\\ b (load ((diverges a b) * (diverges b c)))))   ; c descends from a, two splits down
    (boolean x) ((x === 0) + (x === 1))
-   (assert
+   (test
     (unord_eq '((k monocots) (k eudicots)) (query 0 '(k) (\\\ k (load (diverges 'angiosperms k)))))     ; daughter clades of angiosperms (OR)
     (unord_eq '((g monocots) (g eudicots)) (query 0 '(g) (\\\ g (load (descends 'spermatophytes g)))))  ; two splits below seed plants
     ; a clade is not its own daughter: =/= is the ring's separation, infix like ===

@@ -5,11 +5,11 @@
               h)
    f3 (f -3)
    f37 (f3 -7)
- (assert (= -1 (f37 99)) (= -7 (f37 33))))
+ (test (= -1 (f37 99)) (= -7 (f37 33))))
 
 ; applying a number is Church-numeral application: numeric operand -> exponentiation
 ; (operand ** operator), non-numeric operand -> the operator-fold composition.
-(assert
+(test
  (= 2 (1 2))                                  ; (1 2) = 2 ** 1
  (= 1 (2 1))                                  ; (2 1) = 1 ** 2
  (= 9 ((\ f n (f n)) 2 3))                    ; (2 3) = 3 ** 2
@@ -23,7 +23,7 @@
 ; fixnum path). 0 applied to anything is 1 -- it *is* const-1, the zero numeral.
 ; the compose count is ($ n) -- saturating, true to the !!$ truth bits: a non-positive
 ; numeral acts as the zero numeral, a float ceils, a complex/array its saturated net.
-(assert
+(test
  (= 8 (3 2.0))                                ; float operand: 2.0 ** 3 = 8.0, = bridges to 8
  (= 9 (2.0 3))                                ; float operator: 3 ** 2.0 via real power = 9.0
  (= 13 ((2.5 (+ 1)) 10))                      ; float operator on a fn: ($ 2.5)=3 compositions
@@ -42,7 +42,7 @@
  (< (abs (im ((0 ~ 1) (0 ~ 1)))) 0.0001)) ; i^i = e^(-pi/2) is real
 ; basic arithmetic
 (: zero? (= 0)
-(assert
+(test
  (= 17 ((\ f (f 9)) (+ 8)))
  (= 13 (: a 9 b 7 c -3 (+ a (+ b c))))
  (: (even? n) (? (zero? n) 1 (odd? (+ -1 n)))
@@ -58,13 +58,13 @@
              (= 2 p) 1
              m)
   (ack m (ack m (+ -1 n) p) (+ -1 p)))
- (assert (= 65536 (ack 2 3 3))))
+ (test (= 65536 (ack 2 3 3))))
 ; tarai function
 (: (たらい x y z)
    (? (<= x y) y (たらい (たらい (- x 1) y z)
                          (たらい (- y 1) z x)
                          (たらい (- z 1) x y)))
- (assert (= 1013 (たらい 1012 1013 1014))))
+ (test (= 1013 (たらい 1012 1013 1014))))
 
 (: (c1895 m n) (+ m (/ (* (+ m n) (+ m (+ n 1))) 2))
    (c1895_inv p) (:
@@ -75,14 +75,14 @@
     [m n])
    p (c1895 103 110)
    l (c1895_inv p)
-   (assert (= 103 (cap l)) (= 110 (cap (cup l)))))
+   (test (= 103 (cap l)) (= 110 (cap (cup l)))))
 
 ; heron's method for finding square roots (integer Newton -- floor division `//`,
 ; so it converges to the exact integer root and the `=` test terminates)
 (: (heron x g) (? (= g (// x g)) g
     (heron x (// (+ g (// x g)) 2)))
    guess 1337
- (assert (= 6 (heron 36 guess))))
+ (test (= 6 (heron 36 guess))))
 
 ; church numerals
 (: (add a b f x) (a f (b f x))
@@ -95,8 +95,8 @@
    five (add two three)
    six (mul two three)
    seven (add one six)
- (assert (= 420 (mul (mul two five) (mul six seven) (+ 1) 0))))
+ (test (= 420 (mul (mul two five) (mul six seven) (+ 1) 0))))
 
 ; fibonacci
 (: (fib n) (? (> 3 n) 1 (+ (fib (+ -1 n)) (fib (+ -2 n))))
- (assert (= 2178309 (fib 32))))
+ (test (= 2178309 (fib 32))))

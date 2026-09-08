@@ -26,7 +26,7 @@
 (borrow "apps/helm/helm.l")
 (borrow 'helm)
 
-(assert
+(test
  (member? 'helm (cite ()))
  (member? 'hconf (keys (cite 'helm)))
  (lit? (cite 'helm 'helm-main)))
@@ -58,7 +58,7 @@
    ; --- LANGUAGE ------------------------------------------------------------------
    r  (hconf good)
    us <r
-   _ (assert
+   _ (test
       (= 4 (tally us))
       (= ['once 'fails 'settles 'default] (hnames us))
       (! (two? <>r))                                  ; a clean config gripes about nothing
@@ -75,7 +75,7 @@
    b  (hconf bad)
    gs <>b
    (says? t) ((: (go l) (? !(two? l) 0 (has? <l t) 1 (go >l))) gs)
-   _ (assert
+   _ (test
       (< 5 (tally gs))
       (says? "unknown kind")
       (says? "duplicate unit a")
@@ -96,7 +96,7 @@
                                (rest 5, go 0)))
                   (go 0))
    _ (hboot 'default)
-   _ (assert
+   _ (test
       (two? (stat stamp))                     ; the oneshot RAN, and ran to completion
       (id? 'done (hstate 'once))              ; ... before anything that came after it
       (settle 5000)
@@ -112,7 +112,7 @@
    _ (twirl (\ _ (helm-moor sock)) 0)
    _ (rest 50)
    c (connectu sock)
-   _ (assert (lit? c))
+   _ (test (lit? c))
    ; the reply, one line. the accumulator is a charlist, and `string` is what
    ; makes it one string -- a `+ ""` leaves it a list of charms.
    (rdline _) (: (go acc) (: ch (see c)
@@ -122,14 +122,14 @@
                  (go ()))
    _ (say c "(+ 2 3)\n")
    _ (flush c)
-   _ (assert (= "5" (rdline 0)))
+   _ (test (= "5" (rdline 0)))
    _ (say c "(status 'once)\n")
    _ (flush c)
    l (rdline 0)
-   _ (assert (has? l "once") (has? l "done"))
+   _ (test (has? l "once") (has? l "done"))
    _ (say c "(units 0)\n")
    _ (flush c)
-   _ (assert (has? (rdline 0) "oneshot"))
+   _ (test (has? (rdline 0) "oneshot"))
    _ (close c)
    _ (unlink sock)
 
@@ -139,12 +139,12 @@
    ubd "out/.helm-underlay"
    n   (hunderlay ubd)
    ws  (keys (cite 'verbs 'tab))
-   _   (assert (= n (1 + tally ws)))                  ; every verb, and `love` itself
-   _   (assert (= (readlink (ubd + "/ls")) (selfpath 0)))
-   _   (assert (member? 'ls ws) (string? (readlink (ubd + "/love"))))
+   _   (test (= n (1 + tally ws)))                  ; every verb, and `love` itself
+   _   (test (= (readlink (ubd + "/ls")) (selfpath 0)))
+   _   (test (member? 'ls ws) (string? (readlink (ubd + "/love"))))
    ; the point of the directory: a child with nothing but it on PATH has a userland.
    r   (hark [(ubd + "/sh") "-c" ("PATH=" + ubd + "; ls " + ubd + "/ls")])
-   _   (assert (= 0 <r) (has? <>r "ls"))
+   _   (test (= 0 <r) (has? <>r "ls"))
    _   (each ws (\ w (unlink (ubd + "/" + string w))))
    _   (unlink (ubd + "/love"))
    _   (rmdir ubd)
@@ -154,9 +154,9 @@
    ; so its own files are where this file says they are.
    scd "out/.helm-scatter"
    k   (hscatter scd)
-   _   (assert (0 < k))
-   _   (assert (two? (stat (scd + "/apps/helm/helm.l"))))
-   _   (assert (!(two? (stat (scd + "/love-0.1")))))  ; the top is dropped, not laid
+   _   (test (0 < k))
+   _   (test (two? (stat (scd + "/apps/helm/helm.l"))))
+   _   (test (!(two? (stat (scd + "/love-0.1")))))  ; the top is dropped, not laid
    _   (hark [(selfpath 0) "rm" "-rf" scd])           ; 13M of tree, and out/ is not a nest
 
    _ (unlink good) _ (unlink bad) _ (unlink stamp)

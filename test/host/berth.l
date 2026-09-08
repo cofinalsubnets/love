@@ -18,16 +18,16 @@
 
 ; --- a child's plain output lands on the grid, colours and all ---
 (: md (tether ["sh" "-c" "printf 'hi\\033[31mred'; exit 3"])
- _ (assert (two? md))
+ _ (test (two? md))
  s (mkscr 5 20)
  bx {s}
  _ (moor bx (cup md) ())
- _ (assert
+ _ (test
     (= "hired" (snip (rowtx s 0) 0 5))
     (= 7 (& 255 (>> (glass s 1) 8)))     ; the h: default pen
     (= 1 (& 255 (>> (glass s 2) 8))))    ; the r: red
  st (waitfor (cap md))
- _ (assert (two? st) (= 3 (cap st)))     ; the status pair came home
+ _ (test (two? st) (= 3 (cap st)))     ; the status pair came home
  (close (cup md)))
 
 ; --- the pty's onlcr: a child's bare \n arrives as \r\n, so columns behave ---
@@ -35,7 +35,7 @@
  s (mkscr 5 20)
  bx {s}
  _ (moor bx (cup md) ())
- _ (assert
+ _ (test
     (= 97 (chat s 0))
     (= 98 (chat s 20)))                  ; b at row 1 column 0, not under the a
  _ (waitfor (cap md))
@@ -55,7 +55,7 @@
  s (mkscr 5 20)
  bx {s}
  _ (moor bx (cup md) ())
- _ (assert (= "^[[1;1R" (snip (rowtx s 0) 0 7)))
+ _ (test (= "^[[1;1R" (snip (rowtx s 0) 0 7)))
  _ (waitfor (cap md))
  (close (cup md)))
 
@@ -64,7 +64,7 @@
  s (mkscr 6 20)
  bx {s}
  _ (moor bx (cup md) ())
- _ (assert
+ _ (test
     (= "    deepsea" (snip (rowtx s 2) 0 11))
     (= 4 (>> (glass s (+ (* 2 20) 8)) 28)))   ; the s of sea: reverse video
  _ (waitfor (cap md))
@@ -81,7 +81,7 @@
            "-e" "(berth [\"sh\" \"-c\" \"printf 'x\\\\342\\\\224\\\\200y\\\\303\\\\251z'; sleep 1\"])"])
  outb (slurp (cup md))
  st (: (wf p) (: g2 (gather p) (? (two? g2) g2 (: _ (rest 2) (wf p)))) (wf (cap md)))
- _ (assert
+ _ (test
     (two? st)
     (find outb "x\xe2\x94\x80y" 0)       ; the ─ came back out as utf-8
     (find outb "\xc3\xa9z" 0))           ; ... and the é
@@ -112,7 +112,7 @@
  hb (mkhb 10 20 ["sh" "-c" "printf hi"])
  _ (moor (hbox (hpane hb 1)) (hmas (hpane hb 1)) ())
  f (hframe hb)
- _ (assert
+ _ (test
     ('((1 0 0 10 20)) = (hb 'lay))
     (20 = (gaze (scrof hb 1) 2))
     (sub? f "\e[1;1H" 0)                  ; row 0 of the only pane
@@ -127,7 +127,7 @@
  ; both pids, before hshut drops the panes that hold them
  p1 (hpid (hpane hb2 1)) p2 (hpid (hpane hb2 2))
  lay (hb2 'lay)
- _ (assert
+ _ (test
     (2 = (tally lay))
     (10 = (wharf-cols <lay)) (10 = (wharf-cols <>lay))
     (0 = (wharf-col <lay))   (11 = (wharf-col <>lay))
@@ -138,7 +138,7 @@
 
  ; --- the frame composites: each pane addressed at its own origin, plus a bar
  f2 (hframe hb2)
- _ (assert
+ _ (test
     (sub? f2 "\e[1;1H" 0)                 ; pane 1's first row
     (sub? f2 "\e[1;11H" 0)                ; the bar's own column
     (sub? f2 limn-down 0)                     ; ... drawn with it
@@ -150,21 +150,21 @@
 
  ; --- steering moves the focus and nothing else ---------------------------
  _ (hsteer hb2 'left)
- _ (assert (1 = (hb2 'focus)))
+ _ (test (1 = (hb2 'focus)))
  _ (hsteer hb2 'up)
- _ (assert (1 = (hb2 'focus)))            ; the wall: a no-op, not a condition
+ _ (test (1 = (hb2 'focus)))            ; the wall: a no-op, not a condition
  _ (hsteer hb2 'right)
- _ (assert (2 = (hb2 'focus)))
+ _ (test (2 = (hb2 'focus)))
 
  ; --- shutting promotes the sibling over the bar they shared --------------
  _ (hshut hb2 2)
- _ (assert
+ _ (test
     (1 = (hb2 'plan))
     (1 = (hb2 'focus))                    ; the focus follows the survivor
     ('((1 0 0 10 21)) = (hb2 'lay))
     (21 = (gaze (scrof hb2 1) 2)))        ; and it took the bar's column too
  _ (hshut hb2 1)
- _ (assert
+ _ (test
     (() = (hb2 'plan))                    ; the empty wharf ends berth's swim
     (() = (wharf-berths (hb2 'plan)))
     (() = (hb2 'focus)))
@@ -182,13 +182,13 @@
                    0)
  md (tether ["out/love" "-l" "apps/berth/berth.l"
              "-e" "(berth [\"sh\" \"-c\" \"sleep 5\"])"])
- _ (assert (two? md))
+ _ (test (two? md))
  m (cup md)
  _ (rest 1200)                            ; let berth come up and moor its first child
  ; the order is the content: "v C-a" is not the prefix, so the two puts are sequenced
  _ (put m 1) _ (put m 118) _ (flush m)     ; C-a v: split beside
  outb (slurp m)                           ; ... until both children leave and berth ends
- _ (assert
+ _ (test
     (sub? outb "\e[1;40H" 0)              ; the bar's column, 39 zero-based
     (sub? outb limn-down 0)                   ; ... drawn with the box glyph
     (sub? outb "\e[2;41H" 0))             ; the new pane's second row, past the bar

@@ -14,21 +14,21 @@
    dev (mkdev img))
 
 ; mkfs: a whole format answers 1; a device under FAT32's own floor refuses
-(assert
+(test
  (1 = (fat-mkfs dev))
  !(fat-mkfs (mkdev (cask (* 1000 512)))))
 
 (: f (fat-mount dev))
 
 ; mount: presence, and the honest refusals
-(assert
+(test
  (tablet? f)
  !(fat-mount (mkdev (cask (* 70000 512))))            ; unformatted: no signature
  (two? (fat-ls f "")) (! (cap (cup (fat-ls f ""))))   ; the fresh root: (1 ())
  !(fat-ls f "nope") !(fat-read f "nope") !(fat-stat f "nope"))
 
 ; files: write, list, stat, read -- and every answer wears the (1 _) wrapper
-(assert
+(test
  (1 = (fat-write f "hello.txt" "hello disk"))
  ('("hello.txt") = (cap (cup (fat-ls f ""))))
  ('(1 10 32) = (fat-stat f "hello.txt"))
@@ -40,7 +40,7 @@
 
 ; replace: longer, then shorter; the size follows, the old chain is freed
 (: big ((: (go i acc) (? (< i 200) (go (i + 1) (acc + "0123456789")) acc)) 0 ""))
-(assert
+(test
  (1 = (fat-write f "hello.txt" big))                  ; 2000 bytes: a real chain
  (2000 = (cap (cup (fat-stat f "hello.txt"))))
  (big = (cap (cup (fat-read f "hello.txt"))))
@@ -48,7 +48,7 @@
  ("short" = (cap (cup (fat-read f "hello.txt")))))
 
 ; long names: LFN written and read back, case-blind like everything here
-(assert
+(test
  (1 = (fat-write f "limine.conf" "timeout: 1"))
  ("timeout: 1" = (cap (cup (fat-read f "LIMINE.CONF"))))
  (1 = (fat-write f "a rather long name indeed.text" "lfn"))
@@ -56,7 +56,7 @@
  (member? "limine.conf" (cap (cup (fat-ls f "")))))
 
 ; directories: mkdir, files inside, nesting; rm insists a dir be empty first
-(assert
+(test
  (1 = (fat-mkdir f "boot"))
  (1 = (fat-write f "boot/love.elf" "ELF!"))
  ("ELF!" = (cap (cup (fat-read f "/boot/love.elf"))))
@@ -73,7 +73,7 @@
 
 ; persistence is the point: a fresh mount over the same bytes reads it all back
 (: f2 (fat-mount dev))
-(assert
+(test
  (tablet? f2)
  ("timeout: 1" = (cap (cup (fat-read f2 "limine.conf"))))
  ("ELF!" = (cap (cup (fat-read f2 "boot/love.elf"))))
@@ -100,7 +100,7 @@
            im2 (cask (tally s))
            _ (pour im2 0 s 0 (tally s))
            f3 (fat-mount (mkdev im2))
-           (assert
+           (test
             (! (cap md)) (! (cap mt)) (! (cap mc))
             (member? "::/limine.conf" (lines* (cup md)))
             ("timeout: 1" = (cup mt))

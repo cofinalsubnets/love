@@ -15,7 +15,7 @@
 ;                  have. no pid needed and it never yields; the pair carries the
 ;                  presence, since a retval of () is a perfectly ordinary answer.
 
-(assert
+(test
  ; hatch-wait round trip: fn is applied to x; the result flows back through wait.
  (= 42 (: p (twirl (\ x x) 42) (catch p)))
  (= 43 (: p (twirl (\ x (+ x 1)) 42) (catch p)))

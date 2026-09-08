@@ -93,7 +93,7 @@
       (= n (go n (wheel sd) 0)))
 
  ; spec.v's reduction theorems, as binary twins (beta_id / beta_const / nested / eta)
- (assert
+ (test
   (5 = ((\ x x) 5))  (1 = ((\ _ 1) 9))  (5 = ((\ x x) ((\ x x) 5)))
   !((\ x (cap x)) = cap)
   ; the fuzzed differential: every random closed affine term agrees with ev

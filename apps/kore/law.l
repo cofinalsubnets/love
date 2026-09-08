@@ -6,13 +6,13 @@
 
 ; --- the classic: Myers' own worked example, D = 5 ---
 (: A '(a b c a b b a) B '(c b a b a c) s (myers A B)
-   (assert
+   (test
       (= (dold s) A) (= (dnew s) B)                         ; the script spells both sides
       (= (dcost s) 5)))                                     ; the paper's shortest path
 
 ; --- the edges: empties, equal, disjoint, a lone keep ---
 (: s1 (myers () '(1 2)) s2 (myers '(1 2) ()) s3 (myers '(1 2 3) '(1 2 3)) s4 (myers '(1 2) '(3 4))
-   (assert
+   (test
       !(myers () ())                                        ; nothing to nothing is nothing
       (= (dnew s1) '(1 2)) !(dold s1) (= (dcost s1) 2)      ; all adds
       (= (dold s2) '(1 2)) !(dnew s2) (= (dcost s2) 2)      ; all dels
@@ -48,7 +48,7 @@
                  (= (dcost s) (- (+ (tally a) (tally b)) (* 2 (lcslen a b)))))
           (? ok (fz (- i 1) <>lb) ['broke a b])))
    r (fz 100 (wheel 7))
-   (assert (= r 'ok)))
+   (test (= r 'ok)))
 
 ; --- patience: the same script contract, anchored -- the projections hold verbatim,
 ; minimality is traded (never below myers), and the unique-in-both lines land as keeps ---
@@ -60,7 +60,7 @@
    st (patience '("a" "b" "c") '("b" "c" "d"))                  ; string lines census structurally
    tr (patience '((1 2) (3 4)) '((3 4) (5 6)))                  ; ... and whole trees do too
    eq (patience '(1 2 3) '(1 2 3))
-   (assert
+   (test
       (= (dold s) A) (= (dnew s) B) (= (dcost s) 5)             ; ... so patience = the myers floor
       (= (dold mv) '(h1 b1 b2 h2 c1 c2)) (= (dnew mv) '(h2 c1 c2 h1 b1 b2))
       (= (tally (keeps mv)) 3) (= (dcost mv) 6)                 ; one block anchors whole, the other moves
@@ -86,12 +86,12 @@
                  !(< (dcost sp) (dcost (myers a b))))
           (? ok (fzp (- i 1) <>lb) ['broke a b])))
    r (fzp 100 (wheel 11))
-   (assert (= r 'ok)))
+   (test (= r 'ok)))
 
 ; --- lines/unlines: the text bridge -- split at 10, terminate every line, the round
 ; trip exact on newline-terminated texts (an unterminated tail gains its newline) ---
 (: t "a\nb\n" u "a\n\nb\n"
-   (assert
+   (test
       (= (lines t) '("a" "b")) (= (unlines '("a" "b")) t)
       (= (unlines (lines t)) t) (= (unlines (lines u)) u)         ; round trips, empty line included
       !(lines "") !(unlines ())                                   ; nothing bridges to nothing
@@ -106,7 +106,7 @@
    x1 "--- old\n+++ new\n@@ -1,9 +1,9 @@\n a\n b\n-c\n+C\n d\n e\n f\n g\n-h\n+H\n i\n"
    s2 (uhunks (patience (lines at) (lines "a\nb\nC\nd\ne\nf\nG\nh\ni\n")) 1)   ; gap 3 > 2*1: two hunks
    x2 "@@ -2,3 +2,3 @@\n b\n-c\n+C\n d\n@@ -6,3 +6,3 @@\n f\n-g\n+G\n h\n"
-   (assert
+   (test
       (= d1 x1) (= s2 x2)
       !(udiff "a" "b" at at)                                      ; agreement is nothing
       (= (udiff "a" "b" "" "x\n") "--- a\n+++ b\n@@ -0,0 +1 @@\n+x\n")
@@ -114,7 +114,7 @@
 
 ; --- the u-floor (apps/kore/u.l): the pure helpers under the line tools, each
 ; held to its GNU face -- the clips, the counter, the two path clips ---
-(: (assert
+(: (test
       (= (uatoi "42") 42) (= (uatoi "-7") -7) (= (uatoi "0") 0)
       (= (upad 7 "2") "      2") (= (upad 1 "34") "34")            ; a wider count never shrinks
       (= (ujoin '("a" "b" "c")) "a b c") (= (ujoin ()) "")
@@ -142,7 +142,7 @@
 ; --- the field-tool floor: usplit keeps every piece (cut's face, where lines drops
 ; the empty tail), uspec/upick read cut's list, uset expands tr's ranges + escapes,
 ; urev walks a text backwards ---
-(: (assert
+(: (test
       (= (usplit 58 "a:b:c") '("a" "b" "c"))
       (= (usplit 58 "a:") '("a" ""))                               ; the kept empty tail
       (= (usplit 58 "") '(""))
@@ -160,7 +160,7 @@
 ; --- the column floor (apps/kore/core.l): fold, expand and unexpand all count
 ; columns, which is the one thing they share and the one thing a byte count
 ; disagrees with -- so ucol is lawed first and the three faces over it after ---
-(: (assert
+(: (test
       (= (ucol 0 9 8) 8) (= (ucol 1 9 8) 8) (= (ucol 8 9 8) 16)     ; a tab lands on the stop
       (= (ucol 3 9 4) 4) (= (ucol 4 9 4) 8)
       (= (ucol 5 8 8) 4) (= (ucol 0 8 8) 0)                         ; \b never walks past 0
@@ -180,7 +180,7 @@
       (= (uunexpand 8 1 "a        ") "a\t ")))                       ; a trailing run is a run
 
 ; --- tac, the encodings and factor (apps/kore/core.l) ---
-(: (assert
+(: (test
       ; the newline rides the line it followed, so a last line arriving without one
       ; comes back first without one -- which is the whole of tac's shape
       (= (utac "a\nb\nc\n") '("c\n" "b\n" "a\n"))
@@ -202,7 +202,7 @@
 
 ; --- the fs-tool floor (apps/kore/fs.l): uoct reads chmod's octal, rp-parts cuts a
 ; path into the components realpath walks ---
-(: (assert
+(: (test
       (= (uoct "755") 493) (= (uoct "644") 420) (= (uoct "0") 0) (= (uoct "7") 7)
       (= (rp-parts "/a//b/") '("a" "b")) (= (rp-parts "a") '("a")) !(rp-parts "///")))
 
@@ -210,7 +210,7 @@
 ; construction (no month table, no float), and the round trip is what holds it: stat's
 ; %y and date both read them, and a leap-year slip would only show on one day a year ---
 (: (rt z) (: c (ucivil z) (= (udays <c <>c <>>c) z))
-   (assert
+   (test
       (= (ucivil 0) '(1970 1 1)) (= (ucivil 1) '(1970 1 2)) (= (ucivil -1) '(1969 12 31))
       (= (ucivil 19675) '(2023 11 14)) (= (ucivil 20682) '(2026 8 17))
       (= (ucivil 11016) '(2000 2 29))                   ; a century divisible by 400 is leap
@@ -221,7 +221,7 @@
 
 ; --- the record floor (apps/kore/core.l): paste's delimiter list, split's suffix and
 ; size words, join's field split, and od's three readings ---
-(: (assert
+(: (test
       (= (udels ":|") '(":" "|"))
       (= (udels "\\t") '("\t")) (= (udels "\\0") '(""))   ; POSIX's \0 is the empty one
       (= (udels "") '(""))
@@ -243,7 +243,7 @@
 
 ; --- the report floor (apps/kore/fs.l): stat's permission face and timestamp, du's
 ; three-figure human face (rounded UP, which is GNU's rule and not a rounding) ---
-(: (assert
+(: (test
       (= (ust-perm 33188) "-rw-r--r--") (= (ust-perm 16877) "drwxr-xr-x")
       (= (ust-perm 41471) "lrwxrwxrwx") (= (ust-perm 36333) "-rwsr-sr-x")
       (= (ust-perm 33261) "-rwxr-xr-x") (= (ust-perm 17407) "drwxrwxrwt")
@@ -258,7 +258,7 @@
 ; --- the expr floor (apps/kore/expr.l): every value is a TEXT, a text that reads as a
 ; whole number is a number where one is wanted, and the division truncates ---
 (: (e as) (<(ex-parse 0 as))
-   (assert
+   (test
       (= (ex-num "42") '(1 42)) (= (ex-num "-7") '(1 -7)) !(ex-num "12a") !(ex-num "")
       !(ex-num "-") (= (ex-num "0") '(1 0))
       (ex-true? "1") (ex-true? "a") !(ex-true? "0") !(ex-true? "")
@@ -283,7 +283,7 @@
    secs (pt-parse (lines p1))
    sec <secs
    h (<(sec 2))
-   (assert
+   (test
       (= (pt-hdr "@@ -1,8 +1,8 @@") '(1 8 1 8))
       (= (pt-hdr "@@ -3 +4,2 @@ fn()") '(3 1 4 2))                        ; a bare seat is one line
       (= (pt-hdr "@@ -0,0 +1,2 @@") '(0 0 1 2))
@@ -328,7 +328,7 @@
                        && (over (i + 1))))
           ((over 0) && (sweep (n + 1)))))
    big (mk (jug 0) 5000 9)
-   (assert
+   (test
       (sweep 0)
       (= (sc "" 97 0) -1) (= (sc "abc" 97 9) -1)               ; empty, and a start past the end
       (= (sc "abc" 98 0) 1) (= (sc "abc" 98 2) -1)             ; found, and found no later
@@ -357,7 +357,7 @@
    (sweep n) (? (n > 40) 1 (: s (mk (jug 0) n (n + 1)) ((xagree s) && (bagree s) && (sweep (n + 1)))))
    big (mk (jug 0) 5000 9)
    same (mk (jug 0) 300 0)                                    ; one byte: the squeeze's longest run
-   (assert
+   (test
       (sweep 0)
       (xagree big) (bagree big) (xagree same) (bagree same)
       (= (kb64-walk "abc" ub64set (cask 4)) 4)
@@ -368,7 +368,7 @@
 (: (ok p s) (: r (rebre p) (two? r && rehas <>r s))
    (no p s) (: r (rebre p) (two? r && !(rehas <>r s)))
    (bad p) !(two? (rebre p))
-   (assert
+   (test
       (ok "" "anything") (ok "" "")                            ; the empty pattern matches every line
       (ok "a" "bab") (no "a" "xyz")
       (ok "b.c" "abzcd") (no "b.c" "bc")                       ; . wants one charm
@@ -430,7 +430,7 @@
 (: (eok p s) (: r (reere p) (two? r && rehas <>r s))
    (eno p s) (: r (reere p) (two? r && !(rehas <>r s)))
    (ebad p) !(two? (reere p))
-   (assert
+   (test
       (eok "a|b" "b") (eno "a|b" "c") (eok "(a|x)b" "xb")
       (eok "ab?c" "ac") (eok "a+" "aa") (eno "a+" "b")
       (eok "a{2}" "aa") (eno "a{2}" "ab") (eok "(a|b)+z" "abz")
@@ -510,13 +510,13 @@
                 (? (= e o) (fzr (- i 1) <>ss)
                    ['broke <pp <ss])))))
    r (fzr 200 (wheel 13))
-   (assert (= r 'ok)))
+   (test (= r 'ok)))
 
 ; --- the sed floor (apps/kore/sed.l): the substitution walk to its GNU face,
 ; and the script parser's shapes -- what parses, what refuses ---
 (: (sub p r s g?) (: b (rebre p) <>(usub (recomp <>b) r s g?))
    (sp s) (sparse s ())                                          ; the BRE door, the default
-   (assert
+   (test
       (= (sub "b" "X" "abc" ()) "aXc") (= (sub "z" "X" "abc" ()) "abc")
       <(usub (recomp <>(rebre "b")) "X" "abc" ())                ; the changed bit ...
       !<(usub (recomp <>(rebre "z")) "X" "abc" ())               ; ... and its absence
@@ -547,7 +547,7 @@
 ; terminal name and the uptime phrase. the faces over them cannot be lawed and are not
 ; smoked byte-for-byte either -- every number they read is a clock and the process
 ; table moves between two runs -- so this is where the family is actually held ---
-(: (assert
+(: (test
       ; the comm is taken between the first ( AND THE LAST ), because a program may
       ; be named with either in it -- split on spaces and every field after it shifts
       (= (ustatf "42 (bash) S 7 42 42 1024 99") '(42 "bash" "S" "7" "42" "42" "1024" "99"))
@@ -567,7 +567,7 @@
       !(usignum "-nope") !(usignum "x") !(usignum "-")))
 
 ; --- the process floor (apps/kore/proc.l): durations to milliseconds ---
-(: (assert
+(: (test
       (= (udur "2") 2000) (= (udur "0") 0) (= (udur "1s") 1000)
       (= (udur "1.5") 1500) (= (udur ".5") 500) (= (udur "1.") 1000)
       (= (udur "2m") 120000) (= (udur "1h") 3600000) (= (udur "1d") 86400000)
@@ -576,7 +576,7 @@
 
 ; --- the find floor (apps/kore/find.l): the path join, the argument split and
 ; the expression grammar. the walk itself is smoked against the system find ---
-(: (assert
+(: (test
       (= (fi-join "a" "b") "a/b") (= (fi-join "a/" "b") "a/b") (= (fi-join "/" "b") "/b")
       ; the paths run out at the first flag, bracket or bang
       (= (fi-paths '("a" "b" "-name" "x") ()) ['("a" "b") '("-name" "x")])
@@ -602,7 +602,7 @@
 
 ; --- the awk floor (apps/kore/awk.l): the number faces C's printf owes, the
 ; strnum question, and the grammar's shapes. the language is smoked against gawk ---
-(: (assert
+(: (test
       ; %f %e %g by hand -- `show` spells a double round-trip exact, awk owes %.6g
       (= (aw-fixed 3.14159 2) "3.14") (= (aw-fixed -1.005 2) "-1.00")
       (= (aw-fixed 2.5 0) "3")                 ; half away from zero; C says "2"
@@ -647,7 +647,7 @@
    (pg-top ls w h fl keys) ((pg-run ls w h fl keys) 'top)
    ten '("l1" "l2" "l3" "l4" "l5" "l6" "l7" "l8" "l9" "l10")
    caps '("a" "b" "c" "d" "e" "f" "ALPHA" "h" "i" "j")
-   (assert
+   (test
       ; the wrap: fragments at the width, a tab to the next 8th column, a control
       ; byte as ^X, and a utf-8 tail byte no column of its own
       (= (pgwrap 4 "abcdefghij") '("abcd" "efgh" "ij"))
@@ -718,12 +718,12 @@
    _ (pgload st '("x") "a.txt")
    _ (pins st 'files '("a.txt" "b.txt") 'fi 0)
    _ (pgstep st 58) _ (pgstep st 110)
-   (assert (= (st 'fi) 1) (= (st 'doe) '("b.txt")))
+   (test (= (st 'fi) 1) (= (st 'doe) '("b.txt")))
    _ (pin st 'doe ())
    _ (pgstep st 58) _ (pgstep st 110)
-   (assert (= (st 'fi) 1) (nil? (st 'doe)) (= (st 'msg) "no next file"))
+   (test (= (st 'fi) 1) (nil? (st 'doe)) (= (st 'msg) "no next file"))
    _ (pgstep st 58) _ (pgstep st 112)
-   (assert (= (st 'fi) 0) (= (st 'doe) '("a.txt"))))
+   (test (= (st 'fi) 0) (= (st 'doe) '("a.txt"))))
 
 ; --- the bc floor (apps/kore/bc.l): the number tower and every scale rule in it,
 ; the base writer, the numeral reader, the grammar's shapes, and a seeded fuzz over
@@ -733,7 +733,7 @@
    (nod s) <(bc-expr (bc-lex s))
    (stm s) <(bc-stmt (bc-lex s))
    (refuses? th) (trap (\ _ (: _ (th 0) 0)) () (\ a b 1))
-   (assert
+   (test
       ; the scale rules, one line each -- the table at the head of bc.l
       (= (bn-add [15 1] [15 1]) [30 1])                      ; + and - keep the wider
       (= (bn-add [1 0] [5 3]) [1005 3])
@@ -834,7 +834,7 @@
                  (? (= <n 0) 1 (= (bc-numeral (bc-show st n) 10) n)))
           (? ok (fz (- i 1) >g) ['broke a b sc])))
    r (fz 300 (wheel 23))
-   (assert (= r 'ok)))
+   (test (= r 'ok)))
 
 (test_fin ())                                        ; no zz-fin here: quit before claiming ok
 (say err "apps/kore/law: myers + patience + lines/unlines + unified hunks + the u-floor + the regex floor + the find, awk, pager and bc floors -- projections + minimality (lcs oracle) + anchors + seeded fuzz (lcs + brzozowski oracles) ok

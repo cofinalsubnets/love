@@ -35,7 +35,7 @@
    test_state (tablet 0)
    (test_set k v) (pin test_state k v)
    (test_get k) (peep test_state k 0)
-   ; a failed assert records and carries on, so one run shows every failure -- zz-fin.l
+   ; a failed test records and carries on, so one run shows every failure -- zz-fin.l
    ; prints the list and quits 1. a runner that does not end in zz-fin.l owes a
    ; (test_fin ()) of its own before it claims ok, or its failures exit 0 in silence.
    (test_fin u) (: f (test_get 'fail)
@@ -55,7 +55,7 @@
    ; word was this proxy while the wasm shim was 32-bit; the wasm64 module is 64-bit, so
    ; word is true there now and a filesystem law needs its own predicate.
    files !(love-os = 'wasm))
-(:: 'assert (\ l
+(:: 'test (\ l
 (:
  (report x v) (do
   (test_set 'count (+ 1 (test_get 'count)))

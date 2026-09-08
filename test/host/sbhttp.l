@@ -55,7 +55,7 @@
    npat (tally (readdir ".sb/patch"))
    _ (chdir home))
 
-(assert
+(test
  (urlp "http://h/") (! (urlp "https://h/")) (! (urlp "../peer"))     ; the url gate
  (5432 = (digits "5432")) (! (digits "8x"))
  ((show '("h" 8080 "/a")) = (show (urlsplit "http://h:8080/a")))

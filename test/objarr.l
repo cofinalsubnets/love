@@ -12,7 +12,7 @@
    oa-z     (top-tray '(3) 0)                         ; nil-filled
    oa-nest  (top-tray '(2) [(top-tray '(2) '(1 2)) (top-tray '(2) '(3 4))]))
 
-(assert
+(test
  ; --- construction / accessors ---
  (= top-tray (tier oa-a))                                 ; oa-a is an object tray
  (= 1 (rank oa-a))   (= 5 (tally oa-a))
@@ -59,7 +59,7 @@
    oa-zar (star-tray '(2) [oa-w oa-w])           ; typed int array -> wraps
    oa-oar (top-tray   '(2) [oa-w oa-w]))          ; object array   -> exact
 
-(assert
+(test
  ; result of an op on a g_O array is itself g_O
  (= top-tray (tier oa-sum))
  ; exact elementwise results (no wrap, no float rounding)
@@ -104,7 +104,7 @@
 (: oa-q (array 2 'hello 'world)                  ; symbols -> object array
    oa-bn (array 2 (100 2) 5)                  ; bignum -> o, stored exactly
    oa-m  (array [2 2] 1 2 3 4))                 ; rank-2 from a shape list
-(assert
+(test
  ; type inference: pure ints -> z, any float -> r, anything past the real
  ; 64-bit tower (bignum/symbol/...) -> o
  (= star-tray (tier (array 3 1 2 3)))
@@ -140,7 +140,7 @@
 (: oa-z2 (array 2 (0 ~ 0) (0 ~ 0))             ; two zero complexes -> packed c array
    oa-c2 (array 2 (0 ~ 0) (3 ~ 4))               ; nets sum: (0 ~ 0)+(3 ~ 4) -> re 3 -> ceil 3
    oa-b2 (array 2 (100 2) 0))                 ; bignum element saturates pin, forces o
-(assert
+(test
  (= twin-tray (tier oa-z2)) (= twin-tray (tier oa-c2)) (= top-tray (tier oa-b2))
  (= 0 (sat oa-z2)) (nil? oa-z2)                   ; all-zero object array -> falsy, pin 0
  (= 3 (sat oa-c2)) !!oa-c2                         ; one nonzero element -> truthy, ceil(3)

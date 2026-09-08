@@ -15,7 +15,7 @@
 
 ; hark/getenv are host-only (subprocess + environment); inle and the browser have
 ; neither, so skip the whole file there (hosted, test/00-init.l).
-(? hosted (assert
+(? hosted (test
   ; --- ran successfully: a chain, exit 0, and (here) no output ---
   (two? (hark ["true"]))
   (= 0 (cap (hark ["true"])))

@@ -32,7 +32,7 @@
    r3m ((: (go i a) (? (< i 3000000) (go (+ i 1) (+ a (ca-sq i))) a)) 0 0)   ; interp reference (inline sum; a closure never glazed -> pure interp) for the boundary case
    ; NB: strict prefix `(= a b)` throughout -- opfix currently mis-factors compound=compound infix
    ; (((f x) = (g y)) -> (f (= x (g y)))), so prefix sidesteps it entirely (opfix fix is a follow-up).
-   _ (assert
+   _ (test
        (= 0 (nat 0))                                 ; empty
        (= 285 (nat 10))                              ; fixnum fast path
        (= 2666664666667000000 (nat 2000000))         ; ~2.6e15 fixnum
@@ -67,7 +67,7 @@
    (ag-capcg f) (\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (f (+ i 1)))) a)) 0 0)) ; captured non-(F i): sum f(i+1), hook -> njit-calloutframe arch
    cs (ag-summer ag-sq)  cf (ag-summer ag-half)  cp (ag-multiplier ag-inc)  cpf (ag-multiplier ag-ph)  ccg (ag-capcg ag-sq)
    ag30 (ag-sum 30)                                                                  ; global reference for the captured==global cross-check
-   _ (assert
+   _ (test
        (= 285 (ag-sum 10)) (= 0 (ag-sum 0))                                          ; global auto-glaze fast path + empty
        (= 8555 (ag-sum 30))                                                          ; global auto-glaze == 0+1+4+..+841
        (= 8999995500000500000 (ag-sum 3000000))                                      ; global gate-2 boundary -> bignum

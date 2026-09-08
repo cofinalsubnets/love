@@ -9,8 +9,8 @@
 ; filesystem. Everything made here is unmade at the foot, so the corpus behind
 ; reads the tree as this file found it.
 ;
-; the `:` has a body -- the assert itself -- so the helpers stay local; and each
-; law is its own assert argument, since assert maps over its args and a `do` would
+; the `:` has a body -- the test itself -- so the helpers stay local; and each
+; law is its own assert argument, since test maps over its args and a `do` would
 ; report only the last one.
 
 (: (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
@@ -18,7 +18,7 @@
    d "/tmp/l-wfs"
    f (d + "/a")
    e (d + "/e")
- (assert
+ (test
    ; -- create: `w` under a live directory mints the file; `a` does too --
    !(mkdir d 493)
    (wr f "five!")

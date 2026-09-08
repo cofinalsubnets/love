@@ -30,12 +30,12 @@
 
    ; the bake answers 1 and the session rides on (this very assert runs post-dump);
    ; note the file port feeding this script is live at the dump -- the fz leg.
-   _ (assert ((bake img) = 1))
+   _ (test ((bake img) = 1))
 
    ; the woken child reads the marker this session pinned before its bake
    _ (: p (open drv "w") _ (say p "(: _ (putn bake-smoke-marker) (quit 0))") (close p))
    r (hark ["out/love" "wake" img drv])
-   _ (assert (two? r) (<r = 0) (>r = "4242"))
+   _ (test (two? r) (<r = 0) (>r = "4242"))
 
    ; ..and what the hash-cons did to the pair of casks: two equal casks stay two objects,
    ; which a pin on one shows (the deduped lists cannot be told apart, and need not be)
@@ -45,15 +45,15 @@
         _ (say p "_ (putn ok) (quit 0))")
         (close p))
    r2 (hark ["out/love" "wake" img drv])
-   _ (assert (two? r2) (<r2 = 0) (>r2 = "1"))
+   _ (test (two? r2) (<r2 = 0) (>r2 = "1"))
 
    ; ..and the native: still native in the child, and the same answer
-   _ (assert (nat? bake-native) ((bake-native 100000) = 4999950000))
+   _ (test (nat? bake-native) ((bake-native 100000) = 4999950000))
    _ (: p (open drv "w")
         _ (say p "(: _ (putn (? (nat? bake-native) (bake-native 100000) -1)) (quit 0))")
         (close p))
    r3 (hark ["out/love" "wake" img drv])
-   _ (assert (two? r3) (<r3 = 0) (>r3 = "4999950000"))
+   _ (test (two? r3) (<r3 = 0) (>r3 = "4999950000"))
 
    _ (unlink img) _ (unlink drv)
    _ (test_fin ())

@@ -499,7 +499,7 @@
                     (walkops >ops)))
    (walk fs) (? !fs 0
                 (: f <fs
-                   _ (? (two? f && (= <f 'assert)) (walkops >f) 0)
+                   _ (? (two? f && (= <f 'test)) (walkops >f) 0)
                    (walk >fs)))
 
    _ (dot (join [

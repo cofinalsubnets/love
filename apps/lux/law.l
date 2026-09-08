@@ -7,7 +7,7 @@
 ; --- the zipper laws ---
 (borrow 'xwire)   ; the X wire, apps/lux/wire.l
 (: z3 (zmk 2 '(1) '(3))                                                          ; row (1 2 3), 2 focused
-   (assert
+   (test
       (zrow (zfrom '(1 2 3)) = '(1 2 3)) !(zfrom ()) !(zrow ())
       (zrow z3 = '(1 2 3)) (zfoc z3 = 2)
       (zfocdn (zfocup z3) = z3) (zfocup (zfocdn z3) = z3)                        ; motions are inverses
@@ -27,7 +27,7 @@
 (: (sameset? a b) ((#a = tally b) && all (x \ any (y \ x = y) b) a)         ; equal as sets
    s0 (sheaf '(1 2 3)) s1 (admit s0 10) s2 (admit (admit s1 20) 30)             ; ws1 row (30 20 10)
    s4 (shiftto s2 2)
-   (assert
+   (test
       (wscur s0 = 1) !(wsrow s0) !(wsfoc s0) (wssane? s0)
       (wsfoc s1 = 10) (wsrow s1 = '(10)) (wsknownw? s1 10) (wssane? s1)
       (admit s1 10 = s1)                                                         ; managing a managed window is a no-op
@@ -53,7 +53,7 @@
 (: s2 (admit (admit (admit (sheaf '(1 2 3)) 10) 20) 30) r99 '(20 20 200 100)
    (sameset? a b) ((#a = tally b) && all (x \ any (y \ x = y) b) a)
    f2 (wsdofloat s2 20 r99)
-   (assert
+   (test
       !(wsfloating? s2 20) (wsfloating? f2 20) (wsrect f2 20 = r99)              ; float lifts a window
       (wsknownw? f2 20) (wsrect f2 30 = ())                                      ; still managed; a tiled window has no rect
       !(any (x \ x = 20) (wstiled f2))                                         ; float removed 20 from the tiled stack
@@ -86,7 +86,7 @@
           s2 (fzop <r1 (1 + <r2) s)
           (wssane? s2 ? (fz (i - 1) >r2 s2) ['broke <r1 (1 + <r2)])))
    sF (fz 200 (wheel 7) (sheaf '(1 2 3)))
-   (assert (wssane? sF) (all (w \ wsfloating? sF w || wsknown? sF (wstagof sF w)) (wswins sF))))
+   (test (wssane? sF) (all (w \ wsfloating? sF w || wsknown? sF (wstagof sF w)) (wswins sF))))
 
 ; --- the layout engine (apps/lux/layout.l): geometry is a partition ---
 (: (area p) (p 3 * p 4)                                                ; a placement's w*h
@@ -95,7 +95,7 @@
    z1 (zfrom '(10)) z3 (zfrom '(10 20 30))                                       ; z3 focuses the master (10)
    L1 (resizable-tall 1 0.02 0.5)
    t1 <(lay-tile L1 r z1) t3 <(lay-tile L1 r z3)
-   (assert
+   (test
       ; ResizableTall partitions the rect exactly, master-left / slaves-right
       (#t3 = 3) (sumarea t3 = full-area)
       (<t3 = '(10 0 0 400 600))                                                  ; master owns the left half
@@ -130,7 +130,7 @@
 ; --- none invented, row order kept -- whatever the master count ---
 (: (wincol ps) (two? ps ? (<<ps >< wincol >ps) ())
    r (rct 0 0 800 600) ws '(10 20 30 40 50) z (zfrom ws)
-   (assert
+   (test
       (wincol <(lay-tile (resizable-tall 1 0.02 0.5) r z) = ws)
       (wincol <(lay-tile (resizable-tall 3 0.02 0.5) r z) = ws)
       (wincol <(lay-tile (tall 9) r z) = ws)
@@ -143,7 +143,7 @@
    L1 (resizable-tall 1 0.02 0.5)
    base (choice [L1 (dwindle 1.618)])
    stk (minimize (smart-borders (toggle-full (mirror base))))                    ; the config's t (l1 ||| l2) shape
-   (assert
+   (test
       ; mirror transposes: master moves to the top, the partition is preserved
       (: m (lay-msg (mirror L1) 'mirror z3) p <(lay-tile m r z3)                 ; toggle mirror on
          ((<p = '(10 0 0 800 300)) && (sumarea p = 480000)))                      ; master owns the top strip
@@ -180,7 +180,7 @@
                      (op = 'msg) (a = 'grow ? [<lay (lay 1 + 10)] ())
                      ())
    Q [q 50] r (rct 0 0 800 600) z3 (zfrom '(10 20 30))
-   (assert
+   (test
       (<(lay-tile Q r z3) = '((10 0 0 100 50)))                                  ; the closure places
       (<>(lay-tile Q r z3) = Q)                                                  ; ... and hands its record back
       ((lay-msg Q 'grow z3) 1 = 60)                                         ; a message it takes rewrites its state
@@ -194,7 +194,7 @@
    c (mg-ctx 0 20 (rct 0 0 800 600) (rct 100 100 300 200))                      ; socket 0 (unused: pure actions/mocks), win 20, screen, geom
    yes (c \ 1) no (c \ 0)                                                        ; mock predicates
    tag (nm \ \ c sh (nm >< sh))                                               ; mock action: cons a tag onto the sheaf (marks it ran)
-   (assert
+   (test
       ; float actions move the (tiled) window into the floating half at the right rect
       (: f (do-full-float c s0) (wsfloating? f 20 && (wsrect f 20 = '(0 0 800 600)) && !(any (x \ x = 20) (wstiled f))))
       (: f (do-float c s0) (wsrect f 20 = '(100 100 300 200)))                  ; do-float keeps the window's own geometry
@@ -218,7 +218,7 @@
 
 ; --- the Go/Swap zipper halves (apps/lux/core.l rung 6): focus/swap by NAME ---
 (: z3 (zmk 2 '(1) '(3))                                                          ; row (1 2 3), 2 focused
-   (assert
+   (test
       (zfoc (zfocto 3 z3) = 3) (zrow (zfocto 3 z3) = '(1 2 3))                   ; zfocto moves only the focus
       (zfocto 2 z3 = z3) (zfocto 9 z3 = z3)                                      ; to self / to absent: no-ops
       (zrow (zswapw 1 3 z3) = '(3 2 1)) (zfoc (zswapw 1 3 z3) = 2)               ; zswapw exchanges positions, focus keeps its window
@@ -227,7 +227,7 @@
       (zswapw 1 9 z3 = z3)))                                                     ; a missing party: no-op
 
 ; --- the keymap (apps/lux/keys.l rung 6): the table's shape, the union law, nextMatch ---
-(: (assert
+(: (test
       ; every binding is (lib keysym action), the action a tagged list
       (all (r \ (#r = 3) && two? (kb-act r) && name? <(kb-act r)) the-keys)
       (kmodmask = (shiftm | (ctrlm | (altm | supm))))
@@ -253,7 +253,7 @@
       !(nm-pick '(10) 10 '(10) 1)))                                              ; nowhere to go
 
 ; --- EWMH + docks (apps/lux/ewmh.l rung 7): strut arithmetic + wire encodings ---
-(: (assert
+(: (test
       ; _net_wm_strut_partial's 12 values: the strut is the first 4; short = none
       (strut-parse '(0 0 30 0 0 0 0 0 0 0 400 800) = '(0 0 30 0))
       !(strut-parse '(1 2))
@@ -267,25 +267,25 @@
    _ (ewmh-toggle ()) r2 (ewmh-rect (rct 0 0 800 600) 800 600)                   ; ToggleStruts: the full screen again
    _ (ewmh-toggle ()) _ (ewmh-untrack 88) r3 (ewmh-rect (rct 0 0 800 600) 800 600)
    _ (pin ewst 'struts ())                                                       ; leave the tablet clean
-   (assert (r1 = '(40 30 760 570)) (r2 = '(0 0 800 600)) (r3 = '(0 30 800 570))))
+   (test (r1 = '(40 30 760 570)) (r2 = '(0 0 800 600)) (r3 = '(0 30 800 570))))
 
 ; --- the property/window encodings, byte-exact into a jug ---
 (: j (jug 0) _ (x-chprop32 j 5 6 7 '(9 10)) b (slurp j)
-   (assert (#b = 32) (b 0 = 18) (b 2 = 8)                                   ; opcode, len 6+2
+   (test (#b = 32) (b 0 = 18) (b 2 = 8)                                   ; opcode, len 6+2
            (b 4 = 5) (b 8 = 6) (b 12 = 7)                                        ; window, property, type
            (b 16 = 32) (b 20 = 2) (b 24 = 9) (b 28 = 10)))                       ; format, count, the two values
 
 (: j (jug 0) _ (x-chprop8 j 5 6 7 "AB") b (slurp j)
-   (assert (#b = 28) (b 0 = 18) (b 2 = 7)                                   ; len 6 + 1 (2 chars + pad)
+   (test (#b = 28) (b 0 = 18) (b 2 = 7)                                   ; len 6 + 1 (2 chars + pad)
            (b 16 = 8) (b 20 = 2) (b 24 = 65) (b 25 = 66) (b 26 = 0)))            ; format 8, n=2, "ab\0\0"
 
 (: j (jug 0) _ (x-mkwin j 42 7) b (slurp j)
-   (assert (#b = 32) (b 0 = 1) (b 4 = 42) (b 8 = 7)                         ; CreateWindow, wid, parent
+   (test (#b = 32) (b 0 = 1) (b 4 = 42) (b 8 = 7)                         ; CreateWindow, wid, parent
            (b 12 = 255) (b 13 = 255) (b 16 = 1) (b 22 = 2)))                     ; x=-1, w=1, class InputOnly
 
 ; --- ClientMessage field reads (win@4 type@8 data@12,16,20) ---
 (: pk ('(33 32 0 0 9 0 0 0 5 0 0 0 2 0 0 0 7 0 0 0 8 0 0 0) + '(0 0 0 0 0 0 0 0))
-   (assert (ewmh-cm-win pk = 9) (ewmh-cm-type pk = 5)
+   (test (ewmh-cm-win pk = 9) (ewmh-cm-type pk = 5)
            (ewmh-cm-d0 pk = 2) (ewmh-cm-d1 pk = 7) (ewmh-cm-d2 pk = 8)))
 
 ; --- the config (apps/lux/config.l rung 8): the transliteration's shape.
@@ -296,7 +296,7 @@
                (conf-roster c0 'layout-wrap '(minimize smart toggle-full mirror)))
    sm (lay0 2) tf (sm 1) mir (tf 2) ch (mir 2)               ; peel minimize/smart/toggle/mirror down to the |||
    subs (ch 2) rt <subs dw <>subs
-   (assert
+   (test
       (salt-one c0 'border 3 = 3) (conf-tags c0 = 9) (conf-mod c0 = supm)
       (<lay0 = 'minimize) (<sm = 'smart) (<tf = 'toggle-lay)
       (<mir = 'mirror) (<ch = 'choice)
@@ -317,7 +317,7 @@
                (conf-roster c1 'layout-wrap '(minimize smart toggle-full mirror)))
    km (keys-build (conf-mod c1) (salt-one c1 'nudge 20) (conf-tags c1)
                   (conf-roster c1 'bind ()) (conf-roster c1 'unbind ()))
-   (assert
+   (test
       (salt-one c1 'border 3 = 5) (conf-tags c1 = 4) (conf-mod c1 = altm)        ; scalars land
       (<lay1 = 'smart) (<(lay1 1) = 'choice)                                ; layout-wrap replaces the whole stack
       (#((lay1 1) 2) = 1)                                         ; one ||| member, the config's dwindle
@@ -341,7 +341,7 @@
                      ((nonsense q) (kill)))
                (unbind (sup p) (sup z) (sup bogus))))
    km (keys-build supm 20 9 (conf-roster c2 'bind ()) (conf-roster c2 'unbind ()))
-   (assert
+   (test
       (kspec supm '(sup e) = '(64 101))                                          ; a one-char key is its ascii keysym
       (kspec supm '(sup shift Return) = '(65 65293))                             ; masks or together, names come off the table
       (kspec altm '(mod Tab) = '(8 65289))                                       ; `mod` follows the configured modifier
@@ -365,7 +365,7 @@
    (fld t) (be16 #t + t)
    (entry num data) ((((be16 256 + fld "bee") + fld num) + fld "MIT-MAGIC-COOKIE-1") + fld data)
    b (entry "0" "aaaabbbbccccdddd" + entry "7" "0123456789abcdef")
-   (assert
+   (test
       (xauth-parse b "7" = '("MIT-MAGIC-COOKIE-1" "0123456789abcdef"))           ; finds the display's cookie
       (<>(xauth-parse b "0") = "aaaabbbbccccdddd")                               ; ... whichever display
       !(xauth-parse b "9")                                                       ; no entry -> ()
@@ -373,9 +373,9 @@
 
 ; --- the rung-8 wire encodings, byte-exact into a jug ---
 (: j (jug 0) _ (x-borderpix j 5 77) b (slurp j)                                  ; cwa cwborderPixel
-   (assert (#b = 16) (b 0 = 2) (b 4 = 5) (b 8 = 8) (b 12 = 77)))
+   (test (#b = 16) (b 0 = 2) (b 4 = 5) (b 8 = 8) (b 12 = 77)))
 (: j (jug 0) _ (x-cursor j 9 41 42) b (slurp j)                                  ; OpenFont + CreateGlyphCursor + CloseFont + cwa cwcursor
-   (assert (#b = 76)
+   (test (#b = 76)
            (b 0 = 45) (b 2 = 5) (b 4 = 41) (b 12 = 99)                           ; OpenFont len 5, fid, "cursor"[0]='c'
            (b 20 = 94) (b 24 = 42) (b 36 = 68)                                   ; CreateGlyphCursor, cid, glyph 68
            (b 52 = 46) (b 60 = 2) (b 68 = 0) (b 69 = 64) (b 72 = 42)))           ; CloseFont; cwa mask 0x4000, value cid
@@ -383,7 +383,7 @@
 ; --- minimize's targeted restore (a taskbar activate; apps/lux/layout.l rung 8) ---
 (: z3 (zfrom '(10 20 30)) r (rct 0 0 800 600)
    M (lay-msg (minimize (resizable-tall 1 0.02 0.5)) '(minimize-window 20) z3)
-   (assert
+   (test
       (#<(lay-tile M r z3) = 2)                                             ; 20 hidden
       (#<(lay-tile (lay-msg M '(restore-window 20) z3) r z3) = 3)           ; named restore brings it back
       !(lay-msg M '(restore-window 30) z3)))                                     ; not minimized -> unhandled ()

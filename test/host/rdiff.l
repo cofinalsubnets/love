@@ -139,7 +139,7 @@
             + " injected=" + (show (peep rd-p0hurtn 'bad 0))
             + " deep=" + (show rd-deep) + "\n")))
 
-(assert
+(test
  ; the sweep reached the tree and read it -- the proof OF work, checked and not
  ; merely printed. floors, not exact counts: the tree grows.
  (250 < (peep rd-clean 'files 0))

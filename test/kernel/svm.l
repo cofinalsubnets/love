@@ -15,7 +15,7 @@
    (? (! (? had (svm ()) ()))
       (: _ (puts "svm: no AMD-V here, laws skipped") _ (putc 10) ())
       (: r (svm-run ())
-         _ (assert
+         _ (test
             (3 = (tally r))          ; (exitcode rax rip) -- a refusal answers ()
             (114 = <r)               ; 0x72, the cpuid intercept
             (4660 = <>r)             ; 0x1234, the sentinel the guest loaded

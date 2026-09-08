@@ -24,7 +24,7 @@
 
 ; --- types: the base and the declarator are built separately, because a C
 ; declaration brackets its own name. these are the shapes love.c actually writes.
-(assert
+(test
  ((one '(gdecl (("x" int (num 5))))) = ("int x = 5;" + nl))
  ((one '(gdecl (("p" (ptr char) ())))) = ("char *p;" + nl))
  ((one '(gdecl (("t" (arr (ptr char) 2) ())))) = ("char *t[2];" + nl))
@@ -40,7 +40,7 @@
 ; --- const binds to the declarator over a pointer and to the base otherwise.
 ; `lvm_t *const m[16][16]` is the shape the dispatch matrices need, and getting it
 ; wrong is the difference between a const table and a table of consts.
-(assert
+(test
  ((one '(gdecl (("a" (const int) (num 1))))) = ("int const a = 1;" + nl))
  ((one '(gdecl (("b" (const (ptr char)) ())))) = ("char *const b;" + nl))
  ((one '(gdecl (("t" (const (named "size_t")) ())))) = ("size_t const t;" + nl))
@@ -53,21 +53,21 @@
 ; the enum gave it, and stays readable.
 (: cl-di '(gdecl (("v" (arr int 2) (init ((didx KMint (var "lvm_0")) (didx KNom (var "lvm_1")))))))
    cl-df '(gdecl (("s" (named "S") (init ((dfield "x" (num 1)) (num 2))))))
-   (assert
+   (test
     ((one '(gdecl (("v" (arr int KN) ())))) = ("int v[KN];" + nl))
     ((one cl-di) = ("int v[2] = { [KMint] = lvm_0, [KNom] = lvm_1 };" + nl))
     ((one cl-df) = ("S s = { .x = 1, 2 };" + nl))))
 
 ; --- the return type is clay's 4th slot on `fn`. cparse never fills it, so every
 ; function it hands back prints `int`; an authored one says what it means.
-(assert
+(test
  ((one '(fn "f" (("a" int)) (blk ((ret (var "a")))))) = ("int f(int a) {" + nl + " return a;" + nl + "}" + nl))
  ((one '(fn "g" () (blk ((ret ()))) void)) = ("void g(void) {" + nl + " return;" + nl + "}" + nl)))
 
 ; --- a note is emit-only: authored in the generator, never captured from C. one
 ; `//` per line, so a paragraph keeps its shape and generated love.c arrives with
 ; the prose the tree runs on rather than stripped of it.
-(assert
+(test
  ((one '(note "the lane table")) = ("// the lane table" + nl))
  ((one '(note "two lines
 here")) = ("// two lines" + nl + "// here" + nl)))
@@ -75,7 +75,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 ; --- a real typedef, the form cparse cannot emit --------------------------------
 (: cl-vas '(prog ((fn "f" () (blk ((expr (vastart (var "ap"))))))))
    cl-inf ['gdecl [["d" 'double ['flo (1.0 / 0.0)]]]]
-   (assert
+   (test
     ((one '(tdef "lvm_t" (fn void))) = ("typedef void lvm_t();" + nl))
     ; ...and the empty marker it emits instead refuses, rather than printing a `;`
     ; that would round-trip green while saying nothing. the same for va_start's lost
@@ -92,7 +92,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 ; is still referred to as ('struct tag).
 (: cl-sd '(sdef "P" (("x" int) ("next" (ptr (struct "P"))) ("row" (arr (named "lvm_t") KN))))
    cl-un '(sdef "pun" (("d" double) ("u" ullong)) union)
-   (assert
+   (test
     ((one cl-sd) = ("struct P {" + nl + " int x;" + nl + " struct P *next;" + nl
                     + " lvm_t row[KN];" + nl + "};" + nl))
     ((one cl-un) = ("union pun {" + nl + " double d;" + nl + " unsigned long long u;" + nl + "};" + nl))))
@@ -102,7 +102,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 ; without a definition is either incomplete by design (`struct S *p`) or resolved by
 ; the header the generated region sits inside -- which is how mx.h rides love.c.
 (: cl-tds '(prog ((sdef "P" (("x" int))) (tdef "P" (struct "P")) (gdecl (("v" (struct "P") ())))))
-   (assert
+   (test
     ((one cl-tds) = ("struct P {" + nl + " int x;" + nl + "};" + nl
                      + "typedef struct P P;" + nl + "struct P v;" + nl))
     ((one '(gdecl (("p" (ptr (struct "S")) ())))) = ("struct S *p;" + nl))
@@ -117,7 +117,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 ; attributes ride fn's 5th slot as spellings -- love.h's macros used call-shaped,
 ; so clay says "ai_noinline" and never what it expands to. emit-only by necessity:
 ; parse.l balance-skips a trailing attribute run, so none can come back through G1.
-(assert
+(test
  ((one '(fn "ai_sleep" (("ticks" (named "uintptr_t"))) (blk ((ret ()))) void
             ("__attribute__((weak))" "ai_noinline")))
   = ("__attribute__((weak)) ai_noinline void ai_sleep(uintptr_t ticks) {" + nl
@@ -147,7 +147,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
             (blk ((ret (call (var "Continue") ()) "ai_musttail")))
             (ptr (struct "ai"))
             ("ai_noinline" "ai_noicf"))
-   (assert
+   (test
     ((one cl-lvm)
      = ("ai_noinline ai_noicf struct ai *lvm_add(struct ai *restrict g, union u *Ip, word *Hp, word *restrict Sp) {"
         + nl + " ai_musttail return Continue();" + nl + "}" + nl))))
@@ -157,7 +157,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 ; survives to be parsed back. a body that is a clay expression renders at the
 ; tightest context, which is macro hygiene falling out of the precedence table --
 ; the body cannot see where it is substituted, so it parenthesizes itself.
-(assert
+(test
  ((one '(cpp-def "ai_data_n" 9)) = ("#define ai_data_n 9" + nl))
  ((one '(cpp-def "countof(_)" (bin / (szof (var "_")) (szof (deref (var "_"))))))
   = ("#define countof(_) (sizeof(_) / sizeof(*_))" + nl))
@@ -184,7 +184,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
    ; every directive at column 0 whatever the depth -- love.h's own style
    cl-nest ['cpp-if [[['un 'not (cl-def "ai_data_stride")]
                        [cl-if]]]]
-   (assert
+   (test
     ((one cl-if) = ("#if defined(__x86_64__) || defined(__aarch64__)" + nl
                     + "#define ai_data_stride 16" + nl + "#else" + nl
                     + "#define ai_data_stride 128" + nl + "#endif" + nl))
@@ -209,7 +209,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 ; fn does; the appended slots mirror `fn`'s exactly and one `csig` lays both, so a
 ; declaration cannot drift from the definition it announces. two generated functions
 ; calling each other have no other way to be spelled.
-(assert
+(test
  ((one '(proto "shash")) = ("int shash();" + nl))
  ((one '(proto "shash" (("g" (ptr (struct "ai"))) ("x" (named "word"))
                         ("env" (ptr (struct "arib")))) (named "uintptr_t") ("static")))
@@ -224,7 +224,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 ; constant is an anonymous enum, where the position means nothing and the value is
 ; the whole point, and love.c's `enum { nf_maxcap = 64 }` is exactly that: the one
 ; way to bound an array in a struct without spending a macro on it.
-(assert
+(test
  ((one '(edef "q" (KMint KNom KChain))) = ("enum q { KMint, KNom, KChain };" + nl))
  ((one '(edef () ((nf_maxcap (num 64))))) = ("enum { nf_maxcap = 64 };" + nl))
  ((one '(edef "e" (a (b (num 8)) c))) = ("enum e { a, b = 8, c };" + nl))
@@ -237,7 +237,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 ; choice is clay's. love.c writes the first; an index binds like the postfix it is
 ; written as, so `dot` spends its arrow on the star and never on the bracket.
 (: (ex x) (cs ['gdecl [["r" 'int x]]])
-   (assert
+   (test
     ((ex '(dot (deref (bin + (var "k") (num 0))) "ap")) = ("int r = k[0].ap;" + nl))
     ((ex '(dot (deref (bin + (var "u") (num 2))) "m")) = ("int r = u[2].m;" + nl))
     ; an index is an expression context, so a negative literal spells there
@@ -250,14 +250,14 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 ; --- `for (;;)`, C's own spelling of forever ------------------------------------
 ; the general join lays `for (; ; )`, which reads as three omissions rather than one
 ; idiom. the clauses that are there still take the general shape.
-(assert
+(test
  ((one '(fn "f" () (blk ((for () () () (blk ((brk)))))) void))
   = ("void f(void) {" + nl + " for (;;) {" + nl + "  break;" + nl + " }" + nl + "}" + nl))
  ((one '(fn "g" () (blk ((for () (var "c") () (blk ((brk)))))) void))
   = ("void g(void) {" + nl + " for (; c; ) {" + nl + "  break;" + nl + " }" + nl + "}" + nl)))
 
 ; --- clay-ok? is a shape check, because gen.l trusts its input ------------------
-(assert
+(test
  (1 = (cok '(bin + (num 1) (num 2))))
  (gripe? (cok '(bin + (num 1))))                  ; bin takes three
  (gripe? (cok '(nosuchtag 1)))
@@ -281,7 +281,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 ; --- precedence: the shower is not fully parenthesized, so the table has to be
 ; right. these are the pairs that go wrong when it is not.
 (: (e x) (cs ['gdecl [["r" 'int x]]])
-   (assert
+   (test
     ((e '(bin * (bin + (var "a") (var "b")) (var "c"))) = ("int r = (a + b) * c;" + nl))
     ((e '(bin + (bin * (var "a") (var "b")) (var "c"))) = ("int r = a * b + c;" + nl))
     ; - is left associative: a - (b - c) needs the parens back
@@ -302,7 +302,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 
 ; --- strings: the escapes C needs, and an octal fallback for the rest -----------
 (: cl-str ['gdecl [["s" '(ptr char) ['str ("a" + (string 10) + "\"b\\" + (string 1))]]]]
-   (assert
+   (test
     ((one cl-str) = ("char *s = \"a\\n\\\"b\\\\\\001\";" + nl))))
 
 ; --- ...and a character literal, emit-only: cparse folds one to its number, so it
@@ -310,7 +310,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 ; swap roles against a string's -- the apostrophe is the delimiter here and the
 ; double quote is not -- and nothing else about the escapes changes.
 (: (ec x) (cs ['gdecl [["r" 'int x]]])
-   (assert
+   (test
     ((ec '(chr 92)) = ("int r = '\\\\';" + nl))
     ((ec '(chr 39)) = ("int r = '\\'';" + nl))
     ((ec '(chr 34)) = ("int r = '\"';" + nl))

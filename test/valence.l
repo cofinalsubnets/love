@@ -1,4 +1,4 @@
-(assert
+(test
  ; cap and cup, and the compounds by greedy monadic factorization
  (1 = <'(1 2 3)) ('(2 3) = >'(1 2 3))
  (2 = <>'(1 2 3)) ('(3) = >>'(1 2 3))
@@ -29,7 +29,7 @@
  (-7 = (negate 7)) (0.5 = (reciprocal 2)) (0.25 = (fraction 5.25)) (1 = (bit 9))
  (6 = (net '(1 2 3))) (24 = (prod '(2 3 4))))
 
-(assert
+(test
  (-1 = (net '(-2 1)))                           ; the net unclamped ($ is law.l's sat-net)
  (negate = (- 0)) (reciprocal = (/ 1))               ; the words are the sections
  ((net @(1 2 3)) = (net @(1 2 3))) ((net @(1 2 3)) = (net '(1 2 3)))

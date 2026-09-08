@@ -46,7 +46,7 @@
    fz-l      (fz-list 8 fz-elem))                        ; list of small ints, pin 0..8
 
 ; ---- numeric-tower algebra: laws that hold across fixnum / box / bignum ----
-(assert
+(test
  ; commutativity of + and *
  (fz-ok 400 1 (fz-pair2 fz-num fz-num) (\ v (<v + <>v = <>v + <v)))
  (fz-ok 400 2 (fz-pair2 fz-num fz-num) (\ v (<v * <>v = <>v * <v)))
@@ -87,7 +87,7 @@
 ; into a 2^160-sized exponent. With fz-op bounded, every result here stays tiny
 ; (|m ** n| <= 4 ** 6), so these properties cannot loop or blow up the heap.
 (: fz-op (fz-int 0 7))
-(assert
+(test
  ; numeric operand: (n m) == m ** n  (exponent n bounded to <= 6)
  (fz-ok 300 15 (fz-pair2 fz-op (fz-int -4 5))
    (\ v (<v <>v = <v <>v)))
@@ -96,7 +96,7 @@
    (\ v (<v * <>v + <>>v = (<v (+ <>v) <>>v)))))
 
 ; ---- list-combinator identities ----
-(assert
+(test
  (fz-ok 300 20 fz-l (\ l (l = rev (rev l))))                          ; rev is involutive
  (fz-ok 300 21 fz-l (\ l (l = map id l)))                            ; map id = id
  (fz-ok 300 22 fz-l (\ l (l = foldr link () l)))                     ; foldr X () = id
@@ -134,7 +134,7 @@
       (\ st (: r (random st 3)            ; 1/3 leaf, 2/3 a bounded list of sub-exprs
           (? (<r = 0) (fz-leaf >r)
              ((fz-list 4 (fz-sexp (- d 1))) >r))))))
-(assert
+(test
  (fz-ok 200 30 fz-leaf (\ x (x = fz-rd x)))            ; leaves: ints + symbols
  (fz-ok 200 31 (fz-sexp 3) (\ x (x = fz-rd x)))        ; nested structure round-trips
  (fz-ok 150 32 (fz-sexp 4) (\ x (x = fz-rd x))))
@@ -144,7 +144,7 @@
 (: fz-arrpair (fz-bind (fz-int 1 6) (\ n (\ st
     (: a ((fz-rep n fz-elem) st) b ((fz-rep n fz-elem) >a)
        ([(star-tray [n] <a) (star-tray [n] <b)] >< >b))))))
-(assert
+(test
  (fz-ok 250 40 fz-arrpair (\ v (aall (<v + <>v = <>v + <v))))  ; + commutes
  (fz-ok 250 41 fz-arrpair (\ v (aall (<v * <>v = <>v * <v))))  ; * commutes
  ; sum is linear: sum(a+b) = sum(a) + sum(b)
@@ -170,7 +170,7 @@
    ; a string with 0 <= i <= j <= pin, as `(s i j)
    fz-s-ij (fz-bind fz-s (\ s (fz-bind (fz-int 0 (1 + tally s))
               (\ i (fz-map (\ j [s i j]) (fz-int i (1 + tally s))))))))
-(assert
+(test
  ; +: length adds, is associative, and "" is a two-sided identity
  (fz-ok 300 50 fz-s2 (\ v ($(<v + <>v) = $<v + $<>v)))
  (fz-ok 250 51 fz-s3 (\ v ((<v + <>v) + <>>v = <v + (<>v + <>>v))))
@@ -230,4 +230,4 @@
           (? <res 1
              (: _ (puts ("fuzz FAILED: " + string nom + "   at " + show >res + "\n")) 0))))
    (fz-all rs) (? (atom? rs) 1 ((fz-row <rs) && fz-all >rs)))
-(assert (fz-all fz-rows))
+(test (fz-all fz-rows))

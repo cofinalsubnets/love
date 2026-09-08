@@ -4,7 +4,7 @@
 ; applies f to that snapshot as k. invoking (k v) reinstates the
 ; captured stack and resumes as if (call_cc f) had returned v.
 
-(assert
+(test
  ; --- f returns directly without invoking k ---
  ; the captured k is discarded; the form resolves to f's return value.
  (= 41 (call-cc (\ k 41)))

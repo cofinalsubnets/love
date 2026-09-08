@@ -19,7 +19,7 @@
 ; --- one file ---------------------------------------------------------------
 ; a setting is `(key operand ..)`: the head names it, the tail is the value.
 (: st-a (st-put "a.l" "(singleton 1)\n(deprecated old-thing (worse \"say better\"))\n"))
-(assert
+(test
  (: c (salt-file st-a (tablet 0))
     (&& (1 = (salt-one c 'singleton 0))
         (2 = (tally (salt-all c 'deprecated)))
@@ -30,7 +30,7 @@
 ; evaluated -- so a dotfile cannot run anything. if this line were evaled the
 ; test would exit here instead of asserting; it lands as a plain list.
 (: st-q (st-put "quit.l" "(danger (quit 1))\n"))
-(assert
+(test
  (: c (salt-file st-q (tablet 0))
     v (salt-one c 'danger ())
     (&& (two? v) ('quit = <v))))
@@ -40,7 +40,7 @@
 ; disturb what is already in the tablet. (an empty config file is a perfectly
 ; good thing for a config file to be -- the question is whether it opened.)
 (: st-e (st-put "empty.l" ""))
-(assert
+(test
  (: c (salt-file st-e (salt-file st-a (tablet 0))) (1 = (salt-one c 'singleton 0)))
  (: c (salt-file st-gone (salt-file st-a (tablet 0))) (1 = (salt-one c 'singleton 0)))
  !(salt-all (salt-file st-e (tablet 0)) 'singleton)
@@ -52,7 +52,7 @@
 ; point of the order -- ~/.love/etc/libra.l for your taste, ./.libra.l over it
 ; for the tree's own.)
 (: st-b (st-put "b.l" "(singleton 0)\n"))
-(assert
+(test
  (: c (salt-file st-b (salt-file st-a (tablet 0)))
     (&& (0 = (salt-one c 'singleton 9))                  ; replaced
         (2 = (tally (salt-all c 'deprecated)))))         ; untouched
@@ -63,7 +63,7 @@
 ; a typo must not take the tool down, and half a config is better than none:
 ; the bad forms are skipped in silence and everything around them still lands.
 (: st-j (st-put "junk.l" "loose-symbol\n42\n\"a string\"\n(singleton 1)\n((f x) 2)\n(deprecated a)\n"))
-(assert
+(test
  (: c (salt-file st-j (tablet 0))
     (&& (1 = (salt-one c 'singleton 0))
         (1 = (tally (salt-all c 'deprecated))))))
@@ -72,7 +72,7 @@
 ; answers `torn` on an unfinished shape, which is a third thing to catch --
 ; not a datum and not the clean end.
 (: st-t (st-put "trunc.l" "(singleton 1)\n(deprecated foo\n"))
-(assert
+(test
  (: c (salt-file st-t (tablet 0))
     (&& (1 = (salt-one c 'singleton 0)) !(salt-all c 'deprecated))))
 
@@ -80,7 +80,7 @@
 ; salt-all cannot tell an absent key from one written with no operand -- both
 ; are () -- so a switch is `(singleton 1)`, never a bare `(singleton)`.
 (: st-n (st-put "none.l" "(singleton)\n"))
-(assert
+(test
  (: c (salt-file st-n (tablet 0))
     (&& !(salt-all c 'singleton) ('dflt = (salt-one c 'singleton 'dflt))))
  (: c (salt-file st-a (tablet 0))
@@ -90,7 +90,7 @@
 ; the roster lane: an entry is either a bare name or `(name "hint"), and the
 ; answer is the entry wrapped -- presence out of band, since a bare name nets
 ; whatever its spelling nets and could not say "found" on its own.
-(assert
+(test
  (: c (salt-file st-a (tablet 0))
     (&& (two? (salt-has? c 'deprecated 'old-thing))
         ('old-thing = <>(salt-has? c 'deprecated 'old-thing))
@@ -102,7 +102,7 @@
 ; --- the door ---------------------------------------------------------------
 ; (salt 'app) is salt-file twice over the two well-known paths. the app name
 ; spells both, so nothing here hardcodes a tool.
-(assert
+(test
  (tablet? (salt 'salt-test-no-such-app))                 ; neither file exists: an empty tablet
  !(salt-all (salt 'salt-test-no-such-app) 'singleton))
 
