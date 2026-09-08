@@ -381,7 +381,8 @@
    ; two operands, and the arity is the protocol: under-applied this answers a closure, which
    ; is truthy, and every purity gate below silently opens. `as` is the arg forms, not values --
    ; kconst declines a non-constant, so a site that cannot know its operand denies readset.
-   (pure-head? h as) (pure-fn? (gv h ()) (: k (two? as ? (kconst <as)) (? <k >k)))
+   (pure-hv? v as) (pure-fn? v (: k (two? as ? (kconst <as)) (? <k >k)))
+   (pure-head? h as) (pure-hv? (gv h ()) as)
    ; pure-ap?: the same question for cpap's walk, widened by the data lanes -- which never run
    ; what they are handed: a sequence indexes or joins (text by byte, a chain by element), a point
    ; answers const-1, a numeric or array composes (it builds the composition, it does not call it).
@@ -540,6 +541,13 @@
                     (bspl x h h2 hr as se fl op bnd pb))                                     ;    foldc/cpap are dead for a lambda head, so its decline keeps the call)
                 (nom? h && allk as && !(member? h bnd) && pure-head? h as)            ; pure-fn on consts -> fold. bnd-guarded: a binder
                   (foldc (gv h ()) as)                                                ;   spelled like an op still shadows (the alpha law)
+                ; the same fold for a head that arrived as a VALUE -- a macro splice ([a b] is
+                ; prel's list, which splices the link nif). the purity tables are keyed by value,
+                ; so no name is wanted; and a value has none to shadow, hence no bnd guard.
+                ; ahead of cpap on purpose: cpap's licence stops at the first partial, and the
+                ; residual it bakes reads as a two? head that feels' sticky lane then declines.
+                (<hk && one? >hk && allk as && pure-hv? >hk as)
+                  (foldc >hk as)
                 (two? as && propk? <as && <hk && pure-ap? >hk (kval <as))             ; a pure-applying head with a known operand: fold the whole
                   (cpap >hk as)                                                       ;   known prefix, an unknown tail keeps the value as its head
                 (keep2 x h2 as)))))))                                                ; nothing rewrote -> the original call
