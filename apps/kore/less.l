@@ -28,6 +28,8 @@
 (use 're)
 
 (module 'kore
+(use 'posix)
+
 (:
    pg-ere (from 're 'reere) pg-fold (from 're 'refold) pg-find (from 're 'refind)
 

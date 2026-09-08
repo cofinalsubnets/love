@@ -20,6 +20,7 @@
 ; format (the LINK's arch), and a cross backend joins from its tree text the
 ; way mksrc.l joins one.
 
+(use 'posix)
 (: (rt-die m) (say err ("mkrt: " + m + "\n"), quit 1)
    (rt-rdev cl)
     (sound cl @ 'torn (rt-die "torn backend text")

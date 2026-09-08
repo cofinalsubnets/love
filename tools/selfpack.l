@@ -48,6 +48,7 @@
 (use "apps/sb/http.l")
 (use "apps/sb/sb.l")   ; for the ignore law only -- .sbignore is sb's file
 
+(use 'posix)
 (: (sp-die m) (say err ("selfpack: " + m + "\n"), quit 1)
    (sp-read p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, [1 (s + "")]))))
    (sp-write p s) (: q (open p "w")

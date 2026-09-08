@@ -20,6 +20,7 @@
 ;; to save around the sysv call (the loader C keeps off the floats, so xmm6..15
 ;; never move; sub 8 squares the stack for sysv). register names are holo's
 ;; file: r1=rcx r2=rdx r5=rsi r6=rdi r7=r8 r8=r9.
+(use 'posix)
 (: efi-ir-x64
     '((label efiboot)
       (push r5)                   ; rsi

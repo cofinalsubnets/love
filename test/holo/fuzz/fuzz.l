@@ -14,6 +14,7 @@
 ;
 ; exit 1 on any failure; each failure names its class, IR, hex and reason.
 
+(use 'posix)
 (reads (open "l/holo/holo.l" "r"))
 (reads (open "l/holo/x64.l" "r"))
 (reads (open "l/holo/a64.l" "r"))

@@ -19,6 +19,7 @@
 ; the gate fails on a round-trip difference or a shower crash. it does not fail on an
 ; inexpressible file, and it does not fail on a file the parser itself refuses (a few
 ; in test/cc/ are there to be refused).
+(use 'posix)
 (:
    _ (use "apps/moon/clay.l")
    _ (use 'moon)                       ; the front end (clex/cpp/cparse-t) is module 'moon

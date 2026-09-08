@@ -25,6 +25,7 @@
 ; function-pointer comparison that named each lane, and the unknown case this file
 ; had to refuse on when it could not. the lane's symbol is the datum now.
 
+(use 'posix)
 (: (join l) (foldl (+) "" l)
    nl "\n"
 

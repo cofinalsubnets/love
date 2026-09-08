@@ -19,6 +19,7 @@
 ;
 ; Run: out/love tools/uu2lean.l > test/proof/lean/uugen.lean   then  lean test/proof/lean/uugen.lean
 
+(use 'posix)
 (: _ (reads (open "test/uu.l" "r"))
    _ (reads (open "test/uuhom.l" "r"))
    _ (reads (open "test/uuhomgen.l" "r"))

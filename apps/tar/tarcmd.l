@@ -14,6 +14,7 @@
 (use 'gz)
 (use 'tar)
 
+(use 'posix)
 (: ; the exit door: a status raised, not a process ended, so a caller already in
    ; this image gets a charm back. loaded without kore there is no catcher and we
    ; quit as before -- the two ride together in every artifact that carries tar.

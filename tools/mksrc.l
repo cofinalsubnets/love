@@ -20,6 +20,7 @@
 ; -l $(ho)/.mksys-cat.l (kore text/core/asbook + holo elf/obj), the lane
 ; sys.o already rides.
 
+(use 'posix)
 (? (lit? (from 'holo 'objelf)) (use 'holo) 0) ; splice the assembler when this love is baked; the guard below says so when not
 
 (: (mksrc-slurp p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, [1 (s + "")]))))

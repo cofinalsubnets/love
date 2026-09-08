@@ -26,6 +26,7 @@
 ;
 ; exit 1 on any mismatch, naming the word, both spellings and the count.
 
+(use 'posix)
 (reads (open "l/holo/holo.l" "r"))
 (reads (open "l/holo/rv64.l" "r"))
 

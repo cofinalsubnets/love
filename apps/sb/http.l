@@ -17,6 +17,7 @@
 ; connect) comes off module 'dns, scoped here to the wrap's own compile.
 (module 'sb
 (use 'dns)
+(use 'posix)
 (:
    ; "80" -> 80. `int` is a truncation, not a parser, so digits are ours.
    (digits s)

@@ -5,6 +5,7 @@
 (use 'gz)
 (use 'tar)
 
+(use 'posix)
 (: (src-die m) (say err (";; " + m + "\n"), quit 1)
 
    ; the directory is positional, so a mistyped flag would be taken as one and a whole

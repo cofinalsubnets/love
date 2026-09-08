@@ -35,6 +35,7 @@
 ; Usage: love tools/waits.l file ..   (paths as the roster spells them: repo-relative)
 ; Exit:  0 = the waits are exactly the roster, 1 = they are not, 2 = usage error.
 
+(use 'posix)
 (: (die m) (say err "waits: ", say err m, say err "\n", quit 2)
 
    ; --- what counts as a wait -------------------------------------------------

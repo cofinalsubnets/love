@@ -21,6 +21,7 @@
   x-grabbtn x-replay x-allow-async x-grabptr x-ungrabptr x-querytree x-attrs x-manageable?
   x-redirect x-keymap x-grab x-ungrabkeys x-color x-borderpix x-cursor xauth-parse
   xauth-cookie x-decode x-next ev-code ev-detail ev-window ev-state ev-raw)
+(use 'posix)
 (:
    ; --- byte IO over the socket (little-endian) ---
    (x-w8 s v)  (put s v)

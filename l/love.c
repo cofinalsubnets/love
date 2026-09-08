@@ -204,7 +204,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
    {"love-tco", {.x = putcharm(ai_tco)}, 0}, };
   g = ai_defn(g, def0, countof(def0));
   // a nif row's value is its run inside nifs[]; an instruction row's is a bare fn, and that
-  // binds as its op charm -- no code address belongs in a love value (love/ev.c's pick/place).
+  // binds as its op charm -- no code address belongs in a love value (l/ev.c's pick/place).
   for (uintptr_t j = 0; j < countof(def1); j++) {
    struct ai_def d = def1[j];
    if (!ai_nif_cell(d.v.k)) d.v.x = putcharm(ai_op_index((intptr_t) d.v.ap));

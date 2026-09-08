@@ -15,6 +15,7 @@
 (use "apps/vi/hue.l")
 (use 'hueweb)
 
+(use 'posix)
 (: (h2w-rdf p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, (string? s ? [1 s])))))
    (h2w-usage _) (say err "usage: love tools/hue2web.l css | src FILE\n", quit 2)
 

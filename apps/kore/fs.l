@@ -7,6 +7,8 @@
 ; answers () ok or an errno nom, so !e is the success every loop below asks.
 ; a body-less top-level `:` leaking uoct (lawed in law.l) and the mains.
 (module 'kore
+(use 'posix)
+
 (:
    ; octal text -> a charm ("755" is 493), chmod's one argument shape
    (uoct s)

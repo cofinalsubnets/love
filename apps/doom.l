@@ -20,6 +20,7 @@
 ; -frames N ends the game after N drawn frames: the gate's door, and nobody else's.
 (module 'doom
 (use 'xwire)
+(use 'posix)
 (:
    ; --- the display, as lux reads it: DISPLAY -> the unix socket, the cookie off
    ;     XAUTHORITY or ~/.Xauthority when the server wants one ---

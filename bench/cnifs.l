@@ -21,6 +21,7 @@
 ; ⚠ no `use` and no lib file: the binary under test lives in out/bench/cc, so the
 ; module walk would miss lib/ entirely. everything here is built from the core, and the
 ; inflate row's stream is laid beside it by ccgen.l through the host love.
+(use 'posix)
 (:
    ; ⚠ VARIED BYTES, not a zeroed cask like ccrypto's: crc32 indexes eight tables with
    ; the data, so an all-NUL message would touch one entry of each and read a cache the

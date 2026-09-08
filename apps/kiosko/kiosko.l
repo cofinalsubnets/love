@@ -36,6 +36,7 @@
 (module (kiosko serve serve5 serve1 kiosko-main gulp)
 
 ; --- little utils -------------------------------------------------------------------
+(use 'posix)
 (: (strcat l)   (foldl (+) "" l)
    (joins l sp) (? !(two? l) "" !(two? >l) <l (<l + sp + joins >l sp))
    (ends? s t)  (: n #s m #t (m <= n && snip s (n - m) n = t))
@@ -349,6 +350,10 @@ usage: kiosko [-p PORT] [-q] [DIR]
    (kiosko-main as)
    (: _ (? !(nil? (from 'kiosko)) (use 'kiosko))  ; splice my registered self if I am one (cook-main's
                                                   ; guard); on a -l load my names already walk
+      ; ..and posix beside it. a global name reads the LIVE book (l/ev.c's lvm_index),
+      ; and this is called on a chain that carries neither: the line above puts back
+      ; this file's own names, and nothing puts back the doors it was loaded with.
+      _ (use 'posix)
       box {'port 8080 'root "."}
       (loop (w . r))
         (w @ ("-p" || "--port") (need w r, pin box 'port (numof <r), loop >r)

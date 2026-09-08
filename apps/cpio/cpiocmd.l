@@ -26,6 +26,7 @@
 (use 'tar)
 (use 'cpio)
 
+(use 'posix)
 (: cpioc-usage "usage: cpio {-o|-i|-t} [-H newc] [-dutv] [-F|-I|-O FILE] [--quiet]"
    (cpioc-moan m) (: _ (say err ("cpio: " + m)) _ (put err 10) (flush err))
    (cpioc-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) [1 (s + "")])))

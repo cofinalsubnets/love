@@ -1791,7 +1791,11 @@ void kmain(void) {
  // read. every exit funnels through the seat-aware quit; wait is catch, the pid is the task
  // pid. pg/fg/closes are accepted and ignored: no process groups, no ^Z, and the seat dups
  // its own ends so there is nothing for a child to leak.
- "(: (k-bn p) (: n (tally p)"
+  // the fs doors by VALUE, off their module: a splice would sit above the kernel's own
+  // shadows (raw, signal, setenv, environ, and the no-op roster below), and those are
+  // the whole reason this seat can run a crew written for a host.
+ "(: open (from 'posix 'open) close (from 'posix 'close) stat (from 'posix 'stat)"
+ "   (k-bn p) (: n (tally p)"
  "     (go i r) (? (< i n) (go (+ i 1) (? (= (p i) 47) (+ i 1) r)) (snip p r n))"
  "     (go 0 0))"
  "   (k-run-file p) (\\ as (: q (open p \"r\")"
@@ -1898,6 +1902,7 @@ void kmain(void) {
    "          (? (< i j) (kwords s (+ j 1) (+ j 1) (link (snip s i j) acc)) (kwords s (+ j 1) (+ j 1) acc))"
    "          (kwords s i (+ j 1) acc))"
    "       (? (< i j) (rev (link (snip s i j) acc)) (rev acc)))"
+   "   open (from 'posix 'open) close (from 'posix 'close)"    // by value, as above
    "   (kslurp p) (: h (open p \"r\") s (slurp h) _ (close h) s)"
    "   (kcat l) (? (two? l) (+ (kslurp (cap l)) (kcat (cup l))) \"\")"
    "   korecat (kcat (kwords korelist 0 0 ())))");

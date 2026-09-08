@@ -23,6 +23,7 @@
 ; ink, so manifest never joins the corpus -- boot/manifest.l probes both,
 ; the tui end to end through a pty with the cb screen as the witness.
 
+(use 'posix)
 (:
  ; --- reading a cell: repl-style, one form, unreadable text is a label ---
  (glean s) (: r (sound (+ "(" (+ s ")")))

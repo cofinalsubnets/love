@@ -15,6 +15,7 @@
 ; a kernel with unprivileged user namespaces off skips the file with a word and
 ; stays green -- that is a machine's policy, not a fault in the code.
 
+(use 'posix)
 (: e (newns 0)
    (? e (: _ (puts "rootns: no unprivileged user namespace here, laws skipped")
            _ (putc 10) 0)

@@ -31,6 +31,8 @@
 ; one -- the two differ only on an exact tie, which a decimal literal can reach
 ; and a computed double essentially never does.
 (module 'kore
+(use 'posix)
+
 (:
    ; -- values --------------------------------------------------------------
    ; a value is () uninitialised, a number, a string, or ('sn n s) -- a strnum,

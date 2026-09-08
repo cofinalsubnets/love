@@ -32,6 +32,7 @@
 (use 'gz)
 (use 'tar)
 
+(use 'posix)
 (: (usage _)
    (: _ (puts "helm -- a service supervisor, and a love shell over its socket
 usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first)

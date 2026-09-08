@@ -16,6 +16,8 @@
 ; milliseconds for one handshake.
 (module 'tls
 (use 'dns)
+(use 'posix)
+
 (:
    ; --- bytes and words ---
    (u8 v) (string (v & 255))

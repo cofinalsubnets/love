@@ -5,6 +5,7 @@
 ;
 ; edit this file, not mx.h / kinds.h / love_data.ld -- make relays all three from
 ; here, off the mx_gen roster in test/test.mk. `make mx` refreshes, test_clay diffs.
+(use 'posix)
 (:
    ; --- the kinds. this roster is `enum q`, so the order here is the dispatch lattice
    ; itself, each lane a contiguous block; love.h's narrative argues that order. dispatch

@@ -316,7 +316,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
   g = ai_evals_(g, "(use 'cli)(use 'holo)");
   g = ai_unsplice_(g);
   g = ai_evals_(g,
-    "(use 'uu)(: uu (from 'uu))(use 'kanren)"
+    "(use 'uu)(: uu (from 'uu))(use 'kanren)(use 'posix)"
     "(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0)"
     "   (c0read p) (: q (open p \"r\")"
     "               (? q (: s (slurp q) _ (close q) s)"
@@ -377,7 +377,8 @@ static struct ai *bake_eval_file(struct ai *g, char const *path) {
   if (!ai_ok(g)) return g;
   ai_core_of(g)->sp++;
   g = ai_evals_(g,
-    "(: q (open bake-load \"r\")"
+    "(: open (from 'posix 'open) close (from 'posix 'close)"    // the fs doors are a module's
+    "   q (open bake-load \"r\")"
     " (? q (: _ (reads q) (close q))"
     "      (: _ (say err (\"love: bake: cannot open \" + bake-load)) _ (put err 10) (quit 1))))");
   return ai_ok(g) ? ai_evals_(g, "(: bake-load ())") : g; }

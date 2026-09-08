@@ -26,6 +26,7 @@
 (module 'gzcmd
 (use 'gz)
 
+(use 'posix)
 (: gzc-usage "usage: gzip [-cdfklnNqrtv19] [-S SUF] [FILE..]   (gunzip = -d, zcat = -dc)"
    gzc-help "gzip -- the RFC 1952 container in love (apps/gz/gz.l is the codec)
 usage: gzip [-cdfklnNqrtv19] [-S SUF] [FILE..]

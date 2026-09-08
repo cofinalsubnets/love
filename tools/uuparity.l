@@ -10,6 +10,7 @@
 ;
 ; skips with a note when UniMath is absent. the scan is textual on both sides
 ; (a commented-out defn still counts), the shape of the python it replaced.
+(use 'posix)
 (: unimath "/usr/lib/ocaml/coq/user-contrib/UniMath"
    uul "test/uu.l"
 

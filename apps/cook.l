@@ -53,6 +53,8 @@
 ; before anything below compiles against them, scoped to this module's compile.
 (use 'peg)
 
+(use 'posix)
+
 (: cards (tablet 0)          ; the recipe cards: item -> (ingredients orderonly . steps)
    check (tablet 0)        ; a 1-cell box: the standing check -- the first item declared (the default when no ticket is named)
    tickets (tablet 0)      ; a 1-cell box: the recipe words named on the command line (the non-flag args), () until the dispatch parses them
@@ -1464,6 +1466,10 @@
    (: _ (? !(nil? (from 'cook)) (use 'cook) 0)  ; splice my registered self if I am one (the module
                                                 ; path); riding a cat, my names already walk -- the
                                                 ; presence guard keeps the loader out of it
+      ; ..and posix beside it. a global name reads the LIVE book (l/ev.c's lvm_index),
+      ; and this is called on a chain that carries neither: the line above puts back
+      ; this file's own names, and nothing puts back the doors it was loaded with.
+      _ (use 'posix)
       opt (parse-args as)
       _ (? (peep opt 'help 0) (usage 0) 0)
       _ (? (peep opt 'ver 0) (version 0) 0)

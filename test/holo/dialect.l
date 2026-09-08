@@ -5,6 +5,7 @@
 ; `att.s intel.s` pair per line; a miss prints the first differing item of the pair.
 (use 'holo)
 
+(use 'posix)
 (: (slurpf f) (: q (open f "r") (slurp q))
    (strip its) (map (it \ <it = 'dir ? ['dir <>it] it) its)
    (words s) (filter (w \ #w > 0) (xa-split s 32))

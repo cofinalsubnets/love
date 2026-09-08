@@ -12,6 +12,7 @@
 ; run: out/love -l l/holo/holo.l -l l/holo/x64.l -l l/holo/a64.l -l l/holo/elf.l l/holo/demo.l
 
 (module 'holo
+(use 'posix)
 (: say (\ s (: _ (puts s) (flush out)))
 
    ;; -- the x86-64 userland program: write the message via the Linux syscall ABI, then exit(7).

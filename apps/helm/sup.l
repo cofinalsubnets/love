@@ -20,6 +20,7 @@
 ;   'order   the names that came up, newest first -- shutdown walks it as-is
 ;   'events  the recent event lines, newest first: helm's whole journal
 (module 'helm
+(use 'posix)
 (: helm-cell {}
    (hcell k d) (peep helm-cell k d)
    (hput k v)  (pin helm-cell k v)

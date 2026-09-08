@@ -27,6 +27,7 @@
 ; WITHOUT DROPPING THE BODY: its `static ai_inline` copy_data is spliced into every call
 ; site and the out-of-line copy still ships, referenced by nothing.
 
+(use 'posix)
 (: root (cwd 0)
    wd (root + "/out/bench/cc")
 

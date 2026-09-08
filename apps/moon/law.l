@@ -18,6 +18,8 @@
 ; it gave up in. So a law that means "this source is refused" says `refused?`;
 ; the laws that mean "refused, and here is exactly what it said" pin `gripe?`
 ; and the message, in the diagnostics sections below.
+(use 'posix)
+
 (: (refused? x) (!x || gripe? x))
 
 ; --- the lexer: kinds, values, lines, comments, maximal munch ---

@@ -7,6 +7,7 @@
 ; out of their reach and a DEFLATE stream cannot be made where it is used -- it has to
 ; arrive as a file, and the size has to arrive with it (the nif is handed the exact
 ; inflated length, and a blind call would time a counting pass as well).
+(use 'posix)
 (: _ (use 'gz)
    av >argv
    _ (? (2 <= tally av) 0 (: _ (say err "ccgen: usage: ccgen.l SRC OUT\n") (quit 1)))

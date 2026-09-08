@@ -12,6 +12,7 @@
 ;
 ;   out/love test/holo/fuzz/sysdiff.l          (exit 1 on any disagreement)
 
+(use 'posix)
 (reads (open "l/holo/holo.l" "r"))
 (reads (open "l/holo/x64.l" "r"))
 (reads (open "l/holo/a64.l" "r"))

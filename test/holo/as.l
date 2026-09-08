@@ -13,6 +13,7 @@
 ; in-snippet where as-hex resolves the rel32 in place.
 (use 'holo) ; the cat's wrapped sources just registered the module
 
+(use 'posix)
 (: pass {0 0} fail {0 0}
    (bump t)  (pin t 0 $ 1 + peep t 0 0)
    (sayln s) (puts s, flush out)

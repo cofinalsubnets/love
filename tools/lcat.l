@@ -20,6 +20,8 @@
 ; SYM_raw what they inflate to. every byte goes out as a three-digit octal escape -- always
 ; three, so a following digit cannot extend it, and no byte value needs a case of its own.
 
+(use 'posix)
+
 (: (die m) (say err ("lcat: " + m + "\n"), quit 1)
    (s2cl s) ((: (g i) (i < #s ? (s i . g (i + 1)))) 0)  ; string -> charlist
    ; the datums readable from s (stop on the eof sentinel or an incomplete form,

@@ -20,7 +20,22 @@
 ; (sh-rev sh-int sh-unwords) and the shell state (sh-jobs sh-status sh-tty).
 
 (module 'lush
-(: (sh-rev l) (foldl (\ a x (x . a)) () l)
+; the syscall doors this shell drives, taken off the module by VALUE. a splice would
+; not survive the trip: lush's entries are called from a foreign chain (a seat, a gate,
+; another module's splice) and a global name reads the LIVE book (l/ev.c's lvm_index),
+; so what is in scope at the CALL decides. the roster is also the honest statement of
+; which syscalls a shell needs -- the seat doors it drives (spawn, wait, fork, pipe,
+; dup, still, ttyfg, environ ..) are not here, because a seat shadows those on the book.
+(: chdir (from 'posix 'chdir)      chmod (from 'posix 'chmod)
+   close (from 'posix 'close)      cwd (from 'posix 'cwd)
+   mkdir (from 'posix 'mkdir)      open (from 'posix 'open)
+   openfd (from 'posix 'openfd)    readdir (from 'posix 'readdir)
+   readlink (from 'posix 'readlink) rmdir (from 'posix 'rmdir)
+   selfpath (from 'posix 'selfpath) stat (from 'posix 'stat)
+   sigclear (from 'posix 'sigclear) sigfd (from 'posix 'sigfd)
+   sigign? (from 'posix 'sigign?)  sigtake (from 'posix 'sigtake)
+
+   (sh-rev l) (foldl (\ a x (x . a)) () l)
 
    sig-int 2 sig-quit 3 sig-tstp 20 sig-cont 18 sig-ttou 22 sig-ttin 21
    sh-jobs (tablet 0)

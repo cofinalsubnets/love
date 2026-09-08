@@ -27,6 +27,8 @@
 (use 'kore)
 (use 'holo) ; the assembler module: asm-text, arbytes, the linker
 
+(use 'posix)
+
 (:
    ; the directory portion of a path (up to and including the last '/'), or ""
    (cdir path) (: n (tally path)

@@ -28,6 +28,8 @@
 (module (ain ain-main)
 (use 'dns)
 
+(use 'posix)
+
 (: (ain-main as)
  (:
     ; parse a decimal port string -> a fixnum (a string indexes its bytes; '0' = 48).

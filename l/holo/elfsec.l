@@ -6,6 +6,7 @@
 ; a bare () would call it absent. a section table is a table, so an a64 object reads on
 ; x86-64 asking nothing of the machine underneath -- which is how `.comment`, the producer
 ; record, is read back with no binutils in the picture.
+(use 'posix)
 (:
    (es-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) s)))
    (es-le s i n) (: (go k a m) (? (k = n) a (go (k + 1) (a + peep s (i + k) 0 * m) (m * 256)))

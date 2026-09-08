@@ -13,6 +13,7 @@
 (use "apps/vi/hue.l")
 (use 'hueweb)
 
+(use 'posix)
 (: head "/* laid by web/style.l from apps/vi/config.l's tokyo-night -- edit those, not this.
    periwinkle on polar-night blue, green = a kept answer; the crew fly the name space in
    aurora teal/cyan. the quay bitmaps set everything: 8x16 cells, crisp at 16px native

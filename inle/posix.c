@@ -900,39 +900,48 @@ static union u const
   nif_posix_ttyfg[]   = {{lvm_posix_ttyfg}, {lvm_ret0}},
   nif_posix_setenv[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_setenv}, {lvm_ret0}},
   nif_posix_environ[] = {{lvm_posix_environ}, {lvm_ret0}};
+// ⚠ NOT EVERY ROW HERE IS THE MODULE'S. nineteen stay on the BOOK -- dup dup2 environ
+// fdopen fork getuid glean hardlink pipe raw setenv signal spawn spawnio spawnmap still
+// ttyfg wait winsize -- because a SEAT SHADOWS each with a global of its own: the
+// kernel's bindings and no-op roster (inle/kmain.c), the page's tty words
+// (inle/wasm/web.l), and the four the seat-doors tablet swaps (inle/main.c). a global
+// name reads the LIVE book (l/ev.c's lvm_index), which is exactly how the shadow is
+// reached -- so a module splice, sitting above the base, would hide it for good and the
+// crew would call the host's door on a seat that has no host. the line is not
+// posix-vs-love: it is SYSCALL vs SEAT DOOR, and only the seats can say which.
 AiNif("spawn", nif_spawn, NULL);
 AiNif("glean", nif_reapany, NULL);
-AiNif("sigfd", nif_sigfd, NULL);
-AiNif("sigtake", nif_sigtake, NULL);
-AiNif("sigclear", nif_sigclear, NULL);
-AiNif("sigign?", nif_sigignp, NULL);
+AiNif("sigfd", nif_sigfd, "posix");
+AiNif("sigtake", nif_sigtake, "posix");
+AiNif("sigclear", nif_sigclear, "posix");
+AiNif("sigign?", nif_sigignp, "posix");
 AiNif("wait", nif_waitpid, NULL);
-AiNif("chdir", nif_chdir, NULL);
-AiNif("cwd", nif_cwd, NULL);
-AiNif("selfpath", nif_selfpath, NULL);
+AiNif("chdir", nif_chdir, "posix");
+AiNif("cwd", nif_cwd, "posix");
+AiNif("selfpath", nif_selfpath, "posix");
 AiNif("pipe", nif_pipe, NULL);
-AiNif("openfd", nif_openfd, NULL);
+AiNif("openfd", nif_openfd, "posix");
 AiNif("spawnio", nif_spawnio, NULL);
 AiNif("fdopen", nif_fdopen, NULL);
 AiNif("spawnmap", nif_spawnmap, NULL);
 AiNif("getuid", nif_getuid, NULL);
-AiNif("getgid", nif_getgid, NULL);
+AiNif("getgid", nif_getgid, "posix");
 AiNif("fork", nif_fork, NULL);
 AiNif("dup2", nif_dup2, NULL);
 AiNif("dup", nif_dup, NULL);
-AiNif("mkdir", nif_mkdir, NULL);
-AiNif("mount", nif_mount, NULL);
-AiNif("mountf", nif_mountf, NULL);
-AiNif("umount", nif_umount, NULL);
-AiNif("chroot", nif_chroot, NULL);
-AiNif("sync", nif_sync, NULL);
-AiNif("mknod", nif_mknod, NULL);
-AiNif("newns", nif_newns, NULL);
-AiNif("stat", nif_posix_stat, NULL);
-AiNif("lstat", nif_posix_lstat, NULL);
-AiNif("readdir", nif_posix_readdir, NULL);
-AiNif("unlink", nif_posix_unlink, NULL);
-AiNif("lseek", nif_posix_lseek, NULL);
+AiNif("mkdir", nif_mkdir, "posix");
+AiNif("mount", nif_mount, "posix");
+AiNif("mountf", nif_mountf, "posix");
+AiNif("umount", nif_umount, "posix");
+AiNif("chroot", nif_chroot, "posix");
+AiNif("sync", nif_sync, "posix");
+AiNif("mknod", nif_mknod, "posix");
+AiNif("newns", nif_newns, "posix");
+AiNif("stat", nif_posix_stat, "posix");
+AiNif("lstat", nif_posix_lstat, "posix");
+AiNif("readdir", nif_posix_readdir, "posix");
+AiNif("unlink", nif_posix_unlink, "posix");
+AiNif("lseek", nif_posix_lseek, "posix");
 AiNif("signal", nif_posix_signal, NULL);
 AiNif("ttyfg", nif_posix_ttyfg, NULL);
 AiNif("setenv", nif_posix_setenv, NULL);
@@ -1077,16 +1086,16 @@ static union u const
   nif_posix_rmdir[]    = {{lvm_posix_rmdir}, {lvm_ret0}},
   nif_posix_hardlink[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_hardlink}, {lvm_ret0}},
   nif_posix_copyfile[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_copyfile}, {lvm_ret0}};
-AiNif("rename", nif_posix_rename, NULL);
-AiNif("symlink", nif_posix_symlink, NULL);
-AiNif("readlink", nif_posix_readlink, NULL);
-AiNif("chmod", nif_posix_chmod, NULL);
-AiNif("chown", nif_posix_chown, NULL);
-AiNif("utime", nif_posix_utime, NULL);
-AiNif("umask", nif_posix_umask, NULL);
-AiNif("rmdir", nif_posix_rmdir, NULL);
+AiNif("rename", nif_posix_rename, "posix");
+AiNif("symlink", nif_posix_symlink, "posix");
+AiNif("readlink", nif_posix_readlink, "posix");
+AiNif("chmod", nif_posix_chmod, "posix");
+AiNif("chown", nif_posix_chown, "posix");
+AiNif("utime", nif_posix_utime, "posix");
+AiNif("umask", nif_posix_umask, "posix");
+AiNif("rmdir", nif_posix_rmdir, "posix");
 AiNif("hardlink", nif_posix_hardlink, NULL);
-AiNif("copyfile", nif_posix_copyfile, NULL);
+AiNif("copyfile", nif_posix_copyfile, "posix");
 // --- the pty wrapper: bao's rlwrap/debugger muscle ------------------------------
 // spawn a program on a fresh pseudo-terminal, reap it without blocking, signal
 // it, and read/write its window size. the keystone, (tether argv), is hark
@@ -1401,13 +1410,13 @@ static union u const
   nif_winsize[]    = {{lvm_winsize}, {lvm_ret0}},
   nif_setwinsize[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_setwinsize}, {lvm_ret0}},
   nif_ptyecho[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ptyecho}, {lvm_ret0}};
-AiNif("tether", nif_tether, NULL);
-AiNif("gather", nif_reap, NULL);
+AiNif("tether", nif_tether, "posix");
+AiNif("gather", nif_reap, "posix");
 AiNif("still", nif_kill, NULL);
 AiNif("winsize", nif_winsize, NULL);
-AiNif("setwinsize", nif_setwinsize, NULL);
-AiNif("ptyecho", nif_ptyecho, NULL);
+AiNif("setwinsize", nif_setwinsize, "posix");
+AiNif("ptyecho", nif_ptyecho, "posix");
 AiNif("raw", nif_raw, NULL);
-AiNif("swig", nif_swig, NULL);
-AiNif("open", nif_open, NULL);
-AiNif("close", nif_close, NULL);
+AiNif("swig", nif_swig, "posix");
+AiNif("open", nif_open, "posix");
+AiNif("close", nif_close, "posix");

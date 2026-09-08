@@ -29,9 +29,12 @@
    zero? nil?
    ; use: splice a registered module just below the head, so its names resolve on the walk but
    ; never shadow yours. a missing name scares -- a silent ()-splice would be a silent no-op.
+   ; ..and only a TABLET is ever spliced. a scare ANSWERS wherever a help handler is
+   ; installed (a page, a task), so the miss would otherwise lay () in the chain -- and a
+   ; book the walk cannot read is a fault in map_probe, not the no-op the line above means.
    (use m)    (: b (tablet? m ? m
                     (: r (mods () m) (? r r (scare 'no-module m))))
-               (setbooks (<(books ()) . b . >(books ()))))
+               (? (tablet? b) (setbooks (<(books ()) . b . >(books ()))) b))
    ; from: a module is its tablet. currying reaches a member because a tablet already indexes
    ; itself, so (from 'holo 'assemble) reads the same as ever; `keys` is the ordinary function,
    ; not a reserved key; (from ()) lists the registry; a missing module answers ().
@@ -124,7 +127,8 @@
 ; because several files register one module (sb's parts, lush's, tls's) and a name-keyed
 ; mark would drop every part after the first. it also reads what it is pointed at -- a
 ; tree's own file over a baked older copy of it, which is what papel's want asks for.
-; `open` is captured by peep, so a fs-less frontend holds () there and every path misses.
+; `open` is captured off the posix module, so a fs-less frontend holds () there and every
+; path misses.
 (: use
    (: prior use
       ; read-eval every form of a module source; a torn form scares.
@@ -143,7 +147,7 @@
                    b ((: (go k r) (k >= n ? r (go (k + 1) (? (47 = peep s k 0) (k + 1) r)))) 0 0)
                    e (? (2 < n - b ? (".l" = snip s (n - 2) n) 0) (n - 2) n)
                    (intern (snip s b e)))
-      fsopen (peep book 'open ())      ; the host's open nif, by peep -- see above
+      fsopen (from 'posix 'open)       ; the host's open nif, off its module -- see above
       (\ m (? (tablet? m) (prior m)
               (string? m)
               (: nm (mname m)
@@ -1863,6 +1867,7 @@
 
 (: no (nom 0) eofsym (nom 0)
 
+   ; a seat door, or (): the freestanding seats carry none of these
    (want n) (member? n (names ()) ? (ev n) ())
    raw (want 'raw)
 
@@ -2152,7 +2157,8 @@
  (trap (\ x
  (: (cli-leave c) (scare 'cli-leave c)
     ; a kind test, not a match on (): a refusal answers a nom, and a nom is truthy
-    (load1 p) (: q (open p "r")
+    ; open is posix's, and a seat without it answers () here rather than at the bake
+    (load1 p) (: q ((from 'posix 'open) p "r")
                  (? (hot? q) (reads q) (say err $ "love: cannot open " + p, cli-leave 1)))
     (eval1 s) (: m (nom 0)                           ; a fresh nom: the unfinished shape, id?-safe
        (rdl x acc) (sound x @ 'torn      m           ; every top-level datum off the string, in order

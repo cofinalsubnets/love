@@ -35,6 +35,7 @@
 (use 'hueweb)
 (use 'lapiz)
 
+(use 'posix)
 (:
    (sv-ends? s t) (: n #s m #t (m <= n && snip s (n - m) n = t))
    (sv-rdf p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) (string? s && [1 s]))))

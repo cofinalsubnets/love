@@ -11,6 +11,7 @@
 ;
 ; safe to dry-run on the host: `out/love init/boot.l` sees getpid != 1, prints the
 ; banner and returns -- no mounts, no shell handoff (so it never blocks a dev machine).
+(use 'posix)
 (: (say1 s) (: _ (puts s) (puts "\n"))              ; a console line
 
    ; mount one early filesystem at its fhs path (mkdir first; mount is () success /

@@ -32,6 +32,7 @@
 (use "apps/berth/wharf.l")
 (use "apps/berth/limn.l")
 
+(use 'posix)
 (:
  ; --- the moor: pump the master through the screen until the child hangs up.
  ; the screen lives in box bx (a relay swaps it); replies pour straight back;

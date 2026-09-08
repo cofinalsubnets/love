@@ -29,6 +29,8 @@
 ; than a nif. only the three special forms are written out, and they are the
 ; grammar, not the book. a list would rot; a question cannot.
 (module 'vi
+(use 'posix)
+
 (:
    hue-classes
     '((comment    Comment    (eol (";" "#!")))

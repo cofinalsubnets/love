@@ -29,6 +29,7 @@
 ; window). The live socket is the one that accepts; dead generations'
 ; leftovers are swept at moor start (lux-sweep).
 (use 'xwire)   ; the X wire, apps/lux/wire.l
+(use 'posix)
 (: lux-cell {}
    (lux-st u) (peep lux-cell 'st ())
    ; a change queues; the driver's loop drains at its next X event. On a live

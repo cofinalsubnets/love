@@ -46,6 +46,7 @@
 ; module and splices it. a module already registered (the gate, a host embedding) is
 ; left alone. `root` and `bn` are exactly the kind of name a leak makes dangerous, and
 ; they stay wherever this file's layer is -- never orth.
+(use 'posix)
 (: (bn p)   (: n #p
                (go k r) (k < n ? (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
                (go 0 0))
@@ -377,6 +378,10 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
    (papel-main as)
    (: _ (? (lit? (from 'papel)) (use 'papel) 0)   ; splice my registered self if I am one (cook-main's
                                                   ; guard); on a -l load my names already walk
+      ; ..and posix beside it. a global name reads the LIVE book (l/ev.c's lvm_index),
+      ; and this is called on a chain that carries neither: the line above puts back
+      ; this file's own names, and nothing puts back the doors it was loaded with.
+      _ (use 'posix)
       c (conf0 ())
       (loop ws) (? !(two? ws) 0
                    (: w <ws r >ws

@@ -30,6 +30,10 @@
 (module (story story-main story-run story-new story-key story-frame open-window window-say
          level kind thing level-of data-of level-text load-level save-level library
          tile kind-of wall? thing-at pen wrap joins)
+; posix is OPTIONAL: the page's seat (inle/wasm) links none of it, and this file runs
+; there. ask before splicing -- an absent module is a scare, and the names below that
+; want a tty go missing on that seat exactly as they did before there was a module.
+(? (from 'posix) (use 'posix) ())
 (:
  ; --- levels as data ------------------------------------------------------------
  ; in play: level {'title 'rows (strings) 'w 'h 'sx 'sy 'tiles {ch kind ..} 'things {id

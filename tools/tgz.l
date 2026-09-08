@@ -8,6 +8,7 @@
 (use 'tar)
 (use 'gz)
 
+(use 'posix)
 (: (tgz-slurp p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, [1 (s + "")]))))
    (tgz-die m) (say err ("tgz: " + m + "\n"), quit 1)
 

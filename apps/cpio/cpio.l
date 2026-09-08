@@ -32,6 +32,7 @@
 (module 'cpio
 (use 'tar)
 
+(use 'posix)
 (:
    cpio-mag "070701"
    cpio-trail "TRAILER!!!"

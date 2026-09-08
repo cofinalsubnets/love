@@ -6,6 +6,7 @@
 ; is our two items). a `.byte` of ours is a miss by construction: the bytes said something.
 (use 'holo)
 
+(use 'posix)
 (: (slurpf f) (: q (open f "r") (slurp q))
    (words s) (filter (w \ #w > 0) (xa-split s 32))
    ;; objdump's line: "   1a:\tmov    %rsp,%rbp" -> (offset mnemonic), or () for anything else

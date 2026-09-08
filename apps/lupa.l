@@ -18,6 +18,7 @@
 ; usage: love lupa FILE
 (module (lupa lupa-main lupa-run lupa-new lupa-key lupa-frame lupa-byte)
 (use 'holo)
+(use 'posix)
 (:
  ;; --- the file, and an ELF's .text and symbols over it ------------------------------------
  ;; elf: () or {'toff 'taddr 'tsize 'syms 'names}: .text's file offset, address and size; syms

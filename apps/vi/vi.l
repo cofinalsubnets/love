@@ -9,6 +9,8 @@
 ; a piped script (the smoke lane) ends with :wq and never dangles.
 (module 'vi
 (use 'kore) ; the text/u floors
+(use 'posix)
+
 (:
    (vi-main as)
     (: f (? (two? as) <as "")

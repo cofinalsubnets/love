@@ -37,6 +37,7 @@
 ; afterwards rather than a reload. unwrapped it leaked its names into the cat's layer
 ; and `use` found no module, so every caller recompiled this file from lib/.
 (module 'tar
+(use 'posix)
 (:
    tar-blk 512
 

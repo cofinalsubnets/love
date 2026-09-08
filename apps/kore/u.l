@@ -11,6 +11,8 @@
 ;
 ; a body-less top-level `:` -- these names leak on purpose, which is what makes them a floor.
 (module 'kore
+(use 'posix)
+
 (:
    ; -- the u-floor --
    ; decimal text -> a charm (a leading - reads negative)

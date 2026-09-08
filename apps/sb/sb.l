@@ -28,6 +28,7 @@
 ; the seat form at the tail is the only thing that fires as a program.
 (module 'sb
 (use 'kore)
+(use 'posix)
 (:
    ; --- files ---
    ; presence is the (1 _) wrapper, content is always a string: an empty file

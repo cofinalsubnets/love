@@ -19,6 +19,10 @@
 ; than spliced at boot. baked modules, so `use` finds them without a filesystem read.
 (use 'kanren)
 
+; the driver's own doors: it reads the roster off the ramfs BEFORE it feeds 00-init.l,
+; so the corpus's own splice is not yet standing when these are compiled.
+(use 'posix)
+
 ; ⚠ a member that will not open SCARES rather than skipping: a typo in the roster
 ; would otherwise drop a whole file's laws and leave the gate green.
 (: (feed p) (: q (open p "r")

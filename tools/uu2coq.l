@@ -17,6 +17,7 @@
 ;
 ; Run: out/love tools/uu2coq.l > test/proof/rocq/uugen.v   then  coqc test/proof/rocq/uugen.v
 
+(use 'posix)
 (: _ (reads (open "test/uu.l" "r"))
    _ (reads (open "test/uuhom.l" "r"))
    _ (reads (open "test/uuhomgen.l" "r"))

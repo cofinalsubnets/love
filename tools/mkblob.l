@@ -15,6 +15,7 @@
 ; which a fresh seed tree does not have. make hands us holo the way it hands
 ; mksrc its own -- -l $(ho)/.mksys-cat.l.
 
+(use 'posix)
 (? (lit? (from 'holo 'objelf)) (use 'holo) 0) ; splice the assembler when this love is baked
 
 (: (mkblob-slurp p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, [1 (s + "")]))))

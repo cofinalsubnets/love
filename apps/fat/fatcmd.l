@@ -30,6 +30,7 @@
 (module 'fatcmd
 (use 'fat)
 
+(use 'posix)
 (: fatc-usage "usage: fat {ls|stat|cat|get|put|mkdir|rm|mkfs} IMG [PATH..]"
    (fatc-moan m) (: _ (say err ("fat: " + m)) _ (put err 10) _ (flush err) 1)
    ; the exit door: a status raised, not a process ended, so a caller already in

@@ -15,6 +15,8 @@
 ; digit width of the byte total, uniq -c wears width 7, head/tail banner many files
 ; with ==> name <== and a blank line between.
 (module 'kore
+(use 'posix)
+
 (:
    ; -- cat: files (or -) onto out, verbatim --
    (cat-main as) (uchunks "cat" puts as)

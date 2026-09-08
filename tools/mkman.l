@@ -7,6 +7,7 @@
 ; build keeps the version, so the fill lands here and the chain needs no sed. with no
 ; second argument the placeholder rides through, which is what a hand run wants.
 (use 'lapiz)
+(use 'posix)
 (: (rd p) (: q (open p "r")
              (? q (: t (slurp q) (close q, t))
                 (say err ("mkman: cannot read " + p), put err 10, quit 1)))

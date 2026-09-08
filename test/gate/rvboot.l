@@ -10,6 +10,7 @@
 ; the rv64 backend is read in rather than used: the host bakes its NATIVE encoder only,
 ; and the linker reaches back into the backend to re-encode a relocated field.
 
+(use 'posix)
 (reads (open "l/holo/rv64.l" "r"))
 (use 'holo)
 

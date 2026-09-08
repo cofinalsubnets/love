@@ -9,6 +9,8 @@
 ; the exit codes are wget's own: 0, 1 a bad url or a dead wire, 3 the file, 8 a server
 ; that answered with an error status.
 (module 'kore
+(use 'posix)
+
 (:
    (wg-digits s)
     (: n #s

@@ -7,6 +7,8 @@
 ; sleep, milliseconds). a body-less top-level `:` leaking one pure helper
 ; (udur -- lawed in law.l) and the mains.
 (module 'kore
+(use 'posix)
+
 (:
    ; a duration text -> milliseconds | (): N or N.N, an optional s/m/h/d suffix
    ; (seconds the default). 0 is a real duration -- callers test charm?, not truth
