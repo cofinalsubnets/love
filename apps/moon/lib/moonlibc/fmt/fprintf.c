@@ -69,7 +69,7 @@ static void __fmtflo(void (*put)(void *, int), void *ctx, double v, int conv,
                      int prec, int width, int fl) {
   unsigned long bits;
   memcpy(&bits, &v, sizeof bits);
-  int neg = (int) (bits >> 63);            /* from the SIGN BIT, not v < 0:
+  int neg = (int) (bits >> 63);            /* ⚠ from the SIGN BIT, not v < 0:
                                               -0.0 is not less than zero, and
                                               printf must still say -0 */
   int be = (int) ((bits >> 52) & 0x7ffUL);

@@ -5,7 +5,7 @@
 # through whatever C compiler the machine has; SEED carries its own source, is its own
 # toolchain, and touches no ambient compiler at all. Both answer the same bytes.
 #
-# WHY THAT IS EVEN POSSIBLE, and it is not something we engineered for this gate:
+# ⚠ WHY THAT IS EVEN POSSIBLE, and it is not something we engineered for this gate:
 # the local cc builds `love0` and NOTHING else (the Makefile). Every object in the
 # shipped binary is mooncc's, compiled by love0 waking mooncc0.image. The bootstrap
 # compiler is a scaffold that leaves no trace in the product -- which is the same
@@ -13,34 +13,34 @@
 # love0) was audited 2026-07-27. This gate says it ACROSS the artifacts, which is the
 # form a person downloading them can care about.
 #
-# THE ARTIFACTS ARE COMPARED TO EACH OTHER, not to the in-tree binary. That is the
+# ⚠ THE ARTIFACTS ARE COMPARED TO EACH OTHER, not to the in-tree binary. That is the
 # claim as stated: the archive is cut from the tree itself (selfpack, no index and no
 # stage), so what you are looking at is what both artifacts carry.
 #
-# AND THE SEED LANE POISONS THE COMPILER. A gate that merely observes the build
+# ⚠ AND THE SEED LANE POISONS THE COMPILER. A gate that merely observes the build
 # succeed cannot tell whether the bundled love did the work or the ambient gcc quietly
 # did it: both produce a working binary. So cc/gcc/clang are shadowed by scripts that
 # fail loudly, and the build has to come out the far side anyway.
 #
-# THE SEED CARRIES ITS OWN SOURCE. It holds the source tarball in .rodata
+# ⚠ THE SEED CARRIES ITS OWN SOURCE. It holds the source tarball in .rodata
 # (tools/mksrc.l, inle/src.c) and lays it out itself, so one downloaded file needs no tar
 # and no second fetch. "It unpacked something" is not the claim -- the tree it lays has to
-# BUILD, compilers poisoned. and `love seed` is what drives that build, not a bare make:
+# BUILD, compilers poisoned. ⚠ and `love seed` is what drives that build, not a bare make:
 # the tree carries no love of its own now, so make alone can only mean the ambient cc (and
 # would find the poisoned one). A love driving knows its own selfpath and names CC.
 #
-# AND THE CIRCLE IS THE WHOLE CLAIM. The seed rebuilds ITSELF from the source it
+# ⚠ AND THE CIRCLE IS THE WHOLE CLAIM. The seed rebuilds ITSELF from the source it
 # laid, byte for byte -- so it carries everything it was made from and nothing of the
 # machine that made it. That leg only became possible once a bake stopped writing the
 # baker's ASLR base and hatch time into the image (test_bakerep guards the same law
 # cheaply, in the slow gate, so a regression does not wait for a release).
 #
-# THERE WAS A THIRD ARTIFACT, retired 2026-08-13: a FULL tarball, the source tree
+# ⚠ THERE WAS A THIRD ARTIFACT, retired 2026-08-13: a FULL tarball, the source tree
 # with a baked love in bin/. The seed does that job strictly better -- one file, and
 # nothing needed to unpack it -- so its leg here was a third bootstrap proving what
 # the seed's already proves.
 #
-# THE SEED IS THE TREE'S OWN out/love (seed-universal U2: the host build
+# ⚠ THE SEED IS THE TREE'S OWN out/love (seed-universal U2: the host build
 # subsumed, the love-<arch> names dissolved). Two consequences ride here: the
 # lean tree's binary embeds an archive it must RE-CUT from itself (selfpack --
 # leg 4's compare is what holds that re-cut to the byte), and the claim compare
@@ -87,11 +87,11 @@ for c in cc gcc clang c99 tcc; do
   printf '#!/bin/sh\necho "distboot: the ambient %s was called -- the bundled love should have been the compiler" >&2\nexit 1\n' "$c" > "$w/nocc/$c"
   chmod +x "$w/nocc/$c"
 done
-# run it from a COPY in the scratch dir. `love source` lays its tree beside the
+# ⚠ run it from a COPY in the scratch dir. `love source` lays its tree beside the
 # binary's cwd, and the tree we are testing must not land in the repo.
 mkdir -p "$w/self"
 cp "$seed" "$w/self/love" || fail "cannot copy $seed"
-# LOVE_NO_IMAGE= (empty = UNSET) leads. The root Makefile EXPORTS it for the corpus,
+# ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads. The root Makefile EXPORTS it for the corpus,
 # and an egg-booted love has no verb table at all -- `source` then reads as a FILENAME
 # and the artifact answers "cannot open source", which looks like a missing verb
 # rather than a missing image. The build lanes lead with the same thing for `mooncc`.
@@ -100,10 +100,10 @@ cp "$seed" "$w/self/love" || fail "cannot copy $seed"
 selfd=$(echo "$w"/self/love-*/)
 [ -d "$selfd" ] || fail "'love source' unpacked no love-<ver>/ directory"
 [ -f "$selfd/VERSION" ] || fail "the embedded source carries no VERSION"
-# NO BINARY IS LAID BESIDE THE SOURCE, and a tree that carried one would be the weaker
+# ⚠ NO BINARY IS LAID BESIDE THE SOURCE, and a tree that carried one would be the weaker
 # claim anyway -- the toolchain chosen by a file existing rather than by anyone deciding.
 [ ! -e "$selfd/bin" ] || fail "'love source' laid a bin/ -- the tree is source, nothing else"
-# THE BARE LINK, not `love seed`: the verb runs `make dist`, which BAKES, and leg 3
+# ⚠ THE BARE LINK, not `love seed`: the verb runs `make dist`, which BAKES, and leg 3
 # compares this against leg 1's unbaked out/love. So the target is named here and CC
 # with it -- which is the seed verb's own fallback spelled by hand (apps/source.l names
 # `<selfpath> mooncc` where its probe finds no cc that works), and the same claim: this
@@ -131,23 +131,23 @@ fi
 # back OUT of the artifact, and rebuild -- and the second artifact is the first one's
 # bytes. That is a stronger claim than "it builds": it says the artifact carries
 # everything it was made from and nothing about the machine it was made on leaked in.
-# AND THE DECISION RIDES HERE TOO. This leg is a real `love seed`, not an open-coded
+# ⚠ AND THE DECISION RIDES HERE TOO. This leg is a real `love seed`, not an open-coded
 # `make dist` -- the verb's own -wait half IS this leg (build dist in the laid tree, then
 # compare selfpath against out/love), so running it whole costs a lay more and buys
 # the one thing legs 2 and 3 cannot say: that the seed PICKS its own mooncc when no
 # ambient compiler works. Legs 2 and 3 name CC by hand and so supply the answer.
-# PATH IS THE POISON DIR ALONE, not $w/nocc:$PATH. src-cc walks every PATH entry for
+# ⚠ PATH IS THE POISON DIR ALONE, not $w/nocc:$PATH. src-cc walks every PATH entry for
 # each of cc/gcc/clang, so a prepended poison leaves the machine's real /usr/bin/cc
 # reachable and the probe rightly takes it -- the fallback would never fire. The farm
 # (apps/source.l) supplies make/sh/sed and the rest out of the binary itself.
-# it seeds a FRESH tree rather than rebuilding $selfd, which leg 3 compared: nothing
+# ⚠ it seeds a FRESH tree rather than rebuilding $selfd, which leg 3 compared: nothing
 # here disturbs that artifact, and this leg no longer has to run after it.
 #
-# IT NEEDS A REPRODUCIBLE BAKE, and that is the only reason this leg can exist. An
+# ⚠ IT NEEDS A REPRODUCIBLE BAKE, and that is the only reason this leg can exist. An
 # image used to carry the baker's ASLR base (raw kept absolutes, the header's address
 # pair, a dead JIT husk's W^X pointer) and `born`, the hatch duration -- so two bakes of
 # one tree differed by 180012 bytes and no artifact could ever equal another.
-# and the archive rides ALONG: `love source` lays the very bytes it carried, and a
+# ⚠ and the archive rides ALONG: `love source` lays the very bytes it carried, and a
 # re-cut (selfpack, the one cutter) answers the same bytes -- the cmp below is what
 # holds that to the byte. Same blob in, same binary out.
 mkdir -p "$w/circle"

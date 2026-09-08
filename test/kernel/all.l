@@ -8,7 +8,7 @@
 ; shell. that is the whole of the kernel's corpus wiring: no baked string, no
 ; second filesystem.
 ;
-; THE ROSTER IS AN ORDERING, NOT A SET. 00-init, spec and uu go first exactly as
+; ⚠ THE ROSTER IS AN ORDERING, NOT A SET. 00-init, spec and uu go first exactly as
 ; mk/common.mk's `t` front-loads them: a locale sort puts uukind* before uu.l and
 ; would run those laws against an unloaded kernel. the kernel half is a dependency
 ; order too -- kore0.l pins `quit` for every member behind it, and each crew file
@@ -23,7 +23,7 @@
 ; so the corpus's own splice is not yet standing when these are compiled.
 (borrow 'posix)
 
-; a member that will not open SCARES rather than skipping: a typo in the roster
+; ⚠ a member that will not open SCARES rather than skipping: a typo in the roster
 ; would otherwise drop a whole file's laws and leave the gate green.
 (: (feed p) (: q (open p "r")
                  (? (port? q) (: _ (reads q) (close q)) (scare 'no-corpus-member p)))

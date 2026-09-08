@@ -9,7 +9,7 @@
  * slot reads as the frame pointer. `*p`, `p[i]` and `p + i` all addressed the
  * FRAME instead of p.
  *
- * silent, and it answers rather than faults: fp is a valid address, so the
+ * ⚠ silent, and it answers rather than faults: fp is a valid address, so the
  * load lands in the caller's own frame and returns plausible garbage. Lua 5.4
  * found it -- lstrlib's prepstate takes six parameters, its 6th spilled and
  * its 5th rode x4, so ms->p_end came out as sp + lp and EVERY pattern match

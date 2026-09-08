@@ -113,7 +113,7 @@
    ;; a logical (bitmask) immediate -> the N:immr:imms field packed at bits [22:10]: any rotated run
    ;; of ones replicated over a 2/4/8/16/32/64-bit element. 0, -1 and a two-run pattern have no
    ;; encoding at all and raise -- materialize those into a register instead.
-   ;; bit tests, never a 64-bit mask: (1 << 63) - 1 leaves fixnum range and & on the big misreads.
+   ;; ⚠ bit tests, never a 64-bit mask: (1 << 63) - 1 leaves fixnum range and & on the big misreads.
    (bmbit v k)  ((v >> k) & 1)
    (bmones v i) ((: (go k) (? ((i + k) = 64 || 0 = (bmbit v (i + k))) k (go (k + 1)))) 0)
    (bmctz v)    ((: (go k) (? (k = 64 || 1 = (bmbit v k)) k (go (k + 1)))) 0)

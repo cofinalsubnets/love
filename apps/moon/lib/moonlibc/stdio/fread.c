@@ -1,6 +1,6 @@
 #include "../impl.h"
 
-/* THE PUSHBACK BELONGS TO THE STREAM, not to getc. C says the next input of
+/* ⚠ THE PUSHBACK BELONGS TO THE STREAM, not to getc. C says the next input of
  * ANY kind sees an ungetc'd byte, so draining f->un here is not a courtesy to
  * getc -- skipping it both DROPS the byte and leaves it in place, and a program
  * that probes for EOF the portable way then never reaches it. bzip2's myfeof is

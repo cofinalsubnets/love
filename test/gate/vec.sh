@@ -59,7 +59,7 @@ fi
 if ! have "$qemu"; then
   echo "  (vec $arch: fault boots skipped, no $qemu)"
 else
-  # only a NEWLINE-TERMINATED report counts: rip=/err=/cr2= land after the marker,
+  # ⚠ only a NEWLINE-TERMINATED report counts: rip=/err=/cr2= land after the marker,
   # so waking on the marker alone kills qemu mid-line and the gate reads a PREFIX of
   # the address it asked for -- a failure that only shows under load. wc -l counts
   # terminators, so head -n that many is exactly the complete lines.
@@ -69,7 +69,7 @@ else
   }
   # boot, type one expression AT THE PROMPT, stop as soon as the report lands whole.
   # the kernel is halted at that point and would otherwise sit until a timeout.
-  # the line goes in after the prompt, never with the boot: a byte queued on the
+  # ⚠ the line goes in after the prompt, never with the boot: a byte queued on the
   # UART before the console is up is the firmware's and the FIFO reset's to drop
   # (OpenSBI reads one off the 16550 at init), so stdin is a fifo this loop writes
   # once the shell has spoken. the ceiling is the prompt's: an egg baked under TCG

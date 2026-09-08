@@ -20,7 +20,7 @@ long __ai_inle(long n, long a, long b, long c, long d, long e, long f) {
 long __ai_osdetect(void) {
 #ifndef AiOsTranslate
   /* no tables on this arch: the kernel is whichever one the build was compiled
-   * for, and nothing at runtime can contradict it. READ OFF -os, never
+   * for, and nothing at runtime can contradict it. ⚠ READ OFF -os, never
    * assumed -- linux is where we started, not a default, and a build naming a
    * kernel this arch has no tail for owes a diagnostic and not another
    * kernel's numbers. */
@@ -38,11 +38,11 @@ long __ai_osdetect(void) {
    * -EBADF, a pid is positive, and no kernel is disturbed by asking. a
    * positive answer says BSD; kern.ostype's first byte parts the two
    * (__sysctl is 202 and {CTL_KERN, KERN_OSTYPE} is {1, 1} on both).
-   * on aarch64 the two doors are mksys leaves, not __ai_sys: netbsd there
+   * ⚠ on aarch64 the two doors are mksys leaves, not __ai_sys: netbsd there
    * SIGSYSes the register form, so the question has to be asked in the svc
    * IMMEDIATE the kernel being asked about reads. 20 is epoll_create1 on
    * linux/arm64, which refuses -EINVAL -- the same negative the writev door
-   * gives. and that immediate is ILLEGAL on freebsd/arm64, whose svc handler
+   * gives. ⚠ and that immediate is ILLEGAL on freebsd/arm64, whose svc handler
    * signals SIGILL/ILL_ILLOPN for any but zero -- asking blind kills the
    * process before it can hear an answer. So freebsd is already OUT by the
    * time this runs: crt0 parts it from the rest by the entry protocol alone
@@ -177,7 +177,7 @@ static short const os_nr[][3] = {
   {NR_pipe2,         NR_fb_pipe2,       453},
 };
 
-/* A PLAIN SCAN, and it must be: the rows are keyed by OUR NR_*, which impl.h
+/* ⚠ A PLAIN SCAN, and it must be: the rows are keyed by OUR NR_*, which impl.h
  * defines per arch, so the written order is ascending on x64 (read 0, write
  * 1, close 3 ..) and is NOT on the asm-generic arches (read 63, write 64, close
  * 57 ..). An early exit on a passed key would answer ENOSYS to almost every
@@ -226,7 +226,7 @@ long __ai_errfb(long e) {
 /* the signal permutation, canonical <-> freebsd. same through 6, 8..9, 11,
  * 13..15, 21..22, 24..28; the parted ones swap in pairs; -1 = no twin
  * (STKFLT and PWR have no freebsd number; EMT and INFO no canonical one, and
- * ride raw -- nothing upstairs names them). the overlap is adversarial:
+ * ride raw -- nothing upstairs names them). ⚠ the overlap is adversarial:
  * freebsd 17 IS canonical SIGCHLD's number and means SIGSTOP there -- a lost
  * translation stops a child where it meant to reap it. */
 static signed char const os_sigfb[32] = {

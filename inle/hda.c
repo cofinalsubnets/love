@@ -18,7 +18,7 @@
 // zeroed by k_horn_poll -- a writer that stops leaves silence, not a loop of its
 // last second. no interrupts: blk.c's posture, for blk.c's reason.
 //
-// every DMA address the device sees is PHYSICAL: pa = va - khhdm, which holds
+// ⚠ every DMA address the device sees is PHYSICAL: pa = va - khhdm, which holds
 // for kmallocw memory and not for image statics, so the rings and the sample
 // buffer are all heap.
 #include "k.h"

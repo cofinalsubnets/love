@@ -92,7 +92,7 @@ for f in "$LUASRC"/src/*.c; do
   objs="$objs $d/$b.o"
 done
 
-# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). NO moonlibc
+# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO moonlibc
 # object -- the link owes its symbols and the driver's runtime table pulls
 # apps/moon/lib/moonlibc/ MEMBER BY NEED (the Makefile says the same of love itself).
 # Naming an object would take every member instead.

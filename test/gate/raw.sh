@@ -14,7 +14,7 @@
 #
 # make owns the dependency graph, the corpus list AND the source lanes; this owns the
 # procedure. NOT set -e: the corpus run captures $? for its own failure message.
-# the lanes arrive in the environment because the corpus already has the variadic
+# ⚠ the lanes arrive in the environment because the corpus already has the variadic
 # tail -- gate_love_c / gate_host_c, mk/common.mk's own. one folder, named lanes: a
 # gate that globs a directory instead is a second authority on what the binary is.
 #

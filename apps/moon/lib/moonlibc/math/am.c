@@ -472,7 +472,7 @@ static double am_hexflo(uint64_t m, int e2, int sticky, int sign) {
   uint64_t lost = m & (((uint64_t) 1 << sh) - 1), half = (uint64_t) 1 << (sh - 1);
   sig = m >> sh;
   if (lost > half || (lost == half && (sticky || (sig & 1)))) sig++; }
- // the subnormal encoding runs CONTINUOUSLY into the normals: a sig that
+ // ⚠ the subnormal encoding runs CONTINUOUSLY into the normals: a sig that
  // rounded up to 2^52 reads as exponent field 1, mantissa 0 -- the smallest
  // normal -- so the raw word is already the answer and needs no special case.
  if (sub) { double d = mkd(sig); return sign > 0 ? d : -d; }

@@ -1509,7 +1509,7 @@
    ; winner must stat as the running binary, so an installed twin of our own name is
    ; somebody else's build and spawns. a word with a `/` is a demand and spawns in
    ; either mode. asked once per word per session.
-   ; a rung is only as reachable as the SHAPE allows, and two shapes cannot see
+   ; ⚠ a rung is only as reachable as the SHAPE allows, and two shapes cannot see
    ; the whole ladder: a pipeline stage skips in-image (a stage has to be a process
    ; to be concurrent, so it starts at fork), and a $( ) body reaches the jug lane
    ; or the stage path and never in-image -- so `$(basename x)` forks where a plain
@@ -1732,7 +1732,7 @@
    ; the fear is that a word with nothing past it reaches a repl, and the child is
    ; handed tty=0 and would drink stdin where the exec'd twin would have prompted.
    ; a pipe or a `<` laying fd 0 settles it -- that is every `| cat`, `| sort`,
-   ; `| tee` there is. the shell's OWN stdin cannot stand in for the stage's: a
+   ; `| tee` there is. ⚠ the shell's OWN stdin cannot stand in for the stage's: a
    ; script is not interactive and still leaves the terminal on fd 0, so a bare word
    ; that lays nothing spawns, and lets love make its own isatty answer.
    (sh-fd0? fdmap) (? !(two? fdmap) 0 (= <<fdmap 0) 1 (sh-fd0? >fdmap))

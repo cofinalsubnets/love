@@ -14,12 +14,12 @@ int main(void);
 // --- fault diagnostics ----------------------------------------------------
 // ARMv6-M (Cortex-M0+) has no CFSR/BFAR, so a fault says only where it stopped:
 // halt on a breakpoint and let an attached SWD debugger read the frame the
-// hardware stacked. this handler used to select MSP/PSP and copy that frame
+// hardware stacked. ⚠ this handler used to select MSP/PSP and copy that frame
 // into a struct, which wants `naked` plus mrs/tst -- neither in holo's thumb1
 // lane. The frame is still on the stack for the debugger; only the copy is gone.
 void isr_hardfault(void) { for (;;) asm volatile("bkpt #0"); }
 
-// the templates here are holo's NEUTRAL mnemonics, not ARM's: `trap` is the
+// ⚠ the templates here are holo's NEUTRAL mnemonics, not ARM's: `trap` is the
 // BKPT this backend lays (l/holo/thumb1.l). wfe/wfi have no thumb1 row yet,
 // so an idle handler spins instead of parking.
 static void default_handler(void) { for (;;) asm volatile("bkpt #0"); }

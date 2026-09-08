@@ -1,12 +1,12 @@
 /* the formatter: snprintf / sprintf / vsnprintf over one body (__femit's twin),
  * with %s %c %d %u %x %o, the l/z widths, and the %[-0]WIDTH.PREC flags.
  *
- * this is the one program whose subject appears in the PAYLOAD rather than the
+ * ⚠ this is the one program whose subject appears in the PAYLOAD rather than the
  * frame: say.h turns its own digits by hand, so a drifted %d shows up here as a
  * wrong bracketed string and NOT as garbage across the other five programs. if
  * every family diffs at once, read this one first.
  *
- * snprintf's RETURN is the length it WOULD have written, not what it did --
+ * ⚠ snprintf's RETURN is the length it WOULD have written, not what it did --
  * the difference is the whole reason the function exists, and a truncating
  * implementation that returns the truncated length is the classic bug. */
 #include <stdio.h>
@@ -51,7 +51,7 @@ int main(void)
 	F("lx", snprintf(b, sizeof b, "%lx", 11400714819323198485UL));
 	F("zu", snprintf(b, sizeof b, "%zu", (size_t) 1234));
 
-	/* --- width, the zero flag and the left flag. zeros hug the digits and
+	/* --- width, the zero flag and the left flag. ⚠ zeros hug the digits and
 	   sit INSIDE the sign; spaces sit outside it. --- */
 	F("w", snprintf(b, sizeof b, "[%6d]", 42));
 	F("w.left", snprintf(b, sizeof b, "[%-6d]", 42));

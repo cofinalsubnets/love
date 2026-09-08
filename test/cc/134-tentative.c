@@ -12,7 +12,7 @@
  * answer at the site: it is the NEXT global getting the same address. Two
  * such arrays alias completely, and the link succeeds.
  *
- * this is exactly the shape a header makes, so it is the common one rather
+ * ⚠ this is exactly the shape a header makes, so it is the common one rather
  * than a corner: gzip.h declares `extern char ifname[], ofname[];` and gzip.c
  * defines both. With them aliased, gzip 1.2.4 built, linked, ran, printed its
  * version and its compilation options -- and then opened its OUTPUT name for

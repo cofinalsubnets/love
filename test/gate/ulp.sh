@@ -90,7 +90,7 @@ for mode in sweep reduce; do
 done
 
 # -- the accuracy ceiling: am.c's documented stance, per function.
-# `pow` sweeps x in [2^-40, 2^40] against y up to 2^8, so |y ln x| reaches
+# ⚠ `pow` sweeps x in [2^-40, 2^40] against y up to 2^8, so |y ln x| reaches
 # the representable rim and its 7 is NOT the header's "<= 2 ulp typical" --
 # that claim is about small |y ln x| and this sweep does not isolate it.
 # `powrim` is deliberately at the rim and carries the documented ~40. --

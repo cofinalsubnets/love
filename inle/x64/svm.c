@@ -9,10 +9,10 @@
 // guest ran. That shape is AMD's -- the Intel twin has to stand up a host-RIP
 // entry point of its own to say the same thing.
 //
-// every physical address is `va - khhdm`, which holds for kernel-heap memory
+// ⚠ every physical address is `va - khhdm`, which holds for kernel-heap memory
 // and NOT for image statics -- blk.c's law, same reason. The caller hands in
 // one k_svm_need() block and everything below is carved out of it.
-// this file keeps NO state: the block lives in kmain's hand, the CPU's own
+// ⚠ this file keeps NO state: the block lives in kmain's hand, the CPU's own
 // enable bit is idempotent, and the VMCB is rebuilt on every run.
 #include "k.h"
 #include "asmops.h"
@@ -75,7 +75,7 @@ static void wseg(unsigned char *v, uintptr_t off, uint16_t attr, uint64_t base) 
 
 // Does this machine offer SVM at all? CPUID first, then VM_CR -- in that order,
 // because the MSR does not exist on a CPU whose CPUID does not claim SVM.
-// firmware can leave the feature bit up and SVMDIS set, and then the EFER
+// ⚠ firmware can leave the feature bit up and SVMDIS set, and then the EFER
 // write below #GPs: a triple fault, in a kernel with no handler for one. Asking
 // is the whole difference between an absence and a dead machine.
 //
@@ -115,7 +115,7 @@ int k_svm_spike(void *mem, uint64_t *exitcode, uint64_t *rax, uint64_t *rip) {
   guest[3] = 0x0f; guest[4] = 0xa2;                   // cpuid
   guest[5] = 0xf4;                                    // hlt
 
-  // the control area. THREE of these are consistency checks wearing the face
+  // the control area. ⚠ THREE of these are consistency checks wearing the face
   // of ordinary settings, and each one alone answers exit code -1 (INVALID)
   // with nothing else to say: the VMRUN intercept must be SET, the ASID must be
   // NON-ZERO, and (below) the guest's EFER.SVME must be set.
@@ -145,7 +145,7 @@ int k_svm_spike(void *mem, uint64_t *exitcode, uint64_t *rax, uint64_t *rip) {
   k_wrmsr(msr_efer, k_rdmsr(msr_efer) | efer_svme);
   k_wrmsr(msr_vm_hsave, pa_of(hsave));
 
-  // the five-step entry, and every step is load-bearing. clgi first, so no
+  // ⚠ the five-step entry, and every step is load-bearing. clgi first, so no
   // interrupt lands between the host save and the entry; vmsave for the state
   // vmrun does not carry; vmrun; vmload to take it back; and stgi LAST, because
   // #VMEXIT left GIF clear and until this runs the machine is deaf -- a missing

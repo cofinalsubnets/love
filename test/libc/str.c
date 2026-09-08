@@ -3,7 +3,7 @@
  * that do NOT terminate, the ones that pad, the ones that answer a pointer into
  * their own argument, and strtok's hidden state).
  *
- * comparisons report a SIGN and pointers report an OFFSET -- see say.h. */
+ * ⚠ comparisons report a SIGN and pointers report an OFFSET -- see say.h. */
 #include <string.h>
 #include <stdlib.h>
 #include "say.h"
@@ -44,7 +44,7 @@ int main(void)
 	say_c("strcmp.prefix", strcmp("ab", "abc"));
 	say_c("strcmp.empty", strcmp("", "a"));
 	say_c("strcmp.both", strcmp("", ""));
-	/* char compares UNSIGNED here: "\x80" is ABOVE "\x7f" */
+	/* ⚠ char compares UNSIGNED here: "\x80" is ABOVE "\x7f" */
 	say_c("strcmp.high", strcmp("\x80", "\x7f"));
 	say_c("strncmp.cut", strncmp("abcXX", "abcYY", 3));
 	say_c("strncmp.at", strncmp("abcX", "abcY", 4));
@@ -60,7 +60,7 @@ int main(void)
 	say_c("strcoll.lt", strcoll("abc", "abd"));
 
 	/* --- strcpy / strncpy.
-	   strncpy is the trap: it PADS with NULs to n and does NOT terminate
+	   ⚠ strncpy is the trap: it PADS with NULs to n and does NOT terminate
 	   when the source fills n exactly. both halves are asserted. --- */
 	memset(buf, '.', sizeof buf);
 	strcpy(buf, "abc");
@@ -82,7 +82,7 @@ int main(void)
 	say_b("strncpy.0", buf, 4);
 
 	/* --- strcat / strncat.
-	   strncat is NOT strncpy's twin: n bounds the SOURCE, and it always
+	   ⚠ strncat is NOT strncpy's twin: n bounds the SOURCE, and it always
 	   terminates. --- */
 	strcpy(buf, "abc");
 	strcat(buf, "def");
@@ -148,7 +148,7 @@ int main(void)
 	  say_s("strdup.empty", d);
 	  free(d); }
 
-	/* --- strerror: the TEXT is not compared. ours is the canonical POSIX
+	/* --- strerror: ⚠ the TEXT is not compared. ours is the canonical POSIX
 	   wording (m4's check suite string-compares it) and glibc's mostly agrees,
 	   but that agreement is not a law worth gating -- what is gated is that
 	   every errno in the classic range answers something non-empty. --- */

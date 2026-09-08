@@ -9,11 +9,11 @@
 ; silicon booted with
 ; (2026-07; the README carries the wrong-offset lore).
 ;
-; a vector is an ADDRESS CARRYING THE THUMB BIT, and obj.l sets bit 0 on every FUNC
+; ⚠ a vector is an ADDRESS CARRYING THE THUMB BIT, and obj.l sets bit 0 on every FUNC
 ; symbol -- so `cstartup` here takes addend 0 where the old .S wrote a bare symbol and
 ; leaned on .thumb_func. R_ARM_ABS32 is (S + A) | T either way.
 ;
-; sp is not a register MOVW/MOVT can name (UNPREDICTABLE, same law as MOV.W), so the
+; ⚠ sp is not a register MOVW/MOVT can name (UNPREDICTABLE, same law as MOV.W), so the
 ; stack pointer arrives through r0 -- `la` into a general register, then the 16-bit
 ; hi-register mov. `ldr sp,=__stack_top__` was the .S spelling of exactly that.
 ;
@@ -56,7 +56,7 @@
 
       ;; -- 3. the ARM vector table (VTOR points here once we run; the ROM boots via
       ;; the IVT, so word 0's SP is advisory). every fault lands somewhere that speaks.
-      ;; DebugMon is isr_hardfault too: with DEMCR.MON_EN a bkpt (a __builtin_trap,
+      ;; ⚠ DebugMon is isr_hardfault too: with DEMCR.MON_EN a bkpt (a __builtin_trap,
       ;; a contract guard) arrives HERE, and it must REPORT rather than lock up mute.
       vecs ((wsym '__stack_top__) + (wsym 'cstartup)
              + (wsym 'default_handler) + (wsym 'isr_hardfault)     ; NMI, HardFault
@@ -79,7 +79,7 @@
       ;; with `ite eq` + mrseq/mrsne; a branch pair says the same thing without an IT
       ;; block, and TST takes no immediate here (thumb-test is register-only), so the 4
       ;; rides r1 -- free, since the hardware stacked r0-r3 on the way in.
-      ;; the reporter runs on a FRESH stack: if the fault WAS a stack overflow (or sp
+      ;; ⚠ the reporter runs on a FRESH stack: if the fault WAS a stack overflow (or sp
       ;; is garbage), pushing its frame on the old sp double-faults into lockup and the
       ;; report never reaches the wire.
       text [['label 'isr_hardfault]

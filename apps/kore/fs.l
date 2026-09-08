@@ -104,7 +104,7 @@
    ;   -1 one per line, which is what this ls always does: GNU writes one name a line
    ;      whenever stdout is not a terminal, and nothing here is one
    ; several operands print GNU's `name:` headers, files before directories.
-   ; THE LONG ROW'S CLOCK IS UTC. this tree carries no timezone database (see
+   ; ⚠ THE LONG ROW'S CLOCK IS UTC. this tree carries no timezone database (see
    ; date's own note), so `ls -l` reads local time only where local time is UTC, and
    ; the gate that compares it to GNU sets TZ for that reason.
    ; absent and said so: -C/-x columns, -R, -S, -h, -i, -F and --color.
@@ -135,7 +135,7 @@
      (uls-when (// (st 3) 1000000000) now)
      (uls-nom p nm (st 2))]
    (uls-wide rs k) (foldl (\ w r (: n #(r k) (? (w < n) n w))) 0 rs)
-   ; the widths come from `ws` and not from `rs`. GNU sizes the command-line block's
+   ; ⚠ the widths come from `ws` and not from `rs`. GNU sizes the command-line block's
    ; columns over EVERY operand, directories included -- even though a directory
    ; operand is listed further down as a block of its own and its row is never
    ; printed here. `ls -l file dir` pads file's size to the width of dir's, and a
@@ -188,7 +188,7 @@
        ; an EMPTY directory still owes its header and its `total 0`, so nothing here
        ; returns early on the empty readdir.
        (dirlist p first ok)
-        ; readdir does NOT hand back . and .. -- it answers the names a walk wants.
+        ; ⚠ readdir does NOT hand back . and .. -- it answers the names a walk wants.
         ; `ls -a` owes both, so they are put back here rather than taught to readdir,
         ; where every other caller would then have to take them out again.
         (: ns (readdir p)
@@ -220,7 +220,7 @@
        dps (: s (sort dirs) (? r? (rev s) s))
        (walk l first ok) (? !(two? l) ok (walk >l 0 (dirlist <l first ok)))
        ok (walk dps !(two? pes) (? (two? bad) 0 1))
-       ; GNU's ls answers 2 for "cannot access", not 1: 1 is a minor trouble
+       ; ⚠ GNU's ls answers 2 for "cannot access", not 1: 1 is a minor trouble
        ; (an unreadable subdirectory under -R) and 2 is "the operand is not there",
        ; which is the status a script's `ls x || ...` is reading.
        _ (flush out) (? ok 0 2))

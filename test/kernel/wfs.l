@@ -75,7 +75,7 @@
    (member? "kore.l" (readdir "."))
    !(chdir "..")
    (= "/apps" (cwd 0))                      ; .. unwinds ONE component
-   ; the seat has to go back to / by hand. this file is one member of a corpus the
+   ; ⚠ the seat has to go back to / by hand. this file is one member of a corpus the
    ; runner loads by RELATIVE path, so a cwd left anywhere else takes every member
    ; after this one down with a no-corpus-member -- which reads as a missing file
    ; and not as the walk that moved.

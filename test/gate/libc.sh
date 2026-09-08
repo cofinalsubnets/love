@@ -9,7 +9,7 @@
 # comparison, an address, strerror's wording) the programs report the part that
 # IS fixed, so a legitimate difference never fails the gate. see test/libc/say.h.
 #
-# it compares OUTPUT, not the exit code the mooncc battery compares. an exit
+# ⚠ it compares OUTPUT, not the exit code the mooncc battery compares. an exit
 # code is eight bits and says only THAT something drifted; a diff of the output
 # names the function and the case. that is the whole reason this is its own gate
 # and not more programs in test/cc.

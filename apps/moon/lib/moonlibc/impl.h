@@ -2,7 +2,7 @@
  * The members are pulled BY NEED (apps/moon/moon.l's runtime table globs this
  * directory the way it globs lib/moonlibc/math/), so a love that asks for no calendar
  * links no calendar. That is the whole reason this is a directory and not the
- * one file it used to be. a member reaching another member's file-scope
+ * one file it used to be. ⚠ a member reaching another member's file-scope
  * static is what splitting costs: use the public spelling (errno, not
  * __errno_v), or move the state here. */
 #ifndef AiMoonlibcImplH
@@ -44,13 +44,13 @@
 #include <netinet/in.h>
 
 extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
-/* WHERE THE TRANSLATION LAYER COMPILES. moonlibc's C is written in one kernel's
+/* ⚠ WHERE THE TRANSLATION LAYER COMPILES. moonlibc's C is written in one kernel's
  * spelling -- linux's, because that is where we started and NOT because it is a
  * default -- and os.c translates the others into it. The tables compile where
  * the machine tail they call has been laid: x64 and a64 have it, riscv
  * takes os.c's identity stubs and speaks whichever kernel -os named. This is a
  * claim about mksys leaves, never a roster of kernels we are willing to run on.
- * AND THE NETBSD RETURN PATH IS ITS OWN CLAIM -- narrower in principle, though
+ * ⚠ AND THE NETBSD RETURN PATH IS ITS OWN CLAIM -- narrower in principle, though
  * the same arches carry both today: __ai_nb_sigtramp is per-arch asm (mksys.l
  * lays x64 and arm64). Where it is absent netbsd's sigaction refuses BY NAME
  * rather than register a trampoline that is not there; freebsd on the same arch
@@ -84,21 +84,21 @@ struct _IO_FILE {
  * NR_fb_*: it is machine-independent (stable/14 sys/sys/syscall.h) and feeds
  * two lanes -- the -os freebsd compile aliases NR_* to it below, and os.c's
  * runtime map pairs it with the canonical numbers so ONE binary answers both
- * kernels. a canonical name ABSENT here is a MECHANISM that differs, not a
+ * kernels. ⚠ a canonical name ABSENT here is a MECHANISM that differs, not a
  * number we lack -- the member that wants it owes a freebsd body. ---- */
 #define NR_fb_read            3
 #define NR_fb_write           4
 #define NR_fb_close           6
-#define NR_fb_fstat         551   /* ino64; another struct stat (rung 3) */
+#define NR_fb_fstat         551   /* ino64; ⚠ another struct stat (rung 3) */
 #define NR_fb_lseek         478
 #define NR_fb_nanosleep     240
 #define NR_fb_mmap          477
 #define NR_fb_mprotect       74
 #define NR_fb_munmap         73
 #define NR_fb_madvise        75
-#define NR_fb_rt_sigaction  416   /* sigaction; no restorer, another ksigaction (rung 3) */
-#define NR_fb_rt_sigprocmask 340  /* sigprocmask; 16-byte set, no size arg (rung 3) */
-#define NR_fb_ioctl          54   /* the numbers it takes are another encoding (rung 3) */
+#define NR_fb_rt_sigaction  416   /* sigaction; ⚠ no restorer, another ksigaction (rung 3) */
+#define NR_fb_rt_sigprocmask 340  /* sigprocmask; ⚠ 16-byte set, no size arg (rung 3) */
+#define NR_fb_ioctl          54   /* ⚠ the numbers it takes are another encoding (rung 3) */
 #define NR_fb_pread64       475
 #define NR_fb_pwrite64      476
 #define NR_fb_getpid         20
@@ -106,8 +106,8 @@ struct _IO_FILE {
 #define NR_fb_setgid        181
 #define NR_fb_setgroups      80
 #define NR_fb_geteuid        25
-#define NR_fb_sendfile      393   /* another signature (rung 3) */
-#define NR_fb_pselect6      522   /* pselect; the 6th arg is a plain sigset* (rung 3) */
+#define NR_fb_sendfile      393   /* ⚠ another signature (rung 3) */
+#define NR_fb_pselect6      522   /* pselect; ⚠ the 6th arg is a plain sigset* (rung 3) */
 #define NR_fb_socket         97
 #define NR_fb_connect        98
 #define NR_fb_accept         30
@@ -141,7 +141,7 @@ struct _IO_FILE {
 #define NR_fb_setpgid        82
 #define NR_fb_setsid        147
 #define NR_fb_getpgid       207
-#define NR_fb_mount          21   /* another signature -- (type dir flags data) (rung 3) */
+#define NR_fb_mount          21   /* ⚠ another signature -- (type dir flags data) (rung 3) */
 #define NR_fb_getdirentries 554   /* ino64; the record IS the freebsd dirent (readdir.c) */
 #define NR_fb___sysctl      202   /* sysctl(3)'s door (selfpath's KERN_PROC_PATHNAME) */
 #define NR_fb_posix_openpt  504   /* a real syscall here; linux opens /dev/ptmx */
@@ -154,7 +154,7 @@ struct _IO_FILE {
 #define NR_fb_mknodat       559
 #define NR_fb_fchownat      491
 #define NR_fb_faccessat     489
-#define NR_fb_newfstatat    552   /* fstatat; another struct stat (rung 3) */
+#define NR_fb_newfstatat    552   /* fstatat; ⚠ another struct stat (rung 3) */
 #define NR_fb_unlinkat      503
 #define NR_fb_renameat      501
 #define NR_fb_linkat        495
@@ -411,7 +411,7 @@ static long fb1(long n, long a) { return __ai_fb(n, a, 0, 0, 0, 0, 0); }
 static long fb2(long n, long a, long b) { return __ai_fb(n, a, b, 0, 0, 0, 0); }
 static long fb3(long n, long a, long b, long c) { return __ai_fb(n, a, b, c, 0, 0, 0); }
 static long fb6(long n, long a, long b, long c, long d, long e, long f) { return __ai_fb(n, a, b, c, d, e, f); }
-/* er, sc0..sc6 and fb1..fb6 are static IN A HEADER on purpose: a member inlines
+/* ⚠ er, sc0..sc6 and fb1..fb6 are static IN A HEADER on purpose: a member inlines
  * the ones it uses and the dead-static sweep drops the bodies it did not need, so
  * the rest cost nothing. Before that sweep this shape would have been duplication
  * in every TU. */
@@ -518,12 +518,12 @@ extern void __ai_nbstat(struct __nb_stat const *f, struct stat *st);
 extern void __ai_nb_sigtramp(void);   /* mksys: the ucontext register; setcontext */
 #endif
 #if defined(__aarch64__)
-/* THE PROBE CANNOT USE __ai_sys HERE. netbsd/aarch64 takes the number from
+/* ⚠ THE PROBE CANNOT USE __ai_sys HERE. netbsd/aarch64 takes the number from
  * the SVC IMMEDIATE and SIGSYSes the register form, so asking which kernel we
  * are on with the register form would die on the very kernel it is asking
  * about. These two leaves set x8 AND the immediate to the same number: linux
  * ignores the immediate and runs x8, netbsd reads it. 20 = getpid on netbsd,
- * epoll_create1 on linux/arm64. freebsd hears NEITHER -- it signals SIGILL
+ * epoll_create1 on linux/arm64. ⚠ freebsd hears NEITHER -- it signals SIGILL
  * for any immediate but zero -- and is already out when these run: crt0 knows
  * it by the entry protocol and hands __ai_start the answer. */
 extern long __ai_nbp20(long);
@@ -545,7 +545,7 @@ extern long __ai_nbp202(long, long, long, long, long, long);
  * of a long, sized by the seat rather than written out. (w - AiOnes) & ~w &
  * AiHighs is nonzero exactly when some byte of w is zero -- strlen.c and
  * memchr.c both ride it. compile-time, so no member pays to build them. */
-/* WRITTEN OUT, not derived. the tidy spelling is ~0UL / 255, and mooncc does
+/* ⚠ WRITTEN OUT, not derived. the tidy spelling is ~0UL / 255, and mooncc does
  * not fold it -- it emits a `divq`, twice per loop iteration, and the byte scan
  * that was supposed to get faster carries a hardware divide. a cast of an
  * out-of-range literal is well defined modulo 2^N, so the 32-bit seats truncate

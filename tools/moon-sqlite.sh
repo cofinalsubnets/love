@@ -194,7 +194,7 @@ int main(void) {
 EOF
 $mc $tflag -Iapps/moon/include -I"$SQLSRC" -c "$d/drv.c" "$d/drv.o" || { echo "FAIL mooncc -c drv.c"; exit 1; }
 
-# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). NO moonlibc
+# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO moonlibc
 # object -- the link owes its symbols and the driver's runtime table pulls
 # apps/moon/lib/moonlibc/ MEMBER BY NEED (the Makefile says the same of love itself).
 # Naming an object would take every member instead.
@@ -234,7 +234,7 @@ if [ "$target" = x64 ]; then
       if cmp -s "$d/out.txt" "$d/g/out.txt"; then
         echo "  OK every answer byte-identical to the same source built by $cc_g"
       else
-        # the LABEL must name the argument order, because the first thing anyone
+        # ⚠ the LABEL must name the argument order, because the first thing anyone
         # does with this output is decide which side is the bug. `<` is the ORACLE
         # here, not us -- reading it the other way sent one session off explaining
         # why gcc must be wrong. (The tiebreaker when in doubt is a third opinion:

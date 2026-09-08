@@ -158,7 +158,7 @@ static intptr_t image_imm_index(word v) {
 // a mismatched buffer -> NULL, so the caller boots normally -- never wrong.
 /* bump if the wire format changes -- which includes RENUMBERING image_immortals, since a
    saved index means nothing to a binary that lays the table differently. "..06": the
-   stream grew the 8-aligned lane and the wide dictionary seats below. test/gate/
+   stream grew the 8-aligned lane and the wide dictionary seats below. ⚠ test/gate/
    bakerep.sh greps the SPELLING ("AISNO06") to corrupt a header, so the two move together. */
 #define ImageMagic 0x36304f4e5349411aULL
 #if defined(__x86_64__)

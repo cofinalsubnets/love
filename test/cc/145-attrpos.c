@@ -4,10 +4,10 @@
  * skip, one door over, and the kernel's __maybe_unused / __packed / __aligned are
  * written in all four.
  *
- * what is skipped is dropped: an `aligned` ask on a local or a member aligns
+ * ⚠ what is skipped is dropped: an `aligned` ask on a local or a member aligns
  * NOTHING, exactly as the leading spelling has always dropped it. The rows below
  * ask only for the layout the types themselves give.
- * the skip takes __attribute__ ALONE. `int x __asm__("y")` still refuses, because
+ * ⚠ the skip takes __attribute__ ALONE. `int x __asm__("y")` still refuses, because
  * dropping an asm name would rename an object in silence.
  *
  * `__label__` at a block head declares local labels; it is parsed and dropped, since

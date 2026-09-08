@@ -14,7 +14,7 @@
    (evs p a b) (map we (p (qi a) (qi b)))
    (ons p a b) (map we (filter onset? (p (qi a) (qi b))))
    (cnt p a b) #(p (qi a) (qi b))
-   ; a query answers in EMISSION order, not time order -- a stack interleaves its
+   ; ⚠ a query answers in EMISSION order, not time order -- a stack interleaves its
    ; members -- so a law about which value lands where sorts first.
    (vals p a b) (map (\ x (evv x))
                      (sortby (\ u v ((evwb u) < (evwb v)))
@@ -32,10 +32,10 @@
              ((-1 /// 2) < (1 /// 3)) ((7 /// 2) < (5 /// 1))
              ; equality by value, which is the whole of what onset? rests on
              ((qi 1) = (1 /// 1))  ((qi 2) = (4 /// 2))  !((qi 1) = (qi 2))
-             ; and a rational does not meet a tray: it answers (), silently, so
+             ; ⚠ and a rational does not meet a tray: it answers (), silently, so
              ; apps/harp/play.l crosses to frames through qnum and never after
              (nil? ((iota 4) + (1 /// 3)))
-             ; // truncates toward zero; a floor that did not step down would
+             ; ⚠ // truncates toward zero; a floor that did not step down would
              ; put cycle -1/2 in cycle 0 and every negative span would be wrong
              (0  = qfl (1 /// 2))   (-1 = qfl (-1 /// 2))
              (-1 = qfl (-1 /// 1))  (-2 = qfl (-3 /// 2))

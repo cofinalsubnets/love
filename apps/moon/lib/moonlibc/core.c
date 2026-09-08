@@ -55,7 +55,7 @@ FILE *stdin = &__stdf[0], *stdout = &__stdf[1], *stderr = &__stdf[2];
  * mantissa -- so rounding and emission read EXACT digits and the answer is
  * byte-equal to glibc, which is what test_libc compares.
  *
- * the lane this replaced turned digits out of the double itself, normalising
+ * ⚠ the lane this replaced turned digits out of the double itself, normalising
  * by repeated `/= 10`. that spends a rounding per decade, and the error lands
  * exactly where a long precision asks to read: %.17g of 1e300 came back wrong
  * from its 16th digit, %.20f of 0.1 answered twenty zeros where the value
@@ -87,7 +87,7 @@ FILE *stdin = &__stdf[0], *stdout = &__stdf[1], *stderr = &__stdf[2];
  * ET_DYN. AT_PHDR is the runtime address of the program headers, which sit at
  * file offset 64 inside the p_offset==0 PT_LOAD, so bias = AT_PHDR - 64 - that
  * segment's link-time p_vaddr (0x400000 for EXEC -> 0; 0 for PIE -> the slide). ---- */
-/* a_type reads through its LOW WORD everywhere: netbsd's AuxInfo is
+/* ⚠ a_type reads through its LOW WORD everywhere: netbsd's AuxInfo is
  * {u32 type, pad, u64 value} and the kernel leaves the pad unzeroed, so a
  * long-wide read sees garbage -- and linux's u64 types all fit 32 bits, so
  * one narrow read serves every kernel (the AT_NULL stop included). */

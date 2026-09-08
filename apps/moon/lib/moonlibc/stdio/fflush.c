@@ -28,7 +28,7 @@ int setvbuf(FILE *f, char *buf, int mode, size_t size) {
   if (buf && size) { f->buf = (unsigned char *) buf; f->cap = (int) size; }
   f->line = mode == _IOLBF;
   return 0; }
-/* a buffered stream is NEVER LEFT FULL -- len < cap between calls, so the store is in
+/* ⚠ a buffered stream is NEVER LEFT FULL -- len < cap between calls, so the store is in
  * bounds and the == below catches the fill. fwrite drains at <= for exactly this: left
  * exactly full, it writes one past the end AND this == never matches again. */
 int fputc(int c, FILE *f) {

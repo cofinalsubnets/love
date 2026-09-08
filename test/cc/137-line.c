@@ -4,8 +4,8 @@
  * as a prototype's unspecified VLA bound, and a function-typed parameter carrying
  * a non-empty parameter list.
  *
- * `#line N` makes the NEXT line N, so the line after it is N and not N+1.
- * the file operand is accepted and DROPPED -- __FILE__ stays the TU's name, so
+ * ⚠ `#line N` makes the NEXT line N, so the line after it is N and not N+1.
+ * ⚠ the file operand is accepted and DROPPED -- __FILE__ stays the TU's name, so
  * nothing here may test it.
  */
 
@@ -46,7 +46,7 @@ int main(void)
 #line 300
     if (__LINE__ != 300) return 6;
 
-    /* ..and the DIRECTIVE lane sees it too. keep this pair ADJACENT: `#line N`
+    /* ..and the DIRECTIVE lane sees it too. ⚠ keep this pair ADJACENT: `#line N`
        makes the very next line N, so the check cannot drift when the file grows. */
 #line 400
 #if __LINE__ != 400
@@ -54,7 +54,7 @@ int main(void)
 #endif
 
     /* C11 6.10.4p3: an operand that is not already a digit sequence is macro-expanded
-       and then has to be one. keep each `#line` ADJACENT to its check. */
+       and then has to be one. ⚠ keep each `#line` ADJACENT to its check. */
 #line five_hundred
     if (__LINE__ != 500) return 7;
 

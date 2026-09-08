@@ -13,7 +13,7 @@
 # word move. love.c has none of those shapes, so nothing else here reads them --
 # and mooncc compiles all three into the shipped artifact.
 #
-# THE HARNESSES INCLUDE THE .c. Every entry point in the three files is a
+# ⚠ THE HARNESSES INCLUDE THE .c. Every entry point in the three files is a
 # static, so a program that includes the source sees the algorithm whole and no
 # seam had to be cut into host/ to reach it. What the love-facing wrappers name is
 # stubbed (nif/stub.h) -- main() enters at the algorithm and the lvm ops are never
@@ -37,7 +37,7 @@
 #              shell holds the clock: the two builds carry different libcs, so a
 #              program reading its own would time the clock as much as the code.
 #
-# READ THE TIME ROWS IN PAIRS, never as one number. crc32 and cksum are branch-
+# ⚠ READ THE TIME ROWS IN PAIRS, never as one number. crc32 and cksum are branch-
 # free table walks; sha-256 and md5 are register pressure with no memory in the
 # loop; deflate is pointer chasing; inflate is a branch per symbol. mooncc level
 # on one and far behind on another names the lane that wants work -- which is the
@@ -130,7 +130,7 @@ done
 echo
 
 # ---------------------------------------------------------------- text
-# gap-derived per function, exact per file. mooncc's ELF carries no st_size, so
+# gap-derived per function, exact per file. ⚠ mooncc's ELF carries no st_size, so
 # a comparison has to use the measure every lane answers -- the distance to the
 # next text symbol, which includes inter-function padding (~1-2%). the whole-file
 # number below it is off the section header and is exact.
@@ -160,7 +160,7 @@ for f in hash gz; do
     syms "$W/$f.$l.o" > "$W/$f.$l.syms"
     mine=$(wc -l < "$W/$f.mooncc.syms")
     theirs=$(wc -l < "$W/$f.$l.syms")
-    # NO SUM OVER THE INTERSECTION. gcc and clang inline statics out of
+    # ⚠ NO SUM OVER THE INTERSECTION. gcc and clang inline statics out of
     # existence, so a callee mooncc emits separately lives INSIDE the other
     # lane's caller: totalling the shared names charges mooncc for a function
     # its opposite number already paid for inside another row. The whole-file

@@ -11,7 +11,7 @@
  * rounded whole -- the assertions below check the exact bit patterns, not a
  * tolerance.
  *
- * found by the am.c ulp differential's REDUCTION scan (test_ulp) and by
+ * ⚠ found by the am.c ulp differential's REDUCTION scan (test_ulp) and by
  * nothing else. am.c's rbig builds a 192-bit fraction whose middle word
  * crosses 2^63 on most inputs, so sin/cos drifted to 1609 ulp above the
  * Payne-Hanek handoff at 2^19 -- while every argument BELOW it stayed exact,
@@ -41,7 +41,7 @@ int main(void)
 	r += bits(u2d(1UL)) == 0x3ff0000000000000UL;
 	r += bits(u2d(0x7fffffffffffffffUL)) == 0x43e0000000000000UL;
 
-	/* AT AND ABOVE 2^63 -- every one of these went negative */
+	/* ⚠ AT AND ABOVE 2^63 -- every one of these went negative */
 	r += bits(u2d(0x8000000000000000UL)) == 0x43e0000000000000UL;
 	r += bits(u2d(0x8000000000000001UL)) == 0x43e0000000000000UL;
 	r += bits(u2d(0xc000000000000001UL)) == 0x43e8000000000000UL;

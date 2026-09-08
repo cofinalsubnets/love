@@ -32,7 +32,7 @@
 #            compiler is asked, and it must AGREE that the source does not build or that
 #            we cannot both be right -- see the note beside each name.
 #
-# exit codes are 8 bits and stdout needs a libc, so this compares the CODE alone. Every
+# ⚠ exit codes are 8 bits and stdout needs a libc, so this compares the CODE alone. Every
 # program in test/cc returns a count of passing checks, which is what makes that enough --
 # but unlike thumb.sh, the wants belong to the programs and cannot be chosen clear of the
 # codes a death wears: 43-dispatch legitimately answers 131, which is 128+3 read as a
@@ -64,7 +64,7 @@ for tool in arm-none-eabi-gcc arm-none-eabi-ld qemu-system-arm; do
     echo "$name: no arm-none-eabi toolchain / qemu-system-arm, skipped"; exit 0; }
 done
 
-# ONE RUN'S WORTH: a failing case keeps its objects and elfs, which is the only time
+# ⚠ ONE RUN'S WORTH: a failing case keeps its objects and elfs, which is the only time
 # anyone wants them; clearing at the start rather than the end is what bounds the pile.
 d=$ho/cc-$tgt
 rm -rf "$d"
@@ -74,7 +74,7 @@ echo "CCTHUMB $d"
 
 # the startup is thumb.sh's -- vector table, `bl run`, then semihosting SYS_EXIT_EXTENDED
 # carrying run()'s answer out as the process exit code -- flash and the 16 KiB SRAM
-# window exactly as that gate spells them. the initial SP is a real address on this
+# window exactly as that gate spells them. ⚠ the initial SP is a real address on this
 # machine and not a size to raise at will: 0x20040000 is off the end of the M7 board's
 # SRAM, and every program then faults before its first instruction, both compilers' alike
 # -- which reads as agreement on a crash and says nothing. Hence the check below. A VFP target must enable CP10/CP11
@@ -124,7 +124,7 @@ arm-none-eabi-gcc $cpu -ffreestanding -O2 -c "$d/run.c" -o "$d/run.o" || fail "g
 lg=$(arm-none-eabi-gcc $cpu -print-libgcc-file-name)
 
 # -- the three lists, per target. see the header for what each one asserts. --
-# refuse is tested FIRST, so a name may sit in both: 135-uac wants printf, and on
+# ⚠ refuse is tested FIRST, so a name may sit in both: 135-uac wants printf, and on
 # thumb2 the compiler refuses it before the libc question is reached at all.
 hosted="72-quals 110-param5 114-rmwlv 134-tentative 135-uac 142-syntax 146-declscope
         147-enumscope 148-tagscope 149-paste 150-alloc 154-blockextern"
@@ -141,7 +141,7 @@ case $tgt in
                   88-varargs-overflow 97-muslrungs 100-complex 101-vla 102-bigstruct
                   111-int128 115-rmwop 117-vastruct 128-bswap 129-sync 133-popcount
                   135-uac 144-gnubuiltins 151-w128fuzz" ;;
-  # the two lists are NOT the same list: v6-M takes 80-manyargs and 135-uac where
+  # ⚠ the two lists are NOT the same list: v6-M takes 80-manyargs and 135-uac where
   # ARMv7E-M refuses them, and refuses 82-znvalue where thumb2 takes it. the composite
   # rows do not move together (doc/misc/moon-c-gaps), so neither do these.
   thumb1) refuse="67-varargs-double 68-static-assert 71-varargs-sysv 82-znvalue 85-aggval
@@ -219,7 +219,7 @@ for f in test/cc/*.c; do
     || fail "$b: GCC'S binary faulted on $mach -- the harness or the program, not our codegen"
   [ $rt -eq $rg ] || fail "$b: ours $rt, gcc $rg -- same source, same machine, one compiler"
 
-  # A PASSED CASE IS DEAD WEIGHT: `fail` exits, so reaching here means every leg agreed
+  # ⚠ A PASSED CASE IS DEAD WEIGHT: `fail` exits, so reaching here means every leg agreed
   # and nothing downstream reads these again. A failing one keeps all of it.
   rm -f "$d/$b.t.o" "$d/$b.g.o" "$d/$b.t.elf" "$d/$b.g.elf" \
         "$d/$b.tlog" "$d/$b.glog" "$d/$b.llog" "$d/$b.tout" "$d/$b.gout"

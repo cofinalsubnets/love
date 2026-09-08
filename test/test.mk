@@ -63,7 +63,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 # love0 bakes prel+ev+repl + the whole corpus and self-tests BOTH compilers in one run
 # (-Dai_tco=0, the trampoline lane too), so it must print TWO "tests pass" summaries: a
 # reader stop drops the rest of the stream and exits 0. Status rides `.rc` -- no pipefail.
-# corpus.list IS A RUNTIME INPUT NOW, not only a stamp: love0 reads it to find the corpus
+# ⚠ corpus.list IS A RUNTIME INPUT NOW, not only a stamp: love0 reads it to find the corpus
 # (inle/main.c), so it has to EXIST before love0 runs. It used to be pulled in as tests0.h's
 # prerequisite; with the corpus off the bootstrap's dependency graph, nothing else asks for it,
 # and a fresh tree died with `love0: corpus: cannot open out/lib/corpus.list` -- which the
@@ -119,7 +119,7 @@ test_stdinbuf: $(ho)/.love.baked
 	    || { cat out/.test_stdinbuf3.out; \
 	         echo "FAIL fd 0 handed on nonblocking (flags $$fl) -- stdin_give did not put the bit back"; exit 1; }
 # ..and the GIVE-BACK rides the same seek: `unchug` puts drained bytes back into the run, so
-# ai_io_pending counts them again and the child inherits fd 0 in front of them. THE CONTRAST
+# ai_io_pending counts them again and the child inherits fd 0 in front of them. ⚠ THE CONTRAST
 # IS THE LAW: `chug` drains the WHOLE borrowed run, so without the give-back the child inherits
 # NOTHING and with it all ten. It is what an ai_io_unread reaching by bio_of would break -- the
 # run is BORROWED under a static, so only rbio_of finds it, and a heap-port-only door would
@@ -148,9 +148,9 @@ test_host: $(ho)/.love.baked
 # heap: a woken one arrives with a pinned prefix it did not copy and an intern map it did
 # not build. three baked-only GC gates once passed a commit that broke the egg lane, and
 # test_stdincorpus -- the one gate that ran both -- caught it on its first run.
-# it asks for $(ho)/love, NOT .love.baked: an egg lane has no use for the ~12 s bake, and
+# ⚠ it asks for $(ho)/love, NOT .love.baked: an egg lane has no use for the ~12 s bake, and
 # a gate that pulled the stamp would pay it for a binary it then tells to ignore the image.
-# it counts TWO asserts fewer than test_host, and that is right: test/holo.l opens on
+# ⚠ it counts TWO asserts fewer than test_host, and that is right: test/holo.l opens on
 # `(lit? (cite 'holo))`, and holo lives in the glaze -- so its two backend laws are the
 # baked door's alone. Fewer asserts is not less collector; it is a different heap.
 test_hostegg: $(ho)/love
@@ -164,11 +164,11 @@ test_hostegg: $(ho)/love
 # so at the scale where a reader's window arithmetic actually breaks, nothing looked: a `reads`
 # that parsed the corpus's own English COMMENTS as code still printed "3959 tests pass" on the
 # file door and exited 0. It was caught by hand-diffing the doors; this is that diff, kept.
-# ALL THREE DOORS, because they are three different readers -- a file and a redirect share the
+# ⚠ ALL THREE DOORS, because they are three different readers -- a file and a redirect share the
 # borrowed run (l/love.c's rbio_of), a pipe has none and drips.
-# the summary line carries a DURATION, so that is normalised away and everything else must
+# ⚠ the summary line carries a DURATION, so that is normalised away and everything else must
 # match byte for byte -- the dots included, since a dropped assert is exactly what this catches.
-# AND BOTH LOVES. The egg lane and the baked image are not interchangeable here: a
+# ⚠ AND BOTH LOVES. The egg lane and the baked image are not interchangeable here: a
 # reader bug that lost two bytes of the corpus showed on the baked lane and NOT on the
 # egg one, so a gate that ran only the egg reported ok while the shipped binary read
 # 2286 of 3959 asserts and quit 1.
@@ -200,7 +200,7 @@ test_stdincorpus: $(ho)/.love.baked
 	@echo "  ok   file, redirect and pipe read the corpus identically on both loves"
 # test_front -- the TEST-ONLY FRONTEND: out/front links liblove.a (l/love.c only)
 # and supplies the frontend contract itself, so its port vt can answer WOULD-BLOCK on
-# cue. it EXITS 97 on a wait with no deadline -- a deadlock, said loudly.
+# cue. ⚠ it EXITS 97 on a wait with no deadline -- a deadlock, said loudly.
 $(ho)/front: test/front/main.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/l/love_data.ld \
     out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h
 	@echo 'CC	'$@
@@ -245,7 +245,7 @@ test_glaze:
 endif
 # test_hook -- the natjit CREATION-HOOK laws: every law claims BOTH the answer and that the hook
 # owned it (`fired?`), twice over the hook's two lives -- the IMAGE's ($m, what ships) and the
-# EGG BOOT's ($m). never by cat'ing hook.l in: a woken image has `nif` off the book.
+# EGG BOOT's ($m). ⚠ never by cat'ing hook.l in: a woken image has `nif` off the book.
 ifneq ($(filter $a,x64 a64),)
 test_hook: host
 	@echo TEST test/glaze-hook.l "(the baked image)"
@@ -391,7 +391,7 @@ test_dist: $(ho)/.love.baked
 # rebuilds itself through the machine's toolchain; the rebuilt binary must answer the
 # running one's bytes (`love seed`). Minutes -- a whole bootstrap -- and the claim the
 # product makes, so it rides the slow gate. The scratch stays on a red for the autopsy.
-# WHAT ONLY THIS GATE SAYS: the DEFAULT lane, where the seed probes for an ambient cc
+# ⚠ WHAT ONLY THIS GATE SAYS: the DEFAULT lane, where the seed probes for an ambient cc
 # that works and DEFERS to it (apps/source.l). test_distboot runs `love seed` too, but with
 # every compiler poisoned, so it takes the fallback and can never exercise the deference.
 # That deference is the diverse-double-compiling leg -- a foreign compiler holding the
@@ -443,7 +443,7 @@ test_moon: host $(love0)
 # the COMMITTED GENERATED artifacts, laid from the tables that define them (l/mx.l the +/*
 # dispatch matrices and the kind lattice they index, l/nifs.l the nif + instruction registry,
 # quay.l the xterm-256 palette host and kernel share). `make mx` refreshes; test_clay diffs.
-# l/mx.h/kinds.h/nifs.h are CORE headers -- a refresh rebuilds the tree, so the gate to run
+# ⚠ l/mx.h/kinds.h/nifs.h are CORE headers -- a refresh rebuilds the tree, so the gate to run
 # after is `make test`, not test_clay alone. Each is written aside and moved only once the
 # whole set lays, so a shape check that quits leaves every committed file untouched.
 # l/love_data.ld is the last linker script in the tree and is laid WHOLE: every other
@@ -455,7 +455,7 @@ mx_gen = l/mx.h:l/mx.l:mx-h:mx-ok l/kinds.h:l/mx.l:kinds-h:mx-ok l/nifs.h:l/nifs
 # /warn the \# escapes are load-bearing: a bare # in a make VARIABLE starts a comment and
 # would eat the rest of the line (a recipe line passes # through, a variable does not).
 mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${r\#*:}; o=out/.`basename $$d`
-# the EGG lane, deliberately: these generators read CORE tables with the boot
+# ⚠ the EGG lane, deliberately: these generators read CORE tables with the boot
 # vocabulary, and the warm book now carries the crew (the layered bake) -- kore's
 # two-arg `join` shadowed clay's one-arg at mx-h's define and the .h came out empty.
 mxlay   = LOVE_NO_IMAGE=1 $m -l $$l -e "(: _ (? $$k 0 (quit 1)) _ (puts $$v) (quit 0))"
@@ -467,7 +467,7 @@ mx: host
 # its table moves, and the objects that include it then rebuild from the fresh one. Without
 # this a new l/nifs.l row builds clean and gates GREEN with its nom still off the book -- the
 # drift diff lives in test_clay, which only test_extra reaches.
-# the prerequisite is the TABLE ALONE, never $(m): love is built FROM these headers, so
+# ⚠ the prerequisite is the TABLE ALONE, never $(m): love is built FROM these headers, so
 # naming it as a prerequisite closes the loop and make drops the lot. The recipe instead takes
 # whatever love ALREADY exists -- sound because the generator is l/nifs.l/mx.l themselves, and a
 # stale love lays a fresh table. A tree with no love yet is the bootstrap case: the committed
@@ -482,7 +482,7 @@ $(word 1,$(subst :, ,$(1))): $(word 2,$(subst :, ,$(1)))
 endef
 $(foreach s,$(mx_gen),$(eval $(call mx_dep,$(s))))
 # test_clay -- G1, clay's faithfulness gate (apps/moon/clay.l, doc/misc/clay.md): for every file
-# in test/cc/, (cparse (clay-show ast)) == ast, STRUCTURALLY. the run PARTITIONS and names
+# in test/cc/, (cparse (clay-show ast)) == ast, STRUCTURALLY. ⚠ the run PARTITIONS and names
 # both halves: what it can say, and the declarations cparse did not keep -- a measured gap.
 test_clay: host
 	@echo TEST test/gate/clay.l "(clay G1: (cparse (clay-show c)) == c over test/cc)"
@@ -503,7 +503,7 @@ test_moonfuzz: host
 # test_forge -- nifs WRITTEN IN LOVE (apps/forge.l): a kernel's holo IR assembled for this cpu,
 # installed through the `nif` seam, and required to agree with the twin it deopts into -- on the
 # monomorphic lane it says and on every lane it hands back.
-# the twin here is the C nif itself, so a disagreement is one denotation answering two ways.
+# ⚠ the twin here is the C nif itself, so a disagreement is one denotation answering two ways.
 # Zero kernels fitted FAILS: a graceful decline is the design, a silent one reads like a pass.
 test_forge: host
 	@echo TEST test/gate/forge.l "(forge: love IR -> holo -> nif -> differential)"
@@ -585,7 +585,7 @@ test_raw: host
 # test_tco0 -- THE TRAMPOLINE, at full strength. `tco=0` is a documented knob
 # (mk/common.mk) and it had rotted to a segfault in `bake`: the glaze emits the
 # TAIL-THREADED lvm shape, and nothing stopped a trampoline build from calling it.
-# love0 is the tree's other tco=0 lane and it cannot cover this -- it is the
+# ⚠ love0 is the tree's other tco=0 lane and it cannot cover this -- it is the
 # LoveBoot branch, which never reaches AiGlazed, so the one build that exercised
 # the trampoline was the one build that could not meet the bug. this is the full
 # love at tco=0: it must build, BAKE (where the segfault was), and pass the corpus.
@@ -643,7 +643,7 @@ test_rvboot:
 # test_vec -- the INTERRUPT gate: raises a real CPU exception with (fault n) and reads the
 # report, the only way to reach inle/mkvec.l's 32 stubs and the fault vector, then
 # checks the stubs no boot can reach against the architecture's own error-code list.
-# WHICH vec.o: at the HOST arch there is no $(k_pie) build -- the elf is projected out of
+# ⚠ WHICH vec.o: at the HOST arch there is no $(k_pie) build -- the elf is projected out of
 # the shipped love, which already carries the kart lane's objects -- so $(k_o) never runs and
 # the only vec.o laid for this machine is $(moon_d)/kvec.o. same mkvec.l, same arch, same lay.
 # a cross arch builds the pie and lays its own under $(ko). two ifeqs, never an else-ifeq.
@@ -726,7 +726,7 @@ test_raw_rv64: host
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
 	  sh test/gate/raw.sh rv64 $(ho) $m $t
 # test_raw's a64 twin: mooncc -t a64 lays every object, mksys-a64 the syscall leaf,
-# OUR linker binds, qemu-user runs the WHOLE C-sorted $t over the fresh egg. $t must stay
+# OUR linker binds, qemu-user runs the WHOLE C-sorted $t over the fresh egg. ⚠ $t must stay
 # in C/byte order: test/uu.l defines the kernel test/uukindlaw.l calls. Opt-in; needs qemu.
 # test/a64/callout.l rides past $t: it builds 'a64 nifs and RUNS them, so only an a64
 # love may read it -- gate_sentinel is how the gate knows it was read and not stopped short.
@@ -814,7 +814,7 @@ test_nucleo446: host
 # test_nucleo446_smoke -- the same port RUN, not read: the -D QSMOKE twin on qemu's Cortex-M4,
 # its exit code the self-check tally carried out through mkboot.l's sh_exit. The only lane that
 # executes crt0, the semihosting block and the fault vectors. ~0.7s.
-# qemu only -- on silicon a bkpt with no debugger escalates to lockup.
+# ⚠ qemu only -- on silicon a bkpt with no debugger escalates to lockup.
 test_nucleo446_smoke: host
 	@sh test/gate/boot.sh nucleo446_smoke "$(MAKE)"
 # test_rp2040 -- the Pico firmware BUILD gate, nucleo446-shaped, and the one port with NO .S:
@@ -879,7 +879,7 @@ $(eval $(call moon_pkg,bzip2,BZIP2SRC,host))
 # its own mooncc and rebuilds ITSELF byte for byte. Minutes, opt-in, by name -- and the
 # reason the claim can hold at all is that the local cc builds love0 and nothing else
 # (see the script).
-# IT DOES NOT SUBSUME test_seed, and must not be read as doing so: no leg here runs a
+# ⚠ IT DOES NOT SUBSUME test_seed, and must not be read as doing so: no leg here runs a
 # DEFAULT `love seed`, so nothing here tests the seed choosing to defer to a working
 # ambient cc. Both lanes are covered; only one of the two DECISIONS is. Three full builds
 # against test_seed's one, and still not a superset.
@@ -910,13 +910,13 @@ test_gz: host
 # NAMESPACE and does the real thing -- a tmpfs mounted, a bind that shows the other
 # tree, both unmounted, and a chroot with a command running inside the new root. A
 # gate that only watched these answer 'eperm would pass against a stub.
-# a kernel with unprivileged user namespaces off skips the second half with a word
+# ⚠ a kernel with unprivileged user namespaces off skips the second half with a word
 # and stays green: that is a machine's policy, not a fault in the code.
 test_root: host
 	@echo TEST test/gate/root.sh
 	@sh test/gate/root.sh $(ho) $(ho)/love
 # test_fat32 -- `love fat` + `love mkfs.vfat`, the command line over apps/fat/fat.l.
-# NOT test_fat, which gates the fat CONTAINER (seed-universal U1) and shares only a
+# ⚠ NOT test_fat, which gates the fat CONTAINER (seed-universal U1) and shares only a
 # word. test/host/fat.l proves the filesystem's own laws over a cask, needing nothing
 # outside; this is the half only another implementation can say, and mtools is it --
 # their reader on our format, our reader on theirs, and our reader on an mformat image.
@@ -975,7 +975,7 @@ nettest: host
 	@sh $R/test/net/loopback.sh $m $(PORT)
 # The tool gates beside the build: the hue generators, cook, tele. See tools/Makefile.
 # vmret is NOT here -- it rides test_slow over $m, and after plan C2 every other love in
-# the tree is a projection of that one. lush is a real
+# the tree is a projection of that one. ⚠ lush is a real
 # prerequisite: test/host/cook.l's SHELL pair sets `SHELL := out/lush` to prove cook honors it.
 test_tools: host out$(hsuf)/lush
 	@$(MAKE) -C tools

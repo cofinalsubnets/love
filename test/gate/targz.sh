@@ -6,7 +6,7 @@
 # field. THIS gate proves the half that only the outside world can say -- that GNU
 # tar and GNU gzip AGREE with us, in both directions, over a real tree.
 #
-# AGREEING WITH OURSELVES PROVES NOTHING HERE. A coder and a decoder written by
+# ⚠ AGREEING WITH OURSELVES PROVES NOTHING HERE. A coder and a decoder written by
 # one hand share a model, and a round trip through both is green for any pair of
 # functions that invert each other -- including a pair that agree on a format
 # nobody else speaks. The system tools are the only oracle that can catch that,
@@ -90,7 +90,7 @@ cat > "$w/unpack.l" <<EOF
 EOF
 "$love" "$w/unpack.l" || fail "love could not read the system's .tar.gz"
 diff -r "$w/tree" "$w/ours" || fail "our extraction of the system archive differs"
-# diff -r COMPARES BYTES, NOT MODES, and that blind spot shipped a real bug: our
+# ⚠ diff -r COMPARES BYTES, NOT MODES, and that blind spot shipped a real bug: our
 # extractor read the mode out of every header and never applied it, so everything
 # landed 0644 and an extracted BINARY would not run. Content-identical and useless.
 # So the modes are compared as their own list, both directions.
@@ -166,7 +166,7 @@ gzip -l "$c/g.txt.gz" > "$w/l.want" 2>/dev/null
 cmp -s "$w/l.want" "$w/l.got" || { diff "$w/l.want" "$w/l.got"; fail "gzip -l vs GNU"; }
 
 # -t says nothing about a good member and 1 about a torn one.
-# set -e is ON in this gate, so a status is caught with `|| e=$?` and never with a
+# ⚠ set -e is ON in this gate, so a status is caught with `|| e=$?` and never with a
 # bare run followed by $? -- a failing command on its own line ends the script silently
 run() { e=0; "$@" > /dev/null 2>&1 || e=$?; }
 "$love" gzip -t "$c/g.txt.gz" || fail "gzip -t on a good member"

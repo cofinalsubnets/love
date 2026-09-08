@@ -2,7 +2,7 @@
 // inle/kmain.c (inle) run the same egg and register the same modules, and the artifact
 // carries BOTH of them -- so these are one definition (inle/cats.c) rather than a static
 // apiece, which is the whole prel said twice in every link.
-// not love0's: it LAYS the header (tools/lcat.l), and its own boot rides out/lib/boot0.h.
+// ⚠ not love0's: it LAYS the header (tools/lcat.l), and its own boot rides out/lib/boot0.h.
 #ifndef AI_CATS_H
 #define AI_CATS_H
 

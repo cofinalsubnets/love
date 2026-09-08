@@ -20,7 +20,7 @@
 ; numbers; the control words (hit/note/gain/pan/..) lift those into tablets, which
 ; merge, which is what makes `#` a set and `jux` a stereo split.
 ;
-; this file shadows prel's `rev` and `every` with the pattern ones (tidal's names,
+; ⚠ this file shadows prel's `rev` and `every` with the pattern ones (tidal's names,
 ; and the tree has no other reader here). nothing below may call the list versions.
 (module '(harp
   qi qzero qone qhalf qneg qmin qmax qfl qfq qnum
@@ -39,7 +39,7 @@
    ; EVERY time value is a coin, whole cycles included -- qi is how an integer
    ; becomes one, and nothing below writes a bare one. `load` is why: qfl and qnum
    ; take a coin apart, and a plain integer has no parts to take.
-   ; a rational meeting a TRAY answers () -- `+` takes the coin lane before the
+   ; ⚠ a rational meeting a TRAY answers () -- `+` takes the coin lane before the
    ;   array lane and the rational's method refuses a non-star. so a time crosses
    ;   into frame arithmetic through qnum and never after; see apps/harp/play.l.
    (qi n)     (n /// 1)
@@ -49,7 +49,7 @@
    (qneg a)   (qzero - a)
    (qmin a b) (? (a < b) a b)
    (qmax a b) (? (a < b) b a)
-   ; // truncates toward zero, so a negative cycle needs the step down by hand
+   ; ⚠ // truncates toward zero, so a negative cycle needs the step down by hand
    (qfl a)    (: p (load a)  n <p  d <>p  t (n // d)
                  (? ((t * d) = n) t (? (n < 0) (t - 1) t)))
    (qfq a)    (qi (qfl a))

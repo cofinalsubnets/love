@@ -297,7 +297,7 @@ int main(void) {
       sh_hex(bad.q[3 * i + 1]); sh_putc(' ');
       sh_hex(bad.q[3 * i + 2]); sh_putc('\n'); }
     m7_exit(4); }
-  // THE BAKED RUNTIME GOES BEFORE THE PROOF DOES, and on 16 MB that is the whole
+  // ⚠ THE BAKED RUNTIME GOES BEFORE THE PROOF DOES, and on 16 MB that is the whole
   // margin: img is g->alloc'd and outlives r, the wake wants a second pool the size of
   // the first, and holding a spent heap through it left the arena 14 KB short of a
   // 6 MB ask with 10.9 MB free but in four pieces.

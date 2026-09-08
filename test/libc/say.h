@@ -1,17 +1,17 @@
 /* test/libc/say.h -- the reporting side of the libc differential.
  *
- * DELIBERATELY INDEPENDENT OF THE LIBC UNDER TEST. digits are turned by hand
+ * ⚠ DELIBERATELY INDEPENDENT OF THE LIBC UNDER TEST. digits are turned by hand
  * and everything leaves through putchar, so nothing here touches the formatter.
  * report with printf instead and a drifted %d corrupts the FRAME of all six
  * programs at once, which reads as "everything is broken" when one thing is.
  * fmt.c tests the formatter by putting its output in the PAYLOAD.
  *
- * AND THE COMPARISONS REPORT A SIGN, NEVER A VALUE. the standard fixes only
+ * ⚠ AND THE COMPARISONS REPORT A SIGN, NEVER A VALUE. the standard fixes only
  * the sign of memcmp/strcmp/strncmp/strcasecmp/strcoll -- glibc hands back the
  * byte difference, ours hands back -1/0/1, and both are right. a differential
  * that compared the number would fail on a difference that is not one.
  *
- * likewise a POINTER result is reported as an OFFSET from its base (-1 for
+ * ⚠ likewise a POINTER result is reported as an OFFSET from its base (-1 for
  * null): the addresses differ between two builds of the same program, the
  * offsets do not.
  */

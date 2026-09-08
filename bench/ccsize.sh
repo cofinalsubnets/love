@@ -18,7 +18,7 @@
 #     `c0_lambda`, and the clone's bytes belong to the parent. 53 symbols (7.5 KB) land
 #     in the wrong column without it.
 #
-# this counts what a lane SHIPS, which for a libc is half the question: what it can
+# ⚠ this counts what a lane SHIPS, which for a libc is half the question: what it can
 # CALL is the other half, and ccdead.l answers that one.
 #
 # usage: ./ccsize.sh          (after ./ccbench.sh, or `make ccbench`)
@@ -51,7 +51,7 @@ objsyms() { nm --defined-only "$@" 2>/dev/null | awk '
 for l in $LANES; do
   binsyms "$W/love-$l" > "$TD/bin.$l"
   if [ "$l" = mooncc ]; then
-    # mooncc's own lane: love.o + m_am.o + the host objects (flat). there is no
+    # mooncc's own lane: love.o + m_am.o + the host objects (flat). ⚠ there is no
     # moonlibc object to exclude -- the driver pulls those members itself, so they
     # reach the binary and never the object dir. The complement IS the libc.
     objsyms "$W/mooncc/love.o" "$W/mooncc/m_am.o" \

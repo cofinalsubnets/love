@@ -21,7 +21,7 @@
 set -e
 
 # mooncc and kore are love's own verbs (the layered bake); MOONCC/KORE still override.
-# `env`, not a bare assignment prefix: $mc expands AFTER assignment-recognition, so a
+# ⚠ `env`, not a bare assignment prefix: $mc expands AFTER assignment-recognition, so a
 # literal `LOVE_NO_IMAGE=` in the expansion would run as a command name.
 love=${LOVE:-out/love}
 mc=${MOONCC:-env LOVE_NO_IMAGE= $love mooncc}
@@ -115,7 +115,7 @@ p s_badcast    'struct s { int a; };
 int main(void){ int x = (struct s)1; return x; }'
 
 echo "--- labels: the ones that reach the SYMBOL TABLE ---"
-# these two are the finding. An unresolved local label does not refuse -- it
+# ⚠ these two are the finding. An unresolved local label does not refuse -- it
 # leaves the object carrying an undefined GLOBAL symbol spelled with mooncc's own
 # internal name, and only the LINK notices. the symbol table is printed because the
 # compiler's exit code says nothing. `kore nm -u` reads it -- our own reader over

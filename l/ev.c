@@ -101,7 +101,7 @@ static struct ai *eset(struct ai *g, struct env **c, int k, word v) {
 // ev.l's closure cell is the same thing (mkc/cof/cput, a tablet under key 0).
 enum { LThread, LImps };
 // a backpatch site is a box too: the entry whose thread fills the hole, and the hole.
-// the hole is an interior pointer and has to be -- c1's clip re-points the terminator
+// ⚠ the hole is an interior pointer and has to be -- c1's clip re-points the terminator
 // at the entry once emission ends, so the head this cell was indexed from is no longer
 // the thread's, and no base available here stays one. gcp relocates an interior pointer
 // into a thread by preserving its offset, which is what carries this across a move.
@@ -114,7 +114,7 @@ static struct ai *sset(struct ai *g, word s, int k, word v) {
  return g; }
 static ai_inline word lget(struct ai *g, word y, int k) {
  return ai_mapget(g, zero, putcharm(k), B(y)); }
-static struct ai *lset(struct ai *g, word y, int k, word v) {   // y must be rooted: a
+static struct ai *lset(struct ai *g, word y, int k, word v) {   // ⚠ y must be rooted: a
  g = ai_push(g, 3, putcharm(k), v, B(y));                       //   growing put allocates
  if (ai_ok(g = ai_mapput(g))) g->sp++;
  return g; }

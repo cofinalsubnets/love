@@ -10,14 +10,14 @@
 # everywhere" asks for), and mooncc's output does not depend on the arch
 # mooncc runs on.
 #
-# the TU flags MIRROR the Makefile's x-lane (AiHaveVersionH on love.o), the
+# ⚠ the TU flags MIRROR the Makefile's x-lane (AiHaveVersionH on love.o), the
 # fixpoint.sh drift trap wearing its cross face. this gate's first run caught the
 # version flag MISSING from the x-lane: the twin named itself "unknown".
-# AND THE LIST IS THE ARTIFACT'S, kernel objects included: a gate that links a
+# ⚠ AND THE LIST IS THE ARTIFACT'S, kernel objects included: a gate that links a
 # shorter binary than `make` does still answers love1 == love2, and answers it
 # about a binary nobody ships.
 #
-# only the FLAGS are spelled here. the object names are derived from the source paths
+# ⚠ only the FLAGS are spelled here. the object names are derived from the source paths
 # (mkobj below) and the rosters arrive in the environment -- gate_love_c / gate_host_c /
 # gate_arch_c / gate_kern_c -- so a rename in the Makefile cannot leave this behind.
 #

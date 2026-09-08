@@ -33,7 +33,7 @@ int main(void)
     if (u"\U0001F600"[0] != 0xD83D) return 11;
     if (u"\U0001F600"[1] != 0xDE00) return 12;
 
-    /* a UCN concatenates like any other escape. NOT "\u0041" for 'A': C11 6.4.3p2
+    /* a UCN concatenates like any other escape. ⚠ NOT "\u0041" for 'A': C11 6.4.3p2
        forbids a UCN naming a basic-set character, and gcc 13 refuses it outright. */
     if (sizeof("\u00E4" "BC") != 5) return 13;
     if ((unsigned char)("\u00E4" "BC")[2] != 'B') return 14;

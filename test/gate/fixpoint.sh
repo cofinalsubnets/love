@@ -10,7 +10,7 @@
 #
 # make owns the dependency graph (the moon_o objects + mooncc0.image exist) AND the
 # source lanes; this owns the procedure. NOT set -e: the compile loop reports its own
-# file. the lanes arrive in the environment because the object list already has the
+# file. ⚠ the lanes arrive in the environment because the object list already has the
 # variadic tail -- gate_love_c / gate_host_c / gate_arch_c / gate_kern_c, the Makefile's own.
 #
 # usage: gate_love_c=.. gate_host_c=.. gate_arch_c=.. gate_kern_c=..
@@ -28,7 +28,7 @@ cat=$ho/.mooncc-cat.l
 # any arch a seed can be laid for owes this invariant; an arch off the roster
 # skips, it does not fail. the mksys leaf is the
 # host's own (the twin roster, the Makefile).
-# the spelling arrives as $(hosta), never from `uname -m` here: on the BSDs those two
+# ⚠ the spelling arrives as $(hosta), never from `uname -m` here: on the BSDs those two
 # disagree (amd64, evbarm), and a gate that spells the arch itself is a second authority.
 case "$ha" in
   x64)  mks=mksys-x64 ;;
@@ -53,7 +53,7 @@ mkobj() {                    # $1 = source -> $o
 }
 
 # love1: relink the generation make already compiled (love0's lane, byte-cheap).
-# the list arrives FROM make ($(moon_o) $(kart_o), source-derived) and is never globbed out of
+# ⚠ the list arrives FROM make ($(moon_o) $(kart_o), source-derived) and is never globbed out of
 # the odir: a deleted src/*.c leaves its .o sitting there, and a glob relinks the ghost --
 # love1 carrying a TU love2 never compiles, which reads as a broken fixpoint.
 moon0() { "$love0" wake "$ho/mooncc0.image" mooncc "$@"; }
@@ -67,7 +67,7 @@ LOVE_NO_IMAGE=1 "$d/love1" -l "$cat" -e "(? ((bake \"$d/mooncc1.image\") = 1) (q
 
 # ...and rebuilds every TU with it, in the exact order make links them
 moon1() { "$d/love1" wake "$d/mooncc1.image" mooncc "$@"; }
-# l/love.c's flags must MIRROR make's ($(moon_d)/love.o in the Makefile), not just its
+# ⚠ l/love.c's flags must MIRROR make's ($(moon_d)/love.o in the Makefile), not just its
 # order: -D AiHaveVersionH is what puts the version id in this TU, and love1 was linked
 # from make's object. Drop it here and love2 carries "unknown" -- the compare fails at the
 # string, naming a broken fixpoint where the only difference is a build flag.
@@ -89,7 +89,7 @@ LOVE_NO_IMAGE=1 "$d/love1" -l "$ho/.mksys-cat.l" -e "((cite 'moon '$mks) \"$d/sy
 test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 
 # the kernel the artifact carries (the Makefile's $(kart_o)): the link takes it,
-# so the rebuild owes it. a gate that links what make links and compiles less
+# so the rebuild owes it. ⚠ a gate that links what make links and compiles less
 # still answers love1 == love2 -- it just answers it about a shorter binary than
 # anyone ships. an arch with no seat carries none, and $gate_arch_c is empty there.
 if [ -n "$gate_arch_c" ]; then

@@ -6,7 +6,7 @@
 # them ours now. So the oracle is GNU cpio, in BOTH directions, over a tree chosen
 # for the format's edges rather than for size.
 #
-# AGREEING WITH OURSELVES PROVES NOTHING. A packer and an unpacker written by one
+# ⚠ AGREEING WITH OURSELVES PROVES NOTHING. A packer and an unpacker written by one
 # hand invert each other for any format, including one nobody else speaks -- the same
 # argument test/gate/targz.sh makes, and the reason this gate is separate from the
 # laws in test/host/.
@@ -54,7 +54,7 @@ mkdir -p "$w/x1"
 diff -r "$t" "$w/x1" || fail "system cpio's extraction of our archive differs"
 [ -L "$w/x1/sub/deep/link" ] || fail "the symlink came out as a regular file"
 [ "$(readlink "$w/x1/sub/deep/link")" = ../b.txt ] || fail "the symlink target is wrong"
-# diff -r COMPARES BYTES, NOT MODES -- the blind spot that shipped a real bug in the
+# ⚠ diff -r COMPARES BYTES, NOT MODES -- the blind spot that shipped a real bug in the
 # tar extractor. The modes are their own list, both directions.
 ( cd "$t"    && find . -type f | LC_ALL=C sort | xargs stat -c '%a %n' ) > "$w/m.want"
 ( cd "$w/x1" && find . -type f | LC_ALL=C sort | xargs stat -c '%a %n' ) > "$w/m.got"
@@ -81,7 +81,7 @@ cpio -t --quiet < "$w/gnu.cpio" > "$w/l3"
 cmp -s "$w/l1" "$w/l2" || { diff "$w/l1" "$w/l2"; fail "-t on our archive"; }
 cmp -s "$w/l3" "$w/l4" || { diff "$w/l3" "$w/l4"; fail "-t on GNU's archive"; }
 cmp -s "$w/l1" "$w/l3" || { diff "$w/l1" "$w/l3"; fail "the two archives name different things"; }
-# the stored name loses a leading "./" -- GNU cpio drops it where GNU tar keeps it
+# ⚠ the stored name loses a leading "./" -- GNU cpio drops it where GNU tar keeps it
 grep -q '^\./' "$w/l1" && fail "a stored name kept its ./"
 echo "  OK -t listings byte-identical, both archives, both tools"
 
@@ -103,11 +103,11 @@ run sh -c "cd '$t' && '$L' cpio -o -H odc < '$w/names'"
 grep -q '^[0-9][0-9]* blocks$' "$w/blocks" || fail "no 'N blocks' line on err"
 "$L" cpio -t --quiet -I "$w/byO.cpio" 2> "$w/quiet" > /dev/null || fail "cpio -t --quiet"
 [ ! -s "$w/quiet" ] || fail "--quiet still said something"
-# -v names every member on err as it packs, and only on err (-t's own -v is GNU's
+# -v names every member on err as it packs, and only on err (⚠ -t's own -v is GNU's
 # ls -l LISTING, a layout of its own, and is not here -- so -v is asked of -o)
 ( cd "$t" && "$L" cpio -o -v --quiet < "$w/names" ) > /dev/null 2> "$w/verb" || fail "cpio -ov"
 cmp -s "$w/names" "$w/verb" || fail "-v did not name every member on err"
-# -u overwrites; without it a newer file on disk stays. the archive's mtimes are the
+# -u overwrites; without it a newer file on disk stays. ⚠ the archive's mtimes are the
 # tree's own, so "newer" here is arranged with touch and not with luck
 mkdir -p "$w/x3" && ( cd "$w/x3" && "$L" cpio -i --quiet < "$w/ours.cpio" )
 printf 'MINE\n' > "$w/x3/n1"; touch -d '2030-01-01' "$w/x3/n1"

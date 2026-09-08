@@ -26,7 +26,7 @@
 # (a64, via AARCH64_CC or the local Nerves toolchain) it is used as an
 # ADDITIONAL oracle, because agreeing with x64 cannot catch a bug both share.
 #
-# stdout is compared, not just the exit code. These programs return a COUNT of
+# ⚠ stdout is compared, not just the exit code. These programs return a COUNT of
 # passing checks; eight bits can say THAT something moved and never which one.
 #
 # THE EXCLUSIONS ARE ASSERTED, NOT SKIPPED, and the list is PER TARGET. A program
@@ -64,7 +64,7 @@ case $arch in
   *) echo "ccarch.sh: unknown target $arch" >&2; exit 1 ;;
 esac
 
-# ONE RUN'S WORTH, and no more: each case leaves a .g (a STATIC gcc binary, ~3.2 MB), a
+# ⚠ ONE RUN'S WORTH, and no more: each case leaves a .g (a STATIC gcc binary, ~3.2 MB), a
 # .glog, a .gout, a .t and a .tout, and nothing ever read them again -- 1192 files and 420 MB
 # for a64 alone, 94 MB for riscv, growing with every run. Clearing at the START rather than
 # the end keeps the last run's artifacts for a post-mortem, which is the only time anyone wants
@@ -153,7 +153,7 @@ for f in test/cc/*.c; do
     fi
   fi
 
-  # A PASSED CASE IS DEAD WEIGHT. `fail` exits, so reaching here means this program agreed
+  # ⚠ A PASSED CASE IS DEAD WEIGHT. `fail` exits, so reaching here means this program agreed
   # on every leg -- and the diffs are printed INLINE at the moment they disagree, so nothing
   # downstream ever reads these again. The .g is a STATICALLY LINKED cross binary, 3.3 MB, one
   # per program: 137 of them made cc-a64 436 MB, 73% of the whole out/ tree, for a gate that

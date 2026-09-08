@@ -44,14 +44,14 @@ static const char boot_ai[] =
 // the summary. _writen lands what fits and answers the count, so an overflowing
 // eval truncates rather than overruns.
 //
-// AND A FULL BUFFER SAYS SO. ai_stdout is a STATIC port: it carries no write
+// ⚠ AND A FULL BUFFER SAYS SO. ai_stdout is a STATIC port: it carries no write
 // run (rung 4), and zputc offers a refused byte twice before giving up, so what
 // does not fit here really is on the floor. A bigger number would only move the
 // cliff; the honest edge is to SAY the answer is short. out_tail is held back
 // from the buffer for that one line, so a truncated eval reads as truncated
 // instead of stopping mid-word.
 //
-// AND IT SAYS ONLY WHAT IS TRUE -- WHICH IS NOT A BYTE COUNT. lvm_fputs answers
+// ⚠ AND IT SAYS ONLY WHAT IS TRUE -- WHICH IS NOT A BYTE COUNT. lvm_fputs answers
 // a refusal by re-offering the whole remainder, and then the byte alone through
 // zputc, twice: a device sees each lost byte many times over and cannot tell
 // attempts from bytes. What it can tell is THAT it ran out, so that is all it says.

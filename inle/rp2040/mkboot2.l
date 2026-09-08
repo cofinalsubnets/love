@@ -10,7 +10,7 @@
 ; vector table rides -- so this port has no .S at all, the only thumb one that
 ; doesn't. rp2040.lds KEEPs .boot2 at flash base and the table right behind it.
 ;
-; CRC-32/MPEG-2, not the zlib one: poly 0x04c11db7, init 0xffffffff, NO input
+; ⚠ CRC-32/MPEG-2, not the zlib one: poly 0x04c11db7, init 0xffffffff, NO input
 ; or output reflection, xorout 0. boot2.bin checksums to 0x7a4eb274 -- the one
 ; number that says this file still works.
 ;

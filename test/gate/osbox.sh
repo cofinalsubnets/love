@@ -11,7 +11,7 @@
 # kqueue's EVFILT_SIGNAL), UV-pty (the quartet through three per-kernel
 # shapes), and -- FBSD_SEED=1 / NBSD_SEED=1, minutes -- the trophy:
 # `love seed` ON THE BOX answers the tree's own bytes.
-# NOT here on purpose: termios proper (a gate that needs a real tty).
+# ⚠ NOT here on purpose: termios proper (a gate that needs a real tty).
 #
 # the box arrives by env: FBSD_SSH / NBSD_SSH is a command prefix ("ssh -p
 # 2222 -i key root@host"); without one the gate skips loudly, the house rule
@@ -29,14 +29,14 @@
 # boot the same qemu shape with -qmp; its console is VGA, so the one-time
 # setup (rc.conf sshd=YES dhcpcd=YES, the key, consdev=com0) types in by QMP
 # send-key, root with no password. sshd's default already takes keyed root.
-# TWO DIMENSIONS NOW: the OS and the ISA. `osbox.sh OUT LOVE0 freebsd a64`
+# ⚠ TWO DIMENSIONS NOW: the OS and the ISA. `osbox.sh OUT LOVE0 freebsd a64`
 # runs the same battery against a freebsd/arm64 box (FBSD_ARM64_SSH), and the
 # LOCAL half of every comparison rides qemu-aarch64 -- same binary, same ISA,
 # two kernels, which is the claim. Without that emulator the a64 lane skips
 # loudly, exactly as a missing box does.
 # an arm64 freebsd box (2026-08-18): the aarch64 BASIC-CLOUDINIT qcow2 from the
 # same VM-IMAGES tree, booted by qemu-system-aarch64 -M virt -accel kvm on an
-# a64 host (a pi is native; TCG elsewhere is ~2x slower again). the disk
+# a64 host (a pi is native; TCG elsewhere is ~2x slower again). ⚠ the disk
 # must be virtio-blk-PCI said explicitly -- `if=virtio' lands it on the MMIO bus,
 # which the edk2 firmware does not enumerate, and UEFI walks the whole PXE list
 # instead. edk2 is not packaged for arch-arm; the .fd is GUEST code, so a copy
@@ -170,7 +170,7 @@ moon0() { "$love0" wake "$ho/mooncc0.image" mooncc "$@"; }
 # and the brand BORN in (every hosted static exe leaves the linker EI_OSABI=9;
 # freebsd's loader requires the byte and linux's never reads it). the SAME
 # file must answer the SAME text and status on both kernels.
-# -e/argv LANES RUN MANY TIMES ON PURPOSE: the freebsd kernel hands the
+# ⚠ -e/argv LANES RUN MANY TIMES ON PURPOSE: the freebsd kernel hands the
 # vector base in %rdi and [rsp] may hold a pad word below argc, so a crt0
 # reading the wrong door flips by stack address, not by input -- one green
 # run proves nothing.

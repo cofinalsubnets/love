@@ -196,7 +196,7 @@ void serial_init(void) {
 static uint8_t  rx_ring[1024];
 static uint32_t rx_w, rx_r, rx_lost;
 
-// A FULL RING DROPS THE NEWEST BYTE AND COUNTS IT. it used to write straight
+// ⚠ A FULL RING DROPS THE NEWEST BYTE AND COUNTS IT. it used to write straight
 // through -- `rx_ring[rx_w++ & 1023u] = ..` with no room check -- so a paste
 // longer than the ring OVERWROTE bytes the reader had not taken yet: the stream
 // came out scrambled in the middle rather than short at the end, and nothing
@@ -220,7 +220,7 @@ static void rx_pump(void) {
     rx_put(REG(LPUART_DATA) & 0xff); } }
 
 // how many inbound bytes the ring could not hold since the last ask, and clears.
-// NOT reported from rx_pump: the console is this same UART, so a notice
+// ⚠ NOT reported from rx_pump: the console is this same UART, so a notice
 // written there would re-enter through serial_putc's own pump.
 uint32_t serial_rx_lost(void) {
   uint32_t n = rx_lost;

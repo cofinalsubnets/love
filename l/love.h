@@ -79,7 +79,7 @@
 // clang/gcc 15+ take the attribute, mooncc's sibcall pass spells it or refuses the
 // compile -- an opportunistic miss is one frame per dispatch and a stack overflow down
 // some long read. `make vmret` cross-checks the shipped binary.
-// AN LVM TAKES NO OTHER ARGUMENT, and the macros above cannot spell one: musttail
+// ⚠ AN LVM TAKES NO OTHER ARGUMENT, and the macros above cannot spell one: musttail
 // wants matching prototypes, so a fifth parameter would leave that op's tails to the
 // compiler's mood. what an op needs beyond the stack rides g->b, read at entry.
 // ai_tco=1 now IMPLIES ai_have_musttail -- the refusal above makes that structural,
@@ -806,7 +806,7 @@ lvm_t lvm_kcall,
  lvm_calloutdrive, lvm_calloutresume,   // the drive addresses as fixnums (probes; a native reads them off g->jk)
  lvm_jkoff,       // (jkoff x): g->jk's byte offset, what the emitter's `jk` law loads from
  lvm_natp;        // (nat? f): is f a native closure -- its code in the arena
-// THE ATTRIBUTES ARE THE DECLARATION: `lvm(n)` is `ai_noinline ai_noicf _lvm(n)`, so these
+// ⚠ THE ATTRIBUTES ARE THE DECLARATION: `lvm(n)` is `ai_noinline ai_noicf _lvm(n)`, so these
 // cannot fold into the plain lvm_t list above without shedding both. ai_noicf is noipa, and the
 // data sentinels below are what it is for -- see their note.
 ai_noinline ai_noicf lvm_t
@@ -1127,7 +1127,7 @@ static ai_inline bool tray_put(struct ai_tray *v, uintptr_t i, word x) {
                       : gemp(x) ? (intptr_t) gem_get(x) : sun_get(x));
  return true; }
 
-// equality comparisons inline the fast identity check. eqv is declared HERE, not with the
+// equality comparisons inline the fast identity check. ⚠ eqv is declared HERE, not with the
 // other bools at the tail: eql below calls it, and a caller cannot precede its declaration.
 ai_noinline bool eqv(struct ai*, word, word); // this is for checking equality of non-identical values
 // eqv has no value-equality for distinct charms or distinct noms -- identity is

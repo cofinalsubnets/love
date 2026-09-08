@@ -10,19 +10,19 @@
 # shape nobody would have written down. a random draw does not know what we meant
 # either, which is exactly its value: it asks GNU instead of asking us.
 #
-# THE ORACLE MUST BE THE REAL GNU. an interactive `grep` on a dev box may be a
+# ⚠ THE ORACLE MUST BE THE REAL GNU. an interactive `grep` on a dev box may be a
 # ugrep shim whose BRE differs (it ERRORS where GNU takes a loose repeat as ink),
 # so the oracle is an ABSOLUTE PATH, its --version is checked, and the lane SKIPS
 # loudly where GNU is absent. a differential with no independent oracle is not a
 # weaker test, it is not a test.
 #
-# GNU grep AND GNU sed DO NOT SHARE AN ERE DIALECT, which is why the atom sets
+# ⚠ GNU grep AND GNU sed DO NOT SHARE AN ERE DIALECT, which is why the atom sets
 # below are per-tool. `grep -E ')'` matches a literal paren; `sed -E 's/)/X/'`
 # quits with "Unmatched ) or \)". same for an unclosed `{`. our engine follows
 # GREP there (apps/kore/re.l's `loose`), so the sed lane simply does not draw the
 # two shapes -- rather than pretend one answer is right for both tools.
 #
-# SEEDED, NOT RANDOM: the draw is a pure function of $seed, so a red run
+# ⚠ SEEDED, NOT RANDOM: the draw is a pure function of $seed, so a red run
 # reproduces exactly and a green one means the same thing tomorrow. raise
 # REFUZZ_ROUNDS by hand when hunting; never make either time-dependent.
 #
@@ -51,7 +51,7 @@ mkdir -p "$w" || exit 1
 trap 'rm -rf "$w"' EXIT INT TERM
 korerun() { LOVE_NO_IMAGE= "$m" kore "$@"; }
 
-# THE DRAW IS MADE IN awk, ONCE, not in the shell: `$(rnd)` runs in a SUBSHELL,
+# ⚠ THE DRAW IS MADE IN awk, ONCE, not in the shell: `$(rnd)` runs in a SUBSHELL,
 # so an LCG kept in a shell variable never advances in the parent and every round
 # draws the same pattern -- a fuzz that runs 150 rounds of one case and says ok.
 # fields: BRE \t ERE(grep) \t ERE(sed) \t the six subject lines joined by | .
@@ -59,21 +59,21 @@ korerun() { LOVE_NO_IMAGE= "$m" kore "$@"; }
 awk -v seed="$seed" -v n="$rounds" '
 BEGIN {
   srand(seed)
-  # THE SEPARATOR IS `;` AND MAY NOT APPEAR IN AN ATOM. it was `|` here once,
+  # ⚠ THE SEPARATOR IS `;` AND MAY NOT APPEAR IN AN ATOM. it was `|` here once,
   # and BRE atoms carry `\|` -- so \(a\|b\) split into \(a\ and b\), the draw
   # emitted shapes no dialect has, and the lane spent its rounds on nonsense.
   nb = split("a;b;c;.;a*;.*;[ab];[^a];[a-c];b\\+;c\\?;\\(ab\\)*;\\(a\\|b\\);a\\|b;" \
              "b\\{2\\};a\\{1,2\\};[[:alpha:]];[[:digit:]];^;$;\\{2\\};\\+;*", B, ";")
   # the grep-ERE set carries the ragged shapes: ) and { as ink, a loose repeat dropped
   # NOTE: no apostrophes anywhere in this awk block -- it is single-quoted shell.
-  # AT MOST ONE bare repeat, and the draw puts it FIRST (see mkere below): GNU
+  # ⚠ AT MOST ONE bare repeat, and the draw puts it FIRST (see mkere below): GNU
   # stacks them into shapes POSIX calls undefined (a leading star-then-brace
   # matches only the empty text, for reasons no spec licenses) and
   # bug-compatibility with that is not a goal. one loose repeat IS drawn, because
   # "GNU drops it" is the documented edge our own parser leans on
   ng = split("a;b;c;.;a*;.*;[ab];[^a];[a-c];b+;c?;(ab)*;(a|b);a|b;b{2};a{1,2};" \
              "[[:alpha:]];[[:digit:]];^;$;);{", G, ";")
-  # `*` and `+` only. a LEADING `{2}` is left out because GNU is not
+  # ⚠ `*` and `+` only. a LEADING `{2}` is left out because GNU is not
   # self-consistent about it: `-E {2}` alone behaves as the empty pattern (every
   # line), but `-E {2}a` does NOT behave as `a`. POSIX calls the shape undefined,
   # nothing in this tree writes it, and we drop the whole interval (see re.l).

@@ -14,7 +14,7 @@
 #              said to be wrong. It is also the cheapest differential apps/kore/
 #              has: three independent implementations of the same POSIX text, which
 #              will disagree with us in different places if we are wrong and in none
-#              if we are right. LC_ALL=C throughout -- sort and tr have a locale,
+#              if we are right. ⚠ LC_ALL=C throughout -- sort and tr have a locale,
 #              and without it GNU collates differently from the other three and
 #              every row reads as a divergence.
 #   start   -- the fixed price of one invocation. love loads an image and wakes a
@@ -36,14 +36,14 @@
 #              bad exponent; this table is what tells them apart, and an exponent
 #              is the defect that keeps growing after the machine gets faster.
 #
-# NEVER READ A WORK ROW ALONE. The nif-backed rows (md5sum, sha256sum, cksum) are
+# ⚠ NEVER READ A WORK ROW ALONE. The nif-backed rows (md5sum, sha256sum, cksum) are
 # the floor: their inner loop is the same C in every lane, so whatever ratio they
 # show is love's own per-invocation and per-byte overhead and NOT the applet's
 # algorithm. A row at the md5sum ratio is as fast as this tree can currently make
 # it; a row well above it is the applet's own, and the scaling table says whether
 # that is a constant or an exponent.
 #
-# EVERY TIMED RUN IS UNDER A TIMEOUT (default 60 s). A pathology need not
+# ⚠ EVERY TIMED RUN IS UNDER A TIMEOUT (default 60 s). A pathology need not
 # terminate -- catastrophic backtracking is the one here that will not -- so a cell
 # reading `to` is a result and not a harness failure.
 #
@@ -55,7 +55,7 @@
 #   samples  timed runs per cell, median reported (default 3)
 # env:
 #   LOVE=path   the binary under test (default ../out/love)
-#   TIMEOUT=n   per-run wall-clock cutoff, seconds (default 60). not tight: the
+#   TIMEOUT=n   per-run wall-clock cutoff, seconds (default 60). ⚠ not tight: the
 #               rows here are chosen to be slow, and a cutoff that catches one of
 #               them turns a NUMBER worth recording into an unreadable `to`.
 #   SCALE=n     the LARGEST scaling size in MB; the table reads n/4, n/2, n
@@ -269,7 +269,7 @@ answer tr-bin  "$W/c.binary"    tr a-z A-Z
 echo
 
 # ---------------------------------------------------------------- timing floor
-# EXIT 1 IS A TIMED RESULT, not a failure. grep answers 1 for "no match" and cmp
+# ⚠ EXIT 1 IS A TIMED RESULT, not a failure. grep answers 1 for "no match" and cmp
 # for "differ" -- and the two rows here that matter most (the long-line grep, and
 # the backtracker, which no lane matches) both end that way. Reading 1 as dnf blanks
 # exactly the cells the shapes table was built to show. 124 is the timeout, and
@@ -286,7 +286,7 @@ run_to() {   # run "$@" under the timeout, stdout dropped; echoes ms or to/dnf
   [ "$rc" -gt 1 ] && { echo dnf; return; }
   echo $(( (e - s) / 1000000 ))
 }
-# the median has to survive a SHORT list. A `to` or `dnf` ends the sampling, so
+# ⚠ the median has to survive a SHORT list. A `to` or `dnf` ends the sampling, so
 # the awk sees one line where it expected SAMPLES -- and an `NR == (n+1)/2` picked
 # off the sample count then matches nothing and the cell comes out EMPTY, which
 # reads on the page as a tool that was never run rather than as one that failed.
@@ -346,7 +346,7 @@ emit() {   # emit ROW LANE MS -- the machine-readable half, for the page
 [ -n "$RAW" ] && : > "$RAW"
 
 # ---------------------------------------------------------------- start
-# THE ONE ROW THAT IS NOT ABOUT AN APPLET. `true` does nothing, so what is timed
+# ⚠ THE ONE ROW THAT IS NOT ABOUT AN APPLET. `true` does nothing, so what is timed
 # is exec plus whatever the binary does before it looks at its arguments -- for
 # love, the image load and the heap. Every row below carries this same constant,
 # which is why the work corpus is megabytes: on a small input this number IS the
@@ -497,7 +497,7 @@ done
 echo; echo
 
 # ---------------------------------------------------------------- shapes
-# THE TABLE THIS SCRIPT EXISTS FOR. Each corpus is 1 MB (the backtracker is 41
+# ⚠ THE TABLE THIS SCRIPT EXISTS FOR. Each corpus is 1 MB (the backtracker is 41
 # bytes), so a cell far above its own row in the work table is not bytes -- it is
 # the shape. A `to` is a result: the tool did not finish inside the timeout.
 echo "== shapes, ms on 1 MB of adversarial input (ratio is kore/lane) =="
@@ -561,7 +561,7 @@ echo; echo
 # a reading of one implementation's exponent, and the other lanes are all linear on
 # every row here by construction.
 #
-# THE START COST IS SUBTRACTED before the ratio is taken. love pays ~30 ms to
+# ⚠ THE START COST IS SUBTRACTED before the ratio is taken. love pays ~30 ms to
 # wake before it reads a byte; leaving that in makes every row look sublinear at
 # these sizes, which is precisely the reading that would hide a quadratic one.
 #
@@ -587,7 +587,7 @@ slope() {   # slope LABEL T1 T2 T4 -- the row, and the reading of t(4n)/t(n)
   lbl=$1; a=$2; b=$3; c=$4
   printf '%-16s%10s%10s%10s' "$lbl" "$a" "$b" "$c"
   case "$a$b$c" in *to*|*dnf*) printf '%10s   %s\n' "-" "did not finish"; return ;; esac
-  # the floor is not fussiness. With start subtracted, a row costing 7 ms of real
+  # ⚠ the floor is not fussiness. With start subtracted, a row costing 7 ms of real
   # work at the small size divides two numbers that are each mostly timer noise, and
   # the quotient lands anywhere -- `wc -l` read as 8.3x QUADRATIC on the first fill
   # this way, and it is linear. A slope needs both ends clear of the noise before it

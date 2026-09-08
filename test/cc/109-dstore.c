@@ -10,7 +10,7 @@
  * the value stores from wherever it sits) guarded against a float TARGET and
  * never looked at the float SOURCE.
  *
- * WHY IT SURVIVED THIS LONG: the DECLARING form was always right.
+ * ⚠ WHY IT SURVIVED THIS LONG: the DECLARING form was always right.
  * `long v = d;` goes through cgdecl's own store, which converts. only the
  * separated assignment was broken -- and the declaring form is the one everybody
  * writes, so the whole corpus, the 108-program battery and every gate stayed
@@ -42,7 +42,7 @@ int main(void)
 {
 	int r = 0;
 
-	/* THE CASE THAT WAS BROKEN: a separated assignment, every width */
+	/* ⚠ THE CASE THAT WAS BROKEN: a separated assignment, every width */
 	r += asn_long(3.75) == 3L;
 	r += asn_ulong(3.75) == 3UL;
 	r += asn_int(3.75) == 3;

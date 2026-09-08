@@ -3,7 +3,7 @@
 # not a gate of its own: test/gate/kore.sh calls it, and it is here as one file
 # because the matrix is the test and a matrix reads badly inlined.
 #
-# LC_ALL=C on BOTH sides. GNU's default collation ignores punctuation and case,
+# ⚠ LC_ALL=C on BOTH sides. GNU's default collation ignores punctuation and case,
 # ours is byte order, and without this every row disagrees for a reason that has
 # nothing to do with the code.
 set -u

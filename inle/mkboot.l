@@ -111,7 +111,7 @@
      ;; described twice, and NX on the second description is the whole reason the
      ;; hhdm exists. one bit at the top of the walk covers every page under it, and
      ;; the hhdm is how the kernel reaches ram (kboot.hhdm), so heap and every page
-     ;; it hands out stop being executable without a second table. the identity
+     ;; it hands out stop being executable without a second table. ⚠ the identity
      ;; window keeps X: the kernel image and the framebuffer are read through it.
      + [(i32 (i-edi-sym 'pml4 0)) (i32 (i-eax-sym 'pdpt_id 3))
         (i32 i-st-edi0) (i32 (i-st-edi (256 * 8)))
@@ -122,7 +122,7 @@
         (i32 (i-eax-sym 'pml4 0)) (i32 (i-stcr 3))
         (i32 (i-ecx-imm 0xC0000080)) (i32 i-rdmsr)                  ; EFER
         (i32 (i-or-eax 0x900)) (i32 i-wrmsr)                          ; LME | NXE
-         ; NXE before PG: with it clear, bit 63 of a table entry is RESERVED, and
+         ; ⚠ NXE before PG: with it clear, bit 63 of a table entry is RESERVED, and
          ; the first walk after paging comes on faults instead of honouring the NX.
         (i32 (i-ldcr 0)) (i32 (i-or-eax 0x80000001)) (i32 (i-stcr 0))]    ; PG | PE
      + [(i32 (i-ljmp 'pvh64 0))]
@@ -210,7 +210,7 @@
         ['li 'r2 (a-gig + 0x40000000)] ['st 'r1 16 'r2]
         ['li 'r2 (a-gig + 0x80000000)] ['st 'r1 24 'r2]]
      ;; the L0s: the same L1 under both -- identity for the kernel to run in,
-     ;; the hhdm for reaching ram by physical address. the XN pair rides the
+     ;; the hhdm for reaching ram by physical address. ⚠ the XN pair rides the
      ;; hhdm descriptor ALONE, which is the whole reason the second window is
      ;; worth its entry: one bit at the top of the walk covers every page under
      ;; it, so the heap and every page it hands out stop being executable

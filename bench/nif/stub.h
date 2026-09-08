@@ -11,7 +11,7 @@
  * they exist so the object LINKS, which is why every body is a stub and why a
  * stub answering nonsense is harmless.
  *
- * include this AFTER the nif source. the types are love.h's and the
+ * ⚠ include this AFTER the nif source. the types are love.h's and the
  * declarations are love.h's; this only lays the bodies. */
 #ifndef NIF_STUB_H
 #define NIF_STUB_H

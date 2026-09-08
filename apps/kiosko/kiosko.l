@@ -183,7 +183,7 @@
 ; --- what a file is ------------------------------------------------------------------
 (: types '(("html" "text/html; charset=utf-8") ("htm" "text/html; charset=utf-8")
            ("css" "text/css; charset=utf-8")   ("js" "text/javascript; charset=utf-8")
-           ; a module is REFUSED on a non-js type, so .mjs owes a row of its own
+           ; ⚠ a module is REFUSED on a non-js type, so .mjs owes a row of its own
            ("mjs" "text/javascript; charset=utf-8")
            ("json" "application/json")         ("txt" "text/plain; charset=utf-8")
            ("md" "text/plain; charset=utf-8")  ("xml" "application/xml")

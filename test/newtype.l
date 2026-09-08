@@ -92,7 +92,7 @@
     (-4 = +(sm [1 -5]))      ; mode absent: the payload hom, signed, as ever
 
     ; --- rationals (///): a multi-field coin; +/*/=/show all work ---
-    ; this die is the one coin that is a NUMBER: cmp_rank seats it in the number
+    ; ⚠ this die is the one coin that is a NUMBER: cmp_rank seats it in the number
     ; band by value, so its order, its sort and its `=` all read the value and not
     ; the representation. every other coin below stays an opaque newtype.
     (5 /// 6 = 1 /// 2 + 1 /// 3)    ; 1/2 + 1/3 = 5/6
@@ -115,7 +115,7 @@
     !(1 /// 2 = 1)  !(1 /// 1 = 2)
     (member? (1 /// 1) [1 2 3])  !(member? (9 /// 1) [1 2 3])
     ([0 (1 /// 1) 2] = sort [2 (1 /// 1) 0])
-    ; exact, never through a double: these two differ by a part f64 has no room
+    ; ⚠ exact, never through a double: these two differ by a part f64 has no room
     ; for, and the quotient of the second rounds to exactly 1.0
     (: h (2 3 40)  (!(1 /// h = 1 /// (h + 1)) && !((h + 1) /// h = 1.0)))
     ; ..and the promotion is the ratio die's alone: an ordinary newtype is opaque,

@@ -1,7 +1,7 @@
 ; bench/ccdead.l -- how much of each lane's libc the binary can never reach.
 ;
 ;   love bench/ccdead.l            (after ./ccbench.sh, or `make ccbench`)
-;   love bench/ccdead.l ELF ..     (no own-object split, so every text symbol
+;   love bench/ccdead.l ELF ..     (⚠ no own-object split, so every text symbol
 ;                                        reads as libc -- see the caveat below)
 ;
 ; ccsize.sh answers how many libc bytes a lane ships. This answers how many it can call,
@@ -20,7 +20,7 @@
 ; link-time alternates, a public entry riding along with the object-mate that is used), so
 ; it is the floor a libc built for static linking still cannot get under.
 ;
-; this reports the LIBC column only, but love's OWN C is worth asking about too, and the
+; ⚠ this reports the LIBC column only, but love's OWN C is worth asking about too, and the
 ; natives are the control that makes the answer readable: mooncc leaves 6.4% of its own
 ; text unreachable against gcc's 2.6% and clang's 1.7%. The excess is not this scan missing
 ; a dispatch table -- all three lanes run the same tables -- it is that MOONCC INLINES

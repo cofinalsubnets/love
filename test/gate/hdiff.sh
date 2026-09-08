@@ -15,7 +15,7 @@
 #      either -- it reads the binary mooncc built, sounding our own rule against our own
 #      output. A foreign cc compiling the same file is the only instrument that has.
 #
-# ai_tco=1 IS THE POINT. at tco=0 ai_musttail expands to nothing and this proves nothing,
+# ⚠ ai_tco=1 IS THE POINT. at tco=0 ai_musttail expands to nothing and this proves nothing,
 # which is exactly why love0's clang lane never caught any of it.
 #
 # usage: hdiff.sh CC..
@@ -63,7 +63,7 @@ for cc in "$@"; do
 done
 
 rm -f "$mtc" "$mtc".o
-# the summary names what RAN. a line that says "gcc and clang" after skipping both
+# ⚠ the summary names what RAN. a line that says "gcc and clang" after skipping both
 # is the same silence this gate exists to end, one level up.
 [ -n "$ran" ] || { echo "test_hdiff: no cc here could run this lane -- nothing was proved"; exit 0; }
 echo "test_hdiff:$ran each build love, pass the host suite and tail-jump clean"

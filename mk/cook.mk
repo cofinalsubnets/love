@@ -7,7 +7,7 @@
 # captures stdout and waits -- passes straight through to make below.
 
 LOVE := out/love
-# cook reads the Makefile ITSELF, never a transpiled snapshot: a snapshot freezes the
+# ⚠ cook reads the Makefile ITSELF, never a transpiled snapshot: a snapshot freezes the
 # $(wildcard) lists at emit time, so it goes quietly stale the next time a source lands.
 COOK := $(LOVE) -l apps/cook.l -f Makefile
 

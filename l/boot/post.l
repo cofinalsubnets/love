@@ -1587,7 +1587,7 @@
                          (\ s i n (: j (sc s c i)          ; module binding, which bakes
                                      (j < 0 ? n j)))))])
    ; -- the budget, and the one shape that needs it -------------------------------
-   ; THIS ENGINE'S ONE UNBOUNDED INPUT. matching is greedy backtracking in
+   ; ⚠ THIS ENGINE'S ONE UNBOUNDED INPUT. matching is greedy backtracking in
    ; continuation style, so a repeat whose atom can match one span MORE THAN ONE WAY
    ; -- (a|aa)+ , (a*)* -- tries every split of a run and is exponential in its
    ; length: `grep -E '^(a|aa)+b$'` against forty a's does not finish. GNU builds an
@@ -1596,15 +1596,15 @@
    ; the budget is what this one can afford: a step count spent ONLY by the repeats
    ; that can nest, reset once per find, and a scare when it runs out. A pattern that
    ; says "too costly" out loud beats one that never comes back.
-   ; the cost lands on nothing else. `renests?` asks at COMPILE time, so an
+   ; ⚠ the cost lands on nothing else. `renests?` asks at COMPILE time, so an
    ; ordinary repeat -- [0-9]+, .*, a\{2,5\} -- compiles to the same rrepc it always
    ; did and its inner loop never reads the cell. `recomp`'s fourth word says whether
    ; a matcher spends the budget at all, so the drivers do not even reset it for one
    ; that cannot.
-   ; one cell, so a nested find (sed's s/// inside a walk that is itself matching)
+   ; ⚠ one cell, so a nested find (sed's s/// inside a walk that is itself matching)
    ; shares it. the reset is per top-level find and the only cost of sharing is an
    ; early "too costly" in a corner that is already pathological.
-   ; A FUNCTION, not `relimit 200000`. module 're is walked while post.l is itself
+   ; ⚠ A FUNCTION, not `relimit 200000`. module 're is walked while post.l is itself
    ; still loading, so a VALUE binding here is read before the letrec reaches it and
    ; love0's boot floods `;; missing relimit` -- while the built love, whose image
    ; already holds the module, is perfectly happy. A call defers, which is the same
@@ -1656,7 +1656,7 @@
                                  (try bs))))
           ; the budgeted twin is chosen HERE, once, off the atom's shape -- so a
           ; repeat that cannot nest is compiled to exactly the loop it always was
-          ; the counter is born HERE, in the closure, so it is one per ENTRY to this
+          ; ⚠ the counter is born HERE, in the closure, so it is one per ENTRY to this
           ; repeat -- per starting position for a top-level one -- and there is no
           ; module-level cell to bake, to reset per find, or to share with a nested
           ; match. A repeat inside another gets a fresh budget per outer step, which

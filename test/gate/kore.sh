@@ -26,7 +26,7 @@ korerun() { LOVE_NO_IMAGE= "$m" kore "$@"; }
 moonc() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 # the love and the out dir, spelled ABSOLUTELY: $m and $ho are relative (the root
 # Makefile sets R := .), and the checks that cd somewhere -- split's output directory,
-# patch's tree -- cannot use either. a `< $ho/p.diff` INSIDE a cd'd subshell opens
+# patch's tree -- cannot use either. ⚠ a `< $ho/p.diff` INSIDE a cd'd subshell opens
 # after the cd, so a relative one silently hands patch an empty stdin -- and both sides
 # then do nothing and match, which reads exactly like a pass.
 case $ho in /*) HO=$ho;; *) HO=$PWD/$ho;; esac
@@ -46,7 +46,7 @@ pipe() { n=$1; i=$2; shift 2
 # ------------------------------------------------------------------- the laws
 echo "UTILS apps/kore/{text,core,fs,re,sed,awk,expr,bc,less,find,diff,patch,law}.l"
 out=$ho/.test_kore.out
-# lush's job.l + glob.l ride along because find.l captures sh-match at its define
+# ⚠ lush's job.l + glob.l ride along because find.l captures sh-match at its define
 { cat test/00-init.l apps/kore/text.l apps/kore/u.l apps/kore/core.l apps/kore/fs.l apps/kore/re.l \
       apps/kore/sed.l apps/kore/awk.l apps/kore/expr.l apps/kore/bc.l apps/kore/proc.l apps/kore/less.l apps/libra/lint.l apps/vi/config.l apps/vi/hue.l \
       apps/vi/core.l apps/vi/vi.l apps/kore/diff.l apps/kore/patch.l apps/lush.l \
@@ -106,7 +106,7 @@ if [ "$(uname -m)" = x86_64 ]; then
   [ -s "$ho/.kore-crt0.o" ] || fail "kore ld: crt0 lay"
   moonc "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-mc.elf" >/dev/null 2>&1 || fail "kore ld: mooncc link"
   korerun ld "$ho/.kore-crt0.o" "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-ld.elf" || fail "kore ld"
-  # BYTE-IDENTICAL, and it is `.comment` that lets it be: both doors drive the SAME linker,
+  # ⚠ BYTE-IDENTICAL, and it is `.comment` that lets it be: both doors drive the SAME linker,
   # so the file they write is the same file, producer record included. It briefly was not --
   # mooncc stamped "mooncc" and kore ld stamped "holo", which shifted every header after it and
   # cost this check ten lines of objcopy to look past. The distinction carried nothing: one
@@ -138,7 +138,7 @@ if [ "$(uname -m)" = x86_64 ]; then
   # nm over holo's own ELF reader. the differential is against LC_ALL=C nm: the
   # BYTE order is ours, and a desk with a locale set gets a collated one from GNU,
   # so an uncollated `nm` here would fail on the machine and not in the tree.
-  # the executable is in the roster on purpose -- ld-read is ET_REL by contract
+  # ⚠ the executable is in the roster on purpose -- ld-read is ET_REL by contract
   # and ld-syms is the door that is not, so a regression that hands nm to ld-read
   # shows up here rather than the day someone reads a linked file.
   if command -v nm >/dev/null 2>&1; then
@@ -173,7 +173,7 @@ both "seq"      seq 5
 both "echo"     echo hi there
 both "basename" basename /a/b.txt .txt
 both "tac"      tac "$ho/.cu1" "$ho/.cu2"
-# the newline rides the line it FOLLOWED: a last line arriving without one comes
+# ⚠ the newline rides the line it FOLLOWED: a last line arriving without one comes
 # back FIRST without one, which is the whole of tac's shape and easy to get wrong
 printf 'x\ny' > "$ho/.cu3"
 both "tac no-nl" tac "$ho/.cu3"
@@ -190,7 +190,7 @@ awk 'BEGIN{for(i=0;i<40;i++){for(j=0;j<300;j++)printf "%09d-",j; print ""}}' > "
 dd if=/dev/zero bs=4096 count=1 2>/dev/null | tr '\0' 'x' > "$ho/.gs3"    # 4096, no newline
 printf 'abc' > "$ho/.gs4"                                                 # no newline at all
 : > "$ho/.gs5"                                                            # empty
-# wc counts a WORD as a maximal ink run, so one straddling a gulp is the seam that
+# ⚠ wc counts a WORD as a maximal ink run, so one straddling a gulp is the seam that
 # double-counts; and uniq's runs straddle too. Neither shows on the fixtures above,
 # which hold no spaces and no repeats.
 awk 'BEGIN{for(i=0;i<2000;i++)printf "word%d ", i%7; print ""}' > "$ho/.gs6"
@@ -208,7 +208,7 @@ for f in .gs1 .gs2 .gs3 .gs4 .gs5 .gs6 .gs7; do
 done
 korerun cat "$ho/.gs1" "$ho/.gs4" "$ho/.gs2" > "$o"; cat "$ho/.gs1" "$ho/.gs4" "$ho/.gs2" > "$g"
 cmp -s "$g" "$o" || fail "kore cat: operands joined across the seams"
-# sed JOINS its operands, so $ is the last line of the LAST file and an unterminated
+# ⚠ sed JOINS its operands, so $ is the last line of the LAST file and an unterminated
 # file in the MIDDLE keeps its newline -- both are lookahead, and both are invisible
 # on one operand. grep does not join: its numbers restart per file.
 for t in 'sed $d' 'sed $s/^/L/' "sed -n 2p" "sed 3q" "grep -n 000000002" "grep -c 0"; do
@@ -235,7 +235,7 @@ echo "kore: the gulp seams (a line past 4096, no final newline, empty, boundary-
 sh test/gate/sortcmp.sh "$K" || fail "kore sort: the flag matrix diverges from GNU"
 sh test/gate/lscmp.sh "$K"   || fail "kore ls: the flag matrix diverges from GNU"
 
-# THE BACKTRACKER'S CLIFF, and it is timed on purpose. `(a|aa)+` over a run of a's
+# ⚠ THE BACKTRACKER'S CLIFF, and it is timed on purpose. `(a|aa)+` over a run of a's
 # is exponential in this engine -- it tries every split -- and before the step budget
 # landed this line did not return AT ALL. What is gated is that it comes back, with
 # the status and the sentence: a `grep` that hangs on a pattern a person can type is a
@@ -305,7 +305,7 @@ pipe "expand -t 4" 'a	b
 '                  expand -t 4
 pipe "expand -i"   '	a	b
 '                  expand -i
-# a tab lands only where it saves at least TWO columns, so a lone space sitting on
+# ⚠ a tab lands only where it saves at least TWO columns, so a lone space sitting on
 # a stop stays a space -- the one rule the obvious implementation gets wrong
 pipe "unexpand"    '   	ab   cd
 '                  unexpand
@@ -439,7 +439,7 @@ for p in 'ab*c' '^x' 'z$' '[abx]b' '[^a]b' 'b\+' 'xb\?z' '\(zz\)*z' '.z' '^\+q' 
   korerun grep -c "$p" "$ho/.gr1" > "$o" 2>/dev/null; b=$?
   cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore grep BRE '$p' vs GNU"
 done
-# the ERE battery. THE RAGGED EDGES ARE THE POINT: a loose repeat is DROPPED in
+# the ERE battery. ⚠ THE RAGGED EDGES ARE THE POINT: a loose repeat is DROPPED in
 # ERE where BRE keeps it as ink, and an unclosed brace / stray ) are literals here
 # and malformed there -- all four read off GNU, none of them guessable
 for p in 'a|z' '(a|x)b' 'a{2}' 'z{2,}' 'z{1,2}' '[[:digit:]]+' 'a+' 'ab?c' '(a|b)+' \
@@ -453,7 +453,7 @@ done
 # a walk that reads only whole words takes `-qF` for a pattern and passes every
 # single-flag test while doing it
 printf 'abc\nxbz\nzzz\n+q\n*r\nFoo Bar\nab_cd\nx{2}y\na1b2\n' > "$ho/.gr3"
-# set -f FIRST: the word split below is deliberate, the PATHNAME EXPANSION that
+# ⚠ set -f FIRST: the word split below is deliberate, the PATHNAME EXPANSION that
 # rides along with it is not -- `[a-z]*` and `*r` are globs, and an unguarded split
 # hands grep whatever files happen to sit in the cwd instead of the pattern
 set -f
@@ -467,7 +467,7 @@ for fl in '-c b' '-i FOO' '-i foo' '-w ab' '-w abc' '-x zzz' '-x zz' \
   korerun grep "$@" "$ho/.gr3" > "$o" 2>/dev/null; b=$?
   cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore grep flags '$fl' vs GNU"
 done
-# THE EMPTY PATTERN IS ITS OWN ROW. `set -- $fl` word-splits, so an empty word cannot
+# ⚠ THE EMPTY PATTERN IS ITS OWN ROW. `set -- $fl` word-splits, so an empty word cannot
 # ride that list at all: the `-x ` and `-o ` rows above were really `grep -x FILE`, a
 # pattern and NO file -- which reads STDIN, and hangs any run whose stdin is a pipe
 # instead of a terminal. Both sides hung or both saw EOF, so it passed while proving
@@ -516,7 +516,7 @@ same "sed -e stacking"
 sed -ne 2p "$ho/.sd1" > "$g"; korerun sed -ne 2p "$ho/.sd1" > "$o"; same "sed -ne clustered"
 sed -e 's/a/1/' -e 's/b/2/' "$ho/.sd1" > "$g"
 korerun sed -e 's/a/1/' -e 's/b/2/' "$ho/.sd1" > "$o"; same "sed -e twice"
-# -i IS A DIFFERENT STREAM MODEL, not just a different sink: each file is its own
+# ⚠ -i IS A DIFFERENT STREAM MODEL, not just a different sink: each file is its own
 # stream, so line numbers restart and $ is per-file. TWO files is the only test that
 # can tell that from the joined lane -- with one file the two models agree
 for t in 's/b/X/g' '1d' '$d' 's/[[:digit:]]/#/g'; do
@@ -543,7 +543,7 @@ printf 'a\n' | korerun sed 's/a' > /dev/null 2>&1; b=$?
 sed p "$ho/.sd-nope" "$ho/.sd1" > "$g" 2>&1; a=$?
 korerun sed p "$ho/.sd-nope" "$ho/.sd1" > "$o" 2>&1; b=$?
 cmp -s "$g" "$o" && [ $a -eq 2 ] && [ $b -eq 2 ] || fail "kore sed missing file vs GNU"
-# A MISSING FINAL NEWLINE IS DATA. GNU drops it after the LAST WRITE and not after
+# ⚠ A MISSING FINAL NEWLINE IS DATA. GNU drops it after the LAST WRITE and not after
 # every one, so `-n 'p;p'` keeps the inner newline and loses only the outer -- which is
 # why the line rides a jug rather than a per-write flag. The whole line lane answers to
 # this: sed, rev and the two clips (head that CUT before the last line does not).
@@ -594,7 +594,7 @@ sleep 3 & sp=$!
 korerun kill -9 $sp || fail "kore kill send"
 wait $sp; r=$?; [ $r -eq 137 ] || fail "kore kill effect (rc $r)"
 korerun kill -0 999999 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore kill dead pid (rc $r)"
-# printenv and the three one-line answers. `arch` is not a program on every distro
+# printenv and the three one-line answers. ⚠ `arch` is not a program on every distro
 # (Arch ships none), so uname -m is its oracle -- and nproc's is --all: nothing here
 # reads an affinity mask, so the count is the machine's and not this process's
 [ "$(KAUP=7 korerun printenv KAUP)" = 7 ] || fail "kore printenv"
@@ -613,12 +613,12 @@ korerun printenv | grep -v '^_=' | LC_ALL=C sort > "$o"; same "printenv print"
 echo "kore: process tools (env/printenv/sleep/kill/xargs/whoami/groups/arch/nproc) ok"
 
 # --------------------------------------------------------- the /proc family
-# NOT byte-for-byte, and it cannot be: the process table moves between two runs and
+# ⚠ NOT byte-for-byte, and it cannot be: the process table moves between two runs and
 # every number these read is a clock. The PARSERS are lawed above (ustatf, uclk, utty,
 # uupsay); what is asked here is that the FACES agree with procps about the machine
 # they are both looking at -- the header they print, a process we made ourselves, and
 # a number that has to come out of /proc/meminfo.
-# the victim is a COPY of sleep under our own name: `killall sleep` on a shared box
+# ⚠ the victim is a COPY of sleep under our own name: `killall sleep` on a shared box
 # would reach into somebody else's build, and this gate has no business doing that.
 nap=$ho/.kore-nap
 cp "$(command -v sleep)" "$nap" 2>/dev/null && chmod 755 "$nap"
@@ -651,7 +651,7 @@ korerun pidof nosuchprocess > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore p
 mt=$(awk '/^MemTotal:/{print $2}' /proc/meminfo)
 [ "$(korerun free | awk 'NR==2{print $2}')" = "$mt" ] || fail "kore free total vs /proc/meminfo"
 [ "$(korerun free -m | awk 'NR==2{print $2}')" = "$((mt / 1024))" ] || fail "kore free -m"
-# no `N users` clause: it comes out of utmp, which this tree does not keep
+# ⚠ no `N users` clause: it comes out of utmp, which this tree does not keep
 korerun uptime | grep -qE '^ [0-9][0-9]:[0-9][0-9]:[0-9][0-9] up .*load average: [0-9]' \
   || fail "kore uptime shape"
 korerun uptime | grep -q users && fail "kore uptime invented a user count"
@@ -785,7 +785,7 @@ same "awk -f"
 echo "kore: awk (41 checks byte-identical to gawk, the exit code, -f, the refusal) ok"
 
 # ------------------------------------------------------------------ find
-# THE ORDER IS SORTED ON BOTH SIDES. find hands out readdir order, which is the
+# ⚠ THE ORDER IS SORTED ON BOTH SIDES. find hands out readdir order, which is the
 # file system's business and repeats for nobody; ours sorts each directory on
 # purpose (a build wants the same tree to cut the same image twice), so the only
 # honest comparison is of the SETS. everything else here is byte-identical.
@@ -836,7 +836,7 @@ printf 'a\nb\nc\n' > "$rt/p1"; printf '1\n2\n' > "$rt/p2"; printf 'X\nY\nZ\nW\n'
 both "paste"       paste "$rt/p1" "$rt/p2"
 both "paste 3"     paste "$rt/p1" "$rt/p2" "$rt/p3"
 both "paste -d"    paste -d: "$rt/p1" "$rt/p3"
-# the delimiter LIST cycles per gap and starts over each row -- a two-delimiter
+# ⚠ the delimiter LIST cycles per gap and starts over each row -- a two-delimiter
 # list over three columns is the only shape that can tell that from "the first one"
 both "paste -d2"   paste -d':|' "$rt/p1" "$rt/p2" "$rt/p3"
 both "paste -s"    paste -s "$rt/p1" "$rt/p2"
@@ -858,7 +858,7 @@ both "join -t:"     join -t: "$rt/j3" "$rt/j4"
 both "join -t: -a1" join -t: -a 1 "$rt/j3" "$rt/j4"
 both "join -1 -2"   join -1 2 -2 1 "$rt/j1" "$rt/j2"
 both "join blanks"  join "$rt/j5" "$rt/j6"
-# a key repeated on BOTH sides is the whole cross product, in file-1-outer order
+# ⚠ a key repeated on BOTH sides is the whole cross product, in file-1-outer order
 both "join cross"   join "$rt/j1" "$rt/j1"
 # split writes files and says nothing: the pieces are the comparison
 seq 1 25 > "$rt/sq"; printf 'a\nb' > "$rt/nonl"; : > "$rt/none"
@@ -889,7 +889,7 @@ done
 both "od -An -tx1"  od -An -tx1 "$rt/o1"
 both "od two files" od -c "$rt/o1" "$rt/oesc"
 both "od -Ax -to2"  od -Ax -to2 "$rt/o1"
-# od READS its operands now, a row at a time off a joined stream, so a row that
+# ⚠ od READS its operands now, a row at a time off a joined stream, so a row that
 # spans a 4096-byte gulp, a -j that skips past one, and a `*` run that crosses one
 # are all new seams -- and every fixture above is under fifty bytes.
 awk 'BEGIN{for(i=0;i<1300;i++)printf "0123456789abcdef"}' > "$rt/obig"   # 20800, all dup
@@ -968,7 +968,7 @@ printf '%s  a\n' 000000000000000000000000000000000000000000000000000000000000000
 ( cd "$ck" && LOVE_NO_IMAGE= "$K" kore sha256sum -c bad ) > "$o" 2>/dev/null; ro=$?
 same "sha256sum -c mismatch"
 [ "$rg" -eq 1 ] && [ "$ro" -eq 1 ] || fail "sha256sum -c mismatch exit ($rg vs $ro)"
-# A DIRECTORY OPENS AND SLURPS EMPTY, so an unguarded digest of one is the digest of
+# ⚠ A DIRECTORY OPENS AND SLURPS EMPTY, so an unguarded digest of one is the digest of
 # nothing -- a plausible number, which is worse than none. GNU refuses it and so do we.
 mkdir -p "$ck/dir"
 for t in cksum md5sum sha256sum; do
@@ -980,7 +980,7 @@ done
 echo "kore: checksums (cksum/md5sum/sha256sum GNU-identical over the block boundaries, -c both ways round) ok"
 
 # ------------------------------------------------------------------- expr
-# EXPR SPEAKS IN THE EXIT CODE as much as on stdout (0 the answer is neither ""
+# ⚠ EXPR SPEAKS IN THE EXIT CODE as much as on stdout (0 the answer is neither ""
 # nor "0", 1 it is, 2 the expression will not do), so `both` comparing both is the
 # whole check. the arithmetic ones are here because C's TRUNCATING division and
 # love's FLOORING // disagree on every negative pair.
@@ -1009,7 +1009,7 @@ echo "kore: expr (36 expressions + the groups, stdout AND the 0/1/2 exit, GNU-id
 # the check. every digit under it is exact (a number is an integer over a power of
 # ten, in love's own bigints), which is why the math library can be asked for the
 # same bytes GNU prints rather than for a tolerance.
-# THE LIBRARY IS ASKED AT SCALE 10 AND UP. below that the two part company on 29
+# ⚠ THE LIBRARY IS ASKED AT SCALE 10 AND UP. below that the two part company on 29
 # of 735 sampled calls, every one of them a place where GNU's series has run out of
 # guard digits and ours has not -- ours is the correctly truncated value each time
 # (checked against GNU's own answer at scale 40), so agreeing there would be wrong.
@@ -1263,7 +1263,7 @@ printf '' | korerun bc "$ho/.kore-bc-nope" > /dev/null 2>&1; b=$?
 echo "kore: bc (the scale rules, the bases both ways, the language, the wrap, -l, GNU-identical) ok"
 
 # ------------------------------------------------- stat, du, date, id, mktemp, chown
-# TZ=UTC: this love has no tz database (localtime IS gmtime), so `date` and stat's
+# ⚠ TZ=UTC: this love has no tz database (localtime IS gmtime), so `date` and stat's
 # %y are UTC and only UTC. GNU reads TZ, so the oracle has to be told.
 export TZ=UTC
 dt=$ho/.kore-dt
@@ -1277,7 +1277,7 @@ for f in '%n' '%s' '%a' '%A' '%F' '%u' '%U' '%g' '%G' '%h' '%i' '%Y' '%b' '%B' '
   both "stat -c $f" stat -c "$f" "$dt/f1"
 done
 both "stat dir"      stat -c '%n %F %A %a' "$dt/a"
-# the bare face does NOT follow a link and -L does -- one stat call apart, and the
+# ⚠ the bare face does NOT follow a link and -L does -- one stat call apart, and the
 # only check that can tell lstat from stat at all
 both "stat link"     stat -c '%n %F %A' "$dt/lk"
 both "stat -L link"  stat -L -c '%n %F %A' "$dt/lk"
@@ -1352,7 +1352,7 @@ korerun chown nosuchuser000 "$dt/f1" 2>/dev/null; r=$?
 echo "kore: stat/du/date/id/mktemp/chown (GNU-identical, the tree sums, the UTC clock) ok"
 
 # ------------------------------------------------------------------ patch
-# THE ORACLE IS THE TREE, not the message. GNU patch's chatter has moved between
+# ⚠ THE ORACLE IS THE TREE, not the message. GNU patch's chatter has moved between
 # releases; what has not is what it leaves on disk, so every check here runs GNU
 # and ours over two identical copies and requires the copies to still match.
 pw=$HO/.kore-pw
@@ -1386,7 +1386,7 @@ diff -r "$pw/g" "$pw/o" > /dev/null 2>&1 && [ $a -eq $b ] || fail "kore patch (n
 pset; printf 'x\ny\nz\n' > "$pw/new"
 ( cd "$pw" && diff -u /dev/null new | sed -e '2s|^+++ new.*|+++ b/sub/new.txt|' ) > "$pw/p.diff"
 prun "creates a file" -p1
-# the missing final newline, BOTH directions -- the `\ No newline` line carries no
+# ⚠ the missing final newline, BOTH directions -- the `\ No newline` line carries no
 # count of its own, so the one closing a hunk arrives after the counts are spent
 pset; printf 'a\nb\nc' > "$pw/base"
 cp "$pw/base" "$pw/g/sub/f.txt"; cp "$pw/base" "$pw/o/sub/f.txt"
@@ -1422,7 +1422,7 @@ for s in g o; do printf 'nope\nnope\nnope\nnope\nnope\nnope\nnope\nnope\n' > "$p
   && [ -f "$pw/o/sub/f.txt.rej" ] && [ -f "$pw/o/sub/f.txt.orig" ] \
   || fail "kore patch reject (gnu $a ours $b)"
 cmp -s "$pw/g/sub/f.txt.rej" "$pw/o/sub/f.txt.rej" || fail "kore patch .rej vs GNU"
-# the .orig is the file AS IT WAS, which here is the unrelated one -- so the reject
+# ⚠ the .orig is the file AS IT WAS, which here is the unrelated one -- so the reject
 # is re-applied to the tree the patch was cut against, and that is the real claim: a
 # .rej we wrote is a patch our own reader takes back.
 cp "$pw/base" "$pw/o/sub/f.txt"
@@ -1466,7 +1466,7 @@ tail -1 "$o"
 # a caller staying in the image lives through a tool that fails -- the property the
 # seat hides, since the seat quits with the answer. one image, four tools whose
 # statuses are 1, 2 (a udie from deep inside), 0 and 0: the run must reach the last
-# say, and the charms must be exactly those. nothing else here can catch this: a
+# say, and the charms must be exactly those. ⚠ nothing else here can catch this: a
 # regression to `quit` still passes every check above.
 LOVE_NO_IMAGE= "$m" -e '(: _ (borrow (name "kore")) a (kore-main (list "kore" "false"))
                                     b (kore-main (list "kore" "basename"))

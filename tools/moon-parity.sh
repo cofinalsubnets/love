@@ -22,15 +22,15 @@
 # not a grep for __aeabi_ -- so it catches an x64 or rv64 lane reaching for
 # libgcc's own spellings (__divti3, __muldc3) as readily as arm's.
 #
-# NO FOREIGN TOOL: the symbols come from `kore nm -u`, which is holo's ELF reader
+# ⚠ NO FOREIGN TOOL: the symbols come from `kore nm -u`, which is holo's ELF reader
 # (l/holo/link.l's ld-syms) behind nm's surface -- one wake over every object the
 # sweep laid, not one readelf per cell. Everything this script needs, the tree built.
 #
-# A cell is a COMPILE, not a run. `ok` means the lane exists, never that it is
+# ⚠ A cell is a COMPILE, not a run. `ok` means the lane exists, never that it is
 # right -- test_cts and the cross gates are what say that. Read this table for the
 # SHAPE of the coverage and go elsewhere for its depth.
 #
-# thumb2 and thumb2sp get their own columns, and the reason is one row: thumb2sp
+# ⚠ thumb2 and thumb2sp get their own columns, and the reason is one row: thumb2sp
 # is ARMv7E-M with an SP-only FPU (the Playdate's STM32F746), so f64 softens to
 # __aeabi_* where thumb2's fpv5-d16 does it in hardware. A merged t32 column hides
 # exactly that, which is how the hand-written table got it wrong.
@@ -42,7 +42,7 @@
 set -e
 
 # mooncc and kore are love's own verbs (the layered bake); MOONCC/KORE still override.
-# `env`, not a bare assignment prefix: $mc expands AFTER assignment-recognition, so a
+# ⚠ `env`, not a bare assignment prefix: $mc expands AFTER assignment-recognition, so a
 # literal `LOVE_NO_IMAGE=` in the expansion would run as a command name.
 love=${LOVE:-out/love}
 mc=${MOONCC:-env LOVE_NO_IMAGE= $love mooncc}

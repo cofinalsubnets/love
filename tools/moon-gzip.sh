@@ -19,14 +19,14 @@
 # under dl/ then under $MOONSRC (~/src when unset). An explicit GZIPSRC= still
 # outranks both, and a missing tree is a clean SKIP rather than a failure.
 #
-# configure is not load-bearing here: DEFS is three macros this script passes
+# ⚠ configure is not load-bearing here: DEFS is three macros this script passes
 # anyway, so an UNconfigured tree builds too. It stays the witness because it is
 # the one file that says the tree was prepared.
 #
 # THREE TARGETS, one procedure (raw.sh's shape): `moon-gzip.sh a64` cross
 # compiles and runs under qemu, SKIPPING cleanly without it.
 #
-# THE ONE APP-SIDE EDIT, and it is a real 64-bit portability bug in gzip, not
+# ⚠ THE ONE APP-SIDE EDIT, and it is a real 64-bit portability bug in gzip, not
 # a mooncc gap: gzip.c calls `ctime` with no declaration in scope. On the 32-bit
 # machines of 1993 the implicit `int` return was the same width as the pointer;
 # on x86-64 it TRUNCATES the returned char*. We prepend `#include <time.h>` to a
@@ -97,7 +97,7 @@ for b in $SRC; do
   objs="$objs $d/$b.o"
 done
 
-# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). NO moonlibc
+# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO moonlibc
 # object -- the link owes its symbols and the driver's runtime table pulls
 # apps/moon/lib/moonlibc/ MEMBER BY NEED (the Makefile says the same thing about love
 # itself). Naming an object would take every member instead.

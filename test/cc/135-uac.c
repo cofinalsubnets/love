@@ -12,7 +12,7 @@
  *   2. the constant strength-reduction lane fired on "either operand unsigned"
  *      AND a power-of-two divisor, turning a signed divide into a LOGICAL shift.
  *
- * SQLITE IS WHERE THIS SURFACED, and the path is worth keeping because nothing
+ * ⚠ SQLITE IS WHERE THIS SURFACED, and the path is worth keeping because nothing
  * smaller reached it: LARGEST_INT64 is spelled with that exact `|`, so
  * SMALLEST_INT64 is `(i64)-1 - LARGEST_INT64`, and sqlite3MulInt64's overflow
  * guard divides it by the multiplier. Reading INT64_MIN/2 as positive made EVERY
@@ -20,7 +20,7 @@
  * `SELECT 4294967296*2` answered `8589934592.0` where every other sqlite in the
  * world answers the integer `8589934592`.
  *
- * the power-of-two divisor is what makes this nasty: /3u was always right, /2u
+ * ⚠ the power-of-two divisor is what makes this nasty: /3u was always right, /2u
  * and /4u were wrong, so the shape that looks safest is the one that broke. */
 #include <stdio.h>
 
@@ -71,7 +71,7 @@ int main(void)
 	 * not make the result unsigned. 3 is not a power of two, so this is the
 	 * general divide, not the reduction lane. */
 	if ((((i64)-8) | 0u) / (i64)3 != -2) bad += 512;
-	/* and the rule cuts BOTH ways: because the common type is signed long
+	/* ⚠ and the rule cuts BOTH ways: because the common type is signed long
 	 * long, `~0u` widens to +4294967295 rather than sign-extending, so this
 	 * masks off the high word. -8 is the wrong answer here, 4294967288 the
 	 * right one -- the same rank rule, read in the other direction. */
@@ -88,7 +88,7 @@ int main(void)
 	printf("%d %lld %lld %lld %lld\n", bad, LARGEST_INT64, SMALLEST_INT64,
 	       SMALLEST_INT64 / (i64)2, prod);
 	printf("%lld %lld %lld\n", neg / 2u, n12 / 4u, (((i64)-8) | 0u) / (i64)3);
-	/* NOT `return bad` -- an exit code is taken mod 256, and the first four
+	/* ⚠ NOT `return bad` -- an exit code is taken mod 256, and the first four
 	 * failures here sum past it (8192 would exit 0). The printed line is what
 	 * the differential compares; the status only has to be nonzero. */
 	return bad ? 1 : 0;

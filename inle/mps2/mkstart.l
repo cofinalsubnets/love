@@ -3,7 +3,7 @@
 ; and even it is holo IR, not foreign asm -- inle/virt/mkstart.l's shape at thumb2.
 ;
 ; the M7 boots from the vectors at 0: word 0 is the initial SP, word 1 the reset
-; entry, then NMI..SysTick. so the table LEADS this object's .text and this object
+; entry, then NMI..SysTick. ⚠ so the table LEADS this object's .text and this object
 ; leads the link -- address 0 is where the core looks, and the core is what places it,
 ; not a section name a linker script hunts for. it is read-only data sitting in the
 ; executable lane, which is what address 0 is.
@@ -17,13 +17,13 @@
 ; size is its own business and need not be a multiple of four, and a few thousand
 ; iterations at boot cost nothing next to getting the tail wrong.
 ;
-; every vector is an ADDRESS CARRYING THE THUMB BIT, and it is the object's FUNC
+; ⚠ every vector is an ADDRESS CARRYING THE THUMB BIT, and it is the object's FUNC
 ; symbols that carry it (obj.l sets bit 0 on every one) -- so the fixups here take
 ; addend 0 where the old .S wrote `_start+1`. Both land on the same byte, because
 ; R_ARM_ABS32 is (S + A) | T with bit 0 masked out of S first -- but only ours is
 ; right if a linker skips that mask.
 ;
-; CPACR (0xE000ED88) must open CP10/CP11 before any VFP instruction or the core
+; ⚠ CPACR (0xE000ED88) must open CP10/CP11 before any VFP instruction or the core
 ; locks up ("can't escalate 3 to HardFault") -- love.c is full of doubles, so this is
 ; the first thing _start does and the barriers after it are not decoration.
 ;

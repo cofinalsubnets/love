@@ -20,7 +20,7 @@ case $ho in /*) HO=$ho;; *) HO=$PWD/$ho;; esac
 W=$HO/.root; rm -rf "$W"; mkdir -p "$W"
 
 # ---------------------------------------------------------------- refusals
-# a refusal has to be a STATUS. these all run as an ordinary user, so the kernel
+# ⚠ a refusal has to be a STATUS. these all run as an ordinary user, so the kernel
 # says no to every one of them, and what is being checked is that the no arrives as
 # an exit code and a line on stderr rather than as a scare or a silent 0.
 "$m" chroot /tmp/definitely-not-here 2>/dev/null && fail "chroot: a missing dir must fail"
