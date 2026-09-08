@@ -109,7 +109,7 @@ twin of its native 2.37× — the array-slot residual, the same as on x64.
 
 **The module is big.** sum.c is 169,627 bytes as our module against emcc -O2's 13,703
 (12.4×) and gz.c 195,872 against 26,911 (7.3×): mooncc's text runs ~4× gcc's natively
-(ccsize) and the link pulls nolibc members whole, so a driver that wants printf carries
+(ccsize) and the link pulls moonlibc members whole, so a driver that wants printf carries
 the formatter's neighbours. A size rung, if one is wanted, starts at the archive's grain.
 
 **The whole corpus, both builds under node** (the gate's own command, `test.mjs --love`):
@@ -568,7 +568,7 @@ functions it names, then the corpus row.
   read −0.4% while the cs borrow's `wb` denied it beside every callish loop, and +1.1%
   once the borrow was cut. When mechanisms gate each other, ablate the gater first.
 - ⚠ an ablation is part of the compiler's IDENTITY: `mcid` carries `MOON_ABLATE` in the
-  runtime-cache key (the nolibc archive under `out/cache/moon` once served
+  runtime-cache key (the moonlibc archive under `out/cache/moon` once served
   base-compiled members into an ablated build — a "broken" fixpoint whose only defect
   was the env-blind key). Any future config knob must join the key the same way.
 - ⚠ the mooncc ccbench lane races the ARTIFACT (its baked image keys as `"<baked>"`, so

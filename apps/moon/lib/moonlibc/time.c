@@ -1,4 +1,4 @@
-/* apps/moon/lib/nolibc/time.c -- the calendar: no timezone database, so
+/* apps/moon/lib/moonlibc/time.c -- the calendar: no timezone database, so
  * localtime IS gmtime (UTC). */
 #include "impl.h"
 

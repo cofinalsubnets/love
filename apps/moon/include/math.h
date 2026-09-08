@@ -7,7 +7,7 @@ double exp(double), log(double), log2(double), log10(double);
 double sqrt(double), fabs(double), floor(double), ceil(double);
 double atan2(double, double), pow(double, double), fmod(double, double);
 double frexp(double, int*), ldexp(double, int);
-/* the C99 float twins -- thin narrowings of the doubles above (nolibc.c's faces),
+/* the C99 float twins -- thin narrowings of the doubles above (moonlibc.c's faces),
  * declared because ordinary sources reach for them: st asks ceilf for a cell box. */
 float sinf(float), cosf(float), tanf(float);
 float asinf(float), acosf(float), atanf(float);

@@ -31,7 +31,7 @@ static lvm(lvm_srcgz) LvmCall(g, host_srcgz)
 static union u const nif_srcgz[] = {{lvm_srcgz}, {lvm_ret0}};
 AiNif("source-gz", nif_srcgz);
 
-// (runtime-gz "x64"|"a64"|"rv64") -> that ISA's nolibc archive, deflated;
+// (runtime-gz "x64"|"a64"|"rv64") -> that ISA's moonlibc archive, deflated;
 // (runtime-gz "id") -> the pure tree-slice hash the archives were cut from
 // (moon.l's rtcid). () when none is carried. tools/mkrt.l lays them, the
 // same weak/strong law as the source blob above; moon.l's rtcarried consumes.

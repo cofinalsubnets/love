@@ -113,7 +113,7 @@ a row that is not there) and close's EBADF on a stranger row and on a reclose.
 law -- it catches a wrong offset through the parse that matters, where reading
 the cask only asserted that the offsets are the ones we wrote down.
 
-What went with the instruments is one kind of law: the refusal branches nolibc
+What went with the instruments is one kind of law: the refusal branches moonlibc
 cannot reach, and raw wire formats. A dirfd that is not AT_FDCWD, an absolute
 path ignoring its dirfd, O_RDWR on a ramfs file, `dup3` src == dst, `pipe2` with
 a flag word, `fcntl` with a stranger cmd, UTIME_OMIT, getcwd's ERANGE, the
@@ -125,7 +125,7 @@ so what is lost is the argument values those rows refuse, defensive arms
 guarding against a caller that does not exist. inle/sys.c says so above its
 dispatch rather than leaving them looking exercised. getpid's row is the one
 casualty: this seat has no getpid nif (love's answers the TASK pid, kmain's own
-door), so nothing in the tree reaches it -- nolibc's own C callers still do.
+door), so nothing in the tree reaches it -- moonlibc's own C callers still do.
 
 The instrument's claim to be "the syscall seam's one gate" was false, which is
 the finding under this rung. Every ordinary nif on this seat bottoms out in a

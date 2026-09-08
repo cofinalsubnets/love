@@ -16,7 +16,7 @@
 #include <unistd.h>
 
 // __ai_osv, "which kernel this binary stands on", rides love.h: os.c defines
-// it hosted, love.c carries the weak zero for links with no nolibc at all.
+// it hosted, love.c carries the weak zero for links with no moonlibc at all.
 
 // the kernel's port lanes (inle/kmain.c), reached on a negative osv: a protocol read(2)
 // cannot carry, busy and end being distinct answers, so the vt branches here rather than

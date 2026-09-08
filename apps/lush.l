@@ -16,7 +16,7 @@
 ; `sh-jobs`: n -> (pids state cmd), state 'stopped | 'running. builtins:
 ; jobs / fg / bg; a trailing & runs the pipeline unwaited as a 'running job.
 ; signal numbers are the Linux/x86 charms (the repo's home ABI; the BSDs
-; take them through nolibc's permutation). also here: the shared floor
+; take them through moonlibc's permutation). also here: the shared floor
 ; (sh-rev sh-int sh-unwords) and the shell state (sh-jobs sh-status sh-tty).
 
 (module 'lush

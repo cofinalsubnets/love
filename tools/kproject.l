@@ -1,7 +1,7 @@
 ; tools/kproject.l -- the metal projection (plan C2). the artifact is one
 ; hosted -pie love; a boot door eats a fixed-address image. this tool derives
 ; the second from the first: re-base every PT_LOAD at the kernel base, apply
-; the love_rela table there (the same law nolibc's __ai_reloc runs at a hosted
+; the love_rela table there (the same law moonlibc's __ai_reloc runs at a hosted
 ; start -- run ahead of time, since on metal nobody is there to run it), lay
 ; and patch boot.o below the image, write k_image_top into the file, and emit
 ; the flat ELF the doors have always eaten. cat after core/holo/{elf,obj,link}.l:

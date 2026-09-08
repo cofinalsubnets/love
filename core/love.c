@@ -539,9 +539,9 @@ static lvm(lvm_casknew) {
 struct ai_code { char *base, *own; size_t len, used; int fixed; struct ai_code *next; };
 struct ai_cfree { char *p; size_t n; struct ai_cfree *next; };           // a freed blob (its whole span)
 #if __STDC_HOSTED__
-// which kernel underneath: nolibc's os.c defines it (0 unprobed; 1..3 the
+// which kernel underneath: moonlibc's os.c defines it (0 unprobed; 1..3 the
 // hosted kernels; negative = we ARE the kernel). weak for seats with no
-// nolibc aboard (love0 under a foreign libc, wasm), where zero reads as
+// moonlibc aboard (love0 under a foreign libc, wasm), where zero reads as
 // hosted -- which such a seat is.
 __attribute__((weak)) long __ai_osv;
 #ifndef MAP_ANONYMOUS

@@ -1,7 +1,7 @@
 #!/bin/sh
 # test/gate/raw.sh -- the GCC-FREE fixpoint, for one target. Everything test_selfhost
-# builds, PLUS our own raw libc (apps/moon/lib/nolibc.c: raw-syscall wrappers, mini
-# stdio, mmap malloc), the math floor (apps/moon/lib/math/am.c, ours), and sys.o (the
+# builds, PLUS our own raw libc (apps/moon/lib/moonlibc.c: raw-syscall wrappers, mini
+# stdio, mmap malloc), the math floor (apps/moon/lib/moonlibc/math/am.c, ours), and sys.o (the
 # syscall trampoline + our sigsetjmp/longjmp, laid by apps/moon/lib/mksys.l) -- then
 # OUR OWN static linker (core/holo/link.l, via `mooncc a.o..`) binds them. No gcc, no
 # glibc, no ld anywhere: the whole chain is love. Corpus green over the fresh egg.
@@ -42,7 +42,7 @@ esac
 
 fail() { echo "FAIL $name: $*" >&2; exit 1; }
 
-# x64 is the native lane: it needs no emulator but mksys/nolibc/math are x64-only,
+# x64 is the native lane: it needs no emulator but mksys/moonlibc/math are x64-only,
 # so it is the host arch that gates it. The cross lanes need their qemu.
 if [ -z "$need" ]; then
   arch=$(uname -m)
@@ -68,12 +68,12 @@ for f in $gate_love_c $gate_host_c; do
   moonc -D ai_tco=1 -I"$ho" -I. -Icore -Iinle -Iout/lib -c "$f" "$d/$b.o" || fail "mooncc $tflag -c $f"
 done
 
-# nolibc is NOT compiled here: the link below owes its symbols and the driver's
-# runtime table supplies them member by need (apps/moon/lib/nolibc/, test_drv's
+# moonlibc is NOT compiled here: the link below owes its symbols and the driver's
+# runtime table supplies them member by need (apps/moon/lib/moonlibc/, test_drv's
 # lane). Naming the objects would take every member, dead areas included.
-for f in apps/moon/lib/math/*.c; do
+for f in apps/moon/lib/moonlibc/math/*.c; do
   b=$(basename "$f" .c)
-  moonc -Iapps/moon/lib/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || fail "mooncc $tflag -c $f"
+  moonc -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || fail "mooncc $tflag -c $f"
 done
 
 # sys.o is laid by mksys.l rather than compiled: it is the syscall trampoline and
@@ -108,6 +108,6 @@ tail -1 "$ho/$out"
   || fail "no sentinel /$gate_sentinel/ -- a file was skipped or read past"
 
 case $target in
-  x64) echo "test_raw: the src/*.c lanes + nolibc + am math + sys.o, our linker, no gcc/glibc/ld -- corpus passes" ;;
+  x64) echo "test_raw: the src/*.c lanes + moonlibc + am math + sys.o, our linker, no gcc/glibc/ld -- corpus passes" ;;
   *)   echo "$name: the gcc-free $pretty love -- mooncc objects, $mksys, our linker, corpus under qemu" ;;
 esac

@@ -180,7 +180,7 @@ endif
 define moonlane
 $(1)_love_o = $$(core_tu:%.c=$$($(2))/%.o)
 $(1)_host_o = $$(host_c:$$(R)/inle/%.c=$$($(2))/host_%.o)
-$(1)_math_o = $$(patsubst apps/moon/lib/math/%.c,$$($(2))/m_%.o,$$(wildcard apps/moon/lib/math/*.c))
+$(1)_math_o = $$(patsubst apps/moon/lib/moonlibc/math/%.c,$$($(2))/math_%.o,$$(wildcard apps/moon/lib/moonlibc/math/*.c))
 $(1)_o = $$($(1)_love_o) $$($(1)_host_o) $$($(1)_math_o) $$($(2))/sys.o
 $$($(1)_love_o): $$($(2))/%.o: $$(R)/core/%.c $$(love_h) $$(moon0_dep)
 	@echo 'MOON	'$$@
@@ -194,10 +194,10 @@ $$($(2))/host_%.o: $$(R)/inle/%.c $$(love_h) $$(moon0_dep)
 $$($(2))/host_main.o: out/lib/distlist.h
 $$($(2))/host_cats.o: out/lib/baked.h
 $$($(2))/host_cb.o: core/quay/quay.c core/quay/nif.c core/quay/quay.h
-$$($(2))/m_%.o: apps/moon/lib/math/%.c $$(moon0_dep)
+$$($(2))/math_%.o: apps/moon/lib/moonlibc/math/%.c $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
-	@$$($(3)) -Iapps/moon/lib/math -Iapps/moon/include -c $$< $$@
+	@$$($(3)) -Iapps/moon/include -c $$< $$@
 # the machine tail rides the host's own cat, one cut for every consumer; only the entry
 # names the arch.
 $$($(2))/sys.o: out/.mksys-cat.l $$(love0)
@@ -227,15 +227,15 @@ $(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/core/lo
 	@mkdir -p $(dir $@)
 	@$(hcc) -o $@ $(host_o) $(ho)/liblove.a $(image_ldflags) $(data_ld)
 else
-nolibc_src = $(wildcard apps/moon/lib/nolibc/*.c apps/moon/lib/nolibc/*.h \
-                        apps/moon/lib/nolibc/*/*.c apps/moon/lib/nolibc/*/*.h)
-# out/rt.o LEADS: a job pool fills in prerequisite order, and this one is the long pole
+moonlibc_src = $(wildcard apps/moon/lib/moonlibc/*.c apps/moon/lib/moonlibc/*.h \
+                        apps/moon/lib/moonlibc/*/*.c apps/moon/lib/moonlibc/*/*.h)
+# out/moonlibc.o LEADS: a job pool fills in prerequisite order, and this one is the long pole
 # (three ISAs' runtime members, ~30 s cold) -- behind the TU list it starts as they finish
 # and runs alone. ahead of them it rides beside them, and -j loses that time outright.
-$(ho)/love $(ho)/love.cand: out/rt.o $(moon_o) out/src.o out/lib/readme.bin $(nolibc_src)
+$(ho)/love $(ho)/love.cand: out/moonlibc.o $(moon_o) out/src.o out/lib/readme.bin $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) $(kart_o) out/src.o out/rt.o -freadme=out/lib/readme.bin -o $@
+	@$(moon0) -pie $(moon_o) $(kart_o) out/src.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
 endif
 
 $(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md tools/mkman.l apps/lapiz.l out/lib/love_version.h $(ho)/love
@@ -344,10 +344,10 @@ out/src.o: $(dist_source) tools/mksrc.l out/.mksys-cat.l $(love0)
 
 rt_slice = $(wildcard apps/moon/include/*.h apps/moon/include/*/*.h \
                       apps/moon/lib/*.l \
-                      apps/moon/lib/nolibc/*.c apps/moon/lib/nolibc/*.h \
-                      apps/moon/lib/nolibc/*/*.c apps/moon/lib/nolibc/*/*.h \
-                      apps/moon/lib/math/*.c)
-out/rt.o: $(rt_slice) tools/mkrt.l $(rtlove_dep) $(love0)
+                      apps/moon/lib/moonlibc/*.c apps/moon/lib/moonlibc/*.h \
+                      apps/moon/lib/moonlibc/*/*.c apps/moon/lib/moonlibc/*/*.h \
+                      apps/moon/lib/moonlibc/math/*.c)
+out/moonlibc.o: $(rt_slice) tools/mkrt.l $(rtlove_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(rtlove) tools/mkrt.l $@ $(hosta)
 
@@ -366,12 +366,12 @@ $(eval $(call moonlane,x,xd,moonx,xa))
 $(xd)/src.o: $(dist_source) tools/mksrc.l out/.mksys-cat.l $(love0)
 	@echo 'HOLO	'$@
 	@$(love0) -l out/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(xa)
-$(xd)/rt.o: $(rt_slice) tools/mkrt.l $(rtlove_dep) $(love0)
+$(xd)/moonlibc.o: $(rt_slice) tools/mkrt.l $(rtlove_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(rtlove) tools/mkrt.l $@ $(xa)
-$(xd)/love: $(x_o) $(xd)/src.o $(xd)/rt.o out/lib/readme.bin
+$(xd)/love: $(x_o) $(xd)/src.o $(xd)/moonlibc.o out/lib/readme.bin
 	@echo 'MOON	'$@
-	@$(moonx) -pie $(x_o) $(xkart_o) $(xd)/src.o $(xd)/rt.o -freadme=out/lib/readme.bin -o $@
+	@$(moonx) -pie $(x_o) $(xkart_o) $(xd)/src.o $(xd)/moonlibc.o -freadme=out/lib/readme.bin -o $@
 fat = out/dist/love-fat
 .PHONY: dist-fat
 dist-fat: $(ho)/.love.baked $(xd)/love tools/fatpack.l
@@ -406,7 +406,7 @@ distro_dir   = out/distro
 distro_root  = $(distro_dir)/root
 distro_img   = $(distro_dir)/initramfs.cpio.gz
 # ⚠ the base love MUST be static -- a bare initramfs has no ld.so or glibc. love-raw is it:
-# gcc-free, our own linker over nolibc, and 935K against the baked love's ~11M, which is
+# gcc-free, our own linker over moonlibc, and 935K against the baked love's ~11M, which is
 # what an initramfs wants carried into RAM. `make test_raw` lays it.
 distro_love    = $(wildcard out/love-raw)
 # kore applets to expose as argv[0] symlinks (kore dispatches on the basename).
@@ -481,7 +481,7 @@ mooncc_dep = $(ho)/.love.baked
 k_arch_c = $(wildcard $(R)/inle/$a/*.c)
 k_free_c = $R/inle/kmain.c $R/inle/blk.c $R/inle/hda.c $R/inle/sys.c
 # the whole kernel compile, in link order: the runtime and its math floor, the console
-# engine with its two fonts, nolibc, the metal, the free trio -- and $(host_c) itself,
+# engine with its two fonts, moonlibc, the metal, the free trio -- and $(host_c) itself,
 # because the kernel runs the same frontend the host does. taking that roster rather than
 # copying it is what lets a new inle/<app>.c reach the kernel with no rule edit.
 k_c = $(love_c) \
@@ -501,7 +501,7 @@ k_tail_o = $(k_odir)/$a/sys.o
 # $(k_free_o) alone is named apart: `make kmain_o` is the ports' door to it.
 k_free_o = $(k_free_c:$(R)/%.c=$(k_odir)/%.o)
 k_o = $(k_c:$(R)/%.c=$(k_odir)/%.o) $(k_lay_o) $(k_tail_o) \
-  $(k_odir)/rt.o $(k_odir)/src.o $(k_doom_o)
+  $(k_odir)/moonlibc.o $(k_odir)/src.o $(k_doom_o)
 
 kcppflags := \
   -I$(k_odir) \
@@ -513,7 +513,7 @@ kcc = $(mooncc) $(kcppflags) -t $a
 kernel: $(k_elf)
 
 $(k_odir)/inle/cb.o: core/quay/quay.c core/quay/nif.c core/quay/quay.h
-$(k_odir)/rt.o: $(rt_slice) tools/mkrt.l $m
+$(k_odir)/moonlibc.o: $(rt_slice) tools/mkrt.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@$m tools/mkrt.l $@ $a
@@ -1024,7 +1024,7 @@ site-wasm: wasm
 	@echo '$(t_cp)	'port/wasm/love-wasm.image
 	@cp out/wasm/love-wasm.image port/wasm/love-wasm.image
 # the wasm inle seat: the kernel the three metal seats link -- kmain and the ramfs, the
-# console painter with its fonts, inle/sys.c under nolibc, the host frontend whole -- with
+# console painter with its fonts, inle/sys.c under moonlibc, the host frontend whole -- with
 # inle/wasm/arch.c for the machine and the source blob as a wasm data object (mksrc.l's
 # text lane). one module beside out/love-$a.elf; the runtime rides in by need, and no
 # the heap image is baked below. the CPU under it is port/wasm/cpu.mjs, a worker;
@@ -1085,7 +1085,7 @@ index.html: web/index.l port/wasm/machine.html $(ho)/.love.baked
 .PHONY: ulp
 ulp:
 	@mkdir -p out
-	@$(CC) -O2 -o out/ulp $R/tools/ulp.c $R/apps/moon/lib/math/am.c -lm
+	@$(CC) -O2 -o out/ulp $R/tools/ulp.c $R/apps/moon/lib/moonlibc/math/am.c -lm
 	@out/ulp
 out/perf.data: host
 	cat $t | perf record -o $@ $m

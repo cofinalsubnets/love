@@ -1,4 +1,4 @@
-/* apps/moon/lib/nolibc/core.c -- the floor every link takes: the syscall table
+/* apps/moon/lib/moonlibc/core.c -- the floor every link takes: the syscall table
  * and its wrappers, errno, mem/string, malloc, env, stdio, exit and the entry.
  * The optional areas are members beside this one; see impl.h. */
 #include "impl.h"

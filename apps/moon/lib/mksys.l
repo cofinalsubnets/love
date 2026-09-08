@@ -1,13 +1,13 @@
 ; apps/moon/lib/mksys.l -- lay sys.o, the raw seam's hand-written machine tail (rung 4):
 ; the five functions C cannot say. everything else in the gcc-free link is C compiled
-; by mooncc (nolibc.c + math/); these are the register-exact leaves under it:
-;   __ai_sys(n,a,b,c,d,e,f)  the 7-slot syscall trampoline (nolibc.c calls nothing else)
+; by mooncc (moonlibc.c + math/); these are the register-exact leaves under it:
+;   __ai_sys(n,a,b,c,d,e,f)  the 7-slot syscall trampoline (moonlibc.c calls nothing else)
 ;   __sigsetjmp / siglongjmp our own jmp_buf inside the glibc-sized 25-long buffer:
 ;                            [0..5] rbx rbp r12 r13 r14 r15, [6] rsp, [7] rip,
 ;                            [8] the signal mask (rt_sigprocmask saves/restores it --
 ;                            love.c's fault barrier is sigsetjmp(env,1), the mask is load-bearing)
-;   __ai_sigret              the sa_restorer tail (rt_sigreturn) nolibc's sigaction installs
-; (sqrt stays in C -- apps/moon/lib/math/am.c's am_sqrt, OURS and IEEE-exact; a thing
+;   __ai_sigret              the sa_restorer tail (rt_sigreturn) moonlibc's sigaction installs
+; (sqrt stays in C -- apps/moon/lib/moonlibc/math/am.c's am_sqrt, OURS and IEEE-exact; a thing
 ; C can say has no place here.) three targets, one layer: (mksys-x64 dst) lays x64,
 ; (mksys-a64 dst) a64, (mksys-rv64 dst) rv64 -- all seed mksys-as, which
 ; picks the arch's IR table. the x64 lane serves two kernels from one object
@@ -210,7 +210,7 @@
          ; [21] the signal mask. rt_sigprocmask is 135; the kernel preserves every
          ; register but x0 across svc, so buf/val stage in x9/x10 and ride through.
          ; __ai_sigret stays laid (rt_sigreturn 139) though a64's sigaction never
-         ; points at it -- the kernel supplies its own vdso trampoline (nolibc gates
+         ; points at it -- the kernel supplies its own vdso trampoline (moonlibc gates
          ; sa_restorer off); the symbol keeps the two sys.o surfaces identical.
          ('(
          ; -- __ai_sys: args x0..x6 (n,a..f) -> the kernel's x8=nr, x0..x5.

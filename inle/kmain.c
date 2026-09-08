@@ -125,7 +125,7 @@ struct k_boot kboot;
 // per-instance scratch -- a ramfs fd holds its handle there, statics leave it null.
 // the table grows and does not cap: k_source_open is the one door in, and it grows the
 // table in the kernel's own heap, so nothing is silently refused at a ceiling.
-// malloc is nolibc's, running its mmap arenas over inle/sys.c's page arm, which kmallocw
+// malloc is moonlibc's, running its mmap arenas over inle/sys.c's page arm, which kmallocw
 // supplies. so the door here stays kmallocw where g cannot be reached and g->alloc
 // everywhere it can: one page supply under both.
 void *kmallocw(uintptr_t n);

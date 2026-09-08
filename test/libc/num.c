@@ -1,7 +1,7 @@
 /* the number parsers -- the part of the floor that has a RULE in it rather than
  * a loop, and therefore the part that actually drifted.
  *
- * nolibc's strtol used to WRAP on overflow where glibc saturates, so one source
+ * moonlibc's strtol used to WRAP on overflow where glibc saturates, so one source
  * text read as two different numbers depending on which libc the binary carried;
  * love.c's reader leaned on the wrap to carry hex kernel addresses
  * (free/klink.l). the reader now reads all three integer bases itself and

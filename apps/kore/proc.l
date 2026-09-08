@@ -105,7 +105,7 @@
        (go pids 1))
 
    ; -- date: the wall clock. utc and only utc -- there is no tz database in this tree,
-   ; so localtime is gmtime, the same call nolibc made and for the same reason. -u is
+   ; so localtime is gmtime, the same call moonlibc made and for the same reason. -u is
    ; taken and changes nothing; -d @seconds and -r file name a moment other than now,
    ; which is also the only thing that makes this tool gateable against GNU at all.
    ; +format, or GNU's C-locale default when none is given.

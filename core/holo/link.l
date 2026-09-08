@@ -592,7 +592,7 @@
 
    ; resolve a name: the symbol book, or a synthesized bracket -- the nif region
    ; (n0..n1), under -pie the relative-reloc offset table (r0..r1) that
-   ; nolibc's startup walks to slide every abs64 data pointer by the load base
+   ; moonlibc's startup walks to slide every abs64 data pointer by the load base
    ; (non-pie leaves r0 == r1, an empty table, so the startup loop is a no-op) --
    ; or GNU ld's own generic rule, which the gcc lane already grants: a section
    ; named X brackets as __start_X/__stop_X, read off the laid lane's extent (xt).
@@ -843,7 +843,7 @@
    ; data -- plus a fourth for .image when the set carries one (see below).
    ; pie: emit et_dyn laid at base 0 (the kernel biases it to a random high
    ; address), collect every abs64 site into a trailing offset table bracketed
-   ; by __start_/__stop_love_rela, and let nolibc's startup add the load base to
+   ; by __start_/__stop_love_rela, and let moonlibc's startup add the load base to
    ; each -- the classic static-pie self-relocation, our own toolchain end to end.
    ; org: () takes the default base (pie 0 / elf-base); a number lays the image
    ; there -- the bare-metal lane (qemu -M virt wants its RAM base, 0x80000000),

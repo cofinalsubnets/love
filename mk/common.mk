@@ -1,5 +1,5 @@
-# Shared variables for the host and kernel builds and for out-of-tree ports (the l-ports
-# repo). An includer sets R to the project root first (the root Makefile sets R := .), so
+# Shared variables for the host, kernel and board builds. An includer sets R to the
+# project root first (the root Makefile sets R := ., a port/ makefile its own way up), so
 # these resolve from any cwd; per-frontend output lands in $R/out/<frontend>/.
 R ?= .
 
@@ -124,7 +124,7 @@ love_tu = love.c gc.c ev.c io.c map.c snap.c num.c arr.c
 love_codec = gz.c
 core_tu = $(love_tu) $(love_codec)
 love_tu_c = $(patsubst %,$R/core/%,$(core_tu))
-love_c = $(love_tu_c) $R/apps/moon/lib/math/am.c
+love_c = $(love_tu_c) $R/apps/moon/lib/moonlibc/math/am.c
 # the per-ISA set ONE machine's build takes, and the directory is the roster: empty on
 # an arch with no seat, which is what the rebuild gates read to skip their kernel half.
 hosta_c = $(wildcard $R/inle/$(hosta)/*.c)
@@ -135,7 +135,7 @@ host_c = $(filter-out $(addprefix $R/inle/,kmain.c blk.c hda.c sys.c doom.c doom
 # per-seat -- a 1-bit device wants neither, the host unity-includes nif.c -- so a seat that
 # wants one NAMES it rather than taking it here.
 f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/core/quay/*.c))
-# inle's libc is nolibc's, named member by member; os.c is the map every syscall
+# inle's libc is moonlibc's, named member by member; os.c is the map every syscall
 # reaches it through -- and a negative __ai_osv (written at kmain) takes the
 # __ai_inle arm, inle/sys.c answering the canonical numbers in C. mooncc builds
 # the kernel, so it builds
@@ -149,22 +149,22 @@ f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/core/quay/*.c))
 # friends write fd 1 themselves, and inle/sys.c is seat-blind, so a seated task's
 # C-level printf reaches the console where its port reaches the pipe. That is the
 # documented divergence (inle/sys.c) -- love code writes through ports, which seat.
-c_c = $(addprefix $R/apps/moon/lib/nolibc/string/,memchr.c memcmp.c memcpy.c memmove.c memset.c strlen.c) \
-  $(addprefix $R/apps/moon/lib/nolibc/sys/,read.c write.c \
+c_c = $(addprefix $R/apps/moon/lib/moonlibc/string/,memchr.c memcmp.c memcpy.c memmove.c memset.c strlen.c) \
+  $(addprefix $R/apps/moon/lib/moonlibc/sys/,read.c write.c \
     chdir.c chmod.c chown.c clock_gettime.c close.c dup2.c fcntl.c fork.c fstat.c getcwd.c \
     getgid.c getpgrp.c getpid.c getuid.c ioctl.c kevent.c kill.c kqueue.c \
     link.c lseek.c lstat.c madvise.c mkdir.c mmap.c mount.c mprotect.c munmap.c open.c pipe.c poll.c raise.c readlink.c \
     rename.c rmdir.c setpgid.c setsid.c stat.c symlink.c sysconf.c sysctl.c umask.c \
     unlink.c unshare.c utimensat.c waitpid.c) \
-  $(addprefix $R/apps/moon/lib/nolibc/dirent/,closedir.c opendir.c readdir.c) \
-  $(addprefix $R/apps/moon/lib/nolibc/signal/,grantpt.c posix_openpt.c ptsname.c \
+  $(addprefix $R/apps/moon/lib/moonlibc/dirent/,closedir.c opendir.c readdir.c) \
+  $(addprefix $R/apps/moon/lib/moonlibc/signal/,grantpt.c posix_openpt.c ptsname.c \
     sigaction.c sigaddset.c sigemptyset.c signal.c signalfd.c sigprocmask.c \
     tcgetattr.c tcsetattr.c tcsetpgrp.c unlockpt.c) \
-  $(addprefix $R/apps/moon/lib/nolibc/proc/,atexit.c execv.c execvp.c exit.c) \
-  $(addprefix $R/apps/moon/lib/nolibc/env/,getenv.c setenv.c unsetenv.c) \
-  $(addprefix $R/apps/moon/lib/nolibc/stdio/,fflush.c femit.c pad.c semit.c) \
-  $R/apps/moon/lib/nolibc/fmt/fprintf.c \
-  $R/apps/moon/lib/nolibc/os.c
+  $(addprefix $R/apps/moon/lib/moonlibc/proc/,atexit.c execv.c execvp.c exit.c) \
+  $(addprefix $R/apps/moon/lib/moonlibc/env/,getenv.c setenv.c unsetenv.c) \
+  $(addprefix $R/apps/moon/lib/moonlibc/stdio/,fflush.c femit.c pad.c semit.c) \
+  $R/apps/moon/lib/moonlibc/fmt/fprintf.c \
+  $R/apps/moon/lib/moonlibc/os.c
 
 # ⚠ CANCEL MAKE'S LEX RULE. `.l` is Lex's extension to make, so a built-in `%.c: %.l`
 # stands over every source file in this tree -- and where a `<name>.l` sits beside a real

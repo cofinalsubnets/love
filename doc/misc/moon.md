@@ -170,7 +170,7 @@ Anything without `-c` is a **link**, through `core/holo/link.l`.
   library has its own door — give the `.a` as an input). Lua's own `LIBS=-lm` is why this
   matters. ⚠ glued only: a bare `-l` refuses, since taking it would eat the next word as a
   library name and the one after it as an input;
-- an exe link still owing strong symbols pulls the runtime **by need**, archive-fashion — nolibc
+- an exe link still owing strong symbols pulls the runtime **by need**, archive-fashion — moonlibc
   + the am math + the mksys leaf, taken from the archive the binary CARRIES, or compiled from
   the toolchain root and cached under `out/cache/moon/` (below), so a set carrying its own
   `am.o` never meets a twin;
@@ -247,7 +247,7 @@ the runtime sources the implicit link pulls — are found through three rungs, t
    is the binary's own.
 
 The runtime itself rides COMPILED as well as in source: tools/mkrt.l lays each hosted
-ISA's nolibc archive (x64/a64/rv64, ~1.5 MB of archive under DEFLATE, ~210 kB carried,
+ISA's moonlibc archive (x64/a64/rv64, ~1.5 MB of archive under DEFLATE, ~210 kB carried,
 one inflate on the ISA a link asks for) beside the source blob, stamped with
 `rtcid` — a pure hash of the include/ + lib/ slice. A link consults the cache, then the
 carried archive (the blob lane by construction; a disk home only when its slice hashes to
@@ -268,7 +268,7 @@ the same face.
 
 ## the runtime (apps/moon/lib/)
 
-* **nolibc.c** — the raw libc over one `__ai_sys` trampoline: a mini stdio (a FILE is a fd plus
+* **moonlibc.c** — the raw libc over one `__ai_sys` trampoline: a mini stdio (a FILE is a fd plus
   a flush buffer), a K&R first-fit malloc over mmap arenas, dirent over getdents64, the
   glibc-152B-to-kernel-32B sigaction fold with our own restorer, a numeric getaddrinfo,
   env/exec/termios/pty. Single-threaded like love: errno is one int, no locks. See.
@@ -297,7 +297,7 @@ linux's numbers.
 pull can see what it defines, so every link owing a libc nom paid for all 190 of them — ~23s of a
 cold hello-world link's ~23s. They now ride `out/cache/moon/<sha>.a`, ONE archive per
 (compiler, target), keyed on the target, the runtime tree's whole text (headers included — an
-edited `stdio.h` changes what `nolibc.c` means) and the compiler's own identity. A warm link is
+edited `stdio.h` changes what `moonlibc.c` means) and the compiler's own identity. A warm link is
 ~0.15s. An archive and not 190 objects because the ranlib index IS the "what does this member
 define" answer, written once and read back rather than recomputed on every warm link — and
 because one file is one generation, whole the moment it lands and countable when the sweep asks
@@ -320,7 +320,7 @@ clock cannot tell the two apart. The `-c` path is not cached, and neither is a `
 named — this is the *implicit* runtime only.
 
 **The crt0 switch is one weak symbol.** `__ai_start` is defined WEAK in the crt0 object (the
-bare call-main tail every small link gets), and nolibc overrides it STRONG to unpack
+bare call-main tail every small link gets), and moonlibc overrides it STRONG to unpack
 argv/envp/auxv before main — no link-time flag anywhere, the weak machinery IS the switch.
 
 ## the ABI

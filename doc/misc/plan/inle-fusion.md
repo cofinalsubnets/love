@@ -11,7 +11,7 @@ third seat beside host and wasm rather than a second application.
 ⚠ **this is not a code-size reduction, and selling it as one is how it goes
 wrong.** Measured: the duplicated marshaling is ~200-350 lines, and the syscall
 door that replaces it is ~150-250. What improves is implementations-per-behaviour
-(21x2 -> 21x1), so a bug in `stat`'s shape is fixed once -- and nolibc becomes
+(21x2 -> 21x1), so a bug in `stat`'s shape is fixed once -- and moonlibc becomes
 callable inside the kernel, which is what lets more of the crew run there.
 
 ## where it stands
@@ -47,11 +47,11 @@ callable inside the kernel, which is what lets more of the crew run there.
 
 | | |
 |---|---|
-| syscalls `inle/posix.c` reaches | **34** (not 78 -- that is all of nolibc) |
+| syscalls `inle/posix.c` reaches | **34** (not 78 -- that is all of moonlibc) |
 | ..answered so far | **20**: read/write/close/lseek; the path family (openat, newfstatat, mkdirat, unlinkat, renameat, chdir, getcwd, fchmodat, utimensat); the fd family (pipe2, dup3, fcntl, fstat, getdents64); getpid + clock_gettime |
 | ..that inle simply lacks, and `-ENOSYS` already answers | ~9 (clone, wait4, kill, setpgid, setsid, mount, unshare, madvise, getpgid) |
 | `posix.c` changes needed to compile freestanding | **none** -- verified, it builds clean under the kernel's flags today |
-| its undefined symbols | 84: 17 love-core (kernel has them), 3 nolibc string (linked), ~64 nolibc members to link |
+| its undefined symbols | 84: 17 love-core (kernel has them), 3 moonlibc string (linked), ~64 moonlibc members to link |
 | boot spent evaluating source | ~2 s (`test_kernel` 10.41 s wall vs its own 7.8 s corpus) |
 
 ## the questions that are settled
@@ -126,7 +126,7 @@ twenty-one behaviours stop existing twice.
   stays with the nif, where g is threaded. per-task fd tables, if ever, take
   identity as an explicit pid into pid-keyed kernel tables (k_seats' shape),
   never an ambient g.
-- A3 ✅ `inle/posix.c` rides the kernel whole: 66 nolibc members named into
+- A3 ✅ `inle/posix.c` rides the kernel whole: 66 moonlibc members named into
   `c_c` (core.c stays out; inle/sys.c answers its four seat symbols -- environ,
   the unbuffered std streams, `__ai_sigret`), and kmain shed its SEVENTEEN
   posix twins in the same commit. `open`/`close` stay -- their host twins live
@@ -144,7 +144,7 @@ posix surface it hosts rather than mirrors.
 every runtime branch fusion needs becomes live and gated before anything merges.
 
 - B1 ✅ inle is `__ai_osv` -1, written at kmain (metal has no `__ai_start`);
-  `-D__inle__` is gone and the kernel compiles nolibc with `AiOsTranslate` ON.
+  `-D__inle__` is gone and the kernel compiles moonlibc with `AiOsTranslate` ON.
   ⚠ the value is NEGATIVE by necessity: ~25 member sites read `v >= 2` as "a
   BSD" and ~5 read `v < 2` as "speak canonical linux", which inle does -- a
   positive value would take freebsd shapes. `__ai_call`'s first arm takes v<0
@@ -199,7 +199,7 @@ host-only TUs): FOUR symbols remain defined on both sides -- `ai_fd_close`,
   of the link), `k_image_top` patched into the file where the flat link's
   `kimage_end` stood, symtab slid (the UEFI loader reads `kboot` off it).
   klink.l retired; ldkern stays for the ports. with core.c aboard the LAST
-  twins fell: errno and the streams are nolibc's (`k_seat_init` arms what a
+  twins fell: errno and the streams are moonlibc's (`k_seat_init` arms what a
   hosted `__ai_start` would), malloc runs its mmap arenas over inle/sys.c's
   page arm -- kmallocw supplies pages like any kernel does, zeroed because
   MAP_ANONYMOUS promises that -- and quit/getpid branch to `k_lvm_` twins.

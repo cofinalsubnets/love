@@ -39,7 +39,7 @@ C file) under three raw nifs, and **FAT32 r/w written in love** (`apps/fat/fat.l
 over them — a file written before a reset is there after it, and mtools reads what it writes.
 
 And it has a fourth seat, wasm: the same kernel (`kmain.c`, the ramfs off the source
-blob, the console painter, `inle/sys.c` under nolibc, the host frontend whole) links
+blob, the console painter, `inle/sys.c` under moonlibc, the host frontend whole) links
 through `mooncc -t wasm` to `out/love-wasm.wasm`, with `inle/wasm/arch.c` for the
 machine — five hypercalls through the module's one import, wearing linux's numbers, and no
 hardware at all. The CPU under it is a worker (`port/wasm/cpu.mjs`) whose idle is an
@@ -49,7 +49,7 @@ browser (the framebuffer on a canvas, the keyboard as a serial terminal; `coi.js
 static host cross-origin isolated, which SharedArrayBuffer wants). The seat wakes a heap
 image: `bake PATH` on any kernel's boot line writes the warm heap to the ramfs, the wasm lift
 carries it out (`make out/wasm/love-wasm.image`), and the page hands it to `k_start` as
-`kboot.image`. The runtime archives are not carried; mooncc compiles nolibc from the source
+`kboot.image`. The runtime archives are not carried; mooncc compiles moonlibc from the source
 the seat holds. `make test_kernel_wasm` bakes, then runs the kernel corpus on the wake.
 
 Missing: network.
@@ -67,7 +67,7 @@ Three mappings, all of them already half-built:
   already parks a task on an fd and wakes the ready one (``).
 
 **host/ is inle/'s now** (2026-09-07): the hosted surface -- main.c, posix.c, sock.c, fd.c,
-image.c and the rest -- and the kernel are two sides of one seam, nolibc's `__ai_sys`, and one
+image.c and the rest -- and the kernel are two sides of one seam, moonlibc's `__ai_sys`, and one
 link carries both (`doc/misc/plan/inle-fusion.md`, phases A-D). The kernel links that surface
 whole: `host_c` is inle/ less the kernel's own six files, and a `inle/<app>.c` dropped in
 registers its nifs on every seat with no rule edit.
@@ -395,7 +395,7 @@ is the glue, ~120 lines, and the whole of what it needed:
     like nothing. test/cc/154-blockextern.c.
   * a **float constant through a cast to an integer type** would not fold
     (doc/misc/moon-c-gaps.md; the parse half was answering WRONG, not refusing).
-  * nolibc's **printf dropped the precision on `%d`**, so `"%.3d"` of 33 read `33` — which is
+  * moonlibc's **printf dropped the precision on `%d`**, so `"%.3d"` of 33 read `33` — which is
     how doom asks for the lump name `STCFN033` (test/libc/fmt.c had precision rows for `%s`
     alone).
 * **three doors, and they existed.** `k_fb` hands over the framebuffer whole, `k_scan_arm` /

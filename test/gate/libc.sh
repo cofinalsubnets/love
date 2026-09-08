@@ -3,7 +3,7 @@
 # system's, function by function, with gcc+glibc as the second opinion.
 #
 # each test/libc/*.c is built twice -- once by mooncc, which pulls
-# apps/moon/lib/nolibc.c by need, and once by gcc against glibc -- run, and the
+# apps/moon/lib/moonlibc.c by need, and once by gcc against glibc -- run, and the
 # two OUTPUTS compared byte for byte. gcc is never trusted to be right, only to
 # be a second opinion; where the standard leaves a choice (the magnitude of a
 # comparison, an address, strerror's wording) the programs report the part that
@@ -15,7 +15,7 @@
 # and not more programs in test/cc.
 #
 # WHY IT EXISTS: the tree carries two libcs, and they drifted --
-# nolibc's strtol wrapped on overflow where glibc saturates, so one source text
+# moonlibc's strtol wrapped on overflow where glibc saturates, so one source text
 # read as two different numbers depending on which binary carried it. it went
 # unnoticed because nothing gated the pure floor against anything. this is that
 # gate, and it is rung 0 of for a reason: it is worth having whether
@@ -115,9 +115,9 @@ names=$(grep -hE '^[a-z][a-zA-Z_0-9 ]*[ *][a-z_][a-z_0-9]*\(' \
 
 nref=$(printf '%s\n' $names | grep -c .)
 moonrun -o "$d/decls" "$gen" > "$d/decls.build" 2>&1 || {
-  echo "--- the headers declare what nolibc does not define ---" >&2
+  echo "--- the headers declare what moonlibc does not define ---" >&2
   grep -i "undef" "$d/decls.build" >&2 || cat "$d/decls.build" >&2
   fail "header/library completeness: $nref names declared, at least one has no body"
 }
 
-echo "test_libc: nolibc agrees with $cc_g's libc over$fams ($n families), and defines all $nref names its headers declare"
+echo "test_libc: moonlibc agrees with $cc_g's libc over$fams ($n families), and defines all $nref names its headers declare"

@@ -4,7 +4,7 @@
 ; reset defaults -- sp is garbage, the FPU is OFF (mstatus.FS = 0), mtvec
 ; points nowhere. the driver's crt0 sits at that address (the -Ttext trick in
 ; the Makefile) and its first act is `call __ai_start` -- so this object
-; overrides __ai_start STRONG (the same weak seam nolibc uses) and does the
+; overrides __ai_start STRONG (the same weak seam moonlibc uses) and does the
 ; three things C cannot: pin sp, open the FPU, aim mtvec at a fault tail that
 ; hands mcause/mepc to main.c's fault_report (exit 98 -- loud, never a silent
 ; trap loop). the CSR instructions ride the 'raw escape (holo carries no Zicsr

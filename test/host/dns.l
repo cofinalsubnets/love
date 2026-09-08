@@ -94,7 +94,7 @@
    _ (assert (= (dns-conf cp "search") '("one.test" "two.test"))))
 
 ; --- law 5: an empty resolv.conf still names a server --------------------------
-; musl's fallback and nolibc's: 127.0.0.1, so a machine with no config reaches a
+; musl's fallback and moonlibc's: 127.0.0.1, so a machine with no config reaches a
 ; local stub instead of answering "no such host".
 (: ns (dns-servers "out/.dns-t/nope")
    _ (assert (two? ns) (<(cap ns) = 2130706433)))

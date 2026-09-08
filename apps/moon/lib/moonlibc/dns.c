@@ -1,4 +1,4 @@
-/* apps/moon/lib/nolibc/dns.c -- getaddrinfo: the numeric slice, then the NAME
+/* apps/moon/lib/moonlibc/dns.c -- getaddrinfo: the numeric slice, then the NAME
  * half over /etc/hosts and a UDP A query to /etc/resolv.conf's server. */
 #include "impl.h"
 

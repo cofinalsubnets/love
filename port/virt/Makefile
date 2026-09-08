@@ -7,7 +7,7 @@
 # unmapped hole below DRAM, where the loader's writes are discarded, and the FIRST TEXT
 # BYTE lands exactly at 0x80000000. That first text is the driver's crt0, whose
 # `call __ai_start` lands in start.o's STRONG override (sp, FPU, mtvec, then main) -- the
-# same weak seam nolibc rides, doing bare-metal bring-up.
+# same weak seam moonlibc rides, doing bare-metal bring-up.
 #
 # Boot it: qemu-system-riscv64 -M virt -bios none -nographic -kernel love.elf
 # (exit 42 = the egg hatched and the driver tail's laws held; 98 = a trap, with mcause/mepc
@@ -29,8 +29,8 @@ $(eval $(call p_lay,start,mkstart,"$(o)/start.o"))
 
 $(foreach u,$(love_m),$(eval $(call p_obj,$u,core/$u.c,\
   $(R)/core/$u.c $(love_dep),$(virt_cc))))
-$(foreach m,$(libc_m),$(eval $(call p_obj,$m,apps/moon/lib/nolibc/string/$m.c,\
-  $(R)/apps/moon/lib/nolibc/string/$m.c $(libc_dep),$(virt_cc) -Iapps/moon/include)))
+$(foreach m,$(libc_m),$(eval $(call p_obj,$m,apps/moon/lib/moonlibc/string/$m.c,\
+  $(R)/apps/moon/lib/moonlibc/string/$m.c $(libc_dep),$(virt_cc) -Iapps/moon/include)))
 $(eval $(call p_obj,main,port/virt/main.c,main.c $(R)/core/love.h $(lib_hR) $(mc),$(virt_cc)))
 
 $(R)/$(o)/love.elf: $(objs)

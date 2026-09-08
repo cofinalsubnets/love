@@ -1,5 +1,5 @@
 #!/bin/sh
-# moon-gzip.sh -- build gzip 1.2.4 with mooncc + nolibc + the holo linker (no
+# moon-gzip.sh -- build gzip 1.2.4 with mooncc + moonlibc + the holo linker (no
 # gcc/glibc/ld) and prove it RUNS: round-trips over four shapes of input, `-t`
 # integrity, the `-l` listing, and -- the one that matters -- FORMAT ACCURACY
 # both ways against the system gzip. The second moon-userland rung
@@ -89,7 +89,7 @@ SRC="gzip zip deflate trees bits unzip inflate util crypt lzw unlzw unpack unlzh
 # exactly the DEFS its own configure writes on Linux.
 CFLAGS="-DSTDC_HEADERS=1 -DHAVE_UNISTD_H=1 -DDIRENT=1 -Iapps/moon/include -I$d/src"
 
-echo "MOON-GZIP  $GZIPSRC  ($target: mooncc + nolibc + holo, no gcc/glibc/ld)"
+echo "MOON-GZIP  $GZIPSRC  ($target: mooncc + moonlibc + holo, no gcc/glibc/ld)"
 
 objs=""
 for b in $SRC; do
@@ -97,13 +97,13 @@ for b in $SRC; do
   objs="$objs $d/$b.o"
 done
 
-# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO nolibc
+# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO moonlibc
 # object -- the link owes its symbols and the driver's runtime table pulls
-# apps/moon/lib/nolibc/ MEMBER BY NEED (the Makefile says the same thing about love
+# apps/moon/lib/moonlibc/ MEMBER BY NEED (the Makefile says the same thing about love
 # itself). Naming an object would take every member instead.
-for f in apps/moon/lib/math/*.c; do
+for f in apps/moon/lib/moonlibc/math/*.c; do
   b=`basename "$f" .c`
-  $mc $tflag -Iapps/moon/lib/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
+  $mc $tflag -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
 done
 # sys.o is LAID, not compiled -- and a CROSS lay needs holo's backend loaded
 # first (the host bake carries only the native one), exactly as raw.sh does it.
@@ -140,7 +140,7 @@ done
 echo "  OK roundtrip byte-identical (empty, 1 byte, text, incompressible, source)"
 
 # the listing columns: -l reads its own header back, and it is the one place the
-# printf field widths in nolibc's __fmt are load-bearing.
+# printf field widths in moonlibc's __fmt are load-bearing.
 ( cd "$w" && $run "$gz" -9 -c text > text.gz && $run "$gz" -l text.gz ) > "$w/list.out" 2>&1 \
   || { echo "FAIL gzip -l"; exit 1; }
 grep -q 'uncompressed' "$w/list.out" || { echo "FAIL gzip -l wrote no header row"; cat "$w/list.out"; exit 1; }
@@ -156,4 +156,4 @@ if command -v gzip >/dev/null 2>&1; then
   echo "  OK format-accurate both ways against the system gzip"
 fi
 
-echo "$name: gzip 1.2.4 built by mooncc + nolibc + holo$([ -n "$run" ] && echo " for $target"), runs + round-trips -- ok"
+echo "$name: gzip 1.2.4 built by mooncc + moonlibc + holo$([ -n "$run" ] && echo " for $target"), runs + round-trips -- ok"

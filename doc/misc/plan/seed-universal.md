@@ -74,7 +74,7 @@ signalfd → kqueue's EVFILT_SIGNAL behind the same sigfd/sigtake nif shape
 (non-Linux already degrades to inert stubs, so the seam exists); SA_RESTORER/
 rt_sigreturn simply drop on BSD (the kernel lays its own trampoline) but
 sigsetjmp's inlined mask ABI changes; image.c's bake walk — dl_iterate_phdr
-(nolibc already grows its own off auxv) plus a hard `readlink("/proc/self/exe")`
+(moonlibc already grows its own off auxv) plus a hard `readlink("/proc/self/exe")`
 that bypasses the selfpath ladder everyone else uses; kore uname's /proc/sys reads (fallbacks exist). pid1,
 mount and namespaces stay Linux-only behind their existing ENOSYS stubs — a
 distro concern, not the artifact's.
@@ -95,7 +95,7 @@ owes a roster gate: on linux, assert the linux features are aboard.
   readlink, and test/host/fs.l probes the roster (the real mount answers the
   call's errno, the stub answers ENOSYS — a lost predefine now fails a gate;
   sigfd's twin assert already lived in test/host/sh.l).
-- **rung 2 — nolibc grows the OS axis.** Landed AND GATED 2026-08-16:
+- **rung 2 — moonlibc grows the OS axis.** Landed AND GATED 2026-08-16:
   test_freebsd (the FBSD_SSH door, a qemu/KVM FreeBSD 14.4 box) ran a
   mooncc-laid static freebsd/amd64 binary — tables, trampoline, er()'s one
   law, crt0-fbsd, the EI_OSABI brand, sigsetjmp round trip. The ride found two
@@ -124,7 +124,7 @@ owes a roster gate: on linux, assert the linux features are aboard.
   signal-number leak into job.l/init.l waits for a love runtime on freebsd
   (rung 5) to mean anything.
 - **rung 4 — the mechanisms.** BEGUN 2026-08-17, by need — the whole love was
-  compiled -os freebsd and the link named its debts: sysctl (nolibc grew the
+  compiled -os freebsd and the link named its debts: sysctl (moonlibc grew the
   member + header; selfpath's KERN_PROC_PATHNAME reads it), the termios fork
   (freebsd's 44-byte struct, no c_line; ISIG/ICANON/IEXTEN/IXON/VMIN/VTIME
   and the flush/flow selectors part company — termios.h forks on the OS), and
@@ -353,7 +353,7 @@ owes a roster gate: on linux, assert the linux features are aboard.
   - **UV-sig — sigfd rides kqueue. LANDED 2026-08-18.** The last inert
     stub with a live consumer (init's perceive parks on sigfd; lush's job
     control never called it — wait/signal/still, already translated).
-    nolibc grows the pair: sys/event.h speaks freebsd's record and
+    moonlibc grows the pair: sys/event.h speaks freebsd's record and
     negative filters as the canon; netbsd repacks to __kevent50's 40
     bytes, filter = -canon - 1 (an involution). EVFILT_SIGNAL is the one
     filter whose ident is a signal number, so it alone rides the

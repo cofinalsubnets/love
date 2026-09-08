@@ -1,5 +1,5 @@
 #!/bin/sh
-# moon-bzip2.sh -- build bzip2 1.0.8 with mooncc + nolibc + the holo linker (no
+# moon-bzip2.sh -- build bzip2 1.0.8 with mooncc + moonlibc + the holo linker (no
 # gcc/glibc/ld) and prove it RUNS: round-trips at both block-size ends, `-t`
 # integrity, and format accuracy both ways against the system bzip2. The FIRST
 # moon-userland rung, and still the best-shaped one.
@@ -68,7 +68,7 @@ rm -rf "$d"; mkdir -p "$d"
 SRC="blocksort huffman crctable randtable compress decompress bzlib bzip2"
 CFLAGS="-D_FILE_OFFSET_BITS=64 -DBZ_UNIX=1 -Iapps/moon/include -I$BZIP2SRC"
 
-echo "MOON-BZIP2  $BZIP2SRC  ($target: mooncc + nolibc + holo, no gcc/glibc/ld)"
+echo "MOON-BZIP2  $BZIP2SRC  ($target: mooncc + moonlibc + holo, no gcc/glibc/ld)"
 
 objs=""
 for b in $SRC; do
@@ -76,13 +76,13 @@ for b in $SRC; do
   objs="$objs $d/$b.o"
 done
 
-# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO nolibc
+# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO moonlibc
 # object -- the link owes its symbols and the driver's runtime table pulls
-# apps/moon/lib/nolibc/ MEMBER BY NEED (the Makefile says the same of love itself).
+# apps/moon/lib/moonlibc/ MEMBER BY NEED (the Makefile says the same of love itself).
 # Naming an object would take every member instead.
-for f in apps/moon/lib/math/*.c; do
+for f in apps/moon/lib/moonlibc/math/*.c; do
   b=`basename "$f" .c`
-  $mc $tflag -Iapps/moon/lib/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
+  $mc $tflag -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
 done
 # sys.o is LAID, not compiled -- and a CROSS lay needs holo's backend loaded
 # first (the host bake carries only the native one), exactly as raw.sh does it.
@@ -129,4 +129,4 @@ if command -v bzip2 >/dev/null 2>&1; then
   echo "  OK format-accurate both ways against the system bzip2"
 fi
 
-echo "$name: bzip2 1.0.8 built by mooncc + nolibc + holo$([ -n "$run" ] && echo " for $target"), runs + round-trips -- ok"
+echo "$name: bzip2 1.0.8 built by mooncc + moonlibc + holo$([ -n "$run" ] && echo " for $target"), runs + round-trips -- ok"

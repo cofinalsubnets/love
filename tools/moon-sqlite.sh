@@ -1,5 +1,5 @@
 #!/bin/sh
-# moon-sqlite.sh -- build the SQLite amalgamation with mooncc + nolibc + the
+# moon-sqlite.sh -- build the SQLite amalgamation with mooncc + moonlibc + the
 # holo linker (no gcc/glibc/ld) and prove it RUNS: an in-memory battery
 # (aggregates, ORDER BY, expressions) and a FILE-BACKED one through the whole
 # unix VFS -- journaled transaction, index, close/reopen persistence, prepared
@@ -33,7 +33,7 @@
 # explicit SQLSRC= still outranks both, and a missing tree is a clean SKIP
 # rather than a failure, so this gate stays opt-in either way.
 #
-# The config: THREADSAFE=0 (nolibc carries no pthreads) and no load-extension
+# The config: THREADSAFE=0 (moonlibc carries no pthreads) and no load-extension
 # (no dlopen) -- both first-class sqlite configurations, not patches.
 set -e
 
@@ -79,7 +79,7 @@ fi
 d=$ho/$sub
 rm -rf "$d"; mkdir -p "$d"
 
-echo "MOON-SQLITE  $SQLSRC  ($target: mooncc + nolibc + holo, no gcc/glibc/ld)"
+echo "MOON-SQLITE  $SQLSRC  ($target: mooncc + moonlibc + holo, no gcc/glibc/ld)"
 
 $mc $tflag -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION=1 -Iapps/moon/include \
     -c "$SQLSRC/sqlite3.c" "$d/sqlite3.o" || { echo "FAIL mooncc -c sqlite3.c"; exit 1; }
@@ -128,7 +128,7 @@ int main(void) {
   q(db, "int.bit",  "SELECT 255&15, 240|15, ~0, -1>>63, 1<<63");
 
   /* --- REAL: sqlite carries its OWN printf, so this is a second float
-     formatter under mooncc, independent of nolibc's --- */
+     formatter under mooncc, independent of moonlibc's --- */
   q(db, "real.fmt", "SELECT 3.14159265358979, 1e300, 1e-300, 0.1+0.2");
   q(db, "real.rnd", "SELECT round(2.5), round(3.5), round(-2.5), round(1.005,2)");
   q(db, "real.cast","SELECT CAST(3.99 AS INTEGER), CAST(-3.99 AS INTEGER), CAST('12abc' AS INTEGER)");
@@ -194,13 +194,13 @@ int main(void) {
 EOF
 $mc $tflag -Iapps/moon/include -I"$SQLSRC" -c "$d/drv.c" "$d/drv.o" || { echo "FAIL mooncc -c drv.c"; exit 1; }
 
-# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO nolibc
+# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO moonlibc
 # object -- the link owes its symbols and the driver's runtime table pulls
-# apps/moon/lib/nolibc/ MEMBER BY NEED (the Makefile says the same of love itself).
+# apps/moon/lib/moonlibc/ MEMBER BY NEED (the Makefile says the same of love itself).
 # Naming an object would take every member instead.
-for f in apps/moon/lib/math/*.c; do
+for f in apps/moon/lib/moonlibc/math/*.c; do
   b=$(basename "$f" .c)
-  $mc $tflag -Iapps/moon/lib/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
+  $mc $tflag -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
 done
 # sys.o is LAID, not compiled -- and a CROSS lay needs holo's backend loaded
 # first (the host bake carries only the native one), exactly as raw.sh does it.

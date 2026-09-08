@@ -19,7 +19,7 @@ LFS spends two chapters here and calls it the hard part. It is the part we are d
 | --- | --- | --- |
 | binutils | `core/holo/` — as, ld, ar+ranlib, nm, objcopy | byte-identical smokes vs GNU/llvm |
 | gcc | `apps/moon/` — mooncc, C11 freestanding | self-hosting, fixpoint-gated, x64 + a64 + riscv |
-| glibc | `apps/moon/lib/nolibc/` | by-need members, no host libc |
+| glibc | `apps/moon/lib/moonlibc/` | by-need members, no host libc |
 | linux-headers | `apps/moon/include/` | our own minimal set, not the host's |
 
 Plus one rung LFS never attempts: `the Makefile` builds a whole kernel with
@@ -41,7 +41,7 @@ and **`mknod`** (`apps/kore/fs.l`) — the last two being what fills a `/dev`.
 Five nifs grew with them (`inle/posix.c`): `chroot`, `umount`, `sync`, `mknod`, and
 `mountf` — the last standing *beside* `mount` rather than replacing it, because a nif's
 arity is fixed and `apps/init/boot.l` calls the three-argument one at pid 1, which
-is not where an arity change wants finding out. Two nolibc members grew too
+is not where an arity change wants finding out. Two moonlibc members grew too
 (`sys/umount.c`, `sys/sync.c`); `chroot`, `mknod`, `mkfifo` and `mount` were already
 there.
 

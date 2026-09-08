@@ -13,7 +13,7 @@ o = ../../out/wasm
 # rest of the tree reads. g_h is core whole, so every object keeps a header dep.
 R := ../..
 include $(R)/mk/common.mk
-g_c = $(patsubst %,../../core/%,$(love_tu)) ../../apps/moon/lib/math/am.c \
+g_c = $(patsubst %,../../core/%,$(love_tu)) ../../apps/moon/lib/moonlibc/math/am.c \
       ../../inle/horn.c
 g_h = $(wildcard ../../core/*.h)
 

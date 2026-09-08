@@ -14,11 +14,11 @@
 ; `catch`. whichever finishes first wins, because a freeze out from under a catcher
 ; wakes it with the zero point. no `cue?` loop, no 1 ms tick.
 ;
-; this is a port of apps/moon/lib/nolibc.c's resolver, which is what a mooncc-built
+; this is a port of apps/moon/lib/moonlibc.c's resolver, which is what a mooncc-built
 ; love used to reach through getaddrinfo -- and which blocked, for up to 2 tries x
 ; 2.5 s per nameserver across three of them. that C is the reference for every fiddly
 ; part here (the wire format, the compression pointer, the two config parsers) and it
-; stays where it is: nolibc is a libc, and a C program mooncc builds is entitled to
+; stays where it is: moonlibc is a libc, and a C program mooncc builds is entitled to
 ; getaddrinfo.
 ;
 ; what it speaks, and what it does not: a records over UDP, /etc/hosts first,
@@ -170,7 +170,7 @@
      (go (dns-lines (dns-look path))))
 
    ; the nameservers, in order -- 127.0.0.1 when the file names none, musl's fallback
-   ; and nolibc's, so a machine with an empty resolv.conf still reaches a local stub
+   ; and moonlibc's, so a machine with an empty resolv.conf still reaches a local stub
    ; rather than answering "no such host".
    (dns-servers conf)
     (: ns (: (go l) (? (two? l)
@@ -180,7 +180,7 @@
        (two? ns ? ns [(2130706433 . 53)]))
 
    ; --- the door -----------------------------------------------------------------
-   dns-ms 2500                            ; nolibc's per-server deadline, kept
+   dns-ms 2500                            ; moonlibc's per-server deadline, kept
 
    ; ask every server in turn for one name. a server that answers ends the walk,
    ; even to say no -- only silence moves on to the next.

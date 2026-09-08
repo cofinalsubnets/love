@@ -910,7 +910,7 @@
    ; a floor division, which is what these want -- the sign dance the C originals carry
    ; is only there because C truncates. lawed in law.l over the round trip.
    ; there is no time zone here and there will not be one without a tz database: every
-   ; face over these is utc, exactly as nolibc's localtime is its gmtime.
+   ; face over these is utc, exactly as moonlibc's localtime is its gmtime.
    (ucivil z0)                         ; days since 1970-01-01 -> (year month day)
     (: z (z0 + 719468)
        era (// z 146097)

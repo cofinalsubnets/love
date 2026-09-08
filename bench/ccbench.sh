@@ -35,7 +35,7 @@
 #            the freshly-eval'd egg (a level field).
 #
 # ⚠ the natives are STATIC MUSL, not the distro's dynamic glibc, and the size rows are
-# why: mooncc's binary is a static ELF carrying its own nolibc, so racing it against a
+# why: mooncc's binary is a static ELF carrying its own moonlibc, so racing it against a
 # dynamic binary asks two questions at once and answers neither -- ~40 KB of the gap it
 # used to report was glibc being ABSENT from the file. Runtime is untouched by the
 # choice (measured: under 0.1% on insns, cycles and boot -- love runs on its own floor,
@@ -116,7 +116,7 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
   ( cd "$R" || exit 1
     for b in $love_tu; do
       $cc $CFLAGS $xf -c "core/$b.c" -o "$od/$b.o" || exit 1; done
-    $cc $CFLAGS $xf -c apps/moon/lib/math/am.c -o "$od/am.o" || exit 1
+    $cc $CFLAGS $xf -c apps/moon/lib/moonlibc/math/am.c -o "$od/am.o" || exit 1
     for f in $host_cs; do b=$(basename "$f" .c)
       $cc $CFLAGS $xf -c "$f" -o "$od/host/$b.o" || exit 1; done
     $cc $CFLAGS $xf $LDFLAGS -o "$bin" "$od"/*.o "$od"/host/*.o ) || return 1
@@ -126,7 +126,7 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
 #    unit, mksys the syscall leaf, our linker binds. -I$ho picks up the lcat'd headers. --
 # ⚠ THE COMPILER IS THE SHIPPED ARTIFACT, and it is not a preference -- it is the only
 # spelling of this lane that measures the same thing twice. mooncc's link pulls
-# apps/moon/lib/nolibc/ MEMBER BY NEED and caches the archive under ~/.love/cache/moon,
+# apps/moon/lib/moonlibc/ MEMBER BY NEED and caches the archive under ~/.love/cache/moon,
 # keyed on the compiler, its stat, AND ITS IMAGE (moon.l's mcrtkey). An image FILE puts
 # that file's stat in the key, so while the lane ran out of out/mooncc -- whose
 # .image this file's own make target rebuilt as a prerequisite -- every run missed and
@@ -148,11 +148,11 @@ build_mooncc() { # $1=binpath
       mc -D ai_tco=1 -D AiHaveVersionH -Iout -I. -Icore -Iinle -Iout/lib -c "core/$b.c" "$od/$b.o" || exit 1; done
     for f in $host_cs; do b=$(basename "$f" .c)
       mc -D ai_tco=1 -D AiHaveVersionH -Iout -I. -Icore -Iinle -Iout/lib -c "$f" "$od/host_$b.o" || exit 1; done
-    # no nolibc object: the link owes its symbols and the driver supplies them
+    # no moonlibc object: the link owes its symbols and the driver supplies them
     # member by need, so the dead areas never arrive. ⚠ ccsize/ccdead therefore
-    # read mooncc's libc off the BINARY's complement, not off a nolibc.o.
-    for f in apps/moon/lib/math/*.c; do b=$(basename "$f" .c)
-      mc -Iapps/moon/lib/math -Iapps/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
+    # read mooncc's libc off the BINARY's complement, not off a moonlibc.o.
+    for f in apps/moon/lib/moonlibc/math/*.c; do b=$(basename "$f" .c)
+      mc -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
     { cat apps/kore/text.l apps/kore/u.l apps/kore/asbook.l \
           core/holo/elf.l core/holo/obj.l apps/moon/lib/mksys.l
       echo "((from 'moon 'mksys-x64) \"$od/sys.o\")"; } | env LOVE_NO_IMAGE= "$SEED" || exit 1
@@ -249,7 +249,7 @@ else
 fi
 # the native lanes: static musl. The wrappers hand the compiler musl's headers and crt,
 # so the translation units are the identical job -- only the libc differs, and -static
-# puts it inside the binary where mooncc's nolibc already is.
+# puts it inside the binary where mooncc's moonlibc already is.
 for c in gcc clang; do
   if command -v "musl-$c" >/dev/null 2>&1; then
     lane "$c-musl" "build_cc musl-$c" "$WORK/love-$c-musl" -static

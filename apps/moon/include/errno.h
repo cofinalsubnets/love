@@ -15,7 +15,7 @@ int *__errno_location(void);
 #define ECHILD          10
 /* 1..10 are V7's, one table; from 11 the kernels part ways. these are the
  * CANONICAL (linux) values on every lane -- a freebsd kernel's answers
- * translate through nolibc's row (os.c) before anything reads errno.
+ * translate through moonlibc's row (os.c) before anything reads errno.
  * 41 and 58 are blanks, and 41 doubles as the no-canonical-concept answer. */
 #define EAGAIN          11
 #define EWOULDBLOCK     11

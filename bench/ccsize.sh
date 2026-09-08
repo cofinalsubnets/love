@@ -52,10 +52,10 @@ for l in $LANES; do
   binsyms "$W/love-$l" > "$TD/bin.$l"
   if [ "$l" = mooncc ]; then
     # mooncc's own lane: love.o + m_am.o + the host objects (flat). ⚠ there is no
-    # nolibc object to exclude -- the driver pulls those members itself, so they
+    # moonlibc object to exclude -- the driver pulls those members itself, so they
     # reach the binary and never the object dir. The complement IS the libc.
     objsyms "$W/mooncc/love.o" "$W/mooncc/m_am.o" \
-            $(ls "$W"/mooncc/*.o | grep -vE '/(love|nolibc|sys|m_[a-z0-9]+)\.o$') > "$TD/own.$l"
+            $(ls "$W"/mooncc/*.o | grep -vE '/(love|moonlibc|sys|m_[a-z0-9]+)\.o$') > "$TD/own.$l"
   else
     od=$W/o-love-$l
     objsyms "$od/love.o" "$od/am.o" "$od"/host/*.o > "$TD/own.$l"

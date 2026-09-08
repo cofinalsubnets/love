@@ -1,4 +1,4 @@
-/* The allocator's contract, held against the C library's. nolibc hands any request of
+/* The allocator's contract, held against the C library's. moonlibc hands any request of
  * 128 kB or more a mapping of its own so that free can give the pages back, and calloc
  * skips the memset on those because the kernel has already zeroed them -- so the size a
  * request lands on decides which path serves it, and both paths owe the caller exactly

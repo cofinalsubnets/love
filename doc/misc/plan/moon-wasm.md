@@ -159,11 +159,11 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   a stale view), every export as `_name`, and `ExitStatus` thrown on exit with its code
   — test.mjs's contract. It is also the global `Love`, so the page loads it as a module
   script and repl.js drives it unchanged. The module imports ONE function, `env.__ai_sys`
-  — nolibc's one OS door, so the C runtime compiles as it is — and the loader is the
+  — moonlibc's one OS door, so the C runtime compiles as it is — and the loader is the
   kernel under it, speaking linux's numbers: `write` to print/printErr, `mmap` as a
-  page-aligned bump over `memory.grow` (nolibc's malloc takes 1 MB arenas and never gives
+  page-aligned bump over `memory.grow` (moonlibc's malloc takes 1 MB arenas and never gives
   them back, so munmap is a no-op), `clock_gettime` laying a timespec, `exit`/`exit_group`
-  throwing, `writev(-1)` answering -EBADF (nolibc's kernel probe, which must say linux),
+  throwing, `writev(-1)` answering -EBADF (moonlibc's kernel probe, which must say linux),
   and ENOSYS for the rest. The type law crosses the boundary here: every param is an
   i64, so a Number becomes a BigInt on the way in and a Number on the way out; a pointer
   handed to wasm is a BigInt and a view's offset a Number. host.c's `emscripten.h` need
@@ -199,11 +199,11 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   `__start_`/`__stop_` brackets of love_nifs, love_rela (empty: nothing relocates) and
   every named section, the data and bss bounds. Undefined names must be in the
   import list, one today: `__ai_sys`. The driver: `mooncc -t wasm` (the roster in
-  post.l knows the word), an object is the gen tuple as text, the runtime is nolibc's
+  post.l knows the word), an object is the gen tuple as text, the runtime is moonlibc's
   members compiled for wasm, cached whole under the archive's key law and pulled by
-  need off a (defs . refs) ledger; crt0 hands nolibc's `__ai_start` a stack laid in
+  need off a (defs . refs) ledger; crt0 hands moonlibc's `__ai_start` a stack laid in
   data (argc 1, an argv, empty envp and auxv) and exits with its answer through the
-  import. nolibc's BSD translate lane stays off under `__wasm__`. `port/wasm/run.mjs`
+  import. moonlibc's BSD translate lane stays off under `__wasm__`. `port/wasm/run.mjs`
   runs such a module the way a shell runs an executable.
   **The gate is `test_ccwasm`**: ccarch.sh's procedure with node as the machine, the
   158 programs of test/cc — 153 answering exactly as x86-64 does, stdout and exit
@@ -461,7 +461,7 @@ What moved since the ladder was written, and what it changes:
 
 - the console arc (rungs 0-2) put quay in the wasm seat: host.c unity-includes the
   engine and exports seven more verbs. rung 3's shim grows by those names, nothing else.
-- the one-syscall door landed in nolibc (`__ai_sys`), so rung 3 is an import of one
+- the one-syscall door landed in moonlibc (`__ai_sys`), so rung 3 is an import of one
   function plus malloc over `memory.grow`, not a libc.
 - asmops made every inline asm GNU-dialect under `__mooncc__`; the wasm lane refuses
   `asm` and the C faces stand — num.c's divq already did this for mooncc.

@@ -2,7 +2,7 @@
 // module, answers its hypercalls, and never yields. the terminal is the other thread
 // (inle.mjs under node, inle.html in the browser); the two share one ring of key bytes
 // in a SharedArrayBuffer, which is what lets the kernel's idle really block: nanosleep is
-// an Atomics.wait on the ring, one tick or the next key. nolibc's calls never arrive --
+// an Atomics.wait on the ring, one tick or the next key. moonlibc's calls never arrive --
 // kmain writes __ai_osv = -1 and they take inle/sys.c -- so what comes through the one
 // import is inle/wasm/arch.c's five hypercalls, wearing linux's numbers.
 //

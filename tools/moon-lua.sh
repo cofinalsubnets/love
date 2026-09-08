@@ -1,5 +1,5 @@
 #!/bin/sh
-# moon-lua.sh -- build Lua 5.4 with mooncc + nolibc + the holo linker (no
+# moon-lua.sh -- build Lua 5.4 with mooncc + moonlibc + the holo linker (no
 # gcc/glibc/ld) and prove it RUNS: a battery over closures, strings, tables,
 # the math floor (am.c under the libc faces), integer/bitwise ops, pcall +
 # coroutines (setjmp/longjmp through sys.o's leaves), metatables, gc, os
@@ -82,7 +82,7 @@ G=$(pwd); MC=$G/$mc
 d=$ho/$sub
 rm -rf "$d"; mkdir -p "$d"
 
-echo "MOON-LUA  $LUASRC  ($target: mooncc + nolibc + holo, no gcc/glibc/ld)"
+echo "MOON-LUA  $LUASRC  ($target: mooncc + moonlibc + holo, no gcc/glibc/ld)"
 
 objs=""
 for f in "$LUASRC"/src/*.c; do
@@ -92,13 +92,13 @@ for f in "$LUASRC"/src/*.c; do
   objs="$objs $d/$b.o"
 done
 
-# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO nolibc
+# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO moonlibc
 # object -- the link owes its symbols and the driver's runtime table pulls
-# apps/moon/lib/nolibc/ MEMBER BY NEED (the Makefile says the same of love itself).
+# apps/moon/lib/moonlibc/ MEMBER BY NEED (the Makefile says the same of love itself).
 # Naming an object would take every member instead.
-for f in apps/moon/lib/math/*.c; do
+for f in apps/moon/lib/moonlibc/math/*.c; do
   b=$(basename "$f" .c)
-  $MC $tflag -Iapps/moon/lib/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
+  $MC $tflag -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
 done
 # sys.o is LAID, not compiled -- and a CROSS lay needs holo's backend loaded first
 # (the host bake carries only the native one), exactly as raw.sh does it.

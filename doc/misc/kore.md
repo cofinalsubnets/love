@@ -342,7 +342,7 @@ rather than as an error.
 ## the clock (apps/kore/proc.l)
 
 ⚠ **UTC and only UTC.** There is no tz database in this tree, so localtime IS gmtime — the same
-call nolibc made, for the same reason. `date -u` is taken and changes nothing. `-d @SECONDS` and
+call moonlibc made, for the same reason. `date -u` is taken and changes nothing. `-d @SECONDS` and
 `-r FILE` name a moment other than now, which is also the only thing that makes the tool gateable
 against GNU at all; the gate runs the oracle under `TZ=UTC`. The calendar itself is Hinnant's
 exact integer civil-from-days in core.l (`ucivil`/`udays`, lawed by the round trip), which stat's

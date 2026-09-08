@@ -1,4 +1,4 @@
-/* apps/moon/lib/nolibc/num.c -- strtol/strtod, and the stdio odds and ends the
+/* apps/moon/lib/moonlibc/num.c -- strtol/strtod, and the stdio odds and ends the
  * HEADERS promised (sscanf, ferror, popen). */
 #include "impl.h"
 
@@ -128,8 +128,8 @@ double ldexp(double x, int n) {                    /* x * 2^n, clamped through t
   else if (n < -1022) { x *= __e2d(-969); n += 969;
     if (n < -1022) { x *= __e2d(-969); n += 969; if (n < -1022) n = -1022; } }
   return x * __e2d(n); }
-/* the math floor's exact reader (apps/moon/lib/math/am.c -- linked wherever
-   nolibc is: the raw love build and the whole moon userland): correctly
+/* the math floor's exact reader (apps/moon/lib/moonlibc/math/am.c -- linked wherever
+   moonlibc is: the raw love build and the whole moon userland): correctly
    rounded, so read(show x) = x holds off-glibc too. The naive accumulator
    that lived here parsed "0.3" one ulp off -- masked until love's printer
    went shortest-roundtrip, then loud in test_raw. */

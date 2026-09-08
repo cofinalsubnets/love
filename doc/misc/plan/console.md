@@ -96,7 +96,7 @@ that is a compiler.
   show them, so they wait for the page's console); the page's library catalogue, laid
   by make web.
 - **rung 3 -- the wasm backend**, doc/misc/plan/moon-wasm.md rungs 0-5: the module
-  writer, control flow by dispatch loop, the type law, the environment (a nolibc face
+  writer, control flow by dispatch loop, the type law, the environment (a moonlibc face
   where the handful of system calls are imports the page supplies, and a loader of a
   few dozen lines in place of emscripten's runtime -- repl.js's `Love()`, `cwrap`
   and the heap views are the API to keep), gen.l's lane, the gate. its oracle is the

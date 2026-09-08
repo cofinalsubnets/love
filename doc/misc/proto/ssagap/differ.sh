@@ -7,9 +7,9 @@ S=$1
 [ -n "$S" ] || S=out/ssagap
 mkdir -p "$S"
 : > "$S/ir.txt"
-for f in src/*.c apps/moon/lib/math/am.c apps/moon/lib/nolibc/string/*.c \
-         apps/moon/lib/nolibc/stdio/*.c apps/moon/lib/nolibc/fmt/*.c \
-         apps/moon/lib/nolibc/os.c apps/moon/lib/nolibc/env/*.c apps/moon/lib/nolibc/proc/*.c; do
+for f in src/*.c apps/moon/lib/moonlibc/math/am.c apps/moon/lib/moonlibc/string/*.c \
+         apps/moon/lib/moonlibc/stdio/*.c apps/moon/lib/moonlibc/fmt/*.c \
+         apps/moon/lib/moonlibc/os.c apps/moon/lib/moonlibc/env/*.c apps/moon/lib/moonlibc/proc/*.c; do
   sed "s|@FILE@|$f|" doc/misc/proto/ssagap/valdiff.tpl.l > "$S/v1.l"
   out/love "$S/v1.l" >> "$S/ir.txt" || echo "!! $f"
 done

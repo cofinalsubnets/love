@@ -1,4 +1,4 @@
-; tools/mkrt.l -- lay the compiled nolibc runtime into an ELF object, one
+; tools/mkrt.l -- lay the compiled moonlibc runtime into an ELF object, one
 ; deflated archive per hosted ISA, so a bare `love cc` links without compiling
 ; 197 members first (moon.l's rtcarried; inle/src.c answers runtime-gz).
 ;

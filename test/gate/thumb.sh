@@ -107,8 +107,8 @@ lane() { # lane TAG LIBSRC HARNESSSRC MOONFLAGS WANT TIMEOUT MSG TAIL
   fi
 }
 
-am=apps/moon/lib/math/am.c
-aminc="-Iapps/moon/lib/math -Iapps/moon/include"
+am=apps/moon/lib/moonlibc/math/am.c
+aminc="-Iapps/moon/lib/moonlibc/math -Iapps/moon/include"
 
 # ---- the smoke lane: written here because it IS the target's own feature list ----
 if [ "$tgt" = thumb1 ]; then

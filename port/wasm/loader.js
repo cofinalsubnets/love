@@ -1,7 +1,7 @@
 // port/wasm/loader.js -- the environment of moon's wasm artifact, in place of emcc's
 // runtime: Love() instantiates love.wasm and answers the Module the page already drives
 // (repl.js, screen.mjs, test.mjs) -- ccall/cwrap, the string marshalling, _malloc/_free,
-// and the HEAPU8/HEAPU32 views. the module imports ONE function, env.__ai_sys, nolibc's
+// and the HEAPU8/HEAPU32 views. the module imports ONE function, env.__ai_sys, moonlibc's
 // syscall door, and this file is the kernel under it: linux's numbers, the handful the
 // artifact issues -- write, mmap over memory.grow, clock_gettime, exit -- and ENOSYS for
 // the rest. the type law is the arity: every wasm param and answer is an i64, so a number
@@ -50,7 +50,7 @@ export default async function Love(opts = {}) {
         if (fd !== 1 && fd !== 2) return BigInt(-EBADF);   // only the two the seat has: a stray fd must not land on the page
         (fd === 2 ? printErr : print)(dec.decode(u8().slice(p, p + len)));
         return c; }
-      case NR.writev: return BigInt(-EBADF);               // nolibc's kernel probe: -EBADF says linux
+      case NR.writev: return BigInt(-EBADF);               // moonlibc's kernel probe: -EBADF says linux
       case NR.close: case NR.mprotect: case NR.munmap: return 0n;
       case NR.mmap: {                                     // anonymous only: grow the memory by whole pages
         const len = Number(b), pages = Math.ceil(len / PAGE);

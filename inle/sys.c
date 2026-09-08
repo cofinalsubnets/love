@@ -1,14 +1,14 @@
-// inle/sys.c -- inle's syscall door, and the whole of it. nolibc's 76 sys/* members reach
+// inle/sys.c -- inle's syscall door, and the whole of it. moonlibc's 76 sys/* members reach
 // one seam (impl.h's sc0..sc6 -> __ai_call), and __ai_call parts its callers by __ai_osv:
 // a hosted kernel takes the mksys.l lay that issues `syscall` or `svc`, a negative osv --
 // written at kmain, where we are the kernel -- takes __ai_inle, this file's C answer.
 // the numbers are linux's, per arch, straight off impl.h's NR_*: the tree carries those
 // tables already and inle owes compatibility to nobody, so nothing is translated.
 // an unmapped number answers -ENOSYS, the same refusal mount and unshare wear off linux.
-#include "../apps/moon/lib/nolibc/impl.h"
+#include "../apps/moon/lib/moonlibc/impl.h"
 #include <stdint.h>
 
-// the C runtime is nolibc's core.c: errno, the streams, the mmap-arena malloc. what a
+// the C runtime is moonlibc's core.c: errno, the streams, the mmap-arena malloc. what a
 // hosted __ai_start would arm the kernel arms here -- an empty environment and the std
 // streams write-through on fds 1 and 2 at cap 0. a task's C-level printf reaches the
 // console where its own port reaches the pipe. kmain calls this after the osv.
@@ -189,7 +189,7 @@ long __ai_inle(long n, long a, long b, long c, long d, long e, long f) {
   case NR_getdents64:
    if (!b) return -EFAULT;
    return k_fd_dents((int) a, (void *) b, c);
-  // the allocator's page door: nolibc's malloc runs its mmap arenas here as anywhere,
+  // the allocator's page door: moonlibc's malloc runs its mmap arenas here as anywhere,
   // kmallocw supplying the pages. anonymous and kernel-placed only; the true base rides
   // the word below the aligned block, where munmap reads it back. zeroed, since
   // MAP_ANONYMOUS promises that and calloc's direct lane trusts it.

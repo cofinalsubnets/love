@@ -1,5 +1,5 @@
 #!/bin/sh
-# moon-m4.sh -- build GNU m4 1.4 with mooncc + nolibc + the holo linker (no
+# moon-m4.sh -- build GNU m4 1.4 with mooncc + moonlibc + the holo linker (no
 # gcc/glibc/ld) and prove it RUNS: the package's OWN check suite (57 checks
 # lifted from the m4 manual) green against our binary, plus a direct battery
 # (define/eval/divert/esyscmd through popen/format floats). The fourth
@@ -36,7 +36,7 @@
 # config.h (the accepted precedent -- mooncc COMPILES every object). Two of
 # configure's answers describe GLIBC, not our target libc, so the build
 # corrects them in place (config.h is a generated file; this IS configuration):
-#   HAVE_EFGCVT  -- nolibc has no ecvt/fcvt/gcvt; format.c's sprintf branch
+#   HAVE_EFGCVT  -- moonlibc has no ecvt/fcvt/gcvt; format.c's sprintf branch
 #                   is the right lane (and the better code).
 #   USE_STACKOVF -- stack-overflow detection needs sigaltstack + sys/resource.h
 #                   headers we don't carry yet; a nicety, off.
@@ -88,12 +88,12 @@ d=$ho/$sub
 rm -rf "$d"; mkdir -p "$d"
 
 # m4's link set, as its src/Makefile OBJECTS + lib/Makefile OBJECTS chose --
-# minus stackovf.o (USE_STACKOVF off) and alloca.o (HAVE_ALLOCA: nolibc's).
+# minus stackovf.o (USE_STACKOVF off) and alloca.o (HAVE_ALLOCA: moonlibc's).
 SRC="m4 builtin debug eval format freeze input macro output path symtab"
 LIB="regex getopt getopt1 error obstack xmalloc xstrdup"
 CFLAGS="-DSTDC_HEADERS=1 -DHAVE_CONFIG_H -Iapps/moon/include -I$M4SRC -I$M4SRC/src -I$M4SRC/lib"
 
-echo "MOON-M4  $M4SRC  ($target: mooncc + nolibc + holo, no gcc/glibc/ld)"
+echo "MOON-M4  $M4SRC  ($target: mooncc + moonlibc + holo, no gcc/glibc/ld)"
 
 objs=""
 for b in $SRC; do
@@ -105,13 +105,13 @@ for b in $LIB; do
   objs="$objs $d/lib_$b.o"
 done
 
-# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO nolibc
+# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO moonlibc
 # object -- the link owes its symbols and the driver's runtime table pulls
-# apps/moon/lib/nolibc/ MEMBER BY NEED (the Makefile says the same of love itself).
+# apps/moon/lib/moonlibc/ MEMBER BY NEED (the Makefile says the same of love itself).
 # Naming an object would take every member instead.
-for f in apps/moon/lib/math/*.c; do
+for f in apps/moon/lib/moonlibc/math/*.c; do
   b=`basename "$f" .c`
-  $mc $tflag -Iapps/moon/lib/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
+  $mc $tflag -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
 done
 # sys.o is LAID, not compiled -- and a CROSS lay needs holo's backend loaded
 # first (the host bake carries only the native one), exactly as raw.sh does it.
@@ -152,9 +152,9 @@ t=$(printf "format(\`%%05d %%.2f %%e', 7, 3.14159, 12345.678)\n" | $run "$m4bin"
 echo "  OK define/eval + divert + esyscmd + format"
 
 # the package's own check suite: 57 manual-derived checks, stdout AND stderr
-# compared (the stderr legs read strerror texts -- nolibc's table matters)
+# compared (the stderr legs read strerror texts -- moonlibc's table matters)
 ( cd "$M4SRC/checks" && PATH="$m4dir:$PATH" sh ./check-them [0-9]* ) | tail -1 | grep -q "All checks successful" \
   || { echo "FAIL m4's own check suite"; exit 1; }
 echo "  OK m4's own check suite (57 checks from the manual)"
 
-echo "$name: GNU m4 1.4 built by mooncc + nolibc + holo$([ -n "$run" ] && echo " for $target"), runs + full check suite -- ok"
+echo "$name: GNU m4 1.4 built by mooncc + moonlibc + holo$([ -n "$run" ] && echo " for $target"), runs + full check suite -- ok"

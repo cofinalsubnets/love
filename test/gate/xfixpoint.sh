@@ -61,9 +61,9 @@ for f in $gate_host_c; do
   b=$(basename "$f" .c)
   moon1 -D ai_tco="$tco" -I"$ho" -I. -Isrc -Iout/lib -c "$f" "$d/host_$b.o" || fail "love1 mooncc -c $f"
 done
-for f in apps/moon/lib/math/*.c; do
+for f in apps/moon/lib/moonlibc/math/*.c; do
   b=$(basename "$f" .c)
-  moon1 -Iapps/moon/lib/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || fail "love1 mooncc -c $f"
+  moon1 -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || fail "love1 mooncc -c $f"
 done
 LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$ho/.mksys-cat.l" -q -e "((from 'moon '$mks) \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
 test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"

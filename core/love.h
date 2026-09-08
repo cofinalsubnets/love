@@ -395,9 +395,9 @@ extern uintptr_t const ai_srcgz_len;
 
 uintptr_t ai_clock(void); // used by garbage collector
 intptr_t ai_nclock(void); // the fine interval clock (ns); weak ms-degraded default in love.c, hosts override with a real ns source
-// which kernel underneath (nolibc's os.c: 0 unprobed; 1 linux, 2 freebsd,
+// which kernel underneath (moonlibc's os.c: 0 unprobed; 1 linux, 2 freebsd,
 // 3 netbsd; NEGATIVE = we ARE the kernel, inle). love.c carries a weak zero
-// for seats with no nolibc aboard, where hosted is what zero reads as.
+// for seats with no moonlibc aboard, where hosted is what zero reads as.
 extern long __ai_osv;
 void ai_sleep(uintptr_t ticks); // per-frontend deep wait for at most `ticks` ai_clock()
 // units (0 = infinite); no input wakeup (parked streams go via ai_wait_fds). default no-op.
@@ -607,7 +607,7 @@ static ai_inline bool strp(word _) { return lamp(_) && cell(_)->ap == lvm_str; }
 
 // --- kernel-internal declarations ---
 
-// the math floor is ours on every frontend: apps/moon/lib/math/am.c (fdlibm and
+// the math floor is ours on every frontend: apps/moon/lib/moonlibc/math/am.c (fdlibm and
 // -lm both retired); the 32-bit lane computes in binary64 and narrows.
 double am_sin(double), am_cos(double), am_atan2(double, double),
        am_sqrt(double), am_exp(double), am_log(double), am_pow(double, double),

@@ -151,7 +151,7 @@ and 145-attrpos.c hold both to gcc):
   fall-through run into whatever follows, which is the one lowering that cannot be debugged.
 - `__builtin_memcpy`/`memmove`/`memset`/`memcmp`/`strlen`/`strcpy` ARE the plain functions:
   parse rewrites the name and DECLARES it if nothing else has, since a program that spells the
-  prefix is the one that never included the header. The link pulls the nolibc member by need.
+  prefix is the one that never included the header. The link pulls the moonlibc member by need.
 - the `l`/`ll` counting spellings (`clzl`, `ctzl`, `ctzll`). x64's `bsf` and rv's ladder walk up
   from the low bit and were already 64-bit-shaped; only a64 owed a second encoding. On t32 the
   `l` spellings are the 32-bit lane (long is 4 there) and `ll` refuses with the other pair rows.
@@ -549,7 +549,7 @@ becomes observable; both ops were already in the vocabulary and all six targets 
 
 Held by test/cc/140-fsuffix.c. The old note here said the consumer was PDCLib's `INFINITY`
 spelled `(_PDCLIB_FLT_MAX * 2)` — ⚠ that reading was wrong twice over: PDCLib is not this
-tree's libc (`apps/moon/lib/nolibc/` is), and we do not define `INFINITY` at all. The real
+tree's libc (`apps/moon/lib/moonlibc/` is), and we do not define `INFINITY` at all. The real
 consumer is every `float` expression in the tree.
 
 ### the `#if` evaluator — LANDED 2026-08-14, and one of its three bugs cost right answers

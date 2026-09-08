@@ -1,4 +1,4 @@
-// apps/moon/lib/math/am.c -- the math floor: our own transcendentals, ONE file on
+// apps/moon/lib/moonlibc/math/am.c -- the math floor: our own transcendentals, ONE file on
 // every frontend (host, love0, kernel, wasm, the gcc-free raw build -- the last
 // vendored math, fdlibm, retired here). binary64, portable C in the mooncc subset:
 // unions for bit access, uint64 arithmetic, no fma/int128/builtins. coefficients
@@ -430,7 +430,7 @@ float am_powf(float x, float y) { return (float) am_pow(x, y); }
 // steps one ulp at a time by bit arithmetic until the input falls inside.
 // exact and the same answer on every target: glibc's strtod leaves the
 // trusted base, and the naive accumulator that read "0.3" one ulp off
-// (nolibc's num.c) delegates here now.
+// (moonlibc's num.c) delegates here now.
 enum { am_dgmax = 800 };   // a boundary expansion: 17 digits + one per x5 step (<= 1076)
 static void am_dgmul(unsigned char *d, int *n, int k) {   // k = 2 or 5
  int c = 0;

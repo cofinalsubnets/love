@@ -4,7 +4,7 @@
 // machine is the worker running the module (port/wasm/inle.js), and each face below is
 // one hypercall through __ai_sys, the module's one import, wearing linux's number for
 // the nearest thing -- write is the serial line, read the keys, nanosleep the idle,
-// clock_gettime the two clocks, reboot the reset. nolibc's own calls never reach that
+// clock_gettime the two clocks, reboot the reset. moonlibc's own calls never reach that
 // import here: kmain writes __ai_osv = -1 first, so they take inle/sys.c's C answer.
 #include <stdint.h>
 #include <stdbool.h>
@@ -64,7 +64,7 @@ void k_reset(void) { for (;;) __ai_sys(hc_reboot, 0, 0, 0, 0, 0, 0); }
 // (fault n) backend: wasm has one trap, `unreachable`, and every n is it
 void k_fault_trigger(intptr_t n) { (void) n; __builtin_trap(); }
 
-// nolibc's signal-return trampoline, the metal tails' one asm leaf (mksys.l); no
+// moonlibc's signal-return trampoline, the metal tails' one asm leaf (mksys.l); no
 // signal is ever delivered on this machine, so the leaf is empty
 void __ai_sigret(void) { }
 

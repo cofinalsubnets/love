@@ -1,12 +1,12 @@
-/* apps/moon/lib/nolibc/impl.h -- the shared head of every nolibc member.
+/* apps/moon/lib/moonlibc/impl.h -- the shared head of every moonlibc member.
  * The members are pulled BY NEED (apps/moon/moon.l's runtime table globs this
- * directory the way it globs lib/math/), so a love that asks for no calendar
+ * directory the way it globs lib/moonlibc/math/), so a love that asks for no calendar
  * links no calendar. That is the whole reason this is a directory and not the
  * one file it used to be. ⚠ a member reaching another member's file-scope
  * static is what splitting costs: use the public spelling (errno, not
  * __errno_v), or move the state here. */
-#ifndef AiNolibcImplH
-#define AiNolibcImplH
+#ifndef AiMoonlibcImplH
+#define AiMoonlibcImplH
 #include <stddef.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -44,7 +44,7 @@
 #include <netinet/in.h>
 
 extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
-/* ⚠ WHERE THE TRANSLATION LAYER COMPILES. nolibc's C is written in one kernel's
+/* ⚠ WHERE THE TRANSLATION LAYER COMPILES. moonlibc's C is written in one kernel's
  * spelling -- linux's, because that is where we started and NOT because it is a
  * default -- and os.c translates the others into it. The tables compile where
  * the machine tail they call has been laid: x64 and a64 have it, riscv

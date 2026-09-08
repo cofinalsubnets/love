@@ -82,7 +82,7 @@ ai_noinline static int call_connect(uint32_t a, int port) {
  int r;
  do r = connect(fd, (struct sockaddr*) &sa, sizeof sa); while (r < 0 && errno == EINTR);
  // EINPROGRESS and no EALREADY: this is the first connect on a fresh socket, so "a
- // previous one is still going" cannot be the answer -- and nolibc has no EALREADY.
+ // previous one is still going" cannot be the answer -- and moonlibc has no EALREADY.
  if (r == 0 || errno == EINPROGRESS) return fd;   // in hand, or in flight
  int e = errno;
  close(fd);

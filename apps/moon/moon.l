@@ -16,7 +16,7 @@
 ; advisory flag families (-W.. -O.. -g.. -std= -f.. -pipe -static) ride through
 ; ignored so `CC=mooncc` drives a gcc-shaped recipe unchanged -- less -fno-inline,
 ; which is real here and bars every splice. a link owing
-; libc symbols pulls the runtime (nolibc + am math + sys) by need from the
+; libc symbols pulls the runtime (moonlibc + am math + sys) by need from the
 ; sources beside it -- -nostdlib/-ffreestanding turn that off. errors speak on
 ; err and exit 1; usage exits 2. last in the mooncc cat (its own app, doc/misc/moon.md), after
 ; core/holo/{elf,obj,link}.l and apps/moon/{lex,cpp,parse,gen}.l; rides the
@@ -58,12 +58,12 @@
    ; no runtime either. core.c is the one member every link takes, so it is
    ; the one that says a root is real.
    (mhome _) (: (go rs) (? !(two? rs) ()
-                           (two? (uread (<rs + "lib/nolibc/core.c"))) <rs
+                           (two? (uread (<rs + "lib/moonlibc/core.c"))) <rs
                            (go >rs))
                 (go (mroots ())))
    (pfx? s p) (: n (tally p) (n <= tally s && (snip s 0 n = p)))
    ; a path with its . and .. components folded away, for the table lookups
-   ; below -- "lib/nolibc/sys/../impl.h" and "lib/nolibc/impl.h" are one key.
+   ; below -- "lib/moonlibc/sys/../impl.h" and "lib/moonlibc/impl.h" are one key.
    (pnorm p)
     (: n (tally p)
        (go i st ps) (? (n < i) ps
@@ -399,7 +399,7 @@
                  ; our libc is the one in this link, and it carries its whole
                  ; surface on every kernel it serves -- so a source asking what it
                  ; may call asks this, never which kernel it is standing on.
-                 + '("AiNolibc=1")
+                 + '("AiMoonlibc=1")
                  + (? (= dia 'moon) '("__moon__=1") ())   ; the dialect's own macro: extensions on
                  +   ; ds9, not ds: a :-local shadows the param over the whole scope (the boxfix cell trap)
                  (? (member? tgt '(x64 a64)) ("__SIZEOF_INT128__=16" >< ds) ds))     ; the wide pair (gen's d128 lane); love.c's limb seam reads it, and gcc says the same on both
@@ -464,7 +464,7 @@
    ; and exits with its answer if it ever returns. __ai_start is defined here
    ; weak -- the call-main tail every small link gets (the push 16-aligns the
    ; call, and argc/argv unpack so an arg-taking main reads truth, not the raw
-   ; sp) -- so a libc object (apps/moon/lib/nolibc.c, rung 4) can override it
+   ; sp) -- so a libc object (apps/moon/lib/moonlibc.c, rung 4) can override it
    ; strong and unpack envp/auxv too. no conditional anywhere: the weak
    ; machinery is the whole switch.
    ; ..and the x64 entry serves both kernels (seed-universal rung UV1): linux
@@ -474,7 +474,7 @@
    ; and the freebsd side pushes once to restore linux's entry parity
    ; (rsp ≡ 8 mod 16 there, ≡ 0 here). each side exits by its own number;
    ; the weak tail exits linux's way -- a link that rides freebsd carries
-   ; nolibc's strong __ai_start, whose exit() goes through the one door. both
+   ; moonlibc's strong __ai_start, whose exit() goes through the one door. both
    ; sides hand it a second word of 0: every kernel here answers the probe.
    crt0 '((cmp r6 0)
            (br ne c0-fb)
@@ -500,7 +500,7 @@
    ; argc off the pad, find no program, and fall to stdin. So a zero x0 says
    ; linux and sp is the vector; a non-zero x0 is the vector. Each side exits by
    ; its own number (exit_group 93 / exit 1); a link riding freebsd carries
-   ; nolibc's strong __ai_start, whose exit() goes through the one door.
+   ; moonlibc's strong __ai_start, whose exit() goes through the one door.
    ; the branch taken is also handed down in the second word: this arch's kernel
    ; probe cannot run blind the way x64's can -- netbsd carries the number in the
    ; svc immediate and freebsd sigills any immediate but zero -- so the freebsd
@@ -536,7 +536,7 @@
               (li r7 94) (sys))
    ; the driver's libc (tolerance's other half): a link still owing strong
    ; symbols after the given objects is the cue every cc answers by supplying
-   ; the runtime -- ours is nolibc + the am math + the sys leaf, compiled from
+   ; the runtime -- ours is moonlibc + the am math + the sys leaf, compiled from
    ; the sources beside us and pulled member by need, archive-fashion: a member
    ; whose every def the link already carries stays out, so a set bringing its
    ; own am.o (love0's does) never meets a twin. the lane engages exactly where a
@@ -583,7 +583,7 @@
    ; which generations to keep.
    ; the compiler is one of those inputs and the costly one to get wrong -- a
    ; stale entry is an old codegen worn silently, and the gates that compile
-   ; nolibc by hand (test_raw, test_libc, test_fixpoint) would pass against it.
+   ; moonlibc by hand (test_raw, test_libc, test_fixpoint) would pass against it.
    ; its identity is the baked image, which the wake strips from cmdline: we
    ; cannot know which one we woke, so every *.image beside the love rides, by
    ; name and stat. hashing the compiler's .l sources instead looks tighter and
@@ -615,7 +615,7 @@
    ; the parameter leaves that read free -- `;; missing d`, at the mooncc0 bake.
    (mcims d) (map (\ f [f (mccid (d + f))]) (sort (filter dotim? (readdir d))))
    ; a directory's whole text, names and bytes, sorted and recursive. the
-   ; headers are an input too: an edited stdio.h changes what nolibc.c means, and
+   ; headers are an input too: an edited stdio.h changes what moonlibc.c means, and
    ; hashing the .c alone would not see it.
    (mctree d)
     (foldl (\ a f (: p (d + f)
@@ -815,15 +815,15 @@
    ; the roster, ahead of any compile: [name source includes] a member, an empty source
    ; naming the one that is laid rather than compiled. apart from the compile so a
    ; warmer can take a slice of it where the archive lane takes all of it.
-   ; nolibc is a tree: every .c directly under lib/nolibc/ and every .c one level down
+   ; moonlibc is a tree: every .c directly under lib/moonlibc/ and every .c one level down
    ; (string/, ..), one function to a file where the file-scope state allows. one level,
    ; not a walk -- the depth is the vocabulary, and a deeper tree would say nothing. the
-   ; member names flatten that tree with _ and the math ones wear m_: time.c and
-   ; sys/time.c are two members of one basename, and an archive resolves by name alone.
+   ; member names flatten that tree with _: time.c and sys/time.c are two members of one
+   ; basename, and an archive resolves by name alone. math/ is one of those directories
+   ; and wears no prefix of its own -- it had one only while it lived outside the library.
    (rtplan home tgt os vb)
     (: disk (string? home)                ; () home = the blob lane: paths are vb keys
-       ndir (? disk (home + "lib/nolibc/") "lib/nolibc/")
-       mdir (? disk (home + "lib/math/") "lib/math/")
+       ndir (? disk (home + "lib/moonlibc/") "lib/moonlibc/")
        inc  (? disk (home + "include/") "include/")
        (dotobj n) (? (dotc? n) (snip n 0 (tally n - 2) + ".o") n)
        (swap47 s) (: n (tally s) c (cask n)
@@ -846,12 +846,7 @@
            (foldl (\ a k (: sub (snip k (tally d) (tally k))
                             (? (dotc? sub) (a + [[(dotobj (swap47 sub)) k]]) a)))
                   () (sort (filter (\ k (pfx? k d)) (keys vb)))))
-       mfs (? disk (sort (filter dotc? (readdir (home + "lib/math"))))
-              (foldl (\ a k (: sub (snip k (tally mdir) (tally k))
-                               (? (dotc? sub) (a + [sub]) a)))
-                     () (sort (filter (\ k (pfx? k mdir)) (keys vb)))))
        ((map ((a b) \ [a b [inc]]) (nlmems ndir))
-        + map (\ f [("m_" + dotobj f) (mdir + f) [mdir inc]]) mfs
         + (? (member? tgt '(x64 a64 rv64)) [["mksys.o" "" ()]] ())))
    ; the members compile under the link's os (impl.h's table opens on it), and the sys
    ; leaf is the os's own -- freebsd rides the x64 machine.
@@ -924,7 +919,7 @@
              <pr)))
    ; -- the wasm link (core/holo/wasmfn.l): the objects are gen tuples as text, the
    ; runtime the same members compiled for wasm and pulled by need, and one function
-   ; imported -- __ai_sys, the syscall door the page's loader answers. crt0 hands nolibc's
+   ; imported -- __ai_sys, the syscall door the page's loader answers. crt0 hands moonlibc's
    ; __ai_start a stack laid in data (argc 1, an argv, empty envp and auxv) and exits with
    ; its answer through the import; the weak default calls main outright.
    (wasm-tu text) (: r (sound text) (? (two? r && two? <r) <r (udie 1 "cc: not a wasm object")))

@@ -1,5 +1,5 @@
 #!/bin/sh
-# moon-tar.sh -- build GNU tar 1.13 with mooncc + nolibc + the holo linker (no
+# moon-tar.sh -- build GNU tar 1.13 with mooncc + moonlibc + the holo linker (no
 # gcc/glibc/ld) and prove it RUNS: a cf/xf roundtrip byte-identical to the tree
 # it archived, a czf/xzf roundtrip (tar forks gzip through a pipe), and interop
 # with the system tar reading our archive. The third moon-userland rung
@@ -88,7 +88,7 @@ SRC="arith buffer compare create delete extract incremen list mangle misc names 
 LIB="addext argmatch backupfile basename error exclude fnmatch full-write getdate getopt getopt1 modechange msleep quotearg safe-read xgetcwd xmalloc xstrdup xstrtol xstrtoul xstrtoumax mktime"
 CFLAGS="-DSTDC_HEADERS=1 -DHAVE_CONFIG_H -Iapps/moon/include -I$TARSRC -I$TARSRC/src -I$TARSRC/lib -I$TARSRC/intl"
 
-echo "MOON-TAR  $TARSRC  ($target: mooncc + nolibc + holo, no gcc/glibc/ld)"
+echo "MOON-TAR  $TARSRC  ($target: mooncc + moonlibc + holo, no gcc/glibc/ld)"
 
 objs=""
 for b in $SRC; do
@@ -100,13 +100,13 @@ for b in $LIB; do
   objs="$objs $d/lib_$b.o"
 done
 
-# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO nolibc
+# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO moonlibc
 # object -- the link owes its symbols and the driver's runtime table pulls
-# apps/moon/lib/nolibc/ MEMBER BY NEED (the Makefile says the same of love itself).
+# apps/moon/lib/moonlibc/ MEMBER BY NEED (the Makefile says the same of love itself).
 # Naming an object would take every member instead.
-for f in apps/moon/lib/math/*.c; do
+for f in apps/moon/lib/moonlibc/math/*.c; do
   b=`basename "$f" .c`
-  $mc $tflag -Iapps/moon/lib/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
+  $mc $tflag -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
 done
 # sys.o is LAID, not compiled -- and a CROSS lay needs holo's backend loaded
 # first (the host bake carries only the native one), exactly as raw.sh does it.
@@ -146,4 +146,4 @@ if command -v gzip >/dev/null 2>&1; then
   echo "  OK czf/xzf roundtrip (forked gzip through a pipe)"
 fi
 
-echo "$name: GNU tar 1.13 built by mooncc + nolibc + holo$([ -n "$run" ] && echo " for $target"), runs + roundtrips -- ok"
+echo "$name: GNU tar 1.13 built by mooncc + moonlibc + holo$([ -n "$run" ] && echo " for $target"), runs + roundtrips -- ok"

@@ -538,7 +538,7 @@ dl/c-testsuite:
 	@echo 'MK	'c-testsuite
 	@git clone --depth=1 https://github.com/c-testsuite/c-testsuite.git $@ > /dev/null 2>&1
 # test_libc -- OUR C LIBRARY against the system's, function by function:
-# test/libc/*.c built by mooncc (pulling apps/moon/lib/nolibc.c by need) and by gcc, run,
+# test/libc/*.c built by mooncc (pulling apps/moon/lib/moonlibc.c by need) and by gcc, run,
 # and the two OUTPUTS compared, so a drift names the function and the case.
 test_libc: host
 	@sh test/gate/libc.sh $(ho) $m
@@ -557,7 +557,7 @@ test_selfhost: host
 	  for f in $(love_tu_c) $(host_c); do b=`basename $$f .c`; \
 	    $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Icore -Iinle -Iout/lib -c $$f $$d/$$b.o \
 	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
-	  $(moonrun) -Iapps/moon/include -c apps/moon/lib/math/am.c $$d/am.o \
+	  $(moonrun) -Iapps/moon/include -c apps/moon/lib/moonlibc/math/am.c $$d/am.o \
 	    || { echo "FAIL mooncc -c am.c"; exit 1; }; \
 	  $(CC) -static -o $(ho)/love-selfhost $$d/*.o $(host_ldflags) \
 	    || { echo "FAIL link all-mooncc binary"; exit 1; }; \
@@ -568,7 +568,7 @@ test_selfhost: host
 	    || { echo "FAIL all-mooncc corpus (exit $$s)"; exit 1; }; \
 	  echo "test_selfhost: all `echo $(love_tu_c) $(host_c) | wc -w` src/*.c built by mooncc, corpus passes"
 # The rung-4 gate: the GCC-FREE fixpoint. Everything test_selfhost builds PLUS our own raw
-# libc (nolibc.c), math floor (am.c) and sys.o, bound by OUR OWN static linker -- no gcc,
+# libc (moonlibc.c), math floor (am.c) and sys.o, bound by OUR OWN static linker -- no gcc,
 # no glibc, no ld anywhere. In test_slow, x86-64 only; supersedes test_selfhost.
 test_raw: host
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
@@ -836,7 +836,7 @@ test_mps2_build: host
 test_virt_build: host
 	@echo TEST out/virt/love.elf '(build)'
 	@$(MAKE) -C port/virt || { echo "FAIL virt build"; exit 1; }
-# the userland packages: each built by mooncc + nolibc + the holo
+# the userland packages: each built by mooncc + moonlibc + the holo
 # linker -- no gcc/glibc/ld anywhere -- then RUN and held to the package's own answers:
 # tar 1.13 cf/xf + czf/xzf roundtrips and system-tar interop, m4 1.4's own 57-check suite,
 # lua 5.4's interpreter battery, sqlite's amalgamation + VFS battery. Opt-in: point the

@@ -34,8 +34,8 @@ mps2t1: $(R)/$(o)/love-t1.elf
 
 $(foreach u,$(love_m),$(eval $(call p_obj,$u,core/$u.c,\
   $(R)/core/$u.c $(love_dep),$(mps2_cc))))
-$(foreach m,$(libc_m),$(eval $(call p_obj,$m,apps/moon/lib/nolibc/string/$m.c,\
-  $(R)/apps/moon/lib/nolibc/string/$m.c $(libc_dep),$(mps2_cc) -Iapps/moon/include)))
+$(foreach m,$(libc_m),$(eval $(call p_obj,$m,apps/moon/lib/moonlibc/string/$m.c,\
+  $(R)/apps/moon/lib/moonlibc/string/$m.c $(libc_dep),$(mps2_cc) -Iapps/moon/include)))
 
 # main.c, once per face -- the -D is the whole difference.
 mainc = main.c $(R)/core/love.h $(lib_hR) $(mc)
@@ -112,11 +112,11 @@ t1_objs = $(R)/$(o)/start.o $(t1_love_o) $(R)/$(o)/am-t1.o $(t1_libc_o) \
 
 $(foreach u,$(love_m),$(eval $(call p_obj,$u-t1,core/$u.c,\
   $(R)/core/$u.c $(love_dep),$(mps2t1_cc))))
-$(foreach m,$(libc_m),$(eval $(call p_obj,$m-t1,apps/moon/lib/nolibc/string/$m.c,\
-  $(R)/apps/moon/lib/nolibc/string/$m.c $(libc_dep),$(mps2t1_cc) -Iapps/moon/include)))
+$(foreach m,$(libc_m),$(eval $(call p_obj,$m-t1,apps/moon/lib/moonlibc/string/$m.c,\
+  $(R)/apps/moon/lib/moonlibc/string/$m.c $(libc_dep),$(mps2t1_cc) -Iapps/moon/include)))
 $(eval $(call p_obj,main-t1,port/mps2/main.c,$(mainc),$(mps2t1_cc)))
-$(eval $(call p_obj,am-t1,apps/moon/lib/math/am.c,$(R)/apps/moon/lib/math/am.c $(mc),\
-  $(MOONCC) -t thumb1 -Iapps/moon/lib/math -Iapps/moon/include))
+$(eval $(call p_obj,am-t1,apps/moon/lib/moonlibc/math/am.c,$(R)/apps/moon/lib/moonlibc/math/am.c $(mc),\
+  $(MOONCC) -t thumb1 -Iapps/moon/lib/moonlibc/math -Iapps/moon/include))
 
 # our linker binds this one too: libgcc.a rides in as an ARCHIVE, resolved by need through
 # its ranlib index (core/holo/link.l's ld-arsyms). gcc's own v6-M members are the only

@@ -170,7 +170,7 @@ setup: $(SETUP)
 # truth); the mooncc lane runs THE ARTIFACT's own mooncc verb, so depend on `dist-seed`
 # beside `host`. ⚠ that is not tidiness -- ccbench.sh's SEED note has the measurement:
 # through out/mooncc the build row read 2.2x high, because rebuilding mooncc.image
-# invalidated the cached nolibc archive on every run. Cached; `make ccbench` to refresh it
+# invalidated the cached moonlibc archive on every run. Cached; `make ccbench` to refresh it
 # on its own. (mooncc is x86-64 only -- dnf elsewhere.)
 CCBENCH := $(BDIR)/ccbench.txt
 $(CCBENCH): ccbench.sh ccrypto.l cnifs.l ccgen.l $(GL) $(R)/core/love.c $(wildcard $(R)/inle/*.c) | $(BDIR)

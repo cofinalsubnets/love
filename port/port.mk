@@ -80,21 +80,21 @@ love_m   = $(basename $(love_tu) $(love_codec))
 love_dep = $(love_h) $(lib_hR) $(mc)
 love_o   = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(love_m)))
 
-# nolibc's pure members: the libc a bare-metal seat gets, the same six the kernel takes
+# moonlibc's pure members: the libc a bare-metal seat gets, the same six the kernel takes
 # (mk/common.mk) out of the same source -- there is no second libc in this tree. A port
 # lays them with a foreach over libc_m under its own <x>_cc. ⚠ -Iapps/moon/include is
 # owed: the members open with impl.h, whose hosted declarations cost compile time and
 # nothing else -- the six owe ONE symbol between them (memmove's memcpy), and it is one
 # of the six.
 libc_m    = memchr memcmp memcpy memmove memset strlen
-libc_dep  = $(R)/apps/moon/lib/nolibc/impl.h $(mc)
+libc_dep  = $(R)/apps/moon/lib/moonlibc/impl.h $(mc)
 libc_o    = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(libc_m)))
 
 # the am math floor: the one object every port compiles exactly alike.
-$(R)/$(o)/am.o: $(R)/apps/moon/lib/math/am.c $(mc)
+$(R)/$(o)/am.o: $(R)/apps/moon/lib/moonlibc/math/am.c $(mc)
 	@echo 'MOON	'$@
 	@mkdir -p $(R)/$(o)
-	@cd $(R) && $(MOONCC) -t $(p_tgt) -Iapps/moon/lib/math -Iapps/moon/include -c apps/moon/lib/math/am.c $(o)/am.o
+	@cd $(R) && $(MOONCC) -t $(p_tgt) -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c apps/moon/lib/moonlibc/math/am.c $(o)/am.o
 
 # p_ocopy -- the flatten, for the ports that ship a .bin/.hex: core/holo/copy.l reads the
 # linked ELF and writes objcopy's two output formats, byte for byte (`kore objcopy` is the

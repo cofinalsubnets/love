@@ -8094,7 +8094,7 @@
        ; -- lazy lowering, which is why no sweep follows it. we splice a small
        ; static into its call sites, and the out-of-line body then ships named
        ; by nothing -- 143 of love.c's 675, and 15 of the 16 syscall wrappers
-       ; every nolibc member inherits from impl.h. so lay the roots, read what
+       ; every moonlibc member inherits from impl.h. so lay the roots, read what
        ; their laid forms still call, and lay that, to closure.
        ; the roots are every exported fn, every alias target, the
        ; section-named fns (placed for their address), and every fn an

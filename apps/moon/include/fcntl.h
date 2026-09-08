@@ -2,7 +2,7 @@
 #define _AI_FCNTL_H
 /* Linux x86-64 values (octal in the kernel; spelled decimal here) -- the
  * CANONICAL face on every lane; a freebsd kernel takes them translated
- * (nolibc's os.c flag rows). */
+ * (moonlibc's os.c flag rows). */
 #define O_RDONLY         0
 #define O_WRONLY         1
 #define O_RDWR           2

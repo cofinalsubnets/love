@@ -1,4 +1,4 @@
-/* apps/moon/lib/nolibc/os.c -- the kernel under one binary (seed-universal
+/* apps/moon/lib/moonlibc/os.c -- the kernel under one binary (seed-universal
  * rungs UV1-UV2). one build runs linux, freebsd and netbsd: __ai_osdetect asks
  * the kernel which it is (once, at entry or lazily under __ai_call), and
  * numbers, errnos, signals, masks and flag words translate through the tables
@@ -27,11 +27,11 @@ long __ai_osdetect(void) {
 # if defined(__linux__)
   return 1;
 # elif defined(__FreeBSD__)
-#  error "nolibc: -os freebsd wants the translation tables, and this arch has no machine tail for them"
+#  error "moonlibc: -os freebsd wants the translation tables, and this arch has no machine tail for them"
 # elif defined(__NetBSD__)
-#  error "nolibc: -os netbsd wants the translation tables, and this arch has no machine tail for them"
+#  error "moonlibc: -os netbsd wants the translation tables, and this arch has no machine tail for them"
 # else
-#  error "nolibc: no OS predefine -- -os named a kernel os.c cannot speak for"
+#  error "moonlibc: no OS predefine -- -os named a kernel os.c cannot speak for"
 # endif
 #else
   /* 20 is getpid on both BSDs and writev on linux: writev(-1, NULL, 0) is
