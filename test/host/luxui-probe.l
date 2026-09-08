@@ -16,6 +16,9 @@
 ;   closing the focused tile hands the keyboard to the survivor.
 ; Exits 0 iff every assertion held; any failure names itself and exits 1.
 ; Load order: core -> layout -> wire, then this file; test/host/luxui.l spawns it.
+; loaded with -l, no test/00-init.l ahead of it -- so the posix door is borrowed here.
+(? (cite 'posix) (borrow 'posix) ())
+
 (borrow 'xwire)   ; the X wire, apps/lux/wire.l
 (: (probe dpy)
    (: s (connectu dpy)
