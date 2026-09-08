@@ -107,7 +107,7 @@
   ; fuse/spa/spq are this backend's peepholes; ava (avw, the scope walker) resolves a variable to
   ; karg (a local, at its [imps args] frame slot) / kim (a global constant) / em2 lvm_index.
   ; this is the threaded (bytecode) backend, the portable default every target runs. a native
-  ; backend (love/boot/glaze/emit.l, x86-64, opt-in) implements the same leaf interface over a byte
+  ; backend (l/boot/glaze/emit.l, x86-64, opt-in) implements the same leaf interface over a byte
   ; buffer -- kim -> movabs, karg -> mov [rcx+8i] + a fixnum guard, aco -> cmp+jcc -- today via the
   ; ala creation hook (book['natjit]) for leaf bodies, with kap (a call) deopting into this thread.
   (p2 i x) (poke -1 i * poke -1 x)

@@ -85,7 +85,7 @@ test_filemode: $(ho)/.love.baked
 	      && ! grep -q "^past$$" out/.test_filemode.out; } \
 	    || { cat out/.test_filemode.out; echo "FAIL file mode not terminal (exit $$r)"; exit 1; }
 # test_stdinbuf -- WHAT WE BORROW OF fd 0 IS INVISIBLE, and we borrow two things. Both doors
-# read the device in 4096-byte gulps (love/love.c's rbio_of), so the first law is that BOTH ANSWER
+# read the device in 4096-byte gulps (l/love.c's rbio_of), so the first law is that BOTH ANSWER
 # THE SAME: the bytes our reader has not taken are still there for an in-form (slurp in), and
 # still there for a child that inherits the fd. A seekable door puts them back with an lseek;
 # a pipe has no rewind, so stdin_hand DELIVERS them down a fresh pipe instead -- which is why
@@ -134,7 +134,7 @@ test_stdinbuf: $(ho)/.love.baked
 # stdin works (test/io.l used to poke `in` and eat a byte of whatever fed the suite --
 # it taps a charlist now), and it is equally strict, quitting 1 on a scare either way.
 # What is left of the gap is the READER, not the device: a redirect gulps 4096 like
-# the file does (love/love.c's rbio_of), but `reads` trickles `in` a byte at a time to keep
+# the file does (l/love.c's rbio_of), but `reads` trickles `in` a byte at a time to keep
 # its position exact, which costs ~1.45x here. This is the gate that runs constantly.
 # cat'ing also keeps the corpus's one-global-scope property.
 test_host: $(ho)/.love.baked
@@ -165,7 +165,7 @@ test_hostegg: $(ho)/love
 # that parsed the corpus's own English COMMENTS as code still printed "3959 tests pass" on the
 # file door and exited 0. It was caught by hand-diffing the doors; this is that diff, kept.
 # ⚠ ALL THREE DOORS, because they are three different readers -- a file and a redirect share the
-# borrowed run (love/love.c's rbio_of), a pipe has none and drips.
+# borrowed run (l/love.c's rbio_of), a pipe has none and drips.
 # ⚠ the summary line carries a DURATION, so that is normalised away and everything else must
 # match byte for byte -- the dots included, since a dropped assert is exactly what this catches.
 # ⚠ AND BOTH LOVES. The egg lane and the baked image are not interchangeable here: a
@@ -198,10 +198,10 @@ test_stdincorpus: $(ho)/.love.baked
 	 done; \
 	 done
 	@echo "  ok   file, redirect and pipe read the corpus identically on both loves"
-# test_front -- the TEST-ONLY FRONTEND: out/front links liblove.a (love/love.c only)
+# test_front -- the TEST-ONLY FRONTEND: out/front links liblove.a (l/love.c only)
 # and supplies the frontend contract itself, so its port vt can answer WOULD-BLOCK on
 # cue. ⚠ it EXITS 97 on a wait with no deadline -- a deadlock, said loudly.
-$(ho)/front: test/front/main.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/love/love_data.ld \
+$(ho)/front: test/front/main.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/l/love_data.ld \
     out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h
 	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
@@ -231,13 +231,13 @@ test_doc: host
 	  cat test/00-init.l $$s | sh test/gate/run.sh doc "$m" ": ok" \
 	    || { echo "  (the gate above is $$s)"; exit 1; }; \
 	done
-# Native-codegen self-tests (the love/boot/glaze/ x86-64 jit): test/glaze-x86.l covers emit
+# Native-codegen self-tests (the l/boot/glaze/ x86-64 jit): test/glaze-x86.l covers emit
 # (the SSE emitter) + auto (ev's source-recognizer), cats the holo backends ahead of
 # itself, and runs each block through base-ev. Needs the `nat` nif; x86-64 only.
 ifeq ($a,x64)
 test_glaze: host
 	@echo TEST test/glaze-x86.l "(emit + auto)"
-	@{ echo "(use 'holo)"; cat love/holo/x64.l love/holo/a64.l test/glaze-x86.l; } \
+	@{ echo "(use 'holo)"; cat l/holo/x64.l l/holo/a64.l test/glaze-x86.l; } \
 	  | sh test/gate/run.sh glaze "env LOVE_NO_IMAGE=1 $m" "test/glaze-x86:"
 else
 test_glaze:
@@ -269,16 +269,16 @@ else
 test_glazebench:
 	@echo "test_glazebench: skipped (the glaze emits for x64 / a64; host arch is $a)"
 endif
-# test_glazefuzz -- the glaze's DIFFERENTIAL fuzz (love/boot/glaze/fuzz.l): 3000 random closures
+# test_glazefuzz -- the glaze's DIFFERENTIAL fuzz (l/boot/glaze/fuzz.l): 3000 random closures
 # run TWICE against the SAME binary (plain, then LOVE_NO_GLAZE=1), stdouts byte-identical.
 # `fires=` is the checked proof of work; stderr is dropped (the two runs scare differently).
 ifneq ($(filter $a,x64 a64),)
 test_glazefuzz: host
-	@echo TEST love/boot/glaze/fuzz.l "(glaze differential fuzz: glazed vs interpreted)"
+	@echo TEST l/boot/glaze/fuzz.l "(glaze differential fuzz: glazed vs interpreted)"
 	@on=out/.gfuzz_on.out; off=out/.gfuzz_off.out; \
-	  LOVE_NO_IMAGE=1 $m love/boot/glaze/fuzz.l > $$on 2>/dev/null \
+	  LOVE_NO_IMAGE=1 $m l/boot/glaze/fuzz.l > $$on 2>/dev/null \
 	    || { echo "FAIL glazefuzz: the GLAZED run died"; exit 1; }; \
-	  LOVE_NO_IMAGE=1 LOVE_NO_GLAZE=1 $m love/boot/glaze/fuzz.l > $$off 2>/dev/null \
+	  LOVE_NO_IMAGE=1 LOVE_NO_GLAZE=1 $m l/boot/glaze/fuzz.l > $$off 2>/dev/null \
 	    || { echo "FAIL glazefuzz: the INTERPRETED run died"; exit 1; }; \
 	  fon=`sed -n 's/^fires=//p' $$on`; foff=`sed -n 's/^fires=//p' $$off`; \
 	  [ -n "$$fon" ] && [ -n "$$foff" ] \
@@ -344,7 +344,7 @@ test_web: host
 	@mkdir -p out/.web
 	@$m web/index.l out/.web/index.html
 	@env -u LOVE_NO_IMAGE $m web/style.l out/.web/style.css
-	@env -u LOVE_NO_IMAGE $m tools/mkicon.l love/quay/cga_8x8.c 3 32 out/.web/favicon.png 2>/dev/null
+	@env -u LOVE_NO_IMAGE $m tools/mkicon.l l/quay/cga_8x8.c 3 32 out/.web/favicon.png 2>/dev/null
 	@cmp -s out/.web/index.html index.html && cmp -s out/.web/style.css assets/web/style.css \
 	  && cmp -s out/.web/favicon.png assets/web/favicon.png \
 	  || { echo "  FAIL: index.html, style.css or favicon.png is behind web/ -- run make web and commit"; exit 1; }
@@ -431,18 +431,18 @@ moonrun = $m mooncc
 # bootstrap lane can lose the feature while this one keeps it.
 test_moon: host $(love0)
 	@sh test/gate/moon.sh $(ho) $m $(love0)
-# the COMMITTED GENERATED artifacts, laid from the tables that define them (love/mx.l the +/*
-# dispatch matrices and the kind lattice they index, love/nifs.l the nif + instruction registry,
+# the COMMITTED GENERATED artifacts, laid from the tables that define them (l/mx.l the +/*
+# dispatch matrices and the kind lattice they index, l/nifs.l the nif + instruction registry,
 # quay.l the xterm-256 palette host and kernel share). `make mx` refreshes; test_clay diffs.
-# ⚠ love/mx.h/kinds.h/nifs.h are CORE headers -- a refresh rebuilds the tree, so the gate to run
+# ⚠ l/mx.h/kinds.h/nifs.h are CORE headers -- a refresh rebuilds the tree, so the gate to run
 # after is `make test`, not test_clay alone. Each is written aside and moved only once the
 # whole set lays, so a shape check that quits leaves every committed file untouched.
-# love/love_data.ld is the last linker script in the tree and is laid WHOLE: every other
+# l/love_data.ld is the last linker script in the tree and is laid WHOLE: every other
 # seat's link became ours, and holo needs no script at all.
 # dest:source:value:shape-check -- ONE roster, read by `make mx` (which writes) and by
 # test_clay (which regenerates and diffs). Two spellings of this list is how they drift.
-mx_gen = love/mx.h:love/mx.l:mx-h:mx-ok love/kinds.h:love/mx.l:kinds-h:mx-ok love/nifs.h:love/nifs.l:nifs-h:nifs-ok \
-         love/quay/xterm256.h:love/quay/quay.l:q-c:q-ok love/love_data.ld:love/mx.l:mx-ld:mx-ok
+mx_gen = l/mx.h:l/mx.l:mx-h:mx-ok l/kinds.h:l/mx.l:kinds-h:mx-ok l/nifs.h:l/nifs.l:nifs-h:nifs-ok \
+         l/quay/xterm256.h:l/quay/quay.l:q-c:q-ok l/love_data.ld:l/mx.l:mx-ld:mx-ok
 # /warn the \# escapes are load-bearing: a bare # in a make VARIABLE starts a comment and
 # would eat the rest of the line (a recipe line passes # through, a variable does not).
 mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${r\#*:}; o=out/.`basename $$d`
@@ -451,16 +451,16 @@ mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${
 # two-arg `join` shadowed clay's one-arg at mx-h's define and the .h came out empty.
 mxlay   = LOVE_NO_IMAGE=1 $m -l $$l -e "(: _ (? $$k 0 (quit 1)) _ (puts $$v) (quit 0))"
 mx: host
-	@echo 'LOVE	'love/mx.h love/kinds.h love/nifs.h xterm256.h love/love_data.ld "(love/mx.l + love/nifs.l + quay.l on $m)"
+	@echo 'LOVE	'l/mx.h l/kinds.h l/nifs.h xterm256.h l/love_data.ld "(l/mx.l + l/nifs.l + quay.l on $m)"
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o || exit 1; done
 	@for s in $(mx_gen); do $(mxsplit); mv $$o $$d; done
 # ...and the DEPENDENCY, off the same roster: a committed generated file is stale the moment
 # its table moves, and the objects that include it then rebuild from the fresh one. Without
-# this a new love/nifs.l row builds clean and gates GREEN with its nom still off the book -- the
+# this a new l/nifs.l row builds clean and gates GREEN with its nom still off the book -- the
 # drift diff lives in test_clay, which only test_extra reaches.
 # ⚠ the prerequisite is the TABLE ALONE, never $(m): love is built FROM these headers, so
 # naming it as a prerequisite closes the loop and make drops the lot. The recipe instead takes
-# whatever love ALREADY exists -- sound because the generator is love/nifs.l/mx.l themselves, and a
+# whatever love ALREADY exists -- sound because the generator is l/nifs.l/mx.l themselves, and a
 # stale love lays a fresh table. A tree with no love yet is the bootstrap case: the committed
 # file is what builds the first one, so the rule stands aside and only marks it seen.
 define mx_dep
@@ -483,7 +483,7 @@ test_clay: host
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o; \
 	   cmp -s $$o $$d || { echo "FAIL $$d is not what $$l lays -- run: make mx"; \
 	                       diff -u $$d $$o | head -20; exit 1; }; done
-	@echo "clay-mx: love/mx.h, love/kinds.h, love/nifs.h, xterm256.h and love/love_data.ld regenerate identically"
+	@echo "clay-mx: l/mx.h, l/kinds.h, l/nifs.h, xterm256.h and l/love_data.ld regenerate identically"
 	@for s in $(mx_gen); do $(mxsplit); rm -f $$o; done
 # test_moonfuzz -- moon's REFUSAL surface: each test/cc file broken
 # eight ways from a fixed seed. Two reds -- no SCARE, no hang -- plus G1 on every mutant that
@@ -555,7 +555,7 @@ test_selfhost: host
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/selfhost; mkdir -p $$d; rm -f $$d/*.o; \
 	  for f in $(love_tu_c) $(host_c); do b=`basename $$f .c`; \
-	    $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Ilove -Iinle -Iout/lib -c $$f $$d/$$b.o \
+	    $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Il -Iinle -Iout/lib -c $$f $$d/$$b.o \
 	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
 	  $(moonrun) -Iapps/moon/include -c apps/moon/lib/moonlibc/math/am.c $$d/am.o \
 	    || { echo "FAIL mooncc -c am.c"; exit 1; }; \
@@ -622,7 +622,7 @@ rvboot_o = $(ko)/rv64/rv64/boot.o $(ko)/rv64/inle/rv64/dtb.o $(ko)/rv64/rvboot.o
 $(ko)/rv64/rvboot.o: test/gate/rvboot.c $(love_h) $(R)/inle/k.h $(R)/inle/dtb.h $(mooncc_dep)
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
-	@$(mooncc) -I$(ko)/rv64 -I. -Ilove -Iinle -I$(ho) -Iout/lib -I$R -I$R/apps/moon/include \
+	@$(mooncc) -I$(ko)/rv64 -I. -Il -Iinle -I$(ho) -Iout/lib -I$R -I$R/apps/moon/include \
 	  -t rv64 -c $< -o $@
 $(ko)/rv64/rvboot.elf: $(rvboot_o) test/gate/rvboot.l $m
 	@echo 'RVLINK	'$@
@@ -725,7 +725,7 @@ test_raw_a64: host
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
 	  gate_sentinel='test/a64/callout:.* ok' \
 	  sh test/gate/raw.sh a64 $(ho) $m $t test/a64/callout.l
-# test_thumb1 -- the ELF32/EM_ARM object writer (love/holo/obj.l objsecs32) end to end and the
+# test_thumb1 -- the ELF32/EM_ARM object writer (l/holo/obj.l objsecs32) end to end and the
 # 32-bit data model: a cross-object BL, the inline v6-M soft divide/rem, a global via the
 # literal-pool `la`, a gcc-built pointer-bearing struct mooncc reads a field back from, and a
 # NAMED SECTION holding a function-pointer table -- the vector-table shape, thumb bit and all.
@@ -922,16 +922,16 @@ test_fat32: host
 test_cpio: host
 	@echo TEST test/gate/cpio.sh
 	@sh test/gate/cpio.sh $(ho)/love
-# The neutral assembler (love/holo/) + its x86-64 backend: every encoder golden is
+# The neutral assembler (l/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (test/holo/golden.l). A host-only app -- it adds no nif and is NOT
 # baked into love0. The sources are cat'd in because the host bakes its NATIVE backend
 # only; the other four reach the gate no other way. Gate = exit 0 AND the "N passed,
 # 0 failed" sentinel.
 test_holo: host
 	@echo TEST test/holo/golden.l
-	@cat love/holo/holo.l love/holo/x64.l love/holo/a64.l love/holo/thumb2.l \
-	    love/holo/rv64.l love/holo/thumb1.l love/holo/text.l love/holo/dialect.l love/holo/gas.l love/holo/elf.l \
-	    love/holo/wasm.l love/holo/wasmfn.l test/holo/golden.l | sh test/gate/run.sh holo "$m" ", 0 failed"
+	@cat l/holo/holo.l l/holo/x64.l l/holo/a64.l l/holo/thumb2.l \
+	    l/holo/rv64.l l/holo/thumb1.l l/holo/text.l l/holo/dialect.l l/holo/gas.l l/holo/elf.l \
+	    l/holo/wasm.l l/holo/wasmfn.l test/holo/golden.l | sh test/gate/run.sh holo "$m" ", 0 failed"
 # as.l -- the real x86-64 front over holo, either dialect through dialect.l's lens (the lens
 # laws ride test/holo/as.l; test/gate/dialect.sh judges it against gcc's own two outputs,
 # skipping without gcc), and decode.l reads the bytes back (its battery laws ride the same
@@ -940,7 +940,7 @@ test_holo: host
 # asrefuse.sh is the other half: what must RAISE, one love per case.
 test_as: host
 	@echo TEST test/holo/as.l
-	@cat love/holo/holo.l love/holo/x64.l love/holo/dialect.l love/holo/decode.l love/holo/as.l test/holo/as.l \
+	@cat l/holo/holo.l l/holo/x64.l l/holo/dialect.l l/holo/decode.l l/holo/as.l test/holo/as.l \
 	  | sh test/gate/run.sh as "$m" ", 0 failed"
 	@sh test/gate/asrefuse.sh "$m"
 	@sh test/gate/dialect.sh "$m" $(ho)
@@ -951,7 +951,7 @@ test_as: host
 # and NOTHING else -- no as, no ld, no arm-none-eabi -- so it runs where the thumb gates skip.
 test_elf32: host
 	@sh test/gate/elf32.sh $(ho)
-# test_objcopy -- love/holo/copy.l, the flatten, against the objcopy it replaces: a BYTE
+# test_objcopy -- l/holo/copy.l, the flatten, against the objcopy it replaces: a BYTE
 # comparison of both output formats over fixtures our own linker mints plus every ELF on
 # hand. Intel HEX is a wire (a Teensy loader reads it), so nothing softer would do. The
 # gate skips where no objcopy exists -- see the script for what the fixtures are for.
@@ -1037,11 +1037,11 @@ test_uugen: host
 	@echo TEST test/proof/rocq/uugen.v "(coqc)"
 	@$(COQC) -q test/proof/rocq/uugen.v
 	@$(call vclean,uugen)
-# love/mx.l IS the +/* dispatch matrices; love/mx.h is laid from it through clay and tools/mx2coq.l models
+# l/mx.l IS the +/* dispatch matrices; l/mx.h is laid from it through clay and tools/mx2coq.l models
 # it in Rocq -- two derivations of ONE datum.
 test_mx: host
 	@echo TEST test/proof/rocq/mx.v "(the dispatch matrices: band factorization + dispatch commutativity, coqc)"
-	@cat love/mx.l tools/mx2coq.l | $m > test/proof/rocq/mx.v
+	@cat l/mx.l tools/mx2coq.l | $m > test/proof/rocq/mx.v
 	@cd test/proof/rocq && $(COQC) -q mx.v >/dev/null
 	@$(call vclean,mx)
 endif
@@ -1094,7 +1094,7 @@ test_encver: host
 	@for s in $(encver); do n=$${s%%:*}; r=$${s#*:}; c=$${r%%:*}; l=$${r#*:}; \
 	   o=out/.$${n}_oracle; \
 	   test/proof/rocq/$${n}_drive > $$o.l; \
-	   { cat love/holo/holo.l love/holo/x64.l; echo "(use 'holo)"; cat $$o.l; } | $m > $$o.out 2>&1; r=$$?; \
+	   { cat l/holo/holo.l l/holo/x64.l; echo "(use 'holo)"; cat $$o.l; } | $m > $$o.out 2>&1; r=$$?; \
 	   { [ $$r -eq 0 ] && grep -q "$$c / $$c PASS" $$o.out; } \
 	     || { echo "FAIL the $$n oracle, $$l (exit $$r):"; cat $$o.out; exit 1; }; \
 	   cat $$o.out; done
@@ -1158,14 +1158,14 @@ endef
 #   uuhomgen  dest.l's two code generators, on its law sites -> test/uuhomlaw.l, the destination-die laws
 #   uusplgen  spl.l's three call-site compilers (call, binding splice, substitution
 #             splice) on its samples                  -> test/uuspllaw.l, the SPLICE LICENSE
-#   uumx      love.c's +/* DISPATCH MATRICES (love/mx.l) -> test/uumxlaw.l, the band lattice
+#   uumx      love.c's +/* DISPATCH MATRICES (l/mx.l) -> test/uumxlaw.l, the band lattice
 #   uuvallaw  CLAUDE.md's LAWS off test/law.l's own rows -> proved where they stand, one
 #             spelling for the fuzz lane and the proof lane both
 $(eval $(call uu_corpus,uuwm,uuwmgen,apps/lux/core.l))
 $(eval $(call uu_corpus,uukind,kinds2uu,doc/misc/proto/kinds.l))
 $(eval $(call uu_corpus,uuhomgen,dest2uu,doc/misc/proto/dest.l))
 $(eval $(call uu_corpus,uusplgen,spl2uu,doc/misc/proto/spl.l))
-$(eval $(call uu_corpus,uumx,mx2uu,love/mx.l))
+$(eval $(call uu_corpus,uumx,mx2uu,l/mx.l))
 $(eval $(call uu_corpus,uuvallaw,law2uu,test/law.l))
 # test_wake: the BAKE-THEN-WAKE ROUND TRIP, which no other gate runs -- every other lane
 # wakes an image some earlier recipe baked. A CANDIDATE COPY bakes (love.wake, ETXTBSY-proof)
@@ -1315,7 +1315,7 @@ test_kernel_wasm: host
 	@grep "tests pass" out/wasm/kernel.log
 endif
 
-# the wasm module writer and the IR lowering (love/holo/wasm.l) under a foreign engine:
+# the wasm module writer and the IR lowering (l/holo/wasm.l) under a foreign engine:
 # love lays three modules (the writer's by hand, the program's off holo IR, a mock of the
 # artifact's face), binaryen validates them where the box has one, node instantiates and
 # runs them -- the third through inle/wasm/loader.js, the artifact's own environment.
@@ -1329,7 +1329,7 @@ test_holowasm:
 else
 test_holowasm: host
 	@echo TEST test/holo/wasm.l
-	@cat love/holo/holo.l love/holo/wasm.l love/holo/wasmfn.l test/holo/wasm.l | $m
+	@cat l/holo/holo.l l/holo/wasm.l l/holo/wasmfn.l test/holo/wasm.l | $m
 	@$(if $(WASMOPT),for w in $(holo_wasm); do $(WASMOPT) $(wasmopt_flags) $$w -o /dev/null 2>/dev/null || exit 1; done && echo "  wasm-opt: all valid",echo "  wasm-opt: absent, node alone validates")
 	@$(NODE) test/holo/wasm.mjs out/.holo.wasm out/.holo2.wasm
 	@$(NODE) test/holo/loader.mjs out/.holo3.wasm

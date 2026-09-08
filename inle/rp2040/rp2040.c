@@ -20,7 +20,7 @@ int main(void);
 void isr_hardfault(void) { for (;;) asm volatile("bkpt #0"); }
 
 // ⚠ the templates here are holo's NEUTRAL mnemonics, not ARM's: `trap` is the
-// BKPT this backend lays (love/holo/thumb1.l). wfe/wfi have no thumb1 row yet,
+// BKPT this backend lays (l/holo/thumb1.l). wfe/wfi have no thumb1 row yet,
 // so an idle handler spins instead of parking.
 static void default_handler(void) { for (;;) asm volatile("bkpt #0"); }
 

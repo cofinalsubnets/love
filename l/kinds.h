@@ -6,7 +6,7 @@ enum d { DMint, DNom, DSun, DGem, DTwin, DBig, DTray, DString, DChain };
 //
 // the data slot layout: the sentinels tile one section at ai_data_stride in
 // enum d order, so a value's rep is arithmetic on its ap -- love.c's DSENT,
-// love.h's ai_typ, love/love_data.ld. each #if is a default, the guard a -D door.
+// love.h's ai_typ, l/love_data.ld. each #if is a default, the guard a -D door.
 #if !defined(ai_data_section)
 #if defined(__wasm__)
 #define ai_data_section 0

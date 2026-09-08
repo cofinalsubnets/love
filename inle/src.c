@@ -1,7 +1,7 @@
 // inle/src.c -- the artifact's own source, handed back out. auto-globbed and
 // AiNif-registered, the fs.c discipline: (source-gz ()) -> the embedded
 // love-<ver>.tar.gz bytes | () when none is baked in. tools/mksrc.l lays the
-// archive as two .rodata symbols, the dist link pulls it in, love/boot/post.l's
+// archive as two .rodata symbols, the dist link pulls it in, l/boot/post.l's
 // `source` inflates what this answers. doc/misc/dist.md.
 // presence rides the kind, not the net: absence is the zero point and any archive
 // is a string, so `string?` separates even at zero bytes where `(! s)` would not.
@@ -51,7 +51,7 @@ static ai_inline struct ai *host_rtgz(struct ai *g) {
  if (strp(a)) {
   const char *s = (const char*) txt(a);
   uintptr_t sl = len(a);
-  // the canonical ISA words (love/boot/prel.l's arch-canon); the width is spelled
+  // the canonical ISA words (l/boot/prel.l's arch-canon); the width is spelled
   // beside the name and has to travel with it -- a shorter word here answers nothing
   if      (sl == 3 && !memcmp(s, "x64",   3)) p = ai_rtgz_x64,   n = ai_rtgz_x64_len;
   else if (sl == 3 && !memcmp(s, "a64",   3)) p = ai_rtgz_a64,   n = ai_rtgz_a64_len;

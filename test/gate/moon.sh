@@ -18,7 +18,7 @@ love0=$3
 fail() { echo "FAIL $*" >&2; exit 1; }
 # the compiler under test: love's own mooncc verb (the crew layer, woken per invocation)
 moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
-# ..and the BOOTSTRAP one, the lane that compiles love/love.c: love0 waking mooncc0.image
+# ..and the BOOTSTRAP one, the lane that compiles l/love.c: love0 waking mooncc0.image
 moon0() { "$love0" wake out/mooncc0.image mooncc "$@"; }
 
 # ---------------------------------------------------------------- the laws
@@ -28,7 +28,7 @@ out=$ho/.test_moon.out
   cat test/00-init.l apps/kore/text.l apps/kore/u.l   # the kore floors register module 'kore
   echo "(use 'kore)"                    # ..ambient: holo/text.l and law.l read `lines` bare
   cat apps/moon/floor.l apps/moon/lex.l apps/moon/cpp.l apps/moon/parse.l \
-      love/holo/text.l love/holo/dialect.l love/holo/gas.l apps/moon/val.l apps/moon/gen.l
+      l/holo/text.l l/holo/dialect.l l/holo/gas.l apps/moon/val.l apps/moon/gen.l
   echo "(use 'moon)"                    # the cat re-laid module 'moon; law.l reads it bare
   cat apps/moon/law.l
 } | "$m" > "$out" 2>&1
@@ -41,9 +41,9 @@ cat "$out"
 # frontend's boot binds to that module's accessor. a lane that leaves something else
 # there curries every combinator into a silent partial: no scare, no wrong answer,
 # just every template failing to parse. love0's build-tool lane is the one that
-# compiles love/love.c, and it is the only lane the laws above never walk.
-echo "CC love/holo/text.l (love0 lane)"
-"$love0" -l love/holo/text.l -e '(? (two? ((from (name "holo") (name "asm-text")) "li r0, 60")) (quit 0) (quit 1))' </dev/null \
+# compiles l/love.c, and it is the only lane the laws above never walk.
+echo "CC l/holo/text.l (love0 lane)"
+"$love0" -l l/holo/text.l -e '(? (two? ((from (name "holo") (name "asm-text")) "li r0, 60")) (quit 0) (quit 1))' </dev/null \
   || fail "asm-text under love0 -- is bare \`post\` the module accessor there?"
 
 # ---------------------------------------------- the pipeline's stage types
@@ -548,9 +548,9 @@ done
 # gcc for the code gcc compiled rather than claiming the whole binary.
 # ⚠ ours is the BASE half of love-version and never the whole id, and that is a law:
 # the VCS suffix names the commit that built the COMPILER, so it would make love1 and
-# love2 differ and name a broken fixpoint (love/holo/link.l says it at the door).
+# love2 differ and name a broken fixpoint (l/holo/link.l says it at the door).
 # read ./VERSION rather than writing 0.1 down -- a release bump must not fail here.
-cmt() { "$m" -l love/holo/elfsec.l \
+cmt() { "$m" -l l/holo/elfsec.l \
           -e "(: r (elfsec \"$1\" \".comment\") _ (? (two? r) (puts <r) 0) _ (flush out) (quit 0))"; }
 c=$(cmt "$ho/.fgnx" | tr '\0' ' ')
 case "$c" in

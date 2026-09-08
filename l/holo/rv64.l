@@ -1,4 +1,4 @@
-; riscv -- the rv64 backend for the neutral assembler (love/holo/holo.l), the fifth target (the
+; riscv -- the rv64 backend for the neutral assembler (l/holo/holo.l), the fifth target (the
 ; pine64 ox64's T-Head c906 and qemu -M virt). like the others it pins a {lower,patch} pair -- here
 ; under 'rv64 and 'rv64 -- and the driver, IR forms and byte plumbing stay untouched. little-endian
 ; instructions, native three-address ALU. these tables are rv64imfd: no Zbb/Zba, and no A -- moon's

@@ -14,7 +14,7 @@
 // single-precision, so every f64 op softens to __aeabi_* -- the same libgcc
 // helpers Panic's own toolchain leans on). The SDK lives behind pdglue.c's
 // word-only surface; nothing here sees pd_api.h, a float ABI, or a variadic.
-#include "../../love/love.h"
+#include "../../l/love.h"
 #include "quay.h"
 #include "pdglue.h"
 
@@ -88,9 +88,9 @@ static union u const
   nif_pushed[]  = {{ai_pushed}, {lvm_ret0}},
   nif_cur_set[] = {{lvm_cur}, {.x = putcharm(2)}, {ai_cur_set}, {lvm_ret0}};
 static struct ai_def defs[] = {
-  {"crank",   (intptr_t) nif_crank},
-  {"pushed",  (intptr_t) nif_pushed},
-  {"cur_set", (intptr_t) nif_cur_set} };
+  {"crank",   {.k = nif_crank}},
+  {"pushed",  {.k = nif_pushed}},
+  {"cur_set", {.k = nif_cur_set}} };
 
 // --- the frame --------------------------------------------------------------
 static void blit(void) {
@@ -161,8 +161,8 @@ void love_init(void) {
     if (ib) pdg_realloc(ib, 0); }
   int woke = g0 != NULL;
   pdg_log(woke ? "love: image awake" : "love: no image -- baking the egg");
-  for (char const *s = woke ? "; love/playdate -- image awake"
-                            : "; love/playdate -- baking the egg"; *s; s++)
+  for (char const *s = woke ? "; l/playdate -- image awake"
+                            : "; l/playdate -- baking the egg"; *s; s++)
     cb_putc(kcb, *s);
   blit();
   struct ai *g = ai_defn(woke ? g0 : ai_ini_m(pd_alloc), defs, countof(defs));

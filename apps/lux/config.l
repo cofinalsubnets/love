@@ -1,6 +1,6 @@
 ; apps/lux/config.l -- the config: ~/.xmonad/xmonad.hs transliterated, now with a
 ; door. Everything the Haskell record pinned, as plain values the driver
-; (apps/lux/lux.l) reads -- the dsl underneath (love/layout/manage/keys/ewmh)
+; (apps/lux/lux.l) reads -- the dsl underneath (l/layout/manage/keys/ewmh)
 ; already is the xmonad vocabulary, so this file is short the way a config should
 ; be. a body-less `:`.
 ;

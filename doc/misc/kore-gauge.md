@@ -179,7 +179,7 @@ caught, and overwriting it hides that.
 
 `grep -E '^(a|aa)+b$'` against forty `a`s did not finish in sixty seconds; busybox and
 GNU both answer in two milliseconds. The engine is `module 're` in
-`love/boot/post.l`, and its own header says what it is: *"matching is greedy
+`l/boot/post.l`, and its own header says what it is: *"matching is greedy
 backtracking in continuation style"*. On a repeated alternation that is exponential in
 the input length — it tries every way to split the run — while GNU builds an automaton
 and walks the string once.
@@ -319,7 +319,7 @@ the run-to-run noise.
 walk at ~684 instructions a byte and written the one kernel that finds a byte; `tr` and
 `base64` are nothing *but* that loop. `tr`'s is generic -- any byte map through a 512-byte
 table (image and mode per charm: drop, write, squeeze), three faces in one loop -- so it
-is a **nif**, `(xlat s tbl dst)` in `love/map.c` beside `pour`: one C body mooncc
+is a **nif**, `(xlat s tbl dst)` in `l/map.c` beside `pour`: one C body mooncc
 compiles for every target, no startup cost, reachable by any applet. `base64`'s group
 coder is its own shape and used by nothing in the core, so it stays out of the roster as
 a **holo kernel** in `apps/kore/core.l`: one IR for x64 and a64 in `scan.l`'s shape

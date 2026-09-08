@@ -655,7 +655,7 @@
        (ulines "cut" dot fs))
 
    ; ---- the byte loops, natively -------------------------------------------------
-   ; the interpreter's byte loop is ~700 instructions a byte (love/boot/scan.l
+   ; the interpreter's byte loop is ~700 instructions a byte (l/boot/scan.l
    ; prices it), and tr and base64 are nothing but that loop. tr's is the `xlat` nif:
    ; any byte map through a 512-byte table, one C body on every target, with the
    ; love walk below as the oracle law.l holds it to. base64's group coder is its

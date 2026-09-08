@@ -12,7 +12,7 @@
 ; pairwise code for any of them: a conversion is one surface's reader and another's shower, so
 ; the `surfaces` table is the whole of it and a fourth adds a row. a row also names its hub,
 ; the middle it reads into: the documents say 'doc, and the two x86 assembler dialects
-; (love/holo/dialect.l) say 'x86. `convert` composes only inside one hub, answering the
+; (l/holo/dialect.l) say 'x86. `convert` composes only inside one hub, answering the
 ; nom 'nolens across hubs or for a format it has no row for, so a third middle adds rows under
 ; its own hub and the matrix grows a block, not a seam.
 ; roff was added third and
@@ -20,7 +20,7 @@
 ; missing (meta, deflist), which then made markdown and html richer too. that is the trade a
 ; surface is allowed to ask for; anything else it must do alone.
 ;
-; both readers are built from the parser combinators in love/boot/post.l (a parser
+; both readers are built from the parser combinators in l/boot/post.l (a parser
 ; is (\ s y n): a string s, a success continuation y = (rest payload), a failure continuation
 ; n = rest; payloads are lists that `seq` concatenates -- love has no regex, so the leaves are
 ; `lit`, `one` and `span`). cook and sat/dimacs share that same set; lapiz adds the handful it
@@ -83,7 +83,7 @@
 (module (lapiz mdread mdshow htread htshow rfread rfshow
          md->ht ht->md md->rf rf->md convert  htb hti hq mget)
 
-; the combinators (love/boot/post.l) -- lapiz wants only the lenient `runp`. inside the
+; the combinators (l/boot/post.l) -- lapiz wants only the lenient `runp`. inside the
 ; module, so peg splices for this compile alone.
 (use 'peg)
 

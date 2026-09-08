@@ -150,8 +150,8 @@ owes a roster gate: on linux, assert the linux features are aboard.
 
 - **rung U0 — evidence before architecture.** Landed 2026-08-16, two gates:
   test_fixpoint now runs on any seed arch (the x86-64 guard opens, the mksys
-  leaf forks on the host — and the gate had been dark since the love/ move,
-  missing -Ilove, which is its own argument for U0). test_xfixpoint runs the
+  leaf forks on the host — and the gate had been dark since the l/ move,
+  missing -Il, which is its own argument for U0). test_xfixpoint runs the
   cross-machine claim in effigy: dist_cross's twin objects link love1 (this
   machine's bytes for the other arch), love1 under qemu-user rebuilds itself
   natively and must answer the same bytes — one cmp proves the twin machine

@@ -1,6 +1,6 @@
 ; inle/rp2040/rlink.l -- the Raspberry Pi Pico link, ours. holo's ldbare32
-; (love/holo/link.l) in place of arm-none-eabi-ld + rp2040.lds. cat it after
-; love/holo/{elf,obj,link}.l and run the result:
+; (l/holo/link.l) in place of arm-none-eabi-ld + rp2040.lds. cat it after
+; l/holo/{elf,obj,link}.l and run the result:
 ;
 ;   love <cat> OUT OBJ.o..
 ;

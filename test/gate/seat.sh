@@ -32,7 +32,7 @@ want='not a directory'; try "kiosko"             apps/kiosko/kiosko.l --nope
 want='no markdown'  ; try "papel"                apps/papel.l --nope
 
 # and the same seat UNDER A PRIME: `wake IMAGE` is the command line's word, not the
-# program's, so love/boot/post.l's `unprime` steps it and the app still seats itself.
+# program's, so l/boot/post.l's `unprime` steps it and the app still seats itself.
 # the cat is not optional: a bare `bake` snapshots a fresh egg, which registers the
 # core modules and no crew, and libra reads lint and salt. -l CAT is how the shipped
 # image is baked too (Makefile's .love.baked), so this wakes the shape love ships.

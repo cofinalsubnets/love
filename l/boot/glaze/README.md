@@ -9,10 +9,10 @@
 >   applicable native closure. Cell `[code, src, code, interp, lvm_ret, 0]`, value at
 >   the 3rd word, so `value[-1]`=src (`fn_src`/printer/`salpha` → `=`/`show` see the
 >   source) and `value[1]`=interp (the deopt fallback). W^X arena with a finalizer.
-> - **`love/boot/glaze/emit.l`** — a love-level **x86-64 emitter**: compiles `(\ x E)` arithmetic
+> - **`l/boot/glaze/emit.l`** — a love-level **x86-64 emitter**: compiles `(\ x E)` arithmetic
 >   and a counted-sum loop `(\ n Σ_{i<n} body)` to native, with a `jno`+inline-deopt
 >   guard on every `+`/`-`/`*` and on `putfix` (its `add rax,rax` overflow flag is
->   exactly the 62-bit fixnum boundary). x86-64 only; load with `-l love/boot/glaze/emit.l`.
+>   exactly the 62-bit fixnum boundary). x86-64 only; load with `-l l/boot/glaze/emit.l`.
 >
 > This realizes the law the earlier experiment found — *a glaze wins only when it owns
 > the loop* — concretely: the counted-loop emitter owns the iteration end to end
@@ -23,7 +23,7 @@
 > internal (mopped like `boxfix`/`wev`) and there is no user-facing verb at all.
 >
 > **The leaf substrate is gone.** `eat`/`toast` (a word→word trampoline over an opaque
-> executable handle) and `love/boot/glaze/probe.l` predated `nat` and were superseded by it;
+> executable handle) and `l/boot/glaze/probe.l` predated `nat` and were superseded by it;
 > they were deleted once the production glaze had run on `nif`/`nifx` for good. The
 > earlier scalar/array/fold kernels and the `opjit` hook are **gone** too; their one
 > fixed-code win (reduction reassociation) lives **baked in the C builtins**. The
@@ -31,7 +31,7 @@
 
 ## The finding: on the kernel, emitted bytes just run
 
-A retired probe (`love/boot/glaze/probe.l`, deleted with `eat`/`toast`) built a buf holding
+A retired probe (`l/boot/glaze/probe.l`, deleted with `eat`/`toast`) built a buf holding
 six AMD64 bytes —
 
 ```
@@ -57,7 +57,7 @@ Those decline laws are the ones worth understanding before touching a lane. A la
 **recognizer + codegen pair**, and `cggir`'s dispatch ends in a silent `()`: an operand it
 cannot emit compiles to *no code at all* and leaves whatever the accumulator last held. So
 a recognizer that admits one shape too many does not crash — it answers a plausible number,
-forever. `make test_glazefuzz` (`love/boot/glaze/fuzz.l`) is the standing guard: 3000 random
+forever. `make test_glazefuzz` (`l/boot/glaze/fuzz.l`) is the standing guard: 3000 random
 closures, one shape per lane, run glazed and again under `LOVE_NO_GLAZE=1`, required to
 agree byte for byte. Its leaf pools carry what the integer lanes *cannot* hold — strings,
 noms, lists, gems — because the interesting behaviour is declining, not compiling.

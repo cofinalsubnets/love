@@ -14,7 +14,7 @@
 ; there) -- boot code touches no float, so the two are the same bytes here; naming the
 ; port's own target is what keeps the object's machine agreeing with its neighbours'.
 ;
-; runs after love/holo/{elf,obj}.l in a cat with the thumb2 backend spliced into the
+; runs after l/holo/{elf,obj}.l in a cat with the thumb2 backend spliced into the
 ; sealed holo module (the mkboot2 shape; inle/nucleo446/Makefile drives it).
 (: (mkboot dst)
    (: (zeros n) (? (n < 1) () (0 >< (zeros (n - 1))))

@@ -4,7 +4,7 @@
 ; the love_rela table there (the same law moonlibc's __ai_reloc runs at a hosted
 ; start -- run ahead of time, since on metal nobody is there to run it), lay
 ; and patch boot.o below the image, write k_image_top into the file, and emit
-; the flat ELF the doors have always eaten. cat after love/holo/{elf,obj,link}.l:
+; the flat ELF the doors have always eaten. cat after l/holo/{elf,obj,link}.l:
 ;
 ;   love <cat> in.pie boot.o out.elf arch
 ;

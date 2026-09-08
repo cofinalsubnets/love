@@ -862,7 +862,7 @@
 )
 ; pat -- @ : pattern matching, one macro and no special form. a post-egg layer,
 ; not part of the language: prel stays minimal and each frontend includes the
-; layers it wants (the host, love0, wasm and the kernel do, since love/boot/post.l is
+; layers it wants (the host, love0, wasm and the kernel do, since l/boot/post.l is
 ; written in it). its `use`
 ; must precede every reader's compile -- a macro is only in the chain once its
 ; layer is spliced, and a consumer folds its refs at its own compile.
@@ -876,12 +876,12 @@
 ; sigil, so @(1 2) never changed hands and `(@ @(a b) ..)` says both in a breath.
 ; and it is infix at `?`'s own band, n-ary like it: (x @ p b .. else) is the same form,
 ; scrutinee on the left, where a compound one spends no parens -- (vof en <t @ ..)
-; not (@ (vof en <t) ..). love/boot/prel.l's `operators` row; this file sees neither.
+; not (@ (vof en <t) ..). l/boot/prel.l's `operators` row; this file sees neither.
 ;
 ; a pattern also goes in A \ param, and that half is opfix's, not this file's: a param
 ; that is not a nom becomes a fresh one and the body takes it apart, so (\ [a b] x) is
 ; (\ v (@ v [a b] x)) and (map (\ [a b] (a * b)) ..) reads the way it should. A
-; define-sugar binder is a \ too, at every level. love/boot/prel.l's op-depat / op-dpb.
+; define-sugar binder is a \ too, at every level. l/boot/prel.l's op-depat / op-dpb.
 ;
 ; a pattern is its constructor, read backwards: the same text that builds a value
 ; matches it, so nothing has to be learned twice and a bracket is as closed in a
@@ -1100,7 +1100,7 @@
    (pand ts) (? (one? ts) 1 (one? >ts) <ts  ('&& . ts))
 
    ; the wrapper is ev's to remove, not ours. a nom read once could have its accessor
-   ; inlined here, and that is what love/boot/ev.l's read-once refinement already does to the
+   ; inlined here, and that is what l/boot/ev.l's read-once refinement already does to the
    ; whole tree: a lone read of an effectful argument substitutes and the call is gone. A
    ; second copy in this macro measured 3.5 M on a 32.5 G corpus -- noise -- so the one
    ; mechanism lives in the compiler, where every caller gets it and not just `@`.

@@ -267,7 +267,7 @@ static struct ai *env_budget(struct ai *g) {
 
 #ifdef LoveBoot
 #include "boot0.h"                                   // src0_<name>[]: one literal per boot file, laid by sed
-static char const runner[] = "(reads(tap(s2cl tests)))";   // the stream shell (love/boot/post.l) drinks the corpus
+static char const runner[] = "(reads(tap(s2cl tests)))";   // the stream shell (l/boot/post.l) drinks the corpus
 // the groups love0 evaluates as ONE text apiece: a text is read whole before its first
 // form runs, so joining at boot keeps that seam where the pasted headers had it.
 static char const *const mods0[] = { src0_holo, src0_x64, src0_a64, NULL };
@@ -354,7 +354,7 @@ static char const glaze_off[] = "";
 // the session layer: boot is over and the base is never the head again, so a top-level
 // definition lands here. never popped -- its lifetime is the session, which is what lets a
 // catted app's files share one vocabulary; the egg boot and the image wake both converge.
-// love/boot/post.l's `cli-line` is this tail entire, spliced with its module: the argv[0] verb
+// l/boot/post.l's `cli-line` is this tail entire, spliced with its module: the argv[0] verb
 // door, the positional rail, the repl, the stdin drink. the isatty answer is all C still owns.
 static struct ai *run_program(struct ai *g, bool replp) {
   if (replp) raw_mode();

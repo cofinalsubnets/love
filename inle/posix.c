@@ -134,7 +134,7 @@ static ai_inline int proc_status(int st) {
 // to the syscall, which fails with EBADF -- the honest answer.
 
 // a love string as a C string, or NULL for a non-string: bytes[len] is always a NUL
-// (love/love.h), so the bytes go to the syscall where they lie. a path the kernel finds
+// (l/love.h), so the bytes go to the syscall where they lie. a path the kernel finds
 // too long comes back ENAMETOOLONG, which is a truer answer than a cap of ours.
 static ai_inline char const *str_c(ai_word x) { return strp(x) ? txt(x) : NULL; }
 
@@ -1317,7 +1317,7 @@ static lvm(lvm_swig) {
 // posix surface like everything above, and one body per behaviour (plan C2):
 // on inle the open(2)/close(2) below land in inle/sys.c's arms, so the ramfs
 // answers the same nif. ⚠ `open`'s PRESENCE in the book is what lights up
-// prel's module walk (love/boot/prel.l's fsopen, by peep) and salt's config read --
+// prel's module walk (l/boot/prel.l's fsopen, by peep) and salt's config read --
 // both gate on the name, so the registration below is the whole wiring.
 
 // mode is a l string; only the first byte is consulted: r read, w truncate-or-

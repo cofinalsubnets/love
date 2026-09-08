@@ -1,4 +1,4 @@
-; test/gate/forge.l -- apps/forge.l's gate: a nif written in love, assembled through love/holo
+; test/gate/forge.l -- apps/forge.l's gate: a nif written in love, assembled through l/holo
 ; for this cpu and installed through the `nif` seam, must agree with the twin it deopts into on
 ; every shape -- the lane it says natively and the lanes it hands back.
 ;

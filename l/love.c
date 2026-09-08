@@ -1,5 +1,5 @@
 // love.c -- g, stack, sys, str, sym, chain, tray. one translation unit of the runtime;
-// the shared layouts and the cross-TU seam are love/love.h.
+// the shared layouts and the cross-TU seam are l/love.h.
 #include "love.h"
 #include <stddef.h>
 struct ai_chain;
@@ -52,7 +52,7 @@ enum ai_status ai_fin(struct ai *g) {
 // a value that moves arrives on the stack instead (ai_defv).
 struct ai *ai_defn(struct ai*g, struct ai_def const*defs, uintptr_t n) {
  for (g = ai_push(g, 1, A(ai_core_of(g)->book)); n--;
-  g = ai_mapput(intern(ai_strof(ai_push(g, 1, defs[n].x), defs[n].n))));
+  g = ai_mapput(intern(ai_strof(ai_push(g, 1, defs[n].v.x), defs[n].n))));
  ai_core_of(g)->sp++;
  return g; }
 
@@ -89,7 +89,7 @@ lvm(lvm_help) {
 
 // reverse-lookup a nif value -> its source name or NULL (the printer renders nifs by name)
 char const *ai_nif_name(intptr_t x) {
- for (uintptr_t i = 0; i < countof(def1); i++) if (def1[i].x == x) return def1[i].n;
+ for (uintptr_t i = 0; i < countof(def1); i++) if (def1[i].v.x == x) return def1[i].n;
  return 0; }
 
 // the canonical (linux) errno numbering, lowercase -- the spellings ai_ini_0
@@ -172,27 +172,27 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   if (ai_ok(g)) g->symbols = ai_pop1(g);
   if (ai_ok(g = map_new(g))) g->mods = ai_pop1(g);   // the registry, before the first ai_modtab
   struct ai_def def0[] = {
-   {"book", A(g->book)},   // the l-level book = the orth map (the chain stays C-side; `books` reads it)
-   {"in", (word) &ai_stdin},
-   {"out", (word) &ai_stdout},
-   {"err", (word) &ai_stderr},
+   {"book", {.x = A(g->book)}},   // the l-level book = the orth map (the chain stays C-side; `books` reads it)
+   {"in", {.x = (word) &ai_stdin}},
+   {"out", {.x = (word) &ai_stdout}},
+   {"err", {.x = (word) &ai_stderr}},
    // the two doors prel builds (tap and jug), so it can stamp the kind it means;
-   // mopped at birth like every other raw pointer the compiler folds (love/boot/egg.l)
-   {"ci-vt", (word) &ai_ci_vt},
-   {"to-vt", (word) &ai_to_vt},
+   // mopped at birth like every other raw pointer the compiler folds (l/boot/egg.l)
+   {"ci-vt", {.x = (word) &ai_ci_vt}},
+   {"to-vt", {.x = (word) &ai_to_vt}},
    // max-charm/min-charm: this build's fixnum bounds, exposed so width-specific
    // tests gate on the real boundary (it differs on 32- vs 64-bit ports).
-   {"max-charm", putcharm((word)((uintptr_t)-1 >> 2))},
-   {"min-charm", putcharm(-(word)((uintptr_t)-1 >> 2) - 1)},
+   {"max-charm", {.x = putcharm((word)((uintptr_t)-1 >> 2))}},
+   {"min-charm", {.x = putcharm(-(word)((uintptr_t)-1 >> 2) - 1)}},
    // love-tco: glazed code continues by tail-jump, which only the threaded build
    // honors -- auto.l reads this and keeps the interpreter on a trampoline build
-   {"love-tco", putcharm(ai_tco)}, };
+   {"love-tco", {.x = putcharm(ai_tco)}}, };
   g = ai_defn(g, def0, countof(def0));
   g = ai_defn(g, def1, countof(def1));
   if (ai_ok(g = ai_strof(g, AiVersion)))            // a live string: off the stack, never an ai_def
    g = ai_pop(ai_defv(g, "love-version"), 1);
   // `love-arch`: the host CPU the glaze emits for, and the assembler target every backend
-  // is registered under. A NOM, in the prel's canonical spelling (love/boot/prel.l's arch-canon)
+  // is registered under. A NOM, in the prel's canonical spelling (l/boot/prel.l's arch-canon)
   // -- so a reader compares it against 'x64 rather than interning a string first, and
   // there is one word for this machine across holo, moon, kore and the seed.
 #if defined(__x86_64__)
@@ -900,7 +900,7 @@ static ai_inline intptr_t seq_byte(word x) {
   if (!(f >= 0 && f <= 255)) return -1;                 // range first (nan fails); cast below is safe
   return f != (ai_flo_t) (intptr_t) f ? -1 : (intptr_t) f; }
  return -1; }
-// list lane. the matrix routes only list-involved pairs here (love/mx.l's five cells),
+// list lane. the matrix routes only list-involved pairs here (l/mx.l's five cells),
 // and lvm_add has already answered for () and every mint, so one operand is a chain and
 // the other is a chain, a string or a named symbol -- nothing else arrives.
 // list+list -> spine append; text <-> list -> the bytes splice; anything else adjoins.

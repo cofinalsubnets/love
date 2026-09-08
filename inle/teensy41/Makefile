@@ -16,7 +16,7 @@ p_be  = thumb2
 lib_h = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/love_version.h
 include ../port.mk
 
-te_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Ilove -Iout/lib
+te_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Il -Iout/lib
 
 objs = $(love_o) $(R)/$(o)/am.o $(libc_o) \
   $(R)/$(o)/teensy41.o $(R)/$(o)/psram.o $(R)/$(o)/main.o $(R)/$(o)/boot.o \
@@ -26,12 +26,12 @@ objs = $(love_o) $(R)/$(o)/am.o $(libc_o) \
 default: teensy41
 teensy41: $(R)/$(o)/love.hex
 
-$(foreach u,$(love_m),$(eval $(call p_obj,$u,love/$u.c,\
-  $(R)/love/$u.c $(love_dep),$(te_cc))))
+$(foreach u,$(love_m),$(eval $(call p_obj,$u,l/$u.c,\
+  $(R)/l/$u.c $(love_dep),$(te_cc))))
 $(foreach m,$(libc_m),$(eval $(call p_obj,$m,apps/moon/lib/moonlibc/string/$m.c,\
   $(R)/apps/moon/lib/moonlibc/string/$m.c $(libc_dep),$(te_cc) -Iapps/moon/include)))
-$(eval $(call p_obj,teensy41,inle/teensy41/teensy41.c,teensy41.c teensy41.h $(R)/love/love.h $(mc),$(te_cc)))
-$(eval $(call p_obj,main,inle/teensy41/main.c,main.c teensy41.h $(R)/love/love.h $(lib_hR) $(mc),$(te_cc)))
+$(eval $(call p_obj,teensy41,inle/teensy41/teensy41.c,teensy41.c teensy41.h $(R)/l/love.h $(mc),$(te_cc)))
+$(eval $(call p_obj,main,inle/teensy41/main.c,main.c teensy41.h $(R)/l/love.h $(lib_hR) $(mc),$(te_cc)))
 
 # boot.o: the ROM-facing FlexSPI/IVT/vector blocks, crt0 and the asm helpers, laid from
 # holo IR -- no gas. inle/mps2/mkstart.l is the same shape with one section,

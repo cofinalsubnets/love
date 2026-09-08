@@ -4532,7 +4532,7 @@
    ; the callee-saved file, per target. two readers: a call spares them (the liveness kit), and
    ; a write owes a save/restore pair (cskeep). these rosters are the machine, and a wrong one
    ; is a miscompile rather than a missed optimization -- each is holo's own table read back
-   ; (love/holo/<tgt>.l), never the ABI document. x64 r3 r4 r11..r14 = rbx rbp r12..r15; a64
+   ; (l/holo/<tgt>.l), never the ABI document. x64 r3 r4 r11..r14 = rbx rbp r12..r15; a64
    ; r19..r28 = x19..x28; riscv r13/r14/r15 = s2/s3/s1 (the homes) and r19..r26 = s4..s11;
    ; thumb2 r4..r10 (AAPCS32 keeps r4..r11, but r11 IS fp and holo maps both names to 11).
    (csregs g) (? (a64? g) '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
@@ -6185,7 +6185,7 @@
 
    ; stmt -> forms | 'bad
    ; -- inline asm (the 'asm statement): the template is the target's own GNU dialect -- AT&T on
-   ; x64, ARM on a64, riscv, thumb -- lowered by love/holo/gas.l, so one template serves every
+   ; x64, ARM on a64, riscv, thumb -- lowered by l/holo/gas.l, so one template serves every
    ; compiler; `__attribute__((holo)) asm(..)` says holo's neutral TEXT instead (asm-text). %0..%9
    ; the operands (outputs first, GNU numbering; the b/w/k/q/c and w/x modifiers), %% a literal %.
    ; the body assembles to bytes right here and splices as one opaque ('raw ..), so the IR passes

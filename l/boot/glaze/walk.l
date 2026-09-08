@@ -1,7 +1,7 @@
 ; walk -- re-declare the prel list walkers through the glazed compiler. the prel
 ; originals are egg-baked pre-glaze; these compile under the live natjit, so amble owns
 ; their self-recursion, an applied param takes the drive, and the generic = keeps symbol
-; and string keys native. bodies verbatim from love/boot/prel.l, caap spelled through cap (a
+; and string keys native. bodies verbatim from l/boot/prel.l, caap spelled through cap (a
 ; free accessor head declines). loads after hook.l; egg-baked consumers keep the closures
 ; they folded, every post-boot stream folds these.
 (? (0 < love-tco)

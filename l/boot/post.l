@@ -549,7 +549,7 @@
 ; --- globals, and the rest register as modules a seat splices as it wants ---
 
 ; rng -- the random layer, two faces over the pure C steps; C holds no state.
-; (wheel n) -> a fresh 256-bit state, turn/turnf step it. love/boot/prel.l first.
+; (wheel n) -> a fresh 256-bit state, turn/turnf step it. l/boot/prel.l first.
 ;
 ; functional, reproducible: (random st n) draws once -> (value . st'), the value's type
 ; by n -- float -> float in [0,n), positive int -> int in [0,n), n <= 0 -> full-width int.
@@ -614,7 +614,7 @@
 ; where the substrate belongs. this half is a predicate over two strings, and more than
 ; the shell asks it -- lush's case patterns, kore's find -name, the sb ignore law, the
 ; selfpack walk. selfpack runs on love0, which carries no lush: that is why this is a
-; love/boot module and not an app one.
+; l/boot module and not an app one.
 ;
 ; patterns travel as (text . mask) -- the mask a parallel string of '1'/'0' bytes, '1'
 ; where the char came in unquoted (glob-live), '0' where a quote shielded it ('*' matches
@@ -753,7 +753,7 @@
     (: (go (a . u)) (vet1 s a @ ^ufail ufail r (: t (go u) (t == ufail || r == 'drop ? t (r . t)))) go)
    (con st c) (: d (vet <st c) (? (ufail? d) ufail (<st . d)))   ; a state with c added, or ufail
 
-   ; --- streams: a colist, love's lazy list (love/boot/p1.l's shape) --------------
+   ; --- streams: a colist, love's lazy list (l/boot/p1.l's shape) --------------
    ; () is empty, (x . s) is mature, a thunk is immature -- three shapes told apart by
    ; lit?/two?. the church encoding this replaces cost 26-35% more instructions on every
    ; shape measured; doc/misc/kanren.md carries the numbers.
@@ -1285,7 +1285,7 @@
 ; not. The unit is the only nil that leaves here.
 ;
 ; a module the boot never splices: it is registered with the rest, and each consumer opens with
-; its own top-level (use 'peg), then reads the names bare off that splice -- love/holo/text.l,
+; its own top-level (use 'peg), then reads the names bare off that splice -- l/holo/text.l,
 ; apps/cook.l, apps/lapiz.l, apps/sat/dimacs.l. the (use ..) must be its own
 ; top-level form: a `:` body compiles as one unit, so a use nested inside the form that reads
 ; the names runs too late to serve it.
@@ -1999,7 +1999,7 @@
 
    ps1 "> "
    ; the helm glows in the crew's cyan (256-colour 117 ~ #7dcfff), reset after.
-   ; SGR is zero-width to both the host terminal and the inle console (love/quay/quay.c),
+   ; SGR is zero-width to both the host terminal and the inle console (l/quay/quay.c),
    ; so `pl` below stays (tally ps1) and the cursor math is undisturbed.
    ps1c (string 27 + "[38;5;117m" + ps1 + string 27 + "[39m")
 

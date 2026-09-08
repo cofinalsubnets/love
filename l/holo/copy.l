@@ -1,4 +1,4 @@
-; love/holo/copy.l -- objcopy's two output formats, ours: a linked elf flattened to
+; l/holo/copy.l -- objcopy's two output formats, ours: a linked elf flattened to
 ; the bytes a flash tool takes. `-O binary` is the image as it lies from the lowest
 ; load address, `-O ihex` that same image in Intel hex, which is what teensy_loader_cli
 ; and the Teensy Loader gui read. between them they were the last foreign tool on the
@@ -15,7 +15,7 @@
 ; matching that is what lets test/gate/objcopy.sh be a byte comparison and not a
 ; reading of the result.
 ;
-; loads after love/holo/link.l, whose field table, ld-write and ld-zeros it reads.
+; loads after l/holo/link.l, whose field table, ld-write and ld-zeros it reads.
 (module 'holo
 (use 'kore) ; the text/u floors (uread, usplit ..), scoped to this module's compile
 (:

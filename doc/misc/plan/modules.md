@@ -15,7 +15,7 @@ insists on a file. This arc finishes the thought:
   one otherwise), eval each form there exactly as the loader would, leave
   registers. A file joins a module by changing its head form, not its path.
 - **the search collapses to the baked table** -- ai_libs() is the principled
-  "baked-in libs" door; libsrc's two SEAT rungs (`<seat>/../lib/`, its `love/`
+  "baked-in libs" door; libsrc's two SEAT rungs (`<seat>/../lib/`, its `l/`
   subfolder) are the nest legacy and go. cwd `lib/` stays at first for the dev
   tree, with this note as its retirement paper.
 - **ai_defn grows a module target** -- a `.mod` field on struct ai_def (NULL =
@@ -42,7 +42,7 @@ that registers nothing. Nothing else moves. Gate: `make test`.
 
 **Rung 1 -- ai_defn's module target. CLIMBED.** The module is the CALL's, not
 the row's: ai_defn grew a fourth parameter (NULL = the book, so struct ai_def
-stays two words), and ai_modtab (love/love.c) pushes the found-or-made module
+stays two words), and ai_modtab (l/love.c) pushes the found-or-made module
 tablet where the book map would sit -- the binding loop is one loop either
 way. The registry is made C-side at boot (the drain runs BEFORE prel) and
 FOUND over a woken image, where the drain re-pins the current addresses (the
@@ -184,7 +184,7 @@ hue2vim.l lead with (use 'vi); apps/vi/hueweb.l splices it for its own compile
 re-pin); kore.l's vi row reads (from 'vi 'vi-main). Only the still-bare
 holo/asbook ambience remains -- holo's own wrap, rung 2's coda, dissolves it.
 
-*Holo CLIMBED -- the coda, and the last ambience dies.* The fourteen love/holo
+*Holo CLIMBED -- the coda, and the last ambience dies.* The fourteen l/holo
 files wear `(module 'holo`, so the baked lib entry (holo + native backend +
 elf/obj/link as one source) and every cat REOPEN one tablet -- the double-carry
 is now a double-write into the same module, and defbackend's join is unchanged.
@@ -211,7 +211,7 @@ there (the whole form compiles before the use runs) -- love0-lane probes spell
 
 **Rung 3 -- the search collapses. CLIMBED.** libsrc walks the baked table and
 cwd `lib/` -- the dev tree's lane, kept with its retirement note until the
-tree stops being special. The seat rungs (`<seat>/../lib/`, its `love/`
+tree stops being special. The seat rungs (`<seat>/../lib/`, its `l/`
 subfolder) are gone, and `selfpath` leaves the loader with them: an artifact's
 modules are baked or image-carried, never found beside the binary. The
 installed lanes proved it whole at the time -- binaries that never touch the
@@ -333,6 +333,6 @@ Eight frontends lost their table and their ~20 `src_*` arrays for one
   compare before the move (out/lib/corpus.list's discipline), so a touch that
   changes no bytes now rewrites nothing and rebuilds nothing, where before it
   rewrote every header and relinked love0. The standing option should holo's
-  share ever matter: `love/holo/holo.l` into `$(moonfiles)`, ahead of asbook.l
+  share ever matter: `l/holo/holo.l` into `$(moonfiles)`, ahead of asbook.l
   and the backends already there, so that cat carries its own core and holo
   leaves love0's text.

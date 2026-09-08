@@ -1,4 +1,4 @@
-; thumb1 -- the armv6-M (Cortex-M0/M0+, e.g. RP2040) backend for the neutral assembler (love/holo/holo.l),
+; thumb1 -- the armv6-M (Cortex-M0/M0+, e.g. RP2040) backend for the neutral assembler (l/holo/holo.l),
 ; a skeleton. sibling to thumb2.l but a lower rung: this is 16-bit Thumb-1, not the wide Thumb-2, so
 ; despite the shared "thumb" name almost every encoder here is its own animal. registers r0..r15
 ; (r13=sp, r14=lr, r15=pc); the data-processing surface is two-address and reaches only r0..r7 (the
@@ -393,7 +393,7 @@
    ;; ABI's -- R_ARM_THM_CALL is the wide BL T1 encoding on both cores (t1-patch lays
    ;; it bit-for-bit), and a v6-M image can carry a v7-M object whose MOVW/MOVT pair
    ;; still has to resolve. so there is one arm32 re-encoder, it lives in thumb2.l,
-   ;; and love/holo/link.l asks for it by family -- which is what lets a cat that only
+   ;; and l/holo/link.l asks for it by family -- which is what lets a cat that only
    ;; lays v6-M code (inle/rp2040's boot2) carry this file alone.
 
    t1 {'lower t1-lower 'patch t1-patch 'nop '(0 191)}  ; the ('align n) filler unit: NOP (16-bit) bf00 LE

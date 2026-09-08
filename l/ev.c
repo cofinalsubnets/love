@@ -1,5 +1,5 @@
 // ev.c -- ev, vm, the lisp help. one translation unit of the runtime;
-// the shared layouts and the cross-TU seam are love/love.h.
+// the shared layouts and the cross-TU seam are l/love.h.
 #include "love.h"
 struct ai_wait_fd;
 typedef Ana(ana);

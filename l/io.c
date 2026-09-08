@@ -1,5 +1,5 @@
 // io.c -- io. one translation unit of the runtime;
-// the shared layouts and the cross-TU seam are love/love.h.
+// the shared layouts and the cross-TU seam are l/love.h.
 #include "love.h"
 // this file's own, forward-declared so order within it does not matter.
 static ai_noinline double strtod_wrap(struct ai*g, word x);

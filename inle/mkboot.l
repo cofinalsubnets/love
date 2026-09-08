@@ -16,7 +16,7 @@
 ; fetch after the MMU comes on, where a pc-relative branch would ride a broken
 ; map instead of failing on it, and the stack it lands on.
 ;
-; runs after love/holo/{elf,obj}.l in a (use 'holo) cat, with the target's
+; runs after l/holo/{elf,obj}.l in a (use 'holo) cat, with the target's
 ; backend text joined (a frontend bakes holo with the NATIVE backend only);
 ; the Makefile drives it. register vocabulary is holo's -- x86: r0=rax
 ; r1=rcx r2=rdx r3=rbx r5=rsi r6=rdi; a64: rN = xN.

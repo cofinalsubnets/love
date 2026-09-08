@@ -1,5 +1,5 @@
 // gc.c -- the generational collector. one translation unit of the runtime; the shared
-// layouts and the cross-TU seam are love/love.h. a minor evacuates young into the major
+// layouts and the cross-TU seam are l/love.h. a minor evacuates young into the major
 // active half, a major compacts that half into the spare one and flips; the rem set and the
 // write barriers below are what let a minor skip the tenured bulk.
 #include "love.h"

@@ -62,7 +62,7 @@
    ; defined here rather than taken from moon, which is what lets clay load alone.
    ; lex.l's copies sit in a different module layer and cannot clobber these.
    ; `el` has no caller left in this file and is not dead: a use splices it, and
-   ; love/mx.l and love/nifs.l -- the generators behind mx.h, kinds.h and nifs.h -- read it.
+   ; l/mx.l and l/nifs.l -- the generators behind mx.h, kinds.h and nifs.h -- read it.
    join (foldl (+) "")
    (sepby s l) (l @ (a . u) (foldl (a \ x \ a + s + x) a u) "")
    nl (string 10)
@@ -285,7 +285,11 @@
    ; is built where it stands, and the shower's mutually recursive group compiles as one
    ; unit at cty-dtor above -- a value this far down is still an empty cell when the group
    ; that reads it is compiled. `(name args)` defers, and defers unconditionally.
-   (cnested? l) (any (x \ cinitv x @ ('init . _) 1) l)
+   ; a child brace group puts every item on its own line -- but a DESIGNATED one-field
+   ; group (`{ .k = x }`) names a member and reads as a scalar, so it stays inline. a plain
+   ; one-item group (`{ lvm_clock }`) is a table's element and keeps its own line.
+   (cnested? l) (any (x \ cinitv x @ ['init [(['dfield _ _] || ['didx _ _])]] 0
+                                      ('init . _) 1) l)
    (cinit x ind)
     (x @ ['dfield a b] ("." + a + " = " + cinit b ind)
          ['didx a b] ("[" + (? (charm? a) (show a) (ce a 0)) + "] = " + cinit b ind)

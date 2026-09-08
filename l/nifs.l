@@ -184,13 +184,15 @@
 
    ; the book table: love name -> the value as a word. a nif carries its run's address,
    ; an instruction carries itself. unsized, so C's count cannot disagree with the roster.
-   (def-row nm v) ['init [['str nm] ['cast '(named "intptr_t") v]]]
+   ; m is the value's own union member: a nif is threaded code (union u const*), an
+   ; instruction is the lvm_ that runs it (lvm_t*). the union says which; no cast either way.
+   (def-row m nm v) ['init [['str nm] ['init [['dfield m v]]]]]
    (nif-at n) (n < 1 ? (vr "nifs") ['bin '+ (vr "nifs") ['num n]])
    (zip a b) (two? a ? ([<a <b] . zip >a >b))
    nif-def1
     ['gdecl [["def1" '(arr (const (struct "ai_def")) 0)
-              ['init ((map (p \ def-row <><p (nif-at <>p)) (zip nif-rows nif-ats))
-                      + (map (\ i (def-row (string i) (vr (string i)))) nif-insts))]]]
+              ['init ((map (p \ def-row "k" <><p (nif-at <>p)) (zip nif-rows nif-ats))
+                      + (map (\ i (def-row "ap" (string i) (vr (string i)))) nif-insts))]]]
      '(static)]
 
    ; --- the bridge the splice JIT needs ------------------------------------------

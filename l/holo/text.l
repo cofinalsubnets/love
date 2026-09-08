@@ -1,11 +1,11 @@
 ; text -- a human-writable TEXT front-end for the neutral assembler, parsed with the parser
-; combinators (love/boot/post.l, the same set cook and sat use). it turns lines like
+; combinators (l/boot/post.l, the same set cook and sat use). it turns lines like
 ;     li   r0, 60        ; a comment
 ;     add  r0, r0, r1
 ;     label loop
 ;     br   eq, loop
 ;     ret
-; into the IR list ((li r0 60) (add r0 r0 r1) (label loop) (br eq loop) (ret)) that love/holo/holo.l
+; into the IR list ((li r0 60) (add r0 r0 r1) (label loop) (br eq loop) (ret)) that l/holo/holo.l
 ; assembles. one line = one instruction; operands are separated by spaces and/or commas; a register
 ; or label is a symbol, an immediate a (optionally signed) number; `;` starts a comment. there is no
 ; arch here at all -- it lowers to whatever backend `holo` is handed. mooncc's inline asm
@@ -13,9 +13,9 @@
 ;
 ; needs only (use 'peg) -- no assembler names, so it loads in the raw holo.l stream (test_holo)
 ; and on the baked host alike:
-;   out/love -l love/holo/text.l ...
+;   out/love -l l/holo/text.l ...
 
-; the combinators (love/boot/post.l). the use is its own top-level form -- a `:` body compiles
+; the combinators (l/boot/post.l). the use is its own top-level form -- a `:` body compiles
 ; as one unit, so a use inside the form below would run too late to serve it.
 (module 'holo
 (use 'peg)

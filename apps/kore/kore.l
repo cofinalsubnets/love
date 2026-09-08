@@ -6,8 +6,8 @@
 ;   kore nc host port    the netcat (apps/ain.l); nc -l port listens
 ;   kore make [F] [T..]  the build tool (apps/cook.l)
 ;   kore as tgt in out   assemble IR forms from in (x64|a64) into an ELF at out
-;   kore objcopy -O binary|ihex in out   a linked ELF flattened (love/holo/copy.l)
-;   kore nm [-gup] file..   an ELF's symbols, nm's three columns (love/holo/link.l)
+;   kore objcopy -O binary|ihex in out   a linked ELF flattened (l/holo/copy.l)
+;   kore nm [-gup] file..   an ELF's symbols, nm's three columns (l/holo/link.l)
 ;   kore cat|tac|head|tail|wc|sort|uniq|tee|echo|seq|yes|true|false|basename|dirname
 ;   kore cut|tr|nl|rev|paste|comm|join|split|od   the line, field and record tools
 ;                                                 (apps/kore/core.l)
@@ -75,7 +75,7 @@
           (? (nil? d) 0
              (: _ (puts d) _ (flush out) 1))))
 
-   ; as: IR forms -> a runnable ELF (love/holo/elf.l over the baked holo book)
+   ; as: IR forms -> a runnable ELF (l/holo/elf.l over the baked holo book)
    (as-main as)
     (? !(two? >>as) (die "usage: kore as TARGET IN OUT   (TARGET: x64 | a64)")
        (: tgt (arch-nom <as) src <>as dst <>>as
@@ -95,7 +95,7 @@
           0))
 
    ; ar: the classic "!<arch>" archive, GNU shape to the byte -- the bytes come
-   ; from holo's `arbytes` (love/holo/link.l), beside the reader that pulls them
+   ; from holo's `arbytes` (l/holo/link.l), beside the reader that pulls them
    ; back, so mooncc's runtime archive and this one are the same writer.
    ; `ar rcs OUT M..` writes out whole (fresh, like liblove.a's rm-first recipe),
    ; member names stored as basenames (GNU's rule). `ar t OUT` lists.
@@ -144,7 +144,7 @@
                 0))))
 
    ; ld: holo's static linker as an applet -- mooncc .o (and any ELF relocatable
-   ; love/holo/link.l reads) into a static exe, no binutils anywhere; -pie the
+   ; l/holo/link.l reads) into a static exe, no binutils anywhere; -pie the
    ; self-relocating et_dyn, -Ttext the bare-metal org (qemu -kernel's lane).
    (ld-main as)
     (: (num s) (: n (tally s)
@@ -181,7 +181,7 @@
        0)
 
    ; nm: the symbols a file names, in nm's three columns -- VALUE type NAME, over
-   ; love/holo/link.l's ld-syms. the letter is ELF's own facts and never a guess: U
+   ; l/holo/link.l's ld-syms. the letter is ELF's own facts and never a guess: U
    ; undefined, a absolute, C common, else the defining section's flags pick T
    ; executable / B nobits / D writable / R the rest, and a local bind lowercases it
    ; -- that case is nm's whole convention. -g keeps the externals, the only view a
@@ -254,7 +254,7 @@
             'make (from 'cook 'cook-main) 'cook (from 'cook 'cook-main)   ; cook.l's wrap registered ahead in the cat; the map ctor evaluates values
             'as as-main
             'ar ar-main 'ld ld-main
-            'objcopy (from 'holo 'objcopy)   ; the applet is the function: love/holo/copy.l, module-side
+            'objcopy (from 'holo 'objcopy)   ; the applet is the function: l/holo/copy.l, module-side
             'cat cat-main 'tac tac-main 'echo echo-main
             'head head-main 'tail tail-main
             'wc wc-main 'sort sort-main
@@ -366,7 +366,7 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
    ; -- the dispatch (this form's body) --
    ; the spellings kore answers to: itself, its file, and every applet -- the symlink
    ; lane is just an applet name in the program seat, so the table is the list. the
-   ; scan is love/boot/post.l's `seatof` (over the list we are handed, never a command
+   ; scan is l/boot/post.l's `seatof` (over the list we are handed, never a command
    ; line: the in-image door dispatches (link "kore" "ls" "-l")), which drops the -l
    ; pairs and answers (SEAT-WORD . rest), () when the seat is someone else's -- so a
    ; bake loading the cat as `love -l .kore-cat.l -e ..` stays quiet.

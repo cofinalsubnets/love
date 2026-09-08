@@ -1,4 +1,4 @@
-; love/holo/elfsec.l -- a named section's bytes out of any ELF, on any machine. `(use "love/holo/elfsec.l")`:
+; l/holo/elfsec.l -- a named section's bytes out of any ELF, on any machine. `(use "l/holo/elfsec.l")`:
 ;
 ;   (elfsec path nm) -> (1 bytes) | ()      the section named nm, or () for no file / no section
 ;

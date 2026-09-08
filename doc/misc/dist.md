@@ -93,7 +93,7 @@ make test_distboot
 The archive is **ours end to end** — `apps/tar/tar.l` writes the ustar, `apps/gz/gz.l` the
 DEFLATE — so cutting a release needs neither `tar` nor `gzip` on the box.
 The coder blocks and costs three spellings (stored, fixed, its own code) and lands
-~4% above `gzip -9` (apps/gz/gz.l carries the measured numbers); love/gz.c is its
+~4% above `gzip -9` (apps/gz/gz.l carries the measured numbers); l/gz.c is its
 C twin, held to the same bytes, so cutting is cheap wherever the nifs are aboard.
 
 **Reproducible by construction.** The pack pins every mtime/uid/gid to `dist_stamp`

@@ -1,7 +1,7 @@
 # plan: one binary, host and free
 
 **THE CLAIM: the tree builds two loves for one machine.** `out/love` and
-`out/love-x64.elf` share `love/love.c`, `am.c` and quay -- ~86% of the
+`out/love-x64.elf` share `l/love.c`, `am.c` and quay -- ~86% of the
 kernel's text and 78% of the host's -- and then implement twenty-one of the same
 behaviours twice. `open`, `stat`, `readdir`, `lseek`, `mkdir`, `rename`, `pipe`,
 `dup`: each is one body in `inle/posix.c` and a second in `inle/kmain.c`. The

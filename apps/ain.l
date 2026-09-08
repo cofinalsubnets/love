@@ -11,7 +11,7 @@
 ; its fd is not ready -- see inle/sock.c / love.c). So the whole program is just two
 ; pump loops + a teardown discipline; the real work is the socket nifs in C.
 ;
-; Run it straight (prel is ALREADY in the egg -- do NOT `-l love/boot/prel.l`; the egg mops
+; Run it straight (prel is ALREADY in the egg -- do NOT `-l l/boot/prel.l`; the egg mops
 ; book/tray/etc after it hatches, so re-feeding prel.l raises `missing book`):
 ;   out/love apps/ain.l host port
 ;   out/love apps/ain.l -l port

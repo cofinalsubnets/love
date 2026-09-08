@@ -166,7 +166,7 @@ and 145-attrpos.c hold both to gcc):
 - `__label__ a, b;` at a block head parses and drops — a label already mangles to `fn.NAME`.
   ⚠ so a name DECLARED in two blocks of one function refuses (above) where gcc compiles it.
 
-The whole set costs **+0.081% of the instructions** compiling love/love.c (perf, 136.115G vs
+The whole set costs **+0.081% of the instructions** compiling l/love.c (perf, 136.115G vs
 136.005G, the same tree built twice and stable to eight figures). `pprim` sees every identifier
 in the TU, so the four arms' string compares hide behind `bib?` — a length test and one
 character. Without it the same features cost +0.128%, which is what the shape test is for.
@@ -308,7 +308,7 @@ outlive the declaration that described it. The sources of a mark are the specifi
 slot for), and — for a cast, whose `('cast ty ..)` node keeps the bare type gen reads — a
 re-read of the type-name off the tokens (`qctl`).
 
-It costs **+0.09% of the instructions** compiling love/love.c (perf, 130.348G vs 130.231G,
+It costs **+0.09% of the instructions** compiling l/love.c (perf, 130.348G vs 130.231G,
 stable to five figures across runs), and the `.o` is byte-identical. Two things buy that back and both are load-bearing: nothing is staged for
 an unqualified declaration (the common path never touches a table), and `qrun` walks the
 specifier run rather than taking a token span — a span by `tally` is O(the rest of the stream),

@@ -1,5 +1,5 @@
 ; --- test/host/limn.l: the laws of apps/berth/limn.l, the cell painter ---
-; not in the test/*.l corpus: `glass` and `unfold` are cb's nifs (love/quay/nif.c)
+; not in the test/*.l corpus: `glass` and `unfold` are cb's nifs (l/quay/nif.c)
 ; and love0 links none of them. it needs the loader too, the way its neighbour
 ; test/host/wharf.l does -- `use` finds apps/berth/limn.l by the filesystem walk.
 ;

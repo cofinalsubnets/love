@@ -1,4 +1,4 @@
-; love/holo/obj.l -- a relocatable elf64 object emitter (cc stage 7a). where elf.l
+; l/holo/obj.l -- a relocatable elf64 object emitter (cc stage 7a). where elf.l
 ; wraps assembled bytes in a static executable (one RWX segment, all labels
 ; resolved), this lays a `.o` the system linker can consume: separate .text /
 ; .data sections, a symbol table (each function a global FUNC, each global var a
@@ -10,7 +10,7 @@
 ; and move together). a64 rides the same walk with its own reloc vocabulary
 ; (CALL26/JUMP26, the ADRP/ADD pair, ABS64) -- see the type table and reltext --
 ; and rv64 likewise (CALL_PLT over the auipc pair, JAL, R_RISCV_64).
-; loads after love/holo/elf.l in the au cat -- reads elf-machines / write-bytes
+; loads after l/holo/elf.l in the au cat -- reads elf-machines / write-bytes
 ; bare, and the assembler internals bare too: the cat leads with (use 'holo)
 ; (apps/kore/asbook.l), so lay/laylax/patch-with/le*/catall resolve through the
 ; spliced module. moon.l drives it: `mooncc -c foo.c foo.o`.

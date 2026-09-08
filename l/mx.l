@@ -177,7 +177,7 @@
     (: nl (string 10)
        [['note ("the data slot layout: the sentinels tile one section at ai_data_stride in" + nl
                  + "enum d order, so a value's rep is arithmetic on its ap -- love.c's DSENT," + nl
-                 + "love.h's ai_typ, love/love_data.ld. each #if is a default, the guard a -D door.")]
+                 + "love.h's ai_typ, l/love_data.ld. each #if is a default, the guard a -D door.")]
          (mx-knob "ai_data_section" mx-sections)
          (mx-knob "ai_data_stride" mx-strides)
          ['cpp-def "ai_data_n" (tally mx-reps)]])

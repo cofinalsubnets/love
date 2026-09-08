@@ -1,7 +1,7 @@
 # moon — the C compiler, in love
 
 `mooncc` is a C compiler written in love (chibicc was the seed), emitting through the holo books. With
-`love/holo/link.l` (our static linker) and `apps/moon/lib/` (our libc, math floor and machine
+`l/holo/link.l` (our static linker) and `apps/moon/lib/` (our libc, math floor and machine
 tail) it is a **complete C toolchain that borrows nothing**: love builds itself with no gcc, no
 glibc and no ld, and the kernel is built by it too.
 
@@ -159,7 +159,7 @@ size, identical offsets.
 second is a licence to use an extension — under `-std=c` this is still mooncc and the
 extension is still refused.
 
-Anything without `-c` is a **link**, through `love/holo/link.l`.
+Anything without `-c` is a **link**, through `l/holo/link.l`.
 
 **The cc conventions** — `CC=mooncc` drives a gcc-shaped recipe unchanged:
 
@@ -224,7 +224,7 @@ generations share; `love0` is stamped `$(love_base)+bootstrap` for exactly this,
 tracks files, not flag strings, and a stale love0 would fail the fixpoint at a byte offset with
 nothing to say about the cause). A reader wanting the commit reads `love-version` in `.rodata`.
 
-Read it back without any binutils at all: `love/holo/elfsec.l`'s `(elfsec PATH ".comment")` answers the
+Read it back without any binutils at all: `l/holo/elfsec.l`'s `(elfsec PATH ".comment")` answers the
 `(1 bytes)` wrapper — an empty section is a real section. It works on gcc's objects and on every
 target mooncc emits, cross-machine, for the reason anything here does: a section table is a
 table. Gated by `test_moon`, both halves — the union over a foreign `.o`, and the exact string on
@@ -408,7 +408,7 @@ predefined on x64 alone (gen's d128 lane), which is what love.c's limb seam read
 ## inline asm
 
 The GNU statement form, in the GNU dialect: the template is what clang and gcc read for the
-target — AT&T on x64, ARM on a64, riscv, thumb — and `love/holo/gas.l` lowers it to the
+target — AT&T on x64, ARM on a64, riscv, thumb — and `l/holo/gas.l` lowers it to the
 neutral IR the baked assembler encodes. So a header says each instruction ONCE and every
 compiler reads it (the kernel's `inle/<a>/asmops.h` carry no `#ifdef __mooncc__` at all);
 no new encoder exists anywhere, every line lands on a backend row test/holo/golden.l froze.

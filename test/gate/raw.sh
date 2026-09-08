@@ -3,7 +3,7 @@
 # builds, PLUS our own raw libc (apps/moon/lib/moonlibc.c: raw-syscall wrappers, mini
 # stdio, mmap malloc), the math floor (apps/moon/lib/moonlibc/math/am.c, ours), and sys.o (the
 # syscall trampoline + our sigsetjmp/longjmp, laid by apps/moon/lib/mksys.l) -- then
-# OUR OWN static linker (love/holo/link.l, via `mooncc a.o..`) binds them. No gcc, no
+# OUR OWN static linker (l/holo/link.l, via `mooncc a.o..`) binds them. No gcc, no
 # glibc, no ld anywhere: the whole chain is love. Corpus green over the fresh egg.
 #
 # THREE targets, ONE procedure: x64 native, rv64 and a64 under qemu-user. They
@@ -32,10 +32,10 @@ case $target in
            out=.test_raw.out    ; mksys=mksys-x64    ; backend=""
            run=""               ; need=""            ; pretty=x64 ;;
   rv64) name=test_raw_rv64  ; tflag="-t rv64" ; sub=raw-rv64; bin=love-raw-rv64
-           out=.test_raw_rv.out ; mksys=mksys-rv64  ; backend=love/holo/rv64.l
+           out=.test_raw_rv.out ; mksys=mksys-rv64  ; backend=l/holo/rv64.l
            run=qemu-riscv64     ; need=qemu-riscv64  ; pretty=rv64 ;;
   a64)   name=test_raw_a64  ; tflag="-t a64"   ; sub=raw-a64 ; bin=love-raw-a64
-           out=.test_raw_a64.out; mksys=mksys-a64  ; backend=love/holo/a64.l
+           out=.test_raw_a64.out; mksys=mksys-a64  ; backend=l/holo/a64.l
            run=qemu-aarch64     ; need=qemu-aarch64  ; pretty=a64 ;;
   *) echo "raw.sh: unknown target $target" >&2; exit 1 ;;
 esac
@@ -65,7 +65,7 @@ moonc() { LOVE_NO_IMAGE= "$m" mooncc $tflag "$@"; }
 
 for f in $gate_love_c $gate_host_c; do
   b=$(basename "$f" .c)
-  moonc -D ai_tco=1 -I"$ho" -I. -Ilove -Iinle -Iout/lib -c "$f" "$d/$b.o" || fail "mooncc $tflag -c $f"
+  moonc -D ai_tco=1 -I"$ho" -I. -Il -Iinle -Iout/lib -c "$f" "$d/$b.o" || fail "mooncc $tflag -c $f"
 done
 
 # moonlibc is NOT compiled here: the link below owes its symbols and the driver's
@@ -85,7 +85,7 @@ done
     cat "$backend"
   fi
   cat apps/kore/text.l apps/kore/u.l apps/kore/asbook.l \
-      love/holo/elf.l love/holo/obj.l apps/moon/lib/mksys.l
+      l/holo/elf.l l/holo/obj.l apps/moon/lib/mksys.l
   echo "((from 'moon '$mksys) \"$d/sys.o\")"
 } | "$m" || fail "$mksys sys.o"
 

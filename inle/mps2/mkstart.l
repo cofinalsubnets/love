@@ -13,7 +13,7 @@
 ; puts bytes where the segment says and only one segment can own an address. so
 ; _start copies it across and makes .bss's zeros, off the three brackets only the
 ; linker can know (__data_load__ / __data_start__ / __data_end__, __bss_start__ /
-; __bss_end__ -- love/holo/link.l's ldbare32 pins them). BYTE loops: a section's
+; __bss_end__ -- l/holo/link.l's ldbare32 pins them). BYTE loops: a section's
 ; size is its own business and need not be a multiple of four, and a few thousand
 ; iterations at boot cost nothing next to getting the tail wrong.
 ;
@@ -27,7 +27,7 @@
 ; locks up ("can't escalate 3 to HardFault") -- love.c is full of doubles, so this is
 ; the first thing _start does and the barriers after it are not decoration.
 ;
-; runs after love/holo/{elf,obj}.l in a cat with the thumb2 backend spliced into the
+; runs after l/holo/{elf,obj}.l in a cat with the thumb2 backend spliced into the
 ; sealed holo module (the mkboot2 shape; inle/mps2/Makefile drives it).
 (: (mkstart dst)
    (: cpacr 0xE000ED88  cp1011 0xF00000

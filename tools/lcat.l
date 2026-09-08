@@ -114,11 +114,11 @@
      (: e (n < i + 20 ? n (i + 20))
       (say out ("\"" + string (row s i (e - 1) ()) + "\"\n"), zrows s e n)))
 
-   ; the boot files by name; the glaze's and holo's live beside love/boot
-   home {'emit "love/boot/glaze/" 'auto "love/boot/glaze/"
-         'hook "love/boot/glaze/" 'walk "love/boot/glaze/"
-         'holo "love/holo/" 'x64 "love/holo/" 'a64 "love/holo/" 'rv64 "love/holo/"}
-   (path n) (peep home n "love/boot/" + show n + ".l")
+   ; the boot files by name; the glaze's and holo's live beside l/boot
+   home {'emit "l/boot/glaze/" 'auto "l/boot/glaze/"
+         'hook "l/boot/glaze/" 'walk "l/boot/glaze/"
+         'holo "l/holo/" 'x64 "l/holo/" 'a64 "l/holo/" 'rv64 "l/holo/"}
+   (path n) (peep home n "l/boot/" + show n + ".l")
    (slurp-file p) (: q (open p "r") _ (!q ? (die ("cannot open " + p))) s (slurp q) _ (close q) s)
    ; a file's minified text, once: holo rides four blobs
    cache {}
@@ -144,7 +144,7 @@
      ['ai_cat_mods_h_z ['holo 'a64 'scan]]
      "#elif defined(__riscv)" "#define AiCatModsH 1"
      ['ai_cat_mods_h_z ['holo 'rv64 'scan]]
-     ; wasm is gen's rv64 lane under another writer (love/holo/wasmfn.l), so the
+     ; wasm is gen's rv64 lane under another writer (l/holo/wasmfn.l), so the
      ; machine under that seat's holo is rv64's
      "#elif defined(__wasm__)" "#define AiCatModsH 1"
      ['ai_cat_mods_h_z ['holo 'rv64 'scan]]

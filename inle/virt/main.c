@@ -10,7 +10,7 @@
 // double-bake under emulation -- then the driver tail asserts a few spec
 // laws and exits through vexit, so `make test_virt` sees 42 (98 = a trap,
 // reported by start.o's mtvec tail through fault_report below).
-#include "../../love/love.h"
+#include "../../l/love.h"
 
 #ifndef EOF
 #define EOF (-1)
@@ -102,7 +102,7 @@ static lvm(ai_vexit) {
   return Continue(); }                       // unreached
 
 static union u const nif_vexit[] = {{ai_vexit}, {lvm_ret0}};
-static struct ai_def defs[] = { {"vexit", (intptr_t) nif_vexit} };
+static struct ai_def defs[] = { {"vexit", {.k = nif_vexit}} };
 
 // --- the arena ------------------------------------------------------------
 // The teensy first-fit free list, fed 64 MB of virt's DRAM by address -- the
@@ -168,7 +168,7 @@ void free(void *p) {
 // over the hatched image and exit with the verdict. 42 = the egg hatched and
 // the laws hold on the hart.
 int main(void) {
-  v_puts("\n; love/virt -- baking the egg on the hart\n");
+  v_puts("\n; l/virt -- baking the egg on the hart\n");
   freelist = (struct mem*) POOL;
   freelist->next = NULL;
   freelist->len = POOL_BYTES / sizeof(uintptr_t);

@@ -18,7 +18,7 @@
 # every solver sees identical instances by construction; the SATLIB rows feed love the
 # byte-identical files, converted to a formula literal by awk.
 #
-# love's `fcdcl` (apps/sat/flat.l: flat-arena CDCL + the love/holo/-emitted native BCP kernel)
+# love's `fcdcl` (apps/sat/flat.l: flat-arena CDCL + the l/holo/-emitted native BCP kernel)
 # is timed by its OWN clock around the solve call, so the interpreter warmup + the
 # self-tests (which would otherwise dominate) are
 # excluded -- the honest "solve time". External solvers are timed by process

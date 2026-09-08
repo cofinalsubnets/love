@@ -1,4 +1,4 @@
-; apps/kore/re.l -- grep, over the regex engine in love/boot/post.l. the engine moved out
+; apps/kore/re.l -- grep, over the regex engine in l/boot/post.l. the engine moved out
 ; (it is pure and had no kore couplings); this half is the one that reads files,
 ; so it keeps the u-floor (uread, udie) and text.l's lines. smoked byte-identical
 ; against GNU in `make test_kore`. a toolbox file, no seat -- kore.l is its door.
@@ -110,7 +110,7 @@
        ; `bad`, not `err`: err is the port, and a shadow here would say into a charm
        st (tablet 0) _ (pin st 'hit 0) _ (pin st 'bad 0)
        ; ⚠ ONE trap for the whole run, not one per line. the engine is a greedy
-       ; backtracker (love/boot/post.l), so a repeat whose atom can match a span two
+       ; backtracker (l/boot/post.l), so a repeat whose atom can match a span two
        ; ways -- (a|aa)+ -- is exponential in the run's length; the engine spends a
        ; step budget on exactly those and scares when it runs out. this is where the
        ; scare becomes a sentence and a status instead of a stack. any other scare is

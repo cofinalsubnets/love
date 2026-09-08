@@ -58,7 +58,7 @@ static int kqpop(void) {                   // dequeue one byte, -1 if empty
   int b = kkb.q[kkb.qh];
   return kkb.qh = (kkb.qh + 1) & 15, b; }
 
-// the console's font. the palette that goes with it lives in love/quay/paint.c,
+// the console's font. the palette that goes with it lives in l/quay/paint.c,
 // which is the one place a cell becomes pixels.
 static struct font const kfont = { .glyphs = (uint8_t*) moderndos_8x16, .w = 8, .h = 16 };
 
@@ -81,7 +81,7 @@ void kputn(uintptr_t n, int base) {
  while (i) kputc(buf[--i]); }
 // the kernel-only nif bracket (defs[] below); the linker synthesizes the pair
 extern struct ai_def const __start_ai_knifs[], __stop_ai_knifs[];
-// the bracket, for the image codec's nif slice (love/snap.c's weak default answers none)
+// the bracket, for the image codec's nif slice (l/snap.c's weak default answers none)
 uintptr_t ai_knifs_slice(struct ai_def const **s) {
   return *s = __start_ai_knifs, (uintptr_t)(__stop_ai_knifs - __start_ai_knifs); }
 // the metal image's far edge, PATCHED INTO THE FILE by the projection
@@ -1632,10 +1632,10 @@ static bool cbinit(void) {
 // linker synthesizes the bracket, so there is no registration line anywhere. indexed by
 // position like its sibling, so this order is part of an image's contract: append only.
 static struct ai_def const __attribute__((section("ai_knifs"), used)) defs[] = {
-  {"reset", (intptr_t) nif_reset},
-  {"draw", (intptr_t) nif_draw},
-  {"key", (intptr_t) nif_key},
-  {"fault", (intptr_t) nif_fault},
+  {"reset", {.k = nif_reset}},
+  {"draw", {.k = nif_draw}},
+  {"key", {.k = nif_key}},
+  {"fault", {.k = nif_fault}},
   // the posix surface, open/close/quit/getpid included, is inle/posix.c's and inle/main.c's,
   // linked whole: their nifs land in this section, libc calls bottom out in inle/sys.c's
   // table, and quit and getpid branch to k_lvm_quit / k_lvm_getpid on a negative osv. what
@@ -1643,18 +1643,18 @@ static struct ai_def const __attribute__((section("ai_knifs"), used)) defs[] = {
   // rung 5: the disk -- the raw block door apps/fat/fat.l's filesystem rides. these
   // three are OURS (no host twin: the host has no raw disk), so the shapes are
   // love's -- absence and refusal answer (), presence is the green sector count.
-  {"disk", (intptr_t) nif_disk},
-  {"disk-read", (intptr_t) nif_disk_read},
-  {"disk-write", (intptr_t) nif_disk_write},
+  {"disk", {.k = nif_disk}},
+  {"disk-read", {.k = nif_disk_read}},
+  {"disk-write", {.k = nif_disk_write}},
   // x64 only, so a love-side reader asks (member? 'svm (names ())) before (svm ()): on
   // the a64 seat the nom is not in the book, so reading it is missing, not absence.
 #if defined(__x86_64__)
-  {"svm", (intptr_t) nif_svm},
-  {"svm-run", (intptr_t) nif_svm_run},
-  {"vmx", (intptr_t) nif_vmx},
-  {"vmx-run", (intptr_t) nif_vmx_run},
+  {"svm", {.k = nif_svm}},
+  {"svm-run", {.k = nif_svm_run}},
+  {"vmx", {.k = nif_vmx}},
+  {"vmx-run", {.k = nif_vmx_run}},
 #endif
-  {"color", (intptr_t) nif_color} };
+  {"color", {.k = nif_color}} };
 
 // the kore cat is CATTED FROM THE RAMFS at boot -- the blob initrd carries every
 // member, so only the ORDER is baked: the korefiles roster, one line.
@@ -1723,11 +1723,11 @@ void kmain(void) {
   if (ai_ok(g)) ai_core_of(g)->budget = kram_words / 8;
   // the kore ROSTER (rung 3): the cat itself is read off the ramfs below.
   g = ai_strof(g, src_korelist);
-  struct ai_def kd[] = {{"korelist", ai_pop1(g)}};
+  struct ai_def kd[] = {{"korelist", {.x = ai_pop1(g)}}};
   g = ai_defn(g, kd, countof(kd));
   // the boot cmdline, raw; the boot text below splits it into the argv shape.
   g = ai_strof(g, kboot.cmdline);
-  struct ai_def bd[] = {{"bootline", ai_pop1(g)}};
+  struct ai_def bd[] = {{"bootline", {.x = ai_pop1(g)}}};
   g = ai_defn(g, bd, countof(bd));
   // the EGG lane: load the prel, warm the module layers -- everything a woken
   // image already carries. the seat text below runs on BOTH lanes.

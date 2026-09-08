@@ -1,4 +1,4 @@
-; x64 -- the x86-64 backend for the neutral assembler (love/holo/holo.l). it lowers each IR form to a list
+; x64 -- the x86-64 backend for the neutral assembler (l/holo/holo.l). it lowers each IR form to a list
 ; of machine-code bytes (and label fixups), in 64-bit operand mode throughout. every encoding here
 ; was checked against `objdump -d -M intel`: emit the bytes, disassemble, confirm the mnemonic.
 ;

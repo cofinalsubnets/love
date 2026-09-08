@@ -1,5 +1,5 @@
 // num.c -- big. one translation unit of the runtime;
-// the shared layouts and the cross-TU seam are love/love.h.
+// the shared layouts and the cross-TU seam are l/love.h.
 #include "love.h"
 // this file's own, forward-declared so order within it does not matter.
 static ai_dlimb div128by64(ai_limb hi, ai_limb lo, ai_limb d, ai_limb *rem);
@@ -1367,7 +1367,7 @@ lvm(lvm_tally) {
 // (long? n l): is l a chain at least n links deep -- the arity question, asked once.
 // `two?` per step is the spelling that reads, and it costs a cup, a load and a
 // dispatch each; a destructuring pattern asks it n times to reach n fields
-// (love/boot/post.l). n <= 0 is true of anything: no link is claimed.
+// (l/boot/post.l). n <= 0 is true of anything: no link is claimed.
 lvm(lvm_longp) { word l = Sp[1];
  if (!charmp(Sp[0])) ai_musttail return Push(zero);
  for (intptr_t k = getcharm(Sp[0]); k > 0; k--) {

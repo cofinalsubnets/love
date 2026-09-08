@@ -13,7 +13,7 @@ lib_h  = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h o
 p_hdrs = out/lib/rune.h
 include ../port.mk
 
-mps2_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Ilove -Iout/lib
+mps2_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Il -Iout/lib
 # our own link: -Ttext 0 is the board's origin, -nostdlib says an owed nom is a diagnostic
 # rather than a hunt for a runtime this board would not want.
 mps2_ld = $(MOONCC) -t thumb2 -Ttext 0 -Tdata 0x20000000 -nostdlib
@@ -32,13 +32,13 @@ default: mps2
 mps2: $(R)/$(o)/love.elf
 mps2t1: $(R)/$(o)/love-t1.elf
 
-$(foreach u,$(love_m),$(eval $(call p_obj,$u,love/$u.c,\
-  $(R)/love/$u.c $(love_dep),$(mps2_cc))))
+$(foreach u,$(love_m),$(eval $(call p_obj,$u,l/$u.c,\
+  $(R)/l/$u.c $(love_dep),$(mps2_cc))))
 $(foreach m,$(libc_m),$(eval $(call p_obj,$m,apps/moon/lib/moonlibc/string/$m.c,\
   $(R)/apps/moon/lib/moonlibc/string/$m.c $(libc_dep),$(mps2_cc) -Iapps/moon/include)))
 
 # main.c, once per face -- the -D is the whole difference.
-mainc = main.c $(R)/love/love.h $(lib_hR) $(mc)
+mainc = main.c $(R)/l/love.h $(lib_hR) $(mc)
 $(eval $(call p_obj,main,inle/mps2/main.c,$(mainc),$(mps2_cc)))
 $(eval $(call p_obj,main-baker,inle/mps2/main.c,$(mainc),$(mps2_cc) -D BAKER))
 $(eval $(call p_obj,main-waker,inle/mps2/main.c,$(mainc),$(mps2_cc) -D WAKER))
@@ -76,7 +76,7 @@ imgpd: $(R)/$(o)/love-pd.img
 $(R)/out/playdate/cas.h:
 	@$(MAKE) -C $(R)/inle/playdate ../../out/playdate/cas.h
 
-pdmainc = main.c $(R)/love/love.h $(addprefix $(R)/,$(pd_lib_h)) $(R)/out/playdate/cas.h $(mc)
+pdmainc = main.c $(R)/l/love.h $(addprefix $(R)/,$(pd_lib_h)) $(R)/out/playdate/cas.h $(mc)
 $(eval $(call p_obj,main-baker-pd,inle/mps2/main.c,$(pdmainc),$(mps2_cc) -D BAKER -D BAKER_RUNE -Iout/playdate))
 $(eval $(call p_obj,main-waker-pd,inle/mps2/main.c,$(pdmainc),$(mps2_cc) -D WAKER -D BAKER_RUNE -Iout/playdate))
 
@@ -103,15 +103,15 @@ $(R)/$(o)/love-pd.img: $(R)/$(o)/baker-pd.elf $(R)/$(o)/waker-pd.elf
 # floor, this proves the whole runtime. ai_tco=0: v6-M has no sibcalls (the pop-pc
 # epilogue), so the VM rides the trampoline -- the lane the clang rp2040 build uses. The
 # __aeabi soft-float/64-bit helpers come from gcc's v6-m multilib.
-mps2t1_cc = $(MOONCC) -t thumb1 -D ai_tco=0 -D __STDC_HOSTED__=0 -I. -Ilove -Iout/lib
+mps2t1_cc = $(MOONCC) -t thumb1 -D ai_tco=0 -D __STDC_HOSTED__=0 -I. -Il -Iout/lib
 t1_lg = `arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -print-libgcc-file-name`
 t1_libc_o = $(addprefix $(R)/$(o)/,$(addsuffix -t1.o,$(libc_m)))
 t1_love_o = $(addprefix $(R)/$(o)/,$(addsuffix -t1.o,$(love_m)))
 t1_objs = $(R)/$(o)/start.o $(t1_love_o) $(R)/$(o)/am-t1.o $(t1_libc_o) \
   $(R)/$(o)/main-t1.o
 
-$(foreach u,$(love_m),$(eval $(call p_obj,$u-t1,love/$u.c,\
-  $(R)/love/$u.c $(love_dep),$(mps2t1_cc))))
+$(foreach u,$(love_m),$(eval $(call p_obj,$u-t1,l/$u.c,\
+  $(R)/l/$u.c $(love_dep),$(mps2t1_cc))))
 $(foreach m,$(libc_m),$(eval $(call p_obj,$m-t1,apps/moon/lib/moonlibc/string/$m.c,\
   $(R)/apps/moon/lib/moonlibc/string/$m.c $(libc_dep),$(mps2t1_cc) -Iapps/moon/include)))
 $(eval $(call p_obj,main-t1,inle/mps2/main.c,$(mainc),$(mps2t1_cc)))
@@ -119,7 +119,7 @@ $(eval $(call p_obj,am-t1,apps/moon/lib/moonlibc/math/am.c,$(R)/apps/moon/lib/mo
   $(MOONCC) -t thumb1 -Iapps/moon/lib/moonlibc/math -Iapps/moon/include))
 
 # our linker binds this one too: libgcc.a rides in as an ARCHIVE, resolved by need through
-# its ranlib index (love/holo/link.l's ld-arsyms). gcc's own v6-M members are the only
+# its ranlib index (l/holo/link.l's ld-arsyms). gcc's own v6-M members are the only
 # foreign objects in the tree's boot images.
 $(R)/$(o)/love-t1.elf: $(t1_objs)
 	@echo MOON	$@

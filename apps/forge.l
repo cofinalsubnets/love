@@ -1,4 +1,4 @@
-; apps/forge.l -- nifs written in love. a kernel is a love/holo IR program plus an honest
+; apps/forge.l -- nifs written in love. a kernel is a l/holo IR program plus an honest
 ; interpreted twin. forge assembles the program for the cpu it is running on and installs it
 ; through the `nif` seam; the twin is what runs everywhere the native cannot. `(use "apps/forge.l")`:
 ;
@@ -49,14 +49,14 @@
 ; the IR is built at fit time, never earlier, and never kept.
 ;
 ; a native cell does not survive a bake, and it does not say so. the image codec reverts it to
-; its twin (love/love.c img_nif_interp) because the w^x mapping dies with the baking process, so
+; its twin (l/love.c img_nif_interp) because the w^x mapping dies with the baking process, so
 ; the bake succeeds, the value wakes, it answers correctly -- and it is the twin. measured on the
 ; 4096-cell battery: 4 ms native, 13 ms after a bake and a wake, which is the C nif's own 13.
 ; what bakes is the roster, thunks and twins being ordinary love data, so a woken image is correct
 ; and slow until someone calls `forge-fit` again -- ~0.1 ms per kernel.
 ;
 ; the fit is a batch, every kernel assembling before any installs, because `nif` mmaps a
-; page-rounded arena per call (love/love.c code_maplen), so a roster of n costs n pages and n
+; page-rounded arena per call (l/love.c code_maplen), so a roster of n costs n pages and n
 ; vmas today. one arena for the batch is a change to that seam, and this shape is what feeds it.
 ;
 ; it needs the glaze module, not the glaze hook: the seal pulls `nif`/`nifx` off the book on
@@ -75,7 +75,7 @@
    ; target -- r1 is Sp here and Ip on a64, and only Hp coincides. every guard,
    ; epilogue and deopt tail below names them by number, and holo lowers all of it on
    ; any backend, so an off-x64 assemble succeeds and installs a kernel reading Ip
-   ; where it means Sp. what the roles need is a row per target -- love/boot/scan.l has one
+   ; where it means Sp. what the roles need is a row per target -- l/boot/scan.l has one
    ; -- and until they have it `forge-abi?` is what keeps the twins in force.
    forge-trayk (apof (iota 0))                      ; a tray's ap word, live in this process
    forge-chaink (apof '(1 2))                       ; a chain's
@@ -124,7 +124,7 @@
    ; is image-encoded -- so unlike an `li` immediate it is a heap reference the collector knows
    ; about. that is the door for a constant a kernel cannot spell: the zero point terminator a
    ; list-building kernel needs is `&ai_mint_zero`, and no book name hands its address out.
-   ; the glaze uses the same slot for a closure (love/boot/glaze/emit.l).
+   ; the glaze uses the same slot for a closure (l/boot/glaze/emit.l).
    (forge-extras d) [['ld d 'r5 32]]
    ; the deopt tail: Ip <- the interp twin (Ip[1]), then enter it with the args still on Sp.
    ; arity 1 enters at its first word; arity>=2 skips the twin's own curry preamble.

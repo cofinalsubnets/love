@@ -33,7 +33,7 @@ went.
 | the boot drink | `test/kernel/all.l` through `k-run-file`, INSTEAD of the kore cat and the boot cmdline |
 | Makefile | `ksuf`, the `-test` odir, `-DK_TEST -Dai_tco=1`, four gates |
 
-`-Dai_tco=1` is redundant: `love/love.h:39` already defaults it to 1 and the
+`-Dai_tco=1` is redundant: `l/love.h:39` already defaults it to 1 and the
 shipped kernel takes the default.
 
 ## the rungs

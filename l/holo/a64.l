@@ -1,4 +1,4 @@
-; a64 -- the a64 backend for the neutral assembler (love/holo/holo.l), the second target. it shows
+; a64 -- the a64 backend for the neutral assembler (l/holo/holo.l), the second target. it shows
 ; the IR really is arch-neutral: the driver, the IR forms, the text front-end and the ELF linker are
 ; all untouched -- this file just pins a {lower,patch} pair under 'a64. every word
 ; here was checked against llvm-mc (--show-encoding) and llvm-objdump.

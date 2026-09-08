@@ -3,7 +3,7 @@
 // the kernel is the last place in the tree that talks to the machine in
 // assembler, and it says each thing ONCE, in GNU's AT&T template: clang reads
 // it natively, and mooncc lowers the same text to holo's neutral IR
-// (love/holo/gas.l -- the registers, `$` immediates, disp(%base) memory,
+// (l/holo/gas.l -- the registers, `$` immediates, disp(%base) memory,
 // the `1:`/`1f` local labels and the size suffix all read as GNU does). so the
 // spelling lives HERE, once per operation, every call site says the operation's
 // NAME, and the clang build stays alive as the differential twin: both

@@ -155,7 +155,7 @@ is the opposite — a `malloc` *and* an individual `drop`/free **per node** — 
 case, and the only reason a GC'd language would "win" the row. So `tree.rs`/`bintrees.rs`
 use a bump **arena** (nodes in a pre-sized `Vec`, children as indices, bulk-freed at the
 end): Rust's memory model used *well*, the same bump-then-bulk shape love's collector has —
-and it lands ahead of love/go (Rust ~0.55 vs love ~0.86 on `tree`). The honest reading is
+and it lands ahead of l/go (Rust ~0.55 vs love ~0.86 on `tree`). The honest reading is
 "copying GC vs. arena," both at their best, not "love is faster at trees." `float` is mandelbrot escape counts over a
 64×64 grid: pure f64 `+`/`−`/`*`/`<=` (no transcendentals) over exactly
 representable constants, with an integer checksum, so it is bit-identical

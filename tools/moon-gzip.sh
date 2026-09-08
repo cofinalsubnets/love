@@ -38,9 +38,9 @@ case $target in
   x64)   name=moon-gzip       ; tflag=""            ; sub=moongzip
          mksys=mksys       ; backend=""               ; run=""            ; need="" ;;
   a64) name=moon-gzip-a64 ; tflag="-t a64"    ; sub=moongzip-a64
-         mksys=mksys-a64 ; backend=love/holo/a64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
+         mksys=mksys-a64 ; backend=l/holo/a64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
   rv64) name=moon-gzip-rv64 ; tflag="-t rv64" ; sub=moongzip-rv
-         mksys=mksys-rv64 ; backend=love/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
+         mksys=mksys-rv64 ; backend=l/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
   *) echo "moon-gzip.sh: unknown target $target (x64 | a64 | rv64)" >&2; exit 1 ;;
 esac
 
@@ -108,7 +108,7 @@ done
 # sys.o is LAID, not compiled -- and a CROSS lay needs holo's backend loaded
 # first (the host bake carries only the native one), exactly as raw.sh does it.
 { if [ -n "$backend" ]; then echo "(use 'holo)"; cat "$backend"; fi
-  cat apps/kore/text.l apps/kore/u.l apps/kore/asbook.l love/holo/elf.l love/holo/obj.l apps/moon/lib/mksys.l
+  cat apps/kore/text.l apps/kore/u.l apps/kore/asbook.l l/holo/elf.l l/holo/obj.l apps/moon/lib/mksys.l
   echo "((from 'moon '$mksys) \"$d/sys.o\")"; } | $love || { echo "FAIL $mksys sys.o"; exit 1; }
 
 $mc $tflag $objs "$d"/m_*.o "$d/sys.o" -o "$d/gzip" || { echo "FAIL holo link gzip"; exit 1; }

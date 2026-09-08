@@ -14,7 +14,7 @@
 ; or output reflection, xorout 0. boot2.bin checksums to 0x7a4eb274 -- the one
 ; number that says this file still works.
 ;
-; runs after love/holo/{elf,obj}.l in a cat with the thumb1 backend spliced into
+; runs after l/holo/{elf,obj}.l in a cat with the thumb1 backend spliced into
 ; the sealed holo module (the mkstart shape; inle/rp2040/Makefile).
 (: m32 4294967295
    (crc-step c) (: c2 ((c << 1) & m32)

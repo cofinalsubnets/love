@@ -1,4 +1,4 @@
-; decode -- x86-64 machine code back to the parsed instruction of love/holo/dialect.l: the
+; decode -- x86-64 machine code back to the parsed instruction of l/holo/dialect.l: the
 ; bytes-to-text half of the x86 lens. what as.l and x64.l emit, what gcc's output uses, and the
 ; kernel's system lane all read back; anything else lands as a `.byte` item, one byte at a time,
 ; so a stream never scares and always resynchronises. the showers then print either dialect.

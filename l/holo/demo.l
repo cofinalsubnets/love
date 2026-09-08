@@ -9,7 +9,7 @@
 ;                        qemu-system-aarch64 -M virt -cpu cortex-a57 -nographic -kernel /tmp/love-a64.elf
 ;                      (ctrl-a x to quit qemu.)
 ;
-; run: out/love -l love/holo/holo.l -l love/holo/x64.l -l love/holo/a64.l -l love/holo/elf.l love/holo/demo.l
+; run: out/love -l l/holo/holo.l -l l/holo/x64.l -l l/holo/a64.l -l l/holo/elf.l l/holo/demo.l
 
 (module 'holo
 (: say (\ s (: _ (puts s) (flush out)))

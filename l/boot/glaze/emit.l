@@ -5,7 +5,7 @@
 ; (love.c): it w^x-installs the bytes and wraps them in a closure cell
 ; [code, src, code, interp, lvm_ret, 0], value[-1]=src (=/show) and value[1]=interp.
 ;
-; every lane below lays neutral love/holo/ IR and assembles it per target, so the
+; every lane below lays neutral l/holo/ IR and assembles it per target, so the
 ; roles are named through `greg`: x86 lands g/Ip/Hp/Sp in rdi/rsi/rdx/rcx, a64
 ; in x0..x3. putfix is `adds A A A` then `or A A 1` -- the overflow flag is the
 ; 62-bit fixnum boundary, which is what every arith result gates on.
@@ -39,7 +39,7 @@
    (hasm tgt ir) (: f (glazeasm 'f) ((lit? f ? f (from 'holo 'assemble)) tgt ir))   ; the pinned assembler, else the module's
    (asmx ir) ((hasm 'x64 ir) 'bytes)                                          ; assemble neutral IR -> flat bytes, x86
    (asmt tgt ir) ((hasm tgt ir) 'bytes)                                       ; ... target-aware (the loop/float lanes that run on both arches)
-   ; the map probe, laid by the love/holo/ assembler so hit/miss/loop resolve as labels.
+   ; the map probe, laid by the l/holo/ assembler so hit/miss/loop resolve as labels.
    ; reg map: holo r0=rax, r7=x86-r8, r8=x86-r9, r9=x86-r10, r10=x86-r11. it wants the map
    ; in rax and the tagged key in r11 (holo r10), and ends branched to hit (match) / miss (gap).
    mprobe-ir ['(ld r7 r0 8) '(ld r8 r7 16) '(shr r8 1) '(dec r8) '(add r7 r7 24)    ; r8=backing; r9=cap; >>1; --(=mask); r8=&slots
@@ -987,12 +987,12 @@
                     (['(ucomisd f0 f0) ['br 'vc ok]] + [['li A 0] ['movqxr 'f0 A]] + [['label ok]])))
    (jitfr lam tgt) (jitfrx lam tgt (ev lam))                        ; 2-arg public: bakes the interpreter deopt (auto-ev + the glaze-x86 tests)
    ; jitfrx: the deopt-parameterized core. auto-ev/tests reach it through jitfr ((ev lam)); the natjit
-   ; creation hook (love/boot/glaze/hook.l) calls it directly with `e`, the bytecode twin ala already built --
+   ; creation hook (l/boot/glaze/hook.l) calls it directly with `e`, the bytecode twin ala already built --
    ; re-interpreting lam there would re-enter ala -> natjit -> ... (the leaf lane's `e`-deopt law).
    (jitfrx lam tgt interp)
     (: v <>lam
        A (greg tgt 'acc) S (greg tgt 'sp) HP (greg tgt 'hp) IP (greg tgt 'ip) T (greg tgt 'tmp) ok (mint 0)
-       ; neutral love/holo/ IR (both targets): the room-guard skips the deopt by label; the box store is `stsd`;
+       ; neutral l/holo/ IR (both targets): the room-guard skips the deopt by label; the box store is `stsd`;
        ; the deopt is deoptbody (no pending spills here -- cgf balances its own); nanc is arch-aware.
        (nif (emit (asmt tgt ((cgf tgt v <>>lam 0)
           + [['lea A HP 80] ['cmp S A] ['br 'ae ok]]                  ; cmp Sp,Hp+10w ; room? skip deopt

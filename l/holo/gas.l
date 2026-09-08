@@ -1,6 +1,6 @@
 ; gas -- the GNU-dialect front for inline asm: the text an `asm("..")` template carries once its
 ; operands are substituted, in the assembler syntax the target's own toolchain speaks (AT&T on
-; x64, ARM on a64, riscv, thumb), lowered to the neutral IR love/holo/holo.l assembles. where
+; x64, ARM on a64, riscv, thumb), lowered to the neutral IR l/holo/holo.l assembles. where
 ; text.l reads holo's own mnemonics over abstract registers, this reads what clang and gcc read,
 ; so one template serves every compiler. it encodes nothing itself: every line lands on a backend
 ; row, so the encodings stay where they are gated (test/holo/golden.l). (as.l is the physical
@@ -17,11 +17,11 @@
 ; system lane. x64's 32-bit forms ride the 64-bit op plus a zero-extend; the 8/16-bit register
 ; forms and indexed memory refuse. a line that fits nothing scares, so a typo never drops out.
 ; a multi-instruction template separates on `\n` or `;`, as GNU does. the x64 text is read by
-; love/holo/dialect.l's att-read -- the same parsed instruction as.l encodes and the Intel
+; l/holo/dialect.l's att-read -- the same parsed instruction as.l encodes and the Intel
 ; dialect shows -- and only lowered here; the other dialects still parse their own lines.
 
 (module 'holo
-(: ;; the lexer (gtoks) and the immediate expressions (gimm) sit in love/holo/dialect.l,
+(: ;; the lexer (gtoks) and the immediate expressions (gimm) sit in l/holo/dialect.l,
    ;; shared with the x86 lens; the lines and local labels below are GNU's, for every dialect
 
    ;; -- lines. a template separates on newline or `;`; `//` comments everywhere, `#` where it is
@@ -118,7 +118,7 @@
           (= tgt 'rv64) (peep rv-names k ())
           (peep t32-names k ())))
 
-   ;; -- x64: the AT&T text is read by love/holo/dialect.l (att-read) into the parsed
+   ;; -- x64: the AT&T text is read by l/holo/dialect.l (att-read) into the parsed
    ;;    instruction -- (op mn w ops), destination first, physical registers -- and lowered here.
    ;;    GNU's numeric local labels resolve over the read items first, the k-th `N:` becoming
    ;;    lN.k, `Nf` the next one, `Nb` the last one. --

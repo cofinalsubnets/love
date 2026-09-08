@@ -1,6 +1,6 @@
 // FIXME merge with image.c
 // snap.c -- the heap-image snapshot. one translation unit of the runtime;
-// the shared layouts and the cross-TU seam are love/love.h.
+// the shared layouts and the cross-TU seam are l/love.h.
 #include "love.h"
 struct ai_chain; struct hc; struct image_hdr; struct img_ord;
 // this file's own, forward-declared so order within it does not matter.
@@ -102,9 +102,9 @@ static ai_inline uintptr_t image_nhost(void) {
 static ai_inline intptr_t image_host_x(uintptr_t k) {                // slice entry k's cell
  uintptr_t nh = (uintptr_t)(__stop_love_nifs - __start_love_nifs);
  struct ai_def const *ks;
- if (k < nh) return __start_love_nifs[k].x;
+ if (k < nh) return __start_love_nifs[k].v.x;
  ai_knifs_slice(&ks);
- return ks[k - nh].x; }
+ return ks[k - nh].v.x; }
 
 // bidirectional lvm_* table: index <-> address. supplemental table 0..E-1, ai_def1 E.., then
 // the host slice last so existing indices keep their meaning.
@@ -112,7 +112,7 @@ static intptr_t image_ap_index(intptr_t ap) {
  for (uintptr_t i = 0; i < countof(image_extra_aps); i++)
   if ((intptr_t) image_extra_aps[i] == ap) return (intptr_t) i;
  for (uintptr_t j = 0; j < ai_def1_n; j++)
-  if (ai_def1[j].x == ap) return (intptr_t)(countof(image_extra_aps) + j);
+  if (ai_def1[j].v.x == ap) return (intptr_t)(countof(image_extra_aps) + j);
  for (uintptr_t k = 0, n = image_nhost(); k < n; k++)
   if (image_host_x(k) == ap)
    return (intptr_t)(countof(image_extra_aps) + ai_def1_n + k);
@@ -121,7 +121,7 @@ static intptr_t image_ap_index(intptr_t ap) {
 static ai_inline intptr_t image_ap_resolve(intptr_t idx) {
  uintptr_t e = countof(image_extra_aps), d = ai_def1_n;
  if (idx < (intptr_t) e) return (intptr_t) image_extra_aps[idx];
- if (idx < (intptr_t)(e + d)) return ai_def1[idx - e].x;
+ if (idx < (intptr_t)(e + d)) return ai_def1[idx - e].v.x;
  uintptr_t k = (uintptr_t) idx - e - d;                    // the host slice; a short roster reads 0
  return k < image_nhost() ? image_host_x(k) : 0; }
 
@@ -131,7 +131,7 @@ static intptr_t image_fn_slot(word const *cell) {
  return (intptr_t) (cell[0] == (word) lvm_cur ? cell[2] : cell[0]); }
 static intptr_t image_fn_index(intptr_t v) {
  for (uintptr_t j = 0; j < ai_def1_n; j++) {
-  word const *c = (word const*) ai_def1[j].x;
+  word const *c = (word const*) ai_def1[j].v.x;
   if (image_fn_slot(c) == v) return (intptr_t) j; }
  for (uintptr_t k = 0, n = image_nhost(); k < n; k++) {
   word const *c = (word const*) image_host_x(k);
@@ -139,7 +139,7 @@ static intptr_t image_fn_index(intptr_t v) {
  return -1; }
 static intptr_t image_fn_resolve(intptr_t j) {
  uintptr_t d = ai_def1_n;
- if (j < (intptr_t) d) return image_fn_slot((word const*) ai_def1[j].x);
+ if (j < (intptr_t) d) return image_fn_slot((word const*) ai_def1[j].v.x);
  uintptr_t k = (uintptr_t) j - d;                          // the host slice; a short roster reads 0
  return k < image_nhost() ? image_fn_slot((word const*) image_host_x(k)) : 0; }
 // the out-of-pool immortals: (), "", the std ports, NULL (a mid-eval dump meets it in an
@@ -320,9 +320,9 @@ static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
  intptr_t bj = -1;
  uintptr_t boff = 0;
  for (uintptr_t j = 0; j < ai_def1_n; j++) {
-  uintptr_t x = (uintptr_t) ai_def1[j].x, d = (uintptr_t) v - x;
+  uintptr_t x = (uintptr_t) ai_def1[j].v.x, d = (uintptr_t) v - x;
   if ((uintptr_t) v > x && d < ImageCellW * sizeof(word) && !(d % sizeof(word))
-      && (bj < 0 || x > (uintptr_t) ai_def1[bj].x)) bj = (intptr_t) j, boff = d / sizeof(word); }
+      && (bj < 0 || x > (uintptr_t) ai_def1[bj].v.x)) bj = (intptr_t) j, boff = d / sizeof(word); }
  if (bj >= 0) return (intptr_t)(hb + 2 * (ImageNLvm + ImageNImm)
                                    + 2 * (((uintptr_t)(countof(image_extra_aps) + (uintptr_t) bj)) * ImageCellW + boff));
  // nothing above claimed it, so it is a raw address of the binary -- and no lane carries one

@@ -1,4 +1,4 @@
-/* the GZIP floor -- love/gz.c, both directions, through mooncc, gcc and
+/* the GZIP floor -- l/gz.c, both directions, through mooncc, gcc and
  * clang, with the three reports diffed and the three builds timed. ccnif.sh
  * drives it.
  *
@@ -24,7 +24,7 @@
  * describe a code -- first-writer-wins in the table, a zeroed symbol array --
  * so what it answers on garbage is as specified as what it answers on a valid
  * block, and the refusal paths are where the bit reader's edges live. */
-#include "../../love/gz.c"
+#include "../../l/gz.c"
 #include "stub.h"
 #include "say.h"
 

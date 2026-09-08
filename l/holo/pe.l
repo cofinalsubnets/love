@@ -1,4 +1,4 @@
-; love/holo/pe.l -- the pe32+ container: lay obj.l relocatables into a uefi
+; l/holo/pe.l -- the pe32+ container: lay obj.l relocatables into a uefi
 ; application (subsystem 10) instead of an ELF. same lay/patch heart as
 ; link.l's ldlink (this file rides after it in a cat -- ld-read/ldlay/ldpatch/
 ; ldsyms all bound there); only the clothing differs. the whole image is one

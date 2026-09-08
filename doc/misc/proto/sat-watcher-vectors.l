@@ -14,7 +14,7 @@
 ; run: cat apps/sat/sat.l doc/misc/proto/sat-watcher-vectors.l | ai   (replaces flat.l wholesale)
 ;
 ; apps/sat/flat -- the CDCL solver over FLAT state, with THREE DOMAIN-SPECIFIC NATIVE
-; KERNELS: at solver-build time the hot loops are assembled through love/holo/ (neutral IR,
+; KERNELS: at solver-build time the hot loops are assembled through l/holo/ (neutral IR,
 ; section offsets baked as immediates -- each kernel is SPECIALIZED to the instance's
 ; nvars, cached per nv) and installed via the `nif` seam:
 ;   bcp  (fx ar wn)        two-watched-literal propagation      -> conflict cid | -1

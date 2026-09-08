@@ -9,7 +9,7 @@
 ;
 ; (this tool was first written as tools/bake.l; it was renamed to apps/cook.l so
 ; the file name does not collide with the other, unrelated sense of "bake" in this
-; tree -- baking the heap image / the egg (love/boot/egg.l), the array-perf bake. the
+; tree -- baking the heap image / the egg (l/boot/egg.l), the array-perf bake. the
 ; build verb here is `cook`; "bake" is reserved for the egg. the messages this tool
 ; prints are prefixed `cook:` for the same reason.)
 ;
@@ -49,7 +49,7 @@
 ; loader keeps a file's own registration over its wrapper layer (prel's t re-pin).
 (module 'cook
 
-; the combinators (love/boot/post.l) -- the wrap's first form, so the names walk
+; the combinators (l/boot/post.l) -- the wrap's first form, so the names walk
 ; before anything below compiles against them, scoped to this module's compile.
 (use 'peg)
 
@@ -400,7 +400,7 @@
 ; cook reads a Cookfile (ordinary love source) -- but it can also read a real
 ; Makefile directly, the same dependency idea wearing make's notation. The reader
 ; is built on the parser combinators (after the gw.js style) now shared from the
-; love/boot/post.l: a parser is (\ s y n) over a string s, with a success
+; l/boot/post.l: a parser is (\ s y n) over a string s, with a success
 ; continuation y = rest parsed and a failure continuation n = rest; the parsed
 ; payload is a list that `seq` concatenates. love has no regex, so the leaves are
 ; `lit` (a literal prefix), `one` (one char by predicate) and `span` (a maximal
@@ -439,7 +439,7 @@
    ; resolved cards can be shown back as a Cookfile (see emit-cookfile below).
    emitp (tablet 0)
 
-   ; -- the combinators (eps/lit/one/span/alt/seq/seqs/opt/skip/pmap/many/parse) come from love/boot/post.l,
+   ; -- the combinators (eps/lit/one/span/alt/seq/seqs/opt/skip/pmap/many/parse) come from l/boot/post.l,
    ;    spliced by the (use 'peg) above; this body-having `:` reads them bare down the walk.
 
    ; -- character classes and string utilities --
@@ -1215,7 +1215,7 @@
       ; tries the next, and with none left the target is a source leaf that is
       ; already on disk. Taking one as a last resort demands a file nobody makes:
       ; `%.c: %.l` (mk/common.mk cancels make's lex rule, since this tree is full of
-      ; `<name>.l` beside `<name>.c`) had cook asking for love/love.l. "Can be had"
+      ; `<name>.l` beside `<name>.c`) had cook asking for l/love.l. "Can be had"
       ; is exists-or-has-a-card -- no intermediates, per the note above.
       (phave? p item) (: s (psrc p item) (|| (exists? s) (two? (peep cards s ()))))
       (best-of ms item)        ; the shortest stem among the patterns that apply

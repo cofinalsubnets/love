@@ -7,9 +7,9 @@
 // port's UART0 console (USB CDC is a TODO, see README). The arch backend
 // (teensy41.c) owns the FlexSPI boot image, startup, clocks, LPUART, GPT
 // timer, and GPIO; this file is just the love glue plus a few GPIO nifs. The
-// shell line editor (love/boot/post.l, the baked shell core) drives the console
+// shell line editor (l/boot/post.l, the baked shell core) drives the console
 // exactly as it drives the kernel's.
-#include "../../love/love.h"
+#include "../../l/love.h"
 #include "teensy41.h"
 #include "psram.h"
 
@@ -129,10 +129,10 @@ static union u const
 extern const char _binary_love_img_start[], _binary_love_img_end[];
 
 static struct ai_def defs[] = {
-  {"gpio_init", (intptr_t) nif_gpio_init},
-  {"gpio_dir",  (intptr_t) nif_gpio_dir},
-  {"gpio_put",  (intptr_t) nif_gpio_put},
-  {"gpio_get",  (intptr_t) nif_gpio_get}, };
+  {"gpio_init", {.k = nif_gpio_init}},
+  {"gpio_dir",  {.k = nif_gpio_dir}},
+  {"gpio_put",  {.k = nif_gpio_put}},
+  {"gpio_get",  {.k = nif_gpio_get}}, };
 
 // --- the arena ------------------------------------------------------------
 // The generational collector is the ONLY collector, and it draws its pools
@@ -208,7 +208,7 @@ int main(void) {
   gpio_init(LED_BIT); gpio_set_dir(LED_BIT, 1); gpio_put(LED_BIT, 1);
   // a raw banner straight to the LPUART: proves the console path (mux, baud,
   // adapter wiring) the moment the board resets, before any love runs.
-  for (char const *s = "\r\n; love/teensy41\r\n"; *s; s++)
+  for (char const *s = "\r\n; l/teensy41\r\n"; *s; s++)
     serial_putc(*s);
   // self-reported core clock: derive MHz from the LIVE mux state (not from
   // what clocks_init intended) -- pll1 path only; anything else prints the

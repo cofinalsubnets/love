@@ -156,7 +156,8 @@ struct ai_port_vt;   // the port's kind, in its head; spelled out below
 union u {
  lvm_t *ap;
  ai_word x;
- union u *m; };
+ union u *m;
+ union u const *k; };   // threaded code, which is const: it lives in .rodata, or flash
 
 struct ai {
  union u *ip;
@@ -208,7 +209,7 @@ struct ai {
  // in major_pool, its own two-space. a minor evacuates young -> the major active half; a
  // major drains both, compacts into the spare half, flips, rebuilds symbols, runs
  // finalizers. the ranges the pass itself walks are `struct ai_gcx`, on the collector's
- // own C stack (love/love.c).
+ // own C stack (l/love.c).
  ai_word *major_pool, *major_base, *major_hp;   // major: malloc base (2*major_len words), active-half base, active bump
  uintptr_t
    major_len,                     // major half size (words)
@@ -253,12 +254,15 @@ struct ai {
      lvm_t *ap;
      struct ai_port_vt const *vt;   // what kind of port this is -- the only answer there is
      ai_word ungetc_buf;            // pushed-back byte; putcharm(EOF) = empty
-     // three words: prel's tap/jug poke this layout by index (love/boot/prel.l), so a word
+     // three words: prel's tap/jug poke this layout by index (l/boot/prel.l), so a word
      // added here is a renumbering there
     } *io; }; }; };
  intptr_t end[]; };
 
-struct ai_def { char const *n; intptr_t x; };
+// the value is a union, so a row SAYS which kind it holds and C checks it rather than
+// every writer spelling a cast: .k a nif's threaded code, .ap an instruction's own lvm_,
+// .x a word or a tagged fixnum. every one must be immortal -- see ai_defn.
+struct ai_def { char const *n; union u v; };
 
 // host nif auto-registration: AiNif("name", fn) lands the entry in the love_nifs section
 // and boot drains [__start_love_nifs, __stop_love_nifs) through ai_defn, so an app adds nifs
@@ -267,7 +271,7 @@ struct ai_def { char const *n; intptr_t x; };
 extern struct ai_def const __start_love_nifs[], __stop_love_nifs[];
 #define AiNif(nm, fn) \
   static struct ai_def const __attribute__((section("love_nifs"), used)) \
-    _ainif_##fn = { (nm), (intptr_t) (fn) }
+    _ainif_##fn = { (nm), { .k = (fn) } }
 
 // port vtable -- what a device owes, and nothing else. a NULL slot means no method
 // (no readn reads end, no writen discards). neither blocks the scheduler; the generic
@@ -387,7 +391,7 @@ int image_bake(struct ai*), ai_baked_pick(void const **blob, uintptr_t *blen);
 struct ai *image_load(char const*), *image_dump(struct ai*, char const*);
 extern uint64_t ai_baked_image[];
 extern uintptr_t ai_baked_image_len;
-// ..love/gz.c, and inle/src.c's own source (weak zero without a blob)
+// ..l/gz.c, and inle/src.c's own source (weak zero without a blob)
 intptr_t ai_inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
          ai_deflate_raw(struct ai*, unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
 extern unsigned char const ai_srcgz[];
@@ -442,7 +446,7 @@ void ai_scare_face_(struct ai*);
 
 extern struct ai_fio ai_stdin, ai_stdout, ai_stderr;
 
-// the boot driver: ai_egg_(g, egg, p1, corpus) applies love/boot/egg.l to the quoted corpus
+// the boot driver: ai_egg_(g, egg, p1, corpus) applies l/boot/egg.l to the quoted corpus
 // -- compile the compiler with c0, recompile the corpus through itself, install as `ev`.
 // the list is stitched (p0 reads egg + p1; p1, evaluated a step earlier, reads the
 // corpus), so p1.l is the only .l held to the pure lisp subset.
@@ -847,7 +851,7 @@ static ai_inline struct ai_str *bytes_of(word x) { return caskp(x) ? cask(x)->st
 // bespoke evac. ai_kind reads KCoin, so +/* route every coin combination to lvm_addh/mulh,
 // where a struck operand is intercepted. the kind is a tablet keyed by the noms below
 // (interned at boot into g->knom); every coin of a kind is struck from one table, and a
-// named one is registered in g->kreg (name -> (serial . table)) by love/boot/post.l's `coin`.
+// named one is registered in g->kreg (name -> (serial . table)) by l/boot/post.l's `coin`.
 struct ai_coin { lvm_t *ap; word kind; word payload; };
 static ai_inline bool coinp(word _) { return lamp(_) && cell(_)->ap == lvm_coin; }
 static ai_inline word coin_kind(word x) { return ((struct ai_coin*) x)->kind; }

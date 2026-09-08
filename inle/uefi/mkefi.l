@@ -1,6 +1,6 @@
 ; inle/uefi/mkefi.l -- lay the firmware seam and bind the UEFI loader:
 ; inle/virt/mkstart.l's sibling, the one piece of the boot that is not C, and
-; even it is holo IR. runs after love/holo/{elf,obj,link,pe}.l in a
+; even it is holo IR. runs after l/holo/{elf,obj,link,pe}.l in a
 ; (use 'holo) cat; (mkboot out arch objs..) links mooncc's loader objects into
 ; the PE32+ that goes on the ESP as BOOTX64.EFI / BOOTAA64.EFI.
 ;

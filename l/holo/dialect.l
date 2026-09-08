@@ -1,6 +1,6 @@
 ; dialect -- the x86-64 assembler-text lens: AT&T and Intel are two spellings of one parsed
 ; instruction, and this file is a reader and a shower for each over that one value. nothing here
-; encodes: love/holo/as.l is the physical encoder and reads the value this file produces,
+; encodes: l/holo/as.l is the physical encoder and reads the value this file produces,
 ; so `as` takes either dialect and the two spellings can be converted through the middle
 ; (apps/lapiz.l lists both under the 'x86 hub).
 ;
@@ -16,7 +16,7 @@
 ;   ('im n)  ('ims sym)  ('lbl sym)  ('rip sym off)  ('ind o)  ('mem base index scale disp)
 ; a statement ends at a newline or a `;`, a comment starts at `#` or `//`, and an immediate may
 ; be a C expression over numbers (`$~(1 << 2)`) -- the GNU rules, so an inline-asm template
-; (love/holo/gas.l) reads through the same door as a whole .s file.
+; (l/holo/gas.l) reads through the same door as a whole .s file.
 ; a memory operand under a segment override is ('seg fs o); lock/rep/repne are items of their own
 ; ahead of the instruction they prefix. a memory operand's absent register is -1. the stem folds
 ; away what the dialects disagree on:

@@ -1,12 +1,12 @@
 # inle -- the machine side of love
 
-love/ is the language; this is every machine it runs on. One seam, `__ai_sys`,
+l/ is the language; this is every machine it runs on. One seam, `__ai_sys`,
 and inle gives the other side of it -- for the host kernels (the frontend TUs
 the shipped artifact links), for bare metal, and for each device below. Every
 device target is self-contained (own Makefile, `R := ../..` back to the repo
 root); the qemu boot gates live in test/test.mk and ride `make test_slow`.
 A seat's own vocabulary comes in through `ai_defn` -- the crank on a Playdate,
-a board's console -- so love/ never learns a device's name.
+a board's console -- so l/ never learns a device's name.
 
 ## the kernel
 
@@ -52,7 +52,7 @@ and main.c is a 32-check battery over exactly those. The one port with **no
 into a named section. Gate test_rp2040 verifies the boot image (boot2 CRC, SP,
 thumb-bit reset entry); qemu has no RP2040 machine, so test_mps2_t1 is where
 this ISA actually runs. ⚠ arm-none-eabi-ld still binds it (thumb relocations
-are not in love/holo/link.l), and there is no .uf2 packer -- `make bin` writes
+are not in l/holo/link.l), and there is no .uf2 packer -- `make bin` writes
 the raw flash image, and a UF2 wants one written.
 
 ## teensy41/

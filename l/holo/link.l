@@ -1,4 +1,4 @@
-; love/holo/link.l -- a static ELF linker over obj.l's relocatable objects (the
+; l/holo/link.l -- a static ELF linker over obj.l's relocatable objects (the
 ; toolchain ladder, rung 3): read each .o (the section shape obj.l lays -- .text /
 ; .data / love_nifs + symtab + RELA, or rel at 32 bits -- ld-read takes either ELF
 ; class off the field table below), resolve every symbol across the set
@@ -20,7 +20,7 @@
 ; free/klink.l drives it; the inle kernel rides it on both arches. `ldbare32`
 ; is the third: one ELF32 segment for a part with no MMU at all (an M-profile
 ; board), where the image lays at the address the core boots from.
-; loads after love/holo/obj.l in the mooncc cat -- reads elf-base / elf-machines /
+; loads after l/holo/obj.l in the mooncc cat -- reads elf-base / elf-machines /
 ; elf64-hdr / le32 / le64 bare (asbook.l + elf.l re-leak them). moon.l drives it:
 ; `mooncc a.o b.c -o prog`.
 (module 'holo

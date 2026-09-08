@@ -1,9 +1,9 @@
 ; as -- a real assembler front over holo: it reads standard GNU x86-64 assembly, in either
-; dialect, and emits the same byte/fixup item stream the neutral backend (love/holo/x64.l)
-; produces, so love/holo/obj.l lays the relocatable `.o` and love/holo/link.l links it --
+; dialect, and emits the same byte/fixup item stream the neutral backend (l/holo/x64.l)
+; produces, so l/holo/obj.l lays the relocatable `.o` and l/holo/link.l links it --
 ; the front tooth of the gcc-free chain, paired with link.l's `ld`. the text is read by
-; love/holo/dialect.l (att-read / intel-read) into one parsed-instruction value, and this
-; file is the physical encoder over that value: where love/holo/text.l parses holo's own
+; l/holo/dialect.l (att-read / intel-read) into one parsed-instruction value, and this
+; file is the physical encoder over that value: where l/holo/text.l parses holo's own
 ; mnemonics over abstract registers, this encodes real x86-64 -- physical registers, the operand
 ; width, the full operand grammar. the encoders mirror x64.l form-for-form but read the register
 ; number off the operand and carry the width (x64.l is 64-bit-mode only). scope: the GPR core at
@@ -14,7 +14,7 @@
 ; load after holo.l + x64.l + dialect.l (bare, dev/test context -- the encoder primitives
 ; le32/byte/fix/modrm.. are still on the global book; the eventual host path reaches them
 ; through the `holo` book):
-;   out/love -l love/holo/holo.l -l love/holo/x64.l -l love/holo/dialect.l -l love/holo/as.l ...
+;   out/love -l l/holo/holo.l -l l/holo/x64.l -l l/holo/dialect.l -l l/holo/as.l ...
 
 (module 'holo
 (: ;; --- encoder primitives (physical, width-aware; x64.l is the form reference). ---

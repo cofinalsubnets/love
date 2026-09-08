@@ -1,4 +1,4 @@
-; thumb2 -- the armv7e-m (Cortex-M7) backend for the neutral assembler (love/holo/holo.l), the third
+; thumb2 -- the armv7e-m (Cortex-M7) backend for the neutral assembler (l/holo/holo.l), the third
 ; target. like a64.l it pins a {lower,patch} pair (here under 'thumb2 and 'thumb2sp) and the driver,
 ; IR forms, and byte plumbing stay untouched -- but the ISA is a different animal from a64 despite
 ; the shared "ARM" name. this is 32-bit Thumb-2: mixed 16/32-bit little-endian instructions, r0..r15

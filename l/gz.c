@@ -1,4 +1,4 @@
-// love/gz.c -- DEFLATE, both directions. one translation unit because the two halves are
+// l/gz.c -- DEFLATE, both directions. one translation unit because the two halves are
 // one format: RFC 1951 §3.2.5's code tables are read by the coder and the decoder alike,
 // and a coder and a decoder that disagree there disagree about the format. apps/gz/gz.l's
 // gz-lbase/gz-lext/gz-dbase/gz-dext say the same numbers in love.
@@ -561,7 +561,7 @@ ai_noinline static struct ai *host_deflate(struct ai *g) {
 
 static LvmWrap(lvm_deflate, host_deflate)
 
-// one operand, so the run is {impl, ret0} -- love/nifs.l states the law and lvm_cur
+// one operand, so the run is {impl, ret0} -- l/nifs.l states the law and lvm_cur
 // curries once unconditionally, which at arity one hands the body an operand too many.
 static union u const nif_deflate[] = {{lvm_deflate}, {lvm_ret0}};
 AiNif("deflate", nif_deflate);

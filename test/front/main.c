@@ -194,7 +194,7 @@ uintptr_t ai_fd_say(int fd, unsigned char const *src, uintptr_t n) {
 // ⚠ no scratch on an lvm_ frame (CLAUDE.md, the tail-threaded VM): the bodies
 // that need one go through an ai_noinline helper, and the ones here need none.
 
-// (quit n) -- the frontend nif cli's scare tail reaches for (love/boot/post.l). Without
+// (quit n) -- the frontend nif cli's scare tail reaches for (l/boot/post.l). Without
 // it `(use 'cli)` compiles a form naming an unbound global and raises missing.
 static lvm(lvm_quit) {
   fflush(stdout);
@@ -309,16 +309,16 @@ static union u const
   nif_wcap[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_wcap},   {lvm_ret0}};
 
 static struct ai_def const defs[] = {
-  {"quit",   (intptr_t) nif_quit},
-  {"dev",    (intptr_t) nif_dev},
-  {"feed",   (intptr_t) nif_feed},
-  {"shut",   (intptr_t) nif_shut},
-  {"stall",  (intptr_t) nif_stall},
-  {"wstall", (intptr_t) nif_wstall},
-  {"wcap",   (intptr_t) nif_wcap},
-  {"sent",   (intptr_t) nif_sent},
-  {"wpending", (intptr_t) nif_wpend},
-  {"naps",   (intptr_t) nif_naps} };
+  {"quit",   {.k = nif_quit}},
+  {"dev",    {.k = nif_dev}},
+  {"feed",   {.k = nif_feed}},
+  {"shut",   {.k = nif_shut}},
+  {"stall",  {.k = nif_stall}},
+  {"wstall", {.k = nif_wstall}},
+  {"wcap",   {.k = nif_wcap}},
+  {"sent",   {.k = nif_sent}},
+  {"wpending", {.k = nif_wpend}},
+  {"naps",   {.k = nif_naps}} };
 
 // --- the boot --------------------------------------------------------------
 

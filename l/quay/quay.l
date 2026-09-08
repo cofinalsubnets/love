@@ -1,10 +1,10 @@
-; quay.l -- the xterm-256 palette, laid as C through clay (love/quay/xterm256.h).
+; quay.l -- the xterm-256 palette, laid as C through clay (l/quay/xterm256.h).
 ; the recipe is xterm's own: 16 classics, a 6x6x6 cube, a 24-step grey ramp. it was
 ; written twice -- inle/cb.c's xpal and inle/kmain.c's palette -- each a mutable
 ; global a seat filled at boot from a copy of these same three loops. laid here it is
 ; one .rodata table both read, and a cell means the same pixels on a framebuffer and
 ; in a window by construction rather than by two recipes agreeing.
-; edit this file, not love/quay/xterm256.h. `make mx` regenerates it.
+; edit this file, not l/quay/xterm256.h. `make mx` regenerates it.
 ; static, and included only by the seats that index it: a header carrying a
 ; definition cannot ride a shared one (two TUs, one symbol), and a static table in a
 ; header no TU reads sits unread under -Werror. mx.h keeps the same rule.

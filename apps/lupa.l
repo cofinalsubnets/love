@@ -13,7 +13,7 @@
 ; gates headless (test/host/lupa.l); only lupa-run ties the tty, on cli's stage, and the
 ; command line is cli's editor. the bytes never change under the cursor: an edit is a note in
 ; a tablet over the file's string, and :w lays the patched string back. the decoder is
-; love/holo/decode.l and the two spellings love/holo/dialect.l's; another ISA joins
+; l/holo/decode.l and the two spellings l/holo/dialect.l's; another ISA joins
 ; by decoding its own bytes to the same item shape.
 ; usage: love lupa FILE
 (module (lupa lupa-main lupa-run lupa-new lupa-key lupa-frame lupa-byte)

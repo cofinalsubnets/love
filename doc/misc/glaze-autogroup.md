@@ -1,6 +1,6 @@
 # autogroup — when the glaze rewrites a file it did not need to
 
-`autogroup` (love/boot/glaze/auto.l) is the entry the ev-rebind hands every top-level `:`.
+`autogroup` (l/boot/glaze/auto.l) is the entry the ev-rebind hands every top-level `:`.
 It lowers the form through nine passes, looks for a glazeable group of first-order
 functions, and — if one survives — hands back **the lowered form** in place of the
 source. Two facts about that shape, taken together, turned an ordinary library into a
@@ -79,7 +79,7 @@ test/glaze-x86.l.
 ## the method
 
 The failure looked like a letrec/global-name bug in c0's `ana_v` — a sibling reference
-emitted as `lvm_index`. It was not c0 at all: `-l` and `-e` compile through love/boot/ev.l,
+emitted as `lvm_index`. It was not c0 at all: `-l` and `-e` compile through l/boot/ev.l,
 and instrumenting every `ana_v` return lane gives byte-identical traces for the failing
 and the working session. One flag names the lane in a single run:
 

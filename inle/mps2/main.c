@@ -8,7 +8,7 @@
 // The boot bakes the egg from source on the M7 -- the whole self-hosting
 // double-bake runs under emulation -- then the driver tail asserts a few
 // spec laws and exits through m7exit, so `make test_mps2` sees 42.
-#include "../../love/love.h"
+#include "../../l/love.h"
 
 #ifndef EOF
 #define EOF (-1)
@@ -109,7 +109,7 @@ static lvm(ai_m7exit) {
   return Continue(); }                       // unreached
 
 static union u const nif_m7exit[] = {{ai_m7exit}, {lvm_ret0}};
-static struct ai_def defs[] = { {"m7exit", (intptr_t) nif_m7exit} };
+static struct ai_def defs[] = { {"m7exit", {.k = nif_m7exit}} };
 
 // --- the arena ------------------------------------------------------------
 // The teensy first-fit free list, fed the AN500's 16 MB PSRAM (mps.ram at
@@ -178,7 +178,7 @@ void free(void *p) {
 #define SH_FLEN  0x0C
 static void sh_puts(const char *s) { while (*s) sh_putc(*s++); }
 int main(void) {
-  sh_puts("\n; love/mps2 waker -- cross-binary wake\n");
+  sh_puts("\n; l/mps2 waker -- cross-binary wake\n");
   // arena at +8MB: BREAK the baker-twin address luck -- a woken value that
   // secretly depends on the baker's pool base must die here, not on silicon
   freelist = (struct mem*) (POOL + (8u << 20));
@@ -251,7 +251,7 @@ static char const src_mods[] =
 #endif
 ;
 int main(void) {
-  sh_puts("\n; love/mps2 baker -- baking the corpus\n");
+  sh_puts("\n; l/mps2 baker -- baking the corpus\n");
   freelist = (struct mem*) POOL;
   freelist->next = NULL;
   freelist->len = POOL_BYTES / sizeof(uintptr_t);
@@ -336,7 +336,7 @@ int main(void) {
 // exit with the verdict. 42 = the egg hatched and the laws hold on the M7.
 int main(void) {
   uart_init();
-  for (char const *s = "\n; love/mps2 -- baking the egg on the M7\n"; *s; s++)
+  for (char const *s = "\n; l/mps2 -- baking the egg on the M7\n"; *s; s++)
     sh_putc(*s);
   freelist = (struct mem*) POOL;
   freelist->next = NULL;
