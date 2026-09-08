@@ -67,9 +67,8 @@
        _ (n < 1 ? (mksrc-die (src + " is empty")))
        forms ['(label ai_srcgz_len) ['raw (mksrc-le8 n 0 ())]
               '(label ai_srcgz)     ['raw (mksrc-bytes s (n - 1) ())]]
-       _ (arch = 'wasm ? (mksrc-wasm dst forms)
-          (write-bytes dst (objelf arch () () () '("ai_srcgz" "ai_srcgz_len") () () () () () forms)))
-       (say out $ "MKSRC\t" + dst + " (" + show n + " bytes)\n"))
+       (arch = 'wasm ? (mksrc-wasm dst forms)
+        (write-bytes dst (objelf arch () () () '("ai_srcgz" "ai_srcgz_len") () () () () () forms))))
 
    ; `argv` is a list and its head is this script's own path, so the arguments
    ; start at the tail -- tools/tgz.l says the same thing at its own foot.

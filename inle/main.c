@@ -522,7 +522,6 @@ static void first_boot(char const **argv) {
       close(fd), unlink(cat), munmap(t, un);
       return; } }
   close(fd), munmap(t, un);
-  fprintf(stderr, ";; baking heap image\n");
   // a child, so the bake gets a clean process: it snapshots its own heap and exits, and
   // this one keeps a session to fall back to.
   pid_t p = fork();

@@ -54,6 +54,6 @@
                   sz (num (args 2))
                   out (png sz (raster rows sz))
                   q (open (args 3) "w")
-                  (? (hot? q) (: _ (say q (cask out)) _ (close q) (say err ("mkicon: " + args 3 + " " + show #out + " bytes\n")))
+                  (? (hot? q) (: _ (say q (cask out)) (close q))
                      (: _ (say err ("mkicon: cannot open " + args 3 + "\n")) (quit 1))))
    (main >argv))

@@ -7,6 +7,25 @@ R ?= .
 # in an echo line only separates argv, which echo rejoins with a space -- so the column
 # has to be a character echo passes through. Paths print relative to the tree; `make
 # install` is the exception, where the artifact lands outside it.
+# ⚠ ONE LINE PER TARGET AND NOTHING ELSE. A tool a recipe runs says nothing of its own --
+# not a byte count, not a timing, not a verdict. The tag is the whole report, so a build
+# reads as a list of the files it made.
+
+# ..and the tag names the tool that RAN, not the one that was spelled. `love seed` and
+# `love serve` ARM the build (apps/source.l's src-arm): our verbs go first on PATH,
+# LUSHFLAGS=-a, CC becomes our mooncc -- so a recipe's `cat` is kore's and its shell is
+# lush, in-process, no fork. An ordinary make takes the ambient ones. LOVE_ARMED is the
+# arm's own word for it; a build log then says which world it was built in.
+armed  := $(if $(LOVE_ARMED),1,)
+t_sh   := $(if $(armed),LUSH,SH)
+t_cat  := $(if $(armed),KORE,CAT)
+t_sed  := $(if $(armed),KORE,SED)
+t_ld   := $(if $(armed),MOON,LD)
+t_cc   := $(if $(armed),MOON,CC)
+t_ar   := $(if $(armed),KORE,AR)
+t_cp   := $(if $(armed),KORE,CP)
+t_rm   := $(if $(armed),KORE,RM)
+t_ln   := $(if $(armed),KORE,LN)
 
 m = $R/out$(hsuf)/love
 # ⚠ the HOST's arch, which $a is NOT: a cross lane overrides $a on the command line, and

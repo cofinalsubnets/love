@@ -52,8 +52,7 @@
        forms [['label (name lsym)] ['raw (mkblob-le8 n 0 ())]
               ['label (name sym)]  ['raw (mkblob-bytes s (n - 1) ())]]
        ob (objelf arch () () () [sym lsym] () () () () () forms)
-       _ (write-bytes dst ob)
-       (say out $ "MKBLOB\t" + dst + " (" + show n + " bytes)\n"))
+       (write-bytes dst ob))
 
    ; `argv` is a list whose head is this script's own path, so the arguments
    ; start at the tail. the arch arrives as TEXT and `name` interns it, so the

@@ -374,9 +374,9 @@
    (cook item)                                ; prep item up to date and report
    (? !item (: _ (say err "cook: nothing to cook") _ (put err 10) (quit 1))
       (: shipped (prepped item)
-         ; the key count: how many items actually ran a recipe.
-         (? (0 < #shipped)
-            (: _ (puts ("cook: cooked " + show item)) (putc 10))
+         ; the key count: how many items actually ran a recipe. a run that built
+         ; something says nothing, as make does -- the recipes' own tags are the report.
+         (? (0 < #shipped) 0
             (: _ (puts ("cook: " + show item + " is already up to date")) (putc 10)))))
 
    ; resolve a command-line word to an item: the bare string when it names a file

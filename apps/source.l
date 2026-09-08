@@ -108,6 +108,10 @@
        _ (setenv "PATH" (farm + ":" + getenv "PATH"))
        _ (setenv "LUSHFLAGS" "-a")
        _ (setenv "CC" (exe + " mooncc"))
+       ; the arm, said out loud: a recipe's `cat` is kore's here and its shell is lush,
+       ; so the build's tags name the tool that RAN (mk/common.mk). LUSHFLAGS is not
+       ; that answer -- a person may set it for their own reasons.
+       _ (setenv "LOVE_ARMED" "1")
        farm)
    src-needs '("cc" "make" "sh" "sed" "grep" "tr" "cat" "mkdir" "mv" "rm" "ln"
                "test" "uname" "printf" "install" "cmp" "chmod" "touch" "echo")

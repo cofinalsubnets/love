@@ -33,4 +33,4 @@ const t1 = performance.now();
 const ptr = m.ccall('ai_bake', 'number', [], []), len = m.ccall('ai_bake_len', 'number', [], []);
 if (!ptr || !len) { console.error('the bake was refused'); process.exit(1); }
 writeFileSync(out, new Uint8Array(m.memory.buffer, ptr, len));
-console.log(`baked ${out}: ${len} bytes (boot ${(t1 - t0).toFixed(0)} ms, bake ${(performance.now() - t1).toFixed(0)} ms)`);
+void t1;                     // the recipe's tag is the whole report; a build says nothing else

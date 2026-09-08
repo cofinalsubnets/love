@@ -104,9 +104,7 @@
        (? fresh 0
           adopt (sp-write side h)
           (: z (gz-zip a "" 0)
-             (sp-write arch z, sp-write side h,
-              say out $ "selfpack: " + show #lev + " entries -> " + arch + "\n",
-              0))))
+             (sp-write arch z, sp-write side h, 0))))
 
    (sp-main av)
     (: n #av
