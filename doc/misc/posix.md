@@ -97,7 +97,7 @@ for the numbering's blanks), so no error path allocates. A call refused upstairs
 before any syscall ran, answers `'badarg`, which is not a posix name, so the two can
 never shadow. Success is `()`, the answer with nothing more to say: `!e` reads "it
 worked" on an effect op, `nom? e` reads "it failed" on any op, and a specific reason
-matches by name — kore's mv takes its cross-device lane on `(id? e 'exdev)`. ⚠ a
+matches by name — kore's mv takes its cross-device lane on `(id? e 'exdev)`. a
 failure is TRUTHY: never ask `? x` of a value op's answer — `hot?` is the port test,
 `two?` the tuple test, `charm?`/`string?` the rest. The C seams underneath are
 untouched: `kmain.c`'s `k_fs_*` and `__ai_sys` answer 0-or-negative as every C face
@@ -106,7 +106,7 @@ word now: `'badarg`, retiring the positive-EINVAL / `-1` / `-EINVAL` split.
 `stat` answers `(size mtime-ms mode ns uid gid nlink blocks ino)` — ns the
 whole mtime in nanoseconds, one charm, cook's build-grade resolution; blocks is `st_blocks`,
 512-byte units, which is DISK USAGE and not the size — or the nom (`'enoent` absent,
-`'eacces` unreadable). `lstat` answers the same of the LINK itself. ⚠ **the tail is append-only and a reader asks `tally` before reading past
+`'eacces` unreadable). `lstat` answers the same of the LINK itself. **the tail is append-only and a reader asks `tally` before reading past
 `ns`**: the kernel's own stat (inle/kmain.c) answers the first four alone, an image tree having no
 ownership to tell about, and kore's `stat`/`du` say so rather than reading a 0 someone might
 believe. `openfd`'s mode 3 is O_CREAT|O_EXCL at 0600 — the one that FAILS on an existing name,
@@ -117,7 +117,7 @@ values differ across Linux/*BSD/mac, so the `call_X` worker normalizes and love 
 shape.
 
 The shell's job control rides this: per-job process groups + tcsetpgrp handoff (`spawnio`
-pg/fg, `ttyfg`), ^C/^Z to the foreground job only, jobs/fg/bg/&. ⚠ a stop signal to an
+pg/fg, `ttyfg`), ^C/^Z to the foreground job only, jobs/fg/bg/&. a stop signal to an
 ORPHANED group is discarded, so in-shell-pgrp children can never ^Z under a nested session.
 Task-level `chill`/thaw stays separate — **tasks are not processes**: a task is an in-VM green
 thread (`spawn`/`chill`), a process is a host pid (`fork`/`still`). Never cross them.

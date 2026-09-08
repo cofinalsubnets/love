@@ -54,7 +54,7 @@ all: $(o)/love.js
 
 # love.c bakes the version string (its __has_include of love_version.h), so recompile it
 # when ./VERSION moves -- else the browser banner keeps whatever id love.o last saw.
-# ..and the version header lands on the TU that carries the id. ⚠ the path is the one
+# ..and the version header lands on the TU that carries the id. the path is the one
 # core_o's patsubst actually makes: ../../l/love.c -> $(o)/l/love.o. Spelled l/ this
 # rule named a target nothing builds, so the dependency was simply not there.
 $(o)/l/love.o: ../../out/lib/love_version.h

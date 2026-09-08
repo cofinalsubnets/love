@@ -168,7 +168,7 @@ setup: $(SETUP)
 # Rows build+test+chacha+poly1305+inflate+crc32+sha256,
 # columns the compilers. ai_cflags + the corpus come from the Makefile (one source of
 # truth); the mooncc lane runs THE ARTIFACT's own mooncc verb, so depend on `dist-seed`
-# beside `host`. ⚠ that is not tidiness -- ccbench.sh's SEED note has the measurement:
+# beside `host`. that is not tidiness -- ccbench.sh's SEED note has the measurement:
 # through out/mooncc the build row read 2.2x high, because rebuilding mooncc.image
 # invalidated the cached moonlibc archive on every run. Cached; `make ccbench` to refresh it
 # on its own. (mooncc is x86-64 only -- dnf elsewhere.)

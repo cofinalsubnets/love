@@ -51,7 +51,7 @@ and main.c is a 32-check battery over exactly those. The one port with **no
 256-byte stage the mask ROM CRC-checks before running -- is laid by mkboot2.l
 into a named section. Gate test_rp2040 verifies the boot image (boot2 CRC, SP,
 thumb-bit reset entry); qemu has no RP2040 machine, so test_mps2_t1 is where
-this ISA actually runs. ⚠ arm-none-eabi-ld still binds it (thumb relocations
+this ISA actually runs. arm-none-eabi-ld still binds it (thumb relocations
 are not in l/holo/link.l), and there is no .uf2 packer -- `make bin` writes
 the raw flash image, and a UF2 wants one written.
 

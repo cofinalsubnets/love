@@ -65,7 +65,7 @@ piece. ~14k lines of love (law.l beside them).
   block (pinned on the declaration, restored at `}`) — love.h makes `num`/`word` typedefs and
   love.c uses both as local variable names. A signature table (`ps 'sigs`: name → return type,
   parameter types, variadic bit) comes out as a fourth value.
-  ⚠ **A read-modify-write may not duplicate its lvalue.** `x op= y` desugars to
+  **A read-modify-write may not duplicate its lvalue.** `x op= y` desugars to
   `(asn x (bin op x y))` and `++x` to the same — exact only when evaluating the lvalue leaves
   no trace, so `calm?` gates it and the other two doors take the address once: `++`/`--` ride
   `('post lv step)`, `op=` stays whole as `('rmw op lv rhs)` for gen to moor.
@@ -114,12 +114,12 @@ Every moon extension is syntax C **rejects outright**, so moon is a strict super
 program means anything different under it, which is the whole licence for defaulting to it.
 `-std=c` is the fence for when that matters.
 
-⚠ there is deliberately **no `holyc`**. Struct labels are borrowed from HolyC, but a flag by
+there is deliberately **no `holyc`**. Struct labels are borrowed from HolyC, but a flag by
 that name would refuse `U0`, `I64` and `class` — a parse error on line 1 of anything actually
 written in HolyC, which is the one input that would reach for it. The name comes back when
 it is true.
 
-⚠ `-std=` is lifted off the command line by a **pre-pass**, never an accumulator on the flag
+`-std=` is lifted off the command line by a **pre-pass**, never an accumulator on the flag
 walk: that walk keeps one tablet now, and `-std=` names the *language* rather than a flag, so
 it belongs before the line is read at all.
 
@@ -137,7 +137,7 @@ is typed as a zero-length `char` array, so it decays the way `char hdr[0]` does 
 staying an lvalue, which keeps `offsetof(S, hdr)` answering. It costs nothing: the struct
 above has exactly the size and offsets of `struct { char a; long b; int c; };`.
 
-⚠ **the alignment is the whole feature.** The idiom this replaces is a zero-length array
+**the alignment is the whole feature.** The idiom this replaces is a zero-length array
 marker, `char hdr[0];` — a GCC/Clang extension — and it has alignment 1, so it lands where
 the *previous* field ended and names the padding: gcc puts it at **4** where the `long`
 sits at **8**. A label aligns as the member it precedes, so it names the member.
@@ -168,7 +168,7 @@ Anything without `-c` is a **link**, through `l/holo/link.l`.
   recipe asks for is already in the artifact before it asks, and a name we cannot satisfy still
   lands as a *named* undefined reference at the link rather than going quiet (a real third-party
   library has its own door — give the `.a` as an input). Lua's own `LIBS=-lm` is why this
-  matters. ⚠ glued only: a bare `-l` refuses, since taking it would eat the next word as a
+  matters. glued only: a bare `-l` refuses, since taking it would eat the next word as a
   library name and the one after it as an input;
 - an exe link still owing strong symbols pulls the runtime **by need**, archive-fashion — moonlibc
   + the am math + the mksys leaf, taken from the archive the binary CARRIES, or compiled from
@@ -177,7 +177,7 @@ Anything without `-c` is a **link**, through `l/holo/link.l`.
 - `-nostdlib`/`-nodefaultlibs`/`-ffreestanding` turn that pull off;
 - `-ffreestanding` ALSO says the standard's own word: it makes `__STDC_HOSTED__` 0, which is how
   a source asks (love.c asks it to choose the W^X mmap arena over the freestanding heap copy).
-  ⚠ **Only that flag** — the rest of the family is a hosted program supplying its own runtime,
+  **Only that flag** — the rest of the family is a hosted program supplying its own runtime,
   which is exactly what `test_raw` is;
 - `-nostdinc`'s whole job is done by design now: the `/usr/include` tail is gone, so a header
   we do not carry refuses either way. The flag rides through accepted-and-ignored for
@@ -192,7 +192,7 @@ Anything without `-c` is a **link**, through `l/holo/link.l`.
   when a splice has rewritten it into its caller. Gated by `test_moon`, both halves — that it
   bites, and that the answer is unchanged;
 - the **semantic** refusals stay loud (`-shared`, `-Wl,`'s payload, `-m..`) — an ignored one
-  would be the silent-no-op trap in a cc suit. ⚠ mooncc **refuses** a `-m` rather than ignoring
+  would be the silent-no-op trap in a cc suit. mooncc **refuses** a `-m` rather than ignoring
   it.
 
 Errors speak on err and exit 1; usage exits 2.
@@ -215,7 +215,7 @@ $ mooncc m.o gcc-built.o -o mix && readelf -p .comment mix
   [    1b]  love 0.1
 ```
 
-⚠ **the version is `love-version`'s BASE half, never the whole id, and that is a law.** The VCS
+**the version is `love-version`'s BASE half, never the whole id, and that is a law.** The VCS
 suffix names the commit that built *the compiler*, so it would make `love1` — built by love0's
 mooncc — and `love2` — built by love1's — differ at `e_shoff` and name a broken fixpoint where
 the two compilers agree on every byte they *emit*. The base moves with a release, which both
@@ -256,10 +256,10 @@ then compiles. That is what makes the bare door ~0.2 s instead of the ~28 s memb
 still writing nothing.
 
 Gate: `test/gate/dist.sh`'s bare leg compiles from an empty cwd with an empty HOME and
-holds that HOME stays empty. ⚠ `cd` matters here -- from the repo root rung 1 serves and
+holds that HOME stays empty. `cd` matters here -- from the repo root rung 1 serves and
 rung 2 is never exercised -- so a gate for the installed nest has to leave the tree.
 
-⚠ **The root is READ AT EACH CALL, never bound.** mooncc rides a baked image, and a captured
+**The root is READ AT EACH CALL, never bound.** mooncc rides a baked image, and a captured
 seat would fold the build tree's path into that image and ride it forever.
 
 Owing symbols with NO root in reach is its own diagnostic, naming the owed symbols and the roots
@@ -280,13 +280,13 @@ the same face.
 * **math/am.c** — our transcendentals. sqrt exact, the seven within a few ulp; `make ulp` is the
   differential gate. `-lm` appears in no link.
 
-⚠ **The CARRIED archive is asked first, and on a stock tree it is the whole answer** — the
+**The CARRIED archive is asked first, and on a stock tree it is the whole answer** — the
 binary's own stamped bytes cannot be improved on by a cache entry, so the key is cut only where
 they were refused. That leaves the cache two populations: `tools/mkrt.l` cutting the carried set
 under love0, which carries none, and a toolchain edited past the stamp. Both are a checkout,
 which is why the cache seats itself at `out/` and `make clean` reaches it.
 
-⚠ **The carried archives are per-ISA and kernel-neutral.** All three are cut under `-os linux`
+**The carried archives are per-ISA and kernel-neutral.** All three are cut under `-os linux`
 and the pin does not reach the bytes: `impl.h` parts linux, freebsd and netbsd at RUN time on
 `__ai_osv`, and `os.c` — the only member with an OS predefine in it — keeps its arms under
 `#ifndef AiOsTranslate`. So a refusal here belongs to the TARGET, never the kernel: riscv has no
@@ -304,7 +304,7 @@ because one file is one generation, whole the moment it lands and countable when
 which to keep. It is holo's own `arbytes`/`arpull` at both ends, the same pair `kore ar` and a
 user-named `.a` on the command line use.
 
-⚠ **The compiler's identity is the image it woke**, by stat, plus the love's own — `love-image`
+**The compiler's identity is the image it woke**, by stat, plus the love's own — `love-image`
 (doc/misc/snapshot.md), read as `(ev 'love-image)` because mooncc lives baked and a bare read folds.
 A love that does not say falls back to every `*.image` beside it, which is what this was before
 `love-image` existed: correct but far too eager, since re-baking a `kore.image` the link never
@@ -314,7 +314,7 @@ entry filed under the new sources holds the old image's codegen.
 No identity — a love with no image file in reach — means no cache at all. Nor is anything else
 owed it: no `out/`, an unwritable directory, a mangled entry (each is checked for its archive
 magic) all fall back to compiling, silently. Entries land by `rename`, so parallel links cannot
-tear one, and a miss sweeps all but the six newest generations. ⚠ **count, not age**: the rate
+tear one, and a miss sweeps all but the six newest generations. **count, not age**: the rate
 is the tree's own — a day of rebuilds mints more generations than a month of use does, and a
 clock cannot tell the two apart. The `-c` path is not cached, and neither is a `.c` the user
 named — this is the *implicit* runtime only.
@@ -339,12 +339,12 @@ argv/envp/auxv before main — no link-time flag anywhere, the weak machinery IS
 * **`float` is 4 bytes in memory but always a double in an xmm register** — a load widens
   (`ldss`+`cvtss2sd`), a store narrows. Only the DECLARED type drives the 4-vs-8-byte choice.
   This is self-consistent and matches gcc for values representable in both.
-* ⚠ **16-byte stack alignment is ours to keep.** A spill that outlives a nested call reserves a
+* **16-byte stack alignment is ours to keep.** A spill that outlives a nested call reserves a
   16-byte cell, never an 8-byte push — `rsp` must be 16-aligned at every call, or the first
   callee that stores aligned SSE to an rbp-relative slot (glibc's `fork` child path is the
   classic) takes a #GP. This is invisible to love.c's own code and to a `-O0` gcc differential,
   so it is gated directly (`test_moon`'s `g=id(fork())` program).
-* ⚠ **rbx (holo r3) is callee-saved** and every function owns frame slot -8 for it; the gate
+* **rbx (holo r3) is callee-saved** and every function owns frame slot -8 for it; the gate
   links a mooncc callee against an `-O2` caller holding a loop bound live in ebx.
 
 ## the register story (the one build)
@@ -465,16 +465,16 @@ is `(quit (moon-run as))` — every shim above keeps its contract untouched. Obj
 are byte-identical to the same compile run cold, including the ones laid after a failure;
 test/gate/moon.sh holds both halves.
 
-⚠ `moon-run` traps `'leave`, the u-floor's exit door (a `udie` anywhere in the compile rides it
+`moon-run` traps `'leave`, the u-floor's exit door (a `udie` anywhere in the compile rides it
 out carrying the status), and passes its charm through. Every OTHER condition is a genuine
 internal raise and gets the `cc: internal error:` sentence with status 1 — taking `'leave` for
 one of those would print nonsense over every usage error and flatten its 2 to a 1.
 
-⚠ The image is binary-specific (anchor-checked) and installs from the same build as `bin/love`
+The image is binary-specific (anchor-checked) and installs from the same build as `bin/love`
 (strip keeps vaddrs, so the stripped install wakes it); a mismatched pair falls back to a fresh
 boot with no `moon-main`, so never mix builds by hand.
 
-⚠ A catted app is `#!/usr/bin/env -S love` plus the cat, so a bare `mooncc` runs on the PATH
+A catted app is `#!/usr/bin/env -S love` plus the cat, so a bare `mooncc` runs on the PATH
 `love` — a STALE install mis-runs it. Probe the repo cat with `./out/love out/mooncc`,
 never a bare `mooncc`, until `make install` refreshes the PATH binary.
 
@@ -484,7 +484,7 @@ never a bare `mooncc`, until `make install` refreshes the PATH binary.
   printed and compared, layout/alignment tables, gen goldens.
 * **The differential oracle is `gcc -O0`**: same source, run both, compare stdout + exit code.
   The battery lives in `test/cc/*.c` and ONLY grows — every bug fixed adds its regression.
-  ⚠ Differential programs must be **UB-free**: `pick(++i,++i,++i)` is unsequenced, and gcc
+  Differential programs must be **UB-free**: `pick(++i,++i,++i)` is unsequenced, and gcc
   legitimately disagrees.
 * A seeded expression fuzz against gcc (`test_moonfuzz`).
 * **An OUTSIDE corpus, and its own answers** (`test_cts`, all three native targets and wasm under node): c-testsuite's
@@ -493,7 +493,7 @@ never a bare `mooncc`, until `make install` refreshes the PATH binary.
   written by people compiling other compilers, and their first run found **nine** programs
   mooncc built clean and answered wrong. All nine landed, 00219 (`_Generic` over a qualifier)
   last, so the wrong-answer roster is **empty** on all three targets and the rest is refusals,
-  rostered with a cause apiece in `test/gate/cts.sh` and kept apart. ⚠ the roster is double-
+  rostered with a cause apiece in `test/gate/cts.sh` and kept apart. the roster is double-
   edged only when it is READ: five of its lines had gone stale by 2026-08-16 — four already
   fixed, and 00219 filed as a refusal when the truth was a live miscompile, which is what
   a gate nobody runs without an opt-in corpus buys you.

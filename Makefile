@@ -401,14 +401,14 @@ syntax: $(ho)/syntax.vim
 #
 # The kernel stays the one imported artifact (BZIMAGE, default the host's).
 
-# ⚠ THE CUT IS OURS END TO END NOW -- kore's find, apps/cpio/cpio.l and apps/gz/gz.l where the
+# THE CUT IS OURS END TO END NOW -- kore's find, apps/cpio/cpio.l and apps/gz/gz.l where the
 # host's find | cpio | gzip -9 stood. $(mabs) because the pack runs INSIDE a `cd`, and
 # $m is spelled relative to the tree root.
 mabs         = $(abspath $m)
 distro_dir   = out/distro
 distro_root  = $(distro_dir)/root
 distro_img   = $(distro_dir)/initramfs.cpio.gz
-# ⚠ the base love MUST be static -- a bare initramfs has no ld.so or glibc. love-raw is it:
+# the base love MUST be static -- a bare initramfs has no ld.so or glibc. love-raw is it:
 # gcc-free, our own linker over moonlibc, and 935K against the baked love's ~11M, which is
 # what an initramfs wants carried into RAM. `make test_raw` lays it.
 distro_love    = $(wildcard out/love-raw)
@@ -430,7 +430,7 @@ $(distro_img): apps/init/boot.l $(lushfiles) $(korefiles) $(distro_love)
 	@cp apps/init/boot.l $(distro_root)/init && chmod 755 $(distro_root)/init
 	@cp $(distro_love) $(distro_root)/bin/love && chmod 755 $(distro_root)/bin/love
 	@cat $(lushfiles) > $(distro_root)/lib/sh.l
-# ⚠ apps/dns.l RIDES ALONG OR THE WHOLE TOOLBOX DIES: apps/ain.l, a korefiles member,
+# apps/dns.l RIDES ALONG OR THE WHOLE TOOLBOX DIES: apps/ain.l, a korefiles member,
 # probes for the `dial` nif at load and says (borrow 'dns) when it is absent -- which it is
 # in love-raw -- and an initramfs with no /apps/dns.l answers that with a scare that takes
 # the whole cat down. The symptom is every applet gone, not a quiet nc.
@@ -445,7 +445,7 @@ $(distro_img): apps/init/boot.l $(lushfiles) $(korefiles) $(distro_love)
 # Direct kernel boot, no bootloader: rdinit=/init makes love pid 1. KVM when the host
 # offers it -- TCG is too slow to reach the console inside a smoke window.
 distro_accel = $(shell test -e /dev/kvm && echo -enable-kvm -cpu host)
-# ⚠ 2G: love reserves a two-space GC heap at startup, so pid1 love PLUS a forked child
+# 2G: love reserves a two-space GC heap at startup, so pid1 love PLUS a forked child
 # each need one -- 512M overflows (execve -> ENOMEM). Override with QMEM=.
 QMEM ?= 2048
 distro_qemu = qemu-system-x86_64 -m $(QMEM) $(distro_accel) -kernel $(BZIMAGE) -initrd $(distro_img) \
@@ -456,7 +456,7 @@ distro-run: $(distro_img)
 	exec $(distro_qemu)
 
 # Non-interactive smoke: boot, feed `ls /proc` to the console, prove love came up as pid 1
-# with /proc mounted and the kore userland running, then kill qemu. ⚠ the trailing sleep
+# with /proc mounted and the kore userland running, then kill qemu. the trailing sleep
 # holds stdin open, keeping the shell out of an EOF-respawn loop.
 distro-smoke: $(distro_img)
 	@test -r "$(BZIMAGE)" || { echo "distro-smoke: no kernel at $(BZIMAGE)"; exit 1; }
@@ -766,7 +766,7 @@ dl/edk2-ovmf/ovmf-code-%.fd:
 include $(R)/test/test.mk
 #
 # THE NEST: the default install is ~/.love, a self-implying home, and what lands in it
-# is the BINARY and the things a person reads -- man pages and the vim files. ⚠ nothing
+# is the BINARY and the things a person reads -- man pages and the vim files. nothing
 # else needs to: the loader resolves modules out of the baked image (the modules arc,
 # rung 3) and mooncc carries its own headers and runtime (the bare cc door), so a nest
 # holding copies of either would be serving nobody.
@@ -779,7 +779,7 @@ DESTDIR ?= $(HOME)/
 # BIN -- the name the interpreter installs under, and the ONE knob for the LÖVE collision
 # (Arch's extra/love owns /usr/bin/love and man1/love.1 outright). Nothing below hardcodes
 # the command name, so `make install BIN=lovelang` moves the binary, both shims, every
-# shebang and the man page together. ⚠ the PROJECT is still love: lib/love/, liblove,
+# shebang and the man page together. the PROJECT is still love: lib/love/, liblove,
 # l/love.h and l/boot/*.l keep the name -- data paths, not PATH entries.
 BIN ?= love
 BINUP = $(shell echo '$(BIN)' | tr '[:lower:]' '[:upper:]')
@@ -792,12 +792,12 @@ v = $(DESTDIR)/$(VIMPREFIX)
 # with line 1 rewritten -- which is what a package wants anyway. The pattern matches both
 # shebang forms, leaving a trailing ` -l` alone.
 # the sed these recipes spawn is OURS: kore is the installed binary's own verb now
-# (the layered bake). ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads,
+# (the layered bake). LOVE_NO_IMAGE= (empty = UNSET) leads,
 # for $(hcc)'s reason: the root exports it=1 for the corpus, and an egg-booted love has
 # no verbs -- `kore` would read as a filename.
 korecmd = LOVE_NO_IMAGE= $(ho)/love kore
 ifeq ($(BIN),love)
-# ⚠ the chmod repairs the target when the source came through svalbard, which does not carry
+# the chmod repairs the target when the source came through svalbard, which does not carry
 # the executable bit -- without it the link resolves to a 644 file and every exec EACCESes.
 instool = ln -sf $(abspath $1) $2 && chmod 755 $(abspath $1)
 instag = LN
@@ -806,7 +806,7 @@ instool = $(korecmd) sed '1s|env -S love|env -S $(BIN)|' $1 > $2 && chmod 755 $2
 instag = CP
 endif
 
-# ⚠ ONE roster each: the compat-symlink block below reads the same two names, and two
+# ONE roster each: the compat-symlink block below reads the same two names, and two
 # spellings of a list is how they drift.
 binnames = $(BIN) kore sb mooncc cook papel kiosko libra ain lux bao lush
 mannames = $(BIN) cook lush
@@ -851,7 +851,7 @@ $d/bin/$(BIN): $(ho)/love $(ho)/.love.baked
 # by READLINK'ing this very symlink back to the source tree, so the link on PATH and the
 # crew directory need not be neighbours. libra's siblings are named ((borrow 'lint),
 # (borrow 'salt), and (borrow 'lapiz) on the doc verb alone) and ride the baked image.
-# ⚠ each source sits FIRST on its own line: instool reads $<, and a prerequisite added on
+# each source sits FIRST on its own line: instool reads $<, and a prerequisite added on
 # the grouped line below lands ahead of it -- which installs the kore shim as `cook`.
 $d/bin/cook:    apps/cook.l    $(ho)/.love.baked
 $d/bin/papel:   apps/papel.l  $(ho)/.love.baked
@@ -877,7 +877,7 @@ $d/bin/ain: apps/ain.l $(ho)/.love.baked
 # A VERB SHIM: the installed binary carries the crew in its own layered image, so
 # there is no sibling image and no wake spelling -- the
 # picker wakes the crew layer off the `kore` verb, same warm start as ever.
-# ⚠ `n` comes off $0 UNCHASED where `h` is the chased path: a tool symlink must arrive as its
+# `n` comes off $0 UNCHASED where `h` is the chased path: a tool symlink must arrive as its
 # own name for the argv[0] door, and only the real file's dir has the $(BIN) sibling.
 $d/bin/kore: $(MAKEFILE_LIST)
 	@echo '$(t_cat)	'$(abspath $@)
@@ -900,7 +900,7 @@ $d/bin/sb $d/bin/lush:
 	@chmod 755 $@
 
 # mooncc: the same verb-shim shape -- the compiler is the installed binary's own verb,
-# its layer woken by the picker (~ms, the whole-cat re-eval long gone). ⚠ the home comes
+# its layer woken by the picker (~ms, the whole-cat re-eval long gone). the home comes
 # off the CHASED path (readlink -f): invoked through a ~/.local compat symlink, $0's own
 # dir has no $(BIN) sibling -- the nest does.
 $d/bin/mooncc: $(MAKEFILE_LIST)
@@ -922,7 +922,7 @@ $d/bin/lux: $(luxfiles)
 	@chmod 755 $@
 
 # bao, the interactive shell. Unlike cook and ain, l/boot/post.l is DEFINE-ONLY -- main.c
-# fires `(shell 0)` on a tty -- so the bin is a tiny launcher that fires it. ⚠ the module
+# fires `(shell 0)` on a tty -- so the bin is a tiny launcher that fires it. the module
 # rides the binary, so there is nothing to -l and no nest path to get wrong.
 $d/bin/bao: $(MAKEFILE_LIST)
 	@echo '$(t_cat)	'$(abspath $@)
@@ -940,7 +940,7 @@ $d/share/man/man1/$(BIN).1: $(ho)/love.1 $(ho)/.love.baked
 	@$(korecmd) sed '1s|"LOVE"|"$(BINUP)"|' $< > $@
 	@chmod 644 $@
 
-# the man pages BIN does not rename, and the two hand-written vim files. ⚠ static
+# the man pages BIN does not rename, and the two hand-written vim files. static
 # patterns: an implicit rule would make these intermediate.
 $d/share/man/man1/cook.1 $d/share/man/man1/lush.1: $d/share/man/man1/%.1: $(ho)/%.1
 	$(inst644)

@@ -4,7 +4,7 @@
 // bytes, which is what lets the kernel's idle really block. one island per .machine on
 // the page, its parts found by class under it, so a page carries the markup
 // (inle/wasm/machine.html) and this script and no glue.
-// ⚠ a shared ring means the page must be CROSS-ORIGIN ISOLATED. a server that sends the
+// a shared ring means the page must be CROSS-ORIGIN ISOLATED. a server that sends the
 // two headers has it already (kiosko does); on a host that will not, coi.js asks for them
 // with a service worker and one reload. no isolation, no machine -- said, not left blank.
 // the module and its image are fetched from assets/wasm/ -- where the tracked, committed
@@ -26,7 +26,7 @@ export async function loveMachine(root) {
   const status = q('status'), canvas = q('fb'), serial = q('serial');
   // the machine's console is a TERMINAL, and this <pre> is not one: the shell colours its
   // prompt and erases to end of line, and those bytes show as text instead of being obeyed.
-  // strip them. ⚠ a sequence can straddle a chunk boundary, so an unfinished one is HELD
+  // strip them. a sequence can straddle a chunk boundary, so an unfinished one is HELD
   // and prepended to the next -- without that its tail leaks as the very text this removes.
   // CR goes too: with the erase stripped there is nothing to redraw over.
   let esc = '';

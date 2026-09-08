@@ -50,7 +50,7 @@ What genuinely stands between here and freestanding C11, each row live above:
 
 **A duplicate label now refuses and names itself** (2026-08-18). C11 6.8.1p3 scopes a label to
 its whole function; two of a name emitted one mangled label twice and every `goto` to it took
-the first, in silence. ⚠ the deviation it buys: gcc's `__label__` makes two blocks' `L` two
+the first, in silence. the deviation it buys: gcc's `__label__` makes two blocks' `L` two
 labels, and that program refuses here.
 
 **Landed 2026-08-16** (test/cc/142-syntax.c and 138-ucn.c hold them to gcc; the refusals sit in
@@ -58,11 +58,11 @@ test/gate/moon.sh), and the deliberate readings in them:
 
 - **`_Thread_local`** (and gcc's `__thread`) is an ignorable specifier: no TLS, no threads
   (`__STDC_NO_THREADS__`), so a thread-local *is* the one static object — observationally
-  right, and C11 gives the storage class no opt-out macro to refuse it under. ⚠ it is the row
+  right, and C11 gives the storage class no opt-out macro to refuse it under. it is the row
   that would read wrong, in silence, the day threads arrive.
 - **universal character names in an identifier**, the remaining half of a C99-mandatory row.
   A UCN names a code point, so `Å` and a raw utf-8 `Å` intern as one name and export the
-  same symbol bytes gcc does. ⚠ a byte past 127 is now an identifier char everywhere, so a
+  same symbol bytes gcc does. a byte past 127 is now an identifier char everywhere, so a
   stray one outside a literal interns instead of scaring; Annex D's ranges are not enforced,
   which accepts more than C11 spells rather than less.
 - **`switch (x) case 0: ;`** — `parm`, the brace-less if/while arms' own door, was already the
@@ -120,7 +120,7 @@ chars), binary literals (`0b1010`, gcc's extension and C23's spelling), `__func_
 (test/cc/154-blockextern.c, held to gcc). C11 6.2.2p4: `extern int x;` inside a function
 declares the external object — no slot, no local name, the linker binds it. It was binding a
 LOCAL, so the body read and wrote a slot nothing else could see, and a `.o` carried no
-reference to the symbol at all. ⚠ **a silent wrong answer, over a construct that reads like
+reference to the symbol at all. **a silent wrong answer, over a construct that reads like
 nothing** — the class §4 cannot catch, since the program is strictly conforming and we
 compiled it without a word. It is how the linux kernel and doom both reach a global from one
 function without a header. The decls hoist to the TU's top as `('xdecl ..)`, where the global
@@ -130,7 +130,7 @@ pass already reads them, and C's tentative rule lets a real definition take the 
 (test/cc/153-flocast.c, held to gcc) — C11 6.6p6's one float an integer constant expression
 may hold, truncating toward zero. It folds in BOTH places, because they are different folds:
 `cfold` (parse.l) is what an array dimension asks, and gen.l's `imgbytes` is what a static
-initializer's image asks. ⚠ the parse half is the one that was answering WRONG rather than
+initializer's image asks. the parse half is the one that was answering WRONG rather than
 refusing — an unfoldable dimension reads as a VLA, so `char d[(int) 3.9]` sized 8 in silence.
 The row came off doom's `am_map.c`, which writes `((int)(-.867 * (1 << 16)))`.
 
@@ -143,7 +143,7 @@ and 145-attrpos.c hold both to gcc):
 - `__builtin_types_compatible_p` compares the MARKED types `_Generic` keeps (`pcqty`), so an
   inner `const` tells `const char *` from `char *` while a top-level one drops — and NOTHING
   decays, which is the question linux's `__must_be_array` asks it (`T[]` is not `T*`).
-- `__builtin_constant_p` is 1 exactly where `cfold` settles the operand. ⚠ CONSERVATIVE by
+- `__builtin_constant_p` is 1 exactly where `cfold` settles the operand. CONSERVATIVE by
   construction, and it must stay that way: a miss answers 0 and sends the consumer down its
   runtime lane, where a false 1 would hand it a constant that is not one. The operand is not
   evaluated, so its side effects are gone — gcc's rule.
@@ -159,12 +159,12 @@ and 145-attrpos.c hold both to gcc):
   the leading position was always skipped, and the kernel writes `__maybe_unused`/`__packed` in
   all four. The skip takes `__attribute__` alone: `int x __asm__("y")` still refuses, because
   dropping an asm name renames an object in silence (`register long v asm("rdx")` is the other
-  thing an asm name means, and that one is READ: the pin inline asm's operands honor). ⚠ what is skipped is DROPPED, so an
+  thing an asm name means, and that one is READ: the pin inline asm's operands honor). what is skipped is DROPPED, so an
   `aligned` or `packed` ask on one MEMBER lays the member where its type says — the same
   silence the leading spelling has always kept (the alignment row below), and an ABI question
   rather than a missed optimization. A `packed` on the struct BODY is read, and stays read.
 - `__label__ a, b;` at a block head parses and drops — a label already mangles to `fn.NAME`.
-  ⚠ so a name DECLARED in two blocks of one function refuses (above) where gcc compiles it.
+  so a name DECLARED in two blocks of one function refuses (above) where gcc compiles it.
 
 The whole set costs **+0.081% of the instructions** compiling l/love.c (perf, 136.115G vs
 136.005G, the same tree built twice and stable to eight figures). `pprim` sees every identifier
@@ -184,17 +184,17 @@ Four of them carry an edge worth knowing:
 - **`_Alignas`** is honored at **file scope only**, on the one door gcc's
   `__attribute__((aligned(N)))` already used (`alignat?` → `ps 'aligns` → `cgdata`); both the
   constant and the type-name operand (`_Alignas(double)`) work, and the `.o`'s section header
-  asks the linker for the same boundary. ⚠ on a **local or a struct member it is still
+  asks the linker for the same boundary. on a **local or a struct member it is still
   skipped in silence** — the row below.
 
 - **variable-length arrays** ride x64, a64 and rv64; the thumb family says `no lane
-  for a variable-length array on <tgt>`. ⚠ a VLA with an *initializer* refuses everywhere
+  for a variable-length array on <tgt>`. a VLA with an *initializer* refuses everywhere
   (`parse error near =`) — C's own rule, not a gap. `__builtin_alloca` is absent on every
   target, so a VLA is the only dynamic frame allocation here.
 - **wide and prefixed literals** desugar to a *bounded compound literal* of the element type
   (`L` → wchar, `u` → char16 with surrogate pairs, `U` → char32, `u8` stays bytes), so globals,
   locals, braces, elision, concatenation across a prefix and `sizeof` all match gcc on every
-  target, and a wide *char* constant decodes to its last code point as gcc reads it. ⚠ the
+  target, and a wide *char* constant decodes to its last code point as gcc reads it. the
   storage is the compound literal's — automatic inside a function where C says static duration,
   so a pointer kept past the frame dangles, and `wchar_t *p = L"x"` at file scope refuses on the
   static-clit row above. A mixed-prefix concatenation `u"a" U"b"` takes the first prefix where
@@ -202,21 +202,21 @@ Four of them carry an edge worth knowing:
 - **`__extension__`** is a no-op at a declaration's head (file scope, block, member, before
   `typedef`) and as a cast-expression prefix, the typedef declarator's trailing attribute run
   skipping alongside — which is what opens `#include <pthread.h>`. gcc-refused spots like
-  `int __extension__ x;` still refuse; ⚠ `sizeof(__extension__ T)` is accepted where gcc
+  `int __extension__ x;` still refuse; `sizeof(__extension__ T)` is accepted where gcc
   refuses, the one tolerance.
 - **universal character names landed 2026-08-14** in every literal face
-  (test/cc/138-ucn.c). ⚠ a UCN names a CODE POINT, not a byte, and that is the whole
+  (test/cc/138-ucn.c). a UCN names a CODE POINT, not a byte, and that is the whole
   trap: `"\u00E4"` in a **narrow** string is the two utf-8 bytes `C3 A4`, where
   `"\xE4"` is the one byte `E4` — so `escseq` reports whether the escape was a UCN
   and the narrow lane encodes on that. Exactly 4 (or 8) hex digits: a short run refuses
   rather than taking what it found, matching gcc's *incomplete universal character name*.
   C11 6.4.3p2's **validity rule** is enforced: a UCN may not name a basic-set character
   (under `00A0`, bar `$ @ ` `), a surrogate, or anything past the last code point — so
-  `\u0041` for `A` refuses. ⚠ that rule was found by the **cross** gcc (13.2), which
+  `\u0041` for `A` refuses. that rule was found by the **cross** gcc (13.2), which
   refuses it where the newer host gcc takes C23's relaxation and says nothing: a
-  single-oracle check would have shipped the hole. ⚠ we also refuse past-`10FFFF` where
+  single-oracle check would have shipped the hole. we also refuse past-`10FFFF` where
   gcc only warns — a refusal, so it costs no right answer.
-  ⚠ an identifier spelled with one still refuses — the row above.
+  an identifier spelled with one still refuses — the row above.
 
 ### the directives, and which are ignored on purpose
 
@@ -238,11 +238,11 @@ where active tokens accumulate, and again on a directive's own body, which is wh
 return. The operand is **macro-expanded** when it is not already a digit sequence (C11
 6.10.4p3, landed 2026-08-17), so `#line line` takes the 1000 that `line` expands to and a
 second round works too; one that still is not a number leaves the directive doing nothing.
-⚠ the **file operand is parsed and dropped**: `#line 700 "generated.y"` reports line
+the **file operand is parsed and dropped**: `#line 700 "generated.y"` reports line
 700 of the *real* path, where gcc says `generated.y`. `__FILE__` is the TU's name throughout
 (cpp shares one macro table across includes), so the file half wants that lifted first.
 
-⚠ `#include_next` refuses *because* it is unimplemented — ignoring it drops a header in silence,
+`#include_next` refuses *because* it is unimplemented — ignoring it drops a header in silence,
 which is worse. carries when it becomes load-bearing.
 
 ### the predefine surface
@@ -297,7 +297,7 @@ qualifier, matched the first structurally equal row, and answered whichever one 
 first — c-testsuite 00219 (`const int * const` taking the `int *` row where C takes neither and
 falls to `default`) is off the roster with this.
 
-⚠ **the type language still carries no qualifier**, and that is the point: a node for one would
+**the type language still carries no qualifier**, and that is the point: a node for one would
 reach all 56 of gen's ptr dispatch sites. The one consumer that must tell `const char *` from
 `char *` keeps its **own marked copy** — `('cq mask t)` over the leaf, mask 1=const 2=volatile —
 parked in `ps 'qtys` beside `'locals` and shadowed with it, staged by each declarator parse
@@ -322,12 +322,12 @@ Two deliberate readings:
 - a type-name with a **top-level** qualifier (`int * const:`) is parsed, kept, and matched
   against nothing — no lvalue-converted controlling type can be compatible with it. gcc accepts
   the row and never selects it; clang warns. We agree on the answer and say nothing.
-- ⚠ only the **specifier run's** qualifier is seen. A mid-declarator one — `char * const *p`,
+- only the **specifier run's** qualifier is seen. A mid-declarator one — `char * const *p`,
   where the const sits on the inner pointer — reads unqualified, so it matches *more* than C
   does, never less. `typedef char *cp; const cp x;` is read right (a const *pointer*, so the
   mark does not reach the leaf); `typedef char *cp; const cp *y;` is the shape that would not be.
 
-⚠ one path binds a name without staging for it: a **K&R** parameter list, whose types arrive as
+one path binds a name without staging for it: a **K&R** parameter list, whose types arrive as
 separate declarations. A prototype's staged mark for the same name would still be sitting there,
 and it is taken if it strips back to the same type — so `int f(const char *buf);` followed by a
 K&R `f(buf) char *buf;` would read `buf` as qualified. The guard makes it need a shape match as
@@ -335,7 +335,7 @@ well as a name match; nothing in the tree or the corpus reaches it.
 
 ### the `_Static_assert` quirks
 
-- ⚠ **A failed static assert reports as `parse error near ;`.** The refusal is correct; the
+- **A failed static assert reports as `parse error near ;`.** The refusal is correct; the
   wording names the compiler's position rather than the program's fault. See.
 - **`cfold` is deliberately partial** (no floats, no comma, no address constants) and `pstatic`
   **lets a non-constant assertion by**. Making non-foldable an error would convert every
@@ -364,10 +364,10 @@ nothing took a constant back off at the closing brace, so `enum { N = 4 };` insi
 answered in every later one. Each constant now rides `ps 'enumacc` as a shadow entry from the
 moment `pbty` pins it, and `edrain` moves the run onto the block's own shadow list — where
 `unshadow` already knew how to put a name back, and where a local of the same spelling stacks
-on top of it. ⚠ **file scope drains nowhere**: `note` clears the run per top-level form instead,
+on top of it. **file scope drains nowhere**: `note` clears the run per top-level form instead,
 which is also what keeps the delta short enough for `edrain` to count by `tally`.
 
-⚠ the constant is folded AT PARSE, and that is the whole reason a restore is sound here — no
+the constant is folded AT PARSE, and that is the whole reason a restore is sound here — no
 `'enums` name reaches gen, so nothing outlives the table. A block-scope struct TAG is the same
 C rule and **cannot** be done this way: the tag table rides out to gen and the type node carries
 only the name, so pulling an inner tag would leave gen sizing `('struct T)` off the outer one.
@@ -387,7 +387,7 @@ following token, and an empty operand fell through two ways:
 - `A ## B` with `B` empty emitted a **literal `##`** into the C stream — `parse error near ##`,
   loud and harmless.
 - `A ## B ; bob` pasted `A` with the **`;`**, and since `jim;` does not relex to one token the
-  fold kept `A` and **dropped the semicolon**. ⚠ that is a preprocessor silently deleting a
+  fold kept `A` and **dropped the semicolon**. that is a preprocessor silently deleting a
   token, and it reads as a refusal only because a missing `;` usually breaks the parse next.
   Nothing guarantees it does.
 
@@ -404,7 +404,7 @@ spelling alone, so the LAST `struct T` in a TU laid out every earlier one's memb
 halves of that cost a right answer: an inner tag escaped (`sizeof(struct T)` in a later function
 read the inner layout — c-testsuite 00044), and a collision refused as `cannot compile 'f'
 (cause unnamed)` once gen went looking for a member the winning layout did not have (00053).
-⚠ the ledger had this filed as a refusal row; the escape half was a **wrong answer** and nothing
+the ledger had this filed as a refusal row; the escape half was a **wrong answer** and nothing
 said so. Both are off the corpus roster now, on all three targets.
 
 A block tag takes a **key of its own** (`ptagkey`) and `ps 'tags` binds the spelling to it for
@@ -416,11 +416,11 @@ key is bound *before* the body parses, so `struct T { struct T *n; }` resolves t
 
 Three deliberate readings:
 
-- ⚠ the key leads with `.` (`.T.3`), like `panon`'s `.anon0`, so it is **not a C identifier**
+- the key leads with `.` (`.T.3`), like `panon`'s `.anon0`, so it is **not a C identifier**
   and clay gripes rather than laying a name no C compiler could read back. A block containing a
   tag definition is *inexpressible* in clay's partition, which is the honest answer and not a
   red — a block tag cannot be said at top level without its block.
-- ⚠ **a bare `struct T` with no tag in scope answers the bare spelling**, where C11 6.7.2.3p8
+- **a bare `struct T` with no tag in scope answers the bare spelling**, where C11 6.7.2.3p8
   declares a fresh incomplete tag in the current scope. So `struct Node *p;` in a body still
   means the file-scope `Node` it was written to mean. That accepts more than C spells, never
   less, and it is what lets the reference site stay a lookup instead of a lookahead to tell a
@@ -442,7 +442,7 @@ declaration's names only after the whole declaration was parsed (the block loop'
 so an earlier declarator was invisible to a later initializer and any file-scope enum constant or
 typedef of the same spelling won. Now `'declaring` marks each name as its declarator finishes and
 the primary rule declines to fold it; the block's `shadowdecl` still owns the durable hiding and
-the restore. ⚠ found by a DIFFERENTIAL BETWEEN OUR OWN TWO BINARIES — `love` is mooncc-built and
+the restore. found by a DIFFERENTIAL BETWEEN OUR OWN TWO BINARIES — `love` is mooncc-built and
 `love0` is gcc-built, and running the same array battery under both named the one function that
 differed. That instrument costs nothing and nobody had pointed it at the tray ops.
 
@@ -458,7 +458,7 @@ line — 00187, which writes a file and reads it back where the loader's kernel 
 filesystem. That is the machine's line, not the compiler's, and it sits under `wrong` so the
 seat growing files is heard.
 
-⚠ **A rostered line is a claim that goes stale in silence.** Four of them (`#if ||`'s dead arm,
+**A rostered line is a claim that goes stale in silence.** Four of them (`#if ||`'s dead arm,
 `int x[const *]`, a function-typed parameter, `_Generic`) had been fixed by earlier rungs and
 still sat on the roster; 00219's line said *refuses* where the truth was *answers wrong*; and
 00044's said the tag *escapes to file scope* as if that were the refusal it sat under, where the
@@ -499,7 +499,7 @@ entry, and every positional consumer of a decl entry in `gen.l` moves with it �
 of cost `asm goto`'s surface row carries. Past 16 the frame must be realigned at run time, and
 that should refuse rather than land wrong.
 
-⚠ Until it lands the tree cannot use either spelling on a local, and neither can a header it
+Until it lands the tree cannot use either spelling on a local, and neither can a header it
 compiles — and since 2026-08-18 that covers the TRAILING spellings on a local, a parameter and a
 member too, which skip alongside the leading one rather than refusing. A struct **member** is a
 second rung: `playout` computes a member's alignment from its type alone, and an over-aligned
@@ -508,7 +508,7 @@ that day).
 
 ### what the %f hunt actually found — and the trap in it
 
-⚠ **`printf("%f", 1.23e12)` answering `9AB0000000000.000000` under a mooncc-built PDCLib is
+**`printf("%f", 1.23e12)` answering `9AB0000000000.000000` under a mooncc-built PDCLib is
 NOT a miscompile.** PDCLib's `_PDCLIB_print_fp` indexes `_PDCLIB_digits[ buffer[i] ]` over a
 buffer that `_PDCLIB_print_fp_deci` filled with *characters*, so it reads ~12 bytes past a
 37-byte array — undefined behaviour, in their source, on every compiler. It looks right under
@@ -541,14 +541,14 @@ being skipped and thrown away) and parse lowers it to `('cast float ..)`.
 
 That fixed the *type* and not the *value*, which exposed the one underneath:
 
-⚠ **a cast to `float` never rounded.** gen keeps every float as a double in a register and
+**a cast to `float` never rounded.** gen keeps every float as a double in a register and
 narrows only at a **store** (`fstf`), so the cast lane's `(flo? tgt)` arm passed the value
 straight through — `(float)d == d` read true for an ordinary double **variable**, not just
 for a literal. The cast now round-trips `cvtsd2ss`/`cvtss2sd`, which is where the rounding
 becomes observable; both ops were already in the vocabulary and all six targets take it.
 
 Held by test/cc/140-fsuffix.c. The old note here said the consumer was PDCLib's `INFINITY`
-spelled `(_PDCLIB_FLT_MAX * 2)` — ⚠ that reading was wrong twice over: PDCLib is not this
+spelled `(_PDCLIB_FLT_MAX * 2)` — that reading was wrong twice over: PDCLib is not this
 tree's libc (`apps/moon/lib/moonlibc/` is), and we do not define `INFINITY` at all. The real
 consumer is every `float` expression in the tree.
 
@@ -559,7 +559,7 @@ a signedness** — `(v u)`, v in `[0,2^64)`. Love's integers are exact and unbou
 why none of this fell out for free. Three separate wrongs lived here, and the first is the one
 worth remembering:
 
-- ⚠ **truth was `0 <`, where C is `!= 0`** — so `#if -1` read **false**, and so did
+- **truth was `0 <`, where C is `!= 0`** — so `#if -1` read **false**, and so did
   `#if -1 && 1`, `#if -1 ? 1 : 0`, while `#if !(-1)` read true. Any header branching on a
   negative constant took the wrong arm in silence. This was not in the ledger; the signedness
   row is what led to it.
@@ -571,11 +571,11 @@ worth remembering:
   `<<`/`>>` had already routed around the same hole through multiply and divide.
 
 Held to gcc by test/cc/139-ifexpr.c, seventeen conditions across truth, signedness, the
-conversions, truncating division, arithmetic shift and the bitwise trio. ⚠ the one place gcc
+conversions, truncating division, arithmetic shift and the bitwise trio. the one place gcc
 still says more: it *warns* on signed overflow in a `#if` (`0x7fffffffffffffff + 1`); we wrap
 silently and agree on the value.
 
-⚠ **The constants live at the HEAD of cpp.l's top-level `:` and must stay there.** love0's
+**The constants live at the HEAD of cpp.l's top-level `:` and must stay there.** love0's
 compiler is single-pass and folds a pure global at each definition's own compile, so one of
 them bound mid-list reads as `;; missing m64` — and only in the **mooncc0** bake, which is
 love0's lane. The default love takes it either way, so the edit looks clean and the build
@@ -611,7 +611,7 @@ REFUSING at compile (love.h). A check that passes the incompatible case means mo
 cannot police it. Measured 2026-08-15: 58 converted `ghelp` tails, mooncc took all 58, clang
 named the 5 that were extra-arg lvms.
 
-⚠ **`make vmret` does not cover this.** It reads the shipped binary, which mooncc builds — so
+**`make vmret` does not cover this.** It reads the shipped binary, which mooncc builds — so
 it sounds mooncc's own output against mooncc's own rule. `test_front` is currently the only
 gate compiling clang at `ai_tco=1`, which is what caught it.
 
@@ -644,13 +644,13 @@ never silent**.
 `tools/moon-parity.sh check` fails if this doc and the compiler have drifted** (`why` prints
 each refusal's cause). Regenerate it rather than editing a cell by hand.
 
-⚠ **A ✓ means the lane exists, not that it is differentiated** — the sweep compiles (`-c`) and
-reads the object's symbols, and only x64/a64/rv64 have running gates behind them. ⚠ several of
+**A ✓ means the lane exists, not that it is differentiated** — the sweep compiles (`-c`) and
+reads the object's symbols, and only x64/a64/rv64 have running gates behind them. several of
 these refusals arrive as `cannot compile 'f' (cause unnamed)` rather than a named cause —
 `__int128` and every composite-argument row among them. The refusal is real either way; what is
 missing is the sentence naming it.
 
-⚠ **`libgcc` is a cell value, and the two targets wearing it borrow for different reasons.**
+**`libgcc` is a cell value, and the two targets wearing it borrow for different reasons.**
 thumb1 (v6-M) has no UMULL, no long shifts and no FPU, so 64-bit `*`/shifts/divide, int↔double
 conversion and *all* float and double arithmetic lower to `__aeabi_*` calls (`gen.l`'s `v6m?`
 lanes); `inle/rp2040/Makefile` names a cortex-m0 libgcc.a on the link line and calls it "the one
@@ -660,16 +660,16 @@ fpv5-d16 does both. A borrow is a LINK-time dependency, invisible to a compile: 
 an undefined `__aeabi_*` in the object, which is how the table finds it. Everywhere else the
 lane is ours or there is no lane.
 
-⚠ **The two struct rows do not move together, and thumb1 inverts them.** v6-M returns *any*
+**The two struct rows do not move together, and thumb1 inverts them.** v6-M returns *any*
 struct over 4 bytes through memory (`sretm?`), so thumb1 takes both composite returns while
 refusing every composite *argument*; a64 and rv64 are the mirror image, taking arguments
 and the 16B return but refusing the MEMORY-class return — which is what stops PDCLib's dlmalloc
 on the cross targets.
 
-⚠ **The register-exhausted by-value composite is x64-only, and even there only the gp half.**
+**The register-exhausted by-value composite is x64-only, and even there only the gp half.**
 A 9..16B aggregate argument with too few *integer* registers left now goes wholly to the
 overflow block on x64 (SysV's rule; the param side already bound it there, and the shape is
-`xdrawcursor(int,int,Glyph,int,int,Glyph)` in st). ⚠ **The SSE twin still refuses**: five
+`xdrawcursor(int,int,Glyph,int,int,Glyph)` in st). **The SSE twin still refuses**: five
 `struct { float a,b,c; }` by value exhausts xmm0–7 and `cgfn` gives up — the same rule, the
 other register file, and c-testsuite's 00204 is the probe.
 **a64, rv64 and t32 refuse the gp case too** — deliberately, because each has a
@@ -677,16 +677,16 @@ other register file, and c-testsuite's 00204 is the probe.
 AAPCS64 closes the gp file behind a stack composite (C.13), rv64 SPLITS one across the
 register/stack seam, and t32 has no lane at all. Three rules, three rungs; do not fold them.
 
-⚠ **A by-value composite NAMED in a variadic parameter list rides x64 and a64** (`vaspill`,
+**A by-value composite NAMED in a variadic parameter list rides x64 and a64** (`vaspill`,
 `vaspill-a64`); `vaspill-rv` and `vaspill-t32` refuse the shape, each for its own ABI's reason.
-⚠ that is a different shape from *passing* a composite at a variadic call site, which rv64
+that is a different shape from *passing* a composite at a variadic call site, which rv64
 also takes — probe the one you mean.
 
 - **mixed/int-pair 8..16B composites on t32** — an aone-`int` 5..8B, or a two-eightbyte
   not-both-sse aggregate by value; register-exhausted stack HFAs (9+ double args); and
   doubles/pairs/structs across a t32 VARIADIC seam. love.c reaches none of them.
 - **a 16B all-int composite RETURN on t32** refuses on thumb2 and thumb2sp; a64, rv64 and
-  x64 all take it. ⚠ the probe must DEFINE one, not declare it —
+  x64 all take it. the probe must DEFINE one, not declare it —
   `typedef struct {int a,b,c,d;} R; static R mk(int x){ R r = {x,x,x,x}; return r; }` plus a
   caller; a bare prototype compiles everywhere. It is what stops the Playdate SDK's own
   header: `LCDMakeRect` returns an `LCDRect` by value, so `pd_api.h` cannot be compiled for the
@@ -709,7 +709,7 @@ also takes — probe the one you mean.
   the atomics want LDREX/STREX plumbing (v6-M has none), and nothing reaches either there yet.
 
 What **thumb2** carries, so it is not re-derived (thumb1 reaches libgcc for most of this — the
-⚠ above): 64-bit `long long` as register pairs (lo:hi on r0:r1, r2:r3 the shuttle) with +, -,
+above): 64-bit `long long` as register pairs (lo:hi on r0:r1, r2:r3 the shuttle) with +, -,
 ×(UMULL/MLA), unsigned `/` and `%` (a self-contained 64-step restoring expansion — no
 `__aeabi_uldivmod`, no libgcc), all shifts across the word
 boundary, every relation (SUBS/SBCS, exact at the 2^53 tie), widen/narrow, `__builtin_clzll`,
@@ -720,7 +720,7 @@ BIT-IDENTICAL to the host on the M7. By-value composites + varargs on thumb2 (a 
 HFA rides d-pairs per the AAPCS32-VFP rule; va_list is gcc's one running pointer). `la` on
 thumb2 lowers to the MOVW/MOVT absolute pair, and `leax` to `ADD.W Rd,Rn,Rm,LSL#n`.
 
-⚠ **Parse-side and gen-side type twins drift silently.** `tsz`/`talign` (parse) and `(wsize g)`
+**Parse-side and gen-side type twins drift silently.** `tsz`/`talign` (parse) and `(wsize g)`
 (gen) once disagreed on pointer width, mislaying every struct containing a pointer on both
 32-bit targets with no scare. The target is threaded into the parse state now (`psnew tgt`,
 `psword ps`), but those two copies are still kept in step by hand. The promotion/conversion
@@ -729,7 +729,7 @@ spelling, `ptype` and gen's `cmpu` both consume it, and the width rides one para
 (`!(pst32? ps)` / `!(t32? g)`). Any NEW parse-side type computation should go through or
 beside the door, not grow a private ladder.
 
-⚠ **Parse folds early on purpose** — an array bound needs the constant at parse time, and gen's
+**Parse folds early on purpose** — an array bound needs the constant at parse time, and gen's
 `szof` lane is too late. Deferring a fold to gen is not an available fix.
 
 ---
@@ -738,7 +738,7 @@ beside the door, not grow a private ladder.
 
 The one refusal that has been costed rather than just filed. Still **not built**: it is close to
 kernel-only, and it is worth doing when something we actually want to compile demands it, and
-not before. ⚠ the references below were accurate when written — re-check them at the point of
+not before. the references below were accurate when written — re-check them at the point of
 edit rather than trusting them.
 
 **The allocator is not the problem.** The obvious fear, that a terminator with multiple
@@ -773,7 +773,7 @@ Everything else already refuses or resets on raw: `unframe` bails, `deadcell` di
 treats it as a barrier. **The estimate is about a week**, touching parse, one gen pass and one
 new holo door — and not the allocator.
 
-⚠ **It does not bring Linux into range on its own.** The kernel additionally wants `__label__`,
+**It does not bring Linux into range on its own.** The kernel additionally wants `__label__`,
 computed goto, `_Generic`, and attribute semantics that change codegen.
 
 ---

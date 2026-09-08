@@ -208,7 +208,7 @@
 
 
 ; the structure the corpus already carries (rung 1): a banner is a section, a
-; display is a display, and a is a hazard. the prose is read, never rewritten.
+; display is a display. the prose is read, never rewritten.
 (assert
  ; a `--- name ---` banner is a level-2 heading, and the padding dashes are padding
  ((ldoc-md "; --- the table ------------------------------------------------\n; a row is a thing.\n(: x 1)\n")
@@ -226,12 +226,10 @@
   = "- a bullet that wraps onto\n  a second line\n- and one that does not\n")
  ((mdread (ldoc-md "; - a bullet that wraps onto\n;   a second line\n(: x 1)\n"))
   = '((bullets (((text "a bullet that wraps onto a second line"))))))
- ; the hazard marker in bold, and no more than that
- ((ldoc-md "; ⚠ a hazard, and it is one.\n(: x 1)\n") = "**⚠** a hazard, and it is one.\n")
- ; ..and a hazard starts a block: 22 of the tree's 74 sit jammed against the prose
- ; above them, and filling them into it is how a page becomes a wall
- ((ldoc-md "; prose.\n; ⚠ a hazard.\n(: x 1)\n") = "prose.\n\n**⚠** a hazard.\n")
- ((ldoc-md "; prose.\n;\n; ⚠ a hazard.\n(: x 1)\n") = "prose.\n\n**⚠** a hazard.\n"))
+ ; prose is read, never rewritten: a paragraph comes out as the sentence it was
+ ((ldoc-md "; a plain line, and it stays one.\n(: x 1)\n") = "a plain line, and it stays one.\n")
+ ((ldoc-md "; prose.\n; a second line fills into it.\n(: x 1)\n")
+  = "prose.\na second line fills into it.\n"))
 
 ; and the whole of it through the lens: a real header comes out as a document with
 ; a heading its sections hang off, which is what papel reads a page's title,

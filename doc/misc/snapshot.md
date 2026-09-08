@@ -45,7 +45,7 @@ place. The dictionary is chosen by COUNT and not by lane: a fixed token budget p
 obvious thing and it is also worse (3.63x), because the split would be tuned to whichever image
 was measured, and the counts follow a kernel's image or an artifact's wherever those go.
 
-⚠ **NULL is an immortal.** A live bio port carries undressed `rbuf`/`wbuf` zero words; a raw
+**NULL is an immortal.** A live bio port carries undressed `rbuf`/`wbuf` zero words; a raw
 zero is even and below the index bound, so it needs its own slot in `image_immortals`.
 
 ## the stamp is a DISTANCE
@@ -54,7 +54,7 @@ Not a build hash: `arch` (a compile-time tag) + `anchor`, the **gap** between `a
 `image_immortals`. A different binary — cross-arch, or a stale rebuild — lays symbols out
 differently, the gap changes, and the image is refused.
 
-⚠ it was two addresses, compared to check their ASLR deltas agreed — which is that gap being
+it was two addresses, compared to check their ASLR deltas agreed — which is that gap being
 preserved, said the long way round and at the price of writing the baker's mmap base into every
 image. Two bakes of one tree then differed there and nowhere else. The distance discriminates
 exactly as well and is the same number every run; `test_bakerep` is what holds it.
@@ -106,7 +106,7 @@ way; the value is the path, or `"<baked>"` for the binary's own section. It is p
 when a session actually woke one** — absence is the answer for an egg boot, asked out of band
 with `(member? 'love-image (names ()))`.
 
-⚠ **Read it as `(ev 'love-image)`, never bare.** A baked consumer folds its bare globals at its
+**Read it as `(ev 'love-image)`, never bare.** A baked consumer folds its bare globals at its
 own compile, and the bakes all egg-boot, so a straight read wires that session's answer — a `0` —
 into the image forever. The nom has to reach the lookup as *data*. `cmdline` and `argv` answer the
 same law from the other side: a bake pins neither, so their bare reads cannot fold either.
@@ -182,7 +182,7 @@ Three things carry it:
 - **A string is opt-in.** The non-code thread aps are a closed roster (`image_extra_aps`), and of
   them only a cask's payload and a port's buffers are memcpy'd through in place; every other slot
   in the heap replaces a POINTER and never a byte. Those two pin their strings, and the stack pins
-  what it is still filling. ⚠ a byte-writable holder added to that roster has to be added there.
+  what it is still filling. a byte-writable holder added to that roster has to be added there.
 - **Roots are not rewritten.** A duplicate the stack still names simply survives — a few words, and
   a mid-eval bake's continuation keeps its values identical.
 

@@ -105,12 +105,6 @@
    (ditem? s) (: n #s
                  (((2 <= n) && (snip s 0 2 = "- "))
                   || ((3 <= n) && ((47 < s 0) && (s 0 < 58) && (snip s 1 3 = ". ")))))
-   ; the marker in bold; a hazard is a paragraph and only its first line wears it
-   (dwarn s) (? (dstarts? s "⚠ ") ("**⚠**" + snip s 3 #s) s)
-   ; ..and it starts one -- a hazard jammed against the prose above it would
-   ; otherwise fill into that paragraph, glyph and all
-   (dnl2? s) (: n #s (? (n < 2) (n = 0) ((s (n - 1) = 10) && (s (n - 2) = 10))))
-   (dbreak acc s) (? (&& (dstarts? s "⚠ ") !(dnl2? acc)) (acc + "\n") acc)
 
    ; a display: the run of indented lines at the head of ls, and what is left.
    (dtake ls)
@@ -139,8 +133,8 @@
                   (: r (dtake >ls) (go <>r 0 (acc + dfence (s . <r))))
                  (&& (0 < dind s) li) (go >ls 1 (acc + s + "\n"))
                  (0 < dind s)        (: r (dtake ls) (go <>r 0 (acc + dfence <r)))
-                 (ditem? s)          (go >ls 1 (acc + dwarn s + "\n"))
-                 (go >ls 0 (dbreak acc s + dwarn s + "\n")))))
+                 (ditem? s)          (go >ls 1 (acc + s + "\n"))
+                 (go >ls 0 (acc + s + "\n")))))
        (go (ldoc-head src) 0 ""))
 
    ; --- doc ------------------------------------------------------------------

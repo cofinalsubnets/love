@@ -58,9 +58,6 @@ carry structure that markdown would otherwise fill flat:
 any other indented run
 :   a fence too -- unless the indent is a list item's WRAP, where lapiz joins it
 
-a leading `⚠`
-:   the marker in bold, and a block of its own
-
 and the file's name becomes the level-1 heading. that is the one thing on the
 page not taken from the prose, and it is not decoration: papel reads a page's
 title, its anchors and its whole contents nav off the headings.
@@ -80,7 +77,7 @@ that the document keeps every LETTER of the header -- an extraction that stalls
 drops its whole tail in silence, and neither a length nor a block count would
 notice. this is rung 0 of the doc system.
 
-⚠ **an unknown verb reads as a FILENAME.** `libra serv x.l` says "cannot open
+**an unknown verb reads as a FILENAME.** `libra serv x.l` says "cannot open
 serv" rather than "no such verb". that is the price of the bare file list being
 the common case, and it is a real edge.
 
@@ -119,7 +116,7 @@ wanted one curry away. three things are exempt, and each for a reason:
 - an ALL-PUNCTUATION token, the escape idiom: `(+)` is `+` as a value, and
   `(:)` `(?)` `(\)` read their own zero point.
 
-⚠ that last exemption is narrower than "starts with punctuation" on purpose.
+that last exemption is narrower than "starts with punctuation" on purpose.
 `(<>b)` and `<>b` are one value, so those parens really are droppable, and
 flagging them is the point.
 
@@ -147,7 +144,7 @@ person, which is why the project file exists at all.
 (deprecated old-thing (worse-thing "use better-thing"))
 ```
 
-⚠ `singleton` is read with `salt-one`, never by PRESENCE: the tail of
+`singleton` is read with `salt-one`, never by PRESENCE: the tail of
 `(singleton 0)` is `two?` just as much as `(singleton 1)`'s is, so asking whether
 the key is there would read an explicit OFF as an on.
 
@@ -161,12 +158,12 @@ They are an editing aid, read by a person who asked for them. libra weighs paren
 and holds no opinion about how a file is laid out -- there is no indentation rule,
 no tab rule, and nothing to promote one into a refusal.
 
-⚠ **a config is DATA, never CODE.** the file is read with `sound`, the datum
+**a config is DATA, never CODE.** the file is read with `sound`, the datum
 reader, and no part of it is ever evaluated. a dotfile cannot run anything, and
 nothing in it needs quoting, because nothing in it is evaluated -- write
 `(deprecated foo)`, not `(deprecated 'foo)`.
 
-⚠ **a form that is not a setting is simply not a setting.** a bad line is
+**a form that is not a setting is simply not a setting.** a bad line is
 skipped in silence and the rest of the file still lands. a typo in a dotfile
 must not take the tool down with it, and half a config is better than none. a
 dropped paren ends the read rather than spinning on it.
@@ -190,15 +187,15 @@ app can call `(salt 'its-own-name)` and get the same two-file overlay. see
 (salt-has? c k nm)  ; -> [1 entry] if nm is listed under k, else ()
 ```
 
-⚠ `salt-all` cannot tell an ABSENT key from one written with no operand -- both
+`salt-all` cannot tell an ABSENT key from one written with no operand -- both
 are `()`. so a switch is `(singleton 1)`, never a bare `(singleton)`, and an
 app that wants "the EMPTY roster" spells it with an explicit `()` operand --
 `(startup ())` in `apps/lux/config.l`, the other salt consumer.
 
-⚠ a repeated key REPLACES rather than appends, so a roster takes all its entries
+a repeated key REPLACES rather than appends, so a roster takes all its entries
 in ONE form. lux's `(bind (spec action) (spec action) ..)` is the shape.
 
-⚠ `salt` reads `HOME`. the seat of `/usr/bin/love` is `/usr`, and nobody's
+`salt` reads `HOME`. the seat of `/usr/bin/love` is `/usr`, and nobody's
 settings live in `/usr/etc`, so config is the one thing a love program finds by
 the environment rather than by the seat walk. the module walk still reads none.
 

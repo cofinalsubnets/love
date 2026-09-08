@@ -32,11 +32,11 @@ one that reshaped this doc -- see §the criterion.
 ## the state, measured
 
 on the current tree -- `love.c` 8232 lines, `love.h` 540, `apps/moon/clay.l` 601.
-⚠ re-measure these rather than quoting them; the previous figure sat here stale by 84.
+re-measure these rather than quoting them; the previous figure sat here stale by 84.
 
 `make test_clay` reads **63 round-trip, 55 inexpressible, 0 unparsed, 118 files**.
 
-⚠ **that 55 is not clay's ceiling.** it measures `cparse`'s lossiness on the way IN, not
+**that 55 is not clay's ceiling.** it measures `cparse`'s lossiness on the way IN, not
 clay's grammar on the way OUT. a typedef, a struct definition, an enum and a
 `_Static_assert` all land as the empty marker `(tdef)`; a block-scope declaration that
 declares no OBJECT -- a bare `struct S {..};`, or a function declaration -- lands as the
@@ -134,7 +134,7 @@ per macro between three routes:
 * **(c) add an emit-only clay node.** the rung 2b-2d precedent, for the shapes that are
   not call-shaped.
 
-### ⚠ hand-paring is the inverse of the criterion
+### hand-paring is the inverse of the criterion
 
 `lvm(lvm_add)` expands to `ai_noinline ai_noicf struct ai *lvm_add(struct ai *restrict g,
 union u *Ip, word *Hp, word *restrict Sp)`. writing that out at **184 definition
@@ -193,7 +193,7 @@ incremental, each rung shippable, `love.c` staying hand-written until its region
 converted and reverted: the question is no longer "how pure is it" but "what is there to
 generate". a region with no repetition C cannot abstract is not on this list at all.
 
-⚠ **the NUMBERS moved with the re-rank, and git log did not.** commits written before it
+**the NUMBERS moved with the re-rank, and git log did not.** commits written before it
 say "rung 4" for the α-equivalence cluster, which is struck below; this list's rung 4 is
 `vbin_fill`. read a rung by its NAME, never by its number, and do not renumber again --
 name the region in a commit message instead.
@@ -212,7 +212,7 @@ name the region in a commit message instead.
    -- see §the seam -- and the theorem `love.c:7602` has been claiming for free
    ("mixed/bignum/broadcast falls through to the general loop; results bit-identical"),
    which nothing checks.
-   ⚠ those in-function macros mean generated C writes the loop out ~11 times, so
+   those in-function macros mean generated C writes the loop out ~11 times, so
    BYTE-comparison here is structurally impossible; the AST-vs-AST oracle (`tools/clay-g2.l`)
    is immune, and this is the rung it was built for.
    then the rest of the family, all the same shape: `vmap1_fill` 7255, `vmap2_fill` 7734,
@@ -240,7 +240,7 @@ name the region in a commit message instead.
    leg. `clay-tables` derives `stag` + `sigs`, REUSING `playout` (`parse.l:576`) rather
    than reimplementing C layout rules. document it in `doc/misc/moon.md`, whose architecture
    section names only backend seams today.
-   ⚠ this is independent of every rung above it: it is about clay as an INPUT, and nothing
+   this is independent of every rung above it: it is about clay as an INPUT, and nothing
    in it asks a region to be authored.
 
 ### struck from the slate, and why
@@ -256,7 +256,7 @@ these were ranked by purity and are transcription targets. §the parse is enough
   multiply. `test/proof/rocq/big.v` already models the lane against stdlib `Z` and `big_drive`
   FUZZES love's limbs against it, and putting the IMPLEMENTATION into Rocq is still the
   largest single verification step this plan offers -- but that step is `clay2coq` over
-  the PARSE, not a `.l` transcription. ⚠ and it was never byte-exact anyway:
+  the PARSE, not a `.l` transcription. and it was never byte-exact anyway:
   `apps/moon/cpp.l` leaves `__SIZEOF_INT128__` undefined, so mooncc-built love.c takes the
   32-bit limb path and gcc-built takes the 64-bit one.
 * ~~**dtoa**~~ -- SETTLED the other way: the printer moved into lisp (`l/boot/post.l`), and
@@ -316,7 +316,7 @@ why `vbin_fill` earns its place even though it comes later.
   AST, never as a string compare of the C text (twice now the printer has been the
   thing standing in front of the bug). run over all 114 files of `test/cc/`: that
   makes "expresses arbitrary C" empirical rather than claimed. currently **63 / 51 / 0**.
-  ⚠ emit-only additions must not move it.
+  emit-only additions must not move it.
 * **G2 conversion equivalence** -- `tools/clay-g2.l`: parse the original translation unit
   and the converted one WHOLE, and compare the named top-level definitions as TREES.
   parsing whole is what makes it exact -- both sides meet the same cpp, typedefs and macro
@@ -324,7 +324,7 @@ why `vbin_fill` earns its place even though it comes later.
   a byte diff cannot make when the generator writes `A(l)`, prints `A(l)`, and cpp turns
   both into the same tree. runs once at a conversion, against a copy of the pre-conversion
   file; afterwards the regeneration-drift `cmp` in test_clay is what stands.
-  ⚠ it is a GENERATION gate. rung 7 is what it was built for -- where the six `VBF(E)`
+  it is a GENERATION gate. rung 7 is what it was built for -- where the six `VBF(E)`
   redefinitions make byte comparison structurally impossible -- and it has no job on a
   region that is merely being transcribed, because such a region should not be converted.
   rung 2 did the table version of this: all 512 cells reproduced before `love.c` was
@@ -387,7 +387,7 @@ tells about moon. state it this way or not at all.
    `kinds.h` is laid from the same roster the grid is, and `KN` is the roster's own length
    rather than a number someone counted. the generated line came out BYTE-IDENTICAL to the
    hand-written one. cost: one new clay form, `(edef NAME (CONSTS..))`, emit-only.
-   ⚠ the embedding surface is TWO files now -- `the Makefile` ships `kinds.h` beside
+   the embedding surface is TWO files now -- `the Makefile` ships `kinds.h` beside
    `love.h`, and an install missing it does not compile.
 2c. **the rep roster, split off the dispatch one.** `enum q` was answering two questions;
    only nine members were ever `ai_typ` answers. now `enum d` is laid from its own roster,
@@ -398,7 +398,7 @@ tells about moon. state it this way or not at all.
    ['union])` defines a struct; the refusal is narrowed to parse's anonymous `.anon0`
    (`parse.l:614`), which is not a C identifier. FIELDS take the shape `pmembers` already
    answers, so the day parse.l fills `(tdef)` the member list is the one it hands back.
-   ⚠ a named tag does not weaken G1: a file that DEFINES the struct it names still carries
+   a named tag does not weaken G1: a file that DEFINES the struct it names still carries
    the `(tdef)` that refuses, so a tag clay prints without defining is one the source never
    defined either. laws in `test/host/clay.l`.
 3. **the five node shapes, ~750 sites.** attribute SPELLINGS on `fn`'s appended 5th slot
@@ -436,7 +436,7 @@ tells about moon. state it this way or not at all.
    top-level declarations as multisets -- **equal** at the point the per-nif arrays were
    still named, which is what pins the cell contents to what the macros expanded to.
    net C **-84** lines.
-   ⚠ 506 generated lines stand where 85 dense macro lines did, and that is the criterion
+   506 generated lines stand where 85 dense macro lines did, and that is the criterion
    working, not failing -- the `.l` roster is 126 rows and the repetition went where
    repetition belongs. a braced union cell is an aggregate, so `cinit`'s one layout rule
    gives it its own line; that rule is not a knob, and a compaction wanting a new clay node
@@ -472,12 +472,12 @@ tells about moon. state it this way or not at all.
      drift from the definition it announces.
    * an `edef`'s constants took the positions C gives them and could not name a value, so
      `enum { nf_maxcap = 64 }` -- C's spelling for a lone compile-time constant -- was
-     unsayable. ⚠ and a valued constant did not REFUSE: it printed the list's bytes as a
+     unsayable. and a valued constant did not REFUSE: it printed the list's bytes as a
      name and emitted mojibake. that was a live bug in a committed generator's path.
    * `dot` spent its arrow on the bracket, so `k[0].ap` printed `(k + 0)->ap`.
    * there was no character literal, so a function about the backslash symbol compared
      against `92`.
-   ⚠ **all four are READABILITY, not capability** -- clay could already SAY every one, and
+   **all four are READABILITY, not capability** -- clay could already SAY every one, and
    that is exactly what made the rung look cheap. it is not a reason to convert a region;
    it is the tax on converting one that should not be. they are kept because a GENERATION
    rung still owes readable output, and rungs 4-6 of the order of work will spend them.

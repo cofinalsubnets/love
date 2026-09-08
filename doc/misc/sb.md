@@ -90,7 +90,7 @@ from the tips. Re-banking a name at the same head is a no-op; at a different hea
 because a banked name is immutable. `log` shows each ref with its **psid** — `sha256` of the
 sorted tips — the name of that release's head DAG state.
 
-⚠ **A ref freezes the tip *set*, not a single tip.** Deps are **per path**, so a patch depends
+**A ref freezes the tip *set*, not a single tip.** Deps are **per path**, so a patch depends
 only on what it *touched* — an independent birth is never depended upon and stays maximal
 forever. Two or three tips is what ordinary parallel work looks like, not a fork to repair, and
 the only way to collapse them would be to write a patch touching every path every tip touched,

@@ -5,7 +5,7 @@ apps/kore/ orients here; the laws live in apps/kore/law.l, the GNU-identical smo
 Speed and adversarial inputs are a different page, filled by
 `make -C bench korebench` (kore against busybox, uutils and GNU).
 
-⚠ **the inventory below names TOOLS, never their flag coverage**, and the two are not the
+**the inventory below names TOOLS, never their flag coverage**, and the two are not the
 same reach. A tool listed here answers to its name; which options it answers to is stated
 at the head of its own source, absences included. `make -C bench korebench` found the two
 worst of those absences by running the flags rather than reading the list — `sort` had no
@@ -91,7 +91,7 @@ The file discipline, two shapes:
   tail of kore.l quits with it), and a caller staying in the image lives through a tool that
   fails: `kore-main` is the in-image door, taking `(link "kore" "ls" "-l")` and answering the
   status. mooncc rides the same floor with two doors of its own — `moon-run` answers, `moon-main`
-  quits with what it answers (doc/misc/moon.md). ⚠ nothing unwinds through a scare, so a port a tool
+  quits with what it answers (doc/misc/moon.md). nothing unwinds through a scare, so a port a tool
   still holds at the leave is lost, exactly as `quit` lost it. The property is gated in
   test/gate/kore.sh and test/gate/moon.sh; a regression to `quit` passes every other check.
 * **the nif lane.** fs effects ride inle/posix.c (app-glob AiNif, no core edit) and its
@@ -108,7 +108,7 @@ The file discipline, two shapes:
 
 * `show` is the decimal formatter; `string` of a number makes a ONE-CHARM text.
 * prel `sort` on strings IS lexicographic (probed via the "b"-vs-"ab" discriminator), which is
-  exactly LC_ALL=C. ⚠ but `sortby` under it is **not stable** — `sortsplit` deals the list
+  exactly LC_ALL=C. but `sortby` under it is **not stable** — `sortsplit` deals the list
   into two, so element 1 lands right of element 2 and a left-preferring merge swaps them.
   `sort -u` picks a representative out of every equal run, so the applet carries the index
   as its last tiebreak rather than hoping for stability from underneath.
@@ -128,7 +128,7 @@ COLUMNS, so a tab steps to the next stop, `\b` steps back one and `\r` starts th
 obsolescent `-N` both say the width; `expand -t N -i`; `unexpand -a`, and `-t N` means `-a`
 too, as GNU's does.
 
-* ⚠ **a tab lands only where it saves at least two columns**, which is why a lone space
+* **a tab lands only where it saves at least two columns**, which is why a lone space
   sitting on a tab stop stays a space. It is the one rule the obvious unexpand gets wrong.
 * fold breaks BEFORE the charm that would overflow, so a charm wider than the whole width
   still gets a line of its own.
@@ -138,7 +138,7 @@ bits, 5 to 8 at 5, the short tail padded with `=` either way. `-d` reads it back
 is ignored, anything else outside the alphabet is refused with exit 1 — and `-w` says the
 wrap, 76 unsaid.
 
-* ⚠ **`-w 0` closes nothing.** GNU ends a wrapped last line with a newline but leaves one
+* **`-w 0` closes nothing.** GNU ends a wrapped last line with a newline but leaves one
   long line without one, so the obvious implementation is a byte too long.
 
 `tsort` answers **a** topological order and not GNU's: where the input pins one they agree,
@@ -186,7 +186,7 @@ on empty input, all like GNU. `printenv` prints the world or just the names aske
 with nothing in it says nothing and the exit remembers); `whoami` and `groups` are id's two
 thin faces, so they read /etc/passwd and /etc/group exactly as id does. `arch` and `nproc`
 live in core.l beside uname, which is the other tool that reads the machine: arch IS uname -m
-and ⚠ nproc counts what /proc/cpuinfo names, which is GNU's `--all` — nothing here reads an
+and nproc counts what /proc/cpuinfo names, which is GNU's `--all` — nothing here reads an
 affinity mask.
 
 ## awk (apps/kore/awk.l)
@@ -250,7 +250,7 @@ own file because `:` rides re.l's BRE engine, and a body captures its free names
   the second pair has no number in it.
 * the **exit code is a third channel** — 0 the answer is neither `""` nor `"0"`, 1 it is, 2 the
   expression will not do — so the gate compares stdout *and* `$?` on every check.
-* ⚠ **the division truncates toward zero and the remainder wears the dividend's sign**, which is
+* **the division truncates toward zero and the remainder wears the dividend's sign**, which is
   C's rule and expr's. love's `//` FLOORS, so the sign is taken out and put back rather than
   divided with; `-7 / 2` is -3 and `-7 % 2` is -1.
 
@@ -284,7 +284,7 @@ kept, never at load: this file is baked by a love that HAS the nifs.
 `realpath` walks a path COMPONENT BY COMPONENT — resolving each symlink as it arrives — so a
 last name that does not exist yet still answers, which is GNU's default face and the case a
 resolver written around one `stat` gets wrong. `-e` wants the whole path to be there, `-m`
-allows any of it to be missing, `-s` takes the links as they lie. ⚠ `readlink -f` beside it is
+allows any of it to be missing, `-s` takes the links as they lie. `readlink -f` beside it is
 STRICTER than GNU's (it wants the path to exist), which is GNU's `readlink -e`; realpath is
 the GNU-shaped door. `link` and `unlink` are the two syscalls said plainly, no face on them.
 
@@ -294,7 +294,7 @@ neither), `du`, `chown`, `mktemp`. They read the **stat tail**: inle/posix.c's `
 is append-only and the KERNEL's own stat (inle/kmain.c) answers the first four alone — an image
 tree has no ownership to tell about — so it is asked by `tally` and a world without it says so.
 
-* ⚠ **there is no default `stat` face.** GNU's is four lines of access, change and birth times
+* **there is no default `stat` face.** GNU's is four lines of access, change and birth times
   and a device number, none of which this stat carries. Printing the modify time three times over
   would be a fabrication, so the tool asks for `-c`.
 * **du counts `st_blocks`, which is allocation and not size** — a sparse file costs less than it
@@ -315,7 +315,7 @@ any of them** — /proc is a filesystem, so the whole family is `uread` and a pa
 world without one (the kernel's own image, which mounts no procfs) reads as *no processes*
 rather than as an error.
 
-* ⚠ **the comm is taken between the FIRST `(` and the LAST `)`** of a stat line, never by
+* **the comm is taken between the FIRST `(` and the LAST `)`** of a stat line, never by
   splitting on spaces: a program may be named `(sd-pam)` or `a b)c`, and a naive split
   reads its parentheses as fields — silently, since every field after it then shifts.
 * **`ps` bare is procps' rule**: the processes that are ours *and* share this terminal.
@@ -326,7 +326,7 @@ rather than as an error.
 * **`free`'s used is total minus AVAILABLE**, not total minus free — the kernel's own
   estimate of what a new program could have is the only honest reading, and it is what
   procps prints. `-m` and `-g` divide; `-h` is not here (its rounding is a layout).
-* ⚠ **`uptime` has no `N users` field** and will not get one: that count comes out of
+* **`uptime` has no `N users` field** and will not get one: that count comes out of
   utmp, which this tree does not keep, and a fabricated 0 is worse than an absent field.
   The time of day is UTC, for the reason the clock section gives.
 * **the by-name four** match the COMM, which the kernel caps at fifteen charms; `pgrep -f`
@@ -335,13 +335,13 @@ rather than as an error.
   own table, shared.
 * the faces are **not smoked byte-for-byte** — the process table moves between two runs —
   so the parsers are lawed and the faces are asked about a process the gate made itself:
-  in `ps -e`, found by `pidof`, gone after `pkill`. ⚠ and the gate kills a COPY of sleep
+  in `ps -e`, found by `pidof`, gone after `pkill`. and the gate kills a COPY of sleep
   under its own name, because `killall sleep` on a shared box reaches into other people's
   work.
 
 ## the clock (apps/kore/proc.l)
 
-⚠ **UTC and only UTC.** There is no tz database in this tree, so localtime IS gmtime — the same
+**UTC and only UTC.** There is no tz database in this tree, so localtime IS gmtime — the same
 call moonlibc made, for the same reason. `date -u` is taken and changes nothing. `-d @SECONDS` and
 `-r FILE` name a moment other than now, which is also the only thing that makes the tool gateable
 against GNU at all; the gate runs the oracle under `TZ=UTC`. The calendar itself is Hinnant's
@@ -357,7 +357,7 @@ parsers for a shape nothing in this decade emits.
 
 * a FILE is a list of `(text nl)` pairs. **A missing final newline is data** here as everywhere in
   kore, and a patch can both carry one in and take one away, so the flag rides per line.
-* ⚠ **the `\ No newline at end of file` line is tested before the counts run out.** It carries no
+* **the `\ No newline at end of file` line is tested before the counts run out.** It carries no
   count of its own, so the one closing a hunk arrives after both counters have hit zero — a body
   that stopped on the counts alone leaves every "the patch takes the newline away" case unmarked.
 * applying carries a **delta**: the running difference between a seat in the original and the same

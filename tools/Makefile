@@ -22,7 +22,7 @@ $(m):
 # vocabulary the host answers to, so there is no checked-in second copy to drift from and
 # nothing left to diff -- a rename that moves (names ()) now just rebuilds it. What is
 # still worth asking is whether the generator ran to the END and meant what it emitted.
-# ⚠ THE EXIT CODE CANNOT ANSWER THAT. the cat rides STDIN, where a scare prints `;; a b`
+# THE EXIT CODE CANNOT ANSWER THAT. the cat rides STDIN, where a scare prints `;; a b`
 # and CARRIES ON at 0, so a condition can land in the middle of the file and still leave a
 # green make. The terminal b:current_syntax is the summary line here -- hue2vim.l writes
 # it last -- and the two shape checks below are what a diff used to say the long way.
@@ -44,7 +44,7 @@ test_hue: | $(m)
 
 # hue2web.l -- the THIRD reader of the same class table (the painter, the vim syntax, the
 # site). Two claims, and the second is the one that matters.
-# ⚠ PAINTING CHANGES NO TEXT. strip every tag from the emitted <pre> and decode the three
+# PAINTING CHANGES NO TEXT. strip every tag from the emitted <pre> and decode the three
 # entities and what is left must be the source FILE, byte for byte -- a highlighter that
 # drops a line, eats a backslash or mis-carries a multi-line string is a highlighter that
 # rewrote the program it was showing you, and nothing about the colours would say so.
@@ -77,9 +77,9 @@ test_hueweb: | $(m)
 # cook's Makefile-importer suite: test/host/cook.l writes fixture Makefiles to a temp dir and
 # runs cook on them as a subprocess, asserting over the captured output. Paths are relative
 # to the repo root, so it runs from there.
-# ⚠ the SHELL pair needs the BUILT lush (a fixture sets `SHELL := out/lush` to prove
+# the SHELL pair needs the BUILT lush (a fixture sets `SHELL := out/lush` to prove
 # cook honors it), and that rule lives in the ROOT makefile -- so the prerequisite sits on
-# test_tools, not here. ⚠ and the built love goes on PATH FIRST: lush is a catted script
+# test_tools, not here. and the built love goes on PATH FIRST: lush is a catted script
 # under `#!/usr/bin/env -S love`, so PATH picks the love, and without this the gate runs
 # whatever love is INSTALLED. a one-entry .bin/, NOT out itself -- that holds
 # `sh -> kore`, and shadowing /bin/sh costs the two .SHELLFLAGS tests.
