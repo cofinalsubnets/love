@@ -400,7 +400,10 @@
    (assert (= "[HI]\n" (cup r))))
 (: r (hark ["out/love" "out/lush" "-c" "cd /tmp; echo [$( (cd /; pwd) )][$(pwd)]"])
    (assert (= "[/][/tmp]\n" (cup r))))
-(: r (hark ["out/love" "out/lush" "-c" "x=$( (exit 4); echo tail); echo [$x]"])
+; ⚠ the brackets are QUOTED here and nowhere else in this file: [tail] is a glob class
+; over {t,a,i,l}, and the tree grew a one-letter name (l/) that it matches. the law is
+; about the capture, not about globbing, so it says so.
+(: r (hark ["out/love" "out/lush" "-c" "x=$( (exit 4); echo tail); echo \"[$x]\""])
    (assert (= "[tail]\n" (cup r))))
 ; the drainer earns its keep: a body saying more than one pipe buffer (64 KiB) would
 ; stop forever against a reader that is us. a builtin's buffered bytes come first.
