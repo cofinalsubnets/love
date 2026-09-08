@@ -439,7 +439,7 @@
    ; section states nothing, so the check ld exists to make could not be made at all. we
    ; answer only what we know: the architecture, the profile, the ISA, the FPU, wchar_t,
    ; the enum width, the float model and the float-argument lane.
-   ; ⚠ AN UNSTATED TAG IS NOT NEUTRAL. it reads 0, and a 0 can DISARM the check on a tag
+   ; AN UNSTATED TAG IS NOT NEUTRAL. it reads 0, and a 0 can DISARM the check on a tag
    ; that was stated: ld runs the VFP_args comparison -- the one that is a hard error and
    ; not a warning -- only where Tag_ABI_FP_number_model says the object uses floats at
    ; all. without tag 23 ours linked silently against a soft-float object while gcc's own

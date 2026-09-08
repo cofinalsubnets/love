@@ -2,7 +2,7 @@
 
 /* a block worth its own mapping gets one, and free hands that back whole: the
    arena list below never returns a page, so a heap that peaks through a few
-   large blocks would keep every one of them resident for the run. ⚠ the tag
+   large blocks would keep every one of them resident for the run. the tag
    rides `next', which an allocated block does not otherwise use -- so malloc
    writes it on EVERY block, or free reads whatever the old payload left there.
    __MDirect names it in impl.h, where calloc reads it too. */

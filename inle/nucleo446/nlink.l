@@ -11,13 +11,13 @@
 ; script's `> SRAM AT> FLASH`. cstartup moves it across off the brackets ldbare32
 ; pins (__data_load__ / __data_start__ / __data_end__, __bss_start__/__bss_end__).
 ;
-; ⚠ .vectors is named FIRST and by hand. the core fetches its initial SP and reset
+; .vectors is named FIRST and by hand. the core fetches its initial SP and reset
 ; vector from flash base before it runs anything, so the table's address is a fact
 ; about the silicon -- but the section's own flags say ALLOC-only, which would file
 ; it with rodata, after the code. flags are what an object can say; where the board
 ; looks is not something an object knows. so the map says it.
 ;
-; ⚠ and .startup is NOT named: it rides text by its flags, and that is right --
+; and .startup is NOT named: it rides text by its flags, and that is right --
 ; cstartup is reached through the vector table's reset word, an address rather than
 ; a position, so nothing depends on it leading. e_entry is a courtesy for objdump.
 ;

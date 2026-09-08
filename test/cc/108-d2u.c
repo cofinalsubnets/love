@@ -12,12 +12,12 @@
  * has an ulp of at least 2^11 and d - 2^63 is a multiple of it, landing under
  * 2^63), so no rounding enters and the values below are exact, not approximate.
  *
- * ⚠ the conversion happens at every context that has a destination type, not
+ * the conversion happens at every context that has a destination type, not
  * just a cast -- so this exercises the cast, a store, an initializer, an
  * argument and a return, which are the five places gen.l routes through asintt.
  * fixing only the cast would leave `unsigned long v = d;` wrong.
  *
- * ⚠ NOT asserted: negative, out-of-range and NaN sources. C leaves all three
+ * NOT asserted: negative, out-of-range and NaN sources. C leaves all three
  * undefined, and a test that pins them would be pinning whatever two compilers
  * happen to share rather than a law. */
 
@@ -60,7 +60,7 @@ int main(void)
 	r += d2u(1.0) == 1UL;
 	r += d2u(9.3e18) == 9300000000000000000UL;
 
-	/* ⚠ AT AND ABOVE 2^63 -- every one of these saturated */
+	/* AT AND ABOVE 2^63 -- every one of these saturated */
 	r += d2u(9223372036854775808.0) == 9223372036854775808UL;      /* exactly 2^63 */
 	r += d2u(1.0e19) == 10000000000000000000UL;
 	r += d2u(18446744073709549568.0) == 18446744073709549568UL;    /* the largest exact */

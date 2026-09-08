@@ -3,7 +3,7 @@
 # SECOND IMPLEMENTATION, not our own expectations: each case is a tiny Makefile run
 # by both, and the outputs must agree byte for byte.
 #
-# ⚠ THE FAILURE THIS EXISTS FOR IS SILENCE. An unknown `$(name args)` is a VARIABLE
+# THE FAILURE THIS EXISTS FOR IS SILENCE. An unknown `$(name args)` is a VARIABLE
 # reference in make's grammar, not an error -- so a builtin cook has never implemented
 # expands to nothing and the build carries on with an empty value. That is how
 # `$(error ..)` guards were no-ops here, and it is invisible to any test that only
@@ -21,7 +21,7 @@ case "$(make --version 2>/dev/null | head -1)" in
   *) echo "cookdiff: ambient make is not GNU make -- skipped"; exit 0 ;;
 esac
 
-# ⚠ THE ORACLE RUNS TOP-LEVEL. under `make -jN` the outer make exports MAKEFLAGS with
+# THE ORACLE RUNS TOP-LEVEL. under `make -jN` the outer make exports MAKEFLAGS with
 # its jobserver, and the make below would inherit it -- a parallel oracle reorders any
 # case whose target has two independent prerequisites, so `all: a | b` prints [b] before
 # [a] about 1 run in 12 and the gate reports COOK as failing when the oracle moved. cook
@@ -31,7 +31,7 @@ unset MAKEFLAGS MFLAGS GNUMAKEFLAGS MAKELEVEL
 
 # cook REPORTS where make is silent: it names the goal it cooked, or says it was already
 # up to date. Neither line is a recipe's output -- they are cook's own progress -- so both
-# are filtered out of the comparison. ⚠ nothing else may join them: every other line cook
+# are filtered out of the comparison. nothing else may join them: every other line cook
 # prints and make does not IS the difference the gate exists to find.
 cooknoise='is already up to date|^cook: cooked '
 
@@ -40,7 +40,7 @@ trap 'rm -rf "$work"' EXIT
 fail=0; ran=0; known=0
 
 # case NAME KIND  <<'E' ... E     KIND: same = must agree | known = a recorded difference
-# ⚠ EACH CASE RUNS EXACTLY ONCE PER MAKE. A case may have side effects on purpose
+# EACH CASE RUNS EXACTLY ONCE PER MAKE. A case may have side effects on purpose
 # (shell_once counts them), so re-running one to print its diff would report a
 # different world than the one that failed. Capture both outputs, then decide.
 case_() {
@@ -167,7 +167,7 @@ case_ patrule same    <<'E'
 all: a.o
 a.c: ;@touch a.c
 E
-# ⚠ A PATTERN WHOSE PREREQUISITE CANNOT BE MADE DOES NOT APPLY. make rejects the
+# A PATTERN WHOSE PREREQUISITE CANNOT BE MADE DOES NOT APPLY. make rejects the
 # rule and tries the next; with none left, a target that exists on disk is a source
 # leaf and is done. cook took the unmatchable rule as a LAST RESORT instead and
 # demanded a file nobody makes -- and since mk/common.mk cancels make's lex rule
@@ -229,7 +229,7 @@ case_ phony same      <<'E'
 all:;@echo "[phony ok]"
 E
 
-# ⚠ SIDE EFFECTS ARE THE POINT OF THIS ONE. A recipe line expanded twice runs its
+# SIDE EFFECTS ARE THE POINT OF THIS ONE. A recipe line expanded twice runs its
 # $(shell ..) twice, and only the second value is ever used -- so the duplicate work
 # and its side effects are invisible in the output. Count the runs instead.
 case_ shell_once same <<'E'
@@ -238,12 +238,12 @@ all:
 E
 
 # ---- the two-run law -------------------------------------------------------
-# ⚠ EVERY CASE ABOVE RUNS FROM SCRATCH, and a make that rebuilds nothing at all looks
+# EVERY CASE ABOVE RUNS FROM SCRATCH, and a make that rebuilds nothing at all looks
 # CORRECT there: no output exists, so anything gets built. These build, age the artifact,
 # and build AGAIN, comparing both runs as one -- so "did nothing the second time" and
 # "did it twice" are each a failure. `cook prog` reading an existing `prog` as its build
 # file is the bug that asked for this, and it is invisible on a first run by construction.
-# ⚠ AGE THE ARTIFACT, never touch the source forward: a future mtime makes GNU make print
+# AGE THE ARTIFACT, never touch the source forward: a future mtime makes GNU make print
 # a clock-skew warning that is not cook's to match, and the diff would be of the warning.
 # case2_ NAME KIND ARTIFACT [GOAL] -- GOAL reaches both makes; empty means the default.
 case2_() {
@@ -288,7 +288,7 @@ stamp:
 E
 
 # ---- recorded differences, reported and not failed -------------------------
-# ⚠ each of these is a KNOWN divergence with a reason, not a shrug. Promote one to
+# each of these is a KNOWN divergence with a reason, not a shrug. Promote one to
 # `same` the moment it is fixed; never add a row here to make the gate quiet.
 #
 # continuation: make folds \<newline> AND the next line's indent into one space in a

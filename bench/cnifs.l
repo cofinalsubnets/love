@@ -17,13 +17,13 @@
 ; is behind on inflate and level on crc32 is losing to branches, not to loads. On the
 ; day they were added it read mooncc 1.85x gcc on inflate and 1.5x on crc32.
 ;
-; ⚠ these run the NIFS, never apps/gz/gz.l's love twins -- this table times C compilers.
-; ⚠ no `borrow` and no lib file: the binary under test lives in out/bench/cc, so the
+; these run the NIFS, never apps/gz/gz.l's love twins -- this table times C compilers.
+; no `borrow` and no lib file: the binary under test lives in out/bench/cc, so the
 ; module walk would miss lib/ entirely. everything here is built from the core, and the
 ; inflate row's stream is laid beside it by ccgen.l through the host love.
 (borrow 'posix)
 (:
-   ; ⚠ VARIED BYTES, not a zeroed cask like ccrypto's: crc32 indexes eight tables with
+   ; VARIED BYTES, not a zeroed cask like ccrypto's: crc32 indexes eight tables with
    ; the data, so an all-NUL message would touch one entry of each and read a cache the
    ; real one does not get. Built small and doubled -- a love loop over the whole megabyte
    ; would cost more than the row it feeds, and inside the timed window.
@@ -33,10 +33,10 @@
    (nifdbl s k) (? (k < 1) s (nifdbl (s + s) (k - 1)))
    nifmsg (nifdbl nifseed 8)                 ; 4 KiB -> 1 MiB
 
-   ; ⚠ (f) at zero operands is f itself, unrun. the unit is the operand, and it is ().
+   ; (f) at zero operands is f itself, unrun. the unit is the operand, and it is ().
    (rep k f) (? (k < 1) 0 (: _ (f ()) (rep (k - 1) f)))
 
-   ; ⚠ the reps are fixed so all three compilers do identical work, and chosen so the
+   ; the reps are fixed so all three compilers do identical work, and chosen so the
    ; FASTEST lane still spends ~300 ms of real work -- the floor on a ccbench ratio is 4%,
    ; and a row that finishes in 50 ms cannot say anything at all.
    (crc-run _) (: _a (rep 1000 (\ _ (crc32 nifmsg)))

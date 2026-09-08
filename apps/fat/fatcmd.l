@@ -20,7 +20,7 @@
 ; honest about the cost: a 64 MB image is 64 MB of heap and a whole-file rewrite per
 ; mutating verb. Positioned reads would want a pread nif; nothing here has one.
 ;
-; ⚠ FAT32 REFUSES ANYTHING UNDER ~33 MB, by the format's own law -- under 65525
+; FAT32 REFUSES ANYTHING UNDER ~33 MB, by the format's own law -- under 65525
 ; clusters the type is FAT16 by definition. `fat mkfs` on a smaller image answers the
 ; refusal rather than writing something that is not what its boot sector claims.
 ;
@@ -64,7 +64,7 @@
      (#im // 512)]
 
    ; open IMG as a mounted fs: answers [im dirty fs], or leaves through fatc-die.
-   ; ⚠ the two failures are told apart on purpose: a missing file and a file that is
+   ; the two failures are told apart on purpose: a missing file and a file that is
    ; not a FAT32 want different repairs, and one "cannot read" sends you to the wrong one.
    (fatc-open img)
     (: t (fatc-slurp img)
@@ -117,7 +117,7 @@
        (? (fat-rm <>>b path) (fatc-sync img <b <>b)
           (fatc-moan (path + ": cannot remove (no such file, or a directory with things in it)"))))
    ; mkfs: an existing image is formatted where it lies; a SIZE makes one first.
-   ; ⚠ a size given for a file that is already there is honoured -- the image is
+   ; a size given for a file that is already there is honoured -- the image is
    ; remade at that size, which is what `mkfs.vfat -C` means and what a script
    ; re-running its own setup wants.
    (fatc-mkfs img size)

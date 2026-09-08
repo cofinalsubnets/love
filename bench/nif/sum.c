@@ -8,14 +8,14 @@
  * tree -- love.c is a narrow style and never rotates a word -- so a fault in
  * the shift/rotate or wrap lane has no other place to show.
  *
- * ⚠ NO VECTOR IS WRITTEN DOWN HERE, on purpose. an answer every lane reaches is
+ * NO VECTOR IS WRITTEN DOWN HERE, on purpose. an answer every lane reaches is
  * inle/hash.c's own and test/host/hash.l is where it is checked; an answer ONE
  * lane reaches is the code generator's, and that is the only thing this file can
  * see. test/host/hash.l reads these nifs through the RUNNING love, which is the
  * gcc build nearly everywhere -- so it asks whether the algorithm is right and
  * never which compiler built it.
  *
- * ⚠ the streaming lane is walked WITHOUT a cask. the state layout is inle/
+ * the streaming lane is walked WITHOUT a cask. the state layout is inle/
  * hash.c's own (its header spells all three), love only carries the bytes, so
  * a harness can lay the state directly and ride the same blk_feed/blk_done/
  * dig_ld/dig_st the nifs ride. going through the cask would need a heap and
@@ -24,7 +24,7 @@
 #include "stub.h"
 #include "say.h"
 
-/* ⚠ NOT rand(): the two builds carry different libcs, so the corpus has to be
+/* NOT rand(): the two builds carry different libcs, so the corpus has to be
  * this file's own arithmetic or the programs do not see the same bytes. */
 static void fill(unsigned char *b, unsigned n, unsigned seed)
 {
@@ -100,7 +100,7 @@ static unsigned udec(char const *s)
 /* THE TIMED LANE: one algorithm over a megabyte, `reps` times, the running
  * answer printed so no lane can fold the work away.
  *
- * ⚠ the SHELL does the timing. the two builds carry different libcs, so a
+ * the SHELL does the timing. the two builds carry different libcs, so a
  * program reading its own clock would be timing the clock as much as the code
  * -- and the whole point of the row is that the ONLY difference between two
  * runs is the code generator. */

@@ -111,7 +111,7 @@ static void mmio_map(void) {
 // --- the wall clock: the PL031 RTC ------------------------------------
 // one register, already UNIX SECONDS, and already mapped: RTC_PHYS shares the 2MiB
 // block mmio_map lays for the UART. the a64 counterpart of x64's CMOS walk,
-// and a tenth its size -- ⚠ so it must be called AFTER archinit, like everything
+// and a tenth its size -- so it must be called AFTER archinit, like everything
 // else that touches device memory here.
 uint64_t k_rtc(void) { return mmio_rd(RTC_PHYS, 0); }
 

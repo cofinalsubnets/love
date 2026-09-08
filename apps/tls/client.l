@@ -1,7 +1,7 @@
 ; apps/tls/client.l -- a TLS 1.3 client over the ciphers beside it: x25519 for the key
 ; share, HKDF-SHA256 for the schedule, chacha20-poly1305 for the records. one suite, one
 ; group, one version -- what every server of the last five years speaks, and what a
-; fetch needs. ⚠ the peer is NOT verified: the certificate is read into the transcript and
+; fetch needs. the peer is NOT verified: the certificate is read into the transcript and
 ; believed. that is an integrity-and-privacy channel against a passive wire, not an
 ; identity, and a caller that needs identity should say so before trusting a byte.
 ;

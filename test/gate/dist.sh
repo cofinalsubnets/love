@@ -65,7 +65,7 @@ smoke)
 
   ln -sf "$dabs" "$s/sb"
   run "$s/sb" 2>&1 | grep -q "usage: sb"       || fail "the argv[0] door"
-  # ⚠ NOT a name already symlinked above -- `>` through a symlink writes the artifact
+  # NOT a name already symlinked above -- `>` through a symlink writes the artifact
   echo '(quit 7)' > "$s/kore"
   ( cd "$s" && run "$dabs" -- kore ); [ $? -eq 7 ] || fail "-- should force the file lane"
 

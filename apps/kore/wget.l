@@ -4,7 +4,7 @@
 ;
 ; a GET with Connection: close, redirects followed (eight, then it stops), a chunked
 ; body unchunked, the rest read to the peer's close. https rides the tls module's
-; client (apps/tls/client.l) -- ⚠ which does not verify the peer, and says so once
+; client (apps/tls/client.l) -- which does not verify the peer, and says so once
 ; per fetch unless -q. the file is -O, else the url's last path word, else index.html.
 ; the exit codes are wget's own: 0, 1 a bad url or a dead wire, 3 the file, 8 a server
 ; that answered with an error status.

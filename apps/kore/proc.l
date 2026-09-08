@@ -248,7 +248,7 @@
        _ (? (member? 'chroot (names ())) () (udie 1 "chroot: no chroot on this seat"))
        e (chroot d)
        _ (? e (udie 1 ("chroot: cannot change root to " + d + ": " + (show e))) ())
-       ; ⚠ the chdir is not tidiness. chroot moves the ROOT and leaves the cwd where it
+       ; the chdir is not tidiness. chroot moves the ROOT and leaves the cwd where it
        ; was -- outside the new tree -- and a relative path then walks out of the jail.
        _ (? (chdir "/") (udie 1 "chroot: cannot enter the new root") ())
        cmd (? (two? >as) >as

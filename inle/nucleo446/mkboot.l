@@ -3,11 +3,11 @@
 ; mkboot.l stripped to the generic Cortex-M shape -- the F446 boots straight from the
 ; vector table at flash base, so there are no vendor ROM blocks to satisfy.
 ;
-; ⚠ a vector is an ADDRESS CARRYING THE THUMB BIT, and obj.l sets bit 0 on every FUNC
+; a vector is an ADDRESS CARRYING THE THUMB BIT, and obj.l sets bit 0 on every FUNC
 ; symbol -- so `cstartup` here takes addend 0 where the old .S wrote a bare symbol and
 ; leaned on .thumb_func. R_ARM_ABS32 is (S + A) | T either way.
 ;
-; ⚠ sp is not a register MOVW/MOVT can name (UNPREDICTABLE, same law as MOV.W), so the
+; sp is not a register MOVW/MOVT can name (UNPREDICTABLE, same law as MOV.W), so the
 ; stack pointer arrives through a general register and the 16-bit hi-register mov.
 ;
 ; the lay says 'thumb2sp, which is thumb2's encoder under another nom (gen softens f64
@@ -43,7 +43,7 @@
       ;; with `ite eq` + mrseq/mrsne; a branch pair says the same without an IT block,
       ;; and TST takes no immediate here (thumb-test is register-only), so the 4 rides
       ;; r1 -- free, since the hardware stacked r0-r3 on the way in.
-      ;; ⚠ the reporter runs on a FRESH stack: if the fault WAS a stack overflow (or sp
+      ;; the reporter runs on a FRESH stack: if the fault WAS a stack overflow (or sp
       ;; is garbage), pushing its frame on the old sp double-faults into lockup and the
       ;; report never reaches the wire (the teensy41 lesson).
       text [['label 'isr_hardfault]
@@ -57,7 +57,7 @@
              ;; semihosting SYS_EXIT_EXTENDED, the qemu gate's exit door: r1 points at
              ;; a two-word block of (reason, code). the pushes lay it in that order --
              ;; r0's code goes down first so the reason lands under it, at sp.
-             ;; ⚠ on silicon a bkpt with no debugger escalates to lockup, so QSMOKE only.
+             ;; on silicon a bkpt with no debugger escalates to lockup, so QSMOKE only.
             ['label 'sh_exit]
             ['li 'r1 0x20026]                   ; ADP_Stopped_ApplicationExit
             ['push 'r0] ['push 'r1] ['mov 'r1 'sp]

@@ -70,7 +70,7 @@
    ; the value is a tablet from the control words, a bare string from `hit`, or a
    ; bare number from a note pattern with nothing wrapped round it.
    (vname v) (? (tablet? v) (peep v 's "sin") (string? v) v "sin")
-   ; ⚠ peep's default cannot be (): 0 is a real gain and a real note, and `nil? 0` is
+   ; peep's default cannot be (): 0 is a real gain and a real note, and `nil? 0` is
    ; true here, so a missing key is asked for by a symbol nothing else can be.
    (vnum v k d) (: r (? (tablet? v) (peep v k 'none) (charm? v) (? (id? k 'note) v 'none) 'none)
                    (? (id? r 'none) d r))
@@ -121,7 +121,7 @@
    ; --- the run: cycles in, chunks out ---------------------------------------
    harp-chunk 2048
    ; a cycle's onsets, as voices, with the start frame each one lands on.
-   ; ⚠ THIS IS THE BOUNDARY. cycle time is a `///` rational and frame time is an
+   ; THIS IS THE BOUNDARY. cycle time is a `///` rational and frame time is an
    ; integer, and qnum is the one crossing: a rational that reached the tray lane
    ; would answer () rather than promoting it, and the voice would go silent with
    ; nothing said. nothing downstream of here holds a rational.

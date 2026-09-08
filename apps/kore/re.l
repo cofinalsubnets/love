@@ -109,7 +109,7 @@
                  (lp 1 hit 0))))
        ; `bad`, not `err`: err is the port, and a shadow here would say into a charm
        st (tablet 0) _ (pin st 'hit 0) _ (pin st 'bad 0)
-       ; ⚠ ONE trap for the whole run, not one per line. the engine is a greedy
+       ; ONE trap for the whole run, not one per line. the engine is a greedy
        ; backtracker (l/boot/post.l), so a repeat whose atom can match a span two
        ; ways -- (a|aa)+ -- is exponential in the run's length; the engine spends a
        ; step budget on exactly those and scares when it runs out. this is where the

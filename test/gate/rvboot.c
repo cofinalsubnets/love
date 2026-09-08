@@ -56,7 +56,7 @@ void kmain(void) {
   law("satp.mode", 8, rd_satp() >> 60);
 
   // 2. FP is open before any C ran -- a reset leaves FS Off and the first fld traps.
-  // ⚠ this law cannot fail on THIS firmware: OpenSBI hands over with FS already
+  // this law cannot fail on THIS firmware: OpenSBI hands over with FS already
   // Dirty, so it holds with the stub's own set removed. It is here for the machine
   // that does not (the ox64's chain is its own), and it says what C is owed.
   law("sstatus.FS", 3, (rd_sstatus() >> 13) & 3);

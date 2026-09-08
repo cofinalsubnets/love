@@ -2,7 +2,7 @@
 # ccbench.sh -- the COMPILER shootout (the page's FOURTH table). Builds the love host
 # binary with three C compilers and, for each, reports four wall-clock costs:
 #   build : compile every C translation unit (l/love.c + inle/*.c + the am math floor)
-#           and link a working `love` -- source to runnable binary. ⚠ the mooncc lane
+#           and link a working `love` -- source to runnable binary. the mooncc lane
 #           builds ONCE UNTIMED first; the note above that call says why, and the row read
 #           2.2x too high until it did.
 #   test  : run the full arch-neutral corpus ($t, the same files test_host/test_raw
@@ -34,7 +34,7 @@
 #            egg-boot -- no `bake`, so all three lanes run the identical corpus off
 #            the freshly-eval'd egg (a level field).
 #
-# ⚠ the natives are STATIC MUSL, not the distro's dynamic glibc, and the size rows are
+# the natives are STATIC MUSL, not the distro's dynamic glibc, and the size rows are
 # why: mooncc's binary is a static ELF carrying its own moonlibc, so racing it against a
 # dynamic binary asks two questions at once and answers neither -- ~40 KB of the gap it
 # used to report was glibc being ABSENT from the file. Runtime is untouched by the
@@ -53,7 +53,7 @@
 # x86-64 only (mooncc's native lane); off x86-64, or with no artifact built, the mooncc
 # cells read dnf and gcc/clang are still raced.
 #
-# ⚠ THE net ROW IS A SUM OVER EVERY PHASE, so adding rows moves it and results either
+# THE net ROW IS A SUM OVER EVERY PHASE, so adding rows moves it and results either
 # side of a row change do not compare. The per-row ratios do.
 #
 # usage: ./ccbench.sh [timeout-seconds] [samples]
@@ -124,7 +124,7 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
 
 # -- mooncc: the WHOLE toolchain in love, verbatim from `make test_raw`. mooncc -c each
 #    unit, mksys the syscall leaf, our linker binds. -I$ho picks up the lcat'd headers. --
-# ⚠ THE COMPILER IS THE SHIPPED ARTIFACT, and it is not a preference -- it is the only
+# THE COMPILER IS THE SHIPPED ARTIFACT, and it is not a preference -- it is the only
 # spelling of this lane that measures the same thing twice. mooncc's link pulls
 # apps/moon/lib/moonlibc/ MEMBER BY NEED and caches the archive under ~/.love/cache/moon,
 # keyed on the compiler, its stat, AND ITS IMAGE (moon.l's mcrtkey). An image FILE puts
@@ -135,9 +135,9 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
 # every rebuild of the intermediates (measured then: `touch out/mooncc.image
 # out/love` left it at 18.9 s). The one-binary change has since retired that image
 # file, which closes the same hole from the other side -- but the artifact is still what
-# this should race, because it is what a user runs. ⚠ a one-line C file does NOT warm the
+# this should race, because it is what a user runs. a one-line C file does NOT warm the
 # archive in its place: a program that needs no member pulls none.
-# ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads, the guard against an exported egg: an
+# LOVE_NO_IMAGE= (empty = UNSET) leads, the guard against an exported egg: an
 # egg-booted love has no verb table, so `mooncc` reads as a FILENAME.
 SEED=$R/out/love
 mc() { env LOVE_NO_IMAGE= "$SEED" mooncc "$@"; }
@@ -149,7 +149,7 @@ build_mooncc() { # $1=binpath
     for f in $host_cs; do b=$(basename "$f" .c)
       mc -D ai_tco=1 -D AiHaveVersionH -Iout -I. -Il -Iinle -Iout/lib -c "$f" "$od/host_$b.o" || exit 1; done
     # no moonlibc object: the link owes its symbols and the driver supplies them
-    # member by need, so the dead areas never arrive. ⚠ ccsize/ccdead therefore
+    # member by need, so the dead areas never arrive. ccsize/ccdead therefore
     # read mooncc's libc off the BINARY's complement, not off a moonlibc.o.
     for f in apps/moon/lib/moonlibc/math/*.c; do b=$(basename "$f" .c)
       mc -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
@@ -203,7 +203,7 @@ drv_ms() { # $1=binpath $2=driver-file $3=driver-call $4=sentinel
 # the inflate row's input, laid ONCE by the already-built host love -- apps/gz/gz.l is a
 # module and the lane binaries have no module path, so the stream cannot be made where
 # it is used. INFN is the inflated size, handed to the nif so it allocates once.
-# ⚠ if this fails the inflate row is dnf and the other two are unaffected: a missing
+# if this fails the inflate row is dnf and the other two are unaffected: a missing
 # stream must not read as a compiler that could not build.
 INF=$WORK/bench.deflate
 INFN=$(cd "$R" && out/love bench/ccgen.l l/love.c "$INF" 2>/dev/null)
@@ -229,7 +229,7 @@ lane() { # $1=label $2=builder-cmd $3=binpath $4=extra cflags (build_cc only)
 crow() { case $3 in dnf) echo "$1 $2 dnf";; *) echo "$1 $2 $3 ok";; esac; }
 dnf_lane() { for ph in build test chacha poly1305 inflate crc32 sha256; do echo "$ph $1 dnf"; done; }
 
-# ⚠ A LANE THAT CANNOT BUILD REPORTS dnf, WHICH MEANS A BROKEN HARNESS RENDERS AS A
+# A LANE THAT CANNOT BUILD REPORTS dnf, WHICH MEANS A BROKEN HARNESS RENDERS AS A
 # WELL-FORMED TABLE OF NOTHING. that is not hypothetical: the 2026-08-15 reorg broke the
 # root resolution and the -Il seam, and twelve dnf rows sat in the cached result for a
 # day with the corpus reading simply unavailable. one missing compiler is a legitimate
@@ -237,7 +237,7 @@ dnf_lane() { for ph in build test chacha poly1305 inflate crc32 sha256; do echo 
 LIVE=0
 
 if [ "$(uname -m)" = x86_64 ] && [ -x "$SEED" ]; then
-  # ⚠ AND ONE UNTIMED BUILD BEFORE THE TIMED ONE, which the note on SEED explains: the
+  # AND ONE UNTIMED BUILD BEFORE THE TIMED ONE, which the note on SEED explains: the
   # artifact's cache entry survives everything but a NEW ARTIFACT, and after `make dist`
   # the first link builds the runtime. gcc and clang link a musl somebody else compiled,
   # so holding mooncc to the same shape means its libc is built too, not built inside the
@@ -258,7 +258,7 @@ for c in gcc clang; do
   fi
 done
 # CCGLIBC=1: the old dynamic-glibc lanes, kept for continuity with the fills that
-# predate the switch. Not the comparison the size rows want -- see the ⚠ at the top.
+# predate the switch. Not the comparison the size rows want -- see the at the top.
 if [ -n "$CCGLIBC" ]; then
   for c in gcc clang; do
     if command -v "$c" >/dev/null 2>&1; then

@@ -1203,7 +1203,7 @@
    ; convention); a64's aapcs lands them in x0..x3, so the accumulator moves off r0. anchor is
    ; the machine stack-pointer snapshot for the deopt unwind; scratch is the callout lanes' second
    ; temp (mulo/rem take it as an operand and x86 ignores it -- rdx is the divide's own).
-   ; ⚠ EVERY ROLE MUST BE CALLER-SAVED. a blob is an lvm: entered by jmp, left by jmp, so it owns no
+   ; EVERY ROLE MUST BE CALLER-SAVED. a blob is an lvm: entered by jmp, left by jmp, so it owns no
    ; epilogue to restore in, and the ret at the end of the dispatch chain answers to the C caller.
    ; holo's r0..r14 are x0..x14 on a64, all temporary; on x64 r3 and r4 are rbx and rbp.
    (greg tgt role)                                                     ; a role table, not a chain: read it in columns

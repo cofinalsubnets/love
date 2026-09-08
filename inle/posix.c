@@ -76,7 +76,7 @@
 #if defined(AiHaveNamespaces)
 #include <sched.h>          // unshare, CLONE_NEWUSER/NEWNS (newns)
 #endif
-// ⚠ OUTSIDE every guard: what follows is called unconditionally below (argv_marshal,
+// OUTSIDE every guard: what follows is called unconditionally below (argv_marshal,
 // sigtake, the pty pair), so putting any of it under one kernel's feature is a build that
 // only stands on that kernel.
 // CLOCK_REALTIME in milliseconds -- the one scale for the scheduler's
@@ -484,7 +484,7 @@ ai_noinline size_t host_selfpath(char *b, size_t n) {
  if (r <= 0) r = readlink("/proc/curproc/exe", b, n - 1);
  if (r > 0) {
   b[r] = 0;
-  // ⚠ the suffix is the KERNEL's, not the path's: once our own inode is unlinked the
+  // the suffix is the KERNEL's, not the path's: once our own inode is unlinked the
   // link reads "PATH (deleted)", and every use of it after that -- an open, a rename
   // target -- names a file that is not there. a concurrent self-bake unlinks us the
   // moment it renames its image over the path we both live at, so the door that answers
@@ -658,7 +658,7 @@ static lvm(lvm_mount) { Sp[2] = host_mount(g, Sp[0], Sp[1], Sp[2]); Sp += 2; ai_
 // which is what ro, bind, remount and the nosuid family are. It stands BESIDE mount
 // rather than replacing it: apps/init/boot.l calls the three-argument one, a nif's
 // arity is fixed, and an early boot is not where an arity change wants finding out.
-// ⚠ the DATA argument stays NULL, so an -o that is filesystem text rather than a flag
+// the DATA argument stays NULL, so an -o that is filesystem text rather than a flag
 // (tmpfs's size=, a uid= on vfat) has nowhere to go and the face refuses it by name.
 static ai_inline word host_mountf(struct ai *g, word a, word b, word c, word f) {
  char const *src = str_c(a), *tgt = str_c(b), *typ = str_c(c);
@@ -1325,7 +1325,7 @@ static lvm(lvm_swig) {
 // --- the port doors: (open path mode) and (close p) --------------------------
 // posix surface like everything above, and one body per behaviour (plan C2):
 // on inle the open(2)/close(2) below land in inle/sys.c's arms, so the ramfs
-// answers the same nif. ⚠ `open`'s PRESENCE in the book is what lights up
+// answers the same nif. `open`'s PRESENCE in the book is what lights up
 // prel's module walk (l/boot/prel.l's fsopen, by peep) and salt's config read --
 // both gate on the name, so the registration below is the whole wiring.
 
@@ -1346,7 +1346,7 @@ static int call_open(struct ai_str *pv, struct ai_str *mv) {
 
 // (open path mode) -- a heap port (closed on GC), or a nom: open(2)'s errno,
 // 'badarg for misuse (a non-string argument, an unknown mode). the value-op
-// convention at the head of this file. ⚠ a failure is TRUTHY now (a nom nets
+// convention at the head of this file. a failure is TRUTHY now (a nom nets
 // positive), so a caller may not ask ? of the answer -- port? is the success
 // test, nom? the failure test, and both are exact.
 static lvm(lvm_open) {

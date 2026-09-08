@@ -134,12 +134,12 @@ double ldexp(double x, int n) {                    /* x * 2^n, clamped through t
    that lived here parsed "0.3" one ulp off -- masked until love's printer
    went shortest-roundtrip, then loud in test_raw. */
 double am_strtod(char const *, char **);
-/* ⚠ THE LIBC FACE IS NOT am_strtod's FACE, and the wrapper is where they part:
+/* THE LIBC FACE IS NOT am_strtod's FACE, and the wrapper is where they part:
  * am_strtod is love's float reader, and the reader hands it a whole TOKEN, so
  * it skips no leading space. C's strtod owes that, and owes endptr = the
  * ORIGINAL nptr when nothing converts. doing it here keeps am.c exactly what
  * love wants -- correctly rounded and nothing else. found by test/libc/num.c.
- * ⚠ the SIGN of a zero needs nothing: am_strtod gets -0.0 right on its own.
+ * the SIGN of a zero needs nothing: am_strtod gets -0.0 right on its own.
  * it did not while mooncc lowered -d as 0.0 - d (apps/moon/gen.l), and a
  * wrapper that "fixed" it here would now flip the sign BACK, since -0.0 == 0.0
  * tests true. */

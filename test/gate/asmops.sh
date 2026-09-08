@@ -8,7 +8,7 @@
 #
 #   1. COVERAGE. every `static inline k_*` the header defines is called by
 #      test/gate/asmops.c. derived from the header itself, so adding an op and
-#      forgetting the probe fails here rather than going unchecked. ⚠ the probe
+#      forgetting the probe fails here rather than going unchecked. the probe
 #      also takes each op's ADDRESS (k_asmops_keep): calling one is not enough
 #      to make it EXIST, since a static inline whose calls are all inlined is
 #      dead and a compiler is right to drop it.
@@ -127,7 +127,7 @@ for a in x64 a64 rv64; do
   fi
   seq "$work/$a-clang.o" $t > "$work/$a-clang.seq"
   eval "skip=\$divergent_$a"
-  # ⚠ the two sides are separated by a MARKER LINE, not by which file a record came
+  # the two sides are separated by a MARKER LINE, not by which file a record came
   # from. An empty side is a real state -- a compiler that inlines every op and drops
   # the dead statics emits none of them -- and FNR==1 never fires for an empty file,
   # so a record-driven side counter silently files the OTHER compiler's functions under

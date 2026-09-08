@@ -46,7 +46,7 @@
       ;; efi_go(pml4, entry): the loader's own code stays mapped through the
       ;; switch (the new tables identity-map the low 4G), and the current stack
       ;; rides along -- firmware-typed memory kboot never hands the heap.
-      ;; ⚠ EFER.NXE first: firmware is not obliged to have set it, and our
+      ;; EFER.NXE first: firmware is not obliged to have set it, and our
       ;; tables NX the hhdm entry -- bit 63 is RESERVED while NXE is clear, so
       ;; the first walk after the cr3 load would fault instead of honouring it.
       ;; rdmsr/wrmsr touch only eax/edx/ecx, so rdi and rsi ride through.
@@ -73,7 +73,7 @@
       (jmpr r6)
       ;; efi_go(tables, entry): x0 is the TTBR0 root and TTBR1's is the page
       ;; after it -- loader.c lays l0_lo and l0_hi adjacent for exactly this.
-      ;; ⚠ the MMU is already ON here (firmware's identity map), so this is a
+      ;; the MMU is already ON here (firmware's identity map), so this is a
       ;; SWITCH, not a bring-up: both maps identity the code we are running, so
       ;; the fetch after the write lands in the same place either way, and the
       ;; TLBI + ISB is what makes the new one authoritative.
