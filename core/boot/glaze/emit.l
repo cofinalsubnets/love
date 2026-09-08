@@ -586,7 +586,7 @@
        ; entries, and a stub pulls its own into one slot -- the entry never copies them
        fbk  (drok && (ahascall? env go body || foldl (\ ac i (ac || ahascall? env go i)) 0 inits))
        ovs  (fbk ? '(+ - * // % & | ^ < <= > >= = cap cup . bit) ())
-       ovals (map (o \ gv o 0) ovs)
+       ovals (map (o \ (= o 'bit ? bit (gv o 0))) ovs)   ; the truth stub's bit is the glaze's own: the book's may be a module's namesake
        nd0  (drok ? (amax (amble-depth go cx body) (foldl (\ acd i (amax acd (amble-depth 0 cx i))) 0 inits)) 0)
        nd   (nd0 + (fbk ? 1 0))                                  ; the stubs read the right operand off one spill past its op
        kn   (sfq ? (self . (gn + cn)) (gn + cn))         ; every resolvable free head + the self name (amble-ok?'s membership test)

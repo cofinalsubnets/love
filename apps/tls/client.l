@@ -49,7 +49,7 @@
    (finv a) (modpow a (p25519 - 2) p25519)
    (le-num s) (: (go i a) (? (i < 0) a (go (i - 1) ((a * 256) + s i))) (go (#s - 1) 0))
    (le-bytes n) (bytes 32 (i \ (% (// n ((8 * i) 2)) 256)))
-   (bit k t) (% (// k (t 2)) 2)
+   (kbit k t) (% (// k (t 2)) 2)                                       ; bit t of the scalar
    ; the ladder, RFC 7748 section 5: the state is (x2 z2 x3 z3), swapped by the scalar's bits
    (ladder k u)
     (: a24 121665
@@ -62,7 +62,7 @@
        (swap st) [(st 2) (st 3) <st <>st]
        (go t st sw)
         (? (t < 0) (sw ? (swap st) st)
-           (: kt (bit k t)
+           (: kt (kbit k t)
               st2 (? (= 1 (sw ^ kt)) (swap st) st)
               (go (t - 1) (step st2 t) kt)))
        r (go 254 [1 0 u 1] 0)

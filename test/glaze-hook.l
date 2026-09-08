@@ -133,6 +133,15 @@
     (: n (peep fires () 0)
        f (ev '(: (g h m) (? (< m 1) 0 (? (h m) (+ 1 (g h (- m 1))) (g h (- m 1)))) g))
        (&& (fired? n) (= 2 (f (\ x (? (= x 2) () (list x))) 3))))            ; a heap truth on the call's answer: the bit stub decides
+    ; ... and the stub's bit is the glaze's own, whatever the book binds to the name (a spliced
+    ;     module may export one): a nil in a let slot still reads false
+    (: old bit
+       _ (ev '(: bit (\ a b 1)))
+       n (peep fires () 0)
+       f (ev '(: (g h m) (: y (? (< m 1) (h m) ()) (? y 8 9)) g))
+       r (f (\ x x) 1)
+       _ (ev (list ': 'bit (list 'quote old)))
+       (&& (fired? n) (= 9 r) (= 0 (bit ()))))
     (: o (jug 0) k {0}
        f (ev '(: (g h m) (? (< m 1) 0 (+ (h m) (g h (- m 1)))) g))
        _ (f (\ x (: _ (pin k 0 (+ 1 (peep k 0 0))) _ (put o (+ 97 x)) 4000000000000000000)) 3)
