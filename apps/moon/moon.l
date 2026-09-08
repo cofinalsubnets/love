@@ -1,11 +1,11 @@
 ; apps/moon/moon.l -- the C compiler's driver:
 ;   mooncc [-c] [-I dir] [-D name[=val]] [-o out] in.c|in.o|lib.a ..
 ; reads C, rides lex -> cpp -> parse -> gen -> the holo book. two outcomes, the
-; cc shape: with -c it lays relocatable ELF objects (core/holo/obj.l --
+; cc shape: with -c it lays relocatable ELF objects (love/holo/obj.l --
 ; separate sections, a symbol table, and relocations), several .c inputs each
 ; landing in the cwd as x.o (gcc-shaped); without it every input (a .c compiled
 ; on the way, a .o read off disk) goes to our own static linker
-; (core/holo/link.l, rung 3), which binds them with crt0 and the implicit
+; (love/holo/link.l, rung 3), which binds them with crt0 and the implicit
 ; runtime into -o's exe, `a.out` bare. the old positional
 ; pair `mooncc [-c] IN OUT` still reads (two bare args, no .c and -- linking --
 ; no .o). -I dirs search before our own headers on both include forms -- and
@@ -19,7 +19,7 @@
 ; libc symbols pulls the runtime (moonlibc + am math + sys) by need from the
 ; sources beside it -- -nostdlib/-ffreestanding turn that off. errors speak on
 ; err and exit 1; usage exits 2. last in the mooncc cat (its own app, doc/misc/moon.md), after
-; core/holo/{elf,obj,link}.l and apps/moon/{lex,cpp,parse,gen}.l; rides the
+; love/holo/{elf,obj,link}.l and apps/moon/{lex,cpp,parse,gen}.l; rides the
 ; u-floor (uread udie urun). its tail seat fires moon-main when mooncc is the program;
 ; moon-run is the same compile answering its status, for a caller staying in the image.
 ;
@@ -38,7 +38,7 @@
    mtree "apps/moon/"
    ; the toolchain root -- where our own headers and the runtime sources live.
    ; two rungs, tried in order: the dev tree off the cwd, then the installed
-   ; nest through the seat (core/boot/prel.l's own walk -- selfpath,
+   ; nest through the seat (love/boot/prel.l's own walk -- selfpath,
    ; then <seat>/../lib/love/moon/, so ~/.love/bin/love finds ~/.love/lib/love/
    ; moon/ and a distro's /usr/bin/love finds /usr/lib/love/moon/). without the
    ; second rung mooncc only works with the repo root as the cwd: every path
@@ -436,7 +436,7 @@
    (cc-objbytes src (t @ {'ni ni 'tgt tgt}))
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs]
-       ; wasm rides gen's rv64 lane whole (core/holo/wasmfn.l is the machine under it) and
+       ; wasm rides gen's rv64 lane whole (love/holo/wasmfn.l is the machine under it) and
        ; lays no ELF: its object is the gen tuple as text, read back by the wasm link
        (: ob (cgen-obj ast stag sigs weaks
                        [sfns svars sects alias aligns ainl noinl consts rstrs ni] (? (= tgt 'wasm) 'rv64 tgt))
@@ -457,7 +457,7 @@
              (udie 1 ("cc: the code generator answered an unexpected shape for " + src))))
        (udie 1 ("cc: the parser answered an unexpected shape for " + src)))
    (cc-obj src dst t) (write-bytes dst (cc-objbytes src t))
-   ; the link path (rung 3, core/holo/link.l): every input lands as object
+   ; the link path (rung 3, love/holo/link.l): every input lands as object
    ; bytes (a .c compiled here, a .o read off disk), crt0 rides first (its
    ; text is the entry), and ldlink binds the static exe -- no system linker.
    ; the entry hands the OS stack pointer (argc sits at [rsp]) to __ai_start
@@ -917,7 +917,7 @@
              ; scares about first.
              _ (? (two? <>pr) (undie <>pr) 0)
              <pr)))
-   ; -- the wasm link (core/holo/wasmfn.l): the objects are gen tuples as text, the
+   ; -- the wasm link (love/holo/wasmfn.l): the objects are gen tuples as text, the
    ; runtime the same members compiled for wasm and pulled by need, and one function
    ; imported -- __ai_sys, the syscall door the page's loader answers. crt0 hands moonlibc's
    ; __ai_start a stack laid in data (argc 1, an argv, empty envp and auxv) and exits with

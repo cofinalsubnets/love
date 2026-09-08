@@ -1,6 +1,6 @@
 ; inle/nucleo446/nlink.l -- the Nucleo-F446RE link, ours. holo's ldbare32
-; (core/holo/link.l) in place of arm-none-eabi-ld + nucleo446.lds. cat it after
-; core/holo/{elf,obj,link}.l and run the result:
+; (love/holo/link.l) in place of arm-none-eabi-ld + nucleo446.lds. cat it after
+; love/holo/{elf,obj,link}.l and run the result:
 ;
 ;   love <cat> OUT OBJ.o..
 ;

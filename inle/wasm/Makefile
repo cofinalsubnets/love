@@ -13,9 +13,9 @@ o = ../../out/wasm
 # rest of the tree reads. g_h is core whole, so every object keeps a header dep.
 R := ../..
 include $(R)/mk/common.mk
-g_c = $(patsubst %,../../core/%,$(love_tu)) ../../apps/moon/lib/moonlibc/math/am.c \
+g_c = $(patsubst %,../../love/%,$(love_tu)) ../../apps/moon/lib/moonlibc/math/am.c \
       ../../inle/horn.c
-g_h = $(wildcard ../../core/*.h)
+g_h = $(wildcard ../../love/*.h)
 
 # One object per source, so an edit recompiles just that TU and ccache can cache each.
 # Local host.c stays rooted in cwd; shared kernel/*.c carry ../../, mapped in by the patsubst.
@@ -26,7 +26,7 @@ objs = $(host_o) $(core_o)
 CFLAGS = -std=gnu2x -O2 -g0 -Dai_tco=0 \
   -Wall -Wno-unused-parameter -Wno-shift-negative-value \
   -fno-exceptions \
-  -I../.. -I../../core -I../../inle -I../../out/lib
+  -I../.. -I../../love -I../../inle -I../../out/lib
 
 EMFLAGS = \
   -sMODULARIZE=1 -sEXPORT_NAME=Love \
@@ -42,22 +42,22 @@ EMFLAGS = \
 
 all: $(o)/love.js
 
-# these are serialized from core/boot/*.l by the top-level lcat rule; host.c assembles them into
+# these are serialized from love/boot/*.l by the top-level lcat rule; host.c assembles them into
 # the bootstrap via G_EGG_PRE/POST -- no repl here, the browser feeds it through ai_eval.
-../../out/lib/egg.h: ../../core/boot/egg.l
-../../out/lib/post.h: ../../core/boot/post.l
-../../out/lib/p1.h: ../../core/boot/p1.l
-../../out/lib/prel.h: ../../core/boot/prel.l
-../../out/lib/ev.h: ../../core/boot/ev.l
+../../out/lib/egg.h: ../../love/boot/egg.l
+../../out/lib/post.h: ../../love/boot/post.l
+../../out/lib/p1.h: ../../love/boot/p1.l
+../../out/lib/prel.h: ../../love/boot/prel.l
+../../out/lib/ev.h: ../../love/boot/ev.l
 ../../out/lib/egg.h ../../out/lib/post.h ../../out/lib/p1.h ../../out/lib/prel.h ../../out/lib/ev.h ../../out/lib/love_version.h:
 	$(MAKE) -C $(R) out/lib/$(notdir $@)
 
 # love.c bakes the version string (its __has_include of love_version.h), so recompile it
 # when ./VERSION moves -- else the browser banner keeps whatever id love.o last saw.
 # ..and the version header lands on the TU that carries the id. ⚠ the path is the one
-# core_o's patsubst actually makes: ../../core/love.c -> $(o)/core/love.o. Spelled core/ this
+# core_o's patsubst actually makes: ../../love/love.c -> $(o)/love/love.o. Spelled love/ this
 # rule named a target nothing builds, so the dependency was simply not there.
-$(o)/core/love.o: ../../out/lib/love_version.h
+$(o)/love/love.o: ../../out/lib/love_version.h
 
 # the link is multi-input, so ccache cannot cache it -- bare $(EMCC), and EMFLAGS apply only
 # here. the page rides moon's own module now (inle/wasm/love.wasm over loader.js), so

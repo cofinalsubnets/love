@@ -1,10 +1,10 @@
 ; --- test/host/gzc.l: the C twins of gz.l, held to the love they shadow ---
-; not in the test/*.l corpus: `inflate` (core/gz.c) and `crc32` (inle/hash.c) are
+; not in the test/*.l corpus: `inflate` (love/gz.c) and `crc32` (inle/hash.c) are
 ; host nifs and apps/gz/gz.l is a lib module, so neither is visible to the love0 bake.
 ;
 ; test/host/gz.l is where apps/gz/gz.l's own laws live; this file asks the other question --
 ; does the C answer what love answers, on the same stream? gz-puff is the oracle
-; (core/gz.c says so in its head), so a disagreement is the C being wrong until
+; (love/gz.c says so in its head), so a disagreement is the C being wrong until
 ; proven otherwise.
 ;
 ;   shapes    the round trip over the five that break coders, plus a long dist-1 run and
@@ -148,7 +148,7 @@
  ; ..and the empty stream is not a stream at all, at either lane
  (gzc-same "" 0))
 
-; --- deflate, the coder twin (core/gz.c): held to the bytes, not just the round
+; --- deflate, the coder twin (love/gz.c): held to the bytes, not just the round
 ;     trip -- same parse, same block costing, same Huffman tie-breaks, so `=` over the
 ;     streams is the law. the love lane is the oracle; a divergence is the C being
 ;     wrong until proven otherwise.

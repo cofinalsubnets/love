@@ -306,7 +306,7 @@
       (= (pt-seek (pt-pairs "") () -1) '(1 0))                            ; a create's -0,0
       !(pt-seek (pt-pairs "q\n") '("a") 0)))
 
-; --- the scan floor (core/boot/scan.l): the native byte scan against its own twin ---
+; --- the scan floor (love/boot/scan.l): the native byte scan against its own twin ---
 ; the kernel is hand-written machine code and the twin is the honest walk, so this
 ; is the differential that says the two agree. it sweeps the lengths that cross the
 ; align/word/tail boundaries, every start including one past the end, and charms

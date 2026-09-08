@@ -10,8 +10,8 @@ and the reading half has a real hole in the middle of it.
 
 ## the hole
 
-No reader in the tree keeps comments. `p0` (C, `core/love.c`) and `sound`
-(`core/boot/p1.l`) both drop `;` lines on the floor by design, and libra's own header
+No reader in the tree keeps comments. `p0` (C, `love/love.c`) and `sound`
+(`love/boot/p1.l`) both drop `;` lines on the floor by design, and libra's own header
 says why its print-from-the-datum verbs are stdout-only: printing from the datum
 strips every comment. Two lexers *locate* comments without keeping them —
 `apps/libra/lint.l` tracks a `'cmt` state (positions, no text), `apps/vi/hue.l` classifies

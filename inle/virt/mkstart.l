@@ -10,7 +10,7 @@
 ; trap loop). the CSR instructions ride the 'raw escape (holo carries no Zicsr
 ; rows -- these four words are the only ones the tree needs).
 ;
-; runs after core/holo/{elf,obj}.l in a cat with the riscv backend spliced
+; runs after love/holo/{elf,obj}.l in a cat with the riscv backend spliced
 ; into the sealed holo module (the mksys-rv64 shape; inle/virt/Makefile).
 (: ;; csr rd rs1: the Zicsr I-form (opcode 0x73) -- f3 2 = csrrs, 1 = csrrw
    (csrw f3 rd rs1 csr) ((csr << 20) | ((rs1 << 15) | ((f3 << 12) | ((rd << 7) | 0x73))))

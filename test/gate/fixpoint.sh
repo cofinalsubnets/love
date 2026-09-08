@@ -67,18 +67,18 @@ LOVE_NO_IMAGE=1 "$d/love1" -l "$cat" -e "(? ((bake \"$d/mooncc1.image\") = 1) (q
 
 # ...and rebuilds every TU with it, in the exact order make links them
 moon1() { "$d/love1" wake "$d/mooncc1.image" mooncc "$@"; }
-# ⚠ core/love.c's flags must MIRROR make's ($(moon_d)/love.o in the Makefile), not just its
+# ⚠ love/love.c's flags must MIRROR make's ($(moon_d)/love.o in the Makefile), not just its
 # order: -D AiHaveVersionH is what puts the version id in this TU, and love1 was linked
 # from make's object. Drop it here and love2 carries "unknown" -- the compare fails at the
 # string, naming a broken fixpoint where the only difference is a build flag.
 for f in $gate_love_c; do
   mkobj "$f"
-  moon1 -D ai_tco=1 -D AiHaveVersionH -I"$ho" -I. -Icore -Iinle -Iout/lib -c "$f" "$o" \
+  moon1 -D ai_tco=1 -D AiHaveVersionH -I"$ho" -I. -Ilove -Iinle -Iout/lib -c "$f" "$o" \
     || fail "love1 mooncc -c $f"
 done
 for f in $gate_host_c; do
   mkobj "$f"
-  moon1 -D ai_tco=1 -I"$ho" -I. -Icore -Iinle -Iout/lib -c "$f" "$o" || fail "love1 mooncc -c $f"
+  moon1 -D ai_tco=1 -I"$ho" -I. -Ilove -Iinle -Iout/lib -c "$f" "$o" || fail "love1 mooncc -c $f"
 done
 # moonlibc rides the implicit runtime, as in raw.sh -- pulled member by need.
 for f in apps/moon/lib/moonlibc/math/*.c; do
@@ -93,9 +93,9 @@ test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 # still answers love1 == love2 -- it just answers it about a shorter binary than
 # anyone ships. an arch with no seat carries none, and $gate_arch_c is empty there.
 if [ -n "$gate_arch_c" ]; then
-  kinc="-I$ho -I. -Icore -Iinle -Iout/lib -Icore/quay -Iapps/moon/include"
-  for f in $gate_kern_c $gate_arch_c core/quay/paint.c \
-           core/quay/cga_8x8.c core/quay/moderndos_8x16.c; do
+  kinc="-I$ho -I. -Ilove -Iinle -Iout/lib -Ilove/quay -Iapps/moon/include"
+  for f in $gate_kern_c $gate_arch_c love/quay/paint.c \
+           love/quay/cga_8x8.c love/quay/moderndos_8x16.c; do
     mkobj "$f"
     moon1 $kinc -c "$f" "$o" || fail "love1 mooncc -c $f"
   done

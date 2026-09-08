@@ -100,7 +100,7 @@ cat <<'SAT'
 <p class="note">A separate field: love&rsquo;s own CDCL solver (<code>apps/sat/flat.l</code>:
 flat cask-resident state driven by four native kernels &mdash; propagation, the whole
 conflict handler, the decision, and the <code>fbva</code> grow step &mdash; each assembled
-through <code>core/holo/</code> at solver-build time, specialized to the instance size)
+through <code>love/holo/</code> at solver-build time, specialized to the instance size)
 against reference C solvers.
 Two row families: PHP(<i>n</i>) &mdash; (<i>n</i>+1) pigeons into <i>n</i> holes, UNSAT
 and resolution-hard, where clause learning alone is <b>exponential</b> and love&rsquo;s
@@ -159,9 +159,9 @@ cat <<'CC'
 <p class="note">A third field, love&rsquo;s C toolchain against the incumbents:
 <b>mooncc</b> is love&rsquo;s own C compiler (<code>apps/moon/</code>), and it builds
 <code>love</code> with <i>no gcc, glibc, or ld</i> &mdash; mooncc lays every object,
-<code>mksys</code> emits the syscall leaf, and our own linker (<code>core/holo/</code>)
+<code>mksys</code> emits the syscall leaf, and our own linker (<code>love/holo/</code>)
 binds the executable. The <b>build</b> row is the wall-clock to compile every C
-translation unit (<code>core/love.c</code> + <code>inle/*.c</code> + the <code>am</code> math
+translation unit (<code>love/love.c</code> + <code>inle/*.c</code> + the <code>am</code> math
 floor) and link a working binary; the <b>test</b> row runs the full corpus (the same
 files <code>test_host</code>/<code>test_raw</code> feed) through the binary that build
 produced. All three lanes egg-boot (no baked image), so the corpus runs off the freshly

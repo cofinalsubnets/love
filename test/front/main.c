@@ -194,7 +194,7 @@ uintptr_t ai_fd_say(int fd, unsigned char const *src, uintptr_t n) {
 // ⚠ no scratch on an lvm_ frame (CLAUDE.md, the tail-threaded VM): the bodies
 // that need one go through an ai_noinline helper, and the ones here need none.
 
-// (quit n) -- the frontend nif cli's scare tail reaches for (core/boot/post.l). Without
+// (quit n) -- the frontend nif cli's scare tail reaches for (love/boot/post.l). Without
 // it `(use 'cli)` compiles a form naming an unbound global and raises missing.
 static lvm(lvm_quit) {
   fflush(stdout);

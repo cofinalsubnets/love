@@ -58,7 +58,7 @@ static int kqpop(void) {                   // dequeue one byte, -1 if empty
   int b = kkb.q[kkb.qh];
   return kkb.qh = (kkb.qh + 1) & 15, b; }
 
-// the console's font. the palette that goes with it lives in core/quay/paint.c,
+// the console's font. the palette that goes with it lives in love/quay/paint.c,
 // which is the one place a cell becomes pixels.
 static struct font const kfont = { .glyphs = (uint8_t*) moderndos_8x16, .w = 8, .h = 16 };
 
@@ -81,7 +81,7 @@ void kputn(uintptr_t n, int base) {
  while (i) kputc(buf[--i]); }
 // the kernel-only nif bracket (defs[] below); the linker synthesizes the pair
 extern struct ai_def const __start_ai_knifs[], __stop_ai_knifs[];
-// the bracket, for the image codec's nif slice (core/snap.c's weak default answers none)
+// the bracket, for the image codec's nif slice (love/snap.c's weak default answers none)
 uintptr_t ai_knifs_slice(struct ai_def const **s) {
   return *s = __start_ai_knifs, (uintptr_t)(__stop_ai_knifs - __start_ai_knifs); }
 // the metal image's far edge, PATCHED INTO THE FILE by the projection

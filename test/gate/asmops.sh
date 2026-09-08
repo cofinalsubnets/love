@@ -3,7 +3,7 @@
 #
 # inle/<a>/asmops.h says every privileged instruction the kernel needs
 # ONCE, in GNU's template: clang reads it natively, mooncc lowers the same text
-# through core/holo/gas.l. one spelling, two readers -- and the reader that
+# through love/holo/gas.l. one spelling, two readers -- and the reader that
 # rots quietly is ours, so:
 #
 #   1. COVERAGE. every `static inline k_*` the header defines is called by

@@ -5,7 +5,7 @@ names them all, keeps one, and says what happens to each of the others.
 
 ## the stance
 
-**the native uu prover (core/boot/uu.l) is target number one.** a property worth
+**the native uu prover (love/boot/uu.l) is target number one.** a property worth
 holding is worth stating as a uu term; rocq and lean are EXPORT targets
 (tools/uu2coq.l, uu2lean.l -- both wired: test_uugen, test_uulean), not
 homes. the fuzz lanes (test/law.l, test/fuzz.l, the seeded walks) stay -- a
@@ -16,7 +16,7 @@ half of the same ladder, not separate programs.
 
 | angle | home | fate |
 |---|---|---|
-| uu kernel + UniMath corpus | core/boot/uu.l, test/uu*.l | THE TARGET |
+| uu kernel + UniMath corpus | love/boot/uu.l, test/uu*.l | THE TARGET |
 | rocq export | uu2coq.l, spec2coq.l, mx2coq.l | keep: export leg |
 | lean export | uu2lean.l | keep: export leg |
 | verified lux (uuwm) | wm2uu.l, test/uuwm*.l | keep; FRESHENED 2026-08-16 |
@@ -191,7 +191,7 @@ link laws land.
 add-assoc / mul-assoc / mul-dist rest on the BAND LATTICE, which lived only in
 Rocq (test/proof/rocq/mx.v, from tools/mx2coq.l). it lives in uu now too:
 
-- **tools/mx2uu.l** -- mx2coq's uu twin, reading THE TABLE (core/mx.l, the same
+- **tools/mx2uu.l** -- mx2coq's uu twin, reading THE TABLE (love/mx.l, the same
   love datum love.c's mx.h is laid from) and deriving the band partition by the
   same rule -- kinds grouped by row+column equality across BOTH matrices at
   once -- so the two exports cannot disagree about what a band is.
@@ -215,7 +215,7 @@ Rocq (test/proof/rocq/mx.v, from tools/mx2coq.l). it lives in uu now too:
   identity. and flipping one cell of the generated table makes the kernel refuse
   a proof outright (uu-idpath-mismatch, exit 1).
 - gated by `make test_uumx` off the uu_corpus roster (regenerate + diff, so a
-  core/mx.l edit with no refresh reddens), and exported: all 28 mx entries
+  love/mx.l edit with no refresh reddens), and exported: all 28 mx entries
   re-check in Rocq and Lean 4. mx.l's shape now stands in three kernels, twice
   in Rocq by two independent roads.
 

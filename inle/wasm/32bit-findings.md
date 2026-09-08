@@ -27,7 +27,7 @@ is `wint = (< (32 2) max-charm)` (true on the full 64-bit hosted builds).
 ## Fixed
 
 - **A function pointer is a small table index, and an odd one IS a charm.** c0's
-  saturated-call peephole (`ana_ap`, core/ev.c) read a quoted operator as a nif's
+  saturated-call peephole (`ana_ap`, love/ev.c) read a quoted operator as a nif's
   code table -- `[1].ap == lvm_ret0` -- which on a native word can never hold of a
   payload, and on wasm holds whenever `lvm_ret0`'s slot is `2k+1` and the quoted value
   (a chain, a lambda, a partial) carries the charm `k` there. p1's letrec then compiled

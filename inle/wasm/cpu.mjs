@@ -66,7 +66,7 @@ let serial = '';
 const u8 = () => new Uint8Array(memory.buffer);
 const flush = () => { if (serial) { post({ serial }); serial = ''; } };
 
-// the framebuffer, 0xRRGGBB a pixel (core/quay/xterm256.h), into the canvas's RGBA --
+// the framebuffer, 0xRRGGBB a pixel (love/quay/xterm256.h), into the canvas's RGBA --
 // or, under node with no canvas, a PPM at fb.dump once a second: the gate's eyes.
 let writeFileSync = null, dumpAt = 0;
 const blit = (force) => {

@@ -8,14 +8,14 @@ Linux. So the question "can the host have this too" is not a second implementati
 same door with a different fd under it.
 
 ⚠ **`sound` is TAKEN and it is not close.** `sound` is love's reader — one datum off text,
-`core/boot/p1.l`, and salt, dns, cli and bao all stand on it. There is a `sound0` nif beside it.
+`love/boot/p1.l`, and salt, dns, cli and bao all stand on it. There is a `sound0` nif beside it.
 Naming the audio door `sound` would shadow the reader in every file that uses both. **`horn`**
 is free and is what this plan spells; `reed`, `drum` and `chime` are free too if a better ear
 than mine prefers one.
 
 ## what already exists, and it is most of it
 
-* **the port vtable is the ring contract, verbatim.** `core/love.h`: *"writen: land up to n bytes
+* **the port vtable is the ring contract, verbatim.** `love/love.h`: *"writen: land up to n bytes
   in one motion: >0 landed, 0 no room now (caller keeps the residue), -1 the device is gone."*
   That is a DMA ring with backpressure, described without knowing it. A full audio buffer
   answers 0, the caller keeps the residue, and the scheduler's existing fd-park wakes it.

@@ -103,7 +103,7 @@ static unsigned long __ai_bias(void) {
       return phdr - 64 - (unsigned long) ph[i].p_vaddr;
   return 0; }
 
-/* ---- -pie self-relocation. The linker (core/holo/link.l) laid the exe at base 0
+/* ---- -pie self-relocation. The linker (love/holo/link.l) laid the exe at base 0
  * and left every abs64 data pointer holding its base-0 offset, plus a table of
  * those sites bracketed by __start_/__stop_love_rela. Add the real load base to each
  * -- the whole of static-PIE relocation, no dynamic loader. Must run before any

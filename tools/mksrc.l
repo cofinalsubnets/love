@@ -41,7 +41,7 @@
    (mksrc-be2 arch)
     (? (lit? (backends arch)) 0
        ; the backend file is the canonical arch word now -- one spelling, no map
-       (: f ("core/holo/" + string arch + ".l")
+       (: f ("love/holo/" + string arch + ".l")
           q (open f "r")
           (? q (mksrc-rdev (flow q), close q)
              (mksrc-die ("no backend aboard and no text at " + f)))))

@@ -172,7 +172,7 @@ E
 # leaf and is done. cook took the unmatchable rule as a LAST RESORT instead and
 # demanded a file nobody makes -- and since mk/common.mk cancels make's lex rule
 # (`%.c: %.l`, this tree being full of `<name>.l` beside `<name>.c`), EVERY .c in
-# the tree matched: `make -f mk/cook.mk all` died on "no recipe to make core/love.l".
+# the tree matched: `make -f mk/cook.mk all` died on "no recipe to make love/love.l".
 # Cook's whole job is this tree's own Makefile, and none of the cases above noticed.
 case_ patrule_reject same <<'E'
 $(shell printf 'int x;\n' > src.c)

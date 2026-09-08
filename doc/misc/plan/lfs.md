@@ -17,7 +17,7 @@ LFS spends two chapters here and calls it the hard part. It is the part we are d
 
 | LFS | ours | state |
 | --- | --- | --- |
-| binutils | `core/holo/` — as, ld, ar+ranlib, nm, objcopy | byte-identical smokes vs GNU/llvm |
+| binutils | `love/holo/` — as, ld, ar+ranlib, nm, objcopy | byte-identical smokes vs GNU/llvm |
 | gcc | `apps/moon/` — mooncc, C11 freestanding | self-hosting, fixpoint-gated, x64 + a64 + riscv |
 | glibc | `apps/moon/lib/moonlibc/` | by-need members, no host libc |
 | linux-headers | `apps/moon/include/` | our own minimal set, not the host's |

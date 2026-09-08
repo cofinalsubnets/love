@@ -27,7 +27,7 @@
    (rt-be arch)
     (? (lit? (from 'holo 'backends arch)) 0
        ; the backend file is the canonical arch word now -- one spelling, no map
-       (: f ("core/holo/" + string arch + ".l")
+       (: f ("love/holo/" + string arch + ".l")
           q (open f "r")
           (? (hot? q) (rt-rdev (flow q), close q)
              (rt-die ("no backend aboard and no text at " + f)))))

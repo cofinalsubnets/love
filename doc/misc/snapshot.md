@@ -11,7 +11,7 @@ slower.
 Three payoffs, in order:
 
 1. **cold start** for the whole runtime — every script run, every repl, every bench wall-clock.
-2. **the glaze bake is free.** Adding `core/boot/glaze/emit.l`+`auto.l` to the boot corpus costs
+2. **the glaze bake is free.** Adding `love/boot/glaze/emit.l`+`auto.l` to the boot corpus costs
    ~+810 ms when eval'd at startup. Inside a snapshot it is precompiled: always-on transparent
    JIT at zero startup cost, which is what makes the bake worth having at all.
 3. **no GC-footprint tax.** The image lives in an out-of-pool immortal region, so the moving
@@ -88,7 +88,7 @@ For the mooncc lane the bytes are a real section too: `.image` is a fourth strea
 cgdata → objelf → the `image` lane in link.l, beside `love_nifs` — the other named section whose
 whole point is WHERE it lands.
 
-## core/host split
+## love/host split
 
 The core owns the stdio-free buffer codec `ai_image_save` / `ai_image_load` (love.h); file I/O
 lives in `inle/image.c`. The codec sits OUTSIDE the one `#if __STDC_HOSTED__` region, so it

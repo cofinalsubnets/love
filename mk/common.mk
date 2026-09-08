@@ -109,13 +109,13 @@ hsuf := $(if $(HCC),/cc,)$(if $(filter 0,$(tco)),/tco0,)
 # code, so they ride their own arch-guarded targets, never the arch-neutral corpus.
 t = $R/test/00-init.l $R/test/spec.l $R/test/uu.l $(filter-out %/00-init.l %/spec.l %/glaze-x86.l %/glaze-hook.l %/uu.l,$(sort $(wildcard $R/test/*.l)))
 
-# the runtime's own headers, and core/ is the roster: these four live there and
+# the runtime's own headers, and love/ is the roster: these four live there and
 # nothing else does. the metal seat's k.h and the per-ISA asmops sit under inle/,
 # so a touch on one of those rebuilds no love object.
-love_h = $(wildcard $R/core/*.h)
+love_h = $(wildcard $R/love/*.h)
 # the core rides with its math floor: our own transcendentals, no libm anywhere.
 # love.c broke into TUs so the biggest one is not the whole build's critical path;
-# core/love.h is what they share. this roster is a LINK ORDER, so it stays named
+# love/love.h is what they share. this roster is a LINK ORDER, so it stays named
 # where the other sets glob -- $(wildcard) answers readdir order, not link order.
 love_tu = love.c gc.c ev.c io.c map.c snap.c num.c arr.c
 # ..and the codec snap.c reaches unconditionally, to pack and unpack an image's code
@@ -123,7 +123,7 @@ love_tu = love.c gc.c ev.c io.c map.c snap.c num.c arr.c
 # it reads love_tu alone -- which is why the codec joins the roster here and not there.
 love_codec = gz.c
 core_tu = $(love_tu) $(love_codec)
-love_tu_c = $(patsubst %,$R/core/%,$(core_tu))
+love_tu_c = $(patsubst %,$R/love/%,$(core_tu))
 love_c = $(love_tu_c) $R/apps/moon/lib/moonlibc/math/am.c
 # the per-ISA set ONE machine's build takes, and the directory is the roster: empty on
 # an arch with no seat, which is what the rebuild gates read to skip their kernel half.
@@ -134,7 +134,7 @@ host_c = $(filter-out $(addprefix $R/inle/,kmain.c blk.c hda.c sys.c doom.c doom
 # the quay engine every seat carries. paint.c (32bpp) and nif.c (the love door) are
 # per-seat -- a 1-bit device wants neither, the host unity-includes nif.c -- so a seat that
 # wants one NAMES it rather than taking it here.
-f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/core/quay/*.c))
+f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/love/quay/*.c))
 # inle's libc is moonlibc's, named member by member; os.c is the map every syscall
 # reaches it through -- and a negative __ai_osv (written at kmain) takes the
 # __ai_inle arm, inle/sys.c answering the canonical numbers in C. mooncc builds
@@ -169,7 +169,7 @@ c_c = $(addprefix $R/apps/moon/lib/moonlibc/string/,memchr.c memcmp.c memcpy.c m
 # ⚠ CANCEL MAKE'S LEX RULE. `.l` is Lex's extension to make, so a built-in `%.c: %.l`
 # stands over every source file in this tree -- and where a `<name>.l` sits beside a real
 # `<name>.c`, make runs lex on it, fails, and DELETES THE C. An empty recipe unmakes the
-# rule. (core/quay/ is the pair that found it; nothing here has ever wanted lex.)
+# rule. (love/quay/ is the pair that found it; nothing here has ever wanted lex.)
 %.c: %.l
 %.r: %.l
 %.ln: %.l
@@ -197,9 +197,9 @@ ai_cflags += -fcf-protection=none
 ifeq ($(filter FreeBSD NetBSD,$(shell uname -s)),)
 ai_cflags += -D_POSIX_C_SOURCE=200809L
 endif
-# the data-sentinel tiling core/love.h's ai_typ reads (core/love.c's DSENT), on every ld/lld link.
-data_ld = -Wl,-T,$R/core/love_data.ld
-# ⚠ AN EMPTY BRACKET IS STILL A BRACKET. core/love.c indexes the host nif slice off
+# the data-sentinel tiling love/love.h's ai_typ reads (love/love.c's DSENT), on every ld/lld link.
+data_ld = -Wl,-T,$R/love/love_data.ld
+# ⚠ AN EMPTY BRACKET IS STILL A BRACKET. love/love.c indexes the host nif slice off
 # [__start_love_nifs, __stop_love_nifs), which the toolchain synthesises only where the
 # SECTION exists -- so an embedder registering its defs by hand owns no AiNif and the
 # pair goes undefined at the link. weak declarations do not answer it: ld leaves a weak

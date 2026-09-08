@@ -1710,7 +1710,7 @@
 
    ; asm [volatile] ( "template" [: outputs [: inputs [: clobbers]]] ) ; -- the
    ; GNU statement form (basic and extended), the template in holo's neutral
-   ; TEXT (core/holo/text.l; gen assembles it). adjacent template strings
+   ; TEXT (love/holo/text.l; gen assembles it). adjacent template strings
    ; concatenate (multi-line templates). operands ride as ((constraint expr)..),
    ; clobbers as (string..) -- the constraint grammar is gen's business.
    ; -> (('asm tmpl outs ins clobs) rest) | ()

@@ -2,7 +2,7 @@
 
 **THE CLAIM: one cell buffer, three seats, and the last foreign tool falls out at the
 end.** quay's console is core C: a cell buffer the tty apps draw into, a painter
-(core/quay/paint.c) that turns a cell into pixels off the xterm-256 table, and a
+(love/quay/paint.c) that turns a cell into pixels off the xterm-256 table, and a
 font that is a C array. inle runs that on a framebuffer. a real terminal runs the same
 apps through their own ANSI. the page runs neither: inle/wasm/repl.js takes the
 ANSI frame an app would write to a terminal and re-lays it into spans, ignoring cursor
@@ -22,7 +22,7 @@ that is a compiler.
   interactive-fiction engine minus the fiction, and minus the crawl's rats.
 - **libra lifts a document off a file** (`libra doc`), and the site's tool pages are
   exactly that -- the library's books exist, they have no room yet.
-- **the console is core**, not host: quay's cb, painter and palette (core/quay/) are
+- **the console is core**, not host: quay's cb, painter and palette (love/quay/) are
   in every seat's link, the wasm one included; only the blit is missing there.
 - **the door has half its implementations.** on a terminal a tty app is a spawn, which
   lush's fork lane does on the warm heap; on inle it is a task (twirl). nothing yet says
@@ -82,7 +82,7 @@ that is a compiler.
   the outdoors' unseen edge, and the sea is a wall with pens. things carry pens too.
   the designer paints with a brush (1-9 the palette's, # and ., `a` a new kind in one
   line, `c` the pens of the brush or of the thing here, space paints) and moves like
-  the map, yubn included. THE FACE IS ONE: cli (core/boot/post.l) carries the
+  the map, yubn included. THE FACE IS ONE: cli (love/boot/post.l) carries the
   key reader (`edkey`: a byte, -7 at eof, arrows/home/end/del as the negative codes,
   alt+letter as 256 + the letter, a bare escape after a beat), the line editor as a
   tablet (`ednew`, `(edstep t key)` answers the tablet with 'ev the key it left to the

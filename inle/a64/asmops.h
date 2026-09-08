@@ -1,7 +1,7 @@
 // asmops -- the a64 privileged instructions, one static inline each. the x64
 // twin (inle/x64/asmops.h) opens with the why; the short version is that
 // the kernel says each thing once, in GNU's ARM template, and mooncc lowers the
-// same text to holo's neutral IR (core/holo/gas.l): xN/sp/xzr, `#`
+// same text to holo's neutral IR (love/holo/gas.l): xN/sp/xzr, `#`
 // immediates, [base, #off] memory, b.cond, the sysreg and sys-op names as ARM
 // spells them. so the spelling lives here and the call sites say the NAME.
 //

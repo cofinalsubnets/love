@@ -55,18 +55,18 @@ $(mc): FORCE
 # the holo cats. ⚠ the backend text is named explicitly: a frontend bakes holo with the
 # NATIVE backend only, and a port must not care which machine it is building on.
 p_link_be ?= $(p_be)
-p_be_l    = $(addprefix $(R)/core/holo/,$(addsuffix .l,$(p_be)))
-p_lnbe_l  = $(addprefix $(R)/core/holo/,$(addsuffix .l,$(p_link_be)))
+p_be_l    = $(addprefix $(R)/love/holo/,$(addsuffix .l,$(p_be)))
+p_lnbe_l  = $(addprefix $(R)/love/holo/,$(addsuffix .l,$(p_link_be)))
 # ⚠ THE FLOOR IS CATTED, THEN SPLICED. text.l and u.l reopen module 'kore, so their
 # names (uread, udie ..) do not walk for whoever comes after -- and every driver below
 # reads them bare. So the cats emit (use 'kore) once the two files have registered it,
 # the Makefile's klink recipe exactly.
 kore_l = $(R)/apps/kore/text.l $(R)/apps/kore/u.l
 lay_l  = $(kore_l) $(R)/apps/kore/asbook.l \
-  $(R)/core/holo/elf.l $(R)/core/holo/obj.l
+  $(R)/love/holo/elf.l $(R)/love/holo/obj.l
 link_l = $(kore_l) $(R)/apps/kore/asbook.l \
-  $(p_lnbe_l) $(R)/core/holo/elf.l $(R)/core/holo/obj.l $(R)/core/holo/link.l
-copy_l = $(link_l) $(R)/core/holo/copy.l
+  $(p_lnbe_l) $(R)/love/holo/elf.l $(R)/love/holo/obj.l $(R)/love/holo/link.l
+copy_l = $(link_l) $(R)/love/holo/copy.l
 # the same lists spelled from $(R), which is where the cats run
 lay_lc  = $(subst $(R)/,,$(lay_l))
 kore_lc = $(subst $(R)/,,$(kore_l))
@@ -96,7 +96,7 @@ $(R)/$(o)/am.o: $(R)/apps/moon/lib/moonlibc/math/am.c $(mc)
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(MOONCC) -t $(p_tgt) -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c apps/moon/lib/moonlibc/math/am.c $(o)/am.o
 
-# p_ocopy -- the flatten, for the ports that ship a .bin/.hex: core/holo/copy.l reads the
+# p_ocopy -- the flatten, for the ports that ship a .bin/.hex: love/holo/copy.l reads the
 # linked ELF and writes objcopy's two output formats, byte for byte (`kore objcopy` is the
 # same code with a name). Takes no argument; a port that links its own ELF and stops there
 # (virt, mps2) never asks for it.

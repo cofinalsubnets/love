@@ -18,9 +18,9 @@
 ; rt_sigprocmask 14 (4 args, 8-byte set, SIG_* 0/2) and sigprocmask 340
 ; (3 args, 16-byte set, SIG_* 1/3). (mksys-freebsd dst) survives as an alias.
 ; (the scaffold is shared; the payloads are irreducibly per-ISA). runs after
-; core/holo/{elf,obj}.l in a cat (the mooncc prefix layers; the assembler itself
+; love/holo/{elf,obj}.l in a cat (the mooncc prefix layers; the assembler itself
 ; rides the baked holo book):
-;   { cat apps/kore/{text,core,asbook}.l core/holo/{elf,obj}.l apps/moon/lib/mksys.l;
+;   { cat apps/kore/{text,core,asbook}.l love/holo/{elf,obj}.l apps/moon/lib/mksys.l;
 ;     echo '(mksys-x64 "out/.../sys.o")'; } | out/love
 ; register vocabulary is holo's: r0=rax r1=rcx r2=rdx r3=rbx r4=rbp r5=rsi r6=rdi
 ; r7=r8 r8=r9 r9=r10 r10=r11 r11=r12 r12=r13 r13=r14 r14=r15.

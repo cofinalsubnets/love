@@ -1,7 +1,7 @@
 // asmops -- the rv64 privileged instructions, one static inline each. the x64
 // twin (inle/x64/asmops.h) opens with the why; the short version is that
 // the kernel says each thing once, in GNU's template, and mooncc lowers the
-// same text to holo's neutral IR (core/holo/gas.l): the ABI register names,
+// same text to holo's neutral IR (love/holo/gas.l): the ABI register names,
 // off(base) memory, the csr pseudos by name. so the spelling lives here and the
 // call sites say the NAME. a multi-instruction template separates on `\n` or `;`.
 #pragma once

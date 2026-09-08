@@ -10,7 +10,7 @@
 ; ⚠ the section is ALLOC-only PROGBITS on an 8-byte grain: the image header carries
 ; uint64 fields, and the wake reads them in place before any copy.
 ;
-; runs after core/holo/{elf,obj}.l in a cat with the thumb2 backend spliced into the
+; runs after love/holo/{elf,obj}.l in a cat with the thumb2 backend spliced into the
 ; sealed holo module; inle/teensy41/Makefile drives it.
 (: (mkimg src dst)
    (: r (uread src)

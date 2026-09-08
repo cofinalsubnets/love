@@ -1,6 +1,6 @@
 # inle -- the machine side of love
 
-core/ is the language; this is every machine it runs on. One seam, `__ai_sys`,
+love/ is the language; this is every machine it runs on. One seam, `__ai_sys`,
 and inle gives the other side of it -- for the host kernels (the frontend TUs
 the shipped artifact links), for bare metal, and for each device below. Every
 device target is self-contained (own Makefile, `R := ../..` back to the repo
@@ -50,7 +50,7 @@ and main.c is a 32-check battery over exactly those. The one port with **no
 into a named section. Gate test_rp2040 verifies the boot image (boot2 CRC, SP,
 thumb-bit reset entry); qemu has no RP2040 machine, so test_mps2_t1 is where
 this ISA actually runs. ⚠ arm-none-eabi-ld still binds it (thumb relocations
-are not in core/holo/link.l), and there is no .uf2 packer -- `make bin` writes
+are not in love/holo/link.l), and there is no .uf2 packer -- `make bin` writes
 the raw flash image, and a UF2 wants one written.
 
 ## teensy41/

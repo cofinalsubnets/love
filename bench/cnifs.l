@@ -3,9 +3,9 @@
 ; ccrypto.l's pair is a LEVER: two ciphers chosen so the difference between them names
 ; the defect (array slots). These three are the opposite question -- real work the tree
 ; actually does, on the path a user waits on -- and they are here because the corpus row
-; averages a compiler over all of core/love.c and the ciphers are 120 lines apiece.
+; averages a compiler over all of love/love.c and the ciphers are 120 lines apiece.
 ;
-;   inflate   core/gz.c: a bit reader, a table lookup per symbol, a byte copy. The
+;   inflate   love/gz.c: a bit reader, a table lookup per symbol, a byte copy. The
 ;             branchiest of the three, and the one `love source` spends its time in.
 ;   crc32     inle/hash.c: eight INDEPENDENT table lookups per eight bytes and nothing
 ;             else. No branches in the loop at all, so it reads pure load/xor throughput.

@@ -559,7 +559,7 @@
    ; #include: resolve via incf, lex, and preprocess sharing macs. incf may
    ; answer (1 text child-incf): the child resolves the included file's own
    ; quote includes relative to its dir (gcc's rule -- inle/cb.c's unity
-   ; include of ../core/quay/quay.c needs quay.c's "quay.h" found beside it);
+   ; include of ../love/quay/quay.c needs quay.c's "quay.h" found beside it);
    ; a plain (1 text) keeps this incf (the laws feed includes as data).
    (doinc body macs cond out rest incf)
     (? !(condactive cond) (cppgo rest macs cond () out incf)

@@ -62,7 +62,7 @@
    ; defined here rather than taken from moon, which is what lets clay load alone.
    ; lex.l's copies sit in a different module layer and cannot clobber these.
    ; `el` has no caller left in this file and is not dead: a use splices it, and
-   ; core/mx.l and core/nifs.l -- the generators behind mx.h, kinds.h and nifs.h -- read it.
+   ; love/mx.l and love/nifs.l -- the generators behind mx.h, kinds.h and nifs.h -- read it.
    join (foldl (+) "")
    (sepby s l) (l @ (a . u) (foldl (a \ x \ a + s + x) a u) "")
    nl (string 10)

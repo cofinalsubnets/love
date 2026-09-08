@@ -188,10 +188,10 @@ thumb1)
   # a whole link would only report in aggregate. test_mps2_t1 binds a v6-M image end
   # to end; this names what a miss actually is.
   { echo "(use 'holo)"
-    cat core/holo/thumb1.l apps/kore/text.l apps/kore/u.l
+    cat love/holo/thumb1.l apps/kore/text.l apps/kore/u.l
     echo "(use 'kore)"                 # ld32.l reads uread; the floors above register 'kore
     cat apps/kore/asbook.l \
-        core/holo/elf.l core/holo/obj.l core/holo/link.l test/gate/ld32.l
+        love/holo/elf.l love/holo/obj.l love/holo/link.l test/gate/ld32.l
     echo "(ld32-check \"$d/am.lib.o\")"; } | "$ho/love" || fail "ld-read of $d/am.lib.o"
   echo "test_thumb1: mooncc -t thumb1 -c -> ELF32/EM_ARM (R_ARM_THM_CALL + soft divide + la/R_ARM_ABS32 + 32-bit struct layout + leax + AAPCS32 varargs + 64-bit pairs + soft doubles + am.c bit-exact + aligned(N) section grain + composites vs gcc), ld binds, runs on qemu Cortex-M0; holo's own ld-read reads the object back" ;;
 thumb2)

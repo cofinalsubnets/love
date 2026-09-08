@@ -75,7 +75,7 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   already has one. Untouched and still rung 4's: the pinned lanes, the SysV
   convention wasm replaces outright, and the r4 frame's address-taken escape
   analysis.
-- **rung 0 — the module writer. ✅ LANDED** (`core/holo/wasm.l`, ~150 lines).
+- **rung 0 — the module writer. ✅ LANDED** (`love/holo/wasm.l`, ~150 lines).
   LEB128 over `//` and `%` (a u64 pattern past the fixnum stays exact), names, vectors,
   the twelve sections, an opcode table where each row names its immediate shape, and
   `wasm-emit` over one tablet — types, imports, funcs, table, memory, globals, exports,
@@ -179,7 +179,7 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   `sp`/`fp`/`lr` frame with every parameter spilled (rv64 homes none), `la` for every
   address, `raw` only under inline asm and two sync builtins — everything the wasm
   machine wants and nothing it cannot carry. So `-t wasm` runs gen as rv64 under
-  `__wasm__` predefines, and `core/holo/wasmfn.l` is the machine under that lane
+  `__wasm__` predefines, and `love/holo/wasmfn.l` is the machine under that lane
   (the lowering of rungs 1–2, now over r0..r26, `fp`, `lr`, and `sp` as global 0 — the
   shadow stack, where `push`/`pop` move 16 as the arm family's do and gen.l's frame
   offsets count on it) plus `wasm-link`, the whole program off gen's objects. The one
@@ -373,7 +373,7 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   `block`/`loop`/`br_if` nesting from gen's CFG where it is reducible, the dispatch kept
   only where it is not. Priced on ccwasm's sha256 and deflate rows and the corpus.
 - **rung 6 — a splicer in the browser.** Off the AOT path, after the artifact
-  ships. Wasm forbids the native JIT by construction (`core/love.c` declines on
+  ships. Wasm forbids the native JIT by construction (`love/love.c` declines on
   `__wasm__`: a jump to a data address traps), so the browser love has no tier at
   all. A template splicer is the shape that works with no writable-executable page,
   because it builds a MODULE instead of patching code: read a thread back, take each

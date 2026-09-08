@@ -117,7 +117,7 @@ if [ "$(uname -m)" = x86_64 ]; then
   # and the archive as a LINK INPUT: `mooncc main.o libf.a` must bind the exe the
   # .o link binds, byte for byte -- which is the proof that members come in BY NEED
   # through the ranlib index, since the library also carries one nothing calls. our
-  # ar writes it, our linker reads it (core/holo/link.l's ld-arsyms).
+  # ar writes it, our linker reads it (love/holo/link.l's ld-arsyms).
   printf 'int unused(void){return 99;}\n' > "$ho/.kore-arz.c"
   moonc -c "$ho/.kore-arz.c" "$ho/.kore-arz.o" >/dev/null 2>&1 || fail "kore ar: mooncc -c unused.c"
   rm -f "$ho/.kore-arl.a"
@@ -698,7 +698,7 @@ fsh 'kore sh -c "kore echo deep"' | grep -qx deep || fail "fork lane nested sh"
 [ "$(fsh 'echo n=$(kore echo abc | kore wc -c)')" = "n=4" ] || fail "fork lane cmdsub"
 fsh 'kore seq 3 > '"$HO"'/.fork-r' ; [ "$(wc -l < "$HO/.fork-r")" = "3" ] || fail "fork lane redirect"
 # ..and the lane's reach is the BINARY, never a verb list: the child hands its whole
-# line to cli-line (core/boot/post.l), the very door an exec would have reached, so a word
+# line to cli-line (love/boot/post.l), the very door an exec would have reached, so a word
 # that dispatches through argv[1] rides it too -- `love -e`, `love VERB`, and the
 # status either answers with.
 ln -sf "$K" "$fb/love"

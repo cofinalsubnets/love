@@ -1,5 +1,5 @@
 ; apps/sat/flat -- the CDCL solver over flat state, with four domain-specific native
-; kernels: at solver-build time the hot loops are assembled through core/holo/ (neutral IR,
+; kernels: at solver-build time the hot loops are assembled through love/holo/ (neutral IR,
 ; section offsets baked as immediates -- each kernel is specialized to the instance's
 ; nvars, cached per nv) and installed via the `nif` seam:
 ;   bcp  (fx ar wn)        two-watched-literal propagation      -> conflict cid | -1

@@ -17,7 +17,7 @@
 ; stack pointer arrives through r0 -- `la` into a general register, then the 16-bit
 ; hi-register mov. `ldr sp,=__stack_top__` was the .S spelling of exactly that.
 ;
-; runs after core/holo/{elf,obj}.l in a cat with the thumb2 backend spliced into the
+; runs after love/holo/{elf,obj}.l in a cat with the thumb2 backend spliced into the
 ; sealed holo module (the mkboot2 shape; inle/teensy41/Makefile drives it).
 (: (mkboot dst)
    (: (zeros n) (? (n < 1) () (0 >< (zeros (n - 1))))
@@ -45,7 +45,7 @@
 
       ;; -- 2. the image vector table at flash 0x1000, and the boot data after it ------
       ;; the ROM validates the header and jumps to entry. boot_data.length is how much
-      ;; of flash the ROM treats as the image -- __load_size__, which core/holo/link.l
+      ;; of flash the ROM treats as the image -- __load_size__, which love/holo/link.l
       ;; pins from the layout, being the one number here that only the link can know.
       ivt ((le32 0x432000D1)                   ; tag 0xD1, len 0x0020, ver 0x43
             + (wsym 'cstartup)                 ; entry

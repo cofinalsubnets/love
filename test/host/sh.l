@@ -407,7 +407,7 @@
 ; the body cats the whole glob, not a named file: a source file's size is a moving
 ; target -- cutting one in half used to halve this body and quietly drop the volume
 ; this is here to carry.
-(: r (hark ["out/love" "out/lush" "-c" "f() { pwd; cat core/*.c; cat core/*.c; }; x=$(f); echo ${#x}"])
+(: r (hark ["out/love" "out/lush" "-c" "f() { pwd; cat love/*.c; cat love/*.c; }; x=$(f); echo ${#x}"])
    t (cup r)
    (assert (< 800000 (sh-int (snip t 0 (- (tally t) 1))))))
 

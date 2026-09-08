@@ -2,7 +2,7 @@
 // the wasm build mirrors a screen (host.c's `mirror`: rows, cols, cursor, flag, then
 // the packed cells, quay.h's layout) and this lays it as text -- one span per run of
 // like-penned cells, rows joined by newlines -- in the quay face the sheet sets. the
-// colours are the same xterm256 table core/quay/paint.c spends and the glyphs the
+// colours are the same xterm256 table love/quay/paint.c spends and the glyphs the
 // same unfold, read out of the module once, so a cell means the same pixels on inle's
 // framebuffer and on the page. no DOM here: node lays the same frame in the gate.
 

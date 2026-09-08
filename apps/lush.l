@@ -868,7 +868,7 @@
 ; '1'/'0' bytes, '1' where the char came in unquoted (glob-live), '0' where a
 ; quote shielded it ('*' matches a literal star) -- absence-of-specialness
 ; carried out of band, the quoting law made byte-addressable.
-;   the matcher itself is core/boot/post.l -- fmatch / match / anyglob / ones,
+;   the matcher itself is love/boot/post.l -- fmatch / match / anyglob / ones,
 ;   bound back to their sh- names below so every reader here is unchanged.
 ;   (sh-globby? t m)       -> any live * ? [ under the mask
 ;   (sh-glob t m)          -> sorted matching paths | () (caller keeps the word)
@@ -876,7 +876,7 @@
 ; pattern that spells the . itself.
 
 (module 'lush
-(: sh-anyglob (from 'glob 'anyglob)   ; the matcher moved to core/boot/post.l; every love
+(: sh-anyglob (from 'glob 'anyglob)   ; the matcher moved to love/boot/post.l; every love
    sh-fmatch (from 'glob 'fmatch)     ; carries it now, this one included. the sh- names
    sh-match (from 'glob 'match)       ; stay -- word.l, eval.l, line.l, cook and kore's
    sh-ones (from 'glob 'ones)         ; find all read them, some through (from 'lush ..)
@@ -1684,7 +1684,7 @@
    ; a forked child -- the warm heap rides, no exec, no wake. it asks `ours?` and
    ; nothing else about the main, for the reason the ladder above gives.
    ; no verb table is read here and none is wanted: the child hands its line to `cli-line`,
-   ; core/boot/post.l's own tail, which is the very thing the exec would have reached --
+   ; love/boot/post.l's own tail, which is the very thing the exec would have reached --
    ; argv[0] door, rail, and the registry lookup inside it. a foreign binary spawns
    ; as ever, and so does a slashed or .l word: an explicit path is a demand.
    ; decided once per word, sh-imgc's shape -- and cli-line is absent on a frontend
@@ -1914,7 +1914,7 @@
    ; and this lane spell their arguments differently -- `love -e "1 + 2"` would
    ; read `-e` as a datum and fold it into the form, answering 3.0 for 3. The two
    ; want different command lines and isolated processes, so the word `love` stays
-   ; the binary's and spawns. `ev` is love's own name for the evaluator (core/boot/ev.l).
+   ; the binary's and spawns. `ev` is love's own name for the evaluator (love/boot/ev.l).
    (sh-loveb args)
      (: q ((two? args) && (<args = "-n"))
         src (sh-unwords (? q >args args))

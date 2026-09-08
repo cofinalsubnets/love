@@ -42,7 +42,7 @@ that registers nothing. Nothing else moves. Gate: `make test`.
 
 **Rung 1 -- ai_defn's module target. CLIMBED.** The module is the CALL's, not
 the row's: ai_defn grew a fourth parameter (NULL = the book, so struct ai_def
-stays two words), and ai_modtab (core/love.c) pushes the found-or-made module
+stays two words), and ai_modtab (love/love.c) pushes the found-or-made module
 tablet where the book map would sit -- the binding loop is one loop either
 way. The registry is made C-side at boot (the drain runs BEFORE prel) and
 FOUND over a woken image, where the drain re-pins the current addresses (the
@@ -184,7 +184,7 @@ hue2vim.l lead with (use 'vi); apps/vi/hueweb.l splices it for its own compile
 re-pin); kore.l's vi row reads (from 'vi 'vi-main). Only the still-bare
 holo/asbook ambience remains -- holo's own wrap, rung 2's coda, dissolves it.
 
-*Holo CLIMBED -- the coda, and the last ambience dies.* The fourteen core/holo
+*Holo CLIMBED -- the coda, and the last ambience dies.* The fourteen love/holo
 files wear `(module 'holo`, so the baked lib entry (holo + native backend +
 elf/obj/link as one source) and every cat REOPEN one tablet -- the double-carry
 is now a double-write into the same module, and defbackend's join is unchanged.
@@ -333,6 +333,6 @@ Eight frontends lost their table and their ~20 `src_*` arrays for one
   compare before the move (out/lib/corpus.list's discipline), so a touch that
   changes no bytes now rewrites nothing and rebuilds nothing, where before it
   rewrote every header and relinked love0. The standing option should holo's
-  share ever matter: `core/holo/holo.l` into `$(moonfiles)`, ahead of asbook.l
+  share ever matter: `love/holo/holo.l` into `$(moonfiles)`, ahead of asbook.l
   and the backends already there, so that cat carries its own core and holo
   leaves love0's text.

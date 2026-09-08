@@ -1,6 +1,6 @@
 ; inle/teensy41/tlink.l -- the Teensy 4.1 link, ours. holo's ldbare32
-; (core/holo/link.l) in place of arm-none-eabi-ld + teensy41.lds. cat it after
-; core/holo/{elf,obj,link}.l and run the result:
+; (love/holo/link.l) in place of arm-none-eabi-ld + teensy41.lds. cat it after
+; love/holo/{elf,obj,link}.l and run the result:
 ;
 ;   love <cat> OUT OBJ.o..
 ;

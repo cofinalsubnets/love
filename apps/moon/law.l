@@ -724,7 +724,7 @@
 
 ; --- the object view (stage 7a): cgen-obj splits the program into TEXT (functions,
 ; no _start) and data (globals + strings), and names the defined functions and
-; global variables for the symbol table. core/holo/obj.l turns that into a
+; global variables for the symbol table. love/holo/obj.l turns that into a
 ; relocatable .o (the ELF bytes are gated end-to-end by the make .o link/interop
 ; smoke, which needs the holo book + the system linker). ---
 (: (cob src) (: r (cparse <>(clex src))
@@ -1119,7 +1119,7 @@
       (two? (cgn "int f(int x){return x;} typedef int (*fp)(int); fp t[1] = { &f }; int main(){ return t[0](1); }"))
       (refused? (cgn "int main(){ return (long)&nope; }"))))
 
-; -- inline asm (the statement): the template is the target's GNU dialect (core/holo/gas.l
+; -- inline asm (the statement): the template is the target's GNU dialect (love/holo/gas.l
 ; lowers it; AT&T here on x64), %N the operands (outputs first), adjacent template strings
 ; concatenate, and the body assembles at cg time into one opaque ('raw ..) between the staging
 ; forms. the picks come off asmpick front-first (r10 the first), so the one-output golden's
