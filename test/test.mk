@@ -663,7 +663,8 @@ test_vec: host
 test_fixpoint: host $(love0) out/mooncc0.image
 	@$(MAKE) -s a=$(hosta) $(ko)/$(hosta)/mkvec.l
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
-	  sh test/gate/fixpoint.sh $(ho) $(love0) $(hosta) $(moon_o) $(kart_o)
+	  gate_kern_c='$(k_free_c)' \
+	  sh test/gate/fixpoint.sh $(ho) $(love0) $(hosta) $(moon_d) $(moon_o) $(kart_o)
 # THE CROSS-MACHINE FIXPOINT, in effigy (doc/misc/plan/seed-universal.md U0): the x-lane's
 # twin objects link love1, then love1 under qemu-user rebuilds itself natively and must
 # answer the same bytes -- the twin machine reproducing this machine's, on one box.
@@ -672,6 +673,7 @@ test_fixpoint: host $(love0) out/mooncc0.image
 .PHONY: test_xfixpoint
 test_xfixpoint: $(x_o) $(xkart_o) $(love0) out/mooncc0.image
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(wildcard $R/inle/$(xa)/*.c)' \
+	  gate_kern_c='$(k_free_c)' \
 	  sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xa) mksys-$(xa) $(tco) $(xd) $(xa) $(x_o) $(xkart_o)
 # test_fat -- the fat container (seed-universal U1): the one file answers through
 # its prefix + cache on the native machine, the pack is byte-deterministic, and

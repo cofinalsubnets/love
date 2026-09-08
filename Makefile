@@ -173,28 +173,31 @@ $(love0): $(love0_o)
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(CC) $(ai_cflags) -pie -o $@ $(love0_o)
 endif
-# THE MOONCC OBJECT LANE: love's own C compiled by mooncc into one directory, worn twice --
-# at the host's arch, and at the cross arch $(xa) names. $(call moonlane,NAME,DIRVAR,CCVAR,
+# THE MOONCC OBJECT LANE: love's own C compiled by mooncc into one odir, worn twice -- at
+# the host's arch, and at the cross arch $(xa) names. $(call moonlane,NAME,DIRVAR,CCVAR,
 # ARCHVAR), every argument but the first a variable NAME so the body stays deferred; the
 # kart shape below is the same idiom. Answers $(1)_love_o, _host_o, _math_o and $(1)_o.
+# EVERY OBJECT SITS AT ITS SOURCE'S PATH under the odir, as out/0 and $(k_odir) already
+# lay theirs. The sets take different flags, so each rule names its own list and the odir
+# needs no prefix to keep core/ev.o and inle/ev.o apart -- the tree does that.
 define moonlane
-$(1)_love_o = $$(core_tu:%.c=$$($(2))/%.o)
-$(1)_host_o = $$(host_c:$$(R)/inle/%.c=$$($(2))/host_%.o)
-$(1)_math_o = $$(patsubst apps/moon/lib/moonlibc/math/%.c,$$($(2))/math_%.o,$$(wildcard apps/moon/lib/moonlibc/math/*.c))
+$(1)_love_o = $$(love_tu_c:$$(R)/%.c=$$($(2))/%.o)
+$(1)_host_o = $$(host_c:$$(R)/%.c=$$($(2))/%.o)
+$(1)_math_o = $$(patsubst apps/moon/lib/moonlibc/%.c,$$($(2))/moonlibc/%.o,$$(wildcard apps/moon/lib/moonlibc/math/*.c))
 $(1)_o = $$($(1)_love_o) $$($(1)_host_o) $$($(1)_math_o) $$($(2))/sys.o
-$$($(1)_love_o): $$($(2))/%.o: $$(R)/core/%.c $$(love_h) $$(moon0_dep)
+$$($(1)_love_o): $$($(2))/%.o: $$(R)/%.c $$(love_h) $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
 	@$$($(3)) -D ai_tco=$$(tco) -D AiHaveVersionH -I$$(ho) -I. -Icore -Iinle -Iout/lib -c $$< $$@
-$$($(2))/love.o: out/lib/love_version.h        # only this TU carries the version id
-$$($(2))/host_%.o: $$(R)/inle/%.c $$(love_h) $$(moon0_dep)
+$$($(2))/core/love.o: out/lib/love_version.h   # only this TU carries the version id
+$$($(1)_host_o): $$($(2))/%.o: $$(R)/%.c $$(love_h) $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
 	@$$($(3)) -D ai_tco=$$(tco) -I$$(ho) -I. -Icore -Iinle -Iout/lib -c $$< $$@
-$$($(2))/host_main.o: out/lib/distlist.h
-$$($(2))/host_cats.o: out/lib/baked.h
-$$($(2))/host_cb.o: core/quay/quay.c core/quay/nif.c core/quay/quay.h
-$$($(2))/math_%.o: apps/moon/lib/moonlibc/math/%.c $$(moon0_dep)
+$$($(2))/inle/main.o: out/lib/distlist.h
+$$($(2))/inle/cats.o: out/lib/baked.h
+$$($(2))/inle/cb.o: core/quay/quay.c core/quay/nif.c core/quay/quay.h
+$$($(1)_math_o): $$($(2))/moonlibc/%.o: apps/moon/lib/moonlibc/%.c $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
 	@$$($(3)) -Iapps/moon/include -c $$< $$@
@@ -581,24 +584,17 @@ kart_inc = -I$(ho) -I. -Icore -Iinle -Iout/lib -I$R \
 kart_bake = out/lib/korelist.h
 define kart
 $(1)_h = $$(love_h) $$R/inle/k.h $$R/inle/ustar.h $$(wildcard $$R/inle/$$($(4))/*.h)
-$(1)_arch_o = $$(patsubst $$R/inle/$$($(4))/%.c,$$($(2))/ka_%.o,$$(wildcard $$R/inle/$$($(4))/*.c))
+$(1)_arch_o = $$(patsubst $$R/%.c,$$($(2))/%.o,$$(wildcard $$R/inle/$$($(4))/*.c))
 # the console's painter and its fonts: kernel-only draws the host link never had
-$(1)_quay_o = $$(patsubst %,$$($(2))/k_q_%.o,paint cga_8x8 moderndos_8x16)
-$(1)_o = $$(if $$($(1)_arch_o),$$($(2))/k_kmain.o $$($(2))/k_blk.o $$($(2))/k_hda.o $$($(2))/k_sys.o \
+$(1)_quay_o = $$(patsubst %,$$($(2))/core/quay/%.o,paint cga_8x8 moderndos_8x16)
+$(1)_kern_o = $$(k_free_c:$$R/%.c=$$($(2))/%.o)
+$(1)_o = $$(if $$($(1)_arch_o),$$($(1)_kern_o) \
   $$($(1)_arch_o) $$($(1)_quay_o) $$($(2))/kvec.o,)
 $(1)_lay_l = $$R/apps/kore/text.l $$R/apps/kore/u.l $$R/apps/kore/asbook.l \
   $$R/core/holo/$$($(4)).l $$R/core/holo/elf.l $$R/core/holo/obj.l
-$$($(2))/k_%.o: $$R/inle/%.c $$($(1)_h) $$(kart_bake) $$(moon0_dep)
-	@echo 'MOON	'$$@
-	@mkdir -p "$$(dir $$@)"
-	@$$($(3)) $$(kart_inc) -c $$< $$@
-# ..and the per-ISA half on its own stem, so inle/kmain.c and inle/<a>/arch.c
-# cannot collide on one pattern.
-$$($(2))/ka_%.o: $$R/inle/$$($(4))/%.c $$($(1)_h) $$(kart_bake) $$(moon0_dep)
-	@echo 'MOON	'$$@
-	@mkdir -p "$$(dir $$@)"
-	@$$($(3)) $$(kart_inc) -c $$< $$@
-$$($(2))/k_q_%.o: $$R/core/quay/%.c $$(moon0_dep)
+# the kernel-only trio, the per-ISA seat and the console draws take one flag set and
+# one rule -- named lists, so the frontend's own inle/*.o rule above cannot claim them.
+$$($(1)_kern_o) $$($(1)_arch_o) $$($(1)_quay_o): $$($(2))/%.o: $$R/%.c $$($(1)_h) $$(kart_bake) $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p "$$(dir $$@)"
 	@$$($(3)) $$(kart_inc) -c $$< $$@
@@ -635,14 +631,14 @@ $(k_odir)/doom/wad.o: $R/dl/doom1.wad tools/mkblob.l out/.mksys-cat.l $m
 # built (plan C2: the artifact carries it) -- so `make kernel DOOM=1` at $(hosta)
 # rides these and the cross odir rides the rows above.
 kart_inc += -I$(doom_d) -I$R/inle/doom -DFEATURE_SOUND
-kart_doom_o = $(patsubst $(doom_d)/%.c,$(moon_d)/kd_%.o,$(doom_c)) \
-  $(moon_d)/kd_wad.o $(moon_d)/k_doom.o $(moon_d)/k_doomsnd.o
+kart_doom_o = $(patsubst $(doom_d)/%.c,$(moon_d)/doom/%.o,$(doom_c)) \
+  $(moon_d)/doom/wad.o
 kart_o += $(kart_doom_o)
-$(moon_d)/kd_%.o: $(doom_d)/%.c $(moon0_dep)
+$(moon_d)/doom/%.o: $(doom_d)/%.c $(moon0_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
 	@$(moon0) $(kart_inc) -c $< $@
-$(moon_d)/kd_wad.o: $R/dl/doom1.wad tools/mkblob.l out/.mksys-cat.l $(love0)
+$(moon_d)/doom/wad.o: $R/dl/doom1.wad tools/mkblob.l out/.mksys-cat.l $(love0)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@LOVE_NO_IMAGE= $(love0) -l out/.mksys-cat.l tools/mkblob.l $< $@ doom_wad $(hosta)

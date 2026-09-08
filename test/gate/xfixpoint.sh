@@ -17,7 +17,12 @@
 # shorter binary than `make` does still answers love1 == love2, and answers it
 # about a binary nobody ships.
 #
-# usage: xfixpoint.sh OUTDIR LOVE0 QEMU XTGT MKSYS TCO XD XA OBJ...
+# ⚠ only the FLAGS are spelled here. the object names are derived from the source paths
+# (mkobj below) and the rosters arrive in the environment -- gate_love_c / gate_host_c /
+# gate_arch_c / gate_kern_c -- so a rename in the Makefile cannot leave this behind.
+#
+# usage: gate_love_c=.. gate_host_c=.. gate_arch_c=.. gate_kern_c=..
+#        xfixpoint.sh OUTDIR LOVE0 QEMU XTGT MKSYS TCO XD XA OBJ...
 set -u
 
 ho=$1
@@ -36,8 +41,18 @@ command -v "$qemu" >/dev/null 2>&1 || { echo "test_xfixpoint: skipped (needs $qe
 
 fail() { echo "FAIL test_xfixpoint: $*" >&2; exit 1; }
 
+rm -rf "$d"
 mkdir -p "$d"
-rm -f "$d"/*.o "$d"/love1 "$d"/love2 "$d"/mooncc1.image
+
+# the object of a source is its PATH under $d, exactly as make lays it under the odir --
+# derived, never spelled, so a renamed, moved or newly-added TU cannot leave a stale name
+# here. moonlibc drops its apps/moon/lib/ stem, the one place make does too.
+mkobj() {                    # $1 = source -> $o
+  o=${1#./}
+  case $o in apps/moon/lib/*) o=${o#apps/moon/lib/} ;; esac
+  o=$d/${o%.c}.o
+  mkdir -p "${o%/*}"
+}
 
 # love1: machine A's link of the twin -- exactly the dist link, before the bake
 # mutates it (the object list arrives FROM make, $(xobjs), never globbed).
@@ -53,17 +68,17 @@ LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$cat" -e "(? ((bake \"$d/mooncc1.image\")
 # ...and rebuilds every TU with it, natively, in the order make links them
 moon1() { "$qemu" "$d/love1" wake "$d/mooncc1.image" mooncc "$@"; }
 for f in $gate_love_c; do
-  b=$(basename "$f" .c)
-  moon1 -D ai_tco="$tco" -D AiHaveVersionH -I"$ho" -I. -Isrc -Iout/lib -c "$f" "$d/$b.o" \
+  mkobj "$f"
+  moon1 -D ai_tco="$tco" -D AiHaveVersionH -I"$ho" -I. -Icore -Iinle -Iout/lib -c "$f" "$o" \
     || fail "love1 mooncc -c $f"
 done
 for f in $gate_host_c; do
-  b=$(basename "$f" .c)
-  moon1 -D ai_tco="$tco" -I"$ho" -I. -Isrc -Iout/lib -c "$f" "$d/host_$b.o" || fail "love1 mooncc -c $f"
+  mkobj "$f"
+  moon1 -D ai_tco="$tco" -I"$ho" -I. -Icore -Iinle -Iout/lib -c "$f" "$o" || fail "love1 mooncc -c $f"
 done
 for f in apps/moon/lib/moonlibc/math/*.c; do
-  b=$(basename "$f" .c)
-  moon1 -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || fail "love1 mooncc -c $f"
+  mkobj "$f"
+  moon1 -Iapps/moon/include -c "$f" "$o" || fail "love1 mooncc -c $f"
 done
 LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$ho/.mksys-cat.l" -q -e "((from 'moon '$mks) \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
 test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
@@ -72,14 +87,10 @@ test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 # and laid the same way. an arch with no seat carries none, and $gate_arch_c is
 # empty there -- the makefile draws that line with its own wildcard.
 if [ -n "$gate_arch_c" ]; then
-  kinc="-I$ho -I. -Isrc -Iout/lib -Icore/quay -Iapps/moon/include"
-  for f in inle/kmain.c inle/blk.c inle/sys.c $gate_arch_c core/quay/paint.c \
+  kinc="-I$ho -I. -Icore -Iinle -Iout/lib -Icore/quay -Iapps/moon/include"
+  for f in $gate_kern_c $gate_arch_c core/quay/paint.c \
            core/quay/cga_8x8.c core/quay/moderndos_8x16.c; do
-    b=$(basename "$f" .c)
-    case "$f" in
-      core/quay/*) o=$d/k_q_$b.o ;;
-      *)           o=$d/k_$b.o ;;
-    esac
+    mkobj "$f"
     moon1 $kinc -c "$f" "$o" || fail "love1 mooncc -c $f"
   done
   LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$xd/mkvec.l" -q -e "(lay-vec \"$d/kvec.o\" \"$xa\")" \
@@ -87,7 +98,7 @@ if [ -n "$gate_arch_c" ]; then
   test -s "$d/kvec.o" || fail "love1 lay-vec laid an empty kvec.o"
 fi
 
-o2=; for o in "$@"; do o2="$o2 $d/${o##*/}"; done
+o2=; for o in "$@"; do o2="$o2 $d/${o#$xd/}"; done
 moon1 -pie $o2 -o "$d/love2" || fail "love2 link"
 
 cmp "$d/love1" "$d/love2" || fail "love2 differs from love1 -- machine B does not reproduce machine A's bytes"
