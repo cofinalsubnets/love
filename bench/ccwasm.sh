@@ -107,5 +107,5 @@ for row in $rows; do
 done
 echo
 echo "ccwasm: the ratio in a cell is mooncc/that lane -- 1.00x is parity. the corpus row lives in"
-echo "        the gates: \`make test_wasm\` times the module, \`make -C inle/wasm gate\` lays emcc's"
-echo "        out/wasm/love.js and test.mjs --love takes either."
+echo "        the gates: \`make test_wasm\` drives the module, \`make -C inle/wasm gate\` lays"
+echo "        emcc's out/wasm/love.js beside it as the differential."

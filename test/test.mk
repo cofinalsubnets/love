@@ -1281,17 +1281,16 @@ endif
 
 NODE ?= $(shell command -v node 2>/dev/null)
 # test_wasm rides moon's OWN module (make wasm -> out/wasm/love.wasm) under the loader,
-# no emcc: the whole love corpus, the console apps, and the horn's PCM into WebAudio.
+# no emcc. THE CORPUS IS NOT HERE any more: test/kernel/all.l reads mk/common.mk's own `t`
+# off the ramfs, so test_kernel_wasm already runs it on the kernel module, woken image and
+# all -- one wasm build of the same TUs, one corpus. what is left is the two seams the
+# machine has not grown: quay's cells laid as html, and the horn's PCM into WebAudio.
 # the emcc build is opt-in now (make wasm-emcc); its love.js is not in any gate.
 ifeq ($(NODE),)
 test_wasm:
 	@echo "test_wasm: skipped (needs node)"
 else
 test_wasm: wasm
-	@echo TEST out/wasm/love.wasm "(node)"
-	@$(NODE) $(R)/inle/wasm/test.mjs --love $(R)/out/wasm/love.wasm $t
-	@echo TEST out/wasm/love.image "(node, the woken heap)"
-	@$(NODE) $(R)/inle/wasm/test.mjs --love $(R)/out/wasm/love.wasm --image $(R)/out/wasm/love.image $t
 	@$(NODE) $(R)/inle/wasm/screen.mjs --love $(R)/out/wasm/love.wasm
 	@$(NODE) $(R)/inle/wasm/horn.mjs --love $(R)/out/wasm/love.wasm
 endif

@@ -124,7 +124,7 @@ struct ai_port_vt const ai_fd_port_vt = { _flush, fd_writen, fd_readn, NULL };
 // so a body that merely MENTIONS `exit` (e.g. an assert's unrun fail branch)
 // raises (scare 'missing 'exit) at the define if the name is absent. Without
 // this, every assert fired a spurious missing-scare on wasm, inflating help-log.
-// emscripten maps exit() to an ExitStatus the JS caller catches (see test.mjs).
+// exit() reaches the JS caller as an ExitStatus it catches (loader.js).
 static noreturn lvm(lvm_exit) { exit(getcharm(Sp[0])); }
 static union u const nif_exit[] = {{lvm_exit}, {lvm_ret0}};
 AiNif("exit", nif_exit);

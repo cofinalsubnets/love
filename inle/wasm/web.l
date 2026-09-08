@@ -1,5 +1,5 @@
 ; inle/wasm/web.l -- the page's love side: the quay tty apps on the page's console,
-; unchanged. repl.js feeds this through ai_eval after story.l and BEFORE rove.l and
+; unchanged. a driver feeds this through ai_eval after story.l and BEFORE rove.l and
 ; ink.l -- a closure captures its free globals at creation, so the tty words an app asks
 ; for must stand first, and story's words must stand before the demo below -- and
 ; inle/wasm/screen.mjs runs it under node the same way.

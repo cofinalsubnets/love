@@ -1,7 +1,7 @@
 // the console seam's gate: a frame scribed into quay's screen, mirrored out of the wasm
 // build, and laid by cells.js -- the same cells inle's painter would put on a
 // framebuffer, checked here as cells and as html. and the real apps: rove and ink boot
-// on a page-sized screen through web.l, the way repl.js drives them.
+// on a page-sized screen through web.l, driven the way a page would drive them.
 //
 // Usage: node inle/wasm/screen.mjs [--love <love.js>]
 import { readFileSync } from 'node:fs';
@@ -29,12 +29,12 @@ const view = () => { const p = mirror() >> 2, h = M.HEAPU32.subarray(p, p + 4);
                      return { hdr: Array.from(h), cells: M.HEAPU32.subarray(p + 4, p + 4 + h[0] * h[1]) }; };
 const face = cellsFace(M.HEAPU32.subarray(palette() >> 2, (palette() >> 2) + 256), unfold);
 
-// the session's help, as repl.js installs it: a condition prints ";; a b" and answers (),
+// the session's help, as a page installs it: a condition prints ";; a b" and answers (),
 // in the app tasks too (a task inherits its parent's help) -- without one a scare in an
 // app is not the app's end but a runaway
 ev('(hear (\\ a b (: _ (puts ";; ") _ (putx a) _ (puts " ") _ (putx b) _ (putc 10) ())))'); drain();
 let fails = 0;
-// a love string literal: " and \ and controls ride \xHH (as repl.js spells it)
+// a love string literal: " and \ and controls ride \xHH
 const aiStr = t => '"' + Array.from(t, ch => { const o = ch.codePointAt(0);
   return ch === '"' || ch === '\\' || (o < 32 && ch !== '\n' && ch !== '\t') ? '\\x' + o.toString(16).padStart(2, '0')
        : ch === '\n' ? '\\n' : ch === '\t' ? '\\t' : ch; }).join('') + '"';
@@ -69,7 +69,7 @@ ok(evs('(puts (show (mirror s)))').trim() === '24', 'mirror answers the cell cou
 
 // --- the apps, through web.l, as tasks on a page-sized console ---
 const key = b => M.ccall('ai_key', 'number', ['number'], [b]);
-// one pump, repl.js's: the app's turn, its drawing scribed and mirrored, and whether it lives
+// one pump: the app's turn, its drawing scribed and mirrored, and whether it lives
 const runnable = M.cwrap('ai_runnable', 'number', []), alive = M.cwrap('ai_alive', 'number', []);
 const pump = () => { let acc = drain();
   for (let n = 0; n < 256 && acc.length < 65536; n++) { ev('(web-step)'); acc += drain(); if (!runnable()) break; }

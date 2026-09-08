@@ -1,6 +1,6 @@
 // test/holo/loader.mjs -- inle/wasm/loader.js over the mock artifact test/holo/wasm.l
-// lays (out/.holo3.wasm): the page's own drive (test.mjs's shape -- init, a string through
-// the heap, eval, drain the out buffer), the syscalls the kernel-in-JS answers, and exit.
+// lays (out/.holo3.wasm): a driver's own shape -- init, a string through the heap, eval,
+// drain the out buffer -- the syscalls the kernel-in-JS answers, and exit.
 // usage: node test/holo/loader.mjs [out/.holo3.wasm]
 import Love, { ExitStatus } from '../../inle/wasm/loader.js';
 

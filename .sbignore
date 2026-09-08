@@ -25,7 +25,7 @@ test/proof/rocq/uugen.v
 test/proof/lean/uugen.lean
 
 # the project's web page and what it alone links: generated, committed for github
-# pages, never shipped (the module is `make wasm`'s, copied beside its loader)
+# pages, never shipped (the machine's pair is `make site-wasm`'s copy out of out/)
 index.html
 assets
 assets/wasm/love-wasm.wasm

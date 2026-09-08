@@ -29,7 +29,7 @@
 ; shower.
 ;
 ; usage:  papel [-o out] [-t title] [src ..]        (with the `papel` script on PATH)
-;     or: love -l apps/papel.l [-o out] [-r wasm] [src ..]
+;     or: love -l apps/papel.l [-o out] [src ..]
 ; src is a .md file or a directory of them; with none, this tree's own docs (README.md
 ; and doc/). out defaults to out/site. papel writes out/<name>.html per source, out/
 ; papel.css, and out/index.html -- the last only when no source is itself an index.md.
@@ -212,20 +212,16 @@
       (rows sls its) (? !(two? its) () (row <sls <its . rows >sls >its))
       ("<dl" + (0 < #cls ? (" class=\"" + hq cls + "\"") "") + ">\n"
        + joins (rows sls items) "\n" + "\n</dl>"))
-   ; isle is html to lay after the head-1 (before everything, on a page without one), or ""
-   (pshow d hs ts isle)
-   (: h1? (two? (filter (b \ head? b && (<>b = 1)) d))
-      want (0 < #isle)
-      ((: (g l hs ts acc i cls)
-          (? !(two? l) (joins (rev acc) "\n")
-             (: b <l
-                (? (head? b)
-                   (: h (hhead <(<hs) (<>(<hs)) <>>b)
-                      (? (0 < #i && (<>b = 1)) (g >l >hs ts (i . h . acc) "" (<>(<hs)))
-                         (g >l >hs ts (h . acc) i (<>(<hs)))))
-                   (<b = 'deflist) (g >l hs >ts (hdl cls <ts <>b . acc) i cls)
-                   (g >l hs ts (htb b . acc) i cls)))))
-       d hs ts (want && !h1? ? [isle] ()) (want && h1? ? isle "") ""))
+   (pshow d hs ts)
+   ((: (g l hs ts acc cls)
+       (? !(two? l) (joins (rev acc) "\n")
+          (: b <l
+             (? (head? b)
+                (: h (hhead <(<hs) (<>(<hs)) <>>b)
+                   (g >l >hs ts (h . acc) (<>(<hs))))
+                (<b = 'deflist) (g >l hs >ts (hdl cls <ts <>b . acc) cls)
+                (g >l hs ts (htb b . acc) cls)))))
+    d hs ts () "")
    ; the toc: the same heads, minus the one that became the title. a page with fewer than
    ; two of them gets none -- a one-item contents is furniture, not navigation.
    (ptoc d hs) (: rest (? (two? hs && (1 = <(<hs))) >hs hs)
@@ -236,7 +232,7 @@
    (pmetah kvs) (atom? kvs ? "" (htb ['meta kvs])))
 
 ; --- the page template ------------------------------------------------------------------
-(: (wrap conf ttl metah toch body tail)
+(: (wrap conf ttl metah toch body)
    (: site (peep conf 'title "papel")
       ("<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
        + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
@@ -249,19 +245,7 @@
        + (tally toch ? ("<nav class=\"toc\">\n" + toch + "\n</nav>\n"))
        + "<article>\n" + body + "\n</article>\n</main>\n"
        + "<footer>markdown through <b>lapiz</b>, built by <b>cook</b>, laid out by <b>papel</b></footer>\n"
-       + tail + "</body>\n</html>\n")))
-
-; --- the repl island ---------------------------------------------------------------------
-; conf 'repl names the wasm port's directory the way the page links it (inle/wasm from
-; a page at the tree root, ../../inle/wasm from out/site), so one spelling is both the
-; script hrefs and, under out, the path of repl.html -- the island markup repl.js drives.
-; the island rides the index page alone: a site has one front door. the scripts go last,
-; since repl.js mounts every .repl it finds as it loads.
-(: (rdir conf)     (peep conf 'repl "")
-   (rfrag conf)    (: r (rdir conf) (0 < #r ? (peep conf 'out "out/site" + "/" + r + "/repl.html") ""))
-   (island conf)   (: f (rfrag conf) (0 < #f ? (slurpf f) ""))
-   (rscripts conf) (: r (rdir conf)
-                      (0 < #r ? ("<script src=\"" + r + "/cells.js\"></script>\n<script type=\"module\" src=\"" + r + "/repl.js\"></script>\n") "")))
+       + "</body>\n</html>\n")))
 
 ; --- the stylesheet ---------------------------------------------------------------------
 ; one file, linked by every page, written by the same cook recipe machinery as the pages
@@ -308,10 +292,8 @@ table{border-collapse:collapse}
       body (pbody d)
       hs (pheads body)
       ttl (ptitle body (base src))
-      idx? (outname src = "index.html")
       _ (spitf dst (wrap conf ttl (pmetah (pmeta d)) (ptoc body hs)
-                         (pshow body hs (pterms body hs) (idx? ? (island conf) ""))
-                         (idx? ? (rscripts conf) "")))
+                         (pshow body hs (pterms body hs))))
       dst)
    ; the index is a page like any other: papel builds an AST -- a head, then a deflist of
    ; link/blurb pairs -- and lapiz shows it. no second template, no html here at all.
@@ -323,7 +305,7 @@ table{border-collapse:collapse}
    (windex conf srcs dst)
    (: d (index-doc conf srcs)
       hs (pheads d)
-      _ (spitf dst (wrap conf (peep conf 'title "papel") "" "" (pshow d hs (pterms d hs) (island conf)) (rscripts conf)))
+      _ (spitf dst (wrap conf (peep conf 'title "papel") "" "" (pshow d hs (pterms d hs))))
       dst))
 
 ; --- the sources, and the build -----------------------------------------------------------
@@ -362,16 +344,14 @@ table{border-collapse:collapse}
       known (foldl (\ t s (pin t (base s) 1)) {} srcs)
       self (peep conf 'self "")
       dep (two? (stat self) ? [self])
-      frag (rfrag conf)
-      idep (dep + (two? (stat frag) ? [frag] ()))      ; the island, when the site has one
       dsts (map (s \ out + "/" + outname s) srcs)
-      _ (each srcs (s \ recipe (out + "/" + outname s) (s . (outname s = "index.html" ? idep dep))
+      _ (each srcs (s \ recipe (out + "/" + outname s) (s . dep)
                          [(_ \ render conf known s (out + "/" + outname s))]))
       sheet (out + "/papel.css")
       _ (recipe sheet dep [(_ \ spitf sheet css)])
       idx (out + "/index.html")
       own? (peep known "index.md" 0)                 ; a real index.md wins; papel adds none
-      _ (? own? 0 (recipe idx (srcs + idep) [(_ \ windex conf srcs idx)]))
+      _ (? own? 0 (recipe idx (srcs + dep) [(_ \ windex conf srcs idx)]))
       _ (recipe 'site (dsts + [sheet] + (? own? () [idx])) ())
       ; cook's own `cook` prints its verdict; papel wants the number, so it takes the
       ; quiet entry. $ of a map is its key count, and cook marks an item shipped only when
@@ -390,9 +370,6 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
   -t, --title NAME  the site name, used in the header and on the index (default papel)
   -q, --quiet       write the site and say nothing
   -s, --serve PORT  build, then hand OUT to kiosko and serve it on PORT
-  -r, --repl DIR    lay the repl island on the index: DIR holds cells.js, repl.js (a module
-                    over loader.js and love.wasm) and repl.html, spelled as the index page
-                    links it (inle/wasm)
   SRC               a .md file or a directory of them; with none, README.md and doc/
 ")
                 (quit 0))
@@ -407,7 +384,6 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
                          ("-t" || "--title") (need w r, pin c 'title <r, loop >r)
                          ("-q" || "--quiet") (pin c 'quiet 1, loop r)
                          ("-s" || "--serve") (need w r, pin c 'serve (numof <r), loop >r)
-                         ("-r" || "--repl") (need w r, pin c 'repl <r, loop >r)
                          ("-h" || "--help") (usage 0)
                          (pin c 'src (peep c 'src () + [w]), loop r))))
       _ (loop as)

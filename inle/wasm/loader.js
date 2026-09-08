@@ -1,6 +1,7 @@
 // inle/wasm/loader.js -- the environment of moon's wasm artifact, in place of emcc's
-// runtime: Love() instantiates love.wasm and answers the Module the page already drives
-// (repl.js, screen.mjs, test.mjs) -- ccall/cwrap, the string marshalling, _malloc/_free,
+// runtime: Love() instantiates a module and answers the Module its drivers already expect
+// (run.mjs, screen.mjs, test/holo/loader.mjs) -- ccall/cwrap, the string marshalling,
+// _malloc/_free,
 // and the HEAPU8/HEAPU32 views. the module imports ONE function, env.__ai_sys, moonlibc's
 // syscall door, and this file is the kernel under it: linux's numbers, the handful the
 // artifact issues -- write, mmap over memory.grow, clock_gettime, exit -- and ENOSYS for

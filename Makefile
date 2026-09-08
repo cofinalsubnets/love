@@ -986,37 +986,27 @@ site-serve: host out/toolmd.stamp
 # through mooncc -t wasm, linked to one module -- no emcc, no C toolchain. tco=1: the
 # vm's tails are return_call, the engines' tail-call law (node 26, firefox 121, chrome
 # 112, safari 18), and the corpus runs 1.31x faster than on the trampoline. the loader
-# (inle/wasm/loader.js) is the runtime under it. NOTHING ON THE SITE READS IT any more --
-# the front page carries the machine (the kernel module below) -- so it is laid, not
-# tracked: papel's -r island wants it beside the loader, test_wasm and horn.html read out/.
+# (inle/wasm/loader.js) is the runtime under it. NOTHING SHIPS IT any more -- the front
+# page carries the machine (the kernel module below) -- so it is laid under out/ and never
+# copied out: test_wasm's two checks and horn.html are the whole readership, and each is a
+# seam the machine has not grown yet (quay's cells, the horn's ring).
 # the emcc build stays as wasm-emcc, a differential and nothing on the page.
 wasm_c = $(love_c) $(R)/inle/horn.c $(R)/inle/wasm/host.c
 out/wasm/love.wasm: $(wasm_c) $(lib_h) out/lib/love_version.h host
 	@mkdir -p $(dir $@)
 	@echo 'WASM	'$@
 	@$(mooncc) -t wasm -Dai_tco=1 -DAiHaveVersionH -I. -Ilove -Iinle -Iout/lib -o $@ $(wasm_c)
-# the module's heap image (rung 7): the egg booted once under node and written as bytes
-# the page fetches beside the module -- a wake is milliseconds where the boot is seconds,
-# and the woken heap is compact where the boot's arena is not. anchored to the module that
-# baked it (a stale one is refused and the egg boots), so the two are laid together.
-out/wasm/love.image: out/wasm/love.wasm inle/wasm/bake.mjs inle/wasm/loader.js
-	@echo 'BAKE	'$@
-	@$(NODE) inle/wasm/bake.mjs --love out/wasm/love.wasm -o $@
 ifeq ($(NODE),)
 wasm: out/wasm/love.wasm
 else
-wasm: out/wasm/love.wasm out/wasm/love.image out/wasm/love-wasm.image
+wasm: out/wasm/love.wasm out/wasm/love-wasm.image
 endif
-# by hand, as love.js was: bytes every C edit would otherwise churn. THE MACHINE'S PAIR
-# GOES TO assets/, beside the fonts and the stylesheet -- generated files committed for
-# one reason, that github pages serves what it is given and builds nothing. the hosted
-# pair stays beside its loader, gitignored, for papel -r; the horn reads out/.
+# by hand, as love.js was: bytes every C edit would otherwise churn. ONE PAIR IS COPIED
+# OUT, the machine's, to assets/ beside the fonts and the stylesheet -- generated files
+# committed for one reason, that github pages serves what it is given and builds nothing.
+# the hosted module is a gate's, not a page's, and never leaves out/.
 site-wasm: wasm
 	@mkdir -p assets/wasm
-	@echo '$(t_cp)	'inle/wasm/love.wasm
-	@cp out/wasm/love.wasm inle/wasm/love.wasm
-	@echo '$(t_cp)	'inle/wasm/love.image
-	@cp out/wasm/love.image inle/wasm/love.image
 	@echo '$(t_cp)	'assets/wasm/love-wasm.wasm
 	@cp out/love-wasm.wasm assets/wasm/love-wasm.wasm
 	@echo '$(t_cp)	'assets/wasm/love-wasm.image
@@ -1039,7 +1029,7 @@ out/love-wasm.wasm: $(kw_c) $(kw_h) out/wasm/src.o out/lib/baked.h out/lib/distl
 	@echo 'WASM	'$@
 	@$(mooncc) -t wasm -Dai_tco=1 -DAiHaveVersionH -I. -Ilove -Iinle -Iout/lib \
 	  -Ilove/quay -Iapps/moon/include -o $@ $(kw_c) out/wasm/src.o
-wasm-emcc:                       # emcc's love, out/wasm/love.js: the foreign build ccwasm and test.mjs can take
+wasm-emcc:                       # emcc's love, out/wasm/love.js: the foreign build ccwasm takes
 	@$(MAKE) -C inle/wasm
 # the seat's heap image: the kernel booted once under node with `bake PATH` on the boot
 # line -- the egg, the modules and the korecat warm, the seat text run -- written to the
@@ -1079,7 +1069,7 @@ assets/web/style.css: web/style.l apps/vi/config.l apps/vi/hueweb.l $(ho)/.love.
 assets/web/favicon.png: love/quay/cga_8x8.c tools/mkicon.l apps/vi/config.l $(ho)/.love.baked
 	@mkdir -p $(dir $@)
 	@env -u LOVE_NO_IMAGE $m tools/mkicon.l $< 3 32 $@
-# ..and the front page itself, its island the fragment repl.js drives
+# ..and the front page itself, its island the fragment machine.js drives
 index.html: web/index.l inle/wasm/machine.html $(ho)/.love.baked
 	@$m web/index.l $@
 .PHONY: ulp
