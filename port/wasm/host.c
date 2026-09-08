@@ -256,12 +256,22 @@ void *ai_bake(void) {
 EMSCRIPTEN_KEEPALIVE
 uintptr_t ai_bake_len(void) { return bake_len; }
 
+// ..and a torn text does not take the session with it. a status rides the frame
+// POINTER, so an unbalanced read hands back a tagged F and every eval after it answers
+// that same status having done nothing -- one bad paste and the page is dead. the
+// rollback is the reader's own (p0text): a torn parse leaves its pile behind, so drop
+// back to the depth we came in at. the native repl never meets this -- its loop is in
+// love, over `sound`, and reads a datum at a time.
 EMSCRIPTEN_KEEPALIVE
 int ai_eval(const char *src) {
   out_len = 0, out_full = 0;
-  F = ai_evals_(F, src);
+  uintptr_t const d = topof(F) - F->sp;              // a depth, so a collection may move it
+  struct ai *g = ai_evals_(F, src);
+  enum ai_status const s = ai_code_of(g);
+  F = ai_core_of(g);
+  if (s != ai_status_ok) F->sp = topof(F) - d;
   if (out_full) out_note();
-  return ai_code_of(F); }
+  return s; }
 
 // (ai_runnable): is a task other than the session's runnable now -- in the run ring,
 // not landed, its wake (if any) due? a fair yield is one time slice, so the page yields

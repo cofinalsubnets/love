@@ -74,15 +74,26 @@ async function loveRepl(root) {
   const palette = M.cwrap('ai_palette', 'number', []);
   const unfold = M.cwrap('ai_unfold', 'number', ['number']);
   const face = cellsFace(M.HEAPU32.subarray(palette() >> 2, (palette() >> 2) + 256), unfold);
+  // a fetched .l is SOURCE, and only source: `love serve` paints a .l into an html page
+  // for a browser that navigates to one, and evaluating that page is how the session
+  // used to end. what came back has to say it is text before any of it is evaluated.
+  const source = async p => {
+    const r = await fetch(p);
+    if (!r.ok) throw new Error(`${p}: ${r.status}`);
+    const ct = r.headers.get('content-type') || '';
+    if (/html/i.test(ct)) throw new Error(`${p}: html, not source`);
+    return r.text();
+  };
   try {
     const srcs = await Promise.all(
       ['apps/rove/story.l', 'apps/rove/levels/lighthouse.l', 'port/wasm/web.l', 'apps/rove/rove.l', 'apps/ink.l']
-        .map(p => fetch(p).then(r => r.text())));
+        .map(source));
     ev(srcs[0]);
     ev('(: lighthouse-data <(sound ' + aiStr(srcs[1]) + '))');   // the level's datum, read not run
     for (const t of srcs.slice(2)) ev(t);
     for (const ch of root.querySelectorAll('[data-app]')) ch.style.display = 'inline-block';
   } catch (e) {
+    console.error('the apps did not load:', e.message);   // the chips stay hidden; the shell is fine
   }
 
   const hist = []; let hi = 0;
@@ -122,6 +133,10 @@ async function loveRepl(root) {
     return r + '"';
   }
 
+  // what a nonzero ai_eval means (ai_status): the text was refused, not the image lost --
+  // host.c rolls the frame back, so the next line runs whatever this one did.
+  const REFUSED = { 1: 'the form was refused', 2: 'the text is unfinished', 3: 'no datum' };
+
   function run(src) {
     src = src.replace(/\s+$/, '');
     if (!src) return;
@@ -130,7 +145,7 @@ async function loveRepl(root) {
     const s = ev('(puts (show (webln ' + aiStr(src) + ')))');
     const o = drain();
     for (const ln of o.split('\n')) if (ln.length) put(ln, ln.startsWith('# ') ? 'cnd' : 'ans');
-    if (s !== 0) put('# the image stopped (status ' + s + ') -- reload to reboot', 'cnd');
+    if (s !== 0) put('# ' + (REFUSED[s] || 'refused (status ' + s + ')'), 'cnd');
     scroll.scrollTop = scroll.scrollHeight;
   }
 

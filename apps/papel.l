@@ -429,7 +429,7 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
               q (peep c 'quiet 0)
               _ (pin c 'quiet 1)
               box (: t (tablet 0) _ (pin t 'f (fprint c)) t)
-              _ (? (from 'kiosko 'serve (peep c 'out "out/site") port q (_ \ refresh c box)) 0
+              _ (? (from 'kiosko 'serve (peep c 'out "out/site") port q (_ \ _ \ refresh c box)) 0
                    (say err $ "papel: cannot listen on :" + show port + "\n", quit 1))))
       (quit 0))
    papel-main)

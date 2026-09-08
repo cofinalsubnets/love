@@ -6,7 +6,8 @@
 ; hook, and three answers through it:
 ;
 ;   *.l        the painted source -- syntax coloured, one span per line, every
-;              line linkable (apps/vi/hueweb.l)
+;              line linkable (apps/vi/hueweb.l). only for a browser NAVIGATING here:
+;              a fetch() and a bare client read the file itself (sv-doc?)
 ;   *.l.md     that file's header comment as a document -- libra lifts it, lapiz
 ;              shows it, and the two pages link to each other
 ;   *.md       the rendered document -- markdown through lapiz's html surface
@@ -70,9 +71,30 @@
       (? (0 < #md) ("# " + path + "\n\n" + md)
          ("# " + path + "\n\nthis file has no header comment.\n")))
 
+   ; a case-blind substring walk over the request head; the needle comes in lowercase
+   (sv-in? h t)
+   (: n #h m #t
+      (fold c) (65 <= c <= 90 ? (c + 32) c)
+      (at i j) (? (m <= j) 1
+                  (fold (h (i + j)) = t j) (at i (j + 1))
+                  0)
+      (g i) (? (n - m < i) 0
+               (at i 0) 1
+               (g (i + 1)))
+      (g 0))
+
+   ; painted, or the file itself? a browser NAVIGATING to a .l wants the page; a fetch()
+   ; from one of our own pages wants the source it asked for, and handing it html is how
+   ; the repl island ate a `<!doctype` and wedged. sec-fetch-dest says which -- browsers
+   ; send it on every request, `document` only for a navigation -- and where it is absent
+   ; an Accept naming text/html is the older tell, so curl and every fetch read the file.
+   (sv-doc? head)
+   (? (sv-in? head "sec-fetch-dest:") (sv-in? head "sec-fetch-dest: document")
+      (sv-in? head "text/html"))
+
    ; the hook: `(ctype body) to serve, () to say "not mine". `.l.md` is tested
    ; first because that path ends in `.md` as much as it ends in `.l.md`.
-   (sv-make root box p)
+   (sv-make root box p head)
    (: hd? (sv-ends? p ".l.md")
       md? (sv-ends? p ".md")
       src (hd? ? (snip p 0 (#p - 3)) p)            ; "/x.l.md" -> "/x.l"
@@ -81,6 +103,8 @@
          (: f (root + src)
             r (sv-rdf f)
             (? !(two? r) ()                       ; not there: let kiosko say 404
+               ; ..and a .l.md is a rendering with no file behind it, so it is always made
+               !(hd? || sv-doc? head) ["text/plain; charset=utf-8" <>r]
                ["text/html; charset=utf-8"
                 (sv-cached box p
                   (\ _ (? hd? (sv-doc p (sv-head src <>r) [src "the source"])
@@ -156,7 +180,7 @@ toolchain), and that tree is the one served.
       _ (nil? serve5 ? (say err "serve: no kiosko aboard\n", quit 1))
       _ (sv-tree? dir ? (say err ("serve: " + dir + " -- the page is http://127.0.0.1:" + show port
                                   + "/ and the machine /port/wasm/inle.html\n")) 0)
-      _ (? (serve5 dir port 0 () (p \ sv-make dir box p)) 0
+      _ (? (serve5 dir port 0 () (sv-make dir box)) 0
            (: _ (say err ("serve: cannot listen on :" + show port)) _ (put err 10) (quit 1)))
       (quit 0))
 

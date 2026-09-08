@@ -240,10 +240,11 @@
 ; but consuming them lets the peer finish its write before we close, which is the
 ; difference between a clean close and a reset.
 ; `make` is a hook, not a route table: kiosko still knows nothing about what it
-; serves. it is handed the decoded path and answers [ctype body] to serve, or ()
-; to say "not mine" -- and it is asked first, so a caller can answer for a path
-; that is also a file on disk (`love serve` paints a .l that is right there).
-; () for the hook is the ordinary static server, unchanged.
+; serves. it is handed the decoded path and the request head, and answers [ctype body]
+; to serve, or () to say "not mine" -- and it is asked first, so a caller can answer
+; for a path that is also a file on disk (`love serve` paints a .l that is right there).
+; the head rides along for the one thing such a hook has to negotiate: whether the
+; client navigated here or fetched this as data. () is the ordinary static server.
 (: (serve1 root make c)
    (: blk (reqblk c)
       line (line1 blk)
@@ -254,7 +255,7 @@
             (? !(meth = "GET" || head?) (oops c 405 "Method Not Allowed" 0, [405 meth raw])
                (: p (pdecode (cutq raw))
                   (? !(safe? p) (oops c 403 "Forbidden" head?, [403 meth raw])
-                     (: m (? make (make p))
+                     (: m (? make (make p blk))
                         (? (two? m)
                            (reply c 200 "OK" <m <>m head?, [200 meth raw])
                      (: full (root + p)
