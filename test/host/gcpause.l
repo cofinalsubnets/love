@@ -1,4 +1,4 @@
-; --- test/gcpause.l: the pause gauge ---
+; --- test/host/gcpause.l: the pause gauge ---
 ; what one collection costs, and that the cost keeps its shape. the collector
 ; is a copier, so a collection's pause is its copy volume: a minor copies the
 ; nursery's survivors (the churn's live edge) and owes nothing to the tenured

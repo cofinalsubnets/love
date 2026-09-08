@@ -3,7 +3,7 @@
 # system's, function by function, with gcc+glibc as the second opinion.
 #
 # each test/libc/*.c is built twice -- once by mooncc, which pulls
-# apps/moon/lib/moonlibc.c by need, and once by gcc against glibc -- run, and the
+# apps/moon/lib/moonlibc/ by need, and once by gcc against glibc -- run, and the
 # two OUTPUTS compared byte for byte. gcc is never trusted to be right, only to
 # be a second opinion; where the standard leaves a choice (the magnitude of a
 # comparison, an address, strerror's wording) the programs report the part that

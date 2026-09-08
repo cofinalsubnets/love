@@ -268,7 +268,7 @@ the same face.
 
 ## the runtime (apps/moon/lib/)
 
-* **moonlibc.c** — the raw libc over one `__ai_sys` trampoline: a mini stdio (a FILE is a fd plus
+* **moonlibc/** — the raw libc over one `__ai_sys` trampoline: a mini stdio (a FILE is a fd plus
   a flush buffer), a K&R first-fit malloc over mmap arenas, dirent over getdents64, the
   glibc-152B-to-kernel-32B sigaction fold with our own restorer, a numeric getaddrinfo,
   env/exec/termios/pty. Single-threaded like love: errno is one int, no locks. See.
@@ -297,7 +297,7 @@ linux's numbers.
 pull can see what it defines, so every link owing a libc nom paid for all 190 of them — ~23s of a
 cold hello-world link's ~23s. They now ride `out/cache/moon/<sha>.a`, ONE archive per
 (compiler, target), keyed on the target, the runtime tree's whole text (headers included — an
-edited `stdio.h` changes what `moonlibc.c` means) and the compiler's own identity. A warm link is
+edited `stdio.h` changes what `moonlibc/` means) and the compiler's own identity. A warm link is
 ~0.15s. An archive and not 190 objects because the ranlib index IS the "what does this member
 define" answer, written once and read back rather than recomputed on every warm link — and
 because one file is one generation, whole the moment it lands and countable when the sweep asks

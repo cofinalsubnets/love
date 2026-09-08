@@ -4,7 +4,7 @@
 ; dead chains, and a NULL bio-buffer word encodes as an immortal -- and `love wake
 ; PATH prog.l` boots a session carrying every global pinned before the bake.
 ; host-only (the nif + hark + wake), so it runs standalone against the built
-; binary like test/host/fs.l:
+; binary like test/fs.l:
 ;   cat test/00-init.l test/host/bake.l | out/love
 ; the marker the woken child reads back. its own top-level body-less `:`, so it leaks to the
 ; session scope and the snapshot carries it -- `book` is off the book on every boot now, and

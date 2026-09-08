@@ -20,22 +20,14 @@
 ;     orientation itself, the positional pair carries it in the name, and
 ;     either way the table adds none of its own.
 ;   * the diagonal reads the lattice: one lane per band, the algebra ladder.
-; what the dump-shaped predecessor needed and this does not: tools/mxdump.c, the
-; 47-line TU that #include'd love.c whole to read its own statics back out, the
-; function-pointer comparison that named each lane, and the unknown case this file
-; had to refuse on when it could not. the lane's symbol is the datum now.
 
 (borrow 'posix)
 (: (join l) (foldl (+) "" l)
    nl "\n"
 
    ; the table comes from mx.l, catted ahead of this file -- love data, the
-   ; same datum love.c's mx.h is laid from. it used to arrive as a dump: out/.mx.l,
-   ; printed by tools/mxdump.c, a translation unit that #include'd love.c whole and
-   ; recovered each lane by comparing function pointers, printing unknown when it
-   ; could not name one -- a case this file had to refuse on. all of that is gone:
-   ; here the lane's symbol is the datum, so there is nothing to recover and nothing
-   ; to fail to name.
+   ; same datum love.c's mx.h is laid from. the lane's symbol IS the datum here, so
+   ; there is nothing to recover from a binary and no lane this file can fail to name.
    kinds mx-kinds                                       ; the kind noms, enum order
    addm  mx-add                                         ; one row of lane noms per kind
    mulm  mx-mul

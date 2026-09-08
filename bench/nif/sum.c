@@ -9,9 +9,9 @@
  * the shift/rotate or wrap lane has no other place to show.
  *
  * NO VECTOR IS WRITTEN DOWN HERE, on purpose. an answer every lane reaches is
- * inle/hash.c's own and test/host/hash.l is where it is checked; an answer ONE
+ * inle/hash.c's own and test/digest.l is where it is checked; an answer ONE
  * lane reaches is the code generator's, and that is the only thing this file can
- * see. test/host/hash.l reads these nifs through the RUNNING love, which is the
+ * see. test/digest.l reads these nifs through the RUNNING love, which is the
  * gcc build nearly everywhere -- so it asks whether the algorithm is right and
  * never which compiler built it.
  *

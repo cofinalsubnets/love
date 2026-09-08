@@ -189,13 +189,13 @@ void love_init(void) {
 #include "post.h"
     );
   K.g = ai_evals_(K.g, src_mods);
-    " "
+  K.g = ai_evals_(K.g,
     "(borrow 'kanren)"
     " "
     "(borrow 'rune)"
     " "
 #include "cas.h"
-    "0)");
+    " 0");
   // THE SESSION: the crank's evals defglob here, never in the base
   K.g = ai_open_(K.g);
   pdg_log(ai_ok(K.g) ? "love: boot eval ok" : "love: boot eval FAILED");

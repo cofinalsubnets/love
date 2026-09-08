@@ -7,11 +7,8 @@
 ; symlink to it on PATH (the user installs that), running `cook Cookfile [ticket]`
 ; execs `love -l <this-file> Cookfile [ticket]`: the -l loads cook, then Cookfile runs.
 ;
-; (this tool was first written as tools/bake.l; it was renamed to apps/cook.l so
-; the file name does not collide with the other, unrelated sense of "bake" in this
-; tree -- baking the heap image / the egg (l/boot/egg.l), the array-perf bake. the
-; build verb here is `cook`; "bake" is reserved for the egg. the messages this tool
-; prints are prefixed `cook:` for the same reason.)
+; the verb here is `cook`, never "bake" -- that word is the egg's (l/boot/egg.l) and
+; the array-perf bake's. the messages carry a `cook:` prefix for the same reason.
 ;
 ; an item is brought up to date by first prepping its prerequisites up to date
 ; (depth first), then -- if the item is missing or older than any prerequisite --

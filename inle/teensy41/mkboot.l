@@ -38,9 +38,9 @@
                    (0x84 0x26043206))   ; LUT[1]: DUMMY 6 cycles, READ (4 pads)
       (fcfb-lay ws pos)
          (? (two? ws)
-            (: w <ws  o (at w 0)
+            (: w <ws  o <w
                _ (? (o < pos) (scare 'fcfb-overlap o) 0)
-               ((zeros (o - pos)) + (le32 (at w 1)) + (fcfb-lay >ws (o + 4))))
+               ((zeros (o - pos)) + (le32 <>w) + (fcfb-lay >ws (o + 4))))
             (zeros (fcfb-size - pos)))
 
       ;; -- 2. the image vector table at flash 0x1000, and the boot data after it ------

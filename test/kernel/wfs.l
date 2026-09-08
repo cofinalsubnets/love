@@ -3,7 +3,7 @@
 ; the environment (getenv setenv environ), a tablet in the kernel's boot text. The
 ; shapes are doc/misc/posix.md's and the host's exactly: an effect answers () ok |
 ; an errno nom | 'badarg misuse; a value answers the value | () | a nom | 'badarg.
-; test/host/fs.l holds sibling laws against the real tree.
+; test/fs.l holds sibling laws against the real tree.
 ;
 ; kernel only -- test/kernel/all.l's roster, never $t: on the host these paths are the real
 ; filesystem. Everything made here is unmade at the foot, so the corpus behind

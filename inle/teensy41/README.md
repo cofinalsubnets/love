@@ -32,7 +32,7 @@ and only to bake the heap image.
 
 LPUART6 on **pin 0 (RX1) / pin 1 (TX1)** at 115200 8N1, over a 3.3 V USB-serial
 adapter -- the analogue of the rp2040 port's UART0 console. The REPL line editor
-in `l/repl.l` drives it exactly as it drives the kernel's. USB CDC (so the
+in `l/boot/post.l` drives it exactly as it drives the kernel's. USB CDC (so the
 Teensy's own USB shows up as the console, no adapter) is the obvious next step
 and a **TODO** -- bare-metal device USB on the RT1062 is a substantial chunk.
 

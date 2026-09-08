@@ -1,4 +1,4 @@
-; test/clay.l -- G1, clay's faithfulness gate: (cparse (clay-show c)) == c, over
+; test/gate/clay.l -- G1, clay's faithfulness gate: (cparse (clay-show c)) == c, over
 ; every C file in test/cc/. run inside a woken mooncc image, which is where the
 ; front end lives; clay itself arrives by (borrow 'clay), a module, so none of its
 ; helper names touch the compiler's book.

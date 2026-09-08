@@ -1,4 +1,4 @@
-/* test/nif/stub.h -- the runtime the host nifs name, and nothing else.
+/* bench/nif/stub.h -- the runtime the host nifs name, and nothing else.
  *
  * a nif file is an ALGORITHM plus a love-facing wrapper. the algorithm is what
  * this corpus differentials, and it is reachable by including the .c: every

@@ -6,7 +6,7 @@
 # has nothing to do with the filesystem. `make test_fat` is that gate; this is
 # `make test_fat32`.
 #
-# test/host/fat.l proves the FILESYSTEM against its own laws over a cask; this gate
+# test/fat.l proves the FILESYSTEM against its own laws over a cask; this gate
 # proves the FACE -- that an image on disk survives the round trip through a real
 # second implementation. mtools is that implementation: it reads the image we format
 # and writes one we read, so neither side is grading its own homework. Without mtools

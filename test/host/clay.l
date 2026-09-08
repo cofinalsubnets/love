@@ -1,13 +1,13 @@
 ; --- test/host/clay.l: clay, the C shower (apps/moon/clay.l) ----------------
 ; the authoring direction, which is the half G1 structurally cannot reach.
-; test/clay.l round-trips clay that came out of cparse, so it exercises exactly
+; test/gate/clay.l round-trips clay that came out of cparse, so it exercises exactly
 ; the subset cparse can emit -- and every form clay adds on top (a return type, a
 ; storage class, `const`, a typedef'd name, a symbolic array bound, a designated
 ; index that is not a number, a comment) is by definition absent from that subset.
 ; those forms are what a generator writes, so they are checked here, against the
 ; text they must produce.
 ;
-; comparing generated C to expected C text is right here and wrong in test/clay.l,
+; comparing generated C to expected C text is right here and wrong in test/gate/clay.l,
 ; and the difference is what is being proven: there, that the shower and the parser
 ; agree about a tree; here, that the shower emits the C a human meant to write.
 ;

@@ -58,7 +58,7 @@
 
 ; --- the sigpipe pair: the console still dies, a child never inherits the ignore -
 ; love ignores sigpipe so a write to a hung-up peer answers instead of killing the
-; runtime (test/host/net.l has that half). two things must survive that:
+; runtime (test/net.l has that half). two things must survive that:
 ; 1. A SHELL tool must still die on a closed PIPE, or `love ... | head` runs to
 ;   completion writing into nothing. the console re-raises by hand, so the wait
 ;   status stays a signal death and every downstream $? is unchanged. the spewer

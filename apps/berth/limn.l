@@ -13,7 +13,7 @@
 ; can survive a layout change. a caller that leaves gaps owns them.
 ;
 ; host-only: `glass` and `unfold` are cb's nifs (l/quay/nif.c), so this never joins
-; the corpus -- test/host/limn.l is its gate.
+; the corpus -- test/limn.l is its gate.
 (:
    ; --- the pen: a cell's high bytes ((>> cell 8): fg, bg, font+faces). one SGR per
    ; pen change, respecified from zero each time -- cheap, and never stale ----------

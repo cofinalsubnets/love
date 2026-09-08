@@ -1,7 +1,7 @@
 ; apps/moon/lib/mksys.l -- lay sys.o, the raw seam's hand-written machine tail (rung 4):
 ; the five functions C cannot say. everything else in the gcc-free link is C compiled
-; by mooncc (moonlibc.c + math/); these are the register-exact leaves under it:
-;   __ai_sys(n,a,b,c,d,e,f)  the 7-slot syscall trampoline (moonlibc.c calls nothing else)
+; by mooncc (all of moonlibc/); these are the register-exact leaves under it:
+;   __ai_sys(n,a,b,c,d,e,f)  the 7-slot syscall trampoline (moonlibc calls nothing else)
 ;   __sigsetjmp / siglongjmp our own jmp_buf inside the glibc-sized 25-long buffer:
 ;                            [0..5] rbx rbp r12 r13 r14 r15, [6] rsp, [7] rip,
 ;                            [8] the signal mask (rt_sigprocmask saves/restores it --

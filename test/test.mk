@@ -551,7 +551,7 @@ dl/c-testsuite:
 	@echo 'MK	'c-testsuite
 	@git clone --depth=1 https://github.com/c-testsuite/c-testsuite.git $@ > /dev/null 2>&1
 # test_libc -- OUR C LIBRARY against the system's, function by function:
-# test/libc/*.c built by mooncc (pulling apps/moon/lib/moonlibc.c by need) and by gcc, run,
+# test/libc/*.c built by mooncc (pulling apps/moon/lib/moonlibc/ by need) and by gcc, run,
 # and the two OUTPUTS compared, so a drift names the function and the case.
 test_libc: host
 	@sh test/gate/libc.sh $(ho) $m
@@ -581,7 +581,7 @@ test_selfhost: host
 	    || { echo "FAIL all-mooncc corpus (exit $$s)"; exit 1; }; \
 	  echo "test_selfhost: all `echo $(love_tu_c) $(host_c) | wc -w` src/*.c built by mooncc, corpus passes"
 # The rung-4 gate: the GCC-FREE fixpoint. Everything test_selfhost builds PLUS our own raw
-# libc (moonlibc.c), math floor (am.c) and sys.o, bound by OUR OWN static linker -- no gcc,
+# libc (moonlibc/), math floor (am.c) and sys.o, bound by OUR OWN static linker -- no gcc,
 # no glibc, no ld anywhere. In test_slow, x86-64 only; supersedes test_selfhost.
 test_raw: host
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
@@ -921,7 +921,7 @@ test_root: host
 	@sh test/gate/root.sh $(ho) $(ho)/love
 # test_fat32 -- `love fat` + `love mkfs.vfat`, the command line over apps/fat/fat.l.
 # NOT test_fat, which gates the fat CONTAINER (seed-universal U1) and shares only a
-# word. test/host/fat.l proves the filesystem's own laws over a cask, needing nothing
+# word. test/fat.l proves the filesystem's own laws over a cask, needing nothing
 # outside; this is the half only another implementation can say, and mtools is it --
 # their reader on our format, our reader on theirs, and our reader on an mformat image.
 # Skips the interop half where mtools is missing; the verbs still run.
@@ -1182,14 +1182,15 @@ $(eval $(call uu_corpus,uumx,mx2uu,l/mx.l))
 $(eval $(call uu_corpus,uuvallaw,law2uu,test/law.l))
 # test_wake: the BAKE-THEN-WAKE ROUND TRIP, which no other gate runs -- every other lane
 # wakes an image some earlier recipe baked. A CANDIDATE COPY bakes (love.wake, ETXTBSY-proof)
-# under a timeout the wake storm cannot meet (fresh lane ~1s, storm >90s; doc/wake-storm.md).
+# under a timeout the wake storm cannot meet: a fresh lane checks uu in ~1s, a storming one
+# takes >90s, so the clock is the whole assertion.
 test_wake: $(ho)/love
-	@echo TEST wake "(the woken-image lane, doc/wake-storm.md)"
+	@echo TEST wake "(the woken-image lane)"
 	@cp $(ho)/love $(ho)/love.wake && $(ho)/love.wake bake
 	@cat test/00-init.l test/uu.l > $(ho)/wake-corpus.l
 	@if timeout 60 $(ho)/love.wake $(ho)/wake-corpus.l > /dev/null 2>&1; \
 	  then echo "test_wake: green (the woken image checks uu at speed)"; rm -f $(ho)/love.wake $(ho)/wake-corpus.l; \
-	  else echo "test_wake: FAILED -- the wake storm (doc/wake-storm.md)"; rm -f $(ho)/love.wake $(ho)/wake-corpus.l; exit 1; fi
+	  else echo "test_wake: FAILED -- the woken image storms"; rm -f $(ho)/love.wake $(ho)/wake-corpus.l; exit 1; fi
 
 # --- the metal gates: what boots, and where ---------------------------
 # The kernel BUILD rules and the `run`/`uefi` verbs stay in the root Makefile;

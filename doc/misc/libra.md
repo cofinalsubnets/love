@@ -35,7 +35,7 @@ reports every comment with its text): no reader in the tree keeps comments, so a
 datum walk would answer nothing. it lives in libra because reading `.l` is
 libra's beat and nothing else in the tree should have to learn what a comment is.
 what it hands out is MARKDOWN TEXT, and the showing is
-[lapiz](../apps/lapiz.l)'s -- which is why one verb offers three surfaces
+[lapiz](../../apps/lapiz.l)'s -- which is why one verb offers three surfaces
 and libra implements none of them.
 
 ```
@@ -64,7 +64,7 @@ title, its anchors and its whole contents nav off the headings.
 
 nothing is shielded or escaped any more. a `--- banner ---` used to stop mdread
 dead and take the rest of the header with it; lapiz's reader is
-[total](../apps/lapiz.l) as of 2026-08-16, so the loss was fixed in the
+[total](../../apps/lapiz.l) as of 2026-08-16, so the loss was fixed in the
 lens rather than papered over here.
 
 **`make site` is built on it.** the crew tools that have no page here get one

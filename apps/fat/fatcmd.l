@@ -15,7 +15,7 @@
 ;
 ; THE DEVICE IS THE WHOLE IMAGE IN MEMORY. fat.l wants a (rd wr nsec) chain and this
 ; one is a cask: the file is read once, the verb runs, and the cask goes back to disk
-; only if something wrote. That is the same device shape test/host/fat.l drives the
+; only if something wrote. That is the same device shape test/fat.l drives the
 ; laws through, which is why there is no second code path to get wrong -- and it is
 ; honest about the cost: a 64 MB image is 64 MB of heap and a whole-file rewrite per
 ; mutating verb. Positioned reads would want a pread nif; nothing here has one.

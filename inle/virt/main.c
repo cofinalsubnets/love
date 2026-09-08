@@ -186,13 +186,9 @@ int main(void) {
 #include "post.h"
     );
   r = ai_evals_(r,
-    // the driver tail: application-as-power, currying through map, the net
-    // measure, and the hatched ev -- each a spec.l law, alive on the hart.
-    "(: ok (&& ((3 2) = 8)"
-    "      (&& ('(2 3 4) = (map (+ 1) '(1 2 3)))"
-    "      (&& (6 = $'(1 2 3))"                    // $ GLUED: spaced it is the apply operator
-    "      (&& (lit? ev)"
-    "          ((2 3 4) = 262144)))))"
+    // the driver tail: the seat laws (inle/seat.l), alive on the hart.
+    "(: ok "
+#include "seat.h"
     "   _ (putc 10) _ (puts \"; the egg hatched -- love on the hart\") _ (putc 10)"
     "   (vexit (? ok 42 1)))");
   if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);

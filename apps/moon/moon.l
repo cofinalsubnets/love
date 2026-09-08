@@ -466,7 +466,7 @@
    ; and exits with its answer if it ever returns. __ai_start is defined here
    ; weak -- the call-main tail every small link gets (the push 16-aligns the
    ; call, and argc/argv unpack so an arg-taking main reads truth, not the raw
-   ; sp) -- so a libc object (apps/moon/lib/moonlibc.c, rung 4) can override it
+   ; sp) -- so a libc object (apps/moon/lib/moonlibc/, rung 4) can override it
    ; strong and unpack envp/auxv too. no conditional anywhere: the weak
    ; machinery is the whole switch.
    ; ..and the x64 entry serves both kernels (seed-universal rung UV1): linux
@@ -617,7 +617,7 @@
    ; the parameter leaves that read free -- `;; missing d`, at the mooncc0 bake.
    (mcims d) (map (\ f [f (mccid (d + f))]) (sort (filter dotim? (readdir d))))
    ; a directory's whole text, names and bytes, sorted and recursive. the
-   ; headers are an input too: an edited stdio.h changes what moonlibc.c means, and
+   ; headers are an input too: an edited stdio.h changes what moonlibc means, and
    ; hashing the .c alone would not see it.
    (mctree d)
     (foldl (\ a f (: p (d + f)

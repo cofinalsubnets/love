@@ -1,10 +1,10 @@
 ; glaze-auto -- the auto-hook end to end: take the float benchmark's unchanged source (the
-; mand/col/grid mandelbrot nest from bench/benches/float.l), recognize it with `grok`, glaze it
+; mand/col/grid mandelbrot nest from bench/benches/mandelbrot.l), recognize it with `grok`, glaze it
 ; to native, and time it the way the bench does. ordinary interpreted source, no hand-annotation.
 ;
 ; run:  out/love -l l/boot/glaze/emit.l tools/glaze-auto.l   (emit.l leaks grok/jitfgrid as globals)
 
-(: ; the exact bodies from bench/benches/float.l -- quoted source the recognizer reads, so
+(: ; the exact bodies from bench/benches/mandelbrot.l -- quoted source the recognizer reads, so
    ; they stay verbatim: infixing one would change the datum grok matches on
    mps   '(cx cy zx zy it)
    mbody '(? (&& (< it 100) (<= (+ (* zx zx) (* zy zy)) 4.0))

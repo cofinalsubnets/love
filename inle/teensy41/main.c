@@ -262,8 +262,10 @@ int main(void) {
   // (below) = fatal. 3 is LED_BIT (GPIO2_IO03 = pin 13). the tail runs AFTER
   // the bake/wake, so its `puts` marks the exact moment love is up.
 #define TE_TAIL(banner) \
-    "(: _ (gpio_init 3) _ (gpio_dir 3 1) _ (gpio_put 3 0)" \
-    "    _ (putc 10) _ (puts \"" banner "\") _ (putc 10) ((cite 'cli 'shell) 0))"
+    "   _ (gpio_init 3) _ (gpio_dir 3 1) _ (gpio_put 3 0)" \
+    "   _ (putc 10)" \
+    "   _ (puts (? ok \"" banner "\" \"; SEAT LAWS FAILED -- shell up anyway\"))" \
+    "   _ (putc 10) ((cite 'cli 'shell) 0))"
   if (!woke) {
     // the on-device egg bake: bao is a MODULE, registered by the eval below and
     // then spliced. a woken image (the mps2 baker's) carries the load already.
@@ -282,8 +284,16 @@ int main(void) {
   // THE SESSION: a fresh writable layer, C-side -- the shell's defglobs land
   // here, never in the base (bakes carry none; every boot or wake pushes its own).
   g = ai_open_(g);
-  struct ai *r = ai_evals_(g, woke ? TE_TAIL("; image hatched -- shell up")
-                                   : TE_TAIL("; egg hatched -- shell up"));
+  // the seat laws (inle/seat.l) answer first: a shell over an image that fails them is
+  // worse than a loud prompt, and this board has no exit code to say it with.
+  struct ai *r = ai_evals_(g, woke ?
+    "(: ok "
+#include "seat.h"
+    TE_TAIL("; image hatched -- shell up")
+    :
+    "(: ok "
+#include "seat.h"
+    TE_TAIL("; egg hatched -- shell up"));
   // The shell only returns on a fatal error: honest face, then blink it out.
   if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
   ai_fin(r);

@@ -7,8 +7,9 @@
 ; a byte-exact oracle would false-alarm on legal 32-bit-mov-zero-extend and disp-size
 ; choices. a decode oracle checks meaning, not layout.
 ;
-; knobs ride the environment: fuzz_n (per class, default 8), fuzz_seed, fuzz_arch
-; (x64|a64|riscv -- holo's own names, default all three). run from the repo root:
+; knobs ride the environment: FUZZ_N (per class, default 8), FUZZ_SEED, FUZZ_ARCH
+; (x64|a64|rv64 -- the lane names below; any other spelling scares rather than
+; filtering to nothing). run from the repo root:
 ;
 ;   out/love test/holo/fuzz/fuzz.l
 ;

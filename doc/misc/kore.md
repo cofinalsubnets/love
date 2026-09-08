@@ -97,7 +97,7 @@ The file discipline, two shapes:
 * **the nif lane.** fs effects ride inle/posix.c (app-glob AiNif, no core edit) and its
   `posix_` conventions: an effect op answers () ok | an errno nom | 'badarg misuse; a
   value op answers the value | () absence | a nom. inle/posix.c holds rename symlink readlink chmod chown utime
-  umask rmdir hardlink (`link` the word belongs to the chain ctor). test/host/fs.l smokes them
+  umask rmdir hardlink (`link` the word belongs to the chain ctor). test/fs.l smokes them
   under test_hostnif. `!e` is the success test, `nom? e` the failure test, and a
   specific errno matches by name (mv's `(id? e 'exdev)` lane). test/gate/kore.sh
   carries a failure row per tool.

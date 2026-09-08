@@ -207,15 +207,12 @@ int main(void) {
   g = ai_defn(g, defs, countof(defs));
   if (ai_ok(g)) ai_core_of(g)->budget = freelist->len / 4;
   struct ai *r = ai_evals_(g,
-    "(: ok (&& ((3 2) = 8)"
-    "      (&& ('(2 3 4) = (map (+ 1) '(1 2 3)))"
-    "      (&& (6 = $'(1 2 3))"
-    "      (&& (lit? ev)"
+    "(: ok (&& "
+#include "seat.h"
 #ifdef BAKER_RUNE
-    "      (&& (! ((cite ()) = ()))"            // the module registry is live: rune registered
-    "          ((2 3 4) = 262144))))))"
+    "          (! ((cite ()) = ())))"           // the module registry is live: rune registered
 #else
-    "          ((2 3 4) = 262144)))))"
+    "          1)"                              // no rune here: the seat laws are the whole verdict
 #endif
     "   _ (putc 10) _ (puts \"; the image woke -- love on the M7\") _ (putc 10)"
     "   (m7exit (? ok 42 1)))");
@@ -308,7 +305,9 @@ int main(void) {
   struct ai *g2 = ai_image_load(img, len);
   if (!g2) { sh_puts("; round-trip load FAILED\n"); m7_exit(7); }
   struct ai *r2 = ai_evals_(g2,
-    "(: _ (? ((3 2) = 8) (puts \"; round-trip ok\") (puts \"; ROUND-TRIP BROKEN\"))"
+    "(: _ (? "
+#include "seat.h"
+    " (puts \"; round-trip ok\") (puts \"; ROUND-TRIP BROKEN\"))"
     "   _ (putc 10) 0)");
   if (!ai_ok(r2)) { sh_puts("; round-trip eval FAILED\n"); m7_exit(8); }
 #ifdef BAKER_RUNE
@@ -355,13 +354,9 @@ int main(void) {
 #include "post.h"
     );
   r = ai_evals_(r,
-    // the driver tail: application-as-power, currying through map, the net
-    // measure, and the hatched ev -- each a spec.l law, alive on the M7.
-    "(: ok (&& ((3 2) = 8)"
-    "      (&& ('(2 3 4) = (map (+ 1) '(1 2 3)))"
-    "      (&& (6 = $'(1 2 3))"                    // $ GLUED: spaced it is the apply operator
-    "      (&& (lit? ev)"
-    "          ((2 3 4) = 262144)))))"
+    // the driver tail: the seat laws (inle/seat.l), alive on the M7.
+    "(: ok "
+#include "seat.h"
     "   _ (putc 10) _ (puts \"; the egg hatched -- love on the M7\") _ (putc 10)"
     "   (m7exit (? ok 42 1)))");
   if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);

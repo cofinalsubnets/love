@@ -2,7 +2,7 @@
 ; not in the test/*.l corpus: the socket nifs live in inle/sock.c, which love0 does not
 ; link, and this loads a crew file and splices its module.
 ;
-; the whole thing runs in one process, the way test/host/net.l does: a server task
+; the whole thing runs in one process, the way test/net.l does: a server task
 ; twirled onto a listener, the client in the main task, the two interleaving through the
 ; cooperative scheduler. so these are real HTTP responses off a real socket, not a call
 ; to `serve1` with a pretend port.

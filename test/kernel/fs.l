@@ -2,7 +2,7 @@
 ; lane under them -- and the wall clock, which is what makes an mtime a date. The
 ; shapes are doc/misc/posix.md's and the host's, exactly: (size ms mode ns) and a list of
 ; entry strings, because kore reads these and a divergence would be silent where an
-; absence is loud (test/host/init.l holds the same laws against the real tree).
+; absence is loud (test/init.l holds the same laws against the real tree).
 ;
 ; the initrd is flat -- rows for "apps/json.l" and none for "apps/kore" --
 ; so a directory is a prefix some path lies under, and the entries are the distinct next

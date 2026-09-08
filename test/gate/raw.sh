@@ -1,6 +1,6 @@
 #!/bin/sh
 # test/gate/raw.sh -- the GCC-FREE fixpoint, for one target. Everything test_selfhost
-# builds, PLUS our own raw libc (apps/moon/lib/moonlibc.c: raw-syscall wrappers, mini
+# builds, PLUS our own raw libc (apps/moon/lib/moonlibc/: raw-syscall wrappers, mini
 # stdio, mmap malloc), the math floor (apps/moon/lib/moonlibc/math/am.c, ours), and sys.o (the
 # syscall trampoline + our sigsetjmp/longjmp, laid by apps/moon/lib/mksys.l) -- then
 # OUR OWN static linker (l/holo/link.l, via `mooncc a.o..`) binds them. No gcc, no

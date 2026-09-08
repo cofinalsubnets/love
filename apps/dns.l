@@ -14,7 +14,7 @@
 ; `catch`. whichever finishes first wins, because a freeze out from under a catcher
 ; wakes it with the zero point. no `cue?` loop, no 1 ms tick.
 ;
-; this is a port of apps/moon/lib/moonlibc.c's resolver, which is what a mooncc-built
+; this is a port of apps/moon/lib/moonlibc/dns.c, which is what a mooncc-built
 ; love used to reach through getaddrinfo -- and which blocked, for up to 2 tries x
 ; 2.5 s per nameserver across three of them. that C is the reference for every fiddly
 ; part here (the wire format, the compression pointer, the two config parsers) and it

@@ -3,13 +3,12 @@
 A version control system whose object is a **set** of patches, not a chain of snapshots.
 The tree is a pure function of the patch set, so order is not part of the state, "the state as
 of P" and "what I have plus P" differ only in the set you name, and a union in either direction
-just fills gaps. [`apps/sb/sb.l`](../apps/sb/sb.l) is the tool, `make test_sb` the
+just fills gaps. [`apps/sb/sb.l`](../../apps/sb/sb.l) is the tool, `make test_sb` the
 gate; a hunk is test/patch.l's proven `chg` at file grain (slot = path, context = old content
 hash), and the store is content-addressed under `.sb/`.
 
-The model — the patch DAG, the derivation, the nest, refs — is [``](hatch.md);
-this doc is the interface over it. hatch.md says *what the objects are*; this says *what you
-type*.
+The model — the patch DAG, the derivation, the nest, refs — lives in the tool itself;
+this doc is the interface over it: *what you type*, not *what the objects are*.
 
 ## the verbs
 
@@ -51,7 +50,7 @@ That is what makes a release the unit you propagate rather than a local bookmark
 A *convergent* write (two nests reach the same content) is silent. Same-path divergence
 **merges**: the incoming hunk names the content hash it expected, so the common ancestor is
 already in the store and the three sides go to a diff3 line merge
-([`apps/sb/merge.l`](../apps/sb/merge.l)) — disjoint edits to one file both survive, and
+([`apps/sb/merge.l`](../../apps/sb/merge.l)) — disjoint edits to one file both survive, and
 only a true overlap lands in `<<<<<<<` markers naming both patches, whereupon sync reports and
 exits 1. The resolution is an ordinary `record`, so no new verb: the fix is a patch like any
 other, and it settles the clash for good. A delete meeting an edit, or a binary file, cannot

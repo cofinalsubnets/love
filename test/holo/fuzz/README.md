@@ -1,11 +1,11 @@
 # holo encoder fuzz — the fuzz-first rung of the holo verification ladder
 
-> The full ladder (this fuzz rung + the machine-checked prove rung in
-> `test/proof/rocq/enc*.v`) and the roadmap for further slices live in
-> [``](../../../).
+> The other rung of the ladder is the machine-checked one:
+> `test/proof/rocq/enc.v`, `encli.v` and `encmem.v`.
 
-The verification frontier stops at holo today: `l/holo/` (the x86-64 + a64 assembler)
-has no formal proof, only the frozen goldens in `test/holo/golden.l`/`test/holo/as.l`. Those goldens were
+The verification frontier stops at holo today: `l/holo/` (the assembler -- x64, a64, rv64,
+thumb, wasm) has no formal proof, only the frozen goldens in `test/holo/golden.l` and
+`test/holo/as.l`. Those goldens were
 each validated by hand — "emit the bytes, `objdump -d -M intel`, confirm the mnemonic" — over a
 few dozen forms. This harness **automates that exact round-trip and runs it over tens of
 thousands of randomly generated forms**, so the encoder is exercised far past the goldens
@@ -29,8 +29,7 @@ immediates, minimal displacement sizes, redundant-but-legal REX prefixes, etc. A
 compare against GNU `as` would false-alarm on every such choice. So:
 
 - **registers** compare by *abstract identity* (width-agnostic — `eax` and `rax` both read back as
-  holo `r0`). The abstract→x86 map is probed directly from the encoder by `regmap.py`, never
-  guessed.
+  holo `r0`). The abstract→machine map is probed directly from the encoder, never guessed.
 - **immediates** compare by numeric value mod 2^64 (so a sign-extended `-1` and its `0xff..ff`
   decode agree).
 - **memory** operands compare base / index / scale / displacement structurally.
@@ -43,17 +42,20 @@ every a64 instruction is exactly 4 bytes, the decoded-instruction count must equ
 
 ## Running
 
+The harness is love, and the knobs ride the environment: `FUZZ_N` (samples per class,
+default 8), `FUZZ_SEED`, `FUZZ_ARCH` (`x64`|`a64`|`rv64`, default all three).
+
 ```
-python3 test/holo/fuzz/regmap.py                            # verify the abstract-reg -> x86 map
-python3 test/holo/fuzz/fuzz.py --arch x64  -n 300 --seed 7  # x64, both decoders
-python3 test/holo/fuzz/fuzz.py --arch a64 -n 300 --seed 7 # a64, via llvm-mc
-python3 test/holo/fuzz/fuzz.py --arch rv64 -n 300 --seed 7 # rv64, via llvm-mc
-python3 test/holo/fuzz/fuzz.py --arch x64 -n 250 --seed 3 --no-llvm    # faster, objdump only
-python3 test/holo/fuzz/fuzz.py --arch a64 --classes ld,st,li -n 500  # a subset
+out/love test/holo/fuzz/fuzz.l                              # all three lanes
+FUZZ_N=300 FUZZ_SEED=7 out/love test/holo/fuzz/fuzz.l       # deeper, one seed
+FUZZ_ARCH=a64 FUZZ_N=500 out/love test/holo/fuzz/fuzz.l     # one lane
+out/love test/holo/fuzz/rvc.l                               # the rvc squeeze, next door
 ```
 
-Deterministic per seed. Needs `out/love` built, plus `objdump` (x64) / `llvm-mc` (a64, and
-x64 unless `--no-llvm`). Exit code is nonzero iff any sample fails.
+An arch no lane answers to scares rather than filtering to nothing, so a misspelling
+cannot read as a pass. Deterministic per seed. Needs `out/love` built, plus `objdump`
+(x64) and `llvm-mc` (a64/rv64, and x64 as the second decoder); a lane whose disassembler
+is absent says so and is skipped. Exit code is nonzero iff any sample fails.
 
 ## Coverage
 
@@ -109,24 +111,25 @@ kernel moves SP by name (`mov x9, sp` around an `msr spsel`), and `mov` is ORR a
 `(mov r9 sp)` would have answered zero. It **scares** instead and points at `(lea d s 0)`,
 add-#0, which is the instruction the assembler writes for that move.
 
-## The system lane — `sysdiff.py`
+## The system lane — `sysdiff.l`
 
-`sysdiff.py` checks the privileged instructions with a different, sharper oracle. Each system op
+`sysdiff.l` checks the privileged instructions with a different, sharper oracle. Each system op
 has exactly one encoding and a small enumerable operand space (a system register by name, a
 barrier domain, a cache operation), so instead of disassembling holo's bytes it **assembles the
 intended text with `llvm-mc` and demands the same bytes** — byte-exact, in both directions of
 the encode/decode pair.
 
 It reads the op tables straight out of `l/holo/a64.l` (`a64-sysregs`, `a64-pstate`,
-`a64-barrier-opts`, and the four SYS tables), so **a row added to holo is checked on the next
+`a64-barrier-opts`, and the four SYS tables) and riscv's CSR table out of `l/holo/rv64.l`,
+so **a row added to holo is checked on the next
 run with no edit here** — the uncovered row is the one that ships wrong. The x86 side has no
 name tables (its operand space *is* the register file), so it enumerates: cr0–cr8 × every GPR ×
 read/write, `lgdt`/`lidt`/`invlpg` over every base including the rsp-SIB and rbp-forced-disp
 quirks, `ltr`, all 256 `int` vectors, and the nullaries.
 
 ```
-python3 test/holo/fuzz/sysdiff.py             # both arches (in test_holofuzz)
-python3 test/holo/fuzz/sysdiff.py --arch a64 -v
+out/love test/holo/fuzz/sysdiff.l                    # all three (in test_holofuzz)
+SYSDIFF_ARCH=a64 out/love test/holo/fuzz/sysdiff.l   # one arch
 ```
 
 Two rejections by `llvm-mc` are counted as skips, not failures, because holo is deliberately the
