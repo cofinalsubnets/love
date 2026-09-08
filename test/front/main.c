@@ -88,7 +88,7 @@ static void grow(unsigned char **b, uintptr_t *cap, uintptr_t want) {
 static struct dev *dev_of_fd(intptr_t fd) {
   return fd >= dev_base && fd - dev_base < ndev ? devs + (fd - dev_base) : NULL; }
 
-static struct dev *dev_of_port(ai_word x) {
+static struct dev *dev_of_port(word x) {
   if ((x & 1) || ((union u*) x)->ap != lvm_port_io) return NULL;
   return dev_of_fd(ai_io_fd((struct ai_io*) x)); }
 
@@ -223,7 +223,7 @@ static lvm(lvm_dev) {
 // (feed p s) -- queue s (text or one charm) on p. Answers p.
 static lvm(lvm_feed) {
   struct dev *d = dev_of_port(Sp[0]);
-  ai_word x = Sp[1], out = ZeroPoint;
+  word x = Sp[1], out = ZeroPoint;
   if (d) {
     out = Sp[0];
     if (x & 1) {
@@ -249,7 +249,7 @@ static lvm(lvm_shut) {
 #define counter_nif(nm, field) \
   static lvm(nm) { \
     struct dev *d = dev_of_port(Sp[0]); \
-    ai_word out = ZeroPoint; \
+    word out = ZeroPoint; \
     if (d && (Sp[1] & 1)) { \
       intptr_t k = getcharm(Sp[1]); \
       d->field = k > 0 ? (uintptr_t) k : 0; \
@@ -280,7 +280,7 @@ static lvm(lvm_sent) {
 // (wpending p) -- the size of p's unsent write run, straight off love.h's own
 // accessor. no device state of its own: this is the runtime's number, not ours.
 static lvm(lvm_wpending) {
-  ai_word x = Sp[0];
+  word x = Sp[0];
   uintptr_t n = 0;
   if (!(x & 1) && ((union u*) x)->ap == lvm_port_io) {
     Pack(g);

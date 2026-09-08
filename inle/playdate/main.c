@@ -171,7 +171,7 @@ void love_init(void) {
   // teensy's law): a major resize holds old and new pools at once, so the
   // transient peak is double the budget -- 8 MB here, and the simulator
   // emulates the device heap exactly (a budget of half OOMed it).
-  if (ai_ok(g)) ai_core_of(g)->budget = (4u << 20) / sizeof(ai_word);
+  if (ai_ok(g)) ai_core_of(g)->budget = (4u << 20) / sizeof(word);
   if (woke) {
     K.g = ai_layer_(g);          // the waker opens its own session (the bake carries none)
     pdg_log("love: woke -- workbench up");

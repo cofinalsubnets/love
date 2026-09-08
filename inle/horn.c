@@ -33,7 +33,7 @@ __attribute__((weak)) void k_horn_close(void) { }
 enum { horn_sink, horn_dev, horn_seat };
 // the port: the bio, then the device's words, all charms. wpos and t0 are the sink's
 // clock (frames landed, and the ms the drain is reckoned from); the others hold the open.
-struct ai_horn { struct ai_bio b; ai_word kind, rate, chans, wpos, t0; };
+struct ai_horn { struct ai_bio b; word kind, rate, chans, wpos, t0; };
 
 // the sink keeps a quarter second: what a small card's ring holds
 #define sink_ms 250
@@ -259,7 +259,7 @@ void ai_horn_shut(struct ai_io *io) { horn_fin(NULL, io); }
 
 // (horn rate chans) -> the port at sp[2], over the two args
 ai_noinline static struct ai *horn_open(struct ai *g) {
- ai_word rw = g->sp[0], cw = g->sp[1];
+ word rw = g->sp[0], cw = g->sp[1];
  intptr_t rate = (rw & 1) ? getcharm(rw) : -1, chans = (cw & 1) ? getcharm(cw) : -1;
  if (rate < 8000 || rate > 192000 || chans < 1 || chans > 2)
   return g->sp[1] = ai_badarg(g), g->sp += 1, g;
@@ -300,7 +300,7 @@ static lvm(lvm_horn) {
 
 // (horn-lag p) -> frames queued and unplayed | () for anything but an open horn
 static lvm(lvm_horn_lag) {
- ai_word x = Sp[0];
+ word x = Sp[0];
  if (charmp(x) || cell(x)->ap != lvm_port_io || ((struct ai_io*) x)->vt != &ai_horn_vt)
   ai_musttail return Answer(ZeroPoint);
  struct ai_horn *h = (struct ai_horn*) x;

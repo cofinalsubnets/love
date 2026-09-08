@@ -211,7 +211,7 @@ int ai_boot(void) {
   // and it does it at a DOUBLING, where a few percent more live asks for twice the pool.
   // a quarter of the ceiling, like every other bounded seat: the transient peak while a
   // resize holds both halves is double the budget.
-  if (ai_ok(F)) ai_core_of(F)->budget = (2048u << 20) / sizeof(ai_word) / 4;
+  if (ai_ok(F)) ai_core_of(F)->budget = (2048u << 20) / sizeof(word) / 4;
   // the AiNif slice of every linked TU (this seat, the console, the horn), as main.c drains it
   F = ai_defn(F, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
   if (!ai_ok(F)) return ai_code_of(F);
@@ -240,7 +240,7 @@ int ai_wake(void const *buf, uintptr_t len) {
   struct ai *g = ai_image_load(buf, len);
   if (!g) return -1;
   F = g;
-  ai_core_of(F)->budget = (2048u << 20) / sizeof(ai_word) / 4;
+  ai_core_of(F)->budget = (2048u << 20) / sizeof(word) / 4;
   F = ai_defn(F, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
   if (!ai_ok(F)) return ai_code_of(F);
   F = ai_layer_(F);

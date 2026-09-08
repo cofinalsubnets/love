@@ -253,7 +253,7 @@ AiNif("getpid", nif_getpid);
 static struct ai *env_budget(struct ai *g) {
   char const *b = getenv("LOVE_BUDGET_MB");
   if (g && b && atol(b) > 0) {
-    g->budget = (uintptr_t) atol(b) * (1024 * 1024 / sizeof(ai_word));
+    g->budget = (uintptr_t) atol(b) * (1024 * 1024 / sizeof(word));
     return g; }
   if (g && !g->budget) {
     int fd = open("/proc/meminfo", O_RDONLY);
@@ -262,7 +262,7 @@ static struct ai *env_budget(struct ai *g) {
       if (n > 8 && !memcmp(mb, "MemTotal", 8)) { mb[n] = 0;
         char *p = mb; while (*p && (*p < '0' || *p > '9')) p++;
         uintptr_t kb = 0; while (*p >= '0' && *p <= '9') kb = kb * 10 + (uintptr_t)(*p++ - '0');
-        g->budget = kb * 1024 / 2 / sizeof(ai_word); } } }
+        g->budget = kb * 1024 / 2 / sizeof(word); } } }
   return g; }
 
 #ifdef LoveBoot

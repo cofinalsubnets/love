@@ -98,9 +98,9 @@ ai_noinline uintptr_t ai_clock(void) {
 // answers -- they do not agree), and a failed reserve leaves it not ok.
 struct ai *ai_argv_marshal(struct ai *g, char ***cavp) {
  *cavp = NULL;
- ai_word argv = g->sp[0];
+ word argv = g->sp[0];
  uintptr_t argc = 0, total = 0;
- for (ai_word p = argv; chainp(p); p = B(p)) {
+ for (word p = argv; chainp(p); p = B(p)) {
   if (!strp(A(p))) return g;                              // misuse: non-string argv
   argc++, total += len(A(p)) + 1; }                          // +1 for the NUL
  if (!argc) return g;                                        // empty argv
@@ -110,7 +110,7 @@ struct ai *ai_argv_marshal(struct ai *g, char ***cavp) {
  char **cav = (char**) g->hp,                                // at Hp: aligned
       *blob = (char*) (g->hp + (argc + 1));                  // whole words after
  uintptr_t off = 0, i = 0;
- for (ai_word p = argv; chainp(p); p = B(p), i++) {
+ for (word p = argv; chainp(p); p = B(p), i++) {
   struct ai_str *s = str(A(p));
   memcpy(blob + off, txt(s), len(s));
   blob[off + len(s)] = 0;
@@ -136,7 +136,7 @@ static ai_inline int proc_status(int st) {
 // a love string as a C string, or NULL for a non-string: bytes[len] is always a NUL
 // (l/love.h), so the bytes go to the syscall where they lie. a path the kernel finds
 // too long comes back ENAMETOOLONG, which is a truer answer than a cap of ours.
-static ai_inline char const *str_c(ai_word x) { return strp(x) ? txt(x) : NULL; }
+static ai_inline char const *str_c(word x) { return strp(x) ? txt(x) : NULL; }
 
 // the argv marshal: the chain of strings at g->sp[0] -> argc+1 char** + the
 // NUL-joined byte blob, laid in the uncommitted heap gap at Hp -- GC-invisible,
@@ -180,7 +180,7 @@ static void sig_dfl_job(void) {
 // ignored on entry to a non-interactive shell cannot be trapped or reset, and a
 // `&` from the calling shell is how a script most often gets one -- so a shell
 // that cannot ask this trapped signals its caller had deliberately turned off.
-ai_noinline static ai_word host_sigignp(ai_word sigw) {
+ai_noinline static word host_sigignp(word sigw) {
  struct sigaction sa;
  if (!charmp(sigw)) return putcharm(0);
  if (sigaction((int) getcharm(sigw), NULL, &sa)) return putcharm(0);
@@ -189,7 +189,7 @@ static lvm(lvm_sigignp) { Sp[0] = host_sigignp(Sp[0]); ai_musttail return Next(1
 
 // (sigclear _) -> () -- empty this process's signal mask. the exec children get it
 // from sig_dfl_job above; a shell's forked subshell never execs, so it asks here.
-ai_noinline static ai_word host_sigclear(struct ai *g) {
+ai_noinline static word host_sigclear(struct ai *g) {
  sigset_t none; sigemptyset(&none);
  return sigprocmask(SIG_SETMASK, &none, NULL) ? ai_err(g, errno) : ZeroPoint; }
 static lvm(lvm_sigclear) { Sp[0] = host_sigclear(g); ai_musttail return Next(1); }
@@ -234,7 +234,7 @@ ai_noinline static struct ai *host_spawnx(struct ai *g, int in, int out, int err
  char **cav;
  g = argv_marshal(g, &cav);
  if (!cav) return g;                                         // misuse pushed -1, or oom
- ai_word fdmap = mapat >= 0 ? g->sp[mapat] : ZeroPoint,
+ word fdmap = mapat >= 0 ? g->sp[mapat] : ZeroPoint,
          closes = closeat >= 0 ? g->sp[closeat] : ZeroPoint;
  fflush(NULL);                                               // flush now, not twice in the child
  pid_t pid = fork();
@@ -247,15 +247,15 @@ ai_noinline static struct ai *host_spawnx(struct ai *g, int in, int out, int err
   if (in  >= 0) dup2(in, 0);
   if (out >= 0) dup2(out, 1);
   if (err >= 0) dup2(err, 2);
-  for (ai_word p = fdmap; chainp(p); p = B(p)) {
-   ai_word e = A(p);
+  for (word p = fdmap; chainp(p); p = B(p)) {
+   word e = A(p);
    if (!chainp(e)) continue;
    intptr_t cfd = charmp(A(e)) ? getcharm(A(e)) : -1;
    if (cfd < 0) continue;
-   ai_word sw = B(e);
+   word sw = B(e);
    if (charmp(sw) && getcharm(sw) >= 0) dup2((int) getcharm(sw), (int) cfd);
    else close((int) cfd); }                    // () (or a negative) srcfd closes childfd
-  for (ai_word p = closes; chainp(p); p = B(p)) {
+  for (word p = closes; chainp(p); p = B(p)) {
    intptr_t fd = getcharm(A(p));
    if (fd > 2) close((int) fd); }
   sig_dfl_job();                                // undo the shell's ignores (TTOU too)
@@ -310,12 +310,12 @@ static lvm(lvm_reapany) {
 // send -- before delivery processing -- so the same blocked mask queues here
 // too (probed on both boxes). one kernel per process, so one flavor: a flag.
 static int host_sigkq;
-ai_noinline static int host_sigfd_kq(ai_word a) {
+ai_noinline static int host_sigfd_kq(word a) {
  int kq = kqueue();
  if (kq < 0) return -1;
  struct kevent ch;
  if (chainp(a))
-  for (ai_word p = a; chainp(p); p = B(p)) {
+  for (word p = a; chainp(p); p = B(p)) {
    if (!charmp(A(p))) continue;
    EV_SET(&ch, getcharm(A(p)), EVFILT_SIGNAL, EV_ADD, 0, 0, 0);
    if (kevent(kq, &ch, 1, 0, 0, 0) < 0) return close(kq), -1; }
@@ -333,9 +333,9 @@ ai_noinline static int host_sigfd_kq(ai_word a) {
 ai_noinline static struct ai *host_sigfd(struct ai *g) {
  sigset_t m;
  sigemptyset(&m);
- ai_word a = g->sp[0];
+ word a = g->sp[0];
  if (chainp(a))
-  for (ai_word p = a; chainp(p); p = B(p)) {
+  for (word p = a; chainp(p); p = B(p)) {
   if charmp(A(p)) sigaddset(&m, (int) getcharm(A(p))); }
  else { sigaddset(&m, SIGCHLD); sigaddset(&m, SIGTERM); }
  if (sigprocmask(SIG_BLOCK, &m, NULL)) return g->sp[0] = ai_err(g, errno), g;
@@ -419,7 +419,7 @@ static lvm(lvm_sigtake) { Sp[0] = ai_err(g, ENOSYS); ai_musttail return Next(1);
 // WNOHANG, and the unit means "still running". a real answer is a charm status
 // (256+sig for a stop) or a failure's nom, so the zero point is free to carry
 // the fourth term -- no sentinel is overloaded.
-ai_noinline static ai_word host_waitpid(struct ai *g, ai_word arg) {
+ai_noinline static word host_waitpid(struct ai *g, word arg) {
  intptr_t pid = charmp(arg) ? getcharm(arg) : 0;
  int st;
  pid_t r;
@@ -436,11 +436,11 @@ ai_noinline static ai_word host_waitpid(struct ai *g, ai_word arg) {
 // correct until something measures it hurting. nothing is consumed before the park
 // (WNOHANG left the child exactly as it found it), so the op re-runs whole.
 static lvm(lvm_waitpid) {
- ai_word r = host_waitpid(g, Sp[0]);
+ word r = host_waitpid(g, Sp[0]);
  if (r == ZeroPoint) { g->next_wake_at = ai_clock() + 1; ai_musttail return Ap(lvm_yield_sw, g); }
  Sp[0] = r; ai_musttail return Next(1); }
 
-ai_noinline static ai_word host_posix_signal(struct ai *g, ai_word sigw, ai_word dw) {
+ai_noinline static word host_posix_signal(struct ai *g, word sigw, word dw) {
  if (!charmp(sigw) || !charmp(dw)) return ai_badarg(g);
  struct sigaction sa;
  memset(&sa, 0, sizeof sa);
@@ -454,7 +454,7 @@ static lvm(lvm_posix_signal) {
 
 // a host inlines into its wrapper unless its frame holds a buffer or an address-taken
 // local -- those stay ai_noinline, off the frame the musttail has to leave behind
-static ai_inline ai_word host_chdir(struct ai *g, ai_word arg) {
+static ai_inline word host_chdir(struct ai *g, word arg) {
  char const *buf = str_c(arg);
  if (!buf) return ai_badarg(g);
  return chdir(buf) ? ai_err(g, errno) : ZeroPoint; }
@@ -567,7 +567,7 @@ static lvm(lvm_spawnio) {
           fg = charmp(Sp[6]) ? getcharm(Sp[6]) : 0;
  LvmCallp(g, 7, host_spawnx, in, out, err, -1, 4, pg, fg) }   // argv at sp[0], closes at sp[4]; pid over the 7 args
 
-ai_noinline static ai_word host_posix_ttyfg(struct ai *g, ai_word pgw) {
+ai_noinline static word host_posix_ttyfg(struct ai *g, word pgw) {
  pid_t pg = (charmp(pgw) && getcharm(pgw) > 0) ? (pid_t) getcharm(pgw) : getpgrp();
  return tcsetpgrp(0, pg) ? ai_err(g, errno) : ZeroPoint; }
 
@@ -609,7 +609,7 @@ static lvm(lvm_getgid) { Sp[0] = putcharm(getgid()); ai_musttail return Next(1);
 // to the reader loop (doc/misc/posix.md's open question, answered conservatively:
 // the child owns a full copy-on-write address space, so the GC is fine; the
 // discipline is all in the caller -- flush out/err before, child = eval+quit).
-static ai_inline ai_word host_fork(struct ai *g) {
+static ai_inline word host_fork(struct ai *g) {
  fflush(NULL);
  pid_t pid = fork();
  return pid < 0 ? ai_err(g, errno) : putcharm(pid); }
@@ -619,14 +619,14 @@ static lvm(lvm_fork) { Sp[0] = host_fork(g); ai_musttail return Next(1); }
 // laying its own fdmap, a compound's `done < file` swap).
 // (dup fd) -> a fresh fd duplicating fd (>= 3, clear of stdio) | a nom. the
 // save half of the swap.
-static ai_inline ai_word host_dup2(struct ai *g, ai_word sw, ai_word dw) {
+static ai_inline word host_dup2(struct ai *g, word sw, word dw) {
  return !charmp(sw) || !charmp(dw) ? ai_badarg(g) :
         dup2((int) getcharm(sw), (int) getcharm(dw)) < 0 ? ai_err(g, errno) :
         ZeroPoint; }
 
 static lvm(lvm_dup2) { Sp[1] = host_dup2(g, Sp[0], Sp[1]); Sp += 1; ai_musttail return Next(1); }
 
-static ai_inline ai_word host_dup(struct ai *g, ai_word w) {
+static ai_inline word host_dup(struct ai *g, word w) {
  if (!charmp(w)) return ai_badarg(g);
  int fd = fcntl((int) getcharm(w), F_DUPFD, 3);
  return fd < 0 ? ai_err(g, errno) : putcharm(fd); }
@@ -649,7 +649,7 @@ static lvm(lvm_mkdir) {
  ai_musttail return Nextp(1, 1); }
 
 #if defined(AiHaveMount)
-static ai_inline ai_word host_mount(struct ai *g, ai_word a, ai_word b, ai_word c) {
+static ai_inline word host_mount(struct ai *g, word a, word b, word c) {
  char const *src = str_c(a), *tgt = str_c(b), *typ = str_c(c);
  if (!src || !tgt || !typ) return ai_badarg(g);
  return mount(src, tgt, typ, 0, NULL) ? ai_err(g, errno) : ZeroPoint; }
@@ -660,7 +660,7 @@ static lvm(lvm_mount) { Sp[2] = host_mount(g, Sp[0], Sp[1], Sp[2]); Sp += 2; ai_
 // arity is fixed, and an early boot is not where an arity change wants finding out.
 // ⚠ the DATA argument stays NULL, so an -o that is filesystem text rather than a flag
 // (tmpfs's size=, a uid= on vfat) has nowhere to go and the face refuses it by name.
-static ai_inline ai_word host_mountf(struct ai *g, ai_word a, ai_word b, ai_word c, ai_word f) {
+static ai_inline word host_mountf(struct ai *g, word a, word b, word c, word f) {
  char const *src = str_c(a), *tgt = str_c(b), *typ = str_c(c);
  if (!src || !tgt || !typ) return ai_badarg(g);
  return mount(src, tgt, typ, (unsigned long) getcharm(f), NULL) ? ai_err(g, errno) : ZeroPoint; }
@@ -756,7 +756,7 @@ static lvm(lvm_newns) { Sp[0] = ai_err(g, ENOSYS); ai_musttail return Next(1); }
 //                   under a seek). whence: 0 SET, 1 CUR, 2 END, and a stranger is the
 //                   row's 'einval rather than a quiet SET.
 ai_noinline static struct ai *host_stat_tuple(struct ai *g, int follow) {
- ai_word x = g->sp[0];
+ word x = g->sp[0];
  struct stat st;
  if (charmp(x)) {
   if (getcharm(x) < 0) return g->sp[0] = ai_badarg(g), g;
@@ -812,7 +812,7 @@ static ai_inline struct ai *host_posix_readdir(struct ai *g) {
 static lvm(lvm_posix_readdir) {
  LvmCall(g, host_posix_readdir) }
 
-static ai_inline ai_word host_posix_unlink(struct ai *g, ai_word arg) {
+static ai_inline word host_posix_unlink(struct ai *g, word arg) {
  char const *p = str_c(arg);
  if (!p) return ai_badarg(g);
  return unlink(p) ? ai_err(g, errno) : ZeroPoint; }
@@ -825,7 +825,7 @@ static lvm(lvm_posix_unlink) {
 // (the absence lane: (setenv n ()) clears n from the environment).
 // (environ _)       -> the environment as a list of "name=value" strings (the raw
 //                      POSIX shape -- split at the first '=' in love; no order promised).
-static ai_inline ai_word host_posix_setenv(struct ai *g, ai_word nw, ai_word vw) {
+static ai_inline word host_posix_setenv(struct ai *g, word nw, word vw) {
  char const *n = str_c(nw), *v = str_c(vw);
  if (!n) return ai_badarg(g);
  if (!v) return unsetenv(n) ? ai_err(g, errno) : ZeroPoint;
@@ -848,7 +848,7 @@ static ai_inline struct ai *host_posix_environ(struct ai *g) {
 static lvm(lvm_posix_environ) {
  LvmCall(g, host_posix_environ) }
 
-static ai_inline ai_word host_posix_lseek(struct ai *g, ai_word fdw, ai_word offw, ai_word whw) {
+static ai_inline word host_posix_lseek(struct ai *g, word fdw, word offw, word whw) {
  if (!charmp(fdw) || !charmp(offw) || !charmp(whw)) return ai_badarg(g);
  intptr_t w = getcharm(whw);
  // the three by name, a platform's numbers being its own; anything else goes down
@@ -951,7 +951,7 @@ AiNif("environ", nif_posix_environ);
 //   (hardlink old new)    -> () | a nom | 'badarg  (link(2); `link` the word is
 //                            the chain ctor, the most spoken name in the prel,
 //                            so the nif wears the long form)
-static ai_inline ai_word host_posix_rename(struct ai *g, ai_word ow, ai_word nw) {
+static ai_inline word host_posix_rename(struct ai *g, word ow, word nw) {
  char const *o = str_c(ow), *n = str_c(nw);
  if (!o || !n) return ai_badarg(g);
  return rename(o, n) ? ai_err(g, errno) : ZeroPoint; }
@@ -959,7 +959,7 @@ static lvm(lvm_posix_rename) {
  Sp[1] = host_posix_rename(g, Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
 
-static ai_inline ai_word host_posix_symlink(struct ai *g, ai_word tw, ai_word pw) {
+static ai_inline word host_posix_symlink(struct ai *g, word tw, word pw) {
  char const *t = str_c(tw), *p = str_c(pw);
  if (!t || !p) return ai_badarg(g);
  return symlink(t, p) ? ai_err(g, errno) : ZeroPoint; }
@@ -979,7 +979,7 @@ ai_noinline static struct ai *host_posix_readlink(struct ai *g) {
 static lvm(lvm_posix_readlink) {
  LvmCall(g, host_posix_readlink) }
 
-static ai_inline ai_word host_posix_chmod(struct ai *g, ai_word pw, ai_word mw) {
+static ai_inline word host_posix_chmod(struct ai *g, word pw, word mw) {
  char const *p = str_c(pw);
  if (!p || !charmp(mw)) return ai_badarg(g);
  return chmod(p, (mode_t) getcharm(mw)) ? ai_err(g, errno) : ZeroPoint; }
@@ -987,7 +987,7 @@ static lvm(lvm_posix_chmod) {
  Sp[1] = host_posix_chmod(g, Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
 
-static ai_inline ai_word host_posix_chown(struct ai *g, ai_word pw, ai_word uw, ai_word gw) {
+static ai_inline word host_posix_chown(struct ai *g, word pw, word uw, word gw) {
  char const *p = str_c(pw);
  if (!p || !charmp(uw) || !charmp(gw)) return ai_badarg(g);
  return chown(p, (uid_t) getcharm(uw), (gid_t) getcharm(gw)) ? ai_err(g, errno) : ZeroPoint; }
@@ -995,7 +995,7 @@ static lvm(lvm_posix_chown) {
  Sp[2] = host_posix_chown(g, Sp[0], Sp[1], Sp[2]);
  ai_musttail return Nextp(1, 2); }
 
-ai_noinline static ai_word host_posix_utime(struct ai *g, ai_word pw, ai_word msw) {
+ai_noinline static word host_posix_utime(struct ai *g, word pw, word msw) {
  char const *p = str_c(pw);
  if (!p) return ai_badarg(g);
  struct timespec ts[2];
@@ -1010,13 +1010,13 @@ static lvm(lvm_posix_utime) {
  Sp[1] = host_posix_utime(g, Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
 
-static ai_inline ai_word host_posix_rmdir(struct ai *g, ai_word pw) {
+static ai_inline word host_posix_rmdir(struct ai *g, word pw) {
  char const *p = str_c(pw);
  if (!p) return ai_badarg(g);
  return rmdir(p) ? ai_err(g, errno) : ZeroPoint; }
 static lvm(lvm_posix_rmdir) { Sp[0] = host_posix_rmdir(g, Sp[0]); ai_musttail return Next(1); }
 
-static ai_inline ai_word host_posix_hardlink(struct ai *g, ai_word ow, ai_word nw) {
+static ai_inline word host_posix_hardlink(struct ai *g, word ow, word nw) {
  char const *o = str_c(ow), *n = str_c(nw);
  if (!o || !n) return ai_badarg(g);
  return link(o, n) ? ai_err(g, errno) : ZeroPoint; }
@@ -1036,7 +1036,7 @@ static lvm(lvm_posix_hardlink) {
 // would be one guarded branch inside it, worth adding when a profile asks.
 // and the buffer lives in a helper, not in the lvm_ -- 64K owed at a tail turns the jump
 // into a ret and grows the stack every dispatch (love.h's no-scratch rule).
-ai_noinline static ai_word host_posix_copyfile(struct ai *g, ai_word sw, ai_word dw) {
+ai_noinline static word host_posix_copyfile(struct ai *g, word sw, word dw) {
  char const *s = str_c(sw), *d = str_c(dw);
  if (!s || !d) return ai_badarg(g);
  int in = open(s, O_RDONLY);
@@ -1289,7 +1289,7 @@ static lvm(lvm_raw) {
 // n bytes read; 0 = nothing waiting or eof (the next see tells those apart); a
 // nom = failure ('badarg misuse). the chunk lane a per-byte see cannot be.
 static lvm(lvm_swig) {
- ai_word p = Sp[0], x = Sp[1], out = ai_badarg(g);
+ word p = Sp[0], x = Sp[1], out = ai_badarg(g);
  if (!charmp(p) && ((union u*) p)->ap == lvm_port_io
       && !charmp(x) && ((union u*) x)->ap == lvm_cask) {
   struct ai_io *io = (struct ai_io*) p;

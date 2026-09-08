@@ -45,7 +45,7 @@ static struct ai
  *big_read_radix(struct ai *g, ai_limb radix, int chunk, uintptr_t pfx);
 static struct ai_zn tray_cell_zn(struct ai_tray *v, uintptr_t i);
 static uintptr_t bdim(uintptr_t da, uintptr_t db);
-static union u *as_big(ai_word **hp, word x);
+static union u *as_big(word **hp, word x);
 static void
  big_addsub(ai_limb *r, int *rn, bool *rneg, ai_limb const *a, int na, bool nega,
             ai_limb const *b, int nb, bool negb, bool subtract),
@@ -250,7 +250,7 @@ int ai_big_cmp(word a, word b) {
 
 // demote a magnitude to the smallest tier: fixnum, sun box, bignum -- the single
 // sink that keeps the tiers disjoint, so eqv / table keys stay well defined
-word ai_big_canon(ai_word **hp, ai_limb const *limb, int n, bool neg) {
+word ai_big_canon(word **hp, ai_limb const *limb, int n, bool neg) {
  while (n > 0 && limb[n-1] == 0) n--;
  if (n == 0) return zero;
  if (n <= wlimbs) {
@@ -536,7 +536,7 @@ struct ai *ai_big_quot_true(struct ai *g) {
 static union u const bmul_loop[1] = { { .ap = lvm_bmul } };
 
 // materialize integer x as a heap ai_big (a bignum returns in place)
-static union u *as_big(ai_word **hp, word x) {
+static union u *as_big(word **hp, word x) {
  if (bigp(x)) return cell(x);
  intptr_t v = toint(x);
  bool neg = v < 0;
@@ -1025,8 +1025,8 @@ static lvm(lvm_aextreme) {
   if (ismax?m3>m0:m3<m0) m0=m3;
   emit_int(_res, m0); }
  ai_musttail return Answer(_res); }
-lvm(lvm_max) { g->b = (ai_word) 2; ai_musttail return Ap(lvm_aextreme, g); }
-lvm(lvm_min) { g->b = (ai_word) 3; ai_musttail return Ap(lvm_aextreme, g); }
+lvm(lvm_max) { g->b = (word) 2; ai_musttail return Ap(lvm_aextreme, g); }
+lvm(lvm_min) { g->b = (word) 3; ai_musttail return Ap(lvm_aextreme, g); }
 
 // aall: the bool conjunction reduction ("no zero element"; empty -> vacuously
 // true; scalar -> identity). the disjunction is just `len`.
@@ -1426,7 +1426,7 @@ lvm(lvm_sort) {
 static lvm(lvm_cmp_ord) {
  int op = (int) g->b;
  word a = Sp[0], b = Sp[1]; intptr_t r;
- if (trayp(a) || trayp(b)) { g->b = (ai_word) (op); ai_musttail return Ap(lvm_vbin, g); }      // array -> elementwise
+ if (trayp(a) || trayp(b)) { g->b = (word) (op); ai_musttail return Ap(lvm_vbin, g); }      // array -> elementwise
  int ra = cmp_rank(g, a), rb = cmp_rank(g, b);
  if (ra != rb) r = vcmp_int(op, ra, rb);                   // cross-kind: the true-blue lattice (cmp_rank)
  else if (!(isnum(a) || twinp(a)) || coinp(b)) r = vcmp_int(op, cmp3(g, a, b), 0);  // same non-number band, or a ratio coin either side (a coin as `a` fails isnum; as `b` this catches it): via cmp3
@@ -1594,14 +1594,14 @@ lvm(lvm_vbin) {
  if (((atray && tray(a)->type == ai_C) || (btray && tray(b)->type == ai_C) || twinp(a) || twinp(b))
      && !(atray && tray(a)->type == ai_O) && !(btray && tray(b)->type == ai_O)) {
   if (vop_bitp(op)) ai_musttail return Push(ZeroPoint);   // no bits on a complex
-  g->b = (ai_word) (op); ai_musttail return Ap(lvm_cbin, g); }
+  g->b = (word) (op); ai_musttail return Ap(lvm_cbin, g); }
  if (!(atray || isnum(a)) || !(btray || isnum(b)))   // each operand: array or scalar
   ai_musttail return Push(op == vop_eq ? zero : ZeroPoint);   // `=` is boolean: undefined face -> 0, not ()
  if ((atray && tray(a)->type == ai_O) || (btray && tray(b)->type == ai_O)) {
   // boxed cells are not the word lane: a big refuses the bits on a star, so the
   // object tray refuses them whole rather than answering per-element zero.
   if (vop_bitp(op)) ai_musttail return Push(ZeroPoint);
-  g->b = (ai_word) (op); ai_musttail return Ap(lvm_obin, g); }                   // object array -> promoting lane
+  g->b = (word) (op); ai_musttail return Ap(lvm_obin, g); }                   // object array -> promoting lane
  // compute-type = max element type; a scalar int contributes the lowest type
  // (i8) so it never widens an int array, a scalar float forces the float lane.
  int ta = atray ? (int) tray(a)->type : gemp(a) ? (int) ai_R : (int) ai_Z,

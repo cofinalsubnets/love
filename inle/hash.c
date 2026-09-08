@@ -310,7 +310,7 @@ static lvm(lvm_cksum) {
 #define Md5Buf 25
 #define CkSt 12
 
-static struct ai_str *dig_cask(ai_word x, uintptr_t want) {   // the cask's bytes, or NULL
+static struct ai_str *dig_cask(word x, uintptr_t want) {   // the cask's bytes, or NULL
  if (charmp(x) || ((union u*) x)->ap != lvm_cask) return NULL;
  struct ai_str *s = ((struct ai_cask*) x)->str;
  return s && s->len == want ? s : NULL; }
@@ -338,7 +338,7 @@ static const struct digspec dig_sha = {ShaSt, 8, ShaRem, ShaBuf, sha_block, 1, s
 
 // (X-init b) -> b, carrying the standard's initial state and nothing fed | () on
 // anything that is not a cask of X's width
-static ai_word dig_init(ai_word x, const struct digspec *d) {
+static word dig_init(word x, const struct digspec *d) {
  struct ai_str *s = dig_cask(x, d->st);
  if (!s) return ZeroPoint;
  uint8_t *st = (uint8_t*) s->bytes;
@@ -349,7 +349,7 @@ static ai_word dig_init(ai_word x, const struct digspec *d) {
 // (X-feed b str) -> b, str's bytes folded in | (). any chunk size: what does not fill
 // a block stays in the remainder and rides to the next feed, which is the whole point
 // -- a caller reads by the gulp and never has to think in 64s.
-static ai_word dig_feed(ai_word x, ai_word a, const struct digspec *d) {
+static word dig_feed(word x, word a, const struct digspec *d) {
  struct ai_str *cs = dig_cask(x, d->st);
  if (!cs || !strp(a)) return ZeroPoint;
  struct ai_str *in = (struct ai_str*) a;
@@ -402,7 +402,7 @@ static lvm(lvm_md5_feed) {
  Sp[1] = dig_feed(Sp[0], Sp[1], &dig_md5);
  ai_musttail return Nextp(1, 1); }
 
-ai_noinline static ai_word host_ck_feed(ai_word x, ai_word a) {
+ai_noinline static word host_ck_feed(word x, word a) {
  struct ai_str *cs = dig_cask(x, CkSt);
  if (!cs || !strp(a)) return ZeroPoint;
  struct ai_str *in = (struct ai_str*) a;
@@ -416,7 +416,7 @@ ai_noinline static ai_word host_ck_feed(ai_word x, ai_word a) {
  dig_st(st, &c, 1, len);
  return x; }
 
-ai_noinline static ai_word host_ck_done(ai_word x) {
+ai_noinline static word host_ck_done(word x) {
  struct ai_str *cs = dig_cask(x, CkSt);
  if (!cs) return ZeroPoint;
  uint8_t *st = (uint8_t*) cs->bytes;

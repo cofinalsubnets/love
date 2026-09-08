@@ -292,7 +292,7 @@ lvm(lvm_chug) {
 // since it last looked, which is the only way to know its own charlist is still the port's.
 lvm(lvm_inhand) {
  if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
- Sp[0] = putcharm(iop(Sp[0]) ? (ai_word) ai_io_pending(g, (struct ai_io*) Sp[0]) : 0);
+ Sp[0] = putcharm(iop(Sp[0]) ? (word) ai_io_pending(g, (struct ai_io*) Sp[0]) : 0);
  ai_musttail return Next(1); }
 
 // (unchug port n): hand back up to n bytes of the run this port already gave out, so a
@@ -301,7 +301,7 @@ lvm(lvm_inhand) {
 lvm(lvm_unchug) {
  if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
  Sp[1] = putcharm(iop(Sp[0]) && charmp(Sp[1]) && getcharm(Sp[1]) != 0
-                  ? (ai_word) ai_io_unread(g, (struct ai_io*) Sp[0],
+                  ? (word) ai_io_unread(g, (struct ai_io*) Sp[0],
                                            (intptr_t) getcharm(Sp[1])) : 0);
  ai_musttail return Nextp(1, 1); }
 
@@ -315,8 +315,8 @@ uintptr_t ai_io_wpending(struct ai *g, struct ai_io *i) {
 __attribute__((weak)) void ai_fd_drain(int fd, void const *p, uintptr_t n) {
  }
 
-struct ci { struct ai_io io; ai_word head; }; // charlist input
-struct to { struct ai_io io; struct ai_str *buf; ai_word i; }; // lisp string output
+struct ci { struct ai_io io; word head; }; // charlist input
+struct to { struct ai_io io; struct ai_str *buf; word i; }; // lisp string output
 static struct ai *noop_flush(struct ai *g) { return g; }
 
 // the charlist source's read door: walks the spine, never blocks, so a spent list is the
@@ -568,7 +568,7 @@ lvm(lvm_fgetc) {
   intptr_t k;
   Pack(g); k = fd < 0 ? -1 : ai_fd_readn(g, (int) fd, &c, 1); Unpack(g);
   if (!k) { g->next_wait_fd = fd; ai_musttail return Ap(lvm_yield_sw, g); }
-  Sp[0] = putcharm(k > 0 ? (ai_word) c : EOF);
+  Sp[0] = putcharm(k > 0 ? (word) c : EOF);
   ai_musttail return Next(1); }
  if (iop(Sp[0])) {
   struct ai_io *i = (struct ai_io*) Sp[0];

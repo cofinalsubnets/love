@@ -223,19 +223,19 @@ bit_slow(band, &, vop_band) bit_slow(bor, |, vop_bor) bit_slow(bxor, ^, vop_bxor
 lvm(lvm_band) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) ai_musttail return Push((a & b) | 1);
  avm_unit(a, b);
- if (trayp(a) || trayp(b)) { g->b = (ai_word) (vop_band); ai_musttail return Ap(lvm_vbin, g); }
+ if (trayp(a) || trayp(b)) { g->b = (word) (vop_band); ai_musttail return Ap(lvm_vbin, g); }
  ai_musttail return Ap(lvm_band_slow, g); }
 
 lvm(lvm_bor) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) ai_musttail return Push((a | b) | 1);
  avm_unit(a, b);
- if (trayp(a) || trayp(b)) { g->b = (ai_word) (vop_bor); ai_musttail return Ap(lvm_vbin, g); }
+ if (trayp(a) || trayp(b)) { g->b = (word) (vop_bor); ai_musttail return Ap(lvm_vbin, g); }
  ai_musttail return Ap(lvm_bor_slow, g); }
 
 lvm(lvm_bxor) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) ai_musttail return Push((a ^ b) | 1);
  avm_unit(a, b);
- if (trayp(a) || trayp(b)) { g->b = (ai_word) (vop_bxor); ai_musttail return Ap(lvm_vbin, g); }
+ if (trayp(a) || trayp(b)) { g->b = (word) (vop_bxor); ai_musttail return Ap(lvm_vbin, g); }
  ai_musttail return Ap(lvm_bxor_slow, g); }
 // (bitwise complement is `(^ x -1)`; logical not is the `!` reader sigil / `zerop`.)
 
@@ -250,7 +250,7 @@ lvm(lvm_bsr) {
    ai_musttail return Push(putcharm(getcharm(a) >> k)); }
  avm_unit(a, b);
  if (trayp(a) || trayp(b)) {
-  g->b = (ai_word) (vop_bsr);
+  g->b = (word) (vop_bsr);
   ai_musttail return Ap(lvm_vbin, g); }
  if (!intp(a) || !intp(b))
   ai_musttail return Push(ZeroPoint);
@@ -261,7 +261,7 @@ lvm(lvm_bsr) {
 // "nothing was lost", and it lets 0 and every small shift stay cheap.
 lvm(lvm_bsl) { word a = Sp[0], b = Sp[1], _res;
  avm_unit(a, b);
- if (trayp(a) || trayp(b)) { g->b = (ai_word) (vop_bsl); ai_musttail return Ap(lvm_vbin, g); }
+ if (trayp(a) || trayp(b)) { g->b = (word) (vop_bsl); ai_musttail return Ap(lvm_vbin, g); }
  if (!intp(a) || !intp(b)) ai_musttail return Push(ZeroPoint);
  if (charmp(a) && charmp(b)) { intptr_t x = getcharm(a), k = getcharm(b);
   if (k >= 0 && k < Bits) { intptr_t r = (intptr_t) ((uintptr_t) x << k);
@@ -281,7 +281,7 @@ static lvm(lvm_math1) {
  word a = Sp[0];
  if (trayp(a)) {                               // (sin a-tray) etc. -> gem tray; a twin tray is undefined
   if (tray(a)->type == ai_C) ai_musttail return Answer(ZeroPoint);
-  g->b = (ai_word) (uintptr_t) (fn); ai_musttail return Ap(lvm_vmap1, g); }
+  g->b = (word) (uintptr_t) (fn); ai_musttail return Ap(lvm_vmap1, g); }
  if (!isnum(a)) ai_musttail return Answer(ZeroPoint);
  ai_flo_t ad = toflo(a), rd = fn(ad);
  Have(gem_req);
@@ -293,7 +293,7 @@ static lvm(lvm_math2) {
  if (trayp(a) || trayp(b)) {                               // (pow arr ..) etc. -> float array
   if ((trayp(a) && tray(a)->type == ai_C) || (trayp(b) && tray(b)->type == ai_C))
    ai_musttail return Push(ZeroPoint);                 // complex array undefined here
-  g->b = (ai_word) (uintptr_t) (fn); ai_musttail return Ap(lvm_vmap2, g); }
+  g->b = (word) (uintptr_t) (fn); ai_musttail return Ap(lvm_vmap2, g); }
  if (!isnum(a) || !isnum(b)) ai_musttail return Push(ZeroPoint);
  ai_flo_t ad = toflo(a), bd = toflo(b), rd = fn(ad, bd);
  Have(gem_req);
@@ -301,7 +301,7 @@ static lvm(lvm_math2) {
 
 
 m1(mvm1)
-lvm(lvm_atan2) { g->b = (ai_word) (uintptr_t) (ai_atan2); ai_musttail return Ap(lvm_math2, g); }
+lvm(lvm_atan2) { g->b = (word) (uintptr_t) (ai_atan2); ai_musttail return Ap(lvm_math2, g); }
 
 // (log x): a positive real stays float; a negative real or complex widens to the
 // complex principal value ~((log |z|) (arg z)) -- so (log -1) = (* i pi), euler in
@@ -312,7 +312,7 @@ lvm(lvm_log) {
  if (twinp(a)) m = ai_log(twin_mod(a)), th = ai_atan2(twin_im(a), twin_re(a));
  else if (isnum(a) && toflo(a) < 0) { ai_flo_t ad = toflo(a);
   m = ai_log(-ad), th = ai_atan2(0, ad); }
- else { g->b = (ai_word) (uintptr_t) (ai_log); ai_musttail return Ap(lvm_math1, g); }
+ else { g->b = (word) (uintptr_t) (ai_log); ai_musttail return Ap(lvm_math1, g); }
  Have(twin_req);
  Sp[0] = mk_twin(&Hp, m, th); ai_musttail return Next(1); }
 
@@ -375,7 +375,7 @@ static bool rng_state_p(word x) {
         && tray(x)->shape[0] == rng_state_len; }
 
 // a fresh state tray at Hp copying src's limbs; caller holds Have(rng_tray_req)
-static struct ai_tray *rng_copy(ai_word **hp, struct ai_tray *src) {
+static struct ai_tray *rng_copy(word **hp, struct ai_tray *src) {
  struct ai_tray *v = (struct ai_tray*) *hp;
  *hp += rng_tray_req;
  ini_tray(v, rng_vt, 1);
@@ -1094,7 +1094,7 @@ lvm(lvm_pow) {
    ai_flo_t m = ai_pow(-ad, bd), re = m * ai_cospi(bd), im = m * ai_sinpi(bd);
    Have(twin_req);
    *++Sp = mk_twin(&Hp, re, im); ai_musttail return Next(1); } }
- g->b = (ai_word) (uintptr_t) (ai_pow); ai_musttail return Ap(lvm_math2, g); }
+ g->b = (word) (uintptr_t) (ai_pow); ai_musttail return Ap(lvm_math2, g); }
 
 // (sqrt x): a complex operand or a negative real widens to the principal root,
 // as (** x 1/2) does; a non-negative real stays in the float lane.
@@ -1112,7 +1112,7 @@ lvm(lvm_sqrt) {
   ai_flo_t m = ai_sqrt(-toflo(a));
   Have(twin_req);
   ai_musttail return Answer(mk_twin(&Hp, 0, m)); }
- g->b = (ai_word) (uintptr_t) (ai_sqrt); ai_musttail return Ap(lvm_math1, g); }
+ g->b = (word) (uintptr_t) (ai_sqrt); ai_musttail return Ap(lvm_math1, g); }
 
 // (exp x): a complex operand takes the complex power lane, as (** e x) does.
 lvm(lvm_exp) {
@@ -1125,7 +1125,7 @@ lvm(lvm_exp) {
   v->ap = lvm_twinbox;
   twin_pow_fill(v, e, a);
   ai_musttail return Answer(word(v)); }
- g->b = (ai_word) (uintptr_t) (ai_exp); ai_musttail return Ap(lvm_math1, g); }
+ g->b = (word) (uintptr_t) (ai_exp); ai_musttail return Ap(lvm_math1, g); }
 
 // fill a packed ai_C array with (re = a-element, im = b-element) under broadcast
 static ai_noinline void twin_build_fill(struct ai_tray *r, word a, word b) {
@@ -1205,7 +1205,7 @@ lvm(lvm_re) {
   enum ai_tray_type t = tray(a)->type;
   if (t == ai_O) ai_musttail return Answer(ZeroPoint);   // a tray is not a number
   if (t != ai_C) ai_musttail return Next(1);          // a real array is its own real part
-  g->b = (ai_word) (0); ai_musttail return Ap(lvm_cpart, g); }
+  g->b = (word) (0); ai_musttail return Ap(lvm_cpart, g); }
  if (isnum(a)) ai_musttail return Next(1);            // re of a real is itself
  ai_musttail return Answer(ZeroPoint); }
 
@@ -1219,7 +1219,7 @@ lvm(lvm_im) {
  if (trayp(a)) {
   enum ai_tray_type t = tray(a)->type;
   if (t == ai_O) ai_musttail return Answer(ZeroPoint);
-  g->b = (ai_word) (t == ai_C ? 1 : -1); ai_musttail return Ap(lvm_cpart, g); }   // real array -> zeros of its shape
+  g->b = (word) (t == ai_C ? 1 : -1); ai_musttail return Ap(lvm_cpart, g); }   // real array -> zeros of its shape
  if (isnum(a)) ai_musttail return Answer(putcharm(0));   // im of a real is 0
  ai_musttail return Answer(ZeroPoint); }
 

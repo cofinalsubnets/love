@@ -7,7 +7,7 @@ enum kind { KA, KB, KC, KN };
 int mx[KN][KN] = { [KA]={ [KA]=1, [KC]=2 }, [KC]={ [KB]=3 } };  /* designated, nested, enum idx */
 int limb[NB / 32];                                             /* const-expr dim = 2 */
 
-typedef long num;               /* love.h's habit: `num` a typedef... */
+typedef long num;               /* a typedef name... */
 
 static int shadowed(void)
 {

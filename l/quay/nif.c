@@ -27,7 +27,7 @@
 // hold a sane screen. The cask is OPEN DATA -- the love side can pin any byte
 // of it -- so every entry clamps the header fields the C loops trust: a
 // scribbled screen may paint garbage, never read or write out of bounds.
-static struct cb *scr_ok(ai_word x) {
+static struct cb *scr_ok(word x) {
  if (x & 1 || ((union u*) x)->ap != lvm_cask) return 0;
  struct ai_str *s = ((struct ai_cask*) x)->str;
  if (s->len < sizeof(struct cb)) return 0;
@@ -49,10 +49,10 @@ static struct cb *scr_ok(ai_word x) {
 // byte count the cask needs -- the size protocol that keeps sizeof(struct cb)
 // out of the surface. Geometry is capped well under the u32 cell indices.
 static lvm(lvm_screen) {
- ai_word b = Sp[0];
+ word b = Sp[0];
  intptr_t r = (Sp[1] & 1) ? getcharm(Sp[1]) : 0,
            k = (Sp[2] & 1) ? getcharm(Sp[2]) : 0;
- ai_word out = ZeroPoint;
+ word out = ZeroPoint;
  if (r >= 1 && k >= 1 && r <= 65535 && k <= 65535
       && (uintptr_t) r * (uintptr_t) k <= (uintptr_t) 1 << 22) {
   uintptr_t need = sizeof(struct cb) + (uintptr_t) r * (uintptr_t) k * 4;
@@ -70,7 +70,7 @@ static lvm(lvm_screen) {
 // screen back so feeds chain. No allocation, so the pointer holds throughout.
 static lvm(lvm_scribe) {
  struct cb *c = scr_ok(Sp[0]);
- ai_word x = Sp[1], out = ZeroPoint;
+ word x = Sp[1], out = ZeroPoint;
  if (c) {
   out = Sp[0];
   if (x & 1) cb_putc(c, (char) (getcharm(x) & 0xff));
@@ -87,7 +87,7 @@ static lvm(lvm_scribe) {
 // (glass scr i): look through to one packed cell.
 static lvm(lvm_glass) {
  struct cb *c = scr_ok(Sp[0]);
- ai_word out = ZeroPoint;
+ word out = ZeroPoint;
  if (c && (Sp[1] & 1)) {
   uintptr_t i = (uintptr_t) getcharm(Sp[1]);
   if (i < (uintptr_t) c->rows * c->cols) out = putcharm(c->cb[i]); }
@@ -98,7 +98,7 @@ static lvm(lvm_glass) {
 // polls the cursor for free. 0 cursor, 1 rows, 2 cols, 3 flag, 4 top, 5 bot.
 static lvm(lvm_gaze) {
  struct cb *c = scr_ok(Sp[0]);
- ai_word out = ZeroPoint;
+ word out = ZeroPoint;
  if (c && (Sp[1] & 1)) switch (getcharm(Sp[1])) {
   case 0: out = putcharm(c->wpos); break;
   case 1: out = putcharm(c->rows); break;
@@ -114,7 +114,7 @@ static lvm(lvm_gaze) {
 // the renderer's shopping list. bit 255 stands for row 255 and past.
 static lvm(lvm_damage) {
  struct cb *c = scr_ok(Sp[0]);
- ai_word out = ZeroPoint;
+ word out = ZeroPoint;
  if (c && (Sp[1] & 1)) {
   intptr_t k = getcharm(Sp[1]);
   if (k >= 0 && k < 8) {
@@ -140,7 +140,7 @@ ai_noinline static struct ai *host_reply(struct ai *g) {
  int n = c ? cb_reply(c, buf) : 0;
  if (!n) { g->sp[0] = ZeroPoint; return g; }
  if (!ai_ok(g = ai_have(g, (uintptr_t) n * Width(struct ai_chain)))) return g;
- ai_word tail = ZeroPoint;
+ word tail = ZeroPoint;
  for (int i = n; i-- > 0;) {
   struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
                                    putcharm(buf[i]), tail);

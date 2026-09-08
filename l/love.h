@@ -10,8 +10,8 @@
 #define ai_code_of(g) ((enum ai_status)((intptr_t)(g)&(sizeof(intptr_t)-1)))
 #define ai_ok(g) (ai_code_of(g) == ai_status_ok)
 
-#define putcharm(_) ((ai_word)(((uintptr_t)(ai_word)(_)<<1)|1))
-#define getcharm(_) ((ai_word)(_)>>1)
+#define putcharm(_) ((word)(((uintptr_t)(word)(_)<<1)|1))
+#define getcharm(_) ((word)(_)>>1)
 
 #ifndef EOF
 #define EOF (-1)
@@ -58,7 +58,7 @@
 #endif
 
 #if ai_tco
-#define _lvm(n) struct ai *n(struct ai *restrict g, union u *Ip, ai_word *Hp, ai_word *restrict Sp)
+#define _lvm(n) struct ai *n(struct ai *restrict g, union u *Ip, word *Hp, word *restrict Sp)
 #define Ap(fn, g) fn(g, Ip, Hp, Sp)
 #define Continue() Ap(Ip->ap, g)
 // the stepped/answering tails as bare calls (ai_musttail's operand may not be a comma):
@@ -120,7 +120,7 @@
 #define LvmResume(g, f, ...) { LvmPack(g, f, ##__VA_ARGS__); ai_musttail return Resume(); }
 #define LvmWrap(n, f) lvm(n) LvmCall(g, f)
 
-typedef intptr_t ai_word;
+typedef intptr_t word;
 
 union u;
 typedef _lvm(lvm_t);
@@ -155,13 +155,13 @@ struct ai_port_vt;   // the port's kind, in its head; spelled out below
 
 union u {
  lvm_t *ap;
- ai_word x;
+ word x;
  union u *m;
  union u const *k; };   // threaded code, which is const: it lives in .rodata, or flash
 
 struct ai {
  union u *ip;
- ai_word *hp, *sp;
+ word *hp, *sp;
  union u *tasks,  // running tasks; the head is the running one, [6]/[7] its help and stdio
          *parked; // paused tasks
  uint16_t yield_ctr,   // cycles since last cooperative yield
@@ -172,13 +172,13 @@ struct ai {
  // IoWouldBlock), what a write door landed, and the word count a Have() asks lvm_gc for.
  // the three never overlap, and the rule that keeps it so: deposit b as the last act
  // before the return that hands it back, so nothing allocates before the read.
- ai_word b;
- ai_word inflag;       // fd 0's flags as we found them (a charm), 0 = we left them alone
+ word b;
+ word inflag;           // fd 0's flags as we found them (a charm), 0 = we left them alone
  uintptr_t next_serial, // mint id counter
            next_wake_at; // deadline for next yield_sw snapshot's wake_at slot; 0 = always runnable
- ai_word symbols;       // intern map (string -> canonical atom), swept each gc
+ word symbols;          // intern map (string -> canonical atom), swept each gc
  uintptr_t len;         // main-pool size in words: the core sits at its base, [end,hp) is the young heap
- struct ai_r { ai_word *x; struct ai_r *n; } *root; // gc roots list
+ struct ai_r { word *x; struct ai_r *n; } *root; // gc roots list
  struct ai_fz { // finalizers
   union u *p;
   void (*fn)(struct ai*, void *);
@@ -191,7 +191,7 @@ struct ai {
  // what a native reads off g instead of carrying: the kind sentinels and the callout
  // drives are addresses of this binary, and a blob that held one could not ride an
  // image. jk_ini fills it; the emitter's `jk` law names the slots.
- ai_word jk[12];
+ word jk[12];
  void *(*alloc)(struct ai*, void*, size_t); // alloc(g,p,n): n>0 reserve n bytes (p ignored), n==0 free p; -> block or NULL
  uintptr_t n_gc, max_len, max_heap, // gc instrumentation (cycles, peak pool len, peak live heap; words)
            n_seen, n_evac;          // Σ per collection: occupancy entering / survivors copied.
@@ -199,7 +199,7 @@ struct ai {
  // the remembered set, which is the whole write barrier: old cells that took a young
  // pointer, rescanned by the next minor. rem_miss counts drops on overflow -- any miss
  // forces the next collection major, so a minor only runs under a complete set.
- ai_word *rem;
+ word *rem;
  uint32_t rem_n, rem_hi, rem_miss;   // all three bounded by AiRemCap, the fixed capacity
  // the sub-word collector scalars, adjacent so both ride the rem set's tail
  bool gc_gen;                             // set during a collection: gbump() targets major_hp, not hp
@@ -210,7 +210,7 @@ struct ai {
  // major drains both, compacts into the spare half, flips, rebuilds symbols, runs
  // finalizers. the ranges the pass itself walks are `struct ai_gcx`, on the collector's
  // own C stack (l/love.c).
- ai_word *major_pool, *major_base, *major_hp;   // major: malloc base (2*major_len words), active-half base, active bump
+ word *major_pool, *major_base, *major_hp;   // major: malloc base (2*major_len words), active-half base, active bump
  uintptr_t
    major_len,                     // major half size (words)
    n_minor,                       // minor collections so far (majors = n_gc - n_minor)
@@ -231,7 +231,7 @@ struct ai {
  union {
   intptr_t v0;
   struct {
-   ai_word
+   word
      book,   // global env map; the macro table is book[zero]. GC-forwarded in v0..end.
      scare_a, scare_b, // the last scare's condition data, stashed at the raise for
      // hooks: lisp functions that C calls
@@ -249,11 +249,11 @@ struct ai {
      knom[16],    // the kind table's keys and the built-in coins' names (the Kn rows)
      inport;      // the buffered stdin port, or 0
    union {
-    ai_word x;
+    word x;
     struct ai_io {
      lvm_t *ap;
      struct ai_port_vt const *vt;   // what kind of port this is -- the only answer there is
-     ai_word ungetc_buf;            // pushed-back byte; putcharm(EOF) = empty
+     word ungetc_buf;               // pushed-back byte; putcharm(EOF) = empty
      // three words: prel's tap/jug poke this layout by index (l/boot/prel.l), so a word
      // added here is a renumbering there
     } *io; }; }; };
@@ -297,7 +297,7 @@ struct ai_port_vt {
 enum ai_status ai_fin(struct ai*);
 
 static ai_inline size_t b2w(size_t b) {
- size_t q = b / sizeof(ai_word), r = b % sizeof(ai_word);
+ size_t q = b / sizeof(word), r = b % sizeof(word);
  return q + (r ? 1 : 0); }
 
 lvm_t lvm_ret0, lvm_cur, lvm_port_io, lvm_help, lvm_cask,
@@ -345,14 +345,14 @@ void ai_fd_close(int fd);
 // the fd port: the head plus the descriptor. the vt is the license to read it --
 // nothing casts here without ai_io_fd, which answers -1 for every port whose door
 // is not a device (a tap, a jug, a closed port: all real ports, none with an fd).
-struct ai_fio { struct ai_io io; ai_word fd; };
+struct ai_fio { struct ai_io io; word fd; };
 intptr_t ai_io_fd(struct ai_io const*);
 // the buffered port: the fd port plus both buffer lanes, private to the generic
 // dispatch (prel's tap/jug poke the bare shape; static ports stay bare -- nothing
 // traces a static). rbuf/wbuf hold an ai_str backing or 0; [rpos,rlen) bounds the
 // pending read run, wlen the filled write prefix. GC walks the extension words as
 // ordinary thread words.
-struct ai_bio { struct ai_fio f; ai_word rbuf, rpos, rlen, wbuf, wlen; };
+struct ai_bio { struct ai_fio f; word rbuf, rpos, rlen, wbuf, wlen; };
 // the two faces host nifs need (guards inside; both 0/no-op on a bare port):
 // pending = bytes waiting in the read buffer; drain pops up to n of them into dst
 uintptr_t
@@ -378,7 +378,7 @@ void ai_fd_drain(int fd, void const*, uintptr_t);
 intptr_t ai_fd_readn(struct ai*, int fd, unsigned char *dst, uintptr_t);
 intptr_t ai_fd_writen(int fd, unsigned char const *src, uintptr_t);
 uintptr_t ai_fd_say(int fd, unsigned char const *src, uintptr_t);
-intptr_t ai_port_fd(ai_word);                         // the fd under a love port, or -1
+intptr_t ai_port_fd(word);                         // the fd under a love port, or -1
 uintptr_t ai_fd_write_all(int, unsigned char const*, uintptr_t);   // land every byte, waiting
 
 // the seat's other doors, one definition each: inle/posix.c..
@@ -457,8 +457,7 @@ extern struct ai_fio ai_stdin, ai_stdout, ai_stderr;
 #define len(_) (((struct ai_str*)(_))->len)
 #define txt(_) (((struct ai_str*)(_))->bytes)
 #define avail(g) ((uintptr_t)(g->sp-g->hp))
-#define num(_) ((word)(_))
-#define word(_) num(_)
+#define word(_) ((word)(_))   // the cast with its parens; the inner `word` is the typedef
 #define oddp(_) ((uintptr_t)(_)&1)
 #define evenp(_) !oddp(_)
 #define cell(_) ((union u*)(_))
@@ -493,7 +492,6 @@ struct ai_chain { lvm_t *ap; intptr_t a, b; };
 // mx.h's ai_kind_of_d is the one crossing, and a tray is the one rep that dispatches
 // four ways. both rosters are mx.l's -- edit that, not kinds.h.
 #include "kinds.h"
-typedef ai_word num, word;
 // the unique empty string: data-segment, never moved (gcp's out-of-pool
 // short-circuit); strings are immutable, so one suffices. its own type, so the
 // NUL every string carries behind its bytes has storage here too.
@@ -532,7 +530,7 @@ lvm(lvm_gc);                                    // takes its word count in g->b
 // the nom a canonical errno names: 'eperm .. 'ehwpoison; 'eunknown for a number
 // the numbering leaves blank, 'badarg at -1 for a call refused before any
 // syscall ran. reads g->errs, interned at boot -- no allocation on any error path.
-ai_word ai_err(struct ai*, int);
+word ai_err(struct ai*, int);
 #define ai_badarg(g) ai_err(g, -1)
 uintptr_t hash(struct ai*, word), ai_tray_bytes(struct ai_tray*);
 // any value -> its enum q: KCharm for a fixnum, KCoin for a non-data heap pointer,
@@ -879,7 +877,7 @@ static ai_inline struct ai_big *ini_big(struct ai_big *b, intptr_t slen) {
 uintptr_t ai_big_bytes(struct ai_big*);
 // canonicalize a magnitude into the smallest tier: fixnum, sun box, bignum
 // (bumps *hp when it boxes); one sink shared by the reader and the arith slow paths
-word ai_big_canon(ai_word **hp, ai_limb const *limb, int n, bool neg);
+word ai_big_canon(word **hp, ai_limb const *limb, int n, bool neg);
 ai_flo_t ai_big_to_flo(word);                 // bignum -> double (used by toflo)
 int ai_big_cmp(word, word);                  // -1/0/1 over two integer operands
 intptr_t ai_mint_cmp(struct ai*, word, word); // -1/0/1 over two points: () < bare mints < names
@@ -1018,14 +1016,14 @@ void *malloc(size_t), free(void*),
 size_t strlen(char const*);
 
 // the lean scalar boxes: {ap, payload} GC leaves, copied like bignums
-struct ai_gem { lvm_t *ap; ai_word w; };
+struct ai_gem { lvm_t *ap; word w; };
 #define gem_req Width(struct ai_gem)
 #define gem(_) ((struct ai_gem*)(_))
 struct ai_sun { lvm_t *ap; intptr_t w; };    // raw intptr_t payload, no bit pun
 #define sun_req Width(struct ai_sun)
 #define sun(_) ((struct ai_sun*)(_))
 #define box_req (gem_req > sun_req ? gem_req : sun_req)     // what emit_int/emit_gem reserve
-struct ai_twin { lvm_t *ap; ai_word re, im; };   // two punned-double payload words
+struct ai_twin { lvm_t *ap; word re, im; };   // two punned-double payload words
 #define twin(_) ((struct ai_twin*)(_))
 // pun through a union, not memcpy(&local,..): the memcpy form escapes a stack
 // local, and clang -Os then refuses the sibling call out of any inlining VM ap --
@@ -1037,7 +1035,7 @@ static ai_inline ai_flo_t gem_get(word x) {
 // allocate a float box at *hpp (caller holds Have(gem_req)); no &local, so the caller keeps its tail call.
 // the law, the one real-float box-write: NaN collapses to 0 so the order stays total and
 // !x == (0 = $x) holds. inf rides through. glaze's jit lanes emit the same collapse.
-static ai_inline word mk_gem(ai_word **hpp, ai_flo_t v) {
+static ai_inline word mk_gem(word **hpp, ai_flo_t v) {
  if (v != v) return ZeroPoint;   // nothing is unequal to itself, come on IEEE, give me a break
  struct ai_gem *f = (struct ai_gem*) *hpp;
  *hpp += gem_req;
@@ -1060,7 +1058,7 @@ static ai_inline void twin_set(struct ai_twin *v, ai_flo_t re, ai_flo_t im) {
  v->re = ((ai_flo_pun){ .d = re }).u;
  v->im = ((ai_flo_pun){ .d = im }).u; }
 
-static ai_inline word mk_twin(ai_word **hpp, ai_flo_t re, ai_flo_t im) {
+static ai_inline word mk_twin(word **hpp, ai_flo_t re, ai_flo_t im) {
  struct ai_twin *v = (struct ai_twin*) *hpp;
  *hpp += twin_req;
  v->ap = lvm_twinbox;
@@ -1070,7 +1068,7 @@ static ai_inline word mk_twin(ai_word **hpp, ai_flo_t re, ai_flo_t im) {
 static ai_inline intptr_t sun_get(word x) { return ((struct ai_sun*) x)->w; }
 
 // allocate a sun box at *hpp (caller holds Have(sun_req)); no &local taken
-static ai_inline word mk_sun(ai_word **hpp, intptr_t v) {
+static ai_inline word mk_sun(word **hpp, intptr_t v) {
  struct ai_sun *w = (struct ai_sun*) *hpp; *hpp += sun_req;
  w->ap = lvm_sunbox; w->w = v; return word(w); }
 
@@ -1276,7 +1274,7 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
  Have(box_req);                                                       \
  emit_int(_res, toint(a) c_op toint(b));                                    \
  ai_musttail return Push(_res); }
-#define mvm1(n) lvm(lvm_##n) { g->b = (ai_word) (uintptr_t) (ai_##n); ai_musttail return Ap(lvm_math1, g); }
+#define mvm1(n) lvm(lvm_##n) { g->b = (word) (uintptr_t) (ai_##n); ai_musttail return Ap(lvm_math1, g); }
 #define m1(_) _(sin) _(cos) _(tan) _(atan)   // the real-only unaries; sqrt/exp/log widen to complex and have their own aps
 #define cmp_lt(nom, vop) lvm(nom) { \
  word a = Sp[0], b = Sp[1]; \
@@ -1284,7 +1282,7 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
   intptr_t r = vcmp_int(vop, a, b); \
   if (Ip[1].ap == lvm_cond) { Sp += 2; Ip = r ? Ip + 3 : Ip[2].m; ai_musttail return Continue(); } \
   ai_musttail return Push(r ? putcharm(1) : zero); } \
- g->b = (ai_word) (vop); ai_musttail return Ap(lvm_cmp_ord, g); }
+ g->b = (word) (vop); ai_musttail return Ap(lvm_cmp_ord, g); }
 
 // --------------------------------------------------------------------------
 // THE TU SEAM. src/love*.c is one runtime cut into translation units so no single

@@ -143,13 +143,13 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 ; restrict-qualified params, the return type, the musttail return.
 (: cl-lvm '(fn "lvm_add"
             (("g" (restrict (ptr (struct "ai")))) ("Ip" (ptr (named "union u")))
-             ("Hp" (ptr (named "ai_word"))) ("Sp" (restrict (ptr (named "ai_word")))))
+             ("Hp" (ptr (named "word"))) ("Sp" (restrict (ptr (named "word")))))
             (blk ((ret (call (var "Continue") ()) "ai_musttail")))
             (ptr (struct "ai"))
             ("ai_noinline" "ai_noicf"))
    (assert
     ((one cl-lvm)
-     = ("ai_noinline ai_noicf struct ai *lvm_add(struct ai *restrict g, union u *Ip, ai_word *Hp, ai_word *restrict Sp) {"
+     = ("ai_noinline ai_noicf struct ai *lvm_add(struct ai *restrict g, union u *Ip, word *Hp, word *restrict Sp) {"
         + nl + " ai_musttail return Continue();" + nl + "}" + nl))))
 
 ; --- the preprocessor, doc/misc/clay.md's rung 2 ------------------------------------

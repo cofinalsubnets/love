@@ -218,7 +218,7 @@ intptr_t ai_inflate_raw(const unsigned char *in, uintptr_t n, unsigned char *out
  return (intptr_t) inf_run(in, n, out, cap); }
 
 static ai_inline struct ai *host_inflate(struct ai *g) {
- ai_word sw = g->sp[0], nw = g->sp[1];
+ word sw = g->sp[0], nw = g->sp[1];
  intptr_t hint;
  int64_t want;
  int guessed;
@@ -231,7 +231,7 @@ static ai_inline struct ai *host_inflate(struct ai *g) {
   if (want < 0) break;
   if (!ai_ok(g = str0(g, (uintptr_t) want))) return g;
   if (!want) { g->sp[2] = g->sp[0], g->sp += 2; return g; }   // the counting pass read it
-  { ai_word s2 = g->sp[1];
+  { word s2 = g->sp[1];
     int64_t got = inf_run((const uint8_t*) txt(s2), len(s2),
                           (uint8_t*) txt(g->sp[0]), (uintptr_t) want);
     if (got == want) { g->sp[2] = g->sp[0], g->sp += 2; return g; } }
@@ -521,7 +521,7 @@ static int64_t df_go(const uint8_t *s, uintptr_t n, uint8_t *out, uintptr_t cap,
 // a pointer held across the bump is stale, and a major collection flips the halves.
 static uint8_t *df_arena(struct ai *g, int *alloced) {
  *alloced = 0;
- if (g->major_pool && g->major_len * sizeof(ai_word) >= DF_ARENA)
+ if (g->major_pool && g->major_len * sizeof(word) >= DF_ARENA)
   return (uint8_t*) ((g->major_base == g->major_pool) ? g->major_pool + g->major_len : g->major_pool);
  void *p = g->alloc(g, NULL, DF_ARENA);
  if (p) *alloced = 1;
@@ -540,7 +540,7 @@ intptr_t ai_deflate_raw(struct ai *g, unsigned char const *in, uintptr_t n,
  return (intptr_t) got; }
 
 ai_noinline static struct ai *host_deflate(struct ai *g) {
- ai_word sw = g->sp[0];
+ word sw = g->sp[0];
  uint8_t *m;
  int alloced;
  int64_t want, got;

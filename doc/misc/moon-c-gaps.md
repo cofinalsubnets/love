@@ -600,7 +600,7 @@ carrying an extra argument will happily jump into a callee without one:
 
 ```c
 // a 5-arg caller into a 4-arg callee: mooncc emits the jump, clang refuses the compile
-static struct ai *f(struct ai *g, union u *Ip, ai_word *Hp, ai_word *Sp, int extra) {
+static struct ai *f(struct ai *g, union u *Ip, word *Hp, word *Sp, int extra) {
   ai_musttail return callee(g, Ip, Hp, Sp); }
 ```
 

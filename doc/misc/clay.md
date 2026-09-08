@@ -137,7 +137,7 @@ per macro between three routes:
 ### ⚠ hand-paring is the inverse of the criterion
 
 `lvm(lvm_add)` expands to `ai_noinline ai_noicf struct ai *lvm_add(struct ai *restrict g,
-union u *Ip, ai_word *Hp, ai_word *restrict Sp)`. writing that out at **184 definition
+union u *Ip, word *Hp, word *restrict Sp)`. writing that out at **184 definition
 sites** ADDS the most repetitive text in the file -- precisely what the criterion says to
 generate.
 
@@ -221,8 +221,8 @@ name the region in a commit message instead.
    negatives should SCARE rather than answer `()` -- so clay lands the fix and the
    generation together.
 5. **the `lvm(..)` declarator, at 184 definition sites** -- `lvm(lvm_add)` expands to
-   `ai_noinline ai_noicf struct ai *lvm_add(struct ai *restrict g, union u *Ip, ai_word *Hp,
-   ai_word *restrict Sp)`, and 184 of them is the most repetitive text in the file. rung 3
+   `ai_noinline ai_noicf struct ai *lvm_add(struct ai *restrict g, union u *Ip, word *Hp,
+   word *restrict Sp)`, and 184 of them is the most repetitive text in the file. rung 3
    made the expansion sayable; what is not decided is whether clay should print `lvm(..)`
    ITSELF -- a declarator-MACRO node -- or its expansion. printing the expansion is a
    generated region 184 signatures longer than the one it replaces, which is the criterion

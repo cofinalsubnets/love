@@ -778,7 +778,7 @@ lvm(lvm_eval) { Ip++; LvmResume(g, c0, lvm_jump) }
 // ============================================================================
 // the hooks (love.h): lisp the C lanes reach by slot, handed over by (seal-hook n f).
 // hot_hook traps on an unsealed slot -- a clean failure, never a wild read.
-ai_word hot_hook(ai_word h) { if (!lamp(h)) __builtin_trap(); return h; }
+word hot_hook(word h) { if (!lamp(h)) __builtin_trap(); return h; }
 // hooks 5 and 6 are the running task's, so they ride its ring node -- the head (cf.
 // lvm_myself). a write is a store into a maybe-tenured node: gen_wb_cell, on a packed g.
 ai_inline word *task_help(struct ai *g) { return &g->tasks[6].x; }
@@ -1098,11 +1098,11 @@ static lvm(lvm_coin_op) {
  word *dst = Sp - 2, ret = word(Ip + 1);
  dst[0] = a, dst[1] = f, dst[2] = b, dst[3] = ret;
  Sp = dst; Ip = (union u*) numap_drive; ai_musttail return Continue(); }
-static lvm(lvm_add_coin) { g->b = (ai_word) (KnAdd); ai_musttail return Ap(lvm_coin_op, g); }
-static lvm(lvm_mul_coin) { g->b = (ai_word) (KnMul); ai_musttail return Ap(lvm_coin_op, g); }
+static lvm(lvm_add_coin) { g->b = (word) (KnAdd); ai_musttail return Ap(lvm_coin_op, g); }
+static lvm(lvm_mul_coin) { g->b = (word) (KnMul); ai_musttail return Ap(lvm_coin_op, g); }
 // `-` and `/` have no kind matrix; lvm_sub/lvm_quot intercept coins themselves and land here.
-lvm(lvm_sub_coin) { g->b = (ai_word) (KnSub); ai_musttail return Ap(lvm_coin_op, g); }
-lvm(lvm_quot_coin) { g->b = (ai_word) (KnDiv); ai_musttail return Ap(lvm_coin_op, g); }
+lvm(lvm_sub_coin) { g->b = (word) (KnSub); ai_musttail return Ap(lvm_coin_op, g); }
+lvm(lvm_quot_coin) { g->b = (word) (KnDiv); ai_musttail return Ap(lvm_coin_op, g); }
 
 // applying a coin: run the kind's ap closure as `((f self) arg)`; absent, a coin
 // is an opaque handle -- nothing to answer with, () -- like a cask/port. self is the value at Ip (the apply

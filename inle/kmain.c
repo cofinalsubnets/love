@@ -1176,7 +1176,7 @@ static lvm(lvm_disk) {
   ai_musttail return Next(1); }
 
 ai_noinline static struct ai *k_disk_read(struct ai *g) {
-  ai_word lw = g->sp[0], nw = g->sp[1];
+  word lw = g->sp[0], nw = g->sp[1];
   intptr_t lba = (lw & 1) ? getcharm(lw) : -1,
            n   = (nw & 1) ? getcharm(nw) : -1;
   if (lba < 0 || n <= 0 || n > 1 << 24) return g->sp[1] = ZeroPoint, g->sp += 1, g;
@@ -1188,7 +1188,7 @@ ai_noinline static struct ai *k_disk_read(struct ai *g) {
 static lvm(lvm_disk_read) {
  LvmCall(g, k_disk_read) }
 
-ai_noinline static ai_word k_disk_write(ai_word lw, ai_word sw) {
+ai_noinline static word k_disk_write(word lw, word sw) {
  intptr_t lba = (lw & 1) ? getcharm(lw) : -1;
  if (lba < 0 || !strp(sw)) return ZeroPoint;
  struct ai_str *s = (struct ai_str*) sw;
@@ -1566,8 +1566,8 @@ lvm(k_lvm_quit) {
     // the love-machine _exit: the stack becomes just [code] and Ip a task-exit
     // cell, exactly the shape lvm_task_exit leaves -- catch reads node[7], donep
     // and scoop read the saved ap. the frame below Sp is abandoned whole.
-    ai_word code = (Sp[0] & 1) ? Sp[0] : putcharm(0);
-    Sp = (ai_word*) g + g->len - 1;
+    word code = (Sp[0] & 1) ? Sp[0] : putcharm(0);
+    Sp = (word*) g + g->len - 1;
     Sp[0] = code;
     Ip = (union u*) k_exit_body;
     ai_musttail return Ap(lvm_task_exit, g); }

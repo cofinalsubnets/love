@@ -218,7 +218,7 @@ int image_bake(struct ai *g) {
 // carries. answers 1 | ().
 static lvm(lvm_bake) {
  Pack(g);
- ai_word r = strp(g->sp[0]) && !image_put(g) ? putcharm(1) : ai_zero;
+ word r = strp(g->sp[0]) && !image_put(g) ? putcharm(1) : ai_zero;
  Unpack(g);
  Sp[0] = r;
  ai_musttail return Next(1); }
