@@ -90,6 +90,9 @@
  y (feel c (opfix x))    ; opfix (factor sigils), feel (desugar) -- ev = the deserialized-data lane
  (ana c y (k0 c) 0 0)))
   lvm_cur (peek 0 (+))
+  ; the nil? nif itself, for cflip's head test: opfix's glued lane splices the value, never
+  ; the name (prel's '! nil?), so `!e` reaches the peephole unnamed. read once, like lvm_cur.
+  nilv (gv 'nil? ())
   (sco p a i) {'arg a 'imp i 'par p}
   (rootc c) (: p (c 'par) (nil? p ? c (rootc p)))   ; top scope: where feel stashes 'src
   ; --- the emission interface (the codegen seam; the design in one page:) ---
@@ -283,7 +286,12 @@
    ; (? (nil? e) c [el]) and (? e [el] c) are equal -- flipping the branches drops the nil? wrapper
    ; (and lets cst then fold a now-bare constant test). fires only on an exact (nil? e) test in a
    ; 2- or 3-form clause; a longer clause list keeps its tail unflipped.
-   (cflip bs) (two? >bs && two? <bs && id? <<bs 'nil? && atom? >><bs ?
+   ; the head answers to the VALUE as well as the name -- opfix's glued lane splices the nif, so
+   ; `!e` arrives unnamed -- and only the name arm defers to sh, the shadow: a spliced value has
+   ; no binder to hide it. cflip re-runs on its own answer, so `!!e` loses both wrappers.
+   (cflip bs sh) (: r (cflip1 bs sh) (r == bs ? bs (cflip r sh)))
+   (cflip1 bs sh) (two? >bs && two? <bs && atom? >><bs
+                   && (id? <<bs nilv || (!sh && id? <<bs 'nil?)) ?
     (: e <><bs c <>bs rest >>bs
      (? (atom? rest)       [e () c]                ; (nil? e) c    -> (e () c)
         (atom? >rest) [e <rest c]        ; (nil? e) c el -> (e el c)
@@ -296,7 +304,7 @@
               (? <c (1 . !>c)       ; kconst knows it (atom / quote literal)
                  (atom? >t && atom? <t && !(nom? <t)) (1 . !<t)  ; plus (c) == c: a folded monadic (opfix wraps (! e) -> ((nil? e)), so a folded test lands wrapped)
                  0))
-   (wxc bs bnd) (: fb (? (member? 'nil? bnd) bs (cflip bs))
+   (wxc bs bnd) (: fb (cflip bs (member? 'nil? bnd))
     (? (atom? fb) [()]                           ; clauses ran out: implicit () else (nil-ontology)
        (atom? >fb) (keep1 fb (wx <fb bnd))      ; the lone else
        (: t (wx <fb bnd) k (cst t)               ; walk the test; is it a static constant?
