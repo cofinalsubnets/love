@@ -21,8 +21,8 @@
      coi.js in the head -- that one goes first because it may reload the page to put the
      isolation headers on. web/index.l lays it on the front page.
      the boot line and the two artifacts ride data- attributes, so a page can aim it
-     elsewhere (data-wasm, data-image, data-boot, data-ram); the defaults sit beside
-     machine.js, which is where `make site-wasm` puts them. -->
+     elsewhere (data-wasm, data-image, data-boot, data-ram); the defaults are assets/wasm/,
+     which is where `make site-wasm` puts them. -->
 <div class="machine">
 <p class="status">waking the machine...</p>
 <canvas class="fb" width="640" height="400" tabindex="0"></canvas>

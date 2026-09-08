@@ -28,8 +28,8 @@ test/proof/lean/uugen.lean
 # pages, never shipped (the module is `make wasm`'s, copied beside its loader)
 index.html
 assets
-inle/wasm/love-wasm.wasm
-inle/wasm/love-wasm.image
+assets/wasm/love-wasm.wasm
+assets/wasm/love-wasm.image
 
 # editor and debugger leavings
 vgcore.*

@@ -113,6 +113,6 @@
                   b (foldl (\ a c (a * 10 + c - 48)) 0 (bytes (args 1)))
                   out (woff (font (cells src) b (args 3)))
                   q (open (args 2) "w")
-                  (? q (: _ (say q (cask out)) _ (close q) (say err ("mkfont: " + args 2 + " " + show #out + " bytes\n")))
+                  (? q (: _ (say q (cask out)) (close q))
                      (: _ (say err ("mkfont: cannot open " + args 2 + "\n")) (quit 1))))
    (main >argv))

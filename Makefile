@@ -988,7 +988,7 @@ site-serve: host out/toolmd.stamp
 # 112, safari 18), and the corpus runs 1.31x faster than on the trampoline. the loader
 # (inle/wasm/loader.js) is the runtime under it. NOTHING ON THE SITE READS IT any more --
 # the front page carries the machine (the kernel module below) -- so it is laid, not
-# tracked: papel's -r island and horn.html want it, test_wasm and horn.html read out/.
+# tracked: papel's -r island wants it beside the loader, test_wasm and horn.html read out/.
 # the emcc build stays as wasm-emcc, a differential and nothing on the page.
 wasm_c = $(love_c) $(R)/inle/horn.c $(R)/inle/wasm/host.c
 out/wasm/love.wasm: $(wasm_c) $(lib_h) out/lib/love_version.h host
@@ -1007,18 +1007,20 @@ wasm: out/wasm/love.wasm
 else
 wasm: out/wasm/love.wasm out/wasm/love.image out/wasm/love-wasm.image
 endif
-# the page's copies, beside the loader that fetches them. by hand, as love.js was: bytes
-# every C edit would otherwise churn. only the MACHINE's pair is tracked -- it is what the
-# front page boots; the hosted pair is laid here and gitignored, for papel -r and the horn.
+# by hand, as love.js was: bytes every C edit would otherwise churn. THE MACHINE'S PAIR
+# GOES TO assets/, beside the fonts and the stylesheet -- generated files committed for
+# one reason, that github pages serves what it is given and builds nothing. the hosted
+# pair stays beside its loader, gitignored, for papel -r; the horn reads out/.
 site-wasm: wasm
+	@mkdir -p assets/wasm
 	@echo '$(t_cp)	'inle/wasm/love.wasm
 	@cp out/wasm/love.wasm inle/wasm/love.wasm
 	@echo '$(t_cp)	'inle/wasm/love.image
 	@cp out/wasm/love.image inle/wasm/love.image
-	@echo '$(t_cp)	'inle/wasm/love-wasm.wasm
-	@cp out/love-wasm.wasm inle/wasm/love-wasm.wasm
-	@echo '$(t_cp)	'inle/wasm/love-wasm.image
-	@cp out/wasm/love-wasm.image inle/wasm/love-wasm.image
+	@echo '$(t_cp)	'assets/wasm/love-wasm.wasm
+	@cp out/love-wasm.wasm assets/wasm/love-wasm.wasm
+	@echo '$(t_cp)	'assets/wasm/love-wasm.image
+	@cp out/wasm/love-wasm.image assets/wasm/love-wasm.image
 # the wasm inle seat: the kernel the three metal seats link -- kmain and the ramfs, the
 # console painter with its fonts, inle/sys.c under moonlibc, the host frontend whole -- with
 # inle/wasm/arch.c for the machine and the source blob as a wasm data object (mksrc.l's
@@ -1062,9 +1064,11 @@ valg: host
 web: fonts assets/web/style.css assets/web/favicon.png index.html
 fonts: assets/fonts/quay16.woff assets/fonts/quay8.woff
 assets/fonts/quay16.woff: core/quay/moderndos_8x16.c tools/mkfont.l $(ho)/.love.baked
+	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
 	@$m tools/mkfont.l $< 12 $@ "Quay 16"
 assets/fonts/quay8.woff: core/quay/cga_8x8.c tools/mkfont.l $(ho)/.love.baked
+	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
 	@$m tools/mkfont.l $< 6 $@ "Quay 8"
 # ..the front page's stylesheet: config.l's tokyo-night through hueweb, over the layout
