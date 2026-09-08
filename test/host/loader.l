@@ -1,4 +1,4 @@
-; --- test/host/loader.l: use on a path, the loader (love/boot/prel.l) ---
+; --- test/host/loader.l: use on a path, the loader (l/boot/prel.l) ---
 ; `use` answers a module two ways and only two: a NAME it already holds -- baked,
 ; catted, or loaded earlier -- and a PATH the caller writes out. it invents no
 ; paths of its own, so a name it lacks is a miss even when a file of that name is
@@ -66,7 +66,11 @@
 
 (: _ (unlink "lib/zz-loadprobe.l") _ (unlink "lib/zz-loadprobe/sub.l")
    _ (unlink "lib/zz-pathprobe.l") _ (unlink "lib/zz-elsewhere.l")
-   _ (rmdir "lib/zz-loadprobe") 0)
+   _ (rmdir "lib/zz-loadprobe")
+   ; ..and lib/ itself, which this file made. rmdir refuses a directory with anything
+   ; in it, so a real one is safe -- and without this the repo root grows an empty lib/
+   ; on every run, which is a fixture the foot forgot rather than a thing the tree has.
+   _ (rmdir "lib") 0)
 
 ; the seat rungs are retired (the modules arc, rung 3) and so is the cwd walk:
 ; the loader reads no directory of its own, so a fixture beside the binary is as
