@@ -782,10 +782,15 @@ test_thumb2sp: host
 # test_playdate -- the playdate build gate: the device half compiled by mooncc -t thumb2sp
 # behind pdglue's word-only SDK seam, the pdx built by pdc. Verifies the DEVICE elf: no UND,
 # eventHandler exported, ZERO movw/movt relocs -- the loader relocates ABS32 words only.
+# the probe runs FIRST and never skips: main.c reaches the SDK through pdglue's word-only
+# seam, so mooncc compiles the device main with no foreign tool. without it the whole lane
+# exits 0 on a machine with no SDK -- which is how main.c spent three days as invalid C.
 test_playdate: host
+	@echo TEST out/playdate/main.o '(the device main, no SDK)'
+	@$(MAKE) -C inle/playdate probe || { echo "FAIL playdate: the device main does not compile"; exit 1; }
 	@echo TEST out/playdate/love.pdx
 	@if [ -z "$$PLAYDATE_SDK_PATH" ] || ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
-	   echo "test_playdate: no PLAYDATE_SDK_PATH / arm-none-eabi toolchain, skipped"; exit 0; fi; \
+	   echo "test_playdate: the device main compiles; no PLAYDATE_SDK_PATH / arm-none-eabi, the pdx half skipped"; exit 0; fi; \
 	  $(MAKE) -C inle/playdate || { echo "FAIL playdate build"; exit 1; }; \
 	  u=`llvm-readelf -s out/playdate/pdex.elf | grep -c "UND [a-zA-Z_]"`; \
 	  [ "$$u" -eq 0 ] || { echo "FAIL pdex.elf has $$u undefined symbols"; exit 1; }; \

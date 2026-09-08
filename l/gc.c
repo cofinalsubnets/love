@@ -247,6 +247,14 @@ struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
   resized = g->alloc(g, NULL, 2 * to_len * sizeof(word));
   if (!resized && to_len > need_step)                          // the headroom alloc failed: retry at the tight size
    to_len = need_step, resized = (need_step == g->major_len) ? 0 : g->alloc(g, NULL, 2 * need_step * sizeof(word));
+  // last chance: drop the STEP granularity too. need_step is need rounded UP to a whole
+  // step, so it can overshoot the largest free block by most of a step -- on a seat whose
+  // pool is a fixed region that is the difference between a heap and a dead board. need
+  // itself is the worst case the to-space has to hold, by the arithmetic above; a pair
+  // sized there has no headroom and the next collection will be a major too, which is the
+  // trade this rung exists to make.
+  if (!resized && need < to_len)
+   to_len = need, resized = (need == g->major_len) ? 0 : g->alloc(g, NULL, 2 * need * sizeof(word));
   if (resized) to = resized;
   else if (need <= g->major_len) to_len = g->major_len, to = spare;   // alloc failed, but the existing spare half holds the live set
   else return g->gc_gen = false, encode(g, ai_status_scare);         // true oom: compacting would overflow the spare -> clean scare, no corruption

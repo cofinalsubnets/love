@@ -53,9 +53,10 @@ pd_h = $(love_h) $(wildcard $(R)/l/quay/*.h) $(o)/cas.h $(lib_hs)
 # (the pd_api.h owner) + the SDK's setup.c. the sim build compiles everything
 # hosted, so pd_src keeps the full wildcard.
 pd_local_c = $(wildcard *.c)
-# love_codec beside love_c: snap.c reaches the codecs unconditionally, and this roster
-# is named rather than globbed, so a runtime that grows a TU has to be told
-pd_shared_c = $(love_c) $(addprefix $(R)/src/,$(love_codec)) $(f_c)
+# love_c already carries the codecs (mk/common.mk's core_tu = love_tu + love_codec),
+# so naming them again here is one roster too many -- and the second one pointed at
+# src/, which the flatten retired.
+pd_shared_c = $(love_c) $(f_c)
 pd_sdk_c = $(pd_sdk)/C_API/buildsupport/setup.c
 pd_src = $(pd_local_c) $(pd_shared_c) $(pd_sdk_c)
 mc_shared_o = $(pd_shared_c:$(R)/%.c=$(o)/%.o)
@@ -66,7 +67,13 @@ pd_o = $(o)/main.o $(mc_shared_o) $(o)/pdglue.o $(o)/setup.o
 # alone (the root does not include it), so it says so itself. see ../../Makefile.
 .DELETE_ON_ERROR:
 
-.PHONY: default sim clean
+# probe: the DEVICE main, and nothing that wants the SDK. main.c reaches the seat
+# through pdglue.h, which is a word-only seam over <stddef.h>, so mooncc compiles it
+# with no foreign tool -- which makes this the one playdate lane that can run anywhere
+# and therefore the one that can FAIL. test_playdate runs it before it decides whether
+# it has an SDK to do the rest with.
+.PHONY: default sim clean probe
+probe: $(o)/main.o
 default: $(o)/$n.pdx
 
 sim: $(o)/$n.pdx
