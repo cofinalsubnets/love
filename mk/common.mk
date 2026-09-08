@@ -131,6 +131,9 @@ hosta_c = $(wildcard $R/inle/$(hosta)/*.c)
 # ..and the hosted surface is inle/ less the kernel's own six (kmain, the syscall table,
 # the two drivers, doom): drop an inle/<app>.c in and its nifs register with no rule edit.
 host_c = $(filter-out $(addprefix $R/inle/,kmain.c blk.c hda.c sys.c doom.c doomsnd.c),$(wildcard $R/inle/*.c))
+# ⚠ love/ vs inle/ cuts language from SEATS, not portable from machine-specific: quay
+# draws into a buffer and names no device, so it stays here with the engines no machine
+# owns. a seat that wants its own nifs brings them through ai_defn, which is that door.
 # the quay engine every seat carries. paint.c (32bpp) and nif.c (the love door) are
 # per-seat -- a 1-bit device wants neither, the host unity-includes nif.c -- so a seat that
 # wants one NAMES it rather than taking it here.

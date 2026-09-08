@@ -5,6 +5,8 @@ and inle gives the other side of it -- for the host kernels (the frontend TUs
 the shipped artifact links), for bare metal, and for each device below. Every
 device target is self-contained (own Makefile, `R := ../..` back to the repo
 root); the qemu boot gates live in test/test.mk and ride `make test_slow`.
+A seat's own vocabulary comes in through `ai_defn` -- the crank on a Playdate,
+a board's console -- so love/ never learns a device's name.
 
 ## the kernel
 
