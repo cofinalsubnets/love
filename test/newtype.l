@@ -91,8 +91,10 @@
     (3 = +[(cnt [1]) (cnt [1 1])])      ; counts flow through the list sum: 1+2
     (-4 = +(sm [1 -5]))      ; mode absent: the payload hom, signed, as ever
 
-    ; --- rationals (///): a multi-field coin; +/*/=/show all work. (a coin nets its
-    ;     payload, so a rational's truth/sort go by representation, not value -- not asserted.) ---
+    ; --- rationals (///): a multi-field coin; +/*/=/show all work ---
+    ; ⚠ this die is the one coin that is a NUMBER: cmp_rank seats it in the number
+    ; band by value, so its order, its sort and its `=` all read the value and not
+    ; the representation. every other coin below stays an opaque newtype.
     (5 /// 6 = 1 /// 2 + 1 /// 3)    ; 1/2 + 1/3 = 5/6
     (1 /// 2 = 2 /// 3 * 3 /// 4)    ; 2/3 * 3/4 = 1/2
     (1 /// 2 = 2 /// 4)                ; reduced on construction
@@ -102,6 +104,23 @@
     ; rational wears the operator, which reads back as itself.
     ("(1 /// 2)" = show (2 /// 4))
     (1 /// 2 = ev (cap (sound (show (2 /// 4)))))   ; ..and that is the whole claim, checked
+
+    ; --- a rational promotes across the tower, like every other numeric rung ---
+    ; the law that pins it: `=` has to agree with the order it is already given. a
+    ; value where (<= a b) and (>= a b) are both true and (= a b) is false is not a
+    ; number in an order, it is two answers -- which is what this used to be.
+    (: a (4 /// 2) b 2  (((a <= b) && (a >= b)) = (a = b)))
+    (1 /// 1 = 1)   (1 = 1 /// 1)   (4 /// 2 = 2)   (0 /// 1 = 0)
+    (7 /// 2 = 3.5) (3.5 = 7 /// 2) (1 /// 2 = 0.5)
+    !(1 /// 2 = 1)  !(1 /// 1 = 2)
+    (member? (1 /// 1) [1 2 3])  !(member? (9 /// 1) [1 2 3])
+    ([0 (1 /// 1) 2] = sort [2 (1 /// 1) 0])
+    ; ⚠ exact, never through a double: these two differ by a part f64 has no room
+    ; for, and the quotient of the second rounds to exactly 1.0
+    (: h (2 3 40)  (!(1 /// h = 1 /// (h + 1)) && !((h + 1) /// h = 1.0)))
+    ; ..and the promotion is the ratio die's alone: an ordinary newtype is opaque,
+    ; which is the whole point of striking one
+    (: m (coin 'metre (z \ {}))  (!(m 5 = 5) && !(5 = m 5) && (m 5 = m 5)))
 
     ; --- `-` rides slot 5: q pins it (cross-multiply, reduce); the unit still rides ---
     (1 /// 6 = 1 /// 2 - 1 /// 3)    ; 1/2 - 1/3 = 1/6

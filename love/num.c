@@ -1344,6 +1344,12 @@ static intptr_t cmp3(struct ai *g, word a, word b) {
  uintptr_t ha = hash(g, a), hb = hash(g, b);               // lambda/inle/cask: by repr hash
  return ha < hb ? -1 : ha > hb ? 1 : 0; }
 
+// the two arr.c's equality lane needs: whether a value orders as a number, and the
+// order itself. a ratio coin answers true to the first -- cmp_rank seats it in the
+// number band by value -- which is what makes `=` agree with `<` and sort on one.
+bool ai_numband(struct ai *g, word x) { return cmp_rank(g, x) == 2; }
+intptr_t ai_cmp3(struct ai *g, word a, word b) { return cmp3(g, a, b); }
+
 // (sort l): stable ascending merge by cmp3 -- one reservation up front (n result
 // chains + 2n scratch in the uncommitted gap), and cmp3 is alloc-free, so nothing
 // moves between reservation and fill. prel's sort dispatches (<)/(>) here.
