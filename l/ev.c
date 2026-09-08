@@ -1794,24 +1794,68 @@ fldc(lvm_argtwocond, chainp(v) && !nomp(v))            // two? answers a charm: 
 
 // the cell doors. peek/poke move values and pick/place instructions -- two pairs because a
 // thread cell's kind is its position, not its content, and only reading can decide it: a
-// code word is exactly one the ap table names, a value word never is. so no code address
-// reaches love, and a charm target answers () rather than dereferencing a fixnum -- love
-// builds no other even word, which closes these over every value they can be handed.
-// the index is still the caller's to get right, and so is poke's contract below.
+// code word is exactly one the op table names, a value word never is. so no code address
+// reaches love: pick answers an index, and every door answers () rather than dereferencing
+// a charm. what a door cannot know is whether the caller picked the right cell -- pick at a
+// value cell and place at an op cell are safe and meaningless. the bounds below are the
+// half that IS structural.
+//
+// a terminator word: the tag bits plus a payload pointing into a live pool. nothing else a
+// cell may hold is 2 mod 4 -- a heap pointer is word-aligned, a charm odd, an instruction
+// at least 4-aligned (thumb's interworking bit makes it odd instead, and wasm's synthetic
+// addresses are laid 8 apart) -- so this misreads no value and no op.
+static ai_inline bool ai_termp(struct ai *g, word x) {
+ return (x & 3) == ai_thread_tag && in_live_pool(g, (word const*) (x & ~(word) 3)); }
+
 lvm(lvm_trim) {
  if (lamp(Sp[0])) clip(g, cell(Sp[0]));
  return Ip++, Continue(); }
 
-lvm(lvm_seek) { return
- Sp[1] = lamp(Sp[1]) ? word(cell(Sp[1]) + getcharm(Sp[0])) : ZeroPoint,
- Sp++, Ip++, Continue(); }
+// (seek i v): the cell i steps away, or () if the step leaves the object. an object ends at
+// its own terminator and the object below it ends one word under this head, so a step
+// crosses out exactly when one of the cells it steps over is a terminator -- O(|i|), and i
+// is 1 or 2 at every call site. reading the head off the terminator instead would rescan
+// the whole thread per emit, and the emitter walks a thread backwards cell by cell.
+lvm(lvm_seek) {
+ intptr_t i = getcharm(Sp[0]);
+ word v = Sp[1], r = ZeroPoint;
+ if (lamp(v)) {
+  union u *b = cell(v), *e = b + i;
+  if (!in_live_pool(g, ptr(b))) r = word(e);       // a static nif run: no terminator to ask
+  else if (in_live_pool(g, ptr(e))) {
+   union u *p = i < 0 ? e : b + 1, *q = i < 0 ? b : e + 1;
+   while (p < q && !ai_termp(g, p->x)) p++;
+   if (p == q) r = word(e); } }
+ return Sp[1] = r, Sp++, Ip++, Continue(); }
+
+// (stem v): the head of the object v points into -- what a lambda's value hides when it
+// reserves a leading source cell. (span v): the cells from v up to the terminator, so a
+// walk knows its length without stepping to the wall. both () off the heap.
+lvm(lvm_stem) { return
+ Sp[0] = lamp(Sp[0]) && in_heap(g, Sp[0]) ? word(tag_head(ttag(g, cell(Sp[0])))) : ZeroPoint,
+ Ip++, Continue(); }
+
+lvm(lvm_span) { return
+ Sp[0] = lamp(Sp[0]) && in_heap(g, Sp[0])
+  ? putcharm(cell(ttag(g, cell(Sp[0]))) - cell(Sp[0])) : ZeroPoint,
+ Ip++, Continue(); }
+
+// what a cell hands back as a value, or (). the three refusals are all the machine's own
+// words, never love's: a terminator (the heap's bookkeeping), an instruction the op table
+// names, and a glazed body in the code arena -- which no table names, so `pick` cannot see
+// it either and a raw code address would otherwise ride out. a pool pointer is none of the
+// three, and asking that first is also what keeps the table scan off the common peek.
+static ai_inline word ai_cellval(struct ai *g, word w) {
+ if ((w & 3) == ai_thread_tag) return ZeroPoint;
+ if (lamp(w) && in_live_pool(g, ptr(w))) return w;
+ return ai_op_index((intptr_t) w) >= 0 || (lamp(w) && code_in(g, (uintptr_t) w))
+  ? ZeroPoint : w; }
 
 lvm(lvm_peek) {
  word w = lamp(Sp[1]) ? (cell(Sp[1]) + getcharm(Sp[0]))->x : ZeroPoint;
- return Sp[1] = ai_op_index((intptr_t) w) < 0 ? w : ZeroPoint,
- Sp++, Ip++, Continue(); }
+ return Sp[1] = ai_cellval(g, w), Sp++, Ip++, Continue(); }
 
-// (pick i v): the instruction at cell i as its table index, () where a value sits
+// (pick i v): the instruction at cell i as its op index, () where a value sits
 lvm(lvm_pick) {
  word w = lamp(Sp[1]) ? (cell(Sp[1]) + getcharm(Sp[0]))->x : ZeroPoint;
  intptr_t j = ai_op_index((intptr_t) w);
@@ -1822,6 +1866,7 @@ lvm(lvm_poke) {
  if (!lamp(Sp[2])) { *(Sp += 2) = ZeroPoint; ai_musttail return Next(1); }
  union u *c = cell(Sp[2]) + getcharm(Sp[0]);
  Pack(g);                    // ai_young reads g->hp -- the live Hp may be ahead (the lvm-context law)
+ if (ai_termp(g, c->x)) { *(Sp += 2) = ZeroPoint; ai_musttail return Next(1); }  // never over the wall
  gen_wb_cell(g, c, Sp[1]);   // poke's contract: the target cell sits in a tagged span (a spin
                              // thread, an env) -- never a chain's field (ev boxes those; a chain
                              // has no terminator for the remembered cell-walk).
@@ -1834,6 +1879,7 @@ lvm(lvm_place) {
  if (!lamp(Sp[2]) || !a) { *(Sp += 2) = ZeroPoint; ai_musttail return Next(1); }
  union u *c = cell(Sp[2]) + getcharm(Sp[0]);
  Pack(g);
+ if (ai_termp(g, c->x)) { *(Sp += 2) = ZeroPoint; ai_musttail return Next(1); }
  gen_wb_cell(g, c, (word) a);
  c->x = (word) a; *(Sp += 2) = word(c); ai_musttail return Next(1); }
 

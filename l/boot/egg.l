@@ -12,10 +12,13 @@
  ; flag can only answer from an unbaked boot). nomop now leaves them on the book as well.
  (ev '(:
    ; keep this list up to date
-   m '(cellread seal-hook books setbooks mods lib enter leave gv trim peek poke pick place seek spin lamsrc nifnom yield ci-vt to-vt macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx feels apx iop gone numfn nfa nfq nfnest powg fpow ipow tray atype asum aprod alen a-coll a-dim a-emax a-rank a-shape a-type pureset operators seqx sortsplit lidx ldel packp _)
+   m '(cellread seal-hook books setbooks mods lib enter leave gv trim peek poke pick place seek stem span
+       dis disp discell opname opnames nifop spin lamsrc nifnom yield ci-vt to-vt macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx feels apx iop gone numfn nfa nfq nfnest powg fpow ipow tray atype asum aprod alen a-coll a-dim a-emax a-rank a-shape a-type pureset operators seqx sortsplit lidx ldel packp _)
    n (filter (\ k (? (nom? k) (= "lvm_" (snip (string k) 0 4)))) (keys book))
    M (mods ())
-   F (tablet 0)
+   ; the module may already exist: a def row can name it in C (love/love.h's AiNif), and
+   ; those rows were bound at boot, before any of this. join them rather than replace.
+   F (: e (peep M 'guts ()) (tablet? e ? e (tablet 0)))
    miss (mint 0)                       ; a roster name that never bound answers this, and is skipped
    keep (book 'nomop)
    (p k) (: v (peep book k miss)

@@ -29,7 +29,7 @@ static ai_inline struct ai *host_srcgz(struct ai *g) {
 static lvm(lvm_srcgz) LvmCall(g, host_srcgz)
 
 static union u const nif_srcgz[] = {{lvm_srcgz}, {lvm_ret0}};
-AiNif("source-gz", nif_srcgz);
+AiNif("source-gz", nif_srcgz, NULL);
 
 // (runtime-gz "x64"|"a64"|"rv64") -> that ISA's moonlibc archive, deflated;
 // (runtime-gz "id") -> the pure tree-slice hash the archives were cut from
@@ -67,4 +67,4 @@ static ai_inline struct ai *host_rtgz(struct ai *g) {
 static lvm(lvm_rtgz) LvmCall(g, host_rtgz)
 
 static union u const nif_rtgz[] = {{lvm_rtgz}, {lvm_ret0}};
-AiNif("runtime-gz", nif_rtgz);
+AiNif("runtime-gz", nif_rtgz, NULL);

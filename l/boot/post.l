@@ -546,6 +546,40 @@
 (seal-hook 7 show)
 (: (red? x) (+x < 0) (blue? x) (+x = 0) (green? x) (+x > 0))
 
+; --- the disassembler: a thread read back as data. the two halves of the question are
+; --- answered by different machinery. the BOUNDS are structural -- stem reads the head off
+; --- the terminator, span counts the cells to it, seek refuses a step over either -- so a
+; --- walk stays inside the object whatever the cells hold. the KIND of a cell is the op
+; --- table's answer, and is only as good as the table: pick hands back an index where the
+; --- word is one the table names and () where it is not. so read a cell you know to be an
+; --- operand with peek and one you know to be code with pick; where the two disagree the
+; --- cell was guessed wrong, and neither door lied.
+(: ret0 (pick 1 cap) cur (pick 0 (+))
+   ; a nif's run is [impl][ret0], or [cur][arity][impl][ret0]: the shape ev's own `opof` reads
+   (nifop v) (? (ret0 = pick 1 v)                     (pick 0 v)
+                (cur = pick 0 v && ret0 = pick 3 v)   (pick 2 v))
+   ; the instruction rows name themselves; a nif's body fn is an op no lvm_ name spells, so
+   ; it takes the nif's own -- `+` over an index, and the roster is the book either way
+   opnames (: ks (sort (keys book))                   ; sorted: two names on one op must not race
+              T (foldl (\ t k (? (? (nom? k) (= "lvm_" (snip (string k) 0 4)))
+                                 (pin t (book k) k) t))
+                       {cur 'lvm_cur ret0 'lvm_ret0} ks)   ; neither of these is a book name
+              (foldl (\ t k (: b (? (nom? k) (nifop (book k)))
+                               (? (? b (nil? (peep t b ()))) (pin t b k) t)))
+                     T ks))
+   (opname i) (peep opnames i i)                      ; an index with no name prints as itself
+   (discell c) (: p (pick 0 c) (nil? p ? ['val (peek 0 c)] ['op (opname p)]))
+   ; (dis v): every cell of the object v points into, from its head
+   (dis v) (: h (stem v) (nil? h ? () (map (\ i (discell (seek i h))) (jot (span h)))))
+   ; (disp v): the same, one cell a line, `>` marking the cell v itself points at
+   (disp v) (: h (stem v)
+              _ (nil? h ? (puts "not on the heap\n")
+                 (: _ (? (nat? v) (puts "; native: a glazed body is code, and reads ()\n"))
+                  (each (jot (span h)) (\ i (: r (discell (seek i h))
+                   (puts (show i), puts (seek i h = v ? " > " "   "),
+                    puts (<r = 'op ? "" "= "), putx (r 1), puts "\n"))))))
+              ()))
+
 ; --- the library layers, sat here with post so every seat carries them: rng and q are
 ; --- globals, and the rest register as modules a seat splices as it wants ---
 

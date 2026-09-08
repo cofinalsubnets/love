@@ -314,5 +314,5 @@ static lvm(lvm_horn_lag) {
 static union u const
  nif_horn[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_horn}, {lvm_ret0}},
  nif_horn_lag[] = {{lvm_horn_lag}, {lvm_ret0}};
-AiNif("horn", nif_horn);
-AiNif("horn-lag", nif_horn_lag);
+AiNif("horn", nif_horn, NULL);
+AiNif("horn-lag", nif_horn_lag, NULL);

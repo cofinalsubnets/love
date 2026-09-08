@@ -900,43 +900,43 @@ static union u const
   nif_posix_ttyfg[]   = {{lvm_posix_ttyfg}, {lvm_ret0}},
   nif_posix_setenv[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_setenv}, {lvm_ret0}},
   nif_posix_environ[] = {{lvm_posix_environ}, {lvm_ret0}};
-AiNif("spawn", nif_spawn);
-AiNif("glean",  nif_reapany);
-AiNif("sigfd", nif_sigfd);
-AiNif("sigtake", nif_sigtake);
-AiNif("sigclear", nif_sigclear);
-AiNif("sigign?", nif_sigignp);
-AiNif("wait",  nif_waitpid);
-AiNif("chdir", nif_chdir);
-AiNif("cwd",   nif_cwd);
-AiNif("selfpath", nif_selfpath);
-AiNif("pipe",  nif_pipe);
-AiNif("openfd", nif_openfd);
-AiNif("spawnio", nif_spawnio);
-AiNif("fdopen", nif_fdopen);
-AiNif("spawnmap", nif_spawnmap);
-AiNif("getuid", nif_getuid);
-AiNif("getgid", nif_getgid);
-AiNif("fork", nif_fork);
-AiNif("dup2", nif_dup2);
-AiNif("dup", nif_dup);
-AiNif("mkdir", nif_mkdir);
-AiNif("mount", nif_mount);
-AiNif("mountf", nif_mountf);
-AiNif("umount", nif_umount);
-AiNif("chroot", nif_chroot);
-AiNif("sync", nif_sync);
-AiNif("mknod", nif_mknod);
-AiNif("newns", nif_newns);
-AiNif("stat",    nif_posix_stat);
-AiNif("lstat",   nif_posix_lstat);
-AiNif("readdir", nif_posix_readdir);
-AiNif("unlink",  nif_posix_unlink);
-AiNif("lseek",   nif_posix_lseek);
-AiNif("signal",  nif_posix_signal);
-AiNif("ttyfg",   nif_posix_ttyfg);
-AiNif("setenv",  nif_posix_setenv);
-AiNif("environ", nif_posix_environ);
+AiNif("spawn", nif_spawn, NULL);
+AiNif("glean", nif_reapany, NULL);
+AiNif("sigfd", nif_sigfd, NULL);
+AiNif("sigtake", nif_sigtake, NULL);
+AiNif("sigclear", nif_sigclear, NULL);
+AiNif("sigign?", nif_sigignp, NULL);
+AiNif("wait", nif_waitpid, NULL);
+AiNif("chdir", nif_chdir, NULL);
+AiNif("cwd", nif_cwd, NULL);
+AiNif("selfpath", nif_selfpath, NULL);
+AiNif("pipe", nif_pipe, NULL);
+AiNif("openfd", nif_openfd, NULL);
+AiNif("spawnio", nif_spawnio, NULL);
+AiNif("fdopen", nif_fdopen, NULL);
+AiNif("spawnmap", nif_spawnmap, NULL);
+AiNif("getuid", nif_getuid, NULL);
+AiNif("getgid", nif_getgid, NULL);
+AiNif("fork", nif_fork, NULL);
+AiNif("dup2", nif_dup2, NULL);
+AiNif("dup", nif_dup, NULL);
+AiNif("mkdir", nif_mkdir, NULL);
+AiNif("mount", nif_mount, NULL);
+AiNif("mountf", nif_mountf, NULL);
+AiNif("umount", nif_umount, NULL);
+AiNif("chroot", nif_chroot, NULL);
+AiNif("sync", nif_sync, NULL);
+AiNif("mknod", nif_mknod, NULL);
+AiNif("newns", nif_newns, NULL);
+AiNif("stat", nif_posix_stat, NULL);
+AiNif("lstat", nif_posix_lstat, NULL);
+AiNif("readdir", nif_posix_readdir, NULL);
+AiNif("unlink", nif_posix_unlink, NULL);
+AiNif("lseek", nif_posix_lseek, NULL);
+AiNif("signal", nif_posix_signal, NULL);
+AiNif("ttyfg", nif_posix_ttyfg, NULL);
+AiNif("setenv", nif_posix_setenv, NULL);
+AiNif("environ", nif_posix_environ, NULL);
 // --- the rest of the fs surface: the effect ops the fs tools ride ---------------
 // (mv, ln, touch, chmod, chown -- apps/kore/fs.l and friends).
 //   (rename old new)      -> () | a nom | 'badarg  (mv's heart; same filesystem)
@@ -1077,16 +1077,16 @@ static union u const
   nif_posix_rmdir[]    = {{lvm_posix_rmdir}, {lvm_ret0}},
   nif_posix_hardlink[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_hardlink}, {lvm_ret0}},
   nif_posix_copyfile[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_copyfile}, {lvm_ret0}};
-AiNif("rename",   nif_posix_rename);
-AiNif("symlink",  nif_posix_symlink);
-AiNif("readlink", nif_posix_readlink);
-AiNif("chmod",    nif_posix_chmod);
-AiNif("chown",    nif_posix_chown);
-AiNif("utime",    nif_posix_utime);
-AiNif("umask",    nif_posix_umask);
-AiNif("rmdir",    nif_posix_rmdir);
-AiNif("hardlink", nif_posix_hardlink);
-AiNif("copyfile", nif_posix_copyfile);
+AiNif("rename", nif_posix_rename, NULL);
+AiNif("symlink", nif_posix_symlink, NULL);
+AiNif("readlink", nif_posix_readlink, NULL);
+AiNif("chmod", nif_posix_chmod, NULL);
+AiNif("chown", nif_posix_chown, NULL);
+AiNif("utime", nif_posix_utime, NULL);
+AiNif("umask", nif_posix_umask, NULL);
+AiNif("rmdir", nif_posix_rmdir, NULL);
+AiNif("hardlink", nif_posix_hardlink, NULL);
+AiNif("copyfile", nif_posix_copyfile, NULL);
 // --- the pty wrapper: bao's rlwrap/debugger muscle ------------------------------
 // spawn a program on a fresh pseudo-terminal, reap it without blocking, signal
 // it, and read/write its window size. the keystone, (tether argv), is hark
@@ -1401,13 +1401,13 @@ static union u const
   nif_winsize[]    = {{lvm_winsize}, {lvm_ret0}},
   nif_setwinsize[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_setwinsize}, {lvm_ret0}},
   nif_ptyecho[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ptyecho}, {lvm_ret0}};
-AiNif("tether", nif_tether);
-AiNif("gather", nif_reap);
-AiNif("still", nif_kill);
-AiNif("winsize", nif_winsize);
-AiNif("setwinsize", nif_setwinsize);
-AiNif("ptyecho", nif_ptyecho);
-AiNif("raw", nif_raw);
-AiNif("swig", nif_swig);
-AiNif("open", nif_open);
-AiNif("close", nif_close);
+AiNif("tether", nif_tether, NULL);
+AiNif("gather", nif_reap, NULL);
+AiNif("still", nif_kill, NULL);
+AiNif("winsize", nif_winsize, NULL);
+AiNif("setwinsize", nif_setwinsize, NULL);
+AiNif("ptyecho", nif_ptyecho, NULL);
+AiNif("raw", nif_raw, NULL);
+AiNif("swig", nif_swig, NULL);
+AiNif("open", nif_open, NULL);
+AiNif("close", nif_close, NULL);

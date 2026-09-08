@@ -119,18 +119,19 @@
 
    ;; -- symbols and calls. env: name -> (fn idx [n]) | (data addr). a call under uni hands
    ;;    every argument local and takes both answers back; the per-arity lane counts. --
-   ;; a function's ADDRESS is not its table index: base + 2i, so it is even and far above any
-   ;; address this memory holds. every other target's fn address is already both, and love
-   ;; reads a word's parity as its tag -- a bare index made half the functions look like
-   ;; fixnums. w-indirect takes the index back out; nothing else looks inside one.
+   ;; a function's ADDRESS is not its table index: base + 8i, so it is word-aligned and far
+   ;; above any address this memory holds -- what every other target's fn address already is.
+   ;; love reads a word's low bits as its tag, and a bare index made half the functions look
+   ;; like fixnums and a quarter of them like thread terminators. w-indirect takes the index
+   ;; back out; nothing else looks inside one.
    w-fnbase (1 << 40)
-   (w-fnaddr i) (w-fnbase + 2 * i)
+   (w-fnaddr i) (w-fnbase + 8 * i)
    (w-sym x) (peep (peep w-st 'env {}) x ())
    (w-args e) (? (w-uni? 0) (catmap (\ i [['local.get i]]) (jot 16))
                  (catmap (\ i [['local.get i]]) (jot (e 2))))
    (w-rets _) (? (w-uni? 0) [['local.set 9] ['local.set 8] ['local.set 1] ['local.set 0]] [['local.set 0]])
    (w-indirect d op) (? (w-uni? 0) (w-args () + w-val d
-                                    + [['i64.const w-fnbase] ['i64.sub] ['i64.const 1] ['i64.shr_u]
+                                    + [['i64.const w-fnbase] ['i64.sub] ['i64.const 3] ['i64.shr_u]
                                        ['i32.wrap_i64] [op 0 0]])
                         (scare 'wasm-indirect-needs-uni d))
    (w-la d x)
@@ -477,8 +478,12 @@
        base (peep opts 'base 4096)
        (lay st forms) (: r (w-lay-data forms (w-align16 <st) syms (st 1)) [<r (r 1)])
        (lane st forms) (foldl lay st forms)
+       ;; a bracketed lane is read as an ARRAY of one struct, so its tus must BUTT: a
+       ;; 16-align between two of them is a gap the stride knows nothing about, and the
+       ;; drain then walks past the end. an explicit aligned(N) still lands, as its own form.
+       (snug st forms) (: r (w-lay-data forms <st syms (st 1)) [<r (r 1)])
        (bracket nm st forms)                          ; the pair around one lane's whole
-        (: a (w-align16 <st) r (lane [a (st 1)] forms)
+        (: a (w-align16 <st) r (foldl snug [a (st 1)] forms)
            _ (pin syms (nom ("__start_" + nm)) ['data a])
            _ (pin syms (nom ("__stop_" + nm)) ['data <r])
            r)

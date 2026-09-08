@@ -47,13 +47,28 @@ enum ai_status ai_fin(struct ai *g) {
    g->alloc(g, g, 0); }                       // ..the pool is g, so it goes last
  return s; }
 
-// every .x here must be immortal -- a nif address, a fixnum, an out-of-pool
-// constant. C cannot re-root what it holds in an array, and no ordering fixes it;
-// a value that moves arrives on the stack instead (ai_defv).
+// the map a row binds into, pushed: the book, or the tablet its module names -- minted on
+// first sight and registered in g->mods, so a registration section owns its namespace
+// outright rather than landing on the book to be swept off later.
+static struct ai *def_home(struct ai *g, char const *m) {
+ if (!ai_ok(g)) return g;                                       // ..so g is the core, unmasked
+ if (!m) return ai_push(g, 1, A(g->book));
+ if (!ai_ok(g = intern(ai_strof(g, m)))) return g;              // [nom ..]
+ word t = ai_mapget(g, zero, g->sp[0], g->mods);
+ if (t != zero) return g->sp[0] = t, g;                         // known: [tab ..]
+ if (!ai_ok(g = map_new(g))) return g;                          // [tab nom ..]
+ if (!ai_ok(g = ai_push(g, 1, g->mods))) return g;              // [mods tab nom ..]
+ if (!ai_ok(g = ai_push(g, 1, g->sp[1]))) return g;             // [tab mods tab nom ..]
+ if (!ai_ok(g = ai_push(g, 1, g->sp[3]))) return g;             // [nom tab mods tab nom ..]
+ if (!ai_ok(g = ai_mapput(g))) return g;                        // mods[nom] = tab: [mods tab nom ..]
+ return g->sp[2] = g->sp[1], g->sp += 2, g; }                   // [tab ..]
+
 struct ai *ai_defn(struct ai*g, struct ai_def const*defs, uintptr_t n) {
- for (g = ai_push(g, 1, A(ai_core_of(g)->book)); n--;
-  g = ai_mapput(intern(ai_strof(ai_push(g, 1, defs[n].v.x), defs[n].n))));
- ai_core_of(g)->sp++;
+ while (n--) {
+  g = ai_mapput(intern(ai_strof(
+       ai_push(def_home(g, defs[n].m), 1, defs[n].v.x), defs[n].n)));
+  if (!ai_ok(g)) return g;
+  g->sp++; }                                                    // the home, done with
  return g; }
 
 // FIXME this function should pop the bound value off the stack
@@ -172,24 +187,24 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   if (ai_ok(g)) g->symbols = ai_pop1(g);
   if (ai_ok(g = map_new(g))) g->mods = ai_pop1(g);   // the registry, before the first ai_modtab
   struct ai_def def0[] = {
-   {"book", {.x = A(g->book)}},   // the l-level book = the orth map (the chain stays C-side; `books` reads it)
-   {"in", {.x = (word) &ai_stdin}},
-   {"out", {.x = (word) &ai_stdout}},
-   {"err", {.x = (word) &ai_stderr}},
+   {"book", {.x = A(g->book)}, 0},   // the l-level book = the orth map (the chain stays C-side; `books` reads it)
+   {"in", {.x = (word) &ai_stdin}, 0},
+   {"out", {.x = (word) &ai_stdout}, 0},
+   {"err", {.x = (word) &ai_stderr}, 0},
    // the two doors prel builds (tap and jug), so it can stamp the kind it means;
    // mopped at birth like every other raw pointer the compiler folds (l/boot/egg.l)
-   {"ci-vt", {.x = (word) &ai_ci_vt}},
-   {"to-vt", {.x = (word) &ai_to_vt}},
+   {"ci-vt", {.x = (word) &ai_ci_vt}, 0},
+   {"to-vt", {.x = (word) &ai_to_vt}, 0},
    // max-charm/min-charm: this build's fixnum bounds, exposed so width-specific
    // tests gate on the real boundary (it differs on 32- vs 64-bit ports).
-   {"max-charm", {.x = putcharm((word)((uintptr_t)-1 >> 2))}},
-   {"min-charm", {.x = putcharm(-(word)((uintptr_t)-1 >> 2) - 1)}},
+   {"max-charm", {.x = putcharm((word)((uintptr_t)-1 >> 2))}, 0},
+   {"min-charm", {.x = putcharm(-(word)((uintptr_t)-1 >> 2) - 1)}, 0},
    // love-tco: glazed code continues by tail-jump, which only the threaded build
    // honors -- auto.l reads this and keeps the interpreter on a trampoline build
-   {"love-tco", {.x = putcharm(ai_tco)}}, };
+   {"love-tco", {.x = putcharm(ai_tco)}, 0}, };
   g = ai_defn(g, def0, countof(def0));
   // a nif row's value is its run inside nifs[]; an instruction row's is a bare fn, and that
-  // binds as its op charm -- no code address belongs in a love value (core/ev.c's pick/place).
+  // binds as its op charm -- no code address belongs in a love value (love/ev.c's pick/place).
   for (uintptr_t j = 0; j < countof(def1); j++) {
    struct ai_def d = def1[j];
    if (!ai_nif_cell(d.v.k)) d.v.x = putcharm(ai_op_index((intptr_t) d.v.ap));

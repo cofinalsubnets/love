@@ -262,16 +262,32 @@ struct ai {
 // the value is a union, so a row SAYS which kind it holds and C checks it rather than
 // every writer spelling a cast: .k a nif's threaded code, .ap an instruction's own lvm_,
 // .x a word or a tagged fixnum. every one must be immortal -- see ai_defn.
-struct ai_def { char const *n; union u v; };
+// `m` is the module the row belongs to, NULL for the global book: the tablet is minted on
+// first sight and registered in g->mods, so a row names its namespace where it is written
+// and no boot order has to be kept for it.
+struct ai_def { char const *n; union u v; char const *m; };
 
-// host nif auto-registration: AiNif("name", fn) lands the entry in the love_nifs section
-// and boot drains [__start_love_nifs, __stop_love_nifs) through ai_defn, so an app adds nifs
-// in its own inle/<app>.c. no linker script -- the toolchain defines the bracket symbols.
-// a nif rides the image as an index off this bracket, so nothing here is ever a kept absolute.
+// host nif auto-registration: AiNif("name", fn, "mod") lands the entry in the love_nifs
+// section and boot drains [__start_love_nifs, __stop_love_nifs) through ai_defn, so an app
+// adds nifs in its own inle/<app>.c. no linker script -- the toolchain defines the bracket
+// symbols. a nif rides the image as an index off this bracket, never a kept absolute.
+// the third argument is the module, NULL to land on the book: a nif that has a namespace to
+// belong to should say so here rather than be swept off the book afterwards.
+// ⚠ the alignment is load-bearing: the bracket is read as an ARRAY, so an entry must not
+// be padded past the struct's own alignment. left to itself the compiler over-aligns a
+// static, and the drain then walks a stride nothing in the section is laid at -- which is
+// how 109 rows read as 134 the day this struct grew its third field. a literal, not
+// _Alignof: mooncc reads this attribute's operand as a number token and nothing else.
+#if UINTPTR_MAX > 0xffffffffu
+#define AiDefAlign 8
+#else
+#define AiDefAlign 4
+#endif
 extern struct ai_def const __start_love_nifs[], __stop_love_nifs[];
-#define AiNif(nm, fn) \
-  static struct ai_def const __attribute__((section("love_nifs"), used)) \
-    _ainif_##fn = { (nm), { .k = (fn) } }
+#define AiNif(nm, fn, mod) \
+  static struct ai_def const \
+    __attribute__((section("love_nifs"), used, aligned(AiDefAlign))) \
+    _ainif_##fn = { (nm), { .k = (fn) }, (mod) }
 
 // port vtable -- what a device owes, and nothing else. a NULL slot means no method
 // (no readn reads end, no writen discards). neither blocks the scheduler; the generic
@@ -761,7 +777,7 @@ lvm_t lvm_kcall,
  lvm_string, lvm_lt,     lvm_le,   lvm_eq,     lvm_same, lvm_gt,  lvm_ge,
  lvm_sort,  lvm_sortby, lvm_tally, lvm_longp,
  lvm_pin, lvm_pull, lvm_tablet,   lvm_keys,  lvm_dig,
- lvm_unc, lvm_poke, lvm_peek, lvm_pick, lvm_place,
+ lvm_unc, lvm_poke, lvm_peek, lvm_pick, lvm_place, lvm_stem, lvm_span,
  lvm_seek,  lvm_trim,   lvm_spin,   lvm_add,
  lvm_mul,    lvm_quot,   lvm_fquot, lvm_rem,  lvm_arg,
  lvm_bmul_start,             // the resumable bignum multiply's entry; its loop bodies are num.c's

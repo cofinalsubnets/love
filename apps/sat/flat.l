@@ -40,8 +40,8 @@
 (:
    ; --- 8-byte word slots, low 4 bytes live: inle/mem.c's word nifs. the host glob and
    ; k_host_c both carry them, so they are here -------------------------------------
-   getw peepw
-   putw pinw
+   getw (from 'guts 'peepw)
+   putw (from 'guts 'pinw)
    (enc l) (? (l < 0) (1 + (2 * (0 - l))) (2 * l))          ; signed literal -> encoded
    ; --- the layout, from nv (twins recompute these from fx w3) --------------------
    (lvo-of nv) (8 + (nv + 1))

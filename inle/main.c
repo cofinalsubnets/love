@@ -243,12 +243,12 @@ static union u const
  nif_exec[] = {{lvm_exec}, {lvm_ret0}},
  nif_getenv[] = {{lvm_getenv}, {lvm_ret0}},
  nif_getpid[] = {{lvm_getpid}, {lvm_ret0}};
-AiNif("quit", nif_exit);
-AiNif("hark", nif_hark);
-AiNif("herald", nif_herald);
-AiNif("exec", nif_exec);
-AiNif("getenv", nif_getenv);
-AiNif("getpid", nif_getpid);
+AiNif("quit", nif_exit, NULL);
+AiNif("hark", nif_hark, NULL);
+AiNif("herald", nif_herald, NULL);
+AiNif("exec", nif_exec, NULL);
+AiNif("getenv", nif_getenv, NULL);
+AiNif("getpid", nif_getpid, NULL);
 
 static struct ai *env_budget(struct ai *g) {
   char const *b = getenv("LOVE_BUDGET_MB");

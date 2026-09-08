@@ -4,7 +4,7 @@
 ; edit this file, not nifs.h -- make relays it from here, off the mx_gen roster in
 ; test/test.mk. `make mx` refreshes by hand, test_clay diffs.
 ;
-; a new love name must not already be a LOCAL in core/boot/*.l: those files compile
+; a new love name must not already be a LOCAL in love/boot/*.l: those files compile
 ; against the bare book, so a sibling of the same name shadows the nif in that whole
 ; letrec and the call quietly becomes a partial application of the local. grep them
 ; for the name as a binding, not just the book for the name.
@@ -65,6 +65,8 @@
       (nif_place         "place"         3 lvm_place)
       (nif_trim          "trim"          1 lvm_trim)
       (nif_seek          "seek"          2 lvm_seek)
+      (nif_stem          "stem"          1 lvm_stem)
+      (nif_span          "span"          1 lvm_span)
       (nif_saturate      "sat"           1 lvm_saturate)
       (nif_ceil          "ceil"          1 lvm_ceil)
       (nif_peep          "peep"          3 lvm_peep)
@@ -193,13 +195,18 @@
    ; an instruction carries itself. unsized, so C's count cannot disagree with the roster.
    ; m is the value's own union member: a nif is threaded code (union u const*), an
    ; instruction is the lvm_ that runs it (lvm_t*). the union says which; no cast either way.
-   (def-row m nm v) ['init [['str nm] ['init [['dfield m v]]]]]
+   ; mod is the module the row is born in, () for the global book -- and no sweep in egg.l
+   ; has to know it. the boot .l files compile against the bare book, so any name one of
+   ; them spells has to stay global, which is what keeps that column near-empty.
+   (mod-of r) (? (4 < tally r) (r 4) ())
+   (def-row m nm v mod) ['init [['str nm] ['init [['dfield m v]]]
+                                (? mod ['str (string mod)] ['num 0])]]
    (nif-at n) (n < 1 ? (vr "nifs") ['bin '+ (vr "nifs") ['num n]])
    (zip a b) (two? a ? ([<a <b] . zip >a >b))
    nif-def1
     ['gdecl [["def1" '(arr (const (struct "ai_def")) 0)
-              ['init ((map (p \ def-row "k" <><p (nif-at <>p)) (zip nif-rows nif-ats))
-                      + (map (\ i (def-row "ap" (string i) (vr (string i)))) nif-insts))]]]
+              ['init ((map (p \ def-row "k" <><p (nif-at <>p) (mod-of <p)) (zip nif-rows nif-ats))
+                      + (map (\ i (def-row "ap" (string i) (vr (string i)) ())) nif-insts))]]]
      '(static)]
 
    ; --- the bridge the splice JIT needs ------------------------------------------

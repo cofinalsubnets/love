@@ -246,7 +246,7 @@ static lvm(lvm_inflate) {
  LvmCall(g, host_inflate) }
 
 static union u const nif_inflate[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_inflate}, {lvm_ret0}};
-AiNif("inflate", nif_inflate);
+AiNif("inflate", nif_inflate, NULL);
 
 // ===== deflate -- the C twin of apps/gz/gz.l's DEFLATE coder, AiNif-registered =====
 // the same discipline as inflate above: (deflate s) -> the raw stream | ().
@@ -564,4 +564,4 @@ static LvmWrap(lvm_deflate, host_deflate)
 // one operand, so the run is {impl, ret0} -- l/nifs.l states the law and lvm_cur
 // curries once unconditionally, which at arity one hands the body an operand too many.
 static union u const nif_deflate[] = {{lvm_deflate}, {lvm_ret0}};
-AiNif("deflate", nif_deflate);
+AiNif("deflate", nif_deflate, NULL);

@@ -455,16 +455,16 @@ static union u const
  nif_ck_feed[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ck_feed}, {lvm_ret0}},
  nif_ck_done[] = {{lvm_ck_done}, {lvm_ret0}};
 
-AiNif("sha256", nif_sha256);
-AiNif("sha256-init", nif_sha_init);
-AiNif("sha256-feed", nif_sha_feed);
-AiNif("sha256-done", nif_sha_done);
-AiNif("md5", nif_md5);
-AiNif("md5-init", nif_md5_init);
-AiNif("md5-feed", nif_md5_feed);
-AiNif("md5-done", nif_md5_done);
-AiNif("crc32", nif_crc32);
-AiNif("cksum", nif_cksum);
-AiNif("cksum-init", nif_ck_init);
-AiNif("cksum-feed", nif_ck_feed);
-AiNif("cksum-done", nif_ck_done);
+AiNif("sha256", nif_sha256, NULL);
+AiNif("sha256-init", nif_sha_init, NULL);
+AiNif("sha256-feed", nif_sha_feed, NULL);
+AiNif("sha256-done", nif_sha_done, NULL);
+AiNif("md5", nif_md5, NULL);
+AiNif("md5-init", nif_md5_init, NULL);
+AiNif("md5-feed", nif_md5_feed, NULL);
+AiNif("md5-done", nif_md5_done, NULL);
+AiNif("crc32", nif_crc32, NULL);
+AiNif("cksum", nif_cksum, NULL);
+AiNif("cksum-init", nif_ck_init, NULL);
+AiNif("cksum-feed", nif_ck_feed, NULL);
+AiNif("cksum-done", nif_ck_done, NULL);

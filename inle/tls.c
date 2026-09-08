@@ -179,5 +179,5 @@ static lvm(lvm_poly1305) LvmCall(g, host_poly1305)
 static union u const
   nif_chacha20[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_chacha20}, {lvm_ret0}},
   nif_poly1305[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_poly1305}, {lvm_ret0}};
-AiNif("chacha20", nif_chacha20);
-AiNif("poly1305", nif_poly1305);
+AiNif("chacha20", nif_chacha20, NULL);
+AiNif("poly1305", nif_poly1305, NULL);

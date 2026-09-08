@@ -127,9 +127,9 @@ struct ai_port_vt const ai_fd_port_vt = { _flush, fd_writen, fd_readn, NULL };
 // exit() reaches the JS caller as an ExitStatus it catches (loader.js).
 static noreturn lvm(lvm_exit) { exit(getcharm(Sp[0])); }
 static union u const nif_exit[] = {{lvm_exit}, {lvm_ret0}};
-AiNif("exit", nif_exit);
+AiNif("exit", nif_exit, NULL);
 static union u const nif_quit[] = {{lvm_exit}, {lvm_ret0}};   // the crew's verb tail (moon-main), as main.c has it
-AiNif("quit", nif_quit);
+AiNif("quit", nif_quit, NULL);
 
 // (close p) -> (): a port's write run lands, a horn shuts its device, and the closed
 // vt goes in -- posix.c's close less the fd, which this seat has none of
@@ -151,7 +151,7 @@ static lvm(lvm_close) {
   Sp[0] = ZeroPoint;
   ai_musttail return Next(1); }
 static union u const nif_close[] = {{lvm_close}, {lvm_ret0}};
-AiNif("close", nif_close);
+AiNif("close", nif_close, NULL);
 
 // --- the console: quay's screen, and the page's mirror of it ---------------
 // the engine and its love door ride along by unity include, as inle/cb.c has them;
@@ -161,13 +161,13 @@ AiNif("close", nif_close);
 // reads after the eval returns. answers the cell count, or () for a screen too big.
 #include "quay/quay.c"
 #include "quay/nif.c"
-AiNif("screen", nif_screen);      // the console's love door, on the slice as inle/cb.c lays it
-AiNif("scribe", nif_scribe);
-AiNif("glass", nif_glass);
-AiNif("gaze", nif_gaze);
-AiNif("reply", nif_reply);
-AiNif("unfold", nif_unfold);
-AiNif("wet", nif_damage);
+AiNif("screen", nif_screen, NULL);      // the console's love door, on the slice as inle/cb.c lays it
+AiNif("scribe", nif_scribe, NULL);
+AiNif("glass", nif_glass, NULL);
+AiNif("gaze", nif_gaze, NULL);
+AiNif("reply", nif_reply, NULL);
+AiNif("unfold", nif_unfold, NULL);
+AiNif("wet", nif_damage, NULL);
 #include "quay/xterm256.h"
 enum { mir_head = 4, mir_max = 1 << 16 };
 static uint32_t mir[mir_head + mir_max];   // rows cols cursor flag, then the cells
@@ -181,7 +181,7 @@ static lvm(lvm_mirror) {
   else Sp[0] = ZeroPoint;
   Ip += 1; ai_musttail return Continue(); }
 static union u const nif_mirror[] = {{lvm_mirror}, {lvm_ret0}};
-AiNif("mirror", nif_mirror);
+AiNif("mirror", nif_mirror, NULL);
 EMSCRIPTEN_KEEPALIVE uint32_t*       ai_mirror(void)  { return mir; }
 EMSCRIPTEN_KEEPALIVE uint32_t const* ai_palette(void) { return xterm256; }
 EMSCRIPTEN_KEEPALIVE uint32_t        ai_unfold(uint32_t g_) { return g_ < 256 ? cb_unfold((uint8_t) g_) : 0; }
