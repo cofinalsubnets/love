@@ -22,7 +22,7 @@
 ; beside the file says which, with the original .orig kept), 2 the patch itself is
 ; unreadable.
 (module 'kore
-(use 'posix)
+(borrow 'posix)
 
 (:
    (pt-pfx s p) ((tally p <= tally s) && (snip s 0 (tally p) = p))

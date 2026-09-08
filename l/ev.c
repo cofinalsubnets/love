@@ -101,7 +101,7 @@ static struct ai *eset(struct ai *g, struct env **c, int k, word v) {
 // ev.l's closure cell is the same thing (mkc/cof/cput, a tablet under key 0).
 enum { LThread, LImps };
 // a backpatch site is a box too: the entry whose thread fills the hole, and the hole.
-// ⚠ the hole is an interior pointer and has to be -- c1's clip re-points the terminator
+// the hole is an interior pointer and has to be -- c1's clip re-points the terminator
 // at the entry once emission ends, so the head this cell was indexed from is no longer
 // the thread's, and no base available here stays one. gcp relocates an interior pointer
 // into a thread by preserving its offset, which is what carries this across a move.
@@ -114,7 +114,7 @@ static struct ai *sset(struct ai *g, word s, int k, word v) {
  return g; }
 static ai_inline word lget(struct ai *g, word y, int k) {
  return ai_mapget(g, zero, putcharm(k), B(y)); }
-static struct ai *lset(struct ai *g, word y, int k, word v) {   // ⚠ y must be rooted: a
+static struct ai *lset(struct ai *g, word y, int k, word v) {   // y must be rooted: a
  g = ai_push(g, 3, putcharm(k), v, B(y));                       //   growing put allocates
  if (ai_ok(g = ai_mapput(g))) g->sp++;
  return g; }
@@ -319,7 +319,7 @@ static Ana(ana_v) {
  if (!ai_ok(g)) return g;
  for (struct env *d = *c;; d = d->par) {
   if (zerop(d)) {
-   if ((y = bookget(g, 0, x))) return ana_q(g, c, y);
+   if ((y = stacklook(g, 0, x))) return ana_q(g, c, y);
    // undefined global: resolved by lvm_index at run time. record it as a captured
    // free variable only when nested -- at top level imps would alias an
    // uninitialized arg slot. re-read x from the imps hook: the push above can GC.
@@ -587,7 +587,7 @@ static bool lexbound(struct ai *g, struct env *d, word x) {
  return false; }
 
 static ai_inline Ana(ana_2, word a, word b) {
- if ((x = macroget(ai_core_of(g), a)) && !lexbound(g, *c, a))   // macro table = each layer's [zero] slot, walked; the scope walk only on a macro hit
+ if ((x = stacklook_macro(ai_core_of(g), a)) && !lexbound(g, *c, a))   // macro table = each layer's [zero] slot, walked; the scope walk only on a macro hit
   return g = ai_eval_(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, b, zero, zero, x))))))),
          analyze(g, c, ai_ok(g) ? pop1(g) : 0);
  if (!chainp(b)) return analyze(g, c, a);  // (f) == f -- below the macro lane, which has no value to be
@@ -615,7 +615,7 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
  // exists: forward-referenced bindings indirect through nom-keyed cells (prel.l).
  // ev.l runs the same pass in feel, so both lanes share one boxfix.
  if (ai_ok(g = intern(ai_strof(g, "boxfix")))) {
-  word bf = bookget(g, 0, pop1(g));
+  word bf = stacklook(g, 0, pop1(g));
   if (bf && lamp(bf)) {
    g = ai_eval_(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, exp, zero, zero, bf)))))));
    if (ai_ok(g)) exp = pop1(g); } }
@@ -760,7 +760,7 @@ lvm(lvm_defglob) {
  Have(3);
  Sp -= 3;
  word k = Ip[1].x, v = Sp[3];
- Sp[0] = k, Sp[1] = v, Sp[2] = A(g->book), Pack(g);          // a pin lands in the head layer
+ Sp[0] = k, Sp[1] = v, Sp[2] = A(g->stack), Pack(g);          // a pin lands in the head layer
  if (!ai_ok(g = ai_mapput(g))) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g), Sp += 1, Ip += 2;
  ai_musttail return Continue(); }
@@ -981,7 +981,7 @@ static ai_noinline word missing_tag(struct ai *g) {
 // the site never self-patches: a later define is seen, a rebind honoured.
 lvm(lvm_index) {
  Have1();                          // room for the push first (may GC; no live local held yet)
- word v = bookget(g, word(no_entry), Ip[1].x);
+ word v = stacklook(g, word(no_entry), Ip[1].x);
  if (v != word(no_entry)) return
   *--Sp = v,                       // present: push the live value, no quote patch
   Ip += 2,
@@ -1040,7 +1040,7 @@ lvm(lvm_seal) {
  switch (getcharm(Sp[0])) {
   case 0: g->hot_read = Sp[1]; break;
   case 1: g->hot_numap = Sp[1]; break;
-  case 2: g->hot_stack = Sp[1]; break;
+  case 2: g->hot_arrange = Sp[1]; break;
   case 3: g->hot_compose = Sp[1]; break;
   case 4: g->hot_opfix = Sp[1]; break;
   case 5: *task_help(g) = Sp[1], gen_wb_cell(g, task_help(g), Sp[1]); break;
@@ -1068,7 +1068,7 @@ op11(lvm_myself, (intptr_t) g->tasks[2].x)
 lvm(lvm_addh) {
  if (coinp(Sp[0]) || coinp(Sp[1])) ai_musttail return Ap(lvm_add_coin, g);
  Have(2);
- word h = hot_hook(g->hot_stack);
+ word h = hot_hook(g->hot_arrange);
  word fa = Sp[0], ga = Sp[1], *dst = Sp - 2, ret = word(Ip + 1);
  dst[0] = fa, dst[1] = h, dst[2] = ga, dst[3] = ret;
  Sp = dst; Ip = (union u*) numap_drive; ai_musttail return Continue(); }

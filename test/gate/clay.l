@@ -1,6 +1,6 @@
 ; test/clay.l -- G1, clay's faithfulness gate: (cparse (clay-show c)) == c, over
 ; every C file in test/cc/. run inside a woken mooncc image, which is where the
-; front end lives; clay itself arrives by (use 'clay), a module, so none of its
+; front end lives; clay itself arrives by (borrow 'clay), a module, so none of its
 ; helper names touch the compiler's book.
 ;
 ; the comparison is structural, on the reparsed AST, and never a string compare of
@@ -19,13 +19,13 @@
 ; the gate fails on a round-trip difference or a shower crash. it does not fail on an
 ; inexpressible file, and it does not fail on a file the parser itself refuses (a few
 ; in test/cc/ are there to be refused).
-(use 'posix)
+(borrow 'posix)
 (:
-   _ (use "apps/moon/clay.l")
-   _ (use 'moon)                       ; the front end (clex/cpp/cparse-t) is module 'moon
-   _ (use 'kore)                       ; uread below is the u-floor's
-   cshow (from 'clay 'clay-show)
-   cok? (from 'clay 'clay-ok?)
+   _ (borrow "apps/moon/clay.l")
+   _ (borrow 'moon)                       ; the front end (clex/cpp/cparse-t) is module 'moon
+   _ (borrow 'kore)                       ; uread below is the u-floor's
+   cshow (cite 'clay 'clay-show)
+   cok? (cite 'clay 'clay-ok?)
    nl (string 10)
    (say1 s) (puts (s + nl))
    (dotc? s) (: n (tally s) (&& (2 < n) (&& ((s (n - 2)) = 46) ((s (n - 1)) = 99))))

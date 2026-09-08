@@ -7,11 +7,11 @@
 ; The self-tests below read `cdcl` for the parse->solve leg, so this file is run behind the solver:
 ; cat apps/sat/sat.l apps/sat/dimacs.l | out/love.
 ; the combinators (l/boot/post.l) -- its own top-level form; this reader is all lenient `runp`.
-(use 'peg)
+(borrow 'peg)
 
 (:
    ; -- the parser combinators (eps/lit/span/alt/seq/seqs/skip/many + the lenient runner runp) come from
-   ;    l/boot/post.l via the (use 'peg) above -- shared with cook, not re-derived here.
+   ;    l/boot/post.l via the (borrow 'peg) above -- shared with cook, not re-derived here.
    ; -- character classes + the signed-integer leaf --
    (ws? c)   (c @ (32 || 9 || 13 || 10) 1 0)     ; space/tab/cr/lf -- a ?-name owes a bit
    (dig? c)  (47 < c < 58)                 ; '0'..'9'

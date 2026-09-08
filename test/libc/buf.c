@@ -1,6 +1,6 @@
 /* stdio's BUFFERING edges -- the fill boundary, at every alignment.
  *
- * ⚠ THE BYTES ALONE CANNOT SEE THIS FAMILY. a stream that overruns its buffer
+ * THE BYTES ALONE CANNOT SEE THIS FAMILY. a stream that overruns its buffer
  * writes its payload to the memory just past it and then hands that same
  * contiguous run to write(2) at the next flush, so the output is CORRECT while
  * the heap behind it is not -- the defect that prompted this file emitted 8448
@@ -8,7 +8,7 @@
  * buffer is followed by a GUARD that is read back directly: the differential
  * still compares the payload, but the count below is what actually names it.
  *
- * ⚠ setvbuf is called ONCE, before any other use of the stream -- ISO C fixes
+ * setvbuf is called ONCE, before any other use of the stream -- ISO C fixes
  * no behaviour for a second one, and a small buffer is the whole instrument:
  * it puts the boundary 128 times over in 20 kB instead of once in 8 kB.
  *
@@ -89,7 +89,7 @@ int main(void)
 	say_n("fflush.ok", fflush(stdout));
 	say_n("ferror", ferror(stdout) ? 1 : 0);
 
-	/* ⚠ the real verdict. zero under any correct libc; nonzero says the stream
+	/* the real verdict. zero under any correct libc; nonzero says the stream
 	   wrote past the buffer it was handed, whatever the payload above looked like. */
 	say_n("guard.bytes.written", over);
 

@@ -19,13 +19,13 @@
 ;
 ; run:  cat test/00-init.l test/host/kiosko.l | out/love
 
-(use 'kiosko)                                 ; the baked module, spliced
+(borrow 'kiosko)                                 ; the baked module, spliced
 
 (assert
- (member? 'kiosko (from ()))
- (member? 'serve1 (keys (from 'kiosko)))
- (lit? (from 'kiosko 'kiosko-main))
- (! (from 'kiosco)))
+ (member? 'kiosko (cite ()))
+ (member? 'serve1 (keys (cite 'kiosko)))
+ (lit? (cite 'kiosko 'kiosko-main))
+ (! (cite 'kiosco)))
 
 ; --- the shelf ------------------------------------------------------------------------
 (: dir "/tmp/kioskotest"

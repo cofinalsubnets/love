@@ -41,8 +41,8 @@
 ; tabs render raw (the terminal's stops, not ours), no horizontal scroll (long
 ; lines clip at the view's edge).
 (module 'vi
-(use 'kore) ; the text/u floors
-(use 'lint)  ; lint-scan, spliced for this module's compile
+(borrow 'kore) ; the text/u floors
+(borrow 'lint)  ; lint-scan, spliced for this module's compile
 (:
    ; -- the small floor --
    ; lists do not index by application (a number list would church-tower), so
@@ -278,8 +278,8 @@
        (fwd i steps)
         (? (nl < steps) ()
            (: ln (ls i)
-              from (steps = 0 ? (c + 1) 0)
-              m (? (from <= #ln) (refind (st 'pat) ln from) ())
+              cite (steps = 0 ? (c + 1) 0)
+              m (? (cite <= #ln) (refind (st 'pat) ln cite) ())
               (? (two? m) [i <>m]
                  (fwd (% (i + 1) nl) (steps + 1)))))
        (bwd i steps)

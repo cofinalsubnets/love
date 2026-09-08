@@ -4,10 +4,10 @@
 ; GLYPH is the cell's index (cp437: 3 is the heart), SIZE the canvas in pixels; the
 ; scale is the largest whole number of pixels per glyph pixel that fits, so the glyph
 ; lands crisp. the ink is config.l's tokyo-night `red`, the colour the front page wears.
-(use "apps/vi/config.l")
-(use 'gz)
+(borrow "apps/vi/config.l")
+(borrow 'gz)
 
-(use 'posix)
+(borrow 'posix)
 (: (be32 n) [((n >> 24) & 255) ((n >> 16) & 255) ((n >> 8) & 255) (n & 255)]
    (bytes s) (map (i \ s i) ^#s)
    (cat l)   (foldl (+) () l)
@@ -21,7 +21,7 @@
    (cells src) (filter two? (map cell (lines src)))
    ; --- the ink: the palette's red, "#rrggbb" -> (r g b) ----------------------------
    (row nm l) (? (atom? l) () (= <<l nm) <l (row nm >l))
-   ink (: pal (row 'tokyo-night (from 'vi 'hue-page))
+   ink (: pal (row 'tokyo-night (cite 'vi 'hue-page))
           hex (? (two? pal) (<>(row 'red (pal 1))) "")
           (? (= #hex 7) (map (i \ hexv ("0x" + snip hex (1 + 2 * i) (3 + 2 * i))) ^3)
              (: _ (say err "mkicon: no tokyo-night red in config.l\n") (quit 1))))

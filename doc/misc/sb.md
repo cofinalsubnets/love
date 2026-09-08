@@ -136,7 +136,7 @@ thing traded is that `tree` read as "version control" on sight; `svalbard` leans
 to carry that, and since the model isn't a tree, that's the right trade.
 
 The command is **`sb`** — two letters, and antimony beside mercury's `hg`. Everything typed or
-imported is `sb` (`apps/sb/`, `(use 'sb)`, `.sb/`, `make test_sb`); *svalbard* is the prose name,
+imported is `sb` (`apps/sb/`, `(borrow 'sb)`, `.sb/`, `make test_sb`); *svalbard* is the prose name,
 the way Mercurial is the project and `hg` is the thing you run.
 
 `hatch` is not a plant word, deliberately: egg / hatch / `born` is love's own bootstrap cluster,
@@ -145,7 +145,7 @@ bootstrap half; install is the two composed.
 
 ## open
 
-- Does a nest need an explicit `pick`/`use` to switch its live ref, or is that just
+- Does a nest need an explicit `pick`/`borrow` to switch its live ref, or is that just
   `apply <ref>`? Leaning fold-into-`apply`, skip the verb.
 - The command surface: bare `sb <url>` as install, or a front-of-house alias.
 - `spin` is **not available** as a verb flavor — love.c registers a nif under that string and

@@ -173,7 +173,7 @@ void love_init(void) {
   // emulates the device heap exactly (a budget of half OOMed it).
   if (ai_ok(g)) ai_core_of(g)->budget = (4u << 20) / sizeof(ai_word);
   if (woke) {
-    K.g = ai_layer_(g);          // the waker opens its own session (the bake carries none)
+    K.g = ai_open_(g);          // the waker opens its own session (the bake carries none)
     pdg_log("love: woke -- workbench up");
     if (ai_ok(K.g)) pdg_set_update(k_update);
     return; }
@@ -190,14 +190,14 @@ void love_init(void) {
     );
   K.g = ai_evals_(K.g, src_mods);
     " "
-    "(use 'kanren)"
+    "(borrow 'kanren)"
     " "
-    "(use 'rune)"
+    "(borrow 'rune)"
     " "
 #include "cas.h"
     "0)");
   // THE SESSION: the crank's evals defglob here, never in the base
-  K.g = ai_layer_(K.g);
+  K.g = ai_open_(K.g);
   pdg_log(ai_ok(K.g) ? "love: boot eval ok" : "love: boot eval FAILED");
   if (ai_ok(K.g))
     pdg_set_update(k_update);

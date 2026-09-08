@@ -14,7 +14,7 @@
 ;
 ; This needs the host-only `hark`/`getenv` nifs (subprocess + environment).
 
-(use 'posix)
+(borrow 'posix)
 (: (die m)   (say err "vmret: ", say err m, say err "\n", quit 2)
    (usage 0) (say out "usage: vmret.l ELF [--prefix PREFIX] [--objdump PATH]\n", quit 0))
 

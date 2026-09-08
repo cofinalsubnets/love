@@ -9,9 +9,9 @@ static intptr_t seq_byte(word x);
 // the nifs.h table lands mid-file and names these, so the whole set is declared up here
 // (lvm_subn's body comes out of avm_slow, which carries no storage class of its own).
 static lvm_t
- lvm_apof, lvm_bigp, lvm_books, lvm_cap, lvm_casknew, lvm_chainp, lvm_clock, lvm_cup,
- lvm_gauge, lvm_intf, lvm_key, lvm_kreg, lvm_link, lvm_mint, lvm_mintp, lvm_mods, lvm_namep,
- lvm_nclock, lvm_nomctor, lvm_nomp, lvm_packp, lvm_please, lvm_setbooks, lvm_setp,
+ lvm_apof, lvm_bigp, lvm_stack, lvm_cap, lvm_casknew, lvm_chainp, lvm_clock, lvm_cup,
+ lvm_gauge, lvm_intf, lvm_key, lvm_kreg, lvm_link, lvm_mint, lvm_mintp, lvm_lib, lvm_namep,
+ lvm_nclock, lvm_nomctor, lvm_nomp, lvm_packp, lvm_please, lvm_setstack, lvm_setp,
  lvm_snip, lvm_strp, lvm_sub, lvm_subn, lvm_sunp, lvm_tune, _lvm_help_scare, _lvm_yield_c;
 static struct ai
  *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, void*, size_t));
@@ -48,16 +48,16 @@ enum ai_status ai_fin(struct ai *g) {
  return s; }
 
 // the map a row binds into, pushed: the book, or the tablet its module names -- minted on
-// first sight and registered in g->mods, so a registration section owns its namespace
+// first sight and registered in g->lib, so a registration section owns its namespace
 // outright rather than landing on the book to be swept off later.
 static struct ai *def_home(struct ai *g, char const *m) {
  if (!ai_ok(g)) return g;                                       // ..so g is the core, unmasked
- if (!m) return ai_push(g, 1, A(g->book));
+ if (!m) return ai_push(g, 1, A(g->stack));
  if (!ai_ok(g = intern(ai_strof(g, m)))) return g;              // [nom ..]
- word t = ai_mapget(g, zero, g->sp[0], g->mods);
+ word t = ai_mapget(g, zero, g->sp[0], g->lib);
  if (t != zero) return g->sp[0] = t, g;                         // known: [tab ..]
  if (!ai_ok(g = map_new(g))) return g;                          // [tab nom ..]
- if (!ai_ok(g = ai_push(g, 1, g->mods))) return g;              // [mods tab nom ..]
+ if (!ai_ok(g = ai_push(g, 1, g->lib))) return g;              // [mods tab nom ..]
  if (!ai_ok(g = ai_push(g, 1, g->sp[1]))) return g;             // [tab mods tab nom ..]
  if (!ai_ok(g = ai_push(g, 1, g->sp[3]))) return g;             // [nom tab mods tab nom ..]
  if (!ai_ok(g = ai_mapput(g))) return g;                        // mods[nom] = tab: [mods tab nom ..]
@@ -77,7 +77,7 @@ struct ai *ai_defn(struct ai*g, struct ai_def const*defs, uintptr_t n) {
 // the sp[1] re-read happens after the book push, so a collection inside it is accounted for.
 struct ai *ai_defv(struct ai *g, char const *nm) {
  if (!ai_ok(g)) return g;
- g = ai_push(g, 1, A(g->book));           // [book, value, ..]
+ g = ai_push(g, 1, A(g->stack));           // [book, value, ..]
  if (!ai_ok(g)) return g;
  g = ai_mapput(intern(ai_strof(ai_push(g, 1, ai_core_of(g)->sp[1]), nm)));
  if (ai_ok(g)) ai_core_of(g)->sp++;                   // [value, ..]
@@ -143,7 +143,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
  memset(g, 0, sizeof(struct ai));      // the core needs no leading ap: () is the const ZeroPoint, never (word)g
  g->len = len0, g->alloc = al;
  g->scare_a = g->scare_b = zero;        // v0..end is GC-walked: raw 0 is not a value
- g->hot_read = g->hot_numap = g->hot_stack = g->hot_compose = g->hot_opfix = g->hot_show = zero;   // unsealed: hot_hook traps until (seal-hook) fills them
+ g->hot_read = g->hot_numap = g->hot_arrange = g->hot_compose = g->hot_opfix = g->hot_show = zero;   // unsealed: hot_hook traps until (seal-hook) fills them
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c;
  // the rem set + major pool ride g->alloc: a frontend that cannot supply them cannot run
  g->major_len = ai_major0;
@@ -171,23 +171,23 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   // stack; push the zero key so (sp2,sp1,sp0)=(book,macro,zero) for ai_mapput.
   g = ai_push(g, 1, zero);
   g = ai_mapput(g);                     // -> sp[0] = book
-  g->book = g->sp[0];                  // henceforth GC-forwarded via the v0..end loop
-  // the abyss: g->book holds a chain of books, walked head-first (bookget) --
+  g->stack = g->sp[0];                  // henceforth GC-forwarded via the v0..end loop
+  // the abyss: g->stack holds a chain of books, walked head-first (stacklook) --
   // one link today (orth, the boot book); a later layer prepends and shadows.
-  // the l-level `book` global stays the orth map (def0 pins A(g->book)).
+  // the l-level `book` global stays the orth map (def0 pins A(g->stack)).
   if (ai_ok(g = ai_have(g, Width(struct ai_chain)))) {
    struct ai_chain *ly = (void*) bump(g, Width(struct ai_chain));
    ini_chain(ly, g->sp[0], ZeroPoint);
-   g->book = (word) ly; }
+   g->stack = (word) ly; }
   g = ai_pop(g, 1);
   // the weak intern map (string -> the canonical atom), created before the
   // first intern (the def tables just below). it lives outside the traced
   // v0 region: a collection clones it untraced and sweeps it at the fixpoint.
   g = map_new(g);
   if (ai_ok(g)) g->symbols = ai_pop1(g);
-  if (ai_ok(g = map_new(g))) g->mods = ai_pop1(g);   // the registry, before the first ai_modtab
+  if (ai_ok(g = map_new(g))) g->lib = ai_pop1(g);   // the registry, before the first ai_modtab
   struct ai_def def0[] = {
-   {"book", {.x = A(g->book)}, 0},   // the l-level book = the orth map (the chain stays C-side; `books` reads it)
+   {"book", {.x = A(g->stack)}, 0},   // the l-level book = the orth map (the chain stays C-side; `stack` reads it)
    {"in", {.x = (word) &ai_stdin}, 0},
    {"out", {.x = (word) &ai_stdout}, 0},
    {"err", {.x = (word) &ai_stderr}, 0},
@@ -786,28 +786,28 @@ static lvm(lvm_intf) {
 // ============================================================================
 op11(lvm_cap, chainp(Sp[0]) ? A(Sp[0]) : Sp[0])
 op11(lvm_cup, chainp(Sp[0]) ? B(Sp[0]) : ZeroPoint)   // cup of an atom -> the const () (ZeroPoint), not the moving core (which had serial g->ip, not 0)
-op11(lvm_books, g->book)   // the live layer chain (the abyss) -- runtime-internal, mopped at birth; ev.l's gv walks it
-op11(lvm_setbooks, (g->book = Sp[0], zero))   // set the layer chain: the scope-layer door (open/use/close ride it); runtime-internal, mopped at birth
+op11(lvm_stack, g->stack)   // the live layer chain (the abyss) -- runtime-internal, mopped at birth; ev.l's gv walks it
+op11(lvm_setstack, (g->stack = Sp[0], zero))   // set the layer chain: the scope-layer door (open/use/close ride it); runtime-internal, mopped at birth
 op11(lvm_kreg, ai_core_of(g)->kreg)   // (kreg _): the named-kind registry; post.l's coin/kinds read and pin it
-op11(lvm_mods, g->mods)   // (mods _): the module registry book; runtime-internal, mopped at birth
+op11(lvm_lib, g->lib)   // (lib _): the module registry book; runtime-internal, mopped at birth
 // push a fresh writable layer at the head of the book chain -- the runtime's
 // enter: the session's scope, every defglob's target
-struct ai *ai_layer_(struct ai *g) {
+struct ai *ai_open_(struct ai *g) {
  if (!ai_ok(g)) return g;
  if (!ai_ok(g = map_new(g))) return g;                 // sp[0] = the fresh layer map
- g = gxr(ai_push(g, 1, ai_core_of(g)->book));          // (layer . chain)
+ g = gxr(ai_push(g, 1, ai_core_of(g)->stack));          // (layer . chain)
  if (!ai_ok(g)) return g;
- ai_core_of(g)->book = *ai_core_of(g)->sp;
+ ai_core_of(g)->stack = *ai_core_of(g)->sp;
  return ai_pop(g, 1); }
 // drop the link just below the head -- the runtime's bare leave, the inverse of
-// one `use`; nothing below the head is a no-op
-struct ai *ai_unsplice_(struct ai *g) {
+// one `borrow`; nothing below the head is a no-op
+struct ai *ai_shelve_(struct ai *g) {
  if (!ai_ok(g)) return g;
- word bk = ai_core_of(g)->book;
+ word bk = ai_core_of(g)->stack;
  if (!chainp(B(bk))) return g;
  g = gxl(ai_push(g, 2, A(bk), B(B(bk))));              // (head . below-the-neighbour)
  if (!ai_ok(g)) return g;
- ai_core_of(g)->book = *ai_core_of(g)->sp;
+ ai_core_of(g)->stack = *ai_core_of(g)->sp;
  return ai_pop(g, 1); }
 
 op11(lvm_chainp, (chainp(Sp[0]) && !nomp(Sp[0])) ? putcharm(1) : zero)  // the surface chain?: a real compound list. a named symbol reads (name . mint) but counts as an atom

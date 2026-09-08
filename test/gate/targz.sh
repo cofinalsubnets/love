@@ -6,7 +6,7 @@
 # field. THIS gate proves the half that only the outside world can say -- that GNU
 # tar and GNU gzip AGREE with us, in both directions, over a real tree.
 #
-# ⚠ AGREEING WITH OURSELVES PROVES NOTHING HERE. A coder and a decoder written by
+# AGREEING WITH OURSELVES PROVES NOTHING HERE. A coder and a decoder written by
 # one hand share a model, and a round trip through both is green for any pair of
 # functions that invert each other -- including a pair that agree on a format
 # nobody else speaks. The system tools are the only oracle that can catch that,
@@ -48,8 +48,8 @@ fail() { echo "FAIL targz: $*"; exit 1; }
 
 # ---- 1. we WRITE, they READ ------------------------------------------------
 cat > "$w/pack.l" <<EOF
-(use 'tar)
-(use 'gz)
+(borrow 'tar)
+(borrow 'gz)
 (: g (tar-gather "$w/tree" "")
    _ (? (! g) (: _ (say err "gather failed\n") (quit 1)) 0)
    a (tar-pack (<(>g)))
@@ -77,8 +77,8 @@ echo "  OK we write, GNU tar + gzip read -- tree identical, symlink and mode int
 ( cd "$w/tree" && tar czf "$w/theirs.tar.gz" . )
 mkdir -p "$w/ours"
 cat > "$w/unpack.l" <<EOF
-(use 'tar)
-(use 'gz)
+(borrow 'tar)
+(borrow 'gz)
 (: q (open "$w/theirs.tar.gz" "r") z (: s (slurp q) _ (close q) (s + ""))
    u (gz-unzip z)
    _ (? (! u) (: _ (say err "gunzip failed\n") (quit 1)) 0)
@@ -90,7 +90,7 @@ cat > "$w/unpack.l" <<EOF
 EOF
 "$love" "$w/unpack.l" || fail "love could not read the system's .tar.gz"
 diff -r "$w/tree" "$w/ours" || fail "our extraction of the system archive differs"
-# ⚠ diff -r COMPARES BYTES, NOT MODES, and that blind spot shipped a real bug: our
+# diff -r COMPARES BYTES, NOT MODES, and that blind spot shipped a real bug: our
 # extractor read the mode out of every header and never applied it, so everything
 # landed 0644 and an extracted BINARY would not run. Content-identical and useless.
 # So the modes are compared as their own list, both directions.
@@ -103,7 +103,7 @@ echo "  OK GNU tar + gzip write, we read -- tree identical, modes preserved"
 for f in tree/text.l tree/sub/deep/blob.bin tree/empty; do
   src="$w/$f"
   cat > "$w/one.l" <<EOF
-(use 'gz)
+(borrow 'gz)
 (: q (open "$src" "r") s (: t (slurp q) _ (close q) (t + ""))
    z (gz-zip s "" 0)
    o (open "$w/one.gz" "w") _ (say o z) _ (close o)
@@ -116,7 +116,7 @@ EOF
   # reading only its own writer's output has never been asked anything.
   gzip -9 -c "$src" > "$w/theirs.gz"
   cat > "$w/one2.l" <<EOF
-(use 'gz)
+(borrow 'gz)
 (: q (open "$w/theirs.gz" "r") z (: t (slurp q) _ (close q) (t + ""))
    u (gz-unzip z)
    _ (? (! u) (: _ (say err "unzip failed\n") (quit 1)) 0)
@@ -166,7 +166,7 @@ gzip -l "$c/g.txt.gz" > "$w/l.want" 2>/dev/null
 cmp -s "$w/l.want" "$w/l.got" || { diff "$w/l.want" "$w/l.got"; fail "gzip -l vs GNU"; }
 
 # -t says nothing about a good member and 1 about a torn one.
-# ⚠ set -e is ON in this gate, so a status is caught with `|| e=$?` and never with a
+# set -e is ON in this gate, so a status is caught with `|| e=$?` and never with a
 # bare run followed by $? -- a failing command on its own line ends the script silently
 run() { e=0; "$@" > /dev/null 2>&1 || e=$?; }
 "$love" gzip -t "$c/g.txt.gz" || fail "gzip -t on a good member"
@@ -207,7 +207,7 @@ echo "  OK the command faces -- gzip/gunzip/zcat, the suffixes, the statuses, -l
 # symlink (no body), the empty file (no pad), the exact-512 body (a zero-length pad,
 # where an off-by-one lives), and a body that outruns the read buffer.
 cat > "$w/hash.l" <<EOF
-(use 'tar)
+(borrow 'tar)
 (: g (tar-gather? (\ _ 1) "$w/tree" "")
    t (tar-thin? (\ _ 1) "$w/tree" "")
    _ (? (g && t) 0 (: _ (say err "walk failed\n") (quit 1)))
@@ -231,8 +231,8 @@ echo "  OK the streamed archive digest equals the packed one"
 # pack it again, and the packer must answer the tree rather than its own umask.
 mkdir -p "$w/um"
 cat > "$w/unpack6.l" <<EOF
-(use 'tar)
-(use 'gz)
+(borrow 'tar)
+(borrow 'gz)
 (: q (open "$w/ours.tar.gz" "r") z (: s (slurp q) _ (close q) (s + ""))
    u (gz-unzip z)
    _ (? (! u) (: _ (say err "gunzip failed\n") (quit 1)) 0)
@@ -247,7 +247,7 @@ EOF
 ( cd "$w/um"   && find . -mindepth 1 \( -type f -o -type d \) | sort | xargs stat -c '%a %n' ) > "$w/m6.got"
 diff "$w/m6.want" "$w/m6.got" || fail "a lay under umask 077 lost the archived modes"
 cat > "$w/repack6.l" <<EOF
-(use 'tar)
+(borrow 'tar)
 (: g1 (tar-gather "$w/tree" "")
    g2 (tar-gather "$w/um" "")
    _ (? (g1 && g2) 0 (: _ (say err "walk failed\n") (quit 1)))

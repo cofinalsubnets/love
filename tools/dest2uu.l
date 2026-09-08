@@ -17,7 +17,7 @@
 ; references resolve at its compile, which must follow this run. reads carries the
 ; top-level leak (uu2coq's door); out rides a jug meanwhile -- dest.l's own asserts
 ; gate the run, its "dest: ok" stays out of the artifact.
-(use 'posix)
+(borrow 'posix)
 (: j (jug 0) _ (wear [in j err])
    _ (reads (open "test/proto/dest.l" "r"))
    _ (wear ()) ())

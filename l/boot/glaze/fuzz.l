@@ -11,7 +11,7 @@
 ; differs between the runs by design (the native cell keeps the surface src, the
 ; bytecode twin its post-cprop body). the call-out and counted-loop lanes want the
 ; applied named-let `((: (go i a) ..) 0 a0)`; the un-applied form drops to the group
-; lane -- probe ((from 'glaze) 'calloutinfo) &c before believing a shape covers a lane.
+; lane -- probe ((cite 'glaze) 'calloutinfo) &c before believing a shape covers a lane.
 ; the trailing `fires=` line is the proof of work: nonzero in the glazed run, zero in
 ; the other, or the diff is over nothing.
 ;

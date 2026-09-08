@@ -5,7 +5,7 @@
 ; standalone from the repo root:
 ;   cat test/00-init.l test/host/salt.l | out/love
 
-(use 'salt)
+(borrow 'salt)
 
 (: st-dir "out/.salt"
    _ (mkdir "out" 493) _ (mkdir st-dir 493)

@@ -10,8 +10,8 @@
 ; block coder's edges live; a long run is the overlapping copy (dist 1) that a bulk
 ; move would get wrong; incompressible data is the lane where matches never fire; and
 ; text is the only one that looks like the happy path.
-(use 'gz)
-(use 'tar)
+(borrow 'gz)
+(borrow 'tar)
 
 (: (gz-mk n f) (: b (cask n) (go i) (? (n <= i) (string b) (: _ (pin b i (f i)) (go (i + 1)))) (go 0))
    gz-empty ""

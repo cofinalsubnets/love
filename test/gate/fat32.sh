@@ -1,7 +1,7 @@
 #!/bin/sh
 # fat32.sh -- `love fat` and `love mkfs.vfat`, the command line over apps/fat/fat.l.
 #
-# ⚠ NOT test/gate/fat.sh, which is a different subject entirely: that one gates the
+# NOT test/gate/fat.sh, which is a different subject entirely: that one gates the
 # FAT CONTAINER (one file, many architectures) and
 # has nothing to do with the filesystem. `make test_fat` is that gate; this is
 # `make test_fat32`.
@@ -12,7 +12,7 @@
 # and writes one we read, so neither side is grading its own homework. Without mtools
 # on PATH the interop half is skipped by name and the rest still runs.
 #
-# ⚠ FAT32 REFUSES ANYTHING UNDER ~33 MB by the format's own law -- under 65525
+# FAT32 REFUSES ANYTHING UNDER ~33 MB by the format's own law -- under 65525
 # clusters the type IS FAT16. every image here is 40 MB for that reason, not for room.
 #
 # usage: fat32.sh OUTDIR LOVE
@@ -27,7 +27,7 @@ I=$W/img.fat
 # ---------------------------------------------------------------- format
 "$m" fat mkfs "$I" 40M || fail "fat mkfs 40M"
 [ "$(wc -c < "$I")" = 41943040 ] || fail "fat mkfs: the image is not the size asked for"
-# ⚠ the refusal is a FEATURE and is tested as one: a 4 MB image is FAT16 territory,
+# the refusal is a FEATURE and is tested as one: a 4 MB image is FAT16 territory,
 # and writing a boot sector that claims otherwise would be worse than saying no.
 "$m" fat mkfs "$W/small.fat" 4M 2>/dev/null && fail "fat mkfs: 4M must be refused"
 # a size that is not whole sectors is refused too
@@ -92,13 +92,13 @@ echo "fat: mkfs.vfat / mkdosfs (busybox's two spellings, -C, 1K blocks) ok"
 
 # ---------------------------------------------------------------- mtools interop
 # the half that matters: a second implementation, written by other people, reading
-# what we wrote and writing what we read. ⚠ mtools wants a drive letter, so every
+# what we wrote and writing what we read. mtools wants a drive letter, so every
 # call here carries its own config through MTOOLSRC rather than the user's ~/.mtoolsrc.
 if command -v mdir > /dev/null 2>&1 && command -v mcopy > /dev/null 2>&1; then
   printf 'drive z: file="%s"\nmtools_skip_check=1\n' "$I" > "$W/mtoolsrc"
   MTOOLSRC=$W/mtoolsrc; export MTOOLSRC
 
-  # mtools reads ours. ⚠ `mdir -/` alone prints the classic 8.3 COLUMN layout, where
+  # mtools reads ours. `mdir -/` alone prints the classic 8.3 COLUMN layout, where
   # a.txt reads "a        txt" and no grep for a filename matches; -b is the bare
   # one-path-a-line form and the only one worth comparing against.
   mdir -b -/ z:/ > "$W/mdir" 2>&1 || fail "mtools cannot read the image we formatted"

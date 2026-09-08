@@ -18,7 +18,7 @@
 ; thing, kind-of, load-level, save-level, story-run, pen -- are the story module's.
 ; usage: love design [LEVEL.l]      the file to lay out (default apps/rove/levels/lighthouse.l)
 (module (design design-main design-run design-new design-key design-frame)
-(use 'story)
+(borrow 'story)
 (:
  (design-new lvl p) {'lvl lvl 'path p 'cx (lvl 'sx) 'cy (lvl 'sy) 'mode 'map 'buf (ednew ()) 'msg "" 'new () 'brush 46 'dirty 0 'over 0 'want ()}
  (tell d s) (pin d 'msg s)
@@ -143,7 +143,7 @@
  ; --- the runner: the designer on cli's stage --------------------------------------
  (design-run p) (: lvl (: l (load-level p) (l ? l (level p 1 1 ["#####" "#...#" "#####"] {} {})))
                    d (design-new lvl p)
-                   vi (from 'vi 'vi-main)
+                   vi (cite 'vi 'vi-main)
                    ; vi on the level's file and a play of the level are stages of their own:
                    ; each leaves the screen and the tty as it found them, so this one re-arms
                    (visit f) (: _ (save d) _ (f ()) _ (raw 1) (say out "\e[?1049h"))
@@ -153,5 +153,5 @@
                                        ()))
                    (stage (w \ h \ design-frame d w h) step (\ _ (d 'over))))
  (design-main as) (design-run (two? as ? <as "apps/rove/levels/lighthouse.l"))
- _ (pins (from 'verbs 'tab) 'design design-main))
+ _ (pins (cite 'verbs 'tab) 'design design-main))
 ) ; module design

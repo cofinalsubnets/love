@@ -2,12 +2,12 @@
 ; (it is pure and had no kore couplings); this half is the one that reads files,
 ; so it keeps the u-floor (uread, udie) and text.l's lines. smoked byte-identical
 ; against GNU in `make test_kore`. a toolbox file, no seat -- kore.l is its door.
-(use 're)
+(borrow 're)
 
 (module 'kore
-(: rebre (from 're 'rebre) reere (from 're 'reere)      ; the four engine names grep reads
-   refold (from 're 'refold) refindp (from 're 'refindp)
-   recomp (from 're 'recomp) refindpm (from 're 'refindpm)
+(: rebre (cite 're 'rebre) reere (cite 're 'reere)      ; the four engine names grep reads
+   refold (cite 're 'refold) refindp (cite 're 'refindp)
+   recomp (cite 're 'recomp) refindpm (cite 're 'refindpm)
 
    ; -- grep --------------------------------------------------------------------
    ; flags ride a tablet keyed by the option charm (u.l's uopts fills it), so a
@@ -109,7 +109,7 @@
                  (lp 1 hit 0))))
        ; `bad`, not `err`: err is the port, and a shadow here would say into a charm
        st (tablet 0) _ (pin st 'hit 0) _ (pin st 'bad 0)
-       ; ⚠ ONE trap for the whole run, not one per line. the engine is a greedy
+       ; ONE trap for the whole run, not one per line. the engine is a greedy
        ; backtracker (l/boot/post.l), so a repeat whose atom can match a span two
        ; ways -- (a|aa)+ -- is exponential in the run's length; the engine spends a
        ; step budget on exactly those and scares when it runs out. this is where the

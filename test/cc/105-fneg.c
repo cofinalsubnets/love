@@ -7,7 +7,7 @@
  * for years and nothing noticed: love has no negative zero at all, so the fault
  * was unreachable from the language and visible only to a C program.
  *
- * ⚠ it was found by test/libc/num.c -- strtod("-0.0") against glibc -- and it
+ * it was found by test/libc/num.c -- strtod("-0.0") against glibc -- and it
  * lives HERE because it is a codegen law, freestanding and exit-code compared
  * like the rest of this battery. the zero cases are the whole point: drop them
  * and the test passes against the broken lowering.
@@ -42,7 +42,7 @@ int main(void)
 	double nz = dbits(0x8000000000000000UL);
 	int r = 0;
 
-	/* ⚠ THE CASE THAT MATTERS: -(+0.0) is -0.0, and -(-0.0) is +0.0 */
+	/* THE CASE THAT MATTERS: -(+0.0) is -0.0, and -(-0.0) is +0.0 */
 	r += dneg(pz) == 1;
 	r += dneg(nz) == 0;
 	r += fneg(fz) == 1;

@@ -11,7 +11,7 @@
 ;
 ; safe to dry-run on the host: `out/love init/boot.l` sees getpid != 1, prints the
 ; banner and returns -- no mounts, no shell handoff (so it never blocks a dev machine).
-(use 'posix)
+(borrow 'posix)
 (: (say1 s) (: _ (puts s) (puts "\n"))              ; a console line
 
    ; mount one early filesystem at its fhs path (mkdir first; mount is () success /
@@ -26,7 +26,7 @@
    ; the console job: a fresh `love` running the shell over the inherited console fds.
    ; the -l registers module 'lush (the parts' own wraps); the -e reads it through
    ; one use -- compile is per-binding, so (sh 0) compiles after the splice.
-   (console _) ["/bin/love" "-l" "/lib/sh.l" "-e" "(: _ (use 'lush) (sh 0))"]
+   (console _) ["/bin/love" "-l" "/lib/sh.l" "-e" "(: _ (borrow 'lush) (sh 0))"]
 
    ; a boot self-check: run a real userland command (kore, forked + captured) so the
    ; console shows the base system works end to end before we hand off the tty. `hark`

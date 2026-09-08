@@ -22,8 +22,8 @@
 ; the type read asks `readlink` first -- a link answers l, whatever it points at,
 ; and the walk does not descend through it. a dangling link is still visited.
 (module 'kore
-(use 'lush) ; -name/-path ride lush's fnmatch (sh-match), captured at the define below
-(use 'posix)
+(borrow 'lush) ; -name/-path ride lush's fnmatch (sh-match), captured at the define below
+(borrow 'posix)
 
 (:
    ; a path and one entry -> the child's path (a trailing / on the parent stays one /)

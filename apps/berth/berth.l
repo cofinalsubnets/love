@@ -29,10 +29,10 @@
 ; host-only (screen/scribe + tether/gather + raw/winsize ride inle/*.c), so
 ; berth never joins the corpus; the moor core needs no tty and is smoke-
 ; tested end to end over a real pty by test/host/berth.l.
-(use "apps/berth/wharf.l")
-(use "apps/berth/limn.l")
+(borrow "apps/berth/wharf.l")
+(borrow "apps/berth/limn.l")
 
-(use 'posix)
+(borrow 'posix)
 (:
  ; --- the moor: pump the master through the screen until the child hangs up.
  ; the screen lives in box bx (a relay swaps it); replies pour straight back;

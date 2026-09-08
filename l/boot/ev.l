@@ -10,14 +10,14 @@
 ; and only a global resolves identically in every bootstrap generation.
 (: gone (mint 0))
 
-; gv: the layered global read -- (books ()) is the live chain of books, walked head-first with
+; gv: the layered global read -- (stack ()) is the live chain of books, walked head-first with
 ; `gone` as the per-layer miss sentinel (a stored () SHADOWS, never falls through), answering d on
 ; total miss. every book read in this file routes here, so a later layer can shadow orth without
-; touching the compiler. the C twin is love.c's bookget; keep in step.
+; touching the compiler. the C twin is love.c's stacklook; keep in step.
 ; the sentinel test is `==` (id?), never the pin `^gone`: a pin compiles to `=`, which
 ; walks whatever the layer stored, and every global read comes through here.
 (: (gv k d) ((: (go c) (c @ (a . u) (: v (peep a k gone) (v == gone ? (go u) v)) d))
-             (books ())))
+             (stack ())))
 
 ; feels: value->ap memo for global fns, built once by scanning every global. a ap folds an
 ; application to a value when its args are constant (pure fns only), else emits an (iop op . args)
@@ -83,7 +83,7 @@
           ar (? o >o (id? lvm_cur (pick 0 v)) (peek 1 v) 0)   ; nif/multi-arg-fn arity
           (pin t v (hgen v op ar p)))
        t))))
-   (foldl add {} (catmap keys (books ())))))
+   (foldl add {} (catmap keys (stack ())))))
 
 (:- (\ x (:
  c (sco 0 [()] ())

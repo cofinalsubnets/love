@@ -9,7 +9,7 @@
 ; A differentiates the view (again and again -- the pipeline simps between),
 ; B flips a polynomial card into its factors. every answer on screen is
 ; exact -- Q coefficients, Zassenhaus under the B button, 30 fps.
-(use 'rune)
+(borrow 'rune)
 (: NC 7
    px1 (poly (pvar 1 0)) px2 (poly (pvar 2 0)) py2 (poly (pvar 2 1))
    ; a card at dial n: 'tm the term, 'vs its variables, 'xp expand the rest

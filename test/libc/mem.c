@@ -1,7 +1,7 @@
 /* the mem* five. moonlibc copies WORD-WIDE where the pointers agree and falls to
  * bytes where they do not, so every case here is run at several alignments and
  * across the word boundary -- an off-by-one in the wide lane hides completely at
- * offset 0. ⚠ this battery is 64-bit only, and the wide lane is written against
+ * offset 0. this battery is 64-bit only, and the wide lane is written against
  * sizeof(long): what proves the 32-bit stride is the thumb boards booting
  * (test_mps2, test_mps2_t1), since moonlibc is their libc too. */
 #include <string.h>
@@ -44,7 +44,7 @@ int main(void)
 	say_n("memcpy.0", 1);
 
 	/* --- memmove: the overlap both directions, adjacent and by a word.
-	   ⚠ dest > src must copy BACKWARD or it eats its own tail. --- */
+	   dest > src must copy BACKWARD or it eats its own tail. --- */
 	for (int d = 1; d <= 9; d++) {
 		fill(buf, 40, 0);
 		memmove(buf + d, buf, 24);                /* forward overlap */
@@ -75,7 +75,7 @@ int main(void)
 		say_c("memcmp.short", memcmp(buf + off, b2 + off, 23));   /* one shy: equal */
 	}
 	say_c("memcmp.0", memcmp("a", "b", 0));       /* zero length is always equal */
-	/* ⚠ INDEPENDENT offsets. the sweep above moves both pointers together, so the
+	/* INDEPENDENT offsets. the sweep above moves both pointers together, so the
 	   two always share an alignment and the word lane always takes -- these are
 	   what reach it when they do not, and the lengths that cross its step. */
 	for (int ox = 0; ox < 9; ox++)
@@ -89,7 +89,7 @@ int main(void)
 					say_c("memcmp.mix", memcmp(buf + ox, b2 + oy, n));
 					say_c("memcmp.mix.rev", memcmp(b2 + oy, buf + ox, n));
 					b2[oy + d] ^= 0x80; } } }
-	/* ⚠ the bytes compare as UNSIGNED char: 0x80 is ABOVE 0x7f, not below */
+	/* the bytes compare as UNSIGNED char: 0x80 is ABOVE 0x7f, not below */
 	{ unsigned char hi[2], lo[2];
 	  hi[0] = 0x80; hi[1] = 0; lo[0] = 0x7f; lo[1] = 0;
 	  say_c("memcmp.unsigned", memcmp(hi, lo, 1)); }

@@ -1,13 +1,13 @@
 ; --- test/host/limn.l: the laws of apps/berth/limn.l, the cell painter ---
 ; not in the test/*.l corpus: `glass` and `unfold` are cb's nifs (l/quay/nif.c)
 ; and love0 links none of them. it needs the loader too, the way its neighbour
-; test/host/wharf.l does -- `use` finds apps/berth/limn.l by the filesystem walk.
+; test/host/wharf.l does -- `borrow` finds apps/berth/limn.l by the filesystem walk.
 ;
 ;   cat test/00-init.l test/host/limn.l | out/love   ; exits 1 on fail
 ;
 ; the vocabulary under test: a grid of cb cells in, escapes out. origins are
 ; 0-based going in and 1-based on the wire, which is the one conversion here.
-(use "apps/berth/limn.l")
+(borrow "apps/berth/limn.l")
 
 ; `sub?` is each gate's own here (test/host/berth.l carries the same three lines) --
 ; it searches from i; `at?` is the exact-position twin, which is what counting wants

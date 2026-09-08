@@ -20,13 +20,13 @@
 ; format (the LINK's arch), and a cross backend joins from its tree text the
 ; way mksrc.l joins one.
 
-(use 'posix)
+(borrow 'posix)
 (: (rt-die m) (say err ("mkrt: " + m + "\n"), quit 1)
    (rt-rdev cl)
     (sound cl @ 'torn (rt-die "torn backend text")
                 (a . u) (ev a, rt-rdev u))
    (rt-be arch)
-    (? (lit? (from 'holo 'backends arch)) 0
+    (? (lit? (cite 'holo 'backends arch)) 0
        ; the backend file is the canonical arch word now -- one spelling, no map
        (: f ("l/holo/" + string arch + ".l")
           q (open f "r")
@@ -96,16 +96,16 @@
     ; every archive arch joins, not just the object's: the image bakes the
     ; native backend only, and each ISA's members ride its own obj writer
     (: _ (rt-be 'x64, rt-be 'a64, rt-be 'rv64, rt-be arch)
-       rtcid (from 'moon 'rtcid)
-       rtarch (from 'moon 'rtarch)
-       rtwarm (from 'moon 'rtwarm)
-       objelf (from 'holo 'objelf)
+       rtcid (cite 'moon 'rtcid)
+       rtarch (cite 'moon 'rtarch)
+       rtwarm (cite 'moon 'rtwarm)
+       objelf (cite 'holo 'objelf)
        cid (rtcid "apps/moon/")
        _ (!(string? cid) ? (rt-die "no apps/moon/ slice to hash -- run from the tree root"))
        ; through rtarch, so the runtime cache serves a repeat build (~instant)
        ; and only a real slice or compiler change recompiles the members --
        ; without this every seed and rebake paid three full runtime compiles.
-       cd ((from 'moon 'mcdir) ())
+       cd ((cite 'moon 'mcdir) ())
        _ (rt-fan rtwarm cd '(x64 a64 rv64))
        ; deflated: ~1.5 MB of archive across the three ISAs becomes ~210 kB,
        ; and rtcarried pays one inflate for the ISA it wants.
@@ -126,7 +126,7 @@
             "ai_rtgz_a64" "ai_rtgz_a64_len"
             "ai_rtgz_rv64" "ai_rtgz_rv64_len")
        ob (objelf arch () () () xs () () () () () forms)
-       ((from 'holo 'write-bytes) dst ob))      ; ob is a byte list, not a string
+       ((cite 'holo 'write-bytes) dst ob))      ; ob is a byte list, not a string
 
    (mkrt-main av)
     (: n #av

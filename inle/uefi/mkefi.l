@@ -1,7 +1,7 @@
 ; inle/uefi/mkefi.l -- lay the firmware seam and bind the UEFI loader:
 ; inle/virt/mkstart.l's sibling, the one piece of the boot that is not C, and
 ; even it is holo IR. runs after l/holo/{elf,obj,link,pe}.l in a
-; (use 'holo) cat; (mkboot out arch objs..) links mooncc's loader objects into
+; (borrow 'holo) cat; (mkboot out arch objs..) links mooncc's loader objects into
 ; the PE32+ that goes on the ESP as BOOTX64.EFI / BOOTAA64.EFI.
 ;
 ; three thunks in one object, laid FIRST so the PE entry is the first text byte.
@@ -13,14 +13,14 @@
 ;   efi_call -- every UEFI service goes back OUT through this.
 ;   efi_go(tables, entry) -- the instructions C cannot spell: interrupts off,
 ;     our tables in, jump to the kernel. never returns.
-(use 'kore)   ; the u-floor (uread), off the module the cat's own u.l registered
+(borrow 'kore)   ; the u-floor (uread), off the module the cat's own u.l registered
 
 ;; -- x86-64: ms_abi in, sysv out -------------------------------------------
 ;; rsi/rdi are ms callee-saved and sysv scratch, so they are the only registers
 ;; to save around the sysv call (the loader C keeps off the floats, so xmm6..15
 ;; never move; sub 8 squares the stack for sysv). register names are holo's
 ;; file: r1=rcx r2=rdx r5=rsi r6=rdi r7=r8 r8=r9.
-(use 'posix)
+(borrow 'posix)
 (: efi-ir-x64
     '((label efiboot)
       (push r5)                   ; rsi
@@ -46,7 +46,7 @@
       ;; efi_go(pml4, entry): the loader's own code stays mapped through the
       ;; switch (the new tables identity-map the low 4G), and the current stack
       ;; rides along -- firmware-typed memory kboot never hands the heap.
-      ;; ⚠ EFER.NXE first: firmware is not obliged to have set it, and our
+      ;; EFER.NXE first: firmware is not obliged to have set it, and our
       ;; tables NX the hhdm entry -- bit 63 is RESERVED while NXE is clear, so
       ;; the first walk after the cr3 load would fault instead of honouring it.
       ;; rdmsr/wrmsr touch only eax/edx/ecx, so rdi and rsi ride through.
@@ -73,7 +73,7 @@
       (jmpr r6)
       ;; efi_go(tables, entry): x0 is the TTBR0 root and TTBR1's is the page
       ;; after it -- loader.c lays l0_lo and l0_hi adjacent for exactly this.
-      ;; ⚠ the MMU is already ON here (firmware's identity map), so this is a
+      ;; the MMU is already ON here (firmware's identity map), so this is a
       ;; SWITCH, not a bring-up: both maps identity the code we are running, so
       ;; the fetch after the write lands in the same place either way, and the
       ;; TLBI + ISB is what makes the new one authoritative.

@@ -26,7 +26,7 @@
 ; answer a failure -- and only on inputs nobody hand-writes.
 ;
 ; run:  cat test/00-init.l test/host/gzc.l | out/love
-(use 'gz)
+(borrow 'gz)
 
 (assert
  (lit? inflate)

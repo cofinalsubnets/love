@@ -9,7 +9,7 @@
 ; MapRequest/DestroyNotify/ConfigureRequest/MapNotify/KeyPress; () at EOF.
 ;
 ; module 'xwire: every name below is exported, and a file that speaks X says
-; (use 'xwire) -- lux's own (ewmh, manage, config, lux) and the doom driver
+; (borrow 'xwire) -- lux's own (ewmh, manage, config, lux) and the doom driver
 ; (apps/doom.l), which is why this is a module and not a leak.
 (module '(xwire
   x-w8 x-w16 x-w32 x-flush x-r8 x-r16 x-r32 x-skip
@@ -21,7 +21,7 @@
   x-grabbtn x-replay x-allow-async x-grabptr x-ungrabptr x-querytree x-attrs x-manageable?
   x-redirect x-keymap x-grab x-ungrabkeys x-color x-borderpix x-cursor xauth-parse
   xauth-cookie x-decode x-next ev-code ev-detail ev-window ev-state ev-raw)
-(use 'posix)
+(borrow 'posix)
 (:
    ; --- byte IO over the socket (little-endian) ---
    (x-w8 s v)  (put s v)
@@ -226,9 +226,9 @@
                        (go (i + 1))))
             (go 0))
        km)
-   (x-grab s root mods kc) (kc < 1 ? 0
+   (x-grab s root lib kc) (kc < 1 ? 0
                             (x-w8 s 33, x-w8 s 1, x-w16 s 4, x-w32 s root,
-                             x-w16 s mods, x-w8 s kc, x-w8 s 1, x-w8 s 1,
+                             x-w16 s lib, x-w8 s kc, x-w8 s 1, x-w8 s 1,
                              x-w8 s 0, x-w8 s 0, x-w8 s 0))
    (x-ungrabkeys s root) (x-w8 s 34, x-w8 s 0, x-w16 s 3,                        ; UngrabKey AnyKey/AnyModifier: a regrab starts clean
                           x-w32 s root, x-w16 s 32768, x-w16 s 0)

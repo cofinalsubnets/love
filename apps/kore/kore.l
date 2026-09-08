@@ -38,7 +38,7 @@
 ; own seats stay quiet here (no file of theirs sits in the program seat), so this
 ; dispatcher is the one thing that fires. the module head is the export list -- this is
 ; the last kore block in every cat, so its leave prunes the whole module down to the
-; names below: every tool's <name>-main (lush's in-image lane and any (from 'kore ..)
+; names below: every tool's <name>-main (lush's in-image lane and any (cite 'kore ..)
 ; reach them by that spelling), the u/text floors later cat members read bare, and
 ; kore-main. the helpers this file defines (die, read-text, the registry) stay private.
 ; every path answers a charm through core.l's urun, so an in-image caller lives through
@@ -60,8 +60,8 @@
         touch-main tr-main true-main tsort-main uatoi ubase uclk ucopy udie udiff udirp ujoin
         uleave umount-main uname-main unexpand-main uniq-main unlines unlink-main uptime-main uread urun
         uset usplit ustatf utag utty uupsay wc-main whoami-main xargs-main yes-main)
-(use 'holo) ; the assembler module: elf64, arbytes, ld-syms, at -- as/ar/ld/nm read it
-(use 'posix)
+(borrow 'holo) ; the assembler module: elf64, arbytes, ld-syms, at -- as/ar/ld/nm read it
+(borrow 'posix)
 (: (read-text p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) [1 t]) ()))    ; (1 text) | ()
    (die m) (: _ (say err m) _ (put err 10) (uleave 2))
 
@@ -251,11 +251,11 @@
    ; the registry: name -> main (aliases share)
    applets {'diff diff-main
             'nm nm-main
-            'nc (from 'ain 'ain-main) 'ain (from 'ain 'ain-main)   ; ain's wrap registered ahead in the cat
-            'make (from 'cook 'cook-main) 'cook (from 'cook 'cook-main)   ; cook.l's wrap registered ahead in the cat; the map ctor evaluates values
+            'nc (cite 'ain 'ain-main) 'ain (cite 'ain 'ain-main)   ; ain's wrap registered ahead in the cat
+            'make (cite 'cook 'cook-main) 'cook (cite 'cook 'cook-main)   ; cook.l's wrap registered ahead in the cat; the map ctor evaluates values
             'as as-main
             'ar ar-main 'ld ld-main
-            'objcopy (from 'holo 'objcopy)   ; the applet is the function: l/holo/copy.l, module-side
+            'objcopy (cite 'holo 'objcopy)   ; the applet is the function: l/holo/copy.l, module-side
             'cat cat-main 'tac tac-main 'echo echo-main
             'head head-main 'tail tail-main
             'wc wc-main 'sort sort-main
@@ -293,7 +293,7 @@
             'wget wget-main
             'grep grep-main 'sed sed-main
             'awk awk-main 'find find-main
-            'vi (from 'vi 'vi-main)   ; the editor's wrap registered ahead in the cat
+            'vi (cite 'vi 'vi-main)   ; the editor's wrap registered ahead in the cat
             'less less-main 'more less-main   ; one pager, and the two names it is asked for
             'env env-main 'printenv printenv-main 'sleep sleep-main
             ; the privileged half: chroot is LFS chapter 7's own call, and mount,
@@ -312,7 +312,7 @@
             ; symlink usually through lush's own seat, which fires first at
             ; cat load on an sh/lush basename -- this row serves the image
             ; wake, where only kore-main dispatches)
-            'sh (from 'lush 'sh-main) 'lush (from 'lush 'sh-main)}
+            'sh (cite 'lush 'sh-main) 'lush (cite 'lush 'sh-main)}
    (usage _) (: _ (say err "kore -- the love multi-call toolbox
 usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   diff OLD NEW       unified diff, patience hunks (0 same / 1 differ / 2 trouble)
@@ -382,12 +382,12 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
    ; userland this is.
    ; each row closes over its own f -- the inner `:` is a fresh scope per step, so the
    ; closures do not all end up holding the last applet.
-   _ (: T (from 'verbs 'tab)
+   _ (: T (cite 'verbs 'tab)
         ; kore-main is unbound here -- it binds later in this same form -- so the
         ; closure reads it through the registry at the call, when module 'kore holds
         ; it. a bare read compiled here would ride a missing cell against the
         ; caller's walk, where kore never walks.
-        _ (pin T 'kore (\ as ((from 'kore 'kore-main) ("kore" >< as))))
+        _ (pin T 'kore (\ as ((cite 'kore 'kore-main) ("kore" >< as))))
         (go ks) (? (two? ks) (: f (applets <ks) _ (pin T <ks (\ as (urun f as))) (go >ks)) 0)
         (go (keys applets)))
    ; kore-main is the dispatch door, and the in-image door too: it dispatches a
@@ -398,7 +398,7 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
    ; image runs a tool by handing it (link "kore" "ls" "-l") and reading the charm.
    ; two doors: a list handed in is scanned, () means "the line I was started with".
    (kore-main a)
-    (: s (? (two? a) ((from 'verbs 'seatof) mynames a) ((from 'verbs 'fire) mynames))
+    (: s (? (two? a) ((cite 'verbs 'seatof) mynames a) ((cite 'verbs 'fire) mynames))
        (? !(two? s) ()
           (: f0 (applets (intern (bn <s)))
              (? f0 (urun f0 >s)

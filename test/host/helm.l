@@ -20,16 +20,16 @@
 ;             archive's top the way inle/kmain.c's k_untar does it.
 ; the mount half of both is pid 1's and root's, and is not asserted here: hunderlay
 ; answers the errno and lays in place, which is the lane this runs.
-(use "apps/helm/unit.l")
-(use "apps/helm/sup.l")
-(use "apps/helm/moor.l")
-(use "apps/helm/helm.l")
-(use 'helm)
+(borrow "apps/helm/unit.l")
+(borrow "apps/helm/sup.l")
+(borrow "apps/helm/moor.l")
+(borrow "apps/helm/helm.l")
+(borrow 'helm)
 
 (assert
- (member? 'helm (from ()))
- (member? 'hconf (keys (from 'helm)))
- (lit? (from 'helm 'helm-main)))
+ (member? 'helm (cite ()))
+ (member? 'hconf (keys (cite 'helm)))
+ (lit? (cite 'helm 'helm-main)))
 
 ; --- a config on disk -------------------------------------------------------------
 (: (spill path text) (: q (open path "w") _ (say q text) _ (flush q) (close q))
@@ -138,7 +138,7 @@
    ; registry's own -- a roster spelled out here would drift from what love can do.
    ubd "out/.helm-underlay"
    n   (hunderlay ubd)
-   ws  (keys (from 'verbs 'tab))
+   ws  (keys (cite 'verbs 'tab))
    _   (assert (= n (1 + tally ws)))                  ; every verb, and `love` itself
    _   (assert (= (readlink (ubd + "/ls")) (selfpath 0)))
    _   (assert (member? 'ls ws) (string? (readlink (ubd + "/love"))))

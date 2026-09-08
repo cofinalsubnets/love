@@ -13,10 +13,10 @@
 ; nothing, so the enforcement is sharp exactly at the pass-to-pass seams.
 ; (content of the forms is cskeep's charge at emission; this leg types the WIRING.)
 
-(use 'posix)
+(borrow 'posix)
 
-(: ovck (from 'overlay 'ov-check)
-   _ (? !(nil? (from 'overlay)) 0 (: _ (puts ";; moon-stage: no overlay module in this love") (quit 1)))
+(: ovck (cite 'overlay 'ov-check)
+   _ (? !(nil? (cite 'overlay)) 0 (: _ (puts ";; moon-stage: no overlay module in this love") (quit 1)))
    stage-dies '(gst ir-vreg ir-chosen ir-nolab ir-noframe ir-jmpfix ir-final ir-emitted)
    (stage-join x y) (? (= x y) x 'top)
    (stage-tr op x y) 'top

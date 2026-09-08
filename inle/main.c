@@ -294,7 +294,7 @@ static struct ai *evals0(struct ai *g, char const *const *v) {
 // mooncc0.image is the `bake` nif's, called from a -e, so it seals the session layer with
 // cli0 already on it -- and every build-time object compile is one wake of it.
 static struct ai *run_program(struct ai *g, bool replp) {
-  g = ai_layer_(g);
+  g = ai_open_(g);
   return ai_evals(g, "(cli-line cmdline 0)"); }
 
 // with args, run the build tool (lcat / gen_data) through the CLI driver.
@@ -307,16 +307,16 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     g = ai_evals_(g, src0_p1);
     g = evals0(g, prelpost0);
     g = evals0(g, mods0);
-    g = ai_evals_(g, "(use 'cli)(use 'kanren)(use 'verbs)");
-    g = ai_unsplice_(g);
+    g = ai_evals_(g, "(borrow 'cli)(borrow 'kanren)(borrow 'verbs)");
+    g = ai_shelve_(g);
     return ai_evals(g, "(cli-line cmdline 0)"); }
   g = ai_evals_(g, src0_p1);                         // its own call: readtext picks its reader once per
   g = evals0(g, prelpost0);                          // text, and p1 seals hook 0 only when this call evaluates
   g = evals0(g, mods0);
-  g = ai_evals_(g, "(use 'cli)(use 'holo)");
-  g = ai_unsplice_(g);
+  g = ai_evals_(g, "(borrow 'cli)(borrow 'holo)");
+  g = ai_shelve_(g);
   g = ai_evals_(g,
-    "(use 'uu)(: uu (from 'uu))(use 'kanren)(use 'posix)"
+    "(borrow 'uu)(: uu (cite 'uu))(borrow 'kanren)(borrow 'posix)"
     "(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0)"
     "   (c0read p) (: q (open p \"r\")"
     "               (? q (: s (slurp q) _ (close q) s)"
@@ -346,7 +346,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
 // LOVE_NO_GLAZE: a pure-interpreter session -- ev back to base-ev and the natjit hook
 // cleared. a session knob like LOVE_NO_IMAGE: it governs a run, never the artifact.
 #ifdef AiGlazed
-static char const glaze_off[] = "(: ev (from 'glaze 'base-ev) natjit ())";
+static char const glaze_off[] = "(: ev (cite 'glaze 'base-ev) natjit ())";
 #else
 static char const glaze_off[] = "";
 #endif
@@ -358,7 +358,7 @@ static char const glaze_off[] = "";
 // door, the positional rail, the repl, the stdin drink. the isatty answer is all C still owns.
 static struct ai *run_program(struct ai *g, bool replp) {
   if (replp) raw_mode();
-  g = ai_layer_(g);
+  g = ai_open_(g);
   if (getenv("LOVE_NO_GLAZE")) g = ai_evals_(g, glaze_off);
   return ai_evals(g, replp ? "(cli-line cmdline 1)" : "(cli-line cmdline 0)"); }
 
@@ -377,7 +377,7 @@ static struct ai *bake_eval_file(struct ai *g, char const *path) {
   if (!ai_ok(g)) return g;
   ai_core_of(g)->sp++;
   g = ai_evals_(g,
-    "(: open (from 'posix 'open) close (from 'posix 'close)"    // the fs doors are a module's
+    "(: open (cite 'posix 'open) close (cite 'posix 'close)"    // the fs doors are a module's
     "   q (open bake-load \"r\")"
     " (? q (: _ (reads q) (close q))"
     "      (: _ (say err (\"love: bake: cannot open \" + bake-load)) _ (put err 10) (quit 1))))");
@@ -386,39 +386,39 @@ static struct ai *bake_eval_file(struct ai *g, char const *path) {
 // FIXME waaaaaaaaaaaaaaaaaaaaay too much code in string literals
 static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load) {
   // leave the internal names in global scope too. only an unbaked boot reaches this; the
-  // `guts` module egg.l registers is how a baked one gets at them (from 'guts 'peek).
+  // `guts` module egg.l registers is how a baked one gets at them (cite 'guts 'peek).
   char const *nm = getenv("LOVE_NO_MOP");
   if (nm && *nm) g = ai_evals_(g, "(: nomop 1)");
   g = ai_cats_egg(g);                                    // prel then ev's half, and the printer with `@`
-  g = ai_cats_mods(g);                                   // register every baked module; the uses below are splices
+  g = ai_cats_lib(g);                                   // register every baked module; the uses below are splices
   g = ai_evals_(g,
-    "(use 'kanren)"
-    "(use 'overlay)"
-    "(: overlay (from 'overlay)"
-    "   ev ((from 'overlay 'ov-hook) ev))"
-    "(use 'uu)"
-    "(: uu (from 'uu))"
-    "(use 'holo)"
+    "(borrow 'kanren)"
+    "(borrow 'overlay)"
+    "(: overlay (cite 'overlay)"
+    "   ev ((cite 'overlay 'ov-hook) ev))"
+    "(borrow 'uu)"
+    "(: uu (cite 'uu))"
+    "(borrow 'holo)"
   );
-  g = ai_unsplice_(g);
-  g = ai_evals_(g, "(use 'cli)(use 'verbs)");
-  g = ai_unsplice_(g);
+  g = ai_shelve_(g);
+  g = ai_evals_(g, "(borrow 'cli)(borrow 'verbs)");
+  g = ai_shelve_(g);
   // kanren, overlay and uu come off: the latter two already have their accessor bound
   // above, so the splice bought only ambient names -- `C`, `Q`, `src`, `glob`, `walk`,
   // `var`, `con`, `est` are what this tree calls its locals. kanren keeps a named surface.
   // unsplice drops one link at a time, so bao comes off with them and goes straight back
   // on: read/reads for cli, `@` for every later compile.
-  for (int i = 0; i < 4; i++) g = ai_unsplice_(g);       // bao, uu, overlay, kanren
+  for (int i = 0; i < 4; i++) g = ai_shelve_(g);       // bao, uu, overlay, kanren
   // FIXME what is this even doing? we just used bao a couple of lines ago? what is "hoist"?
-  g = ai_evals_(g, "(use 'cli)"
-    "(hoist 'kanren ())"                                 // \\\, &&&, |||, zz -- macros, not names
-    "(: unify (from 'kanren 'unify)  ufail (from 'kanren 'ufail)"
-    "   ufail? (from 'kanren 'ufail?)  var (from 'kanren 'var)"
-    "   s_plus (from 'kanren 's_plus)  s_star (from 'kanren 's_star)"
-    "   === (from 'kanren '===)  =/= (from 'kanren '=/=))");
+  g = ai_evals_(g, "(borrow 'cli)"
+    "(transcribe 'kanren ())"                                 // \\\, &&&, |||, zz -- macros, not names
+    "(: unify (cite 'kanren 'unify)  ufail (cite 'kanren 'ufail)"
+    "   ufail? (cite 'kanren 'ufail?)  var (cite 'kanren 'var)"
+    "   s_plus (cite 'kanren 's_plus)  s_star (cite 'kanren 's_star)"
+    "   === (cite 'kanren '===)  =/= (cite 'kanren '=/=))");
   g = ai_cats_glaze(g);                                     // a no-op on an unglazed arch
 #ifdef AiGlazed
-  g = ai_unsplice_(g);                                   // holo back to non-ambient
+  g = ai_shelve_(g);                                   // holo back to non-ambient
 #endif
 
   g = ai_evals_(g,
@@ -493,21 +493,21 @@ static void first_boot(char const **argv) {
   // an env var because the state it guards spans an exec: the re-exec below sets it, so
   // the binary that comes back knows it already tried and a failed bake cannot loop.
   if (getenv("LOVE_FIRST_BOOT")) {
-    fprintf(stderr, "; first boot: still unbaked after a bake -- running from source\n");
+    fprintf(stderr, "; first boot: still unbaked after a bake -- running cite source\n");
     return; }
   char exe[4096], cat[sizeof exe + 40];              // + ".firstboot.<pid>.l" and its NUL
   if (!host_selfpath(exe, sizeof exe)) return;
   uintptr_t un = 0;
   unsigned char *t = fb_untar(&un);
   if (!t) {                                          // truncated or not gzip; or the mmap failed
-    fprintf(stderr, "; first boot: the carried source will not inflate -- running from source\n");
+    fprintf(stderr, "; first boot: the carried source will not inflate -- running cite source\n");
     return; }
   // per-process, for the reason the bake's scratch is (inle/image.c): concurrent first
   // boots on one name would write into and unlink each other's cat.
   snprintf(cat, sizeof cat, "%s.firstboot.%ld.l", exe, (long) getpid());
   int fd = open(cat, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) {                                      // a read-only seat -- /usr/bin, a container layer
-    fprintf(stderr, "; first boot: %s is not writable -- running from source this session\n", cat);
+    fprintf(stderr, "; first boot: %s is not writable -- running cite source this session\n", cat);
     munmap(t, un);
     return; }
   for (char const *p = src_distlist; *p;) {
@@ -520,7 +520,7 @@ static void first_boot(char const **argv) {
     unsigned char const *m = fb_find(t, un, w, &ml, 0);
     // a roster name the archive does not carry (a stale distlist), or a full filesystem
     if (!m || (ml && write(fd, m, ml) != (ssize_t) ml)) {
-      fprintf(stderr, "; first boot: %s %s -- running from source\n", w,
+      fprintf(stderr, "; first boot: %s %s -- running cite source\n", w,
               m ? "would not write" : "is not in the carried source");
       close(fd), unlink(cat), munmap(t, un);
       return; } }
@@ -534,11 +534,11 @@ static void first_boot(char const **argv) {
   if (p > 0) waitpid(p, &st, 0);
   unlink(cat);
   if (p < 0 || !WIFEXITED(st) || WEXITSTATUS(st)) {
-    fprintf(stderr, ";; bake failed, running from source\n");
+    fprintf(stderr, ";; bake failed, running cite source\n");
     return; }
   setenv("LOVE_FIRST_BOOT", "1", 1);
   execv(exe, (void*) argv);                          // the patched file: same path, new inode
-  fprintf(stderr, "; first boot: cannot re-exec -- running from source\n"); }
+  fprintf(stderr, "; first boot: cannot re-exec -- running cite source\n"); }
 #else
 #define first_boot(argv) ((void) 0)                      // love0, or no processes to fork
 #endif

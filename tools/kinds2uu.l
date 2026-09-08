@@ -13,7 +13,7 @@
 ; kind symbols appear only quoted in kinds.l ('bot ..), so a bare nom is a variable.
 ;
 ; a body-less `:` -- the k2-* vocabulary leaks; none shadows a nif.
-(use 'posix)
+(borrow 'posix)
 (:
    (k2-pairs (a . b . c)) ([a b] . k2-pairs c)
    (k2-find nm ps) <(filter (((^nm . _) . _) \ 1) ps)

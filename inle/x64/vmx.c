@@ -21,7 +21,7 @@
 // guest-physical one, and the EPT turns that into a host-physical one -- and
 // the gate's laws cannot pass unless both happened.
 //
-// ⚠ every physical address is `va - khhdm`, which holds for kernel-heap memory
+// every physical address is `va - khhdm`, which holds for kernel-heap memory
 // and NOT for image statics -- blk.c's law. The caller hands in one
 // k_vmx_need() block and everything is carved out of it.
 #include "k.h"
@@ -39,7 +39,7 @@
 #define msr_vmx_cr4_fixed0  0x488u
 #define msr_vmx_cr4_fixed1  0x489u
 // the TRUE_* capability MSRs, which say what the CPU will really accept where
-// the four above still carry the old default1 bits. ⚠ they exist only when
+// the four above still carry the old default1 bits. they exist only when
 // IA32_VMX_BASIC bit 55 says so; reading one on a part that lacks it faults.
 #define msr_vmx_true_pin    0x48du
 #define msr_vmx_true_proc   0x48eu
@@ -144,13 +144,13 @@ static void w64(unsigned char *p, uintptr_t off, uint64_t v) {
 
 // a control word, reconciled with what this CPU will actually accept: the low
 // half of the capability MSR is the bits that MUST be 1, the high half the bits
-// that MAY be. ⚠ asking for a bit the CPU forbids is a refused entry with no
+// that MAY be. asking for a bit the CPU forbids is a refused entry with no
 // other symptom, and so is failing to set one it demands.
 static uint32_t ctl_fit(uint32_t msr, uint32_t want) {
   uint64_t m = k_rdmsr(msr);
   return (want | (uint32_t) m) & (uint32_t) (m >> 32); }
 
-// Does this machine offer VMX, and has firmware left it reachable? ⚠ the lock
+// Does this machine offer VMX, and has firmware left it reachable? the lock
 // bit is the trap: locked with the outside-SMX bit clear means the BIOS turned
 // VMX off, and then the CR4.VMXE write below #GPs into a triple fault.
 bool k_vmx_ok(void) {
@@ -204,7 +204,7 @@ int k_vmx_spike(void *mem, uint64_t *reason, uint64_t *rax, uint64_t *rip,
 
   // the EPT, four levels down to 4 KiB leaves, mapping exactly the two pages the
   // guest can reach: its code at guest-physical 0 and its page directory at
-  // 0x1000. ⚠ a leaf carries a memory type in bits 5:3 where the upper levels
+  // 0x1000. a leaf carries a memory type in bits 5:3 where the upper levels
   // carry only the three permission bits -- write-back is 6, and an EPT with no
   // memory type is a refused entry.
   w64(ept4, 0, pa_of(ept3) | 0x7);                       // read | write | execute
@@ -218,7 +218,7 @@ int k_vmx_spike(void *mem, uint64_t *reason, uint64_t *rax, uint64_t *rip,
   // the live table: mkboot.l lays exactly these two words, and reading them
   // back would mean dereferencing a GDTR base that was loaded before paging.
   // A 64-bit TSS descriptor goes at index 3, which is what TR selects.
-  // ⚠ every exit reloads GDTR from this table, so it is put back by hand at the
+  // every exit reloads GDTR from this table, so it is put back by hand at the
   // foot -- these pages are a love string's bytes, and the collector is free to
   // move them the moment we return.
   unsigned char gdtr[10], idtr[10];
@@ -240,7 +240,7 @@ int k_vmx_spike(void *mem, uint64_t *reason, uint64_t *rax, uint64_t *rip,
   uint64_t cr4 = k_rd_cr4() | (1ull << 13);              // CR4.VMXE
   cr4 = (cr4 | k_rdmsr(msr_vmx_cr4_fixed0)) & k_rdmsr(msr_vmx_cr4_fixed1);
   k_wr_cr4(cr4);
-  // ⚠ AND THE SAME FOR CR0, WHICH HAS TO BE WRITTEN BACK AND NOT MERELY
+  // AND THE SAME FOR CR0, WHICH HAS TO BE WRITTEN BACK AND NOT MERELY
   // COMPUTED: vmxon #GPs -- it does not fail, it FAULTS -- unless the live CR0
   // already satisfies IA32_VMX_CR0_FIXED0. That MSR demands NE, a bit this
   // kernel has never had a reason to set, so on Intel the very first vmxon
@@ -252,7 +252,7 @@ int k_vmx_spike(void *mem, uint64_t *reason, uint64_t *rax, uint64_t *rip,
   uint64_t basic = k_rdmsr(msr_vmx_basic);
   *(uint32_t*) vmxon = (uint32_t) basic & 0x7fffffffu;
   *(uint32_t*) vmcs  = (uint32_t) basic & 0x7fffffffu;
-  // ⚠ bit 55 says the TRUE_* capability MSRs exist; without it the four
+  // bit 55 says the TRUE_* capability MSRs exist; without it the four
   // ordinary ones are the only truth, and reading 0x48d on such a part faults.
   uint32_t true_msrs = (basic >> 55) & 1;
 
@@ -266,7 +266,7 @@ int k_vmx_spike(void *mem, uint64_t *reason, uint64_t *rax, uint64_t *rip,
   k_vmwrite(f_pin_ctl, ctl_fit(true_msrs ? msr_vmx_true_pin : msr_vmx_pinbased, 0));
   k_vmwrite(f_cpu_ctl, ctl_fit(true_msrs ? msr_vmx_true_proc : msr_vmx_procbased,
                                1u << 31));              // activate secondary controls
-  // ..which is the only door to EPT. ⚠ the secondary word has no TRUE_ twin:
+  // ..which is the only door to EPT. the secondary word has no TRUE_ twin:
   // 0x48b is the whole truth about what this part will take.
   k_vmwrite(f_secondary_ctl, ctl_fit(msr_vmx_proc2, 1u << 1));
   // EPTP: the table, write-back (6), and a walk length of 4 given as 3.
@@ -283,7 +283,7 @@ int k_vmx_spike(void *mem, uint64_t *reason, uint64_t *rax, uint64_t *rip,
   k_vmwrite(f_vpid, 0);
   k_vmwrite(f_cr0_mask, 0);
   k_vmwrite(f_cr4_mask, 0);
-  // ⚠ the link pointer is ~0 and not 0. Zero is a valid-looking shadow VMCS
+  // the link pointer is ~0 and not 0. Zero is a valid-looking shadow VMCS
   // pointer, and the entry is refused for it.
   k_vmwrite(f_vmcs_link, ~0ull);
 
@@ -326,7 +326,7 @@ int k_vmx_spike(void *mem, uint64_t *reason, uint64_t *rax, uint64_t *rip,
     k_vmwrite(f_guest_es_base + 2 * s, s == seg_tr ? tb : 0);
     k_vmwrite(f_guest_es_limit + 2 * s, s == seg_tr ? 0x67 : 0xffffffffu);
     // access rights: 32-bit code, 32-bit data, an UNUSABLE ldtr (bit 16), and a
-    // busy 32-bit TSS -- ⚠ the guest's tr may not be unusable, so it gets a
+    // busy 32-bit TSS -- the guest's tr may not be unusable, so it gets a
     // real descriptor even though nothing will ever task-switch to it.
     k_vmwrite(f_guest_es_ar + 2 * s, s == seg_cs ? 0xc09b :
                                      s == seg_ldtr ? 0x10000 :

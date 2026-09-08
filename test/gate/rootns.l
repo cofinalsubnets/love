@@ -6,7 +6,7 @@
 ; are the real calls on a real kernel. What the namespace still refuses (mounting
 ; proc, which wants a pid namespace too) is left out rather than worked around.
 ;
-; ⚠ every command below runs through SPAWN and the real argv, not by calling a main:
+; every command below runs through SPAWN and the real argv, not by calling a main:
 ; the applet's own dispatch, option walk and status are the half most likely to be
 ; wrong, and a direct call skips all three. the child inherits the namespace, which
 ; is the whole reason this can be one process's worth of setup.
@@ -15,7 +15,7 @@
 ; a kernel with unprivileged user namespaces off skips the file with a word and
 ; stays green -- that is a machine's policy, not a fault in the code.
 
-(use 'posix)
+(borrow 'posix)
 (: e (newns 0)
    (? e (: _ (puts "rootns: no unprivileged user namespace here, laws skipped")
            _ (putc 10) 0)
@@ -31,7 +31,7 @@
                 r (? (nom? p) 127 (wait p))
                 _ (close fd)
                 r)
-   ; a command's stdout, as a string. ⚠ spawnio's in/out/err are RAW FDS and not
+   ; a command's stdout, as a string. spawnio's in/out/err are RAW FDS and not
    ; ports, so a jug cannot be handed to it -- the capture goes through a file the
    ; child writes and this side reads back.
    (out-of as) (: f (W + "/.cap")
@@ -70,7 +70,7 @@
    _ (assert !(member? "hosts" (readdir (W + "/b"))))
 
    ; -- mkfifo and mknod ---------------------------------------------------------
-   ; ⚠ a CHARACTER DEVICE is refused even here, and that is the kernel's policy and
+   ; a CHARACTER DEVICE is refused even here, and that is the kernel's policy and
    ; not ours: mknod(2) wants CAP_MKNOD in the INITIAL user namespace, so a userns
    ; root cannot make one however root it looks. The refusal is asserted instead --
    ; that it comes back as a status and a word rather than a crash is the half this
@@ -96,12 +96,12 @@
    _ (mk (W + "/root/bin"))
    _ (assert (0 = (run ["cp" me (W + "/root/bin/love")])))
    _ (mk (W + "/root/hello"))
-   ; ⚠ `chroot DIR CMD` execs, so it never comes back -- the status is the CHILD's,
+   ; `chroot DIR CMD` execs, so it never comes back -- the status is the CHILD's,
    ; and a chroot that quietly failed would answer 1 here rather than ls's own 0.
    r (out-of ["chroot" (W + "/root") "/bin/love" "ls" "/"])
    _ (assert (member? "hello" (lines r)) (member? "bin" (lines r)))
 
-   ; ⚠ the tree goes LAST and only on the way out: an early rm would take the
+   ; the tree goes LAST and only on the way out: an early rm would take the
    ; chroot's own /bin/love with it, and the failure would read as a missing binary.
    _ (run ["rm" "-rf" W])
    _ (puts "rootns: chroot, mount (tmpfs + bind), umount, mknod and mkfifo -- proved in a userns")

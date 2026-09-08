@@ -11,9 +11,9 @@
 ; byte-different-but-correct and stay out of this battery (they are the M2 items); external-symbol
 ; call/lea need the reloc-preserving .o path, so the symbol tests below define their target
 ; in-snippet where as-hex resolves the rel32 in place.
-(use 'holo) ; the cat's wrapped sources just registered the module
+(borrow 'holo) ; the cat's wrapped sources just registered the module
 
-(use 'posix)
+(borrow 'posix)
 (: pass {0 0} fail {0 0}
    (bump t)  (pin t 0 $ 1 + peep t 0 0)
    (sayln s) (puts s, flush out)

@@ -50,9 +50,9 @@
 
 ; the payoff, and the end-to-end proof the rung is real: prel's module walk is gated
 ; on the presence of `open` (l/boot/prel.l's fsopen, by peep), so with the row in
-; defs[] `use` resolves lib/<x>.l off the ramfs with zero prel change -- json is in
+; defs[] `borrow` resolves lib/<x>.l off the ramfs with zero prel change -- json is in
 ; no baked ai_libs table on this seat, only in the initrd. it also reads the
 ; scratch back through the compiler, so it is the restore above proving itself byte
 ; for byte; it has to stay after those laws.
-(use "apps/json.l")
+(borrow "apps/json.l")
 (assert (member? 'json-read (names ())))

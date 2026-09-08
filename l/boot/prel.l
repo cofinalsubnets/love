@@ -18,16 +18,16 @@
    atom? one?
    ; a fresh layer: its own macro table at key 0, the pre-enter chain and name at charm key 31337.
    ; a charm key cannot collide with a name. (enter ()) is anonymous.
-   (enter nm) (: F (tablet 0) _ (pin F 0 (tablet 0)) _ (pin F 31337 (link (books ()) nm))
-                 _ (setbooks (link F (books ()))) ())
+   (enter nm) (: F (tablet 0) _ (pin F 0 (tablet 0)) _ (pin F 31337 (link (stack ()) nm))
+                 _ (setstack (link F (stack ()))) ())
 
    ; unwind to the pre-enter chain, register the layer under its name, answer the book.
    ; a bare leave -- never entered, so no charm -- pops whatever sits below the head instead.
-   (leave _)  (: F (cap (books ())) s (peep F 31337 ())
+   (leave _)  (: F (cap (stack ())) s (peep F 31337 ())
                  (? (two? s)
-                    (: _ (pull F 31337 0) _ (setbooks (cap s))
-                       _ (? (nil? (cup s)) 0 (pin (mods ()) (cup s) F)) F)
-                    (setbooks (link F (cup (cup (books ())))))))
+                    (: _ (pull F 31337 0) _ (setstack (cap s))
+                       _ (? (nil? (cup s)) 0 (pin (lib ()) (cup s) F)) F)
+                    (setstack (link F (cup (cup (stack ())))))))
 
    (caap x) (cap (cap x)) (caup x) (cap (cup x))
    (cuap x) (cup (cap x)) (cuup x) (cup (cup x))
@@ -38,14 +38,14 @@
                                  (? (= 0 (% k 2)) h2 (% (* h2 b) m)))))
 ; `::` defines a macro in the head layer's table -- the same book a plain `:` defglobs to, so
 ; prel's macros land in orth during boot, a script's in the session layer, a module's in the module.
-(: ; look a macro up across the layer chain -- the twin of love.c's macroget, kept in step with
+(: ; look a macro up across the layer chain -- the twin of love.c's stacklook_macro, kept in step with
    ; it. each book holds its table at the nil key; a layer without one is skipped. 0 = no macro.
    (macros k) (: (go c) (? (nil? (two? c)) 0
                            (: m (peep (cap c) 0 ())
                               (? (tablet? m) (: v (peep m k 0) (? v v (go (cup c))))
                                  (go (cup c)))))
-                 (go (books ())))
-   (:: a b) (: F (cap (books ())) m (peep F 0 ())
+                 (go (stack ())))
+   (:: a b) (: F (cap (stack ())) m (peep F 0 ())
                (pin (? (tablet? m) m (: t (tablet 0) _ (pin F 0 t) t)) a b))
 
 )
@@ -128,11 +128,11 @@
 ; seal-hook caches num-ap into the VM, so it must follow the pin above.
 (seal-hook 1 num-ap)
 ; the + and * of two functions, which is all church arithmetic is: the extra a-slot threaded into
-; both of stack's operands is what makes + agree with addition, not the S combinator's (f x (g x)).
-; the C lanes (lvm_addh/lvm_mulh) read them by slot.
-(: (stack f g a x) (f a (g a x))                  ; (+ f g)
+; both of arrange's operands is what makes + agree with addition, not the S combinator's (f x (g x)).
+; the C lanes (lvm_addh/lvm_mulh) read them by slot. arrange to compose as + is to *.
+(: (arrange f g a x) (f a (g a x))                ; (+ f g)
    (compose f g x) (f (g x))                      ; (* f g)
-   _ (seal-hook 2 stack)
+   _ (seal-hook 2 arrange)
    _ (seal-hook 3 compose))
 ; map runs left to right: a mapped effect fires in list order. the value is computed as an
 ; argument -- link's own two operands go right to left, so nothing inside link could order them.
@@ -201,7 +201,7 @@
    rev (foldl (flip link) ())
    ; every nom on the layer chain, deduped through a tablet. noms only -- a layer's keys also hold
    ; the macro table and the unwind chain. it sits down here so catmap/foldl are already bound.
-   (names _) (filter nom? (keys (foldl (\ t k (pin t k 1)) (tablet 0) (catmap keys (books ())))))
+   (names _) (filter nom? (keys (foldl (\ t k (pin t k 1)) (tablet 0) (catmap keys (stack ())))))
 
    ; the range 0..x-1 (iota its array twin), and lifted over a list so the glued run
    ; composes: ^^3 is (jot (jot 3)), a list of lists, since a run factors greedily.
@@ -253,10 +253,10 @@
 ; compiled early would defglob past it) and a macro form serves the next form,
 ; not its own. the run rides the expansion as a VALUE: enter/leave are mopped.
 (: _
- (: (mopen nm) (: r (? (nil? nm) () (peep (mods ()) nm ()))
+ (: (mopen nm) (: r (? (nil? nm) () (peep (lib ()) nm ()))
                   F (? (tablet? r) r (: t (tablet 0) _ (pin t 0 (tablet 0)) t))
-                  _ (pin F 31337 (link (books ()) nm))
-                  (setbooks (link F (books ()))))
+                  _ (pin F 31337 (link (stack ()) nm))
+                  (setstack (link F (stack ()))))
     ; a list head is (name export..): the body defglobs as ever, then every nom not
     ; named is pulled off the tablet, so from and use each see only the exports. the
     ; charm keys (0 the macros, 31337 the parent chain) are not noms and so survive.
@@ -267,7 +267,7 @@
                      xs (? (two? nm) (cup nm) ())
                      _  (mopen n)
                      _  (each fs (\ f (ev 'ev f)))
-                     F  (cap (books ()))
+                     F  (cap (stack ()))
                      _  (? (two? xs)
                            (each (keys F) (\ k (? (nom? k) (? (member? k xs) 0 (pull F k 0)) 0)))
                            0)
@@ -863,7 +863,7 @@
 ; pat -- @ : pattern matching, one macro and no special form. a post-egg layer,
 ; not part of the language: prel stays minimal and each frontend includes the
 ; layers it wants (the host, love0, wasm and the kernel do, since l/boot/post.l is
-; written in it). its `use`
+; written in it). its `borrow`
 ; must precede every reader's compile -- a macro is only in the chain once its
 ; layer is spliced, and a consumer folds its refs at its own compile.
 ; the module exports no names: the macro is the surface, and it rides the splice

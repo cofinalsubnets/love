@@ -17,7 +17,7 @@ p_dir = $(notdir $(CURDIR))
 o = out/$(p_dir)
 # mooncc is love's own verb (the layered bake). MOONCC is the
 # command as run FROM $(R); mc is the file the verb needs, the baked-stamp's sibling.
-# ⚠ LOVE_NO_IMAGE= leads (the guard against an exported egg): an egg-booted love has no verbs.
+# LOVE_NO_IMAGE= leads (the guard against an exported egg): an egg-booted love has no verbs.
 MOONCC = LOVE_NO_IMAGE= out/love mooncc
 mc = $(R)/out/.love.baked
 lv = $(R)/out/love
@@ -35,8 +35,8 @@ lv = $(R)/out/love
 clean:
 	rm -rf $(R)/$(o)
 
-# ⚠ FORCE, never a bare prerequisite-less rule: that fires only when the target is MISSING,
-# so a stale header or binary is served forever. ⚠ and the explicit binary rules also block
+# FORCE, never a bare prerequisite-less rule: that fires only when the target is MISSING,
+# so a stale header or binary is served forever. and the explicit binary rules also block
 # make's builtin `%: %.o` -- out/love.o sits beside the binary, and a bare prerequisite
 # let the builtin "relink" love from that lone object, then delete the half-made result.
 FORCE:
@@ -52,14 +52,14 @@ $(lv): FORCE
 $(mc): FORCE
 	@$(MAKE) -C $(R) out/.love.baked
 
-# the holo cats. ⚠ the backend text is named explicitly: a frontend bakes holo with the
+# the holo cats. the backend text is named explicitly: a frontend bakes holo with the
 # NATIVE backend only, and a port must not care which machine it is building on.
 p_link_be ?= $(p_be)
 p_be_l    = $(addprefix $(R)/l/holo/,$(addsuffix .l,$(p_be)))
 p_lnbe_l  = $(addprefix $(R)/l/holo/,$(addsuffix .l,$(p_link_be)))
-# ⚠ THE FLOOR IS CATTED, THEN SPLICED. text.l and u.l reopen module 'kore, so their
+# THE FLOOR IS CATTED, THEN SPLICED. text.l and u.l reopen module 'kore, so their
 # names (uread, udie ..) do not walk for whoever comes after -- and every driver below
-# reads them bare. So the cats emit (use 'kore) once the two files have registered it,
+# reads them bare. So the cats emit (borrow 'kore) once the two files have registered it,
 # the Makefile's klink recipe exactly.
 kore_l = $(R)/apps/kore/text.l $(R)/apps/kore/u.l
 lay_l  = $(kore_l) $(R)/apps/kore/asbook.l \
@@ -82,7 +82,7 @@ love_o   = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(love_m)))
 
 # moonlibc's pure members: the libc a bare-metal seat gets, the same six the kernel takes
 # (mk/common.mk) out of the same source -- there is no second libc in this tree. A port
-# lays them with a foreach over libc_m under its own <x>_cc. ⚠ -Iapps/moon/include is
+# lays them with a foreach over libc_m under its own <x>_cc. -Iapps/moon/include is
 # owed: the members open with impl.h, whose hosted declarations cost compile time and
 # nothing else -- the six owe ONE symbol between them (memmove's memcpy), and it is one
 # of the six.
@@ -104,7 +104,7 @@ define p_ocopy
 $$(R)/$$(o)/ocopy.l: $$(copy_l)
 	@echo 'CAT	'$$@
 	@mkdir -p $$(R)/$$(o)
-	@{ echo "(use 'holo)"; cat $$(kore_l); echo "(use 'kore)"; \
+	@{ echo "(borrow 'holo)"; cat $$(kore_l); echo "(borrow 'kore)"; \
 	   cat $$(filter-out $$(kore_l),$$(copy_l)); echo '(objcopy >argv)'; } > $$@
 endef
 
@@ -123,18 +123,18 @@ define p_lay
 $$(R)/$$(o)/$1.o: $2.l $$(p_be_l) $$(lay_l) $$(lv)
 	@echo 'HOLO	'$$@
 	@mkdir -p $$(R)/$$(o)
-	@cd $$(R) && { echo "(use 'holo)"; cat $$(be_lc) $$(kore_lc); echo "(use 'kore)"; \
+	@cd $$(R) && { echo "(borrow 'holo)"; cat $$(be_lc) $$(kore_lc); echo "(borrow 'kore)"; \
 	  cat $$(filter-out $$(kore_lc),$$(lay_lc)) inle/$$(p_dir)/$2.l; \
 	  echo '($2 $3)'; } | out/love
 endef
 
-# p_link -- the link driver's cat. $1 its stem. ⚠ an explicit target, never a pattern rule:
+# p_link -- the link driver's cat. $1 its stem. an explicit target, never a pattern rule:
 # a pattern-MADE prerequisite is an INTERMEDIATE make deletes after the link, and the cat
 # would then run again on every build.
 define p_link
 $$(R)/$$(o)/$1.l: $1.l $$(link_l)
 	@echo 'CAT	'$$@
 	@mkdir -p $$(R)/$$(o)
-	@{ echo "(use 'holo)"; cat $$(kore_l); echo "(use 'kore)"; \
+	@{ echo "(borrow 'holo)"; cat $$(kore_l); echo "(borrow 'kore)"; \
 	   cat $$(filter-out $$(kore_l),$$(link_l)) $$<; } > $$@
 endef

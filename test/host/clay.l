@@ -14,10 +14,10 @@
 ; run standalone from the repo root:
 ;   cat test/00-init.l test/host/clay.l | out/love
 
-(use "apps/moon/clay.l")
+(borrow "apps/moon/clay.l")
 
-(: cs (from 'clay 'clay-show)
-   cok (from 'clay 'clay-ok?)
+(: cs (cite 'clay 'clay-show)
+   cok (cite 'clay 'clay-ok?)
    nl (string 10)
    (one c) (cs c)                      ; a single top-level item, no (prog ..) wrapper
    (gripe? x) (&& (two? x) (<x = 'gripe)))

@@ -1,7 +1,7 @@
 /* STRUCT LABELS -- a `name:` where a member declaration would start, naming an OFFSET.
  * A moon extension (-std=moon, the default; -std=c refuses it), borrowed from HolyC.
  *
- * ⚠ GUARDED ON __moon__, NOT __mooncc__. The first says which DIALECT is live, the second
+ * GUARDED ON __moon__, NOT __mooncc__. The first says which DIALECT is live, the second
  * only which compiler: under -std=c this is still mooncc and the label is still a syntax
  * error, so a source asking for an extension must ask the dialect. gcc sees neither macro
  * and compiles the plain half, which is what lets this file ride the battery -- every
@@ -13,7 +13,7 @@
  * below hold the labelled struct to the same size and offsets as its label-free twin,
  * which is what gcc compiles.
  *
- * ⚠ THE ALIGNMENT IS THE WHOLE FEATURE. `char hdr[0];` -- the GCC idiom this replaces --
+ * THE ALIGNMENT IS THE WHOLE FEATURE. `char hdr[0];` -- the GCC idiom this replaces --
  * has alignment 1 and lands where the LAST field ended, so it names the padding -- for the
  * struct below gcc puts it at 1, where the long sits at 8. A label aligns as the member it
  * precedes, and a
@@ -51,7 +51,7 @@ static int labels(void) {
   { union U u;
     if ((void *) u.top != (void *) &u.x) return 10;
     if (offsetof(union U, top) != 0) return 11; }
-  /* ⚠ THE CLAIM IN THE HEADER, CHECKED: a label names the member the marker cannot reach */
+  /* THE CLAIM IN THE HEADER, CHECKED: a label names the member the marker cannot reach */
   if (offsetof(struct S, hdr) == offsetof(struct Zla, mark)) return 14;
   if (offsetof(struct S, hdr) != offsetof(struct Zla, b)) return 15;
   /* and it is a position you can walk from */

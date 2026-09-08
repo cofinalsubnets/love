@@ -11,7 +11,7 @@
 ;
 ; a body-less top-level `:` -- these names leak on purpose, which is what makes them a floor.
 (module 'kore
-(use 'posix)
+(borrow 'posix)
 
 (:
    ; -- the u-floor --
@@ -113,7 +113,7 @@
        (go k l) (: i (sc s 10 k) (i < 0 ? l (go (i + 1) (l + 1))))
        [<st (go 0 <>st) <>>st (<>>>st + n)])
    (ucount-for l? w?)
-    (? w? ucount-go (? l? (ucount-l ((from 'scan 'scanner) ())) ucount-b))
+    (? w? ucount-go (? l? (ucount-l ((cite 'scan 'scanner) ())) ucount-b))
    ucount0 [0 0 0 0]
    (ucount-say st) [<>st <>>st <>>>st]      ; the state's (lines words bytes) face
    ; text -> (lines words bytes), a word a maximal ink run (lawed in law.l)
@@ -142,13 +142,13 @@
    ; the floor is not aboard
    (usplit c s)
     (: n (tally s)
-       sc (from 'scan 'scanner)
-       (go from k acc) (? (n <= k) (rev (snip s from k >< acc))
-                          (s k = c) (go (k + 1) (k + 1) (snip s from k >< acc))
-                          (go from (k + 1) acc))
-       (fast f from acc) (: k (f s c from)
-                            (? (k < 0) (rev (snip s from n >< acc))
-                               (fast f (k + 1) (snip s from k >< acc))))
+       sc (cite 'scan 'scanner)
+       (go cite k acc) (? (n <= k) (rev (snip s cite k >< acc))
+                          (s k = c) (go (k + 1) (k + 1) (snip s cite k >< acc))
+                          (go cite (k + 1) acc))
+       (fast f cite acc) (: k (f s c cite)
+                            (? (k < 0) (rev (snip s cite n >< acc))
+                               (fast f (k + 1) (snip s cite k >< acc))))
        (? (lit? sc) (fast (sc ()) 0 ()) (go 0 0 ())))
    ; join with charm c between
    (ujoinc c ls)
@@ -207,7 +207,7 @@
    ; per line, so a line costs its own length instead of the tail behind it
    (urd q) (: t (tablet 0)
               _ (pin t 'q q) _ (pin t 'h "") _ (pin t 'p 0) _ (pin t 'm 0)
-              _ (pin t 'e 0) _ (pin t 'sc ((from 'scan 'scanner) ()))
+              _ (pin t 'e 0) _ (pin t 'sc ((cite 'scan 'scanner) ()))
               t)
    (urd-drop t)                                  ; let the read-through bytes go
     (: p (peep t 'p 0)

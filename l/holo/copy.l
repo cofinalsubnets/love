@@ -17,8 +17,8 @@
 ;
 ; loads after l/holo/link.l, whose field table, ld-write and ld-zeros it reads.
 (module 'holo
-(use 'kore) ; the text/u floors (uread, usplit ..), scoped to this module's compile
-(use 'posix)
+(borrow 'kore) ; the text/u floors (uread, usplit ..), scoped to this module's compile
+(borrow 'posix)
 
 (:
    ;; the pt_loads as (fileoff filesz paddr) -- all a flat image needs of them.

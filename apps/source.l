@@ -1,11 +1,11 @@
-; the wrap: see apps/tar/tarcmd.l -- `use` splices into the current layer, so the two asks
+; the wrap: see apps/tar/tarcmd.l -- `borrow` splices into the current layer, so the two asks
 ; need a layer of this file's own rather than the dist cat's. the seed's lay reads the
 ; carried archive through both, and rode that cat's leak to reach them before.
 (module 'source
-(use 'gz)
-(use 'tar)
+(borrow 'gz)
+(borrow 'tar)
 
-(use 'posix)
+(borrow 'posix)
 (: (src-die m) (say err (";; " + m + "\n"), quit 1)
 
    ; the directory is positional, so a mistyped flag would be taken as one and a whole
@@ -97,7 +97,7 @@
    (src-farm root exe)
     (d : (root + "/out/.seedbin")
        (mkdir d 493,
-        each (keys (from 'verbs 'tab))
+        each (keys (cite 'verbs 'tab))
              (k \ (d + "/" + string k @ p (unlink p, symlink exe p))),
         d))
    ; the autonomous arming, what `seed -a` sets before its build: the farm of our verbs
@@ -319,7 +319,7 @@
        es <>t
        top (src-top es)
        ; the inputs cross on the verb table -- the one tablet every layer can
-       ; reach ((from 'verbs 'tab) hands the real thing) -- under a key pulled
+       ; reach ((cite 'verbs 'tab) hands the real thing) -- under a key pulled
        ; back off below, so `love verbs` never lists it. the stream evals in
        ; its own layer, where a plain name cannot cross either way; its last
        ; form does the whole projection where everything is visible, so
@@ -327,16 +327,16 @@
        _ (pin kern-box 'pie pie)
        _ (pin kern-box 'out out)
        _ (pin kern-box 'arch arch)
-       vt (from 'verbs 'tab)
+       vt (cite 'verbs 'tab)
        _ (pin vt 'kern-in kern-box)
-       cat ("(use 'holo)"
+       cat ("(borrow 'holo)"
             + (kern-pick es top "apps/kore/text.l")
             + (kern-pick es top "apps/kore/u.l")
-            + "(use 'kore)"
+            + "(borrow 'kore)"
             + (kern-pick es top "apps/kore/asbook.l")
             + (kern-pick es top "inle/mkboot.l")
             + (kern-pick es top "tools/kproject.l")
-            + "(: kb (peep (from 'verbs 'tab) 'kern-in 0)"
+            + "(: kb (peep (cite 'verbs 'tab) 'kern-in 0)"
             + "   bb (string (cask (lay-boot-bytes (peep kb 'arch 0))))"
             + "   (kproject (peep kb 'pie 0) bb (peep kb 'out 0) (peep kb 'arch 0)))")
        _ (reads (tap ((: (g i) (? (< i #cat) (link (peep cat i 0) (g (+ 1 i))))) 0)))
@@ -345,8 +345,8 @@
        0)
 
    ; a binding, not a body: the letrec stays body-less, so every name above is the
-   ; module's -- (from 'source 'src-arm) for serve and doom -- and the pins still run at load
-   _ (pins (from 'verbs 'tab)
+   ; module's -- (cite 'source 'src-arm) for serve and doom -- and the pins still run at load
+   _ (pins (cite 'verbs 'tab)
       'source source-main
       'src    source-main
       'seed   seed-main

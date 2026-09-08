@@ -6,7 +6,7 @@
  * buffer holding '8' incremented the byte p had already left and advanced p by
  * two, so the byte the caller wanted was untouched.
  *
- * ⚠ It answers rather than faults, and the damage is one character wide.
+ * It answers rather than faults, and the damage is one character wide.
  * pdclib's %f found it: _PDCLIB_print_fp_deci rounds its last digit with
  * `++*current++`, so 3.14159 printed as 3.14150 -- the 9 written and then
  * erased by the '\0' that a pointer left one short put over it. Every other

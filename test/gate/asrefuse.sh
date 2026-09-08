@@ -3,7 +3,7 @@
 # ARE; these say that there are none. that is the half which keeps a silent mis-encoding from
 # passing for an answer, and the reason it exists: `movq $N, %rax' with an undefined N once
 # assembled to `movq $30' -- as-num read the character's value off the front and stopped.
-# ⚠ nothing unwinds through a scare, so each case is its own love.
+# nothing unwinds through a scare, so each case is its own love.
 #
 # usage: asrefuse.sh LOVE      (from the repo root; LOVE is a word list, not a path)
 set -u
@@ -13,7 +13,7 @@ n=0 leaked=0
 try() {   # try NAME SOURCE  -- SOURCE must RAISE
   n=$((n + 1))
   { cat l/holo/holo.l l/holo/x64.l l/holo/dialect.l l/holo/as.l
-    printf "(use 'holo)\n(: _ (puts (as-hex \"%s\")) _ 0)\n" "$2"
+    printf "(borrow 'holo)\n(: _ (puts (as-hex \"%s\")) _ 0)\n" "$2"
   } | $love > /dev/null 2>&1 &&
     { echo "FAIL asrefuse: $1 -- assembled, should have raised"; leaked=$((leaked + 1)); }
 }
@@ -33,7 +33,7 @@ try "width clash"            'movq %eax, (%rbx)'
 try "immediate destination"  'movq %rax, $1'
 try "bad scale"              'movq %rax, (%rbx,%rcx,3)'
 try "too many mem fields"    'movq %rax, (%rbx,%rcx,4,8)'
-# ⚠ rel32 is measured from the end of its own field and the fixup carries no addend, so a
+# rel32 is measured from the end of its own field and the fixup carries no addend, so a
 # rip-relative operand with an immediate tail cannot be spelled -- it must not be guessed.
 try "rip with an imm tail"   'movq $1, t(%rip)\nt:\n ret'
 # and the plain unknowns

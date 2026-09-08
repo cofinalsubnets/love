@@ -16,7 +16,7 @@
 // doom lane says how). this file is the tree's own 0BSD glue; what it includes is
 // not, so nothing here builds unless someone put that source there on purpose.
 //
-// ⚠ on inle the WAD is a BAKED FILE, not a disk one: k_baked hands the ramfs a row
+// on inle the WAD is a BAKED FILE, not a disk one: k_baked hands the ramfs a row
 // for it (kmain.c's hook), so doom's own fopen/fread reach it through inle/sys.c
 // with no filesystem mounted anywhere. the host opens the path it was handed.
 #include "love.h"

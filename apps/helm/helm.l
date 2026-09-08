@@ -29,10 +29,10 @@
 ;   love -l apps/helm/unit.l -l apps/helm/sup.l -l apps/helm/moor.l \
 ;        -l apps/helm/helm.l -e '(helm-main ["-c" "apps/helm/sample.l"])'
 (module 'helm
-(use 'gz)
-(use 'tar)
+(borrow 'gz)
+(borrow 'tar)
 
-(use 'posix)
+(borrow 'posix)
 (: (usage _)
    (: _ (puts "helm -- a service supervisor, and a love shell over its socket
 usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first)
@@ -82,7 +82,7 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
        r (mount src tgt typ)
        (hnote ("mount " + typ + " on " + tgt + (r ? (" -> errno " + show r) " -> ok"))))
    ; --- the underlay: /usr/bin, laid from the verb table ----------------------
-   ; this binary answers to every name in (from 'verbs 'tab) through argv[0] --
+   ; this binary answers to every name in (cite 'verbs 'tab) through argv[0] --
    ; post.l's `seat` reads the basename -- so a directory of links onto selfpath
    ; IS the userland, and a machine with no disk still has one. inle wants no such
    ; directory: k-prog reads the registry itself (inle/kmain.c). here execve
@@ -112,7 +112,7 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
                                                       " -> tmpfs")))
              ; `love` is not a verb -- it is the seat every other name wears -- so
              ; it is named here rather than read off the table.
-             ws (sort ("love" . map string (keys (from 'verbs 'tab))))
+             ws (sort ("love" . map string (keys (cite 'verbs 'tab))))
              n  (net (map (\ w (hlink1 exe dir w)) ws))
              _  (hnote ("underlay " + show n + " names on " + exe))
              n)))
@@ -161,7 +161,7 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
    ; the splice first: the moor evaluates in the session's book, so helm's own
    ; vocabulary has to BE that book for (status 0) to mean anything at a prompt.
    (helm-run conf sock quiet)
-    (: _   (!(nil? (from 'helm)) ? (use 'helm))
+    (: _   (!(nil? (cite 'helm)) ? (borrow 'helm))
        _   (hput 'conf conf)
        _   (hput 'quiet quiet)
        _   (helm-pid1 0)
@@ -180,7 +180,7 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
 
    ; --- the command line ------------------------------------------------------
    (helm-main as)
-    (: _ (!(nil? (from 'helm)) ? (use 'helm))
+    (: _ (!(nil? (cite 'helm)) ? (borrow 'helm))
        box {'conf "/etc/helm.l" 'sock (helm-sock 0) 'verb 'run 'words ()}
        (loop (w . r))
         (w @ ("-c" || "--config") (need w r, pin box 'conf <r, loop >r)
@@ -202,6 +202,6 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
 ; command line. the bare file name is deliberately NOT a seat word -- helm is
 ; four files, and a `-l apps/helm/helm.l` that seated would start supervising in
 ; the middle of loading itself.
-(: _ (pins (from 'verbs 'tab) 'helm helm-main)
-   s (from 'verbs 'fire ["helm"])
+(: _ (pins (cite 'verbs 'tab) 'helm helm-main)
+   s (cite 'verbs 'fire ["helm"])
    ((two? s) ? (helm-main >s))))

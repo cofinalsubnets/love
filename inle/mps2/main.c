@@ -212,7 +212,7 @@ int main(void) {
     "      (&& (6 = $'(1 2 3))"
     "      (&& (lit? ev)"
 #ifdef BAKER_RUNE
-    "      (&& (! ((from ()) = ()))"            // the module registry is live: rune registered
+    "      (&& (! ((cite ()) = ()))"            // the module registry is live: rune registered
     "          ((2 3 4) = 262144))))))"
 #else
     "          ((2 3 4) = 262144)))))"
@@ -239,7 +239,7 @@ int main(void) {
 // each absolute, so naming them needs nothing of the core's. quads: obj-off, val, obj-hot.
 static void sh_puts(const char *s) { while (*s) sh_putc(*s++); }
 // THE BAKED MODULE, the one this baker wants: rune is a plain text every consumer loads
-// through `use`, so the wrapper is here -- the shell core rides post now. the source
+// through `borrow`, so the wrapper is here -- the shell core rides post now. the source
 // strings carry no absolutes, so the absguard stays satisfied.
 static char const src_mods[] =
 #ifdef BAKER_RUNE
@@ -276,11 +276,11 @@ int main(void) {
     // bao -- the device has no shell, the crank is the interface. cas's
     // crank/pushed/cur_set refs stay symbolic (unbound here); the device
     // defn's them post-wake and the book resolves them live.
-    "(use 'rune)"
+    "(borrow 'rune)"
     " "
 #include "cas.h"
 #else
-    "(use 'cli)"
+    "(borrow 'cli)"
 #endif
     "(: _ (putc 10) _ (puts \"; corpus baked -- dumping\") _ (putc 10) 0)");
   if (!ai_ok(r)) {
@@ -297,7 +297,7 @@ int main(void) {
       sh_hex(bad.q[3 * i + 1]); sh_putc(' ');
       sh_hex(bad.q[3 * i + 2]); sh_putc('\n'); }
     m7_exit(4); }
-  // ⚠ THE BAKED RUNTIME GOES BEFORE THE PROOF DOES, and on 16 MB that is the whole
+  // THE BAKED RUNTIME GOES BEFORE THE PROOF DOES, and on 16 MB that is the whole
   // margin: img is g->alloc'd and outlives r, the wake wants a second pool the size of
   // the first, and holding a spent heap through it left the arena 14 KB short of a
   // 6 MB ask with 10.9 MB free but in four pieces.

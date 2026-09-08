@@ -1,4 +1,4 @@
-; l/holo/elfsec.l -- a named section's bytes out of any ELF, on any machine. `(use "l/holo/elfsec.l")`:
+; l/holo/elfsec.l -- a named section's bytes out of any ELF, on any machine. `(borrow "l/holo/elfsec.l")`:
 ;
 ;   (elfsec path nm) -> (1 bytes) | ()      the section named nm, or () for no file / no section
 ;
@@ -6,7 +6,7 @@
 ; a bare () would call it absent. a section table is a table, so an a64 object reads on
 ; x86-64 asking nothing of the machine underneath -- which is how `.comment`, the producer
 ; record, is read back with no binutils in the picture.
-(use 'posix)
+(borrow 'posix)
 (:
    (es-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) s)))
    (es-le s i n) (: (go k a m) (? (k = n) a (go (k + 1) (a + peep s (i + k) 0 * m) (m * 256)))

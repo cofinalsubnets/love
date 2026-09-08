@@ -28,7 +28,7 @@
    ; detectable autorepeat covers -- then the release. what this proves is that
    ; the key path and the XKB requests leave the wire in step: the frames still count.
    _ (rest 2500)
-   XW (from 'xwire)
+   XW (cite 'xwire)
    s ((XW 'x-connect) (+ "/tmp/.X11-unix/X" (show dn)))
    _ (assert (hot? s))
    sc ((XW 'x-setup) s ())

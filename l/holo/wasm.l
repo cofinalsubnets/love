@@ -23,7 +23,7 @@
 ; names each op's shape. functions, types, tables, memories and globals are indices, imports first.
 
 (module 'holo
-(use 'posix)
+(borrow 'posix)
 (: ;; -- LEB128. unsigned rides // and % so a u64 past the fixnum stays exact; signed stops
    ;;    when the rest is the sign's own extension and the byte's bit 6 agrees. --
    (uleb n) (: b (n % 128) r (n // 128) (r @ 0 [b] (b + 128 . uleb r)))

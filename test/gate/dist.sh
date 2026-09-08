@@ -65,7 +65,7 @@ smoke)
 
   ln -sf "$dabs" "$s/sb"
   run "$s/sb" 2>&1 | grep -q "usage: sb"       || fail "the argv[0] door"
-  # ⚠ NOT a name already symlinked above -- `>` through a symlink writes the artifact
+  # NOT a name already symlinked above -- `>` through a symlink writes the artifact
   echo '(quit 7)' > "$s/kore"
   ( cd "$s" && run "$dabs" -- kore ); [ $? -eq 7 ] || fail "-- should force the file lane"
 
@@ -115,7 +115,7 @@ MK
   # process and ask whether the decision was taken and kept: an unconsulted lane
   # leaves the cache untouched, whatever the predicate on its own would answer.
   ( PATH=$sabs/bin:/usr/bin:/bin && export PATH \
-    && run "$dabs" -e '(: _ (use (name "lush")) _ (sh-oneline (list "-c") "mooncc -zzz") (quit (? (two? (peep sh-imgc "mooncc" 0)) 0 1)))' ) \
+    && run "$dabs" -e "(: _ (borrow 'lush) _ (sh-oneline (list \"-c\") \"mooncc -zzz\") (quit (? (two? (peep sh-imgc \"mooncc\" 0)) 0 1)))" ) \
      >/dev/null 2>&1 \
     || fail "lush ran a command without taking its own in-image decision"
   # the checksums ride the same lane, and the same two things are asked of them: that the
@@ -124,7 +124,7 @@ MK
   ln -sf "$dabs" "$sabs/bin/sha256sum"
   printf 'love\n' > "$sabs/w/sum.in"
   ( cd "$sabs/w" && PATH=$sabs/bin:/usr/bin:/bin && export PATH \
-    && run "$dabs" -e '(: _ (use (name "lush")) _ (sh-oneline (list "-c") "sha256sum sum.in > sum.out") (quit (? (two? (peep sh-imgc "sha256sum" 0)) 0 1)))' ) \
+    && run "$dabs" -e "(: _ (borrow 'lush) _ (sh-oneline (list \"-c\") \"sha256sum sum.in > sum.out\") (quit (? (two? (peep sh-imgc \"sha256sum\" 0)) 0 1)))" ) \
      >/dev/null 2>&1 \
     || fail "lush spawned sha256sum where its own main rides this image"
   if command -v sha256sum > /dev/null 2>&1; then
@@ -144,10 +144,10 @@ MK
   # shortcut is refused. autonomous mode reads the verb registry and not PATH, so the
   # same copy is simply never consulted there -- the lane engages either way.
   ( LUSHFLAGS=-g PATH=$sabs/cbin:/usr/bin:/bin && export PATH LUSHFLAGS \
-    && run "$dabs" -e '(: _ (use (name "lush")) (quit (? (two? (sh-imgfn "mooncc")) 1 0)))' ) \
+    && run "$dabs" -e "(: _ (borrow 'lush) (quit (? (two? (sh-imgfn \"mooncc\")) 1 0)))" ) \
     || fail "the in-image lane engaged under -g for a mooncc that is a DIFFERENT file"
   ( PATH=$sabs/cbin:/usr/bin:/bin && export PATH \
-    && run "$dabs" -e '(: _ (use (name "lush")) (quit (? (two? (sh-imgfn "mooncc")) 0 1)))' ) \
+    && run "$dabs" -e "(: _ (borrow 'lush) (quit (? (two? (sh-imgfn \"mooncc\")) 0 1)))" ) \
     || fail "autonomous mode consulted PATH for a verb this binary carries"
 
   # a bare name we do NOT own must never go in-image, whatever rides this image

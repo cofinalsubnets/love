@@ -7,7 +7,7 @@
 ; loads after fs.l for udirp. a body-less top-level `:` -- the three mains leak,
 ; kore.l registers them.
 (module 'kore
-(use 'posix)
+(borrow 'posix)
 
 (:
    ; --- the digest door ------------------------------------------------------

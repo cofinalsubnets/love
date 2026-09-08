@@ -28,8 +28,8 @@
 ; execs the script in place (same pid; the adoption sweep keeps every
 ; window). The live socket is the one that accepts; dead generations'
 ; leftovers are swept at moor start (lux-sweep).
-(use 'xwire)   ; the X wire, apps/lux/wire.l
-(use 'posix)
+(borrow 'xwire)   ; the X wire, apps/lux/wire.l
+(borrow 'posix)
 (: lux-cell {}
    (lux-st u) (peep lux-cell 'st ())
    ; a change queues; the driver's loop drains at its next X event. On a live
@@ -155,7 +155,7 @@
    ;     (kmodmask already masks the lock bits back out at match time). the
    ;     table lives in a cell so MappingNotify can re-resolve and regrab. ---
    (keys-resolve u) (: km (x-keymap s (scr-mink sc) (scr-maxk sc) (keys-syms lux-keymap))
-                       (filter (r \ <>r > 0)                                   ; rows (mods keycode action); keysym absent -> dropped
+                       (filter (r \ <>r > 0)                                   ; rows (lib keycode action); keysym absent -> dropped
                                (map (r \ [(kb-mods r) (peep km (kb-sym r) 0) (kb-act r)]) lux-keymap)))
    (keys-grab tab) (map (r \ map (lm \ x-grab s root (lm | <r) <>r) '(0 2 16 18)) tab,
                       x-flush s)

@@ -7,18 +7,18 @@
 ; tools/tgz.l is the same two engines behind c|x|t; this is the spelling a hand types.
 ; our deflate lands a few percent above `gzip -9`; the numbers live in apps/gz/gz.l.
 ;
-; the module wrap is not decoration: `use` splices a module's names into the current
+; the module wrap is not decoration: `borrow` splices a module's names into the current
 ; layer, so unwrapped these two asks would put tar's and gz's names on the dist cat's
 ; shared layer.
 (module 'tarcmd
-(use 'gz)
-(use 'tar)
+(borrow 'gz)
+(borrow 'tar)
 
-(use 'posix)
+(borrow 'posix)
 (: ; the exit door: a status raised, not a process ended, so a caller already in
    ; this image gets a charm back. loaded without kore there is no catcher and we
    ; quit as before -- the two ride together in every artifact that carries tar.
-   (tarc-leave c) (: u (from 'kore 'uleave) (? (lit? u) (u c) (quit c)))
+   (tarc-leave c) (: u (cite 'kore 'uleave) (? (lit? u) (u c) (quit c)))
    (tarc-die m) (: _ (say err ("tar: " + m + "\n")) (tarc-leave 1))
    (tarc-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) [1 (s + "")])))
    (tarc-blurt p s) (: q (open p "w") (hot? q && (: _ (say q s) _ (close q) 1)))
@@ -70,8 +70,8 @@
           (tarc-has? fl 116) (tarc-t a z?)                                  ; t
           (tarc-die usage)))
 
-   T (from 'verbs 'tab)
-   (tarc-run av) (: r (from 'kore 'urun) (? (lit? r) (r tar-main av) (tar-main av)))
+   T (cite 'verbs 'tab)
+   (tarc-run av) (: r (cite 'kore 'urun) (? (lit? r) (r tar-main av) (tar-main av)))
    _ (pins T 'tar tarc-run))
 
 ) ; module 'tarcmd

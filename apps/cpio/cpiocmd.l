@@ -23,10 +23,10 @@
 ; the behaviour. tar rides module 'tar and this file reads its entry shapes, so the ask
 ; lands in a layer of our own rather than on the dist cat's shared one.
 (module 'cpiocmd
-(use 'tar)
-(use 'cpio)
+(borrow 'tar)
+(borrow 'cpio)
 
-(use 'posix)
+(borrow 'posix)
 (: cpioc-usage "usage: cpio {-o|-i|-t} [-H newc] [-dutv] [-F|-I|-O FILE] [--quiet]"
    (cpioc-moan m) (: _ (say err ("cpio: " + m)) _ (put err 10) (flush err))
    (cpioc-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) [1 (s + "")])))
@@ -185,6 +185,6 @@
                 (= m 't) (cpioc-t t)
                 (: _ (cpioc-moan cpioc-usage) 2)))))
 
-   (pins (from 'verbs 'tab) 'cpio cpio-main))
+   (pins (cite 'verbs 'tab) 'cpio cpio-main))
 
 ) ; module 'cpiocmd

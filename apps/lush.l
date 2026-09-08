@@ -4,7 +4,7 @@
 ; the one module and a later part reads an earlier one.
 
 ; --- lush 🐚 job control -- the shell state + the v3 job machinery ---
-; every part rides module 'lush (the wrap): (use 'lush) assembles them via
+; every part rides module 'lush (the wrap): (borrow 'lush) assembles them via
 ; apps/lush.l, and the catted bin and the distro's /lib/sh.l register the same
 ; module in cat order (job eval line main) -- each part a body-less `:` binding
 ; into the module, so later parts read earlier ones. the shell story is main.l's.
@@ -26,14 +26,14 @@
 ; so what is in scope at the CALL decides. the roster is also the honest statement of
 ; which syscalls a shell needs -- the seat doors it drives (spawn, wait, fork, pipe,
 ; dup, still, ttyfg, environ ..) are not here, because a seat shadows those on the book.
-(: chdir (from 'posix 'chdir)      chmod (from 'posix 'chmod)
-   close (from 'posix 'close)      cwd (from 'posix 'cwd)
-   mkdir (from 'posix 'mkdir)      open (from 'posix 'open)
-   openfd (from 'posix 'openfd)    readdir (from 'posix 'readdir)
-   readlink (from 'posix 'readlink) rmdir (from 'posix 'rmdir)
-   selfpath (from 'posix 'selfpath) stat (from 'posix 'stat)
-   sigclear (from 'posix 'sigclear) sigfd (from 'posix 'sigfd)
-   sigign? (from 'posix 'sigign?)  sigtake (from 'posix 'sigtake)
+(: chdir (cite 'posix 'chdir)      chmod (cite 'posix 'chmod)
+   close (cite 'posix 'close)      cwd (cite 'posix 'cwd)
+   mkdir (cite 'posix 'mkdir)      open (cite 'posix 'open)
+   openfd (cite 'posix 'openfd)    readdir (cite 'posix 'readdir)
+   readlink (cite 'posix 'readlink) rmdir (cite 'posix 'rmdir)
+   selfpath (cite 'posix 'selfpath) stat (cite 'posix 'stat)
+   sigclear (cite 'posix 'sigclear) sigfd (cite 'posix 'sigfd)
+   sigign? (cite 'posix 'sigign?)  sigtake (cite 'posix 'sigtake)
 
    (sh-rev l) (foldl (\ a x (x . a)) () l)
 
@@ -891,10 +891,10 @@
 ; pattern that spells the . itself.
 
 (module 'lush
-(: sh-anyglob (from 'glob 'anyglob)   ; the matcher moved to l/boot/post.l; every love
-   sh-fmatch (from 'glob 'fmatch)     ; carries it now, this one included. the sh- names
-   sh-match (from 'glob 'match)       ; stay -- word.l, eval.l, line.l, cook and kore's
-   sh-ones (from 'glob 'ones)         ; find all read them, some through (from 'lush ..)
+(: sh-anyglob (cite 'glob 'anyglob)   ; the matcher moved to l/boot/post.l; every love
+   sh-fmatch (cite 'glob 'fmatch)     ; carries it now, this one included. the sh- names
+   sh-match (cite 'glob 'match)       ; stay -- word.l, eval.l, line.l, cook and kore's
+   sh-ones (cite 'glob 'ones)         ; find all read them, some through (cite 'lush ..)
    (sh-globby? t m)
      (: n #t
         (go i) (? (i = n) 0
@@ -1509,7 +1509,7 @@
    ; winner must stat as the running binary, so an installed twin of our own name is
    ; somebody else's build and spawns. a word with a `/` is a demand and spawns in
    ; either mode. asked once per word per session.
-   ; ⚠ a rung is only as reachable as the SHAPE allows, and two shapes cannot see
+   ; a rung is only as reachable as the SHAPE allows, and two shapes cannot see
    ; the whole ladder: a pipeline stage skips in-image (a stage has to be a process
    ; to be concurrent, so it starts at fork), and a $( ) body reaches the jug lane
    ; or the stage path and never in-image -- so `$(basename x)` forks where a plain
@@ -1610,7 +1610,7 @@
                      (? (two? (stat p)) (sh-self? p) (go >l))))
         (go (sh-pathdirs ())))
    ; does this binary carry the word as a verb? the registry's own answer, PATH aside
-   (sh-verbw? w) (: f (from 'verbs 'word) (? (lit? f) !(nil? (f w)) 0))
+   (sh-verbw? w) (: f (cite 'verbs 'word) (? (lit? f) !(nil? (f w)) 0))
    ; --- the mode: autonomous or gregarious ---------------------------------
    ; autonomous (the default, -a): a bare word naming a verb this binary carries is
    ; ours whatever PATH holds -- it runs in-image or on the forked warm heap, and the
@@ -1675,11 +1675,11 @@
    (sh-imgask w)
      (: al (sh-assoc w sh-imgalias)
         mn (? (two? al) <>al (w + "-main"))
-        md (? ((two? al) && (two? >>al)) (from (intern <>>al)) ())   ; the row's module, or ()
+        md (? ((two? al) && (two? >>al)) (cite (intern <>>al)) ())   ; the row's module, or ()
         nm (intern mn)
         f0 (? (tablet? md) (md nm)                    ; the alias row named the module
               (member? nm (names ())) (ev nm)         ; a bare global
-              (from 'kore nm))                        ; else the applets' home module
+              (cite 'kore nm))                        ; else the applets' home module
         (? (&& (sh-smem? w sh-imgok) !(sh-slashed? w) !(nil? f0) (sh-ours? w))
            [1 (sh-imgwrap f0 mn) (mn = "kore-main")]
            0))
@@ -1689,7 +1689,7 @@
    ; takes the whole shell down instead of failing one command. moon-run wants no wrap --
    ; it answers its status by construction, which is why it was the safe single entry.
    ; urun lives in module 'kore now; a miss absorbs to (), which keeps the no-wrap lane.
-   (sh-imgwrap f mn) (: ur (from 'kore 'urun)
+   (sh-imgwrap f mn) (: ur (cite 'kore 'urun)
                         (? ((mn = "moon-run") || !ur) f (\ as (ur f as))))
    (sh-assoc w l) (? !(two? l) 0 (w = <<l) <l (sh-assoc w >l))
    (sh-imgfn w) (: v (peep sh-imgc w 'no)
@@ -1732,7 +1732,7 @@
    ; the fear is that a word with nothing past it reaches a repl, and the child is
    ; handed tty=0 and would drink stdin where the exec'd twin would have prompted.
    ; a pipe or a `<` laying fd 0 settles it -- that is every `| cat`, `| sort`,
-   ; `| tee` there is. ⚠ the shell's OWN stdin cannot stand in for the stage's: a
+   ; `| tee` there is. the shell's OWN stdin cannot stand in for the stage's: a
    ; script is not interactive and still leaves the terminal on fd 0, so a bare word
    ; that lays nothing spawns, and lets love make its own isatty answer.
    (sh-fd0? fdmap) (? !(two? fdmap) 0 (= <<fdmap 0) 1 (sh-fd0? >fdmap))
@@ -1872,9 +1872,9 @@
      (: all ((two? args) && (<args = "-a"))
         (sh-which2 "which" "which [-a] name.." all (? all >args args)))
    (sh-whereb args) (sh-which2 "where" "where name.." 1 args)
-   (sh-which2 nm use all ws)
+   (sh-which2 nm borrow all ws)
      (: pre ("lush: " + (nm + ": "))
-        (? !(two? ws) (cmderr (nm + (": usage: " + use)))
+        (? !(two? ws) (cmderr (nm + (": usage: " + borrow)))
            (foldl (\ st w
                      (: v (sh-verdict w)
                         (? !(two? v)
@@ -2702,7 +2702,7 @@
                          (? ((s i) = 58) (go (i + 1) (i + 1) (snip s st i . acc))
                             (go (i + 1) st acc)))
         (go 0 0 ()))
-   (sh-verbnames _) (map string (keys (from 'verbs 'tab)))
+   (sh-verbnames _) (map string (keys (cite 'verbs 'tab)))
    (sh-cmds w)                                  ; command candidates for prefix w
      (sh-uniq (sort (+ (filter (sh-prefix? w) sh-builtins)
                        ; autonomous mode: our verbs are commands whatever PATH holds
@@ -2907,11 +2907,11 @@
 ; shell -- the scan strips the dash to match and hands the raw word back, which is
 ; the whole reason it hands one back. (the env -S shebang usually eats the dash, so
 ; --login is the reliable door, doc/lush.md.)
-(: _ (pins (from 'verbs 'tab) 'sh sh-main 'lush sh-main)
+(: _ (pins (cite 'verbs 'tab) 'sh sh-main 'lush sh-main)
    (bn p) (: n #p
              (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
              (go 0 0))
-   s ((from 'verbs 'fire) ["lush" "lush.l" "sh"])
+   s ((cite 'verbs 'fire) ["lush" "lush.l" "sh"])
    (? (two? s) (: w (bn <s)
                   _ (? (tally w && (w 0 = 45)) (pin sh-login () 1) 0)
                   (sh-main >s))

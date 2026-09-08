@@ -9,7 +9,7 @@
 ; probes: `love story`, `love story apps`.
 ;   cat test/00-init.l test/host/story.l | out/love
 
-(use 'story)   ; the artifact's module, warm from the tree
+(borrow 'story)   ; the artifact's module, warm from the tree
 
 (: (find h n i) (? (i + tally n < 1 + tally h)
                   (? (n = snip h i (i + tally n)) 1 (find h n (i + 1)))

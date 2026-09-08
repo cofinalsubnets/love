@@ -2,13 +2,13 @@
 ;
 ;   love ccgen.l SRC OUT    writes SRC deflated into OUT, prints SRC's byte count
 ;
-; ⚠ IT RUNS THROUGH THE ALREADY-BUILT out/love, never through a lane binary. The
+; IT RUNS THROUGH THE ALREADY-BUILT out/love, never through a lane binary. The
 ; three binaries under test live in out/bench/cc with no module path, so apps/gz/gz.l is
 ; out of their reach and a DEFLATE stream cannot be made where it is used -- it has to
 ; arrive as a file, and the size has to arrive with it (the nif is handed the exact
 ; inflated length, and a blind call would time a counting pass as well).
-(use 'posix)
-(: _ (use 'gz)
+(borrow 'posix)
+(: _ (borrow 'gz)
    av >argv
    _ (? (2 <= tally av) 0 (: _ (say err "ccgen: usage: ccgen.l SRC OUT\n") (quit 1)))
    q (open <av "r")

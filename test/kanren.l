@@ -1,11 +1,11 @@
 ; kanren -- the machinery lives in l/boot/post.l, a registered module (unify + its
 ; ufail/ufail? contract and the macro-emitted var/s_plus/s_star/===/=/= stay global;
-; walk/est/query/streams/rel ride the registry -- (from 'kanren) is the curried
+; walk/est/query/streams/rel ride the registry -- (cite 'kanren) is the curried
 ; accessor). this file is the assert suite + the relational-algebra demo. one
 ; body-having `:` -- the accessor binds and `unord_eq` (an unordered list equality;
 ; search order is not specified) stay local, per the corpus law (and the registry
 ; retired the old re-sweep-mark poisoning hazard outright).
-(: K (from 'kanren)
+(: K (cite 'kanren)
    est (K 'est)  query (K 'query)  rel (K 'rel)  sX (K 'sX)  slist (K 'slist)
    smap (K 'smap)  sno (K 'sno)  stake (K 'stake)  walk (K 'walk)  s_app (K 's_app)
    dif (K 'dif)  absent (K 'absent)  apt (K 'apt)  ifte (K 'ifte)  sole (K 'sole)

@@ -21,13 +21,13 @@
 ;
 ; run:  cat test/00-init.l test/host/tls.l | out/love
 
-(use "apps/tls/tls.l")
+(borrow "apps/tls/tls.l")
 
 (assert
- (member? 'tls (from ()))
- (member? 'cc-block (keys (from 'tls)))
- (member? 'po-mac (keys (from 'tls)))
- (lit? (from 'tls 'cc-xor)))
+ (member? 'tls (cite ()))
+ (member? 'cc-block (keys (cite 'tls)))
+ (member? 'po-mac (keys (cite 'tls)))
+ (lit? (cite 'tls 'cc-xor)))
 
 ; --- bytes ------------------------------------------------------------------------
 (assert

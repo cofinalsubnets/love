@@ -7,7 +7,7 @@
 ; test/uuwm.l is a committed artifact -- `make test_uuwm` regenerates and
 ; diffs, failing loudly if core.l moved without a refresh; test/uuwmlaw.l
 ; then proves the theorems OF these terms at corpus time on every target.
-(use 'posix)
+(borrow 'posix)
 (: _ (reads (open "apps/lux/sigs.l" "r"))
    _ (reads (open "tools/wm2uu.l" "r"))
    ; opfix first. `forms` reads the surface, where `(i - 1)` is three data

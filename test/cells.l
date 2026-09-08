@@ -1,10 +1,10 @@
 ; --- test/cells.l: the cell doors -- peek/poke for values, pick/place for instructions ---
 ; the four are the compiler's own, and they live in the `guts` module rather than on the
-; book. read them through `from`, never a (use 'guts) splice: the corpus is one scope and
+; book. read them through `cite`, never a (borrow 'guts) splice: the corpus is one scope and
 ; a splice here would reach every file after this one. the bootstrap egg (love0) never mops,
 ; so there the same names are still the book's -- and `guts` still answers a tablet, since
 ; a def row registers into it from C. so ask the module first and the book after.
-(: G (from 'guts)
+(: G (cite 'guts)
    (guts k) (: v (? (tablet? G) (peep G k ())) (nil? v ? (book k) v))
    g-peek (guts 'peek) g-poke (guts 'poke)
    g-pick (guts 'pick) g-place (guts 'place)

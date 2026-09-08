@@ -15,13 +15,13 @@
 ; across many objects (the nif lane), and link.l's ldsynth is a fixed list of them; a
 ; blob is one object of known size, so ordinary globals land in the symbol book like
 ; any other and nothing in the linker has to learn a new name.
-; no (use 'holo) here: that resolves off a nest (~/.love), which a fresh
+; no (borrow 'holo) here: that resolves off a nest (~/.love), which a fresh
 ; seed tree does not have. make hands us holo the way it hands mksys its own:
 ; -l $(ho)/.mksys-cat.l (kore text/core/asbook + holo elf/obj), the lane
 ; sys.o already rides.
 
-(use 'posix)
-(? (lit? (from 'holo 'objelf)) (use 'holo) 0) ; splice the assembler when this love is baked; the guard below says so when not
+(borrow 'posix)
+(? (lit? (cite 'holo 'objelf)) (borrow 'holo) 0) ; splice the assembler when this love is baked; the guard below says so when not
 
 (: (mksrc-slurp p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, [1 (s + "")]))))
    (mksrc-die m) (say err ("mksrc: " + m + "\n"), quit 1)
@@ -37,7 +37,7 @@
    ; rides the tree beside us; make runs this from the root. and an unbaked
    ; love has no holo at all -- say so, instead of a bare ;; note.
    (mksrc-be arch)
-    (? (lit? (from 'holo 'objelf)) (mksrc-be2 arch)
+    (? (lit? (cite 'holo 'objelf)) (mksrc-be2 arch)
        (mksrc-die "no holo aboard -- this love is unbaked (make host bakes it)"))
    (mksrc-be2 arch)
     (? (lit? (backends arch)) 0

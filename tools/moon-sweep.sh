@@ -5,7 +5,7 @@
 # The before/after harness for; the method the tar rung used
 # (nm-diff the link set) applied to compilation instead of linking.
 #
-# ⚠ THE DENOMINATOR IS THE POINT. A gnulib lib/ carries every platform's lane
+# THE DENOMINATOR IS THE POINT. A gnulib lib/ carries every platform's lane
 # (Windows, MSVC, ports without pipe/fsync), so a raw `for f in lib/*.c` count
 # is meaningless -- gzip-1.13 ships 118 .c of which automake builds 37 here.
 # This scores against lib/Makefile's *_a_OBJECTS and reports the rest apart.

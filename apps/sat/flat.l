@@ -13,7 +13,7 @@
 ;                          arena family; the layout comment sits above fbvag3)
 ;                                                              -> best key | count = M_cls
 ; the interpreted twins (fbcp3/fconf3/fdec3/fbvag3) over the same memory are the deopt
-; fallbacks, the a64/no-`nif` engine (the seam rides `(from 'glaze 'nif)` -- main.c's
+; fallbacks, the a64/no-`nif` engine (the seam rides `(cite 'glaze 'nif)` -- main.c's
 ; seal pulls nif off the book, and the glaze module is the door it keeps), and the
 ; differential oracle: the `fknob` box forces the twins and `fboth` gates verdict
 ; equality. lisp keeps only the cold path: restarts, learnt-db reduction, decay/rescale.
@@ -40,8 +40,8 @@
 (:
    ; --- 8-byte word slots, low 4 bytes live: inle/mem.c's word nifs. the host glob and
    ; k_host_c both carry them, so they are here -------------------------------------
-   getw (from 'guts 'peepw)
-   putw (from 'guts 'pinw)
+   getw (cite 'guts 'peepw)
+   putw (cite 'guts 'pinw)
    (enc l) (? (l < 0) (1 + (2 * (0 - l))) (2 * l))          ; signed literal -> encoded
    ; --- the layout, from nv (twins recompute these from fx w3) --------------------
    (lvo-of nv) (8 + (nv + 1))
@@ -677,9 +677,9 @@
    ; the seam itself, bound once, through the module: main.c's seal pulls `nif` off the book on
    ; every boot -- the glaze folded it into its closures and keeps it as a member, so this is the
    ; one door left.
-   nifseam (from 'glaze 'nif)
+   nifseam (cite 'glaze 'nif)
    (fnif ir fb ar)                                          ; assemble + install one kernel (fb = the honest twin)
-    (: bs (peep ((from 'holo 'assemble) 'x64 ir) 'bytes 0)   ; through the registry accessor -- holo's whole public surface
+    (: bs (peep ((cite 'holo 'assemble) 'x64 ir) 'bytes 0)   ; through the registry accessor -- holo's whole public surface
        c (cask bs)                                           ; the charlist lane fills in C
        (nifseam c fb '(\ q (q)) ar))
    (fbcpk nv)                                               ; -> (bcp conf dec), or () when they can't build
@@ -713,10 +713,10 @@
           'btop 0 'bph (cask (8 * (nv + 1)))
           'learnts () 'nl 0 'maxl (peep fmaxl0 () 2000))
        ks (fbcpk nv)
-       use (two? ks && (0 = peep fknob () 0))
-       _ (pins s 'bcp  (use ? <ks fbcp3)
-                 'conf (use ? <>ks fconf3)
-                 'dec  (use ? <>>ks fdec3))
+       borrow (two? ks && (0 = peep fknob () 0))
+       _ (pins s 'bcp  (borrow ? <ks fbcp3)
+                 'conf (borrow ? <>ks fconf3)
+                 'dec  (borrow ? <>>ks fdec3))
        _ (foldl (\ _ c (fload s c)) 0 formula) s)
    ; --- the cold path: restarts, decay, learnt-db reduction (lisp side) -----------
    (fbackjump s lvl)                                        ; pop + unassign above lvl (restarts: lvl = 0)

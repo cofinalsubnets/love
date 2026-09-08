@@ -1,5 +1,5 @@
 ; apps/gz/gz.l -- gzip in love, both ways: the RFC 1952 container, the RFC 1951 deflate
-; stream inside it, and the crc32 underneath. `(use 'gz)`, then:
+; stream inside it, and the crc32 underneath. `(borrow 'gz)`, then:
 ;
 ;   (gz-crc32 s)           -> the IEEE crc32 of a string, a charm
 ;   (gz-deflate s)         -> raw deflate bytes
@@ -45,11 +45,11 @@
 ; `+` is dyadic: every sum here is infix. a prefix (+ a b c) is application, which
 ; church-exponentiates and answers a bignum the size of the sky (apps/tls/bytes.l pays
 ; the same warning).
-; the wrap: gz rides module 'gz. a consumer says (use 'gz); riding a cat -- the dist
+; the wrap: gz rides module 'gz. a consumer says (borrow 'gz); riding a cat -- the dist
 ; artifact's, where this file is evaluated into the image -- the wrap registers the
-; same module, so the compile is paid once at bake time and (use 'gz) is a splice
+; same module, so the compile is paid once at bake time and (borrow 'gz) is a splice
 ; afterwards rather than a reload. unwrapped it leaked its names into the cat's layer
-; and `use` found no module, so every caller recompiled this file from lib/.
+; and `borrow` found no module, so every caller recompiled this file from lib/.
 (module 'gz
 (:
    ; --- crc32 (IEEE 802.3: reflected, polynomial 0xedb88320) -----------------
@@ -291,9 +291,9 @@
    ; with the top bit set reads as a negative k, which this walks off as "no chain" and
    ; the twin walks into a wild position: two different answers from one cask.
    (gz-find-ir _)
-    (: guard (from 'forge 'forge-guard)     fixg (from 'forge 'forge-fixg)
-       room  (from 'forge 'forge-room)      save (from 'forge 'forge-save)
-       restore (from 'forge 'forge-restore) epi  (from 'forge 'forge-epi-ptr)
+    (: guard (cite 'forge 'forge-guard)     fixg (cite 'forge 'forge-fixg)
+       room  (cite 'forge 'forge-room)      save (cite 'forge 'forge-save)
+       restore (cite 'forge 'forge-restore) epi  (cite 'forge 'forge-epi-ptr)
        strk (apof "ab")   caskk (apof (cask 1))   chaink (apof '(1 2))
        ; the extra two slots ride above the callee-saved file, so they come off first
        unwind ('(label deoptp) . ('(pop r0) . '(pop r0) . restore + '((jmp deopt))))
@@ -369,10 +369,10 @@
    (gz-finder n)
     (? (n < gz-floor) gz-find
        (peep gz-forged 0 ()) (peep gz-forged 0 ())
-       (: v (trap (\ _ (: _ (use "apps/forge.l")
-                          putx (from 'forge 'forge-putx)
-                          fit  (from 'forge 'forge-fit)
-                          of   (from 'forge 'forge-of)
+       (: v (trap (\ _ (: _ (borrow "apps/forge.l")
+                          putx (cite 'forge 'forge-putx)
+                          fit  (cite 'forge 'forge-fit)
+                          of   (cite 'forge 'forge-of)
                           _ (? (lit? putx) (: _ (putx 'gz-find 5 gz-find-ir gz-find ())
                                                 _ (fit 0) 0)
                                0)

@@ -15,7 +15,7 @@
 ; glaze's. the RHS is the outer nif: a body-less `:` rebinds, it does not letrec.
 (: nif nif  nifx nifx)
 
-(: ; inle/main.c brackets this load with (use 'holo) .. ai_unsplice_, so assemble and
+(: ; inle/main.c brackets this load with (borrow 'holo) .. ai_shelve_, so assemble and
    ; assemble-at resolve at compile and fold into every closure (the capture law).
    ; this `:` is body-less, so its bindings leak to the glaze module's own book --
    ; which is why the byte-piece concat helper is `bcat` and never `holo`.
@@ -36,7 +36,7 @@
    ; off g at run time (love.h's JkX slots), so the bytes ride any base and any image
    (jk tgt r k) ['ld r (greg tgt 'g) ((jkoff 0) + (8 * k))]   ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume 9 cur 10 unc
    mapmix 0x9e3779b97f4a7c15                                       ; = love.c's map hash multiplier, for the inline probe
-   (hasm tgt ir) (: f (glazeasm 'f) ((lit? f ? f (from 'holo 'assemble)) tgt ir))   ; the pinned assembler, else the module's
+   (hasm tgt ir) (: f (glazeasm 'f) ((lit? f ? f (cite 'holo 'assemble)) tgt ir))   ; the pinned assembler, else the module's
    (asmx ir) ((hasm 'x64 ir) 'bytes)                                          ; assemble neutral IR -> flat bytes, x86
    (asmt tgt ir) ((hasm tgt ir) 'bytes)                                       ; ... target-aware (the loop/float lanes that run on both arches)
    ; the map probe, laid by the l/holo/ assembler so hit/miss/loop resolve as labels.
@@ -50,7 +50,7 @@
       + [['label 'miss] ['li 'r0 d] '(jmp end)
          '(label hit) '(leax r0 r9 r9 1 0) '(ldx r0 r7 r0 8 8) '(sar r0 1) '(label end)])
    (asmx-seed ir nm addr) (: t (pin {} nm addr) f (glazeasm 'at)
-                             (((lit? f ? f (from 'holo 'assemble-at)) 'x64 ir t) 'bytes))   ; one pre-bound external label nm->addr (the glaze's deopt handler)
+                             (((lit? f ? f (cite 'holo 'assemble-at)) 'x64 ir t) 'bytes))   ; one pre-bound external label nm->addr (the glaze's deopt handler)
    ; the same probe with write tails, so `pin` is insert-or-update. a miss (a gap at slot I)
    ; with the table near full needs a grow, which native cannot do, so it deopts through an
    ; external label the caller seeds; `(tablet n)` presizes so a counted insert loop never gets
@@ -1203,7 +1203,7 @@
    ; convention); a64's aapcs lands them in x0..x3, so the accumulator moves off r0. anchor is
    ; the machine stack-pointer snapshot for the deopt unwind; scratch is the callout lanes' second
    ; temp (mulo/rem take it as an operand and x86 ignores it -- rdx is the divide's own).
-   ; ⚠ EVERY ROLE MUST BE CALLER-SAVED. a blob is an lvm: entered by jmp, left by jmp, so it owns no
+   ; EVERY ROLE MUST BE CALLER-SAVED. a blob is an lvm: entered by jmp, left by jmp, so it owns no
    ; epilogue to restore in, and the ret at the end of the dispatch chain answers to the C caller.
    ; holo's r0..r14 are x0..x14 on a64, all temporary; on x64 r3 and r4 are rbx and rbp.
    (greg tgt role)                                                     ; a role table, not a chain: read it in columns

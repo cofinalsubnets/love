@@ -12,7 +12,7 @@
 ; it, then assemble for real. load after holo.l + the backend(s).
 
 (module 'holo
-(use 'posix)
+(borrow 'posix)
 
 (: elf-base 4194304                                            ; 0x400000, the classic et_exec base
    elf-hdr  120                                                ; 64-byte ELF header + 56-byte phdr (catall is in holo.l)

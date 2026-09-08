@@ -368,7 +368,7 @@ tells about moon. state it this way or not at all.
 
 ## what has landed
 
-0. **name it and law it.** `apps/moon/clay.l`, a registered module (`(use 'clay)`). the
+0. **name it and law it.** `apps/moon/clay.l`, a registered module (`(borrow 'clay)`). the
    node grammar as data (`clay-tags`, the live roster): top `prog fn proto gdecl xdecl tdef
    note edef sdef`; stmt `blk decl sdecl ret if while for do switch case dflt brk cont goto
    lbl expr nop asm`; expr `num flo str var bin un asn rmw post cond comma call deref addr

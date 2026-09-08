@@ -7,7 +7,7 @@
 ; _end, mangled from `love.img`. this lays them by hand under the same two noms,
 ; because main.c says them and a rename is not what this rung is about.
 ;
-; ⚠ the section is ALLOC-only PROGBITS on an 8-byte grain: the image header carries
+; the section is ALLOC-only PROGBITS on an 8-byte grain: the image header carries
 ; uint64 fields, and the wake reads them in place before any copy.
 ;
 ; runs after l/holo/{elf,obj}.l in a cat with the thumb2 backend spliced into the

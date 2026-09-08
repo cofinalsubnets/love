@@ -32,7 +32,7 @@
 ; of `hkeys`. every complaint is collected rather than raised: a config is read
 ; once and `helm check` owes you all of it at once, not the first line.
 (module 'helm
-(use 'posix)
+(borrow 'posix)
 (: hkinds    ['service 'oneshot 'target]
    hrestarts ['no 'on-fail 'always]
    ; clause -> how its tail folds: 'all the whole tail, 'one the first operand

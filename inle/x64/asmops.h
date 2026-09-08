@@ -98,7 +98,7 @@ static inline void k_cpuid(uint32_t leaf, uint32_t *b, uint32_t *c, uint32_t *d)
 // vmrun/vmload/vmsave take the VMCB's PHYSICAL address in rax and name no
 // operand of their own; the template names %rax for the reader.
 //
-// ⚠ THE CLOBBER LIST IS THE CONTRACT. #VMEXIT restores RAX, RSP, RIP, RFLAGS,
+// THE CLOBBER LIST IS THE CONTRACT. #VMEXIT restores RAX, RSP, RIP, RFLAGS,
 // the segments and the control registers from the host save area -- and NO
 // other GPR. rbx/rcx/rdx/rsi/rdi/r8..r15 come back holding whatever the guest
 // left in them, so the compiler is told so by name (mooncc saves the
@@ -121,7 +121,7 @@ static inline void k_vmsave(uint64_t vmcb_pa) {
 static inline void k_vmload(uint64_t vmcb_pa) {
   asm volatile ("vmload %%rax" :: "a"(vmcb_pa) : "memory"); }
 
-// the global interrupt flag. ⚠ #VMEXIT leaves GIF CLEAR: between the exit and
+// the global interrupt flag. #VMEXIT leaves GIF CLEAR: between the exit and
 // the stgi the machine takes no interrupt at all, so a missing stgi is a deaf
 // machine wearing a hang's face.
 static inline void k_stgi(void) { asm volatile ("stgi" ::: "memory"); }
@@ -167,17 +167,17 @@ static inline void k_lgdt(void const *p) {
 
 // k_vmlaunch -- the entry, which on this vendor cannot be one instruction.
 //
-// ⚠ A VM EXIT DOES NOT RESUME AFTER `vmlaunch`. It resumes at the HOST_RIP in
+// A VM EXIT DOES NOT RESUME AFTER `vmlaunch`. It resumes at the HOST_RIP in
 // the VMCS with the HOST_RSP in the VMCS, so this block writes both to its own
 // label and its own stack pointer first. That is the whole structural
 // difference from SVM's `vmrun`, which simply came back.
 //
-// ⚠ And the two outcomes arrive at the same place by different roads: a
+// And the two outcomes arrive at the same place by different roads: a
 // REFUSED launch falls THROUGH to the next instruction, while a guest that ran
 // and exited lands on the label. Only the marker register tells them apart --
 // it is set to 1 before the launch and to 0 on the label.
 //
-// ⚠ VMX saves no guest GPR: rax is read at the label because by the next
+// VMX saves no guest GPR: rax is read at the label because by the next
 // instruction it is gone. By the same token the host's own GPRs are NOT
 // restored on exit (rsp and rip are, and nothing else), so a guest that writes
 // more than rax wants a save/restore stub around this instead of an inline.

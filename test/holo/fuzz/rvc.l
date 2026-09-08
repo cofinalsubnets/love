@@ -26,11 +26,11 @@
 ;
 ; exit 1 on any mismatch, naming the word, both spellings and the count.
 
-(use 'posix)
+(borrow 'posix)
 (reads (open "l/holo/holo.l" "r"))
 (reads (open "l/holo/rv64.l" "r"))
 
-(: _ (use (name "holo"))
+(: _ (borrow (name "holo"))
    ;; the rv64 backend's test door -- the squeeze, the fixup writer and the cb base. holo's
    ;; own surface carries the rest (imm?, at, jot).
    parts (peep (peep backends 'rv64 ()) 'parts ())

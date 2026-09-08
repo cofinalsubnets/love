@@ -9,11 +9,11 @@
 ;
 ; LOVE_NO_IMAGE must be cleared by whoever runs this (the Makefile does): hueweb rides
 ; the vi module, which the baked image registers and the egg boot does not.
-(use "apps/vi/config.l")
-(use "apps/vi/hue.l")
-(use 'hueweb)
+(borrow "apps/vi/config.l")
+(borrow "apps/vi/hue.l")
+(borrow 'hueweb)
 
-(use 'posix)
+(borrow 'posix)
 (: head "/* laid by web/style.l from apps/vi/config.l's tokyo-night -- edit those, not this.
    periwinkle on polar-night blue, green = a kept answer; the crew fly the name space in
    aurora teal/cyan. the quay bitmaps set everything: 8x16 cells, crisp at 16px native

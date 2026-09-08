@@ -9,7 +9,7 @@
 ; holo rides module 'holo, so the cat's own names are not ambient here: this file has
 ; to ask for them. Without the (use), the writer answers `;; missing elf32` -- which is
 ; what a gate cat catting a module's files looks like from the outside.
-(use 'holo)
+(borrow 'holo)
 (: (elf32-write tgt path)
    (: msg "love-asm speaks arm32 linux\n"
       (prog a) [['li 'r0 1] ['li 'r1 a] ['li 'r2 (tally msg)] ['li 'r7 4] ['sys]

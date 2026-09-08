@@ -14,12 +14,12 @@
 #                       mapping whose distance to the binary is randomized
 #   `born`              the hatch DURATION, frozen from whichever machine baked
 #
-# ⚠ SECONDS, AND IT RIDES THE SLOW GATE ON PURPOSE. test_distboot proves the whole
+# SECONDS, AND IT RIDES THE SLOW GATE ON PURPOSE. test_distboot proves the whole
 # circle -- the artifact rebuilding itself to the byte -- but it is opt-in and minutes
 # long, so a regression here would sit unnoticed until a release. This is the same law
 # asked cheaply enough to run every time.
 #
-# ⚠ THE PATH IS NOT IN THE IMAGE, though this line once said it was and gave that as the
+# THE PATH IS NOT IN THE IMAGE, though this line once said it was and gave that as the
 # reason the two bakes share a path. `love-image` is the literal "<baked>" wherever the
 # binary carries its own .image section (inle/main.c), and a bake unpins it besides; the
 # seat rungs the loader once walked off selfpath retired with the modules arc. Bake one
@@ -70,7 +70,7 @@ cmp -s "$w/b3" "$w/b4" \
 
 # ..and the thing still has to WAKE. A bake that is reproducible and dead would pass the
 # comparison above and nothing else, which is the failure this line exists to refuse.
-# ⚠ GREP, never a whole-output compare: `-e` prints the form's VALUE as well as anything
+# GREP, never a whole-output compare: `-e` prints the form's VALUE as well as anything
 # it said, so a probe that puts "x" answers `x"x"` and an equality test fails on the echo
 # rather than on the answer.
 out=$(cd "$w" && env -u LOVE_NO_IMAGE ./b1 -e '(puts (? (3 = 1 + 2) "wake-ok" "wake-bad"))' 2>&1) \

@@ -1,9 +1,9 @@
 ; apps/lux/keys.l -- the keymap dsl + xmonad's default keymap + the config's custom
-; table. pure data: a binding is (mods keysym action), an action a tagged list
+; table. pure data: a binding is (lib keysym action), an action a tagged list
 ; the driver (apps/lux/lux.l) interprets -- so the whole table rides the corpus and
 ; apps/lux/law.l asserts its shape, the union law, and the directional generator.
 ; The config is xmonad's `(. keys def) . M.union . M.fromList $ [custom]`:
-; custom bindings union over the stock table, custom winning on (mods keysym).
+; custom bindings union over the stock table, custom winning on (lib keysym).
 ; keys-build is the same union with a user's rows on top -- it takes plain
 ; operands, never a settings tablet, so this file compiles before apps/lux/config.l
 ; reads salt (a bare `salt-one` here would fold against nothing).
@@ -26,10 +26,10 @@
    xk-ret 65293  xk-tab 65289  xk-left 65361  xk-up 65362  xk-right 65363  xk-down 65364
 
    ; --- a binding row ---
-   (kb mods sym act) [mods sym act]
+   (kb lib sym act) [lib sym act]
    (kb-mods r) <r  (kb-sym r) <>r  (kb-act r) (r 2)
-   (keys-has t mods sym) (any (r \ (kb-mods r = mods) && (kb-sym r = sym)) t)
-   (keys-find t mods sym) (: hit (afind (r \ (kb-mods r = mods) && (kb-sym r = sym)) t)
+   (keys-has t lib sym) (any (r \ (kb-mods r = lib) && (kb-sym r = sym)) t)
+   (keys-find t lib sym) (: hit (afind (r \ (kb-mods r = lib) && (kb-sym r = sym)) t)
                              (two? hit ? (kb-act hit) ()))
    (keys-union custom def) (custom + (filter (r \ !(keys-has custom (kb-mods r) (kb-sym r))) def))
    (keys-syms t) (foldl (\ a r (any (x \ x = kb-sym r) a ? a (kb-sym r >< a))) () t)
@@ -70,7 +70,7 @@
                        (= m 'shift) shiftm
                        (= m 'mod) modm                                         ; `mod` follows whatever the config chose
                        ())
-   ; a spec -> (mods keysym), or () if any field is unknown. the mask accumulates
+   ; a spec -> (lib keysym), or () if any field is unknown. the mask accumulates
    ; through a `(1 mask)` wrapper: a bare mask of 0 (no modifiers) is a legitimate
    ; answer and would read as failure on its own.
    (kspec modm spec)

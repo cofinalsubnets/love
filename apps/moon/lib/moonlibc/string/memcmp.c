@@ -5,10 +5,10 @@
  * sizeof(long) more times. n bounds every load, so the word lane needs no
  * alignment for safety -- it takes it for speed, and only where BOTH pointers
  * offer it, as memcpy does.
- * ⚠ THE WORD COMPARE SAYS WHETHER, NEVER WHICH WAY. a word holds its bytes in
+ * THE WORD COMPARE SAYS WHETHER, NEVER WHICH WAY. a word holds its bytes in
  * the machine's order, so on a little-endian seat the wide compare orders them
  * backwards; the answer has to come from the byte loop that follows.
- * ⚠ the stride is sizeof(long), never a literal 8: a 32-bit seat (the thumb
+ * the stride is sizeof(long), never a literal 8: a 32-bit seat (the thumb
  * boards) would else step eight bytes having compared four. */
 int memcmp(void const *a, void const *b, size_t n) {
   unsigned char const *x = a, *y = b;

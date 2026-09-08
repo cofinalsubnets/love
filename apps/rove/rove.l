@@ -20,7 +20,7 @@
 ; posix is OPTIONAL: the page's seat (inle/wasm) links none of it, and this file runs
 ; there. ask before splicing -- an absent module is a scare, and the names below that
 ; want a tty go missing on that seat exactly as they did before there was a module.
-(? (from 'posix) (use 'posix) ())
+(? (cite 'posix) (borrow 'posix) ())
 (:
  ; --- the deck: tiles in a cask, (x y) indexed; 0 rock, 1 floor, 2 the hatch ---
  (dat d x y) (0 <= x < d 'w && 0 <= y < d 'h ? (peep (d 't) (x + (d 'w) * y) 0) 0)
@@ -291,5 +291,5 @@
                                     ("ashore with " + show (g 'p 'gold) + " gold")),
               (g 'p 'gold)))
  (rove-main as) (rove-run ())
- _ (pins (from 'verbs 'tab) 'rove rove-main))
+ _ (pins (cite 'verbs 'tab) 'rove rove-main))
 ) ; module rove

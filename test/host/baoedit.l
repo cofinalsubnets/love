@@ -17,8 +17,8 @@
 ; eof = the sentinel edraw returns at ^D / port EOF: captured by reading it back
 ; off an empty port (the sentinel is bao-private now -- the editor no longer leaks
 ; its `eofsym` global, so we name it by what edraw produces, not by its binding).
-(: edraw (from 'cli 'edraw)              ; the editor primitives ride the bao module now
-   edln (from 'cli 'edln)
+(: edraw (cite 'cli 'edraw)              ; the editor primitives ride the bao module now
+   edln (cite 'cli 'edln)
    (keys l) (tap l)
    abc [97 98 99]
    eof (edraw (keys 0) ""))

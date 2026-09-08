@@ -32,8 +32,8 @@
 ;
 ; the conf-* readers take the tablet, so apps/lux/law.l proves the defaults against
 ; an empty one -- the gate must not change meaning the day you write a config file.
-(use 'xwire)   ; the X wire, apps/lux/wire.l
-(use 'salt)
+(borrow 'xwire)   ; the X wire, apps/lux/wire.l
+(borrow 'salt)
 (:
    ; --- the readers. a roster entry is a name or a form; anything else (the lone
    ;     `()` that spells "empty") drops out, and an absent roster takes d. ---

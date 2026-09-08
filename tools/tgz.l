@@ -5,10 +5,10 @@
 ;
 ; the verbs are tar's own letters because the muscle memory is worth more than a
 ; better name. the pack direction lives in tools/selfpack.l, the one cutter.
-(use 'tar)
-(use 'gz)
+(borrow 'tar)
+(borrow 'gz)
 
-(use 'posix)
+(borrow 'posix)
 (: (tgz-slurp p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, [1 (s + "")]))))
    (tgz-die m) (say err ("tgz: " + m + "\n"), quit 1)
 

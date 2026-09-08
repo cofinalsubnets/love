@@ -32,17 +32,17 @@
    ; ..and only a TABLET is ever spliced. a scare ANSWERS wherever a help handler is
    ; installed (a page, a task), so the miss would otherwise lay () in the chain -- and a
    ; book the walk cannot read is a fault in map_probe, not the no-op the line above means.
-   (use m)    (: b (tablet? m ? m
-                    (: r (mods () m) (? r r (scare 'no-module m))))
-               (? (tablet? b) (setbooks (<(books ()) . b . >(books ()))) b))
+   (borrow m)    (: b (tablet? m ? m
+                    (: r (lib () m) (? r r (scare 'no-module m))))
+               (? (tablet? b) (setstack (<(stack ()) . b . >(stack ()))) b))
    ; from: a module is its tablet. currying reaches a member because a tablet already indexes
-   ; itself, so (from 'holo 'assemble) reads the same as ever; `keys` is the ordinary function,
-   ; not a reserved key; (from ()) lists the registry; a missing module answers ().
+   ; itself, so (cite 'holo 'assemble) reads the same as ever; `keys` is the ordinary function,
+   ; not a reserved key; (cite ()) lists the registry; a missing module answers ().
    ; the tablet is the real one -- pin it and you are doing surgery on a live runtime, which is
    ; yours to do. it was never a safety wrapper: a module's members are folded into its consumers
    ; at their compile, so gutting one changes nothing already compiled and everything compiled
    ; after -- the hazard is divergence, and no closure here could have caught it.
-   (from k)   (? k (mods () k) (keys (mods ()))))
+   (cite k)   (? k (lib () k) (keys (lib ()))))
 
 (: putc (put out)
    puts (say out)
@@ -56,11 +56,11 @@
    ap (foldl id))
 
 (: ; the macro twin: each layer keeps its table at its nil key, so this walks the chain `macros`
-   ; looks up through. same placement rule as `names`, and its `books` folds at compile time.
+   ; looks up through. same placement rule as `names`, and its `stack` folds at compile time.
    (macro-names _) (filter nom? (keys (foldl (\ t k (pin t k 1)) {}
                                              (catmap (\ b (: m (b 0)
                                                              (tablet? m ? (keys m))))
-                                                     (books ())))))
+                                                     (stack ())))))
    (part p) (foldr (\ a m (p a ? ((a . <m) . >m)
                                  (<m . a . >m))) '(())))
 
@@ -116,7 +116,7 @@
 (: pow ** power ** car cap cdr cup cons .)
 
 ; --- the loader: use on a path ------------------------------------------------
-; the `use` up top splices a module the runtime already holds; here it also loads one
+; the `borrow` up top splices a module the runtime already holds; here it also loads one
 ; from a PATH the caller writes out. the loader invents no path of its own, so a NAME
 ; it lacks is a miss and the splice raises by name: what a frontend baked, and what a
 ; cat registered, is the whole of what a name can mean.
@@ -129,8 +129,8 @@
 ; tree's own file over a baked older copy of it, which is what papel's want asks for.
 ; `open` is captured off the posix module, so a fs-less frontend holds () there and every
 ; path misses.
-(: use
-   (: prior use
+(: borrow
+   (: prior borrow
       ; read-eval every form of a module source; a torn form scares.
       ; `flow`, never `slurp`: slurp conses the bytes, reverses, re-strings, and sound would cons
       ; them again -- four copies of the module.
@@ -147,11 +147,11 @@
                    b ((: (go k r) (k >= n ? r (go (k + 1) (? (47 = peep s k 0) (k + 1) r)))) 0 0)
                    e (? (2 < n - b ? (".l" = snip s (n - 2) n) 0) (n - 2) n)
                    (intern (snip s b e)))
-      fsopen (from 'posix 'open)       ; the host's open nif, off its module -- see above
+      fsopen (cite 'posix 'open)       ; the host's open nif, off its module -- see above
       (\ m (? (tablet? m) (prior m)
               (string? m)
               (: nm (mname m)
-                 (? (peep (mods ()) m ()) (prior nm)          ; read already -- the path is the mark
+                 (? (peep (lib ()) m ()) (prior nm)          ; read already -- the path is the mark
                     (: q (? !fsopen () (fsopen m "r"))
                        (? !(hot? q) (prior m)
                           ; a file whose own (module nm ..) registered wins: keep its tablet
@@ -160,18 +160,18 @@
                           ; t is read after the eval, so it holds either claim on the name --
                           ; the file's, or a module that already stood there. a bare wrapper
                           ; with neither is no module: pull the name and answer ().
-                          (: _ (pin (mods ()) m 1)
-                             _ (enter nm) _ (rdev q) t (mods () nm) w (leave ())
-                             _ (t && pin (mods ()) nm t)
-                             (!t && bare? w ? (pull (mods ()) nm 0, ()) (prior nm)))))))
+                          (: _ (pin (lib ()) m 1)
+                             _ (enter nm) _ (rdev q) t (lib () nm) w (leave ())
+                             _ (t && pin (lib ()) nm t)
+                             (!t && bare? w ? (pull (lib ()) nm 0, ()) (prior nm)))))))
               (prior m)))))
 
 ; a module's macros in the head layer, without its names. a macro rides its own
 ; layer's table, which `macros` walks, so a consumer reaching a module through
-; `from` rather than a splice has no other way to spell one. ks names them, ()
+; `cite` rather than a splice has no other way to spell one. ks names them, ()
 ; takes the lot; a macro table is a module's key 0, the one the export prune keeps.
-(: (hoist m ks)
-   (: M (from m 0)
+(: (transcribe m ks)
+   (: M (cite m 0)
       (? (tablet? M)
          (each (two? ks ? ks (keys M)) (\ k (: v (M k) (v && :: k v)))))))
 
@@ -180,7 +180,7 @@
    (has? s sub)    (0 <= findsub s sub)
    (starts? s p)   (#p <= #s && snip s 0 #p = p ? 1 0)          ; a ?-name owes a bit, and && gives ()
    (ends? s p)     (#p <= #s && snip s (#s - #p) #s = p ? 1 0)
-   (replace s from to) (#from = 0 ? s (join to (split from s)))
+   (replace s cite to) (#cite = 0 ? s (join to (split cite s)))
    (ws? c)  (c = 32 || c = 9 || c = 10 || c = 13 ? 1 0)
    (lstrip s) (: (go i) (i < #s && ws? (s i) ? (go (i + 1)) i) (snip s (go 0) #s))
    (rstrip s) (: (go j) (0 < j && ws? (s (j - 1)) ? (go (j - 1)) j) (snip s 0 (go #s)))
@@ -714,8 +714,8 @@
 ; binding is a rational tree, and walk_star mu-marks a back-edge to reify it without looping.
 ; a goal is (\ st stream) over a state (substitution . constraints); est/=== unify, +
 ; interleaves (disjunction), * binds (conjunction), so a relation is a polynomial in
-; unifications. a boot says (use 'kanren) to splice the bare names; internals -- subst,
-; walk, query, the dict kit -- answer to (from 'kanren ..).
+; unifications. a boot says (borrow 'kanren) to splice the bare names; internals -- subst,
+; walk, query, the dict kit -- answer to (cite 'kanren ..).
 (module '(kanren =/= === absent apt closed? con dif empty_dict est ifte inside mintp naf nay query rel
    residual rewrite s_app scount slist smap sno sole s_plus s_star st0 stake subst sun
    sX tie ufail ufail? unify untie var var? walk)
@@ -882,7 +882,7 @@
 ; exceptions, and any all-punct head is already infix-dyadic at house band. =/= shares a band
 ; with ===, so a chain folds by hand and wants parens.
 ; the goal language: `::` writes the head layer's macro table, so these four live in kanren's
-; own book, and a consumer's (use 'kanren) splice carries them -- macroget walks the chain's
+; own book, and a consumer's (borrow 'kanren) splice carries them -- stacklook_macro walks the chain's
 ; macro slots, so &&&/|||/\\\/zz expand at the caller and the names their expansions emit
 ; (var, s_plus, s_star) resolve down the same splice.
 ; the tripled spellings are the point: a relation is the ordinary operator said three times --
@@ -897,7 +897,7 @@
 
 ; overlay -- an optional, observe-only static-type overlay hooked at the ev seam
 (module '(overlay ov-check ov-eng overlay-off overlay-set ov-hook ov-slot)
-(use 'kanren)                                         ; subst unify ufail ufail? var, scoped to this compile
+(borrow 'kanren)                                         ; subst unify ufail ufail? var, scoped to this compile
 (: ov-both
     (: (ov-sigof sigs nm) (sigs @ (((aa . ua) @ a) . u) (nm @ ^aa a (ov-sigof u nm)))
        (ov-look env x) (env @ ((ap . up) . env') (x @ ^ap up (ov-look env' x)) 'bot)
@@ -978,8 +978,8 @@
 ; and any other list is an application spine. (f) == f here too.
 ;
 ; a module on every corpus target (host + love0 + the inle kernel + wasm): the
-; frontend lists this source in its ai_libs table and its boot says (use 'uu), then
-; rebinds `uu` to the accessor -- (: uu (from 'uu)) -- so the surface stays
+; frontend lists this source in its ai_libs table and its boot says (borrow 'uu), then
+; rebinds `uu` to the accessor -- (: uu (cite 'uu)) -- so the surface stays
 ; (uu 'vof), (uu 'defn), (uu 'chk), (uu 'lof), and every internal a probe away.
 ; the layer is the module boundary now: the old uu-mark/sweep trailer retired
 ; with the brackets. the UniMath theorem corpus rides in test/uu.l (and the
@@ -987,7 +987,7 @@
 ; axm macros land in this layer's macro slot and ride the boot splice.
 
 ; --- the kernel: values, evaluation, conversion, checking ---
-; the surface: what `from`/`use` see. everything else is internal, a probe away.
+; the surface: what `cite`/`borrow` see. everything else is internal, a probe away.
 (module '(uu axm bridge capp chk conv defn defq GLOB HELPC lof rejects vof)
 (: GLOB {} HELPC {} SRC {} CMEM {} BRIDGE {})
 
@@ -1324,7 +1324,7 @@
 ; not. The unit is the only nil that leaves here.
 ;
 ; a module the boot never splices: it is registered with the rest, and each consumer opens with
-; its own top-level (use 'peg), then reads the names bare off that splice -- l/holo/text.l,
+; its own top-level (borrow 'peg), then reads the names bare off that splice -- l/holo/text.l,
 ; apps/cook.l, apps/lapiz.l, apps/sat/dimacs.l. the (use ..) must be its own
 ; top-level form: a `:` body compiles as one unit, so a use nested inside the form that reads
 ; the names runs too late to serve it.
@@ -1370,7 +1370,7 @@
 ; re -- the POSIX regex engine, BRE and ERE. love has no regex syntax, so this is
 ; the door: (rebre p) / (reere p) compile a pattern, (rehas ns s) and
 ; (refind ns s i) run it. pure -- no i/o, no seat -- and peg's peer: a module the
-; boot never splices, so each consumer opens with its own top-level (use 're).
+; boot never splices, so each consumer opens with its own top-level (borrow 're).
 ; grep lives on in apps/kore/re.l, which reads four names off this splice.
 ;
 ; lawed in apps/kore/law.l: hand laws plus a seeded differential fuzz against an
@@ -1583,11 +1583,11 @@
    (recomp ns) (: c (refirst ns)
                   [(recompm ns) (reanch ns)
                    (? (nil? c) ()
-                      (: sc ((from 'scan 'scanner) ())      ; at compile time: never at a
+                      (: sc ((cite 'scan 'scanner) ())      ; at compile time: never at a
                          (\ s i n (: j (sc s c i)          ; module binding, which bakes
                                      (j < 0 ? n j)))))])
    ; -- the budget, and the one shape that needs it -------------------------------
-   ; ⚠ THIS ENGINE'S ONE UNBOUNDED INPUT. matching is greedy backtracking in
+   ; THIS ENGINE'S ONE UNBOUNDED INPUT. matching is greedy backtracking in
    ; continuation style, so a repeat whose atom can match one span MORE THAN ONE WAY
    ; -- (a|aa)+ , (a*)* -- tries every split of a run and is exponential in its
    ; length: `grep -E '^(a|aa)+b$'` against forty a's does not finish. GNU builds an
@@ -1596,15 +1596,15 @@
    ; the budget is what this one can afford: a step count spent ONLY by the repeats
    ; that can nest, reset once per find, and a scare when it runs out. A pattern that
    ; says "too costly" out loud beats one that never comes back.
-   ; ⚠ the cost lands on nothing else. `renests?` asks at COMPILE time, so an
+   ; the cost lands on nothing else. `renests?` asks at COMPILE time, so an
    ; ordinary repeat -- [0-9]+, .*, a\{2,5\} -- compiles to the same rrepc it always
    ; did and its inner loop never reads the cell. `recomp`'s fourth word says whether
    ; a matcher spends the budget at all, so the drivers do not even reset it for one
    ; that cannot.
-   ; ⚠ one cell, so a nested find (sed's s/// inside a walk that is itself matching)
+   ; one cell, so a nested find (sed's s/// inside a walk that is itself matching)
    ; shares it. the reset is per top-level find and the only cost of sharing is an
    ; early "too costly" in a corner that is already pathological.
-   ; ⚠ A FUNCTION, not `relimit 200000`. module 're is walked while post.l is itself
+   ; A FUNCTION, not `relimit 200000`. module 're is walked while post.l is itself
    ; still loading, so a VALUE binding here is read before the letrec reaches it and
    ; love0's boot floods `;; missing relimit` -- while the built love, whose image
    ; already holds the module, is perfectly happy. A call defers, which is the same
@@ -1656,7 +1656,7 @@
                                  (try bs))))
           ; the budgeted twin is chosen HERE, once, off the atom's shape -- so a
           ; repeat that cannot nest is compiled to exactly the loop it always was
-          ; ⚠ the counter is born HERE, in the closure, so it is one per ENTRY to this
+          ; the counter is born HERE, in the closure, so it is one per ENTRY to this
           ; repeat -- per starting position for a top-level one -- and there is no
           ; module-level cell to bake, to reset per find, or to share with a nested
           ; match. A repeat inside another gets a fresh budget per outer step, which
@@ -1701,12 +1701,12 @@
    (rehasm m s)
     (: f <m n (<>m ? 0 #s)                        ; anchored: the walk ends where it starts
        sk <>>m
-       (from i) (? (f s i () (\ j sp [1 j])) 1
-                   (i < n) (from (i + 1)))
+       (cite i) (? (f s i () (\ j sp [1 j])) 1
+                   (i < n) (cite (i + 1)))
        (jump i) (: j (sk s i n)                   ; only the positions that could open
                    (? (n <= j) ()
                       (? (f s j () (\ e sp [1 e])) 1 (jump (j + 1)))))
-       (nil? sk || <>m ? (from 0) (jump 0)))
+       (nil? sk || <>m ? (cite 0) (jump 0)))
    ; the node-list faces: they compile and then match, for a caller with one text to
    ; ask about. a caller with many -- grep, sed, awk -- holds the matcher instead
    (rehas ns s) (rehasm (recomp ns) s)
@@ -1723,13 +1723,13 @@
    (refindpm m s i p)
     (: f <m n (<>m ? i #s)                        ; anchored: the walk ends where it starts
        sk <>>m
-       (from j) (f s j () (\ e sp (p j e ? [1 e sp])) @ [_ e sp] [1 j e sp]
-                  (? (j < n) (from (j + 1)) ()))
+       (cite j) (f s j () (\ e sp (p j e ? [1 e sp])) @ [_ e sp] [1 j e sp]
+                  (? (j < n) (cite (j + 1)) ()))
        (jump j) (: j2 (sk s j n)                  ; only the positions that could open
                    (? (n <= j2) ()
                       (f s j2 () (\ e sp (p j2 e ? [1 e sp])) @ [_ e sp] [1 j2 e sp]
                         (jump (j2 + 1)))))
-       ((nil? sk || <>m) ? (from i) (jump i)))
+       ((nil? sk || <>m) ? (cite i) (jump i)))
    (refindm m s i) (refindpm m s i (\ a b 1))
    (refindp ns s i p) (refindpm (recomp ns) s i p)
    (refind ns s i) (refindm (recomp ns) s i)
@@ -1738,7 +1738,7 @@
 ) ; module 're
 
 ; verbs -- the registry behind `love mooncc ..`, `love cook ..`, and a `sed` symlink onto
-; the artifact. one symbol-keyed tablet, mutated in place: (from 'verbs 'tab) hands the
+; the artifact. one symbol-keyed tablet, mutated in place: (cite 'verbs 'tab) hands the
 ; real tablet, not a copy, and `pin` is the door. registered, never spliced -- tab/word/
 ; seat are not names to reach bare, and `get` would shadow half the tree.
 ;
@@ -2158,7 +2158,7 @@
  (: (cli-leave c) (scare 'cli-leave c)
     ; a kind test, not a match on (): a refusal answers a nom, and a nom is truthy
     ; open is posix's, and a seat without it answers () here rather than at the bake
-    (load1 p) (: q ((from 'posix 'open) p "r")
+    (load1 p) (: q ((cite 'posix 'open) p "r")
                  (? (hot? q) (reads q) (say err $ "love: cannot open " + p, cli-leave 1)))
     (eval1 s) (: m (nom 0)                           ; a fresh nom: the unfinished shape, id?-safe
        (rdl x acc) (sound x @ 'torn      m           ; every top-level datum off the string, in order
@@ -2208,7 +2208,7 @@
            ; lands at the next collection: the opening pool was sized before argv was read.
            ("-m" || "--memory")  (need h t, tune (pin (tune ()) 0 (size h <t)), pre >t)
            "--"                 (t @ (_ . _) ('file . t) '(stdin))
-           (from 'verbs 'word h @ '() ('file . a) f ('verb . f . a)))
+           (cite 'verbs 'word h @ '() ('file . a) f ('verb . f . a)))
       '(none))
     ; stdin is the answer to an empty command line, or to `--` with nothing after it --
     ; never to a line that carried flags and named no program.
@@ -2232,7 +2232,7 @@
 
  (cli-line ln tty)
    (: (charm0 x) (charm? x ? x 0)
-      V  (from 'verbs)
+      V  (cite 'verbs)
       _  (ev [': 'cmdline ['\ ln] 'argv ['\ ln] ])   ; C's line is already past the primes
       f  (V 'seat <ln)
       (charm0 (? f          (f >ln)
@@ -2244,6 +2244,6 @@
  ; shell with no seat to exec reach the repl by name, an inle console being every such
  ; shell. a line rails, nothing opens the repl; a pipeline execs on a hosted seat and
  ; never arrives here. last in the letrec: the closure takes its free names as they stand.
- _ (pins (from 'verbs 'tab) 'love
+ _ (pins (cite 'verbs 'tab) 'love
      (\ as (two? as ? (cli-rail (link "love" as)) (shell 0))))
 ) ; module cli

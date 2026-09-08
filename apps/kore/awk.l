@@ -31,7 +31,7 @@
 ; one -- the two differ only on an exact tie, which a decimal literal can reach
 ; and a computed double essentially never does.
 (module 'kore
-(use 'posix)
+(borrow 'posix)
 
 (:
    ; -- values --------------------------------------------------------------
@@ -723,9 +723,9 @@
    (aw-splitc t c)                               ; a single charm, literally
     (: n #t
        (n = 0 ? ()
-        (: (go from k acc) (? (n <= k) (rev (snip t from k . acc))
-                              (t k = c) (go (k + 1) (k + 1) (snip t from k . acc))
-                              (go from (k + 1) acc))
+        (: (go cite k acc) (? (n <= k) (rev (snip t cite k . acc))
+                              (t k = c) (go (k + 1) (k + 1) (snip t cite k . acc))
+                              (go cite (k + 1) acc))
            (go 0 0 ()))))
    (aw-splitre E t pat)
     (: n #t nds (aw-recomp E pat)
@@ -772,10 +772,10 @@
                 go (k + 1)))
        s (go 1)
        (pin E 'rec s, s))
-   (aw-grow E from to)
+   (aw-grow E cite to)
     (: fl (aw-fl E)
        (fill j) (j <= to && (pin fl j (peep fl j ""), fill (j + 1)))
-       (fill from))
+       (fill cite))
    (aw-setnf E k)
     (: n (aw-nf E)
        (n < k && aw-grow E (n + 1) k,

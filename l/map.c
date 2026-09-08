@@ -27,21 +27,21 @@ word ai_mapget(struct ai *g, word dflt, word k, word m) {
  bool found; uintptr_t i = map_probe(g, m, k, &found);
  return found ? map_slots(m)[2 * i + 1] : dflt; }
 
-// the layered global read: g->book is a chain of books walked head-first. a
+// the layered global read: g->stack is a chain of books walked head-first. a
 // per-layer miss needs its own sentinel -- a stored () must shadow, never fall
 // through. the l twin is ev.l's gv; keep them in step.
-word bookget(struct ai *g, word dflt, word k) {
+word stacklook(struct ai *g, word dflt, word k) {
  static union u const miss[1];
- for (word c = g->book; chainp(c); c = B(c)) {
+ for (word c = g->stack; chainp(c); c = B(c)) {
   word v = ai_mapget(g, word(miss), k, A(c));
   if (v != word(miss)) return v; }
  return dflt; }
 
 // the layered macro read: each layer's macro table rides its [zero] slot; miss
 // answers 0, the no-macro convention
-word macroget(struct ai *g, word k) {
+word stacklook_macro(struct ai *g, word k) {
  static union u const miss[1];
- for (word c = g->book; chainp(c); c = B(c)) {
+ for (word c = g->stack; chainp(c); c = B(c)) {
   word mt = ai_mapget(g, word(miss), zero, A(c));
   if (mt == word(miss)) continue;
   word v = ai_mapget(g, word(miss), k, mt);

@@ -125,7 +125,7 @@ for f in "$cts"/tests/single-exec/*.c; do
   want=$(kindof "$b")
   [ -f "$f.expected" ] || fail "$b: the corpus has no .expected for it"
 
-  # ⚠ take the status on its own line: after `if ! cmd`, $? is the `!`, not the cmd.
+  # take the status on its own line: after `if ! cmd`, $? is the `!`, not the cmd.
   moonrun $tflag -o "$d/$b.bin" "$f" > "$d/$b.cclog" 2>&1; st=$?
   if [ $st -ne 0 ]; then
     case $want in
@@ -141,10 +141,10 @@ for f in "$cts"/tests/single-exec/*.c; do
     || fail "$b: mooncc BUILT a program rostered as refusing ($(causeof "$b")) -- take its line out of this script"
 
   # in its own subshell: two of the rostered-wrong ones SEGFAULT, and the shell
-  # announcing that on stderr would read as the gate itself dying. ⚠ the trailing
+  # announcing that on stderr would read as the gate itself dying. the trailing
   # `exit $?` is load-bearing -- a lone command in a subshell is exec'd into it, so
   # the SIGSEGV lands on the subshell and the parent does the announcing instead.
-  # ⚠ AND IN $d, not here: 00187 writes fred.txt beside itself and reads it back, so a
+  # AND IN $d, not here: 00187 writes fred.txt beside itself and reads it back, so a
   # run from the tree root litters the tree root (fred.txt was .gitignore'd rather than
   # confined). the subshell's cd keeps the outer paths below unchanged.
   ( cd "$d" && timeout 60 ${QEMU:-} "./$b.bin" > "$b.out" 2>&1; exit $? ) 2>/dev/null; r=$?

@@ -1,7 +1,7 @@
 #include "../impl.h"
 
 /* ---- memory/string: word-wide where the pointers agree (the GC image and
- * string lanes move real volume through these). ⚠ the stride is sizeof(long),
+ * string lanes move real volume through these). the stride is sizeof(long),
  * never a literal 8: a 32-bit seat (the thumb boards) would else copy four
  * bytes and step eight, leaving every other word untouched.
  * FOUR words an iteration: the length compare, the two pointer bumps and the

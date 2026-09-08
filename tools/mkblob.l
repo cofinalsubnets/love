@@ -11,12 +11,12 @@
 ; tools/mksrc.l is the same lay under two fixed names, for the one blob every
 ; artifact carries; this is the door for the rest. inle/doom.c reads a pair.
 ;
-; no (use 'holo) here, for mksrc's reason: it resolves off a nest (~/.love),
+; no (borrow 'holo) here, for mksrc's reason: it resolves off a nest (~/.love),
 ; which a fresh seed tree does not have. make hands us holo the way it hands
 ; mksrc its own -- -l $(ho)/.mksys-cat.l.
 
-(use 'posix)
-(? (lit? (from 'holo 'objelf)) (use 'holo) 0) ; splice the assembler when this love is baked
+(borrow 'posix)
+(? (lit? (cite 'holo 'objelf)) (borrow 'holo) 0) ; splice the assembler when this love is baked
 
 (: (mkblob-slurp p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, [1 (s + "")]))))
    (mkblob-die m) (say err $ "mkblob: " + m + "\n", quit 1)
@@ -29,7 +29,7 @@
    ; a cross arch's backend joins at runtime (obj.l's law: registered, not merely
    ; named), and an unbaked love has no holo at all -- say so.
    (mkblob-be arch)
-    (? (lit? (from 'holo 'objelf)) (mkblob-be2 arch)
+    (? (lit? (cite 'holo 'objelf)) (mkblob-be2 arch)
        (mkblob-die "no holo aboard -- this love is unbaked (make host bakes it)"))
    (mkblob-be2 arch)
     (? (lit? (backends arch)) 0

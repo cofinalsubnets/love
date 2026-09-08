@@ -4,10 +4,10 @@
 ; comment is. run standalone from the repo root:
 ;   cat test/00-init.l test/host/libra.l | out/love
 
-(use 'lint)          ; libra splices this below itself, so the session must ask for it too
-(use 'salt)
-(use 'libra)
-(use 'lapiz)         ; ..and the doc verb's surfaces, which libra loads on that verb alone
+(borrow 'lint)          ; libra splices this below itself, so the session must ask for it too
+(borrow 'salt)
+(borrow 'libra)
+(borrow 'lapiz)         ; ..and the doc verb's surfaces, which libra loads on that verb alone
 
 ; the settings a test means, stated rather than inherited: an empty tablet is
 ; "no config anywhere", which is what every balance test wants. never (salt
@@ -227,11 +227,11 @@
  ((mdread (ldoc-md "; - a bullet that wraps onto\n;   a second line\n(: x 1)\n"))
   = '((bullets (((text "a bullet that wraps onto a second line"))))))
  ; the hazard marker in bold, and no more than that
- ((ldoc-md "; ⚠ a hazard, and it is one.\n(: x 1)\n") = "**⚠** a hazard, and it is one.\n")
+ ((ldoc-md "; a hazard, and it is one.\n(: x 1)\n") = "**** a hazard, and it is one.\n")
  ; ..and a hazard starts a block: 22 of the tree's 74 sit jammed against the prose
  ; above them, and filling them into it is how a page becomes a wall
- ((ldoc-md "; prose.\n; ⚠ a hazard.\n(: x 1)\n") = "prose.\n\n**⚠** a hazard.\n")
- ((ldoc-md "; prose.\n;\n; ⚠ a hazard.\n(: x 1)\n") = "prose.\n\n**⚠** a hazard.\n"))
+ ((ldoc-md "; prose.\n; a hazard.\n(: x 1)\n") = "prose.\n\n**** a hazard.\n")
+ ((ldoc-md "; prose.\n;\n; a hazard.\n(: x 1)\n") = "prose.\n\n**** a hazard.\n"))
 
 ; and the whole of it through the lens: a real header comes out as a document with
 ; a heading its sections hang off, which is what papel reads a page's title,

@@ -34,7 +34,7 @@
 (module (dns dial resolve dns-show
          dns-answers dns-ask dns-be16 dns-conf dns-query dns-servers
          dns-hosts dns-labels resolve-in)
-(use 'posix)
+(borrow 'posix)
 (:
    ; --- files, lines, words ----------------------------------------------------
    ; the two config files are line-oriented text, not love data, so `sound` is no

@@ -20,7 +20,7 @@
 ; honest about the cost: a 64 MB image is 64 MB of heap and a whole-file rewrite per
 ; mutating verb. Positioned reads would want a pread nif; nothing here has one.
 ;
-; ⚠ FAT32 REFUSES ANYTHING UNDER ~33 MB, by the format's own law -- under 65525
+; FAT32 REFUSES ANYTHING UNDER ~33 MB, by the format's own law -- under 65525
 ; clusters the type is FAT16 by definition. `fat mkfs` on a smaller image answers the
 ; refusal rather than writing something that is not what its boot sector claims.
 ;
@@ -28,14 +28,14 @@
 ; unreadable image, so a script reads the difference between "no such file in there"
 ; and "that is not a filesystem".
 (module 'fatcmd
-(use 'fat)
+(borrow 'fat)
 
-(use 'posix)
+(borrow 'posix)
 (: fatc-usage "usage: fat {ls|stat|cat|get|put|mkdir|rm|mkfs} IMG [PATH..]"
    (fatc-moan m) (: _ (say err ("fat: " + m)) _ (put err 10) _ (flush err) 1)
    ; the exit door: a status raised, not a process ended, so a caller already in
    ; this image gets a charm back; without kore aboard there is no catcher.
-   (fatc-leave c) (: u (from 'kore 'uleave) (? (lit? u) (u c) (quit c)))
+   (fatc-leave c) (: u (cite 'kore 'uleave) (? (lit? u) (u c) (quit c)))
    (fatc-die c m) (: _ (fatc-moan m) (fatc-leave c))
    (fatc-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) [1 (s + "")])))
    (fatc-blurt p s) (: q (open p "w") (hot? q && (: _ (say q s) _ (close q) 1)))
@@ -64,7 +64,7 @@
      (#im // 512)]
 
    ; open IMG as a mounted fs: answers [im dirty fs], or leaves through fatc-die.
-   ; ⚠ the two failures are told apart on purpose: a missing file and a file that is
+   ; the two failures are told apart on purpose: a missing file and a file that is
    ; not a FAT32 want different repairs, and one "cannot read" sends you to the wrong one.
    (fatc-open img)
     (: t (fatc-slurp img)
@@ -117,7 +117,7 @@
        (? (fat-rm <>>b path) (fatc-sync img <b <>b)
           (fatc-moan (path + ": cannot remove (no such file, or a directory with things in it)"))))
    ; mkfs: an existing image is formatted where it lies; a SIZE makes one first.
-   ; ⚠ a size given for a file that is already there is honoured -- the image is
+   ; a size given for a file that is already there is honoured -- the image is
    ; remade at that size, which is what `mkfs.vfat -C` means and what a script
    ; re-running its own setup wants.
    (fatc-mkfs img size)
@@ -158,9 +158,9 @@
              bl (? (two? >as) (fatc-size <>as) ())
              (fatc-mkfs img (? (charm? bl) (bl * 1024) ())))))
 
-   T (from 'verbs 'tab)
+   T (cite 'verbs 'tab)
    ; the verb wraps in urun, kore.l's own shape for a main that leaves deep
-   (fatc-run f av) (: r (from 'kore 'urun) (? (lit? r) (r f av) (f av)))
+   (fatc-run f av) (: r (cite 'kore 'urun) (? (lit? r) (r f av) (f av)))
    _ (pins T 'fat       (av \ fatc-run fat-main av)
             'mkfs.vfat  (av \ fatc-run mkfsv-main av)
             'mkdosfs    (av \ fatc-run mkfsv-main av)))

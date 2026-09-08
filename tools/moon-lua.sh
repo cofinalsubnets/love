@@ -92,7 +92,7 @@ for f in "$LUASRC"/src/*.c; do
   objs="$objs $d/$b.o"
 done
 
-# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO moonlibc
+# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). NO moonlibc
 # object -- the link owes its symbols and the driver's runtime table pulls
 # apps/moon/lib/moonlibc/ MEMBER BY NEED (the Makefile says the same of love itself).
 # Naming an object would take every member instead.
@@ -102,9 +102,9 @@ for f in apps/moon/lib/moonlibc/math/*.c; do
 done
 # sys.o is LAID, not compiled -- and a CROSS lay needs holo's backend loaded first
 # (the host bake carries only the native one), exactly as raw.sh does it.
-{ if [ -n "$backend" ]; then echo "(use 'holo)"; cat "$backend"; fi
+{ if [ -n "$backend" ]; then echo "(borrow 'holo)"; cat "$backend"; fi
   cat apps/kore/text.l apps/kore/u.l apps/kore/asbook.l l/holo/elf.l l/holo/obj.l apps/moon/lib/mksys.l
-  echo "((from 'moon '$mksys) \"$d/sys.o\")"; } | $love || { echo "FAIL $mksys sys.o"; exit 1; }
+  echo "((cite 'moon '$mksys) \"$d/sys.o\")"; } | $love || { echo "FAIL $mksys sys.o"; exit 1; }
 
 $MC $tflag $objs "$d"/m_*.o "$d/sys.o" -o "$d/lua" || { echo "FAIL holo link lua"; exit 1; }
 echo "  linked $(wc -c < "$d/lua") bytes -> $d/lua"

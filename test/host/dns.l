@@ -10,7 +10,7 @@
 ; driven from test/host/run.l under a timeout, like the other socket laws: a
 ; resolver that stops parking stops the whole vm, and a wedged gate is worse than
 ; a red one.
-(: _ (use 'dns))
+(: _ (borrow 'dns))
 
 ; --- the fake nameserver -------------------------------------------------------
 ; answer `q` (a query) with one a record for `addr`, or with the TC bit set and

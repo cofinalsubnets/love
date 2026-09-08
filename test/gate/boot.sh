@@ -12,7 +12,7 @@
 #   rvboot           rv64 inle bring-up: sv39 + the tree door, S-mode under SBI  42
 #   virt             rv64 bare metal, our linker + holo start.o  42
 #
-# ⚠ qemu reads </dev/null: -nographic muxes guest serial + monitor onto stdio, so
+# qemu reads </dev/null: -nographic muxes guest serial + monitor onto stdio, so
 # without a definite-EOF stdin qemu BLOCKS on the host chardev when this runs with no
 # tty -- the guest exits via semihosting instantly but qemu-in-make hangs to the
 # timeout. Host I/O, not the port.

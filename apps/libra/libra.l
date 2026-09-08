@@ -17,10 +17,10 @@
 ; libra would hand the whole session their names as well as its own.
 ; `fatal?` is out because test/host/libra.l pins the gate rule against it.
 (module (libra libra-main libra-check libra-doc ldoc-head ldoc-md fatal?)
-(use 'lint)
-(use 'salt)
+(borrow 'lint)
+(borrow 'salt)
 
-(use 'posix)
+(borrow 'posix)
 (:
    ; --- lines ----------------------------------------------------------------
    (ltrim s) (: n #s
@@ -159,10 +159,10 @@
                     (: _ (say err (<fs + ": no header comment\n"))
                        (libra-doc-files >fs surf (bad + 1)))
                    (: _ (say out (? (= surf 'md) md
-                                     ((from 'lapiz (? (= surf 'ht) 'md->ht 'md->rf)) md)))
+                                     ((cite 'lapiz (? (= surf 'ht) 'md->ht 'md->rf)) md)))
                       (libra-doc-files >fs surf bad)))))))
    (libra-doc fs surf)
-    (: _ (? (= surf 'md) 0 (use 'lapiz))
+    (: _ (? (= surf 'md) 0 (borrow 'lapiz))
        n (libra-doc-files fs surf 0)
        (? (0 < n) 1 0))
 
@@ -196,11 +196,11 @@
 ; the verb, and the seat (kiosko's shape): the table makes `love libra ..` a word
 ; on the artifact, the seat fires libra-main iff this file sits in the program
 ; seat of the real command line. body-having, so nothing leaks.
-(: _ (pins (from 'verbs 'tab) 'libra libra-main)
-   s ((from 'verbs 'fire) ["libra" "libra.l"])
+(: _ (pins (cite 'verbs 'tab) 'libra libra-main)
+   s ((cite 'verbs 'fire) ["libra" "libra.l"])
    ; quit, never return: the shebang's -l makes this a preload, so a path that
    ; merely answers leaves cli holding our arguments and loads the first as a
-   ; program. the seat miss does return -- that arm is (use 'libra).
+   ; program. the seat miss does return -- that arm is (borrow 'libra).
    ; the status is libra-main's now, so the seat carries it out rather than 0.
    (? (two? s) (: r (libra-main >s) (quit (? (charm? r) r 0))) ()))
 ) ; module libra

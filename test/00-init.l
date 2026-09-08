@@ -6,7 +6,7 @@
 ; corpus is ONE scope, so splicing it here is what lets every later file spell `open`
 ; plainly -- and it must come before the fallbacks, which read what is in scope. a seat
 ; without posix has no such module, and those fallbacks still cover it.
-(? (from 'posix) (use 'posix) ())
+(? (cite 'posix) (borrow 'posix) ())
 (map (\ n (? (member? n (names ())) () (ev [': [n 'x] ()]))) '(quit close run getenv))
 (? (member? 'open (names ())) () (ev '(: (open x y) ())))
 

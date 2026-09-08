@@ -3,9 +3,9 @@
 ; -- labels, .globl and every instruction. the other directives compare by name only (gcc quotes
 ; symbols in its Intel output and not in its at&T). @PAIRS@ is the list the shell lays, one
 ; `att.s intel.s` pair per line; a miss prints the first differing item of the pair.
-(use 'holo)
+(borrow 'holo)
 
-(use 'posix)
+(borrow 'posix)
 (: (slurpf f) (: q (open f "r") (slurp q))
    (strip its) (map (it \ <it = 'dir ? ['dir <>it] it) its)
    (words s) (filter (w \ #w > 0) (xa-split s 32))

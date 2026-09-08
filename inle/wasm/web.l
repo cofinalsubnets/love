@@ -20,13 +20,13 @@
 ; the tty words this seat has no device for: winsize is the screen's, raw is nothing
 ; to do. an app run on the session's own task (a typed `(rove-run ())`) reads the end of
 ; stdin at once (host.c) and steps ashore, since nothing could unpark it.
-(use 'story)                                        ; the engine, fed just before this file
+(borrow 'story)                                        ; the engine, fed just before this file
 (: raw (\ _ ())
    web-scr {} web-task {}
    (winsize _) (: s (peep web-scr () 0) (? s ((gaze s 1) . (gaze s 2)) ()))
    (web-boot nm c r) (: _ (scoop 0)                                 ; the last app's node, reaped
                         s (screen (cask (screen () r c)) r c)
-                        f (nm @ "rove" (from 'rove 'rove-run) (ev (nom nm)))   ; the runner, by its name
+                        f (nm @ "rove" (cite 'rove 'rove-run) (ev (nom nm)))   ; the runner, by its name
                         _ (pin web-scr () s)
                         _ (pin web-task () (twirl (\ _ (f ())) 0))
                         ())

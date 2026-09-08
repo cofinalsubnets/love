@@ -1,6 +1,6 @@
 ; apps/forge.l -- nifs written in love. a kernel is a l/holo IR program plus an honest
 ; interpreted twin. forge assembles the program for the cpu it is running on and installs it
-; through the `nif` seam; the twin is what runs everywhere the native cannot. `(use "apps/forge.l")`:
+; through the `nif` seam; the twin is what runs everywhere the native cannot. `(borrow "apps/forge.l")`:
 ;
 ;   (forge-put nom arity mkir twin) -> register one kernel; mkir is a thunk, twin the fallback
 ;   (forge-fit ())                  -> assemble + install the whole roster -> the fitted count
@@ -60,7 +60,7 @@
 ; vmas today. one arena for the batch is a change to that seam, and this shape is what feeds it.
 ;
 ; it needs the glaze module, not the glaze hook: the seal pulls `nif`/`nifx` off the book on
-; every boot (inle/main.c) and `(from 'glaze 'nif)` is the one door left. LOVE_NO_GLAZE=1 clears
+; every boot (inle/main.c) and `(cite 'glaze 'nif)` is the one door left. LOVE_NO_GLAZE=1 clears
 ; the jit hook and keeps the module, so a pure-interpreter session still forges.
 (:
    ; --- the ABI kit -------------------------------------------------------------------
@@ -152,12 +152,12 @@
    ; --- the fit -----------------------------------------------------------------------
    ; one door, bound once: a missing module answers (), so `nil?` on the module is the
    ; presence test and a build without the glaze simply stays interpreted.
-   forge-glaze (from 'glaze)
-   forge-seam (from 'glaze 'nif)
-   forge-seamx (from 'glaze 'nifx)                  ; the same door, one extras slot wider
+   forge-glaze (cite 'glaze)
+   forge-seam (cite 'glaze 'nif)
+   forge-seamx (cite 'glaze 'nifx)                  ; the same door, one extras slot wider
    forge-arch love-arch
    forge-abi? (= forge-arch 'x64)               ; the targets the kit above spells
-   forge-asm (from 'holo 'assemble)
+   forge-asm (cite 'holo 'assemble)
    ; assemble one kernel -> its bytes | (). the deopt tail is the module's, because it is
    ; arity-determined and mechanical; the epilogue is the kernel's, because only the kernel
    ; knows whether r0 ends up holding a number or a pointer.

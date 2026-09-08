@@ -12,7 +12,7 @@
  * that says the copy tracks: locals, params, block scope, globals, typedefs,
  * struct members, array decay, & and *, and const told apart from volatile.
  *
- * ⚠ the battery compares EXIT CODES, so every check folds into the status:
+ * the battery compares EXIT CODES, so every check folds into the status:
  * 0 is agreement, and the first failing check's number comes back instead.
  */
 

@@ -11,7 +11,7 @@
 ; samples leak from its body-less binder, so the roster below is the model's;
 ; its own asserts gate the load. untrusted like every translator here: a wrong
 ; lift can miss a law, never fake one, and each source op prints over its term.
-(use 'posix)
+(borrow 'posix)
 (: j (jug 0) _ (wear [in j err])
    _ (reads (open "test/proto/spl.l" "r"))
    _ (wear ()) ())

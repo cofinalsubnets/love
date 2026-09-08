@@ -1,4 +1,4 @@
-; apps/cpio/cpio.l -- cpio in love: the SVR4 "newc" archive, read and written. `(use 'cpio)`:
+; apps/cpio/cpio.l -- cpio in love: the SVR4 "newc" archive, read and written. `(borrow 'cpio)`:
 ;
 ;   (cpio-pack entries)      -> the archive bytes
 ;   (cpio-unpack s)          -> (1 entries) | ()
@@ -28,11 +28,11 @@
 ; reader that believes nlink waits for a body that never comes.
 ;
 ; cpio rides module 'cpio and reads tar's names, the entry shape being tar's on purpose
-; so one walk feeds both wires. a consumer says (use 'cpio).
+; so one walk feeds both wires. a consumer says (borrow 'cpio).
 (module 'cpio
-(use 'tar)
+(borrow 'tar)
 
-(use 'posix)
+(borrow 'posix)
 (:
    cpio-mag "070701"
    cpio-trail "TRAILER!!!"

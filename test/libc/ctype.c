@@ -5,12 +5,12 @@
  * function and the exact byte. that is worth doing here and nowhere else: the
  * domain is small enough to enumerate, which is rare.
  *
- * ⚠ the C locale is the whole contract. glibc without setlocale is in it, and
+ * the C locale is the whole contract. glibc without setlocale is in it, and
  * ours has no locales at all, so the two agree by construction from 0..127. the
  * 128..255 half is the interesting one -- a table-driven ctype that indexed with
  * a SIGNED char, or one that let the high half through, would show here.
  *
- * ⚠ tolower/toupper are reported as VALUES, not flags: they must pass every
+ * tolower/toupper are reported as VALUES, not flags: they must pass every
  * non-letter through unchanged, which a mapping table gets wrong at exactly the
  * bytes nobody tries by hand. */
 #include <ctype.h>
@@ -54,7 +54,7 @@ int main(void)
 	/* the partition laws, checked rather than assumed: every byte is exactly
 	   one of print/cntrl or neither (the 128..255 half is neither), and
 	   graph = print minus the space.
-	   ⚠ every answer is normalized with !! first. a predicate's TRUE is
+	   every answer is normalized with !! first. a predicate's TRUE is
 	   implementation-defined -- glibc hands back the mask bit it tested
 	   (_ISalnum is 8), ours hands back 1 -- so comparing two of them with !=
 	   finds a difference that is not one. found by this gate, in this file. */

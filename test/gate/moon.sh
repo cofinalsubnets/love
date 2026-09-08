@@ -24,12 +24,12 @@ moon0() { "$love0" wake out/mooncc0.image mooncc "$@"; }
 # ---------------------------------------------------------------- the laws
 echo "CC apps/moon/{lex,cpp,parse,gen,val,law}.l"
 out=$ho/.test_moon.out
-{ echo "(use 'holo)"
+{ echo "(borrow 'holo)"
   cat test/00-init.l apps/kore/text.l apps/kore/u.l   # the kore floors register module 'kore
-  echo "(use 'kore)"                    # ..ambient: holo/text.l and law.l read `lines` bare
+  echo "(borrow 'kore)"                    # ..ambient: holo/text.l and law.l read `lines` bare
   cat apps/moon/floor.l apps/moon/lex.l apps/moon/cpp.l apps/moon/parse.l \
       l/holo/text.l l/holo/dialect.l l/holo/gas.l apps/moon/val.l apps/moon/gen.l
-  echo "(use 'moon)"                    # the cat re-laid module 'moon; law.l reads it bare
+  echo "(borrow 'moon)"                    # the cat re-laid module 'moon; law.l reads it bare
   cat apps/moon/law.l
 } | "$m" > "$out" 2>&1
 r=$?
@@ -37,13 +37,13 @@ cat "$out"
 [ $r -eq 0 ] && grep -q "apps/moon/law:" "$out" || fail "cc laws (exit $r)"
 
 # ----------------------------------------------- the template parser, under love0
-# ⚠ holo/text.l reaches the combinators through the bare name `post`, which each
+# holo/text.l reaches the combinators through the bare name `post`, which each
 # frontend's boot binds to that module's accessor. a lane that leaves something else
 # there curries every combinator into a silent partial: no scare, no wrong answer,
 # just every template failing to parse. love0's build-tool lane is the one that
 # compiles l/love.c, and it is the only lane the laws above never walk.
 echo "CC l/holo/text.l (love0 lane)"
-"$love0" -l l/holo/text.l -e '(? (two? ((from (name "holo") (name "asm-text")) "li r0, 60")) (quit 0) (quit 1))' </dev/null \
+"$love0" -l l/holo/text.l -e '(? (two? ((cite (name "holo") (name "asm-text")) "li r0, 60")) (quit 0) (quit 1))' </dev/null \
   || fail "asm-text under love0 -- is bare \`post\` the module accessor there?"
 
 # ---------------------------------------------- the pipeline's stage types
@@ -85,7 +85,7 @@ for f in test/cc/*.c; do
 done
 
 # ------------------------------------------- -std=: the dialect rail (struct labels)
-# ⚠ THE ORACLE IS THE LABEL-FREE TWIN. A struct label is not C -- gcc cannot compile the
+# THE ORACLE IS THE LABEL-FREE TWIN. A struct label is not C -- gcc cannot compile the
 # labelled source at all -- so the differential is against the SAME struct with the labels
 # deleted: identical size, identical offsets, and the label answering its member's own
 # address. That is the whole claim (a virtual member, holding nothing, taking no space),
@@ -113,7 +113,7 @@ int main(void) {
          (int)offsetof(struct S,b), (int)offsetof(struct S,c), (int)sizeof(union U));
   return 0; }
 EOF
-# ⚠ NO FLAG: `moon` is the DEFAULT dialect, so the extension is what a bare mooncc reads.
+# NO FLAG: `moon` is the DEFAULT dialect, so the extension is what a bare mooncc reads.
 moonrun -o "$ho/.lbl" "$ho/.lbl.c" > /dev/null 2>&1 || fail "struct labels did not compile by default"
 a=$("$ho/.lbl"); ra=$?
 $cc_g -O0 -o "$ho/.lblg" "$ho/.lblg.c" > /dev/null 2>&1 && b=$("$ho/.lblg")
@@ -177,7 +177,7 @@ printf 'int m(void){ register long v asm("rcx") = 5; asm("" : "+r"(v)); return (
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
   || fail "a register variable pinned by asm() to a nameable register refused"
 # C11 6.8.1p3: a label is unique to its FUNCTION. two of a name laid one mangled label
-# twice and every goto took the first. ⚠ gcc COMPILES this one, __label__ making the two
+# twice and every goto took the first. gcc COMPILES this one, __label__ making the two
 # distinct -- a refusal, so it costs no right answer.
 printf 'int m(void){ { __label__ L; L: ; } { __label__ L; L: ; } return 0; }\n' > "$ho/.feat.c"
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
@@ -487,9 +487,9 @@ moonrun "$ho/.hm2.c" "$ho/.hm1.o" -o "$ho/.lnk7" > /dev/null 2>&1 || fail "moonc
 # const and reloc-free comes out ALLOC-only. one holding an ADDRESS stays writable --
 # the .rodata rule, and gcc's answer too (.data.rel.ro is the lane gcc renames it to,
 # and a section the programmer NAMED cannot be renamed).
-# ⚠ r2's const leads the SPECIFIER run: a declarator-side `void *const r2[]` is no
+# r2's const leads the SPECIFIER run: a declarator-side `void *const r2[]` is no
 # const object here at all (parse.l's cobj?) and never reaches the relocation guard.
-# ⚠ mixtab holds one of each in BOTH orders -- gcc refuses the mix outright ("section
+# mixtab holds one of each in BOTH orders -- gcc refuses the mix outright ("section
 # type conflict"), we take the writable reading, and a walk that stops at the first
 # member it likes reads as unanimous from whichever end it starts.
 cat > "$ho/.hm3.c" <<'EOF'
@@ -509,7 +509,7 @@ EOF
 moonrun "$ho/.hm3.c" -o "$ho/.lnk8" > /dev/null 2>&1 || fail "mooncc link its own const named section"
 "$ho/.lnk8"; a=$?
 [ $a -eq 42 ] || fail "mooncc const named section (got $a want 42; 1 = the relocated entry is wrong)"
-# ⚠ read the home off nm, not off an address comparison: these order by declaration
+# read the home off nm, not off an address comparison: these order by declaration
 # and so agree with the claim whether or not the flags do.
 nm "$ho/.lnk8" > "$ho/.hm3.nm" 2>&1 || fail "nm on the named-flags exe"
 for s in "R c2" "D r2" "D w2" "D m1" "D m2" "D m3" "D m4"; do
@@ -546,7 +546,7 @@ done
 # with our own ELF walk, so this holds on any machine and needs no readelf.
 # the UNION is the point: .fgnx is our link over a gcc object, and it must credit
 # gcc for the code gcc compiled rather than claiming the whole binary.
-# ⚠ ours is the BASE half of love-version and never the whole id, and that is a law:
+# ours is the BASE half of love-version and never the whole id, and that is a law:
 # the VCS suffix names the commit that built the COMPILER, so it would make love1 and
 # love2 differ and name a broken fixpoint (l/holo/link.l says it at the door).
 # read ./VERSION rather than writing 0.1 down -- a release bump must not fail here.
@@ -602,23 +602,23 @@ echo "mooncc: cc (laws + return-42 + a $(ls test/cc/*.c | wc -l)-program gcc bat
 # every cc after it is free. four compiles in one process: good, a hard error, a
 # usage error, then good again; the process must reach the last say, the statuses
 # must be 0 1 2 0, and the object laid AFTER the two failures must be byte-identical
-# to the same compile run cold. ⚠ a regression to `quit` inside moon-run passes
+# to the same compile run cold. a regression to `quit` inside moon-run passes
 # every check above this line.
 printf 'int wa(int x){return x+1;}\n' > "$ho/.wa.c"
 printf 'int wb(void){ return nope; }\n' > "$ho/.wb.c"
-# ⚠ AND THE FLAGS MUST NOT BLEED. The flag walk accumulates into ONE TABLET now, and a
+# AND THE FLAGS MUST NOT BLEED. The flag walk accumulates into ONE TABLET now, and a
 # tablet is mutated in place -- so a second compile in the same process would inherit the
 # first's flags if `fnew` ever stopped building a fresh one. The four compiles below all
 # carry the same flags and would not notice; this pair does: a flag-bearing compile, then
 # a bare one, whose object must equal the bare compile run cold.
 moonrun -c "$ho/.wa.c" -o "$ho/.wa-bare.o" > /dev/null 2>&1 || fail "warm: the bare reference compile"
-LOVE_NO_IMAGE= "$m" -e "(: mr (from 'moon 'moon-run)
+LOVE_NO_IMAGE= "$m" -e "(: mr (cite 'moon 'moon-run)
      a (mr (list \"-c\" \"-fno-inline\" \"-DLEAK=1\" \"-nostdinc\" \"$ho/.wa.c\" \"-o\" \"$ho/.wl1.o\"))
      b (mr (list \"-c\" \"$ho/.wa.c\" \"-o\" \"$ho/.wl2.o\")) (a + b))" </dev/null > /dev/null 2>&1 \
   || fail "warm: the flag-leak pair did not compile"
 cmp -s "$ho/.wa-bare.o" "$ho/.wl2.o" || fail "warm: FLAGS BLED between compiles in one process"
 moonrun -c "$ho/.wa.c" -o "$ho/.wa-cold.o" > /dev/null 2>&1 || fail "warm: the cold reference compile"
-warm=$(printf '(: mr (from (name "moon") (name "moon-run"))
+warm=$(printf '(: mr (cite (name "moon") (name "moon-run"))
                   a (mr (list "-c" "%s" "-o" "%s"))
                   b (mr (list "-c" "%s" "-o" "/dev/null"))
                   c (mr (list "-zzz"))
@@ -639,7 +639,7 @@ echo "mooncc: the warm compiler (moon-run answers, the image compiles on past a 
 # one archive per ISA, all three cut under -os linux -- and that pin does not reach the
 # bytes, because impl.h parts the kernels at RUN time on __ai_osv. so every hosted kernel
 # must take the CARRIED archive.
-# ⚠ A CLOCK ALONE CANNOT SAY IT WAS TAKEN: out/cache/moon's .a entries make the
+# A CLOCK ALONE CANNOT SAY IT WAS TAKEN: out/cache/moon's .a entries make the
 # member-compile lane fast too, so a warm cache passes this leg whether the archive was
 # read or refused, and a refusal can sit here green for as long as the cache lives. So ask
 # the BINARY what it carries -- inle/src.c matches the arch word and its width, and a

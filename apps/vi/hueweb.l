@@ -34,12 +34,12 @@
 ; writing files must clear it, the way the syntax rule does.
 ;
 ; hue rides module 'vi. the images that cat apps/vi/{config,hue}.l registered it; a
-; tool outside those images says (use "apps/vi/config.l") and (use "apps/vi/hue.l")
+; tool outside those images says (borrow "apps/vi/config.l") and (borrow "apps/vi/hue.l")
 ; first. the use below sits inside this module, so it splices vi for this file's
 ; compile alone: at a catted file's top level it would hand the session vi's ninety
 ; -odd names.
 (module (hueweb hw-vars hw-css hw-body hw-page)
-(use 'vi)
+(borrow 'vi)
 (:
    (hw-cat l)   (foldl (+) "" l)
    ; the three characters html cannot hear otherwise

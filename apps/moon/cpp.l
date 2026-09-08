@@ -18,7 +18,7 @@
 ; adjacent string literals concatenate (phase 6). fenced: _Pragma, __counter__,
 ; the GNU ,##__va_args__ comma elision, #if with character constants.
 (module 'moon
-(use 'kore)
+(borrow 'kore)
 (:
    ; at the head, and they have to be: love0's compiler is single-pass and folds a
    ; pure global at each definition's own compile, so one of these bound mid-list reads

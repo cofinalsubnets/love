@@ -14,20 +14,20 @@
 ; run:
 ;   cat test/00-init.l test/host/serve.l | out/love
 
-(use "apps/vi/config.l")                    ; the theme: hue-theme
-(use "apps/vi/hue.l")                       ; the class table, read bare by hueweb
-(use 'lapiz)                                ; the document lens, read bare by serve
-(use 'libra)                                ; ..and the header lifter, likewise
-(use 'hueweb)
-(use 'kiosko)
-(use 'serve)
+(borrow "apps/vi/config.l")                    ; the theme: hue-theme
+(borrow "apps/vi/hue.l")                       ; the class table, read bare by hueweb
+(borrow 'lapiz)                                ; the document lens, read bare by serve
+(borrow 'libra)                                ; ..and the header lifter, likewise
+(borrow 'hueweb)
+(borrow 'kiosko)
+(borrow 'serve)
 
 ; --- the seam -----------------------------------------------------------------
 (assert
- (member? 'serve (from ()))
- (member? 'serve-main (keys (from 'serve)))
+ (member? 'serve (cite ()))
+ (member? 'serve-main (keys (cite 'serve)))
  ; the verb is registered, which is what makes `love serve` a word on the artifact
- (lit? (peep (from 'verbs 'tab) 'serve ())))
+ (lit? (peep (cite 'verbs 'tab) 'serve ())))
 
 ; a scratch tree to answer for. the maker takes a root and a path and joins them
 ; itself, so the fixture is a real directory and the test asks for real paths.

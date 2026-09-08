@@ -3,7 +3,7 @@
  * char*, never char[4]) and evaluates no other arm; _Alignof answers talign,
  * the door playout lays members with; _Alignas is honored at FILE SCOPE.
  *
- * ⚠ the battery compares EXIT CODES, so every check folds into the status:
+ * the battery compares EXIT CODES, so every check folds into the status:
  * 0 is agreement, and the first failing check's number comes back instead.
  */
 #include <stdalign.h>
