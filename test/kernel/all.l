@@ -23,11 +23,12 @@
 ; would otherwise drop a whole file's laws and leave the gate green.
 (: (feed p) (: q (open p "r")
                  (? (port? q) (: _ (reads q) (close q)) (scare 'no-corpus-member p)))
-   ; the host corpus is mk/common.mk's `t`, less the three files wanting a seat
-   ; this machine has not got: run.l a real process, bell.l a tty. zz-fin.l is
-   ; held back because it is the summary and rides at the foot.
-   apart '("00-init.l" "spec.l" "uu.l" "glaze-x86.l" "glaze-hook.l"
-           "run.l" "bell.l" "zz-fin.l")
+   ; the host corpus is mk/common.mk's `t`, held back exactly where `t` holds back --
+   ; the three front-loads and the two glaze lanes -- plus zz-fin.l, which is the summary
+   ; and rides at the foot. NOTHING ELSE: a file a seat cannot run guards itself, in its
+   ; own text where the reason is readable (run.l is one whole `(? hosted ..)`), never in
+   ; a roster over here that goes stale without saying so.
+   apart '("00-init.l" "spec.l" "uu.l" "glaze-x86.l" "glaze-hook.l" "zz-fin.l")
    (law? n) (: k #n (&& (2 < k) (= ".l" (snip n (k - 2) k)) !(member? n apart)))
    host (map (\ n ("test/" + n)) (filter law? (sort (readdir "test"))))
    roster (["test/00-init.l" "test/spec.l" "test/uu.l"] + host +
