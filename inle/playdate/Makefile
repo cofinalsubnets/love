@@ -73,8 +73,8 @@ pd_o = $(o)/main.o $(mc_shared_o) $(o)/pdglue.o $(o)/setup.o
 # and therefore the one that can FAIL. test_playdate runs it before it decides whether
 # it has an SDK to do the rest with.
 .PHONY: default sim clean probe
-probe: $(o)/main.o
 default: $(o)/$n.pdx
+probe: $(o)/main.o
 
 sim: $(o)/$n.pdx
 	@$(pd_sdk)/bin/PlaydateSimulator $^
