@@ -283,7 +283,7 @@
           (seed-wait root xa dst)))
 
    ; --- `love kernel OUT.elf` -- the metal projection of this binary ----------
-   ; the artifact is the kernel (doc/misc/plan/inle-fusion.md): this verb emits
+   ; the artifact is the kernel: this verb emits
    ; the flat image a boot door eats, from nothing but what it already carries.
    ; the boot stub is laid here, not stored: mkboot.l rides the source blob and
    ; holo is baked, so the lay's cat (kore text/u/asbook, then mkboot, then

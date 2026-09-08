@@ -1811,7 +1811,7 @@
       !(emits? '(sub r0 r12 r0)) !(emits? '(shlv r5 r9))
       (emits? '(add r0 r12 r0)) (emits? '(add r7 r7 8))))
 
-; -- the destination die reaches asn/decl (doc/misc/proto/dest.l, the migration's first lane):
+; -- the destination die reaches asn/decl (test/proto/dest.l, the migration's first lane):
 ; a statement-position constant store into a static slot delivers as one store-immediate
 ; (no li, no cvt, no r0), a slotted scalar's licensed constant init likewise, and a homed
 ; local's init lands in the home with no bridge mov (irBa above pins the a64 face).
@@ -2004,7 +2004,7 @@
 
 ; --- the value layer (apps/moon/val.l, moon-ssa rung 0): cfg, escape census,
 ; cells, dead stores, per-def chains, pinned on hand shapes. the corpus
-; differential against the python oracle is doc/misc/proto/ssagap/differ.sh.
+; differential against the python oracle is the ssagap spike's differ.sh.
 ; the goldens themselves pin determinism: every v-list is sorted, and the
 ; fixpoints are monotone unions, so no tablet order can reach an answer.
 (: fsA '((align 2) (label g) (li r5 0) (li r9 0) (label .c.0) (cmp r9 r6) (br ge .d.2)

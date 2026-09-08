@@ -2,7 +2,7 @@
 # fat32.sh -- `love fat` and `love mkfs.vfat`, the command line over apps/fat/fat.l.
 #
 # ⚠ NOT test/gate/fat.sh, which is a different subject entirely: that one gates the
-# FAT CONTAINER of doc/misc/plan/seed-universal.md (one file, many architectures) and
+# FAT CONTAINER (one file, many architectures) and
 # has nothing to do with the filesystem. `make test_fat` is that gate; this is
 # `make test_fat32`.
 #

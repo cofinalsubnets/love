@@ -85,8 +85,7 @@ struct _IO_FILE {
  * two lanes -- the -os freebsd compile aliases NR_* to it below, and os.c's
  * runtime map pairs it with the canonical numbers so ONE binary answers both
  * kernels. ⚠ a canonical name ABSENT here is a MECHANISM that differs, not a
- * number we lack -- the member that wants it owes a freebsd body
- * (doc/misc/plan/seed-universal.md rungs 4 / UV2). ---- */
+ * number we lack -- the member that wants it owes a freebsd body. ---- */
 #define NR_fb_read            3
 #define NR_fb_write           4
 #define NR_fb_close           6

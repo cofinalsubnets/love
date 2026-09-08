@@ -209,7 +209,7 @@ ccwasm: $(GL)
 # answers (GNU the oracle -- a divergence is a bug), the fixed per-invocation start
 # cost, and the per-corpus work. Not cached and not a gate, for the same reason ccnif
 # is not: a development instrument, run while working in apps/kore/. The doc it
-# fills is doc/misc/kore-gauge.md. `make korebench MB=32 SAMPLES=5` for a quieter
+# fills is the kore gauge. `make korebench MB=32 SAMPLES=5` for a quieter
 # reading; a lane not on PATH drops out of every table.
 MB ?= 8
 KOREBENCH := $(BDIR)/korebench.txt

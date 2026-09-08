@@ -89,7 +89,7 @@
               && all whole? inits                                     ; inits are fixnum consts
               ? [vars updates T R inits] 0))
           0)
-   ; --- c-finite bignum deopt (doc/misc/proto/cfinite.l): a constant-coefficient linear recurrence with a
+   ; --- c-finite bignum deopt: a constant-coefficient linear recurrence with a
    ;     canonical counter (init 0, step (c + 1), test (c < n)) closes to m^n x0, O(log n) -- so only
    ;     njit-loop-n's post-overflow path changes. linearity is a structural certificate, read off the
    ;     syntax by cf-lin: anything non-linear or non-canonical declines to `interp`. the state carries a
@@ -571,7 +571,7 @@
        (: y (map debool e) h (opword <y) as >y                    ; lower operands first (bottom-up); opword names a glued value head
           (? (= h '&&) (dband as)  (= h '||) (dbor as)
              (= h 'abs && 1 = #as) (dbabs <as)  y)))
-   ; --- specialization (autospec): mix (doc/misc/proto/mix.l) wired in as a recognizer -- the 1st
+   ; --- specialization (autospec): mix wired in as a recognizer -- the 1st
    ;     Futamura projection composed with the native lane. an interpreter applied to a static program (a
    ;     const-bound quoted AST) and a dynamic input specializes: the dispatch and AST navigation fold
    ;     away to the program's straight-line arithmetic, which the later passes then native. a
@@ -659,7 +659,7 @@
           (? !(two? defs && two? statenv) form                            ; need a defined fn and a static-data binding
              (swalk form statenv defs (map cap defs) (map cap statenv)))))
    ; --- deforestation: fuse a map/filter pipeline under its consumer into one pass, then lower it over
-   ;     (jot N) to the named-let loop lift already glazes (doc/misc/proto/forest.l has the spec).
+   ;     (jot N) to the named-let loop lift already glazes.
    ;     consumers: foldl/foldr, a counted loop counting up for foldl and down for foldr, and all/any,
    ;     an early-exit loop answering truth bits -- all/any glaze only because their false is the fixnum
    ;     0 like =/</!, not the zero point (), which is what the integer compiler returns. `each` is not
@@ -759,7 +759,7 @@
        !(two? form && (= <form ':) && !(atom? >form)) (dlower (dsimp (dforest form)))
        (': . defol-bs >form))
    ; --- loop-closer (loopclose): collapse a polynomial accumulation (foldl/foldr (+) z SRC) to its
-   ;     closed form in the bound, work independent of the trip count (doc/misc/proto/close.l).
+   ;     closed form in the bound, work independent of the trip count.
    ;     runs before defoliate -- it wants the raw fold, not the lowered loop. the engine is finite
    ;     differences in exact integers: the forward differences c_k = Δ^k g(0) plus the hockey-stick
    ;     identity Σ_{i<N} C(i,k) = C(N,k+1) give Σ_{i<N} g(i) = Σ_k c_k C(N,k+1), emitted as falling

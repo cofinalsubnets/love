@@ -2,7 +2,7 @@
 # korebench.sh -- kore's applets against busybox, uutils and GNU, on generated
 # corpora. NOT A GATE and deliberately not wired into one: a development
 # instrument, run by hand while working in apps/kore/, printing four readings
-# of the same jobs rather than a verdict. The doc it fills is doc/misc/kore-gauge.md.
+# of the same jobs rather than a verdict.
 #
 # THE SUBJECT is apps/kore/ -- love on the u-floor, interpreted, against three
 # C/Rust userlands. Being slower than all three is expected and is not the finding.

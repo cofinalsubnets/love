@@ -25,8 +25,8 @@ shift 4
 d=$ho/fix
 cat=$ho/.mooncc-cat.l
 
-# any arch a seed can be laid for owes this invariant (doc/misc/plan/seed-universal.md
-# U0); an arch off the roster skips, it does not fail. the mksys leaf is the
+# any arch a seed can be laid for owes this invariant; an arch off the roster
+# skips, it does not fail. the mksys leaf is the
 # host's own (the twin roster, the Makefile).
 # ⚠ the spelling arrives as $(hosta), never from `uname -m` here: on the BSDs those two
 # disagree (amd64, evbarm), and a gate that spells the arch itself is a second authority.

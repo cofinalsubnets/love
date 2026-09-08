@@ -335,7 +335,7 @@
    ; -- gv resolves the nif and pureset, the same curated effect-free set feels' purity gates read,
    ; is the fold license; a bnd-shadowed head never folds (the alpha law). it does not prune conds
    ; (wxc does, downstream) and it does not unfold recursion (near-inert on this VM; true
-   ; interpreter specialization lives in the offline partial evaluator, doc/misc/proto/mix.l). it runs
+   ; interpreter specialization lives in the offline partial evaluator). it runs
    ; before wx (pre-boxfix, pre-expansion); only an already-constant RHS propagates (a forward ref /
    ; cell read never is -- letrec-safe), and a non-constant rebind or a lambda param kills the name.
    (propk? v) <(kconst v)   ; a constant form? -- the const? bit of the shared kconst recognizer (prel; cf. cst, the falsy projection)
@@ -376,7 +376,7 @@
    ; duplicating/dropping them is unobservable), and a fuel bound caps the reduction cascade. the
    ; cascade runs through cprop's normal recursion, so an under-saturated call substitutes the given
    ; args and answers a \ of the rest -- currying, statically -- collapsing curried hofs to
-   ; first-order arithmetic the back end (and the glaze) can take native. see doc/misc/proto/inl.l.
+   ; first-order arithmetic the back end (and the glaze) can take native.
    ; soundness: beta is not bridged by `=` on closures (the spec), so a beta-produced closure must
    ; never escape to where =/id?/show could observe it. the operator-position flag `op` is the
    ; guard: a beta result that is itself a lambda is committed only when consumed (op=1, an

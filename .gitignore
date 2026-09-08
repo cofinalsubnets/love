@@ -1,3 +1,5 @@
+# the engineering narratives and the design record: local, never tracked, never shipped
+notes
 vgcore.*
 .gdb_history
 .claude/
@@ -40,7 +42,6 @@ __pycache__/
 /love-*/
 
 # the engineering narratives: read through and purged locally, never shipped
-doc/archive/
 
 # the two generated proof terms: test_uugen and test_uulean write them from the uu
 # corpus on EVERY run, so a committed copy is 810 KB nothing ever reads

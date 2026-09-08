@@ -1,5 +1,5 @@
 ; test/uuhomlaw.l -- the laws of the destination die, proved of the terms
-; test/uuhomgen.l generated from doc/misc/proto/dest.l (loaded just before this by
+; test/uuhomgen.l generated from test/proto/dest.l (loaded just before this by
 ; sort order; machine + skeleton in test/uuhom.l, kernel in test/uu.l). dest.l
 ; pins these laws by assert on its emissions; here each is a theorem of the
 ; lifted terms -- the semantic ones forall machine states (neutral state, the

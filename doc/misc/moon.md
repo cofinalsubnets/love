@@ -383,9 +383,8 @@ function under those seats.
   OWN range, so one cell's call-free chain leaves the frame while its crossing
   sibling keeps the cell), frame elision, and the cs upkeep.
 
-The economics that shaped this are doc/misc/moon-gauge.md (the two halves buy
-different things: the pool half buys cycles with instructions, the cs half buys
-latency at flat count); the arc that built it is doc/misc/plan/moon-ssa.md.
+The economics that shaped this: the two halves buy different things -- the pool
+half buys cycles with instructions, the cs half buys latency at flat count.
 
 ## sibcalls, and the flat stack
 

@@ -2,7 +2,7 @@
 
 apps/kore/ orients here; the laws live in apps/kore/law.l, the GNU-identical smokes in
 `make test_kore`, and every doubt settles by probing the built `kore`.
-Speed and adversarial inputs are a different page: doc/misc/kore-gauge.md, filled by
+Speed and adversarial inputs are a different page, filled by
 `make -C bench korebench` (kore against busybox, uutils and GNU).
 
 ⚠ **the inventory below names TOOLS, never their flag coverage**, and the two are not the
@@ -19,7 +19,7 @@ kernel + a static `love` + .l files, and kore is busybox's multi-call trick done
 
 ONE roster — the `$(korefiles)` list in the Makefile: kore's own toolboxes, apps/libra/lint.l,
 apps/vi/, apps/ain.l, the lush files, apps/cook.l and the holo linker files. The
-crew rides IN the default binary's own layered image (doc/misc/plan/one-binary.md), so the
+crew rides IN the default binary's own layered image, so the
 build tree's spelling is `love kore TOOL` and the installed `bin/kore` is a two-line verb
 shim — re-evaling the cat per spawn costs ~1.3s, so only the distro, which has no image
 to ship, still runs it as a shebang script.

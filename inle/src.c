@@ -2,7 +2,7 @@
 // AiNif-registered, the fs.c discipline: (source-gz ()) -> the embedded
 // love-<ver>.tar.gz bytes | () when none is baked in. tools/mksrc.l lays the
 // archive as two .rodata symbols, the dist link pulls it in, l/boot/post.l's
-// `source` inflates what this answers. doc/misc/dist.md.
+// `source` inflates what this answers.
 // presence rides the kind, not the net: absence is the zero point and any archive
 // is a string, so `string?` separates even at zero bytes where `(! s)` would not.
 // the blobs are weak here and the dist link overrides them strong -- so they are

@@ -1,5 +1,5 @@
 ; test/patch.l -- the patch groupoid, the executable spec the whole patch stack drifts
-; against. doc/misc/proto/patch.l is the design: a distribution, a namespace and a
+; against. the design: a distribution, a namespace and a
 ; repo-state are one algebra of selectable sets, with commute the primitive underneath.
 ;
 ; the proofs run on two legs. the generated leg is the destination: test/uupatch.l
@@ -19,7 +19,7 @@
 ; whole spec is one leak-free form.
 
 (:
- ; --- the model (mirror of doc/misc/proto/patch.l) ---
+ ; --- the model ---
  (chg k a b) (link 'chg (link k (link a (link b 0))))     ; patch: change slot k, old->new
  (pk p) (cap (cup p))                                     ; the slot it touches
  (pa p) (cap (cup (cup p)))                               ; its context (old value)

@@ -78,8 +78,7 @@ papel reads markdown, and neither learns the other's job.
 the gate rides `test/host/libra.l` with the rest of the verbs, and its law is
 that the document keeps every LETTER of the header -- an extraction that stalls
 drops its whole tail in silence, and neither a length nor a block count would
-notice. the plan is [`doc/misc/plan/doc-system.md`](plan/doc-system.md); this is its
-rung 0.
+notice. this is rung 0 of the doc system.
 
 ⚠ **an unknown verb reads as a FILENAME.** `libra serv x.l` says "cannot open
 serv" rather than "no such verb". that is the price of the bare file list being

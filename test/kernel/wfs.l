@@ -1,4 +1,4 @@
-; The writable tree, inle's rung 2 (doc/misc/inle.md): create, mkdir, rmdir, unlink,
+; The writable tree, inle's rung 2: create, mkdir, rmdir, unlink,
 ; rename, chdir/cwd -- plus chmod and utime, which kore's cp and touch ride -- and
 ; the environment (getenv setenv environ), a tablet in the kernel's boot text. The
 ; shapes are doc/misc/posix.md's and the host's exactly: an effect answers () ok |

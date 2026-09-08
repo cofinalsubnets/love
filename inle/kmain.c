@@ -937,7 +937,7 @@ ai_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st) {
 // on. each end counts its holders and the queue frees when both counts reach zero.
 // the queue grows rather than refusing at a cap -- the writer's lane is the static port's
 // unbuffered zputc, which retries once and then drops the byte, so a bounded ring would shed
-// bytes in silence under exactly the load it exists for (doc/misc/inle.md).
+// bytes in silence under exactly the load it exists for.
 struct k_pipe { unsigned char *buf; uintptr_t cap, rp, wp; int rrefs, wrefs; };
 
 static struct k_pipe *k_pipe_of(int fd) {
@@ -1277,7 +1277,7 @@ static lvm(lvm_vmx_run) {
 // --- rung 2: the writable tree -- mkdir, rmdir, unlink, rename, chdir/cwd, chmod, utime.
 // doc/misc/posix.md's conventions exactly: an effect answers 0 | -errno (the host's numbers
 // negated) | EINVAL on misuse, and cwd answers the string | (). the environment is not
-// here -- it is a tablet in the boot text below, as doc/misc/inle.md says.
+// here -- it is a tablet in the boot text below.
 
 // --- the path faces ------------------------------------------------------
 // k_fs_* take (bytes, len) and answer 0 or a negative errno, as k_fd_* and k_parent_ok do --

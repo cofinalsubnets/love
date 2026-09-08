@@ -1,4 +1,4 @@
-// inle/horn.c -- the horn: PCM out as a port, on every seat (doc/misc/plan/horn.md).
+// inle/horn.c -- the horn: PCM out as a port, on every seat.
 //
 //   (horn rate chans)   open the sound device -> a port | an errno nom | 'badarg.
 //                       16-bit little-endian samples go out through the ordinary

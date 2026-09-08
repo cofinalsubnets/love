@@ -7,7 +7,7 @@
 ; THROUGH bindings, and `:` is letrec* -- bindings can reference each other (even
 ; cyclically), so the env must be iterated to a fixpoint. the lattice has finite
 ; height and the transfer functions are monotone, so `join`-update terminates.
-; this is the doc/misc/proto/datalog.l engine specialized to a lattice domain.
+; this is a datalog engine specialized to a lattice domain.
 
 (:
  ; --- the kinds-lattice abstract domain: the tier spine N<Z<R<C, str/list as

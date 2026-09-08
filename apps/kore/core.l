@@ -947,7 +947,7 @@
    ; ⚠ and it was not the two things it looked like: the tower computing 2^shift is
    ; 5 ms per 3M, and the jug is 145 ms per 1.4M puts. Both were measured and neither
    ; is the cost. `shf` below is still worth having -- one table beats gc towers a
-   ; group -- but it is the smaller half by far. doc/misc/kore-gauge.md carries the
+   ; group -- but it is the smaller half by far. the kore gauge carries the
    ; numbers and the two dead ends.
    ; base64 rides the kb64 kernel over the whole groups and the coder below over the
    ; tail; base32 (5 bits) is the coder's alone

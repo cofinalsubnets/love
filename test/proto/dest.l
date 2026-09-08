@@ -1,4 +1,4 @@
-; --- doc/misc/proto/dest.l: the DESTINATION vocabulary, modeled -- a gen.l design spike ---
+; --- test/proto/dest.l: the DESTINATION vocabulary, modeled -- a gen.l design spike ---
 ; a runnable companion to (the catalog; the gap it chases is
 ; scored in): TWO code generators over one C-shaped AST, emitting
 ; one holo-flavored IR. `cv` is the r0 protocol as gen.l has it today --
@@ -19,7 +19,7 @@
 ; the literature calls it destination-driven code generation (Dybvig & Burger).
 ; the design said once, both machines:.
 ;
-; run: cat test/00-init.l doc/misc/proto/dest.l | out/love    ; dots, then `dest: ok`
+; run: cat test/00-init.l test/proto/dest.l | out/love    ; dots, then `dest: ok`
 ;
 ; the laws, gen.l's machinery named in brackets:
 ;   * p->f = 7 is ONE si form            [the addressing/store folds, by construction]

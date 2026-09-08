@@ -1,5 +1,5 @@
 ; wasmfn -- holo IR to wasm: the lowering of one function, and the whole-program link
-; (doc/misc/plan/moon-wasm.md, rungs 1, 2 and 4). the IR is what gen.l emits for rv64 -- the
+; (rungs 1, 2 and 4). the IR is what gen.l emits for rv64 -- the
 ; a8 argument shape, the sp/fp/lr frame, la for every address, a compare chain for switch --
 ; and none of it changes: this file is the machine under that lane.
 ;

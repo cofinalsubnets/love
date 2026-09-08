@@ -1,4 +1,4 @@
-; The ramfs, inle's rung 0 (doc/misc/inle.md). The initrd is .rodata -- the
+; The ramfs, inle's rung 0. The initrd is .rodata -- the
 ; artifact's own source blob, inflated and walked as a tar into one {path, bytes,
 ; len} row per file -- and reads come straight off it; the first write copies the
 ; blob into the kernel heap and the file reads from the copy ever after. So: a

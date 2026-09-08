@@ -6,8 +6,9 @@
 # downloaded, never built
 dl
 
-# the engineering narratives, and the design record: read locally, never shipped
-doc/archive
+# the engineering narratives, and the design record: local, and gitignored besides.
+# named here too so the dist cut agrees with git rather than relying on it.
+notes
 
 # rocq/lean build products. these sit UNDER test/proof, which the archive keeps
 # for its 14 tracked sources -- so they are globs, not a prefix.

@@ -225,7 +225,7 @@ test_hostnif: host out$(hsuf)/lush
 # Runnable design companions -- pure-love models that pin the shape a C design
 # takes. Zero-dep, but they leak helper names into the
 # one global scope, so they run standalone. Same contract: exit 0 AND a "<name>: ok".
-doc_tests = doc/misc/proto/dest.l doc/misc/proto/spl.l
+doc_tests = test/proto/dest.l test/proto/spl.l
 test_doc: host
 	@for s in $(doc_tests); do echo "TEST $$s"; \
 	  cat test/00-init.l $$s | sh test/gate/run.sh doc "$m" ": ok" \
@@ -362,8 +362,8 @@ test_sb: host out$(hsuf)/sb
 	@echo TEST apps/sb/sb.l + test/host/sb.l
 	@rm -rf out/.sbtest
 	@cat test/00-init.l test/host/sb.l | sh test/gate/run.sh sb "$m" "sb: ok"
-# the kore smokes drive love's own crew layer (`love kore ..` -- the layered bake,
-# doc/misc/plan/one-binary.md), warm per spawn; the argv0 smoke lays its own two-line shim,
+# the kore smokes drive love's own crew layer (`love kore ..` -- the layered bake),
+# warm per spawn; the argv0 smoke lays its own two-line shim,
 # the distro's shape, since the tree carries no kore binary anymore.
 korerun = $m kore
 test_kore: host
@@ -674,7 +674,7 @@ test_fixpoint: host $(love0) out/mooncc0.image
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
 	  gate_kern_c='$(k_free_c)' \
 	  sh test/gate/fixpoint.sh $(ho) $(love0) $(hosta) $(moon_d) $(moon_o) $(kart_o)
-# THE CROSS-MACHINE FIXPOINT, in effigy (doc/misc/plan/seed-universal.md U0): the x-lane's
+# THE CROSS-MACHINE FIXPOINT, in effigy: the x-lane's
 # twin objects link love1, then love1 under qemu-user rebuilds itself natively and must
 # answer the same bytes -- the twin machine reproducing this machine's, on one box.
 # opt-in BY NAME (a full rebuild under emulation is minutes): `make test_xfixpoint`,
@@ -690,7 +690,7 @@ test_xfixpoint: $(x_o) $(xkart_o) $(love0) out/mooncc0.image
 .PHONY: test_fat
 test_fat: dist-fat
 	@sh test/gate/fat.sh $(fat) $a $(xa) $(xqemu) "$(love0)" $(ho) $(xd)
-# the multi-OS gate (doc/misc/plan/seed-universal.md, rung UV): ONE default-lane
+# the multi-OS gate: ONE default-lane
 # binary answers every kernel with the same text. the box arrives by env --
 # FBSD_SSH / NBSD_SSH = "ssh -p 2222 -i KEY root@HOST" -- and without one the
 # gate skips loudly. opt-in by name, like test_distboot; FBSD_SEED=1 /
@@ -1171,9 +1171,9 @@ endef
 #   uuvallaw  CLAUDE.md's LAWS off test/law.l's own rows -> proved where they stand, one
 #             spelling for the fuzz lane and the proof lane both
 $(eval $(call uu_corpus,uuwm,uuwmgen,apps/lux/core.l))
-$(eval $(call uu_corpus,uukind,kinds2uu,doc/misc/proto/kinds.l))
-$(eval $(call uu_corpus,uuhomgen,dest2uu,doc/misc/proto/dest.l))
-$(eval $(call uu_corpus,uusplgen,spl2uu,doc/misc/proto/spl.l))
+$(eval $(call uu_corpus,uukind,kinds2uu,test/proto/kinds.l))
+$(eval $(call uu_corpus,uuhomgen,dest2uu,test/proto/dest.l))
+$(eval $(call uu_corpus,uusplgen,spl2uu,test/proto/spl.l))
 $(eval $(call uu_corpus,uumx,mx2uu,l/mx.l))
 $(eval $(call uu_corpus,uuvallaw,law2uu,test/law.l))
 # test_wake: the BAKE-THEN-WAKE ROUND TRIP, which no other gate runs -- every other lane

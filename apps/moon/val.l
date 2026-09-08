@@ -1,7 +1,7 @@
 ; apps/moon/val.l -- the VALUE layer (moon-ssa rung 0): cfg, escape census,
 ; per-def chains and interval liveness over final forms. an instrument today,
 ; the allocator's substrate later; touches no codegen. the python twin is
-; doc/misc/proto/ssagap/ (two implementations, one answer -- differ.sh).
+; the ssagap spike (two implementations, one answer).
 ; the determinism law: every list a v-fn answers is sorted, and no answer may
 ; depend on tablet iteration order (joins are unions, keys sort before walks).
 ; a frame op that misses the base+const shape reads everything -- the floor:

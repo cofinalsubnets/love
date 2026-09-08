@@ -1,5 +1,5 @@
 ; wasm -- the module writer: a WebAssembly binary off love data, the container half of the
-; browser lane (doc/misc/plan/moon-wasm.md, rung 0). not a holo backend: a module has no
+; browser lane (rung 0). not a holo backend: a module has no
 ; addresses, so lay/resolve never see it. what is here is the leaf encoders (LEB128, names,
 ; vectors, sections), the opcode table with each op's immediate shape, and one whole-module
 ; emitter over a tablet. the law: the ALU is i64 and the memory is 64-bit (memory64), so an

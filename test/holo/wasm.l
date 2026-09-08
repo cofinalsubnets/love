@@ -1,4 +1,4 @@
-; test/holo/wasm.l -- rung 0 of the wasm lane (doc/misc/plan/moon-wasm.md): a module laid by
+; test/holo/wasm.l -- rung 0 of the wasm lane: a module laid by
 ; l/holo/wasm.l off hand-built forms, written to out/.holo.wasm for test/holo/wasm.mjs
 ; to validate and RUN under an engine that is not ours. what it claims: a memory64 module with
 ; an import, a table, a data segment, i64 arithmetic, a 64-bit address store and load, a

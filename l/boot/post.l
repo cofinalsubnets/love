@@ -756,7 +756,7 @@
    ; --- streams: a colist, love's lazy list (l/boot/p1.l's shape) --------------
    ; () is empty, (x . s) is mature, a thunk is immature -- three shapes told apart by
    ; lit?/two?. the church encoding this replaces cost 26-35% more instructions on every
-   ; shape measured; doc/misc/kanren.md carries the numbers.
+   ; shape measured.
    sno ()
    (sX x s) (x . s)
    (sun x) [x]

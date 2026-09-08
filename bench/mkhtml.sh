@@ -250,7 +250,7 @@ defect. <code>bench/korebench.sh</code> prints two further tables that separate 
 &mdash; the same tools on adversarial inputs (one line with no newline in it, a million
 one-byte lines, an ERE built to make a backtracking matcher explode), and a growth
 reading at n, 2n and 4n with the start cost subtracted out. That is where a pathology
-shows; this table is the summary. <code>doc/misc/kore-gauge.md</code> carries the
+shows; this table is the summary. the kore gauge carries the
 findings.</p>
 <div class="wrap">
 KO

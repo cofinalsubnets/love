@@ -1,4 +1,4 @@
-; --- test/horn.l: the horn, PCM out as a port (doc/misc/plan/horn.md, rung 0) ---
+; --- test/horn.l: the horn, PCM out as a port ---
 ; the laws are the port's shape, not the sound: a full device refuses at the door,
 ; the writer parks and the scheduler runs on, what has played drains at the rate.
 ; on the host HORN=none picks the sink, a ring that keeps time and discards -- so

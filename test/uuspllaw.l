@@ -1,5 +1,5 @@
 ; test/uuspllaw.l -- the splice license, proved of the terms test/uusplgen.l
-; generated from doc/misc/proto/spl.l (loaded just before this by sort order; the
+; generated from test/proto/spl.l (loaded just before this by sort order; the
 ; stack machine in test/uuhom.l, kernel in test/uu.l). the model pins these
 ; laws by assert at one demo env; here each is a theorem forall states -- and
 ; the flip pair is the reason the observation carries a trace: substitution
