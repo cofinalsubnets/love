@@ -1,4 +1,4 @@
-; --- test/host/gcpause.l: the pause gauge ---
+; --- test/gcpause.l: the pause gauge ---
 ; what one collection costs, and that the cost keeps its shape. the collector
 ; is a copier, so a collection's pause is its copy volume: a minor copies the
 ; nursery's survivors (the churn's live edge) and owes nothing to the tenured
@@ -21,6 +21,11 @@
 ;   -- megabytes of tenured casks -- not for its names)
 ;
 ;   cat test/00-init.l test/host/gcpause.l | out/love
+;
+; not a corpus member, and the reason is the table above: it prints live-word counts,
+; and those differ by READER -- a file door and a seek door allocate differently on the
+; way in. test_stdincorpus holds the corpus byte-identical down all three doors, so a
+; gauge that reports its own machine cannot ride it. the appetite is the second reason.
 
 (: G_LEN 0 G_GC 3 G_EVAC 7 G_OLD 8 G_MINOR 11 G_MAJCAP 12 G_MINHI 14 G_MAJHI 15
    (gget i) (peep (gauge 0) i 0)
@@ -81,5 +86,5 @@
       (<t3 <= gget G_MAJHI))
 
    _ (test_fin ())
-   _ (puts "test/host/gcpause: ok")
+   _ (puts "gcpause: ok")
  (putc 10))

@@ -209,10 +209,14 @@ $(ho)/front: test/front/main.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/l/lo
 test_front: $(ho)/front
 	@echo TEST $(ho)/front
 	@sh test/gate/run.sh -a front "$(ho)/front" "front: ok" test/front/io.l
-# Host-nif smoke tests: the host lane's nifs link into `love` but NOT love0, so they live under
-# test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
-# AND a "<name>: ok"; a cold lane opts in via hostnif_cold.
-hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/serve.l test/host/sbhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l test/host/gzc.l test/host/hash.l test/host/story.l test/host/design.l test/host/lupa.l test/host/helm.l test/host/wget.l test/host/cook.l
+# Standalone smoke tests, held out of the corpus glob ($t is a non-recursive test/*.l).
+# NOT for the host: love0_o is the whole host glob less inle/cats.c, so love0 links every
+# nif named under test/host/. what actually holds a file back is one of three, and each
+# file says which: it wants a crew module, and cats.c is the catalog love0 has not got;
+# it is not idempotent, and love0 evaluates the corpus TWICE; or its regression is a hang,
+# which wants the timeout a driver can give and a corpus cannot -- a wedged gate being
+# worse than a red one. Gate = exit 0 AND a "<name>: ok"; a cold lane opts in via hostnif_cold.
+hostnif_tests = test/host/gcpause.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/berth.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/serve.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/gz.l test/host/gzc.l test/host/story.l test/host/design.l test/host/lupa.l test/host/helm.l test/host/wget.l test/host/cook.l
 # out/lush: test/host/sh.l drives the BUILT shell end to end, via out/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
@@ -1304,6 +1308,10 @@ test_wasm: wasm
 	@$(NODE) $(R)/inle/wasm/horn.mjs --love $(R)/out/wasm/love.wasm
 endif
 
+# INLE_RAM: cpu.mjs grows the memory ONCE at boot and hands kmain that fixed span, so the
+# seat's room is a number here, not a policy. 256 (its default) is short of the corpus --
+# the collector's doubling asks for 4480156 words and the grow refuses, at the same length
+# whichever member happens to be running, because the live set is what crossed the line.
 # test_kernel_wasm -- the wasm inle seat (out/love-wasm.wasm) under node: the image baked
 # (the egg lane, `bake PATH` on the boot line), then the kernel corpus off the ramfs on the
 # woken image, the serial line captured, the (reset) that ends it read as the exit -- what
@@ -1315,7 +1323,7 @@ else
 test_kernel_wasm: host
 	@$(MAKE) -s out/wasm/love-wasm.image
 	@echo TEST out/love-wasm.wasm "(node: the kernel corpus on the woken image, serial, headless)"
-	@$(NODE) $(R)/inle/wasm/inle.mjs --image out/wasm/love-wasm.image $(R)/out/love-wasm.wasm test/kernel/all.l \
+	@INLE_RAM=768 $(NODE) $(R)/inle/wasm/inle.mjs --image out/wasm/love-wasm.image $(R)/out/love-wasm.wasm test/kernel/all.l \
 	   < /dev/null > out/wasm/kernel.log 2>&1; \
 	 grep -q "image awake" out/wasm/kernel.log \
 	   && grep -q "tests pass" out/wasm/kernel.log && ! grep -q "failed:" out/wasm/kernel.log \

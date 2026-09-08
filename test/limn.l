@@ -1,9 +1,9 @@
-; --- test/host/limn.l: the laws of apps/berth/limn.l, the cell painter ---
-; not in the test/*.l corpus: `glass` and `unfold` are cb's nifs (l/quay/nif.c)
-; and love0 links none of them. it needs the loader too, the way its neighbour
-; test/host/wharf.l does -- `borrow` finds apps/berth/limn.l by the filesystem walk.
+; --- test/limn.l: the laws of apps/berth/limn.l, the cell painter ---
+; `glass` and `unfold` are cb's nifs (l/quay/nif.c) and love0 links them too, so these
+; are corpus laws. `borrow` finds apps/berth/limn.l by the filesystem walk, which the
+; hosted seats have; a seat without one will want a guard here.
 ;
-;   cat test/00-init.l test/host/limn.l | out/love   ; exits 1 on fail
+;   cat test/00-init.l test/limn.l | out/love   ; exits 1 on fail
 ;
 ; the vocabulary under test: a grid of cb cells in, escapes out. origins are
 ; 0-based going in and 1-based on the wire, which is the one conversion here.

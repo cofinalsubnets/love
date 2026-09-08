@@ -1,9 +1,9 @@
 ; --- test/host/cb.l: a vttest-lite for quay's console screen (inle/cb.c + l/quay/quay.c) ---
-; not in the test/*.l corpus on purpose: the screen nifs (screen/scribe/glass/gaze/reply)
-; live in inle/cb.c, which the final `love` links but love0 does not -- and love0 bakes the
-; whole corpus, so a corpus test would read these names as missing and fail love0's
-; self-test. So this is verified the host-nif way: standalone, against the built
-; binary (the assert macro comes from test/00-init.l):
+; held out of the corpus, and not for its nifs: love0 links screen/scribe/glass/gaze/reply
+; as surely as the final `love` does, and these laws pass twice on their own and beside
+; the other movers. inside the WHOLE corpus love0's second evaluation stops. which
+; member it is quarrelling with is not known -- the corpus resists subsetting, since
+; the roster is an ordering and a half of it is not a corpus. standalone, then:
 ;
 ;   cat test/00-init.l test/host/cb.l | out/love      ; exits 1 on fail, prints cb: ok
 ;

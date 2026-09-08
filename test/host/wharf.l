@@ -1,9 +1,9 @@
 ; --- test/host/wharf.l: the laws of apps/berth/wharf.l, quay's layout algebra ---
-; not in the test/*.l corpus, but for a different reason than its neighbours here:
-; wharf needs no nifs at all -- it is arithmetic over lists, and would run happily
-; on love0, wasm and the kernel. what it needs is the loader: `borrow` finds apps/berth/wharf.l
-; by the filesystem walk, and the corpus also runs where there is no filesystem. when
-; a second seat bakes wharf behind its egg, these laws can move to the corpus whole.
+; not in the corpus, and not for its nifs: wharf needs none at all -- it is arithmetic
+; over lists. two things hold it back. `borrow` finds apps/berth/wharf.l by the
+; filesystem walk, and the corpus runs where there is no filesystem; and inside the
+; WHOLE corpus love0's second evaluation stops, as cb's does, against a member not
+; identified. when a seat bakes wharf behind its egg, the first of those goes.
 ;
 ;   cat test/00-init.l test/host/wharf.l | out/love   ; exits 1 on fail
 ;

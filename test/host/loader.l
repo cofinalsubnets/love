@@ -1,4 +1,7 @@
 ; --- test/host/loader.l: use on a path, the loader (l/boot/prel.l) ---
+; not in the corpus, and it cannot be: love0 evaluates the corpus twice, and the first
+; law below is that zz-loadprobe is ABSENT -- true once, since the run that proves it
+; registers it. a second evaluation reads the module it just made and stops there.
 ; `borrow` answers a module two ways and only two: a NAME it already holds -- baked,
 ; catted, or loaded earlier -- and a PATH the caller writes out. it invents no
 ; paths of its own, so a name it lacks is a miss even when a file of that name is

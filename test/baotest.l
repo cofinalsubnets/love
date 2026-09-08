@@ -1,11 +1,11 @@
-; --- test/host/baotest.l: the editor + repl + parseall unit battery ---
+; --- test/baotest.l: the editor + repl + parseall unit battery ---
 ; the line editor (ed*), the history zipper (uphist/downhist/eddetach), joinln/splitat,
 ; and parseall are cli's exports (l/boot/post.l), reached through the module
 ; tablet: (cite 'cli) hands the module back, (B 'edleft) reaches one, (keys B) lists them.
 ;
 ; cli is baked (in the host egg), so this file needs no -l:
 ;
-;   cat test/00-init.l test/host/baotest.l | out/love
+;   cat test/00-init.l test/baotest.l | out/love
 ;
 ; (wired into `make test_hostnif`.) green dots = pass.
 ; (ed u l r d) builds a buffer; (b4 t) and (b7 t) read it back as a comparable list,

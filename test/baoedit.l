@@ -1,12 +1,12 @@
-; --- test/host/baoedit.l: a smoke test for cli's raw-line editor (l/boot/post.l `edraw`) ---
+; --- test/baoedit.l: a smoke test for cli's raw-line editor (l/boot/post.l `edraw`) ---
 ; edraw lives in l/boot/post.l, now the baked shell core (in the host egg), so edraw is
-; a book global -- but it reads love forms (it's the editor), so it can't be a corpus
-; test (love0 bakes the corpus and would run edraw on the test stream). edraw reads
-; from a port arg (here a (tap ..), not stdin), so the bare stdin runner drives it:
+; a book global. it reads love forms, being the editor, so the thing to know is WHERE
+; from: a port arg (here a (tap ..), never stdin). that is what keeps it clear of the
+; corpus stream love0 reads, and why it can ride test/*.l at all.
 ; the piped forms read-eval off stdin (a pipe is the bare filter) while each edraw
 ; consumes its own sip. Run (assert comes from test/00-init.l):
 ;
-;   cat test/00-init.l test/host/baoedit.l | out/love
+;   cat test/00-init.l test/baoedit.l | out/love
 ;
 ; green dots = pass; the shell's banner/prompts + edraw's ansi redraws are noise
 ; around them. Full interactive editing (real keystrokes, real tty) stays manual.

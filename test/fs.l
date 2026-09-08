@@ -1,12 +1,15 @@
-; --- test/host/fs.l: smoke test for the fs nifs (inle/posix.c) ---
-; rename/symlink/readlink/chmod/chown/utime/umask link into `love` and love0 now
-; (love0 carries the whole inle/*.c glob since the self-host promotion); this
-; still runs standalone against the built binary, like test/host/init.l --
-; not in test/*.l. Run (assert comes from test/00-init.l):
-;   cat test/00-init.l test/host/fs.l | out/love
+; --- test/fs.l: smoke test for the fs nifs (inle/posix.c) ---
+; rename/symlink/readlink/chmod/chown/utime/umask link into `love` and love0 alike
+; (love0 carries the whole inle/*.c glob since the self-host promotion), so these
+; are corpus laws. it still reads standalone (assert comes from test/00-init.l):
+;   cat test/00-init.l test/fs.l | out/love
 ; the conventions under test are inle/posix.c's posix_ lane: an effect op answers
 ; () ok | an errno nom | 'badarg misuse; a value op answers the value | () | a nom.
 
+; the seat: rename/symlink/chown/utime are the OS's own metadata, and inle's ramfs
+; answers for none of them -- `files` is true there and not enough, so these laws ask
+; for a kernel underneath. run.l guards the same way, for the same kind of reason.
+(? !hosted 0
 (: d "out/.fs-nif-smoke"
    a (+ d "/a") b (+ d "/b") l (+ d "/l")
    _ (mkdir d 493)                                  ; EEXIST from a prior run is fine
@@ -107,4 +110,4 @@
 
    _ (unlink l) _ (unlink b)
    _ (test_fin ())
-   _ (say out "fs: ok") (put out 10))
+   _ (say out "fs: ok") (put out 10)))

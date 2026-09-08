@@ -1,5 +1,7 @@
 ; --- test/host/rune.l: the rune engine, exactly ---
-; not in the test/*.l corpus (it loads a crew file and leaks its helpers).
+; not in the corpus: love0 evaluates it TWICE and this file does not survive its own
+; second run -- one marker where a corpus file gives two. it loads a crew file and
+; leaks its helpers besides.
 ; after the ring/field laws, the corpus is a real disproof: the 19 july 2026
 ; counterexample to the jacobian conjecture (alpoge, found working with fable),
 ; verified whole in exact arithmetic --

@@ -1,6 +1,6 @@
-; --- test/host/hash.l: the digests in inle/hash.c, held to what publishes them ---
-; not in the test/*.l corpus: sha256, md5 and cksum are host nifs, so none is visible
-; to the love0 bake. apps/kore's cksum, md5sum and sha256sum are these three plus a
+; --- test/digest.l: the digests in inle/hash.c, held to what publishes them ---
+; named digest, not hash, because test/hash.l is the tablet's.
+; apps/kore's cksum, md5sum and sha256sum are these three plus a
 ; line of output, and test/gate/kore.sh holds those to GNU coreutils -- so this file is
 ; the half of the rope that does not need another implementation on the box.
 ;
@@ -23,7 +23,7 @@
 ;             vector. the state's width is the only thing telling the three apart,
 ;             so the misuse cases feed each nif the other two's cask.
 ;
-; run:  cat test/00-init.l test/host/hash.l | out/love
+; run:  cat test/00-init.l test/digest.l | out/love
 (assert
  (lit? sha256)
  (lit? md5)
@@ -189,7 +189,7 @@
  (nil? (md5-done (cask 8))) (nil? (cksum-done (cask 8))))
 
 (: _ (test_fin ())
-   _ (puts "hash: ok -- md5 and sha-256 on their published vectors, the resumable sha-256
+   _ (puts "digest: ok -- md5 and sha-256 on their published vectors, the resumable sha-256
       against the one-shot, cksum against a love walk, and md5/cksum streamed too
 ")
    0)

@@ -1,8 +1,8 @@
-; --- test/host/fat.l: FAT32 in love (apps/fat/fat.l) over a cask device -- the same
+; --- test/fat.l: FAT32 in love (apps/fat/fat.l) over a cask device -- the same
 ; module the kernel mounts on its virtio disk (rung 5), proven here where the
 ; laws run in milliseconds and mtools can sit on the other side of the format.
 ; run standalone from the repo root:
-;   cat test/00-init.l test/host/fat.l | out/love
+;   cat test/00-init.l test/fat.l | out/love
 
 (borrow "apps/fat/fat.l")
 
