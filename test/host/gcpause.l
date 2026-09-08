@@ -38,20 +38,6 @@
                _  (tally keep)                       ; keep lives across the minor
              [dg de ns])
 
-   ; a forced major fires on a near-empty nursery, so gen_major sizes its
-   ; to-space just 25% over the live set -- less headroom than one full
-   ; nursery, and ai_please's worst-case-promotion guard then (rightly)
-   ; escalates every next collection to a major. production never sees this
-   ; (a natural major fires with the nursery FULL, so the resized pool
-   ; inherits nursery-sized headroom); restore it the same way -- churn dead
-   ; casks so the next collections fire at a full nursery -- and hold on
-   ; until the headroom clears the nursery by a whole window's promotions
-   ; (the step-snap can land the first recovery tight; stage 2 proved it).
-   (recover _) (: (room _) ((// (gget G_MAJCAP) 2) - gget G_OLD)
-                  (go i) (? ((room ()) < (gget G_LEN) + 262144)
-                          (go (i + tally (cask 262144))) i)
-                (go 0))
-
    ; k steps -> `(worst-words worst-ns collections) over the window
    (churn k) (: (go i ww wn cs)
                 (? (i < k) (: r (step ())
@@ -61,7 +47,11 @@
 
    ; tenure n 64KB casks: build them young, then the timed forced major
    ; promotes them -> `(major-words major-ns casks); the casks ride in the
-   ; answer so a later read holds every level live to the end.
+   ; answer so a later read holds every level live to the end. the major
+   ; sizes its pool for the test that forced it and zeroes the amortization
+   ; window, so the churn that follows fires minors only -- churning dead
+   ; casks here to "recover" headroom would spend that window and shrink the
+   ; nursery, and the next churn step would major on the amortization rule.
    (tenure n) (: l (map (\ _ (cask 65536)) (jot n))
                  e0 (gget G_EVAC)
                  t0 (nclock 0)
@@ -76,9 +66,9 @@
                   (putc 10))
 
    ; three levels, 12x tenured growth end to end, every level held live
-   t1 (tenure 16)  _ (recover ()) r1 (churn 8) _ (row t1 r1)
-   t2 (tenure 48)  _ (recover ()) r2 (churn 8) _ (row t2 r2)
-   t3 (tenure 192) _ (recover ()) r3 (churn 8) _ (row t3 r3)
+   t1 (tenure 16)  r1 (churn 8) _ (row t1 r1)
+   t2 (tenure 48)  r2 (churn 8) _ (row t2 r2)
+   t3 (tenure 192) r3 (churn 8) _ (row t3 r3)
    _ (tally <>>t1 + tally <>>t2 + tally <>>t3)       ; every cask list live past the last minor
 
    _ (assert
