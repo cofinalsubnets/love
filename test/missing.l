@@ -79,7 +79,7 @@
 (hear 0)
 
 ; the conditioned read itself is the compiler's (boxfix's letrec cells) and its nom
-; is mopped at birth, so there is no user-facing call to assert here. what a reader
+; is mopped at birth, so there is no user-facing call to test here. what a reader
 ; wants from a tablet is presence, and peep answers that totally: a fresh (mint 0)
 ; is unique, so no stored value can pose as it.
 (test (: t {1 0} s (mint 0)

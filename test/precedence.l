@@ -104,7 +104,7 @@
  ; --- the grip door: (grip ar nm v) declares an operator's shape at run time and answers the
  ; row it replaced, in the shape it takes -- so (grip ar nm (grip ar nm new)) restores exactly.
  ; `ar` is the lane, the operands the sigil takes from the form around it: 0 glued, 2 spaced, -1
- ; spaced with no bound. every assert here restores inside its own form: the corpus is read form by
+ ; spaced with no bound. every test here restores inside its own form: the corpus is read form by
  ; form, so a live row would change how the next form parses. the table is read live, so `opfix`
  ; shows the change at once. ---
  (: was (grip 2 '<+> -60)                           ; haskell's `infixl 7 <+>` -- the minus is the left hand
