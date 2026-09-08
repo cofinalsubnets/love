@@ -884,6 +884,10 @@ ai_flo_t ai_big_to_flo(word);                 // bignum -> double (used by toflo
 int ai_big_cmp(word, word);                  // -1/0/1 over two integer operands
 intptr_t ai_mint_cmp(struct ai*, word, word); // -1/0/1 over two points: () < bare mints < names
 bool ai_ratio_exact(struct ai*, word);  // int/ceil/saturate's exact-ratio domain: a net-mode-2 coin over integer (n d)
+// the number band's order, for arr.c's equality lane: a ratio coin seats in that
+// band by value (cmp_rank), so `=` has to read it the way `<` and sort already do.
+bool ai_numband(struct ai*, word);            // x orders as a number (cmp_rank 2)
+intptr_t ai_cmp3(struct ai*, word, word);     // -1/0/1, the order sort and < share
 struct ai
  *ai_ratio_rung(struct ai*, int),     // ..and the lane: long-divide the parts (0 int, 1 ceil, 2 saturate), packed
  *ai_big_binop(struct ai*, int vop),  // vop_add..vop_rem, packed; pops one operand

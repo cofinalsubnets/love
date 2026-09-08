@@ -794,9 +794,16 @@ lvm(lvm_eq) {
   Sp[1] = r ? putcharm(1) : zero;
   ai_musttail return Nextp(1, 1); }
  bool r;
+ // a ratio coin is a number: cmp_rank seats it in the band by value, so `<` and sort
+ // read it there and `=` must agree -- else (<= a b) and (>= a b) are both true where
+ // (= a b) is false. the band test gates it, so every other coin stays an opaque
+ // newtype; cmp3 is exact, where toflo would call two rationals past 2^53 equal.
+ if (coinp(a) || coinp(b)) {
+  if (ai_numband(g, a) && ai_numband(g, b)) r = ai_cmp3(g, a, b) == 0;
+  else r = eql(g, a, b); }
  // a float operand compares as doubles across the whole tower (a bignum loses
  // precision past 2^53, the documented caveat); otherwise eql
- if (gemp(a) || gemp(b)) r = isnum(a) && isnum(b) && (toflo(a) == toflo(b));
+ else if (gemp(a) || gemp(b)) r = isnum(a) && isnum(b) && (toflo(a) == toflo(b));
  else r = eql(g, a, b);
  Sp[1] = r ? putcharm(1) : zero;
  ai_musttail return Nextp(1, 1); }
