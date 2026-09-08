@@ -70,12 +70,12 @@
 ;   (.EX/.EE has no slot), a rule vanishes (man pages have none), and a link flattens to its
 ;   text with the url trailing in \(la..\(ra -- the man idiom for one.
 
-; no brackets here: the runtime supplies the layer. a consumer says (use 'lapiz)
-; (the baked module) or hands the loader this file's path ((use "apps/lapiz.l")
+; no brackets here: the runtime supplies the layer. a consumer says (borrow 'lapiz)
+; (the baked module) or hands the loader this file's path ((borrow "apps/lapiz.l")
 ; -- papel's want does), and reads bare down the splice, or reaches one member through
-; the accessor: (from 'lapiz 'md->ht). the six faces are
+; the accessor: (cite 'lapiz 'md->ht). the six faces are
 ; mdread/mdshow/htread/htshow/md->ht/ht->md; everything else is machinery,
-; reachable for a probe ((keys (from 'lapiz))) but not meant for the eye.
+; reachable for a probe ((keys (cite 'lapiz))) but not meant for the eye.
 
 ; the head names the exports: the ten faces, plus the four pieces papel's template
 ; reaches through the accessor. everything else is machinery and stays off the
@@ -85,7 +85,7 @@
 
 ; the combinators (l/boot/post.l) -- lapiz wants only the lenient `runp`. inside the
 ; module, so peg splices for this compile alone.
-(use 'peg)
+(borrow 'peg)
 
 ; --- little utils ---
 (: strcat   (foldl (+) "")
@@ -488,8 +488,8 @@
 ; different hubs, or a format with no row, meet at the one undefined spot: the nom 'nolens.
 ; the x86 rows reach the holo book when called, so lapiz owes it nothing at bake.
 (: surfaces [['md 'doc mdread mdshow] ['ht 'doc htread htshow] ['rf 'doc rfread rfshow]
-             ['att 'x86 (s \ (from 'holo 'att-read) s) (v \ (from 'holo 'att-show) v)]
-             ['intel 'x86 (s \ (from 'holo 'intel-read) s) (v \ (from 'holo 'intel-show) v)]]
+             ['att 'x86 (s \ (cite 'holo 'att-read) s) (v \ (cite 'holo 'att-show) v)]
+             ['intel 'x86 (s \ (cite 'holo 'intel-read) s) (v \ (cite 'holo 'intel-show) v)]]
    (srow k) ((: (g l) (? (atom? l) () (= <<l k) <l (g >l))) surfaces)
    (convert from to s) (: a (srow from) b (srow to)
                           (? (two? a && two? b && (<>a = <>b)) (<>>>b (<>>a s)) 'nolens))
@@ -499,4 +499,4 @@
    (rf->md s) (mdshow (rfread s)))
 ) ; module lapiz
 
-; a later surface joins the sealed module the runtime way: (use 'lapiz), then its own text.
+; a later surface joins the sealed module the runtime way: (borrow 'lapiz), then its own text.

@@ -180,7 +180,7 @@
    (linear i o)    (linear-wb (glass (tl-randmat i o)) (glass (tl-zeros o)))
 
    ;; seq: compose modules/functions left-to-right; params = the concatenation.
-   (seq mods) (tl-mod (x \ foldl (flip tl-mfwd) x mods) (tl-cat (map tl-mparams mods)))
+   (seq lib) (tl-mod (x \ foldl (flip tl-mfwd) x lib) (tl-cat (map tl-mparams lib)))
 
    ;; optim: an sgd stepper over a parameter list. step: p <- p - lr*grad (in place,
    ;; swapping the node's immutable val for a fresh one); zero: clear every grad.

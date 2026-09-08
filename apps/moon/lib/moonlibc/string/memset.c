@@ -1,6 +1,6 @@
 #include "../impl.h"
 
-/* ⚠ the stride and the fill both ride sizeof(long): on a 32-bit seat a literal
+/* the stride and the fill both ride sizeof(long): on a 32-bit seat a literal
  * `w <<= 32' is undefined and a literal 8 steps twice what it wrote.
  * four words an iteration, like memcpy: the loop's own cost is the same
  * whether it lays one word or four. */

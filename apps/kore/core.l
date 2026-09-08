@@ -15,6 +15,8 @@
 ; digit width of the byte total, uniq -c wears width 7, head/tail banner many files
 ; with ==> name <== and a blank line between.
 (module 'kore
+(borrow 'posix)
+
 (:
    ; -- cat: files (or -) onto out, verbatim --
    (cat-main as) (uchunks "cat" puts as)
@@ -213,7 +215,7 @@
        (frc k) (? ((#fa <= k) && (#fb <= k)) 0
                   (: ca (? (k < #fa) (fa k) 48) cb (? (k < #fb) (fb k) 48)
                      (? (ca < cb) -1 (cb < ca) 1 (frc (k + 1)))))
-       ; ⚠ never `(? r r ..)` on a comparison: -1 is FALSY here (a predicate is the sign
+       ; never `(? r r ..)` on a comparison: -1 is FALSY here (a predicate is the sign
        ; of the net), so a "less than" would fall through to the next test as if equal.
        m (? (#ia < #ib) -1 (#ib < #ia) 1 (: r (lex 0) (? (= r 0) (frc 0) r)))
        (? (sa < sb) -1 (sb < sa) 1 (sa < 0) (0 - m) m))
@@ -235,7 +237,7 @@
     (: (sdie m) (udie 2 ("sort: " + m))
        ; the flag walk is sort's own: -k takes a value AND stacks, -t takes a charm
        ; that may be glued or not, and uopts stacks only -e.
-       ; ⚠ every arm below sits inside the ONE `?`. a `(:` here reads `(w = "--")` as a
+       ; every arm below sits inside the ONE `?`. a `(:` here reads `(w = "--")` as a
        ; BINDING -- a define whose head is a call pattern -- and silently shadows w with
        ; a two-parameter function, which is how the first draft of this walk answered a
        ; closure where the file list belonged.
@@ -302,7 +304,7 @@
                       110 (opt2 (i + 1) B F 1 R)
                       114 (opt2 (i + 1) B F N 1)
                       c   (sdie ("unknown key letter -- " + (string c)))))
-                 ; ⚠ the two halves do NOT carry the same letters. n/r/f on either
+                 ; the two halves do NOT carry the same letters. n/r/f on either
                  ; half order the whole key, but `b` names a POSITION: on the start
                  ; spec it skips the field's leading blanks, on the end spec it is
                  ; about where the key stops. so -k1b,1 strips and -k1,1b does not,
@@ -324,22 +326,22 @@
                   _ (? (= st 0) 0 (uleave 2))
                   (rev (peep box 'l ())))
        ; the comparison: every key in turn, then the last-resort whole-line compare.
-       ; ⚠ -r is already inside each key (glob hands it down), so it must NOT also
+       ; -r is already inside each key (glob hands it down), so it must NOT also
        ; reverse the output -- doing both is the identity, and the first draft of this
        ; sorted correctly and then undid it. the last resort is the one place -r still
        ; has to be applied by hand.
-       ; ⚠ -s and -u BOTH drop the last resort -- -s because that is what stable means
+       ; -s and -u BOTH drop the last resort -- -s because that is what stable means
        ; here, and -u because a dedupe reading the whole line would keep two lines that
        ; the keys call equal, which is the opposite of what was asked.
        (last a b) (: c (usort-cmpstr a b) (? r? (0 - c) c))
        ; a line rides decorated: [index line readings], one reading per key, taken once.
-       ; ⚠ the same falsy trap as usort-cmpnum's: `(? c c (go >ks))` sends every
+       ; the same falsy trap as usort-cmpnum's: `(? c c (go >ks))` sends every
        ; less-than on to the next key, and `!(cmp ..)` calls it equal. both readings
        ; have to ask `= 0` out loud.
        (cmp da db) (: (go ks xa xb) (? !(two? ks) (? (s? || u?) 0 (last (da 1) (db 1)))
                                        (: c (usort-cmp1 <xa <xb <ks) (? (= c 0) (go >ks >xa >xb) c)))
                       (go keys (da 2) (db 2)))
-       ; ⚠ an equal pair drops the SECOND, never the first: `(ded >a)` walks off the
+       ; an equal pair drops the SECOND, never the first: `(ded >a)` walks off the
        ; head and leaves the run's LAST line standing, where GNU keeps its first.
        (same? da db) (? plain? (= (da 1) (db 1)) (= 0 (cmp da db)))
        (ded a) (? !(two? a) ()
@@ -734,7 +736,7 @@
    ; install declines (inle's NX heap, wasm), so no fallback is arranged here; built
    ; on first use and kept for the process, scan.l's shape and reason
    (kmake ir twin arity)
-    (: h (from 'holo) g (from 'glaze)
+    (: h (cite 'holo) g (cite 'glaze)
        (? (nil? h || nil? g || !(member? love-arch '(x64 a64))) twin
           (: bs (peep ((h 'assemble) love-arch (ir love-arch)) 'bytes 0)
              ((g 'nif) (cask bs) twin '(\ q (q)) arity))))
@@ -938,13 +940,13 @@
    ; the output at 76 unless told another width, 0 for one long line.
    ub64set "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
    ub32set "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
-   ; ⚠ val and go are lifted OUT of grp on purpose. Written inside it -- which is the
+   ; val and go are lifted OUT of grp on purpose. Written inside it -- which is the
    ; obvious shape, and was this coder's for a long time -- they are two closures minted
    ; per THREE INPUT BYTES, and love has no pass that hoists a loop lambda out of
    ; another loop's body. That alone was 3.5x of this function (539 ms -> 155 ms over
    ; 512 KB, byte-identical), and it is why `base64` used to read ~600x busybox on
    ; bench/korebench.sh where `tr`, the same kind of per-byte transform, reads ~48x.
-   ; ⚠ and it was not the two things it looked like: the tower computing 2^shift is
+   ; and it was not the two things it looked like: the tower computing 2^shift is
    ; 5 ms per 3M, and the jug is 145 ms per 1.4M puts. Both were measured and neither
    ; is the cost. `shf` below is still worth having -- one table beats gc towers a
    ; group -- but it is the smaller half by far. the kore gauge carries the

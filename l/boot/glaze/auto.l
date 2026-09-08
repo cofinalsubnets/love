@@ -15,14 +15,14 @@
 ; ev stays 1-arg, so the loader's `(ev 'ev r)` = `((ev 'ev) r)` survives the rebind;
 ; njit-loop and njit-loop-n call the captured base-ev, so a jit never re-enters ev.
 ; loads after l/boot/glaze/emit.l. emit.l + this file are the `glaze` module (inle/main.c
-; registers the pair), so every name here is reached by (from 'glaze 'k) and none of them
+; registers the pair), so every name here is reached by (cite 'glaze 'k) and none of them
 ; touches the book -- `ev` and `member?` are the exceptions the tail explains.
 (: sfuel {})   ; autospec's unfold-fuel, a global because a sibling-captured value-local misses in the hatched ev; smix re-seeds it per specialization
-(: glaze-loaded? (lit? (from 'glaze))   ; a re-load detector, read before this load defglob's anything: `glaze` in the registry means the baked glaze is already installed, and the `ev` rebind below hands it straight back
+(: glaze-loaded? (lit? (cite 'glaze))   ; a re-load detector, read before this load defglob's anything: `glaze` in the registry means the baked glaze is already installed, and the `ev` rebind below hands it straight back
    ; the registry, never `book` -- a woken image has `book` sealed away and the read would scare
    ; the pure interpreter, captured once: on a re-load `ev` is auto-ev already, so read the interpreter
    ; out of the module book -- else base-ev is the glaze, and autospec's static fold re-enters it
-   base-ev (: G (from 'glaze) (? G (G 'base-ev) ev))
+   base-ev (: G (cite 'glaze) (? G (G 'base-ev) ev))
    arch love-arch                         ; the host CPU as the assembler target ('x64 / 'a64), already a nom; glaze loads only on these
    x86? (= arch 'x64)                 ; gates the still-x86-only lanes (float result, counted loops, float grids)
    ; the emitter's expression grammar over var v, exact arity: (+ x 1 2) is a tower, not x + 1
@@ -1202,7 +1202,7 @@
                               ; grid to real pairs, then a float-grid nest or an arith group, else interp
                               (base-ev (autogroup (autonat (twolow (castbuild (canon (opfix e))))))))))))
    ; the auto-native ev under the module's own name: `ev` is orth, which a module layer cannot write,
-   ; so the boot installs it as (: ev (from 'glaze 'ev)). a re-load hands the baked auto-ev straight
+   ; so the boot installs it as (: ev (cite 'glaze 'ev)). a re-load hands the baked auto-ev straight
    ; back, and a trampoline build (love-tco 0) stays the interpreter -- glazed code Continues by
    ; tail-jump, which only the threaded vm honors
    ev (? glaze-loaded? ev
@@ -1214,7 +1214,7 @@
 ; so the prel walker (egg-baked, interp) is re-stated here and autogroup hands back the native. post-boot
 ; streams fold it; egg-baked consumers keep the interp closure they already folded. the gates mirror the
 ; ev rebind's, and charm and string keys deopt at the entry guard, only interp knowing (2 = 2.0).
-; like `ev` this is orth's name, so the boot installs it: (: member? (from 'glaze 'member?)).
+; like `ev` this is orth's name, so the boot installs it: (: member? (cite 'glaze 'member?)).
 ; two forms: memb0 must read the outer member?, where one scope would read the rebind before its pin.
 (: memb0 member?)
 (: member? (? glaze-loaded? memb0 (0 < love-tco)

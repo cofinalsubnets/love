@@ -16,12 +16,12 @@
 ; the glaze are modules now, so this post-boot stream binds every internal it drives through the
 ; accessors. the leak assert must run before those binds: it is a body-less top-level `:`, so its
 ; names land on the book and half the roster would answer its own copies.
-(assert (member? 'glaze (from ()))
-        (400 < (tally (keys (from 'glaze))))
+(assert (member? 'glaze (cite ()))
+        (400 < (tally (keys (cite 'glaze))))
         (: nm (names ()) (&& (! (member? 'autogroup nm)) (! (member? 'jitir nm)) (! (member? 'glaze nm)))))
-(: assemble (from 'holo 'assemble)
+(: assemble (cite 'holo 'assemble)
    bcat (\ ps (foldl (\ a b (+ a b)) () ps))
-   G (from 'glaze)
+   G (cite 'glaze)
    anat-defs (G 'anat-defs)  autogroup (G 'autogroup)  autonat (G 'autonat)  autospec (G 'autospec)
    base-ev (G 'base-ev)  castbuild (G 'castbuild)  cggir (G 'cggir)  cggvir (G 'cggvir)
    consir (G 'consir)  coreir (G 'coreir)  delet (G 'delet)  deoptir (G 'deoptir)

@@ -13,7 +13,7 @@
 # says. gcc is the reference ABI; a disagreement is ours. Where a harness returns 100+n,
 # n names the first check that missed.
 #
-# ⚠ qemu reads </dev/null: -nographic muxes guest serial + monitor onto stdio, so with
+# qemu reads </dev/null: -nographic muxes guest serial + monitor onto stdio, so with
 # no definite-EOF stdin qemu BLOCKS on the host chardev when this runs without a tty --
 # the guest exits via semihosting instantly, but qemu-in-make hangs to the timeout.
 # Host I/O, not codegen. Every qemu line here keeps the redirect.
@@ -94,7 +94,7 @@ lane() { # lane TAG LIBSRC HARNESSSRC MOONFLAGS WANT TIMEOUT MSG TAIL
   timeout "$tmo" qemu-system-arm -M $mach -semihosting -nographic \
     -kernel "$d/$prefix$tag.elf" < /dev/null
   a=$?
-  # ⚠ a WANT must stay clear of 124 (timeout's own code) and of 128+n, where a
+  # a WANT must stay clear of 124 (timeout's own code) and of 128+n, where a
   # guest that died by signal lands -- a crashing qemu aborts to 134 and a want
   # of 134 reads as every check passing. Found the hard way: a deliberately
   # thumb-bitless vector entry HardFaulted, qemu dumped core, and this gate said
@@ -187,9 +187,9 @@ thumb1)
   # half of OUR linker (link.l's ld-read) and check the symbol and relocation shapes
   # a whole link would only report in aggregate. test_mps2_t1 binds a v6-M image end
   # to end; this names what a miss actually is.
-  { echo "(use 'holo)"
+  { echo "(borrow 'holo)"
     cat l/holo/thumb1.l apps/kore/text.l apps/kore/u.l
-    echo "(use 'kore)"                 # ld32.l reads uread; the floors above register 'kore
+    echo "(borrow 'kore)"                 # ld32.l reads uread; the floors above register 'kore
     cat apps/kore/asbook.l \
         l/holo/elf.l l/holo/obj.l l/holo/link.l test/gate/ld32.l
     echo "(ld32-check \"$d/am.lib.o\")"; } | "$ho/love" || fail "ld-read of $d/am.lib.o"

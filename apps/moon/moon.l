@@ -24,8 +24,10 @@
 ; moon-run is the same compile answering its status, for a caller staying in the image.
 ;
 (module 'moon
-(use 'kore)
-(use 'holo) ; the assembler module: asm-text, arbytes, the linker
+(borrow 'kore)
+(borrow 'holo) ; the assembler module: asm-text, arbytes, the linker
+
+(borrow 'posix)
 
 (:
    ; the directory portion of a path (up to and including the last '/'), or ""
@@ -79,7 +81,7 @@
    ; the carried archive is a .gz: the 10-byte header, the flagged optional
    ; fields stepped over, the deflate stream to the C nif, the isize from the
    ; trailer as its hint. apps/gz/gz.l's walk, carried here read-only because moon
-   ; owes no module (a bake-order `use` was exactly the fragility this had).
+   ; owes no module (a bake-order `borrow` was exactly the fragility this had).
    (gzskip s n i) (? (n <= i) () ((s i) = 0) (i + 1) (gzskip s n (i + 1)))
    (gzbody s)
     (: n (tally s)
@@ -1298,7 +1300,7 @@
 ; `cc` is the same row. A Makefile's default CC is `cc`, so without this word an
 ; artifact carrying a whole compiler still could not answer the name every recipe
 ; reaches for -- and `CC=cc` on a box with no toolchain found nothing at all.
-(: _ (pins (from 'verbs 'tab) 'mooncc moon-main 'cc moon-main)
-   s ((from 'verbs 'fire) ["mooncc" "mooncc.l" "moon.l"])
+(: _ (pins (cite 'verbs 'tab) 'mooncc moon-main 'cc moon-main)
+   s ((cite 'verbs 'fire) ["mooncc" "mooncc.l" "moon.l"])
    (? (two? s) (moon-main >s) ()))
 ) ; module 'moon

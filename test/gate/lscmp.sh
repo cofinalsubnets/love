@@ -2,11 +2,11 @@
 # lscmp.sh -- kore's ls against GNU's, byte for byte, over a flag matrix.
 # called by test/gate/kore.sh; here as one file because the matrix is the test.
 #
-# ⚠ TZ=UTC on BOTH sides. `ls -l`'s clock column is local time and this tree keeps
+# TZ=UTC on BOTH sides. `ls -l`'s clock column is local time and this tree keeps
 # no timezone database, so ours is UTC always; the comparison is only meaningful
 # where GNU's is UTC too. (LC_ALL=C for the same reason on the name order.)
 #
-# ⚠ the tree is BUILT here, never a real directory: a stray file, an ACL or an
+# the tree is BUILT here, never a real directory: a stray file, an ACL or an
 # SELinux label would move GNU's mode column by one character and read as a bug.
 set -u
 m=${1:-./out/love}

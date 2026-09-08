@@ -9,7 +9,7 @@
  * reached for rcx as a store's address shuttle and the 4th parameter was gone;
  * the two out-pointers collapsed onto one, so `*d` wrote through `c`.
  *
- * ⚠ this is a SILENT wrong answer before it is ever a crash: with both stores
+ * this is a SILENT wrong answer before it is ever a crash: with both stores
  * aimed at the same valid address nothing faults, one variable just never gets
  * written. it reached the shipping binary through am.c's mul64, whose `lo`
  * out-pointer became a wild address -- am_sin then segfaulted for every

@@ -28,13 +28,14 @@
 ; two isolation headers kiosko's reply sends are what let inle.html's machine run here
 ; without its service worker.
 ;
-; kiosko is a module: `from` is the reach, and its miss is checked by name -- () applied
+; kiosko is a module: `cite` is the reach, and its miss is checked by name -- () applied
 ; to operands is 1, a miss that would read as a server that started.
 (module (serve serve-main sv-make)
-(use 'libra)
-(use 'hueweb)
-(use 'lapiz)
+(borrow 'libra)
+(borrow 'hueweb)
+(borrow 'lapiz)
 
+(borrow 'posix)
 (:
    (sv-ends? s t) (: n #s m #t (m <= n && snip s (n - m) n = t))
    (sv-rdf p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) (string? s && [1 s]))))
@@ -146,7 +147,7 @@ toolchain), and that tree is the one served.
    (sv-build dir)
    (: exe (selfpath 0)
       _ (string? exe ? 0 (say err "serve: can't find my own path\n", quit 1))
-      _ ((from 'source 'src-arm) dir exe)
+      _ ((cite 'source 'src-arm) dir exe)
       _ (say err ";; laying the page: make web wasm site-wasm out/love-wasm.wasm\n")
       p (spawn [exe "make" "-C" dir "web" "wasm" "site-wasm" "out/love-wasm.wasm"])
       st (charm? p && 0 <= p ? (wait p) 1)
@@ -176,7 +177,7 @@ toolchain), and that tree is the one served.
              build? (sv-seed dir0)
              dir0)
       _ (build? && sv-tree? dir ? (sv-build dir) 0)
-      serve5 (from 'kiosko 'serve5)
+      serve5 (cite 'kiosko 'serve5)
       _ (nil? serve5 ? (say err "serve: no kiosko aboard\n", quit 1))
       _ (sv-tree? dir ? (say err ("serve: " + dir + " -- the page is http://127.0.0.1:" + show port
                                   + "/ and the machine /inle/wasm/inle.html\n")) 0)
@@ -186,7 +187,7 @@ toolchain), and that tree is the one served.
 
    ; the verb, and the seat (kiosko's shape): `love serve ..` on the artifact, or
    ; this file named on a command line, and neither needs a script
-   _ (pins (from 'verbs 'tab) 'serve serve-main)
-   s ((from 'verbs 'fire) ["serve" "serve.l"])
+   _ (pins (cite 'verbs 'tab) 'serve serve-main)
+   s ((cite 'verbs 'fire) ["serve" "serve.l"])
    _ (two? s && serve-main >s))
 ) ; module serve

@@ -17,7 +17,7 @@
 ;     -e '(clay-g2 ".love-orig.c" "love.c" (\ ("salpha" "shash")))'
 ; answers 1 and prints a report; quits 1 on any difference.
 (:
-   _ (use 'moon)                       ; the front end is module 'moon now
+   _ (borrow 'moon)                       ; the front end is module 'moon now
    (g2-say s) (puts (s + "\n"))
 
    ; the front end without cc-parse's udie: a refusal has to come back as a value, so

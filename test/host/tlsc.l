@@ -24,7 +24,7 @@
 ;
 ; run:  cat test/00-init.l test/host/tlsc.l | out/love
 
-(use "apps/tls/tls.l")
+(borrow "apps/tls/tls.l")
 
 (assert
  (lit? chacha20)

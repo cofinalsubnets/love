@@ -4,21 +4,23 @@
 ;
 ; a GET with Connection: close, redirects followed (eight, then it stops), a chunked
 ; body unchunked, the rest read to the peer's close. https rides the tls module's
-; client (apps/tls/client.l) -- ⚠ which does not verify the peer, and says so once
+; client (apps/tls/client.l) -- which does not verify the peer, and says so once
 ; per fetch unless -q. the file is -O, else the url's last path word, else index.html.
 ; the exit codes are wget's own: 0, 1 a bad url or a dead wire, 3 the file, 8 a server
 ; that answered with an error status.
 (module 'kore
+(borrow 'posix)
+
 (:
    (wg-digits s)
     (: n #s
        (go i a) (? (n <= i) a
                    (: c (s i) (? ((47 < c) && (c < 58)) (go (i + 1) ((a * 10) + (c - 48))) a)))
        (go 0 0))
-   (wg-find s sub from)                                                ; first index of sub at/after from, else -1
+   (wg-find s sub cite)                                                ; first index of sub at/after from, else -1
     (: n #s m #sub
        (go i) (? ((n - m) < i) -1 ((snip s i (i + m)) = sub) i (go (i + 1)))
-       (go from))
+       (go cite))
    (wg-lower s) (string (map (\ i (: c (s i) (? ((64 < c) && (c < 91)) (c + 32) c))) (jot #s)))
    ; "https://host[:port]/path" -> (tls? host port path) | ()
    (wg-url u)
@@ -69,13 +71,13 @@
    (wg-once tls? host port path)
     (: req ("GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\nUser-Agent: love-wget\r\nAccept: */*\r\nConnection: close\r\n\r\n")
        raw (? tls?
-              (: t ((from 'tls 'tls-dial) host port)
+              (: t ((cite 'tls 'tls-dial) host port)
                  (? !(tablet? t) ()
-                    (: _ ((from 'tls 'tls-say) t req)
-                       r ((from 'tls 'tls-slurp) t)
+                    (: _ ((cite 'tls 'tls-say) t req)
+                       r ((cite 'tls 'tls-slurp) t)
                        _ (close (t 's))
                        r)))
-              (: s ((from 'dns 'dial) host port)
+              (: s ((cite 'dns 'dial) host port)
                  (? !(hot? s) ()
                     (: _ (say s req) _ (flush s) r (slurp s) _ (close s) r))))
        (? !(string? raw) ()

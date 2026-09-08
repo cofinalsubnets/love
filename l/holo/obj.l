@@ -11,7 +11,7 @@
 ; (CALL26/JUMP26, the ADRP/ADD pair, ABS64) -- see the type table and reltext --
 ; and rv64 likewise (CALL_PLT over the auipc pair, JAL, R_RISCV_64).
 ; loads after l/holo/elf.l in the au cat -- reads elf-machines / write-bytes
-; bare, and the assembler internals bare too: the cat leads with (use 'holo)
+; bare, and the assembler internals bare too: the cat leads with (borrow 'holo)
 ; (apps/kore/asbook.l), so lay/laylax/patch-with/le*/catall resolve through the
 ; spliced module. moon.l drives it: `mooncc -c foo.c foo.o`.
 (module 'holo
@@ -439,7 +439,7 @@
    ; section states nothing, so the check ld exists to make could not be made at all. we
    ; answer only what we know: the architecture, the profile, the ISA, the FPU, wchar_t,
    ; the enum width, the float model and the float-argument lane.
-   ; ⚠ AN UNSTATED TAG IS NOT NEUTRAL. it reads 0, and a 0 can DISARM the check on a tag
+   ; AN UNSTATED TAG IS NOT NEUTRAL. it reads 0, and a 0 can DISARM the check on a tag
    ; that was stated: ld runs the VFP_args comparison -- the one that is a hard error and
    ; not a warning -- only where Tag_ABI_FP_number_model says the object uses floats at
    ; all. without tag 23 ours linked silently against a soft-float object while gcc's own
@@ -498,7 +498,7 @@
        machine (peep elf-machines target 0)
        ; the backend must be registered, not merely named: a frontend bakes holo
        ; with the native backend only, and a cross target joins the cat at runtime
-       ; ((use 'holo) then the backend's own text). unregistered, `lay` lowers
+       ; ((borrow 'holo) then the backend's own text). unregistered, `lay` lowers
        ; nothing and answers an empty stream -- so the object writes out whole,
        ; with a 0-byte .text, and the failure only surfaces as a link or a boot
        ; that goes nowhere. one lit? here turns that into a scare at the source.

@@ -316,8 +316,8 @@
 ; ABI register roles differ (r1 is Sp on x64 and Ip on a64), so a port that
 ; reads right and disassembles right can still be wrong. a bad one fails here
 ; loudly rather than corrupting a line split somewhere quiet.
-(: sc ((from 'scan 'scanner) ())
-   tw (from 'scan 'walk)
+(: sc ((cite 'scan 'scanner) ())
+   tw (cite 'scan 'walk)
    (mk o n k) (? (n <= 0) (slurp o) (: _ (put o (97 + (k % 5))) (mk o (n - 1) (k * 7 + 3))))
    (agree s c i) (= (sc s c i) (tw s c i))
    (sweep n)                                     ; every length past the word step ...
@@ -485,8 +485,8 @@
                         (<= n j) ()
                         (: a2 (dstep alts (s j))
                            (? (two? a2) (walk a2 (+ j 1)) ())))
-       (from i) (? (walk [ns] i) 1 (< i n) (from (+ i 1)) ())
-       (from 0))
+       (cite i) (? (walk [ns] i) 1 (< i n) (cite (+ i 1)) ())
+       (cite 0))
    ; the draws: 1..4 tokens make a pattern, 0..6 charms of abc a subject
    ; every token here must parse and the oracle must know its node -- an entry
    ; the draw cannot build is dead weight, and one the oracle cannot take is a

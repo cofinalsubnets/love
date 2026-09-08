@@ -17,10 +17,10 @@
                                             ; and the macro is what quotes their operands
    lof (uu 'lof) bridge (uu 'bridge))
 ; ..so hoist the three into this layer. a module's macros ride its own table and the
-; corpus reaches uu through `from`, not a splice, so nothing else would find them.
+; corpus reaches uu through `cite`, not a splice, so nothing else would find them.
 ; its own top-level form: c0 compiles a whole form at once, so a hoist beside a use
 ; is too late for that form.
-(: _ (hoist 'uu '(defn defq axm)))
+(: _ (transcribe 'uu '(defn defq axm)))
 
 ; the book must answer, not ride the zero point: with `uu` missing (a broken
 ; boot bake -- e.g. a mid-edit prel.l snapshot stranding the layers behind it)

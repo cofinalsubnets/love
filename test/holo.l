@@ -1,11 +1,11 @@
 ; the l/holo/ assembler -- a core language service, baked into the post-egg layer of both
 ; the host `love` and the bootstrap `love0` (inle/main.c), so the corpus exercises it under
 ; both compilers, like prel/ev. Its whole surface is one public name: `holo`, a book --
-; reached through the module registry: (from 'holo) answers the opaque accessor, so
+; reached through the module registry: (cite 'holo) answers the opaque accessor, so
 ; (A 'assemble) is the call and the internals live one probe away (the loader wraps the
 ; whole entry in one layer and registers it: namespacing, not hiding).
 ; not in the kernel/wasm frontends (a host-only bake, like the parser combinators), so
-; guard on its presence: (from 'holo) answers () where it was never baked -- no
+; guard on its presence: (cite 'holo) answers () where it was never baked -- no
 ; missing-read warning. and the host bakes its native backend only (mooncc.image carries
 ; all), so each backend's goldens gate on its presence in (A 'backends) -- under love0
 ; (every backend baked) both blocks run, on the host the native one does. The full
@@ -15,8 +15,8 @@
 ; runtime and assembles bit-identically -- it lives here, at test/'s top, because the corpus
 ; glob is a non-recursive test/*.l.
 ; reg map: r0=rax, r7=x86-r8 .. r10=x86-r11; goldens copied from golden.l (objdump-verified).
-(? (lit? (from 'holo))                                     ; presence check via the registry -- () when holo isn't baked (wasm/kernel)
-   (: A (from 'holo)                                       ; the module accessor; bindings local (a body-having :)
+(? (lit? (cite 'holo))                                     ; presence check via the registry -- () when holo isn't baked (wasm/kernel)
+   (: A (cite 'holo)                                       ; the module accessor; bindings local (a body-having :)
       holo-hex (A 'holo-hex)  assemble (A 'assemble)  label-at (A 'label-at)
       _
       (? (peep (A 'backends) 'x64 0)

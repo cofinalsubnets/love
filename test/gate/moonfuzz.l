@@ -1,5 +1,5 @@
 ; test/gate/moonfuzz.l -- moon's refusal surface, fuzzed. run inside a woken mooncc
-; image, where the front end lives; clay arrives by (use 'clay), a module, so its
+; image, where the front end lives; clay arrives by (borrow 'clay), a module, so its
 ; helper names never touch the compiler's book.
 ;
 ; the corpus (test/cc/) is C that compiles. this takes each file and breaks it --
@@ -25,12 +25,13 @@
 ;
 ; a vacuous pass is a fail, the clay gate's lesson: a run where nothing parsed and
 ; nothing refused proved nothing. the floors below are explicit.
+(borrow 'posix)
 (:
-   _ (use "apps/moon/clay.l")
-   _ (use 'moon)                       ; the front end (clex/cpp/cparse-t) is module 'moon
-   _ (use 'kore)                       ; uread below is the u-floor's
-   cshow (from 'clay 'clay-show)
-   cok? (from 'clay 'clay-ok?)
+   _ (borrow "apps/moon/clay.l")
+   _ (borrow 'moon)                       ; the front end (clex/cpp/cparse-t) is module 'moon
+   _ (borrow 'kore)                       ; uread below is the u-floor's
+   cshow (cite 'clay 'clay-show)
+   cok? (cite 'clay 'clay-ok?)
    nl (string 10)
    (say1 s) (puts (s + nl))
    (dotc? s) (: n (tally s) (&& (2 < n) (&& ((s (n - 2)) = 46) ((s (n - 1)) = 99))))

@@ -79,7 +79,7 @@
 // clang/gcc 15+ take the attribute, mooncc's sibcall pass spells it or refuses the
 // compile -- an opportunistic miss is one frame per dispatch and a stack overflow down
 // some long read. `make vmret` cross-checks the shipped binary.
-// ⚠ AN LVM TAKES NO OTHER ARGUMENT, and the macros above cannot spell one: musttail
+// AN LVM TAKES NO OTHER ARGUMENT, and the macros above cannot spell one: musttail
 // wants matching prototypes, so a fifth parameter would leave that op's tails to the
 // compiler's mood. what an op needs beyond the stack rides g->b, read at entry.
 // ai_tco=1 now IMPLIES ai_have_musttail -- the refusal above makes that structural,
@@ -232,17 +232,20 @@ struct ai {
   intptr_t v0;
   struct {
    word
-     book,   // global env map; the macro table is book[zero]. GC-forwarded in v0..end.
+     stack,  // the books checked out, ours on top; the macro table is stack[zero]'s.
+             // GC-forwarded in v0..end. `book` in love is this one's head -- the book
+             // being written -- and `lib` below is where a checked-out one comes from.
      scare_a, scare_b, // the last scare's condition data, stashed at the raise for
      // hooks: lisp functions that C calls
      hot_read,    // 0: the p1 reader
      hot_numap,   // 1: numeric application (church exponentiation)
-     hot_stack,   // 2: church addition
+     hot_arrange,   // 2: church addition (prel's `arrange`)
      hot_compose, // 3: composition (church multiplication)
      hot_opfix,   // 4: the operator factor pass
                   // 5 the help and 6 the stdio are the running task's, in its node
      hot_show,    // 7: show a value as a string
-     mods,        // the module registry book: name -> module-book
+     lib,        // the library: name -> book. `borrow` takes one onto the stack, `cite`
+                 // reads one where it stands, `leave` checks the written one back in.
      errs,        // errno vocabulary: canonical number -> its nom; ai_err reads it
      kinds,       // the kind roster: enum q row -> its nom (kinds.h); `kind` reads it
      kreg,        // the named kinds: name -> (serial . table), pinned by post.l's `coin`
@@ -262,16 +265,32 @@ struct ai {
 // the value is a union, so a row SAYS which kind it holds and C checks it rather than
 // every writer spelling a cast: .k a nif's threaded code, .ap an instruction's own lvm_,
 // .x a word or a tagged fixnum. every one must be immortal -- see ai_defn.
-struct ai_def { char const *n; union u v; };
+// `m` is the module the row belongs to, NULL for the global book: the tablet is minted on
+// first sight and registered in g->lib, so a row names its namespace where it is written
+// and no boot order has to be kept for it.
+struct ai_def { char const *n; union u v; char const *m; };
 
-// host nif auto-registration: AiNif("name", fn) lands the entry in the love_nifs section
-// and boot drains [__start_love_nifs, __stop_love_nifs) through ai_defn, so an app adds nifs
-// in its own inle/<app>.c. no linker script -- the toolchain defines the bracket symbols.
-// a nif rides the image as an index off this bracket, so nothing here is ever a kept absolute.
+// host nif auto-registration: AiNif("name", fn, "mod") lands the entry in the love_nifs
+// section and boot drains [__start_love_nifs, __stop_love_nifs) through ai_defn, so an app
+// adds nifs in its own inle/<app>.c. no linker script -- the toolchain defines the bracket
+// symbols. a nif rides the image as an index off this bracket, never a kept absolute.
+// the third argument is the module, NULL to land on the book: a nif that has a namespace to
+// belong to should say so here rather than be swept off the book afterwards.
+// the alignment is load-bearing: the bracket is read as an ARRAY, so an entry must not
+// be padded past the struct's own alignment. left to itself the compiler over-aligns a
+// static, and the drain then walks a stride nothing in the section is laid at -- which is
+// how 109 rows read as 134 the day this struct grew its third field. a literal, not
+// _Alignof: mooncc reads this attribute's operand as a number token and nothing else.
+#if UINTPTR_MAX > 0xffffffffu
+#define AiDefAlign 8
+#else
+#define AiDefAlign 4
+#endif
 extern struct ai_def const __start_love_nifs[], __stop_love_nifs[];
-#define AiNif(nm, fn) \
-  static struct ai_def const __attribute__((section("love_nifs"), used)) \
-    _ainif_##fn = { (nm), { .k = (fn) } }
+#define AiNif(nm, fn, mod) \
+  static struct ai_def const \
+    __attribute__((section("love_nifs"), used, aligned(AiDefAlign))) \
+    _ainif_##fn = { (nm), { .k = (fn) }, (mod) }
 
 // port vtable -- what a device owes, and nothing else. a NULL slot means no method
 // (no readn reads end, no writen discards). neither blocks the scheduler; the generic
@@ -414,8 +433,8 @@ struct ai
  *ai_egg_(struct ai*, char const*, char const*, char const*, char const*),  // (egg, p1, corpus, post)
  *ai_defn(struct ai*, struct ai_def const*, uintptr_t),                // immortal values only
  *ai_defv(struct ai*, char const*),                // its twin for a live heap value (rides sp[0], stays there)
- *ai_layer_(struct ai*),      // push a fresh writable layer (the runtime's enter); every frontend opens its session with it
- *ai_unsplice_(struct ai*);   // drop the link below the head (the runtime's bare leave)
+ *ai_open_(struct ai*),      // push a fresh writable layer (the runtime's enter); every frontend opens its session with it
+ *ai_shelve_(struct ai*);   // drop the link below the head (the runtime's bare leave)
 
 // the heap-image codec (stdio-free): save compacts g and serializes into a fresh
 // g->alloc'd buffer; load reconstructs a fresh g, or NULL on any mismatch (the
@@ -759,7 +778,7 @@ lvm_t lvm_kcall,
  lvm_string, lvm_lt,     lvm_le,   lvm_eq,     lvm_same, lvm_gt,  lvm_ge,
  lvm_sort,  lvm_sortby, lvm_tally, lvm_longp,
  lvm_pin, lvm_pull, lvm_tablet,   lvm_keys,  lvm_dig,
- lvm_unc, lvm_poke, lvm_peek,
+ lvm_unc, lvm_poke, lvm_peek, lvm_pick, lvm_place, lvm_stem, lvm_span,
  lvm_seek,  lvm_trim,   lvm_spin,   lvm_add,
  lvm_mul,    lvm_quot,   lvm_fquot, lvm_rem,  lvm_arg,
  lvm_bmul_start,             // the resumable bignum multiply's entry; its loop bodies are num.c's
@@ -787,7 +806,7 @@ lvm_t lvm_kcall,
  lvm_calloutdrive, lvm_calloutresume,   // the drive addresses as fixnums (probes; a native reads them off g->jk)
  lvm_jkoff,       // (jkoff x): g->jk's byte offset, what the emitter's `jk` law loads from
  lvm_natp;        // (nat? f): is f a native closure -- its code in the arena
-// ⚠ THE ATTRIBUTES ARE THE DECLARATION: `lvm(n)` is `ai_noinline ai_noicf _lvm(n)`, so these
+// THE ATTRIBUTES ARE THE DECLARATION: `lvm(n)` is `ai_noinline ai_noicf _lvm(n)`, so these
 // cannot fold into the plain lvm_t list above without shedding both. ai_noicf is noipa, and the
 // data sentinels below are what it is for -- see their note.
 ai_noinline ai_noicf lvm_t
@@ -840,8 +859,8 @@ static ai_inline uintptr_t map_len(word m) { return getcharm(cell(map_back(m))[1
 static ai_inline uintptr_t map_cap(word m) { return getcharm(cell(map_back(m))[2].x); }
 word
  ai_mapget(struct ai*, word, word, word),
- bookget(struct ai*, word, word),   // the layered global read: walks g->book (a chain of books) head-first
- macroget(struct ai*, word);        // the layered macro read: each layer's table rides its [zero] slot
+ stacklook(struct ai*, word, word),   // the layered global read: walks g->stack (a chain of books) head-first
+ stacklook_macro(struct ai*, word);        // the layered macro read: each layer's table rides its [zero] slot
 struct ai *ai_mapput(struct ai*), *map_new(struct ai*);
 // the byte ops read from a string or a cask; both resolve to a ai_str of bytes.
 static ai_inline struct ai_str *bytes_of(word x) { return caskp(x) ? cask(x)->str : str(x); }
@@ -1108,7 +1127,7 @@ static ai_inline bool tray_put(struct ai_tray *v, uintptr_t i, word x) {
                       : gemp(x) ? (intptr_t) gem_get(x) : sun_get(x));
  return true; }
 
-// equality comparisons inline the fast identity check. ⚠ eqv is declared HERE, not with the
+// equality comparisons inline the fast identity check. eqv is declared HERE, not with the
 // other bools at the tail: eql below calls it, and a caller cannot precede its declaration.
 ai_noinline bool eqv(struct ai*, word, word); // this is for checking equality of non-identical values
 // eqv has no value-equality for distinct charms or distinct noms -- identity is
@@ -1302,6 +1321,11 @@ char *code_install(struct ai *g, char const *src, size_t n), *code_adopt(struct 
 char *ai_code_window(char *p);
 void code_free(struct ai *g, char *code), code_fin(struct ai *g), jk_ini(struct ai *g);
 int code_in(struct ai *g, uintptr_t v);
+// the instruction table (l/snap.c): an instruction word <-> its index. a negative index
+// is not an instruction, address 0 is no such index. ai_nif_cell (l/love.c) is the line
+// they draw against a nif's run, which is a value and never an instruction.
+intptr_t ai_op_index(intptr_t ap), ai_op_resolve(intptr_t i);
+int ai_nif_cell(union u const *k);
 size_t code_len(char *code);
 // the jk slots (g->jk): what a native reads off g -- the emitter's `jk` law names them the same
 enum { JkChain, JkStr, JkMap, JkNom, JkMint, JkGem, JkCask, JkDrive, JkResume, JkCur, JkUnc };

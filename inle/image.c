@@ -224,7 +224,7 @@ static lvm(lvm_bake) {
  ai_musttail return Next(1); }
 
 static union u const nif_bake[] = {{lvm_bake}, {lvm_ret0}};
-AiNif("bake", nif_bake);
+AiNif("bake", nif_bake, NULL);
 
 struct ai *image_load(char const *path) {
   int fd = open(path, O_RDONLY);

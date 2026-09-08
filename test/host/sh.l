@@ -7,7 +7,7 @@
 ; quiet under the corpus (no lush on cmdline).
 ; run: cat test/00-init.l test/host/sh.l | out/love
 (reads (open "apps/lush.l" "r"))
-(use 'lush) ; the parts just registered module 'lush -- the laws below read it spliced
+(borrow 'lush) ; the parts just registered module 'lush -- the laws below read it spliced
 
 ; the lexer: glued operators, io-numbers out of band ((), or (n) attached),
 ; quotes as segments, # comments, the 'more protocol on an unfinished shape.
@@ -400,7 +400,7 @@
    (assert (= "[HI]\n" (cup r))))
 (: r (hark ["out/love" "out/lush" "-c" "cd /tmp; echo [$( (cd /; pwd) )][$(pwd)]"])
    (assert (= "[/][/tmp]\n" (cup r))))
-; ⚠ the brackets are QUOTED here and nowhere else in this file: [tail] is a glob class
+; the brackets are QUOTED here and nowhere else in this file: [tail] is a glob class
 ; over {t,a,i,l}, and the tree grew a one-letter name (l/) that it matches. the law is
 ; about the capture, not about globbing, so it says so.
 (: r (hark ["out/love" "out/lush" "-c" "x=$( (exit 4); echo tail); echo \"[$x]\""])

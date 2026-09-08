@@ -94,7 +94,7 @@ static int64_t civil_days(int64_t y, uint32_t m, uint32_t d) {
   return era * 146097 + (int64_t) doe - 719468; }
 
 uint64_t k_rtc(void) {
-  // ⚠ seconds and minutes live in separate registers, so a read across the tick
+  // seconds and minutes live in separate registers, so a read across the tick
   // answers 10:59:60 -- wait the update out. BOUNDED: an absent chip reads 0xff.
   for (int i = 0; i < 100000 && cmos(0x0a) & 0x80; i++) {}
   uint32_t st = cmos(0x0b), s = cmos(0), mi = cmos(2), h = cmos(4),

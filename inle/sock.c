@@ -292,13 +292,13 @@ static union u const
  nif_udpbind[]  = {{lvm_udpbind}, {lvm_ret0}},
  nif_udprecv[]  = {{lvm_udprecv}, {lvm_ret0}},
  nif_udpsend[]  = {{lvm_cur}, {.x = putcharm(3)}, {lvm_udpsend}, {lvm_ret0}};
-AiNif("connect",  nif_connect);
-AiNif("listen",   nif_listen);
-AiNif("accept",   nif_accept);
-AiNif("seal", nif_shutdown);
-AiNif("udp-bind", nif_udpbind);
-AiNif("udp-recv", nif_udprecv);
-AiNif("udp-send", nif_udpsend);
+AiNif("connect", nif_connect, NULL);
+AiNif("listen", nif_listen, NULL);
+AiNif("accept", nif_accept, NULL);
+AiNif("seal", nif_shutdown, NULL);
+AiNif("udp-bind", nif_udpbind, NULL);
+AiNif("udp-recv", nif_udprecv, NULL);
+AiNif("udp-send", nif_udpsend, NULL);
 // --- unix-domain connect: lux's X display door ----------------------------------
 // (connectu path) -- connect to a unix-domain stream socket and wrap the fd as a port | a
 // nom | 'badarg. the load-bearing case is an X display socket (/tmp/.X11-unix/X<n>), which
@@ -320,7 +320,7 @@ static lvm(lvm_connectu) {
  LvmCallp(g, 1, host_port, call_connectu(pv)) }   // [path] -> [port]
 
 static union u const nif_connectu[] = {{lvm_connectu}, {lvm_ret0}};
-AiNif("connectu", nif_connectu);
+AiNif("connectu", nif_connectu, NULL);
 // --- the unix listener ----------------------------------------------------------
 //   (shore path)          -> a listening unix port | a nom | 'badarg ; unlinks
 //                            stale first (accept/await/close ride the core port nifs)
@@ -344,4 +344,4 @@ static lvm(lvm_shore) {
  LvmCallp(g, 1, host_port, call_shore(p)) }   // [path] -> [port]
 
 static union u const nif_shore[] = {{lvm_shore}, {lvm_ret0}};
-AiNif("shore", nif_shore);
+AiNif("shore", nif_shore, NULL);

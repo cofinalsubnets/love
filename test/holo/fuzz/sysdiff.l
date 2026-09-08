@@ -12,13 +12,14 @@
 ;
 ;   out/love test/holo/fuzz/sysdiff.l          (exit 1 on any disagreement)
 
+(borrow 'posix)
 (reads (open "l/holo/holo.l" "r"))
 (reads (open "l/holo/x64.l" "r"))
 (reads (open "l/holo/a64.l" "r"))
 (reads (open "l/holo/rv64.l" "r"))
 ; holo rides module 'holo: reading the source registers it, and the names come
 ; through the door rather than off this file's layer.
-(use 'holo)
+(borrow 'holo)
 
 (:
  (trim s) (: n (tally s)

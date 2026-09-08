@@ -9,17 +9,17 @@
  * DELIBERATELY not a word move. every one of those is a lane love.c never
  * exercises, and the file is compiled by mooncc in the shipped artifact.
  *
- * ⚠ A ROUND TRIP IS NOT ENOUGH and it is worth saying why. inflate(deflate(x))
+ * A ROUND TRIP IS NOT ENOUGH and it is worth saying why. inflate(deflate(x))
  * == x holds under a great many wrong deflates -- any legal stream decodes --
  * so the compressed BYTES are reported too. deflate is a twin held to apps/gz/gz.l
  * at the byte (test/host/gzc.l), so its output is a fixed answer and not a
  * licensed choice: a differing byte is a differing compiler.
  *
- * ⚠ THE SUMMARY IS THIS FILE'S OWN ARITHMETIC. an FNV-1a over the output, not
+ * THE SUMMARY IS THIS FILE'S OWN ARITHMETIC. an FNV-1a over the output, not
  * the crc32 next door in inle/hash.c -- a summary computed by the code under
  * test can agree with itself while both halves are wrong.
  *
- * ⚠ AND THE MALFORMED STREAMS ARE PART OF THE SUBJECT, not a robustness check.
+ * AND THE MALFORMED STREAMS ARE PART OF THE SUBJECT, not a robustness check.
  * gz.c's inflate reproduces gz-puff's answer for a stream that does not
  * describe a code -- first-writer-wins in the table, a zeroed symbol array --
  * so what it answers on garbage is as specified as what it answers on a valid
@@ -28,7 +28,7 @@
 #include "stub.h"
 #include "say.h"
 
-/* ⚠ NOT rand(): the two builds carry different libcs, so the corpus has to be
+/* NOT rand(): the two builds carry different libcs, so the corpus has to be
  * this file's own arithmetic or the programs do not see the same bytes. */
 static unsigned lcg(unsigned *s) { return *s = *s * 1103515245u + 12345u; }
 
@@ -70,7 +70,7 @@ static int64_t roll(unsigned n)
 	 * lengths, the hlit/hdist/hclen row -- shows here without a bisect */
 	say_b("df.head", out, got < 48 ? (size_t) got : 48);
 
-	/* ⚠ the counting pass must answer the same length with the stores
+	/* the counting pass must answer the same length with the stores
 	 * dropped: it is the decode with `out` NULL, and nothing the buffer
 	 * holds may reach a branch */
 	cnt = inf_run(out, (uintptr_t) got, 0, (uintptr_t) -1);
@@ -99,7 +99,7 @@ static unsigned udec(char const *t)
 
 /* THE TIMED LANE -- see nif/sum.c's for why the shell holds the clock.
  *
- * ⚠ THE TWO ROWS ARE DIFFERENT SHAPES and that is the reading. deflate is a
+ * THE TWO ROWS ARE DIFFERENT SHAPES and that is the reading. deflate is a
  * hash-chain walk over a 32 KB window: pointer chasing, a byte compare loop,
  * an insertion sort per block. inflate is a bit reader and a table lookup per
  * symbol -- branchy, and almost no arithmetic. a lane behind on one and level

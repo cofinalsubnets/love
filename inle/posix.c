@@ -76,7 +76,7 @@
 #if defined(AiHaveNamespaces)
 #include <sched.h>          // unshare, CLONE_NEWUSER/NEWNS (newns)
 #endif
-// ⚠ OUTSIDE every guard: what follows is called unconditionally below (argv_marshal,
+// OUTSIDE every guard: what follows is called unconditionally below (argv_marshal,
 // sigtake, the pty pair), so putting any of it under one kernel's feature is a build that
 // only stands on that kernel.
 // CLOCK_REALTIME in milliseconds -- the one scale for the scheduler's
@@ -484,7 +484,7 @@ ai_noinline size_t host_selfpath(char *b, size_t n) {
  if (r <= 0) r = readlink("/proc/curproc/exe", b, n - 1);
  if (r > 0) {
   b[r] = 0;
-  // ⚠ the suffix is the KERNEL's, not the path's: once our own inode is unlinked the
+  // the suffix is the KERNEL's, not the path's: once our own inode is unlinked the
   // link reads "PATH (deleted)", and every use of it after that -- an open, a rename
   // target -- names a file that is not there. a concurrent self-bake unlinks us the
   // moment it renames its image over the path we both live at, so the door that answers
@@ -658,7 +658,7 @@ static lvm(lvm_mount) { Sp[2] = host_mount(g, Sp[0], Sp[1], Sp[2]); Sp += 2; ai_
 // which is what ro, bind, remount and the nosuid family are. It stands BESIDE mount
 // rather than replacing it: apps/init/boot.l calls the three-argument one, a nif's
 // arity is fixed, and an early boot is not where an arity change wants finding out.
-// ⚠ the DATA argument stays NULL, so an -o that is filesystem text rather than a flag
+// the DATA argument stays NULL, so an -o that is filesystem text rather than a flag
 // (tmpfs's size=, a uid= on vfat) has nowhere to go and the face refuses it by name.
 static ai_inline word host_mountf(struct ai *g, word a, word b, word c, word f) {
  char const *src = str_c(a), *tgt = str_c(b), *typ = str_c(c);
@@ -900,43 +900,52 @@ static union u const
   nif_posix_ttyfg[]   = {{lvm_posix_ttyfg}, {lvm_ret0}},
   nif_posix_setenv[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_setenv}, {lvm_ret0}},
   nif_posix_environ[] = {{lvm_posix_environ}, {lvm_ret0}};
-AiNif("spawn", nif_spawn);
-AiNif("glean",  nif_reapany);
-AiNif("sigfd", nif_sigfd);
-AiNif("sigtake", nif_sigtake);
-AiNif("sigclear", nif_sigclear);
-AiNif("sigign?", nif_sigignp);
-AiNif("wait",  nif_waitpid);
-AiNif("chdir", nif_chdir);
-AiNif("cwd",   nif_cwd);
-AiNif("selfpath", nif_selfpath);
-AiNif("pipe",  nif_pipe);
-AiNif("openfd", nif_openfd);
-AiNif("spawnio", nif_spawnio);
-AiNif("fdopen", nif_fdopen);
-AiNif("spawnmap", nif_spawnmap);
-AiNif("getuid", nif_getuid);
-AiNif("getgid", nif_getgid);
-AiNif("fork", nif_fork);
-AiNif("dup2", nif_dup2);
-AiNif("dup", nif_dup);
-AiNif("mkdir", nif_mkdir);
-AiNif("mount", nif_mount);
-AiNif("mountf", nif_mountf);
-AiNif("umount", nif_umount);
-AiNif("chroot", nif_chroot);
-AiNif("sync", nif_sync);
-AiNif("mknod", nif_mknod);
-AiNif("newns", nif_newns);
-AiNif("stat",    nif_posix_stat);
-AiNif("lstat",   nif_posix_lstat);
-AiNif("readdir", nif_posix_readdir);
-AiNif("unlink",  nif_posix_unlink);
-AiNif("lseek",   nif_posix_lseek);
-AiNif("signal",  nif_posix_signal);
-AiNif("ttyfg",   nif_posix_ttyfg);
-AiNif("setenv",  nif_posix_setenv);
-AiNif("environ", nif_posix_environ);
+// NOT EVERY ROW HERE IS THE MODULE'S. nineteen stay on the BOOK -- dup dup2 environ
+// fdopen fork getuid glean hardlink pipe raw setenv signal spawn spawnio spawnmap still
+// ttyfg wait winsize -- because a SEAT SHADOWS each with a global of its own: the
+// kernel's bindings and no-op roster (inle/kmain.c), the page's tty words
+// (inle/wasm/web.l), and the four the seat-doors tablet swaps (inle/main.c). a global
+// name reads the LIVE book (l/ev.c's lvm_index), which is exactly how the shadow is
+// reached -- so a module splice, sitting above the base, would hide it for good and the
+// crew would call the host's door on a seat that has no host. the line is not
+// posix-vs-love: it is SYSCALL vs SEAT DOOR, and only the seats can say which.
+AiNif("spawn", nif_spawn, NULL);
+AiNif("glean", nif_reapany, NULL);
+AiNif("sigfd", nif_sigfd, "posix");
+AiNif("sigtake", nif_sigtake, "posix");
+AiNif("sigclear", nif_sigclear, "posix");
+AiNif("sigign?", nif_sigignp, "posix");
+AiNif("wait", nif_waitpid, NULL);
+AiNif("chdir", nif_chdir, "posix");
+AiNif("cwd", nif_cwd, "posix");
+AiNif("selfpath", nif_selfpath, "posix");
+AiNif("pipe", nif_pipe, NULL);
+AiNif("openfd", nif_openfd, "posix");
+AiNif("spawnio", nif_spawnio, NULL);
+AiNif("fdopen", nif_fdopen, NULL);
+AiNif("spawnmap", nif_spawnmap, NULL);
+AiNif("getuid", nif_getuid, NULL);
+AiNif("getgid", nif_getgid, "posix");
+AiNif("fork", nif_fork, NULL);
+AiNif("dup2", nif_dup2, NULL);
+AiNif("dup", nif_dup, NULL);
+AiNif("mkdir", nif_mkdir, "posix");
+AiNif("mount", nif_mount, "posix");
+AiNif("mountf", nif_mountf, "posix");
+AiNif("umount", nif_umount, "posix");
+AiNif("chroot", nif_chroot, "posix");
+AiNif("sync", nif_sync, "posix");
+AiNif("mknod", nif_mknod, "posix");
+AiNif("newns", nif_newns, "posix");
+AiNif("stat", nif_posix_stat, "posix");
+AiNif("lstat", nif_posix_lstat, "posix");
+AiNif("readdir", nif_posix_readdir, "posix");
+AiNif("unlink", nif_posix_unlink, "posix");
+AiNif("lseek", nif_posix_lseek, "posix");
+AiNif("signal", nif_posix_signal, NULL);
+AiNif("ttyfg", nif_posix_ttyfg, NULL);
+AiNif("setenv", nif_posix_setenv, NULL);
+AiNif("environ", nif_posix_environ, NULL);
 // --- the rest of the fs surface: the effect ops the fs tools ride ---------------
 // (mv, ln, touch, chmod, chown -- apps/kore/fs.l and friends).
 //   (rename old new)      -> () | a nom | 'badarg  (mv's heart; same filesystem)
@@ -1077,16 +1086,16 @@ static union u const
   nif_posix_rmdir[]    = {{lvm_posix_rmdir}, {lvm_ret0}},
   nif_posix_hardlink[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_hardlink}, {lvm_ret0}},
   nif_posix_copyfile[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_copyfile}, {lvm_ret0}};
-AiNif("rename",   nif_posix_rename);
-AiNif("symlink",  nif_posix_symlink);
-AiNif("readlink", nif_posix_readlink);
-AiNif("chmod",    nif_posix_chmod);
-AiNif("chown",    nif_posix_chown);
-AiNif("utime",    nif_posix_utime);
-AiNif("umask",    nif_posix_umask);
-AiNif("rmdir",    nif_posix_rmdir);
-AiNif("hardlink", nif_posix_hardlink);
-AiNif("copyfile", nif_posix_copyfile);
+AiNif("rename", nif_posix_rename, "posix");
+AiNif("symlink", nif_posix_symlink, "posix");
+AiNif("readlink", nif_posix_readlink, "posix");
+AiNif("chmod", nif_posix_chmod, "posix");
+AiNif("chown", nif_posix_chown, "posix");
+AiNif("utime", nif_posix_utime, "posix");
+AiNif("umask", nif_posix_umask, "posix");
+AiNif("rmdir", nif_posix_rmdir, "posix");
+AiNif("hardlink", nif_posix_hardlink, NULL);
+AiNif("copyfile", nif_posix_copyfile, "posix");
 // --- the pty wrapper: bao's rlwrap/debugger muscle ------------------------------
 // spawn a program on a fresh pseudo-terminal, reap it without blocking, signal
 // it, and read/write its window size. the keystone, (tether argv), is hark
@@ -1257,7 +1266,7 @@ static lvm(lvm_ptyecho) {
 // `on` puts the tty in raw mode (no ICANON/ECHO/ISIG, VMIN=1) so bao's editor is
 // the sole echo; on = 0 / () restores the cooked termios captured at the first
 // raw-on. bao's (shell _) calls (raw 1) because the bin/bao launch
-// (love -l cli.l -e "((from 'cli 'shell) 0)") passes argv, so main.c's argp path never raws --
+// (love -l cli.l -e "((cite 'cli 'shell) 0)") passes argv, so main.c's argp path never raws --
 // without this the kernel tty echo doubles every line the editor draws. () on
 // success, a nom on failure ('enotty: stdin is no tty).
 // one terminal, so one saved baseline and one atexit -- main.c's repl calls this too
@@ -1316,7 +1325,7 @@ static lvm(lvm_swig) {
 // --- the port doors: (open path mode) and (close p) --------------------------
 // posix surface like everything above, and one body per behaviour (plan C2):
 // on inle the open(2)/close(2) below land in inle/sys.c's arms, so the ramfs
-// answers the same nif. ⚠ `open`'s PRESENCE in the book is what lights up
+// answers the same nif. `open`'s PRESENCE in the book is what lights up
 // prel's module walk (l/boot/prel.l's fsopen, by peep) and salt's config read --
 // both gate on the name, so the registration below is the whole wiring.
 
@@ -1337,7 +1346,7 @@ static int call_open(struct ai_str *pv, struct ai_str *mv) {
 
 // (open path mode) -- a heap port (closed on GC), or a nom: open(2)'s errno,
 // 'badarg for misuse (a non-string argument, an unknown mode). the value-op
-// convention at the head of this file. ⚠ a failure is TRUTHY now (a nom nets
+// convention at the head of this file. a failure is TRUTHY now (a nom nets
 // positive), so a caller may not ask ? of the answer -- port? is the success
 // test, nom? the failure test, and both are exact.
 static lvm(lvm_open) {
@@ -1401,13 +1410,13 @@ static union u const
   nif_winsize[]    = {{lvm_winsize}, {lvm_ret0}},
   nif_setwinsize[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_setwinsize}, {lvm_ret0}},
   nif_ptyecho[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ptyecho}, {lvm_ret0}};
-AiNif("tether", nif_tether);
-AiNif("gather", nif_reap);
-AiNif("still", nif_kill);
-AiNif("winsize", nif_winsize);
-AiNif("setwinsize", nif_setwinsize);
-AiNif("ptyecho", nif_ptyecho);
-AiNif("raw", nif_raw);
-AiNif("swig", nif_swig);
-AiNif("open", nif_open);
-AiNif("close", nif_close);
+AiNif("tether", nif_tether, "posix");
+AiNif("gather", nif_reap, "posix");
+AiNif("still", nif_kill, NULL);
+AiNif("winsize", nif_winsize, NULL);
+AiNif("setwinsize", nif_setwinsize, "posix");
+AiNif("ptyecho", nif_ptyecho, "posix");
+AiNif("raw", nif_raw, NULL);
+AiNif("swig", nif_swig, "posix");
+AiNif("open", nif_open, "posix");
+AiNif("close", nif_close, "posix");

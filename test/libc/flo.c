@@ -3,7 +3,7 @@
  * here too -- say.h turns its own digits, so a drifted %f cannot corrupt the
  * frame of the other programs.
  *
- * ⚠ THIS IS A TWO-SUBJECT PROGRAM, and the split is the point. a case built
+ * THIS IS A TWO-SUBJECT PROGRAM, and the split is the point. a case built
  * from a LITERAL tests the compiler's decimal->binary as well as the printer;
  * a case built by memcpy from a BIT PATTERN tests the printer alone. all three
  * of the bugs this gate was written for hid in that gap: the printer turned
@@ -14,7 +14,7 @@
  * IEEE encoder had no subnormal lane at all. the literal cases alone would
  * have blamed the printer; the bit cases alone would have missed two of them.
  *
- * ⚠ EVERY ANSWER HERE IS EXACT AND THEREFORE FULLY PINNED. a double is
+ * EVERY ANSWER HERE IS EXACT AND THEREFORE FULLY PINNED. a double is
  * m * 2^e with m a 53-bit integer, so it has a FINITE decimal form -- 309
  * digits before the point at most and 1074 after -- and printf must print
  * that, rounding ties to even because a tie is a real tie. there is no
@@ -48,7 +48,7 @@ int main(void)
 	F("%g", 1e-4); F("%g", 1e-5); F("%g", 0.5); F("%g", 123456789.0);
 	F("%F", 1.5); F("%E", 1.5); F("%G", 1e-9);
 
-	/* --- NEGATIVE ZERO. ⚠ -0.0 is not less than zero, so a sign taken by
+	/* --- NEGATIVE ZERO. -0.0 is not less than zero, so a sign taken by
 	   comparison loses it; the sign BIT is the only place it lives. --- */
 	F("%g", -0.0); F("%f", -0.0); F("%e", -0.0); F("%.14g", -0.0); F("%a", -0.0);
 	F("%f", -1e-30);                       /* genuinely negative, rounds to zero */
@@ -97,7 +97,7 @@ int main(void)
 	F("%#a", 1.0); F("%5a", 1.0); F("%+a", 1.0);
 
 	/* --- THE BIT PATTERNS: the printer with no compiler in the way. --- */
-	/* ⚠ ONE conversion per call: the sink takes a single double, and a format
+	/* ONE conversion per call: the sink takes a single double, and a format
 	   with two would read the second off an argument that was never passed --
 	   which is a bug in the TEST that reads exactly like a bug in the libc. */
 	B("bit.zero.g",    "%g", 0x0000000000000000UL);
@@ -157,7 +157,7 @@ int main(void)
 	   double lane cannot stand in for it: a double's fraction IS an integer at
 	   the scale it is cut, so truncating there is exact and truncating here is
 	   a ulp -- 0.1f sat one low until this was gated.
-	   ⚠ the values are read through STATICS on purpose. a bare `(double) 0.1f`
+	   the values are read through STATICS on purpose. a bare `(double) 0.1f`
 	   would test something else and currently disagrees with gcc: mooncc eats
 	   the f suffix without giving the constant `float` TYPE, so 0.1f keeps 53
 	   bits in an expression. that is a real gap, filed rather than papered

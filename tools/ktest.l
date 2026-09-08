@@ -11,6 +11,7 @@
 ; volume (the uefi door -- our own BOOTX64.EFI + love.elf), and takes the
 ; firmware as pflash. there is no third door, so anything else is a refusal.
 
+(borrow 'posix)
 (: (sub-at s i t j) (? (j >= #t) 1                           ; does t occur in s at index i?
        (s (i + j) = t j ? (sub-at s i t (j + 1)) 0))
    (idx s t) ((: (g i) (? (i + #t > #s) -1                     ; first index of t in s, else -1

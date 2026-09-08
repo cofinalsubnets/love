@@ -7,8 +7,8 @@
 ; probes: `love design`.
 ;   cat test/00-init.l test/host/design.l | out/love
 
-(use 'story)
-(use 'design)
+(borrow 'story)
+(borrow 'design)
 
 (: S "/tmp/designtest.l"
    (find h n i) (? (i + tally n < 1 + tally h)

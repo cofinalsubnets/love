@@ -12,7 +12,7 @@
 #define O_TRUNC        512
 #define O_APPEND      1024
 #define O_NONBLOCK    2048
-/* ⚠ THE ARM FAMILY IS THE EXCEPTION HERE, and rv64 is NOT in it. a64 kept
+/* THE ARM FAMILY IS THE EXCEPTION HERE, and rv64 is NOT in it. a64 kept
  * 32-bit ARM's values for these two; rv64 takes the genuine asm-generic
  * ones, which are x86-64's. the first cut of this gated on
  * `__aarch64__ || __riscv` and called 040000 "asm-generic" -- it is arm's. on

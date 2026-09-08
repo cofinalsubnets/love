@@ -20,6 +20,8 @@
 ; SYM_raw what they inflate to. every byte goes out as a three-digit octal escape -- always
 ; three, so a following digit cannot extend it, and no byte value needs a case of its own.
 
+(borrow 'posix)
+
 (: (die m) (say err ("lcat: " + m + "\n"), quit 1)
    (s2cl s) ((: (g i) (i < #s ? (s i . g (i + 1)))) 0)  ; string -> charlist
    ; the datums readable from s (stop on the eof sentinel or an incomplete form,
@@ -139,15 +141,15 @@
      ; none, the one shape that leaves AiCatModsH unset. scan rides it: it lays a native
      ; kernel through holo at load. every other module is post's.
      "#if defined(__x86_64__)" "#define AiCatModsH 1"
-     ['ai_cat_mods_h_z ['holo 'x64 'scan]]
+     ['ai_cat_lib_h_z ['holo 'x64 'scan]]
      "#elif defined(__aarch64__)" "#define AiCatModsH 1"
-     ['ai_cat_mods_h_z ['holo 'a64 'scan]]
+     ['ai_cat_lib_h_z ['holo 'a64 'scan]]
      "#elif defined(__riscv)" "#define AiCatModsH 1"
-     ['ai_cat_mods_h_z ['holo 'rv64 'scan]]
+     ['ai_cat_lib_h_z ['holo 'rv64 'scan]]
      ; wasm is gen's rv64 lane under another writer (l/holo/wasmfn.l), so the
      ; machine under that seat's holo is rv64's
      "#elif defined(__wasm__)" "#define AiCatModsH 1"
-     ['ai_cat_mods_h_z ['holo 'rv64 'scan]]
+     ['ai_cat_lib_h_z ['holo 'rv64 'scan]]
      "#endif"
      ; the glaze, one text: emit.l (the native emitter) then auto.l (ev's source
      ; recognizer, which reads emit's names bare), so the order here is the module and the
@@ -155,8 +157,8 @@
      ; orth and the ala creation hook trail it, and hook.l leaks natjit/fires/fired?/bake
      ; so it stays outside. not a module blob: an unglazed build must not pay for it.
      "#ifdef AiGlazed"
-     ['src_glaze_z ["(use 'holo)(module 'glaze " 'emit 'auto ")"
-                    "(: ev (from 'glaze 'ev) member? (from 'glaze 'member?))"
+     ['src_glaze_z ["(borrow 'holo)(module 'glaze " 'emit 'auto ")"
+                    "(: ev (cite 'glaze 'ev) member? (cite 'glaze 'member?))"
                     'hook 'walk 'holo 'x64 'a64]]
      "#endif"]
    (text items) (foldl (\ a i (a + (string? i ? i (file i)))) "" items)

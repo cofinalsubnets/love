@@ -1,4 +1,4 @@
-; apps/tar/tar.l -- tar in love: the ustar archive, read and written. `(use 'tar)`, then:
+; apps/tar/tar.l -- tar in love: the ustar archive, read and written. `(borrow 'tar)`, then:
 ;
 ;   (tar-pack entries)     -> the archive bytes
 ;   (tar-unpack s)         -> (1 entries) | ()
@@ -31,12 +31,13 @@
 ; that is not stored. a path that fits neither -- no "/" leaving a <=100 tail -- is
 ; refused rather than truncated: a silently shortened path is a wrong archive that
 ; looks right until something extracts it.
-; the wrap: tar rides module 'tar. a consumer says (use 'tar); riding a cat -- the
+; the wrap: tar rides module 'tar. a consumer says (borrow 'tar); riding a cat -- the
 ; dist artifact's, where this file is evaluated into the image -- the wrap registers
-; the same module, so the compile is paid once at bake time and (use 'tar) is a splice
+; the same module, so the compile is paid once at bake time and (borrow 'tar) is a splice
 ; afterwards rather than a reload. unwrapped it leaked its names into the cat's layer
-; and `use` found no module, so every caller recompiled this file from lib/.
+; and `borrow` found no module, so every caller recompiled this file from lib/.
 (module 'tar
+(borrow 'posix)
 (:
    tar-blk 512
 

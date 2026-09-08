@@ -26,7 +26,9 @@
 ; dns is a module in the tree and in the dist artifact alike, so this splices it
 ; for ain's own compile and leaves the session's book alone.
 (module (ain ain-main)
-(use 'dns)
+(borrow 'dns)
+
+(borrow 'posix)
 
 (: (ain-main as)
  (:
@@ -81,6 +83,6 @@
 ; taking the args after the seat. `cmdline` is the full C argv, never rebound, so the
 ; test reads the same in both load orders; a multi-call cat (kore) never matches and the
 ; dispatcher there calls ain-main itself. body-having: nothing leaks.
-(: s (from 'verbs 'fire ["ain" "ain.l"])
+(: s (cite 'verbs 'fire ["ain" "ain.l"])
    (two? s ? (ain-main >s)))
 ) ; module ain

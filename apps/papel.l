@@ -35,17 +35,18 @@
 ; papel.css, and out/index.html -- the last only when no source is itself an index.md.
 
 ; no brackets here: the runtime supplies the layer (a module consumer says
-; (use 'papel); a -l load rides the session layer, where the seat reads bare).
+; (borrow 'papel); a -l load rides the session layer, where the seat reads bare).
 
 ; --- the modules papel stands on ---------------------------------------------------------
 ; papel loads its siblings itself rather than being handed them: two tool files cannot both
 ; be -l'd, since each one's seat would fire on the other's command line, so the `papel`
 ; script -l's this file alone. the crew root comes off our own seat word, which means an
 ; installed script pointing at the source tree finds its siblings wherever that tree is --
-; `want` hands the loader that PATH ((use "apps/lapiz.l")), which loads it as a
+; `want` hands the loader that PATH ((borrow "apps/lapiz.l")), which loads it as a
 ; module and splices it. a module already registered (the gate, a host embedding) is
 ; left alone. `root` and `bn` are exactly the kind of name a leak makes dangerous, and
 ; they stay wherever this file's layer is -- never orth.
+(borrow 'posix)
 (: (bn p)   (: n #p
                (go k r) (k < n ? (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
                (go 0 0))
@@ -65,10 +66,10 @@
    ; the source tree (root came off our own seat), else by NAME off the registry
    ; an installed love baked. the tree lane probes first, so a tree papel running
    ; under an installed love reads its own siblings, never the baked older copies.
-   (want nm f) (? (from nm) 1
+   (want nm f) (? (cite nm) 1
                   (: q (open (root + f) "r")
-                     (? (hot? q) (: _ (close q) _ (use (root + f)) 1)
-                        (: _ (use nm) 1))))
+                     (? (hot? q) (: _ (close q) _ (borrow (root + f)) 1)
+                        (: _ (borrow nm) 1))))
    _ (want 'lapiz "lapiz/lapiz.l")
    _ (want 'cook "cook/cook.l")
    _ (want 'hueweb "vi/hueweb.l"))
@@ -78,9 +79,9 @@
 ; template needs to render one node itself: `hq` (escape), `hti` (an inl), `htb` (a block).
 ; papel renders exactly one node -- an anchored head -- and defers every other to `htb`.
 ; from cook, the two verbs a build is made of.
-(: L (from 'lapiz)
+(: L (cite 'lapiz)
    mdread (L 'mdread)  htshow (L 'htshow)  htb (L 'htb)  hti (L 'hti)  hq (L 'hq)  mget (L 'mget)
-   C (from 'cook)
+   C (cite 'cook)
    recipe (C 'recipe)  prepped (C 'prepped))
 
 ; --- little utils (papel's own: it leans on lapiz for DOCUMENTS, not for lists) --------
@@ -252,7 +253,7 @@
 ; (so editing this string rebuilds the site). the colours are config.l's paper palette
 ; through hueweb's hw-vars, so this sheet and the painted sources' agree by construction.
 (: css
-   (((from 'hueweb 'hw-vars) 'paper) +
+   (((cite 'hueweb 'hw-vars) 'paper) +
    "*{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-serif,Georgia,serif}
 header{border-bottom:1px solid var(--rule);padding:1rem 1.25rem;font-family:ui-sans-serif,system-ui,sans-serif}
@@ -375,8 +376,12 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
                 (quit 0))
    (need h r) (? (two? r) 0 (: _ (say err ("papel: " + h + " needs an argument")) _ (put err 10) (quit 2)))
    (papel-main as)
-   (: _ (? (lit? (from 'papel)) (use 'papel) 0)   ; splice my registered self if I am one (cook-main's
+   (: _ (? (lit? (cite 'papel)) (borrow 'papel) 0)   ; splice my registered self if I am one (cook-main's
                                                   ; guard); on a -l load my names already walk
+      ; ..and posix beside it. a global name reads the LIVE book (l/ev.c's lvm_index),
+      ; and this is called on a chain that carries neither: the line above puts back
+      ; this file's own names, and nothing puts back the doors it was loaded with.
+      _ (borrow 'posix)
       c (conf0 ())
       (loop ws) (? !(two? ws) 0
                    (: w <ws r >ws
@@ -405,7 +410,7 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
               q (peep c 'quiet 0)
               _ (pin c 'quiet 1)
               box (: t (tablet 0) _ (pin t 'f (fprint c)) t)
-              _ (? (from 'kiosko 'serve (peep c 'out "out/site") port q (_ \ _ \ refresh c box)) 0
+              _ (? (cite 'kiosko 'serve (peep c 'out "out/site") port q (_ \ _ \ refresh c box)) 0
                    (say err $ "papel: cannot listen on :" + show port + "\n", quit 1))))
       (quit 0))
    papel-main)
@@ -416,4 +421,4 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
 ; script -- sits in the program seat of the real command line, on the args after it.
 ; body-having, so the machinery leaks nothing; papel-main reads bare -- whichever
 ; layer holds this file's binds is still the head here.
-(: s (from 'verbs 'fire ["papel" "papel.l"]) (two? s ? (papel-main >s)))
+(: s (cite 'verbs 'fire ["papel" "papel.l"]) (two? s ? (papel-main >s)))

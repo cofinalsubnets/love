@@ -36,6 +36,7 @@
 (module (kiosko serve serve5 serve1 kiosko-main gulp)
 
 ; --- little utils -------------------------------------------------------------------
+(borrow 'posix)
 (: (strcat l)   (foldl (+) "" l)
    (joins l sp) (? !(two? l) "" !(two? >l) <l (<l + sp + joins >l sp))
    (ends? s t)  (: n #s m #t (m <= n && snip s (n - m) n = t))
@@ -182,7 +183,7 @@
 ; --- what a file is ------------------------------------------------------------------
 (: types '(("html" "text/html; charset=utf-8") ("htm" "text/html; charset=utf-8")
            ("css" "text/css; charset=utf-8")   ("js" "text/javascript; charset=utf-8")
-           ; ⚠ a module is REFUSED on a non-js type, so .mjs owes a row of its own
+           ; a module is REFUSED on a non-js type, so .mjs owes a row of its own
            ("mjs" "text/javascript; charset=utf-8")
            ("json" "application/json")         ("txt" "text/plain; charset=utf-8")
            ("md" "text/plain; charset=utf-8")  ("xml" "application/xml")
@@ -347,8 +348,12 @@ usage: kiosko [-p PORT] [-q] [DIR]
                 (quit 0))
    (need h r) (atom? r ? (say err $ "kiosko: " + h + " needs an argument\n", quit 2))
    (kiosko-main as)
-   (: _ (? !(nil? (from 'kiosko)) (use 'kiosko))  ; splice my registered self if I am one (cook-main's
+   (: _ (? !(nil? (cite 'kiosko)) (borrow 'kiosko))  ; splice my registered self if I am one (cook-main's
                                                   ; guard); on a -l load my names already walk
+      ; ..and posix beside it. a global name reads the LIVE book (l/ev.c's lvm_index),
+      ; and this is called on a chain that carries neither: the line above puts back
+      ; this file's own names, and nothing puts back the doors it was loaded with.
+      _ (borrow 'posix)
       box {'port 8080 'root "."}
       (loop (w . r))
         (w @ ("-p" || "--port") (need w r, pin box 'port (numof <r), loop >r)
@@ -371,7 +376,7 @@ usage: kiosko [-p PORT] [-q] [DIR]
 ; script -- sits in the program seat of the real command line. kiosko-main reads bare:
 ; whichever layer holds this file's binds is still the head here. body-having, so
 ; nothing leaks.
-(: _ (pins (from 'verbs 'tab) 'kiosko kiosko-main)
-   s (from 'verbs 'fire ["kiosko" "kiosko.l"])
+(: _ (pins (cite 'verbs 'tab) 'kiosko kiosko-main)
+   s (cite 'verbs 'fire ["kiosko" "kiosko.l"])
    (two? s ? (kiosko-main >s)))
 ) ; module kiosko

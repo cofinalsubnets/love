@@ -183,7 +183,7 @@ app can call `(salt 'its-own-name)` and get the same two-file overlay. see
 ## salt, the shared door
 
 ```love
-(use 'salt)
+(borrow 'salt)
 (salt app)          ; -> a tablet of that app's settings
 (salt-one c k d)    ; -> the first operand of setting k, or d
 (salt-all c k)      ; -> the whole tail of setting k, or ()

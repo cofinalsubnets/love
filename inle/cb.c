@@ -9,10 +9,10 @@
 #include "../l/quay/quay.c"
 #include "../l/quay/nif.c"
 
-AiNif("screen", nif_screen);
-AiNif("scribe", nif_scribe);
-AiNif("glass", nif_glass);
-AiNif("gaze", nif_gaze);
-AiNif("reply", nif_reply);
-AiNif("unfold", nif_unfold);
-AiNif("wet", nif_damage);
+AiNif("screen", nif_screen, NULL);
+AiNif("scribe", nif_scribe, NULL);
+AiNif("glass", nif_glass, NULL);
+AiNif("gaze", nif_gaze, NULL);
+AiNif("reply", nif_reply, NULL);
+AiNif("unfold", nif_unfold, NULL);
+AiNif("wet", nif_damage, NULL);

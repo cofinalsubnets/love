@@ -34,9 +34,9 @@ static const char src_post[] =
 #include "post.h"
 ;
 static const char boot_ai[] =
-  "(use 'uu) (: uu (from 'uu))"   // the library layers ride post; the uu kernel keeps its one-name surface
-  "(use 'kanren)"
-  "(use 'cli)"                    // the shell core, last and spliced, as inle/main.c has it:
+  "(borrow 'uu) (: uu (cite 'uu))"   // the library layers ride post; the uu kernel keeps its one-name surface
+  "(borrow 'kanren)"
+  "(borrow 'cli)"                    // the shell core, last and spliced, as inle/main.c has it:
 ;                                 //   read/reads/welp are reached bare (test/help.l's floor handler)
 
 // 256K: a single ai_eval can emit a lot before the page drains it -- the
@@ -44,14 +44,14 @@ static const char boot_ai[] =
 // the summary. _writen lands what fits and answers the count, so an overflowing
 // eval truncates rather than overruns.
 //
-// ⚠ AND A FULL BUFFER SAYS SO. ai_stdout is a STATIC port: it carries no write
+// AND A FULL BUFFER SAYS SO. ai_stdout is a STATIC port: it carries no write
 // run (rung 4), and zputc offers a refused byte twice before giving up, so what
 // does not fit here really is on the floor. A bigger number would only move the
 // cliff; the honest edge is to SAY the answer is short. out_tail is held back
 // from the buffer for that one line, so a truncated eval reads as truncated
 // instead of stopping mid-word.
 //
-// ⚠ AND IT SAYS ONLY WHAT IS TRUE -- WHICH IS NOT A BYTE COUNT. lvm_fputs answers
+// AND IT SAYS ONLY WHAT IS TRUE -- WHICH IS NOT A BYTE COUNT. lvm_fputs answers
 // a refusal by re-offering the whole remainder, and then the byte alone through
 // zputc, twice: a device sees each lost byte many times over and cannot tell
 // attempts from bytes. What it can tell is THAT it ran out, so that is all it says.
@@ -127,9 +127,9 @@ struct ai_port_vt const ai_fd_port_vt = { _flush, fd_writen, fd_readn, NULL };
 // exit() reaches the JS caller as an ExitStatus it catches (loader.js).
 static noreturn lvm(lvm_exit) { exit(getcharm(Sp[0])); }
 static union u const nif_exit[] = {{lvm_exit}, {lvm_ret0}};
-AiNif("exit", nif_exit);
+AiNif("exit", nif_exit, NULL);
 static union u const nif_quit[] = {{lvm_exit}, {lvm_ret0}};   // the crew's verb tail (moon-main), as main.c has it
-AiNif("quit", nif_quit);
+AiNif("quit", nif_quit, NULL);
 
 // (close p) -> (): a port's write run lands, a horn shuts its device, and the closed
 // vt goes in -- posix.c's close less the fd, which this seat has none of
@@ -151,7 +151,7 @@ static lvm(lvm_close) {
   Sp[0] = ZeroPoint;
   ai_musttail return Next(1); }
 static union u const nif_close[] = {{lvm_close}, {lvm_ret0}};
-AiNif("close", nif_close);
+AiNif("close", nif_close, NULL);
 
 // --- the console: quay's screen, and the page's mirror of it ---------------
 // the engine and its love door ride along by unity include, as inle/cb.c has them;
@@ -161,13 +161,13 @@ AiNif("close", nif_close);
 // reads after the eval returns. answers the cell count, or () for a screen too big.
 #include "quay/quay.c"
 #include "quay/nif.c"
-AiNif("screen", nif_screen);      // the console's love door, on the slice as inle/cb.c lays it
-AiNif("scribe", nif_scribe);
-AiNif("glass", nif_glass);
-AiNif("gaze", nif_gaze);
-AiNif("reply", nif_reply);
-AiNif("unfold", nif_unfold);
-AiNif("wet", nif_damage);
+AiNif("screen", nif_screen, NULL);      // the console's love door, on the slice as inle/cb.c lays it
+AiNif("scribe", nif_scribe, NULL);
+AiNif("glass", nif_glass, NULL);
+AiNif("gaze", nif_gaze, NULL);
+AiNif("reply", nif_reply, NULL);
+AiNif("unfold", nif_unfold, NULL);
+AiNif("wet", nif_damage, NULL);
 #include "quay/xterm256.h"
 enum { mir_head = 4, mir_max = 1 << 16 };
 static uint32_t mir[mir_head + mir_max];   // rows cols cursor flag, then the cells
@@ -181,7 +181,7 @@ static lvm(lvm_mirror) {
   else Sp[0] = ZeroPoint;
   Ip += 1; ai_musttail return Continue(); }
 static union u const nif_mirror[] = {{lvm_mirror}, {lvm_ret0}};
-AiNif("mirror", nif_mirror);
+AiNif("mirror", nif_mirror, NULL);
 EMSCRIPTEN_KEEPALIVE uint32_t*       ai_mirror(void)  { return mir; }
 EMSCRIPTEN_KEEPALIVE uint32_t const* ai_palette(void) { return xterm256; }
 EMSCRIPTEN_KEEPALIVE uint32_t        ai_unfold(uint32_t g_) { return g_ < 256 ? cb_unfold((uint8_t) g_) : 0; }
@@ -228,7 +228,7 @@ EMSCRIPTEN_KEEPALIVE
 int ai_init(void) {
   int rc = ai_boot();
   if (rc) return rc;
-  F = ai_layer_(F);
+  F = ai_open_(F);
   return ai_code_of(F); }
 
 // (ai_wake buf len): boot from a heap image the page fetched beside the module --
@@ -243,7 +243,7 @@ int ai_wake(void const *buf, uintptr_t len) {
   ai_core_of(F)->budget = (2048u << 20) / sizeof(word) / 4;
   F = ai_defn(F, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
   if (!ai_ok(F)) return ai_code_of(F);
-  F = ai_layer_(F);
+  F = ai_open_(F);
   return ai_code_of(F); }
 
 // (ai_bake): the booted base as image bytes, for the page's love.image -- the

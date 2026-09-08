@@ -5,7 +5,7 @@
 ; leaks, and no single form grows big enough to stress the whole-form compiler.
 
 ; --- the zipper laws ---
-(use 'xwire)   ; the X wire, apps/lux/wire.l
+(borrow 'xwire)   ; the X wire, apps/lux/wire.l
 (: z3 (zmk 2 '(1) '(3))                                                          ; row (1 2 3), 2 focused
    (assert
       (zrow (zfrom '(1 2 3)) = '(1 2 3)) !(zfrom ()) !(zrow ())
@@ -228,7 +228,7 @@
 
 ; --- the keymap (apps/lux/keys.l rung 6): the table's shape, the union law, nextMatch ---
 (: (assert
-      ; every binding is (mods keysym action), the action a tagged list
+      ; every binding is (lib keysym action), the action a tagged list
       (all (r \ (#r = 3) && two? (kb-act r) && name? <(kb-act r)) the-keys)
       (kmodmask = (shiftm | (ctrlm | (altm | supm))))
       ; the directional generator: 4 dirs x 2 keysyms x 3 modifier rows

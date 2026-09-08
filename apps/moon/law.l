@@ -18,6 +18,8 @@
 ; it gave up in. So a law that means "this source is refused" says `refused?`;
 ; the laws that mean "refused, and here is exactly what it said" pin `gripe?`
 ; and the message, in the diagnostics sections below.
+(borrow 'posix)
+
 (: (refused? x) (!x || gripe? x))
 
 ; --- the lexer: kinds, values, lines, comments, maximal munch ---
@@ -1128,7 +1130,7 @@
 ; constraint refusals: a letter outside the surface, a duplicate pin, x64's frame r4, a float
 ; operand, a clobber of the stack pointer -- each () out of cgen, never fudged bytes.
 (: (cast src) <>(cparse <>(clex src))
-   hb (from 'holo 'holo-bytes)
+   hb (cite 'holo 'holo-bytes)
    (hasraw fs want) (? !(two? fs) ()
                        (: f2 <fs
                           (? (two? f2 && (= <f2 'raw) && (= <>f2 want)) 1 (hasraw >fs want))))
@@ -1733,13 +1735,13 @@
 
 ; -- the exhaustion: the rename relation is finite -- one shape per op rdsp knows, at most two
 ; read positions each, fifteen registers in the gp file -- so "can this pass hand holo a form the
-; assembler refuses?" is decidable by running the carrier rather than argued from the guards.
+; assembler refuses?" is decidable by running the carrier rather than argued cite the guards.
 ; Every (shape, read position, substitute) goes through the real cpwalk and the real assembler,
 ; and every (shape, new destination) through the real coal: a complete proof over the carrier,
 ; drift-gated twice -- an op added to a roster with no shape here fails the coverage assert, and a
 ; guard relaxed too far fails an emit. both refusals copyprop was built against (alias-dst and
 ; shiftv-count-not-r1) were found by a build breaking; this is what replaces that.
-(: hb9 (from 'holo 'holo-bytes)
+(: hb9 (cite 'holo 'holo-bytes)
    ; the label rides along for la's fixup; a scare anywhere in the encode answers 0
    (emits? f) (trap (\ _ (: _ (hb9 'x64 [f '(label zz9)]) 1)) () (\ a b 0))
    gX {}

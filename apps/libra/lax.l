@@ -25,6 +25,7 @@
 ; arity table or node constructor answers most of its sites at once (clay-tags in
 ; apps/moon/clay.l is one), and a longest-first arm cascade over a ranged tag
 ; reads the same either way, since the longer arm already took the longer node.
+(borrow 'posix)
 (:
    infix '(. >< + || && @)
    tagheads '(list hash tuple ? \ mono jot)      ; mono/jot: a glued ^pin, already exact

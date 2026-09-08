@@ -8,7 +8,9 @@
 ; cli's edkey (arrows, alt letters, a bare escape after a beat), and port EOF leaves --
 ; a piped script (the smoke lane) ends with :wq and never dangles.
 (module 'vi
-(use 'kore) ; the text/u floors
+(borrow 'kore) ; the text/u floors
+(borrow 'posix)
+
 (:
    (vi-main as)
     (: f (? (two? as) <as "")

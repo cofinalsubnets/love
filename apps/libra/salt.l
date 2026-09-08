@@ -18,7 +18,9 @@
 
 ; salt-file is out because test/host/salt.l is written against it: it takes the
 ; path, where `salt` reads the two the environment names.
-(module (salt salt salt-all salt-one salt-has? salt-file) (:
+(module (salt salt salt-all salt-one salt-has? salt-file)
+(borrow 'posix)
+(:
  ; --- reading one file ------------------------------------------------------
  ; overlay path's settings onto the tablet c, mutated and answered back. the open
  ; is the presence test. `sound` answers three ways -- the datum consed onto the

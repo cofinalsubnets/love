@@ -16,15 +16,15 @@
 ; zero fitted is not a failure here and is in test/gate/forge.l. a build with no glaze
 ; module answers the twin everywhere, which is the design; what this gate owes is that the
 ; two agree, and that it says out loud which one it was comparing.
-(: _ (use 'gz)
-   _ (use "apps/forge.l")
+(: _ (borrow 'gz)
+   _ (borrow "apps/forge.l")
    (die m) (: _ (say err ("gzfind: " + m + "\n")) _ (flush err) (quit 1))
    (safe f) (trap (\ _ (f 0)) () (\ a b ['scared a]))
    (mk n f) (: b (cask n) (go i) (? (n <= i) (string b) (: _ (pin b i (f i)) (go (i + 1)))) (go 0))
    win (32768 * 4)
 
    nat (gz-finder (gz-floor + 1))
-   native (peep (from 'forge 'forge-nat) 'gz-find 0)
+   native (peep (cite 'forge 'forge-nat) 'gz-find 0)
    _ (say out ("gzfind: the finder is " + (? native "NATIVE" "the twin")
                + ", arch " + love-arch + "\n"))
    _ (? (forge-why 0) (say out ("  declines: " + show (forge-why 0) + "\n")) 0)

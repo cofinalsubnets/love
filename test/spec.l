@@ -821,11 +821,11 @@
 (assert (lit? ev) (? hatched (charm? born) 1))
 (hear test-strict)
 
-; --- modules --- one layer per load, the registry, and `use` the loader -- all the runtime's.
+; --- modules --- one layer per load, the registry, and `borrow` the loader -- all the runtime's.
 ; there is no enter/leave on the surface: the runtime opens a fresh layer around every module
 ; load and around the session itself (the base is read-only because it is never the head), and
 ; the layer verbs live on only inside the loader's closures, mopped at birth like books/setbooks.
-; a module arrives by NAME: (use 'x) splices a registered module just below the top -- its names
+; a module arrives by NAME: (borrow 'x) splices a registered module just below the top -- its names
 ; resolve on the walk but can never shadow the top's own -- and loads it on a miss, off the one
 ; walk left: lib/<x>.l on the cwd, the dev tree's lane. what a frontend bakes never reaches that
 ; walk -- the source declares its own (module 'x ..) and the boot evals it, so the name is
@@ -835,18 +835,18 @@
 ; fixtures, so it lives outside this corpus); here the boot-loaded modules prove the registry
 ; surface, since every corpus frontend registers rng and kanren (bao too, except the wasm
 ; shim, whose test harness feeds cli.l bare -- the page is its own repl).
-; (from 'name) is the module's tablet -- currying reaches a member because a tablet indexes
+; (cite 'name) is the module's tablet -- currying reaches a member because a tablet indexes
 ; itself, `keys` introspects it like any other, a missing module answers () (the presence
 ; guard: `lit?` is true of a tablet even when empty and false of (), so it is the one honest
-; test), and (from ()) lists the registered names.
+; test), and (cite ()) lists the registered names.
 (assert
-  (lit? (from 'uu)) (lit? (from 'kanren))                      ; boot-loaded, registered
-  (member? 'kanren (from ())) (member? 'uu (from ()))          ; the registry lists them
-  !(from 'spec-nope)                                            ; the presence guard
-  (tablet? (from 'kanren))                                      ; a module is its tablet
-  (member? 'walk (keys (from 'kanren)))                         ; so `keys` introspects it
-  (8 = ((from 'kanren 'subst) '(()) 8))                         ; curried member reach
-  !(from 'kanren 'spec-missing)                                 ; a member miss reads the zero point
+  (lit? (cite 'uu)) (lit? (cite 'kanren))                      ; boot-loaded, registered
+  (member? 'kanren (cite ())) (member? 'uu (cite ()))          ; the registry lists them
+  !(cite 'spec-nope)                                            ; the presence guard
+  (tablet? (cite 'kanren))                                      ; a module is its tablet
+  (member? 'walk (keys (cite 'kanren)))                         ; so `keys` introspects it
+  (8 = ((cite 'kanren 'subst) '(()) 8))                         ; curried member reach
+  !(cite 'kanren 'spec-missing)                                 ; a member miss reads the zero point
   (lit? unify) (lit? rand) (lit? reads))                        ; the boot splices serve the bare names
 
 ; (module 'nm form ..) is the filesystem-free definition: open nm's layer -- the registered
@@ -861,16 +861,16 @@
    m2 (module 'spec-mod (: smv (smv + 1) smw 100))       ; reopen: the old member is in scope
    ma (module () (: sma 9))
  (assert
-  (tablet? m1) (m1 = m2) (m1 = from 'spec-mod)           ; one tablet, registered, answered
-  (42 = from 'spec-mod 'smv) (100 = from 'spec-mod 'smw) ; the reopen read 41 and extended
-  (42 = ((from 'spec-mod 'smf) 1))                       ; smf folded smv at its compile: 41
+  (tablet? m1) (m1 = m2) (m1 = cite 'spec-mod)           ; one tablet, registered, answered
+  (42 = cite 'spec-mod 'smv) (100 = cite 'spec-mod 'smw) ; the reopen read 41 and extended
+  (42 = ((cite 'spec-mod 'smf) 1))                       ; smf folded smv at its compile: 41
   (smv-out = member? 'smv (names ()))                    ; no leak: the walk is as it was
   !(member? 'sma (names ()))                             ; the anonymous layer leaks nothing
   (tablet? ma)))                                         ; the scratch layer answers its tablet
 ; use splices a module `module` made. two forms, and they have to be: a group is
 ; compiled whole, so a read of smv sitting beside the use that splices it is addressed
 ; before the splice has run, and answers `;; missing smv' on the way to being right.
-(: _ (use 'spec-mod))
+(: _ (borrow 'spec-mod))
 (assert (42 = smv))
 ; a module's forms eval one by one, never as one application chain: a form whose
 ; answer is a function must not be applied to the next form's answer. the probe is

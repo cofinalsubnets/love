@@ -206,7 +206,7 @@ $$($(1)_math_o): $$($(2))/moonlibc/%.o: apps/moon/lib/moonlibc/%.c $$(moon0_dep)
 $$($(2))/sys.o: out/.mksys-cat.l $$(love0)
 	@echo 'HOLO	'$$@
 	@mkdir -p $$(dir $$@)
-	@LOVE_NO_IMAGE= $$(love0) -l out/.mksys-cat.l -q -e "((from 'moon 'mksys-$$($(4))) \"$$@\")" && test -s $$@
+	@LOVE_NO_IMAGE= $$(love0) -l out/.mksys-cat.l -q -e "((cite 'moon 'mksys-$$($(4))) \"$$@\")" && test -s $$@
 endef
 
 moon_d = $(ho)/moon
@@ -431,7 +431,7 @@ $(distro_img): apps/init/boot.l $(lushfiles) $(korefiles) $(distro_love)
 	@cp $(distro_love) $(distro_root)/bin/love && chmod 755 $(distro_root)/bin/love
 	@cat $(lushfiles) > $(distro_root)/lib/sh.l
 # ⚠ apps/dns.l RIDES ALONG OR THE WHOLE TOOLBOX DIES: apps/ain.l, a korefiles member,
-# probes for the `dial` nif at load and says (use 'dns) when it is absent -- which it is
+# probes for the `dial` nif at load and says (borrow 'dns) when it is absent -- which it is
 # in love-raw -- and an initramfs with no /apps/dns.l answers that with a scare that takes
 # the whole cat down. The symptom is every applet gone, not a quiet nc.
 	@cp apps/dns.l $(distro_root)/apps/dns.l
@@ -537,8 +537,8 @@ $(k_odir)/kproject.list: force_dist_list
 $(k_odir)/kproject.l: $(kproject_l) $(k_odir)/kproject.list
 	@echo '$(t_cat)	'$@
 	@mkdir -p "$(dir $@)"
-	@{ echo "(use 'holo)"; cat $R/apps/kore/text.l $R/apps/kore/u.l; \
-	   echo "(use 'kore)"; cat $(filter-out $R/apps/kore/text.l $R/apps/kore/u.l,$(kproject_l)); } > $@
+	@{ echo "(borrow 'holo)"; cat $R/apps/kore/text.l $R/apps/kore/u.l; \
+	   echo "(borrow 'kore)"; cat $(filter-out $R/apps/kore/text.l $R/apps/kore/u.l,$(kproject_l)); } > $@
 
 # at the host's own arch there is no second kernel build: $(kart_o) is linked into the
 # shipped love already, so the elf is projected out of that binary, and it WAKES the
@@ -601,8 +601,8 @@ $$($(1)_kern_o) $$($(1)_arch_o) $$($(1)_quay_o): $$($(2))/%.o: $$R/%.c $$($(1)_h
 $$($(2))/mkvec.l: $$R/inle/mkvec.l $$($(1)_lay_l)
 	@echo '$(t_cat)	'$$@
 	@mkdir -p "$$(dir $$@)"
-	@{ echo "(use 'holo)"; cat $$R/apps/kore/text.l $$R/apps/kore/u.l; \
-	   echo "(use 'kore)"; cat $$(filter-out $$R/apps/kore/text.l $$R/apps/kore/u.l,$$($(1)_lay_l)) $$<; } > $$@
+	@{ echo "(borrow 'holo)"; cat $$R/apps/kore/text.l $$R/apps/kore/u.l; \
+	   echo "(borrow 'kore)"; cat $$(filter-out $$R/apps/kore/text.l $$R/apps/kore/u.l,$$($(1)_lay_l)) $$<; } > $$@
 # the vector lay, under whatever love a fresh tree has (mksys's own idiom)
 $$($(2))/kvec.o: $$($(2))/mkvec.l $$(love0)
 	@echo 'HOLO	'$$@
@@ -661,8 +661,8 @@ klay_l = $R/apps/kore/text.l $R/apps/kore/u.l $R/apps/kore/asbook.l \
 $(k_odir)/mkvec.l $(k_odir)/mkboot.l: $(k_odir)/%.l: $R/inle/%.l $(klay_l)
 	@echo '$(t_cat)	'$@
 	@mkdir -p "$(dir $@)"
-	@{ echo "(use 'holo)"; cat $R/apps/kore/text.l $R/apps/kore/u.l; \
-	   echo "(use 'kore)"; cat $(filter-out $R/apps/kore/text.l $R/apps/kore/u.l,$(klay_l)) $<; } > $@
+	@{ echo "(borrow 'holo)"; cat $R/apps/kore/text.l $R/apps/kore/u.l; \
+	   echo "(borrow 'kore)"; cat $(filter-out $R/apps/kore/text.l $R/apps/kore/u.l,$(klay_l)) $<; } > $@
 
 $(xd)/love: $(xkart_o)
 
@@ -678,7 +678,7 @@ $(k_lay_o) $(k_boot_o): $(k_odir)/$a/%.o: $(k_odir)/mk%.l $m
 $(k_tail_o): out/.mksys-cat.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@$m -l out/.mksys-cat.l -q -e "((from 'moon 'mksys-$a) \"$@\")" && test -s $@
+	@$m -l out/.mksys-cat.l -q -e "((cite 'moon 'mksys-$a) \"$@\")" && test -s $@
 
 k_kvm = $(if $(and $(wildcard /dev/kvm),$(filter x64,$a),$(filter x64,$(hosta))),-enable-kvm -cpu host,)
 # the sound card: an HDA controller with one output codec, on the host's own audio.
@@ -735,7 +735,7 @@ $(k_uefid)/loader.o: $R/inle/uefi/loader.c $(ho)/.love.baked
 $(k_uefid)/$(k_efiname): $(k_uefid)/loader.o $(uefi_l) $m
 	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
-	@{ echo "(use 'holo)"; cat $(uefi_l); echo '(mkboot "$@" "$a" (list "$<"))'; } | $m
+	@{ echo "(borrow 'holo)"; cat $(uefi_l); echo '(mkboot "$@" "$a" (list "$<"))'; } | $m
 # the ESP: the loader at that path, and the kernel beside it (the loader opens
 # "love.elf" on its own volume).
 $(k_espd)/EFI/BOOT/$(k_efiname): $(k_uefid)/$(k_efiname)
@@ -849,8 +849,8 @@ $d/bin/$(BIN): $(ho)/love $(ho)/.love.baked
 # READ their siblings rather than being -l'd beside them -- two tool files cannot both be
 # -l'd, since each one's seat would fire on the other's command line -- and they find them
 # by READLINK'ing this very symlink back to the source tree, so the link on PATH and the
-# crew directory need not be neighbours. libra's siblings are named ((use 'lint),
-# (use 'salt), and (use 'lapiz) on the doc verb alone) and ride the baked image.
+# crew directory need not be neighbours. libra's siblings are named ((borrow 'lint),
+# (borrow 'salt), and (borrow 'lapiz) on the doc verb alone) and ride the baked image.
 # ⚠ each source sits FIRST on its own line: instool reads $<, and a prerequisite added on
 # the grouped line below lands ahead of it -- which installs the kore shim as `cook`.
 $d/bin/cook:    apps/cook.l    $(ho)/.love.baked
@@ -929,7 +929,7 @@ $d/bin/bao: $(MAKEFILE_LIST)
 	@install -d $(dir $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$(readlink -f -- "$$0")")" && pwd)'; \
-	   echo 'exec "$$h/$(BIN)" -e "((from '\''cli '\''shell) 0)" "$$@"'; } > $@
+	   echo 'exec "$$h/$(BIN)" -e "((cite '\''cli '\''shell) 0)" "$$@"'; } > $@
 	@chmod 755 $@
 
 # the .TH command name follows BIN too (`man lovelang` should not head LOVE(1));

@@ -26,6 +26,7 @@
 ; mount (early /proc, /sys, devtmpfs), and the cgroup-v2 writes. everything below that
 ; is this file -- the dependency graph, the restart policy, the checkpoint -- already love.
 
+(borrow 'posix)
 (: (note s) (: _ (puts s) (puts "\n"))               ; the narrator: a line to the console
 
    ; --- a unit is an immutable list (name kind cmd restart deps) --- show/read

@@ -75,7 +75,7 @@ int main(void) {
   if (rounds) ok++;
 
   /* a multiply that wraps is refused outright -- the whole reason the count and the
-   * size are two arguments rather than one. ⚠ volatile: a compiler that folds these
+   * size are two arguments rather than one. volatile: a compiler that folds these
    * sees an impossible object and warns, and the runtime answer is what is asked */
   volatile unsigned long huge = (unsigned long) -1;
   if (!calloc(huge / 2 + 1, 4)) ok++;

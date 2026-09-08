@@ -47,10 +47,10 @@
 
 ; the backends reopen this module, each wearing the same (module 'holo head, so a frontend
 ; cats this file plus the backends it wants into the text its boot evals and gets one layer.
-; its boot then says (use 'holo) and ai_unsplice_ -- so holo registers without staying
-; ambient: a consumer either (use 'holo) and reads bare, or probes one member through
-; (from 'holo 'assemble). a backend the frontend left out joins at runtime the same way every
-; cat does: (use 'holo), then the backend text.
+; its boot then says (borrow 'holo) and ai_shelve_ -- so holo registers without staying
+; ambient: a consumer either (borrow 'holo) and reads bare, or probes one member through
+; (cite 'holo 'assemble). a backend the frontend left out joins at runtime the same way every
+; cat does: (borrow 'holo), then the backend text.
 
 (module 'holo
 (: ;; -- a 0-based list accessor (prel has none; `nth` is not bound -- it absorbs as the zero

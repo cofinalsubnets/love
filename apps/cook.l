@@ -42,8 +42,8 @@
 ; Cookfile, or a -f file) is love source. See "importing a Makefile" at the foot of
 ; this file. The first rule is the default ticket either way.
 
-; the wrap: every lane rides module 'cook. a consumer says (use 'cook)
-; (the baked module) or probes (from 'cook 'recipe); riding a cat (kore's), the wrap
+; the wrap: every lane rides module 'cook. a consumer says (borrow 'cook)
+; (the baked module) or probes (cite 'cook 'recipe); riding a cat (kore's), the wrap
 ; registers the same module, so the ~30 globals (`join` `date` `check` `shell`
 ; among them) stay off the cat's session layer too. a path load composes: the
 ; loader keeps a file's own registration over its wrapper layer (prel's t re-pin).
@@ -51,7 +51,9 @@
 
 ; the combinators (l/boot/post.l) -- the wrap's first form, so the names walk
 ; before anything below compiles against them, scoped to this module's compile.
-(use 'peg)
+(borrow 'peg)
+
+(borrow 'posix)
 
 (: cards (tablet 0)          ; the recipe cards: item -> (ingredients orderonly . steps)
    check (tablet 0)        ; a 1-cell box: the standing check -- the first item declared (the default when no ticket is named)
@@ -336,7 +338,7 @@
    (inimg sh)
    (: v (peep cookbox 'inimg 'no)
        (? !(= v 'no) v
-          (: ours (from 'lush 'sh-ours?) one (from 'lush 'sh-oneline)
+          (: ours (cite 'lush 'sh-ours?) one (cite 'lush 'sh-oneline)
              f (? ((lit? ours) && (lit? one) && (ours sh)) one 0)
              _ (pin cookbox 'inimg f)
              f)))
@@ -417,13 +419,13 @@
 ; (kore's) registered it already, and a standalone -l load reads the file by
 ; name, here, before cook-glob folds its from-read. where neither lands (a dev
 ; binary run outside the tree), globw below keeps the POSIX shell-out lane.
-(? (tablet? (from 'lush)) 0
-   (two? (stat "apps/lush.l")) (use "apps/lush.l")  ; the one file registers module 'lush
+(? (tablet? (cite 'lush)) 0
+   (two? (stat "apps/lush.l")) (borrow "apps/lush.l")  ; the one file registers module 'lush
    0)
 ; cook-glob: the pathname glob, a closure when lush's glob is aboard, () when
 ; not (the importer then keeps its POSIX shell-out lane). the glob rides
 ; module 'lush now, so the door is a from-read -- a miss answers ().
-(: cook-glob (: g (from 'lush 'sh-glob) o (from 'lush 'sh-ones)
+(: cook-glob (: g (cite 'lush 'sh-glob) o (cite 'lush 'sh-ones)
                 (? ((lit? g) && (lit? o)) (\ pat (g pat (o #pat))) ())))
 
 ; The whole importer lives in one body-having `:`, so none of its many helper
@@ -440,7 +442,7 @@
    emitp (tablet 0)
 
    ; -- the combinators (eps/lit/one/span/alt/seq/seqs/opt/skip/pmap/many/parse) come from l/boot/post.l,
-   ;    spliced by the (use 'peg) above; this body-having `:` reads them bare down the walk.
+   ;    spliced by the (borrow 'peg) above; this body-having `:` reads them bare down the walk.
 
    ; -- character classes and string utilities --
    (chws c)     ((c = 32) || (c = 9))
@@ -606,7 +608,7 @@
                 (g (1 + j) depth)))))
     i 0)
 
-   ; GNU make substitution on one word of $(VAR:from=to). With a % in `from` it is
+   ; GNU make substitution on one word of $(VAR:from=to). With a % in `cite` it is
    ; a pattern (prefix%suffix) whose stem fills the % in `to`; without a % it is a
    ; trailing-text replacement (the .o=.c shorthand). Non-match passes through.
    (patsub frm to w)
@@ -1459,11 +1461,15 @@
    ; it splices its own layer first, and owns that for every caller (the seat, kore's
    ; dispatcher, a host embedding cook): a Cookfile is love source read at runtime, so
    ; its bare (recipe ..) (cook-all 0) (ticket 0) only resolve on the module walk. one
-   ; (use 'cook), at the one place that needs it -- a caller just needs the closure.
+   ; (borrow 'cook), at the one place that needs it -- a caller just needs the closure.
    (cook-main as)
-   (: _ (? !(nil? (from 'cook)) (use 'cook) 0)  ; splice my registered self if I am one (the module
+   (: _ (? !(nil? (cite 'cook)) (borrow 'cook) 0)  ; splice my registered self if I am one (the module
                                                 ; path); riding a cat, my names already walk -- the
                                                 ; presence guard keeps the loader out of it
+      ; ..and posix beside it. a global name reads the LIVE book (l/ev.c's lvm_index),
+      ; and this is called on a chain that carries neither: the line above puts back
+      ; this file's own names, and nothing puts back the doors it was loaded with.
+      _ (borrow 'posix)
       opt (parse-args as)
       _ (? (peep opt 'help 0) (usage 0) 0)
       _ (? (peep opt 'ver 0) (version 0) 0)
@@ -1527,8 +1533,8 @@
 ;
 ; cook-main reads bare: the module's layer holds this file's binds and is still
 ; the head here. cook-main splices its registered self when called from outside.
-(: _ (pins (from 'verbs 'tab) 'cook cook-main)
-   s ((from 'verbs 'fire) ["cook" "cook.l"])
+(: _ (pins (cite 'verbs 'tab) 'cook cook-main)
+   s ((cite 'verbs 'fire) ["cook" "cook.l"])
    (? (two? s) (cook-main >s) ()))
 
 ) ; module 'cook

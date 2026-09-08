@@ -17,8 +17,8 @@
 ; output stage), and the moon gate checks this file as data against it -- a new pass declares
 ; its sig there, and a recomposition of the strict chains is a clash naming its seam.
 (module 'moon
-(use 'kore)
-(use 'holo) ; the assembler module: asm-text, arbytes, the linker
+(borrow 'kore)
+(borrow 'holo) ; the assembler module: asm-text, arbytes, the linker
 (:
    ; first binding on purpose: a plain VALUE folds eagerly when the baking compiler reaches
    ; a reader (a lambda resolves lazily), and the fold order is not textual. the t32 pair push;
@@ -260,18 +260,18 @@
         (? (a >= hi) (ctlin? u lo hi)
            (a > lo) 1)
        (minp l) (atom? >l ? <<l (minp >l))
-       ; the release scan: does the register's leftover matter past `from`? walk linearly:
-       ; the earliest event past `from` decides -- a jump-out refuses (the leftover flows
+       ; the release scan: does the register's leftover matter past `cite`? walk linearly:
+       ; the earliest event past `cite` decides -- a jump-out refuses (the leftover flows
        ; where we cannot look), a call clears (caller-saved dies there), a ret clears unless
        ; the register is in lvret (an invisible read), a mention clears on a def and refuses
        ; on a read, and no event at all is clear (a route ends AT a mention, so no mention
        ; anywhere past means no reader anywhere).
-       (rel? nom from)
+       (rel? nom cite)
         (: (go2 ml)
-            (: p (: (nx (a . u)) (<a > from ? [<a <>a] (nx u)) (nx ml))
-               jp (fpast (st 'jout) from)
-               sp (fpast (st 'stop) from)
-               rtp (fpast (st 'ret) from)
+            (: p (: (nx (a . u)) (<a > cite ? [<a <>a] (nx u)) (nx ml))
+               jp (fpast (st 'jout) cite)
+               sp (fpast (st 'stop) cite)
+               rtp (fpast (st 'ret) cite)
                big 1000000000
                pv (two? p ? <p big)
                jv (jp || big)
@@ -6241,7 +6241,7 @@
    ; an operand's byte width, off its type by static peek (a register spells by it on x64)
    (asmw g env e) (: ty (peekty g env e)
                      (? (bad? ty) 8 (: n (tsz g ty) (? (member? n '(1 2 4 8)) n 8))))
-   asmhb holo-bytes                                 ; bare: the cat leads with (use 'holo) (asbook.l), so this folds at compile
+   asmhb holo-bytes                                 ; bare: the cat leads with (borrow 'holo) (asbook.l), so this folds at compile
    (cgasm g env s)
     (: _ (pin g 'hasasm 1)
        tmpl <>s

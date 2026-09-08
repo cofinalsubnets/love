@@ -12,15 +12,15 @@
 ; touching any other. run:
 ;   cat test/00-init.l test/host/lapiz.l | out/love
 
-(use 'lapiz)                                ; the baked module, spliced
+(borrow 'lapiz)                                ; the baked module, spliced
 
 ; --- the module seam: lapiz registered, the splice + accessor both reach -------
 (assert
- (member? 'lapiz (from ()))                   ; the registry lists it
- (member? 'md->ht (keys (from 'lapiz)))        ; keys introspects the layer
- ("<h1>hi</h1>" = ((from 'lapiz 'md->ht) "# hi"))   ; the opaque accessor reaches a face
- (lit? (from 'lapiz))                         ; presence: the accessor is a closure
- (! (from 'lapis)))                           ; a missing module answers ()
+ (member? 'lapiz (cite ()))                   ; the registry lists it
+ (member? 'md->ht (keys (cite 'lapiz)))        ; keys introspects the layer
+ ("<h1>hi</h1>" = ((cite 'lapiz 'md->ht) "# hi"))   ; the opaque accessor reaches a face
+ (lit? (cite 'lapiz))                         ; presence: the accessor is a closure
+ (! (cite 'lapis)))                           ; a missing module answers ()
 
 ; --- the corpus: every block, every span, and the edges around them ------------
 (: corpus

@@ -4,7 +4,8 @@
 ; rides its row's comment, // [X] (n), so cp437 -> unicode needs no table of its own.
 ;   love tools/mkfont.l SRC.c BASELINE OUT.woff FAMILY
 ; BASELINE is the pixel row the glyphs sit on: 12 on the 8x16 face, 6 on the 8x8.
-(use 'gz)
+(borrow 'gz)
+(borrow 'posix)
 (: upem 1024
    (be16 n) (: v (n < 0 ? (n + 65536) n) [((v >> 8) & 255) (v & 255)])
    (be32 n) (: v (n < 0 ? (n + 4294967296) n) [((v >> 24) & 255) ((v >> 16) & 255) ((v >> 8) & 255) (v & 255)])

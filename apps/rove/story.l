@@ -30,6 +30,10 @@
 (module (story story-main story-run story-new story-key story-frame open-window window-say
          level kind thing level-of data-of level-text load-level save-level library
          tile kind-of wall? thing-at pen wrap joins)
+; posix is OPTIONAL: the page's seat (inle/wasm) links none of it, and this file runs
+; there. ask before splicing -- an absent module is a scare, and the names below that
+; want a tty go missing on that seat exactly as they did before there was a module.
+(? (cite 'posix) (borrow 'posix) ())
 (:
  ; --- levels as data ------------------------------------------------------------
  ; in play: level {'title 'rows (strings) 'w 'h 'sx 'sy 'tiles {ch kind ..} 'things {id
@@ -113,11 +117,11 @@
                    _ (pin w 'steps >st)
                    (<s @ 'say (each >s (t \ window-say g t))
                         'ask (pin w 'prompt 1)
-                        'hatch (: run (from 'rove 'rove-run)
+                        'hatch (: run (cite 'rove 'rove-run)
                                   (? run (run (), window-say g "you climb back out of the hold.")
                                      (window-say g "the hatch is sealed on this seat.")))
                         (window-say g ("?? " + show s))))))
- (mod nm k) (from nm k)
+ (mod nm k) (cite nm k)
  ; the interpreter, inside a window: a book to read or open off the thing's shelf, a
  ; look, a help, or a love form evaluated and shown -- every answer lands in the window
  (interp g ln) (: w (g 'win) t (w 'thing)
@@ -275,5 +279,5 @@
  (story-main as) (: p (two? as ? <as "apps/rove/levels/lighthouse.l")
                      lvl (? (two? (readdir p)) (library p) (load-level p))
                      (? lvl (story-run lvl) (say err ("story: not a level: " + p + "\n"), 1)))
- _ (pins (from 'verbs 'tab) 'story story-main))
+ _ (pins (cite 'verbs 'tab) 'story story-main))
 ) ; module story

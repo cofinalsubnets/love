@@ -1734,13 +1734,13 @@ void kmain(void) {
   struct ai *r = g;
   if (!woke) {
    r = ai_cats_egg(g);
-   r = ai_cats_mods(r);                                  // register every baked module; the uses below are splices
+   r = ai_cats_lib(r);                                  // register every baked module; the uses below are splices
    r = ai_evals_(r,
     // verbs FIRST: this machine's userland IS a verb table -- the cat's apps pin their
     // own names as they load, and the boot cmdline's program seat reads the registry.
-    "(use 'verbs)"
-    "(use 'uu) (: uu (from 'uu))"                         // the uu kernel: the corpus's uu files drive it through the
-    "(use 'cli)"); }                                      //   one-name `uu` surface on this target too
+    "(borrow 'verbs)"
+    "(borrow 'uu) (: uu (cite 'uu))"                         // the uu kernel: the corpus's uu files drive it through the
+    "(borrow 'cli)"); }                                      //   one-name `uu` surface on this target too
   // FIXME waaaaay too much code in here, old style too. also, this gets eval'd by c0, right? not ideal.
   // FIXME again, waaaaaaaaaaaaaaaaaaaaaaaaaaay too much code in string literals! ridiculous!
   //
@@ -1791,7 +1791,11 @@ void kmain(void) {
  // read. every exit funnels through the seat-aware quit; wait is catch, the pid is the task
  // pid. pg/fg/closes are accepted and ignored: no process groups, no ^Z, and the seat dups
  // its own ends so there is nothing for a child to leak.
- "(: (k-bn p) (: n (tally p)"
+  // the fs doors by VALUE, off their module: a splice would sit above the kernel's own
+  // shadows (raw, signal, setenv, environ, and the no-op roster below), and those are
+  // the whole reason this seat can run a crew written for a host.
+ "(: open (cite 'posix 'open) close (cite 'posix 'close) stat (cite 'posix 'stat)"
+ "   (k-bn p) (: n (tally p)"
  "     (go i r) (? (< i n) (go (+ i 1) (? (= (p i) 47) (+ i 1) r)) (snip p r n))"
  "     (go 0 0))"
  "   (k-run-file p) (\\ as (: q (open p \"r\")"
@@ -1802,11 +1806,11 @@ void kmain(void) {
  "        127)))"
  "   (k-tool nm as) (? (member? nm (names ())) (link (ev nm) as) ())"
  // the registry is the PATH on this machine: every app pins its own names into
- // (from 'verbs 'tab), and `word` applies the shadow rules -- a slashed word or
+ // (cite 'verbs 'tab), and `word` applies the shadow rules -- a slashed word or
  // a .l name is a file and never a verb, which is what leaves the two lanes
  // below reachable. a verb takes the args AFTER its name, kore's convention.
  "   (k-prog argv) (: a0 (cap argv) b (k-bn a0) as (cup argv)"
- "     v ((from 'verbs 'word) a0)"
+ "     v ((cite 'verbs 'word) a0)"
  "     (? !(nil? v) (link v as)"
  "        (: k (k-tool (intern (+ b \"-main\")) as)"
  "           (? (two? k) k"
@@ -1872,7 +1876,7 @@ void kmain(void) {
    "   0)");
   // THE SESSION: a fresh writable layer, C-side (the host's run_program shape) --
   // the shell's defglobs (and the corpus stream's) land here, never in the base.
-  r = ai_layer_(r);
+  r = ai_open_(r);
   // rung 3: the userland. first test/00-init.l's move, for its reason: an unbound mention
   // raises missing at every define that names one, and bao's file-help folds a real quit,
   // so one absent nif in the cat resets the machine at load. pin a no-op fallback for
@@ -1898,6 +1902,7 @@ void kmain(void) {
    "          (? (< i j) (kwords s (+ j 1) (+ j 1) (link (snip s i j) acc)) (kwords s (+ j 1) (+ j 1) acc))"
    "          (kwords s i (+ j 1) acc))"
    "       (? (< i j) (rev (link (snip s i j) acc)) (rev acc)))"
+   "   open (cite 'posix 'open) close (cite 'posix 'close)"    // by value, as above
    "   (kslurp p) (: h (open p \"r\") s (slurp h) _ (close h) s)"
    "   (kcat l) (? (two? l) (+ (kslurp (cap l)) (kcat (cup l))) \"\")"
    "   korecat (kcat (kwords korelist 0 0 ())))");
@@ -1921,7 +1926,7 @@ void kmain(void) {
    "           (: _ (say err (+ (cap bootargv) \": not found\")) _ (put err 10) 127))"
    "      (quit (? (charm? r) r 0)))"
    "   0)");
-  r = ai_evals_(r, "((from 'cli 'shell) 0)");
+  r = ai_evals_(r, "((cite 'cli 'shell) 0)");
   // a terminal scare gets the honest face on the serial console before reset
   if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
   ai_fin(r); }

@@ -414,7 +414,7 @@
 
  ; --- witnesses: a little program -- three top forms, one nested ---
  t0 '((: a 1) (: b 2) (main (f x)))
- pr (tp () 0 () '((use m)))                                ; root insert at 0 (dp +1)
+ pr (tp () 0 () '((borrow m)))                                ; root insert at 0 (dp +1)
  qd (tp '(3) 1 '((f x)) '((g y)))                          ; deep edit, aimed post-pr
 
  ; (L1) commute is involutive, and the re-aim is a PATH re-aim: qd's postcode
@@ -429,7 +429,7 @@
  ; dependencies: a deep edit inside freshly-written news, and the swallow
  ;      (q replaces the subtree p edited -- shut HERE; form six opens it)
  _ (assert
-    (! (commute pr (tp '(0) 0 '(use) '(want))))            ; inside pr's news
+    (! (commute pr (tp '(0) 0 '(borrow) '(want))))            ; inside pr's news
     (! (commute (tp '(1) 2 '(1) '(7)) (tp () 1 '((: a 7)) ()))))  ; swallowed
 
  ; (L2) inverse round-trips at depth
@@ -447,7 +447,7 @@
       (assert
        (heq (apon (apon t0 pr) qd) (apon (apon t0 cq) cp))
        (heq (apon (apon t0 pr) qd)
-            '((use m) (: a 1) (: b 2) (main (g y))))
+            '((borrow m) (: a 1) (: b 2) (main (g y))))
        (! (valid t0 qd))))
 
  ; the inp lane: a deep edit rides a root shrink the other way (path 2 -> 1)

@@ -37,6 +37,7 @@
 ; Z not nat: (3 3 3) = 3^27 would blow up unary-nat vm_compute.
 ; Reads test/spec.l, writes Coq to `out`.  Run: out/love tools/spec2coq.l > test/proof/rocq/gen.v
 
+(borrow 'posix)
 (: join (foldl (+) "")                           ; join a list of strings with + (was `cat`, which shadowed the global dyadic cat)
    ; the four interning tables, hoisted to the head of the chain: bound down beside their
    ; readers, a capturing closure resolves them as a global import and the runtime says

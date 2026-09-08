@@ -19,7 +19,7 @@
 ; adjacent edits with no stable line between them share a run and conflict --
 ; textbook diff3, the same call git makes.
 ;
-; every lane rides module 'sb (the wrap below): a consumer says (use 'sb) --
+; every lane rides module 'sb (the wrap below): a consumer says (borrow 'sb) --
 ; the parts assemble the whole stack (kore text + diff, then merge/http/core),
 ; each part registering itself; the standalone script is the same files catted,
 ; the wrap registering the same module. loads after apps/kore/{text,diff}.l
@@ -30,7 +30,7 @@
 ; path already diverged.
 
 (module 'sb
-(use 'kore) ; the text/diff floors (myers, lines) ride module 'kore
+(borrow 'kore) ; the text/diff floors (myers, lines) ride module 'kore
 (:
    ; the 'adds sitting at the front of a script (a del's replacement)
    (m3grab m a) (? (two? m && (<<m = 'add)) (m3grab >m (<><m . a)) [m (rev a)])

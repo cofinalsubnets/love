@@ -10,7 +10,10 @@
 ; driven from test/host/run.l under a timeout, like the other socket laws: a
 ; resolver that stops parking stops the whole vm, and a wedged gate is worse than
 ; a red one.
-(: _ (use 'dns))
+; driven bare -- no test/00-init.l ahead of it -- so the posix door is borrowed here.
+(? (cite 'posix) (borrow 'posix) ())
+
+(: _ (borrow 'dns))
 
 ; --- the fake nameserver -------------------------------------------------------
 ; answer `q` (a query) with one a record for `addr`, or with the TC bit set and

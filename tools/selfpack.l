@@ -31,23 +31,24 @@
 ; it is the cut that writes the sidecar, so what .sha names is always the archive
 ; that was written and never the pass that only looked.
 ; named as paths, not module names, because love0 has no image to carry them: it is
-; gcc-built from the l/boot/*.l headers alone, so `(use 'tar)` under it has no registered
+; gcc-built from the l/boot/*.l headers alone, so `(borrow 'tar)` under it has no registered
 ; tablet to find and the loader has no business inventing one. each file's own
-; (module 'nm ..) head registers it as it loads, which is all a later `use` needs.
+; (module 'nm ..) head registers it as it loads, which is all a later `borrow` needs.
 ; the order is the dependency order: kore's text+diff floor under sb, dns under sb's http.
 ;
 ; a path, never `-l`: `-l FILE` whose basename names a verb seats it (l/boot/post.l's
 ; seatof -- the installed shebang's lane), so `-l apps/sb/sb.l` runs sb instead of
-; loading it. `use` on a string touches no command line.
-(use "apps/tar/tar.l")
-(use "apps/gz/gz.l")
-(use "apps/kore/text.l")
-(use "apps/kore/diff.l")
-(use "apps/sb/merge.l")
-(use "apps/dns.l")
-(use "apps/sb/http.l")
-(use "apps/sb/sb.l")   ; for the ignore law only -- .sbignore is sb's file
+; loading it. `borrow` on a string touches no command line.
+(borrow "apps/tar/tar.l")
+(borrow "apps/gz/gz.l")
+(borrow "apps/kore/text.l")
+(borrow "apps/kore/diff.l")
+(borrow "apps/sb/merge.l")
+(borrow "apps/dns.l")
+(borrow "apps/sb/http.l")
+(borrow "apps/sb/sb.l")   ; for the ignore law only -- .sbignore is sb's file
 
+(borrow 'posix)
 (: (sp-die m) (say err ("selfpack: " + m + "\n"), quit 1)
    (sp-read p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, [1 (s + "")]))))
    (sp-write p s) (: q (open p "w")
@@ -62,8 +63,8 @@
    ; are written in doc/{love,cook,lush}.md and `make install` in an unpacked
    ; release generates all three from them); and each drop nom by name.
    sp-own '("bin" "dl" "doc/misc" ".*")
-   sp-ign? (from 'sb 'ign?)
-   (sp-rules drops) (((from 'sb 'igs) 0) + sp-own + drops)
+   sp-ign? (cite 'sb 'ign?)
+   (sp-rules drops) (((cite 'sb 'igs) 0) + sp-own + drops)
    ; handed to the walk, not run after it: what the archive will not carry is never
    ; read (out/ and dl/ are gigabytes on a build box, and a rejected directory is
    ; never descended into at all).

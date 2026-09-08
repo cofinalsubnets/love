@@ -22,6 +22,7 @@
 ; `see` parks a session on its client, and a session that raises takes only
 ; itself down -- the supervisor it is a window into keeps running.
 (module 'helm
+(borrow 'posix)
 (: (hrundir _) (: r (getenv "XDG_RUNTIME_DIR") ((string? r) && (1 < tally r) ? r "/run"))
    (helm-sock _) (hrundir 0 + "/helm.sock")
 

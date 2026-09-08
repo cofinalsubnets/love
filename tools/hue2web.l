@@ -11,10 +11,11 @@
 ; LOVE_NO_IMAGE must be cleared by whoever runs this, and the Makefile does: the
 ; word lanes ask the running binary for its vocabulary, and under the egg boot
 ; that answer is the compiler's own internals rather than the language we ship.
-(use "apps/vi/config.l")
-(use "apps/vi/hue.l")
-(use 'hueweb)
+(borrow "apps/vi/config.l")
+(borrow "apps/vi/hue.l")
+(borrow 'hueweb)
 
+(borrow 'posix)
 (: (h2w-rdf p) (: q (open p "r") (hot? q ? (: s (slurp q) (close q, (string? s ? [1 s])))))
    (h2w-usage _) (say err "usage: love tools/hue2web.l css | src FILE\n", quit 2)
 

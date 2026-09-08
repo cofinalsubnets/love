@@ -7,7 +7,7 @@
 ; five lowered from holo's IR by wasm-fn, rung 1 itself.
 ; run: cat l/holo/holo.l l/holo/wasm.l test/holo/wasm.l | out/love
 
-(use 'holo)
+(borrow 'holo)
 
 (: ;; sum 0..n by dispatch loop. locals: 0 n, 1 the label (i32), 2 acc, 3 i.
    ;; from inside the innermost block the depths are B0 0, B1 1, B2 2, the loop 3, the exit 4;

@@ -50,6 +50,7 @@
 ; load the kernel and the model first, in their own form -- the next form's bare
 ; references resolve at its compile, which must follow this run. their asserts
 ; ride a jug meanwhile so the artifact stays clean.
+(borrow 'posix)
 (: j (jug 0) _ (wear [in j err])
    _ (reads (open "test/uu.l" "r"))
    _ (reads (open "test/uuval.l" "r"))

@@ -22,6 +22,8 @@
 ; beside the file says which, with the original .orig kept), 2 the patch itself is
 ; unreadable.
 (module 'kore
+(borrow 'posix)
+
 (:
    (pt-pfx s p) ((tally p <= tally s) && (snip s 0 (tally p) = p))
    ; the say flushes: the hunk reports go to err and the file report to out, so an

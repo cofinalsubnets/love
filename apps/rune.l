@@ -20,10 +20,10 @@
 ; so reduction folds top powers down with no division anywhere.
 
 ; no brackets here: the runtime supplies the layer. a consumer hands the loader
-; this file's path ((use "apps/rune.l")) and it loads as one fresh layer,
+; this file's path ((borrow "apps/rune.l")) and it loads as one fresh layer,
 ; leave registers it, the splice serves the bare names -- or, where a device
-; baked the source, (use 'rune) answers off that registration; or one member
-; comes through the accessor, (from 'rune 'deriv).
+; baked the source, (borrow 'rune) answers off that registration; or one member
+; comes through the accessor, (cite 'rune 'deriv).
 
 ; --- the polynomial ring ---------------------------------------------------
 (: (mco m) <m
@@ -672,8 +672,8 @@
 ; termination is the rule set's burden. a named symbol is a (name . mint)
 ; chain -- the same shape as a var -- so mark and rewrite treat noms as
 ; atoms, never walking into them.
-(: sew (from 'kanren 'subst)
-   mnil (from 'kanren 'empty_dict)
+(: sew (cite 'kanren 'subst)
+   mnil (cite 'kanren 'empty_dict)
    (match p x) (: r (unify mnil p x) (ufail? r ? () r))
    (vlook v ps) (? (0 = tally ps) ()
                    (<<ps = v) ><ps

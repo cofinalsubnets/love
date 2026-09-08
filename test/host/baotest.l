@@ -1,7 +1,7 @@
 ; --- test/host/baotest.l: the editor + repl + parseall unit battery ---
 ; the line editor (ed*), the history zipper (uphist/downhist/eddetach), joinln/splitat,
 ; and parseall are cli's exports (l/boot/post.l), reached through the module
-; tablet: (from 'cli) hands the module back, (B 'edleft) reaches one, (keys B) lists them.
+; tablet: (cite 'cli) hands the module back, (B 'edleft) reaches one, (keys B) lists them.
 ;
 ; cli is baked (in the host egg), so this file needs no -l:
 ;
@@ -11,7 +11,7 @@
 ; (ed u l r d) builds a buffer; (b4 t) and (b7 t) read it back as a comparable list,
 ; with the history zipper for b7.
 
-(: B (from 'cli)
+(: B (cite 'cli)
    ednew (B 'ednew)       edstep (B 'edstep)     edput (B 'edput)       ednl (B 'ednl)
    edleft (B 'edleft)     edright (B 'edright)   edbsp (B 'edbsp)       eddel (B 'eddel)
    edhome (B 'edhome)     edend (B 'edend)       edtop (B 'edtop)       edbot (B 'edbot)

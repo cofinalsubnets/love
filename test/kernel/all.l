@@ -8,18 +8,22 @@
 ; shell. that is the whole of the kernel's corpus wiring: no baked string, no
 ; second filesystem.
 ;
-; ⚠ THE ROSTER IS AN ORDERING, NOT A SET. 00-init, spec and uu go first exactly as
+; THE ROSTER IS AN ORDERING, NOT A SET. 00-init, spec and uu go first exactly as
 ; mk/common.mk's `t` front-loads them: a locale sort puts uukind* before uu.l and
 ; would run those laws against an unloaded kernel. the kernel half is a dependency
 ; order too -- kore0.l pins `quit` for every member behind it, and each crew file
 ; lands before the laws that ask about it.
 
 ; the optional layers the corpus asserts on, and only it: a booting kernel wants no
-; random stream, no rationals and no unifier, so they are `use`d here rather
-; than spliced at boot. baked modules, so `use` finds them without a filesystem read.
-(use 'kanren)
+; random stream, no rationals and no unifier, so they are `borrow`d here rather
+; than spliced at boot. baked modules, so `borrow` finds them without a filesystem read.
+(borrow 'kanren)
 
-; ⚠ a member that will not open SCARES rather than skipping: a typo in the roster
+; the driver's own doors: it reads the roster off the ramfs BEFORE it feeds 00-init.l,
+; so the corpus's own splice is not yet standing when these are compiled.
+(borrow 'posix)
+
+; a member that will not open SCARES rather than skipping: a typo in the roster
 ; would otherwise drop a whole file's laws and leave the gate green.
 (: (feed p) (: q (open p "r")
                  (? (port? q) (: _ (reads q) (close q)) (scare 'no-corpus-member p)))

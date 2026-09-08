@@ -25,11 +25,13 @@
 ; byte shows as ^X, and a utf-8 tail byte is no column of its own.
 ; out of scope, documented: horizontal scroll (-S), marks, and following a
 ; growing file (+F) -- the input is read once.
-(use 're)
+(borrow 're)
 
 (module 'kore
+(borrow 'posix)
+
 (:
-   pg-ere (from 're 'reere) pg-fold (from 're 'refold) pg-find (from 're 'refind)
+   pg-ere (cite 're 'reere) pg-fold (cite 're 'refold) pg-find (cite 're 'refind)
 
    pg-help
     "  kore less -- the pager (`more` is the same door)

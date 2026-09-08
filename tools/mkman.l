@@ -2,11 +2,12 @@
 ; the man pages are written in doc/*.md and this generates doc's roff at build time, so
 ; there is only one source to keep true. run from the repo root:
 ;   love tools/mkman.l file.md [love_version.h]
-; (the (use 'lapiz) below splices the baked module)
+; (the (borrow 'lapiz) below splices the baked module)
 ; @version@ is the one placeholder the prose carries and the second argument is where the
 ; build keeps the version, so the fill lands here and the chain needs no sed. with no
 ; second argument the placeholder rides through, which is what a hand run wants.
-(use 'lapiz)
+(borrow 'lapiz)
+(borrow 'posix)
 (: (rd p) (: q (open p "r")
              (? q (: t (slurp q) (close q, t))
                 (say err ("mkman: cannot read " + p), put err 10, quit 1)))

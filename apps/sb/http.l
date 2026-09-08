@@ -16,7 +16,8 @@
 ; rides module 'sb, so these names never reach the book; `dial` (resolve +
 ; connect) comes off module 'dns, scoped here to the wrap's own compile.
 (module 'sb
-(use 'dns)
+(borrow 'dns)
+(borrow 'posix)
 (:
    ; "80" -> 80. `int` is a truncation, not a parser, so digits are ours.
    (digits s)
@@ -26,15 +27,15 @@
                       (? ((47 < c) && (c < 58)) (go (i + 1) ((a * 10) + (c - 48))) ())))
        (go 0 0))
 
-   ; the index of `sub` in `s` at or after `from`, searching at most `cap`
+   ; the index of `sub` in `s` at or after `cite`, searching at most `cap`
    ; positions -- headers sit in the first few KB and a whole-body scan would be
    ; O(n*m) for nothing. -1 when absent.
-   (findsub s sub from cap)
+   (findsub s sub cite cap)
     (: n #s m #sub lim (? ((n - m) < cap) (n - m) cap)
        (go i) (? (lim < i) -1
                  (snip s i (i + m) = sub) i
                  (go (i + 1)))
-       (go from))
+       (go cite))
 
    (url? u) ((7 <= tally u) && (snip u 0 7 = "http://"))
    ; "http://host[:port]/path" -> (host port path) | ()

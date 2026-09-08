@@ -7,8 +7,8 @@
 ;
 ; the second line is the same shape from the shell, less the transforms: a bare
 ; argument is mini-notation, and several arguments stack.
-(use (: m (from 'harp) (? m m "apps/harp/harp.l")))
-(use "apps/harp/play.l")
+(borrow (: m (cite 'harp) (? m m "apps/harp/harp.l")))
+(borrow "apps/harp/play.l")
 (:
    ; every fourth cycle the kick doubles up -- `every` takes the transform, so the
    ; variation is a function of the pattern and not a second pattern to keep in step
@@ -32,5 +32,5 @@
        _ (harp-wav song 0 8 48000 0.55 24000 11000.0 w)
        _ (say out $ w + "\n") 0))
 
-(: s (from 'verbs 'fire ["harp-demo" "demo.l"])
+(: s (cite 'verbs 'fire ["harp-demo" "demo.l"])
    (two? s ? (quit (demo-main >s))))

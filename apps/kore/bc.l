@@ -22,6 +22,8 @@
 ; quit is executed here. GNU's fires when the lexer reaches it, so GNU leaves
 ;   on `if (0) quit`; ours does not, and halt is the same statement either way.
 (module 'kore
+(borrow 'posix)
+
 (:
    ; -- numbers ---------------------------------------------------------------
    bn-zero [0 0]

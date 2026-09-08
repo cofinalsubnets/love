@@ -2,13 +2,13 @@
 ; ELF linker. each golden is the exact hex the assembler emits, and every one was checked against
 ; the real toolchain (objdump / llvm-mc, the mnemonic in the trailing comment): this file is the
 ; frozen record of that round-trip, so a drifted golden is a broken encoder or a disagreeing
-; disassembler. the sources are cat'd in rather than `use`d because the host bakes its native
+; disassembler. the sources are cat'd in rather than `borrow`d because the host bakes its native
 ; backend only -- the other four reach these goldens no other way (test/holo.l is the in-corpus
 ; smoke over the baked module).
 ; run: cat l/holo/{holo,x64,a64,thumb2,riscv,thumb1,text,gas,elf}.l test/holo/golden.l
 ;      | out/love   (nonzero exit on any miss)
 
-(use 'holo) ; the cat's wrapped sources just registered the module
+(borrow 'holo) ; the cat's wrapped sources just registered the module
 
 (: pass {0 0} fail {0 0}
    (bump t)  (pin t 0 $ 1 + peep t 0 0)

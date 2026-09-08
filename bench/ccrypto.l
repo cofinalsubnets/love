@@ -14,9 +14,9 @@
 ; says the gap is array slots. they close together, or the diagnosis was wrong.
 ; (love.c's own z-tray lane is the same shape and ~5x -- the reason to care.)
 ;
-; ⚠ these run the NIFS (inle/tls.c), never apps/tls's love ciphers -- this table
+; these run the NIFS (inle/tls.c), never apps/tls's love ciphers -- this table
 ; times C compilers. apps/tls/bench.l is where the two languages meet.
-; ⚠ no `use` and no crew file: the binary under test lives in out/bench/cc, so the
+; no `borrow` and no crew file: the binary under test lives in out/bench/cc, so the
 ; module walk would miss lib/ entirely. everything here is built from the core.
 ;
 ; ccbench.sh cats this file and then one driver call; the reps are fixed so all
@@ -33,7 +33,7 @@
             (go i) (? (32 <= i) (string b) (: _ (pin b i (& (i * 7) 255)) (go (i + 1))))
             (go 0))
 
-   ; ⚠ (f) at zero operands is f itself, unrun. the unit is the operand, and it is ().
+   ; (f) at zero operands is f itself, unrun. the unit is the operand, and it is ().
    (rep k f) (? (k < 1) 0 (: _ (f ()) (rep (k - 1) f)))
 
    (cc-run _) (: _a (rep 2000 (\ _ (chacha20 cckey non 1 msg)))

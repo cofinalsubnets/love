@@ -17,8 +17,9 @@
 ; go out in reverse table order and vim reproduces the table's own priority --
 ; sigils before numbers before atoms before strings before comments, exactly as
 ; the hand-written file used to arrange by hand and explain in a paragraph.
-(use 'vi) ; hue's table rides module 'vi -- the cat registered it just above
+(borrow 'vi) ; hue's table rides module 'vi -- the cat registered it just above
 
+(borrow 'posix)
 (: (line s) (say out s, put out 10)
    (blank x) (line "")
    (bytes s) (: n #s (go i acc) (i < 0 ? acc (go (i - 1) (s i . acc)))

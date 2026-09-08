@@ -8,7 +8,7 @@
  * never calls strtol, which is exactly why this needs a gate of its own: nothing
  * else in the tree observes the difference any more.
  *
- * ⚠ endptr is reported as an OFFSET (say.h) -- the addresses differ, the
+ * endptr is reported as an OFFSET (say.h) -- the addresses differ, the
  * offsets do not. */
 #include <stdlib.h>
 #include <limits.h>
@@ -87,7 +87,7 @@ int main(void)
 	L("scan.oct9", "0778", 8);          /* stops at the 8 */
 	L("scan.plusminus", "+-5", 10);
 	L("scan.dec_x", "12x", 0);
-	/* ⚠ no invalid-base case here. base must be 0 or 2..36 and the standard
+	/* no invalid-base case here. base must be 0 or 2..36 and the standard
 	   says nothing about the rest: BOTH libraries return 0 and leave endptr
 	   untouched, so a differential on it compares two uninitialized pointers
 	   and fails at random. (it did, on this gate's first run.) */

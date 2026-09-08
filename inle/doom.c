@@ -16,7 +16,7 @@
 // doom lane says how). this file is the tree's own 0BSD glue; what it includes is
 // not, so nothing here builds unless someone put that source there on purpose.
 //
-// ⚠ on inle the WAD is a BAKED FILE, not a disk one: k_baked hands the ramfs a row
+// on inle the WAD is a BAKED FILE, not a disk one: k_baked hands the ramfs a row
 // for it (kmain.c's hook), so doom's own fopen/fread reach it through inle/sys.c
 // with no filesystem mounted anywhere. the host opens the path it was handed.
 #include "love.h"
@@ -191,8 +191,8 @@ static union u const
  nif_doom_tick[] = {{lvm_doom_tick}, {lvm_ret0}},
  nif_doom_frame[] = {{lvm_doom_frame}, {lvm_ret0}},
  nif_doom_key[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_doom_key}, {lvm_ret0}};
-AiNif("doom", nif_doom);
-AiNif("doom-start", nif_doom_start);
-AiNif("doom-tick", nif_doom_tick);
-AiNif("doom-frame", nif_doom_frame);
-AiNif("doom-key", nif_doom_key);
+AiNif("doom", nif_doom, NULL);
+AiNif("doom-start", nif_doom_start, NULL);
+AiNif("doom-tick", nif_doom_tick, NULL);
+AiNif("doom-frame", nif_doom_frame, NULL);
+AiNif("doom-key", nif_doom_key, NULL);

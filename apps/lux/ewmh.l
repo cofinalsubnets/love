@@ -10,7 +10,7 @@
 ; The strut arithmetic and the property encodings are pure (jug-testable), so
 ; apps/lux/law.l asserts them; the ewst tablet is the module's one mutable cell (the
 ; evq pattern). Loads after apps/lux/{layout,wire}.l. a body-less `:` -- leaks all.
-(use 'xwire)   ; the X wire, apps/lux/wire.l
+(borrow 'xwire)   ; the X wire, apps/lux/wire.l
 (:
    ; --- pure: strut arithmetic. a strut is (left right top bottom), root-
    ;     relative reserved widths; shrinking clamps the rect off each edge. ---

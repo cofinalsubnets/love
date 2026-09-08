@@ -8,7 +8,7 @@
 // a dead device is a refusal, never a hang. no interrupts: the device's line
 // stays masked and nobody listens.
 //
-// ⚠ every DMA address the device sees is PHYSICAL: pa = va - khhdm, which
+// every DMA address the device sees is PHYSICAL: pa = va - khhdm, which
 // holds exactly for kmallocw/love-heap memory (meminit chains RAM at
 // khhdm + base) and does NOT hold for image statics -- so the ring and the
 // request header live in the block kmain hands k_blk_init, and data buffers

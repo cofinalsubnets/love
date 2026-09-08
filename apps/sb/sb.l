@@ -27,7 +27,8 @@
 ; lane rides module 'sb: the engine binds in the module, never the cat's scope;
 ; the seat form at the tail is the only thing that fires as a program.
 (module 'sb
-(use 'kore)
+(borrow 'kore)
+(borrow 'posix)
 (:
    ; --- files ---
    ; presence is the (1 _) wrapper, content is always a string: an empty file
@@ -67,8 +68,8 @@
    ;     and out/love, never output. blank lines and # comments are skipped.
    ;     tools/selfpack.l reads these too, so the dist cut and the walk agree.
    igs0 '(".sb" ".git" "out")
-   ig-glob? (from 'glob 'anyglob)
-   ig-match (from 'glob 'match)
+   ig-glob? (cite 'glob 'anyglob)
+   ig-match (cite 'glob 'match)
    (ig-live? l) ((0 < tally l) && !((l 0) = 35))
    (igs _) (: t (look ".sbignore")
                  (? (two? t) (igs0 + filter ig-live? (lines <>t))
@@ -220,8 +221,8 @@
    ; one direction of the store exchange: copy the sha256-named files `to` lacks,
    ; verifying every address on the way. a nest root is "." or a peer path.
    ; answers (ncopied nfailed) -- a failed write is a peer we cannot push to.
-   (copy sub from to)
-    (: fd (from + "/.sb/" + sub + "/") td (to + "/.sb/" + sub + "/")
+   (copy sub cite to)
+    (: fd (cite + "/.sb/" + sub + "/") td (to + "/.sb/" + sub + "/")
        (go m n bad)
         (? !(two? m) [n bad]
            (: h <m
@@ -703,8 +704,8 @@ usage: sb VERB ..
 ; this file and have nothing fire. sb-main reads bare: the module's layer holds
 ; this file's binds and is still the head when this form compiles. body-having:
 ; the seat leaks nothing.
-(: _ (pins (from 'verbs 'tab) 'sb sb-main)
-   s ((from 'verbs 'fire) ["sb" "sb.l"])
+(: _ (pins (cite 'verbs 'tab) 'sb sb-main)
+   s ((cite 'verbs 'fire) ["sb" "sb.l"])
    (? (two? s) (sb-main >s) ()))
 
 ) ; module 'sb

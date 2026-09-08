@@ -11,6 +11,7 @@
 
 ; --- the little dsl: the lay of each element. first, since a value binds in order and the
 ; data below calls these as it binds.
+(borrow 'posix)
 (: (cat l)     (foldl (+) "" l)
    (ref k t)   ("<a href=\"#g-" + show k + "\">" + t + "</a>")      ; a link to an entry
    (g k)       (ref k (show k))                                      ; ..named by its id

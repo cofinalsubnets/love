@@ -7,7 +7,7 @@ R ?= .
 # in an echo line only separates argv, which echo rejoins with a space -- so the column
 # has to be a character echo passes through. Paths print relative to the tree; `make
 # install` is the exception, where the artifact lands outside it.
-# ⚠ ONE LINE PER TARGET AND NOTHING ELSE. A tool a recipe runs says nothing of its own --
+# ONE LINE PER TARGET AND NOTHING ELSE. A tool a recipe runs says nothing of its own --
 # not a byte count, not a timing, not a verdict. The tag is the whole report, so a build
 # reads as a list of the files it made.
 
@@ -28,9 +28,9 @@ t_rm   := $(if $(armed),KORE,RM)
 t_ln   := $(if $(armed),KORE,LN)
 
 m = $R/out$(hsuf)/love
-# ⚠ the HOST's arch, which $a is NOT: a cross lane overrides $a on the command line, and
+# the HOST's arch, which $a is NOT: a cross lane overrides $a on the command line, and
 # anything under out reading $a then lays a cross artifact into the host tree.
-# ⚠ AND `uname -m` IS NOT THE ISA. It answers the kernel's MACHINE, which only linux
+# AND `uname -m` IS NOT THE ISA. It answers the kernel's MACHINE, which only linux
 # spells the way free/<a>/, the mksys leaves and the holo backends do: the BSDs say
 # amd64 for x86_64, freebsd says arm64 and netbsd evbarm for aarch64. evbarm names a
 # 32-bit port too, so there the ISA has to come from `uname -p` -- the one place a
@@ -56,7 +56,7 @@ endif
 ifeq ($(hosta),riscv64)
 hosta := rv64
 endif
-# ⚠ `?=` MAKES A RECURSIVE VARIABLE, so `a ?= $(shell uname -m)` re-forks uname at every
+# `?=` MAKES A RECURSIVE VARIABLE, so `a ?= $(shell uname -m)` re-forks uname at every
 # single reference -- 203 of them before this build even reached out/lib/egg.h. Deferring
 # to the simply-expanded $(hosta) keeps the override and spends one fork for the tree.
 a ?= $(hosta)
@@ -73,7 +73,7 @@ uname_rv64 = riscv64
 # is what lets love0's stamp agree with a real one -- see boot_cc).
 love_base := $(shell cat $R/VERSION 2>/dev/null || echo 0)
 
-# ⚠ IS THIS TREE A CHECKOUT OR AN UNPACKED RELEASE? `git -C DIR` walks UP, so the test is for
+# IS THIS TREE A CHECKOUT OR AN UNPACKED RELEASE? `git -C DIR` walks UP, so the test is for
 # THIS tree's own .git and never an ancestor's (the Makefile learned that the hard way). One
 # thing reads it: the DEFAULT GOAL -- a checkout wants the fast gate for its edit loop, an
 # unpacked release wants the product, because whoever unpacked it came for love and not for
@@ -87,7 +87,7 @@ in_git := $(wildcard $R/.git)
 # instead -- the one differential a foreign cc still gets, the kernel having none. It is the
 # only build that puts a foreign cc on the vm at ai_tco=1, where ai_musttail is live and where
 # a prototype mismatch our own sibcall pass waves through is refused (doc/misc/moon-c-gaps.md).
-# ⚠ ITS OWN TREE, because the two loves are the same path otherwise: out/cc keeps the
+# ITS OWN TREE, because the two loves are the same path otherwise: out/cc keeps the
 # objects and the binary apart, and $m follows it so a test runs the one you asked for.
 override HCC := $(filter-out 0,$(HCC))
 
@@ -97,15 +97,15 @@ override HCC := $(filter-out 0,$(HCC))
 # and the two seats with no sibcall -- mps2's thumb1 face and the playdate simulator.
 tco ?= 1
 
-# ⚠ tco EARNS A TREE THE SAME WAY HCC does, and for the same reason: a tco=0 love is a
+# tco EARNS A TREE THE SAME WAY HCC does, and for the same reason: a tco=0 love is a
 # different binary at the same path, so sharing out would make every following make
 # rebuild the world, and a test would run whichever flavour was built last.
 hsuf := $(if $(HCC),/cc,)$(if $(filter 0,$(tco)),/tco0,)
 
-# the corpus: 00-init's harness first, the spec second, then uu.l, then the rest. ⚠ uu.l is
+# the corpus: 00-init's harness first, the spec second, then uu.l, then the rest. uu.l is
 # front-loaded EXPLICITLY so its dependents (uukind*, uulay, uupatch, uuwm*) see it whatever
 # the collation -- a locale `ls` orders uukind* first and the laws would run against an
-# unloaded kernel. ⚠ glaze-x86 and glaze-hook are EXCLUDED: both EXECUTE native machine
+# unloaded kernel. glaze-x86 and glaze-hook are EXCLUDED: both EXECUTE native machine
 # code, so they ride their own arch-guarded targets, never the arch-neutral corpus.
 t = $R/test/00-init.l $R/test/spec.l $R/test/uu.l $(filter-out %/00-init.l %/spec.l %/glaze-x86.l %/glaze-hook.l %/uu.l,$(sort $(wildcard $R/test/*.l)))
 
@@ -131,7 +131,7 @@ hosta_c = $(wildcard $R/inle/$(hosta)/*.c)
 # ..and the hosted surface is inle/ less the kernel's own six (kmain, the syscall table,
 # the two drivers, doom): drop an inle/<app>.c in and its nifs register with no rule edit.
 host_c = $(filter-out $(addprefix $R/inle/,kmain.c blk.c hda.c sys.c doom.c doomsnd.c),$(wildcard $R/inle/*.c))
-# ⚠ l/ vs inle/ cuts language from SEATS, not portable from machine-specific: quay
+# l/ vs inle/ cuts language from SEATS, not portable from machine-specific: quay
 # draws into a buffer and names no device, so it stays here with the engines no machine
 # owns. a seat that wants its own nifs brings them through ai_defn, which is that door.
 # the quay engine every seat carries. paint.c (32bpp) and nif.c (the love door) are
@@ -148,7 +148,7 @@ f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/l/quay/*.c))
 # metal). core.c stays OUT -- it carries malloc, the process entry and the
 # std streams, every one of which the kernel owns; inle/sys.c answers its four
 # seat symbols (environ, stdout/stderr, the sigaction restorer) instead.
-# ⚠ NAMING A MEMBER HERE IS A DECISION, and stdio was the one weighed: printf and
+# NAMING A MEMBER HERE IS A DECISION, and stdio was the one weighed: printf and
 # friends write fd 1 themselves, and inle/sys.c is seat-blind, so a seated task's
 # C-level printf reaches the console where its port reaches the pipe. That is the
 # documented divergence (inle/sys.c) -- love code writes through ports, which seat.
@@ -169,7 +169,7 @@ c_c = $(addprefix $R/apps/moon/lib/moonlibc/string/,memchr.c memcmp.c memcpy.c m
   $R/apps/moon/lib/moonlibc/fmt/fprintf.c \
   $R/apps/moon/lib/moonlibc/os.c
 
-# ⚠ CANCEL MAKE'S LEX RULE. `.l` is Lex's extension to make, so a built-in `%.c: %.l`
+# CANCEL MAKE'S LEX RULE. `.l` is Lex's extension to make, so a built-in `%.c: %.l`
 # stands over every source file in this tree -- and where a `<name>.l` sits beside a real
 # `<name>.c`, make runs lex on it, fails, and DELETES THE C. An empty recipe unmakes the
 # rule. (l/quay/ is the pair that found it; nothing here has ever wanted lex.)
@@ -187,7 +187,7 @@ ai_cflags = -std=$(ai_std) -g -O2 -pipe $(EXTRA_CFLAGS) \
   -Wall -Wextra -Werror -Wstrict-prototypes -Wno-unused-parameter \
   -Wmissing-field-initializers -Wno-implicit-fallthrough\
   -falign-functions=16 -fno-stack-protector
-# ⚠ a strict -std sets __STRICT_ANSI__ and glibc then hides its POSIX half -- inle/main.c
+# a strict -std sets __STRICT_ANSI__ and glibc then hides its POSIX half -- inle/main.c
 # owes clock_gettime and kill, so the level is asked for by name.
 # -fcf-protection (Intel CET) is x86-only; the non-x86 seats have no CET to turn off and
 # take it as a no-op.
@@ -202,7 +202,7 @@ ai_cflags += -D_POSIX_C_SOURCE=200809L
 endif
 # the data-sentinel tiling l/love.h's ai_typ reads (l/love.c's DSENT), on every ld/lld link.
 data_ld = -Wl,-T,$R/l/love_data.ld
-# ⚠ AN EMPTY BRACKET IS STILL A BRACKET. l/love.c indexes the host nif slice off
+# AN EMPTY BRACKET IS STILL A BRACKET. l/love.c indexes the host nif slice off
 # [__start_love_nifs, __stop_love_nifs), which the toolchain synthesises only where the
 # SECTION exists -- so an embedder registering its defs by hand owns no AiNif and the
 # pair goes undefined at the link. weak declarations do not answer it: ld leaves a weak

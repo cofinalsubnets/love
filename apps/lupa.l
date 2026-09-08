@@ -17,7 +17,8 @@
 ; by decoding its own bytes to the same item shape.
 ; usage: love lupa FILE
 (module (lupa lupa-main lupa-run lupa-new lupa-key lupa-frame lupa-byte)
-(use 'holo)
+(borrow 'holo)
+(borrow 'posix)
 (:
  ;; --- the file, and an ELF's .text and symbols over it ------------------------------------
  ;; elf: () or {'toff 'taddr 'tsize 'syms 'names}: .text's file offset, address and size; syms
@@ -245,5 +246,5 @@
                     (: d (lupa-new <>r p)
                        (stage (w \ h \ lupa-frame d w h) (c \ lupa-key d c) (\ _ (d 'over))))))
  (lupa-main as) (two? as ? (lupa-run <as) (puts "usage: love lupa FILE\n", 1))
- _ (pins (from 'verbs 'tab) 'lupa lupa-main))
+ _ (pins (cite 'verbs 'tab) 'lupa lupa-main))
 ) ; module lupa

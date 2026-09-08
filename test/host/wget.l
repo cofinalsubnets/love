@@ -5,12 +5,12 @@
 ; the handshake stands on (x25519 from 7748, hmac from 4231): a live peer is
 ; test/host/wgetnet.l, opt-in, because a gate must not need the internet.
 ;   cat test/00-init.l test/host/wget.l | out/love
-(use 'kiosko)
-(use 'tls)
+(borrow 'kiosko)
+(borrow 'tls)
 
-(: T (from 'tls)
+(: T (cite 'tls)
    unhex (T 'unhex) hex (T 'hex)
-   wget (from 'kore 'wget-main)
+   wget (cite 'kore 'wget-main)
    root "out/.wget"
    _ (hark (list "rm" "-rf" root))
    _ (mkdir "out" 493) _ (mkdir root 493) _ (mkdir (root + "/site") 493)
@@ -23,7 +23,7 @@
    l (listen port)
    srv (twirl (\ _ ((: (g k) (: _ (await l)
                                 c (accept l)
-                                _ (? (hot? c) (: _ ((from 'kiosko 'serve1) sroot () c)
+                                _ (? (hot? c) (: _ ((cite 'kiosko 'serve1) sroot () c)
                                           (close c)) ())
                                 (g k)))
                     0)) 0)

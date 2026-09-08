@@ -24,6 +24,8 @@
 ; elf64-hdr / le32 / le64 bare (asbook.l + elf.l re-leak them). moon.l drives it:
 ; `mooncc a.o b.c -o prog`.
 (module 'holo
+(borrow 'posix)
+
 (:
    ; little-endian reads off a byte-indexable text; a u64 field can carry a
    ; signed value (a RELA addend), so sg64 folds the high half back down

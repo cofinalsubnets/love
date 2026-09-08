@@ -29,7 +29,7 @@
 //   (naps ())     how many times the scheduler has reached its wait -- the gauge
 //                 that tells a park from a spin
 //
-// ⚠ A WAIT WITH NO DEADLINE EXITS 97 rather than sleeping. A synthetic device
+// A WAIT WITH NO DEADLINE EXITS 97 rather than sleeping. A synthetic device
 // can only be fed by another task, so "every task is parked with no timer" is a
 // deadlock by construction -- and a loud exit beats a gate that hangs until the
 // harness kills it. That makes this frontend a deadlock detector as well as a
@@ -112,10 +112,10 @@ void ai_sleep(uintptr_t ms) {
 // every port with no device behind it, and those wait on nothing external),
 // the console is always ready (end-of-stream IS an answer),
 // and a device is ready when it has bytes or has ended.
-// ⚠ rstall is NOT consulted here, and that is the whole point: `ai_ready` says
+// rstall is NOT consulted here, and that is the whole point: `ai_ready` says
 // go and the read says no, which is the one schedule no in-process test could
 // otherwise reach.
-// ⚠ an OUT park is ready by definition here: this frontend's devices take
+// an OUT park is ready by definition here: this frontend's devices take
 // writes through `wstall`, which is a REFUSAL from the write door, not a
 // readiness the scheduler can poll for. Only the read direction is a question.
 bool ai_ready(int fd, int events) {
@@ -191,11 +191,11 @@ uintptr_t ai_fd_say(int fd, unsigned char const *src, uintptr_t n) {
   return i; }
 
 // --- the nifs --------------------------------------------------------------
-// ⚠ no scratch on an lvm_ frame (CLAUDE.md, the tail-threaded VM): the bodies
+// no scratch on an lvm_ frame (CLAUDE.md, the tail-threaded VM): the bodies
 // that need one go through an ai_noinline helper, and the ones here need none.
 
 // (quit n) -- the frontend nif cli's scare tail reaches for (l/boot/post.l). Without
-// it `(use 'cli)` compiles a form naming an unbound global and raises missing.
+// it `(borrow 'cli)` compiles a form naming an unbound global and raises missing.
 static lvm(lvm_quit) {
   fflush(stdout);
   for (;;) exit((int) getcharm(Sp[0]));
@@ -353,8 +353,8 @@ int main(int argc, char const **argv) {
     ,
 #include "post.h"
     );
-  g = ai_evals_(g, "(use 'cli)");
-  g = ai_layer_(g);                  // the session layer: one load, one layer
+  g = ai_evals_(g, "(borrow 'cli)");
+  g = ai_open_(g);                  // the session layer: one load, one layer
   for (int i = 1; i < argc && ai_ok(g); i++) g = ai_evals_(g, slurp(argv[i]));
   if (ai_code_of(g) == ai_status_scare) ai_scare_face_(g);   // the honest face: ";; a b", or ";; oom@len=N" bare
   fflush(stdout);

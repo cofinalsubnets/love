@@ -24,8 +24,9 @@
 ; gz rides module 'gz, so the codec's names are asked for and the ask lands in a layer
 ; of our own rather than on the dist cat's shared one.
 (module 'gzcmd
-(use 'gz)
+(borrow 'gz)
 
+(borrow 'posix)
 (: gzc-usage "usage: gzip [-cdfklnNqrtv19] [-S SUF] [FILE..]   (gunzip = -d, zcat = -dc)"
    gzc-help "gzip -- the RFC 1952 container in love (apps/gz/gz.l is the codec)
 usage: gzip [-cdfklnNqrtv19] [-S SUF] [FILE..]
@@ -275,7 +276,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
    (gunzip-main as) (: t (tablet 0) _ (pin t 'd 1) (gzc-run as t))
    (zcat-main as) (: t (tablet 0) _ (pin t 'd 1) _ (pin t 'c 1) (gzc-run as t))
 
-   (pins (from 'verbs 'tab)
+   (pins (cite 'verbs 'tab)
     'gzip   gzip-main
     'gunzip gunzip-main
     'zcat   zcat-main))

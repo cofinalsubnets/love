@@ -10,8 +10,8 @@
 ; installation is reachable only through the glaze, which is the only thing that does it.
 ; a bare `nif` here would read the zero point and every claim below would answer 1.
 ; and under the presence guard: love0 and the kernel/wasm frontends carry no glaze, so
-; there is no seam there to hold to its word -- (from 'glaze) answers () and this stands down.
-(: G (from 'glaze)
+; there is no seam there to hold to its word -- (cite 'glaze) answers () and this stands down.
+(: G (cite 'glaze)
    (? G (: N (G 'nif)
            (assert (lit? N)
                    !(N 5 0 0 1) !(N 'x 0 0 1) !(N () 0 0 1) !(N "" 0 0 1)))

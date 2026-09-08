@@ -11,7 +11,7 @@
 (: fires {0}                                                              ; probe counter: closures the hook native-backed
    natjit
     (: arch love-arch                                                     ; the runtime target ('x64 / 'a64), read on the actual binary
-       G (from 'glaze)                                                    ; this file is not in the module (test_glaze re-cats it alone): every name arrives by key
+       G (cite 'glaze)                                                    ; this file is not in the module (test_glaze re-cats it alone): every name arrives by key
        emit (G 'emit)  coreir (G 'coreir)  deoptir (G 'deoptir)
        loopinfo (G 'loopinfo)  njit-loop (G 'njit-loop)
        loopinfo-n (G 'loopinfo-n)  njit-loop-n (G 'njit-loop-n)
@@ -20,9 +20,9 @@
        qualfr (G 'qualfr)  jitfrx (G 'jitfrx)
        anat-defs (G 'anat-defs)  jgir-ok? (G 'jgir-ok?)  jitgroupirx (G 'jitgroupirx)  grpfix (G 'grpfix)
        njit-amble (G 'njit-amble)
-       asm (from 'holo 'assemble)                                         ; holo's post-hook build, pinned for the glaze: the cat's later reopen of holo never moves it
+       asm (cite 'holo 'assemble)                                         ; holo's post-hook build, pinned for the glaze: the cat's later reopen of holo never moves it
        _ (pin (G 'glazeasm) 'f asm)
-       _ (pin (G 'glazeasm) 'at (from 'holo 'assemble-at))
+       _ (pin (G 'glazeasm) 'at (cite 'holo 'assemble-at))
        gvbox (G 'gvbox)                                                     ; auto.l's canon reads globals through ala's gv, pinned here on the first closure
        (hit x) (pin fires () (1 + peep fires () 0), x)
        ; grp-ok? is the group gate: autogroup's own recognizer over the defs jitgroupirx compiles. jgir-ok?

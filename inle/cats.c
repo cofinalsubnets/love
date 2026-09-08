@@ -7,7 +7,7 @@
 #include "love.h"
 #include "cats.h"
 // ONE registry, every frontend and every face: the roster and its order are the
-// header's, and every build takes the whole set -- `from` on an unregistered module
+// header's, and every build takes the whole set -- `cite` on an unregistered module
 // answers () rather than scaring, so a short registry is a silent wrong binding.
 #include "baked.h"
 
@@ -38,9 +38,9 @@ struct ai *ai_cats_egg(struct ai *g) {
   return g; }
 
 // the arch's holo, scan riding it; every other module registers as post is sat
-struct ai *ai_cats_mods(struct ai *g) {
+struct ai *ai_cats_lib(struct ai *g) {
 #ifdef AiCatModsH
-  g = CatEval(g, ai_cat_mods_h_z);
+  g = CatEval(g, ai_cat_lib_h_z);
 #endif
   return g; }
 

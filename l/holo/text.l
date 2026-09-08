@@ -11,14 +11,14 @@
 ; arch here at all -- it lowers to whatever backend `holo` is handed. mooncc's inline asm
 ; (apps/moon/gen.l) parses its templates with asm-text; its cats carry this file.
 ;
-; needs only (use 'peg) -- no assembler names, so it loads in the raw holo.l stream (test_holo)
+; needs only (borrow 'peg) -- no assembler names, so it loads in the raw holo.l stream (test_holo)
 ; and on the baked host alike:
 ;   out/love -l l/holo/text.l ...
 
 ; the combinators (l/boot/post.l). the use is its own top-level form -- a `:` body compiles
 ; as one unit, so a use inside the form below would run too late to serve it.
 (module 'holo
-(use 'peg)
+(borrow 'peg)
 
 (: ;; -- byte-class predicates (the combinator leaves feed a parser one byte at a time). --
    (txws?  c) (c = 32 || c = 9)                             ; space / tab

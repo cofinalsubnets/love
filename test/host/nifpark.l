@@ -16,6 +16,10 @@
 ; the shape of every law: a ticker task that only advances if the task under test
 ; gave up its turn. Its count is the gauge, exactly as (naps ()) is in test/front.
 
+; driven bare -- no test/00-init.l ahead of it -- so the posix door is borrowed here,
+; the same guarded way the corpus prelude borrows it.
+(? (cite 'posix) (borrow 'posix) ())
+
 (: (ticker n) (twirl (\ _ ((: (go u) (: _ (pin n 0 (1 + (peep n 0 0)))
                                          _ (rest 0)
                                          (go ())))

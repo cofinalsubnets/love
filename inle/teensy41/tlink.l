@@ -11,7 +11,7 @@
 ; word, and their flags (ALLOC-only) would otherwise file them with rodata, behind
 ; the code, where the ROM does not look.
 ;
-; ⚠ the 0x1000 gap between the two `at` runs is FILE bytes: the runs fuse into one
+; the 0x1000 gap between the two `at` runs is FILE bytes: the runs fuse into one
 ; segment and the linker pads across, which is what makes flash offsets and flash
 ; addresses the same number -- the whole reason the .hex verify can read the FCFB
 ; tag at 0 and the IVT at 0x1000 by seeking.

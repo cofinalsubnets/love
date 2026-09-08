@@ -24,20 +24,20 @@
 
 ; --- the module seam: three modules, and papel adds nothing to the book ----------
 (: parse-before (member? 'parse (names ()))  ; the book before the load, for the leak delta
- _ (use "apps/papel.l")                ; the loader: papel wants lapiz + cook itself
+ _ (borrow "apps/papel.l")                ; the loader: papel wants lapiz + cook itself
  (assert
-  (member? 'papel (from ()))
-  (member? 'lapiz (from ()))
-  (member? 'cook (from ()))
-  (member? 'build (keys (from 'papel)))
-  (lit? (from 'papel 'papel-main))
-  (! (from 'papyrus))                          ; a missing module answers ()
-  ; the combinators are a module nobody splices at boot: lapiz and cook each said (use 'peg),
+  (member? 'papel (cite ()))
+  (member? 'lapiz (cite ()))
+  (member? 'cook (cite ()))
+  (member? 'build (keys (cite 'papel)))
+  (lit? (cite 'papel 'papel-main))
+  (! (cite 'papyrus))                          ; a missing module answers ()
+  ; the combinators are a module nobody splices at boot: lapiz and cook each said (borrow 'peg),
   ; so peg is loaded and reachable by key. `parse` itself can sit on the book -- the
   ; crew layer (moon's front end) puts it there in the warm lane -- so the leak check is
   ; a delta: loading papel must not have added it.
-  (member? 'peg (from ()))
-  (lit? (from 'peg 'seq))
+  (member? 'peg (cite ()))
+  (lit? (cite 'peg 'seq))
   (= parse-before (member? 'parse (names ())))))
 
 (: dir "/tmp/papeltest"
@@ -143,7 +143,7 @@ Only a paragraph, so the title has to come from the meta block.
    ; and cook's merge used to append prerequisites each time -- so a dev server that
    ; rebuilds per source change climbed 28 ingredients a rebuild, forever, and `prep`
    ; walked all of them. unbounded memory and quadratic time out of a server sitting idle.
-   cards (from 'cook 'cards)
+   cards (cite 'cook 'cards)
    (icount _) (tally (cap (peep cards (dir + "/site/index.html") ())))
    n0 (icount ())
    _ ((: (again k) (? (k < 6) (: _ (build conf) (again (k + 1))) 0)) 0)
@@ -189,17 +189,17 @@ Only a paragraph, so the title has to come from the meta block.
    _ (assert
       (0 < tally (finds one "<h1 id=\""))        ; from the head-1
       (has? (finds two "content=\"") "Two From Meta")
-      ((from 'papel 'ptitle) ((from 'lapiz 'mdread) (get-file "src/two.md")) "x") = "Two From Meta"
-      ((from 'papel 'ptitle) ((from 'lapiz 'mdread) (get-file "src/three.md")) "three.md") = "three.md")
+      ((cite 'papel 'ptitle) ((cite 'lapiz 'mdread) (get-file "src/two.md")) "x") = "Two From Meta"
+      ((cite 'papel 'ptitle) ((cite 'lapiz 'mdread) (get-file "src/three.md")) "three.md") = "three.md")
 
    ; --- the index lists every page, each with its blurb ------------------------------
    _ (: ih (finds idx "href=\"")
         _ (assert (has? ih "one.html") (has? ih "two.html") (has? ih "three.html")
                   ; the blurb is the first paragraph, clipped on a word boundary
-                  (0 < tally ((from 'papel 'blurb) ((from 'lapiz 'mdread) (get-file "src/one.md"))))))
+                  (0 < tally ((cite 'papel 'blurb) ((cite 'lapiz 'mdread) (get-file "src/one.md"))))))
 
    ; --- the slug is a function of the text, and nothing else -------------------------
-   _ (: slug (from 'papel 'slug)
+   _ (: slug (cite 'papel 'slug)
         (assert ((slug "Hello, World!") = "hello-world")
                 ((slug "  --- ") = "section")            ; nothing left -> a name, never ""
                 ((slug "A") = (slug "a"))))
@@ -220,10 +220,10 @@ Only a paragraph, so the title has to come from the meta block.
       (10 < rn)                                   ; it built a real site
       (0 = (build rconf)))                        ; ..and is at once up to date
    _ (: (page f) (: q (open (dir + "/love/" + f) "r") (? (hot? q) (slurp q) ""))
-        _ (each (filter (\ f ((from 'papel 'ends?) f ".html")) (readdir (dir + "/love")))
+        _ (each (filter (\ f ((cite 'papel 'ends?) f ".html")) (readdir (dir + "/love")))
                 (\ f (: h (page f)
                         (assert (0 < tally h)
-                                ((from 'papel 'ends?) h "</html>\n")
+                                ((cite 'papel 'ends?) h "</html>\n")
                                 (anchored? h)))))
         0)
 

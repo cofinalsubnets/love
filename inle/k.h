@@ -48,7 +48,7 @@ struct k_boot {
  bool has_fb; // FIXME how is this different from fb.base == NULL
  // the wall date at boot, UNIX SECONDS -- what makes ai_clock a clock and not an
  // uptime. NO door answers it now, so every one falls back to the machine's RTC
- // in kmain -- a door that learns a date may still fill this. ⚠ 0 is "nobody
+ // in kmain -- a door that learns a date may still fill this. 0 is "nobody
  // knew", not midnight 1970: a stat
  // then reads as its own uptime, which is wrong but at least visibly so.
  uint64_t date;

@@ -10,14 +10,14 @@
 ; and only a global resolves identically in every bootstrap generation.
 (: gone (mint 0))
 
-; gv: the layered global read -- (books ()) is the live chain of books, walked head-first with
+; gv: the layered global read -- (stack ()) is the live chain of books, walked head-first with
 ; `gone` as the per-layer miss sentinel (a stored () SHADOWS, never falls through), answering d on
 ; total miss. every book read in this file routes here, so a later layer can shadow orth without
-; touching the compiler. the C twin is love.c's bookget; keep in step.
+; touching the compiler. the C twin is love.c's stacklook; keep in step.
 ; the sentinel test is `==` (id?), never the pin `^gone`: a pin compiles to `=`, which
 ; walks whatever the layer stored, and every global read comes through here.
 (: (gv k d) ((: (go c) (c @ (a . u) (: v (peep a k gone) (v == gone ? (go u) v)) d))
-             (books ())))
+             (stack ())))
 
 ; feels: value->ap memo for global fns, built once by scanning every global. a ap folds an
 ; application to a value when its args are constant (pure fns only), else emits an (iop op . args)
@@ -46,13 +46,13 @@
 (: readset (: names '(peep pin)
    (foldl (\ t s (: v (gv s ()) (? v (pin t v 1) t))) {} names)))
 (: feels (:
-   lvm_cur  (peek 0 (+))
-   lvm_ret0 (peek 1 cap)
+   lvm_cur  (pick 0 (+))
+   lvm_ret0 (pick 1 cap)
    (bake v) (charm? v ? v ['\ v])           ; value -> source: fixnum bare else quote
-   ; (op . arity) iff v is a nif. `id?` (identity) not `=`: a non-nif global may peep to a word
-   ; that looks like a heap pointer, which `=`/eql would deref and crash on.
-   (opof v) (? (lvm_ret0 == peek 1 v) (peek 0 v . 1)
-               (lvm_cur == peek 0 v && lvm_ret0 == peek 3 v) (peek 2 v . peek 1 v))
+   ; (op . arity) iff v is a nif. cells 0/2/3 hold instructions, cell 1 the arity, so `pick`
+   ; reads the first three and `peek` the last -- a value cell answers () through pick.
+   (opof v) (? (lvm_ret0 == pick 1 v) (pick 0 v . 1)
+               (lvm_cur == pick 0 v && lvm_ret0 == pick 3 v) (pick 2 v . peek 1 v))
    ; a mint, a name and a tablet compare by address, so `=` on one of them IS identity, and
    ; identity is the cheaper op. a CONSTANT operand of those kinds licenses lvm_same at lvm_eq's
    ; site -- the other side may be any value, a kind that is not the constant's answering 0 under
@@ -80,16 +80,16 @@
      (: o (opof v) p (pureset v)
       (? (o || p)
        (: op (? o <o 0)
-          ar (? o >o (id? lvm_cur (peek 0 v)) (peek 1 v) 0)   ; nif/multi-arg-fn arity
+          ar (? o >o (id? lvm_cur (pick 0 v)) (peek 1 v) 0)   ; nif/multi-arg-fn arity
           (pin t v (hgen v op ar p)))
        t))))
-   (foldl add {} (catmap keys (books ())))))
+   (foldl add {} (catmap keys (stack ())))))
 
 (:- (\ x (:
  c (sco 0 [()] ())
  y (feel c (opfix x))    ; opfix (factor sigils), feel (desugar) -- ev = the deserialized-data lane
  (ana c y (k0 c) 0 0)))
-  lvm_cur (peek 0 (+))
+  lvm_cur (pick 0 (+))
   ; the nil? nif itself, for cflip's head test: opfix's glued lane splices the value, never
   ; the name (prel's '! nil?), so `!e` reaches the peephole unnamed. read once, like lvm_cur.
   nilv (gv 'nil? ())
@@ -110,9 +110,11 @@
   ; backend (l/boot/glaze/emit.l, x86-64, opt-in) implements the same leaf interface over a byte
   ; buffer -- kim -> movabs, karg -> mov [rcx+8i] + a fixnum guard, aco -> cmp+jcc -- today via the
   ; ala creation hook (book['natjit]) for leaf bodies, with kap (a call) deopting into this thread.
-  (p2 i x) (poke -1 i * poke -1 x)
-  (em1 x k) (poke -1 x * k * (+ 1))
-  (em2 i x k) (poke -1 i * poke -1 x * k * (+ 2))
+  ; `place` writes the op cells, `poke` the operand cells -- a thread cell's kind is its
+  ; position, so the emitters carry it and neither door ever holds a code address.
+  (p2 i x) (place -1 i * poke -1 x)
+  (em1 x k) (place -1 x * k * (+ 1))
+  (em2 i x k) (place -1 i * poke -1 x * k * (+ 2))
   ; karg/kim: emit an arg ref / a quote, fusing with an immediately-following 1-ary apply (lvm_ap)
   ; or tail-call (lvm_tap) that kap already wrote into the continuation head -- overwrite that op
   ; cell with the operand (seek 1 keeps what follows) and prepend the fused op. kap over-reserves a
@@ -169,11 +171,10 @@
   ; keep whatever followed them exactly where it was -- `?`'s else-address included.
   ; arg only: a quote consumed by one of these folds at compile time anyway.
   ; the consumer ops are nif bodies, not `insts` entries, so they are not names in the
-  ; book -- read them off the nif VALUE the way opof/feels does ((peek 0 f) is a 1-arg
+  ; book -- read them off the nif VALUE the way opof/feels does ((pick 0 f) is a 1-arg
   ; nif's code slot). lvm_cond is an inst and resolves by name.
-  lvm_cup_ (peek 0 cup) lvm_cap_ (peek 0 cap) lvm_two_ (peek 0 two?)
-  ; `==` (id?), not the pin `^`: h is a raw op address and a pin compiles to `=`, which
-  ; would deref it. () when the head is not a known consumer.
+  lvm_cup_ (pick 0 cup) lvm_cap_ (pick 0 cap) lvm_two_ (pick 0 two?)
+  ; () when the head is not a known consumer.
   (cfuse h) (? (h == lvm_cup_) lvm_argcup (h == lvm_cap_) lvm_argcap
                (h == lvm_two_) lvm_argtwo (h == lvm_cond) lvm_argcond)
   ; the rung above: load + predicate + cond in one op. Only 7.1M conds test a bare local;
@@ -191,33 +192,30 @@
   ; fire ~never are worse than none.
   (cfuse2 h h2) (h2 == lvm_cond && h == lvm_two_ && lvm_argtwocond)
   (fuse a o t sp pc tc gs x k n)
-   (: tail (k (2 + n)) h (peek 0 tail)
+   (: tail (k (2 + n)) h (pick 0 tail)
       cf (gs = 1 ? (cfuse h))              ; arg only; () when the head is not a known consumer
-      c2 (gs = 1 ? (cfuse2 h (peek 1 tail)))   ; ... and the load+predicate+cond triple
-    ; the guard is `!== ()`, not a bare `cf`: cf is a raw op address, and asking one for its
-    ; truth sends `net` into it as a heap object -- the answer is then the machine code at
-    ; that address, not whether we found a consumer. `==` is id?, and dereferences nothing.
-    ; (the `(? s ..)` spa/spq test below is the same shape, working by luck of address.)
+      c2 (gs = 1 ? (cfuse2 h (pick 1 tail)))   ; ... and the load+predicate+cond triple
+    ; cfuse/cfuse2 miss with (), which no op index spells, so the guard is `!== ()`.
     (? (h == lvm_ap)       (p2 a x (seek 1 tail))
        (o && h == lvm_tap) (p2 o x (seek 1 tail))
-       (c2 !== ())         (poke 1 x tail, poke 0 c2 tail)
+       (c2 !== ())         (poke 1 x tail, place 0 c2 tail)
        (cf !== ())         (p2 cf x (seek 1 tail))
        (: c (rsh h)
         (? c (p2 (gop c gs) x (rimm h @ () (seek 1 tail) i (poke -1 i (seek 1 tail))))
-           (: s (sp x) (? s (poke -1 s tail)
+           (: s (sp x) (? s (place -1 s tail)
                             (p2 t x tail)))))))
   ; arg fuses both ap and tap; quote only ap. quote;tap (a constant arg to a tail call) is left
   ; unfused: overwriting the shared tap cell in some emit contexts corrupts a branch's jump target.
   (karg x k n) (fuse lvm_argap   lvm_argtap lvm_arg   spa 3 1 1 x k n)
   (kim  x k n) (fuse lvm_quoteap 0           lvm_quote spq 4 2 2 x k n)
-  (k0 c n) (poke -1 lvm_ret (poke (1 + n) (ary c) (spin (2 + n))))
+  (k0 c n) (place -1 lvm_ret (poke (1 + n) (ary c) (spin (2 + n))))
   ; k0s: like k0 but reserves one extra leading cell for ala to stash the lambda's source \-expr at
   ; value[-1], where the printer (gzput_fn) finds it. entry = cell 1, src = cell 0.
-  (k0s c n) (poke -1 lvm_ret (poke (2 + n) (ary c) (spin (3 + n))))
+  (k0s c n) (place -1 lvm_ret (poke (2 + n) (ary c) (spin (3 + n))))
   (ary c) (#(c 'arg) + #(c 'imp))
-  (pro f) (charm? f ? f (: a (peek 0 f) (?- f
+  (pro f) (charm? f ? f (: a (pick 0 f) (?- f
    (a == lvm_unc) (pro (seek -2 (peek 2 f)))
-   (a == lvm_cur) (?- f (lvm_unc == peek 2 f)
+   (a == lvm_cur) (?- f (lvm_unc == pick 2 f)
                           (pro (seek -2 (peek 4 f)))))))
   ; feel: source->source pre-pass before `ana` -- expands macros, constant-folds, and marks applies
   ; with their n-ary-vs-l2r strategy. tail position is not tracked here -- kap detects tail by
@@ -315,7 +313,7 @@
    ; leading n-ary apply. a surplus arg curries onto that answer instead of onto the head, one
    ; frame in place of one closure per arg. 0 = no n-ary lane.
    ; `id?`-safe peeps (a non-fn value never matches lvm_cur).
-   (napof v args) (charm? v || !(id? lvm_cur (peek 0 v)) ? 0
+   (napof v args) (charm? v || !(id? lvm_cur (pick 0 v)) ? 0
     (: ar (peek 1 v) (1 < ar && ar <= #args ? ar 0)))
    ; fold: un-shadowed global head -> ap (fold/iop/apx); else mark the call as an apx node
    ; (apx n head . args) carrying the apply strategy: n > 1 = the leading n-ary apply's width,
@@ -628,9 +626,9 @@
  (kap n k m)
   (:- (p j)
     j (k (2 + m))
-    p (peek 0 j == lvm_ret ?                              ; peep the continuation for ret -> tail
-       (n > 1 ? (poke -1 lvm_tapn * poke 0 n) (poke 0 lvm_tap))
-       (n > 1 ? (p2 lvm_apn n) (poke -1 lvm_ap))))
+    p (pick 0 j == lvm_ret ?                              ; peep the continuation for ret -> tail
+       (n > 1 ? (place -1 lvm_tapn * poke 0 n) (place 0 lvm_tap))
+       (n > 1 ? (p2 lvm_apn n) (place -1 lvm_ap))))
 
   ; aco -- compile a cond (? test result .. else). jump-threaded: each test, on false, branches
   ; (lvm_cond) to the next clause; on true, runs its result and jumps to the join (the cond's
@@ -642,7 +640,7 @@
    (tojoin k n) (:
     j (k $ 3 + n)
     a <(c 'join)
-    i (peek 0 a)
+    i (pick 0 a)
     (? (lvm_ret == i || lvm_tap == i) (p2 i (peek 1 a) j)
        (lvm_tapn == i)                (p2 i (peek 1 a) (poke -1 (peek 2 a) j))
                                       (p2 lvm_jump a j)))
@@ -665,7 +663,7 @@
   ; a raw poke into tenured data is the one write the precise barrier can't cover.
   (qsite site k n) (: cell (poke -1 0 * k $ 2 + n)
                       _ (pin >site 0 cell)
-                    (poke -1 lvm_quote cell))
+                    (place -1 lvm_quote cell))
   ; a closure cell is a box (tablet 0) holding the closure chain (entry . imports): mkc makes one,
   ; cof reads it, cput stores into it. the letrec* capture fixpoint and the recursive-ref
   ; backpatch mutate through the box, so the shared mutable cell is a proper heap object.

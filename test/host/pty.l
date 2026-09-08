@@ -105,7 +105,7 @@
 ; scriptable with two ptys: one plays the keyboard (echo OFF so escape bytes
 ; arrive raw -- with echo on, the line discipline renders ESC as `^[` and the
 ; arrow never decodes), one is the child.
-(: edraw (from 'cli 'edraw)
+(: edraw (cite 'cli 'edraw)
    (pump src dst) (: ch (see src)
                      (? (ch = -1) 0 (: _ (put dst ch) _ (flush dst) (pump src dst))))
    (feedlines ip m)

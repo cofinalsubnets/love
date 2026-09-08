@@ -13,10 +13,10 @@
 ; endpoint, and the walk discovers everything by reading what it already fetched
 ; -- /tips names the heads, each patch names its `deps` and its `hunks`. an
 ; empty blob rides through too, which is the case that found kiosko's 404.
-(use 'sb)                                 ; the baked module: the whole stack, spliced
-(use 'kiosko)
+(borrow 'sb)                                 ; the baked module: the whole stack, spliced
+(borrow 'kiosko)
 
-(: SD (from 'sb)
+(: SD (cite 'sb)
    record (SD 'sb-record) sync (SD 'sb-sync) bank (SD 'sb-bank)
    look (SD 'look) lay (SD 'lay) mk (SD 'mk) dirty (SD 'dirty) refof (SD 'refof)
    urlsplit (SD 'url-split) urlp (SD 'url?) digits (SD 'digits) readform (SD 'readform)
@@ -42,7 +42,7 @@
    l (listen port)
    srv (twirl (\ _ ((: (g k) (: _ (await l)
                                 c (accept l)
-                                _ (? (hot? c) (: _ ((from 'kiosko 'serve1) oroot () c)
+                                _ (? (hot? c) (: _ ((cite 'kiosko 'serve1) oroot () c)
                                           (close c)) ())
                                 (g k)))
                     0)) 0)

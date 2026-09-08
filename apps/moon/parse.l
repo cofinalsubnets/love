@@ -29,7 +29,7 @@
 ; a new node here is also clay's: clay.l validates and re-says what this file
 ; produces, so it wants an arity row, a precedence and a rendering (doc/misc/clay.md).
 (module 'moon
-(use 'kore)
+(borrow 'kore)
 (:
    ; token readers: t = (kind val line)
    (tkk t) <t (tkv t) <>t

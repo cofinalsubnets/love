@@ -263,7 +263,7 @@ int main(void) {
   // the bake/wake, so its `puts` marks the exact moment love is up.
 #define TE_TAIL(banner) \
     "(: _ (gpio_init 3) _ (gpio_dir 3 1) _ (gpio_put 3 0)" \
-    "    _ (putc 10) _ (puts \"" banner "\") _ (putc 10) ((from 'cli 'shell) 0))"
+    "    _ (putc 10) _ (puts \"" banner "\") _ (putc 10) ((cite 'cli 'shell) 0))"
   if (!woke) {
     // the on-device egg bake: bao is a MODULE, registered by the eval below and
     // then spliced. a woken image (the mps2 baker's) carries the load already.
@@ -278,10 +278,10 @@ int main(void) {
     ,
 #include "post.h"
     );
-    g = ai_evals_(g, "(use 'cli) 0"); }
+    g = ai_evals_(g, "(borrow 'cli) 0"); }
   // THE SESSION: a fresh writable layer, C-side -- the shell's defglobs land
   // here, never in the base (bakes carry none; every boot or wake pushes its own).
-  g = ai_layer_(g);
+  g = ai_open_(g);
   struct ai *r = ai_evals_(g, woke ? TE_TAIL("; image hatched -- shell up")
                                    : TE_TAIL("; egg hatched -- shell up"));
   // The shell only returns on a fatal error: honest face, then blink it out.

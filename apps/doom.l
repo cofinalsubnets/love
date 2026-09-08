@@ -19,7 +19,8 @@
 ; silent game and HORN=/dev/snd/pcmC1D0p names a card (inle/horn.c).
 ; -frames N ends the game after N drawn frames: the gate's door, and nobody else's.
 (module 'doom
-(use 'xwire)
+(borrow 'xwire)
+(borrow 'posix)
 (:
    ; --- the display, as lux reads it: DISPLAY -> the unix socket, the cookie off
    ;     XAUTHORITY or ~/.Xauthority when the server wants one ---
@@ -143,7 +144,7 @@
    (fetch url path)
     (? (two? (stat path)) 0
        (: _ (note ("fetching " + url))
-          rc ((from 'kore 'wget-main) ["-q" "-O" path url])
+          rc ((cite 'kore 'wget-main) ["-q" "-O" path url])
           (? (rc = 0) 0 (: _ (unlink path) rc))))
    ; the nest's IWAD rides the exec unless the caller named one: the nest's cwd is the caller's
    (nest-args dl as) (? (any (\ a (a = "-iwad")) as) as ("-iwad" . ((dl + "/doom1.wad") . as)))
@@ -171,13 +172,13 @@
                    r2 (? (two? (stat (dl + "/doomgeneric"))) 0
                          (: r (fetch dg-url (dl + "/doomgeneric.tgz"))
                             (? !(r = 0) r
-                               (: _ ((from 'tarcmd 'tar-main) ["xzf" (dl + "/doomgeneric.tgz") dl])
+                               (: _ ((cite 'tarcmd 'tar-main) ["xzf" (dl + "/doomgeneric.tgz") dl])
                                   _ (rename (dl + "/doomgeneric-master") (dl + "/doomgeneric"))
                                   _ (unlink (dl + "/doomgeneric.tgz"))
                                   _ (unlink (dl + "/pax_global_header"))              ; the tarball's pax row, laid as a file
                                   (two? (stat (dl + "/doomgeneric")) ? 0 1)))))
                    (? (!(r1 = 0) || !(r2 = 0)) (fail "the downloads did not land")
-                      (: _ ((from 'source 'src-arm) nest exe)                     ; autonomous: ours throughout
+                      (: _ ((cite 'source 'src-arm) nest exe)                     ; autonomous: ours throughout
                          _ (note "building the nest's love with doom inside -- this binary is the toolchain")
                          st2 (run-in nest [exe "cook" "host" "DOOM=1" ("LOVE=" + exe)])
                          (? !(st2 = 0) (fail "the doom build failed")
@@ -217,7 +218,7 @@
                          _ (puts ("doom: " + show n + " frames\n"))
                          0)))))))
 
-   _ (pins (from 'verbs 'tab) 'doom doom-main)
-   s (from 'verbs 'fire ["doom" "doom.l"])
+   _ (pins (cite 'verbs 'tab) 'doom doom-main)
+   s (cite 'verbs 'fire ["doom" "doom.l"])
    (two? s ? (quit (doom-main >s))))
 ) ; module doom

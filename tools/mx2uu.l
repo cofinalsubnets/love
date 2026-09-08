@@ -23,6 +23,7 @@
 ;
 ; load the table first, in its own top-level form: the next form's bare mx-kinds /
 ; mx-add / mx-mul references resolve at its compile, which must follow this run.
+(borrow 'posix)
 (: _ (reads (open "l/mx.l" "r")) ())
 
 (:

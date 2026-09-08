@@ -3,7 +3,7 @@
 ; love table rather than transcribed by hand. the plan, the ranked slate and the
 ; gates are doc/misc/clay.md.
 ;
-; a registered module: (use "apps/moon/clay.l"), then clay-show / clay-ok? / clay-tags. nothing
+; a registered module: (borrow "apps/moon/clay.l"), then clay-show / clay-ok? / clay-tags. nothing
 ; here depends on the rest of moon -- a shower is pure AST -> text -- so a generator
 ; can take clay without the lexer, the preprocessor and the parser.
 ;

@@ -20,7 +20,7 @@
 # THREE TARGETS, one procedure (raw.sh's shape): `moon-bzip2.sh a64` cross
 # compiles and runs the round-trips under qemu, SKIPPING cleanly without it.
 #
-# ⚠ bzip2's own Makefile passes -D_FILE_OFFSET_BITS=64, and it is load-bearing
+# bzip2's own Makefile passes -D_FILE_OFFSET_BITS=64, and it is load-bearing
 # rather than decoration: bzip2.c reaches for fopen64/fseeko64 without it on a
 # glibc header set. Ours is not glibc, but the macro is what its sources expect
 # to be true, so it is passed here exactly as its Makefile passes it.
@@ -76,7 +76,7 @@ for b in $SRC; do
   objs="$objs $d/$b.o"
 done
 
-# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO moonlibc
+# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). NO moonlibc
 # object -- the link owes its symbols and the driver's runtime table pulls
 # apps/moon/lib/moonlibc/ MEMBER BY NEED (the Makefile says the same of love itself).
 # Naming an object would take every member instead.
@@ -86,9 +86,9 @@ for f in apps/moon/lib/moonlibc/math/*.c; do
 done
 # sys.o is LAID, not compiled -- and a CROSS lay needs holo's backend loaded
 # first (the host bake carries only the native one), exactly as raw.sh does it.
-{ if [ -n "$backend" ]; then echo "(use 'holo)"; cat "$backend"; fi
+{ if [ -n "$backend" ]; then echo "(borrow 'holo)"; cat "$backend"; fi
   cat apps/kore/text.l apps/kore/u.l apps/kore/asbook.l l/holo/elf.l l/holo/obj.l apps/moon/lib/mksys.l
-  echo "((from 'moon '$mksys) \"$d/sys.o\")"; } | $love || { echo "FAIL $mksys sys.o"; exit 1; }
+  echo "((cite 'moon '$mksys) \"$d/sys.o\")"; } | $love || { echo "FAIL $mksys sys.o"; exit 1; }
 
 $mc $tflag $objs "$d"/m_*.o "$d/sys.o" -o "$d/bzip2" || { echo "FAIL holo link bzip2"; exit 1; }
 echo "  linked $(wc -c < "$d/bzip2") bytes -> $d/bzip2"
