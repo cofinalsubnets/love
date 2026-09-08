@@ -24,7 +24,21 @@ const CSI = { Enter: [13], Backspace: [127], Tab: [9], Escape: [27], Delete: [27
 export async function loveMachine(root) {
   const q = c => root.querySelector('.' + c);
   const status = q('status'), canvas = q('fb'), serial = q('serial');
-  const say = s => { serial.textContent = (serial.textContent + s).slice(-4000);
+  // the machine's console is a TERMINAL, and this <pre> is not one: the shell colours its
+  // prompt and erases to end of line, and those bytes show as text instead of being obeyed.
+  // strip them. ⚠ a sequence can straddle a chunk boundary, so an unfinished one is HELD
+  // and prepended to the next -- without that its tail leaks as the very text this removes.
+  // CR goes too: with the erase stripped there is nothing to redraw over.
+  let esc = '';
+  const strip = s => {
+    s = esc + s; esc = '';
+    const i = s.search(/\x1b(\[[0-9;?]*)?$|\x1b\][^\x07\x1b]*$/);   // an unfinished tail
+    if (i >= 0) esc = s.slice(i), s = s.slice(0, i);
+    return s.replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]/g, '')                // CSI: sgr, cursor, erase
+            .replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '')          // OSC: the title and kin
+            .replace(/\x1b[@-Z\\-_]/g, '')                             // the two-byte escapes
+            .replace(/\r/g, ''); };
+  const say = s => { serial.textContent = (serial.textContent + strip(s)).slice(-4000);
                      serial.scrollTop = serial.scrollHeight; };
   const halt = t => { status.textContent = t; status.hidden = false; canvas.hidden = true; };
 
