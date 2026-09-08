@@ -265,84 +265,6 @@ static struct ai *env_budget(struct ai *g) {
         g->budget = kb * 1024 / 2 / sizeof(word); } } }
   return g; }
 
-#ifdef LoveBoot
-#include "boot0.h"                                   // src0_<name>[]: one literal per boot file, laid by sed
-static char const runner[] = "(reads(tap(s2cl tests)))";   // the stream shell (l/boot/post.l) drinks the corpus
-// the groups love0 evaluates as ONE text apiece: a text is read whole before its first
-// form runs, so joining at boot keeps that seam where the pasted headers had it.
-static char const *const mods0[] = { src0_holo, src0_x64, src0_a64, NULL };
-static char const *const prelpost0[] = { src0_prel, src0_post, NULL };
-static char const *const prelev0[] = { src0_prel, src0_ev, NULL };
-// one NUL-terminated buffer off the heap, so a collect mid-eval cannot move it; the caller frees
-static char *join0(struct ai *g, char const *const *v) {
-  uintptr_t n = 0;
-  for (int i = 0; v[i]; i++) n += strlen(v[i]);
-  char *t = g->alloc(g, NULL, n + 1), *p = t;
-  if (!t) return NULL;
-  for (int i = 0; v[i]; i++) { uintptr_t l = strlen(v[i]); memcpy(p, v[i], l); p += l; }
-  return *p = 0, t; }
-static struct ai *evals0(struct ai *g, char const *const *v) {
-  char *t = join0(g, v);
-  if (!t) return g;
-  g = ai_evals_(g, t);
-  return g->alloc(g, t, 0), g; }
-
-// FIXME this seems confabulated. is there a reason why this split is actually necessary?
-// love0 is never interactive -- a build tool or the self-test -- so replp is the full
-// love's word and this lane only takes it to share main's one dispatch. love0 wakes an
-// image file (its own mooncc0.image bake); the .image self-patch is the full binary's.
-// mooncc0.image is the `bake` nif's, called from a -e, so it seals the session layer with
-// cli0 already on it -- and every build-time object compile is one wake of it.
-static struct ai *run_program(struct ai *g, bool replp) {
-  g = ai_open_(g);
-  return ai_evals(g, "(cli-line cmdline 0)"); }
-
-// with args, run the build tool (lcat / gen_data) through the CLI driver.
-// with no args, self-test: eval prel, load bao (the shell core) as a module, and run
-// the baked corpus via c0, then bootstrap the self-hosted ev (egg) and run the corpus
-// again through it. bake/bake_load are the full love's; they land here so one call
-// serves both lanes.
-static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load) {
-  if (argp) {
-    g = ai_evals_(g, src0_p1);
-    g = evals0(g, prelpost0);
-    g = evals0(g, mods0);
-    g = ai_evals_(g, "(borrow 'cli)(borrow 'kanren)(borrow 'verbs)");
-    g = ai_shelve_(g);
-    return ai_evals(g, "(cli-line cmdline 0)"); }
-  g = ai_evals_(g, src0_p1);                         // its own call: readtext picks its reader once per
-  g = evals0(g, prelpost0);                          // text, and p1 seals hook 0 only when this call evaluates
-  g = evals0(g, mods0);
-  g = ai_evals_(g, "(borrow 'cli)(borrow 'holo)");
-  g = ai_shelve_(g);
-  g = ai_evals_(g,
-    "(borrow 'uu)(: uu (cite 'uu))(borrow 'kanren)(borrow 'posix)"
-    "(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0)"
-    "   (c0read p) (: q (open p \"r\")"
-    "               (? q (: s (slurp q) _ (close q) s)"
-    "                  (: _ (say err (\"love0: corpus: cannot open \" + p)) _ (put err 10) (quit 1))))"
-    "   (c0split s) (: n (tally s)"
-    "                  (go i j acc) (? (n <= i) (rev (? (< j i) (link (snip s j i) acc) acc))"
-    "                                 (: c (peep s i 0)"
-    "                                    (? (|| (= c 32) (= c 10))"
-    "                                       (go (+ i 1) (+ i 1) (? (< j i) (link (snip s j i) acc) acc))"
-    "                                       (go (+ i 1) j acc))))"
-    "                  (go 0 0 ()))"
-    "   fs (c0split (c0read \"out/lib/corpus.list\"))"
-    "   _ (? (two? fs) 0 (: _ (say err \"love0: corpus: out/lib/corpus.list names nothing\")"
-    "                       _ (put err 10) (quit 1)))"
-    "   tests (foldl (\\ a f (a + c0read f)) \"\" fs))");
-  g = ai_evals_(g, runner);          // pass 1: corpus via ev = the c0 nif
-  char *corpus = join0(g, prelev0);                   // bootstrap: install the self-hosted ev
-  if (corpus) g = ai_egg_(g, src0_egg, src0_p1, corpus, src0_post), g->alloc(g, corpus, 0);
-  return ai_evals_(g, runner); }                      // pass 2: corpus via the self-hosted ev
-
-#else
-// the full love: raw terminal mode for the interactive REPL, and the CLI driver and the
-// glaze off inle/cats.c. the tty is one terminal, so its cooked baseline and its atexit
-// live in posix.c, which the (raw on) nif drives. the capture-once latch there is what makes
-// a repl that raws after bao already did restore the true baseline rather than a raw one.
-#define raw_mode() ((void) ai_raw_mode(1))
 // LOVE_NO_GLAZE: a pure-interpreter session -- ev back to base-ev and the natjit hook
 // cleared. a session knob like LOVE_NO_IMAGE: it governs a run, never the artifact.
 #ifdef AiGlazed
@@ -356,12 +278,21 @@ static char const glaze_off[] = "";
 // catted app's files share one vocabulary; the egg boot and the image wake both converge.
 // l/boot/post.l's `cli-line` is this tail entire, spliced with its module: the argv[0] verb
 // door, the positional rail, the repl, the stdin drink. the isatty answer is all C still owns.
+// both seats run this one: love0 is never interactive and never glazed, so replp is false
+// and glaze_off is the empty text there -- the seat shows in the ANSWERS, not in a fork.
+// the tty is one terminal, so its cooked baseline and its atexit live in posix.c, which the
+// (raw on) nif drives; the capture-once latch there is what makes a repl that raws after
+// bao already did restore the true baseline rather than a raw one.
 static struct ai *run_program(struct ai *g, bool replp) {
-  if (replp) raw_mode();
+  if (replp) (void) ai_raw_mode(1);
   g = ai_open_(g);
   if (getenv("LOVE_NO_GLAZE")) g = ai_evals_(g, glaze_off);
   return ai_evals(g, replp ? "(cli-line cmdline 1)" : "(cli-line cmdline 0)"); }
 
+#ifdef LoveBoot
+// love0's seat is its own translation unit: inle/boot.c, linked only into love0.
+struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load);
+#else
 // read-eval one .l file into the booting session, loudly: a bake's cat has no shell help,
 // so a raise in it must end the bake rather than seal a half-built artifact.
 // the path is a value, never spliced into the source, so the text stays data whatever it
@@ -450,7 +381,7 @@ ai_noinline static struct ai *argv_chain(struct ai *g, char const **v, int argc,
   for (g = ai_push(g, 1, ZeroPoint); n--; g = gxr(g));   // () terminates, as a love list does
   return g; }
 
-#if !defined(LoveBoot) && !defined(__wasm__)
+#ifdef AiFirstBoot
 #include "ustar.h"
 static char const src_distlist[] =
 #include "distlist.h"
@@ -540,7 +471,7 @@ static void first_boot(char const **argv) {
   execv(exe, (void*) argv);                          // the patched file: same path, new inode
   fprintf(stderr, "; first boot: cannot re-exec -- running cite source\n"); }
 #else
-#define first_boot(argv) ((void) 0)                      // love0, or no processes to fork
+#define first_boot(argv) ((void) 0)                      // no blob to bake, or no exec back
 #endif
 
 int main(int argc, char const **argv) {

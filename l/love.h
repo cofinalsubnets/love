@@ -490,6 +490,20 @@ extern struct ai_fio ai_stdin, ai_stdout, ai_stderr;
 #  define ai_avail_floor 8
 # endif
 #endif
+// AiFirstBoot -- this link can bake itself from the source it carries (inle/src.c's
+// ai_srcgz, laid strong by the dist link) and re-exec the patched file. a capability,
+// not a roster: love0 LAYS that blob rather than carrying one, and the wasm seat has no
+// exec to come back through, so neither asks for the reader or the fork.
+#if !defined(LoveBoot) && !defined(__wasm__)
+# define AiFirstBoot 1
+#endif
+// AiFirstBoot -- this link can bake itself from the source it carries (inle/src.c's
+// ai_srcgz, laid strong by the dist link) and re-exec the patched file. a capability,
+// not a roster: love0 LAYS that blob rather than carrying one, and the wasm seat has
+// no exec to come back through, so neither asks for the reader or the fork.
+#if !defined(LoveBoot) && !defined(__wasm__)
+# define AiFirstBoot 1
+#endif
 // the GC tail is ai_musttail like every other, and that is why lvm_gc takes its word
 // count in g->b instead of a fifth parameter: musttail wants matching prototypes, so an
 // extra-arg callee left this tail to the compiler's mood. it is owed now, per Have.
