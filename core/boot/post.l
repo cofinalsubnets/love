@@ -1720,7 +1720,9 @@
    (dotl? w) (: n #w (2 < n && snip w (n - 2) n = ".l"))
    (sl? w)   (: n #w (go i) (? (n <= i) 0 (w i = 47) 1 (go (i + 1))) (go 0))
    (word w)  (sl? w || dotl? w ? () (get (name w)))
-   seat  (get * name * bn)
+   ; ..and never the artifact's own name: argv[0] `love` is THIS BINARY, not a verb
+   ; called love, so the front door keeps its flags, its tty test and its stdin.
+   (seat p)  (: w (bn p) (w = "love" ? () (get (name w))))
    (putln k) (puts (string k), putc 10)
    ; `love verbs` -- one name per line, for a pipe. sorted: a tablet's key order is its own
    ; business and would read like a change.
@@ -2196,4 +2198,11 @@
                  (two? >ln) (cli-rail ln)
                  tty        (shell 0)
                  (reads in, 0)))))         ; non-tty stdin: the stream face drinks the in port
+
+ ; `love` is a verb like every other program this binary carries -- which is what lets a
+ ; shell with no seat to exec reach the repl by name, an inle console being every such
+ ; shell. a line rails, nothing opens the repl; a pipeline execs on a hosted seat and
+ ; never arrives here. last in the letrec: the closure takes its free names as they stand.
+ _ (pins (from 'verbs 'tab) 'love
+     (\ as (two? as ? (cli-rail (link "love" as)) (shell 0))))
 ) ; module cli
