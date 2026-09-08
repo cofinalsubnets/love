@@ -3,17 +3,34 @@
 typedef int sig_atomic_t;
 #include <sys/types.h>
 typedef struct { long __v[16]; } sigset_t;   /* 128 bytes, glibc-sized */
+/* the canonical (linux) siginfo, 128 bytes: the head, then a union whose fault
+ * lane is the faulting address. the BSDs order the head differently and put the
+ * address elsewhere, so sigaction.c's shim translates into this one shape and a
+ * handler reads the same layout on every kernel. */
+typedef struct {
+  int si_signo, si_errno, si_code, __si_pad;
+  union { void *__addr; char __pad[112]; } __sifields;
+} siginfo_t;
+#define si_addr __sifields.__addr
 struct sigaction {
-  void (*sa_handler)(int);
+  /* a union, so `sa.sa_handler = h` keeps working unchanged: both spellings are
+   * one pointer slot, which is what every kernel's shape holds here too. */
+  union {
+    void (*sa_handler)(int);
+    void (*sa_sigaction)(int, siginfo_t *, void *);
+  } __sa_un;
   sigset_t sa_mask;
   int sa_flags;
   void (*sa_restorer)(void);
 };
+#define sa_handler   __sa_un.sa_handler
+#define sa_sigaction __sa_un.sa_sigaction
 #define SIG_DFL ((void(*)(int))0)
 #define SIG_IGN ((void(*)(int))1)
 #define SIG_ERR ((void(*)(int))-1)
 #define SIGINT   2
 #define SIGILL   4
+#define SIGTRAP  5
 #define SIGABRT  6
 #define SIGFPE   8
 #define SIGSEGV 11

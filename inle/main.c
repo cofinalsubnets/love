@@ -474,8 +474,44 @@ static void first_boot(char const **argv) {
 #define first_boot(argv) ((void) 0)                      // no blob to bake, or no exec back
 #endif
 
+// a __builtin_trap guard fired: `ud2` / `brk #0` / `ebreak`, so it lands here as
+// SIGILL (SIGTRAP on the arm and riscv seats) with si_addr at the instruction.
+// the kernel's k_exception prints this same line; hosted had only a bare 132.
+// write and raise only -- a handler may call nothing the VM or malloc owns, so
+// the address is spelled by hand. it does not resume: the default disposition
+// goes back on and the signal is re-raised, so the exit status and the core stay
+// what they were.
+static void trap_note(int s, siginfo_t *si, void *ctx) {
+  char b[48], *p = b;
+  for (char const *m = "*** love: trap at 0x"; *m; m++) *p++ = *m;
+  uintptr_t a = si ? (uintptr_t) si->si_addr : 0;
+  int seen = 0;
+  for (int i = (int) sizeof a * 8 - 4; i >= 0; i -= 4) {
+    unsigned d = (unsigned) (a >> i) & 15;
+    if (d || seen || !i) *p++ = "0123456789abcdef"[d], seen = 1; }
+  *p++ = '\n';
+  (void) ctx;
+  (void) write(2, b, (size_t) (p - b));
+  signal(s, SIG_DFL);
+  raise(s); }
+
+// SIGTRAP only where the trap instruction raises it -- on x86 it is the
+// debugger's, and naming a breakpoint "love: trap" would be a lie.
+static void trap_note_on(void) {
+  struct sigaction sa;
+  memset(&sa, 0, sizeof sa);
+  sa.sa_sigaction = trap_note;
+  sa.sa_flags = SA_SIGINFO;
+  sigemptyset(&sa.sa_mask);
+  sigaction(SIGILL, &sa, NULL);
+#if defined(__aarch64__) || defined(__riscv)
+  sigaction(SIGTRAP, &sa, NULL);
+#endif
+}
+
 int main(int argc, char const **argv) {
   signal(SIGPIPE, SIG_IGN);
+  trap_note_on();
   struct ai *g = NULL;
   char const *image_load_path = NULL, *bake = NULL,   // see boot(): "" = self-bake, a path = an image file
              *bake_load = NULL;                      // bake -l CAT: read-eval it before the seal

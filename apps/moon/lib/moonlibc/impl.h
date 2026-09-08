@@ -367,6 +367,10 @@ extern long __ai_nrfb(long n);
 extern long __ai_errfb(long e);
 extern long __ai_sigfb(long sig);
 extern long __ai_sigcan(long sig);
+/* a native siginfo -> the canonical one signal.h spells. the heads disagree
+ * (netbsd swaps code and errno) and so does the address's offset, so a handler
+ * under SA_SIGINFO reads what the shim wrote, never the kernel's own record. */
+extern void __ai_sicanon(void const *native, siginfo_t *out);
 extern unsigned long __ai_maskfb(unsigned long m);
 extern unsigned long __ai_maskcan(unsigned long m);
 extern long __ai_ofb(long fl);

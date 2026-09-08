@@ -72,6 +72,7 @@ long __ai_nrfb(long n) { return n; }      /* no second kernel on this arch */
 long __ai_errfb(long e) { return e; }
 long __ai_sigfb(long s) { return s; }
 long __ai_sigcan(long s) { return s; }
+void __ai_sicanon(void const *n, siginfo_t *o) { memcpy(o, n, sizeof *o); }
 unsigned long __ai_maskfb(unsigned long m) { return m; }
 unsigned long __ai_maskcan(unsigned long m) { return m; }
 long __ai_ofb(long f) { return f; }
@@ -237,6 +238,24 @@ static signed char const os_sigcan[32] = {
   23, 19, 20, 18, 17, 21, 22, 29, 24, 25, 26, 27, 28, 29, 10, 12 };
 long __ai_sigfb(long s) { return (s >= 0 && s < 32) ? os_sigfb[s] : -1; }
 long __ai_sigcan(long s) { return (s >= 0 && s < 32) ? os_sigcan[s] : s; }
+
+/* the native siginfo heads. freebsd keeps linux's signo/errno/code order and
+ * then parts (pid uid status before the address); netbsd swaps code and errno
+ * and lands the address where linux does. neither is read past what the
+ * canonical shape can hold. */
+struct __fb_siginfo { int signo, err, code, pid; unsigned uid; int status; void *addr; };
+struct __nb_siginfo { int signo, code, err, pad; void *addr; };
+void __ai_sicanon(void const *n, siginfo_t *o) {
+  memset(o, 0, sizeof *o);
+  if (__ai_osv == 2) {
+    struct __fb_siginfo const *f = n;
+    o->si_signo = (int) __ai_sigcan(f->signo), o->si_errno = f->err;
+    o->si_code = f->code, o->si_addr = f->addr; }
+  else if (__ai_osv == 3) {
+    struct __nb_siginfo const *b = n;
+    o->si_signo = (int) __ai_sigcan(b->signo), o->si_errno = b->err;
+    o->si_code = b->code, o->si_addr = b->addr; }
+  else memcpy(o, n, sizeof *o); }         /* linux: the native record IS canonical */
 
 /* a mask, bit (sig-1), both spellings in the low word (signals 1..31); the
  * canonical rt band above 31 has no freebsd twin and drops. */
