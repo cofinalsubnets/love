@@ -3,6 +3,11 @@
 ;
 ; edit this file, not nifs.h -- make relays it from here, off the mx_gen roster in
 ; test/test.mk. `make mx` refreshes by hand, test_clay diffs.
+;
+; a new love name must not already be a LOCAL in core/boot/*.l: those files compile
+; against the bare book, so a sibling of the same name shadows the nif in that whole
+; letrec and the call quietly becomes a partial application of the local. grep them
+; for the name as a binding, not just the book for the name.
 (:
    _ (use "apps/moon/clay.l")
 
@@ -56,6 +61,8 @@
       (nif_lamsrc        "lamsrc"        1 lvm_lamsrc)
       (nif_nifnom        "nifnom"        1 lvm_nifnom)
       (nif_poke          "poke"          3 lvm_poke)
+      (nif_pick          "pick"          2 lvm_pick)
+      (nif_place         "place"         3 lvm_place)
       (nif_trim          "trim"          1 lvm_trim)
       (nif_seek          "seek"          2 lvm_seek)
       (nif_saturate      "sat"           1 lvm_saturate)

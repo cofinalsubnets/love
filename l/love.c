@@ -188,7 +188,12 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
    // honors -- auto.l reads this and keeps the interpreter on a trampoline build
    {"love-tco", {.x = putcharm(ai_tco)}}, };
   g = ai_defn(g, def0, countof(def0));
-  g = ai_defn(g, def1, countof(def1));
+  // a nif row's value is its run inside nifs[]; an instruction row's is a bare fn, and that
+  // binds as its op charm -- no code address belongs in a love value (core/ev.c's pick/place).
+  for (uintptr_t j = 0; j < countof(def1); j++) {
+   struct ai_def d = def1[j];
+   if (!ai_nif_cell(d.v.k)) d.v.x = putcharm(ai_op_index((intptr_t) d.v.ap));
+   g = ai_defn(g, &d, 1); }
   if (ai_ok(g = ai_strof(g, AiVersion)))            // a live string: off the stack, never an ai_def
    g = ai_pop(ai_defv(g, "love-version"), 1);
   // `love-arch`: the host CPU the glaze emits for, and the assembler target every backend
@@ -1047,4 +1052,11 @@ lvm(lvm_twinbox)  { ai_musttail return Ap(data_num_apply, g); }
 // same table to number the aps it serializes.
 struct ai_def const *const ai_def1 = def1;
 uintptr_t const ai_def1_n = countof(def1);
+// which def1 rows are VALUES: a nif's row carries .k, a run inside nifs[]; an instruction's
+// carries .ap. the union says which was WRITTEN and C checks it there -- at RUNTIME the two
+// are one word, so the question is still the address's, and this is the one place that asks.
+// the boot above splits on it, and so does l/snap.c's op table: a cell holding a nif is
+// holding a value, and must read back as one.
+int ai_nif_cell(union u const *k) {
+ return (uintptr_t) ((char const*) k - (char const*) nifs) < sizeof nifs; }
 

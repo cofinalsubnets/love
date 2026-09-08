@@ -119,15 +119,23 @@
 
    ;; -- symbols and calls. env: name -> (fn idx [n]) | (data addr). a call under uni hands
    ;;    every argument local and takes both answers back; the per-arity lane counts. --
+   ;; a function's ADDRESS is not its table index: base + 2i, so it is even and far above any
+   ;; address this memory holds. every other target's fn address is already both, and love
+   ;; reads a word's parity as its tag -- a bare index made half the functions look like
+   ;; fixnums. w-indirect takes the index back out; nothing else looks inside one.
+   w-fnbase (1 << 40)
+   (w-fnaddr i) (w-fnbase + 2 * i)
    (w-sym x) (peep (peep w-st 'env {}) x ())
    (w-args e) (? (w-uni? 0) (catmap (\ i [['local.get i]]) (jot 16))
                  (catmap (\ i [['local.get i]]) (jot (e 2))))
    (w-rets _) (? (w-uni? 0) [['local.set 9] ['local.set 8] ['local.set 1] ['local.set 0]] [['local.set 0]])
-   (w-indirect d op) (? (w-uni? 0) (w-args () + w-val d + [['i32.wrap_i64] [op 0 0]])
+   (w-indirect d op) (? (w-uni? 0) (w-args () + w-val d
+                                    + [['i64.const w-fnbase] ['i64.sub] ['i64.const 1] ['i64.shr_u]
+                                       ['i32.wrap_i64] [op 0 0]])
                         (scare 'wasm-indirect-needs-uni d))
    (w-la d x)
     (w-sym x @- (scare 'wasm-la x)
-     ('fn . u . _)   ([['i64.const u]] + w-set d)
+     ('fn . u . _)   ([['i64.const (w-fnaddr u)]] + w-set d)
      ('data . u . _) ([['i64.const u]] + w-set d)
      ('null . _) ([['i64.const 0]] + w-set d))
    (w-jump l d) (: labs (peep w-st 'labs {}) j (peep labs l -1)
@@ -508,8 +516,14 @@
        _ (map (\ i (pin syms (imps i) ['fn i])) (jot ni))
        _ (map (\ i (pin syms ((fns i) 0) ['fn (i + ni)])) (jot (tally fns)))
        _ (map (\ a (pin syms (a 0) (peep syms (a 1) ()))) (als + als))   ; twice: an alias of an alias
-       ;; 6. the data image, its pointers resolved: a function's address is its index
-       (symval x) (: e (peep syms x ()) (? !(two? e) (scare 'wasm-unresolved x) (e 1)))
+       ;; 6. the data image, its pointers resolved. symidx is the module's own numbering (a
+       ;; funcidx, what the export section wants); symval is the ADDRESS a data word holds,
+       ;; which for a function is w-fnaddr's -- the same word w-la lays for it.
+       (symidx x) (: e (peep syms x ()) (? !(two? e) (scare 'wasm-unresolved x) (e 1)))
+       (symval x) (: e (peep syms x ())
+                     (? !(two? e) (scare 'wasm-unresolved x)
+                        (<e = 'fn) (w-fnaddr (e 1))
+                        (e 1)))
        dsize (dend - base)
        img (cask dsize)
        _ (map (\ it (? (two? >it)                             ; (addr sym aux): an abs64 pointer
@@ -532,7 +546,7 @@
         'table (ni + tally fns) 'elem (jot (ni + tally fns))
         'memory [pages]
         'globals [['i64 1 [['i64.const sp0]]]]
-        'exports ((map (\ s [s 'func (symval (nom s))]) exports) + '(("mem" memory 0)))
+        'exports ((map (\ s [s 'func (symidx (nom s))]) exports) + '(("mem" memory 0)))
         'data [(base . string img)]
         'names (map (\ i [i (show (imps i))]) ^ni + map (\ i [(i + ni) (show ((fns i) 0))]) (jot (tally fns)))
         'start -1}))

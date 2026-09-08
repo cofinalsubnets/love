@@ -64,17 +64,18 @@
 ; the port head is three words -- ap, vt, ungetc -- and both languages know it: love.h declares
 ; it, these build it. each poke answers the cell it wrote, so `poke -1` walks backwards. the vt
 ; is the port's whole kind, so these stamp the one they mean; C hands the address over as ci-vt
-; and to-vt, the way it hands over lvm_quote, and the egg mops both noms.
+; and to-vt, and the egg mops both noms. a vt is a value word (poke), the head's ap an
+; instruction (place) -- the two cells of this head are the two doors, side by side.
 (: (tap cl)
- (poke -1 (peek 0 in) (poke -1 ci-vt (poke -1 -1 (poke 3 cl (spin 4)))))
+ (place -1 (pick 0 in) (poke -1 ci-vt (poke -1 -1 (poke 3 cl (spin 4)))))
  (jug _)                                          ; the output dual of `tap`: say into it, slurp it back out
   ; the backing starts empty, and that is the whole isolation: a literal here is
   ; one string every jug would share, and to_writen fills a backing in place -- two
   ; live jugs then write over each other until the first one grows.
-  (poke -1 (peek 0 in) (poke -1 to-vt (poke -1 -1 (poke -1 "" (poke 4 0 (spin 5))))))
+  (place -1 (pick 0 in) (poke -1 to-vt (poke -1 -1 (poke -1 "" (poke 4 0 (spin 5))))))
  ; hot? names the zoo (a buf or a port), the head's ap word the species -- the recognition C's iop
- ; does. hot? goes first so the peek only ever lands on a heap cell.
- (port? o) (? (hot? o) (id? (peek 0 o) (peek 0 in)) 0)   ; the else arm is the bit: a two-armed ? answers the zero point
+ ; does. hot? goes first so the read only ever lands on a heap cell.
+ (port? o) (? (hot? o) (id? (pick 0 o) (pick 0 in)) 0)   ; the else arm is the bit: a two-armed ? answers the zero point
  ; drain a vessel to a value: a jug reads its backing buffer, everything else a gulp at a time.
  ; the drain accumulates, it does not recurse -- a recursion's stack depth is the gulp count, and
  ; on a parking port every task switch copies that stack.
@@ -227,12 +228,12 @@
 ; binary?: does f take exactly two operands? read two ways -- the arity off the n-ary closure
 ; marker, else the param count off the source a compiled lambda stashes. one-sided on purpose:
 ; a shape neither reads (a nif, a partial) passes.
-; the marker is read off a known binary rather than named: `peek`'s nom dies at the hatch but
+; the marker is read off a known binary rather than named: `pick`'s nom dies at the hatch but
 ; the folded reference lives. and it must be lvm_cur -- the ap table has it. binding lvm_ret0
 ; the same way (to catch a one-armed nif) segfaults the image bake, so the nif case stays open.
-(: hcur (peek 0 (\ a b a))
+(: hcur (pick 0 (\ a b a))
    (binary? f) (? (charm? f) 0                      ; a charm is no handler at all
-                  (id? hcur (peek 0 f)) (2 = peek 1 f)
+                  (id? hcur (pick 0 f)) (2 = peek 1 f)
                   (: s (lamsrc f) (? (two? s) (4 = #s) 1)))
    (hear f) (? !f (seal-hook 5 f)                   ; every nothing uninstalls
                (binary? f) (seal-hook 5 f)
@@ -325,7 +326,7 @@
   ; or self reference -- the printer below is one), a sibling bound to an unfoldable
   ; call is boxed too and its cell never filled, so every read of it raises `missing`:
   ;   (: f (: (a o) (f o) c (tablet 0) (\ o c)))   -> ;; missing c
-  cur (peek 0 (+)) ret0 (peek 1 cap) unc (peek 0 (+ 1))
+  cur (pick 0 (+)) ret0 (pick 1 cap) unc (pick 0 (+ 1))
   ; the float width is the seat's, never this file's: love.c gives a 32-bit seat
   ; (wasm, mps2, teensy41, playdate, rp2040) binary32 for ai_flo_t. so ask the
   ; arithmetic instead of spelling binary64's numbers -- a hard-coded 2^53 sends
@@ -376,11 +377,11 @@
   ; walking down by ten a step, and at each one try the truncation and the bump,
   ; the nearer first (a display nicety). at pk = 1 it terminates, dv itself being
   ; inside by construction.
-  (pick dv lo hi evn pk) (? (pk < 1) dv
+  (fewest dv lo hi evn pk) (? (pk < 1) dv
     (: t ((dv // pk) * pk)
        up (1 < pk && 5 <= (dv // (pk // 10) - (10 * (dv // pk))))
        c1 (? up (t + pk) t) c2 (? up t (t + pk))
-       (? (fits c1 lo hi evn) c1 (fits c2 lo hi evn) c2 (pick dv lo hi evn (pk // 10)))))
+       (? (fits c1 lo hi evn) c1 (fits c2 lo hi evn) c2 (fewest dv lo hi evn (pk // 10)))))
   ; strip trailing zeros, keeping one digit
   (strip n) (: q (n // 10) (0 < q && (n - (q * 10)) = 0 ? (strip q) n))
   (zeros o n) (0 < n ? (put o 48, zeros o (n - 1)) 0)
@@ -391,7 +392,7 @@
     dlo ((4 * m - (flo ? 1 2)) * up)
     dhi ((4 * m + 2) * up)
     evn (m = 2 * (m // 2))
-    dc (pick dv dlo dhi evn (** 10 ((ndig dv) - 1)))
+    dc (fewest dv dlo dhi evn (** 10 ((ndig dv) - 1)))
     lead (ndig dc)
     ss (dstr (strip dc)) sig (tally ss)
     dxp (lead + (sh < 0 ? sh 0))
@@ -469,10 +470,10 @@
 
   ; --- closures. a partial's every unc cell holds its arg at [1] and the link at
   ; [2], so the base value sits at link-2.
-  (partp v) (id? unc (peek 0 v) || id? cur (peek 0 v) && id? unc (peek 2 v))
-  (unc0 v) (? (id? cur (peek 0 v)) (seek 2 v) v)
-  (nargs v) (: (go u n) (: l (peek 2 u) (? (id? unc (peek 0 l)) (go l (1 + n)) n)) (go (unc0 v) 1))
-  (fbase v) (: (go u) (: l (peek 2 u) (? (id? unc (peek 0 l)) (go l) (seek -2 l))) (go (unc0 v)))
+  (partp v) (id? unc (pick 0 v) || id? cur (pick 0 v) && id? unc (pick 2 v))
+  (unc0 v) (? (id? cur (pick 0 v)) (seek 2 v) v)
+  (nargs v) (: (go u n) (: l (peek 2 u) (? (id? unc (pick 0 l)) (go l (1 + n)) n)) (go (unc0 v) 1))
+  (fbase v) (: (go u) (: l (peek 2 u) (? (id? unc (pick 0 l)) (go l) (seek -2 l))) (go (unc0 v)))
   (farg v i n) (: (go u w) (? (0 < w) (go (peek 2 u) (w - 1)) (peek 1 u)) (go (unc0 v) ((n - 1) - i)))
   ; --- a lambda's source, de Bruijn renamed: a \-bound variable prints as its level's
   ; letter, so a-equivalent lambdas print alike and inspect agrees with `=`. free, global

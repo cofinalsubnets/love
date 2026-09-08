@@ -384,7 +384,9 @@ static struct ai *bake_eval_file(struct ai *g, char const *path) {
 
 // FIXME waaaaaaaaaaaaaaaaaaaaay too much code in string literals
 static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load) {
-  char const *nm = getenv("LOVE_NO_MOP"); // leave internal names in global scope for debugging
+  // leave the internal names in global scope too. only an unbaked boot reaches this; the
+  // `guts` module egg.l registers is how a baked one gets at them (from 'guts 'peek).
+  char const *nm = getenv("LOVE_NO_MOP");
   if (nm && *nm) g = ai_evals_(g, "(: nomop 1)");
   g = ai_cats_egg(g);                                    // prel then ev's half, and the printer with `@`
   g = ai_cats_mods(g);                                   // register every baked module; the uses below are splices

@@ -1792,24 +1792,50 @@ lvm(lvm_argcond) { Ip = ai_nilp(g, Sp[getcharm(Ip[1].x)]) ? Ip[2].m : Ip + 3; ai
  Ip = (test) ? Ip + 3 : Ip[2].m; ai_musttail return Continue(); }
 fldc(lvm_argtwocond, chainp(v) && !nomp(v))            // two? answers a charm: no ai_nilp needed
 
-lvm(lvm_trim) { return
- clip(g, cell(Sp[0])), Ip++, Continue(); }
+// the cell doors. peek/poke move values and pick/place instructions -- two pairs because a
+// thread cell's kind is its position, not its content, and only reading can decide it: a
+// code word is exactly one the ap table names, a value word never is. so no code address
+// reaches love, and a charm target answers () rather than dereferencing a fixnum -- love
+// builds no other even word, which closes these over every value they can be handed.
+// the index is still the caller's to get right, and so is poke's contract below.
+lvm(lvm_trim) {
+ if (lamp(Sp[0])) clip(g, cell(Sp[0]));
+ return Ip++, Continue(); }
 
 lvm(lvm_seek) { return
- Sp[1] = word(cell(Sp[1]) + getcharm(Sp[0])),
+ Sp[1] = lamp(Sp[1]) ? word(cell(Sp[1]) + getcharm(Sp[0])) : ZeroPoint,
  Sp++, Ip++, Continue(); }
 
-lvm(lvm_peek) { return
- Sp[1] = (cell(Sp[1]) + getcharm(Sp[0]))->x,
+lvm(lvm_peek) {
+ word w = lamp(Sp[1]) ? (cell(Sp[1]) + getcharm(Sp[0]))->x : ZeroPoint;
+ return Sp[1] = ai_op_index((intptr_t) w) < 0 ? w : ZeroPoint,
+ Sp++, Ip++, Continue(); }
+
+// (pick i v): the instruction at cell i as its table index, () where a value sits
+lvm(lvm_pick) {
+ word w = lamp(Sp[1]) ? (cell(Sp[1]) + getcharm(Sp[0]))->x : ZeroPoint;
+ intptr_t j = ai_op_index((intptr_t) w);
+ return Sp[1] = j < 0 ? ZeroPoint : putcharm(j),
  Sp++, Ip++, Continue(); }
 
 lvm(lvm_poke) {
+ if (!lamp(Sp[2])) { *(Sp += 2) = ZeroPoint; ai_musttail return Next(1); }
  union u *c = cell(Sp[2]) + getcharm(Sp[0]);
  Pack(g);                    // ai_young reads g->hp -- the live Hp may be ahead (the lvm-context law)
  gen_wb_cell(g, c, Sp[1]);   // poke's contract: the target cell sits in a tagged span (a spin
                              // thread, an env) -- never a chain's field (ev boxes those; a chain
                              // has no terminator for the remembered cell-walk).
  c->x = Sp[1]; *(Sp += 2) = word(c); ai_musttail return Next(1); }
+
+// (place i c v): write instruction c into cell i. the barrier runs as poke's does -- a code
+// word roots nothing, but the cell it lands in is the same cell poke's contract describes.
+lvm(lvm_place) {
+ intptr_t a = charmp(Sp[1]) ? ai_op_resolve(getcharm(Sp[1])) : 0;   // an index is a charm, always
+ if (!lamp(Sp[2]) || !a) { *(Sp += 2) = ZeroPoint; ai_musttail return Next(1); }
+ union u *c = cell(Sp[2]) + getcharm(Sp[0]);
+ Pack(g);
+ gen_wb_cell(g, c, (word) a);
+ c->x = (word) a; *(Sp += 2) = word(c); ai_musttail return Next(1); }
 
 lvm(lvm_spin) {
  size_t n = getcharm(Sp[0]);

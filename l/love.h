@@ -761,7 +761,7 @@ lvm_t lvm_kcall,
  lvm_string, lvm_lt,     lvm_le,   lvm_eq,     lvm_same, lvm_gt,  lvm_ge,
  lvm_sort,  lvm_sortby, lvm_tally, lvm_longp,
  lvm_pin, lvm_pull, lvm_tablet,   lvm_keys,  lvm_dig,
- lvm_unc, lvm_poke, lvm_peek,
+ lvm_unc, lvm_poke, lvm_peek, lvm_pick, lvm_place,
  lvm_seek,  lvm_trim,   lvm_spin,   lvm_add,
  lvm_mul,    lvm_quot,   lvm_fquot, lvm_rem,  lvm_arg,
  lvm_bmul_start,             // the resumable bignum multiply's entry; its loop bodies are num.c's
@@ -1304,6 +1304,11 @@ char *code_install(struct ai *g, char const *src, size_t n), *code_adopt(struct 
 char *ai_code_window(char *p);
 void code_free(struct ai *g, char *code), code_fin(struct ai *g), jk_ini(struct ai *g);
 int code_in(struct ai *g, uintptr_t v);
+// the instruction table (l/snap.c): an instruction word <-> its index. a negative index
+// is not an instruction, address 0 is no such index. ai_nif_cell (l/love.c) is the line
+// they draw against a nif's run, which is a value and never an instruction.
+intptr_t ai_op_index(intptr_t ap), ai_op_resolve(intptr_t i);
+int ai_nif_cell(union u const *k);
 size_t code_len(char *code);
 // the jk slots (g->jk): what a native reads off g -- the emitter's `jk` law names them the same
 enum { JkChain, JkStr, JkMap, JkNom, JkMint, JkGem, JkCask, JkDrive, JkResume, JkCur, JkUnc };

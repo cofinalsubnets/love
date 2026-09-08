@@ -49,19 +49,19 @@
                (pin (? (tablet? m) m (: t (tablet 0) _ (pin F 0 t) t)) a b))
 
 )
-; numfn lays the n-fold thread with spin/poke, so applying a fixnum never re-enters the compiler:
+; numfn lays the n-fold thread with spin/place, so applying a fixnum never re-enters the compiler:
 ; n quote-f's then n ap's, cell 0 the printer's source, entry at cell 1.
 ; the helpers pass th/f/n explicitly: a closure over the forward-bound th miscompiles under c0.
 (: (nfnest f i acc) (? (< i 1) acc (nfnest f (+ -1 i) (link f (link acc ()))))
-   (nfq th f i n) (? (< i n) (: _ (poke (+ 1 (* 2 i)) lvm_quote th) _ (poke (+ 2 (* 2 i)) f th) (nfq th f (+ 1 i) n)) th)
-   (nfa th i n) (? (< i n) (: _ (poke (+ (+ 3 (* 2 n)) i) lvm_ap th) (nfa th (+ 1 i) n)) th)
+   (nfq th f i n) (? (< i n) (: _ (place (+ 1 (* 2 i)) lvm_quote th) _ (poke (+ 2 (* 2 i)) f th) (nfq th f (+ 1 i) n)) th)
+   (nfa th i n) (? (< i n) (: _ (place (+ (+ 3 (* 2 n)) i) lvm_ap th) (nfa th (+ 1 i) n)) th)
    (numfn n f) (:                                  ; build (\ x (f (f ... (f x)))), n f's
      src (link '\ (link 'x (link (nfnest f n 'x) ())))  ; alloc before spin; printer source
      th (spin (+ 5 (* 3 n)))                         ; [src] n*[quote f] [arg n] n*[ap] [ret 1]
      _ (poke 0 src th) _ (nfq th f 0 n)             ; no allocation past spin: th can't move
-     _ (poke (+ 1 (* 2 n)) lvm_arg th) _ (poke (+ 2 (* 2 n)) n th)   ; arg n: x, now under n f's
+     _ (place (+ 1 (* 2 n)) lvm_arg th) _ (poke (+ 2 (* 2 n)) n th)   ; arg n: x, now under n f's
      _ (nfa th 0 n)
-     _ (poke (+ 3 (* 3 n)) lvm_ret th) _ (poke (+ 4 (* 3 n)) 1 th)
+     _ (place (+ 3 (* 3 n)) lvm_ret th) _ (poke (+ 4 (* 3 n)) 1 th)
    (seek 1 th))
    ;; FIXME rename | -> bit-or to free | for pipe operator
    (constellation? x) (| (charm? x) (| (packp x) (big? x)))   ; whole tower: fixnum / float / wide int / complex / array / bignum
@@ -1036,7 +1036,7 @@
                  ts (map (e \ two? e && two? >e ? (: w <e d <>e (pand (<w + <d + map (bind <>d) <>>w)))) (zip ws ds))
                  bss (map caup ds)
                  uni (foldl (u \ g \ adds u (map cap g)) () bss)
-                 [[('|| . ts)] (map (\ n [n (pick n bss ts)]) uni) ()])
+                 [[('|| . ts)] (map (\ n [n (across n bss ts)]) uni) ()])
               (h = '\) (two? >as ? (wlist p v) (wts (weq <as v)))      ; (\ x b) is a lambda, a form
               (h = 'list) (wlist as v)
               (h = '>< || h = '.) (? (2 = #as)              ; one tag, two spellings; prefix
@@ -1061,9 +1061,9 @@
    ; supplies every nom -- one it does not bind reads (), it does not fall through to a
    ; later branch. Otherwise one body could wear bindings from two different shapes at
    ; once, and the arm would answer for a value no single branch described.
-   (pick n bss ts) (one? bss ? (lit ())
+   (across n bss ts) (one? bss ? (lit ())
                       (: e (assoc n <bss)
-                         ['? <ts (one? e ? (lit ()) <>e) (pick n >bss >ts)]))
+                         ['? <ts (one? e ? (lit ()) <>e) (across n >bss >ts)]))
    ; a pattern longer than its value must never reach a `cap`, so the whole run is
    ; claimed before any of it is read: `two?` on the head, then one `long?` for the rest
    ; of the depth. asking `two?` per step instead spends a cup, a load and a dispatch at

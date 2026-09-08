@@ -131,7 +131,8 @@ static intptr_t image_fn_slot(word const *cell) {
  return (intptr_t) (cell[0] == (word) lvm_cur ? cell[2] : cell[0]); }
 static intptr_t image_fn_index(intptr_t v) {
  for (uintptr_t j = 0; j < ai_def1_n; j++) {
-  word const *c = (word const*) ai_def1[j].v.x;
+  if (!ai_nif_cell(ai_def1[j].v.k)) continue;   // an instruction row carries .ap, no cell to read
+  word const *c = (word const*) ai_def1[j].v.k;
   if (image_fn_slot(c) == v) return (intptr_t) j; }
  for (uintptr_t k = 0, n = image_nhost(); k < n; k++) {
   word const *c = (word const*) image_host_x(k);
@@ -139,7 +140,8 @@ static intptr_t image_fn_index(intptr_t v) {
  return -1; }
 static intptr_t image_fn_resolve(intptr_t j) {
  uintptr_t d = ai_def1_n;
- if (j < (intptr_t) d) return image_fn_slot((word const*) ai_def1[j].v.x);
+ if (j < (intptr_t) d) return ai_nif_cell(ai_def1[j].v.k)
+  ? image_fn_slot((word const*) ai_def1[j].v.k) : 0;
  uintptr_t k = (uintptr_t) j - d;                          // the host slice; a short roster reads 0
  return k < image_nhost() ? image_fn_slot((word const*) image_host_x(k)) : 0; }
 // the out-of-pool immortals: (), "", the std ports, NULL (a mid-eval dump meets it in an
@@ -289,6 +291,32 @@ static word image_root_dec(uint64_t tag, uint64_t val, word *base) {
 #define ImageCodeBase (ImageIdxBase + 2 * (ImageNLvm + ImageNImm) \
                                     + 2 * ImageNLvm * ImageCellW + 2 * ImageNFn)
 #define ImageCodeMax ((uintptr_t) 1 << 28)   /* bytes of code an image can carry */
+
+// the instruction table, opened to love: `pick`/`place` move a thread's code words as these
+// indices, so no code address ever lands in a love value. the image's lanes number the same
+// words, so an index is shared with a dump -- but only the ones an op CELL can hold: a def1
+// row carrying a nif's run is that nif's value, and a cell holding it must read back whole.
+// the body fn inside such a run is an op, and rides the bare-fn lane behind ImageNLvm.
+intptr_t ai_op_index(intptr_t ap) {
+#if !defined(__arm__)
+ // a charm's word is odd, and everywhere but thumb -- whose interworking bit makes every fn
+ // address odd -- an instruction's is not. that is a shortcut, not the answer: on thumb the
+ // table is asked for charms too, and the same ~300-in-2^31 collision img_encode lives with
+ // is what a peek there lives with.
+ if (oddp(ap)) return -1;
+#endif
+ for (uintptr_t i = 0; i < countof(image_extra_aps); i++)
+  if ((intptr_t) image_extra_aps[i] == ap) return (intptr_t) i;
+ if (!ai_nif_cell((union u const*) ap))      // a nif's run is that nif's value: not an instruction
+  for (uintptr_t j = 0; j < ai_def1_n; j++)
+   if (ai_def1[j].v.x == ap) return (intptr_t)(countof(image_extra_aps) + j);
+ intptr_t i = image_fn_index(ap);            // the host slice is nif cells too, so it is not asked
+ return i < 0 ? -1 : (intptr_t) ImageNLvm + i; }
+intptr_t ai_op_resolve(intptr_t i) {
+ if (i < 0) return 0;
+ if ((uintptr_t) i < ImageNLvm) return image_ap_resolve(i);
+ i -= (intptr_t) ImageNLvm;
+ return (uintptr_t) i < ImageNFn ? image_fn_resolve(i) : 0; }
 static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
  uintptr_t const hb = ImageIdxBase;
  // the ap table first, before parity: on thumb every fn address is odd and would ride raw
