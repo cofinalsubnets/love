@@ -107,17 +107,12 @@ footer { margin-top: 3.5em; color: var(--faint); font-size: .85em;
           color: #ffffff; font: inherit; line-height: 1; white-space: pre; }
 .appbar { flex-shrink: 0; color: var(--dim); font-size: .8em; margin-top: .6em; }
 .appbar b { color: var(--link); font-weight: normal; }
-/* the machine island: the canvas IS the console, so it takes the box and scales by
-   width, its pixels left square. the serial pre under it is the boot text the
-   framebuffer has not painted yet -- small, bounded, and empty most of the time. */
+/* the machine island: the canvas IS the console -- the only one -- so it takes the box
+   and scales by width, its pixels left square. */
 .machine .fb { width: 100%; image-rendering: pixelated; background: #000000; outline: none;
                border-radius: 3px; }
 .machine .fb[hidden] { display: none; }
 .mbar { flex-shrink: 0; color: var(--dim); font-size: .8em; margin-top: .6em; }
-.serial { flex-shrink: 0; max-height: 6em; overflow: auto; margin: .6em 0 0;
-          background: none; border: none; padding: 0; color: var(--dim);
-          font: inherit; font-size: .8em; line-height: 1.2; white-space: pre-wrap; }
-.serial:empty { display: none; }
 
 /* --- chips (runnable examples) + the crew roster + the glossary --- */
 .chip { display: inline-block; background: var(--pre); border: 1px solid var(--rule);

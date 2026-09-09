@@ -358,10 +358,14 @@ test_web: host
 	@$m web/index.l out/.web/index.html
 	@env -u LOVE_NO_IMAGE $m web/style.l out/.web/style.css
 	@env -u LOVE_NO_IMAGE $m tools/mkicon.l l/quay/cga_8x8.c 3 32 out/.web/favicon.png 2>/dev/null
+	@env -u LOVE_NO_IMAGE $m tools/mkfont.l l/quay/moderndos_8x16.c 12 out/.web/quay16.woff "Quay 16"
+	@env -u LOVE_NO_IMAGE $m tools/mkfont.l l/quay/cga_8x8.c 6 out/.web/quay8.woff "Quay 8"
 	@cmp -s out/.web/index.html index.html && cmp -s out/.web/style.css assets/web/style.css \
 	  && cmp -s out/.web/favicon.png assets/web/favicon.png \
-	  || { echo "  FAIL: index.html, style.css or favicon.png is behind web/ -- run make web and commit"; exit 1; }
-	@echo "  web: ok -- index.html, style.css and favicon.png are what web/ lays"
+	  && cmp -s out/.web/quay16.woff assets/fonts/quay16.woff \
+	  && cmp -s out/.web/quay8.woff assets/fonts/quay8.woff \
+	  || { echo "  FAIL: a committed web asset is behind web/ -- run make web and commit"; exit 1; }
+	@echo "  web: ok -- the page, the stylesheet, the icon and both fonts are what web/ lays"
 test_sb: host out$(hsuf)/sb
 	@echo TEST apps/sb/sb.l + test/host/sb.l
 	@rm -rf out/.sbtest
