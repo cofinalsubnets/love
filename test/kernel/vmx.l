@@ -18,7 +18,7 @@
    (? (! (? had (vmx ()) ()))
       (: _ (puts "vmx: no VT-x here, laws skipped") _ (putc 10) ())
       (: r (vmx-run ())
-         _ (assert
+         _ (test
             (4 = (tally r))          ; (reason rax rip err) -- a refusal answers ()
             (0 = <>>>r)              ; the VM-instruction error: the entry was taken
             (10 = <r)                ; exit_reason_cpuid

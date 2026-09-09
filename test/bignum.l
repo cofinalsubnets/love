@@ -20,7 +20,7 @@
    KP (* KA KBb)
    Kref (+ (* (% KA KHB) KBb) (* (* (// KA KHB) KBb) KHB)))
 
-(assert
+(test
  ; --- overflow promotion + exact value, read round-trip against a literal ---
  (= F25 15511210043330985984000000)
  (= B100 1267650600228229401496703205376)

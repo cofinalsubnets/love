@@ -11,23 +11,23 @@
 ; big would flood the gate log. The >64KB lane -- where the capture string
 ; outgrows its buffer and moves mid-drain -- is checked by hand instead:
 ;   (: c `("sh" "-c" "i=0; while [ $i -lt 20000 ]; do echo abcdefgh; i=$((i+1)); done")
-;      (assert ((>(hark c)) = (>(herald c)))))
+;      (test ((>(hark c)) = (>(herald c)))))
 (: cmd ["sh" "-c" "printf 'tee-me\n'"]
 
    ; the two agree on both halves of the answer: teeing changes when the bytes
    ; reach stdout, never what the caller is handed.
    a (hark cmd) b (herald cmd)
-   _ (assert (two? a) (two? b))
-   _ (assert (<a = <b) (<a = 0))
-   _ (assert (>a = >b) (>a = "tee-me\n"))
+   _ (test (two? a) (two? b))
+   _ (test (<a = <b) (<a = 0))
+   _ (test (>a = >b) (>a = "tee-me\n"))
 
    ; a nonzero exit still rides back through the tee path
    bad (herald ["sh" "-c" "printf 'nope\n'; exit 3"])
-   _ (assert (two? bad) (<bad = 3) (>bad = "nope\n"))
+   _ (test (two? bad) (<bad = 3) (>bad = "nope\n"))
 
    ; no output -> the EmptyString singleton, tee or not
    quiet (herald ["sh" "-c" "exit 0"])
-   _ (assert (two? quiet) (<quiet = 0) (! >quiet))
+   _ (test (two? quiet) (<quiet = 0) (! >quiet))
 
    (puts "run: ok\n"))
 
@@ -49,7 +49,7 @@
    t0 (clock 0)
    _ (say w (* "x" 200000))          ; 200K against a 64K pipe: the tail cannot land
    ms (clock t0)
-   _ (assert (charm? pid) (0 < pid)
+   _ (test (charm? pid) (0 < pid)
              (ms < 500))             ; a blocking door sits here for the child's whole nap
    _ (close w)                       ; ai_io_wflush: the residue lands before the fd dies
    _ (wait pid))
@@ -74,7 +74,7 @@
 (: spew "( echo '(: (go n) (? (n = 0) 0 (: _ (putc 120) _ (putc 10) (go (n - 1)))) _ (go 300000) 0)' | out/love; echo $? > out/.sigst ) | head -1 > /dev/null; cat out/.sigst; rm -f out/.sigst"
    st (cup (hark ["sh" "-c" spew]))
    sig (cup (hark ["sh" "-c" "grep SigIgn /proc/self/status"]))
-   _ (assert
+   _ (test
       (st = "141\n")                       ; 128 + sigpipe: the death the shell has always seen
       (sig = "SigIgn:\t0000000000000000\n")))  ; the child inherits no ignore at all
 
@@ -86,7 +86,7 @@
 ; the ninth parked task never got into) and a wedged gate is worse than a red one.
 ; it must be a subprocess for that reason alone; nothing about it needs one.
 (: rc (cap (hark ["sh" "-c" "timeout 20 out/love test/host/parked.l"]))
-   _ (assert (rc = 0)))                    ; 124 is the timeout: the old cap's hang
+   _ (test (rc = 0)))                    ; 124 is the timeout: the old cap's hang
 
 (puts "run parked: ok\n")
 
@@ -97,7 +97,7 @@
 ; worse than a red one. 124 is the control's answer, and each law was verified by
 ; putting its own blocking call back.
 (: rc (cap (hark ["sh" "-c" "timeout 20 out/love test/host/nifpark.l"]))
-   _ (assert (rc = 0)))
+   _ (test (rc = 0)))
 
 (puts "run nifpark: ok\n")
 
@@ -107,7 +107,7 @@
 ; stops working does not redden, it hangs -- there is no answer coming and nothing
 ; to wake the caller.
 (: rc (cap (hark ["sh" "-c" "timeout 20 out/love test/host/dns.l"]))
-   _ (assert (rc = 0)))
+   _ (test (rc = 0)))
 
 (test_fin ())
 (puts "run dns: ok\n")

@@ -17,11 +17,11 @@
 ; infix section).
 
 ; reading is structural: a sigil from a port is just the symbol, no table consulted
-(assert ('^ = (cap (sound '(94)))) ('+ = (cap (sound '(43)))))
+(test ('^ = (cap (sound '(94)))) ('+ = (cap (sound '(43)))))
 
 ; ^^ has no entry, and a spaced sigil never splits, so in head position it stays
 ; the plain symbol -- and ^ is the xor nif all along
-(assert (nom? '^^) ("(^^ 5)" = (show (opfix '(^^ 5))))
+(test (nom? '^^) ("(^^ 5)" = (show (opfix '(^^ 5))))
         (-2 = (^ 1 -1)) (6 = (^ 5 3)))
 
 ; --- the comma: the clause layer, loosest of all -----------------------------
@@ -31,7 +31,7 @@
 ; (: _ a (b c)): effects in source order, the last clause answers. empty
 ; clauses drop: a doubled interior comma composes to one, a leading or
 ; trailing comma to nothing. head position is the macro itself.
-(assert
+(test
  (2 = (1 , 2))                                  ; spaced
  (3 = (1, 2, 3))                                ; glued left (C typography)
  (3 = (1,2,3))                                  ; fully glued
@@ -48,10 +48,10 @@
 (: cq (tablet 0)
    (cnote v) (: _ (pin cq (tally cq) v) v)
    (: r ((cnote 'a), (cnote 'b), (cnote 'c))
-      (assert ('c = r) ('a = (cq 0)) ('b = (cq 1)) ('c = (cq 2)) (3 = #cq))))
+      (test ('c = r) ('a = (cq 0)) ('b = (cq 1)) ('c = (cq 2)) (3 = #cq))))
 ; quote interiors are data: the comma stays a plain symbol, and reading is
 ; structural -- a lone comma off a port is just the datum
-(assert (3 = (tally '(1 , 2))) (', = (caup '(1 , 2)))
+(test (3 = (tally '(1 , 2))) (', = (caup '(1 , 2)))
         (nom? ',) ("," = (string ',)) (', = (cap (sound '(44)))))
 ; clauses nest per list, and chain their effects in source order
-(assert (6 = (: t {0 1} _ ((pin t 0 2), (pin t 1 3)) ((t 0) * (t 1)))))
+(test (6 = (: t {0 1} _ ((pin t 0 2), (pin t 1 3)) ((t 0) * (t 1)))))

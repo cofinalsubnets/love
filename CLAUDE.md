@@ -102,8 +102,9 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 ; - (: a b  b 5 ..) is ";; missing b": a value binding sees only EARLIER siblings, a
 ;   lambda body sees later ones too. same split when a module file bakes -- `name value`
 ;   runs at bake, `(name args)` defers
-; - a mid-letrec assert must bind: `_ (assert ..)`. bare `(assert ..)` is define-sugar,
-;   so a false one never runs and passes in silence
+; - a mid-letrec check must bind: `_ (test ..)`. bare `(test ..)` is define-sugar,
+;   so a false one never runs and passes in silence. `test` is the harness macro
+;   (test/00-init.l: records and carries on); `assert` is post.l's, and it scares
 
 ; the working vocabulary (verified in-tree)
 ; - (show x) prints-to-string; puts/putc write; putx prints a form

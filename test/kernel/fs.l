@@ -15,8 +15,8 @@
 ; It runs after ramfs.l, which owns apps/json.l's bytes; the write laws here take
 ; apps/dns.l instead (a file the boot never loads) and put it back.
 ;
-; the `:` has a body -- the assert itself -- so the helpers stay local; and each
-; law is its own assert argument, since assert maps over its args and a `do` would
+; the `:` has a body -- the test itself -- so the helpers stay local; and each
+; law is its own assert argument, since test maps over its args and a `do` would
 ; report only the last one.
 
 (: f "apps/json.l" d "apps" g "apps/dns.l"
@@ -30,7 +30,7 @@
    now (stat g)
    _ (wr g orig)
    back (stat g)
- (assert
+ (test
    ; stat answers the four fields, and the size is the bytes a read hands over
    (two? st)
    (= sz <st)

@@ -24,7 +24,7 @@
 ;             so the misuse cases feed each nif the other two's cask.
 ;
 ; run:  cat test/00-init.l test/digest.l | out/love
-(assert
+(test
  (lit? sha256)
  (lit? md5)
  (lit? cksum))
@@ -40,7 +40,7 @@
    (hash-bytes n) (hash-mk n (\ i (((i * 2654435761) >> 11) & 255))))
 
 ; --- md5, RFC 1321 appendix A.5 ---
-(assert
+(test
  ((md5 "") = "d41d8cd98f00b204e9800998ecf8427e")
  ((md5 "a") = "0cc175b9c0f1b6a831c399e269772661")
  ((md5 "abc") = "900150983cd24fb0d6963f7d28e17f72")
@@ -50,7 +50,7 @@
  ((md5 hash-nums) = "57edf4a22be3c955ac49da2e2107b67a"))
 
 ; --- sha-256, fips 180-4 ---
-(assert
+(test
  ((sha256 "") = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
  ((sha256 "abc") = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
  ((sha256 hash-56) = "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1")
@@ -71,7 +71,7 @@
    (hash-cksame s) (? ((cksum s) = (hash-ckwalk s)) 1 0)
    (hash-cklen k) (: (go i) (? (k < i) 1 !(hash-cksame (hash-bytes i)) 0 (go (i + 1)))
                      (go 0)))
-(assert
+(test
  (930766865 = (cksum "123456789"))          ; what POSIX publishes for cksum
  (4294967295 = (cksum ""))                  ; the length fold: an empty message still turns it
  (hash-cklen 129)
@@ -93,10 +93,10 @@
              (! (hash-hexlen s 64)) 0
              (! (hash-cksame s)) 0
              (hash-shape >ls)))))
-(assert (hash-shape '(0 1 54 55 56 57 63 64 65 118 119 120 127 128 129 200)))
+(test (hash-shape '(0 1 54 55 56 57 63 64 65 118 119 120 127 128 129 200)))
 
 ; --- misuse: value ops, so a wrong shape answers () ---
-(assert
+(test
  !(string? (md5 7))
  !(string? (md5 ()))
  !(string? (md5 (cask 8)))
@@ -147,7 +147,7 @@
                  (? (dig-agree? n '(1 3 7 63 64 65 127 128)) (go (n + 1)) 0))
        (go lo)))
 
-(assert
+(test
  (lit? sha256-init) (lit? sha256-feed) (lit? sha256-done)
  ; the published vectors, arrived at a byte at a time
  ((sha-stream "" 1) = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")

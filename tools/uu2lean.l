@@ -57,7 +57,7 @@
    (kids ks acc) (two? ks ? (kids >ks (deq? <ks || axq? <ks ? (entry <ks . acc) acc)) acc)
    (gather fs acc) (? (two? fs)
                       (gather (cup fs) (: F (cap fs)
-                        (? (two? F && <F = 'assert) (kids >F acc)
+                        (? (two? F && <F = 'test) (kids >F acc)
                            (deq? F || axq? F) (entry F . acc) acc)))
                       (rev acc))
    (app2 a b) (two? a ? (<a . app2 >a b) b)   ; not `cat` -- the local cat is the string fold

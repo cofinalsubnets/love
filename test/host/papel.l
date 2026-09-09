@@ -25,7 +25,7 @@
 ; --- the module seam: three modules, and papel adds nothing to the book ----------
 (: parse-before (member? 'parse (names ()))  ; the book before the load, for the leak delta
  _ (borrow "apps/papel.l")                ; the loader: papel wants lapiz + cook itself
- (assert
+ (test
   (member? 'papel (cite ()))
   (member? 'lapiz (cite ()))
   (member? 'cook (cite ()))
@@ -123,7 +123,7 @@ Only a paragraph, so the title has to come from the meta block.
    _ (rest 5)
    _ (: s (get-file "src/one.md") q (open (dir + "/src/one.md") "w") _ (say q s) (close q))
    n3 (build conf)
-   _ (assert (n1 = 5) (n2 = 0) (n3 = 2))
+   _ (test (n1 = 5) (n2 = 0) (n3 = 2))
 
    ; --- and the dev-server gate over it -------------------------------------------
    ; `refresh` is what the server calls per request: a source fingerprint, and `build`
@@ -137,7 +137,7 @@ Only a paragraph, so the title has to come from the meta block.
    _ (: s (get-file "src/two.md") q (open (dir + "/src/two.md") "w") _ (say q s) (close q))
    r3 (refresh conf box)
    r4 (refresh conf box)
-   _ (assert (0 = r1) (0 = r2) (2 = r3) (0 = r4))
+   _ (test (0 = r1) (0 = r2) (2 = r3) (0 = r4))
 
    ; ..and re-registering must not grow the card. `build` declares its recipes every call,
    ; and cook's merge used to append prerequisites each time -- so a dev server that
@@ -147,7 +147,7 @@ Only a paragraph, so the title has to come from the meta block.
    (icount _) (tally (cap (peep cards (dir + "/site/index.html") ())))
    n0 (icount ())
    _ ((: (again k) (? (k < 6) (: _ (build conf) (again (k + 1))) 0)) 0)
-   _ (assert (0 < n0) (n0 = (icount ())))
+   _ (test (0 < n0) (n0 = (icount ())))
 
    one (get-file "site/one.html")
    two (get-file "site/two.html")
@@ -160,7 +160,7 @@ Only a paragraph, so the title has to come from the meta block.
    (anchored? h) (: ids (finds h "id=\"")
                     tgts (finds h "href=\"#")
                     (? (! (two? tgts)) 1 (: bad (filter (\ t (! (has? ids t))) tgts) (! (two? bad)))))
-   _ (assert
+   _ (test
       (anchored? one) (anchored? two) (anchored? three)
       ; and it is not vacuous: page one really has a contents, with the head-1 left
       ; out of it (it became the title) and both duplicate headings in.
@@ -179,14 +179,14 @@ Only a paragraph, so the title has to come from the meta block.
 
    ; --- relink: rewritten inside the site, untouched outside ------------------------
    hrefs (finds one "href=\"")
-   _ (assert
+   _ (test
       (has? hrefs "two.html")                    ; in the site -> .html
       (has? hrefs "archive/old.md")              ; not built -> left alone
       (has? hrefs "https://example.com/x.md")    ; absolute -> left alone
       (! (has? hrefs "two.md")))
 
    ; --- title: the three sources, in order ------------------------------------------
-   _ (assert
+   _ (test
       (0 < tally (finds one "<h1 id=\""))        ; from the head-1
       (has? (finds two "content=\"") "Two From Meta")
       ((cite 'papel 'ptitle) ((cite 'lapiz 'mdread) (get-file "src/two.md")) "x") = "Two From Meta"
@@ -194,13 +194,13 @@ Only a paragraph, so the title has to come from the meta block.
 
    ; --- the index lists every page, each with its blurb ------------------------------
    _ (: ih (finds idx "href=\"")
-        _ (assert (has? ih "one.html") (has? ih "two.html") (has? ih "three.html")
+        _ (test (has? ih "one.html") (has? ih "two.html") (has? ih "three.html")
                   ; the blurb is the first paragraph, clipped on a word boundary
                   (0 < tally ((cite 'papel 'blurb) ((cite 'lapiz 'mdread) (get-file "src/one.md"))))))
 
    ; --- the slug is a function of the text, and nothing else -------------------------
    _ (: slug (cite 'papel 'slug)
-        (assert ((slug "Hello, World!") = "hello-world")
+        (test ((slug "Hello, World!") = "hello-world")
                 ((slug "  --- ") = "section")            ; nothing left -> a name, never ""
                 ((slug "A") = (slug "a"))))
 
@@ -216,13 +216,13 @@ Only a paragraph, so the title has to come from the meta block.
             _ (pin t 'quiet 1)
             t)
    rn (build rconf)
-   _ (assert
+   _ (test
       (10 < rn)                                   ; it built a real site
       (0 = (build rconf)))                        ; ..and is at once up to date
    _ (: (page f) (: q (open (dir + "/love/" + f) "r") (? (hot? q) (slurp q) ""))
         _ (each (filter (\ f ((cite 'papel 'ends?) f ".html")) (readdir (dir + "/love")))
                 (\ f (: h (page f)
-                        (assert (0 < tally h)
+                        (test (0 < tally h)
                                 ((cite 'papel 'ends?) h "</html>\n")
                                 (anchored? h)))))
         0)

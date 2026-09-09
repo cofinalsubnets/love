@@ -37,7 +37,7 @@
                        (: (gov j b2) (? (j < 20) (gov (j + 1) (|| b2 (dat d 0 j) (dat d 59 j))) b2)
                           (gov 0 bad)))
           (go 0 0))
- (assert
+ (test
   (teq <p1 <p2)                                  ; one seed, one deck
   !(teq <p1 <p3)                                 ; another seed, another deck
   (1 < tally (d 'rooms))
@@ -56,7 +56,7 @@
 (: hd {'w 9 'h 5 't (cask 45) 'seen (cask 45) 'rooms [[1 1 3 3] [5 1 3 3]]}
    _ (map (\ y (map (\ x (? (x = 4) () (dput hd x y 1))) '(1 2 3 4 5 6 7))) '(1 2 3))
    v (fov hd 1 1 8)
- (assert
+ (test
   (peep v (1 + 9 * 1) 0)                         ; your own cell is lit
   (peep v (3 + 9 * 1) 0)                         ; down the cabin
   (peep v (4 + 9 * 1) 0)                         ; the bulkhead catches the light
@@ -67,14 +67,14 @@
   !(peep (hd 'seen) (5 + 9 * 1) 0))
  ; step across: the far cabin lights, the seen cask keeps both
  (: v2 (fov hd 5 2 8)
-  (assert
+  (test
    (peep v2 (5 + 9 * 1) 0)
    !(peep v2 (1 + 9 * 1) 0)
    (peep (hd 'seen) (1 + 9 * 1) 0)
    (peep (hd 'seen) (6 + 9 * 2) 0))))
 
 ; --- the helm: arrows, the sailor's keys, alt letters; anything else is itself ---
-(assert
+(test
  ('(0 -1) = steer -8) ('(0 1) = steer -9) ('(1 0) = steer -2) ('(-1 0) = steer -1)
  (27 = (steer 27))
  ('(-1 0) = steer 104) ('(0 1) = steer 106) ('(0 -1) = steer 107) ('(1 0) = steer 108)
@@ -94,16 +94,16 @@
 ; the hull holds: a stride into rock stands you still
 (: g (hand-g ())
    _ (crawl-turn g [0 -1])
- (assert (1 = g 'p 'x) (1 = g 'p 'y) (find (g 'msg) "the hull holds" 0)))
+ (test (1 = g 'p 'x) (1 = g 'p 'y) (find (g 'msg) "the hull holds" 0)))
 
 ; gold weighs in, grog mends, and a full flask tops out at the brim
 (: g (hand-g ())
    _ (pin (g 'loot) (2 + 9 * 1) ['gold 7], pin (g 'loot) (3 + 9 * 1) ['grog 0])
    _ (pin (g 'p) 'hp 5)
    _ (crawl-turn g [1 0])
-   _ (assert (7 = g 'p 'gold) (find (g 'msg) "pocket" 0) (1 = tally (keys (g 'loot))))
+   _ (test (7 = g 'p 'gold) (find (g 'msg) "pocket" 0) (1 = tally (keys (g 'loot))))
    _ (crawl-turn g [1 0])
- (assert (10 = g 'p 'hp) (find (g 'msg) "grog" 0) !(keys (g 'loot))))
+ (test (10 = g 'p 'hp) (find (g 'msg) "grog" 0) !(keys (g 'loot))))
 
 ; bump combat: the rat goes down inside its hit points
 (: g (hand-g ())
@@ -111,22 +111,22 @@
    _ (pin g 'ms [m])
    (fight i) (? (&& (i < 8) (g 'ms)) (crawl-turn g [1 0], fight (i + 1)) i)
    n (fight 0)
- (assert !(g 'ms) (n <= 4) (find (g 'msg) "done for" 0)
+ (test !(g 'ms) (n <= 4) (find (g 'msg) "done for" 0)
          (1 = g 'p 'x)))                         ; you strike in place, never through
 
 ; the bite: a cornered sailor with one hp left is done for
 (: g (hand-g ())
    _ (pin g 'ms [(mob-new 0 2 1)], pin (g 'p) 'hp 1)
    _ (crawl-turn g 46)
- (assert ('dead = (g 'over)) (find (g 'msg) "done for" 0)))
+ (test ('dead = (g 'over)) (find (g 'msg) "done for" 0)))
 
 ; the hatch: > climbs down only where the hatch is cut, and restocks the deck
 (: g (hand-g ())
    _ (crawl-turn g 62)
-   _ (assert (1 = g 'lvl) (find (g 'msg) "no hatch" 0))
+   _ (test (1 = g 'lvl) (find (g 'msg) "no hatch" 0))
    _ (dput (g 'd) 1 1 2)
    _ (crawl-turn g 62)
- (assert (2 = g 'lvl) (find (g 'msg) "deck 2" 0)
+ (test (2 = g 'lvl) (find (g 'msg) "deck 2" 0)
          (1 = dat (g 'd) (g 'p 'x) (g 'p 'y))    ; moored on the fresh deck's floor
          (tablet? (g 'loot))))
 
@@ -134,7 +134,7 @@
 (: g (hand-g ())
    _ (pin (g 'loot) (2 + 9 * 1) ['pearl 0])
    _ (crawl-turn g [1 0])
- (assert ('won = (g 'over)) (find (g 'msg) "pearl" 0)))
+ (test ('won = (g 'over)) (find (g 'msg) "pearl" 0)))
 
 ; --- the whole game, generated: a seeded random walk holds every invariant ---
 (: g (crawl-new 60 20 (wheel 3))
@@ -148,13 +148,13 @@
                                 ((p 'hp) <= p 'mx)
                                 (0 <= p 'gold))))
                 ok)
- (assert (turn 0 1)
+ (test (turn 0 1)
          (|| (g 'over) (0 < g 'p 'hp))))
 
 ; --- the painter: one frame into a jug, glyphs and hues where they belong ---
 (: g (crawl-new 60 20 (wheel 3))
    f (crawl-frame g)
- (assert
+ (test
   (string? f)
   (find f "@" 0)                                 ; you are on the map
   (find f "#" 0) (find f "." 0)                  ; walls and floor in the light

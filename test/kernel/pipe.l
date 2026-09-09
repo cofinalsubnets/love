@@ -11,7 +11,7 @@
    wp (fdopen wfd) rp (fdopen rfd)
    _ (say wp "hello pipe") _ (close wp)         ; the run drains at the close; the last writer leaves
    s (slurp rp) _ (close rp)
- (assert (two? pp) (charm? rfd) (charm? wfd)
+ (test (two? pp) (charm? rfd) (charm? wfd)
          (port? wp) (port? rp)
          (= s "hello pipe")))
 
@@ -25,19 +25,19 @@
    _ (close wfd)
    e (see rfd)
    s (slurp rfd) _ (close rfd)
- (assert (= 104 a) (= "ello pipe!" x) (= -1 e) (= "" s)))
+ (test (= 104 a) (= "ello pipe!" x) (= -1 e) (= "" s)))
 
 ; a pipe end wears its own kind, where a ramfs fd wears a file's -- stat off the
 ; fd is the one door either way
 (: pp (pipe 0) rfd (cap pp) wfd (cup pp)
    s (stat rfd)
    _ (close rfd) _ (close wfd)
- (assert (= 4096 (& 61440 <>>s))))
+ (test (= 4096 (& 61440 <>>s))))
 
 ; a row that is not there swallows what is written and reads as the end. that is
 ; what keeps a closed seat's output from faulting a task which cannot know, and
 ; it is the same answer on both seats
-(assert (= "into the void" (say 4096 "into the void"))
+(test (= "into the void" (say 4096 "into the void"))
         (= -1 (see 4096)) (= "" (slurp 4096))
         (= 4096 (flush 4096)))
 
@@ -48,7 +48,7 @@
    wp (fdopen (cup pp))
    _ (say wp "wake") _ (close wp)
    r (catch p) _ (close rp)
- (assert (= r "wake")))
+ (test (= r "wake")))
 
 ; dup is a row alias: the end comes at the last writer's close, not the first
 (: pp (pipe 0) rfd (cap pp) wfd (cup pp)
@@ -61,7 +61,7 @@
    w2p (fdopen w2)
    _ (say w2p ", two") _ (close w2p)
    r (catch p) _ (close rp)
- (assert (charm? w2) (< 2 w2) (= r "one, two")))
+ (test (charm? w2) (< 2 w2) (= r "one, two")))
 
 ; dup2 lands the alias in the named slot, closing what sat there
 (: pa (pipe 0) pb (pipe 0)
@@ -70,17 +70,17 @@
    _ (close (cup pa))                         ; a's own write end steps out too
    sb (slurp (fdopen (cap pb)))                 ; b lost its one writer at the dup2
    sa (slurp (fdopen (cap pa)))
- (assert (! e) (= sb "") (= sa "crossed")))
+ (test (! e) (= sb "") (= sa "crossed")))
 
 ; spawn maps argv onto a love main, the pid is the task pid, wait is catch;
 ; the corpus itself runs unseated in the main task
 (: p (spawn (list "kore" "echo" "rung4"))
- (assert (charm? (getpid 0)) (= 0 (getpid 0))
+ (test (charm? (getpid 0)) (= 0 (getpid 0))
          (charm? p) (< 0 p) (= 0 (wait p))))
 
 ; an unknown program still answers a pid; its exit is 127, the host's face
 (: p (spawn (list "no-such-tool"))
- (assert (= 127 (wait p))))
+ (test (= 127 (wait p))))
 
 ; the seat: a stage's out rides the pipe while the parent keeps the console --
 ; the parent closes its end and still reads the child whole
@@ -88,7 +88,7 @@
    p (spawnmap (list "kore" "echo" "seated") (list (link 1 wfd)) (list rfd wfd) (- 0 1) 0)
    _ (close wfd)
    s (slurp (fdopen rfd))
- (assert (= 0 (wait p)) (= s "seated\n")))
+ (test (= 0 (wait p)) (= s "seated\n")))
 
 ; two stages plumbed by hand -- echo | wc -l -- the parent reading the tail;
 ; the seat carries fd 0 as well as fd 1
@@ -99,4 +99,4 @@
    _ (close (cup pa)) _ (close (cap pa)) _ (close (cup pb))
    s (slurp (fdopen (cap pb)))
    r1 (wait p1) r2 (wait p2)
- (assert (= 0 r1) (= 0 r2) (= s "1\n")))
+ (test (= 0 r1) (= 0 r2) (= s "1\n")))

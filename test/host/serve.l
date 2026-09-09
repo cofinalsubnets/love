@@ -23,7 +23,7 @@
 (borrow 'serve)
 
 ; --- the seam -----------------------------------------------------------------
-(assert
+(test
  (member? 'serve (cite ()))
  (member? 'serve-main (keys (cite 'serve)))
  ; the verb is registered, which is what makes `love serve` a word on the artifact
@@ -50,7 +50,7 @@
 
    ; --- the three it answers for ----------------------------------------------
    _ (: r (mk "/x.l")
-        _ (assert
+        _ (test
            (two? r)
            (<r = "text/html; charset=utf-8")
            (sub? <>r "class=\"l-comment\"")        ; painted, by hue's own table
@@ -58,7 +58,7 @@
            (sub? <>r "/hue.css"))                  ; ..with the stylesheet that colours it
         0)
    _ (: r (mk "/d.md")
-        _ (assert
+        _ (test
            (two? r)
            (<r = "text/html; charset=utf-8")
            (sub? <>r "<h1>a head</h1>")            ; rendered, through lapiz
@@ -67,7 +67,7 @@
    ; `.l.md` is claimed before `.md`, and reads the .l with the suffix off. the
    ; two pages link to each other, which is the whole reason the nav line exists.
    _ (: r (mk "/x.l.md")
-        _ (assert
+        _ (test
            (two? r)
            (sub? <>r "<h1>/x.l</h1>")              ; the file names the document
            (sub? <>r "a comment")                  ; ..and its header is the document
@@ -76,10 +76,10 @@
    ; a file with no header says so, rather than serving a blank page
    _ (: _ (spit "/bare.l" "(: x 1)\n")
         r (mk "/bare.l.md")
-        _ (assert (two? r) (sub? <>r "no header comment"))
+        _ (test (two? r) (sub? <>r "no header comment"))
         0)
    _ (: r (mk "/hue.css")
-        _ (assert
+        _ (test
            (two? r)
            (<r = "text/css; charset=utf-8")
            (sub? <>r ".hue .l-comment{color:#"))   ; the theme join, not a guess
@@ -89,7 +89,7 @@
    ; () is the whole of "not mine": kiosko then serves the file, or says 404, and
    ; neither answer is this file's to give. a maker that answered for everything
    ; would take the static server away.
-   _ (assert
+   _ (test
       (() = (mk "/plain.txt"))                       ; a file it does not claim
       (() = (mk "/"))                                ; the listing stays kiosko's
       (() = (mk "/nothing.l")))                      ; ..and a .l that is not there
@@ -98,7 +98,7 @@
    ; the same path answers differently by head. handing a fetch() html is how the
    ; island ate a `<!doctype` and wedged, so the source is what a fetch gets.
    _ (: r (fetch "/x.l")
-        _ (assert
+        _ (test
            (two? r)
            (<r = "text/plain; charset=utf-8")
            (sub? <>r "; a comment")                ; the file itself
@@ -106,7 +106,7 @@
         0)
    ; ..but a .l.md is a rendering with no file behind it, so it is made either way
    _ (: r (fetch "/x.l.md")
-        _ (assert (two? r) (<r = "text/html; charset=utf-8"))
+        _ (test (two? r) (<r = "text/html; charset=utf-8"))
         0)
 
    ; --- the cache --------------------------------------------------------------
@@ -114,7 +114,7 @@
    ; is the same value, and rewriting the file answers the new one.
    _ (: a (mk "/x.l")
         b (mk "/x.l")
-        _ (assert (<>a = <>b))
+        _ (test (<>a = <>b))
         0)
    0)
 

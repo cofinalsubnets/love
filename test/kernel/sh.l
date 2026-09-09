@@ -23,5 +23,5 @@
    s2 (rd "/tmp/l-sh-wc")
    _  (unlink "/tmp/l-sh-wc")
 
- (assert (= r1 0) (string? s1) (= (numof s1) (tally (readdir "apps/kore")))
+ (test (= r1 0) (string? s1) (= (numof s1) (tally (readdir "apps/kore")))
          (= r2 0) (= s2 "3\n")))

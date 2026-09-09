@@ -20,7 +20,7 @@
    _ (puts "\n; the source the lux runs (kind-directed by apps/lux/sigs.l) -- so the laws")
    _ (puts "\n; in test/uuwmlaw.l are proved of the implementation itself; an invariant-")
    _ (puts "\n; breaking core.l edit fails a proof at `make test`. Substrate: test/uu.l.")
-   _ (puts "\n(assert")
+   _ (puts "\n(test")
    _ (each gens (g \ (puts "\n (defn ", puts (string <g),
                       puts "\n   ", puts (show <>g),
                       puts "\n   ", puts (show <>>g),

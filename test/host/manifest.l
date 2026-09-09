@@ -15,22 +15,22 @@
  _ (cell! sh (\ a1) "5")
  _ (cell! sh (\ b1) "a1 * 7")             ; infix goes bare, repl-style
  _ (cell! sh (\ c1) "(+ a1 b1)")
- _ (assert
+ _ (test
     (= 5 (worth sh (\ a1)))
     (= 35 (worth sh (\ b1)))
     (= 40 (worth sh (\ c1))))
  _ (cell! sh (\ d1) "(+ a1 z9)")          ; z9 is empty: the unit rides
- _ (assert (= 5 (worth sh (\ d1))))
+ _ (test (= 5 (worth sh (\ d1))))
  _ (cell! sh (\ e1) "hello")              ; a bare unknown name is a label
  _ (cell! sh (\ f1) "\"port of call\"")   ; a string is text
- _ (assert
+ _ (test
     (= "hello" (worth sh (\ e1)))
     (= "port of call" (worth sh (\ f1))))
  _ (cell! sh (\ g1) "(+ 2)")              ; a cell may hold a function
  _ (cell! sh (\ h1) "(g1 40)")            ; ... and a neighbour may apply it
- _ (assert (= 42 (worth sh (\ h1))))
+ _ (test (= 42 (worth sh (\ h1))))
  _ (cell! sh (\ a1) "10")                 ; an edit recomputes the dependents
- _ (assert
+ _ (test
     (= 70 (worth sh (\ b1)))
     (= 80 (worth sh (\ c1)))))
 
@@ -41,7 +41,7 @@
  _ (cell! sh (\ j1) "net i1")
  _ (cell! sh (\ n1) "(: x 3 (x * a1))")   ; a local x shadows its label
  _ (cell! sh (\ o1) "(map (+ a1) [1 2])")
- _ (assert
+ _ (test
     (= 6 (worth sh (\ j1)))
     (= 9 (worth sh (\ n1)))
     (= [4 5] (worth sh (\ o1)))))
@@ -53,7 +53,7 @@
  _ (cell! sh (\ l1) "k1 + 1")
  _ (cell! sh (\ m1) "(+ k1 5)")
  _ (cell! sh (\ a1) "3")
- _ (assert
+ _ (test
     (= "cycle!" (face (worth sh (\ k1))))
     (= "cycle!" (face (worth sh (\ l1))))
     (= "cycle!" (face (worth sh (\ m1))))
@@ -61,7 +61,7 @@
     (= "" (face ()))                      ; an empty cell wears nothing
     (= "5" (face 5)))
  _ (cell! sh (\ l1) "2")                  ; break the circle: all is forgiven
- _ (assert
+ _ (test
     (= 3 (worth sh (\ k1)))
     (= 8 (worth sh (\ m1)))))
 
@@ -71,9 +71,9 @@
  _ (cell! sh (\ a1) "5")
  _ (cell! sh (\ b1) "a1 * 7")
  _ (cell! sh (\ e1) "\"line \\e[7m noise\"")   ; escapes must round-trip
- _ (assert (stow sh p))
+ _ (test (stow sh p))
  sh2 (unstow (sheet 0) p)
- _ (assert
+ _ (test
     (= (cell sh2 (\ b1)) (cell sh (\ b1)))
     (= 35 (worth sh2 (\ b1)))
     (= (worth sh (\ e1)) (worth sh2 (\ e1)))))
@@ -103,13 +103,13 @@
                               (< t 1) 0
                               (: _ (rest 30) (aw (- t 1))))
                     (aw tries))
- _ (assert (await "\e[?25l" 300))         ; the first frame: raw mode is up
+ _ (test (await "\e[?25l" 300))         ; the first frame: raw mode is up
  _ (say m "=10\r") _ (flush m)            ; a1 = 10
- _ (assert (await "a1: 10" 300))          ; committed: the bar shows the source
+ _ (test (await "a1: 10" 300))          ; committed: the bar shows the source
  _ (say m "\e[C") _ (flush m)             ; sail right to b1
- _ (assert (await "b1" 300))
+ _ (test (await "b1" 300))
  _ (say m "=a1 * 7\r") _ (flush m)        ; b1 = a1 * 7
- _ (assert (await "70" 300))              ; the worth painted
+ _ (test (await "70" 300))              ; the worth painted
  _ (say m "q") _ (flush m)                ; step ashore
  st (: (wf p2) (: g2 (gather p2) (? (two? g2) g2 (: _ (rest 2) (wf p2)))) (wf (cap md)))
  _ (catch rd)                             ; the reader drains to EOF and rests
@@ -120,7 +120,7 @@
  shore (findi outb "\e[?1049l" 0)
  _ (scribe scr (? (< -1 shore) (snip outb 0 shore) outb))
  row1 (rowtx scr 2)                       ; screen line 2 = sheet row 1
- _ (assert
+ _ (test
     (two? st) (= 0 (cap st))              ; a clean exit
     (find outb "\e[?1049h" 0)             ; the alt screen was entered
     (find outb "\e[?1049l" 0)             ; ... and left

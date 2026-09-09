@@ -25,19 +25,19 @@
 ; symbol still misses: the loader has no path to invent, so the splice raises by
 ; name and nothing registers.
 (: a (trap (\ _ (borrow 'zz-loadprobe)) () (\ a b 'caught))
- (assert (a = 'caught) (nil? (cite 'zz-loadprobe))))
+ (test (a = 'caught) (nil? (cite 'zz-loadprobe))))
 
 ; the path lane: one layer named for the basename, registered, spliced -- bare names
 ; resolve in forms compiled after the use (the capture law: a use must precede its readers)
 (borrow "lib/zz-loadprobe.l")
-(assert (3 = zz-probe-hi 2)
+(test (3 = zz-probe-hi 2)
         (41 = (cite 'zz-loadprobe 'zz-probe-pin))
         (lit? (cite 'zz-loadprobe)))
 
 ; the basename is the whole name: a nested path registers under `sub`, and the
 ; directory it sat in is not part of it
 (borrow "lib/zz-loadprobe/sub.l")
-(assert (70 = zz-probe-sub 7)
+(test (70 = zz-probe-sub 7)
         (lit? (cite 'sub))
         (nil? (cite 'zz-loadprobe/sub)))
 
@@ -46,7 +46,7 @@
 (: p (open "lib/zz-loadprobe.l" "w") _ (say p "(: zz-probe-pin 999)") (close p))
 (borrow 'zz-loadprobe)
 (borrow "lib/zz-loadprobe.l")
-(assert (41 = (cite 'zz-loadprobe 'zz-probe-pin)))
+(test (41 = (cite 'zz-loadprobe 'zz-probe-pin)))
 
 ; a self-registering file -- its text is a (module 'nm ..) wrap (cook.l's shape) --
 ; keeps its registration: the loader's empty wrapper layer must not pin over the
@@ -56,16 +56,16 @@
 (: p (open "lib/zz-pathprobe.l" "w")
    _ (say p "(module 'zz-pathprobe (: zz-path-pin 78))") (close p))
 (borrow "lib/zz-pathprobe.l")
-(assert (78 = (cite 'zz-pathprobe 'zz-path-pin)))
+(test (78 = (cite 'zz-pathprobe 'zz-path-pin)))
 (: p (open "lib/zz-elsewhere.l" "w")
    _ (say p "(module 'zz-othername (: zz-other-pin 79))") (close p))
 (borrow "lib/zz-elsewhere.l")
-(assert (79 = (cite 'zz-othername 'zz-other-pin))
+(test (79 = (cite 'zz-othername 'zz-other-pin))
         (nil? (cite 'zz-elsewhere)))
 
 ; a path that opens nothing is a miss, like any other
 (: a (trap (\ _ (borrow "lib/zz-absent.l")) () (\ a b 'caught))
- (assert (a = 'caught)))
+ (test (a = 'caught)))
 
 (: _ (unlink "lib/zz-loadprobe.l") _ (unlink "lib/zz-loadprobe/sub.l")
    _ (unlink "lib/zz-pathprobe.l") _ (unlink "lib/zz-elsewhere.l")
@@ -88,7 +88,7 @@
         (close p)))
 (: a (trap (\ _ (borrow 'zz-seatprobe)) () (\ a b 'caught))
    b (trap (\ _ (borrow 'zz-fhsprobe)) () (\ a b 'caught))
- (assert (a = 'caught) (b = 'caught)
+ (test (a = 'caught) (b = 'caught)
          (nil? (cite 'zz-seatprobe)) (nil? (cite 'zz-fhsprobe))))
 (: _ (unlink "out/lib/zz-seatprobe.l") _ (unlink "out/lib/love/zz-fhsprobe.l")
    _ (rmdir "out/lib/love") 0)

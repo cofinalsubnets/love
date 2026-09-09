@@ -122,4 +122,4 @@
       ['seq        (x \ : y 1 y (y + 1) (y = 2))]         ; the sequence law: a rebind reads the previous
       ['empty-form (x \ ((:) = ()))])
    law-ok (foldl (\ a r (a + law-run r)) 0 law-rows)
-   (assert (law-ok = tally law-rows)))
+   (test (law-ok = tally law-rows)))

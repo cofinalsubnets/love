@@ -33,30 +33,30 @@
    (sweep path) (foldl (\ a f (cat a (chk1 lux-dom lux-sigs (fix1 f)))) () (forms (open path "r")))
 
  ; leg 1: the shipped sources check clean...
- _ (assert (! (sweep "apps/lux/core.l"))
+ _ (test (! (sweep "apps/lux/core.l"))
            (! (sweep "apps/lux/layout.l")))
  ; ...and a known kind in the wrong seat is caught: zins wants (window zipper),
  ; the wound hands it a tag and a sheaf
  hurt (chk1 lux-dom (link '(oops (sheaf tag) top) lux-sigs)
             '(: (oops s t) (zins (wstagof s t) s)))
- _ (assert (two? hurt) ('oops = (cap (cap hurt))))
+ _ (test (two? hurt) ('oops = (cap (cap hurt))))
 
  ; leg 2: the gradual laws
  sg2 (link '(g1 (rect) window) (link '(g2 (window) top) lux-sigs))
- _ (assert (! (chk1 lux-dom sg2 '(: (g1 r) (zfoc (cap r)))))       ; unknown arg: consistent
+ _ (test (! (chk1 lux-dom sg2 '(: (g1 r) (zfoc (cap r)))))       ; unknown arg: consistent
            (! (chk1 lux-dom sg2 '(: (g2 w) (zins w))))             ; partial app: open, not a clash
            (two? (chk1 lux-dom sg2 '(: (g1 r) (zfoc r)))))         ; a rect in the zipper seat: flagged
 
  ; leg 3: uu, baked -- define, certify, compute
  _ ((uu 'defn) 'boot-add '(pi m nat (pi n nat nat))
                '(lam m (lam n (nat_rect (lam q nat) n (lam k (lam r (succ r))) m))))
- _ (assert (= 3 ((uu 'vof) () '(boot-add 2 1)))
+ _ (test (= 3 ((uu 'vof) () '(boot-add 2 1)))
            (= 5 ((uu 'vof) () '(boot-add 2 3)))))
 
 ; the kernel refuses through the help cell -- install the escape (test/uu.l's
 ; own tail move; the kernel span rightly bakes no global help), probe, uninstall
 (hear (\ p e (: h (peep (uu 'HELPC) () 0) (h ? (h p e) 0))))
-(assert ('rejected = ((uu 'rejects) (z \ (uu 'defn) 'boot-bad 'nat '(lam x x)))))
+(test ('rejected = ((uu 'rejects) (z \ (uu 'defn) 'boot-bad 'nat '(lam x x)))))
 (hear 0)
 
 ; leg 4: load the whole uu corpus (kernel + the StackSet model + its theorems,
@@ -73,7 +73,7 @@
    (decz v) (zmk (v 1) (decl ((v 2) 1)) (decl ((v 2) 2)))
  z0 (zmk 5 [2] [7 9])
  z1 (zmk 5 () [7 9])
- _ (assert
+ _ (test
     (= (zrow z0) (decl (vof 0 ['zrow (encz z0)])))
     (= (zrow (zins 4 z0)) (decl (vof 0 ['zrow ['zins 4 (encz z0)]])))
     (= #(zrow (zins 4 z0)) (vof 0 ['zcount ['zins 4 (encz z0)]]))
@@ -127,7 +127,7 @@
                         (dot [(\ fuzz-insane) i zc]))
                      0)
                 (fuzz (- i 1) (rnd s2) zc (= r 0 ? (+ nid 1) nid))))))
- _ (assert (fuzz 150 20260705 (zmk 0 () ()) 1))
+ _ (test (fuzz 150 20260705 (zmk 0 () ()) 1))
  (puts "overlay leg 5: ok"))
 
 ; leg 6 (stage 3 of the translator ladder): tools/wm2uu.l reads core.l's ops
@@ -139,7 +139,7 @@
 (reads (open "tools/wm2uu.l" "r"))
 (:    cforms (map (f \ unglue (opfix f)) (forms (open "apps/lux/core.l" "r")))   ; the surface factored to the core, as above
    gens (wm2uu cforms lux-sigs)
- _ (assert (= 10 #gens))
+ _ (test (= 10 #gens))
  _ (map (g \ (uu 'defn) (cap g) (g 1) (g 2)) gens)   ; the function: these args are computed
  _ (puts "overlay leg 6: translated + certified ")
 
@@ -195,10 +195,10 @@
           zm (decz (mstep r w (encz z)))
           (? (! (= zc zm)) (: _ (dot [(\ genfuzz-diverged) i r w zc zm]) 0)
              (fuzz (- i 1) (rnd s2) zc (= r 0 ? (+ nid 1) nid)))))
- _ (assert (fuzz 100 424242 (zmk 0 () ()) 1))
+ _ (test (fuzz 100 424242 (zmk 0 () ()) 1))
  ; and the accessors/row through the translated lane, spot-checked
  z0 (zmk 5 [2] [7 9])
- _ (assert
+ _ (test
     (= (zrow z0) (decl (vof 0 ['gen-zrow (encz z0)])))
     (= (cap (zrev z0)) (vof 0 ['zfoc ['gen-zrev (encz z0)]]))
     (= (znub 7 (zrow z0)) (decl (vof 0 ['gen-znub 7 ['gen-zrow (encz z0)]]))))
@@ -225,6 +225,6 @@
           model (decl (vof 0 ['rtwins nm 'nnil 0 (encl ws)]))
           (? (! (&& (= core ws) (= model ws))) (: _ (dot [(\ ledger-diverged) i nm ws core model]) 0)
              (walk (- i 1) s2))))
- _ (assert (walk 40 20260706))
+ _ (test (walk 40 20260706))
  _ (test_fin ())
  (puts "overlay leg 7: the tiling ledger holds, model and metal"))

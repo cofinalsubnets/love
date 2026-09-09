@@ -48,7 +48,7 @@
    _ (rest 20)                                        ; s reaches its park
    a (dns-ask 2130706433 port "ab.cd" 2000)
    _ (catch s)
-   _ (assert (two? a)
+   _ (test (two? a)
              (<a = 16909060)
              (! (two? >a))))                          ; exactly one a record
 
@@ -60,7 +60,7 @@
 (: t0 (clock 0)
    a (dns-ask 2130706433 7402 "ab.cd" 200)            ; nothing is bound there
    ms ((clock 0) - t0)
-   _ (assert (! (two? a))
+   _ (test (! (two? a))
              (200 <= ms)
              (ms < 2000)))
 
@@ -71,7 +71,7 @@
 ; the lie.
 (: q (dns-query 4660 "ab.cd")
    r (dns-reply q 0 1)
-   _ (assert ((dns-answers r 4660) = 'torn)))
+   _ (test ((dns-answers r 4660) = 'torn)))
 
 ; --- law 4: /etc/hosts answers with no packet at all ---------------------------
 ; and a fixture is the only way to say that: pointing at the machine's own file
@@ -88,18 +88,18 @@
    _ (close c)
    ; no nameserver is reachable from here, so an answer proves hosts was enough
    a (resolve-in cp hp "ab.cd")
-   _ (assert (two? a) (<a = 16909060))
+   _ (test (two? a) (<a = 16909060))
    ; the conf parse, read back through the door that uses it
    ns (dns-servers cp)
-   _ (assert (two? ns)
+   _ (test (two? ns)
              (<(cap ns) = 151587081)                  ; 9.9.9.9
              (>(cap ns) = 53))                        ; ... and resolv.conf means 53
-   _ (assert (= (dns-conf cp "search") '("one.test" "two.test"))))
+   _ (test (= (dns-conf cp "search") '("one.test" "two.test"))))
 
 ; --- law 5: an empty resolv.conf still names a server --------------------------
 ; musl's fallback and moonlibc's: 127.0.0.1, so a machine with no config reaches a
 ; local stub instead of answering "no such host".
 (: ns (dns-servers "out/.dns-t/nope")
-   _ (assert (two? ns) (<(cap ns) = 2130706433)))
+   _ (test (two? ns) (<(cap ns) = 2130706433)))
 
 (: _ (say out "dns: ok") (putc 10))

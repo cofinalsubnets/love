@@ -3,7 +3,7 @@
 ; keeps it honest. read l/boot/post.l for the grammar -- every tag it documents has
 ; its clause below, and the sections here follow that order.
 
-(assert
+(test
  ; --- a nom binds, `_` swallows, and position is the whole grammar
  (2 = (@ '(1 2) [_a b] b))
  (2 = (@ '(1 2) [_ b] b))
@@ -212,7 +212,7 @@
 ; --- a pattern in a \ param, which is opfix's doing and not this macro's: a param that is
 ; not a nom becomes a fresh one and the body takes it apart. (\ [a b] x) is (\ v (@ v [a b] x)),
 ; so every shape above works there, and a define-sugar binder is a \ like any other.
-(assert
+(test
  (7 = ((\ [a b] (a + b)) '(3 4)))
  ('(6 20) = (map (\ [a b] (a * b)) '((2 3) (4 5))))      ; ..the everyday one
  ('q = ((\ ['lam x b] x) '(lam q r)))

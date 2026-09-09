@@ -5,9 +5,9 @@
 ; answering the collection count, so two asks order strictly. the worst pause of each kind
 ; rides gauge[14]/[15]; test/host/gcpause.l reads the same array by index and proves the
 ; minor's cost flat in the live set.
-(assert (charm? (clock 0)) (0 <= nclock (nclock 0)) (16 = tally (gauge 0)))
+(test (charm? (clock 0)) (0 <= nclock (nclock 0)) (16 = tally (gauge 0)))
 (: c1 (please ()) c2 (please 1)                  ; the sequence law orders the two asks
- (assert (c1 < c2)))
+ (test (c1 < c2)))
 
 ; (tune v) is gauge's write twin -- the four live GC knobs as a rank-1 Z array, in words:
 ; [0] budget (total footprint cap, 2*minor + 2*major; 0 = unbounded -- appel's rule gives the
@@ -21,7 +21,7 @@
    now (tune ())
    bad (tune 'nonsense)                          ; refused: not an array
    back (tune k0)                                ; ..and put the seat back for the rest of the corpus
- (assert (4 = tally k0) (tray? k0)
+ (test (4 = tally k0) (tray? k0)
          (k0 = old)                              ; a write answers what it replaced
          (2097152 = peep now 0 0) (16 = peep now 3 0)
          (now = bad)                             ; a refused shape wrote nothing

@@ -275,9 +275,9 @@
 ; erased the row gets its paths twin over the pinned carrier beside it, by
 ; uuval.l's bridge. Substrate: test/uuval.l over test/uu.l.")
    _ (pl "")
-   _ (pl "(assert (member? 'vof (names ())))")
+   _ (pl "(test (member? 'vof (names ())))")
    _ (pl "")
-   _ (pl "(assert")
+   _ (pl "(test")
    ; the cases proof wears its four operands one to a line: the motive is the
    ; obligation again at (nval n), and reading them stacked is the point
    (proofof d)

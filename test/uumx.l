@@ -8,10 +8,10 @@
 ; love.c's mx.h is laid from -- so a dispatch edit that breaks the band quotient,
 ; or the mirror symmetry, fails a proof at `make test`. Substrate: test/uu.l.
 
-(assert (member? 'vof (names ())))
+(test (member? 'vof (names ())))
 
 ; --- the codes ---
-(assert
+(test
  (defn mxKMint nat 0)
  (defn mxKNom nat 1)
  (defn mxKCharm nat 2)
@@ -47,7 +47,7 @@
 ; --- take memb's form -- one nat_rect over the length, the index carried down
 ; --- -- and a grid keeps both of them short, which is the whole reason the
 ; --- square is not one flat list: npred is O(index) under the eager NbE ---
-(assert
+(test
  (defn mvec (pi n nat UU)
    (lam n (nat_rect (lam q UU) unit (lam k (lam r (total2 h nlist r))) n)))
  (defn mlist UU (total2 n nat (mvec n)))
@@ -77,7 +77,7 @@
  (9 = (vof 0 '(mxnth 0 (mxrow 1 (mcons (ncons 5 nnil) (mcons (ncons 9 nnil) mnil)))))))
 
 ; --- the squares, one row per kind in enum order ---
-(assert
+(test
  ; `+`: 15 kinds square, 225 cells
  (defn mxaddgrid mlist
    ; KMint
@@ -193,7 +193,7 @@
    (lam x (lam y (mxnth y (mxrow x mxmulbgrid))))))
 
 ; --- the bounded forall the theorems close by: every kind, then the square ---
-(assert
+(test
  (defn mxall (pi n nat (pi f (pi k nat bool) bool))
    (lam n (lam f (nat_rect (lam q bool) true (lam k (lam r (andb (f k) r))) n))))
  (defn mxsq (pi f (pi a nat (pi b nat bool)) bool)

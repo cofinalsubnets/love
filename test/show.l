@@ -1,7 +1,7 @@
 ; (show x) -> string. Heap-allocates a data-sink port, prints x through
 ; gfputx, returns the harvested bytes. Should match what (dot x) writes to stdout.
 
-(assert
+(test
   ; numbers
   (= "42"   (show 42))
   (= "-7"   (show -7))

@@ -6,6 +6,6 @@
 ;;; (putx "if this printed, ;;; still started a block") (putc 10)
 #! a `#!` shebang line is skipped too -- ) ) ( ( " weird tokens are fine here
 (: cmt-after 7)  ;;; a trailing ;;; is an ordinary line comment
-(assert
+(test
  (= 7 cmt-after)                                ; survived the ;;; / #! / ;; lines above
  (= 1 1))

@@ -150,7 +150,7 @@
 
 ; --- law: the member store. p->f = 7 -- seven forms become one si. ---
 (: s1 '(asn (fld (v p) 8) (k 7)) e1 '((p home r9)))
-(assert (= (cvs s1 e1)
+(test (= (cvs s1 e1)
            '((mov r0 r9) (sub sp sp 8) (st sp 0 r0) (li r0 7)
              (ld r1 sp 0) (add sp sp 8) (st r1 8 r0)))
         (= (cks s1 e1 P) '((si r9 8 7))))
@@ -158,7 +158,7 @@
 ; --- law: the home write. y = y + 1 -- the shuttle dance becomes one alu form
 ; (the ++ residency story in one line: dest = the home, operand = an immediate). ---
 (: s2 '(asn (loc y) (bin add (v y) (k 1))) e2 '((y home r8)))
-(assert (= 8 (tally (cvs s2 e2)))
+(test (= 8 (tally (cvs s2 e2)))
         (= (cks s2 e2 P) '((add r8 r8 1))))
 
 ; --- law: control destinations. if (x<y && y<3) z=1; else z=0; -- cv reifies each
@@ -172,7 +172,7 @@
    a3 (cvs s3 e3)
    _ (relab 0)
    b3 (cks s3 e3 P)
-   _ (assert (member? 'set (heads a3))
+   _ (test (member? 'set (heads a3))
              !(member? 'set (heads b3))
              (= 34 (tally a3))
              (= b3 '((cmp r8 r9) (br ge l0) (cmp r9 3) (br ge l0)
@@ -182,7 +182,7 @@
 ; call;ret; ck delivers each arg into its seat and the call IS the jump. ---
 (: s4 '(ret (call f ((v x) (k 3)))) e4 '((x home r8)))
 (: a4 (cvs s4 e4)
-   _ (assert (= 6 (tally a4))
+   _ (test (= 6 (tally a4))
              (= 'ret (cap (last a4)))
              (= 'call (cap (cap (cup (rev a4)))))
              (= (cks s4 e4 P) '((mov r6 r8) (li r5 3) (jmp f)))))
@@ -191,7 +191,7 @@
 ; byte-for-byte as cv does -- which is what makes the migration lane-by-lane: an
 ; unmigrated consumer keeps finding its value in r0. compounds only improve. ---
 (: e5 '((z slot -8) (y home r9)))
-(assert (= (cv '(k 7) e5) (ck '(k 7) e5 P ()))
+(test (= (cv '(k 7) e5) (ck '(k 7) e5 P ()))
         (= (cv '(v z) e5) (ck '(v z) e5 P ()))
         (: b (ck '(bin add (v y) (k 1)) e5 P ())
            (&& (< (tally b) (tally (cv '(bin add (v y) (k 1)) e5)))

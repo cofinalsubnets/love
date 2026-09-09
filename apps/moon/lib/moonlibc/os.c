@@ -72,6 +72,7 @@ long __ai_nrfb(long n) { return n; }      /* no second kernel on this arch */
 long __ai_errfb(long e) { return e; }
 long __ai_sigfb(long s) { return s; }
 long __ai_sigcan(long s) { return s; }
+void __ai_sicanon(void const *n, siginfo_t *o) { memcpy(o, n, sizeof *o); }
 unsigned long __ai_maskfb(unsigned long m) { return m; }
 unsigned long __ai_maskcan(unsigned long m) { return m; }
 long __ai_ofb(long f) { return f; }
@@ -237,6 +238,59 @@ static signed char const os_sigcan[32] = {
   23, 19, 20, 18, 17, 21, 22, 29, 24, 25, 26, 27, 28, 29, 10, 12 };
 long __ai_sigfb(long s) { return (s >= 0 && s < 32) ? os_sigfb[s] : -1; }
 long __ai_sigcan(long s) { return (s >= 0 && s < 32) ? os_sigcan[s] : s; }
+
+/* the native siginfo heads. freebsd keeps linux's signo/errno/code order and
+ * then lays every lane flat (pid uid status, then the address); netbsd swaps
+ * code and errno and unions the lanes where linux does. neither is read past
+ * what the canonical shape can hold. */
+struct __fb_siginfo { int signo, err, code, pid; unsigned uid; int status; void *addr; };
+struct __nb_siginfo { int signo, code, err, pad;
+  union { void *addr; struct { int pid; unsigned uid; int status; } chld; } u; };
+/* which lane a record carries, by canonical number. the lanes overlap on two of
+ * the three kernels, so the question is asked once here rather than by every
+ * handler downstairs. */
+static int os_faultsig(int s) {
+  return s == SIGILL || s == SIGTRAP || s == SIGFPE || s == SIGBUS || s == SIGSEGV; }
+/* si_code's SENDER band. the per-signal fault codes (ILL_ILLOPC, SEGV_MAPERR,
+ * CLD_EXITED ..) are small positives and mean the same on all three kernels, so
+ * they ride. who SENT a signal does not: freebsd numbers that band from 0x10001
+ * and netbsd from -1 -- and netbsd is not linux either, ASYNCIO and MESGQ being
+ * swapped. a code with no canonical twin rides rather than being invented:
+ * freebsd's SI_NOINFO is 0, which IS linux's SI_USER and cannot be told from it,
+ * and netbsd's is 32767, which nothing upstairs names. */
+static long os_sicode(long c) {
+  if (__ai_osv == 2) switch (c) {
+    case 0x10001: return 0;      /* SI_USER */
+    case 0x10002: return -1;     /* SI_QUEUE */
+    case 0x10003: return -2;     /* SI_TIMER */
+    case 0x10004: return -4;     /* SI_ASYNCIO */
+    case 0x10005: return -3;     /* SI_MESGQ */
+    case 0x10006: return 0x80;   /* SI_KERNEL */
+    case 0x10007: return -6;     /* SI_LWP; linux's nearest is SI_TKILL */
+    default: return c; }
+  if (__ai_osv == 3) switch (c) {
+    case -3: return -4;          /* SI_ASYNCIO */
+    case -4: return -3;          /* SI_MESGQ */
+    case -5: return -6;          /* SI_LWP; linux's -5 is SI_SIGIO, a different thing */
+    default: return c; }         /* USER, QUEUE and TIMER already agree */
+  return c; }
+void __ai_sicanon(void const *n, siginfo_t *o) {
+  memset(o, 0, sizeof *o);
+  if (__ai_osv == 2) {
+    struct __fb_siginfo const *f = n;
+    o->si_signo = (int) __ai_sigcan(f->signo), o->si_errno = f->err;
+    o->si_code = (int) os_sicode(f->code);
+    if (os_faultsig(o->si_signo)) o->si_addr = f->addr;
+    else { o->si_pid = f->pid, o->si_uid = f->uid;
+           if (o->si_signo == SIGCHLD) o->si_status = f->status; } }
+  else if (__ai_osv == 3) {
+    struct __nb_siginfo const *b = n;
+    o->si_signo = (int) __ai_sigcan(b->signo), o->si_errno = b->err;
+    o->si_code = (int) os_sicode(b->code);
+    if (os_faultsig(o->si_signo)) o->si_addr = b->u.addr;
+    else { o->si_pid = b->u.chld.pid, o->si_uid = b->u.chld.uid;
+           if (o->si_signo == SIGCHLD) o->si_status = b->u.chld.status; } }
+  else memcpy(o, n, sizeof *o); }         /* linux: the native record IS canonical */
 
 /* a mask, bit (sig-1), both spellings in the low word (signals 1..31); the
  * canonical rt band above 31 has no freebsd twin and drops. */

@@ -11,7 +11,7 @@
       (: pat ((: (go b i) (? (< i 512) (: _ (pin b i (% (i * 7) 256)) (go b (i + 1)))
                              (string b)))
               (cask 512) 0)
-         _ (assert
+         _ (test
             (< 65536 dn)                        ; the gate attaches ~70000 sectors
             (1 = (disk-write 16 pat))
             (pat = (disk-read 16 1))
@@ -27,12 +27,12 @@
          seen (? (tablet? f0) (fat-read f0 "boot.txt") ())
          f (? (tablet? f0) f0 (: _ (fat-mkfs dev) (fat-mount dev)))
          _ (? (two? seen)
-              (: _ (assert ("the machine remembers" = (cap (cup seen))))
+              (: _ (test ("the machine remembers" = (cap (cup seen))))
                  _ (puts "disk: fat kept across the reset") (putc 10))
               (: _ (puts "disk: fat born") _ (putc 10) ()))
-         _ (assert (tablet? f))
-         _ (assert (1 = (fat-write f "boot.txt" "the machine remembers")))
-         _ (assert (1 = (fat-write f "scratch.txt" "abc"))
+         _ (test (tablet? f))
+         _ (test (1 = (fat-write f "boot.txt" "the machine remembers")))
+         _ (test (1 = (fat-write f "scratch.txt" "abc"))
                    ("abc" = (cap (cup (fat-read f "scratch.txt"))))
                    (two? (cap (cup (fat-ls f ""))))
                    (1 = (fat-rm f "scratch.txt"))

@@ -9,7 +9,7 @@
 
 ; --- the list vocabulary rt-tile leans on: take, drop, and placeat's window
 ; --- column (zip, keeping the left list; it truncates at the shorter) ---
-(assert
+(test
  (defn ltake (pi k nat (pi l nlist nlist))
    (lam k ((nat_rect (lam q (pi l nlist nlist))
               (lam l nnil)
@@ -42,7 +42,7 @@
 ; --- the splits, ledger face: splitv-eq's loop yields one strip per master,
 ; --- splitv-w one per frac, padfr a length-ns frac list -- only the counts
 ; --- survive the geometry erasure, and the counts are what the theorem eats ---
-(assert
+(test
  (defn msplitveq (pi n nat (pi r nat nlist))
    (lam n (lam r (nat_rect (lam q nlist) nnil (lam j (lam IH (ncons r IH))) n))))
  (defn msplitvw (pi fr nlist (pi r nat nlist))
@@ -60,7 +60,7 @@
 ; --- rt-tile's window flow, mirrored: empty row places nothing; a row that
 ; --- fits the master count zips into the master column; otherwise masters
 ; --- (take nm) and slaves (drop nm) zip their own strips and append ---
-(assert
+(test
  (defn rtwins (pi nm nat (pi fr nlist (pi r nat (pi row nlist nlist))))
    (lam nm (lam fr (lam r (lam row
       (let n (nlen row)
@@ -90,7 +90,7 @@
 ; --- lapptakedrop: take ++ drop = the row, the classic, by rect on k with
 ; --- the row generalized (the inner rect's own IH goes unused, nateqbsymm
 ; --- style) ---
-(assert
+(test
  (defq lnil0 (pi v (nvec 0) (paths nlist (tpair 0 v) nnil))
    (lam v (maponpaths unit nlist (lam u (tpair 0 u)) v tt (uu-unitpath v))))
  (defq ldroplen
@@ -174,7 +174,7 @@
 ; --- both zips (lziplpadvw, lzipltake), and closes with take ++ drop = row.
 ; --- rtwinsane rides it: a duplicate-free row tiles duplicate-free -- with
 ; --- zsane, every window is placed exactly once ---
-(assert
+(test
  (defq rtwinsrow
    (pi nm nat (pi fr nlist (pi r nat (pi row nlist (paths nlist (rtwins nm fr r row) row)))))
    (lam nm (lam fr (lam r (lam row

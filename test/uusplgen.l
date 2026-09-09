@@ -5,7 +5,7 @@
 ; opcodes pushk0 pusha1 pushl2 pushs3 setl4 sets5 add6 emit7, operands raw.
 ; Each source op prints over its term. Laws: test/uuspllaw.l; substrate:
 ; test/uuhom.l's stack machine over test/uu.l (the kernel).
-(assert
+(test
  ; sp0call  (pusha 0)
  ; sp0call  (sets 0)
  ; sp0call  (pushs 0)

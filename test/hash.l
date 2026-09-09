@@ -1,6 +1,6 @@
 ; hash constructor (nested `put`) + {…} printer/reader form
 (: t (hash 1 100 2 200 3 300))
-(assert
+(test
  ; the constructor builds a working hash
  (tablet? t) (nil? (tablet? 5)) (nil? (tablet? '(1 2)))   ; tablet?: only maps, not fixnums/lists
  (lit? t) (lit? cap) (nil? (lit? 5)) (nil? (lit? 0))  ; lit?: any heap object, not a fixnum/nil
@@ -27,7 +27,7 @@
 ; a box. {} reads to the empty map directly: the reader emits (tablet 0) -- () is the
 ; zero-point, distinct from 0. hashes print as {…}, the empty map as {}.
 (: ht {1 100 2 200 3 300})
-(assert
+(test
  (tablet? ht)
  (= 100 (peep ht 1 0))
  (= 300 (peep ht 3 0))
@@ -42,7 +42,7 @@
 ; at () (the unit -- the do-nothing key is NOTHING, the 0->() flip) -- still distinct
 ; from {} the empty map (one ()-keyed entry vs no entries). key 0 is a miss now.
 (: bx {0})
-(assert
+(test
  (tablet? {0}) !!{0} (= 1 ${0})                    ; a box is a nonempty 1-entry hash
  (= 0 (peep bx () 9))                           ; the boxed value sits at key () (the unit)
  (= 9 (peep bx 0 9))                            ; ... and key 0 is a miss (the flip's tell)

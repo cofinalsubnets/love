@@ -12,11 +12,11 @@
 ; the nif links on every seat, but the ANSWERS below are the OS's: a seat with no unix
 ; sockets under it refuses differently. skip where there is no kernel (hosted).
 (? hosted (do
-  (assert (lit? connectu))
-  (assert ('enoent = (connectu "/nonexistent/never/sock")))   ; no such path
-  (assert ('badarg = (connectu "")))                          ; empty path: refused up here
-  (assert (nom? (connectu "/tmp")))                             ; a directory, not a socket
-  (assert ('badarg = (connectu 7)))                           ; not a string
+  (test (lit? connectu))
+  (test ('enoent = (connectu "/nonexistent/never/sock")))   ; no such path
+  (test ('badarg = (connectu "")))                          ; empty path: refused up here
+  (test (nom? (connectu "/tmp")))                             ; a directory, not a socket
+  (test ('badarg = (connectu 7)))                           ; not a string
   (test_fin ())
   (say err "lux: ok\n")
 ) 0)

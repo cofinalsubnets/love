@@ -6,7 +6,7 @@
 ; heap. `snip` reads a range back out as a string, clamping its bounds the way a string snip
 ; does, and it snapshots: the bytes are copied, so a later pin cannot reach what was read.
 ; out of range, either door is a silent no-op.
-(assert
+(test
  ; --- a cask is its own kind ---
  !(string? (cask 4)) !(charm? (cask 4))
 

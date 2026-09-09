@@ -85,14 +85,14 @@
    (both f s) (run (f (s 0) (s 1)) A9))
 
 ; --- the license: call == bind as (value . trace), every sample ---
-(assert
+(test
  ((both ecall e0) = (both ebind e0)) ('(8) = (both ebind e0))
  ((both ecall e1) = (both ebind e1)) ('(8 7) = (both ebind e1))
  ((both ecall e2) = (both ebind e2)) ('(14 7) = (both ebind e2))
  ((both ecall e3) = (both ebind e3)) ('(5 7 5) = (both ebind e3)))
 
 ; --- the flip: substitution duplicates the effect; the VALUE cannot see it ---
-(assert
+(test
  ((both esubst e0) = (both ebind e0))              ; pure: substitution is licensed
  ((both esubst e1) = (both ebind e1))              ; read once: still licensed
  (!(= (both esubst e2) (both ebind e2)))          ; read twice: the breach

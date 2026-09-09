@@ -4,7 +4,7 @@
 ; the serial is also the mint's hash, so distinct mints key a map apart. (the +/* lanes a
 ; symbol inherits are spec.l's; the fine dispatch cells are test/matrix.l's.)
 (: a (mint 0) b (mint 0) c (mint 0)
- (assert
+ (test
   (a < b) (b < c) (a < c) !(b < a) !(c < b)     ; strict, transitive, by creation
   !(a = b) !(b = c)                             ; = stays identity-sharp
   (() < a) !(a < ())                            ; the zero point sits first among the nameless

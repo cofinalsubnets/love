@@ -2,7 +2,7 @@
 ; static-port (getc/putc/key?) nifs that dispatch via f->io. open/close round out the
 ; surface for heap-allocated stream ports backed by real fds.
 
-(assert
+(test
   ; in and out are heap-shaped (lvm_port_io), so show renders a hex address
   (string? (show in))
   (string? (show out))

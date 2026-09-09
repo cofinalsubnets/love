@@ -10,7 +10,7 @@
 
 ; the whole file probes the 64-bit-word wide-int box (2^62 fixnum-max, bit-63
 ; shift idioms); on a 32-bit word these are out of range, so skip there (word).
-(? word (assert
+(? word (test
  ; --- promotion / demotion boundary ---
  !(charm? (<< 1 62))                 ; 2^62 is boxed, not a fixnum
  !(gem? (<< 1 62))                 ; ...integer, not float

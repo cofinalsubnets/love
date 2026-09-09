@@ -25,7 +25,7 @@
  kconst (mkconst 7)
  ; memoizing fixpoint combinator (used for the recursive-value fib below)
  (memo f) (: m (tablet 0) (\ x (: c (peep m x 0) (? c c (: y (f x) _ (pin m x y) y)))))
- (assert
+ (test
   ; --- recursive functions (unchanged behaviour) ---
   (= 120 (nfac 5))                 ; named recursion
   (= 7 (kconst 0))                 ; eta-expanded factory, base case
@@ -104,7 +104,7 @@
 (: (lots n) ((: (go i a) (? (< i n) (go (+ i 1) (link i a)) (tally a))) 0 ())
    (fa a b) (+ a b) (ga a b) (+ a b)
    _ (lots 200000)                                       ; force a major -> fa/ga tenured
-   (assert
+   (test
      (= fa ga)                                           ; alpha-equal across the major pool
      (= 9 (peep {fa 9} ga 0))                            ; map keyed on fa, found by alpha-equal ga (eq/hash consistent)
      (< 8 (tally (show fa)))))                           ; show finds the tenured source
@@ -128,7 +128,7 @@
           (go q 1))
        ())                                             ; the leaf: nothing (falsy) -- a partial is truthy
    (go a) (? rq (zap a) 0)
-   (assert (= 1 (go [5 6 7]))))                        ; ran to every leaf, no partial anywhere
+   (test (= 1 (go [5 6 7]))))                        ; ran to every leaf, no partial anywhere
 
 ; --- capture that reaches through a later sibling -----------------------------
 ; the read that wants a cell need not sit in the value's own def-prefix: an earlier
@@ -140,7 +140,7 @@
                _ (pin K 'k 'yes) (helper 'k))
    ; a binding whose nom also spells a macro is a variable here, never a macro head
    (tk3 _) (: (a o) (zz o) c (tablet 0) zz (\ o (peep c o 'no)) _ (pin c 'k 'yes) (a 'k))
-   (assert ('yes = (tk1 ())) ('yes = (tk2 ())) ('yes = (tk3 ()))))
+   (test ('yes = (tk1 ())) ('yes = (tk2 ())) ('yes = (tk3 ()))))
 
 ; --- a top-level `:` reads its own name late ----------------------------------
 ; the outer let is body-less, so closure-fct defglobs -- after its own def is built.
@@ -148,4 +148,4 @@
 ; does not exist yet is what the missing condition used to report at definition.
 (: closure-fct (: (h n acc) (? (n < 1) acc (h (n - 1) (acc * n))) (\ n (h n 1))))
 (: (tl1 _) (: walk (: (kid k) (? (two? k) (walk (cup k)) k) (\ n (kid n))) (walk '(1 2 3)))
-   (assert (= 120 (closure-fct 5)) (nil? (tl1 ()))))
+   (test (= 120 (closure-fct 5)) (nil? (tl1 ()))))

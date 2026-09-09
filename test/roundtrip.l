@@ -13,7 +13,7 @@
    (rdr s) (: r (rd-test (s2cl s)) (? (two? r) <r r))
    (rd x) (rdr (show x))
    (rt x) (ev (rdr (show x))))
-(assert
+(test
  ; --- datum round-trip (print -> read): the printed form re-reads equal ---
  (= 42 (rd 42))
  (= -7 (rd -7))

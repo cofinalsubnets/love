@@ -85,7 +85,7 @@
    _ (pl "; (str the branch off the spine). test/uukindlaw.l proves the semilattice laws")
    _ (pl "; of these terms at corpus time -- a law-breaking kinds.l edit fails a check.")
    _ (pl "; Substrate: test/uu.l (natgtb / nateqb / andb / bool_rect).")
-   _ (pl "(assert")
+   _ (pl "(test")
    _ (pdefn "numq" numq ")")
    _ (pdefn "kjoin" kjoin "))")
    ; the carrier codes 0..str, for the law file (derived, so drift follows kinds.l)

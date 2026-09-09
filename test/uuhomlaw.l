@@ -7,17 +7,17 @@
 ; a dest.l edit that breaks one fails a proof at `make test`, and the laws
 ; export to Rocq + Lean with the corpus (test_uugen / test_uulean).
 ; guard: substrate + generated terms must land in glob first; fail by name if not.
-(assert (member? 'vof (names ())) (two? (peep GLOB 'drun 0)) (two? (peep GLOB 'ds1ck 0)))
+(test (member? 'vof (names ())) (two? (peep GLOB 'drun 0)) (two? (peep GLOB 'ds1ck 0)))
 
 ; --- the member store & the home write collapse: one si, one alu ---
-(assert
+(test
  (defq dl-onesi
    (paths nlist ds1ck (ncons 4 (ncons 18 (ncons 1 (ncons 15 nnil)))))
    (idpath ds1ck))
  (defq dl-onealu (paths nat (nlen ds2ck) 4) (idpath 4)))
 
 ; --- and the collapse is sound: the home write lands the same r8, forall states ---
-(assert
+(test
  (defq dl-mig-asn
    (pi R hst (pi F hst (pi K hst
       (paths nat (mrg (drun ds2ck (mmk R F K 0)) 8)
@@ -26,14 +26,14 @@
 
 ; --- control destinations: ck branches off the compares, cv reifies -- the
 ; --- set forms are the bridge the ('br) die never pays ---
-(assert
+(test
  (defq dl-noset (paths bool (memb 8 (opsof ds3ck)) false)
    (idpath false))
  (defq dl-cvset (paths bool (memb 8 (opsof ds3cv)) true)
    (idpath true)))
 
 ; --- the tail: ck's emission ends in jmp (the sibcall), cv's in call;ret ---
-(assert
+(test
  (defq dl-tailjmp (paths nat (pr1 (pr2 (lrev (opsof ds4ck)))) 10)
    (idpath 10))
  (defq dl-cvret (paths nat (pr1 (pr2 (lrev (opsof ds4cv)))) 13)
@@ -42,7 +42,7 @@
    (idpath 12)))
 
 ; --- and the arg seats agree before either transfer, forall states ---
-(assert
+(test
  (defq dl-seat6
    (pi R hst (pi F hst (pi K hst
       (paths nat (mrg (drun ds4ckargs (mmk R F K 0)) 6)
@@ -56,12 +56,12 @@
 
 ; --- the degenerate die: a leaf under () compiles byte-for-byte as cv does --
 ; --- data equality, the law that makes migration lane-by-lane ---
-(assert
+(test
  (defq dl-lane-k (paths nlist de5kcv de5kck) (idpath de5kck))
  (defq dl-lane-v (paths nlist de5vcv de5vck) (idpath de5vck)))
 
 ; --- a compound under a die only improves: same r0 forall states, fewer forms ---
-(assert
+(test
  (defq dl-mig-bin
    (pi R hst (pi F hst (pi K hst
       (paths nat (mrg (drun de5bck (mmk R F K 0)) 0)

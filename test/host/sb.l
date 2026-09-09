@@ -27,7 +27,7 @@
    s1 (snap ())
    again (sb-record "again"))
 
-(assert
+(test
  (64 = tally p1)                                       ; a real content address
  (seq (tips ()) [p1])                               ; the one tip
  (3 = tally s1)                                        ; junk/ stayed out; .sbignore is a file like any other
@@ -44,7 +44,7 @@
    p2 (sb-record "second")
    f2 (patch p2))
 
-(assert
+(test
  (3 = nd)                                              ; diff saw all three
  (seq (fld f2 'deps) [p1])                          ; the context reads p1's writes
  (3 = tally (fld f2 'hunks))
@@ -58,7 +58,7 @@
    p3 (sb-record "third")
    f3 (patch p3))
 
-(assert
+(test
  !(fld f3 'deps)                                    ; no context anywhere
  (2 = tally (tips ()))                              ; two maximal patches
  (member? p2 (tips ())) (member? p3 (tips ()))
@@ -81,7 +81,7 @@
    got (sb-sync "pr")
    nafter (tally (readdir ".sb/patch")))
 
-(assert
+(test
  (0 = pdirty)                                             ; clean, so sync will materialize
  (< nbefore nafter)                                       ; the peer's patch arrived
  (two? (patch pp))                                     ; ...as a real, addressable patch object
@@ -110,7 +110,7 @@
    et (look "e.txt")
    _ (chdir ".."))
 
-(assert
+(test
  (64 = tally pe)                                          ; the empty file made a real patch
  (two? esnap)                                             ; ...and reached the snap
  (<>esnap = sha256 "")                                  ; ...under the honest empty digest
@@ -152,7 +152,7 @@
    ndirty (dirty ())
    _ (chdir "../.."))
 
-(assert
+(test
  (mtext = "ONE\ntwo\nthree\nfour\nFIVE\n")               ; both disjoint edits survived
  (0 < gotm)                                              ; ...and it was not a conflict
  (1 = tally cfm) (0 = <><cfm)                          ; one merge, zero regions unresolved
@@ -176,7 +176,7 @@
    cfd (<>(derive-snap (readdir ".sb/patch")))
    _ (chdir "../.."))
 
-(assert
+(test
  (0 = gotd)                                              ; a delete against an edit is a conflict
  (two? gtext)                                            ; the file is still there...
  (<>gtext = "keep\nme too\n")                          ; ...with the edit intact, not the deletion
@@ -207,7 +207,7 @@
    dstore (tally (readdir "../d/.sb/patch"))
    _ (chdir "../.."))
 
-(assert
+(test
  (0 < gotx)                                              ; the exchange went through
  (two? dhere) (two? chere)                               ; each nest took the other's file
  (show csnap = show dsnap)                               ; ...and both derived the same snap
@@ -237,7 +237,7 @@
    clean (dirty ())
    _ (chdir "../.."))
 
-(assert
+(test
  (1 = n1) (a1 = "v1\n") !(two? b1)                       ; as of pa: a rolled back, b not yet born
  (2 = n2) (a2 = "v1\n") (two? b2)                        ; pa + pc: pb's edit skipped, pc's birth kept
  (3 = nstore)                                            ; ...and the store never shrank -- apply is a view
@@ -273,7 +273,7 @@
    _ (lay "h" "a\nB3\n")                                ; settle the markers by hand
    _ (chdir "../.."))
 
-(assert
+(test
  (1 = u1)                                               ; the undo landed as a patch
  (ftext = "one\ntwo\nTHREE!\n")                        ; the bad edit lifted, the later work kept
  (n1 = (n0 + 1))                                        ; ...by growing the store, never shrinking it
@@ -307,7 +307,7 @@
    _ (lay "a" "1\n")
    _ (chdir "../.."))
 
-(assert
+(test
  (2 = ntip)                                              ; two independent births, two tips -- normal
  (1 = b1) (1 = b2)                                       ; banked; re-banking the same head is a no-op
  (2 = tally r1)                                          ; the ref froze the tip set, not one id
@@ -338,7 +338,7 @@
    _ (chdir "../d") dkept (refof "rel")                  ; ...and d kept its
    _ (chdir "../../.."))
 
-(assert
+(test
  (0 < got) (two? travelled)                              ; the ref crossed with the patches
  (1 = n1)                                                ; ...and named a release the nest never banked
  !(show drel = show lrel)                                ; the two `rel`s really are different heads

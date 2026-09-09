@@ -18,7 +18,7 @@
 
 ; the check is the scan itself, laid out for a terminal: one warning here is one
 ; line there, and the config rides in as an argument rather than being read
-(assert
+(test
  (1 = (tally (lint-scan "(: a 1\n")))
  (1 = (tally (lint-of "(: a 1\n" lt-none)))
  !(lint-scan "(: a 1)\n") !(lint-of "(: a 1)\n" lt-none))
@@ -36,7 +36,7 @@
    (lt-rule ws) (map (\ w <>>>w) ws)
    (lt-msg ws)  (map (\ w <>>w) ws))
 
-(assert
+(test
  !(lint-scan "(go)")                        ; off by default: the rule is an opinion
  (1 = (tally (lint-of "(go)" lt-sing)))
  ('(singleton) = (lt-rule (lint-of "(go)" lt-sing)))
@@ -44,14 +44,14 @@
 
 ; a form of one element is that element, so the parens do nothing -- and a
 ; nullary call never fires. the position points at the opener.
-(assert
+(test
  (: w <(lint-of "(: a 1\n   (go))" lt-sing) (&& (2 = <w) (4 = <>w)))
  (1 = (tally (lint-of "(0)" lt-sing)))         ; a number is no different
  (1 = (tally (lint-of "((f x))" lt-sing)))     ; nor is an inner form
  (1 = (tally (lint-of "foo(x)" lt-sing))))     ; foo(x) is two datums, so (x) is a form
 
 ; the three exemptions, each load-bearing.
-(assert
+(test
  ; 1. a constructor is a datum, not a form -- and a ' makes its contents data too
  !(lint-of "'(x)" lt-sing) !(lint-of "@(x)" lt-sing)
  !(lint-of "{x}" lt-sing)
@@ -74,7 +74,7 @@
 
 ; the deprecated roster: a bare name, or `(name "hint"). comments and strings are
 ; not code, and a quoted 'foo names foo just as much as bare foo does.
-(assert
+(test
  !(lint-scan "(f old-thing)")                                  ; empty roster: silent
  ("deprecated old-thing" = <(lt-msg (lint-of "(f old-thing)" lt-dep)))
  ("deprecated worse-thing -- use better-thing"
@@ -90,7 +90,7 @@
 ; imbalance always does, because the file does not read and that is not a matter
 ; of opinion. An opinion never does, whatever a config says -- libra weighs parens,
 ; and the rest it merely says out loud.
-(assert
+(test
  (fatal? <(lint-scan "(: a 1\n"))
  !(fatal? <(lint-of "(go)" lt-sing))
  !(fatal? <(lint-of "(f old-thing)" lt-dep)))
@@ -113,7 +113,7 @@
 ; eight
 "
    cs (lint-cmts src)
-   _ (assert
+   _ (test
       (6 = tally cs)                                    ; six, and the string holds none
       ('(1 1 "/usr/bin/env -S love -l" bang) = <cs)     ; the introducer's own spot
       ('(2 1 " two" semi) = (cs 1))                ; the text is what follows `;`
@@ -134,7 +134,7 @@
 (: run 1)   ; not the header
 ; nor this
 "
-   _ (assert
+   _ (test
       ('("the tool -- what it is for" "" "  a display, two spaces in"
          "  and an indented line is still a sentence" "and back")
        = (ldoc-head src))                                ; ..and it keeps its indent
@@ -155,7 +155,7 @@
 ; the body under it
 (: x 1)
 "))
-   _ (assert
+   _ (test
       (2 = tally d)
       ('(head 2 ((text "a banner"))) = <d)
       ('(para ((text "the body under it"))) = (d 1)))
@@ -193,7 +193,7 @@
    _ (map (\ f (: src (slurpf f)
                   head (foldl (+) "" (ldoc-head src))
                   d (mdread (ldoc-md src))
-                  (assert
+                  (test
                    (1 < tally d)                         ; a document, not a line
                    (0 < tally (bare head))
                    ((bare head) = (bare (dtext d))))))   ; ..and it kept every letter
@@ -201,7 +201,7 @@
    ; the surfaces come free, and that is the seam's whole promise: libra says
    ; markdown, lapiz says the rest.
    _ (: md (ldoc-md (slurpf "apps/vi/hue.l"))
-        _ (assert (0 < tally (md->ht md))
+        _ (test (0 < tally (md->ht md))
                   (0 < tally (md->rf md)))
         0)
    0)
@@ -209,7 +209,7 @@
 
 ; the structure the corpus already carries (rung 1): a banner is a section, a
 ; display is a display. the prose is read, never rewritten.
-(assert
+(test
  ; a `--- name ---` banner is a level-2 heading, and the padding dashes are padding
  ((ldoc-md "; --- the table ------------------------------------------------\n; a row is a thing.\n(: x 1)\n")
   = "## the table\na row is a thing.\n")
@@ -237,7 +237,7 @@
 (: (rd f) (: q (open f "r") (? (hot? q) (slurp q) ""))
    d (mdread ("# apps/lapiz.l\n\n" + ldoc-md (rd "apps/lapiz.l")))
    heads (filter (\ b (<b = 'head)) d)
-   _ (assert
+   _ (test
       (3 < tally heads)
       ('(head 1 ((text "apps/lapiz.l"))) = <heads)   ; the file names the page
       (2 = <>(heads 1))                               ; ..and its banners are sections

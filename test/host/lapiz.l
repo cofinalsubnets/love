@@ -15,7 +15,7 @@
 (borrow 'lapiz)                                ; the baked module, spliced
 
 ; --- the module seam: lapiz registered, the splice + accessor both reach -------
-(assert
+(test
  (member? 'lapiz (cite ()))                   ; the registry lists it
  (member? 'md->ht (keys (cite 'lapiz)))        ; keys introspects the layer
  ("<h1>hi</h1>" = ((cite 'lapiz 'md->ht) "# hi"))   ; the opaque accessor reaches a face
@@ -86,7 +86,7 @@ the [end](e)."]
    (t0? x) (? (! (two? x)) (0 = x) (|| (t0? <x) (t0? >x)))
    _ (map (\ s
       (: d (mdread s)  m (nrm s)  h (md->ht s)
-         (assert
+         (test
             (d = (mdread (mdshow d)))          ; law 1, the markdown surface
             (d = (htread (htshow d)))          ; law 1, the html surface
             (m = (ht->md (md->ht s)))          ; law 2: the lens closes, up to normalization
@@ -97,7 +97,7 @@ the [end](e)."]
             (! (t0? (htread h)))))) corpus)
 
  ; --- the shapes, spelled out: the middle is plain love data -------------------
- _ (assert
+ _ (test
     ((mdread "# hi") = '((head 1 ((text "hi")))))
     ((mdread "*a*b") = '((para ((em ((text "a"))) (text "b")))))
     ((mdread "- x\n- y\n") = '((bullets (((text "x")) ((text "y"))))))
@@ -192,13 +192,13 @@ love \\- a curried lisp
 some literal
 ```"]
     _ (map (\ s (: d (mdread s)
-                   (assert (d = (rfread (rfshow d)))        ; law 1, the roff surface
+                   (test (d = (rfread (rfshow d)))        ; law 1, the roff surface
                            (! (t0? (rfread (rfshow d))))))) rfcorpus)
 
     ; ..and outside the domain rfshow stays total while rfread normalizes. each loss is
     ; pinned here, so it is a stated property of the surface and not a surprise.
     (rfrt s) (rfread (rfshow (mdread s)))
-    _ (assert
+    _ (test
        ((rfrt "### deep") = '((head 2 ((text "deep")))))              ; .SH/.SS and no more
        ((rfrt "```c\nx\n```\n") = '((fence "" "x\n")))                ; .EX/.EE has no language slot
        ((rfrt "---\n") = ())                                          ; a man page has no rule
@@ -208,7 +208,7 @@ some literal
        ((rfrt "```\nx\n```\n") = '((fence "" "x\n"))))
 
     ; the surface table is the whole of conversion: six pairings, no pairwise code
-    _ (assert
+    _ (test
        ((convert 'md 'ht "# hi") = "<h1>hi</h1>")
        ((convert 'md 'rf "# hi") = ".SH hi\n")
        ((convert 'rf 'md ".SH hi\n") = "# hi\n")
@@ -231,7 +231,7 @@ some literal
  ; what keeps doc/*.md and the shipped doc/*.1 from being able to disagree.
  _ (: (slurpf f) (: q (open f "r") (slurp q))
       _ (map (\ f (: d (mdread (slurpf f))
-                     (assert
+                     (test
                         (0 < tally d)                    ; it parsed
                         (d = (mdread (mdshow d)))        ; law 1 on real markdown
                         (d = (htread (htshow d)))
@@ -241,13 +241,13 @@ some literal
       ; roff domain (deep headings, fence languages, links, rules), which is the domain
       ; doing its job rather than a failure.
       _ (map (\ f (: d (mdread (slurpf f))
-                     (assert (d = (rfread (rfshow d))))))   ; law 1 on the roff the build ships
+                     (test (d = (rfread (rfshow d))))))   ; law 1 on the roff the build ships
              ["doc/love.md" "doc/cook.md"])
       ; the man pages are man-page-shaped: every block is in the roff domain, so the
       ; generated page loses nothing (verified against groff by hand, byte-identical
       ; to the hand-written pages these replaced).
       _ (map (\ f (: d (mdread (slurpf f))
-                     (assert ('meta = (cap (cap d)))    ; a .th, and it leads
+                     (test ('meta = (cap (cap d)))    ; a .th, and it leads
                              (! (member? 'rule (map cap d)))))) ["doc/love.md" "doc/cook.md"])
       0)
 

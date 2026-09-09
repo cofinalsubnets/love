@@ -146,10 +146,10 @@
   (two? (parseall '(49 32 61 32 49)))]                ; "1 = 1"
 
    ; every check in the battery must be true.
-   _ (each results (\ b (assert b)))
+   _ (each results (\ b (test b)))
    ; and the battery must be non-trivial (a typo'd list returning () would
    ; vacuously pass the each above).
-   _ (assert (< 50 (tally results))))
+   _ (test (< 50 (tally results))))
 
 (test_fin ())
 (puts "baotest: ok") (putc 10)

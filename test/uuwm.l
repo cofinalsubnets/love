@@ -3,7 +3,7 @@
 ; the source the lux runs (kind-directed by apps/lux/sigs.l) -- so the laws
 ; in test/uuwmlaw.l are proved of the implementation itself; an invariant-
 ; breaking core.l edit fails a proof at `make test`. Substrate: test/uu.l.
-(assert
+(test
  (defn zrow
    (pi z stk nlist)
    (lam z (lapp (lrev (zup z)) (ncons (zfoc z) (zdn z)))))

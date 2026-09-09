@@ -20,7 +20,7 @@
       holo-hex (A 'holo-hex)  assemble (A 'assemble)  label-at (A 'label-at)
       _
       (? (peep (A 'backends) 'x64 0)
-       (assert
+       (test
         ; -- x86-64 backend: the SIB + rotate + bignum-movabs forms the glaze's map probe leans on --
         (= "488d4c0001"  (holo-hex 'x64 '((leax r1 r0 r0 1 1))))         ; lea rcx,[rax+rax*1+1]  (the tagged-key lea)
         (= "4b8b44d808"  (holo-hex 'x64 '((ldx r0 r7 r10 8 8))))        ; mov rax,[r8+r11*8+8]   (slot value load)
@@ -36,7 +36,7 @@
        0)
       ; -- the a64 backend rides the same neutral IR (a second target, byte-checked as data) --
       (? (peep (A 'backends) 'a64 0)
-       (assert
+       (test
         (= "2000028b" (holo-hex 'a64 '((add r0 r1 r2))))
         (= "207c029b" (holo-hex 'a64 '((imul r0 r1 r2)))))
        0))

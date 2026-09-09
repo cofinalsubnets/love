@@ -5,7 +5,7 @@
 ; matched first, longest first. the reader half is `sound`, the factor half opfix.
 (: (rdr s) (: r (sound s) (? (two? r) (cap r) r)))
 
-(assert
+(test
  ; --- the reader: the run is cut one past the token's last sigil, digits and all
  ('(mono (2?<> x)) = (rdr "2?<>x"))
  ('(mono (1? x)) = (rdr "1?x"))
@@ -25,7 +25,7 @@
 
 ; --- right to left, and the one shape that can tell the directions apart: two rows
 ; overlapping mid-run. left to right would take <> then |; the walk takes >| then <.
-(assert
+(test
  (: w1 (grip 0 '<> 'tally) w2 (grip 0 '>| 'net)
     tree (unglue (opfix '<>|x))
     _ (grip 0 '<> w1) _ (grip 0 '>| w2)
@@ -49,7 +49,7 @@
 ; lane differs from the spaced ones, where the sigil is the name and a shadow is visible in
 ; the text that uses it. a row `grip 0` puts there is whatever the caller handed over --
 ; a nom row resolves at the use site, as it always did.
-(assert
+(test
  (1 = (: cap 5 ((\ v <v) '(1 2 3))))                ; the catastrophic one: <v stayed cap
  (5 = (: cap 5 cap))                                ; ..and the binding still stands
  (6 = (: net 'not-a-fn ((\ l +l) '(1 2 3))))         ; a love-closure row is reached the same way
@@ -59,7 +59,7 @@
 ; --- opnom / unglue: the words, when a reader wants them --------------------
 ; a value head is a form no text can spell, so the map back is the door -- and every reader
 ; of post-opfix source (pat's pin, the glaze, spec2coq, wm2uu) goes through it.
-(assert
+(test
  ('cap = (opnom cap)) ('jot = (opnom jot)) ('two? = (opnom two?)) ('nil? = (opnom nil?))
  (0 = (opnom 5)) (0 = (opnom 'cap)) (0 = (opnom '(1 2)))   ; a miss is 0; a list never reaches the hash
  ('(cap (cup x)) = (unglue (opfix '<>x)))

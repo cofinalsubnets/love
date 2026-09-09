@@ -11,8 +11,8 @@
 ; purpose: apps/json.l is a file the boot never loads, and the write laws put its
 ; bytes back, so nothing downstream in the corpus sees a clobbered tree.
 ;
-; the `:` has a body -- the assert itself -- so the helpers stay local; and each
-; law is its own assert argument, since assert maps over its args and a `do` would
+; the `:` has a body -- the test itself -- so the helpers stay local; and each
+; law is its own assert argument, since test maps over its args and a `do` would
 ; report only the last one.
 
 (: f "apps/json.l"
@@ -21,7 +21,7 @@
    (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
    (wr p s m) (: q (open p m) (? (port? q) (: _ (say q s) _ (close q) 1) 0))
    orig (rd f)
- (assert
+ (test
    ; a baked path opens, and carries the bytes the archive put in the row
    (port? (open f "r"))
    (< 0 (tally orig))
@@ -55,4 +55,4 @@
 ; scratch back through the compiler, so it is the restore above proving itself byte
 ; for byte; it has to stay after those laws.
 (borrow "apps/json.l")
-(assert (member? 'json-read (names ())))
+(test (member? 'json-read (names ())))

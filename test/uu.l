@@ -27,7 +27,7 @@
 ; every defn/defq below is a truthy no-op and the whole corpus paints fake
 ; green under a shell help; only a value demo would catch it. one loud probe:
 ; a defn must land in glob and compute.
-(assert
+(test
  (: _ (defn uu-alive (pi n nat nat) (lam n (succ n)))
     (two? (peep GLOB 'uu-alive 0)))
  (= 3 (vof 0 '(uu-alive 2))))
@@ -38,7 +38,7 @@
 ; --- mit license, copyright (c) 2015 the UniMath Development Team; this
 ; --- acknowledgement rides with the ported portion per that license. The
 ; --- kernel above (and everything it bakes into the binary) is our own.
-(assert
+(test
  (defn idfun (pi T UU (pi x T T)) (lam T (lam x x)))
  (defn funcomp
    (pi X UU (pi Y UU (pi Z UU (pi f (pi x X Y) (pi g (pi y Y Z) (pi x X Z))))))
@@ -86,7 +86,7 @@
    (lam n (lam m (nat_rect (lam x nat) m (lam k (lam r (succ r))) n)))))
 
 ; the eliminators compute: proofs by idpath are proofs by evaluation.
-(assert
+(test
  (defn uu-two-plus-two (paths nat (add 2 2) 4) (idpath 4))
  (defn uu-negb-true (paths bool (negb true) false) (idpath false))
  (defn uu-fromsum (pi v (coprod nat bool) nat)
@@ -97,7 +97,7 @@
 ; the crown: the identity is a weak equivalence (PartA idisweq -- the proof
 ; needs sigma-eta), the inverse falls out of contractible fibers, and
 ; univalence is the axiom over a checked eqweqmap, exactly UnivalenceAxiom.v.
-(assert
+(test
  (defn idisweq (pi T UU (isweq T T (idfun T)))
    (lam T (lam y (tpair (tpair y (idpath y))
       (lam t (paths_rect
@@ -125,7 +125,7 @@
 ; the h-level ladder grounded at iscontr by nat-recursion (PartB isofhlevel;
 ; the motive lands in UU -> UU), the bridges holding definitionally, and
 ; Propositions.v's impredicative truncation: no higher inductive anywhere.
-(assert
+(test
  (defn isaprop (pi X UU UU)
    (lam X (pi x X (pi y X (iscontr (paths X x y))))))
  (defn isaset (pi X UU UU)
@@ -158,7 +158,7 @@
 ; UnivalenceAxiom.v's first theorems. (UniMath's neg/negf are SKIPPED: `neg`
 ; is the prel's monadic word for -x, and a corpus global would shadow it
 ; for every test compiled after this file -- the infinity lesson again.)
-(assert
+(test
  (defn total2_paths_f
    (pi A UU (pi P (pi x A UU)
       (pi s (total2 x A (P x)) (pi sp (total2 x A (P x))
@@ -213,7 +213,7 @@
 ; identity is the definitional one). isapropunit is one name: the stored type
 ; of iscontrpathsinunit is the unfolding of (isaprop unit), so the reference
 ; checks bare.
-(assert
+(test
  (defn pathscomp0rid
    (pi A UU (pi a A (pi b A (pi e (paths A a b)
       (paths (paths A a b) (pathscomp0 A a b b e (idpath b)) e)))))
@@ -289,7 +289,7 @@
 ; J-base is all definitional under left-inducting twin?. the corollaries pay
 ; immediately: the inverse of a weq is a weq, negb is a weq, and weqtopaths
 ; mints a path bool = bool in the universe that is not idpath.
-(assert
+(test
  (defn path_assoc
    (pi A UU (pi a A (pi b A (pi c A (pi d A
       (pi e1 (paths A a b) (pi e2 (paths A b c) (pi e3 (paths A c d)
@@ -422,7 +422,7 @@
 ; names), and boolascoprod runs every inductive eliminator inside one weq:
 ; bool_rect both ways, coprod_rect for the section, unit_rect through
 ; uu-unitpath for the corrections.
-(assert
+(test
  (defn twooutof3c
    (pi X UU (pi Y UU (pi Z UU (pi f (pi x X Y) (pi g (pi y Y Z)
       (pi isf (isweq X Y f) (pi isg (isweq Y Z g)
@@ -481,7 +481,7 @@
 ; invproofirrelevance turns collapse into contractibility. the coconut
 ; (iscontrcoconusfromt) is the based path space, the first stone of the
 ; funext chain. every name is UniMath's.
-(assert
+(test
  (defn coconusfromt (pi T UU (pi t T UU))
    (lam T (lam t (total2 tp T (paths T t tp)))))
  (defn iscontrcoconusfromt (pi T UU (pi t T (iscontr (coconusfromt T t))))
@@ -676,7 +676,7 @@
 ; by one maponpaths, and funextempty stops being an axiom. the let form pays
 ; its way in weqtransportbuah; natplusr0 + the demo mint a path
 ; (lam n (add n 0)) = (lam n n) that no conversion sees.
-(assert
+(test
  (defn transportb
    (pi A UU (pi P (pi x A UU) (pi a A (pi b A (pi e (paths A a b) (pi p (P b) (P a)))))))
    (lam A (lam P (lam a (lam b (lam e (transportf A P b a (pathsinv0 A a b e))))))))
@@ -827,7 +827,7 @@
 ; eta closes it). funextcontr contracts the section-coconut, and funextsec
 ; falls out by proof irrelevance + one maponpaths -- no isweqtotaltofib
 ; needed. heavy proofs are Qed-sealed.
-(assert
+(test
  (defn toforallpaths
    (pi T UU (pi P (pi t T UU) (pi f (pi t T (P t)) (pi g (pi t T (P t))
       (pi e (paths (pi t T (P t)) f g) (pi t T (paths (P t) (f t) (g t))))))))
@@ -930,7 +930,7 @@
 ; closed checked TERM -- the honest price of UU : UU, paid in public.
 ; type formers and the nat_rect tower stay transparent (the descent proof's
 ; type must compute); the proofs are Qed-sealed.
-(assert
+(test
  (defn wf (pi Flse UU (pi T UU UU))
    (lam Flse (lam T
       (total2 lt (pi x T (pi y T UU))
@@ -1113,7 +1113,7 @@
 ; truncation, implication and negation by impred -- with the intro rules and
 ; a squash-recursion demo. names are UniMath's; proofs Qed, formers stay
 ; transparent (the demos project them with pr1).
-(assert
+(test
  (defq isapropempty (isaprop empty)
    (lam x (lam y (fromempty (iscontr (paths empty x y)) x))))
  (defq isapropifcontr (pi X UU (pi is (iscontr X) (isaprop X)))
@@ -1212,7 +1212,7 @@
 ; isapropisaprop). the universal map factors through the prop-valued image
 ; and computes: setquotunivcomm checks by idpath, exactly as in Coq. the
 ; demo quotients bool by the total relation and evaluates the induced map.
-(assert
+(test
  (defn hrel (pi X UU UU) (lam X (pi x X (pi y X hProp))))
  (defn istrans (pi X UU (pi R (hrel X) UU))
    (lam X (lam R (pi x1 X (pi x2 X (pi x3 X
@@ -1423,7 +1423,7 @@
 ; of sets is a set (paths collapse through pointwise paths), and setquot is
 ; a set (paths collapse through paths of underlying subtypes, the class
 ; axioms discharged as props). hPropset and setquotinset close Sets.v's arc.
-(assert
+(test
  (defq uu-pathscollapse
    (pi X UU (pi x X (pi PF (pi y X UU)
       (pi s (pi y X (pi e (paths X x y) (PF y)))
@@ -1531,7 +1531,7 @@
 ; naturalnumbers (the parity lane): the additive monoid laws. natplusl0 is
 ; one idpath (add computes on the left); the rest are nat_rect + maponpaths
 ; succ, with natplusnsm's right side computing to meet the induction.
-(assert
+(test
  (defq natplusl0 (pi n nat (paths nat (add 0 n) n))
    (lam n (idpath n)))
  (defq natplusnsm
@@ -1586,7 +1586,7 @@
 ; same as UniMath's), so multsnm is one natpluscomm, natmultl1 is one idpath
 ; ((mul 1 n) computes through (add 0 n) to n), and natmultassoc closes by
 ; natrdistr feeding the induction. the distributors ride the additive laws.
-(assert
+(test
  (6 = (vof 0 '(mul 2 3)))
  (defq multsnm
    (pi n nat (pi m nat (paths nat (mul (succ n) m) (add m (mul n m)))))
@@ -1707,7 +1707,7 @@
 ; across the laws (uugen.v), the instances (test/proof/rocq/gen.v), and spec.v. `uu-app n x = x^n`
 ; (recurse on the exponent), matching spec.v's `app`; the universal laws hold by refl
 ; (const1) or natmultr1 (x^1 = mul x 1 = x), the tower by ground reduction.
-(assert
+(test
  (defn uu-app (pi n nat (pi x nat nat))
    (lam n (lam x (nat_rect (lam q nat) 1 (lam p (lam r (mul x r))) n))))
  (defn uu-app-const1 (pi x nat (paths nat (uu-app 0 x) 1)) (lam x (idpath 1)))
@@ -1833,7 +1833,7 @@
 
 ; landmarks as pure booleans (so a false one scares loudly here, before the negative-test
 ; section installs its scare-swallowing help) -- no `rejects`, which needs that help.
-(assert
+(test
  (= 1 (ulvl (pinf 0 0 0 'UU)))                                   ; UU0 : uu1 -- a real hierarchy, not UU:UU
  (= 0 (ulvl (pinf 0 0 0 'nat)))                                  ; nat : UU0
  (= 1 (sortof 0 0 0 '(pi T UU T)))                               ; predicativity: forall(T:UU),T lives one level up, in uu1
@@ -1866,7 +1866,7 @@
 ; behavior for free), natgth the hProp, then the first laws: succ-succ steps
 ; land on their IH definitionally, and istransnatgth's triple destruct is
 ; three nested rects whose inner motives never touch their ihs.
-(assert
+(test
  (defn natgtb (pi n nat (pi m nat bool))
    (lam n (nat_rect (lam q (pi m nat bool))
       (lam m false)
@@ -1946,7 +1946,7 @@
 ; (k>0 as succ k) rides both through istransnatgth: (mul (succ (succ p)) _)
 ; computes to (add (mul (succ p) _) _), so the succ step is "plusr by the IH on
 ; the left summand, then plusl by g on the right" -- and mul 1 _ is _ for the base.
-(assert
+(test
  (defq natgthandplusl
    (pi n nat (pi m nat (pi k nat (pi g (paths bool (natgtb n m) true)
       (paths bool (natgtb (add k n) (add k m)) true)))))
@@ -1984,7 +1984,7 @@
 ; NaturalNumbers stands on, is one bool_rect on (natgtb n m): true -> ii1 (idpath
 ; true), false -> ii2 (idpath false). No induction -- the decidability was already
 ; sitting in natgtb's bit; the coprod_rect demos read the decision back out.
-(assert
+(test
  (defn natlth (pi n nat (pi m nat hProp))
    (lam n (lam m (natgth m n))))
  (defn natleh (pi n nat (pi m nat hProp))
@@ -2010,7 +2010,7 @@
 ; case flips the work: the n=0 corner is now idpath false (not a contradiction),
 ; and the succ-0 corners contradict through nopathstruetofalse (natgtb (succ _) 0
 ; is true, so "= false" is absurd). antisymm closes by maponpaths succ on the IH.
-(assert
+(test
  (defq isreflnatleh (pi n nat (paths bool (natgtb n n) false))
    (lam n (nat_rect (lam q (paths bool (natgtb q q) false))
       (idpath false)
@@ -2072,7 +2072,7 @@
 ; bool_rect carrying the negation hypothesis in its motive (true forces empty via
 ; the hypothesis, false is idpath false). natlthtoleh then rides <- through
 ; isasymmnatgth: m>n gives not (n>m), which is exactly n<=m.
-(assert
+(test
  (defq natlehtonegnatgth
    (pi n nat (pi m nat (pi p (paths bool (natgtb n m) false)
       (pi q (paths bool (natgtb n m) true) empty))))
@@ -2099,7 +2099,7 @@
 ; (n-n lands on its IH, like isreflnatleh). natlehsucc (a<=k weakens to a<=succ k)
 ; is the missing rung; natminusleh (n-m <= n) then inducts down natminus's own
 ; shape -- the m=0 corner is isreflnatleh, the succ corner weakens the IH.
-(assert
+(test
  (defn natminus (pi n nat (pi m nat nat))
    (lam n (nat_rect (lam x (pi m nat nat))
       (lam m 0)
@@ -2152,7 +2152,7 @@
 ; (n'-m') + (succ m') = succ ((n'-m') + m') = succ n' -- natplusnsm to push the
 ; succ across the +, then the IH under a maponpaths. (the reader admits primes
 ; now, so the predecessors read n' m', not the round-21 workaround.)
-(assert
+(test
  (defq natminusplusnmm
    (pi n nat (pi m nat (pi h (paths bool (natgtb m n) false) (paths nat (add (natminus n m) m) n))))
    (lam n
@@ -2186,7 +2186,7 @@
 ; natlehandminusr (k<=m -> n-m <= n-k, ANTITONE in the subtrahend) is heavier --
 ; its m=0 corner splits on k (k=0 is isreflnatleh, k>0 contradicts), and its
 ; m-succ-0 corner is natminusleh weakened by natlehsucc (n'-m' <= n' <= succ n').
-(assert
+(test
  (defq natlehandminusl
    (pi n nat (pi m nat (pi k nat (pi h (paths bool (natgtb n m) false)
       (paths bool (natgtb (natminus n k) (natminus m k)) false)))))
@@ -2245,7 +2245,7 @@
 ; --- focus (Swierstra's Stack -- core.l's () empty case lives outside the
 ; --- model). the ops wear core.l's names; boot/post.l runs the model
 ; --- against the implementation, and the theorems export via uu2coq/uu2lean.
-(assert
+(test
  (defn nvec (pi n nat UU)
    (lam n (nat_rect (lam q UU) unit (lam k (lam r (total2 h nat r))) n)))
  (defn nlist UU (total2 n nat (nvec n)))
@@ -2267,7 +2267,7 @@
             (pr2 a)))))
 
 ; --- decidable equality and the duplicate hunt, all booleans ---
-(assert
+(test
  (defn orb (pi a bool (pi b bool bool))
    (lam a (lam b (bool_rect (lam x bool) true b a))))
  (defn andb (pi a bool (pi b bool bool))
@@ -2311,7 +2311,7 @@
    _ (bridge 'npred (\ m (? (= m 0) 0 (m - 1))))
    _ (bridge 'nateqb (\ n m (? (= n m) 'true 'false)))
    0)
-(assert
+(test
  ; the bridged names, both lanes, edges included
  ((vof 0 '(add 2 3)) = (lof '(add 2 3)))
  ((vof 0 '(add 0 7)) = (lof '(add 0 7)))
@@ -2341,7 +2341,7 @@
 ; --- hd0/tl0, mstk). the moves themselves live in test/uuwm.l -- generated
 ; --- from apps/lux/core.l by tools/wm2uu.l -- and their laws + computed
 ; --- claims in test/uuwmlaw.l (the two load after this file by sort order) ---
-(assert
+(test
  (defn stk UU (total2 f nat (total2 u nlist nlist)))
  (defn zmk (pi f nat (pi u nlist (pi d nlist stk)))
    (lam f (lam u (lam d (tpair f (tpair u d))))))
@@ -2352,7 +2352,7 @@
    (lam z (succ (add (nlen (zup z)) (nlen (zdn z)))))))
 
 ; --- the defaulting projections, hd0/tl0: how a translated move reads a row ---
-(assert
+(test
  (defn hd0 (pi l nlist nat)
    (lam l ((nat_rect (lam q (pi v (nvec q) nat))
               (lam v 0)
@@ -2369,7 +2369,7 @@
 ; --- the boolean observation lemmas: what an orb/andb/negb verdict tells
 ; --- you about its operands (each by bool_rect on the scrutinee; the true
 ; --- branch of orbfalsel is its hypothesis, by conversion) ---
-(assert
+(test
  (defq orbfalsel (pi a bool (pi b bool (pi h (paths bool (orb a b) false) (paths bool a false))))
    (lam a (bool_rect (lam a2 (pi b bool (pi h (paths bool (orb a2 b) false) (paths bool a2 false))))
        (lam b (lam h h))
@@ -2412,7 +2412,7 @@
 ; --- (tpair (succ k) v) b unfolds through the head even on a neutral tail,
 ; --- and sigma-eta closes (tpair (pr1 b) (pr2 b)) = b -- so every step is
 ; --- a conversion, and the path algebra only carries the verdicts around ---
-(assert
+(test
  (defq membmid
    (pi u nat (pi w nat (pi b nlist (pi hu (paths bool (nateqb u w) false)
       (pi a nlist (pi hm (paths bool (memb u (lapp a b)) false)
@@ -2473,7 +2473,7 @@
 ; --- nfilt (znub's mirror, the every-copy filter) and the Maybe Stack
 ; --- (coprod unit stk: ii1 the empty harbor, ii2 the survivor) -- the
 ; --- substrate zdel's translation answers into ---
-(assert
+(test
  (defn nfilt (pi w nat (pi l nlist nlist))
    (lam w (lam l ((nat_rect (lam q (pi v (nvec q) nlist))
              (lam v nnil)
@@ -2487,7 +2487,7 @@
 ; --- the kernel refuses: ill-typed terms scare; the help cell catches them.
 ; --- (install per the help law; the scare bit is the only one a help sees.)
 (hear (\ p e (: h (peep HELPC () 0) (? h (h p e) 0))))
-(assert
+(test
  ('rejected = (rejects (\ z (defn uu-bad1 (paths nat 1 2) (idpath 1)))))
  ('rejected = (rejects (\ z (defn uu-bad2 (pi x nat nat) (lam x (succ y))))))
  ('rejected = (rejects (\ z (defn uu-bad3 nat (lam x x)))))
@@ -2501,7 +2501,7 @@
 ; bruijn level would accept an invalid proof while every positive law in this file stayed
 ; green. each negative needs its positive: a term that rejects for the wrong reason proves
 ; nothing, and the accepted twin is what says conv can still say yes.
-(assert
+(test
  ; the pi codomain, under one binder
  ('accepted = (rejects (\ z (defn uu-cv1 (pi x nat (paths nat x x))
                     (the (pi x nat (paths nat x x)) (lam x (idpath x)))))))

@@ -3,7 +3,7 @@
 ; the charlist port (g.c:ci_getc, used by the REPL submit path) so the
 ; in-memory edit buffer agrees with file input.
 
-(assert
+(test
   ; --- C reader path: this file is parsed by it ---
   ; \n / \t / \r / \0 become 1-byte strings with the corresponding byte.
   (= 1 (tally "\n"))           (= "\n" (string (link 10 0)))
@@ -31,7 +31,7 @@
 (:
  ; chars-of-source-with-quotes -> the parsed datum.
  (parse cl) (cap (sound cl))
- (assert
+ (test
    (= (string (link 10 0))                   (parse '(34 92 110 34)))   ; "\n"
    (= (string (link 9 0))                    (parse '(34 92 116 34)))   ; "\t"
    (= (string (link 13 0))                   (parse '(34 92 114 34)))   ; "\r"

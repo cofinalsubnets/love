@@ -20,7 +20,7 @@
                                  (go 0 2))))
               0 0)
    dn (rdnum (cup xv))
-   _ (assert (charm? dn))
+   _ (test (charm? dn))
    ; the game: silent (HORN=none), 300 frames, then it says how many it drew
    ph (tether ["env" "HORN=none" (+ "DISPLAY=:" (show dn)) "out/love" "doom" "-frames" "300"])
    ; while it runs, a held key through XTEST on a wire of our own: a second and a half
@@ -30,7 +30,7 @@
    _ (rest 2500)
    XW (cite 'xwire)
    s ((XW 'x-connect) (+ "/tmp/.X11-unix/X" (show dn)))
-   _ (assert (hot? s))
+   _ (test (hot? s))
    sc ((XW 'x-setup) s ())
    qx (: n 5 _ ((XW 'x-w8) s 98) _ ((XW 'x-w8) s 0) _ ((XW 'x-w16) s 4) _ ((XW 'x-w16) s n) _ ((XW 'x-w16) s 0)
          _ ((XW 'x-wpad) s "XTEST") _ ((XW 'x-flush) s)
@@ -49,5 +49,5 @@
    ; the pty's tail: the count, then whatever line ending the terminal put after it
    (trimr s) (: n #s (? (&& (< 0 n) (member? (s (- n 1)) '(10 13))) (trimr (snip s 0 (- n 1))) s))
    o (trimr out)
-   _ (assert (= "doom: 300 frames" (snip o (- (tally o) 16) (tally o))))
+   _ (test (= "doom: 300 frames" (snip o (- (tally o) 16) (tally o))))
    (puts "doomx: ok"))

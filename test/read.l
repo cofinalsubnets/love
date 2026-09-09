@@ -4,7 +4,7 @@
 ; form structurally and compiles it through opfix/feel/ana/cata, so the
 ; whole hull -- characters to top -- closes in lisp.
 (: (zs s) ((: (g i) (? (< i (tally s)) (link (s i) (g (+ 1 i))))) 0)   ; string -> chars
- (assert
+ (test
   (3 = (read (zs "(+ 1 2)")))                  ; the plain lane
   (3 = (read (zs "(1 + 2)")))                  ; infix factors through the charm lane
   (7 = (read (zs "(1 + 2 * 3)")))              ; right-assoc, same as ev
@@ -29,6 +29,6 @@
 ; the colist lift (`char`) + realizer are now closure-private inside read; what stays
 ; observable is that read drinks any input: chars (above), a port, or a hand-built charms.
 (: (zs2 s) ((: (g i) (? (< i (tally s)) (link (s i) (g (+ 1 i))))) 0)
- (assert
+ (test
   (6 = (read (tap (zs2 "(* 2 3)"))))             ; a port: read lifts the hot charms
   (1 = (read (link 49 (\ _ ()))))))              ; a hand-built one-cell charms: "1"

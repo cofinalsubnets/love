@@ -26,7 +26,7 @@
 
 (borrow "apps/tls/tls.l")
 
-(assert
+(test
  (lit? chacha20)
  (lit? poly1305))
 
@@ -51,7 +51,7 @@
 (: pt242 ("Ladies and Gentlemen of the class of '99: If I could offer you only "
           + "one tip for the future, sunscreen would be it.")
    k252 (unhex "85d6be7857556d337f4452fe42d506a80103808afb0db2fd4abff6af4149f51b")
-   (assert
+   (test
     ((hex (chacha20 ckey cnon 1 pt242))
      = ("6e2e359a2568f98041ba0728dd0d6981e97e7aec1d4360c20a27afccfd9fae0b"
         + "f91b65c5524733ab8f593dabcd62b3571639d624e65152ab8f530c359f0861d8"
@@ -63,14 +63,14 @@
     (pt242 = (chacha20 ckey cnon 1 (chacha20 ckey cnon 1 pt242)))))
 
 ; --- lengths: the two twins agree at every length across both block edges ----------
-(assert
+(test
  (-1 = (cbad 0 129))
  ; ..and the run is not two piles of nothing: lengths differ, counters differ
  (! ((poly1305 ckey (cmsg 32)) = (poly1305 ckey (cmsg 33))))
  (! ((chacha20 ckey cnon 1 (cmsg 64)) = (chacha20 ckey cnon 2 (cmsg 64)))))
 
 ; --- counters: love varies the counter down a galaxy, C walks it ------------------
-(assert
+(test
  (-1 = (cctrbad 0 5))
  ; block 1 of a batch is what counter 2 gives on its own -- love's vectorised
  ; galaxy and C's loop, meeting on the same 64 bytes
@@ -82,7 +82,7 @@
 ; --- misuse: a value op, so a wrong shape answers () and encrypts nothing ----------
 (: shortk (bytes 31 (\ i i))
    longn (bytes 16 (\ i i))
-   (assert
+   (test
     (! (chacha20 shortk cnon 1 "hello"))
     (! (chacha20 ckey longn 1 "hello"))
     (! (chacha20 ckey cnon 'x "hello"))

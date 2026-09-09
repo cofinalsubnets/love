@@ -36,10 +36,10 @@
 ;
 ; substrate: test/uu.l (the kernel + nat vocabulary; this file loads after it by
 ; sort order). guard: fail by name if the kernel is not up.
-(assert (member? 'vof (names ())))
+(test (member? 'vof (names ())))
 
 ; --- zed: the integers, ceil's codomain. ii1 n is n, ii2 n is -(succ n) ---
-(assert
+(test
  (defn zed UU (coprod nat nat))
  (defn nzed (pi n nat zed) (lam n (ii1 n)))                 ; the section: a nat is an integer
  (defn zneg (pi n nat zed) (lam n (ii2 n)))                 ; -(n+1)
@@ -94,7 +94,7 @@
  (= (vof 0 '(ii1 0)) (vof 0 '(zsucc (ii2 0)))))
 
 ; --- rea: a real is a half-integer, z + (h ? 1/2 : 0). ceil is the carry ---
-(assert
+(test
  (defn rea UU (total2 z zed bool))
  (defn rmk (pi z zed (pi h bool rea)) (lam z (lam h (tpair z h))))
  (defn zrea (pi z zed rea) (lam z (tpair z false)))         ; the section: an integer is a real
@@ -111,7 +111,7 @@
  (= (vof 0 '(rmk (ii1 3) false)) (vof 0 '(radd (rmk (ii1 1) true) (rmk (ii1 1) true)))))
 
 ; --- msr: the measure is complex, and re is the rung love's ceil reads ---
-(assert
+(test
  (defn msr UU (total2 r rea rea))
  (defn mre (pi m msr rea) (lam m (pr1 m)))
  (defn rmsr (pi r rea msr) (lam r (tpair r rzero)))         ; the section: a real is a measure
@@ -122,7 +122,7 @@
 ; --- atm: what a leaf carries. () and 0 net the same and both read nil, and
 ; --- they are still not one value -- love keeps "" and () and 0 apart, and
 ; --- (= () 0) is false -- so a leaf carries a tag and not just its measure ---
-(assert
+(test
  (defn atm UU (coprod unit msr))
  (defn aunit atm (ii1 tt))                                  ; ()
  (defn anum (pi m msr atm) (lam m (ii2 m)))                 ; a number is its measure
@@ -135,7 +135,7 @@
 ; --- not a shape: a leaf spells the same at every depth, which is what makes a
 ; --- node's head unambiguous and lets cap/cup/two? read it without recursing.
 ; --- net folds the tree ---
-(assert
+(test
  (defn vtre (pi d nat UU)
    (lam d (nat_rect (lam q UU) atm (lam k (lam T (coprod atm (total2 x T T)))) d)))
  ; the two limbs of a link, named. bare pr1/pr2 would do it here, but the Rocq
@@ -185,7 +185,7 @@
  (defn vblue  (pi v val bool) (lam v (andb (zblue (pr1 (vre v))) (negb (pr2 (vre v)))))))
 
 ; --- the retraction ladder: each rung's round trip, four of the five by idpath ---
-(assert
+(test
  (defn uv-retract (pi A UU (pi B UU (pi s (pi a A B) (pi r (pi b B A) UU))))
    (lam A (lam B (lam s (lam r (pi a A (paths A (r (s a)) a)))))))
  (defq uv-net-sect  (uv-retract msr val vnum vnet)  (lam m (idpath m)))
@@ -201,7 +201,7 @@
 ; --- negative half to 0, and lands on the edge past chmax. stated hypothesis-
 ; --- free -- (nmin chmax n) is a net that fits and (add chmax n) one that does
 ; --- not -- so nothing rests on a decision procedure for the bound ---
-(assert
+(test
  (defq uv-nmin-idem (pi a nat (pi b nat (paths nat (nmin a (nmin a b)) (nmin a b))))
    (lam a (nat_rect (lam q (pi b nat (paths nat (nmin q (nmin q b)) (nmin q b))))
              (lam b (idpath 0))
@@ -235,7 +235,7 @@
 
 ; --- net is a homomorphism: a leaf nets its measure at whatever height it sits
 ; --- at, and a link sums ---
-(assert
+(test
  (defq uv-net-leaf
    (pi d nat (pi m atm (paths msr (netd (succ d) (ii1 m)) (anet m))))
    (lam d (lam m (idpath (anet m)))))
@@ -252,7 +252,7 @@
 ; --- which is what lets three of these compose, where a fuel derived from a pair
 ; --- of heights gives the three sides of a transitivity three different ones.
 ; --- first the measure's own equality, and the andb plumbing the proofs lean on ---
-(assert
+(test
  (defn beqb (pi a bool (pi b bool bool))
    (lam a (lam b (bool_rect (lam x bool) b (negb b) a))))
  (defn zeqb (pi a zed (pi b zed bool))
@@ -305,7 +305,7 @@
 ; --- ..and each of them reflects: an equality that answers true hands back the
 ; --- path. reflexivity alone would give a preorder; this is what makes = an
 ; --- equivalence, and every rung has to give it up before the tree's can ---
-(assert
+(test
  (defq uv-pairpath
    (pi A UU (pi B UU (pi a1 A (pi a2 A (pi b1 B (pi b2 B
       (pi p (paths A a1 a2) (pi q (paths B b1 b2)
@@ -415,7 +415,7 @@
 ; --- the four things a node shows: whether it is a pair, its cap, its cup, and
 ; --- the measure it carries when it is not. none of them recurse -- a leaf is
 ; --- ii1 at every depth, so the head is read in one step ---
-(assert
+(test
  (defn vtwod (pi d nat (pi t (vtre d) bool))
    (lam d (nat_rect (lam q (pi t (vtre q) bool))
              (lam t false)
@@ -463,7 +463,7 @@
 ; --- depth. that is what mx2 buys: (mx2 0 b) is b and (mx2 (succ j) 0) is
 ; --- (succ j) definitionally, so a pad lands on one index from either side.
 ; --- `add` cannot do it -- (add j 0) is stuck on a neutral j ---
-(assert
+(test
  (defn mx2 (pi a nat (pi b nat nat))
    (lam a (nat_rect (lam q (pi b nat nat))
              (lam b b)
@@ -506,7 +506,7 @@
 
 ; --- veq is reflexive: at a leaf the right value shows no head and the same
 ; --- atom, at a pair it shows both limbs one level down ---
-(assert
+(test
  (defq uv-veq-refl (pi v val (paths bool (veq v v) true))
    (lam v ((nat_rect (lam d (pi t (vtre d) (paths bool (veqd d t (tpair d t)) true)))
              (lam t (uv-aeqb-refl t))
@@ -526,7 +526,7 @@
 ; --- it costs is that the middle's shape has to be read -- veqd only reduces on
 ; --- a head -- so each arm cases on the middle's index and tree, and the two
 ; --- arms where the middle shows a head the left does not are ex falso ---
-(assert
+(test
  ; the leaf case, shared by the base and by the step's leaf arm: the middle must
  ; show no head, and its atom carries the equality across
  (defq uv-leaf-trans
@@ -641,7 +641,7 @@
 ; --- pad's own index a -- what makes mx2 and padl reduce -- and the case on b
 ; --- and on the tree is what makes veqd reduce beside it. both argument orders,
 ; --- since a law names its two sides in its own order ---
-(assert
+(test
  (defq uv-padl-fwd
    (pi a nat (pi b nat (pi t (vtre a)
       (paths bool (veqd a t (tpair (mx2 a b) (padl a b t))) true))))
@@ -760,7 +760,7 @@
 ; --- spells, so the proof goes down through the pad, across by the hypothesis,
 ; --- and back up the other pad -- three steps that only compose because veq
 ; --- composes ---
-(assert
+(test
  (defq uv-veq-of (pi u val (pi w val (pi p (paths val u w) (paths bool (veq u w) true))))
    (lam u (lam w (lam p
       (pathscomp0 bool (veq u w) (veq u u) true
@@ -804,7 +804,7 @@
 ; --- as the equality, and paths is a congruence for every function for free.
 ; --- the tightness is a path in nat, hence a proposition, hence invisible to
 ; --- equality; the tree family, mx2 and both pads carry over unchanged ---
-(assert
+(test
  (defn pht (pi d nat (pi t (vtre d) nat))
    (lam d (nat_rect (lam q (pi t (vtre q) nat))
              (lam t 0)
@@ -822,7 +822,7 @@
 
 ; --- what the pin costs: the pad must not move the height. two inductions with
 ; --- the pads' own shape, and a two-argument congruence for the max ---
-(assert
+(test
  (defq uv-mx2-cong
    (pi a nat (pi a2 nat (pi b nat (pi b2 nat
       (pi p (paths nat a a2) (pi q (paths nat b b2)
@@ -893,7 +893,7 @@
 
 ; --- and so the link, carrying its own tightness. this is the same vlink one
 ; --- level down -- the pinned link is a wrapper, not a second construction ---
-(assert
+(test
  (defq uv-ptight-link
    (pi a nat (pi b nat (pi t (vtre a) (pi s (vtre b)
       (pi h1 (paths nat (pht a t) a) (pi h2 (paths nat (pht b s) b)
@@ -921,7 +921,7 @@
 ; --- the hypothesis and back up the other, standing on transitivity; here the
 ; --- congruence is two maponpaths, and the same shape gives it for net, and for
 ; --- any function at all ---
-(assert
+(test
  (defq uv-propirr (pi X UU (pi i (isaprop X) (pi x X (pi y X (paths X x y)))))
    (lam X (lam i (lam x (lam y (pr1 (i x y)))))))
  (defq uv-ptightirr
@@ -950,7 +950,7 @@
 
 ; --- pin: read a value at its own height. the recursion is through plink
 ; --- itself, so nothing here has to tighten a tree by hand ---
-(assert
+(test
  (defn ppin (pi d nat (pi t (vtre d) pval))
    (lam d (nat_rect (lam q (pi t (vtre q) pval))
              (lam t (pleaf t))
@@ -1016,7 +1016,7 @@
 ; --- when the two pin to the same value -- so veq is a decision procedure for
 ; --- paths on the pinned carrier, sound and complete, and every law stated with
 ; --- one can be stated with the other ---
-(assert
+(test
  (defq uv-leaf-pin
    (pi a atm (pi w val (pi h (paths bool (andb (negb (vtwo w)) (aeqb a (vleaf w))) true)
       (paths pval (pleaf a) (pin w)))))
@@ -1184,7 +1184,7 @@
 ; --- fourth is claude.md's own lambda equation read as a colour -- truth is
 ; --- positive green, above the blue floor -- and it is the one that needs the
 ; --- half bit, since a measure at 0 with its half up already ceils to 1 ---
-(assert
+(test
  (defq uv-blue-green (pi v val (paths bool (orb (negb (vblue v)) (vgreen v)) true))
    (lam v (coprod_rect (lam w (paths bool
                           (orb (negb (andb (zblue w) (negb (pr2 (vre v))))) (zgreen w)) true))
@@ -1228,7 +1228,7 @@
 ; --- and the laws the equality unlocks. each is stated as test/law.l states it,
 ; --- and tools/law2uu.l picks these up by NAME -- so if a row moves and the
 ; --- obligation with it, the lemma stops applying and the gate says so ---
-(assert
+(test
  (defq uv-cap-total-d
    (pi d nat (pi t (vtre d)
       (paths bool (orb (vtwod d t) (veq (tpair d t) (vcapd d t))) true)))
@@ -1304,7 +1304,7 @@
 ; --- being re-proved: the pinned link of two pinned values is the pin of their
 ; --- link, the two leaf constructors pin on the nose, and the net is untouched
 ; --- -- so pinning is a change of spelling and not of meaning ---
-(assert
+(test
  (defq uv-madd2
    (pi a msr (pi a2 msr (pi b msr (pi b2 msr
       (pi p (paths msr a a2) (pi q (paths msr b b2)
@@ -1477,7 +1477,7 @@
 ; --- condition itself, and totality becomes the statement that veq decides the
 ; --- equality. that is what a law reads like once its equality is an equality
 ; --- and not a decision procedure ---
-(assert
+(test
  (defq uv-orbfalse
    (pi a bool (pi b bool (pi h (paths bool a false) (pi g (paths bool (orb a b) true)
       (paths bool b true)))))
@@ -1525,7 +1525,7 @@
 ; --- all: they are the types -- vsat lands in nat and vbit in bool, so "a
 ; --- non-negative charm" and "0 or 1" are read off the ladder rather than
 ; --- checked. the demos: the tower computes ---
-(assert
+(test
  (= (vof 0 '(ii1 3))  (vof 0 '(vceil (rval (rmk (ii1 2) true)))))   ; ceil 2.5 = 3
  (= (vof 0 '3)        (vof 0 '(vsat  (rval (rmk (ii1 2) true)))))   ; $2.5 = 3
  (= (vof 0 '0)        (vof 0 '(vsat  (zval (zneg 4)))))             ; $-5 = 0
@@ -1592,7 +1592,7 @@
 ; --- must refuse that one. every negative takes its positive (test/uu.l's rule:
 ; --- a term rejected for the wrong reason is not evidence). ---
 (hear (\ p e (: h (peep HELPC () 0) (? h (h p e) 0))))
-(assert
+(test
  ; ceil is not the identity on the integer part -- the rung that makes the
  ; tower more than five copies of one retraction
  ('accepted = (rejects (\ z (defn uv-ok-ceil (paths zed (rceil (rmk (ii1 2) true)) (ii1 3)) (idpath (ii1 3))))))

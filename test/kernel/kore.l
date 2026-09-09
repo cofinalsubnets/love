@@ -10,7 +10,7 @@
 (: (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
    (wr p s) (: q (open p "w") (? (port? q) (: _ (say q s) _ (close q) 1) 0))
    d "/tmp/l-kore"
- (assert
+ (test
    (= 0 (pwd-main ()))                          ; prints the seat, answers 0
    (= 0 (mkdir-main ["-p" (d + "/a/b")]))
    (udirp (d + "/a/b"))

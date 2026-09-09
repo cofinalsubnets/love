@@ -14,7 +14,7 @@
 ;
 ; the model's reals are the half-integers, so a measure that is neither whole nor
 ; a half is off the corpus and says so (uuval-not-a-half) rather than going quiet.
-(assert (member? 'vof (names ())))
+(test (member? 'vof (names ())))
 
 ; a body-less `:` -- the uv2-* vocabulary leaks; none shadows a nif.
 (:
@@ -80,7 +80,7 @@
              (: _ (puts ("uuval differential FAILED: " + show <>b + " on " + show >>b + "\n")) 0)
              (uv2-run >l)))))
 
-(assert
+(test
  ; the four lanes agree with love over the whole corpus
  (uv2-run uv2-corpus)
  ; ..and the comparison has teeth: the fold over a link is what makes (1 2)
@@ -123,7 +123,7 @@
    (uv3-run l)
     (? (atom? l) 1 (? (uv3-col <l uv3-corpus) (uv3-run >l) 0)))
 
-(assert
+(test
  ; every ordered pair, both operations
  (uv3-run uv3-corpus)
  ; ..and it has teeth: the degeneration is visible in the net, so a cell that

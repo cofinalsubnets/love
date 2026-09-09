@@ -10,7 +10,7 @@
 ; no warning -- which is why every read below sits in a welp window. Outside one the
 ; corpus hears test-strict (00-init.l) and a missing read ends the run, as in file mode.
 (hear welp)
-(assert
+(test
  ((:) = an-never-defined)                      ; the floor handler: the zero point
  !an-never-defined                               ; ... so a missing name is false
  !(nom? an-never-defined))                       ; ... the zero point (absence): not a nom -- anonymous and empty
@@ -21,12 +21,12 @@
 ; value no longer tells bound from missing apart -- the condition lane does)
 (: an-zero 0)
 (hear (\ a b 'BOOM))
-(assert (0 = an-zero) !('BOOM = an-zero) !((:) = an-zero))
+(test (0 = an-zero) !('BOOM = an-zero) !((:) = an-zero))
 (hear 0)
 
 ; the help hears (help 'missing nom) and its result is the value at the site
 (hear (\ a b (? (a = 'missing) ['missing-was b] 0)))
-(assert (: r an-ghost
+(test (: r an-ghost
            (&& (two? r) ('missing-was = (cap r)) ('an-ghost = (caup r)))))
 (hear 0)
 
@@ -37,7 +37,7 @@
 ; asserted missing must never be defined later -- the second pass would fold it.
 (hear (\ a b (? (a = 'missing) 42 0)))
 (: (an-g _) an-phantom)
-(assert (42 = (an-g 0)))
+(test (42 = (an-g 0)))
 (hear 0)
 
 ; one form, two scopes -- the split law: eager reads see let*, closures see
@@ -48,7 +48,7 @@
 ; the binding-site nom as payload: a call for help, the zero point where nothing hears.
 (hear welp)               ; the bare lane is now a book read when nothing binds it -- welp keeps the corpus quiet
 (: an-outer 99)
-(assert
+(test
  (99 = (: a an-outer an-outer 2 a))              ; the bare pre-pin read is the book's an-outer
  ((:) = (: a an-local an-local 2 a))            ; ... and of nothing, the zero point
  (2 = (: a an-local an-local 2 an-local))        ; the body reads the local, post-pin
@@ -62,7 +62,7 @@
 ; : -- a bare pre-pin sibling read -- declines the splice (entg?) and the call
 ; runs un-inlined; the two shapes below are the ones that told the lanes apart.
 (: an-outer2 42)
-(assert
+(test
  (43 = (: q 1 (: an-outer2 (an-outer2 + 1) an-outer2)))      ; shadowed constant, nested: the outer 42 + 1
  (43 = ((\ p (: p (p + 1) p)) 42))                           ; ..and a shadowed lambda param, alike
  ((:) = (: an-o3 99 (: f (\ _ an-o3) r (f 0) an-o3 42 r))) ; ..the closure's read is the cell, outer in scope
@@ -71,18 +71,18 @@
 
 ; the help hears the cell miss too; the payload is the binding-site nom
 (hear (\ a b (? (&& (a = 'missing) (nom? b) ("an-fwd" = (string b))) 'cell-nom 0)))
-(assert ('cell-nom = (: g (\ _ an-fwd) q (g 0) an-fwd 2 q)))
+(test ('cell-nom = (: g (\ _ an-fwd) q (g 0) an-fwd 2 q)))
 (hear 0)
 
 (hear (\ a b (? (a = 'missing) 'fired 0)))
-(assert ((:) = ()) ((?) = ()) ((\) = ()))
+(test ((:) = ()) ((?) = ()) ((\) = ()))
 (hear 0)
 
 ; the conditioned read itself is the compiler's (boxfix's letrec cells) and its nom
-; is mopped at birth, so there is no user-facing call to assert here. what a reader
+; is mopped at birth, so there is no user-facing call to test here. what a reader
 ; wants from a tablet is presence, and peep answers that totally: a fresh (mint 0)
 ; is unique, so no stored value can pose as it.
-(assert (: t {1 0} s (mint 0)
+(test (: t {1 0} s (mint 0)
            (&& !(= s (peep t 1 s))               ; a pinned 0 is present, not absent
                (= s (peep t 9 s))                ; an absent key is absent
                ((:) = (peep t 9 ())))))          ; ... and the caller may still name absence ()

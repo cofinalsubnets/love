@@ -35,12 +35,12 @@
    ; <>s, not (cup s): the tail of (24 80) is the list (80), whose net is 80 --
    ; so the arithmetic below would run on a list and quietly prove nothing
    sizes '((24 80) (1 1) (2 2) (3 3) (1 80) (80 1) (5 7) (200 300))
- _ (assert
+ _ (test
     (0 = (tally (filter (\ p (! (foldl (\ a s (&& a (sound? p <s <>s))) 1 sizes)))
                         plans)))))
 
 ; --- 1. a lone berth is the whole wharf, and wears no bar ---
-(: _ (assert
+(: _ (test
       ('((7 0 0 24 80)) = (wharf-lay 7 24 80))
       (() = (wharf-bars 7 24 80))
       ('(7) = (wharf-berths 7))))
@@ -49,24 +49,24 @@
 ; 39 + 1 + 40 = 80, and the bar stands in the column neither half was given.
 (: bs (wharf-lay '(beside 50 1 2) 24 80)
    br (wharf-bars '(beside 50 1 2) 24 80)
- _ (assert
+ _ (test
     ('((1 0 0 24 39) (2 0 40 24 40)) = bs)
     ('((down 0 39 24)) = br)
     (80 = ((wharf-cols <bs) + 1 + (wharf-cols <>bs)))
     (24 = (wharf-rows <bs))))                   ; the undivided axis is untouched
 
 ; --- 3. stack divides the rows the same way, and its bar lies across ---
-(: _ (assert
+(: _ (test
       ('((1 0 0 11 80) (2 12 0 12 80)) = (wharf-lay '(stack 50 1 2) 24 80))
       ('((across 11 0 80)) = (wharf-bars '(stack 50 1 2) 24 80))))
 
 ; --- 4. pct is a's share of what is left after the bar ---
 (: bs (wharf-lay '(beside 25 1 2) 24 80)
- _ (assert (19 = (wharf-cols <bs)) (60 = (wharf-cols <>bs))))
+ _ (test (19 = (wharf-cols <bs)) (60 = (wharf-cols <>bs))))
 
 ; --- 5. nesting: a plan is a tree, and the halves divide what they were handed ---
 (: p '(beside 50 1 (stack 50 2 3))
- _ (assert
+ _ (test
     ('((1 0 0 24 39) (2 0 40 11 40) (3 12 40 12 40)) = (wharf-lay p 24 80))
     ('((down 0 39 24) (across 11 40 40)) = (wharf-bars p 24 80))
     ('(1 2 3) = (wharf-berths p))))
@@ -77,7 +77,7 @@
 (: p '(beside 50 1 2)
    b3 (wharf-lay p 24 3)
    b2 (wharf-lay p 24 2)
- _ (assert
+ _ (test
     ('((1 0 0 24 1) (2 0 2 24 1)) = b3)         ; 1 + bar + 1
     (two? (wharf-bars p 24 3))
     ('((1 0 0 24 2) (2 0 0 24 0)) = b2)         ; no bar, and b is at the corner
@@ -88,7 +88,7 @@
 
 ; --- 7. the hit test: bars belong to nobody ---
 (: bs (wharf-lay '(beside 50 1 (stack 50 2 3)) 24 80)
- _ (assert
+ _ (test
     (1 = (wharf-at bs 0 0))
     (() = (wharf-at bs 0 39))                   ; the bar's own column
     (2 = (wharf-at bs 0 40))
@@ -102,7 +102,7 @@
 ; --- 8. steering: nearest past the edge, other axis overlapping ---
 ; the wall is a no-op rather than a condition, and so is a focus that has been shut.
 (: bs (wharf-lay '(beside 50 1 (stack 50 2 3)) 24 80)
- _ (assert
+ _ (test
     (2 = (wharf-steer bs 1 'right))             ; ties on gap break to the nearer row
     (1 = (wharf-steer bs 2 'left))
     (1 = (wharf-steer bs 3 'left))              ; one tall berth reached from either
@@ -115,17 +115,17 @@
 
 ; --- 8a. an unshowable berth is never steered to ---
 (: bs (wharf-lay '(beside 50 1 2) 24 2)
- _ (assert (1 = (wharf-steer bs 1 'right))))
+ _ (test (1 = (wharf-steer bs 1 'right))))
 
 ; --- 9. splitting names the new berth, and leaves the rest of the plan alone ---
-(: _ (assert
+(: _ (test
       ('(stack 50 2 5) = (wharf-split 2 2 'stack 50 5))
       ('(beside 50 1 (stack 50 2 5)) = (wharf-split '(beside 50 1 2) 2 'stack 50 5))
       ('(beside 50 1 2) = (wharf-split '(beside 50 1 2) 99 'stack 50 5))))
 
 ; --- 10. shutting promotes the sibling: the pair's whole rectangle, bar included ---
 (: p (wharf-shut '(beside 50 1 (stack 50 2 3)) 2)
- _ (assert
+ _ (test
     ('(beside 50 1 3) = p)
     ('((1 0 0 24 39) (3 0 40 24 40)) = (wharf-lay p 24 80))
     (() = (wharf-shut 7 7))                     ; the last one leaves an empty wharf
@@ -133,7 +133,7 @@
     (1 = (wharf-shut '(beside 50 1 2) 2))))
 
 ; --- 10a. the empty wharf holds nothing, and is not a berth named () ---
-(: _ (assert
+(: _ (test
       (() = (wharf-lay () 24 80))
       (() = (wharf-bars () 24 80))
       (() = (wharf-berths ()))
@@ -141,7 +141,7 @@
 
 ; --- 11. split then shut is the identity on the plan ---
 (: p '(beside 25 1 (stack 75 2 3))
- _ (assert (p = (wharf-shut (wharf-split p 3 'beside 50 4) 4))))
+ _ (test (p = (wharf-shut (wharf-split p 3 'beside 50 4) 4))))
 
 (test_fin ())
 (puts "wharf: ok")

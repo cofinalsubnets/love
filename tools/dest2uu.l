@@ -102,7 +102,7 @@
    _ (puts "\n; br9 jmp10 label11 call12 ret13 push14 pop15 (the sp shuttle rides push/pop).")
    _ (puts "\n; Each source form is printed over its term. Laws: test/uuhomlaw.l; substrate:")
    _ (puts "\n; test/uuhom.l over test/uu.l (the kernel).")
-   _ (puts "\n(assert")
+   _ (puts "\n(test")
    _ (each progs emit1)
    _ (puts ")\n")
    0)
