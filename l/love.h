@@ -40,6 +40,15 @@
 #define ai_tco 1
 #endif
 
+// which libc is under us. mooncc links moonlibc and nothing else, and moonlibc
+// carries every door on all three kernels (apps/moon/include/sys) -- so which
+// doors a lane may CALL is a build fact here and a box fact under a foreign
+// libc, which is the distinction inle/posix.c's ladder is written against. the
+// ambient-cc lane (love0, glibc) takes that ladder's kernel arms instead.
+#if defined(__mooncc__) && !defined(AiNolibc)
+#define AiNolibc 1
+#endif
+
 // musttail IS the tail-threaded vm: without it every dispatch keeps its frame and a
 // long read overflows the stack, so tco=1 without it is not slower, it is broken.
 // refuse rather than ship it, and name the lane that works -- tco=0 is the trampoline.
