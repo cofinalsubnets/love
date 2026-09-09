@@ -819,6 +819,14 @@ lvm(lvm_elem) { word x = Sp[0], l = Sp[1];
   if (ai_eq_value(g, x, A(l))) ai_musttail return Push(putcharm(1));
  ai_musttail return Push(zero); }
 
+// (eleq x l): elem under `==` rather than `=` -- identity, so a pointer compare a link
+// and never a call. the two part company exactly where == and = do: a ratio coin, a
+// float, a tray, and any two chains built apart.
+lvm(lvm_eleq) { word x = Sp[0], l = Sp[1];
+ for (; chainp(l) && !nomp(l); l = B(l))
+  if (A(l) == x) ai_musttail return Push(putcharm(1));
+ ai_musttail return Push(zero); }
+
 // ============================================================================
 // obin -- object-array elementwise lane (ai_O)
 // ============================================================================

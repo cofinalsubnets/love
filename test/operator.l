@@ -68,3 +68,12 @@
       (1 != 2) (1 !== 2)                     ; two charms differ both ways
       (1 == 1) !(1 !== 1)                    ; ..and an equal charm IS the same one
       ((a != b) = 0) ((a !== b) = 1)))       ; both answer the exact booleans
+; elem and eleq are the same walk under = and ==, so they part company exactly where
+; those two do: a ratio coin reads in the number band, an identity compare cannot.
+(: r (/// 1 1)
+   (test
+      (elem r '(1 2 3)) !(eleq r '(1 2 3))    ; 1/1 IS 1 by value, and is not the same word
+      (elem 1 (list r 2)) !(eleq 1 (list r 2))
+      (elem 'b '(a b)) (eleq 'b '(a b))       ; a nom is its own equality either way
+      !(elem 'z '(a b)) !(eleq 'z '(a b))
+      (elem '(1 2) '((1 2))) !(eleq '(1 2) '((1 2))))) ; two chains built apart

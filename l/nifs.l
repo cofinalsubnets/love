@@ -41,6 +41,7 @@
       (nif_gt            ">"             2 lvm_gt)
       (nif_same          "=="            2 lvm_same)
       (nif_elem          "elem"          2 lvm_elem)
+      (nif_eleq          "eleq"          2 lvm_eleq)
       (nif_bsl           "<<"            2 lvm_bsl)
       (nif_bsr           ">>"            2 lvm_bsr)
       (nif_band          "&"             2 lvm_band)
