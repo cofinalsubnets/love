@@ -1210,13 +1210,3 @@
          ev)
 )
 
-; --- elem re-declared through the glazed compiler: the point-= grammar closes the singleton group,
-; so the prel walker (egg-baked, interp) is re-stated here and autogroup hands back the native. post-boot
-; streams fold it; egg-baked consumers keep the interp closure they already folded. the gates mirror the
-; ev rebind's, and charm and string keys deopt at the entry guard, only interp knowing (2 = 2.0).
-; like `ev` this is orth's name, so the boot installs it: (: elem (cite 'glaze 'elem)).
-; two forms: memb0 must read the outer elem, where one scope would read the rebind before its pin.
-(: memb0 elem)
-(: elem (? glaze-loaded? memb0 (0 < love-tco)
-              (ev '(: (elem x l) (? (two? l) (? (= x (cap l)) 1 (elem x (cup l))) 0) elem))
-              memb0))

@@ -77,3 +77,11 @@
       (elem 'b '(a b)) (eleq 'b '(a b))       ; a nom is its own equality either way
       !(elem 'z '(a b)) !(eleq 'z '(a b))
       (elem '(1 2) '((1 2))) !(eleq '(1 2) '((1 2))))) ; two chains built apart
+; assoc and assq are the pair-walkers of the same two questions: assoc reads keys with
+; `=`, assq with `==`, so a ratio key finds a charm row only through assoc.
+(: rows (list (list (/// 1 1) 'ratio) '(b two))
+   (test
+      (assoc 1 rows = (list (/// 1 1) 'ratio))   ; 1 IS 1/1 by value
+      (nil? (assq 1 rows))                       ; ..and is not the same word
+      (assoc 'b rows = '(b two)) (assq 'b rows = '(b two))
+      (nil? (assoc 'z rows)) (nil? (assq 'z rows))))

@@ -158,7 +158,7 @@
      ; so it stays outside. not a module blob: an unglazed build must not pay for it.
      "#ifdef AiGlazed"
      ['src_glaze_z ["(borrow 'holo)(module 'glaze " 'emit 'auto ")"
-                    "(: ev (cite 'glaze 'ev) elem (cite 'glaze 'elem))"
+                    "(: ev (cite 'glaze 'ev))"
                     'hook 'walk 'holo 'x64 'a64]]
      "#endif"]
    (text items) (foldl (\ a i (a + (string? i ? i (file i)))) "" items)

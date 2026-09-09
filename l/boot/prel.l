@@ -192,6 +192,9 @@
 )
 (: catmap (compose (flip foldr ()) (compose cat))
    (assoc x l) (? (two? l) (? (= x (caap l)) (cap l) (assoc x (cup l))))
+   ; assoc's identity twin, as eleq is elem's: a key that is a nom or a charm wants no
+   ; structural walk, and `==` says so in one word.
+   (assq x l) (? (two? l) (? (== x (caap l)) (cap l) (assq x (cup l))))
    (lidx x) ((: (f n l) (? (two? l) (? (= x (cap l)) n (f (+ 1 n) (cup l))) -1)) 0)
    (zip a b) (? (two? a) (? (two? b) (. (. (cap a) (cap b)) (zip (cup a) (cup b)))))
    rev (foldl (flip (.)) ())
