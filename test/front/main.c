@@ -309,16 +309,16 @@ static union u const
   nif_wcap[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_wcap},   {lvm_ret0}};
 
 static struct ai_def const defs[] = {
-  {"quit",   {.k = nif_quit}},
-  {"dev",    {.k = nif_dev}},
-  {"feed",   {.k = nif_feed}},
-  {"shut",   {.k = nif_shut}},
-  {"stall",  {.k = nif_stall}},
-  {"wstall", {.k = nif_wstall}},
-  {"wcap",   {.k = nif_wcap}},
-  {"sent",   {.k = nif_sent}},
-  {"wpending", {.k = nif_wpend}},
-  {"naps",   {.k = nif_naps}} };
+  {"quit",   {.k = nif_quit}, NULL},
+  {"dev",    {.k = nif_dev}, NULL},
+  {"feed",   {.k = nif_feed}, NULL},
+  {"shut",   {.k = nif_shut}, NULL},
+  {"stall",  {.k = nif_stall}, NULL},
+  {"wstall", {.k = nif_wstall}, NULL},
+  {"wcap",   {.k = nif_wcap}, NULL},
+  {"sent",   {.k = nif_sent}, NULL},
+  {"wpending", {.k = nif_wpend}, NULL},
+  {"naps",   {.k = nif_naps}, NULL} };
 
 // --- the boot --------------------------------------------------------------
 
