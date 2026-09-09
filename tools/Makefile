@@ -5,7 +5,7 @@
 # `make test_tools` from the repo root, or `make -C tools` here.
 
 R := ..
-include $(R)/mk/common.mk
+include $(R)/common.mk
 
 # the love spelled from the REPO ROOT, for the recipes that `cd $(R)` first
 # (where $(m)'s ../ prefix would point one level above the root).

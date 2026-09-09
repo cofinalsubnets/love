@@ -169,11 +169,9 @@ a.c: ;@touch a.c
 E
 # A PATTERN WHOSE PREREQUISITE CANNOT BE MADE DOES NOT APPLY. make rejects the
 # rule and tries the next; with none left, a target that exists on disk is a source
-# leaf and is done. cook took the unmatchable rule as a LAST RESORT instead and
-# demanded a file nobody makes -- and since mk/common.mk cancels make's lex rule
-# (`%.c: %.l`, this tree being full of `<name>.l` beside `<name>.c`), EVERY .c in
-# the tree matched: `make -f mk/cook.mk all` died on "no recipe to make l/love.l".
-# Cook's whole job is this tree's own Makefile, and none of the cases above noticed.
+# leaf and is done. taking the unmatchable rule as a LAST RESORT instead demands a
+# file nobody makes -- and common.mk cancels make's lex rule (`%.c: %.l`, this tree
+# being full of `<name>.l` beside `<name>.c`), so every .c in the tree would match.
 case_ patrule_reject same <<'E'
 $(shell printf 'int x;\n' > src.c)
 %.c: %.l ; @echo "LEXED $<"

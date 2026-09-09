@@ -3,7 +3,7 @@
 // shipped love carries, so it carries none itself, and its whole job is the corpus --
 // a build tool from the command line, the self-test with no arguments.
 //
-// its own translation unit because that IS the seat boundary. mk/common.mk keeps this
+// its own translation unit because that IS the seat boundary. common.mk keeps this
 // file out of host_c and the Makefile names it into love0_o, the way i/cats.c is
 // named out of love0's list: main.c holds what both seats do, and the two things only
 // love0 does -- the pasted boot texts and the twice-run corpus -- live here.

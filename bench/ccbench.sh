@@ -74,14 +74,14 @@ rm -rf "$WORK"; mkdir -p "$WORK"
 # shim pass straight through to the real compiler, every unit compiled for real.
 export CCACHE_DISABLE=1
 
-# the corpus, byte-identical to mk/common.mk's `t`: 00-init/spec/uu front-loaded, then
+# the corpus, byte-identical to common.mk's `t`: 00-init/spec/uu front-loaded, then
 # every other test/*.l in byte order (glaze-x86 excluded -- it needs emit.l ahead and
 # runs x86 native under its own guard). The Makefile passes it in $CORPUS; recompute
 # it for a standalone run.
 CORPUS=${CORPUS:-"$R/test/00-init.l $R/test/spec.l $R/test/uu.l $(ls "$R"/test/*.l 2>/dev/null | grep -vE '/(00-init|spec|glaze-x86|uu)\.l$' | LC_ALL=C sort)"}
 
 # the host's real C flags come from the Makefile ($(ai_cflags)); fall back to a
-# matching set (mk/common.mk) for a standalone run.
+# matching set (common.mk) for a standalone run.
 if [ -z "$LOVE_CFLAGS" ]; then
   LOVE_CFLAGS="-std=c11 -g -O2 -pipe -Wall -Wextra -Werror -Wstrict-prototypes -Wno-unused-parameter -Wmissing-field-initializers -Wno-implicit-fallthrough -falign-functions=16 -fomit-frame-pointer -fno-stack-check -fno-stack-protector -fno-exceptions -fno-asynchronous-unwind-tables"
   LOVE_CFLAGS="$LOVE_CFLAGS -fcf-protection=none -D_POSIX_C_SOURCE=200809L"
@@ -91,11 +91,11 @@ fi
 # throughput -- gcc's -Wall flags a benign construct in l/love.c (-Wmisleading-indentation)
 # that clang doesn't, and that shouldn't scratch it from a SPEED race.
 CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/love -I$R/i -I$R/out/lib"
-# the hosted TU roster, mk/common.mk's spelling: the core (love_tu + the codec) under
+# the hosted TU roster, common.mk's spelling: the core (love_tu + the codec) under
 # l/, and the host set is i/ less the kernel's own six
 love_tu="love gc ev io map snap num arr gz"
 host_cs=$(ls "$R"/i/*.c | grep -v '/\(kmain\|blk\|hda\|sys\|doom\|doomsnd\)\.c$')
-# mk/common.mk's $(data_ld), which a bench link owes exactly as a host link does: the data
+# common.mk's $(data_ld), which a bench link owes exactly as a host link does: the data
 # sentinels' tiling IS l/love.h's ai_typ, and ld left to itself keeps each love.data.N an
 # orphan in first-encountered order -- gcc emits love.data.7 first, so lvm_str lands
 # below lvm_sym and every string reads as a closure.

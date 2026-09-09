@@ -12,7 +12,7 @@ o = ../../out/wasm
 # works until it does not. common.mk carries love_tu, so this reads the membership the
 # rest of the tree reads. g_h is core whole, so every object keeps a header dep.
 R := ../..
-include $(R)/mk/common.mk
+include $(R)/common.mk
 g_c = $(patsubst %,../../l/%,$(love_tu)) ../../apps/moon/lib/moonlibc/math/am.c \
       ../../i/horn.c
 g_h = $(wildcard ../../l/*.h)

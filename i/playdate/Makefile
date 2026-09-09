@@ -13,7 +13,7 @@
 # delegated to the root), apps/rune.l as a registered module, and cas.l (this
 # folder, lcat'd locally) driving the workbench. See main.c + pdglue.c.
 R := ../..
-include $(R)/mk/common.mk
+include $(R)/common.mk
 
 o = $(R)/out/playdate
 n = love
@@ -53,7 +53,7 @@ pd_h = $(love_h) $(wildcard $(R)/l/quay/*.h) $(o)/cas.h $(lib_hs)
 # (the pd_api.h owner) + the SDK's setup.c. the sim build compiles everything
 # hosted, so pd_src keeps the full wildcard.
 pd_local_c = $(wildcard *.c)
-# love_c already carries the codecs (mk/common.mk's core_tu = love_tu + love_codec),
+# love_c already carries the codecs (common.mk's core_tu = love_tu + love_codec),
 # so naming them again here is one roster too many -- and the second one pointed at
 # src/, which the flatten retired.
 # l/bare.c is the null seat: this frontend supplies main and the SDK supplies the

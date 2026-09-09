@@ -9,7 +9,7 @@
 ; second filesystem.
 ;
 ; THE ROSTER IS AN ORDERING, NOT A SET. 00-init, spec and uu go first exactly as
-; mk/common.mk's `t` front-loads them: a locale sort puts uukind* before uu.l and
+; common.mk's `t` front-loads them: a locale sort puts uukind* before uu.l and
 ; would run those laws against an unloaded kernel. the kernel half is a dependency
 ; order too -- kore0.l pins `quit` for every member behind it, and each crew file
 ; lands before the laws that ask about it.
@@ -27,7 +27,7 @@
 ; would otherwise drop a whole file's laws and leave the gate green.
 (: (feed p) (: q (open p "r")
                  (? (port? q) (: _ (reads q) (close q)) (scare 'no-corpus-member p)))
-   ; the host corpus is mk/common.mk's `t`, held back exactly where `t` holds back --
+   ; the host corpus is common.mk's `t`, held back exactly where `t` holds back --
    ; the three front-loads and the two glaze lanes -- plus zz-fin.l, which is the summary
    ; and rides at the foot. NOTHING ELSE: a file a seat cannot run guards itself, in its
    ; own text where the reason is readable (run.l is one whole `(? hosted ..)`), never in

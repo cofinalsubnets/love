@@ -1210,7 +1210,7 @@
              ; ahead of the dash refusal, and the only arg that is: a bare `-` is an
              ; input, the source on stdin. every configure probe on earth writes
              ; `cc -x c -c -o /dev/null -` before it trusts a flag, and a cc that cannot
-             ; be asked gets answered by the fallback -- ours is mk/common.mk's, which
+             ; be asked gets answered by the fallback -- ours is common.mk's, which
              ; then hands us the one -std= spelling we refuse.
              (a = "-") (flags r (fpush t 'ins a))
              ((0 < tally a) && (a 0 = 45)) (udie 2 usage)

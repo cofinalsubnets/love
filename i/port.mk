@@ -12,7 +12,7 @@
 R := ../..
 # the shared variables, love_tu among them: a port reads the membership rather than
 # restating it, since nothing in a makefile can see that a list has grown.
-include $(R)/mk/common.mk
+include $(R)/common.mk
 p_dir = $(notdir $(CURDIR))
 o = out/$(p_dir)
 # mooncc is love's own verb (the layered bake). MOONCC is the
@@ -73,7 +73,7 @@ kore_lc = $(subst $(R)/,,$(kore_l))
 be_lc   = $(subst $(R)/,,$(p_be_l))
 
 # the runtime a bare seat links: love_tu's seven translation units and love_codec's pair
-# (mk/common.mk names both). a port compiles every one under its own <x>_cc, since love.c
+# (common.mk names both). a port compiles every one under its own <x>_cc, since love.c
 # owes the other six and snap.c owes the codecs. love_m is the object stems, love_dep what
 # each one watches.
 # ..plus l/bare.c, the answers a seat with no OS under it gives to the runtime's own
@@ -84,7 +84,7 @@ love_dep = $(love_h) $(lib_hR) $(mc)
 love_o   = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(love_m)))
 
 # moonlibc's pure members: the libc a bare-metal seat gets, the same six the kernel takes
-# (mk/common.mk) out of the same source -- there is no second libc in this tree. A port
+# (common.mk) out of the same source -- there is no second libc in this tree. A port
 # lays them with a foreach over libc_m under its own <x>_cc. -Iapps/moon/include is
 # owed: the members open with impl.h, whose hosted declarations cost compile time and
 # nothing else -- the six owe ONE symbol between them (memmove's memcpy), and it is one

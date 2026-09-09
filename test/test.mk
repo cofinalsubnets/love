@@ -1,6 +1,6 @@
 # test/test.mk -- the test_* gates (and the uuwm/uukind corpus generators).
 # A fragment of the root Makefile, included by ./Makefile and invoked from the
-# project root; paths resolve from there. Shared vars live in mk/common.mk.
+# project root; paths resolve from there. Shared vars live in common.mk.
 
 # EVERY gate below is phony, this roster included -- a gate whose name is missing here
 # stops running the day a file of that name appears. Generated from what this file
@@ -594,7 +594,7 @@ test_raw: host
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
 	  sh test/gate/raw.sh x64 $(ho) $m $t
 # test_tco0 -- THE TRAMPOLINE, at full strength. `tco=0` is a documented knob
-# (mk/common.mk) and it had rotted to a segfault in `bake`: the glaze emits the
+# (common.mk) and it had rotted to a segfault in `bake`: the glaze emits the
 # TAIL-THREADED lvm shape, and nothing stopped a trampoline build from calling it.
 # love0 is the tree's other tco=0 lane and it cannot cover this -- it is the
 # LoveBoot branch, which never reaches AiGlazed, so the one build that exercised
@@ -1323,7 +1323,7 @@ endif
 
 NODE ?= $(shell command -v node 2>/dev/null)
 # test_wasm rides moon's OWN module (make wasm -> out/wasm/love.wasm) under the loader,
-# no emcc. THE CORPUS IS NOT HERE any more: test/kernel/all.l reads mk/common.mk's own `t`
+# no emcc. THE CORPUS IS NOT HERE any more: test/kernel/all.l reads common.mk's own `t`
 # off the ramfs, so test_kernel_wasm already runs it on the kernel module, woken image and
 # all -- one wasm build of the same TUs, one corpus. what is left is the two seams the
 # machine has not grown: quay's cells laid as html, and the horn's PCM into WebAudio.

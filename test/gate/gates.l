@@ -7,7 +7,7 @@
 ; test/00-init.l comes first and stays: `test` publishes globally (`::`, `hear`) and the
 ; tablet it records into is one, so a single count covers every row.
 ;
-; the file lives here, not in test/: $t (mk/common.mk) globs test/*.l non-recursively, so a
+; the file lives here, not in test/: $t (common.mk) globs test/*.l non-recursively, so a
 ; driver named there joins the corpus.
 (: _ (borrow 'posix)
    _ (borrow "test/00-init.l")

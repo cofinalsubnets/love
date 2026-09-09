@@ -1213,7 +1213,7 @@
       ; a pattern whose source cannot be had does not apply -- make rejects it and
       ; tries the next, and with none left the target is a source leaf that is
       ; already on disk. Taking one as a last resort demands a file nobody makes:
-      ; `%.c: %.l` (mk/common.mk cancels make's lex rule, since this tree is full of
+      ; `%.c: %.l` (common.mk cancels make's lex rule, since this tree is full of
       ; `<name>.l` beside `<name>.c`) had cook asking for l/love.l. "Can be had"
       ; is exists-or-has-a-card -- no intermediates, per the note above.
       (phave? p item) (: s (psrc p item) (|| (exists? s) (two? (peep cards s ()))))

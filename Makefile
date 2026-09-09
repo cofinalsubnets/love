@@ -1,5 +1,5 @@
 R ?= .
-include $(R)/mk/common.mk
+include $(R)/common.mk
 
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
