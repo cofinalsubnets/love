@@ -195,7 +195,7 @@
                 pre (tar-txt s (o + 345) 155)
                 nom (? (tally pre) (pre + "/" + name) name)
                 tc (s (o + 156))
-                kind (? (tc = 53) 'dir (member? tc '(50 49)) 'link 'file)   ; '5' '2'/'1'
+                kind (? (tc = 53) 'dir (elem tc '(50 49)) 'link 'file)   ; '5' '2'/'1'
                 sz (kind == 'file && tar-oct s (o + 124) 12)
                 ; a member whose body runs past the end of the bytes we were handed
                 ; is a truncated archive, and the size field is where that shows.

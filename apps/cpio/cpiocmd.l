@@ -153,13 +153,13 @@
                  (: (cl i rest)
                      (? (n <= i) (go rest)
                         (: c (w i)
-                           (? (member? c '(111 105 116))            ; -o -i -t
+                           (? (elem c '(111 105 116))            ; -o -i -t
                               (: _ (pin t 'mode (? (c = 111) 'o (c = 105) 'i 't))
                                  (cl (i + 1) rest))
-                              (member? c '(100 117 118))            ; -d -u -v
+                              (elem c '(100 117 118))            ; -d -u -v
                                (: _ (pin t (? (c = 100) 'd (c = 117) 'u 'v) 1)
                                   (cl (i + 1) rest))
-                              (member? c '(72 70 73 79))            ; -H -F -I -O
+                              (elem c '(72 70 73 79))            ; -H -F -I -O
                                (: glue (snip w (i + 1) n)
                                   v (0 < #glue ? glue (two? rest && <rest))
                                   rest2 (0 < #glue ? rest (two? rest ? >rest rest))

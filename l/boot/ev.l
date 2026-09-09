@@ -31,7 +31,7 @@
           '(// << >> ^
             == gcd modpow abs
             . cap cup caap caup cuap cuup
-            dig lidx assoc member? last rev cat
+            dig lidx assoc elem last rev cat
             charm? nom? two? tablet? lit? string? nil? gem? twin? atom?
             snip string
             re im conj arg gem twin
@@ -246,7 +246,7 @@
    ; lrd/lrdl: does x read any name in ms? the whole row in one walk, where wl asks per name --
    ; and no macro lane, cprop's output having none (the same reading wx's own fold takes).
    (lrd ms x bnd) (?
-    (nom? x) (member? x ms && nil? (member? x bnd))
+    (nom? x) (elem x ms && nil? (elem x bnd))
     (atom? x) 0
     (<x == '\) (atom? >>x ? 0 (: r (lp x) (lrd ms >r (<r + bnd))))
     (<x == ':) (lrdl ms >x (ln >x + bnd))
@@ -257,7 +257,7 @@
    (lflat bs) (: t (lend bs)
     (? !(two? t && lsub? <t) bs
      (: b <t ns (ln bs) ms (ln >b)
-      (? (any (\ m (member? m ns)) ms) bs                            ; a name collision
+      (? (any (\ m (elem m ns)) ms) bs                            ; a name collision
          (lrdl ms bs ns) bs                                          ; an outer def reads an inner name
          (lflat (lup bs))))))
    ; --- the identity kit: unchanged -> the original, no copy --------------------------------
@@ -302,7 +302,7 @@
               (? <c (1 . !>c)       ; kconst knows it (atom / quote literal)
                  (atom? >t && atom? <t && !(nom? <t)) (1 . !<t)  ; plus (c) == c: a folded monadic (opfix wraps (! e) -> ((nil? e)), so a folded test lands wrapped)
                  0))
-   (wxc bs bnd) (: fb (cflip bs (member? 'nil? bnd))
+   (wxc bs bnd) (: fb (cflip bs (elem 'nil? bnd))
     (? (atom? fb) [()]                           ; clauses ran out: implicit () else (nil-ontology)
        (atom? >fb) (keep1 fb (wx <fb bnd))      ; the lone else
        (: t (wx <fb bnd) k (cst t)               ; walk the test; is it a static constant?
@@ -325,7 +325,7 @@
        ; straight; without this every `<x` in the tree would pay the generic apply.
        (nil? (nom? h)) (: hd (charm? h || two? h ? 0 (feels h))
                           (? hd (hd x) (apx . 0 . x)))
-       (member? h bnd) (apx . 0 . x)                    ; a shadowed name: local head
+       (elem h bnd) (apx . 0 . x)                    ; a shadowed name: local head
        (: v (gv h ()) hd (feels v)
         (? hd (hd x) (apx . napof v >x . x)))))
    ; cprop: the partial-evaluation pre-pass. it threads a static VALUE env `se` (name . const-form)
@@ -412,7 +412,7 @@
     (nom? <x) (!(macros <x) && all smpl? x)
     (all smpl? x))
    (fvs x bs) (?                                                                       ; free vars of a simple term
-    (nom? x) (x == () || member? x bs ? () [x])
+    (nom? x) (x == () || elem x bs ? () [x])
     (atom? x) ()
     (== <x '\) (two? >>x ? (: r (lp x) (fvs (last x) (<r + bs))))
     (foldl (a \ e \ a + fvs e bs) () x))
@@ -421,10 +421,10 @@
     (atom? x) 1
     (<x == '?) (all (e \ pbody? e bnd) >x)
     (<x == '\) (? (atom? >>x) 1 (: r (lp x) (pbody? (last x) (<r + bnd))))
-    (nom? <x) ((pure-head? <x >x || member? <x bnd) && all (e \ pbody? e bnd) >x)
+    (nom? <x) ((pure-head? <x >x || elem <x bnd) && all (e \ pbody? e bnd) >x)
     (all (e \ pbody? e bnd) x))
    (inlinable? nm lam) (lambp lam && smpl? lam && closedl? lam && pbody? lam () && !(w nm lam 0 0 0))
-   (rmkeys ps env) (filter (\ p !(member? <p ps)) env)                         ; drop shadowed substitutions
+   (rmkeys ps env) (filter (\ p !(elem <p ps)) env)                         ; drop shadowed substitutions
    (colnms bs) (atom? >bs ? ()                                                  ; the : letrec's binder noms (sugar already lowered to \ by cpbinds)
                 (: n <bs (nom? n ? (n . colnms >>bs) (colnms >>bs))))
    (bsub env x) (?                                                                     ; capture-avoiding substitution
@@ -459,9 +459,9 @@
    (rdn v x) (?
     (nom? x) (x == v)
     (atom? x) 0
-    (<x == '\) (atom? >>x ? 0 (: r (lp x) (member? v <r ? 0 (2 * (rdn v (last x))))))
+    (<x == '\) (atom? >>x ? 0 (: r (lp x) (elem v <r ? 0 (2 * (rdn v (last x))))))
     (<x == '?) (2 * foldl (a \ e \ a + rdn v e) 0 >x)
-    (<x == ':) (member? v (colnms >x) ? 0 (foldl (a \ e \ a + rdn v e) 0 >x))
+    (<x == ':) (elem v (colnms >x) ? 0 (foldl (a \ e \ a + rdn v e) 0 >x))
     (foldl (a \ e \ a + rdn v e) 0 x))
    (lasti ps as se) (atom? ps ? -1                                             ; index of the last effectful arg, -1 = none
     (: k (lasti >ps >as se)
@@ -491,8 +491,8 @@
    ; two or three compares.
    (cplam x se fl op bnd pb) (atom? >>x ? x                                       ; (\ v) quote -> leave
     (: r (lp x)
-     (? (any (p \ p != '_ && member? p pb) <r)
-        (cplam (foldl (\ z p (? (p != '_ && member? p pb) (sub1 z p (nom 0)) z)) x <r) se fl op bnd pb)
+     (? (any (p \ p != '_ && elem p pb) <r)
+        (cplam (foldl (\ z p (? (p != '_ && elem p pb) (sub1 z p (nom 0)) z)) x <r) se fl op bnd pb)
         (relam x r (cprop >r (rmkeys <r se) fl 0 (<r + bnd) (<r + pb))))))          ; the body is a value -> op 0
    ; the new-law guard (eager reads see let*, closures see letrec*): bsub renames a :'s
    ; binders over the whole form -- letrec-wise -- but a bare read before its name's pin
@@ -508,7 +508,7 @@
        (walk bs pn) (?
         (atom? bs) 0
         (atom? >bs) (entg? <bs)
-        (? (any (\ v (nil? (member? v pn) && occn v <>bs)) nms) 1
+        (? (any (\ v (nil? (elem v pn) && occn v <>bs)) nms) 1
            (entg? <>bs) 1
            (walk >>bs (<bs . pn))))
        (walk >x ()))
@@ -533,7 +533,7 @@
     ': (ln >x @ ns (keep x (cpbinds >x (rmkeys ns se) fl op (ns + bnd) pb) ':))
     '? (keep x (mapi (e \ cprop e se fl op bnd pb) >x) '?)              ; no prune here -- wxc does it
     h (: m (? (nom? h) (macros h) 0)                                          ; macro head, not shadowed? expand on raw args -- a
-       (? (m && !(member? h bnd)) (cprop (m >x) se fl op bnd pb)                  ; structural macro (a two?/cap probe) must see them
+       (? (m && !(elem h bnd)) (cprop (m >x) se fl op bnd pb)                  ; structural macro (a two?/cap probe) must see them
           (: as (mapi (e \ cprop e se fl 0 bnd pb) >x)
              hr (nom? h ? (: e (assq h se) (atom? e ? h <>e)) (cprop h se fl 1 bnd pb)) ; head is consumed -> op 1
              h2 (nom? h ? (propk? hr && (kind hr) != 'lambda ? hr h) hr)       ; the emitted head: a const-bound nom is its value -- a closure stays a nom (the frame imports the name and the glaze reads it)
@@ -545,7 +545,7 @@
                      (: red (cprop (beta hr as) se (fl - 1) op bnd pb)                       ; known lambda -> beta, re-cprop (fuel-bounded)
                       (op || !(lambp red) ? red (keep2 x h2 as)))                    ; escaping lambda result -> revert (keep the closure)
                     (bspl x h h2 hr as se fl op bnd pb))                                     ;    foldc/cpap are dead for a lambda head, so its decline keeps the call)
-                (nom? h && allk as && !(member? h bnd) && pure-head? h as)            ; pure-fn on consts -> fold. bnd-guarded: a binder
+                (nom? h && allk as && !(elem h bnd) && pure-head? h as)            ; pure-fn on consts -> fold. bnd-guarded: a binder
                   (foldc (gv h ()) as)                                                ;   spelled like an op still shadows (the alpha law)
                 ; the same fold for a head that arrived as a VALUE -- a macro splice ([a b] is
                 ; prel's list, which splices the link nif). the purity tables are keyed by value,
@@ -681,7 +681,7 @@
                   p * q))
   (ava c x) (avw c c x)
   (shadowed? c d x) (: far (d 'far)
-   (tablet? far && 0 <= peep far x -1 && !(member? x (d 'par 'stk))))
+   (tablet? far && 0 <= peep far x -1 && !(elem x (d 'par 'stk))))
   (avw c d x)
    (? !d ; outside all lexical scopes?
     (: y (gv x gone) (y == gone ? (em2 lvm_index x) (kim y)))   ; ==, not the pin: see gv
@@ -693,7 +693,7 @@
            (stki d2) (lidx x (d2 'imp + d2 'arg))
            (q i j m) (karg (i + stki c) j m)
          (?- (avw c (d 'par) x)
-          (member? x s) (? home (karg (lidx x s))
+          (elem x s) (? home (karg (lidx x s))
                          (c 'par ? (push c 'imp x), q #(c 'stk)))
           (stki d >= 0) (? home (q #(c 'stk))
                          (c 'par ? (push c 'imp x), q #(c 'stk))))))))
@@ -766,10 +766,10 @@
      ; `monofix` repeats the pass until `capsize` stops growing -- the pass mutates the cells and
      ; returns the same list, so monofix's snapshot-before size catches each pass's growth.
      (pour e1 e2) (each >(cof e1)                         ; pour e1's imports into e2 (skip dups; prepend)
-        (var \ member? var >(cof e2) ? 0 (cput e2 (<(cof e2) . var . >(cof e2)))))
+        (var \ elem var >(cof e2) ? 0 (cput e2 (<(cof e2) . var . >(cof e2)))))
      (pass1 lst k1 k2) (? (atom? k1) lst                       ; one full sweep over ordered pairs k1 x k2
         (atom? k2) (pass1 lst >k1 lst)                    ; k2 done -> next k1, reset k2
-        (k1 != k2 && member? <<k1 >(cof <k2))   ; k2 references k1
+        (k1 != k2 && elem <<k1 >(cof <k2))   ; k2 references k1
          (pour <k1 <k2, pass1 lst k1 >k2)
         (pass1 lst k1 >k2))
      (capsize lst) (foldl (a \ e \ a + #>(cof e)) 0 lst)   ; total imports across closures (the measure)

@@ -112,7 +112,7 @@
  x64-prefixes '("rex" "data16" "data32" "addr32" "lock" "rep" "repz" "repnz"
                 "bnd" "notrack" "cs" "ss" "ds" "es" "fs" "gs")
  (strip-pfx ts) (? !(two? ts) ts
-                   ((member? <ts x64-prefixes) || (pfx? <ts "rex.")) (strip-pfx >ts)
+                   ((elem <ts x64-prefixes) || (pfx? <ts "rex.")) (strip-pfx >ts)
                    ts)
 
  ; x64: objdump -D -b binary. a line is addr TAB bytes TAB text; a continuation
@@ -290,7 +290,7 @@
          (? !(two? is) ()
             (: i <is mns (cap <sp) cks (<sp 1)
                o (a-ops (i-ops i))
-               (? !(member? (i-mnem i) mns) ("mnem " + i-mnem i + " unexpected (" + i-ops i + ")")
+               (? !(elem (i-mnem i) mns) ("mnem " + i-mnem i + " unexpected (" + i-ops i + ")")
                   (strict && ((tally o) != (tally cks))) (i-mnem i + ": " + show (tally o) + " ops != " + show (tally cks))
                   ((tally o) < (tally cks)) (i-mnem i + ": missing operands (" + i-ops i + ")")
                   (: (goc os ws) (? !(two? ws) ()

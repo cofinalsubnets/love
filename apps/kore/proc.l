@@ -195,7 +195,7 @@
            (: w <a
               (cl k) (? (tally w <= k) (fl >a t)
                         (: c (w k)
-                           (? (member? c '(117 103 71 110 114))
+                           (? (elem c '(117 103 71 110 114))
                               (: _ (pin t c 1) (cl (k + 1)))
                               (udie 1 ("id: unknown option -" + string c)))))
               (cl 1)))
@@ -245,7 +245,7 @@
    (chroot-main as)
     (: _ (? (two? as) () (udie 1 "usage: chroot DIR [CMD [ARG..]]"))
        d <as
-       _ (? (member? 'chroot (names ())) () (udie 1 "chroot: no chroot on this seat"))
+       _ (? (elem 'chroot (names ())) () (udie 1 "chroot: no chroot on this seat"))
        e (chroot d)
        _ (? e (udie 1 ("chroot: cannot change root to " + d + ": " + (show e))) ())
        ; the chdir is not tidiness. chroot moves the ROOT and leaves the cwd where it
@@ -295,12 +295,12 @@
           fs <>>o
           _ (? (two? >fs) () (udie 1 "usage: mount [-t TYPE] [-o OPTS] SRC TGT   (or bare, to list)"))
           src <fs tgt <>fs
-          _ (? (member? 'mountf (names ())) () (udie 1 "mount: no mount on this seat"))
+          _ (? (elem 'mountf (names ())) () (udie 1 "mount: no mount on this seat"))
           e (mountf src tgt ty ob)
           (? e (udie 1 ("mount: cannot mount " + src + " on " + tgt + ": " + (show e))) 0)))
    (umount-main as)
     (: _ (? (two? as) () (udie 1 "usage: umount TARGET.."))
-       _ (? (member? 'umount (names ())) () (udie 1 "umount: no umount on this seat"))
+       _ (? (elem 'umount (names ())) () (udie 1 "umount: no umount on this seat"))
        (go l ok) (? !(two? l) ok
                     (: e (umount <l)
                        _ (? e (: _ (say err ("umount: cannot unmount " + <l + ": " + (show e)))
@@ -406,7 +406,7 @@
    (ps-main as)
     (: all (: (go l) (? !(two? l) 0
                         (: w <l
-                           (? (member? w '("-e" "-A" "-ax" "ax" "a" "x" "-a")) 1 (go >l))))
+                           (? (elem w '("-e" "-A" "-ax" "ax" "a" "x" "-a")) 1 (go >l))))
               (go as))
        self (upself 0)
        mine (? self (uatoi (self 6)) 0)
@@ -430,7 +430,7 @@
    (free-main as)
     (: m (umeminfo 0)
        (g k) (peep m k 0)
-       div (? (member? "-g" as) 1048576 (? (member? "-m" as) 1024 1))
+       div (? (elem "-g" as) 1048576 (? (elem "-m" as) 1024 1))
        (cell x) (upad 12 (show (// x div)))
        tot (g 'MemTotal) fre (g 'MemFree) av (g 'MemAvailable)
        bc (((g 'Buffers) + (g 'Cached)) + (g 'SReclaimable))

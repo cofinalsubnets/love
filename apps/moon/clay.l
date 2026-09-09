@@ -185,10 +185,10 @@
    ; first and would corrupt the second. an infinity prints `infinity`, for which C
    ; has no literal -- so one is sayable exactly when its characters are C's.
    (cfinite? x) (: s (show x)
-                   !(any (\ i !(member? (s i) '(46 69 101 43 45 48 49 50 51 52 53 54 55 56 57)))
+                   !(any (\ i !(elem (s i) '(46 69 101 43 45 48 49 50 51 52 53 54 55 56 57)))
                          ^#s))
    (cflo x) (: s (show x) b (map s ^#s)
-             (member? 46 b || member? 101 b || member? 69 b ? s (s + ".0")))
+             (elem 46 b || elem 101 b || elem 69 b ? s (s + ".0")))
    ; `//`, not `/`: love's `/` is exact, so (1 / 64) is 0.015625 and the octal digit
    ; comes out a float
    (oct3 b) (string (48 + (b // 64 % 8)) + string (48 + (b // 8 % 8)) + string (48 + (b % 8)))
@@ -276,11 +276,11 @@
         ('vaend ap) ("__builtin_va_end(" + ce ap 21 + ")")
         "/*?*/"))
    ; a type shows up in operand position for sizeof; tell the two apart by the head
-   (ctype? t) (? (name? t) (member? t '(char short int long uint void double float))
-                 (two? t && member? <t '(ptr arr struct named const restrict fn)))
+   (ctype? t) (? (name? t) (elem t '(char short int long uint void double float))
+                 (two? t && elem <t '(ptr arr struct named const restrict fn)))
    ; the shower's one layout rule: a nested initializer breaks the line and a flat
    ; one does not, so a 16x16 matrix comes out a row per line with no threshold to tune
-   (cinitv x) (two? x && member? <x '(dfield didx) ? <>>x x)
+   (cinitv x) (two? x && elem <x '(dfield didx) ? <>>x x)
    ; a function binding, not the point-free `cnested? (any ..)`: a `name value` pair
    ; is built where it stands, and the shower's mutually recursive group compiles as one
    ; unit at cty-dtor above -- a value this far down is still an empty cell when the group
@@ -473,7 +473,7 @@
         (? !(two? x) ()
            (= <x 'tdef && !(two? >x))
             (gripe "(tdef) carries nothing -- a typedef, struct or _Static_assert cparse could not keep")
-           (member? <x '(decl sdecl) && !(two? <>x))
+           (elem <x '(decl sdecl) && !(two? <>x))
             (gripe ("(" + string <x + " ()) declared no object -- the tag or the function name is not in the node"))
            (= <x 'vastart && !(two? >>x))
             (gripe "(vastart ap) lost va_start's last named parameter at parse")
@@ -491,7 +491,7 @@
             (gripe ("(sdef " + show <>x + ") -- an anonymous tag is not a C identifier"))
            ; a macro is named by an identifier, and `#if` with no arm is a syntax
            ; error rather than a group that is always off
-           (member? <x '(cpp-def cpp-undef) && !(cident? <>x))
+           (elem <x '(cpp-def cpp-undef) && !(cident? <>x))
             (gripe ("(" + string <x + " " + show <>x + ") -- a macro name is an identifier"))
            (= <x 'cpp-if && !(two? <>x))
             (gripe "(cpp-if ()) has no arms -- C has no #if without a condition")

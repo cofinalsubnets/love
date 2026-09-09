@@ -104,18 +104,18 @@
    ; its own 8-byte type, 'llong/'ullong -- the register pair.
    tyspec '(char short int long void double float signed unsigned _Bool _Complex __int128)
    (canon ps specs)
-    (? (member? '_Complex specs)                   ; C99 complex: a seeded two-member struct
-        (? (member? 'float specs) '(struct "__cplx_float") '(struct "__cplx_double"))
-       (member? 'void specs) 'void
-       (member? '_Bool specs) 'bool                  ; one byte, stores normalize to 0/1 (C11 6.3.1.2)
-       (member? 'double specs) 'double
-       (member? 'float specs) 'float
-       (member? '__int128 specs) (? (member? 'unsigned specs) 'u128 'i128)
-       (: uns (member? 'unsigned specs)
+    (? (elem '_Complex specs)                   ; C99 complex: a seeded two-member struct
+        (? (elem 'float specs) '(struct "__cplx_float") '(struct "__cplx_double"))
+       (elem 'void specs) 'void
+       (elem '_Bool specs) 'bool                  ; one byte, stores normalize to 0/1 (C11 6.3.1.2)
+       (elem 'double specs) 'double
+       (elem 'float specs) 'float
+       (elem '__int128 specs) (? (elem 'unsigned specs) 'u128 'i128)
+       (: uns (elem 'unsigned specs)
           ll (pst32? ps && (: (n2 l k) (? !(two? l) k (n2 >l (? (= <l 'long) (k + 1) k)))
                              (1 < n2 specs 0)))                             ; two longs on t32
-          base (? (member? 'char specs) 'char (member? 'short specs) 'short
-                  ll 'llong (member? 'long specs) 'long 'int)
+          base (? (elem 'char specs) 'char (elem 'short specs) 'short
+                  ll 'llong (elem 'long specs) 'long 'int)
           (? !uns base
              (base = 'char) 'uchar (base = 'short) 'ushort
              (base = 'llong) 'ullong (base = 'long) 'ulong 'uint)))
@@ -154,7 +154,7 @@
           (nm = "strcpy") [cp [cp cp] ()]
           [vp [vp vp sz] ()]))                     ; memcpy and memmove
    ; one qualifier token, and the cursor past it (an attribute id carries its parens)
-   (qual? t) (? (tkk t = 'kw) (member? (tkv t) qualkw) (tkk t = 'id) (member? (tkv t) qualid) ())
+   (qual? t) (? (tkk t = 'kw) (elem (tkv t) qualkw) (tkk t = 'id) (elem (tkv t) qualid) ())
    (qskip ts) (: r >ts (? ((tkk <ts = 'id) && peekp r "(") (skipbal >r 1) r))
    (pquals ts) (? (two? ts && qual? <ts) (pquals (qskip ts)) ts)
    ; skip a trailing run of __attribute__((..)) / __asm__(..) -- the decoration
@@ -164,7 +164,7 @@
    ; eating it strands whatever followed.
    (patt ts)
     (? !(two? ts) ts
-       (((tkk <ts = 'id) && member? (tkv <ts) '("__attribute__" "__asm__" "__asm")) &&
+       (((tkk <ts = 'id) && elem (tkv <ts) '("__attribute__" "__asm__" "__asm")) &&
         peekp >ts "(")
         (patt (skipbal >>ts 1))
        ts)
@@ -197,14 +197,14 @@
     (? !(two? ts) ()
        (: t <ts
           (? (tkw? t 'restrict) 1
-             ((tkk t = 'id) && member? (tkv t) '("__restrict" "__restrict__")) 1
+             ((tkk t = 'id) && elem (tkv t) '("__restrict" "__restrict__")) 1
              (qual? t) (rstrq? (qskip ts))
              ())))
    (leadkw? ps ts k)
     (? !(two? ts) ()
        (: t <ts
           (? (tkw? t k) 1
-             ((tkk t = 'kw) && member? (tkv t) tyspec) (leadkw? ps >ts k)
+             ((tkk t = 'kw) && elem (tkv t) tyspec) (leadkw? ps >ts k)
              (qual? t) (leadkw? ps (qskip ts) k)
              ; a typedef name is a type specifier like any other, and C lets a qualifier
              ; follow the type: `uint32_t const x` is `const uint32_t x`. a struct/union/
@@ -379,8 +379,8 @@
    ; does a type begin here?
    (tkbty? ps t)
     (? !(two? t) ()
-       (tkk t = 'kw) (member? (tkv t) tyspec || member? (tkv t) '(struct union enum))
-       (tkk t = 'id) (? (member? (tkv t) tyofid) 1
+       (tkk t = 'kw) (elem (tkv t) tyspec || elem (tkv t) '(struct union enum))
+       (tkk t = 'id) (? (elem (tkv t) tyofid) 1
                           (peep (ps 'types) (tkv t) 0) 1 ())
        ())
 
@@ -389,7 +389,7 @@
    ; -- the type floor rides apps/moon/floor.l (shapes, sizes, the typing door), spelled once
    ; and read from gen too. ps carries only the two things the floor takes as parameters:
    ; the machine WORD and the tag table. --
-   (pst32? ps) (member? (peep ps 'tgt ()) '(thumb2 thumb2sp thumb1))
+   (pst32? ps) (elem (peep ps 'tgt ()) '(thumb2 thumb2sp thumb1))
    (psword ps) (? (pst32? ps) 4 8)
    (szty ps) (? (pst32? ps) 'uint 'ulong)          ; size_t: sizeof folds wear this coat
    (tsz ps ty) (tysz (psword ps) (ps 'stag) ty)
@@ -497,18 +497,18 @@
              ; the decayed pointer, and a both-arithmetic result is puac of the
              ; operands -- so sizeof(c + x) folds to 4, not the register's 8.
              ; either side unknown defers to gen's szof, as ever.
-             ((k = 'bin) && member? <>e '(+ - * / % & ^ |))
+             ((k = 'bin) && elem <>e '(+ - * / % & ^ |))
               (: a (ptype ps <>>e) b (ptype ps <>>>e)
                  (? ((ptr? a || arr? a) && (ptr? b || arr? b)) (? (= <>e '-) 'long ())
-                    (ptr? a || arr? a) (? (member? <>e '(+ -)) (tdecay a) ())
+                    (ptr? a || arr? a) (? (elem <>e '(+ -)) (tdecay a) ())
                     (ptr? b || arr? b) (? (= <>e '+) (tdecay b) ())
                     (parith? a && parith? b) (puac !(pst32? ps) a b)
                     ()))
              ; a shift's type is the promoted left operand alone (C11 6.5.7) --
              ; the right side never converts into it
-             ((k = 'bin) && member? <>e '(shl shr))
+             ((k = 'bin) && elem <>e '(shl shr))
               (: a (ptype ps <>>e) (? (parith? a) (pprom a) ()))
-             ((k = 'un) && member? <>e '(neg bnot))
+             ((k = 'un) && elem <>e '(neg bnot))
               (: a (ptype ps <>>e) (? (parith? a) (pprom a) ()))
              ; ?: arms meet by puac (6.5.15); same non-arithmetic type rides
              ; through whole (sizeof(c ? s1 : s2) over one struct type)
@@ -521,8 +521,8 @@
              ; relations, && and || -- whatever the operand, so no operand typing
              ; here (gen's wider carrier only ever holds 0/1 and is never asked)
              ((k = 'un) && (= <>e 'not)) 'int
-             ((k = 'bin) && member? <>e '(eq ne lt le gt ge)) 'int
-             (member? k '(land lor)) 'int
+             ((k = 'bin) && elem <>e '(eq ne lt le gt ge)) 'int
+             (elem k '(land lor)) 'int
              ())))
 
    ; -- declarators: stars XOR one array suffix, plus the function-pointer
@@ -705,7 +705,7 @@
                  (? (!(two? s) || (d < 1)) [pk s]
                     (peekp s "(") (scan >s (d + 1) pk)
                     (peekp s ")") (scan >s (d - 1) pk)
-                    ((tkk <s = 'id) && member? (tkv <s) '("packed" "__packed__")) (scan >s d 1)
+                    ((tkk <s = 'id) && elem (tkv <s) '("packed" "__packed__")) (scan >s d 1)
                     (scan >s d pk))
                 r2 (scan >r 1 0)
                 nx (pattpk <>r2)
@@ -797,13 +797,13 @@
     (: ts (pquals ts0)
      (? !(two? ts) ()
        (: t <ts
-          (? ((tkk t = 'kw) && member? (tkv t) tyspec)         ; a run of type specifiers -> one canonical type
-              (: (grab l acc) (? (two? l && (tkk <l = 'kw) && member? (tkv <l) tyspec)
+          (? ((tkk t = 'kw) && elem (tkv t) tyspec)         ; a run of type specifiers -> one canonical type
+              (: (grab l acc) (? (two? l && (tkk <l = 'kw) && elem (tkv <l) tyspec)
                                  (grab >l (tkv <l . acc))
                                  ; a qualifier interleaved in the run (`unsigned const char`):
                                  ; C's declaration specifiers are order-free -- skip and continue
                                  (: l2 (pquals l)
-                                    (? (two? l2 && (tkk <l2 = 'kw) && member? (tkv <l2) tyspec)
+                                    (? (two? l2 && (tkk <l2 = 'kw) && elem (tkv <l2) tyspec)
                                        (grab l2 acc)
                                        [(rev acc) l])))
                  r (grab ts ())
@@ -878,7 +878,7 @@
              ; __typeof(expr) / __typeof__(type-name) (gcc): the operand's parse-time
              ; type -- a type-name reads pcty, an expression ptype (whose 'sigs lane
              ; carries musl's weak_alias: `extern __typeof(old) new __attribute__(..)`)
-             ((tkk t = 'id) && member? (tkv t) tyofid)
+             ((tkk t = 'id) && elem (tkv t) tyofid)
               (: r1 (want >ts "(")
                  (? !(two? r1) ()
                     (tkbty? ps <r1) (thenw (pcty ps r1) ")")
@@ -920,7 +920,7 @@
    (cvq t) (? ((tkk t = 'kw) && (tkv t = 'const)) 1
               (idv? t "__const") 1
               ((tkk t = 'kw) && (tkv t = 'volatile)) 2
-              ((tkk t = 'id) && member? (tkv t) '("__volatile__" "__volatile")) 2
+              ((tkk t = 'id) && elem (tkv t) '("__volatile__" "__volatile")) 2
               0)
    ; the specifier run read twice over: its own const/volatile, and what a typedef
    ; NAME in it brought with it (`typedef const char *ccp`). -> (own typedef's).
@@ -933,11 +933,11 @@
     (: (go l sawty)
         (? !(two? l) [0 0]
            (: t <l
-              (? ((tkk t = 'kw) && (member? (tkv t) qualkw || member? (tkv t) tyspec))
-                  (: r (go >l (sawty || member? (tkv t) tyspec)) [(<r | cvq t) <>r])
+              (? ((tkk t = 'kw) && (elem (tkv t) qualkw || elem (tkv t) tyspec))
+                  (: r (go >l (sawty || elem (tkv t) tyspec)) [(<r | cvq t) <>r])
                  !(tkk t = 'id) [0 0]
                  sawty [0 0]
-                 (member? (tkv t) qualid) (go (qskip l) sawty)
+                 (elem (tkv t) qualid) (go (qskip l) sawty)
                  (: q (peep (ps 'qtdef) (tkv t) 0)
                     r (go >l 1)
                     [<r (<>r | q)]))))
@@ -1079,10 +1079,10 @@
              ; fork), u -> char16 (ushort, a supplementary code point as its
              ; surrogate pair), U -> char32 (uint). the token's value is canonical
              ; UTF-8 (lex re-encoded the escapes); utf8dec answers the elements.
-             (member? (tkk t) '(wstr str16 str32))
+             (elem (tkk t) '(wstr str16 str32))
               (: ety (? (tkk t = 'str16) 'ushort
                         (tkk t = 'str32) 'uint
-                        (member? (peep ps 'tgt ()) '(a64 thumb2 thumb2sp thumb1)) 'uint
+                        (elem (peep ps 'tgt ()) '(a64 thumb2 thumb2sp thumb1)) 'uint
                         'int)
                  (s16 l) (? !(two? l) ()
                             (65536 <= <l) (: v (<l - 65536)
@@ -1132,7 +1132,7 @@
                  (? (two? rest) [['asn ['deref <ra] ['deref <rb]] rest] ()))
              ; a library builtin is its plain name: rewrite it, and declare the name if
              ; nothing else has, so the call binds and the link pulls the member by need
-             ((tkk t = 'id) && bib? (tkv t) && member? (tkv t) libbin)
+             ((tkk t = 'id) && bib? (tkv t) && elem (tkv t) libbin)
               (: nm (snip (tkv t) 10 (tally (tkv t)))
                  _ (? (peep (ps 'sigs) nm ()) 0 (pin (ps 'sigs) nm (libsig ps nm)))
                  [['var nm] >ts])
@@ -1241,9 +1241,9 @@
    (calm? e)
     (? !(two? e) 1
        (: k <e
-          (? (member? k '(var num flo str szof)) 1
-             (member? k '(deref addr dot)) (calm? <>e)
-             (member? k '(un cast)) (calm? <>>e)
+          (? (elem k '(var num flo str szof)) 1
+             (elem k '(deref addr dot)) (calm? <>e)
+             (elem k '(un cast)) (calm? <>>e)
              (k = 'bin) (calm? <>>e && calm? <>>>e)
              ())))
    (preop lv step)
@@ -1294,7 +1294,7 @@
              ; _Alignof (C11 6.5.3.4) through talign, the door playout lays members with,
              ; so it cannot drift from the layout it describes. the expression operand
              ; is gcc's __alignof__ alone; C11's spelling takes a type-name only.
-             ((tkk t = 'id) && member? (tkv t) '("_Alignof" "__alignof__"))
+             ((tkk t = 'id) && elem (tkv t) '("_Alignof" "__alignof__"))
               (: r1 >ts
                  (? (ptyat? ps r1)
                      (: tr (thenw (pcty ps >r1) ")")
@@ -1408,7 +1408,7 @@
    ; takes one item when that item is a string. an incomplete tag or a [0] bound
    ; takes nothing, which is how the caller's walk learns to stop.
    (uni? ps ty) (stru? ty && peep (ps 'utag) <>ty 0)
-   (chart? ty) (member? ty '(char uchar))
+   (chart? ty) (elem ty '(char uchar))
    (fills ps ty items)
     (? !(two? items) items
        (arr? ty)
@@ -1429,7 +1429,7 @@
    ; they fill whole elements in order, so the count is how many times `fills` walks
    ; one -- int a[][2] = {1,2,3,4} is 2 rows, and a seven-member struct takes seven
    ; items an element, not one.
-   (allplain? items) (foldl (\ ok it (ok && !(member? <it '(init didx dfield)))) 1 items)
+   (allplain? items) (foldl (\ ok it (ok && !(elem <it '(init didx dfield)))) 1 items)
    (initcount ps elt ini)
     (? (two? ini && (<ini = 'str)) (tally <>ini + 1)
        ; a wide literal (a bounded clit-of-array after the desugar): its own bound
@@ -1510,7 +1510,7 @@
    ; left -- an approximation, honest for the putcharm-style word math images use.
    (cint? x) (charm? x || sun? x || big? x)
    (uext? e) (? !(two? e) ()
-                (<e = 'cast) (member? <>e '(uchar ushort uint ulong ullong))
+                (<e = 'cast) (elem <>e '(uchar ushort uint ulong ullong))
                 (<e = 'bin) (uext? <>>e)
                 ())
    ; the folder carries no types, so it reads them off the casts the literal
@@ -1521,7 +1521,7 @@
    ; 64-bit does. everything else folds unbounded exactly as before -- signed
    ; overflow is ub, and a 64-bit result already is the word pattern.
    (w64c? e) (? !(two? e) ()
-                (<e = 'cast) (member? <>e '(long ulong llong ullong))
+                (<e = 'cast) (elem <>e '(long ulong llong ullong))
                 (<e = 'bin) (w64c? <>>e || w64c? <>>>e)
                 (<e = 'un) (w64c? <>>e)
                 ())
@@ -1539,7 +1539,7 @@
        (: iv (cfold e)
           (? (cint? iv) (0.0 + iv)
              (<e = 'flo) (0.0 + <>e)
-             (<e = 'cast) (? (member? <>e '(double float)) (fcfold <>>e) 'bad)
+             (<e = 'cast) (? (elem <>e '(double float)) (fcfold <>>e) 'bad)
              (<e = 'un) (: v (fcfold <>>e)
                            (? (= v 'bad) 'bad (<>e = 'neg) (0.0 - v) 'bad))
              (<e = 'bin)
@@ -1579,7 +1579,7 @@
            ; where it matters, since an unfoldable one reads as a VLA in silence.
            ; the target must be an integer type and the roster has to be spelled:
            ; a cast to `double` takes the same fold and must keep its fraction.
-           v (? (cint? v0 || !(member? ty '(bool char uchar short ushort int uint
+           v (? (cint? v0 || !(elem ty '(bool char uchar short ushort int uint
                                             long ulong llong ullong))) v0
                 (: f (fcfold <>>e)
                    (? (= f 'bad) v0
@@ -1590,7 +1590,7 @@
               (ty = 'uchar) (v & 255)
               (ty = 'ushort) (v & 65535)
               (ty = 'uint) (v & 4294967295)
-              (member? ty '(char short int))
+              (elem ty '(char short int))
                (: w (? (ty = 'char) 8 (ty = 'short) 16 32)
                   r (& v ((1 << w) - 1))
                   (? (r < (<< 1 (w - 1))) r (r - (1 << w))))
@@ -1715,7 +1715,7 @@
    ; clobbers as (string..) -- the constraint grammar is gen's business.
    ; -> (('asm tmpl outs ins clobs) rest) | ()
    (asmid? t) (two? t && (tkk t = 'id) &&
-               member? (tkv t) '("asm" "__asm__" "__asm"))
+               elem (tkv t) '("asm" "__asm__" "__asm"))
    (pasm ps ts)
     (: r >ts
        t1 (? (two? r && (tkw? <r 'volatile ||
@@ -1784,7 +1784,7 @@
    ; labels. an ARM -- an if/while/do/for body without braces -- has no list to splice into, and
    ; the marker alone would BE the arm, leaving its statement to fall out past the arm's join.
    ; so an arm takes the marker run with the statement under it, as one block.
-   (markerp s) (two? s && member? <s '(lbl case dflt))
+   (markerp s) (two? s && elem <s '(lbl case dflt))
    (parm ps ts)
     ((: (go ts acc)
         (: r (pstmt ps ts)
@@ -1950,7 +1950,7 @@
                                 _ (qtake ps nm <>ent)
                                 (['locals nm old] . (['qtys nm oq] . shadows)))
    (bindlocs ps ents shadows) (? !(two? ents) shadows (bindlocs ps >ents (bindloc ps <ents shadows)))
-   (loctypes form) (? (two? form && member? <form '(decl sdecl)) <>form ())       ; a block decl's entries, () otherwise
+   (loctypes form) (? (two? form && elem <form '(decl sdecl)) <>form ())       ; a block decl's entries, () otherwise
    ; a block-scope typedef (sqlite's LOGFUNC_t): pin each declarator into ps
    ; 'types, saving the old binding on the block's shadow list ('none = fresh) so
    ; unshadow restores C scope; file scope (tdeflist) hands an empty list and drops
@@ -2311,7 +2311,7 @@
        ; note the completed form's staticness/section per declared name, then
        ; clear the stashes for the next form
        (note f)
-        (: _ (? (member? <f '(gdecl xdecl))         ; register file-scope names -> types (ptype's global fallback)
+        (: _ (? (elem <f '(gdecl xdecl))         ; register file-scope names -> types (ptype's global fallback)
                 ; ..and consume the mark ptop staged for each, on bindloc's terms:
                 ; only when it strips back to the type actually filed
                 (: (gogl prs) (? !(two? prs) 1
@@ -2322,7 +2322,7 @@
                    (gogl <>f))
                 ())
            st (peep ps 'curstat ()) sc (peep ps 'cursect ()) an (peep ps 'curalign ())
-           fnp (member? <f '(fn proto))
+           fnp (elem <f '(fn proto))
            _ (? (st && fnp) (pin (ps 'sfns) <>f 1) ())
            ; a function may name its section and its alignment too (love.c's data
            ; sentinels): where the code lands is the point there exactly as it is
@@ -2351,7 +2351,7 @@
                       (go3 nms))))
            _ (: wk (peep ps 'curweak ())
                 (? !wk ()
-                   (: nms (? (member? <f '(gdecl xdecl)) (map cap <>f)
+                   (: nms (? (elem <f '(gdecl xdecl)) (map cap <>f)
                              fnp [<>f] ())
                       (go4 l) (? !(two? l) 1 (: _ (addweak ps <l) (go4 >l)))
                       (go4 nms))))

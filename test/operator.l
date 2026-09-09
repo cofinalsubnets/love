@@ -55,3 +55,16 @@
         (nom? ',) ("," = (string ',)) (', = (cap (sound '(44)))))
 ; clauses nest per list, and chain their effects in source order
 (test (6 = (: t {0 1} _ ((pin t 0 2), (pin t 1 3)) ((t 0) * (t 1)))))
+; the two negations, which the glaze desugars rather than calls: (!= a b) is
+; (? (= a b) 0 1) and (!== a b) the same over ==. structural against identity is
+; the whole of the difference, so each law needs two chains that are equal and not
+; the same one.
+(: a '(1 2)
+   b '(1 2)
+   (test
+      (a = b) !(a == b)                      ; equal, not the same
+      !(a != b) (a !== b)
+      (a == a) !(a !== a)                    ; the same is both
+      (1 != 2) (1 !== 2)                     ; two charms differ both ways
+      (1 == 1) !(1 !== 1)                    ; ..and an equal charm IS the same one
+      ((a != b) = 0) ((a !== b) = 1)))       ; both answer the exact booleans

@@ -229,10 +229,10 @@
    (flagfree be l k)
       (? (k < 1 || one? l) 0
          (: o <(<l)
-            (? (member? o (be 'flagr)) 0
-               (member? o (be 'flagw)) 1
-               (member? o '(call ret sys)) 1
-               (member? o '(jmp jmpr)) 0
+            (? (elem o (be 'flagr)) 0
+               (elem o (be 'flagw)) 1
+               (elem o '(call ret sys)) 1
+               (elem o '(jmp jmpr)) 0
                (flagfree be >l (k - 1)))))
    (lay prog be addr items labels)
       (? !(two? prog) (rev items . labels)
@@ -315,7 +315,7 @@
                         (: pad (pad-to be fa (ins 1))
                            (stitch >p >cs (pa + k) (fa + tally pad) (era + 1)
                                    (rev pad + items)))
-                        (member? <ins '(jmp br))
+                        (elem <ins '(jmp br))
                         (: t (tgt-of (? (<ins = 'jmp) (ins 1) (ins 2)) era)
                            sc (? (imm? t) (short-of ins (rev c) (t - pa)) ())
                            (? (two? sc)

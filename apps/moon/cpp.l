@@ -69,7 +69,7 @@
    (addhide t hs)                                   ; union hs into t's hideset
     [(kof t) (vof t) (lof t) (dedup (hof t + hs)) (sof t)]
    (dedup l) (: (go l seen) (? !(two? l) ()
-                              (member? <l seen) (go >l seen)
+                              (elem <l seen) (go >l seen)
                               (<l . go >l (<l . seen)))
                 (go l ()))
 
@@ -77,10 +77,10 @@
    numks '(num unum ulnum llnum ullnum flo flof iflo)
    (spell t) (: k (kof t) s (sof t)
                 (? (0 < tally s) s                            ; the spelling the lexer kept
-                   (member? k numks) (show (vof t))           ; ..or a cpp-minted decimal
+                   (elem k numks) (show (vof t))           ; ..or a cpp-minted decimal
                    (k = 'kw) (show (vof t))
                    (k = 'str) ("\"" + vof t + "\"")
-                   (member? k '(wstr str16 str32))                       ; a wide literal, prefix restored
+                   (elem k '(wstr str16 str32))                       ; a wide literal, prefix restored
                     ((? (k = 'wstr) "L\"" (k = 'str16) "u\"" "U\"") + vof t + "\"")
                    (vof t)))                          ; id / p are their text
    ; C11 6.10.3.2's stringize: the argument's own spelling, quotes and escapes and
@@ -202,7 +202,7 @@
        (: t <toks rest >toks
           (? !(idt? t) (t . expand rest macs)
              (idv? t "__LINE__") (tok 'num (lof t) (lof t) . expand rest macs)
-             (member? (vof t) (hof t)) (t . expand rest macs)       ; blue-painted: leave it
+             (elem (vof t) (hof t)) (t . expand rest macs)       ; blue-painted: leave it
              (: m (mdef macs (vof t))
                 (? (mobj? m)
                     (: hs (vof t . hof t)
@@ -288,10 +288,10 @@
    (cprim ts)
     (? !(two? ts) [(cv 0 0) ()]
        (: t <ts
-          (? (member? (kof t) '(num unum ulnum llnum ullnum))
+          (? (elem (kof t) '(num unum ulnum llnum ullnum))
               ; a U suffix says unsigned, and so does a value past intmax's top --
               ; 0xffffffffffffffff has no signed type to land in (C11 6.4.4.1)
-              [(cv (vof t) (member? (kof t) '(unum ulnum ullnum) || h64 <= vof t)) >ts]
+              [(cv (vof t) (elem (kof t) '(unum ulnum ullnum) || h64 <= vof t)) >ts]
              (pv? t "(") (: r (ccond >ts) (? (two? <>r && pv? <<>r ")") [<r ><>r] r))
              (pv? t "!") (: r (cprim >ts) [(cv !(ctrue <r) 0) <>r])
              (pv? t "~") (: r (cprim >ts) [(cv (m64 - 1 - cvv <r) (cvu <r)) <>r])
@@ -370,7 +370,7 @@
    ; saved (() = was undefined). a pop with nothing saved is a no-op, gcc's reading;
    ; the body reads raw, so a user macro named pop_macro cannot interfere (cts 00206). --
    (pragmac? body) (two? body && idt? <body &&
-                    member? (vof <body) '("push_macro" "pop_macro"))
+                    elem (vof <body) '("push_macro" "pop_macro"))
    (dopragmac macs body)
     (: r >body
        (? !(two? r && pv? <r "(" && two? >r && (kof <>r = 'str) &&
@@ -397,7 +397,7 @@
    ; the string family joins across a prefix: C11 6.4.5p5 -- a narrow piece takes the
    ; wide side's kind (its bytes are UTF-8 text, so the decode reads them right), and
    ; two different wide prefixes keep the first (gcc refuses; nothing here spells it)
-   (strk? k) (member? k '(str wstr str16 str32))
+   (strk? k) (elem k '(str wstr str16 str32))
    (jork a b) (? (a = b) a (a = 'str) b (b = 'str) a a)
    (fmark? ('fmark . _)) 1
    (fmpush t files) (? (vof t = 'in) (lof t . files) >files)
@@ -484,7 +484,7 @@
                  ; `line` itself stays raw -- the #line arm computes its delta from it.
                  sline (lnshift macs line)
                  sbody (? (two? sline) >>sline ())
-                 (? (member? dir '("if" "ifdef" "ifndef" "elif" "else" "endif"))
+                 (? (elem dir '("if" "ifdef" "ifndef" "elif" "else" "endif"))
                      (: cond2 (docond dir sbody sline macs cond)
                         (? (= cond2 'err) (gripeat sline ("#" + dir + " without #if"))   ; unbalanced -- fatal, not empty
                            (cppgo rest macs cond2 () out1 incf)))
@@ -519,7 +519,7 @@
                     ; ignored on purpose, and each is one gcc also accepts: a bare
                     ; `#` is the null directive (C11 6.10.7), and a numeric one is
                     ; gcc -E's line marker.
-                    (member? dir '("pragma" "ident" "sccs" "assert" "unassert") ||
+                    (elem dir '("pragma" "ident" "sccs" "assert" "unassert") ||
                         !(two? >line) || (= dirk 'num))
                      (cppgo rest macs cond () out1 incf)
                     ; ..and anything else is a directive we do not implement, where
@@ -537,7 +537,7 @@
    ; carries its opener's forward, so an unterminated conditional at EOF can say
    ; which one never closed.
    (docond dir body line macs cond)
-    (? (member? dir '("if" "ifdef" "ifndef"))
+    (? (elem dir '("if" "ifdef" "ifndef"))
         (: pa (condactive cond)                        ; parent active?
            v (? !pa 0
                 (dir = "ifdef") !!(two? (mdef macs (vof <body)))

@@ -39,7 +39,7 @@
    ; @ then x, @x is (tuple x); '# is the sigil's own name, '#x the run around x).
    ; resetting the left context there would hide the very byte the probe has to
    ; weigh -- and opb? then keeps their space outright.
-   ; a chain, not a member? over a list: this runs on every byte of every text.
+   ; a chain, not a elem over a list: this runs on every byte of every text.
    (hardb c) (? (c = 32) 1 (c = 10) 1 (c = 9) 1
                 (c = 40) 1 (c = 41) 1 (c = 91) 1 (c = 93) 1 (c = 123) 1 (c = 125) 1
                 (c = 34) 1 (c = 59) 1 (c = 39) 1 (c = 96) 1 (c = 44) 1
@@ -158,7 +158,7 @@
      ; so it stays outside. not a module blob: an unglazed build must not pay for it.
      "#ifdef AiGlazed"
      ['src_glaze_z ["(borrow 'holo)(module 'glaze " 'emit 'auto ")"
-                    "(: ev (cite 'glaze 'ev) member? (cite 'glaze 'member?))"
+                    "(: ev (cite 'glaze 'ev) elem (cite 'glaze 'elem))"
                     'hook 'walk 'holo 'x64 'a64]]
      "#endif"]
    (text items) (foldl (\ a i (a + (string? i ? i (file i)))) "" items)

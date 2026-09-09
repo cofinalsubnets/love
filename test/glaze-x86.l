@@ -16,9 +16,9 @@
 ; the glaze are modules now, so this post-boot stream binds every internal it drives through the
 ; accessors. the leak assert must run before those binds: it is a body-less top-level `:`, so its
 ; names land on the book and half the roster would answer its own copies.
-(assert (member? 'glaze (cite ()))
+(assert (elem 'glaze (cite ()))
         (400 < (tally (keys (cite 'glaze))))
-        (: nm (names ()) (&& (! (member? 'autogroup nm)) (! (member? 'jitir nm)) (! (member? 'glaze nm)))))
+        (: nm (names ()) (&& (! (elem 'autogroup nm)) (! (elem 'jitir nm)) (! (elem 'glaze nm)))))
 (: assemble (cite 'holo 'assemble)
    bcat (\ ps (foldl (\ a b (+ a b)) () ps))
    G (cite 'glaze)
@@ -530,7 +530,7 @@
                 (hash-run 30))
        pl (plift rpl)
        (&& !(= pl rpl) (900 = (base-ev rpl)) (900 = (base-ev pl))                       ; fired + source->source semantic equivalence
-           (member? 'hash-run_scan (map (\ pr (? (two? (cap pr)) (caap pr) (cap pr))) (cap (anat-defs (cup pl)))))))   ; scan hoisted to a top-level sibling
+           (elem 'hash-run_scan (map (\ pr (? (two? (cap pr)) (caap pr) (cap pr))) (cap (anat-defs (cup pl)))))))   ; scan hoisted to a top-level sibling
     ; map lane: a read-only map probe glazes from source -- `h` a map param (raw pointer, mapkind entry
     ; guard; the native hashes the key 0x9e37.. then linear-probes the open-addressed backing -- regs
     ; rax/r8-r11 only, never rcx=Sp or rdx=Hp, both live for the interp after Continue). mapfix rewrites
@@ -879,39 +879,39 @@
    h1 (swh '(? (two? l) (pm9 x (want9 = 3 ? (cup l) l)) 0) '(x l) ())
    h2 (swh '(: a (want9 1 2) (+ a x)) '(x) ())
    _ (assert
-      (! (member? 'want9 h1)) (1 = (member? 'pm9 h1))                             ; a free operand is no head; the real call is
-      (1 = (member? 'want9 h2))                                                   ; a called global still arrives
-      (! (member? 'x h2)))                                                        ; ... and the binder set still filters
+      (! (elem 'want9 h1)) (1 = (elem 'pm9 h1))                             ; a free operand is no head; the real call is
+      (1 = (elem 'want9 h2))                                                   ; a called global still arrives
+      (! (elem 'x h2)))                                                        ; ... and the binder set still filters
    (say err "l/boot/glaze/auto: swheads reads opfixed source -- no operand fake heads\n"))
 
-; --- the point-= grammar + the re-declared member?: the recognizer admits a point-guarded
-;     key compared to a raw chain car ((= P (cap ..))), so the auto.l tail's member? is a
+; --- the point-= grammar + the re-declared elem: the recognizer admits a point-guarded
+;     key compared to a raw chain car ((= P (cap ..))), so the auto.l tail's elem is a
 ;     group native -- the baked global rides it. Lanes: word-compare hits over any car kind
 ;     (a point equals only itself), the end-of-chain miss, and the entry deopts (a charm or
 ;     string key: only interp knows the numeric bridges (= 2 2.0) / structural string =).
 (: mm (nom 0)
-   ; admission (the drift gate): autogroup must rewrite the member?-shaped group -- a
+   ; admission (the drift gate): autogroup must rewrite the elem-shaped group -- a
    ; declined form keeps the quoted body list in the binding slot; an admitted one splices
    ; the native closure (not two?). If this fires, the point-= grammar regressed and the
-   ; baked member? silently fell back to interp.
+   ; baked elem silently fell back to interp.
    adm ((G 'autogroup) '(: (pm1 x l) (? (two? l) (? (= x (cap l)) 1 (pm1 x (cup l))) 0) (pm1 'b '(a b))))
    _ (assert
       (! (two? (caup (cup adm)))) (1 = (ev adm))                                  ; admitted: native spliced, and it answers
-      (1 = (member? 'b '(a b c))) (0 = (member? 'z '(a b c)))                     ; nom key, native walk
-      (1 = (member? 2 '(1 2 3))) (0 = (member? 9 '(1 2 3)))                      ; charm key -> entry deopt (bridges), interp stays right
-      (1 = (member? 2 '(2.0 4))) (1 = (member? 2 '(4 2.0 2)))                    ; the numeric bridge, through the fallback
-      (0 = (member? 5 '(6.0 7.0)))                                              ; deopt lane, false stays false
-      (1 = (member? "ab" '(1 "ab"))) (0 = (member? "zz" '("ab")))                ; string key -> entry deopt, structural =
-      (1 = (member? 'z '(1 "s" (x y) 2.5 z)))                                    ; nom key walks every car kind natively
-      (0 = (member? 'q '("s" 2.5 (a))))                                          ; ... and a miss over heap cars
-      (1 = (member? mm (. 1 (. mm ())))) (0 = (member? mm '(a b)))         ; a mint key rides the guard
-      (0 = (member? () '(1 2))) (1 = (member? () (. () ())))                  ; the zero point is a mint
-      (0 = (member? 'x ())) (0 = (member? 'x 5))                                 ; no chain -> the walk never starts
-      (200000 = ((: (go i a) (? (< i 200000) (go (+ i 1) (+ a (member? 'q '(a b q)))) a)) 0 0))
+      (1 = (elem 'b '(a b c))) (0 = (elem 'z '(a b c)))                     ; nom key, native walk
+      (1 = (elem 2 '(1 2 3))) (0 = (elem 9 '(1 2 3)))                      ; charm key -> entry deopt (bridges), interp stays right
+      (1 = (elem 2 '(2.0 4))) (1 = (elem 2 '(4 2.0 2)))                    ; the numeric bridge, through the fallback
+      (0 = (elem 5 '(6.0 7.0)))                                              ; deopt lane, false stays false
+      (1 = (elem "ab" '(1 "ab"))) (0 = (elem "zz" '("ab")))                ; string key -> entry deopt, structural =
+      (1 = (elem 'z '(1 "s" (x y) 2.5 z)))                                    ; nom key walks every car kind natively
+      (0 = (elem 'q '("s" 2.5 (a))))                                          ; ... and a miss over heap cars
+      (1 = (elem mm (. 1 (. mm ())))) (0 = (elem mm '(a b)))         ; a mint key rides the guard
+      (0 = (elem () '(1 2))) (1 = (elem () (. () ())))                  ; the zero point is a mint
+      (0 = (elem 'x ())) (0 = (elem 'x 5))                                 ; no chain -> the walk never starts
+      (200000 = ((: (go i a) (? (< i 200000) (go (+ i 1) (+ a (elem 'q '(a b q)))) a)) 0 0))
       (: pg (jitgroupir [(. '(pm2 x l) '(? (two? l) (? (= x (cap l)) 1 (pm2 x (cup l))) 0))] 'pm2 'x64)     ; the group lane direct: exec x64 ...
          (&& (1 = (pg 'b '(a b))) (0 = (pg 'z '(a b))) (0 = (pg 'z 7))))
       (< 0 (tally (peep (assemble 'a64 (bcat [(mkouterir 'a64 2 'pm3 2 0 () () () () '(0))     ; ... and the point-guarded outer assembles on a64
                 (mkhir 'a64 '(pm3) 'pm3 '(x l) '(? (two? l) (? (= x (cap l)) 1 (pm3 x (cup l))) 0))])) 'bytes 0))))
-   (say err "l/boot/glaze/emit: the point-= grammar -- member? group-native, admission + both deopt lanes ok\n"))
+   (say err "l/boot/glaze/emit: the point-= grammar -- elem group-native, admission + both deopt lanes ok\n"))
 
 (say err "test/glaze-x86: emit + auto + ir native codegen ok\n")

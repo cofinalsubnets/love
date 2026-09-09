@@ -26,7 +26,7 @@
    ; baked by a host love, so a load-time answer would freeze this world's nif set into
    ; that one's.
    (ucopy-bytes src dst)
-    (? (member? 'copyfile (names ()))
+    (? (elem 'copyfile (names ()))
        (charm? (copyfile src dst))
        (: r (uread src)
           (? (two? r) (: q (open dst "w")
@@ -51,7 +51,7 @@
    ; syncing everything instead would be a different thing wearing the same name.
    (sync-main as)
     (: _ (? (two? as) (udie 1 "sync: takes no operands here (no fsync nif)") ())
-       _ (? (member? 'sync (names ())) (sync 0) ())
+       _ (? (elem 'sync (names ())) (sync 0) ())
        0)
 
    ; -- mkfifo and mknod: the two rows a /dev wants ------------------------------
@@ -62,7 +62,7 @@
    (umkdev maj mn)
     (((& maj 4095) << 8) | (& mn 255) | ((maj >> 12) << 44) | ((mn >> 8) << 20))
    (umknod who p md dev)
-    (? (member? 'mknod (names ())) (mknod p md dev) 'enosys)
+    (? (elem 'mknod (names ())) (mknod p md dev) 'enosys)
    (mkfifo-main as)
     (: t (tablet 0)
        o (uopts as t '(109) ())
@@ -232,8 +232,8 @@
    ; mtime is the half that was missing.) a recipe saying `mv -f` fails without this.
    (cpf-split as)                              ; -> (p? rest) off a leading -f/-p cluster
     (: (fl a p) (? !(two? a) [p a]
-                    (member? <a '("-f" "-p" "-fp" "-pf"))
-                     (fl >a (? (member? <a '("-p" "-fp" "-pf")) 1 p))
+                    (elem <a '("-f" "-p" "-fp" "-pf"))
+                     (fl >a (? (elem <a '("-p" "-fp" "-pf")) 1 p))
                     [p a])
        (fl as 0))
    (cp-main as)
@@ -490,7 +490,7 @@
            (: f (usplit 58 <ls)
               g (? (4 <= tally f) (uatoi (f 2)) -1)
               ms (? (4 <= tally f) (usplit 44 (f 3)) ())
-              (go >ls (? ((member? nm ms) && !(g = gid)) (g . acc) acc))))
+              (go >ls (? ((elem nm ms) && !(g = gid)) (g . acc) acc))))
        rest (? (two? r) (sort (go (lines <>r) ())) ())
        (gid . rest))
 

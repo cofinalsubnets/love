@@ -14,7 +14,7 @@
 ; erased the row gets its paths twin over the pinned carrier beside it, by
 ; uuval.l's bridge. Substrate: test/uuval.l over test/uu.l.
 
-(test (member? 'vof (names ())))
+(test (elem 'vof (names ())))
 
 (test
  ; cap-total   (\ x (? (two? x) 1 (= x (cap x))))

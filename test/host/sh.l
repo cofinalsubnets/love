@@ -556,7 +556,7 @@
 (: r (hark ["out/love" "out/lush" "-c" "PATH=/nonexistent; dir /; type dir"])
    (: s (hark ["out/love" "out/lush" "-c" "PATH=/nonexistent; ls /"])
       (test (= (cup s) (snip (cup r) 0 #(cup s)))
-              (member? 'verb (sh-verdict "dir")))))
+              (elem 'verb (sh-verdict "dir")))))
 ; (under -g even echo is PATH's, so the status crosses a variable and PATH comes back)
 (: r (hark ["out/love" "out/lush" "-g" "-c"
             "p=$PATH; PATH=/nonexistent; which tr 2>/dev/null; s=$?; PATH=$p; echo st=$s"])

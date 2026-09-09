@@ -211,7 +211,7 @@
                  (bc-low? c)
                   (: e (wd k)
                      w (snip src k e)
-                     (go e ((? (member? w bc-kws) ['kw w] ['name w]) . acc)))
+                     (go e ((? (elem w bc-kws) ['kw w] ['name w]) . acc)))
                  (bc-op-at src n k @ [w j] (go j (['op w] . acc))
                    (bc-syn ("unexpected character " + string c))))))
        (go 0 ()))
@@ -268,13 +268,13 @@
              (= k 'kw)
               ; `scale` is both: the register, and the function when a ( follows.
               ; the register arm has to come second or scale(x) never reads
-              (? ((member? v '("length" "sqrt")) || ((v = "scale") && bc-op? r "("))
+              (? ((elem v '("length" "sqrt")) || ((v = "scale") && bc-op? r "("))
                   (: r2 (bc-want r "(" ("expected ( after " + v))
                      (bc-expr (bc-nl r2) @ [e r3]
                        [[(? (v = "length") 'len (v = "scale") 'scl 'sqrt) e]
                         (bc-want r3 ")" ("expected ) after " + v))]
                        ()))
-                 (member? v bc-regs) [['reg (name v)] r]
+                 (elem v bc-regs) [['reg (name v)] r]
                  (v = "read") (bc-syn "read() is out of dialect")
                  (bc-syn ("`" + v + "' is not an expression")))
              (bc-op? ts "(")
@@ -319,7 +319,7 @@
    (bc-rel ts)
     (bc-add ts @ [a r]
       (: (go v m)
-          (? (bc-k? m 'op && member? <><m bc-rels)
+          (? (bc-k? m 'op && elem <><m bc-rels)
              (bc-add >m @ [w m2] (go ['cmp <><m v w] m2) ())
              [v m])
          (go a r))
@@ -341,7 +341,7 @@
       ())
    (bc-expr ts)
     (bc-or ts @ [n r]
-      (? ((bc-k? r 'op) && (member? <><r bc-assigns) && bc-lval? n)
+      (? ((bc-k? r 'op) && (elem <><r bc-assigns) && bc-lval? n)
          (bc-expr >r @ [v r2] [['asgn <><r n v] r2] ())
          [n r])
       ())

@@ -26,7 +26,7 @@
    (5 = <(stat f))
    (1600000000000 < <>(stat f))                 ; born wearing the clock's date
    (32768 = 61440 & <>>(stat f))
-   (member? "a" (readdir d))
+   (elem "a" (readdir d))
    (: q (open (d + "/b") "a") (port? q ? (close q, 1) 0))
    (two? (stat (d + "/b")))
    !(port? (open "/no-such-dir/x" "w"))      ; an absent parent refuses
@@ -72,7 +72,7 @@
    !(chdir "apps/kore")
    ("/apps/kore" = cwd 0)
    (0 < tally (rd "kore.l"))                  ; a relative path reads off the cwd
-   (member? "kore.l" (readdir "."))
+   (elem "kore.l" (readdir "."))
    !(chdir "..")
    ("/apps" = cwd 0)                      ; .. unwinds ONE component
    ; the seat has to go back to / by hand. this file is one member of a corpus the
@@ -99,7 +99,7 @@
    ("1" = getenv "WFS")
    !(setenv "WFS" "2")                  ; a re-set replaces: still one row
    ("2" = getenv "WFS")
-   (member? "WFS=2" (environ 0))
+   (elem "WFS=2" (environ 0))
    !(setenv "WFS2" "x")
    (2 = tally (environ 0))
    !(setenv "WFS2" ())                  ; a non-string value unsets
@@ -120,7 +120,7 @@
    ('einval = readlink f)                     ; a plain file is not a link
    ('enoent = readlink (d + "/nope"))
    ('eexist = symlink f (d + "/ln"))          ; one name, laid once
-   (member? "ln" (readdir d))
+   (elem "ln" (readdir d))
    ; a target that is not there is still a link: the name resolves, the open does not
    !(symlink (d + "/gone") (d + "/dangle"))
    (d + "/gone" = readlink (d + "/dangle"))

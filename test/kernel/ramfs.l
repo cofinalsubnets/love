@@ -59,7 +59,7 @@
 ; scratch back through the compiler, so it is the restore above proving itself byte
 ; for byte; it has to stay after those laws.
 (borrow "apps/json.l")
-(test (member? 'json-read (names ())))
+(test (elem 'json-read (names ())))
 
 ; /proc's live rows. meminfo is the kernel's own free list, gauge the collector's
 ; counters -- both filled at the open, off state the syscall under it cannot see, so

@@ -45,16 +45,16 @@
    ((stat (d + "/no-such-thing.l")) = 'enoent)
    (! (charm? (stat (d + "/no-such-thing.l"))))
    ; readdir hands over the baked names as strings
-   (member? "json.l" (readdir d))
+   (elem "json.l" (readdir d))
    (string? (cap (readdir d)))
    ; "" and "." are both the root, as they are on the host: the tree's own top
    ; names, each deduped across every row beneath it, plus tmp -- the scratch the
    ; rung-2 tree seeds at boot, which no row carries
-   (member? "apps" (readdir "."))
-   (member? "apps" (readdir ""))
-   (member? "test" (readdir ""))
-   (member? "tmp" (readdir ""))
-   !(member? f (readdir ""))                     ; components, never whole paths
+   (elem "apps" (readdir "."))
+   (elem "apps" (readdir ""))
+   (elem "test" (readdir ""))
+   (elem "tmp" (readdir ""))
+   !(elem f (readdir ""))                     ; components, never whole paths
    ; a file is no directory, and neither is a prefix nothing lies under
    ((readdir f) = 'enotdir)
    ((readdir (d + "/nope")) = 'enoent)

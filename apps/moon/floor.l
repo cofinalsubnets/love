@@ -13,7 +13,7 @@
    (fn? ('fn . _)) 1                     ; ('fn ret?) -- a function; decays to its address
    (stru? ('struct . _)) 1
    (bitf? ('bitfield . _)) 1             ; (bitfield uty bitoff width); its lvalue is a unit address
-   (cplxty? ty) (stru? ty && member? <>ty '("__cplx_double" "__cplx_float"))   ; a seeded complex
+   (cplxty? ty) (stru? ty && elem <>ty '("__cplx_double" "__cplx_float"))   ; a seeded complex
 
    ; -- sizes and alignment. w is the machine word in bytes (4 on the 32-bit thumb ABI, 8
    ; otherwise), stag the tag table: tag -> (fields size align).
@@ -47,14 +47,14 @@
    ; long is 8 bytes -- on ilp32 a long cannot hold every uint, so long meets uint at ulong
    ; where LP64 answers long.
    (parith? ty) (? (bitf? ty) 1
-                   (member? ty '(bool char uchar short ushort int uint long ulong
+                   (elem ty '(bool char uchar short ushort int uint long ulong
                                  llong ullong i128 u128 float double)))
    (trank ty) (ty @ ('i128 || 'u128) 4 ('llong || 'ullong) 3 ('long || 'ulong) 2 1)
-   (tusg? ty) (member? ty '(uchar ushort uint ulong ullong u128))
+   (tusg? ty) (elem ty '(uchar ushort uint ulong ullong u128))
    (tusg ty) (ty @ 'int 'uint 'long 'ulong 'llong 'ullong 'i128 'u128 ty)
    (tw w64 ty) (trank ty @ 1 4 2 (w64 ? 8 4) 3 8 16)
    (pprom ty) (? (bitf? ty) (pprom <>ty)              ; a bitfield promotes as its unit
-                 (member? ty '(bool char uchar short ushort)) 'int
+                 (elem ty '(bool char uchar short ushort)) 'int
                  ty)
    (puac w64 ta tb)
     ; either operand decides, so this reads both and cannot be an @ over ta alone

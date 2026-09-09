@@ -53,7 +53,7 @@
  ("timeout: 1" = (cap (cup (fat-read f "LIMINE.CONF"))))
  (1 = (fat-write f "a rather long name indeed.text" "lfn"))
  ("lfn" = (cap (cup (fat-read f "a rather long name indeed.text"))))
- (member? "limine.conf" (cap (cup (fat-ls f "")))))
+ (elem "limine.conf" (cap (cup (fat-ls f "")))))
 
 ; directories: mkdir, files inside, nesting; rm insists a dir be empty first
 (test
@@ -102,7 +102,7 @@
            f3 (fat-mount (mkdev im2))
            (test
             (! (cap md)) (! (cap mt)) (! (cap mc))
-            (member? "::/limine.conf" (lines* (cup md)))
+            (elem "::/limine.conf" (lines* (cup md)))
             ("timeout: 1" = (cup mt))
             (tablet? f3)
             ("from the host side" = (cap (cup (fat-read f3 "fromhost.txt"))))

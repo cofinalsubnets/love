@@ -292,7 +292,7 @@
                                           (pfind >pv >rr i j)))
                           (mk j) (map (\ i (? (i = j) 1 (pfind pivs R i j)))
                                       (rng 0 (n - 1)))
-                          (map mk (filter (\ j !(member? j pivs)) (rng 0 (n - 1)))))
+                          (map mk (filter (\ j !(elem j pivs)) (rng 0 (n - 1)))))
    (bsplit p r vs fs)
    (? (tally fs = r) fs
       (0 = tally vs) fs
@@ -727,9 +727,9 @@
 ; fixpoint, the same shape as rewrite (noms are atoms, never walked into);
 ; simp is its laws face, expand its xlaws face -- through collect (below).
 (: (nzc c t) (? (nom? t) (? (t = 'pi || t = 'e) 1
-                             (member? ['nz t] c) 1
-                             (member? ['pos t] c) 1
-                             (member? ['neg t] c) 1)
+                             (elem ['nz t] c) 1
+                             (elem ['pos t] c) 1
+                             (elem ['neg t] c) 1)
                  (star? t) (0 != $(t * t))
                  (two? t) (<t @ 'exp 1
                                 '** (nzc c <>t)
@@ -737,7 +737,7 @@
                                 '* (nzc c <>t && nzc c <>(>t))))
    (nz? t) (nzc () t)
    (posc c t) (? (nom? t) (? (t = 'pi || t = 'e) 1
-                             (member? ['pos t] c) 1)
+                             (elem ['pos t] c) 1)
                  (star? t) (0 < t)
                  (two? t) (? (<t = 'exp) 1
                              (<t = 'sqrt) (posc c <>t)
@@ -833,7 +833,7 @@
    (fold1 t) (? (nom? t) t
                 !(two? t) t
                 !(3 = tally t) t
-                !(member? <t '(+ - * ** /)) t
+                !(elem <t '(+ - * ** /)) t
                 (: a <>t b <>(>t)
                    (? !(star? a && star? b) t
                       (<t = '**)

@@ -84,7 +84,7 @@
    ; papel's dev server calls `build` per source change, and its index card climbed 28
    ; ingredients per rebuild -- 2828 after a hundred -- which `prep` then walks every pass.
    ; unbounded memory and quadratic time, from a tool that looked idle.
-   (adds a b) (foldl (\ acc x (? (member? x acc) acc (acc + [x]))) a b)
+   (adds a b) (foldl (\ acc x (? (elem x acc) acc (acc + [x]))) a b)
    ; a Cookfile is written on one seat and read on another, so its paths name the
    ; seat symbolically: a leading $HOME or $PWD opens here, at registration. step
    ; strings want none of this -- sh -c expands them itself. a non-string item is

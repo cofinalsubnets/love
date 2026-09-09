@@ -119,7 +119,7 @@
    (q-bit? n) (: f (ev n)
                  (ok v) !(() = f v)
                  (ok 'zz && ok 0 && ok "" && ok ()))
-   bad (member? 'love-image (names ()) ? ()
+   bad (elem 'love-image (names ()) ? ()
           (filter (n \ !(q-bit? n)) (filter (n \ q-nom? n && !!(ev n)) (names ()))))
    _ (two? bad ? (puts ("bit-law offenders: " + show bad + "\n"), 0) 0)   ; NAME them: the
    (test !(two? bad)))                                           ; seat that fails is not always this one
@@ -476,7 +476,7 @@
  ('(1 3) = (filter (x \ x % 2) '(1 2 3 4))) ('(1 2 3) = (sort '(3 1 2))) ('(3 2 1) = (sortby (>) '(1 2 3)))
  ('(1 2 3 4) = (cat '(1 2) '(3 4))) ('(3 2 1) = (rev '(1 2 3))) ('(1 2) = (map cap (zip '(1 2) '(3 4))))
  (20 = <>(assoc 2 [[1 10] [2 20]])) ('(1 2) = (take 2 '(1 2 3 4))) ('(3 4) = (drop 2 '(1 2 3 4)))
- (3 = (last '(1 2 3))) ('(1 2) = (init '(1 2 3))) (member? 3 '(1 2 3)) !(member? 9 '(1 2 3))
+ (3 = (last '(1 2 3))) ('(1 2) = (init '(1 2 3))) (elem 3 '(1 2 3)) !(elem 9 '(1 2 3))
  (all (x \ 0 < x) '(1 2 3)) (any (x \ 2 < x) '(1 2 3))
  (7 = ('(7 8 9) 0)) (9 = ('(7 8 9) 2)) (9 = ('(7 8 9) -1)) (7 = ('(7 8 9) -3))   ; a charm indexes, negatives from the end
  !('(7 8 9) 3) !('(7 8 9) -4) !('(7 8 9) 'x) !('(7 8 9) ())        ; out of range, and every non-index operand, is ()
@@ -816,7 +816,7 @@
 ; post-egg runtime as pre-egg and pass every law under it vacuously. It measured 6 ms here
 ; and 0 is one quiet machine away. which names the mop takes is l/boot/egg.l's list and
 ; internal -- nothing on the surface names them, so nothing here asserts them.
-(: hatched (member? 'born (names ())))
+(: hatched (elem 'born (names ())))
 (hear welp)
 (test (lit? ev) (? hatched (charm? born) 1))
 (hear test-strict)
@@ -841,10 +841,10 @@
 ; test), and (cite ()) lists the registered names.
 (test
   (lit? (cite 'uu)) (lit? (cite 'kanren))                      ; boot-loaded, registered
-  (member? 'kanren (cite ())) (member? 'uu (cite ()))          ; the registry lists them
+  (elem 'kanren (cite ())) (elem 'uu (cite ()))          ; the registry lists them
   !(cite 'spec-nope)                                            ; the presence guard
   (tablet? (cite 'kanren))                                      ; a module is its tablet
-  (member? 'walk (keys (cite 'kanren)))                         ; so `keys` introspects it
+  (elem 'walk (keys (cite 'kanren)))                         ; so `keys` introspects it
   (8 = ((cite 'kanren 'subst) '(()) 8))                         ; curried member reach
   !(cite 'kanren 'spec-missing)                                 ; a member miss reads the zero point
   (lit? unify) (lit? rand) (lit? reads))                        ; the boot splices serve the bare names
@@ -854,7 +854,7 @@
 ; registers; answers the tablet. text anywhere defines or reopens any module; (module () ..) is
 ; a scratch layer, registered nowhere. each form compiles at its eval, so bindings defglob into
 ; the module layer and a member folds into a consumer at the consumer's compile, as ever.
-(: smv-out (member? 'smv (names ()))                     ; captured before: love0 reruns the
+(: smv-out (elem 'smv (names ()))                     ; captured before: love0 reruns the
                                                          ; corpus in-process, and run 1's use
                                                          ; below splices smv onto the walk
    m1 (module 'spec-mod (: smv 41 (smf x) (x + smv)))
@@ -864,8 +864,8 @@
   (tablet? m1) (m1 = m2) (m1 = cite 'spec-mod)           ; one tablet, registered, answered
   (42 = cite 'spec-mod 'smv) (100 = cite 'spec-mod 'smw) ; the reopen read 41 and extended
   (42 = ((cite 'spec-mod 'smf) 1))                       ; smf folded smv at its compile: 41
-  (smv-out = member? 'smv (names ()))                    ; no leak: the walk is as it was
-  !(member? 'sma (names ()))                             ; the anonymous layer leaks nothing
+  (smv-out = elem 'smv (names ()))                    ; no leak: the walk is as it was
+  !(elem 'sma (names ()))                             ; the anonymous layer leaks nothing
   (tablet? ma)))                                         ; the scratch layer answers its tablet
 ; use splices a module `module` made. two forms, and they have to be: a group is
 ; compiled whole, so a read of smv sitting beside the use that splices it is addressed
@@ -880,7 +880,7 @@
 (: smt (tablet 0))
 (: mq (module () (: (smf2 x) (pin smt 'called 1)) (: smq2 2))
  (test !(smt 'called)                                  ; nothing applied smf2
-         (member? 'smq2 (keys mq))))                     ; ..and both forms landed
+         (elem 'smq2 (keys mq))))                     ; ..and both forms landed
 
 ; --- odds & ends --- show renders a value as its reparsable printed form; an opaque handle
 ; acts as a constant function. the VM's own instruments -- clock/nclock/gauge/please and

@@ -34,7 +34,7 @@
       (each ts m)
        (? !(two? ts) m
           (: t <ts k (t 1) ad (t 3)
-             _ (? (member? k '(2 10)) 0 (scare 'ld32-reloc-kind k))
+             _ (? (elem k '(2 10)) 0 (scare 'ld32-reloc-kind k))
              _ (? (two? ad) (scare 'ld32-rel-addend k) 0)
              (each >ts (m + 1))))
       (rwalk rs n) (? !(two? rs) n (rwalk >rs (each >(<rs) n)))

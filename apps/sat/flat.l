@@ -1235,7 +1235,7 @@
    (fd-rat? db c)                                           ; rat on <c: every resolvent taut or rup
     (? (atom? c) 0
        (: p <c
-          (all (\ d (? (member? (neg p) d)
+          (all (\ d (? (elem (neg p) d)
                        (: rv (>c + rem-lit (neg p) d)
                           (? (1 = taut? rv) 1 (fd-rup? db rv)))
                        1))

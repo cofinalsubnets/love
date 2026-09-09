@@ -1778,8 +1778,8 @@
 
    (psym cx x)                                                         ; UU0 : uu1
    (? (x = 'UU) '(U 1)
-      (member? x '(nat bool unit empty)) 'UU
-      (x = 'zero) 'nat (x = 'tt) 'unit (member? x '(true false)) 'bool
+      (elem x '(nat bool unit empty)) 'UU
+      (x = 'zero) 'nat (x = 'tt) 'unit (elem x '(true false)) 'bool
       (: e (assoc x cx) (? e <>e (: g (peep GLOB x 0) (? g <g (scare 'uu-unbound x))))))
 
    (sortof cx en d T) (: l (ulvl (pinf cx en d T)) (? (l = 'no) (scare 'uu-not-a-type T) l))

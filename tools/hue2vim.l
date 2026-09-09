@@ -31,7 +31,7 @@
    (pre? t p) (: m #p
                  (go i) (? (m <= i) 1 (#t <= i) () (t i = p i) (go (i + 1)) ())
                  (go 0))
-   (esc? c set) (: b (bytes set) (member? c b))
+   (esc? c set) (: b (bytes set) (elem c b))
    ; a keyword as vim reads one: | and \ carry meaning in a syn keyword line
    (kwesc t) (foldl (\ a c (a + (? (esc? c "|\\") ("\\" + (string c)) (string c))))
                     "" (bytes t))
@@ -58,7 +58,7 @@
    ; and calling it the language, so this dies loudly rather than emit a file that
    ; looks fine and is wrong. unreachable while the seal holds, which is the point:
    ; it is what notices if the seal ever goes lane-dependent again.
-   _ (member? 'book (names ())
+   _ (elem 'book (names ())
       ? (say err "hue2vim: `book` is still on the book -- the seal did not run, and that is build state, not the language",
          put err 10, quit 1))
    wtab (: seen (tablet ())

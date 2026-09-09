@@ -120,8 +120,8 @@
    (\ l (: (ln x) (foldl (\ n _ (1 + n)) 0 x)
            p (\ x (0 = x % 2))
            (all p (filter p l) && ln (filter p l) <= ln l))))
- ; an element consed on is found by member?
- (fz-ok 300 28 (fz-pair2 fz-elem fz-l) (\ v (member? <v (<v . <>v)))))
+ ; an element consed on is found by elem
+ (fz-ok 300 28 (fz-pair2 fz-elem fz-l) (\ v (elem <v (<v . <>v)))))
 
 ; ---- print -> read round trip on random s-expressions ----
 ; serialize via show, re-read the bytes, expect equality -- through rd-test, the

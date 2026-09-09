@@ -24,8 +24,8 @@
 
 ; --- the seam -----------------------------------------------------------------
 (test
- (member? 'serve (cite ()))
- (member? 'serve-main (keys (cite 'serve)))
+ (elem 'serve (cite ()))
+ (elem 'serve-main (keys (cite 'serve)))
  ; the verb is registered, which is what makes `love serve` a word on the artifact
  (lit? (peep (cite 'verbs 'tab) 'serve ())))
 

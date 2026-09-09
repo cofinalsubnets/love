@@ -256,7 +256,7 @@
                  ((op = 'jmp || op = 'jmp8) && labset (f 1)) (go >l () (mk cur 'jmp (f 1) () . acc))
                  (op = 'br || op = 'br8) (go >l () (mk cur 'br (f 2) (w-cond (f 1)) . acc))
                  (op = 'mulo) (go >l () (mk cur 'br (f 5) (w-mulo-cond (f 1) (f 2) (f 3)) . acc))
-                 (member? op '(jmp jmp8 ret jmpr trap)) (go >l () (mk cur 'end () (w-ins f 0) . acc))
+                 (elem op '(jmp jmp8 ret jmpr trap)) (go >l () (mk cur 'end () (w-ins f 0) . acc))
                  (go >l (rev (w-ins f 0) + cur) acc))))
        bs (go prog () ())
        ((map (b \ [<b (b 1) ((b 1) @ ('jmp || 'br) (labs (b 2)) ()) (b 3)]) bs) . labs))
@@ -268,7 +268,7 @@
     (: bs <(w-blocks prog) n #bs
        (succs i) (: b (bs i) nx (i + 1 < n ? [(i + 1)] ())
                     ((b 1) @ 'jmp [(b 2)]
-                            'br  (member? (b 2) nx ? nx ((b 2) . nx))
+                            'br  (elem (b 2) nx ? nx ((b 2) . nx))
                             'fall nx
                             ()))
        ;; reverse postorder from the entry; what it misses is dead and never laid
@@ -440,11 +440,11 @@
                  (jot ntu))
        ;; 2. weak against strong: a weak definition with a strong twin elsewhere keeps its
        ;;    body under a private name; two weak ones, the first stands
-       strong (: t {} _ (map (\ tu (map (\ s (? (member? s (tu 11)) 0 (pin t (nom s) 1))) ((tu 2) + (tu 3)))) tus1) t)
+       strong (: t {} _ (map (\ tu (map (\ s (? (elem s (tu 11)) 0 (pin t (nom s) 1))) ((tu 2) + (tu 3)))) tus1) t)
        wkseen {}
        ren2 (map (\ i (: tu (tus1 i) r {}
                           _ (map (\ s (: l (nom s)
-                                         (? !(member? s (tu 11)) 0
+                                         (? !(elem s (tu 11)) 0
                                             (peep strong l 0) (pin r l (nom (show l + ".wk." + show i)))
                                             (peep wkseen l 0) (pin r l (nom (show l + ".wk." + show i)))
                                             (pin wkseen l 1))))
@@ -487,7 +487,7 @@
            _ (pin syms (nom ("__start_" + nm)) ['data a])
            _ (pin syms (nom ("__stop_" + nm)) ['data <r])
            r)
-       xnames (: (go l acc) (? !(two? l) (rev acc) (go >l (? (member? <l acc) acc (<l . acc))))
+       xnames (: (go l acc) (? !(two? l) (rev acc) (go >l (? (elem <l acc) acc (<l . acc))))
                  (go (catmap (tu \ map cap (tu 7)) tus2) ()))
        st1 (lane [base ()] (map (tu \ tu 9) tus2))
        st2 (lane st1 (map caup tus2))
@@ -514,9 +514,9 @@
        _ (map (\ x (? (peep wkall x 0) (pin syms x '(null)) 0)) owed0)
        owed (filter (\ x !(peep wkall x 0)) owed0)
        allowed (map nom (peep opts 'imports ()))
-       bad (filter (\ x !(member? x allowed)) owed)
+       bad (filter (\ x !(elem x allowed)) owed)
        _ (? (two? bad) (scare 'wasm-undefined bad) 0)
-       imps (filter (\ x (member? x owed)) allowed)
+       imps (filter (\ x (elem x owed)) allowed)
        ni (tally imps)
        _ (map (\ i (pin syms (imps i) ['fn i])) (jot ni))
        _ (map (\ i (pin syms ((fns i) 0) ['fn (i + ni)])) (jot (tally fns)))

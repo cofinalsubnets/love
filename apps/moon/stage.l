@@ -21,7 +21,7 @@
    (stage-join x y) (? (= x y) x 'top)
    (stage-tr op x y) 'top
    (stage-lit e) 'bot
-   (stage-okr bd decl) (member? bd '(top bot) || (= bd decl))
+   (stage-okr bd decl) (elem bd '(top bot) || (= bd decl))
    stage-dom (hash 'dice stage-dies 'ctors () 'tr stage-tr 'join stage-join
                    'litdie stage-lit 'okr stage-okr)
    stage-sigs '((cgfn (gst top) top)                ; sigged so its body -- both chains -- is walked

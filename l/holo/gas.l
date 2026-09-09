@@ -89,7 +89,7 @@
                 _ (foldl (\ _ i (pin t (name ("r" + show i)) (name ("r" + show i)))) 0 ^13)
                 _ (pin t 'sp 'sp) _ (pin t 'lr 'lr)
                 t)
-   (gthumb? tgt) (member? tgt '(thumb2 thumb2sp thumb1))
+   (gthumb? tgt) (elem tgt '(thumb2 thumb2sp thumb1))
 
    ;; the dialect's spelling of the neutral file, for operand substitution. `mod` is GNU's
    ;; modifier letter (x64 b/w/k/q, a64 w/x) or 0.
@@ -158,7 +158,7 @@
           (= m 'jmp) (? (<d = 'lbl) [['jmp <>d]] (<d = 'ind) [['jmpr (gx-r <>d)]] (scare 'gas-x64-operand ops))
           (= m 'call) (? (<d = 'lbl) [['call <>d]] (<d = 'ind) [['callr (gx-r <>d)]] (scare 'gas-x64-operand ops))
           (= m 'int) [['int (gx-imm d)]]
-          (member? m gx-mem2) (: bm (gx-mem d) [[m <bm <>bm]])
+          (elem m gx-mem2) (: bm (gx-mem d) [[m <bm <>bm]])
           (= m 'vmread) [['vmread (gx-r d) (gx-r s)]]
           (= m 'vmwrite) [['vmwrite (gx-r d) (gx-r s)]]
           (= m 'mov)
@@ -180,19 +180,19 @@
            (? (<s = 'rip && <>>s = 0) [['la (gx-r d) <>s]]
               (<s = 'mem) (: bm (gx-mem s) [['lea (gx-r d) <bm <>bm]])
               (scare 'gas-x64-operand ops))
-          (member? m gx-alu)
+          (elem m gx-alu)
            (? (k = 3) [['imul (gx-r d) (gx-r s) (gx-imm (ops 2))]]
               (: x (gx-r d) v (gx-rv s)
                  ([[m x x v]] + (? (m = 'xor && v = x) () (gx-zx x w)))))
           (= m 'cmp) [['cmp (gx-r d) (gx-rv s)]]
           (= m 'test) [['test (gx-r d) (gx-rv s)]]
-          (member? m '(shl sal shr sar rol ror))
+          (elem m '(shl sal shr sar rol ror))
            (: op (m = 'sal ? 'shl m) x (gx-r d)
               (? (k = 1) [[op x 1]]
                  (<s = 'im) [[op x <>s]]
                  (<s = 'rg && <>s = 1 && <>>s = 1) [[(name (show op + "v")) x 'r1]]
                  (scare 'gas-x64-operand ops)))
-          (member? m '(not neg inc dec push pop)) [[m (gx-r d)]]
+          (elem m '(not neg inc dec push pop)) [[m (gx-r d)]]
           (= m 'div) [[(w = 4 ? 'divl 'divq) (gx-r d)]]
           (= m 'ltr) [['ltr (gx-r d)]]
           (scare 'gas-x64-op m)))
@@ -257,10 +257,10 @@
           (= m 'bl) [['call (<>(os 0))]]
           (= m 'br) [['jmpr (ga-r (os 0))]]
           (= m 'blr) [['callr (ga-r (os 0))]]
-          (member? m '(dsb dmb)) [[m (<>(os 0))]]
+          (elem m '(dsb dmb)) [[m (<>(os 0))]]
           (= m 'mrs) [['mrs (ga-r (os 0)) (<>(os 1))]]
           (= m 'msr) ((os 1) @ ('imm n) [['msri (<>(os 0)) n]] [['msr (<>(os 0)) (ga-r (os 1))]])
-          (member? m ga-sys) [[m (<>(os 0)) (? (k > 1) (ga-r (os 1)) 'zr)]]
+          (elem m ga-sys) [[m (<>(os 0)) (? (k > 1) (ga-r (os 1)) 'zr)]]
           (ghas? ga-exc m) [[(ga-exc m) (? (k > 0) (<>(os 0)) 0)]]
           (= m 'svc) (: n (? (k > 0) (<>(os 0)) 0) (? (n = 0) '((sys)) [['svcn n]]))
           (= m 'mov)
@@ -334,8 +334,8 @@
           (ghas? gr-ld m) ((os 1) @ ('mem b o) [[(gr-ld m) (gr-r (os 0)) b o]] (scare 'gas-rv64-operand os))
           (ghas? gr-st m) ((os 1) @ ('mem b o) [[(gr-st m) b o (gr-r (os 0))]] (scare 'gas-rv64-operand os))
           (= m 'csrr) [['csrr (gr-r (os 0)) (<>(os 1))]]
-          (member? m gr-csr1) [[m (<>(os 0)) (gr-v (os 1))]]
-          (member? m gr-csr2) [[m (gr-r (os 0)) (<>(os 1)) (gr-v (os 2))]]
+          (elem m gr-csr1) [[m (<>(os 0)) (gr-v (os 1))]]
+          (elem m gr-csr2) [[m (gr-r (os 0)) (<>(os 1)) (gr-v (os 2))]]
           (scare 'gas-rv64-op m)))
    (gr-line toks)
     (: l (gline toks)

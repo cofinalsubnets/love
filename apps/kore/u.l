@@ -41,7 +41,7 @@
              (: (cl k rest es)
                  (? (tally a <= k) (uopts rest t vals es)
                     (: c (a k)
-                       (? !(member? c vals) (: _ (pin t c 1) (cl (k + 1) rest es))
+                       (? !(elem c vals) (: _ (pin t c 1) (cl (k + 1) rest es))
                           ; a glued value is asked by tally and never by `two?`: a text
                           ; is no link, so `two? "2"` is 0 and a -m2 read as a bare -m
                           ; with nothing behind it -- silently, since the miss then took

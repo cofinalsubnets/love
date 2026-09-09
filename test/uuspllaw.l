@@ -11,7 +11,7 @@
 ; forall states of both machines's "one design, two machines"
 ; as one law. exports to Rocq + Lean with the corpus.
 ; guard: substrate + generated terms must land in glob first; fail by name if not.
-(test (member? 'vof (names ())) (two? (peep GLOB 'srun 0)) (two? (peep GLOB 'sp0call 0)))
+(test (elem 'vof (names ())) (two? (peep GLOB 'srun 0)) (two? (peep GLOB 'sp0call 0)))
 
 ; --- the license: the splice observes as the call, value and trace, forall states ---
 (test

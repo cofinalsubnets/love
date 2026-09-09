@@ -90,7 +90,7 @@
     (? (op = "|") (? (ex-true? a) a (? (ex-true? b) b "0"))
        (op = "&") (? ((ex-true? a) && (ex-true? b)) a "0")
        (op = ":") (ex-match a b)
-       (member? op '("+" "-" "*" "/" "%")) (ex-arith op a b)
+       (elem op '("+" "-" "*" "/" "%")) (ex-arith op a b)
        (ex-cmp op a b))
    ; the whole descent is one function taking its own depth, so the primary can call
    ; back into the loosest level for a parenthesis without any two names needing to
@@ -118,7 +118,7 @@
        (? (5 < lv) (prim ts)
           (: ops (ex-ops lv)
              r (ex-parse (lv + 1) ts)
-             (go v m) (? ((two? m) && (member? <m ops))
+             (go v m) (? ((two? m) && (elem <m ops))
                          (: r2 (ex-parse (lv + 1) >m)
                             (go (ex-app <m v <r2) <>r2))
                          [v m])

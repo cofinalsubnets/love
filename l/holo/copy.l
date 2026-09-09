@@ -151,7 +151,7 @@
     (? !(tally as = 4) (oc-die "usage: objcopy -O binary|ihex IN OUT")
        (: fmt (? (<as = "-O") <>as (oc-die ("unrecognized option " + <as)))
           src (as 2) dst (as 3)
-          _ (? (member? fmt '("binary" "ihex")) 0 (oc-die ("unknown output format " + fmt)))
+          _ (? (elem fmt '("binary" "ihex")) 0 (oc-die ("unknown output format " + fmt)))
           r (uread src)
           _ (? (two? r) 0 (oc-die ("cannot open " + src)))
           s <>r

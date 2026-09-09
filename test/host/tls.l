@@ -24,9 +24,9 @@
 (borrow "apps/tls/tls.l")
 
 (test
- (member? 'tls (cite ()))
- (member? 'cc-block (keys (cite 'tls)))
- (member? 'po-mac (keys (cite 'tls)))
+ (elem 'tls (cite ()))
+ (elem 'cc-block (keys (cite 'tls)))
+ (elem 'po-mac (keys (cite 'tls)))
  (lit? (cite 'tls 'cc-xor)))
 
 ; --- bytes ------------------------------------------------------------------------

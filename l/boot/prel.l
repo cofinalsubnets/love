@@ -193,7 +193,6 @@
 (: catmap (compose (flip foldr ()) (compose cat))
    (assoc x l) (? (two? l) (? (= x (caap l)) (cap l) (assoc x (cup l))))
    (lidx x) ((: (f n l) (? (two? l) (? (= x (cap l)) n (f (+ 1 n) (cup l))) -1)) 0)
-   (member? x l) (? (two? l) (? (= x (cap l)) 1 (member? x (cup l))) 0)   ; any of (= x); first-order, so the glaze's point-= grammar closes it (auto.l re-declares this body)
    (zip a b) (? (two? a) (? (two? b) (. (. (cap a) (cap b)) (zip (cup a) (cup b)))))
    rev (foldl (flip (.)) ())
    ; every nom on the layer chain, deduped through a tablet. noms only -- a layer's keys also hold
@@ -231,7 +230,11 @@
                   (go (cap l) (cup l)))))
 
 (: (** a b) (b a)  
-   $ 1 ! nil?  (!= a b) (nil? (= a b)))                  ; the exponent answers to all three spellings
+   $ 1 ! nil?  (!= a b) (nil? (= a b))
+   ; elem is the nif (l/arr.c); this is its negation, so `nelem x` partials the way
+   ; `nil? * elem x` composes. spelled `nil?`, not glued `!`: a glued sigil factors
+   ; through monofactor's (mono ..), and mono is bound further down than this.
+   (nelem x l) (nil? (elem x l)))                         ; the exponent answers to all three spellings
 
 ; lisp compatibility synonyms
 (: seqx (\ l (. ': (foldr (\ l r (. '_ (. l r))) (list (last l)) (init l))))
@@ -266,7 +269,7 @@
                      _  (each fs (\ f (ev 'ev f)))
                      F  (cap (stack ()))
                      _  (? (two? xs)
-                           (each (keys F) (\ k (? (nom? k) (? (member? k xs) 0 (pull F k 0)) 0)))
+                           (each (keys F) (\ k (? (nom? k) (? (elem k xs) 0 (pull F k 0)) 0)))
                            0)
                      (leave ()))
     ; the quote takes the forms list whole -- (\ (f ..)), one element per form; an extra
@@ -742,12 +745,12 @@
    ; w/wl: does x / binding-list bs reference symbol v? \ and : shadow, one-operand \ is quote,
    ; macros expand. u tracks lambda depth; dm counts only references not under a lambda.
    (w v x bnd u dm) (?
-    (nom? x) (&& (? dm !u 1) (== x v) !(member? v bnd))
+    (nom? x) (&& (? dm !u 1) (== x v) !(elem v bnd))
     (one? x) 0
     (: h <x (?
       (== h '\) (? (one? >>x) 0 (: r (lp x) (w v >r (<r + bnd) 1 dm)))
       (== h ':) (wl v >x (cat (ln >x) bnd) u dm)
-      (: m (nom? h ? (macros h) 0) (m && !(member? h bnd) ? (w v (m >x) bnd u dm) (any (e \ w v e bnd u dm) x))))))
+      (: m (nom? h ? (macros h) 0) (m && !(elem h bnd) ? (w v (m >x) bnd u dm) (any (e \ w v e bnd u dm) x))))))
    (wl v bs bnd u dm) (?
     (one? bs) 0
     (one? >bs) (w v <bs bnd u dm)
@@ -765,13 +768,13 @@
      ; a one-operand \ is quote, macros expand -- except a head this let binds, which is a
      ; variable and never a macro (boxfix-core's sub reads it the same way).
      (bref x bnd u acc) (?
-      (nom? x) (member? x nm && !(member? x bnd) ? ((x . u) . acc) acc)
+      (nom? x) (elem x nm && !(elem x bnd) ? ((x . u) . acc) acc)
       (one? x) acc
       (: h <x (?
         (== h '\) (one? >>x ? acc (: r (lp x) (bref >r (<r + bnd) 1 acc)))
         (== h ':) (brefl >x (ln >x + bnd) u acc)
         (: m (? (nom? h) (macros h) 0)
-           (? (m && !(member? h bnd) && !(member? h nm)) (bref (m >x) bnd u acc)
+           (? (m && !(elem h bnd) && !(elem h nm)) (bref (m >x) bnd u acc)
               (foldl (a \ e \ bref e bnd u a) acc x))))))
      (brefl bs bnd u acc) (?
       (one? bs) acc
@@ -781,17 +784,17 @@
      (reads m) >(assoc m es)
      (anyname m) (map cap (reads m))                           ; read anywhere
      (barename m) (map cap (filter (nil? * cup) (reads m)))   ; read not under a \
-     (grow s) (: s2 (foldl (a \ m \ a + filter (\ k !(member? k a)) (anyname m)) s s)
+     (grow s) (: s2 (foldl (a \ m \ a + filter (\ k !(elem k a)) (anyname m)) s s)
                   (#s2 = #s ? s (grow s2)))
      ; near: a read from a binding at or before v. a lambda name takes only the bare ones --
      ; a call comes after the pin -- a value name every one.
      (near v) (: d (lambp >(assoc v prs))
-                 (any (m \ member? v (? d (barename m) (anyname m)))
+                 (any (m \ elem v (? d (barename m) (anyname m)))
                       (take (1 + lidx v nm) nm)))
      ; reach: v is read from anywhere the bindings before it get to through the let's own
      ; names -- capture, not evaluation order. an earlier closure inherits a later sibling's
      ; captures, so it wants v's slot at construction, before that slot exists.
-     (reach v) (member? v (grow (catmap anyname (take (lidx v nm) nm))))
+     (reach v) (elem v (grow (catmap anyname (take (lidx v nm) nm))))
      (filter (\ v (? (near v) 1 (lambp >(assoc v prs)) 0 (reach v))) nm))
    (mkcs bx) (map (v \ v . mint 0 . v) bx)
    (cellbinds cs) (map (c \ <>c . list tablet 0) cs)
@@ -813,19 +816,19 @@
 ; outward, and (: s (trim s)) under a param s reads the param. a read under a \ takes the
 ; cell, filled by the time the closure runs (or the cell-miss door when it runs early).
 ; pn is the pinned-so-far set; u is 1 under a \.
-(: (boxfix-core prs body) (: (rmc cs ns) (filter (\ p !(member? <p ns)) cs)
+(: (boxfix-core prs body) (: (rmc cs ns) (filter (\ p !(elem <p ns)) cs)
    ; bnd: the lexical binder set, seeded with the scope's own names, so a locally-bound name is
    ; an ordinary variable and never a macro head.
    (sub cs x bnd pn u) (?
     (nom? x) (: p (assoc x cs)
                 (? (one? p) x
-                   (|| u (member? x pn)) (list cellread <>p (list '\ >>p))
+                   (|| u (elem x pn)) (list cellread <>p (list '\ >>p))
                    x))
     (atom? x) x
     (: h (cap x) (?
       (== h '\) (one? >>x ? x (: r (lp x) ('\ . <r + list (sub (rmc cs <r) >r (<r + bnd) pn 1))))
       (== h ':) (: ns (ln >x) (': . subl (rmc cs ns) >x (cat ns bnd) pn u))
-      (: m (macros h) (? (&& m !(member? h bnd)) (sub cs (m >x) bnd pn u) (map (e \ sub cs e bnd pn u) x))))))
+      (: m (macros h) (? (&& m !(elem h bnd)) (sub cs (m >x) bnd pn u) (map (e \ sub cs e bnd pn u) x))))))
    (subl cs bs bnd pn u) (?
     (one? bs) bs
     (one? >bs) (list (sub cs <bs bnd pn u))
@@ -834,7 +837,7 @@
       (? (== () bx) ()
        (: cs (mkcs bx) ns0 (map cap prs)
           (one p pn) (: d (sub cs >p ns0 pn 0)
-                        (? (member? <p bx)
+                        (? (elem <p bx)
                            (: c (assoc <p cs) ('_ . list pin <>c (list '\ >>c) d))
                            (cap p . d)))
           (ones ps pn) (? (one? ps) ()
@@ -853,7 +856,7 @@
 ; --- scheme and common lisp spellings ---------------------------------------
 ; a name you half-remember should work. every row here is the same function under
 ; another name, so nothing below can drift; where the lisp semantics differ from
-; love's -- memq/assq/member answer a tail where member? answers a bit, for-each
+; love's -- memq/assq/member answer a tail where elem answers a bit, for-each
 ; takes its function first -- it is a definition and not an alias, and says so.
 (: (assq x l)   (? (two? l) (? (== x (caap l)) (cap l) (assq x (cup l))))
 )
@@ -1172,7 +1175,7 @@
                        (map (b \ [<b (<as . <>b)]) (arms <>as))
                      [[p ()]])))
    (wgds w gs) (foldl (\ x g (wcat x (wgd g))) w gs)
-   (adds u ns) (u + filter (\ n !(member? n u)) ns)    ; u, then what it did not have
+   (adds u ns) (u + filter (\ n !(elem n u)) ns)    ; u, then what it did not have
    _ (:: '@ (\ a
        (: v (nom 0)
           ; the clause a walk answers: its tests, then its non-linear equalities, then its

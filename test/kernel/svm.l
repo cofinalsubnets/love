@@ -11,7 +11,7 @@
 ; sentinel is in the guest's own rax, and only the guest could have put it
 ; there), and that the intercept fired where it should (the saved rip is the
 ; cpuid's own address, one instruction in -- not 0, and not the hlt's 5).
-(: had (member? 'svm (names ()))
+(: had (elem 'svm (names ()))
    (? (! (? had (svm ()) ()))
       (: _ (puts "svm: no AMD-V here, laws skipped") _ (putc 10) ())
       (: r (svm-run ())

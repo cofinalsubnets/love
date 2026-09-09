@@ -8,7 +8,7 @@
 ; love.c's mx.h is laid from -- so a dispatch edit that breaks the band quotient,
 ; or the mirror symmetry, fails a proof at `make test`. Substrate: test/uu.l.
 
-(test (member? 'vof (names ())))
+(test (elem 'vof (names ())))
 
 ; --- the codes ---
 (test

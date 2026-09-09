@@ -61,7 +61,7 @@
    ; a word-lane operand: a charm, a nested bitwise tree of them, or a numeral
    ; spine that lands back in a charm
    (wz? o) (? (charm? o) 1
-              (len3? o && member? <o '(& | ^)) (wz? <>o && wz? <>>o)
+              (len3? o && elem <o '(& | ^)) (wz? <>o && wz? <>>o)
               (two? o && charm? <o && allv? o) (charm? (ev o))
               0)
    bs '\                                                ; the quote symbol \ (for '(..) z-list data)
@@ -107,7 +107,7 @@
    (uzf h) (binop h || shiftf h || (= h '/ ? "Z.div" 0))  ; / only ever meets its unit (the Some/Some lane never fires)
    ; scalar u-tree: + - * recurse; the narrower ops take their unit directly
    (uz? x) (? (unit? x) 1  (intv? x) 1
-              (x @ [h i j] (? (member? h '(+ - *)) (uz? i && uz? j)
+              (x @ [h i j] (? (elem h '(+ - *)) (uz? i && uz? j)
                               (uzf h)              ((unit? i && uz? j) || (uz? i && unit? j))
                               0)
                    0))
@@ -150,7 +150,7 @@
    (twinv? x) (len3? x && (= <x 'twin) && charm? <>x && charm? <>>x)
    ; a twin/conj/i anywhere in the term: the gate into the gaussian lane (a bare charm
    ; or unit is gaussian-coercible, but only in gaussian company)
-   (hasg? x) (? (nom? x) (member? x '(i twin conj)) (two? x) (hasg? <x || hasg? >x) 0)
+   (hasg? x) (? (nom? x) (elem x '(i twin conj)) (two? x) (hasg? <x || hasg? >x) 0)
    (gneg? x) (two? x && un2? x && two? <x &&
               (: s <x (un2? s && (= <s '-) && (= <>s 0))))        ; ((- 0) g): negation
    (gz? x) (? (twinv? x) 1  (= x 'i) 1  (charm? x) 1  (unit? x) 1
@@ -194,7 +194,7 @@
                              (p >= 0 ? ("(LV " + show p + ")") ("(LO " + show (lidx x) + ")")))
                  (lamform? x) (ltlam >x () env)
                  (atom? x) 0
-                 (member? <x [bs colon qm]) 0
+                 (elem <x [bs colon qm]) 0
                  (: r (lt <x env) (? r (ltap r >x env) 0)))
    (ltap acc args env) (? (atom? args) acc
                           (: r (lt <args env)
@@ -220,7 +220,7 @@
    (allnothing? l) (two? l ? (nothing? <l && allnothing? >l) 1)
    (unitv? x) (? (= x ()) 1  (qempty? x) 1
                  (atom? x) 0
-                 (atom? >x) (member? <x [colon qm bs])   ; (:) (?) (\): an empty form reads its head
+                 (atom? >x) (elem <x [colon qm bs])   ; (:) (?) (\): an empty form reads its head
                  (<x @ '? (condu? >x)  '&& (andu? >x)  '|| (allnothing? >x)
                        ('map && len3? x) (= <>>x ())
                        0))
@@ -259,7 +259,7 @@
                     0))
    (listv? x) (arr? x || lst? x)                     ; any collection value
    ; the list reducers (love surface -> coq): net -> asum, prod -> aprod, max/min, tally -> count
-   (lop? h) (member? h '(net prod tally max min))
+   (lop? h) (elem h '(net prod tally max min))
    ; a hash literal {k v ..} = (hash k v ..): an assoc list of fixnum chains (even count)
    (even? l) (two? l ? !(even? >l) 1)
    (hashv? x) (two? x && (= <x 'hash) && zlist? >x && even? >x)
@@ -304,7 +304,7 @@
                 (nom? x) (peep vtab x 0 ? 1 0)
                 (two? x) (: h <x
                             (? (binop h)     (len3? x &&
-                                              (member? h '(& | ^)             ; bitwise is the word lane:
+                                              (elem h '(& | ^)             ; bitwise is the word lane:
                                                ? (wz? <>x && wz? <>>x)        ; a big operand answers (), off the Z model
                                                  (intv? <>x && intv? <>>x)))
                                (shiftf h)    (len3? x && charm? <>x && charm? <>>x)
@@ -314,8 +314,8 @@
                                (= h 'peep)  (len4? x && (hashv? <>x || listv? <>x) && intv? <>>x && intv? <>>>x)
                                (lop? h)       (un2? x && (listv? <>x || qnlist? <>x))
                                (= h 'abs)   (un2? x && intv? <>x)
-                               (member? h '(cap caup last)) (un2? x && lst? <>x)
-                               (member? h '(foldl foldr))
+                               (elem h '(cap caup last)) (un2? x && lst? <>x)
+                               (elem h '(foldl foldr))
                                               (len4? x && tfn2 <>x && intv? <>>x && lst? <>>>x)
                                (hashv? h)     (un2? x && intv? <>x)          ; ({..} k) map lookup
                                (two? h && un2? x) (tfn h && intv? <>x)       ; direct beta / an applied section
@@ -376,9 +376,9 @@
              (gem? x) "Vflo"  (string? x) "Vstr"  (= x 'i) "Vcx"
              (two? x) (: h <x
                         (? (= h bs) (tkq <>x)                        ; '(..) or 'x
-                           (member? h '(twin conj)) "Vcx"              ; (re ~ im); conj always answers a twin
+                           (elem h '(twin conj)) "Vcx"              ; (re ~ im); conj always answers a twin
                            (= h 'hash) "Vmap"                        ; {..}
-                           (member? h '(tuple iota)) "Varr"            ; @(..) / (iota n)
+                           (elem h '(tuple iota)) "Varr"            ; @(..) / (iota n)
                            "Vbot"))
              "Vbot")
    (tkq q) (? (nom? q) "Vsym" (two? q) "Vpair" (charm? q) "Vz" "Vbot")   ; the quoted datum's kind
@@ -388,7 +388,7 @@
                   'whole? "whole"  'atom? "atomp" 'packp "packp"
                   'lit? "lamp" 0)
    ; cross-kind order: symbol<string<number<chain<map by band; same band stays value/lex
-   (ordop? h) (member? h '(< <= > >=))
+   (ordop? h) (elem h '(< <= > >=))
    (litband x) (: t (tk x)
                  (? (t = "Vbot") -1  (t = "Vunit") -1                 ; the unit stays out of the band order
                     (t = "Vsym") 0 (t = "Vstr") 1
@@ -414,7 +414,7 @@
                                       (hasg? a && glist? a) ("(negb (gpos " + tgsum (gels a) + "))")
                                       (: p (tp a) (? p ("(negb " + p + ")") 0))))
                    (kpred h)  (: t (tk <>f) (t = "Vbot" ? 0 ("(" + kpred h + " " + t + ")")))  ; (charm? 5), (two? '(..))..
-                   (= h 'member?) (len3? f && intv? <>f && lst? <>>f ?
+                   (= h 'elem) (len3? f && intv? <>f && lst? <>>f ?
                                      ("(existsb (Z.eqb " + tv <>f + ") " + tl <>>f + ")") 0)
                    (= h 'all) (len3? f && lst? <>>f && tfb <>f ?
                                  ("(forallb " + tfb <>f + " " + tl <>>f + ")") 0)

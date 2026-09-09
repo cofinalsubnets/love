@@ -23,22 +23,22 @@
 ;  whose basename is papel.l, and papel's own seat would fire on it.)
 
 ; --- the module seam: three modules, and papel adds nothing to the book ----------
-(: parse-before (member? 'parse (names ()))  ; the book before the load, for the leak delta
+(: parse-before (elem 'parse (names ()))  ; the book before the load, for the leak delta
  _ (borrow "apps/papel.l")                ; the loader: papel wants lapiz + cook itself
  (test
-  (member? 'papel (cite ()))
-  (member? 'lapiz (cite ()))
-  (member? 'cook (cite ()))
-  (member? 'build (keys (cite 'papel)))
+  (elem 'papel (cite ()))
+  (elem 'lapiz (cite ()))
+  (elem 'cook (cite ()))
+  (elem 'build (keys (cite 'papel)))
   (lit? (cite 'papel 'papel-main))
   (! (cite 'papyrus))                          ; a missing module answers ()
   ; the combinators are a module nobody splices at boot: lapiz and cook each said (borrow 'peg),
   ; so peg is loaded and reachable by key. `parse` itself can sit on the book -- the
   ; crew layer (moon's front end) puts it there in the warm lane -- so the leak check is
   ; a delta: loading papel must not have added it.
-  (member? 'peg (cite ()))
+  (elem 'peg (cite ()))
   (lit? (cite 'peg 'seq))
-  (= parse-before (member? 'parse (names ())))))
+  (= parse-before (elem 'parse (names ())))))
 
 (: dir "/tmp/papeltest"
    (put-file f s) (: q (open (dir + "/" + f) "w") _ (say q s) (close q))
@@ -53,8 +53,8 @@
                                   (g j (. (snip s (i + m) j) acc)))
                                (g (i + 1) acc))
                             (rev acc))) 0 ()))
-   (has? l x)     (member? x l)
-   (uniq? l)      ((: (g l) (? (! (two? l)) 1 (member? <l >l) 0 (g >l))) l)
+   (has? l x)     (elem x l)
+   (uniq? l)      ((: (g l) (? (! (two? l)) 1 (elem <l >l) 0 (g >l))) l)
 
    ; from a clean slate: the freshness clauses below count files written, so a left-over
    ; site from a previous run would make the first build a no-op and every count wrong.

@@ -39,7 +39,7 @@
       (paren      Delimiter  (delim "()[]{}"))
       ; `,` earns a tag of its own because it is its own case everywhere else too:
       ; the C reader stops on it like a quote, and opfix splits a form at
-      ; it (prel's op-cm?/op-take/op-drop). it is in no vocabulary -- (member? ',
+      ; it (prel's op-cm?/op-take/op-drop). it is in no vocabulary -- (elem ',
       ; (names ())) is nothing -- so no word lane claims it; it is not a sigil, so
       ; no punct lane does; and it has no partner, so it cannot ride the pair above.
       (comma      Operator   (sep 44))

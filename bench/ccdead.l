@@ -193,7 +193,7 @@
        (? !(isdir? d) ()
           (: os (? (lane = "mooncc")
                    (: skip '("love.o" "moonlibc.o" "sys.o")
-                      keep (filter (\ f (!(member? f skip) && !(at? f "m_" 0)))
+                      keep (filter (\ f (!(elem f skip) && !(at? f "m_" 0)))
                                    (ls-suffix d ".o"))
                       ((map (\ f (d + "/" + f)) keep) + [(d + "/love.o") (d + "/m_am.o")]))
                    (: hd (d + "/host")

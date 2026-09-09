@@ -390,7 +390,7 @@
     (: t (tablet 0)
        o (uopts as t () ())
        _ (? (two? o) () (udie 2 "less: bad option"))
-       _ (foldl (\ a c (? (member? c '(78 105 115 101)) a
+       _ (foldl (\ a c (? (elem c '(78 105 115 101)) a
                           (udie 2 ("less: unknown option -" + string c))))
                 0 (keys t))
        [t <>>o])

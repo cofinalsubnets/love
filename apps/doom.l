@@ -198,7 +198,7 @@
        disp (opt as "-display" (getenv "DISPLAY"))
        frames (: f (opt as "-frames" ()) (string? f ? (digits f) 0))
        (? (any (\ a (a = "-h" || a = "--help")) as) (doom-usage 0)
-          !(member? 'doom-start (names ())) (doom-nest as)
+          !(elem 'doom-start (names ())) (doom-nest as)
           !(two? (stat wad)) (say err ("doom: no IWAD at " + wad + "\n"), 1)
           (: dn (dispof (string? disp ? disp ""))
              s (x-connect ("/tmp/.X11-unix/X" + dn))

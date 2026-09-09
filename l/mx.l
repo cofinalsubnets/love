@@ -67,12 +67,12 @@
 
    ; --- expanding the table ------------------------------------------------------
    (mx-rowof asg k)                                   ; which row does kind k take?
-    (: (go (r . u)) (member? k >r ? <r (go u))
+    (: (go (r . u)) (elem k >r ? <r (go u))
      (go asg))
    (mx-lane rw c)                                     ; the lane at (row rw, column c)
     (: (go (e . u)) (<e @ ^rw >e (go u))
        v (go mx-rows)                                 ; the row's seven, indexed by application
-       (v (? (member? c mx-numk) 0
+       (v (? (elem c mx-numk) 0
              (c @ 'KMint 1 'KNom 2 'KString 3 'KChain 4 'KTablet 5 6))))
    ; the whole square of lane noms, in enum order: mx2coq.l derives the band partition from
    ; it, and the C lays it out.

@@ -106,7 +106,7 @@
          fop  (? (imm < 0) (? (op = 'add) 'sub (op = 'sub) 'add (op = 'adds) 'subs 'adds) op)
          base ((peep a64-alu fop 0) 1)                   ; the (flipped) op's immediate base word (slot 1 of its alu row)
          (? (pos <= 4095) (alu-rri base d a pos)
-            ((pos <= 16777215) && member? fop '(add sub))     ; hi12 shifted (LSL #12, bit 22), then the low tail off d
+            ((pos <= 16777215) && elem fop '(add sub))     ; hi12 shifted (LSL #12, bit 22), then the low tail off d
              (catall [(alu-rri (base | 0x400000) d a (pos >> 12))                    ; (the S-forms stay single: a split
                        (? ((pos % 4096) = 0) () (alu-rri base d d (pos % 4096)))])    ;  would read the tail's flags)
             (scare 'imm12-range imm)))
@@ -340,8 +340,8 @@
    ;; XOR; the ordered relations run the borrow chain and read nzcv off the high sbcs; gt/above/le/be
    ;; reverse the subtraction and read the flipped relation.
    (a64-w128cc cond chain rsub zch)
-      (? (member? cond '(eq ne))       (zch + a64-set cond 'r0)
-         (member? cond '(lt below ge ae)) (chain + a64-set cond 'r0)
+      (? (elem cond '(eq ne))       (zch + a64-set cond 'r0)
+         (elem cond '(lt below ge ae)) (chain + a64-set cond 'r0)
          (cond = 'gt)    (rsub + a64-set 'lt 'r0)
          (cond = 'above) (rsub + a64-set 'below 'r0)
          (cond = 'le)    (rsub + a64-set 'ge 'r0)

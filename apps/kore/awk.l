@@ -291,7 +291,7 @@
    (aw-err m) (scare 'awk-err m)
    (aw-alp? c) (97 <= c <= 122 || 65 <= c <= 90 || c = 95)
    (aw-aln? c) (aw-alp? c || aw-dig? c)
-   (aw-kw? w) (member? w '("BEGIN" "END" "function" "func" "if" "else" "while"
+   (aw-kw? w) (elem w '("BEGIN" "END" "function" "func" "if" "else" "while"
                            "for" "do" "break" "continue" "next" "exit" "return"
                            "delete" "in" "print" "printf" "getline"))
    ; the / is two tokens depending on what came before it: division after a
@@ -300,7 +300,7 @@
    (aw-div? t)
     (aw-nil? t ? 0
      (<t @ ('num || 'str || 'name || 'ere) 1
-           'op (member? <>t '(")" "]" "++" "--"))
+           'op (elem <>t '(")" "]" "++" "--"))
            0))
    aw-ops '("**=" "+=" "-=" "*=" "/=" "%=" "^=" "==" "!=" "<=" ">=" "&&" "||"
             "++" "--" "!~" ">>" "**" "{" "}" "(" ")" "[" "]" ";" "," "+" "-"
@@ -397,7 +397,7 @@
    (aw-starts? ts)
     (two? ts &&
      (<<ts @ ('num || 'str || 'ere || 'name || 'fname) 1
-             'op (member? <><ts '("$" "(" "!" "++" "--"))
+             'op (elem <><ts '("$" "(" "!" "++" "--"))
              0))
    ; a comma-separated expression list, closed by the caller
    (aw-elist ts ng acc)
@@ -415,15 +415,15 @@
              'ere [['ere v] r]
              'name
               (? (aw-op? r "[") (aw-subs >r @ [es r2] [['idx v es] r2] ())
-                 (member? v aw-bis) [['bi v ()] r]
+                 (elem v aw-bis) [['bi v ()] r]
                  [['var v] r])
              'fname
               (: r2 (aw-want r "(" "expected (")
                  (aw-op? r2 ")" ?
-                    [(member? v aw-bis ? ['bi v ()] ['call v ()]) >r2]
+                    [(elem v aw-bis ? ['bi v ()] ['call v ()]) >r2]
                     (aw-elist (aw-nl r2) 0 () @ [es r3]
                       (: r4 (aw-want r3 ")" "expected ) after the arguments")
-                         [(member? v aw-bis ? ['bi v es] ['call v es]) r4])
+                         [(elem v aw-bis ? ['bi v es] ['call v es]) r4])
                       ())))
              'kw (aw-err ("`" + v + "' is not an expression"
                           + (v @ "getline" " (getline is out of dialect)" "")))
@@ -479,7 +479,7 @@
    ; which is why this takes one relop and stops
    (aw-e-rel ts ng)
     (aw-e-cat ts ng @ [a r]
-      (aw-k? r 'op && member? <><r (ng ? '("<" "<=" "==" "!=" ">=") aw-rels) ?
+      (aw-k? r 'op && elem <><r (ng ? '("<" "<=" "==" "!=" ">=") aw-rels) ?
          (aw-e-cat >r ng @ [b r2] [['cmp <><r a b] r2] ())
          [a r])
       ())
@@ -526,7 +526,7 @@
       ())
    (aw-e-assign ts ng)
     (aw-e-tern ts ng @ [n r]
-      (aw-k? r 'op && member? <><r aw-assigns && aw-lval? n ?
+      (aw-k? r 'op && elem <><r aw-assigns && aw-lval? n ?
          (aw-e-assign (aw-nl >r) ng @ [v r2] [['assign <><r n v] r2] ())
          [n r])
       ())

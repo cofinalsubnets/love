@@ -135,8 +135,8 @@
             (k @ 'rg (: n (as-regn a)
                       (as-p16 pw + (n >= 8 ? [65 (88 | as-lo n)] [(88 | n)])))
                  (as-emit pw 0 '(143) 0 a))
-            (member? mn '(neg not inc dec))
-            (: opc (member? mn '(inc dec) ? 255 247)
+            (elem mn '(neg not inc dec))
+            (: opc (elem mn '(inc dec) ? 255 247)
                ext (mn @ 'neg 3 'not 2 'inc 0 1)
                (w @ 0 (scare 'as-nowidth [mn a]) (as-emit w frc [(as-opw opc w)] ext a)))
             (k = 'ind)                                       ; call/jmp through a register or memory
@@ -144,7 +144,7 @@
                (mn @ 'call (as-emit 0 0 '(255) 2 o)
                      'jmp  (as-emit 0 0 '(255) 4 o)
                      (scare 'as-op1 mn)))
-            (member? mn '(call jmp))
+            (elem mn '(call jmp))
             (: sym (a 1) (mn @ 'call [232 (fix 4 'rel32 sym 0)] [233 (fix 4 'rel32 sym 0)]))
             (as-cc mn) (: sym (a 1) [15 (peep as-cc mn 0) (fix 4 'rel32 sym 0)])
             (scare 'as-op1 mn)))
@@ -186,7 +186,7 @@
                (: it <its
                   (<it @ 'label (pin labels <>it addr, go >its addr items)
                         'globl (pin globls <>it 1, go >its addr items)
-                        'dir (member? <>it as-dirs ? (go >its addr items)   ; M1: single .text section
+                        'dir (elem <>it as-dirs ? (go >its addr items)   ; M1: single .text section
                                 (scare 'as-directive <>it))
                         (: r (revonto (as-instr it) items 0)
                            (go >its (addr + <r) >r)))))

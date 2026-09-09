@@ -36,7 +36,7 @@
 ;
 ; substrate: test/uu.l (the kernel + nat vocabulary; this file loads after it by
 ; sort order). guard: fail by name if the kernel is not up.
-(test (member? 'vof (names ())))
+(test (elem 'vof (names ())))
 
 ; --- zed: the integers, ceil's codomain. ii1 n is n, ii2 n is -(succ n) ---
 (test

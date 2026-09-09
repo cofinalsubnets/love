@@ -11,7 +11,7 @@
    dif (K 'dif)  absent (K 'absent)  apt (K 'apt)  ifte (K 'ifte)  sole (K 'sole)
    naf (K 'naf)  tie (K 'tie)  untie (K 'untie)  scount (K 'scount)  empty_dict (K 'empty_dict)
    sun (K 'sun)
-   (unord_eq a b) (&& (= (sat a) (sat b)) (all (flip member? a) b))
+   (unord_eq a b) (&& (= (sat a) (sat b)) (all (flip elem a) b))
 
  _ (test
  (unord_eq '(1 2 3) '(2 1 3))
@@ -108,6 +108,6 @@
               ((boolean x) * (boolean y) * (boolean z)
                 * ((x === 1) + (y === 1))
                 * ((x === 0) + (z === 1))))))
-       _ (member? '(x 0 y 1 z 1) sat)        ; a model
-       (nil? (member? '(x 0 y 0 z 1) sat)))))  ; x=0,y=0 violates (x|y) -> not a model
+       _ (elem '(x 0 y 1 z 1) sat)        ; a model
+       (nil? (elem '(x 0 y 0 z 1) sat)))))  ; x=0,y=0 violates (x|y) -> not a model
  0)  ; the closing 0 = the outer form's body: nothing leaks

@@ -6,7 +6,7 @@
 ;   cat test/00-init.l test/host/doomx.l | out/love
 ; a love without doom in it would take the verb's NEST path -- a seed and a build under
 ; $HOME -- which no gate may start: the door is DOOM=1, and this says so instead.
-(: _ (? (member? 'doom-start (names ())) 0
+(: _ (? (elem 'doom-start (names ())) 0
         (: _ (puts "doomx: FAIL -- this love carries no doom (build with DOOM=1)") _ (putc 10) (quit 1)))
    xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "800x600x24" "-nolisten" "tcp"])
    (wfx p) (: g2 (gather p) (? (two? g2) g2 (: _ (rest 2) (wfx p))))
@@ -47,7 +47,7 @@
    _ (still (cap xv) 15)
    _ (wfx (cap xv))
    ; the pty's tail: the count, then whatever line ending the terminal put after it
-   (trimr s) (: n #s (? (&& (< 0 n) (member? (s (- n 1)) '(10 13))) (trimr (snip s 0 (- n 1))) s))
+   (trimr s) (: n #s (? (&& (< 0 n) (elem (s (- n 1)) '(10 13))) (trimr (snip s 0 (- n 1))) s))
    o (trimr out)
    _ (test (= "doom: 300 frames" (snip o (- (tally o) 16) (tally o))))
    (puts "doomx: ok"))

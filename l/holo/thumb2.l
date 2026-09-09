@@ -104,7 +104,7 @@
    (thumb-aluop op d a b)
       (: base (peep thumb-alu op 0)
          (? (reg? b) (thumb-alu-rrr base d a b)
-            (member? op '(add sub)) (thumb-addsub-imm op d a b)
+            (elem op '(add sub)) (thumb-addsub-imm op d a b)
             (scare 'thumb-logimm [op d a b])))                 ; and/or/xor #imm: materialize instead (immok blocks it)
 
    (thumb-cmp a b)                                            ; CMP.W Rn, Rm  /  CMP Rn, #imm8 (T2)
@@ -412,7 +412,7 @@
    ;; the thumb bit rides in `target` (the linker folds it out of the symbol) and passes
    ;; through untouched -- every field here shifts the offset right by at least one.
    (thumb-refix kind bs target site width)
-      (: aux (member? kind '(movw16 movt16) ? (bs 3 & 15) 0)     ; MOVW/MOVT t3: Rd, hw2 bits 11:8
+      (: aux (elem kind '(movw16 movt16) ? (bs 3 & 15) 0)     ; MOVW/MOVT t3: Rd, hw2 bits 11:8
          _ (? (thumb-patch kind 0 0 width aux = bs) 0 (scare 'thumb-refix-addend kind))
          (thumb-patch kind target site width aux))
 

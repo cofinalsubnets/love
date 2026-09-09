@@ -401,12 +401,12 @@
       (0 < tally (hue-words 'names))
       ; the probes answer what they claim to: a known macro, a known constant, a
       ; known verb -- each in its lane and no other
-      (member? "assert" (hue-words 'macros))
-      (member? "&&" (hue-words 'macros))                   ; not filtered: a sigil macro is a macro
-      (member? "tau" (hue-words 'values))
-      (member? "map" (hue-words 'names))
-      !(member? "+" (hue-words 'names))                    ; a bare operator belongs to the punct lanes
-      !(member? "$" (hue-words 'values))
+      (elem "assert" (hue-words 'macros))
+      (elem "&&" (hue-words 'macros))                   ; not filtered: a sigil macro is a macro
+      (elem "tau" (hue-words 'values))
+      (elem "map" (hue-words 'names))
+      !(elem "+" (hue-words 'names))                    ; a bare operator belongs to the punct lanes
+      !(elem "$" (hue-words 'values))
       ; sorted, because the generator freezes them into a diff-gated file
       (: w (hue-words 'names) (= w (sort w)))
       ; the stability law. both book lanes are positive tests -- a name does
@@ -415,8 +415,8 @@
       ; the generated syntax file cannot depend on how the generator was started.
       (all (\ w (lit? (ev (intern w)))) (hue-words 'names))
       (all (\ w !(lit? (ev (intern w)))) (hue-words 'values))
-      !(member? "argv" (hue-words 'names))
-      !(member? "argv" (hue-words 'values))
+      !(elem "argv" (hue-words 'names))
+      !(elem "argv" (hue-words 'values))
       ; earlier row wins in the one tablet, exactly as the table reads top-down
       (: b (hue-book ()) (= (b "assert") 'macro && (= (b "tau") 'const) &&
                           (= (b "map") 'book))))

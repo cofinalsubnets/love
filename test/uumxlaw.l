@@ -13,7 +13,7 @@
 ;
 ; what this cannot see, and the fuzz must: that a lane nom names the C function it
 ; says it does. the table is the interface; love.c is the other side of it.
-(test (member? 'vof (names ())))
+(test (elem 'vof (names ())))
 
 ; --- the roster every forall below ranges over. a kind added or a lane merged
 ; --- moves these numbers first ---

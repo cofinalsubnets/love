@@ -1892,7 +1892,7 @@ static struct ai_def const __attribute__((section("ai_knifs"), used)) defs[] = {
   {"disk", {.k = nif_disk}},
   {"disk-read", {.k = nif_disk_read}},
   {"disk-write", {.k = nif_disk_write}},
-  // x64 only, so a love-side reader asks (member? 'svm (names ())) before (svm ()): on
+  // x64 only, so a love-side reader asks (elem 'svm (names ())) before (svm ()): on
   // the a64 seat the nom is not in the book, so reading it is missing, not absence.
 #if defined(__x86_64__)
   {"svm", {.k = nif_svm}},
@@ -2061,7 +2061,7 @@ void kmain(void) {
  "           (go cl) (: r (sound cl) (? (two? r) (: _ (ev (cap r)) (go (cup r))) 0))"
  "           (go t))"
  "        127)))"
- "   (k-tool nm as) (? (member? nm (names ())) (. (ev nm) as) ())"
+ "   (k-tool nm as) (? (elem nm (names ())) (. (ev nm) as) ())"
   // the crew is NOT in the kernel's cat, so a verb nobody asks for costs nothing. the
   // load reads the roster's files off /proc/src -- where the bake laid them and no write
   // can have reached -- and each file's own (module ..) form registers it. it hangs off
@@ -2146,7 +2146,7 @@ void kmain(void) {
   // a baked lush or cook spawns tasks here. the egg book has no tablet (its cat
   // captures the shim directly below), and the probe answers that.
   r = ai_evals_(r,
-   "(? (member? 'seat-doors (names ()))"
+   "(? (elem 'seat-doors (names ()))"
    "   (: _ (pin seat-doors 0 spawn) _ (pin seat-doors 1 spawnio)"
    "      _ (pin seat-doors 2 spawnmap) (pin seat-doors 3 wait))"
    "   0)");
@@ -2161,7 +2161,7 @@ void kmain(void) {
   // always being a raw tty, and signal accepts and ignores; lush's entry rides both.
   r = ai_evals_(r,
    "(: (raw m) () (signal n h) ())"
-   "(map (\\ n (? (member? n (names ())) () (ev [': [n 'x] ()])))"
+   "(map (\\ n (? (elem n (names ())) () (ev [': [n 'x] ()])))"
    "     '(hardlink spawn spawnmap fork exec herald wait still"
    "       getpid getuid seal ttyfg glean pipe fdopen dup dup2 connect listen"
    "       accept udp-bind udp-send udp-recv hark winsize))");

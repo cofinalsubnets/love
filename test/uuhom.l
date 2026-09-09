@@ -6,7 +6,7 @@
 ; differential foot ties homcomp to the binary's `*` at a numeral (vof/lof, the
 ; corpus's own gate). exports to Rocq + Lean with the corpus (uu2coq/uu2lean).
 ; guard: the uu kernel (test/uu.l) must load first -- $t front-loads it; fail by name if not.
-(test (member? 'vof (names ())))
+(test (elem 'vof (names ())))
 
 (test
  ; love's `*` on the top band, spelled in uu: (homcomp f g) x = f (g x) -- prel.l's

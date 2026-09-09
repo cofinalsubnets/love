@@ -66,13 +66,13 @@
        (: x <items
           (? (fix? x)
               (: lbl (fix-l x) w (fix-w x) k (fix-k x)
-                 (? (internal? && member? k rset &&
+                 (? (internal? && elem k rset &&
                      o-has? labels lbl && !(o-has? wkset lbl))          ; a weak target stays a reloc
                      (: tgt (peep labels lbl 0)
                         bs (patch-with be k tgt off w (fix-a x))
                         (o-walkr be >items labels wkset internal? rset (off + w)
                                  (rev bs + bacc) racc))
-                    (: fill (? (member? k '(b26 b19 adrp21 addlo12 j21)) (le32 (fix-a x))
+                    (: fill (? (elem k '(b26 b19 adrp21 addlo12 j21)) (le32 (fix-a x))
                                ; a surviving riscv 'pcrel: the aux packs both base words (auipc low,
                                ; the I-insn high) -- lay them as the 8-byte placeholder call_plt patches
                                (k == 'pcrel) (le32 (fix-a x % 4294967296) + le32 (fix-a x // 4294967296))
@@ -81,11 +81,11 @@
                                ; field is pc=instr+4 relative, but the reloc's P is the instr address, so
                                ; the -4 compensates -- gas emits the identical fff7feff for `bl sym`). the
                                ; linker folds s-p into the imm bits and needs the opcode there already.
-                               (member? k '(b bcc bl)) (patch-with be k off off w (fix-a x))
+                               (elem k '(b bcc bl)) (patch-with be k off off w (fix-a x))
                                ; a surviving movw16/movt16 (thumb2 la) holds its base encoding with a
                                ; zero imm16 -- absolute, so no pipeline addend; bakemw below re-encodes
                                ; the section-relative addend into the field when the target binds one.
-                               (member? k '(movw16 movt16)) (patch-with be k 0 off w (fix-a x))
+                               (elem k '(movw16 movt16)) (patch-with be k 0 off w (fix-a x))
                                (o-zeros w))
                        ; carry the byte just before the field (bacc's head, reversed) -- the
                        ; x64 opcode: E8/e9 (call/jmp) vs a lea's modrm, so reltext can tell a
@@ -151,7 +151,7 @@
    ; ABI keeps the addend in the field, so a surviving thumb branch carries its base
    ; encoding (o-walk fills it) and the .rel tables need no addend column. --
    arm32-targets '(thumb1 thumb2 thumb2sp arm)
-   (arm32? t) (member? t arm32-targets)
+   (arm32? t) (elem t arm32-targets)
    r-thm-call 10                                    ; R_ARM_THM_CALL   ((S+A)|T) - P  (a thumb BL to a symbol)
    r-thm-jump24 30                                  ; R_ARM_THM_JUMP24 same math      (a thumb2 B.W tail-jump)
    r-arm-abs32 2                                     ; R_ARM_ABS32      S + A           (la's pooled address word)
@@ -211,7 +211,7 @@
            (go rs acc)
             (? !(two? rs) acc
                (: r <rs lbl (r 2)
-                  w (member? (r 1) kinds ? (o-where lanes lbl))
+                  w (elem (r 1) kinds ? (o-where lanes lbl))
                   (go >rs (? !(two? w) acc
                              !(pick <w lbl) acc
                              (o-has? seen lbl) acc
@@ -262,7 +262,7 @@
         (: (go rs bs)
             (? !(two? rs) bs
                (: r <rs
-                  (go >rs (member? <>r '(movw16 movt16) ?
+                  (go >rs (elem <>r '(movw16 movt16) ?
                              (: sl (mwloc <>>r)
                                 (<>sl = 0 ? bs
                                    (o-putbs bs <r (patch-with be <>r <>sl 0 4 <>>>r))))
@@ -287,12 +287,12 @@
                                  locs))
            fsyms (catall (o-mapi (\ i fs (: w (o-place fs)
                                             (o-sym32 (stroffs (nloc + i))
-                                                     (member? fs wknames ? 2 1)         ; stb_weak vs stb_global
+                                                     (elem fs wknames ? 2 1)         ; stb_weak vs stb_global
                                                      2 <w (<>w | 1))))                    ; stt_func, +thumb bit
                                  funcnames))
            gsyms (catall (o-mapi (\ i gs (: w (o-place gs)
                                             (o-sym32 (stroffs (nloc + nfun + i))
-                                                     (member? gs wknames ? 2 1) 1 <w <>w)))
+                                                     (elem gs wknames ? 2 1) 1 <w <>w)))
                                  globnames))
            ; a weak undef resolves to zero at static link, where a strong one is an
            ; error -- the binding is the whole difference
@@ -565,7 +565,7 @@
                                  locnames))
            fsyms (catall (o-mapi (\ i fs (: w (o-place fs)
                                             (o-sym (stroffs (nloc + i))
-                                             (member? fs wknames ? 2 1)   ; stb_weak: a strong def elsewhere wins
+                                             (elem fs wknames ? 2 1)   ; stb_weak: a strong def elsewhere wins
                                              2 <w <>w)))
                                  funcnames))
            ; a data symbol honours wknames too: musl's __stdio_exit.c defines
@@ -573,7 +573,7 @@
            ; wins -- a hardcoded strong binding made that pair a link-dup
            gsyms (catall (o-mapi (\ i gs (: w (o-place gs)
                                             (o-sym (stroffs (nloc + nfun + i))
-                                                   (member? gs wknames ? 2 1) 1 <w <>w)))
+                                                   (elem gs wknames ? 2 1) 1 <w <>w)))
                                  globnames))
            ; an external symbol honours wknames too: a weak undefined reference
            ; resolves to zero at static link (musl's _DYNAMIC), where a strong
@@ -626,7 +626,7 @@
                   (o-rela off si
                           (? (o-has? wkset lbl && o-has? fnidx lbl) r-plt32
                              (o-where lanes lbl) r-pc32
-                             (member? pv '(232 233)) r-plt32
+                             (elem pv '(232 233)) r-plt32
                              r-pc32)
                           ((sa + aux) - 4))
                  ; a64: an adrp/add pair relocates by kind (a page delta never

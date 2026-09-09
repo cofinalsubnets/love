@@ -167,7 +167,7 @@
      (: w (dns-words l)
       (? (atom? w) (go u)
        (: a (dns-quad <w)
-        (two? a && member? h >w ? a (go u)))))
+        (two? a && elem h >w ? a (go u)))))
      (go (dns-lines (dns-look path))))
 
    ; the nameservers, in order -- 127.0.0.1 when the file names none, musl's fallback

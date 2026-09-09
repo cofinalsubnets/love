@@ -55,7 +55,7 @@
    (ln x) (: t (show x) ("L" + ("lvm_" = snip t 0 4 ? (snip t 4 #t) t)))
    lanes ((: (go rows acc)                              ; distinct lanes, appearance order
             (? (one? rows) (rev acc)
-               (go >rows (foldl (\ a x (member? x a ? a (x . a))) acc <rows))))
+               (go >rows (foldl (\ a x (elem x a ? a (x . a))) acc <rows))))
           (addm + mulm) ())
 
    ; ==, not =: the test is "is this the head cell", not "does it look like it"

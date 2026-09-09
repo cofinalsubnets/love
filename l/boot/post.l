@@ -321,7 +321,7 @@
    every all some any delete-duplicates uniq butlast init
    (for-each f l) (each l f)                     ; scheme takes the function first
    ; the -q trio walks by identity and answers what it found, () for a miss --
-   ; `member?`/`assoc` above stay love's, a bit and a pair by `=`.
+   ; `elem`/`assoc` above stay love's, a bit and a pair by `=`.
    (memq x l)   (? (two? l) (? (== x (cap l)) l (memq x (cup l))))
    (member x l) (? (two? l) (? (= x (cap l)) l (member x (cup l)))))
 
@@ -851,7 +851,7 @@
     (walk_star s u path) (?                          ; cycle-safe: (mu label) on a back-edge
      (var? u) (: t (has_s s u)
                  (? (one? t) u
-                    (member? u path) ['mu <u]
+                    (elem u path) ['mu <u]
                     (walk_star s <t (u . path))))
      (tie? u) (: a (nom 0) ['tie a (walk_star s (untie u a) path)])
      (two? u) (walk_star s <u path . walk_star s >u  path)
@@ -859,7 +859,7 @@
     ; the noms an answer carries -- a tie's binder, an atom a relation minted -- are
     ; renamed a1 a2 .. in first-sight order, so an answer reads back and compares.
     (noms t acc) (? (var? t) acc
-                    (mint? t) (member? t acc ? acc (t . acc))
+                    (mint? t) (elem t acc ? acc (t . acc))
                     (two? t) (noms >t (noms <t acc))
                     acc)
     (renom d t) (? (var? t) t
@@ -901,16 +901,16 @@
 (: ov-both
     (: (ov-sigof sigs nm) (sigs @ (((aa . ua) @ a) . u) (nm @ ^aa a (ov-sigof u nm)))
        (ov-look env x) (env @ ((ap . up) . env') (x @ ^ap up (ov-look env' x)) 'bot)
-       (ov2-var? dom d) (nom? d && !(member? d (dom 'dice)) && !(member? d (dom 'ctors)))   ; a sig variable: not concrete, not a constructor
+       (ov2-var? dom d) (nom? d && !(elem d (dom 'dice)) && !(elem d (dom 'ctors)))   ; a sig variable: not concrete, not a constructor
        (ov2-vars dom d acc) (one? d ?
-        (ov2-var? dom d && !(member? d acc) ? (d . acc) acc)
+        (ov2-var? dom d && !(elem d acc) ? (d . acc) acc)
         (foldl (flip $ ov2-vars dom) acc d))
        (ov2-lk vm d) (? (one? vm) d
                         (d = <<vm) ><vm
                         (ov2-lk >vm d))   ; ><vm is glued: cuap, not the cons
        (ov2-term vm d)    (one? d ? (ov2-lk vm d) (map (ov2-term vm) d))
        (ov2-uall ps as s) (? (one? ps || one? as) s
-                             (member? <as '(top bot)) (ov2-uall >ps >as s)   ; an unknown arg is gradual: consistent with any param, binds nothing
+                             (elem <as '(top bot)) (ov2-uall >ps >as s)   ; an unknown arg is gradual: consistent with any param, binds nothing
                              (: s1 (unify s <ps <as) (ufail? s1 ? ufail (ov2-uall >ps >as s1))))
        (ov2-inst dom sg args)                                          ; sg = (name (param-dies) result): structured caller instantiation
         (: params <>sg result <>>sg
@@ -923,7 +923,7 @@
           (? (nom? e) (ov-look env e)
              (one? e) (dom 'litdie e)
              (: h <e as (map (ov-kindof dom sigs env) >e)
-                (? (member? h '(+ *)) (dom 'tr h <as <>as)
+                (? (elem h '(+ *)) (dom 'tr h <as <>as)
                    (h = '? && #e = 4) (dom 'join <>as <>>as)
                    (: sg (ov-sigof sigs h) (one? sg ? 'top (ov2-inst dom sg as))))))
        (ov-zip (ap . up)  (ad . ud))     ((ap . ad) . ov-zip up ud)
@@ -1457,7 +1457,7 @@
                  (rnum (j + 1) 0 0 @ [_ hi j2] (clo j2 ? [lo hi (j2 + bw)])
                                     (clo (j + 1) ? [lo () (j + 1 + bw)])))))
        ; can a repeat land? nothing repeats an anchor or an empty head
-       (repable acc) (two? acc && !(member? <<acc '(bol eol)))
+       (repable acc) (two? acc && !(elem <<acc '(bol eol)))
        ; where a sigil is an anchor. POSIX leaves BRE's answer undefined outside
        ; the head and the tail; GNU and busybox both read `^` wherever nothing has
        ; been read yet -- the head, or just past `\(` or `\|`, which is exactly an
@@ -1797,7 +1797,7 @@
                     (<a = "-l") (two? >a ?                     ; a preload named for me seats
                                  (mine? ws <>a ? (<>a . >>a) (seatof ws >>a)))  ; me -- the shebang's lane
                     (mine? ws <a) (<a . >a))
-   (fire ws)   (seatof ws (? (member? 'cmdline (names ())) >cmdline ())))
+   (fire ws)   (seatof ws (? (elem 'cmdline (names ())) >cmdline ())))
 
 ) ; module verbs
 
@@ -1878,7 +1878,7 @@
 (: no (nom 0) eofsym (nom 0)
 
    ; a seat door, or (): the freestanding seats carry none of these
-   (want n) (member? n (names ()) ? (ev n) ())
+   (want n) (elem n (names ()) ? (ev n) ())
    raw (want 'raw)
 
 

@@ -14,7 +14,7 @@
 ;
 ; the model's reals are the half-integers, so a measure that is neither whole nor
 ; a half is off the corpus and says so (uuval-not-a-half) rather than going quiet.
-(test (member? 'vof (names ())))
+(test (elem 'vof (names ())))
 
 ; a body-less `:` -- the uv2-* vocabulary leaks; none shadows a nif.
 (:

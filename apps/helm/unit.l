@@ -72,7 +72,7 @@
         (? !(two? fs) [(rev us) (rev gs)]
            (: f <fs
               (? !(two? f)              (go >fs us (("not a unit form: " + show f) . gs))
-                 !(member? <f hkinds)   (go >fs us (("unknown kind " + show <f) . gs))
+                 !(elem <f hkinds)   (go >fs us (("unknown kind " + show <f) . gs))
                  !(two? >f)             (go >fs us (("a " + string <f + " wants a name") . gs))
                  !(name? <>f)           (go >fs us (("a unit name is a name, not " + show <>f) . gs))
                  (: nm <>f  cs >>f
@@ -89,13 +89,13 @@
    ; in reading order. nothing here raises: a bad config is a report, not a fault.
    (happend a b) (foldl (\ l x (x . l)) b (rev a))
    (hdedup l seen) (? !(two? l) (rev seen)
-                      (member? <l seen ? (hdedup >l seen) (hdedup >l (<l . seen))))
+                      (elem <l seen ? (hdedup >l seen) (hdedup >l (<l . seen))))
    (hstrings? l) (? !(two? l) 1 (string? <l ? (hstrings? >l) 0))
 
    ; a cycle in `after` is the one error the supervisor cannot survive: the dep
    ; walk would never bottom out. answers the name the walk came back to, or ().
    (hcycle us nm seen)
-    (? (member? nm seen) nm
+    (? (elem nm seen) nm
        (: u (hby us nm)
           (? !u ()
              (: path (nm . seen)
@@ -112,7 +112,7 @@
        (happend
         (happend
          (: r (peep u 'restart ())
-            (? !(member? r hrestarts) [(tag + "restart " + show r + " is not no|on-fail|always")]
+            (? !(elem r hrestarts) [(tag + "restart " + show r + " is not no|on-fail|always")]
                (: n (peep u 'tries 0)
                   (? (charm? n && 0 < n) () [(tag + "tries wants a positive count")]))))
          (? (run? && !(two? ex))       [(tag + "no (exec ..) -- nothing to run")]

@@ -373,7 +373,7 @@
                (dir-save f dcl (dir-drop (dir-load f dcl) nm) ? 1))))))
 
    ; --- the kernel's own disk as a dev, when this seat has one ---
-   (fat-disk u) (? (member? 'disk (names ()))
+   (fat-disk u) (? (elem 'disk (names ()))
                    (: n (ev 'disk ())
                       (n ? [(ev 'disk-read) (ev 'disk-write) n]))
                    ()))

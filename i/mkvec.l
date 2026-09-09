@@ -35,7 +35,7 @@
    x-eoi '((li r0 0x20) (li r2 0x20) (outb))
    (x-stub v)
     ([['label (nom $ "exc_stub_" + show v)]]
-     + (member? v xerr-vecs ? () [['push 0]])       ; the dummy error code
+     + (elem v xerr-vecs ? () [['push 0]])       ; the dummy error code
      + [['push v] ['jmp 'exc_common]])
    (sn1 v) ("exc_stub_" + show v)
    x-stub-names (map sn1 (v-upto 32))

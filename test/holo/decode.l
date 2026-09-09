@@ -17,7 +17,7 @@
        (? (c <= 0) ()
           (: off (xa-trim (snip l 0 c)) rest (xa-trim (snip l (c + 1) #l))
              (? (!(xa-allof? off xa-hexc? 0) || 0 = #rest) ()
-                (: ws (filter (w \ !(member? w objdump-prefixes) && !(xa-has? w 46))
+                (: ws (filter (w \ !(elem w objdump-prefixes) && !(xa-has? w 46))
                               (words (string (map (c \ c = 9 ? 32 c) (chars rest)))))
                    (two? ws ? [(hexv off) <ws] ()))))))
    ;; ours: the last item of a row that is not a prefix word; a .byte is the miss "byte"
@@ -28,7 +28,7 @@
    (agree? ours theirs)
     (: n #theirs
        (? (ours = theirs) 1
-          (n > 2 && ours = (snip theirs 0 (n - 1)) && member? (theirs (n - 1)) '(98 119 108 113)) 1
+          (n > 2 && ours = (snip theirs 0 (n - 1)) && elem (theirs (n - 1)) '(98 119 108 113)) 1
           (: k (xa-att-nil (name theirs)) (nom? k && ours = show k)) 1
           (theirs = "movsl" && ours = "movsd") 1
           (theirs = "movabs" && ours = "mov") 1

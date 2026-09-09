@@ -25,7 +25,7 @@
 ; carrier, the second by the bridge and one line each.
 ;
 ; substrate: test/uu.l and test/uuval.l (both load before this by sort order).
-(test (member? 'vof (names ())) (two? (peep GLOB 'vlink 0)))
+(test (elem 'vof (names ())) (two? (peep GLOB 'vlink 0)))
 
 ; --- zsucc and zpred are inverse, each way. the two nat cases are where the
 ; --- sign crosses: zpred (ii1 0) is -1 and zsucc (ii2 0) is 0 ---

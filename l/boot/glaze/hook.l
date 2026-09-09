@@ -29,11 +29,11 @@
        ; only says the ops are implemented -- a body past the grammar reaches cggir, whose ? chain ends in a
        ; silent () that emits no code for an operand it cannot hold
        (grp-ok? gds) (: cands (map (gd \ [<<gd (#<gd - 1)]) gds) (#(grpfix gds cands) = #gds))   ; (name arity)
-       (exprn ps e) (? (member? e ps) 1  (whole? e) 1  (atom? e) 0                    ; the leaf grammar, exact arity: (+ x 1 2) is a tower, not x + 1
-                       (e @ (op a b) (member? op '(+ - * // % & | ^ < <= > >= =) && exprn ps a && exprn ps b)
+       (exprn ps e) (? (elem e ps) 1  (whole? e) 1  (atom? e) 0                    ; the leaf grammar, exact arity: (+ x 1 2) is a tower, not x + 1
+                       (e @ (op a b) (elem op '(+ - * // % & | ^ < <= > >= =) && exprn ps a && exprn ps b)
                             ('? c a b) (exprn ps c && exprn ps a && exprn ps b)
                             0))
-       (opnd-ok? ps e) (? (two? e) (all (opnd-ok? ps) >e)  (nom? e) (member? e ps)  1)   ; every operand leaf a frame param: jgir has no slot for a free capture
+       (opnd-ok? ps e) (? (two? e) (all (opnd-ok? ps) >e)  (nom? e) (elem e ps)  1)   ; every operand leaf a frame param: jgir has no slot for a free capture
        (gdefs-ok? gds) (all (gd \ opnd-ok? ><gd >gd) gds)                             ; ... and per def body, over that def's own params
        ; e = the bytecode entry (the deopt target), s = the surface (\ frame.. body), a = arity, gv = ala's
        ; folded global resolver (the book is mopped post-egg), farq = the letrec-local predicate (a farq name
@@ -62,11 +62,11 @@
                           okshape (pd && two? tail && all (dd \ dd @ (n . '\ . _ . _) (nom? n) 0) dds)
                           gdefs (? okshape (map (dd \ (<dd . init >>dd) . last >>dd) dds) ())     ; ((name p..) . B)
                           gnames (map caap gdefs)
-                          flat? (okshape && member? <tail gnames && >tail = ps)                     ; the tail is (entry frame..)
+                          flat? (okshape && elem <tail gnames && >tail = ps)                     ; the tail is (entry frame..)
                           osym '__outer  agdefs (? okshape (gdefs + [((osym . ps) . tail)]) ())
                           (? (flat? && grp-ok? gdefs && jgir-ok? gdefs && gdefs-ok? gdefs)
                              (hit (jitgroupirx gdefs <tail arch e s))                               ; stamps the outer s: =/show transparent
-                             (okshape && !(member? osym gnames) && opnd-ok? ps tail && grp-ok? agdefs && jgir-ok? agdefs && gdefs-ok? gdefs)
+                             (okshape && !(elem osym gnames) && opnd-ok? ps tail && grp-ok? agdefs && jgir-ok? agdefs && gdefs-ok? gdefs)
                              (hit (jitgroupirx agdefs osym arch e s))
                              (: aj (njit-amble s a e gv farq lams nm ti ta inl arch)                 ; amble, the last lane: 0 on decline
                                 (? aj (hit aj)

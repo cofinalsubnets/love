@@ -33,7 +33,7 @@
    ; own text where the reason is readable (run.l is one whole `(? hosted ..)`), never in
    ; a roster over here that goes stale without saying so.
    apart '("00-init.l" "spec.l" "uu.l" "glaze-x86.l" "glaze-hook.l" "zz-fin.l")
-   (law? n) (: k #n (2 < k && ".l" = snip n (k - 2) k && !(member? n apart)))
+   (law? n) (: k #n (2 < k && ".l" = snip n (k - 2) k && !(elem n apart)))
    host (map (\ n ("test/" + n)) (filter law? (sort (readdir "test"))))
    roster (["test/00-init.l" "test/spec.l" "test/uu.l"] + host +
            ["test/kernel/ramfs.l" "test/kernel/fs.l" "test/kernel/wfs.l"

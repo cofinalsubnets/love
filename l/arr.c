@@ -772,6 +772,22 @@ static ai_noinline bool tray_eq(struct ai *g, word a, word b) {
 // (= a b): value-equality with numeric promotion across the tower; falls through
 // to eql for non-numeric operands. strictly looser than eqv, which still rejects
 // mixed-type chains (table keys 3 and 3.0 stay distinct).
+// the whole of `=` as a question, so lvm_eq and lvm_elem cannot drift: a charm or a nom
+// is settled by identity, and a tray, a complex, a numeric coin and a float each read by
+// value before the structural fall-through. eql alone is NOT `=` -- it answers 0 for
+// (= (/// 1 1) 1), which the coin band below reads as equal.
+static bool ai_eq_value(struct ai *g, word a, word b) {
+ if ((charmp(a) && charmp(b)) || nomp(a) || nomp(b)) return a == b;
+ if (trayp(a) || trayp(b)) return tray_eq(g, a, b);
+ if (twinp(a) || twinp(b))
+  return (twinp(a) || isnum(a)) && (twinp(b) || isnum(b))
+      && (twinp(a) ? twin_re(a) : toflo(a)) == (twinp(b) ? twin_re(b) : toflo(b))
+      && (twinp(a) ? twin_im(a) : 0) == (twinp(b) ? twin_im(b) : 0);
+ if (coinp(a) || coinp(b))
+  return ai_numband(g, a) && ai_numband(g, b) ? ai_cmp3(g, a, b) == 0 : eql(g, a, b);
+ if (gemp(a) || gemp(b)) return isnum(a) && isnum(b) && (toflo(a) == toflo(b));
+ return eql(g, a, b); }
+
 lvm(lvm_eq) {
  word a = Sp[0], b = Sp[1];
  // the common case: identity settles two charms, and a point against anything
@@ -781,37 +797,27 @@ lvm(lvm_eq) {
   bool r = a == b;
   if (Ip[1].ap == lvm_cond) { Sp += 2; Ip = r ? Ip + 3 : Ip[2].m; ai_musttail return Continue(); }
   ai_musttail return Answerp(1, r ? putcharm(1) : zero); }
- if (trayp(a) || trayp(b)) {   // whole-array equality -> a boolean; the mask lives on < and >
-  bool r = tray_eq(g, a, b);
-  Sp[1] = r ? putcharm(1) : zero;
-  ai_musttail return Nextp(1, 1); }
- // complex: equal iff re and im match, a real reading as (r, 0); before the
- // float lane so a complex never reaches toflo
- if (twinp(a) || twinp(b)) {
-  bool r = (twinp(a) || isnum(a)) && (twinp(b) || isnum(b))
-        && (twinp(a) ? twin_re(a) : toflo(a)) == (twinp(b) ? twin_re(b) : toflo(b))
-        && (twinp(a) ? twin_im(a) : 0) == (twinp(b) ? twin_im(b) : 0);
-  Sp[1] = r ? putcharm(1) : zero;
-  ai_musttail return Nextp(1, 1); }
- bool r;
- // a ratio coin is a number: cmp_rank seats it in the band by value, so `<` and sort
- // read it there and `=` must agree -- else (<= a b) and (>= a b) are both true where
- // (= a b) is false. the band test gates it, so every other coin stays an opaque
- // newtype; cmp3 is exact, where toflo would call two rationals past 2^53 equal.
- if (coinp(a) || coinp(b)) {
-  if (ai_numband(g, a) && ai_numband(g, b)) r = ai_cmp3(g, a, b) == 0;
-  else r = eql(g, a, b); }
- // a float operand compares as doubles across the whole tower (a bignum loses
- // precision past 2^53, the documented caveat); otherwise eql
- else if (gemp(a) || gemp(b)) r = isnum(a) && isnum(b) && (toflo(a) == toflo(b));
- else r = eql(g, a, b);
- Sp[1] = r ? putcharm(1) : zero;
+ Sp[1] = ai_eq_value(g, a, b) ? putcharm(1) : zero;
  ai_musttail return Nextp(1, 1); }
 
 // (== a b): pointer/word identity, no structural recursion
 lvm(lvm_same) {
  Sp[1] = Sp[0] == Sp[1] ? putcharm(1) : zero;
  ai_musttail return Nextp(1, 1); }
+
+// (elem x l): x equal to some element of the chain l. eqv scratches above the pool and
+// never collects, so l is safe to hold across a compare.
+// a nom and a charm are each their own equality -- eql settles both by identity and
+// never reaches eqv -- so ask that ONCE rather than per link: the common
+// (elem nm '(a b c)) then walks at one pointer compare a link, which is assq's speed.
+lvm(lvm_elem) { word x = Sp[0], l = Sp[1];
+ if (nomp(x)) {
+  for (; chainp(l) && !nomp(l); l = B(l))
+   if (A(l) == x) ai_musttail return Push(putcharm(1));
+  ai_musttail return Push(zero); }
+ for (; chainp(l) && !nomp(l); l = B(l))
+  if (ai_eq_value(g, x, A(l))) ai_musttail return Push(putcharm(1));
+ ai_musttail return Push(zero); }
 
 // ============================================================================
 // obin -- object-array elementwise lane (ai_O)

@@ -210,7 +210,7 @@
    ; the arch word is positional and A PATH still wins: `./a64` is the
    ; directory, the verb rail's own rule worn one level down.
    (seed-arch? w) (: n #w
-                     (go i) (? (n <= i) (member? (arch-nom w) seed-arches)
+                     (go i) (? (n <= i) (elem (arch-nom w) seed-arches)
                                (w i = 47) 0
                                (go (i + 1)))
                      (go 0))

@@ -52,7 +52,7 @@
    (rd-dotl? n) (: t (tally n) (&& (2 < t) (= ".l" (snip n (t - 2) t))))
    (rd-walk d acc)
      (foldl (\ a n (: p (? (= "." d) n (d + "/" + n))
-                      (? (|| (rd-dot? n) (member? n rd-skip)) a
+                      (? (|| (rd-dot? n) (elem n rd-skip)) a
                          (rd-dir? p) (rd-walk p a)
                          (rd-dotl? n) (p . a)
                          a)))

@@ -251,7 +251,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
                                   (? (0 < #glue) (: _ (pin t 'suf glue) (go rest fs))
                                      (two? rest) (: _ (pin t 'suf <rest) (go >rest fs))
                                      (: _ (gzc-moan t "-S wants a suffix") ())))
-                              (member? c '(99 100 102 104 107 108 110 113 114 116 118))
+                              (elem c '(99 100 102 104 107 108 110 113 114 116 118))
                                (: _ (pin t (intern (string c)) 1) (cl (k + 1) rest))
                               (c = 78) (: _ (pin t 'N 1) (cl (k + 1) rest))
                               (c = 86) (: _ (pin t 'V 1) (cl (k + 1) rest))

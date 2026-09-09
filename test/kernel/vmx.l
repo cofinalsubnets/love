@@ -14,7 +14,7 @@
 ; physical 0 holds the machine's own low memory. So a sentinel of 0x1234 coming
 ; back could only have been executed out of the page the ept pointed at -- an
 ; untranslated fetch would have run whatever lies at the bottom of RAM.
-(: had (member? 'vmx (names ()))
+(: had (elem 'vmx (names ()))
    (? !(? had (vmx ()) ())
       (puts "vmx: no VT-x here, laws skipped\n", ())
       (: r (vmx-run ())

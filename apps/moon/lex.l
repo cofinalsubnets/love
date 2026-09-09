@@ -106,7 +106,7 @@
                  (48 <= c <= 57 || 97 <= c <= 122 || 65 <= c <= 90 || c = 95 || 128 <= c ? 16 0) +
                  (48 <= c <= 57 || 97 <= c <= 102 || 65 <= c <= 70 ? 32 0) +
                  (c = 117 || c = 85 || c = 108 || c = 76 ? 64 0) +
-                 (member? c '(40 41 91 93 123 125 59 44 46 58 63 126 33 43 45 42 47 37 60 62 61 38 124 94 35) ? 128 0))
+                 (elem c '(40 41 91 93 123 125 59 44 46 58 63 126 33 43 45 42 47 37 60 62 61 38 124 94 35) ? 128 0))
        ctbl (: (go k acc) (k < 0 ? (string acc) (go (k - 1) (cbit k . acc))) (go 255 ()))
        (ws? c) (ctbl c & 2)
        (dig? c) (ctbl c & 4)
@@ -256,17 +256,17 @@
                       [j1 0])
            j2 <ee exp <>ee
            isflo (dot || hase)
-           j3 (? (isflo && j2 < n && member? (src j2) '(102 70 108 76)) (j2 + 1) j2)
+           j3 (? (isflo && j2 < n && elem (src j2) '(102 70 108 76)) (j2 + 1) j2)
            ; gcc's imaginary suffix (i/I/j/J, riding after or before f/l): 1.0fi
            ; is _Complex_I's spelling (musl complex.h) -- the flag rises to 'imag
-           im (isflo && j3 < n && member? (src j3) '(105 73 106 74))
+           im (isflo && j3 < n && elem (src j3) '(105 73 106 74))
            j4 (? !im j3
                  (: k (j3 + 1)
-                    (? (k < n && member? (src k) '(102 70 108 76)) (k + 1) k)))
+                    (? (k < n && elem (src k) '(102 70 108 76)) (k + 1) k)))
            dxp (exp - fd)
            ; C11 6.4.4.2: an f/F suffix makes the constant a float, not a double kept
            ; at 53 bits. the 4th element reports it; the caller picks the kind.
-           fsu ?(isflo && (j2 < n) && member? (src j2) '(102 70))
+           fsu ?(isflo && (j2 < n) && elem (src j2) '(102 70))
            val (? isflo ['dec mant dxp] iv)          ; cflo folds it, if anyone asks
            [j4 (? im 'imag isflo) val fsu])
        ; -- hex literals: 0x integer (0xff), or a hex float 0x H.H p [+-] D (a binary
@@ -297,8 +297,8 @@
                  j2 <ee exp <>ee
                  bexp (exp - 4 * fd)                        ; each fractional hex digit is 2^-4
                  val ['hex mant bexp]                    ; cflo folds it, if anyone asks
-                 j3 (j2 < n && member? (src j2) '(102 70 108 76) ? (j2 + 1) j2)
-                 [j3 1 val (j2 < n && member? (src j2) '(102 70))])))
+                 j3 (j2 < n && elem (src j2) '(102 70 108 76) ? (j2 + 1) j2)
+                 [j3 1 val (j2 < n && elem (src j2) '(102 70))])))
        (go i line acc)
         (? (n <= i) [1 (rev acc)]
            (: c (src i)

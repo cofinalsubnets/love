@@ -18,8 +18,8 @@
 
 ; --- the module seam: rune registered, the splice + accessor both reach ----
 (test
- (member? 'rune (cite ()))                ; the registry lists it
- (member? 'deriv (keys (cite 'rune)))      ; keys introspects the layer
+ (elem 'rune (cite ()))                ; the registry lists it
+ (elem 'deriv (keys (cite 'rune)))      ; keys introspects the layer
  (1 = ((cite 'rune 'cnorm) (3 /// 3)))      ; the opaque accessor reaches a member
  (lit? (cite 'rune))                      ; presence: the accessor is a closure
  (! (cite 'ruin)))                        ; a missing module answers ()

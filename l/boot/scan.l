@@ -105,7 +105,7 @@
    ; build it, or answer the twin. `nif` hands the twin back itself when it declines
    ; (inle's heap rides an NX window; so does wasm), so no fallback is arranged here
    (mk _) (: h (cite 'holo) g (cite 'glaze)
-             (? (nil? h || nil? g || !(member? love-arch '(x64 a64))) walk
+             (? (nil? h || nil? g || !(elem love-arch '(x64 a64))) walk
                 (: bs (peep ((h 'assemble) love-arch (scan-ir love-arch)) 'bytes 0)
                    ((g 'nif) (cask bs) walk '(\ q (q)) 3))))
    box (tablet 0)                                ; one install for the process, not one per ask

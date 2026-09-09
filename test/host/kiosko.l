@@ -22,8 +22,8 @@
 (borrow 'kiosko)                                 ; the baked module, spliced
 
 (test
- (member? 'kiosko (cite ()))
- (member? 'serve1 (keys (cite 'kiosko)))
+ (elem 'kiosko (cite ()))
+ (elem 'serve1 (keys (cite 'kiosko)))
  (lit? (cite 'kiosko 'kiosko-main))
  (! (cite 'kiosco)))
 

@@ -7,7 +7,7 @@
 ; a dest.l edit that breaks one fails a proof at `make test`, and the laws
 ; export to Rocq + Lean with the corpus (test_uugen / test_uulean).
 ; guard: substrate + generated terms must land in glob first; fail by name if not.
-(test (member? 'vof (names ())) (two? (peep GLOB 'drun 0)) (two? (peep GLOB 'ds1ck 0)))
+(test (elem 'vof (names ())) (two? (peep GLOB 'drun 0)) (two? (peep GLOB 'ds1ck 0)))
 
 ; --- the member store & the home write collapse: one si, one alu ---
 (test

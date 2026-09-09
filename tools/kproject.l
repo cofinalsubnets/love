@@ -81,7 +81,7 @@
       _ ((: (go e)
              (? ((symo + symz) <= e) 0
                 (: sx (rle16 pie (e + 6)) bind (pie (e + 4) >> 4)
-                   _ (? (0 < sx < 0xff00 && member? bind '(1 2))
+                   _ (? (0 < sx < 0xff00 && elem bind '(1 2))
                         (: nm (ld-cstr pie (stro + rle32 pie e))
                            (? (two? (glo nm)) 0
                               (pin glo nm [(bias + rle64 pie (e + 8)) 0])))

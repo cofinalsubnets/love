@@ -26,7 +26,7 @@
    (json-null? v) !!(kind v = 'json-null)
 
    ; --- reading --------------------------------------------------------------------
-   (jws s i n)  (i < n && member? (s i) '(32 9 10 13) ? (jws s (i + 1) n) i)
+   (jws s i n)  (i < n && elem (s i) '(32 9 10 13) ? (jws s (i + 1) n) i)
 
    (jdigv c)    (? (48 <= c <= 57) (c - 48) -1)
    (jhexv c)    (? (48 <= c <= 57)  (c - 48)
@@ -95,7 +95,7 @@
 
    ; an exponent: optional sign, then at least one digit.
    (jexp s i n) (: g  (i < n && s i = 45 ? -1 1)
-                   a  (i < n && member? (s i) '(43 45) ? (i + 1) i)
+                   a  (i < n && elem (s i) '(43 45) ? (i + 1) i)
                    dg (jdigits s a n)
                    (<>dg != a ? [(g * <dg) <>dg]))
 
@@ -113,7 +113,7 @@
                          c  (two? fd ? <>fd b)
                          fv (two? fd ? <fd 0)
                          fl (two? fd ? (c - (b + 1)) 0)
-                         ee (c < n && member? (s c) '(101 69))
+                         ee (c < n && elem (s c) '(101 69))
                          ex (ee && jexp s (c + 1) n)
                          d  (two? ex ? <>ex c)
                          (? (two? fd && fl = 0) ()   ; "1." is not json

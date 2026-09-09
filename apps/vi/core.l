@@ -676,7 +676,7 @@
        ; pending is dropped -- a diagonal is not a range
        (diag vc hc) (? (two? (st 'op)) (pin st 'op ())
                        (: _ (mv1 (vmot st vc n rawc)) (mv1 (vmot st hc n rawc))))
-       (? (member? c '(104 108 48 94 36 119 101 98 106 107 71))   ; h l 0 ^ $ w e b j k G
+       (? (elem c '(104 108 48 94 36 119 101 98 106 107 71))   ; h l 0 ^ $ w e b j k G
            (motion (vmot st (? ((c = 119) &&                      ; the vi special case:
                                 (: o (st 'op)                     ; cw changes the word only,
                                    (two? o && (<o = 99))))
@@ -684,13 +684,13 @@
                           n rawc))
           (c = 377) (diag 107 104)  (c = 373) (diag 107 108)         ; alt-y alt-u: up-left, up-right
           (c = 354) (diag 106 104)  (c = 366) (diag 106 108)         ; alt-b alt-n: down-left, down-right
-          (member? c '(102 70 116 84))                            ; f F t T
+          (elem c '(102 70 116 84))                            ; f F t T
            (: _ (pin st 'cnt n)
               (pin st 'pc (? (c = 102) 'f (c = 70) 'F (c = 116) 't 'T)))
           (c = 103) (: _ (pin st 'gcnt rawc) (pin st 'pc 'g))
           (c = 90) (pin st 'pc 'Z)
           (c = 114) (: _ (pin st 'cnt n) (pin st 'pc 'r))
-          (member? c '(100 121 99))                             ; d y c
+          (elem c '(100 121 99))                             ; d y c
            (: op (st 'op)
               (? (two? op && (<op = c))
                  (: total (* n <>op)

@@ -106,7 +106,7 @@
    (ws? c)   (sp? c || c = 10 || c = 13)
    (dig? c)  (47 < c < 58)
    (hash? c) (c = 35)
-   (spec? c) (member? c '(92 42 96 91 93))                     ; \ * ` [ ] -- where an inline span can start
+   (spec? c) (elem c '(92 42 96 91 93))                     ; \ * ` [ ] -- where an inline span can start
    (ord? c)  !(spec? c))
 
 ; --- the meta record: document-level fields, one canonical shape ---
@@ -148,7 +148,7 @@
    (bmrg l) (? (atom? l) ()
                (atom? >l) (<l . ())
                (: a <l b <>l
-                  (? (= <a <b && member? <a '(bullets numbers deflist))
+                  (? (= <a <b && elem <a '(bullets numbers deflist))
                      (bmrg ([<a (<>a + <>b)] . >>l))
                      (a . bmrg >l))))
    plain (strcat * map caup)                        ; an inl of pure texts back to a string

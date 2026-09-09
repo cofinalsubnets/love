@@ -480,7 +480,7 @@
    ; the stat tuple is (size mtime mode ..); 61440 masks the kind, 32768 a file, 16384 a dir
    (t-file op p)                               ; a file test, or 'no if op is not one
     (: s (stat p) m (? (two? s) <>>s 0)
-       (? !(member? op t-fops) 'no
+       (? !(elem op t-fops) 'no
           !(two? s) 0
           (op = "-e") 1
           (op = "-f") (32768 = (& m 61440))
@@ -503,7 +503,7 @@
           (3 = n) (: a <as op <>as b <>>as
                      (? (op = "=") (a = b)
                         (op = "!=") !(a = b)
-                        !(member? op t-nops) 'no
+                        !(elem op t-nops) 'no
                         (: x (t-int a) y (t-int b)
                            (? (!(two? x) || !(two? y)) 'no
                               (: p <>x q <>y
@@ -541,13 +541,13 @@
    ; reads it the same way). nothing pinned falls to the file, then to a refusal --
    ; uname owes a name it was told, never one it guessed.
    (u-os _)
-    (: n (? (member? 'love-os (names ())) (ev 'love-os) ())
+    (: n (? (elem 'love-os (names ())) (ev 'love-os) ())
        s (? (nom? n) (peep os-uname n ()) ())
        (? (string? s) s (u-1line "/proc/sys/kernel/ostype" "unknown")))
    (u-join ws) (? !(two? ws) "" !(two? >ws) <ws (<ws + " " + u-join >ws))
    (uname-main as)
     (: fl (? (two? as) as '("-s"))
-       (want f) (? (member? "-a" fl) 1 (member? f fl))
+       (want f) (? (elem "-a" fl) 1 (elem f fl))
        ws ((? (want "-s") [(u-os ())] ())
            + (? (want "-n") [(u-1line "/proc/sys/kernel/hostname" "unknown")] ())
            + (? (want "-r") [(u-1line "/proc/sys/kernel/osrelease" "unknown")] ())
@@ -737,7 +737,7 @@
    ; on first use and kept for the process, scan.l's shape and reason
    (kmake ir twin arity)
     (: h (cite 'holo) g (cite 'glaze)
-       (? (nil? h || nil? g || !(member? love-arch '(x64 a64))) twin
+       (? (nil? h || nil? g || !(elem love-arch '(x64 a64))) twin
           (: bs (peep ((h 'assemble) love-arch (ir love-arch)) 'bytes 0)
              ((g 'nif) (cask bs) twin '(\ q (q)) arity))))
    kbox (tablet 0)
@@ -1267,7 +1267,7 @@
         (? !(two? a) (rev fs)
            (: w <a
               o (uopt w)
-              takes (? o (member? <o '("1" "2" "t" "a" "v")) 0)
+              takes (? o (elem <o '("1" "2" "t" "a" "v")) 0)
               glue (? o <>o "")
               got (? (0 < tally glue) glue (? (two? >a) <>a ()))
               rest (? (0 < tally glue) >a (? (two? >a) >>a >a))
@@ -1357,7 +1357,7 @@
               o (uopt w)
               k (? o <o ())
               glue (? o <>o "")
-              takes (? o (member? k '("A" "t" "N" "j")) 0)
+              takes (? o (elem k '("A" "t" "N" "j")) 0)
               got (? (0 < tally glue) glue (? (two? >a) <>a ()))
               rest (? (0 < tally glue) >a (? (two? >a) >>a >a))
               short (? o (? (k = "c") (uodtype "c") (k = "a") (uodtype "a")

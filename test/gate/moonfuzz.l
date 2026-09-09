@@ -142,7 +142,7 @@
                 (: mr (mut src st)
                    v (one <mr)
                    _ (bump <v (v 1))
-                   _ (? (member? <v '(scare diff badshape reparse))
+                   _ (? (elem <v '(scare diff badshape reparse))
                         (sin <v (f + ":" + (show j))) 0)
                    (go (j + 1) >mr)))
              (go 0 (wheel (1 + idx))))))

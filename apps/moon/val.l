@@ -14,12 +14,12 @@
    (vldw x) (x @ 'ld 8 'ld4 4 'ldu4 4 'ld2 2 'ldu2 2 'ld1 1 'ldu1 1 0)
    (vstw x) (x @ 'st 8 'st4 4 'st2 2 'st1 1 0)
    (vsiw x) (x @ 'si 8 'si4 4 'si2 2 'si1 1 0)
-   (valu? x) (member? x '(add sub and or xor imul))
+   (valu? x) (elem x '(add sub and or xor imul))
    (vbase? x) (x = 'sp || x = 'r4)
    (vsbit x) (x = 'sp ? 0 1)
    (vspc b) (b = 0 ? 'sp 'r4)
    ; ops that neither read nor write frame memory
-   (vpure? x) (member? x '(ret br label li mov cmp test push pop set la ud2
+   (vpure? x) (elem x '(ret br label li mov cmp test push pop set la ud2
                            add sub and or xor imul shl shr sar ror4
                            sx4 zx4 sx2 zx2 sx1 zx1 not neg))
 
@@ -76,9 +76,9 @@
            (: f <l
               _ (? !(two? f) 0
                    (: op <f
-                      (? (member? op '(lea lean leax)) (mark >f)
+                      (? (elem op '(lea lean leax)) (mark >f)
                          (0 < vldw op || 0 < vstw op || 0 < vsiw op
-                          || member? op '(ldsd stsd cmpm cmprm ldss stss cvtsi2sd movqxr movqrx)) 0
+                          || elem op '(ldsd stsd cmpm cmprm ldss stss cvtsi2sd movqxr movqrx)) 0
                          (valu? op && <>f = 'sp) 0
                          (mark >f))))
               (go >l)))
@@ -113,7 +113,7 @@
                     (: op <f
                        (? (op = 'jmp) (: j (peep lt <>f -1) (? (j < 0) () [j]))
                           (op = 'br) (: j (peep lt <>>f -1) (? (j < 0) nx (j . nx)))
-                          (member? op '(ret jmpr ud2)) ()
+                          (elem op '(ret jmpr ud2)) ()
                           nx)))
               _ (pin t i ss)
               (go >l (i + 1))))
@@ -148,11 +148,11 @@
        (: op <f
           lw (vldw op) sw (vstw op) iw (vsiw op)
           (? (0 < lw) ((vbase? <>>f && charm? <>>>f) ? [(vbytes <>>f (c + <>>>f) lw) () 0] [() () 1])
-             (member? op '(ldsd ldss)) ((vbase? <>>f && charm? <>>>f) ? [(vbytes <>>f (c + <>>>f) 8) () 0] [() () 1])
+             (elem op '(ldsd ldss)) ((vbase? <>>f && charm? <>>>f) ? [(vbytes <>>f (c + <>>>f) 8) () 0] [() () 1])
              (0 < sw) ((vbase? <>f && charm? <>>f) ? [() (vbytes <>f (c + <>>f) sw) 0] [() () 1])
              (0 < iw) ((vbase? <>f && charm? <>>f) ? [() (vbytes <>f (c + <>>f) iw) 0] [() () 1])
-             (member? op '(stsd stss)) ((vbase? <>f && charm? <>>f) ? [() (vbytes <>f (c + <>>f) 8) 0] [() () 1])
-             (member? op '(cmpm cmprm call callr sys raw jmpr)) [() () 1]
+             (elem op '(stsd stss)) ((vbase? <>f && charm? <>>f) ? [() (vbytes <>f (c + <>>f) 8) 0] [() () 1])
+             (elem op '(cmpm cmprm call callr sys raw jmpr)) [() () 1]
              (op = 'jmp) ((0 <= peep lt <>f -1) ? [() () 0] [() () 1])
              (vpure? op) [() () 0]
              [() () 1])))
@@ -175,7 +175,7 @@
        (sweep chg i)
         (? (i < 0) chg
            (: f (peep bt i ())
-              o0 (? ((two? f && member? <f '(ret jmpr sys ud2)) && escn) 'all ())
+              o0 (? ((two? f && elem <f '(ret jmpr sys ud2)) && escn) 'all ())
               ou (out (peep succ i ()) o0)
               rw (peep rwt i ())
               nin (? ((0 < <>>rw) || vall? ou) 'all (vun (vsans ou <>rw) <rw))
@@ -215,17 +215,17 @@
                         (: k (vtk (vsbit <>f) (c + <>>f) iw)
                            _ (pin tt k ([i op] . peep tt k ()))
                            (go >l (i + 1) c ci))
-                       (member? op '(ldsd ldss))
+                       (elem op '(ldsd ldss))
                         (: _ (? (vbase? <>>f && charm? <>>>f)
                                 (pin bad ((c + <>>>f + voff) * 2 + vsbit <>>f) 1) 0)
                            (go >l (i + 1) c ci))
-                       (member? op '(stsd stss))
+                       (elem op '(stsd stss))
                         (: _ (? (vbase? <>f && charm? <>>f)
                                 (pin bad ((c + <>>f + voff) * 2 + vsbit <>f) 1) 0)
                            (go >l (i + 1) c ci))
-                       (vmb? f && !(member? op '(label jmp br ret call li mov cmp test la))) 'skip
+                       (vmb? f && !(elem op '(label jmp br ret call li mov cmp test la))) 'skip
                        (go >l (i + 1) c
-                           (? (member? op '(call callr sys)) (i . ci) ci)))))))
+                           (? (elem op '(call callr sys)) (i . ci) ci)))))))
        (go bd 0 0 ()))
 
    ; -- cells: the touches grouped 8-aligned per space, with the census flags
@@ -307,7 +307,7 @@
        lt (ctx 'lt) lv (ctx 'lv) spans (ctx 'spans)
        (near i) (: (go k) (? ((n <= k) || ((i + 5) < k)) 0
                              (: f (peep bt k ())
-                                (? (two? f && member? <f '(call callr)) 1 (go (k + 1)))))
+                                (? (two? f && elem <f '(call callr)) 1 (go (k + 1)))))
                    (go (i + 1)))
        (out ss seed)
         (? (vall? seed) 'all

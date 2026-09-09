@@ -235,7 +235,7 @@
    ; nothing pinned means nothing could tell, and a compile owes a diagnostic
    ; there rather than a guess at whichever kernel we happen to have started on.
    (host-os _)
-    (: n (? (member? 'love-os (names ())) (ev 'love-os) ())
+    (: n (? (elem 'love-os (names ())) (ev 'love-os) ())
        (? (nom? n) (toos n)
           (udie 2 "cc: cannot tell which kernel this is -- name one with -os")))
    (osdefs os0)
@@ -254,7 +254,7 @@
     ('("__STDC_NO_ATOMICS__=1" "__STDC_NO_THREADS__=1"
        "__STDC_UTF_16__=1" "__STDC_UTF_32__=1")
      + (? (= tgt 'x64) () '("__STDC_NO_COMPLEX__=1"))
-     + (? (member? tgt '(x64 a64)) () '("__STDC_NO_VLA__=1")))
+     + (? (elem tgt '(x64 a64)) () '("__STDC_NO_VLA__=1")))
    ; the gcc-shaped predefine table (doc/misc/moon-c-gaps: the predefine surface) --
    ; the <stdint>/<limits>/<float.h> family a library config reads instead of
    ; probing: pdclib, gnulib and musl typedef straight off these names. one
@@ -404,7 +404,7 @@
                  + '("AiMoonlibc=1")
                  + (? (= dia 'moon) '("__moon__=1") ())   ; the dialect's own macro: extensions on
                  +   ; ds9, not ds: a :-local shadows the param over the whole scope (the boxfix cell trap)
-                 (? (member? tgt '(x64 a64)) ("__SIZEOF_INT128__=16" . ds) ds))     ; the wide pair (gen's d128 lane); love.c's limb seam reads it, and gcc says the same on both
+                 (? (elem tgt '(x64 a64)) ("__SIZEOF_INT128__=16" . ds) ds))     ; the wide pair (gen's d128 lane); love.c's limb seam reads it, and gcc says the same on both
        ; `-` is read here and nowhere else, so every door onto a TU gets stdin for
        ; free -- and cdir answers "" for it, which is the cwd, gcc's own rule for a
        ; source with no directory of its own.
@@ -669,7 +669,7 @@
    (mcid home)
     (: x (selfpath 0)
        d (? (string? x) (cdir x) ())
-       w (? (member? 'love-image (names ())) [1 (ev 'love-image)] ())
+       w (? (elem 'love-image (names ())) [1 (ev 'love-image)] ())
        ims (? (two? w) (: im <>w
                           (? !(string? im) ()
                              (im = "<baked>") ["<baked>"]
@@ -778,8 +778,8 @@
    ; refuses by #error rather than quietly linking linux's.
    (rtcarried home tgt os)
     (? (= os 'none) ()                                     ; freestanding owes no runtime
-       (= tgt 'rv64 && member? os '(freebsd netbsd)) ()
-       (: nm (? (member? tgt '(x64 a64 rv64)) (string tgt) ())
+       (= tgt 'rv64 && elem os '(freebsd netbsd)) ()
+       (: nm (? (elem tgt '(x64 a64 rv64)) (string tgt) ())
           (? (! (string? nm)) ()
              (: z (runtime-gz nm)
                 (? (! (string? z)) ()
@@ -849,7 +849,7 @@
                             (? (dotc? sub) (a + [[(dotobj (swap47 sub)) k]]) a)))
                   () (sort (filter (\ k (pfx? k d)) (keys vb)))))
        ((map ((a b) \ [a b [inc]]) (nlmems ndir))
-        + (? (member? tgt '(x64 a64 rv64)) [["mksys.o" "" ()]] ())))
+        + (? (elem tgt '(x64 a64 rv64)) [["mksys.o" "" ()]] ())))
    ; the members compile under the link's os (impl.h's table opens on it), and the sys
    ; leaf is the os's own -- freebsd rides the x64 machine.
    (rtflags tgt os vb is) (pin (pin (pin (fseed tgt 'moon) 'os os) 'is is) 'vb vb)
@@ -961,14 +961,14 @@
                         (filter (\ r !(peep defs r 0)) (keys refs))))
        ; crt0 rides when an input defines main; a module with a face of its own (the wasm
        ; seat's host.c, which the page enters at ai_init) links without an entry
-       base (? (foldl (\ a tu (a || member? "main" (tu 2))) 0 tus) (crt0-wasm . tus) tus)
+       base (? (foldl (\ a tu (a || elem "main" (tu 2))) 0 tus) (crt0-wasm . tus) tus)
        owed0 (ledger base)
        home (? (two? owed0 && !nostd) (mhome ()) ())
        rt (? (two? owed0 && !nostd) (wasm-rt home os9 vb) ())
        mems (map (\ m [(m 0) (wasm-tu (m 1)) (<(wasm-tu-syms (wasm-tu (m 1))))]) rt)
        (pull set owed)
-        (: hit (filter (\ m (foldl (\ a d (a || member? d owed)) 0 (m 2))) mems)
-           new (filter (\ m !(member? m set)) hit)
+        (: hit (filter (\ m (foldl (\ a d (a || elem d owed)) 0 (m 2))) mems)
+           new (filter (\ m !(elem m set)) hit)
            (? !(two? new) set
               (: set2 (set + new) (pull set2 (ledger (base + map (\ m (m 1)) set2))))))
        picked (pull () owed0)
@@ -1242,7 +1242,7 @@
     (: sd (std-take as)
        dia <sd
        as9 <>sd                                    ; the line with -std= lifted off it
-       ntv (? (member? love-arch '(x64 a64 rv64)) love-arch 'x64)   ; unknown grounds keep x64
+       ntv (? (elem love-arch '(x64 a64 rv64)) love-arch 'x64)   ; unknown grounds keep x64
        f (flags as9 (fseed ntv dia))       ; the flag set, seeded whole
        ; normalise in the tablet, not at a reader. -I dirs want a trailing slash, and the
        ; consumers now take `f` itself -- so a `dirn` applied on the way out of one reader

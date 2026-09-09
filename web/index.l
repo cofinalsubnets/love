@@ -225,7 +225,7 @@ don't automatically construct a list for you.</p>
                                   (rev acc))
                     (go 0 ()))
    ids   (finds page "id=\"")
-   dead  (filter (t \ !(member? t ids)) (finds page "href=\"#"))
+   dead  (filter (t \ !(elem t ids)) (finds page "href=\"#"))
    _ (? (two? dead) (: _ (say err ("index: dead anchors: " + show dead + "\n")) (quit 1)) 0)
 
    (main args) (: q (open (args 0) "w")

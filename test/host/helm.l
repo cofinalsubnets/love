@@ -27,8 +27,8 @@
 (borrow 'helm)
 
 (test
- (member? 'helm (cite ()))
- (member? 'hconf (keys (cite 'helm)))
+ (elem 'helm (cite ()))
+ (elem 'hconf (keys (cite 'helm)))
  (lit? (cite 'helm 'helm-main)))
 
 ; --- a config on disk -------------------------------------------------------------
@@ -141,7 +141,7 @@
    ws  (keys (cite 'verbs 'tab))
    _   (test (= n (1 + tally ws)))                  ; every verb, and `love` itself
    _   (test (= (readlink (ubd + "/ls")) (selfpath 0)))
-   _   (test (member? 'ls ws) (string? (readlink (ubd + "/love"))))
+   _   (test (elem 'ls ws) (string? (readlink (ubd + "/love"))))
    ; the point of the directory: a child with nothing but it on PATH has a userland.
    r   (hark [(ubd + "/sh") "-c" ("PATH=" + ubd + "; ls " + ubd + "/ls")])
    _   (test (= 0 <r) (has? <>r "ls"))

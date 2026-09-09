@@ -42,7 +42,7 @@
                                   (go >l))
                         (go p))
    (any-infix? p) (: (go l) (? (nil? (two? l)) 0
-                               (&& (nom? <l) (member? <l infix)) 1
+                               (&& (nom? <l) (elem <l infix)) 1
                                (go >l))
                      (go p))
    ; the run before op. a singleton collapses, `(x)` being `x`, so one element is
@@ -55,7 +55,7 @@
    (untagged? p)
     (? (nil? (two? p)) 0                      ; an atom is a literal: already strict
        (any-infix? p) 0                       ; . . + || && @ -- a tag, or a guard
-       (: h <p (? (nom? h) (nil? (member? h tagheads)) 1)))   ; a quoted head is untagged
+       (: h <p (? (nom? h) (nil? (elem h tagheads)) 1)))   ; a quoted head is untagged
 
    ; --- the walk -------------------------------------------------------------
    ; a tagged form's operands are patterns in their own right and the strict rule

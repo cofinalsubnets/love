@@ -213,7 +213,7 @@
        w (? (b 4 = 2) 16 8)
        ; a section or file symbol names no value of the program's -- nm shows
        ; neither, and an empty name is the null-ish filler a section symbol leaves
-       all (filter (\ sy (? (nil? (tally <sy)) () (member? (sy 2) '(3 4)) () 1))
+       all (filter (\ sy (? (nil? (tally <sy)) () (elem (sy 2) '(3 4)) () 1))
                    (ld-syms p b))
        ; "no symbols" is the file's fact, asked before the flags narrow: a -u that
        ; comes back empty says the lanes are all ours, which is an answer, not a lack

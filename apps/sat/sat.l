@@ -11,7 +11,7 @@
    (vof l)  (abs l)                                          ; the variable of a literal
    (neg l)  (- 0 l)                                          ; the complementary literal
    (sgn l)  (? (< l 0) -1 1)                                 ; polarity as +-1
-   ; --- small list helpers (prel has map/foldl/filter/all/any/member?) --------
+   ; --- small list helpers (prel has map/foldl/filter/all/any/elem) --------
    (sfind p l) (? (atom? l) () (p <l) <l (sfind p >l))                     ; first elt matching p, else ()
    (rng lo hi) (? (< lo hi) (lo . rng (+ lo 1) hi) ())                   ; [lo,hi)
    ; --- assignment (an alist (var . +-1) for the pure DPLL baseline) -----------
@@ -99,8 +99,8 @@
     (: _ (pin (vmap s 'wl) cid (a . b))
        _ (pin (vmap s 'watch) a (cid . peep (vmap s 'watch) a ()))
        _ (pin (vmap s 'watch) b (cid . peep (vmap s 'watch) b ())) 0)
-   (dedup-lits c) (? (atom? c) () (member? <c >c) (dedup-lits >c) (<c . dedup-lits >c))                                ; drop duplicate literals
-   (taut? c) (? (atom? c) 0 (member? (neg <c) >c) 1 (taut? >c))                  ; contains a literal and its negation?
+   (dedup-lits c) (? (atom? c) () (elem <c >c) (dedup-lits >c) (<c . dedup-lits >c))                                ; drop duplicate literals
+   (taut? c) (? (atom? c) 0 (elem (neg <c) >c) 1 (taut? >c))                  ; contains a literal and its negation?
    (load-clause s c0)                                       ; add a source clause to the db + watches (clean it first: dedupe, drop tautologies)
     (? (= 1 (taut? c0)) 0                                                        ; tautology -> always satisfied, skip
        (: c (dedup-lits c0)

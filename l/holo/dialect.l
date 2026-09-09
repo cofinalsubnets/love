@@ -227,12 +227,12 @@
           'xorpd 16 'xorps 16 'andpd 16 'andps 16 'andnpd 16 'orpd 16 'pxor 16
           'cvtss2sd 4 'cvtsd2ss 8 'cvttsd2si 8 'cvttss2si 4 'cvtsd2si 8 'cvtss2si 4
           'call 8 'jmp 8}
-   (xa-branch? mn) (member? mn '(call jmp))
+   (xa-branch? mn) (elem mn '(call jmp))
    ;; push/pop of an immediate or memory are 64-bit unless sized: at&T writes pushq $5, Intel push 5
-   (xa-w64 mn w) (w = 0 && member? mn '(push pop) ? 8 w)
+   (xa-w64 mn w) (w = 0 && elem mn '(push pop) ? 8 w)
    (xa-xmm? ops) (foldl (\ a o (a > 0 ? a (<o = 'rg && <>>o = 16))) 0 ops)
    ;; the sign/zero-extend family: stem movs<src>/movz<src>, w the destination's
-   (xa-ext? mn) (member? mn '(movsb movsw movsl movzb movzw))
+   (xa-ext? mn) (elem mn '(movsb movsw movsl movzb movzw))
    (xa-extsrc mn) (mn @ 'movsb 1 'movsw 2 'movsl 4 'movzb 1 2)
    (xa-ptrword w) (w @ 1 "BYTE" 2 "WORD" 4 "DWORD" 8 "QWORD" 16 "XMMWORD" "")
    (xa-ptrsz s) (s @ "byte" 1 "word" 2 "dword" 4 "qword" 8 "xmmword" 16 0)
@@ -293,7 +293,7 @@
          ['lbl (name (xa-unquote t))])
    ;; ..which the instruction settles: a branch's target, else memory at that address
    xa-conds '(o no b ae e ne be a s ns p np l ge le g c nc z nz na nae nb nbe ng nge nl nle pe po)
-   (xa-cc? mn) (: t (show mn) (#t > 1 && t 0 = 106 && member? (name (snip t 1 #t)) xa-conds))
+   (xa-cc? mn) (: t (show mn) (#t > 1 && t 0 = 106 && elem (name (snip t 1 #t)) xa-conds))
    (xa-abs mn o) (? !(<o = 'abs) o
                     (xa-branch? mn || xa-cc? mn) ['lbl <>o]
                     ['mem -1 -1 1 <>o])
@@ -304,7 +304,7 @@
             && (xa-sfxw (s 4) @ 0 0 8 0 1) && xa-sfxw (s 5) > 0)
          [(name (snip s 0 5)) (xa-sfxw (s 5))]
          (: w (n < 2 ? 0 (xa-sfxw (s (n - 1)))) st (w = 0 ? 'x (name (snip s 0 (n - 1))))
-            (w > 0 && member? st xa-sfxable ? [st w] [l 0]))))
+            (w > 0 && elem st xa-sfxable ? [st w] [l 0]))))
    (at-insn mn rest)
       (: mw (at-mnw mn) st <mw ops (map (o \ xa-abs st o) (rev (map at-operand (xa-ops rest))))
          (? (xa-branch? st) ['op st 0 ops]
@@ -335,7 +335,7 @@
       (? (xa-nil-att mn) (show (xa-nil-att mn))
          (!(two? ops) && nom? (xa-strd mn)) (show (xa-strd mn))
          (xa-ext? mn && two? ops) (show mn + xa-wsfx w)
-         (w > 0 && member? mn xa-sfxable && xa-gprw ops = 0) (show mn + xa-wsfx w)
+         (w > 0 && elem mn xa-sfxable && xa-gprw ops = 0) (show mn + xa-wsfx w)
          (show mn))
    (att-show items)
       (xa-show items (\ it (: mn (it 1) w (it 2) ops (it 3)
@@ -411,7 +411,7 @@
          psz (foldl (\ a p (a > 0 ? a <p)) 0 prs)          ; the PTR size, if one operand said
          (? (xa-att-nil l) ['op (xa-att-nil l) 0 ops]
             (xa-branch? l) ['op l 0 (map (o \ (<o = 'rg || <o = 'mem || <o = 'rip) ? ['ind o] o) ops)]
-            (member? l '(movsx movzx movsxd))
+            (elem l '(movsx movzx movsxd))
             (: src (ops 1)
                sw (? (l = 'movsxd) 4 (xa-gpr? src) <>>src (psz > 0) psz (scare 'as-extsrc rest))
                st (name ((l = 'movzx ? "movz" "movs") + xa-wsfx sw))

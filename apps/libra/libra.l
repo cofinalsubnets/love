@@ -172,14 +172,14 @@
 
    ; the config is read once, here, and handed down -- never re-read per file
    (libra-main as)
-    (? (member? "-h" as || member? "--help" as)
+    (? (elem "-h" as || elem "--help" as)
         (: _ (say err "libra ⚖ -- the .l balance tool.\n") _ (say err usage) 0)
        (: conf (salt 'libra)
           v (? (two? as) <as "")
           r >as
           (? (v = "check") (libra-check conf (files r))
-             (v = "doc")   (libra-doc (files r) (? (member? "-ht" r) 'ht
-                                                   (member? "-rf" r) 'rf
+             (v = "doc")   (libra-doc (files r) (? (elem "-ht" r) 'ht
+                                                   (elem "-rf" r) 'rf
                                                    'md))
              (v = "")      (: _ (say err usage) 1)            ; nothing named, nothing to weigh
              ; no verb: the whole line is files. so an unknown verb reads as a

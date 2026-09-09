@@ -167,7 +167,7 @@
    ; cycle, but a config edited under a running helm does not go back through it.
    (hensure nm seen)
     (? (hup? nm) 1
-       (member? nm seen) (hnote ("after cycles at " + string nm), 0)
+       (elem nm seen) (hnote ("after cycles at " + string nm), 0)
        (: u (hby (hunits-now 0) nm)
           (? !u (hnote ("no unit " + string nm), 0)
              (: _ (each (peep u 'after []) (\ d (hensure d (nm . seen))))

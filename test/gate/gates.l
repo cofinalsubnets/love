@@ -86,8 +86,8 @@
    ; by -- `love test/gate/gates.l lux` is what `make test_lux` asks for, and the make
    ; target stays. no tail runs the lot, early first.
    want (map intern >argv)
-   pick (? want (filter (\ r (member? <r want)) all) all)
-   miss (filter (\ n !(member? n (map cap all))) want)
+   pick (? want (filter (\ r (elem <r want)) all) all)
+   miss (filter (\ n !(elem n (map cap all))) want)
    _ (each miss (\ n (say1 ("gates: no row named " + show n))))
    bad (miss ? #miss 0 + net (map row pick))
    _ (say1 (0 < bad ? ("gates: " + show bad + " rows failed") "gates: ok"))

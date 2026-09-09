@@ -16,8 +16,8 @@
 
 ; --- the module seam: lapiz registered, the splice + accessor both reach -------
 (test
- (member? 'lapiz (cite ()))                   ; the registry lists it
- (member? 'md->ht (keys (cite 'lapiz)))        ; keys introspects the layer
+ (elem 'lapiz (cite ()))                   ; the registry lists it
+ (elem 'md->ht (keys (cite 'lapiz)))        ; keys introspects the layer
  ("<h1>hi</h1>" = ((cite 'lapiz 'md->ht) "# hi"))   ; the opaque accessor reaches a face
  (lit? (cite 'lapiz))                         ; presence: the accessor is a closure
  (! (cite 'lapis)))                           ; a missing module answers ()
@@ -248,7 +248,7 @@ some literal
       ; to the hand-written pages these replaced).
       _ (map (\ f (: d (mdread (slurpf f))
                      (test ('meta = (cap (cap d)))    ; a .th, and it leads
-                             (! (member? 'rule (map cap d)))))) ["doc/love.md" "doc/cook.md"])
+                             (! (elem 'rule (map cap d)))))) ["doc/love.md" "doc/cook.md"])
       0)
 
  _ (test_fin ())

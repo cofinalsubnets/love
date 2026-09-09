@@ -474,7 +474,7 @@
                 (: d1 (map (\ u (u + >ns)) (dn <ns c))
                    (? (dnul <ns) (d1 + (dl >ns c)) d1)))
    (dstep alts c) (: (dd xs acc) (? !(two? xs) acc
-                                    (member? <xs acc) (dd >xs acc)
+                                    (elem <xs acc) (dd >xs acc)
                                     (dd >xs (<xs . acc)))
                      (dd (catmap (\ u (dl u c)) alts) ()))
    ; contains-match by derivatives: from every start, hit as soon as some

@@ -69,7 +69,7 @@
           (scare 'dest2uu-op h)))
 
    (pre fs) (? (one? fs) ()
-               (member? (<fs 0) '(call jmp ret)) ()
+               (elem (<fs 0) '(call jmp ret)) ()
                (<fs . pre >fs))
    (emit1 g)
     (: nm (g 0) fs (plift (g 1))

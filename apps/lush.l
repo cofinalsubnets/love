@@ -221,7 +221,7 @@
    (sh-reapbg _)
      (: r (glean 0) (? (two? r) (: _ (sh-bgnote <r) (sh-reapbg 0)) 0))
    ; job addressing: "fg 2" by number, bare "fg" the latest
-   ; string membership: member? tests identity (uninterned strings never hit)
+   ; string membership: elem tests identity (uninterned strings never hit)
    (sh-smem? x l) (? !(two? l) 0 (? (x = <l) 1 (sh-smem? x >l)))
    (sh-int s) (sh-intl s 0 0)
    (sh-intl s i a) (? (i = #s) a (sh-intl s (i + 1) ((a * 10) + ((s i) - 48))))
@@ -488,7 +488,7 @@
                                  (s j = b) (1 . acc . j + 1)
                                  (go (j + 1) (acc + string (s j))))
                    (go (i + 1) ""))
-              (: (bare? x) !(lx-ws? x || member? x '(10 124 38 59 60 62 40 41))
+              (: (bare? x) !(lx-ws? x || elem x '(10 124 38 59 60 62 40 41))
                  (go j acc) ((j < n && bare? (s j)) ? (go (j + 1) (acc + string (s j)))
                                                       (acc . j))
                  r (go i "")
@@ -526,7 +526,7 @@
                    (1 . map (t \ fixw t bods) (sh-rev toks)))
       ; '...' -> index of the closing quote | ()
       (sq j) (? (j = n) () (s j = 39) j (sq (j + 1)))
-      (esc? b) (member? b '(34 36 92 96))
+      (esc? b) (elem b '(34 36 92 96))
       (peek? i b) (i + 1 < n && s (i + 1) = b)
       ; ".." -> (segs . j-past) | () unfinished
       (dq i cur segs) (i != n ?
@@ -1126,7 +1126,7 @@
         (: b (s i) b2 (? ((1 + i) < n) (s (1 + i)) 0) b3 (? ((2 + i) < n) (s (2 + i)) 0)
            (? (b = 61) (? (b2 = 61) () ("=" . (1 + i)))
               ((b = 60 || b = 62) && b2 = b && b3 = 61) ((snip s i (3 + i)) . (3 + i))
-              (b2 = 61 && (member? b '(42 47 37 43 45 38 94 124))) ((snip s i (2 + i)) . (2 + i))
+              (b2 = 61 && (elem b '(42 47 37 43 45 38 94 124))) ((snip s i (2 + i)) . (2 + i))
               ())))
    ; --- the walk
    (ar-expr s n i d)
@@ -1596,7 +1596,7 @@
                       (go 0))
    ; asked at the call: the kernel bakes this file and carries no host nif, where a
    ; top-level bind would fold the baking love's own seat in and call every tool ours.
-   (sh-seat _) (? (member? 'selfpath (names ())) (selfpath 0) ())
+   (sh-seat _) (? (elem 'selfpath (names ())) (selfpath 0) ())
    (sh-self? p) (: a (stat p) ((two? a) && (a = (stat (sh-seat ())))))
    (sh-whichp w)                                ; PATH's winner for w -> (1 path), or ()
      (? (sh-slashed? w) (? (two? (stat w)) [1 w] ())
@@ -1678,7 +1678,7 @@
         md (? ((two? al) && (two? >>al)) (cite (intern <>>al)) ())   ; the row's module, or ()
         nm (intern mn)
         f0 (? (tablet? md) (md nm)                    ; the alias row named the module
-              (member? nm (names ())) (ev nm)         ; a bare global
+              (elem nm (names ())) (ev nm)         ; a bare global
               (cite 'kore nm))                        ; else the applets' home module
         (? (&& (sh-smem? w sh-imgok) !(sh-slashed? w) !(nil? f0) (sh-ours? w))
            [1 (sh-imgwrap f0 mn) (mn = "kore-main")]
@@ -1707,10 +1707,10 @@
    ; the lane is dormant there and the task shim keeps the spawn.
    sh-forkc (tablet 0)                          ; word -> 1 | 0, decided once
    (sh-dotl? w) (: n #w ?((2 < n) && (snip w (n - 2) n = ".l")))
-   (sh-cliline _) (? (member? 'cli-line (names ())) (ev 'cli-line) ())   ; a bare global, read at the call
+   (sh-cliline _) (? (elem 'cli-line (names ())) (ev 'cli-line) ())   ; a bare global, read at the call
    ; a seat with no fork: inle runs a process as a task (kmain's shim, the spawnmap
    ; lane below), and the fork it pins is a no-op -- so no word forks there
-   (sh-forkseat? _) (? (member? 'love-os (names ())) !(member? (ev 'love-os) '(inle wasm)) 1)
+   (sh-forkseat? _) (? (elem 'love-os (names ())) !(elem (ev 'love-os) '(inle wasm)) 1)
    (sh-forkask w) (? (|| (sh-slashed? w) (sh-dotl? w)) 0
                      !(sh-forkseat? 0) 0
                      (&& (sh-cliline ()) (sh-ours? w)) 1
@@ -1739,7 +1739,7 @@
    (sh-forkok? av fdmap)
      (: a >av                                    ; cap is total, so a bare word reads () here
         (? (|| (<a = "bake") (<a = "wake")) 0
-           ((0 < tally (getenv "LOVE_NO_IMAGE")) && (member? 'love-image (names ()))) 0
+           ((0 < tally (getenv "LOVE_NO_IMAGE")) && (elem 'love-image (names ()))) 0
            (two? a) 1
            (sh-fd0? fdmap) 1
            0))

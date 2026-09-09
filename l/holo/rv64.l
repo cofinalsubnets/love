@@ -109,7 +109,7 @@
          (? (reg? b) (rv-alu-rrr f3 f7 dn an (rvn b))
             ;; immediate: sub flips to addi -imm; add/and/or/xor ride the I-form; else via x31.
             ((op = 'sub) && rv-fits12 (0 - b)) (rv-i (0 - b) an 0 dn 0x13)
-            (rv-fits12 b && member? op '(add and or xor))
+            (rv-fits12 b && elem op '(add and or xor))
              (rv-i b an (? (op = 'add) 0 f3) dn 0x13)
             (catall [(rv-li-rec 31 b) (rv-alu-rrr f3 f7 dn an 31)])))
 
@@ -199,11 +199,11 @@
                (catall [(p 0)
                          (rv-b (? (p 1) 0 1) 31 0 8)                      ; hop: beqz/bnez x31, +8
                          jal]))
-            (member? cond '(s ns))
+            (elem cond '(s ns))
             (catall [(rv-alu-rrr 0 32 31 an bn)                              ; x31 = a - b (the SF bit)
                       (rv-b (? (cond = 's) 5 4) 31 0 8)                      ; hop: bgez/bltz x31, +8
                       jal])
-            (member? cond '(vs vc))
+            (elem cond '(vs vc))
             (: v (st 3) _ (? (v < 0) (scare 'rv-no-overflow cond) 0)
                (catall [(rv-b (? (cond = 'vs) 5 4) v 0 8) jal]))
             (: t (rv-int-b cond an bn)
@@ -217,20 +217,20 @@
                (catall [(p 0)
                          (? (p 1) (rv-i 0 31 0 dn 0x13)                   ; d = x31
                             (rv-i 1 31 3 dn 0x13))]))                        ; d = (x31 < 1)  (seqz)
-            (member? cond '(eq ne))
+            (elem cond '(eq ne))
             (: xs (? (bn = 0) () (rv-alu-rrr 4 0 31 an bn))                  ; x31 = a ^ b
                t  (? (bn = 0) an 31)
                (catall [xs (? (cond = 'eq) (rv-i 1 t 3 dn 0x13)              ; sltiu d, t, 1
                               (rv-alu-rrr 3 0 dn 0 t))]))                    ; sltu d, x0, t
-            (member? cond '(s ns))
+            (elem cond '(s ns))
             (catall [(rv-alu-rrr 0 32 31 an bn)
                       (rv-alu-rrr 2 0 dn 31 0)                               ; slt d, x31, x0
                       (? (cond = 's) () (rv-i 1 dn 4 dn 0x13))])             ; xori d, d, 1
-            (member? cond '(vs vc))
+            (elem cond '(vs vc))
             (: v (st 3) _ (? (v < 0) (scare 'rv-no-overflow cond) 0)
                (catall [(rv-alu-rrr 2 0 dn v 0)
                          (? (cond = 'vs) () (rv-i 1 dn 4 dn 0x13))]))
-            (: neg (member? cond '(ge le ae be))                             ; the complement conds
+            (: neg (elem cond '(ge le ae be))                             ; the complement conds
                t (rv-int-b (? (cond = 'ge) 'lt (cond = 'le) 'gt
                               (cond = 'ae) 'below (cond = 'be) 'above cond) an bn)
                (catall [(rv-alu-rrr (? (t 0 = 4) 2 3) 0 dn (t 1) (t 2))      ; slt/sltu
@@ -288,7 +288,7 @@
          (? (op = 'shl) (rv-i c dn 1 dn 0x13)                                ; slli
             (op = 'shr) (rv-i c dn 5 dn 0x13)                                ; srli
             (op = 'sar) (rv-i (1024 + c) dn 5 dn 0x13)                       ; srai
-            (member? op '(rol ror))
+            (elem op '(rol ror))
             (: k (? (op = 'ror) c ((64 - c) & 63))                           ; rol c = ror 64-c
                (catall [(rv-i k dn 5 31 0x13)                                ; srli x31, d, k
                          (rv-i ((64 - k) & 63) dn 1 dn 0x13)                 ; slli d, d, 64-k

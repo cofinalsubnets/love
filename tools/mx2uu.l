@@ -58,7 +58,7 @@
    (ln x) (: t (string x) ("mxL" + ("lvm_" = snip t 0 4 ? (snip t 4 #t) t)))
    lanes ((: (go rows acc)                           ; distinct lanes, appearance order
             (? (one? rows) (rev acc)
-               (go >rows (foldl (\ a x (member? x a ? a (x . a))) acc <rows))))
+               (go >rows (foldl (\ a x (elem x a ? a (x . a))) acc <rows))))
           (addm + mulm) ())
    (lcode x) (idxin x lanes 0)
    ; mirror: the argument swap's action on lanes. the positional degenerate pair
@@ -88,7 +88,7 @@
    _ (pl "; love.c's mx.h is laid from -- so a dispatch edit that breaks the band quotient,")
    _ (pl "; or the mirror symmetry, fails a proof at `make test`. Substrate: test/uu.l.")
    _ (pl "")
-   _ (pl "(test (member? 'vof (names ())))")
+   _ (pl "(test (elem 'vof (names ())))")
    _ (pl "")
    _ (pl "; --- the codes ---")
    _ (pl "(test")

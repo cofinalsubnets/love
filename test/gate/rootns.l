@@ -52,7 +52,7 @@
    ; -- mount: a tmpfs, and a bind that really shows the other tree ---------------
    _ (assert (0 = (run ["mount" "-t" "tmpfs" "tmpfs" (W + "/t")])))
    _ (assert (0 = (run ["mount" "-o" "bind" "/etc" (W + "/b")])))
-   _ (assert (member? "hosts" (readdir (W + "/b"))))   ; the bind is not a nod
+   _ (assert (elem "hosts" (readdir (W + "/b"))))   ; the bind is not a nod
    ; a tmpfs is writable, which is what says the mount is a mount and not a mkdir
    _ (assert (: q (open (W + "/t/x") "w") (port? q && (: _ (say q "hi") _ (close q) 1)))
              ("hi" = (: q (open (W + "/t/x") "r") s (slurp q) _ (close q) s)))
@@ -67,7 +67,7 @@
    _ (assert (0 = (run ["umount" (W + "/b")])))
    _ (assert (0 = (run ["umount" (W + "/t")])))
    _ (assert !(two? (stat (W + "/t/x"))))          ; the tmpfs took its contents away
-   _ (assert !(member? "hosts" (readdir (W + "/b"))))
+   _ (assert !(elem "hosts" (readdir (W + "/b"))))
 
    ; -- mkfifo and mknod ---------------------------------------------------------
    ; a CHARACTER DEVICE is refused even here, and that is the kernel's policy and
@@ -99,7 +99,7 @@
    ; `chroot DIR CMD` execs, so it never comes back -- the status is the CHILD's,
    ; and a chroot that quietly failed would answer 1 here rather than ls's own 0.
    r (out-of ["chroot" (W + "/root") "/bin/love" "ls" "/"])
-   _ (assert (member? "hello" (lines r)) (member? "bin" (lines r)))
+   _ (assert (elem "hello" (lines r)) (elem "bin" (lines r)))
 
    ; the tree goes LAST and only on the way out: an early rm would take the
    ; chroot's own /bin/love with it, and the failure would read as a missing binary.

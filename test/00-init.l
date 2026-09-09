@@ -7,8 +7,8 @@
 ; plainly -- and it must come before the fallbacks, which read what is in scope. a seat
 ; without posix has no such module, and those fallbacks still cover it.
 (? (cite 'posix) (borrow 'posix) ())
-(map (\ n (? (member? n (names ())) () (ev [': [n 'x] ()]))) '(quit close run getenv))
-(? (member? 'open (names ())) () (ev '(: (open x y) ())))
+(map (\ n (? (elem n (names ())) () (ev [': [n 'x] ()]))) '(quit close run getenv))
+(? (elem 'open (names ())) () (ev '(: (open x y) ())))
 
 ; the reader under test -- the socket. every print->read
 ; differential in the tree reads through this one binding (test/roundtrip.l,

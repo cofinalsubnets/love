@@ -135,7 +135,7 @@
                             (? !old (go >m acc)
                                (: e (peep st <<m ())
                                   pid (? (two? e) <>e ())
-                                  (? (!pid || member? pid acc) (go >m acc)
+                                  (? (!pid || elem pid acc) (go >m acc)
                                      (go >m (pid . acc)))))))
                       (go hunks ()))
              ptext (show (list 'patch (list 'note note) (list 'time (clock 0))
@@ -143,7 +143,7 @@
              pid (sha256 ptext)
              _ (lay (".sb/patch/" + pid) ptext)
              _ (lay ".sb/snap" (show (snap+ sn hunks pid ())))
-             tp (filter (\ t !(member? t deps)) (tips ()))
+             tp (filter (\ t !(elem t deps)) (tips ()))
              _ (lay ".sb/tips" (show (sort (pid . tp))))
              _ (puts ("sb: recorded " + snip pid 0 12 + " (" + show #hunks + " paths)\n"))
              pid)))
@@ -178,7 +178,7 @@
        (pr m)
         (? !(two? m) ()
            (: e <m id <>e
-              _ (puts (? (member? id tp) "* " "  "))
+              _ (puts (? (elem id tp) "* " "  "))
               _ (puts (snip id 0 12 + "  " + show <>>>e + " paths"))
               nt <>>e
               _ (? !nt () (puts ("  " + nt)))

@@ -113,7 +113,7 @@
     (1 /// 1 = 1)   (1 = 1 /// 1)   (4 /// 2 = 2)   (0 /// 1 = 0)
     (7 /// 2 = 3.5) (3.5 = 7 /// 2) (1 /// 2 = 0.5)
     !(1 /// 2 = 1)  !(1 /// 1 = 2)
-    (member? (1 /// 1) [1 2 3])  !(member? (9 /// 1) [1 2 3])
+    (elem (1 /// 1) [1 2 3])  !(elem (9 /// 1) [1 2 3])
     ([0 (1 /// 1) 2] = sort [2 (1 /// 1) 0])
     ; exact, never through a double: these two differ by a part f64 has no room
     ; for, and the quotient of the second rounds to exactly 1.0
