@@ -1,7 +1,8 @@
-// l/bare.c -- the bare seat: what the runtime's doors answer on a machine with no OS
-// under them and no i/fd.c beside them. the boards link this (i/port.mk's love_m) and
-// nothing else does -- a hosted love, love0 and every kernel all carry i/fd.c, whose
-// bodies are the real ones.
+// l/bare.c -- the null seat: what the runtime's doors answer with no OS under them and
+// no i/fd.c beside them. the boards link it (i/port.mk's love_m) and so does out/front,
+// the test frontend, which supplies its own contract and wants exactly these eight and
+// no more -- a hosted love, love0 and every kernel all carry i/fd.c, whose bodies are
+// the real ones.
 //
 // plain definitions, not weak defaults in the runtime: a seat that grows a real door
 // collides here and says so, and a seat that needs one and has none fails to link. the
