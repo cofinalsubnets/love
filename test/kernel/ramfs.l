@@ -118,3 +118,11 @@
    (! (symlink "/loop2" "/loop1"))
    (! (symlink "/loop1" "/loop2"))
    (! (port? (open "/loop1" "r")))))
+
+; stat follows the last name and lstat does not -- the pair POSIX has, and the only
+; reason k_walk carries a leaf flag. /bin is a link TO a directory, so the two answer
+; different kinds of the same path. (stat p) -> (size mtime-ms mode ns).
+(test
+  (= 16384 (& ((stat "/bin") 2) 61440))          ; 040000: through the link, a directory
+  (= 40960 (& ((lstat "/bin") 2) 61440))         ; 0120000: the link itself
+  (= 8 (cap (lstat "/bin"))))                    ; sized by its target, "/usr/bin"

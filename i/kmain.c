@@ -1125,6 +1125,7 @@ ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
 // one is silent.
 #define k_mode_file 0100000            // (& mode 61440) = 32768: a regular file
 #define k_mode_dir  0040000            //                = 16384: a directory
+#define k_mode_lnk  0120000            //                = 40960: a symlink
 
 // (stat path) -> (size mtime-ms mode ns) | (). ns is the ms date times a million, not a
 // finer reading of it: this clock's last hand is the millisecond, and digits it does not
@@ -1137,19 +1138,24 @@ struct k_st { uintptr_t size, ms, mode; };
 // children but no entry of its own, and the root -- answers like any other, the initrd
 // carrying no directories. that case is also why this fills a struct rather than handing
 // back an entry index: it has no row to point at.
-ai_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st) {
+ai_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st, bool follow) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
-  if ((cn = k_walk(p, pn, cp, true)) < 0) return (int) cn;
+  if ((cn = k_walk(p, pn, cp, follow)) < 0) return (int) cn;
   bool src = false;
   intptr_t sn = k_src_strip(cp, cn);
   if (sn >= 0) {
     if (!sn) return *st = (struct k_st) { 0, 0, k_mode_dir | 0555 }, 0;   // the mount itself
     src = true, cn = sn; }
-  int i = k_find(cp, (uintptr_t) cn);               // is the door to the link itself
+  int i = k_find(cp, (uintptr_t) cn);
   uintptr_t kid;
   *st = (struct k_st) { 0, 0, 0 };
+  // lstat's answer, and the only reason the walk was told to leave the last name alone:
+  // the link itself, sized by its target the way stat(2) has it.
+  if (!follow && i >= 0 && k_ents[i].to)
+    return *st = (struct k_st) { strlen(k_ents[i].to), k_ents[i].ms,
+                                 k_mode_lnk | 0777 }, 0;
   if (i >= 0 && !k_ents[i].dir) {
     if (src && k_ents[i].bake < 0) return -ENOENT;   // a row the bake never laid
     int vt = src ? 0 : k_vt_slot(cp, (uintptr_t) cn);

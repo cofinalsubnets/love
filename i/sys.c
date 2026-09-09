@@ -34,7 +34,7 @@ extern void *kmallocw(uintptr_t n), kfree(void *p);
 struct k_st { uintptr_t size, ms, mode; };
 extern int
  k_fs_open(char const *p, uintptr_t pn, char m),
- k_fs_stat(char const *p, uintptr_t pn, struct k_st *st),
+ k_fs_stat(char const *p, uintptr_t pn, struct k_st *st, bool follow),
  k_fs_mkdir(char const *p, uintptr_t pn, uintptr_t mode),
  k_fs_rmdir(char const *p, uintptr_t pn),
  k_fs_unlink(char const *p, uintptr_t pn),
@@ -87,7 +87,7 @@ static long k_openat(long dfd, char const *p, long fl, long mode) {   // mode is
   if (r == -EISDIR && m == 'r') return k_fs_opendir(p, strlen(p));
   if (r == -ENOENT && m == 'r') {
     struct k_st t;
-    if (!k_fs_stat(p, strlen(p), &t) && (t.mode & 040000))
+    if (!k_fs_stat(p, strlen(p), &t, true) && (t.mode & 040000))
       return k_fs_opendir(p, strlen(p)); }
   return r; }
 
@@ -108,7 +108,9 @@ static long k_statat(long dfd, char const *p, struct stat *st, long fl) {
  long r = at_ok(dfd, p);
  if (r || !st) return r ? r : -EFAULT;
  struct k_st t;
- if ((r = k_fs_stat(p, strlen(p), &t))) return r;
+ // AT_SYMLINK_NOFOLLOW is what tells lstat from stat: one arm serves both, and the
+ // flag was being read and dropped, so lstat followed.
+ if ((r = k_fs_stat(p, strlen(p), &t, !(fl & AT_SYMLINK_NOFOLLOW)))) return r;
  stat_fab(st, &t);
  return 0; }
 
