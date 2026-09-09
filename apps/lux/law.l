@@ -1,11 +1,12 @@
 ; apps/lux/law.l -- xmonad's QuickCheck properties for apps/lux/core.l, in exact arithmetic,
-; plus a seeded fuzz. Reads the leaked globals from apps/lux/core.l (concatenate them:
-; `cat test/00-init.l apps/lux/core.l apps/lux/law.l | love`, the `make test_lux` gate). Split
-; into small independent top-level `:` forms -- each self-contained, nothing new
-; leaks, and no single form grows big enough to stress the whole-form compiler.
+; plus a seeded fuzz. Reads apps/lux/core.l's names off the row that loads them both
+; (test/gates.l 'lux). Split into small independent top-level `:` forms -- each
+; self-contained, nothing new leaks, and no single form grows big enough to stress the
+; whole-form compiler.
 
 ; --- the zipper laws ---
 (borrow 'xwire)   ; the X wire, apps/lux/wire.l
+(borrow 'salt)    ; the config door, read below -- config.l splices it too, and a splice is not inherited
 (: z3 (zmk 2 '(1) '(3))                                                          ; row (1 2 3), 2 focused
    (test
       (zrow (zfrom '(1 2 3)) = '(1 2 3)) !(zfrom ()) !(zrow ())

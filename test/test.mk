@@ -14,7 +14,7 @@
   test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_front test_gc test_gcheck test_gcstress \
-  test_gen test_glaze test_glazebench test_glazefuzz test_gz test_harp test_hdiff test_holo test_holofuzz test_holowasm test_hook \
+  test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_harp test_hdiff test_holo test_holofuzz test_holowasm test_hook \
   test_host test_hostegg test_hostnif test_inle test_kboot test_kernel_a64 test_kernel_rv64 test_kernel_wasm test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
@@ -42,8 +42,8 @@ test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpu
 test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_uulean test_uuwm \
 	test_uukind test_gc test_gcheck test_gcstress test_extract test_big test_mx \
 	test_tools test_web test_hostnif test_doc test_glaze test_hook test_sat test_holo test_holowasm test_as \
-	test_holofuzz test_glazefuzz test_encver test_lux test_harp test_kore test_refuzz test_sb test_vi \
-	test_clay test_moonfuzz test_forge \
+	test_holofuzz test_glazefuzz test_encver test_kore test_refuzz test_sb test_vi \
+	test_clay test_moonfuzz test_forge test_gates \
 	test_cts test_libc test_ulp test_raw \
 	test_drv test_hdiff test_tco0 nettest test_wake test_gz test_cpio test_fat32 test_root \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
@@ -321,19 +321,22 @@ test_drat: host
 # sheaf, floating half -- with xmonad's QuickCheck laws + a seeded fuzz. Pure love, so it
 # self-tests portably; the X layers need connectu and are proven against Xephyr, not here.
 test_lux: host
-	@echo TEST apps/lux/core.l ... apps/lux/config.l + apps/lux/law.l "(the whole app, host)"
-	@cat test/00-init.l apps/lux/core.l apps/lux/layout.l apps/lux/wire.l apps/lux/ewmh.l \
-	    apps/lux/manage.l apps/lux/keys.l apps/lux/config.l apps/lux/law.l \
-	  | sh test/gate/run.sh lux "$m" "apps/lux/law: StackSet"
+	@$m test/gate/gates.l lux < /dev/null
 # harp (apps/harp/harp.l): tidal's cycle algebra, where a pattern is a function from a
 # span to events -- so the gate is queries, and the whole pure half runs anywhere. the
 # voices (apps/harp/play.l) ride along for the far end: one cycle into a .wav whose
 # energy has to land where the pattern said, and one out the HORN=none sink, which has
 # to take a second to play a second. that is as far as a gate that cannot listen goes.
 test_harp: host
-	@echo TEST apps/harp/harp.l + apps/harp/play.l "(patterns, mini-notation, voices)"
-	@cat test/00-init.l apps/harp/harp.l apps/harp/play.l apps/harp/law.l \
-	  | sh test/gate/run.sh harp "$m" "apps/harp/law: patterns"
+	@$m test/gate/gates.l harp < /dev/null
+# test_gates -- the app-law rows in ONE love. a row's files arrive by `borrow` on a path,
+# which makes the layer `cat` was faking, so rows keep their names apart without a process
+# apiece; and the verdict is the harness's own tally instead of a grep for the red X it
+# prints -- run.sh reads that back off stdout because a pipe is all a shell can see. each
+# row above keeps its make target, which runs that row by name.
+test_gates: host
+	@echo TEST test/gate/gates.l "(the app-law rows, one love)"
+	@$m test/gate/gates.l < /dev/null
 # the SEAT lane -- an app fired by its own FILE NAME (positional, or a -l preload), which
 # is the one dispatch door no other gate reaches: every app gate below drives its subject
 # through the verb rail or a baked image instead. ~2.5s, most of it one bake, and it rides
