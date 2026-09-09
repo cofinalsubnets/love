@@ -615,9 +615,23 @@ static intptr_t k_canon(char const *p, uintptr_t pn, char *out) {
   if (!(pn && p[0] == '/')) memcpy(out, k_cwd, n = k_cwd_n);
   return ai_path_canon(out, n, p, pn, 256); }
 
-// one open file: which entry, where in it, and whether writes are allowed. rides
-// the k_source row's `state`; the close door frees it.
-struct k_fh { int i; uintptr_t pos; bool w; };
+// /proc/src -- the initrd under a second name. the same rows, read as the bake laid them,
+// so a module loads from a copy nobody can have edited: the guarantee is that the shell
+// cannot be broken by the tree it is editing. a path under the mount strips to the row's
+// own key. -1 is not under it, 0 is the mount itself, above that the stripped length.
+static char const k_srcmnt[] = "proc/src";
+static intptr_t k_src_strip(char *cp, intptr_t cn) {
+  uintptr_t m = sizeof k_srcmnt - 1;
+  if ((uintptr_t) cn < m || memcmp(cp, k_srcmnt, m)) return -1;
+  if ((uintptr_t) cn == m) return 0;
+  if (cp[m] != '/') return -1;
+  memmove(cp, cp + m + 1, (uintptr_t) cn - m - 1);
+  return cn - (intptr_t) m - 1; }
+
+// one open file: which entry, where in it, and whether writes are allowed. `src` is the
+// /proc/src read, which takes the bake row past any copy. rides the k_source row's
+// `state`; the close door frees it.
+struct k_fh { int i; uintptr_t pos; bool w, src; };
 
 static intptr_t ram_readn(int fd, unsigned char *dst, uintptr_t n);
 
@@ -629,11 +643,15 @@ static ai_inline struct k_fh *k_fh(int fd) {
   return s && s->readn == ram_readn ? s->state : NULL; }
 
 // what entry i reads as: the heap copy once there is one, the baked blob until then.
-static unsigned char const *k_blob(int i, uintptr_t *len) {
+// `pristine` is /proc/src's read -- the bytes the bake laid, whatever the tree above has
+// been written since. a row the bake never laid has no pristine face at all, which is why
+// the mount refuses one at the open rather than reaching for a row that is not there.
+static unsigned char const *k_blob_at(int i, uintptr_t *len, bool pristine) {
   struct k_ent const *e = &k_ents[i];
-  if (e->own) return *len = e->len, e->bytes;
+  if (e->own && !pristine) return *len = e->len, e->bytes;
   struct k_file const *f = k_bake_row(e->bake);
   return *len = f->len, (unsigned char const*) f->bytes; }
+static unsigned char const *k_blob(int i, uintptr_t *len) { return k_blob_at(i, len, false); }
 
 // inle/sys.c's seek. it answers a NEGATIVE errno, the one sign every C face in
 // this kernel wears; the love door upstairs names it (ai_err). whence 0/1/2
@@ -644,7 +662,7 @@ long k_fd_lseek(int fd, long off, int whence) {
   if (!h) return -29;                                    // ESPIPE: a console or a pipe
   if (whence < 0 || whence > 2) return -22;              // EINVAL
   uintptr_t len;
-  k_blob(h->i, &len);
+  k_blob_at(h->i, &len, h->src);
   intptr_t at = off + (whence == 1 ? (intptr_t) h->pos
                      : whence == 2 ? (intptr_t) len : 0);
   if (at < 0) return -22;
@@ -798,7 +816,7 @@ static intptr_t ram_readn(int fd, unsigned char *dst, uintptr_t n) {
   struct k_fh *h = k_fh(fd);
   if (!h) return -1;
   uintptr_t len;
-  unsigned char const *p = k_blob(h->i, &len);
+  unsigned char const *p = k_blob_at(h->i, &len, h->src);
   // the end, never 0: a file does not grow under its reader, so "nothing waiting"
   // would park the scheduler on a source that will never speak.
   if (h->pos >= len) return -1;
@@ -857,9 +875,16 @@ ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   char cp[256];
   intptr_t cn = k_canon(p, pn, cp);
   if (cn < 0) return -ENAMETOOLONG;
+  bool src = false;
+  intptr_t sn = k_src_strip(cp, cn);
+  if (sn >= 0) {                                 // under /proc/src: read-only, bake rows only
+    if (m != 'r') return -EROFS;
+    if (!sn) return -EISDIR;                     // the mount itself
+    src = true, cn = sn; }
   if ((cn = k_deref(cp, cn)) < 0) return (int) cn;
   if (!cn) return -EISDIR;                       // the root is a directory
   int i = k_find(cp, (uintptr_t) cn);
+  if (src && (i < 0 || k_ents[i].bake < 0)) return -ENOENT;   // only what the bake laid
   if (i >= 0 && k_ents[i].dir) return -EISDIR;
   bool made = false;
   if (i < 0) {
@@ -886,7 +911,7 @@ ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   if (m == 'w') e->own = true, e->len = 0, e->ms = k_clock_ms();
   if (m == 'a') k_blob(i, &len);
   e->refs++;
-  *h = (struct k_fh) { .i = i, .pos = len, .w = m != 'r' };
+  *h = (struct k_fh) { .i = i, .pos = len, .w = m != 'r', .src = src };
   *s = (struct k_source) { .readn = ram_readn, .writen = ram_writen,
                            .ready = ram_ready, .close = ram_close, .state = h };
   return fd; }
@@ -916,13 +941,19 @@ ai_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st) {
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
   if ((cn = k_canon(p, pn, cp)) < 0) return -ENOENT;
+  bool src = false;
+  intptr_t sn = k_src_strip(cp, cn);
+  if (sn >= 0) {
+    if (!sn) return *st = (struct k_st) { 0, 0, k_mode_dir | 0555 }, 0;   // the mount itself
+    src = true, cn = sn; }
   if ((cn = k_deref(cp, cn)) < 0) return (int) cn;  // stat(2), not lstat: readlink
   int i = k_find(cp, (uintptr_t) cn);               // is the door to the link itself
   uintptr_t kid;
   *st = (struct k_st) { 0, 0, 0 };
-  if (i >= 0 && !k_ents[i].dir)
-    k_blob(i, &st->size), st->ms = k_ents[i].ms,
-    st->mode = k_mode_file | k_ents[i].mode;
+  if (i >= 0 && !k_ents[i].dir) {
+    if (src && k_ents[i].bake < 0) return -ENOENT;   // a row the bake never laid
+    k_blob_at(i, &st->size, src), st->ms = k_ents[i].ms,
+    st->mode = k_mode_file | k_ents[i].mode; }
   else if (i >= 0) {
     st->mode = k_mode_dir | k_ents[i].mode;     // an explicit directory: its own date,
     st->ms = k_ents[i].ms;                      // or its newest child's if newer
@@ -1068,7 +1099,7 @@ long k_fd_pipe(int fds[2]) {
 // a directory opens as a row with a close and a dents cursor and nothing else: read(2) on it
 // is EISDIR, and the love doors never make one. the cursor is the count of names already
 // handed out, and the scan re-walks and skips, so no enumeration state outlives the call.
-struct k_dh { uintptr_t pn; int at; char p[256]; };
+struct k_dh { uintptr_t pn; int at; bool src; char p[256]; };
 static void k_dir_close(int fd) {
  struct k_source *s = k_source(fd);
  if (!s) return;
@@ -1080,13 +1111,16 @@ long k_fs_opendir(char const *p, uintptr_t pn) {
  intptr_t cn;
  if (!k_fs_init()) return -ENOMEM;
  if ((cn = k_canon(p, pn, cp)) < 0) return -ENAMETOOLONG;
+ bool src = false;
+ intptr_t sn = k_src_strip(cp, cn);
+ if (sn >= 0) src = true, cn = sn;                 // the mount lists the tree it shadows
  if (!k_dirp(cp, (uintptr_t) cn))
   return k_find(cp, (uintptr_t) cn) >= 0 ? -ENOTDIR : -ENOENT;
  int fd = k_fd_free();
  struct k_dh *h = kmallocw(b2w(sizeof *h));
  struct k_source *s = h ? k_source_open(fd) : NULL;
  if (!s) { kfree(h); return -ENOMEM; }
- h->pn = (uintptr_t) cn, h->at = 0;
+ h->pn = (uintptr_t) cn, h->at = 0, h->src = src;
  memcpy(h->p, cp, (uintptr_t) cn);
  *s = (struct k_source) { .close = k_dir_close, .state = h };
  return fd; }
@@ -1106,6 +1140,7 @@ long k_fd_dents(int fd, void *buf, long cap) {
   uintptr_t k;
   char const *e = k_entry(i, h->p, h->pn, &k);
   if (!e) continue;
+  if (h->src && k_ents[i].bake < 0) continue;   // the mount shows what the bake laid
   bool seen = false;                          // one name per entry, k_readdir's rule
   for (int j = 0; j < i && !seen; j++) {
    uintptr_t k2;
@@ -1135,7 +1170,7 @@ long k_fd_stat(int fd, struct k_st *st) {
   *st = (struct k_st) { 0, 0, 0 };
   if (s->readn == ram_readn) {
     struct k_fh *h = s->state;
-    k_blob(h->i, &st->size);
+    k_blob_at(h->i, &st->size, h->src);
     st->ms = k_ents[h->i].ms;
     st->mode = k_mode_file | k_ents[h->i].mode;
     return 0; }
@@ -1662,6 +1697,14 @@ static struct ai_def const __attribute__((section("ai_knifs"), used)) defs[] = {
 static char const src_korelist[] =
 #include "korelist.h"
 ;
+// the crew roster. these files are NOT in the kernel's cat -- a verb nobody asks for
+// costs nothing -- so what the kernel carries is the ORDER, and the members are read off
+// /proc/src at the first ask. one line rather than a name-to-path rule because a module's
+// name does not say which file holds it: story lives in apps/rove/, xwire in
+// apps/lux/wire.l, and sb spans three files that have to load in the order given.
+static char const src_crewlist[] =
+#include "crewlist.h"
+;
 
 void kmain(void) {
 #if defined(__x86_64__)
@@ -1726,6 +1769,9 @@ void kmain(void) {
   g = ai_strof(g, src_korelist);
   struct ai_def kd[] = {{"korelist", {.x = ai_pop1(g)}}};
   g = ai_defn(g, kd, countof(kd));
+  g = ai_strof(g, src_crewlist);
+  struct ai_def cd[] = {{"crewlist", {.x = ai_pop1(g)}}};
+  g = ai_defn(g, cd, countof(cd));
   // the boot cmdline, raw; the boot text below splits it into the argv shape.
   g = ai_strof(g, kboot.cmdline);
   struct ai_def bd[] = {{"bootline", {.x = ai_pop1(g)}}};
@@ -1806,6 +1852,25 @@ void kmain(void) {
  "           (go t))"
  "        127)))"
  "   (k-tool nm as) (? (member? nm (names ())) (link (ev nm) as) ())"
+  // the crew is NOT in the kernel's cat, so a verb nobody asks for costs nothing. the
+  // first ask reads the roster's files off /proc/src -- where the bake laid them and no
+  // write can have reached -- and each file's own (module ..) form registers it. `source`
+  // is the witness: it is in the roster, so its row says the load already happened.
+ "   (cwords s i j acc)"
+ "    (? (< j (tally s))"
+ "       (? (= 32 (peep s j 0))"
+ "          (? (< i j) (cwords s (+ j 1) (+ j 1) (link (snip s i j) acc)) (cwords s (+ j 1) (+ j 1) acc))"
+ "          (cwords s i (+ j 1) acc))"
+ "       (? (< i j) (rev (link (snip s i j) acc)) (rev acc)))"
+ "   (cload p) (: q (open (+ \"/proc/src/\" p) \"r\")"
+ "     (? (port? q)"
+ "        (: t (slurp q) _ (close q)"
+ "           (go cl) (: r (sound cl) (? (two? r) (: _ (ev (cap r)) (go (cup r))) 0))"
+ "           (go t))"
+ "        0))"
+ "   (crewload _) (? (cite 'source) 0 (: _ (each (cwords crewlist 0 0 ()) cload) 0))"
+  // one retry around the dispatch, so the crew loads only where every other lane missed
+ "   (k-progc argv) (: p (k-prog argv) (? (two? p) p (: _ (crewload ()) (k-prog argv))))"
  // the registry is the PATH on this machine: every app pins its own names into
  // (cite 'verbs 'tab), and `word` applies the shadow rules -- a slashed word or
  // a .l name is a file and never a verb, which is what leaves the two lanes
@@ -1826,7 +1891,7 @@ void kmain(void) {
  // wears; anything higher is duped, the port owning the copy from there.
  "   (k-port w n f) (? (! (charm? f)) (k-slot w n) (f < 0) (k-slot w n)"
  "                     (f < 3) (k-slot w f) (fdopen (dup f)))"
- "   (k-spawn1 argv f0 f1 f2) (: pr (k-prog argv)"
+ "   (k-spawn1 argv f0 f1 f2) (: pr (k-progc argv)"
  "     w (worn ())"
  "     kw [(k-port w 0 f0) (k-port w 1 f1) (k-port w 2 f2)]"
  // worn across the twirl, which does not switch tasks: the child inherits node[7] and
@@ -1922,7 +1987,7 @@ void kmain(void) {
    "   (: _ (hear (\\ a b (? (id? a 'leave) (quit b)"
    "                        (: _ (say err \";; \") _ (print err a) _ (say err \" \") _ (print err b)"
    "                           _ (put err 10) (quit 1)))))"
-   "      pr (k-prog bootargv)"
+   "      pr (k-progc bootargv)"
    "      r (? (two? pr) ((cap pr) (cup pr))"
    "           (: _ (say err (+ (cap bootargv) \": not found\")) _ (put err 10) 127))"
    "      (quit (? (charm? r) r 0)))"

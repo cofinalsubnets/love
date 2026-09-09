@@ -570,8 +570,17 @@ out/lib/korelist.h: Makefile
 	@tf=$@.$$$$.tmp; printf '"%s"\n' '$(korefiles)' > $$tf; \
 	 $(note)
 
+# the crew roster, the same one line: these files are NOT in the kernel's cat, so the
+# order is all the kernel carries and the members come off /proc/src when a verb is asked
+# for. one line, because a name does not say which file holds it -- story lives in
+# apps/rove/, xwire in apps/lux/wire.l, and sb spans three that must load in order.
+out/lib/crewlist.h: Makefile
+	@mkdir -p out/lib
+	@tf=$@.$$$$.tmp; printf '"%s"\n' '$(crewfiles)' > $$tf; \
+	 $(note)
+
 # every $(k_c) source, wherever in the tree it lives, lands under $(k_odir) by its path.
-$(k_odir)/%.o: $(R)/%.c $(k_h) $(mooncc_dep) out/lib/baked.h out/lib/distlist.h out/lib/korelist.h
+$(k_odir)/%.o: $(R)/%.c $(k_h) $(mooncc_dep) out/lib/baked.h out/lib/distlist.h out/lib/korelist.h out/lib/crewlist.h
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
@@ -587,9 +596,10 @@ kmain_o: $(k_free_o)
 # carries no seat and its roster is empty.
 kart_inc = -I$(ho) -I. -Il -Iinle -Iout/lib -I$R \
   -I$R/l/quay -I$R/apps/moon/include
-# kmain.c's own bake is the kore ROSTER now; the egg and the module set are inle/cats.c's,
-# and that object rides the host lane above.
-kart_bake = out/lib/korelist.h
+# kmain.c's own bake is the two ROSTERS now -- the kore cat's order, and the crew's, which
+# it carries the order of and reads the members of off /proc/src. the egg and the module set
+# are inle/cats.c's, and that object rides the host lane above.
+kart_bake = out/lib/korelist.h out/lib/crewlist.h
 define kart
 $(1)_h = $$(love_h) $$R/inle/k.h $$R/inle/ustar.h $$(wildcard $$R/inle/$$($(4))/*.h)
 $(1)_arch_o = $$(patsubst $$R/%.c,$$($(2))/%.o,$$(wildcard $$R/inle/$$($(4))/*.c))
@@ -1033,7 +1043,7 @@ out/wasm/src.o: $(dist_source) tools/mksrc.l out/.mksys-cat.l $m
 	@mkdir -p "$(dir $@)"
 	@LOVE_NO_IMAGE= $m -l out/.mksys-cat.l tools/mksrc.l $(dist_source) $@ wasm
 out/love-wasm.wasm: $(kw_c) $(kw_h) out/wasm/src.o out/lib/baked.h out/lib/distlist.h \
-  out/lib/korelist.h out/lib/love_version.h $(mooncc_dep)
+  out/lib/korelist.h out/lib/crewlist.h out/lib/love_version.h $(mooncc_dep)
 	@echo 'MOON	'$@
 	@$(mooncc) -t wasm -Dai_tco=1 -DAiHaveVersionH -I. -Il -Iinle -Iout/lib \
 	  -Il/quay -Iapps/moon/include -o $@ $(kw_c) out/wasm/src.o
