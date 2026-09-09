@@ -37,7 +37,7 @@
 
    b (see qr)                      ; parks; only the woken peer's byte releases it
    _ (wait pid)
-   _ (test (b = 120)))
+   _ (assert (b = 120)))
 
 ; --- defect 6: readiness is asked of an FD, but the bytes live in the port -----
 ; a task parked on a quiet fd over a buffer another task's gulp filled used to
@@ -59,7 +59,7 @@
    a (see r)
    b (catch t)                      ; hangs with the port half of the test taken out
    _ (wait pid)
-   _ (test (a = 65) (b = 66)))    ; one byte each, in order
+   _ (assert (a = 65) (b = 66)))    ; one byte each, in order
 
 ; --- the same defect at the entry: await asked the fd alone --------------------
 ; a port holding bytes is readable however quiet its fd is (love.c, bio_of's park
@@ -72,7 +72,7 @@
    a2 (see r2)                      ; gulps both; the second is in the buffer now
    _ (await r2)                     ; hangs with the buffer term taken out
    b2 (see r2)
-   _ (test (a2 = 65) (b2 = 66)))
+   _ (assert (a2 = 65) (b2 = 66)))
 
 ; --- rung 2: a parked peer is not starved by tasks that never block ------------
 ; the two rings put the fd-parked tasks off the run ring, so the only thing that
@@ -95,6 +95,6 @@
    got (catch t3)                   ; never returns if the parked peer starves
    _ (wait pid3)
    _ (freeze c1) _ (freeze c2)
-   _ (test (got = 90)))
+   _ (assert (got = 90)))
 
 (puts "parked: ok\n")

@@ -41,7 +41,7 @@
    _ (freeze t)
    _ (close c)
    _ (close l)
-   _ (test (0 < k)))                  ; a blocking accept never gets here at all
+   _ (assert (0 < k)))                  ; a blocking accept never gets here at all
 
 ; --- law 2: udp-recv parks on a quiet socket ----------------------------------
 ; the same law on the datagram side. The peer address is (ipv4 << 16) | port --
@@ -58,7 +58,7 @@
    got (catch rx)
    _ (freeze t)
    _ (close s)
-   _ (test (0 < k)
+   _ (assert (0 < k)
              (got = "ping")))           ; and the datagram still arrives whole
 
 ; --- law 3: wait parks while a child is up ------------------------------------
@@ -72,7 +72,7 @@
    st (wait (cap r))
    _ (freeze t)
    _ (close (cup r))
-   _ (test (0 < (peep n 0 0))         ; 0 with the blocking waitpid back in
+   _ (assert (0 < (peep n 0 0))         ; 0 with the blocking waitpid back in
              (st = 0)))                 ; ... and the child's status is still exact
 
 ; --- law 4: hark parks for the child's whole life ------------------------------
@@ -88,7 +88,7 @@
    t (ticker n)
    r (hark '("sh" "-c" "echo one; sleep 0.2; echo two"))
    _ (freeze t)
-   _ (test (0 < (peep n 0 0))         ; 0 with the blocking drain back in
+   _ (assert (0 < (peep n 0 0))         ; 0 with the blocking drain back in
              ((cap r) = 0)
              ((cup r) = "one\ntwo\n")))  ; ... and the capture is still whole
 
@@ -130,7 +130,7 @@
    r (catch s)
    _ (freeze t)
    _ (close a)
-   _ (test (0 < k)                    ; 0 with a blocking connect back in
+   _ (assert (0 < k)                    ; 0 with a blocking connect back in
              (nom? r)                   ; the reset handshake answers its nom
              (lit? a)))                 ; ... and a connect that did land is a port
 
