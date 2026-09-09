@@ -460,6 +460,100 @@ echo "$lp" | grep -q "rc=42" || fail "uvpty exit -- got: $lp"
 
 echo "$t: UV-pty -- the quartet, one binary, both kernels"
 
+# ---- rung UV-siginfo: SA_SIGINFO, one binary, both kernels ----
+# the record itself, not just the number. a handler that asked for SA_SIGINFO is
+# handed the kernel's own siginfo, and the three kernels lay it three ways:
+# freebsd puts pid/uid/status ahead of the address and numbers si_code's SENDER
+# band from 0x10001, netbsd swaps code and errno in the head and unions the
+# address with the child, linux is the shape moonlibc canonicalises to. so the
+# SAME binary must read the SAME record everywhere -- a wrong offset or an
+# untranslated code shows up as a differing line, not as a crash.
+# the pid and uid are reported as a MATCH: they differ between two machines.
+cat > "$d/uvsi.c" <<'EOF'
+#include <unistd.h>
+#include <signal.h>
+#include <string.h>
+#include <stdio.h>
+#include <setjmp.h>
+#include <stdlib.h>
+#include <sys/wait.h>
+
+static volatile sig_atomic_t c_signo, c_code, c_status, c_pidok;
+static volatile sig_atomic_t u_signo, u_code, u_pidok;
+static volatile sig_atomic_t s_signo, s_code;
+static volatile unsigned long s_addr;
+static sigjmp_buf segv_back;
+static int self;
+
+static void on_chld(int s, siginfo_t *si, void *c) {
+  (void) s; (void) c;
+  c_signo = si->si_signo; c_code = si->si_code;
+  c_status = si->si_status; c_pidok = si->si_pid > 0; }
+
+static void on_usr(int s, siginfo_t *si, void *c) {
+  (void) s; (void) c;
+  u_signo = si->si_signo; u_code = si->si_code;
+  u_pidok = si->si_pid == self; }
+
+static void on_segv(int s, siginfo_t *si, void *c) {
+  (void) s; (void) c;
+  s_signo = si->si_signo; s_code = si->si_code;
+  s_addr = (unsigned long) si->si_addr;
+  siglongjmp(segv_back, 1); }
+
+static void arm(int sig, void (*h)(int, siginfo_t *, void *)) {
+  struct sigaction sa;
+  memset(&sa, 0, sizeof sa);
+  sa.sa_sigaction = h;
+  sa.sa_flags = SA_SIGINFO;
+  sigemptyset(&sa.sa_mask);
+  if (sigaction(sig, &sa, 0)) { write(2, "arm\n", 4); _exit(9); } }
+
+int main(void) {
+  char m[256];
+  self = (int) getpid();
+
+  /* the child lane: pid, status and CLD_EXITED all come from the kernel */
+  arm(SIGCHLD, on_chld);
+  int kid = fork();
+  if (!kid) _exit(7);
+  int st = 0;
+  while (waitpid(kid, &st, 0) < 0) ;
+
+  /* the sender band: kill(2) is SI_USER, which is 0 canonically and 0x10001
+     on freebsd -- the one code that must be translated rather than ridden */
+  arm(SIGUSR1, on_usr);
+  kill(self, SIGUSR1);
+
+  /* the fault lane: a known unmapped address, so si_addr is a constant */
+  arm(SIGSEGV, on_segv);
+  if (sigsetjmp(segv_back, 1) == 0)
+    *(volatile int *) 0x12340000UL = 1;
+
+  sprintf(m, "uvsi: chld signo=%d code=%d status=%d pid=%d\n"
+             "uvsi: usr1 signo=%d code=%d pid=%d\n"
+             "uvsi: segv signo=%d code=%d addr=0x%lx\n",
+          (int) c_signo, (int) c_code, (int) c_status, (int) c_pidok,
+          (int) u_signo, (int) u_code, (int) u_pidok,
+          (int) s_signo, (int) s_code, s_addr);
+  write(1, m, strlen(m));
+  return 42; }
+EOF
+moon0 -t "$arch" "$d/uvsi.c" -o "$d/uvsi" || fail "uvsi: the default-lane compile"
+lout=$(run "$d/uvsi"; echo "rc=$?")
+fout=$($box 'cat > /tmp/uvsi && chmod +x /tmp/uvsi && /tmp/uvsi; echo "rc=$?"' < "$d/uvsi") \
+  || fail "uvsi: the box could not take or run it"
+[ "$lout" = "$fout" ] || fail "uvsi: the kernels disagree -- linux[$lout] $os[$fout]"
+echo "$lout" | grep -q "uvsi: chld signo=17 code=1 status=7 pid=1" \
+  || fail "uvsi child lane -- got: $lout"
+echo "$lout" | grep -q "uvsi: usr1 signo=10 code=0 pid=1" \
+  || fail "uvsi sender band -- got: $lout"
+echo "$lout" | grep -q "uvsi: segv signo=11 code=1 addr=0x12340000" \
+  || fail "uvsi fault lane -- got: $lout"
+echo "$lout" | grep -q "rc=42" || fail "uvsi exit -- got: $lout"
+
+echo "$t: UV-siginfo -- one SA_SIGINFO record read the same on both kernels"
+
 # ---- the trophy, opt-in by name (FBSD_SEED=1, minutes): the seed builds the
 # seed ON THE BOX, and the bytes are the tree's own. the bake is budget-
 # invariant now, so the box's budget (RAM economics) does not move the answer.

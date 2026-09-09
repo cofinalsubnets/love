@@ -251,19 +251,42 @@ struct __nb_siginfo { int signo, code, err, pad;
  * handler downstairs. */
 static int os_faultsig(int s) {
   return s == SIGILL || s == SIGTRAP || s == SIGFPE || s == SIGBUS || s == SIGSEGV; }
+/* si_code's SENDER band. the per-signal fault codes (ILL_ILLOPC, SEGV_MAPERR,
+ * CLD_EXITED ..) are small positives and mean the same on all three kernels, so
+ * they ride. who SENT a signal does not: freebsd numbers that band from 0x10001
+ * and netbsd from -1 -- and netbsd is not linux either, ASYNCIO and MESGQ being
+ * swapped. a code with no canonical twin rides rather than being invented:
+ * freebsd's SI_NOINFO is 0, which IS linux's SI_USER and cannot be told from it,
+ * and netbsd's is 32767, which nothing upstairs names. */
+static long os_sicode(long c) {
+  if (__ai_osv == 2) switch (c) {
+    case 0x10001: return 0;      /* SI_USER */
+    case 0x10002: return -1;     /* SI_QUEUE */
+    case 0x10003: return -2;     /* SI_TIMER */
+    case 0x10004: return -4;     /* SI_ASYNCIO */
+    case 0x10005: return -3;     /* SI_MESGQ */
+    case 0x10006: return 0x80;   /* SI_KERNEL */
+    case 0x10007: return -6;     /* SI_LWP; linux's nearest is SI_TKILL */
+    default: return c; }
+  if (__ai_osv == 3) switch (c) {
+    case -3: return -4;          /* SI_ASYNCIO */
+    case -4: return -3;          /* SI_MESGQ */
+    case -5: return -6;          /* SI_LWP; linux's -5 is SI_SIGIO, a different thing */
+    default: return c; }         /* USER, QUEUE and TIMER already agree */
+  return c; }
 void __ai_sicanon(void const *n, siginfo_t *o) {
   memset(o, 0, sizeof *o);
   if (__ai_osv == 2) {
     struct __fb_siginfo const *f = n;
     o->si_signo = (int) __ai_sigcan(f->signo), o->si_errno = f->err;
-    o->si_code = f->code;    /* the fault codes agree everywhere; the sender band does not */
+    o->si_code = (int) os_sicode(f->code);
     if (os_faultsig(o->si_signo)) o->si_addr = f->addr;
     else { o->si_pid = f->pid, o->si_uid = f->uid;
            if (o->si_signo == SIGCHLD) o->si_status = f->status; } }
   else if (__ai_osv == 3) {
     struct __nb_siginfo const *b = n;
     o->si_signo = (int) __ai_sigcan(b->signo), o->si_errno = b->err;
-    o->si_code = b->code;
+    o->si_code = (int) os_sicode(b->code);
     if (os_faultsig(o->si_signo)) o->si_addr = b->u.addr;
     else { o->si_pid = b->u.chld.pid, o->si_uid = b->u.chld.uid;
            if (o->si_signo == SIGCHLD) o->si_status = b->u.chld.status; } }
