@@ -34,6 +34,7 @@ static uintptr_t kram_words;
 
 static struct cb *kcb;
 
+
 static struct {
   volatile uint32_t *_;
   uint16_t width, height, pitch; } kfb;
@@ -923,18 +924,12 @@ static int k_gauge(char *b, struct ai const *g) {
   at = k_row(b, at, "minor-peak", g->minor_hi);
   return k_row(b, at, "major-peak", g->major_hi); }
 
-void k_proc_fill(struct ai *g, char const *p, uintptr_t pn) {
-  char cp[256];
-  intptr_t cn = k_canon(p, pn, cp);
-  if (cn < 0) return;
-  int slot = k_proc_slot(cp, (uintptr_t) cn);
-  if (!slot || !k_fs_init()) return;
-  int i = k_find(cp, (uintptr_t) cn);
-  if (i < 0) return;
+// entry i's bytes <- the machine, at the open of a read. memory refusing leaves the last
+// content standing: a stale row is answerable, an open that failed for want of one is not.
+static void k_proc_read(int i, int slot) {
+  if (slot == 2 && !ai_system) return;          // no process to ask; meminfo is ours alone
   char b[768];
-  int n = slot == 1 ? k_meminfo(b) : k_gauge(b, g);
-  // memory refusing leaves the last content standing: a stale row is answerable, an
-  // open that failed for want of it would not be.
+  int n = slot == 1 ? k_meminfo(b) : k_gauge(b, ai_system);
   if (!k_fit(i, (uintptr_t) n)) return;
   memcpy(k_ents[i].bytes, b, (uintptr_t) n);
   k_ents[i].len = (uintptr_t) n; }
@@ -1041,6 +1036,8 @@ ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   struct k_ent *e = &k_ents[i];
   int vt = src ? 0 : k_vt_slot(cp, (uintptr_t) cn);
   if (vt && m == 'r') k_vt_read(i, vt);          // the pen, as of this open
+  int ps = src || m != 'r' ? 0 : k_proc_slot(cp, (uintptr_t) cn);
+  if (ps) k_proc_read(i, ps);                    // and the machine, as of this open
   if (m == 'w') e->own = true, e->len = 0, e->ms = k_clock_ms();
   if (m == 'a') k_blob(i, &len);
   e->refs++;
@@ -1087,6 +1084,8 @@ ai_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st) {
     if (src && k_ents[i].bake < 0) return -ENOENT;   // a row the bake never laid
     int vt = src ? 0 : k_vt_slot(cp, (uintptr_t) cn);
     if (vt) k_vt_read(i, vt);                        // so a size is the pen's, not the last read's
+    int ps = src ? 0 : k_proc_slot(cp, (uintptr_t) cn);
+    if (ps) k_proc_read(i, ps);
     k_blob_at(i, &st->size, src), st->ms = k_ents[i].ms,
     st->mode = k_mode_file | k_ents[i].mode; }
   else if (i >= 0) {

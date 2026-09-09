@@ -559,6 +559,7 @@ struct ai_wait_fd { int fd; short events, revents; };
 void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ticks), // wait for a fd to be ready
     ai_ready_fds(struct ai_wait_fd *fds, int n);                  // non-blocking variant
 bool ai_ready(int fd, int events);
+extern struct ai *ai_system;   // the running state; gen_grow is the only thing that moves it
 struct ai
  *ai_please(struct ai*, uintptr_t),
  *ai_push(struct ai*, uintptr_t, ...),

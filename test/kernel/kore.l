@@ -7,24 +7,24 @@
 
 (borrow 'kore) ; the applets ride module 'kore -- the cat's kore files above just registered it
 
-(: (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
-   (wr p s) (: q (open p "w") (? (port? q) (: _ (say q s) _ (close q) 1) 0))
+(: (rd p) (: q (open p "r") (port? q ? (: s (slurp q) (close q, s)) ()))
+   (wr p s) (: q (open p "w") (port? q ? (say q s, close q, 1) 0))
    d "/tmp/l-kore"
  (test
-   (= 0 (pwd-main ()))                          ; prints the seat, answers 0
-   (= 0 (mkdir-main ["-p" (d + "/a/b")]))
+   (0 = pwd-main ())                          ; prints the seat, answers 0
+   (0 = mkdir-main ["-p" (d + "/a/b")])
    (udirp (d + "/a/b"))
    (wr (d + "/f") "hi kore")
-   (= 0 (ls-main [d]))
-   (= 2 (ls-main ["/tmp/l-kore-ghost"]))        ; a miss says so and exits 2, GNU's status
-   (= 0 (cp-main [(d + "/f") (d + "/a")]))      ; a dir destination pulls the name in
-   (= "hi kore" (rd (d + "/a/f")))
-   (= 0 (touch-main [(d + "/t")]))              ; be there, and be now
+   (0 = ls-main [d])
+   (2 = ls-main ["/tmp/l-kore-ghost"])        ; a miss says so and exits 2, GNU's status
+   (0 = cp-main [(d + "/f") (d + "/a")])      ; a dir destination pulls the name in
+   ("hi kore" = rd (d + "/a/f"))
+   (0 = touch-main [(d + "/t")])              ; be there, and be now
    (two? (stat (d + "/t")))
-   (= 0 (mv-main [(d + "/t") (d + "/t2")]))
-   ((stat (d + "/t")) = 'enoent)
+   (0 = mv-main [(d + "/t") (d + "/t2")])
+   (stat (d + "/t") = 'enoent)
    (two? (stat (d + "/t2")))
-   (= 0 (rm-main [(d + "/t2")]))
-   ((stat (d + "/t2")) = 'enoent)
-   (= 0 (rm-main ["-r" d]))                     ; the tree walks out bottom-up
-   ((stat d) = 'enoent)))
+   (0 = rm-main [(d + "/t2")])
+   (stat (d + "/t2") = 'enoent)
+   (0 = rm-main ["-r" d])                     ; the tree walks out bottom-up
+   (stat d = 'enoent)))

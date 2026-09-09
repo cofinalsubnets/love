@@ -316,6 +316,7 @@ struct ai *gen_grow(struct ai *g, uintptr_t len1) {
  h->n_resize += 1;
  if (h->len > h->max_len) h->max_len = h->len;
  g->alloc(g, g, 0);                          // free the old main pool
+ ai_system = h;                              // the one place a state changes address
  return h; }
 
 // the GC entry: a minor unless the rem set overflowed or the major lacks headroom --

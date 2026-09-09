@@ -15,14 +15,13 @@
 ; back could only have been executed out of the page the ept pointed at -- an
 ; untranslated fetch would have run whatever lies at the bottom of RAM.
 (: had (member? 'vmx (names ()))
-   (? (! (? had (vmx ()) ()))
-      (: _ (puts "vmx: no VT-x here, laws skipped") _ (putc 10) ())
+   (? !(? had (vmx ()) ())
+      (puts "vmx: no VT-x here, laws skipped\n", ())
       (: r (vmx-run ())
          _ (test
-            (4 = (tally r))          ; (reason rax rip err) -- a refusal answers ()
+            (4 = #r)          ; (reason rax rip err) -- a refusal answers ()
             (0 = <>>>r)              ; the VM-instruction error: the entry was taken
             (10 = <r)                ; exit_reason_cpuid
             (4660 = <>r)             ; 0x1234, the sentinel the guest loaded
             (5 = <>>r))              ; the cpuid's own address, one instruction in
-         _ (puts "vmx: guest ran, cpuid exited") _ (putc 10)
-         ())))
+       (puts "vmx: guest ran, cpuid exited\n", ()))))

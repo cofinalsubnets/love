@@ -13,7 +13,7 @@
    s (slurp rp) _ (close rp)
  (test (two? pp) (charm? rfd) (charm? wfd)
          (port? wp) (port? rp)
-         (= s "hello pipe")))
+         (s = "hello pipe")))
 
 ; the same pair through the raw-fd lane: say/put/see/chug/slurp take a charm
 ; where they take a port, unbuffered and straight at the row -- no fdopen, so no
@@ -25,30 +25,30 @@
    _ (close wfd)
    e (see rfd)
    s (slurp rfd) _ (close rfd)
- (test (= 104 a) (= "ello pipe!" x) (= -1 e) (= "" s)))
+ (test (104 = a) ("ello pipe!" = x) (-1 = e) ("" = s)))
 
 ; a pipe end wears its own kind, where a ramfs fd wears a file's -- stat off the
 ; fd is the one door either way
 (: pp (pipe 0) rfd (cap pp) wfd (cup pp)
    s (stat rfd)
    _ (close rfd) _ (close wfd)
- (test (= 4096 (& 61440 <>>s))))
+ (test (4096 = 61440 & <>>s)))
 
 ; a row that is not there swallows what is written and reads as the end. that is
 ; what keeps a closed seat's output from faulting a task which cannot know, and
 ; it is the same answer on both seats
 (test (= "into the void" (say 4096 "into the void"))
-        (= -1 (see 4096)) (= "" (slurp 4096))
-        (= 4096 (flush 4096)))
+        (-1 = see 4096) ("" = slurp 4096)
+        (4096 = flush 4096))
 
 ; a parked reader wakes on the write, and ends on the close
 (: pp (pipe 0) rp (fdopen (cap pp))
-   p (twirl (\ _ (slurp rp)) 0)
+   p (twirl (_ \ slurp rp) 0)
    _ (rest 0)                                   ; let the reader park on the quiet pipe
    wp (fdopen (cup pp))
    _ (say wp "wake") _ (close wp)
    r (catch p) _ (close rp)
- (test (= r "wake")))
+ (test (r = "wake")))
 
 ; dup is a row alias: the end comes at the last writer's close, not the first
 (: pp (pipe 0) rfd (cap pp) wfd (cup pp)
@@ -56,7 +56,7 @@
    wp (fdopen wfd)
    _ (say wp "one") _ (close wp)
    rp (fdopen rfd)
-   p (twirl (\ _ (slurp rp)) 0)
+   p (twirl (_ \ slurp rp) 0)
    _ (rest 0)
    w2p (fdopen w2)
    _ (say w2p ", two") _ (close w2p)
@@ -70,13 +70,13 @@
    _ (close (cup pa))                         ; a's own write end steps out too
    sb (slurp (fdopen (cap pb)))                 ; b lost its one writer at the dup2
    sa (slurp (fdopen (cap pa)))
- (test (! e) (= sb "") (= sa "crossed")))
+ (test !e (sb = "") (sa = "crossed")))
 
 ; spawn maps argv onto a love main, the pid is the task pid, wait is catch;
 ; the corpus itself runs unseated in the main task
 (: p (spawn (list "kore" "echo" "rung4"))
- (test (charm? (getpid 0)) (= 0 (getpid 0))
-         (charm? p) (< 0 p) (= 0 (wait p))))
+ (test (charm? (getpid 0)) (0 = getpid 0)
+         (charm? p) (0 < p) (0 = wait p)))
 
 ; an unknown program still answers a pid; its exit is 127, the host's face
 (: p (spawn (list "no-such-tool"))

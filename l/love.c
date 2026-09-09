@@ -263,10 +263,21 @@ word ai_err(struct ai *g, int e) {
  word v = ai_mapget(g, 0, putcharm(e), g->errs);
  return v ? v : ai_mapget(g, 0, zero, g->errs); }
 
+// THE system process. one of the two mutable globals the runtime keeps, and it is here
+// rather than behind a per-seat hook because there is ONE artifact: kmain and main and gc
+// are objects in the same ELF, so a weak default and a seat's override are two bodies with
+// one name, not two sides. born below, and moved only by gen_grow, which is the only place
+// a `struct ai` ever changes address. read by C that sits UNDER the syscall boundary and
+// therefore cannot be handed g -- inle's /proc. a seat running two states at once would
+// see the one that grew last; nothing in the tree does, and only /proc reads this.
+struct ai *ai_system;
+
 struct ai *ai_ini_m(void *(*al)(struct ai*, void*, size_t)) {
  uintptr_t const len0 = ai_minor0;   // initial minor pool; grows on demand (gen_grow)
  struct ai *g = al(NULL, NULL, 2 * len0 * sizeof(word));
- return g == NULL ? encode(g, ai_status_scare) : ai_ini_0(g, len0, al); }
+ if (g == NULL) return encode(g, ai_status_scare);
+ g = ai_ini_0(g, len0, al);
+ return ai_ok(g) ? (ai_system = g) : g; }
 
 void *ai_libc_alloc(struct ai*g, void *p, size_t n) { return n ? malloc(n) : (free(p), NULL); }
 struct ai *ai_ini(void) { return ai_ini_m(ai_libc_alloc); }
