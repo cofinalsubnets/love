@@ -246,11 +246,16 @@ long __ai_sigcan(long s) { return (s >= 0 && s < 32) ? os_sigcan[s] : s; }
 struct __fb_siginfo { int signo, err, code, pid; unsigned uid; int status; void *addr; };
 struct __nb_siginfo { int signo, code, err, pad;
   union { void *addr; struct { int pid; unsigned uid; int status; } chld; } u; };
-/* which lane a record carries, by canonical number. the lanes overlap on two of
- * the three kernels, so the question is asked once here rather than by every
- * handler downstairs. */
-static int os_faultsig(int s) {
-  return s == SIGILL || s == SIGTRAP || s == SIGFPE || s == SIGBUS || s == SIGSEGV; }
+/* which lane a record carries. the lanes overlap on two of the three kernels, so
+ * the question is asked once here rather than by every handler downstairs -- and
+ * it takes BOTH halves: the signal names the pair, the code picks between them.
+ * a fault signal SENT by a process carries its sender and no address at all, so
+ * the address lane is the kernel's own codes only, above SI_USER and below
+ * SI_KERNEL. that is linux's own rule, and where the lanes are unioned the other
+ * reading hands a handler the sender's pid punned as a pointer. */
+static int os_faultlane(int s, long code) {
+  return (s == SIGILL || s == SIGTRAP || s == SIGFPE || s == SIGBUS || s == SIGSEGV)
+         && code > 0 && code < 0x80; }
 /* si_code's SENDER band. the per-signal fault codes (ILL_ILLOPC, SEGV_MAPERR,
  * CLD_EXITED ..) are small positives and mean the same on all three kernels, so
  * they ride. who SENT a signal does not: freebsd numbers that band from 0x10001
@@ -280,14 +285,14 @@ void __ai_sicanon(void const *n, siginfo_t *o) {
     struct __fb_siginfo const *f = n;
     o->si_signo = (int) __ai_sigcan(f->signo), o->si_errno = f->err;
     o->si_code = (int) os_sicode(f->code);
-    if (os_faultsig(o->si_signo)) o->si_addr = f->addr;
+    if (os_faultlane(o->si_signo, o->si_code)) o->si_addr = f->addr;
     else { o->si_pid = f->pid, o->si_uid = f->uid;
            if (o->si_signo == SIGCHLD) o->si_status = f->status; } }
   else if (__ai_osv == 3) {
     struct __nb_siginfo const *b = n;
     o->si_signo = (int) __ai_sigcan(b->signo), o->si_errno = b->err;
     o->si_code = (int) os_sicode(b->code);
-    if (os_faultsig(o->si_signo)) o->si_addr = b->u.addr;
+    if (os_faultlane(o->si_signo, o->si_code)) o->si_addr = b->u.addr;
     else { o->si_pid = b->u.chld.pid, o->si_uid = b->u.chld.uid;
            if (o->si_signo == SIGCHLD) o->si_status = b->u.chld.status; } }
   else memcpy(o, n, sizeof *o); }         /* linux: the native record IS canonical */

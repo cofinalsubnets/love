@@ -482,6 +482,7 @@ static volatile sig_atomic_t c_signo, c_code, c_status, c_pidok;
 static volatile sig_atomic_t u_signo, u_code, u_pidok;
 static volatile sig_atomic_t s_signo, s_code;
 static volatile unsigned long s_addr;
+static volatile sig_atomic_t b_signo, b_code, b_pidok;
 static sigjmp_buf segv_back;
 static int self;
 
@@ -500,6 +501,12 @@ static void on_segv(int s, siginfo_t *si, void *c) {
   s_signo = si->si_signo; s_code = si->si_code;
   s_addr = (unsigned long) si->si_addr;
   siglongjmp(segv_back, 1); }
+
+/* a FAULT signal that was SENT: which lane the record carries is the CODE's
+   question and not the signal's, so this one holds a sender and no address */
+static void on_bus(int s, siginfo_t *si, void *c) {
+  (void) s; (void) c;
+  b_signo = si->si_signo; b_code = si->si_code; b_pidok = si->si_pid == self; }
 
 static void arm(int sig, void (*h)(int, siginfo_t *, void *)) {
   struct sigaction sa;
@@ -530,12 +537,17 @@ int main(void) {
   if (sigsetjmp(segv_back, 1) == 0)
     *(volatile int *) 0x12340000UL = 1;
 
+  arm(SIGBUS, on_bus);
+  kill(self, SIGBUS);
+
   sprintf(m, "uvsi: chld signo=%d code=%d status=%d pid=%d\n"
              "uvsi: usr1 signo=%d code=%d pid=%d\n"
-             "uvsi: segv signo=%d code=%d addr=0x%lx\n",
+             "uvsi: segv signo=%d code=%d addr=0x%lx\n"
+             "uvsi: sbus signo=%d code=%d pid=%d\n",
           (int) c_signo, (int) c_code, (int) c_status, (int) c_pidok,
           (int) u_signo, (int) u_code, (int) u_pidok,
-          (int) s_signo, (int) s_code, s_addr);
+          (int) s_signo, (int) s_code, s_addr,
+          (int) b_signo, (int) b_code, (int) b_pidok);
   write(1, m, strlen(m));
   return 42; }
 EOF
@@ -550,6 +562,8 @@ echo "$lout" | grep -q "uvsi: usr1 signo=10 code=0 pid=1" \
   || fail "uvsi sender band -- got: $lout"
 echo "$lout" | grep -q "uvsi: segv signo=11 code=1 addr=0x12340000" \
   || fail "uvsi fault lane -- got: $lout"
+echo "$lout" | grep -q "uvsi: sbus signo=7 code=0 pid=1" \
+  || fail "uvsi sent-fault lane -- got: $lout"
 echo "$lout" | grep -q "rc=42" || fail "uvsi exit -- got: $lout"
 
 echo "$t: UV-siginfo -- one SA_SIGINFO record read the same on both kernels"
