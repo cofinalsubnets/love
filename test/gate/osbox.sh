@@ -578,6 +578,10 @@ if [ -n "$sd" ]; then
   # the love-level sigfd round rides the shipped binary: the port IS a kqueue
   # here -- the pending take, then the PARKED take (await merges the kq fd).
   cat > "$d/sigkq.l" <<'EOF'
+; sigfd and sigtake are the posix module's rows, not the bare book's. a corpus
+; file inherits 00-init's borrow; this one is handed straight to love and owes
+; its own, or the whole leg dies on `;; missing sigfd` before it asks anything.
+(borrow 'posix)
 (: sp (sigfd [10 17])
    me (getpid 0)
    _  (still me 10)
