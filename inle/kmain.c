@@ -580,6 +580,16 @@ struct k_ent {
 static struct k_ent *k_ents;
 static int k_ents_n, k_ents_cap;
 
+// /proc/vt -- the console's colours as two files, xterm-256 indices in decimal. an
+// ordinary entry each, so stat, dents and the whole fd machinery need nothing new: the
+// open refreshes a read off the live pen and the close applies a write.
+static char const k_vtfg[] = "proc/vt/fg", k_vtbg[] = "proc/vt/bg";
+// 0 is neither, 1 the foreground, 2 the background.
+static int k_vt_slot(char const *p, uintptr_t n) {
+  if (n == sizeof k_vtfg - 1 && !memcmp(p, k_vtfg, n)) return 1;
+  if (n == sizeof k_vtbg - 1 && !memcmp(p, k_vtbg, n)) return 2;
+  return 0; }
+
 // lay the table on first use: every baked row, live, reading off .rodata -- plus
 // tmp, the scratch a POSIX machine promises and no initrd carries. idempotent, and
 // a refusal leaves the console standing (the caller answers absence or ENOMEM).
@@ -600,7 +610,14 @@ static bool k_fs_init(void) {
                             .ms = f->ms, .mode = 0644, .live = true }; }
   t[n] = (struct k_ent) { .path = "tmp", .bake = -1, .ms = k_clock_ms(),
                           .mode = 0755, .own = true, .dir = true, .live = true };
-  k_ents = t, k_ents_n = n + 1, k_ents_cap = cap;
+  // the console's two colours, as files. own with no bytes yet: empty until the first
+  // read refreshes them, and `proc` and `proc/vt` come free -- a name baked paths lie
+  // under is a directory already, which is how the flat initrd carries `apps`.
+  t[n + 1] = (struct k_ent) { .path = k_vtfg, .bake = -1, .ms = k_clock_ms(),
+                              .mode = 0644, .own = true, .live = true };
+  t[n + 2] = (struct k_ent) { .path = k_vtbg, .bake = -1, .ms = k_clock_ms(),
+                              .mode = 0644, .own = true, .live = true };
+  k_ents = t, k_ents_n = n + 3, k_ents_cap = cap;
   return true; }
 
 // the cwd, a kernel string -- canonical ("" is the root), what k_canon resolves
@@ -631,7 +648,7 @@ static intptr_t k_src_strip(char *cp, intptr_t cn) {
 // one open file: which entry, where in it, and whether writes are allowed. `src` is the
 // /proc/src read, which takes the bake row past any copy. rides the k_source row's
 // `state`; the close door frees it.
-struct k_fh { int i; uintptr_t pos; bool w, src; };
+struct k_fh { int i, vt; uintptr_t pos; bool w, src; };
 
 static intptr_t ram_readn(int fd, unsigned char *dst, uintptr_t n);
 
@@ -812,6 +829,36 @@ static bool k_fit(int i, uintptr_t need) {
   e->bytes = p, e->cap = cap;
   return true; }
 
+// entry i's bytes <- the pen, at the open of a read. memory refusing leaves the last
+// content standing: a stale number is answerable, and an open that failed here would
+// not be -- the console is not something `cat` can be told it has run out of.
+static void k_vt_read(int i, int slot) {
+  // serial-only: no console to ask, and the file reads EMPTY rather than handing back
+  // whatever a write left in it -- a colour nothing is wearing would be a lie.
+  if (!kcb) { k_ents[i].len = 0; return; }
+  unsigned v = slot == 1 ? kcb->def_fg : kcb->def_bg;
+  char d[4]; int n = 0;
+  if (v >= 100) d[n++] = (char) ('0' + v / 100);
+  if (v >= 10)  d[n++] = (char) ('0' + v / 10 % 10);
+  d[n++] = (char) ('0' + v % 10);
+  d[n++] = '\n';
+  if (!k_fit(i, (uintptr_t) n)) return;
+  memcpy(k_ents[i].bytes, d, (uintptr_t) n);
+  k_ents[i].len = (uintptr_t) n; }
+
+// the pen <- entry i's bytes, at the close of a write. a leading number is the whole
+// grammar; anything past it is ignored, and no number at all -- or one past the 256 the
+// palette holds -- leaves the console alone rather than blanking it on a typo.
+static void k_vt_write(int i, int slot) {
+  if (!kcb) return;
+  unsigned char const *b = k_ents[i].bytes;
+  uintptr_t len = k_ents[i].len, j = 0;
+  unsigned v = 0;
+  while (j < len && b[j] >= '0' && b[j] <= '9' && v < 256) v = v * 10 + (unsigned) (b[j++] - '0');
+  if (!j || v > 255) return;
+  cb_recolor(kcb, slot == 1 ? (uint8_t) v : kcb->def_fg,
+                  slot == 1 ? kcb->def_bg : (uint8_t) v); }
+
 static intptr_t ram_readn(int fd, unsigned char *dst, uintptr_t n) {
   struct k_fh *h = k_fh(fd);
   if (!h) return -1;
@@ -848,6 +895,7 @@ static void ram_close(int fd) {
   struct k_source *s = k_source(fd);
   if (!s) return;
   struct k_fh *h = s->state;
+  if (h && h->vt && h->w) k_vt_write(h->i, h->vt);   // the write lands when the writer is done
   if (h && k_ents[h->i].refs) k_ents[h->i].refs--, k_ent_gc(h->i);
   kfree(s->state);
   *s = (struct k_source) {0}; }               // and the row is free again
@@ -908,10 +956,12 @@ ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   // the truncate lands last, past every way this can still fail (same law).
   uintptr_t len = 0;
   struct k_ent *e = &k_ents[i];
+  int vt = src ? 0 : k_vt_slot(cp, (uintptr_t) cn);
+  if (vt && m == 'r') k_vt_read(i, vt);          // the pen, as of this open
   if (m == 'w') e->own = true, e->len = 0, e->ms = k_clock_ms();
   if (m == 'a') k_blob(i, &len);
   e->refs++;
-  *h = (struct k_fh) { .i = i, .pos = len, .w = m != 'r', .src = src };
+  *h = (struct k_fh) { .i = i, .vt = vt, .pos = len, .w = m != 'r', .src = src };
   *s = (struct k_source) { .readn = ram_readn, .writen = ram_writen,
                            .ready = ram_ready, .close = ram_close, .state = h };
   return fd; }
@@ -952,6 +1002,8 @@ ai_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st) {
   *st = (struct k_st) { 0, 0, 0 };
   if (i >= 0 && !k_ents[i].dir) {
     if (src && k_ents[i].bake < 0) return -ENOENT;   // a row the bake never laid
+    int vt = src ? 0 : k_vt_slot(cp, (uintptr_t) cn);
+    if (vt) k_vt_read(i, vt);                        // so a size is the pen's, not the last read's
     k_blob_at(i, &st->size, src), st->ms = k_ents[i].ms,
     st->mode = k_mode_file | k_ents[i].mode; }
   else if (i >= 0) {
