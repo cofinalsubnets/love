@@ -61,6 +61,7 @@ void
   cb_stamp(struct cb*, uint8_t),
   cb_fill(struct cb*, uint8_t),
   cb_attr(struct cb*, uint8_t fg, uint8_t bg, uint8_t font),
+  cb_recolor(struct cb*, uint8_t fg, uint8_t bg),
   cb_cur(struct cb*, uint32_t row, uint32_t col);
 int cb_reply(struct cb*, uint8_t*);  // drain the reply queue; buf holds cb_outn
 uint32_t cb_unfold(uint8_t);       // a glyph byte's codepoint (0 = none)

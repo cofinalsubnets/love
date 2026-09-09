@@ -19,6 +19,16 @@ void cb_fill(struct cb *c, uint8_t _) {
 
 void cb_clear(struct cb *c) { cb_fill(c, 0); }
 
+// the attribute, and every cell ALREADY on the screen with it -- the characters stay put.
+// the rows are marked like any other write: a cell whose colour changed and whose row is
+// clean is a cell the painter will not come back for, so the screen would recolour only
+// where something else happened to be writing.
+void cb_recolor(struct cb *c, uint8_t fg, uint8_t bg) {
+  cb_attr(c, fg, bg, 0);
+  for (uint32_t i = 0, j = (uint32_t) c->rows * c->cols; i < j; i++)
+    c->cb[i] = cb_cell(cb_ch(c->cb[i]), fg, bg, 0);
+  cb_dirt(c, 0, c->rows - 1u); }
+
 void cb_cur(struct cb *c, uint32_t row, uint32_t col) {
   c->wpos = (row * c->cols + col) % ((uint32_t) c->rows * c->cols); }
 

@@ -1515,13 +1515,14 @@ static lvm(key) {
  Sp[0] = putcharm(b < 0 ? 0 : b);
  ai_musttail return Next(1); }
 
+// (color fg bg) -- xterm-256 indices, the attribute and every cell already on the screen.
+// two in and one out, so the answer lands in the deeper slot and Sp moves by one: Next
+// alone would leave the VM holding two arguments it has been told nothing about.
 static lvm(color) {
- uint8_t fg = getcharm(*Sp++), bg = getcharm(*Sp++);
- if (kcb) {
-  cb_attr(kcb, fg, bg, 0);
-  for (uint32_t i = 0, j = kcb->rows * kcb->cols; i < j; i++)
-   kcb->cb[i] = cb_cell(cb_ch(kcb->cb[i]), fg, bg, 0); }
- ai_musttail return Next(1); }
+ uint8_t fg = getcharm(Sp[0]), bg = getcharm(Sp[1]);
+ if (kcb) cb_recolor(kcb, fg, bg);
+ Sp[1] = ZeroPoint;
+ ai_musttail return Nextp(1, 1); }
 
 // (fault n) -- deliberately raise a CPU exception to exercise the ap in arch.c.
 // k_fault_trigger maps n to a concrete fault, the cases mirroring x64 vector numbers and
@@ -1621,7 +1622,7 @@ static bool cbinit(void) {
   if (!(kcb = kmallocw(b2w(sizeof(struct cb) + rows * cols * sizeof(uint32_t))))) return false;
   cb_open(kcb, rows, cols);
   kcb->flag |= cb_lnm;  // the kernel console's discipline: a bare \n is a newline
-  cb_attr(kcb, 47, 56, 0);
+  cb_attr(kcb, 15, 0, 0);   // white on black: xterm-256's 15 and 0, what a terminal is
   cb_fill(kcb, 0);
   return true; }
 
