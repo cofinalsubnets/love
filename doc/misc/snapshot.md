@@ -211,5 +211,17 @@ hold it to.
    non-PIE, so absolute pointers stay valid only if nothing moves); or a layout-stable shared TU.
    Resolves cold start on the MCU too.
 
+2. **The image as a suspended computation.** The wake re-establishes `ip` from the top, so the
+   running continuation rides in as wake-unreachable garbage and the program is named at wake
+   instead. A `bake` taking a continuation would make that the k = top-level case and give the
+   other one: warm up, capture, dump, resume where it left off on the next boot. Most of the
+   machinery is here — `call-cc` (`lvm_callk`) snapshots the caller's stack into a heap THREAD, so
+   a continuation is an ordinary serializable value; the root table walks `v0..end` generically,
+   so a resume root is a new field and no codec change; and a parked `ip` already crosses as an
+   index. The cost is the fd question from the other side: the save forges the `fz` chain dead
+   because dump-time fds mean nothing in a NEW process, which a resumed one is not. That turns
+   what a baked continuation may close over into a contract rather than an invariant — k = top
+   being the case that holds nothing.
+
 Relates: (the collector and the immortal region) (the bake's
 codegen).

@@ -218,8 +218,7 @@ int image_bake(struct ai *g) {
 // the (bake path) nif: `love wake path prog.l ..` boots a session carrying every global
 // this one had pinned, a live native closure among them -- its code is bytes the image
 // carries. answers 1 | ().
-// FIXME extend LvmCall macro to handle this. also, what if it was bake-with-current-continuation?
-//       would that give us a better story for what waking an image means?
+// FIXME extend LvmCall macro to handle this.
 static lvm(lvm_bake) {
  Pack(g);
  word r = strp(g->sp[0]) && !image_put(g) ? putcharm(1) : ai_zero;
