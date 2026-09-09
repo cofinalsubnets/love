@@ -33,7 +33,7 @@
       ['link-back  (x \ two? x ? (x = (. <x >x)) 1)]
       ['nil?-total (x \ : b !x (b = 0 || b = 1))]
       ['=-total    (x \ : b (x = x) (b = 1))]
-      ['==-finer  (x \ (= x x) ? (x = x) 1)]           ; == implies =, never the converse
+      ['==-finer  (x \ x == x ? (x = x) 1)]            ; == implies =, never the converse
       ; --- the measure and the tower it retracts down. every value has a complex measure and
       ; each rung is that measure saturated into a smaller set -- idempotent, identity on its
       ; own image, which is what makes the tower retractions rather than conversions.
