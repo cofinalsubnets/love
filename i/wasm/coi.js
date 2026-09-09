@@ -5,21 +5,28 @@
 // worker, it adds the two headers to every response. a server that sends them itself
 // never registers it (the page is already isolated, and the script does nothing).
 if (typeof window === 'undefined') {
-  self.addEventListener('install', () => self.skipWaiting());
-  self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
-  self.addEventListener('fetch', (e) => {
-    if (e.request.cache === 'only-if-cached' && e.request.mode !== 'same-origin') return;
-    e.respondWith(fetch(e.request).then((r) => {
-      if (r.status === 0) return r;
-      const h = new Headers(r.headers);
-      h.set('Cross-Origin-Embedder-Policy', 'require-corp');
-      h.set('Cross-Origin-Opener-Policy', 'same-origin');
-      return new Response(r.body, { status: r.status, statusText: r.statusText, headers: h }); })); });
+ self.addEventListener('install', () => self.skipWaiting());
+ self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+ self.addEventListener('fetch', e => {
+  if (e.request.cache === 'only-if-cached' && e.request.mode !== 'same-origin') return;
+  e.respondWith(fetch(e.request).then(r => {
+   if (r.status === 0) return r;
+   const h = new Headers(r.headers);
+   h.set('Cross-Origin-Embedder-Policy', 'require-corp');
+   h.set('Cross-Origin-Opener-Policy', 'same-origin');
+   return new Response(r.body, {
+    status: r.status,
+    statusText: r.statusText,
+    headers: h }); })); });
 } else if (!window.crossOriginIsolated && navigator.serviceWorker) {
-  const src = document.currentScript.src;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!sessionStorage.getItem('coi-reloaded')) { sessionStorage.setItem('coi-reloaded', '1'); location.reload(); } });
-  navigator.serviceWorker.register(src).then((reg) => {
-    if (reg.active && !navigator.serviceWorker.controller && !sessionStorage.getItem('coi-reloaded')) {
-      sessionStorage.setItem('coi-reloaded', '1'); location.reload(); } });
-}
+ const src = document.currentScript.src;
+ navigator.serviceWorker.addEventListener('controllerchange', () =>
+  !sessionStorage.getItem('coi-reloaded') &&
+  (sessionStorage.setItem('coi-reloaded', '1'),
+   location.reload()));
+ navigator.serviceWorker.register(src).then(reg =>
+  reg.active &&
+  !navigator.serviceWorker.controller &&
+  !sessionStorage.getItem('coi-reloaded') &&
+  (sessionStorage.setItem('coi-reloaded', '1'),
+   location.reload())); }

@@ -56,7 +56,11 @@ pd_local_c = $(wildcard *.c)
 # love_c already carries the codecs (mk/common.mk's core_tu = love_tu + love_codec),
 # so naming them again here is one roster too many -- and the second one pointed at
 # src/, which the flatten retired.
-pd_shared_c = $(love_c) $(f_c)
+# l/bare.c is the null seat: this frontend supplies main and the SDK supplies the
+# libc, so the doors i/fd.c carries on a hosted love have nobody here to answer them.
+# the port.mk boards take it through love_m; this folder keeps its own roster and so
+# has to name it.
+pd_shared_c = $(love_c) $(f_c) $(R)/l/bare.c
 pd_sdk_c = $(pd_sdk)/C_API/buildsupport/setup.c
 pd_src = $(pd_local_c) $(pd_shared_c) $(pd_sdk_c)
 mc_shared_o = $(pd_shared_c:$(R)/%.c=$(o)/%.o)

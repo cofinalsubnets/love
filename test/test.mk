@@ -35,7 +35,7 @@ test:
 	@$(MAKE) --no-print-directory $(test_phases)
 
 # slow gate
-test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_cookdiff test_glazebench test_dist test_seed test_moon test_boards test_kernel_wasm
+test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_cookdiff test_glazebench test_dist test_seed test_moon test_links test_kernel_wasm
 
 
 # really slow gate
@@ -851,15 +851,31 @@ test_rp2040: host
 # port's own make is single-threaded and only the four of them can overlap.
 # rp2040 and nucleo446 carry their own toolchain skips; mps2 and virt want nothing foreign
 # to BUILD, only to boot, so the build halves come out here as their own targets.
-# teensy41, playdate and wasm are OUT while their own breaks stand -- each is one word.
-test_boards: test_mps2_build test_virt_build test_rp2040 test_nucleo446
-	@echo "test_boards: four ports build and link -- mooncc and our linker, no emulator"
+# i/wasm is not here and never will be: that folder is the RETIRED emcc build, opt-in as
+# `make wasm-emcc` and in no gate. the module the page carries is out/love-wasm.wasm, which
+# test_links below builds.
+test_boards: test_mps2_build test_virt_build test_rp2040 test_nucleo446 test_teensy41 test_playdate
+	@echo "test_boards: six ports build and link -- mooncc and our linker, no emulator"
 test_mps2_build: host
 	@echo TEST out/mps2/love.elf '(build)'
 	@$(MAKE) -C i/mps2 || { echo "FAIL mps2 build"; exit 1; }
 test_virt_build: host
 	@echo TEST out/virt/love.elf '(build)'
 	@$(MAKE) -C i/virt || { echo "FAIL virt build"; exit 1; }
+# test_links -- EVERY DISTINCT LINK TOPOLOGY, compiled and linked, and nothing run.
+# a seat change breaks LINKS, and a link is the cheapest question this tree asks. the seat
+# work that removed the weak defaults broke four at once -- the wasm library module,
+# out/front, the boards, and playdate, which keeps its own roster and so missed l/bare.c --
+# and no fast gate could see any of them, because the lanes that cover them live in
+# test_extra, which takes an hour and therefore does not get run. rides test_slow.
+.PHONY: test_links
+test_links: host $(ho)/front $(love0) out/wasm/love.wasm out/love-wasm.wasm
+	@$(MAKE) -s $(ko)/love-x64.elf
+	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
+	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
+	@$(MAKE) -s test_boards
+	@echo "test_links: hosted, bootstrap, front, both wasm modules, three kernels, six boards"
+
 # the userland packages: each built by mooncc + moonlibc + the holo
 # linker -- no gcc/glibc/ld anywhere -- then RUN and held to the package's own answers:
 # tar 1.13 cf/xf + czf/xzf roundtrips and system-tar interop, m4 1.4's own 57-check suite,
