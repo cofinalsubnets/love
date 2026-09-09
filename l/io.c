@@ -311,9 +311,6 @@ uintptr_t ai_io_wpending(struct ai *g, struct ai_io *i) {
  struct ai_bio *b = bio_of(g, i);
  return bio_wpending(b) ? (uintptr_t) getcharm(b->wlen) : 0; }
 
-// GC-context finalizer hook: weak no-op; the host overrides with write(2).
-__attribute__((weak)) void ai_fd_drain(int fd, void const *p, uintptr_t n) {
- }
 
 struct ci { struct ai_io io; word head; }; // charlist input
 struct to { struct ai_io io; struct ai_str *buf; word i; }; // lisp string output
@@ -354,9 +351,6 @@ static struct ai *to_writen(struct ai *g, unsigned char const *src, uintptr_t n)
  g->sp++;
  return g->b = 0, g; }
 
-// the horn's door is the host's (inle/horn.c); a link without one has a horn that is gone
-__attribute__((weak)) struct ai *ai_horn_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
- return g->b = -1, g; }
 
 struct ai_port_vt const
  ai_to_vt     = { noop_flush, to_writen, NULL,     NULL },       // a string sink: prel's `jug`

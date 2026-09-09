@@ -48,8 +48,8 @@ static struct ai *stdin_take(struct ai *g) {
  fc->inport = fc->sp[0], fc->sp++;
  return g; }
 
-__attribute__((weak)) lvm(k_lvm_quit) { ai_musttail return Ap(_lvm_ghelp, g); }
-__attribute__((weak)) lvm(k_lvm_getpid) { ai_musttail return Ap(_lvm_ghelp, g); }
+_lvm(k_lvm_quit);
+_lvm(k_lvm_getpid);
 
 static lvm(lvm_exit) {
  if (__ai_osv < 0) ai_musttail return Ap(k_lvm_quit, g);

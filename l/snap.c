@@ -94,7 +94,7 @@ static uintptr_t image_objsize(struct ai *g, union u *p) {
 #define ImageNHost 256u
 // the kernel's own bracket (inle/kmain.c's ai_knifs) rides the slice behind the host's, so a
 // kernel bakes the book it drained: a link without one -- a board, the bootstrap -- answers none
-__attribute__((weak)) uintptr_t ai_knifs_slice(struct ai_def const **s) { return *s = NULL, 0; }
+uintptr_t ai_knifs_slice(struct ai_def const **s);
 static ai_inline uintptr_t image_nhost(void) {
  struct ai_def const *ks;
  uintptr_t n = (uintptr_t)(__stop_love_nifs - __start_love_nifs) + ai_knifs_slice(&ks);

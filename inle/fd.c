@@ -22,12 +22,12 @@
 // cannot carry, busy and end being distinct answers, so the vt branches here rather than
 // riding the syscall door. these bodies both declare the doors and stand in for them where
 // no kmain.c is linked -- love0 and the HCC build, neither of which can take the branch.
-__attribute__((weak)) struct ai *k_port_flush(struct ai *g) { return g; }
-__attribute__((weak)) struct ai *k_port_writen(struct ai *g, unsigned char const *src, uintptr_t n) { return g->b = -1, g; }
-__attribute__((weak)) intptr_t k_port_readn(struct ai *g, unsigned char *dst, uintptr_t n) { return -1; }
+struct ai *k_port_flush(struct ai *g);
+struct ai *k_port_writen(struct ai *g, unsigned char const *src, uintptr_t n);
+intptr_t k_port_readn(struct ai *g, unsigned char *dst, uintptr_t n);
 // and the rows under them, which an fd spelled in love reaches without the seat.
-__attribute__((weak)) intptr_t k_row_read(int fd, unsigned char *dst, uintptr_t n) { return -1; }
-__attribute__((weak)) intptr_t k_row_write(int fd, unsigned char const *src, uintptr_t n) { return -1; }
+intptr_t k_row_read(int fd, unsigned char *dst, uintptr_t n);
+intptr_t k_row_write(int fd, unsigned char const *src, uintptr_t n);
 
 // re-raise rather than exit: the wait status stays a signal death, so the shell's
 // reporting and every `$?` downstream read as they always did. a heap port reports.
@@ -126,10 +126,10 @@ struct ai_fio
 // k_fd_write's row, which is that port's absolute fd by the seat law.
 void ai_fd_drain(int fd, void const *p, uintptr_t n) { ai_fd_write_all(fd, p, n); }
 
-__attribute__((weak)) void k_row_close(int fd) {}
-__attribute__((weak)) bool k_ready(int fd, int events) { return true; }
-__attribute__((weak)) void k_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {}
-__attribute__((weak)) void k_sleep(uintptr_t ms) {}
+void k_row_close(int fd);
+bool k_ready(int fd, int events);
+void k_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms);
+void k_sleep(uintptr_t ms);
 
 // shared EINTR-retry skeleton for poll-based wait. ms=0 means infinite.
 // returns only when poll succeeds (data ready / deadline elapsed) or fails

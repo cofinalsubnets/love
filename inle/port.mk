@@ -76,7 +76,10 @@ be_lc   = $(subst $(R)/,,$(p_be_l))
 # (mk/common.mk names both). a port compiles every one under its own <x>_cc, since love.c
 # owes the other six and snap.c owes the codecs. love_m is the object stems, love_dep what
 # each one watches.
-love_m   = $(basename $(love_tu) $(love_codec))
+# ..plus l/bare.c, the answers a seat with no OS under it gives to the runtime's own
+# doors. only a bare seat links it: everything else carries inle/fd.c, whose bodies
+# are the real ones, and two of them in one link is a collision that says so.
+love_m   = $(basename $(love_tu) $(love_codec)) bare
 love_dep = $(love_h) $(lib_hR) $(mc)
 love_o   = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(love_m)))
 

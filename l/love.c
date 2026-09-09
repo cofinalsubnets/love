@@ -326,8 +326,6 @@ op11(lvm_clock, putcharm(ai_clock() - (charmp(Sp[0]) ? getcharm(Sp[0]) : 0)))
 // the fine clock: monotonic ns for differences ((nclock t) is ns minus t); clock
 // stays at ms, the scheduler's scale (ns wraps 32 bits every 4.3s). weak default
 // degrades to ms*1e6; hosts override with a real ns source.
-__attribute__((weak)) intptr_t ai_nclock(void) {
- return (intptr_t) (ai_clock() * 1000000u); }
 op11(lvm_nclock, putcharm(ai_nclock() - (charmp(Sp[0]) ? getcharm(Sp[0]) : 0)))
 
 // (please x): a collection on demand -- () a minor, a positive charm a major;
@@ -445,22 +443,6 @@ lvm(lvm_natp) {
   (cell(x)->ap == lvm_cur && code_in(g, (uintptr_t) cell(x)[2].ap)));
  ai_musttail return Answer(putcharm(nat)); }
 
-// default fd-keyed waits, conservative (all fds always-ready; multi-source wait
-// collapses to sleep) so non-multitasking frontends link without impls
-__attribute__((weak)) bool ai_ready(int fd, int events) { return true; }
-__attribute__((weak)) void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ticks) {
-  ai_sleep(ticks); }
-// the default authoritative readiness sweep: ask one at a time but fill every
-// slot, so "none ready" never reads as "nobody answered"; hosts replace the loop
-// with one poll(2)
-__attribute__((weak)) void ai_ready_fds(struct ai_wait_fd *fds, int n) {
-  for (int i = 0; i < n; i++)
-    fds[i].revents = ai_ready(fds[i].fd, fds[i].events) ? fds[i].events : 0; }
-
-__attribute__((weak)) void ai_fd_close(int fd) { }   // host overrides with close(2)
-// default sleep is busy wait
-__attribute__((weak)) ai_noinline void ai_sleep(uintptr_t ticks) {
-  for (ticks += ai_clock(); ai_clock() < ticks;); }
 
 // (cue? p): would `see` answer without parking? the dual of the park law -- all
 // three terms (pushback, buffered run, fd), or a port with bytes in hand reads
@@ -571,10 +553,8 @@ struct ai_code { char *base, *own; size_t len, used; int fixed; struct ai_code *
 struct ai_cfree { char *p; size_t n; struct ai_cfree *next; };           // a freed blob (its whole span)
 #if __STDC_HOSTED__
 // which kernel underneath: moonlibc's os.c defines it (0 unprobed; 1..3 the
-// hosted kernels; negative = we ARE the kernel). weak for seats with no
-// moonlibc aboard (love0 under a foreign libc, wasm), where zero reads as
-// hosted -- which such a seat is.
-__attribute__((weak)) long __ai_osv;
+// hosted kernels; negative = we ARE the kernel). moonlibc defines it (os.c);
+// a seat without one gives its own -- love0 in inle/main0.c.
 #ifndef MAP_ANONYMOUS
 #define MAP_ANONYMOUS MAP_ANON
 #endif
@@ -634,7 +614,7 @@ int code_in(struct ai *g, uintptr_t v) {                          // a code addr
 size_t code_len(char *code) { return ((uintptr_t*) code)[-2]; }
 // the seat's executable alias for a heap block: itself, unless a seat maps its heap
 // non-executable and keeps a second window that runs. inle does (inle/kmain.c).
-__attribute__((weak)) char *ai_code_window(char *p) { return p; }
+
 // the image lane: a packed segment of blobs becomes a chunk of its own, sealed for the
 // session -- image code is text, nothing frees it
 char *code_adopt(struct ai *g, char const *src, size_t n) {

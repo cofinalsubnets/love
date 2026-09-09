@@ -129,9 +129,9 @@ love_c = $(love_tu_c) $R/apps/moon/lib/moonlibc/math/am.c
 # an arch with no seat, which is what the rebuild gates read to skip their kernel half.
 hosta_c = $(wildcard $R/inle/$(hosta)/*.c)
 # ..and the hosted surface is inle/ less the kernel's own six (kmain, the syscall table,
-# the two drivers, doom) and love0's own seat (boot.c, which the Makefile names into
+# the two drivers, doom) and love0's own seat (main0.c, which the Makefile names into
 # love0_o instead): drop an inle/<app>.c in and its nifs register with no rule edit.
-host_c = $(filter-out $(addprefix $R/inle/,kmain.c boot.c blk.c hda.c sys.c doom.c doomsnd.c),$(wildcard $R/inle/*.c))
+host_c = $(filter-out $(addprefix $R/inle/,kmain.c main0.c blk.c hda.c sys.c doom.c doomsnd.c),$(wildcard $R/inle/*.c))
 # l/ vs inle/ cuts language from SEATS, not portable from machine-specific: quay
 # draws into a buffer and names no device, so it stays here with the engines no machine
 # owns. a seat that wants its own nifs brings them through ai_defn, which is that door.

@@ -122,8 +122,8 @@ $(ho)/liblove.a: $(h_o)
 
 # pinned to out/0, never $(ho)/0: love0 is one binary whatever HCC and tco say
 # love0 takes the whole hosted surface less the crew catalog, PLUS its own seat --
-# inle/boot.c, which host_c holds back because only this link has a use for it.
-love0_o = $(patsubst $(R)/%.c,out/0/%.o,$(filter-out $(R)/inle/cats.c,$(host_c)) $(R)/inle/boot.c $(love_c))
+# inle/main0.c, which host_c holds back because only this link has a use for it.
+love0_o = $(patsubst $(R)/%.c,out/0/%.o,$(filter-out $(R)/inle/cats.c,$(host_c)) $(R)/inle/main0.c $(love_c))
 out/0/inle/boot.o: out/lib/boot0.h
 out/0/inle/cb.o: l/quay/quay.c l/quay/nif.c l/quay/quay.h
 boot_cc = $(CCACHE) $(CC) $(ai_cflags) -fPIE -DLoveBoot -Dai_tco=0 -Dai_data_section=0 -DAiVersion='"$(love_base)+bootstrap"' -I. -Il -Iinle -Iout/lib

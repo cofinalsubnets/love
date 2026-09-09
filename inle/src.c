@@ -12,8 +12,8 @@
 #include "love.h"
 #include <string.h>
 
-__attribute__((weak)) const unsigned char ai_srcgz[1] = {0};
-__attribute__((weak)) const uintptr_t ai_srcgz_len = 0;
+extern const unsigned char ai_srcgz[];
+extern const uintptr_t ai_srcgz_len;
 
 // inlined into their wrappers: no buffer and nothing address-taken, so the tail still jumps
 static ai_inline struct ai *host_srcgz(struct ai *g) {
@@ -35,14 +35,14 @@ AiNif("source-gz", nif_srcgz, NULL);
 // (runtime-gz "id") -> the pure tree-slice hash the archives were cut from
 // (moon.l's rtcid). () when none is carried. tools/mkrt.l lays them, the
 // same weak/strong law as the source blob above; moon.l's rtcarried consumes.
-__attribute__((weak)) const unsigned char ai_rtgz_x64[1] = {0};
-__attribute__((weak)) const uintptr_t ai_rtgz_x64_len = 0;
-__attribute__((weak)) const unsigned char ai_rtgz_a64[1] = {0};
-__attribute__((weak)) const uintptr_t ai_rtgz_a64_len = 0;
-__attribute__((weak)) const unsigned char ai_rtgz_rv64[1] = {0};
-__attribute__((weak)) const uintptr_t ai_rtgz_rv64_len = 0;
-__attribute__((weak)) const unsigned char ai_rtgz_id[1] = {0};
-__attribute__((weak)) const uintptr_t ai_rtgz_id_len = 0;
+extern const unsigned char ai_rtgz_x64[];
+extern const uintptr_t ai_rtgz_x64_len;
+extern const unsigned char ai_rtgz_a64[];
+extern const uintptr_t ai_rtgz_a64_len;
+extern const unsigned char ai_rtgz_rv64[];
+extern const uintptr_t ai_rtgz_rv64_len;
+extern const unsigned char ai_rtgz_id[];
+extern const uintptr_t ai_rtgz_id_len;
 
 static ai_inline struct ai *host_rtgz(struct ai *g) {
  const unsigned char *p = 0;

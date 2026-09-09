@@ -88,3 +88,17 @@ void k_start(uintptr_t lo, uintptr_t hi, uintptr_t w, uintptr_t h, char const *c
 
 // where the worker blits from: the framebuffer's address, 0 when there is none
 uintptr_t k_fb_addr(void) { return (uintptr_t) kboot.fb.base; }
+
+// --- what this seat does not have ------------------------------------------------
+// the horn is inle/hda.c's, and there is no sound card behind a wasm module; the
+// carried per-ISA runtimes are the shipped artifact's, and out/wasm/src.o brings only
+// the source blob. plain definitions, so a seat that grows either one collides here
+// rather than quietly keeping the empty answer.
+const unsigned char ai_rtgz_x64[1] = {0};
+const uintptr_t ai_rtgz_x64_len = 0;
+const unsigned char ai_rtgz_a64[1] = {0};
+const uintptr_t ai_rtgz_a64_len = 0;
+const unsigned char ai_rtgz_rv64[1] = {0};
+const uintptr_t ai_rtgz_rv64_len = 0;
+const unsigned char ai_rtgz_id[1] = {0};
+const uintptr_t ai_rtgz_id_len = 0;

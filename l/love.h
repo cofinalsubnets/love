@@ -426,7 +426,7 @@ extern unsigned char const ai_srcgz[];
 extern uintptr_t const ai_srcgz_len;
 
 uintptr_t ai_clock(void); // used by garbage collector
-intptr_t ai_nclock(void); // the fine interval clock (ns); weak ms-degraded default in love.c, hosts override with a real ns source
+intptr_t ai_nclock(void); // the fine interval clock (ns); a host gives a real source, the null seat degrades to ms
 // which kernel underneath (moonlibc's os.c: 0 unprobed; 1 linux, 2 freebsd,
 // 3 netbsd; NEGATIVE = we ARE the kernel, inle). love.c carries a weak zero
 // for seats with no moonlibc aboard, where hosted is what zero reads as.

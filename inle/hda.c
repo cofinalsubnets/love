@@ -413,8 +413,14 @@ void k_hda_init(void *dma) {
     hputs(" pin\r\n"); } }
 
 #else
-// no PCI walk on this machine: no controller, and horn.c's weak k_horn_* faces
-// answer the port. only the two doors the kernel calls stand.
+// no PCI walk on this machine, so no controller -- and the horn's four faces are this
+// file's to answer either way: a machine without a card has a horn that refuses, which
+// is a fact about the hardware and belongs beside the driver rather than in a default
+// somebody else carries.
 void k_hda_init(void *dma) { (void) dma; }
 void k_horn_poll(void) { }
+int k_horn_open(int rate) { return -1; }
+intptr_t k_horn_write(unsigned char const *src, uintptr_t n) { return -1; }
+uintptr_t k_horn_lag(void) { return 0; }
+void k_horn_close(void) { }
 #endif

@@ -25,10 +25,10 @@
 #include <sys/ioctl.h>
 
 // stand-ins for a link with no inle/hda.c under it
-__attribute__((weak)) int k_horn_open(int rate) { return -1; }
-__attribute__((weak)) intptr_t k_horn_write(unsigned char const *src, uintptr_t n) { return -1; }
-__attribute__((weak)) uintptr_t k_horn_lag(void) { return 0; }
-__attribute__((weak)) void k_horn_close(void) { }
+int k_horn_open(int rate);
+intptr_t k_horn_write(unsigned char const *src, uintptr_t n);
+uintptr_t k_horn_lag(void);
+void k_horn_close(void);
 
 enum { horn_sink, horn_dev, horn_seat };
 // the port: the bio, then the device's words, all charms. wpos and t0 are the sink's
