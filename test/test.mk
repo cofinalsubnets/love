@@ -64,7 +64,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 # (-Dai_tco=0, the trampoline lane too), so it must print TWO "tests pass" summaries: a
 # reader stop drops the rest of the stream and exits 0. Status rides `.rc` -- no pipefail.
 # corpus.list IS A RUNTIME INPUT NOW, not only a stamp: love0 reads it to find the corpus
-# (inle/main.c), so it has to EXIST before love0 runs. It used to be pulled in as tests0.h's
+# (i/main.c), so it has to EXIST before love0 runs. It used to be pulled in as tests0.h's
 # prerequisite; with the corpus off the bootstrap's dependency graph, nothing else asks for it,
 # and a fresh tree died with `love0: corpus: cannot open out/lib/corpus.list` -- which the
 # unpacked-release path found and no in-tree run could, out/lib always being warm here.
@@ -210,7 +210,7 @@ test_front: $(ho)/front
 	@echo TEST $(ho)/front
 	@sh test/gate/run.sh -a front "$(ho)/front" "front: ok" test/front/io.l
 # Standalone smoke tests, held out of the corpus glob ($t is a non-recursive test/*.l).
-# NOT for the host: love0_o is the whole host glob less inle/cats.c, so love0 links every
+# NOT for the host: love0_o is the whole host glob less i/cats.c, so love0 links every
 # nif named under test/host/. what actually holds a file back is one of three, and each
 # file says which: it wants a crew module, and cats.c is the catalog love0 has not got;
 # it is not idempotent, and love0 evaluates the corpus TWICE; or its regression is a hang,
@@ -572,7 +572,7 @@ test_selfhost: host
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/selfhost; mkdir -p $$d; rm -f $$d/*.o; \
 	  for f in $(love_tu_c) $(host_c); do b=`basename $$f .c`; \
-	    $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Il -Iinle -Iout/lib -c $$f $$d/$$b.o \
+	    $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Il -Ii -Iout/lib -c $$f $$d/$$b.o \
 	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
 	  $(moonrun) -Iapps/moon/include -c apps/moon/lib/moonlibc/math/am.c $$d/am.o \
 	    || { echo "FAIL mooncc -c am.c"; exit 1; }; \
@@ -616,12 +616,12 @@ test_hdiff: host
 # stay loud (-shared usage-refuses, -nostdlib names its undefined references). In test_slow.
 test_drv: host
 	@sh test/gate/drv.sh $(ho) $(ai_cflags)
-# the kernel's inline-asm SEAM: inle/<a>/asmops.h says every privileged instruction
+# the kernel's inline-asm SEAM: i/<a>/asmops.h says every privileged instruction
 # once, in GNU's template, and mooncc reads it through holo/gas.l -- so the gate compiles one
 # probe with mooncc and clang and compares op by op. Skips without llvm-objdump.
 test_asmops: host
 	@sh test/gate/asmops.sh $(ho)
-# test_dtb -- inle/dtb.h, the walk both device-tree doors ride (a64_dtb.c and
+# test_dtb -- i/dtb.h, the walk both device-tree doors ride (a64_dtb.c and
 # rv64_dtb.c, each one two constants and this include), on trees the gate builds
 # rather than a machine hands over. A boot reaches exactly ONE tree, virt's; these reach
 # the other cell width, a nested reg that is not memory, two banks either way a tree says
@@ -630,26 +630,26 @@ test_dtb:
 	@echo TEST test/gate/dtb.c
 	@$(CC) -I$R/src -I$R -o $(ho)/.dtbgate $R/test/gate/dtb.c
 	@$(ho)/.dtbgate
-# test_rvboot -- THE RISCV BRING-UP ON A HART: mkboot.l's sv39 lane and inle/rv64/dtb.c
+# test_rvboot -- THE RISCV BRING-UP ON A HART: mkboot.l's sv39 lane and i/rv64/dtb.c
 # under qemu -M virt, entered the way the kernel will be (OpenSBI, S-mode, a1 the tree).
 # Three objects and nothing else -- the stub, the door, and test/gate/rvboot.c standing in
 # for kmain -- bound by ldkern, the kernel linker's own door, since mooncc's driver enters
 # through its crt0 and a machine enters at the load address. Nine laws, exit 42.
-rvboot_o = $(ko)/rv64/rv64/boot.o $(ko)/rv64/inle/rv64/dtb.o $(ko)/rv64/rvboot.o
-$(ko)/rv64/rvboot.o: test/gate/rvboot.c $(love_h) $(R)/inle/k.h $(R)/inle/dtb.h $(mooncc_dep)
+rvboot_o = $(ko)/rv64/rv64/boot.o $(ko)/rv64/i/rv64/dtb.o $(ko)/rv64/rvboot.o
+$(ko)/rv64/rvboot.o: test/gate/rvboot.c $(love_h) $(R)/i/k.h $(R)/i/dtb.h $(mooncc_dep)
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
-	@$(mooncc) -I$(ko)/rv64 -I. -Il -Iinle -I$(ho) -Iout/lib -I$R -I$R/apps/moon/include \
+	@$(mooncc) -I$(ko)/rv64 -I. -Il -Ii -I$(ho) -Iout/lib -I$R -I$R/apps/moon/include \
 	  -t rv64 -c $< -o $@
 $(ko)/rv64/rvboot.elf: $(rvboot_o) test/gate/rvboot.l $m
 	@echo 'RVLINK	'$@
 	@LOVE_NO_IMAGE= $m test/gate/rvboot.l $(rvboot_o) $@
 test_rvboot:
-	@$(MAKE) -s a=rv64 $(ko)/rv64/rv64/boot.o $(ko)/rv64/inle/rv64/dtb.o
+	@$(MAKE) -s a=rv64 $(ko)/rv64/rv64/boot.o $(ko)/rv64/i/rv64/dtb.o
 	@$(MAKE) -s $(ko)/rv64/rvboot.elf
 	@sh test/gate/boot.sh rvboot "$(MAKE)"
 # test_vec -- the INTERRUPT gate: raises a real CPU exception with (fault n) and reads the
-# report, the only way to reach inle/mkvec.l's 32 stubs and the fault vector, then
+# report, the only way to reach i/mkvec.l's 32 stubs and the fault vector, then
 # checks the stubs no boot can reach against the architecture's own error-code list.
 # WHICH vec.o: at the HOST arch there is no $(k_pie) build -- the elf is projected out of
 # the shipped love, which already carries the kart lane's objects -- so $(k_o) never runs and
@@ -689,7 +689,7 @@ test_fixpoint: host $(love0) out/mooncc0.image
 # or `make xa=rv64 test_xfixpoint` for the other twin. skips loudly without qemu.
 .PHONY: test_xfixpoint
 test_xfixpoint: $(x_o) $(xkart_o) $(love0) out/mooncc0.image
-	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(wildcard $R/inle/$(xa)/*.c)' \
+	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(wildcard $R/i/$(xa)/*.c)' \
 	  gate_kern_c='$(k_free_c)' \
 	  sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xa) mksys-$(xa) $(tco) $(xd) $(xa) $(x_o) $(xkart_o)
 # test_fat -- the fat container (seed-universal U1): the one file answers through
@@ -756,11 +756,11 @@ test_thumb1: host
 test_thumb2: host
 	@sh test/gate/thumb.sh thumb2 $(ho)
 # test_virt -- LOVE ITSELF on the bare rv64 hart: the whole runtime compiled end to end
-# by mooncc -t rv64 (inle/virt/), start.o laid from holo IR, OUR linker binds -- no
+# by mooncc -t rv64 (i/virt/), start.o laid from holo IR, OUR linker binds -- no
 # foreign toolchain ANYWHERE. Bakes the egg, asserts, exits 42; 98 = a machine trap.
 test_virt: host
 	@sh test/gate/boot.sh virt "$(MAKE)"
-# test_mps2 -- LOVE ITSELF on the M7: the whole runtime by mooncc -t thumb2 (inle/mps2/),
+# test_mps2 -- LOVE ITSELF on the M7: the whole runtime by mooncc -t thumb2 (i/mps2/),
 # start.o laid from holo IR, ldbare32 binding one RWX segment at 0 -- no foreign toolchain
 # ANYWHERE, the second port after virt to reach that. On qemu's Cortex-M7 it bakes the egg
 # FROM SOURCE and asserts spec laws over the hatched image; exits 42, and 98 = fault.
@@ -791,11 +791,11 @@ test_thumb2sp: host
 # exits 0 on a machine with no SDK -- which is how main.c spent three days as invalid C.
 test_playdate: host
 	@echo TEST out/playdate/main.o '(the device main, no SDK)'
-	@$(MAKE) -C inle/playdate probe || { echo "FAIL playdate: the device main does not compile"; exit 1; }
+	@$(MAKE) -C i/playdate probe || { echo "FAIL playdate: the device main does not compile"; exit 1; }
 	@echo TEST out/playdate/love.pdx
 	@if [ -z "$$PLAYDATE_SDK_PATH" ] || ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   echo "test_playdate: the device main compiles; no PLAYDATE_SDK_PATH / arm-none-eabi, the pdx half skipped"; exit 0; fi; \
-	  $(MAKE) -C inle/playdate || { echo "FAIL playdate build"; exit 1; }; \
+	  $(MAKE) -C i/playdate || { echo "FAIL playdate build"; exit 1; }; \
 	  u=`llvm-readelf -s out/playdate/pdex.elf | grep -c "UND [a-zA-Z_]"`; \
 	  [ "$$u" -eq 0 ] || { echo "FAIL pdex.elf has $$u undefined symbols"; exit 1; }; \
 	  llvm-readelf -s out/playdate/pdex.elf | grep -qw eventHandler || { echo "FAIL no eventHandler"; exit 1; }; \
@@ -809,7 +809,7 @@ test_playdate: host
 # 0x1000, thumb-bit entry). So this one never skips; test_mps2 is the runtime (no RT1062 qemu).
 test_teensy41: host
 	@echo TEST out/teensy41/love.hex
-	@$(MAKE) -C inle/teensy41 || { echo "FAIL teensy41 build (the boot-image verify is inside)"; exit 1; }
+	@$(MAKE) -C i/teensy41 || { echo "FAIL teensy41 build (the boot-image verify is inside)"; exit 1; }
 	@echo "test_teensy41: love (all-mooncc thumb2), OUR linker, flatten and boot image -- nothing foreign"
 # test_nucleo446 -- the Nucleo-F446RE firmware BUILD gate: mooncc -t thumb2sp compiles,
 # nlink.l binds (no ld, no linker script -- the F4's memory map is the map in that file),
@@ -822,7 +822,7 @@ test_nucleo446: host
 	@echo TEST out/nucleo446/firm.hex
 	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   echo "test_nucleo446: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
-	  $(MAKE) -C inle/nucleo446 || { echo "FAIL nucleo446 build (the boot-image verify is inside)"; exit 1; }; \
+	  $(MAKE) -C i/nucleo446 || { echo "FAIL nucleo446 build (the boot-image verify is inside)"; exit 1; }; \
 	  echo "test_nucleo446: firmware (all-mooncc thumb2sp), OUR linker and flatten, no linker script, boot image verified"
 # test_nucleo446_smoke -- the same port RUN, not read: the -D QSMOKE twin on qemu's Cortex-M4,
 # its exit code the self-check tally carried out through mkboot.l's sh_exit. The only lane that
@@ -841,7 +841,7 @@ test_rp2040: host
 	@echo TEST out/rp2040/love.bin
 	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   echo "test_rp2040: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
-	  $(MAKE) -C inle/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }; \
+	  $(MAKE) -C i/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }; \
 	  echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker and flatten, flash R|X, boot surface verified"
 # test_boards -- THE BUILD HALF of the ports, no emulator anywhere. the boot gates above
 # prove a port RUNS; this one proves it still COMPILES, and that is the half that rots
@@ -856,10 +856,10 @@ test_boards: test_mps2_build test_virt_build test_rp2040 test_nucleo446
 	@echo "test_boards: four ports build and link -- mooncc and our linker, no emulator"
 test_mps2_build: host
 	@echo TEST out/mps2/love.elf '(build)'
-	@$(MAKE) -C inle/mps2 || { echo "FAIL mps2 build"; exit 1; }
+	@$(MAKE) -C i/mps2 || { echo "FAIL mps2 build"; exit 1; }
 test_virt_build: host
 	@echo TEST out/virt/love.elf '(build)'
-	@$(MAKE) -C inle/virt || { echo "FAIL virt build"; exit 1; }
+	@$(MAKE) -C i/virt || { echo "FAIL virt build"; exit 1; }
 # the userland packages: each built by mooncc + moonlibc + the holo
 # linker -- no gcc/glibc/ld anywhere -- then RUN and held to the package's own answers:
 # tar 1.13 cf/xf + czf/xzf roundtrips and system-tar interop, m4 1.4's own 57-check suite,
@@ -1314,8 +1314,8 @@ test_wasm:
 	@echo "test_wasm: skipped (needs node)"
 else
 test_wasm: wasm
-	@$(NODE) $(R)/inle/wasm/screen.mjs --love $(R)/out/wasm/love.wasm
-	@$(NODE) $(R)/inle/wasm/horn.mjs --love $(R)/out/wasm/love.wasm
+	@$(NODE) $(R)/i/wasm/screen.mjs --love $(R)/out/wasm/love.wasm
+	@$(NODE) $(R)/i/wasm/horn.mjs --love $(R)/out/wasm/love.wasm
 endif
 
 # INLE_RAM: cpu.mjs grows the memory ONCE at boot and hands kmain that fixed span, so the
@@ -1333,7 +1333,7 @@ else
 test_kernel_wasm: host
 	@$(MAKE) -s out/wasm/love-wasm.image
 	@echo TEST out/love-wasm.wasm "(node: the kernel corpus on the woken image, serial, headless)"
-	@INLE_RAM=768 $(NODE) $(R)/inle/wasm/inle.mjs --image out/wasm/love-wasm.image $(R)/out/love-wasm.wasm test/kernel/all.l \
+	@INLE_RAM=768 $(NODE) $(R)/i/wasm/inle.mjs --image out/wasm/love-wasm.image $(R)/out/love-wasm.wasm test/kernel/all.l \
 	   < /dev/null > out/wasm/kernel.log 2>&1; \
 	 grep -q "image awake" out/wasm/kernel.log \
 	   && grep -q "tests pass" out/wasm/kernel.log && ! grep -q "failed:" out/wasm/kernel.log \
@@ -1345,7 +1345,7 @@ endif
 # the wasm module writer and the IR lowering (l/holo/wasm.l) under a foreign engine:
 # love lays three modules (the writer's by hand, the program's off holo IR, a mock of the
 # artifact's face), binaryen validates them where the box has one, node instantiates and
-# runs them -- the third through inle/wasm/loader.js, the artifact's own environment.
+# runs them -- the third through i/wasm/loader.js, the artifact's own environment.
 # skips without node.
 WASMOPT ?= $(shell command -v wasm-opt 2>/dev/null)
 wasmopt_flags = --enable-memory64 --enable-bulk-memory --enable-nontrapping-float-to-int

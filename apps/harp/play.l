@@ -1,7 +1,7 @@
 #!/usr/bin/env -S love -l
 ; apps/harp/play.l -- harp's voices and its verb: a pattern (apps/harp/harp.l) is
 ; asked for one cycle at a time, its onsets become voices, and the voices are summed
-; into PCM that goes out the horn (inle/horn.c) or into a .wav.
+; into PCM that goes out the horn (i/horn.c) or into a .wav.
 ;
 ;   love apps/harp/play.l [-n CYCLES] [-c CPS] [-r RATE] [-g GAIN] [-o FILE] [-p] PATTERN..
 ;

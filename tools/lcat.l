@@ -127,7 +127,7 @@
    (file n) (: s (peep cache n ())
                (? (string? s) s (: m (minify (slurp-file (path n))) _ (pin cache n m) m)))
 
-   ; the baked source (inle/cats.c), row by row: a string lays as it is -- the arch
+   ; the baked source (i/cats.c), row by row: a string lays as it is -- the arch
    ; guards -- and a list is [symbol items], laid deflated with the _raw twin. an item is a
    ; symbol, one boot file by name, or a string, glue laid between two files. a group is ONE
    ; text: ai_evals_ reads a text whole before its first form runs, so the grouping here is

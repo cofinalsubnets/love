@@ -409,7 +409,7 @@ predefined on x64 alone (gen's d128 lane), which is what love.c's limb seam read
 The GNU statement form, in the GNU dialect: the template is what clang and gcc read for the
 target — AT&T on x64, ARM on a64, riscv, thumb — and `l/holo/gas.l` lowers it to the
 neutral IR the baked assembler encodes. So a header says each instruction ONCE and every
-compiler reads it (the kernel's `inle/<a>/asmops.h` carry no `#ifdef __mooncc__` at all);
+compiler reads it (the kernel's `i/<a>/asmops.h` carry no `#ifdef __mooncc__` at all);
 no new encoder exists anywhere, every line lands on a backend row test/holo/golden.l froze.
 
     asm [volatile] ("mov $40, %0" : "=r"(v) : "r"(x), "i"(3) : "memory");

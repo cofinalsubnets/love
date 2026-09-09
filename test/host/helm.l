@@ -17,7 +17,7 @@
 ;   UNDERLAY  the verb table laid as a directory of links onto selfpath, and a
 ;             child resolving `ls` through it with that directory as its whole PATH.
 ;   SCATTER   the carried source archive inflated to a tree, re-homed below the
-;             archive's top the way inle/kmain.c's k_untar does it.
+;             archive's top the way i/kmain.c's k_untar does it.
 ; the mount half of both is pid 1's and root's, and is not asserted here: hunderlay
 ; answers the errno and lays in place, which is the lane this runs.
 (borrow "apps/helm/unit.l")

@@ -173,7 +173,7 @@ setup: $(SETUP)
 # invalidated the cached moonlibc archive on every run. Cached; `make ccbench` to refresh it
 # on its own. (mooncc is x86-64 only -- dnf elsewhere.)
 CCBENCH := $(BDIR)/ccbench.txt
-$(CCBENCH): ccbench.sh ccrypto.l cnifs.l ccgen.l $(GL) $(R)/l/love.c $(wildcard $(R)/inle/*.c) | $(BDIR)
+$(CCBENCH): ccbench.sh ccrypto.l cnifs.l ccgen.l $(GL) $(R)/l/love.c $(wildcard $(R)/i/*.c) | $(BDIR)
 	@$(MAKE) -s -C $(R) host dist-seed
 	@LOVE_CFLAGS='$(ai_cflags)' CORPUS='$(t)' ./ccbench.sh $(TIMEOUT) $(SAMPLES) > $@
 ccbench: $(CCBENCH)
@@ -189,7 +189,7 @@ ccsize: $(CCBENCH)
 ccdead: $(CCBENCH)
 	@$(GL) ccdead.l
 
-# mooncc against gcc and clang on the three files in inle/ that ask the most of it --
+# mooncc against gcc and clang on the three files in i/ that ask the most of it --
 # the checksum and gzip floors, compiled straight (no love runtime, no libc in the
 # picture) and read three ways: answers, .text, wall clock. Where ccbench times these
 # nifs through the shipped binary, this times the CODE. Not cached and not a gate: a

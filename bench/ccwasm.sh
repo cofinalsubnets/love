@@ -22,10 +22,10 @@ NODE=$(command -v node 2>/dev/null || true)
 [ -n "$NODE" ] || { echo "ccwasm: no node -- nothing runs a module here" >&2; exit 1; }
 EMCC=${EMCC:-$(command -v emcc 2>/dev/null || true)}
 [ -n "$EMCC" ] || [ ! -x /usr/lib/emscripten/emcc ] || EMCC=/usr/lib/emscripten/emcc
-RUN=$R/inle/wasm/run.mjs
+RUN=$R/i/wasm/run.mjs
 
 rm -rf "$W"; mkdir -p "$W"
-inc="-I$R/love -I$R/inle -I$R/test/libc -I$R/bench/nif"
+inc="-I$R/love -I$R/i -I$R/test/libc -I$R/bench/nif"
 lanes="mooncc emcc-O2 emcc-O0"
 have=mooncc; [ -z "$EMCC" ] || have="$have emcc-O2 emcc-O0"
 echo "ccwasm: lanes: $have   reps=$REPS samples=$SAMPLES   (emcc: ${EMCC:-none})"
@@ -107,5 +107,5 @@ for row in $rows; do
 done
 echo
 echo "ccwasm: the ratio in a cell is mooncc/that lane -- 1.00x is parity. the corpus row lives in"
-echo "        the gates: \`make test_wasm\` drives the module, \`make -C inle/wasm gate\` lays"
+echo "        the gates: \`make test_wasm\` drives the module, \`make -C i/wasm gate\` lays"
 echo "        emcc's out/wasm/love.js beside it as the differential."

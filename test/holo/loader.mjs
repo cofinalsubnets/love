@@ -1,8 +1,8 @@
-// test/holo/loader.mjs -- inle/wasm/loader.js over the mock artifact test/holo/wasm.l
+// test/holo/loader.mjs -- i/wasm/loader.js over the mock artifact test/holo/wasm.l
 // lays (out/.holo3.wasm): a driver's own shape -- init, a string through the heap, eval,
 // drain the out buffer -- the syscalls the kernel-in-JS answers, and exit.
 // usage: node test/holo/loader.mjs [out/.holo3.wasm]
-import Love, { ExitStatus } from '../../inle/wasm/loader.js';
+import Love, { ExitStatus } from '../../i/wasm/loader.js';
 
 const path = process.argv[2] ?? 'out/.holo3.wasm';
 const lines = [];

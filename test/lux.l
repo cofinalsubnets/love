@@ -1,5 +1,5 @@
-; --- test/lux.l: a runnable smoke test for lux's socket nif (inle/sock.c) ---
-; inle/sock.c links love0 as well as the final `love`, so this is a corpus law; it
+; --- test/lux.l: a runnable smoke test for lux's socket nif (i/sock.c) ---
+; i/sock.c links love0 as well as the final `love`, so this is a corpus law; it
 ; still reads standalone, like test/net.l:
 ;
 ;   cat test/00-init.l test/lux.l | out/love

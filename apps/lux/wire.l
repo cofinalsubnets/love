@@ -1,6 +1,6 @@
 ; apps/lux/wire.l -- the x11 wire protocol: connect, the setup handshake, request
 ; writers, the substructure redirect, keyboard mapping/grabs, and the event
-; decoder. Host-only (needs the connectu nif, inle/sock.c). Every op takes the
+; decoder. Host-only (needs the connectu nif, i/sock.c). Every op takes the
 ; socket port `s` explicitly -- no closure over a free `s` and no nif shadow (the
 ; codec's byte writers call the real `put`/`get` nifs, never a wm helper).
 ;

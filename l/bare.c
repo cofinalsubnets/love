@@ -1,6 +1,6 @@
 // l/bare.c -- the bare seat: what the runtime's doors answer on a machine with no OS
-// under them and no inle/fd.c beside them. the boards link this (inle/port.mk's love_m) and
-// nothing else does -- a hosted love, love0 and every kernel all carry inle/fd.c, whose
+// under them and no i/fd.c beside them. the boards link this (i/port.mk's love_m) and
+// nothing else does -- a hosted love, love0 and every kernel all carry i/fd.c, whose
 // bodies are the real ones.
 //
 // plain definitions, not weak defaults in the runtime: a seat that grows a real door

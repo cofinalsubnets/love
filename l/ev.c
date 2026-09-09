@@ -1584,7 +1584,7 @@ lvm(lvm_donep) {
  ai_musttail return Continue(); }
 
 // (scoop _) -> (pid . retval) of one finished task, or () when none have -- the
-// task-side twin of `glean` (inle/posix.c). presence rides the pair, never the
+// task-side twin of `glean` (i/posix.c). presence rides the pair, never the
 // net: a retval is legitimately (), so `two?` is the test and ZeroPoint the empty
 // answer. only the run ring is walked (parked = blocked = unfinished); the arg is
 // a dummy, so a bare (scoop) curries -- call it (scoop 0).

@@ -16,7 +16,7 @@
 ; as pid 1 it lays a machine that needs no disk: the early filesystems, then
 ; /usr/bin as links onto this binary (every name in the verb registry, argv[0] being
 ; the door), then the carried source archive inflated to a tree. that is inle's boot
-; in userspace -- inle/kmain.c inflates the same blob into its own ramfs -- and
+; in userspace -- i/kmain.c inflates the same blob into its own ramfs -- and
 ; the two differ where the kernels do: inle has no symlinks, so its k-prog reads the
 ; registry where execve here wants a dirent.
 ;
@@ -85,7 +85,7 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
    ; this binary answers to every name in (cite 'verbs 'tab) through argv[0] --
    ; post.l's `seat` reads the basename -- so a directory of links onto selfpath
    ; IS the userland, and a machine with no disk still has one. inle wants no such
-   ; directory: k-prog reads the registry itself (inle/kmain.c). here execve
+   ; directory: k-prog reads the registry itself (i/kmain.c). here execve
    ; resolves a path, so the kernel is owed the dirents the registry stands for.
    ;
    ; the names come from the registry and are never listed: a roster would drift
@@ -117,7 +117,7 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
              _  (hnote ("underlay " + show n + " names on " + exe))
              n)))
    ; --- the scatter: the carried tree, inflated into RAM -----------------------
-   ; inle's ramfs IS this archive (k_untar in inle/kmain.c): the artifact carries
+   ; inle's ramfs IS this archive (k_untar in i/kmain.c): the artifact carries
    ; its own source and the machine inflates it at boot, so a disk was never what the
    ; tree was on. the same blob is here, so a hosted pid 1 lays the same tree.
    ;

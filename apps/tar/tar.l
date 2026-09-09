@@ -82,7 +82,7 @@
         (pour q 0 m (k + 1) (n - k - 1),
          [(string p) (string q)]))))))
 
-   ; inle/hash.c's streaming state: 105 bytes, opaque, allocated here because the
+   ; i/hash.c's streaming state: 105 bytes, opaque, allocated here because the
    ; nifs do not allocate -- they fold into a cask the caller owns.
    tar-shast 105
 
@@ -121,7 +121,7 @@
    ; --- the archive as a stream ----------------------------------------------
    ; tar-pack's answer exists to be looked at once and dropped, and for a source tree
    ; that is megabytes held to be hashed. tar-hash is the same archive fed through a
-   ; resumable sha-256 (inle/hash.c) a bufferful at a time: the header, then the file's
+   ; resumable sha-256 (i/hash.c) a bufferful at a time: the header, then the file's
    ; bytes read straight off 'path, then the pad -- so the peak is one cask and not one
    ; archive. It answers what (sha256 (tar-pack es)) answers, and test/gate/targz.sh
    ; holds the two together over a tree with the awkward shapes in it.

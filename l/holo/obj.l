@@ -387,7 +387,7 @@
    ; and a symbol alone cannot say it: nifforms are the AiNif registry entries,
    ; laid in their own `love_nifs` section so the linker's __start_/__stop_ bracket
    ; symbols bound them, and imgforms the `.image` bake slot, which link.l lays last
-   ; of all so `love bake` can grow it at the tail (inle/image.c). funcnames the
+   ; of all so `love bake` can grow it at the tail (i/image.c). funcnames the
    ; defined functions (global FUNC symbols), globnames the global variables (global
    ; object symbols); locnames the static functions -- local func symbols, so a
    ; linked binary's nm/objdump/gdb (and tools/vmret.l's symbol spans) see them;

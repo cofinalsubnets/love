@@ -1,5 +1,5 @@
 ; the l/holo/ assembler -- a core language service, baked into the post-egg layer of both
-; the host `love` and the bootstrap `love0` (inle/main.c), so the corpus exercises it under
+; the host `love` and the bootstrap `love0` (i/main.c), so the corpus exercises it under
 ; both compilers, like prel/ev. Its whole surface is one public name: `holo`, a book --
 ; reached through the module registry: (cite 'holo) answers the opaque accessor, so
 ; (A 'assemble) is the call and the internals live one probe away (the loader wraps the

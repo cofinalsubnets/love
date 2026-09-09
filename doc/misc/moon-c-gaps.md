@@ -70,7 +70,7 @@ test/gate/moon.sh), and the deliberate readings in them:
 - **`int f(int), a;`** — `one`/`more` hoisted out of the dispatch's inner scope, so the
   function-first list reaches the object lane mproto cannot take.
 - **bare `typeof`**, and an attribute run **before** a struct/union tag.
-- **an integer where a pointer is owed** — the §4 row that took `inle/main.c`'s `return 1` in
+- **an integer where a pointer is owed** — the §4 row that took `i/main.c`'s `return 1` in
   silence and handed back address 1. `return <non-zero literal>` from a `T *` now refuses and
   says so; a cast still passes, because a cast says the program means it.
 - **`_Generic` over QUALIFIED types** (test/cc/143-genericqual.c) — the row below, and the last
@@ -653,7 +653,7 @@ missing is the sentence naming it.
 **`libgcc` is a cell value, and the two targets wearing it borrow for different reasons.**
 thumb1 (v6-M) has no UMULL, no long shifts and no FPU, so 64-bit `*`/shifts/divide, int↔double
 conversion and *all* float and double arithmetic lower to `__aeabi_*` calls (`gen.l`'s `v6m?`
-lanes); `inle/rp2040/Makefile` names a cortex-m0 libgcc.a on the link line and calls it "the one
+lanes); `i/rp2040/Makefile` names a cortex-m0 libgcc.a on the link line and calls it "the one
 foreign FILE". thumb2sp borrows for one row only — it is ARMv7E-M with an **SP-only** FPU (the
 Playdate's STM32F746), so `float` rides the hardware and `double` softens, where thumb2's
 fpv5-d16 does both. A borrow is a LINK-time dependency, invisible to a compile: it shows up as
@@ -690,7 +690,7 @@ also takes — probe the one you mean.
   `typedef struct {int a,b,c,d;} R; static R mk(int x){ R r = {x,x,x,x}; return r; }` plus a
   caller; a bare prototype compiles everywhere. It is what stops the Playdate SDK's own
   header: `LCDMakeRect` returns an `LCDRect` by value, so `pd_api.h` cannot be compiled for the
-  device — which is exactly why `inle/playdate` routes it through `pdglue.c` on
+  device — which is exactly why `i/playdate` routes it through `pdglue.c` on
   arm-none-eabi-gcc and calls that a "word-only seam". AAPCS32 wants the hidden-pointer memory
   return the v6-M lane already implements (`sretm?`); thumb2 has no such lane.
 - **a MEMORY-class composite RETURN on a64 and rv64** — `no lane for returning this

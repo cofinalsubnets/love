@@ -9,14 +9,14 @@
 <!-- the machine's shared ring wants an isolated page, and a static host sends no headers:
      this asks for them with a service worker and one reload. first, so the reload is
      cheap; inert where the server sends them itself (kiosko does). -->
-<script src="inle/wasm/coi.js"></script>
+<script src="i/wasm/coi.js"></script>
 </head>
 <body>
 <h1 id="love_title">🌑 <a href="https://github.com/cofinalsubnets/love">love</a> 🔭</h1>
 
 <nav class="topnav"><a href="#language">language</a> &nbsp;&middot;&nbsp; <a href="#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="#crew">crew</a></nav>
 
-<!-- inle/wasm/machine.html -- the machine island: the markup inle/wasm/machine.js drives,
+<!-- i/wasm/machine.html -- the machine island: the markup i/wasm/machine.js drives,
      its parts found by class. a page carries this block and machine.js (a module), and
      coi.js in the head -- that one goes first because it may reload the page to put the
      isolation headers on. web/index.l lays it on the front page.
@@ -33,7 +33,7 @@
 <span class="chip" data-type="echo hello world :3">echo hello world :3</span>
 </div>
 
-<script type="module" src="inle/wasm/machine.js"></script>
+<script type="module" src="i/wasm/machine.js"></script>
 
 <h2 id="language"><a href="#language">🎨 language</a></h2>
 <p>

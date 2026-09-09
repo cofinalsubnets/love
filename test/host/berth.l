@@ -1,5 +1,5 @@
 ; --- test/host/berth.l: the berth emulator's moor, end to end over a real pty ---
-; not in the test/*.l corpus (screen/scribe/tether live in inle/*.c; love0 links
+; not in the test/*.l corpus (screen/scribe/tether live in i/*.c; love0 links
 ; none of them). loads the berth library off disk with reads, berths real
 ; children, and reads the grid back through the glass:
 ;

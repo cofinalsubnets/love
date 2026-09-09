@@ -4,7 +4,7 @@
 ; loop, the frame blit, and the file the : commands ask for. That lane needs a
 ; terminal, so it gets one: `tether` spawns `kore less` on a pty, we type at the
 ; master and read the frames back off it. not in the test/*.l corpus -- tether and
-; winsize live in inle/posix.c, which love0 does not link. Run it (the test macro
+; winsize live in i/posix.c, which love0 does not link. Run it (the test macro
 ; comes from test/00-init.l; $lovebin names the binary under test and $lesstestdir a
 ; scratch directory it may write in):
 ;

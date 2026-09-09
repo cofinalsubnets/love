@@ -61,13 +61,13 @@
      "THE wait: every parked task and the nearest timer, one call"]
     ["l/io.c" "io_close" "ai_fd_drain"
      "the finalizer: a dying port's unsent run. runs inside gc, where nothing can park -- the write side's one remaining unbounded wait"]
-    ["inle/fd.c" "ai_fd_say" "ai_sleep"
+    ["i/fd.c" "ai_fd_say" "ai_sleep"
      "a raw fd carries no write run of love's to park behind, so the busy device is waited on -- bounded by its drain"]
     ["test/front/main.c" "ai_fd_say" "ai_sleep"
      "the test frontend's copy of that row, over a synthetic device whose stall arm counts down per call"]
-    ["inle/teensy41/main.c" "main" "ai_sleep"
+    ["i/teensy41/main.c" "main" "ai_sleep"
      "the panic blink after a fatal shell exit -- nothing runs after it"]
-    ["inle/doom.c" "DG_SleepMs" "ai_sleep"
+    ["i/doom.c" "DG_SleepMs" "ai_sleep"
      "doom's frame pacer: the game loop owns the frame and names the gap itself, with no love task behind it to park -- bounded by the frame, and the freestanding half waits the same way through k_sleep"]]
 
    ; --- character classes ------------------------------------------------------

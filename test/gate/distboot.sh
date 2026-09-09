@@ -23,7 +23,7 @@
 # fail loudly, and the build has to come out the far side anyway.
 #
 # THE SEED CARRIES ITS OWN SOURCE. It holds the source tarball in .rodata
-# (tools/mksrc.l, inle/src.c) and lays it out itself, so one downloaded file needs no tar
+# (tools/mksrc.l, i/src.c) and lays it out itself, so one downloaded file needs no tar
 # and no second fetch. "It unpacked something" is not the claim -- the tree it lays has to
 # BUILD, compilers poisoned. and `love seed` is what drives that build, not a bare make:
 # the tree carries no love of its own now, so make alone can only mean the ambient cc (and

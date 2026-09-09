@@ -2,7 +2,7 @@
 ; (kernel, wasm) binds few of them, and an unbound mention raises missing at every
 ; define that names one. this file leads the corpus, so pin a no-op fallback for
 ; whichever are absent: every later mention compiles quiet, and absence answers ().
-; the posix doors are a module of their own now (inle/posix.c's rows name it) and the
+; the posix doors are a module of their own now (i/posix.c's rows name it) and the
 ; corpus is ONE scope, so splicing it here is what lets every later file spell `open`
 ; plainly -- and it must come before the fallbacks, which read what is in scope. a seat
 ; without posix has no such module, and those fallbacks still cover it.

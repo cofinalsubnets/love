@@ -7,7 +7,7 @@
 ; fetches doomgeneric and the shareware IWAD there, builds DOOM=1 once and runs that binary
 ; (doom-nest below); from one built with DOOM=1 it is the window right away.
 ;
-; the game is C, linked into this binary by the DOOM=1 lane (inle/doom.c's host
+; the game is C, linked into this binary by the DOOM=1 lane (i/doom.c's host
 ; doors: doom-start / doom-tick / doom-frame / doom-key); this file is the window.
 ; one 640x400 InputOutput window at the root's depth, the frame pushed as four
 ; PutImage bands (a band is 100 rows: 256000 bytes, under the 65535-word request
@@ -16,7 +16,7 @@
 ; autorepeat on so a held key is not a release every 40 ms. the socket is polled
 ; between frames (cue?), never waited on: doom's own tick keeps the clock.
 ; sound rides the horn's C face inside the mixer, so `HORN=none love doom` is a
-; silent game and HORN=/dev/snd/pcmC1D0p names a card (inle/horn.c).
+; silent game and HORN=/dev/snd/pcmC1D0p names a card (i/horn.c).
 ; -frames N ends the game after N drawn frames: the gate's door, and nobody else's.
 (module 'doom
 (borrow 'xwire)

@@ -13,11 +13,11 @@
 ; run: love rove
 ; the engine core is pure love (delve/fov/paint/crawl-* run headless, gated by
 ; test/host/rove.l); only rove-run ties the tty (cli's stage over
-; inle/posix.c), so rove never joins the corpus. a module: the crawl's words are
+; i/posix.c), so rove never joins the corpus. a module: the crawl's words are
 ; its own, and story.l's hatch reaches rove-run by name.
 (module (rove rove-run rove-main dat open? dput delve fov clear? paint steer
          crawl-new crawl-turn crawl-frame note mob-new mob-at roll stock)
-; posix is OPTIONAL: the page's seat (inle/wasm) links none of it, and this file runs
+; posix is OPTIONAL: the page's seat (i/wasm) links none of it, and this file runs
 ; there. ask before splicing -- an absent module is a scare, and the names below that
 ; want a tty go missing on that seat exactly as they did before there was a module.
 (? (cite 'posix) (borrow 'posix) ())

@@ -876,7 +876,7 @@
        ; nothing is ever two of them at once. but only where an OS enforces it. `org`
        ; is the bare-metal lane: the MMU is off, the image is copied by p_paddr, and
        ; the port owns its own map, so it keeps the one segment it always had. and it
-       ; must: the header reserve sits below the text address, so inle/virt asks for
+       ; must: the header reserve sits below the text address, so i/virt asks for
        ; 0x80000000 - hdrsz by hand -- one segment more here silently moves the hart's
        ; first instruction. .image, when the set has one, takes a segment too. the
        ; reserve is the ELF header plus one phdr per segment, and every caller reads it
@@ -903,7 +903,7 @@
        ; the difference already zeroed -- which is the whole meaning of .bss.
        bend (ldlayn 'bss (ldlay1 'bss r1 objs) objs)
        ; .image last of all -- past .bss, on a page, so `love bake` can grow it at
-       ; the tail of the file (inle/image.c: the section that ENDS the segment is the
+       ; the tail of the file (i/image.c: the section that ENDS the segment is the
        ; one that can grow without moving anything). it takes a segment of its own,
        ; because .bss sits between it and everything written: one segment would have to
        ; carry that gap as file zeros, and a real .bss makes that the whole of it. two

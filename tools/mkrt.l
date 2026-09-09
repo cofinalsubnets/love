@@ -1,6 +1,6 @@
 ; tools/mkrt.l -- lay the compiled moonlibc runtime into an ELF object, one
 ; deflated archive per hosted ISA, so a bare `love cc` links without compiling
-; 197 members first (moon.l's rtcarried; inle/src.c answers runtime-gz).
+; 197 members first (moon.l's rtcarried; i/src.c answers runtime-gz).
 ;
 ;   love wake out/mooncc0.image tools/mkrt.l out.o [arch]
 ;
@@ -11,7 +11,7 @@
 ;   ai_rtgz_<nm>       the bytes, right behind it (a .a under DEFLATE; `id`
 ;                      is moon.l's rtcid of the tree slice, plain text)
 ;
-; inle/src.c declares every symbol weak, so a love carrying no runtime (love0)
+; i/src.c declares every symbol weak, so a love carrying no runtime (love0)
 ; answers nothing and the compile-from-source lane stands. determinism is
 ; load-bearing: arbytes and rtcid are all pure of the machine, so the
 ; seed's fixpoint carries this object unchanged.

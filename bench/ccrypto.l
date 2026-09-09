@@ -14,7 +14,7 @@
 ; says the gap is array slots. they close together, or the diagnosis was wrong.
 ; (love.c's own z-tray lane is the same shape and ~5x -- the reason to care.)
 ;
-; these run the NIFS (inle/tls.c), never apps/tls's love ciphers -- this table
+; these run the NIFS (i/tls.c), never apps/tls's love ciphers -- this table
 ; times C compilers. apps/tls/bench.l is where the two languages meet.
 ; no `borrow` and no crew file: the binary under test lives in out/bench/cc, so the
 ; module walk would miss lib/ entirely. everything here is built from the core.

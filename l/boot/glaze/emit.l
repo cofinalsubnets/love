@@ -11,11 +11,11 @@
 ; 62-bit fixnum boundary, which is what every arith result gates on.
 
 ; nif/nifx -- the C install seam (love.c). the book loses them on every boot
-; (inle/main.c), so this is the one door onto raw byte installation, and it is the
+; (i/main.c), so this is the one door onto raw byte installation, and it is the
 ; glaze's. the RHS is the outer nif: a body-less `:` rebinds, it does not letrec.
 (: nif nif  nifx nifx)
 
-(: ; inle/main.c brackets this load with (borrow 'holo) .. ai_shelve_, so assemble and
+(: ; i/main.c brackets this load with (borrow 'holo) .. ai_shelve_, so assemble and
    ; assemble-at resolve at compile and fold into every closure (the capture law).
    ; this `:` is body-less, so its bindings leak to the glaze module's own book --
    ; which is why the byte-piece concat helper is `bcat` and never `holo`.

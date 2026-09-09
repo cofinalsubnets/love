@@ -212,7 +212,7 @@ static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t c
 
 // str0 collects, so the stream is re-read off the stack after it: a C local's pointer
 // into the heap is stale across the bump. tls.c pays the same toll.
-// the raw-DEFLATE door for C callers with no g: inle/kmain.c inflates the
+// the raw-DEFLATE door for C callers with no g: i/kmain.c inflates the
 // source blob into its initrd through this. same law as inf_run, exported.
 intptr_t ai_inflate_raw(const unsigned char *in, uintptr_t n, unsigned char *out, uintptr_t cap) {
  return (intptr_t) inf_run(in, n, out, cap); }

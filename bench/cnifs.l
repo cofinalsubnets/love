@@ -7,9 +7,9 @@
 ;
 ;   inflate   l/gz.c: a bit reader, a table lookup per symbol, a byte copy. The
 ;             branchiest of the three, and the one `love source` spends its time in.
-;   crc32     inle/hash.c: eight INDEPENDENT table lookups per eight bytes and nothing
+;   crc32     i/hash.c: eight INDEPENDENT table lookups per eight bytes and nothing
 ;             else. No branches in the loop at all, so it reads pure load/xor throughput.
-;   sha256    inle/hash.c: a 64-word message schedule ARRAY plus eight scalar working
+;   sha256    i/hash.c: a 64-word message schedule ARRAY plus eight scalar working
 ;             variables -- ccrypto's two shapes in ONE function, which is why it is not
 ;             a lever and why it sits between them.
 ;

@@ -1746,7 +1746,7 @@
 ;   (word w)  a leading positional -- cli's rail. refuses a `/` or a `.l`, so with
 ;             fifty applets registered `make`, `env`, `true` and `cmp` cannot eat a local
 ;             script of the same name; `love ./up` and `love -- up` stay the file.
-;   (seat p)  argv[0] -- inle/main.c's door, which fires before the cli runs at all (a bare
+;   (seat p)  argv[0] -- i/main.c's door, which fires before the cli runs at all (a bare
 ;             `seed` at argc 1 wants its usage). always a path, so the basename decides.
 ; a verb takes the args after its name and answers a status charm; the rail quits with it.
 ; that is kore's convention, and it is why `love kore sed ..` nests.
@@ -1787,7 +1787,7 @@
    ; shebang's `-l`, a catted script under its own name. no name was typed, a path was.
    ;   (fire ws)      -> (seat-word . args-after) over this invocation's line, else ()
    ;   (seatof ws a)  the same over a list handed in
-   ; a bake pins no `cmdline` (inle/main.c), which leaves the read below a lookup: nothing
+   ; a bake pins no `cmdline` (i/main.c), which leaves the read below a lookup: nothing
    ; typed, nothing seats. () means "not seated", the presence answer -- ask it with two?.
    (dash w)    (0 < #w && w 0 = 45 ? (snip w 1 #w) w)   ; -sh: login(1)'s mark
    (any? w (a . u)) (a = w || any? w u)
@@ -1807,7 +1807,7 @@
 ; right after the program-name head:
 ;   (cli-rail ln)     the walk over ln = (program-name . args)
 ;   (cli-line ln tty) a frontend's whole tail: the argv[0] door, the rail, the repl, stdin
-; inle/main.c calls cli-line, and so does a forked lush child -- a word whose PATH winner
+; i/main.c calls cli-line, and so does a forked lush child -- a word whose PATH winner
 ; is this binary need not exec, and what it would have exec'd is (cli-line its-line) on a
 ; warm heap. the shadow rule lives in one place, verbs' `word`. prel and pat
 ; must be up before this compiles: @ reads here, and a macro reaches a reader only once its

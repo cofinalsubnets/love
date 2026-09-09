@@ -14,7 +14,7 @@
 ;
 ; ev stays 1-arg, so the loader's `(ev 'ev r)` = `((ev 'ev) r)` survives the rebind;
 ; njit-loop and njit-loop-n call the captured base-ev, so a jit never re-enters ev.
-; loads after l/boot/glaze/emit.l. emit.l + this file are the `glaze` module (inle/main.c
+; loads after l/boot/glaze/emit.l. emit.l + this file are the `glaze` module (i/main.c
 ; registers the pair), so every name here is reached by (cite 'glaze 'k) and none of them
 ; touches the book -- `ev` and `member?` are the exceptions the tail explains.
 (: sfuel {})   ; autospec's unfold-fuel, a global because a sibling-captured value-local misses in the hatched ev; smix re-seeds it per specialization

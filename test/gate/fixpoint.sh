@@ -73,12 +73,12 @@ moon1() { "$d/love1" wake "$d/mooncc1.image" mooncc "$@"; }
 # string, naming a broken fixpoint where the only difference is a build flag.
 for f in $gate_love_c; do
   mkobj "$f"
-  moon1 -D ai_tco=1 -D AiHaveVersionH -I"$ho" -I. -Il -Iinle -Iout/lib -c "$f" "$o" \
+  moon1 -D ai_tco=1 -D AiHaveVersionH -I"$ho" -I. -Il -Ii -Iout/lib -c "$f" "$o" \
     || fail "love1 mooncc -c $f"
 done
 for f in $gate_host_c; do
   mkobj "$f"
-  moon1 -D ai_tco=1 -I"$ho" -I. -Il -Iinle -Iout/lib -c "$f" "$o" || fail "love1 mooncc -c $f"
+  moon1 -D ai_tco=1 -I"$ho" -I. -Il -Ii -Iout/lib -c "$f" "$o" || fail "love1 mooncc -c $f"
 done
 # moonlibc rides the implicit runtime, as in raw.sh -- pulled member by need.
 for f in apps/moon/lib/moonlibc/math/*.c; do
@@ -93,7 +93,7 @@ test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 # still answers love1 == love2 -- it just answers it about a shorter binary than
 # anyone ships. an arch with no seat carries none, and $gate_arch_c is empty there.
 if [ -n "$gate_arch_c" ]; then
-  kinc="-I$ho -I. -Il -Iinle -Iout/lib -Il/quay -Iapps/moon/include"
+  kinc="-I$ho -I. -Il -Ii -Iout/lib -Il/quay -Iapps/moon/include"
   for f in $gate_kern_c $gate_arch_c l/quay/paint.c \
            l/quay/cga_8x8.c l/quay/moderndos_8x16.c; do
     mkobj "$f"

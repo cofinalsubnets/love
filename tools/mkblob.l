@@ -9,7 +9,7 @@
 ;   <sym>       the bytes, right behind it
 ;
 ; tools/mksrc.l is the same lay under two fixed names, for the one blob every
-; artifact carries; this is the door for the rest. inle/doom.c reads a pair.
+; artifact carries; this is the door for the rest. i/doom.c reads a pair.
 ;
 ; no (borrow 'holo) here, for mksrc's reason: it resolves off a nest (~/.love),
 ; which a fresh seed tree does not have. make hands us holo the way it hands

@@ -554,7 +554,7 @@ struct ai_cfree { char *p; size_t n; struct ai_cfree *next; };           // a fr
 #if __STDC_HOSTED__
 // which kernel underneath: moonlibc's os.c defines it (0 unprobed; 1..3 the
 // hosted kernels; negative = we ARE the kernel). moonlibc defines it (os.c);
-// a seat without one gives its own -- love0 in inle/main0.c.
+// a seat without one gives its own -- love0 in i/main0.c.
 #ifndef MAP_ANONYMOUS
 #define MAP_ANONYMOUS MAP_ANON
 #endif
@@ -613,12 +613,12 @@ int code_in(struct ai *g, uintptr_t v) {                          // a code addr
  return 0; }
 size_t code_len(char *code) { return ((uintptr_t*) code)[-2]; }
 // the seat's executable alias for a heap block: itself, unless a seat maps its heap
-// non-executable and keeps a second window that runs. inle does (inle/kmain.c).
+// non-executable and keeps a second window that runs. inle does (i/kmain.c).
 
 // the image lane: a packed segment of blobs becomes a chunk of its own, sealed for the
 // session -- image code is text, nothing frees it
 char *code_adopt(struct ai *g, char const *src, size_t n) {
- // inle: mmap hands back the hhdm, which is NX by construction (inle/mkboot.l puts the
+ // inle: mmap hands back the hhdm, which is NX by construction (i/mkboot.l puts the
  // bit on the whole window), and its mprotect cannot lift that off a 2 MiB entry the
  // identity map shares. so take the block through the window that runs -- the same
  // memory, the address the low map reaches it by -- and seat it as a fixed chunk, so

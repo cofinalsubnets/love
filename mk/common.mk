@@ -1,5 +1,5 @@
 # Shared variables for the host, kernel and board builds. An includer sets R to the
-# project root first (the root Makefile sets R := ., a inle/ makefile its own way up), so
+# project root first (the root Makefile sets R := ., a i/ makefile its own way up), so
 # these resolve from any cwd; per-frontend output lands in $R/out/<frontend>/.
 R ?= .
 
@@ -110,7 +110,7 @@ hsuf := $(if $(HCC),/cc,)$(if $(filter 0,$(tco)),/tco0,)
 t = $R/test/00-init.l $R/test/spec.l $R/test/uu.l $(filter-out %/00-init.l %/spec.l %/glaze-x86.l %/glaze-hook.l %/uu.l,$(sort $(wildcard $R/test/*.l)))
 
 # the runtime's own headers, and l/ is the roster: these four live there and
-# nothing else does. the metal seat's k.h and the per-ISA asmops sit under inle/,
+# nothing else does. the metal seat's k.h and the per-ISA asmops sit under i/,
 # so a touch on one of those rebuilds no love object.
 love_h = $(wildcard $R/l/*.h)
 # the core rides with its math floor: our own transcendentals, no libm anywhere.
@@ -127,12 +127,12 @@ love_tu_c = $(patsubst %,$R/l/%,$(core_tu))
 love_c = $(love_tu_c) $R/apps/moon/lib/moonlibc/math/am.c
 # the per-ISA set ONE machine's build takes, and the directory is the roster: empty on
 # an arch with no seat, which is what the rebuild gates read to skip their kernel half.
-hosta_c = $(wildcard $R/inle/$(hosta)/*.c)
-# ..and the hosted surface is inle/ less the kernel's own six (kmain, the syscall table,
+hosta_c = $(wildcard $R/i/$(hosta)/*.c)
+# ..and the hosted surface is i/ less the kernel's own six (kmain, the syscall table,
 # the two drivers, doom) and love0's own seat (main0.c, which the Makefile names into
-# love0_o instead): drop an inle/<app>.c in and its nifs register with no rule edit.
-host_c = $(filter-out $(addprefix $R/inle/,kmain.c main0.c blk.c hda.c sys.c doom.c doomsnd.c),$(wildcard $R/inle/*.c))
-# l/ vs inle/ cuts language from SEATS, not portable from machine-specific: quay
+# love0_o instead): drop an i/<app>.c in and its nifs register with no rule edit.
+host_c = $(filter-out $(addprefix $R/i/,kmain.c main0.c blk.c hda.c sys.c doom.c doomsnd.c),$(wildcard $R/i/*.c))
+# l/ vs i/ cuts language from SEATS, not portable from machine-specific: quay
 # draws into a buffer and names no device, so it stays here with the engines no machine
 # owns. a seat that wants its own nifs brings them through ai_defn, which is that door.
 # the quay engine every seat carries. paint.c (32bpp) and nif.c (the love door) are
@@ -141,18 +141,18 @@ host_c = $(filter-out $(addprefix $R/inle/,kmain.c main0.c blk.c hda.c sys.c doo
 f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/l/quay/*.c))
 # inle's libc is moonlibc's, named member by member; os.c is the map every syscall
 # reaches it through -- and a negative __ai_osv (written at kmain) takes the
-# __ai_inle arm, inle/sys.c answering the canonical numbers in C. mooncc builds
+# __ai_inle arm, i/sys.c answering the canonical numbers in C. mooncc builds
 # the kernel, so it builds
-# the kernel's libc too -- there is no second copy to drift. this is inle/posix.c's
+# the kernel's libc too -- there is no second copy to drift. this is i/posix.c's
 # closure (plan A3) plus the members love.c's hosted compile reaches (plan C1:
 # the mmap family behind the W^X arena's runtime branch, refused -ENOSYS on
 # metal). core.c stays OUT -- it carries malloc, the process entry and the
-# std streams, every one of which the kernel owns; inle/sys.c answers its four
+# std streams, every one of which the kernel owns; i/sys.c answers its four
 # seat symbols (environ, stdout/stderr, the sigaction restorer) instead.
 # NAMING A MEMBER HERE IS A DECISION, and stdio was the one weighed: printf and
-# friends write fd 1 themselves, and inle/sys.c is seat-blind, so a seated task's
+# friends write fd 1 themselves, and i/sys.c is seat-blind, so a seated task's
 # C-level printf reaches the console where its port reaches the pipe. That is the
-# documented divergence (inle/sys.c) -- love code writes through ports, which seat.
+# documented divergence (i/sys.c) -- love code writes through ports, which seat.
 c_c = $(addprefix $R/apps/moon/lib/moonlibc/string/,memchr.c memcmp.c memcpy.c memmove.c memset.c strlen.c) \
   $(addprefix $R/apps/moon/lib/moonlibc/sys/,read.c write.c \
     chdir.c chmod.c chown.c clock_gettime.c close.c dup2.c fcntl.c fork.c fstat.c getcwd.c \
@@ -188,7 +188,7 @@ ai_cflags = -std=$(ai_std) -g -O2 -pipe $(EXTRA_CFLAGS) \
   -Wall -Wextra -Werror -Wstrict-prototypes -Wno-unused-parameter \
   -Wmissing-field-initializers -Wno-implicit-fallthrough\
   -falign-functions=16 -fno-stack-protector
-# a strict -std sets __STRICT_ANSI__ and glibc then hides its POSIX half -- inle/main.c
+# a strict -std sets __STRICT_ANSI__ and glibc then hides its POSIX half -- i/main.c
 # owes clock_gettime and kill, so the level is asked for by name.
 # -fcf-protection (Intel CET) is x86-only; the non-x86 seats have no CET to turn off and
 # take it as a no-op.

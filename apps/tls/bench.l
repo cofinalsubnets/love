@@ -1,7 +1,7 @@
 ; apps/tls/bench.l -- the two ciphers, love against their C twins.
 ;
 ; apps/tls/chacha.l and apps/tls/poly1305.l are the readable statement of each
-; cipher; inle/tls.c holds a C twin of each behind a nif, and test/host/tlsc.l
+; cipher; i/tls.c holds a C twin of each behind a nif, and test/host/tlsc.l
 ; proves the two answer the same bytes. this asks the other question: what does
 ; the readable one cost?
 ;

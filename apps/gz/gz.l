@@ -82,7 +82,7 @@
        (? (charm? v) v
           (: w (trap (\ _ (: _ (f 0) 1)) () (\ a b 0)) _ (pin gz-door k w) w)))
 
-   ; inle/hash.c where the artifact carries it, the walk above where it does not.
+   ; i/hash.c where the artifact carries it, the walk above where it does not.
    ; the fallback is not why the walk is here: it is the statement of the polynomial and
    ; the oracle test/host/gzc.l holds the C to, and it would earn its place in a tree where
    ; every build carried every nif.

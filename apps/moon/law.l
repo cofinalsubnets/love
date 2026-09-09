@@ -746,7 +746,7 @@
 ; three names have a meaning the object writer knows -- love_nifs (bracketed by
 ; the linker for main()'s boot drain), .love.image (laid last, for the bake) and
 ; .data (where an unattributed global goes). every other name rides out as its
-; own section, because where those bytes land is the point: inle/rp2040's
+; own section, because where those bytes land is the point: i/rp2040's
 ; .vectors is read by the core before an instruction runs, and a vector table
 ; quietly sitting in .data is a part that never boots. cob passes no
 ; xtra, so this needs the variant that carries the parser's section table. ---
@@ -877,7 +877,7 @@
       ; form's first: a body that dies on line 5 must not point at line 2
       (: g (cparse <>(clex "int ok(void) { return 1; }\nint bad(void)\n{\n  int x = 1;\n  x = x + ;\n  return x;\n}\n"))
          (gripe? g && (gline g = 5)))
-      ; adjacent string literals join across an include boundary -- inle/main.c
+      ; adjacent string literals join across an include boundary -- i/main.c
       ; splices the egg exactly so ("(" then #include egg.h then "'(" ..), so
       ; the file marks must stay invisible to phase 6
       (= <>(pgi "char *s = \"a\"\n#include \"h.h\"\n\"c\";\n" "\"b\"\n")

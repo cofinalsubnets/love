@@ -25,7 +25,7 @@ endif
 
 # love0's boot text: one header, one src0_<name>[] literal per file, laid by sed alone --
 # love0 is what runs lcat, so nothing love-made can sit under it. every boot file rides;
-# inle/main.c names the ones love0 evaluates.
+# i/main.c names the ones love0 evaluates.
 sed_lit = sed \
   -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/'
 boot0_l = $(wildcard l/boot/*.l) l/holo/holo.l l/holo/x64.l l/holo/a64.l
@@ -68,9 +68,9 @@ out/lib/rune.h: apps/rune.l tools/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
 	@$(lcat_love) tools/lcat.l $< > $@
-# the seat laws, one text for every board that runs love (inle/mps2, inle/virt): their
+# the seat laws, one text for every board that runs love (i/mps2, i/virt): their
 # main.c splices this literal into its driver tail, so the laws are said once.
-out/lib/seat.h: inle/seat.l tools/lcat.l $(love0)
+out/lib/seat.h: i/seat.l tools/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
 	@$(lcat_love) tools/lcat.l $< > $@
@@ -96,7 +96,7 @@ out/lib/readme.bin: $(love0) $(R)/l/boot/post.l $(R)/VERSION
 ho = out$(hsuf)
 h_o = $(love_c:$(R)/%.c=$(ho)/%.o)
 host_o = $(host_c:$(R)/%.c=$(ho)/%.o)
-hcc = LOVE_NO_IMAGE= $(CC) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Il -Iinle -Iout/lib
+hcc = LOVE_NO_IMAGE= $(CC) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Il -Ii -Iout/lib
 image_ldflags = -Wl,--section-start=.love.image=0x2000000
 .PHONY: force_hostcc
 force_hostcc: ;
@@ -122,11 +122,11 @@ $(ho)/liblove.a: $(h_o)
 
 # pinned to out/0, never $(ho)/0: love0 is one binary whatever HCC and tco say
 # love0 takes the whole hosted surface less the crew catalog, PLUS its own seat --
-# inle/main0.c, which host_c holds back because only this link has a use for it.
-love0_o = $(patsubst $(R)/%.c,out/0/%.o,$(filter-out $(R)/inle/cats.c,$(host_c)) $(R)/inle/main0.c $(love_c))
-out/0/inle/boot.o: out/lib/boot0.h
-out/0/inle/cb.o: l/quay/quay.c l/quay/nif.c l/quay/quay.h
-boot_cc = $(CCACHE) $(CC) $(ai_cflags) -fPIE -DLoveBoot -Dai_tco=0 -Dai_data_section=0 -DAiVersion='"$(love_base)+bootstrap"' -I. -Il -Iinle -Iout/lib
+# i/main0.c, which host_c holds back because only this link has a use for it.
+love0_o = $(patsubst $(R)/%.c,out/0/%.o,$(filter-out $(R)/i/cats.c,$(host_c)) $(R)/i/main0.c $(love_c))
+out/0/i/boot.o: out/lib/boot0.h
+out/0/i/cb.o: l/quay/quay.c l/quay/nif.c l/quay/quay.h
+boot_cc = $(CCACHE) $(CC) $(ai_cflags) -fPIE -DLoveBoot -Dai_tco=0 -Dai_data_section=0 -DAiVersion='"$(love_base)+bootstrap"' -I. -Il -Ii -Iout/lib
 .PHONY: force_love0cc
 force_love0cc: ;
 out/0/.love0cc: force_love0cc
@@ -145,14 +145,14 @@ $(ho)/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
 
 # l.o carries the version string; recompile it when the id changes. love0's twin is
 # deliberately not here -- see the -DAiVersion note on boot_cc.
-# the baked source rides inle/cats.c; main.c bakes the dist roster for the first boot
-$(ho)/inle/cats.o: out/lib/baked.h
-$(ho)/inle/main.o: out/lib/distlist.h
+# the baked source rides i/cats.c; main.c bakes the dist roster for the first boot
+$(ho)/i/cats.o: out/lib/baked.h
+$(ho)/i/main.o: out/lib/distlist.h
 $(ho)/l/love.o: out/lib/love_version.h
 # the carried-blob reader both the first boot and the kernel's ram fs decode with
-$(ho)/inle/main.o $(ho)/inle/ustar.o: $(R)/inle/ustar.h
-# inle/cb.c rides the l/quay sources by unity include -- recompile when they move.
-$(ho)/inle/cb.o: l/quay/quay.c l/quay/nif.c l/quay/quay.h
+$(ho)/i/main.o $(ho)/i/ustar.o: $(R)/i/ustar.h
+# i/cb.c rides the l/quay sources by unity include -- recompile when they move.
+$(ho)/i/cb.o: l/quay/quay.c l/quay/nif.c l/quay/quay.h
 
 moon0 = $(love0) wake out/mooncc0.image mooncc $(GCDBG)
 moon0_dep = out/mooncc0.image
@@ -187,7 +187,7 @@ endif
 # kart shape below is the same idiom. Answers $(1)_love_o, _host_o, _math_o and $(1)_o.
 # EVERY OBJECT SITS AT ITS SOURCE'S PATH under the odir, as out/0 and $(k_odir) already
 # lay theirs. The sets take different flags, so each rule names its own list and the odir
-# needs no prefix to keep l/ev.o and inle/ev.o apart -- the tree does that.
+# needs no prefix to keep l/ev.o and i/ev.o apart -- the tree does that.
 define moonlane
 $(1)_love_o = $$(love_tu_c:$$(R)/%.c=$$($(2))/%.o)
 $(1)_host_o = $$(host_c:$$(R)/%.c=$$($(2))/%.o)
@@ -196,15 +196,15 @@ $(1)_o = $$($(1)_love_o) $$($(1)_host_o) $$($(1)_math_o) $$($(2))/sys.o
 $$($(1)_love_o): $$($(2))/%.o: $$(R)/%.c $$(love_h) $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
-	@$$($(3)) -D ai_tco=$$(tco) -D AiHaveVersionH -I$$(ho) -I. -Il -Iinle -Iout/lib -c $$< $$@
+	@$$($(3)) -D ai_tco=$$(tco) -D AiHaveVersionH -I$$(ho) -I. -Il -Ii -Iout/lib -c $$< $$@
 $$($(2))/l/love.o: out/lib/love_version.h   # only this TU carries the version id
 $$($(1)_host_o): $$($(2))/%.o: $$(R)/%.c $$(love_h) $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
-	@$$($(3)) -D ai_tco=$$(tco) -I$$(ho) -I. -Il -Iinle -Iout/lib -c $$< $$@
-$$($(2))/inle/main.o: out/lib/distlist.h
-$$($(2))/inle/cats.o: out/lib/baked.h
-$$($(2))/inle/cb.o: l/quay/quay.c l/quay/nif.c l/quay/quay.h
+	@$$($(3)) -D ai_tco=$$(tco) -I$$(ho) -I. -Il -Ii -Iout/lib -c $$< $$@
+$$($(2))/i/main.o: out/lib/distlist.h
+$$($(2))/i/cats.o: out/lib/baked.h
+$$($(2))/i/cb.o: l/quay/quay.c l/quay/nif.c l/quay/quay.h
 $$($(1)_math_o): $$($(2))/moonlibc/%.o: apps/moon/lib/moonlibc/%.c $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
@@ -489,16 +489,16 @@ mooncc = LOVE_NO_IMAGE= $(ho)/love mooncc
 mooncc_dep = $(ho)/.love.baked
 
 # this machine's metal files, and the three TUs only a kernel has a frontend for.
-k_arch_c = $(wildcard $(R)/inle/$a/*.c)
-k_free_c = $R/inle/kmain.c $R/inle/blk.c $R/inle/hda.c $R/inle/sys.c
+k_arch_c = $(wildcard $(R)/i/$a/*.c)
+k_free_c = $R/i/kmain.c $R/i/blk.c $R/i/hda.c $R/i/sys.c
 # the whole kernel compile, in link order: the runtime and its math floor, the console
 # engine with its two fonts, moonlibc, the metal, the free trio -- and $(host_c) itself,
 # because the kernel runs the same frontend the host does. taking that roster rather than
-# copying it is what lets a new inle/<app>.c reach the kernel with no rule edit.
+# copying it is what lets a new i/<app>.c reach the kernel with no rule edit.
 k_c = $(love_c) \
   $R/l/quay/cga_8x8.c $R/l/quay/moderndos_8x16.c $R/l/quay/paint.c \
   $(c_c) $(k_arch_c) $(k_free_c) $(host_c)
-k_h = $(love_h) $(R)/inle/k.h $(R)/inle/ustar.h $(wildcard $(R)/inle/$a/*.h)
+k_h = $(love_h) $(R)/i/k.h $(R)/i/ustar.h $(wildcard $(R)/i/$a/*.h)
 
 k_odir = $(ko)/$a
 k_elf = $(ko)/love-$a.elf
@@ -516,14 +516,14 @@ k_o = $(k_c:$(R)/%.c=$(k_odir)/%.o) $(k_lay_o) $(k_tail_o) \
 
 kcppflags := \
   -I$(k_odir) \
-  -I. -Il -Iinle -Iout/lib -I$(R)/l/quay -I$(R) \
+  -I. -Il -Ii -Iout/lib -I$(R)/l/quay -I$(R) \
   -I$(R)/apps/moon/include \
   $(kcppflags)
 kcc = $(mooncc) $(kcppflags) -t $a
 
 kernel: $(k_elf)
 
-$(k_odir)/inle/cb.o: l/quay/quay.c l/quay/nif.c l/quay/quay.h
+$(k_odir)/i/cb.o: l/quay/quay.c l/quay/nif.c l/quay/quay.h
 $(k_odir)/moonlibc.o: $(rt_slice) tools/mkrt.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
@@ -592,17 +592,17 @@ kmain_o: $(k_free_o)
 # THE CARRIED SEAT: the metal objects the one binary links, so `love kernel` projects a
 # bootable elf out of the running artifact instead of building a second one. one shape,
 # worn once per machine -- $(call kart,ROSTER,DIRVAR,CCVAR,ARCHVAR), every argument but
-# the first a variable NAME so the body stays deferred. an arch with no inle/<arch>/
+# the first a variable NAME so the body stays deferred. an arch with no i/<arch>/
 # carries no seat and its roster is empty.
-kart_inc = -I$(ho) -I. -Il -Iinle -Iout/lib -I$R \
+kart_inc = -I$(ho) -I. -Il -Ii -Iout/lib -I$R \
   -I$R/l/quay -I$R/apps/moon/include
 # kmain.c's own bake is the two ROSTERS now -- the kore cat's order, and the crew's, which
 # it carries the order of and reads the members of off /proc/src. the egg and the module set
-# are inle/cats.c's, and that object rides the host lane above.
+# are i/cats.c's, and that object rides the host lane above.
 kart_bake = out/lib/korelist.h out/lib/crewlist.h
 define kart
-$(1)_h = $$(love_h) $$R/inle/k.h $$R/inle/ustar.h $$(wildcard $$R/inle/$$($(4))/*.h)
-$(1)_arch_o = $$(patsubst $$R/%.c,$$($(2))/%.o,$$(wildcard $$R/inle/$$($(4))/*.c))
+$(1)_h = $$(love_h) $$R/i/k.h $$R/i/ustar.h $$(wildcard $$R/i/$$($(4))/*.h)
+$(1)_arch_o = $$(patsubst $$R/%.c,$$($(2))/%.o,$$(wildcard $$R/i/$$($(4))/*.c))
 # the console's painter and its fonts: kernel-only draws the host link never had
 $(1)_quay_o = $$(patsubst %,$$($(2))/l/quay/%.o,paint cga_8x8 moderndos_8x16)
 $(1)_kern_o = $$(k_free_c:$$R/%.c=$$($(2))/%.o)
@@ -611,12 +611,12 @@ $(1)_o = $$(if $$($(1)_arch_o),$$($(1)_kern_o) \
 $(1)_lay_l = $$R/apps/kore/text.l $$R/apps/kore/u.l $$R/apps/kore/asbook.l \
   $$R/l/holo/$$($(4)).l $$R/l/holo/elf.l $$R/l/holo/obj.l
 # the kernel-only trio, the per-ISA seat and the console draws take one flag set and
-# one rule -- named lists, so the frontend's own inle/*.o rule above cannot claim them.
+# one rule -- named lists, so the frontend's own i/*.o rule above cannot claim them.
 $$($(1)_kern_o) $$($(1)_arch_o) $$($(1)_quay_o): $$($(2))/%.o: $$R/%.c $$($(1)_h) $$(kart_bake) $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p "$$(dir $$@)"
 	@$$($(3)) $$(kart_inc) -c $$< $$@
-$$($(2))/mkvec.l: $$R/inle/mkvec.l $$($(1)_lay_l)
+$$($(2))/mkvec.l: $$R/i/mkvec.l $$($(1)_lay_l)
 	@echo '$(t_cat)	'$$@
 	@mkdir -p "$$(dir $$@)"
 	@{ echo "(borrow 'holo)"; cat $$R/apps/kore/text.l $$R/apps/kore/u.l; \
@@ -635,8 +635,8 @@ doom_d = $R/dl/doomgeneric/doomgeneric
 doom_drop = $(wildcard $(doom_d)/doomgeneric_*.c $(doom_d)/i_allegro*.c $(doom_d)/i_sdl*.c)
 doom_c = $(filter-out $(doom_drop),$(wildcard $(doom_d)/*.c))
 k_doom_o = $(patsubst $(doom_d)/%.c,$(k_odir)/doom/%.o,$(doom_c)) $(k_odir)/doom/wad.o
-k_free_c += $R/inle/doom.c $R/inle/doomsnd.c
-kcppflags += -I$(doom_d) -I$R/inle/doom -DFEATURE_SOUND
+k_free_c += $R/i/doom.c $R/i/doomsnd.c
+kcppflags += -I$(doom_d) -I$R/i/doom -DFEATURE_SOUND
 $(k_odir)/doom/%.o: $(doom_d)/%.c $(mooncc_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
@@ -648,7 +648,7 @@ $(k_odir)/doom/wad.o: $R/dl/doom1.wad tools/mkblob.l out/.mksys-cat.l $m
 # and the same set on the KART lane, which is where the host's own kernel is
 # built (plan C2: the artifact carries it) -- so `make kernel DOOM=1` at $(hosta)
 # rides these and the cross odir rides the rows above.
-kart_inc += -I$(doom_d) -I$R/inle/doom -DFEATURE_SOUND
+kart_inc += -I$(doom_d) -I$R/i/doom -DFEATURE_SOUND
 kart_doom_o = $(patsubst $(doom_d)/%.c,$(moon_d)/doom/%.o,$(doom_c)) \
   $(moon_d)/doom/wad.o
 kart_o += $(kart_doom_o)
@@ -676,7 +676,7 @@ $(k_odir)/l/love.o: kcppflags += -DAiHaveVersionH
 
 klay_l = $R/apps/kore/text.l $R/apps/kore/u.l $R/apps/kore/asbook.l \
   $R/l/holo/$a.l $R/l/holo/elf.l $R/l/holo/obj.l
-$(k_odir)/mkvec.l $(k_odir)/mkboot.l: $(k_odir)/%.l: $R/inle/%.l $(klay_l)
+$(k_odir)/mkvec.l $(k_odir)/mkboot.l: $(k_odir)/%.l: $R/i/%.l $(klay_l)
 	@echo '$(t_cat)	'$@
 	@mkdir -p "$(dir $@)"
 	@{ echo "(borrow 'holo)"; cat $R/apps/kore/text.l $R/apps/kore/u.l; \
@@ -738,7 +738,7 @@ init-container: host
 
 uefi_l = $R/apps/kore/text.l $R/apps/kore/u.l $R/apps/kore/asbook.l \
   $R/l/holo/elf.l $R/l/holo/obj.l $R/l/holo/link.l $R/l/holo/pe.l \
-  $R/inle/uefi/mkefi.l
+  $R/i/uefi/mkefi.l
 # the removable-media path firmware looks for, per arch -- it is the FILENAME that
 # picks the loader, so the two ESPs differ in nothing else.
 k_efiname_x64 = BOOTX64.EFI
@@ -746,7 +746,7 @@ k_efiname_a64 = BOOTAA64.EFI
 k_efiname = $(k_efiname_$a)
 k_uefid = $(ko)/uefi-$a
 k_espd = $(ko)/esp-$a
-$(k_uefid)/loader.o: $R/inle/uefi/loader.c $(ho)/.love.baked
+$(k_uefid)/loader.o: $R/i/uefi/loader.c $(ho)/.love.baked
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(mooncc) -t $a -c $< $@
@@ -1004,16 +1004,16 @@ site-serve: host out/toolmd.stamp
 # through mooncc -t wasm, linked to one module -- no emcc, no C toolchain. tco=1: the
 # vm's tails are return_call, the engines' tail-call law (node 26, firefox 121, chrome
 # 112, safari 18), and the corpus runs 1.31x faster than on the trampoline. the loader
-# (inle/wasm/loader.js) is the runtime under it. NOTHING SHIPS IT any more -- the front
+# (i/wasm/loader.js) is the runtime under it. NOTHING SHIPS IT any more -- the front
 # page carries the machine (the kernel module below) -- so it is laid under out/ and never
 # copied out: test_wasm's two checks and horn.html are the whole readership, and each is a
 # seam the machine has not grown yet (quay's cells, the horn's ring).
 # the emcc build stays as wasm-emcc, a differential and nothing on the page.
-wasm_c = $(love_c) $(R)/inle/horn.c $(R)/inle/wasm/host.c
+wasm_c = $(love_c) $(R)/i/horn.c $(R)/i/wasm/host.c
 out/wasm/love.wasm: $(wasm_c) $(lib_h) out/lib/love_version.h host
 	@mkdir -p $(dir $@)
 	@echo 'MOON	'$@
-	@$(mooncc) -t wasm -Dai_tco=1 -DAiHaveVersionH -I. -Il -Iinle -Iout/lib -o $@ $(wasm_c)
+	@$(mooncc) -t wasm -Dai_tco=1 -DAiHaveVersionH -I. -Il -Ii -Iout/lib -o $@ $(wasm_c)
 ifeq ($(NODE),)
 wasm: out/wasm/love.wasm
 else
@@ -1030,14 +1030,14 @@ site-wasm: wasm
 	@echo '$(t_cp)	'assets/wasm/love-wasm.image
 	@cp out/wasm/love-wasm.image assets/wasm/love-wasm.image
 # the wasm inle seat: the kernel the three metal seats link -- kmain and the ramfs, the
-# console painter with its fonts, inle/sys.c under moonlibc, the host frontend whole -- with
-# inle/wasm/arch.c for the machine and the source blob as a wasm data object (mksrc.l's
+# console painter with its fonts, i/sys.c under moonlibc, the host frontend whole -- with
+# i/wasm/arch.c for the machine and the source blob as a wasm data object (mksrc.l's
 # text lane). one module beside out/love-$a.elf; the runtime rides in by need, and no
-# the heap image is baked below. the CPU under it is inle/wasm/cpu.mjs, a worker;
-# the terminals are inle/wasm/inle.mjs (node) and inle/wasm/inle.html (the page).
+# the heap image is baked below. the CPU under it is i/wasm/cpu.mjs, a worker;
+# the terminals are i/wasm/inle.mjs (node) and i/wasm/inle.html (the page).
 kw_c = $(love_c) $R/l/quay/cga_8x8.c $R/l/quay/moderndos_8x16.c $R/l/quay/paint.c \
-  $(k_free_c) $(host_c) $R/inle/wasm/arch.c
-kw_h = $(love_h) $R/inle/k.h $R/inle/ustar.h $R/inle/asmops.h $R/inle/wasm/asmops.h
+  $(k_free_c) $(host_c) $R/i/wasm/arch.c
+kw_h = $(love_h) $R/i/k.h $R/i/ustar.h $R/i/asmops.h $R/i/wasm/asmops.h
 out/wasm/src.o: $(dist_source) tools/mksrc.l out/.mksys-cat.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
@@ -1045,23 +1045,23 @@ out/wasm/src.o: $(dist_source) tools/mksrc.l out/.mksys-cat.l $m
 out/love-wasm.wasm: $(kw_c) $(kw_h) out/wasm/src.o out/lib/baked.h out/lib/distlist.h \
   out/lib/korelist.h out/lib/crewlist.h out/lib/love_version.h $(mooncc_dep)
 	@echo 'MOON	'$@
-	@$(mooncc) -t wasm -Dai_tco=1 -DAiHaveVersionH -I. -Il -Iinle -Iout/lib \
+	@$(mooncc) -t wasm -Dai_tco=1 -DAiHaveVersionH -I. -Il -Ii -Iout/lib \
 	  -Il/quay -Iapps/moon/include -o $@ $(kw_c) out/wasm/src.o
 wasm-emcc:                       # emcc's love, out/wasm/love.js: the foreign build ccwasm takes
-	@$(MAKE) -C inle/wasm
+	@$(MAKE) -C i/wasm
 # the seat's heap image: the kernel booted once under node with `bake PATH` on the boot
 # line -- the egg, the modules and the korecat warm, the seat text run -- written to the
 # ramfs and lifted out at the reset. the page fetches it beside the module and the worker
 # hands it to k_start; a stale one is refused and the egg bakes, the host's own law.
-out/wasm/love-wasm.image: out/love-wasm.wasm inle/wasm/cpu.mjs inle/wasm/inle.mjs
+out/wasm/love-wasm.image: out/love-wasm.wasm i/wasm/cpu.mjs i/wasm/inle.mjs
 	@echo 'BAKE	'$@
-	@$(NODE) inle/wasm/inle.mjs --lift /love.image:$@ out/love-wasm.wasm bake /love.image < /dev/null > out/wasm/bake.log 2>&1 \
+	@$(NODE) i/wasm/inle.mjs --lift /love.image:$@ out/love-wasm.wasm bake /love.image < /dev/null > out/wasm/bake.log 2>&1 \
 	   || { cat out/wasm/bake.log; exit 1; }
 
 clean:
 	rm -rf out
 	@rm -f test/proof/rocq/*.vo test/proof/rocq/*.vok test/proof/rocq/*.vos test/proof/rocq/*.glob test/proof/rocq/.*.aux
-	@[ -d inle/wasm ] && $(MAKE) -C inle/wasm clean || :
+	@[ -d i/wasm ] && $(MAKE) -C i/wasm clean || :
 distclean: clean
 	rm -rf dl
 valg: host
@@ -1088,7 +1088,7 @@ assets/web/favicon.png: l/quay/cga_8x8.c tools/mkicon.l apps/vi/config.l $(ho)/.
 	@mkdir -p $(dir $@)
 	@env -u LOVE_NO_IMAGE $m tools/mkicon.l $< 3 32 $@
 # ..and the front page itself, its island the fragment machine.js drives
-index.html: web/index.l inle/wasm/machine.html $(ho)/.love.baked
+index.html: web/index.l i/wasm/machine.html $(ho)/.love.baked
 	@$m web/index.l $@
 .PHONY: ulp
 ulp:

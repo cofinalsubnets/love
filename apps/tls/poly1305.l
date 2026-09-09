@@ -23,7 +23,7 @@
 ; would be a branch on the accumulator, which is a branch on the message and the
 ; key together.
 ;
-; inle/tls.c's `poly1305` nif is the C twin, the same five limbs and the same
+; i/tls.c's `poly1305` nif is the C twin, the same five limbs and the same
 ; mask; test/host/tlsc.l holds it to this file, apps/tls/bench.l times both.
 (module 'tls
 (:

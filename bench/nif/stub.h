@@ -3,7 +3,7 @@
  * a nif file is an ALGORITHM plus a love-facing wrapper. the algorithm is what
  * this corpus differentials, and it is reachable by including the .c: every
  * entry point is a static, so a harness that includes the file sees all of them
- * and needs no seam cut into inle/.
+ * and needs no seam cut into i/.
  *
  * what the wrapper needs is a handful of runtime symbols -- the string/cask
  * predicates, the allocator door, and four lvm ops the nif's dispatch row names.

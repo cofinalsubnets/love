@@ -92,7 +92,7 @@ static uintptr_t image_objsize(struct ai *g, union u *p) {
 // by position, so this order is part of the image's contract -- unchecked by name, since a
 // binary whose nif set differs is a different binary and its anchor says so.
 #define ImageNHost 256u
-// the kernel's own bracket (inle/kmain.c's ai_knifs) rides the slice behind the host's, so a
+// the kernel's own bracket (i/kmain.c's ai_knifs) rides the slice behind the host's, so a
 // kernel bakes the book it drained: a link without one -- a board, the bootstrap -- answers none
 uintptr_t ai_knifs_slice(struct ai_def const **s);
 static ai_inline uintptr_t image_nhost(void) {
@@ -283,7 +283,7 @@ static word image_root_dec(uint64_t tag, uint64_t val, word *base) {
 #define ImageNImm ((uintptr_t) countof(image_immortals))
 #define ImageCellW 16u   /* max nif-cell span (words) an interior link can sit in */
 // the bare-fn lane's width: one slot per nif cell whose code slot a thread can embed --
-// ai_def1's, then the host slice's (AiNif registers a cell too: inle/main.c's nif_exit[]).
+// ai_def1's, then the host slice's (AiNif registers a cell too: i/main.c's nif_exit[]).
 #define ImageNFn ((uintptr_t)(ai_def1_n + ImageNHost))
 // the lane floor: above any heap this codec encodes (1 TB on 64-bit, 128 MB on 32-bit;
 // a dump past it is refused rather than aliased) and below the absolute lane.
@@ -401,7 +401,7 @@ static ai_inline intptr_t img_decode(intptr_t v, word *base, char *code) {
 #define ImageNPlain (ImageNShift + 7u)                /* 248..255 a plain 1..8-byte one */
 #define ImageDHash 4096u  /* the encoder's value -> token map (open-addressed, 0xffff = free) */
 // the encoder's tables ride the allocator, never the frame: they are kilobytes together, and
-// an arm32 load has 12 bits of displacement -- inle/mps2 refused them on the stack.
+// an arm32 load has 12 bits of displacement -- i/mps2 refused them on the stack.
 struct img_dic { word dict[ImageNAll], key[ImageDHash]; uint16_t tk[ImageDHash];
                  uintptr_t cnt[ImageNAll]; };   /* cnt is the selection's, too big for a frame */
 

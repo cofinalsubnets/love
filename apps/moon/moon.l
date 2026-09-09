@@ -428,7 +428,7 @@
    ; both targets: obj.l picks the reloc vocabulary by tgt.
    ; ..plus one section per other __attribute__((section(NAME))) name the TU
    ; used, appended in declaration order (cgen-obj's tail). a section named at all
-   ; is a section whose address is the point -- inle/rp2040's .vectors is read by
+   ; is a section whose address is the point -- i/rp2040's .vectors is read by
    ; the core before an instruction runs -- so both its existence and its order are
    ; the program's to fix, never ours. objsecs is the door that takes them.
    ; the two wide tuples are named once, here -- parse.l's `tops` answers fourteen fields
@@ -764,7 +764,7 @@
     (mcmemo "moon-rtcid 1" (mcsrcshape home)
             (\ _ (sha256 ("moon-rtc 1\n" + (mcsrctext home)))))
    ; the carried runtime: the build lays each ISA's compiled archive beside the
-   ; source blob (tools/mkrt.l; inle/src.c answers runtime-gz), so a link
+   ; source blob (tools/mkrt.l; i/src.c answers runtime-gz), so a link
    ; owes no member compiles -- the bare door's ~28 s becomes a read. only when the
    ; identity matches: the blob lane's identity is the carried source, a disk home
    ; serves iff its slice hashes to the stamped id (a laid seed tree does; an edited
@@ -1194,7 +1194,7 @@
              ; hosted program that simply supplies its own runtime, and test_raw
              ; is exactly that. freestanding also has no OS, so it pins -os none
              ; (a later explicit -os wins, pin over pin -- nothing under free/
-             ; or inle/ reads an OS macro, so the kernel and the boards lose a
+             ; or i/ reads an OS macro, so the kernel and the boards lose a
              ; __linux__ they never asked for).
              (a = "-ffreestanding")
               (flags r (pin (pin (fpush t 'ds "__STDC_HOSTED__=0") 'nostd 1) 'os 'none))

@@ -10,7 +10,7 @@
 ;     green task and a crash is a `scare` the watchdog `help` welps to () (the SAME
 ;     shape recovery inle uses), so the dep graph / restart policy / checkpoint run
 ;     with no OS processes. (the oneshot lane here is already real via the `hark` nif.)
-;   (real 0) -- the real supervisor: services are OS processes. inle/posix.c adds the
+;   (real 0) -- the real supervisor: services are OS processes. i/posix.c adds the
 ;     two missing primitives -- (spawn argv) forks+execs and returns a pid to track,
 ;     (glean _) is the SIGCHLD core (waitpid(-1) -> (pid . status), restart per policy).
 ;     same supervisor shape, now over real children. (demos 0) ends by calling it.
@@ -19,7 +19,7 @@
 ; (the file only DEFINES -- a plain load prints nothing; -l preloads it into the shared
 ; global scope so the -e call finds `demos`/`real`.)
 ;
-; what an actual pid1 still needs is small and core-clean (inle/posix.c via the AiNif
+; what an actual pid1 still needs is small and core-clean (i/posix.c via the AiNif
 ; glob, no love.c/love.h edit -- the same discipline as ain/bao). done: fork/execve +
 ; the non-blocking waitpid reaper (spawn/glean). remaining: signalfd (SIGCHLD/SIGTERM
 ; become perceive events, merged with timers by ai_wait_fds exactly like {nic, clock}),
@@ -71,7 +71,7 @@
    (start1 reg cnt u)
      (: name (u-name u)
         (? (= (u-kind u) 'oneshot)
-             (: res  (hark (u-cmd u))                  ; real child (inle/main.c fork+exec+wait)
+             (: res  (hark (u-cmd u))                  ; real child (i/main.c fork+exec+wait)
                 code (cap res)  text (cup res)         ; (exit . stdout)
                 _    (note (+ "  [oneshot] " (+ (show name) (+ " -> \"" (+ text (+ "\" (exit " (+ (show code) ")")))))))
                 (pin reg name (? (= code 0) 'done 'failed)))
@@ -107,7 +107,7 @@
 ; log the fault to the journal here). mirrors repl.l's shell-help, quieter.
 (hear welp)
 
-; --- the real supervisor (needs inle/posix.c: spawn + glean; kill via bao's `still`) ---
+; --- the real supervisor (needs i/posix.c: spawn + glean; kill via bao's `still`) ---
 ; the same supervisor, now over OS processes. spawn each unit (a pid to track), then
 ; poll `glean` -- the SIGCHLD core -- mapping each dead pid back to its unit and
 ; restarting on a nonzero exit per policy. on metal this poll is driven by signalfd
@@ -147,7 +147,7 @@
         _ (rloop units pids tries (tally units) 500)
         (note "-- all real children reaped --")))
 
-; --- the perceive lane (Linux: inle/posix.c sigfd/sigtake + the core `await`) ---
+; --- the perceive lane (Linux: i/posix.c sigfd/sigtake + the core `await`) ---
 ; the supervisor's perceive becomes a real park on a signalfd, not a poll loop.
 ; (await sig) cooperatively yields until a signal lands; the scheduler folds the
 ; parked sigfd and a heartbeat task's timer into one ai_wait_fds -- the {nic, clock}

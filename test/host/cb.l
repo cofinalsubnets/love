@@ -1,4 +1,4 @@
-; --- test/host/cb.l: a vttest-lite for quay's console screen (inle/cb.c + l/quay/quay.c) ---
+; --- test/host/cb.l: a vttest-lite for quay's console screen (i/cb.c + l/quay/quay.c) ---
 ; held out of the corpus, and not for its nifs: love0 links screen/scribe/glass/gaze/reply
 ; as surely as the final `love` does, and these laws pass twice on their own and beside
 ; the other movers. inside the WHOLE corpus love0's second evaluation stops. which

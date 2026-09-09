@@ -1,9 +1,9 @@
-; --- test/fs.l: smoke test for the fs nifs (inle/posix.c) ---
+; --- test/fs.l: smoke test for the fs nifs (i/posix.c) ---
 ; rename/symlink/readlink/chmod/chown/utime/umask link into `love` and love0 alike
-; (love0 carries the whole inle/*.c glob since the self-host promotion), so these
+; (love0 carries the whole i/*.c glob since the self-host promotion), so these
 ; are corpus laws. it still reads standalone (test comes from test/00-init.l):
 ;   cat test/00-init.l test/fs.l | out/love
-; the conventions under test are inle/posix.c's posix_ lane: an effect op answers
+; the conventions under test are i/posix.c's posix_ lane: an effect op answers
 ; () ok | an errno nom | 'badarg misuse; a value op answers the value | () | a nom.
 
 ; the seat: rename/symlink/chown/utime are the OS's own metadata, and inle's ramfs
