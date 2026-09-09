@@ -34,7 +34,7 @@
    ; --- shelling out, captured ------------------------------------------------
    (shout argv)
     (: pp (pipe 0) r <pp w >pp
-       kid (spawnmap argv [(1 >< w) (2 >< ())] () 0 0)
+       kid (spawnmap argv [(1 . w) (2 . ())] () 0 0)
        _ (close w)
        (? (charm? kid && kid < 0) (: _ (close r) "")
           (: q (fdopen r) s (slurp q) _ (close q) _ (wait kid) ("" + s))))
@@ -42,15 +42,15 @@
    ; --- little string kit -----------------------------------------------------
    (lines s)
     (: n (tally s)
-       (go i a acc) (? (n <= i) (rev (? (i <= a) acc ((snip s a i) >< acc)))
-                       ((s i) = 10) (go (i + 1) (i + 1) ((snip s a i) >< acc))
+       (go i a acc) (? (n <= i) (rev (? (i <= a) acc ((snip s a i) . acc)))
+                       ((s i) = 10) (go (i + 1) (i + 1) ((snip s a i) . acc))
                        (go (i + 1) a acc))
        (go 0 0 ()))
    (blank? c) ((c = 32) || (c = 9) || (c = 13))
    (fields s)
     (: n (tally s)
-       (go i a acc) (? (n <= i) (rev (? (i <= a) acc ((snip s a i) >< acc)))
-                       (blank? (s i)) (go (i + 1) (i + 1) (? (i <= a) acc ((snip s a i) >< acc)))
+       (go i a acc) (? (n <= i) (rev (? (i <= a) acc ((snip s a i) . acc)))
+                       (blank? (s i)) (go (i + 1) (i + 1) (? (i <= a) acc ((snip s a i) . acc)))
                        (go (i + 1) a acc))
        (go 0 0 ()))
    (at? s sub i)                                   ; does sub sit at offset i of s
@@ -86,7 +86,7 @@
    (tsyms-of txt)                                  ; -> ((addr . name) ..), nm order
     (: rows (map fields (lines txt))
        ok (filter (\ p (: f p (3 = tally f) && ((f 1) = "T" || (f 1) = "t"))) rows)
-       (map (\ f ((hex <f) >< (canon (f 2)))) ok))
+       (map (\ f ((hex <f) . (canon (f 2)))) ok))
 
    ; sizes by ADDRESS GAP -- mooncc's ELF carries no st_size, so the next symbol
    ; is what bounds this one; the last symbol in the run measures 0.
@@ -113,7 +113,7 @@
                (: (fin j) (? (n <= j) (rev acc)
                              ((ln j) = 62) (: nm (snip ln (i + 1) j)
                                               p (idx-plus nm)
-                                              (tgts ln ((? (p < 0) nm (snip nm 0 p)) >< acc) (j + 1)))
+                                              (tgts ln ((? (p < 0) nm (snip nm 0 p)) . acc) (j + 1)))
                              (fin (j + 1)))
                   (fin (i + 1)))
               (tgts ln acc (i + 1))))
@@ -152,7 +152,7 @@
            ; so this skips almost every offset without building a number.
            (((raw (i + 7)) = 0) && ((raw (i + 6)) = 0))
             (: nm (peep ba (le64 raw i) ())
-               (scan raw (i + 1) n (? (string? nm) (nm >< acc) acc)))
+               (scan raw (i + 1) n (? (string? nm) (nm . acc) acc)))
            (scan raw (i + 1) n acc))
        (go secs acc)
         (? !(two? secs) acc

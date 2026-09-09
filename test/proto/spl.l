@@ -28,7 +28,7 @@
 
 ; --- the machine: ops are (op x); state [stack locals seats trace]; A the
 ; --- caller's environment. emitters prepend, compose runs left first.
-(: (kop op x) (\ k (link [op x] k))
+(: (kop op x) (\ k (. [op x] k))
    (kpushk x) (kop 'pushk x)                        ; push a constant
    (kpusha i) (kop 'pusha i)                        ; push caller arg i
    (kpushl i) (kop 'pushl i)                        ; push local i
@@ -40,19 +40,19 @@
    (kseq a b) (\ k (a (b k)))                       ; compose: a's ops first
 
    ; the interpreter: a thread against env A -> (value . trace)
-   (put9 al i v) (link [i v] al)
+   (put9 al i v) (. [i v] al)
    (get9 al i) (: e (assoc i al) (? (two? e) (cap (cup e)) (scare 'spl-unbound i)))
    (in9 th A st lo se tr)
-    (? !(two? th) (link (cap st) (rev tr))
+    (? !(two? th) (. (cap st) (rev tr))
        (: op (<th 0) x (<th 1)
-          (? (= op 'pushk) (in9 >th A (link x st) lo se tr)
-             (= op 'pusha) (in9 >th A (link (get9 A x) st) lo se tr)
-             (= op 'pushl) (in9 >th A (link (get9 lo x) st) lo se tr)
-             (= op 'pushs) (in9 >th A (link (get9 se x) st) lo se tr)
+          (? (= op 'pushk) (in9 >th A (. x st) lo se tr)
+             (= op 'pusha) (in9 >th A (. (get9 A x) st) lo se tr)
+             (= op 'pushl) (in9 >th A (. (get9 lo x) st) lo se tr)
+             (= op 'pushs) (in9 >th A (. (get9 se x) st) lo se tr)
              (= op 'setl)  (in9 >th A >st (put9 lo x <st) se tr)
              (= op 'sets)  (in9 >th A >st lo (put9 se x <st) tr)
-             (= op 'add)   (in9 >th A (link ((cap (cup st)) + <st) (cuup st)) lo se tr)
-             (= op 'emit)  (in9 >th A st lo se (link <st tr))
+             (= op 'add)   (in9 >th A (. ((cap (cup st)) + <st) (cuup st)) lo se tr)
+             (= op 'emit)  (in9 >th A st lo se (. <st tr))
              (scare 'spl-op op))))
    (run em A) (in9 (em ()) A () () () ())
 

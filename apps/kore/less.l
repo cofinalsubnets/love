@@ -86,13 +86,13 @@
    ; a line -> its fragments at width w, at least one, so a blank line is a row
    (pgwrap w ln)
     (: (go s acc) (: k (pgspan s w)
-                     (? (#s <= k) (rev (s >< acc))
-                        (go (snip s k #s) (snip s 0 k >< acc))))
+                     (? (#s <= k) (rev (s . acc))
+                        (go (snip s k #s) (snip s 0 k . acc))))
        (go (pgtabs ln) ()))
    ; the display rows: [fragment line first?], source order
    (pgrows w ls)
     (: (frag fs i acc first) (? !(two? fs) acc
-                                (frag >fs i ([<fs i first] >< acc) ()))
+                                (frag >fs i ([<fs i first] . acc) ()))
        (go l i acc) (? !(two? l) (rev acc)
                        (go >l (i + 1) (frag (pgwrap w <l) i acc 1)))
        (go ls 0 ()))
@@ -129,7 +129,7 @@
    (pgsqueeze ls)
     (: (go l was acc) (? !(two? l) (rev acc)
                          (: b !(0 < #(<l))
-                            (? (b && was) (go >l b acc) (go >l b (<l >< acc)))))
+                            (? (b && was) (go >l b acc) (go >l b (<l . acc)))))
        (go ls 0 ()))
    (pgwrapall st)
     (: rw (pgrows (pgwidth st) (st 'ls))

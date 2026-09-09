@@ -91,7 +91,7 @@
              (saturate val vsat nat) (bit val vbit bool) (nil? val vnil bool)
              (cap val vcap val) (cup val vcup val) (two? val vtwo bool))
    ; the binary words: what each side wants, the model's name, what it answers
-   wordmap2 '((link val val vlink val) (>< val val vlink val)
+   wordmap2 '((. val val vlink val)
               (&& bool bool andb bool) (|| bool bool orb bool))
 
    ; --- tx: an expression to [1 term level], or [0 the-word-that-stopped-it] ---

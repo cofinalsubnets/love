@@ -48,10 +48,10 @@
    ; take it for free. replace the line, never rebuild with tok: a token may carry
    ; a 5th element (sof, the spelling # owes) and a rebuild would drop it.
    (lndel macs) (: d (peep macs 'lndelta 0) (? (charm? d) d 0))
-   (lnbump d (p >< q >< r >< s)) (p >< q >< r + d >< s)
+   (lnbump d (p . q . r . s)) (p . q . r + d . s)
    (lnshift macs l)
     (: d (lndel macs)
-       (? (d = 0) l (: (go k) (? !(two? k) () (lnbump d <k >< go >k)) (go l))))
+       (? (d = 0) l (: (go k) (? !(two? k) () (lnbump d <k . go >k)) (go l))))
    ; -- include markers -- an #include splices the
    ; header's own line numbering into the one flat output stream, so a line
    ; number alone can't say which file it is (and isn't monotone across the
@@ -60,7 +60,7 @@
    ; ever sees one. 'in carries the header's name, 'out pops back.
    (fmin name) ['fmark 'in name]
    fmout ['fmark 'out ()]
-   (idt? ('id >< _)) 1
+   (idt? ('id . _)) 1
    ; the value is a guard, never a second pattern variable: `(pv? ('p v) v)` rebinds
    ; v rather than demanding the two agree, so it answered 1 for every punctuator.
    (idv? ('id . v . _) s) ?(v = s)
@@ -70,7 +70,7 @@
     [(kof t) (vof t) (lof t) (dedup (hof t + hs)) (sof t)]
    (dedup l) (: (go l seen) (? !(two? l) ()
                               (member? <l seen) (go >l seen)
-                              (<l >< go >l (<l >< seen)))
+                              (<l . go >l (<l . seen)))
                 (go l ()))
 
    ; -- the spelling of a token, for ## paste and # stringize --
@@ -94,19 +94,19 @@
 
    ; -- macro table entries: (obj body) | (fun params body variadic?) --
    (mdef macs name) (peep macs name ())
-   (mobj? ('obj >< _)) 1
-   (mfun? ('fun >< _)) 1
+   (mobj? ('obj . _)) 1
+   (mfun? ('fun . _)) 1
 
    ; -- lex a spelling back into one token (## paste result) --
    ; keep the spelling: `spell` falls back to (show (vof t)) without it, and a
    ; float's value is pieces, not a number.
    (relex s line)
-    (clex s @ [_ (t >< _)] [<t <>t line () s])   ; clex answers (1 toks) -- reach inside
+    (clex s @ [_ (t . _)] [<t <>t line () s])   ; clex answers (1 toks) -- reach inside
 
    ; -- split off the first logical line (tokens sharing the head's line no.) --
    (linesplit toks) (: ln (lof <toks)
                        (go ts acc) (? !(two? ts) [(rev acc) ()]
-                                      (lof <ts = ln) (go >ts (<ts >< acc))
+                                      (lof <ts = ln) (go >ts (<ts . acc))
                                       [(rev acc) ts])
                        (go toks ()))
 
@@ -117,11 +117,11 @@
     (: (go ts depth cur args)
         (? !(two? ts) ()
            (: t <ts
-              (? (depth = 1 && pv? t ")") [(rev (rev cur >< args)) >ts]
-                 (depth = 1 && pv? t ",") (go >ts depth () (rev cur >< args))
-                 (pv? t "(") (go >ts (depth + 1) (t >< cur) args)
-                 (pv? t ")") (go >ts (depth - 1) (t >< cur) args)
-                 (go >ts depth (t >< cur) args))))
+              (? (depth = 1 && pv? t ")") [(rev (rev cur . args)) >ts]
+                 (depth = 1 && pv? t ",") (go >ts depth () (rev cur . args))
+                 (pv? t "(") (go >ts (depth + 1) (t . cur) args)
+                 (pv? t ")") (go >ts (depth - 1) (t . cur) args)
+                 (go >ts depth (t . cur) args))))
        (go ts 1 () ()))
    (paramidx params name) (: (go l i) (? !(two? l) -1 (<l = name) i (go >l (i + 1)))
                              (go params 0))
@@ -133,17 +133,17 @@
    ; folds them, and the sweep at the end drops any that met no ##. without one, an
    ; empty operand left the ## unfolded -- `A ## B` with B empty emitted a literal ##,
    ; and `A ## B ; bob` pasted a with the `;` and ate it when the join failed to relex. --
-   (pmk? ('pmark >< _)) 1
+   (pmk? ('pmark . _)) 1
    (paste toks line)
-    (: (nopm l) (? !(two? l) () (pmk? <l) (nopm >l) (<l >< nopm >l))
+    (: (nopm l) (? !(two? l) () (pmk? <l) (nopm >l) (<l . nopm >l))
        (go l acc) (? !(two? l) (nopm (rev acc))
                      (pv? <l "##" && two? acc && two? >l)
                       (: a <acc b <>l
-                         (? (pmk? a) (go >>l (b >< >acc))     ; placemarker ## x -> x
+                         (? (pmk? a) (go >>l (b . >acc))     ; placemarker ## x -> x
                             (pmk? b) (go >>l acc)             ; x ## placemarker -> x
                             (: r (relex (spell a + spell b) line)
-                               (go >>l ((? r r a) >< >acc)))))
-                     (go >l (<l >< acc)))
+                               (go >>l ((? r r a) . >acc)))))
+                     (go >l (<l . acc)))
        (go toks ()))
 
    ; -- substitute args into a function-macro body. a param preceded by # is
@@ -163,8 +163,8 @@
                      pi (? (idt? p) (paramidx params (vof p)) -1)
                      va (var? && idv? p "__VA_ARGS__")
                      (? (-1 < pi || va)
-                        (go (i + 2) (tok 'str (spellcat (? va (vaargs args params) (args pi))) line >< acc))
-                        (go (i + 1) (t >< acc))))
+                        (go (i + 2) (tok 'str (spellcat (? va (vaargs args params) (args pi))) line . acc))
+                        (go (i + 1) (t . acc))))
                  (idt? t && -1 < paramidx params (vof t))       ; a named parameter
                   (: pi (paramidx params (vof t))
                      raw (args pi)
@@ -185,14 +185,14 @@
                         ; an empty tail is the placemarker, same as a named parameter's
                         prevhh (go (i + 1) (revcat (? (two? va) va [(tok 'pmark "" line)]) acc))
                         (go (i + 1) (revcat (expand va macs) acc))))
-                 (go (i + 1) (t >< acc)))))
+                 (go (i + 1) (t . acc)))))
        (paste (go 0 ()) line))
    (vaargs args params)                             ; the arg token-lists past the named params, comma-joined
     (: np (tally params)
        (skip l k) (? (k < 1 || atom? l) l (skip >l (k - 1)))
        (join l) (? !(two? l) ()
                    !(two? >l) <l
-                   (<l + (tok 'p "," 0 >< join >l)))
+                   (<l + (tok 'p "," 0 . join >l)))
        (join (skip args np)))
 
    ; -- the expander: rescan toks, replacing macro invocations (honoring
@@ -200,26 +200,26 @@
    (expand toks macs)
     (? !(two? toks) ()
        (: t <toks rest >toks
-          (? !(idt? t) (t >< expand rest macs)
-             (idv? t "__LINE__") (tok 'num (lof t) (lof t) >< expand rest macs)
-             (member? (vof t) (hof t)) (t >< expand rest macs)       ; blue-painted: leave it
+          (? !(idt? t) (t . expand rest macs)
+             (idv? t "__LINE__") (tok 'num (lof t) (lof t) . expand rest macs)
+             (member? (vof t) (hof t)) (t . expand rest macs)       ; blue-painted: leave it
              (: m (mdef macs (vof t))
                 (? (mobj? m)
-                    (: hs (vof t >< hof t)
+                    (: hs (vof t . hof t)
                        body (mapadd <>m hs (lof t))
                        (expand (body + rest) macs))
                    (mfun? m && two? rest && pv? <rest "(")
                     (: ca (collargs >rest)
-                       (? !(two? ca) (t >< expand rest macs)
+                       (? !(two? ca) (t . expand rest macs)
                           (: args <ca after <>ca
                              params <>m mbody <>>m mvar <>>>m
-                             hs (vof t >< hof t)
+                             hs (vof t . hof t)
                              body (subst mbody params args mvar (lof t) macs)
                              (expand (mapadd body hs (lof t) + after) macs))))
-                   (t >< expand rest macs))))))
+                   (t . expand rest macs))))))
    (mapadd toks hs line)                            ; give body tokens the hideset + the invocation line
     (? !(two? toks) ()
-       (: t <toks ([(kof t) (vof t) line (dedup (hof t + hs)) (sof t)] >< mapadd >toks hs line)))
+       (: t <toks ([(kof t) (vof t) line (dedup (hof t + hs)) (sof t)] . mapadd >toks hs line)))
    ; -- #line's operand: a digit sequence, or what one macro-expands to (C11 6.10.4p3).
    ; () when it is neither, which is the directive doing nothing. --
    (lnum body macs)
@@ -234,14 +234,14 @@
         (: r >ts
            (? (two? r && pv? <r "(")
                (: nm <>r
-                  (link (tok 'num (? (two? (mdef macs (vof nm))) 1 0) 0)
+                  (. (tok 'num (? (two? (mdef macs (vof nm))) 1 0) 0)
                         (resolve-defined >>>r macs)))    ; skip ( name )
               (two? r && idt? <r)
-               (tok 'num (? (two? (mdef macs (vof <r))) 1 0) 0 >< resolve-defined >r macs)
+               (tok 'num (? (two? (mdef macs (vof <r))) 1 0) 0 . resolve-defined >r macs)
               (resolve-defined r macs)))
-       (<ts >< resolve-defined >ts macs))
+       (<ts . resolve-defined >ts macs))
    (zero-ids ts) (? !(two? ts) ()                  ; any surviving identifier is 0
-                    (: t <ts ((? (idt? t || kof t = 'kw) (tok 'num 0 0) t) >< zero-ids >ts)))
+                    (: t <ts ((? (idt? t || kof t = 'kw) (tok 'num 0 0) t) . zero-ids >ts)))
    (ifval ts macs) (: r0 (resolve-defined ts macs)
                       r1 (expand r0 macs)
                       r2 (zero-ids r1)
@@ -360,8 +360,8 @@
        (pv? <ts "...") (: r >ts (? (two? r && pv? <r ")") [(rev params) 1 >r] ()))
        (idt? <ts)
         (: nm (vof <ts) r >ts
-           (? (two? r && pv? <r ",") (defparams >r (nm >< params) var?)
-              (two? r && pv? <r ")") [(rev (nm >< params)) var? >r]
+           (? (two? r && pv? <r ",") (defparams >r (nm . params) var?)
+              (two? r && pv? <r ")") [(rev (nm . params)) var? >r]
               ()))
        ())
 
@@ -376,7 +376,7 @@
        (? !(two? r && pv? <r "(" && two? >r && (kof <>r = 'str) &&
            two? >>r && pv? <>>r ")") ()
           (: nm (vof <>r) key ("#save:" + nm) stk (peep macs key ())
-             (? (vof <body = "push_macro") (pin macs key ((mdef macs nm) >< stk))
+             (? (vof <body = "push_macro") (pin macs key ((mdef macs nm) . stk))
                 (two? stk) (: _ (pin macs nm <stk) (pin macs key >stk))
                 ()))))
 
@@ -399,11 +399,11 @@
    ; two different wide prefixes keep the first (gcc refuses; nothing here spells it)
    (strk? k) (member? k '(str wstr str16 str32))
    (jork a b) (? (a = b) a (a = 'str) b (b = 'str) a a)
-   (fmark? ('fmark >< _)) 1
-   (fmpush t files) (? (vof t = 'in) (lof t >< files) >files)
+   (fmark? ('fmark . _)) 1
+   (fmpush t files) (? (vof t = 'in) (lof t . files) >files)
    (fmtop files) (two? files ? <files)
    spanacc {}                               ; the spans, reversed, of the strcat-pass now running
-   (spanat n files) (pin spanacc 'l ([n (fmtop files)] >< peep spanacc 'l ()))
+   (spanat n files) (pin spanacc 'l ([n (fmtop files)] . peep spanacc 'l ()))
    ; -> the rest after a run of marks, the file stack they leave, and whether
    ; the next real token is a string (so the caller knows to join)
    (skipfm ts files) (? (two? ts && fmark? <ts) (skipfm >ts (fmpush <ts files)) [ts files])
@@ -412,12 +412,12 @@
        (: t <ts
           (? (fmark? t)
               (: fs (fmpush t files) _ (spanat n fs) (strcat-pass >ts n fs))
-             !(strk? (kof t)) (t >< strcat-pass >ts (n + 1) files)
+             !(strk? (kof t)) (t . strcat-pass >ts (n + 1) files)
              (: sr (skipfm >ts files) nxt <sr fs <>sr
-                (? !(two? nxt && strk? (kof <nxt)) (t >< strcat-pass >ts (n + 1) files)
+                (? !(two? nxt && strk? (kof <nxt)) (t . strcat-pass >ts (n + 1) files)
                    ; the marks we just consumed take effect after the merged token
                    (: _ (? (fmtop fs = fmtop files) () (spanat (n + 1) fs))
-                      (strcat-pass (tok (jork (kof t) (kof <nxt)) (vof t + vof <nxt) (lof t) >< >nxt) n fs)))))))
+                      (strcat-pass (tok (jork (kof t) (kof <nxt)) (vof t + vof <nxt) (lof t) . >nxt) n fs)))))))
 
    ; -- the driver: walk logical lines, run directives, expand active code.
    ; macs is a mutable tablet (so #define/#undef persist and includes share it);
@@ -467,8 +467,8 @@
        (go (peep memo 'l ())))
    ; bounded, oldest dropped: an entry is one header under one -D set, so a
    ; handful covers a build and nothing here knows which of them are dead.
-   (mput e) (pin memo 'l (e >< mfew (peep memo 'l ()) 3))
-   (mfew l n) (? ((n < 1) || !(two? l)) () (<l >< mfew >l (n - 1)))
+   (mput e) (pin memo 'l (e . mfew (peep memo 'l ()) 3))
+   (mfew l n) (? ((n < 1) || !(two? l)) () (<l . mfew >l (n - 1)))
 
    (cppgo toks macs cond buf out incf)
     (? !(two? toks) (? (two? cond) (gripe () <>><cond () "unterminated #if -- no #endif")
@@ -543,16 +543,16 @@
                 (dir = "ifdef") !!(two? (mdef macs (vof <body)))
                 (dir = "ifndef") !(two? (mdef macs (vof <body)))
                 !!(0 < ifval body macs))
-           ([(pa && 0 < v) (pa && 0 < v) (lof <line)] >< cond))
+           ([(pa && 0 < v) (pa && 0 < v) (lof <line)] . cond))
        (dir = "elif")
         (? !(two? cond) 'err
            (: fr <cond pa (parentactive >cond) taken <>fr
               v (!taken && pa && 0 < ifval body macs)
-              ([(!taken && pa && 0 < v) (taken || 0 < v) <>>fr] >< >cond)))
+              ([(!taken && pa && 0 < v) (taken || 0 < v) <>>fr] . >cond)))
        (dir = "else")
         (? !(two? cond) 'err
            (: fr <cond pa (parentactive >cond) taken <>fr
-              ([(!taken && pa) 1 <>>fr] >< >cond)))
+              ([(!taken && pa) 1 <>>fr] . >cond)))
        (dir = "endif") (? (two? cond) >cond 'err)
        'err)
 
@@ -586,7 +586,7 @@
                 ; after them. the marks are minted here, never memoized -- they
                 ; carry the spelling this #include used.
                 (rejoin toks)
-                 (cppgo rest macs cond () (fmout >< ((rev toks) + (fmin name >< out))) incf)
+                 (cppgo rest macs cond () (fmout . ((rev toks) + (fmin name . out))) incf)
                 (? (two? got) (: _ (mrestore macs <>>>>got) (rejoin <>>>got))
                    (: lr (clex <>txt)
                       ; okv?, not two? -- a gripe is a pair, and a two? here would read
@@ -683,5 +683,5 @@
        (? (gripe? r) r
           (: _ (pin spanacc 'l ())
              out (strcat-pass r 0 ())
-             [1 (tok 'fspans (rev (peep spanacc 'l ())) 0 >< out)]))))       ; an empty token list is a valid empty TU, not a failure -- only a gripe fails
+             [1 (tok 'fspans (rev (peep spanacc 'l ())) 0 . out)]))))       ; an empty token list is a valid empty TU, not a failure -- only a gripe fails
 ) ; module 'moon

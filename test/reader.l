@@ -54,7 +54,7 @@
 ; runs every reader lane through that sieve and demands the string's answer back.
 (: (rdr-all x)                                      ; every datum of a text, in order
    (: (go cl acc) (: r (sound cl)
-                     (? (two? r)      (go (cup r) (link (cap r) acc))
+                     (? (two? r)      (go (cup r) (. (cap r) acc))
                         (r = 'torn) 'torn
                         (rev acc)))
       (go x ()))

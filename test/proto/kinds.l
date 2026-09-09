@@ -25,7 +25,7 @@
 
  ; --- env: an assoc (name . kind); a missing name reads bot ---
  (look env x) (? (atom? env) 'bot (: p (cap env) (? (= x (cap p)) (cup p) (look (cup env) x))))
- (joininto env x k) (link (link x (join (look env x) k)) env)   ; monotone shadow-update (look finds newest)
+ (joininto env x k) (. (. x (join (look env x) k)) env)   ; monotone shadow-update (look finds newest)
 
  ; --- kindof: abstract-evaluate an expression under env ---
  (kindof env e) (?
@@ -39,7 +39,7 @@
         'top)))                                              ; lambda / unknown form -> top
 
  ; --- the seminaive FIXPOINT over the flat (n1 e1 n2 e2 ..) binding list ---
- (pairs bs) (? (atom? bs) 0 (atom? (cup bs)) 0 (link (link (cap bs) (cap (cup bs))) (pairs (cup (cup bs)))))
+ (pairs bs) (? (atom? bs) 0 (atom? (cup bs)) 0 (. (. (cap bs) (cap (cup bs))) (pairs (cup (cup bs)))))
  (alle a b) (? (atom? a) 1 (: p (cap a) (&& (= (cup p) (look b (cap p))) (alle (cup a) b))))
  (enveq a b) (&& (alle a b) (alle b a))                      ; same name->kind both ways = fixpoint
  (step ps env) (foldl (\ env p (joininto env (cap p) (kindof env (cup p)))) env ps)
@@ -51,7 +51,7 @@
    (: h (cap e) sub (catmap (\ s (sites env s)) (cup e))
       (? (&& (|| (= h '+) (= h '*))
              (num? (kindof env (cap (cup e)))) (num? (kindof env (cap (cup (cup e))))))
-         (link e sub) sub)))
+         (. e sub) sub)))
 
  ; --- report ---
  (showenv bs) (: env (infer bs)

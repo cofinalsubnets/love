@@ -25,8 +25,8 @@
    ; and so does negation: `!` is the sigil, `nil?` what opfix factors it to.
    ; the forms arrive factored, so match the core word and the surface one both.
    (w2-not? ('! || 'nil?)) 1
-   ; ..and the pair ops: >< is link, + is cat on a row. both spellings match.
-   (w2-link? ('>< || 'link || '.)) 1
+   ; ..and the pair ops: . is the cons, + is cat on a row.
+   (w2-link? '.) 1
    (w2-cat? ('+ || 'cat)) 1
 
    ; --- kinds -> the model's types; zdel is the one Maybe op ---

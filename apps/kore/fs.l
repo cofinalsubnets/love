@@ -192,7 +192,7 @@
         ; `ls -a` owes both, so they are put back here rather than taught to readdir,
         ; where every other caller would then have to take them out again.
         (: ns (readdir p)
-           keep (? a? ("." >< (".." >< ns))
+           keep (? a? ("." . (".." . ns))
                    aa? ns
                    (filter (\ n !(n 0 = 46)) ns))
            es (filter two? (map (\ n (uls-ent p n)) keep))
@@ -386,13 +386,13 @@
     (: n (tally q)
        (seg i st acc) (? (i < n)
                          (? (q i = 47)
-                            (seg (i + 1) (i + 1) (? (st < i) (snip q st i >< acc) acc))
+                            (seg (i + 1) (i + 1) (? (st < i) (snip q st i . acc) acc))
                             (seg (i + 1) st acc))
-                         (rev (? (st < i) (snip q st i >< acc) acc)))
+                         (rev (? (st < i) (snip q st i . acc) acc)))
        (fold l acc) (? !(two? l) (rev acc)
                        (<l = ".") (fold >l acc)
                        (<l = "..") (fold >l (? (two? acc) >acc acc))
-                       (fold >l (<l >< acc)))
+                       (fold >l (<l . acc)))
        ("/" + ujoinc 47 (fold (seg 0 0 ()) ())))
    (rl-chase q n)                  ; follow link upon link (n bounds a cycle)
     (: t (readlink q)
@@ -490,9 +490,9 @@
            (: f (usplit 58 <ls)
               g (? (4 <= tally f) (uatoi (f 2)) -1)
               ms (? (4 <= tally f) (usplit 44 (f 3)) ())
-              (go >ls (? ((member? nm ms) && !(g = gid)) (g >< acc) acc))))
+              (go >ls (? ((member? nm ms) && !(g = gid)) (g . acc) acc))))
        rest (? (two? r) (sort (go (lines <>r) ())) ())
-       (gid >< rest))
+       (gid . rest))
 
    ; -- stat: the file's own facts, by -c format. %n %N %s %b %B %f %a %A %F %u %U %g %G
    ; %h %i %Y %y, the \n \t \\ escapes, and %% . -L follows a symbolic link; the bare
@@ -573,7 +573,7 @@
            ((2 < tally <a) && (snip <a 0 2 = "-c")) (fl >a (snip <a 2 (tally <a)) L 0 fs)
            (long? <a 9 "--format=") (fl >a (snip <a 9 (tally <a)) L 0 fs)
            (long? <a 9 "--printf=") (fl >a (snip <a 9 (tally <a)) L 1 fs)
-           (fl >a fmt L pf (<a >< fs)))
+           (fl >a fmt L pf (<a . fs)))
        p (fl as () 0 0 ())
        fmt <p L? <>p pf? <>>p fs (p 3)
        _ (? ((string? fmt) && two? fs) ()
@@ -610,7 +610,7 @@
     (: (fl a t fs) (? !(two? a) [t (rev fs)]
                       (<a = "-d") (? (two? >a) (: _ (pin t 'd (uatoi <>a)) (fl >>a t fs))
                                      (udie 2 "du: -d wants a depth"))
-                      ((tally <a < 2) || !(<a 0 = 45)) (fl >a t (<a >< fs))
+                      ((tally <a < 2) || !(<a 0 = 45)) (fl >a t (<a . fs))
                       (: w <a
                          (cl k) (? (tally w <= k) (fl >a t fs)
                                    (: c (w k)
@@ -714,7 +714,7 @@
            (<a = "-t") (fl >a d u q (? dir dir (getenv "TMPDIR")) fs)
            (<a = "-p") (? (two? >a) (fl >>a d u q <>a fs) (udie 1 "mktemp: -p wants a directory"))
            ((2 < tally <a) && (snip <a 0 2 = "-p")) (fl >a d u q (snip <a 2 (tally <a)) fs)
-           (fl >a d u q dir (<a >< fs)))
+           (fl >a d u q dir (<a . fs)))
        p (fl as 0 0 0 () ())
        d? <p u? <>p q? <>>p pdir (p 3) fs (p 4)
        tm (? (string? pdir) pdir (: e (getenv "TMPDIR") (? (string? e) e "/tmp")))

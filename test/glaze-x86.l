@@ -236,8 +236,8 @@
 ; is the storm shape: deep non-tail call nesting with cons churn per level -- thousands of
 ; pending drive frames while the GC runs.
 (: (am-cnt l k a) ((: (go l a) (? (two? l) (go (cup l) (? (= (cap l) k) (+ a 1) a)) a)) l a))
-(: (am-rev l acc) ((: (go l a) (? (two? l) (go (cup l) (link (cap l) a)) a)) l acc))
-(: (am-mk i acc) (? (< i 1) acc (am-mk (- i 1) (link (% i 7) acc))))
+(: (am-rev l acc) ((: (go l a) (? (two? l) (go (cup l) (. (cap l) a)) a)) l acc))
+(: (am-mk i acc) (? (< i 1) acc (am-mk (- i 1) (. (% i 7) acc))))
 (: am-l (am-mk 200 ()))
 (: am-dbl (: F (\ x (+ x x)) (\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (F (F i)))) a)) 0 0))))
 (: (am-sq x) (+ (* x x) 1))                                                          ; the v4 global callees + the rc4 namesake
@@ -257,7 +257,7 @@
           ((am-rev (am-rev am-l ()) ()) = am-l)                                    ; native cons round-trips against the interp-built list (()-tailed)
           (= () (am-rev () ()))                                                  ; the () literal is the mint, not charm 0
           (19800 = (am-dbl 100))                                                   ; nested captured calls via the drive: sum 4i, i<100
-          (: deep (base-ev '(: H (\ x ((: (go i a) (? (< i 40) (go (+ i 1) (link i a)) a)) 0 (link x ())))
+          (: deep (base-ev '(: H (\ x ((: (go i a) (? (< i 40) (go (+ i 1) (. i a)) a)) 0 (. x ())))
                              (: (dv d) (? (< d 1) 0 (+ (two? (H d)) (dv (- d 1)))))))
              (5000 = (deep 5000)))                                                 ; the storm shape: 5000 pending frames + GC churn, == interp
           ; quoted-datum constants (v3): a nom dispatch walker -- 'r/'R ride nifx extras slots,
@@ -507,13 +507,13 @@
     ; entry guard, since two? is total: a non-chain reads false), with (two? t)/(cap t)/(cup t) lowered
     ; inline (cap/cup chain-guarded, deopting a non-chain) and the recursive ck a native sibling call.
     ; == interp, transparent. This is the `tree` bench's traverse half (the allocating mk stays interp).
-    (: rcl '(: (mk d) (? (< d 1) 0 (link (mk (- d 1)) (mk (- d 1))))
+    (: rcl '(: (mk d) (? (< d 1) 0 (. (mk (- d 1)) (mk (- d 1))))
                (ck t) (? (two? t) (+ 1 (+ (ck (cap t)) (ck (cup t)))) 0)
                (ck (mk 8)))
        (&& !(= (autogroup rcl) rcl) (255 = (ev rcl)) (= (base-ev rcl) (ev rcl))))      ; depth 8 = 2^8-1 = 255 nodes
     ; chain-lane soundness: a cap feeding arithmetic ((+ (cap t) 0)) is a chain word in an int slot --
     ; the recognizer rejects it (cap is chain-valued), so it stays interpreted; cap under two? is fine.
-    (: rcb '(: (g t) (+ (cap t) 0) (g (link 7 8)))
+    (: rcb '(: (g t) (+ (cap t) 0) (g (. 7 8)))
        (&& (= (autogroup rcb) rcb) (= (base-ev rcb) (ev rcb))))                         ; not rewritten (rejected) -> == interp
     ; partial lift (plift): the hash bench's `scan` -- a read-only loop buried among the allocating
     ; ins/bump inside hash-run, sharing the mutable map h -- hoists to a top-level sibling `hash-run_scan`
@@ -638,7 +638,7 @@
     (: dap '(: (f n) (all (\ x (> x 0)) (map (+ 1) (jot n))) (f 10))
        (&& !(= (autogroup dap) dap) (1 = (ev dap)) (= (base-ev dap) (ev dap))))        ; all (+1 i)>0 -> producer fuses into the guard
     ; a fn that calls out of the fragment (into `link`) drops the whole group -> form unchanged, interpreted
-    (: ro '(: (build n) (? (< n 1) () (link n (build (- n 1)))) (build 3))
+    (: ro '(: (build n) (? (< n 1) () (. n (build (- n 1)))) (build 3))
        (&& (= (autogroup ro) ro) ('(3 2 1) = (ev ro))))   ; left interpreted; base () -> a clean ()-terminated (3 2 1)
     ; specialization (autospec/mix): a recursive interpreter ev1 applied to a static program P (a const-
     ; bound quoted AST) + a dynamic loop var specializes -- the dispatch + AST navigation fold away to P's
@@ -794,58 +794,58 @@
       !(= (peep (assemble 'x64 (calloutir 'x64 '+ 'i)) 'bytes 0)
           (peep (assemble 'x64 (calloutir 'x64 '+ '(* i i))) 'bytes 0))                                ; a computed arg (F (* i i)) lays differently from bare (F i)
       ; --- group lane (jitgroupir): mutually-recursive first-order integer fns, native == interp
-      (55 = ((jitgroupir [(link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))] 'fib 'x64) 10))
+      (55 = ((jitgroupir [(. '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))] 'fib 'x64) 10))
       (= ((ev '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) fib)) 25)
-         ((jitgroupir [(link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))] 'fib 'x64) 25))            ; fib(25)=75025 == interp
-      (1180591620717411303424 = ((jitgroupir [(link '(p2 n) '(? (< n 1) 1 (* 2 (p2 (- n 1)))))] 'p2 'x64) 70))   ; 2^70: mul overflow -> ovf -> deopt -> bignum
+         ((jitgroupir [(. '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))] 'fib 'x64) 25))            ; fib(25)=75025 == interp
+      (1180591620717411303424 = ((jitgroupir [(. '(p2 n) '(? (< n 1) 1 (* 2 (p2 (- n 1)))))] 'p2 'x64) 70))   ; 2^70: mul overflow -> ovf -> deopt -> bignum
       ; integer-param fixnum guard (mkouterir's, distinct from the leaf coreir guard): a heap arg to a plain
       ; int param must deopt to the interp, never sar+re-tag into a garbage fixnum (pointer|1). glazed == interp.
-      (: gidh ((jitgroupir [(link '(id1 x) 'x)] 'id1 'x64) '(a b)) (&& ('(a b) = gidh) !(charm? gidh)))     ; identity on a list -> the list, not a mangled fixnum
-      (= (+ '(1 2) 1) ((jitgroupir [(link '(inc n) '(+ n 1))] 'inc 'x64) '(1 2)))                            ; arith on a heap arg -> deopt == interp
+      (: gidh ((jitgroupir [(. '(id1 x) 'x)] 'id1 'x64) '(a b)) (&& ('(a b) = gidh) !(charm? gidh)))     ; identity on a list -> the list, not a mangled fixnum
+      (= (+ '(1 2) 1) ((jitgroupir [(. '(inc n) '(+ n 1))] 'inc 'x64) '(1 2)))                            ; arith on a heap arg -> deopt == interp
       ; // and % in the group lane (divir), with /-by-0 deopt -- a path the jitir/jitnir cases don't reach
-      (3 = ((jitgroupir [(link '(q n d) '(// n d))] 'q 'x64) 10 3)) (-3 = ((jitgroupir [(link '(q n d) '(// n d))] 'q 'x64) -10 3))
-      (1 = ((jitgroupir [(link '(r n d) '(% n d))] 'r 'x64) 10 3)) (= (% 7 0) ((jitgroupir [(link '(r n d) '(% n d))] 'r 'x64) 7 0))       ; /-by-0 -> deopt -> interp
-      (7 = ((jitgroupir [(link '(tak x y z) '(? (< y x) (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)) z))] 'tak 'x64) 18 12 6))     ; multi-arg, nested self-calls
-      (7 = (((jitgroupir [(link '(tak x y z) '(? (< y x) (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)) z))] 'tak 'x64) 18 12) 6))   ; ... curries at any split
-      (: eo [(link '(evn n) '(? (= n 0) 1 (odn (- n 1)))) (link '(odn n) '(? (= n 0) 0 (evn (- n 1))))]
+      (3 = ((jitgroupir [(. '(q n d) '(// n d))] 'q 'x64) 10 3)) (-3 = ((jitgroupir [(. '(q n d) '(// n d))] 'q 'x64) -10 3))
+      (1 = ((jitgroupir [(. '(r n d) '(% n d))] 'r 'x64) 10 3)) (= (% 7 0) ((jitgroupir [(. '(r n d) '(% n d))] 'r 'x64) 7 0))       ; /-by-0 -> deopt -> interp
+      (7 = ((jitgroupir [(. '(tak x y z) '(? (< y x) (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)) z))] 'tak 'x64) 18 12 6))     ; multi-arg, nested self-calls
+      (7 = (((jitgroupir [(. '(tak x y z) '(? (< y x) (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)) z))] 'tak 'x64) 18 12) 6))   ; ... curries at any split
+      (: eo [(. '(evn n) '(? (= n 0) 1 (odn (- n 1)))) (. '(odn n) '(? (= n 0) 0 (evn (- n 1))))]
          (&& (1 = ((jitgroupir eo 'evn 'x64) 10)) (0 = ((jitgroupir eo 'evn 'x64) 7)) (1 = ((jitgroupir eo 'odn 'x64) 7))))   ; mutual recursion (either entry)
-      (= (jitgroupir [(link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))] 'fib 'x64)
-         (jitgroupir [(link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))] 'fib 'x64))                 ; two natives, same source -> = (transparent)
+      (= (jitgroupir [(. '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))] 'fib 'x64)
+         (jitgroupir [(. '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))] 'fib 'x64))                 ; two natives, same source -> = (transparent)
       ; jitgroupirx stamps the supplied outer src (=/show) -- the hook passes `s` so a group-glazed closure
       ; is transparent against its bytecode twin; the elam entry-lambda is only the fallback (jitgroupir).
-      (: dfs [(link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))]  dopt (jitgroupir dfs 'fib 'x64)
+      (: dfs [(. '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))]  dopt (jitgroupir dfs 'fib 'x64)
          (&& (55 = ((jitgroupirx dfs 'fib 'x64 dopt '(\ m (fib m))) 10))                                          ; runs correct
              (= (jitgroupirx dfs 'fib 'x64 dopt '(\ m (fib m))) (jitgroupirx dfs 'fib 'x64 dopt '(\ m (fib m))))  ; same supplied src -> =
              !(= (jitgroupirx dfs 'fib 'x64 dopt '(\ m (fib m))) (jitgroupir dfs 'fib 'x64))))                     ; supplied src differs from the elam default
       ; string lane (peep/tally): s a string param (kind-guarded, passed RAW); peep reads byte [s+16], tally the len [s+8]
       (: data (string [72 105 90 33 65])                                                                         ; "HiZ!A": byte-sum 365, len 5
-         sbn (jitgroupir [(link '(sb s i) '(? (< i 0) 0 (+ (peep s i 0) (sb s (- i 1)))))] 'sb 'x64)              ; recursive byte-sum
-         tln (jitgroupir [(link '(tl s) '(tally s))] 'tl 'x64)
-         pkn (jitgroupir [(link '(pk s i) '(peep s i 0))] 'pk 'x64)
+         sbn (jitgroupir [(. '(sb s i) '(? (< i 0) 0 (+ (peep s i 0) (sb s (- i 1)))))] 'sb 'x64)              ; recursive byte-sum
+         tln (jitgroupir [(. '(tl s) '(tally s))] 'tl 'x64)
+         pkn (jitgroupir [(. '(pk s i) '(peep s i 0))] 'pk 'x64)
          (&& (365 = (sbn data 4)) (= ((ev '(: (sb s i) (? (< i 0) 0 (+ (peep s i 0) (sb s (- i 1)))) sb)) data 4) (sbn data 4))   ; native byte-sum == interp
              (5 = (tln data)) (! (tln 5))                                                                         ; tally native; a fixnum arg -> guard rejects -> deopt -> interp tally of a scalar = ()
              (72 = (pkn data 0)) (0 = (pkn data 99))))                                                            ; peep in-bounds (byte 'H'=72); oob -> the default 0 (pure-native branch, no deopt)
       ; cask lane (pin): c a cask param (kind-guarded, raw); pin stores V's low byte at backing[i], returns c (so it threads as a call arg)
       (: c (cask 5)
-         fil (jitgroupir [(link '(fill c i) '(? (< i 0) 0 (fill (pin c i (+ 65 i)) (- i 1))))] 'fill 'x64)          ; fill bytes 0..i with 65+i, recursing on (pin ..)'s returned cask
+         fil (jitgroupir [(. '(fill c i) '(? (< i 0) 0 (fill (pin c i (+ 65 i)) (- i 1))))] 'fill 'x64)          ; fill bytes 0..i with 65+i, recursing on (pin ..)'s returned cask
          _ (fil c 4)
          (&& (= '(65 66 67 68 69) [(peep c 0 0) (peep c 1 0) (peep c 2 0) (peep c 3 0) (peep c 4 0)])               ; each byte written natively
-             (88 = (: c2 (cask 4) _ ((jitgroupir [(link '(g c) '(pin c 2 88))] 'g 'x64) c2) (peep c2 2 0)))))       ; a single native pin -> byte 2
+             (88 = (: c2 (cask 4) _ ((jitgroupir [(. '(g c) '(pin c 2 88))] 'g 'x64) c2) (peep c2 2 0)))))       ; a single native pin -> byte 2
       ; map lane (mpeep/mpin): m a map param (kind-guarded, raw); the open-addressed probe (mprobe-ir relabeled per site, deopt -> OVF)
-      (: rn (jitgroupir [(link '(run m i) '(? (< i 0) (mpeep m 3 -1) (run (mpin m (+ 1 i) (* 10 i)) (- i 1))))] 'run 'x64)     ; fill keys 1..i+1 with 10*i (threading (mpin ..)'s map), then read key 3
+      (: rn (jitgroupir [(. '(run m i) '(? (< i 0) (mpeep m 3 -1) (run (mpin m (+ 1 i) (* 10 i)) (- i 1))))] 'run 'x64)     ; fill keys 1..i+1 with 10*i (threading (mpin ..)'s map), then read key 3
          m16 (tablet 16) r16 (rn m16 8)                                                                              ; presized -> pure native
          m2 (tablet 2) r2 (rn m2 8)                                                                                  ; undersized -> mpin grow-miss -> ovf deopt -> interp grows (faithful)
          (&& (20 = r16) (40 = (peep m16 5 -1)) (0 = (peep m16 1 -1))                                                 ; native mpin wrote real entries (the core map accessor reads them)
              (20 = r2) (80 = (peep m2 9 -1))                                                                         ; grow-deopt faithful: same result + the map actually grew & inserted
-             (-1 = ((jitgroupir [(link '(g m k) '(mpeep m k -1))] 'g 'x64) 5 3))))                                   ; a fixnum map arg -> guard rejects -> deopt -> interp peep on a scalar = the default -1
+             (-1 = ((jitgroupir [(. '(g m k) '(mpeep m k -1))] 'g 'x64) 5 3))))                                   ; a fixnum map arg -> guard rejects -> deopt -> interp peep on a scalar = the default -1
       ; chain lane (cap/cup/two?): t a chain param (raw, NO entry guard -- two? is TOTAL; cap/cup chain-guard inline, deopting a non-chain)
-      (: (mk d) (? (< d 1) 0 (link (mk (- d 1)) (mk (- d 1))))                                                       ; an interp tree builder (the allocating mk stays interp)
-         ckn (jitgroupir [(link '(ck t) '(? (two? t) (+ 1 (+ (ck (cap t)) (ck (cup t)))) 0))] 'ck 'x64)              ; native node-count walk
+      (: (mk d) (? (< d 1) 0 (. (mk (- d 1)) (mk (- d 1))))                                                       ; an interp tree builder (the allocating mk stays interp)
+         ckn (jitgroupir [(. '(ck t) '(? (two? t) (+ 1 (+ (ck (cap t)) (ck (cup t)))) 0))] 'ck 'x64)              ; native node-count walk
          (&& (255 = (ckn (mk 8))) (15 = (ckn (mk 4)))                                                                ; 2^d-1 nodes, native cap/cup recursion
-             (0 = (ckn 0)) (1 = (ckn (link 0 0)))))                                                                  ; two? total: a fixnum leaf -> 0; a lone chain -> 1
+             (0 = (ckn 0)) (1 = (ckn (. 0 0)))))                                                                  ; two? total: a fixnum leaf -> 0; a lone chain -> 1
       ; tco: a tail self-call loops in place (reuse the frame, O(1) stack) -- 1M deep would sigsegv without it
-      (1000000 = ((jitgroupir [(link '(loop i) '(? (< i 1000000) (loop (+ i 1)) i))] 'loop 'x64) 0))                 ; single-arg counted loop
-      (499999500000 = ((jitgroupir [(link '(sm i a) '(? (< i 1000000) (sm (+ i 1) (+ a i)) a))] 'sm 'x64) 0 0))      ; multi-arg tail accumulator (sum 0..1M-1)
+      (1000000 = ((jitgroupir [(. '(loop i) '(? (< i 1000000) (loop (+ i 1)) i))] 'loop 'x64) 0))                 ; single-arg counted loop
+      (499999500000 = ((jitgroupir [(. '(sm i a) '(? (< i 1000000) (sm (+ i 1) (+ a i)) a))] 'sm 'x64) 0 0))      ; multi-arg tail accumulator (sum 0..1M-1)
       ; a64: the group assembles (data); the H saves lr + uses 16-byte slots + bl calls (llvm-mc-verified)
       (< 0 (tally (peep (assemble 'a64 (bcat [(mkouterir 'a64 1 'fib 1 0 () () () () ())
                 (mkhir 'a64 '(fib) 'fib '(n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))])) 'bytes 0))))
@@ -904,11 +904,11 @@
       (1 = (member? "ab" '(1 "ab"))) (0 = (member? "zz" '("ab")))                ; string key -> entry deopt, structural =
       (1 = (member? 'z '(1 "s" (x y) 2.5 z)))                                    ; nom key walks every car kind natively
       (0 = (member? 'q '("s" 2.5 (a))))                                          ; ... and a miss over heap cars
-      (1 = (member? mm (link 1 (link mm ())))) (0 = (member? mm '(a b)))         ; a mint key rides the guard
-      (0 = (member? () '(1 2))) (1 = (member? () (link () ())))                  ; the zero point is a mint
+      (1 = (member? mm (. 1 (. mm ())))) (0 = (member? mm '(a b)))         ; a mint key rides the guard
+      (0 = (member? () '(1 2))) (1 = (member? () (. () ())))                  ; the zero point is a mint
       (0 = (member? 'x ())) (0 = (member? 'x 5))                                 ; no chain -> the walk never starts
       (200000 = ((: (go i a) (? (< i 200000) (go (+ i 1) (+ a (member? 'q '(a b q)))) a)) 0 0))
-      (: pg (jitgroupir [(link '(pm2 x l) '(? (two? l) (? (= x (cap l)) 1 (pm2 x (cup l))) 0))] 'pm2 'x64)     ; the group lane direct: exec x64 ...
+      (: pg (jitgroupir [(. '(pm2 x l) '(? (two? l) (? (= x (cap l)) 1 (pm2 x (cup l))) 0))] 'pm2 'x64)     ; the group lane direct: exec x64 ...
          (&& (1 = (pg 'b '(a b))) (0 = (pg 'z '(a b))) (0 = (pg 'z 7))))
       (< 0 (tally (peep (assemble 'a64 (bcat [(mkouterir 'a64 2 'pm3 2 0 () () () () '(0))     ; ... and the point-guarded outer assembles on a64
                 (mkhir 'a64 '(pm3) 'pm3 '(x l) '(? (two? l) (? (= x (cap l)) 1 (pm3 x (cup l))) 0))])) 'bytes 0))))

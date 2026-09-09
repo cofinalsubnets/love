@@ -74,7 +74,7 @@
                            (go (i + 1) (i + 1)
                                (? ((c = "") || (c = ".")) ps
                                   (c = "..") (? (two? ps) >ps ())
-                                  (c >< ps))))
+                                  (c . ps))))
                        (go (i + 1) st ps))
        (jn l a) (? !(two? l) a (jn >l (<l + (? (tally a) ("/" + a) a))))
        (jn (go 0 0 ()) ""))
@@ -125,7 +125,7 @@
                         k (s (o + 156))
                         acc2 (? ((k = 48) || (k = 0))
                                 (: c (cask sz) _ (pour c 0 s (o + 512) sz)
-                                   ([nom (string c)] >< acc))
+                                   ([nom (string c)] . acc))
                                 acc)
                         (go (o + 512 + (* 512 (// (sz + 511) 512))) acc2)))
        (go 0 ()))
@@ -404,7 +404,7 @@
                  + '("AiMoonlibc=1")
                  + (? (= dia 'moon) '("__moon__=1") ())   ; the dialect's own macro: extensions on
                  +   ; ds9, not ds: a :-local shadows the param over the whole scope (the boxfix cell trap)
-                 (? (member? tgt '(x64 a64)) ("__SIZEOF_INT128__=16" >< ds) ds))     ; the wide pair (gen's d128 lane); love.c's limb seam reads it, and gcc says the same on both
+                 (? (member? tgt '(x64 a64)) ("__SIZEOF_INT128__=16" . ds) ds))     ; the wide pair (gen's d128 lane); love.c's limb seam reads it, and gcc says the same on both
        ; `-` is read here and nowhere else, so every door onto a TU gets stdin for
        ; free -- and cdir answers "" for it, which is the cwd, gcc's own rule for a
        ; source with no directory of its own.
@@ -1010,7 +1010,7 @@
               [['at org 'text 'rodata 'data 'nifs 'bss]])
        c9 (tgt @ 'a64 crt0-a64 'rv64 crt0-rv crt0)   ; x64's serves both kernels
        all (? arm? srcs
-              (["crt0" (string (objelf tgt c9 () '("__ai_start") () '("__ai_start") () () () () ()))] >< srcs))
+              (["crt0" (string (objelf tgt c9 () '("__ai_start") () '("__ai_start") () () () () ()))] . srcs))
        ; the archives first, then whatever the runtime still owes: a library the
        ; line named is what the link meant, and the implicit one is the fallback.
        lib (all + arload all ars tgt)
@@ -1097,7 +1097,7 @@
                     d (stdof w)
                     _ (? d 0 (udie 2 ("cc: unknown -std=" + w + " -- mooncc reads: " + (stdnames ()))))
                     (go >l d acc))
-                 (go >l dia (a >< acc)))))
+                 (go >l dia (a . acc)))))
        (go as 'moon ()))          ; unsaid means moon: our C, extensions and all
    ; `none` is gcc's word for "read the suffix again", which for us is the default.
    (xlang? w) (w = "c" || w = "none")
@@ -1127,7 +1127,7 @@
    ; is last-one-wins.
    ; the one helper that is not already a primitive: prepend onto a keyed list. `pin`
    ; answers its tablet, so every arm below is a plain pin.
-   (fpush t k v) (pin t k (v >< (peep t k ())))
+   (fpush t k v) (pin t k (v . (peep t k ())))
    ; every key, seeded -- and this is the manifest. The consumers destructure the set in
    ; their own parameter, and a map pattern matches on presence: a key pinned only when its
    ; flag appears would fail to match exactly when the flag was absent, and the whole call

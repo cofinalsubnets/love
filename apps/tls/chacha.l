@@ -45,7 +45,7 @@
        [a2 b2 c2 d2])
 
    ; the state is a 16-list of galaxies; these are its two accessors.
-   (lset l i v) (: (go j r) (j < 0 ? r (go (j - 1) (link (? (j = i) v (peep l j 0)) r)))
+   (lset l i v) (: (go j r) (j < 0 ? r (go (j - 1) (. (? (j = i) v (peep l j 0)) r)))
                    (go 15 ()))
    (qra s i j k l)
     (: r (qr (peep s i 0) (peep s j 0) (peep s k 0) (peep s l 0))

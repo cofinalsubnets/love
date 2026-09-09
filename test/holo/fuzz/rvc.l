@@ -47,8 +47,8 @@
    (tool? t) ((sh ("command -v " + t + " >/dev/null 2>&1")) = 0)
 
    (lines s) (: n (tally s)
-                (go i j acc) (? (n <= j) (rev (? (i < j) ((snip s i j) >< acc) acc))
-                                ((s j) = 10) (go (j + 1) (j + 1) ((snip s i j) >< acc))
+                (go i j acc) (? (n <= j) (rev (? (i < j) ((snip s i j) . acc) acc))
+                                ((s j) = 10) (go (j + 1) (j + 1) ((snip s i j) . acc))
                                 (go i (j + 1) acc))
                 (go 0 0 ()))
    (ws? c) ((c = 32) || (c = 9))
@@ -56,11 +56,11 @@
    (norm s) (: n (tally s)
                (go i acc sp) (? (n <= i) (rev acc)
                                 (ws? (s i)) (go (i + 1) acc 1)
-                                (go (i + 1) ((s i) >< (? (sp && (two? acc)) (32 >< acc) acc)) 0))
+                                (go (i + 1) ((s i) . (? (sp && (two? acc)) (32 . acc) acc)) 0))
                (string (go 0 () 0)))
 
    hexd "0123456789abcdef"
-   (hx2 b) (: c (\ i (hexd i)) (string ((c ((b >> 4) & 15)) >< ((c (b & 15)) >< ()))))
+   (hx2 b) (: c (\ i (hexd i)) (string ((c ((b >> 4) & 15)) . ((c (b & 15)) . ()))))
    (bytes-of w n) (: (go i acc) (? (n <= i) acc (go (i + 1) (acc + ("0x" + hx2 ((w >> (8 * i)) & 255)) + " ")))
                      (go 0 ""))
 
@@ -107,7 +107,7 @@
 
    ; keep only those that compress, paired with their C word
    pairs (foldl (\ a w (: c (rvc-of w)
-                           (? (two? c) ([w ((c 0) | ((c 1) << 8))] >< a) a))) () words)
+                           (? (two? c) ([w ((c 0) | ((c 1) << 8))] . a) a))) () words)
    npair (tally pairs)
 
    _ (? (tool? "llvm-mc") 0
@@ -133,7 +133,7 @@
                   (: c (idx-of t ", zero, ")
                      (? (charm? c) ("mv " + (snip t 4 c) + ", " + (snip t (c + 8) (tally t))) t))
                   t))
-   (firstn n l) (? ((n < 1) || !(two? l)) () (<l >< firstn (n - 1) >l))
+   (firstn n l) (? ((n < 1) || !(two? l)) () (<l . firstn (n - 1) >l))
 
    _ (? ((tally d32) = npair) 0
         (: _ (say err ("FAIL test_rvc: llvm-mc decoded " + show (tally d32)
@@ -143,7 +143,7 @@
                         + " of " + show npair + " compressed words -- an unencodable C form?\n")) (quit 1)))
 
    bad (foldl (\ a i (: x (demv (d32 i)) y (norm (d16 i))
-                         (? (x = y) a ([((pairs i) 0) x y] >< a)))) () (jot npair))
+                         (? (x = y) a ([((pairs i) 0) x y] . a)))) () (jot npair))
    _ (foldl (\ _ b (: _ (say err ("  word " + show (b 0) + ": 32-bit `" + (b 1)
                                    + "` vs C `" + (b 2) + "`\n")) 0)) 0 (firstn 12 bad))
    _ (? !(two? bad) 0
@@ -173,7 +173,7 @@
    _ (? ((tally dbr) = tally want) 0
         (: _ (say err ("FAIL test_rvc: llvm-mc decoded " + show (tally dbr) + " of "
                         + show (tally want) + " compressed branches\n")) (quit 1)))
-   bbad (foldl (\ a i (? ((dbr i) = (want i)) a ([(want i) (dbr i)] >< a)))
+   bbad (foldl (\ a i (? ((dbr i) = (want i)) a ([(want i) (dbr i)] . a)))
                () (jot (tally want)))
    _ (foldl (\ _ b (: _ (say err ("  wanted `" + (b 0) + "` got `" + (b 1) + "`\n")) 0))
             0 (firstn 12 bbad))
@@ -184,7 +184,7 @@
    ;; register outside the window, a second source, a compare that is not beq/bne.
    nocb '((0 8 0 256) (0 8 0 -258) (0 7 0 100) (0 16 0 100) (0 8 9 100) (4 8 0 100) (6 8 0 100))
    loose (foldl (\ a c (? (imm? (rv-cbase (bform (c 0) (c 1) (c 2)) (c 3)))
-                          (c >< a) a)) () nocb)
+                          (c . a) a)) () nocb)
    _ (? !(two? loose) 0
         (: _ (say err ("FAIL test_rvc: rv-cbase took " + show (tally loose)
                         + " cases CB cannot encode\n")) (quit 1)))

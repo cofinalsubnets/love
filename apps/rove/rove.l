@@ -62,7 +62,7 @@
                  (? !(apart? rm (d 'rooms)) (try (n - 1))
                   (carve x y rw rh,
                    d 'rooms ? (lash (mid rm) (mid <(d 'rooms))),
-                   pin d 'rooms (rm >< d 'rooms),
+                   pin d 'rooms (rm . d 'rooms),
                    try (n - 1)))))))
    _ (try ((w * h) // 24))
    ; a cramped deck can come up short: guarantee two moored rooms
@@ -73,7 +73,7 @@
    _ (pins d 'in (mid (last (d 'rooms)))
              'down (mid <(d 'rooms)))
    _ (dput d <(d 'down) <>(d 'down) 2)
-   (d >< peep sb () 0))
+   (d . peep sb () 0))
 
  ; --- the lantern: line-of-sight fov over bresenham strides ---
  ; a stride is clear when every cell strictly between the ends is open; the
@@ -175,7 +175,7 @@
                        (? (&& (dat d x y = 1)
                               !(peep loot (x + d 'w * y) ())
                               !(any (o \ x = o 'x && y = o 'y) acc))
-                        (mobs rm (n - 1) (mob-new (peep (mob-kinds lvl) (roll sb 4) 0) x y >< acc))
+                        (mobs rm (n - 1) (mob-new (peep (mob-kinds lvl) (roll sb 4) 0) x y . acc))
                         (mobs rm (n - 1) acc)))
                     acc)
    (treasure rm) (: xy (drop-at rm) i (<xy + (d 'w) * <>xy)
@@ -273,7 +273,7 @@
                 + "  hp " + show (g 'p 'hp) + "/" + show (g 'p 'mx)
                 + "  gold " + show (g 'p 'gold))
  (crawl-frame g) (: j (paint (jug 0) (g 'd) (g 'vis) (g 'loot)
-                            (g 'p >< g 'ms) (g 'msg) (crawl-bar g))
+                            (g 'p . g 'ms) (g 'msg) (crawl-bar g))
                     (slurp j))
 
  ; --- rove: the crawl on cli's stage. any seed sails; q or esc steps ashore ---

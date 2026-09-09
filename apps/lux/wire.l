@@ -35,7 +35,7 @@
    (x-rstr s n) (: (go i acc) (i >= n ? acc (go (i + 1) (acc + string (see s)))) (go 0 ""))
    (x-pad4 n) ((4 - (n % 4)) % 4)
    (x-wname s t) (: (go i) (i < #t ? (put s (t i), go (i + 1))) (go 0))
-   (x-rbytes s n) (: (go i acc) (i >= n ? (rev acc) (go (i + 1) (see s >< acc))) (go 0 ()))       ; n raw bytes -> a list
+   (x-rbytes s n) (: (go i acc) (i >= n ? (rev acc) (go (i + 1) (see s . acc))) (go 0 ()))       ; n raw bytes -> a list
    (u16 l off) (l off | (l (off + 1) << 8))                            ; little-endian reads out of a byte list
    (u32 l off) (u16 l off | (u16 l (off + 2) << 16))
 
@@ -114,7 +114,7 @@
              bytes (x-rbytes s (rlen * 4))
              [(hdr 1) (u32 hdr 12) bytes])))
    (x-atoms-of bytes) (? (#bytes < 4) ()                                         ; group 4 le bytes -> a 32-bit atom/window list
-                         (u32 bytes 0 >< x-atoms-of (drop 4 bytes)))
+                         (u32 bytes 0 . x-atoms-of (drop 4 bytes)))
    (x-getprop-atoms s win prop) (x-atoms-of ((x-getprop s win prop) 2))
    (x-has-atom s win propnm valnm) (: at (x-getprop-atoms s win (x-intern s propnm)) va (x-intern s valnm)   ; isInProperty
                                       (any (a \ a = va) at))
@@ -278,7 +278,7 @@
        (two? q ? (pin evq 0 >q, x-decode <q)
         (: b0 (see s)
            (b0 = -1 ? ()
-            (: pkt (b0 >< x-rbytes s 31)
+            (: pkt (b0 . x-rbytes s 31)
                (b0 = 1 ? (x-skip s (4 * u32 pkt 4), x-next s)                    ; an orphaned reply (its wait ended on an error): drain + skip
                 (x-decode pkt)))))))
    (ev-code e) <e  (ev-detail e) <>e  (ev-window e) (e 2)  (ev-state e) (e 3)

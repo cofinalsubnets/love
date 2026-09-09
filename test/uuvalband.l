@@ -294,7 +294,7 @@
 ; --- the number arrives as the chain's unit and the chain answers whole, which
 ; --- is what buys associativity with no side conditions. append walks the left
 ; --- spine and replaces its tail whatever the tail is: love answers (1 3) for
-; --- ((link 1 2) + '(3)), and so does this ---
+; --- ((. 1 2) + '(3)), and so does this ---
 (test
  (defn vappd (pi d nat (pi t (vtre d) (pi w val val)))
    (lam d (nat_rect (lam q (pi t (vtre q) (pi w val val)))

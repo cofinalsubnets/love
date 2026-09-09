@@ -63,7 +63,7 @@
  !'(-5) !@(-3 -4) !'(-2 1) !!'(0 1)              ; negatives net <= 0 at every rank; -2+1 < 0 < 0+1
  (3 = $'(1 () 2)) (6 = $'(1 2 3)) (7 = $@(3 4))  ; $ sums the nets, then clamps once
  (? word (: n ((53 2) + 1) m ((53 2) + 3) (&& (n = $n) (m = $m))) 1)  ; $ is the identity on a green charm, exactly -- past 2^53 the net's double would round it
- (3 = $(link 1 2)) !!(link 0 2) (6 = $(1 . 2 . 3))  ; every link nets car + cdr, so a dotted tail counts too
+ (3 = $(. 1 2)) !!(. 0 2) (6 = $(1 . 2 . 3))  ; every link nets car + cdr, so a dotted tail counts too
  (0 = $[(3 ~ 4) (-3 ~ 4)]) ![(0 ~ 5) -1]       ; phases sum as vectors, then the total is gated once:
  !i !(0 ~ -1) !(0 ~ 8) (0 = $i)                  ; ...and a pure phase is blue. `i` and `-i` are swapped by a
  (i < 5) ((0 ~ -1) < i)                          ; field automorphism, so truth cannot tell them apart -- but the
@@ -467,7 +467,7 @@
 ; default action, const-1.
 ; () is the zero point, not a chain, so (l ()) is the default and not the identity + gives it.
 (test
- (1 = (cap '(1 2 3))) ('(2 3) = (cup '(1 2 3))) (3 = (caup '(2 3 4))) ('(1 2) = (link 1 (link 2 ())))
+ (1 = (cap '(1 2 3))) ('(2 3) = (cup '(1 2 3))) (3 = (caup '(2 3 4))) ('(1 2) = (. 1 (. 2 ())))
  !(cap 0) ("x" = (string 'x)) !(two? 'x)          ; no cap at the end of the list; a symbol is not a chain -- its name comes via `string`
  (long? 3 '(1 2 3)) !(long? 4 '(1 2 3)) ((long? 1 '(1 2)) = (two? '(1 2))) ((long? 1 'x) = (two? 'x))
  (long? 0 'x) !(long? 1 ()) !(long? 2 "ab") !(long? 'a '(1 2))  ; at zero nothing is claimed, so anything answers; a count that is not a charm never does
@@ -484,7 +484,7 @@
  ('(1 2 3 4 5) = ('(1 2) '(3 4) '(5)))                                           ; ... and it curries, as text does
  ('(1 X 3) = (pin '(1 2 3) 1 'X)) (: l '(1 2 3) _ (pin l 1 'X) ('(1 2 3) = l))   ; pin answers a fresh spine; the original is untouched
  ('(1 2 3) = (pin '(1 2 3) 3 'X)) ('(1 2 3) = (pin '(1 2 3) -1 'X))              ; out of range is the no-op (from-the-end is APPLY's alone)
- (: p (pin (link 1 2) 0 'X) ('X = <p && 2 = >p))                                 ; ... the tail is whatever was there: an improper one rides too
+ (: p (pin (. 1 2) 0 'X) ('X = <p && 2 = >p))                                 ; ... the tail is whatever was there: an improper one rides too
  (294 = $'(a b c)) (3 = #'(a b c)))         ; net sums spellings; tally counts the spine
 
 ; --- strings, symbols & mints --- a symbol is an identifier: interned by its name, or anonymous
@@ -639,7 +639,7 @@
 ; form's operator at head (they take the whole list); + and - are runs like every other
 ; punctuation, and the one exception is that a numeral has to start somewhere -- a digit (or a `.`,
 ; for -.5) right after them makes a number instead (-3 a number, -x negate x, --5 -(-5), -(f x)
-; negate). the monadic words: < cap, > cup (<< >> <> >< the compounds), + net,
+; negate). the monadic words: < cap, > cup (<< >> <> . the compounds), + net,
 ; * prod, | abs, - negate, / reciprocal, % fraction, ? bit, $ sat, ! nil?, # tally, ~ conj.
 ; the comma is the
 ; loosest layer, above infix: a lone one-char datum (never fused), the list split into clauses at
@@ -665,11 +665,11 @@
  (-4 = 1 - 2 - 3) (1 = 8 / 4 / 2)                ; the left hand: ((1 - 2) - 3), ((8 / 4) / 2)
  (: was (grip 2 '<+> -60) t (opfix '(a <+> b <+> c)) _ (grip 2 '<+> was)   ; the grip door,
     (&& (was = ()) (t = '(<+> (<+> a b) c))))     ;   restored inside the form: the next one reparses
- ('(1 2 3) = 1 >< 2 >< '(3))                     ; ... while a right-handed band still folds right
- ((.) = link) ((1 . 2) = (link 1 2)) ("(1 . 2)" = (show (1 >< 2)))     ; `.` is >< under its other name --
- ((1 >< 2) @ (a . b) (a = 1 && b = 2) _ 0)                            ;   valid in a pattern too, and
- ((1 . 2) @ (a >< b) (a = 1 && b = 2) _ 0)                            ;   the two spellings interchange
- ((1 . 2 . 3) = (1 >< 2 >< 3)) (3 = tally '(1 . 2))                  ;   the pair reads and prints, but a
+ ('(1 2 3) = 1 . 2 . '(3))                     ; ... while a right-handed band still folds right
+ ((1 . 2) = (. 1 2)) ("(1 . 2)" = (show (1 . 2)))     ; `.` is . under its other name --
+ ((1 . 2) @ (a . b) (a = 1 && b = 2) _ 0)                            ;   valid in a pattern too, and
+ ((1 . 2) @ (a . b) (a = 1 && b = 2) _ 0)                            ;   the two spellings interchange
+ ((1 . 2 . 3) = (1 . 2 . 3)) (3 = tally '(1 . 2))                  ;   the pair reads and prints, but a
                                                                      ;   quoted (1 . 2) is data: a 3-list
  (3 = abs -3) (66 = (2 + 3 4))                   ; application binds tighter than infix: (= 3 (abs -3)), (+ 2 (3 4))
  (1 = (3 != 4)) (0 = (3 != 3)) (: t (opfix '(a != b && c)) (t = '(&& (!= a b) c)))  ; != is a plain

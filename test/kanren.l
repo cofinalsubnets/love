@@ -17,7 +17,7 @@
  (unord_eq '(1 2 3) '(2 1 3))
  (unord_eq '(2 1 3) (stake 3 (sX 1 (sX 2 (sX 3 sno)))))
  (unord_eq '(6 4 2) (slist (smap (* 2) (sX 1 (sX 2 (sX 3 sno))))))
- ; a stream is a colist: () empty, (x >< s) mature, a thunk immature. so a finite
+ ; a stream is a colist: () empty, (x . s) mature, a thunk immature. so a finite
  ; realized one is just its list, and `sX`/`sno` are `link`/`()` under other names.
  (= '(1 2 3) (sX 1 (sX 2 (sX 3 sno))))
  (= 3 (scount (sX 1 (sX 2 (sX 3 sno)))))

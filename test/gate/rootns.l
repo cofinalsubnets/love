@@ -22,12 +22,12 @@
       (:
    me (selfpath 0)
    W ("/tmp/l-rootns-" + (show (getpid 0)))
-   (run as) (: p (spawn (me >< as)) (? (nom? p) 127 (wait p)))
+   (run as) (: p (spawn (me . as)) (? (nom? p) 127 (wait p)))
    ; the same, with the child's stderr thrown away: the refusal rows below are
    ; SUPPOSED to complain, and a gate that prints their complaints reads like a
    ; failure to anyone scrolling past it
    (nope as) (: fd (openfd "/dev/null" 1)
-                p (spawnio (me >< as) 0 1 fd () -1 0)
+                p (spawnio (me . as) 0 1 fd () -1 0)
                 r (? (nom? p) 127 (wait p))
                 _ (close fd)
                 r)
@@ -36,7 +36,7 @@
    ; child writes and this side reads back.
    (out-of as) (: f (W + "/.cap")
                    fd (openfd f 1)               ; 1 = write, create, truncate
-                   p (spawnio (me >< as) 0 fd 2 () -1 0)
+                   p (spawnio (me . as) 0 fd 2 () -1 0)
                    _ (? (nom? p) () (wait p))
                    _ (close fd)
                    q (open f "r") s (slurp q) _ (close q) s)

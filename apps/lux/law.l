@@ -129,7 +129,7 @@
 ; --- certified by Rocq + Lean; here the same law watched on the metal):
 ; --- rt-tile's placements name the row exactly -- every window placed once,
 ; --- none invented, row order kept -- whatever the master count ---
-(: (wincol ps) (two? ps ? (<<ps >< wincol >ps) ())
+(: (wincol ps) (two? ps ? (<<ps . wincol >ps) ())
    r (rct 0 0 800 600) ws '(10 20 30 40 50) z (zfrom ws)
    (test
       (wincol <(lay-tile (resizable-tall 1 0.02 0.5) r z) = ws)
@@ -177,7 +177,7 @@
 ; --- edit (the lux repl's live-layout hook), and modifiers wrap them like
 ; --- any builtin ---
 (: (q op lay a b) (? (op = 'tile) (: f (zfoc b)                                  ; focus in a fixed corner box; state = (lay 1)
-                                     [(f ? [(f >< rct 0 0 100 (lay 1))] ()) lay])
+                                     [(f ? [(f . rct 0 0 100 (lay 1))] ()) lay])
                      (op = 'msg) (a = 'grow ? [<lay (lay 1 + 10)] ())
                      ())
    Q [q 50] r (rct 0 0 800 600) z3 (zfrom '(10 20 30))
@@ -194,7 +194,7 @@
 (: s0 (admit (admit (sheaf '(1 2 3)) 10) 20)                                     ; ws1 tiled (20 10); we manage 20
    c (mg-ctx 0 20 (rct 0 0 800 600) (rct 100 100 300 200))                      ; socket 0 (unused: pure actions/mocks), win 20, screen, geom
    yes (c \ 1) no (c \ 0)                                                        ; mock predicates
-   tag (nm \ \ c sh (nm >< sh))                                               ; mock action: cons a tag onto the sheaf (marks it ran)
+   tag (nm \ \ c sh (nm . sh))                                               ; mock action: cons a tag onto the sheaf (marks it ran)
    (test
       ; float actions move the (tiled) window into the floating half at the right rect
       (: f (do-full-float c s0) (wsfloating? f 20 && (wsrect f 20 = '(0 0 800 600)) && !(any (x \ x = 20) (wstiled f))))
@@ -205,15 +205,15 @@
       ((yes <||> no) c) !((no <||> no) c) ((no <||> yes) c)
       ((no <||> no <||> yes) c)                                                  ; and chains right, so a run of alternatives is one rule
       ; -?> fires the action iff the predicate matches (a 1-list = matched, () = not)
-      (((yes -?> tag 'a) c s0) = [('a >< s0)])
+      (((yes -?> tag 'a) c s0) = [('a . s0)])
       !((no -?> tag 'a) c s0)
       ; the two bind so a rule needs no inner parens: `p <||> q -?> act`
-      (((no <||> yes -?> (tag 'a)) c s0) = [('a >< s0)])
+      (((no <||> yes -?> (tag 'a)) c s0) = [('a . s0)])
       ; compose-one takes the first matching rule; none -> the sheaf unchanged
-      (((compose-one [(no -?> tag 'a) (yes -?> tag 'b) (yes -?> tag 'c)]) c s0) = ('b >< s0))
+      (((compose-one [(no -?> tag 'a) (yes -?> tag 'b) (yes -?> tag 'c)]) c s0) = ('b . s0))
       (((compose-one [(no -?> tag 'a) (no -?> tag 'b)]) c s0) = s0)
       ; compose-all threads every hook (a plain hook, so wrap or use identity)
-      (((compose-all [(\ c sh ('x >< sh)) (\ c sh ('y >< sh))]) c s0) = ('y >< ('x >< s0)))
+      (((compose-all [(\ c sh ('x . sh)) (\ c sh ('y . sh))]) c s0) = ('y . ('x . s0)))
       ; manage-for is the assembled config hook -- a runnable closure (X-driven; not called here)
       (lit? manage-default) (lit? (manage-for '("a") '("b") '("c")))))
 

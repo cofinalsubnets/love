@@ -342,7 +342,7 @@
        (? ((a < 0) || ((b < 0) || (b < a))) ()
           (: h (uwords (snip ln 0 a))
              (? !(two? h) ()
-                ((uatoi <h) >< ((snip ln (a + 1) b) >< (uwords (snip ln (b + 1) n))))))))
+                ((uatoi <h) . ((snip ln (a + 1) b) . (uwords (snip ln (b + 1) n))))))))
    (upstat pid)                        ; a pid -> its stat fields | ()
     (: r (uread (("/proc/" + (show pid)) + "/stat"))
        (? (two? r) (ustatf <>r) ()))
@@ -540,7 +540,7 @@
        rest (? nflag >>as as)
        cmd (? (two? rest) rest '("echo"))
        ws (uwords (slurp in))
-       (chunks k l) (? !(two? l) () (take k l >< chunks k (drop k l)))
+       (chunks k l) (? !(two? l) () (take k l . chunks k (drop k l)))
        runs (? !(two? ws) [()]                       ; no input still runs once, like GNU
                nn (chunks nn ws)
                [ws])

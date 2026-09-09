@@ -261,7 +261,7 @@
    ;     sits among allocating siblings that must stay interpreted. read-only means no pin/link/tablet/
    ;     cask/say, since a write cannot hoist past the interpreted fills it interleaves with; and the loop
    ;     must be self-recursive with no sibling call. the lifted fn gets the same captures by value.
-   roalloc '(pin pull link tablet hash cask say pour jug tap put puts putc putn putx flush dot see sip slurp sound read reads rand randf twirl catch scare ev)   ; allocating/mutating/IO heads -- a `_`-bound one is an effect that must not be dropped or hoisted
+   roalloc '(pin pull . tablet hash cask say pour jug tap put puts putc putn putx flush dot see sip slurp sound read reads rand randf twirl catch scare ev)   ; allocating/mutating/IO heads -- a `_`-bound one is an effect that must not be dropped or hoisted
    (uses-head? hs e) (? (two? e) (member? <e hs || foldl (\ a x (a || uses-head? hs x)) 0 >e) 0)
    (fnpair? pr) (: nf <pr (two? nf && nom? <nf && 1 < #nf && all nom? >nf && distinctp >nf))  ; (g q..) define-sugar
    (roloop? pr sibs) (: g <<pr body >pr                                                 ; a hoistable read-only self-loop
@@ -900,7 +900,7 @@
              (= op 'two?)                               (2 = #e && cok? cm cands cps ps <>e)               ; (two? CE): ce chain-valued; result int 0/1 (total -- a non-chain reads false)
              0))                                                                               ; bare cap/cup are chain-valued -> not admitted in an int position (cok? and the point-= carry them)
        0)
-   ; --- vok? -- the value grammar, a heap-allocating fn's body: an int const | a param | (link V V) |
+   ; --- vok? -- the value grammar, a heap-allocating fn's body: an int const | a param | (. V V) |
    ;     (? INT V V), the test through groupok? and the branches value | a call to a value-typed
    ;     candidate. cross-call soundness comes from the candidate sets being separate -- vok?'s calls
    ;     resolve only in vcands, groupok?'s only in icands, so neither kind can call the other.
@@ -910,7 +910,7 @@
        (member? e ps) 1
        (two? e) (: op <e ar (clook2 op vcands)
           (? (-1 < ar)         (#>e = ar && gargok? cm pm icands cps pps ps >e 0 op)   ; a value-group call (target in vcands)
-             (= op 'link || (= op '.))    (3 = #e && vok? cm pm icands vcands cps pps ps <>e && vok? cm pm icands vcands cps pps ps <>>e)
+             (= op '.)                    (3 = #e && vok? cm pm icands vcands cps pps ps <>e && vok? cm pm icands vcands cps pps ps <>>e)
              (= op '?)       (4 = #e && groupok? cm pm icands cps pps ps <>e && vok? cm pm icands vcands cps pps ps <>>e && vok? cm pm icands vcands cps pps ps <>>>e)
              0))
        0)
@@ -1167,7 +1167,7 @@
                           (nom? x) (cnom x bnd 0)
                           (atom? x) x
                           (= <x '\) (? (atom? >>x) x                                           ; (\ v): a quote
-                                       (: ps (init >x) (link '\ (ps + [(cw (last x) (ps + bnd))]))))
+                                       (: ps (init >x) (. '\ (ps + [(cw (last x) (ps + bnd))]))))
                           (= <x '@) (: (arms l) (? (atom? l) l (atom? >l) [(cw <l bnd)]            ; (@ x pat body ..): a pattern is the
                                                     (<l . (cw <>l bnd) . arms >>l))               ; macro's to read, only the bodies respell
                                        ('@ . (cw <>x bnd) . arms >>x))
@@ -1175,7 +1175,7 @@
                                        (cbs bs) (? (atom? bs) bs
                                                    (atom? >bs) [(cw <bs bnd2)]
                                                    (: b <bs ps (? (two? b) >b ())
-                                                      (link b (link (cw <>bs (ps + bnd2)) (cbs >>bs)))))
+                                                      (. b (. (cw <>bs (ps + bnd2)) (cbs >>bs)))))
                                        (': . cbs >x))
                           (nom? <x) ((cnom <x bnd 1) . map (y \ cw y bnd) >x)                       ; the head may take an operator spelling
                           (map (y \ cw y bnd) x))

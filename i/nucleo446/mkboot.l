@@ -17,7 +17,7 @@
 ; runs after l/holo/{elf,obj}.l in a cat with the thumb2 backend spliced into the
 ; sealed holo module (the mkboot2 shape; i/nucleo446/Makefile drives it).
 (: (mkboot dst)
-   (: (zeros n) (? (n < 1) () (0 >< (zeros (n - 1))))
+   (: (zeros n) (? (n < 1) () (0 . (zeros (n - 1))))
       (wsym l) [['fix 4 'abs32 l 0]]           ; a word the linker fills: (S + A) | T
 
       ;; -- the ARM vector table at flash base ----------------------------------------

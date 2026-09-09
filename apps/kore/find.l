@@ -42,7 +42,7 @@
    (fi-exec m acc)                              ; -exec's words, up to the closing ;
     (? !(two? m) ()
        (<m = ";") (? (two? acc) [['exec (rev acc)] >m] ())
-       (fi-exec >m (<m >< acc)))
+       (fi-exec >m (<m . acc)))
    (fi-prim ws)
     (? !(two? ws) ()
        (: a <ws m >ws
@@ -92,14 +92,14 @@
        (: a <ws
           (? ((a = "-maxdepth") && (two? >ws)) (fi-depths >>ws (uatoi <>ws) mind acc)
              ((a = "-mindepth") && (two? >ws)) (fi-depths >>ws maxd (uatoi <>ws) acc)
-             (fi-depths >ws maxd mind (a >< acc)))))
+             (fi-depths >ws maxd mind (a . acc)))))
    ; the leading words that are neither a flag nor an open bracket are the paths
    (fi-paths as acc)
     (? !(two? as) [(rev acc) ()]
        (: a <as
           (? (((0 < tally a) && (a 0 = 45)) || (a = "(") || (a = "!"))
              [(rev acc) as]
-             (fi-paths >as (a >< acc)))))
+             (fi-paths >as (a . acc)))))
    ; does the tree act, or only test -- the question that decides the added -print
    (fi-acts? e)
     (: k <e

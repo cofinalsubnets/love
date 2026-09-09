@@ -32,7 +32,7 @@
    ; both stop, which is what makes the injected-fault runs below comparable.
    (rd-forms r txt)
      (: (go cl acc) (: x (r cl)
-                       (? (two? x) (go (cup x) (<x >< acc)) (rev acc)))
+                       (? (two? x) (go (cup x) (<x . acc)) (rev acc)))
         (go (rd-cl txt) ())))
 
 ; the smallest subform where two trees part -- descend while the differing child
@@ -54,7 +54,7 @@
      (foldl (\ a n (: p (? (= "." d) n (d + "/" + n))
                       (? (|| (rd-dot? n) (member? n rd-skip)) a
                          (rd-dir? p) (rd-walk p a)
-                         (rd-dotl? n) (p >< a)
+                         (rd-dotl? n) (p . a)
                          a)))
             acc (sort (readdir d))))
 

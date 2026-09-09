@@ -101,7 +101,7 @@
  (flow p) (: (gulp tl) (: c (see p)
                           (? (= c -1) tl
                              (: t (unsee p c, chug p)
-                                (go k l) (? (0 >= k) l (: j (k - 1) (go j (link (t j) l))))
+                                (go k l) (? (0 >= k) l (: j (k - 1) (go j (. (t j) l))))
                                 (go #t tl))))
              c (see p)
              (c != -1 ? (unsee p c, gulp (once (_ \ flow p)))))
@@ -111,7 +111,7 @@
  ; borrowed under it), so this stays the only door that reads stdin exactly.
  (trickle p) (: c (see p) (c != -1 ? (c . once (_ \ trickle p)))))
 
-(:: '>>= (\ l (link (last l) (init l))))
+(:: '>>= (\ l (. (last l) (init l))))
 (:: '<=< (\ g (: y (nom 0) ['\ y (foldr (\ f x [f x]) y g)])))
 (: pow ** power ** car cap cdr cup cons .)
 
@@ -311,7 +311,7 @@
    (arch-nom s) (: s (name s) (peep arch-canon s s))
    arch-mach arch-uname)
 
-(: car cap cdr cup cons link
+(: car cap cdr cup cons .
    caar caap cadr caup cdar cuap cddr cuup
    caaar caaap caadr caaup cadar cauap caddr cauup
    cdaar cuaap cdadr cuaup cddar cuuap cdddr cuuup
@@ -2255,5 +2255,5 @@
  ; shell. a line rails, nothing opens the repl; a pipeline execs on a hosted seat and
  ; never arrives here. last in the letrec: the closure takes its free names as they stand.
  _ (pins (cite 'verbs 'tab) 'love
-     (\ as (two? as ? (cli-rail (link "love" as)) (shell 0))))
+     (\ as (two? as ? (cli-rail (. "love" as)) (shell 0))))
 ) ; module cli

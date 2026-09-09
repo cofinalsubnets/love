@@ -21,11 +21,11 @@
     ; which reads as the empty pattern and matches every line
     (: (one s) (? (gflag t 70) [1 (map (\ i ['chr (s i)]) (jot (tally s))) 0]
                   ((? (gflag t 69) reere rebre) s))
-       (wrap nds) (: a (? (gflag t 120) (cat ('(bol) >< nds) '((eol))) nds)
+       (wrap nds) (: a (? (gflag t 120) (cat ('(bol) . nds) '((eol))) nds)
                      (? (gflag t 105) (refold a) a))
        (go ls acc)
-        (ls @ (l >< more)
-           (one l @ [_ nds _] (go more ((wrap nds) >< acc)) ())
+        (ls @ (l . more)
+           (one l @ [_ nds _] (go more ((wrap nds) . acc)) ())
            [1 (rev acc)])
        ; the empty pattern is one empty pattern, not none: `lines ""` is (), and
        ; a walk over () would answer no patterns at all -- so `grep ''`, which

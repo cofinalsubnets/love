@@ -182,7 +182,7 @@
    ; one, and this is what makes that true rather than merely intended.
    (hue-lex bk s in keep)
     (: n (tally s)
-       (emit acc k a b) (? (keep && (a < b)) ([k a b] >< acc) acc)
+       (emit acc k a b) (? (keep && (a < b)) ([k a b] . acc) acc)
        (tend i) (? ((n <= i) || hue-term? (s i)) i (tend (i + 1)))
        (srun i) (? ((i < n) && hue-sig? (s i)) (srun (i + 1)) i)
        ; glued means the whole run touches a datum start: syntax.vim's rule, and
@@ -226,7 +226,7 @@
    ; one start-state per line: fold the lexer down the buffer, keeping nothing
    (hue-carry bk ls)
     (: (go l st acc) (? !(two? l) (rev acc)
-                        (: r (hue-lex bk <l st ()) (go >l <>r (st >< acc))))
+                        (: r (hue-lex bk <l st ()) (go >l <>r (st . acc))))
        (go ls 0 ()))
 
    ; --- the pens --------------------------------------------------------------
@@ -277,7 +277,7 @@
        q (? (string? h) (open (h + hue-theme-file) "r") ())
        (? (hot? q) (: t (slurp q)
                (go x acc) (: r (sound x)
-                              (? (two? r) (go >r (<r >< acc)) (rev acc)))
+                              (? (two? r) (go >r (<r . acc)) (rev acc)))
                rs (go t ())
                _ (close q)
                (foldl hue-over hue-theme rs))

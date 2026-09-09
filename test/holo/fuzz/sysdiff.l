@@ -28,8 +28,8 @@
              i (a 0) j (b n)
              (? (i < j) (snip s i j) ""))
  (lines s) (: n (tally s)
-              (go i j acc) (? (n <= j) (rev (? (i < j) ((snip s i j) >< acc) acc))
-                              ((s j) = 10) (go (j + 1) (j + 1) ((snip s i j) >< acc))
+              (go i j acc) (? (n <= j) (rev (? (i < j) ((snip s i j) . acc) acc))
+                              ((s j) = 10) (go (j + 1) (j + 1) ((snip s i j) . acc))
                               (go i (j + 1) acc))
               (go 0 0 ()))
  (idx-from s sub i0) (: n (tally s) k (tally sub)
@@ -47,14 +47,14 @@
  (wrf p t) (: q (open p "w") _ (say q t) (close q))
  tmpd "out"
 
- ; --- the ('key >< ..) rows of a `name (tabof ...)` form in a64.l, source order ---
+ ; --- the ('key . ..) rows of a `name (tabof ...)` form in a64.l, source order ---
  a64src (rdf "l/holo/a64.l")
  rv64src (rdf "l/holo/rv64.l")
  (table-in src nm)
   (: i (idx-of src ("\n   " + nm + " (tabof"))
      _ (? (charm? i) 0 (: _ (puts ("sysdiff: no table " + nm + "\n")) (quit 1)))
      j0 (idx-from src "(tabof" i)
-     ; walk to the (tabof ..) close, then harvest ('name >< inside [i, j)
+     ; walk to the (tabof ..) close, then harvest ('name . inside [i, j)
      (close j d) (? ((src j) = 40) (close (j + 1) (d + 1))
                     ((src j) = 41) (? (d = 1) j (close (j + 1) (d - 1)))
                     (close (j + 1) d))
@@ -66,7 +66,7 @@
             (: (e m) (? (namec? (src m)) (e (m + 1)) m)
                b (e (h + 2))
                (? (has? (snip src b (b + 3)) "><")
-                  (harvest b ((snip src (h + 2) b) >< acc))
+                  (harvest b ((snip src (h + 2) b) . acc))
                   (harvest b acc)))))
      (harvest i ()))
  (table nm) (table-in a64src nm)
@@ -185,11 +185,11 @@
                                  (? (!(charm? j) || !(charm? e)) a
                                     (: n (s2d (snip ln (i + 8) j))
                                        (? (n = ()) a
-                                          ([(n - 1 - nhead) (snip ln (e + 9) (tally ln))] >< a))))))))
+                                          ([(n - 1 - nhead) (snip ln (e + 9) (tally ln))] . a))))))))
                 () (lines (rdf (tmpd + "/.sysd.err"))))
      good (: (go i m acc) (? !(two? m) (rev acc)
                              (? (two? (assoc i bad)) (go (i + 1) >m acc)
-                                (go (i + 1) >m (<m >< acc))))
+                                (go (i + 1) >m (<m . acc))))
              (go 0 asms ()))
      _ (lay good)
      _ (sh ("llvm-mc -triple=" + triple + mattr + " --show-encoding < " + tmpd + "/.sysd.in > "
@@ -203,7 +203,7 @@
                                                         (? ((c = 48) && (k + 1 < tally raw) && ((raw (k + 1)) = 120))
                                                            (go (k + 2) acc)
                                                            (c = 44) (go (k + 1) acc)
-                                                           (go (k + 1) (c >< acc)))))
+                                                           (go (k + 1) (c . acc)))))
                                        (go 0 ()))
                                  (a + [hx])))))
                 () (lines (rdf (tmpd + "/.sysd.out"))))
@@ -214,8 +214,8 @@
      (: (go i m es acc)
          (? !(two? m) (rev acc)
             (: b (assoc i bad)
-               (? (two? b) (go (i + 1) >m es ([() <>b] >< acc))
-                  (go (i + 1) >m >es ([<es ()] >< acc)))))
+               (? (two? b) (go (i + 1) >m es ([() <>b] . acc))
+                  (go (i + 1) >m >es ([<es ()] . acc)))))
         (go 0 asms enc ())))
 
  (sweep arch)

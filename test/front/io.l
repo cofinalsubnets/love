@@ -20,7 +20,7 @@
        (? (k = 0) (string (rev acc))
           (: c (see p)
              (? (c = -1) (string (rev acc))
-                (go (k - 1) (link c acc))))))
+                (go (k - 1) (. c acc))))))
     n ()))
 
 ; --- law 1: a stalled read loses nothing --------------------------------------

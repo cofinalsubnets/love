@@ -17,7 +17,7 @@
  ((opfix '(a + b + c)) = '(+ (+ a b) c))            ; equal band, left hand -> the additive band folds left
  ((opfix '(10 - 2 - 3)) = '(- (- 10 2) 3))          ; same, subtraction -- the reading every other language has
  ((opfix '(a / b / c)) = '(/ (/ a b) c))            ; the multiplicative band is left-handed too
- ((opfix '(a >< b >< c)) = '(>< a (>< b c)))        ; but cons stays right-handed -- a builder folds right
+ ((opfix '(a . b . c)) = '(. a (. b c)))        ; but cons stays right-handed -- a builder folds right
  ((opfix '(a <+> b <+> c)) = '(<+> a (<+> b c)))    ; and a coined operator defaults to the right hand at house band
  ((opfix '(3 = 1 + 2)) = '(= 3 (+ 1 2)))            ; + over = : the spec.l infix-assert law holds
  ((opfix '(a < b && c < d)) = '(&& (< a b) (< c d))) ; && below comparison
@@ -58,8 +58,8 @@
  ((opfix '(c ? a + b)) = '(? c (+ a b)))            ; an n-ary frame yields its last right operand to a tighter op
  ((opfix '(? c a b)) = '(? c a b))                  ; ..and the prefix spelling is untouched, a fixed point as ever
  (: r (grip -1 '? ()) _ (grip -1 '? r) (r = 10))      ; the arity is the lane, so the door names it and restores exactly
- ((opfix '(a + b >< c)) = '(>< (+ a b) c))          ; >< the loosest builder, below arithmetic
- ((opfix '(a :+ b >< c)) = '(>< (:+ a b) c))        ; a coined op at house band beats ><
+ ((opfix '(a + b . c)) = '(. (+ a b) c))          ; . the loosest builder, below arithmetic
+ ((opfix '(a :+ b . c)) = '(. (:+ a b) c))         ; a coined op at house band beats .
  ((opfix '(a :+ b + c)) = '(+ (:+ a b) c))          ; ..and arithmetic, and every other band:
  ((opfix '(a :+ b ** c)) = '(** (:+ a b) c))        ;   house is the tightest, so an undeclared
  ((opfix '(a :+ b && c)) = '(&& (:+ a b) c))        ;   operator groups before anything can steal

@@ -99,8 +99,8 @@
    (: at (unseat item) ins (unseatl ing) ors (unseatl oo)
       prev (peep cards at ())
       (? prev
-         (pin cards at (link (adds <prev ins)
-                             (link (adds <>prev ors)
+         (pin cards at (. (adds <prev ins)
+                             (. (adds <>prev ors)
                                    (? (two? steps) steps >>prev))))
          (: _ (pin cards at (ins . (ors . steps)))
              _ (? (peep check 0 0) 0 (pin check 0 at)) at)))
@@ -112,7 +112,7 @@
    (regd item ing oo steps)
    (: at (unseat item) ins (unseatl ing) ors (unseatl oo)
       prev (peep cards at ())
-      (? prev (pin cards at (link (adds <prev ins) (link (adds <>prev ors) (>>prev + steps))))
+      (? prev (pin cards at (. (adds <prev ins) (. (adds <>prev ors) (>>prev + steps))))
          (reg item ing oo steps)))
    ; the public Cookfile API: (recipe item ingredients steps) -- no order-only prereqs.
    (recipe item ingredients steps) (reg item ingredients 0 steps)
@@ -164,7 +164,7 @@
                ; looked at the compiler). park the land under the item instead: the
                ; parent calls jobland on the way past, so every job still comes home.
                (? !(two? steps)
-                  (: _ (pin pending item (link 'agg (link (ingredients + orderonly) ()))) ())
+                  (: _ (pin pending item (. 'agg (. (ingredients + orderonly) ()))) ())
                   (: _ (each ingredients (\ d (jobland d done shipped pending)))
                      _ (each orderonly (\ d (jobland d done shipped pending)))
                      ta0 (date item)
@@ -176,7 +176,7 @@
                      ; one, else right here. a job's item settles when it lands;
                      ; everything else settles now.
                      j (? stale (jobstart item steps) 0)
-                     (? j (: _ (pin pending item (link j (link ta0 steps))) ta0)
+                     (? j (: _ (pin pending item (. j (. ta0 steps))) ta0)
                           (settle item ta0 (? stale steps ()) done shipped)))))
             ; no card: a source leaf. it must already exist on disk.
             (: ta (date item)

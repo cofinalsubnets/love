@@ -120,7 +120,7 @@
                (: e <(mkey <p)
                   (e . me1s (filter (\ m !(e = <(mkey m))) >p))))
    (mdiv f d) (? (0 = tally f) ()
-                 (: t [(link (cnorm (mco <f * cinv (mco <d)))
+                 (: t [(. (cnorm (mco <f * cinv (mco <d)))
                              (ksub (mkey <f) (mkey <d)))]
                     (padd t (mdiv (psub f (pmul t d)) d))))
    (mprem f g) (? (0 = tally f) ()
@@ -186,7 +186,7 @@
                        (sort (go cds g ())))))
    (proots p) (: fs (psff (load p))
                  (go i r) (tally r ?
-                           (flat (map (\ x (i (link x) ())) (rroots <r)) + go (i + 1) >r))
+                           (flat (map (\ x (i (. x) ())) (rroots <r)) + go (i + 1) >r))
                (sort (go 1 fs))))
 
 ; --- zassenhaus: factorization whole -----------------------------------------
@@ -208,8 +208,8 @@
    (vtrim v) (tally v ?
               (: r (vtrim >v)
                (0 = tally r && 0 = <v ? () (<v . r))))
-   (vpadn n v) (v + ((n - tally v) (link 0) ()))
-   (fvshift k v) (k (link 0) v)
+   (vpadn n v) (v + ((n - tally v) (. 0) ()))
+   (fvshift k v) (k (. 0) v)
    (fvadd m a b) (vtrim (: (go a b) (? (0 = tally a) b
                                        (0 = tally b) a
                                        (zmod m (<a + <b) . go >a >b))
@@ -262,7 +262,7 @@
                  (map (\ r <r) rs . mflip (map (\ r >r) rs)))
    (msubI m rs) (: (dec r i) (: (go l k)
                                 (? (0 = tally l) ()
-                                   (link (? (k = i) (zmod m (<l - 1)) <l)
+                                   (. (? (k = i) (zmod m (<l - 1)) <l)
                                          (go >l (k + 1))))
                                 (go r 0))
                    (go2 l i) (? (0 = tally l) ()
@@ -346,7 +346,7 @@
          (hliftn P p <gh ga + hliftn P p <>gh gb)))
    (combs s l) (? (s = 0) '(())
                   (0 = tally l) ()
-                  (map (link <l) (combs (s - 1) >l) + combs s >l))
+                  (map (. <l) (combs (s - 1) >l) + combs s >l))
    (drop1 x l) (? (0 = tally l) () (? (<l = x) >l (<l . drop1 x >l)))
    (lminus l xs) (? (0 = tally xs) l (lminus (drop1 <xs l) >xs))
    (zrec s P F ls acc)
@@ -387,7 +387,7 @@
                    (map (G \ pmonic (msub2 G L))
                         (zfac (msub1 g L n)))))
    (msub1 g L n) (map (\ m2 (: e <(mkey m2)
-                               (link (? (e = n) 1 (mco m2 * ((n - 1 - e) L)))
+                               (. (? (e = n) 1 (mco m2 * ((n - 1 - e) L)))
                                      (mkey m2))))
                       g)
    (msub2 G L) (map (m2 \ cnorm (mco m2 * <(mkey m2) L) . mkey m2) G)
@@ -399,7 +399,7 @@
                               rem (dstrip <r rs)
                               one (map plin rs
                                    + (? (0 = pdeg rem) () (pdeep rem)))
-                              (flat (map (\ z (i (link z) ())) one)
+                              (flat (map (\ z (i (. z) ())) one)
                                + go (i + 1) >r)))
                (? (c = 1) (go 1 (psff x))
                   (pconst 1 c . go 1 (psff x)))))
@@ -529,7 +529,7 @@
                 yfs (map a1y2 (filter (\ g !(0 = pdeg g)) (pfac cy)))
                 (go i r) (tally r ?
                           (: fs (? (0 = pdeg <r) () (zfac2g <r))
-                             (flat (map (\ z (i (link z) ())) fs)
+                             (flat (map (\ z (i (. z) ())) fs)
                               + go (i + 1) >r)))
                 all (yfs + go 1 (msff pp))
                 cst (cnorm (mco <x * cinv (lcs all)))
@@ -565,7 +565,7 @@
    (mdm f d) (: (go u qq rr)
                 (? (0 = tally u) [qq rr]
                    (kge (mkey <u) (mkey <d))
-                   (: t2 [(link (cnorm (mco <u * cinv (mco <d)))
+                   (: t2 [(. (cnorm (mco <u * cinv (mco <d)))
                                 (ksub (mkey <u) (mkey <d)))]
                       (go (psub u (pmul t2 d)) (padd t2 qq) rr))
                    (go >u qq (padd [(mco <u . mkey <u)] rr)))

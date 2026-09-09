@@ -32,13 +32,13 @@
              i (a 0) j (b n)
              (? (i < j) (snip s i j) ""))
  (lines s) (: n (tally s)
-              (go i j acc) (? (n <= j) (rev (? (i < j) ((snip s i j) >< acc) acc))
-                              ((s j) = 10) (go (j + 1) (j + 1) ((snip s i j) >< acc))
+              (go i j acc) (? (n <= j) (rev (? (i < j) ((snip s i j) . acc) acc))
+                              ((s j) = 10) (go (j + 1) (j + 1) ((snip s i j) . acc))
                               (go i (j + 1) acc))
               (go 0 0 ()))
  (fields s c) (: n (tally s)                            ; split on the charm c, empties kept
-                 (go i j acc) (? (n <= j) (rev ((snip s i j) >< acc))
-                                 ((s j) = c) (go (j + 1) (j + 1) ((snip s i j) >< acc))
+                 (go i j acc) (? (n <= j) (rev ((snip s i j) . acc))
+                                 ((s j) = c) (go (j + 1) (j + 1) ((snip s i j) . acc))
                                  (go i (j + 1) acc))
                  (go 0 0 ()))
  (toks s) (filter (\ t (0 < tally t)) (foldl (\ a t (a + (fields t 9))) () (fields s 32)))
@@ -69,7 +69,7 @@
                   (? (v = ()) () (? neg (0 - v) v)))))
  ; exact big division: int on an inexact big ratio rides a gem and drops digits
  (divp v d) (int ((v - (% v d)) / d))
- (show0x n) (: (h v acc) (? (v = 0) acc (h (divp v 16) (('(48 49 50 51 52 53 54 55 56 57 97 98 99 100 101 102) (% v 16)) >< acc)))
+ (show0x n) (: (h v acc) (? (v = 0) acc (h (divp v 16) (('(48 49 50 51 52 53 54 55 56 57 97 98 99 100 101 102) (% v 16)) . acc)))
                (? (n = 0) "0x0" ("0x" + string (h n ()))))
  M64 18446744073709551616
  (mask64 x) (% ((% x M64) + M64) M64)
@@ -83,7 +83,7 @@
  (pick l) (l (rnd (tally l)))
  (coin _) (rnd 2)
  (pick-n l k) (? (k = 0) ()                                  ; k distinct draws
-                 (: x (pick l) (x >< pick-n (filter (\ y !(y = x)) l) (k - 1))))
+                 (: x (pick l) (x . pick-n (filter (\ y !(y = x)) l) (k - 1))))
 
  ; ---- subprocess plumbing: sh with redirection; bytes laid via printf octal ----
  tmpd "out"
@@ -93,7 +93,7 @@
  (oct3 c) (string [(48 + (int (c / 64))) (48 + (% (int (c / 8)) 8)) (48 + (% c 8))])
  (hex-bytes hx) (: n (tally hx)                              ; hex string -> charm list
                    (go i acc) (? (n <= i) (rev acc)
-                                 (go (i + 2) ((16 * hexdv (hx i) + hexdv (hx (i + 1))) >< acc)))
+                                 (go (i + 2) ((16 * hexdv (hx i) + hexdv (hx (i + 1))) . acc)))
                    (go 0 ()))
  (lay-bin hx p) (sh ("printf '" + foldl (\ a c (a + "\\" + oct3 c)) "" (hex-bytes hx) + "' > " + p))
  (spaced-hex hx) (: n (tally hx)
@@ -127,7 +127,7 @@
                (: ts (strip-pfx (toks (fs 2)))
                   (? !(two? ts) (go >m acc)
                      (go >m ([(cap ts) (foldl (\ a t (? (a = "") t (a + " " + t))) "" >ts)
-                              (tally (toks (fs 1))) (has? <m "(bad)")] >< acc)))))))
+                              (tally (toks (fs 1))) (has? <m "(bad)")] . acc)))))))
      (go (lines (rdf (tmpd + "/.fuzz.out"))) ()))
 
  ; a64/riscv: llvm-mc --disassemble. a fixed-width lane gets full consumption for free
@@ -146,9 +146,9 @@
          ln (trim (? (charm? c) (snip l0 0 c) l0))
          (? ((tally ln) = 0) acc
             (pfx? ln ".text") acc
-            (pfx? ln ".byte") ([".byte" "" 4 1] >< acc)
+            (pfx? ln ".byte") ([".byte" "" 4 1] . acc)
             (: ts (toks ln)
-               ([(cap ts) (trim (snip ln (tally <ts) (tally ln))) 4 0] >< acc))))
+               ([(cap ts) (trim (snip ln (tally <ts) (tally ln))) 4 0] . acc))))
      got (rev (foldl (\ a ln (one ln a)) () (lines (rdf (tmpd + "/.fuzz.out")))))
      want (? vw (rv-icount (hex-bytes hx)) (int ((tally hx) / 8)))
      (? ((tally got) = want) got
@@ -163,10 +163,10 @@
  ; ---- operand parsers, per arch ----
  (ops-comma s) (? ((tally s) = 0) () (map trim (fields s 44)))
  (ops-arm s) (: n (tally s)                              ; comma split respecting [...]
-                (go i j d acc) (? (n <= j) (rev ((trim (snip s i j)) >< acc))
+                (go i j d acc) (? (n <= j) (rev ((trim (snip s i j)) . acc))
                                   ((s j) = 91) (go i (j + 1) (d + 1) acc)
                                   ((s j) = 93) (go i (j + 1) (d - 1) acc)
-                                  (((s j) = 44) && (d = 0)) (go (j + 1) (j + 1) d ((trim (snip s i j)) >< acc))
+                                  (((s j) = 44) && (d = 0)) (go (j + 1) (j + 1) d ((trim (snip s i j)) . acc))
                                   (go i (j + 1) d acc))
                 (? (n = 0) () (go 0 0 0 ())))
 

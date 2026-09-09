@@ -56,7 +56,7 @@
      _ (say wp txt)
      _ (close wp)
      rp (open "/tmp/l-io-test" "r")
-     (slurp acc) (: c (see rp) (? (= c -1) (rev acc) (slurp (link c acc))))
+     (slurp acc) (: c (see rp) (? (= c -1) (rev acc) (slurp (. c acc))))
      rd (string (slurp 0))
      _ (close rp)
      (= txt rd)) 1)
@@ -165,7 +165,7 @@
      (&& (two? d) (= 1 (cap d)) (= 2 (caup d))))
   (: d (cap (sound '(39 49)))                           ; "'1" -> (` 1)
      (&& (two? d) (= 1 (caup d))))
-  (= (string (link 104 (link 105 0))) (cap (sound '(34 104 105 34))))   ; "hi"
+  (= (string (. 104 (. 105 0))) (cap (sound '(34 104 105 34))))   ; "hi"
 
   ; sequential reads thread the residue; the last one is the clean end
   (: a (sound '(49 32 50 32 51))                        ; "1 2 3"

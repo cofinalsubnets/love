@@ -49,7 +49,7 @@
  (seq (fld f2 'deps) [p1])                          ; the context reads p1's writes
  (3 = tally (fld f2 'hunks))
  (seq (tips ()) [p2])                               ; p1 is no longer maximal
- !(member? "sub/b.txt" (: (go m acc) (? (two? m) (go >m (<<m >< acc)) acc)
+ !(member? "sub/b.txt" (: (go m acc) (? (two? m) (go >m (<<m . acc)) acc)
                           (go (snap ()) ())))       ; the death left the snap
  (0 = sb-diff ()))                                   ; recorded = working again
 

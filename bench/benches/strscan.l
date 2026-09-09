@@ -7,6 +7,6 @@
 (: hmod 1000000007
    (strhash s) (: n (tally s)
      (go i h) (? (< i n) (go (+ i 1) (% (+ (* h 31) (peep s i 0)) hmod)) h) (go 0 0))
-   (mkdata n) (string ((: (go i) (? (< i n) (link (+ 32 (% (* 7 i) 95)) (go (+ i 1))))) 0))
+   (mkdata n) (string ((: (go i) (? (< i n) (. (+ 32 (% (* 7 i) 95)) (go (+ i 1))))) 0))
    data (mkdata 20000)
  (bench "strscan" (\ _ (strhash data))))

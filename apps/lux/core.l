@@ -27,21 +27,21 @@
    ;     (nearest-first), so focus motion is O(1) at either end. ---
    (zmk f up dn) [f up dn]
    (zfoc z) (two? z ? <z)                                     ; the focused window (() if empty)
-   (zrow z) (two? z ? (rev <>z + (<z >< <>>z)))               ; the stack as an ordered row, master first
+   (zrow z) (two? z ? (rev <>z + (<z . <>>z)))               ; the stack as an ordered row, master first
    (zfrom l) (two? l ? (zmk <l () >l))                        ; a row -> a zipper, head focused
    (zrev z) (two? z ? (zmk <z <>>z <>z))                      ; mirror: up <-> down
    (zfocup z) (? !(two? z) ()                                      ; focus up, wrapping to the bottom
                  (: up <>z
-                    (? (two? up) (zmk <up >up (<z >< <>>z))
-                       (: all (rev (<z >< <>>z)) (zmk <all >all ())))))
+                    (? (two? up) (zmk <up >up (<z . <>>z))
+                       (: all (rev (<z . <>>z)) (zmk <all >all ())))))
    (zfocdn z) (zrev (zfocup (zrev z)))                             ; focus down = mirrored focus up
    (zswapup z) (? !(two? z) ()                                     ; swap the focused window upward
                   (: up <>z
-                     (? (two? up) (zmk <z >up (<up >< <>>z))
+                     (? (two? up) (zmk <z >up (<up . <>>z))
                         (zmk <z (rev <>>z) ()))))                  ; at the top: rotate to the bottom
    (zswapdn z) (zrev (zswapup (zrev z)))
    (zmaster z) (!(two? z) ? () (zmk <z () (rev <>z + <>>z)))       ; focused becomes master
-   (zins w z) (two? z ? (zmk w <>z (<z >< <>>z)) (zmk w () ()))  ; insert above the focus, focused
+   (zins w z) (two? z ? (zmk w <>z (<z . <>>z)) (zmk w () ()))  ; insert above the focus, focused
    (znub w l) (filter (x \ x != w) l)
    (zdel w z) (? !(two? z) ()                                      ; delete w; focus falls down, then up
                  (: f <z up (znub w <>z) dn (znub w <>>z)
@@ -52,7 +52,7 @@
    (zhas? w z) (any (x \ x = w) (zrow z))
    (zfromrow row f) (: (go up m) (? !(two? m) ()                   ; a row -> a zipper focused at f (() if absent)
                                     (<m = f) (zmk f up >m)
-                                    (go (<m >< up) >m))
+                                    (go (<m . up) >m))
                        (go () row))
    (zfocto w z) (zhas? w z ? (zfromrow (zrow z) w) z)            ; focus the named window (Go dir's StackSet half)
    (zswapw a b z) (? (zhas? a z && zhas? b z)                      ; exchange a and b in place; focus follows its window
@@ -85,7 +85,7 @@
    (wsdel-tiled sh w) (map (p \ [<p (zdel w <>p)]) (wsboard sh))   ; drop w from every workspace's tiled stack
    (wsdofloat sh w r)                                              ; float: tiled -> floating; the home tag is where it
     (: t0 (wsftag sh w) t1 (t0 ? t0 (wstagof sh w)) t (t1 ? t1 (wscur sh))   ; already lives (re-float keeps it; a tiled window's
-       (wsmake (wscur sh) (wsdel-tiled sh w) ([w r t] >< wsunfl w (wsfloat sh))))   ; tag; else the current view)
+       (wsmake (wscur sh) (wsdel-tiled sh w) ([w r t] . wsunfl w (wsfloat sh))))   ; tag; else the current view)
    (wssink sh w) (wsmap (wsmake (wscur sh) (wsboard sh) (wsunfl w (wsfloat sh))) (zins w))   ; sink: floating -> the current tiled stack
 
    ; --- managing windows across the whole sheaf ---

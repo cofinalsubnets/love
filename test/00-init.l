@@ -61,7 +61,7 @@
   (test_set 'count (+ 1 (test_get 'count)))
    (? v (term_text green_dot)
     (do (term_text red_x)
-       (test_set 'fail (x >< (? (two? (test_get 'fail)) (test_get 'fail) ()))))))
- (link 'do (map (\ l [report ['\ l] l]) l)))))
+       (test_set 'fail (x . (? (two? (test_get 'fail)) (test_get 'fail) ()))))))
+ (. 'do (map (\ l [report ['\ l] l]) l)))))
 
 (hear test-strict)

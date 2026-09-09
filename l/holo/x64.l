@@ -91,7 +91,7 @@
       (: _ (constellation? imm ? 0 (scare 'badimm imm))
          dn (rn d)
          (? (0 <= imm <= 4294967295)
-            ((? (hi dn = 0) () [(rex 0 0 0 1)]) + ((184 | lo dn) >< le32 imm))
+            ((? (hi dn = 0) () [(rex 0 0 0 1)]) + ((184 | lo dn) . le32 imm))
             (fits32 imm)
             ([(rex 1 0 0 (hi dn)) 199 (modrm 3 0 dn)] + le32 imm)
             ([(rex 1 0 0 (hi dn)) (184 | lo dn)] + le64 imm)))
@@ -335,7 +335,7 @@
    ;; frame reaching the C handler has one shape.
    (emit-push s) (? (reg? s) (: sn (rn s) (sn >= 8 ? [65 (80 | lo sn)] [(80 | sn)]))
                     (fits8 s) [106 (byte s)]
-                    (fits32 s) (104 >< le32 s)
+                    (fits32 s) (104 . le32 s)
                     (scare 'push-imm s))
    (emit-pop  d) (: dn (rn d) (? (dn >= 8) [65 (88 | lo dn)] [(88 | dn)]))
 

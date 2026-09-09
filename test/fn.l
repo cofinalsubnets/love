@@ -13,7 +13,7 @@
 (: (rt x) (ev (cap (sound (show x))))
  (test
   (= "\+" (show (+)))
-  (= "." (show link))
+  (= "." (show (.)))
   (= "(\\ a a)" (show (\ x x)))
   (= "(\\ a b (+ a b))" (show (\ a b (+ a b))))      ; already canonical: prints as written
   (= (show (\ x x)) (show (\ y y)))               ; a-equivalent -> identical print
@@ -38,16 +38,16 @@
   (= (\ x (\ x x)) (\ x (\ x x)))                    ; shadowing stays nested (not flattened to the ambiguous (\ x x x)); still self-equal
   (! (= ((\ a b (+ a b)) 1) (\ b (+ 2 b))))          ; a different capture stays distinct
   (! (= ((\ a b (+ a b)) 1) (\ b (- 1 b))))          ; a different body stays distinct
-  (! (= (\ x (link x)) link))                         ; eta still not bridged -- the line holds (= surfaces no NEW reduction)
+  (! (= (\ x (. x)) (.)))                         ; eta still not bridged -- the line holds (= surfaces no NEW reduction)
   (= (+ 1) (+ 1)) (! (= (+ 1) (+ 2)))                ; a source-less (builtin) base: the pairwise fallback, intact
   (= 9 (peep {((\ a b (+ a b)) 5) 9} (\ b (+ 5 b)) 0))   ; hash consistency: a map keyed on the partial-app, found by the residual
   ; worklist safety: a closure with a chain capture nested in a compared structure -- equal closures
   ; but a differing tail must stay not equal (the bridge's re-entrant eqv must not clobber pending pairs)
-  (! (= (link ((\ v x (+ x v)) '(1 2)) (link 5 6)) (link ((\ v x (+ x v)) '(1 2)) (link 5 7))))
-  (= (link ((\ v x (+ x v)) '(1 2)) (link 5 6)) (link ((\ v x (+ x v)) '(1 2)) (link 5 6)))
+  (! (= (. ((\ v x (+ x v)) '(1 2)) (. 5 6)) (. ((\ v x (+ x v)) '(1 2)) (. 5 7))))
+  (= (. ((\ v x (+ x v)) '(1 2)) (. 5 6)) (. ((\ v x (+ x v)) '(1 2)) (. 5 6)))
   ; the same safety on the no-capture path: salpha falls back to eqv for a quote body,
   ; and that fallback scratches above the pending pairs, so the differing tail still tells
-  (! (= (link (\ a (\ 5)) (link 5 6)) (link (\ b (\ 5)) (link 5 7))))
-  (= (link (\ a (\ 5)) (link 5 6)) (link (\ b (\ 5)) (link 5 6)))
+  (! (= (. (\ a (\ 5)) (. 5 6)) (. (\ b (\ 5)) (. 5 7))))
+  (= (. (\ a (\ 5)) (. 5 6)) (. (\ b (\ 5)) (. 5 6)))
   (string? (show map))
   (< 10 (tally (show map)))))

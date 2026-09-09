@@ -73,13 +73,13 @@
     ; closed one is the shared cell. the inner bodies here decline every lane (a show call
     ; in a one-shot body), so the fire is the driver's own.
     (: n (peep fires () 0)
-       ad (ev '(: (ad f l) (? (two? l) (link (f (\ x (+ (tally (show x)) (cap l)))) (ad f (cup l))) ()) ad))
+       ad (ev '(: (ad f l) (? (two? l) (. (f (\ x (+ (tally (show x)) (cap l)))) (ad f (cup l))) ()) ad))
        cs (ad (\ g g) '(1 2))
        (&& (fired? n) ('(4 5 6) = (ad (\ g (g 100)) '(1 2 3)))
            !(= (cap cs) (cap (cup cs)))
            (= (cap cs) ((\ l (\ x (+ (tally (show x)) (cap l)))) '(1 2)))))
     (: n (peep fires () 0)
-       ac (ev '(: (ac f l) (? (two? l) (link (f (\ x (+ (tally (show x)) 1))) (ac f (cup l))) ()) ac))
+       ac (ev '(: (ac f l) (? (two? l) (. (f (\ x (+ (tally (show x)) 1))) (ac f (cup l))) ()) ac))
        cs (ac (\ g g) '(1 2))
        (&& (fired? n) ('(2 2) = (ac (\ g (g 5)) '(1 2))) (= (cap cs) (cap (cup cs)))))
     ; --- the negations, a cond chain, and an inlined sibling's mint-bound arg: (nil? x) is
@@ -89,8 +89,8 @@
        lay (ev '(: (pad be n) (list n n) (at l k) (? (= k 0) (cap l) (at (cup l) (- k 1)))
                    (lay p acc) (? !(two? p) (rev acc)
                                   (= (cap (cap p)) 'label) (: _ (pin (tablet 0) (at (cap p) 1) 0) (lay (cup p) acc))
-                                  (= (cap (cap p)) 'align) (: r (pad 0 (at (cap p) 1)) (lay (cup p) (link (cap r) acc)))
-                                  (: r (cap (cap p)) (lay (cup p) (link r acc))))
+                                  (= (cap (cap p)) 'align) (: r (pad 0 (at (cap p) 1)) (lay (cup p) (. (cap r) acc)))
+                                  (: r (cap (cap p)) (lay (cup p) (. r acc))))
                    lay))
        (&& (fired? n) ('(add 4 mov) = (lay '((label a) (add) (align 4) (mov)) ()))
            (= (lay '((x) (align 2)) ()) '(x 2))))
@@ -99,7 +99,7 @@
        (&& (16 = (f 3)) (= (f 3) (g 3)) (= (f 5) (g 5))))
     ; ... and under a named-let whose loop var shadows the frame: the site's import renames with it
     (: n (peep fires () 0)
-       mk (ev '(\ l ((: (go l acc) (? (two? l) (go (cup l) (link (\ y (* y (tally (show (cap l))))) acc)) acc)) l ())))
+       mk (ev '(\ l ((: (go l acc) (? (two? l) (go (cup l) (. (\ y (* y (tally (show (cap l))))) acc)) acc)) l ())))
        (&& (fired? n) ('(2 2 2) = (map (\ c (c 2)) (mk '(1 2 3)))) ('(4 2) = (map (\ c (c 2)) (mk '(1 10))))))
     ; --- the restart law: a deopt re-runs the twin from the restart point, so any call-out the
     ;     native already made is made again. both loops write a byte and then overflow a fixnum

@@ -25,24 +25,24 @@
 
    ; -- sorted-int-list sets --
    (vun a b) (? !(two? a) b !(two? b) a
-                (<a < <b) (<a >< vun >a b)
-                (<b < <a) (<b >< vun a >b)
-                (<a >< vun >a >b))
+                (<a < <b) (<a . vun >a b)
+                (<b < <a) (<b . vun a >b)
+                (<a . vun >a >b))
    (vsans a b) (? !(two? a) () !(two? b) a
-                  (<a < <b) (<a >< vsans >a b)
+                  (<a < <b) (<a . vsans >a b)
                   (<b < <a) (vsans a >b)
                   (vsans >a >b))
    (vboth a b) (? (!(two? a) || !(two? b)) ()
                   (<a < <b) (vboth >a b)
                   (<b < <a) (vboth a >b)
-                  (<a >< vboth >a >b))
-   (vapp a b) (? !(two? a) b (<a >< vapp >a b))
+                  (<a . vboth >a >b))
+   (vapp a b) (? !(two? a) b (<a . vapp >a b))
    (vall? x) (x = 'all)
    (vsz x) (? (vall? x) -1 (tally x))
-   (vuq l) (? !(two? l) () (: r (vuq >l) (? (two? r && <l = <r) r (<l >< r))))
+   (vuq l) (? !(two? l) () (: r (vuq >l) (? (two? r && <l = <r) r (<l . r))))
    (vany p l) (? !(two? l) 0 (p <l) 1 (vany p >l))
-   (vkeep p l) (? !(two? l) () (p <l) (<l >< vkeep p >l) (vkeep p >l))
-   (vtake n l) (? ((n < 1) || !(two? l)) () (<l >< vtake (n - 1) >l))
+   (vkeep p l) (? !(two? l) () (p <l) (<l . vkeep p >l) (vkeep p >l))
+   (vtake n l) (? ((n < 1) || !(two? l)) () (<l . vtake (n - 1) >l))
    (vat k l) (? (k < 1) <l (vat (k - 1) >l))
 
    ; -- indexing --
@@ -57,14 +57,14 @@
 
    ; -- a TU's forms into functions: a non-dot label opens one, align is glue --
    (vfns fs)
-    (: (shut nm bd acc) (nm = () ? acc ([nm (rev bd)] >< acc))
+    (: (shut nm bd acc) (nm = () ? acc ([nm (rev bd)] . acc))
        (go l nm bd acc)
         (? !(two? l) (rev (shut nm bd acc))
            (: f <l
               (? (two? f && <f = 'label && !(vdot? <>f)) (go >l <>f () (shut nm bd acc))
                  (two? f && <f = 'align) (go >l nm bd acc)
                  (nm = ()) (go >l nm bd acc)
-                 (go >l nm (f >< bd) acc))))
+                 (go >l nm (f . bd) acc))))
        (go fs () () ()))
 
    ; -- escape census: spaces whose address leaks --
@@ -94,7 +94,7 @@
                    (<f = 'jmp) (peep lt <>f -1)
                    (<f = 'br) (peep lt <>>f -1)
                    -1)
-              (go >l (i + 1) (? (0 <= j && j < i) ([j i] >< acc) acc))))
+              (go >l (i + 1) (? (0 <= j && j < i) ([j i] . acc) acc))))
        (go bd 0 ()))
    (vwt sp i)
     (: (dep l d) (? !(two? l) d
@@ -112,7 +112,7 @@
               ss (? !(two? f) nx
                     (: op <f
                        (? (op = 'jmp) (: j (peep lt <>f -1) (? (j < 0) () [j]))
-                          (op = 'br) (: j (peep lt <>>f -1) (? (j < 0) nx (j >< nx)))
+                          (op = 'br) (: j (peep lt <>>f -1) (? (j < 0) nx (j . nx)))
                           (member? op '(ret jmpr ud2)) ()
                           nx)))
               _ (pin t i ss)
@@ -141,7 +141,7 @@
    ; -- one form's frame bytes: [reads writes all?], keys (off*2 + space bit) --
    (vbytes b o w)
     (: sb (vsbit b)
-       (go k acc) (? (k < 0) acc (go (k - 1) (((o + k) * 2 + sb) >< acc)))
+       (go k acc) (? (k < 0) acc (go (k - 1) (((o + k) * 2 + sb) . acc)))
        (go (w - 1) ()))
    (vrw f c lt)
     (? !(two? f) [() () 0]
@@ -205,15 +205,15 @@
                        (op = 'pop) (go >l (i + 1) (c + 8) ci)
                        (0 < lw && vbase? <>>f && charm? <>>>f)
                         (: k (vtk (vsbit <>>f) (c + <>>>f) lw)
-                           _ (pin tt k ([i op] >< peep tt k ()))
+                           _ (pin tt k ([i op] . peep tt k ()))
                            (go >l (i + 1) c ci))
                        (0 < sw && vbase? <>f && charm? <>>f)
                         (: k (vtk (vsbit <>f) (c + <>>f) sw)
-                           _ (pin tt k ([i op] >< peep tt k ()))
+                           _ (pin tt k ([i op] . peep tt k ()))
                            (go >l (i + 1) c ci))
                        (0 < iw && vbase? <>f && charm? <>>f)
                         (: k (vtk (vsbit <>f) (c + <>>f) iw)
-                           _ (pin tt k ([i op] >< peep tt k ()))
+                           _ (pin tt k ([i op] . peep tt k ()))
                            (go >l (i + 1) c ci))
                        (member? op '(ldsd ldss))
                         (: _ (? (vbase? <>>f && charm? <>>>f)
@@ -225,7 +225,7 @@
                            (go >l (i + 1) c ci))
                        (vmb? f && !(member? op '(label jmp br ret call li mov cmp test la))) 'skip
                        (go >l (i + 1) c
-                           (? (member? op '(call callr sys)) (i >< ci) ci)))))))
+                           (? (member? op '(call callr sys)) (i . ci) ci)))))))
        (go bd 0 0 ()))
 
    ; -- cells: the touches grouped 8-aligned per space, with the census flags
@@ -240,7 +240,7 @@
                (? !(two? l) 0
                   (: k <l d (vdek k) sb <d off <>d w <>>d
                      ck (((vflr8 off) + voff) * 2 + sb)
-                     _ (pin ct ck ([off w (rev (peep tt k ()))] >< peep ct ck ()))
+                     _ (pin ct ck ([off w (rev (peep tt k ()))] . peep ct ck ()))
                      (go >l)))
                (go (sort (keys tt))))
           (row l acc)
@@ -280,7 +280,7 @@
                                                        a))))
                                     (g es ())))
                        (row >l ([sb base (full ? 1 0) (across ? 1 0) (sifed ? 1 0)
-                                 (nar ? 1 0) multi (tally allts) wsum dfs uss] >< acc))))))
+                                 (nar ? 1 0) multi (tally allts) wsum dfs uss] . acc))))))
           (row (sort (keys ct)) ())))
 
    ; -- the whole layer over one body --
@@ -323,7 +323,7 @@
                  (: ou (out (peep succ i ()) ())
                     (? (vall? ou) (row (i - 1) acc)
                        (two? (vboth wr ou)) (row (i - 1) acc)
-                       (row (i - 1) ([i <f (vwt spans i) (near i)] >< acc)))))))
+                       (row (i - 1) ([i <f (vwt spans i) (near i)] . acc)))))))
        (row (n - 1) ()))
 
    ; -- reaching defs at cell grain: rt i -> the defs (a sorted subset of dfs)
@@ -371,7 +371,7 @@
        ut {}
        nod (: (g l2 a) (? !(two? l2) (rev a)
                           (: u <l2 rin (peep rt u ())
-                             (? !(two? rin) (g >l2 (u >< a))
+                             (? !(two? rin) (g >l2 (u . a))
                                 (: r2 (find <rin)
                                    _ (pin ut r2 (vapp (peep ut r2 ()) [u]))
                                    (g >l2 a)))))

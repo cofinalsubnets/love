@@ -13,25 +13,25 @@
 ; to see the offending input.
 (:
  ; --- generator monad: pure / map / bind over the functional RNG ---
- fz-pure link                          ; ignores the stream
- (fz-map f g) (\ st (: r (g st) (f <r >< >r)))
+ fz-pure (.)                           ; ignores the stream
+ (fz-map f g) (\ st (: r (g st) (f <r . >r)))
  (fz-bind g k) (\ st (: r (g st) ((k <r) >r))) ; feed value into next gen
  ; --- primitive draws (every range below keeps hi > lo so random never mods by 0) ---
  (fz-nat n) (\ st (random st n))                        ; [0, n)
  (fz-int lo hi) (fz-map (+ lo) (fz-nat (- hi lo)))       ; [lo, hi)
- (fz-elt l) (\ st (: r (random st (tally l)) (<(drop <r l) >< >r)))
+ (fz-elt l) (\ st (: r (random st (tally l)) (<(drop <r l) . >r)))
  (fz-oneof gs) (fz-bind (fz-nat (tally gs)) (\ k <(drop k gs)))  ; pick a generator
  ; --- structured draws: fixed repetition, bounded-length list, tuples ---
  (fz-rep n g) (? (n < 1) (fz-pure ())
-    (\ st (: a (g st) b ((fz-rep (n - 1) g) >a) ((<a >< <b) >< >b))))
+    (\ st (: a (g st) b ((fz-rep (n - 1) g) >a) ((<a . <b) . >b))))
  (fz-list mx g) (\ st (: r (random st (1 + mx)) ((fz-rep <r g) >r)))  ; pin in [0,mx]
- (fz-pair2 ga gb) (\ st (: a (ga st) b (gb >a) ([<a <b] >< >b)))
+ (fz-pair2 ga gb) (\ st (: a (ga st) b (gb >a) ([<a <b] . >b)))
  (fz-trip ga gb gc)
-   (\ st (: a (ga st) b (gb >a) c (gc >b) ([<a <b <c] >< >c)))
+   (\ st (: a (ga st) b (gb >a) c (gc >b) ([<a <b <c] . >c)))
  ; --- the driver: N trials from seed `sd`, first counterexample wins ---
  (fz-find n sd g p)
-   (: (go n st) (? (n < 1) (1 >< 0)
-        (: r (g st) (? (p <r) (go (- n 1) >r) (0 >< <r))))
+   (: (go n st) (? (n < 1) (1 . 0)
+        (: r (g st) (? (p <r) (go (- n 1) >r) (0 . <r))))
       (go n (wheel sd)))
  (fz-ok n sd g p) <(fz-find n sd g p))
 
@@ -99,7 +99,7 @@
 (test
  (fz-ok 300 20 fz-l (\ l (l = rev (rev l))))                          ; rev is involutive
  (fz-ok 300 21 fz-l (\ l (l = map id l)))                            ; map id = id
- (fz-ok 300 22 fz-l (\ l (l = foldr link () l)))                     ; foldr X () = id
+ (fz-ok 300 22 fz-l (\ l (l = foldr (.) () l)))                     ; foldr X () = id
  ; cat adds spine lengths, and the net law holds exactly: $ of a cat is the
  ; saturated sum of the two lists' element sums (one clamp, at the top)
  (fz-ok 300 23 (fz-pair2 fz-l fz-l)
@@ -121,12 +121,12 @@
            p (\ x (0 = x % 2))
            (all p (filter p l) && ln (filter p l) <= ln l))))
  ; an element consed on is found by member?
- (fz-ok 300 28 (fz-pair2 fz-elem fz-l) (\ v (member? <v (<v >< <>v)))))
+ (fz-ok 300 28 (fz-pair2 fz-elem fz-l) (\ v (member? <v (<v . <>v)))))
 
 ; ---- print -> read round trip on random s-expressions ----
 ; serialize via show, re-read the bytes, expect equality -- through rd-test, the
 ; reader-under-test socket.
-(: (fz-s2cl s) ((: (g i) (? (i < tally s) (peep s i 0 >< g (1 + i)))) 0)
+(: (fz-s2cl s) ((: (g i) (? (i < tally s) (peep s i 0 . g (1 + i)))) 0)
    (fz-rd x) (: r (rd-test (fz-s2cl (show x))) (? (two? r) <r r))   ; the reader-under-test socket (test/00-init.l)
    fz-syms '(a b c d foo bar baz qux)
    fz-leaf (fz-oneof [(fz-elt fz-syms) (fz-int -500 500)])
@@ -143,7 +143,7 @@
 ; fz-arrpair draws two z vectors of the same random length so elementwise ops line up.
 (: fz-arrpair (fz-bind (fz-int 1 6) (\ n (\ st
     (: a ((fz-rep n fz-elem) st) b ((fz-rep n fz-elem) >a)
-       ([(star-tray [n] <a) (star-tray [n] <b)] >< >b))))))
+       ([(star-tray [n] <a) (star-tray [n] <b)] . >b))))))
 (test
  (fz-ok 250 40 fz-arrpair (\ v (aall (<v + <>v = <>v + <v))))  ; + commutes
  (fz-ok 250 41 fz-arrpair (\ v (aall (<v * <>v = <>v * <v))))  ; * commutes
@@ -166,7 +166,7 @@
    fz-s3   (fz-trip fz-s fz-s fz-s)
    fz-cl1  (fz-bind (fz-int 1 12) (\ n (fz-rep n fz-byte))) ; nonempty charlist
    ; a string paired with a split point i in [0, pin]
-   fz-s-i  (fz-bind fz-s (\ s (fz-map (link s) (fz-int 0 (1 + tally s)))))
+   fz-s-i  (fz-bind fz-s (\ s (fz-map (. s) (fz-int 0 (1 + tally s)))))
    ; a string with 0 <= i <= j <= pin, as `(s i j)
    fz-s-ij (fz-bind fz-s (\ s (fz-bind (fz-int 0 (1 + tally s))
               (\ i (fz-map (\ j [s i j]) (fz-int i (1 + tally s))))))))

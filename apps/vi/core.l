@@ -57,7 +57,7 @@
    ; string carry be recomputed once per edit instead of once per keystroke
    (vgen st) (pin st 'hlgen (st 'hlgen + 1))
    (vput st r ln) (: _ (pin st 'lines (: (go l i) (? !(two? l) ()
-                                                     ((? (i = r) ln <l) >< go >l (i + 1)))
+                                                     ((? (i = r) ln <l) . go >l (i + 1)))
                                          (go (st 'lines) 0)))
                      (vgen st))
    (vgole st c) (pins st 'col c 'goal c)
@@ -254,14 +254,14 @@
    (vundo st)
     (: u (st 'undo)
        (? !(two? u) (vmsg st "already at oldest change")
-          (: _ (pins st 'redo ([(st 'lines) (st 'row) (st 'col)] >< st 'redo)
+          (: _ (pins st 'redo ([(st 'lines) (st 'row) (st 'col)] . st 'redo)
                         'undo >u)
              _ (vrest st <u)
              (vclampn st))))
    (vredo st)
     (: r (st 'redo)
        (? !(two? r) (vmsg st "already at newest change")
-          (: _ (pin st 'undo ([(st 'lines) (st 'row) (st 'col)] >< st 'undo))
+          (: _ (pin st 'undo ([(st 'lines) (st 'row) (st 'col)] . st 'undo))
              _ (pin st 'redo >r)
              _ (vrest st <r)
              (vclampn st))))
@@ -424,7 +424,7 @@
    (vexsubs st m rep a b g?)                       ; ((row text)..) for the rows that change
     (: (go r acc) (? (b < r) (rev acc)
                      (: res (usub m rep (st 'lines r) g?)
-                        (go (r + 1) (<res ? ([r <>res] >< acc) acc))))
+                        (go (r + 1) (<res ? ([r <>res] . acc) acc))))
        (go a ()))
    (vexlay st ps)                                  ; apply ((row text)..), answer the last row
     (: (go l lr) (? !(two? l) lr (: h <l _ (vput st <h <>h) (go >l <h)))
@@ -457,13 +457,13 @@
     (: (go r acc)
         (? (b < r) acc
            (: m? (two? (refind nds (st 'lines r) 0))
-              (go (r + 1) ((inv? ? !m? m?) ? (r >< acc) acc))))
+              (go (r + 1) ((inv? ? !m? m?) ? (r . acc) acc))))
        (go a ()))
    (vexplan st rows sp)                            ; the body, dry: what it would touch
     (? (<sp = 's)
        (: (go l acc) (? !(two? l) acc
                         (: r <l res (usub <>sp <>>sp (st 'lines r) <>>>sp)
-                           (go >l (<res ? ([r <>res] >< acc) acc))))
+                           (go >l (<res ? ([r <>res] . acc) acc))))
           (go rows ()))
        rows)
    (vexglob st s i r1 r2 got? inv?)

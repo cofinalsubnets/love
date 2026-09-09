@@ -28,12 +28,12 @@
  (test
     (= 2 (tally t))
     (= 2 (ln (keys t)))
-    (: (lll t) (foldl (\ l k (link k (link (Get k) l))) () (keys t))
+    (: (lll t) (foldl (\ l k (. k (. (Get k) l))) () (keys t))
      (= (* 2 (tally t)) (ln (lll t))))))
 
 (:
  (stripPrefix p s) (? (= p (snip s 0 (tally p))) (snip s (tally p) (tally s)))
- (lit l y n s) ((\ ss (? ss (y ss (link l ())) (n s))) (stripPrefix l s))
+ (lit l y n s) ((\ ss (? ss (y ss (. l ())) (n s))) (stripPrefix l s))
  (drop p y) (p (\ s _ (y s ())))
  (opt p y _) (p y (\ s (y s ())))
  (cats a b y n) (a (\ s l (b (\ s m (y s (cat l m))) n s)) n)
@@ -63,9 +63,9 @@
   (= "vapoReon" (pin "vaporeon" 4 82)) (= "vaporeon" (pin "vaporeon" -1 82))
   (= "eon" (stripPrefix "vapor" "vaporeon"))
  (= '("eon" "vapor")
-  (lit "vapor" link 0 "vaporeon"))
+  (lit "vapor" (.) 0 "vaporeon"))
  (= '("rrq" "R")
-  (alt (lit "r") (lit "R") link 0 "Rrrq"))
+  (alt (lit "r") (lit "R") (.) 0 "Rrrq"))
  (= '("q" "R" "r" "r")
-  (rep (alt (lit "r") (lit "R")) link 0 "Rrrq"))))
+  (rep (alt (lit "r") (lit "R")) (.) 0 "Rrrq"))))
 

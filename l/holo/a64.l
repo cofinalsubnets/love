@@ -26,35 +26,35 @@
    ;; never asks for it, which is why the borrow is invisible there -- a hand-written lay that names
    ;; r16 must keep its own value out of the way of an `stx`/`ldx` or a beyond-12-bit ld/st.
    a64-regs (tabof
-        [('sp >< 31) ('fp >< 29) ('lr >< 30)
-          ('r0 >< 0) ('r1 >< 1) ('r2 >< 2) ('r3 >< 3)  ('r4 >< 4)
-          ('r5 >< 5) ('r6 >< 6) ('r7 >< 7) ('r8 >< 8)  ('r9 >< 9)
-          ('r10 >< 10) ('r11 >< 11) ('r12 >< 12) ('r13 >< 13) ('r14 >< 14) ('r15 >< 15)
+        [('sp . 31) ('fp . 29) ('lr . 30)
+          ('r0 . 0) ('r1 . 1) ('r2 . 2) ('r3 . 3)  ('r4 . 4)
+          ('r5 . 5) ('r6 . 6) ('r7 . 7) ('r8 . 8)  ('r9 . 9)
+          ('r10 . 10) ('r11 . 11) ('r12 . 12) ('r13 . 13) ('r14 . 14) ('r15 . 15)
            ; x16/x17 (the veneer scratch IP0/IP1) and x18 (the platform register)
            ; are sayable but never allocated -- mooncc names its own file (gen.l)
            ; and asks for none of them. the kernel's irq path does: it saves
            ; x0..x18 because the interrupted code is compiler output free to hold
            ; a live value in any caller-saved register, this trio included.
-          ('r16 >< 16) ('r17 >< 17) ('r18 >< 18)
-          ('r19 >< 19) ('r20 >< 20) ('r21 >< 21) ('r22 >< 22) ('r23 >< 23) ('r24 >< 24)
-          ('r25 >< 25) ('r26 >< 26) ('r27 >< 27) ('r28 >< 28)])
+          ('r16 . 16) ('r17 . 17) ('r18 . 18)
+          ('r19 . 19) ('r20 . 20) ('r21 . 21) ('r22 . 22) ('r23 . 23) ('r24 . 24)
+          ('r25 . 25) ('r26 . 26) ('r27 . 27) ('r28 . 28)])
 
    ;; -- ALU: op -> (reg-reg base word . imm base word | 0 if no immediate form). the row
    ;; list stays bound: the emitter tablet below pins the group off it. --
    a64-alu-rows
-        [('add >< [0x8B000000 0x91000000]) ('sub >< [0xCB000000 0xD1000000])
-          ('and >< [0x8A000000 0]) ('or >< [0xAA000000 0]) ('xor >< [0xCA000000 0])
-          ('adds >< [0xAB000000 0xB1000000]) ('subs >< [0xEB000000 0xF1000000])]      ; the S-variant: set nzcv
+        [('add . [0x8B000000 0x91000000]) ('sub . [0xCB000000 0xD1000000])
+          ('and . [0x8A000000 0]) ('or . [0xAA000000 0]) ('xor . [0xCA000000 0])
+          ('adds . [0xAB000000 0xB1000000]) ('subs . [0xEB000000 0xF1000000])]      ; the S-variant: set nzcv
    a64-alu (tabof a64-alu-rows)
 
    ;; -- condition codes: IR name -> the a64 cond field (B.cond bits[3:0]). --
    a64-cc (tabof
-        [('eq >< 0) ('ne >< 1) ('ae >< 2) ('below >< 3) ('s >< 4) ('ns >< 5)
-          ('vs >< 6) ('vc >< 7)
+        [('eq . 0) ('ne . 1) ('ae . 2) ('below . 3) ('s . 4) ('ns . 5)
+          ('vs . 6) ('vc . 7)
            ; p/np (x86 parity: ucomisd's unordered bit) alias vs/vc -- FCMP
            ; parks unordered in V, and nothing else here reads p/np
-          ('p >< 6) ('np >< 7)
-          ('above >< 8) ('be >< 9) ('ge >< 10) ('lt >< 11) ('gt >< 12) ('le >< 13)])
+          ('p . 6) ('np . 7)
+          ('above . 8) ('be . 9) ('ge . 10) ('lt . 11) ('gt . 12) ('le . 13)])
 
    (rn r) (look a64-regs r 'badreg)
    (reg-eq a b) (rn a = rn b)       ; own the name: a free read here would leak onto x64's register file
@@ -471,7 +471,7 @@
                                                                                                ; temps: no arg, no callee-saved half)
    (frn r) (look a64-fregs r 'badfreg)
    a64-fp3 (tabof                                                                            ; SSE arith mnemonic -> the scalar-double base word (Dd = Dn OP Dm)
-        [('addsd >< 0x1E602800) ('subsd >< 0x1E603800) ('mulsd >< 0x1E600800) ('divsd >< 0x1E601800)])
+        [('addsd . 0x1E602800) ('subsd . 0x1E603800) ('mulsd . 0x1E600800) ('divsd . 0x1E601800)])
    (a64-fp3op op d s) (: dn (frn d) sn (frn s) (le32 (peep a64-fp3 op 0 | ((sn << 16) | ((dn << 5) | dn)))))     ; Dd = Dd OP Ds
    (a64-fmov  d s) (: dn (frn d) sn (frn s) (le32 (0x1E604000 | ((sn << 5) | dn))))           ; fmov Dd, Ds
    (a64-fcmp  a b) (: an (frn a) bn (frn b) (le32 (0x1E602000 | ((bn << 16) | (an << 5)))))   ; FCMP Da, Db (sets NZCV; unordered -> VS)
@@ -500,17 +500,17 @@
    ;; the table is the ~score the kernel touches, and it grows: one row is one instruction.
    (sreg o0 o1 cn cm o2) ((o0 << 19) | ((o1 << 16) | ((cn << 12) | ((cm << 8) | (o2 << 5)))))
    a64-sysregs (tabof
-        [('sctlr_el1 >< sreg 3 0 1 0 0) ('cpacr_el1 >< sreg 3 0 1 0 2)
-          ('ttbr0_el1 >< sreg 3 0 2 0 0) ('ttbr1_el1 >< sreg 3 0 2 0 1)
-          ('tcr_el1 >< sreg 3 0 2 0 2)
-          ('spsr_el1 >< sreg 3 0 4 0 0) ('elr_el1 >< sreg 3 0 4 0 1)
-          ('currentel >< sreg 3 0 4 2 2)
-          ('esr_el1 >< sreg 3 0 5 2 0) ('far_el1 >< sreg 3 0 6 0 0)
-          ('par_el1 >< sreg 3 0 7 4 0) ('mair_el1 >< sreg 3 0 10 2 0)
-          ('vbar_el1 >< sreg 3 0 12 0 0) ('mpidr_el1 >< sreg 3 0 0 0 5)
-          ('ctr_el0 >< sreg 3 3 0 0 1)
-          ('cntfrq_el0 >< sreg 3 3 14 0 0) ('cntpct_el0 >< sreg 3 3 14 0 1)
-          ('cntp_tval_el0 >< sreg 3 3 14 2 0) ('cntp_ctl_el0 >< sreg 3 3 14 2 1)])
+        [('sctlr_el1 . sreg 3 0 1 0 0) ('cpacr_el1 . sreg 3 0 1 0 2)
+          ('ttbr0_el1 . sreg 3 0 2 0 0) ('ttbr1_el1 . sreg 3 0 2 0 1)
+          ('tcr_el1 . sreg 3 0 2 0 2)
+          ('spsr_el1 . sreg 3 0 4 0 0) ('elr_el1 . sreg 3 0 4 0 1)
+          ('currentel . sreg 3 0 4 2 2)
+          ('esr_el1 . sreg 3 0 5 2 0) ('far_el1 . sreg 3 0 6 0 0)
+          ('par_el1 . sreg 3 0 7 4 0) ('mair_el1 . sreg 3 0 10 2 0)
+          ('vbar_el1 . sreg 3 0 12 0 0) ('mpidr_el1 . sreg 3 0 0 0 5)
+          ('ctr_el0 . sreg 3 3 0 0 1)
+          ('cntfrq_el0 . sreg 3 3 14 0 0) ('cntpct_el0 . sreg 3 3 14 0 1)
+          ('cntp_tval_el0 . sreg 3 3 14 2 0) ('cntp_ctl_el0 . sreg 3 3 14 2 1)])
    (a64-sysreg nm) (look a64-sysregs nm 'badsysreg)
    (a64-mrs d nm) (le32 (0xD5200000 | (a64-sysreg nm | rn d)))         ; MRS Xd, <reg>
    (a64-msr nm s) (le32 (0xD5000000 | (a64-sysreg nm | rn s)))         ; MSR <reg>, Xs
@@ -518,7 +518,7 @@
    ;; MSR (immediate): a pstate field, not a register -- op1/op2 name the field and the 4-bit
    ;; immediate rides crm. this is how interrupts mask (daifset/daifclr) and how the stack
    ;; pointer is chosen (spsel).
-   a64-pstate (tabof [('spsel >< '(0 5)) ('daifset >< '(3 6)) ('daifclr >< '(3 7))])
+   a64-pstate (tabof [('spsel . '(0 5)) ('daifset . '(3 6)) ('daifclr . '(3 7))])
    (a64-msri fld imm)
       (: r (peep a64-pstate fld ())
          _ (? (two? r) 0 (scare 'badpstate fld))
@@ -528,8 +528,8 @@
    ;; barriers. one option table (the shareability domain) under all three; isb takes only sy,
    ;; so it is nullary here.
    a64-barrier-opts (tabof
-        [('oshld >< 1) ('oshst >< 2) ('osh >< 3) ('nshld >< 5) ('nshst >< 6) ('nsh >< 7)
-          ('ishld >< 9) ('ishst >< 10) ('ish >< 11) ('ld >< 13) ('st >< 14) ('sy >< 15)])
+        [('oshld . 1) ('oshst . 2) ('osh . 3) ('nshld . 5) ('nshst . 6) ('nsh . 7)
+          ('ishld . 9) ('ishst . 10) ('ish . 11) ('ld . 13) ('st . 14) ('sy . 15)])
    (a64-barrier base opt) (le32 (base | (look a64-barrier-opts opt 'badbarrier << 8)))
    (a64-dsb opt) (a64-barrier 0xD503309F opt)
    (a64-dmb opt) (a64-barrier 0xD50330BF opt)
@@ -538,14 +538,14 @@
    ;; almost disjoint (dc ivac vs ic ivau) and a silent cross-read would emit the wrong cache
    ;; op. the whole-system forms take no register: spell that operand `zr` (Rt = 31 = XZR).
    a64-tlbi-ops (tabof
-        [('vmalle1 >< sreg 1 0 8 7 0) ('vmalle1is >< sreg 1 0 8 3 0)
-          ('vae1 >< sreg 1 0 8 7 1) ('vae1is >< sreg 1 0 8 3 1)
-          ('aside1is >< sreg 1 0 8 3 2) ('alle1 >< sreg 1 4 8 7 4)])
-   a64-ic-ops (tabof [('iallu >< sreg 1 0 7 5 0) ('ivau >< sreg 1 3 7 5 1)])
+        [('vmalle1 . sreg 1 0 8 7 0) ('vmalle1is . sreg 1 0 8 3 0)
+          ('vae1 . sreg 1 0 8 7 1) ('vae1is . sreg 1 0 8 3 1)
+          ('aside1is . sreg 1 0 8 3 2) ('alle1 . sreg 1 4 8 7 4)])
+   a64-ic-ops (tabof [('iallu . sreg 1 0 7 5 0) ('ivau . sreg 1 3 7 5 1)])
    a64-dc-ops (tabof
-        [('ivac >< sreg 1 0 7 6 1) ('zva >< sreg 1 3 7 4 1) ('cvac >< sreg 1 3 7 10 1)
-          ('cvau >< sreg 1 3 7 11 1) ('civac >< sreg 1 3 7 14 1)])
-   a64-at-ops (tabof [('s1e1r >< sreg 1 0 7 8 0) ('s1e1w >< sreg 1 0 7 8 1)])
+        [('ivac . sreg 1 0 7 6 1) ('zva . sreg 1 3 7 4 1) ('cvac . sreg 1 3 7 10 1)
+          ('cvau . sreg 1 3 7 11 1) ('civac . sreg 1 3 7 14 1)])
+   a64-at-ops (tabof [('s1e1r . sreg 1 0 7 8 0) ('s1e1w . sreg 1 0 7 8 1)])
    (a64-sysrt t) (? (= t 'zr) 31 (rn t))
    (a64-sys tab bad op t) (le32 (0xD5000000 | (look tab op bad | a64-sysrt t)))
 
@@ -561,65 +561,65 @@
    ;; the dispatch: an emitter tablet (shapes in holo.l's ir-arity), rows partial-applied,
    ;; nullaries their words outright, `raw` the identity. the alu group pins off its rows.
    a64-emitters (emsof
-        [('li >< a64-li) ('mov >< a64-mov) ('cmp >< a64-cmp) ('imul >< a64-imul)
-          ('ld >< a64-ld) ('st >< a64-st)
-          ('ld1 >< a64-ld1) ('ld2 >< a64-ld2) ('ld4 >< a64-ld4)
-          ('st1 >< a64-st1) ('st2 >< a64-st2) ('st4 >< a64-st4)
-          ('ldu1 >< a64-ldu1) ('ldu2 >< a64-ldu2) ('ldu4 >< a64-ldu4)
-          ('sx1 >< a64-sx 1) ('sx2 >< a64-sx 2) ('sx4 >< a64-sx 4)
-          ('zx1 >< a64-zx 1) ('zx2 >< a64-zx 2) ('zx4 >< a64-zx 4)
-          ('shlv >< a64-shiftv 'shlv) ('shrv >< a64-shiftv 'shrv) ('sarv >< a64-shiftv 'sarv)
-          ('rorv >< a64-shiftv 'rorv) ('rorv4 >< a64-shiftv 'rorv4)
-          ('shl >< a64-shift 'shl) ('shr >< a64-shift 'shr) ('sar >< a64-shift 'sar)
-          ('rol >< a64-shift 'rol) ('ror >< a64-shift 'ror) ('ror4 >< a64-shift 'ror4)
-          ('lea >< a64-lea) ('lean >< a64-lea)           ; a consumed lea (x64 tells them apart for the escape gate)
-          ('push >< a64-push) ('pop >< a64-pop)
-          ('neg >< a64-neg) ('not >< a64-not) ('inc >< a64-inc) ('dec >< a64-dec)
-          ('jmp >< a64-jmp) ('br >< a64-br) ('jmpr >< a64-jmpr) ('callr >< a64-callr)
-          ('mulo >< a64-mulo) ('mulh >< a64-mulh) ('set >< a64-set) ('test >< a64-test)
-          ('div >< a64-div) ('rem >< a64-rem) ('udiv >< a64-udiv) ('urem >< a64-urem)
-          ('a128 >< a64-a128) ('s128 >< a64-s128)                ; -- the 128-bit pair kit --
-          ('m128 >< a64-m128) ('mw128 >< a64-mw128)
-          ('a128r >< a64-a128r) ('s128r >< a64-s128r) ('m128r >< a64-m128r)
-          ('mw128r >< a64-mw128r) ('c128r >< a64-c128r) ('c128 >< a64-c128)
-          ('shl128 >< a64-shl128) ('shr128 >< a64-shr128) ('sar128 >< a64-sar128)
-          ('shl128v >< a64-shl128v) ('shr128v >< a64-shr128v) ('sar128v >< a64-sar128v)
-          ('dv128 >< a64-dv128) ('rm128 >< a64-rm128)
-          ('sx128 >< a64-sx128) ('n128 >< a64-n128)
-          ('inc128 >< a64-inc128) ('dec128 >< a64-dec128)
-          ('ldx >< a64-ldx) ('stx >< a64-stx) ('leax >< a64-leax)
-          ('ldxb >< a64-ldxb) ('stxb >< a64-stxb)
-          ('call >< a64-call) ('la >< a64-la) ('lar >< a64-lar) ('lia >< a64-lia)
-          ('movsd >< a64-fmov)                             ; -- scalar-double FP --
-          ('addsd >< a64-fp3op 'addsd) ('subsd >< a64-fp3op 'subsd)
-          ('mulsd >< a64-fp3op 'mulsd) ('divsd >< a64-fp3op 'divsd)
-          ('ucomisd >< a64-fcmp) ('cvtsi2sd >< a64-scvtf) ('cvttsd2si >< a64-fcvtzs)
-          ('movqxr >< a64-fmovxr) ('movqrx >< a64-fmovrx)
-          ('stsd >< a64-fst) ('ldsd >< a64-fld) ('stss >< a64-fsts) ('ldss >< a64-flds)
-          ('cvtss2sd >< a64-fcvt-widen) ('cvtsd2ss >< a64-fcvt-narrow)
-          ('xorpd >< a64-xorpd)                            ; zero a double (d==s)
-          ('raw >< 1)
-          ('mrs >< a64-mrs) ('msr >< a64-msr) ('msri >< a64-msri)    ; -- the system lane --
-          ('dsb >< a64-dsb) ('dmb >< a64-dmb)
-          ('tlbi >< a64-sys a64-tlbi-ops 'badtlbi)
-          ('ic >< a64-sys a64-ic-ops 'badic)
-          ('dc >< a64-sys a64-dc-ops 'baddc)
-          ('at >< a64-sys a64-at-ops 'badat)
-          ('brk >< a64-exc 0xD4200000) ('dbrk >< a64-exc 0xD4400000)        ; brk #imm / hlt #imm (the debugger halt)
-          ('hvc >< a64-exc 0xD4000002) ('smc >< a64-exc 0xD4000003)
-          ('udf >< a64-udf)
-          ('isb >< le32 0xD5033FDF)                          ; isb sy
-          ('wfi >< le32 0xD503207F) ('wfe >< le32 0xD503205F)
-          ('eret >< le32 0xD69F03E0)
-          ('ret >< le32 0xD65F03C0)                          ; ret x30
-          ('sys >< le32 0xD4000001)                          ; svc #0
+        [('li . a64-li) ('mov . a64-mov) ('cmp . a64-cmp) ('imul . a64-imul)
+          ('ld . a64-ld) ('st . a64-st)
+          ('ld1 . a64-ld1) ('ld2 . a64-ld2) ('ld4 . a64-ld4)
+          ('st1 . a64-st1) ('st2 . a64-st2) ('st4 . a64-st4)
+          ('ldu1 . a64-ldu1) ('ldu2 . a64-ldu2) ('ldu4 . a64-ldu4)
+          ('sx1 . a64-sx 1) ('sx2 . a64-sx 2) ('sx4 . a64-sx 4)
+          ('zx1 . a64-zx 1) ('zx2 . a64-zx 2) ('zx4 . a64-zx 4)
+          ('shlv . a64-shiftv 'shlv) ('shrv . a64-shiftv 'shrv) ('sarv . a64-shiftv 'sarv)
+          ('rorv . a64-shiftv 'rorv) ('rorv4 . a64-shiftv 'rorv4)
+          ('shl . a64-shift 'shl) ('shr . a64-shift 'shr) ('sar . a64-shift 'sar)
+          ('rol . a64-shift 'rol) ('ror . a64-shift 'ror) ('ror4 . a64-shift 'ror4)
+          ('lea . a64-lea) ('lean . a64-lea)           ; a consumed lea (x64 tells them apart for the escape gate)
+          ('push . a64-push) ('pop . a64-pop)
+          ('neg . a64-neg) ('not . a64-not) ('inc . a64-inc) ('dec . a64-dec)
+          ('jmp . a64-jmp) ('br . a64-br) ('jmpr . a64-jmpr) ('callr . a64-callr)
+          ('mulo . a64-mulo) ('mulh . a64-mulh) ('set . a64-set) ('test . a64-test)
+          ('div . a64-div) ('rem . a64-rem) ('udiv . a64-udiv) ('urem . a64-urem)
+          ('a128 . a64-a128) ('s128 . a64-s128)                ; -- the 128-bit pair kit --
+          ('m128 . a64-m128) ('mw128 . a64-mw128)
+          ('a128r . a64-a128r) ('s128r . a64-s128r) ('m128r . a64-m128r)
+          ('mw128r . a64-mw128r) ('c128r . a64-c128r) ('c128 . a64-c128)
+          ('shl128 . a64-shl128) ('shr128 . a64-shr128) ('sar128 . a64-sar128)
+          ('shl128v . a64-shl128v) ('shr128v . a64-shr128v) ('sar128v . a64-sar128v)
+          ('dv128 . a64-dv128) ('rm128 . a64-rm128)
+          ('sx128 . a64-sx128) ('n128 . a64-n128)
+          ('inc128 . a64-inc128) ('dec128 . a64-dec128)
+          ('ldx . a64-ldx) ('stx . a64-stx) ('leax . a64-leax)
+          ('ldxb . a64-ldxb) ('stxb . a64-stxb)
+          ('call . a64-call) ('la . a64-la) ('lar . a64-lar) ('lia . a64-lia)
+          ('movsd . a64-fmov)                             ; -- scalar-double FP --
+          ('addsd . a64-fp3op 'addsd) ('subsd . a64-fp3op 'subsd)
+          ('mulsd . a64-fp3op 'mulsd) ('divsd . a64-fp3op 'divsd)
+          ('ucomisd . a64-fcmp) ('cvtsi2sd . a64-scvtf) ('cvttsd2si . a64-fcvtzs)
+          ('movqxr . a64-fmovxr) ('movqrx . a64-fmovrx)
+          ('stsd . a64-fst) ('ldsd . a64-fld) ('stss . a64-fsts) ('ldss . a64-flds)
+          ('cvtss2sd . a64-fcvt-widen) ('cvtsd2ss . a64-fcvt-narrow)
+          ('xorpd . a64-xorpd)                            ; zero a double (d==s)
+          ('raw . 1)
+          ('mrs . a64-mrs) ('msr . a64-msr) ('msri . a64-msri)    ; -- the system lane --
+          ('dsb . a64-dsb) ('dmb . a64-dmb)
+          ('tlbi . a64-sys a64-tlbi-ops 'badtlbi)
+          ('ic . a64-sys a64-ic-ops 'badic)
+          ('dc . a64-sys a64-dc-ops 'baddc)
+          ('at . a64-sys a64-at-ops 'badat)
+          ('brk . a64-exc 0xD4200000) ('dbrk . a64-exc 0xD4400000)        ; brk #imm / hlt #imm (the debugger halt)
+          ('hvc . a64-exc 0xD4000002) ('smc . a64-exc 0xD4000003)
+          ('udf . a64-udf)
+          ('isb . le32 0xD5033FDF)                          ; isb sy
+          ('wfi . le32 0xD503207F) ('wfe . le32 0xD503205F)
+          ('eret . le32 0xD69F03E0)
+          ('ret . le32 0xD65F03C0)                          ; ret x30
+          ('sys . le32 0xD4000001)                          ; svc #0
            ; svc with an immediate, which netbsd/aarch64 requires: it takes the
            ; syscall number from the instruction, not a register, and offers no
            ; indirect door (SYS_syscall and SYS___syscall both SIGSYS there). So
            ; a runtime number is only reachable through a table of these.
-          ('svcn >< a64-exc 0xD4000001)                    ; svc #imm
-          ('nop >< le32 0xD503201F)
-          ('trap >< le32 0xD4200000)])                       ; brk #0
+          ('svcn . a64-exc 0xD4000001)                    ; svc #imm
+          ('nop . le32 0xD503201F)
+          ('trap . le32 0xD4200000)])                       ; brk #0
    _ (foldl (\ _ p (emrow a64-emitters <p (a64-aluop <p))) 0 a64-alu-rows)
    (a64-lower ins) (: f lower-via (? (lit? f) (f a64-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 

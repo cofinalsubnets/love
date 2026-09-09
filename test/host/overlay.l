@@ -37,12 +37,12 @@
            (! (sweep "apps/lux/layout.l")))
  ; ...and a known kind in the wrong seat is caught: zins wants (window zipper),
  ; the wound hands it a tag and a sheaf
- hurt (chk1 lux-dom (link '(oops (sheaf tag) top) lux-sigs)
+ hurt (chk1 lux-dom (. '(oops (sheaf tag) top) lux-sigs)
             '(: (oops s t) (zins (wstagof s t) s)))
  _ (test (two? hurt) ('oops = (cap (cap hurt))))
 
  ; leg 2: the gradual laws
- sg2 (link '(g1 (rect) window) (link '(g2 (window) top) lux-sigs))
+ sg2 (. '(g1 (rect) window) (. '(g2 (window) top) lux-sigs))
  _ (test (! (chk1 lux-dom sg2 '(: (g1 r) (zfoc (cap r)))))       ; unknown arg: consistent
            (! (chk1 lux-dom sg2 '(: (g2 w) (zins w))))             ; partial app: open, not a clash
            (two? (chk1 lux-dom sg2 '(: (g1 r) (zfoc r)))))         ; a rect in the zipper seat: flagged
@@ -68,7 +68,7 @@
 (reads (open "test/uuwmlaw.l" "r"))
 (: (encl l) (two? l ? ['ncons (cap l) (encl (cup l))] 'nnil)
    (encz z) ['zmk (cap z) (encl (caup z)) (encl (caup (cup z)))]
-   (decl v) (: (go vv acc) (two? vv ? (go (vv 2) (link (vv 1) acc)) (rev acc))
+   (decl v) (: (go vv acc) (two? vv ? (go (vv 2) (. (vv 1) acc)) (rev acc))
               (go (v 2) ()))
    (decz v) (zmk (v 1) (decl ((v 2) 1)) (decl ((v 2) 2)))
  z0 (zmk 5 [2] [7 9])
@@ -96,7 +96,7 @@
 (: (rnd s) (% (+ (* s 1103515245) 12345) 2147483648)
    (encl l) (two? l ? ['ncons (cap l) (encl (cup l))] 'nnil)
    (encz z) ['zmk (cap z) (encl (caup z)) (encl (caup (cup z)))]
-   (decl v) (: (go vv acc) (two? vv ? (go (vv 2) (link (vv 1) acc)) (rev acc))
+   (decl v) (: (go vv acc) (two? vv ? (go (vv 2) (. (vv 1) acc)) (rev acc))
               (go (v 2) ()))
    (decz v) (zmk (v 1) (decl ((v 2) 1)) (decl ((v 2) 2)))
    (mstep r w t) (? (= r 0) (vof 0 ['zins w t])
@@ -159,8 +159,8 @@
                  ks (cap (cup sg))
                  res (w2-mty (w2-rk nm (sg 2)))
                  ((uu 'defn) (caup (assoc nm amap))
-                   (w2-pi ps ks ['paths res (link (w2-gen nm) ps) (link (mname nm) ps)])
-                   (w2-lams ps ['idpath (link (mname nm) ps)]))))
+                   (w2-pi ps ks ['paths res (. (w2-gen nm) ps) (. (mname nm) ps)])
+                   (w2-lams ps ['idpath (. (mname nm) ps)]))))
         w2-want)
  (puts "overlay stage 4: 10 idpath bridges -- the compiled ops ARE the proved model"))
 
@@ -168,7 +168,7 @@
 (: (rnd s) (% (+ (* s 1103515245) 12345) 2147483648)
    (encl l) (two? l ? ['ncons (cap l) (encl (cup l))] 'nnil)
    (encz z) ['zmk (cap z) (encl (caup z)) (encl (caup (cup z)))]
-   (decl v) (: (go vv acc) (two? vv ? (go (vv 2) (link (vv 1) acc)) (rev acc))
+   (decl v) (: (go vv acc) (two? vv ? (go (vv 2) (. (vv 1) acc)) (rev acc))
               (go (v 2) ()))
    (decz v) (zmk (v 1) (decl ((v 2) 1)) (decl ((v 2) 2)))
    (mstep r w t) (? (= r 0) (vof 0 ['gen-zins w t])
@@ -212,10 +212,10 @@
 (reads (open "apps/lux/layout.l" "r"))
 (: (rnd s) (% (+ (* s 1103515245) 12345) 2147483648)
    (encl l) (two? l ? ['ncons (cap l) (encl (cup l))] 'nnil)
-   (decl v) (: (go vv acc) (two? vv ? (go (vv 2) (link (vv 1) acc)) (rev acc))
+   (decl v) (: (go vv acc) (two? vv ? (go (vv 2) (. (vv 1) acc)) (rev acc))
               (go (v 2) ()))
-   (wincol ps) (two? ps ? (link (cap (cap ps)) (wincol (cup ps))) ())
-   (iota n b) (< n 1 ? () (link b (iota (- n 1) (+ b 1))))
+   (wincol ps) (two? ps ? (. (cap (cap ps)) (wincol (cup ps))) ())
+   (iota n b) (< n 1 ? () (. b (iota (- n 1) (+ b 1))))
    (walk i s)
     (? (< i 1) 1
        (: n (% s 7) nm (% (rnd s) 5) s2 (rnd (rnd s))

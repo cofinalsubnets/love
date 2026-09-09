@@ -33,7 +33,7 @@
    ;; -- the tape: a global Wengert list of op nodes, newest-first (= reverse-topo)
    tl-tape {}
    (tl-reset _) (pin tl-tape 0 ())
-   (tl-push n)  (: _ (pin tl-tape 0 (n >< peep tl-tape 0 ())) n)
+   (tl-push n)  (: _ (pin tl-tape 0 (n . peep tl-tape 0 ())) n)
 
    ;; -- nodes --
    (tl-node? x)  (tablet? x)                          ; a tele node (a raw constellation is never a tab)

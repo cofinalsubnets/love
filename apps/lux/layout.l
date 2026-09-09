@@ -18,7 +18,7 @@
    (splitv-eq n r)                                                               ; n equal vertical strips, last takes the remainder
     (? (n < 1) ()
        (: hh (rh r // n)
-          (: (go i) (? (i < n) (link (rct (rx r) (ry r + (i * hh)) (rw r)
+          (: (go i) (? (i < n) (. (rct (rx r) (ry r + (i * hh)) (rw r)
                                           (i = (n - 1) ? (rh r - ((n - 1) * hh)) hh))
                                      (go (i + 1))) ())
              (go 0))))
@@ -27,17 +27,17 @@
        (: (go i yy) (? (i < n)
                        (: fr (fracs i)
                           hh (i = (n - 1) ? ((ry r + rh r) - yy) (int (rh r * (fr / tot))))
-                          (rct (rx r) yy (rw r) hh >< go (i + 1) (yy + hh)))
+                          (rct (rx r) yy (rw r) hh . go (i + 1) (yy + hh)))
                        ())
           (go 0 (ry r))))
    (splith-by ratio r)                                                          ; split width by ratio -> (left right)
     (: mw (int (ratio * rw r))
        [(rct (rx r) (ry r) mw (rh r)) (rct (rx r + mw) (ry r) (rw r - mw) (rh r))])
    (placeat wins rects) (? (two? wins && two? rects)                            ; zip windows with rects -> (win x y w h)..
-                           ((<wins >< <rects) >< placeat >wins >rects) ())
+                           ((<wins . <rects) . placeat >wins >rects) ())
    (posof x l) (: (go i m) (!(two? m) ? -1 (<m = x ? i (go (i + 1) >m))) (go 0 l))
    (mx2 a b) (a < b ? b a)  (mn2 a b) (a < b ? a b)                          ; scalar max/min (max/min are array reducers)
-   (padfr fr ns) (: (go i f) (? (i < ns) (link (two? f ? <f 1.0)              ; a length-ns slave-frac list, padded with 1.0
+   (padfr fr ns) (: (go i f) (? (i < ns) (. (two? f ? <f 1.0)              ; a length-ns slave-frac list, padded with 1.0
                                               (go (i + 1) (two? f ? >f ()))) ())
                     (go 0 fr))
 
@@ -54,7 +54,7 @@
              ms (placeat (take nm row) (splitv-eq nm rl))
              ss (placeat (drop nm row) (splitv-w (padfr fracs ns) rr))
              [(ms + ss) lay])))
-   (rt-set lay k v) (: (go i p) (!(two? p) ? () ((i = k ? v <p) >< go (i + 1) >p)) (go 0 lay))
+   (rt-set lay k v) (: (go i p) (!(two? p) ? () ((i = k ? v <p) . go (i + 1) >p)) (go 0 lay))
    (rt-msg lay msg z)
     (: ratio (lay 2) delta (lay 3)
        (? (msg = 'shrink)     (rt-set lay 2 (mx2 0.05 (ratio - delta)))
@@ -72,19 +72,19 @@
    ; --- Full: the focused window owns the whole rect; the rest go unplaced
    ;     (the driver unmaps windows absent from the placements) ---
    full '(full)
-   (full-tile lay rect z) (: f (zfoc z) [(f ? [(f >< rect)] ()) lay])
+   (full-tile lay rect z) (: f (zfoc z) [(f ? [(f . rect)] ()) lay])
 
    ; --- Dwindle: the golden spiral. Each window takes a phi-fraction of the
    ;     remaining rect, the split axis alternating -- windows dwindle. Pure. ---
    (dwindle ratio) ['dwindle ratio]
    (dw-go rect wins ratio axis)
     (? !(two? wins) ()
-       !(two? >wins) [(<wins >< rect)]                                          ; last window fills the remainder
+       !(two? >wins) [(<wins . rect)]                                          ; last window fills the remainder
        (: f (ratio / (1.0 + ratio))                                              ; the focused window's fraction (phi/(1+phi))
           hs (? (axis = 0)                                                        ; axis 0 = split left|right, 1 = top|bottom
                 (: fw (int (f * rw rect)) [(rct (rx rect) (ry rect) fw (rh rect)) (rct (rx rect + fw) (ry rect) (rw rect - fw) (rh rect))])
                 (: fh (int (f * rh rect)) [(rct (rx rect) (ry rect) (rw rect) fh) (rct (rx rect) (ry rect + fh) (rw rect) (rh rect - fh))]))
-          ((<wins >< <hs) >< dw-go <>hs >wins ratio (1 - axis))))
+          ((<wins . <hs) . dw-go <>hs >wins ratio (1 - axis))))
    (dw-tile lay rect z) [(dw-go rect (zrow z) (lay 1) 0) lay]
    (dw-msg lay msg z) (? (msg = 'expand) (rt-set lay 1 (lay 1 * 1.1))       ; expand/shrink nudge the spiral ratio
                           (msg = 'shrink) (rt-set lay 1 (mx2 1.05 (lay 1 / 1.1))) ())
@@ -122,7 +122,7 @@
    (toggle-full inner) ['toggle-lay 0 inner]
    (tf-tile lay rect z)
     (: on (lay 1) inner (lay 2)
-       (? on (: f (zfoc z) [(f ? [(f >< rect)] ()) lay])                        ; Full: only the focus, whole rect
+       (? on (: f (zfoc z) [(f ? [(f . rect)] ()) lay])                        ; Full: only the focus, whole rect
           (: res (lay-tile inner rect z) [<res ['toggle-lay on <>res]])))
    (tf-msg lay msg z)
     (: on (lay 1) inner (lay 2)
@@ -140,7 +140,7 @@
        [<res ['minimize mins <>res]])
    (mn-msg lay msg z)
     (: mins (lay 1) inner (lay 2)
-       (? (two? msg && (<msg = 'minimize-window)) ['minimize (<>msg >< mins) inner]
+       (? (two? msg && (<msg = 'minimize-window)) ['minimize (<>msg . mins) inner]
           (two? msg && (<msg = 'restore-window))                                  ; un-hide a named window (a taskbar activate)
           (? (any (w \ w = <>msg) mins)
              ['minimize (filter (w \ !(w = <>msg)) mins) inner] ())
@@ -174,7 +174,7 @@
        (: r (lay-msg (ch-cur lay) msg z) (r ? (ch-put lay r) ())))
 
    ; map over two lists in lockstep (prel has none) ---
-   (map2 f a b) (two? a && two? b ? (f <a <b >< map2 f >a >b) ())
+   (map2 f a b) (two? a && two? b ? (f <a <b . map2 f >a >b) ())
 
    ; --- the dispatch: case on the record tag. The tag can also be a closure --
    ;     the open lane: <lay a function answering ('tile lay rect z) ->

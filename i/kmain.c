@@ -2015,11 +2015,11 @@ void kmain(void) {
  "(: envt (tablet 0)"
  "   (envget l n) (? (two? l) (? (= n (cap (cap l))) (cup (cap l)) (envget (cup l) n)) ())"
  "   (envcut l n) (? (two? l) (? (= n (cap (cap l))) (envcut (cup l) n)"
- "                              (link (cap l) (envcut (cup l) n))) ())"
+ "                              (. (cap l) (envcut (cup l) n))) ())"
  "   (getenv n) (? (string? n) (envget (peep envt 0 ()) n) ())"
  "   (setenv n v) (? (string? n)"
  "                   (: c (envcut (peep envt 0 ()) n)"
- "                      _ (pin envt 0 (? (string? v) (link (link n v) c) c)) ())"
+ "                      _ (pin envt 0 (? (string? v) (. (. n v) c) c)) ())"
  "                   'badarg)"
  "   (environ u) (map (\\ e (+ (cap e) (+ \"=\" (cup e)))) (peep envt 0 ())))"
  // the command line (rung 3): `bootargv` = (word..) off the raw boot line, split
@@ -2028,16 +2028,16 @@ void kmain(void) {
  // read, and lush sits mid-cat, so it would take the machine with kore's applets still
  // unread. the boot dispatch at the foot wears the real line.
  "(: bootargv"
- "     (: (kw i w s acc) (? (<= (tally bootline) i) (rev (? (tally w) (link w acc) acc))"
+ "     (: (kw i w s acc) (? (<= (tally bootline) i) (rev (? (tally w) (. w acc) acc))"
  "                          (: c (bootline i)"
  // a char joins a string as a string of one: (+ w c) on mixed bands degenerates to w
  // alone, so a bare charm would drop every word's letters.
  "                             (? s (? (= c s) (kw (+ i 1) w 0 acc) (kw (+ i 1) (+ w (string c)) s acc))"
- "                                (= c 32) (kw (+ i 1) \"\" 0 (? (tally w) (link w acc) acc))"
+ "                                (= c 32) (kw (+ i 1) \"\" 0 (? (tally w) (. w acc) acc))"
  "                                (|| (= c 34) (= c 39)) (kw (+ i 1) w c acc)"
  "                                (kw (+ i 1) (+ w (string c)) 0 acc))))"
  "        (kw 0 \"\" 0 ()))"
- "   cmdline (link \"love\" ())"
+ "   cmdline (. \"love\" ())"
  "   argv cmdline)"
  // rung 4: spawn/wait as a love-side shim over the core task ops. a process on this machine
  // is a task: k-prog maps argv onto a love main -- a verb off the registry, a tool's own
@@ -2061,7 +2061,7 @@ void kmain(void) {
  "           (go cl) (: r (sound cl) (? (two? r) (: _ (ev (cap r)) (go (cup r))) 0))"
  "           (go t))"
  "        127)))"
- "   (k-tool nm as) (? (member? nm (names ())) (link (ev nm) as) ())"
+ "   (k-tool nm as) (? (member? nm (names ())) (. (ev nm) as) ())"
   // the crew is NOT in the kernel's cat, so a verb nobody asks for costs nothing. the
   // load reads the roster's files off /proc/src -- where the bake laid them and no write
   // can have reached -- and each file's own (module ..) form registers it. it hangs off
@@ -2071,9 +2071,9 @@ void kmain(void) {
  "   (cwords s i j acc)"
  "    (? (< j (tally s))"
  "       (? (= 32 (peep s j 0))"
- "          (? (< i j) (cwords s (+ j 1) (+ j 1) (link (snip s i j) acc)) (cwords s (+ j 1) (+ j 1) acc))"
+ "          (? (< i j) (cwords s (+ j 1) (+ j 1) (. (snip s i j) acc)) (cwords s (+ j 1) (+ j 1) acc))"
  "          (cwords s i (+ j 1) acc))"
- "       (? (< i j) (rev (link (snip s i j) acc)) (rev acc)))"
+ "       (? (< i j) (rev (. (snip s i j) acc)) (rev acc)))"
  "   (cload p) (: q (open (+ \"/proc/src/\" p) \"r\")"
  "     (? (port? q)"
  "        (: t (slurp q) _ (close q)"
@@ -2087,14 +2087,14 @@ void kmain(void) {
  // below reachable. a verb takes the args AFTER its name, kore's convention.
  "   (k-prog argv) (: a0 (cap argv) b (k-bn a0) as (cup argv)"
  "     v (cite 'verbs 'word a0)"
- "     (? !(nil? v) (link v as)"
+ "     (? !(nil? v) (. v as)"
  "        (: k (k-tool (intern (+ b \"-main\")) as)"
  "           (? (two? k) k"
  // `kore TOOL ..` where no dispatcher registered one -- the test kernel's seat,
  // which bakes the applet files and not kore.l
  "              (&& (= b \"kore\") (two? as))"
  "                (k-tool (intern (+ (cap as) \"-main\")) (cup as))"
- "              (two? (stat a0)) (link (k-run-file a0) as)"
+ "              (two? (stat a0)) (. (k-run-file a0) as)"
  "              ()))))"
  "   (k-slot w n) (? (! (two? w)) () (n = 0) (cap w) (k-slot (cup w) (n - 1)))"
  // a console-numbered fd means the PARENT's view of it, so 2>&1 follows what the parent
@@ -2175,14 +2175,14 @@ void kmain(void) {
    "(: (kwords s i j acc)"
    "    (? (< j (tally s))"
    "       (? (= 32 (peep s j 0))"
-   "          (? (< i j) (kwords s (+ j 1) (+ j 1) (link (snip s i j) acc)) (kwords s (+ j 1) (+ j 1) acc))"
+   "          (? (< i j) (kwords s (+ j 1) (+ j 1) (. (snip s i j) acc)) (kwords s (+ j 1) (+ j 1) acc))"
    "          (kwords s i (+ j 1) acc))"
-   "       (? (< i j) (rev (link (snip s i j) acc)) (rev acc)))"
+   "       (? (< i j) (rev (. (snip s i j) acc)) (rev acc)))"
    "   open (cite 'posix 'open) close (cite 'posix 'close)"    // by value, as above
    "   (kslurp p) (: h (open p \"r\") s (slurp h) _ (close h) s)"
    "   (kcat l) (? (two? l) (+ (kslurp (cap l)) (kcat (cup l))) \"\")"
    "   korecat (kcat (kwords korelist 0 0 ())))");
-  r = ai_evals_(r, "(reads (tap ((: (g i) (? (< i (tally korecat)) (link (peep korecat i 0) (g (+ 1 i))))) 0)))");
+  r = ai_evals_(r, "(reads (tap ((: (g i) (? (< i (tally korecat)) (. (peep korecat i 0) (g (+ 1 i))))) 0)))");
   }
   // the crew hangs off the registry's miss from here. re-armed on every boot, a woken
   // image's too: the load is idempotent (its own `source` row is the guard), and the
@@ -2195,7 +2195,7 @@ void kmain(void) {
   // now the line wears its real shape and the program word dispatches off the
   // registry -- spawn's own door. a seated program quits with its status (the
   // reset door); an empty line falls to the console shell, the toolbox warm.
-  r = ai_evals_(r, "(: cmdline (link \"love\" bootargv) argv cmdline)");
+  r = ai_evals_(r, "(: cmdline (. \"love\" bootargv) argv cmdline)");
   r = ai_evals_(r,
    "(? (two? bootargv)"
    "   (: _ (hear (\\ a b (? (id? a 'leave) (quit b)"

@@ -32,7 +32,7 @@
    (keys-find t lib sym) (: hit (afind (r \ (kb-mods r = lib) && (kb-sym r = sym)) t)
                              (two? hit ? (kb-act hit) ()))
    (keys-union custom def) (custom + (filter (r \ !(keys-has custom (kb-mods r) (kb-sym r))) def))
-   (keys-syms t) (foldl (\ a r (any (x \ x = kb-sym r) a ? a (kb-sym r >< a))) () t)
+   (keys-syms t) (foldl (\ a r (any (x \ x = kb-sym r) a ? a (kb-sym r . a))) () t)
 
    ; --- key specs: a list, `(sup shift e)` -- the last element is the key, every
    ;     one before it a modifier. a config writes these (apps/lux/config.l reads
@@ -89,7 +89,7 @@
                     a)
    (keys-rows modm rows)                                                         ; ((spec action) ..) -> binding rows; an unreadable spec is dropped
     (foldr (\ r acc (: k (two? r ? (kspec modm <r) ())
-                       (two? k && two? >r ? (kb <k <>k (kb-act-of <>r) >< acc) acc)))
+                       (two? k && two? >r ? (kb <k <>k (kb-act-of <>r) . acc) acc)))
            () rows)
    (keys-drop modm t specs)                                                      ; remove every chord named in specs
     (: ks (filter two? (map (s \ kspec modm s) specs))

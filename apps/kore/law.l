@@ -36,7 +36,7 @@
        (goi i) (? (< n i) (get n m) (: _ (goj i 1) (goi (+ i 1))))
        (goi 1))
    (rlist i st acc) (? (< i 1) [acc st]                     ; a random list over the alphabet 1..4; answers (list state)
-                       (: r (random st 4) (rlist (- i 1) >r ((+ 1 <r) >< acc))))
+                       (: r (random st 4) (rlist (- i 1) >r ((+ 1 <r) . acc))))
    (fz i st)
     (? (< i 1) 'ok
        (: r1 (random st 8) r2 (random >r1 8)
@@ -74,7 +74,7 @@
 ; --- the patience fuzz: a wider alphabet (so anchors actually occur), projections per
 ; draw, and the trade law dcost(patience) >= dcost(myers) held against the myers core ---
 (: (rlist2 i st acc) (? (< i 1) [acc st]
-                        (: r (random st 12) (rlist2 (- i 1) >r ((+ 1 <r) >< acc))))
+                        (: r (random st 12) (rlist2 (- i 1) >r ((+ 1 <r) . acc))))
    (fzp i st)
     (? (< i 1) 'ok
        (: r1 (random st 11) r2 (random >r1 11)
@@ -475,7 +475,7 @@
                    (? (dnul <ns) (d1 + (dl >ns c)) d1)))
    (dstep alts c) (: (dd xs acc) (? !(two? xs) acc
                                     (member? <xs acc) (dd >xs acc)
-                                    (dd >xs (<xs >< acc)))
+                                    (dd >xs (<xs . acc)))
                      (dd (catmap (\ u (dl u c)) alts) ()))
    ; contains-match by derivatives: from every start, hit as soon as some
    ; alternative goes nullable (the prefix face rehas wears)
@@ -635,7 +635,7 @@
 
 ; --- the pager (apps/kore/less.l): every key below drives the pure engine, one
 ; byte at a time, and reads the tablet back -- no tty, no port, no file ---
-(: (pg-bytes s) (: n (tally s) (go i acc) (? (i < 0) acc (go (i - 1) (s i >< acc))) (go (n - 1) ()))
+(: (pg-bytes s) (: n (tally s) (go i acc) (? (i < 0) acc (go (i - 1) (s i . acc))) (go (n - 1) ()))
    (pg-mk ls w h fl)
     (: t (tablet 0)
        _ (foldl (\ a c (pin t c 1)) 0 (pg-bytes fl))

@@ -20,7 +20,7 @@
 ; runs after l/holo/{elf,obj}.l in a cat with the thumb2 backend spliced into the
 ; sealed holo module (the mkboot2 shape; i/teensy41/Makefile drives it).
 (: (mkboot dst)
-   (: (zeros n) (? (n < 1) () (0 >< (zeros (n - 1))))
+   (: (zeros n) (? (n < 1) () (0 . (zeros (n - 1))))
       (wsym l) [['fix 4 'abs32 l 0]]           ; a word the linker fills: (S + A) | T
 
       ;; -- 1. the FlexSPI configuration block at flash 0x000 (RT1060 RM 9.6.3.1) ------

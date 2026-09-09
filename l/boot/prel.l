@@ -8,8 +8,7 @@
    flip co
    link? two?
    name nom intern nom mint nom
-   saturate sat
-   link . >< .)                     ; the infix cons: (a >< b) and (a . b) are (. a b); glued ><x stays the cup-cap accessor (valence)
+   saturate sat)                    ; the infix cons is `.` alone: (a . b) is (. a b); glued ><x stays the cup-cap accessor (valence)
 (: : () ? () \ ())
 (: e 2.718281828459045
    i (twin 0 1) ;; FIXME up top
@@ -145,7 +144,7 @@
 ; and a coin's lane is by declaration: a starred kind nets itself (so additivity lands in the
 ; kind's own ring), else its tally under net-mode tally, else its payload signed.
 ; one walk, tail-recursive: the spine's cars and then the tail, which a dotted link
-; carries and `()` nets away -- so net(link a b) = net a + net b at every link.
+; carries and `()` nets away -- so net(. a b) = net a + net b at every link.
 (: (netsum a l) (? (two? l) (netsum (+ a (net (cap l))) (cup l)) (+ a (net l)))
    (net x) (? (tray? x) (asum x)
               (constellation? x) x
@@ -272,7 +271,7 @@
                            0)
                      (leave ()))
     ; the quote takes the forms list whole -- (\ (f ..)), one element per form; an extra
-    ; (link .. ()) here makes the body one application chain, each answer applied to the next.
+    ; (. .. ()) here makes the body one application chain, each answer applied to the next.
     ; the head takes a nom or a list, quoted or not: 'x reads as (\ x), so unwrap one if it is there.
     (:: 'module (\ l (: h (cap l)
                         n (? (two? h) (? (id? (cap h) '\) (caup h) h) h)
@@ -300,7 +299,7 @@
  '<< -47 '>> -47                                    ; shifts
  '& -46 '^ -45 '| -44                               ; bitwise, C's order
  '&& 31 '|| 30                                      ; logical, below comparison; also pat.l's guard and alternative
- '>< 25 '. 25                                       ; cons -- the loosest builder, under both its spellings
+ '. 25                                              ; cons -- the loosest builder
  '$ 5 '\ 5)                                         ; weak apply (a $ b = (a b), haskell $; glued $x stays saturate) and
                                                     ; the lambda, one band. an infix lambda's body still runs to the end of
                                                     ; the form and swallows a $ to its right, as haskell's does -- but at
@@ -367,9 +366,9 @@
    ; zero can never be a band: a tablet miss answers 0, and a 0 band would read that miss as a
    ; live row at the loosest level there is.
    (op-band? b) (&& (charm? b) (nil? (= 0 b)))   ; prefix-only region: != is not a function yet
-   (op-row nm b ar) (>< nm (>< (abs b) (>< (? (< b 0) 1 0) ar)))       ; -> (name band hand . arity)
+   (op-row nm b ar) (. nm (. (abs b) (. (? (< b 0) 1 0) ar)))       ; -> (name band hand . arity)
    ; an alias tail. this table is compiled before `.` has its row, so up here source can only
-   ; spell the list form -- a written (pin . 20) is the three-element list. a pair built with >< reads too.
+   ; spell the list form -- a written (pin . 20) is the three-element list. a pair built with . reads too.
    (op-tail v) (? (charm? (cup v)) (cup v) (&& (two? (cup v)) (charm? (caup v))) (caup v) 0)
    ; k's row in the spaced lane t of arity ar -> (name band hand . ar), or 0. the row is read by
    ; kind, three shapes and no positions: a charm is the band and the sigil names itself; a nom is
@@ -403,7 +402,7 @@
            (? (< k 1) ()
               (: e (monadics (intern (snip nm (- j k) j)))
                  (? (id? () e) (try (- k 1))
-                    (: r (mono-go nm (- j k) (>< e acc)) (? (two? r) r (try (- k 1))))))))
+                    (: r (mono-go nm (- j k) (. e acc)) (? (two? r) r (try (- k 1))))))))
         j)
        acc)
    (monofactor s) (: nm (string s) (mono-go nm (tally nm) ()))
@@ -412,14 +411,14 @@
 ; need 0 means filled with the fold deferred, so a later operator can steal the last operand --
 ; that deferral is right-associativity. -1 is that steal already spent, the right operand growing
 ; as a span; -2 is N-ARY, which never fills and so never spans. out/pend thread as (out . pend).
-   (op-fr o nm nd g gt) (>< o (>< nm (>< nd (>< g gt))))
+   (op-fr o nm nd g gt) (. o (. nm (. nd (. g gt))))
    (op-fro f) (cap f) (op-frn f) (caup f)
    (op-frd f) (cap (cuup f)) (op-frband f) (cap (cuuup f)) (op-frg f) (cup (cuuup f))
    ; a frame is only ever rebuilt with a new need + got -- orig, name and band are fixed the
    ; moment the operator is read.
    (op-frw f nd g) (op-fr (op-fro f) (op-frn f) nd (op-frband f) g)
    ; wrap a chain of monadic words around a datum, outermost first
-   (op-fin ch x) (? (two? ch) (>< (cap ch) (>< (op-fin (cup ch) x) ())) x)
+   (op-fin ch x) (? (two? ch) (. (cap ch) (. (op-fin (cup ch) x) ())) x)
    ; fold a collected span (out, reversed) into one operand: a lone datum stays itself, two-or-more
    ; become the application (juxtaposition binds tighter than any infix operator).
    (op-span out) (? (two? (cup out)) (rev out) (cap out))
@@ -893,11 +892,11 @@
 ;                          is the untagged case, the one a head that names no tag falls
 ;                          to, and it is the common one: ('lam x b) fits (lam x b ..).
 ;   [a b]  (list a b)      a chain of exactly two        <- a bracket is its wrap
-;   (a >< t)  (link a t)   the cons: head a, tail t. it chains, which is how a
-;                          pattern says "and more" -- ('lam >< x >< b >< _) fits
+;   (a . t)  (. a t)   the cons: head a, tail t. it chains, which is how a
+;                          pattern says "and more" -- ('lam . x . b . _) fits
 ;                          (lam x b ..) at three or longer, ['lam x b] at three
-;                          exactly. [a b >< t] is (>< (list a b) t) -- the same
-;                          datum as ([a b] >< t), so it reads the one way both
+;                          exactly. [a b . t] is (. (list a b) t) -- the same
+;                          datum as ([a b] . t), so it reads the one way both
 ;                          spellings can: a head that is the two-chain (a b).
 ;   ([a b] + t)            a split: the leading run, then t over what is left.
 ;                          a pattern is its constructor, so + means here what it
@@ -1038,7 +1037,7 @@
                  [[('|| . ts)] (map (\ n [n (across n bss ts)]) uni) ()])
               (h = '\) (two? >as ? (wlist p v) (wts (weq <as v)))      ; (\ x b) is a lambda, a form
               (h = 'list) (wlist as v)
-              (h = '>< || h = '.) (? (2 = #as)              ; one tag, two spellings; prefix
+              (h = '.) (? (2 = #as)                         ; the cons tag; prefix
                                                                    ; `link` is the function, not a tag
                                         (wcat (wts [['two? v]])
                                               (wcat (pw <as ['cap v]) (pw <>as ['cup v])))
@@ -1147,7 +1146,7 @@
            ['? (pand p) (flat (map (\ c [(drop #p <c) <>c]) cs) els) els]
            (flat cs els)))
    ; --- alternatives, and why they split two ways ------------------------------
-   ; (p1 || p2) fits when either does -- `|` too, the way `><` and `link` are one tag.
+   ; (p1 || p2) fits when either does -- `|` too, the way `.` and `link` are one tag.
    ; a nom's access form is where it sat, and it sits somewhere else in every branch,
    ; so one access cannot serve two shapes. Two lanes answer that, and which one runs is
    ; decided by where the alternative is, both obeying first-branch-wins:

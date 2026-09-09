@@ -47,7 +47,7 @@
     (: r (sound text)
        (? (= r 'torn) (: _ (puts ";; moon-stage: gen.l reads torn") (quit 1))
           !(two? r) acc
-          (forms >r (<r >< acc))))
+          (forms >r (<r . acc))))
    src (open "apps/moon/gen.l" "r")
    _ (? (hot? src) 0 (: _ (puts ";; moon-stage: cannot open apps/moon/gen.l") (quit 1)))
    text (slurp src)

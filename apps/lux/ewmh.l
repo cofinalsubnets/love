@@ -32,7 +32,7 @@
     (: vals (x-getprop-atoms s win (ewmh-atom "_NET_WM_STRUT_PARTIAL"))
        vals (two? vals ? vals (x-getprop-atoms s win (ewmh-atom "_NET_WM_STRUT")))
        st (strut-parse vals)
-       (st ? (pin ewst 'struts ([win st] >< filter (p \ <p != win) (ewst 'struts)), st)))
+       (st ? (pin ewst 'struts ([win st] . filter (p \ <p != win) (ewst 'struts)), st)))
    (ewmh-untrack win) (pin ewst 'struts (filter (p \ <p != win) (peep ewst 'struts ())))
 
    ; --- CreateWindow (opcode 1): the 1x1 InputOnly support window at (-1,-1) ---
@@ -43,7 +43,7 @@
 
    ; --- ChangeProperty (opcode 18, mode Replace), format 32 and 8 ---
    (x-chprop32 s win prop type vals)
-    (: n #vals (go (a >< u)) (x-w32 s a, go u)
+    (: n #vals (go (a . u)) (x-w32 s a, go u)
      (x-w8 s 18, x-w8 s 0, x-w16 s (6 + n), x-w32 s win, x-w32 s prop,
       x-w32 s type, x-w8 s 32, x-w8 s 0, x-w16 s 0, x-w32 s n,
       go vals))           ; an ordered loop: map's effects run tail-first

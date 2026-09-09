@@ -21,14 +21,14 @@
    (lall l)   (? (two? l) (? <l (lall >l) 0) 1)
    (ncells v) (? (tray? v) (lprod (shape v)) 1)
    ;; flat row-major index k -> a coordinate list (peep takes a coord list at any rank)
-   (decode sh k) (? (two? sh) (: t >sh p (lprod t) ((// k p) >< decode t (% k p))) ())
+   (decode sh k) (? (two? sh) (: t >sh p (lprod t) ((// k p) . decode t (% k p))) ())
    (gcell v k)   (? (tray? v) (peep v (decode (shape v) k) 0) v)
    ;; functionally bump cell k of a constellation by d (arrays are immutable -> rebuild)
    (bump v k d)  (? (tray? v)
                     (: sh (shape v) (gem-tray sh (map (\ j (+ (gcell v j) (? (= j k) d 0)))
                                                       (jot (lprod sh)))))
                     (+ v d))
-   (setnth l p x) (? (= p 0) (x >< >l) (<l >< setnth >l (- p 1) x))
+   (setnth l p x) (? (= p 0) (x . >l) (<l . setnth >l (- p 1) x))
    (close? a b)   (< (abs (- a b)) (* tol (+ 1 (abs b))))
    (close-c? a b) (lall (map (\ k (close? (gcell a k) (gcell b k))) (jot (ncells a))))  ; constellations
 

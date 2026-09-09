@@ -15,7 +15,7 @@
 ; it reads the surface, before opfix, so a pattern here is spelled the way the
 ; file spells it. the walk knows three pattern positions -- an @ arm, a \ param,
 ; and a : binder's head -- and flags a form that names no tag: no infix operator
-; anywhere at the top level (. >< + || && @), and a head that is not one of
+; anywhere at the top level (. . + || && @), and a head that is not one of
 ; list/hash/tuple/?/\. a quoted head is exactly the untagged case ('lam x b), so
 ; it is flagged, and a glued ^pin is not a form at all.
 ;
@@ -27,7 +27,7 @@
 ; reads the same either way, since the longer arm already took the longer node.
 (borrow 'posix)
 (:
-   infix '(. >< + || && @)
+   infix '(. + || && @)
    tagheads '(list hash tuple ? \ mono jot)      ; mono/jot: a glued ^pin, already exact
 
    ; --- lines ----------------------------------------------------------------
@@ -49,12 +49,12 @@
    ; the pattern itself and not a one-long form
    (upto p op) (: (go l) (? (nil? (two? l)) ()
                             (&& (nom? <l) (= <l op)) ()
-                            (<l >< go >l))
+                            (<l . go >l))
                   q (go p)
                   (? (two? >q) q <q))
    (untagged? p)
     (? (nil? (two? p)) 0                      ; an atom is a literal: already strict
-       (any-infix? p) 0                       ; . >< + || && @ -- a tag, or a guard
+       (any-infix? p) 0                       ; . . + || && @ -- a tag, or a guard
        (: h <p (? (nom? h) (nil? (member? h tagheads)) 1)))   ; a quoted head is untagged
 
    ; --- the walk -------------------------------------------------------------
@@ -74,9 +74,9 @@
    (last l) (? (two? >l) (last >l) <l)
    (evens l) (? (nil? (two? l)) ()
                 (nil? (two? >l)) ()
-                (<>l >< evens >>l))
+                (<>l . evens >>l))
    (pat1 p acc) (? (nil? (two? p)) acc
-                   (: a (? (untagged? p) (p >< acc) acc)
+                   (: a (? (untagged? p) (p . acc) acc)
                       (foldl (\ z e (pat1 e z)) a (kids p))))
    ; arms: pat body pat body .. with an optional lone else, so a pattern sits at
    ; an even index and never in the final odd slot.
@@ -118,8 +118,8 @@
    ; in the source, and the count says how many sites share the spelling.
    (rdf p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) t) ()))
    (linesof s) (: n (tally s)
-                  (g i st acc) (? (n <= i) (rev (snip s st n >< acc))
-                                  (s i = 10) (g (i + 1) (i + 1) (snip s st i >< acc))
+                  (g i st acc) (? (n <= i) (rev (snip s st n . acc))
+                                  (s i = 10) (g (i + 1) (i + 1) (snip s st i . acc))
                                   (g (i + 1) st acc))
                   (g 0 0 ()))
    (has? hay ndl) (: n (tally hay) m (tally ndl)

@@ -44,7 +44,7 @@
  ;     Church eliminator ((p f) == (f (a p) (B p))) until the tree was checked and nothing
  ;     at all applied a chain to a function -- so a lambda takes the default action, and
  ;     that is the cell worth pinning. the index/append rows are spec.l's chains section. ---
- (nil? ((link 1 2) 1))                            ; improper chain: the spine is one cell, so 1 is oob
+ (nil? ((. 1 2) 1))                            ; improper chain: the spine is one cell, so 1 is oob
  (nil? ('(1 2) (\ a b [a b])))                   ; arg = a lambda: the default action, not an eliminator
  (nil? ('(1 2) "ab"))                            ; ... as for every other kind
 

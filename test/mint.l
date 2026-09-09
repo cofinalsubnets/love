@@ -9,7 +9,7 @@
   !(a = b) !(b = c)                             ; = stays identity-sharp
   (() < a) !(a < ())                            ; the zero point sits first among the nameless
   (a < 'q)                                      ; nameless below named (lex on "")
-  ('(1 2 3) = (map cup (sort [(link c 3) (link a 1) (link b 2)])))   ; sort sees the serials
+  ('(1 2 3) = (map cup (sort [(. c 3) (. a 1) (. b 2)])))   ; sort sees the serials
   ; GC stability: the order survives heap churn (serials ride the copy)
   (: pre [(a < b) (b < c) (() < a)]
      _ ((: (churn k) (? (< 0 k) (: _ (map (\ i (string (mint 0))) '(1 2 3 4 5 6 7 8)) (churn (- k 1))) 0)) 500)

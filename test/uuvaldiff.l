@@ -108,7 +108,7 @@
 (:
    (uv3-add x y) (vof 0 ['vsat ['vadd (uv2-enc x) (uv2-enc y)]])
    (uv3-mul x y) (vof 0 ['vsat ['vmul (uv2-enc x) (uv2-enc y)]])
-   uv3-corpus (list () 0 1 2 5 -1 -3 '(1 2) '(-2 1) '(1) '(3) (link 1 2))
+   uv3-corpus (list () 0 1 2 5 -1 -3 '(1 2) '(-2 1) '(1) '(3) (. 1 2))
    (uv3-row x y)
     (? (! (uv3-add x y = saturate (x + y)))  [x '+ y]
        (! (uv3-mul x y = saturate (x * y)))  [x '* y]

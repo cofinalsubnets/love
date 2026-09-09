@@ -38,7 +38,7 @@
   ; mapchurn: map a fresh n-list M times -- pure infant mortality (M-1 lists die).
   (mapchurn n m) ((: (go i l) (? (< i m) (go (+ i 1) (map (+ 1) l)) (tally l))) 0 (jot n))
   ; revbig: fold a jot into a fresh reversed list -- n cons cells, then dropped.
-  (revbig n) (tally (foldl (\ a x (link x a)) () (jot n)))
+  (revbig n) (tally (foldl (\ a x (. x a)) () (jot n)))
 
   ; --- run --------------------------------------------------------------------
   _ (puts "workload              churn (a -DAI_STAT host; interpreted unless glazed)") _ (putc 10)

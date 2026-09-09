@@ -103,7 +103,7 @@ the [end](e)."]
     ((mdread "- x\n- y\n") = '((bullets (((text "x")) ((text "y"))))))
     ((mdread "> q\n") = '((quote ((para ((text "q")))))))
     ((mdread "```c\nx\n```\n") = '((fence "c" "x\n")))
-    ((mdread "[t](u)") = '((para ((link ((text "t")) "u")))))
+    ((mdread "[t](u)") = '((para ((. ((text "t")) "u")))))
     ((mdread "---\n") = '((rule)))
     ((mdread "t\n:   b\n") = '((deflist ((((text "t")) ((text "b")))))))
     ((mdread "---\ntitle: L\n---\n") = '((meta ((title "L") (section "") (date "") (source "") (manual "")))))

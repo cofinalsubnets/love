@@ -27,12 +27,12 @@
  (defq law-cup-total
    (pi v val (paths bool (orb (vtwo v) (veq vnilv (vcup v))) true))
    uv-cup-total)
- ; link-apart   (\ x (: p (>< x x) (&& (= (cap p) x) (= (cup p) x))))
+ ; link-apart   (\ x (: p (. x x) (&& (= (cap p) x) (= (cup p) x))))
  ; by the lemma the model names
  (defq law-link-apart
    (pi v val (paths bool (andb (veq (vcap (vlink v v)) v) (veq (vcup (vlink v v)) v)) true))
    uv-link-apart)
- ; link-back   (\ x (? (two? x) (= x (link (cap x) (cup x))) 1))
+ ; link-back   (\ x (? (two? x) (= x (. (cap x) (cup x))) 1))
  ; by the lemma the model names
  (defq law-link-back
    (pi v val (paths bool (orb (negb (vtwo v)) (veq v (vlink (vcap v) (vcup v)))) true))

@@ -76,7 +76,7 @@
                               + (snip txt (j + 1) n)))
               (k = 6) ((snip txt 0 lo) + (snip txt hi n))            ; drop a line
               ((snip txt 0 lo) + (snip txt lo hi) + (snip txt lo n)))  ; double a line
-       (link out st'))
+       (. out st'))
 
    ; --- the front end off TEXT, every stage's refusal kept apart and its carrier
    ; read. cc-parse's udie is deliberately not in the path: a refusal has to come
@@ -132,7 +132,7 @@
    (bump v s) (pin cen (ckey v s) (1 + (peep cen (ckey v s) 0)))
    (cnt v s) (peep cen (ckey v s) 0)
    sins (tablet 0)                       ; the named ones: verdict -> a list of cases
-   (sin k f) (pin sins k (link f (peep sins k ())))
+   (sin k f) (pin sins k (. f (peep sins k ())))
 
    (runfile idx f)
     (: r (uread ("test/cc/" + f))

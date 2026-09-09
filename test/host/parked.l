@@ -19,7 +19,7 @@
 ;
 ; the target is the first-twirled task -- tasks are prepended to the ring, so it
 ; sits furthest from the walking head and is the one the old cap dropped first.
-(: (mk k acc) (? (k = 0) acc (mk (k - 1) (link (pipe 0) acc)))
+(: (mk k acc) (? (k = 0) acc (mk (k - 1) (. (pipe 0) acc)))
    ps (mk 16 ())
    q (pipe 0)
    qw (fdopen (cup q))

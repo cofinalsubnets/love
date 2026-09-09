@@ -42,24 +42,24 @@
    ;;    `zr` names x0, which the IR never asks for -- it is the system lane's whole-address-space
    ;;    spelling (`sfence zr, zr`), a64's `tlbi vmalle1is, zr` shape.
    rv-regs (tabof
-        [('sp >< 2) ('fp >< 8) ('lr >< 1) ('zr >< 0)
-          ('r0 >< 10) ('r1 >< 11) ('r2 >< 12) ('r3 >< 13) ('r4 >< 14)
-          ('r5 >< 15) ('r6 >< 16) ('r7 >< 17)
-          ('r8 >< 5) ('r9 >< 6) ('r10 >< 7) ('r11 >< 28) ('r12 >< 29)
-          ('r13 >< 18) ('r14 >< 19) ('r15 >< 9)
-          ('r19 >< 20) ('r20 >< 21) ('r21 >< 22) ('r22 >< 23)
-          ('r23 >< 24) ('r24 >< 25) ('r25 >< 26) ('r26 >< 27)])
+        [('sp . 2) ('fp . 8) ('lr . 1) ('zr . 0)
+          ('r0 . 10) ('r1 . 11) ('r2 . 12) ('r3 . 13) ('r4 . 14)
+          ('r5 . 15) ('r6 . 16) ('r7 . 17)
+          ('r8 . 5) ('r9 . 6) ('r10 . 7) ('r11 . 28) ('r12 . 29)
+          ('r13 . 18) ('r14 . 19) ('r15 . 9)
+          ('r19 . 20) ('r20 . 21) ('r21 . 22) ('r22 . 23)
+          ('r23 . 24) ('r24 . 25) ('r25 . 26) ('r26 . 27)])
    (rvn r) (look rv-regs r 'badreg)
    (rv-reg-eq a b) (rvn a = rvn b)
 
    ;; -- f0..f7 -> fa0..fa7 (f10..f17, the D argument file), f8..f15 -> ft0..ft7 (f0..f7 pure
    ;;    temps), f16..f19 -> ft8..ft11 (f28..f31, the narrow scratch bank). --
    rv-fregs (tabof
-        [('f0 >< 10) ('f1 >< 11) ('f2 >< 12) ('f3 >< 13) ('f4 >< 14)
-          ('f5 >< 15) ('f6 >< 16) ('f7 >< 17)
-          ('f8 >< 0) ('f9 >< 1) ('f10 >< 2) ('f11 >< 3) ('f12 >< 4)
-          ('f13 >< 5) ('f14 >< 6) ('f15 >< 7)
-          ('f16 >< 28) ('f17 >< 29) ('f18 >< 30) ('f19 >< 31)])
+        [('f0 . 10) ('f1 . 11) ('f2 . 12) ('f3 . 13) ('f4 . 14)
+          ('f5 . 15) ('f6 . 16) ('f7 . 17)
+          ('f8 . 0) ('f9 . 1) ('f10 . 2) ('f11 . 3) ('f12 . 4)
+          ('f13 . 5) ('f14 . 6) ('f15 . 7)
+          ('f16 . 28) ('f17 . 29) ('f18 . 30) ('f19 . 31)])
    (rvf r) (look rv-fregs r 'badfreg)
 
    ;; -- the six instruction formats, each a word builder. immediates arrive signed; & masks
@@ -99,8 +99,8 @@
    ;; -- ALU: op -> (funct3 . funct7). three-address native; an immediate rides addi/andi/ori/xori
    ;;    when it fits 12 bits, else materializes in x31 -- no immediate ever scares here. --
    rv-alu-rows
-        [('add >< '(0 0)) ('sub >< '(0 32)) ('and >< '(7 0)) ('or >< '(6 0)) ('xor >< '(4 0))
-          ('imul >< '(0 1))]
+        [('add . '(0 0)) ('sub . '(0 32)) ('and . '(7 0)) ('or . '(6 0)) ('xor . '(4 0))
+          ('imul . '(0 1))]
    rv-alu (tabof rv-alu-rows)
    (rv-alu-rrr f3 f7 dn an bn) (rv-r f7 bn an f3 dn 0x33)
    (rv-aluop op d a b)
@@ -384,7 +384,7 @@
    (rv-bword rel)  (: u (rel & 8191)                    ; the B-form's scattered 13-bit field
                       ((((u >> 12) & 1) << 31) | ((((u >> 5) & 63) << 25)
                         | ((((u >> 1) & 15) << 8) | (((u >> 11) & 1) << 7)))))
-   (rv-first k l)  (? ((k < 1) || !(two? l)) () (<l >< rv-first (k - 1) >l))
+   (rv-first k l)  (? ((k < 1) || !(two? l)) () (<l . rv-first (k - 1) >l))
    ;;    one rung tighter, the C branches: c.j for the jal, and c.beqz/c.bnez for a hop that
    ;;    compares against x0 with its register in the x8..x15 window. these cannot ride the local
    ;;    rvc-squeeze -- it reads a WORD and these turn on a distance -- so they are the 'short
@@ -428,7 +428,7 @@
 
    ;; -- scalar-double FP (D). SSE-named IR two-address; d repeats as the first source. rm rides
    ;;    the funct3 slot: 7 = dynamic for arithmetic, 1 = toward-zero for the C-cast cvttsd2si. --
-   rv-fp3 (tabof [('addsd >< 1) ('subsd >< 5) ('mulsd >< 9) ('divsd >< 13)])
+   rv-fp3 (tabof [('addsd . 1) ('subsd . 5) ('mulsd . 9) ('divsd . 13)])
    (rv-fp3op op d s) (: dn (rvf d) (rv-r (peep rv-fp3 op 0) (rvf s) dn 7 dn 0x53))
    (rv-fmov d s)   (: sn (rvf s) (rv-r 0x11 sn sn 0 (rvf d) 0x53))           ; fsgnj.d d, s, s
    (rv-fcmp a b)   (rv-flag-set 1 (rvf a) (rvf b) -1)                        ; remember, emit nothing
@@ -454,16 +454,16 @@
    ;;    the CSRs a kernel touches. an unnamed one is a spelling and not a wall: a bare number
    ;;    passes through, so `csrw 1985, r0` reaches the c906's own mhcr. one row, one register.
    rv-csrnames (tabof
-        [('fflags >< 0x001) ('frm >< 0x002) ('fcsr >< 0x003)
-          ('cycle >< 0xC00) ('time >< 0xC01) ('instret >< 0xC02)
-          ('sstatus >< 0x100) ('sie >< 0x104) ('stvec >< 0x105) ('scounteren >< 0x106)
-          ('sscratch >< 0x140) ('sepc >< 0x141) ('scause >< 0x142) ('stval >< 0x143)
-          ('sip >< 0x144) ('satp >< 0x180)
-          ('mstatus >< 0x300) ('misa >< 0x301) ('medeleg >< 0x302) ('mideleg >< 0x303)
-          ('mie >< 0x304) ('mtvec >< 0x305) ('mcounteren >< 0x306)
-          ('mscratch >< 0x340) ('mepc >< 0x341) ('mcause >< 0x342) ('mtval >< 0x343)
-          ('mip >< 0x344)
-          ('mvendorid >< 0xF11) ('marchid >< 0xF12) ('mimpid >< 0xF13) ('mhartid >< 0xF14)])
+        [('fflags . 0x001) ('frm . 0x002) ('fcsr . 0x003)
+          ('cycle . 0xC00) ('time . 0xC01) ('instret . 0xC02)
+          ('sstatus . 0x100) ('sie . 0x104) ('stvec . 0x105) ('scounteren . 0x106)
+          ('sscratch . 0x140) ('sepc . 0x141) ('scause . 0x142) ('stval . 0x143)
+          ('sip . 0x144) ('satp . 0x180)
+          ('mstatus . 0x300) ('misa . 0x301) ('medeleg . 0x302) ('mideleg . 0x303)
+          ('mie . 0x304) ('mtvec . 0x305) ('mcounteren . 0x306)
+          ('mscratch . 0x340) ('mepc . 0x341) ('mcause . 0x342) ('mtval . 0x343)
+          ('mip . 0x344)
+          ('mvendorid . 0xF11) ('marchid . 0xF12) ('mimpid . 0xF13) ('mhartid . 0xF14)])
    (rv-csr c) (? (imm? c) c (look rv-csrnames c 'badcsr))
    (rv-csru u) (? (0 <= u <= 31) u (scare 'rv-csr-uimm u))                   ; the 5-bit source
    (rv-csrop f3 dn csr sn) (rv-i (rv-csr csr) sn f3 dn 0x73)
@@ -488,51 +488,51 @@
 
    ;; the dispatch: an emitter tablet (shapes in holo.l's ir-arity), rows partial-applied.
    rv-emitters (emsof
-        [('li >< rv-li) ('mov >< rv-mov) ('cmp >< rv-cmp) ('test >< rv-test)
-          ('imul >< rv-imul)
-          ('ld >< rv-ld) ('st >< rv-st)
-          ('ld1 >< rv-ld1) ('ld2 >< rv-ld2) ('ld4 >< rv-ld4)
-          ('st1 >< rv-st1) ('st2 >< rv-st2) ('st4 >< rv-st4)
-          ('ldu1 >< rv-ldu1) ('ldu2 >< rv-ldu2) ('ldu4 >< rv-ldu4)
-          ('sx1 >< rv-sx 1) ('sx2 >< rv-sx 2) ('sx4 >< rv-sx 4)
-          ('zx1 >< rv-zx 1) ('zx2 >< rv-zx 2) ('zx4 >< rv-zx 4)
-          ('shlv >< rv-shiftv 'shlv) ('shrv >< rv-shiftv 'shrv) ('sarv >< rv-shiftv 'sarv)
-          ('shl >< rv-shift 'shl) ('shr >< rv-shift 'shr) ('sar >< rv-shift 'sar)
-          ('rol >< rv-shift 'rol) ('ror >< rv-shift 'ror)
-          ('lea >< rv-lea) ('lean >< rv-lea)
-          ('push >< rv-push) ('pop >< rv-pop)
-          ('neg >< rv-neg) ('not >< rv-not) ('inc >< rv-inc) ('dec >< rv-dec)
-          ('jmp >< rv-jmp) ('br >< rv-br) ('jmpr >< rv-jmpr) ('callr >< rv-callr)
-          ('mulo >< rv-mulo) ('mulh >< rv-mulh) ('set >< rv-set)
-          ('adds >< rv-addsub-s 'adds) ('subs >< rv-addsub-s 'subs)
-          ('div >< rv-div) ('rem >< rv-rem) ('udiv >< rv-udiv) ('urem >< rv-urem)
-          ('ldx >< rv-ldx) ('stx >< rv-stx) ('leax >< rv-leax)
-          ('ldxb >< rv-ldxb) ('stxb >< rv-stxb)
-          ('call >< rv-call) ('la >< rv-la) ('lar >< rv-la)
-          ('tp >< rv-tp)
-          ('movsd >< rv-fmov)
-          ('addsd >< rv-fp3op 'addsd) ('subsd >< rv-fp3op 'subsd)
-          ('mulsd >< rv-fp3op 'mulsd) ('divsd >< rv-fp3op 'divsd)
-          ('ucomisd >< rv-fcmp) ('cvtsi2sd >< rv-scvtf) ('cvttsd2si >< rv-fcvtzs)
-          ('movqxr >< rv-fmovxr) ('movqrx >< rv-fmovrx)
-          ('stsd >< rv-fst) ('ldsd >< rv-fld) ('stss >< rv-fsts) ('ldss >< rv-flds)
-          ('cvtss2sd >< rv-fwiden) ('cvtsd2ss >< rv-fnarrow)
-          ('xorpd >< rv-xorpd)
-          ('raw >< 1)
-          ('ret >< rv-i 0 1 0 0 0x67)                                        ; jalr x0, 0(ra)
-          ('sys >< le32 0x73)                                                ; ecall
-          ('nop >< le32 0x13)                                                ; addi x0, x0, 0
-          ('trap >< le32 0x100073)                                           ; ebreak
+        [('li . rv-li) ('mov . rv-mov) ('cmp . rv-cmp) ('test . rv-test)
+          ('imul . rv-imul)
+          ('ld . rv-ld) ('st . rv-st)
+          ('ld1 . rv-ld1) ('ld2 . rv-ld2) ('ld4 . rv-ld4)
+          ('st1 . rv-st1) ('st2 . rv-st2) ('st4 . rv-st4)
+          ('ldu1 . rv-ldu1) ('ldu2 . rv-ldu2) ('ldu4 . rv-ldu4)
+          ('sx1 . rv-sx 1) ('sx2 . rv-sx 2) ('sx4 . rv-sx 4)
+          ('zx1 . rv-zx 1) ('zx2 . rv-zx 2) ('zx4 . rv-zx 4)
+          ('shlv . rv-shiftv 'shlv) ('shrv . rv-shiftv 'shrv) ('sarv . rv-shiftv 'sarv)
+          ('shl . rv-shift 'shl) ('shr . rv-shift 'shr) ('sar . rv-shift 'sar)
+          ('rol . rv-shift 'rol) ('ror . rv-shift 'ror)
+          ('lea . rv-lea) ('lean . rv-lea)
+          ('push . rv-push) ('pop . rv-pop)
+          ('neg . rv-neg) ('not . rv-not) ('inc . rv-inc) ('dec . rv-dec)
+          ('jmp . rv-jmp) ('br . rv-br) ('jmpr . rv-jmpr) ('callr . rv-callr)
+          ('mulo . rv-mulo) ('mulh . rv-mulh) ('set . rv-set)
+          ('adds . rv-addsub-s 'adds) ('subs . rv-addsub-s 'subs)
+          ('div . rv-div) ('rem . rv-rem) ('udiv . rv-udiv) ('urem . rv-urem)
+          ('ldx . rv-ldx) ('stx . rv-stx) ('leax . rv-leax)
+          ('ldxb . rv-ldxb) ('stxb . rv-stxb)
+          ('call . rv-call) ('la . rv-la) ('lar . rv-la)
+          ('tp . rv-tp)
+          ('movsd . rv-fmov)
+          ('addsd . rv-fp3op 'addsd) ('subsd . rv-fp3op 'subsd)
+          ('mulsd . rv-fp3op 'mulsd) ('divsd . rv-fp3op 'divsd)
+          ('ucomisd . rv-fcmp) ('cvtsi2sd . rv-scvtf) ('cvttsd2si . rv-fcvtzs)
+          ('movqxr . rv-fmovxr) ('movqrx . rv-fmovrx)
+          ('stsd . rv-fst) ('ldsd . rv-fld) ('stss . rv-fsts) ('ldss . rv-flds)
+          ('cvtss2sd . rv-fwiden) ('cvtsd2ss . rv-fnarrow)
+          ('xorpd . rv-xorpd)
+          ('raw . 1)
+          ('ret . rv-i 0 1 0 0 0x67)                                        ; jalr x0, 0(ra)
+          ('sys . le32 0x73)                                                ; ecall
+          ('nop . le32 0x13)                                                ; addi x0, x0, 0
+          ('trap . le32 0x100073)                                           ; ebreak
           ;; -- the system lane --
-          ('csrr >< rv-csrr) ('csrw >< rv-csrw) ('csrs >< rv-csrs) ('csrc >< rv-csrc)
-          ('csrwi >< rv-csrwi) ('csrsi >< rv-csrsi) ('csrci >< rv-csrci)
-          ('csrrw >< rv-csrrw) ('csrrs >< rv-csrrs) ('csrrc >< rv-csrrc)
-          ('csrrwi >< rv-csrrwi) ('csrrsi >< rv-csrrsi) ('csrrci >< rv-csrrci)
-          ('sfence >< rv-sfence)
-          ('wfi >< le32 0x10500073)                                          ; wait for interrupt
-          ('sret >< le32 0x10200073) ('mret >< le32 0x30200073)
-          ('fence >< le32 0x0FF0000F)                                        ; fence iorw, iorw
-          ('fencei >< le32 0x0000100F)])                                     ; fence.i
+          ('csrr . rv-csrr) ('csrw . rv-csrw) ('csrs . rv-csrs) ('csrc . rv-csrc)
+          ('csrwi . rv-csrwi) ('csrsi . rv-csrsi) ('csrci . rv-csrci)
+          ('csrrw . rv-csrrw) ('csrrs . rv-csrrs) ('csrrc . rv-csrrc)
+          ('csrrwi . rv-csrrwi) ('csrrsi . rv-csrrsi) ('csrrci . rv-csrrci)
+          ('sfence . rv-sfence)
+          ('wfi . le32 0x10500073)                                          ; wait for interrupt
+          ('sret . le32 0x10200073) ('mret . le32 0x30200073)
+          ('fence . le32 0x0FF0000F)                                        ; fence iorw, iorw
+          ('fencei . le32 0x0000100F)])                                     ; fence.i
    _ (foldl (\ _ p (emrow rv-emitters <p (rv-aluop <p))) 0 rv-alu-rows)
 
    ;; -- rvc, the local squeeze. a lowered chunk that is exactly one 32-bit word carrying no fixup
@@ -641,7 +641,7 @@
                   (go 0 bs))
    (rvc-squeeze bs)
     (? !(two? bs) bs
-       !(imm? <bs) (<bs >< rvc-squeeze >bs)          ; a fixup: its own width, never squeezed
+       !(imm? <bs) (<bs . rvc-squeeze >bs)          ; a fixup: its own width, never squeezed
        !(rvc-4? bs) bs                               ; a ragged tail cannot be an instruction
        (: c (rvc-of ((bs 0) | (((bs 1) << 8) | (((bs 2) << 16) | ((bs 3) << 24)))))
           ((? (two? c) c (rv-first 4 bs)) + rvc-squeeze >>>>bs)))

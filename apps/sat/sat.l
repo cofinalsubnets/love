@@ -13,11 +13,11 @@
    (sgn l)  (? (< l 0) -1 1)                                 ; polarity as +-1
    ; --- small list helpers (prel has map/foldl/filter/all/any/member?) --------
    (sfind p l) (? (atom? l) () (p <l) <l (sfind p >l))                     ; first elt matching p, else ()
-   (rng lo hi) (? (< lo hi) (lo >< rng (+ lo 1) hi) ())                   ; [lo,hi)
+   (rng lo hi) (? (< lo hi) (lo . rng (+ lo 1) hi) ())                   ; [lo,hi)
    ; --- assignment (an alist (var . +-1) for the pure DPLL baseline) -----------
    (aget a v)  (? (atom? a) 0 (= (caap a) v) (cuap a) (aget >a v))        ; 0 = unassigned
    (lval a l)  (: v (aget a (vof l)) (? (= v 0) 0 (= v (sgn l)) 1 -1))    ; 1 sat / -1 falsified / 0 free
-   (put-lit a l) ((vof l >< sgn l) >< a)                                  ; extend a so literal l is true
+   (put-lit a l) ((vof l . sgn l) . a)                                  ; extend a so literal l is true
    ; --- clause / formula status under a ---------------------------------------
    (csat? a c)  (any (\ l (= 1 (lval a l))) c)               ; some literal satisfied
    (cfals? a c) (all (\ l (= -1 (lval a l))) c)              ; every literal falsified (a conflict)
@@ -50,14 +50,14 @@
    ; --- instances --------------------------------------------------------------
    ; cyclic "no two adjacent 0s": clauses (x_i v x_{i+1 mod n}), vars 1..n.
    ; distinct models = the Lucas number L_n (L_10 = 123) -- an oracle from combinatorics.
-   (cyclic n) (map (\ i ((+ i 1) >< ((+ 1 (% (+ i 1) n)) >< ()))) (jot n))
+   (cyclic n) (map (\ i ((+ i 1) . ((+ 1 (% (+ i 1) n)) . ()))) (jot n))
    (lucas n)  ((: (go k a b) (? (= k 0) a (go (- k 1) b (+ a b)))) n 2 1)    ; L_0=2,L_1=1,..  L_n
    ; pigeonhole php(h): h+1 pigeons into h holes -> UNSAT, and resolution-hard, so it forces many
    ; conflicts (exercises clause learning + restarts). var x[p][k] = p*h+k+1 (pigeon p in hole k).
    (php h) (: P (+ h 1)
               pc (map (\ p (map (\ k (+ (* p h) (+ k 1))) (jot h))) (jot P))                          ; each pigeon in some hole
               hc (foldl (\ a k (cat a (foldl (\ a2 p (cat a2 (foldl (\ a3 q                            ; no two pigeons share a hole
-                     (? (< p q) ((neg (+ (* p h) (+ k 1)) >< (neg (+ (* q h) (+ k 1)) >< ())) >< a3) a3))
+                     (? (< p q) ((neg (+ (* p h) (+ k 1)) . (neg (+ (* q h) (+ k 1)) . ())) . a3) a3))
                      () (jot P)))) () (jot P)))) () (jot h))
               (pc + hc))
    (php-vars h) (* (+ h 1) h)
@@ -96,10 +96,10 @@
    (enqueue s lit cid)                                      ; level-0 / forced literal: assign if free, () ok, 'conflict if already false
     (: lv (lit-val s lit) (? (= lv 1) 0  (= lv -1) 'conflict  (: _ (assign s lit cid) 0)))
    (watch2 s cid a b)                                       ; register clause cid as watching literals a and b
-    (: _ (pin (vmap s 'wl) cid (a >< b))
-       _ (pin (vmap s 'watch) a (cid >< peep (vmap s 'watch) a ()))
-       _ (pin (vmap s 'watch) b (cid >< peep (vmap s 'watch) b ())) 0)
-   (dedup-lits c) (? (atom? c) () (member? <c >c) (dedup-lits >c) (<c >< dedup-lits >c))                                ; drop duplicate literals
+    (: _ (pin (vmap s 'wl) cid (a . b))
+       _ (pin (vmap s 'watch) a (cid . peep (vmap s 'watch) a ()))
+       _ (pin (vmap s 'watch) b (cid . peep (vmap s 'watch) b ())) 0)
+   (dedup-lits c) (? (atom? c) () (member? <c >c) (dedup-lits >c) (<c . dedup-lits >c))                                ; drop duplicate literals
    (taut? c) (? (atom? c) 0 (member? (neg <c) >c) 1 (taut? >c))                  ; contains a literal and its negation?
    (load-clause s c0)                                       ; add a source clause to the db + watches (clean it first: dedupe, drop tautologies)
     (? (= 1 (taut? c0)) 0                                                        ; tautology -> always satisfied, skip
@@ -111,17 +111,17 @@
     ((: (go ls) (? (atom? ls) 0 (: l <ls (? (!(= l wo) && !(= (lit-val s l) -1)) l (go >ls))))) (peep (vmap s 'cls) cid ()))
    (prop-lit s f)                                           ; literal f just became false: re-examine watch[f]; -> conflict cid or -1
     (: res ((: (go cs kept)                                                      ; kept = clauses that keep watching f; rebuild watch[f]
-               (? (atom? cs) (-1 >< kept)
+               (? (atom? cs) (-1 . kept)
                   (: cid <cs rest >cs pr (peep (vmap s 'wl) cid ())
                      wo (? (= <pr f) >pr <pr)                                     ; the other watched literal
-                     (? (= (lit-val s wo) 1) (go rest (cid >< kept))             ; satisfied by wo -> keep watching f
+                     (? (= (lit-val s wo) 1) (go rest (cid . kept))             ; satisfied by wo -> keep watching f
                         (: k (find-watch s cid wo)
                            (? !(= k 0)                                            ; slide the watch f -> k
-                              (: _ (pin (vmap s 'wl) cid (wo >< k))
-                                 _ (pin (vmap s 'watch) k (cid >< peep (vmap s 'watch) k ()))
+                              (: _ (pin (vmap s 'wl) cid (wo . k))
+                                 _ (pin (vmap s 'watch) k (cid . peep (vmap s 'watch) k ()))
                                  (go rest kept))                                  ; cid no longer watches f
-                              (= (lit-val s wo) 0) (: _ (assign s wo cid) (go rest (cid >< kept)))     ; unit -> force wo
-                              (cid >< cat kept (cid >< rest))))))))               ; wo false -> conflict; f keeps cid + the unprocessed rest
+                              (= (lit-val s wo) 0) (: _ (assign s wo cid) (go rest (cid . kept)))     ; unit -> force wo
+                              (cid . cat kept (cid . rest))))))))               ; wo false -> conflict; f keeps cid + the unprocessed rest
             (peep (vmap s 'watch) f ()) ())
        _ (pin (vmap s 'watch) f >res) <res)
    (propagate s)                                            ; drain the trail queue through the watches; -> conflict cid or -1
@@ -139,30 +139,30 @@
                     !(= 0 (peep seen v 0)) st
                     (= 0 (peep (vmap s 'lvl) v 0)) st
                     (: _ (pin seen v 1) _ (bump s v)
-                       (? (= (peep (vmap s 'lvl) v 0) dl) ((+ 1 <st) >< >st)
-                          (<st >< (l >< >st)))))))
+                       (? (= (peep (vmap s 'lvl) v 0) dl) ((+ 1 <st) . >st)
+                          (<st . (l . >st)))))))
            acc c)
    (find-seen tr seen idx) (? (= 0 (peep seen (vof (peep tr idx ())) 0)) (find-seen tr seen (- idx 1)) idx)
    (bj-level s learnt) (foldl (\ m l (: lv (peep (vmap s 'lvl) (vof l) 0) (? (> lv m) lv m))) 0 learnt)
    ; the learnt clause's 2nd watch must be its highest-level literal, else a backtrack could unassign
    ; an unwatched literal and the clause would go unit/conflict undetected. So reorder learnt so [1]
    ; is the max-level tail literal (learnt[0] stays the asserting literal).
-   (rem-lit x ls) (? (atom? ls) () (= <ls x) >ls (<ls >< rem-lit x >ls))
+   (rem-lit x ls) (? (atom? ls) () (= <ls x) >ls (<ls . rem-lit x >ls))
    (max-lit s ls) (foldl (\ b l (? (> (peep (vmap s 'lvl) (vof l) 0) (peep (vmap s 'lvl) (vof b) 0)) l b)) <ls >ls)
    (reorder-watch s learnt) (? (atom? >learnt) learnt
-                               (: a0 <learnt rest >learnt mx (max-lit s rest) (a0 >< (mx >< rem-lit mx rest))))
+                               (: a0 <learnt rest >learnt mx (max-lit s rest) (a0 . (mx . rem-lit mx rest))))
    (analyze s confl)                                        ; -> (learnt-clause . backjump-level); learnt[0] is the asserting literal
     (: dl (peep s 'level 0) seen (tablet 0) tr (vmap s 'trail) cls (vmap s 'cls) reason (vmap s 'reason)
-       a0 (absorb s seen dl 0 (peep cls confl ()) (0 >< ()))
+       a0 (absorb s seen dl 0 (peep cls confl ()) (0 . ()))
        res ((: (go counter learnt idx)
                (: ix (find-seen tr seen idx) np (peep tr ix ()) v (vof np)
                   _ (pin seen v 0) cnt (- counter 1)
-                  (? (= cnt 0) (np >< learnt)
-                     (: a (absorb s seen dl v (peep cls (peep reason v 0) ()) (cnt >< learnt))
+                  (? (= cnt 0) (np . learnt)
+                     (: a (absorb s seen dl v (peep cls (peep reason v 0) ()) (cnt . learnt))
                         (go <a >a (- ix 1))))))
             <a0 >a0 (- (peep s 'top 0) 1))
-       uip <res learnt >res learntc (neg uip >< learnt)
-       (learntc >< bj-level s learnt))
+       uip <res learnt >res learntc (neg uip . learnt)
+       (learntc . bj-level s learnt))
    (backjump s lvl)                                         ; pop+unassign every trail entry above level lvl
     (: tr (vmap s 'trail) val (vmap s 'val) lm (vmap s 'lvl) rs (vmap s 'reason) ph (vmap s 'phase)
        nt ((: (go t)
@@ -208,7 +208,7 @@
                  (? (= v 0) 'sat
                     (: _ (pin s 'level (+ 1 (peep s 'level 0)))
                        _ (assign s (* v (peep (vmap s 'phase) v -1)) -1) (loop ()))))))) ())
-   (extract-model s nvars) (map (\ v (v >< val-of s v)) (rng 1 (+ nvars 1)))
+   (extract-model s nvars) (map (\ v (v . val-of s v)) (rng 1 (+ nvars 1)))
    (cdcl formula nvars) (: s (mk formula nvars)
                            (? (= 1 (peep s 'bad 0)) 'unsat                       ; empty clause / contradictory units at construction
                               (: r (search s) (? (= r 'unsat) 'unsat (extract-model s nvars)))))
@@ -216,7 +216,7 @@
    ;     technique; the count is solver-independent (a fact), so count-cdcl (cyclic n) == Lucas n. -----
    (block model) (map (\ vv (neg (* >vv <vv))) model)                  ; clause excluding exactly this model
    (count-cdcl formula nvars)
-    ((: (go fm c) (: r (cdcl fm nvars) (? (= r 'unsat) c (go (block r >< fm) (+ c 1))))) formula 0)
+    ((: (go fm c) (: r (cdcl fm nvars) (? (= r 'unsat) c (go (block r . fm) (+ c 1))))) formula 0)
    ; --- random 3-SAT generator (deterministic LCG) for the differential fuzz ----
    (lcg-next x)  (% (+ (* x 1103515245) 12345) 2147483648)
    (lit-from x n) (: v (+ 1 (% (// x 16) n)) (? (= 0 (% x 2)) v (- 0 v)))
@@ -224,7 +224,7 @@
     ((: (go i x acc)
         (? (>= i m) acc
            (: x1 (lcg-next x) x2 (lcg-next x1) x3 (lcg-next x2)
-              (go (+ i 1) x3 ((lit-from x1 n >< (lit-from x2 n >< (lit-from x3 n >< ()))) >< acc))))) 0 seed ())
+              (go (+ i 1) x3 ((lit-from x1 n . (lit-from x2 n . (lit-from x3 n . ()))) . acc))))) 0 seed ())
    (diff-test seed n m)                                     ; DPLL and CDCL agree (and CDCL's model checks when SAT)
     (: f (gen-formula seed n m) d (solve f n) c (cdcl f n)
        dsat !(= d 'unsat) csat !(= c 'unsat)

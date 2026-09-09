@@ -1789,7 +1789,7 @@
 
    (predpi cx en d t)                                                  ; pi / sigma formation -> U_max(i,j)
    (: i (sortof cx en d <>>t) fr ['nv d]
-      j (sortof (link [<>t (vof en <>>t)] cx) (link [<>t fr] en) (+ d 1) <>>>t)
+      j (sortof (. [<>t (vof en <>>t)] cx) (. [<>t fr] en) (+ d 1) <>>>t)
       (umk (umax i j)))
 
    (pinf-spine cx en d f as)
@@ -1809,21 +1809,21 @@
                               _ (pchk cx en d <>>t Av) _ (pchk cx en d <>>>t Av) (umk l))
             (h = 'succ)   (: _ (pchk cx en d <>t 'nat) 'nat)
             (h = 'the)    (: l (sortof cx en d <>t) Tv (vof en <>t) _ (pchk cx en d <>>t Tv) Tv)
-            (h = 'let)    (: x <>t Av (pinf cx en d <>>t) va (vof en <>>t) (pinf (link [x Av] cx) (link [x va] en) d <>>>t))
+            (h = 'let)    (: x <>t Av (pinf cx en d <>>t) va (vof en <>>t) (pinf (. [x Av] cx) (. [x va] en) d <>>>t))
             (h = 'idpath) (: Av (pinf cx en d <>t) v (vof en <>t) ['paths Av v v])
             (pinf-spine cx en d (pinf cx en d h) >t))))
 
    (pchk cx en d t T)
    (? (&& (two? t) (<t = 'lam))
       (? (<T = 'pi)
-         (: x <>t fr ['nv d] (pchk (link [x <>T] cx) (link [x fr] en) (+ d 1) <>>t (capp <>>T fr)))
+         (: x <>t fr ['nv d] (pchk (. [x <>T] cx) (. [x fr] en) (+ d 1) <>>t (capp <>>T fr)))
          (scare 'uu-lam-needs-pi t))
       (&& (two? t) (<t = 'idpath))
       (? (<T = 'paths)
          (: _ (pchk cx en d <>t <>T) v (vof en <>t) (? (&& (conv d v <>>T) (conv d v <>>>T)) 1 (scare 'uu-idpath-mismatch t)))
          (scare 'uu-idpath-needs-paths t))
       (&& (two? t) (<t = 'let))
-      (: x <>t Av (pinf cx en d <>>t) va (vof en <>>t) (pchk (link [x Av] cx) (link [x va] en) d <>>>t T))
+      (: x <>t Av (pinf cx en d <>>t) va (vof en <>>t) (pchk (. [x Av] cx) (. [x va] en) d <>>>t T))
       (: Ti (pinf cx en d t) (? (cleq d Ti T) 1 (scare 'uu-type-mismatch t))))
 
    (pdefn nm T t) (: _ (sortof 0 0 0 T) Tv (vof 0 T) _ (pchk 0 0 0 t Tv) nm)   ; vof now normalizes (UU l)

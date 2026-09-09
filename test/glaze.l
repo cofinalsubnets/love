@@ -35,12 +35,12 @@
 (: (scar-sp n)   (: (go k acc) (? (k < 1) acc (go (k - 1) (acc + " "))) (go n ""))    ; string built by +
    (scar-dash z) (: (g j) (? (j < 1) "" ("-" + (g (j - 1)))) (g (tally z)))           ; ..the argument-applying twin
    (scar-lit n)  (: (go k acc) (? (k < 1) acc (go (k - 1) "Q")) (go n 0))             ; a bare string constant
-   (scar-link n) (: (go k acc) (? (k < 1) acc (go (k - 1) (link acc 1))) (go n 0))    ; a cons
+   (scar-link n) (: (go k acc) (? (k < 1) acc (go (k - 1) (. acc 1))) (go n 0))    ; a cons
    _ (test
       ("   " = (scar-sp 3))                                  ; was 6  -- the triangular sum of k
       ("--" = (scar-dash "ab"))                              ; was 1
       ("Q" = (scar-lit 2))                                   ; was 0
-      ((link (link (link 0 1) 1) 1) = (scar-link 3)))        ; was 1
+      ((. (. (. 0 1) 1) 1) = (scar-link 3)))        ; was 1
    0)
 
 ; --- autogroup's constant fold respects a pair's own params ---------------------------

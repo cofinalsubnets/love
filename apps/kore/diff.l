@@ -127,8 +127,9 @@
     (? !(two? ps) (patience a b)
        (: h <ps i <h j <>h e <>>h
           na (i - love) nb (j - bi)
-          (patience (take na a) (take nb b) + link ['keep e]
-                    (dsplit (drop (na + 1) a) (drop (nb + 1) b) (i + 1) (j + 1) >ps))))
+          (patience (take na a) (take nb b)
+           + (['keep e] . (dsplit (drop (na + 1) a) (drop (nb + 1) b)
+                                  (i + 1) (j + 1) >ps)))))
    ; the trimmed middle: anchor + split, or myers when nothing anchors
    (dmid a b) (: ps (danchors a b)
                  (? (two? ps) (dsplit a b 0 0 (dlis ps)) (myers a b)))

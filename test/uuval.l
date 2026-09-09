@@ -1284,7 +1284,7 @@
  (defq uv-link-back
    (pi v val (paths bool (orb (negb (vtwo v)) (veq v (vlink (vcap v) (vcup v)))) true))
    (lam v (uv-link-back-d (pr1 v) (pr2 v))))
- ; link-apart takes no induction at all: cap and cup of (link v v) are the two
+ ; link-apart takes no induction at all: cap and cup of (. v v) are the two
  ; pads of v, and the padding lemmas answer both
  (defq uv-link-apart
    (pi v val (paths bool (andb (veq (vcap (vlink v v)) v) (veq (vcup (vlink v v)) v)) true))

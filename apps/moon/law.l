@@ -237,7 +237,7 @@
    (fnf nm fs) (: (seek l) (? !(two? l) () (? (= <l ['label nm]) >l (seek >l)))
                   (take l) (? !(two? l) ()
                               (= <l '(align 2)) ()
-                              (<l >< take >l))
+                              (<l . take >l))
                   (take (seek fs)))
    (movs fs) (tally (filter (\ f (two? f && (= <f 'mov))) fs))
    (splds fs) (: (go l n) (? !(two? l) n
@@ -255,11 +255,11 @@
    (stofs fs op rg) (? !(two? fs) ()                  ; offsets of (op sp K rg) stores...
                        (: f2 <fs r (stofs >fs op rg)
                           (? (two? f2 && (<f2 = op) && (<>f2 = 'sp) && (<>>>f2 = rg))
-                             (<>>f2 >< r) r)))
+                             (<>>f2 . r) r)))
    (ldofs fs op rg) (? !(two? fs) ()                  ; ...and of (op rg sp K) loads
                        (: f2 <fs r (ldofs >fs op rg)
                           (? (two? f2 && (<f2 = op) && (<>f2 = rg) && (<>>f2 = 'sp))
-                             (<>>>f2 >< r) r)))
+                             (<>>>f2 . r) r)))
    ; a law never spells a frame offset. repack re-chooses every number whenever the slot
    ; map grows -- the spush cells joining it moved fifteen laws at once -- and a stale
    ; offset does not reliably red: wlkf's `(= 1 (ldsp wlkf 8))` kept passing while counting

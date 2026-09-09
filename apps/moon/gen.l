@@ -2655,7 +2655,7 @@
                        (v6m? g && sse2? g aty)       ; v6-M: a position-0 16B composite rides r0-r3 whole (the
                         (? (gpc = 0)                     ;  base-ABI words); any later start would split -- deferred
                            (kls >as (i + 1) 4 xmmc ovc
-                                (link ['(g4 0) (tor0 g a + cell4w)] acc))
+                                (. ['(g4 0) (tor0 g a + cell4w)] acc))
                            'bad)
                        (t32? g && stru? aty &&
                            !(sse2? g aty ||
@@ -2664,7 +2664,7 @@
                        (sse2? g aty)                       ; a two-double struct arg: push its pair (re on top), an xmm pair target
                         (? (6 < xmmc) 'bad
                            (kls >as (i + 1) gpc (xmmc + 2) ovc
-                                (link [['x2 xmmc]
+                                (. [['x2 xmmc]
                                          (tor0 g a +
                                           (? (t32? g) cell4w   ; t32: four word copies
                                              (a8? g) cell2w    ; a64/riscv push is a 16-byte cell of its own: lay the pair by hand
@@ -2685,13 +2685,13 @@
                            (? (ngp g < gpc + gpn || 8 < xmmc + xmn)
                                (? (arm? g) 'bad             ; arm? is every non-x64 seat here
                                   (kls >as (i + 1) gpc xmmc (ovc + 2)
-                                       (link [['ov ovc 2] (tor0 g a + push2w)] acc)))
+                                       (. [['ov ovc 2] (tor0 g a + push2w)] acc)))
                               (: i0 (? (= f0 'g) gpc xmmc)
                                  gpc1 (? (= f0 'g) (gpc + 1) gpc)
                                  xmc1 (? (= f0 'x) (xmmc + 1) xmmc)
                                  i1 (? (= f1 'g) gpc1 xmc1)
                                  (kls >as (i + 1) (gpc + gpn) (xmmc + xmn) ovc
-                                      (link [['p2 f0 i0 f1 i1] (tor0 g a + (a8? g ? cell2w push2w))]
+                                      (. [['p2 f0 i0 f1 i1] (tor0 g a + (a8? g ? cell2w push2w))]
                                             acc)))))
                        ; a memory-class by-value struct arg: its eightbytes fill N overflow
                        ; slots. x64 pushes deepest first, so the struct's highest eightbyte
@@ -2715,7 +2715,7 @@
                                     ([['g2 gpe] (asll g a + spush2)] . acc))
                                (: ov8 (& (ovc + 7) -8)
                                   (kls >as (i + 1) 4 xmmc (ov8 + 8)
-                                       (link [['ov ov8 8]
+                                       (. [['ov ov8 8]
                                                 (asll g a + [['st 'sp ov8 'r0] ['st 'sp (ov8 + 4) 'r1]])]
                                              acc)))))
                        ; the delivered seat: aimed and honored by the arg's own emission --
@@ -2761,7 +2761,7 @@
                                           ([['g2 gpe] (aval + spush2)] . acc))
                                      (: ov8 (& (ovc + 7) -8)
                                         (kls >as (i + 1) 4 xmmc (ov8 + 8)
-                                             (link [['ov ov8 8]
+                                             (. [['ov ov8 8]
                                                       (aval + [['st 'sp ov8 'r0] ['st 'sp (ov8 + 4) 'r1]])]
                                                    acc)))))
                              ; a variadic riscv call: every double rides the gp lane (the callee's
@@ -3614,7 +3614,7 @@
    (a4ize fs)
     (: (go (f . u))
         (: bp (two? f ? (peep a4base <f -1) -1)
-         (link (0 <= bp && f bp == 'r4 ? (reop f bp 'fp) f) (go u)))
+         (. (0 <= bp && f bp == 'r4 ? (reop f bp 'fp) f) (go u)))
      (go fs))
    ; v6-M slot retarget: slots live at fp-negative offsets, but armv6-M loads/stores encode only
    ; positive immediates -- and a slot must stay stable across the sub/add-sp shuffle moon wraps
@@ -3627,7 +3627,7 @@
        ((? (i = bp) 'r4 (i = (bp + 1)) (fr + <f) <f) . t16reb >f (i + 1) bp fr))
    (t16slots (f . u) fr)
        (: bp (two? f ? (peep a4base <f -1) -1)
-          (link (? (bp >= 0 && f bp == 'fp && f (bp + 1) < 0) (t16reb f 0 bp fr) f)
+          (. (? (bp >= 0 && f bp == 'fp && f (bp + 1) < 0) (t16reb f 0 bp fr) f)
                 (t16slots u fr)))
    ; v6m has no MOVW/MOVT to build an address, so an (la Rd lbl) becomes a literal-pool load:
    ; align to a word, LDR Rd,[pc,#0], hop the pooled abs32 word, and lay it as an R_ARM_ABS32 the
@@ -3780,7 +3780,7 @@
        (: f <fs
           bp (two? f ? (peep a4base <f -1) -1)
           up (two? f ? (peep uoff <f -1) -1)
-          (link (bp >= 0 && up >= 0 && f bp = 'fp ? (rvreb f 0 up fr) f)
+          (. (bp >= 0 && up >= 0 && f bp = 'fp ? (rvreb f 0 up fr) f)
                 (rvslots >fs fr))))
    ; the x64 frame prologue at fs's head (unframe strips it; repack requires it)
    (pro4? fs) (epim? >fs pro4)
@@ -3892,7 +3892,7 @@
                              (spadj? f && <f = 'sub) (f . rw >l (D + <>>>f))
                              (spadj? f && <f = 'add) (f . rw >l (D - <>>>f))
                              (: bp (peep a4base <f -1)
-                                (link (? (0 <= bp && f bp == fb)
+                                (. (? (0 <= bp && f bp == fb)
                                          (radj f bp (peep uoff <f -1) D)
                                          f)
                                       (rw >l D))))))))
@@ -8205,7 +8205,7 @@
                _ (foldl (\ _ k (: e (g 'glob k)
                                   (? (two? e) (cg-srefs <>>e t, 0) 0)))
                         0 (keys (g 'glob)))
-               q (foldl (\ a s (? ((fnix s) && !(laid s)) (s >< a) a))
+               q (foldl (\ a s (? ((fnix s) && !(laid s)) (s . a) a))
                         () (keys t))
                (? (two? q && !(gripe? (g 'genfail))) (drive q, datclose 0) 0))
            _ (datclose 0)
@@ -8218,7 +8218,7 @@
                     ; txt rides reversed -- a cat per fn re-copies every prior fn's
                     ; forms, quadratic over love.c's 611 -- and the rev restores order.
                     (: _ (pin g 'dropped
-                          (foldl (\ a f (<f = 'fn && !(laid <>f) ? (<>f >< a) a)) () <>ast))
+                          (foldl (\ a f (<f = 'fn && !(laid <>f) ? (<>f . a) a)) () <>ast))
                        txt (foldl (\ a f (: u (<f = 'fn ? (lfm <>f))
                                           (two? u ? (revcat u a) a)))
                                   () <>ast)
@@ -8258,25 +8258,25 @@
              fnames (: (go fs acc) (? !(two? fs) (rev acc)
                                       (: f <fs
                                          (go >fs (? (<f = 'fn && (= (peep sfns <>f 'no) 'no))
-                                                         (<>f >< acc) acc))))
+                                                         (<>f . acc) acc))))
                        ; an alias whose target is a function defined here is a
                        ; func symbol of its own, at the same address
                        defd (: (go2 fs acc) (? !(two? fs) acc
                                                (: f <fs
-                                                  (go2 >fs (? (<f = 'fn) (<>f >< acc) acc))))
+                                                  (go2 >fs (? (<f = 'fn) (<>f . acc) acc))))
                                (go2 <>ast ()))
                        (: base (go <>ast ())
                           (go3 l a2) (? !(two? l) a2
-                                        (go3 >l (? (member? (als <l) defd) (<l >< a2) a2)))
+                                        (go3 >l (? (member? (als <l) defd) (<l . a2) a2)))
                           (base + go3 (keys als) ())))
              gnames (: (go gs acc) (? !(two? gs) (rev acc)
-                                      (go >gs (? (loc? <gs) acc (<gs >< acc))))
+                                      (go >gs (? (loc? <gs) acc (<gs . acc))))
                        ; an alias onto a global (or a block-scope static) is an
                        ; object symbol of its own, at the same bytes
                        dgl (revcat (<r 'globs) $ rev (<r 'statics))
                        (: base (go (rev (<r 'globs)) ())
                           (go2 l a2) (? !(two? l) a2
-                                        (go2 >l (? (member? (als <l) dgl) (<l >< a2) a2)))
+                                        (go2 >l (? (member? (als <l) dgl) (<l . a2) a2)))
                           (base + go2 (keys als) ())))
              ; minus the swept ones: a local func symbol whose body no longer rides
              ; would name an address belonging to whatever followed it.
@@ -8285,14 +8285,14 @@
                                       (: f <fs
                                          (go >fs (? (<f = 'fn && !(= (peep sfns <>f 'no) 'no)
                                                      && !(member? <>f gone))
-                                                         (<>f >< acc) acc))))
+                                                         (<>f . acc) acc))))
                        (go <>ast ()))
              dat <>>r
              ; the sectioned functions as (name forms align), folded to one stream
              ; per name in declaration order -- moon.l gives each an executable
              ; descriptor. a name's grain is the widest its members ask for.
              xfns (: (noms l acc) (? !(two? l) (rev acc)
-                                     (noms >l (? (member? <<l acc) acc (<<l >< acc))))
+                                     (noms >l (? (member? <<l acc) acc (<<l . acc))))
                      (forsec nm l) (: (go l2 a2) (? !(two? l2) a2
                                                     (go >l2 (? (<<l2 = nm) (a2 + <><l2) a2)))
                                       (go l ()))

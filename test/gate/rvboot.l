@@ -27,7 +27,7 @@
           dst (av 3)
           ; ldkern answers (header . pieces), which ld-write is what lays down
           k (ldkern 'rv64 "rvboot" rvg-base 0 srcs)
-          _ (ld-write dst (<k >< >k))
+          _ (ld-write dst (<k . >k))
           (say out ("RVBOOT\t" + (av 3) + "\n")))
        (rvg-die "usage: rvboot.l BOOT.o DTB.o GATE.o OUT.elf"))
 

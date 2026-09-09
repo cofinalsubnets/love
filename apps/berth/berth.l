@@ -133,7 +133,7 @@
  ; shut for it. the handle is kept in 'jobs so the teardown can reap it.
  (hmoor hb id) (: p (hpane hb id)
                   t (twirl (\ _ (: _ (moor (hbox p) (hmas p) (hb 'dirt)) (hshut hb id))) 0)
-                  (pin hb 'jobs (t >< hb 'jobs)))
+                  (pin hb 'jobs (t . hb 'jobs)))
 
  ; split the focused berth and tie a fresh child up in the new half. it opens
  ; at 1x1 and the relay right after is what gives it its real size.

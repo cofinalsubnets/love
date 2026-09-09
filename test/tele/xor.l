@@ -41,7 +41,7 @@
    ;; the learned outputs (want ~0 1 1 0)
    _ (tl-reset 0)
    out (tl-val (call model X))
-   (cell k) (peep out (k >< 0 >< ()) 0)
+   (cell k) (peep out (k . 0 . ()) 0)
    (yes k v) (? (0.5 < cell k) (v = 1) (v = 0))             ; does row k round to v?
    _ (puts $ "00 -> " + show (cell 0) + "\n")
    _ (puts $ "01 -> " + show (cell 1) + "\n")

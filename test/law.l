@@ -29,8 +29,8 @@
       ; love is total, so ours say what holds everywhere. an atom is its own cap; its cup is ().
       ['cap-total  (x \ two? x ? 1 (x = <x))]
       ['cup-total  (x \ two? x ? 1 (() = >x))]
-      ['link-apart (x \ : p (x >< x) (<p = x && >p = x))]
-      ['link-back  (x \ two? x ? (x = link <x >x) 1)]
+      ['link-apart (x \ : p (x . x) (<p = x && >p = x))]
+      ['link-back  (x \ two? x ? (x = (. <x >x)) 1)]
       ['nil?-total (x \ : b !x (b = 0 || b = 1))]
       ['=-total    (x \ : b (x = x) (b = 1))]
       ['id?-finer  (x \ (= x x) ? (x = x) 1)]           ; id? implies =, never the converse

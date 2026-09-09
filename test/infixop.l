@@ -64,13 +64,13 @@
 ; default infix: any all-punct symbol acts dyadic (arity two) with no table pin --
 ; the table holds only the exceptions -- the other grips and hands.
 ; a fresh punct symbol, never registered, reads infix all the same.
-(: >< (\ a b [a b])                              ; a fresh punct op, never registered
+(: . (\ a b [a b])                              ; a fresh punct op, never registered
  (test
-  ('(3 5) = (3 >< 5))                             ; infix: captures the left operand
-  ('(7 (3 5)) = (7 >< 3 >< 5))                    ; nests right-associatively
-  ('(9 (3 5)) = [9 (3 >< 5)])                    ; works inside a list
-  (nom? '><) (= >< (><))                        ; no left operand / escaped: the plain symbol
-  ("(>< 3 5)" = (show (opfix '(3 >< 5))))))     ; a folded infix form is the clause -- splices up, no wrapper (like (1 + 2))
+  ('(3 5) = (3 . 5))                             ; infix: captures the left operand
+  ('(7 (3 5)) = (7 . 3 . 5))                    ; nests right-associatively
+  ('(9 (3 5)) = [9 (3 . 5)])                    ; works inside a list
+  (nom? '.) (= . (.))                          ; no left operand / escaped: the plain symbol
+  ("(. 3 5)" = (show (opfix '(3 . 5))))))      ; a folded infix form is the clause -- splices up, no wrapper (like (1 + 2))
 
 ; opfix does not rearrange a binding form: a `:` keeps its binder names (a symbol
 ; or a define-sugar header) verbatim -- only each pair's value and the trailing
@@ -79,8 +79,8 @@
 ; (compared through show: opfix threads its spines with the 0-nil terminator, the
 ; reader with (); show renders both the same reparsable form, so the factor shows.)
 (test
- ((show '(: >< (\ a b [a b]) (>< 3 5))) = (show (opfix '(: >< (\ a b [a b]) (3 >< 5)))))      ; explicit binder kept
- ((show '(: (>< a b) [a b] (>< 3 5))) = (show (opfix '(: (>< a b) [a b] (3 >< 5)))))          ; sugar header kept
+ ((show '(: . (\ a b [a b]) (. 3 5))) = (show (opfix '(: . (\ a b [a b]) (3 . 5)))))      ; explicit binder kept
+ ((show '(: (. a b) [a b] (. 3 5))) = (show (opfix '(: (. a b) [a b] (3 . 5)))))          ; sugar header kept
  ((show '(\ a b (+ a b))) = (show (opfix '(\ a b (a + b)))))                                  ; \ args verbatim, body factored
  ((show '(: a 1 b 2 (+ a b))) = (show (opfix '(: a 1 b 2 (a + b)))))                          ; : values/body factored, names kept
  (2 = (: x 1 x (x + 1) x)))                                                                     ; the sequence law, intact

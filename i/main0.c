@@ -94,15 +94,15 @@ struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load
   g = ai_shelve_(g);
   g = ai_evals_(g,
     "(borrow 'uu)(: uu (cite 'uu))(borrow 'kanren)(borrow 'posix)"
-    "(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0)"
+    "(: (s2cl s) ((: (g i) (? (< i (tally s)) (. (peep s i 0) (g (+ 1 i))))) 0)"
     "   (c0read p) (: q (open p \"r\")"
     "               (? q (: s (slurp q) _ (close q) s)"
     "                  (: _ (say err (\"love0: corpus: cannot open \" + p)) _ (put err 10) (quit 1))))"
     "   (c0split s) (: n (tally s)"
-    "                  (go i j acc) (? (n <= i) (rev (? (< j i) (link (snip s j i) acc) acc))"
+    "                  (go i j acc) (? (n <= i) (rev (? (< j i) (. (snip s j i) acc) acc))"
     "                                 (: c (peep s i 0)"
     "                                    (? (|| (= c 32) (= c 10))"
-    "                                       (go (+ i 1) (+ i 1) (? (< j i) (link (snip s j i) acc) acc))"
+    "                                       (go (+ i 1) (+ i 1) (? (< j i) (. (snip s j i) acc) acc))"
     "                                       (go (+ i 1) j acc))))"
     "                  (go 0 0 ()))"
     "   fs (c0split (c0read \"out/lib/corpus.list\"))"

@@ -64,7 +64,7 @@
       (label end)))
    ; the param-kind probes: how does the group body use P? each answer picks the entry
    ; guard mkouterir lays for that arg slot.
-   (hasl e) (two? e ? (= <e 'link || (= <e '.) || foldl (\ a x (a || hasl x)) 0 >e) 0)   ; e contains a cons? -> the group is value-typed
+   (hasl e) (two? e ? (= <e '. || foldl (\ a x (a || hasl x)) 0 >e) 0)   ; e contains a cons? -> the group is value-typed
    (suse? e P) (? (atom? e) 0  (member? <e '(peep tally pin) && (= <>e P)) 1  (foldl (\ a x (a || suse? x P)) 0 >e))   ; a string: (peep P..)/(tally P)/(pin P..)
    (buse? e P) (? (atom? e) 0  (= <e 'pin && (= <>e P)) 1  (foldl (\ a x (a || buse? x P)) 0 >e))   ; a cask: (pin P..), so the guard wants the buf kind, not str
    (cuse? e P) (? (atom? e) 0  (member? <e '(cap cup two?) && (= <>e P)) 1  (foldl (\ a x (a || cuse? x P)) 0 >e))   ; a chain: <P />P /(two? P) -- raw, no entry guard, since two? is total
@@ -292,7 +292,7 @@
    ; can: a big literal (or one folding left behind) would be laid truncated, silently.
    (afix? e) (whole? e && (-4611686018427387904 <= e <= 4611686018427387903))
    (aconst? e) (afix? e || (= e amble-nil))
-   (aop2? op) (member? op '(+ - * // % & | ^ < <= > >= = id? link .))
+   (aop2? op) (member? op '(+ - * // % & | ^ < <= > >= = id? .))
    (acmp? op) (member? op '(< <= > >= =))
    (aquote? e) (two? e && (= <e '\) && 2 = #e)            ; the reader's quote: (\ X) at exactly two -- a datum constant
    (aqnom? e) (aquote? e && nom? <>e)                          ; a quoted nom: a point, so (a = 'sym) is raw identity
@@ -301,7 +301,7 @@
    (aq e acc) (? (aquote? e) (amemq e acc ? acc (e . acc))          ; collect quote nodes; never walk into quoted data
                  (two? e) (foldl (\ ac x (aq x ac)) acc e)
                  acc)
-   aopheads '(? : two? cap cup + - * // % & | ^ < <= > >= = id? link .)   ; the heads that are ops, not calls
+   aopheads '(? : two? cap cup + - * // % & | ^ < <= > >= = id? .)   ; the heads that are ops, not calls
    (ahascall? env go e)                                                  ; does e contain a call (any non-op head)? the bisect knob's test
     (? (aquote? e) 0
        (two? e) (: op <e
@@ -401,7 +401,7 @@
    ; nom, id?-keyed, and only when the nom is not env-shadowed: a param named link must win, as it
    ; does in bytecode. a miss falls through to `opnom`, the glued lane's own value -> word map
    ; (prel), so every sigil-backed head is named without this list carrying all fourteen.
-   aopv [[two? 'two?] [cap 'cap] [cup 'cup] [link 'link]
+   aopv [[two? 'two?] [cap 'cap] [cup 'cup] [(.) '.]
            [tally 'tally] [(+) '+] [(-) '-] [(*) '*] [(<) '<] [(<=) '<=]
            [(>) '>] [(>=) '>=] [(=) '=] [(//) '//] [(%) '%] [(&) '&] [(|) '|] [(^) '^]]
    (aopn x l) (atom? l ? (opnom x)  (= x <<l) <><l  (aopn x >l))
@@ -433,7 +433,7 @@
           op (vn && !(member? vn env) ? vn op0)
           as >e
           (? (= op 'list && 0 < #as && !(member? op env))
-               ((: (go l) (two? l ? ['link (adesug env ti ta <l) (go >l)] ())) as)
+               ((: (go l) (two? l ? ['. (adesug env ti ta <l) (go >l)] ())) as)
              (= op '? && 3 < #as)                                            ; a cond chain nests: (? c a c2 b e) is (? c a (? c2 b e))
                ((: (go l) (atom? >l ? (adesug env ti ta <l)
                              (['? (adesug env ti ta <l) (adesug env ti ta <>l)] + (two? >>l ? [(go >>l)] ()))))
@@ -532,7 +532,7 @@
        simp (two? scc ? >scc ())
        ni   #simp
        self (? (= nm 0) 0  (member? nm ps) 0  (member? nm vars0) 0  (= nm go) 0
-               (member? nm '(? two? cap cup id? link + - * < <= > >= = || tally list &&)) 0
+               (member? nm '(? two? cap cup id? + - * < <= > >= = || tally list &&)) 0
                !(simp = (take ni ps)) 0
                nm)
        sfq  !(= self 0)
@@ -624,7 +624,7 @@
                     (= op 'tally && !(member? 'tally env) && member? 'tally gn && atom? >as) (aseq cl as)
                     (= op '|| && !(member? op env) && two? >as) (fbk ? (aseq cl as) (aguard (aseq cl as)))
                     (= op amble-lam) (two? >>as ? (aguard cl) cl)            ; the site's room guard, over frame reads
-                    (member? op '(cap cup link . + - * // % & | ^ < <= > >= =)) (fbk ? (aseq cl as) (aguard (aseq cl as)))   ; stubs in fallback mode
+                    (member? op '(cap cup . + - * // % & | ^ < <= > >= =)) (fbk ? (aseq cl as) (aguard (aseq cl as)))   ; stubs in fallback mode
                     (member? op '(mpeep peep)) (aguard (aseq cl as))         ; reads: a guard, never a call-out
                     (: c2 (aseq cl as) (= c2 'bad ? 'bad 1))))))             ; a call: its args, then the call
        ok ((two? s) && (two? >s) && (all nom? ps) && (adistinct ps)
@@ -864,7 +864,7 @@
                        (= op 'cap) (acap <as d 8)
                        (= op 'cup) (acap <as d 16)
                        (= op 'id?) (aid <as <>as d)
-                       (= op 'link || (= op '.)) (alink <as <>as d)
+                       (= op '.) (alink <as <>as d)
                        (= op '= && (aqnom? <as || aqnom? <>as))
                         (aid <as <>as d)                                               ; (a = 'sym): a point equals only itself (the point-= law) -> raw identity, total
                        (= op '= && (lit? eqv)) (aeq2 <as <>as d)
@@ -1444,7 +1444,7 @@
          (member? e ps) (: R (argregir tgt (argix e ps 0)) [['leax A R R 1 1]])    ; a param: acc = 2*reg + 1
          (atom? e) ()
          (member? <e syms) (cggir tgt syms ps e)                                   ; a value-group call: cggir's call already answers the value
-         (e @ (('link || '.) a b) (bcat [(cggvir tgt syms ps a) [['push A]] (cggvir tgt syms ps b) [['pop T]] (consir tgt)])   ; A ; push ; B ; pop T(=A) ; cons(T,A)
+         (e @ ('. a b) (bcat [(cggvir tgt syms ps a) [['push A]] (cggvir tgt syms ps b) [['pop T]] (consir tgt)])   ; A ; push ; B ; pop T(=A) ; cons(T,A)
               ('? c t f) (: el (mint 0) en (mint 0)
                  (bcat [(cggir tgt syms ps c) [['cmp A 0] ['br 'le el]] (cggvir tgt syms ps t)
                         [['jmp en] ['label el]] (cggvir tgt syms ps f) [['label en]]]))
@@ -1505,7 +1505,7 @@
    ; not re-derive the grammar; it is the backstop for the natjit path, which has no recognizer.
    ; jgir-arity is the operand count cggir/cggvir read, form tally included, so a head at any other
    ; arity would have its extra operands silently dropped.
-   jgir-arity {'+ 3 '- 3 '* 3 '// 3 '% 3 '& 3 '| 3 '^ 3 '< 3 '<= 3 '> 3 '>= 3 '= 3 'link 3 '. 3
+   jgir-arity {'+ 3 '- 3 '* 3 '// 3 '% 3 '& 3 '| 3 '^ 3 '< 3 '<= 3 '> 3 '>= 3 '= 3 '. 3
                '? 4 'peep 4 'pin 4 'mpeep 4 'mpin 4
                'tally 2 'two? 2 'cap 2 'cup 2}
    (jgir-ops-ok? syms e)                                          ; every head in e is a group call or a supported op at its own arity

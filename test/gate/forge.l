@@ -126,16 +126,16 @@
          '(ld r0 r1 8) '(st r2 16 r0)
          '(mov r0 r2) '(add r2 r2 24)]
        + forge-epi-ptr))
-   _ (forge-put 'cons2 2 link-ir link)
+   _ (forge-put 'cons2 2 link-ir (.))
    fitted3 (forge-fit 0)
    _ (? (|| (= fitted 0) (= fitted3 (fitted2 + 1))) 0
         (die ("the allocating kernel did not fit: " + show fitted2 + " -> " + show fitted3)))
    natc (want 'cons2)
    cx [1 0 -3 2.5 () "s" 'nom '(1 2) (iota 3)]
-   badc (filter (\ a (any (\ b !(= (natc a b) (link a b))) cx)) cx)
-   _ (? (nil? badc) 0 (die ("the cons kernel DISAGREES with `link` on " + show badc)))
+   badc (filter (\ a (any (\ b !(= (natc a b) (. a b))) cx)) cx)
+   _ (? (nil? badc) 0 (die ("the cons kernel DISAGREES with `.` on " + show badc)))
    deep (: (go i a) (? (i < 1) a (go (i - 1) (natc i a))) (go 5000 ()))
-   deepc (: (go i a) (? (i < 1) a (go (i - 1) (link i a))) (go 5000 ()))
+   deepc (: (go i a) (? (i < 1) a (go (i - 1) (. i a))) (go 5000 ()))
    _ (? (= deep deepc) 0 (die "a 5000-deep native build differs from the C one"))
    _ (: (go i) (? (i < 1) 0 (: _ (go2 500) (go (i - 1))))
         (go2 k) (: (g3 j a) (? (j < 1) (tally a) (g3 (j - 1) (natc j a))) (g3 k ()))

@@ -43,7 +43,7 @@
  (apply-n t args n) (? (< n 1) t (apply-n (tsubst 0 (cap args) (dbody t)) (cup args) (- n 1)))
  (evs fuel t args)
    (? (< fuel 1) (rebuild t args)
-      (= (dtag t) 2) (: a (evs (- fuel 1) (darg t) 0) (evs (- fuel 1) (dfun t) (link a args)))
+      (= (dtag t) 2) (: a (evs (- fuel 1) (darg t) 0) (evs (- fuel 1) (dfun t) (. a args)))
       (= (dtag t) 1)
         (: n (darity t) k (tally args)
            (? (< k 1) t
@@ -65,15 +65,15 @@
    (? !sc [0 0 st]
       (: r (random st 2) rest (partition (cup sc) (cup r))
          (? (= (cap r) 0)
-            [(link (cap sc) (cap rest)) (caup rest) (cauup rest)]
-            [(cap rest) (link (cap sc) (caup rest)) (cauup rest)])))
+            [(. (cap sc) (cap rest)) (caup rest) (cauup rest)]
+            [(cap rest) (. (cap sc) (caup rest)) (cauup rest)])))
  tI (dlam (dvar 0))
  (gen g sc st)
    (: r (random st 10) pick (cap r) st1 (cup r)
       (? (< g 1) (? !sc [tI 0 st1] [(dvar (cap sc)) (cup sc) st1])
          (&& !!sc (< pick 4)) [(dvar (cap sc)) (cup sc) st1]
          (< pick 7)
-           (: bsc (link 0 (map (+ 1) sc))
+           (: bsc (. 0 (map (+ 1) sc))
               res (gen (- g 1) bsc st1) b (cap res) lo (caup res) st2 (cauup res)
               lo' (map (\ x (- x 1)) (filter (\ x (< 0 x)) lo))
               [(dlam b) lo' st2])

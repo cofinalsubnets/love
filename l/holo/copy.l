@@ -29,7 +29,7 @@
            (: h (po + (i * e))
               (go (i + 1) (? (ld-f fs s h 'ph-type = 1)
                              ([(ld-f fs s h 'ph-off) (ld-f fs s h 'ph-fsz)
-                               (ld-f fs s h 'ph-pa)] >< acc)
+                               (ld-f fs s h 'ph-pa)] . acc)
                              acc))))
        (go 0 ()))
    (oc-lma id segs off)
@@ -69,7 +69,7 @@
               ty (ld-f fs s h 'sh-type) fl (ld-f fs s h 'sh-flags)
               off (ld-f fs s h 'sh-off) sz (ld-f fs s h 'sh-size)
               keep (!(ty = 8) && (0 < (fl & 2)) && (0 < sz))
-              (go (i + 1) (? keep ([(oc-lma id segs off) off sz] >< acc) acc))))
+              (go (i + 1) (? keep ([(oc-lma id segs off) off sz] . acc) acc))))
        secs (go 1 ())
        _ (? (two? secs) 0 (scare 'copy-nothing id))
        [(sortby (\ a b (<a <= <b)) secs) (ld-f fs s 0 'e-entry)])
@@ -83,7 +83,7 @@
            (: c <l a <c o (c 1) n (c 2)
               _ (? (a < pos) (scare 'copy-overlap a) 0)
               (go >l (a + n)
-                  (snip s o (o + n) >< (? (pos < a) (ld-zeros (a - pos) >< acc) acc)))))
+                  (snip s o (o + n) . (? (pos < a) (ld-zeros (a - pos) . acc) acc)))))
        (go secs (<secs 0) ()))
 
    ;; -- Intel hex: ":" ll AAAA tt dd.. CC, every byte two ASCII hex digits, CC the
@@ -106,7 +106,7 @@
    (oc-rec ty addr bs)
     (: all ([(tally bs) ((addr >> 8) & 255) (addr & 255) ty] + bs)
        ck ((256 - (foldl (+) 0 all % 256)) % 256)
-       (oc-cat (":" >< (map oc-x2 (all + [ck]) + '("\r\n")))))
+       (oc-cat (":" . (map oc-x2 (all + [ck]) + '("\r\n")))))
    (oc-be4 v) [((v >> 24) & 255) ((v >> 16) & 255) ((v >> 8) & 255) (v & 255)]
    ;; the entry wears the same two ages as the base: type 03 is cs:ip under 1 MB, and
    ;; type 05 the flat address above it.
@@ -119,7 +119,7 @@
            (: room (65536 - (a % 65536))
               m (? (16 < left) 16 left)
               n (? (room < m) room m)
-              (go (a + n) (o + n) (left - n) ([a o n] >< acc))))
+              (go (a + n) (o + n) (left - n) ([a o n] . acc))))
        (rev (foldl (\ acc c (go <c (c 1) (c 2) acc)) () secs)))
    (oc-b02 nb) (oc-rec 2 0 [((nb >> 12) & 255) ((nb >> 4) & 255)])
    (oc-b04 nb) (oc-rec 4 0 [((nb >> 24) & 255) ((nb >> 16) & 255)])
@@ -127,20 +127,20 @@
    (oc-ihex s secs entry)
     (: (go l base sg acc)
         (? !(two? l)
-           (rev (link ":00000001FF\r\n"
-                      (? (0 < entry) (oc-start entry >< acc) acc)))
+           (rev (. ":00000001FF\r\n"
+                      (? (0 < entry) (oc-start entry . acc) acc)))
            (: c <l a <c
               new? ((base + 65535) < a)
               lin? (0xFFFFF < a)
               nb (a - (a % 65536))
               acc2 (? !new? acc
-                      !lin? (oc-b02 nb >< acc)
-                      sg (oc-b04 nb >< (oc-b02 0 >< acc))
-                      (oc-b04 nb >< acc))
+                      !lin? (oc-b02 nb . acc)
+                      sg (oc-b04 nb . (oc-b02 0 . acc))
+                      (oc-b04 nb . acc))
               b2 (? new? nb base)
               (go >l b2 (? new? !lin? sg)
                   (oc-rec 0 (a - b2)
-                          (map (\ k (s (c 1 + k))) (jot (c 2))) >< acc2))))
+                          (map (\ k (s (c 1 + k))) (jot (c 2))) . acc2))))
        (go (oc-chunks secs) 0 () ()))
 
    ;; -- the applet. GNU's objcopy names itself when it complains and exits 1, and a

@@ -21,7 +21,7 @@
 ; the Makefile drives it. register vocabulary is holo's -- x86: r0=rax
 ; r1=rcx r2=rdx r3=rbx r5=rsi r6=rdi; a64: rN = xN.
 (:
-   (b-rep n x) (? (n < 1) () (x >< (b-rep (n - 1) x)))
+   (b-rep n x) (? (n < 1) () (x . (b-rep (n - 1) x)))
    (b-zeros n) (b-rep n 0)
 
    (b-abs32 lbl ad) [['fix 4 'abs32 lbl ad]]     ; a 4-byte physical address
@@ -48,13 +48,13 @@
    i-inc-ecx        '(65)                                    ; 41           inc %ecx
    i-rdmsr          '(15 50)                                 ; 0f 32        rdmsr
    i-wrmsr          '(15 48)                                 ; 0f 30        wrmsr
-   (i-edi-sym l a)  (191 >< (b-abs32 l a))                   ; bf id        mov $sym, %edi
-   (i-eax-sym l a)  (184 >< (b-abs32 l a))                   ; b8 id        mov $sym, %eax
-   (i-ecx-imm v)    (185 >< (le32 v))                        ; b9 id        mov $imm, %ecx
+   (i-edi-sym l a)  (191 . (b-abs32 l a))                   ; bf id        mov $sym, %edi
+   (i-eax-sym l a)  (184 . (b-abs32 l a))                   ; b8 id        mov $sym, %eax
+   (i-ecx-imm v)    (185 . (le32 v))                        ; b9 id        mov $imm, %ecx
    (i-shl-eax n)    [193 224 n]                              ; c1 e0 ib     shl $n, %eax
-   (i-or-eax v)     (13 >< (le32 v))                         ; 0d id        or $imm32, %eax
+   (i-or-eax v)     (13 . (le32 v))                         ; 0d id        or $imm32, %eax
    (i-or-eax8 v)    [131 200 v]                              ; 83 c8 ib     or $imm8, %eax
-   (i-add-eax v)    (5 >< (le32 v))                          ; 05 id        add $imm32, %eax
+   (i-add-eax v)    (5 . (le32 v))                          ; 05 id        add $imm32, %eax
    (i-cmp-ecx v)    ([129 249] + (le32 v))                   ; 81 f9 id     cmp $imm32, %ecx
    (i-jne lbl)      [15 133 ['fix 4 'rel32 lbl 0]]           ; 0f 85 cd     jne rel32
    (i-st-edi d)     ([137 135] + (le32 d))                   ; 89 87 disp32 mov %eax, d(%edi)
@@ -63,7 +63,7 @@
    (i-lgdt l a)     ([15 1 21] + (b-abs32 l a))              ; 0f 01 15 id  lgdt sym
    (i-ldcr n)       [15 32 (192 | (n << 3))]                 ; 0f 20 /r     mov %crN, %eax
    (i-stcr n)       [15 34 (192 | (n << 3))]                 ; 0f 22 /r     mov %eax, %crN
-   (i-ljmp l a)     ((234 >< (b-abs32 l a)) + '(8 0))        ; ea off32 sel16  ljmp $0x08, $sym
+   (i-ljmp l a)     ((234 . (b-abs32 l a)) + '(8 0))        ; ea off32 sel16  ljmp $0x08, $sym
    (i32 bs) ['raw bs]                                        ; one 32-bit instruction, one form
 
    ;; -- x64 ------------------------------------------------------------

@@ -130,13 +130,13 @@
                                (? (n <= j3) ()
                                   (: v (sc j3)
                                      plain (\ verb (? (sepend? (j3 + 1))
-                                                      (rcmd (j3 + 1) ([a1 a2 verb ()] >< acc))
+                                                      (rcmd (j3 + 1) ([a1 a2 verb ()] . acc))
                                                       ()))
                                      (? (v = 112) (plain 'p)
                                         (v = 100) (plain 'd)
                                         (v = 113) (? (two? a2) () (plain 'q))
                                         (v = 115) (rsub j3 @ [pay j4]
-                                                    (rcmd j4 ([a1 a2 's pay] >< acc))
+                                                    (rcmd j4 ([a1 a2 's pay] . acc))
                                                     ())
                                         ()))))))))
                 ())))
@@ -171,7 +171,7 @@
               ()))
        ; one line through the commands -> (kind ps): 0 flows, 1 deleted, 2 quits
        (rline cs idx ps no q last?)
-        (cs @ (c >< more)
+        (cs @ (c . more)
            (? !(sel? c idx no ps last?) (rline more (idx + 1) ps no q last?)
               (: v <>>c
                  (? (v = 'd) [1 ps]
@@ -223,7 +223,7 @@
        ; not open complains and the rest still flow, exactly as the joined lane.
        ; the answer is still held whole, and must be: it overwrites its own input.
        (inplace a bad)
-        (a @ (f >< more)
+        (a @ (f . more)
            (: rd (urdj sed-miss [f])
               j (jug 0)
               _ (srun cmds rd n? j)

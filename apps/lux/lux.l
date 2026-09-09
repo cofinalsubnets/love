@@ -40,7 +40,7 @@
    ; recycled slot (gdb: ospoll_wait -> CloseDownClient -> FreeClientResources
    ; with the victim's socket provably open) -- one hand on the wire, and the
    ; wire is the driver's alone.
-   (lux! f) (: _ (pin lux-cell 'q (f >< peep lux-cell 'q ()))                 ; (a peep+pin pair -- a concurrent drain in the gap can lose
+   (lux! f) (: _ (pin lux-cell 'q (f . peep lux-cell 'q ()))                 ; (a peep+pin pair -- a concurrent drain in the gap can lose
                 'queued)                                                         ;  a change; prompt-scale odds, and wssane? guards either way)
    ; the command sugar -- each a (lux! ..) over the snapshot shape (sh lay hist ffoc)
    (lay! l)  (lux! (st \ [<st l (st 2) (st 3)]))
@@ -68,7 +68,7 @@
        (dead? p) (: c (connectu p) (hot? c ? (: _ (close c) 0) 1))
        (go ns acc) (? !(two? ns) acc
                       (: p (dir + ("/" + <ns))
-                         (? (!(p = own) && dead? p) (unlink p, go >ns (p >< acc))
+                         (? (!(p = own) && dead? p) (unlink p, go >ns (p . acc))
                             (go >ns acc))))
        (go (filter sockish? (readdir dir)) ()))
    ; our script path, either argv shape: plain `love lux` gives (script ..);
@@ -99,8 +99,8 @@
    (lux-session c)
     (: (rdline acc) (: ch (see c)
                        (? (ch = -1) ()
-                          (ch = 10) (rev (10 >< acc))
-                          (rdline (ch >< acc))))
+                          (ch = 10) (rev (10 . acc))
+                          (rdline (ch . acc))))
        (go pend) (: cl (rdline ())
                     (? !(two? cl) 0
                        ((: (h cl) (: r (sound cl)
@@ -325,7 +325,7 @@
    ;     never accumulated. name the parameter apart and the ring lives. ---
    (loop2 sh lay hist0 ffoc)
     (: f (ffoc ? ffoc (wsfoc sh))                                                ; the mru rides the effective focus: floats enter too
-       hist (f && !(f = (two? hist0 ? <hist0 ())) ? (f >< znub f hist0) hist0)
+       hist (f && !(f = (two? hist0 ? <hist0 ())) ? (f . znub f hist0) hist0)
        (relay sh2 lay2 f2) (: flf (f2 && wsfloating? sh2 f2 ? f2 ())           ; render, focus the float or the tiled top, loop (do-act has its own)
                               _ (render sh2 lay2 flf)
                               _ (flf ? (x-focus s flf, x-flush s) (refocus sh2))

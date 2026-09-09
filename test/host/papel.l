@@ -50,7 +50,7 @@
                          (? ((i + m) <= n)
                             (? ((snip s i (i + m)) = pre)
                                (: j ((: (f k) (? (&& (k < n) (! ((s k) = 34))) (f (k + 1)) k)) (i + m))
-                                  (g j (link (snip s (i + m) j) acc)))
+                                  (g j (. (snip s (i + m) j) acc)))
                                (g (i + 1) acc))
                             (rev acc))) 0 ()))
    (has? l x)     (member? x l)

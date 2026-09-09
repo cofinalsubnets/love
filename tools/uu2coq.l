@@ -140,9 +140,9 @@
 
    ; candidates: a def, in the fragment, not blacklisted, present in glob (uu-certified)
    (cand? e) (&& (<e = 'def) (! (peep bl (e 1) 0)) (peep GLOB (e 1) 0) (tr? (e 2)) (tr? (e 3)))
-   cands (foldl (\ a e (? (cand? e) (link e a) a)) () ents)   ; reversed; restore order at emit
+   cands (foldl (\ a e (? (cand? e) (. e a) a)) () ents)   ; reversed; restore order at emit
    ; each candidate's mentioned-names list (its global dependencies)
-   (mlist e) (keys (ment-l (link (e 2) (link (e 3) ())) (tablet 0)))
+   (mlist e) (keys (ment-l (. (e 2) (. (e 3) ())) (tablet 0)))
 
    ; --- dependency closure: keep only defs all of whose mentions also survive ---
    (allin? l ex) (? (two? l) (&& (peep ex (cap l) 0) (allin? (cup l) ex)) 1)
@@ -155,7 +155,7 @@
    (emit e) (cat ["Definition " (rocqn (e 1)) " : " (u2c (e 2)) " :=" (string 10)
                   "  " (u2c (e 3)) "." (string 10)])
    ; foldr keeps ents' order, and coq wants every definition before its uses (foldl flips)
-   exports (foldr (\ e a (? (peep keep (e 1) 0) (link e a) a)) () ents)
+   exports (foldr (\ e a (? (peep keep (e 1) 0) (. e a) a)) () ents)
 
    _ (dot (cat [
       "(* test/proof/rocq/uugen.v -- GENERATED from test/uu.l by tools/uu2coq.l. Do not edit;" (string 10)

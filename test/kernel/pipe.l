@@ -85,7 +85,7 @@
 ; the seat: a stage's out rides the pipe while the parent keeps the console --
 ; the parent closes its end and still reads the child whole
 (: pp (pipe 0) rfd (cap pp) wfd (cup pp)
-   p (spawnmap (list "kore" "echo" "seated") (list (link 1 wfd)) (list rfd wfd) (- 0 1) 0)
+   p (spawnmap (list "kore" "echo" "seated") (list (. 1 wfd)) (list rfd wfd) (- 0 1) 0)
    _ (close wfd)
    s (slurp (fdopen rfd))
  (test (= 0 (wait p)) (= s "seated\n")))
@@ -93,9 +93,9 @@
 ; two stages plumbed by hand -- echo | wc -l -- the parent reading the tail;
 ; the seat carries fd 0 as well as fd 1
 (: pa (pipe 0) pb (pipe 0)
-   p1 (spawnmap (list "kore" "echo" "a b") (list (link 1 (cup pa))) () (- 0 1) 0)
+   p1 (spawnmap (list "kore" "echo" "a b") (list (. 1 (cup pa))) () (- 0 1) 0)
    p2 (spawnmap (list "kore" "wc" "-l")
-                (list (link 0 (cap pa)) (link 1 (cup pb))) () (- 0 1) 0)
+                (list (. 0 (cap pa)) (. 1 (cup pb))) () (- 0 1) 0)
    _ (close (cup pa)) _ (close (cap pa)) _ (close (cup pb))
    s (slurp (fdopen (cap pb)))
    r1 (wait p1) r2 (wait p2)

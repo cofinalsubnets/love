@@ -85,7 +85,7 @@
           q (open src "r")
           _ (? (hot? q) () (die ("as: cannot open " + src)))
           (rd x acc) (: r (sound x)
-                      (? (two? r) (rd >r (<r >< acc))
+                      (? (two? r) (rd >r (<r . acc))
                          (= r 'torn) (die ("as: unfinished form in " + src))
                          (rev acc)))
           ir (rd (slurp q) ())
@@ -170,7 +170,7 @@
                                 (: t (uread <>a) (? (two? t) (go >>a fs o pie org tgt <>t)
                                                     (die ("ld: cannot open " + <>a))))
                                 (die "ld: --readme wants a path"))
-           (go >a (<a >< fs) o pie org tgt rd))
+           (go >a (<a . fs) o pie org tgt rd))
        r (go as () () 0 () 'x64 ())
        fs <r o <>r pie <>>r org (r 3) tgt (r 4) rdme (r 5)
        _ (? (two? fs) () (die "usage: kore ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"))
@@ -239,7 +239,7 @@
         (? !(two? a) [g u srt (rev fs)]
            ((1 < tally <a) && (<a 0 = 45))
             (: f (nm-flags <a 1 g u srt) (go >a <f <>f <>>f fs))
-           (go >a g u srt (<a >< fs)))
+           (go >a g u srt (<a . fs)))
        r (go as () () () ())
        fs (r 3)
        _ (? (two? fs) () (die "usage: kore nm [-g] [-u] [-p] FILE.."))
@@ -368,12 +368,12 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
    ; the spellings kore answers to: itself, its file, and every applet -- the symlink
    ; lane is just an applet name in the program seat, so the table is the list. the
    ; scan is l/boot/post.l's `seatof` (over the list we are handed, never a command
-   ; line: the in-image door dispatches (link "kore" "ls" "-l")), which drops the -l
+   ; line: the in-image door dispatches (. "kore" "ls" "-l")), which drops the -l
    ; pairs and answers (SEAT-WORD . rest), () when the seat is someone else's -- so a
    ; bake loading the cat as `love -l .kore-cat.l -e ..` stays quiet.
    ; the seat word's basename picks the face: a tool name runs that tool on the rest;
    ; anything else (kore itself, a dev path) reads the next word as the tool.
-   mynames ("kore" >< "kore.l" >< map string (keys applets))
+   mynames ("kore" . "kore.l" . map string (keys applets))
    ; the verbs: kore's applet table is a verb collection, and the registry is where one
    ; goes. every row lands twice over -- `love ls -l` (the word door) and an `ls` symlink
    ; onto the artifact (the seat door) -- while `love kore ls` still nests through the
@@ -387,7 +387,7 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
         ; closure reads it through the registry at the call, when module 'kore holds
         ; it. a bare read compiled here would ride a missing cell against the
         ; caller's walk, where kore never walks.
-        _ (pin T 'kore (\ as ((cite 'kore 'kore-main) ("kore" >< as))))
+        _ (pin T 'kore (\ as ((cite 'kore 'kore-main) ("kore" . as))))
         (go ks) (? (two? ks) (: f (applets <ks) _ (pin T <ks (\ as (urun f as))) (go >ks)) 0)
         (go (keys applets)))
    ; kore-main is the dispatch door, and the in-image door too: it dispatches a
@@ -395,7 +395,7 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
    ; tool word -- and answers the status charm, () when kore is not seated (the bake
    ; stays quiet; an unknown tool is usage's 2, a status like any other). the baked
    ; kore.image wakes to it with a synthetic "kore" argv0, so a caller holding the
-   ; image runs a tool by handing it (link "kore" "ls" "-l") and reading the charm.
+   ; image runs a tool by handing it (. "kore" "ls" "-l") and reading the charm.
    ; two doors: a list handed in is scanned, () means "the line I was started with".
    (kore-main a)
     (: s (? (two? a) ((cite 'verbs 'seatof) mynames a) ((cite 'verbs 'fire) mynames))

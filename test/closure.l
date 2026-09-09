@@ -101,7 +101,7 @@
 ;     lam_src1 via in_heap). before the gen graduation `=` said equal while the address-hash
 ;     split, so a map keyed on fa could not find the alpha-equal ga. (a no-op on the single-pool
 ;     gcg build, where nothing tenures elsewhere.)
-(: (lots n) ((: (go i a) (? (< i n) (go (+ i 1) (link i a)) (tally a))) 0 ())
+(: (lots n) ((: (go i a) (? (< i n) (go (+ i 1) (. i a)) (tally a))) 0 ())
    (fa a b) (+ a b) (ga a b) (+ a b)
    _ (lots 200000)                                       ; force a major -> fa/ga tenured
    (test

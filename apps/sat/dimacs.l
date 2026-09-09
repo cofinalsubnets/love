@@ -30,10 +30,10 @@
    cnf       (seqs [pre header body])                       ; -> ("p" "cnf" nvars nclauses . ints)
    (split0 ints)                                            ; split an int stream into clauses, dropping the 0 terminators
     ((: (g ls cur acc)
-        (? (atom? ls) (atom? cur ? (rev acc) (rev (rev cur >< acc)))         ; flush a final un-terminated clause
-           (<ls = 0) (g >ls () (rev cur >< acc))
-           (g >ls (<ls >< cur) acc))) ints () ())
-   (dimacs text) (: p (runp cnf text) (split0 (drop 4 p) >< p 2))         ; (formula . nvars)
+        (? (atom? ls) (atom? cur ? (rev acc) (rev (rev cur . acc)))         ; flush a final un-terminated clause
+           (<ls = 0) (g >ls () (rev cur . acc))
+           (g >ls (<ls . cur) acc))) ints () ())
+   (dimacs text) (: p (runp cnf text) (split0 (drop 4 p) . p 2))         ; (formula . nvars)
 
  ; -- parse self-tests (standalone; no solver needed) --
  _ (assert

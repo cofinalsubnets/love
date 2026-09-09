@@ -339,7 +339,7 @@
             + "(: kb (peep (cite 'verbs 'tab) 'kern-in 0)"
             + "   bb (string (cask (lay-boot-bytes (peep kb 'arch 0))))"
             + "   (kproject (peep kb 'pie 0) bb (peep kb 'out 0) (peep kb 'arch 0)))")
-       _ (reads (tap ((: (g i) (? (< i #cat) (link (peep cat i 0) (g (+ 1 i))))) 0)))
+       _ (reads (tap ((: (g i) (? (< i #cat) (. (peep cat i 0) (g (+ 1 i))))) 0)))
        _ (pull vt 'kern-in 0)
        _ (puts (";; wrote " + out + " (" + arch + ")\n"))
        0)

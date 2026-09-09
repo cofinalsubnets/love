@@ -84,7 +84,7 @@
    _ (close l))
 
   ; --- slurp over a port that parks is linear ------------------------------------
-  ; prel's slurp used to build the charlist on the way down -- (link c (rl i)) -- so
+  ; prel's slurp used to build the charlist on the way down -- (. c (rl i)) -- so
   ; the stack depth was the byte count. on a file that is merely deep; on a socket
   ; every would-block parks, and a park copies the task's stack, so the cost went
   ; quadratic in the stream and fell over somewhere past 200K. measured on the

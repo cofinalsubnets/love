@@ -536,7 +536,7 @@ lvm(lvm_lamsrc) {
  ai_musttail return Next(1); }
 
 // (nifnom f): a nif's roster spelling, or (). the book cannot answer this: two
-// names can share one nif value (link and ><, peep and ->), and def1 is which of
+// names can share one nif value (. and ><, peep and ->), and def1 is which of
 // them is the name. the printer's other C-only question.
 lvm(lvm_nifnom) {
  char const *nm = ai_nif_name(Sp[0]);

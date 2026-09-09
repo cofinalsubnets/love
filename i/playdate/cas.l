@@ -35,7 +35,7 @@
                   (<l = x) (1 + (count x >l))
                   (count x >l))
    (uniq l) (? (0 = tally l) ()
-               (: f <l (link f (uniq (filter (\ y !(y = f)) >l)))))
+               (: f <l (. f (uniq (filter (\ y !(y = f)) >l)))))
    (factxt t vs) (: fs (map load (pfac (tpoly t vs)))
                     (joins (map (\ f (: k (count f fs) s ("  " + (fshow f vs))
                                         (? (k = 1) (s + "\n")

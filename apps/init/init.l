@@ -40,7 +40,7 @@
    (find units name) (? !units ()                    ; the unit with this name, or ()
                         (? (= (u-name (cap units)) name) (cap units)
                            (find (cup units) name)))
-   (rev l) (foldl (\ a x (link x a)) () l)            ; prepend-fold = reverse
+   (rev l) (foldl (\ a x (. x a)) () l)            ; prepend-fold = reverse
 
    ; --- the registry --- a live book name->status ('up | 'done | 'failed; absent =
    ; 'down). mutable (a book), the one place state is shared while units come and go;

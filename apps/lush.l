@@ -1469,7 +1469,7 @@
               (: t >h p (sh-eqpos t 0)
                  (? !p ()
                     !(sh-asnname? (snip t 0 p)) ()
-                    (link (snip t 0 p)
+                    (. (snip t 0 p)
                           (: rest (snip t (p + 1) #t)
                              (? #rest (('lit . rest) . >segs) >segs))))))))
    (sh-peel ws acc)
@@ -2227,7 +2227,7 @@
                    (\ _ (sh-floop nm (catmap sh-fields ws) b 0)))
               (= k 'case)                      ; a bodyless arm takes the zero at
                 (: w (a 1)                ; plan time -- an AST tells its own
-                   its (map (\ it (link <it      ; absence by two?, a plan cannot
+                   its (map (\ it (. <it      ; absence by two?, a plan cannot
                                         (? (two? >it) (sh-plan >it) sh-zero)))
                             (a 2))
                    (\ _ (sh-citems (sh-textof w) its)))

@@ -60,7 +60,7 @@
    (stampf ts i spans)
     (? !(two? ts) ()
        (: t <ts
-          ([(tkk t) (tkv t) <>>t i (filat spans i)] >< stampf >ts (i + 1) spans)))
+          ([(tkk t) (tkv t) <>>t i (filat spans i)] . stampf >ts (i + 1) spans)))
    (stamped? t) (two? >>>>t)                       ; a 5th cell -- probed, never counted: mark runs on every lookahead of every parse
    (seqof t) (? (stamped? t) <>>>t ())
    (filof t) (? (stamped? t) <>>>>t ())
@@ -545,22 +545,22 @@
    ; sizeof multiplies; anywhere else the varr type refuses downstream.
    (adims ps ts2 acc) (? !(peekp ts2 "[") [(rev acc) ts2]
                          (: t2 (pquals >ts2)
-                            (? (peekp t2 "]") (adims ps >t2 (0 >< acc))
+                            (? (peekp t2 "]") (adims ps >t2 (0 . acc))
                                ; C11 6.7.6.2p4: `[*]` is a prototype's unspecified VLA
                                ; bound, and a parameter decays to a pointer either way
-                               ((peekp t2 "*") && peekp >t2 "]") (adims ps >>t2 (0 >< acc))
+                               ((peekp t2 "*") && peekp >t2 "]") (adims ps >>t2 (0 . acc))
                                (: er (thenw (pexpr ps t2) "]")
                                   (? !(two? er) ()
                                      (: dv (cfold <er)
-                                        (? (charm? dv) (adims ps <>er (dv >< acc))
-                                           (adims ps <>er (['vdim <er] >< acc)))))))))
+                                        (? (charm? dv) (adims ps <>er (dv . acc))
+                                           (adims ps <>er (['vdim <er] . acc)))))))))
    ; fold dims (outer..inner) into a nested arr: [3][4] of T -> (arr (arr T 4) 3);
    ; a 'vdim dim lays ('varr elt expr) instead
    (mkarr ety dims) (? !(two? dims) ety
                        (: d <dims
                           (? (two? d && (= <d 'vdim)) ['varr (mkarr ety >dims) <>d]
                              ['arr (mkarr ety >dims) d])))
-   (varr? ('varr >< _)) 1
+   (varr? ('varr . _)) 1
    ; the (params)/[dims] suffix run on a direct declarator. each suffix wraps
    ; inside w (the wrap-so-far: eventual-pointee -> declared type), so the type
    ; grows inside-out; the name's own (params) ride out as dat (a fn DEF binds
@@ -657,23 +657,23 @@
        ; where the dialect says so, since under -std=c this is a syntax error and stays one.
        (moon? ps && plabel? ts)
         (: nm (tkv <ts)
-           (? (two? (want >ts ":")) (pmembers ps >>ts ([nm 'label] >< acc)) ()))
+           (? (two? (want >ts ":")) (pmembers ps >>ts ([nm 'label] . acc)) ()))
        (: br (pbty ps ts)
           (? !(two? br) ()
              (: bty <br ts2 <>br
                 (? (peekp ts2 ";")                   ; an anonymous struct/union member
-                   (? (stru? bty) (pmembers ps >ts2 ([() bty] >< acc)) ())
+                   (? (stru? bty) (pmembers ps >ts2 ([() bty] . acc)) ())
                    (peekp ts2 ":")                   ; an anonymous bitfield (padding / `:0` aligner): () name + width
                    (: bw (pbits ps ts2)
                       (? !(two? bw) ()
                          (: rest (want <>bw ";")
-                            (? (two? rest) (pmembers ps rest ([() bty <bw] >< acc)) ()))))
+                            (? (two? rest) (pmembers ps rest ([() bty <bw] . acc)) ()))))
                    (: mq (qspec ps ts bty)   ; _Generic's mask for this run; playout has no slot for it
                       (dfin mem2 toks acc2)          ; after a declarator (+ optional bitfield): , or ;
-                       (: _ (? (<mem2 && mq) (pin ps 'qmemacc ([<mem2 mq] >< peep ps 'qmemacc ())) 0)
-                          (? (peekp toks ",") (dts >toks (mem2 >< acc2))
+                       (: _ (? (<mem2 && mq) (pin ps 'qmemacc ([<mem2 mq] . peep ps 'qmemacc ())) 0)
+                          (? (peekp toks ",") (dts >toks (mem2 . acc2))
                              (: rest (want toks ";")
-                                (? (two? rest) [(mem2 >< acc2) rest] ()))))
+                                (? (two? rest) [(mem2 . acc2) rest] ()))))
                       (dts ts3 acc2)                 ; dtor [: width] (, dtor [: width])* ;
                        (: dr (pdtor ps ts3 bty)
                           (? !(two? dr) ()
@@ -733,19 +733,19 @@
                     nt (nxt >l)
                     la (? pk 1 nt (talign ps nt) (? (mx < 1) 1 mx))
                     at (? uni 0 ((aup bit (la * 8)) >> 3))   ; a union flattens every offset
-                    (go >l bit mx ([name at ['arr 'char 0]] >< acc)))
+                    (go >l bit mx ([name at ['arr 'char 0]] . acc)))
                  (bfmem? m)                          ; a bitfield member (named or anonymous): (name ty width)
                  (: w <>>m
                     usz (tsz ps ty) ubits (usz * 8) a (talign ps ty)
                     nmx (? (mx < a) a mx)
                     (? (= w 0) (go >l (aup bit ubits) nmx acc)        ; `:0` -- align the cursor to the unit, no field
                        uni (: fld (? name [name 0 ['bitfield ty 0 w]] ())
-                              (go >l (? (bit < ubits) ubits bit) nmx (? name (fld >< acc) acc)))
+                              (go >l (? (bit < ubits) ubits bit) nmx (? name (fld . acc) acc)))
                        (: bit2 (? (((& bit (ubits - 1)) + w) > ubits) (aup bit ubits) bit)   ; bump to avoid straddling the unit
                           uoff (& (bit2 >> 3) (0 - usz))              ; the declared-type-aligned word holding these bits
                           bitoff (bit2 - (uoff * 8))
                           fld (? name [name uoff ['bitfield ty bitoff w]] ())   ; anonymous -> reserve bits, no field
-                          (go >l (bit2 + w) nmx (? name (fld >< acc) acc)))))
+                          (go >l (bit2 + w) nmx (? name (fld . acc) acc)))))
                  !name                               ; the anonymous struct/union splice (name absent, no width)
                  (: inner (peep (ps 'stag) <>ty 0)
                     ia (? pk 1 <>>inner)
@@ -754,7 +754,7 @@
                     at (sbit >> 3)
                     (spl fs acc2) (? !(two? fs) acc2
                                      (: f <fs
-                                        (spl >fs ([<f (at + <>f) <>>f] >< acc2))))
+                                        (spl >fs ([<f (at + <>f) <>>f] . acc2))))
                     nmx (? (mx < ia) ia mx)
                     nbit (? uni (? (bit < (isz * 8)) (isz * 8) bit) (sbit + (isz * 8)))
                     (go >l nbit nmx (spl <inner acc)))
@@ -764,7 +764,7 @@
                     at (abit >> 3)
                     nmx (? (mx < a) a mx)
                     nbit (? uni (? (bit < (sz * 8)) (sz * 8) bit) (abit + (sz * 8)))
-                    (go >l nbit nmx ([name at ty] >< acc))))))
+                    (go >l nbit nmx ([name at ty] . acc))))))
        (go ms 0 0 ()))
    (panon ps) (: k (peep ps 'anon 0) _ (pin ps 'anon (k + 1)) (".anon" + show k))
    ; a tag defined inside a block is that block's (C11 6.7.2.3), and it cannot be scoped
@@ -778,7 +778,7 @@
    ; whoever owns the scope drains (sdrain / note)
    (spin ps tbl nm v)
     (: old (peep (ps tbl) nm 'none)
-       _ (pin ps 'scopacc ([tbl nm old] >< peep ps 'scopacc ()))
+       _ (pin ps 'scopacc ([tbl nm old] . peep ps 'scopacc ()))
        (pin (ps tbl) nm v))
    (ptagkey ps nm)
     (? (peep ps 'blkd 0 < 1) nm
@@ -799,7 +799,7 @@
        (: t <ts
           (? ((tkk t = 'kw) && member? (tkv t) tyspec)         ; a run of type specifiers -> one canonical type
               (: (grab l acc) (? (two? l && (tkk <l = 'kw) && member? (tkv <l) tyspec)
-                                 (grab >l (tkv <l >< acc))
+                                 (grab >l (tkv <l . acc))
                                  ; a qualifier interleaved in the run (`unsigned const char`):
                                  ; C's declaration specifiers are order-free -- skip and continue
                                  (: l2 (pquals l)
@@ -905,7 +905,7 @@
    ; else reads a marked type.
    ; only the specifier run's qualifier is seen: a mid-declarator one (`char *
    ; const *p`) reads unqualified, which matches MORE than C does, never less.
-   (cq? ('cq >< _)) 1
+   (cq? ('cq . _)) 1
    (qmark q ty) (? !q ty
                    (ptr? ty) ['ptr (qmark q <>ty)]
                    (arr? ty) ['arr (qmark q <>ty) <>>ty]
@@ -1009,7 +1009,7 @@
           (: r <>er row [<tr <>tr <er]
              (? !(peekp r ",") [[row] r]
                 (: more (pgarms ps >r)
-                   (? (two? more) [(row >< <more) <>more] ()))))))
+                   (? (two? more) [(row . <more) <>more] ()))))))
    ; the selected expression, presence-wrapped. equality is structural over the
    ; marked type, so `const int *` and `int *` are two rows; a top-level-qualified
    ; row matches nothing.
@@ -1086,10 +1086,10 @@
                         'int)
                  (s16 l) (? !(two? l) ()
                             (65536 <= <l) (: v (<l - 65536)
-                                             ((55296 + (v >> 10)) >< ((56320 + (v & 1023)) >< s16 >l)))
-                            (<l >< s16 >l))
+                                             ((55296 + (v >> 10)) . ((56320 + (v & 1023)) . s16 >l)))
+                            (<l . s16 >l))
                  cps (: raw (utf8dec (tkv t)) (? (tkk t = 'str16) (s16 raw) raw))
-                 (nums l) (? !(two? l) [['num 0]] (['num <l] >< nums >l))
+                 (nums l) (? !(two? l) [['num 0]] (['num <l] . nums >l))
                  [['clit ['arr ety (tally cps + 1)] ['init (nums cps)]] >ts])
              ; _Generic (C11 6.5.1.1): the controlling expression is typed, never
              ; evaluated -- only the selected arm reaches gen. no match, no default: refuse.
@@ -1196,9 +1196,9 @@
     (? (peekp ts ")") [(rev acc) >ts]
        (: r (pasn ps ts)
           (? !(two? r) ()
-             (peekp <>r ",") (pargs ps ><>r (<r >< acc))
+             (peekp <>r ",") (pargs ps ><>r (<r . acc))
              (: rest (want <>r ")")
-                (? (two? rest) [(rev (<r >< acc)) rest] ())))))
+                (? (two? rest) [(rev (<r . acc)) rest] ())))))
    ; the suffix run from a given seed -- ppost seeds with a primary; punary's
    ; compound literal seeds with the clit ((struct kstat){0}.st_atime_sec,
    ; (size_t [3]){..}[i] -- musl indexes and members straight off the literal)
@@ -1383,8 +1383,8 @@
                (: it (pinititem ps ts2)
                   (? !(two? it) ()
                      (: elem <it ts3 <>it
-                        (? (peekp ts3 ",") (items >ts3 (elem >< acc))
-                           (peekp ts3 "}") [['init (dbuild (rev (elem >< acc)))] >ts3]
+                        (? (peekp ts3 ",") (items >ts3 (elem . acc))
+                           (peekp ts3 "}") [['init (dbuild (rev (elem . acc)))] >ts3]
                            ())))))
            (items >ts ()))
        ; a scalar initializer that folds is its number -- `(Bits>>3)`-style macro
@@ -1462,12 +1462,12 @@
     (? (peekp ts ".")
         (: t2 >ts
            (? !(idat? t2) ()
-              (pdesigs ps >t2 (['f (tkv <t2)] >< acc))))
+              (pdesigs ps >t2 (['f (tkv <t2)] . acc))))
        (peekp ts "[")
         (: er (thenw (pexpr ps >ts) "]")             ; a designator index: any const-expr ([KMint]=.., [2]=..)
            (? !(two? er) ()
               (: n (cfold <er)
-                 (? (charm? n) (pdesigs ps <>er (['i n] >< acc)) ()))))
+                 (? (charm? n) (pdesigs ps <>er (['i n] . acc)) ()))))
        !(two? acc) ()
        (: r (want ts "=")
           (? (two? r) [(rev acc) r] ())))
@@ -1477,19 +1477,19 @@
    (dbuild prs)
     (? !(two? prs) ()
        (: pv <prs path <pv v <>pv
-          (? !(two? path) (v >< dbuild >prs)
+          (? !(two? path) (v . dbuild >prs)
              (: h <path
                 (grab l acc)                         ; consecutive pairs whose head = h, stripped
                  (? !(two? l) [(rev acc) ()]
                     (: p2 <<l
                        (? (two? p2 && (= <p2 h))
-                          (grab >l ([>p2 <><l] >< acc))
+                          (grab >l ([>p2 <><l] . acc))
                           [(rev acc) l])))
                 gr (grab >prs [[>path v]])
                 subs <gr
                 sub (dbuild subs)
                 node (? (!(two? >subs) && !(two? <<subs)) <sub ['init sub])
-                ([(? (= <h 'f) 'dfield 'didx) <>h node] >< dbuild <>gr)))))
+                ([(? (= <h 'f) 'dfield 'didx) <>h node] . dbuild <>gr)))))
    (pinititem ps ts)                                 ; -> ((path value) rest) | ()
     (? (peekp ts "." || peekp ts "[")
         (: dr (pdesigs ps ts ())
@@ -1688,15 +1688,15 @@
                    (more ts2 acc)
                     (: r (one ts2)
                        (? !(two? r) ()
-                          (peekp <>r ",") (more ><>r (<r >< acc))
+                          (peekp <>r ",") (more ><>r (<r . acc))
                           (: rest (want <>r ";")
-                             es (filter (\ e !(fn? <>e)) (rev (<r >< acc)))
+                             es (filter (\ e !(fn? <>e)) (rev (<r . acc)))
                              ; the extern entries hoist to the TU's top, where gen's global
                              ; pass reads them, and the block keeps none of them
                              _ (? (ext && two? es)
                                   (: (gox l) (? !(two? l) 1
                                                 (: _ (pin (ps 'globals) <<l <><l (gox >l))))
-                                     _ (pin ps 'hoist (['xdecl es] >< (ps 'hoist)))
+                                     _ (pin ps 'hoist (['xdecl es] . (ps 'hoist)))
                                      (gox es))
                                   ())
                              (? (two? rest) [[(? stat 'sdecl 'decl) (? ext () es)] rest] ()))))
@@ -1733,13 +1733,13 @@
                     r1 (want >ts2 "(")
                     re (? (two? r1) (thenw (pexpr ps r1) ")") ())
                     (? !(two? re) ()
-                       (peekp <>re ",") (ops ><>re ([c <re] >< acc))
-                       [(rev ([c <re] >< acc)) <>re])))
+                       (peekp <>re ",") (ops ><>re ([c <re] . acc))
+                       [(rev ([c <re] . acc)) <>re])))
              (clobs ts2 acc)
               (? !(strat? ts2) [(rev acc) ts2]
                  (: c (tkv <ts2)
-                    (? (peekp >ts2 ",") (clobs >>ts2 (c >< acc))
-                       [(rev (c >< acc)) >ts2])))
+                    (? (peekp >ts2 ",") (clobs >>ts2 (c . acc))
+                       [(rev (c . acc)) >ts2])))
              tr (tmpl r0 "")
              s1 (? (peekp <>tr ":") (ops ><>tr ()) [() <>tr])
              (? !(two? s1) ()
@@ -1789,9 +1789,9 @@
     ((: (go ts acc)
         (: r (pstmt ps ts)
            (? !(two? r) ()
-              (markerp <r) (go <>r (<r >< acc))
+              (markerp <r) (go <>r (<r . acc))
               !(two? acc) r
-              [['blk (rev (<r >< acc))] <>r])))
+              [['blk (rev (<r . acc))] <>r])))
      ts ())
    ; the `( expr )` after a statement keyword at ts -> (expr rest) | ()
    (pparen ps ts) (: r1 (want >ts "(") (? (two? r1) (thenw (pexpr ps r1) ")") ()))
@@ -1906,10 +1906,10 @@
    (shadow1 ps nm shadows)
     (: s1 (: old (peep (ps 'types) nm 'none)
              (? (old = 'none) shadows
-                (: _ (pin (ps 'types) nm 0) (['types nm old] >< shadows))))
+                (: _ (pin (ps 'types) nm 0) (['types nm old] . shadows))))
        olde (peep (ps 'enums) nm 'none)
        (? (olde = 'none) s1
-          (: _ (pull (ps 'enums) nm 0) (['enums nm olde] >< s1))))
+          (: _ (pull (ps 'enums) nm 0) (['enums nm olde] . s1))))
    (shadowdecl ps names shadows) (? !(two? names) shadows
                                      (shadowdecl ps >names (shadow1 ps <names shadows)))
    ; a type specifier binds names wherever it is written -- an enum body's constants and
@@ -1921,7 +1921,7 @@
    ; which is also what keeps this delta short enough to count by tally.
    (sdrain ps epre shadows)
     (: now (peep ps 'scopacc ())
-       (go l k) (? (k < 1) shadows (<l >< go >l (k - 1)))
+       (go l k) (? (k < 1) shadows (<l . go >l (k - 1)))
        _ (pin ps 'scopacc epre)
        (go now (tally now - tally epre)))
    (unshadow ps shadows) (? !(two? shadows) ()
@@ -1948,7 +1948,7 @@
                                 oq (peep (ps 'qtys) nm 'none)
                                 _ (pin (ps 'locals) nm <>ent)
                                 _ (qtake ps nm <>ent)
-                                (['locals nm old] >< (['qtys nm oq] >< shadows)))
+                                (['locals nm old] . (['qtys nm oq] . shadows)))
    (bindlocs ps ents shadows) (? !(two? ents) shadows (bindlocs ps >ents (bindloc ps <ents shadows)))
    (loctypes form) (? (two? form && member? <form '(decl sdecl)) <>form ())       ; a block decl's entries, () otherwise
    ; a block-scope typedef (sqlite's LOGFUNC_t): pin each declarator into ps
@@ -1963,7 +1963,7 @@
              old (peep (ps 'types) nm 'none)
              _ (pin (ps 'types) nm <><dr)
              _ (? bq (pin (ps 'qtdef) nm bq) 0)
-             sh2 (['types nm old] >< sh)
+             sh2 (['types nm old] . sh)
              af (patt <>dr)                ; glibc trails __attribute__ on a typedef's declarator
              (? (peekp af ",") (btdefs ps base >af sh2 bq)
                 (peekp af ";") [>af sh2]
@@ -1991,7 +1991,7 @@
                     (? !(two? r) (: _ (bend sh) ())
                        ; the enum body parses before the declarators bind, so its entries
                        ; go under theirs -- unshadow walks newest first and the oldest wins
-                       (items <>r (<r >< acc) (bindlocs ps (loctypes <r) (shadowdecl ps (declnames <r) (sdrain ps epre sh)))))))
+                       (items <>r (<r . acc) (bindlocs ps (loctypes <r) (shadowdecl ps (declnames <r) (sdrain ps epre sh)))))))
              (items ts0 () ()))))
 
    ; params := void | type '*'* id (, ..)* [, ...]   -> (entries rest variadic?)
@@ -2009,7 +2009,7 @@
                    (: e0 <dr ty0 <>e0
                       entry (? (arr? ty0) [<e0 (tdecay ty0)] e0)
                       _ (? (peep ps 'sawrstr () && <e0)   ; a named restrict param: file it for note
-                           (pin ps 'currstr (<e0 >< peep ps 'currstr ())) 0)
+                           (pin ps 'currstr (<e0 . peep ps 'currstr ())) 0)
                       _ (? !<e0 0                         ; a named param stages its mark like a local's
                            (: bq (qspec ps ts <br)
                               (? bq (pin (ps 'qstage) <e0 (qmark bq <>entry)) 0)))
@@ -2017,10 +2017,10 @@
                       (? (peekp ts3 ",")
                           (? (peekp >ts3 "...")              ; ... after this param -> variadic
                               (: rest (want >>ts3 ")")
-                                 (? (two? rest) [(rev (entry >< acc)) rest 1] ()))
-                             (pparams ps >ts3 (entry >< acc)))
+                                 (? (two? rest) [(rev (entry . acc)) rest 1] ()))
+                             (pparams ps >ts3 (entry . acc)))
                          (: rest (want ts3 ")")
-                            (? (two? rest) [(rev (entry >< acc)) rest ()] ())))))))))
+                            (? (two? rest) [(rev (entry . acc)) rest ()] ())))))))))
 
    ; -- K&R (old-style) definitions: `f(a, b) int a; char *b; { .. }`. the parens
    ; hold a bare identifier list; the parameter types follow as declarations before
@@ -2032,8 +2032,8 @@
    (kids ts acc)                                     ; the identifier list -> (names rest-after-`)`)
     (? (idat? ts)
         (: nm (tkv <ts) r >ts
-           (? (peekp r ",") (kids >r (nm >< acc))
-              (peekp r ")") [(rev (nm >< acc)) >r]
+           (? (peekp r ",") (kids >r (nm . acc))
+              (peekp r ")") [(rev (nm . acc)) >r]
               ()))
        ())
    (klook nm l) (? !(two? l) 'int (<<l = nm) <><l (klook nm >l))
@@ -2042,7 +2042,7 @@
        (? !(two? dr) ()
           (: nm <<dr ty0 <><dr rest <>dr
              ty (tdecay ty0)
-             acc2 ([nm ty] >< acc)
+             acc2 ([nm ty] . acc)
              (? (peekp rest ",") (kdtors ps >rest base acc2)
                 (peekp rest ";") (kdecls ps >rest acc2)
                 ()))))
@@ -2059,7 +2059,7 @@
                 (: tmap <dr rest <>dr
                    [(map (\ nm [nm (klook nm tmap)]) names) rest ()])))))
 
-   (addweak ps nm) (pin ps 'weaks (nm >< ps 'weaks))   ; the .o binds nm's symbol weak
+   (addweak ps nm) (pin ps 'weaks (nm . ps 'weaks))   ; the .o binds nm's symbol weak
    ; a 'sigs row off pparams' answer: (rettype (paramty..) variadic?)
    (mksig rty rp) [rty (map caup <rp) <>>rp]
    ; a function definition from its `{`: params bound for the body's parse (sizeof
@@ -2204,7 +2204,7 @@
                                    (: dr (pdtor ps >ts3 base)
                                       (? !(two? dr) ()
                                          (: r (one (patt <>dr) <<dr <><dr)
-                                            (? (two? r) (more <>r (<r >< acc)) ()))))
+                                            (? (two? r) (more <>r (<r . acc)) ()))))
                                    ; a declarator whose type is a function type (a function-type
                                    ; typedef: love.h's `lvm_t lvm_ret0, lvm_cur, ..;`) declares a
                                    ; function -- register its sig (the typedef carries the return),
@@ -2234,7 +2234,7 @@
                                                              (regs >l)))
                                               (regs acc))
                                          vps (: (go2 l a2) (? !(two? l) a2
-                                                              (go2 >l (? (fnp? <l) a2 (<l >< a2))))
+                                                              (go2 >l (? (fnp? <l) a2 (<l . a2))))
                                                 (go2 acc ()))
                                          ; a const object with an initializer is a candidate for .rodata --
                                          ; per declarator, since one specifier run serves them all and only
@@ -2356,9 +2356,9 @@
                       (go4 l) (? !(two? l) 1 (: _ (addweak ps <l) (go4 >l)))
                       (go4 nms))))
            _ (? (peep ps 'curinl () && fnp)
-                (pin ps 'ainl (<>f >< ps 'ainl)) ())
+                (pin ps 'ainl (<>f . ps 'ainl)) ())
            _ (? (peep ps 'curnoinl () && fnp)
-                (pin ps 'noinl (<>f >< ps 'noinl)) ())
+                (pin ps 'noinl (<>f . ps 'noinl)) ())
            ; the restrict params, filed under this function -- per-function, never a bare
            ; name set: `p` may be restrict in one function and plain in the next, and a set
            ; that forgets which would promise no-alias about a pointer that never promised it
@@ -2380,6 +2380,6 @@
                               (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
                               (ps 'consts) (ps 'rstrs)]
            (: r (ptop ps ts2)
-              (? (two? r) (: _ (note <r) (tops <>r (<r >< acc))) (pfail ps ts2 spans toks))))
+              (? (two? r) (: _ (note <r) (tops <>r (<r . acc))) (pfail ps ts2 spans toks))))
        (tops toks ())))
 ) ; module 'moon

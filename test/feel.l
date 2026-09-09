@@ -17,8 +17,8 @@
  (= 6  ((+ 1) 5))                                ; (+ 1) -- a curried pure global folds
 
  ; --- X / A / B fold; element access is correct ---
- (= 9  (cap (link 9 8)))
- (= 8  (cup (link 9 8)))
+ (= 9  (cap (. 9 8)))
+ (= 8  (cup (. 9 8)))
  (= 2  (caup '(1 2 3)))
  (= 4  (tally (+ "ab" "cd")))                 ; string built + counted at compile time
 
@@ -49,7 +49,7 @@
  (= 8 (: (f x) (peep '(7 8 9) x 0) (f 1)))        ; peep reads a known chain at compile time
  (: (f _) (pin (tablet 0) 1 2) (nil? (= (f 0) (f 0))))   ; a tablet is mutable: pin there is a write, never folded
  (= 256 (: (f x) ('(7 8 9) 1 x) (f 2)))       ; ... and indexes: ('(7 8 9) 1) folds to 8, leaving (8 x)
- (nil? (: (f x) ((link 1 2) x) (f (\ a b (a + b)))))  ; a lambda operand takes the default action
+ (nil? (: (f x) ((. 1 2) x) (f (\ a b (a + b)))))  ; a lambda operand takes the default action
  ; and a numeral whose answer outgrows a charm stays residual rather than baking into the image:
  ; a composition here, 2**200000 in test/task.l -- whose yieldable-multiply gate leans on it
  (= 3 (: (f x) (3 (\ y (y + 1)) x) (f 0)))
@@ -59,9 +59,9 @@
  (= 15 (: (g x) (+ 10 x) (g 5)))                 ; (+ 10) folded; x unknown -> residual
 
  ; --- shadowing: a locally-bound name is never folded as the global ---
- (= 99 (: (link a b) 99 (link 1 2)))             ; let-bound X
+ (= 99 (: (. a b) 99 (. 1 2)))             ; let-bound X
  (= 5  (: (cap x) 5 (cap '(1 2))))               ; let-bound A
- (= 7  (: (f link) (link 3 4) (f (+))))            ; param X shadows the global; f + -> (+ 3 4)
+ (= 7  (: (f .) (. 3 4) (f (+))))               ; param X shadows the global; f + -> (+ 3 4)
 
  ; --- nil?-flip: (? (nil? e) a b) == (? e b a); behavior-preserving under both compilers ---
  (= 'z  (: (f x) (? (nil? x) 'z 'nz) (f 0)))        ; falsy e -> consequent

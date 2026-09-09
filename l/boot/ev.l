@@ -30,7 +30,7 @@
 (: pureset (: names ('(+ - * / % & | < <= = >= >) +
           '(// << >> ^
             id? gcd modpow abs
-            link cap cup caap caup cuap cuup
+            . cap cup caap caup cuap cuup
             dig lidx assoc member? last rev cat
             charm? nom? two? tablet? lit? string? nil? gem? twin? atom?
             snip string

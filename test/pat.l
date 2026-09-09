@@ -20,26 +20,25 @@
  ; --- clauses, in source order, like ?
  (72 = (@ '(sum 32 40) ['sum a b] (a + b) ['product a b] (a * b) 0))
  (72 = (@ '(product 6 12) ['sum a b] (a + b) ['product a b] (a * b) 0))
- ; --- >< : the cons, and the one law -- a pattern is what the constructor builds
- (1 = (@ '(1 2 3) (a >< t) a))
- ('(2 3) = (@ '(1 2 3) (a >< t) t))
- ('(3) = (@ '(1 2 3) (a >< b >< t) t))     ; ..it chains, so the tail walks further in
- ('no = (@ 5 (a >< t) a 'no))
- ('no = (@ '(1) (a >< b >< t) t 'no))      ; ..and every step still owes a two?
- ('(1 2) = (@ '(1 2) (h >< t) (h >< t)))   ; the law: one text, matching and building
- (= link ><)                             ; ..and >< is link, but only the sigils tag a pattern
- ; ..so a bracket stays closed: [a b >< t] is ([a b] >< t) is (>< (list a b) t)
- ('yes = (@ '((1 2) 3) [a b >< t] 'yes 'no))
- ('yes = (@ '((1 2) 3) ([a b] >< t) 'yes 'no))
+ ; --- . : the cons, and the one law -- a pattern is what the constructor builds
+ (1 = (@ '(1 2 3) (a . t) a))
+ ('(2 3) = (@ '(1 2 3) (a . t) t))
+ ('(3) = (@ '(1 2 3) (a . b . t) t))     ; ..it chains, so the tail walks further in
+ ('no = (@ 5 (a . t) a 'no))
+ ('no = (@ '(1) (a . b . t) t 'no))      ; ..and every step still owes a two?
+ ('(1 2) = (@ '(1 2) (h . t) (h . t)))   ; the law: one text, matching and building
+ ; ..so a bracket stays closed: [a b . t] is ([a b] . t) is (. (list a b) t)
+ ('yes = (@ '((1 2) 3) [a b . t] 'yes 'no))
  ('yes = (@ '((1 2) 3) ([a b] . t) 'yes 'no))
- ('no = (@ '(1 2 3) [a b >< t] 'yes 'no))  ; ..1 is not the chain (a b)
+ ('yes = (@ '((1 2) 3) ([a b] . t) 'yes 'no))
+ ('no = (@ '(1 2 3) [a b . t] 'yes 'no))  ; ..1 is not the chain (a b)
  ; ..and "this tag, then more" is the cons chain, which is what says it
- ('at3 = (@ '(lam x b) ('lam >< x >< b >< _) 'at3 'no))
- ('at5 = (@ '(lam x b j k) ('lam >< x >< b >< _) 'at5 'no))
- ('no = (@ '(lam x) ('lam >< x >< b >< _) 'yes 'no))
+ ('at3 = (@ '(lam x b) ('lam . x . b . _) 'at3 'no))
+ ('at5 = (@ '(lam x b j k) ('lam . x . b . _) 'at5 'no))
+ ('no = (@ '(lam x) ('lam . x . b . _) 'yes 'no))
  ('exact = (@ '(lam x b) ['lam x b] 'exact 'no)) ('no = (@ '(lam x b j) ['lam x b] 'exact 'no))
- (2 = (@ '(1 2 3) (a >< 'b >< t) 0 (a >< b >< t) b))   ; a tail is a pattern like any other
- (6 = (: (sum l) (@ l (h >< t) (h + (sum t)) 0) (sum '(1 2 3))))
+ (2 = (@ '(1 2 3) (a . 'b . t) 0 (a . b . t) b))   ; a tail is a pattern like any other
+ (6 = (: (sum l) (@ l (h . t) (h + (sum t)) 0) (sum '(1 2 3))))
  ; --- a repeated nom matches non-linearly
  ('same = (@ '(1 1) [a a] 'same 'diff)) ('diff = (@ '(1 2) [a a] 'same 'diff))
  (7 = (@ '(7 7) [a a] a 0))
@@ -56,7 +55,7 @@
  ('no = (@ '(1) ([a b] + t) t 'no))           ; ..but the run may not come up short
  (10 = (@ '(1 2 3 4) ([a b] + [c d]) (a + b + c + d) 0))   ; ..either side is a pattern
  ('no = (@ '(1 2 3) ([a b] + [c d]) 'four 'no))
- (3 = (@ '(1 2 3 4) ([a b] + (c >< _)) c 0))  ; ..and it composes with the cons
+ (3 = (@ '(1 2 3 4) ([a b] + (c . _)) c 0))  ; ..and it composes with the cons
  ('right = (@ 5 ([a] + t) 'no-chain 'right))
  ; ..which is how "this tag, then more" is said -- the loose arity, spelled
  ('fits = (@ '(lam x b) (['lam a b] + _) 'fits 'no))

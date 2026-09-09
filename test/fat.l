@@ -82,8 +82,8 @@
 ; --- the other side of the format: mtools reads what we wrote, we read what it
 ; wrote. guarded on mdir being installed (the hdd lane already leans on it).
 (: (lines* s) (: n (tally s)
-                 (go i w acc) (? (<= n i) (rev (? (tally w) (link w acc) acc))
-                                 (? (= (s i) 10) (go (+ i 1) "" (link w acc))
+                 (go i w acc) (? (<= n i) (rev (? (tally w) (. w acc) acc))
+                                 (? (= (s i) 10) (go (+ i 1) "" (. w acc))
                                     (go (+ i 1) (+ w (string [(s i)])) acc)))
                  (go 0 "" ()))
    have-mtools (: r (hark '("sh" "-c" "command -v mdir >/dev/null && echo yes"))

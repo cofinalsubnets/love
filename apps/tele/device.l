@@ -34,10 +34,10 @@
    ;;   reduce n cells   : n flops;    reads 1, writes ~0
    ;;   transp n cells   : 0 flops;    reads 1, writes 1 (pure data movement)
    (dv-gemm-cost a b) (: m (dv-rows a) k (dv-cols a) n (dv-cols b)
-                       (2 * m * k * n >< dv-elsz * (m * k + k * n + m * n)))
-   (dv-ew-cost a)     (: n (dv-cells a) (n >< dv-elsz * 3 * n))
-   (dv-red-cost a)    (: n (dv-cells a) (n >< dv-elsz * n))
-   (dv-tr-cost a)     (: n (dv-cells a) (0 >< dv-elsz * 2 * n))
+                       (2 * m * k * n . dv-elsz * (m * k + k * n + m * n)))
+   (dv-ew-cost a)     (: n (dv-cells a) (n . dv-elsz * 3 * n))
+   (dv-red-cost a)    (: n (dv-cells a) (n . dv-elsz * n))
+   (dv-tr-cost a)     (: n (dv-cells a) (0 . dv-elsz * 2 * n))
 
    ;; -- the sim backend: tele's four kernels, native math wrapped in the meter.
    ;; keys match tele's seam exactly (gemm/ew/reduce/transp); `ew` takes the op. --

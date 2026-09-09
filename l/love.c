@@ -898,7 +898,7 @@ static lvm(lvm_sub) {
 // `+` on sequences is order-preserving concatenation, a scalar lifting into the
 // sequence on the side it appears:
 //   str + str  -> byte concat          list + list -> spine append
-//   str + list -> (link str list)      list + str  -> (append list (list str))
+//   str + list -> (. str list)      list + str  -> (append list (list str))
 //   nom + str  -> byte concat          text + list -> the bytes SPLICE in
 // text and chain are one monoid: a string or named symbol against a list contributes
 // its bytes as elements, never itself as one. a number is foreign to both bands: it
@@ -951,7 +951,7 @@ lvm(lvm_add_seq) {
   for (word l = lst; chainp(l); l = B(l), w++) ini_chain(w, A(l), word(w + 1));
   w[-1].b = n ? word(bw) : ZeroPoint;
   ai_musttail return Push(word(base)); }
- if (front) { Sp[0] = elt, Sp[1] = lst; ai_musttail return Ap(lvm_link, g); }  // (link elt list)
+ if (front) { Sp[0] = elt, Sp[1] = lst; ai_musttail return Ap(lvm_link, g); }  // (. elt list)
  uintptr_t n = llen(lst) + 1; Have(n * Width(struct ai_chain));        // append elt at tail
  lst = chainp(Sp[0]) ? Sp[0] : Sp[1], elt = chainp(Sp[0]) ? Sp[1] : Sp[0];
  struct ai_chain *base = (struct ai_chain*) Hp, *w = base;

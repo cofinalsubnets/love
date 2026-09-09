@@ -20,17 +20,17 @@
 
 (:
  ; --- the model ---
- (chg k a b) (link 'chg (link k (link a (link b 0))))     ; patch: change slot k, old->new
+ (chg k a b) (. 'chg (. k (. a (. b 0))))     ; patch: change slot k, old->new
  (pk p) (cap (cup p))                                     ; the slot it touches
  (pa p) (cap (cup (cup p)))                               ; its context (old value)
  (pb p) (cap (cup (cup (cup p))))                         ; the new value
  (tget t k) (? (atom? t) 0 (: c (cap t) (? (= k (cap c)) (cup c) (tget (cup t) k))))
- (tset t k v) (link (link k v) t)                         ; newest shadows; a missing slot reads 0
+ (tset t k v) (. (. k v) t)                         ; newest shadows; a missing slot reads 0
  (valid t p) (= (tget t (pk p)) (pa p))                 ; a patch belongs iff its context matches
  (apon t p) (tset t (pk p) (pb p))                        ; lay the patch's new value
  (applall t ps) (foldl apon t ps)                         ; fold a whole frontier onto a tree
  (invert p) (chg (pk p) (pb p) (pa p))                    ; the groupoid inverse (unpull)
- (commute p q) (? (= (pk p) (pk q)) 0 (link q (link p 0)))  ; partial: 0 = a dependency
+ (commute p q) (? (= (pk p) (pk q)) 0 (. q (. p 0)))  ; partial: 0 = a dependency
 
  ; --- spec-local equality: deep-structural (patches are lists), and tree agreement
  ;     at a witness key set (trees are maps -> compare pointwise, as the .v does) ---
@@ -38,7 +38,7 @@
               (|| (atom? a) (atom? b)) 0
               (&& (leq (cap a) (cap b)) (leq (cup a) (cup b))))
  (teq a b ks) (? (atom? ks) 1 (&& (= (tget a (cap ks)) (tget b (cap ks))) (teq a b (cup ks))))
- (cat2 a b) (? (atom? a) b (link (cap a) (cat2 (cup a) b)))
+ (cat2 a b) (? (atom? a) b (. (cap a) (cat2 (cup a) b)))
 
  ; --- witnesses ---
  px (chg 'x 0 1) py (chg 'y 0 2)                          ; independent -- different slots
@@ -47,9 +47,9 @@
  ; (L1) commute is involutive: swap two independent patches, swap the result back,
  ;      and you are home. same-slot patches don'T commute -- 0, a dependency.
  _ (test
-    (leq (commute px py) (link py (link px 0)))                       ; p;q -> q;p
+    (leq (commute px py) (. py (. px 0)))                       ; p;q -> q;p
     (: c (commute px py) (leq (commute (cap c) (cap (cup c)))
-                              (link px (link py 0))))                 ; ...and back to p;q
+                              (. px (. py 0))))                 ; ...and back to p;q
     (! (commute p1 p2))                                              ; same slot -> no commute
     (leq p1 p1) (! (leq px py)))                                     ; leq itself is honest
 
@@ -70,11 +70,11 @@
  ;       reproducibility tie: meaning is order-free, so the (unordered) patch set is
  ;       a sound version identity. and the distribution face: two disjoint components
  ;       install to the same frontier whichever is pulled first.
- _ (: pre (link (chg 'a 0 7) 0) post (link (chg 'b 0 8) 0)
-      f1 (applall 0 (cat2 pre (link px (link py post))))             ; pre ++ [px py] ++ post
-      f2 (applall 0 (cat2 pre (link py (link px post))))             ; ...px,py swapped
+ _ (: pre (. (chg 'a 0 7) 0) post (. (chg 'b 0 8) 0)
+      f1 (applall 0 (cat2 pre (. px (. py post))))             ; pre ++ [px py] ++ post
+      f2 (applall 0 (cat2 pre (. py (. px post))))             ; ...px,py swapped
       _ (test (teq f1 f2 '(a b x y)))
-      (: holo (link (chg 'holo 0 1) 0) glaze (link (chg 'glaze 0 1) 0)
+      (: holo (. (chg 'holo 0 1) 0) glaze (. (chg 'glaze 0 1) 0)
          (test (teq (applall 0 (cat2 holo glaze))
                       (applall 0 (cat2 glaze holo)) '(holo glaze)))))
  0)
@@ -92,13 +92,13 @@
 
 (:
  ; --- the model: sequences and hunks ---
- (hunk i o n) (link 'hunk (link i (link o (link n ()))))  ; at i, the segment o becomes n
+ (hunk i o n) (. 'hunk (. i (. o (. n ()))))  ; at i, the segment o becomes n
  (hi p) (cap (cup p))                                     ; where it aims
  (ho p) (cap (cup (cup p)))                               ; its context (the old segment)
  (hn p) (cap (cup (cup (cup p))))                         ; the new segment
- (htake s n) (? (< n 1) () (link (cap s) (htake (cup s) (- n 1))))
+ (htake s n) (? (< n 1) () (. (cap s) (htake (cup s) (- n 1))))
  (hdrop s n) (? (< n 1) s (hdrop (cup s) (- n 1)))
- (hcat a b) (? (atom? a) b (link (cap a) (hcat (cup a) b)))
+ (hcat a b) (? (atom? a) b (. (cap a) (hcat (cup a) b)))
  (seg s i n) (htake (hdrop s i) n)                        ; the n elements from index i
  (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (+ i c))))
  (heq a b) (? (&& (atom? a) (atom? b)) (= a b)
@@ -116,8 +116,8 @@
  (commute p q)
    (: i (hi p) o1 (tally (ho p)) n1 (tally (hn p))
       j (hi q) o2 (tally (ho q)) n2 (tally (hn q))
-      (? (> j (+ i n1)) (link (hunk (- (+ j o1) n1) (ho q) (hn q)) (link p ()))
-         (< (+ j o2) i) (link q (link (hunk (- (+ i n2) o2) (ho p) (hn p)) ()))
+      (? (> j (+ i n1)) (. (hunk (- (+ j o1) n1) (ho q) (hn q)) (. p ()))
+         (< (+ j o2) i) (. q (. (hunk (- (+ i n2) o2) (ho p) (hn p)) ()))
          ()))
 
  ; --- witnesses: a file of five forms; p grows the file (delta +1) ---
@@ -182,8 +182,8 @@
  ; (L3b) a frontier is stable under the adjacent independent swap -- the
  ;       reproducibility tie again, now with real shifting inside the list.
  _ (: c (commute p q)
-      f1 (applall s0 (link (hunk 0 '(a) '(aa)) (link p (link q ()))))
-      f2 (applall s0 (link (hunk 0 '(a) '(aa)) c))
+      f1 (applall s0 (. (hunk 0 '(a) '(aa)) (. p (. q ()))))
+      f2 (applall s0 (. (hunk 0 '(a) '(aa)) c))
       (test (heq f1 f2) (heq f1 '(aa x y c z e))))
  0)
 
@@ -201,25 +201,25 @@
 
 (:
  ; --- the model: rung 1's trees and patches, plus the clash cell ---
- (chg k a b) (link 'chg (link k (link a (link b ()))))
+ (chg k a b) (. 'chg (. k (. a (. b ()))))
  (pk p) (cap (cup p)) (pa p) (cap (cup (cup p))) (pb p) (cap (cup (cup (cup p))))
  (tget t k) (? (atom? t) 0 (: c (cap t) (? (= k (cap c)) (cup c) (tget (cup t) k))))
- (tset t k v) (link (link k v) t)
+ (tset t k v) (. (. k v) t)
  (invert p) (chg (pk p) (pb p) (pa p))
  (heq a b) (? (&& (atom? a) (atom? b)) (= a b)
               (|| (atom? a) (atom? b)) 0
               (&& (heq (cap a) (cap b)) (heq (cup a) (cup b))))
  (teq a b ks) (? (atom? ks) 1 (&& (heq (tget a (cap ks)) (tget b (cap ks)))
                                   (teq a b (cup ks))))
- (clash a rs) (link 'clash (link a (link rs ())))          ; base a, rivals rs (sorted)
+ (clash a rs) (. 'clash (. a (. rs ())))          ; base a, rivals rs (sorted)
  (clash? v) (? (atom? v) 0 ((cap v) = 'clash))
  (cbase c) (cap (cup c))
  (rivals c) (cap (cup (cup c)))
- (cins x rs) (? (atom? rs) (link x ())                     ; canonical insert, dedup --
+ (cins x rs) (? (atom? rs) (. x ())                     ; canonical insert, dedup --
                 (: h (cap rs)                              ; the set that makes merge
                    (? (= x h) rs                           ; order-free
-                      (< x h) (link x rs)
-                      (link h (cins x (cup rs))))))
+                      (< x h) (. x rs)
+                      (. h (cins x (cup rs))))))
 
  ; --- pull: total merge-application. five lanes; the last is the discipline
  ;     backstop (a cell-shaped mismatch no-ops rather than inventing a story). ---
@@ -233,7 +233,7 @@
            (tset t k (clash a (cins b (cins v ()))))       ; a rival landed first
          t))                                               ; discipline breach: no-op
  (applall t ps) (foldl pull t ps)
- (cat2 a b) (? (atom? a) b (link (cap a) (cat2 (cup a) b)))
+ (cat2 a b) (? (atom? a) b (. (cap a) (cat2 (cup a) b)))
 
  ; --- witnesses: three rivals for x over base 1, and an independent bystander ---
  t0 (tset 0 'x 1)
@@ -276,7 +276,7 @@
 
  ; and the distribution face: two components pinning one name differently
  ;      install to the same recorded clash whichever is pulled first.
- _ (: holo (link (chg 'font 0 1) ()) glaze (link (chg 'font 0 2) ())
+ _ (: holo (. (chg 'font 0 1) ()) glaze (. (chg 'font 0 2) ())
       fa (applall 0 (cat2 holo glaze))
       fb (applall 0 (cat2 glaze holo))
       (test (teq fa fb '(font)) (clash? (tget fa 'font))))
@@ -297,32 +297,32 @@
 (:
  (hstr h s i n) (? (= i n) h (hstr (% (+ (* h 33) (s i)) 4294967296) s (+ i 1) n))
  (hval v) (: s (show v) (hstr 5381 s 0 (tally s)))         ; djb2 over the printed form
- (cins x rs) (? (atom? rs) (link x ())
-                (: h (cap rs) (? (= x h) rs (< x h) (link x rs)
-                                 (link h (cins x (cup rs))))))
+ (cins x rs) (? (atom? rs) (. x ())
+                (: h (cap rs) (? (= x h) rs (< x h) (. x rs)
+                                 (. h (cins x (cup rs))))))
  (fid ps) (foldl (\ acc p (cins (hval p) acc)) () ps)      ; the canonical hash set
  (ident ps) (hval (fid ps))                                 ; one scalar to name it
- (chg k a b) (link 'chg (link k (link a (link b ()))))
+ (chg k a b) (. 'chg (. k (. a (. b ()))))
 
  ; --- witnesses ---
  p (chg 'x 1 2) q (chg 'x 1 3) w (chg 'y 0 9)
 
  ; (H1) order-free: any pull order, one identity -- the M4 face, on the name.
  _ (test
-    (= (ident (link p (link q (link w ()))))
-       (ident (link w (link q (link p ())))))
-    (= (ident (link p (link w ()))) (ident (link w (link p ())))))
+    (= (ident (. p (. q (. w ()))))
+       (ident (. w (. q (. p ())))))
+    (= (ident (. p (. w ()))) (ident (. w (. p ())))))
 
  ; (H2) multiplicity-free: pulling twice settles (M2), and the name agrees.
- _ (test (= (ident (link p (link p (link q ()))))
-              (ident (link p (link q ())))))
+ _ (test (= (ident (. p (. p (. q ()))))
+              (ident (. p (. q ())))))
 
  ; (H3) content-sensitive: touch any patch and the name moves -- including
  ;      direction (a patch and its inverse are different content).
  _ (test
-    (! (= (ident (link p ())) (ident (link q ()))))
-    (! (= (ident (link p (link q ()))) (ident (link p (link w ())))))
-    (! (= (ident (link p ())) (ident (link (chg 'x 2 1) ())))))
+    (! (= (ident (. p ())) (ident (. q ()))))
+    (! (= (ident (. p (. q ()))) (ident (. p (. w ())))))
+    (! (= (ident (. p ())) (ident (. (chg 'x 2 1) ())))))
  0)
 
 ; --- the tree lift rung: a hunk gets a path, and the shift climbs the levels ---
@@ -345,9 +345,9 @@
 
 (:
  ; --- the sequence kit (rung 2, local) ---
- (htake s n) (? (< n 1) () (link (cap s) (htake (cup s) (- n 1))))
+ (htake s n) (? (< n 1) () (. (cap s) (htake (cup s) (- n 1))))
  (hdrop s n) (? (< n 1) s (hdrop (cup s) (- n 1)))
- (hcat a b) (? (atom? a) b (link (cap a) (hcat (cup a) b)))
+ (hcat a b) (? (atom? a) b (. (cap a) (hcat (cup a) b)))
  (seg s i n) (htake (hdrop s i) n)
  (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (+ i c))))
  (nth s j) (cap (hdrop s j))
@@ -360,10 +360,10 @@
  (tlay t path s2)
    (? (atom? path) s2
       (splice t (cap path) 1
-              (link (tlay (nth t (cap path)) (cup path) s2) ())))
+              (. (tlay (nth t (cap path)) (cup path) s2) ())))
 
  ; --- patches: (tp path i olds news) -- a hunk with a postcode ---
- (tp path i o n) (link 'tp (link path (link i (link o (link n ())))))
+ (tp path i o n) (. 'tp (. path (. i (. o (. n ())))))
  (pp p) (cap (cup p))            (pi p) (cap (cup (cup p)))
  (po p) (cap (cup (cup (cup p)))) (pn p) (cap (cup (cup (cup (cup p)))))
  (apon t p) (tlay t (pp p) (splice (tnav t (pp p)) (pi p) (tally (po p)) (pn p)))
@@ -380,11 +380,11 @@
                         (heq (seg s (pi p) (tally (po p))) (po p)))))
 
  ; --- path surgery + the path relation ---
- (setidx path d v) (? (= d 0) (link v (cup path))
-                      (link (cap path) (setidx (cup path) (- d 1) v)))
+ (setidx path d v) (? (= d 0) (. v (cup path))
+                      (. (cap path) (setidx (cup path) (- d 1) v)))
  (rel P Q d) (? (&& (atom? P) (atom? Q)) '(same)
-                (atom? P) (link 'inq (link (cap Q) (link d ())))
-                (atom? Q) (link 'inp (link (cap P) (link d ())))
+                (atom? P) (. 'inq (. (cap Q) (. d ())))
+                (atom? Q) (. 'inp (. (cap P) (. d ())))
                 (= (cap P) (cap Q)) (rel (cup P) (cup Q) (+ d 1))
                 '(apart))
 
@@ -395,22 +395,22 @@
       Q (pp q) iq (pi q) o2 (tally (po q)) n2 (tally (pn q)) dq (- n2 o2)
       r (rel P Q 0) tag (cap r)
       (? (tag = 'same)
-           (? (> iq (+ ip n1)) (link (tp Q (- (+ iq o1) n1) (po q) (pn q)) (link p ()))
-              (< (+ iq o2) ip) (link q (link (tp P (- (+ ip n2) o2) (po p) (pn p)) ()))
+           (? (> iq (+ ip n1)) (. (tp Q (- (+ iq o1) n1) (po q) (pn q)) (. p ()))
+              (< (+ iq o2) ip) (. q (. (tp P (- (+ ip n2) o2) (po p) (pn p)) ()))
               ())
          (tag = 'inq)
            (: j (cap (cup r)) d (cap (cup (cup r)))
-              (? (< j ip) (link q (link p ()))
+              (? (< j ip) (. q (. p ()))
                  (>= j (+ ip n1))
-                   (link (tp (setidx Q d (- j dp)) iq (po q) (pn q)) (link p ()))
+                   (. (tp (setidx Q d (- j dp)) iq (po q) (pn q)) (. p ()))
                  ()))
          (tag = 'inp)
            (: j (cap (cup r)) d (cap (cup (cup r)))
-              (? (< j iq) (link q (link p ()))
+              (? (< j iq) (. q (. p ()))
                  (>= j (+ iq o2))
-                   (link q (link (tp (setidx P d (+ j dq)) ip (po p) (pn p)) ()))
+                   (. q (. (tp (setidx P d (+ j dq)) ip (po p) (pn p)) ()))
                  ()))
-         (link q (link p ()))))
+         (. q (. p ()))))
 
  ; --- witnesses: a little program -- three top forms, one nested ---
  t0 '((: a 1) (: b 2) (main (f x)))
@@ -476,7 +476,7 @@
 
  ; (L3b) a frontier is stable under the adjacent independent swap, mixed grains
  _ (: c (commute pr qd)
-      f1 (applall t0 (link pr (link qd ())))
+      f1 (applall t0 (. pr (. qd ())))
       f2 (applall t0 c)
       (test (heq f1 f2)))
  0)
@@ -501,9 +501,9 @@
 
 (:
  ; --- the tree kit (rung 5, local) ---
- (htake s n) (? (< n 1) () (link (cap s) (htake (cup s) (- n 1))))
+ (htake s n) (? (< n 1) () (. (cap s) (htake (cup s) (- n 1))))
  (hdrop s n) (? (< n 1) s (hdrop (cup s) (- n 1)))
- (hcat a b) (? (atom? a) b (link (cap a) (hcat (cup a) b)))
+ (hcat a b) (? (atom? a) b (. (cap a) (hcat (cup a) b)))
  (seg s i n) (htake (hdrop s i) n)
  (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (+ i c))))
  (nth s j) (cap (hdrop s j))
@@ -514,8 +514,8 @@
  (tlay t path s2)
    (? (atom? path) s2
       (splice t (cap path) 1
-              (link (tlay (nth t (cap path)) (cup path) s2) ())))
- (tp path i o n) (link 'tp (link path (link i (link o (link n ())))))
+              (. (tlay (nth t (cap path)) (cup path) s2) ())))
+ (tp path i o n) (. 'tp (. path (. i (. o (. n ())))))
  (pp p) (cap (cup p))            (pi p) (cap (cup (cup p)))
  (po p) (cap (cup (cup (cup p)))) (pn p) (cap (cup (cup (cup (cup p)))))
  (apon t p) (tlay t (pp p) (splice (tnav t (pp p)) (pi p) (tally (po p)) (pn p)))
@@ -530,11 +530,11 @@
                  (: s (tnav t (pp p))
                     (&& (<= (+ (pi p) (tally (po p))) (tally s))
                         (heq (seg s (pi p) (tally (po p))) (po p)))))
- (setidx path d v) (? (= d 0) (link v (cup path))
-                      (link (cap path) (setidx (cup path) (- d 1) v)))
+ (setidx path d v) (? (= d 0) (. v (cup path))
+                      (. (cap path) (setidx (cup path) (- d 1) v)))
  (rel P Q d) (? (&& (atom? P) (atom? Q)) '(same)
-                (atom? P) (link 'inq (link (cap Q) (link d ())))
-                (atom? Q) (link 'inp (link (cap P) (link d ())))
+                (atom? P) (. 'inq (. (cap Q) (. d ())))
+                (atom? Q) (. 'inp (. (cap P) (. d ())))
                 (= (cap P) (cap Q)) (rel (cup P) (cup Q) (+ d 1))
                 '(apart))
 
@@ -549,16 +549,16 @@
                 (: h (cap f)
                    (? (heq h x) '(0)
                       (: r (? (atom? h) () (ffind h x))
-                         (? (! (atom? r)) (link 0 r)
+                         (? (! (atom? r)) (. 0 r)
                             (: d (ffind (cup f) x)
                                (? (atom? d) ()
-                                  (link (+ (cap d) 1) (cup d)))))))))
+                                  (. (+ (cap d) 1) (cup d)))))))))
  ; the unit walk: the shallowest prefix of the deep path whose subtree of the
  ; swallowed element survives into the far side -- (k), or () when nothing
  ; survives (erasure: the honest dependency)
  (sunit el R n2 k)
    (? (! (pathok el (htake R k))) ()
-      (< 0 (occs n2 (tnav el (htake R k)))) (link k ())
+      (< 0 (occs n2 (tnav el (htake R k)))) (. k ())
       (<= (tally R) k) ()
       (sunit el R n2 (+ k 1)))
 
@@ -583,8 +583,8 @@
                                   (&& (= 0 (occs O e))
                                       (&& (= 1 (occs N ep)) (= 0 (occs N e)))))) ()
                            (: fd (ffind N ep)
-                              (link (tp S is (tlay O (link off Rk) e) (tlay N fd e))
-                                    (link (tp (hcat S (hcat (setidx fd 0 (+ is (cap fd))) Rrem))
+                              (. (tp S is (tlay O (. off Rk) e) (tlay N fd e))
+                                    (. (tp (hcat S (hcat (setidx fd 0 (+ is (cap fd))) Rrem))
                                               (pi dp) (po dp) (pn dp))
                                           ())))))))))))
 
@@ -596,24 +596,24 @@
       Q (pp q) iq (pi q) o2 (tally (po q)) n2 (tally (pn q))
       r (rel P Q 0) tag (cap r)
       (? (tag = 'same)
-           (? (> iq (+ ip n1)) (link (tp Q (- (+ iq o1) n1) (po q) (pn q)) (link p ()))
-              (< (+ iq o2) ip) (link q (link (tp P (- (+ ip n2) o2) (po p) (pn p)) ()))
+           (? (> iq (+ ip n1)) (. (tp Q (- (+ iq o1) n1) (po q) (pn q)) (. p ()))
+              (< (+ iq o2) ip) (. q (. (tp P (- (+ ip n2) o2) (po p) (pn p)) ()))
               ())
          (tag = 'inq)
            (: j (cap (cup r)) d (cap (cup (cup r)))
-              (? (< j ip) (link q (link p ()))
+              (? (< j ip) (. q (. p ()))
                  (>= j (+ ip n1))
-                   (link (tp (setidx Q d (- (+ j o1) n1)) iq (po q) (pn q)) (link p ()))
+                   (. (tp (setidx Q d (- (+ j o1) n1)) iq (po q) (pn q)) (. p ()))
                  (: c (swal (invert q) (invert p) j d)
                     (? (atom? c) ()
-                       (link (invert (cap (cup c))) (link (invert (cap c)) ()))))))
+                       (. (invert (cap (cup c))) (. (invert (cap c)) ()))))))
          (tag = 'inp)
            (: j (cap (cup r)) d (cap (cup (cup r)))
-              (? (< j iq) (link q (link p ()))
+              (? (< j iq) (. q (. p ()))
                  (>= j (+ iq o2))
-                   (link q (link (tp (setidx P d (- (+ j n2) o2)) ip (po p) (pn p)) ()))
+                   (. q (. (tp (setidx P d (- (+ j n2) o2)) ip (po p) (pn p)) ()))
                  (swal p q j d)))
-         (link q (link p ()))))
+         (. q (. p ()))))
 
  ; --- witnesses: the same little program; pd edits deep, qm moves the edited
  ;     form (its context aimed post-pd, as a second branch would record it) ---
@@ -687,8 +687,8 @@
  ; (L3b) a frontier is stable under the swallow swap, a bystander riding along.
  _ (: w (tp '(0) 2 '(1) '(7))
       c (commute pd qm)
-      f1 (applall t0 (link w (link pd (link qm ()))))
-      f2 (applall t0 (link w c))
+      f1 (applall t0 (. w (. pd (. qm ()))))
+      f2 (applall t0 (. w c))
       (test (heq f1 f2) (heq f1 '((: a 7) (main (f x)) (: b 9)))))
  0)
 
@@ -726,15 +726,15 @@
 
 (:
  ; --- the sequence kit (rung 2, local) ---
- (htake s n) (? (< n 1) () (link (cap s) (htake (cup s) (- n 1))))
+ (htake s n) (? (< n 1) () (. (cap s) (htake (cup s) (- n 1))))
  (hdrop s n) (? (< n 1) s (hdrop (cup s) (- n 1)))
- (hcat a b) (? (atom? a) b (link (cap a) (hcat (cup a) b)))
+ (hcat a b) (? (atom? a) b (. (cap a) (hcat (cup a) b)))
  (seg s i n) (htake (hdrop s i) n)
  (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (+ i c))))
  (heq a b) (? (&& (atom? a) (atom? b)) (= a b)
               (|| (atom? a) (atom? b)) 0
               (&& (heq (cap a) (cap b)) (heq (cup a) (cup b))))
- (hunk i o n) (link 'hunk (link i (link o (link n ()))))
+ (hunk i o n) (. 'hunk (. i (. o (. n ()))))
  (hi p) (cap (cup p)) (ho p) (cap (cup (cup p))) (hn p) (cap (cup (cup (cup p))))
  (valid s p) (&& (<= (+ (hi p) (tally (ho p))) (tally s))
                  (heq (seg s (hi p) (tally (ho p))) (ho p)))
@@ -743,22 +743,22 @@
  (commute p q)
    (: i (hi p) o1 (tally (ho p)) n1 (tally (hn p))
       j (hi q) o2 (tally (ho q)) n2 (tally (hn q))
-      (? (> j (+ i n1)) (link (hunk (- (+ j o1) n1) (ho q) (hn q)) (link p ()))
-         (< (+ j o2) i) (link q (link (hunk (- (+ i n2) o2) (ho p) (hn p)) ()))
+      (? (> j (+ i n1)) (. (hunk (- (+ j o1) n1) (ho q) (hn q)) (. p ()))
+         (< (+ j o2) i) (. q (. (hunk (- (+ i n2) o2) (ho p) (hn p)) ()))
          ()))
 
  ; --- the cell: hull base + rivals, canonically ordered by content hash ---
  (hstr h s i n) (? (= i n) h (hstr (% (+ (* h 33) (s i)) 4294967296) s (+ i 1) n))
  (hval v) (: s (show v) (hstr 5381 s 0 (tally s)))
- (clash b rs) (link 'clash (link b (link rs ())))
+ (clash b rs) (. 'clash (. b (. rs ())))
  (clash? v) (? (atom? v) 0 ((cap v) = 'clash))
  (cbase c) (cap (cup c))
  (rivals c) (cap (cup (cup c)))
- (sins x rs) (? (atom? rs) (link x ())                      ; canonical insert --
+ (sins x rs) (? (atom? rs) (. x ())                      ; canonical insert --
                 (: h (cap rs)                               ; dedup by content,
                    (? (heq x h) rs                          ; order by its hash
-                      (< (hval x) (hval h)) (link x rs)
-                      (link h (sins x (cup rs))))))
+                      (< (hval x) (hval h)) (. x rs)
+                      (. h (sins x (cup rs))))))
  (has rs x) (? (atom? rs) 0 (|| (heq (cap rs) x) (has (cup rs) x)))
 
  ; --- merge2: the pushout off the shared base. equal edits settle; commute
@@ -774,7 +774,7 @@
                rp (splice base (- (hi p) lo) (tally (ho p)) (hn p))
                rq (splice base (- (hi q) lo) (tally (ho q)) (hn q))
                (splice s0 lo (- hu lo)
-                       (link (clash base (sins rp (sins rq ()))) ()))))))
+                       (. (clash base (sins rp (sins rq ()))) ()))))))
 
  ; --- pull: plain / settled / the widening join / breach -- what state can
  ;     answer. the join lane is general: any rival whose base span overlaps
@@ -792,7 +792,7 @@
       (: e (cap (hdrop s k))
          (? (&& (clash? e)
                 (&& (<= (hi q) (+ k (tally (cbase e))))
-                    (<= k (+ (hi q) (tally (ho q)))))) (link k ())
+                    (<= k (+ (hi q) (tally (ho q)))))) (. k ())
             (findc s q (+ k 1)))))
  (pull s q)
    (: i (hi q) o (ho q) n (hn q)
@@ -811,7 +811,7 @@
                      (: rs (foldl (\ a x (sins (hcat pl (hcat x pr)) a)) () (rivals e))
                         rv (splice hull (- i lo) (tally o) n)
                         (splice s (- k (tally pl)) (+ (tally pl) (+ 1 (tally pr)))
-                                (link (clash hull (sins rv rs)) ())))))))))
+                                (. (clash hull (sins rv rs)) ())))))))))
 
  ; --- witnesses: one disputed span, rivals of three different sizes (the
  ;     segment teeth), and an independent bystander ---
@@ -854,7 +854,7 @@
  ; (M5) resolution is just a hunk: olds = the one-element cell segment --
  ;      the plain lane applies it, invert unpulls it and the clash returns.
  _ (: m (merge2 s0 p q) cell (cap (hdrop m 2))
-      res (hunk 2 (link cell ()) '(z9))
+      res (hunk 2 (. cell ()) '(z9))
       m2 (pull m res)
       (test
        (heq m2 '(a b z9 d e)) (! (clash? (cap (hdrop m2 2))))
@@ -920,7 +920,7 @@
  _ (: p2 (hunk 1 '(b c) '(x)) q2 (hunk 2 '(c d) '(y z)) r2 (hunk 3 '(d e) '(w))
       m (pull (merge2 s0 p2 q2) r2)
       cell (cap (hdrop m 1))
-      res (hunk 1 (link cell ()) '(z9))
+      res (hunk 1 (. cell ()) '(z9))
       (test
        (heq (pull m res) '(a z9))
        (heq (pull (pull m res) (invert res)) m)))
@@ -958,9 +958,9 @@
 
 (:
  ; --- the tree kit (rung 5, local) ---
- (htake s n) (? (< n 1) () (link (cap s) (htake (cup s) (- n 1))))
+ (htake s n) (? (< n 1) () (. (cap s) (htake (cup s) (- n 1))))
  (hdrop s n) (? (< n 1) s (hdrop (cup s) (- n 1)))
- (hcat a b) (? (atom? a) b (link (cap a) (hcat (cup a) b)))
+ (hcat a b) (? (atom? a) b (. (cap a) (hcat (cup a) b)))
  (seg s i n) (htake (hdrop s i) n)
  (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (+ i c))))
  (nth s j) (cap (hdrop s j))
@@ -971,8 +971,8 @@
  (tlay t path s2)
    (? (atom? path) s2
       (splice t (cap path) 1
-              (link (tlay (nth t (cap path)) (cup path) s2) ())))
- (tp path i o n) (link 'tp (link path (link i (link o (link n ())))))
+              (. (tlay (nth t (cap path)) (cup path) s2) ())))
+ (tp path i o n) (. 'tp (. path (. i (. o (. n ())))))
  (pp p) (cap (cup p))            (pi p) (cap (cup (cup p)))
  (po p) (cap (cup (cup (cup p)))) (pn p) (cap (cup (cup (cup (cup p)))))
  (invert p) (tp (pp p) (pi p) (pn p) (po p))
@@ -981,11 +981,11 @@
                        (&& (< j (tally t))
                            (: e (nth t j)
                               (&& (! (atom? e)) (pathok e (cup path)))))))
- (setidx path d v) (? (= d 0) (link v (cup path))
-                      (link (cap path) (setidx (cup path) (- d 1) v)))
+ (setidx path d v) (? (= d 0) (. v (cup path))
+                      (. (cap path) (setidx (cup path) (- d 1) v)))
  (rel P Q d) (? (&& (atom? P) (atom? Q)) '(same)
-                (atom? P) (link 'inq (link (cap Q) (link d ())))
-                (atom? Q) (link 'inp (link (cap P) (link d ())))
+                (atom? P) (. 'inq (. (cap Q) (. d ())))
+                (atom? Q) (. 'inp (. (cap P) (. d ())))
                 (= (cap P) (cap Q)) (rel (cup P) (cup Q) (+ d 1))
                 '(apart))
 
@@ -993,18 +993,18 @@
  ;     a variable (data by discipline: ground content never spells one) ---
  (mv? x) (? (atom? x) 0 ((cap x) = 'mv))
  (mvname x) (cap (cup x))
- (asq k s) (? (atom? s) () (: c (cap s) (? (= k (cap c)) (link (cup c) ()) (asq k (cup s)))))
+ (asq k s) (? (atom? s) () (: c (cap s) (? (= k (cap c)) (. (cup c) ()) (asq k (cup s)))))
  (mtch p g s)                                              ; one-sided unification:
    (? (s = 'no) 'no                                      ; pattern vs ground, the
       (mv? p) (: r (asq (mvname p) s)                      ; substitution threading --
-                 (? (atom? r) (link (link (mvname p) g) s) ; a rebound variable must
+                 (? (atom? r) (. (. (mvname p) g) s) ; a rebound variable must
                     (? (heq (cap r) g) s 'no)))            ; agree (the kanren move)
       (&& (atom? p) (atom? g)) (? (= p g) s 'no)
       (|| (atom? p) (atom? g)) 'no
       (mtch (cup p) (cup g) (mtch (cap p) (cap g) s)))
  (inst p s) (? (mv? p) (: r (asq (mvname p) s) (? (atom? r) p (cap r)))
                (atom? p) p
-               (link (inst (cap p) s) (inst (cup p) s)))
+               (. (inst (cap p) s) (inst (cup p) s)))
 
  ; --- apply: match the olds, lay the news instantiated ---
  (valid t q) (&& (pathok t (pp q))
@@ -1025,20 +1025,20 @@
                 (: h (cap f)
                    (? (&& (! (atom? h)) (&& (mv? h) (= (mvname h) v))) '(0)
                       (: r (? (atom? h) () (mvat h v))
-                         (? (! (atom? r)) (link 0 r)
+                         (? (! (atom? r)) (. 0 r)
                             (: d (mvat (cup f) v)
                                (? (atom? d) ()
-                                  (link (+ (cap d) 1) (cup d)))))))))
+                                  (. (+ (cap d) 1) (cup d)))))))))
  (alast a) (? (atom? (cup a)) (cap a) (alast (cup a)))
- (abut a) (? (atom? (cup a)) () (link (cap a) (abut (cup a))))
+ (abut a) (? (atom? (cup a)) () (. (cap a) (abut (cup a))))
 
  ; --- bind: descend the rule's olds along the deep path. answers ('in mv
  ;     rest) -- the edit rides inside the binding, rest below the seat;
  ;     ('at pat) -- the path landed on a pattern sequence (the whole-binding
  ;     swap checks there); 'no -- fell off the rigid structure ---
  (bind e R)
-   (? (mv? e) (link 'in (link e (link R ())))
-      (atom? R) (link 'at (link e ()))
+   (? (mv? e) (. 'in (. e (. R ())))
+      (atom? R) (. 'at (. e ()))
       (: j (cap R)
          (? (|| (atom? e) (<= (tally e) j)) 'no
             (bind (nth e j) (cup R)))))
@@ -1056,7 +1056,7 @@
            (: v (mvname (cap (cup b))) rest (cap (cup (cup b)))
               (? (! (&& (= 1 (mvn O v)) (= 1 (mvn N v)))) ()
                  (: an (mvat N v)
-                    (link sp (link (tp (hcat S (link (+ is (cap an)) (hcat (cup an) rest)))
+                    (. sp (. (tp (hcat S (. (+ is (cap an)) (hcat (cup an) rest)))
                                        (pi dp) (po dp) (pn dp)) ())))))
          (: pat (cap (cup b)) im (pi dp)                   ; the whole-binding swap:
             (? (! (&& (= 1 (tally (po dp))) (= 1 (tally (pn dp))))) ()   ; one for one,
@@ -1067,8 +1067,8 @@
                         (? (! (&& (= 1 (mvn O v)) (= 1 (mvn N v)))) ()
                            (: an (mvat N v)
                               (? (atom? (cup an))
-                                 (link sp (link (tp S (+ is (cap an)) (po dp) (pn dp)) ()))
-                                 (link sp (link (tp (hcat S (link (+ is (cap an)) (abut (cup an))))
+                                 (. sp (. (tp S (+ is (cap an)) (po dp) (pn dp)) ()))
+                                 (. sp (. (tp (hcat S (. (+ is (cap an)) (abut (cup an))))
                                                     (alast (cup an)) (po dp) (pn dp)) ()))))))))))))
 
  ; --- commute: the tree lift's lanes, the swallow arms schematic; a ground
@@ -1079,24 +1079,24 @@
       Q (pp q) iq (pi q) o2 (tally (po q)) n2 (tally (pn q))
       r (rel P Q 0) tag (cap r)
       (? (tag = 'same)
-           (? (> iq (+ ip n1)) (link (tp Q (- (+ iq o1) n1) (po q) (pn q)) (link p ()))
-              (< (+ iq o2) ip) (link q (link (tp P (- (+ ip n2) o2) (po p) (pn p)) ()))
+           (? (> iq (+ ip n1)) (. (tp Q (- (+ iq o1) n1) (po q) (pn q)) (. p ()))
+              (< (+ iq o2) ip) (. q (. (tp P (- (+ ip n2) o2) (po p) (pn p)) ()))
               ())
          (tag = 'inq)
            (: j (cap (cup r)) d (cap (cup (cup r)))
-              (? (< j ip) (link q (link p ()))
+              (? (< j ip) (. q (. p ()))
                  (>= j (+ ip n1))
-                   (link (tp (setidx Q d (- (+ j o1) n1)) iq (po q) (pn q)) (link p ()))
+                   (. (tp (setidx Q d (- (+ j o1) n1)) iq (po q) (pn q)) (. p ()))
                  (: c (mvswal (invert q) (invert p) j d)
                     (? (atom? c) ()
-                       (link (invert (cap (cup c))) (link (invert (cap c)) ()))))))
+                       (. (invert (cap (cup c))) (. (invert (cap c)) ()))))))
          (tag = 'inp)
            (: j (cap (cup r)) d (cap (cup (cup r)))
-              (? (< j iq) (link q (link p ()))
+              (? (< j iq) (. q (. p ()))
                  (>= j (+ iq o2))
-                   (link q (link (tp (setidx P d (- (+ j n2) o2)) ip (po p) (pn p)) ()))
+                   (. q (. (tp (setidx P d (- (+ j n2) o2)) ip (po p) (pn p)) ()))
                  (mvswal p q j d)))
-         (link q (link p ()))))
+         (. q (. p ()))))
 
  ; --- witnesses: the rule renames main -> run and moves the body (the
  ;     variable's seat slides from child 1 to child 2); the deep edit rides ---
@@ -1157,8 +1157,8 @@
  ; (L3b) a frontier is stable under the schematic swallow swap.
  _ (: w (tp '(0) 2 '(1) '(7))
       c (commute p8 q8)
-      f1 (applall t0 (link w (link p8 (link q8 ()))))
-      f2 (applall t0 (link w c))
+      f1 (applall t0 (. w (. p8 (. q8 ()))))
+      f2 (applall t0 (. w c))
       (test (heq f1 f2) (heq f1 '((: a 7) (: b 2) (run () (g x))))))
  0)
 
@@ -1184,9 +1184,9 @@
 
 (:
  ; --- the tree + pattern kit (form 8's, trimmed local) ---
- (htake s n) (? (< n 1) () (link (cap s) (htake (cup s) (- n 1))))
+ (htake s n) (? (< n 1) () (. (cap s) (htake (cup s) (- n 1))))
  (hdrop s n) (? (< n 1) s (hdrop (cup s) (- n 1)))
- (hcat a b) (? (atom? a) b (link (cap a) (hcat (cup a) b)))
+ (hcat a b) (? (atom? a) b (. (cap a) (hcat (cup a) b)))
  (splice s i c news) (hcat (htake s i) (hcat news (hdrop s (+ i c))))
  (nth s j) (cap (hdrop s j))
  (heq a b) (? (&& (atom? a) (atom? b)) (= a b)
@@ -1196,21 +1196,21 @@
  (tlay t path s2)
    (? (atom? path) s2
       (splice t (cap path) 1
-              (link (tlay (nth t (cap path)) (cup path) s2) ())))
+              (. (tlay (nth t (cap path)) (cup path) s2) ())))
  (mv? x) (? (atom? x) 0 ((cap x) = 'mv))
  (mvname x) (cap (cup x))
- (asq k s) (? (atom? s) () (: c (cap s) (? (= k (cap c)) (link (cup c) ()) (asq k (cup s)))))
+ (asq k s) (? (atom? s) () (: c (cap s) (? (= k (cap c)) (. (cup c) ()) (asq k (cup s)))))
  (mtch p g s)
    (? (s = 'no) 'no
       (mv? p) (: r (asq (mvname p) s)
-                 (? (atom? r) (link (link (mvname p) g) s)
+                 (? (atom? r) (. (. (mvname p) g) s)
                     (? (heq (cap r) g) s 'no)))
       (&& (atom? p) (atom? g)) (? (= p g) s 'no)
       (|| (atom? p) (atom? g)) 'no
       (mtch (cup p) (cup g) (mtch (cap p) (cap g) s)))
  (inst p s) (? (mv? p) (: r (asq (mvname p) s) (? (atom? r) p (cap r)))
                (atom? p) p
-               (link (inst (cap p) s) (inst (cup p) s)))
+               (. (inst (cap p) s) (inst (cup p) s)))
 
  ; --- a rule at a seat: match olds against the subtree, lay news
  ;     instantiated; rw answers (tree) or (), rw2 sequences two ---
@@ -1218,7 +1218,7 @@
    (: sub (tnav t path)
       sg (mtch (cap R) sub ())
       (? (sg = 'no) ()
-         (link (tlay t path (inst (cap (cup R)) sg)) ())))
+         (. (tlay t path (inst (cap (cup R)) sg)) ())))
  (rw2 Ra pa Rb pb t) (: r (rw Ra pa t) (? (atom? r) () (rw Rb pb (cap r))))
 
  t0 '((f 1) ((g 2) (h 3)))

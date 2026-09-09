@@ -31,7 +31,7 @@
        _ (? ((tally s) <= 252) 0 (scare 'mkboot2-too-big (tally s)))
        crc (crc-mpeg2 s 252)
        ; 252 payload+pad bytes, then the CRC little-endian: exactly 256
-       bs ((: (go i acc) (? (252 <= i) (rev acc) (go (i + 1) ((? ((tally s) <= i) 0 (s i)) >< acc)))
+       bs ((: (go i acc) (? (252 <= i) (rev acc) (go (i + 1) ((? ((tally s) <= i) 0 (s i)) . acc)))
               (go 0 ()))
            + (le32 crc))
        ir [['label 'boot2] ['raw bs]]

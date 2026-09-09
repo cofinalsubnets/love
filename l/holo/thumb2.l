@@ -328,7 +328,7 @@
    ;; MRS Rd, <sysm> -- the special registers, which are not in the general file and so have
    ;; no other door. only the two stack pointers are named: a fault handler asks which one was
    ;; active, and that is the whole of what this tree needs to read.
-   thumb-sysm (tabof [('msp >< 8) ('psp >< 9)])
+   thumb-sysm (tabof [('msp . 8) ('psp . 9)])
    (thumb-mrs d sys)
       (: sm (look thumb-sysm sys 'badsysm)
          (t32 (0xF3EF0000 | (0x8000 | (rn d << 8) | sm))))
@@ -336,45 +336,45 @@
    ;; the dispatch: an emitter tablet (shapes in holo.l's ir-arity), rows partial-applied,
    ;; nullaries their halfwords outright, `raw` the identity. the alu group pins off its rows.
    thumb-emitters (emsof
-        [('li >< thumb-li) ('mov >< thumb-mov) ('cmp >< thumb-cmp) ('imul >< thumb-imul)
-          ('umull >< thumb-umull) ('smull >< thumb-smull) ('mla >< thumb-mla)
-          ('addsd >< thumb-addsd) ('subsd >< thumb-subsd) ('mulsd >< thumb-mulsd)
-          ('divsd >< thumb-divsd) ('movsd >< thumb-movsd) ('ucomisd >< thumb-ucomisd)
-          ('cvtsi2sd >< thumb-cvtsi2sd) ('cvtui2sd >< thumb-cvtui2sd)
-          ('cvttsd2si >< thumb-cvttsd2si) ('cvttsd2ui >< thumb-cvttsd2ui)
-          ('movqxr >< thumb-movqxr) ('movqrx >< thumb-movqrx)
-          ('stsd >< thumb-stsd) ('ldsd >< thumb-ldsd) ('stss >< thumb-stss) ('ldss >< thumb-ldss)
-          ('cvtss2sd >< thumb-cvtss2sd) ('cvtsd2ss >< thumb-cvtsd2ss)
-          ('clz >< thumb-clz)
-          ('udivll >< t2-udivmod 'div) ('uremll >< t2-udivmod 'rem)        ; nullary: the whole expansion
-          ('ld >< thumb-ld) ('st >< thumb-st)
-          ('ld1 >< thumb-ld1) ('ld2 >< thumb-ld2) ('ld4 >< thumb-ld4)
-          ('st1 >< thumb-st1) ('st2 >< thumb-st2) ('st4 >< thumb-st4)
-          ('ldu1 >< thumb-ldu1) ('ldu2 >< thumb-ldu2)
-          ('ldu4 >< thumb-ld4)                               ; 32-bit zero-extend == word load here
-          ('sx1 >< thumb-sx 1) ('sx2 >< thumb-sx 2) ('sx4 >< thumb-sx 4)
-          ('zx1 >< thumb-zx 1) ('zx2 >< thumb-zx 2) ('zx4 >< thumb-zx 4)
-          ('shlv >< thumb-shiftv 'shlv) ('shrv >< thumb-shiftv 'shrv) ('sarv >< thumb-shiftv 'sarv)
-          ('shl >< thumb-shift 'shl) ('shr >< thumb-shift 'shr) ('sar >< thumb-shift 'sar)
-          ('rol >< thumb-shift 'rol) ('ror >< thumb-shift 'ror)
-          ('lea >< thumb-lea) ('lean >< thumb-lea)
-          ('la >< thumb-la) ('lapool >< thumb-lapool)
-          ('leax >< thumb-leax) ('ldx >< thumb-ldx) ('ldxb >< thumb-ldxb)
-          ('push >< thumb-push) ('pop >< thumb-pop)
-          ('neg >< thumb-neg) ('not >< thumb-not) ('inc >< thumb-inc) ('dec >< thumb-dec)
-          ('jmp >< thumb-jmp) ('br >< thumb-br) ('jmpr >< thumb-jmpr) ('callr >< thumb-callr)
-          ('set >< thumb-set) ('test >< thumb-test)
-          ('div >< thumb-div) ('rem >< thumb-rem) ('udiv >< thumb-udiv) ('urem >< thumb-urem)
-          ('call >< thumb-call)
-          ('raw >< 1)
-          ('dsb >< thumb-dsb) ('brk >< thumb-brk)            ; -- the system lane --
-          ('mrs >< thumb-mrs)
-          ('isb >< t32 0xF3BF8F6F)                           ; isb sy
-          ('wfi >< t16 0xBF30)                               ; wait for interrupt
-          ('ret >< t16 0x4770)                               ; BX lr
-          ('sys >< t16 0xDF00)                               ; svc #0
-          ('nop >< t16 0xBF00)
-          ('trap >< t16 0xBE00)])                            ; bkpt #0
+        [('li . thumb-li) ('mov . thumb-mov) ('cmp . thumb-cmp) ('imul . thumb-imul)
+          ('umull . thumb-umull) ('smull . thumb-smull) ('mla . thumb-mla)
+          ('addsd . thumb-addsd) ('subsd . thumb-subsd) ('mulsd . thumb-mulsd)
+          ('divsd . thumb-divsd) ('movsd . thumb-movsd) ('ucomisd . thumb-ucomisd)
+          ('cvtsi2sd . thumb-cvtsi2sd) ('cvtui2sd . thumb-cvtui2sd)
+          ('cvttsd2si . thumb-cvttsd2si) ('cvttsd2ui . thumb-cvttsd2ui)
+          ('movqxr . thumb-movqxr) ('movqrx . thumb-movqrx)
+          ('stsd . thumb-stsd) ('ldsd . thumb-ldsd) ('stss . thumb-stss) ('ldss . thumb-ldss)
+          ('cvtss2sd . thumb-cvtss2sd) ('cvtsd2ss . thumb-cvtsd2ss)
+          ('clz . thumb-clz)
+          ('udivll . t2-udivmod 'div) ('uremll . t2-udivmod 'rem)        ; nullary: the whole expansion
+          ('ld . thumb-ld) ('st . thumb-st)
+          ('ld1 . thumb-ld1) ('ld2 . thumb-ld2) ('ld4 . thumb-ld4)
+          ('st1 . thumb-st1) ('st2 . thumb-st2) ('st4 . thumb-st4)
+          ('ldu1 . thumb-ldu1) ('ldu2 . thumb-ldu2)
+          ('ldu4 . thumb-ld4)                               ; 32-bit zero-extend == word load here
+          ('sx1 . thumb-sx 1) ('sx2 . thumb-sx 2) ('sx4 . thumb-sx 4)
+          ('zx1 . thumb-zx 1) ('zx2 . thumb-zx 2) ('zx4 . thumb-zx 4)
+          ('shlv . thumb-shiftv 'shlv) ('shrv . thumb-shiftv 'shrv) ('sarv . thumb-shiftv 'sarv)
+          ('shl . thumb-shift 'shl) ('shr . thumb-shift 'shr) ('sar . thumb-shift 'sar)
+          ('rol . thumb-shift 'rol) ('ror . thumb-shift 'ror)
+          ('lea . thumb-lea) ('lean . thumb-lea)
+          ('la . thumb-la) ('lapool . thumb-lapool)
+          ('leax . thumb-leax) ('ldx . thumb-ldx) ('ldxb . thumb-ldxb)
+          ('push . thumb-push) ('pop . thumb-pop)
+          ('neg . thumb-neg) ('not . thumb-not) ('inc . thumb-inc) ('dec . thumb-dec)
+          ('jmp . thumb-jmp) ('br . thumb-br) ('jmpr . thumb-jmpr) ('callr . thumb-callr)
+          ('set . thumb-set) ('test . thumb-test)
+          ('div . thumb-div) ('rem . thumb-rem) ('udiv . thumb-udiv) ('urem . thumb-urem)
+          ('call . thumb-call)
+          ('raw . 1)
+          ('dsb . thumb-dsb) ('brk . thumb-brk)            ; -- the system lane --
+          ('mrs . thumb-mrs)
+          ('isb . t32 0xF3BF8F6F)                           ; isb sy
+          ('wfi . t16 0xBF30)                               ; wait for interrupt
+          ('ret . t16 0x4770)                               ; BX lr
+          ('sys . t16 0xDF00)                               ; svc #0
+          ('nop . t16 0xBF00)
+          ('trap . t16 0xBE00)])                            ; bkpt #0
    _ (foldl (\ _ p (emrow thumb-emitters <p (thumb-aluop <p))) 0 thumb-alu-rows)
    (thumb-lower ins) (: f lower-via (lit? f ? (f thumb-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 
