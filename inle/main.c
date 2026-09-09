@@ -477,13 +477,17 @@ static void first_boot(char const **argv) {
 // a __builtin_trap guard fired: `ud2` / `brk #0` / `ebreak`, so it lands here as
 // SIGILL (SIGTRAP on the arm and riscv seats) with si_addr at the instruction.
 // the kernel's k_exception prints this same line; hosted had only a bare 132.
+// it names the SIGNAL and not the cause: a jump into data raises SIGILL too, and
+// an address called a trap sends a reader hunting a guard that is not there --
+// where it really was one, the address says so.
 // write and raise only -- a handler may call nothing the VM or malloc owns, so
 // the address is spelled by hand. it does not resume: the default disposition
 // goes back on and the signal is re-raised, so the exit status and the core stay
 // what they were.
 static void trap_note(int s, siginfo_t *si, void *ctx) {
   char b[48], *p = b;
-  for (char const *m = "*** love: trap at 0x"; *m; m++) *p++ = *m;
+  for (char const *m = s == SIGTRAP ? "*** love: SIGTRAP at 0x"
+                                    : "*** love: SIGILL at 0x"; *m; m++) *p++ = *m;
   uintptr_t a = si ? (uintptr_t) si->si_addr : 0;
   int seen = 0;
   for (int i = (int) sizeof a * 8 - 4; i >= 0; i -= 4) {
