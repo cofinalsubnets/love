@@ -44,6 +44,10 @@
    ; a write bigger than the baked blob grows the copy
    (wr f (+ orig orig) "w")
    (= (+ orig orig) (rd f))
+   ; /proc/src is the same row read past every write above -- the mount is what lets a
+   ; module load from bytes the tree it is editing cannot have reached
+   (= orig (rd (+ "/proc/src/" f)))
+   (! (wr (+ "/proc/src/" f) "no" "w"))
    ; put it back, and the tree reads as the bake left it
    (wr f orig "w")
    (= orig (rd f))))
@@ -56,3 +60,21 @@
 ; for byte; it has to stay after those laws.
 (borrow "apps/json.l")
 (test (member? 'json-read (names ())))
+
+; /proc's live rows. meminfo is the kernel's own free list, gauge the collector's
+; counters -- both filled at the open, off state the syscall under it cannot see, so
+; the law that matters is that a read arrives at all and wears the shape. `key value`
+; lines, and the first key names the file.
+(: (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
+   (wr p s) (: q (open p "w") (? (port? q) (: _ (say q s) _ (close q) 1) 0))
+ (test
+   (= "ram-words " (snip (rd "/proc/meminfo") 0 10))
+   (= "pool-words " (snip (rd "/proc/gauge") 0 11))
+   ; nobody's to set: the ramfs never reads its own mode bits, so 0444 is a label and
+   ; the refusal has to be the open's
+   (! (wr "/proc/meminfo" "no"))
+   (! (wr "/proc/gauge" "no"))
+   ; the console's pen opens either way -- it reads empty on a seat with no console,
+   ; which every headless lane in this corpus is
+   (port? (open "/proc/vt/fg" "r"))
+   (port? (open "/proc/vt/bg" "r"))))

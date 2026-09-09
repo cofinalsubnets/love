@@ -584,6 +584,9 @@ static int k_ents_n, k_ents_cap;
 // ordinary entry each, so stat, dents and the whole fd machinery need nothing new: the
 // open refreshes a read off the live pen and the close applies a write.
 static char const k_vtfg[] = "proc/vt/fg", k_vtbg[] = "proc/vt/bg";
+// and the two the open fills from the running machine -- see k_proc_fill, below the
+// grow door it needs.
+static char const k_pmem[] = "proc/meminfo", k_pgauge[] = "proc/gauge";
 // 0 is neither, 1 the foreground, 2 the background.
 static int k_vt_slot(char const *p, uintptr_t n) {
   if (n == sizeof k_vtfg - 1 && !memcmp(p, k_vtfg, n)) return 1;
@@ -617,7 +620,12 @@ static bool k_fs_init(void) {
                               .mode = 0644, .own = true, .live = true };
   t[n + 2] = (struct k_ent) { .path = k_vtbg, .bake = -1, .ms = k_clock_ms(),
                               .mode = 0644, .own = true, .live = true };
-  k_ents = t, k_ents_n = n + 3, k_ents_cap = cap;
+  // and the two the open fills: read-only, since nothing here is anyone's to set.
+  t[n + 3] = (struct k_ent) { .path = k_pmem, .bake = -1, .ms = k_clock_ms(),
+                              .mode = 0444, .own = true, .live = true };
+  t[n + 4] = (struct k_ent) { .path = k_pgauge, .bake = -1, .ms = k_clock_ms(),
+                              .mode = 0444, .own = true, .live = true };
+  k_ents = t, k_ents_n = n + 5, k_ents_cap = cap;
   return true; }
 
 // the cwd, a kernel string -- canonical ("" is the root), what k_canon resolves
@@ -859,6 +867,78 @@ static void k_vt_write(int i, int slot) {
   cb_recolor(kcb, slot == 1 ? (uint8_t) v : kcb->def_fg,
                   slot == 1 ? kcb->def_bg : (uint8_t) v); }
 
+// --- /proc's live rows ------------------------------------------------------------
+// filled at the open, off state only THIS side of the door can see: the kernel's own
+// free list, and the collector's counters, which live in the `struct ai` the syscall
+// boundary under k_fs_open has no word for. `key value` lines, words throughout --
+// what they MEAN is the reader's, and the reader is love.
+static int k_proc_slot(char const *p, uintptr_t n) {
+  if (n == sizeof k_pmem - 1 && !memcmp(p, k_pmem, n)) return 1;
+  if (n == sizeof k_pgauge - 1 && !memcmp(p, k_pgauge, n)) return 2;
+  return 0; }
+
+static int k_dec(char *b, int at, uintptr_t v) {
+  char d[24]; int n = 0;
+  do d[n++] = (char) ('0' + v % 10); while (v /= 10);
+  while (n) b[at++] = d[--n];
+  return at; }
+static int k_row(char *b, int at, char const *k, uintptr_t v) {
+  while (*k) b[at++] = *k++;
+  b[at++] = ' ';
+  at = k_dec(b, at, v);
+  b[at++] = '\n';
+  return at; }
+
+static int k_meminfo(char *b) {
+  uintptr_t free = 0, blocks = 0, big = 0;
+  for (struct mem const *m = kmem; m; m = m->next)
+    free += m->len, blocks++, big = m->len > big ? m->len : big;
+  int at = k_row(b, 0, "ram-words", kram_words);
+  at = k_row(b, at, "free-words", free);
+  at = k_row(b, at, "free-blocks", blocks);
+  at = k_row(b, at, "free-largest", big);
+  // heap bytes only: a baked row costs the image, not the RAM this file is about.
+  uintptr_t ents = 0, bytes = 0;
+  for (int i = 0; i < k_ents_n; i++)
+    if (k_ents[i].live) ents++, bytes += k_ents[i].own ? k_ents[i].cap : 0;
+  at = k_row(b, at, "fs-entries", ents);
+  return k_row(b, at, "fs-heap-bytes", bytes); }
+
+// l/love.c's lvm_gauge roster, spelled out: the same sixteen, named rather than indexed.
+static int k_gauge(char *b, struct ai const *g) {
+  int at = k_row(b, 0, "pool-words", g->len);
+  at = k_row(b, at, "heap-words", (uintptr_t) (g->hp - ptr(g)));
+  at = k_row(b, at, "stack-words", (uintptr_t) (ptr(g) + g->len - g->sp));
+  at = k_row(b, at, "collections", g->n_gc);
+  at = k_row(b, at, "minors", g->n_minor);
+  at = k_row(b, at, "pool-peak", g->max_len);
+  at = k_row(b, at, "heap-peak", g->max_heap);
+  at = k_row(b, at, "seen-words", g->n_seen);
+  at = k_row(b, at, "evac-words", g->n_evac);
+  at = k_row(b, at, "old-words", (uintptr_t) (g->major_hp - g->major_base));
+  at = k_row(b, at, "major-cap", g->major_pool ? 2 * g->major_len : 0);
+  at = k_row(b, at, "rem-miss", g->rem_miss);
+  at = k_row(b, at, "rem-peak", g->rem_hi);
+  at = k_row(b, at, "resizes", g->n_resize);
+  at = k_row(b, at, "minor-peak", g->minor_hi);
+  return k_row(b, at, "major-peak", g->major_hi); }
+
+void k_proc_fill(struct ai *g, char const *p, uintptr_t pn) {
+  char cp[256];
+  intptr_t cn = k_canon(p, pn, cp);
+  if (cn < 0) return;
+  int slot = k_proc_slot(cp, (uintptr_t) cn);
+  if (!slot || !k_fs_init()) return;
+  int i = k_find(cp, (uintptr_t) cn);
+  if (i < 0) return;
+  char b[768];
+  int n = slot == 1 ? k_meminfo(b) : k_gauge(b, g);
+  // memory refusing leaves the last content standing: a stale row is answerable, an
+  // open that failed for want of it would not be.
+  if (!k_fit(i, (uintptr_t) n)) return;
+  memcpy(k_ents[i].bytes, b, (uintptr_t) n);
+  k_ents[i].len = (uintptr_t) n; }
+
 static intptr_t ram_readn(int fd, unsigned char *dst, uintptr_t n) {
   struct k_fh *h = k_fh(fd);
   if (!h) return -1;
@@ -929,6 +1009,9 @@ ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
     if (m != 'r') return -EROFS;
     if (!sn) return -EISDIR;                     // the mount itself
     src = true, cn = sn; }
+  // the filled rows report the machine and are nobody's to set; the ramfs does not read
+  // its own mode bits, so 0444 is a label and this is the refusal.
+  if (!src && k_proc_slot(cp, (uintptr_t) cn) && m != 'r') return -EROFS;
   if ((cn = k_deref(cp, cn)) < 0) return (int) cn;
   if (!cn) return -EISDIR;                       // the root is a directory
   int i = k_find(cp, (uintptr_t) cn);

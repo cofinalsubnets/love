@@ -1349,10 +1349,18 @@ static int call_open(struct ai_str *pv, struct ai_str *mv) {
 // convention at the head of this file. a failure is TRUTHY now (a nom nets
 // positive), so a caller may not ask ? of the answer -- port? is the success
 // test, nom? the failure test, and both are exact.
+// inle's, filling /proc's live rows before the open below reads them; a no-op on a host,
+// where the weak default in inle/main.c stands and the kernel has its own /proc.
+void k_proc_fill(struct ai *g, char const *p, uintptr_t n);
+
 static lvm(lvm_open) {
   long rc = -1;
   if (!strp(Sp[0]) || !strp(Sp[1])) goto fail;
   struct ai_str *pv = str(Sp[0]), *mv = str(Sp[1]);
+  // /proc's live rows, where the seat keeps any: filled here because the numbers are the
+  // running machine's and the open below reaches the fs through a syscall, which carries
+  // no word for one. packed first, so the heap and stack rows are this instant's.
+  Pack(g); k_proc_fill(g, pv->bytes, pv->len); Unpack(g);
   int fd = call_open(pv, mv);
   if (fd < 0) { rc = fd; goto fail; }
   Pack(g);

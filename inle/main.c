@@ -50,6 +50,9 @@ static struct ai *stdin_take(struct ai *g) {
 
 __attribute__((weak)) lvm(k_lvm_quit) { ai_musttail return Ap(_lvm_ghelp, g); }
 __attribute__((weak)) lvm(k_lvm_getpid) { ai_musttail return Ap(_lvm_ghelp, g); }
+// /proc's live rows are inle's; a hosted love has a kernel's /proc already.
+__attribute__((weak)) void k_proc_fill(struct ai *g, char const *p, uintptr_t n) {
+  (void) g, (void) p, (void) n; }
 
 static lvm(lvm_exit) {
  if (__ai_osv < 0) ai_musttail return Ap(k_lvm_quit, g);
