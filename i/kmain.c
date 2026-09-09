@@ -588,11 +588,27 @@ static char const k_vtfg[] = "proc/vt/fg", k_vtbg[] = "proc/vt/bg";
 // and the two the open fills from the running machine -- see k_proc_fill, below the
 // grow door it needs.
 static char const k_pmem[] = "proc/meminfo", k_pgauge[] = "proc/gauge";
+// /dev/{null,zero} -- the two a POSIX userland asks the machine for. NEITHER HOLDS
+// BYTES: the source table's empty slot already discards writes and answers the end, so
+// null is that slot, and zero is that slot with a read door that fills. the table rows
+// below exist only so stat and dents can see them -- the open never reads one.
+static char const k_dnull[] = "dev/null", k_dzero[] = "dev/zero";
+// 0 is neither, 1 null, 2 zero.
+static int k_dev_slot(char const *p, uintptr_t n) {
+  if (n == sizeof k_dnull - 1 && !memcmp(p, k_dnull, n)) return 1;
+  if (n == sizeof k_dzero - 1 && !memcmp(p, k_dzero, n)) return 2;
+  return 0; }
+static intptr_t k_zero_readn(int fd, unsigned char *dst, uintptr_t n) {
+  return memset(dst, 0, n), (intptr_t) n; }
+static bool k_dev_ready(int fd) { return true; }
+
 // 0 is neither, 1 the foreground, 2 the background.
 static int k_vt_slot(char const *p, uintptr_t n) {
   if (n == sizeof k_vtfg - 1 && !memcmp(p, k_vtfg, n)) return 1;
   if (n == sizeof k_vtbg - 1 && !memcmp(p, k_vtbg, n)) return 2;
   return 0; }
+
+static char *k_strdup(char const *p, uintptr_t n);   // below, with the entry doors
 
 // lay the table on first use: every baked row, live, reading off .rodata -- plus
 // tmp, the scratch a POSIX machine promises and no initrd carries. idempotent, and
@@ -605,7 +621,7 @@ static bool k_fs_init(void) {
     struct k_file *xr = kmallocw(b2w((uintptr_t) xn * sizeof *xr));
     if (!xr) return false;
     k_extra = xr, k_extra_n = k_baked(xr, xn); }
-  int n = k_bakes_n + k_extra_n, cap = n + 8;
+  int n = k_bakes_n + k_extra_n, cap = n + 14;
   struct k_ent *t = kmallocw(b2w((uintptr_t) cap * sizeof *t));
   if (!t) return false;
   for (int i = 0; i < n; i++) {
@@ -626,7 +642,26 @@ static bool k_fs_init(void) {
                               .mode = 0444, .own = true, .live = true };
   t[n + 4] = (struct k_ent) { .path = k_pgauge, .bake = -1, .ms = k_clock_ms(),
                               .mode = 0444, .own = true, .live = true };
-  k_ents = t, k_ents_n = n + 5, k_ents_cap = cap;
+  // and the two devices, 0666 and always empty -- `dev` comes free as their prefix,
+  // the way `proc` does. the open never touches these rows; see k_dev_slot.
+  t[n + 5] = (struct k_ent) { .path = k_dnull, .bake = -1, .ms = k_clock_ms(),
+                              .mode = 0666, .own = true, .live = true };
+  t[n + 6] = (struct k_ent) { .path = k_dzero, .bake = -1, .ms = k_clock_ms(),
+                              .mode = 0666, .own = true, .live = true };
+  // the compat names. `to` is heap because k_ent_gc frees it, so a .rodata target
+  // would be freed the first time one of these was unlinked; a strdup that refuses
+  // leaves a plain empty directory rather than a link that cannot be followed.
+  t[n + 7] = (struct k_ent) { .path = "usr/bin", .bake = -1, .ms = k_clock_ms(),
+                              .mode = 0755, .own = true, .dir = true, .live = true };
+  static char const *const compat[] = { "bin", "sbin", "usr/sbin" };
+  int m = n + 8;
+  for (uintptr_t c = 0; c < countof(compat); c++) {
+    char *to = k_strdup("/usr/bin", 8);
+    t[m] = (struct k_ent) { .path = compat[c], .bake = -1, .ms = k_clock_ms(),
+                            .mode = 0777, .own = true, .live = true,
+                            .dir = !to, .to = to };
+    m++; }
+  k_ents = t, k_ents_n = m, k_ents_cap = cap;
   return true; }
 
 // the cwd, a kernel string -- canonical ("" is the root), what k_canon resolves
@@ -703,25 +738,53 @@ static int k_find(char const *p, uintptr_t n) {
         && strlen(k_ents[i].path) == n && !memcmp(k_ents[i].path, p, n)) return i;
   return -1; }
 
-// follow a symlink at the END of a canonical path, in place. LEAF ONLY: a link
-// standing mid-path is not resolved, this tree having no directory that is a link.
-// bounded, because a link may name another and a pair may name each other.
-// -> the new length, or -ELOOP. a path that is not a link comes back untouched.
-#define k_hops 8
-static intptr_t k_deref(char *cp, intptr_t cn) {
-  for (int hop = 0; hop < k_hops; hop++) {
-    int i = cn > 0 ? k_find(cp, (uintptr_t) cn) : -1;
-    if (i < 0 || !k_ents[i].to) return cn;
-    // the target is held as WRITTEN, so it is canonicalized here and not at the
-    // store: relative to the link's own directory, absolute from the root, and
-    // either way losing the leading slash every entry path is spelled without.
-    char nx[256];
-    uintptr_t n = ai_lnk_canon(cp, k_ents[i].to, nx, sizeof nx);
-    if (n >= sizeof nx) return -ELOOP;
-    memcpy(cp, nx, n);
-    cp[n] = 0;
-    cn = (intptr_t) n; }
-  return -ELOOP; }
+// resolve a path against the cwd with links followed at EVERY component, which is what
+// makes a directory able to be one. `leaf` false leaves a FINAL link unresolved -- the
+// calls that act ON a link rather than through it want that (readlink, unlink, rmdir,
+// the new name of mkdir and symlink, both sides of rename).
+// -> the canonical length (0 is the root), -ENAMETOOLONG, or -ELOOP.
+//
+// an expansion RESTARTS the walk instead of splicing in place: a target may name links of
+// its own, and carrying on past the splice would step over them. the budget is spent per
+// resolution, not per component, so a chain and a deep path draw on the same 32.
+#define k_hops 32
+static intptr_t k_walk(char const *p, uintptr_t pn, char *out, bool leaf) {
+  char in[256], nx[256];
+  if (pn >= sizeof in) return -ENAMETOOLONG;
+  memcpy(in, p, pn);
+  uintptr_t inn = pn;
+  for (int hop = 0; ; ) {
+    uintptr_t n = 0;
+    if (!(inn && in[0] == '/')) memcpy(out, k_cwd, n = k_cwd_n);
+    bool again = false;
+    for (uintptr_t i = 0; i < inn; ) {
+      while (i < inn && in[i] == '/') i++;
+      uintptr_t j = i;
+      while (j < inn && in[j] != '/') j++;
+      if (j == i) break;
+      intptr_t r = ai_path_canon(out, n, in + i, j - i, 256);   // "." and ".." included,
+      if (r < 0) return -ENAMETOOLONG;                          // so ".." lands on the
+      n = (uintptr_t) r;                                        // RESOLVED path
+      i = j;
+      uintptr_t k = i;
+      while (k < inn && in[k] == '/') k++;
+      if (k >= inn && !leaf) break;                // the last name, kept as written
+      int e = n ? k_find(out, n) : -1;
+      if (e < 0 || !k_ents[e].to) continue;
+      if (++hop > k_hops) return -ELOOP;
+      // the target is held as WRITTEN, so it is canonicalized here and not at the store:
+      // relative to the link's own place, absolute from the root, and either way losing
+      // the leading slash every entry path is spelled without. the rebuilt line WEARS
+      // one, a walk that starts without one seeding from the cwd instead.
+      uintptr_t tn = ai_lnk_canon(out, k_ents[e].to, nx + 1, sizeof nx - 1) + 1;
+      nx[0] = '/';
+      uintptr_t rest = inn - k;
+      if (tn + 1 + rest >= sizeof nx) return -ENAMETOOLONG;
+      if (rest) nx[tn++] = '/', memcpy(nx + tn, in + k, rest), tn += rest;
+      memcpy(in, nx, inn = tn);
+      again = true;
+      break; }
+    if (!again) return (intptr_t) n; } }
 
 // a slot for a fresh entry: a retired one first, else the table doubles. -1 is a
 // refusal the caller reads.
@@ -996,8 +1059,8 @@ ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   if (m != 'r' && m != 'w' && m != 'a') return -EINVAL;
   if (!k_fs_init()) return -ENOMEM;
   char cp[256];
-  intptr_t cn = k_canon(p, pn, cp);
-  if (cn < 0) return -ENAMETOOLONG;
+  intptr_t cn = k_walk(p, pn, cp, true);
+  if (cn < 0) return (int) cn;
   bool src = false;
   intptr_t sn = k_src_strip(cp, cn);
   if (sn >= 0) {                                 // under /proc/src: read-only, bake rows only
@@ -1007,8 +1070,16 @@ ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   // the filled rows report the machine and are nobody's to set; the ramfs does not read
   // its own mode bits, so 0444 is a label and this is the refusal.
   if (!src && k_proc_slot(cp, (uintptr_t) cn) && m != 'r') return -EROFS;
-  if ((cn = k_deref(cp, cn)) < 0) return (int) cn;
   if (!cn) return -EISDIR;                       // the root is a directory
+  if (!src) {
+    int dv = k_dev_slot(cp, (uintptr_t) cn);     // no handle, no bytes, no entry
+    if (dv) {
+      int dfd = k_fd_free();
+      struct k_source *ds = k_source_open(dfd);
+      if (!ds) return -ENOMEM;
+      *ds = dv == 2 ? (struct k_source) { .readn = k_zero_readn, .ready = k_dev_ready }
+                    : (struct k_source) {0};
+      return dfd; } }
   int i = k_find(cp, (uintptr_t) cn);
   if (src && (i < 0 || k_ents[i].bake < 0)) return -ENOENT;   // only what the bake laid
   if (i >= 0 && k_ents[i].dir) return -EISDIR;
@@ -1070,13 +1141,12 @@ ai_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
-  if ((cn = k_canon(p, pn, cp)) < 0) return -ENOENT;
+  if ((cn = k_walk(p, pn, cp, true)) < 0) return (int) cn;
   bool src = false;
   intptr_t sn = k_src_strip(cp, cn);
   if (sn >= 0) {
     if (!sn) return *st = (struct k_st) { 0, 0, k_mode_dir | 0555 }, 0;   // the mount itself
     src = true, cn = sn; }
-  if ((cn = k_deref(cp, cn)) < 0) return (int) cn;  // stat(2), not lstat: readlink
   int i = k_find(cp, (uintptr_t) cn);               // is the door to the link itself
   uintptr_t kid;
   *st = (struct k_st) { 0, 0, 0 };
@@ -1244,7 +1314,7 @@ long k_fs_opendir(char const *p, uintptr_t pn) {
  char cp[256];
  intptr_t cn;
  if (!k_fs_init()) return -ENOMEM;
- if ((cn = k_canon(p, pn, cp)) < 0) return -ENAMETOOLONG;
+ if ((cn = k_walk(p, pn, cp, true)) < 0) return cn;
  bool src = false;
  intptr_t sn = k_src_strip(cp, cn);
  if (sn >= 0) src = true, cn = sn;                 // the mount lists the tree it shadows
@@ -1458,7 +1528,7 @@ ai_noinline int k_fs_mkdir(char const *p, uintptr_t pn, uintptr_t mode) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
-  if ((cn = k_canon(p, pn, cp)) < 0) return -ENAMETOOLONG;
+  if ((cn = k_walk(p, pn, cp, false)) < 0) return (int) cn;
   uintptr_t junk;
   if (!cn || k_find(cp, (uintptr_t) cn) >= 0 || k_kids(cp, (uintptr_t) cn, &junk))
     return -EEXIST;
@@ -1470,7 +1540,7 @@ ai_noinline int k_fs_rmdir(char const *p, uintptr_t pn) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
-  if ((cn = k_canon(p, pn, cp)) < 0) return -ENOENT;
+  if ((cn = k_walk(p, pn, cp, false)) < 0) return (int) cn;
   if (!cn) return -EBUSY;                         // the root stays
   int i = k_find(cp, (uintptr_t) cn);
   if (i >= 0 && !k_ents[i].dir) return -ENOTDIR;
@@ -1485,7 +1555,7 @@ ai_noinline int k_fs_unlink(char const *p, uintptr_t pn) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
-  if ((cn = k_canon(p, pn, cp)) < 0) return -ENOENT;
+  if ((cn = k_walk(p, pn, cp, false)) < 0) return (int) cn;
   int i = cn ? k_find(cp, (uintptr_t) cn) : -1;
   if (i < 0) return k_dirp(cp, (uintptr_t) cn) ? -EISDIR : -ENOENT;
   if (k_ents[i].dir) return -EISDIR;
@@ -1495,13 +1565,13 @@ ai_noinline int k_fs_unlink(char const *p, uintptr_t pn) {
 
 // (symlink target path): an entry that is a name for another name. the target is
 // stored as GIVEN -- relative or absolute, the way readlink(2) owes it back -- and
-// canonicalized against the link's own place only when k_deref follows it.
+// canonicalized against the link's own place only when k_walk follows it.
 ai_noinline int k_fs_symlink(char const *t, uintptr_t tn, char const *p, uintptr_t pn) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
   if (!tn || tn >= 256) return -ENAMETOOLONG;
-  if ((cn = k_canon(p, pn, cp)) < 0) return -ENAMETOOLONG;
+  if ((cn = k_walk(p, pn, cp, false)) < 0) return (int) cn;
   uintptr_t junk;
   if (!cn || k_find(cp, (uintptr_t) cn) >= 0 || k_kids(cp, (uintptr_t) cn, &junk))
     return -EEXIST;
@@ -1520,7 +1590,7 @@ ai_noinline intptr_t k_fs_readlink(char const *p, uintptr_t pn, char *b, uintptr
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
-  if ((cn = k_canon(p, pn, cp)) < 0) return -ENOENT;
+  if ((cn = k_walk(p, pn, cp, false)) < 0) return cn;
   int i = cn > 0 ? k_find(cp, (uintptr_t) cn) : -1;
   if (i < 0) return -ENOENT;
   if (!k_ents[i].to) return -EINVAL;
@@ -1539,8 +1609,8 @@ ai_noinline int k_fs_rename(char const *o, uintptr_t olen,
   char op[256], np[256];
   intptr_t on, nn;
   if (!k_fs_init()) return -ENOMEM;
-  if ((on = k_canon(o, olen, op)) < 0
-   || (nn = k_canon(n, nlen, np)) < 0) return -ENAMETOOLONG;
+  if ((on = k_walk(o, olen, op, false)) < 0) return (int) on;
+  if ((nn = k_walk(n, nlen, np, false)) < 0) return (int) nn;
   if (!on) return -EBUSY;                         // the root does not move
   if (on == nn && !memcmp(op, np, (uintptr_t) on)) return 0;           // itself: done
   if (!nn) return -EEXIST;                        // onto the root
@@ -1594,7 +1664,7 @@ ai_noinline int k_fs_chdir(char const *p, uintptr_t pn) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
-  if ((cn = k_canon(p, pn, cp)) < 0) return -ENAMETOOLONG;
+  if ((cn = k_walk(p, pn, cp, true)) < 0) return (int) cn;
   if (cn) {
     int i = k_find(cp, (uintptr_t) cn);
     if (i >= 0 && !k_ents[i].dir) return -ENOTDIR;
@@ -1618,7 +1688,7 @@ ai_noinline int k_fs_chmod(char const *p, uintptr_t pn, uintptr_t mode) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
-  if ((cn = k_canon(p, pn, cp)) < 0) return -ENOENT;
+  if ((cn = k_walk(p, pn, cp, true)) < 0) return (int) cn;
   int i = k_find(cp, (uintptr_t) cn);
   if (i < 0) return k_dirp(cp, (uintptr_t) cn) ? 0 : -ENOENT;
   k_ents[i].mode = mode & 07777;
@@ -1628,7 +1698,7 @@ ai_noinline int k_fs_utime(char const *p, uintptr_t pn, uintptr_t ms) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
-  if ((cn = k_canon(p, pn, cp)) < 0) return -ENOENT;
+  if ((cn = k_walk(p, pn, cp, true)) < 0) return (int) cn;
   int i = k_find(cp, (uintptr_t) cn);
   if (i < 0) return k_dirp(cp, (uintptr_t) cn) ? 0 : -ENOENT;
   k_ents[i].ms = ms;

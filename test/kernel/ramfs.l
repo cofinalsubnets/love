@@ -78,3 +78,43 @@
    ; which every headless lane in this corpus is
    (port? (open "/proc/vt/fg" "r"))
    (port? (open "/proc/vt/bg" "r"))))
+
+; /dev/{null,zero}. neither holds a byte: null IS the source table's empty slot, whose
+; law is already "writes discard, reads answer the end", and zero is that slot with a
+; read door that fills. the table rows exist only so stat and dents can see them.
+(: (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
+   (wr p s) (: q (open p "w") (? (port? q) (: _ (say q s) _ (close q) 1) 0))
+ (test
+   (= "" (rd "/dev/null"))
+   (wr "/dev/null" "into the hole")
+   (= "" (rd "/dev/null"))                       ; and it kept none of it
+   ; zero has NO END, so it is read a byte at a time and never slurped
+   (: q (open "/dev/zero" "r") a (see q) _ (close q) (= 0 a))))
+
+; symlinks, first class: k_walk follows one at EVERY component, so a directory can be a
+; link. the machine's own compat names are three of them -- /bin, /sbin and /usr/sbin all
+; name /usr/bin -- and a link made here answers the same way.
+(: (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
+   (wr p s) (: q (open p "w") (? (port? q) (: _ (say q s) _ (close q) 1) 0))
+ (test
+   ; one directory, four doors: written through the real name, read back through each
+   ; link -- which is what following one MID-path buys and the leaf-only walk could not.
+   (wr "/usr/bin/hello" "hi")
+   (= "hi" (rd "/bin/hello"))
+   (= "hi" (rd "/sbin/hello"))
+   (= "hi" (rd "/usr/sbin/hello"))
+   (= "/usr/bin" (readlink "/bin"))              ; the target as WRITTEN, unfollowed
+   ; a link of our own, then a link to that link
+   (! (symlink "/usr/bin" "/opt"))
+   (= "hi" (rd "/opt/hello"))
+   (! (symlink "/opt" "/opt2"))
+   (= "hi" (rd "/opt2/hello"))
+   ; .. lands on the RESOLVED path: /opt is /usr/bin, so its parent is /usr
+   (= "hi" (rd "/opt/../bin/hello"))
+   ; unlink takes the link and never what it names
+   (! (unlink "/opt2"))
+   (= "hi" (rd "/opt/hello"))
+   ; a pair naming each other is answered, not spun
+   (! (symlink "/loop2" "/loop1"))
+   (! (symlink "/loop1" "/loop2"))
+   (! (port? (open "/loop1" "r")))))
