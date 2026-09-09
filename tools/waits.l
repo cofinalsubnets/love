@@ -66,7 +66,9 @@
     ["test/front/main.c" "ai_fd_say" "ai_sleep"
      "the test frontend's copy of that row, over a synthetic device whose stall arm counts down per call"]
     ["inle/teensy41/main.c" "main" "ai_sleep"
-     "the panic blink after a fatal shell exit -- nothing runs after it"]]
+     "the panic blink after a fatal shell exit -- nothing runs after it"]
+    ["inle/doom.c" "DG_SleepMs" "ai_sleep"
+     "doom's frame pacer: the game loop owns the frame and names the gap itself, with no love task behind it to park -- bounded by the frame, and the freestanding half waits the same way through k_sleep"]]
 
    ; --- character classes ------------------------------------------------------
    (idc? c) (97 <= c <= 122 || 65 <= c <= 90 || 48 <= c <= 57 || c = 95)
