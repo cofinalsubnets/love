@@ -8,7 +8,7 @@
 ; the encoding is derived from kinds.l's own `rank`: each kind symbol takes its
 ; rank as its nat code (bot 0 .. top 5), and `str` -- the incomparable branch, off
 ; rank's table -- takes the next code up. so `rank` folds to identity here, and the
-; translation is otherwise structural: ? -> nested bool_rect, = (and id?) -> nateqb,
+; translation is otherwise structural: ? -> nested bool_rect, = (and ==) -> nateqb,
 ; < -> natgtb (swapped), && -> andb, num? -> the emitted numq, a `:` -> a let.
 ; kind symbols appear only quoted in kinds.l ('bot ..), so a bare nom is a variable.
 ;
@@ -41,9 +41,9 @@
        (: h <e
           (? (h = '?)    (k2-cond km >e ty)
              (h = ':)    (k2-lets km >e ty)
-             ; `=` and id? both: kinds.l compares points, and the sweep that made
-             ; every such id? an `=` left this reading only the old spelling.
-             (h = 'id? || h = '=)
+             ; `=` and == both: kinds.l compares points, and the sweep that made
+             ; every such == an `=` left this reading only the old spelling.
+             (h = '== || h = '=)
                          ['nateqb (k2-tx km (e 1) 'nat) (k2-tx km (e 2) 'nat)]
              (h = '<)    ['natgtb (k2-tx km (e 2) 'nat) (k2-tx km (e 1) 'nat)]
              (h = '&&)   ['andb (k2-tx km (e 1) 'bool) (k2-tx km (e 2) 'bool)]

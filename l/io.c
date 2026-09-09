@@ -54,7 +54,7 @@ static word *p0cur(struct ai *g, uintptr_t d);
 bool iop(word x) { return lamp(x) && cell(x)->ap == lvm_port_io; }
 // the port an op acts on. in/out/err are three names, not three devices: a task wearing
 // its own stdio (hook 6, the chain (i o e)) reaches them through here, routed in place so
-// the re-read across a GC edge finds the same port. op-level only -- id?, peek, hot? and
+// the re-read across a GC edge finds the same port. op-level only -- ==, peek, hot? and
 // the image still answer the static, since prel's tap/jug read the head by index.
 word io_route(struct ai *g, word x) {
  word l = *task_io(g), s;
@@ -135,7 +135,7 @@ static struct ai *io_wdrain(struct ai *g, struct ai_io *i) {
 // the three answers for every port. no read method = end; no buffer = ask for one byte.
 // which bio owns this port's read run: its own, or -- for the static input port on a seat
 // that lent it one -- the borrowed one in `inport`. same fd and same vt, so every lane
-// below reads it verbatim and `in` keeps the identity (id? p in) that bao's `reads` folded
+// below reads it verbatim and `in` keeps the identity (== p in) that bao's `reads` folded
 // at egg-compile time. the fd offset the device runs ahead of is the frontend's to rewind.
 static ai_inline struct ai_bio *rbio_of(struct ai *g, struct ai_io *i) {
  struct ai_bio *b = bio_of(g, i);

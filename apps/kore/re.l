@@ -123,7 +123,7 @@
                                    1))
                              fs))
                ()
-               (\ a b (? (id? a 'regex-too-costly)
+               (\ a b (? (== a 'regex-too-costly)
                          (: _ (flush out)
                             _ (say err ("grep: the pattern needs more than " + (show b)
                                         + " backtracking steps on one line -- it is the"))

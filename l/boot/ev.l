@@ -14,7 +14,7 @@
 ; `gone` as the per-layer miss sentinel (a stored () SHADOWS, never falls through), answering d on
 ; total miss. every book read in this file routes here, so a later layer can shadow orth without
 ; touching the compiler. the C twin is love.c's stacklook; keep in step.
-; the sentinel test is `==` (id?), never the pin `^gone`: a pin compiles to `=`, which
+; the sentinel test is `==` (==), never the pin `^gone`: a pin compiles to `=`, which
 ; walks whatever the layer stored, and every global read comes through here.
 (: (gv k d) ((: (go c) (c @ (a . u) (: v (peep a k gone) (v == gone ? (go u) v)) d))
              (stack ())))
@@ -29,7 +29,7 @@
 ; effect-free set its purity gates read. pureset is keyed by VALUE.
 (: pureset (: names ('(+ - * / % & | < <= = >= >) +
           '(// << >> ^
-            id? gcd modpow abs
+            == gcd modpow abs
             . cap cup caap caup cuap cuup
             dig lidx assoc member? last rev cat
             charm? nom? two? tablet? lit? string? nil? gem? twin? atom?
@@ -57,18 +57,18 @@
    ; identity is the cheaper op. a CONSTANT operand of those kinds licenses lvm_same at lvm_eq's
    ; site -- the other side may be any value, a kind that is not the constant's answering 0 under
    ; both. eqop rides sameop so a book carrying one and not the other keeps lvm_eq.
-   sameop <(opof (gv 'id? ()))
+   sameop <(opof (gv '== ()))
    eqop (sameop && <(opof (gv '= ())))
    ; nom? is name? and mint? together; () is the serial-0 mint both predicates decline, and
    ; there is only ever the one, so it compares by address like any other point
-   (byaddr? v) (nom? v || tablet? v || id? v ())
+   (byaddr? v) (nom? v || tablet? v || == v ())
    (addreq? as) (any (a \ (: k (kconst a) (<k && byaddr? >k))) as)
    (hgen v op ar pure x) (: as >x n (tally as)
     (go hv a) (atom? a ? (bake hv)             ; all args constant -> fold to a value
      (: cv (kconst <a)
       (? (pure && <cv) (go (hv >cv) >a)         ; static arg: fold it into the partial
          (op && n = ar) (iop . (op == eqop && addreq? as ? sameop op) . as)   ; matching-arity nif -> inline (the hot path, keep)
-         (id? hv v)                                            ; no static prefix folded -> the original apply
+         (== hv v)                                            ; no static prefix folded -> the original apply
           (1 < ar && ar <= n ? (apx . ar . x)   ;   multi-arg fn the args saturate -> n-ary apply
                                (apx . 0 . x))   ;   generic l2r apply
          (apx . 0 . bake hv . a))))             ; static prefix folded -> apply the partial to the rest
@@ -80,7 +80,7 @@
      (: o (opof v) p (pureset v)
       (? (o || p)
        (: op (? o <o 0)
-          ar (? o >o (id? lvm_cur (pick 0 v)) (peek 1 v) 0)   ; nif/multi-arg-fn arity
+          ar (? o >o (== lvm_cur (pick 0 v)) (peek 1 v) 0)   ; nif/multi-arg-fn arity
           (pin t v (hgen v op ar p)))
        t))))
    (foldl add {} (catmap keys (stack ())))))
@@ -289,7 +289,7 @@
    ; no binder to hide it. cflip re-runs on its own answer, so `!!e` loses both wrappers.
    (cflip bs sh) (: r (cflip1 bs sh) (r == bs ? bs (cflip r sh)))
    (cflip1 bs sh) (two? >bs && two? <bs && atom? >><bs
-                   && (id? <<bs nilv || (!sh && id? <<bs 'nil?)) ?
+                   && (== <<bs nilv || (!sh && == <<bs 'nil?)) ?
     (: e <><bs c <>bs rest >>bs
      (? (atom? rest)       [e () c]                ; (nil? e) c    -> (e () c)
         (atom? >rest) [e <rest c]        ; (nil? e) c el -> (e el c)
@@ -312,8 +312,8 @@
    ; napof: v is a non-nif multi-arg fn the n>1 call args saturate -> its arity, the width of the
    ; leading n-ary apply. a surplus arg curries onto that answer instead of onto the head, one
    ; frame in place of one closure per arg. 0 = no n-ary lane.
-   ; `id?`-safe peeps (a non-fn value never matches lvm_cur).
-   (napof v args) (charm? v || !(id? lvm_cur (pick 0 v)) ? 0
+   ; `==`-safe peeps (a non-fn value never matches lvm_cur).
+   (napof v args) (charm? v || !(== lvm_cur (pick 0 v)) ? 0
     (: ar (peek 1 v) (1 < ar && ar <= #args ? ar 0)))
    ; fold: un-shadowed global head -> ap (fold/iop/apx); else mark the call as an apx node
    ; (apx n head . args) carrying the apply strategy: n > 1 = the leading n-ary apply's width,
@@ -376,7 +376,7 @@
    ; args and answers a \ of the rest -- currying, statically -- collapsing curried hofs to
    ; first-order arithmetic the back end (and the glaze) can take native.
    ; soundness: beta is not bridged by `=` on closures (the spec), so a beta-produced closure must
-   ; never escape to where =/id?/show could observe it. the operator-position flag `op` is the
+   ; never escape to where =/==/show could observe it. the operator-position flag `op` is the
    ; guard: a beta result that is itself a lambda is committed only when consumed (op=1, an
    ; enclosing application's head); at a VALUE position (op=0) we revert to the un-inlined source.
    ; the purity oracle, in one place: applying this function VALUE to this known first operand
@@ -414,7 +414,7 @@
    (fvs x bs) (?                                                                       ; free vars of a simple term
     (nom? x) (x == () || member? x bs ? () [x])
     (atom? x) ()
-    (id? <x '\) (two? >>x ? (: r (lp x) (fvs (last x) (<r + bs))))
+    (== <x '\) (two? >>x ? (: r (lp x) (fvs (last x) (<r + bs))))
     (foldl (a \ e \ a + fvs e bs) () x))
    (closedl? lam) (all (v \ gv v ()) (fvs lam ()))                            ; every free var a global (means the same elsewhere)
    (pbody? x bnd) (?                                                                   ; body is pure: every call head a pure fn or a param
@@ -430,10 +430,10 @@
    (bsub env x) (?                                                                     ; capture-avoiding substitution
     (nom? x) (assq x env @ (_ . x) x x)
     (atom? x) x
-    (id? <x '\) (atom? >>x ? x
+    (== <x '\) (atom? >>x ? x
        (: r (lp x) ps <r ren (map (p \ p . nom 0) ps)                      ; rename binders to fresh -> no capture
           ('\ . (map cup ren + [(bsub (ren + rmkeys ps env) (last x))]))))
-    (id? <x ':) (: nms (colnms >x) ren (map (p \ p . nom 0) nms)       ; rename the :'s binders fresh so a subst can't be captured -- whole-form, which is
+    (== <x ':) (: nms (colnms >x) ren (map (p \ p . nom 0) nms)       ; rename the :'s binders fresh so a subst can't be captured -- whole-form, which is
                                                                              ;   why an entangled : (a bare pre-pin sibling read) never reaches bsub (entg?)
        (map (\ e (bsub (ren + rmkeys nms env) e)) x))
     (map (\ e (bsub env e)) x))
@@ -500,11 +500,11 @@
    ; as a wild cell miss). a body carrying such an entangled : declines beta and the
    ; splice, and the call runs un-inlined. over-approximate on purpose: any occurrence of
    ; a not-yet-pinned sibling name in a def flags, even under a \ or a quote.
-   (occn v e) (? (id? e v) 1 (atom? e) 0 (|| (occn v <e) (occn v >e)))
+   (occn v e) (? (== e v) 1 (atom? e) 0 (|| (occn v <e) (occn v >e)))
    (entg? x) (?
     (atom? x) 0
-    (id? <x '\) (? (atom? >>x) 0 (entg? (last x)))
-    (id? <x ':) (: nms (colnms >x)
+    (== <x '\) (? (atom? >>x) 0 (entg? (last x)))
+    (== <x ':) (: nms (colnms >x)
        (walk bs pn) (?
         (atom? bs) 0
         (atom? >bs) (entg? <bs)
@@ -557,13 +557,13 @@
                 (two? as && propk? <as && <hk && pure-ap? >hk (kval <as))             ; a pure-applying head with a known operand: fold the whole
                   (cpap >hk as)                                                       ;   known prefix, an unknown tail keeps the value as its head
                 (keep2 x h2 as)))))))                                                ; nothing rewrote -> the original call
-   (sub1 x p m) (? (id? x p) m  (atom? x) x  (<x == '\ && atom? >>x) x
+   (sub1 x p m) (? (== x p) m  (atom? x) x  (<x == '\ && atom? >>x) x
                    (mapi2 x (sub1 <x p m) (sub1 >x p m)))
    (wx (cprop x () 64 0 () ()) ()))   ; bnd seeds (): a 0 seed rode `list + 0` into every binder set
   ; a bare symbol is a variable reference -- except the zero point, which reads as a nom? literal.
   ; routing it to ava captures it as a spurious import: it inflates a closure's arity by one with
   ; no matching value applied at the ref site -> an under-saturated partial (silently wrong). the
-  ; test is id?-the-zero-point, not nil?: boxfix's cell names are fresh nameless mints (also nil?)
+  ; test is ==-the-zero-point, not nil?: boxfix's cell names are fresh nameless mints (also nil?)
   ; bound and referenced as real variables, so they must still reach ava.
   ; iop/apx stay `=` tests in the cond, not ^-pins in an @ chain: a pin reads the
   ; name to match against, and these two are letrec siblings this form is compiled
@@ -715,10 +715,10 @@
    ; the nearest enclosing lambda's, this closure's own entry ahead of its subtree's, so a
    ; hook finds any inner lambda site under its body by identity and scans nothing else
    up (lamsco c)
-   _ (? (id? up 0) 0
+   _ (? (== up 0) 0
         (pin up 'l ((? (hq && nm == 0) ([exp (? (two? os) >>os 0) r] . ic 'l) (ic 'l)) + up 'l)))
    r)
-  (lamsco c) (? !c 0 (: t (peep c 'inl 0) (? (id? t 0) (lamsco (c 'par)) t)))
+  (lamsco c) (? !c 0 (: t (peep c 'inl 0) (? (== t 0) (lamsco (c 'par)) t)))
   (farq k x) (? !k 0
                (: f (k 'far)
                   (? (tablet? f && 0 <= peep f x -1) 1 (farq (k 'par) x))))
@@ -791,7 +791,7 @@
                            (#>x != #>(cof cls) ? (scare 'imports-grew n),
                             cput cls x)))
         f (ana c d)
-        g (?- id (even && !(c 'par) && !(id? n '_)) (em2 lvm_defglob n))  ; `_` binds locally, never to the book
+        g (?- id (even && !(c 'par) && !(== n '_)) (em2 lvm_defglob n))  ; `_` binds locally, never to the book
         h (push c 'stk n,
            weave >nds)
         (f * g * h)))

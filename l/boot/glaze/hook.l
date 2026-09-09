@@ -2,7 +2,7 @@
 ; closure built, top-level or embedded: a qualifying leaf, loop, call-out, group or
 ; amble body is native-backed at creation and deopts into the closure's own bytecode
 ; `e`, so native is never wrong, only faster. the native cell keeps value[-1]=s, the
-; surface src, so =/show see the source; a fresh cell per ala call keeps id? honest.
+; surface src, so =/show see the source; a fresh cell per ala call keeps == honest.
 ;
 ; deliberately outside the `glaze` module: ala reads the hook via (gv 'natjit) and
 ; fires/fired? are its probe, so the three must be on the book, and a post-egg stream

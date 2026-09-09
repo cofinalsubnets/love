@@ -22,7 +22,7 @@
    miss (mint 0)                       ; a roster name that never bound answers this, and is skipped
    keep (book 'nomop)
    (p k) (: v (peep book k miss)
-            (? (id? v miss) 0
+            (? (== v miss) 0
                (: _ (pin F k v) (? keep 0 (pull book k k)))))
    _ (each m p)
    _ (each n p)

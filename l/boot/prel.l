@@ -162,11 +162,10 @@
    reciprocal (/ 1)
    (fraction x) (% x 1)
    (bit x) (nil? (nil? x))
-   == id?
    (!== a b) (nil? (== a b))
-   ; a star is the fixpoint of net. id?, not `=`: a number comes back unchanged where a tray's
+   ; a star is the fixpoint of net. ==, not `=`: a number comes back unchanged where a tray's
    ; net is a fresh sum, so star? and galaxy? stay disjoint.
-   (star? x) (id? x (net x))
+   (star? x) (== x (net x))
 )
 (: (filter p l) (? (two? l) (: m (filter p (cup l)) (? (p (cap l)) (. (cap l) m) m)))
    (init l) (? (two? (cup l)) (. (cap l) (init (cup l))))
@@ -183,7 +182,7 @@
    ; constant's value can itself be nothing. no `&&`: c0 is single-pass and it is defined later.
    (kconst e) (? (nom? e) ()                                                    ; a variable -> no fact
                  (one? e) (. 1 e)                                           ; a literal -> (1 . itself)
-                 (id? (cap e) '\) (? (one? (cuup e)) (. 1 (caup e)) ())     ; (\ v) quote of an atom -> (1 . v); a real lambda -> no fact
+                 (== (cap e) '\) (? (one? (cuup e)) (. 1 (caup e)) ())     ; (\ v) quote of an atom -> (1 . v); a real lambda -> no fact
                  ())
    (cat a b) (foldr (.) b a))
 ; (sort l) is the C lane -- a stable bottom-up merge by the total order, no lisp re-entry;
@@ -212,7 +211,7 @@
 
 (: l (foldr (\ a l (. (.) (. a (. l ())))) ()) (:: 'list l))
 ; the false answer is the unit, not 0: (&& a ..) expands to (? a .. ()) and ||'s exhausted tail
-; reads (). test a result with ? or id?, not arithmetic.
+; reads (). test a result with ? or ==, not arithmetic.
 (:: '&& (\ l (: (and l) (? (two? (cup l)) (list '? (cap l) (and (cup l)) ()) (cap l)) (? (two? l) (and l) 1))))
 (:: '|| (\ l (: (or l) (? (two? l) (: y (nom 0) (list ': y (cap l) (list '? y y (or (cup l))))) ()) (or l))))
 ; end weighting: the head argument moves to the tail, so the form a long body would
@@ -274,7 +273,7 @@
     ; (. .. ()) here makes the body one application chain, each answer applied to the next.
     ; the head takes a nom or a list, quoted or not: 'x reads as (\ x), so unwrap one if it is there.
     (:: 'module (\ l (: h (cap l)
-                        n (? (two? h) (? (id? (cap h) '\) (caup h) h) h)
+                        n (? (two? h) (? (== (cap h) '\) (caup h) h) h)
                         (list mrun (list '\ n) (list '\ (cup l))))))))
 
 ; --- reader operators: the operators tablet + the opfix factor pass ---------
@@ -401,7 +400,7 @@
        ((: (try k)
            (? (< k 1) ()
               (: e (monadics (intern (snip nm (- j k) j)))
-                 (? (id? () e) (try (- k 1))
+                 (? (== () e) (try (- k 1))
                     (: r (mono-go nm (- j k) (. e acc)) (? (two? r) r (try (- k 1))))))))
         j)
        acc)
@@ -433,7 +432,7 @@
    (op-cl-splice fs)
     (? (one? (cup fs))
        (: b (cap fs)
-          (? (&& (two? b) (id? (cap b) ':)) (cup b) fs))
+          (? (&& (two? b) (== (cap b) ':)) (cup b) fs))
        (. (cap fs) (op-cl-splice (cup fs))))
    ; a chain, arity -2: (a < b <= c) is (a < b) and (b <= c), and the shared operand is evaluated
    ; once. the binds nest inside the conjunction so all three of python's promises hold at once --
@@ -452,7 +451,7 @@
              (: z (caup r) v (? (one? z) z (nom 0))
                 e (. op (. pv (. v ()))) t (op-chn-rest v (cuup r))
                 bd (? (two? t) (. '&& (. e (. t ()))) e)
-                (? (id? v z) bd (. ': (. v (. z (. bd ())))))))))
+                (? (== v z) bd (. ': (. v (. z (. bd ())))))))))
    ; the whole run wears a `bit`, because a comparison answers a bit and a chain is still one.
    ; `&&` hands back () for a false left and the failing operand otherwise, so a bare chain would
    ; answer () when the first link failed, 0 when a later one did, and 1 when none did -- three
@@ -462,8 +461,8 @@
     (: a (cap os) b (caup os) u (? (one? a) a (nom 0)) v (? (one? b) b (nom 0))
        e (. nm (. u (. v ()))) t (op-chn-rest v (cuup os))
        bd (? (two? t) (. '&& (. e (. t ()))) e)
-       b2 (? (id? v b) bd (. ': (. v (. b (. bd ())))))
-       b3 (? (id? u a) b2 (. ': (. u (. a (. b2 ())))))
+       b2 (? (== v b) bd (. ': (. v (. b (. bd ())))))
+       b3 (? (== u a) b2 (. ': (. u (. a (. b2 ())))))
        (. 'bit (. b3 ())))
    ; fold a frame with what it has: nothing collected gives the plain symbol, a shortfall the
    ; partial application -- the curry law, with no case of its own.
@@ -472,8 +471,8 @@
    ; chain is the join's doing, and it shows as the interleaved operators the join left in `got`.
    (op-fold f) (? (atom? (op-frg f)) (op-fro f)
                   (: nm (op-frn f) os (rev (op-frg f))
-                     (? (id? nm '\) (op-core (. '\ os))
-                        (id? nm ':) (op-core (. ': (op-cl-splice os)))
+                     (? (== nm '\) (op-core (. '\ os))
+                        (== nm ':) (op-core (. ': (op-cl-splice os)))
                         (&& (two? (cup os)) (&& (two? (cuup os)) (op-chain? nm))) (op-chn nm os)
                         (. nm os))))
    ; deliver datum d -> (out' . pend'). a collecting frame takes it; a filled infix frame extends
@@ -607,7 +606,7 @@
           (. (. (cap hr) (cap pr)) (cat (cup pr) (cup hr)))))
    ; flatten a directly-nested lambda body -- (\ a (\ b B)) -> (\ a b B) -- so neither compiler
    ; builds the extra closure. shadowing stays nested: (\ x (\ x x)) must not merge.
-   (op-mem? y l)      (? (one? l) 0 (id? y (cap l)) 1 (op-mem? y (cup l)))
+   (op-mem? y l)      (? (one? l) 0 (== y (cap l)) 1 (op-mem? y (cup l)))
    (op-disjoint? a b) (? (one? b) 1 (op-mem? (cap b) a) 0 (op-disjoint? a (cup b)))
    (op-params ol)     (? (one? (cup ol)) () (. (cap ol) (op-params (cup ol))))
    ; the inner lambda lowers before the shadow check, never after the merge: a pattern carried up
@@ -615,7 +614,7 @@
    (op-flat-ol ol seen)                                      ; -> the flattened operand list, body left raw (op-lam factors it after)
     (? (one? (cup ol))
        (: b (cap ol)
-          (? (&& (two? b) (id? (cap b) '\) (two? (cuup b)))  ; (two? (cuup b)) = a real lambda, not quote
+          (? (&& (two? b) (== (cap b) '\) (two? (cuup b)))  ; (two? (cuup b)) = a real lambda, not quote
              (: ol2 (op-depat (cup b) ())
                 (? (op-disjoint? seen (op-params ol2)) (op-flat-ol ol2 seen) ol))   ; disjoint inner lambda -> merge its operands up
              ol))                                             ; else the body stays raw
@@ -623,9 +622,9 @@
    ; the comma layer, the loosest grouping, above infix. datums split at top-level commas and the
    ; whole becomes the `,` macro: (a, b c) -> (: _ a (b c)); empty clauses drop. the comma outranks
    ; `:`, so a binder spine splits like any list. the symbol is interned, never written literally.
-   (op-cm? l)   (? (one? l) 0 (id? (cap l) ',) 1 (op-cm? (cup l)))
-   (op-take l)  (? (one? l) () (id? (cap l) ',) () (. (cap l) (op-take (cup l))))
-   (op-drop l)  (? (one? l) () (id? (cap l) ',) (cup l) (op-drop (cup l)))
+   (op-cm? l)   (? (one? l) 0 (== (cap l) ',) 1 (op-cm? (cup l)))
+   (op-take l)  (? (one? l) () (== (cap l) ',) () (. (cap l) (op-take (cup l))))
+   (op-drop l)  (? (one? l) () (== (cap l) ',) (cup l) (op-drop (cup l)))
    (op-split l) (: c (op-take l) r (? (op-cm? l) (op-split (op-drop l)) ())
                    (? (two? c) (. c r) r))
    ; op-core: the factor pass. quote interiors stay verbatim, binding forms keep their binders,
@@ -636,17 +635,17 @@
    (op-core x)
     (? (one? x) x
        (: h (cap x)
-          (? (&& (id? h '\) (one? (cuup x))) x              ; (\) / (\ x): quote, verbatim
+          (? (&& (== h '\) (one? (cuup x))) x              ; (\) / (\ x): quote, verbatim
              (op-cm? (cup x))                                ; the comma layer (helpers above)
               (: cs (op-split x)
                  (? (one? cs) ()                            ; commas alone: nothing
                     (one? (cup cs)) (op-core (cap cs))      ; one clause: the commas composed away
                     (. (nom ",") (map op-core cs))))
-             (id? h '\) (. '\ (op-lam (op-flat-ol (op-depat (cup x) ()) ())))   ; (\ a.. body): patterns to noms, flatten nested lambdas, factor the body
-             (id? h ':) (. ': (op-colon (cup x)))         ; (: n v ..): binders verbatim
+             (== h '\) (. '\ (op-lam (op-flat-ol (op-depat (cup x) ()) ())))   ; (\ a.. body): patterns to noms, flatten nested lambdas, factor the body
+             (== h ':) (. ': (op-colon (cup x)))         ; (: n v ..): binders verbatim
              ; the reader's glued-run emission (mono (run d)): factor the run monadically around
              ; the (recursively opfixed) datum; an unfactorable run is the plain application (run d)
-             (&& (id? h 'mono) (two? (cup x)) (two? (caup x)))
+             (&& (== h 'mono) (two? (cup x)) (two? (caup x)))
               (: p (caup x) r (cap p) d (op-core (caup p))
                  fs (? (nom? r) (monofactor r) 0)
                  (? (two? fs) (op-fin fs d) (. r (. d ()))))
@@ -673,10 +672,10 @@
           (: old (peep t nm ())
              ; identity, never truth: a left-handed band is a negative charm, which nets red --
              ; (nil? -60) is true, and this door would read every left-handed row as a clear.
-             (? (id? () v) (: _ (pull t nm 0) old)                   ; () clears the row
+             (? (== () v) (: _ (pull t nm 0) old)                   ; () clears the row
                 (: _ (pin t nm v)
                    (? (op-lane-ok? t ar nm) old                      ; the lane's own read is the acceptor
-                      (: _ (? (id? () old) (pull t nm 0) (pin t nm old))
+                      (: _ (? (== () old) (pull t nm 0) (pin t nm old))
                          (scare 'bad-grip nm))))))))
 
    ; --- this `:` has a body, so the helpers above are local ------------------
@@ -736,18 +735,18 @@
 ; its own binding is forward, and indirects through a cell keyed by the binding site's nom, so a
 ; pre-fill read is a map miss = the missing condition. it emits nif values, not names, so the
 ; egg's mop cannot break it. 0 when nothing needs boxing, else (prs' . body').
-(: (lambp x) (two? x && id? '\ <x && two? >>x) ; \ with >=1 param (one-operand \ is quote)
+(: (lambp x) (two? x && == '\ <x && two? >>x) ; \ with >=1 param (one-operand \ is quote)
    (dsug n d) (? (one? n) (n . d) (dsug <n ('\ . >n + list d)))
    (lp x) (: a >x (one? >a ? (0 . <a) (init a . last a)))
    (ln bs) (? (one? bs) 0 (one? >bs) 0 (<(dsug <bs 0) . ln >>bs))
    ; w/wl: does x / binding-list bs reference symbol v? \ and : shadow, one-operand \ is quote,
    ; macros expand. u tracks lambda depth; dm counts only references not under a lambda.
    (w v x bnd u dm) (?
-    (nom? x) (&& (? dm !u 1) (id? x v) !(member? v bnd))
+    (nom? x) (&& (? dm !u 1) (== x v) !(member? v bnd))
     (one? x) 0
     (: h <x (?
-      (id? h '\) (? (one? >>x) 0 (: r (lp x) (w v >r (<r + bnd) 1 dm)))
-      (id? h ':) (wl v >x (cat (ln >x) bnd) u dm)
+      (== h '\) (? (one? >>x) 0 (: r (lp x) (w v >r (<r + bnd) 1 dm)))
+      (== h ':) (wl v >x (cat (ln >x) bnd) u dm)
       (: m (nom? h ? (macros h) 0) (m && !(member? h bnd) ? (w v (m >x) bnd u dm) (any (e \ w v e bnd u dm) x))))))
    (wl v bs bnd u dm) (?
     (one? bs) 0
@@ -769,8 +768,8 @@
       (nom? x) (member? x nm && !(member? x bnd) ? ((x . u) . acc) acc)
       (one? x) acc
       (: h <x (?
-        (id? h '\) (one? >>x ? acc (: r (lp x) (bref >r (<r + bnd) 1 acc)))
-        (id? h ':) (brefl >x (ln >x + bnd) u acc)
+        (== h '\) (one? >>x ? acc (: r (lp x) (bref >r (<r + bnd) 1 acc)))
+        (== h ':) (brefl >x (ln >x + bnd) u acc)
         (: m (? (nom? h) (macros h) 0)
            (? (m && !(member? h bnd) && !(member? h nm)) (bref (m >x) bnd u acc)
               (foldl (a \ e \ bref e bnd u a) acc x))))))
@@ -804,7 +803,7 @@
    ; survivable. `sent` is minted once and closure-private, so nothing a cell holds poses as absence.
    cellread (: sent (mint 0)
                (\ c nm (: v (peep c nm sent)
-                          (? !(id? v sent) v
+                          (? !(== v sent) v
                              !(heard ()) ()
                              (scare 'missing nm))))))
 
@@ -824,15 +823,15 @@
                    x))
     (atom? x) x
     (: h (cap x) (?
-      (id? h '\) (one? >>x ? x (: r (lp x) ('\ . <r + list (sub (rmc cs <r) >r (<r + bnd) pn 1))))
-      (id? h ':) (: ns (ln >x) (': . subl (rmc cs ns) >x (cat ns bnd) pn u))
+      (== h '\) (one? >>x ? x (: r (lp x) ('\ . <r + list (sub (rmc cs <r) >r (<r + bnd) pn 1))))
+      (== h ':) (: ns (ln >x) (': . subl (rmc cs ns) >x (cat ns bnd) pn u))
       (: m (macros h) (? (&& m !(member? h bnd)) (sub cs (m >x) bnd pn u) (map (e \ sub cs e bnd pn u) x))))))
    (subl cs bs bnd pn u) (?
     (one? bs) bs
     (one? >bs) (list (sub cs <bs bnd pn u))
     (: nd (dsug <bs <>bs) (<nd . sub cs >nd bnd pn u . subl cs >>bs bnd pn u)))
    (: bx (boxset prs)
-      (? (id? () bx) ()
+      (? (== () bx) ()
        (: cs (mkcs bx) ns0 (map cap prs)
           (one p pn) (: d (sub cs >p ns0 pn 0)
                         (? (member? <p bx)
@@ -856,7 +855,7 @@
 ; another name, so nothing below can drift; where the lisp semantics differ from
 ; love's -- memq/assq/member answer a tail where member? answers a bit, for-each
 ; takes its function first -- it is a definition and not an alias, and says so.
-(: (assq x l)   (? (two? l) (? (id? x (caap l)) (cap l) (assq x (cup l))))
+(: (assq x l)   (? (two? l) (? (== x (caap l)) (cap l) (assq x (cup l))))
 )
 ; pat -- @ : pattern matching, one macro and no special form. a post-egg layer,
 ; not part of the language: prel stays minimal and each frontend includes the
@@ -976,10 +975,10 @@
 ; it when it is a call -- so the binding is free exactly when it is not needed.
 (: gone (mint 0)                 ; absence out of band: no stored value poses as a fresh mint
    (lit d) ['\ d]               ; d, as the code that answers d
-   ; a literal is compared with `=` -- except a nom, which is interned, so id? is
+   ; a literal is compared with `=` -- except a nom, which is interned, so == is
    ; the same answer off one pointer where = walks the generic table. noms and
    ; nothing else: = on a charm is numeric across the band (5 matches the gem 5.0),
-   ; and id? would quietly narrow that to one representation.
+   ; and == would quietly narrow that to one representation.
    (weq d v) [['= (lit d) v]]
    wnil [() () ()]
    (wts ts) [ts () ()]
@@ -990,7 +989,7 @@
    ; one operand a pattern reads as an expression is the one after the `&&`.
    ; `&&` is right-handed, so a chain arrives nested -- (p && a && b) is (&& p (&& a b))
    ; -- and that inner `&&` is the chain, never a guard on its own. flatten it.
-   (gand? x) (two? x && id? <x '&&)
+   (gand? x) (two? x && == <x '&&)
    (gchain as) (? (one? >as) as
                   (gand? <>as) (<as . gchain ><>as)
                   as)
@@ -1001,7 +1000,7 @@
    ; (nom access) pairs its body binds, and the guards, which are neither.
    (pw p v)
      (? (nom? p) (p = '_ ? wnil [() [[p v]] ()])
-        (id? p ()) (wts [['= () v]])                        ; () is the empty list, and asks for it
+        (== p ()) (wts [['= () v]])                        ; () is the empty list, and asks for it
         (one? p) (wts [['= p v]])
         (: h (opword <p) as >p                     ; opfix's glued heads are values; opword names them
            (? (= h '?) (? (one? as) (wlist p v)           ; a guard: (? g1 .. gn pat), or (? g)
@@ -1069,7 +1068,7 @@
    ; the head's test stays first and separate, and is not folded into the long?: it is
    ; what the decision tree hoists, and the tag compare has to be reachable before the
    ; arity walk, or 20 arms of a 21-arm dispatch walk to learn they are the wrong tag.
-   ; one walk, two ends: a bracket ends on (id? () rest) -- exact length -- a split on
+   ; one walk, two ends: a bracket ends on (== () rest) -- exact length -- a split on
    ; the right pattern's own walk, wherever the run stopped.
    (warity k v) (? (k = 1) [['two? v]] [['long? k v]])   ; at one, two? is the same answer and fuses
    (wrun ps v end)
@@ -1116,7 +1115,7 @@
    ; and it is one level, never recursive: the duplication stays at exactly 2.
    (same? a b) (? (two? a) (? (two? b) (? (same? <a <b) (same? >a >b)))
                   (two? b) ()
-                  (id? a b))
+                  (== a b))
    ; --- factoring, and its one safe shape --------------------------------------
    ; a full decision tree groups each level's clauses by their next test and recurses
    ; both ways -- into the group, and past it into the fallthrough. correct, and it

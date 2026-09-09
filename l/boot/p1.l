@@ -291,7 +291,7 @@
    ; the bytes between. it wraps its answer (1 v) and reads it back with two?, since
    ; a promise of nothing is the ordinary case at eof. these are prel's flow/once
    ; written again -- prel is not loaded when p1 runs.
-   (p1-port? o) (? (hot? o) (id? (pick 0 o) (pick 0 in)))
+   (p1-port? o) (? (hot? o) (== (pick 0 o) (pick 0 in)))
    (p1-once f) (: t (tablet 0)
                   (\ u (: v (peep t 0 ())
                           (? (two? v) (cup v)
@@ -321,7 +321,7 @@
      (: (go cl acc)
           (: d (p1-read1 cl ())
              (? (two? d) (go (cup d) (. (cap d) acc))
-                (id? d 'torn) 'torn
+                (== d 'torn) 'torn
                 (p1-rev acc ())))
         (go cl ()))
    ; a text -> its charlist. built by index rather than by map/jot: those are

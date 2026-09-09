@@ -292,16 +292,16 @@
    ; can: a big literal (or one folding left behind) would be laid truncated, silently.
    (afix? e) (whole? e && (-4611686018427387904 <= e <= 4611686018427387903))
    (aconst? e) (afix? e || (= e amble-nil))
-   (aop2? op) (member? op '(+ - * // % & | ^ < <= > >= = id? .))
+   (aop2? op) (member? op '(+ - * // % & | ^ < <= > >= = == .))
    (acmp? op) (member? op '(< <= > >= =))
    (aquote? e) (two? e && (= <e '\) && 2 = #e)            ; the reader's quote: (\ X) at exactly two -- a datum constant
    (aqnom? e) (aquote? e && nom? <>e)                          ; a quoted nom: a point, so (a = 'sym) is raw identity
-   (amemq x l) (atom? l ? 0  (= x <l) 1  (amemq x >l))     ; id?-membership: interp's quote answers the source node, so two
+   (amemq x l) (atom? l ? 0  (= x <l) 1  (amemq x >l))     ; ==-membership: interp's quote answers the source node, so two
    (aposq x l i) (= x <l ? i (aposq x >l (i + 1)))         ; =-equal quote nodes stay distinct slots
    (aq e acc) (? (aquote? e) (amemq e acc ? acc (e . acc))          ; collect quote nodes; never walk into quoted data
                  (two? e) (foldl (\ ac x (aq x ac)) acc e)
                  acc)
-   aopheads '(? : two? cap cup + - * // % & | ^ < <= > >= = id? .)   ; the heads that are ops, not calls
+   aopheads '(? : two? cap cup + - * // % & | ^ < <= > >= = == .)   ; the heads that are ops, not calls
    (ahascall? env go e)                                                  ; does e contain a call (any non-op head)? the bisect knob's test
     (? (aquote? e) 0
        (two? e) (: op <e
@@ -398,7 +398,7 @@
    (afresh v avoid) (: c (intern ((string v) + "~")) (member? c avoid ? (afresh c avoid) c))
    ; aopv: a macro expansion splices op values, not noms -- the list/backtick macro emits the link
    ; nif as a head, and show prints that as `link`, invisibly. normalize a value head back to its
-   ; nom, id?-keyed, and only when the nom is not env-shadowed: a param named link must win, as it
+   ; nom, ==-keyed, and only when the nom is not env-shadowed: a param named link must win, as it
    ; does in bytecode. a miss falls through to `opnom`, the glued lane's own value -> word map
    ; (prel), so every sigil-backed head is named without this list carrying all fourteen.
    aopv [[two? 'two?] [cap 'cap] [cup 'cup] [(.) '.]
@@ -532,7 +532,7 @@
        simp (two? scc ? >scc ())
        ni   #simp
        self (? (= nm 0) 0  (member? nm ps) 0  (member? nm vars0) 0  (= nm go) 0
-               (member? nm '(? two? cap cup id? + - * < <= > >= = || tally list &&)) 0
+               (member? nm '(? two? cap cup == + - * < <= > >= = || tally list &&)) 0
                !(simp = (take ni ps)) 0
                nm)
        sfq  !(= self 0)
@@ -575,7 +575,7 @@
               (filter (f \ !(farq f)) (filter (f \ !(member? f cn)) cand)))) ())
        gn   (map cap gps)
        gvals (map caup gps)
-       qs   (drok ? (foldl (\ ac i (aq i ac)) (aq body ()) inits) ())   ; the quoted-datum constants (id?-deduped source nodes); a declined body skips the walk
+       qs   (drok ? (foldl (\ ac i (aq i ac)) (aq body ()) inits) ())   ; the quoted-datum constants (==-deduped source nodes); a declined body skips the walk
        nq   #qs
        eqv  (gv '= 0)                                       ; the = value: aeq2's generic lane drives it off an extras slot
        cx   (op \ (? (= op self) ni (member? op cn) #(cimp op) 0))
@@ -602,7 +602,7 @@
        ; flag onward or 'bad where such a guard follows one. the restart point is the arg slots: a
        ; saturated tail self-call rewrites them before the jump, so the flag clears at that back
        ; edge. the lanes that drive rather than guard -- =, tally -- resolve book primitives at
-       ; compile, and two?/id? carry no guard at all, so none of them sets the flag.
+       ; compile, and two?/== carry no guard at all, so none of them sets the flag.
        (asafe tl cl ex)
         (: (aseq c l) (foldl (\ ac x (asafe 0 ac x)) c l)                      ; the children, in order
            (aguard c) (? (= c 'bad) 'bad  c 'bad  0)                         ; then the node's own guard
@@ -619,7 +619,7 @@
                     (sfq && tl && (= op self) && (#as = (a - ni)))
                      (: c2 (aseq cl as) (= c2 'bad ? 'bad 0))                ; the self back edge
                     (= op go) (fbk ? (aseq cl as) (aguard (aseq cl as)))     ; the named-let back edge
-                    (member? op '(two? id?)) (aseq cl as)
+                    (member? op '(two? ==)) (aseq cl as)
                     (= op '= && (aqnom? <as || aqnom? <>as || lit? eqv)) (aseq cl as)
                     (= op 'tally && !(member? 'tally env) && member? 'tally gn && atom? >as) (aseq cl as)
                     (= op '|| && !(member? op env) && two? >as) (fbk ? (aseq cl as) (aguard (aseq cl as)))
@@ -863,7 +863,7 @@
                        (= op 'two?) (atwo <as d)
                        (= op 'cap) (acap <as d 8)
                        (= op 'cup) (acap <as d 16)
-                       (= op 'id?) (aid <as <>as d)
+                       (= op '==) (aid <as <>as d)
                        (= op '.) (alink <as <>as d)
                        (= op '= && (aqnom? <as || aqnom? <>as))
                         (aid <as <>as d)                                               ; (a = 'sym): a point equals only itself (the point-= law) -> raw identity, total

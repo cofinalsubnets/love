@@ -58,7 +58,7 @@
                (go >rows (foldl (\ a x (member? x a ? a (x . a))) acc <rows))))
           (addm + mulm) ())
 
-   ; id?, not =: the test is "is this the head cell", not "does it look like it"
+   ; ==, not =: the test is "is this the head cell", not "does it look like it"
    (commas f l) (join (map (x \ (= x <l ? (f x) ("; " + f x))) l))
    (bars f l)   (join (map (x \ (= x <l ? (f x) (" | " + f x))) l))
 

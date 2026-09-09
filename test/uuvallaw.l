@@ -42,8 +42,8 @@
  (defq law-eq-total
    (pi v val (paths nat (nbit (veq v v)) 1))
    uv-eq-total)
- ; id?-finer   (\ x (? (id? x x) (= x x) 1))
- ; by the lemma the model names; the guard (id? x x) erases
+ ; ==-finer   (\ x (? (== x x) (= x x) 1))
+ ; by the lemma the model names; the guard (== x x) erases
  (defq law-idq-finer
    (pi v val (paths bool (veq v v) true))
    uv-idq-finer)

@@ -486,7 +486,7 @@ static lvm(lvm_snip) {
   // an empty range (i == j) answers a string, the closest form of nothing for this
   // kind, not the bare floor (fixnum 0) -- and the empty string, never a fresh one.
   // no 0-length string is ever allocated (str0 holds the same line), which is what
-  // lets two empties be id?-equal wherever they were built.
+  // lets two empties be ==-equal wherever they were built.
   if (j == i) Sp[2] = EmptyString;
   else {
    size_t req = str_width(j - i);

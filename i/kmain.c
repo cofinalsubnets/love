@@ -2110,7 +2110,7 @@ void kmain(void) {
  // the help is the exit door too: a kore main leaves deep by scaring 'leave with its
  // status (apps/kore/core.l), and taking that as a plain scare would flatten every usage
  // code to 1. every other condition is the died-child face.
- "     p (twirl (\\ _ (: _ (hear (\\ a b (? (id? a 'leave) (quit b)"
+ "     p (twirl (\\ _ (: _ (hear (\\ a b (? (== a 'leave) (quit b)"
  "                                        (: _ (say err \";; \") _ (print err a)"
  "                                           _ (say err \" \") _ (print err b)"
  "                                           _ (put err 10) (quit 1)))))"
@@ -2198,7 +2198,7 @@ void kmain(void) {
   r = ai_evals_(r, "(: cmdline (. \"love\" bootargv) argv cmdline)");
   r = ai_evals_(r,
    "(? (two? bootargv)"
-   "   (: _ (hear (\\ a b (? (id? a 'leave) (quit b)"
+   "   (: _ (hear (\\ a b (? (== a 'leave) (quit b)"
    "                        (: _ (say err \";; \") _ (print err a) _ (say err \" \") _ (print err b)"
    "                           _ (put err 10) (quit 1)))))"
    "      pr (k-prog bootargv)"

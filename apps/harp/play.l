@@ -72,8 +72,8 @@
    (vname v) (? (tablet? v) (peep v 's "sin") (string? v) v "sin")
    ; peep's default cannot be (): 0 is a real gain and a real note, and `nil? 0` is
    ; true here, so a missing key is asked for by a symbol nothing else can be.
-   (vnum v k d) (: r (? (tablet? v) (peep v k 'none) (charm? v) (? (id? k 'note) v 'none) 'none)
-                   (? (id? r 'none) d r))
+   (vnum v k d) (: r (? (tablet? v) (peep v k 'none) (charm? v) (? (== k 'note) v 'none) 'none)
+                   (? (== r 'none) d r))
    ; a voice is [end-frame amp-of-frames left-gain right-gain]
    (mkvoice st v rate)
     (: ins (instr (vname v))

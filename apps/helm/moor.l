@@ -51,7 +51,7 @@
                                 (: v (trap (\ _ (ev 'ev <r)) 0 (\ a b ['scare a b]))
                                    _ (reply v)
                                    (h >r))
-                              (id? r 'torn) (go x)
+                              (== r 'torn) (go x)
                               (go ()))))
                (pend + cl))))
        (go ()))

@@ -331,7 +331,7 @@
                               >r w reps))
               (c = 40) (: r (meuc s (j + 1) p) (go <r >r w reps))
               ((rept (w . p) reps) . j)))
-       (? (id? <t 'elong) ([(qone . 'elong)] . >t) (go <t >t qone 1)))
+       (? (== <t 'elong) ([(qone . 'elong)] . >t) (go <t >t qone 1)))
    (meuc s i p)
     (: a (mintat s i)          j (madv s (mspace s >a) 44)
        b (mintat s j)          k (mspace s >b)
@@ -343,7 +343,7 @@
    (mfold l) (: (go l out)
                  (? !(two? l) (lrev out)
                     (: x <l
-                       (? (id? >x 'elong)
+                       (? (== >x 'elong)
                           (? (two? out)
                              (: h <out (go >l (((<h + <x) . >h) . >out)))
                              (go >l out))

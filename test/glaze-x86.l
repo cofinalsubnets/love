@@ -262,7 +262,7 @@
              (5000 = (deep 5000)))                                                 ; the storm shape: 5000 pending frames + GC churn, == interp
           ; quoted-datum constants (v3): a nom dispatch walker -- 'r/'R ride nifx extras slots,
           ; (= a 'sym) is raw identity (the point-= law: a point equals only itself). a quoted
-          ; list constant answers the same source node interp does (id?-transparent, never folded
+          ; list constant answers the same source node interp does (==-transparent, never folded
           ; with an =-equal sibling).
           (: dsp (ev '(\ l a ((: (go l a) (? (two? l) (go (cup l) (? (= (cap l) (\ r)) (+ a 1) (? ((cap l) = (\ R)) (+ a 10) a))) a)) l a)))
              (&& (23 = (dsp '(r R r x R r) 0)) (0 = (dsp () 0)) (5 = (dsp '(x y) 5))))
@@ -609,7 +609,7 @@
        (= (base-ev lcaccd) (ev lcaccd)))
     ; cask builder (castbuild): a string-accumulator loop -- (: (go i s) (? COND (go .. (+ s X)) s) (go 0 "")) --
     ; rewrites to a threaded `jug` (O(1)-amortized append + one drain), == interp. "did it fire" is structural
-    ; (!(= ..)) -- castbuild rebuilds via map, so id? never holds even on a no-op.
+    ; (!(= ..)) -- castbuild rebuilds via map, so == never holds even on a no-op.
     (: cb1 '(: (build n) (: (go i s) (? (< i n) (go (+ i 1) (+ s (string (+ 48 (% i 10))))) s) (go 0 "")) (tally (build 100)))
        (&& !(= (castbuild cb1) cb1) (100 = (ev cb1)) (= (base-ev cb1) (ev cb1))))             ; a 100-char build -> jug, == interp
     ; the strcat bench shape: strhash glazes (string lane) while strbuild fills a cask -- both in one form, hash exact

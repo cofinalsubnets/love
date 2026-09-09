@@ -113,7 +113,7 @@
 ; every reader runs `mnorm`, so a meta block always carries the same five keys in the same
 ; order, absent ones empty. That is what lets a shower emit only the fields that are filled
 ; and still round-trip: the reader fills the rest back in with "". Values are single-line.
-; the key is interned, not `nom`ed: `nom` mints a fresh symbol that is neither `id?` nor
+; the key is interned, not `nom`ed: `nom` mints a fresh symbol that is neither `==` nor
 ; `=` to the literal of the same spelling, so a meta read from one surface would compare
 ; unequal to the same meta read from another -- law 1 failing on the key, not the value.
 (: metakeys '(title section date source manual)

@@ -10,9 +10,9 @@
 ; away to straight-line arithmetic that then natives -- DEFAULT behavior (the glaze is baked in; probe:
 ; `out/love this-file` glazes it, no flags). The % 1e9+7 keeps everything in int64 (no bignum deopt),
 ; so the number is native code vs interpretation. checksum = Σ_{i<N} P(i mod 97) mod 1000000007, N=10^6.
-(: (ev1 nd x) (? (id? (cap nd) 'lit) (caup nd)  (id? (cap nd) 'var) x
-                 (id? (cap nd) 'add) (+ (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))
-                 (id? (cap nd) 'mul) (* (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))  0)
+(: (ev1 nd x) (? (== (cap nd) 'lit) (caup nd)  (== (cap nd) 'var) x
+                 (== (cap nd) 'add) (+ (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))
+                 (== (cap nd) 'mul) (* (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))  0)
    P '(add (mul (add (mul (add (mul (lit 2) (var)) (lit 3)) (var)) (lit 5)) (var)) (lit 7))
    (run n) ((: (go i a) (? (< i n) (go (+ i 1) (% (+ a (ev1 P (% i 97))) 1000000007)) a)) 0 0)
    (bench "spec-glaze" (\ _ (run 1000000))))

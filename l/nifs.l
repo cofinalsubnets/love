@@ -39,7 +39,7 @@
       (nif_eq            "="             2 lvm_eq)
       (nif_ge            ">="            2 lvm_ge)
       (nif_gt            ">"             2 lvm_gt)
-      (nif_same          "id?"           2 lvm_same)
+      (nif_same          "=="            2 lvm_same)
       (nif_bsl           "<<"            2 lvm_bsl)
       (nif_bsr           ">>"            2 lvm_bsr)
       (nif_band          "&"             2 lvm_band)

@@ -584,7 +584,7 @@
    (szipenv ps apv) (? (atom? ps) () ([<ps <apv] . szipenv >ps >apv))
    (slook env k) (? (atom? env) (sdyn k) (= k <<env) <><env (slook >env k))  ; unbound -> dynamic
    (sdeflook nm defs) (? (atom? defs) () (= nm <<defs) <defs (sdeflook nm >defs))
-   (sprim? h) (member? h '(* - + ! < <= > >= = cap cup caap caup cuap cuup id?))   ; arith + comparisons + static AST navigation
+   (sprim? h) (member? h '(* - + ! < <= > >= = cap cup caap caup cuap cuup ==))   ; arith + comparisons + static AST navigation
    (ssimp1 h a b)
     (? (= h '* && sstatval? a 1) b   (= h '* && sstatval? b 1) a       ; drop the * and + units on a residual
        (= h '+ && sstatval? a 0) b   (= h '+ && sstatval? b 0) a
@@ -1137,7 +1137,7 @@
    ; auto-ev: a whole-form lambda -> native (cached), else the base interpreter. a creation hook -- one
    ; that rewrote embedded lambdas on a jit-walk -- cannot sit here: it is pre-macroexpansion, so it can
    ; disturb a macro's data args, and the compile cache would make structurally-equal closures
-   ; id?-identical, against love's !(id? (\ x E) (\ x E)).
+   ; ==-identical, against love's !(== (\ x E) (\ x E)).
    ; the lanes route to `arch`. on x86 the full glaze runs; on a64 the integer lanes and the scalar
    ; float-result leaf are live, and only the float-grid lane and castbuild's cask-fill are x86-only --
    ; autogroup carries every source rewrite that lowers to the integer group, so fib/tak/primes glaze

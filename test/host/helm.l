@@ -62,9 +62,9 @@
       (= 4 (tally us))
       (= ['once 'fails 'settles 'default] (hnames us))
       (! (two? <>r))                                  ; a clean config gripes about nothing
-      (id? 'oneshot (peep (hby us 'once) 'kind ()))
-      (id? 'no      (peep (hby us 'once) 'restart ()))   ; a oneshot does not restart
-      (id? 'on-fail (peep (hby us 'settles) 'restart 'x)) ; ... a service does, by default
+      (== 'oneshot (peep (hby us 'once) 'kind ()))
+      (== 'no      (peep (hby us 'once) 'restart ()))   ; a oneshot does not restart
+      (== 'on-fail (peep (hby us 'settles) 'restart 'x)) ; ... a service does, by default
       (= 3 (peep (hby us 'settles) 'tries 0))            ; ... three times
       (= 1 (peep (hby us 'fails) 'tries 0))              ; unless the config says otherwise
       (= ['once] (peep (hby us 'fails) 'after []))
@@ -98,12 +98,12 @@
    _ (hboot 'default)
    _ (test
       (two? (stat stamp))                     ; the oneshot RAN, and ran to completion
-      (id? 'done (hstate 'once))              ; ... before anything that came after it
+      (== 'done (hstate 'once))              ; ... before anything that came after it
       (settle 5000)
-      (id? 'failed (hstate 'fails))           ; nonzero, restarted to the cap, then failed
+      (== 'failed (hstate 'fails))           ; nonzero, restarted to the cap, then failed
       (= 1 (peep (hstat 'fails) 'tries 0))
-      (id? 'done (hstate 'settles))           ; a 0 exit is not a failure, so no restart
-      (id? 'done (hstate 'default)))          ; the target its wants reached
+      (== 'done (hstate 'settles))           ; a 0 exit is not a failure, so no restart
+      (== 'done (hstate 'default)))          ; the target its wants reached
 
    ; --- MOOR ----------------------------------------------------------------------
    ; the socket is an eval server: a form in, its value out. one process, two tasks --

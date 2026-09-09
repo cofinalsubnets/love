@@ -1938,7 +1938,7 @@
    ; back to the type actually filed, else the name's old mark goes too
    (qtake ps nm ty)
     (: nq (peep (ps 'qstage) nm 'none)
-       st !(= nq 'none)          ; a stage is there -- (id? ..) not the datum's own truth
+       st !(= nq 'none)          ; a stage is there -- (== ..) not the datum's own truth
        _ (? (st && (qstrip nq = ty)) (pin (ps 'qtys) nm nq)
             !(= (peep (ps 'qtys) nm 'none) 'none) (pull (ps 'qtys) nm 0)
             0)

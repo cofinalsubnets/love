@@ -808,7 +808,7 @@ lvm(lvm_eq) {
  Sp[1] = r ? putcharm(1) : zero;
  ai_musttail return Nextp(1, 1); }
 
-// (id? a b): pointer/word identity, no structural recursion
+// (== a b): pointer/word identity, no structural recursion
 lvm(lvm_same) {
  Sp[1] = Sp[0] == Sp[1] ? putcharm(1) : zero;
  ai_musttail return Nextp(1, 1); }

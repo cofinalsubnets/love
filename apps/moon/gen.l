@@ -130,11 +130,11 @@
    ; assembled function as build's last link -- so no vreg reaches sibcall, and holo would refuse
    ; one loud. the mint is the pool's alone (homes, seats, pins, borrows stay physical), every
    ; g-table holds physicals only, and rp resolves a nom wherever a predicate asks about the
-   ; machine. what rp must never mediate is a same-mint id?: an honored hint answers the mint
+   ; machine. what rp must never mediate is a same-mint ==: an honored hint answers the mint
    ; object itself, and the free list guarantees two live mints never share a physical.
    (rp g rz) (g 'vrt rz || rz)
    (vmint? g x) ?(g 'vrt x)   ; is x a minted nom? (pre-vrfix only)
-   ; one machine register? every hint-honor test rides this, never bare id?: an unheld hint
+   ; one machine register? every hint-honor test rides this, never bare ==: an unheld hint
    ; returns to the pool at a splice body's psreset, a later ralloc re-mints its physical, and
    ; the value comes back wearing the new mint -- honored by accident, and the accident is the
    ; discipline (the old code compared physicals, so the accident counted).
@@ -424,7 +424,7 @@
           (member? r (g 'pool0) || member? r (cspool g))))
    ; and may this param alias? only if the body never writes it (asn/post on its var): the
    ; register holds the caller's live value, so the splice's own p++ would walk it.
-   ; a C name is a string here, so the compare is `=` -- `id?` answers false for every
+   ; a C name is a string here, so the compare is `=` -- `==` answers false for every
    ; distinct one, and a scan that never matches is a gate that isn't there.
    (wrs? nm e)
     (e @ (('asn || 'post) . ('var ^nm) . _) 1

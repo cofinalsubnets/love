@@ -46,7 +46,7 @@
    (hforms t)
     (: (go x acc) (: r (sound x)
                      (? (two? r)     (go >r (<r . acc))
-                        (id? r 'torn) [(rev acc) 1]
+                        (== r 'torn) [(rev acc) 1]
                         [(rev acc) 0]))
        (go t ()))
 
@@ -55,7 +55,7 @@
     (? !(two? c) (("a clause is a form, not " + show c) . gs)
        (: k <c v >c m (peep hkeys k ())
           (? !m           (("unknown clause " + string k) . gs)
-             (id? m 'one) (? !(two? v) (("(" + string k + ") wants an operand") . gs)
+             (== m 'one) (? !(two? v) (("(" + string k + ") wants an operand") . gs)
                              (pin u k <v, gs))
              (pin u k v, gs))))
 

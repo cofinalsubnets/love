@@ -563,7 +563,7 @@ static uintptr_t img_rank_assign(word *rank, uintptr_t nser) {
 // two structurally equal chains are one value wearing two addresses. a chain's fields are
 // immutable by convention rather than by structure -- poke writes whatever cell it is handed
 // -- but nothing in the tree writes one. merging is invisible to `=` and to the printer;
-// `id?` is the one witness, and answers 1 after this on data written out twice.
+// `==` is the one witness, and answers 1 after this on data written out twice.
 // the walk is bottom-up, so both children are canonical before their parent is looked up and
 // a candidate compares by pointer on both fields: the hash decides nothing and no collision
 // merges unequals. duplicates are left unreferenced for the compaction to drop, and a

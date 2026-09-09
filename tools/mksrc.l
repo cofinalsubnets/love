@@ -75,7 +75,7 @@
    ; start at the tail -- tools/tgz.l says the same thing at its own foot.
    ; and the arch arrives as TEXT: `name` interns it, so the answer is the very
    ; symbol the backend table is keyed by. `mint` makes a fresh one instead --
-   ; equal-looking, `id?` to nothing, and objsecs refuses it as an unknown target one
+   ; equal-looking, `==` to nothing, and objsecs refuses it as an unknown target one
    ; call later.
    (mksrc-main av)
     (: n #av

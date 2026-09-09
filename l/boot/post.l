@@ -78,14 +78,14 @@
   (place -1 (pick 0 in) (poke -1 to-vt (poke -1 -1 (poke -1 "" (poke 4 0 (spin 5))))))
  ; hot? names the zoo (a buf or a port), the head's ap word the species -- the recognition C's iop
  ; does. hot? goes first so the read only ever lands on a heap cell.
- (port? o) (? (hot? o) (id? (pick 0 o) (pick 0 in)) 0)   ; the else arm is the bit: a two-armed ? answers the zero point
+ (port? o) (? (hot? o) (== (pick 0 o) (pick 0 in)) 0)   ; the else arm is the bit: a two-armed ? answers the zero point
  ; drain a vessel to a value: a jug reads its backing buffer, everything else a gulp at a time.
  ; the drain accumulates, it does not recurse -- a recursion's stack depth is the gulp count, and
  ; on a parking port every task switch copies that stack.
  ; `see` is what makes the loop terminate: it is the one door that touches the device (chug
  ; never does), so every turn either lands its byte in the jug or reads the end. the byte goes
  ; to the jug rather than back to the vessel because a raw fd holds no pushback of its own.
- (slurp o) (? (? (port? o) (id? to-vt (peek 1 o))) (snip (peek 3 o) 0 (peek 4 o))   ; a jug by its vt: a buffered fd port's word 3 is a string too
+ (slurp o) (? (? (port? o) (== to-vt (peek 1 o))) (snip (peek 3 o) 0 (peek 4 o))   ; a jug by its vt: a buffered fd port's word 3 is a string too
               (: j (jug 0)
                  (go u) (: c (see o) (? (= c -1) (slurp j)
                                         (: _ (put j c) _ (say j (chug o)) (go ()))))
@@ -136,7 +136,7 @@
       ; them again -- four copies of the module.
       (rdev q) ((: (go cl) (: r (sound cl)
                               (? (two? r) (ev <r, go >r)
-                                 (id? r 'torn) (scare 'unfinished-form q)
+                                 (== r 'torn) (scare 'unfinished-form q)
                                  0)))
                 (flow q))
       ; a layer holding no nom of its own is not a module: the file wrapped itself in a
@@ -237,7 +237,7 @@
 ; the same way (to catch a one-armed nif) segfaults the image bake, so the nif case stays open.
 (: hcur (pick 0 (\ a b a))
    (binary? f) (? (charm? f) 0                      ; a charm is no handler at all
-                  (id? hcur (pick 0 f)) (2 = peek 1 f)
+                  (== hcur (pick 0 f)) (2 = peek 1 f)
                   (: s (lamsrc f) (? (two? s) (4 = #s) 1)))
    (hear f) (? !f (seal-hook 5 f)                   ; every nothing uninstalls
                (binary? f) (seal-hook 5 f)
@@ -258,7 +258,7 @@
      (: _ (? (binary? n) 0 (scare 'help-arity n))   ; refuse before f runs, under the ambient help
         prev (heard ())
         home (myself ())
-        r (call-cc (\ k (: _ (hear (\ a b (? (id? (myself ()) home) (k (\ _ (n a b)))
+        r (call-cc (\ k (: _ (hear (\ a b (? (== (myself ()) home) (k (\ _ (n a b)))
                                              (: _ (hear prev) (scare a b)))))
                            v (f x)
                            (\ _ v))))
@@ -281,7 +281,7 @@
            (\ f x c
               (: r (trap f x (\ a b (mark . [a b])))
                  _ (c ())
-                 (? (two? r && id? <r mark) (scare <>r <>>r) r)))))
+                 (? (two? r && == <r mark) (scare <>r <>>r) r)))))
 
 ; the ISA vocabulary, and it is one word per machine: 'x64 'a64 'rv64, with the
 ; embedded targets keeping theirs. Every other spelling anyone says -- a -t flag, a `seed`
@@ -315,14 +315,14 @@
    caar caap cadr caup cdar cuap cddr cuup
    caaar caaap caadr caaup cadar cauap caddr cauup
    cdaar cuaap cdadr cuaup cddar cuuap cdddr cuuup
-   eq? id? length tally pair? two? atom atom? identity id
+   eq? == length tally pair? two? atom atom? identity id
    reverse rev append + constantly const ceiling ceil
    fold-left foldl fold-right foldr append-map catmap flat-map catmap
    every all some any delete-duplicates uniq butlast init
    (for-each f l) (each l f)                     ; scheme takes the function first
    ; the -q trio walks by identity and answers what it found, () for a miss --
    ; `member?`/`assoc` above stay love's, a bit and a pair by `=`.
-   (memq x l)   (? (two? l) (? (id? x (cap l)) l (memq x (cup l))))
+   (memq x l)   (? (two? l) (? (== x (cap l)) l (memq x (cup l))))
    (member x l) (? (two? l) (? (= x (cap l)) l (member x (cup l)))))
 
 (: px (:
@@ -430,8 +430,8 @@
                                  (: _ (say o " . ") (px o >l sn))))
                     _ (put o 40) _ (go x) (put o 41))
   (pchain o x sn) (: h <x t >x one (two? t && !(two? >t))
-    (? (id? h '\ && one) (: _ (put o 39) (px o <t sn))
-       (id? h 'mono && one && (: m <t (two? m && two? >m && !(two? >>m))))
+    (? (== h '\ && one) (: _ (put o 39) (px o <t sn))
+       (== h 'mono && one && (: m <t (two? m && two? >m && !(two? >>m))))
          (: m <t _ (px o <m sn) (px o <>m sn))
        (plist o x sn)))
 
@@ -452,7 +452,7 @@
 
   ; --- maps print {k v …}, the empty one {}; both read straight back. a map is
   ; mutable and can hold itself, so the path is carried and matched by identity.
-  (onpath? x l) (? !(two? l) 0 (id? x <l) 1 (onpath? x >l))
+  (onpath? x l) (? !(two? l) 0 (== x <l) 1 (onpath? x >l))
   (pmap o m sn) (? (onpath? m sn) (say o "<cycle>")
     (: ks (keys m) s2 (m . sn)
        (go l f) (? (two? l) (: _ (? f 0 (put o 32))
@@ -474,15 +474,15 @@
 
   ; --- closures. a partial's every unc cell holds its arg at [1] and the link at
   ; [2], so the base value sits at link-2.
-  (partp v) (id? unc (pick 0 v) || id? cur (pick 0 v) && id? unc (pick 2 v))
-  (unc0 v) (? (id? cur (pick 0 v)) (seek 2 v) v)
-  (nargs v) (: (go u n) (: l (peek 2 u) (? (id? unc (pick 0 l)) (go l (1 + n)) n)) (go (unc0 v) 1))
-  (fbase v) (: (go u) (: l (peek 2 u) (? (id? unc (pick 0 l)) (go l) (seek -2 l))) (go (unc0 v)))
+  (partp v) (== unc (pick 0 v) || == cur (pick 0 v) && == unc (pick 2 v))
+  (unc0 v) (? (== cur (pick 0 v)) (seek 2 v) v)
+  (nargs v) (: (go u n) (: l (peek 2 u) (? (== unc (pick 0 l)) (go l (1 + n)) n)) (go (unc0 v) 1))
+  (fbase v) (: (go u) (: l (peek 2 u) (? (== unc (pick 0 l)) (go l) (seek -2 l))) (go (unc0 v)))
   (farg v i n) (: (go u w) (? (0 < w) (go (peek 2 u) (w - 1)) (peek 1 u)) (go (unc0 v) ((n - 1) - i)))
   ; --- a lambda's source, de Bruijn renamed: a \-bound variable prints as its level's
   ; letter, so a-equivalent lambdas print alike and inspect agrees with `=`. free, global
   ; and :-bound names keep their spelling; quoted data is shared verbatim.
-  (inq x l) (? !(two? l) 0 (id? x <l) 1 (inq x >l))
+  (inq x l) (? !(two? l) 0 (== x <l) 1 (inq x >l))
   ; the shortlex letters: a b .. z aa ab .. , one-based so the digits carry no zero
   (sxch n a) (: q ((n - 1) // 26) c (97 + ((n - 1) % 26))
               (? (0 < q) (sxch q (c . a)) (c . a)))
@@ -492,8 +492,8 @@
   ; (\ a b (+ a b)) canonicalizes to itself; a body naming e takes f in e's place. the
   ; candidate index is what threads, so the letters are walked once across the whole term.
   (nxt i fv) (? (peep fv (lnom i) 0) (nxt (1 + i) fv) i)
-  (lam? x) (two? x && id? <x '\ && two? >x && two? >>x)
-  (qot? x) (two? x && id? <x '\ && two? >x && !(two? >>x))
+  (lam? x) (two? x && == <x '\ && two? >x && two? >>x)
+  (qot? x) (two? x && == <x '\ && two? >x && !(two? >>x))
   ; the noms canon leaves spelled as written: free, global and :-bound. quoted data is
   ; data, never a reference, so a binder cannot capture into it. one walk, into a tablet
   ; the proposals then read by key; bd is the binders in scope, a stack, so it stays a list.
@@ -529,7 +529,7 @@
                 (coin? x && !(x = load x)) (pcoin o x sn)   ; struck: a native loads as itself
                 (tablet? x) (pmap o x sn)
                 (lit? x) (pfn o x sn)
-                (id? x ()) (say o "()")
+                (== x ()) (say o "()")
                 (two? x) (pchain o x sn)
                 (string? x) (pstr o x)
                 (nom? x) (? (mint? x) (: _ (say o "(mint ") _ (pnum o (dig x)) (put o 41))
@@ -1035,7 +1035,7 @@
       ; list of shapes. It costs the arity guards, and here they are nearly free: comp runs
       ; 14778 times over the corpus where the old vof ran 1102646, so this whole chain is
       ; 1.3% of one capp's traffic. the (two? h) fast PATH is gone with it: a list head is
-      ; never id? to a tag, so a spine falls through every arm to the else on its own -- and
+      ; never == to a tag, so a spine falls through every arm to the else on its own -- and
       ; it is 259 of those 14778, which is not worth a branch or a second copy of the body.
       (t @
          ['lam x b]             (: cb (comp b) (en \ ['lam ['clo (v \ cb ([x v] . en))]]))
@@ -1077,12 +1077,12 @@
 
    ; the scrutinee is a pair, which is why this one stays a `?`: an arm reads both
    ; sides, and a pattern would build the [a b] per call to say less than the tests do.
-   ; id?, the one use outside the egg: same object -> 1 at once, else the arms convert.
+   ; ==, the one use outside the egg: same object -> 1 at once, else the arms convert.
    ; `=` cannot stand in -- on two different terms it walks their closures, and the
    ; shared environments make that exponential. the atom arm is a guard: reaching it
    ; means unequal, and it keeps `<a` off a non-list below.
    (conv d a b)
-   (? (id? a b) 1
+   (? (== a b) 1
       (atom? a || atom? b) 0
       (<a = 'lam || <b = 'lam)
        (: fr ['nv d] (conv (d + 1) (vapp a fr) (vapp b fr)))
@@ -1134,7 +1134,7 @@
        (conv d T Ti || scare 'uu-type-mismatch t)))
 
    ; the else is the spine and needs no head test in front of it: a list head is never
-   ; id? to a tag, and (inf .. <t) answers for a nom head and a nested spine alike.
+   ; == to a tag, and (inf .. <t) answers for a nom head and a nested spine alike.
    ; a pattern carries the arity the old head test did not, so a tag at the wrong
    ; length reaches the spine and comes back unbound instead of reading () for operands.
    (inf cx en d t)
@@ -1989,7 +1989,7 @@
    ; bare escape (no tail within a beat) is 27, the CSI arrows and jumps are the codes
    ; in the tables, alt with a letter is 256 + the letter. any other byte after an
    ; escape goes back for the next read, so esc x is two keys. an unknown sequence is 0
-   ; 0 is the miss, read with id? -- an event code nets red, so truth cannot tell hit from miss
+   ; 0 is the miss, read with == -- an event code nets red, so truth cannot tell hit from miss
    arrow    {68 -1 67 -2 65 -8 66 -9 72 -5 70 -6}    ; ESC [ F -- the plain finals
    modarrow {68 -1 67 -2 65 -8 66 -9 72 -10 70 -11}  ; ESC [ 1 ; M F -- modified home/end jump the buffer
    (edcsi p) (: c (see p) e (peep arrow c 0)
@@ -2170,7 +2170,7 @@
     ; open is posix's, and a seat without it answers () here rather than at the bake
     (load1 p) (: q ((cite 'posix 'open) p "r")
                  (? (hot? q) (reads q) (say err $ "love: cannot open " + p, cli-leave 1)))
-    (eval1 s) (: m (nom 0)                           ; a fresh nom: the unfinished shape, id?-safe
+    (eval1 s) (: m (nom 0)                           ; a fresh nom: the unfinished shape, ==-safe
        (rdl x acc) (sound x @ 'torn      m           ; every top-level datum off the string, in order
                                (a . b)  (rdl b (a . acc))
                                (rev acc))

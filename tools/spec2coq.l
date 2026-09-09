@@ -28,8 +28,8 @@
 ;   * lambdas as de Bruijn terms: function = is alpha + structural (never eta/beta),
 ;     so two lambda literals compare by lteqb on their ltm translations; < answers
 ;     nothing, a closure nets 1, and a closure never = a plain nom.
-;   * id? on literals and the unit-reading forms ((:) (?) (\) '(), a fallen-through
-;     cond, && / || landing on nothing): interned noms and charms are id?-equal by
+;   * == on literals and the unit-reading forms ((:) (?) (\) '(), a fallen-through
+;     cond, && / || landing on nothing): interned noms and charms are ==-equal by
 ;     value, fresh allocations (quoted lists, lambdas) never are, () is not 0.
 ; Left to the hand-written laws: the float tier and transcendental complex (not
 ; vm_compute-able, the honest misses) and the universally-quantified laws. Untranslatable asserts are
@@ -224,9 +224,9 @@
                  (<x @ '? (condu? >x)  '&& (andu? >x)  '|| (allnothing? >x)
                        ('map && len3? x) (= <>>x ())
                        0))
-   ; id? on literals: noms intern (spelling decides), a charm is its tagged word, every
+   ; == on literals: noms intern (spelling decides), a charm is its tagged word, every
    ; unit-reading form is the one unit; a quoted nonempty list or a lambda is a fresh
-   ; allocation, never id?-equal to another; and the unit is id?-distinct from 0
+   ; allocation, never ==-equal to another; and the unit is ==-distinct from 0
    (qplist? x) (two? x && (= <x bs) && un2? x && two? <>x)
    (idv a b) (? (qnom? a && qnom? b) (= <>a <>b ? "true" "false")
                 (unitv? a && unitv? b) "true"
@@ -421,7 +421,7 @@
                    (= h 'any) (len3? f && lst? <>>f && tfb <>f ?
                                  ("(existsb " + tfb <>f + " " + tl <>>f + ")") 0)
                    !(len3? f) 0
-                   (= h 'id?) (idv <>f <>>f)                        ; id? on literals: the verdict, or 0 (skip)
+                   (= h '==) (idv <>f <>>f)                        ; == on literals: the verdict, or 0 (skip)
                    (= h '=) (? (intv? <>f && intv? <>>f)   ("(Z.eqb " + tv <>f + " " + tv <>>f + ")")
                                  (listv? <>f && listv? <>>f) ("(leqb " + tl <>f + " " + tl <>>f + ")")  ; list/array =
                                  ; gaussian =: numeric within the band, so a zero-im twin equals its charm

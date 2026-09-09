@@ -973,7 +973,7 @@
    ; door. a raise is what a trap catches: a form calling `quit` still ends the
    ; process, exactly as `exit` does.
    (sh-loveval src)
-     (: m (nom 0)                                 ; a fresh nom: 'torn, id?-safe
+     (: m (nom 0)                                 ; a fresh nom: 'torn, ==-safe
         (rdl x acc) (sound x @ 'torn       m
                                (d . rest) (rdl rest (d . acc))
                                _           (sh-rev acc))
