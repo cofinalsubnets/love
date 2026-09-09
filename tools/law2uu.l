@@ -51,6 +51,10 @@
 ; references resolve at its compile, which must follow this run. their asserts
 ; ride a jug meanwhile so the artifact stays clean.
 (borrow 'posix)
+; the files read below spell their laws `test`, the corpus recorder. here they run to
+; BUILD, and stdout is the artifact -- so bind assert's instead: silent on success,
+; and a false law stops the run rather than printing a dot into the output.
+(:: 'test (\ l (. 'assert l)))
 (: j (jug 0) _ (wear [in j err])
    _ (reads (open "test/uu.l" "r"))
    _ (reads (open "test/uuval.l" "r"))
@@ -88,7 +92,7 @@
    ; --- answer. love's ceil/saturate/bit/nil? read a whole value (they compose
    ; --- the rungs below them), which is why they all want a val.
    wordmap '((net val vnet msr) (re msr mre rea) (ceil val vceil zed)
-             (saturate val vsat nat) (bit val vbit bool) (nil? val vnil bool)
+             (sat val vsat nat) (bit val vbit bool) (nil? val vnil bool)
              (cap val vcap val) (cup val vcup val) (two? val vtwo bool))
    ; the binary words: what each side wants, the model's name, what it answers
    wordmap2 '((. val val vlink val)
@@ -217,12 +221,19 @@
    (qstrip s) (: (go i) (? (i = tally s) ""
                             ((? (s i = 63) "q" (s i = 61) "eq" (string (s i))) + go (i + 1)))
                  (go 0))                                 ; ? is no name character downstream
+   ; unglue maps a head VALUE to the operator's own word; a head spelled in source
+   ; arrives as a nom and misses that lookup, so an alias (`saturate` onto `sat`)
+   ; would read as a different form from the sigil that means it. resolve the nom
+   ; through the book first -- only a name the book holds, never a lambda's param.
+   bk (foldl (\ t n (pin t n 1)) (tablet 0) (names ()))
+   (opn h) (: v (? (nom? h && peep bk h 0) (ev h) 0) n (? v (opnom v) 0) (? (nom? n) n h))
+   (canon f) (? (two? f) ((opn <f) . (map canon >f)) f)
    (surface? b) (hd? b "=" && #b = 3 && same? (b 1) (b 2))
 
    ; --- one row, all the way to [nm src type proof how guard], [nm 'range level]
    ; --- or [nm () reason] ---
    (row1 r0)
-    (: r (unglue (opfix r0)) nm (unq (r 1)) lm (r 2)
+    (: r (canon (unglue (opfix r0))) nm (unq (r 1)) lm (r 2)
        (? (! (two? lm) || ! (= <lm bs) || ! (nom? (lm 1))) [nm () "not a lambda"]
         (: x (lm 1) b0 (lm 2)
            g (peel b0 [[x (quote v) (quote val)]]) b (g 0)

@@ -18,6 +18,10 @@
 ; top-level leak (uu2coq's door); out rides a jug meanwhile -- dest.l's own asserts
 ; gate the run, its "dest: ok" stays out of the artifact.
 (borrow 'posix)
+; the files read below spell their laws `test`, the corpus recorder. here they run to
+; BUILD, and stdout is the artifact -- so bind assert's instead: silent on success,
+; and a false law stops the run rather than printing a dot into the output.
+(:: 'test (\ l (. 'assert l)))
 (: j (jug 0) _ (wear [in j err])
    _ (reads (open "test/proto/dest.l" "r"))
    _ (wear ()) ())

@@ -18,6 +18,10 @@
 ; Run: out/love tools/uu2coq.l > test/proof/rocq/uugen.v   then  coqc test/proof/rocq/uugen.v
 
 (borrow 'posix)
+; the files read below spell their laws `test`, the corpus recorder. here they run to
+; BUILD, and stdout is the artifact -- so bind assert's instead: silent on success,
+; and a false law stops the run rather than printing a dot into the output.
+(:: 'test (\ l (. 'assert l)))
 (: _ (reads (open "test/uu.l" "r"))
    _ (reads (open "test/uuhom.l" "r"))
    _ (reads (open "test/uuhomgen.l" "r"))
@@ -147,7 +151,10 @@
    ; --- dependency closure: keep only defs all of whose mentions also survive ---
    (allin? l ex) (? (two? l) (&& (peep ex (cap l) 0) (allin? (cup l) ex)) 1)
    (pass cs ex) (foldl (\ a e (? (allin? (mlist e) ex) (: _ (pin a (e 1) 1) a) a)) (tablet 0) cs)
-   (fix ex) (: ex2 (pass cands ex) (? (= $ex2 $ex) ex2 (fix ex2)))
+   ; the measure is the key COUNT: pass only ever shrinks ex, so the counts settle
+   ; exactly when the set does. not glued $, which nets any tablet to 1 and would
+   ; stop the walk after one pass, past defs whose dependency that pass dropped.
+   (fix ex) (: ex2 (pass cands ex) (? (#(keys ex2) = #(keys ex)) ex2 (fix ex2)))
    ex0 (foldl (\ a e (: _ (pin a (e 1) 1) a)) (tablet 0) cands)    ; seed: all candidates
    keep (fix ex0)                                                   ; the closed exportable set
 
@@ -237,6 +244,6 @@
               "Print Assumptions add_comm_std." (string 10)
               "Print Assumptions add_assoc_std." (string 10)
               "Print Assumptions mul_comm_std." (string 10) (string 10)
-              "(* " (show $keep) " exported / " (show #ents) " corpus entries swept;" (string 10)
+              "(* " (show #(keys keep)) " exported / " (show #ents) " corpus entries swept;" (string 10)
               "   3 headline laws (add_comm, add_assoc, mul_comm) landed on Coq's Nat.* via the bridge *)" (string 10)]))
    (quit 0))

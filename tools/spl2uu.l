@@ -12,6 +12,10 @@
 ; its own asserts gate the load. untrusted like every translator here: a wrong
 ; lift can miss a law, never fake one, and each source op prints over its term.
 (borrow 'posix)
+; the files read below spell their laws `test`, the corpus recorder. here they run to
+; BUILD, and stdout is the artifact -- so bind assert's instead: silent on success,
+; and a false law stops the run rather than printing a dot into the output.
+(:: 'test (\ l (. 'assert l)))
 (: j (jug 0) _ (wear [in j err])
    _ (reads (open "test/proto/spl.l" "r"))
    _ (wear ()) ())
