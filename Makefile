@@ -124,7 +124,7 @@ $(ho)/liblove.a: $(h_o)
 # love0 takes the whole hosted surface less the crew catalog, PLUS its own seat --
 # i/main0.c, which host_c holds back because only this link has a use for it.
 love0_o = $(patsubst $(R)/%.c,out/0/%.o,$(filter-out $(R)/i/cats.c,$(host_c)) $(R)/i/main0.c $(love_c))
-out/0/i/boot.o: out/lib/boot0.h
+out/0/i/main0.o: out/lib/boot0.h
 out/0/i/cb.o: l/quay/quay.c l/quay/nif.c l/quay/quay.h
 boot_cc = $(CCACHE) $(CC) $(ai_cflags) -fPIE -DLoveBoot -Dai_tco=0 -Dai_data_section=0 -DAiVersion='"$(love_base)+bootstrap"' -I. -Il -Ii -Iout/lib
 .PHONY: force_love0cc
