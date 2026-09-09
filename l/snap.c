@@ -959,8 +959,7 @@ static struct ai *img_wake(void const *buf, uintptr_t len, void *(*al)(struct ai
   // untouched until the ramp wants them.
   g->major_len = nw + (nw >> 1) + (1u << 19);
   g->major_pool = g->major_base = g->alloc(g, NULL, 2 * g->major_len * sizeof(word));
-  if (!g->major_pool) goto no;
- }
+  if (!g->major_pool) goto no; }
  word *base = g->major_base;
  g->major_hp = base + nw;
  // a distance, never two addresses: the two symbols shift together under ASLR, so storing

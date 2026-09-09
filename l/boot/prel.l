@@ -18,8 +18,8 @@
    atom? one?
    ; a fresh layer: its own macro table at key 0, the pre-enter chain and name at charm key 31337.
    ; a charm key cannot collide with a name. (enter ()) is anonymous.
-   (enter nm) (: F (tablet 0) _ (pin F 0 (tablet 0)) _ (pin F 31337 (link (stack ()) nm))
-                 _ (setstack (link F (stack ()))) ())
+   (enter nm) (: F (tablet 0) _ (pin F 0 (tablet 0)) _ (pin F 31337 (. (stack ()) nm))
+                 _ (setstack (. F (stack ()))) ())
 
    ; unwind to the pre-enter chain, register the layer under its name, answer the book.
    ; a bare leave -- never entered, so no charm -- pops whatever sits below the head instead.
@@ -27,12 +27,12 @@
                  (? (two? s)
                     (: _ (pull F 31337 0) _ (setstack (cap s))
                        _ (? (nil? (cup s)) 0 (pin (lib ()) (cup s) F)) F)
-                    (setstack (link F (cup (cup (stack ())))))))
+                    (setstack (. F (cuup (stack ()))))))
 
    (caap x) (cap (cap x)) (caup x) (cap (cup x))
    (cuap x) (cup (cap x)) (cuup x) (cup (cup x))
 
- (cuuup x) (cup (cup (cup x))))
+ (cuuup x) (cup (cuup x)))
 (: (gcd a b) (? (= b 0) (? (< a 0) (- 0 a) a) (gcd b (% a b)))
    (modpow b k m) (? (< k 1) 1 (: h (modpow b (// k 2) m) h2 (% (* h h) m)
                                  (? (= 0 (% k 2)) h2 (% (* h2 b) m)))))
@@ -52,11 +52,11 @@
 ; numfn lays the n-fold thread with spin/place, so applying a fixnum never re-enters the compiler:
 ; n quote-f's then n ap's, cell 0 the printer's source, entry at cell 1.
 ; the helpers pass th/f/n explicitly: a closure over the forward-bound th miscompiles under c0.
-(: (nfnest f i acc) (? (< i 1) acc (nfnest f (+ -1 i) (link f (link acc ()))))
+(: (nfnest f i acc) (? (< i 1) acc (nfnest f (+ -1 i) (. f (. acc ()))))
    (nfq th f i n) (? (< i n) (: _ (place (+ 1 (* 2 i)) lvm_quote th) _ (poke (+ 2 (* 2 i)) f th) (nfq th f (+ 1 i) n)) th)
    (nfa th i n) (? (< i n) (: _ (place (+ (+ 3 (* 2 n)) i) lvm_ap th) (nfa th (+ 1 i) n)) th)
    (numfn n f) (:                                  ; build (\ x (f (f ... (f x)))), n f's
-     src (link '\ (link 'x (link (nfnest f n 'x) ())))  ; alloc before spin; printer source
+     src (. '\ (. 'x (. (nfnest f n 'x) ())))  ; alloc before spin; printer source
      th (spin (+ 5 (* 3 n)))                         ; [src] n*[quote f] [arg n] n*[ap] [ret 1]
      _ (poke 0 src th) _ (nfq th f 0 n)             ; no allocation past spin: th can't move
      _ (place (+ 1 (* 2 n)) lvm_arg th) _ (poke (+ 2 (* 2 n)) n th)   ; arg n: x, now under n f's
@@ -134,14 +134,13 @@
    (compose f g x) (f (g x))                      ; (* f g)
    _ (seal-hook 2 arrange)
    _ (seal-hook 3 compose))
-; map runs left to right: a mapped effect fires in list order. the value is computed as an
-; argument -- link's own two operands go right to left, so nothing inside link could order them.
-(: (map f l) (? (two? l) ((\ f x l (link x (map f l))) f (f (cap l)) (cup l)))
+; map runs left to right
+(: (map f l) (? (two? l) ((\ f x l (. x (map f l))) f (f (cap l)) (cup l)))
    (foldl f z l) (? (two? l) (foldl f (f z (cap l)) (cup l)) z)
    (foldr f z l) (? (two? l) (f (cap l) (foldr f z (cup l))) z)
    ; (rev l) glued onto acc in one pass. a cat per step re-copies the whole accumulation;
    ; link plus one revcat keeps it linear.
-   (revcat l acc) (? (two? l) (revcat (cup l) (link (cap l) acc)) acc))   ; no `!` here: not bound yet
+   (revcat l acc) (? (two? l) (revcat (cup l) (. (cap l) acc)) acc))   ; no `!` here: not bound yet
 ; the monadic words behind the glued sigils. net is the content measure -- `+` turned inward --
 ; and a coin's lane is by declaration: a starred kind nets itself (so additivity lands in the
 ; kind's own ring), else its tally under net-mode tally, else its payload signed.
@@ -170,11 +169,11 @@
    ; net is a fresh sum, so star? and galaxy? stay disjoint.
    (star? x) (id? x (net x))
 )
-(: (filter p l) (? (two? l) (: m (filter p (cup l)) (? (p (cap l)) (link (cap l) m) m)))
-   (init l) (? (two? (cup l)) (link (cap l) (init (cup l))))
+(: (filter p l) (? (two? l) (: m (filter p (cup l)) (? (p (cap l)) (. (cap l) m) m)))
+   (init l) (? (two? (cup l)) (. (cap l) (init (cup l))))
    (last l) (? (two? (cup l)) (last (cup l)) (cap l))
    (each l f) (? (two? l) (: _ (f (cap l)) (each (cup l) f)))
-   (ldel x l) (? (two? l) (? (= (cap l) x) (cup l) (link (cap l) (ldel x (cup l)))))
+   (ldel x l) (? (two? l) (? (= (cap l) x) (cup l) (. (cap l) (ldel x (cup l)))))
    (all f l) (? (two? l) (? (f (cap l)) (all f (cup l)) 0) 1)   ; truth bits (0/1, like =/</!), not ()
    (any f l) (? (two? l) (? (f (cap l)) 1 (any f (cup l))) 0)   ; -- a predicate's false is 0, the green floor
    ; iterate `step` until `size` stops changing. size must be strictly monotone under step until
@@ -184,21 +183,21 @@
    ; the one constant-form recognizer. the answer is wrapped -- (1 . value) or () -- because a
    ; constant's value can itself be nothing. no `&&`: c0 is single-pass and it is defined later.
    (kconst e) (? (nom? e) ()                                                    ; a variable -> no fact
-                 (one? e) (link 1 e)                                           ; a literal -> (1 . itself)
-                 (id? (cap e) '\) (? (one? (cuup e)) (link 1 (caup e)) ())     ; (\ v) quote of an atom -> (1 . v); a real lambda -> no fact
+                 (one? e) (. 1 e)                                           ; a literal -> (1 . itself)
+                 (id? (cap e) '\) (? (one? (cuup e)) (. 1 (caup e)) ())     ; (\ v) quote of an atom -> (1 . v); a real lambda -> no fact
                  ())
-   (cat a b) (foldr link b a))
+   (cat a b) (foldr (.) b a))
 ; (sort l) is the C lane -- a stable bottom-up merge by the total order, no lisp re-entry;
 ; descending is (rev (sort l)). an arbitrary predicate takes this lisp merge sort instead.
-(: (sortsplit l) (? (one? l) (link l ()) (one? (cup l)) (link l ())
-                    (: r (sortsplit (cuup l)) (link (link (cap l) (cap r)) (link (caup l) (cup r)))))
+(: (sortsplit l) (? (one? l) (. l ()) (one? (cup l)) (. l ())
+                    (: r (sortsplit (cuup l)) (. (. (cap l) (cap r)) (. (caup l) (cup r)))))
 )
 (: catmap (compose (flip foldr ()) (compose cat))
    (assoc x l) (? (two? l) (? (= x (caap l)) (cap l) (assoc x (cup l))))
    (lidx x) ((: (f n l) (? (two? l) (? (= x (cap l)) n (f (+ 1 n) (cup l))) -1)) 0)
    (member? x l) (? (two? l) (? (= x (cap l)) 1 (member? x (cup l))) 0)   ; any of (= x); first-order, so the glaze's point-= grammar closes it (auto.l re-declares this body)
-   (zip a b) (? (two? a) (? (two? b) (link (link (cap a) (cap b)) (zip (cup a) (cup b)))))
-   rev (foldl (flip link) ())
+   (zip a b) (? (two? a) (? (two? b) (. (. (cap a) (cap b)) (zip (cup a) (cup b)))))
+   rev (foldl (flip (.)) ())
    ; every nom on the layer chain, deduped through a tablet. noms only -- a layer's keys also hold
    ; the macro table and the unwind chain. it sits down here so catmap/foldl are already bound.
    (names _) (filter nom? (keys (foldl (\ t k (pin t k 1)) (tablet 0) (catmap keys (stack ())))))
@@ -207,12 +206,12 @@
    ; composes: ^^3 is (jot (jot 3)), a list of lists, since a run factors greedily.
    ; no glued sigil in here -- this sits above the operators table, where infix is not
    ; yet live, so a `$x` would stay a bare nom and holo's fregs would lose a register.
-   (jot x) (? (two? x) (map jot x) (: n (saturate x) (go i) (? (< i n) (link i (go (+ i 1)))) (go 0)))
+   (jot x) (? (two? x) (map jot x) (: n (saturate x) (go i) (? (< i n) (. i (go (+ i 1)))) (go 0)))
    (drop n l) (? n (drop (- n 1) (cup l)) l)
-   (take n l) (? n (? (two? l) (link (cap l) (take (- n 1) (cup l)))))   ; stop at end-of-list (else it pads past it)
+   (take n l) (? n (? (two? l) (. (cap l) (take (- n 1) (cup l)))))   ; stop at end-of-list (else it pads past it)
 )
 
-(: l (foldr (\ a l (link link (link a (link l ())))) ()) (:: 'list l))
+(: l (foldr (\ a l (. (.) (. a (. l ())))) ()) (:: 'list l))
 ; the false answer is the unit, not 0: (&& a ..) expands to (? a .. ()) and ||'s exhausted tail
 ; reads (). test a result with ? or id?, not arithmetic.
 (:: '&& (\ l (: (and l) (? (two? (cup l)) (list '? (cap l) (and (cup l)) ()) (cap l)) (? (two? l) (and l) 1))))
@@ -222,11 +221,11 @@
 ; a `:` these build cannot carry a destructuring binding head: the pattern rewrite
 ; that makes (f (a . u)) bind a and u runs in the read pass, ahead of `::`, so the
 ; names compile as book lookups and miss. plain parameters are fine.
-(:: ':- (\ a (link ': (cat (cup a) (link (cap a) ())))))
-(:: '?- (\ a (link '? (cat (cup a) (link (cap a) ())))))
+(:: ':- (\ a (. ': (cat (cup a) (. (cap a) ())))))
+(:: '?- (\ a (. '? (cat (cup a) (. (cap a) ())))))
 ; @ carries a subject the other two lack, so @- moves the second argument, not the
 ; first: (x @- dflt p v ..) is (x @ p v .. dflt), and the subject stays where it reads.
-(:: '@- (\ a (link '@ (link (cap a) (cat (cup (cup a)) (link (cap (cup a)) ()))))))
+(:: '@- (\ a (. '@ (. (cap a) (cat (cuup a) (. (caup a) ()))))))
 
 ; (pins t k v ..): pin each pair onto an existing tablet -- the mutable-accumulator twin of {..},
 ; which mints a fresh one. an odd trailing operand is dropped (no lone key).
@@ -237,8 +236,8 @@
    $ 1 ! nil?  (!= a b) (nil? (= a b)))                  ; the exponent answers to all three spellings
 
 ; lisp compatibility synonyms
-(: seqx (\ l (>< ': (foldr (\ l r (>< '_ (>< l r))) (list (last l)) (init l))))
-   ifx (>< '?) letx (>< ':) lamx (>< '\ )
+(: seqx (\ l (. ': (foldr (\ l r (. '_ (. l r))) (list (last l)) (init l))))
+   ifx (. '?) letx (. ':) lamx (. '\ )
    _ (:: ', seqx) _ (:: 'do seqx) _ (:: 'begin seqx) _ (:: 'progn seqx)
    _ (:: 'let letx)
    _ (:: 'cond ifx) _ (:: 'if ifx)
@@ -255,8 +254,8 @@
 (: _
  (: (mopen nm) (: r (? (nil? nm) () (peep (lib ()) nm ()))
                   F (? (tablet? r) r (: t (tablet 0) _ (pin t 0 (tablet 0)) t))
-                  _ (pin F 31337 (link (stack ()) nm))
-                  (setstack (link F (stack ()))))
+                  _ (pin F 31337 (. (stack ()) nm))
+                  (setstack (. F (stack ()))))
     ; a list head is (name export..): the body defglobs as ever, then every nom not
     ; named is pulled off the tablet, so from and use each see only the exports. the
     ; charm keys (0 the macros, 31337 the parent chain) are not noms and so survive.
@@ -276,7 +275,7 @@
     ; (link .. ()) here makes the body one application chain, each answer applied to the next.
     ; the head takes a nom or a list, quoted or not: 'x reads as (\ x), so unwrap one if it is there.
     (:: 'module (\ l (: h (cap l)
-                        n (? (two? h) (? (id? (cap h) '\) (cap (cup h)) h) h)
+                        n (? (two? h) (? (id? (cap h) '\) (caup h) h) h)
                         (list mrun (list '\ n) (list '\ (cup l))))))))
 
 ; --- reader operators: the operators tablet + the opfix factor pass ---------
@@ -331,9 +330,9 @@
    (opnom v) (? (two? v) 0 (peep opnoms v 0))       ; a list is never a row; keep it off the hash
    (opword v) (: n (opnom v) (? n n v))             ; ..and the total one: the word, or v untouched
    (unglue x) (? (nil? (two? x)) x
-                 (link (: h (cap x) n (opnom h) (? n n (unglue h)))
+                 (. (: h (cap x) n (opnom h) (? n n (unglue h)))
                        (ungluet (cup x))))
-   (ungluet l) (? (nil? (two? l)) l (link (unglue (cap l)) (ungluet (cup l))))
+   (ungluet l) (? (nil? (two? l)) l (. (unglue (cap l)) (ungluet (cup l))))
    _ (pin book 'opnom opnom)
    _ (pin book 'opword opword)
    (pin book 'unglue unglue))
@@ -553,9 +552,9 @@
                            (&& (< (op-frd (cap pd)) 1)
                                (&& (= gp (op-frband (cap pd))) (op-chain? (op-frn (cap pd)))))))
                     (op-w (cup l) ou (. (op-frw (cap pd) 1 (. nm (op-frg (cap pd)))) (cup pd)))
-                   (two? st) (op-w (cup l) (cap (cup st))
+                   (two? st) (op-w (cup l) (caup st)
                             (. (op-fr e nm (? (= -1 (cup (cuup en))) -2 1) gp (. (cap st) ()))   ; -2 = n-ary: the row's lane, so an alias inherits it
-                                  (cup (cup st))))
+                                  (cuup st)))
                    (: r (op-del e ou pd)     ; no left operand: the plain symbol
                       (op-w (cup l) (cap r) (cup r)))))
              (: r (op-del (op-core e) out pend)
@@ -583,7 +582,7 @@
    ; and it runs before the nested-lambda flatten, so that pass still only ever sees noms
    ; and its shadow check stays a comparison of names. (\ [a b] (\ a x)) must not merge.
    (op-wrap ws b) (? (one? ws) b
-                     (op-wrap (cup ws) (. (nom "@") (. (cap (cap ws)) (. (caup (cap ws))
+                     (op-wrap (cup ws) (. (nom "@") (. (caap ws) (. (caup (cap ws))
                                                        (. b ()))))))
    (op-depat ol ws)
     (? (one? (cup ol)) (. (op-wrap ws (cap ol)) ())          ; the body: wrapped outermost-last

@@ -29,13 +29,13 @@
    ;; push15/pop15: every GPR but rsp, in struct k_frame's order (arch.c) -- lowest address
    ;; first is the reverse of the push order.
    x-save '(r4 r0 r3 r1 r2 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14)   ; rbp rax rbx rcx rdx rsi rdi r8..r15
-   x-push (map (\ r ['push r]) x-save)
-   x-pop  (map (\ r ['pop r]) (rev x-save))
+   x-push (map (r \ ['push r]) x-save)
+   x-pop  (map (r \ ['pop r]) (rev x-save))
    ;; an EOI to the primary PIC. the port rides dx, the datum al.
    x-eoi '((li r0 0x20) (li r2 0x20) (outb))
    (x-stub v)
-    ([['label (intern ("exc_stub_" + (show v)))]]
-     + (? (member? v xerr-vecs) () [['push 0]])       ; the dummy error code
+    ([['label (nom $ "exc_stub_" + show v)]]
+     + (member? v xerr-vecs ? () [['push 0]])       ; the dummy error code
      + [['push v] ['jmp 'exc_common]])
    (sn1 v) ("exc_stub_" + show v)
    x-stub-names (map sn1 (v-upto 32))
@@ -188,7 +188,7 @@
    ;; 16 x 0x80 the architecture defines and the handlers start past it. packing the handler
    ;; into the sixteenth slot's tail would save 124 bytes; a whole table is worth them.
    a-text
-    (foldl (\ a s (a + [['jmp s] ['align 128]])) [['label 'vectors]] a-slots
+    (foldl (a \ s \ a + [['jmp s] ['align 128]]) [['label 'vectors]] a-slots
      ;; the CPU masks DAIF.I on entry, so the handler cannot nest and ELR_EL1/SPSR_EL1 stay
      ;; valid across the call; eret returns through them.
      + [['label 'a_irq] ['sub 'sp 'sp a-frame]]

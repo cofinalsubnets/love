@@ -2010,7 +2010,7 @@ void kmain(void) {
  // a .l name is a file and never a verb, which is what leaves the two lanes
  // below reachable. a verb takes the args AFTER its name, kore's convention.
  "   (k-prog argv) (: a0 (cap argv) b (k-bn a0) as (cup argv)"
- "     v ((cite 'verbs 'word) a0)"
+ "     v (cite 'verbs 'word a0)"
  "     (? !(nil? v) (link v as)"
  "        (: k (k-tool (intern (+ b \"-main\")) as)"
  "           (? (two? k) k"
@@ -2050,7 +2050,7 @@ void kmain(void) {
  "   (spawnio argv i o e cl pg fg) (k-spawn1 argv (k-fdw i) (k-fdw o) (k-fdw e))"
  "   (spawnmap argv fdm cl pg fg)"
  "     ((: (go m a b c)"
- "          (? (! (two? m)) (k-spawn1 argv a b c)"
+ "          (? (one? m) (k-spawn1 argv a b c)"
  "             (: e (cap m) cf (cap e) sf (cup e)"
  "                v (? (charm? sf)"
  "                     (? (&& (<= 0 sf) (< sf 3))"
@@ -2130,7 +2130,7 @@ void kmain(void) {
    "           (: _ (say err (+ (cap bootargv) \": not found\")) _ (put err 10) 127))"
    "      (quit (? (charm? r) r 0)))"
    "   0)");
-  r = ai_evals_(r, "((cite 'cli 'shell) 0)");
+  r = ai_evals_(r, "(cite 'cli 'shell 0)");
   // a terminal scare gets the honest face on the serial console before reset
   if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
   ai_fin(r); }

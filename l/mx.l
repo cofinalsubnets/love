@@ -66,17 +66,14 @@
                (MUL_CHAIN KChain) (MUL_H KTablet KCoin))
 
    ; --- expanding the table ------------------------------------------------------
-   (mx-el l i) (? (i < 1) <l (mx-el >l (i - 1)))
    (mx-rowof asg k)                                   ; which row does kind k take?
-    (: (go l) (? (! (two? l)) ()
-                 (: r <l (? (member? k >r) <r (go >l))))
-       (go asg))
+    (: (go (r . u)) (member? k >r ? <r (go u))
+     (go asg))
    (mx-lane rw c)                                     ; the lane at (row rw, column c)
-    (: r (: (go l) (? (! (two? l)) () (: e <l (? (= <e rw) >e (go >l)))))
-       v (r mx-rows)
-       (? (member? c mx-numk) (mx-el v 0)
-          (= c 'KMint) (mx-el v 1) (= c 'KNom) (mx-el v 2) (= c 'KString) (mx-el v 3)
-          (= c 'KChain) (mx-el v 4) (= c 'KTablet) (mx-el v 5) (mx-el v 6)))
+    (: (go (e . u)) (<e @ ^rw >e (go u))
+       v (go mx-rows)                                 ; the row's seven, indexed by application
+       (v (? (member? c mx-numk) 0
+             (c @ 'KMint 1 'KNom 2 'KString 3 'KChain 4 'KTablet 5 6))))
    ; the whole square of lane noms, in enum order: mx2coq.l derives the band partition from
    ; it, and the C lays it out.
    (mx-grid asg) (map (\ k (map (\ c (mx-lane (mx-rowof asg k) c)) mx-kinds)) mx-kinds)
@@ -89,10 +86,10 @@
    ; array of pointers, so clay places the const on the declarator and not the base.
    mx-ty '(arr (arr (const (ptr (named "lvm_t"))) KN) KN)
    (mx-clay1 nm g)
-    (: rows (map (\ p ['didx <p ['init (map (\ q ['didx <q ['var (string <>q)]]) (zip mx-kinds <>p))]])
+    (: rows (map (p \ ['didx <p ['init (map (q \ ['didx <q ['var (string <>q)]]) (zip mx-kinds <>p))]])
                  (zip mx-kinds g))
        ['gdecl [[(string nm) mx-ty ['init rows]]] '(static)])
-   (zip a b) (? (! (two? a)) () (link [<a <b] (zip >a >b)))
+   (zip a b) (two? a ? ([<a <b] . zip >a >b))   ; prel's pairs improperly; these are 2-lists
 
    ; --- the enums the matrices are indexed by -------------------------------------
    ; KN rides at the end of `enum q` and is not a kind: it is the roster's own length, which
@@ -105,7 +102,7 @@
    ; reaches frontends where a static table would sit unread under -Werror. unsized.
    repq-clay
     ['gdecl [["ai_kind_of_d" '(arr (const (named "enum q")) 0)
-                 ['init (map (\ p ['didx <p ['var (string <>p)]]) mx-repq)]]]
+                 ['init (map (p \ ['didx <p ['var (string <>p)]]) mx-repq)]]]
       '(static)]
 
    ; --- the same roster, laid for the LINKER ---------------------------------------
@@ -125,9 +122,8 @@
    ; two binaries: the heap image carries an ap as its index in image_extra_aps.
    mx-sections '((byname 0 ("__wasm__"))
                  (tiled  1 ()))
-   (mx-stride cls) (: (go l) (atom? l ? (scare 'mx-stride cls)
-                              (: r <l (= <r cls ? <>r (go >l))))
-                      (go mx-strides))
+   (mx-stride cls) (: (go l) (l @ (r . u) (<r @ ^cls <>r (go u)) (scare 'mx-stride cls))
+                    (go mx-strides))
    ; --- and the same classes laid as C, through clay's rung 2 ---------------------
    ; a knob: `#ifndef NAME` over an `#if defined(..) / #elif / #else` on the classes, so the
    ; rows above are a default and the ifndef is the -D door love0 takes ai_data_section=0
@@ -136,16 +132,16 @@
    (mx-ors l) (atom? >l ? (mx-defd <l) ['lor (mx-defd <l) (mx-ors >l)])
    (mx-knob nm rows)
     (: (arms l) (two? l ?
-                   (: r <l (two? (r 2) ? ([(mx-ors (r 2)) [['cpp-def nm <>r]]] >< arms >l)
+                   (: r <l (two? (r 2) ? ([(mx-ors (r 2)) [['cpp-def nm <>r]]] . arms >l)
                             (arms >l))))
        (els l) (atom? l ? (scare 'mx-knob nm)
                   (: r <l (two? (r 2) ? (els >l) [['cpp-def nm <>r]])))
        ['cpp-if [[['un 'not (mx-defd nm)] [['cpp-if (arms rows) (els rows)]]]]])
    mx-nl (string 10)
    (mx-tile base stride p)                        ; one KEEP per rep, each slot pinned
-    (: (go i) (? (i = tally mx-reps) ""
-                 (p + "KEEP(*(love.data." + show i + "))  . = " + base + " + "
-                    + (show (stride * (i + 1))) + ";" + mx-nl + go (i + 1)))
+    (: (go i) (i = #mx-reps ? ""
+               (p + "KEEP(*(love.data." + show i + "))  . = " + base + " + "
+                  + show (stride * (i + 1)) + ";" + mx-nl + go (i + 1)))
        (go 0))
    ; the host link's -T fragment, laid whole
    mx-ld
@@ -157,12 +153,12 @@
         + "   defines no bounds and the two symbols here are the ASSERT's. holo needs no" + mx-nl
         + "   script: it lays each section on the grain the object declares. */" + mx-nl
         + "SECTIONS {" + mx-nl
-        + "  .love.data : ALIGN(" + (show s) + ") {" + mx-nl
+        + "  .love.data : ALIGN(" + show s + ") {" + mx-nl
         + "    __start_love_data = .;" + mx-nl
         + (mx-tile "__start_love_data" s "    ")
         + "    __stop_love_data = .;" + mx-nl + "  }" + mx-nl + "} INSERT AFTER .text;" + mx-nl
         + "ASSERT(__stop_love_data - __start_love_data == "
-        + (show (tally mx-reps)) + " * " + (show s) + "," + mx-nl
+        + show #mx-reps + " * " + show s + "," + mx-nl
         + "       \"love_data: slot count moved -- sync love.h's ai_data_n and mx.l\")" + mx-nl))
 
    mx-h
@@ -181,7 +177,7 @@
                  + "love.h's ai_typ, l/love_data.ld. each #if is a default, the guard a -D door.")]
          (mx-knob "ai_data_section" mx-sections)
          (mx-knob "ai_data_stride" mx-strides)
-         ['cpp-def "ai_data_n" (tally mx-reps)]])
+         ['cpp-def "ai_data_n" #mx-reps]])
    kinds-h
     (: nl2 (string 10)
        ((cats (map clay-show
@@ -189,7 +185,7 @@
           kinds-clay
           reps-clay
           ['cpp-def "ai_kind_names" (: ns (map show mx-kind-noms)   ; one C literal, space-separated
-                                       (string 34 + foldl (\ a n (a + " " + n)) <ns >ns + string 34))]
+                                       (string 34 + foldl (a \ n \ a + " " + n) <ns >ns + string 34))]
           '(note "")]))
         + cats (map clay-show slots-clay)))
    ; a shape check first: a malformed tree arrives as a codegen error naming nothing.
@@ -199,5 +195,5 @@
        c (clay-ok? kinds-clay)
        d (clay-ok? reps-clay)
        e (clay-ok? repq-clay)
-       f (foldl (\ a x (a && (= (clay-ok? x) 1))) 1 slots-clay)
+       f (foldl (a \ x \ a && clay-ok? x) 1 slots-clay)
        (a = b = c = d = e = f = 1)))

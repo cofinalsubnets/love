@@ -1,3 +1,4 @@
+;;; FIXME can this be a C nif?
 ; scan -- find one byte in a text, natively where that is possible. love's own walk
 ; costs ~684 instructions a byte (a call, an index, a compare, a tail); the kernel
 ; below costs 1.876, which is 364x, and every tool that reads lines or matches a

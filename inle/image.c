@@ -59,6 +59,7 @@ struct ai *image_dump(struct ai *g, char const *path) {
   g = ai_strof(g, path);
   if (!ai_ok(g)) return ai_core_of(g)->b = -2, g;
   int rc = image_put(g);
+  // FIXME if g is still ok here then the core_of is redundant
   ai_core_of(g)->sp++;
   return ai_core_of(g)->b = rc, g; }
 
@@ -173,6 +174,7 @@ static int bake_tail(struct ai *g, int src, char const *tmp, void const *buf, ui
   sh[si].sh_size = len;                           // the two records that now describe the image
   ph[pi].p_filesz = ph[pi].p_memsz = al + len;    // .image ends the segment, so its growth is the segment's
   eh.e_shoff = cur = (cur + 7) & ~(uint64_t) 7;
+  // FIXME remove bare block delimiters like this, rename scoped variables if needed
   { uintptr_t l = len;                            // ai_baked_image_len: what main.c hands the codec
     if (pwrite(dst, sh, nsh * sizeof *sh, (off_t) cur) != (ssize_t)(nsh * sizeof *sh)
         || pwrite(dst, ph, nph * sizeof *ph, (off_t) eh.e_phoff) != (ssize_t)(nph * sizeof *ph)
@@ -216,6 +218,8 @@ int image_bake(struct ai *g) {
 // the (bake path) nif: `love wake path prog.l ..` boots a session carrying every global
 // this one had pinned, a live native closure among them -- its code is bytes the image
 // carries. answers 1 | ().
+// FIXME extend LvmCall macro to handle this. also, what if it was bake-with-current-continuation?
+//       would that give us a better story for what waking an image means?
 static lvm(lvm_bake) {
  Pack(g);
  word r = strp(g->sp[0]) && !image_put(g) ? putcharm(1) : ai_zero;
