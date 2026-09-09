@@ -1750,9 +1750,19 @@
 ;             `seed` at argc 1 wants its usage). always a path, so the basename decides.
 ; a verb takes the args after its name and answers a status charm; the rail quits with it.
 ; that is kore's convention, and it is why `love kore sed ..` nests.
-(module '(verbs any? bn dash fire get seat seatof tab word)
+(module '(verbs any? bn dash fills fire get seat seatof tab word)
 (: tab {}   ; nil? when empty, like every empty -- ask it with peep, not by testing it
-   get tab
+   ; a seat whose verbs are not all in the image installs a filler here, and the first MISS
+   ; runs it -- once, the slot cleared before the call so a fill registering through this
+   ; same door cannot re-enter. the registry is the one authority every asker walks -- the
+   ; rail, lush's lookup, `which` -- so a lazily-loaded verb has to arrive at the miss, not
+   ; at the spawn: lush answers "not found" from the lookup and never spawns at all.
+   fill {}
+   (fills f) (pin fill 'f f)
+   (get k)   (: v (peep tab k ())
+                (lit? v ? v
+                 (: f (peep fill 'f ())
+                    (lit? f ? (: _ (pin fill 'f ()) _ (f ()) (peep tab k ())) ()))))
    (bn p)    (: n #p
                 (go k r) (k < n ? (go (k + 1) (p k @ 47 (k + 1) r)) (snip p r n))
                 (go 0 0))

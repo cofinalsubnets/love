@@ -1853,9 +1853,11 @@ void kmain(void) {
  "        127)))"
  "   (k-tool nm as) (? (member? nm (names ())) (link (ev nm) as) ())"
   // the crew is NOT in the kernel's cat, so a verb nobody asks for costs nothing. the
-  // first ask reads the roster's files off /proc/src -- where the bake laid them and no
-  // write can have reached -- and each file's own (module ..) form registers it. `source`
-  // is the witness: it is in the roster, so its row says the load already happened.
+  // load reads the roster's files off /proc/src -- where the bake laid them and no write
+  // can have reached -- and each file's own (module ..) form registers it. it hangs off
+  // the registry's miss (verbs' fills, installed below), the one place every asker walks:
+  // lush answers "not found" from its LOOKUP, so a retry at the spawn never runs.
+  // `source` is the witness: it is in the roster, so its row says the load already happened.
  "   (cwords s i j acc)"
  "    (? (< j (tally s))"
  "       (? (= 32 (peep s j 0))"
@@ -1869,8 +1871,6 @@ void kmain(void) {
  "           (go t))"
  "        0))"
  "   (crewload _) (? (cite 'source) 0 (: _ (each (cwords crewlist 0 0 ()) cload) 0))"
-  // one retry around the dispatch, so the crew loads only where every other lane missed
- "   (k-progc argv) (: p (k-prog argv) (? (two? p) p (: _ (crewload ()) (k-prog argv))))"
  // the registry is the PATH on this machine: every app pins its own names into
  // (cite 'verbs 'tab), and `word` applies the shadow rules -- a slashed word or
  // a .l name is a file and never a verb, which is what leaves the two lanes
@@ -1891,7 +1891,7 @@ void kmain(void) {
  // wears; anything higher is duped, the port owning the copy from there.
  "   (k-port w n f) (? (! (charm? f)) (k-slot w n) (f < 0) (k-slot w n)"
  "                     (f < 3) (k-slot w f) (fdopen (dup f)))"
- "   (k-spawn1 argv f0 f1 f2) (: pr (k-progc argv)"
+ "   (k-spawn1 argv f0 f1 f2) (: pr (k-prog argv)"
  "     w (worn ())"
  "     kw [(k-port w 0 f0) (k-port w 1 f1) (k-port w 2 f2)]"
  // worn across the twirl, which does not switch tasks: the child inherits node[7] and
@@ -1974,6 +1974,10 @@ void kmain(void) {
    "   korecat (kcat (kwords korelist 0 0 ())))");
   r = ai_evals_(r, "(reads (tap ((: (g i) (? (< i (tally korecat)) (link (peep korecat i 0) (g (+ 1 i))))) 0)))");
   }
+  // the crew hangs off the registry's miss from here. re-armed on every boot, a woken
+  // image's too: the load is idempotent (its own `source` row is the guard), and the
+  // slot is spent by whichever ask comes first.
+  r = ai_evals_(r, "((cite 'verbs 'fills) crewload)");
   // `bake PATH` on the boot line: the warm heap -- the crew in, the seat text run -- as an
   // image file on the ramfs, then reset; a door that can carry a file out (the wasm lift)
   // hands it to the next boot as kboot.image. the same bake the host's verb makes.
@@ -1987,7 +1991,7 @@ void kmain(void) {
    "   (: _ (hear (\\ a b (? (id? a 'leave) (quit b)"
    "                        (: _ (say err \";; \") _ (print err a) _ (say err \" \") _ (print err b)"
    "                           _ (put err 10) (quit 1)))))"
-   "      pr (k-progc bootargv)"
+   "      pr (k-prog bootargv)"
    "      r (? (two? pr) ((cap pr) (cup pr))"
    "           (: _ (say err (+ (cap bootargv) \": not found\")) _ (put err 10) 127))"
    "      (quit (? (charm? r) r 0)))"
