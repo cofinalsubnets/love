@@ -8,7 +8,8 @@
 // the port wears the fd port's shape (love.h: ai_horn_vt is a bio to io.c), so a
 // full device answers 0 at the door, the write run keeps the residue and the task
 // parks on the 1 ms poll every heap port already has -- backpressure, never a
-// dropped frame. the device under the door is per seat:
+// dropped frame. the device under the door is per KERNEL,
+// picked at run time off __ai_osv:
 //   - inle: the C face, k_horn_* (i/hda.c)
 //   - linux: /dev/snd/pcmC*D*p by ALSA's ioctls, no libasound -- plain syscalls only
 //   - freebsd: /dev/dsp, the three OSS ioctls and write(2)
@@ -38,8 +39,32 @@ struct ai_horn { struct ai_bio b; word kind, rate, chans, wpos, t0; };
 // the sink keeps a quarter second: what a small card's ring holds
 #define sink_ms 250
 
+// --- which doors this build carries ------------------------------------------------
+// WHICH door a kernel wants is a run-time question wherever this libc carries both,
+// and ours carries both: the ALSA words are _IOC arithmetic and the OSS ones are
+// written out, so neither needs its own box's headers. choosing here at COMPILE time
+// was the last thing in the artifact whose bytes depended on the kernel it was built
+// ON, and so the last thing standing between an on-box `love seed` and its fixpoint.
+// a foreign libc still gets the one door its own box can speak for.
+#if defined(__wasm__)
+# define horn_alsa 0
+# define horn_oss  0
+#elif defined(AiNolibc)
+# define horn_alsa 1
+# define horn_oss  1
+#elif defined(__linux__)
+# define horn_alsa 1
+# define horn_oss  0
+#elif defined(__FreeBSD__)
+# define horn_alsa 0
+# define horn_oss  1
+#else
+# define horn_alsa 0
+# define horn_oss  0
+#endif
+
 // --- linux: ALSA by ioctl ---------------------------------------------------------
-#if defined(__linux__) && !defined(__wasm__)
+#if horn_alsa
 // sound/asound.h's shapes, the ones the handshake needs and no more. an interval's
 // four flag bits ride one word: openmin 1, openmax 2, integer 4, empty 8.
 struct snd_interval { uint32_t min, max, flags; };
@@ -86,7 +111,7 @@ static int alsa_setup(int fd, int rate) {
 
 // the first playback node under /dev/snd, or the named one. the order is the card
 // order and nothing wiser: a box whose first node is an HDMI port names its own in HORN.
-static int dev_open(char const *name, int rate, int *err) {
+static int alsa_open(char const *name, int rate, int *err) {
  char nm[40];
  for (int c = 0; c < 8; c++)
   for (int d = 0; d < 32; d++) {
@@ -112,7 +137,7 @@ static int dev_open(char const *name, int rate, int *err) {
 
 // write(2) on a pcm fd is WRITEI_FRAMES by another door: whole frames land, a full
 // ring is EAGAIN, an underrun is EPIPE and wants a prepare before the retry.
-static intptr_t dev_land(int fd, unsigned char const *src, uintptr_t n) {
+static intptr_t alsa_land(int fd, unsigned char const *src, uintptr_t n) {
  for (int again = 0; ; again++) {
   ssize_t k = write(fd, src, n);
   if (k >= 0) return (intptr_t) k;
@@ -121,12 +146,14 @@ static intptr_t dev_land(int fd, unsigned char const *src, uintptr_t n) {
   if (errno == EPIPE && !again && !ioctl(fd, ALSA_PREPARE)) continue;
   return -1; } }
 
-static uintptr_t dev_lag(int fd) {
+static uintptr_t alsa_lag(int fd) {
  long f = 0;
  return ioctl(fd, ALSA_DELAY, &f) < 0 || f < 0 ? 0 : (uintptr_t) f; }
 
+#endif
+
 // --- freebsd: OSS on /dev/dsp ------------------------------------------------------
-#elif defined(__FreeBSD__)
+#if horn_oss
 // the ioctl words are BSD's encoding, not the _IOC this libc spells (linux's):
 // IOC_INOUT | 4 << 16 | 'P' << 8 | n
 #define OSS_SETFMT    0xc0045005u
@@ -135,7 +162,7 @@ static uintptr_t dev_lag(int fd) {
 #define OSS_GETODELAY 0x40045017u
 #define OSS_S16_LE    0x10
 
-static int dev_open(char const *name, int rate, int *err) {
+static int oss_open(char const *name, int rate, int *err) {
  int fd = open(name ? name : "/dev/dsp", O_WRONLY | O_NONBLOCK | O_CLOEXEC);
  if (fd < 0) return *err = errno, -1;
  int v = OSS_S16_LE, ch = 2, r = rate;
@@ -145,25 +172,57 @@ static int dev_open(char const *name, int rate, int *err) {
   return close(fd), -1; }
  return fd; }
 
-static intptr_t dev_land(int fd, unsigned char const *src, uintptr_t n) {
+static intptr_t oss_land(int fd, unsigned char const *src, uintptr_t n) {
  ssize_t k;
  do k = write(fd, src, n); while (k < 0 && errno == EINTR);
  return k >= 0 ? (intptr_t) k : errno == EAGAIN ? 0 : -1; }
 
-static uintptr_t dev_lag(int fd) {
+static uintptr_t oss_lag(int fd) {
  int b = 0;
  return ioctl(fd, OSS_GETODELAY, &b) < 0 || b < 0 ? 0 : (uintptr_t) b / 4; }
 
-// --- anywhere else: no device door, the sink alone ---------------------------------
+#endif
+
+// --- the door, chosen on the kernel we woke on ------------------------------------
+// linux takes ALSA and freebsd takes OSS. a kernel with neither answers ENODEV, which
+// is what netbsd already got from a linux-built binary hunting /dev/snd -- its own
+// audio(4) is a third API and nobody's door yet. the fd carries no flavour, so land
+// and lag ask the same question open did; __ai_osv does not move under a run.
+#if horn_alsa || horn_oss
+#define horn_doorless 0
+static int dev_open(char const *name, int rate, int *err) {
+#if horn_alsa
+ if (__ai_osv == 1) return alsa_open(name, rate, err);
+#endif
+#if horn_oss
+ if (__ai_osv == 2) return oss_open(name, rate, err);
+#endif
+ return *err = ENODEV, -1; }
+
+static intptr_t dev_land(int fd, unsigned char const *src, uintptr_t n) {
+#if horn_alsa
+ if (__ai_osv == 1) return alsa_land(fd, src, n);
+#endif
+#if horn_oss
+ if (__ai_osv == 2) return oss_land(fd, src, n);
+#endif
+ return -1; }
+
+static uintptr_t dev_lag(int fd) {
+#if horn_alsa
+ if (__ai_osv == 1) return alsa_lag(fd);
+#endif
+#if horn_oss
+ if (__ai_osv == 2) return oss_lag(fd);
+#endif
+ return 0; }
 #else
+// --- anywhere else: no device door, the sink alone ---------------------------------
+// a seat with a door opens the sink only by HORN=none; a doorless one has nothing else
 #define horn_doorless 1
 static int dev_open(char const *name, int rate, int *err) { return *err = ENODEV, -1; }
 static intptr_t dev_land(int fd, unsigned char const *src, uintptr_t n) { return -1; }
 static uintptr_t dev_lag(int fd) { return 0; }
-#endif
-// a seat with a door opens the sink only by HORN=none; a doorless one has nothing else
-#ifndef horn_doorless
-#define horn_doorless 0
 #endif
 
 // --- the sink: a ring that keeps time --------------------------------------------
