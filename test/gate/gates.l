@@ -30,26 +30,6 @@
    ; loads once and splices twice -- which is what the separate processes used to pay for.
    rows [['lux "apps/lux/core.l" "apps/lux/layout.l" "apps/lux/wire.l" "apps/lux/ewmh.l"
           "apps/lux/manage.l" "apps/lux/keys.l" "apps/lux/config.l" "apps/lux/law.l"]
-         ; the host-nif smokes: one file each, and one layer each is what let them stop
-         ; being 33 separate loves. their roster used to say they "leak helper names into
-         ; the one global scope, so they run standalone" -- the leak is real and a layer
-         ; is the answer to it.
-         ['gcpause "test/host/gcpause.l"] ['wharf "test/host/wharf.l"]
-         ['cb "test/host/cb.l"] ['manifest "test/host/manifest.l"]
-         ['rune "test/host/rune.l"] ['pty "test/host/pty.l"]
-         ['loader "test/host/loader.l"] ['rdiff "test/host/rdiff.l"]
-         ['luxui "test/host/luxui.l"] ['berth "test/host/berth.l"]
-         ['overlay "test/host/overlay.l"] ['bake "test/host/bake.l"]
-         ['rove "test/host/rove.l"] ['lapiz "test/host/lapiz.l"]
-         ['papel "test/host/papel.l"] ['kiosko "test/host/kiosko.l"]
-         ['serve "test/host/serve.l"] ['sbhttp "test/host/sbhttp.l"]
-         ['salt "test/host/salt.l"] ['libra "test/host/libra.l"]
-         ['clay "test/host/clay.l"] ['tls "test/host/tls.l"]
-         ['tlsc "test/host/tlsc.l"] ['gz "test/host/gz.l"]
-         ['gzc "test/host/gzc.l"] ['story "test/host/story.l"]
-         ['design "test/host/design.l"] ['lupa "test/host/lupa.l"]
-         ['helm "test/host/helm.l"] ['wget "test/host/wget.l"]
-         ['cook "test/host/cook.l"]
          ; LAST, and it has to be. harp's module exports `rev` -- the cycle algebra's
          ; pattern reverse -- along with stack, pure, range, cut, with and n. borrow
          ; splices a module's names into the caller's layer, so from here on `rev` is
@@ -59,11 +39,11 @@
          ; is containment, not a fix -- the fix is a scope door the harness can close.
          ['harp "apps/harp/harp.l" "apps/harp/play.l" "apps/harp/law.l"]]
 
-   ; NOT rows, and each for a reason a shared process cannot answer:
-   ;   test/host/run.l   its children inherit love's stdin, and under `cat |` that stdin
-   ;                     IS the corpus pipe -- the cat was the scope AND the child's input.
-   ;   test/host/sh.l    drives the built shell, which wants a love of its own to drive.
-   ;   test/host/sb.l    wants out/.sbtest cleared first, which its own target does.
+   ; the host-nif smokes are NOT rows yet, and the blocking law is `quit`: a row that
+   ; calls it ends the SHARED process, so a (quit 0) skip -- luxui's, when the box has no
+   ; Xvfb -- truncates the run and still exits 0. bake, cook, luxui and salt each carry
+   ; one. grep a candidate for `(quit` before adding it.
+   ; the rest of what the experiment learned, and what each still needs, is in the arc.
    all (early + rows)
 
    ; a row's verdict is the fail list's length before and after, not its stdout: a row that
