@@ -53,7 +53,7 @@ const lift = (when) => {
 const isNode = typeof process !== 'undefined' && !!process.versions?.node;
 const port = isNode ? (await import('node:worker_threads')).parentPort
            : typeof WorkerGlobalScope !== 'undefined' ? self : null;
-const post = (m) => port.postMessage(m);
+const post = (m, t) => port.postMessage(m, t);
 
 class Reboot extends Error { }
 
@@ -68,13 +68,28 @@ const flush = () => { if (serial) { post({ serial }); serial = ''; } };
 
 // the framebuffer, 0xRRGGBB a pixel (l/quay/xterm256.h), into the canvas's RGBA --
 // or, under node with no canvas, a PPM at fb.dump once a second: the gate's eyes.
-let writeFileSync = null, dumpAt = 0;
+let writeFileSync = null, dumpAt = 0, postAt = 0;
 const blit = (force) => {
-  if (!fb || !(fbCtx || fb.dump)) return;
+  if (!fb || !(fbCtx || fb.dump || fb.post)) return;
   const now = performance.now();
   if (!force && now - blitAt < 30) return;
   blitAt = now;
   const px = new Uint32Array(memory.buffer, fbAt, fb.w * fb.h);
+  // THE FRAME GOES BY MESSAGE, not by an offscreen commit. this worker never returns to
+  // its event loop -- the idle is an Atomics.wait inside the boot's own task -- and a
+  // canvas transferred here only reaches its placeholder at a task checkpoint, which
+  // never arrives. postMessage does work from inside a long task, so the pixels travel
+  // that way and the page paints them. an idle forces a blit, so this lane keeps its own
+  // floor: no display shows more than one frame per 16 ms anyway.
+  if (fb.post) {
+    if (now - postAt < 16) return;
+    postAt = now;
+    const rgba = new Uint8ClampedArray(px.length * 4), o32 = new Uint32Array(rgba.buffer);
+    for (let i = 0; i < px.length; i++) {
+      const v = px[i];
+      o32[i] = 0xff000000 | ((v & 0xff) << 16) | (v & 0xff00) | ((v >>> 16) & 0xff); }
+    post({ frame: rgba.buffer, w: fb.w, h: fb.h }, [rgba.buffer]);
+    return; }
   if (fbCtx) {
     const out = new Uint32Array(fbImg.data.buffer);
     for (let i = 0; i < px.length; i++) {

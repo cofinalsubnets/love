@@ -74,17 +74,26 @@ export async function loveMachine(root) {
       .then(r => r.ok ? r.arrayBuffer() : null).catch(() => null);
   } catch (e) { return halt(`the machine did not load (${e.message}); the page needs to be served over http.`); }
 
-  const off = canvas.transferControlToOffscreen();
+  // the canvas stays on THIS thread and the worker sends frames (see cpu.mjs's blit): a
+  // transferred canvas only reaches its placeholder at a task checkpoint, and the worker
+  // never has one -- its idle is an Atomics.wait inside the boot's own task.
+  const ctx = canvas.getContext('2d');
   const cpu = new Worker(url('cpu.mjs'), { type: 'module' });
-  // the serial run rides past unread: it is the node terminal's copy of what the canvas
-  // already shows, and a reset boots the machine again, which the canvas says itself.
+  // the serial run is not rendered -- the canvas already shows it -- but its ARRIVAL is
+  // the machine's proof of life, and the page owes the reader that: `status` stays up
+  // until the machine has spoken once, so a machine that never boots says so instead of
+  // leaving a black rectangle. a reset boots it again, which the canvas shows itself.
+  let woke = false;
   cpu.onmessage = ({ data: m }) => {
-    if (m.fault) halt('the machine faulted: ' + m.fault); };
+    if (m.frame) {
+      ctx.putImageData(new ImageData(new Uint8ClampedArray(m.frame), m.w, m.h), 0, 0);
+      if (!woke) { woke = true; status.hidden = true; } }
+    else if (m.fault) halt('the machine faulted: ' + m.fault); };
   cpu.onerror = e => halt('the machine stopped: ' + e.message);
   cpu.postMessage({ wasm, ring, ram: Number(at('ram', 256)), cmd: at('boot', 'sh'),
-                    fb: { w: canvas.width, h: canvas.height, canvas: off }, image },
-                  image ? [wasm, off, image] : [wasm, off]);
-  status.hidden = true;
+                    fb: { w: canvas.width, h: canvas.height, post: true }, image },
+                  image ? [wasm, image] : [wasm]);
+  status.textContent = 'the machine is waking...';
   canvas.focus({ preventScroll: true });
 }
 
