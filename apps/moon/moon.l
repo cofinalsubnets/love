@@ -439,9 +439,11 @@
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs]
        ; wasm rides gen's rv64 lane whole (l/holo/wasmfn.l is the machine under it) and
-       ; lays no ELF: its object is the gen tuple as text, read back by the wasm link
+       ; lays no ELF: its object is the gen tuple as text, read back by the wasm link.
+       ; gen takes the name itself -- rv64? covers both, and what wasm's machine lacks
+       ; (the wide multiply) needs a target of its own to decline
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni] (? (= tgt 'wasm) 'rv64 tgt))
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni] tgt)
           _ (? (okv? ob) () (ccdie ob src ("cc: codegen error in " + src)))
           (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns]
              (: xs (map (\ [nm forms ro] (objsec-named nm forms ro)) xsecs

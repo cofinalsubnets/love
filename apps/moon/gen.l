@@ -321,7 +321,7 @@
                             ; the pair's closing copies are exceptions, not tenants -- the
                             ; round trip r0 -> %m -> r0 coalesces whole this way. only the
                             ; closing direction: an adoption's later (mov X %m) hands X the
-                            ; value either way, where a RE-adoption (mov %m X) resets m to
+                            ; value either way, where a re-adoption (mov %m X) resets m to
                             ; X's old value and must stay a refusal.
                             exc (: (gx l2 a2)
                                     (? !(two? l2) a2
@@ -442,10 +442,10 @@
     (: vp (g 'rpin)
        (? !(two? vp) (pin g 'pool (g 'pool0))
           (pin g 'pool (filter (\ r9 !(elem r9 vp)) (g 'pool0)))))
-   ; -- the target seam: g 'tgt ('x64 | 'a64 | 'rv64 | 'thumb2 | 'thumb2sp | 'thumb1) picks the ABI shapes; the IR stays
+   ; -- the target seam: g 'tgt ('x64 | 'a64 | 'rv64 | 'wasm | 'thumb2 | 'thumb2sp | 'thumb1) picks the ABI shapes; the IR stays
    ; neutral. a64 (AAPCS64): args ride r0..r7, the frame base retargets to fp (x29) at the end
    ; of build (a4ize -- r4 is x4, a CALLER-saved arg register there), bl clobbers lr so the
-   ; prologue saves it. thumb2 (AAPCS32, Cortex-M7): a 32-bit WORD (wsize=4), args in r0..r3, the
+   ; prologue saves it. thumb2 (AAPCS32, Cortex-M7): a 32-bit word (wsize=4), args in r0..r3, the
    ; same lr-push + fp-base + `bx lr` frame shape as a64 (`arm?` covers both) -- r4 is
    ; callee-saved there, but riding fp keeps the a64 build/epilogue path verbatim.
    ; register-homing is off there (nhome=0): every param spills to its frame slot. riscv homes
@@ -453,14 +453,17 @@
    ; frame slot is a memory op the engine cannot lift. --
    (a64? {'tgt 'a64}) 1
    (t32? g) (elem (g 'tgt) '(thumb2 thumb2sp thumb1))   ; the 32-bit thumb ABI family (AAPCS32): armv7e-m + armv6-M share it
-   (sp64? {'tgt 'thumb2sp}) 1       ; armv7e-m with an SP-ONLY fpu (the playdate's STM32F746): f64 arithmetic softens
+   (sp64? {'tgt 'thumb2sp}) 1       ; armv7e-m with an sp-only fpu (the playdate's STM32F746): f64 arithmetic softens
    (v6m? {'tgt 'thumb1}) 1          ; armv6-M refinements only: narrower immediates, no imm-mul, soft-divide, pop-pc epilogue
-   (rv64? {'tgt 'rv64}) 1          ; rv64imfd (LP64): 64-bit, 8 gp args, hard doubles, the lr/fp frame
+   (rv64? g) (elem (g 'tgt) '(rv64 wasm))   ; rv64imfd (LP64): 64-bit, 8 gp args, hard doubles, the lr/fp frame
+   (wasm? {'tgt 'wasm}) 1          ; ..which wasm rides whole; it differs only where its machine lacks an op
+   (gtgt g) (? (wasm? g) 'rv64 (peep g 'tgt 'x64))   ; the ABI name the asm dialect and the lane rosters read
+   (x64? g) (= (peep g 'tgt 'x64) 'x64)
    (a8? g) (a64? g || rv64? g)                        ; the 8-gp-arg LP64 pair: a64 + riscv share the AAPCS64 shapes
    (arm? g) (a64? g || t32? g || rv64? g)             ; the lr-push / fp-base frame family (riscv rides it whole: fused
                                                     ; fcmp conds read gt/ge/lt/le ordered like VCMP, trap is ebreak,
                                                     ; overflow rides adds/subs + set vs, mul imm materializes)
-   (wsize g) (? (t32? g) 4 8)                       ; the machine WORD in bytes (a pointer, a gp scalar, a stack cell)
+   (wsize g) (? (t32? g) 4 8)                       ; the machine word in bytes (a pointer, a gp scalar, a stack cell)
    (argr g) (? (a8? g) argregs-a64 (t32? g) argregs-t32 argregs)   ; riscv a0..a7 map onto the same abstract r0..r7; rosters up top (rasg)
    (ngp g) (? (a8? g) 8 (t32? g) 4 6)
    (pkr g) (? (a64? g) 'r15 (t32? g) 'r12 (rv64? g) 'r12 'r3)   ; the callr park (x64 rbx; a64 x15; thumb2 r12/IP -- x3/r3 is the 4th ARG register; riscv t4, clear of args and its pool)
@@ -489,7 +492,7 @@
    ; does, and the bank is not the question -- every other pool starts clear of r4 for this
    ; reason (a64 r19+, riscv r13+, x64 r11+), and v6m for its own (it plants r4 as a BOTTOM
    ; frame base after the sub). the m7 reset before it could print a second line.
-   ; the same law one register over: no r7 in v6m's pool, because fp IS r7 there (thumb1.l
+   ; the same law one register over: no r7 in v6m's pool, because fp is r7 there (thumb1.l
    ; numbers it, for the imm5 slot reads r11 could not reach). a seat and the frame base as
    ; one register is a body that walks its own base away, and every slot read past that point
    ; is wild. the save/restore pair cskeep asks for is no answer -- the register is clobbered
@@ -527,10 +530,10 @@
               'log (0 < n && 0 = (n & (n + 1))))
        (v6m? g)
         (cls @ 'addsub (-255 <= n <= 255)             ; v6-M ADDS/subs imm8 (imm3 3-addr / imm8 2-addr; negative flips)
-               'cmp (0 <= n <= 255))                  ; CMP imm8 only -- no cmn-imm on v6-M, so materialize negatives
+               'cmp (0 <= n <= 255))                  ; cmp imm8 only -- no cmn-imm on v6-M, so materialize negatives
        (t32? g)
         (cls @ 'addsub (-4095 <= n <= 4095)           ; addw/subw imm12
-               'cmp (-255 <= n <= 255))               ; CMP/cmn imm8
+               'cmp (-255 <= n <= 255))               ; cmp/cmn imm8
        (fits32? n))
    ; the fold side of the gate: may this op take n as its immediate here? (the
    ; sweeps ask before rewriting a reg-reg form -- a decline keeps the register)
@@ -741,6 +744,68 @@
    ; by a power of two strength-reduces to shr/and (signed stays a real div -- C rounds toward
    ; zero, sar toward -inf). answers (ty forms) | 'no (the caller falls back to the shuttle). --
    (pow2? n) (0 < n && 0 = n & (n - 1))
+   ; -- the reciprocal divide (Granlund-Montgomery, in libdivide's derivation): a constant
+   ; divisor that is not a power of two becomes one multiply-high and a shift. answers
+   ; [M shift add?]; add? is the case where M wants a 65th bit, folded back in by hand -- the
+   ; unsigned lane halves the difference, the signed lane adds the dividend straight. M comes
+   ; back as its signed representative, which is the pattern `li` wants either way. --
+   (magic1 d bw sgn)
+    (: L (lg2 d)
+       W (1 << bw)
+       P (1 << (sgn ? (bw - 1 + L) (bw + L)))
+       q (P // d)
+       r (P - (q * d))
+       (sig m) (m >= (W // 2) ? (m - W) m)
+       (? ((d - r) < (1 << L)) [(sig ((q + 1) % W)) (sgn ? (L - 1) L) 0]
+          [(sig (((q + q + ((r + r) >= d ? 1 0)) + 1) % W)) L 1]))
+   ; the lane itself. a divide's sign fixup reads the DIVIDEND's sign rather than the
+   ; quotient's -- the two agree, since the magic quotient is one low exactly when n is
+   ; negative -- so it can spend n's own seat, and the whole divide wants ONE pool seat where
+   ; the dividend already holds a writable one. a remainder reads n again after the quotient,
+   ; so there n is kept and the fixup takes a seat of its own. either way a dividend sitting
+   ; in rax is copied first: x86's one-operand mul spends that register.
+   (magicop g op av aty n nty wnt)
+    (: rA (vreg av)
+       sgn !(cmpu g aty nty)
+       bw (8 * wsize g)
+       keep? (op = '%)
+       copy? ((x64? g && rpeq? g rA 'r0) || (!keep? && !(wr? g rA)))
+       (grab k acc) (? (k < 1) (rev acc)
+                       (: r (ralloc g)
+                          (? r (grab (k - 1) (r . acc))
+                             (: _ (map (\ x (rfree g x)) acc) 'no))))
+       (? ((t32? g) || (wasm? g)) 'no               ; neither machine has a wide multiply
+          (abl? g 'divk) 'no
+          (n < 3) 'no
+          !(n < (1 << (sgn ? (bw - 1) bw))) 'no
+          (keep? && !(imma g 'imul n)) 'no
+          (: rs (grab (1 + (copy? ? 1 0) + (keep? ? 1 0)) ())
+             (? (= rs 'no) 'no
+                (@ (magic1 n bw sgn) [M s add?]
+                 (: rT <rs
+                    rN (copy? ? (rs 1) rA)
+                    rU (keep? ? (rs (copy? ? 2 1)) ())
+                    pre (copy? ? [['mov rN rA]] ())
+                    q9 ([['li rT M] [(sgn ? 'mulh 'umulh) rT rT rN]] +   ; the raw high word
+                        (? (sgn && add?) [['add rT rT rN]] ()) +         ; ..and M's own fold-back
+                        (? sgn (0 < s ? [['sar rT s]] ()) ()))
+                    fx (keep? ? rU rN)                    ; the seat the fold-back may spend
+                    tail (keep? ? [['imul rT rT n] ['sub fx rN rT]] ())  ; n - q*d, into the spare
+                    fs (? (!sgn && add?)                  ; the unsigned 65th bit: halve the gap
+                           (: mid (q9 + [['sub fx rN rT] ['shr fx 1] ['add fx fx rT]] +
+                                   (0 < s ? [['shr fx s]] ()))
+                              (keep? ? (mid + [['imul fx fx n] ['sub rT rN fx]]) mid))
+                          sgn (q9 + (keep? ? [['mov fx rT]] ()) +
+                               [['sar fx (bw - 1)] ['sub rT rT fx]] + tail)
+                          (q9 + (0 < s ? [['shr rT s]] ()) + tail))
+                    rd (? ((!sgn && add?) && !keep?) fx   ; the unsigned fold-back answers in place
+                          ((!sgn && add?) && keep?) rT
+                          keep? fx
+                          rT)
+                    (drop r9) (? ((rpeq? g r9 rd) || rpeq? g r9 rA) () (rfree g r9))
+                    _ (map drop rs)
+                    _ (rpeq? g rd rA ? () (rfree g rA))
+                    (mkv (rbin g aty nty) rd (vfs av + pre + fs))))))))
    (immop g op av aty n nty wnt)                    ; av the left value tuple; nty the constant's C type; wnt the advisory destination
     (: rA (vreg av)
        (? (llt? aty || d128? aty) 'no               ; a pair never rides the immediate lane
@@ -760,7 +825,30 @@
            ; is the same read the general divide below takes). `(long)-8 / 2u` is -4, and
            ; reducing it to a logical shift answered 9223372036854775804 -- a whole
            ; quadrant off, silently, for the one divisor shape that looks safest.
-           (? !(cmpu g aty nty && pow2? n) 'no
+           (? !(pow2? n) (magicop g op av aty n nty wnt)
+              !(cmpu g aty nty)
+               ; the signed pair. C rounds toward zero and sar toward -inf, so a negative
+               ; dividend takes a bias of n-1 first: the sign mask (sar to the word) shifted
+               ; down to the low k bits. the quotient then shifts; the remainder subtracts the
+               ; truncated multiple back off. the register image is sign-extended at every
+               ; width, so the word's own bw is the right one to shift by for int as for long.
+               (: k (lg2 n) bw (8 * wsize g)
+                  (? (abl? g 'divk) 'no
+                     (n = 1) (? (op = '/) (mkv (rbin g aty nty) rA (vfs av))
+                                (mkv (rbin g aty nty) 'r0 (vdrop g av + '((li r0 0)))))
+                     ((op = '%) && !(immok g 'log (0 - n))) 'no
+                     (: rT (ralloc g)
+                        (? !rT 'no
+                           ; a destination may alias its FIRST source only, so the quotient
+                           ; lands in the mask's own seat and the remainder takes a second
+                           (: rd (? (op = '/) (wnt || rT) (wnt || rdst g rA))
+                              bias [['mov rT rA] ['sar rT (bw - 1)] ['shr rT (bw - k)]]
+                              body (? (op = '/) (bias + [['add rd rT rA] ['sar rd k]])
+                                      (bias + [['add rT rT rA] ['and rT rT (0 - n)]
+                                               ['sub rd rA rT]]))
+                              _ (rpeq? g rd rT ? () (rfree g rT))
+                              _ (rpeq? g rd rA ? () (rfree g rA))
+                              (mkv (rbin g aty nty) rd (vfs av + body)))))))
               (op = '/) (? (n = 1) (mkv (rbin g aty nty) rA (vfs av))
                            (? (wr? g rA)
                               (mkv (rbin g aty nty) rA (vfs av + [['shr rA (lg2 n)]]))
@@ -1220,7 +1308,7 @@
                                   (? !(w128? g) (no128 g)
                                      (: u2 (= (? (wA && d128? (vty b)) (wbin (vty a) (vty b))
                                                    wA (vty a) (vty b)) 'u128)
-                                        ; a WORD left widens its cell hi by its own signedness
+                                        ; a word left widens its cell hi by its own signedness
                                         fixa (? wA ()
                                                 (usg? (vty a) || ptr? (vty a)) '((si sp 8 0))
                                                 '((ld r1 sp 0) (sar r1 63) (st sp 8 r1)))
@@ -1310,13 +1398,72 @@
    (zeros n) (n >= 1 ? (0 . zeros (n - 1)))
    ; a straight-line block copy of sz bytes, src address in r0, dest in r1,
    ; r2 the scratch -- 8 at a time, then a byte tail (struct = struct copies)
-   (bcopy g off sz acc)                              ; `ld`/`st` move one WORD -- 8 bytes, 4 on t32
+   (bcopy g off sz acc)                              ; `ld`/`st` move one word -- 8 bytes, 4 on t32
     (: w (wsize g)
        (? (w <= sz) (bcopy g (off + w) (sz - w)
                      (acc + [['ld 'r2 'r0 off] ['st 'r1 off 'r2]]))
           (0 < sz) (bcopy g (off + 1) (sz - 1)
                      (acc + [['ld1 'r2 'r0 off] ['st1 'r1 off 'r2]]))
           acc))
+   ; ..and its fill twin: dest address in r1, the splatted word in r2. a byte tail stores
+   ; the low byte of the same register, which for a splat is the byte the caller asked for
+   (bset g off sz acc)
+    (: w (wsize g)
+       (? (w <= sz) (bset g (off + w) (sz - w) (acc + [['st 'r1 off 'r2]]))
+          (0 < sz) (bset g (off + 1) (sz - 1) (acc + [['st1 'r1 off 'r2]]))
+          acc))
+   ; -- the C library's three block moves, straight-line where the size is a constant the
+   ; expansion stays small under. bcopy already lays exactly this for a struct assignment
+   ; (`*d = *s` is four ld/st pairs and no frame); all that was missing was the routing, so
+   ; memcpy(d,s,8) cost a frame, two spills, a size materialization, a call and two reloads
+   ; where gcc lays two movs. the roster is by NAME, as gcc's is, and declines where a local
+   ; shadows it or where the fn being compiled is the library's own definition.
+   ; memmove is NOT here: bcopy interleaves its loads and stores, so it is memcpy-safe only,
+   ; and an overlapping constant-size move wants a load-all-then-store-all lane of its own. --
+   (meminl g) (8 * wsize g)                          ; the widest expansion: 8 words either way
+   (memk g e) (: k (knum g e) (? (two? k) <k (: v (cfold e) (cint? v ? v ()))))
+   (memnm? bi nm) (bi = nm || bi = "__builtin_" + nm)
+   (memok? g env bi args)                            ; may this call expand at all?
+    ((3 = #args) && !(abl? g 'meminl) && (bad? (vent g env bi)) && !(g 'fn = bi))
+   (cgmem g env bi args)                             ; -> the value | 'no (leave it a call)
+    (? !(memok? g env bi args) 'no
+       (: n9 (memk g (args 2))
+          (? (!(charm? n9) || n9 < 0 || (meminl g) < n9) 'no
+             (memnm? bi "memset")
+              (: c9 (memk g <>args)
+                 (? !(charm? c9) 'no
+                    ; the destination is an argument, not an address the fn keeps: argpos,
+                    ; the way a real call marks one, or every &local memset loses its sibcalls
+                    (: dv (elem <<args '(addr var) ? (pin g 'argpos 1),
+                           cgexpr g env <args ())
+                       _ (pin g 'argpos ())
+                       (? (bad? dv) 'bad
+                          (: v9 ((c9 & 255) * (8 = wsize g ? 72340172838076673 16843009))
+                             (mkv '(ptr void) 'r0 $
+                              relean (tor0 g dv) + [['mov 'r1 'r0] ['li 'r2 v9]] +
+                              bset g 0 n9 ()))))))
+             (memnm? bi "memcpy")
+              ; the destination parks in a POOL seat while the source evaluates, never on the
+              ; machine stack: an spush is sp motion, and sp motion in a fn that owes a
+              ; musttail costs it the tail (lvm_peepw, i/mem.c). a pool seat cannot survive a
+              ; call, so a callish argument declines back to the library instead.
+              (? (callish? <args || callish? <>args) 'no
+                 (: dv (elem <<args '(addr var) ? (pin g 'argpos 1),
+                        cgexpr g env <args ())
+                    _ (pin g 'argpos ())
+                    (? (bad? dv) 'bad
+                       (: fd (tor0 g dv)
+                          rd (ralloc g)
+                          (? !rd 'no
+                             (: sv (elem <<>args '(addr var) ? (pin g 'argpos 1),
+                                    cgexpr g env <>args ())
+                                _ (pin g 'argpos ())
+                                _ (rfree g rd)
+                                (? (bad? sv) 'bad
+                                   (mkv '(ptr void) 'r0 $
+                                    relean fd + [['mov rd 'r0]] + relean (tor0 g sv) +
+                                    [['mov 'r1 rd]] + bcopy g 0 n9 () + '((mov r0 r1))))))))))
+             'no)))
    ; a spill that holds a value across a nested sub-eval (which may itself contain a call).
    ; a bare `push` is 8 bytes and would leave rsp at 8 mod 16 while the inner call runs -- a
    ; SysV violation glibc turns into a #gp -- so reserve a whole 16-byte cell.
@@ -1944,7 +2091,11 @@
               (mkv 'long 'r0 $
                asint g e1 + spush 'r0 + asint g e2 + spush 'r0 +
                e3f + '((mov r3 r0)) + spop 'r1 + spop 'r0 + ovf +
-               '((st r3 0 r0) (mov r0 r1))))))
+               '((st r3 0 r0) (mov r0 r1)))))
+       ; the C library's block moves, LAST in the chain: every __builtin_ clause above gets
+       ; first refusal, and an ordinary call pays one byte compare to reach the roster
+       ((0 < #bi) && (bi 0) = 109) (cgmem g env bi args)
+       (elem bi '("__builtin_memcpy" "__builtin_memset")) (cgmem g env bi args))
 
    ; -- expressions: answers a value tuple | 'bad. wnt is the destination hint, the die's
    ; advisory face: a consumer that knows where the value must land (an asn
@@ -2746,7 +2897,7 @@
                                    (aval + '((push r0))))
                           (? (t32? g && va? && wd2)        ; a t32 variadic call rides the base pcs: no d-reg doubles
                               (nolane g ("no lane for a double in a variadic call" + ontgt g))
-                             (v6m? g && (= aty 'float))    ; v6-M base ABI: a bare float arg is one WORD (binary32,
+                             (v6m? g && (= aty 'float))    ; v6-M base ABI: a bare float arg is one word (binary32,
                               (: av1 (asflo g a              ;  the gcc shape -- ai_flo_t is float on a 32-bit love)
                                       + '((cvtsd2ss f0 f0) (movqrx r0 f0)))
                                  (? (gpc < ngp g)
@@ -2842,7 +2993,7 @@
                                       (go8 >l8 (n8 + (two? >>ce ? <>>ce 1)))))
                     (go8 ovr 0))
              padn ((nov & 1) = 1 ? 8 0)               ; keep sp 16-aligned across the overflow block
-             ; t32 slots are BYTE offsets ((ov off sz) entries): the block spans to the highest
+             ; t32 slots are byte offsets ((ov off sz) entries): the block spans to the highest
              ; slot's end, rounded to 8 (AAPCS32 sp alignment). x64/a64 keep 8-byte slot counts.
              ovblk (? (t32? g)
                       (: (go9 l9 m9) (? !(two? l9) ((m9 + 7) & -8)
@@ -3063,7 +3214,7 @@
        ; evaluates. a constant side rides the immediate lane with no right evaluation; two
        ; register operands combine 3-address; pointer scaling, divide, a variable shift, and a
        ; call on the right keep the memory shuttle (shut).
-       ; the destination die: a LOAD-shaped left (dot/moor/deref -- the shapes whose r0
+       ; the destination die: a load-shaped left (dot/moor/deref -- the shapes whose r0
        ; landing costs a bridge; a var/num re-aims free via cgleaf, a nested bin already
        ; rides a pool register) aims at its park before it evaluates, and vpark sees a
        ; delivered value: no bridge mov. one aim per spine -- an eager aim at every level
@@ -3398,7 +3549,7 @@
    ; after restoring fp/lr and before the return
    epi-t32va '((lea sp fp 0) (pop fp) (pop lr) (add sp sp 16) (ret))
    epi-rv-va '((lea sp fp 0) (pop fp) (pop lr) (add sp sp 64) (ret))                   ; drop the a0-a7 block
-   ; -- the soft-double pass (sp64: an SP-only FPU -- the playdate's STM32F746). fpv4/5-SP keeps
+   ; -- the soft-double pass (sp64: an SP-only FPU -- the playdate's STM32F746). fpv4/5-sp keeps
    ; the 64-bit transfers, so ldsd/stsd/movqxr/movqrx ride the hardware and the value model keeps
    ; its d-regs -- but every f64 arithmetic/compare/convert is undefined there and lowers to the
    ; __aeabi_* helper gcc emits at -mfpu=*-sp-*, so a mooncc double and a gcc double agree to the
@@ -3535,8 +3686,8 @@
    ; pushed just under fp and popped just before it.
    epi-t16 '((lea sp fp 0) (pop r4) (pop fp) (pop pc))
    ; the v6-M vararg twin: pop reaches r0..r7/pc only, and pop-pc couldn't drop the r0-r3 block
-   ; after it -- so the return address pops into r3 (caller-saved, never a return value) and BX r3
-   ; returns once the 16-byte block drops. bit0 of the pushed lr is set, so the BX stays Thumb.
+   ; after it -- so the return address pops into r3 (caller-saved, never a return value) and bx r3
+   ; returns once the 16-byte block drops. bit0 of the pushed lr is set, so the bx stays Thumb.
    epi-t16va '((lea sp fp 0) (pop r4) (pop fp) (pop r3) (add sp sp 16) (jmpr r3))
    ; the exit tests, spelled once: a return is `ret` or v6-M's `pop pc`; an exit is that or a
    ; jmpr -- nothing falls through either. a jmp out of the fn is an exit too, but only the
@@ -3563,7 +3714,7 @@
               [(rg1 <>>f + rg1 <>>>f) [<>f] 1])
           (elem op flagops) [(rg1 <>>f + rg1 <>>>f) [<>f] ()]
           (op = 'push) [[<>f] () ()]
-          ; v6-M returns through `pop pc`, so this pop is an EXIT and reads what one owes back
+          ; v6-M returns through `pop pc`, so this pop is an exit and reads what one owes back
           ; -- lvtx says the same for its own walk. read as a plain pop it names no reads at
           ; all, and a dead set crosses into the unreachable tail behind it: the return-value
           ; mov above dies to that tail's own (li r0 0), which is a whole `return a / b`
@@ -3582,7 +3733,7 @@
           (op = 'set) [() [<>>f] 1]
           (elem op '(cmp test)) [(rg1 <>f + rg1 <>>f) () ()]
           (elem op unops) [[<>f] [<>f] 1]
-          ; the 32-bit pair moves carry a double ACROSS TWO gp registers -- vmov Df, Rlo, Rlo+1
+          ; the 32-bit pair moves carry a double across two gp registers -- vmov Df, Rlo, Rlo+1
           ; -- so the neutral operand names the low half and the high one rides unspelled. a
           ; 64-bit target moves the one register and owes nothing. an unspelled read is a live
           ; value deaddef takes away; an unspelled def is a stale one the forwarders keep
@@ -3599,7 +3750,10 @@
           (elem op wmops) [[(f 3) (f 4)] [<>f <>>f] 1]
           (op = 'mla) [[<>>f <>>>f (f 4)] [<>f] 1]
           (op = 'clz) [[<>>f] [<>f] 1]
-          ; a variable shift defines its dest and NOTHING else. x64 wants the count in cl, but
+          ; the wide multiply reads two and writes one -- plus rax on x64, where the
+          ; one-operand mul is rdx:rax-fixed (it saves rdx itself, so that one stays unspelled)
+          (elem op '(mulh umulh)) [[<>>f <>>>f] ([<>f] + (x64? g ? '(r0) ())) ()]
+          ; a variable shift defines its dest and nothing else. x64 wants the count in cl, but
           ; its encoder refuses any other register outright, so the move that would clobber r1
           ; never happens there -- and every other backend shifts by the count where it stands.
           ; the 32-bit pair lane is what an r1 here costs: it hands the count r2/r3 and keeps
@@ -4239,8 +4393,8 @@
                      (? (k = 16 && two? nx && <nx = 'st &&
                          <>nx = 'sp && <>>nx = 0)
                         (: _ (pin cand (i + 1) 1)
-                           (scan >r (i + 2) ([(i + 1) 16 i (tally stk)] . stk) sw))
-                        (scan r (i + 1) ([() k i (tally stk)] . stk) sw)))
+                           (scan >r (i + 2) ([(i + 1) 16 i #stk] . stk) sw))
+                        (scan r (i + 1) ([() k i #stk] . stk) sw)))
                  (<f = 'add && <>f = 'sp && charm? <>>>f)
                   (: (unwind st2 k w)
                       (? (k = 0) [st2 w]
@@ -4700,7 +4854,7 @@
              ; touches is a full-word ld/st at its own base is a candidate for a register. the
              ; last carries two facts in one -- the register the first store took its value
              ; from, which is also the preferred seat (taking it makes that store a self-mov
-             ; and it drops), and () when the first touch was a LOAD, which reads a value this
+             ; and it drops), and () when the first touch was a load, which reads a value this
              ; cell was never given.
              tls {}                        ; base -> ((i op reg off)..) newest-first, the chains' food
              (touch b n i e9 k9 s9 op9 x9)             ; k9: 'st | 'ld | 'no (an unpromotable shape)
@@ -4760,7 +4914,7 @@
                              (scan >l (i + 1) sp2))))))
              spans (scan fs 0 ())
              (? (= spans 'no) fs
-                (: n2 (tally fs)
+                (: n2 #fs
                    bases (keys obs)
                    ; an escape pins the window's tail to the last form
                    _ (foldl (\ _ b (: w (peep obs b ())
@@ -4814,6 +4968,7 @@
                    scand (foldl (\ a b (: w (peep obs b ())
                                           (? (!(w 3) && (0 < shp9 b)) (b . a) a)))
                                 () bases)
+                   sc9 (vsucc fs)                           ; the form graph, once per fn
                    lot9 (? (two? scand) (lvout g fs) 'no)   ; index -> live-out, or the refusal
                    dft9 (? (= lot9 'no) {}
                            (: t {}
@@ -4875,13 +5030,17 @@
                                         (: _ (pin tk <is9 (r . peep tk <is9 ()))
                                            (pclaim tk r >is9)))
                    (span9 lo hi) (: (go i acc) (? (i < lo) acc (go (i - 1) (i . acc))) (go hi ()))
-                   succ9 (? (= lot9 'no) {} (vsucc fs))
+                   succ9 (? (= lot9 'no) {} sc9)
                    (xt9 op) (op @ 'ld4 'sx4 'ldu4 'zx4 'ld2 'sx2 'ldu2 'zx2 'ld1 'sx1 'ldu1 'zx1 ())
                    (pxv xc w k)                ; an si value, canonically extended at compile time
                     (? (8 <= w) k
                        (: m ((8 * w) 2)
                           v (: r9 (k % m) (? (r9 < 0) (r9 + m) r9))
                           (? (elem xc '(sx1 sx2 sx4)) (? ((m // 2) <= v) (v - m) v) v)))
+                   clvm {}                     ; base -> its cell liveness, walked once
+                   (clv9 b lo hi sts lds)
+                    (: c (peep clvm b ())
+                       (two? c ? <c (: r (vclive lo hi sc9 sts lds) _ (pin clvm b [r]) r)))
                    (chains9 b)                 ; one cell -> ((S pref defs ((use dst ext)..) xc)..)
                     (: w (peep obs b ())
                        tl (rev (peep tls b ()))
@@ -4894,7 +5053,7 @@
                        (? !(two? sts) ()               ; no store: nothing to promote
                           !(two? >sts)                 ; one def: one chain, no reaching needed
                            (: lo0 <>w hi0 <>>w
-                              clv (vclive lo0 hi0 succ9 sts lds)
+                              clv (clv9 b lo0 hi0 sts lds)
                               S (: (go i acc)
                                    (? (i < lo0) acc
                                       (go (i - 1) (? ((i = <sts) || 0 < peep clv i 0) (i . acc) acc)))
@@ -4903,7 +5062,7 @@
                           (: lo0 <>w hi0 <>>w
                              rt (vreach lo0 hi0 succ9 sts)
                              gps <(vgroup rt sts lds)   ; the chains; a no-def load stays a frame read
-                             clv (vclive lo0 hi0 succ9 sts lds)   ; the cell's liveness, once
+                             clv (clv9 b lo0 hi0 sts lds)         ; the cell's liveness, once
                              st9 (foldl (\ t d (pin t d 1)) {} sts)
                              (map (\ gp (: ds <gp us <>gp
                                             dt9 (foldl (\ t d (pin t d 1)) {} ds)
@@ -4984,31 +5143,69 @@
                                     (? (nrw = tally (peep tls b ())) (pin retid b 1) 0)))
                                0 (filter (\ b !(peep retid b ())) bylo)))
                    prom (keys pxm)
+                   ; -- what a cell OCCUPIES. a window is all an unclassified cell can say,
+                   ; and it says too much: a cell touched early and again late is dead in
+                   ; between. where every touch is a classified ld/st/si at the cell's own
+                   ; base, vclive answers the exact indices instead -- 87% of cells, and 14.8%
+                   ; of the overlapping 8-byte pairs turn out never to be live at once.
+                   ; anything else (a cmpm read, an escape's derived pointer) is a use vclive
+                   ; cannot see, and an unseen use makes the set too small, so those keep the
+                   ; window and the two kinds are compared as they are. --
+                   (exact9? b)
+                    (: w (peep obs b ())
+                       (? ((w 3) || (abl? g 'setpack) || (<w != 8)) 0
+                          (foldl (\ a t (a && (t 3) = b &&
+                                         (0 < vldw <>t || 0 < vstw <>t || 0 < vsiw <>t)))
+                                 1 (peep tls b ()))))
+                   (lset9 b)
+                    (: w (peep obs b ())
+                       tl (rev (peep tls b ()))
+                       sts (map (\ t <t) (filter (\ t (0 < vstw <>t || 0 < vsiw <>t)) tl))
+                       lds (map (\ t <t) (filter (\ t (0 < vldw <>t)) tl))
+                       clv (clv9 b <>w <>>w sts lds)
+                       st9 (foldl (\ t d (pin t d 1)) {} sts)
+                       (go i acc) (? (i < <>w) acc
+                                     (go (i - 1) (? (st9 i || 0 < peep clv i 0) (i . acc) acc)))
+                       (go <>>w ()))
+                   ex9 (filter (b \ !(peep retid b ()) && exact9? b) bases)
+                   ls9 (foldl (\ t b (pin t b (lset9 b))) {} ex9)
+                   ext9 (foldl (\ t b (pin t b 1)) {} ex9)
                    rows (sortby (\ a b (<a < <b))
                                 (map (\ b (: w (peep obs b ()) [<>w b <w <>>w]))
                                      (filter (\ b !(peep retid b ())) bases)))
-                   free {}                     ; the retired 8-byte cells
                    nmap {}                     ; base -> its packed seat
-                   (ret1 act lo)                       ; act ((hi n nb)..) -> the still-live rest
-                    (? !(two? act) ()
-                       (: a <act
-                          (? (<a < lo)
-                             (: _ (? (<>a = 8) (pin free 8 (a 2 . peep free 8 ())) 0)
-                                (ret1 >act lo))
-                             (a . ret1 >act lo))))
-                   (place rs act high)                 ; sweep by lo -> the packed high-water
-                    (? !(two? rs) high
+                   ; -- the seat book. a seat takes a second tenant when nothing it already
+                   ; carries meets the newcomer: for two windows that is the interval sweep
+                   ; this replaces, for two sets the question that sweep could not ask. the
+                   ; retired-cell free list went with it, and had to -- a seat whose tenants
+                   ; overlap can never be handed on "the last one ended". --
+                   seats9 {}                   ; 'l -> the 8-byte seats laid, newest first
+                   ten9 {}                     ; seat -> its tenants' occupancies
+                   (occ9 b lo hi) (ext9 b ? ['st (peep ls9 b ())] ['iv lo hi])
+                   (hits? a c)
+                    (? ((<a = 'iv) && (<c = 'iv)) ((<>a <= (c 2)) && (<>c <= (a 2)))
+                       ((<a = 'st) && (<c = 'st)) (two? (vboth <>a <>c))
+                       (<a = 'st) (vany (i \ (<>c <= i) && (i <= (c 2))) <>a)
+                       (vany (i \ (<>a <= i) && (i <= (a 2))) <>c))
+                   (fit9 o oc) !(foldl (\ x t (x || hits? oc t)) 0 (peep ten9 o ()))
+                   (seat9 oc) (: (go l) (? (one? l) () (fit9 <l oc ? <l (go >l)))
+                                 (go (peep seats9 'l ())))
+                   (place rs high)                     ; sweep by lo -> the packed high-water
+                    (? (one? rs) high
                        (: r1 <rs lo <r1 b <>r1 n (r1 2) hi (r1 3)
-                          act2 (ret1 act lo)
-                          fr (? (n = 8) (peep free 8 ()) ())
-                          pr (? (two? fr) (: _ (pin free 8 >fr) [<fr high])
+                          oc (occ9 b lo hi)
+                          o9 (n = 8 ? (seat9 oc) ())
+                          pr (? !(o9 = ()) [o9 high]
                                 (: h1 (? ((16 <= n) &&
                                           !((& (0 - (high + n)) 15) = (b & 15)))
                                          (high + 8) high)
                                    [(0 - (h1 + n)) (h1 + n)]))
+                          _ (pin ten9 <pr (oc . peep ten9 <pr ()))
+                          _ (? ((n = 8) && !(elem <pr (peep seats9 'l ())))
+                               (pin seats9 'l (<pr . peep seats9 'l ())) 0)
                           _ (pin nmap b <pr)
-                          (place >rs ([hi n <pr] . act2) <>pr)))
-                   high2 (place rows () 8)
+                          (place >rs <>pr)))
+                   high2 (place rows 8)
                    ; the cs seats' save slots, fresh below the packed high water; one
                    ; pair serves every chain that shares the seat
                    csused (filter (\ r (peep csut r 0)) cspool9)
@@ -5083,7 +5280,7 @@
    ; region. refs collect every symbol operand in the fn's stream -- over-approximate, so a kept
    ; label is never wrong. deadlab iterates to a fixpoint: a dropped region takes its own refs
    ; with it, exposing the next link of a dead jmp chain.
-   (deadlab fs) (: r (deadlab1 fs) (? (tally r = tally fs) r (deadlab r)))
+   (deadlab fs) (: r (deadlab1 fs) (? (#r = #fs) r (deadlab r)))
    (deadlab1 fs)
     (: refs {}
        (note ops) (? !(two? ops) 0
@@ -5147,7 +5344,7 @@
                     (note >l (i + 1))))
              _ (note fs 1)
              dr (filter defs (csregs g))
-             ; a fn no path leaves owes no file back: the contract is what the CALLER sees on
+             ; a fn no path leaves owes no file back: the contract is what the caller sees on
              ; return, and there is no return. a main ending in a non-returning call is the
              ; shape -- deadlab takes the unreachable epilogue and deadst the saves it leaves
              ; write-only. the walk sits past the cs-write test, so most fns never pay it
@@ -5383,7 +5580,7 @@
                   (: w <wl (seen w ? (next >wl) (pin seen w 1, go (lab all w) >wl))))
        (go fs0 ()))
 
-   ; cmp LOAD-OP fusion: a full-word load whose dest is consumed by the very next cmp and dead
+   ; cmp load-op fusion: a full-word load whose dest is consumed by the very next cmp and dead
    ; beyond it fuses into the cmp's memory operand -- (ld X b o)(cmp X y) is (cmpm b o y),
    ; (cmp r X) is (cmprm r b o). runs after addrfold (the base already folded), the death proof
    ; follows branches. x64 only; full-word only (a narrow cmp's flags shift with the extension).
@@ -5699,7 +5896,7 @@
        ('((li r0 0)) + go off span ()))
    (cgstr off text)                                 ; a char array from a string: byte stores (NUL from the zero)
     (: (go i acc) (? (i < 0) acc (go (i - 1) ([['li 'r0 (text i)] ['st1 'r4 (off + i) 'r0]] + acc)))
-       (go (tally text - 1) ()))
+       (go (#text - 1) ()))
    (cgstore g env off ty val)                       ; store a scalar value expr into [r4+off]
     (: r (cgexpr g env val ())
        (? (bad? r) 'bad
@@ -5934,7 +6131,7 @@
      (ptr? ty) (: r (imaddr g ini)                    ; a data pointer: a constant address (word-sized abs label+offset),
                    (? !(= r 'no) [['fix (wsize g) (? (t32? g) 'abs32 'abs64) <r <>r]]      ; or a constant integer ((int*)0x1000, a null)
                       (: v (icfold ini) (? (= v 'no) 'bad (imnum g ty v)))))
-     ; a label cast to a WORD-SIZED integer ((word)nif_absent, (intptr_t)f) is
+     ; a label cast to a word-sized integer ((word)nif_absent, (intptr_t)f) is
      ; still the label's address; a non-label cast folds through to its value
      (<ini = 'cast && !(aggish? ty) && !(flo? ty) && tsz g ty = wsize g)
       (: r (imaddr g ini)
@@ -6013,7 +6210,7 @@
    (imgpad g ty w val)                              ; imgbytes padded (with zeros) to w bytes | 'bad
     (: b (imgbytes g ty val) (? (bad? b) 'bad (b + zeros (w - imbytelen b))))
    (cgimage g ty ini)                               ; the full span-padded image | 'bad
-    (: span ((tsz g ty + wsize g - 1) & -(wsize g))         ; round to the WORD (8 on x64/a64, 4 on t32)
+    (: span ((tsz g ty + wsize g - 1) & -(wsize g))         ; round to the word (8 on x64/a64, 4 on t32)
        raw (imgbytes g ty ini)
        (? (bad? raw) 'bad (raw + zeros (span - imbytelen raw))))
 
@@ -6073,12 +6270,12 @@
               ty <>p
               init <>>p
               ; a `register T v asm("reg")` local naming a register the asm surface cannot
-              (? (two? >>>p && (: r9 (gas-regname (peep g 'tgt 'x64) <>>>p) !(nom? r9 && asmreg? g r9)))
+              (? (two? >>>p && (: r9 (gas-regname (gtgt g) <>>>p) !(nom? r9 && asmreg? g r9)))
                   (nolane g ("no lane for a register variable in " + <>>>p + ontgt g))
                  (gvarr? ty)
                   (? (two? init)
                       (nolane g "a variable-length array cannot take an initializer")
-                     !(elem (peep g 'tgt 'x64) '(x64 a64 rv64))
+                     !(elem (gtgt g) '(x64 a64 rv64))
                       (nolane g ("no lane for a variable-length array" + ontgt g))
                      (vone ps env2 acc p ty))
                  (: span (& (tsz g ty + 7) -8)
@@ -6107,7 +6304,7 @@
                          (? lht (lht sq) ())))
               ; a `register T v asm("reg")` local: the pin rides the env entry's fourth slot
               ; for cgasm (a register the asm surface cannot name refused above)
-              apin (? (two? >>>p) (gas-regname (peep g 'tgt 'x64) <>>>p) ())
+              apin (? (two? >>>p) (gas-regname (gtgt g) <>>>p) ())
               ; a d128's home is a pair (lo hi) off the cs pool -- ulloc packs two seats
               env3 (([<p (? (two? hreg) ['regw hreg] hreg ['reg hreg] off) ty] + (? (nom? apin) [apin] ())) . env2)
               ; a callee-saved home stays off g 'homes: no call wrap (the callee preserves it),
@@ -6184,8 +6381,8 @@
        (one pairs env))
 
    ; stmt -> forms | 'bad
-   ; -- inline asm (the 'asm statement): the template is the target's own GNU dialect -- AT&T on
-   ; x64, ARM on a64, riscv, thumb -- lowered by l/holo/gas.l, so one template serves every
+   ; -- inline asm (the 'asm statement): the template is the target's own GNU dialect -- at&T on
+   ; x64, arm on a64, riscv, thumb -- lowered by l/holo/gas.l, so one template serves every
    ; compiler; `__attribute__((holo)) asm(..)` says holo's neutral TEXT instead (asm-text). %0..%9
    ; the operands (outputs first, GNU numbering; the b/w/k/q/c and w/x modifiers), %% a literal %.
    ; the body assembles to bytes right here and splices as one opaque ('raw ..), so the IR passes
@@ -6245,7 +6442,7 @@
    (cgasm g env s)
     (: _ (pin g 'hasasm 1)
        tmpl <>s
-       tgt (peep g 'tgt 'x64)
+       tgt (gtgt g)
        neutral? (two? >>>>>s)                       ; the holo attribute: the template is neutral text
        ; one operand list, GNU order: ('o|'x reg expr w) an output (x in-out), ('i reg expr w) a
        ; register input, ('b reg (addr expr) 0) a memory input, ('m imm 0 0) an immediate
@@ -6860,7 +7057,7 @@
                    (? (bad? r) 'bad
                       (flo? rt)                                        ; a double return leaves f0 (xmm0; never inline -- gated);
                        (asflo g r                                      ; v6-M base ABI carries a double out on the r0:r1 pair,
-                        + (? !(v6m? g) ()                              ; a bare float as one WORD (binary32 in r0)
+                        + (? !(v6m? g) ()                              ; a bare float as one word (binary32 in r0)
                              (= rt 'float) '((cvtsd2ss f0 f0) (movqrx r0 f0))
                              '((movqrx r0 f0)))
                         + epj)
@@ -7357,7 +7554,7 @@
                  (stru? pty && aone g pty !== 'int)        ; mixed pair stays ahead; a small INT one rides the gp lane
                   (nolane g ("no lane for passing this " + show (tsz g pty)
                              + "-byte struct by value" + ontgt g))
-                 (v6m? g && pty == 'float)             ; v6-M base ABI: a bare float param is one WORD
+                 (v6m? g && pty == 'float)             ; v6-M base ABI: a bare float param is one word
                   (? (gpi < ngp g)                      ;  (binary32 bits in a gp reg / a 4-byte caller slot);
                      (: off (nslot g 8) ;  clval's fldf 'float widens it on read
                         (spill hp >ps (gpi + 1) xmmi ovi ([<p off pty] . env)
@@ -7473,7 +7670,7 @@
        ; a variadic function (AAPCS32, thumb2 + v6m): no save area of its own -- the prologue
        ; pushed r0-r3 just under the caller's stack args, one contiguous word array past the push
        ; cells ((ovb g): thumb2 lr/fp = 8, v6m lr/fp/r4 = 12). a named register param is addressed
-       ; inside the block (fp+ovb+4i), a named overflow param past it. WORD named params only;
+       ; inside the block (fp+ovb+4i), a named overflow param past it. word named params only;
        ; doubles/pairs/structs refuse loud.
        (vaspill-t32 ps)
         (: (cls qs gpi ov env)
