@@ -1251,7 +1251,9 @@ test_kernel_wasm: host
 	@grep "tests pass" out/wasm/kernel.log
 endif
 
-# the wasm module writer and the IR lowering (l/holo/wasm.l) under a foreign engine:
+# the wasm module writer and the IR lowering (l/holo/wasm.l) under a foreign engine, and
+# the fuzz beside it -- the one backend with NO reader in the tree and no disassembler on
+# most boxes, so v8 is the second opinion and the model in the fuzz file is the intent:
 # love lays three modules (the writer's by hand, the program's off holo IR, a mock of the
 # artifact's face), binaryen validates them where the box has one, node instantiates and
 # runs them -- the third through i/wasm/loader.js, the artifact's own environment.
@@ -1269,6 +1271,9 @@ test_holowasm: host
 	@$(if $(WASMOPT),for w in $(holo_wasm); do $(WASMOPT) $(wasmopt_flags) $$w -o /dev/null 2>/dev/null || exit 1; done && echo "  wasm-opt: all valid",echo "  wasm-opt: absent, node alone validates")
 	@$(NODE) test/holo/wasm.mjs out/.holo.wasm out/.holo2.wasm
 	@$(NODE) test/holo/loader.mjs out/.holo3.wasm
+	@echo TEST test/holo/fuzz/wasm.l "(the wasm lane's second opinion: v8 against the model)"
+	@cat l/holo/holo.l l/holo/wasm.l l/holo/wasmfn.l test/holo/fuzz/wasm.l | $m
+	@$(NODE) test/holo/fuzz/wasm.mjs out/.wasmfuzz.wasm out/.wasmfuzz.json
 endif
 
 # --- the two binary-shape gates, both skipping when their tool is absent ---
