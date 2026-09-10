@@ -94,6 +94,12 @@
 
    ; -- macro table entries: (obj body) | (fun params body variadic?) --
    (mdef macs name) (peep macs name ())
+   ; phase 4 knows no keywords: `#define auto __auto_type` (the linux kernel's) names a
+   ; macro like any other, and the lexer's early `auto` token must still find it. the
+   ; table is keyed by TEXT either way, and 'kwmac says whether any keyword was ever
+   ; defined -- so an ordinary keyword token pays one lookup only in a TU that did
+   (macnm t) (? (kof t = 'kw) (show (vof t)) (vof t))
+   (macat? t macs) (? (idt? t) 1 ((kof t = 'kw) && peep macs 'kwmac ()))
    (mobj? ('obj . _)) 1
    (mfun? ('fun . _)) 1
 
@@ -200,23 +206,24 @@
    (expand toks macs)
     (? !(two? toks) ()
        (: t <toks rest >toks
-          (? !(idt? t) (t . expand rest macs)
+          (? !(macat? t macs) (t . expand rest macs)
              (idv? t "__LINE__") (tok 'num (lof t) (lof t) . expand rest macs)
-             (elem (vof t) (hof t)) (t . expand rest macs)       ; blue-painted: leave it
-             (: m (mdef macs (vof t))
-                (? (mobj? m)
-                    (: hs (vof t . hof t)
-                       body (mapadd <>m hs (lof t))
-                       (expand (body + rest) macs))
-                   (mfun? m && two? rest && pv? <rest "(")
-                    (: ca (collargs >rest)
-                       (? !(two? ca) (t . expand rest macs)
-                          (: args <ca after <>ca
-                             params <>m mbody <>>m mvar <>>>m
-                             hs (vof t . hof t)
-                             body (subst mbody params args mvar (lof t) macs)
-                             (expand (mapadd body hs (lof t) + after) macs))))
-                   (t . expand rest macs))))))
+             (: nm (macnm t)
+                (? (elem nm (hof t)) (t . expand rest macs)      ; blue-painted: leave it
+                   (: m (mdef macs nm)
+                      (? (mobj? m)
+                          (: hs (nm . hof t)
+                             body (mapadd <>m hs (lof t))
+                             (expand (body + rest) macs))
+                         (mfun? m && two? rest && pv? <rest "(")
+                          (: ca (collargs >rest)
+                             (? !(two? ca) (t . expand rest macs)
+                                (: args <ca after <>ca
+                                   params <>m mbody <>>m mvar <>>>m
+                                   hs (nm . hof t)
+                                   body (subst mbody params args mvar (lof t) macs)
+                                   (expand (mapadd body hs (lof t) + after) macs))))
+                         (t . expand rest macs))))))))
    (mapadd toks hs line)                            ; give body tokens the hideset + the invocation line
     (? !(two? toks) ()
        (: t <toks ([(kof t) (vof t) line (dedup (hof t + hs)) (sof t)] . mapadd >toks hs line)))
@@ -234,10 +241,10 @@
         (: r >ts
            (? (two? r && pv? <r "(")
                (: nm <>r
-                  (. (tok 'num (? (two? (mdef macs (vof nm))) 1 0) 0)
+                  (. (tok 'num (? (two? (mdef macs (macnm nm))) 1 0) 0)
                         (resolve-defined >>>r macs)))    ; skip ( name )
-              (two? r && idt? <r)
-               (tok 'num (? (two? (mdef macs (vof <r))) 1 0) 0 . resolve-defined >r macs)
+              (two? r && (idt? <r || kof <r = 'kw))
+               (tok 'num (? (two? (mdef macs (macnm <r))) 1 0) 0 . resolve-defined >r macs)
               (resolve-defined r macs)))
        (<ts . resolve-defined >ts macs))
    (zero-ids ts) (? !(two? ts) ()                  ; any surviving identifier is 0
@@ -343,7 +350,8 @@
    ; -- parse a #define body into a macro entry --
    (defmacro macs line-toks)                        ; line-toks: after the leading (# define)
     (? !(two? line-toks) ()
-       (: name (vof <line-toks)
+       (: name (macnm <line-toks)
+          _ (? (kof <line-toks = 'kw) (pin macs 'kwmac 1) ())
           r >line-toks
           ; function-like only if '(' immediately follows the name (no space) -- the
           ; lexer marks a glued '(' with a 4th token field (`#define F(x)` vs the
@@ -490,7 +498,7 @@
                            (cppgo rest macs cond2 () out1 incf)))
                     !(condactive cond) (cppgo rest macs cond () out1 incf)      ; skipped: ignore non-cond directives
                     (dir = "define") (defmacro macs body, cppgo rest macs cond () out1 incf)
-                    (dir = "undef") (pin macs (vof <body) (), cppgo rest macs cond () out1 incf)
+                    (dir = "undef") (pin macs (macnm <body) (), cppgo rest macs cond () out1 incf)
                     (dir = "include") (doinc body macs cond out1 rest incf)
                     ; say the TEXT. an #error is the program telling you what is wrong in
                     ; its own words, and "#error directive" throws that away -- pdclib's
@@ -540,8 +548,8 @@
     (? (elem dir '("if" "ifdef" "ifndef"))
         (: pa (condactive cond)                        ; parent active?
            v (? !pa 0
-                (dir = "ifdef") !!(two? (mdef macs (vof <body)))
-                (dir = "ifndef") !(two? (mdef macs (vof <body)))
+                (dir = "ifdef") !!(two? (mdef macs (macnm <body)))
+                (dir = "ifndef") !(two? (mdef macs (macnm <body)))
                 !!(0 < ifval body macs))
            ([(pa && 0 < v) (pa && 0 < v) (lof <line)] . cond))
        (dir = "elif")

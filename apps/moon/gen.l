@@ -1701,6 +1701,9 @@
         (? (t32? g) (mkv 'double 'r0 '((li r0 0) (li r1 2146959360) (movqxr f0 r0)))
            (mkv 'double 'r0 '((li r0 9221120237041090560) (movqxr f0 r0))))
        (bi = "__builtin_expect") (cgexpr g env <args ())
+       ; a prefetch is a hint: the address is evaluated for its effects and no insn
+       ; is owed. the locality/rw operands are constants gcc reads and we do not
+       (bi = "__builtin_prefetch") (cgexpr g env <args ())
        (bi = "__builtin___clear_cache")
         ; x86 keeps I-cache coherent with D-cache: nothing to do. a64 does not (qemu-user is
         ; coherent, metal is not), so the architectural sequence: dc cvau each D-line, dsb, ic

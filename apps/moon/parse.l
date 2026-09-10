@@ -129,11 +129,14 @@
    ; _Thread_local/__thread skip: no TLS, no threads (__STDC_NO_THREADS__), so a
    ; thread-local is the one static object -- and would be shared, silently, the day threads land
    qualid '("__attribute__" "__inline" "__inline__" "__restrict" "__restrict__"
-            "__volatile__" "__const" "_Noreturn" "_Alignas" "__extension__"
-            "_Thread_local" "__thread")
+            "__volatile__" "__volatile" "__const" "__const__" "_Noreturn" "_Alignas"
+            "__extension__" "_Thread_local" "__thread")
    ; typeof's three spellings; the bare one is gnu-mode's and c23's. not reserved in
    ; C11, so an object named `typeof` reads as a declaration (the typedef table wins first)
    tyofid '("__typeof" "__typeof__" "typeof")
+   ; gcc's __auto_type: the declared type IS the initializer's, so it stands where a
+   ; type begins and is read by looking past the one name it allows
+   autoid "__auto_type"
    ; gcc's library builtins: the prefix names the plain function and is nothing else.
    ; libsig is the signature to declare on the way past, because a program that spells
    ; the prefix is exactly the one that never included the header. the roster is a
@@ -381,6 +384,7 @@
     (? !(two? t) ()
        (tkk t = 'kw) (elem (tkv t) tyspec || elem (tkv t) '(struct union enum))
        (tkk t = 'id) (? (elem (tkv t) tyofid) 1
+                          ((tkv t) = autoid) 1
                           (peep (ps 'types) (tkv t) 0) 1 ())
        ())
 
@@ -875,6 +879,17 @@
                     [(peep (ps 'etag) tag 'int) ts3]))
              ((tkk t = 'id) && (? (peep (ps 'types) (tkv t) 0) 1 ()))
               [(peep (ps 'types) (tkv t) 0) >ts]
+             ; __auto_type NAME = init: the initializer's own type, read by parsing it
+             ; here and leaving the cursor at the name, so the ordinary declarator path
+             ; runs against a type that was written. gcc allows no other declarator
+             ((tkk t = 'id) && ((tkv t) = autoid))
+              (: r1 >ts
+                 (? !(idat? r1) ()
+                    !(peekp >r1 "=") ()
+                    (: er (pasn ps >>r1)
+                       (? !(two? er) ()
+                          (: ty (ptype ps <er)
+                             (? ty [ty r1] ()))))))
              ; __typeof(expr) / __typeof__(type-name) (gcc): the operand's parse-time
              ; type -- a type-name reads pcty, an expression ptype (whose 'sigs lane
              ; carries musl's weak_alias: `extern __typeof(old) new __attribute__(..)`)
@@ -1173,6 +1188,35 @@
                  ra (? (two? r1) (pasn ps r1) ())
                  rest (? (two? ra) (want <>ra ")") ())
                  (? (two? rest) [['num (? (charm? (cfold <ra)) 1 0)] rest] ()))
+             ; __builtin_object_size(p,t), and the dynamic spelling: the answer gcc gives
+             ; when it cannot see the object -- (size_t)-1 for types 0/1, 0 for 2/3. that is
+             ; the CONSERVATIVE end in both directions, and it is what the linux kernel's
+             ; fortify checks read to stand down. the operand is not evaluated
+             ((tkk t = 'id) && bib? (tkv t) &&
+              elem (tkv t) '("__builtin_object_size" "__builtin_dynamic_object_size"))
+              (: r1 (want >ts "(")
+                 ra (? (two? r1) (pasn ps r1) ())
+                 r2 (? (two? ra) (want <>ra ",") ())
+                 rb (? (two? r2) (pasn ps r2) ())
+                 rest (? (two? rb) (want <>rb ")") ())
+                 tv (? (two? rb) (cfold <rb) ())
+                 (? !(two? rest) ()
+                    [['cast (szty ps) ['num (? (charm? tv && 1 < tv) 0 -1)]] rest]))
+             ; __builtin_choose_expr(c,a,b): c must fold, and the unchosen arm is parsed
+             ; and dropped -- `_Generic`'s own lowering, so a call to an undefined function
+             ; in the arm not taken links clean. the arms are not required to type alike
+             ((tkk t = 'id) && bib? (tkv t) && (tkv t = "__builtin_choose_expr"))
+              (: r1 (want >ts "(")
+                 rc (? (two? r1) (pasn ps r1) ())
+                 r2 (? (two? rc) (want <>rc ",") ())
+                 ra (? (two? r2) (pasn ps r2) ())
+                 r3 (? (two? ra) (want <>ra ",") ())
+                 rb (? (two? r3) (pasn ps r3) ())
+                 rest (? (two? rb) (want <>rb ")") ())
+                 cv (? (two? rc) (cfold <rc) ())
+                 (? !(two? rest) ()
+                    !(charm? cv) (blame r1 "__builtin_choose_expr wants a constant condition")
+                    [(? (cv = 0) <rb <ra) rest]))
              ; __func__ (C99 6.4.2.2): the enclosing function's name as a string.
              ; pinned by the two body-parsing sites; outside a body there is no name
              ; to give, so it stays an undeclared identifier.
@@ -1716,25 +1760,57 @@
    ; -> (('asm tmpl outs ins clobs) rest) | ()
    (asmid? t) (two? t && (tkk t = 'id) &&
                elem (tkv t) '("asm" "__asm__" "__asm"))
+   ; `volatile` and `inline` may both stand between the keyword and the paren, in
+   ; either order; inline is a size hint to gcc's inliner and means nothing here
+   (asmqual? t) (? (tkk t = 'kw) (elem (tkv t) '(volatile inline))
+                   (tkk t = 'id) (elem (tkv t) '("__volatile__" "__inline__" "__inline"))
+                   ())
+   ; `%[name]` -> the operand's NUMBER, so no name reaches gen's asmsub. gcc numbers
+   ; outputs first and inputs after, which is the order nms arrives in; a name that
+   ; matches nothing is left alone for gen to refuse on
+   (anynm? l) (? !(two? l) () (string? <l) 1 (anynm? >l))
+   (asmnm tmpl nms)
+    (: n (tally tmpl)
+       (idx nm l k) (? !(two? l) () (= <l nm) k (idx nm >l (k + 1)))
+       (rbr j) (? (n <= j) -1 ((tmpl j) = 93) j (rbr (j + 1)))
+       (go i acc)
+        (? (n <= i) acc
+           ((tmpl i) = 37 && (i + 1) < n && (tmpl (i + 1)) = 91)
+            (: e (rbr (i + 2))
+               nm (? (e < 0) () (snip tmpl (i + 2) e))
+               k (? (string? nm) (idx nm nms 0) ())
+               (? (charm? k) (go (e + 1) (acc + "%" + show k))
+                  (go (i + 1) (acc + string (tmpl i)))))
+           (go (i + 1) (acc + string (tmpl i))))
+       (go 0 ""))
    (pasm ps ts)
     (: r >ts
-       t1 (? (two? r && (tkw? <r 'volatile ||
-                         (idv? <r "__volatile__")))
-             >r r)
-       r0 (want t1 "(")
+       (t1 l) (? (two? l && asmqual? <l) (t1 >l) l)
+       r0 (want (t1 r) "(")
        (? !(strat? r0) ()
           (: (tmpl ts2 acc) (? (strat? ts2)
                                (tmpl >ts2 (acc + tkv <ts2))
                                [acc ts2])
-             ; an operand run: "constraint" ( expr ) , .. -- empty before : or )
+             ; an operand run: [name] "constraint" ( expr ) , .. -- empty before : or )
+             ; each entry carries its symbolic name (or ()) as a third element; the
+             ; names come off again below, so the ('asm ..) node gen reads is unchanged
              (ops ts2 acc)
-              (? !(strat? ts2) [(rev acc) ts2]
+              (? (peekp ts2 "[")
+                  (: nm (? (idat? >ts2) (tkv <>ts2) ())
+                     r0 (? nm (want >>ts2 "]") ())
+                     (? (two? r0) (op1 r0 nm acc) ()))
+                 !(strat? ts2) [(rev acc) ts2]
+                 (op1 ts2 () acc))
+             (op1 ts2 nm acc)
+              (? !(strat? ts2) ()
                  (: c (tkv <ts2)
                     r1 (want >ts2 "(")
                     re (? (two? r1) (thenw (pexpr ps r1) ")") ())
                     (? !(two? re) ()
-                       (peekp <>re ",") (ops ><>re ([c <re] . acc))
-                       [(rev ([c <re] . acc)) <>re])))
+                       (peekp <>re ",") (ops ><>re ([c <re nm] . acc))
+                       [(rev ([c <re nm] . acc)) <>re])))
+             (opbare e) [<e <>e]                        ; the (constraint expr) pair gen takes
+             (opnm e) <>>e
              (clobs ts2 acc)
               (? !(strat? ts2) [(rev acc) ts2]
                  (: c (tkv <ts2)
@@ -1749,7 +1825,10 @@
                          (? !(two? s3) ()
                             (: r9 (want <>s3 ")")
                                rest (? (two? r9) (want r9 ";") ())
-                               (? (two? rest) [['asm <tr <s1 <s2 <s3] rest] ()))))))))))
+                               nms (map opnm <s1 + map opnm <s2)
+                               tm (? (anynm? nms) (asmnm <tr nms) <tr)
+                               (? (two? rest)
+                                  [['asm tm (map opbare <s1) (map opbare <s2) <s3] rest] ()))))))))))
 
    ; a statement-position __attribute__((..)) run skips (fallthrough..) -- except the two
    ; whose semantic we owe: musttail lands in the ret's pre slot (clay's (ret e PRE)) and
@@ -1875,11 +1954,27 @@
              ; top-level ones; these catch the nested coroutine-style ones -- bzip2's
              ; get_bits drops `case lll:` inside a while, Duff's-device style). gen ties
              ; each back to its nearest enclosing switch by case VALUE (g 'cases).
+             ; gcc's `case A ... B:` expands to one label per value -- sound here because
+             ; a switch dispatches by a compare chain, not a table. capped, so a wide
+             ; range refuses rather than laying thousands of compares in silence
              (tkw? t 'case)
-              (: rv (thenw (pexpr ps >ts) ":")
+              (: rv (pexpr ps >ts)
                  (? !(two? rv) ()
                     (: v (cfold <rv)
-                       (? (charm? v) [['case v] <>rv] ()))))
+                       (crange lo hi acc) (? (hi < lo) (rev acc) (crange (lo + 1) hi (['case lo] . acc)))
+                       (? !(charm? v) ()
+                          (peekp <>rv "...")
+                           (: r2 (pexpr ps ><>rv)
+                              (? !(two? r2) ()
+                                 (: hi (cfold <r2)
+                                    rest (want <>r2 ":")
+                                    (? !(charm? hi) ()
+                                       !(two? rest) ()
+                                       (hi < v) (blame <>rv "an empty case range")
+                                       (1024 < (hi - v)) (blame <>rv "case range too wide")
+                                       [['blk (crange v hi ())] rest]))))
+                          (: rest (want <>rv ":")
+                             (? (two? rest) [['case v] rest] ()))))))
              (tkw? t 'default)
               (: rest (want >ts ":") (? (two? rest) ['(dflt) rest] ()))
              (asmid? t) (pasm ps ts)     ; before the call/label fallthroughs: asm( is a statement
@@ -2028,7 +2123,9 @@
    ; (entries rest variadic?) shape pparams does, with rest at the `{` -- so the fn
    ; path flows straight into pblock. protos stay ansi (OF() expands with types), so
    ; a bare non-type id after `(` is the sole K&R tell.
-   (krhead? ps ts) (idat? ts && !(tkbty? ps <ts))
+   ; a K&R list holds bare parameter NAMES, so a qualifier spelled as an identifier
+   ; (`__const`, `__restrict`, `__extension__`) opens a prototype, not one
+   (krhead? ps ts) (idat? ts && !(tkbty? ps <ts) && !(qual? <ts))
    (kids ts acc)                                     ; the identifier list -> (names rest-after-`)`)
     (? (idat? ts)
         (: nm (tkv <ts) r >ts

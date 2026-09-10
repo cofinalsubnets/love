@@ -318,6 +318,21 @@ moonrun "$ho/.casm5.c" "$ho/.casm5" > /dev/null 2>&1 || fail "mooncc asm registe
 "$ho/.casm5"; a=$?
 [ $a -eq 42 ] || fail "mooncc asm register variable + saved clobber (got $a want 42)"
 
+# named operands: `%[x]` numbers off the operand lists (outputs first, then inputs),
+# so a template may mix a name with a number, and `asm inline` is a hint we drop
+printf 'int main() { int r; asm ("movl %%[i], %%[o]" : [o] "=r" (r) : [i] "r" (42)); return r; }\n' > "$ho/.casmn1.c"
+moonrun "$ho/.casmn1.c" "$ho/.casmn1" > /dev/null 2>&1 || fail "mooncc named asm operand compile"
+"$ho/.casmn1"; a=$?
+[ $a -eq 42 ] || fail "mooncc named asm operand (got $a want 42)"
+printf 'int main() { int r; asm inline ("movl %%1, %%0\\n\\taddl %%[b], %%0" : "=&r" (r) : "r" (40), [b] "r" (2)); return r; }\n' > "$ho/.casmn2.c"
+moonrun "$ho/.casmn2.c" "$ho/.casmn2" > /dev/null 2>&1 || fail "mooncc named+numbered asm operand compile"
+"$ho/.casmn2"; a=$?
+[ $a -eq 42 ] || fail "mooncc named beside numbered asm operand (got $a want 42)"
+printf 'int main() { int l, h; asm ("movl %%[x], %%[l]\\n\\tmovl %%[x], %%[h]\\n\\taddl $2, %%[h]" : [l] "=&r" (l), [h] "=&r" (h) : [x] "r" (40)); return l + h - 40; }\n' > "$ho/.casmn3.c"
+moonrun "$ho/.casmn3.c" "$ho/.casmn3" > /dev/null 2>&1 || fail "mooncc two named outputs compile"
+"$ho/.casmn3"; a=$?
+[ $a -eq 42 ] || fail "mooncc two named asm outputs (got $a want 42)"
+
 # holo's neutral text, under the attribute that names it
 printf 'int main() { long v; __attribute__((holo)) asm("li %%0, 40" : "=r"(v)); return v + 2; }\n' > "$ho/.casm6.c"
 moonrun "$ho/.casm6.c" "$ho/.casm6" > /dev/null 2>&1 || fail "mooncc holo asm compile"
