@@ -302,6 +302,12 @@
                  (two? e) (foldl (\ ac x (aq x ac)) acc e)
                  acc)
    aopheads '(? : two? cap cup + - * // % & | ^ < <= > >= = == .)   ; the heads that are ops, not calls
+   ; every head the amble reads by NAME: aopheads, the ones carrying their own arm, and the
+   ; two reads asafe rules a call-out out for. a frame that rebinds one of these does not mean
+   ; the op by it, so njit-amble masks the taken ones out of all three recognizers at once.
+   ; ? and : stay off the roster -- they are the reader's syntax, not names a body can take.
+   aopnames '(two? cap cup + - * // % & | ^ < <= > >= = == . || && tally list
+              one? nil? atom? != !== peep mpeep)
    (ahascall? env go e)                                                  ; does e contain a call (any non-op head)? the bisect knob's test
     (? (aquote? e) 0
        (two? e) (: op <e
@@ -323,32 +329,33 @@
                  (op . acc) acc)                                      ; would read the unpinned local
            (foldl (\ ac x (aheads env go x ac)) a2 >e))
        acc)
-   ; amble-ok?: does e compile? env = visible names (loop vars shadow params), gn = resolvable
-   ; global call heads, go/k = the loop name + its arity (0 outside a loop), tl = tail position
-   ; ((go ..) is a jump, so it is only sound where its value IS the loop's value).
-   (amble-ok? env gn go k tl e)
+   ; amble-ok?: does e compile? env = visible names (loop vars shadow params), shd = the op
+   ; names this frame may not claim, gn = resolvable global call heads, go/k = the loop name +
+   ; its arity (0 outside a loop), tl = tail position ((go ..) is a jump, so it is only sound
+   ; where its value IS the loop's value).
+   (amble-ok? env shd gn go k tl e)
     (? (nom? e) (elem e env)
        (aconst? e) 1
        (nom? e) (elem e env)                                                      ; a mint: an inlined callee's let-bound arg
        (aquote? e) 1
        (two? e)
-        (: op <e  as >e  n #as
-           (? (= op '?) (2 <= n <= 3 && (amble-ok? env gn go k 0 <as)   ; 2-arm ?: the missing else is (), acg's amble-nil slot
-                           && (amble-ok? env gn go k tl <>as)
-                           && (amble-ok? env gn go k tl <>>as))
+        (: op <e  as >e  n #as  oop (elem op shd ? 0 op)      ; a name the frame took is a call
+           (? (= op '?) (2 <= n <= 3 && (amble-ok? env shd gn go k 0 <as)   ; 2-arm ?: the missing else is (), acg's amble-nil slot
+                           && (amble-ok? env shd gn go k tl <>as)
+                           && (amble-ok? env shd gn go k tl <>>as))
               (= op ':) (!(#e % 2)                                        ; a value let: binders enter env in order, so a forward
                            && ((: (gol l ev)                                       ; read declines rather than reading a stale slot
-                                (? (atom? >l) (amble-ok? ev gn go k tl <l)
-                                   ((amble-ok? ev gn go k 0 <>l)
+                                (? (atom? >l) (amble-ok? ev shd gn go k tl <l)
+                                   ((amble-ok? ev shd gn go k 0 <>l)
                                     && (gol >>l (= <l '_ ? ev (<l . ev))))))
                                as env))
-              (elem op '(two? cap cup)) (n = 1 && amble-ok? env gn go k 0 <as)
-              (aop2? op) (n = 2 && amble-ok? env gn go k 0 <as && amble-ok? env gn go k 0 <>as)
-              (= op '|| && !(elem op env)) (2 <= n && all (x \ amble-ok? env gn go k 0 x) as)
+              (elem oop '(two? cap cup)) (n = 1 && amble-ok? env shd gn go k 0 <as)
+              (aop2? oop) (n = 2 && amble-ok? env shd gn go k 0 <as && amble-ok? env shd gn go k 0 <>as)
+              (= oop '||) (2 <= n && all (x \ amble-ok? env shd gn go k 0 x) as)
               (= op amble-lam) (all (v \ elem v env) >>as)                 ; an inner lambda site: its imports are frame reads
-              (= op go) (tl && n = k && all (x \ amble-ok? env gn go k 0 x) as)
+              (= op go) (tl && n = k && all (x \ amble-ok? env shd gn go k 0 x) as)
               (nom? op) ((0 < n) && (elem op env || elem op gn)
-                          && (all (x \ amble-ok? env gn go k 0 x) as))
+                          && (all (x \ amble-ok? env shd gn go k 0 x) as))
               0))
        0)
    ; amble-depth: an upper bound on the spill slots e needs (operand nesting rides VM slots).
@@ -521,11 +528,13 @@
        k    #vars
        body (lp ? GB (ainl M inl st))
        env  (vars + ps)
-       ; adesug rewrites a head by its MEANING, and env is this frame's binders alone -- an
-       ; enclosing letrec that rebinds one of its words is invisible there, so the body would
-       ; run the nif the name no longer names. farq knows those binders; a shadowed word joins
-       ; the env adesug reads and stays a call, resolved through lams like any other sibling.
-       denv (env + filter (n \ farq n) '(list nil? one? atom? != !== &&))
+       ; a head is the op only where its name still MEANS it, and env is this frame's binders
+       ; alone -- an enclosing letrec that rebinds one of the amble's words is invisible there,
+       ; so every recognizer would read the op the name no longer names. farq knows those
+       ; binders: shd is the taken names, usually none, and adesug, amble-ok?, asafe and acg
+       ; all mask through it, so a rebound word stays a call in all four.
+       shd  (filter (nm \ elem nm env || farq nm) aopnames)
+       denv (env + shd)
        body (adesug denv ti ta body)                         ; own list/&& by definition (nested links / nested ?s) + untag
        inits (map (i \ adesug denv ti ta (ainl i inl st)) inits)
        ins  (st 'l)
@@ -616,7 +625,7 @@
            (? (= cl 'bad) 'bad
               (atom? ex) cl
               (aquote? ex) cl
-              (: op <ex  as >ex
+              (: op <ex  as >ex  oop (elem op shd ? 0 op)
                  (? (= op ':) ((: (gol l c) (atom? >l ? (asafe tl c <l) (gol >>l (asafe 0 c <>l)))) as cl)
                     (= op '?)
                      (: ct (fbk ? (asafe 0 cl <as) (aguard (asafe 0 cl <as)))
@@ -626,20 +635,20 @@
                     (sfq && tl && (= op self) && (#as = (a - ni)))
                      (: c2 (aseq cl as) (= c2 'bad ? 'bad 0))                ; the self back edge
                     (= op go) (fbk ? (aseq cl as) (aguard (aseq cl as)))     ; the named-let back edge
-                    (elem op '(two? ==)) (aseq cl as)
-                    (= op '= && (aqnom? <as || aqnom? <>as || lit? eqv)) (aseq cl as)
-                    (= op 'tally && !(elem 'tally env) && elem 'tally gn && atom? >as) (aseq cl as)
-                    (= op '|| && !(elem op env) && two? >as) (fbk ? (aseq cl as) (aguard (aseq cl as)))
+                    (elem oop '(two? ==)) (aseq cl as)
+                    (= oop '= && (aqnom? <as || aqnom? <>as || lit? eqv)) (aseq cl as)
+                    (= oop 'tally && elem 'tally gn && atom? >as) (aseq cl as)
+                    (= oop '|| && two? >as) (fbk ? (aseq cl as) (aguard (aseq cl as)))
                     (= op amble-lam) (two? >>as ? (aguard cl) cl)            ; the site's room guard, over frame reads
-                    (elem op '(cap cup . + - * // % & | ^ < <= > >= =)) (fbk ? (aseq cl as) (aguard (aseq cl as)))   ; stubs in fallback mode
-                    (elem op '(mpeep peep)) (aguard (aseq cl as))         ; reads: a guard, never a call-out
+                    (elem oop '(cap cup . + - * // % & | ^ < <= > >= =)) (fbk ? (aseq cl as) (aguard (aseq cl as)))   ; stubs in fallback mode
+                    (elem oop '(mpeep peep)) (aguard (aseq cl as))         ; reads: a guard, never a call-out
                     (: c2 (aseq cl as) (= c2 'bad ? 'bad 1))))))             ; a call: its args, then the call
        ok ((two? s) && (two? >s) && (all nom? ps) && (adistinct ps)
            && (a = #ps) && (0 < a) && lpok && drok && !(= lts 'bad) && (two? body)
            && (getenv "LOVE_AMBLE_NOCALL" ? !(ahascall? env go body) 1)                ; the call-lane bisect knob: splits the call machinery from the rest
            && (all lit? gvals) && (all lit? ovals) && (nd < 48) && ((k + #gn + #cn + nq + nin + nl + (fbk ? 1 0)) < 48)   ; slots are cheap once the prologue guards the room (below)
-           && (all (i \ amble-ok? ps kn 0 0 0 i) inits)
-           && (amble-ok? env kn go k 1 body)
+           && (all (i \ amble-ok? ps shd kn 0 0 0 i) inits)
+           && (amble-ok? env shd kn go k 1 body)
            && !(= (asafe 1 (foldl (\ ac i (asafe 0 ac i)) 0 inits) body) 'bad))   ; the restart law, over the gated body
        (? ok
           (: _ (getenv "LOVE_AMBLE_TRACE" ? (puts ("amble: " + show s + "\n")) 0)   ; the compile trace: names every ambled source
@@ -861,27 +870,27 @@
                  (= e amble-nil) [['ld A SP gbo]]
                  (nom? e) [['ld A SP (voff e)]]
                  (aquote? e) [['ld A SP (gbo + (8 * (1 + #gn + #cn + (aposq e qs 0))))]]   ; a quoted datum: its extras slot (past the globals + sibling entries)
-                 (: op <e  as >e
+                 (: op <e  as >e  oop (elem op shd ? 0 op)
                     (? (= op ':) ((: (gol l) (atom? >l ? (acg <l d)                            ; a value let: each binding lands in its slot, in order
                                                   ((acg <>l d)
                                                    + (= <l '_ ? () [['st SP (lvo <l) A]])
                                                    + (gol >>l)))) as)
                        (= op '?) (acq <as <>as <>>as d)
-                       (= op 'two?) (atwo <as d)
-                       (= op 'cap) (acap <as d 8)
-                       (= op 'cup) (acap <as d 16)
-                       (= op '==) (aid <as <>as d)
-                       (= op '.) (alink <as <>as d)
-                       (= op '= && (aqnom? <as || aqnom? <>as))
+                       (= oop 'two?) (atwo <as d)
+                       (= oop 'cap) (acap <as d 8)
+                       (= oop 'cup) (acap <as d 16)
+                       (= oop '==) (aid <as <>as d)
+                       (= oop '.) (alink <as <>as d)
+                       (= oop '= && (aqnom? <as || aqnom? <>as))
                         (aid <as <>as d)                                               ; (a = 'sym): a point equals only itself (the point-= law) -> raw identity, total
-                       (= op '= && (lit? eqv)) (aeq2 <as <>as d)
-                       (acmp? op) (acmp2 op <as <>as d)
-                       (elem op '(+ - *)) (aar op <as <>as d)
-                       (elem op '(// %)) (adm op <as <>as d)
-                       (elem op '(& | ^)) (abit op <as <>as d)
-                       (= op 'tally && !(elem 'tally env) && elem 'tally gn && atom? >as)
-                        (atally <as d)                                       ; the tally fast lane (env-shadowed or multi-arg falls to the call paths)
-                       (= op '|| && !(elem op env) && two? >as) (aor as d)
+                       (= oop '= && (lit? eqv)) (aeq2 <as <>as d)
+                       (acmp? oop) (acmp2 op <as <>as d)
+                       (elem oop '(+ - *)) (aar op <as <>as d)
+                       (elem oop '(// %)) (adm op <as <>as d)
+                       (elem oop '(& | ^)) (abit op <as <>as d)
+                       (= oop 'tally && elem 'tally gn && atom? >as)
+                        (atally <as d)                                       ; the tally fast lane (a taken name or multi-arg falls to the call paths)
+                       (= oop '|| && two? >as) (aor as d)
                        (= op amble-lam) (asite as d)
                        (= op go) (ago as d)
                        (acall op as d))))

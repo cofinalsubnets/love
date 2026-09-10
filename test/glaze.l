@@ -83,3 +83,31 @@
    q (. 0 (. "x" ()))
    _ (test (7 = c6 q))
    0)
+
+; --- a head the amble reads by NAME is that head only while the name still means it ------
+; two?/cap/cup, the binary ops, the compares, ., tally and || each carry an arm in the gate
+; and in both emitters, and a frame's binders are not the only names in scope: an enclosing
+; letrec that spells one of them takes it away. every local below answers 7 where its op
+; answers something else, and each loop runs past the amble's threshold, so what answers is
+; the native and not the interpreter. the bodies compute -- a constant one is folded in
+; before any recognizer sees a call. each driver avoids the ops its own group shadows.
+(: (+ a b) (charm? a ? 7 9)   (- a b) (charm? a ? 7 9)   (* a b) (charm? a ? 7 9)
+   (// a b) (charm? a ? 7 9)  (% a b) (charm? a ? 7 9)
+   (go l acc) (two? l ? (go >l [(+ <l <l) (- <l <l) (* <l <l) (// <l <l) (% <l <l)]) acc)
+   _ (test (all (x \ x = 7) (go ^40 0)))
+   0)
+(: (& a b) (charm? a ? 7 9)   (| a b) (charm? a ? 7 9)   (^ a b) (charm? a ? 7 9)
+   (go l acc) (two? l ? (go >l [(& <l <l) (| <l <l) (^ <l <l)]) acc)
+   _ (test (all (x \ x = 7) (go ^40 0)))
+   0)
+(: (< a b) (charm? a ? 7 9)   (<= a b) (charm? a ? 7 9)  (> a b) (charm? a ? 7 9)
+   (>= a b) (charm? a ? 7 9)  (= a b) (charm? a ? 7 9)   (== a b) (charm? a ? 7 9)
+   (go l acc) (two? l ? (go >l [(< <l <l) (<= <l <l) (> <l <l) (>= <l <l) (= <l <l) (== <l <l)]) acc)
+   _ (test (all (x \ 7 == x) (go ^40 0)))
+   0)
+; ..and the heads the loop above needs for itself, driven by arithmetic instead
+(: (two? a) (charm? a ? 7 9)  (cap a) (charm? a ? 7 9)   (cup a) (charm? a ? 7 9)
+   (. a b) (charm? a ? 7 9)   (|| a b) (charm? a ? 7 9)  (tally a) (charm? a ? 7 9)
+   (go n acc) (n <= 0 ? acc (go (n - 1) [(two? n) (cap n) (cup n) (. n n) (|| n n) (tally n)]))
+   _ (test (all (x \ x = 7) (go 40 0)))
+   0)
