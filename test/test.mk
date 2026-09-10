@@ -20,7 +20,7 @@
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_raw test_raw_a64 test_raw_bake test_raw_rv64 \
   test_refuzz test_root test_rv64 test_rp2040 test_rvboot test_sat test_sb test_seat test_seed \
-  test_selfhost test_slow test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
+  test_selfhost test_slow test_softfp test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
   test_vec test_vi test_virt test_virt_build test_wake test_wasm test_xfixpoint uuhomgen uukind uumx uusplgen \
@@ -44,7 +44,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_tools test_web test_hostnif test_doc test_glaze test_hook test_sat test_holo test_holowasm test_as \
 	test_holofuzz test_glazefuzz test_encver test_kore test_refuzz test_sb test_vi \
 	test_clay test_moonfuzz test_forge test_gates \
-	test_cts test_libc test_ulp test_raw \
+	test_cts test_libc test_ulp test_softfp test_raw \
 	test_drv test_hdiff test_tco0 nettest test_wake test_gz test_cpio test_fat32 test_root \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
@@ -567,6 +567,12 @@ test_libc: host
 # right, never whether OUR compiler builds it -- and float BITS are where codegen hides.
 test_ulp: host
 	@sh test/gate/ulp.sh $(ho) $m
+# test_softfp -- THE COMPILER RUNTIME, against the machine that has the instruction.
+# apps/moon/lib/rt.c is what mooncc's own lowering calls on a board with no FPU, no umull
+# and no clz; on the board there is no second opinion, so it is held to BIT equality with
+# real hardware here, built by the system cc and by mooncc on all three backends.
+test_softfp: host
+	@sh test/gate/softfp.sh $(ho) $m
 # The rung-2 self-host gate: compile the love AND host lanes with mooncc (gcc/clang only
 # LINKS), then run the whole corpus through the all-mooncc binary -- the compiler compiles
 # the runtime it runs on. OPT-IN; x86-64 only; the binary carries no image, so a fresh egg.
@@ -837,15 +843,13 @@ test_nucleo446_smoke: host
 # vector table and crt0 are C, and boot2 -- the 256-byte stage the mask ROM checksums before
 # it runs anything -- is laid straight into a named section by mkboot2.l. So the boot image
 # verify has THREE words, not two: boot2's CRC-32/MPEG-2 must be 0x7a4eb274, the SP inside the
-# 264 KB SRAM, the reset entry thumb-bit and inside flash. rlink.l binds, ocopy.l flattens; the
-# skip asks after the last foreign thing here, gcc's cortex-m0 libgcc, READ as an archive.
-# qemu has no RP2040 machine, so this builds and never boots -- test_thumb1 gates the ISA.
+# 264 KB SRAM, the reset entry thumb-bit and inside flash. rlink.l binds, ocopy.l flattens, and
+# rt.o answers the __aeabi_* calls -- nothing foreign is left to ask after, so this lane never
+# skips. qemu has no RP2040 machine, so it builds and never boots -- test_mps2_t1 runs the ISA.
 test_rp2040: host
 	@echo TEST out/rp2040/love.bin
-	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
-	   echo "test_rp2040: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
-	  $(MAKE) -C i/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }; \
-	  echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker and flatten, flash R|X, boot surface verified"
+	@$(MAKE) -C i/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }
+	@echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker, flatten and runtime -- no foreign file, flash R|X, boot surface verified"
 # test_boards -- THE BUILD HALF of the ports, no emulator anywhere. the boot gates above
 # prove a port RUNS; this one proves it still COMPILES, and that is the half that rots
 # unwatched -- a path or a roster moves, nothing in the merge gate names a board, and the

@@ -1604,7 +1604,7 @@
    ; a pair shift by a variable count in r2 (0..63), value on the protocol. branchy: the big lane
    ; (count >= 32) moves one word across; the small lane composes the carry-over through r12
    ; (count 0 skips -- a 32-c shift at c=0 would be UNPREDICTABLE).
-   ; v6-M: no r12 ALU dest and no free low temp -> libgcc's helper (count in r2, same staging).
+   ; v6-M: no r12 ALU dest and no free low temp -> the runtime helper (count in r2, same staging).
    (pshiftv g kind)
     (? (v6m? g)
        [['call (kind @ 'shl '__aeabi_llsl 'shr '__aeabi_llsr '__aeabi_lasr)]]
@@ -1624,7 +1624,7 @@
    ; the 64-bit float bridges (VFP on AArch32 converts only through 32 bits). llong -> double:
    ; hi rides the U-converter and scales by 2^32 (exact), lo adds exactly, one rounding total;
    ; the signed face negates the pair in, the double out (INT64_MIN survives: its u64 face IS
-   ; 2^63). value r0:r1 -> f0. v6-M: the whole bridge is one libgcc call.
+   ; 2^63). value r0:r1 -> f0. v6-M: the whole bridge is one runtime call.
    (cvtlld g usg)
     (? (v6m? g)
        [['call (? usg '__aeabi_ul2d '__aeabi_l2d)] '(movqxr f0 r0)]
@@ -1642,7 +1642,7 @@
            + u2d + [['label ld]]))))
    ; double -> llong, toward zero: peel sign/exponent off the pattern, rebuild the 53-bit integer
    ; mantissa as a pair, shift it into place, refix the sign. |d| < 1 answers 0; out-of-range is
-   ; ub and shifts to garbage like the hardware would. v6-M: one libgcc call (the peel itself is
+   ; ub and shifts to garbage like the hardware would. v6-M: one runtime call (the peel itself is
    ; sign-blind bit arithmetic -- only the libcall face needs the target's signedness).
    (cvtdll g usg)
     (? (v6m? g)
@@ -1921,13 +1921,13 @@
            ll (? (bi = "__builtin_clz") () (bi = "__builtin_clzll") 1 !(t32? g))
            pre (? ll () '((shl r0 32)))    ; clz32(x) = clz64(x << 32) -- the shift also clears upper garbage
            (? (bad? e1) 'bad
-              (t32? g && !ll)              ; clz32 is one word: clz / libgcc's __clzsi2
+              (t32? g && !ll)              ; clz32 is one word: clz / the runtime's __clzsi2
                (mkv 'long 'r0 (asint g e1 +
                   (? (v6m? g) '((call __clzsi2)) '((clz r0 r0)))))
               (t32? g)                     ; the pair: clz(hi), or 32 + clz(lo) when hi is 0
                (: lz (nlab g ".cz") ld (nlab g ".czd")
                   (mkv 'long 'r0 (asll g e1 +
-                    (? (v6m? g)   ; no clz on v6-M: libgcc's __clzsi2 (arg/result r0)
+                    (? (v6m? g)   ; no clz on v6-M: the runtime's __clzsi2 (arg/result r0)
                        ['(cmp r1 0) ['br 'eq lz] '(mov r0 r1) '(call __clzsi2) ['jmp ld]
                           ['label lz] '(call __clzsi2) '(add r0 r0 32) ['label ld]]
                        ['(cmp r1 0) ['br 'eq lz] '(clz r0 r1) ['jmp ld]
@@ -3401,15 +3401,15 @@
                                  ; unsigned / and % ride the backend's restoring expansion,
                                  ; relations ride subs/sbcs. signed pair divide stays refused.
                                  (: mid2 (asll g av + spush2 + asll g b + spop2 'r2 'r3)
-                                    ; v6-M divide staging: numerator (the LEFT) lands r0:r1, denominator r2:r3
-                                    ; (the __aeabi_(u)ldivmod protocol); mov is the hi-form, flag-silent
+                                    ; v6-M divide staging: numerator (the LEFT) lands r0:r1, denominator
+                                    ; r2:r3, the ordinary pair-argument places; mov is the hi-form, flag-silent
                                     mid2d (asll g av + spush2 + asll g b
                                            + '((mov r2 r0) (mov r3 r1)) + spop2 'r0 'r1)
                                     rt (ubin !(t32? g) ta tb)
                                     (op @ '+ (mkv rt 'r0 (mid2 + '((adds r0 r2 r0) (adc r1 r3 r1))))
                                           '- (mkv rt 'r0 (mid2 + '((subs r0 r2 r0) (sbc r1 r3 r1))))
                                           '*
-                                          (? (v6m? g)   ; no umull/mla on v6-M: libgcc's exact helper (commutative, either staging)
+                                          (? (v6m? g)   ; no umull/mla on v6-M: the runtime's exact helper (commutative, either staging)
                                              (mkv rt 'r0 (mid2 + '((call __aeabi_lmul))))
                                              (mkv rt 'r0 (mid2 + '((imul r3 r3 r0) (mla r3 r2 r1 r3)
                                                                    (umull r0 r12 r2 r0) (add r1 r12 r3)))))
@@ -3417,13 +3417,15 @@
                                           (: w9 (irop op)
                                              (mkv rt 'r0 (mid2 + [[w9 'r0 'r2 'r0] [w9 'r1 'r3 'r1]])))
                                          '/
-                                          (? (v6m? g)   ; quotient rides out in r0:r1; the signed face works too (__aeabi_ldivmod)
-                                             (mkv rt 'r0 (mid2d + [['call (? unsg '__aeabi_uldivmod '__aeabi_ldivmod)]]))
+                                          ; the one-answer names, not aeabi's uldivmod: that one returns the
+                                          ; quotient in r0:r1 AND the remainder in r2:r3, which no C function
+                                          ; can spell, and moon asks for one of the two anyway
+                                          (? (v6m? g)
+                                             (mkv rt 'r0 (mid2d + [['call (? unsg '__udivdi3 '__divdi3)]]))
                                              unsg (mkv rt 'r0 (mid2 + '((udivll)))) 'bad)
                                          '%
-                                          (? (v6m? g)   ; the remainder rides r2:r3 -> the protocol pair
-                                             (mkv rt 'r0 (mid2d + [['call (? unsg '__aeabi_uldivmod '__aeabi_ldivmod)]
-                                                                    '(mov r0 r2) '(mov r1 r3)]))
+                                          (? (v6m? g)
+                                             (mkv rt 'r0 (mid2d + [['call (? unsg '__umoddi3 '__moddi3)]]))
                                              unsg (mkv rt 'r0 (mid2 + '((uremll)))) 'bad)
                                          ('eq || 'ne || 'lt || 'le || 'gt || 'ge)
                                           (: cf (prel g op unsg)

@@ -102,12 +102,11 @@ $(R)/$(o)/love-pd.img: $(R)/$(o)/baker-pd.elf $(R)/$(o)/waker-pd.elf
 # RP2040 machine exists in qemu; the microbit differential legs prove the v6-M encoding
 # floor, this proves the whole runtime. ai_tco=0: v6-M has no sibcalls (the pop-pc
 # epilogue), so the VM rides the trampoline -- the lane the clang rp2040 build uses. The
-# __aeabi soft-float/64-bit helpers come from gcc's v6-m multilib.
+# __aeabi soft-float/64-bit helpers are rt-t1.o, the tree's own.
 mps2t1_cc = $(MOONCC) -t thumb1 -D ai_tco=0 -D __STDC_HOSTED__=0 -I. -Il -Iout/lib
-t1_lg = `arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -print-libgcc-file-name`
 t1_libc_o = $(addprefix $(R)/$(o)/,$(addsuffix -t1.o,$(libc_m)))
 t1_love_o = $(addprefix $(R)/$(o)/,$(addsuffix -t1.o,$(love_m)))
-t1_objs = $(R)/$(o)/start.o $(t1_love_o) $(R)/$(o)/am-t1.o $(t1_libc_o) \
+t1_objs = $(R)/$(o)/start.o $(t1_love_o) $(R)/$(o)/am-t1.o $(R)/$(o)/rt-t1.o $(t1_libc_o) \
   $(R)/$(o)/main-t1.o
 
 $(foreach u,$(love_m),$(eval $(call p_obj,$u-t1,l/$u.c,\
@@ -117,10 +116,11 @@ $(foreach m,$(libc_m),$(eval $(call p_obj,$m-t1,apps/moon/lib/moonlibc/string/$m
 $(eval $(call p_obj,main-t1,i/mps2/main.c,$(mainc),$(mps2t1_cc)))
 $(eval $(call p_obj,am-t1,apps/moon/lib/moonlibc/math/am.c,$(R)/apps/moon/lib/moonlibc/math/am.c $(mc),\
   $(MOONCC) -t thumb1 -Iapps/moon/lib/moonlibc/math -Iapps/moon/include))
+$(eval $(call p_obj,rt-t1,apps/moon/lib/rt.c,$(R)/apps/moon/lib/rt.c $(mc),\
+  $(MOONCC) -t thumb1 -Iapps/moon/include))
 
-# our linker binds this one too: libgcc.a rides in as an ARCHIVE, resolved by need through
-# its ranlib index (l/holo/link.l's ld-arsyms). gcc's own v6-M members are the only
-# foreign objects in the tree's boot images.
+# our linker binds this one too, and every object on the line is ours: no foreign file
+# rides any boot image in this tree.
 $(R)/$(o)/love-t1.elf: $(t1_objs)
 	@echo MOON	$@
-	@cd $(R) && $(MOONCC) -t thumb1 -Ttext 0 -Tdata 0x20000000 -nostdlib $(t1_objs:$(R)/%=%) $(t1_lg) -o $(o)/love-t1.elf
+	@cd $(R) && $(MOONCC) -t thumb1 -Ttext 0 -Tdata 0x20000000 -nostdlib $(t1_objs:$(R)/%=%) -o $(o)/love-t1.elf

@@ -126,8 +126,12 @@ lg=$(arm-none-eabi-gcc $cpu -print-libgcc-file-name)
 # -- the three lists, per target. see the header for what each one asserts. --
 # refuse is tested FIRST, so a name may sit in both: 135-uac wants printf, and on
 # thumb2 the compiler refuses it before the libc question is reached at all.
+# 161-enumwide is on both refuse lists for one row of its own: an enumerator wider than
+# the int word asks for an 8-byte enum, which mooncc does not widen to on ILP32, and the
+# file's own _Static_assert is what says so.
 hosted="72-quals 110-param5 114-rmwlv 134-tentative 135-uac 142-syntax 146-declscope
-        147-enumscope 148-tagscope 149-paste 150-alloc 154-blockextern"
+        147-enumscope 148-tagscope 149-paste 150-alloc 154-blockextern 158-gnukw
+        159-stmtexpr 160-rangeinit 162-constexpr 163-bitfields 164-switchtab"
 # each name, and what it assumes: 81 puts 2^62 in a `long`; 99 and 104 shift a
 # `unsigned long` by 32 or more, which is undefined once long is 32 bits; 105 unions a
 # double with one and reads bit 63; 120 asks for a `:40` bit-field (gcc REFUSES it here,
@@ -140,14 +144,14 @@ case $tgt in
   thumb2) refuse="67-varargs-double 68-static-assert 71-varargs-sysv 80-manyargs 85-aggval
                   88-varargs-overflow 97-muslrungs 100-complex 101-vla 102-bigstruct
                   111-int128 115-rmwop 117-vastruct 128-bswap 129-sync 133-popcount
-                  135-uac 144-gnubuiltins 151-w128fuzz" ;;
+                  135-uac 144-gnubuiltins 151-w128fuzz 161-enumwide" ;;
   # the two lists are NOT the same list: v6-M takes 80-manyargs and 135-uac where
   # ARMv7E-M refuses them, and refuses 82-znvalue where thumb2 takes it. the composite
   # rows do not move together (doc/misc/moon-c-gaps), so neither do these.
   thumb1) refuse="67-varargs-double 68-static-assert 71-varargs-sysv 82-znvalue 85-aggval
                   88-varargs-overflow 97-muslrungs 100-complex 101-vla 102-bigstruct
                   111-int128 115-rmwop 117-vastruct 128-bswap 129-sync 133-popcount
-                  144-gnubuiltins 151-w128fuzz" ;;
+                  144-gnubuiltins 151-w128fuzz 161-enumwide" ;;
 esac
 
 inlist() { for w in $2; do [ "$w" = "$1" ] && return 0; done; return 1; }

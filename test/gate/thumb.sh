@@ -172,7 +172,7 @@ thumb1)
   lane v  test/thumb1/libv.c  test/thumb1/harnessv.c  "" 7  30 "thumb1 varargs" \
     " = every differential check vs gcc; 100+n names the first miss -- see test/thumb1/harnessv.c; the pop-r3/bx epilogue or the r0-r3 push block over lr/fp/r4 is the usual suspect"
   lane p  test/thumb2/lib64.c test/thumb2/harness64.c "" 48 30 "thumb1 64-bit pairs" \
-    " = every differential check vs gcc; 100+n names the first miss -- see test/thumb2/harness64.c; the v6-M lanes ride ADCS/SBCS inline + __aeabi_lmul/(u)ldivmod/shift libcalls"
+    " = every differential check vs gcc; 100+n names the first miss -- see test/thumb2/harness64.c; the v6-M lanes ride ADCS/SBCS inline + __aeabi_lmul/shift + __u/divdi3 libcalls"
   lane d  test/thumb2/libd.c  test/thumb2/harnessd.c  "" 45 30 "thumb1 soft doubles" \
     " = every differential check vs gcc's base-ABI soft float; 100+n names the first miss -- see test/thumb2/harnessd.c; doubles ride gp pairs at every seam, f0/f1/f15 are frame cells inside a fn (soften6)"
   lane am "$am" test/thumb2/harnessam.c "$aminc" 9 60 "thumb1 am.c" \
