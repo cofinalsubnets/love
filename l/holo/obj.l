@@ -29,6 +29,7 @@
    ra-abs64  257                                    ; R_AARCH64_ABS64           S + A
    ra-jump26 282                                    ; R_AARCH64_JUMP26          (S+A-P)>>2 into b's imm26
    ra-call26 283                                    ; R_AARCH64_CALL26          ... into bl's imm26
+   ra-prel32 261                                    ; R_AARCH64_PREL32          S + A - P in four bytes (a jump table's entry)
    ra-pghi21 275                                    ; R_AARCH64_ADR_PREL_PG_HI21  page(S+A)-page(P) into adrp
    ra-lo12   277                                    ; R_AARCH64_ADD_ABS_LO12_NC   (S+A) & 0xfff into add
    ; ... and rv64. the backend's 8-byte 'pcrel (one fixup across the auipc
@@ -36,6 +37,7 @@
    ; second-word -- and jalr/addi/ld share the I-form imm field, so the one type
    ; serves call and la alike (the placeholder carries both base words).
    rr-64    2                                       ; r_rv64_64        S + A  (collides with R_X86_64_PC32: link.l dispatches by machine)
+   rr-pc32  57                                      ; R_RISCV_32_PCREL  S + A - P in four bytes (a jump table's entry)
    rr-jal   17                                      ; R_RISCV_JAL       S + A - P into jal's j-imm
    rr-call  19                                      ; R_RISCV_CALL_PLT  S + A - P across the auipc pair
 
@@ -624,7 +626,9 @@
                  ; `stdout` has no plt stub).
                  'rel32
                   (o-rela off si
-                          (? (o-has? wkset lbl && o-has? fnidx lbl) r-plt32
+                          (? rv rr-pc32                        ; ..and each machine's own, 2 meaning
+                             a64 ra-prel32                     ; only what x64 means by it
+                             (o-has? wkset lbl && o-has? fnidx lbl) r-plt32
                              (o-where lanes lbl) r-pc32
                              (elem pv '(232 233)) r-plt32
                              r-pc32)

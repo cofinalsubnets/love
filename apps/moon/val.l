@@ -113,6 +113,8 @@
                     (: op <f
                        (? (op = 'jmp) (: j (peep lt <>f -1) (? (j < 0) () [j]))
                           (op = 'br) (: j (peep lt <>>f -1) (? (j < 0) nx (j . nx)))
+                          ; a table jump names its targets, so the graph keeps the edges
+                          (op = 'jmpt) (filter (\ j (0 <= j)) (map (\ L (peep lt L -1)) (f 3)))
                           (elem op '(ret jmpr ud2)) ()
                           nx)))
               _ (pin t i ss)

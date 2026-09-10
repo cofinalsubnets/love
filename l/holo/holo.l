@@ -139,7 +139,7 @@
           ('csrrwi . 3) ('csrrsi . 3) ('csrrci . 3)
           ('sx1 . 1) ('sx2 . 1) ('sx4 . 1) ('zx1 . 1) ('zx2 . 1) ('zx4 . 1)
           ('push . 1) ('pop . 1) ('neg . 1) ('not . 1) ('inc . 1) ('dec . 1) ('tp . 1)
-          ('jmp . 1) ('jmp8 . 1) ('jmpr . 1) ('callr . 1) ('call . 1) ('raw . 1) ('lapool . 1)
+          ('jmp . 1) ('jmp8 . 1) ('jmpr . 1) ('jmpt . 3) ('callr . 1) ('call . 1) ('raw . 1) ('lapool . 1)
           ('li . 2) ('mov . 2) ('cmp . 2) ('test . 2) ('set . 2) ('br . 2) ('br8 . 2)
           ('la . 2) ('lar . 2) ('lia . 2) ('ldseg . 2) ('clz . 2)
           ('shl . 2) ('shr . 2) ('sar . 2) ('rol . 2) ('ror . 2) ('ror4 . 2)

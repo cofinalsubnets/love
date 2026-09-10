@@ -422,6 +422,9 @@
 
    (rv-jmp label)  [(fix 4 'j21 label 0x6F)]
    (rv-jmpr d)     (rv-i 0 (rvn d) 0 0 0x67)                                 ; jalr x0, 0(d)
+   ;; the table jump: jmpr, with the table's label and its target list riding along --
+   ;; operands the machine has no use for and the analyses cannot do without.
+   (rv-jmpt d tl labs) (rv-jmpr d)
    (rv-call label) [(fix 8 'pcrel label ((((1 << 15) | ((1 << 7) | 0x67)) * 4294967296) + (0x17 | (1 << 7))))]
    (rv-callr d)    (rv-i 0 (rvn d) 0 1 0x67)                                 ; jalr ra, 0(d)
    (rv-la d label) (: dn (rvn d)
@@ -503,7 +506,7 @@
           ('lea . rv-lea) ('lean . rv-lea)
           ('push . rv-push) ('pop . rv-pop)
           ('neg . rv-neg) ('not . rv-not) ('inc . rv-inc) ('dec . rv-dec)
-          ('jmp . rv-jmp) ('br . rv-br) ('jmpr . rv-jmpr) ('callr . rv-callr)
+          ('jmp . rv-jmp) ('br . rv-br) ('jmpr . rv-jmpr) ('jmpt . rv-jmpt) ('callr . rv-callr)
           ('mulo . rv-mulo) ('mulh . rv-mulh) ('umulh . rv-umulh) ('set . rv-set)
           ('adds . rv-addsub-s 'adds) ('subs . rv-addsub-s 'subs)
           ('div . rv-div) ('rem . rv-rem) ('udiv . rv-udiv) ('urem . rv-urem)

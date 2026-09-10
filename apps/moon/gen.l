@@ -3750,6 +3750,7 @@
           (elem op wmops) [[(f 3) (f 4)] [<>f <>>f] 1]
           (op = 'mla) [[<>>f <>>>f (f 4)] [<>f] 1]
           (op = 'clz) [[<>>f] [<>f] 1]
+          (op = 'jmpt) [[<>f] () ()]           ; the table jump reads its register and nothing else
           ; the wide multiply reads two and writes one -- plus rax on x64, where the
           ; one-operand mul is rdx:rax-fixed (it saves rdx itself, so that one stays unspelled)
           (elem op '(mulh umulh)) [[<>>f <>>>f] ([<>f] + (x64? g ? '(r0) ())) ()]
@@ -4207,6 +4208,9 @@
                  (op = 'br)                          ; the taken edge records; the fall-through rides on
                   (: _ (pmerge <>>f cur rg sl ce ci)
                      (go r 1 cur rg sl ce ci (f . acc)))
+                 (op = 'jmpt)                        ; ..and a table jump records one edge per target
+                  (: _ (map (\ L (pmerge L cur rg sl ce ci)) (f 3))
+                     (go (swallow r) () cur rg sl ce ci (f . acc)))
                  (xit? f) (go (swallow r) () cur rg sl ce ci (f . acc))
                  (op = 'li)
                   (: nx (? (two? r) <r ())
@@ -4756,6 +4760,8 @@
              (succ f i) (: op (? (two? f) <f 'x)
                            (? (op = 'jmp) [(peep labt <>f -1)]
                               (op = 'br) [(peep labt <>>f -1) (i + 1)]
+                              ; the table jump goes to every label its own operand names
+                              (op = 'jmpt) (map (\ L (peep labt L -1)) (f 3))
                               (xit? f) ()
                               [(i + 1)]))
              lin {}
@@ -5300,7 +5306,7 @@
               (? (dead && lbl)
                   (refs <>f ? (f . sweep >l 0) (sweep >l 1))
                  dead (sweep >l 1)
-                 (f . sweep >l (xit? f || (two? f && (= <f 'jmp)))))))
+                 (f . sweep >l (xit? f || (two? f && elem <f '(jmp jmpt)))))))
        (sweep fs 0))
 
    ; -- the callee-saved contract, held at emission (x64): a borrowed register -- r3 r4
@@ -5310,7 +5316,7 @@
    ; bars are rostered quiet here (control, calls, the d128 r0:r2 family) -- an op on
    ; neither roster refuses, so a new op must name its cs effect to land. a fn carrying
    ; inline asm owns its own clobbers: skipped whole. --
-   csquiet '(label align ud2 trap br jmp jmpr ret call callr sys mulo   ; trap = a64's brk #0, ud2's twin
+   csquiet '(label align ud2 trap br jmp jmpr jmpt ret call callr sys mulo   ; trap = a64's brk #0, ud2's twin
              sx128 n128 a128 a128r s128 s128r m128 m128r mw128 mw128r c128 c128r
              dv128 rm128 inc128 dec128 shl128 shr128 sar128 shl128v shr128v sar128v)
    (csdefs g f)                                       ; the cs regs one form writes | 'dark
@@ -7202,7 +7208,7 @@
                     tab {}                ; this switch's value->label map (and 'dflt->label)
                     cases (rev (scasel-l g items tab ()))   ; pre-scan the body (a stmt LIST) at any depth -> (value label) dispatch pairs
                     dflt (peep tab 'dflt lend)
-                    disp (: (go l acc)
+                    chain (: (go l acc)
                              (? !(two? l) acc
                                 (: e2 <l  v (cfit g (vty c) <e2)  lab <>e2
                                    ins (? (immok g 'cmp v)
@@ -7210,6 +7216,8 @@
                                           [['li 'r1 v] ['cmp cr9 'r1] ['br 'eq lab]])
                                    (go >l (acc + ins))))
                             (go cases ()))
+                    jt (jtable g c cr9 cases dflt)
+                    disp (? (= jt 'no) chain jt)
                     _ (rfree g cr9)
                     _ (pins g 'brk (lend . g 'brk)
                               'brkm (() . peep g 'brkm ())   ; lock-step (a switch break's snap is discarded)
@@ -7235,6 +7243,49 @@
                    (? (bad? r) 'bad
                       (cgitems g env >items (acc + r)))))))
 
+   ; -- the switch's table lane: where the case values are dense enough, the O(n) compare
+   ; chain becomes one bounds check, one indexed load and an indirect jump. the index is the
+   ; control less the lowest case, so the whole range test is a single UNSIGNED compare --
+   ; anything below the low end wraps past the top. answers the forms | 'no (the caller keeps
+   ; its chain).
+   ; an entry is the target's distance from its own cell, not its address: `rel32` is a
+   ; difference between two labels of one image, so the link settles it and nothing writes it
+   ; again -- which is what lets the table ride .rodata, where an absolute one could not (the
+   ; rodata span is its own flags-4 segment, and -pie's startup slides every abs64 site).
+   ; so the load reads a signed word and adds it to the cell's own end: leax lands ON that end
+   ; (+4), ld4 reads back one word, and the index's seat carries the sum, being dead by then.
+   ; `jmpt` names its targets so the labels survive deadlab and the edges reach the analyses.
+   (jtable g c cr9 cases dflt)
+    (: vs (sort (map (\ e2 (cfit g (vty c) <e2)) cases))
+       n9 #cases
+       lo (? (two? vs) <vs 0)
+       hi (? (two? vs) (vs (n9 - 1)) 0)
+       span (hi - lo + 1)
+       (? ((wasm? g) || (t32? g)) 'no               ; no memory table on the one, and the other's
+                                                    ; REL lane re-encodes every field: unproven here
+          (abl? g 'jtab) 'no
+          (n9 < 6) 'no                              ; fewer cases than a table is worth
+          (4096 < span) 'no                         ; ..and a span no table should cover
+          ((3 * n9) < span) 'no                     ; too sparse: a third full is the floor
+          !(immok g 'cmp (span - 1)) 'no
+          (!(lo = 0) && !(imma g 'sub lo)) 'no
+          (: tv (foldl (\ t e2 (pin t (cfit g (vty c) <e2) <>e2)) {} cases)
+             (ent i acc) (? (span <= i) (rev acc)
+                            (ent (i + 1) ([['fix 4 'rel32 (peep tv (lo + i) dflt) 0]] . acc)))
+             labs (foldl (\ l e2 (elem <>e2 l ? l (<>e2 . l))) [dflt] cases)
+             tl (nlab g ".J")
+             rI (? (wr? g cr9) cr9 (ralloc g))
+             (? !rI 'no
+                (: rT (ralloc g)
+                   (? !rT (: _ (rpeq? g rI cr9 ? () (rfree g rI)) 'no)
+                      (: _ (pin g 'jtabs ([tl (catall (ent 0 ()))] . g 'jtabs))
+                         _ (rfree g rT)
+                         _ (rpeq? g rI cr9 ? () (rfree g rI))
+                         ((? (lo = 0) (rpeq? g rI cr9 ? () [['mov rI cr9]])
+                             [['sub rI cr9 lo]]) +
+                          [['cmp rI (span - 1)] ['br 'above dflt] ['la rT tl]
+                           ['leax rT rT rI 4 4] ['ld4 rI rT -4] ['add rT rT rI]
+                           ['jmpt rT tl labs]]))))))))
    ; scan a switch body for its case/default labels at any depth, pinning value->label into `tab`
    ; and answering the (value label) dispatch pairs. recurses through stkids but stops at a nested
    ; switch, whose cases belong to it -- a case ties to its nearest enclosing switch, per C.
@@ -8182,9 +8233,11 @@
           sb (? (bad? gb) 'bad (globs (rev (g 'statics)) ".data" 'd ()))   ; (local data labels)
           zg (? (bad? gb || bad? sb) 'bad (globs (rev (g 'globs)) ".data" 'z ()))
           zs (? (bad? zg) 'bad (globs (rev (g 'statics)) ".data" 'z ()))
-          ; .rodata: the string table, any global that named the section itself, and the
-          ; const objects the 'r walk claims off .data. nothing here carries a relocation
-          ; -- which is what lets the stream ride a lane nothing writes, at load or at run.
+          ; .rodata: the string table, the switch jump tables, any global that named the
+          ; section itself, and the const objects the 'r walk claims off .data. nothing here
+          ; is written at load or at run -- which is what lets the stream ride a lane nothing
+          ; writes. a jump table's entries are label differences, settled once by the link; a
+          ; POINTER is what cannot ride, since -pie slides every one of those at startup.
           rg (? (bad? zg || bad? zs) 'bad (globs (rev (g 'globs)) ".rodata" () ()))
           rs (? (bad? rg) 'bad (globs (rev (g 'statics)) ".rodata" () ()))
           cg (? (bad? rg || bad? rs) 'bad (globs (rev (g 'globs)) ".data" 'r ()))
@@ -8193,8 +8246,14 @@
           ib (? (bad? nb) 'bad (globs (rev (g 'globs)) ".love.image" () ()))
           xb (? (bad? ib) 'bad
                 (map (\ nm [nm (globs (rev (g 'globs)) nm () ()) (xro? nm)]) xnames))
+          ; each switch's jump table: its own label, then one 4-byte self-relative entry per
+          ; case. the entries are label DIFFERENCES, settled at link and never written after,
+          ; so they keep .rodata's promise where an absolute table could not
+          jt (foldl (\ a p (a + [['align 4] ['label <p]] + [['raw <>p]]))
+                    () (rev (g 'jtabs)))
           (? (foldl (\ a x (a || bad? x)) () [gb sb zg zs rg rs cg cs nb ib xb]) 'bad
-             [(gb + sb) nb ib xb (zg + zs) (rg + rs + cg + cs + strs (g 'strs) ())])))
+             [(gb + sb) nb ib xb (zg + zs)
+              (rg + rs + cg + cs + jt + strs (g 'strs) ())])))
 
    ; the shared core: build the gen state, then TEXT (the functions, no _start)
    ; and data (globals + strings) separately -> (g textforms dataforms) | ().
@@ -8218,7 +8277,7 @@
        !(two? x) t
        (cg-srefs >x (cg-srefs <x t)))
    (cgen-core ast stbl sigs weaks xtra tgt)
-    (: g {'n 0 'brk () 'brkm () 'cnt () 'cases () 'glob {} 'globs () 'strs () 'statics ()
+    (: g {'n 0 'brk () 'brkm () 'cnt () 'cases () 'glob {} 'globs () 'strs () 'jtabs () 'statics ()
           'abl (ablenv 0)                           ; the pricing knob, read per unit at run time
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
           'fns {} 'inl {} 'cgitems cgitems 'stag stbl 'sigs sigs

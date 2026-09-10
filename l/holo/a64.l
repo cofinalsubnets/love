@@ -264,6 +264,9 @@
                             [(fix 4 'b19 label (0x54000000 | cc))])
    ;; jmpr: BR Xn -- branch to the address held in a register (the glaze's Continue / deopt tail).
    (a64-jmpr d) (: dn (rn d) (le32 (0xD61F0000 | (dn << 5))))
+   ;; the table jump: jmpr, with the table's label and its target list riding along --
+   ;; operands the machine has no use for and the analyses cannot do without.
+   (a64-jmpt d tl labs) (a64-jmpr d)
    ;; callr: blr Xn -- call the address held in a register (a call through a function pointer),
    ;; linking x30. same field as BR with bit 21 set.
    (a64-callr d) (: dn (rn d) (le32 (0xD63F0000 | (dn << 5))))
@@ -576,7 +579,7 @@
           ('lea . a64-lea) ('lean . a64-lea)           ; a consumed lea (x64 tells them apart for the escape gate)
           ('push . a64-push) ('pop . a64-pop)
           ('neg . a64-neg) ('not . a64-not) ('inc . a64-inc) ('dec . a64-dec)
-          ('jmp . a64-jmp) ('br . a64-br) ('jmpr . a64-jmpr) ('callr . a64-callr)
+          ('jmp . a64-jmp) ('br . a64-br) ('jmpr . a64-jmpr) ('jmpt . a64-jmpt) ('callr . a64-callr)
           ('mulo . a64-mulo) ('mulh . a64-mulh) ('umulh . a64-umulh) ('set . a64-set) ('test . a64-test)
           ('div . a64-div) ('rem . a64-rem) ('udiv . a64-udiv) ('urem . a64-urem)
           ('a128 . a64-a128) ('s128 . a64-s128)                ; -- the 128-bit pair kit --

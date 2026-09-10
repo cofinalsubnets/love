@@ -370,6 +370,9 @@
          _ (? (0 <= n <= 5) 0 (scare 'x64-segnum n))
          [(rex 1 0 0 (hi dn)) 140 (modrm 3 n dn)])
    (emit-jmp  label)     [233 (fix 4 'rel32 label 0)]
+   ;; the table jump: jmpr, with the table's label and its target list riding along --
+   ;; operands the machine has no use for and the analyses cannot do without.
+   (emit-jmpt d tl labs) (emit-jmpr d)
    (emit-br cond label)  [15 (jcc-op cond) (fix 4 'rel32 label 0)]
    ;; the 2-byte short forms the relaxer (holo.l relax) rewrites in-range branches to:
    ;; EB rel8 / 7x rel8 -- the short jcc opcode is the 0F 8x second byte less 0x10.
@@ -558,7 +561,7 @@
           ('test . emit-test) ('push . emit-push) ('pop . emit-pop)
           ('neg . emit-un 247 3) ('not . emit-un 247 2) ('inc . emit-un 255 0) ('dec . emit-un 255 1)
           ('jmp . emit-jmp) ('br . emit-br) ('jmp8 . emit-jmp8) ('br8 . emit-br8)
-          ('jmpr . emit-jmpr) ('callr . emit-callr)
+          ('jmpr . emit-jmpr) ('jmpt . emit-jmpt) ('callr . emit-callr)
           ('mulo . emit-mulo) ('mulh . emit-mulh 5) ('umulh . emit-mulh 4) ('set . emit-set)
           ('div . emit-div 0 1) ('udiv . emit-div 0 0)
           ('rem . (\ d a b t (emit-div 1 1 d a b)))         ; (rem d a b t) -- the scratch t is rdx's job on x86
