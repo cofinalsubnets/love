@@ -700,7 +700,7 @@ test_xfixpoint: $(x_o) $(x_seat_o) $(xkart_o) $(love0) out/mooncc0.image
 # the foreign member answers under qemu-user. opt-in by name, like the x-lane.
 .PHONY: test_fat
 test_fat: dist-fat
-	@sh test/gate/fat.sh $(fat) $a $(xa) $(xqemu) "$(love0)" $(ho) $(xd)
+	@sh test/gate/fat.sh $(fat) $a $(xa) $(xqemu) "$(love0)" $(ho) $(xd) $(uname_$(xa))
 # the multi-OS gate: ONE default-lane
 # binary answers every kernel with the same text. the box arrives by env --
 # FBSD_SSH / NBSD_SSH = "ssh -p 2222 -i KEY root@HOST" -- and without one the

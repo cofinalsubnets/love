@@ -6,10 +6,14 @@
 # leg skips loudly without one). HOME points into scratch so the cache the gate
 # exercises is its own, never the nest's.
 #
-# usage: fat.sh FAT NATIVE_ARCH XARCH XQEMU BOOT_LOVE HO XD
+# XUNAME is common.mk's $(uname_<xa>): the prefix dispatches on `uname -m`, which is
+# not the ISA word, so its arms are spelled the way the world spells the machine and
+# an arm carries every spelling of one ISA. the gate looks its arm up by that.
+#
+# usage: fat.sh FAT NATIVE_ARCH XARCH XQEMU BOOT_LOVE HO XD XUNAME
 set -u
 
-fat=$1; a=$2; xa=$3; xqemu=$4; boot=$5; ho=$6; xd=$7
+fat=$1; a=$2; xa=$3; xqemu=$4; boot=$5; ho=$6; xd=$7; xu=$8
 d=$ho/.fattest
 
 fail() { echo "FAIL test_fat: $*" >&2; exit 1; }
@@ -33,8 +37,8 @@ cmp -s "$fat" "$d/fat2" || fail "repack answered different bytes"
 
 # the foreign member: read its case arm off the prefix, extract, run under qemu
 if command -v "$xqemu" >/dev/null 2>&1; then
-  set -- $(sed -n "s/^$xa) b=\([0-9]*\) n=\([0-9]*\) s=\([0-9]*\);;\$/\1 \2 \3/p" "$fat")
-  [ $# -eq 3 ] || fail "no $xa arm in the prefix"
+  set -- $(sed -n "s/^[A-Za-z0-9_|]*$xu[A-Za-z0-9_|]*) b=\([0-9]*\) n=\([0-9]*\) s=\([0-9]*\);;\$/\1 \2 \3/p" "$fat")
+  [ $# -eq 3 ] || fail "no $xa arm in the prefix (looked for $xu)"
   dd if="$fat" of="$d/x.m" bs=4096 skip="$1" count="$2" 2>/dev/null || fail "extract"
   head -c "$3" "$d/x.m" > "$d/x.elf" && chmod +x "$d/x.elf"
   "$xqemu" "$d/x.elf" -e '(quit 7)'

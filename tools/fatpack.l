@@ -21,9 +21,18 @@
    (fp-pad n) ("\x00" * (fp-blocks n * bs - n))
    ; the members' sha, 16 hex -- the cache name's content half
    (fp-id16 h) (: (go i a) (i < 16 ? (go (i + 1) (a + string (h i))) a) (go 0 ""))
+   ; `uname -m` IS NOT THE ISA WORD: it says x86_64 here and amd64 on the BSDs, arm64 on
+   ; freebsd and evbarm on netbsd, where the tree spells one word per backend. so the arm
+   ; matches every spelling the world uses for that ISA -- common.mk's own table, and a
+   ; case arm takes them alternated. an arch with no row would match nothing and the
+   ; prefix would refuse a text it is carrying.
+   fp-unames '((x64 "x86_64|amd64") (a64 "aarch64|arm64") (rv64 "riscv64"))
+   (fp-uname arch)
+    (: r (assoc (intern arch) fp-unames)
+       (two? r ? (r 1) (fp-die ("no uname spelling for " + arch))))
    ; (arch size) -> one case arm; b/n in blocks, s the exact byte count
    (fp-arm arch b n s)
-    (arch + ") b=" + show b + " n=" + show n + " s=" + show s + ";;\n")
+    ((fp-uname arch) + ") b=" + show b + " n=" + show n + " s=" + show s + ";;\n")
    (fp-prefix id arms)
     ("#!/bin/sh\n"
      + "# love -- one file, every text\n"
