@@ -154,6 +154,7 @@
                (le32 (base | ((pos << 10) | (an << 5)))))))
 
    (a64-mulh d a b) (: dn (rn d) an (rn a) bn (rn b) (le32 (0x9B407C00 | ((bn << 16) | ((an << 5) | dn)))))   ; smulh d, a, b: the high 64 of the signed product
+   (a64-umulh d a b) (: dn (rn d) an (rn a) bn (rn b) (le32 (0x9BC07C00 | ((bn << 16) | ((an << 5) | dn)))))  ; umulh d, a, b: ..and the unsigned one
    (a64-imul d a b)                                         ; madd d, a, b, xzr  (= mul); no imm form
       (? (reg? b) (: dn (rn d) an (rn a) bn (rn b) (le32 (0x9B007C00 | ((bn << 16) | ((an << 5) | dn)))))
          (scare 'a64-mul-imm ['imul d a b]))
@@ -263,6 +264,9 @@
                             [(fix 4 'b19 label (0x54000000 | cc))])
    ;; jmpr: BR Xn -- branch to the address held in a register (the glaze's Continue / deopt tail).
    (a64-jmpr d) (: dn (rn d) (le32 (0xD61F0000 | (dn << 5))))
+   ;; the table jump: jmpr, with the table's label and its target list riding along --
+   ;; operands the machine has no use for and the analyses cannot do without.
+   (a64-jmpt d tl labs) (a64-jmpr d)
    ;; callr: blr Xn -- call the address held in a register (a call through a function pointer),
    ;; linking x30. same field as BR with bit 21 set.
    (a64-callr d) (: dn (rn d) (le32 (0xD63F0000 | (dn << 5))))
@@ -575,8 +579,8 @@
           ('lea . a64-lea) ('lean . a64-lea)           ; a consumed lea (x64 tells them apart for the escape gate)
           ('push . a64-push) ('pop . a64-pop)
           ('neg . a64-neg) ('not . a64-not) ('inc . a64-inc) ('dec . a64-dec)
-          ('jmp . a64-jmp) ('br . a64-br) ('jmpr . a64-jmpr) ('callr . a64-callr)
-          ('mulo . a64-mulo) ('mulh . a64-mulh) ('set . a64-set) ('test . a64-test)
+          ('jmp . a64-jmp) ('br . a64-br) ('jmpr . a64-jmpr) ('jmpt . a64-jmpt) ('callr . a64-callr)
+          ('mulo . a64-mulo) ('mulh . a64-mulh) ('umulh . a64-umulh) ('set . a64-set) ('test . a64-test)
           ('div . a64-div) ('rem . a64-rem) ('udiv . a64-udiv) ('urem . a64-urem)
           ('a128 . a64-a128) ('s128 . a64-s128)                ; -- the 128-bit pair kit --
           ('m128 . a64-m128) ('mw128 . a64-mw128)

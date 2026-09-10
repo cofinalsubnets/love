@@ -173,6 +173,22 @@ moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
 printf 'int m(void){ register long sp asm("rsp"); asm("" : "+r"(sp)); return (int)sp; }\n' > "$ho/.feat.c"
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
   && fail "a register variable pinned to the stack pointer was accepted"
+# a FILE-SCOPE `register T nm asm("rsp")` is GNU's global register variable -- x86's
+# current_stack_pointer, which every kernel TU reaches through asm/asm.h. reads answer
+# the register and lay no storage; a WRITE refuses (gcc reserves the register for the
+# whole unit and we cannot), and so does any register but the stack pointer
+printf 'register unsigned long sp asm("rsp");\nint main(void){ int l; unsigned long s = sp; return (unsigned long)&l > s - 8192; }\n' > "$ho/.greg.c"
+moonrun "$ho/.greg.c" "$ho/.greg" > /dev/null 2>&1 || fail "a global register variable refused"
+"$ho/.greg"; a=$?
+[ $a -eq 1 ] || fail "a global register variable did not read the stack pointer (got $a want 1)"
+nm "$ho/.greg" 2>/dev/null | grep -q " [BbDd] sp$" && fail "a global register variable laid storage"
+printf 'register unsigned long sp asm("rsp");\nvoid m(void){ sp = 0; }\n' > "$ho/.greg2.c"
+moonrun -c -o /dev/null "$ho/.greg2.c" 2>&1 | grep -q "write to a global register variable" \
+  || fail "a write to a global register variable was taken"
+printf 'register unsigned long v asm("rcx");\nunsigned long m(void){ return v; }\n' > "$ho/.greg3.c"
+moonrun -c -o /dev/null "$ho/.greg3.c" 2>&1 | grep -q "stack pointer only" \
+  || fail "a global register variable on an allocatable register was taken"
+
 printf 'int m(void){ register long v asm("rcx") = 5; asm("" : "+r"(v)); return (int)v; }\n' > "$ho/.feat.c"
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
   || fail "a register variable pinned by asm() to a nameable register refused"
@@ -317,6 +333,21 @@ printf 'long f(long x) { register long v asm("rdx") = x; asm("addq $2, %%%%rdx\\
 moonrun "$ho/.casm5.c" "$ho/.casm5" > /dev/null 2>&1 || fail "mooncc asm register-variable compile"
 "$ho/.casm5"; a=$?
 [ $a -eq 42 ] || fail "mooncc asm register variable + saved clobber (got $a want 42)"
+
+# named operands: `%[x]` numbers off the operand lists (outputs first, then inputs),
+# so a template may mix a name with a number, and `asm inline` is a hint we drop
+printf 'int main() { int r; asm ("movl %%[i], %%[o]" : [o] "=r" (r) : [i] "r" (42)); return r; }\n' > "$ho/.casmn1.c"
+moonrun "$ho/.casmn1.c" "$ho/.casmn1" > /dev/null 2>&1 || fail "mooncc named asm operand compile"
+"$ho/.casmn1"; a=$?
+[ $a -eq 42 ] || fail "mooncc named asm operand (got $a want 42)"
+printf 'int main() { int r; asm inline ("movl %%1, %%0\\n\\taddl %%[b], %%0" : "=&r" (r) : "r" (40), [b] "r" (2)); return r; }\n' > "$ho/.casmn2.c"
+moonrun "$ho/.casmn2.c" "$ho/.casmn2" > /dev/null 2>&1 || fail "mooncc named+numbered asm operand compile"
+"$ho/.casmn2"; a=$?
+[ $a -eq 42 ] || fail "mooncc named beside numbered asm operand (got $a want 42)"
+printf 'int main() { int l, h; asm ("movl %%[x], %%[l]\\n\\tmovl %%[x], %%[h]\\n\\taddl $2, %%[h]" : [l] "=&r" (l), [h] "=&r" (h) : [x] "r" (40)); return l + h - 40; }\n' > "$ho/.casmn3.c"
+moonrun "$ho/.casmn3.c" "$ho/.casmn3" > /dev/null 2>&1 || fail "mooncc two named outputs compile"
+"$ho/.casmn3"; a=$?
+[ $a -eq 42 ] || fail "mooncc two named asm outputs (got $a want 42)"
 
 # holo's neutral text, under the attribute that names it
 printf 'int main() { long v; __attribute__((holo)) asm("li %%0, 40" : "=r"(v)); return v + 2; }\n' > "$ho/.casm6.c"

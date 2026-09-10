@@ -196,7 +196,10 @@
                          (d i = 61) (snip d 0 i + " " + snip d (i + 1) n)
                          (go (i + 1)))
                (go 0))
-   (deftext ds) (foldl (\ a d (a + "#define " + eqsp d + "\n")) "" ds)
+   ; each entry is one line, so the -D/-U run keeps clexat's skew exact. a -U rides
+   ; as ('u name), which is how the two stay in the order the command line gave them
+   (deftext ds) (foldl (\ a d (a + (? (string? d) ("#define " + eqsp d)
+                                      ("#undef " + <>d)) + "\n")) "" ds)
    ; the target -t names: 'x64 (the default), 'a64, 'rv64, or one of the embedded
    ; three. the spellings are the prel's (arch-canon), which is also what uname's answer
    ; and a `seed` argument come through -- so `-t x64` and `-t riscv` land where
@@ -437,11 +440,13 @@
    ; the gen's option list is the parser's nine tablets plus the driver's own word (-fno-inline).
    (cc-objbytes src (t @ {'ni ni 'tgt tgt}))
     (@ (cc-parse src t)
-       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs]
+       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs]
        ; wasm rides gen's rv64 lane whole (l/holo/wasmfn.l is the machine under it) and
-       ; lays no ELF: its object is the gen tuple as text, read back by the wasm link
+       ; lays no ELF: its object is the gen tuple as text, read back by the wasm link.
+       ; gen takes the name itself -- rv64? covers both, and what wasm's machine lacks
+       ; (the wide multiply) needs a target of its own to decline
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni] (? (= tgt 'wasm) 'rv64 tgt))
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs] tgt)
           _ (? (okv? ob) () (ccdie ob src ("cc: codegen error in " + src)))
           (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns]
              (: xs (map (\ [nm forms ro] (objsec-named nm forms ro)) xsecs
@@ -1022,7 +1027,7 @@
        nw (ld-write dst ps)
        _ (? (nom? nw) (udie 1 ("cc: cannot write " + dst + " -- " + show nw)) 0)
        (chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [-x c] [-t x64|a64|rv64] [-os linux|none|freebsd] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
+   usage "usage: mooncc [-c] [-pie] [-x c] [-t x64|a64|rv64] [-os linux|none|freebsd] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n (tally s)
@@ -1153,6 +1158,7 @@
              (a = "-pie") (flags r (pin t 'pie 1))
              (a = "-I") (? (two? r) (flags >r (fpush t 'is <r)) (udie 2 usage))
              (a = "-D") (? (two? r) (flags >r (fpush t 'ds <r)) (udie 2 usage))
+             (a = "-U") (? (two? r) (flags >r (fpush t 'ds ['u <r])) (udie 2 usage))
              (a = "-o") (? (two? r) (flags >r (pin t 'o <r)) (udie 2 usage))
              (a = "-t") (? (two? r) (flags >r (pin t 'tgt (totgt <r))) (udie 2 usage))
              (a = "-os") (? (two? r) (flags >r (pin t 'os (toos <r))) (udie 2 usage))

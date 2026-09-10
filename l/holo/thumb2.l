@@ -314,6 +314,9 @@
    (thumb-br cond label) (: cc (look thumb-cc cond 'badcc)
                             [(fix 4 'bcc label cc)])
    (thumb-jmpr d)  (: dn (rn d) (t16 (0x4700 | (dn << 3))))    ; BX Rm
+   ;; the table jump: jmpr, with the table's label and its target list riding along --
+   ;; operands the machine has no use for and the analyses cannot do without.
+   (thumb-jmpt d tl labs) (thumb-jmpr d)
    (thumb-callr d) (: dn (rn d) (t16 (0x4780 | (dn << 3))))    ; blx Rm
 
    ;; -- the system lane. M-profile draws one shareability domain, so a barrier takes only
@@ -362,7 +365,7 @@
           ('leax . thumb-leax) ('ldx . thumb-ldx) ('ldxb . thumb-ldxb)
           ('push . thumb-push) ('pop . thumb-pop)
           ('neg . thumb-neg) ('not . thumb-not) ('inc . thumb-inc) ('dec . thumb-dec)
-          ('jmp . thumb-jmp) ('br . thumb-br) ('jmpr . thumb-jmpr) ('callr . thumb-callr)
+          ('jmp . thumb-jmp) ('br . thumb-br) ('jmpr . thumb-jmpr) ('jmpt . thumb-jmpt) ('callr . thumb-callr)
           ('set . thumb-set) ('test . thumb-test)
           ('div . thumb-div) ('rem . thumb-rem) ('udiv . thumb-udiv) ('urem . thumb-urem)
           ('call . thumb-call)

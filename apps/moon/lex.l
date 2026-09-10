@@ -89,6 +89,11 @@
                              (add >l)))
                (add (p3 + p2)))
        kwt (: t {} (go l) (? !(two? l) t (pin t <l 1, go >l)) (go kws))
+       ; gcc's underscored spellings of a keyword, for a header that must not collide
+       ; with a user macro. only a name opening `_` is looked up, so the common
+       ; identifier pays one compare
+       kwal (: t {} (go l) (? !(two? l) t (pin t <<l <><l, go >l))
+               (go '((__signed__ signed) (__signed signed))))
        p1 "()[]{};,.:?~!+-*/%<>=&|^#"
        ; --- the class table: one 256-byte string, a bitmask per char ------
        ; a membership test becomes an index and an `&` where it was a scan
@@ -406,7 +411,8 @@
                                    (bld i))
                                 (snip src i j0))
                            s (intern t)
-                           (go j0 line ((? (kwt s) ['kw s line] ['id t line]) . acc)))))
+                           k (? ((t 0) = 95) (peep kwal s s) s)
+                           (go j0 line ((? (kwt k) ['kw k line] ['id t line]) . acc)))))
                  (: hit (firstat i (pmap c))
                     (? hit (go (i + #hit) line (['p hit line] . acc))
                        (in1? c)                        ; a '(' GLUED to a preceding id (no space) carries a 4th field: the function-macro paren

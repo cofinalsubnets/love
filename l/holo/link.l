@@ -680,8 +680,8 @@
                     ; ..and an abs32 site cannot be slid at all: the startup relocator
                     ; adds a 64-bit base, and a 32-bit field has nowhere to put it.
                     _ (relbox && abs32? ? (scare 'link-abs32-pie <sy))
-                    _ (? (elem kind $ rv ? '(2 17 19)
-                                              '(1 2 4 10 11 257 275 277 278 282 283 284 285 286 299))
+                    _ (? (elem kind $ rv ? '(2 17 19 57)
+                                              '(1 2 4 10 11 257 261 275 277 278 282 283 284 285 286 299))
                          0 (scare 'link-reloc kind))
                     _ (ro + w <= sz ? 0 (scare 'link-oob (peep ob 'id 0)))
                     ; the a64/riscv field kinds patch bits of the instruction word the
@@ -708,8 +708,8 @@
                               _ (? (-524288 <= hi <= 524287) 0 (scare 'link-range <sy))
                               (le32 (wd | ((hi & 1048575) << 12))
                                + le32 (rle32 s (off0 + ro + 4) | ((lo & 4095) << 20))))
-                          (elem kind '(2 4))
-                           (: v prel                          ; pc32/plt32: S + A - P
+                          (elem kind '(2 4 261) || (rv && kind = 57))
+                           (: v prel                          ; pc32/plt32/32_pcrel: S + A - P
                               _ (ld-fits32 v ? 0 (scare 'link-range <sy))
                               (le32 v))
                           (elem kind '(282 283))           ; jump26/call26: (S+A-P)>>2 into imm26

@@ -370,6 +370,9 @@
          _ (? (0 <= n <= 5) 0 (scare 'x64-segnum n))
          [(rex 1 0 0 (hi dn)) 140 (modrm 3 n dn)])
    (emit-jmp  label)     [233 (fix 4 'rel32 label 0)]
+   ;; the table jump: jmpr, with the table's label and its target list riding along --
+   ;; operands the machine has no use for and the analyses cannot do without.
+   (emit-jmpt d tl labs) (emit-jmpr d)
    (emit-br cond label)  [15 (jcc-op cond) (fix 4 'rel32 label 0)]
    ;; the 2-byte short forms the relaxer (holo.l relax) rewrites in-range branches to:
    ;; EB rel8 / 7x rel8 -- the short jcc opcode is the 0F 8x second byte less 0x10.
@@ -385,19 +388,20 @@
    ;; product leaves signed-64, so a plain `jo` is exact -- the scratch `t` is unused on x86 (only
    ;; a64 needs it, for smulh).
    (emit-mulo d a b t lbl) (emit-imul d a b + [15 128 (fix 4 'rel32 lbl 0)])      ; <imul> ; 0F 80 jo rel32
-   ;; mulh: d <- the high 64 of the signed product a*b (the magic-divide's multiply). the one-operand
-   ;; imul is rdx:rax-fixed like idiv, so it takes idiv's dance: save rdx, stage b at [rsp], rax <- a,
-   ;; imul [rsp], the high half rdx -> rax, unstage, restore rdx, d <- rax. clobbers rax; d != r2.
-   (emit-mulh d a b)
-      (? (reg? b && !(reg-eq b 'r0) && !(reg-eq b 'r2))     ; b clear of the fixed pair: imul reg, the high half out of rdx
+   ;; mulh/umulh: d <- the high 64 of the signed (F7 /5) or unsigned (F7 /4) product a*b -- the
+   ;; magic-divide's multiply. the one-operand form is rdx:rax-fixed like idiv, so it takes idiv's
+   ;; dance: save rdx, stage b at [rsp], rax <- a, mul [rsp], the high half rdx -> rax, unstage,
+   ;; restore rdx, d <- rax. clobbers rax; d != r2.
+   (emit-mulh dig d a b)
+      (? (reg? b && !(reg-eq b 'r0) && !(reg-eq b 'r2))     ; b clear of the fixed pair: mul reg, the high half out of rdx
          (: bn (rn b)
             (catall ['(82)
                      (? (reg-eq a 'r0) () (emit-mov 'r0 a))
-                     [(rex 1 0 0 (hi bn)) 247 (modrm 3 5 bn)]   ; imul b  (F7 /5)
+                     [(rex 1 0 0 (hi bn)) 247 (modrm 3 dig bn)]
                      (emit-mov d 'r2) '(90)]))
          (catall ['(82) (emit-push b)
                   (? (reg-eq a 'r0) () (emit-mov 'r0 a))
-                  '(72 247 44 36)                             ; imul qword [rsp]  (F7 /5)
+                  [72 247 (dig = 5 ? 44 36) 36]               ; imul | mul qword [rsp]
                   '(72 137 208  72 131 196 8  90)             ; mov rax,rdx ; add rsp,8 ; pop rdx
                   (? (reg-eq d 'r0) () (emit-mov d 'r0))]))
    ;; set: d <- (cond) ? 1 : 0 from the last cmp -- setcc dl (0F 9x /0) then movzx d,dl (0F B6 /r). a
@@ -408,19 +412,25 @@
          rb (? (dn >= 8) '(65) (dn >= 4) '(64))
          (rb + ([15 (o + 16) (modrm 3 0 dn)] + [(rex 1 (hi dn) 0 (hi dn)) 15 182 (modrm 3 dn dn)])))
    ;; div/rem: x86 idiv is fixed-register (RDX:RAX / r/m -> RAX quotient, RDX remainder), and rdx is
-   ;; commonly live (the glaze keeps Hp there), so the sequence saves rdx itself: push rdx; push the
-   ;; divisor to memory; mov rax,a; cqo (sign-extend); idiv [rsp]; result -> rax (rem: from rdx);
-   ;; add rsp,8; pop rdx; mov d,rax. clobbers rax; `d` must not be r2 (rdx). caller guards b != 0.
+   ;; commonly live (an argument sits there), so the sequence saves rdx itself: push rdx; mov rax,a;
+   ;; cqo (sign-extend); idiv b; result -> rax (rem: from rdx); pop rdx; mov d,rax. F7 /7 /6 take an
+   ;; r/m, so the divisor rides its own register -- unless it is rax, which the dividend move is
+   ;; about to fill, or rdx, whose save cell already holds it. clobbers rax; `d` must not be r2
+   ;; (rdx). caller guards b != 0.
    (emit-div remf sgn d a b)
-      (catall ['(82)                                      ; push rdx
-                (emit-push b)                               ; push the divisor
-                (? (reg-eq a 'r0) () (emit-mov 'r0 a))      ; rax <- a (dividend)
-                (? sgn '(72 153) '(49 210))               ; signed: cqo ; unsigned: xor edx,edx
-                [72 247 (? sgn 60 52) 36]                  ; idiv (/7) | div (/6) qword [rsp]
-                (? remf '(72 137 208) ())                  ; rem: mov rax, rdx
-                '(72 131 196 8)                            ; add rsp, 8
-                '(90)                                      ; pop rdx
-                (? (reg-eq d 'r0) () (emit-mov d 'r0))])    ; d <- rax
+      (: bn (rn b)
+         cell? (reg-eq b 'r0)                              ; the divisor needs a cell of its own
+         (catall ['(82)                                    ; push rdx
+                   (cell? ? (emit-push b) ())              ; the divisor, out of rax's way
+                   (? (reg-eq a 'r0) () (emit-mov 'r0 a))  ; rax <- a (dividend)
+                   (? sgn '(72 153) '(49 210))             ; signed: cqo ; unsigned: xor edx,edx
+                   (? (cell? || reg-eq b 'r2)
+                      [72 247 (? sgn 60 52) 36]            ; idiv (/7) | div (/6) qword [rsp]
+                      [(rex 1 0 0 (hi bn)) 247 (modrm 3 (? sgn 7 6) bn)])
+                   (? remf '(72 137 208) ())               ; rem: mov rax, rdx
+                   (cell? ? '(72 131 196 8) ())            ; add rsp, 8
+                   '(90)                                   ; pop rdx
+                   (? (reg-eq d 'r0) () (emit-mov d 'r0))]))  ; d <- rax
 
    ;; -- sse2 / packed-double (the float-grid glaze lane). xmm regs are a separate abstract file
    ;;    f0..f15 -> 0..15 (so the GP file is untouched); a `raw` escape splices pre-encoded bytes
@@ -551,8 +561,8 @@
           ('test . emit-test) ('push . emit-push) ('pop . emit-pop)
           ('neg . emit-un 247 3) ('not . emit-un 247 2) ('inc . emit-un 255 0) ('dec . emit-un 255 1)
           ('jmp . emit-jmp) ('br . emit-br) ('jmp8 . emit-jmp8) ('br8 . emit-br8)
-          ('jmpr . emit-jmpr) ('callr . emit-callr)
-          ('mulo . emit-mulo) ('mulh . emit-mulh) ('set . emit-set)
+          ('jmpr . emit-jmpr) ('jmpt . emit-jmpt) ('callr . emit-callr)
+          ('mulo . emit-mulo) ('mulh . emit-mulh 5) ('umulh . emit-mulh 4) ('set . emit-set)
           ('div . emit-div 0 1) ('udiv . emit-div 0 0)
           ('rem . (\ d a b t (emit-div 1 1 d a b)))         ; (rem d a b t) -- the scratch t is rdx's job on x86
           ('urem . (\ d a b t (emit-div 1 0 d a b)))

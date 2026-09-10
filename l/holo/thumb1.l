@@ -328,6 +328,9 @@
            [(fix 4 'bl label 0)]))
    (t1-call label) [(fix 4 'bl  label 0)]
    (t1-jmpr d)  (: dn (rn d) (t16 (0x4700 | (dn << 3))))       ; BX Rm
+   ;; the table jump: jmpr, with the table's label and its target list riding along --
+   ;; operands the machine has no use for and the analyses cannot do without.
+   (t1-jmpt d tl labs) (t1-jmpr d)
    (t1-callr d) (: dn (rn d) (t16 (0x4780 | (dn << 3))))       ; blx Rm
 
    ;; the dispatch: an emitter tablet (shapes in holo.l's ir-arity), rows partial-applied,
@@ -354,7 +357,7 @@
           ('push . t1-push) ('pop . t1-pop)
           ('neg . t1-neg) ('not . t1-not) ('inc . t1-inc) ('dec . t1-dec)
           ('set . t1-set)
-          ('jmp . t1-jmp) ('br . t1-br) ('jmpr . t1-jmpr) ('callr . t1-callr) ('call . t1-call)
+          ('jmp . t1-jmp) ('br . t1-br) ('jmpr . t1-jmpr) ('jmpt . t1-jmpt) ('callr . t1-callr) ('call . t1-call)
           ('div . t1-div) ('rem . t1-rem) ('udiv . t1-udiv) ('urem . t1-urem)
           ('lapool . t1-lapool)
           ('raw . 1)
