@@ -116,10 +116,8 @@
      (: e (n < i + 20 ? n (i + 20))
       (say out ("\"" + string (row s i (e - 1) ()) + "\"\n"), zrows s e n)))
 
-   ; the boot files by name; the glaze's and holo's live beside l/boot
-   home {'emit "l/boot/glaze/" 'auto "l/boot/glaze/"
-         'hook "l/boot/glaze/" 'walk "l/boot/glaze/"
-         'holo "l/holo/" 'x64 "l/holo/" 'a64 "l/holo/" 'rv64 "l/holo/"}
+   ; the boot files by name; holo's live beside l/boot
+   home {'holo "l/holo/" 'x64 "l/holo/" 'a64 "l/holo/" 'rv64 "l/holo/"}
    (path n) (peep home n "l/boot/" + show n + ".l")
    (slurp-file p) (: q (open p "r") _ (!q ? (die ("cannot open " + p))) s (slurp q) _ (close q) s)
    ; a file's minified text, once: holo rides four blobs
@@ -151,15 +149,11 @@
      "#elif defined(__wasm__)" "#define LvCatModsH 1"
      ['ai_cat_lib_h_z ['holo 'rv64 'scan]]
      "#endif"
-     ; the glaze, one text: emit.l (the native emitter) then auto.l (ev's source
-     ; recognizer, which reads emit's names bare), so the order here is the module and the
-     ; pair declares it. holo leads because the glaze folds `assemble` at its own compile;
-     ; orth and the ala creation hook trail it, and hook.l leaks natjit/fires/fired?/bake
-     ; so it stays outside. not a module blob: an unglazed build must not pay for it.
+     ; the glaze, one text: l/boot/glaze.l carries its own (borrow 'holo) and its own
+     ; (module 'glaze ..) wrapper, so which halves are inside the module is the file's to
+     ; state and not this roster's. not a module blob: an unglazed build must not pay for it.
      "#ifdef LvGlazed"
-     ['src_glaze_z ["(borrow 'holo)(module 'glaze " 'emit 'auto ")"
-                    "(: ev (cite 'glaze 'ev))"
-                    'hook 'walk 'holo 'x64 'a64]]
+     ['src_glaze_z ['glaze 'holo 'x64 'a64]]
      "#endif"]
    (text items) (foldl (\ a i (a + (string? i ? i (file i)))) "" items)
    (lay-z sym s)

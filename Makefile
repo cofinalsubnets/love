@@ -46,9 +46,7 @@ note = if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo '$(
 # half-written one away when a generator dies, which is the whole of the guarantee.
 # the baked source: one header, one love0 run. tools/lcat.l carries the roster -- which
 # files, in which blobs, with what glue -- so a roster change edits a file this depends on.
-baked_l = $(wildcard l/boot/*.l) \
-  l/boot/glaze/emit.l l/boot/glaze/auto.l l/boot/glaze/hook.l l/boot/glaze/walk.l \
-  l/holo/holo.l l/holo/x64.l l/holo/a64.l l/holo/rv64.l
+baked_l = $(wildcard l/boot/*.l) l/holo/holo.l l/holo/x64.l l/holo/a64.l l/holo/rv64.l
 out/lib/baked.h: $(baked_l) tools/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib

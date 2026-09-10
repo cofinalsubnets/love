@@ -2,8 +2,7 @@
 ; mortality (how much of each collection's scan was already dead) and copy
 ; amplification (how many times the live set gets recopied) on real workloads.
 ; the gauge counters are always on:
-;   cat tools/gcstat.l | out/love                                     ; interpreted
-;   cat l/boot/glaze/emit.l l/boot/glaze/auto.l tools/gcstat.l | out/love ; glazed (x86-64)
+;   cat tools/gcstat.l | out/love              ; glazed -- LOVE_NO_GLAZE=1 for the interpreter
 ;
 ; gauge 0 -> @(len heap stack n_gc max_len max_heap n_seen n_evac):
 ;   mortality = (n_seen - n_evac)/n_seen ; copy-amp = n_evac/max_heap.

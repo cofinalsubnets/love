@@ -124,7 +124,7 @@
    ; is image-encoded -- so unlike an `li` immediate it is a heap reference the collector knows
    ; about. that is the door for a constant a kernel cannot spell: the zero point terminator a
    ; list-building kernel needs is `&ai_mint_zero`, and no book name hands its address out.
-   ; the glaze uses the same slot for a closure (l/boot/glaze/emit.l).
+   ; the glaze uses the same slot for a closure (l/boot/glaze.l).
    (forge-extras d) [['ld d 'r5 32]]
    ; the deopt tail: Ip <- the interp twin (Ip[1]), then enter it with the args still on Sp.
    ; arity 1 enters at its first word; arity>=2 skips the twin's own curry preamble.

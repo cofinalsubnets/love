@@ -11,7 +11,7 @@ slower.
 Three payoffs, in order:
 
 1. **cold start** for the whole runtime — every script run, every repl, every bench wall-clock.
-2. **the glaze bake is free.** Adding `l/boot/glaze/emit.l`+`auto.l` to the boot corpus costs
+2. **the glaze bake is free.** Adding `l/boot/glaze.l` to the boot corpus costs
    ~+810 ms when eval'd at startup. Inside a snapshot it is precompiled: always-on transparent
    JIT at zero startup cost, which is what makes the bake worth having at all.
 3. **no GC-footprint tax.** The image lives in an out-of-pool immortal region, so the moving
