@@ -90,10 +90,8 @@ All of C89 passes. What remains is C99/C11/GNU.
 | construct | probe |
 |---|---|
 | `_Atomic` | `_Atomic int a;` — both spellings; `__STDC_NO_ATOMICS__` says so, which is C11's own door for the absence |
-| statement expressions | `({ … })` |
 | computed goto | `&&label`, `goto *p` |
 | `asm goto` | costed below — the one refusal carrying an estimate |
-| designated RANGE initializers | `[1 ... 5] = 9`, gcc's extension |
 | the address of a compound literal in a **static** initializer | `struct S *p = &(struct S){1,2};` — inside a function it passes |
 | brace elision continuing **past** an anonymous union member | `{1,2,3,{4,5}}` over `struct { int a,b; union { int c,d; }; struct S1 s; }` — elision *into* the union is fine |
 | a `##` paste that makes a macro NAME | `CAT(A,B)(x)` where `AB` is itself a macro — the pasted name is not rescanned as an invocation |
@@ -109,9 +107,13 @@ otherwise: designated initialisers (both `.field =` and `[i] =`), compound liter
 definitions, bitfields including compound assignment, flexible array members, variadic macros,
 `long long`, hex floats, anonymous unions, `restrict`, `static inline`, mixed declarations,
 `for`-scoped declarations, `_Static_assert` (including `&&`/`||`/`?:` in the constant),
-`_Generic` and `_Alignof` (landed 2026-08-14, below),
+`_Generic` and `_Alignof`, `__builtin_choose_expr`/`object_size`/`prefetch`/`return_address`/
+`frame_address`,
 string-literal concatenation, self-referential structs, enum trailing commas, multidimensional
-arrays, brace elision in nested initialisers, pointer-to-array declarators, functions returning
+arrays, statement expressions (`({ .. })`), `__auto_type`, named asm operands (`%[x]`),
+`asm inline`, `case A ... B` and `[a ... b] =` ranges, a global register variable on the
+stack pointer, `__typeof_unqual__`, an enumerator past the int word, a `_Static_assert` or a
+bare `;` standing as a struct member, an anonymous bitfield over a typedef or mid-list, brace elision in nested initialisers, pointer-to-array declarators, functions returning
 function pointers, multi-character constants (`'ab'` is 0x6162, gcc's packing, signed at four
 chars), binary literals (`0b1010`, gcc's extension and C23's spelling), `__func__`, and
 `__typeof__` over locals, globals, struct members, dereferences and function names.
@@ -773,8 +775,19 @@ Everything else already refuses or resets on raw: `unframe` bails, `deadcell` di
 treats it as a barrier. **The estimate is about a week**, touching parse, one gen pass and one
 new holo door — and not the allocator.
 
-**It does not bring Linux into range on its own.** The kernel additionally wants `__label__`,
-computed goto, `_Generic`, and attribute semantics that change codegen.
+**It is now the LAST language row Linux stops on.** Measured 2026-09-09 against linux
+6.19.14, x86_64 defconfig: each translation unit gcc-preprocessed with its own kbuild
+flags and handed to mooncc, no charity but `-U` for the three macros we predefine and C11
+does not. **156 of 160 stop at `asm goto` and nowhere earlier.** Of the other four, two
+are one x86 instruction holo does not encode (`lsl`, `rdpid`, through
+`alternative_io`) and one is TOP-LEVEL asm — which modern `EXPORT_SYMBOL` writes, and
+which wants an assembler that reads `.section`/`.asciz`/`.quad`, not a compiler row.
+That is the honest shape of what is left: the compiler is a week from parsing the kernel
+and the TOOLCHAIN is the larger half (a gas-syntax assembler, a linker-script reader, and
+a 32/16-bit x86 backend for arch/x86/boot and the 32-bit vDSO).
+
+The earlier reading here — that the kernel additionally wants `__label__`, computed goto
+and `_Generic` — was stale: all three land, and none of them is what the corpus stops on.
 
 ---
 
