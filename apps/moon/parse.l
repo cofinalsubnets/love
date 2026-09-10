@@ -893,23 +893,27 @@
                  ; the WIDTH forks by ABI: AAPCS32 wants the smallest type holding every
                  ; enumerator (gcc's -fshort-enums, its bare-metal arm default and what the
                  ; objects we link beside carry), and every other target of ours says int.
-                 (ety pos lo hi)
-                  (: ty (? !(pst32? ps)
-                           ; past the 32-bit word the underlying type widens, gcc's own reading:
-                           ; an enumerator that does not fit an int would otherwise be truncated
-                           ; by every load of a variable of this type
-                           (? (pos && 4294967295 < hi) 'ulong
-                              (!pos && (hi > 2147483647 || lo < -2147483648)) 'long
-                              pos 'uint 'int)
-                           pos (? (hi <= 255) 'uchar (hi <= 65535) 'ushort 'uint)
-                           ((-128 <= lo) && (hi <= 127)) 'char
-                           ((-32768 <= lo) && (hi <= 32767)) 'short
-                           'int)
+                 ; pk: a trailing __attribute__((packed)) on the body, which asks for the
+                 ; smallest type holding every enumerator -- the same answer AAPCS32 wants
+                 ; from every enum, so the two share one computation. past the 32-bit word
+                 ; the type widens either way: an enumerator that does not fit an int would
+                 ; otherwise be truncated by every load of a variable of this type
+                 (ety pos lo hi pk)
+                  (: wide (? (pos && 4294967295 < hi) 'ulong
+                             (!pos && (hi > 2147483647 || lo < -2147483648)) 'long ())
+                     narrow (? pos (? (hi <= 255) 'uchar (hi <= 65535) 'ushort 'uint)
+                               ((-128 <= lo) && (hi <= 127)) 'char
+                               ((-32768 <= lo) && (hi <= 32767)) 'short
+                               'int)
+                     ty (? wide wide
+                           (pst32? ps || pk) narrow
+                           pos 'uint 'int)
                      _ (? tag (spin ps 'etag tag ty) 0)
                      ty)
                  (? (peekp ts3 "{")
                     (: (consts ts4 v pos lo hi)
-                        (? (peekp ts4 "}") [(ety pos lo hi) >ts4]   ; a trailing comma (or empty body): the enum ends
+                        (? (peekp ts4 "}")                         ; a trailing comma (or empty body): the enum ends
+                            (: pa (pattpk >ts4) [(ety pos lo hi <pa) <>pa])
                            !(idat? ts4) ()
                            (: name (tkv <ts4)
                               ts5 >ts4
@@ -929,7 +933,8 @@
                                     lo2 (? (<vr < lo) <vr lo)   hi2 (? (hi < <vr) <vr hi)
                                     (? (peekp ts6 ",") (consts >ts6 (<vr + 1) pos2 lo2 hi2)
                                        (: rest (want ts6 "}")
-                                          (? (two? rest) [(ety pos2 lo2 hi2) rest] ())))))))
+                                          pa (? (two? rest) (pattpk rest) [0 rest])
+                                          (? (two? rest) [(ety pos2 lo2 hi2 <pa) <>pa] ())))))))
                        (consts >ts3 0 1 0 0))
                     [(peep (ps 'etag) tag 'int) ts3]))
              ((tkk t = 'id) && (? (peep (ps 'types) (tkv t) 0) 1 ()))
