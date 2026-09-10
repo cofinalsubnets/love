@@ -1,44 +1,44 @@
 #!/bin/sh
 # moon-m4.sh -- build GNU m4 1.4 with mooncc + moonlibc + the holo linker (no
-# gcc/glibc/ld) and prove it RUNS: the package's OWN check suite (57 checks
+# gcc/glibc/ld) and prove it runs: the package's own check suite (57 checks
 # lifted from the m4 manual) green against our binary, plus a direct battery
 # (define/eval/divert/esyscmd through popen/format floats). The fourth
 # moon-userland rung, after bzip2, gzip and tar.
 #
-# m4's source is the one imported artifact. Point M4SRC at a CONFIGURED
+# m4's source is the one imported artifact. Point M4SRC at a configured
 # m4-1.4 tree (./configure already run, so config.h exists). Without one the
-# check SKIPS (like moon-tar without TARSRC). To make one:
+# check skips (like moon-tar without TARSRC). To make one:
 #   curl -O https://ftp.gnu.org/gnu/m4/m4-1.4.tar.gz
 #   tar xzf m4-1.4.tar.gz && (cd m4-1.4 && ./configure)
 #   make moon-m4       M4SRC=$PWD/m4-1.4
 #   make moon-m4-a64 M4SRC=$PWD/m4-1.4
 #
-# THE SOURCES ARE CACHED, so none of that is needed twice: this looks for
-# `m4-1.4*` under dl/ and then under $MOONSRC -- ~/src when that is unset --
+# the sources are cached, so none of that is needed twice: this looks for
+# `m4-1.4*` under dl/ and then under $moonsrc -- ~/src when that is unset --
 # so a bare `make moon-m4` finds a cached tree with no variable at all. An
-# explicit M4SRC= still outranks both, and a missing tree is a clean SKIP
+# explicit M4SRC= still outranks both, and a missing tree is a clean skip
 # rather than a failure, so this gate stays opt-in either way.
 #
-# TWO TARGETS, one procedure (raw.sh's shape, as moon-lua.sh and moon-sqlite.sh
+# two targets, one procedure (raw.sh's shape, as moon-lua.sh and moon-sqlite.sh
 # do it): `moon-m4.sh a64` cross-compiles the same sources with `mooncc -t
 # a64` and runs everything under qemu-aarch64, SKIPPING cleanly without it.
 # config.h is reused as configure wrote it, which is sound here and worth
 # saying why: both targets are little-endian LP64, and the answers that differ
 # between them are the ones the header already corrects by hand.
 #
-# â  THE CHECK SUITE NEEDS A WRAPPER on the cross target. check-them is a shell
+# the check suite needs a wrapper on the cross target. check-them is a shell
 # script that finds `m4` on PATH and execs it, and an a64 binary is not
 # executable here (no binfmt_misc registration for qemu). So the cross lane
 # puts a one-line `m4` script on PATH that execs qemu with the real binary --
 # the suite then runs completely unmodified, which is the point of running it.
 #
-# Nothing here needs gcc EXCEPT the one-time ./configure probe that emits
+# Nothing here needs gcc except the one-time ./configure probe that emits
 # config.h (the accepted precedent -- mooncc COMPILES every object). Two of
-# configure's answers describe GLIBC, not our target libc, so the build
+# configure's answers describe glibc, not our target libc, so the build
 # corrects them in place (config.h is a generated file; this IS configuration):
-#   HAVE_EFGCVT  -- moonlibc has no ecvt/fcvt/gcvt; format.c's sprintf branch
+#   have_efgcvt  -- moonlibc has no ecvt/fcvt/gcvt; format.c's sprintf branch
 #                   is the right lane (and the better code).
-#   USE_STACKOVF -- stack-overflow detection needs sigaltstack + sys/resource.h
+#   use_stackovf -- stack-overflow detection needs sigaltstack + sys/resource.h
 #                   headers we don't carry yet; a nicety, off.
 set -e
 
@@ -54,8 +54,8 @@ case $target in
 esac
 
 # where a package's sources may live, first hit wins: the tree-local dl,
-# then the cache -- $MOONSRC, or ~/src when that is unset. An explicit *SRC=
-# on the make line still outranks both. Answers EMPTY when nothing matches,
+# then the cache -- $moonsrc, or ~/src when that is unset. An explicit *SRC=
+# on the make line still outranks both. Answers empty when nothing matches,
 # which is what the skip branch below reads, so a missing tree is never an
 # error and never a `set -e` abort.
 pkgfind() {                        # pkgfind <dir-glob> <witness-file>
@@ -87,7 +87,7 @@ sed -i 's|^#define HAVE_EFGCVT 2$|/* #undef HAVE_EFGCVT */|;s|^#define USE_STACK
 d=$ho/$sub
 rm -rf "$d"; mkdir -p "$d"
 
-# m4's link set, as its src/Makefile OBJECTS + lib/Makefile OBJECTS chose --
+# m4's link set, as its src/Makefile objects + lib/Makefile objects chose --
 # minus stackovf.o (USE_STACKOVF off) and alloca.o (HAVE_ALLOCA: moonlibc's).
 SRC="m4 builtin debug eval format freeze input macro output path symtab"
 LIB="regex getopt getopt1 error obstack xmalloc xstrdup"
@@ -105,15 +105,15 @@ for b in $LIB; do
   objs="$objs $d/lib_$b.o"
 done
 
-# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). NO moonlibc
+# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). no moonlibc
 # object -- the link owes its symbols and the driver's runtime table pulls
-# apps/moon/lib/moonlibc/ MEMBER BY NEED (the Makefile says the same of love itself).
+# apps/moon/lib/moonlibc/ member by need (the Makefile says the same of love itself).
 # Naming an object would take every member instead.
 for f in apps/moon/lib/moonlibc/math/*.c; do
   b=`basename "$f" .c`
   $mc $tflag -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
 done
-# sys.o is LAID, not compiled -- and a CROSS lay needs holo's backend loaded
+# sys.o is laid, not compiled -- and a cross lay needs holo's backend loaded
 # first (the host bake carries only the native one), exactly as raw.sh does it.
 { if [ -n "$backend" ]; then echo "(borrow 'holo)"; cat "$backend"; fi
   cat apps/kore/text.l apps/kore/u.l apps/kore/asbook.l l/holo/elf.l l/holo/obj.l apps/moon/lib/mksys.l
@@ -130,7 +130,7 @@ m4dir=$(cd "$d" && pwd)
 if [ -n "$run" ]; then
   m4dir=$(cd "$d" && pwd)/bin
   mkdir -p "$m4dir"
-  # â  -0 m4 matters: m4 prints its own argv[0] in every error message, and two
+  # -0 m4 matters: m4 prints its own argv[0] in every error message, and two
   # of the suite's checks compare stderr against a text that names it. without
   # it the wrapper's full path lands there and those two fail for a reason that
   # has nothing to do with the compiler.
@@ -151,7 +151,7 @@ t=$(printf "format(\`%%05d %%.2f %%e', 7, 3.14159, 12345.678)\n" | $run "$m4bin"
 [ "$t" = "00007 3.14 1.234568e+04" ] || { echo "FAIL format: '$t'"; exit 1; }
 echo "  OK define/eval + divert + esyscmd + format"
 
-# the package's own check suite: 57 manual-derived checks, stdout AND stderr
+# the package's own check suite: 57 manual-derived checks, stdout and stderr
 # compared (the stderr legs read strerror texts -- moonlibc's table matters)
 ( cd "$M4SRC/checks" && PATH="$m4dir:$PATH" sh ./check-them [0-9]* ) | tail -1 | grep -q "All checks successful" \
   || { echo "FAIL m4's own check suite"; exit 1; }

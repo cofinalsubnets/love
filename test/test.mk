@@ -1,8 +1,8 @@
 # test/test.mk -- the test_* gates (and the uuwm/uukind corpus generators).
-# A fragment of the root Makefile, included by ./Makefile and invoked from the
+# a fragment of the root Makefile, included by ./Makefile and invoked from the
 # project root; paths resolve from there. Shared vars live in common.mk.
 
-# EVERY gate below is phony, this roster included -- a gate whose name is missing here
+# every gate below is phony, this roster included -- a gate whose name is missing here
 # stops running the day a file of that name appears. Generated from what this file
 # defines; the root Makefile names only its own verbs.
 .PHONY: \
@@ -26,7 +26,7 @@
   test_vec test_vi test_virt test_virt_build test_wake test_wasm test_xfixpoint uuhomgen uukind uumx uusplgen \
   uuvallaw uuwm vmret waits
 
-# THE THREE GATES. `make test` is the fast one an edit loop runs, test_slow the
+# the three gates. `make test` is the fast one an edit loop runs, test_slow the
 # merge gate, test_extra the really slow one (qemu boots, cross-arch, boards).
 # Everything below is a member of one of them, or opt-in by name.
 test_phases = test_host test_love0
@@ -56,25 +56,22 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 \
 	test_inle
 
-# $m is the WARM love -- the baked image woken, what ships. a gate whose subject is
+# $m is the warm love -- the baked image woken, what ships. a gate whose subject is
 # the egg boot spells LOVE_NO_IMAGE=1 itself; love0 is always the egg.
 
-# love0 bakes prel+ev+repl + the whole corpus and self-tests BOTH compilers in one run
-# (-Dai_tco=0, the trampoline lane too), so it must print TWO "tests pass" summaries: a
-# reader stop drops the rest of the stream and exits 0. Status rides `.rc` -- no pipefail.
-# corpus.list IS A RUNTIME INPUT NOW, not only a stamp: love0 reads it to find the corpus
-# (i/main.c), so it has to EXIST before love0 runs. It used to be pulled in as tests0.h's
-# prerequisite; with the corpus off the bootstrap's dependency graph, nothing else asks for it,
-# and a fresh tree died with `love0: corpus: cannot open out/lib/corpus.list` -- which the
-# unpacked-release path found and no in-tree run could, out/lib always being warm here.
+# love0 self-tests BOTH compilers in one run (-Dai_tco=0, the trampoline lane too), so it
+# must print two "tests pass" summaries -- a reader stop drops the rest and exits 0. status
+# rides `.rc`, no pipefail. corpus.list is a runtime input, not a stamp: love0 reads it to
+# find the corpus (i/main.c), and nothing else asks for it, so it is named here or a fresh
+# tree dies with `love0: corpus: cannot open out/lib/corpus.list`.
 test_love0: $(love0) out/lib/corpus.list
 	@echo TEST $(love0)
 	@{ $(love0) </dev/null; echo $$? > out/.test_love0.rc; } | tee out/.test_love0.out; \
 	  s=$$(cat out/.test_love0.rc); \
 	  [ $$s -eq 0 ] && [ `grep -c "tests pass" out/.test_love0.out` -eq 2 ]
-# test_filemode -- FILE MODE IS TERMINAL, and nothing inside the corpus can gate that:
+# test_filemode -- file mode is terminal, and nothing inside the corpus can gate that:
 # a test that proves the run dies cannot also report. so a shell runs one two-line file
-# and asks both halves of the law -- the face on err AND exit 1 -- for a missing name.
+# and asks both halves of the law -- the face on err and exit 1 -- for a missing name.
 test_filemode: $(ho)/.love.baked
 	@echo TEST file mode is terminal
 	@printf '(: _ (puts "reached\\n") _ (an-name-the-book-lacks 1) (puts "past\\n"))\n' > out/.test_filemode.l
@@ -83,15 +80,13 @@ test_filemode: $(ho)/.love.baked
 	      && grep -q "^;; missing an-name-the-book-lacks$$" out/.test_filemode.out \
 	      && ! grep -q "^past$$" out/.test_filemode.out; } \
 	    || { cat out/.test_filemode.out; echo "FAIL file mode not terminal (exit $$r)"; exit 1; }
-# test_stdinbuf -- WHAT WE BORROW OF fd 0 IS INVISIBLE, and we borrow two things. Both doors
-# read the device in 4096-byte gulps (l/love.c's rbio_of), so the first law is that BOTH ANSWER
-# THE SAME: the bytes our reader has not taken are still there for an in-form (slurp in), and
-# still there for a child that inherits the fd. A seekable door puts them back with an lseek;
-# a pipe has no rewind, so stdin_hand DELIVERS them down a fresh pipe instead -- which is why
-# the handoff laws below are asked of the PIPE output directly and not only of the diff. The
-# pipe also lends its O_NONBLOCK bit (`inflag`), and the law for that one is read straight off
-# /proc: a child must inherit fd 0 BLOCKING, or it takes an empty pipe for an ended one.
-# The corpus cannot gate any of this; it exists only BETWEEN two ways of being fed.
+# test_stdinbuf -- what we borrow OF fd 0 is invisible, and we borrow two things. both doors
+# gulp 4096 (l/love.c's rbio_of), so the law is that both leave the untaken bytes there, for
+# an in-form and for a child inheriting the fd. a seekable door lseeks them back; a pipe has
+# no rewind, so stdin_hand sends them down a fresh pipe -- which is why the handoff laws are
+# asked of the PIPE output directly. the pipe also lends its O_NONBLOCK bit (`inflag`), read
+# straight off /proc: a child must inherit fd 0 blocking or it takes an empty pipe for an
+# ended one. the corpus cannot gate any of this; it lives between two ways of being fed.
 test_stdinbuf: $(ho)/.love.baked
 	@echo TEST stdin borrows a run
 	@printf '(say out (+ "rest: [" (+ (slurp in) "]")))\n(say out "tail form")\n' > out/.test_stdinbuf1.l
@@ -117,24 +112,20 @@ test_stdinbuf: $(ho)/.love.baked
 	  [ -n "$$fl" ] && [ $$(( $$fl & 04000 )) -eq 0 ] \
 	    || { cat out/.test_stdinbuf3.out; \
 	         echo "FAIL fd 0 handed on nonblocking (flags $$fl) -- stdin_give did not put the bit back"; exit 1; }
-# ..and the GIVE-BACK rides the same seek: `unchug` puts drained bytes back into the run, so
-# ai_io_pending counts them again and the child inherits fd 0 in front of them. THE CONTRAST
-# IS THE LAW: `chug` drains the WHOLE borrowed run, so without the give-back the child inherits
-# NOTHING and with it all ten. It is what an ai_io_unread reaching by bio_of would break -- the
-# run is BORROWED under a static, so only rbio_of finds it, and a heap-port-only door would
-# answer 0 here while every file-port law in test/io.l still passed.
+# ..and the give-back rides the same seek: `unchug` returns drained bytes to the run, so
+# ai_io_pending counts them again and the child inherits fd 0 in front of them. the CONTRAST
+# is the law -- `chug` drains the whole run, so the child inherits nothing without it and all
+# ten with. only rbio_of finds that run: a heap-port-only door answers 0 here while every
+# file-port law in test/io.l still passes.
 	@printf 'abcdefghij' > out/.test_stdinbuf4.in
 	@p='(: c (see in) _ (unsee in c) t (chug in)'; \
 	  a=`$m -e "$$p k (unchug in 99) (exec [\"cat\"]))" < out/.test_stdinbuf4.in`; \
 	  b=`$m -e "$$p (exec [\"cat\"]))" < out/.test_stdinbuf4.in`; \
 	  { [ "$$a" = abcdefghij ] && [ -z "$$b" ]; } \
 	    || { echo "FAIL unchug is not in the inherited fd offset (with=[$$a] without=[$$b])"; exit 1; }
-# test_host takes the corpus as a FILE, and that is a SPEED choice, not a necessity:
-# stdin works (test/io.l used to poke `in` and eat a byte of whatever fed the suite --
-# it taps a charlist now), and it is equally strict, quitting 1 on a scare either way.
-# What is left of the gap is the READER, not the device: a redirect gulps 4096 like
-# the file does (l/love.c's rbio_of), but `reads` trickles `in` a byte at a time to keep
-# its position exact, which costs ~1.45x here. This is the gate that runs constantly.
+# test_host takes the corpus as a FILE: a speed choice, not a necessity. the gap is the
+# reader, not the device -- a redirect gulps 4096 like a file does, but `reads` trickles `in`
+# a byte at a time to keep its position exact, ~1.45x here, and this gate runs constantly.
 # cat'ing also keeps the corpus's one-global-scope property.
 test_host: $(ho)/.love.baked
 	@echo TEST $m
@@ -142,35 +133,23 @@ test_host: $(ho)/.love.baked
 	@{ $m out/.test_host.l </dev/null; echo $$? > out/.test_host.rc; } | tee out/.test_host.out; \
 	  s=$$(cat out/.test_host.rc); \
 	  [ $$s -eq 0 ] && grep -q "tests pass" out/.test_host.out
-# test_hostegg -- the same corpus down the EGG boot, for the gates that can afford both
-# doors. $m wakes the image, so test_host reads one heap only, and the two are not the same
-# heap: a woken one arrives with a pinned prefix it did not copy and an intern map it did
-# not build. three baked-only GC gates once passed a commit that broke the egg lane, and
-# test_stdincorpus -- the one gate that ran both -- caught it on its first run.
-# it asks for $(ho)/love, NOT .love.baked: an egg lane has no use for the ~12 s bake, and
-# a gate that pulled the stamp would pay it for a binary it then tells to ignore the image.
-# it counts TWO asserts fewer than test_host, and that is right: test/holo.l opens on
-# `(lit? (cite 'holo))`, and holo lives in the glaze -- so its two backend laws are the
-# baked door's alone. Fewer asserts is not less collector; it is a different heap.
+# test_hostegg -- the same corpus down the egg boot. a woken heap is not the egg's: it
+# arrives with a pinned prefix it did not copy and an intern map it did not build, so both
+# doors are worth running. wants $(ho)/love, not .love.baked -- an egg lane has no use for
+# the ~12 s bake. two asserts fewer than test_host is right: test/holo.l opens on
+# `(lit? (cite 'holo))` and holo lives in the glaze, so those two laws are the baked door's.
 test_hostegg: $(ho)/love
 	@echo TEST $m "(egg)"
 	@cat $t > out/.test_hostegg.l
 	@{ env LOVE_NO_IMAGE=1 $m out/.test_hostegg.l </dev/null; echo $$? > out/.test_hostegg.rc; } | tee out/.test_hostegg.out; \
 	  s=$$(cat out/.test_hostegg.rc); \
 	  [ $$s -eq 0 ] && grep -q "tests pass" out/.test_hostegg.out
-# test_stdincorpus -- THE ORACLE FOR `reads` OVER STDIN, and nothing else was one. test_host
-# takes the corpus as a FILE (the speed choice above) and test_stdinbuf runs two-line programs,
-# so at the scale where a reader's window arithmetic actually breaks, nothing looked: a `reads`
-# that parsed the corpus's own English COMMENTS as code still printed "3959 tests pass" on the
-# file door and exited 0. It was caught by hand-diffing the doors; this is that diff, kept.
-# ALL THREE DOORS, because they are three different readers -- a file and a redirect share the
-# borrowed run (l/love.c's rbio_of), a pipe has none and drips.
-# the summary line carries a DURATION, so that is normalised away and everything else must
-# match byte for byte -- the dots included, since a dropped assert is exactly what this catches.
-# AND BOTH LOVES. The egg lane and the baked image are not interchangeable here: a
-# reader bug that lost two bytes of the corpus showed on the baked lane and NOT on the
-# egg one, so a gate that ran only the egg reported ok while the shipped binary read
-# 2286 of 3959 asserts and quit 1.
+# test_stdincorpus -- the only oracle for `reads` over STDIN at corpus scale, which is where
+# a reader's window arithmetic breaks. three doors because they are three readers: a file and
+# a redirect share the borrowed run (l/love.c's rbio_of), a pipe has none and drips. both
+# loves because a reader bug that lost two bytes showed on the baked lane and not the egg.
+# past the summary's duration everything matches byte for byte -- the dots included, a
+# dropped assert being exactly what this catches.
 test_stdincorpus: $(ho)/.love.baked
 	@echo TEST the corpus down file, redirect and pipe -- egg and baked
 	@cat $t > out/.test_sc.l
@@ -197,9 +176,9 @@ test_stdincorpus: $(ho)/.love.baked
 	 done; \
 	 done
 	@echo "  ok   file, redirect and pipe read the corpus identically on both loves"
-# test_front -- the TEST-ONLY FRONTEND: out/front links liblove.a (l/love.c only)
-# and supplies the frontend contract itself, so its port vt can answer WOULD-BLOCK on
-# cue. it EXITS 97 on a wait with no deadline -- a deadlock, said loudly.
+# test_front -- the test-only frontend: out/front links liblove.a (l/love.c only)
+# and supplies the frontend contract itself, so its port vt can answer would-block on
+# cue. it exits 97 on a wait with no deadline -- a deadlock, said loudly.
 $(ho)/front: test/front/main.c $(R)/l/bare.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/l/love_data.ld \
     out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h
 	@echo 'CC	'$@
@@ -208,15 +187,13 @@ $(ho)/front: test/front/main.c $(R)/l/bare.c $(love_h) $(ho)/liblove.a $(ho)/.ho
 test_front: $(ho)/front
 	@echo TEST $(ho)/front
 	@sh test/gate/run.sh -a front "$(ho)/front" "front: ok" test/front/io.l
-# Standalone smoke tests, held out of the corpus glob ($t is a non-recursive test/*.l).
-# NOT for the host: love0_o is the whole host glob less i/cats.c, so love0 links every
-# nif named under test/host/. what actually holds a file back is one of three, and each
-# file says which: it wants a crew module, and cats.c is the catalog love0 has not got;
-# it is not idempotent, and love0 evaluates the corpus TWICE; or its regression is a hang,
-# which wants the timeout a driver can give and a corpus cannot -- a wedged gate being
-# worse than a red one. Gate = exit 0 AND a "<name>: ok"; a cold lane opts in via hostnif_cold.
+# standalone smoke tests, held out of the corpus glob ($t is a non-recursive test/*.l).
+# a file is held back for one of three reasons and says which: it wants a crew module and
+# cats.c is the catalog love0 lacks; it is not idempotent and love0 evaluates twice; or its
+# regression is a HANG, wanting a timeout a corpus cannot give -- a wedged gate is worse than
+# a red one. gate = exit 0 and a "<name>: ok"; a cold lane opts in via hostnif_cold.
 hostnif_tests = test/host/gcpause.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/berth.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/serve.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/gz.l test/host/gzc.l test/host/story.l test/host/design.l test/host/lupa.l test/host/helm.l test/host/wget.l test/host/cook.l
-# out/lush: test/host/sh.l drives the BUILT shell end to end, via out/love and
+# out/lush: test/host/sh.l drives the built shell end to end, via out/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
 test_hostnif: host out$(hsuf)/lush
@@ -227,7 +204,7 @@ test_hostnif: host out$(hsuf)/lush
 	done
 # Runnable design companions -- pure-love models that pin the shape a C design
 # takes. Zero-dep, but they leak helper names into the
-# one global scope, so they run standalone. Same contract: exit 0 AND a "<name>: ok".
+# one global scope, so they run standalone. Same contract: exit 0 and a "<name>: ok".
 doc_tests = test/proto/dest.l test/proto/spl.l
 test_doc: host
 	@for s in $(doc_tests); do echo "TEST $$s"; \
@@ -246,9 +223,9 @@ else
 test_glaze:
 	@echo "test_glaze: skipped (host arch $a is not x64)"
 endif
-# test_hook -- the natjit CREATION-HOOK laws: every law claims BOTH the answer and that the hook
-# owned it (`fired?`), twice over the hook's two lives -- the IMAGE's ($m, what ships) and the
-# EGG BOOT's ($m). never by cat'ing hook.l in: a woken image has `nif` off the book.
+# test_hook -- the natjit creation-hook laws: every law claims both the answer and that the hook
+# owned it (`fired?`), twice over the hook's two lives -- the image's ($m, what ships) and the
+# egg boot's ($m). never by cat'ing hook.l in: a woken image has `nif` off the book.
 ifneq ($(filter $a,x64 a64),)
 test_hook: host
 	@echo TEST test/glaze-hook.l "(the baked image)"
@@ -259,7 +236,7 @@ else
 test_hook:
 	@echo "test_hook: skipped (the hook emits for x64 / a64; host arch is $a)"
 endif
-# test_glazebench -- the glaze PAYS on the benches, through the lanes a user runs: each bench
+# test_glazebench -- the glaze pays on the benches, through the lanes a user runs: each bench
 # source as spelled (bench/bench.l + bench/benches/<b>.l), glazed against LOVE_NO_GLAZE=1, by
 # stdin and by file in turn, each ratio held to a floor near a third of the healthy speedup;
 # and the driver's ev is the live one. what test_glaze/test_hook cannot see: they hand (ev '..)
@@ -272,8 +249,8 @@ else
 test_glazebench:
 	@echo "test_glazebench: skipped (the glaze emits for x64 / a64; host arch is $a)"
 endif
-# test_glazefuzz -- the glaze's DIFFERENTIAL fuzz (l/boot/glaze/fuzz.l): 3000 random closures
-# run TWICE against the SAME binary (plain, then LOVE_NO_GLAZE=1), stdouts byte-identical.
+# test_glazefuzz -- the glaze's differential fuzz (l/boot/glaze/fuzz.l): 3000 random closures
+# run twice against the same binary (plain, then LOVE_NO_GLAZE=1), stdouts byte-identical.
 # `fires=` is the checked proof of work; stderr is dropped (the two runs scare differently).
 ifneq ($(filter $a,x64 a64),)
 test_glazefuzz: host
@@ -305,13 +282,13 @@ test_glazefuzz:
 	@echo "test_glazefuzz: skipped (the glaze emits for x64 / a64; host arch is $a)"
 endif
 # apps/sat/ -- the CDCL SAT solver app. Portable love (no glaze), so it runs on every arch.
-# Gate = exit 0 AND the sentinels. COLD on purpose -- the one app gate that is: the
+# Gate = exit 0 and the sentinels. cold on purpose -- the one app gate that is: the
 # solver answers in 3.6 s over the fresh egg and 14.4 s over the woken image.
 test_sat: host
 	@echo TEST apps/sat/sat.l + apps/sat/dimacs.l + apps/sat/flat.l
 	@cat apps/sat/sat.l apps/sat/dimacs.l apps/sat/flat.l \
 	  | sh test/gate/run.sh sat "env LOVE_NO_IMAGE=1 $m" "sat: Stages 1-3 ok|apps/sat/dimacs: ok|apps/sat/flat: ok"
-# The DRAT lane's EXTERNAL check: flat.l's refutations verified by drat-trim, the SAT
+# The DRAT lane's external check: flat.l's refutations verified by drat-trim, the SAT
 # competition's own checker (fetched + built into out/drat on first use; skips offline).
 # The in-gate twin (fd-check) runs inside test_sat. Not in test_slow (network).
 test_drat: host
@@ -324,11 +301,11 @@ test_lux: host
 # harp (apps/harp/harp.l): tidal's cycle algebra, where a pattern is a function from a
 # span to events -- so the gate is queries, and the whole pure half runs anywhere. the
 # voices (apps/harp/play.l) ride along for the far end: one cycle into a .wav whose
-# energy has to land where the pattern said, and one out the HORN=none sink, which has
+# energy has to land where the pattern said, and one out the horn=none sink, which has
 # to take a second to play a second. that is as far as a gate that cannot listen goes.
 test_harp: host
 	@$m test/gate/gates.l harp < /dev/null
-# test_gates -- the app-law rows in ONE love. a row's files arrive by `borrow` on a path,
+# test_gates -- the app-law rows in one love. a row's files arrive by `borrow` on a path,
 # which makes the layer `cat` was faking, so rows keep their names apart without a process
 # apiece; and the verdict is the harness's own tally instead of a grep for the red X it
 # prints -- run.sh reads that back off stdout because a pipe is all a shell can see. each
@@ -336,7 +313,7 @@ test_harp: host
 test_gates: host
 	@echo TEST test/gate/gates.l "(the app-law rows, one love)"
 	@$m test/gate/gates.l < /dev/null
-# the SEAT lane -- an app fired by its own FILE NAME (positional, or a -l preload), which
+# the seat lane -- an app fired by its own file NAME (positional, or a -l preload), which
 # is the one dispatch door no other gate reaches: every app gate below drives its subject
 # through the verb rail or a baked image instead. ~2.5s, most of it one bake, and it rides
 # test_slow because the failure it catches is silent by construction (a seat that answers
@@ -345,8 +322,8 @@ test_gates: host
 test_seat: host
 	@echo TEST test/gate/seat.sh "(the file-seat lane)"
 	@sh test/gate/seat.sh $m
-# the CLI's exit STATUS -- 0 working, 1 unopenable, 2 malformed, a verb's own charm.
-# seat.sh reads what the binary SAYS; until this, nothing read what it ANSWERS.
+# the CLI's exit status -- 0 working, 1 unopenable, 2 malformed, a verb's own charm.
+# seat.sh reads what the binary says; until this, nothing read what it answers.
 test_cli: host
 	@echo TEST test/gate/cli.sh "(the cli exit-status lane)"
 	@sh test/gate/cli.sh $m
@@ -378,17 +355,15 @@ test_sb: host out$(hsuf)/sb
 korerun = $m kore
 test_kore: host
 	@sh test/gate/kore.sh $(ho) $m
-# grep + sed against GNU over SEEDED RANDOM patterns (doc: the script's own head).
-# test_kore's battery is a list someone thought of; this one is not, which is why it
-# found the (a*)+ empty-iteration bug and the -w greedy-span bug that the battery,
-# the laws and a green test_slow all sat happily on top of. Skips (exit 0) where GNU
-# grep/sed are absent -- and checks --version, since an interactive `grep` may be a
-# ugrep shim whose BRE differs. Rides test_extra: it costs ~a minute.
+# grep + sed against GNU over seeded random patterns (doc: the script's own head).
+# test_kore's battery is a list someone thought of; this one is NOT, which is the point.
+# skips (exit 0) without GNU grep/sed, and checks --version, since an interactive `grep`
+# may be a ugrep shim whose BRE differs. ~a minute.
 test_refuzz: host
 	@sh test/gate/refuzz.sh $m
-# cook against GNU MAKE, differentially (doc: the script's own head). The oracle is a
-# SECOND IMPLEMENTATION, and it has to be: a builtin cook never implemented is a VARIABLE
-# reference in make's grammar, so it expands to EMPTY and the build carries on -- invisible
+# cook against GNU make, differentially (doc: the script's own head). The oracle is a
+# second implementation, and it has to be: a builtin cook never implemented is a variable
+# reference in make's grammar, so it expands to empty and the build carries on -- invisible
 # to any test that only asks whether cook agrees with itself. Skips (exit 0) where GNU make
 # is not on the box, since there is no oracle to ask.
 test_cookdiff: host
@@ -397,17 +372,13 @@ test_cookdiff: host
 # the bare cc door, the image chain and the in-image lane. seconds, test_slow.
 test_dist: $(ho)/.love.baked
 	@sh test/gate/dist.sh smoke $(ho)/love
-# test_seed -- THE MERGE GATE: the artifact lays its own source into a scratch dir and
-# rebuilds itself through the machine's toolchain; the rebuilt binary must answer the
-# running one's bytes (`love seed`). Minutes -- a whole bootstrap -- and the claim the
-# product makes, so it rides the slow gate. The scratch stays on a red for the autopsy.
-# WHAT ONLY THIS GATE SAYS: the DEFAULT lane, where the seed probes for an ambient cc
-# that works and DEFERS to it (apps/source.l). test_distboot runs `love seed` too, but with
-# every compiler poisoned, so it takes the fallback and can never exercise the deference.
-# That deference is the diverse-double-compiling leg -- a foreign compiler holding the
-# scaffold, the one thing a self build cannot say -- and it stopped working for eleven
-# days (2026-08-14 to 08-25) with every gate green, because this is the only gate that
-# runs it and a roster note had called it the same claim as test_distboot's circle.
+# test_seed -- the merge gate: the artifact lays its own source into a scratch dir, rebuilds
+# itself through the machine's toolchain, and the rebuilt binary must answer the running
+# one's bytes. minutes, and the claim the product makes. scratch stays on a red.
+# ONLY this gate runs the DEFAULT lane, where the seed probes for an ambient cc and defers
+# to it (apps/source.l) -- the diverse-double-compiling leg, the one thing a self build
+# cannot say. test_distboot runs `love seed` with every compiler poisoned, so it takes the
+# fallback and can never exercise the deference. do not roster the two as one claim.
 test_seed: $(ho)/.love.baked
 	@echo TEST love seed "(the fixpoint)"
 	@rm -rf $(ho)/.seedtest && mkdir -p $(ho)/.seedtest
@@ -446,26 +417,23 @@ test_vi: host
 # on the same source. Drives the crew layer warm (~0.68s -> ~0.1s per compile, 88 of them).
 moonrun = $m mooncc
 # love0 rides along for the inline-asm checks: neutral templates parse through holo/text.l,
-# whose combinators come off the bare `post` each frontend's boot binds ITSELF, so the
+# whose combinators come off the bare `post` each frontend's boot binds itself, so the
 # bootstrap lane can lose the feature while this one keeps it.
 test_moon: host $(love0)
 	@sh test/gate/moon.sh $(ho) $m $(love0)
-# the COMMITTED GENERATED artifacts, laid from the tables that define them (l/mx.l the +/*
-# dispatch matrices and the kind lattice they index, l/nifs.l the nif + instruction registry,
-# quay.l the xterm-256 palette host and kernel share). `make mx` refreshes; test_clay diffs.
-# l/mx.h/kinds.h/nifs.h are CORE headers -- a refresh rebuilds the tree, so the gate to run
-# after is `make test`, not test_clay alone. Each is written aside and moved only once the
-# whole set lays, so a shape check that quits leaves every committed file untouched.
-# l/love_data.ld is the last linker script in the tree and is laid WHOLE: every other
-# seat's link became ours, and holo needs no script at all.
-# dest:source:value:shape-check -- ONE roster, read by `make mx` (which writes) and by
+# the committed generated artifacts, laid from the tables that define them (l/mx.l the +/*
+# matrices and the kind lattice, l/nifs.l the nif + instruction registry, quay.l the
+# xterm-256 palette host and kernel share). `make mx` refreshes, test_clay diffs.
+# mx.h/kinds.h/nifs.h are core headers, so the gate after a refresh is `make test`, not
+# test_clay alone. each is written aside and moved only once the whole set lays.
+# dest:source:value:shape-check -- one roster, read by `make mx` (which writes) and by
 # test_clay (which regenerates and diffs). Two spellings of this list is how they drift.
 mx_gen = l/mx.h:l/mx.l:mx-h:mx-ok l/kinds.h:l/mx.l:kinds-h:mx-ok l/nifs.h:l/nifs.l:nifs-h:nifs-ok \
          l/quay/xterm256.h:l/quay/quay.l:q-c:q-ok l/love_data.ld:l/mx.l:mx-ld:mx-ok
-# /warn the \# escapes are load-bearing: a bare # in a make VARIABLE starts a comment and
+# /warn the \# escapes are load-bearing: a bare # in a make variable starts a comment and
 # would eat the rest of the line (a recipe line passes # through, a variable does not).
 mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${r\#*:}; o=out/.`basename $$d`
-# the EGG lane, deliberately: these generators read CORE tables with the boot
+# the egg lane, deliberately: these generators read core tables with the boot
 # vocabulary, and the warm book now carries the crew (the layered bake) -- kore's
 # two-arg `join` shadowed clay's one-arg at mx-h's define and the .h came out empty.
 mxlay   = LOVE_NO_IMAGE=1 $m -l $$l -e "(: _ (? $$k 0 (quit 1)) _ (puts $$v) (quit 0))"
@@ -473,15 +441,13 @@ mx: host
 	@echo 'LOVE	'l/mx.h l/kinds.h l/nifs.h xterm256.h l/love_data.ld "(l/mx.l + l/nifs.l + quay.l on $m)"
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o || exit 1; done
 	@for s in $(mx_gen); do $(mxsplit); mv $$o $$d; done
-# ...and the DEPENDENCY, off the same roster: a committed generated file is stale the moment
-# its table moves, and the objects that include it then rebuild from the fresh one. Without
-# this a new l/nifs.l row builds clean and gates GREEN with its nom still off the book -- the
-# drift diff lives in test_clay, which only test_extra reaches.
-# the prerequisite is the TABLE ALONE, never $(m): love is built FROM these headers, so
-# naming it as a prerequisite closes the loop and make drops the lot. The recipe instead takes
-# whatever love ALREADY exists -- sound because the generator is l/nifs.l/mx.l themselves, and a
-# stale love lays a fresh table. A tree with no love yet is the bootstrap case: the committed
-# file is what builds the first one, so the rule stands aside and only marks it seen.
+# ...and the dependency, off the same roster: without it a new l/nifs.l row builds clean and
+# gates green with its nom still off the book, and the drift diff only test_extra reaches.
+# the prerequisite is the TABLE alone, never $(m) -- love is built from these headers, so
+# naming it closes the loop and make drops the lot. the recipe takes whatever love exists,
+# sound because the generator IS l/nifs.l/mx.l and a stale love lays a fresh table. a tree
+# with no love is the bootstrap case: the committed file builds the first one, so the rule
+# stands aside and only marks it seen.
 define mx_dep
 $(word 1,$(subst :, ,$(1))): $(word 2,$(subst :, ,$(1)))
 	@if test -x $$(m); then \
@@ -492,83 +458,70 @@ $(word 1,$(subst :, ,$(1))): $(word 2,$(subst :, ,$(1)))
 endef
 $(foreach s,$(mx_gen),$(eval $(call mx_dep,$(s))))
 # test_clay -- G1, clay's faithfulness gate (apps/moon/clay.l, doc/misc/clay.md): for every file
-# in test/cc/, (cparse (clay-show ast)) == ast, STRUCTURALLY. the run PARTITIONS and names
+# in test/cc/, (cparse (clay-show ast)) == ast, structurally. the run partitions and names
 # both halves: what it can say, and the declarations cparse did not keep -- a measured gap.
 test_clay: host
 	@echo TEST test/gate/clay.l "(clay G1: (cparse (clay-show c)) == c over test/cc)"
 	@$m -l test/gate/clay.l < /dev/null
-# ...and the CONSUMERS: the generated headers regenerate and DIFF here -- a hand edit to any,
+# ...and the consumers: the generated headers regenerate and diff here -- a hand edit to any,
 # or a table edit with no regen, is a red. The roster is mx_gen above; `cmp`, not rtk diff.
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o; \
 	   cmp -s $$o $$d || { echo "FAIL $$d is not what $$l lays -- run: make mx"; \
 	                       diff -u $$d $$o | head -20; exit 1; }; done
 	@echo "clay-mx: l/mx.h, l/kinds.h, l/nifs.h, xterm256.h and l/love_data.ld regenerate identically"
 	@for s in $(mx_gen); do $(mxsplit); rm -f $$o; done
-# test_moonfuzz -- moon's REFUSAL surface: each test/cc file broken
-# eight ways from a fixed seed. Two reds -- no SCARE, no hang -- plus G1 on every mutant that
-# still parses, and a printed CENSUS of named-vs-bare refusals. stderr is KEPT: cpp speaks there.
+# test_moonfuzz -- moon's refusal surface: each test/cc file broken
+# eight ways from a fixed seed. Two reds -- no scare, no hang -- plus G1 on every mutant that
+# still parses, and a printed census of named-vs-bare refusals. stderr is kept: cpp speaks there.
 test_moonfuzz: host
 	@echo TEST test/gate/moonfuzz.l "(moon refusal fuzz: 8 mutants per file over test/cc)"
 	@$m -l test/gate/moonfuzz.l < /dev/null
-# test_forge -- nifs WRITTEN IN LOVE (apps/forge.l): a kernel's holo IR assembled for this cpu,
+# test_forge -- nifs written in love (apps/forge.l): a kernel's holo IR assembled for this cpu,
 # installed through the `nif` seam, and required to agree with the twin it deopts into -- on the
 # monomorphic lane it says and on every lane it hands back.
 # the twin here is the C nif itself, so a disagreement is one denotation answering two ways.
-# Zero kernels fitted FAILS: a graceful decline is the design, a silent one reads like a pass.
+# Zero kernels fitted fails: a graceful decline is the design, a silent one reads like a pass.
 test_forge: host
 	@echo TEST test/gate/forge.l "(forge: love IR -> holo -> nif -> differential)"
 	@LOVE_NO_IMAGE=1 $m -l test/gate/forge.l < /dev/null
-# test_cca64 / test_ccrv64 -- the battery on a CROSS TARGET (two targets, one procedure
-# in ccarch.sh): every test/cc/*.c built by `mooncc -t <arch>`, run under qemu-user, required
-# to answer what x64 answers. The three programs no cross lane can build must REFUSE, not skip.
-test_cca64: host
-	@sh test/gate/ccarch.sh a64 $(ho) $m
-test_ccrv64: host
-	@sh test/gate/ccarch.sh rv64 $(ho) $m
-# test_ccwasm -- the same battery on the WASM target, node as the machine (ccwasm.sh)
+# every test/cc/*.c by `mooncc -t $*`, run under qemu-user, held to what x64 answers.
+# the three programs no cross lane can build must refuse, not skip.
+test_cca64 test_ccrv64: test_cc%: host
+	@sh test/gate/ccarch.sh $* $(ho) $m
+# test_ccwasm -- the same battery on the wasm target, node as the machine (ccwasm.sh)
 test_ccwasm: host
 	@sh test/gate/ccwasm.sh $(ho) $m
-# test_ccthumb1 / test_ccthumb2 -- the same battery on the DEVICE CPUs, where ccarch.sh's
-# procedure cannot reach: M-profile has no qemu-user lane and is ILP32, so x64 is neither
-# runnable nor the right oracle. arm-none-eabi-gcc's build of the same source, on the same
-# machine, is (ccthumb.sh says why, and what the three exclusion lists each assert).
-test_ccthumb1: host
-	@sh test/gate/ccthumb.sh thumb1 $(ho) $m
-test_ccthumb2: host
-	@sh test/gate/ccthumb.sh thumb2 $(ho) $m
-# test_cts -- an OUTSIDE corpus: c-testsuite's 220 single-file programs, each held to the
-# stdout the corpus itself ships, on all three targets. Every file in test/cc/ was written
-# here to pin a fault we had already met; these were not, and the first run found nine
-# programs mooncc compiles clean and answers wrong. The failures are ROSTERED with a cause
-# apiece in cts.sh, refusals and wrong answers kept apart. Opt-in on an imported tree
-# (`make dl/c-testsuite`), skips whole without it.
+# the same battery on the device CPUs: M-profile has no qemu-user lane and is ILP32, so
+# x64 is neither runnable nor the oracle -- arm-none-eabi-gcc's build of the source is.
+test_ccthumb1 test_ccthumb2: test_cc%: host
+	@sh test/gate/ccthumb.sh $* $(ho) $m
+# an outside corpus: c-testsuite's 220 programs held to the stdout the corpus ships.
+# test/cc/ pins faults we had met; these did not, and found nine mooncc answers wrong --
+# rostered with a cause apiece in cts.sh, refusals and wrong answers kept apart.
+# opt-in on an imported tree (`make dl/c-testsuite`), skips whole without it.
 test_cts: host
 	@sh test/gate/cts.sh x64 $(ho) $m
-test_cts_a64: host
-	@sh test/gate/cts.sh a64 $(ho) $m
-test_cts_rv64: host
-	@sh test/gate/cts.sh rv64 $(ho) $m
-test_cts_wasm: host
-	@sh test/gate/cts.sh wasm $(ho) $m
+test_cts_a64 test_cts_rv64 test_cts_wasm: test_cts_%: host
+	@sh test/gate/cts.sh $* $(ho) $m
 # the corpus itself -- 220 files, cloned once and kept in dl/ like OVMF, so `make clean`
-# leaves it and only `make distclean` asks the network again. NOTHING depends on this rule:
+# leaves it and only `make distclean` asks the network again. nothing depends on this rule:
 # a gate that downloads is a gate that fails on a train.
 dl/c-testsuite:
 	@echo 'MK	'c-testsuite
 	@git clone --depth=1 https://github.com/c-testsuite/c-testsuite.git $@ > /dev/null 2>&1
-# test_libc -- OUR C LIBRARY against the system's, function by function:
+# test_libc -- our C library against the system's, function by function:
 # test/libc/*.c built by mooncc (pulling apps/moon/lib/moonlibc/ by need) and by gcc, run,
-# and the two OUTPUTS compared, so a drift names the function and the case.
+# and the two outputs compared, so a drift names the function and the case.
 test_libc: host
 	@sh test/gate/libc.sh $(ho) $m
-# test_ulp -- THE MATH FLOOR, built by both compilers and required to agree. `make ulp`
+# test_ulp -- the math floor, built by both compilers and required to agree. `make ulp`
 # measures am.c's accuracy for the $(CC) build alone, which asks whether the algorithm is
-# right, never whether OUR compiler builds it -- and float BITS are where codegen hides.
+# right, never whether our compiler builds it -- and float bits are where codegen hides.
 test_ulp: host
 	@sh test/gate/ulp.sh $(ho) $m
-# test_softfp -- THE COMPILER RUNTIME, against the machine that has the instruction.
+# test_softfp -- the compiler runtime, against the machine that has the instruction.
 # apps/moon/lib/rt.c is what mooncc's own lowering calls on a board with no FPU, no umull
-# and no clz; on the board there is no second opinion, so it is held to BIT equality with
+# and no clz; on the board there is no second opinion, so it is held to bit equality with
 # real hardware here, built by the system cc and by mooncc on all three backends.
 test_softfp: host
 	@sh test/gate/softfp.sh $(ho) $m
@@ -578,9 +531,9 @@ test_softfp: host
 # moved -- and holds the seat whose absolutes ride MOVW/MOVT to refusing outright.
 test_reloc32: host
 	@sh test/gate/reloc32.sh $(ho) $m
-# The rung-2 self-host gate: compile the love AND host lanes with mooncc (gcc/clang only
-# LINKS), then run the whole corpus through the all-mooncc binary -- the compiler compiles
-# the runtime it runs on. OPT-IN; x86-64 only; the binary carries no image, so a fresh egg.
+# The rung-2 self-host gate: compile the love and host lanes with mooncc (gcc/clang only
+# links), then run the whole corpus through the all-mooncc binary -- the compiler compiles
+# the runtime it runs on. opt-in; x86-64 only; the binary carries no image, so a fresh egg.
 test_selfhost: host
 	@echo TEST $(ho)/love-selfhost
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
@@ -598,53 +551,49 @@ test_selfhost: host
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_selfhost.out; } \
 	    || { echo "FAIL all-mooncc corpus (exit $$s)"; exit 1; }; \
 	  echo "test_selfhost: all `echo $(love_tu_c) $(host_c) | wc -w` src/*.c built by mooncc, corpus passes"
-# The rung-4 gate: the GCC-FREE fixpoint. Everything test_selfhost builds PLUS our own raw
-# libc (moonlibc/), math floor (am.c) and sys.o, bound by OUR OWN static linker -- no gcc,
-# no glibc, no ld anywhere. In test_slow, x86-64 only; supersedes test_selfhost.
+# the rung-4 gate: the gcc-free fixpoint. everything test_selfhost builds plus our own raw
+# libc (moonlibc/), math floor (am.c) and sys.o, bound by our static linker -- no gcc, no
+# glibc, no ld anywhere. in test_slow, x86-64 only; supersedes test_selfhost. the two cross
+# twins below take the same roster, so it is spelled once.
+raw_env = gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' gate_hosta='$(hosta)' gate_seat_c='$(R)/i/nokern.c $(R)/i/noblob.c'
 test_raw: host
-	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' gate_hosta='$(hosta)' gate_seat_c='$(R)/i/nokern.c $(R)/i/noblob.c' \
-	  sh test/gate/raw.sh x64 $(ho) $m $t
-# test_tco0 -- THE TRAMPOLINE, at full strength. `tco=0` is a documented knob
-# (common.mk) and it had rotted to a segfault in `bake`: the glaze emits the
-# TAIL-THREADED lvm shape, and nothing stopped a trampoline build from calling it.
-# love0 is the tree's other tco=0 lane and it cannot cover this -- it is the
-# Love0 branch, which never reaches LvGlazed, so the one build that exercised
-# the trampoline was the one build that could not meet the bug. this is the full
-# love at tco=0: it must build, BAKE (where the segfault was), and pass the corpus.
-# it takes its own hsuf'd tree, so it neither clobbers nor is clobbered by the
-# default flavour. no vmret here -- at tco=0 an lvm returns, which is the point.
+	@$(raw_env) sh test/gate/raw.sh x64 $(ho) $m $t
+# test_tco0 -- the trampoline at full strength. love0 is the tree's other tco=0 lane and
+# cannot cover this: it is the Love0 branch, which never reaches LvGlazed, so the glaze's
+# tail-threaded lvm shape goes uncalled there. this is the full love at tco=0 -- build,
+# bake, pass the corpus -- in its own hsuf'd tree, so it neither clobbers nor is clobbered.
+# no vmret here: at tco=0 an lvm returns, which is the point.
 test_tco0:
 	@$(MAKE) --no-print-directory tco=0 host
 	@$(MAKE) --no-print-directory tco=0 test_host
 	@echo "test_tco0: the trampoline builds, bakes and passes the host corpus"
-# test_hdiff -- the FOREIGN-CC differential at the host: the one lane a cc that is not
-# ours still gets to build, since nothing foreign builds the kernel at all. gcc and
-# clang each link the whole vm at ai_tco=1, which the default mooncc lane never does, and
-# each must build, answer, pass the quick host suite and come out ret-free. NOT the corpus
-# twice over: semantics are the interpreter's, and they do not move with the compiler.
+# test_hdiff -- the foreign-cc differential, the one lane a cc that is not ours still gets
+# to build. gcc and clang each link the whole vm at ai_tco=1, which the mooncc lane never
+# does, and each must build, answer, pass the quick suite and come out ret-free. not the
+# corpus twice: semantics are the interpreter's and do not move with the compiler.
 test_hdiff: host
 	@echo TEST test/gate/hdiff.sh
 	@sh test/gate/hdiff.sh gcc clang
-# the cc-DRIVER conventions (the `CC=mooncc` door's floor): the REAL $(ai_cflags) soup
+# the cc-driver conventions (the `CC=mooncc` door's floor): the real $(ai_cflags) soup
 # rides through -c, a link owing libc symbols pulls the runtime by need, and the loud edges
 # stay loud (-shared usage-refuses, -nostdlib names its undefined references). In test_slow.
 test_drv: host
 	@sh test/gate/drv.sh $(ho) $(ai_cflags)
-# the kernel's inline-asm SEAM: i/<a>/asmops.h says every privileged instruction
+# the kernel's inline-asm seam: i/<a>/asmops.h says every privileged instruction
 # once, in GNU's template, and mooncc reads it through holo/gas.l -- so the gate compiles one
 # probe with mooncc and clang and compares op by op. Skips without llvm-objdump.
 test_asmops: host
 	@sh test/gate/asmops.sh $(ho)
 # test_dtb -- i/dtb.h, the walk both device-tree doors ride (a64_dtb.c and
 # rv64_dtb.c, each one two constants and this include), on trees the gate builds
-# rather than a machine hands over. A boot reaches exactly ONE tree, virt's; these reach
+# rather than a machine hands over. a boot reaches exactly one tree, virt's; these reach
 # the other cell width, a nested reg that is not memory, two banks either way a tree says
 # it, both clamps, a cmdline past the buffer and a torn magic. Host cc, no love, no qemu.
 test_dtb:
 	@echo TEST test/gate/dtb.c
 	@$(CC) -I$R/i -I$R/l -I$R -o $(ho)/.dtbgate $R/test/gate/dtb.c
 	@$(ho)/.dtbgate
-# test_rvboot -- THE RISCV BRING-UP ON A HART: mkboot.l's sv39 lane and i/rv64/dtb.c
+# test_rvboot -- the riscv bring-up on A HART: mkboot.l's sv39 lane and i/rv64/dtb.c
 # under qemu -M virt, entered the way the kernel will be (OpenSBI, S-mode, a1 the tree).
 # Three objects and nothing else -- the stub, the door, and test/gate/rvboot.c standing in
 # for kmain -- bound by ldkern, the kernel linker's own door, since mooncc's driver enters
@@ -662,13 +611,12 @@ test_rvboot:
 	@$(MAKE) -s a=rv64 $(ko)/rv64/rv64/boot.o $(ko)/rv64/i/rv64/dtb.o
 	@$(MAKE) -s $(ko)/rv64/rvboot.elf
 	@sh test/gate/boot.sh rvboot "$(MAKE)"
-# test_vec -- the INTERRUPT gate: raises a real CPU exception with (fault n) and reads the
-# report, the only way to reach i/mkvec.l's 32 stubs and the fault vector, then
-# checks the stubs no boot can reach against the architecture's own error-code list.
-# WHICH vec.o: at the HOST arch there is no $(k_pie) build -- the elf is projected out of
-# the shipped love, which already carries the kart lane's objects -- so $(k_o) never runs and
-# the only vec.o laid for this machine is $(moon_d)/kvec.o. same mkvec.l, same arch, same lay.
-# a cross arch builds the pie and lays its own under $(ko). two ifeqs, never an else-ifeq.
+# test_vec -- the interrupt gate: raises a real CPU exception with (fault n) and reads the
+# report, the only way to reach i/mkvec.l's 32 stubs and the fault vector, then checks the
+# stubs no boot reaches against the architecture's own error-code list.
+# which vec.o: at the host arch there is no $(k_pie) build -- the elf is projected out of the
+# shipped love -- so $(k_o) never runs and $(moon_d)/kvec.o is the only one laid. a cross arch
+# builds the pie and lays its own under $(ko). two ifeqs, never an else-ifeq.
 kvec_x64  = $(ko)/x64/x64/vec.o
 kvec_a64 = $(ko)/a64/a64/vec.o
 kvec_rv64 = $(ko)/rv64/rv64/vec.o
@@ -685,9 +633,9 @@ test_vec: host
 	@sh test/gate/vec.sh a64 out/love-a64.elf $(kvec_a64)
 	@$(MAKE) -s a=rv64 kernel
 	@sh test/gate/vec.sh rv64 out/love-rv64.elf $(kvec_rv64)
-# THE FIXPOINT: the default love IS mooncc-built, so this gate has it rebuild ITSELF --
+# the fixpoint: the default love is mooncc-built, so this gate has it rebuild itself --
 # love1 (love0's lane, relinked) bakes its own compiler image, recompiles every TU, links
-# love2, and the two must be byte-identical. A headline invariant -- but it runs in
+# love2, and the two must be byte-identical. a headline invariant -- but it runs in
 # test_extra only, so a deleted src/*.c goes green through test_slow either way.
 # $(moon_o) $(kart_o) is the link list, the artifact's own: the gate is handed make's
 # objects, it never globs the odir, and it links no less than `make` does.
@@ -696,10 +644,10 @@ test_fixpoint: host $(moon_seat_o) $(love0) out/mooncc0.image
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
 	  gate_kern_c='$(k_free_c)' gate_seat_c='$(R)/i/noblob.c' \
 	  sh test/gate/fixpoint.sh $(ho) $(love0) $(hosta) $(moon_d) $(moon_o) $(moon_seat_o) $(kart_o)
-# THE CROSS-MACHINE FIXPOINT, in effigy: the x-lane's
+# the cross-machine fixpoint, in effigy: the x-lane's
 # twin objects link love1, then love1 under qemu-user rebuilds itself natively and must
 # answer the same bytes -- the twin machine reproducing this machine's, on one box.
-# opt-in BY NAME (a full rebuild under emulation is minutes): `make test_xfixpoint`,
+# opt-in by NAME (a full rebuild under emulation is minutes): `make test_xfixpoint`,
 # or `make xa=rv64 test_xfixpoint` for the other twin. skips loudly without qemu.
 .PHONY: test_xfixpoint
 test_xfixpoint: $(x_o) $(x_seat_o) $(xkart_o) $(love0) out/mooncc0.image
@@ -712,147 +660,110 @@ test_xfixpoint: $(x_o) $(x_seat_o) $(xkart_o) $(love0) out/mooncc0.image
 .PHONY: test_fat
 test_fat: dist-fat
 	@sh test/gate/fat.sh $(fat) $a $(xa) $(xqemu) "$(love0)" $(ho) $(xd) $(uname_$(xa))
-# the multi-OS gate: ONE default-lane
+# the multi-OS gate: one default-lane
 # binary answers every kernel with the same text. the box arrives by env --
-# FBSD_SSH / NBSD_SSH = "ssh -p 2222 -i KEY root@HOST" -- and without one the
+# FBSD_SSH / NBSD_SSH = "ssh -p 2222 -i key root@host" -- and without one the
 # gate skips loudly. opt-in by name, like test_distboot; FBSD_SEED=1 /
 # NBSD_SEED=1 adds the on-box `love seed` trophy leg (minutes).
 .PHONY: test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64
-test_freebsd: host $(love0) out/mooncc0.image
-	@sh test/gate/osbox.sh $(ho) $(love0) freebsd
-test_netbsd: host $(love0) out/mooncc0.image
-	@sh test/gate/osbox.sh $(ho) $(love0) netbsd
-# the SECOND ISA: FBSD_ARM64_SSH names an aarch64 freebsd box and the local half
-# of each comparison rides qemu-aarch64, so the leg is one binary under two
-# kernels on an ISA this machine is not. Skips loudly without either.
-test_freebsd_a64: host $(love0) out/mooncc0.image
-	@sh test/gate/osbox.sh $(ho) $(love0) freebsd a64
-# and its netbsd sibling: NBSD_ARM64_SSH, the same shape. one aarch64 binary
-# answers all three kernels -- the door netbsd needs there is the svc IMMEDIATE.
-test_netbsd_a64: host $(love0) out/mooncc0.image
-	@sh test/gate/osbox.sh $(ho) $(love0) netbsd a64
+test_freebsd test_netbsd: test_%: host $(love0) out/mooncc0.image
+	@sh test/gate/osbox.sh $(ho) $(love0) $*
+# the second ISA: {F,N}BSD_ARM64_SSH name aarch64 boxes and the local half of each
+# comparison rides qemu-aarch64, so one binary answers all three kernels on an ISA this
+# machine is not. the door netbsd needs there is the svc immediate. skips loudly without.
+test_freebsd_a64 test_netbsd_a64: test_%_a64: host $(love0) out/mooncc0.image
+	@sh test/gate/osbox.sh $(ho) $(love0) $* a64
 # test_raw_bake -- the mooncc-PIE binary bakes its own image and wakes it. The procedure
 # (and the why) lives in test/gate/raw-bake.sh; make keeps the dependency and the file list,
-# the WHOLE corpus. Opt-in: needs the -pie toolchain, x86-64 only.
+# the whole corpus. Opt-in: needs the -pie toolchain, x86-64 only.
 test_raw_bake: test_raw
 	@sh test/gate/raw-bake.sh $(ho) $t
 # test_rv64 -- the test/cc battery `mooncc -t rv64` under qemu-riscv64, exit code
-# against the native x64 build. In NO tier: test_ccrv64 runs the same battery and compares
+# against the native x64 build. In no tier: test_ccrv64 runs the same battery and compares
 # STDOUT, so this is its strict subset -- the lighter lane, opt-in by name.
 test_rv64: host
 	@sh test/gate/rv64.sh $(ho) $m
 # test_raw's rv64 twin: mooncc -t rv64 lays every object, mksys-rv64 the syscall
-# leaf, OUR linker binds, qemu-riscv64 runs the whole corpus over the fresh egg. The riscv
+# leaf, our linker binds, qemu-riscv64 runs the whole corpus over the fresh egg. The riscv
 # backend loads into the sealed holo module at runtime for mksys. Opt-in; skips w/o qemu.
 test_raw_rv64: host
-	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' gate_hosta='$(hosta)' gate_seat_c='$(R)/i/nokern.c $(R)/i/noblob.c' \
-	  sh test/gate/raw.sh rv64 $(ho) $m $t
+	@$(raw_env) sh test/gate/raw.sh rv64 $(ho) $m $t
 # test_raw's a64 twin: mooncc -t a64 lays every object, mksys-a64 the syscall leaf,
-# OUR linker binds, qemu-user runs the WHOLE C-sorted $t over the fresh egg. $t must stay
+# our linker binds, qemu-user runs the whole C-sorted $t over the fresh egg. $t must stay
 # in C/byte order: test/uu.l defines the kernel test/uukindlaw.l calls. Opt-in; needs qemu.
-# test/a64/callout.l rides past $t: it builds 'a64 nifs and RUNS them, so only an a64
+# test/a64/callout.l rides past $t: it builds 'a64 nifs and runs them, so only an a64
 # love may read it -- gate_sentinel is how the gate knows it was read and not stopped short.
 test_raw_a64: host
-	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' gate_hosta='$(hosta)' gate_seat_c='$(R)/i/nokern.c $(R)/i/noblob.c' \
-	  gate_sentinel='test/a64/callout:.* ok' \
+	@$(raw_env) gate_sentinel='test/a64/callout:.* ok' \
 	  sh test/gate/raw.sh a64 $(ho) $m $t test/a64/callout.l
-# test_thumb1 -- the ELF32/EM_ARM object writer (l/holo/obj.l objsecs32) end to end and the
-# 32-bit data model: a cross-object BL, the inline v6-M soft divide/rem, a global via the
-# literal-pool `la`, a gcc-built pointer-bearing struct mooncc reads a field back from, and a
-# NAMED SECTION holding a function-pointer table -- the vector-table shape, thumb bit and all.
-# Then the other direction: test/gate/ld32.l reads an object back through link.l's ld-read,
-# the only exercise the 32-bit rows of its field table get.
-test_thumb1: host
-	@sh test/gate/thumb.sh thumb1 $(ho)
-# test_thumb2 -- the thumb1 gate's ARMv7E-M twin, ON THE DEVICE CPU (qemu mps2-an500 is a
-# Cortex-M7, the Teensy 4.1 / Playdate silicon). the featured lane is `la`, thumb2's
-# MOVW/MOVT pair: every binding shape rides once -- global fn, static fn, literal, var.
-test_thumb2: host
-	@sh test/gate/thumb.sh thumb2 $(ho)
-# test_virt -- LOVE ITSELF on the bare rv64 hart: the whole runtime compiled end to end
-# by mooncc -t rv64 (i/virt/), start.o laid from holo IR, OUR linker binds -- no
-# foreign toolchain ANYWHERE. Bakes the egg, asserts, exits 42; 98 = a machine trap.
-test_virt: host
-	@sh test/gate/boot.sh virt "$(MAKE)"
-# test_mps2 -- LOVE ITSELF on the M7: the whole runtime by mooncc -t thumb2 (i/mps2/),
-# start.o laid from holo IR, ldbare32 binding one RWX segment at 0 -- no foreign toolchain
-# ANYWHERE, the second port after virt to reach that. On qemu's Cortex-M7 it bakes the egg
-# FROM SOURCE and asserts spec laws over the hatched image; exits 42, and 98 = fault.
-test_mps2: host
-	@sh test/gate/boot.sh mps2 "$(MAKE)"
-# test_mps2_t1 -- LOVE ON THE RP2040'S ISA: the same port by mooncc -t thumb1 (ARMv6-M,
-# ai_tco=0's trampoline, soft floats through libgcc's v6-m __aeabi set). v6-M is a strict
-# subset of ARMv7E-M, so qemu's M7 runs it natively; exit 42 = hatched + laws held. Our linker
-# binds this one too -- libgcc.a is named on the line and its members pulled by need through
-# the ranlib index, so the .a is a LIBRARY the link READS, not a tool it runs.
-test_mps2_t1: host
-	@sh test/gate/boot.sh mps2_t1 "$(MAKE)"
-# test_mps2_wake -- the IMAGE lane: the baker bakes the corpus on qemu's M7 and dumps a
-# fully-symbolic heap image; the WAKER -- a different binary, arena deliberately offset --
-# wakes it and re-runs the driver laws. The teensy's build rides the same love.img.
-test_mps2_wake: host
-	@sh test/gate/boot.sh mps2_wake "$(MAKE)"
-# test_thumb2sp -- the SP-only-FPU face (the playdate's STM32F746): f64 arithmetic SOFTENS
-# to __aeabi_* libgcc calls while the 64-bit transfers keep the d-reg value model. Gated on
-# qemu's mps2-an386, whose FPv4-SP FPU FAULTS on any f64 arithmetic that slipped through.
-test_thumb2sp: host
-	@sh test/gate/thumb.sh thumb2sp $(ho)
-# test_playdate -- the playdate build gate. The device half is OURS end to end now:
+# the ELF32/EM_ARM object writer (l/holo/obj.l objsecs32) and the 32-bit data model:
+# a cross-object BL, the inline v6-M soft divide/rem, a literal-pool `la`, a gcc-built
+# struct read back field-wise, and a named section holding a function-pointer table --
+# the vector-table shape, thumb bit and all. ld32.l reads an object back the other way,
+# the only exercise link.l's 32-bit field rows get.
+#   thumb1 v6-M | thumb2 ARMv7E-M on the device CPU, featuring MOVW/MOVT `la`
+#   thumb2sp the SP-only FPU (playdate STM32F746): f64 softens to __aeabi_*, the 64-bit
+#   transfers keep the d-reg model, and qemu's mps2-an386 faults on any that slipped through
+test_thumb1 test_thumb2 test_thumb2sp: test_%: host
+	@sh test/gate/thumb.sh $* $(ho)
+# love itself on the metal, one port apiece: the whole runtime by mooncc, start.o laid
+# from holo IR, our linker binding -- no foreign toolchain anywhere. exit 42 = hatched and
+# the laws held, 98 = a machine trap.
+#   virt      the bare rv64 hart (i/virt/)
+#   mps2      the M7 by -t thumb2, ldbare32 one RWX segment at 0; bakes the egg from source
+#   mps2_t1   the same port on the RP2040's ISA, -t thumb1: v6-M runs natively on qemu's M7,
+#             and libgcc.a is a library the link reads by need, not a tool it runs
+#   mps2_wake the image lane: the baker dumps a symbolic heap, a different binary whose
+#             arena is deliberately offset wakes it. the teensy build rides the same love.img
+#   nucleo446_smoke  the -D QSMOKE twin on qemu's Cortex-M4, exit code = the self-check
+#             tally out through mkboot.l's sh_exit -- the only lane running crt0, the
+#             semihosting block and the fault vectors. qemu only: on silicon a bkpt with
+#             no debugger escalates to lockup.
+test_virt test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke: test_%: host
+	@sh test/gate/boot.sh $* "$(MAKE)"
+# test_playdate -- the playdate build gate. The device half is ours end to end now:
 # mooncc -t thumb2sp compiles every object, pdglue.c (the pd_api.h owner) included, and
 # ldbare32 binds them -- no arm-none-eabi-gcc, no ld, no linker script. The SDK is wanted
 # for its C_API headers and for pdc. See test/gate/playdate.sh for what the image is held to.
 test_playdate: host
 	@sh test/gate/playdate.sh "$(MAKE)" $m
-# test_teensy41 -- the REAL-METAL build gate, and the one port asking for NO foreign tool at
+# test_teensy41 -- the real-metal build gate, and the one port asking for no foreign tool at
 # all: mooncc -t thumb2 compiles, tlink.l binds (no ld, no linker script -- the XIP flash map
 # is the map in that file), mkimg.l wraps the baked heap image, ocopy.l writes the .hex/.bin,
-# and the ROM-facing boot image is VERIFIED out of that .bin (FCFB tag at flash 0, IVT at
+# and the ROM-facing boot image is verified out of that .bin (FCFB tag at flash 0, IVT at
 # 0x1000, thumb-bit entry). So this one never skips; test_mps2 is the runtime (no RT1062 qemu).
 test_teensy41: host
 	@echo TEST out/teensy41/love.hex
 	@$(MAKE) -C i/teensy41 || { echo "FAIL teensy41 build (the boot-image verify is inside)"; exit 1; }
 	@echo "test_teensy41: love (all-mooncc thumb2), OUR linker, flatten and boot image -- nothing foreign"
-# test_nucleo446 -- the Nucleo-F446RE firmware BUILD gate: mooncc -t thumb2sp compiles,
-# nlink.l binds (no ld, no linker script -- the F4's memory map is the map in that file),
-# ocopy.l flattens, and the boot image is VERIFIED (initial SP inside SRAM, thumb-bit reset
-# entry inside flash). arm-none-eabi-gcc is still asked where its cortex-m4 hard-float
-# libgcc.a lives, but the .a is READ as an archive, by need, not run. The 128 KB SRAM never
-# held love: this port is the TOOLCHAIN on silicon, its arithmetic gated by test_thumb2sp
-# and its boot by test_nucleo446_smoke below.
+# test_nucleo446 -- the Nucleo-F446RE firmware build: mooncc -t thumb2sp compiles, nlink.l
+# binds (no ld, no script -- the F4's memory map is the map in that file), ocopy.l flattens,
+# boot image verified (initial SP inside SRAM, thumb-bit reset entry inside flash).
+# arm-none-eabi-gcc is asked only where its cortex-m4 hard-float libgcc.a lives, and the .a
+# is READ by need. the 128 KB SRAM never held love: this port is the toolchain on silicon.
 test_nucleo446: host
 	@echo TEST out/nucleo446/firm.hex
 	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   echo "test_nucleo446: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
 	  $(MAKE) -C i/nucleo446 || { echo "FAIL nucleo446 build (the boot-image verify is inside)"; exit 1; }; \
 	  echo "test_nucleo446: firmware (all-mooncc thumb2sp), OUR linker and flatten, no linker script, boot image verified"
-# test_nucleo446_smoke -- the same port RUN, not read: the -D QSMOKE twin on qemu's Cortex-M4,
-# its exit code the self-check tally carried out through mkboot.l's sh_exit. The only lane that
-# executes crt0, the semihosting block and the fault vectors. ~0.7s.
-# qemu only -- on silicon a bkpt with no debugger escalates to lockup.
-test_nucleo446_smoke: host
-	@sh test/gate/boot.sh nucleo446_smoke "$(MAKE)"
-# test_rp2040 -- the Pico firmware BUILD gate, nucleo446-shaped, and the one port with NO .S:
-# vector table and crt0 are C, and boot2 -- the 256-byte stage the mask ROM checksums before
-# it runs anything -- is laid straight into a named section by mkboot2.l. So the boot image
-# verify has THREE words, not two: boot2's CRC-32/MPEG-2 must be 0x7a4eb274, the SP inside the
-# 264 KB SRAM, the reset entry thumb-bit and inside flash. rlink.l binds, ocopy.l flattens, and
-# rt.o answers the __aeabi_* calls -- nothing foreign is left to ask after, so this lane never
-# skips. qemu has no RP2040 machine, so it builds and never boots -- test_mps2_t1 runs the ISA.
+# test_rp2040 -- the Pico firmware build, nucleo446-shaped, and the one port with no .S:
+# vector table and crt0 are C, and boot2 -- the 256-byte stage the mask ROM checksums first --
+# is laid into a named section by mkboot2.l. so the verify has THREE words: boot2's
+# CRC-32/MPEG-2 must be 0x7a4eb274, the SP inside the 264 KB SRAM, the reset entry thumb-bit
+# and inside flash. nothing foreign is left to ask after, so this never skips. qemu has no
+# RP2040 machine, so it builds and never boots -- test_mps2_t1 runs the ISA.
 test_rp2040: host
 	@echo TEST out/rp2040/love.bin
 	@$(MAKE) -C i/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }
 	@echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker, flatten and runtime -- no foreign file, flash R|X, boot surface verified"
-# test_boards -- THE BUILD HALF of the ports, no emulator anywhere. the boot gates above
-# prove a port RUNS; this one proves it still COMPILES, and that is the half that rots
-# unwatched -- a path or a roster moves, nothing in the merge gate names a board, and the
-# lane stays dark until someone runs test_extra. they are prerequisites, not recipe lines,
-# so a wide make runs the four at once: ~10 s together against ~35 s in a row, since each
-# port's own make is single-threaded and only the four of them can overlap.
-# rp2040 and nucleo446 carry their own toolchain skips; mps2 and virt want nothing foreign
-# to BUILD, only to boot, so the build halves come out here as their own targets.
-# i/wasm is not here and never will be: that folder is the RETIRED emcc build, opt-in as
-# `make wasm-emcc` and in no gate. the module the page carries is out/love-wasm.wasm, which
-# test_links below builds.
+# test_boards -- the build half of the ports, no emulator anywhere: the boot gates prove a
+# port runs, this proves it still compiles, and that is the half that rots unwatched.
+# PREREQUISITES, not recipe lines, so a wide make runs the six at once -- ~10 s together
+# against ~35 s in a row, each port's own make being single-threaded.
+# mps2 and virt want nothing foreign to build, only to boot, so their build halves are here.
+# i/wasm is not a board and never joins: that folder is the retired emcc build, opt-in as
+# `make wasm-emcc`. the module the page carries is out/love-wasm.wasm, from test_links.
 test_boards: test_mps2_build test_virt_build test_rp2040 test_nucleo446 test_teensy41 test_playdate
 	@echo "test_boards: six ports build and link -- mooncc and our linker, no emulator"
 test_mps2_build: host
@@ -861,13 +772,10 @@ test_mps2_build: host
 test_virt_build: host
 	@echo TEST out/virt/love.elf '(build)'
 	@$(MAKE) -C i/virt || { echo "FAIL virt build"; exit 1; }
-# test_links -- EVERY DISTINCT LINK TOPOLOGY, compiled and linked, and nothing run.
-# a seat change breaks LINKS, and a link is the cheapest question this tree asks. the seat
-# work that removed the weak defaults broke four at once -- the wasm library module,
-# out/front, the boards, and playdate, which keeps its own roster and so missed l/bare.c --
-# and no fast gate could see any of them, because the lanes that cover them live in
-# test_extra, which takes an hour and therefore does not get run. rides BOTH slow tiers --
-# in test_extra it stands for the four build-only board rows, being test_boards and more.
+# test_links -- every distinct link topology, compiled and linked, nothing run. a seat
+# change breaks LINKS, and a link is the cheapest question this tree asks; playdate keeps
+# its own roster, so it is the one that goes missing. rides both slow tiers -- in test_extra
+# it stands for the four build-only board rows, being test_boards and more.
 .PHONY: test_links
 test_links: host $(ho)/front $(love0) out/wasm/love.wasm out/love-wasm.wasm
 	@$(MAKE) -s $(ko)/love-x64.elf
@@ -876,18 +784,16 @@ test_links: host $(ho)/front $(love0) out/wasm/love.wasm out/love-wasm.wasm
 	@$(MAKE) -s test_boards
 	@echo "test_links: hosted, bootstrap, front, both wasm modules, three kernels, six boards"
 
-# the userland packages: each built by mooncc + moonlibc + the holo
-# linker -- no gcc/glibc/ld anywhere -- then RUN and held to the package's own answers:
-# tar 1.13 cf/xf + czf/xzf roundtrips and system-tar interop, m4 1.4's own 57-check suite,
-# lua 5.4's interpreter battery, sqlite's amalgamation + VFS battery. Opt-in: point the
-# package's SRC var at a prepared tree (./configure'd for tar/m4, extracted for lua/sqlite)
-# and each script SKIPS cleanly without one. A cross lane puts a qemu wrapper on PATH, so a
-# suite that execs the binary by name runs unmodified; riscv routes around faults the other
-# two share (nhome = 0, so nothing rides), which is why it is not redundant.
+# the userland packages: each built by mooncc + moonlibc + the holo linker -- no gcc/glibc/ld
+# anywhere -- then run and held to the package's own answers: tar 1.13 roundtrips and
+# system-tar interop, m4 1.4's 57-check suite, lua 5.4's battery, sqlite's amalgamation + VFS.
+# opt-in: point the package's SRC var at a prepared tree and each script skips without one.
+# a cross lane puts a qemu wrapper on PATH so a suite that execs by name runs unmodified;
+# riscv routes around faults the other two share (nhome = 0), so it is not redundant.
 # /warn the sqlite cross lanes wait on moon-sqlite: they read its x86-64 answers as the oracle.
 moon_arch_a64 = a64
 moon_arch_rv64 = rv64
-# $1 package, $2 its source-tree var, $3 what the two CROSS lanes wait on
+# $1 package, $2 its source-tree var, $3 what the two cross lanes wait on
 define moon_pkg
 moon-$1: host
 moon-$1-a64 moon-$1-rv64: $3
@@ -900,19 +806,14 @@ $(eval $(call moon_pkg,lua,LUASRC,host))
 $(eval $(call moon_pkg,sqlite,SQLSRC,moon-sqlite))
 $(eval $(call moon_pkg,gzip,GZIPSRC,host))
 $(eval $(call moon_pkg,bzip2,BZIP2SRC,host))
-# test_distboot -- THE RELEASE CLAIM: take either artifact, type make, get the same
-# binary. SOURCE bootstraps through the machine's own cc; SEED lays the source it carries
-# in .rodata and builds it with cc/gcc/clang shadowed by scripts that fail loudly -- so
-# "no ambient compiler did the work" is proved, not assumed. Then the circle: `love seed`
-# with nothing on PATH that compiles, which is where its FALLBACK is exercised -- it takes
-# its own mooncc and rebuilds ITSELF byte for byte. Minutes, opt-in, by name -- and the
-# reason the claim can hold at all is that the local cc builds love0 and nothing else
-# (see the script).
-# IT DOES NOT SUBSUME test_seed, and must not be read as doing so: no leg here runs a
-# DEFAULT `love seed`, so nothing here tests the seed choosing to defer to a working
-# ambient cc. Both lanes are covered; only one of the two DECISIONS is. Three full builds
-# against test_seed's one, and still not a superset.
-# test_bakerep -- A BAKE IS A FUNCTION OF THE TREE. Seconds, and it rides the slow gate
+# test_distboot -- the release claim: take either artifact, type make, get the same binary.
+# source bootstraps through the machine's cc; seed lays the source it carries in .rodata and
+# builds it with cc/gcc/clang shadowed by scripts that fail loudly, so "no ambient compiler
+# did the work" is proved. then the circle: `love seed` with nothing on PATH that compiles,
+# taking its own mooncc. the claim holds because the local cc builds love0 and nothing else.
+# three full builds and still NOT a superset of test_seed -- no leg here runs a default
+# `love seed`, so the deference decision goes untested. minutes, opt-in, by name.
+# test_bakerep -- A bake is a function OF the tree. Seconds, and it rides the slow gate
 # because test_distboot proves the same law over the whole circle but is opt-in and
 # minutes long; a regression would otherwise wait for a release to surface.
 test_bakerep: host
@@ -921,31 +822,27 @@ test_bakerep: host
 test_distboot: dist
 	@echo TEST test/gate/distboot.sh
 	@sh test/gate/distboot.sh $(dist_source) $(ho)/love
-# test_gz -- apps/tar/tar.l + apps/gz/gz.l against the two programs they replace. The LAWS are
-# test/host/gz.l (in test_hostnif, needing nothing outside the tree); this is the half
-# only the outside world can say, and it is a separate gate because a coder and a
-# decoder written by one hand round-trip cleanly through a format nobody else speaks.
-# Skips where either system tool is missing. gzfind.l rides along and needs NOTHING
-# outside: it is the differential between gz.l's match finder and the holo IR beside it
-# that says the same thing to a cpu, over corpora chosen for the chain the kernel walks.
+# test_gz -- apps/tar/tar.l + apps/gz/gz.l against the two programs they replace. the laws
+# are test/host/gz.l; this is the half only the OUTSIDE can say, and it is separate because
+# a coder and decoder by one hand round-trip cleanly through a format nobody else speaks.
+# skips without either system tool. gzfind.l rides along: the differential between gz.l's
+# match finder and the holo IR beside it, over corpora chosen for the chain the kernel walks.
 test_gz: host
 	@echo TEST test/gate/gzfind.l
 	@$m $R/test/gate/gzfind.l
 	@echo TEST test/gate/targz.sh
 	@sh test/gate/targz.sh $(ho)/love
-# test_root -- the privileged verbs: chroot, mount, umount, sync, mkfifo, mknod. Two
-# halves, and the second is the one that means something: the refusals as an ordinary
-# user, then test/gate/rootns.l, which makes itself root in an unprivileged USER
-# NAMESPACE and does the real thing -- a tmpfs mounted, a bind that shows the other
-# tree, both unmounted, and a chroot with a command running inside the new root. A
-# gate that only watched these answer 'eperm would pass against a stub.
-# a kernel with unprivileged user namespaces off skips the second half with a word
-# and stays green: that is a machine's policy, not a fault in the code.
+# test_root -- the privileged verbs: chroot, mount, umount, sync, mkfifo, mknod. the
+# refusals as an ordinary user, then test/gate/rootns.l, which makes itself root in an
+# unprivileged user namespace and does the REAL thing -- tmpfs mounted, a bind showing the
+# other tree, both unmounted, a chroot with a command inside. a gate that only watched these
+# answer 'eperm would pass against a stub. a kernel with user namespaces off skips the second
+# half and stays green: a machine's policy, not a fault in the code.
 test_root: host
 	@echo TEST test/gate/root.sh
 	@sh test/gate/root.sh $(ho) $(ho)/love
 # test_fat32 -- `love fat` + `love mkfs.vfat`, the command line over apps/fat/fat.l.
-# NOT test_fat, which gates the fat CONTAINER (seed-universal U1) and shares only a
+# not test_fat, which gates the fat container (seed-universal U1) and shares only a
 # word. test/fat.l proves the filesystem's own laws over a cask, needing nothing
 # outside; this is the half only another implementation can say, and mtools is it --
 # their reader on our format, our reader on theirs, and our reader on an mformat image.
@@ -961,21 +858,20 @@ test_cpio: host
 	@echo TEST test/gate/cpio.sh
 	@sh test/gate/cpio.sh $(ho)/love
 # The neutral assembler (l/holo/) + its x86-64 backend: every encoder golden is
-# objdump-checked (test/holo/golden.l). A host-only app -- it adds no nif and is NOT
-# baked into love0. The sources are cat'd in because the host bakes its NATIVE backend
-# only; the other four reach the gate no other way. Gate = exit 0 AND the "N passed,
+# objdump-checked (test/holo/golden.l). a host-only app -- it adds no nif and is not
+# baked into love0. The sources are cat'd in because the host bakes its native backend
+# only; the other four reach the gate no other way. Gate = exit 0 and the "N passed,
 # 0 failed" sentinel.
 test_holo: host
 	@echo TEST test/holo/golden.l
 	@cat l/holo/holo.l l/holo/x64.l l/holo/a64.l l/holo/thumb2.l \
 	    l/holo/rv64.l l/holo/thumb1.l l/holo/text.l l/holo/dialect.l l/holo/gas.l l/holo/elf.l \
 	    l/holo/wasm.l l/holo/wasmfn.l test/holo/golden.l | sh test/gate/run.sh holo "$m" ", 0 failed"
-# as.l -- the real x86-64 front over holo, either dialect through dialect.l's lens (the lens
-# laws ride test/holo/as.l; test/gate/dialect.sh judges it against gcc's own two outputs,
-# skipping without gcc), and decode.l reads the bytes back (its battery laws ride the same
-# file; test/gate/decode.sh judges it against objdump). test/holo/as.l's goldens are byte-identical
-# to /usr/bin/as (frozen, no shell-out at gate time). Same sentinel gate as test_holo.
-# asrefuse.sh is the other half: what must RAISE, one love per case.
+# as.l -- the real x86-64 front over holo, either dialect through dialect.l's lens
+# (dialect.sh judges it against gcc's two outputs, skipping without gcc), and decode.l reads
+# the bytes back (decode.sh judges it against objdump). test/holo/as.l's goldens are
+# byte-identical to /usr/bin/as, frozen, no shell-out at gate time. same sentinel gate as
+# test_holo; asrefuse.sh is the other half, what must raise, one love per case.
 test_as: host
 	@echo TEST test/holo/as.l
 	@cat l/holo/holo.l l/holo/x64.l l/holo/dialect.l l/holo/decode.l l/holo/as.l test/holo/as.l \
@@ -986,7 +882,7 @@ test_as: host
 # test_elf32 -- holo's ELF32 executable writer, judged by a real loader: both thumb backends
 # lay write+exit, Linux maps the segment and enters in Thumb state, and 42 must come back.
 # test/holo/golden.l pins the header fields; this pins the only opinion that counts. Needs qemu-arm
-# and NOTHING else -- no as, no ld, no arm-none-eabi -- so it runs where the thumb gates skip.
+# and nothing else -- no as, no ld, no arm-none-eabi -- so it runs where the thumb gates skip.
 test_elf32: host
 	@sh test/gate/elf32.sh $(ho)
 # test_objcopy -- l/holo/copy.l, the flatten, against the objcopy it replaces: a BYTE
@@ -996,22 +892,22 @@ test_elf32: host
 test_objcopy: host
 	@sh test/gate/objcopy.sh $(ho)
 # ain's two-process loopback gate: a server and a client over real TCP on 127.0.0.1,
-# full-duplex, each asserting it got what the other sent. The ONLY net gate driving the real
+# full-duplex, each asserting it got what the other sent. The only net gate driving the real
 # `love apps/ain.l` cli path. In test_slow; override the port with `make nettest PORT=N`.
 PORT ?= 7390
 nettest: host
 	@echo TEST $m "(127.0.0.1:$(PORT))"
 	@sh $R/test/net/loopback.sh $m $(PORT)
 # The tool gates beside the build: the hue generators, cook, tele. See tools/Makefile.
-# vmret is NOT here -- it rides test_slow over $m, and after plan C2 every other love in
+# vmret is not here -- it rides test_slow over $m, and after plan C2 every other love in
 # the tree is a projection of that one. lush is a real
 # prerequisite: test/host/cook.l's SHELL pair sets `SHELL := out/lush` to prove cook honors it.
 test_tools: host out$(hsuf)/lush
 	@$(MAKE) -C tools
-# test_gcheck: the copy loop's FIXPOINT instance check. LvGcCheck makes gen_minor re-drive
-# its WHOLE scan after the drain and trap if the second pass copies a word, in its own tree.
+# test_gcheck: the copy loop's fixpoint instance check. LvGcCheck makes gen_minor re-drive
+# its whole scan after the drain and trap if the second pass copies a word, in its own tree.
 # /warn the knob is GCDBG: EXTRA_CFLAGS rides $(ai_cflags), which the mooncc recipes do not use.
-# â  the shared unsuffixed prerequisites are named HERE so the PARENT makes them once.
+# the shared unsuffixed prerequisites are named here so the parent makes them once.
 # both debug lanes recurse, and a target two sub-makes each decide to remake is a partial
 # file to whoever reads it meanwhile -- a half-written mooncc0.image wakes with no verb
 # table and `mooncc` then reads as a filename (the Makefile). test_fixpoint names them
@@ -1019,7 +915,7 @@ test_tools: host out$(hsuf)/lush
 test_gcheck: host $(love0) out/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DLvGcCheck test_host
 	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DLvGcCheck test_hostegg
-# test_gcstress: the MUTATOR's side -- whether the C around the collector holds a raw pointer
+# test_gcstress: the mutator's side -- whether the C around the collector holds a raw pointer
 # across a call that collects. LvGcStress always collects, poisons the vacated nursery, and
 # majors every 32nd. ~12 min, own tree -- the baked leg tracks the glaze, since every major
 # walks it, and costs 3.4x the egg one for it (429 s against 126 s).
@@ -1027,7 +923,7 @@ test_gcstress: host $(love0) out/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_host
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_hostegg
 # --- the machine-checked half: test/proof/rocq/ + test/proof/lean/ ---------------------------------
-# Each gate below is a no-op that SAYS SO when its checker is missing, so a bare box stays
+# Each gate below is a no-op that says so when its checker is missing, so a bare box stays
 # green. The tool guards are grouped by what they need, not by gate.
 COQC     ?= $(shell command -v coqc 2>/dev/null)
 OCAMLOPT ?= $(shell command -v ocamlopt 2>/dev/null)
@@ -1041,24 +937,24 @@ test_proof test_gc test_gen test_uugen test_mx:
 	@echo "$@: skipped (needs rocq/coqc)"
 else
 # spec.v -- love's headline laws (the numeral / function / absence core of test/spec.l) as Rocq
-# theorems, axiom-free and universe-checked: the executable spec upgraded from SHOWN to PROVED.
-# spec.vo is a FILE target, compiled once and KEPT: test_gen and test_extract both `Require
+# theorems, axiom-free and universe-checked: the executable spec upgraded from shown to proved.
+# spec.vo is a file target, compiled once and kept: test_gen and test_extract both `Require
 # Import spec`. /warn one spelling everywhere (`cd test/proof/rocq && -R . ""`), or spec.vo's logical
-# name is not the one gen.v asks for. A static pattern: big/mx/enc take their own flags.
+# name is not the one gen.v asks for. a static pattern: big/mx/enc take their own flags.
 rocq_kept = test/proof/rocq/spec.vo test/proof/rocq/patch.vo
 $(rocq_kept): test/proof/rocq/%.vo: test/proof/rocq/%.v
 	@echo TEST test/proof/rocq/$*.v "(coqc)"
 	@cd test/proof/rocq && $(COQC) -q -R . "" $*.v
 test_proof: $(rocq_kept)
 	@echo "test_proof: spec.v + patch.v check (the .vo IS the evidence, so a re-run is quiet)"
-# gc.v -- the generational MINOR is SOUND (under a complete write barrier no live young is
-# lost), its PAUSE is bounded by the nursery, and the Cheney drain terminates as a true
+# gc.v -- the generational minor is sound (under a complete write barrier no live young is
+# lost), its pause is bounded by the nursery, and the Cheney drain terminates as a true
 # fixpoint. Axiom-free; test_gcheck instance-checks the drain.
 test_gc:
 	@echo TEST test/proof/rocq/gc.v "(coqc)"
 	@$(COQC) -q test/proof/rocq/gc.v
 	@$(call vclean,gc)
-# The .l -> .v pipeline: tools/spec2coq.l reads test/spec.l and EMITS gen.v, the spec generating
+# The .l -> .v pipeline: tools/spec2coq.l reads test/spec.l and emits gen.v, the spec generating
 # theorems for its own numeral facts. Regenerated every run, so asserts and proofs cannot diverge.
 test_gen: host $(rocq_kept)
 	@echo 'LOVE	'test/proof/rocq/gen.v "(tools/spec2coq.l on $m)"
@@ -1066,8 +962,8 @@ test_gen: host $(rocq_kept)
 	@echo TEST test/proof/rocq/gen.v "(coqc, against spec.v's shared model)"
 	@cd test/proof/rocq && $(COQC) -R . "" gen.v
 	@$(call vclean,gen)
-# The PROOF half of that pipeline (cf. test_gen, which exports concrete ASSERTS): tools/uu2coq.l
-# has uu's kernel TYPE-CHECK a proof term and emits the same term in Gallina for coqc to re-check
+# The proof half of that pipeline (cf. test_gen, which exports concrete ASSERTS): tools/uu2coq.l
+# has uu's kernel type-check a proof term and emits the same term in Gallina for coqc to re-check
 # -- a law proved in love's own kernel and certified by Rocq.
 test_uugen: host
 	@echo 'LOVE	'test/proof/rocq/uugen.v "(tools/uu2coq.l on $m)"
@@ -1075,8 +971,8 @@ test_uugen: host
 	@echo TEST test/proof/rocq/uugen.v "(coqc)"
 	@$(COQC) -q test/proof/rocq/uugen.v
 	@$(call vclean,uugen)
-# l/mx.l IS the +/* dispatch matrices; l/mx.h is laid from it through clay and tools/mx2coq.l models
-# it in Rocq -- two derivations of ONE datum.
+# l/mx.l is the +/* dispatch matrices; l/mx.h is laid from it through clay and tools/mx2coq.l models
+# it in Rocq -- two derivations of one datum.
 test_mx: host
 	@echo TEST test/proof/rocq/mx.v "(the dispatch matrices: band factorization + dispatch commutativity, coqc)"
 	@cat l/mx.l tools/mx2coq.l | $m > test/proof/rocq/mx.v
@@ -1089,7 +985,7 @@ test_extract test_big test_encver:
 	@echo "$@: skipped (needs coqc + ocamlopt)"
 else
 # extract.v's normalizer (on spec.v's PROVEN subst/shift) extracted to OCaml and fuzzed against
-# ev. /warn RUN THE ORACLE ONCE, into a file (2>&1 too): grep it, then cat it -- a second run
+# ev. /warn run the oracle once, into a file (2>&1 too): grep it, then cat it -- a second run
 # to display doubles the work.
 test_extract: host $(rocq_kept)
 	@echo TEST test/proof/rocq/extract.v "(coqc extraction -> ocaml ref vs ev)"
@@ -1104,8 +1000,8 @@ test_extract: host $(rocq_kept)
 	@rm -f test/proof/rocq/normalizer.ml test/proof/rocq/normalizer.mli test/proof/rocq/oracle_drive \
 	  test/proof/rocq/*.cmi test/proof/rocq/*.cmx test/proof/rocq/*.o out/.extract_oracle.l out/.extract_oracle.out
 # big.v proves the decimal codec roundtrip and the quot-rem/gcd witnesses, then extracts stdlib's
-# binary Z with the codec; big_drive.ml emits decimal comparisons -- love's READER, limbs and
-# PRINTER against it.
+# binary Z with the codec; big_drive.ml emits decimal comparisons -- love's reader, limbs and
+# printer against it.
 test_big: host
 	@echo TEST test/proof/rocq/big.v "(coqc codec proof + extracted Z ref vs the limb lane)"
 	@cd test/proof/rocq && $(COQC) -q big.v >/dev/null \
@@ -1118,7 +1014,7 @@ test_big: host
 	@$(call vclean,big)
 	@rm -f test/proof/rocq/bigref.ml test/proof/rocq/bigref.mli test/proof/rocq/big_drive \
 	  test/proof/rocq/*.cmi test/proof/rocq/*.cmx test/proof/rocq/*.o out/.big_oracle.l out/.big_oracle.out
-# the PROVE rung of the holo encoder ladder: reference x86-64 encoders each proving decode
+# the prove rung of the holo encoder ladder: reference x86-64 encoders each proving decode
 # inverts encode, extracted to OCaml and checked BYTE-IDENTICAL against holo -- an oracle, not a
 # disassembler. enc.v is reg-direct, encmem.v ModRM/SIB, encli.v `li`'s form choice.
 encver = enc:1792:reg-direct encmem:6144:memory encli:320:immediate
@@ -1141,8 +1037,8 @@ test_encver: host
 	@rm -f test/proof/rocq/*.cmi test/proof/rocq/*.cmx test/proof/rocq/*.o out/.enc_oracle.* out/.encmem_oracle.* out/.encli_oracle.*
 endif
 
-# the LEAN leg of the proof bridge (cf. test_uugen, the Rocq leg): tools/uu2lean.l emits the SAME
-# uu corpus to Lean 4, which re-checks it -- a SECOND independent kernel, so each law is agreed
+# the lean leg of the proof bridge (cf. test_uugen, the Rocq leg): tools/uu2lean.l emits the same
+# uu corpus to Lean 4, which re-checks it -- a second independent kernel, so each law is agreed
 # by two unrelated implementations. Regenerated every run.
 ifeq ($(LEAN),)
 test_uulean:
@@ -1157,11 +1053,10 @@ test_uulean: host
 	  if [ $$r -ne 0 ] || grep -q sorryAx out/.uulean.out; then cat out/.uulean.out; exit 1; fi
 endif
 
-# the fuzz-first rung of the holo encoder ladder (test/holo/fuzz/): random IR forms encoded
-# via holo (in-process), disassembled (objdump for x64, cross-read by llvm-mc; llvm-mc
-# elsewhere), decode checked against intent. fuzz.l skips a lane whose disassembler is
-# absent and exits 1 on any decode disagreement. sysdiff.l rides the same lane for the
-# SYSTEM ops, byte-exact off holo's own a64.l tables, and rvc.l sweeps the riscv C
+# the fuzz-first rung of the holo encoder ladder (test/holo/fuzz/): random IR encoded via
+# holo, disassembled (objdump for x64, llvm-mc elsewhere), decode checked against intent.
+# fuzz.l skips a lane whose disassembler is absent, exits 1 on any disagreement. sysdiff.l
+# rides it for the system ops off holo's own a64.l tables, and rvc.l sweeps the riscv C
 # squeeze by EQUIVALENCE -- every compressed word against the 32-bit word it replaced.
 test_holofuzz: host
 	@echo TEST test/holo/fuzz/fuzz.l "(holo x64+a64+riscv encoder differential fuzz)"
@@ -1173,9 +1068,9 @@ test_holofuzz: host
 	 else echo "  (sysdiff skipped: no llvm-mc)"; fi
 	@$m test/holo/fuzz/rvc.l \
 	  || { echo "FAIL rvc -- an RVC squeeze changes what the word means"; exit 1; }
-# THE COMMITTED GENERATED CORPORA, one shape four times over: a design's own code
-# compiled into uu terms, so the matching *law.l proves its theorems OF THE
-# IMPLEMENTATION at corpus time and not of a transcription somebody keeps by hand.
+# the committed generated corpora, one shape four times over: a design's own code
+# compiled into uu terms, so the matching *law.l proves its theorems OF the
+# implementation at corpus time and not of a transcription somebody keeps by hand.
 # `make <stem>` refreshes one; test_<stem> regenerates into scratch and diffs, so a
 # source that moved reddens here instead of going quiet.
 # $1 the corpus stem, $2 its generator under tools/, $3 the source that generator reads
@@ -1192,12 +1087,12 @@ test_$1: host
 endef
 # what each row proves, the only part that differs:
 #   uuwm      lux's zipper ops                        -> test/uuwmlaw.l, its theorems
-#   uukind    the abstract kinds-lattice JOIN         -> test/uukindlaw.l, the semilattice laws
+#   uukind    the abstract kinds-lattice join         -> test/uukindlaw.l, the semilattice laws
 #   uuhomgen  dest.l's two code generators, on its law sites -> test/uuhomlaw.l, the destination-die laws
 #   uusplgen  spl.l's three call-site compilers (call, binding splice, substitution
-#             splice) on its samples                  -> test/uuspllaw.l, the SPLICE LICENSE
-#   uumx      love.c's +/* DISPATCH MATRICES (l/mx.l) -> test/uumxlaw.l, the band lattice
-#   uuvallaw  CLAUDE.md's LAWS off test/law.l's own rows -> proved where they stand, one
+#             splice) on its samples                  -> test/uuspllaw.l, the splice license
+#   uumx      love.c's +/* dispatch matrices (l/mx.l) -> test/uumxlaw.l, the band lattice
+#   uuvallaw  CLAUDE.md's laws off test/law.l's own rows -> proved where they stand, one
 #             spelling for the fuzz lane and the proof lane both
 $(eval $(call uu_corpus,uuwm,uuwmgen,apps/lux/core.l))
 $(eval $(call uu_corpus,uukind,kinds2uu,test/proto/kinds.l))
@@ -1205,8 +1100,8 @@ $(eval $(call uu_corpus,uuhomgen,dest2uu,test/proto/dest.l))
 $(eval $(call uu_corpus,uusplgen,spl2uu,test/proto/spl.l))
 $(eval $(call uu_corpus,uumx,mx2uu,l/mx.l))
 $(eval $(call uu_corpus,uuvallaw,law2uu,test/law.l))
-# test_wake: the BAKE-THEN-WAKE ROUND TRIP, which no other gate runs -- every other lane
-# wakes an image some earlier recipe baked. A CANDIDATE COPY bakes (love.wake, ETXTBSY-proof)
+# test_wake: the bake-then-wake round trip, which no other gate runs -- every other lane
+# wakes an image some earlier recipe baked. a candidate copy bakes (love.wake, ETXTBSY-proof)
 # under a timeout the wake storm cannot meet: a fresh lane checks uu in ~1s, a storming one
 # takes >90s, so the clock is the whole assertion.
 test_wake: $(ho)/love
@@ -1218,7 +1113,7 @@ test_wake: $(ho)/love
 	  else echo "test_wake: FAILED -- the woken image storms"; rm -f $(ho)/love.wake $(ho)/wake-corpus.l; exit 1; fi
 
 # --- the metal gates: what boots, and where ---------------------------
-# The kernel BUILD rules and the `run`/`uefi` verbs stay in the root Makefile;
+# The kernel build rules and the `run`/`uefi` verbs stay in the root Makefile;
 # these are only the gates that drive the artifacts those rules lay.
 
 ifeq ($a,x64)
@@ -1236,7 +1131,7 @@ test_wgetnet: host
 	@echo TEST test/host/wgetnet.l "(wget over TLS 1.3 to a live peer)"
 	@cat test/00-init.l test/host/wgetnet.l | sh test/gate/run.sh wgetnet "$m" "wgetnet: ok"
 
-# doom in an X window, the DOOM=1 build under an Xvfb (apps/doom.l): opt-in --
+# doom in an X window, the doom=1 build under an Xvfb (apps/doom.l): opt-in --
 # it wants the vendored source and the IWAD, and rebuilds the artifact with doom inside
 test_doomx: $(R)/test/host/doomx.l
 	@$(MAKE) -s host DOOM=1
@@ -1319,12 +1214,10 @@ test_kernel_rv64: host $(R)/tools/ktest.l
 endif
 
 NODE ?= $(shell command -v node 2>/dev/null)
-# test_wasm rides moon's OWN module (make wasm -> out/wasm/love.wasm) under the loader,
-# no emcc. THE CORPUS IS NOT HERE any more: test/kernel/all.l reads common.mk's own `t`
-# off the ramfs, so test_kernel_wasm already runs it on the kernel module, woken image and
-# all -- one wasm build of the same TUs, one corpus. what is left is the two seams the
-# machine has not grown: quay's cells laid as html, and the horn's PCM into WebAudio.
-# the emcc build is opt-in now (make wasm-emcc); its love.js is not in any gate.
+# test_wasm rides moon's own module (make wasm -> out/wasm/love.wasm) under the loader, no
+# emcc. the corpus is not here: test/kernel/all.l reads common.mk's `t` off the ramfs, so
+# test_kernel_wasm runs it on the kernel module, woken image and all. what is left is the two
+# seams the machine has not grown -- quay's cells as html, the horn's PCM into WebAudio.
 ifeq ($(NODE),)
 test_wasm:
 	@echo "test_wasm: skipped (needs node)"
@@ -1334,10 +1227,10 @@ test_wasm: wasm
 	@$(NODE) $(R)/i/wasm/horn.mjs --love $(R)/out/wasm/love.wasm
 endif
 
-# INLE_RAM: cpu.mjs grows the memory ONCE at boot and hands kmain that fixed span, so the
-# seat's room is a number here, not a policy. 256 (its default) is short of the corpus --
-# the collector's doubling asks for 4480156 words and the grow refuses, at the same length
-# whichever member happens to be running, because the live set is what crossed the line.
+# INLE_RAM: cpu.mjs grows the memory once at boot and hands kmain that fixed span, so the
+# seat's room is a number here, not a policy. 256 (the default) is short of the corpus: the
+# collector's doubling asks 4480156 words and the grow refuses, at the same length whichever
+# member is running, the live set being what crossed the line.
 # test_kernel_wasm -- the wasm inle seat (out/love-wasm.wasm) under node: the image baked
 # (the egg lane, `bake PATH` on the boot line), then the kernel corpus off the ramfs on the
 # woken image, the serial line captured, the (reset) that ends it read as the exit -- what
