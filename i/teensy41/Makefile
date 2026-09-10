@@ -28,8 +28,8 @@ teensy41: $(R)/$(o)/love.hex
 
 $(foreach u,$(love_m),$(eval $(call p_obj,$u,l/$u.c,\
   $(R)/l/$u.c $(love_dep),$(te_cc))))
-$(foreach m,$(libc_m),$(eval $(call p_obj,$m,apps/moon/lib/moonlibc/string/$m.c,\
-  $(R)/apps/moon/lib/moonlibc/string/$m.c $(libc_dep),$(te_cc) -Iapps/moon/include)))
+$(foreach m,$(libc_m),$(eval $(call p_obj,$m,a/moon/lib/moonlibc/string/$m.c,\
+  $(R)/a/moon/lib/moonlibc/string/$m.c $(libc_dep),$(te_cc) -Ia/moon/include)))
 $(eval $(call p_obj,teensy41,i/teensy41/teensy41.c,teensy41.c teensy41.h $(R)/l/love.h $(mc),$(te_cc)))
 $(eval $(call p_obj,main,i/teensy41/main.c,main.c teensy41.h $(R)/l/love.h $(lib_hR) $(mc),$(te_cc)))
 

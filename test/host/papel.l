@@ -24,7 +24,7 @@
 
 ; --- the module seam: three modules, and papel adds nothing to the book ----------
 (: parse-before (elem 'parse (names ()))  ; the book before the load, for the leak delta
- _ (borrow "apps/papel.l")                ; the loader: papel wants lapiz + cook itself
+ _ (borrow "a/papel.l")                ; the loader: papel wants lapiz + cook itself
  (test
   (elem 'papel (cite ()))
   (elem 'lapiz (cite ()))
@@ -104,7 +104,7 @@ Only a paragraph, so the title has to come from the meta block.
            _ (pin t 'out (dir + "/site"))
            _ (pin t 'title "Fixture")
            _ (pin t 'src [(dir + "/src")])
-           _ (pin t 'self "apps/papel.l")
+           _ (pin t 'self "a/papel.l")
            _ (pin t 'quiet 1)
            t)
 
@@ -212,7 +212,7 @@ Only a paragraph, so the title has to come from the meta block.
             _ (pin t 'out (dir + "/love"))
             _ (pin t 'title "love")
             _ (pin t 'src '("README.md" "doc" "doc/misc"))
-            _ (pin t 'self "apps/papel.l")
+            _ (pin t 'self "a/papel.l")
             _ (pin t 'quiet 1)
             t)
    rn (build rconf)
@@ -228,6 +228,6 @@ Only a paragraph, so the title has to come from the meta block.
         0)
 
    _ (test_fin ())
-   _ (puts "apps/papel: ok -- the static site (anchors, slugs, relink, titles, freshness)
+   _ (puts "a/papel: ok -- the static site (anchors, slugs, relink, titles, freshness)
 ")
    0)

@@ -1,7 +1,7 @@
 # moon — the C compiler, in love
 
 `mooncc` is a C compiler written in love (chibicc was the seed), emitting through the holo books. With
-`l/holo/link.l` (our static linker) and `apps/moon/lib/` (our libc, math floor and machine
+`l/holo/link.l` (our static linker) and `a/moon/lib/` (our libc, math floor and machine
 tail) it is a **complete C toolchain that borrows nothing**: love builds itself with no gcc, no
 glibc and no ld, and the kernel is built by it too.
 
@@ -42,7 +42,7 @@ The dialect is not "C11-ish" by taste — it is what the target demands:
 
 ## the architecture
 
-`apps/moon/`, the kore discipline: pure engines with law files, a thin driver, one gate per
+`a/moon/`, the kore discipline: pure engines with law files, a thin driver, one gate per
 piece. ~14k lines of love (law.l beside them).
 
 * **floor.l** — the C type floor: the laws that are neither syntax nor codegen (the type shapes,
@@ -232,10 +232,10 @@ an all-ours link.
 
 ## the toolchain root
 
-mooncc's own files — our headers (`apps/moon/include/`, glibc-ABI-faithful but NOT glibc's) and
+mooncc's own files — our headers (`a/moon/include/`, glibc-ABI-faithful but NOT glibc's) and
 the runtime sources the implicit link pulls — are found through three rungs, tried in order:
 
-1. **the dev tree**, `apps/moon/` off the cwd;
+1. **the dev tree**, `a/moon/` off the cwd;
 2. **the installed nest**, `<seat>/../lib/love/moon/` — the loader's own seat walk, the
    `selfpath` nif. So `~/.love/bin/love` finds `~/.love/lib/love/moon/`, and a distro's
    `/usr/bin/love` finds `/usr/lib/love/moon/`. `the Makefile` lays them there.
@@ -266,7 +266,7 @@ Owing symbols with NO root in reach is its own diagnostic, naming the owed symbo
 searched — an absent toolchain and an incomplete link are different conditions and must not wear
 the same face.
 
-## the runtime (apps/moon/lib/)
+## the runtime (a/moon/lib/)
 
 * **moonlibc/** — the raw libc over one `__ai_sys` trampoline: a mini stdio (a FILE is a fd plus
   a flush buffer), a K&R first-fit malloc over mmap arenas, dirent over getdents64, the
@@ -480,7 +480,7 @@ never a bare `mooncc`, until `make install` refreshes the PATH binary.
 
 ## testing
 
-* Every pure piece is lawed in `apps/moon/law.l`: lexer goldens, cpp expansions, parser ASTs
+* Every pure piece is lawed in `a/moon/law.l`: lexer goldens, cpp expansions, parser ASTs
   printed and compared, layout/alignment tables, gen goldens.
 * **The differential oracle is `gcc -O0`**: same source, run both, compare stdout + exit code.
   The battery lives in `test/cc/*.c` and ONLY grows — every bug fixed adds its regression.

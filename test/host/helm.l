@@ -20,10 +20,10 @@
 ;             archive's top the way i/kmain.c's k_untar does it.
 ; the mount half of both is pid 1's and root's, and is not asserted here: hunderlay
 ; answers the errno and lays in place, which is the lane this runs.
-(borrow "apps/helm/unit.l")
-(borrow "apps/helm/sup.l")
-(borrow "apps/helm/moor.l")
-(borrow "apps/helm/helm.l")
+(borrow "a/helm/unit.l")
+(borrow "a/helm/sup.l")
+(borrow "a/helm/moor.l")
+(borrow "a/helm/helm.l")
 (borrow 'helm)
 
 (test
@@ -155,7 +155,7 @@
    scd "out/.helm-scatter"
    k   (hscatter scd)
    _   (test (0 < k))
-   _   (test (two? (stat (scd + "/apps/helm/helm.l"))))
+   _   (test (two? (stat (scd + "/a/helm/helm.l"))))
    _   (test (!(two? (stat (scd + "/love-0.1")))))  ; the top is dropped, not laid
    _   (hark [(selfpath 0) "rm" "-rf" scd])           ; 13M of tree, and out/ is not a nest
 

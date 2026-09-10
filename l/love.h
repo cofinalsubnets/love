@@ -41,7 +41,7 @@
 #endif
 
 // which libc is under us. mooncc links moonlibc and nothing else, and moonlibc
-// carries every door on all three kernels (apps/moon/include/sys) -- so which
+// carries every door on all three kernels (a/moon/include/sys) -- so which
 // doors a lane may CALL is a build fact here and a box fact under a foreign
 // libc, which is the distinction i/posix.c's ladder is written against. the
 // ambient-cc lane (love0, glibc) takes that ladder's kernel arms instead.
@@ -652,7 +652,7 @@ static ai_inline bool strp(word _) { return lamp(_) && cell(_)->ap == lvm_str; }
 
 // --- kernel-internal declarations ---
 
-// the math floor is ours on every frontend: apps/moon/lib/moonlibc/math/am.c (fdlibm and
+// the math floor is ours on every frontend: a/moon/lib/moonlibc/math/am.c (fdlibm and
 // -lm both retired); the 32-bit lane computes in binary64 and narrows.
 double am_sin(double), am_cos(double), am_atan2(double, double),
        am_sqrt(double), am_exp(double), am_log(double), am_pow(double, double),

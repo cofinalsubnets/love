@@ -6,7 +6,7 @@
 ; beneath it gates headless here. the one file reads bare; its seat stays
 ; quiet under the corpus (no lush on cmdline).
 ; run: cat test/00-init.l test/host/sh.l | out/love
-(reads (open "apps/lush.l" "r"))
+(reads (open "a/lush.l" "r"))
 (borrow 'lush) ; the parts just registered module 'lush -- the laws below read it spliced
 
 ; the lexer: glued operators, io-numbers out of band ((), or (n) attached),
@@ -227,9 +227,9 @@
     (= () (sh-fields [(v "LUSH_NIL_ZZ")]))
     (= '("") (sh-fields [(. 'sq "")]))
     (= '("quay") (sh-fields [(. 'sub "echo quay")]))
-    (= '("apps/lush.l") (sh-fields [(. 'lit "apps/lus*.l")]))
-    (= '("apps/zz*qq") (sh-fields [(. 'lit "apps/zz*qq")]))
-    (= '("apps/lush/j*.l") (sh-fields [(. 'sq "apps/lush/j*.l")]))))
+    (= '("a/lush.l") (sh-fields [(. 'lit "a/lus*.l")]))
+    (= '("a/zz*qq") (sh-fields [(. 'lit "a/zz*qq")]))
+    (= '("a/lush/j*.l") (sh-fields [(. 'sq "a/lush/j*.l")]))))
 (: _ (pin sh-status () 7)
    (test (= '("7") (sh-fields [(. 'var "?")]))))
 
@@ -240,16 +240,16 @@
         (sh-match "[!a]bc" "zbc") (! (sh-match "[!a]bc" "abc"))     ; negation, both ways
         (sh-match "[^a]bc" "zbc") (! (sh-match "[abz]bc" "qbc"))    ; ^ is the same word
         (sh-match "a[bc" "a[bc")                                    ; unterminated [ is itself
-        (= '("apps/lush.l") (sh-glob "apps/l[t-v]sh.l" (sh-ones 19))))
+        (= '("a/lush.l") (sh-glob "a/l[t-v]sh.l" (sh-ones 19))))
 
 ; completion (rung 2): (insert . candidates) -- one path candidate lands its
 ; tail (+ " ", a directory its "/"), the common prefix otherwise; the helpers
-(: r (sh-complete (sh-expl "cat apps/lus"))
-   (test (two? r) (= "h.l " (slurp (tap (cap r)))) (= '("apps/lush.l") (cup r))))
-(: r (sh-complete (sh-expl "cat apps/ko"))
+(: r (sh-complete (sh-expl "cat a/lus"))
+   (test (two? r) (= "h.l " (slurp (tap (cap r)))) (= '("a/lush.l") (cup r))))
+(: r (sh-complete (sh-expl "cat a/ko"))
    (test (= "re/" (slurp (tap (cap r))))))              ; one DIR candidate: its /
-(: r (sh-complete (sh-expl "cat apps/lu"))
-   (test (= '("apps/lupa.l" "apps/lush.l" "apps/lux") (cup r))))   ; three ways forward, listed
+(: r (sh-complete (sh-expl "cat a/lu"))
+   (test (= '("a/lupa.l" "a/lush.l" "a/lux") (cup r))))   ; three ways forward, listed
 (test (= "ab" (sh-common '("abc" "abd" "ab")))
         (= "~" (sh-homely (+ "" (getenv "HOME")))))
 
@@ -299,8 +299,8 @@
    (test (= 0 (cap r)) (= "A B\n" (cup r))))
 (: r (hark ["out/love" "out/lush" "-c" "false && echo no || echo yes"])
    (test (= "yes\n" (cup r))))
-(: r (hark ["out/love" "out/lush" "-c" "echo $(echo hi | tr h H) apps/lus*.l"])
-   (test (= "Hi apps/lush.l\n" (cup r))))
+(: r (hark ["out/love" "out/lush" "-c" "echo $(echo hi | tr h H) a/lus*.l"])
+   (test (= "Hi a/lush.l\n" (cup r))))
 (: r (hark ["out/love" "out/lush" "-c" "sh -c 'echo e >&2' 2>&1 | tr e E"])
    (test (= "E\n" (cup r))))
 (: r (hark ["out/love" "out/lush" "-c" "exit 9"])

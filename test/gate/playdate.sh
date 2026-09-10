@@ -50,7 +50,7 @@ case $ent in *[13579bdf]) ;; *) fail "entry $ent has no thumb bit" ;; esac
 
 # uread is kore's, so the reader rides in ahead of the check -- the same lay
 # test/gate/ld32.l takes to read an object back through our own linker's front half
-{ cat apps/kore/text.l apps/kore/u.l
+{ cat a/kore/text.l a/kore/u.l
   echo "(borrow 'kore)"
   cat test/gate/pdreloc.l
   echo '(pdbin-check "out/playdate/love.pdx/pdex.bin"'

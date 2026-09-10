@@ -91,7 +91,7 @@ rm -rf "$d"; mkdir -p "$d"
 # minus stackovf.o (USE_STACKOVF off) and alloca.o (HAVE_ALLOCA: moonlibc's).
 SRC="m4 builtin debug eval format freeze input macro output path symtab"
 LIB="regex getopt getopt1 error obstack xmalloc xstrdup"
-CFLAGS="-DSTDC_HEADERS=1 -DHAVE_CONFIG_H -Iapps/moon/include -I$M4SRC -I$M4SRC/src -I$M4SRC/lib"
+CFLAGS="-DSTDC_HEADERS=1 -DHAVE_CONFIG_H -Ia/moon/include -I$M4SRC -I$M4SRC/src -I$M4SRC/lib"
 
 echo "MOON-M4  $M4SRC  ($target: mooncc + moonlibc + holo, no gcc/glibc/ld)"
 
@@ -107,16 +107,16 @@ done
 
 # the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). no moonlibc
 # object -- the link owes its symbols and the driver's runtime table pulls
-# apps/moon/lib/moonlibc/ member by need (the Makefile says the same of love itself).
+# a/moon/lib/moonlibc/ member by need (the Makefile says the same of love itself).
 # Naming an object would take every member instead.
-for f in apps/moon/lib/moonlibc/math/*.c; do
+for f in a/moon/lib/moonlibc/math/*.c; do
   b=`basename "$f" .c`
-  $mc $tflag -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
+  $mc $tflag -Ia/moon/lib/moonlibc/math -Ia/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
 done
 # sys.o is laid, not compiled -- and a cross lay needs holo's backend loaded
 # first (the host bake carries only the native one), exactly as raw.sh does it.
 { if [ -n "$backend" ]; then echo "(borrow 'holo)"; cat "$backend"; fi
-  cat apps/kore/text.l apps/kore/u.l apps/kore/asbook.l l/holo/elf.l l/holo/obj.l apps/moon/lib/mksys.l
+  cat a/kore/text.l a/kore/u.l a/kore/asbook.l l/holo/elf.l l/holo/obj.l a/moon/lib/mksys.l
   echo "((cite 'moon '$mksys) \"$d/sys.o\")"; } | $love || { echo "FAIL $mksys sys.o"; exit 1; }
 
 $mc $tflag $objs "$d"/m_*.o "$d/sys.o" -o "$d/m4" || { echo "FAIL holo link m4"; exit 1; }

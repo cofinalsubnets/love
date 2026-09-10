@@ -1,6 +1,6 @@
-; --- test/host/wharf.l: the laws of apps/berth/wharf.l, quay's layout algebra ---
+; --- test/host/wharf.l: the laws of a/berth/wharf.l, quay's layout algebra ---
 ; not in the corpus, and not for its nifs: wharf needs none at all -- it is arithmetic
-; over lists. two things hold it back. `borrow` finds apps/berth/wharf.l by the
+; over lists. two things hold it back. `borrow` finds a/berth/wharf.l by the
 ; filesystem walk, and the corpus runs where there is no filesystem; and inside the
 ; WHOLE corpus love0's second evaluation stops, as cb's does, against a member not
 ; identified. when a seat bakes wharf behind its egg, the first of those goes.
@@ -9,7 +9,7 @@
 ;
 ; the vocabulary under test is rectangles in cells: (id row col rows cols), origins
 ; 0-based, and a bar is (dir row col len) with dir 'across or 'down.
-(borrow "apps/berth/wharf.l")
+(borrow "a/berth/wharf.l")
 
 ; --- the two standing laws, checked rather than trusted ---
 ; spans are half-open, so a zero-extent berth is inside everything and overlaps

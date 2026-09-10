@@ -12,7 +12,7 @@
 ; and rv64 likewise (CALL_PLT over the auipc pair, JAL, R_RISCV_64).
 ; loads after l/holo/elf.l in the au cat -- reads elf-machines / write-bytes
 ; bare, and the assembler internals bare too: the cat leads with (borrow 'holo)
-; (apps/kore/asbook.l), so lay/laylax/patch-with/le*/catall resolve through the
+; (a/kore/asbook.l), so lay/laylax/patch-with/le*/catall resolve through the
 ; spliced module. moon.l drives it: `mooncc -c foo.c foo.o`.
 (module 'holo
 (:

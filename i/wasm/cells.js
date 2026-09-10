@@ -13,7 +13,7 @@ function cellsFace(pal, unfold) {
   for (let i = 0; i < 256; i++) {
     const v = pal[i];
     css[i] = `rgb(${v >> 16 & 255},${v >> 8 & 255},${v & 255})`;
-    // berth's rule (apps/berth/limn.l): ascii as itself, else the unfold, else '?';
+    // berth's rule (a/berth/limn.l): ascii as itself, else the unfold, else '?';
     // and the empty cell is a space
     const cp = i === 0 ? 32 : (i >= 32 && i < 127) ? i : unfold(i);
     glyph[i] = String.fromCodePoint(cp > 0 ? cp : 63);

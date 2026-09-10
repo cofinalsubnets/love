@@ -81,7 +81,7 @@ rm -rf "$d"; mkdir -p "$d"
 
 echo "MOON-SQLITE  $SQLSRC  ($target: mooncc + moonlibc + holo, no gcc/glibc/ld)"
 
-$mc $tflag -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION=1 -Iapps/moon/include \
+$mc $tflag -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION=1 -Ia/moon/include \
     -c "$SQLSRC/sqlite3.c" "$d/sqlite3.o" || { echo "FAIL mooncc -c sqlite3.c"; exit 1; }
 echo "  sqlite3.c -> $(wc -c < "$d/sqlite3.o") bytes of object"
 
@@ -192,20 +192,20 @@ int main(void) {
   return 0;
 }
 EOF
-$mc $tflag -Iapps/moon/include -I"$SQLSRC" -c "$d/drv.c" "$d/drv.o" || { echo "FAIL mooncc -c drv.c"; exit 1; }
+$mc $tflag -Ia/moon/include -I"$SQLSRC" -c "$d/drv.c" "$d/drv.o" || { echo "FAIL mooncc -c drv.c"; exit 1; }
 
 # the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). NO moonlibc
 # object -- the link owes its symbols and the driver's runtime table pulls
-# apps/moon/lib/moonlibc/ MEMBER BY NEED (the Makefile says the same of love itself).
+# a/moon/lib/moonlibc/ MEMBER BY NEED (the Makefile says the same of love itself).
 # Naming an object would take every member instead.
-for f in apps/moon/lib/moonlibc/math/*.c; do
+for f in a/moon/lib/moonlibc/math/*.c; do
   b=$(basename "$f" .c)
-  $mc $tflag -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
+  $mc $tflag -Ia/moon/lib/moonlibc/math -Ia/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
 done
 # sys.o is LAID, not compiled -- and a CROSS lay needs holo's backend loaded
 # first (the host bake carries only the native one), exactly as raw.sh does it.
 { if [ -n "$backend" ]; then echo "(borrow 'holo)"; cat "$backend"; fi
-  cat apps/kore/text.l apps/kore/u.l apps/kore/asbook.l l/holo/elf.l l/holo/obj.l apps/moon/lib/mksys.l
+  cat a/kore/text.l a/kore/u.l a/kore/asbook.l l/holo/elf.l l/holo/obj.l a/moon/lib/mksys.l
   echo "((cite 'moon '$mksys) \"$d/sys.o\")"; } | $love || { echo "FAIL $mksys sys.o"; exit 1; }
 
 $mc $tflag "$d/sqlite3.o" "$d/drv.o" "$d"/m_*.o "$d/sys.o" -o "$d/sq" || { echo "FAIL holo link"; exit 1; }

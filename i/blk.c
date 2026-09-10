@@ -13,7 +13,7 @@
 // khhdm + base) and does NOT hold for image statics -- so the ring and the
 // request header live in the block kmain hands k_blk_init, and data buffers
 // are always heap (a love string's bytes). the filesystem over this stays in
-// love (apps/fat/fat.l); this file is the small part that must be C.
+// love (a/fat/fat.l); this file is the small part that must be C.
 #include "k.h"
 #include "asmops.h"
 #include <stdint.h>

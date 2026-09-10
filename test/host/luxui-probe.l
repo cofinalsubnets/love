@@ -19,7 +19,7 @@
 ; loaded with -l, no test/00-init.l ahead of it -- so the posix door is borrowed here.
 (? (cite 'posix) (borrow 'posix) ())
 
-(borrow 'xwire)   ; the X wire, apps/lux/wire.l
+(borrow 'xwire)   ; the X wire, a/lux/wire.l
 (: (probe dpy)
    (: s (connectu dpy)
       sc (x-setup s ())

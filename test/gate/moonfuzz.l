@@ -27,7 +27,7 @@
 ; nothing refused proved nothing. the floors below are explicit.
 (borrow 'posix)
 (:
-   _ (borrow "apps/moon/clay.l")
+   _ (borrow "a/moon/clay.l")
    _ (borrow 'moon)                       ; the front end (clex/cpp/cparse-t) is module 'moon
    _ (borrow 'kore)                       ; uread below is the u-floor's
    cshow (cite 'clay 'clay-show)

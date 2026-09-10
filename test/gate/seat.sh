@@ -2,7 +2,7 @@
 # test/gate/seat.sh -- the SEAT lane, which nothing else reaches.
 #
 # An app fires three ways: the verb rail (`love mooncc ..`), argv[0] (a symlink), and the
-# one here -- the file IS the program, `love apps/libra/libra.l foo.l`, or its `-l` preload.
+# one here -- the file IS the program, `love a/libra/libra.l foo.l`, or its `-l` preload.
 # The other two are gated all over (test_kore, test_moon, test_dist); this one was gated
 # NOWHERE, and that is how nine apps' seats went dead under a green test_slow: every gate
 # reached its app through the rail or a baked image, so a file seat that answered ()
@@ -25,11 +25,11 @@ try() {
   esac
 }
 
-want='unclosed ('   ; try "libra (positional)"   apps/libra/libra.l $bad
-want='unclosed ('   ; try "libra (-l preload)"   -l apps/libra/libra.l $bad
-want='usage'        ; try "ain"                  apps/ain.l
-want='not a directory'; try "kiosko"             apps/kiosko/kiosko.l --nope
-want='no markdown'  ; try "papel"                apps/papel.l --nope
+want='unclosed ('   ; try "libra (positional)"   a/libra/libra.l $bad
+want='unclosed ('   ; try "libra (-l preload)"   -l a/libra/libra.l $bad
+want='usage'        ; try "ain"                  a/ain.l
+want='not a directory'; try "kiosko"             a/kiosko/kiosko.l --nope
+want='no markdown'  ; try "papel"                a/papel.l --nope
 
 # and the same seat UNDER A PRIME: `wake IMAGE` is the command line's word, not the
 # program's, so l/boot/post.l's `unprime` steps it and the app still seats itself.
@@ -38,7 +38,7 @@ want='no markdown'  ; try "papel"                apps/papel.l --nope
 # image is baked too (Makefile's .love.baked), so this wakes the shape love ships.
 img=$d/seat.image
 if "$love" bake -l out/.dist-cat.l "$img" >/dev/null 2>&1; then
-  want='unclosed ('; try "libra (under a wake)" wake "$img" apps/libra/libra.l $bad
+  want='unclosed ('; try "libra (under a wake)" wake "$img" a/libra/libra.l $bad
 else
   echo "FAIL seat: could not bake an image to test the prime lane"; fails=$((fails+1))
 fi

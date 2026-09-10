@@ -62,10 +62,10 @@ p_lnbe_l  = $(addprefix $(R)/l/holo/,$(addsuffix .l,$(p_link_be)))
 # names (uread, udie ..) do not walk for whoever comes after -- and every driver below
 # reads them bare. So the cats emit (borrow 'kore) once the two files have registered it,
 # the Makefile's klink recipe exactly.
-kore_l = $(R)/apps/kore/text.l $(R)/apps/kore/u.l
-lay_l  = $(kore_l) $(R)/apps/kore/asbook.l \
+kore_l = $(R)/a/kore/text.l $(R)/a/kore/u.l
+lay_l  = $(kore_l) $(R)/a/kore/asbook.l \
   $(R)/l/holo/elf.l $(R)/l/holo/obj.l
-link_l = $(kore_l) $(R)/apps/kore/asbook.l \
+link_l = $(kore_l) $(R)/a/kore/asbook.l \
   $(p_lnbe_l) $(R)/l/holo/elf.l $(R)/l/holo/obj.l $(R)/l/holo/link.l
 copy_l = $(link_l) $(R)/l/holo/copy.l
 # the same lists spelled from $(R), which is where the cats run
@@ -86,28 +86,28 @@ love_o   = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(love_m)))
 
 # moonlibc's pure members: the libc a bare-metal seat gets, the same six the kernel takes
 # (common.mk) out of the same source -- there is no second libc in this tree. A port
-# lays them with a foreach over libc_m under its own <x>_cc. -Iapps/moon/include is
+# lays them with a foreach over libc_m under its own <x>_cc. -Ia/moon/include is
 # owed: the members open with impl.h, whose hosted declarations cost compile time and
 # nothing else -- the six owe ONE symbol between them (memmove's memcpy), and it is one
 # of the six.
 libc_m    = memchr memcmp memcpy memmove memset strlen
-libc_dep  = $(R)/apps/moon/lib/moonlibc/impl.h $(mc)
+libc_dep  = $(R)/a/moon/lib/moonlibc/impl.h $(mc)
 libc_o    = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(libc_m)))
 
 # the am math floor: the one object every port compiles exactly alike.
-$(R)/$(o)/am.o: $(R)/apps/moon/lib/moonlibc/math/am.c $(mc)
+$(R)/$(o)/am.o: $(R)/a/moon/lib/moonlibc/math/am.c $(mc)
 	@echo 'MOON	'$@
 	@mkdir -p $(R)/$(o)
-	@cd $(R) && $(MOONCC) -t $(p_tgt) -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c apps/moon/lib/moonlibc/math/am.c $(o)/am.o
+	@cd $(R) && $(MOONCC) -t $(p_tgt) -Ia/moon/lib/moonlibc/math -Ia/moon/include -c a/moon/lib/moonlibc/math/am.c $(o)/am.o
 
 # the compiler runtime: the calls mooncc's own lowering makes where the machine has no
 # instruction (v6-M has neither FPU nor umull nor clz nor a variable 64-bit shift; a
 # single-precision FPU softens f64 alone). Only the thumb ports name it -- an rv64 or x64
 # seat has the hardware, and an object named on a link line rides it whole.
-$(R)/$(o)/rt.o: $(R)/apps/moon/lib/rt.c $(mc)
+$(R)/$(o)/rt.o: $(R)/a/moon/lib/rt.c $(mc)
 	@echo 'MOON	'$@
 	@mkdir -p $(R)/$(o)
-	@cd $(R) && $(MOONCC) -t $(p_tgt) -Iapps/moon/include -c apps/moon/lib/rt.c $(o)/rt.o
+	@cd $(R) && $(MOONCC) -t $(p_tgt) -Ia/moon/include -c a/moon/lib/rt.c $(o)/rt.o
 
 # p_ocopy -- the flatten, for the ports that ship a .bin/.hex: l/holo/copy.l reads the
 # linked ELF and writes objcopy's two output formats, byte for byte (`kore objcopy` is the

@@ -827,7 +827,7 @@ static int k_create(char const *p, uintptr_t n, bool dir, uintptr_t mode) {
                                .dir = dir, .live = true };
   return i; }
 
-// a directory can be a prefix: the initrd is flat ("apps/json.l" and no row for "lib"), so a
+// a directory can be a prefix: the initrd is flat ("a/json.l" and no row for "lib"), so a
 // name baked paths lie under is a directory with no entry of its own -- synthesized, 0755,
 // wearing its newest child's date. mkdir is what gives one an entry of its own.
 
@@ -1405,7 +1405,7 @@ lvm(k_lvm_getpid) {
   Sp[0] = putcharm(k_cur_pid(g));
   ai_musttail return Next(1); }
 
-// --- rung 5: the disk -- the block door love's filesystem (apps/fat/fat.l) rides.
+// --- rung 5: the disk -- the block door love's filesystem (a/fat/fat.l) rides.
 // the driver is i/blk.c (virtio-blk, polled, synchronous), and DMA rides the love string's
 // own heap bytes -- nothing allocates between post and completion, so the collector cannot
 // move the buffer under the device.
@@ -1886,7 +1886,7 @@ static struct ai_def const __attribute__((section("ai_knifs"), used)) defs[] = {
   // linked whole: their nifs land in this section, libc calls bottom out in i/sys.c's
   // table, and quit and getpid branch to k_lvm_quit / k_lvm_getpid on a negative osv. what
   // stays below has no host twin.
-  // rung 5: the disk -- the raw block door apps/fat/fat.l's filesystem rides. these
+  // rung 5: the disk -- the raw block door a/fat/fat.l's filesystem rides. these
   // three are OURS (no host twin: the host has no raw disk), so the shapes are
   // love's -- absence and refusal answer (), presence is the green sector count.
   {"disk", {.k = nif_disk}},
@@ -1910,8 +1910,8 @@ static char const src_korelist[] =
 // the crew roster. these files are NOT in the kernel's cat -- a verb nobody asks for
 // costs nothing -- so what the kernel carries is the ORDER, and the members are read off
 // /proc/src at the first ask. one line rather than a name-to-path rule because a module's
-// name does not say which file holds it: story lives in apps/rove/, xwire in
-// apps/lux/wire.l, and sb spans three files that have to load in the order given.
+// name does not say which file holds it: story lives in a/rove/, xwire in
+// a/lux/wire.l, and sb spans three files that have to load in the order given.
 static char const src_crewlist[] =
 #include "crewlist.h"
 ;
@@ -2108,7 +2108,7 @@ void kmain(void) {
  // nothing of ours runs in between, so the parent takes its own back on the next line.
  "     _ (wear kw)"
  // the help is the exit door too: a kore main leaves deep by scaring 'leave with its
- // status (apps/kore/core.l), and taking that as a plain scare would flatten every usage
+ // status (a/kore/core.l), and taking that as a plain scare would flatten every usage
  // code to 1. every other condition is the died-child face.
  "     p (twirl (\\ _ (: _ (hear (\\ a b (? (== a 'leave) (quit b)"
  "                                        (: _ (say err \";; \") _ (print err a)"

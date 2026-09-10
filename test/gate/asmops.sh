@@ -92,7 +92,7 @@ for a in x64 a64 rv64; do
   esac
   h=i/$a/asmops.h
   # -I i is arch-neutral: i/asmops.h picks by the target's own predefine
-  inc="-I i -I apps/moon/include"
+  inc="-I i -I a/moon/include"
 
   # 1. coverage, straight off the header
   for op in $(sed -n 's/^static inline [^(]* \**\(k_[A-Za-z0-9_]*\)(.*/\1/p' "$h"); do

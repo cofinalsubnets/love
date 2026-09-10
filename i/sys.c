@@ -5,7 +5,7 @@
 // the numbers are linux's, per arch, straight off impl.h's NR_*: the tree carries those
 // tables already and inle owes compatibility to nobody, so nothing is translated.
 // an unmapped number answers -ENOSYS, the same refusal mount and unshare wear off linux.
-#include "../apps/moon/lib/moonlibc/impl.h"
+#include "../a/moon/lib/moonlibc/impl.h"
 #include <stdint.h>
 
 // the C runtime is moonlibc's core.c: errno, the streams, the mmap-arena malloc. what a

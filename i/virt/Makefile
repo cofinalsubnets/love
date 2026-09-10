@@ -29,8 +29,8 @@ $(eval $(call p_lay,start,mkstart,"$(o)/start.o"))
 
 $(foreach u,$(love_m),$(eval $(call p_obj,$u,l/$u.c,\
   $(R)/l/$u.c $(love_dep),$(virt_cc))))
-$(foreach m,$(libc_m),$(eval $(call p_obj,$m,apps/moon/lib/moonlibc/string/$m.c,\
-  $(R)/apps/moon/lib/moonlibc/string/$m.c $(libc_dep),$(virt_cc) -Iapps/moon/include)))
+$(foreach m,$(libc_m),$(eval $(call p_obj,$m,a/moon/lib/moonlibc/string/$m.c,\
+  $(R)/a/moon/lib/moonlibc/string/$m.c $(libc_dep),$(virt_cc) -Ia/moon/include)))
 $(eval $(call p_obj,main,i/virt/main.c,main.c $(R)/l/love.h $(lib_hR) $(mc),$(virt_cc)))
 
 $(R)/$(o)/love.elf: $(objs)

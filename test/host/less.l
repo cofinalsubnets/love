@@ -1,5 +1,5 @@
 ; --- test/host/less.l: the pager's face on a real terminal ---
-; the engine (apps/kore/less.l's pgstep/pgframe) is lawed in apps/kore/law.l with no
+; the engine (a/kore/less.l's pgstep/pgframe) is lawed in a/kore/law.l with no
 ; tty at all; what is left is the face -- raw mode, the alternate screen, the key
 ; loop, the frame blit, and the file the : commands ask for. That lane needs a
 ; terminal, so it gets one: `tether` spawns `kore less` on a pty, we type at the

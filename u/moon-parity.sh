@@ -14,7 +14,7 @@
 #   ok       -- an object came out, referencing nothing the probe did not declare.
 #               The lane is ours.
 #   rt.c     -- an object came out, and it CALLS OUT: the lane exists but lands in
-#               the compiler runtime, apps/moon/lib/rt.c. That is ours, and a
+#               the compiler runtime, a/moon/lib/rt.c. That is ours, and a
 #               separate object -- a link-time dependency, not a compile-time one,
 #               so only the object's symbols reveal it.
 #   —        -- refused. The cause is printed by `moon-parity.sh why`.

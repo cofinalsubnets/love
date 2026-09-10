@@ -1,5 +1,5 @@
 /* test/gate/softfp.c -- the compiler runtime against the hardware that has the
- * instruction. apps/moon/lib/rt.c is what an FPU-less ARM calls for a double, a 64-bit
+ * instruction. a/moon/lib/rt.c is what an FPU-less ARM calls for a double, a 64-bit
  * multiply or a leading-zero count; here it is compiled for a machine with all three, so
  * `a + b` and `__aeabi_dadd(a, b)` sit side by side and must agree BIT FOR BIT -- not to
  * an ulp, not to a printed decimal. Rounding is round-to-nearest-even on both sides, so
@@ -20,7 +20,7 @@
  * one operand is pure sticky. */
 #include <stdio.h>
 #include <stdint.h>
-#include "apps/moon/lib/rt.c"
+#include "a/moon/lib/rt.c"
 
 #define NSPEC  38
 #define NVAL  360

@@ -66,7 +66,7 @@ cat <<'HEAD'
 </style>
 </head>
 <body>
-<nav class="topnav"><a href="../index.html">love</a> &nbsp;&middot;&nbsp; <a href="../language.html">language</a> &nbsp;&middot;&nbsp; <a href="../index.html#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="../apps/index.html">crew</a> &nbsp;&middot;&nbsp; <span class="here">bench</span></nav>
+<nav class="topnav"><a href="../index.html">love</a> &nbsp;&middot;&nbsp; <a href="../language.html">language</a> &nbsp;&middot;&nbsp; <a href="../index.html#glossary">glossary</a> &nbsp;&middot;&nbsp; <a href="../a/index.html">crew</a> &nbsp;&middot;&nbsp; <span class="here">bench</span></nav>
 <h1>love benchmarks &mdash; milliseconds per iteration</h1>
 <p class="note">Lower is better. Each language self-times its inner loop (reps
 auto-scaled past a 200&nbsp;ms floor, so startup is excluded). The fastest cell
@@ -97,7 +97,7 @@ HEAD
 if [ -n "$2" ] && [ -s "$2" ]; then
 cat <<'SAT'
 <h2>SAT solvers &mdash; milliseconds to solve</h2>
-<p class="note">A separate field: love&rsquo;s own CDCL solver (<code>apps/sat/flat.l</code>:
+<p class="note">A separate field: love&rsquo;s own CDCL solver (<code>a/sat/flat.l</code>:
 flat cask-resident state driven by four native kernels &mdash; propagation, the whole
 conflict handler, the decision, and the <code>fbva</code> grow step &mdash; each assembled
 through <code>l/holo/</code> at solver-build time, specialized to the instance size)
@@ -157,7 +157,7 @@ if [ -n "$3" ] && [ -s "$3" ]; then
 cat <<'CC'
 <h2>compilers &mdash; milliseconds to build love, and to test it</h2>
 <p class="note">A third field, love&rsquo;s C toolchain against the incumbents:
-<b>mooncc</b> is love&rsquo;s own C compiler (<code>apps/moon/</code>), and it builds
+<b>mooncc</b> is love&rsquo;s own C compiler (<code>a/moon/</code>), and it builds
 <code>love</code> with <i>no gcc, glibc, or ld</i> &mdash; mooncc lays every object,
 <code>mksys</code> emits the syscall leaf, and our own linker (<code>l/holo/</code>)
 binds the executable. The <b>build</b> row is the wall-clock to compile every C
@@ -232,7 +232,7 @@ if [ -n "${4:-}" ] && [ -s "$4" ]; then
 cat <<'KO'
 <h2>userland &mdash; milliseconds per job, against three other coreutils</h2>
 <p class="note">A fourth field, and the one where love is the <i>application</i> rather
-than the compiler: <b>kore</b> is love&rsquo;s userland (<code>apps/kore/</code>),
+than the compiler: <b>kore</b> is love&rsquo;s userland (<code>a/kore/</code>),
 about ninety POSIX tools written in love and run by love&rsquo;s own interpreter, beside
 <b>busybox</b> and <b>GNU coreutils</b> (both C) and <b>uutils</b> (Rust). Every row is
 one job over one generated corpus, and the numbers are wall clock including process

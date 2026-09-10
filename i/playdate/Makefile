@@ -17,7 +17,7 @@
 # there setup.c is the SDK's again, so `make sim` runs with no cross tools.
 #
 # Both halves bake the same program: the egg bootstrap (out/lib lcat headers,
-# delegated to the root), apps/rune.l as a registered module, and cas.l (this
+# delegated to the root), a/rune.l as a registered module, and cas.l (this
 # folder, lcat'd locally) driving the workbench. See main.c + pdglue.c.
 R := ../..
 include $(R)/common.mk
@@ -34,7 +34,7 @@ MOONCC = $(R)/out/.love.baked
 # l/love.h's ai_typ reads wants the link to place love.data.NN, and this seat
 # lays one flat text run, so l/love.h asks the sentinels by name here.
 mc_flags = -t thumb2sp -D ai_tco=1 -D __STDC_HOSTED__=0 -D TARGET_PLAYDATE=1 -D TARGET_EXTENSION=1 -D ai_data_section=0 \
-  -Ii/playdate -Iout/playdate -I. -Il -Iout/lib -Il/quay -Iapps/moon/include -I$(pd_sdk)/C_API
+  -Ii/playdate -Iout/playdate -I. -Il -Iout/lib -Il/quay -Ia/moon/include -I$(pd_sdk)/C_API
 # our own link. -Ttext 0 is where link_map.ld puts .text, which is the only thing
 # that script says about placement; --emit-relocs keeps the R_ARM_ABS32 sites so
 # the loader can slide them; -nostdlib makes an owed nom past our own runtime a
@@ -68,8 +68,8 @@ pd_shared_c = $(love_c) $(f_c) $(R)/l/bare.c
 # in this tree), plus rt.c: the calls mooncc's own lowering makes where the machine
 # has no instruction, which on an sp-only fpu is every f64 op. these ride the same
 # $(o)/%.o pattern as the love objects, so they mirror their source paths.
-pd_bare_c = $(addprefix $(R)/apps/moon/lib/moonlibc/string/,\
-  memchr.c memcmp.c memcpy.c memmove.c memset.c strlen.c) $(R)/apps/moon/lib/rt.c
+pd_bare_c = $(addprefix $(R)/a/moon/lib/moonlibc/string/,\
+  memchr.c memcmp.c memcpy.c memmove.c memset.c strlen.c) $(R)/a/moon/lib/rt.c
 # the simulator is a hosted .so and keeps the SDK's setup.c: there pdglue.c leaves the
 # shim and the malloc trio to it, and the host libc answers the rest.
 pd_sdk_c = $(pd_sdk)/C_API/buildsupport/setup.c
@@ -103,7 +103,7 @@ clean:
 # each one needs FORCE: a rule with NO prerequisites fires only when its target
 # is MISSING, so an existing-but-STALE header was served forever and the root's
 # own up-to-date check never got asked. out/lib/rune.h froze that way -- nothing
-# else in the tree regenerates it -- and when apps/rune.l grew the
+# else in the tree regenerates it -- and when a/rune.l grew the
 # (leave ()) that registers the module, the baked image kept the sealless
 # header and the workbench died on `;; no-module rune`. the root decides
 # staleness; our job is only to ask it every time.

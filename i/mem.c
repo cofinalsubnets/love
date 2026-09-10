@@ -1,6 +1,6 @@
 // FIXME this file is too short, merge it somewhere else
 // i/mem.c -- 8-byte word slots on a cask, low 4 bytes live: the flat solver's state
-// (apps/sat/flat.l), where the byte-at-a-time accessors cost 4 dispatches per read.
+// (a/sat/flat.l), where the byte-at-a-time accessors cost 4 dispatches per read.
 // auto-globbed and LvNif-registered.
 //   (peepw c i)   -> the word at slot i, low 4 bytes | () misuse
 //   (pinw c i v)  -> lay v zero-extended into slot i -> c | () misuse

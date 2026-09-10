@@ -281,26 +281,26 @@ else
 test_glazefuzz:
 	@echo "test_glazefuzz: skipped (the glaze emits for x64 / a64; host arch is $a)"
 endif
-# apps/sat/ -- the CDCL SAT solver app. Portable love (no glaze), so it runs on every arch.
+# a/sat/ -- the CDCL SAT solver app. Portable love (no glaze), so it runs on every arch.
 # Gate = exit 0 and the sentinels. cold on purpose -- the one app gate that is: the
 # solver answers in 3.6 s over the fresh egg and 14.4 s over the woken image.
 test_sat: host
-	@echo TEST apps/sat/sat.l + apps/sat/dimacs.l + apps/sat/flat.l
-	@cat apps/sat/sat.l apps/sat/dimacs.l apps/sat/flat.l \
-	  | sh test/gate/run.sh sat "env LOVE_NO_IMAGE=1 $m" "sat: Stages 1-3 ok|apps/sat/dimacs: ok|apps/sat/flat: ok"
+	@echo TEST a/sat/sat.l + a/sat/dimacs.l + a/sat/flat.l
+	@cat a/sat/sat.l a/sat/dimacs.l a/sat/flat.l \
+	  | sh test/gate/run.sh sat "env LOVE_NO_IMAGE=1 $m" "sat: Stages 1-3 ok|a/sat/dimacs: ok|a/sat/flat: ok"
 # The DRAT lane's external check: flat.l's refutations verified by drat-trim, the SAT
 # competition's own checker (fetched + built into out/drat on first use; skips offline).
 # The in-gate twin (fd-check) runs inside test_sat. Not in test_slow (network).
 test_drat: host
-	@cd apps/sat && ./dratcheck.sh || { echo "FAIL drat"; exit 1; }
-# The lux app's pure core (apps/lux/core.l): xmonad's StackSet -- focus zipper, workspace
+	@cd a/sat && ./dratcheck.sh || { echo "FAIL drat"; exit 1; }
+# The lux app's pure core (a/lux/core.l): xmonad's StackSet -- focus zipper, workspace
 # sheaf, floating half -- with xmonad's QuickCheck laws + a seeded fuzz. Pure love, so it
 # self-tests portably; the X layers need connectu and are proven against Xephyr, not here.
 test_lux: host
 	@$m test/gate/gates.l lux < /dev/null
-# harp (apps/harp/harp.l): tidal's cycle algebra, where a pattern is a function from a
+# harp (a/harp/harp.l): tidal's cycle algebra, where a pattern is a function from a
 # span to events -- so the gate is queries, and the whole pure half runs anywhere. the
-# voices (apps/harp/play.l) ride along for the far end: one cycle into a .wav whose
+# voices (a/harp/play.l) ride along for the far end: one cycle into a .wav whose
 # energy has to land where the pattern said, and one out the horn=none sink, which has
 # to take a second to play a second. that is as far as a gate that cannot listen goes.
 test_harp: host
@@ -346,7 +346,7 @@ test_web: host
 	  || { echo "  FAIL: a committed web asset is behind web/ -- run make web and commit"; exit 1; }
 	@echo "  web: ok -- the page, the stylesheet, the icon and both fonts are what web/ lays"
 test_sb: host out$(hsuf)/sb
-	@echo TEST apps/sb/sb.l + test/host/sb.l
+	@echo TEST a/sb/sb.l + test/host/sb.l
 	@rm -rf out/.sbtest
 	@cat test/00-init.l test/host/sb.l | sh test/gate/run.sh sb "$m" "sb: ok"
 # the kore smokes drive love's own crew layer (`love kore ..` -- the layered bake),
@@ -376,7 +376,7 @@ test_dist: $(ho)/.love.baked
 # itself through the machine's toolchain, and the rebuilt binary must answer the running
 # one's bytes. minutes, and the claim the product makes. scratch stays on a red.
 # ONLY this gate runs the DEFAULT lane, where the seed probes for an ambient cc and defers
-# to it (apps/source.l) -- the diverse-double-compiling leg, the one thing a self build
+# to it (a/source.l) -- the diverse-double-compiling leg, the one thing a self build
 # cannot say. test_distboot runs `love seed` with every compiler poisoned, so it takes the
 # fallback and can never exercise the deference. do not roster the two as one claim.
 test_seed: $(ho)/.love.baked
@@ -386,14 +386,14 @@ test_seed: $(ho)/.love.baked
 	  || { tail -20 $(ho)/.test_seed.out; echo "FAIL love seed"; exit 1; }
 	@tail -1 $(ho)/.test_seed.out
 	@rm -rf $(ho)/.seedtest
-# The editor (apps/vi/): the pure modal engine's laws (no tty -- vstep driven byte by
+# The editor (a/vi/): the pure modal engine's laws (no tty -- vstep driven byte by
 # byte), then scripted end-to-end passes through the `kore vi` face over a pipe (keys off
 # stdin, frames onto a captured stdout, :wq writes), driven through the crew layer.
 test_vi: host
-	@echo TEST apps/vi/{hue,core,law}.l
-	@cat test/00-init.l apps/kore/text.l apps/kore/u.l apps/kore/core.l apps/kore/re.l apps/kore/sed.l apps/libra/lint.l \
-	    apps/vi/config.l apps/vi/hue.l apps/vi/core.l apps/vi/law.l \
-	  | sh test/gate/run.sh vi "$m" "apps/vi/law:"
+	@echo TEST a/vi/{hue,core,law}.l
+	@cat test/00-init.l a/kore/text.l a/kore/u.l a/kore/core.l a/kore/re.l a/kore/sed.l a/libra/lint.l \
+	    a/vi/config.l a/vi/hue.l a/vi/core.l a/vi/law.l \
+	  | sh test/gate/run.sh vi "$m" "a/vi/law:"
 	@rm -f $(ho)/.vi1; \
 	  printf 'ihello world\033:wq\n' | $(korerun) vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
 	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi1)" = "hello world" ]; } \
@@ -412,7 +412,7 @@ test_vi: host
 	  { [ $$r -eq 0 ] && [ "$$(tr '\n' ' ' < $(ho)/.vi1)" = "tw0 three 0ne " ]; } \
 	    || { echo "FAIL kore vi ex :s + :m (exit $$r)"; exit 1; }; \
 	  echo "kore: vi (laws + piped create/dd/q!/undo/ex end-to-end) ok"
-# The C compiler (apps/moon/, doc/misc/moon.md): the pure pipeline's goldens, then stage-0 end
+# The C compiler (a/moon/, doc/misc/moon.md): the pure pipeline's goldens, then stage-0 end
 # to end through the real `mooncc` -- compile, run, exit 42, against a gcc -O0 differential
 # on the same source. Drives the crew layer warm (~0.68s -> ~0.1s per compile, 88 of them).
 moonrun = $m mooncc
@@ -457,7 +457,7 @@ $(word 1,$(subst :, ,$(1))): $(word 2,$(subst :, ,$(1)))
 	 else touch $$@; fi
 endef
 $(foreach s,$(mx_gen),$(eval $(call mx_dep,$(s))))
-# test_clay -- G1, clay's faithfulness gate (apps/moon/clay.l, doc/misc/clay.md): for every file
+# test_clay -- G1, clay's faithfulness gate (a/moon/clay.l, doc/misc/clay.md): for every file
 # in test/cc/, (cparse (clay-show ast)) == ast, structurally. the run partitions and names
 # both halves: what it can say, and the declarations cparse did not keep -- a measured gap.
 test_clay: host
@@ -476,7 +476,7 @@ test_clay: host
 test_moonfuzz: host
 	@echo TEST test/gate/moonfuzz.l "(moon refusal fuzz: 8 mutants per file over test/cc)"
 	@$m -l test/gate/moonfuzz.l < /dev/null
-# test_forge -- nifs written in love (apps/forge.l): a kernel's holo IR assembled for this cpu,
+# test_forge -- nifs written in love (a/forge.l): a kernel's holo IR assembled for this cpu,
 # installed through the `nif` seam, and required to agree with the twin it deopts into -- on the
 # monomorphic lane it says and on every lane it hands back.
 # the twin here is the C nif itself, so a disagreement is one denotation answering two ways.
@@ -510,7 +510,7 @@ dl/c-testsuite:
 	@echo 'MK	'c-testsuite
 	@git clone --depth=1 https://github.com/c-testsuite/c-testsuite.git $@ > /dev/null 2>&1
 # test_libc -- our C library against the system's, function by function:
-# test/libc/*.c built by mooncc (pulling apps/moon/lib/moonlibc/ by need) and by gcc, run,
+# test/libc/*.c built by mooncc (pulling a/moon/lib/moonlibc/ by need) and by gcc, run,
 # and the two outputs compared, so a drift names the function and the case.
 test_libc: host
 	@sh test/gate/libc.sh $(ho) $m
@@ -520,7 +520,7 @@ test_libc: host
 test_ulp: host
 	@sh test/gate/ulp.sh $(ho) $m
 # test_softfp -- the compiler runtime, against the machine that has the instruction.
-# apps/moon/lib/rt.c is what mooncc's own lowering calls on a board with no FPU, no umull
+# a/moon/lib/rt.c is what mooncc's own lowering calls on a board with no FPU, no umull
 # and no clz; on the board there is no second opinion, so it is held to bit equality with
 # real hardware here, built by the system cc and by mooncc on all three backends.
 test_softfp: host
@@ -541,7 +541,7 @@ test_selfhost: host
 	  for f in $(love_tu_c) $(host_c) $(R)/i/nokern.c $(R)/i/noblob.c $(R)/i/noosv.c; do b=`basename $$f .c`; \
 	    $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Il -Ii -Iout/lib -c $$f $$d/$$b.o \
 	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
-	  $(moonrun) -Iapps/moon/include -c apps/moon/lib/moonlibc/math/am.c $$d/am.o \
+	  $(moonrun) -Ia/moon/include -c a/moon/lib/moonlibc/math/am.c $$d/am.o \
 	    || { echo "FAIL mooncc -c am.c"; exit 1; }; \
 	  $(CC) -static -o $(ho)/love-selfhost $$d/*.o $(host_ldflags) \
 	    || { echo "FAIL link all-mooncc binary"; exit 1; }; \
@@ -602,7 +602,7 @@ rvboot_o = $(ko)/rv64/rv64/boot.o $(ko)/rv64/i/rv64/dtb.o $(ko)/rv64/rvboot.o
 $(ko)/rv64/rvboot.o: test/gate/rvboot.c $(love_h) $(R)/i/k.h $(R)/i/dtb.h $(mooncc_dep)
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
-	@$(mooncc) -I$(ko)/rv64 -I. -Il -Ii -I$(ho) -Iout/lib -I$R -I$R/apps/moon/include \
+	@$(mooncc) -I$(ko)/rv64 -I. -Il -Ii -I$(ho) -Iout/lib -I$R -I$R/a/moon/include \
 	  -t rv64 -c $< -o $@
 $(ko)/rv64/rvboot.elf: $(rvboot_o) test/gate/rvboot.l $m
 	@echo 'RVLINK	'$@
@@ -822,7 +822,7 @@ test_bakerep: host
 test_distboot: dist
 	@echo TEST test/gate/distboot.sh
 	@sh test/gate/distboot.sh $(dist_source) $(ho)/love
-# test_gz -- apps/tar/tar.l + apps/gz/gz.l against the two programs they replace. the laws
+# test_gz -- a/tar/tar.l + a/gz/gz.l against the two programs they replace. the laws
 # are test/host/gz.l; this is the half only the OUTSIDE can say, and it is separate because
 # a coder and decoder by one hand round-trip cleanly through a format nobody else speaks.
 # skips without either system tool. gzfind.l rides along: the differential between gz.l's
@@ -841,7 +841,7 @@ test_gz: host
 test_root: host
 	@echo TEST test/gate/root.sh
 	@sh test/gate/root.sh $(ho) $(ho)/love
-# test_fat32 -- `love fat` + `love mkfs.vfat`, the command line over apps/fat/fat.l.
+# test_fat32 -- `love fat` + `love mkfs.vfat`, the command line over a/fat/fat.l.
 # not test_fat, which gates the fat container (seed-universal U1) and shares only a
 # word. test/fat.l proves the filesystem's own laws over a cask, needing nothing
 # outside; this is the half only another implementation can say, and mtools is it --
@@ -850,7 +850,7 @@ test_root: host
 test_fat32: host
 	@echo TEST test/gate/fat32.sh
 	@sh test/gate/fat32.sh $(ho) $(ho)/love
-# test_cpio -- apps/cpio/cpio.l + its face against GNU cpio, both ways over newc. Separate
+# test_cpio -- a/cpio/cpio.l + its face against GNU cpio, both ways over newc. Separate
 # from test_gz for the same reason test_gz is separate from the laws: the system tool
 # is the only oracle that can catch a format two of our own functions agree on. This
 # is the wire `make distro-initramfs` cuts its image with.
@@ -893,7 +893,7 @@ test_objcopy: host
 	@sh test/gate/objcopy.sh $(ho)
 # ain's two-process loopback gate: a server and a client over real TCP on 127.0.0.1,
 # full-duplex, each asserting it got what the other sent. The only net gate driving the real
-# `love apps/ain.l` cli path. In test_slow; override the port with `make nettest PORT=N`.
+# `love a/ain.l` cli path. In test_slow; override the port with `make nettest PORT=N`.
 PORT ?= 7390
 nettest: host
 	@echo TEST $m "(127.0.0.1:$(PORT))"
@@ -1094,7 +1094,7 @@ endef
 #   uumx      love.c's +/* dispatch matrices (l/mx.l) -> test/uumxlaw.l, the band lattice
 #   uuvallaw  CLAUDE.md's laws off test/law.l's own rows -> proved where they stand, one
 #             spelling for the fuzz lane and the proof lane both
-$(eval $(call uu_corpus,uuwm,uuwmgen,apps/lux/core.l))
+$(eval $(call uu_corpus,uuwm,uuwmgen,a/lux/core.l))
 $(eval $(call uu_corpus,uukind,kinds2uu,test/proto/kinds.l))
 $(eval $(call uu_corpus,uuhomgen,dest2uu,test/proto/dest.l))
 $(eval $(call uu_corpus,uusplgen,spl2uu,test/proto/spl.l))
@@ -1131,7 +1131,7 @@ test_wgetnet: host
 	@echo TEST test/host/wgetnet.l "(wget over TLS 1.3 to a live peer)"
 	@cat test/00-init.l test/host/wgetnet.l | sh test/gate/run.sh wgetnet "$m" "wgetnet: ok"
 
-# doom in an X window, the doom=1 build under an Xvfb (apps/doom.l): opt-in --
+# doom in an X window, the doom=1 build under an Xvfb (a/doom.l): opt-in --
 # it wants the vendored source and the IWAD, and rebuilds the artifact with doom inside
 test_doomx: $(R)/test/host/doomx.l
 	@$(MAKE) -s host DOOM=1
@@ -1149,10 +1149,10 @@ test_kverb: host
 test_kboot: host $(R)/u/kboot.l
 	@$(MAKE) -s $(k_elf)
 	@echo TEST $(k_elf) "(the kore cat off cmdline; 4 boots, ceiling 420s each)"
-	@$m $(R)/u/kboot.l $(k_elf) "kore ls apps/kore" "kore.l"
-	@$m $(R)/u/kboot.l $(k_elf) "kore wc apps/json.l" "apps/json.l" $$(wc -c < $(R)/apps/json.l)
-	@$m $(R)/u/kboot.l $(k_elf) "sh -c \"cd apps/kore; pwd\"" "/apps/kore"
-	@$m $(R)/u/kboot.l $(k_elf) "sh -c \"kore ls apps/kore | kore wc -l\"" $$(ls $(R)/apps/kore | wc -l)
+	@$m $(R)/u/kboot.l $(k_elf) "kore ls a/kore" "kore.l"
+	@$m $(R)/u/kboot.l $(k_elf) "kore wc a/json.l" "a/json.l" $$(wc -c < $(R)/a/json.l)
+	@$m $(R)/u/kboot.l $(k_elf) "sh -c \"cd a/kore; pwd\"" "/a/kore"
+	@$m $(R)/u/kboot.l $(k_elf) "sh -c \"kore ls a/kore | kore wc -l\"" $$(ls $(R)/a/kore | wc -l)
 else
 test_disk test_kboot:
 	@echo "$@: skipped (host arch $a is not x64)"

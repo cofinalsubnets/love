@@ -34,8 +34,8 @@ mps2t1: $(R)/$(o)/love-t1.elf
 
 $(foreach u,$(love_m),$(eval $(call p_obj,$u,l/$u.c,\
   $(R)/l/$u.c $(love_dep),$(mps2_cc))))
-$(foreach m,$(libc_m),$(eval $(call p_obj,$m,apps/moon/lib/moonlibc/string/$m.c,\
-  $(R)/apps/moon/lib/moonlibc/string/$m.c $(libc_dep),$(mps2_cc) -Iapps/moon/include)))
+$(foreach m,$(libc_m),$(eval $(call p_obj,$m,a/moon/lib/moonlibc/string/$m.c,\
+  $(R)/a/moon/lib/moonlibc/string/$m.c $(libc_dep),$(mps2_cc) -Ia/moon/include)))
 
 # main.c, once per face -- the -D is the whole difference.
 mainc = main.c $(R)/l/love.h $(lib_hR) $(mc)
@@ -111,13 +111,13 @@ t1_objs = $(R)/$(o)/start.o $(t1_love_o) $(R)/$(o)/am-t1.o $(R)/$(o)/rt-t1.o $(t
 
 $(foreach u,$(love_m),$(eval $(call p_obj,$u-t1,l/$u.c,\
   $(R)/l/$u.c $(love_dep),$(mps2t1_cc))))
-$(foreach m,$(libc_m),$(eval $(call p_obj,$m-t1,apps/moon/lib/moonlibc/string/$m.c,\
-  $(R)/apps/moon/lib/moonlibc/string/$m.c $(libc_dep),$(mps2t1_cc) -Iapps/moon/include)))
+$(foreach m,$(libc_m),$(eval $(call p_obj,$m-t1,a/moon/lib/moonlibc/string/$m.c,\
+  $(R)/a/moon/lib/moonlibc/string/$m.c $(libc_dep),$(mps2t1_cc) -Ia/moon/include)))
 $(eval $(call p_obj,main-t1,i/mps2/main.c,$(mainc),$(mps2t1_cc)))
-$(eval $(call p_obj,am-t1,apps/moon/lib/moonlibc/math/am.c,$(R)/apps/moon/lib/moonlibc/math/am.c $(mc),\
-  $(MOONCC) -t thumb1 -Iapps/moon/lib/moonlibc/math -Iapps/moon/include))
-$(eval $(call p_obj,rt-t1,apps/moon/lib/rt.c,$(R)/apps/moon/lib/rt.c $(mc),\
-  $(MOONCC) -t thumb1 -Iapps/moon/include))
+$(eval $(call p_obj,am-t1,a/moon/lib/moonlibc/math/am.c,$(R)/a/moon/lib/moonlibc/math/am.c $(mc),\
+  $(MOONCC) -t thumb1 -Ia/moon/lib/moonlibc/math -Ia/moon/include))
+$(eval $(call p_obj,rt-t1,a/moon/lib/rt.c,$(R)/a/moon/lib/rt.c $(mc),\
+  $(MOONCC) -t thumb1 -Ia/moon/include))
 
 # our linker binds this one too, and every object on the line is ours: no foreign file
 # rides any boot image in this tree.

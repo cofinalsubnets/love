@@ -1,6 +1,6 @@
-; --- test/host/libra.l: libra ⚖, the .l balance tool (apps/libra/libra.l) ---
+; --- test/host/libra.l: libra ⚖, the .l balance tool (a/libra/libra.l) ---
 ; two verbs over one scanner, and this gate is that claim: the check and the doc
-; lifter both read apps/libra/lint.l, so the two cannot disagree about what a paren or a
+; lifter both read a/libra/lint.l, so the two cannot disagree about what a paren or a
 ; comment is. run standalone from the repo root:
 ;   cat test/00-init.l test/host/libra.l | out/love
 
@@ -197,10 +197,10 @@
                    (1 < tally d)                         ; a document, not a line
                    (0 < tally (bare head))
                    ((bare head) = (bare (dtext d))))))   ; ..and it kept every letter
-          ["apps/vi/hue.l" "apps/lush.l" "apps/libra/libra.l"])
+          ["a/vi/hue.l" "a/lush.l" "a/libra/libra.l"])
    ; the surfaces come free, and that is the seam's whole promise: libra says
    ; markdown, lapiz says the rest.
-   _ (: md (ldoc-md (slurpf "apps/vi/hue.l"))
+   _ (: md (ldoc-md (slurpf "a/vi/hue.l"))
         _ (test (0 < tally (md->ht md))
                   (0 < tally (md->rf md)))
         0)
@@ -235,11 +235,11 @@
 ; a heading its sections hang off, which is what papel reads a page's title,
 ; anchors and contents nav from.
 (: (rd f) (: q (open f "r") (? (hot? q) (slurp q) ""))
-   d (mdread ("# apps/lapiz.l\n\n" + ldoc-md (rd "apps/lapiz.l")))
+   d (mdread ("# a/lapiz.l\n\n" + ldoc-md (rd "a/lapiz.l")))
    heads (filter (\ b (<b = 'head)) d)
    _ (test
       (3 < tally heads)
-      ('(head 1 ((text "apps/lapiz.l"))) = <heads)   ; the file names the page
+      ('(head 1 ((text "a/lapiz.l"))) = <heads)   ; the file names the page
       (2 = <>(heads 1))                               ; ..and its banners are sections
       (0 < tally (filter (\ b (<b = 'fence)) d)))       ; the diagrams survived as displays
    0)

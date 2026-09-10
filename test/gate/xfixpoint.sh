@@ -48,10 +48,10 @@ mkdir -p "$d"
 
 # the object of a source is its PATH under $d, exactly as make lays it under the odir --
 # derived, never spelled, so a renamed, moved or newly-added TU cannot leave a stale name
-# here. moonlibc drops its apps/moon/lib/ stem, the one place make does too.
+# here. moonlibc drops its a/moon/lib/ stem, the one place make does too.
 mkobj() {                    # $1 = source -> $o
   o=${1#./}
-  case $o in apps/moon/lib/*) o=${o#apps/moon/lib/} ;; esac
+  case $o in a/moon/lib/*) o=${o#a/moon/lib/} ;; esac
   o=$d/${o%.c}.o
   mkdir -p "${o%/*}"
 }
@@ -78,9 +78,9 @@ for f in $gate_host_c $gate_seat_c; do
   mkobj "$f"
   moon1 -D ai_tco="$tco" -I"$ho" -I. -Il -Ii -Iout/lib -c "$f" "$o" || fail "love1 mooncc -c $f"
 done
-for f in apps/moon/lib/moonlibc/math/*.c; do
+for f in a/moon/lib/moonlibc/math/*.c; do
   mkobj "$f"
-  moon1 -Iapps/moon/include -c "$f" "$o" || fail "love1 mooncc -c $f"
+  moon1 -Ia/moon/include -c "$f" "$o" || fail "love1 mooncc -c $f"
 done
 LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$ho/.mksys-cat.l" -q -e "((cite 'moon '$mks) \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
 test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
@@ -89,7 +89,7 @@ test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 # and laid the same way. an arch with no seat carries none, and $gate_arch_c is
 # empty there -- the makefile draws that line with its own wildcard.
 if [ -n "$gate_arch_c" ]; then
-  kinc="-I$ho -I. -Il -Ii -Iout/lib -Il/quay -Iapps/moon/include"
+  kinc="-I$ho -I. -Il -Ii -Iout/lib -Il/quay -Ia/moon/include"
   for f in $gate_kern_c $gate_arch_c l/quay/paint.c \
            l/quay/cga_8x8.c l/quay/moderndos_8x16.c; do
     mkobj "$f"

@@ -551,7 +551,7 @@ becomes observable; both ops were already in the vocabulary and all six targets 
 
 Held by test/cc/140-fsuffix.c. The old note here said the consumer was PDCLib's `INFINITY`
 spelled `(_PDCLIB_FLT_MAX * 2)` — that reading was wrong twice over: PDCLib is not this
-tree's libc (`apps/moon/lib/moonlibc/` is), and we do not define `INFINITY` at all. The real
+tree's libc (`a/moon/lib/moonlibc/` is), and we do not define `INFINITY` at all. The real
 consumer is every `float` expression in the tree.
 
 ### the `#if` evaluator — LANDED 2026-08-14, and one of its three bugs cost right answers
@@ -657,7 +657,7 @@ thumb1 (v6-M) has no UMULL, no long shifts and no FPU, so 64-bit `*`/shifts/divi
 conversion and *all* float and double arithmetic lower to `__aeabi_*` calls (`gen.l`'s `v6m?`
 lanes). thumb2sp calls out for one row only — it is ARMv7E-M with an **SP-only** FPU (the
 Playdate's STM32F746), so `float` rides the hardware and `double` softens, where thumb2's
-fpv5-d16 does both. The answers are `apps/moon/lib/rt.c`, the tree's own compiler runtime;
+fpv5-d16 does both. The answers are `a/moon/lib/rt.c`, the tree's own compiler runtime;
 gcc's libgcc.a answered them until 2026-09-10 and rides no board link now. A call-out is a
 LINK-time dependency, invisible to a compile: it shows up as an undefined `__aeabi_*` in the
 object, which is how the table finds it. Everywhere else the lane is ours or there is no lane.
@@ -699,7 +699,7 @@ also takes — probe the one you mean.
   definition that returns one; a bare prototype compiles everywhere.
 - **signed 64-bit `/` and `%` on thumb2 and thumb2sp** refuse (`cgfn refuses`) — love.c's lane
   is unsigned; wrap the unsigned expansion in an abs/refix sleeve when needed. thumb1 answers
-  it, through the runtime's own `__divdi3`/`__moddi3` (apps/moon/lib/rt.c).
+  it, through the runtime's own `__divdi3`/`__moddi3` (a/moon/lib/rt.c).
 - **thumb1 varargs** — the pop-pc epilogue cannot drop the r0-r3 block; `vaspill-t32` refuses
   v6-M whole.
 - **thumb1 `leax`** — the indexed-call variant (`a[i]()` over a local array) hits
@@ -709,7 +709,7 @@ also takes — probe the one you mean.
   ctz the isolate-and-clz / `__ctzsi2`), but the 64-bit swap wants the r0:r1 pair lane and
   the atomics want LDREX/STREX plumbing (v6-M has none), and nothing reaches either there yet.
 
-What **thumb2** carries, so it is not re-derived (thumb1 reaches apps/moon/lib/rt.c, the
+What **thumb2** carries, so it is not re-derived (thumb1 reaches a/moon/lib/rt.c, the
 compiler runtime, for most of this — the above): 64-bit `long long` as register pairs (lo:hi on r0:r1, r2:r3 the shuttle) with +, -,
 ×(UMULL/MLA), unsigned `/` and `%` (a self-contained 64-step restoring expansion — no
 helper call at all), all shifts across the word

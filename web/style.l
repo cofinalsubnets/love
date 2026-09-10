@@ -2,19 +2,19 @@
 ;
 ;   love web/style.l OUT.css
 ;
-; the palette is apps/vi/config.l's hue-page table through hueweb's hw-vars, so the
+; the palette is a/vi/config.l's hue-page table through hueweb's hw-vars, so the
 ; page, `love serve` and the editor read one table; the layout below wears those roles
 ; as var(--x). the eight colours that are not roles are the terminal's own ansi ink
 ; and the three colour words of the glossary, which no theme moves.
 ;
 ; LOVE_NO_IMAGE must be cleared by whoever runs this (the Makefile does): hueweb rides
 ; the vi module, which the baked image registers and the egg boot does not.
-(borrow "apps/vi/config.l")
-(borrow "apps/vi/hue.l")
+(borrow "a/vi/config.l")
+(borrow "a/vi/hue.l")
 (borrow 'hueweb)
 
 (borrow 'posix)
-(: head "/* laid by web/style.l from apps/vi/config.l's tokyo-night -- edit those, not this.
+(: head "/* laid by web/style.l from a/vi/config.l's tokyo-night -- edit those, not this.
    periwinkle on polar-night blue, green = a kept answer; the crew fly the name space in
    aurora teal/cyan. the quay bitmaps set everything: 8x16 cells, crisp at 16px native
    (so 32px is a clean 2x), and the 8x8 face beside it. both are laid by u/mkfont.l. */

@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/moon.sh -- mooncc's gate. Two halves: the LAWS (apps/moon/law.l, which
+# test/gate/moon.sh -- mooncc's gate. Two halves: the LAWS (a/moon/law.l, which
 # runs anywhere) and, on x86-64 only, an END-TO-END battery against gcc as the oracle
 # -- mooncc compiles a program, gcc compiles the same program, and the two exit codes
 # must agree. gcc is never trusted to be right, only to be a second opinion; where a
@@ -22,19 +22,19 @@ moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 moon0() { "$love0" wake out/mooncc0.image mooncc "$@"; }
 
 # ---------------------------------------------------------------- the laws
-echo "CC apps/moon/{lex,cpp,parse,gen,val,law}.l"
+echo "CC a/moon/{lex,cpp,parse,gen,val,law}.l"
 out=$ho/.test_moon.out
 { echo "(borrow 'holo)"
-  cat test/00-init.l apps/kore/text.l apps/kore/u.l   # the kore floors register module 'kore
+  cat test/00-init.l a/kore/text.l a/kore/u.l   # the kore floors register module 'kore
   echo "(borrow 'kore)"                    # ..ambient: holo/text.l and law.l read `lines` bare
-  cat apps/moon/floor.l apps/moon/lex.l apps/moon/cpp.l apps/moon/parse.l \
-      l/holo/text.l l/holo/dialect.l l/holo/gas.l apps/moon/val.l apps/moon/gen.l
+  cat a/moon/floor.l a/moon/lex.l a/moon/cpp.l a/moon/parse.l \
+      l/holo/text.l l/holo/dialect.l l/holo/gas.l a/moon/val.l a/moon/gen.l
   echo "(borrow 'moon)"                    # the cat re-laid module 'moon; law.l reads it bare
-  cat apps/moon/law.l
+  cat a/moon/law.l
 } | "$m" > "$out" 2>&1
 r=$?
 cat "$out"
-[ $r -eq 0 ] && grep -q "apps/moon/law:" "$out" || fail "cc laws (exit $r)"
+[ $r -eq 0 ] && grep -q "a/moon/law:" "$out" || fail "cc laws (exit $r)"
 
 # ----------------------------------------------- the template parser, under love0
 # holo/text.l reaches the combinators through the bare name `post`, which each
@@ -47,10 +47,10 @@ echo "CC l/holo/text.l (love0 lane)"
   || fail "asm-text under love0 -- is bare \`post\` the module accessor there?"
 
 # ---------------------------------------------- the pipeline's stage types
-# gen.l read as DATA and typed against apps/moon/stage.l's sig table (the
+# gen.l read as DATA and typed against a/moon/stage.l's sig table (the
 # overlay leg): the post-choice chain composes in exactly one order, and a
 # clash names its innermost seam. nothing from stage.l rides any image.
-"$m" apps/moon/stage.l || fail "moon-stage (the ;; moon-stage line names the seam)"
+"$m" a/moon/stage.l || fail "moon-stage (the ;; moon-stage line names the seam)"
 
 arch=$(uname -m)
 if [ "$arch" != x64 ] && [ "$arch" != x86_64 ]; then

@@ -87,7 +87,7 @@ mv "$d/src/gzip.c.new" "$d/src/gzip.c"
 # right (an empty-after-cpp TU is a valid empty TU, not a failure).
 SRC="gzip zip deflate trees bits unzip inflate util crypt lzw unlzw unpack unlzh getopt"
 # exactly the DEFS its own configure writes on Linux.
-CFLAGS="-DSTDC_HEADERS=1 -DHAVE_UNISTD_H=1 -DDIRENT=1 -Iapps/moon/include -I$d/src"
+CFLAGS="-DSTDC_HEADERS=1 -DHAVE_UNISTD_H=1 -DDIRENT=1 -Ia/moon/include -I$d/src"
 
 echo "MOON-GZIP  $GZIPSRC  ($target: mooncc + moonlibc + holo, no gcc/glibc/ld)"
 
@@ -99,16 +99,16 @@ done
 
 # the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). NO moonlibc
 # object -- the link owes its symbols and the driver's runtime table pulls
-# apps/moon/lib/moonlibc/ MEMBER BY NEED (the Makefile says the same thing about love
+# a/moon/lib/moonlibc/ MEMBER BY NEED (the Makefile says the same thing about love
 # itself). Naming an object would take every member instead.
-for f in apps/moon/lib/moonlibc/math/*.c; do
+for f in a/moon/lib/moonlibc/math/*.c; do
   b=`basename "$f" .c`
-  $mc $tflag -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
+  $mc $tflag -Ia/moon/lib/moonlibc/math -Ia/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
 done
 # sys.o is LAID, not compiled -- and a CROSS lay needs holo's backend loaded
 # first (the host bake carries only the native one), exactly as raw.sh does it.
 { if [ -n "$backend" ]; then echo "(borrow 'holo)"; cat "$backend"; fi
-  cat apps/kore/text.l apps/kore/u.l apps/kore/asbook.l l/holo/elf.l l/holo/obj.l apps/moon/lib/mksys.l
+  cat a/kore/text.l a/kore/u.l a/kore/asbook.l l/holo/elf.l l/holo/obj.l a/moon/lib/mksys.l
   echo "((cite 'moon '$mksys) \"$d/sys.o\")"; } | $love || { echo "FAIL $mksys sys.o"; exit 1; }
 
 $mc $tflag $objs "$d"/m_*.o "$d/sys.o" -o "$d/gzip" || { echo "FAIL holo link gzip"; exit 1; }

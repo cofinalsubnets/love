@@ -1,6 +1,6 @@
 # vi — the editor
 
-apps/vi/ orients here; the laws live in apps/vi/law.l, the gate is `make test_vi`, and every
+a/vi/ orients here; the laws live in a/vi/law.l, the gate is `make test_vi`, and every
 doubt settles by feeding `vstep` bytes.
 
 ## the shape
@@ -8,26 +8,26 @@ doubt settles by feeding `vstep` bytes.
 Five files, over the seeds the repo already had (bao's port-driven editor discipline, kore's
 re.l regex engine):
 
-* **apps/vi/core.l** — the PURE engine. A state tablet stepped one byte at a time:
+* **a/vi/core.l** — the PURE engine. A state tablet stepped one byte at a time:
   `(vstep st byte) -> st`, `(vfeed st bytes)`, `(vframe st)` -> one full escape-sequence frame
   as text. No tty, no port, no file io — the ex commands leave a REQUEST on the state (`'dow`
   to write, `'doe` to read, both in uread's `(name)` shape) and flip `'quit`; whoever holds the
   state acts. That purity is the whole test story: the laws drive key sequences and read the
   tablet back, and the frame is lawed to the byte on a tiny screen.
-* **apps/vi/vi.l** — the face. Keys off `in` one byte at a time (arrows ESC[A-D decode to kjlh
+* **a/vi/vi.l** — the face. Keys off `in` one byte at a time (arrows ESC[A-D decode to kjlh
   with a one-byte pushback so a bare ESC still interleaves), frames onto `out`, the alternate
   screen (?1049) so scrollback survives, `raw` for the tty (cooked restores at exit), winsize
   when there is one (80x24 on a pipe). It performs the engine's write/read requests. Port EOF
   quits — which is what makes `kore vi` fully drivable from a pipe: the smokes script whole
   sessions (`printf 'ihello\033:wq\n' | kore vi f`).
-* **apps/vi/hue.l** — the .l syntax written down once, for two readers: the painter in core.l's
+* **a/vi/hue.l** — the .l syntax written down once, for two readers: the painter in core.l's
   `vframe`, and the vim syntax file, which u/hue2vim.l generates from the same table, so the
   two readings cannot drift. `make syntax` builds it into `out/syntax.vim` and
   `make install` puts it in `~/.vim/syntax/love.vim`; it is never checked in, so there is no
   copy to keep up to date.
-* **apps/vi/config.l** — the theme (molokayo) as plain data, keyed by vim highlight group, so
+* **a/vi/config.l** — the theme (molokayo) as plain data, keyed by vim highlight group, so
   the generated syntax file can emit `hi def link` lines rather than hardcoded colours.
-* **apps/vi/law.l** — the gate.
+* **a/vi/law.l** — the gate.
 
 The pens are the face's to hand over: they want `$COLORTERM` and the user's theme file, and the
 engine reads neither.

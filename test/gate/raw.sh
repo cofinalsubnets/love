@@ -1,8 +1,8 @@
 #!/bin/sh
 # test/gate/raw.sh -- the GCC-FREE fixpoint, for one target. Everything test_selfhost
-# builds, PLUS our own raw libc (apps/moon/lib/moonlibc/: raw-syscall wrappers, mini
-# stdio, mmap malloc), the math floor (apps/moon/lib/moonlibc/math/am.c, ours), and sys.o (the
-# syscall trampoline + our sigsetjmp/longjmp, laid by apps/moon/lib/mksys.l) -- then
+# builds, PLUS our own raw libc (a/moon/lib/moonlibc/: raw-syscall wrappers, mini
+# stdio, mmap malloc), the math floor (a/moon/lib/moonlibc/math/am.c, ours), and sys.o (the
+# syscall trampoline + our sigsetjmp/longjmp, laid by a/moon/lib/mksys.l) -- then
 # OUR OWN static linker (l/holo/link.l, via `mooncc a.o..`) binds them. No gcc, no
 # glibc, no ld anywhere: the whole chain is love. Corpus green over the fresh egg.
 #
@@ -76,11 +76,11 @@ for f in $gate_love_c $gate_host_c $gate_seat_c; do
 done
 
 # moonlibc is NOT compiled here: the link below owes its symbols and the driver's
-# runtime table supplies them member by need (apps/moon/lib/moonlibc/, test_drv's
+# runtime table supplies them member by need (a/moon/lib/moonlibc/, test_drv's
 # lane). Naming the objects would take every member, dead areas included.
-for f in apps/moon/lib/moonlibc/math/*.c; do
+for f in a/moon/lib/moonlibc/math/*.c; do
   b=$(basename "$f" .c)
-  moonc -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c "$f" "$d/m_$b.o" || fail "mooncc $tflag -c $f"
+  moonc -Ia/moon/lib/moonlibc/math -Ia/moon/include -c "$f" "$d/m_$b.o" || fail "mooncc $tflag -c $f"
 done
 
 # sys.o is laid by mksys.l rather than compiled: it is the syscall trampoline and
@@ -91,8 +91,8 @@ done
     echo "(borrow 'holo)"
     cat "$backend"
   fi
-  cat apps/kore/text.l apps/kore/u.l apps/kore/asbook.l \
-      l/holo/elf.l l/holo/obj.l apps/moon/lib/mksys.l
+  cat a/kore/text.l a/kore/u.l a/kore/asbook.l \
+      l/holo/elf.l l/holo/obj.l a/moon/lib/mksys.l
   echo "((cite 'moon '$mksys) \"$d/sys.o\")"
 } | "$m" || fail "$mksys sys.o"
 

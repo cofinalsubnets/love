@@ -30,7 +30,7 @@
                         _ (pin web-scr () s)
                         _ (pin web-task () (twirl (\ _ (f ())) 0))
                         ())
-   ; the demo story: its level is a datum the page fetched (apps/rove/levels) and
+   ; the demo story: its level is a datum the page fetched (a/rove/levels) and
    ; bound as lighthouse-data; the engine's load-level reads a file, which this seat lacks
    (lighthouse _) (story-run (level-of lighthouse-data))
    (web-step _) (: _ (rest 0) ())                 ; a rest of nothing: the other tasks' turn

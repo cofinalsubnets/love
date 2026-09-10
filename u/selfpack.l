@@ -37,16 +37,16 @@
 ; the order is the dependency order: kore's text+diff floor under sb, dns under sb's http.
 ;
 ; a path, never `-l`: `-l FILE` whose basename names a verb seats it (l/boot/post.l's
-; seatof -- the installed shebang's lane), so `-l apps/sb/sb.l` runs sb instead of
+; seatof -- the installed shebang's lane), so `-l a/sb/sb.l` runs sb instead of
 ; loading it. `borrow` on a string touches no command line.
-(borrow "apps/tar/tar.l")
-(borrow "apps/gz/gz.l")
-(borrow "apps/kore/text.l")
-(borrow "apps/kore/diff.l")
-(borrow "apps/sb/merge.l")
-(borrow "apps/dns.l")
-(borrow "apps/sb/http.l")
-(borrow "apps/sb/sb.l")   ; for the ignore law only -- .sbignore is sb's file
+(borrow "a/tar/tar.l")
+(borrow "a/gz/gz.l")
+(borrow "a/kore/text.l")
+(borrow "a/kore/diff.l")
+(borrow "a/sb/merge.l")
+(borrow "a/dns.l")
+(borrow "a/sb/http.l")
+(borrow "a/sb/sb.l")   ; for the ignore law only -- .sbignore is sb's file
 
 (borrow 'posix)
 (: (sp-die m) (say err ("selfpack: " + m + "\n"), quit 1)

@@ -9,7 +9,7 @@
 ; assembles. one line = one instruction; operands are separated by spaces and/or commas; a register
 ; or label is a symbol, an immediate a (optionally signed) number; `;` starts a comment. there is no
 ; arch here at all -- it lowers to whatever backend `holo` is handed. mooncc's inline asm
-; (apps/moon/gen.l) parses its templates with asm-text; its cats carry this file.
+; (a/moon/gen.l) parses its templates with asm-text; its cats carry this file.
 ;
 ; needs only (borrow 'peg) -- no assembler names, so it loads in the raw holo.l stream (test_holo)
 ; and on the baked host alike:

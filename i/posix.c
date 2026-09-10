@@ -35,7 +35,7 @@
 
 // --- what this LIBC carries, asked once -------------------------------------
 // the question a lane owes is which doors it may call, never which kernel it is
-// standing on: ours carries every door on all three (apps/moon/include/sys), and
+// standing on: ours carries every door on all three (a/moon/include/sys), and
 // a foreign libc carries what its own box does. so these are build facts under
 // LvNolibc and box facts under anything else.
 // mount(2) and unshare are LINUX-reaching, and still not this file's question:
@@ -154,7 +154,7 @@ static struct ai *argv_marshal(struct ai *g, char ***cavp) {
 // (glean _)     -> (pid . status) of one reaped child
 //                | ()                 none pending
 //                | a nom              (e.g. 'echild: no children left)
-// apps/init/init.l drives real processes with these plus the generic `still` (kill):
+// a/init/init.l drives real processes with these plus the generic `still` (kill):
 // spawn returns a pid to track, glean is the SIGCHLD core (poll it, map the pid
 // back to a unit, restart per policy). on a real pid1 glean also collects
 // reparented orphans (waitpid(-1)).
@@ -656,7 +656,7 @@ static ai_inline word host_mount(struct ai *g, word a, word b, word c) {
 static lvm(lvm_mount) { Sp[2] = host_mount(g, Sp[0], Sp[1], Sp[2]); Sp += 2; ai_musttail return Next(1); }
 // (mountf src tgt type flags) -> () | a nom. the same call carrying linux's MS_ word,
 // which is what ro, bind, remount and the nosuid family are. It stands BESIDE mount
-// rather than replacing it: apps/init/boot.l calls the three-argument one, a nif's
+// rather than replacing it: a/init/boot.l calls the three-argument one, a nif's
 // arity is fixed, and an early boot is not where an arity change wants finding out.
 // the DATA argument stays NULL, so an -o that is filesystem text rather than a flag
 // (tmpfs's size=, a uid= on vfat) has nowhere to go and the face refuses it by name.
@@ -947,7 +947,7 @@ LvNif("ttyfg", nif_posix_ttyfg, NULL);
 LvNif("setenv", nif_posix_setenv, NULL);
 LvNif("environ", nif_posix_environ, NULL);
 // --- the rest of the fs surface: the effect ops the fs tools ride ---------------
-// (mv, ln, touch, chmod, chown -- apps/kore/fs.l and friends).
+// (mv, ln, touch, chmod, chown -- a/kore/fs.l and friends).
 //   (rename old new)      -> () | a nom | 'badarg  (mv's heart; same filesystem)
 //   (symlink target path) -> () | a nom | 'badarg  (path becomes a link to target)
 //   (readlink path)       -> the target string | a nom | 'badarg

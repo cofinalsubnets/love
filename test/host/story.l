@@ -4,9 +4,9 @@
 ; same; a turn (the keys move @, a wall stops it, a thing opens its window); the window
 ; (a say pages its words, enter steps, esc closes; the prompt's interpreter answers
 ; read, look, help and a love form into the window); the frame (the map with @ and the
-; things, the box over it, the status line); and the library lifted from apps -- a
+; things, the box over it, the status line); and the library lifted from a -- a
 ; shelf per wing whose books read through libra. the runner, vi and the hatch stay live
-; probes: `love story`, `love story apps`.
+; probes: `love story`, `love story a`.
 ;   cat test/00-init.l test/host/story.l | out/love
 
 (borrow 'story)   ; the artifact's module, warm from the tree
@@ -25,7 +25,7 @@
    (keys! g s) (each (map (i \ s i) ^#s) (c \ story-key g c))
 
    ; --- the level file, and its round trip ---
-   L (load-level "apps/rove/levels/lighthouse.l")
+   L (load-level "a/rove/levels/lighthouse.l")
    _ (test L (13 = (L 'w)) (14 = (L 'h)) (6 = (L 'sx)) (8 = (L 'sy))
              (= '(lamp sign) (sort (keys (L 'things))))
              ("*" = (L 'things 'lamp 'gl)) (220 = (L 'things 'lamp 'fg))
@@ -105,7 +105,7 @@
    _ (test (58 = (g4 'x)) (40 = (g4 'vx)))
 
    ; --- the library: a shelf per wing, its books through libra, the interpreter ---
-   LB (library "apps")
+   LB (library "a")
    _ (test (10 < tally (keys (LB 'things))) (LB 'things 'rove) (LB 'things 'lapiz) (LB 'things 'hatch)
              ("|" = (LB 'things 'rove 'gl)) (LB 'things 'rove 'books 'story))
    g3 (story-new LB)

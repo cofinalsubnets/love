@@ -50,7 +50,7 @@
     (sound cl @ 'torn (mksrc-die "torn backend text")
                 (a . u) (ev a, mksrc-rdev u))
 
-   ; a wasm object is the gen tuple as text (apps/moon/moon.l), and the link's data lane
+   ; a wasm object is the gen tuple as text (a/moon/moon.l), and the link's data lane
    ; reads the same label/raw forms objelf takes -- so this one is the forms in the data
    ; slot, the two names in the globals slot, and nothing else. no backend to join.
    (mksrc-wasm dst forms)

@@ -9,7 +9,7 @@
 ; letrec and the call quietly becomes a partial application of the local. grep them
 ; for the name as a binding, not just the book for the name.
 (:
-   _ (borrow "apps/moon/clay.l")
+   _ (borrow "a/moon/clay.l")
 
    ; --- the nifs. one row per (C symbol, love name, arity, impl). arity is a shape,
    ; not a number the C reads: 1 runs the op straight, 2..5 curry on lvm_cur first.

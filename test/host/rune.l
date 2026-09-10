@@ -14,7 +14,7 @@
 ;
 ;   cat test/00-init.l test/host/rune.l | out/love
 
-(borrow "apps/rune.l")                  ; the loader: one layer, registered, spliced
+(borrow "a/rune.l")                  ; the loader: one layer, registered, spliced
 
 ; --- the module seam: rune registered, the splice + accessor both reach ----
 (test

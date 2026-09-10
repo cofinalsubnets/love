@@ -4,7 +4,7 @@
 ; GLYPH is the cell's index (cp437: 3 is the heart), SIZE the canvas in pixels; the
 ; scale is the largest whole number of pixels per glyph pixel that fits, so the glyph
 ; lands crisp. the ink is config.l's tokyo-night `red`, the colour the front page wears.
-(borrow "apps/vi/config.l")
+(borrow "a/vi/config.l")
 (borrow 'gz)
 
 (borrow 'posix)

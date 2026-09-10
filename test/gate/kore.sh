@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/kore.sh -- kore, the multi-call toolbox (apps/kore/), against GNU coreutils
+# test/gate/kore.sh -- kore, the multi-call toolbox (a/kore/), against GNU coreutils
 # as the oracle. The laws first, then ~350 checks whose shape is almost always the same
 # one: run the system tool, run OUR applet the same way, and require byte-identical
 # stdout -- and, where the exit code carries meaning (grep's 0/1/2, sed's 1/2, xargs'
@@ -44,18 +44,18 @@ pipe() { n=$1; i=$2; shift 2
          same "$n"; }
 
 # ------------------------------------------------------------------- the laws
-echo "UTILS apps/kore/{text,core,fs,re,sed,awk,expr,bc,less,find,diff,patch,law}.l"
+echo "UTILS a/kore/{text,core,fs,re,sed,awk,expr,bc,less,find,diff,patch,law}.l"
 out=$ho/.test_kore.out
 # lush's job.l + glob.l ride along because find.l captures sh-match at its define
-{ cat test/00-init.l apps/kore/text.l apps/kore/u.l apps/kore/core.l apps/kore/fs.l apps/kore/re.l \
-      apps/kore/sed.l apps/kore/awk.l apps/kore/expr.l apps/kore/bc.l apps/kore/proc.l apps/kore/less.l apps/libra/lint.l apps/vi/config.l apps/vi/hue.l \
-      apps/vi/core.l apps/vi/vi.l apps/kore/diff.l apps/kore/patch.l apps/lush.l \
-      apps/kore/find.l; \
+{ cat test/00-init.l a/kore/text.l a/kore/u.l a/kore/core.l a/kore/fs.l a/kore/re.l \
+      a/kore/sed.l a/kore/awk.l a/kore/expr.l a/kore/bc.l a/kore/proc.l a/kore/less.l a/libra/lint.l a/vi/config.l a/vi/hue.l \
+      a/vi/core.l a/vi/vi.l a/kore/diff.l a/kore/patch.l a/lush.l \
+      a/kore/find.l; \
   echo "(borrow 'kore)"; \
-  cat apps/kore/law.l; } | "$m" > "$out" 2>&1
+  cat a/kore/law.l; } | "$m" > "$out" 2>&1
 r=$?
 cat "$out"
-[ $r -eq 0 ] && grep -q "apps/kore/law: myers" "$out" || fail "utils (exit $r)"
+[ $r -eq 0 ] && grep -q "a/kore/law: myers" "$out" || fail "utils (exit $r)"
 
 # ------------------------------------------- diff, argv0 dispatch, usage, as
 printf 'a\nb\nc\n' > "$ho/.au1"; printf 'a\nX\nc\n' > "$ho/.au2"
@@ -670,7 +670,7 @@ echo "kore: sh (lush aboard -- kore sh + the argv0 symlink) ok"
 
 # ------------------------------------------------------ the shell's fork lane
 # an external word whose PATH winner IS this binary FORKS instead of exec'ing
-# (apps/lush.l sh-forkfn): the child rides the warm heap and no stage pays
+# (a/lush.l sh-forkfn): the child rides the warm heap and no stage pays
 # a second wake. fork-vs-spawn is not portably observable from out here (landed
 # against an execve trace: one exec for the shell, none for the stages) -- so
 # these assert the lane's PLUMBING with the winner self-symlinked, the distro's
@@ -1432,7 +1432,7 @@ cmp -s "$pw/o/sub/f.txt" "$pw/new" || fail "kore patch: the re-applied .rej land
 echo "kore: patch (13 applications leaving the same tree GNU patch does -- offsets, creates, rejects, the newline) ok"
 
 # ----------------------------------------------------------------- the pager
-# `less` and `more` are ONE door (apps/kore/less.l). Its engine is lawed with the
+# `less` and `more` are ONE door (a/kore/less.l). Its engine is lawed with the
 # rest above -- pgstep driven byte by byte, no tty in it -- and its face rides a
 # real pty below. What belongs here is the lane a script actually takes: stdout is
 # not a terminal, so the pager pours, and the pour has to be cat to the byte.
@@ -1462,7 +1462,7 @@ r=$?
 tail -1 "$o"
 
 # ------------------------------------------------------- the status charm
-# every main ANSWERS its status (apps/kore/core.l's urun) instead of quitting, so
+# every main ANSWERS its status (a/kore/core.l's urun) instead of quitting, so
 # a caller staying in the image lives through a tool that fails -- the property the
 # seat hides, since the seat quits with the answer. one image, four tools whose
 # statuses are 1, 2 (a udie from deep inside), 0 and 0: the run must reach the last

@@ -8,11 +8,11 @@
 //   (md5-init b)    / (md5-feed b str)    / (md5-done b)      b an 89-byte cask
 //   (cksum-init b)  / (cksum-feed b str)  / (cksum-done b)    b a 12-byte cask
 // FIPS 180-4, RFC 1321, IEEE 802.3 and POSIX cksum, all the compact single-pass shape.
-// apps/kore's cksum, md5sum and sha256sum applets are these four plus a line of output.
-// they do not all stand on the same footing. crc32 shadows apps/gz/gz.l's gz-crcwalk and
+// a/kore's cksum, md5sum and sha256sum applets are these four plus a line of output.
+// they do not all stand on the same footing. crc32 shadows a/gz/gz.l's gz-crcwalk and
 // cksum test/digest.l's hash-ckwalk -- both polynomials are stated in love and the C
 // is held to the walk at every length, so a disagreement has a right answer. sha256 and
-// md5 shadow nothing, yet apps/sb's blob and patch ids and apps/moon's cache key rest on
+// md5 shadow nothing, yet a/sb's blob and patch ids and a/moon's cache key rest on
 // them; only the published vectors in test/digest.l and GNU coreutils in
 // test/gate/kore.sh hold them honest. the fix for that thin rope is a love sha-256.
 #include "love.h"
@@ -177,7 +177,7 @@ static lvm(lvm_md5) LvmCall(g, host_md5)
 
 // --- crc32 (IEEE 802.3: reflected, polynomial 0xedb88320) -------------------------
 // eight bytes at a time, and that is the whole difference: the byte-at-a-time walk
-// apps/gz/gz.l spells is a dependency chain one link per byte, where slicing spends eight
+// a/gz/gz.l spells is a dependency chain one link per byte, where slicing spends eight
 // independent lookups and lets the machine overlap them. gz.l cannot do this -- eight
 // tray reads per byte would cost eight times what one does.
 // the tables are built on the first call rather than laid in .rodata: 2048 entries

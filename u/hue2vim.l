@@ -1,8 +1,8 @@
-; u/hue2vim.l -- write the vim syntax for .l out of apps/vi/hue.l's class table
+; u/hue2vim.l -- write the vim syntax for .l out of a/vi/hue.l's class table
 ; and the vocabulary the running binary answers to. `make syntax` runs it, into
 ; out/syntax.vim (the Makefile), and the Makefile installs that:
 ;
-;   cat apps/vi/config.l apps/vi/hue.l u/hue2vim.l | out/love
+;   cat a/vi/config.l a/vi/hue.l u/hue2vim.l | out/love
 ;
 ; the file is built and never checked in, which is the point of the whole tool:
 ; the syntax used to carry a hand-curated copy of the vocabulary, with a comment
@@ -44,7 +44,7 @@
    (grp r) ("Love" + (cap1 (string (hue-cls r))))
 
    ; --- the vocabulary ---------------------------------------------------------
-   ; every word lane asks apps/vi/hue.l's probes -- there is no list here either.
+   ; every word lane asks a/vi/hue.l's probes -- there is no list here either.
    ; a lane claims its words and no later lane re-declares them: vim would accept
    ; the duplicate, but the file would be lying about which lane owns the name,
    ; and the painter (one tablet, earlier row wins) does not lie about it.
@@ -76,7 +76,7 @@
 
    ; --- one tag, one vim rendering ---------------------------------------------
    ; the tag set is closed at eight, so this dispatch is the whole other half of
-   ; apps/vi/hue.l's lexer. a class wanting a shape neither can say means a new
+   ; a/vi/hue.l's lexer. a class wanting a shape neither can say means a new
    ; tag, in both -- never a hand-patch here.
    stop (" \\t\\n" + (clesc hue-stop))         ; what ends a token, as a collection
    sig  (clesc hue-sigils)
@@ -152,9 +152,9 @@
 ; --- the file ------------------------------------------------------------------
    _ (line "\" vim syntax for love (.l) -- GENERATED. do not edit.")
    _ (line "\"")
-   _ (line "\"   make syntax   --   cat apps/vi/config.l apps/vi/hue.l u/hue2vim.l | out/love")
+   _ (line "\"   make syntax   --   cat a/vi/config.l a/vi/hue.l u/hue2vim.l | out/love")
    _ (line "\"")
-   _ (line "\" the source is apps/vi/hue.l's class table -- the same table pulchritude's own")
+   _ (line "\" the source is a/vi/hue.l's class table -- the same table pulchritude's own")
    _ (line "\" painter reads, so the editor in the tree and the editor outside it agree by")
    _ (line "\" construction -- plus the vocabulary the running binary answers to. this file is")
    _ (line "\" BUILT and never checked in, so a rename that moves (names ()) is picked up by")
@@ -176,7 +176,7 @@
    _ (line "\" row wins, and reversing makes the two agree.")
    _ (each (rev hue-classes) vim)
    _ (blank ())
-   _ (line "\" a close paren with nothing open is an error -- vim-only; apps/libra/lint.l is where")
+   _ (line "\" a close paren with nothing open is an error -- vim-only; a/libra/lint.l is where")
    _ (line "\" the tree actually answers that question.")
    _ (line "syn match LoveParenError \")\"")
    _ (blank ())

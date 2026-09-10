@@ -211,6 +211,6 @@
    _ (close l)
 
    _ (test_fin ())
-   _ (puts "apps/kiosko: ok -- the static web server (guard, methods, paths, types)
+   _ (puts "a/kiosko: ok -- the static web server (guard, methods, paths, types)
 ")
    0)

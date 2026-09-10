@@ -17,19 +17,19 @@
    (say1 s) (: _ (puts s) (putc 10))
 
    ; FIRST, and the order is the point: these rows' subject IS the ambient book, so they
-   ; want the one a fresh process would hand them. apps/vi/hue.l names its word lanes
+   ; want the one a fresh process would hand them. a/vi/hue.l names its word lanes
    ; `macros`/`values`/`names` and asks each -- "grammar, not the book. a list would rot; a
    ; question cannot" -- so `const` (bound to a value) and `book` (in the book) are answers
    ; about whatever else is loaded. running before anything else is the whole of what a
    ; process of its own was buying.
-   early [['vi "apps/kore/text.l" "apps/kore/u.l" "apps/kore/core.l" "apps/kore/re.l"
-           "apps/kore/sed.l" "apps/libra/lint.l" "apps/vi/config.l" "apps/vi/hue.l"
-           "apps/vi/core.l" "apps/vi/law.l"]]
+   early [['vi "a/kore/text.l" "a/kore/u.l" "a/kore/core.l" "a/kore/re.l"
+           "a/kore/sed.l" "a/libra/lint.l" "a/vi/config.l" "a/vi/hue.l"
+           "a/vi/core.l" "a/vi/law.l"]]
 
    ; a row is [name path ..]. borrow marks a path once read, so a file two rows both want
    ; loads once and splices twice -- which is what the separate processes used to pay for.
-   rows [['lux "apps/lux/core.l" "apps/lux/layout.l" "apps/lux/wire.l" "apps/lux/ewmh.l"
-          "apps/lux/manage.l" "apps/lux/keys.l" "apps/lux/config.l" "apps/lux/law.l"]
+   rows [['lux "a/lux/core.l" "a/lux/layout.l" "a/lux/wire.l" "a/lux/ewmh.l"
+          "a/lux/manage.l" "a/lux/keys.l" "a/lux/config.l" "a/lux/law.l"]
          ; LAST, and it has to be. harp's module exports `rev` -- the cycle algebra's
          ; pattern reverse -- along with stack, pure, range, cut, with and n. borrow
          ; splices a module's names into the caller's layer, so from here on `rev` is
@@ -37,7 +37,7 @@
          ; rd-forms with (rev acc) and answered 0 forms instead of 1929: not an error, a
          ; WRONG ANSWER, which a process apiece is what kept anyone from seeing. ordering
          ; is containment, not a fix -- the fix is a scope door the harness can close.
-         ['harp "apps/harp/harp.l" "apps/harp/play.l" "apps/harp/law.l"]]
+         ['harp "a/harp/harp.l" "a/harp/play.l" "a/harp/law.l"]]
 
    ; the host-nif smokes are NOT rows yet, and the blocking law is `quit`: a row that
    ; calls it ends the SHARED process, so a (quit 0) skip -- luxui's, when the box has no

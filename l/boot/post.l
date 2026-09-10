@@ -649,7 +649,7 @@
 
 
 ; glob -- fnmatch, pure love and no filesystem. the pattern law only: pathname
-; expansion (readdir, the dotfile rule at the directory scan) stays in apps/lush.l,
+; expansion (readdir, the dotfile rule at the directory scan) stays in a/lush.l,
 ; where the substrate belongs. this half is a predicate over two strings, and more than
 ; the shell asks it -- lush's case patterns, kore's find -name, the sb ignore law, the
 ; selfpack walk. selfpack runs on love0, which carries no lush: that is why this is a
@@ -1325,7 +1325,7 @@
 ;
 ; a module the boot never splices: it is registered with the rest, and each consumer opens with
 ; its own top-level (borrow 'peg), then reads the names bare off that splice -- l/holo/text.l,
-; apps/cook.l, apps/lapiz.l, apps/sat/dimacs.l. the (use ..) must be its own
+; a/cook.l, a/lapiz.l, a/sat/dimacs.l. the (use ..) must be its own
 ; top-level form: a `:` body compiles as one unit, so a use nested inside the form that reads
 ; the names runs too late to serve it.
 
@@ -1353,7 +1353,7 @@
    (many a s y n) (a s
     (s1 \ p1 \ many a s1 (s2 \ p2 \ y s2 (p1 + p2)) (_ \ y s1 p1))
     (_ \ y s ()))
-   ; --- the set the consumers kept re-deriving (apps/lapiz.l had all of these
+   ; --- the set the consumers kept re-deriving (a/lapiz.l had all of these
    ; --- under a comment reading "the combinators peg's set lacked") ------------
    (nope s y n) (n s)                                            ; the always-failing parser: alts' unit
    (notp a s y n) (a s (_ \ _ \ n s) (_ \ y s ()))              ; negative lookahead -- consumes nothing either way
@@ -1371,9 +1371,9 @@
 ; the door: (rebre p) / (reere p) compile a pattern, (rehas ns s) and
 ; (refind ns s i) run it. pure -- no i/o, no seat -- and peg's peer: a module the
 ; boot never splices, so each consumer opens with its own top-level (borrow 're).
-; grep lives on in apps/kore/re.l, which reads four names off this splice.
+; grep lives on in a/kore/re.l, which reads four names off this splice.
 ;
-; lawed in apps/kore/law.l: hand laws plus a seeded differential fuzz against an
+; lawed in a/kore/law.l: hand laws plus a seeded differential fuzz against an
 ; independent Brzozowski-derivative oracle, and grep is smoked byte-identical
 ; against GNU in `make test_kore`.
 ;
@@ -1783,7 +1783,7 @@
                             flush out)))
 
    ; --- the seat scan, the third door ---
-   ; a file that is the program seats itself: `love apps/moon/moon.l foo.c`, the installed
+   ; a file that is the program seats itself: `love a/moon/moon.l foo.c`, the installed
    ; shebang's `-l`, a catted script under its own name. no name was typed, a path was.
    ;   (fire ws)      -> (seat-word . args-after) over this invocation's line, else ()
    ;   (seatof ws a)  the same over a list handed in

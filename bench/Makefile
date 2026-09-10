@@ -149,7 +149,7 @@ raw: $(call txt,$(PRESENT))
 # solvers on PHP(5..8). Cached like the language results -- re-run only when the
 # runner or the solver changes. `make satrace` to refresh it on its own.
 SATRACE := $(BDIR)/satrace.txt
-$(SATRACE): satrace.sh $(R)/apps/sat/sat.l $(GL) | $(BDIR)
+$(SATRACE): satrace.sh $(R)/a/sat/sat.l $(GL) | $(BDIR)
 	@./satrace.sh $(TIMEOUT) > $@
 satrace: $(SATRACE)
 	@cat $(SATRACE)
@@ -208,7 +208,7 @@ ccwasm: $(GL)
 # kore's applets against busybox, uutils and GNU coreutils on one generated corpus:
 # answers (GNU the oracle -- a divergence is a bug), the fixed per-invocation start
 # cost, and the per-corpus work. Not cached and not a gate, for the same reason ccnif
-# is not: a development instrument, run while working in apps/kore/. The doc it
+# is not: a development instrument, run while working in a/kore/. The doc it
 # fills is the kore gauge. `make korebench MB=32 SAMPLES=5` for a quieter
 # reading; a lane not on PATH drops out of every table.
 MB ?= 8

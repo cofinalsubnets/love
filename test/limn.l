@@ -1,13 +1,13 @@
-; --- test/limn.l: the laws of apps/berth/limn.l, the cell painter ---
+; --- test/limn.l: the laws of a/berth/limn.l, the cell painter ---
 ; `glass` and `unfold` are cb's nifs (l/quay/nif.c) and love0 links them too, so these
-; are corpus laws. `borrow` finds apps/berth/limn.l by the filesystem walk, which the
+; are corpus laws. `borrow` finds a/berth/limn.l by the filesystem walk, which the
 ; hosted seats have; a seat without one will want a guard here.
 ;
 ;   cat test/00-init.l test/limn.l | out/love   ; exits 1 on fail
 ;
 ; the vocabulary under test: a grid of cb cells in, escapes out. origins are
 ; 0-based going in and 1-based on the wire, which is the one conversion here.
-(borrow "apps/berth/limn.l")
+(borrow "a/berth/limn.l")
 
 ; `sub?` is each gate's own here (test/host/berth.l carries the same three lines) --
 ; it searches from i; `at?` is the exact-position twin, which is what counting wants
@@ -63,7 +63,7 @@
            !(sub? f "\e[1;1H" 0)))                    ; never the home cell
 
 ; --- a blank cell is a space, so a pane always writes every cell it owns and no
-;     stale glyph can survive underneath it (apps/berth/limn.l's no-erase bargain) ---
+;     stale glyph can survive underneath it (a/berth/limn.l's no-erase bargain) ---
    _ (: s (mkscr 1 4)
         _ (scribe s "z")
         f (paint s 1 4 0 0)

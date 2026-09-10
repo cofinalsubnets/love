@@ -1,5 +1,5 @@
 #!/bin/sh
-# fat32.sh -- `love fat` and `love mkfs.vfat`, the command line over apps/fat/fat.l.
+# fat32.sh -- `love fat` and `love mkfs.vfat`, the command line over a/fat/fat.l.
 #
 # NOT test/gate/fat.sh, which is a different subject entirely: that one gates the
 # FAT CONTAINER (one file, many architectures) and

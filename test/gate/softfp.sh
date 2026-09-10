@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/softfp.sh -- the compiler runtime (apps/moon/lib/rt.c) against the hardware.
+# test/gate/softfp.sh -- the compiler runtime (a/moon/lib/rt.c) against the hardware.
 # Those __aeabi_* entries ARE double arithmetic on a v6-M board, where nothing else can
 # check them: the Pico has no second opinion on board, and a wrong low mantissa bit still
 # prints "0.1". So they are gated here, on machines that have the instruction, and held to

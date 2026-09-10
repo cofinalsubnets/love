@@ -1,10 +1,10 @@
-; --- test/fat.l: FAT32 in love (apps/fat/fat.l) over a cask device -- the same
+; --- test/fat.l: FAT32 in love (a/fat/fat.l) over a cask device -- the same
 ; module the kernel mounts on its virtio disk (rung 5), proven here where the
 ; laws run in milliseconds and mtools can sit on the other side of the format.
 ; run standalone from the repo root:
 ;   cat test/00-init.l test/fat.l | out/love
 
-(borrow "apps/fat/fat.l")
+(borrow "a/fat/fat.l")
 
 ; the device: 70000 sectors in one cask. rd answers fresh strings, wr pours.
 (: img (cask (* 70000 512))

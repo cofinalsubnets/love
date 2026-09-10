@@ -26,7 +26,7 @@
 #           shapes in one function. A lane behind on inflate and level on crc32 is
 #           losing to branches, not to loads.
 # The three compilers, ALL THREE STATIC -- that is the whole point of the pairing:
-#   mooncc : love's OWN C compiler (apps/moon/), run out of THE SHIPPED ARTIFACT's own
+#   mooncc : love's OWN C compiler (a/moon/), run out of THE SHIPPED ARTIFACT's own
 #            `mooncc` verb -- no gcc/glibc/ld anywhere: mooncc lays every .o, mksys emits
 #            the syscall leaf, our linker (l/holo/) binds.
 #   gcc-musl / clang-musl : the same translation units at the host's real -O2 cflags,
@@ -60,7 +60,7 @@
 #   build is timed once (a stable multi-second cost, and the artifact is reused);
 #   test subtracts two medians of `samples` runs each (corpus, then empty boot), default 3.
 # resolve the repo root ABSOLUTELY: the build lanes cd into it to reach the source
-# globs (l/love.c, i/*.c, apps/...), so every output/include path below must be absolute.
+# globs (l/love.c, i/*.c, a/...), so every output/include path below must be absolute.
 R=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 TIMEOUT=${1:-180}
 SAMPLES=${2:-3}
@@ -116,7 +116,7 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
   ( cd "$R" || exit 1
     for b in $love_tu; do
       $cc $CFLAGS $xf -c "l/$b.c" -o "$od/$b.o" || exit 1; done
-    $cc $CFLAGS $xf -c apps/moon/lib/moonlibc/math/am.c -o "$od/am.o" || exit 1
+    $cc $CFLAGS $xf -c a/moon/lib/moonlibc/math/am.c -o "$od/am.o" || exit 1
     for f in $host_cs; do b=$(basename "$f" .c)
       $cc $CFLAGS $xf -c "$f" -o "$od/host/$b.o" || exit 1; done
     $cc $CFLAGS $xf $LDFLAGS -o "$bin" "$od"/*.o "$od"/host/*.o ) || return 1
@@ -126,7 +126,7 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
 #    unit, mksys the syscall leaf, our linker binds. -I$ho picks up the lcat'd headers. --
 # THE COMPILER IS THE SHIPPED ARTIFACT, and it is not a preference -- it is the only
 # spelling of this lane that measures the same thing twice. mooncc's link pulls
-# apps/moon/lib/moonlibc/ MEMBER BY NEED and caches the archive under ~/.love/cache/moon,
+# a/moon/lib/moonlibc/ MEMBER BY NEED and caches the archive under ~/.love/cache/moon,
 # keyed on the compiler, its stat, AND ITS IMAGE (moon.l's mcrtkey). An image FILE puts
 # that file's stat in the key, so while the lane ran out of out/mooncc -- whose
 # .image this file's own make target rebuilt as a prerequisite -- every run missed and
@@ -151,10 +151,10 @@ build_mooncc() { # $1=binpath
     # no moonlibc object: the link owes its symbols and the driver supplies them
     # member by need, so the dead areas never arrive. ccsize/ccdead therefore
     # read mooncc's libc off the BINARY's complement, not off a moonlibc.o.
-    for f in apps/moon/lib/moonlibc/math/*.c; do b=$(basename "$f" .c)
-      mc -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
-    { cat apps/kore/text.l apps/kore/u.l apps/kore/asbook.l \
-          l/holo/elf.l l/holo/obj.l apps/moon/lib/mksys.l
+    for f in a/moon/lib/moonlibc/math/*.c; do b=$(basename "$f" .c)
+      mc -Ia/moon/lib/moonlibc/math -Ia/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
+    { cat a/kore/text.l a/kore/u.l a/kore/asbook.l \
+          l/holo/elf.l l/holo/obj.l a/moon/lib/mksys.l
       echo "((cite 'moon 'mksys-x64) \"$od/sys.o\")"; } | env LOVE_NO_IMAGE= "$SEED" || exit 1
     mc "$od"/*.o -o "$bin" ) || return 1
 }
@@ -200,7 +200,7 @@ drv_ms() { # $1=binpath $2=driver-file $3=driver-call $4=sentinel
   awk -v f="$full" -v b="$boot" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
 }
 
-# the inflate row's input, laid ONCE by the already-built host love -- apps/gz/gz.l is a
+# the inflate row's input, laid ONCE by the already-built host love -- a/gz/gz.l is a
 # module and the lane binaries have no module path, so the stream cannot be made where
 # it is used. INFN is the inflated size, handed to the nif so it allocates once.
 # if this fails the inflate row is dnf and the other two are unaffected: a missing

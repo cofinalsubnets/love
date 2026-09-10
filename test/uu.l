@@ -2237,7 +2237,7 @@
              m))))
         n))))
 
-; --- the StackSet model: apps/lux/core.l's zipper, mirrored in uu. lists are
+; --- the StackSet model: a/lux/core.l's zipper, mirrored in uu. lists are
 ; --- UniMath Combinatorics style (a vec by nat-recursion, a list = (Σ n, vec n),
 ; --- so length is literally pr1) but monomorphic at nat -- windows are nats,
 ; --- and a universe variable living only in a definition's body would strand
@@ -2339,7 +2339,7 @@
 ; --- the stack substrate: focus x up x down, a stk nonempty by construction;
 ; --- the representation vocabulary the translator targets (zmk/zfoc/zup/zdn,
 ; --- hd0/tl0, mstk). the moves themselves live in test/uuwm.l -- generated
-; --- from apps/lux/core.l by u/wm2uu.l -- and their laws + computed
+; --- from a/lux/core.l by u/wm2uu.l -- and their laws + computed
 ; --- claims in test/uuwmlaw.l (the two load after this file by sort order) ---
 (test
  (defn stk UU (total2 f nat (total2 u nlist nlist)))

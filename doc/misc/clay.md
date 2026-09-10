@@ -23,7 +23,7 @@ count is near its floor; its TRUSTED surface is not, and that is where clay pays
 -> JS backend is a second consumer of the same datum rather than a second implementation,
 and `cc-clay` gives a native leg with no C text at all.
 
-**rungs 0 through 6 have landed** (`apps/moon/clay.l`, `make test_clay`, `mx.l` +
+**rungs 0 through 6 have landed** (`a/moon/clay.l`, `make test_clay`, `mx.l` +
 `mx.h` + `kinds.h`, the order of work's rung 1 -- the five node shapes -- its rung 3, the
 nif registry, its rung 2, the preprocessor nodes, and four more node shapes plus
 `u/clay-g2.l`); the rest is unbuilt. one rung was landed and REVERTED, and it is the
@@ -31,7 +31,7 @@ one that reshaped this doc -- see §the criterion.
 
 ## the state, measured
 
-on the current tree -- `love.c` 8232 lines, `love.h` 540, `apps/moon/clay.l` 601.
+on the current tree -- `love.c` 8232 lines, `love.h` 540, `a/moon/clay.l` 601.
 re-measure these rather than quoting them; the previous figure sat here stale by 84.
 
 `make test_clay` reads **63 round-trip, 55 inexpressible, 0 unparsed, 118 files**.
@@ -234,7 +234,7 @@ name the region in a commit message instead.
    they are mostly CALL-SHAPED and need no grammar, so most of the loop is transcription
    and does not qualify. what qualifies is whatever survives rungs 5-6, and the honest
    answer today is "not obviously anything". it is also where a mistake is least visible.
-8. **the lawed injection seam** -- `cc-clay` in `apps/moon/moon.l`, sibling to `cc-parse`
+8. **the lawed injection seam** -- `cc-clay` in `a/moon/moon.l`, sibling to `cc-parse`
    (`moon.l:128`): clay in, `clay-ok?`, `clay-tables`, `cgen-obj` (`gen.l:6141`). this is
    what makes clay a frontend target OTHER MODULES can share, and it enables G3's third
    leg. `clay-tables` derives `stag` + `sigs`, REUSING `playout` (`parse.l:576`) rather
@@ -257,7 +257,7 @@ these were ranked by purity and are transcription targets. §the parse is enough
   FUZZES love's limbs against it, and putting the IMPLEMENTATION into Rocq is still the
   largest single verification step this plan offers -- but that step is `clay2coq` over
   the PARSE, not a `.l` transcription. and it was never byte-exact anyway:
-  `apps/moon/cpp.l` leaves `__SIZEOF_INT128__` undefined, so mooncc-built love.c takes the
+  `a/moon/cpp.l` leaves `__SIZEOF_INT128__` undefined, so mooncc-built love.c takes the
   32-bit limb path and gcc-built takes the 64-bit one.
 * ~~**dtoa**~~ -- SETTLED the other way: the printer moved into lisp (`l/boot/post.l`), and
   `dg_*` + `ai_dtoa2` went with it. love has bignums, so the digit arrays and their x2/x5
@@ -356,7 +356,7 @@ segfaulted for every |x| >= 2^19), `68ee440a` (u64->double converted signed, 160
 `make test` is the DEV gate (~20s, every edit) -- host + love0 must BOTH print the zz-fin
 summary, love0 exactly twice. `make test_slow` is the MERGE gate, before publishing only.
 between them, the individual `test_*` covering what you touched. `out/love
-apps/libra/libra.l <file>` on every .l -- silence is clean. never assert on `(show x)` as a
+a/libra/libra.l <file>` on every .l -- silence is clean. never assert on `(show x)` as a
 value test. and watch the clock: a generator that crawls is a bug announcing itself.
 
 ## what stays trusted, honestly
@@ -368,7 +368,7 @@ tells about moon. state it this way or not at all.
 
 ## what has landed
 
-0. **name it and law it.** `apps/moon/clay.l`, a registered module (`(borrow 'clay)`). the
+0. **name it and law it.** `a/moon/clay.l`, a registered module (`(borrow 'clay)`). the
    node grammar as data (`clay-tags`, the live roster): top `prog fn proto gdecl xdecl tdef
    note edef sdef`; stmt `blk decl sdecl ret if while for do switch case dflt brk cont goto
    lbl expr nop asm`; expr `num flo str var bin un asn rmw post cond comma call deref addr

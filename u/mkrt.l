@@ -73,12 +73,12 @@
           ; THE PARENT'S OWN RESIDUE GOES BESIDE THEM, never after the wait: waiting
           ; first spends the children's cores and then runs one share alone, which is
           ; half the width for the whole second half.
-          _ (rtwarm "apps/moon/" ts 'linux () w 0)
+          _ (rtwarm "a/moon/" ts 'linux () w 0)
           (foldl (_ \ wait) 0 ps)))
    (rt-kids rtwarm ts w i acc)
     (? (w <= i) acc
        (: p (fork 0)
-          (? (p = 0) (rtwarm "apps/moon/" ts 'linux () w i, quit 0)
+          (? (p = 0) (rtwarm "a/moon/" ts 'linux () w i, quit 0)
              (0 < p) (rt-kids rtwarm ts w (i + 1) (p . acc))
              (rt-kids rtwarm ts w (i + 1) acc))))
 
@@ -100,8 +100,8 @@
        rtarch (cite 'moon 'rtarch)
        rtwarm (cite 'moon 'rtwarm)
        objelf (cite 'holo 'objelf)
-       cid (rtcid "apps/moon/")
-       _ (!(string? cid) ? (rt-die "no apps/moon/ slice to hash -- run from the tree root"))
+       cid (rtcid "a/moon/")
+       _ (!(string? cid) ? (rt-die "no a/moon/ slice to hash -- run from the tree root"))
        ; through rtarch, so the runtime cache serves a repeat build (~instant)
        ; and only a real slice or compiler change recompiles the members --
        ; without this every seed and rebake paid three full runtime compiles.
@@ -109,7 +109,7 @@
        _ (rt-fan rtwarm cd '(x64 a64 rv64))
        ; deflated: ~1.5 MB of archive across the three ISAs becomes ~210 kB,
        ; and rtcarried pays one inflate for the ISA it wants.
-       (one tgt) (: a (rtarch "apps/moon/" tgt 'linux ())
+       (one tgt) (: a (rtarch "a/moon/" tgt 'linux ())
                     _ (!(string? a) ? (rt-die (show tgt + ": no archive (a member refused?)")))
                     z (deflate a)
                     _ (!(string? z) ? (rt-die (show tgt + ": deflate refused the archive")))
