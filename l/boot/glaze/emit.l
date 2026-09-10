@@ -1270,6 +1270,9 @@
    ; cgir: an arith expr e over params ps -> IR ops accumulating in acc, a param fetched from its Sp
    ; slot. nested operands ride the machine stack, ? gets fresh mint labels, and one deopt label is
    ; shared. serves both the leaf (ps one param) and the n-ary lane.
+   ; cgir and cgvir read every op by NAME and never consult shd: they are safe only because
+   ; amble-ok? declines a frame that rebinds one, so a shadowed loop reaches bytecode instead.
+   ; loosen that gate and these arms take the op over the binding.
    (cgir tgt ps e)
     (: A (greg tgt 'acc) T (greg tgt 'tmp)
        (bin a b fin) ((cgir tgt ps a) + [['push A]] + (cgir tgt ps b) + fin)
