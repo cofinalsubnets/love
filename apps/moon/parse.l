@@ -1443,10 +1443,11 @@
         (: (items ts2 acc)
             (? (peekp ts2 "}") [['init (dbuild (rev acc))] >ts2]
                (: it (pinititem ps ts2)
+                  (rcat l a) (? !(two? l) a (rcat >l (<l . a)))
                   (? !(two? it) ()
-                     (: elem <it ts3 <>it
-                        (? (peekp ts3 ",") (items >ts3 (elem . acc))
-                           (peekp ts3 "}") [['init (dbuild (rev (elem . acc)))] >ts3]
+                     (: es <it ts3 <>it
+                        (? (peekp ts3 ",") (items >ts3 (rcat es acc))
+                           (peekp ts3 "}") [['init (dbuild (rev (rcat es acc)))] >ts3]
                            ())))))
            (items >ts ()))
        ; a scalar initializer that folds is its number -- `(Bits>>3)`-style macro
@@ -1526,10 +1527,18 @@
            (? !(idat? t2) ()
               (pdesigs ps >t2 (['f (tkv <t2)] . acc))))
        (peekp ts "[")
-        (: er (thenw (pexpr ps >ts) "]")             ; a designator index: any const-expr ([KMint]=.., [2]=..)
+        (: er (pexpr ps >ts)                         ; a designator index: any const-expr ([KMint]=.., [2]=..)
            (? !(two? er) ()
-              (: n (cfold <er)
-                 (? (charm? n) (pdesigs ps <>er (['i n] . acc)) ()))))
+              (peekp <>er "...")                     ; gcc's range designator: one item per index
+               (: e2 (thenw (pexpr ps ><>er) "]")
+                  n (cfold <er)
+                  m (? (two? e2) (cfold <e2) ())
+                  (? !(two? e2) ()
+                     !(charm? n && charm? m) ()
+                     (pdesigs ps <>e2 (['r n m] . acc))))
+              (: r2 (want <>er "]")
+                 n (cfold <er)
+                 (? !(two? r2) () (charm? n) (pdesigs ps r2 (['i n] . acc)) ()))))
        !(two? acc) ()
        (: r (want ts "=")
           (? (two? r) [(rev acc) r] ())))
@@ -1552,14 +1561,27 @@
                 sub (dbuild subs)
                 node (? (!(two? >subs) && !(two? <<subs)) <sub ['init sub])
                 ([(? (= <h 'f) 'dfield 'didx) <>h node] . dbuild <>gr)))))
-   (pinititem ps ts)                                 ; -> ((path value) rest) | ()
+   ; -> (((path value)..) rest) | () -- a LIST, because a range designator is one item
+   ; per index. gcc takes a range as an array designator only, and only alone, which
+   ; is the whole of what the kernel writes; capped, so a wide one refuses rather than
+   ; imaging thousands of elements in silence
+   (rng1? p) (two? p && !(two? >p) && two? <p && (= <<p 'r))
+   (rexp lo hi v acc) (? (hi < lo) (rev acc) (rexp (lo + 1) hi v ([[['i lo]] v] . acc)))
+   (pinititem ps ts)
     (? (peekp ts "." || peekp ts "[")
         (: dr (pdesigs ps ts ())
            (? !(two? dr) ()
               (: v (pinit ps <>dr)
-                 (? (two? v) [[<dr <v] <>v] ()))))
+                 pth <dr
+                 (? !(two? v) ()
+                    (rng1? pth)
+                     (: lo <><pth hi <>><pth
+                        (? (hi < lo) (blame ts "an empty range designator")
+                           (1024 < (hi - lo)) (blame ts "range designator too wide")
+                           [(rexp lo hi <v ()) <>v]))
+                    [[[pth <v]] <>v]))))
        (: v (pinit ps ts)
-          (? (two? v) [[() <v] <>v] ())))
+          (? (two? v) [[[() <v]] <>v] ())))
 
    ; a constant-expression folder (for _Static_assert): an integer | () if the
    ; expression is not a compile-time constant. sizeof/enum already folded to num.

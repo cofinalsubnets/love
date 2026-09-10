@@ -1703,6 +1703,19 @@
         (? (t32? g) (mkv 'double 'r0 '((li r0 0) (li r1 2146959360) (movqxr f0 r0)))
            (mkv 'double 'r0 '((li r0 9221120237041090560) (movqxr f0 r0))))
        (bi = "__builtin_expect") (cgexpr g env <args ())
+       ; the frame's own two addresses, level 0 only -- above that wants a frame walk,
+       ; and a wrong answer there is a backtrace pointing at the wrong function. the
+       ; return address sits one word above the frame base on every target here (the
+       ; x64 push-rbp link and the arm/riscv lr+fp pair both lay it there). touching r4
+       ; at an offset no object claims is what keeps unframe off this function
+       (elem bi '("__builtin_return_address" "__builtin_frame_address"))
+        (: lvl (? (two? args && two? <args && (= <<args 'num)) <><args 'no)
+           fb (fbase g)
+           w (? (t32? g) 4 8)
+           (? !(= lvl 0) (nolane g (bi + " above level 0" + ontgt g))
+              (: _ (pin g 'fesc 1)
+                 (? (bi = "__builtin_frame_address") (mkv '(ptr void) 'r0 [['lean 'r0 fb 0]])
+                    (mkv '(ptr void) 'r0 [['ld 'r0 fb w]])))))
        ; a prefetch is a hint: the address is evaluated for its effects and no insn
        ; is owed. the locality/rw operands are constants gcc reads and we do not
        (bi = "__builtin_prefetch") (cgexpr g env <args ())
