@@ -74,7 +74,7 @@ test_hueweb: | $(m)
 	  done; \
 	  echo "  ok   the stylesheet, and the paint changes no text"
 
-# cook's Makefile-importer suite: test/host/cook.l writes fixture Makefiles to a temp dir and
+# cook's Makefile-importer suite: t/host/cook.l writes fixture Makefiles to a temp dir and
 # runs cook on them as a subprocess, asserting over the captured output. Paths are relative
 # to the repo root, so it runs from there.
 # the SHELL pair needs the BUILT lush (a fixture sets `SHELL := out/lush` to prove
@@ -85,29 +85,29 @@ test_hueweb: | $(m)
 # `sh -> kore`, and shadowing /bin/sh costs the two .SHELLFLAGS tests.
 # Through run.sh for the summary line: the exit code alone passes a reader that stopped early.
 test_cook: | $(m)
-	@echo TEST test/host/cook.l
+	@echo TEST t/host/cook.l
 	@mkdir -p $(R)/out$(hsuf)/.bin && ln -sf ../love $(R)/out$(hsuf)/.bin/love
 	@cd $(R) && PATH="$(abspath $(R)/out$(hsuf)/.bin):$$PATH" \
-	  sh test/gate/run.sh -a cook "$(mr)" "cook tests pass" test/host/cook.l
+	  sh t/gate/run.sh -a cook "$(mr)" "cook tests pass" t/host/cook.l
 
-# tele, the autograd library (pure love over the constellation algebra): test/tele/grad.l
+# tele, the autograd library (pure love over the constellation algebra): t/tele/grad.l
 # grad-checks every op, analytic gradient vs central finite difference, so the oracle is
 # self-validating. tele loads as a user `-l` and is NOT in the corpus -- this is its gate.
 # Through run.sh for the summary line: the exit code alone passes a reader that stopped early.
 test_tele: | $(m)
-	@echo TEST test/tele/grad.l
-	@cd $(R) && sh test/gate/run.sh -a tele "$(mr) -l a/tele/tele.l" "tele tests pass" test/tele/grad.l
+	@echo TEST t/tele/grad.l
+	@cd $(R) && sh t/gate/run.sh -a tele "$(mr) -l a/tele/tele.l" "tele tests pass" t/tele/grad.l
 
 # the integration gate over that same library: a 2-8-1 MLP learns XOR, seeded so it converges
-# identically every run -- autograd + nn + optim composed into a real net. test/tele/grad.l
+# identically every run -- autograd + nn + optim composed into a real net. t/tele/grad.l
 # grad-checks the ops one at a time; this asks whether they compose. Corpus-shaped -- 00-init
-# for `assert`, zz-fin for the count -- but tele is no module, so it cannot ride the test/*.l
+# for `assert`, zz-fin for the count -- but tele is no module, so it cannot ride the t/*.l
 # glob and gets this lane instead. Same two checks as its neighbours -- exit 0 AND the summary
 # line, since a reader that stops early leaves the asserts unrun and exits 0 -- but inline
 # rather than through run.sh, because the subject is three files catted, not one handed over.
 test_xor: | $(m)
-	@echo TEST test/tele/xor.l
-	@cd $(R) && cat test/00-init.l test/tele/xor.l test/zz-fin.l > out/.test_xor.l; \
+	@echo TEST t/tele/xor.l
+	@cd $(R) && cat t/00-init.l t/tele/xor.l t/zz-fin.l > out/.test_xor.l; \
 	  $(mr) -l a/tele/tele.l out/.test_xor.l </dev/null > out/.test_xor.out 2>&1; \
 	  r=$$?; cat out/.test_xor.out; \
 	  [ $$r -eq 0 ] || { echo "FAIL test_xor (exit $$r)"; exit 1; }; \

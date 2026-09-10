@@ -54,7 +54,7 @@ static void evac_data(struct ai *g, struct ai_gcx *X) {
 // ===== generational write barrier =====
 // a minor scavenges only [minor, hp) and finds old->young edges through the rem
 // set: every edge execution mints (a map pin, a store) goes through gen_wb, so a
-// minor under a complete set is sound (test/proof/rocq/gc.v barrier_sound).
+// minor under a complete set is sound (t/proof/rocq/gc.v barrier_sound).
 // the one escape is overflow (rem_miss): a dropped entry forces the next collection
 // major, which traces from roots and needs no rem set.
 // young?: the address is the generation (no age bits) -- in [end, hp).

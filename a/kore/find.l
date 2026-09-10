@@ -15,7 +15,7 @@
 ;
 ; the walk sorts each directory. GNU hands out readdir order, which is the file
 ; system's business and not a promise anyone can repeat -- so `find | sort` is the
-; only honest way to smoke us against it, and that is what test/gate/kore.sh does.
+; only honest way to smoke us against it, and that is what t/gate/kore.sh does.
 ; sorted is also what a build wants: the same tree cuts the same image twice.
 ;
 ; symlinks are not followed (GNU's -P, the default). the `stat` nif follows, so

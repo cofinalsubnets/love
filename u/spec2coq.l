@@ -1,6 +1,6 @@
-; spec2coq: generate Coq from test/spec.l, in love.
+; spec2coq: generate Coq from t/spec.l, in love.
 ;
-; The generated half of the verification (see test/proof/rocq/spec.v for the hand-written
+; The generated half of the verification (see t/proof/rocq/spec.v for the hand-written
 ; laws -- the half a generator structurally can't do). Each top-level (assert ..)
 ; operand is `opfix`-factored (infix -> prefix) and translated to a Coq theorem
 ; closed by vm_compute, over models that together cover every exact, computable
@@ -35,7 +35,7 @@
 ; vm_compute-able, the honest misses) and the universally-quantified laws. Untranslatable asserts are
 ; skipped and counted -- never silently dropped (the trailing comment reports it).
 ; Z not nat: (3 3 3) = 3^27 would blow up unary-nat vm_compute.
-; Reads test/spec.l, writes Coq to `out`.  Run: out/love u/spec2coq.l > test/proof/rocq/gen.v
+; Reads t/spec.l, writes Coq to `out`.  Run: out/love u/spec2coq.l > t/proof/rocq/gen.v
 
 (borrow 'posix)
 (: join (foldl (+) "")                           ; join a list of strings with + (was `cat`, which shadowed the global dyadic cat)
@@ -506,7 +506,7 @@
                    (walk >fs)))
 
    _ (dot (join [
-     "(* test/proof/rocq/gen.v -- GENERATED from test/spec.l by u/spec2coq.l. Do not edit;\n"
+     "(* t/proof/rocq/gen.v -- GENERATED from t/spec.l by u/spec2coq.l. Do not edit;\n"
      "   regenerate with `make test_gen`. Each integer-comparison corpus assert is\n"
      "   translated to Coq, with its source assert shown in the comment above it.\n"
      "   The proofs are `vm_compute. reflexivity.`: every goal is a CLOSED computation,\n"
@@ -514,7 +514,7 @@
      "   2^64) to a normal form, and reflexivity checks the two results are identical.\n"
      "   A church numeral n applied to x is x ** n (`appZ`); a list/string nets the\n"
      "   sum of its elements/bytes (`asum`). The MODEL IS SHARED: this file imports\n"
-     "   test/proof/rocq/spec.v and checks against ITS definitions -- appZ/asum/aprod/amax/vscale/srep\n"
+     "   t/proof/rocq/spec.v and checks against ITS definitions -- appZ/asum/aprod/amax/vscale/srep\n"
      "   verbatim, iotaZ the Z-arg face, app_appZ proving appZ IS the nat `app` -- so the\n"
      "   generated instances and the hand-written LAWS speak one model. The defs below are\n"
      "   gen-only (no spec.v twin): amin, leqb, the TOTAL vaddt (spec.v's vadd is option-\n"
@@ -591,7 +591,7 @@
      "Definition lamp  v := match v with Vmap => true | _ => false end.\n"   ; lit? = the top region (map + the unmodeled fns/hots); among modeled kinds only Vmap qualifies
      "Definition vband v : Z := match v with Vsym => 0 | Vstr => 1 | Vz|Vflo|Vcx|Varr => 2 | Vpair => 3 | Vmap => 4 | Vunit|Vbot => 9 end.\n\n"]))
    _ (say err "spec2coq: UNMODELED asserts (seen but never proved) --\n")
-   _ (walk (forms (open "test/spec.l" "r")))
+   _ (walk (forms (open "t/spec.l" "r")))
    _ (dot ("\n(* " + show (peep nt 0 0) + " theorems generated from " + show (peep ns 0 0) + " asserts seen *)\n"))
    _ (say err $ "spec2coq: " + show (peep nt 0 0) + " translated, "
                 + show (peep ns 0 0 - peep nt 0 0) + " UNMODELED, of "

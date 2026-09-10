@@ -1,7 +1,7 @@
 // i/wasm/inle.mjs -- the serial terminal for love-wasm.wasm under node: the machine
 // runs in a worker (cpu.mjs), this thread is its console. stdin's bytes go into the shared
 // key ring, the serial line comes out on stdout, and the kernel's reset ends the run --
-// which is how test/kernel/all.l's (reset) quits the gate, as -no-reboot does under qemu.
+// which is how t/kernel/all.l's (reset) quits the gate, as -no-reboot does under qemu.
 // a tty is put in raw mode so every key reaches the machine; ctrl-] leaves. with --fb the
 // machine has a framebuffer console too, and its pixels land in a PPM once a second --
 // what a gate can look at where a browser would show the canvas. --lift names a ramfs

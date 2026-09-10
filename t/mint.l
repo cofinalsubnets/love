@@ -1,0 +1,19 @@
+; mint serials -- every mint draws from one stream (pids share it), and the serial is what
+; makes the total order total over points: symbols order by name, then interned-first, then
+; serial (creation order), so the nameless sort among themselves by when they were made.
+; the serial is also the mint's hash, so distinct mints key a map apart. (the +/* lanes a
+; symbol inherits are spec.l's; the fine dispatch cells are t/matrix.l's.)
+(: a (mint 0) b (mint 0) c (mint 0)
+ (test
+  (a < b) (b < c) (a < c) !(b < a) !(c < b)     ; strict, transitive, by creation
+  !(a = b) !(b = c)                             ; = stays identity-sharp
+  (() < a) !(a < ())                            ; the zero point sits first among the nameless
+  (a < 'q)                                      ; nameless below named (lex on "")
+  ('(1 2 3) = (map cup (sort [(. c 3) (. a 1) (. b 2)])))   ; sort sees the serials
+  ; GC stability: the order survives heap churn (serials ride the copy)
+  (: pre [(a < b) (b < c) (() < a)]
+     _ ((: (churn k) (? (< 0 k) (: _ (map (\ i (string (mint 0))) '(1 2 3 4 5 6 7 8)) (churn (- k 1))) 0)) 500)
+     (pre = [(a < b) (b < c) (() < a)]))
+  ; the serial is the mint's hash: distinct mints key a map apart, stably
+  (: t (tablet 0) _ (pin t a 'one) _ (pin t b 'two)
+     (&& ('one = (t a)) ('two = (t b)) (2 = #t)))))

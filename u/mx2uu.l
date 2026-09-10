@@ -1,8 +1,8 @@
-; u/mx2uu.l -- emit test/uumx.l: love's `+` and `*` dispatch matrices, read
+; u/mx2uu.l -- emit t/uumx.l: love's `+` and `*` dispatch matrices, read
 ; from the table (l/mx.l) and lifted to uu terms, so the band lattice is a
 ; theorem in the tree's own prover and not only in Rocq. Run on the host binary:
 ;
-;   love u/mx2uu.l > test/uumx.l        (or: make uumx)
+;   love u/mx2uu.l > t/uumx.l        (or: make uumx)
 ;
 ; the uu twin of u/mx2coq.l, and the band partition is derived the same way
 ; -- kinds grouped by row+column equality across both matrices at once -- so the
@@ -17,7 +17,7 @@
 ; indexed by arithmetic: every walk here rides `npred`, which the eager NbE prices
 ; at O(index), so a 225-long row costs 225x what a 15-long one does and the whole
 ; corpus feels it. hence mvec/mlist, nvec/nlist's shape one type up.
-; names are emitted for every kind and lane (mxKCharm, mxLaddn) so test/uumxlaw.l
+; names are emitted for every kind and lane (mxKCharm, mxLaddn) so t/uumxlaw.l
 ; can name a cell instead of counting to it. untrusted like every translator here:
 ; a wrong lift can miss a law, never fake one, and each row prints under its kind.
 ;
@@ -78,15 +78,15 @@
    (rowsof m is js) (map (i \ map (j \ lcode (cell m i j)) js) is)
 
    ; --- the header ---
-   _ (pl "; test/uumx.l -- generated from l/mx.l by u/mx2uu.l. Do not edit;")
+   _ (pl "; t/uumx.l -- generated from l/mx.l by u/mx2uu.l. Do not edit;")
    _ (pl "; refresh with `make uumx`. love's `+` and `*` dispatch matrices as uu terms:")
    _ (pl "; a kind is its index in mx.l's enum roster (which IS the dispatch lattice), a")
    _ (pl "; lane its index in appearance order, a band its class id under row+column")
    _ (pl "; equality across both matrices -- the partition u/mx2coq.l derives too, off")
    _ (pl "; the same datum, so the Rocq model and this one cannot disagree about a band.")
-   _ (pl "; test/uumxlaw.l then proves the laws OF this table -- the same love datum")
+   _ (pl "; t/uumxlaw.l then proves the laws OF this table -- the same love datum")
    _ (pl "; love.c's mx.h is laid from -- so a dispatch edit that breaks the band quotient,")
-   _ (pl "; or the mirror symmetry, fails a proof at `make test`. Substrate: test/uu.l.")
+   _ (pl "; or the mirror symmetry, fails a proof at `make test`. Substrate: t/uu.l.")
    _ (pl "")
    _ (pl "(test (elem 'vof (names ())))")
    _ (pl "")

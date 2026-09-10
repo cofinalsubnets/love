@@ -205,7 +205,7 @@ static ai_inline bool k_row_live(int fd) {
 // the door in: answer fd's row, making room for it first -- doubling from the boot rows,
 // copying, and freeing the old table unless it is the static one, there being no realloc
 // down here. NULL when there is no memory, a refusal the caller must read. the ramfs is
-// the caller, so the grow branch runs on the first open file (test/kernel/ramfs.l).
+// the caller, so the grow branch runs on the first open file (t/kernel/ramfs.l).
 static struct k_source *k_source_open(int fd) {
  if (fd < 0) return NULL;
  if (fd >= k_sources_n) {
@@ -1785,7 +1785,7 @@ static lvm(lvm_fault) {
 // main's answer, its help quits a scare, and a folded (quit 0) inside a kore
 // main was always going to arrive on its own feet.
 // unseated, the exit is the MACHINE's, as rung 3 laid it: reset. a corpus that
-// wants its own code answers it in love -- test/kernel/kore0.l pins (: (quit n) n)
+// wants its own code answers it in love -- t/kernel/kore0.l pins (: (quit n) n)
 // before the cat loads, one door deeper, and every tool then reads as its status.
 static union u const k_exit_body[] = { {lvm_task_exit} };
 // the spawned half: shut the rows this task's worn stdio names -- a pipe's write end has
@@ -2153,7 +2153,7 @@ void kmain(void) {
   // THE SESSION: a fresh writable layer, C-side (the host's run_program shape) --
   // the shell's defglobs (and the corpus stream's) land here, never in the base.
   r = ai_open_(r);
-  // rung 3: the userland. first test/00-init.l's move, for its reason: an unbound mention
+  // rung 3: the userland. first t/00-init.l's move, for its reason: an unbound mention
   // raises missing at every define that names one, and bao's file-help folds a real quit,
   // so one absent nif in the cat resets the machine at load. pin a no-op fallback for
   // whichever host nifs the cat mentions and this seat lacks -- self-retiring, since a rung

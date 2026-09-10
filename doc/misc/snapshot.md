@@ -140,7 +140,7 @@ Three seams make mid-eval dumping honest where the boot bake could assume purity
 - **Natives ride.** A live native closure's cell names its code by the code rung, and the
   blob is bytes in the segment; the woken session runs it without a compile.
 
-Smoke: test/host/bake.l (`test_hostnif`) round-trips a pinned marker through `bake` + `wake`
+Smoke: t/host/bake.l (`test_hostnif`) round-trips a pinned marker through `bake` + `wake`
 in a child process.
 
 ## the dump hash-conses

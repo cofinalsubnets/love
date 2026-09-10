@@ -14,7 +14,7 @@
 ; (rip () disp) with no symbol, a branch target (lbl n) as a number, a memory operand under a
 ; segment override as (seg fs o). the operand size w is the instruction's, 0 where the value
 ; keeps none (branches, the SSE lane with no GPR) -- the same reading the text readers make, so
-; decode and att-read agree on the bytes as.l lays (test/holo/decode.l holds both laws).
+; decode and att-read agree on the bytes as.l lays (t/holo/decode.l holds both laws).
 
 (module 'holo
 (: ;; --- bytes and fields: reads past the end answer 0, and `fin` refuses the instruction ---

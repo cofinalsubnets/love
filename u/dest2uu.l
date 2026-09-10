@@ -1,9 +1,9 @@
-; u/dest2uu.l -- emit test/uuhomgen.l: test/proto/dest.l's two generators (cv
+; u/dest2uu.l -- emit t/uuhomgen.l: t/proto/dest.l's two generators (cv
 ; the r0 protocol, ck the destination die) run on dest.l's own law-site samples,
-; the emissions lifted to uu nlist terms so test/uuhomlaw.l can prove the laws
-; of them (substrate: test/uuhom.l). Run on the host binary:
+; the emissions lifted to uu nlist terms so t/uuhomlaw.l can prove the laws
+; of them (substrate: t/uuhom.l). Run on the host binary:
 ;
-;   love u/dest2uu.l > test/uuhomgen.l        (or: make uuhomgen)
+;   love u/dest2uu.l > t/uuhomgen.l        (or: make uuhomgen)
 ;
 ; the lift: 4 nats per instruction (op d a b, 0-padded); operands parity-tagged
 ; (reg r = 2r, imm k = 2k+1); the sp shuttle idioms fold to push/pop. dest.l's
@@ -23,7 +23,7 @@
 ; and a false law stops the run rather than printing a dot into the output.
 (:: 'test (. 'assert))
 (: j (jug 0) _ (wear [in j err])
-   _ (reads (open "test/proto/dest.l" "r"))
+   _ (reads (open "t/proto/dest.l" "r"))
    _ (wear ()) ())
 
 (: regs '((r0 0) (r1 1) (r2 2) (r3 3) (r4 4) (r5 5) (r6 6) (r7 7)
@@ -97,14 +97,14 @@
           ['de5vcv (cv '(v z) e5)]   ['de5vck (ck '(v z) e5 P ())]
           ['de5bcv (cv eb e5)]       ['de5bck (ck eb e5 P ())]]
 
-   _ (puts "; test/uuhomgen.l -- generated from test/proto/dest.l by u/dest2uu.l. Do not")
+   _ (puts "; t/uuhomgen.l -- generated from t/proto/dest.l by u/dest2uu.l. Do not")
    _ (puts "\n; edit; refresh with `make uuhomgen`. The law-site programs, cv (r0 protocol)")
    _ (puts "\n; and ck (destination die), lifted to uu nlist terms -- 4 nats per instruction")
    _ (puts "\n; (op d a b), operands parity-tagged (reg r = 2r, imm k = 2k+1), frame offsets")
    _ (puts "\n; and labels coded as met, opcodes li0 mov1 ld2 st3 si4 add5 sub6 cmp7 set8")
    _ (puts "\n; br9 jmp10 label11 call12 ret13 push14 pop15 (the sp shuttle rides push/pop).")
-   _ (puts "\n; Each source form is printed over its term. Laws: test/uuhomlaw.l; substrate:")
-   _ (puts "\n; test/uuhom.l over test/uu.l (the kernel).")
+   _ (puts "\n; Each source form is printed over its term. Laws: t/uuhomlaw.l; substrate:")
+   _ (puts "\n; t/uuhom.l over t/uu.l (the kernel).")
    _ (puts "\n(test")
    _ (each progs emit1)
    _ (puts ")\n")

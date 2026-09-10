@@ -10,11 +10,11 @@
 // FIPS 180-4, RFC 1321, IEEE 802.3 and POSIX cksum, all the compact single-pass shape.
 // a/kore's cksum, md5sum and sha256sum applets are these four plus a line of output.
 // they do not all stand on the same footing. crc32 shadows a/gz/gz.l's gz-crcwalk and
-// cksum test/digest.l's hash-ckwalk -- both polynomials are stated in love and the C
+// cksum t/digest.l's hash-ckwalk -- both polynomials are stated in love and the C
 // is held to the walk at every length, so a disagreement has a right answer. sha256 and
 // md5 shadow nothing, yet a/sb's blob and patch ids and a/moon's cache key rest on
-// them; only the published vectors in test/digest.l and GNU coreutils in
-// test/gate/kore.sh hold them honest. the fix for that thin rope is a love sha-256.
+// them; only the published vectors in t/digest.l and GNU coreutils in
+// t/gate/kore.sh hold them honest. the fix for that thin rope is a love sha-256.
 #include "love.h"
 #include <stdint.h>
 #include <string.h>
@@ -288,7 +288,7 @@ static lvm(lvm_cksum) {
 // each triple below carries the state in a cask instead, so a caller feeds it a gulp
 // at a time and holds nothing. the block loops above are untouched -- one spelling of
 // each compression function, two ways in, so a streamed digest cannot drift from its
-// one-shot, and test/digest.l holds the two together at every chunking.
+// one-shot, and t/digest.l holds the two together at every chunking.
 //
 // the layout is this file's; love allocates the cask, carries it, and never reads it.
 // big-endian throughout, whatever the algorithm's own order, so the state is bytes and

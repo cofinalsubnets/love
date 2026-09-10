@@ -63,7 +63,7 @@
    (jit lam) (jitir lam 'x64)            ; (jit '(\ x E)): an arity-1 arith leaf -> the neutral-IR lane
    (argix e ps i) (atom? ps ? 0  (e = <ps) i  (argix e >ps (i + 1)))   ; a param -> its frame index
    (jitn lam) (jitnir lam 'x64)          ; (jitn '(\ p0 .. E)): arity>=2 (natn curries to saturation)
-   (jit2 lam) (jitn lam)                                                  ; arity-2 alias (self-test/auto.l)
+   (jit2 lam) (jitn lam)                                                  ; arity-2 alias (self-t/auto.l)
    (gfind p l) (atom? l ? () (p <l) <l (gfind p >l))     ; first elt matching p
    ; a blob names no address of the binary: the kind sentinels and the callout drives are read
    ; off g at run time (love.h's JkX slots), so the bytes ride any base and any image
@@ -2821,7 +2821,7 @@
 ; deliberately outside the `glaze` module: ala reads the hook via (gv 'natjit) and
 ; fires/fired? are its probe, so the three must be on the book, and a post-egg stream
 ; installs a global only by leaking a body-less `:`. the glaze aliases stay private
-; in the inner body-having `:`. the laws are test/glaze-hook.l, `make test_hook`.
+; in the inner body-having `:`. the laws are t/glaze-hook.l, `make test_hook`.
 (: fires {0}                                                              ; probe counter: closures the hook native-backed
    natjit
     (: arch love-arch                                                     ; the runtime target ('x64 / 'a64), read on the actual binary

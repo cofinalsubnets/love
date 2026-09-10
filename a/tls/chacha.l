@@ -2,7 +2,7 @@
 ;
 ; the cipher is add / xor / rotate on 32-bit words, which is exactly what a z-tray
 ; is: contiguous limbs, fixed-width two's complement, `+ - *` wrapping, the bitwise
-; five broadcasting elementwise (test/spec.l's WIDTH LAW). so there is no C here --
+; five broadcasting elementwise (t/spec.l's WIDTH LAW). so there is no C here --
 ; the arithmetic love already has is the cipher's arithmetic.
 ;
 ; the shape that makes it fast enough to be worth doing: vectorise across blocks,
@@ -16,7 +16,7 @@
 ; per-cell cost, ~14ns, not per-op overhead) -- ample for a handshake and for
 ; sb's pulls. the serving path has the C twin instead: i/tls.c's `chacha20`
 ; nif, which sits behind this interface. this file stays the oracle, and
-; test/host/tlsc.l holds the twin to it -- never the other way round.
+; t/host/tlsc.l holds the twin to it -- never the other way round.
 ; a/tls/bench.l prints the two side by side.
 ;
 ; the one-scope law eats this cipher if you let it. a body-having `:` is one

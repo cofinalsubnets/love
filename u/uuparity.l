@@ -1,5 +1,5 @@
-; u/uuparity.l -- audit test/uu.l against the published UniMath sources.
-; every name defined in test/uu.l (defn/defq/axm) must be one of:
+; u/uuparity.l -- audit t/uu.l against the published UniMath sources.
+; every name defined in t/uu.l (defn/defq/axm) must be one of:
 ;   (a) a name published in the installed UniMath package
 ;       (/usr/lib/ocaml/coq/user-contrib/UniMath, e.g. arch coq-unimath), or
 ;   (b) prefixed uu- : local glue that claims no UniMath ancestry.
@@ -12,7 +12,7 @@
 ; (a commented-out defn still counts), the shape of the python it replaced.
 (borrow 'posix)
 (: unimath "/usr/lib/ocaml/coq/user-contrib/UniMath"
-   uul "test/uu.l"
+   uul "t/uu.l"
 
    (rdf p) (: q (open p "r") t (slurp q) (close q, t))
    (dir? p) (: st (stat p) (one? st ? 0 (61440 & <>>st = 16384)))
@@ -59,7 +59,7 @@
                              (pin seen nm 1, line (eol j) (cnt + 1)))))))))
        (line 0 0))
 
-   ; test/uu.l: every (defn /(defq /(axm  occurrence, in order, dups kept
+   ; t/uu.l: every (defn /(defq /(axm  occurrence, in order, dups kept
    (uu-names s)
     (: n #s
        (lit? i t) (: k #t

@@ -67,7 +67,7 @@ export CCACHE_DISABLE=1
 [ "$(uname -m)" = x86_64 ] || { echo "ccnif: x86-64 only (mooncc emits x64)" >&2; exit 1; }
 
 rm -rf "$W"; mkdir -p "$W"
-inc="-Il -Ii -Itest/libc"
+inc="-Il -Ii -It/libc"
 # the two subjects live in two folders now
 srcof() { case $1 in hash) echo i/hash.c;; gz) echo l/gz.c;; esac; }
 

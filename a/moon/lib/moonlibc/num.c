@@ -138,7 +138,7 @@ double am_strtod(char const *, char **);
  * am_strtod is love's float reader, and the reader hands it a whole TOKEN, so
  * it skips no leading space. C's strtod owes that, and owes endptr = the
  * ORIGINAL nptr when nothing converts. doing it here keeps am.c exactly what
- * love wants -- correctly rounded and nothing else. found by test/libc/num.c.
+ * love wants -- correctly rounded and nothing else. found by t/libc/num.c.
  * the SIGN of a zero needs nothing: am_strtod gets -0.0 right on its own.
  * it did not while mooncc lowered -d as 0.0 - d (a/moon/gen.l), and a
  * wrapper that "fixed" it here would now flip the sign BACK, since -0.0 == 0.0
@@ -320,8 +320,8 @@ int fputs(char const *s, FILE *f) { size_t n = strlen(s); return fwrite(s, 1, n,
  * promised. every one of these was declared in a/moon/include/ with no body
  * anywhere, so a program calling it compiled and then died at the LINK under
  * CC=mooncc while building fine against glibc -- gnulib's progname module
- * reaches getprogname exactly that way. test/libc/'s header-completeness phase
- * (test/gate/libc.sh) is what found them and is what keeps the promise honest
+ * reaches getprogname exactly that way. t/libc/'s header-completeness phase
+ * (t/gate/libc.sh) is what found them and is what keeps the promise honest
  * from here: a name the headers declare must have a definition. ---- */
 int putchar(int c) { return fputc(c, stdout); }
 int puts(char const *s) { return fputs(s, stdout) == EOF || fputc('\n', stdout) == EOF ? EOF : 0; }

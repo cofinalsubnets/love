@@ -111,7 +111,7 @@ or broken) shows a dotted column.
 | `deforest`  | list    | sum `(k² mod p)` of the odds in `[0,N)` — map/filter/fold FUSED to one loop (the `%` keeps it O(n)) |
 | `polysum`   | list    | sum `k²` of the odds in `[0,N)` — same shape, pure-polynomial body, CLOSED to O(1) by the loop-closer |
 | `primes`    | numeric | count primes below 30000 by trial division                |
-| `bell`      | bignum  | Bell numbers in base 36 to 280 digits (port of `test/bell.l`) |
+| `bell`      | bignum  | Bell numbers in base 36 to 280 digits (port of `t/bell.l`) |
 | `strcat`    | string  | build a 4000-char string by single-char concatenation, then hash it — love glazes the O(n²) accumulator loop to a native O(n) cask-fill |
 | `strscan`   | string  | rolling-hash scan over a fixed 20000-char string (read path) |
 | `hash`      | table   | mutable hash table: 10000 sparse-int-keyed insert / lookup / update ops |
@@ -300,5 +300,5 @@ backend, guard the pure-loop benches against compile-time folding (opaque inputs
 the `closure` note above.
 
 Each love bench is concatenated after `bench.l` before being piped to `love`,
-exactly like the `test/` corpus — a top-level `:` form with no trailing body
+exactly like the `t/` corpus — a top-level `:` form with no trailing body
 leaks its bindings into global scope, so the harness names are visible.

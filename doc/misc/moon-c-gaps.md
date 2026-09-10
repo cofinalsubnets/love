@@ -53,8 +53,8 @@ its whole function; two of a name emitted one mangled label twice and every `got
 the first, in silence. the deviation it buys: gcc's `__label__` makes two blocks' `L` two
 labels, and that program refuses here.
 
-**Landed 2026-08-16** (test/cc/142-syntax.c and 138-ucn.c hold them to gcc; the refusals sit in
-test/gate/moon.sh), and the deliberate readings in them:
+**Landed 2026-08-16** (t/cc/142-syntax.c and 138-ucn.c hold them to gcc; the refusals sit in
+t/gate/moon.sh), and the deliberate readings in them:
 
 - **`_Thread_local`** (and gcc's `__thread`) is an ignorable specifier: no TLS, no threads
   (`__STDC_NO_THREADS__`), so a thread-local *is* the one static object — observationally
@@ -73,7 +73,7 @@ test/gate/moon.sh), and the deliberate readings in them:
 - **an integer where a pointer is owed** — the §4 row that took `i/main.c`'s `return 1` in
   silence and handed back address 1. `return <non-zero literal>` from a `T *` now refuses and
   says so; a cast still passes, because a cast says the program means it.
-- **`_Generic` over QUALIFIED types** (test/cc/143-genericqual.c) — the row below, and the last
+- **`_Generic` over QUALIFIED types** (t/cc/143-genericqual.c) — the row below, and the last
   program in c-testsuite that compiled clean and answered wrong.
 
 None of these is large on its own. The honest summary is that conformance here is a **ladder of
@@ -97,7 +97,7 @@ All of C89 passes. What remains is C99/C11/GNU.
 | a `##` paste that makes a macro NAME | `CAT(A,B)(x)` where `AB` is itself a macro — the pasted name is not rescanned as an invocation |
 | a register-exhausted **SSE**-class by-value argument | five float HFAs — the gp twin landed 2026-08-08 (below), this one did not |
 
-The last five are what `test_cts` found (doc/misc/moon.md); `test/gate/cts.sh` names the program
+The last five are what `test_cts` found (doc/misc/moon.md); `t/gate/cts.sh` names the program
 each one came from.
 
 ### what passes, for contrast
@@ -119,7 +119,7 @@ chars), binary literals (`0b1010`, gcc's extension and C23's spelling), `__func_
 `__typeof__` over locals, globals, struct members, dereferences and function names.
 
 **A block-scope `extern` declaration names the FILE-SCOPE object, landed 2026-08-25**
-(test/cc/154-blockextern.c, held to gcc). C11 6.2.2p4: `extern int x;` inside a function
+(t/cc/154-blockextern.c, held to gcc). C11 6.2.2p4: `extern int x;` inside a function
 declares the external object — no slot, no local name, the linker binds it. It was binding a
 LOCAL, so the body read and wrote a slot nothing else could see, and a `.o` carried no
 reference to the symbol at all. **a silent wrong answer, over a construct that reads like
@@ -129,14 +129,14 @@ function without a header. The decls hoist to the TU's top as `('xdecl ..)`, whe
 pass already reads them, and C's tentative rule lets a real definition take the entry back.
 
 **A float constant through a cast to an integer type landed 2026-08-25**
-(test/cc/153-flocast.c, held to gcc) — C11 6.6p6's one float an integer constant expression
+(t/cc/153-flocast.c, held to gcc) — C11 6.6p6's one float an integer constant expression
 may hold, truncating toward zero. It folds in BOTH places, because they are different folds:
 `cfold` (parse.l) is what an array dimension asks, and gen.l's `imgbytes` is what a static
 initializer's image asks. the parse half is the one that was answering WRONG rather than
 refusing — an unfoldable dimension reads as a VLA, so `char d[(int) 3.9]` sized 8 in silence.
 The row came off doom's `am_map.c`, which writes `((int)(-.867 * (1 << 16)))`.
 
-**The GNU builtins and the attribute positions landed 2026-08-18** (test/cc/144-gnubuiltins.c
+**The GNU builtins and the attribute positions landed 2026-08-18** (t/cc/144-gnubuiltins.c
 and 145-attrpos.c hold both to gcc):
 
 - `__builtin_offsetof` rides `nulloff`, the fold the hand-written `&((T*)0)->m` idiom already
@@ -173,7 +173,7 @@ The whole set costs **+0.081% of the instructions** compiling l/love.c (perf, 13
 in the TU, so the four arms' string compares hide behind `bib?` — a length test and one
 character. Without it the same features cost +0.128%, which is what the shape test is for.
 
-**`_Generic` and `_Alignof` landed 2026-08-14** (test/cc/136-c11.c, held to gcc). `_Generic`
+**`_Generic` and `_Alignof` landed 2026-08-14** (t/cc/136-c11.c, held to gcc). `_Generic`
 picks on the controlling expression's lvalue-converted type (`pdecay`) and lowers to the
 selected arm alone, so no other arm reaches gen — a call to an undefined function in one links
 clean. `_Alignof` answers `talign`, the door `playout` lays members with, so the operator
@@ -207,7 +207,7 @@ Four of them carry an edge worth knowing:
   `int __extension__ x;` still refuse; `sizeof(__extension__ T)` is accepted where gcc
   refuses, the one tolerance.
 - **universal character names landed 2026-08-14** in every literal face
-  (test/cc/138-ucn.c). a UCN names a CODE POINT, not a byte, and that is the whole
+  (t/cc/138-ucn.c). a UCN names a CODE POINT, not a byte, and that is the whole
   trap: `"\u00E4"` in a **narrow** string is the two utf-8 bytes `C3 A4`, where
   `"\xE4"` is the one byte `E4` — so `escseq` reports whether the escape was a UCN
   and the narrow lane encodes on that. Exactly 4 (or 8) hex digits: a short run refuses
@@ -233,7 +233,7 @@ an unknown directive let `#cmakedefine X 1` sail through, so an unconfigured tem
 compiled clean and the name it owed was simply absent.
 
 **`#line` MOVES the line number** as of 2026-08-14 — `__LINE__` and every later diagnostic
-report the mapped line, matching gcc (test/cc/137-line.c). The delta rides `macs`, the one
+report the mapped line, matching gcc (t/cc/137-line.c). The delta rides `macs`, the one
 state already threaded through every arm of `cppgo`, so no signature moved; it is applied
 where active tokens accumulate, and again on a directive's own body, which is what makes
 `#if __LINE__` right. `doinc` saves and restores it, so a header's `#line` does not follow the
@@ -260,7 +260,7 @@ stringize-diff against `gcc -dM -E` on x64/riscv64/arm-none-eabi and clang's a64
 `__LONG_MAX__` moved out of cpp into the fork, so t32 now answers `0x7fffffffL` instead of the
 64-bit lie. On top of the older rows: `__STDC__`, `__STDC_HOSTED__`, `__mooncc__`, the linux/
 unix spellings, the arch pairs, `__INT_MAX__`, `__FLT_MAX__`/`__DBL_MAX__`,
-`__SIZEOF_INT128__` on x64, `bool`/`true`/`false`. Pinned by test/cc/123-predef.c (all four
+`__SIZEOF_INT128__` on x64, `bool`/`true`/`false`. Pinned by t/cc/123-predef.c (all four
 compilers agree at 21) and the t32 `#if` checker run against arm-none-eabi-gcc.
 
 Three deliberate deviations, all in the compiler's favor of honesty:
@@ -316,7 +316,7 @@ an unqualified declaration (the common path never touches a table), and `qrun` w
 specifier run rather than taking a token span — a span by `tally` is O(the rest of the stream),
 which would have been quadratic over a TU.
 
-Held to gcc by test/cc/143-genericqual.c: 31 checks over locals, params, block scope, globals,
+Held to gcc by t/cc/143-genericqual.c: 31 checks over locals, params, block scope, globals,
 typedefs, members, array decay, `&` and `*`, and const told apart from volatile.
 
 Two deliberate readings:
@@ -375,7 +375,7 @@ C rule and **cannot** be done this way: the tag table rides out to gen and the t
 only the name, so pulling an inner tag would leave gen sizing `('struct T)` off the outer one.
 That row renames instead — the section below.
 
-Held by test/cc/147-enumscope.c, 11 checks against gcc: the escape itself, nesting, a block
+Held by t/cc/147-enumscope.c, 11 checks against gcc: the escape itself, nesting, a block
 constant over a file-scope one, a local over a block constant, the typedef arm, a tagged enum
 with a declarator, and two sequential blocks.
 
@@ -396,7 +396,7 @@ following token, and an empty operand fell through two ways:
 `subst` mints a `'pmark` token where a `##`-adjacent parameter has an empty argument (the
 variadic tail included), `paste` folds it — `pm ## x` → `x`, `x ## pm` → `x`, `pm ## pm` → `pm`
 — and a sweep drops any that met no `##`, so one can never escape into the C stream. Held to
-gcc by test/cc/149-paste.c, 10 checks over an empty right operand, an empty left, both empty, a
+gcc by t/cc/149-paste.c, 10 checks over an empty right operand, an empty left, both empty, a
 three-way paste with an empty middle, the variadic tail, and tokens on either side of the paste.
 
 ### a block-scope struct tag collided with the file-scope one — FIXED 2026-08-17
@@ -431,7 +431,7 @@ Three deliberate readings:
   so no enum tag key ever reaches gen. Only its signedness is scoped, and `'etag` rides the
   shadow list beside the constants.
 
-Held to gcc by test/cc/148-tagscope.c, 14 checks: the escape, two colliding blocks with a member
+Held to gcc by t/cc/148-tagscope.c, 14 checks: the escape, two colliding blocks with a member
 access in each (the part gen resolves late), the file-scope tag still itself, a self-referential
 inner tag, nesting, a union tag, a block typedef over a block tag, a forward reference, and two
 sequential blocks.
@@ -549,7 +549,7 @@ straight through — `(float)d == d` read true for an ordinary double **variable
 for a literal. The cast now round-trips `cvtsd2ss`/`cvtss2sd`, which is where the rounding
 becomes observable; both ops were already in the vocabulary and all six targets take it.
 
-Held by test/cc/140-fsuffix.c. The old note here said the consumer was PDCLib's `INFINITY`
+Held by t/cc/140-fsuffix.c. The old note here said the consumer was PDCLib's `INFINITY`
 spelled `(_PDCLIB_FLT_MAX * 2)` — that reading was wrong twice over: PDCLib is not this
 tree's libc (`a/moon/lib/moonlibc/` is), and we do not define `INFINITY` at all. The real
 consumer is every `float` expression in the tree.
@@ -572,7 +572,7 @@ worth remembering:
   `cbit` splits into 32-bit limbs, operates, and recombines — arithmetic, which bigs do take.
   `<<`/`>>` had already routed around the same hole through multiply and divide.
 
-Held to gcc by test/cc/139-ifexpr.c, seventeen conditions across truth, signedness, the
+Held to gcc by t/cc/139-ifexpr.c, seventeen conditions across truth, signedness, the
 conversions, truncating division, arithmetic shift and the bitwise trio. the one place gcc
 still says more: it *warns* on signed overflow in a `#if` (`0x7fffffffffffffff + 1`); we wrap
 silently and agree on the value.
@@ -730,7 +730,7 @@ float HFA aligns to ONE slot and so may straddle a d-register — `f(float, stru
 puts the struct in s1:s2 — which is why its words ride the slots one at a time. The allocator
 is a 16-bit mask (`vfpn`/`vfpm`) riding where the other seats carry an xmm count. Two new holo
 ops carry the odd slots, which have no f-register name: `movsnxr`/`movsnrx`, VMOV between a gp
-register and a NUMBERED single. The gate is `test/gate/thumb.sh`'s `f` lane, 16 differential
+register and a NUMBERED single. The gate is `t/gate/thumb.sh`'s `f` lane, 16 differential
 checks against `arm-none-eabi-gcc -mfloat-abi=hard` on both seats.
 
 **An INDIRECT call places its floats too, since 2026-09-10.** A function-pointer type is
@@ -846,12 +846,12 @@ and `_Generic` — was stale: all three land, and none of them is what the corpu
 ## external corpora
 
 **c-testsuite is wired** — `test_cts`, `test_cts_a64`, `test_cts_rv64` over
-`test/gate/cts.sh` (doc/misc/moon.md). 220 single-file programs held to the output they ship, on all
+`t/gate/cts.sh` (doc/misc/moon.md). 220 single-file programs held to the output they ship, on all
 three targets, ~60 s each, opt-in on `make dl/c-testsuite` and skipping whole without it. Its
 first run is where twelve rows of the syntax ledger above and six of the wrong-answer rows came
 from. The roster of failures lives in the gate with a cause apiece.
 
-The rest are still recommendations. `test/cc/` holds 131 gcc-differentiated files, so the
+The rest are still recommendations. `t/cc/` holds 131 gcc-differentiated files, so the
 harness exists; this is a corpus question, not an infrastructure one.
 
 - **gcc.c-torture/execute** — ~1500 self-contained self-checking files (`abort()` on failure,

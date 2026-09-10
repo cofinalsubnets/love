@@ -10,7 +10,7 @@
 ;   :w save   :q leave   :q! leave anyway   :wq   :g ADDR|SYM  go   :/ HEX|"text"  find
 ;
 ; every key is a pure step on the state and every frame a pure lay into a port, so the tool
-; gates headless (test/host/lupa.l); only lupa-run ties the tty, on cli's stage, and the
+; gates headless (t/host/lupa.l); only lupa-run ties the tty, on cli's stage, and the
 ; command line is cli's editor. the bytes never change under the cursor: an edit is a note in
 ; a tablet over the file's string, and :w lays the patched string back. the decoder is
 ; l/holo/decode.l and the two spellings l/holo/dialect.l's; another ISA joins

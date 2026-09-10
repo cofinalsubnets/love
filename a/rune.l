@@ -1,6 +1,6 @@
 ; rune -- the symbolic algebra engine (a wee CAS): exact multivariate
 ; polynomials over the integers, plus univariate arithmetic in Q[x]/(m)
-; riding the rational coin. pure love, no nifs; the gate is test/host/rune.l,
+; riding the rational coin. pure love, no nifs; the gate is t/host/rune.l,
 ; whose corpus verifies the 2026 jacobian-conjecture disproof whole
 ; (det J symbolically, the collision certificates in exact arithmetic).
 ;

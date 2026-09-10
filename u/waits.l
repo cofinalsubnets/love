@@ -63,7 +63,7 @@
      "the finalizer: a dying port's unsent run. runs inside gc, where nothing can park -- the write side's one remaining unbounded wait"]
     ["i/fd.c" "ai_fd_say" "ai_sleep"
      "a raw fd carries no write run of love's to park behind, so the busy device is waited on -- bounded by its drain"]
-    ["test/front/main.c" "ai_fd_say" "ai_sleep"
+    ["t/front/main.c" "ai_fd_say" "ai_sleep"
      "the test frontend's copy of that row, over a synthetic device whose stall arm counts down per call"]
     ["i/teensy41/main.c" "main" "ai_sleep"
      "the panic blink after a fatal shell exit -- nothing runs after it"]

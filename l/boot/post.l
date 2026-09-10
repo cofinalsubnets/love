@@ -203,7 +203,7 @@
    (count p l) (foldl (\ a x (p x ? (a + 1) a)) 0 l))
 
 ; --- assert / suite: the strict checkers, baked so they work with no harness.
-; a failure scares and the program dies; test/00-init.l's `test` records instead. ---
+; a failure scares and the program dies; t/00-init.l's `test` records instead. ---
 (:: 'assert (\ l (. 'do (map (\ e (list '? e 0 (list 'scare (list '\ 'assert) (list '\ e)))) l))))
 
 (:: 'suite (\ l (. 'do (. (. 'assert (cup l)) (list (list 'puts (cap l)) (list 'puts ": ok\n"))))))
@@ -982,8 +982,8 @@
 ; rebinds `uu` to the accessor -- (: uu (cite 'uu)) -- so the surface stays
 ; (uu 'vof), (uu 'defn), (uu 'chk), (uu 'lof), and every internal a probe away.
 ; the layer is the module boundary now: the old uu-mark/sweep trailer retired
-; with the brackets. the UniMath theorem corpus rides in test/uu.l (and the
-; test/uu*.l ladder over it), binding this surface at its head; the defn/defq/
+; with the brackets. the UniMath theorem corpus rides in t/uu.l (and the
+; t/uu*.l ladder over it), binding this surface at its head; the defn/defq/
 ; axm macros land in this layer's macro slot and ride the boot splice.
 
 ; --- the kernel: values, evaluation, conversion, checking ---
@@ -1072,7 +1072,7 @@
 
    (spine en f cas) (cas @ (a . u) (spine en (vapp f (a en)) u) f)
 
-   ; the old door, kept for every caller (chk, inf, the globals, test/uu.l): compile, then run.
+   ; the old door, kept for every caller (chk, inf, the globals, t/uu.l): compile, then run.
    vof (flip comp)
 
    ; the scrutinee is a pair, which is why this one stays a `?`: an arm reads both

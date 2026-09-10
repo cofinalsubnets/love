@@ -1,5 +1,5 @@
 ; Driver for the kernel boot gates: boot the shipped kernel under qemu with the
-; corpus named on its command line, capture the serial console (test/kernel/all.l
+; corpus named on its command line, capture the serial console (t/kernel/all.l
 ; prints the usual "N tests pass" summary, then (exit) quits qemu via
 ; isa-debug-exit), and report. There is no test kernel -- the elf door passes
 ; -append, and the esp door has love.cmd beside love.elf, firmware carrying no
@@ -45,7 +45,7 @@
            (arch = "rv64")
            ["-M" "virt"]
            ["-M" "q35" "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
-            ; the sound card, silent: test/horn.l drives i/hda.c against it
+            ; the sound card, silent: t/horn.l drives i/hda.c against it
             "-device" "intel-hda" "-device" "hda-output,audiodev=snd" "-audiodev" "none,id=snd"])
    ; the two virts carry their disk on virtio-mmio; q35 on pci
    mmio? (arch = "a64" || arch = "rv64")
@@ -70,7 +70,7 @@
    ; at all. ramfb's lands in ordinary ram, so the console paints at memory
    ; speed and the lane costs nothing.
    gfx  (? (arch = "a64") ["-device" "ramfb"] ())
-   media (? elf? ["-kernel" iso "-append" "test/kernel/all.l"]
+   media (? elf? ["-kernel" iso "-append" "t/kernel/all.l"]
             dir? (fw + below4g + gfx + ["-drive" ("format=raw,file=fat:rw:" + iso)])
             (scare 'ktest-media iso))
    ; kvm where the host can back it: 7x on this corpus (50s of TCG against 7s).
@@ -83,7 +83,7 @@
    ; the scratch disk (rung 5): a sparse raw image beside the artifact, virtio-blk
    ; to the kernel. truncate creates it and leaves an existing one's bytes alone
    ; (same size), so a marker written by one boot survives into the next -- the
-   ; persistence gate boots twice on purpose, and test/kernel/disk.l reads which
+   ; persistence gate boots twice on purpose, and t/kernel/disk.l reads which
    ; boot it is off the disk itself. the virts ride virtio-mmio, and qemu's
    ; slots default to the legacy layout -- force-legacy=false is what makes them
    ; speak version 2, the one blk.c drives.

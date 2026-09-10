@@ -104,7 +104,7 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 ;   runs at bake, `(name args)` defers
 ; - a mid-letrec check must bind: `_ (test ..)`. bare `(test ..)` is define-sugar,
 ;   so a false one never runs and passes in silence. `test` is the harness macro
-;   (test/00-init.l: records and carries on); `assert` is post.l's, and it scares
+;   (t/00-init.l: records and carries on); `assert` is post.l's, and it scares
 
 ; the working vocabulary (verified in-tree)
 ; - (show x) prints-to-string; puts/putc write; putx prints a form

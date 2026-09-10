@@ -476,7 +476,7 @@
       (: dn (xrn d) (catall ['(243) (xrex 0 dn (rn base)) '(15 16) (mem dn base disp)]))
 
    ;; -- the system lane: what a kernel says and a userland never does. every encoding below was
-   ;; taken from `llvm-mc -triple=x64 --show-encoding`, and test/holo/golden.l keeps them there.
+   ;; taken from `llvm-mc -triple=x64 --show-encoding`, and t/holo/golden.l keeps them there.
    ;;
    ;; the descriptor-table loads and invlpg are one opcode, 0F 01, told apart by the Modrm digit
    ;; -- so they ride `mem` (which takes the digit where a register number would go) with a REX

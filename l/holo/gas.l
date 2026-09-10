@@ -3,7 +3,7 @@
 ; x64, ARM on a64, riscv, thumb), lowered to the neutral IR l/holo/holo.l assembles. where
 ; text.l reads holo's own mnemonics over abstract registers, this reads what clang and gcc read,
 ; so one template serves every compiler. it encodes nothing itself: every line lands on a backend
-; row, so the encodings stay where they are gated (test/holo/golden.l). (as.l is the physical
+; row, so the encodings stay where they are gated (t/holo/golden.l). (as.l is the physical
 ; encoder over the same x64 value; this one is the inline-asm dialect front.)
 ;
 ;   (gas-text tgt src)          ; text -> IR forms, tgt one of 'x64 'a64 'rv64 'thumb2 'thumb1

@@ -1356,7 +1356,7 @@ static lvm(lvm_open) {
   // the heap and stack ride REGISTERS under ai_tco, and a seat whose open can report them
   // (inle's /proc/gauge) reads them off the struct, under a syscall that carries no g.
   // this is the write-back that makes those two rows this instant's; the other fourteen
-  // live in the struct and need nothing. test/kernel/ramfs.l holds the law.
+  // live in the struct and need nothing. t/kernel/ramfs.l holds the law.
   Pack(g);
   int fd = call_open(pv, mv);
   if (fd < 0) { rc = fd; goto fail; }

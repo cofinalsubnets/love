@@ -7,7 +7,7 @@
 // the `1:`/`1f` local labels and the size suffix all read as GNU does). so the
 // spelling lives HERE, once per operation, every call site says the operation's
 // NAME, and the clang build stays alive as the differential twin: both
-// compilers compile the same kernel from the same lines (test/gate/asmops.sh
+// compilers compile the same kernel from the same lines (t/gate/asmops.sh
 // compares the two objects op by op).
 //
 // worth knowing before editing: an operand's register spells at its C type's

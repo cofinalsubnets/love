@@ -15,7 +15,7 @@
 ; the head names the exports, so the scanner's ~30 helpers stay off the tablet;
 ; lint and salt are spliced in here rather than at the top level, where a catted
 ; libra would hand the whole session their names as well as its own.
-; `fatal?` is out because test/host/libra.l pins the gate rule against it.
+; `fatal?` is out because t/host/libra.l pins the gate rule against it.
 (module (libra libra-main libra-check libra-doc ldoc-head ldoc-md fatal?)
 (borrow 'lint)
 (borrow 'salt)

@@ -37,7 +37,7 @@ static const char boot_ai[] =
   "(borrow 'uu) (: uu (cite 'uu))"   // the library layers ride post; the uu kernel keeps its one-name surface
   "(borrow 'kanren)"
   "(borrow 'cli)"                    // the shell core, last and spliced, as i/main.c has it:
-;                                 //   read/reads/welp are reached bare (test/help.l's floor handler)
+;                                 //   read/reads/welp are reached bare (t/help.l's floor handler)
 
 // 256K: a single ai_eval can emit a lot before the page drains it -- the
 // whole test corpus (test_wasm) runs in one eval and prints ~25K of dots +

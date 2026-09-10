@@ -124,7 +124,7 @@ static lvm(lvm_connectw) {
 // the measured floor for a flat curve at 400 simultaneous clients.
 // a constant and not an operand: `listen` is 1-ary everywhere, and a second operand
 // would make every (listen port) a truthy closure, so failures would test as successes.
-// test/host/nifpark.l's law 5 knows this number -- it fills the queue to stall a connect,
+// t/host/nifpark.l's law 5 knows this number -- it fills the queue to stall a connect,
 // the only way to reach the write-direction park offline. move one and move both.
 #define ai_listen_backlog 512
 

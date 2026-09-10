@@ -2,7 +2,7 @@
 ; laid from them: nifs.h, through clay. doc/misc/clay.md rung 4.
 ;
 ; edit this file, not nifs.h -- make relays it from here, off the mx_gen roster in
-; test/test.mk. `make mx` refreshes by hand, test_clay diffs.
+; t/test.mk. `make mx` refreshes by hand, test_clay diffs.
 ;
 ; a new love name must not already be a LOCAL in l/boot/*.l: those files compile
 ; against the bare book, so a sibling of the same name shadows the nif in that whole

@@ -30,7 +30,7 @@
 ; nets nothing, so every "did it parse" answer is a one-list tested with `two?`.
 
 ; the head names the exports. `dial` and `resolve` are the door; the rest are the
-; wire-format pieces test/host/dns.l drives directly, a protocol being unit-tested.
+; wire-format pieces t/host/dns.l drives directly, a protocol being unit-tested.
 (module (dns dial resolve dns-show
          dns-answers dns-ask dns-be16 dns-conf dns-query dns-servers
          dns-hosts dns-labels resolve-in)

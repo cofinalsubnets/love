@@ -17,7 +17,7 @@
 ; backs out of anything. a map wider or taller than the screen scrolls under you.
 ;
 ; the engine is pure -- a turn is (story-key g c), a frame (story-frame g w h) into any
-; port -- so it gates headless (test/host/story.l); story-run puts it on cli's stage,
+; port -- so it gates headless (t/host/story.l); story-run puts it on cli's stage,
 ; and its keys are cli's edkey codes (arrows negative, alt letters 256 + the letter).
 ;
 ; the library: (library ROOT) lays a hall with a shelf per crew module under the root,

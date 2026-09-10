@@ -1,5 +1,5 @@
 ; a/sb/sb.l -- svalbard: the patch-set vcs (doc/misc/sb.md the interface,
-; test/patch.l + test/proof/rocq/patch.v the laws). this cut
+; t/patch.l + t/proof/rocq/patch.v the laws). this cut
 ; is the MVP's local half: `record` (working changes -> a patch in the store),
 ; `log`, `diff`; `sync` rides the same store next (patches + blobs are immutable
 ; content-addressed files, so union = copy what's missing + re-derive tips).
@@ -14,7 +14,7 @@
 ;   snap             the recorded state -- ((PATH CHASH PATCHID) ..) path-sorted
 ;   ignore           optional: one path prefix per line, atop (".sb" ".git" "out")
 ;
-; a hunk is the proven named-slot patch (test/patch.l's chg): slot = the path,
+; a hunk is the proven named-slot patch (t/patch.l's chg): slot = the path,
 ; context = the old content hash, value = the new -- () for absent (a birth or a
 ; death). patches touching disjoint paths commute (L3a), so sync's union needs
 ; no order; removal is a new patch whose hunk goes to () (the inverse-patch law:

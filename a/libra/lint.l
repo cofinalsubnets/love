@@ -33,7 +33,7 @@
 
    ; --- the config the rules read --------------------------------------------
    ; a plain tablet read with peep, never a/libra/salt.l: vi cats this file directly
-   ; (test/test.mk) and a module it had to carry along would break that.
+   ; (t/test.mk) and a module it had to carry along would break that.
    ; a switch whose default is yes -- absent means on, only an explicit 0 is off
    (lint-yes? conf k) (: v (conf k) (two? v ? (bit <v) 1))
    ; the name a token mentions: a leading ' is quote, so 'foo names foo and a

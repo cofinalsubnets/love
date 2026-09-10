@@ -1,6 +1,6 @@
 ; a/lux/law.l -- xmonad's QuickCheck properties for a/lux/core.l, in exact arithmetic,
 ; plus a seeded fuzz. Reads a/lux/core.l's names off the row that loads them both
-; (test/gates.l 'lux). Split into small independent top-level `:` forms -- each
+; (t/gates.l 'lux). Split into small independent top-level `:` forms -- each
 ; self-contained, nothing new leaks, and no single form grows big enough to stress the
 ; whole-form compiler.
 
@@ -125,7 +125,7 @@
       ; a message ||| doesn't know (shrink) delegates to the active sublayout
       ((ch-cur (lay-msg (choice [L1 full]) 'shrink z3)) 2 = 0.48)))
 
-; --- the tiling ledger (rtwinsrow, test/uulay.l: proved of the model in uu,
+; --- the tiling ledger (rtwinsrow, t/uulay.l: proved of the model in uu,
 ; --- certified by Rocq + Lean; here the same law watched on the metal):
 ; --- rt-tile's placements name the row exactly -- every window placed once,
 ; --- none invented, row order kept -- whatever the master count ---

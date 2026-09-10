@@ -4,7 +4,7 @@ A version control system whose object is a **set** of patches, not a chain of sn
 The tree is a pure function of the patch set, so order is not part of the state, "the state as
 of P" and "what I have plus P" differ only in the set you name, and a union in either direction
 just fills gaps. [`a/sb/sb.l`](../../a/sb/sb.l) is the tool, `make test_sb` the
-gate; a hunk is test/patch.l's proven `chg` at file grain (slot = path, context = old content
+gate; a hunk is t/patch.l's proven `chg` at file grain (slot = path, context = old content
 hash), and the store is content-addressed under `.sb/`.
 
 The model — the patch DAG, the derivation, the nest, refs — lives in the tool itself;

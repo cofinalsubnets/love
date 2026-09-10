@@ -870,12 +870,12 @@
 ; must precede every reader's compile -- a macro is only in the chain once its
 ; layer is spliced, and a consumer folds its refs at its own compile.
 ; the module exports no names: the macro is the surface, and it rides the splice
-; in this layer's macro slot. laws in test/pat.l.
+; in this layer's macro slot. laws in t/pat.l.
 ;
 ; (@ x pat body .. else) reads like `?` with a shape where the test goes: the
 ; first pattern that fits x runs its body with the pattern's noms bound, an odd
 ; trailing operand is the else, and no match with no else is the zero point.
-; the reader hands `@` over spaced (test/reader.l); glued it is still the tray
+; the reader hands `@` over spaced (t/reader.l); glued it is still the tray
 ; sigil, so @(1 2) never changed hands and `(@ @(a b) ..)` says both in a breath.
 ; and it is infix at `?`'s own band, n-ary like it: (x @ p b .. else) is the same form,
 ; scrutinee on the left, where a compound one spends no parens -- (vof en <t @ ..)

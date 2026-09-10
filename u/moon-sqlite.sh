@@ -252,7 +252,7 @@ fi
 
 # ---- THE CROSS DIFFERENTIAL. x86-64 is the oracle: test_moon pins it against
 # gcc, so gcc pins x64 and x64 pins the cross target -- the same ladder
-# test/gate/ccarch.sh stands on. comparing OUTPUT rather than an exit code is
+# t/gate/ccarch.sh stands on. comparing OUTPUT rather than an exit code is
 # the whole point: eight bits cannot name the query that broke.
 ref=$ho/moonsqlite/out.txt
 if [ "$target" != x64 ]; then

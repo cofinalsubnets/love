@@ -7,28 +7,28 @@ vgcore.*
 # downloaded, never built: OVMF, package sources. outside out/ so `make clean`
 # leaves it -- `make distclean` is what takes it.
 /dl/
-# test/proof/rocq/coqc build artifacts (test/proof/rocq/spec.v is checked by `make test_proof`).
-# test/proof/rocq/gen.v is GENERATED and TEST-ONLY: test_gen lays it from test/spec.l and checks it in
-# the same recipe, so a copy in the tree proves nothing the run does not. test/proof/rocq/uugen.v and
-# test/proof/lean/uugen.lean are still checked in -- they regen + re-check in seconds and the diff is
+# t/proof/rocq/coqc build artifacts (t/proof/rocq/spec.v is checked by `make test_proof`).
+# t/proof/rocq/gen.v is GENERATED and TEST-ONLY: test_gen lays it from t/spec.l and checks it in
+# the same recipe, so a copy in the tree proves nothing the run does not. t/proof/rocq/uugen.v and
+# t/proof/lean/uugen.lean are still checked in -- they regen + re-check in seconds and the diff is
 # the drift signal. Only the compiled outputs below are ignored.
-test/proof/rocq/gen.v
+t/proof/rocq/gen.v
 # (Benches are the exception -- regenerated manually, too slow for per-commit.)
-test/proof/lean/*.olean
+t/proof/lean/*.olean
 *.vo
 *.vok
 *.vos
 *.glob
-test/proof/rocq/.*.aux
+t/proof/rocq/.*.aux
 .*.cache
-# test/proof/rocq/extract.v EXTRACTS this (test_extract); oracle_drive.ml is the source driver
-test/proof/rocq/normalizer.ml
-test/proof/rocq/normalizer.mli
-test/proof/rocq/oracle_drive
+# t/proof/rocq/extract.v EXTRACTS this (test_extract); oracle_drive.ml is the source driver
+t/proof/rocq/normalizer.ml
+t/proof/rocq/normalizer.mli
+t/proof/rocq/oracle_drive
 *.cmi
 *.cmx
 *.cmo
-test/proof/rocq/*.o
+t/proof/rocq/*.o
 
 
 # python bytecode caches (bench ports) -- build artifacts, never tracked
@@ -45,5 +45,5 @@ __pycache__/
 
 # the two generated proof terms: test_uugen and test_uulean write them from the uu
 # corpus on EVERY run, so a committed copy is 810 KB nothing ever reads
-test/proof/rocq/uugen.v
-test/proof/lean/uugen.lean
+t/proof/rocq/uugen.v
+t/proof/lean/uugen.lean

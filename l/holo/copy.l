@@ -12,7 +12,7 @@
 ;
 ; the section table sets the record breaks -- objcopy starts a fresh record at each
 ; section, so a hex file carries the section shape in where its short records fall.
-; matching that is what lets test/gate/objcopy.sh be a byte comparison and not a
+; matching that is what lets t/gate/objcopy.sh be a byte comparison and not a
 ; reading of the result.
 ;
 ; loads after l/holo/link.l, whose field table, ld-write and ld-zeros it reads.

@@ -1378,7 +1378,7 @@ static ai_noinline int poll_parked(struct ai *g, uintptr_t now) {
 static ai_noinline union u *yield_sw_wait(struct ai *g, uintptr_t my_wake, int my_wait_fd, int my_events, int me_live) {
  // the syscall-free wakes first, load-bearing: a parked task whose port already
  // holds bytes is runnable over an fd with nothing left to say -- a wait built
- // while it is parked never returns and `catch` hangs (test/host/parked.l, law 2).
+ // while it is parked never returns and `catch` hangs (t/host/parked.l, law 2).
  if (wake_parked(g, ai_clock(), NULL, 0, 0)) {
   union u *n = find_runnable(g, g->tasks, ai_clock(), me_live);
   if (n) return n; }

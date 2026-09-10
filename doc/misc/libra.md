@@ -4,7 +4,7 @@ the scales. libra weighs a `.l` file two ways and they are the same weighing:
 `libra` says what is wrong with it, and `libra doc` lifts its header out as a
 document. one scanner (`a/libra/lint.l`) under both, so the gate and the doc lifter
 can never disagree about what a paren or a comment is. the tool is
-`a/libra/libra.l`, the gate `make test_hostnif` (test/host/libra.l), and
+`a/libra/libra.l`, the gate `make test_hostnif` (t/host/libra.l), and
 `make lint` runs it over every tracked `.l`.
 
 an LSP server lived here until 2026-08-16 -- `libra serve`, publishing the same
@@ -72,7 +72,7 @@ anyway: the build runs `libra doc` over each of them into `out/toolmd/*.md` and
 papel makes a site out of markdown exactly as it always has. libra reads `.l`,
 papel reads markdown, and neither learns the other's job.
 
-the gate rides `test/host/libra.l` with the rest of the verbs, and its law is
+the gate rides `t/host/libra.l` with the rest of the verbs, and its law is
 that the document keeps every LETTER of the header -- an extraction that stalls
 drops its whole tail in silence, and neither a length nor a block count would
 notice. this is rung 0 of the doc system.

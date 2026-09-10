@@ -21,7 +21,7 @@
 ; anyway. so every function is in the table at its own index, a function's address IS its
 ; index, callr is call_indirect and a jmpr (gen.l's tail call) return_call_indirect. a call
 ; clobbers only the four answer registers: a callee's locals are its own.
-; the hand lane (test/holo/wasm.l) keeps a per-arity layout, mode n instead of 'uni.
+; the hand lane (t/holo/wasm.l) keeps a per-arity layout, mode n instead of 'uni.
 
 (module 'holo
 (: ;; -- the layout: register -> local. uni: r0..r7 0..7, f0..f7 8..15, then r8..r26 fp lr,

@@ -16,7 +16,7 @@
 ; value. so (singleton 1) is a switch, (deprecated a b c) a roster, and a repeated
 ; key replaces rather than appends.
 
-; salt-file is out because test/host/salt.l is written against it: it takes the
+; salt-file is out because t/host/salt.l is written against it: it takes the
 ; path, where `salt` reads the two the environment names.
 (module (salt salt salt-all salt-one salt-has? salt-file)
 (borrow 'posix)

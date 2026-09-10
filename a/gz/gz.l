@@ -25,7 +25,7 @@
 ; a/forge.l on an input big enough to pay for loading it, and answering byte for byte
 ; what the twin answers or handing the call back. It is 2.7x on the whole coder, and it
 ; is here rather than in C for the reason the comment above it gives: `(s i)` is a VM
-; apply and the compare wants an instruction. test/gate/gzfind.l is the differential.
+; apply and the compare wants an instruction. t/gate/gzfind.l is the differential.
 ;
 ; and so does inflate, in C. `gz-puff` below is the whole of RFC 1951 and the oracle;
 ; `gz-inflate` is a door that reaches for l/gz.c's nif and falls back to it. That
@@ -33,7 +33,7 @@
 ; puff walks a canonical code one bit at a time, which is the right trade at C's per-op
 ; cost and the wrong one at love's -- building the same table in love costs 44 ms on this
 ; tarball, more than the whole C decode. Which is also why it is not a holo kernel: the
-; small kernel is the bit walk, and the bit walk is not what wins. test/host/gzc.l is the
+; small kernel is the bit walk, and the bit walk is not what wins. t/host/gzc.l is the
 ; differential, and it fuzzes, because a corrupt block is where two decoders part.
 ;
 ; the three containers are not interchangeable, and each is here for a reason a
@@ -84,7 +84,7 @@
 
    ; i/hash.c where the artifact carries it, the walk above where it does not.
    ; the fallback is not why the walk is here: it is the statement of the polynomial and
-   ; the oracle test/host/gzc.l holds the C to, and it would earn its place in a tree where
+   ; the oracle t/host/gzc.l holds the C to, and it would earn its place in a tree where
    ; every build carried every nif.
    ; `charm?`, not `?`: the crc of "" is 0, a true answer a truth test calls absent.
    (gz-crc32 s)
@@ -553,7 +553,7 @@
        ((slurp j) + ""))
    ; l/gz.c where the artifact carries it, the coder above where it does not --
    ; and the C is a twin held to the bytes, so the door changes cost and never content.
-   ; the love lane is the oracle test/host/gzc.l holds it to.
+   ; the love lane is the oracle t/host/gzc.l holds it to.
    (gz-deflate s)
     (? (gz-nif 2 gz-defprobe)
        (: r (deflate s) (? (string? r) r (gz-deflatel s)))

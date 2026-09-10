@@ -495,7 +495,7 @@
    (a64-xorpd d s) (: dn (frn d) sn (frn s) (le32 (0x2E201C00 | ((sn << 16) | ((dn << 5) | dn)))))   ; eor Vd.8B, Vd.8B, Vs.8B (zero a double when d==s; the grid's fvar-init)
 
    ;; -- the system lane: what a kernel says and a userland never does. every word below was
-   ;; taken from `llvm-mc -triple=a64 --show-encoding`, and test/holo/golden.l keeps them there.
+   ;; taken from `llvm-mc -triple=a64 --show-encoding`, and t/holo/golden.l keeps them there.
    ;;
    ;; MRS/MSR and the sys family (tlbi/ic/dc/at) are one encoding wearing four faces: the fixed
    ;; head 1101010100, an L bit (1 = read), and a 16-bit selector op0:op1:crn:crm:op2 sitting at

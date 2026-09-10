@@ -51,7 +51,7 @@ out/lib/baked.h: $(baked_l) u/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
 	@$(lcat_love) u/lcat.l > $@
-# one file as one literal: the ports and test/front paste these in expression position
+# one file as one literal: the ports and t/front paste these in expression position
 lib_h = $(patsubst l/boot/%.l,out/lib/%.h,$(wildcard l/boot/*.l))
 holo_h = out/lib/holo.h out/lib/x64.h out/lib/a64.h out/lib/rv64.h
 $(lib_h): out/lib/%.h: l/boot/%.l u/lcat.l $(love0)
@@ -490,7 +490,7 @@ distro-smoke: $(distro_img)
 
 ko = out
 
-# the kernel's verbs; its gates are test/test.mk's.
+# the kernel's verbs; its gates are t/test.mk's.
 .PHONY: kmain_o run run-$a run-sh run-headless init-container uefi
 
 # love's own mooncc, and the artifact that answers it. the compiler IS the shipped
@@ -779,7 +779,7 @@ $(k_espd)/EFI/BOOT/$(k_efiname) $(k_espd)/love.elf:
 $(k_espd)/love.cmd:
 	@echo '$(t_sh)	'$@
 	@mkdir -p $(dir $@)
-	@echo 'test/kernel/all.l' > $@
+	@echo 't/kernel/all.l' > $@
 uefi: $(ko)/esp-$a/EFI/BOOT/$(k_efiname) $(ko)/esp-$a/love.elf
 	@echo "uefi: $(ko)/esp-$a is an ESP -- copy it to a FAT32 partition, or"
 	@echo "      qemu-system-$(uname_$a) -drive format=raw,file=fat:rw:$(ko)/esp-$a ..."
@@ -788,11 +788,11 @@ uefi: $(ko)/esp-$a/EFI/BOOT/$(k_efiname) $(ko)/esp-$a/love.elf
 dl/edk2-ovmf/ovmf-code-%.fd:
 	@echo 'CURL	'$@
 	@mkdir -p dl
-	@curl -L https://github.com/osdev0/edk2-ovmf-nightly/releases/latest/download/edk2-ovmf.tar.gz | gunzip | tar -C dl -xf -
+	@curl -L https://github.com/osdev0/edk2-ovmf-nightly/releases/lat/download/edk2-ovmf.tar.gz | gunzip | tar -C dl -xf -
 	@case "$a" in \
 		a64) dd if=/dev/zero of=$@ bs=1 count=0 seek=67108864 2>/dev/null;; \
 	esac
-include $(R)/test/test.mk
+include $(R)/t/test.mk
 #
 # THE NEST: the default install is ~/.love, a self-implying home, and what lands in it
 # is the BINARY and the things a person reads -- man pages and the vim files. nothing
@@ -1071,7 +1071,7 @@ out/wasm/love-wasm.image: out/love-wasm.wasm i/wasm/cpu.mjs i/wasm/inle.mjs
 
 clean:
 	rm -rf out
-	@rm -f test/proof/rocq/*.vo test/proof/rocq/*.vok test/proof/rocq/*.vos test/proof/rocq/*.glob test/proof/rocq/.*.aux
+	@rm -f t/proof/rocq/*.vo t/proof/rocq/*.vok t/proof/rocq/*.vos t/proof/rocq/*.glob t/proof/rocq/.*.aux
 	@[ -d i/wasm ] && $(MAKE) -C i/wasm clean || :
 distclean: clean
 	rm -rf dl

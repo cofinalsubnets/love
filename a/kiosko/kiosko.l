@@ -32,7 +32,7 @@
 ; drives, and the verb. catted, an unwrapped kiosko put its whole vocabulary --
 ; `strcat`, `types`, `reply` -- on the session's book.
 
-; `gulp` is out because test/host/kiosko.l drives the cask/short-read lanes directly.
+; `gulp` is out because t/host/kiosko.l drives the cask/short-read lanes directly.
 (module (kiosko serve serve5 serve1 kiosko-main gulp)
 
 ; --- little utils -------------------------------------------------------------------

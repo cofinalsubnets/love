@@ -1,7 +1,7 @@
 ; lcat: the love source a frontend bakes, laid as C. two doors:
 ;
 ;   love u/lcat.l          > out/lib/baked.h   the full love's one header, the roster below
-;   love u/lcat.l FILE.l   > FILE.h            one file as one C string literal (the ports, test/front)
+;   love u/lcat.l FILE.l   > FILE.h            one file as one C string literal (the ports, t/front)
 ;
 ; each top-level form is re-printed via show (canonical), the forms are joined into one
 ; string, and that string is minified -- a space is dropped wherever removing it does not

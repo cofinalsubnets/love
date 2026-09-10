@@ -1,10 +1,10 @@
-; u/spl2uu.l -- emit test/uusplgen.l: test/proto/spl.l's three call-site
+; u/spl2uu.l -- emit t/uusplgen.l: t/proto/spl.l's three call-site
 ; compilers (ecall the convention, ebind the binding splice, esubst the
 ; substitution splice) run on spl.l's own samples, the threads lifted to uu
-; nlist terms so test/uuspllaw.l can prove the splice license OF the emissions
-; (substrate: test/uuhom.l's stack machine). Run on the host binary:
+; nlist terms so t/uuspllaw.l can prove the splice license OF the emissions
+; (substrate: t/uuhom.l's stack machine). Run on the host binary:
 ;
-;   love u/spl2uu.l > test/uusplgen.l        (or: make uusplgen)
+;   love u/spl2uu.l > t/uusplgen.l        (or: make uusplgen)
 ;
 ; the lift: 2 nats per op (op x), operands raw (each op knows its operand's
 ; kind); opcodes pushk0 pusha1 pushl2 pushs3 setl4 sets5 add6 emit7. spl.l's
@@ -17,7 +17,7 @@
 ; and a false law stops the run rather than printing a dot into the output.
 (:: 'test (\ l (. 'assert l)))
 (: j (jug 0) _ (wear [in j err])
-   _ (reads (open "test/proto/spl.l" "r"))
+   _ (reads (open "t/proto/spl.l" "r"))
    _ (wear ()) ())
 
 (: ops '((pushk 0) (pusha 1) (pushl 2) (pushs 3) (setl 4) (sets 5) (add 6) (emit 7))
@@ -37,13 +37,13 @@
           ['sp2subst (esubst (e2 0) (e2 1))]
           ['sp3call (ecall (e3 0) (e3 1))]  ['sp3bind (ebind (e3 0) (e3 1))]]
 
-   _ (puts "; test/uusplgen.l -- generated from test/proto/spl.l by u/spl2uu.l. Do not")
+   _ (puts "; t/uusplgen.l -- generated from t/proto/spl.l by u/spl2uu.l. Do not")
    _ (puts "\n; edit; refresh with `make uusplgen`. The call-site samples under the three")
    _ (puts "\n; compilers -- ecall (args into seats), ebind (the binding splice), esubst")
    _ (puts "\n; (the substitution splice) -- lifted to uu nlist terms, 2 nats per op (op x),")
    _ (puts "\n; opcodes pushk0 pusha1 pushl2 pushs3 setl4 sets5 add6 emit7, operands raw.")
-   _ (puts "\n; Each source op prints over its term. Laws: test/uuspllaw.l; substrate:")
-   _ (puts "\n; test/uuhom.l's stack machine over test/uu.l (the kernel).")
+   _ (puts "\n; Each source op prints over its term. Laws: t/uuspllaw.l; substrate:")
+   _ (puts "\n; t/uuhom.l's stack machine over t/uu.l (the kernel).")
    _ (puts "\n(test")
    _ (each progs emit1)
    _ (puts ")\n")

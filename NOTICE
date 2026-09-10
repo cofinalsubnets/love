@@ -7,7 +7,7 @@ love is released under 0BSD (see LICENSE).
 
 --- code ---
 
-test/uu.l, the ported section only (from "UniMath Foundations PartA")
+t/uu.l, the ported section only (from "UniMath Foundations PartA")
   Copyright (c) 2015 the UniMath Development Team.
   MIT License. https://github.com/UniMath/UniMath
   Definitions and theorem statements from Foundations/PartA.v et al, ported to

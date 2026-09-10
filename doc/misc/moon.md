@@ -148,7 +148,7 @@ trailing padding and point at nothing an array of `S` would ever reach. In a uni
 label flattens to 0, like every other member.
 
 `gen.l` never learned about any of this: a label is one more row in the stag table, which
-is the seam holding. `test/cc/141-structlabel.c` is the battery's own check — guarded on
+is the seam holding. `t/cc/141-structlabel.c` is the battery's own check — guarded on
 `__moon__`, so gcc compiles the label-free half and both compilers must still agree — and
 the gate's oracle is the same struct with the labels deleted, compiled by gcc: identical
 size, identical offsets.
@@ -255,7 +255,7 @@ the stamp, so a laid seed tree serves and an edited dev tree falls through to th
 then compiles. That is what makes the bare door ~0.2 s instead of the ~28 s member build,
 still writing nothing.
 
-Gate: `test/gate/dist.sh`'s bare leg compiles from an empty cwd with an empty HOME and
+Gate: `t/gate/dist.sh`'s bare leg compiles from an empty cwd with an empty HOME and
 holds that HOME stays empty. `cd` matters here -- from the repo root rung 1 serves and
 rung 2 is never exercised -- so a gate for the installed nest has to leave the tree.
 
@@ -410,7 +410,7 @@ The GNU statement form, in the GNU dialect: the template is what clang and gcc r
 target — AT&T on x64, ARM on a64, riscv, thumb — and `l/holo/gas.l` lowers it to the
 neutral IR the baked assembler encodes. So a header says each instruction ONCE and every
 compiler reads it (the kernel's `i/<a>/asmops.h` carry no `#ifdef __mooncc__` at all);
-no new encoder exists anywhere, every line lands on a backend row test/holo/golden.l froze.
+no new encoder exists anywhere, every line lands on a backend row t/holo/golden.l froze.
 
     asm [volatile] ("mov $40, %0" : "=r"(v) : "r"(x), "i"(3) : "memory");
     __attribute__((holo)) asm ("li %0, 40" : "=r"(v));    // holo's neutral text instead
@@ -463,7 +463,7 @@ ANSWERS its status as a charm instead of quitting, so one image compiles again a
 that failed, and a caller who holds the image pays the wake once for a whole build. `moon-main`
 is `(quit (moon-run as))` — every shim above keeps its contract untouched. Objects laid warm
 are byte-identical to the same compile run cold, including the ones laid after a failure;
-test/gate/moon.sh holds both halves.
+t/gate/moon.sh holds both halves.
 
 `moon-run` traps `'leave`, the u-floor's exit door (a `udie` anywhere in the compile rides it
 out carrying the status), and passes its charm through. Every OTHER condition is a genuine
@@ -483,17 +483,17 @@ never a bare `mooncc`, until `make install` refreshes the PATH binary.
 * Every pure piece is lawed in `a/moon/law.l`: lexer goldens, cpp expansions, parser ASTs
   printed and compared, layout/alignment tables, gen goldens.
 * **The differential oracle is `gcc -O0`**: same source, run both, compare stdout + exit code.
-  The battery lives in `test/cc/*.c` and ONLY grows — every bug fixed adds its regression.
+  The battery lives in `t/cc/*.c` and ONLY grows — every bug fixed adds its regression.
   Differential programs must be **UB-free**: `pick(++i,++i,++i)` is unsequenced, and gcc
   legitimately disagrees.
 * A seeded expression fuzz against gcc (`test_moonfuzz`).
 * **An OUTSIDE corpus, and its own answers** (`test_cts`, all three native targets and wasm under node): c-testsuite's
-  220 single-file programs, each held to the stdout it ships. Every `test/cc` file was written
+  220 single-file programs, each held to the stdout it ships. Every `t/cc` file was written
   here to pin a fault we had already met, so the battery says what we already know; these were
   written by people compiling other compilers, and their first run found **nine** programs
   mooncc built clean and answered wrong. All nine landed, 00219 (`_Generic` over a qualifier)
   last, so the wrong-answer roster is **empty** on all three targets and the rest is refusals,
-  rostered with a cause apiece in `test/gate/cts.sh` and kept apart. the roster is double-
+  rostered with a cause apiece in `t/gate/cts.sh` and kept apart. the roster is double-
   edged only when it is READ: five of its lines had gone stale by 2026-08-16 — four already
   fixed, and 00219 filed as a refusal when the truth was a live miscompile, which is what
   a gate nobody runs without an opt-in corpus buys you.

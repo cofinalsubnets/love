@@ -156,7 +156,7 @@
    ; ambient on purpose, never a parameter: the guard is a dynamic extent every
    ; re-entry reads -- a function body, `eval`, a dot-file, and the forks under a
    ; pipeline stage and a $( ) body (those two take it by memory copy). a plan
-   ; parameter would have to cross word.l's expansion. test/host/sh.l pins it.
+   ; parameter would have to cross word.l's expansion. t/host/sh.l pins it.
    sh-noe {0}                                  ; errexit guard depth (conds, && || arms)
    ; ambient for the same reason: the forkless $( ) captures this shell is
    ; inside, innermost first, each a (read-end . drainer) pair -- empty when none,
@@ -1269,7 +1269,7 @@
                               (? (sh-tty ()) "" (sh-leave 2))))
               (o = "+") (? use? (sh-voptext text) "")
               (sh-vstrip v o text))))
-   ; ${v#pat} ${v##pat} ${v%pat} ${v%%pat}: shortest/longest prefix/suffix strip
+   ; ${v#pat} ${v##pat} ${v%pat} ${v%%pat}: short/longest prefix/suffix strip
    (sh-patmask segs)                            ; segs -> (text . mask), quotes inert
      (foldl (\ a sg (: k <sg
                        t (? (= k 'lit) >sg
@@ -2803,7 +2803,7 @@
 ;   out/lush script.sh          ; a script file, continuations gathered
 ;   out/lush --login ..         ; a login shell: /etc/profile + ~/.profile first
 ;   out/love -l a/lush.l ..   ; the module road to the same seat
-; the gate: test/host/sh.l reads the parts bare (cat order) and asserts on the
+; the gate: t/host/sh.l reads the parts bare (cat order) and asserts on the
 ; sh-* names; the interactive loop is probed live under script(1).
 
 (module 'lush

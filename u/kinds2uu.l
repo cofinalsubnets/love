@@ -1,9 +1,9 @@
 ; u/kinds2uu.l -- the kinds-lattice analog of u/wm2uu.l: read the abstract
-; domain of test/proto/kinds.l as data and emit test/uukind.l -- the join (and its
-; num? guard) compiled into uu terms over a nat-coded carrier, so test/uukindlaw.l
+; domain of t/proto/kinds.l as data and emit t/uukind.l -- the join (and its
+; num? guard) compiled into uu terms over a nat-coded carrier, so t/uukindlaw.l
 ; proves the semilattice laws OF the actual analysis, not a hand transcription. Run:
 ;
-;   love u/kinds2uu.l > test/uukind.l        (or: make uukind)
+;   love u/kinds2uu.l > t/uukind.l        (or: make uukind)
 ;
 ; the encoding is derived from kinds.l's own `rank`: each kind symbol takes its
 ; rank as its nat code (bot 0 .. top 5), and `str` -- the incomparable branch, off
@@ -65,7 +65,7 @@
    (k2-op km ps pr resty ty) [(k2-pi ps resty) (k2-lams ps (k2-tx km (pr 1) ty))]
 
    ; --- drive: read kinds.l, lift num? and join ---
-   fs (forms (open "test/proto/kinds.l" "r"))
+   fs (forms (open "t/proto/kinds.l" "r"))
    big <(filter (\ f (two? f && <f = ':)) fs)
    ps (k2-pairs >big)
    km0 (k2-rankmap ((k2-find 'rank ps) 1))
@@ -79,12 +79,12 @@
                         pl ("   " + show <op),
                         pl ("   " + show (op 1) + close))
 
-   _ (puts "; test/uukind.l -- generated from test/proto/kinds.l by u/kinds2uu.l. Do")
+   _ (puts "; t/uukind.l -- generated from t/proto/kinds.l by u/kinds2uu.l. Do")
    _ (pl "; not edit; refresh with `make uukind`. The abstract kinds-lattice join (and")
    _ (pl "; its num? guard) compiled into uu over a nat-coded carrier, kind = its rank")
-   _ (pl "; (str the branch off the spine). test/uukindlaw.l proves the semilattice laws")
+   _ (pl "; (str the branch off the spine). t/uukindlaw.l proves the semilattice laws")
    _ (pl "; of these terms at corpus time -- a law-breaking kinds.l edit fails a check.")
-   _ (pl "; Substrate: test/uu.l (natgtb / nateqb / andb / bool_rect).")
+   _ (pl "; Substrate: t/uu.l (natgtb / nateqb / andb / bool_rect).")
    _ (pl "(test")
    _ (pdefn "numq" numq ")")
    _ (pdefn "kjoin" kjoin "))")

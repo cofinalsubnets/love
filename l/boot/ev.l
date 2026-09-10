@@ -443,7 +443,7 @@
                                                                                    ;   renames the rest fresh -> capture-free)
        (: bd2 (bsub (zip ps (take np as)) (last lam)) rest (drop np as)
           (two? rest ? (bd2 . rest) bd2))))
-   ; --- the binding splice (the license's other half; laws: test/uuspllaw.l) --------------
+   ; --- the binding splice (the license's other half; laws: t/uuspllaw.l) --------------
    ; a saturated known-lambda call with an impure arg no longer declines whole. pure args
    ; substitute as before (sl-sub). the last effectful arg substitutes too when its param is
    ; read exactly once, unconditionally, and the body is otherwise pure (sl-sub-1) -- it
@@ -644,7 +644,7 @@
     (? (lvm_ret == i || lvm_tap == i) (p2 i (peek 1 a) j)
        (lvm_tapn == i)                (p2 i (peek 1 a) (poke -1 (peek 2 a) j))
                                       (p2 lvm_jump a j)))
-   ; clauses: test/result pairs then a trailing else. a constant test folds to one branch; else emit
+   ; clauses: t/result pairs then a trailing else. a constant test folds to one branch; else emit
    ; lvm_cond -- true runs `then` + jumps to join, false falls to `rest`.
    (clauses b) (?
     (atom? b) (kim ())                                ; no else (feel usually supplies one)

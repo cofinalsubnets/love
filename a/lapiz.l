@@ -28,7 +28,7 @@
 ; that starts no other block"), `nope`/`alts`, `many1`, and the two that build a node out of a
 ; flat payload -- `pack` (fold a whole payload down to one element) and `tag` (..and make it one).
 ;
-; --- the lens laws (test/host/lapiz.l proves them) ---
+; --- the lens laws (t/host/lapiz.l proves them) ---
 ;   1. the AST is the fixed point of each surface:  (mdread (mdshow a)) = a
 ;                                                   (htread (htshow a)) = a
 ;   2. so each surface round-trips through the other, up to normalization:

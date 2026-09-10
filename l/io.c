@@ -318,7 +318,7 @@ static struct ai *noop_flush(struct ai *g) { return g; }
 
 // the charlist source's read door: walks the spine, never blocks, so a spent list is the
 // end. no buffer -- no syscall to amortize, and the spine is the run athand counts.
-// a charm outside 0..255 lands as its low byte (test/io.l's tap section).
+// a charm outside 0..255 lands as its low byte (t/io.l's tap section).
 static uintptr_t ci_athand(struct ai *g, uintptr_t n) {
  word h = ((struct ci*) g->io)->head;
  uintptr_t k = 0;
@@ -844,7 +844,7 @@ static ai_inline struct ai *ioread1sym(struct ai*g, uintptr_t d, int c) {
 // the sigil surface is p1's, and p1.l + egg.l are held to this subset so p0 can read them.
 // control flow on the C stack, values on g->sp, so no love value sits in a C local across
 // an allocation. a reader of a subset, not a validator: enforcement is the differential
-// (test/host/rdiff.l). nesting rides the C stack, so p0 is depth-bounded (~100k hosted).
+// (t/host/rdiff.l). nesting rides the C stack, so p0 is depth-bounded (~100k hosted).
 static struct ai *p0read1(struct ai *g, uintptr_t d);
 
 // a list: read datums until `)`, then fold n of them off the stack. the tail is

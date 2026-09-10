@@ -2,7 +2,7 @@
 ; the verification bridge (cf. u/uu2coq.l, the Rocq leg). Same uu.l, same
 ; dependency-closure machinery; a different kernel re-checks the same proof terms.
 ;
-; This sweeps test/uu.l: loads uu's kernel (every defn type-checked against its
+; This sweeps t/uu.l: loads uu's kernel (every defn type-checked against its
 ; stated type -- uu certifies them), reads the file as data, collects every
 ; (defn/defq nm T t), and translates the universe-safe MLTT fragment to Lean. `lean`
 ; re-checks the lot -- an independent third witness (uu, then Rocq, then Lean), so a
@@ -17,30 +17,30 @@
 ; Sigma carrier. Defs are `noncomputable` -- we certify the terms, never run them, so
 ; the code generator (which rejects bare recursors) is irrelevant.
 ;
-; Run: out/love u/uu2lean.l > test/proof/lean/uugen.lean   then  lean test/proof/lean/uugen.lean
+; Run: out/love u/uu2lean.l > t/proof/lean/uugen.lean   then  lean t/proof/lean/uugen.lean
 
 (borrow 'posix)
 ; the files read below spell their laws `test`, the corpus recorder. here they run to
 ; BUILD, and stdout is the artifact -- so bind assert's instead: silent on success,
 ; and a false law stops the run rather than printing a dot into the output.
 (:: 'test (. 'assert))
-(: _ (reads (open "test/uu.l" "r"))
-   _ (reads (open "test/uuhom.l" "r"))
-   _ (reads (open "test/uuhomgen.l" "r"))
-   _ (reads (open "test/uuhomlaw.l" "r"))
-   _ (reads (open "test/uusplgen.l" "r"))
-   _ (reads (open "test/uuspllaw.l" "r"))
-   _ (reads (open "test/uulay.l" "r"))
-   _ (reads (open "test/uupatch.l" "r"))
-   _ (reads (open "test/uuwm.l" "r"))
-   _ (reads (open "test/uuwmlaw.l" "r"))
-   _ (reads (open "test/uukind.l" "r"))
-   _ (reads (open "test/uumx.l" "r"))
-   _ (reads (open "test/uumxlaw.l" "r"))
-   _ (reads (open "test/uuval.l" "r"))
-   _ (reads (open "test/uuvalband.l" "r"))
-   _ (reads (open "test/uuvallaw.l" "r"))
-   _ (reads (open "test/uukindlaw.l" "r"))          ; load + certify uu's corpus (populates GLOB)
+(: _ (reads (open "t/uu.l" "r"))
+   _ (reads (open "t/uuhom.l" "r"))
+   _ (reads (open "t/uuhomgen.l" "r"))
+   _ (reads (open "t/uuhomlaw.l" "r"))
+   _ (reads (open "t/uusplgen.l" "r"))
+   _ (reads (open "t/uuspllaw.l" "r"))
+   _ (reads (open "t/uulay.l" "r"))
+   _ (reads (open "t/uupatch.l" "r"))
+   _ (reads (open "t/uuwm.l" "r"))
+   _ (reads (open "t/uuwmlaw.l" "r"))
+   _ (reads (open "t/uukind.l" "r"))
+   _ (reads (open "t/uumx.l" "r"))
+   _ (reads (open "t/uumxlaw.l" "r"))
+   _ (reads (open "t/uuval.l" "r"))
+   _ (reads (open "t/uuvalband.l" "r"))
+   _ (reads (open "t/uuvallaw.l" "r"))
+   _ (reads (open "t/uukindlaw.l" "r"))          ; load + certify uu's corpus (populates GLOB)
    bs (intern "\\")
    nl "\n"
    b8 "⟨"  b9 "⟩"   ; Lean's anonymous-constructor angle brackets
@@ -65,7 +65,7 @@
                            (deq? F || axq? F) (entry F . acc) acc)))
                       (rev acc))
    (app2 a b) (two? a ? (<a . app2 >a b) b)   ; not `cat` -- the local cat is the string fold
-   ents (gather (app2 (forms (open "test/uu.l" "r")) (app2 (forms (open "test/uuhom.l" "r")) (app2 (forms (open "test/uuhomgen.l" "r")) (app2 (forms (open "test/uuhomlaw.l" "r")) (app2 (forms (open "test/uusplgen.l" "r")) (app2 (forms (open "test/uuspllaw.l" "r")) (app2 (forms (open "test/uulay.l" "r")) (app2 (forms (open "test/uupatch.l" "r")) (app2 (forms (open "test/uuwm.l" "r")) (app2 (forms (open "test/uuwmlaw.l" "r")) (app2 (forms (open "test/uukind.l" "r")) (app2 (forms (open "test/uukindlaw.l" "r")) (app2 (forms (open "test/uumx.l" "r")) (app2 (forms (open "test/uumxlaw.l" "r")) (app2 (forms (open "test/uuval.l" "r")) (app2 (forms (open "test/uuvalband.l" "r")) (forms (open "test/uuvallaw.l" "r")))))))))))))))))) ())
+   ents (gather (app2 (forms (open "t/uu.l" "r")) (app2 (forms (open "t/uuhom.l" "r")) (app2 (forms (open "t/uuhomgen.l" "r")) (app2 (forms (open "t/uuhomlaw.l" "r")) (app2 (forms (open "t/uusplgen.l" "r")) (app2 (forms (open "t/uuspllaw.l" "r")) (app2 (forms (open "t/uulay.l" "r")) (app2 (forms (open "t/uupatch.l" "r")) (app2 (forms (open "t/uuwm.l" "r")) (app2 (forms (open "t/uuwmlaw.l" "r")) (app2 (forms (open "t/uukind.l" "r")) (app2 (forms (open "t/uukindlaw.l" "r")) (app2 (forms (open "t/uumx.l" "r")) (app2 (forms (open "t/uumxlaw.l" "r")) (app2 (forms (open "t/uuval.l" "r")) (app2 (forms (open "t/uuvalband.l" "r")) (forms (open "t/uuvallaw.l" "r")))))))))))))))))) ())
 
    ; the silent-no-op gate (defense in depth behind uu.l's arity-door macros):
    ; a def gathered off the file must be whole -- three operands; a paren slip
@@ -201,11 +201,11 @@
    exports (foldr (\ e a (? (peep keep (e 1) 0) (e . a) a)) () ents)
 
    _ (dot (lines [
-      "/- test/proof/lean/uugen.lean -- GENERATED from test/uu.l by u/uu2lean.l. Do not edit;"
+      "/- t/proof/lean/uugen.lean -- GENERATED from t/uu.l by u/uu2lean.l. Do not edit;"
       "   regenerate with `make test_uulean`. The SAME uu proof terms Rocq certifies"
-      "   (test/proof/rocq/uugen.v) re-checked by a SECOND independent kernel, Lean 4 -- so each law"
+      "   (t/proof/rocq/uugen.v) re-checked by a SECOND independent kernel, Lean 4 -- so each law"
       "   is agreed by two unrelated implementations (the de Bruijn criterion, diversified)."
-      "   uu's kernel type-checked each term against its theorem (test/uu.l, green under"
+      "   uu's kernel type-checked each term against its theorem (t/uu.l, green under"
       "   `make test`); this is the same term in Lean. Lean gives structure-eta and universe"
       "   polymorphism for free; `paths` is the Type-valued Id type (Lean's Eq is Prop) so a"
       "   path can be a Sigma carrier. Only the univalence tower (an axm) is skipped, on its"

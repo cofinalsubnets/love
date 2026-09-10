@@ -38,9 +38,9 @@
    ; --- the wanted ops and their emitted names. zmk/zfoc are not wanted:
    ;     they are the representation vocabulary the rules target (a generated
    ;     zfoc would be (lam z (zfoc z)), a self-reference) -- they live in
-   ;     test/uu.l's substrate. the name map is a slot so a driver can emit
+   ;     t/uu.l's substrate. the name map is a slot so a driver can emit
    ;     under gen-* names (the gate's bridges) or the model's own names
-   ;     (stage 5's test/uuwm.l) ---
+   ;     (stage 5's t/uuwm.l) ---
    w2-want '(zrow zrev zfocup zfocdn zswapup zswapdn zmaster zins znub zdel)
    w2-gmap '((zrow gen-zrow) (zrev gen-zrev)
              (zfocup gen-zfocup) (zfocdn gen-zfocdn) (zswapup gen-zswapup)

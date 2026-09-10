@@ -123,7 +123,7 @@
    ; that is megabytes held to be hashed. tar-hash is the same archive fed through a
    ; resumable sha-256 (i/hash.c) a bufferful at a time: the header, then the file's
    ; bytes read straight off 'path, then the pad -- so the peak is one cask and not one
-   ; archive. It answers what (sha256 (tar-pack es)) answers, and test/gate/targz.sh
+   ; archive. It answers what (sha256 (tar-pack es)) answers, and t/gate/targz.sh
    ; holds the two together over a tree with the awkward shapes in it.
    ; it reads what the header says. a file that moved between the walk's stat and
    ; this read would put a body of one length under a header of another, so a short

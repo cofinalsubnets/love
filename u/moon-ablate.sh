@@ -19,8 +19,8 @@ command -v perf >/dev/null || { echo "moon-ablate: no perf here"; exit 1; }
 
 # the corpus as ONE file, fed by REDIRECT (ccbench's law: only a seekable fd 0 gets a
 # read run; a pipe reads one byte at a time and dilutes every lane identically)
-cat test/00-init.l test/spec.l test/uu.l \
-    $(ls test/*.l | grep -vE '/(00-init|spec|glaze-x86|uu)\.l$' | LC_ALL=C sort) \
+cat t/00-init.l t/spec.l t/uu.l \
+    $(ls t/*.l | grep -vE '/(00-init|spec|glaze-x86|uu)\.l$' | LC_ALL=C sort) \
     > "$WORK/corpus.l"
 
 # perf medians for one binary: EV1=cycles EV2=instructions, corpus minus boot

@@ -19,7 +19,7 @@
 ; does not happen and b lays at zero extent. a zero-extent berth is still in the list,
 ; wearing (id row col 0 0): ask wharf-show?, never whether the rectangle nets nothing.
 ;
-; two laws hold of every lay, and test/host/wharf.l checks them over a spread of plans
+; two laws hold of every lay, and t/host/wharf.l checks them over a spread of plans
 ; and sizes rather than trusting the arithmetic: every rectangle sits inside the wharf,
 ; and no two overlap. the spans are half-open, so a zero-extent berth overlaps nothing
 ; -- including itself -- and neither law has to except it.

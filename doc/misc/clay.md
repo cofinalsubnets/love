@@ -86,7 +86,7 @@ so: before proposing a region, name the repetition. if there is none, the answer
 the plan's payoff is VERIFICATION, and for that purpose a region does not need to be
 authored in clay at all -- `cparse` already hands back a faithful clay term. measured on
 the α cluster: **10 of 10 functions round-trip C -> clay -> C with no authoring**, which is
-G1's own criterion applied to a region rather than to `test/cc/`.
+G1's own criterion applied to a region rather than to `t/cc/`.
 
 the objection that killed the authored version is that a parse arrives POST-CPP: `long`
 for `word`, `92` for `'\\'`, `((struct ai_chain *) a)->a` for `A(a)`, and `#if ai_tco`
@@ -249,11 +249,11 @@ these were ranked by purity and are transcription targets. §the parse is enough
 `clay2coq` can have all of them TODAY through `(cparse ..)`, with no rung spent:
 
 * **the α-equivalence cluster** -- `salpha`/`shash` and the beta bridge. converted, then
-  reverted; the record is in §the criterion. `test/spec.l` §comparing-functions and
-  §reduction pin its laws, `test/proof/rocq/spec.v` sits under them, and the parse hands
+  reverted; the record is in §the criterion. `t/spec.l` §comparing-functions and
+  §reduction pin its laws, `t/proof/rocq/spec.v` sits under them, and the parse hands
   `clay2coq` the term.
 * **the bignum magnitude helpers** -- the raw limb primitives, operand loading, resumable
-  multiply. `test/proof/rocq/big.v` already models the lane against stdlib `Z` and `big_drive`
+  multiply. `t/proof/rocq/big.v` already models the lane against stdlib `Z` and `big_drive`
   FUZZES love's limbs against it, and putting the IMPLEMENTATION into Rocq is still the
   largest single verification step this plan offers -- but that step is `clay2coq` over
   the PARSE, not a `.l` transcription. and it was never byte-exact anyway:
@@ -314,7 +314,7 @@ why `vbin_fill` earns its place even though it comes later.
 
 * **G1 faithfulness** -- `(cparse (clay-show c)) == c`, compared STRUCTURALLY on the parsed
   AST, never as a string compare of the C text (twice now the printer has been the
-  thing standing in front of the bug). run over all 114 files of `test/cc/`: that
+  thing standing in front of the bug). run over all 114 files of `t/cc/`: that
   makes "expresses arbitrary C" empirical rather than claimed. currently **63 / 51 / 0**.
   emit-only additions must not move it.
 * **G2 conversion equivalence** -- `u/clay-g2.l`: parse the original translation unit
@@ -329,9 +329,9 @@ why `vbin_fill` earns its place even though it comes later.
   region that is merely being transcribed, because such a region should not be converted.
   rung 2 did the table version of this: all 512 cells reproduced before `love.c` was
   touched.
-* **G3 differential** -- the `test/gate/ulp.sh` shape: build the generated C with the system
+* **G3 differential** -- the `t/gate/ulp.sh` shape: build the generated C with the system
   cc AND with mooncc, link both into one harness, require byte-identical reports. then the
-  `test/gate/ccarch.sh` shape across a64 and rv64, because `255e8074` proved TARGETS
+  `t/gate/ccarch.sh` shape across a64 and rv64, because `255e8074` proved TARGETS
   ARE NOT REDUNDANT (with `40a5a2b7` reverted, a64 caught the bug while x86-64 and
   rv64 both answered correctly by accident). for dtoa, add the exhaustive 2^32 float
   sweep.
@@ -339,7 +339,7 @@ why `vbin_fill` earns its place even though it comes later.
   axiom-free, tracked in git, regenerated every run, skips loudly without coqc. it has no
   consumer until rung 5 lands.
 * **regeneration drift** -- the generated file is CHECKED INTO GIT and `cmp`'d by a gate
-  that fails on drift, the discipline `mx.h`, `kinds.h` and `test/proof/rocq/gen.v` already live
+  that fails on drift, the discipline `mx.h`, `kinds.h` and `t/proof/rocq/gen.v` already live
   under. there is no chicken-and-egg: regeneration is a gate, not a build step.
 * **`test_fixpoint` and `test_raw`** -- they compile `love.c` from scratch and to the byte,
   so generated C must survive both. `make vmret` on every rung touching a `lvm_`, and
@@ -377,7 +377,7 @@ tells about moon. state it this way or not at all.
    `(asn lv (bin op lv rhs))` would evaluate `lv` twice (doc/misc/moon.md, `calm?`). `clay-ok?`, a validator, because `gen.l` currently TRUSTS its input. honors the
    `gripe` protocol: 1 for a clean tree, `['gripe file line col msg]` naming the first
    offender otherwise.
-1. **`clay-show` and G1.** AST -> C text, plus the round-trip gate over `test/cc/`.
+1. **`clay-show` and G1.** AST -> C text, plus the round-trip gate over `t/cc/`.
 2. **the dispatch matrices; deleted `u/mxdump.c`.** `mx.l` is the table; `mx.h` is
    laid from it through clay and `#include`d by love.c (its first generated region);
    `u/mx2coq.l` reads the same table instead of a dump, so mx.v's bridge moved from
@@ -401,7 +401,7 @@ tells about moon. state it this way or not at all.
    answers, so the day parse.l fills `(tdef)` the member list is the one it hands back.
    a named tag does not weaken G1: a file that DEFINES the struct it names still carries
    the `(tdef)` that refuses, so a tag clay prints without defining is one the source never
-   defined either. laws in `test/host/clay.l`.
+   defined either. laws in `t/host/clay.l`.
 3. **the five node shapes, ~750 sites.** attribute SPELLINGS on `fn`'s appended 5th slot
    (`("ai_noinline" "ai_noicf")` -- love.h's macros used call-shaped, never expanded);
    `(restrict t)` beside `(const t)`, pointers only, anything else refuses; a prefix slot
@@ -409,7 +409,7 @@ tells about moon. state it this way or not at all.
    thinned); `(sassert e "msg")` for `_Static_assert`. the fifth shape cost nothing:
    `(arr t 0)` already printed the flexible member's `[]`, and `unsigned __int128` was
    `(named ..)` all along -- both now lawed. together they say a whole `lvm(..)` definition,
-   which `test/host/clay.l` proves against `lvm_add`'s exact expansion. emit-only BY
+   which `t/host/clay.l` proves against `lvm_add`'s exact expansion. emit-only BY
    NECESSITY -- `parse.l:116-121` balance-skips a trailing attribute run ("the codegen owes
    nothing"), so none can come back through a parse, exactly like `note`/`edef`/`sdef` --
    except the `ret` prefix, which parses now: a statement-position `musttail` lands in the
@@ -499,7 +499,7 @@ tells about moon. state it this way or not at all.
 * **`clay2coq.l`** -- what turns any of this into a theorem rather than a tidier build, and
   after §the parse is enough it is the piece with the most standing value in the plan: it
   wants `(cparse ..)` in front of it, not a `.l` per region, and it can have the α cluster,
-  the limb helpers and dtoa the day it exists. `test/proof/rocq/big.v` is the readiest
+  the limb helpers and dtoa the day it exists. `t/proof/rocq/big.v` is the readiest
   customer -- it already models the bignum lane against stdlib `Z` and fuzzes love's limbs
   against the extraction, and `clay2coq` is what upgrades that to a proof about the code
   that ships.

@@ -1,9 +1,9 @@
-; u/law2uu.l -- emit test/uuvallaw.l: claude.md's laws, one spelling for both
-; lanes. test/law.l quantifies each law as a lambda over a corpus (refutation);
+; u/law2uu.l -- emit t/uuvallaw.l: claude.md's laws, one spelling for both
+; lanes. t/law.l quantifies each law as a lambda over a corpus (refutation);
 ; this tool reads those rows as data and compiles the ones the measure tower can
-; state into uu obligations over test/uuval.l's model (proof). Run on the host:
+; state into uu obligations over t/uuval.l's model (proof). Run on the host:
 ;
-;   love u/law2uu.l > test/uuvallaw.l        (or: make uuvallaw)
+;   love u/law2uu.l > t/uuvallaw.l        (or: make uuvallaw)
 ;
 ; so a law is written once. edit its spelling in law.l and the obligation moves
 ; with it -- `make test_uuvallaw` regenerates and diffs, and the proof is re-found.
@@ -19,14 +19,14 @@
 ; this job for wm2uu, and here the tower is its own.
 ;
 ; the proof is searched, not transcribed. three strategies, tried in order
-; against the live kernel (the tool loads test/uu.l + test/uuval.l and runs defq):
+; against the live kernel (the tool loads t/uu.l + t/uuval.l and runs defq):
 ;   1. by conversion -- (lam v (idpath LHS)). the tower's round trips are
 ;      definitional, so most rungs land here.
 ;   2. by cases on the saturated measure -- nat_rect on (vsat v), both arms
 ;      idpath. the same translation run at v := (nval 0) and v := (nval (succ k))
 ;      gives the two arms and at v := (nval n) the motive; (vsat (nval n)) is n,
 ;      so the motive at (vsat v) converts back to the obligation.
-;   3. by the lemma the model names -- `uv-<row>` in test/uuval.l, cited bare. the
+;   3. by the lemma the model names -- `uv-<row>` in t/uuval.l, cited bare. the
 ;      structural laws (cap/cup/link, veq's reflexivity) need an induction over
 ;      the tree and are hand-proved there; the obligation still comes from law.l,
 ;      so a row that moves leaves its lemma behind and the tool says so.
@@ -56,8 +56,8 @@
 ; and a false law stops the run rather than printing a dot into the output.
 (:: 'test (\ l (. 'assert l)))
 (: j (jug 0) _ (wear [in j err])
-   _ (reads (open "test/uu.l" "r"))
-   _ (reads (open "test/uuval.l" "r"))
+   _ (reads (open "t/uu.l" "r"))
+   _ (reads (open "t/uuval.l" "r"))
    _ (wear ()) ())
 
 (:
@@ -215,7 +215,7 @@
    (checks? nm ty tm) (= 'accepted (rejects (\ z (dq nm ty tm))))
 
    ; --- the rows ---
-   fs (forms (open "test/law.l" "r"))
+   fs (forms (open "t/law.l" "r"))
    (findb l) (? (! (two? l)) () (= <l 'law-rows) (l 1) (findb >l))
    rows >(findb >(cap fs))
    (qstrip s) (: (go i) (? (i = tally s) ""
@@ -270,10 +270,10 @@
    (srcof d) (show ((unglue (opfix (d 1))) 2))
 
    ; --- emit ---
-   _ (pl "; test/uuvallaw.l -- generated from test/law.l by u/law2uu.l. Do not edit;")
+   _ (pl "; t/uuvallaw.l -- generated from t/law.l by u/law2uu.l. Do not edit;")
    _ (pl "; refresh with `make uuvallaw`. CLAUDE.md's laws, one spelling for both lanes:")
-   _ (pl "; test/law.l quantifies each row over a corpus (refutation), and the rows the")
-   _ (pl "; measure tower can state arrive here as uu obligations over test/uuval.l's")
+   _ (pl "; t/law.l quantifies each row over a corpus (refutation), and the rows the")
+   _ (pl "; measure tower can state arrive here as uu obligations over t/uuval.l's")
    _ (pl "; model (proof). the source row prints over its term, and every proof was")
    _ (pl "; searched against the live kernel -- by conversion where the tower's round")
    _ (pl "; trips are definitional, by cases on the saturated measure where they are")
@@ -284,7 +284,7 @@
    _ (pl "; stays, as the orb it always was. a val-rung claim is veq's -- a guarded row
 ; needs a decidable claim, and a path is not a bool -- and where the guard
 ; erased the row gets its paths twin over the pinned carrier beside it, by
-; uuval.l's bridge. Substrate: test/uuval.l over test/uu.l.")
+; uuval.l's bridge. Substrate: t/uuval.l over t/uu.l.")
    _ (pl "")
    _ (pl "(test (elem 'vof (names ())))")
    _ (pl "")

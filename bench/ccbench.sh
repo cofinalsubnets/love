@@ -75,10 +75,10 @@ rm -rf "$WORK"; mkdir -p "$WORK"
 export CCACHE_DISABLE=1
 
 # the corpus, byte-identical to common.mk's `t`: 00-init/spec/uu front-loaded, then
-# every other test/*.l in byte order (glaze-x86 excluded -- it needs emit.l ahead and
+# every other t/*.l in byte order (glaze-x86 excluded -- it needs emit.l ahead and
 # runs x86 native under its own guard). The Makefile passes it in $CORPUS; recompute
 # it for a standalone run.
-CORPUS=${CORPUS:-"$R/test/00-init.l $R/test/spec.l $R/test/uu.l $(ls "$R"/test/*.l 2>/dev/null | grep -vE '/(00-init|spec|glaze-x86|uu)\.l$' | LC_ALL=C sort)"}
+CORPUS=${CORPUS:-"$R/t/00-init.l $R/t/spec.l $R/t/uu.l $(ls "$R"/t/*.l 2>/dev/null | grep -vE '/(00-init|spec|glaze-x86|uu)\.l$' | LC_ALL=C sort)"}
 
 # the host's real C flags come from the Makefile ($(ai_cflags)); fall back to a
 # matching set (common.mk) for a standalone run.

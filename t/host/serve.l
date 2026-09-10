@@ -1,0 +1,124 @@
+; --- t/host/serve.l: `love serve`'s hook (a/kiosko/serve.l) ---
+; not in the t/*.l corpus (it loads crew modules and splices them).
+;
+; the server half is kiosko's and gated there (t/host/kiosko.l drives a real
+; socket, the maker hook included). what is gated here is the maker: the four
+; things `love serve` answers for and the ones it refuses, driven directly --
+; no port, no socket, no timing, because none of that is this file's claim.
+;
+;   *.l        the painted source
+;   *.l.md     that file's header comment, as a document
+;   *.md       the rendered document
+;   /hue.css   the stylesheet that colours both
+;   anything else -> (), and kiosko does what it always did
+; run:
+;   cat t/00-init.l t/host/serve.l | out/love
+
+(borrow "a/vi/config.l")                    ; the theme: hue-theme
+(borrow "a/vi/hue.l")                       ; the class table, read bare by hueweb
+(borrow 'lapiz)                                ; the document lens, read bare by serve
+(borrow 'libra)                                ; ..and the header lifter, likewise
+(borrow 'hueweb)
+(borrow 'kiosko)
+(borrow 'serve)
+
+; --- the seam -----------------------------------------------------------------
+(test
+ (elem 'serve (cite ()))
+ (elem 'serve-main (keys (cite 'serve)))
+ ; the verb is registered, which is what makes `love serve` a word on the artifact
+ (lit? (peep (cite 'verbs 'tab) 'serve ())))
+
+; a scratch tree to answer for. the maker takes a root and a path and joins them
+; itself, so the fixture is a real directory and the test asks for real paths.
+(: dir "/tmp/servetest"
+   _ (mkdir dir 493)
+   (spit p s) (: q (open (dir + p) "w") _ (say q s) (close q))
+   _ (spit "/x.l" "; a comment\n(: x 1)\n")
+   _ (spit "/d.md" "# a head\n\nsome *prose*.\n")
+   _ (spit "/plain.txt" "not mine\n")
+   box (tablet 0)
+   ; the maker takes the request HEAD as well as the path: a browser navigating to a
+   ; .l wants the painted page, a fetch() wants the source. an arity short of that does
+   ; not fail -- it answers a PARTIAL, which is not two?, so every claim reads as refused.
+   nav "GET / HTTP/1.1\r\nHost: x\r\nsec-fetch-dest: document\r\n\r\n"
+   fet "GET / HTTP/1.1\r\nHost: x\r\nsec-fetch-dest: empty\r\n\r\n"
+   (mk p)    (sv-make dir box p nav)
+   (fetch p) (sv-make dir box p fet)
+   (sub? s t) (: n (tally s) m (tally t)
+                 ((: (g i) (? ((i + m) <= n) (? ((snip s i (i + m)) = t) 1 (g (i + 1))) 0)) 0))
+
+   ; --- the three it answers for ----------------------------------------------
+   _ (: r (mk "/x.l")
+        _ (test
+           (two? r)
+           (<r = "text/html; charset=utf-8")
+           (sub? <>r "class=\"l-comment\"")        ; painted, by hue's own table
+           (sub? <>r "id=\"L1\"")                  ; and every line is linkable
+           (sub? <>r "/hue.css"))                  ; ..with the stylesheet that colours it
+        0)
+   _ (: r (mk "/d.md")
+        _ (test
+           (two? r)
+           (<r = "text/html; charset=utf-8")
+           (sub? <>r "<h1>a head</h1>")            ; rendered, through lapiz
+           (sub? <>r "<em>prose</em>"))
+        0)
+   ; `.l.md` is claimed before `.md`, and reads the .l with the suffix off. the
+   ; two pages link to each other, which is the whole reason the nav line exists.
+   _ (: r (mk "/x.l.md")
+        _ (test
+           (two? r)
+           (sub? <>r "<h1>/x.l</h1>")              ; the file names the document
+           (sub? <>r "a comment")                  ; ..and its header is the document
+           (sub? <>r "href=\"/x.l\""))            ; ..with the way back to the source
+        0)
+   ; a file with no header says so, rather than serving a blank page
+   _ (: _ (spit "/bare.l" "(: x 1)\n")
+        r (mk "/bare.l.md")
+        _ (test (two? r) (sub? <>r "no header comment"))
+        0)
+   _ (: r (mk "/hue.css")
+        _ (test
+           (two? r)
+           (<r = "text/css; charset=utf-8")
+           (sub? <>r ".hue .l-comment{color:#"))   ; the theme join, not a guess
+        0)
+
+   ; --- and the ones it refuses -----------------------------------------------
+   ; () is the whole of "not mine": kiosko then serves the file, or says 404, and
+   ; neither answer is this file's to give. a maker that answered for everything
+   ; would take the static server away.
+   _ (test
+      (() = (mk "/plain.txt"))                       ; a file it does not claim
+      (() = (mk "/"))                                ; the listing stays kiosko's
+      (() = (mk "/nothing.l")))                      ; ..and a .l that is not there
+
+   ; --- navigating, and fetching -----------------------------------------------
+   ; the same path answers differently by head. handing a fetch() html is how the
+   ; island ate a `<!doctype` and wedged, so the source is what a fetch gets.
+   _ (: r (fetch "/x.l")
+        _ (test
+           (two? r)
+           (<r = "text/plain; charset=utf-8")
+           (sub? <>r "; a comment")                ; the file itself
+           !(sub? <>r "class=\"l-comment\""))      ; ..not the painting
+        0)
+   ; ..but a .l.md is a rendering with no file behind it, so it is made either way
+   _ (: r (fetch "/x.l.md")
+        _ (test (two? r) (<r = "text/html; charset=utf-8"))
+        0)
+
+   ; --- the cache --------------------------------------------------------------
+   ; keyed by the file's mtime and size, in memory, never on disk. the second ask
+   ; is the same value, and rewriting the file answers the new one.
+   _ (: a (mk "/x.l")
+        b (mk "/x.l")
+        _ (test (<>a = <>b))
+        0)
+   0)
+
+(: _ (test_fin ())
+   _ (puts "lib/serve: ok -- the maker (painted .l, its header, a rendered .md, the css, and ())
+")
+   0)

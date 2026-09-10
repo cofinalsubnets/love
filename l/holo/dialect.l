@@ -23,8 +23,8 @@
 ; the at&T size suffix (movl -> mov, w 4), the sign/zero-extend family (movzbl / movzx eax, BYTE
 ; PTR -> movzb, w = the destination's), and the nullaries at&T names c<from>t<to> (cltq -> cdqe).
 ;
-; --- the laws (test/holo/as.l proves them over the golden battery, test/gate/dialect.sh over
-; gcc's own two outputs of every test/cc file) ---
+; --- the laws (t/holo/as.l proves them over the golden battery, t/gate/dialect.sh over
+; gcc's own two outputs of every t/cc file) ---
 ;   (att-read (att-show v)) = v   and   (intel-read (intel-show v)) = v
 ; so intel = intel-show * att-read is a conversion, and it encodes to the same bytes. reading is
 ; a retraction: a suffix a register already carries, a PTR an SSE mnemonic already implies, the

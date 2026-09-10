@@ -262,7 +262,7 @@
             'uniq uniq-main 'tee tee-main
             'seq seq-main 'yes yes-main
             'true true-main 'false false-main
-            ; test/[ are programs here, not just shell builtins: cook's in-image lane
+            ; t/[ are programs here, not just shell builtins: cook's in-image lane
             ; execs a recipe's words directly, so a `test -s $t && mv ..` looks them up
             ; on PATH. uname and printf are the other two a bootstrap cannot start without.
             ; `[` cannot be quoted -- it opens a bracket in the reader -- so the nom

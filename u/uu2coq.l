@@ -1,7 +1,7 @@
 ; uu2coq: love's internal proof corpus, exported to Rocq -- at scale. The proof half
 ; of the verification bridge (cf. u/spec2coq.l, which exports concrete ASSERTS).
 ;
-; This sweeps test/uu.l: it loads uu's kernel (so every defn there is type-checked
+; This sweeps t/uu.l: it loads uu's kernel (so every defn there is type-checked
 ; against its stated type -- uu certifies them), then reads the same file as data,
 ; collects every (defn/defq nm T t), and translates the ones in the universe-safe
 ; MLTT fragment to Gallina. coqc re-checks the lot -- an independent second witness
@@ -15,30 +15,30 @@
 ; using a constructor we don't map (total2/coprod and friends). What survives is the
 ; predicative core: the path-algebra combinators and the nat/bool arithmetic.
 ;
-; Run: out/love u/uu2coq.l > test/proof/rocq/uugen.v   then  coqc test/proof/rocq/uugen.v
+; Run: out/love u/uu2coq.l > t/proof/rocq/uugen.v   then  coqc t/proof/rocq/uugen.v
 
 (borrow 'posix)
 ; the files read below spell their laws `test`, the corpus recorder. here they run to
 ; BUILD, and stdout is the artifact -- so bind assert's instead: silent on success,
 ; and a false law stops the run rather than printing a dot into the output.
 (:: 'test (\ l (. 'assert l)))
-(: _ (reads (open "test/uu.l" "r"))
-   _ (reads (open "test/uuhom.l" "r"))
-   _ (reads (open "test/uuhomgen.l" "r"))
-   _ (reads (open "test/uuhomlaw.l" "r"))
-   _ (reads (open "test/uusplgen.l" "r"))
-   _ (reads (open "test/uuspllaw.l" "r"))
-   _ (reads (open "test/uulay.l" "r"))
-   _ (reads (open "test/uupatch.l" "r"))
-   _ (reads (open "test/uuwm.l" "r"))
-   _ (reads (open "test/uuwmlaw.l" "r"))
-   _ (reads (open "test/uukind.l" "r"))
-   _ (reads (open "test/uumx.l" "r"))
-   _ (reads (open "test/uumxlaw.l" "r"))
-   _ (reads (open "test/uuval.l" "r"))
-   _ (reads (open "test/uuvalband.l" "r"))
-   _ (reads (open "test/uuvallaw.l" "r"))
-   _ (reads (open "test/uukindlaw.l" "r"))          ; load + certify uu's corpus (populates GLOB)
+(: _ (reads (open "t/uu.l" "r"))
+   _ (reads (open "t/uuhom.l" "r"))
+   _ (reads (open "t/uuhomgen.l" "r"))
+   _ (reads (open "t/uuhomlaw.l" "r"))
+   _ (reads (open "t/uusplgen.l" "r"))
+   _ (reads (open "t/uuspllaw.l" "r"))
+   _ (reads (open "t/uulay.l" "r"))
+   _ (reads (open "t/uupatch.l" "r"))
+   _ (reads (open "t/uuwm.l" "r"))
+   _ (reads (open "t/uuwmlaw.l" "r"))
+   _ (reads (open "t/uukind.l" "r"))
+   _ (reads (open "t/uumx.l" "r"))
+   _ (reads (open "t/uumxlaw.l" "r"))
+   _ (reads (open "t/uuval.l" "r"))
+   _ (reads (open "t/uuvalband.l" "r"))
+   _ (reads (open "t/uuvallaw.l" "r"))
+   _ (reads (open "t/uukindlaw.l" "r"))          ; load + certify uu's corpus (populates GLOB)
    bs (intern "\\")
    (unq x) (two? x && <x = bs ? (x 1) x)   ; strip one ' (reads shows quote as (\ ..))
    (cat l) (foldl (+) "" l)
@@ -61,7 +61,7 @@
                            (deq? F || axq? F) (entry F . acc) acc)))
                       (rev acc))
    (app2 a b) (two? a ? (<a . app2 >a b) b)   ; not `cat` -- the local cat is the string fold
-   ents (gather (app2 (forms (open "test/uu.l" "r")) (app2 (forms (open "test/uuhom.l" "r")) (app2 (forms (open "test/uuhomgen.l" "r")) (app2 (forms (open "test/uuhomlaw.l" "r")) (app2 (forms (open "test/uusplgen.l" "r")) (app2 (forms (open "test/uuspllaw.l" "r")) (app2 (forms (open "test/uulay.l" "r")) (app2 (forms (open "test/uupatch.l" "r")) (app2 (forms (open "test/uuwm.l" "r")) (app2 (forms (open "test/uuwmlaw.l" "r")) (app2 (forms (open "test/uukind.l" "r")) (app2 (forms (open "test/uukindlaw.l" "r")) (app2 (forms (open "test/uumx.l" "r")) (app2 (forms (open "test/uumxlaw.l" "r")) (app2 (forms (open "test/uuval.l" "r")) (app2 (forms (open "test/uuvalband.l" "r")) (forms (open "test/uuvallaw.l" "r")))))))))))))))))) ())
+   ents (gather (app2 (forms (open "t/uu.l" "r")) (app2 (forms (open "t/uuhom.l" "r")) (app2 (forms (open "t/uuhomgen.l" "r")) (app2 (forms (open "t/uuhomlaw.l" "r")) (app2 (forms (open "t/uusplgen.l" "r")) (app2 (forms (open "t/uuspllaw.l" "r")) (app2 (forms (open "t/uulay.l" "r")) (app2 (forms (open "t/uupatch.l" "r")) (app2 (forms (open "t/uuwm.l" "r")) (app2 (forms (open "t/uuwmlaw.l" "r")) (app2 (forms (open "t/uukind.l" "r")) (app2 (forms (open "t/uukindlaw.l" "r")) (app2 (forms (open "t/uumx.l" "r")) (app2 (forms (open "t/uumxlaw.l" "r")) (app2 (forms (open "t/uuval.l" "r")) (app2 (forms (open "t/uuvalband.l" "r")) (forms (open "t/uuvallaw.l" "r")))))))))))))))))) ())
 
    ; the silent-no-op gate (defense in depth behind uu.l's arity-door macros):
    ; a def gathered off the file must be whole -- three operands; a paren slip
@@ -165,9 +165,9 @@
    exports (foldr (\ e a (? (peep keep (e 1) 0) (. e a) a)) () ents)
 
    _ (dot (cat [
-      "(* test/proof/rocq/uugen.v -- GENERATED from test/uu.l by u/uu2coq.l. Do not edit;" (string 10)
+      "(* t/proof/rocq/uugen.v -- GENERATED from t/uu.l by u/uu2coq.l. Do not edit;" (string 10)
       "   regenerate with `make test_uugen`. uu's kernel type-checked each term below" (string 10)
-      "   against its theorem (test/uu.l, green under `make test`); this is the SAME term" (string 10)
+      "   against its theorem (t/uu.l, green under `make test`); this is the SAME term" (string 10)
       "   translated to Gallina, which coqc re-checks -- the independent second witness," (string 10)
       "   and the universe filter uu's type-in-type kernel lacks. Only the MLTT primitives" (string 10)
       "   are mapped (nat/bool/unit/empty + recursors, paths<->a Type-valued Id type + J-match," (string 10)

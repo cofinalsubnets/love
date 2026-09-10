@@ -3,7 +3,7 @@
 ; AST goldens, and the whole IR for return-42 compared form by form. the cat
 ; (`make test_moon`):
 ;
-;   cat test/00-init.l a/moon/floor.l a/moon/lex.l a/moon/parse.l a/moon/val.l a/moon/gen.l a/moon/law.l | out/love
+;   cat t/00-init.l a/moon/floor.l a/moon/lex.l a/moon/parse.l a/moon/val.l a/moon/gen.l a/moon/law.l | out/love
 ;
 ; the end-to-end (elf64, the run, the gcc differential) lives in the Makefile
 ; smoke through the real `mooncc`.
@@ -1039,7 +1039,7 @@
       ((dty "struct S { char n[4]; int v; } t[] = {\"ab\",1,\"cd\",2};") = '(arr (struct "S") 2))
       ; an enum's underlying type is unsigned unless an enumerator is negative (gcc's
       ; choice) -- what makes an enum bit-field extract zero-extended. it rides the tag
-      ; too, so a later mention by tag alone reads the same; test/cc/119 holds that leg,
+      ; too, so a later mention by tag alone reads the same; t/cc/119 holds that leg,
       ; since dty reads the first declaration and a bare definition has no declarator
       ((dty "enum e { A, B } v;") = 'uint)
       ((dty "enum e { A = 148, B } v;") = 'uint)
@@ -1811,7 +1811,7 @@
       !(emits? '(sub r0 r12 r0)) !(emits? '(shlv r5 r9))
       (emits? '(add r0 r12 r0)) (emits? '(add r7 r7 8))))
 
-; -- the destination die reaches asn/decl (test/proto/dest.l, the migration's first lane):
+; -- the destination die reaches asn/decl (t/proto/dest.l, the migration's first lane):
 ; a statement-position constant store into a static slot delivers as one store-immediate
 ; (no li, no cvt, no r0), a slotted scalar's licensed constant init likewise, and a homed
 ; local's init lands in the home with no bridge mov (irBa above pins the a64 face).

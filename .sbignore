@@ -10,20 +10,20 @@ dl
 # named here too so the dist cut agrees with git rather than relying on it.
 notes
 
-# rocq/lean build products. these sit UNDER test/proof, which the archive keeps
+# rocq/lean build products. these sit UNDER t/proof, which the archive keeps
 # for its 14 tracked sources -- so they are globs, not a prefix.
 *.vo
 *.vok
 *.vos
 *.glob
 *.cache
-test/proof/rocq/.*.aux
-test/proof/lean/*.olean
+t/proof/rocq/.*.aux
+t/proof/lean/*.olean
 
 # generated proof terms: their gates lay them from the corpus on every run
-test/proof/rocq/gen.v
-test/proof/rocq/uugen.v
-test/proof/lean/uugen.lean
+t/proof/rocq/gen.v
+t/proof/rocq/uugen.v
+t/proof/lean/uugen.lean
 
 # the project's web page and what it alone links: generated, committed for github
 # pages, never shipped (the machine's pair is `make site-wasm`'s copy out of out/)

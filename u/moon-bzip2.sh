@@ -63,7 +63,7 @@ fi
 d=$ho/$sub
 rm -rf "$d"; mkdir -p "$d"
 
-# the library's seven, plus the driver. bzip2recover/dlltest/spewG/unzcrash are
+# the library's seven, plus the driver. bzip2recover/dllt/spewG/unzcrash are
 # its own side tools and not part of the binary.
 SRC="blocksort huffman crctable randtable compress decompress bzlib bzip2"
 CFLAGS="-D_FILE_OFFSET_BITS=64 -DBZ_UNIX=1 -Ia/moon/include -I$BZIP2SRC"

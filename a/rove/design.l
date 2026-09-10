@@ -13,7 +13,7 @@
 ;   :  a command line: :w saves, :q leaves, :wq both -- q alone is nothing
 ;
 ; every key is a pure step on the state and every frame a pure lay into a port, so
-; the designer gates headless (test/host/design.l); only design-run ties the tty, on
+; the designer gates headless (t/host/design.l); only design-run ties the tty, on
 ; cli's stage, and the prompts are cli's editor. the engine's words -- level, kind,
 ; thing, kind-of, load-level, save-level, story-run, pen -- are the story module's.
 ; usage: love design [LEVEL.l]      the file to lay out (default a/rove/levels/lighthouse.l)

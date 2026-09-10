@@ -7,7 +7,7 @@
 ; u/wm2uu.l reads this file as data and keys on the post-opfix tree --
 ; cap/cup chains (the glued accessors factor to them), ></+/!=, and the literal
 ; shape (cap (cup (cup z))). a rewrite that changes the tree, even value-equal,
-; must teach the translator first or test/host/overlay.l's leg 6 stops certifying.
+; must teach the translator first or t/host/overlay.l's leg 6 stops certifying.
 ;
 ; a body-less top-level `:` -- every binding leaks to the global scope, so the
 ; other a/lux/ files see this vocabulary once concatenated. names shadow no

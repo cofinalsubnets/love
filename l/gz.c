@@ -23,7 +23,7 @@ static const uint8_t gz_clord[19] = {
 // the tls.c discipline: (inflate s n) -> the bytes | (), s a raw DEFLATE stream and n its
 // inflated size or 0. `gz-inflate` reaches for this and falls back to gz-puff.
 // a twin, not a replacement: gz-puff stays the readable statement of RFC 1951 and the
-// differential oracle (test/host/gzc.l holds the two to the same bytes over corpora and
+// differential oracle (t/host/gzc.l holds the two to the same bytes over corpora and
 // over torn and doctored streams). the algorithms differ on purpose -- gz-puff walks the
 // canonical code a bit at a time, this reads a 64-bit window into a per-block table --
 // so the two are held to the same bytes, never to the same shape.
@@ -254,7 +254,7 @@ LvNif("inflate", nif_inflate, NULL);
 // refusal at 4096), same 16384-symbol blocks each costed stored/fixed/dynamic, same
 // two-queue Huffman merge with its leaf-wins tie, same halving walk back under the
 // depth limit -- so `cmp` over any input is the differential. gz-deflate stays the
-// readable statement; test/host/gzc.l holds the two to the same bytes.
+// readable statement; t/host/gzc.l holds the two to the same bytes.
 // why it exists: the love coder is 35x-to-13x off C, but its real cost is the heap.
 // interpreted DEFLATE churns cells per symbol, and on the love0 egg that runs selfpack
 // the heap grows toward the budget before a collection pays. this is a fixed window

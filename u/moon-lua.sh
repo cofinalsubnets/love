@@ -14,12 +14,12 @@
 # SKIPS cleanly without qemu, like test_raw_a64.
 #
 # WHY A CROSS LANE. Every package rung here had been x64-only, and a 30k-line
-# package is a far wider net than the 110 single-file programs of test/cc: the
+# package is a far wider net than the 110 single-file programs of t/cc: the
 # first a64 run found a miscompile that had survived both, and Lua found it
 # in the one way that is hard to notice -- string.match, string.gsub and
 # string.find-with-a-pattern all silently returned nil in an interpreter that
 # otherwise ran floats, coroutines and its whole battery correctly. The cause
-# is test/cc/110-param5.c's law (a 5th pointer parameter riding x4 collided
+# is t/cc/110-param5.c's law (a 5th pointer parameter riding x4 collided
 # with the frame-base spelling); the shape that reaches it is a six-parameter
 # function whose 5th is a pointer, which is prepstate in lstrlib.c and is not
 # a thing anyone writes into a compiler test on purpose.

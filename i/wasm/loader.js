@@ -1,6 +1,6 @@
 // i/wasm/loader.js -- the environment of moon's wasm artifact, in place of emcc's
 // runtime: Love() instantiates a module and answers the Module its drivers already expect
-// (run.mjs, screen.mjs, test/holo/loader.mjs) -- ccall/cwrap, the string marshalling,
+// (run.mjs, screen.mjs, t/holo/loader.mjs) -- ccall/cwrap, the string marshalling,
 // _malloc/_free,
 // and the HEAPU8/HEAPU32 views. the module imports ONE function, env.__ai_sys, moonlibc's
 // syscall door, and this file is the kernel under it: linux's numbers, the handful the

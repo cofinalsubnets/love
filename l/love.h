@@ -224,7 +224,7 @@ struct ai {
    major_len,                     // major half size (words)
    n_minor,                       // minor collections so far (majors = n_gc - n_minor)
    minor_hi, major_hi,            // the pause gauge: peak words one minor / one major copied
-                                  // (gauge[14]/[15]; test/host/gcpause.l puts wall ns against them)
+                                  // (gauge[14]/[15]; t/host/gcpause.l puts wall ns against them)
    since_major, major_live0,      // young words scanned since the last major; major live right
                                   // after it. a major fires once since_major > major_live0 +
                                   // 4*minor-pool, so tenured garbage sweeps and the pool can shrink
@@ -312,7 +312,7 @@ extern struct ai_def const __start_love_nifs[], __stop_love_nifs[];
 //     takes.
 //   readn: drink up to n waiting bytes: >0 bytes, 0 nothing yet (the scheduler owns the
 //     wait), -1 end of stream. never allocates, hence frame by value. the end is stable:
-//     a spent device owes -1 to every ask, not just the first (test/front/io.l law 3).
+//     a spent device owes -1 to every ask, not just the first (t/front/io.l law 3).
 //   athand: of the next n bytes, how many are here already -- a source whose text is in
 //     memory (a C string, a charlist) counts them without a device. NULL is "ask the
 //     device", so a run must come out of a buffer instead. `chug` is the one caller.
