@@ -105,7 +105,6 @@ lvm(data_string_apply) {
  word v = ZeroPoint;
  if (oddp(Sp[0])) {
   word k = getcharm(Sp[0]);
-  if (k < 0) k += (word) na->len;                       // -1 is the last byte
   if (k >= 0 && k < (word) na->len) v = putcharm((unsigned char) txt(na)[k]); }
  Ip = cell(*++Sp), *Sp = v;
  ai_musttail return Continue(); }
@@ -129,7 +128,7 @@ lvm(data_num_apply) {
  Sp = dst, Ip = cell(numap_drive);
  ai_musttail return Continue(); }
 
-// (l k): index the spine -- the kth element, negatives from the end, out of range ().
+// (l k): index the spine -- the kth element, out of range () and a negative is out of range.
 // (l m): a chain operand juxtaposes -- the append, agreeing with (+ l m) on the nose
 // (add_seq's list+list lane, spelled here). the text law, one lattice rung up: a chain
 // indexes elements where text indexes bytes. every other operand answers ().
@@ -145,7 +144,6 @@ lvm(data_pair_apply) {
  word v = ZeroPoint;
  if (oddp(Sp[0])) {
   word k = getcharm(Sp[0]), l = word(Ip);
-  if (k < 0) k += (word) llen(l);            // -1 is the last element
   if (k >= 0) { while (k-- > 0 && chainp(l)) l = B(l);
                 if (chainp(l)) v = A(l); } }
  Ip = cell(*++Sp); *Sp = v; ai_musttail return Continue(); }

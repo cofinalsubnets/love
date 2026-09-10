@@ -775,8 +775,8 @@
                   ['ld X T 0] (jk tgt SC 1) ['cmp X SC] ['br 'ne ld]                             ; native. everything else falls to the drive (never a deopt -- a
                   ['test A 1] ['br 'eq ld]                                                              ; mixed-type call site keeps its closure speed): another callee or
                   ['mov X A] ['sar X 1] ['ld SC T 8]                                                  ; index kind, and -- since the one unsigned compare wraps a negative
-                  ['cmp X SC] ['br 'below ok]                                                           ; huge -- both the from-the-end read and the out-of-range (). so the
-                  ['jmp ld]                                                                             ; lane answers what C answers, at the cost of driving a negative.
+                  ['cmp X SC] ['br 'below ok]                                                           ; huge -- every index out of range, negative or past the end, alike. so
+                  ['jmp ld]                                                                             ; the lane answers what C answers, at the cost of driving one.
                   ['label ok] ['ldxb A T X 1 16] ['leax A A A 1 1]
                   ['jmp en] ['label ld]]
                + (adrive cso)

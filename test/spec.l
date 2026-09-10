@@ -463,7 +463,7 @@
 ; the compounds); (long? n l) asks the arity -- at least n links, one walk, where `two?` per
 ; step spends a cup and a dispatch at each; sort/sortby by the total order; (jot n) the first n
 ; charms; the higher-order functions live in the prel. applying a chain is the text law one
-; lattice rung up: a charm indexes an element (negatives from the end, out of range the unit 1),
+; lattice rung up: a charm indexes an element (out of range -- a negative included -- the unit 1),
 ; a chain juxtaposes -- the append, agreeing with + -- and every other operand takes the
 ; default action, const-1.
 ; () is the zero point, not a chain, so (l ()) is the default and not the identity + gives it.
@@ -479,7 +479,7 @@
  (20 = <>(assoc 2 [[1 10] [2 20]])) ('(1 2) = (take 2 '(1 2 3 4))) ('(3 4) = (drop 2 '(1 2 3 4)))
  (3 = (last '(1 2 3))) ('(1 2) = (init '(1 2 3))) (elem 3 '(1 2 3)) !(elem 9 '(1 2 3))
  (all (x \ 0 < x) '(1 2 3)) (any (x \ 2 < x) '(1 2 3))
- (7 = ('(7 8 9) 0)) (9 = ('(7 8 9) 2)) (9 = ('(7 8 9) -1)) (7 = ('(7 8 9) -3))   ; a charm indexes, negatives from the end
+ (7 = ('(7 8 9) 0)) (9 = ('(7 8 9) 2)) !('(7 8 9) -1) !('(7 8 9) 9)   ; a charm indexes; a negative is out of range like any other
  !('(7 8 9) 3) !('(7 8 9) -4) !('(7 8 9) 'x) !('(7 8 9) ())        ; out of range, and every non-index operand, is ()
  ('(1 2 3 4) = ('(1 2) '(3 4))) (('(1 2) '(3 4)) = '(1 2) + '(3 4))              ; a chain juxtaposes: the append, agreeing with +
  ('(1 2 3 4 5) = ('(1 2) '(3 4) '(5)))                                           ; ... and it curries, as text does
@@ -496,7 +496,7 @@
 ; (a serial-0 mint by representation, printed (), and no symbol: it binds nothing and `nom?`
 ; declines it), distinct from 0 and "" though all net 0;
 ; absence reads it; `$` clamps the net measure, `tally` counts; snip/+/string.
-; a string indexes by a charm -- negatives from the end, out of range the unit 1 -- and
+; a string indexes by a charm -- out of range, a negative included, the unit 1 -- and
 ; juxtaposes by a string: (s t) is s then t, C's adjacent-literal law with the literal
 ; restriction lifted, so it curries to any arity and agrees with (+ s t). every other operand
 ; takes the default action, const-1. a chain reads the same way, by element (see chains).
@@ -536,7 +536,7 @@
  ("" = slurp (jug 0)) ("" = slurp (tap ())) ("" = slurp 42)
  ("" = (puts "")) (0 = (puts 0))                 ; ..and an empty operand writes nothing, answering itself
  ("abcd" = ("ab" "cd")) ("abcdef" = ("ab" "cd" "ef")) (: a "ab" b "cd" ((a b) = (+ a b)))   ; juxtaposition joins text, curried, no literal needed
- (99 = ("abc" -1)) (97 = ("abc" -3)) !("abc" -4)         ; a negative index counts from the end; past the front is out of range
+ !("abc" -1) !("abc" -3) !("abc" 3)                     ; a negative index is out of range, the same as one past the end
  ("aXcd" = (pin "abcd" 1 88)) (: s "abcd" _ (pin s 1 88) ("abcd" = s))   ; pin answers a fresh text; the original is untouched
  ("abcd" = (pin "abcd" 9 88)) ("abcd" = (pin "abcd" -1 88)) ("abcd" = (pin "abcd" 1 'x))  ; out of range / a non-byte is the no-op (from-the-end is APPLY's alone)
  ("ab" = ("ab" "")) ("ab" = ("" "ab")) ("" = ("" "")) ("abcd" = ("ab" 'cd)) !("ab" '(1 2))         ; "" is the unit; a point is text; a non-text operand is ()

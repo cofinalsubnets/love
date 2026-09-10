@@ -299,7 +299,7 @@
           (: bs (ev '(\ s ((: (go i a) (? (< i (tally s)) (go (+ i 1) (+ a (s i))) a)) 0 0)))
              (&& (294 = (bs "abc")) (0 = (bs ""))))
           (: pk (ev '(\ s n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (s (- i 2)))) a)) 0 0)))
-             (390 = (pk "ab" 6)))                                                 ; 97+98+97+98: both negatives read from the end, and past-end is () (joins nothing on)
+             (195 = (pk "ab" 6)))                                                 ; 97+98: i=0,1 index -2,-1 and i>=4 runs past the end -- every out-of-range read joins nothing on
           (: mx (ev '(\ f n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (f i))) a)) 0 0)))
              (&& (90 = (mx (\ x (* x 2)) 10)) (294 = (mx "abc" 5))))              ; one site, both callee kinds; 97+98+99, the two past-end reads joining nothing on
           (: ct (ev '(\ l n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (tally l))) a)) 0 0)))
