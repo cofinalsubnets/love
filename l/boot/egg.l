@@ -18,7 +18,7 @@
    M (lib ())
    ; the module may already exist: a def row can name it in C (l/love.h's LvNif), and
    ; those rows were bound at boot, before any of this. join them rather than replace.
-   F (: e (peep M 'guts ()) (tablet? e ? e (tablet 0)))
+   F (: e (M 'guts) (tablet? e ? e (tablet 0)))
    miss (mint 0)                       ; a roster name that never bound answers this, and is skipped
    keep (book 'nomop)
    (p k) (: v (peep book k miss)

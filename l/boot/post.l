@@ -1572,7 +1572,7 @@
    (recls neg rs)
     (: o (jug 0)
        (go c) (? (255 < c) (slurp o)
-                 (: _ (put o (? (rcls neg rs c) 1 0)) (go (c + 1))))
+                 (put o (? (rcls neg rs c) 1 0), go (c + 1)))
        tbl (go 0)
        (\ c (? (c <= 255) (tbl c) (rcls neg rs c))))
    ; the program a caller holds: the matcher, whether the pattern can only match at
@@ -1688,11 +1688,10 @@
    (rrepb b ab lo hi tail s i sp k cnt)
     (: n (peep b 0 0)
        _ (? (n < 1) (scare 'regex-too-costly (relimit ())) (pin b 0 (n - 1)))
-       more (? (!hi || cnt < hi)
-               (ab s i sp
-                   (\ j sp2 (j = i ? (cnt < lo ? (tail s j sp2 k))
-                              (rrepb b ab lo hi tail s j sp2 k (cnt + 1)))))
-               ())
+       more (!hi || cnt < hi ?
+             (ab s i sp
+              (\ j sp2 (j = i ? (cnt < lo ? (tail s j sp2 k))
+                         (rrepb b ab lo hi tail s j sp2 k (cnt + 1))))))
        (? more more
           (cnt < lo) ()
           (tail s i sp k)))
@@ -1759,10 +1758,10 @@
    ; at the spawn: lush answers "not found" from the lookup and never spawns at all.
    fill {}
    (fills f) (pin fill 'f f)
-   (get k)   (: v (peep tab k ())
+   (get k)   (: v (tab k)
                 (lit? v ? v
-                 (: f (peep fill 'f ())
-                    (lit? f ? (: _ (pin fill 'f ()) _ (f ()) (peep tab k ())) ()))))
+                 (: f (fill 'f)
+                    (lit? f ? (: _ (pin fill 'f ()) _ (f ()) (tab k)) ()))))
    (bn p)    (: n #p
                 (go k r) (k < n ? (go (k + 1) (p k @ 47 (k + 1) r)) (snip p r n))
                 (go 0 0))
@@ -1838,13 +1837,13 @@
            t (chug p)
            _ (pin box 0 (drew () + #t))
            (go k l) (0 >= k ? l (: j (k - 1) (go j (t j . l))))
-         (go #t (once (\ u (feed ()))))))
+         (go #t (once (u \ feed ())))))
       ; consumed, forwards and by identity. never (tally >r) -- the residue is lazy, so that
       ; forces the whole rest; and force at every step, or a plain `cup` walk stops dead at a
       ; gulp boundary and spins on () forever. `once` memoizes, so re-forcing is free.
       (frc x) (lit? x ? (x ()) x)
       (upto a b n) (: aa (frc a) bb (frc b)
-                      (? (= aa bb) n
+                      (? (aa = bb) n
                          (two? aa)   (upto (cup aa) bb (n + 1))
                          n))
       ; with no window both endings are honest -- they can only mean the stream itself ended
@@ -1857,7 +1856,7 @@
                     ; one byte short on purpose -- the byte-exact lane runs one ahead, and test_stdincorpus diffs it
                     _ (drop (0 < rem ? (rem - 1) 0))
                     h (inhand p)
-                    v (ev 'ev a)
+                    v (ev 'ev a) ;;; FIXME i think this should be safe to drop to just (ev a), post evals 100% after ev is rebound, right?
                     (h = inhand p ? (drop 0, step b w2 v)
                                     (start (two? b ? [<b]) v)))
          (drop 0, z))
@@ -1868,7 +1867,7 @@
            inhand p ? (pin box 0 #pre, step (cat pre (feed ())) 0 z)
                       (walk (cat pre (trickle p)) z)))
       ; never rebind `in` -- this identity folded at egg-compile, so a fresh port fails it in silence
-      (? (= p in) (start () 0) (walk (flow p) 0))))
+      (p = in ? (start () 0) (walk (flow p) 0))))
 (: (forms p)
    ((: (g cl acc) (sound cl @ 'torn (scare 'unfinished-form p)
                               (a . b) (g b (a . acc))
@@ -1905,51 +1904,38 @@
    ; call k with (rev (take n xs)) and (drop n xs). stops cleanly at
    ; end-of-xs even if n exceeds the list length.
    (splitat k acc n xs)
-    (xs @ ((ax . ux) && 0 < n) (splitat k (ax . acc) (n - 1) ux)
-     (k acc xs))
+    (xs @- (k acc xs) ((ax . ux) && 0 < n) (splitat k (ax . acc) (n - 1) ux))
 
    ; map non-printables to space; otherwise pass through
    (prc c) (putc $ 32 <= c < 127 ? c 32)
 
    (ednew _) {'u () 'l () 'r () 'd () 'ev 0}
-   (edleft t) (: l (t 'l) u (t 'u)
-     (? (two? l) (pins t 'l >l 'r (<l . t 'r))
-        (two? u) (pins t 'u >u 'l (rev <u) 'r () 'd (revcat l (t 'r) . t 'd))
-        t))
-   (edright t) (: r (t 'r) d (t 'd)
-     (? (two? r) (pins t 'l (<r . t 'l) 'r >r)
-        (two? d) (pins t 'u (revcat (t 'l) r . t 'u) 'l () 'r <d 'd >d)
-        t))
-   (edbsp t) (: l (t 'l) u (t 'u)
-     (? (two? l) (pin t 'l >l)
-        (two? u) (pins t 'u >u 'l (rev <u))
-        t))
-   (eddel t) (: r (t 'r) d (t 'd)
-     (? (two? r) (pin t 'r >r)
-        (two? d) (pins t 'r <d 'd >d)
-        t))
+   (edleft t) (: l (t 'l) u (t 'u) (?- t
+    (two? l) (pins t 'l >l 'r (<l . t 'r))
+    (two? u) (pins t 'u >u 'l (rev <u) 'r () 'd (revcat l (t 'r) . t 'd))))
+   (edright t) (: r (t 'r) d (t 'd) (?- t
+    (two? r) (pins t 'l (<r . t 'l) 'r >r)
+    (two? d) (pins t 'u (revcat (t 'l) r . t 'u) 'l () 'r <d 'd >d)))
+   (edbsp t) (: l (t 'l) u (t 'u) (?- t (two? l) (pin t 'l >l) (two? u) (pins t 'u >u 'l (rev <u))))
+   (eddel t) (: r (t 'r) d (t 'd) (?- t (two? r) (pin t 'r >r) (two? d) (pins t 'r <d 'd >d)))
    (edhome t) (pins t 'l () 'r (revcat (t 'l) (t 'r)))
    (edend t) (pins t 'l (revcat (t 'r) (t 'l)) 'r ())
    ; edtop / edbot jump across the whole buffer: the start of the topmost line, the end
    ; of the bottommost. on a single-line buffer they are edhome / edend
-   (edtop t) (rev (t 'u) @ (au . uu) (pins t 'u () 'l () 'r au 'd (uu + (revcat (t 'l) (t 'r) . t 'd)))
-                (edhome t))
-   (edbot t) (rev (t 'd) @ (ad . ud) (pins t 'u (ud + (revcat (t 'l) (t 'r) . t 'u)) 'l (rev ad) 'r () 'd ())
-                (edend t))
+   (edtop t) (rev (t 'u) @- (edhome t) (au . uu) (pins t 'u () 'l () 'r au 'd (uu + (revcat (t 'l) (t 'r) . t 'd))))
+   (edbot t) (rev (t 'd) @- (edend t)  (ad . ud) (pins t 'u (ud + (revcat (t 'l) (t 'r) . t 'u)) 'l (rev ad) 'r () 'd ()))
    ; up and down keep the column, clamped to the line
-   (edup t) (t 'u @ (au . uu) (splitat (\ lz rr (pins t 'u uu 'l lz 'r rr 'd (revcat (t 'l) (t 'r) . t 'd))) () #(t 'l) au)
-             t)
-   (eddown t) (t 'd @ (ad . ud) (splitat (\ lz rr (pins t 'u (revcat (t 'l) (t 'r) . t 'u) 'l lz 'r rr 'd ud)) () #(t 'l) ad)
-               t)
+   (edup t) (t 'u @- t (au . uu) (splitat (\ lz rr (pins t 'u uu 'l lz 'r rr 'd (revcat (t 'l) (t 'r) . t 'd))) () #(t 'l) au))
+   (eddown t) (t 'd @- t (ad . ud) (splitat (\ lz rr (pins t 'u (revcat (t 'l) (t 'r) . t 'u) 'l lz 'r rr 'd ud)) () #(t 'l) ad))
    (edput t c) (pin t 'l (c . t 'l))                       ; insert at the cursor
    (ednl t) (pins t 'u (rev (t 'l) . t 'u) 'l ())           ; break the line at the cursor
    (edclear t) (pins t 'u () 'l () 'r () 'd ())
-   (edempty? t) !(edchars t)
    (edchars t) (joinln (revcat (t 'u) (revcat (t 'l) (t 'r) . t 'd)))   ; the whole buffer, one charlist
-   (edtext t) (string (edchars t))
-   (edcol t) (tally (t 'l))
-   (edparses? t) (two? (parseall (edchars t)))
-   (edframe t) ((t 'u) . (t 'l) . (t 'r) . (t 'd))           ; the buffer packed for history
+   edempty? (nil? * edchars)
+   edtext (string * edchars)
+   (edcol t) #(t 'l)
+   edparses? (two? * parseall * edchars)
+   (edframe t) (t 'u . t 'l . t 'r . t 'd)           ; the buffer packed for history
    (edload t f) (pins t 'u <f 'l <>f 'r <>>f 'd >>>f)
 
    ; --- the history zipper, on the same tablet ---------------------------------------
@@ -1957,16 +1943,16 @@
    ; to 'hu first, so the original survives. on a pop the buffer goes to the other side
    ; (skipped when empty); on a real recall with no further side, the buffer is pushed
    ; and a fresh empty line opens, as long as it parses
-   (eddetach t) (? (two? (t 'cur)) (pins t 'hu (t 'cur . t 'hu) 'cur ()) t)
+   (eddetach t) (one? (t 'cur) ? t (pins t 'hu (t 'cur . t 'hu) 'cur ()))
    (uphist t) (: hu (t 'hu)
-     (? (two? hu) (: _ (edempty? t ? () (pin t 'hd (edframe t . t 'hd)))
-                     (pins (edload t <hu) 'hu >hu 'cur <hu))
+     (? (two? hu) (edempty? t ? () (pin t 'hd (edframe t . t 'hd)),
+                   pins (edload t <hu) 'hu >hu 'cur <hu)
         (two? (t 'cur) && edparses? t) (: _ (pin t 'hd (edframe t . t 'hd)) (pin (edclear t) 'cur ()))
         t))
    (downhist t) (: hd (t 'hd)
-     (? (two? hd) (: _ (edempty? t ? () (pin t 'hu (edframe t . t 'hu)))
-                     (pins (edload t <hd) 'hd >hd 'cur <hd))
-        (two? (t 'cur) && edparses? t) (: _ (pin t 'hu (edframe t . t 'hu)) (pin (edclear t) 'cur ()))
+     (? (two? hd) (edempty? t ? () (pin t 'hu (edframe t . t 'hu)),
+                   pins (edload t <hd) 'hd >hd 'cur <hd)
+        (two? (t 'cur) && edparses? t) (pin t 'hu (edframe t . t 'hu), pin (edclear t) 'cur ())
         t))
 
    ; --- one key into the buffer ------------------------------------------------------
@@ -1974,15 +1960,20 @@
    ; as 10), escape, tab, ^C, ^D, eof, up and down past the buffer -- is left in 'ev for
    ; the caller, 0 when the key was taken
    (edstep t c)
-     (: (took f) (pin (f t) 'ev 0)
-        (edit f) (took (\ b (f (eddetach b))))
-        (? (32 <= c < 127) (edit (\ b (edput b c)))
-           (c = -1) (took edleft)  (c = -2) (took edright)
-           (c = 127 || c = 8 || c = -3) (edit edbsp)  (c = -4) (edit eddel)
-           (c = 1 || c = -5) (took edhome)  (c = 5 || c = -6) (took edend)
-           (c = -10) (took edtop)  (c = -11) (took edbot)
-           (c = -8 && two? (t 'u)) (took edup)  (c = -9 && two? (t 'd)) (took eddown)
-           (pin t 'ev (c = 13 ? 10 c))))
+    (: (took f) (pin (f t) 'ev 0)
+       (edit f) (took (f * eddetach))
+     (32 <= c < 127 ? (edit (b \ edput b c))
+      (c @ -1 (took edleft)
+           -2 (took edright)
+           (127 || 8 || -3) (edit edbsp)
+           -4 (edit eddel)
+           (1 || -5) (took edhome)
+           (5 || -6) (took edend)
+           -10 (took edtop)
+           -11 (took edbot)
+           (-8 && two? (t 'u)) (took edup)
+           (-9 && two? (t 'd)) (took eddown)
+           (pin t 'ev (c @ 13 10 c)))))
 
    ; --- the key reader ---------------------------------------------------------------
    ; one key off port p: a byte as itself, -7 at eof, and the escape family decoded. a
@@ -1993,7 +1984,7 @@
    arrow    {68 -1 67 -2 65 -8 66 -9 72 -5 70 -6}    ; ESC [ F -- the plain finals
    modarrow {68 -1 67 -2 65 -8 66 -9 72 -10 70 -11}  ; ESC [ 1 ; M F -- modified home/end jump the buffer
    (edcsi p) (: c (see p) e (peep arrow c 0)
-               (? !(= e 0) e
+               (? (e != 0) e
                   (c @ 49 (see p @ 126 -5  59 (see p, peep modarrow (see p) 0)  0)
                        55 (see p, -5)
                        (52 || 56) (see p, -6)
@@ -2001,7 +1992,7 @@
                        0)))
    (edkey p) (: c (see p)
                (? (c = -1) -7
-                  !(c = 27) c
+                  (c != 27) c
                   !(rest 1, cue? p) 27
                   (: c2 (see p)
                      (? (c2 = 91) (edcsi p)
@@ -2040,8 +2031,8 @@
            each (rev u) (\ ln (each ln prc, putc 10)),
            each (revcat l r) prc,
            each d (\ ln (putc 10, each ln prc)))
-        ld (tally d)
-        col ((two? u ? 0 pl) + tally l)
+        ld #d
+        col ((two? u ? 0 pl) + #l)
         (0 < ld ? (csi ld 65),
          putc 13,
          0 < col ? (csi col 67),
@@ -2108,19 +2099,15 @@
      repl 0 0)
 
    ; (edraw ip pr) -- read one line off port `ip`, with in-line editing: the charlist, or eofsym
-   (edraw ip pr)
-     (: pl (tally (puts pr)) t (ednew ())
-        (loop _) (: _ (edrender pl 0 t)
-                    _ (edstep t (edkey ip))
-                    (t 'ev @ 0 (loop ())
-                       (-7 || 4) eofsym
-                       10 (putc 10, revcat (t 'l) (t 'r))
-                       (loop ())))
-        (loop ()))
+   (edraw ip pr) (:- (loop ())
+    pl #(puts pr) t (ednew ())
+    (loop _) (edrender pl 0 t,
+              edstep t (edkey ip),
+              t 'ev @- (loop ()) (-7 || 4) eofsym 10 (putc 10, revcat (t 'l) (t 'r))))
 
    ; the shell line reader: edraw + command history + tab completion
    (edlnc ip pr hist comp)
-     (: pl (tally (puts pr)) hn (tally hist) t (ednew ())
+     (: pl #(puts pr) hn #hist t (ednew ())
         (hnth k) <(drop k hist)                       ; hist[k], 0-based (k < hn)
         (recall i ni draft)                           ; jump to view index ni (0 = the draft)
           (: nd (i = 0 ? (revcat (t 'l) (t 'r)) draft)  ; save the live draft once, the instant up leaves it
@@ -2137,7 +2124,7 @@
                 3 (puts "^C\n", () . hist)   ; ^C: abandon the line, hist untouched
                 9 (? !comp (loop i draft)
                      (: cl (comp (revcat (t 'l) ()))
-                        (? !(two? cl) (loop i draft)
+                        (? (one? cl) (loop i draft)
                            (: _ (pin t 'l (foldl (a \ ch \ ch . a) (t 'l) <cl))
                               cs >cl
                             (two? cs && two? >cs ?
@@ -2234,11 +2221,11 @@
            'none  0                   ; the flags did their printing; leaving is the answer
            (reads in, 0)))
     [av run]))
-       () (\ a b (a == 'cli-leave ? (charm0 b) (scare a b))))
+       () (a \ b \ a == 'cli-leave ? (charm0 b) (scare a b)))
  (? (charm? cli2) cli2                  ; a leave in pre: the status is the answer
     (ev [': 'argv ['\ <cli2]], ; the program's view, before the run
-     trap (\ x (<>cli2 ()))    ; (run ()): dispatch, argv now the program's view
-      () (\ a b (a == 'cli-leave ? (charm0 b) (scare a b))))))
+     trap (x \ <>cli2 ())    ; (run ()): dispatch, argv now the program's view
+      () (a \ b \ a == 'cli-leave ? (charm0 b) (scare a b)))))
 
  (cli-line ln tty)
    (: (charm0 x) (charm? x ? x 0)

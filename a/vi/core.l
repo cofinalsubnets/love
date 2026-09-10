@@ -824,8 +824,8 @@
        ; lines of one literal); it is cached against the generation, so an edit
        ; pays for it and a keystroke that only moves the cursor does not
        car (? paint (: c (st 'hlcar)
-                      (? (two? c && (<c = st 'hlgen)) <>c
-                         (: k (hue-carry bk ls) _ (pin st 'hlcar [(st 'hlgen) k]) k)))
+                     (two? c && <c = st 'hlgen ? <>c
+                      (: k (hue-carry bk ls) _ (pin st 'hlcar [(st 'hlgen) k]) k)))
               ())
        (lay i) (: ln (clip (ls i))
                   (? paint (hue-line (st 'pens) bk ln (car i)) ln))
