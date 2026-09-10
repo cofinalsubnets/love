@@ -172,7 +172,7 @@ Anything without `-c` is a **link**, through `l/holo/link.l`.
   library name and the one after it as an input;
 - an exe link still owing strong symbols pulls the runtime **by need**, archive-fashion — moonlibc
   + the am math + the mksys leaf, taken from the archive the binary CARRIES, or compiled from
-  the toolchain root and cached under `out/cache/moon/` (below), so a set carrying its own
+  the toolchain root and cached under `b/cache/moon/` (below), so a set carrying its own
   `am.o` never meets a twin;
 - `-nostdlib`/`-nodefaultlibs`/`-ffreestanding` turn that pull off;
 - `-ffreestanding` ALSO says the standard's own word: it makes `__STDC_HOSTED__` 0, which is how
@@ -220,7 +220,7 @@ suffix names the commit that built *the compiler*, so it would make `love1` — 
 mooncc — and `love2` — built by love1's — differ at `e_shoff` and name a broken fixpoint where
 the two compilers agree on every byte they *emit*. The base moves with a release, which both
 generations share; `love0` is stamped `$(love_base)+bootstrap` for exactly this, and
-`out/0/.love0cc` content-stamps that compile line so a `./VERSION` bump rebuilds it (make
+`b/0/.love0cc` content-stamps that compile line so a `./VERSION` bump rebuilds it (make
 tracks files, not flag strings, and a stale love0 would fail the fixpoint at a byte offset with
 nothing to say about the cause). A reader wanting the commit reads `love-version` in `.rodata`.
 
@@ -284,7 +284,7 @@ the same face.
 binary's own stamped bytes cannot be improved on by a cache entry, so the key is cut only where
 they were refused. That leaves the cache two populations: `u/mkrt.l` cutting the carried set
 under love0, which carries none, and a toolchain edited past the stamp. Both are a checkout,
-which is why the cache seats itself at `out/` and `make clean` reaches it.
+which is why the cache seats itself at `b/` and `make clean` reaches it.
 
 **The carried archives are per-ISA and kernel-neutral.** All three are cut under `-os linux`
 and the pin does not reach the bytes: `impl.h` parts linux, freebsd and netbsd at RUN time on
@@ -295,7 +295,7 @@ linux's numbers.
 
 **The pull is cached, content-addressed, as one archive.** A member has to be compiled before the
 pull can see what it defines, so every link owing a libc nom paid for all 190 of them — ~23s of a
-cold hello-world link's ~23s. They now ride `out/cache/moon/<sha>.a`, ONE archive per
+cold hello-world link's ~23s. They now ride `b/cache/moon/<sha>.a`, ONE archive per
 (compiler, target), keyed on the target, the runtime tree's whole text (headers included — an
 edited `stdio.h` changes what `moonlibc/` means) and the compiler's own identity. A warm link is
 ~0.15s. An archive and not 190 objects because the ranlib index IS the "what does this member
@@ -312,7 +312,7 @@ reads invalidated the runtime and cost a full rebuild. Hashing the compiler's `.
 instead looks tighter and is a hole: edit `gen.l`, link once before the image catches up, and the
 entry filed under the new sources holds the old image's codegen.
 No identity — a love with no image file in reach — means no cache at all. Nor is anything else
-owed it: no `out/`, an unwritable directory, a mangled entry (each is checked for its archive
+owed it: no `b/`, an unwritable directory, a mangled entry (each is checked for its archive
 magic) all fall back to compiling, silently. Entries land by `rename`, so parallel links cannot
 tear one, and a miss sweeps all but the six newest generations. **count, not age**: the rate
 is the tree's own — a day of rebuilds mints more generations than a month of use does, and a
@@ -475,7 +475,7 @@ The image is binary-specific (anchor-checked) and installs from the same build a
 boot with no `moon-main`, so never mix builds by hand.
 
 A catted app is `#!/usr/bin/env -S love` plus the cat, so a bare `mooncc` runs on the PATH
-`love` — a STALE install mis-runs it. Probe the repo cat with `./out/love out/mooncc`,
+`love` — a STALE install mis-runs it. Probe the repo cat with `./b/love b/mooncc`,
 never a bare `mooncc`, until `make install` refreshes the PATH binary.
 
 ## testing

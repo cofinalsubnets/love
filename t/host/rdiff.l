@@ -1,7 +1,7 @@
 ; --- t/host/rdiff.l: the reader differential ---
 ; two readers, one text, one comparison -- the oracle rungs 5-6 were built against.
 ; run standalone from the repo root:
-;   cat t/00-init.l t/host/rdiff.l | out/love
+;   cat t/00-init.l t/host/rdiff.l | b/love
 ;
 ; the input set is the tree: every .l under the root, walked off readdir (not off
 ; git -- an untracked stray in the tree is still text the reader must read), read form by
@@ -44,7 +44,7 @@
                      [a b]))
 
 ; --- the input set: every .l under the root, off readdir --------------------
-; out/ is generated, dot-directories are not ours. stat's mode word decides
+; b/ is generated, dot-directories are not ours. stat's mode word decides
 ; directory-or-not: (two? (readdir p)) would call an empty directory a file.
 (: rd-skip '("out")
    (rd-dir? p) (: st (stat p) (&& (two? st) (= 16384 (& 61440 (cauup st)))))

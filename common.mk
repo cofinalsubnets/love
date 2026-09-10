@@ -1,6 +1,6 @@
 # Shared variables for the host, kernel and board builds. An includer sets R to the
 # project root first (the root Makefile sets R := ., a i/ makefile its own way up), so
-# these resolve from any cwd; per-frontend output lands in $R/out/<frontend>/.
+# these resolve from any cwd; per-frontend output lands in $R/b/<frontend>/.
 R ?= .
 
 # THE RECIPE TAG COLUMN: `@echo 'MOON<TAB>'$@`, and the quote is load-bearing. A bare tab
@@ -27,9 +27,9 @@ t_cp   := $(if $(armed),KORE,CP)
 t_rm   := $(if $(armed),KORE,RM)
 t_ln   := $(if $(armed),KORE,LN)
 
-m = $R/out$(hsuf)/love
+m = $R/b$(hsuf)/love
 # the HOST's arch, which $a is NOT: a cross lane overrides $a on the command line, and
-# anything under out reading $a then lays a cross artifact into the host tree.
+# anything under b reading $a then lays a cross artifact into the host tree.
 # AND `uname -m` IS NOT THE ISA. It answers the kernel's MACHINE, which only linux
 # spells the way free/<a>/, the mksys leaves and the holo backends do: the BSDs say
 # amd64 for x86_64, freebsd says arm64 and netbsd evbarm for aarch64. evbarm names a
@@ -57,7 +57,7 @@ ifeq ($(hosta),riscv64)
 hosta := rv64
 endif
 # `?=` MAKES A RECURSIVE VARIABLE, so `a ?= $(shell uname -m)` re-forks uname at every
-# single reference -- 203 of them before this build even reached out/lib/egg.h. Deferring
+# single reference -- 203 of them before this build even reached b/lib/egg.h. Deferring
 # to the simply-expanded $(hosta) keeps the override and spends one fork for the tree.
 a ?= $(hosta)
 
@@ -87,7 +87,7 @@ in_git := $(wildcard $R/.git)
 # instead -- the one differential a foreign cc still gets, the kernel having none. It is the
 # only build that puts a foreign cc on the vm at ai_tco=1, where ai_musttail is live and where
 # a prototype mismatch our own sibcall pass waves through is refused (doc/misc/moon-c-gaps.md).
-# ITS OWN TREE, because the two loves are the same path otherwise: out/cc keeps the
+# ITS OWN TREE, because the two loves are the same path otherwise: b/cc keeps the
 # objects and the binary apart, and $m follows it so a test runs the one you asked for.
 override HCC := $(filter-out 0,$(HCC))
 
@@ -98,7 +98,7 @@ override HCC := $(filter-out 0,$(HCC))
 tco ?= 1
 
 # tco EARNS A TREE THE SAME WAY HCC does, and for the same reason: a tco=0 love is a
-# different binary at the same path, so sharing out would make every following make
+# different binary at the same path, so sharing b would make every following make
 # rebuild the world, and a test would run whichever flavour was built last.
 hsuf := $(if $(HCC),/cc,)$(if $(filter 0,$(tco)),/tco0,)
 

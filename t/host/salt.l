@@ -1,14 +1,14 @@
 ; --- t/host/salt.l: salt, the config door (a/libra/salt.l) ------------------
-; the files are the interesting part, so this writes real ones under out/ and
+; the files are the interesting part, so this writes real ones under b/ and
 ; reads them back. `salt-file` is the testable unit -- it takes the path, so a
 ; test never has to fake HOME or depend on whose machine it runs on. run
 ; standalone from the repo root:
-;   cat t/00-init.l t/host/salt.l | out/love
+;   cat t/00-init.l t/host/salt.l | b/love
 
 (borrow 'salt)
 
-(: st-dir "out/.salt"
-   _ (mkdir "out" 493) _ (mkdir st-dir 493)
+(: st-dir "b/.salt"
+   _ (mkdir "b" 493) _ (mkdir st-dir 493)
    (st-put nm text) (: p (st-dir + "/" + nm)
                        q (open p "w")
                        _ (say q text)

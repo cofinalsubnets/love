@@ -38,7 +38,7 @@ static void say(char *s) {
 static u64 die(char *s) { say("uefi: "); say(s); say("\r\n"); return 1; }
 
 // the k_boot shape (i/k.h), kept in step by hand: this file compiles freestanding,
-// before out/lib exists. every field through the last one written here must match k.h's
+// before b/lib exists. every field through the last one written here must match k.h's
 // layout; a tail this copy is short of shows up as a member the compiler cannot find.
 #define ram_max 64
 struct k_boot {

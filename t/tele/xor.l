@@ -3,7 +3,7 @@
 ; wasm, and inle (the freestanding kernel): a neural net on bare metal. t/tele/grad.l
 ; grad-checks each op alone; this one asks whether they compose into a net that learns.
 ;
-;   run:  cat t/00-init.l t/tele/xor.l t/zz-fin.l | out/love -l a/tele/tele.l
+;   run:  cat t/00-init.l t/tele/xor.l t/zz-fin.l | b/love -l a/tele/tele.l
 ;
 ; corpus-shaped but not in the corpus: tele is no module (no lib/tele.l, nothing registered),
 ; so it arrives on -l and this file cannot ride the t/*.l glob. 00-init.l brings `test`,

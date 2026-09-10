@@ -1,6 +1,6 @@
 #!/bin/sh
 # t/gate/fixpoint.sh -- the SELF-REGENERATION fixpoint (self-host rung 2).
-# The default out/love is mooncc-built already (love0 waking mooncc0.image
+# The default b/love is mooncc-built already (love0 waking mooncc0.image
 # compiles every TU, holo links -pie). This gate closes the loop: relink that
 # generation as love1, let love1 bake its OWN mooncc image and rebuild every TU
 # with itself, link love2 the same way, and assert love1 == love2 TO THE BYTE.
@@ -13,8 +13,8 @@
 # file. the lanes arrive in the environment because the object list already has the
 # variadic tail -- gate_love_c / gate_host_c / gate_arch_c / gate_kern_c, the Makefile's own.
 #
-# gate_seat_c is i/noblob.c: this pair links the kernel but lays no out/src.o and no
-# out/moonlibc.o -- it rebuilds every TU itself and carries no archives -- so it answers
+# gate_seat_c is i/noblob.c: this pair links the kernel but lays no b/src.o and no
+# b/moonlibc.o -- it rebuilds every TU itself and carries no archives -- so it answers
 # the carried-archive symbols itself. it rides the OBJ list too, or love1 has a body
 # love2's link cannot find.
 #
@@ -78,12 +78,12 @@ moon1() { "$d/love1" wake "$d/mooncc1.image" mooncc "$@"; }
 # string, naming a broken fixpoint where the only difference is a build flag.
 for f in $gate_love_c; do
   mkobj "$f"
-  moon1 -D ai_tco=1 -D LvHaveVersionH -I"$ho" -I. -Il -Ii -Iout/lib -c "$f" "$o" \
+  moon1 -D ai_tco=1 -D LvHaveVersionH -I"$ho" -I. -Il -Ii -Ib/lib -c "$f" "$o" \
     || fail "love1 mooncc -c $f"
 done
 for f in $gate_host_c $gate_seat_c; do
   mkobj "$f"
-  moon1 -D ai_tco=1 -I"$ho" -I. -Il -Ii -Iout/lib -c "$f" "$o" || fail "love1 mooncc -c $f"
+  moon1 -D ai_tco=1 -I"$ho" -I. -Il -Ii -Ib/lib -c "$f" "$o" || fail "love1 mooncc -c $f"
 done
 # moonlibc rides the implicit runtime, as in raw.sh -- pulled member by need.
 for f in a/moon/lib/moonlibc/math/*.c; do
@@ -98,13 +98,13 @@ test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 # still answers love1 == love2 -- it just answers it about a shorter binary than
 # anyone ships. an arch with no seat carries none, and $gate_arch_c is empty there.
 if [ -n "$gate_arch_c" ]; then
-  kinc="-I$ho -I. -Il -Ii -Iout/lib -Il/quay -Ia/moon/include"
+  kinc="-I$ho -I. -Il -Ii -Ib/lib -Il/quay -Ia/moon/include"
   for f in $gate_kern_c $gate_arch_c l/quay/paint.c \
            l/quay/cga_8x8.c l/quay/moderndos_8x16.c; do
     mkobj "$f"
     moon1 $kinc -c "$f" "$o" || fail "love1 mooncc -c $f"
   done
-  LOVE_NO_IMAGE=1 "$d/love1" -l "out/$ha/mkvec.l" -q -e "(lay-vec \"$d/kvec.o\" \"$ha\")" \
+  LOVE_NO_IMAGE=1 "$d/love1" -l "b/$ha/mkvec.l" -q -e "(lay-vec \"$d/kvec.o\" \"$ha\")" \
     || fail "love1 lay-vec"
   test -s "$d/kvec.o" || fail "love1 lay-vec laid an empty kvec.o"
 fi

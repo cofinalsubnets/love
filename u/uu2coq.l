@@ -15,7 +15,7 @@
 ; using a constructor we don't map (total2/coprod and friends). What survives is the
 ; predicative core: the path-algebra combinators and the nat/bool arithmetic.
 ;
-; Run: out/love u/uu2coq.l > t/proof/rocq/uugen.v   then  coqc t/proof/rocq/uugen.v
+; Run: b/love u/uu2coq.l > t/proof/rocq/uugen.v   then  coqc t/proof/rocq/uugen.v
 
 (borrow 'posix)
 ; the files read below spell their laws `test`, the corpus recorder. here they run to

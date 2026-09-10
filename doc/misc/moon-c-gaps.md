@@ -11,7 +11,7 @@ Probe recipe:
 
 ```sh
 printf 'int m(void){ return 0; }\n' >> q.c
-out/love mooncc \
+b/love mooncc \
   -c -t x64 -o /dev/null q.c
 ```
 

@@ -2,7 +2,7 @@
 ; rendered to a .wav. What the mini-notation cannot say (a transform per layer, a
 ; control taken from a continuous pattern) is said in love around it.
 ;
-;   love a/harp/demo.l [OUT.wav]        default out/harp-demo.wav
+;   love a/harp/demo.l [OUT.wav]        default b/harp-demo.wav
 ;   love a/harp/play.l -n 8 -c 0.55 -g 0.55 'bd ~ [~ bd] ~' 'hh*8?' '~ cp ~ [sn ~ sn]'
 ;
 ; the second line is the same shape from the shell, less the transforms: a bare
@@ -28,7 +28,7 @@
    song  (stack [kick hats snare bass lead])
 
    (demo-main as)
-    (: w (? (two? as) <as "out/harp-demo.wav")
+    (: w (? (two? as) <as "b/harp-demo.wav")
        _ (harp-wav song 0 8 48000 0.55 24000 11000.0 w)
        _ (say out $ w + "\n") 0))
 

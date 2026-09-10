@@ -23,8 +23,8 @@
 ;   C-a C-a         send a literal C-a through
 ; a guest never sees the prefix and never has to cooperate.
 ;
-; run: out/love -l a/berth/berth.l -e '(berth ["sh"])'
-;      out/love -l a/berth/berth.l -e '(berth ["vim" "README.md"])'
+; run: b/love -l a/berth/berth.l -e '(berth ["sh"])'
+;      b/love -l a/berth/berth.l -e '(berth ["vim" "README.md"])'
 ;
 ; host-only (screen/scribe + tether/gather + raw/winsize ride i/*.c), so
 ; berth never joins the corpus; the moor core needs no tty and is smoke-

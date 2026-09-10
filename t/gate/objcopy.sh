@@ -49,8 +49,8 @@ chk() {
 }
 
 for e in "$d"/fix-*.elf; do chk "$e"; done
-for e in "$ho/love" /usr/bin/ls /bin/sh out/teensy41/love.elf out/nucleo446/firm.elf \
-         out/rp2040/love.elf; do
+for e in "$ho/love" /usr/bin/ls /bin/sh b/teensy41/love.elf b/nucleo446/firm.elf \
+         b/rp2040/love.elf; do
   [ -f "$e" ] && chk "$e"
 done
 

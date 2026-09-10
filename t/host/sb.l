@@ -1,17 +1,17 @@
 ; the svalbard gate (a/sb/): a sandbox store driven end to end
 ; (record / log / diff, tips + snap + deps + the content addresses). runs under
-; `make test_sb`: cat t/00-init.l this | out/love -- host nifs
+; `make test_sb`: cat t/00-init.l this | b/love -- host nifs
 ; (sha256, readdir, chdir), so it stays off the corpus like the other hostnif
 ; tests. the make target clears the sandbox first; cwd is the repo root, and
-; everything here happens inside out/.sbtest.
+; everything here happens inside b/.sbtest.
 ; the use below splices svalbard under the session layer: every internal reads
 ; bare, and the test's own helpers stay above in the session.
 (borrow 'sb)
 (borrow 'kore)          ; sb splices the text floor below itself, so the session must ask for it too
 
 (: _ (mkdir "out" 493)
-   _ (mkdir "out/.sbtest" 493)
-   cd (chdir "out/.sbtest")
+   _ (mkdir "b/.sbtest" 493)
+   cd (chdir "b/.sbtest")
    _ (? !cd () (: _ (puts "sbtest: chdir failed\n") (quit 1)))
    ; the same-text equality for list-shaped store values
    (seq a b) (show a = show b)

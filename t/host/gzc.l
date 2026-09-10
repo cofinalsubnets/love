@@ -25,7 +25,7 @@
 ; sums to zero and reads as false, so a presence test spelled `(! r)` calls a correct
 ; answer a failure -- and only on inputs nobody hand-writes.
 ;
-; run:  cat t/00-init.l t/host/gzc.l | out/love
+; run:  cat t/00-init.l t/host/gzc.l | b/love
 (borrow 'gz)
 
 (test

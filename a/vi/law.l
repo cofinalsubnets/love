@@ -3,7 +3,7 @@
 ; tablet back -- no tty, no port, no file. the cat (`make test_vi`):
 ;
 ;   cat t/00-init.l a/kore/text.l a/kore/core.l a/kore/re.l a/kore/sed.l a/libra/lint.l \
-;       a/vi/config.l a/vi/hue.l a/vi/core.l a/vi/law.l | out/love
+;       a/vi/config.l a/vi/hue.l a/vi/core.l a/vi/law.l | b/love
 ;
 ; (vgo lines keys) births a buffer, feeds the TEXT's bytes (27 spelled \e via
 ; the 27-element list shape), and answers the state; the helpers read it back.

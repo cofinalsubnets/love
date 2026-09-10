@@ -1,11 +1,11 @@
 ; t/holo/wasm.l -- rung 0 of the wasm lane: a module laid by
-; l/holo/wasm.l off hand-built forms, written to out/.holo.wasm for t/holo/wasm.mjs
+; l/holo/wasm.l off hand-built forms, written to b/.holo.wasm for t/holo/wasm.mjs
 ; to validate and RUN under an engine that is not ours. what it claims: a memory64 module with
 ; an import, a table, a data segment, i64 arithmetic, a 64-bit address store and load, a
 ; call_indirect -- one function laid by hand the way rung 1 lays every function (a label
 ; local, one loop, one br_table, each label's body ending in a branch back to the top), and
 ; five lowered from holo's IR by wasm-fn, rung 1 itself.
-; run: cat l/holo/holo.l l/holo/wasm.l t/holo/wasm.l | out/love
+; run: cat l/holo/holo.l l/holo/wasm.l t/holo/wasm.l | b/love
 
 (borrow 'holo)
 
@@ -73,8 +73,8 @@
       'exports '(("add" func 1) ("sum" func 2) ("peek" func 3) ("poke" func 4) ("call2" func 5) ("mem" memory 0)
                  ("isum" func 7) ("fib" func 8) ("classify" func 9) ("memops" func 10) ("bits" func 11))
       'start 6}
-   _ (wasm-write "out/.holo.wasm" m)
-   _ (puts ("t/holo/wasm: wrote out/.holo.wasm, " + show (tally (wasm-emit m)) + " bytes\n"))
+   _ (wasm-write "b/.holo.wasm" m)
+   _ (puts ("t/holo/wasm: wrote b/.holo.wasm, " + show (tally (wasm-emit m)) + " bytes\n"))
 
    ;; rung 2, the type law, as a second module laid whole by wasm-program: the double lane
    ;; (doubles travel as their bits through r0), the float conditions after ucomisd packed as
@@ -106,8 +106,8 @@
             ['fimg 2 fimg-ir] ['addo 2 addo-ir] ['subo 2 subo-ir] ['mulo 2 mulo-ir] ['fthen 2 fthen-ir]]
       'exports '(dsum dops dcmp dabs dcvt fimg addo subo mulo fthen)}
    m2 (wasm-program p)
-   _ (wasm-write "out/.holo2.wasm" m2)
-   _ (puts ("t/holo/wasm: wrote out/.holo2.wasm, " + show (tally (wasm-emit m2)) + " bytes\n"))
+   _ (wasm-write "b/.holo2.wasm" m2)
+   _ (puts ("t/holo/wasm: wrote b/.holo2.wasm, " + show (tally (wasm-emit m2)) + " bytes\n"))
 
    ;; rung 3, the environment: a mock of the artifact's face for i/wasm/loader.js --
    ;; the verbs the page calls, over the one import, __ai_sys with linux's numbers. [16] is the
@@ -139,6 +139,6 @@
        'memory '(2 8)
        'data '((24 0 0 1 0 0 0 0 0))}                     ; the bump pointer starts at 65536
    m3 (wasm-program p3)
-   _ (wasm-write "out/.holo3.wasm" m3)
-   _ (puts ("t/holo/wasm: wrote out/.holo3.wasm, " + show (tally (wasm-emit m3)) + " bytes\n"))
+   _ (wasm-write "b/.holo3.wasm" m3)
+   _ (puts ("t/holo/wasm: wrote b/.holo3.wasm, " + show (tally (wasm-emit m3)) + " bytes\n"))
    0)

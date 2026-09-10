@@ -156,7 +156,7 @@ for f in t/cc/*.c; do
   # A PASSED CASE IS DEAD WEIGHT. `fail` exits, so reaching here means this program agreed
   # on every leg -- and the diffs are printed INLINE at the moment they disagree, so nothing
   # downstream ever reads these again. The .g is a STATICALLY LINKED cross binary, 3.3 MB, one
-  # per program: 137 of them made cc-a64 436 MB, 73% of the whole out/ tree, for a gate that
+  # per program: 137 of them made cc-a64 436 MB, 73% of the whole b/ tree, for a gate that
   # only runs in test_extra. A FAILING case keeps everything, which is the only time anyone
   # has ever wanted it.
   rm -f "$d/$b.g" "$d/$b.t" "$d/$b.tout" "$d/$b.gout" "$d/$b.glog" \

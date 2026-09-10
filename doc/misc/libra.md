@@ -42,7 +42,7 @@ and libra implements none of them.
 $ libra doc a/vi/hue.l | head -3
 a/vi/hue.l -- the .l syntax, written down ONCE, for two readers: the
 painter in a/vi/core.l's vframe, and the vim syntax file, which u/hue2vim.l
-GENERATES from the very table below -- built by make into out/syntax.vim and
+GENERATES from the very table below -- built by make into b/syntax.vim and
 ```
 
 **the prose's own structure is read, never rewritten.** the corpus was not
@@ -68,7 +68,7 @@ dead and take the rest of the header with it; lapiz's reader is
 lens rather than papered over here.
 
 **`make site` is built on it.** the crew tools that have no page here get one
-anyway: the build runs `libra doc` over each of them into `out/toolmd/*.md` and
+anyway: the build runs `libra doc` over each of them into `b/toolmd/*.md` and
 papel makes a site out of markdown exactly as it always has. libra reads `.l`,
 papel reads markdown, and neither learns the other's job.
 

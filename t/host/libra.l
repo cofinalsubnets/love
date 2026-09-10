@@ -2,7 +2,7 @@
 ; two verbs over one scanner, and this gate is that claim: the check and the doc
 ; lifter both read a/libra/lint.l, so the two cannot disagree about what a paren or a
 ; comment is. run standalone from the repo root:
-;   cat t/00-init.l t/host/libra.l | out/love
+;   cat t/00-init.l t/host/libra.l | b/love
 
 (borrow 'lint)          ; libra splices this below itself, so the session must ask for it too
 (borrow 'salt)

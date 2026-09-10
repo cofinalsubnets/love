@@ -1,10 +1,10 @@
 // t/holo/loader.mjs -- i/wasm/loader.js over the mock artifact t/holo/wasm.l
-// lays (out/.holo3.wasm): a driver's own shape -- init, a string through the heap, eval,
+// lays (b/.holo3.wasm): a driver's own shape -- init, a string through the heap, eval,
 // drain the out buffer -- the syscalls the kernel-in-JS answers, and exit.
-// usage: node t/holo/loader.mjs [out/.holo3.wasm]
+// usage: node t/holo/loader.mjs [b/.holo3.wasm]
 import Love, { ExitStatus } from '../../i/wasm/loader.js';
 
-const path = process.argv[2] ?? 'out/.holo3.wasm';
+const path = process.argv[2] ?? 'b/.holo3.wasm';
 const lines = [];
 const M = await Love({ wasm: path, print: (s) => lines.push(s) });
 

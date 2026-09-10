@@ -8,12 +8,12 @@
 ; the answer is the binary's, not the language's. love ships mooncc-built, and
 ; mooncc is weakest at exactly the shape both ciphers lean on -- an indexed loop
 ; over an array. run this again under the clang binary the static lane leaves in
-; out/musl/ and the C chacha moves ~25x, the love chacha ~2x, while a scalar
+; b/musl/ and the C chacha moves ~25x, the love chacha ~2x, while a scalar
 ; VM loop moves the catalogued 1.3x. a ratio off one binary is a ratio about that
 ; binary, and the chacha ratio is the one that moves most.
 ;
 ; not a gate: it prints numbers, it asserts nothing. run it by hand --
-;   out/love a/tls/bench.l
+;   b/love a/tls/bench.l
 (borrow "a/tls/tls.l")
 
 (:

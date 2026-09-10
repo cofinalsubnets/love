@@ -66,7 +66,7 @@
                    try (n - 1)))))))
    _ (try ((w * h) // 24))
    ; a cramped deck can come up short: guarantee two moored rooms
-   _ (tally (d 'rooms) < 2 ?
+   _ (#(d 'rooms) < 2 ?
       (: r1 '(1 1 3 3) r2 [(w - 4) (h - 4) 3 3]
          (carve 1 1 3 3, carve (w - 4) (h - 4) 3 3,
           lash (mid r1) (mid r2), pin d 'rooms [r2 r1])))
@@ -96,20 +96,18 @@
  ; a closing pass glows the rock beside every lit floor cell, so corridors
  ; wear their walls (a bare stride only catches rock end-on)
  (fov d px py r) (:
-   vis (tablet 0) w (d 'w) h (d 'h) sn (d 'seen) r2 (1 + r * r)
+   vis {} w (d 'w) h (d 'h) sn (d 'seen) r2 (1 + r * r)
    (glow x y) (: i (x + w * y) (pin vis i 1, pin sn i 1, ()))
    (cell x y) (2 (x - px) + 2 (y - py) <= r2 && clear? d px py x y ? (glow x y))
    (row y x) (x <= px + r ? (cell x y, row y (x + 1)))
    (rows y) (y <= py + r ? (row y (px - r), rows (y + 1)))
    _ (rows (py - r))
-   _ (map (i \ 0 < peep (d 't) i 0 ?
-           (: x (i % w) y (i // w)
-            (map (\ o (: nx (x + <o) ny (y + <>o)
-                         (0 <= nx < w && 0 <= ny < h &&
-                          dat d nx ny = 0 ? (glow nx ny))))
-                 '((-1 -1) (0 -1) (1 -1) (-1 0)
-                   (1 0) (-1 1) (0 1) (1 1)))))
-          (keys vis))
+   _ (flip map (keys vis) (i \ 0 < peep (d 't) i 0 ?
+      (: x (i % w) y (i // w)
+       (map (\ o (: nx (x + <o) ny (y + <>o)
+                  (0 <= nx < w && 0 <= ny < h && dat d nx ny = 0 ? (glow nx ny))))
+            '((-1 -1) (0 -1) (1 -1) (-1 0)
+              (1 0) (-1 1) (0 1) (1 1))))))
    vis)
 
  ; --- the painter: one frame said into a port as painted cells ---
@@ -117,9 +115,8 @@
  ; tiles bright, remembered ones dim, the dark a bare space. one SGR per hue
  ; change, threaded down the frame; the port is any jug, so frames gate headless.
  pens {}
- (pen n) (: s (peep pens n ())
-            (string? s ? s
-             (: s2 ("\e[38;5;" + show n + "m") (pin pens n s2, s2))))
+ (pen n) (: s (pens n) (string? s ? s
+          (: s2 ("\e[38;5;" + show n + "m") (pin pens n s2, s2))))
  tile-gl "#.>"
  (tile-hue t lit) (? lit (t @ 2 51 1 242 250)
                          (t @ 2 24 1 236 240))
@@ -129,9 +126,9 @@
  (paint j d vis loot ents msg bar) (:
    w (d 'w) h (d 'h) sn (d 'seen)
    spot (foldl (\ t e (pin t (e 'x + w * e 'y) e)) {} ents)
-   _ (say j $ "\e[H\e[0m" + (w < tally msg ? (snip msg 0 w) msg) + "\e[K\r\n")
-   (cell i lit) (: e (lit ? (peep spot i ()))
-                   it (lit ? (peep loot i ()))
+   _ (say j $ "\e[H\e[0m" + (w < #msg ? (snip msg 0 w) msg) + "\e[K\r\n")
+   (cell i lit) (: e (lit ? (spot i))
+                   it (lit ? (loot i))
                    (? e [(e 'gl) (e 'hue)]
                       it (loot-face it)
                       (peep sn i 0)
@@ -168,18 +165,18 @@
  ; the last deck trades its hatch for the pearl
  last-deck 3
  (stock g) (:
-   d (g 'd) sb (g 'sb) lvl (g 'lvl) loot (tablet 0)
+   d (g 'd) sb (g 'sb) lvl (g 'lvl) loot {}
    (drop-at rm) [(peep rm 0 0 + roll sb (peep rm 2 1)) (peep rm 1 0 + roll sb (peep rm 3 1))]
    (mobs rm n acc) (? (0 < n)
                     (: xy (drop-at rm) x <xy y <>xy
-                       (? (&& (dat d x y = 1)
-                              !(peep loot (x + d 'w * y) ())
-                              !(any (o \ x = o 'x && y = o 'y) acc))
+                       (? (dat d x y = 1 &&
+                           !(loot (x + d 'w * y)) &&
+                           !(any ({'x ^x 'y ^y} \ 1) acc))
                         (mobs rm (n - 1) (mob-new (peep (mob-kinds lvl) (roll sb 4) 0) x y . acc))
                         (mobs rm (n - 1) acc)))
                     acc)
    (treasure rm) (: xy (drop-at rm) i (<xy + (d 'w) * <>xy)
-                    (? (peep (d 't) i 0 != 1) ()
+                    (? (d 't i != 1) ()
                        (roll sb 10 < 5) (pin loot i ['gold (5 + roll sb 16)])
                        (roll sb 10 < 3) (pin loot i '(grog 0))))
    ms (foldl (\ acc rm (treasure rm, mobs rm (roll sb (2 + lvl)) acc))
@@ -283,8 +280,8 @@
              g (crawl-new (c < 100 ? c 100) r (wheel (clock 0)))
              _ (note g "the hold is dark; the pearl waits three decks down")
              ; an end shows its frame for a beat before the stage is left
-             (turn k) (? (k = 113 || k = 27) (pin g 'over 'fled)
-                         (crawl-turn g (steer k), g 'over ? (say out (crawl-frame g), flush out, rest 1200)))
+             (turn k) (k @ (113 || 27) (pin g 'over 'fled)
+                       (crawl-turn g (steer k), g 'over ? (say out (crawl-frame g), flush out, rest 1200)))
              _ (stage (w \ h \ crawl-frame g) turn (\ _ (g 'over)))
              (puts (g 'over @ 'won  ("the pearl is yours -- and " + show (g 'p 'gold) + " gold besides")
                               'dead ("the hold keeps you, deck " + show (g 'lvl))

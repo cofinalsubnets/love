@@ -1,6 +1,6 @@
 ; the gate for cook's Makefile importer (a/cook.l).
 ;
-; Run on the host binary:  out/love t/host/cook.l
+; Run on the host binary:  b/love t/host/cook.l
 ; (wired into the build as one of test_hostnif's rows).
 ;
 ; cook reads a real Makefile -- variable expansion, the make functions,
@@ -14,7 +14,7 @@
 (? (cite 'posix) (borrow 'posix) ())
 
 (: dir "/tmp/cooktest"
-   love  "out/love"                          ; run from the project root (where make runs)
+   love  "b/love"                          ; run from the project root (where make runs)
 
    ; -- a tiny assert harness (this file is standalone, not in the corpus) --
    pass (tablet 0) fail (tablet 0)
@@ -57,7 +57,7 @@
                       "\techo \"E1[$(h_o)]\""
                       "\techo \"E2[$(suf)]\""
                       "\techo \"E3[$R/$(ho)]\"")) "all")
-   _ (ok "nested-paren + pattern subst-ref" (has ev "E1[out/l/love.o out/data.o]"))
+   _ (ok "nested-paren + pattern subst-ref" (has ev "E1[b/l/love.o b/data.o]"))
    _ (ok "suffix subst-ref"                 (has ev "E2[./l/love.o ./data.o]"))
    _ (ok "single-char $R + $(VAR)"          (has ev "E3[./out]"))
 
@@ -383,10 +383,10 @@
    ; the repo's own shell is the fixture's shell: make-with-lush, the rung-4
    ; distro loop closed. $(wildcard) is lush's pure glob at the repo root
    ; (sorted; a no-match pattern contributes nothing -- nullglob).
-   ; out/lush is a love script, so naming it as SHELL runs it through its shebang --
-   ; the nest's love on PATH, not the tree's. the shim spells the tree's out/love out
+   ; b/lush is a love script, so naming it as SHELL runs it through its shebang --
+   ; the nest's love on PATH, not the tree's. the shim spells the tree's b/love out
    ; loud, the way sh.l does, so the law reads the shell this build made.
-   _ (write-file (+ dir "/lushsh") "#!/bin/sh\nexec out/love out/lush \"$@\"\n")
+   _ (write-file (+ dir "/lushsh") "#!/bin/sh\nexec b/love b/lush \"$@\"\n")
    _ (sh (+ "chmod +x " (+ dir "/lushsh")))
    shl (run-cook (mk [(+ "SHELL := " (+ dir "/lushsh"))
                       "all:"

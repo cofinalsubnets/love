@@ -7,8 +7,8 @@
 // what a gate can look at where a browser would show the canvas. --lift names a ramfs
 // file the machine's program leaves behind, and where to put it on this side, once the
 // program has quit (the reset). --image hands the machine a heap image to wake (the one
-// `bake PATH` on the boot line writes, lifted out: `make out/wasm/love-wasm.image`).
-//   usage: node i/wasm/inle.mjs [--fb WxH --dump screen.ppm] [--lift /in/machine:out/here]
+// `bake PATH` on the boot line writes, lifted out: `make b/wasm/love-wasm.image`).
+//   usage: node i/wasm/inle.mjs [--fb WxH --dump screen.ppm] [--lift /in/machine:b/here]
 //                                  [--image love-wasm.image] love-wasm.wasm [boot line ..]
 import { Worker } from 'node:worker_threads';
 import { readFileSync, writeFileSync } from 'node:fs';

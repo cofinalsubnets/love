@@ -35,11 +35,11 @@ make BENCHES=fib    # restrict the workloads (then `make clean` to refresh files
 make TIMEOUT=60 …   # per-bench wall-clock cutoff in seconds (default 30)
 make raw            # the raw result lines, unformatted
 make html           # write bench.html — a self-contained results page (below)
-make clean          # remove out/bench/
+make clean          # remove b/bench/
 ```
 
 **Results are cached per language.** Each language writes its lines to
-`out/bench/<lang>.txt`, and that file depends on the language's bench sources (and,
+`b/bench/<lang>.txt`, and that file depends on the language's bench sources (and,
 for love, the `love` binary). The user-facing targets just *pretty-print* those
 files — a bench is only (re)run when its result file is missing or older than the
 sources, so `make bench` reformats instantly once the files exist. Touch a source
@@ -96,7 +96,7 @@ server needed) showing the same per-iteration table with the fastest cell per
 bench highlighted and the `love` axis tinted. A **transpose** button swaps benches
 and languages between the rows and columns, and the initial orientation is chosen
 from the viewport (portrait drops languages down the side). It's regenerated from
-the cached `out/bench/*.txt`, so run `make all` first for a full table; the full
+the cached `b/bench/*.txt`, so run `make all` first for a full table; the full
 roster appears as columns, and a language that produced no rows (toolchain absent
 or broken) shows a dotted column.
 
@@ -273,7 +273,7 @@ benches/<x>.{l,ss,lisp,exs,jl,py,js,lua,go,java,rs}
 run.sh           per-language run/compile command + PATH check + per-bench timeout
 report.awk       formats the raw result lines into the terminal table
 mkhtml.sh        builds bench.html from the raw result lines (used by `make html`)
-Makefile         orchestration — per-language out/bench/<lang>.txt result files
+Makefile         orchestration — per-language b/bench/<lang>.txt result files
 ```
 
 ## Adding a benchmark

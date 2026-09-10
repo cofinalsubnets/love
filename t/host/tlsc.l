@@ -22,7 +22,7 @@
 ; by handing po-fin an accumulator directly, and the C twin has no such door.
 ; if that ever matters, the door to open is C's, not this file's.
 ;
-; run:  cat t/00-init.l t/host/tlsc.l | out/love
+; run:  cat t/00-init.l t/host/tlsc.l | b/love
 
 (borrow "a/tls/tls.l")
 

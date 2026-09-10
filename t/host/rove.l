@@ -6,7 +6,7 @@
 ; -- combat, loot, grog, the hatch, the pearl, death. the tty side (rove)
 ; stays a live probe: it is berth-thin over what this file proves.
 ;
-;   cat t/00-init.l t/host/rove.l | out/love
+;   cat t/00-init.l t/host/rove.l | b/love
 
 (borrow 'rove)   ; the artifact's module, warm from the tree
 

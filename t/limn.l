@@ -3,7 +3,7 @@
 ; are corpus laws. `borrow` finds a/berth/limn.l by the filesystem walk, which the
 ; hosted seats have; a seat without one will want a guard here.
 ;
-;   cat t/00-init.l t/limn.l | out/love   ; exits 1 on fail
+;   cat t/00-init.l t/limn.l | b/love   ; exits 1 on fail
 ;
 ; the vocabulary under test: a grid of cb cells in, escapes out. origins are
 ; 0-based going in and 1-based on the wire, which is the one conversion here.

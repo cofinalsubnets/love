@@ -24,9 +24,9 @@
     (src-head (tar-get <es 'nom "") @ ("." || "") (src-top >es) c c))
 
    (src-lay-tgz root top gz)
-    (: _ (mkdir (root + "/out") 493)
-       _ (mkdir (root + "/out/dist") 493)
-       p (root + "/out/dist/" + top + ".tar.gz")
+    (: _ (mkdir (root + "/b") 493)
+       _ (mkdir (root + "/b/dist") 493)
+       p (root + "/b/dist/" + top + ".tar.gz")
        q (open p "w")
        _ (!(hot? q) ? (src-die ("can't write " + p)))
        _ (say q gz)
@@ -94,7 +94,7 @@
       (go (src-dirs ())))
      (try '("cc" "gcc" "clang")))
    (src-farm root exe)
-    (d : (root + "/out/.seedbin")
+    (d : (root + "/b/.seedbin")
        (mkdir d 493,
         each (keys (cite 'verbs 'tab))
              (k \ (d + "/" + string k @ p (unlink p, symlink exe p))),
@@ -160,7 +160,7 @@
    ; roster, and its first boot on the target bakes and patches it in place (i/main.c),
    ; the same bytes a native `make dist` lays.
    (seed-cross root xa dst)
-    (: made (root + "/out/x-" + (show (nom xa)) + "/love")
+    (: made (root + "/b/x-" + (show (nom xa)) + "/love")
        e (copyfile made dst)
        _ (e < 0 ? (src-die ("can't write " + dst)))
        _ (chmod dst 493)
@@ -183,7 +183,7 @@
        xm (? (string? xa) (show (nom xa)) ())     ; make's word for it
        ; -j with no count: cook reads this machine's width, and answers 1 where it
        ; cannot -- so the seed is as wide as the box and never wider.
-       s (herald (string? xa ? [exe "make" "-j" ("xa=" + xm) ("out/x-" + xm + "/love")]
+       s (herald (string? xa ? [exe "make" "-j" ("xa=" + xm) ("b/x-" + xm + "/love")]
                               [exe "make" "-j" "dist"]))
        st (two? s ? <s s)
        _ (chdir here)
@@ -191,7 +191,7 @@
        (? (string? xa) (seed-cross root xa dst)
           ; the one artifact (seed-universal U2): the seed is the laid tree's own
           ; binary, and the rebuild must be this binary, byte for byte.
-          (: out (root + "/out/love")
+          (: out (root + "/b/love")
              (? (src-same? exe out)
                (puts (";; fixpoint ok -- " + out + "\n"), 0)
               (say err ";; fixpoint failed\n", 1)))))

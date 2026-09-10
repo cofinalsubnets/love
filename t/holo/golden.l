@@ -6,7 +6,7 @@
 ; backend only -- the other four reach these goldens no other way (t/holo.l is the in-corpus
 ; smoke over the baked module).
 ; run: cat l/holo/{holo,x64,a64,thumb2,riscv,thumb1,text,gas,elf}.l t/holo/golden.l
-;      | out/love   (nonzero exit on any miss)
+;      | b/love   (nonzero exit on any miss)
 
 (borrow 'holo) ; the cat's wrapped sources just registered the module
 

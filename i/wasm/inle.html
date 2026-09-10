@@ -2,7 +2,7 @@
 <!-- i/wasm/inle.html -- love-wasm.wasm as a machine in the page: the kernel runs in a
      worker (cpu.mjs), the canvas is its framebuffer, the keyboard its serial line. serve
      the tree root (`make serve`) and open /i/wasm/inle.html; the module is read from
-     out/love-wasm.wasm, so `make out/love-wasm.wasm` first. coi.js makes the page
+     b/love-wasm.wasm, so `make b/love-wasm.wasm` first. coi.js makes the page
      cross-origin isolated on a static host, which SharedArrayBuffer wants. -->
 <html lang="en">
 <head>
@@ -77,10 +77,10 @@
         $('lifted').replaceChildren(a); a.click(); }
       else if (m.fault) say('the machine faulted: ' + m.fault); };
     cpu.onerror = (e) => say('the machine stopped: ' + e.message);
-    const wasm = await (await fetch(new URL('../../out/love-wasm.wasm', import.meta.url))).arrayBuffer();
+    const wasm = await (await fetch(new URL('../../b/love-wasm.wasm', import.meta.url))).arrayBuffer();
     // the heap image beside the module (`make wasm` bakes it): a wake is a moment where the
     // egg boot is many seconds. absent, the kernel bakes the egg.
-    const image = await fetch(new URL('../../out/wasm/love-wasm.image', import.meta.url))
+    const image = await fetch(new URL('../../b/wasm/love-wasm.image', import.meta.url))
       .then((r) => r.ok ? r.arrayBuffer() : null).catch(() => null);
     cpu.postMessage({ wasm, ring, ram: Number(q.get('ram') ?? 256), cmd, fb: { w: 640, h: 400, post: true }, image },
                     image ? [wasm, image] : [wasm]);

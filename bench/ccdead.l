@@ -29,7 +29,7 @@
 
 (borrow 'posix)
 (: root (cwd 0)
-   wd (root + "/out/bench/cc")
+   wd (root + "/b/bench/cc")
 
    ; --- shelling out, captured ------------------------------------------------
    (shout argv)

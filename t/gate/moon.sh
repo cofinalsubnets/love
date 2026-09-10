@@ -19,7 +19,7 @@ fail() { echo "FAIL $*" >&2; exit 1; }
 # the compiler under test: love's own mooncc verb (the crew layer, woken per invocation)
 moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 # ..and the BOOTSTRAP one, the lane that compiles l/love.c: love0 waking mooncc0.image
-moon0() { "$love0" wake out/mooncc0.image mooncc "$@"; }
+moon0() { "$love0" wake b/mooncc0.image mooncc "$@"; }
 
 # ---------------------------------------------------------------- the laws
 echo "CC a/moon/{lex,cpp,parse,gen,val,law}.l"
@@ -670,7 +670,7 @@ echo "mooncc: the warm compiler (moon-run answers, the image compiles on past a 
 # one archive per ISA, all three cut under -os linux -- and that pin does not reach the
 # bytes, because impl.h parts the kernels at RUN time on __ai_osv. so every hosted kernel
 # must take the CARRIED archive.
-# A CLOCK ALONE CANNOT SAY IT WAS TAKEN: out/cache/moon's .a entries make the
+# A CLOCK ALONE CANNOT SAY IT WAS TAKEN: b/cache/moon's .a entries make the
 # member-compile lane fast too, so a warm cache passes this leg whether the archive was
 # read or refused, and a refusal can sit here green for as long as the cache lives. So ask
 # the BINARY what it carries -- i/src.c matches the arch word and its width, and a
@@ -681,7 +681,7 @@ for a in x64 a64 rv64; do
   [ "$n" -gt 1000 ] \
     || fail "carried runtime: this binary carries no $a archive (runtime-gz answered $n bytes)"
 done
-rm -f out/cache/moon/*.a                      # the clock below must measure the carried read
+rm -f b/cache/moon/*.a                      # the clock below must measure the carried read
 printf '#include <stdio.h>\nint main(void){ printf("os lane\\n"); return 0; }\n' > "$ho/.os.c"
 for os in linux freebsd netbsd; do
   s0=$(date +%s)

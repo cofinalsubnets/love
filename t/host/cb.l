@@ -5,7 +5,7 @@
 ; member it is quarrelling with is not known -- the corpus resists subsetting, since
 ; the roster is an ordering and a half of it is not a corpus. standalone, then:
 ;
-;   cat t/00-init.l t/host/cb.l | out/love      ; exits 1 on fail, prints cb: ok
+;   cat t/00-init.l t/host/cb.l | b/love      ; exits 1 on fail, prints cb: ok
 ;
 ; the same struct cb is the kernel's framebuffer console, so every law asserted
 ; here holds under inle too -- this file is the emulator's executable spec.

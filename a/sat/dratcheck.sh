@@ -2,7 +2,7 @@
 # a/sat/dratcheck.sh -- the external eye on flat.l's DRAT emission: solve pigeonhole
 # instances with fdrat0 pinned to a jug, dump each ORIGINAL formula (DIMACS) and its
 # refutation, and have drat-trim -- Heule's independent checker, fetched + built into
-# out/drat on first use -- verify every proof (`s VERIFIED`). the BVA lines are RAT
+# b/drat on first use -- verify every proof (`s VERIFIED`). the BVA lines are RAT
 # additions on fresh variables, the learnts RUP, the last line the empty clause; the
 # php5raw row pins fbva0 off to check the pure-RUP lane too. the in-gate twin of this
 # check (fd-check, no external dependency) runs inside `make test_sat`.
@@ -11,9 +11,9 @@
 # and cannot be fetched (offline). NB no `set -e`: drat-trim's exit codes are
 # conventional, the verdict is the `s VERIFIED` line.
 R=../..
-GL=$R/out/love
+GL=$R/b/love
 export LOVE_NO_IMAGE=1   # the native kernels ride the `nif` seam the glazed image mops
-OUT=$R/out/drat
+OUT=$R/b/drat
 mkdir -p "$OUT"
 DT=$OUT/drat-trim
 if [ ! -x "$DT" ]; then

@@ -2,7 +2,7 @@
 ; rename/symlink/readlink/chmod/chown/utime/umask link into `love` and love0 alike
 ; (love0 carries the whole i/*.c glob since the self-host promotion), so these
 ; are corpus laws. it still reads standalone (test comes from t/00-init.l):
-;   cat t/00-init.l t/fs.l | out/love
+;   cat t/00-init.l t/fs.l | b/love
 ; the conventions under test are i/posix.c's posix_ lane: an effect op answers
 ; () ok | an errno nom | 'badarg misuse; a value op answers the value | () | a nom.
 
@@ -10,7 +10,7 @@
 ; answers for none of them -- `files` is true there and not enough, so these laws ask
 ; for a kernel underneath. run.l guards the same way, for the same kind of reason.
 (? !hosted 0
-(: d "out/.fs-nif-smoke"
+(: d "b/.fs-nif-smoke"
    a (+ d "/a") b (+ d "/b") l (+ d "/l")
    _ (mkdir d 493)                                  ; EEXIST from a prior run is fine
    _ (unlink a) _ (unlink b) _ (unlink l)           ; a clean slate, tolerated if absent

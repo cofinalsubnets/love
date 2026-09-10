@@ -5,7 +5,7 @@
 ; cell. no hand-written expected gradients -- the math checks itself. that is the
 ; gate. wired as `test_tele` (see u/Makefile).
 ;
-; run from the repo root:  out/love -l a/tele/tele.l t/tele/grad.l
+; run from the repo root:  b/love -l a/tele/tele.l t/tele/grad.l
 
 (: eps 0.0001 tol 0.003
 

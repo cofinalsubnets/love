@@ -296,7 +296,7 @@
     _ (catch a) _ (catch b)
     (= 5 (peep t 'n 0)))
 
- ; --- what a task wears: in/out/err are names, and each task seats its own ---
+ ; --- what a task wears: in/b/err are names, and each task seats its own ---
  ; (wear (i o e)) re-seats them for the running task, (wear ()) hands the console
  ; back, (worn ()) answers what is worn. an element that is not a port keeps the
  ; console, so a lone stdout re-seat says (() o ()).

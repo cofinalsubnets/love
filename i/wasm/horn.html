@@ -24,8 +24,8 @@ emscripten &mdash; the module is <code>make wasm</code>'s own.</p>
 <script type="module">
 import Love from './loader.js';
 const log = (s) => { document.getElementById('log').textContent = s; };
-// the module: make wasm lays it at out/wasm/love.wasm; serve the repo root
-const M = await Love({ wasm: new URL('../../out/wasm/love.wasm', import.meta.url) });
+// the module: make wasm lays it at b/wasm/love.wasm; serve the repo root
+const M = await Love({ wasm: new URL('../../b/wasm/love.wasm', import.meta.url) });
 if (M.ccall('ai_init', 'number', [], []) !== 0) { log('the image failed to boot'); throw 0; }
 
 const ev = (s) => { const n = M.lengthBytesUTF8(s) + 1, p = M._malloc(n);

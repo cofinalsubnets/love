@@ -5,7 +5,7 @@
 ; has no regex) and the grammar. `dimacs text` -> (formula . nvars): skip `c` comment lines, read the
 ; `p cnf N M` header for N, parse the body integers, split them into clauses at each terminating 0.
 ; The self-tests below read `cdcl` for the parse->solve leg, so this file is run behind the solver:
-; cat a/sat/sat.l a/sat/dimacs.l | out/love.
+; cat a/sat/sat.l a/sat/dimacs.l | b/love.
 ; the combinators (l/boot/post.l) -- its own top-level form; this reader is all lenient `runp`.
 (borrow 'peg)
 

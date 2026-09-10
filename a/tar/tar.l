@@ -241,7 +241,7 @@
    (tar-secs st) (<>st // 1000)
    ; the pruned walk: `keep` is asked with each child's rel nom before the walk
    ; descends or slurps, so what the caller will not carry is never read -- a
-   ; build tree's out/ is gigabytes the archive was never going to hold.
+   ; build tree's b/ is gigabytes the archive was never going to hold.
    (tar-gather? keep root rel) (tar-walk? keep root rel 1)
    ; the thin walk: the same walk that reads no file. each file entry carries its
    ; 'size (off stat) and its 'path (where the bytes are) instead of its body, which

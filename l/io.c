@@ -52,7 +52,7 @@ static word *p0cur(struct ai *g, uintptr_t d);
 // more than one write parks its heap operand on g->sp and re-reads it across each --
 // never a raw pointer over an edge. the lam_* helpers are pure and open none.
 bool iop(word x) { return lamp(x) && cell(x)->ap == lvm_port_io; }
-// the port an op acts on. in/out/err are three names, not three devices: a task wearing
+// the port an op acts on. in/b/err are three names, not three devices: a task wearing
 // its own stdio (hook 6, the chain (i o e)) reaches them through here, routed in place so
 // the re-read across a GC edge finds the same port. op-level only -- ==, peek, hot? and
 // the image still answer the static, since prel's tap/jug read the head by index.

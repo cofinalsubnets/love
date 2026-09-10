@@ -1,7 +1,7 @@
 #!/bin/sh
 # ccsize.sh -- the SIZE half of the compiler differential, the table ccbench.sh's wall
 # clock cannot answer: how much .text each lane lays, and how much of it is love's C
-# rather than the libc underneath. Reads the binaries ccbench.sh leaves in out/bench/cc/
+# rather than the libc underneath. Reads the binaries ccbench.sh leaves in b/bench/cc/
 # (run it first), and writes two tables: the decomposition per lane, then mooncc against
 # each native over the symbols both actually emit.
 #
@@ -23,7 +23,7 @@
 #
 # usage: ./ccsize.sh          (after ./ccbench.sh, or `make ccbench`)
 R=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-W=$R/out/bench/cc
+W=$R/b/bench/cc
 [ -d "$W" ] || { echo "ccsize: no $W -- run ./ccbench.sh first" >&2; exit 1; }
 
 # the lanes ccbench built, in its own order; mooncc first so it is the numerator.

@@ -1,9 +1,9 @@
 // t/holo/wasm.mjs -- the other half of t/holo/wasm.l: instantiate the module love laid
 // under node (V8's validator and engine, not ours) and hold every export to its answer.
-// usage: node t/holo/wasm.mjs [out/.holo.wasm]
+// usage: node t/holo/wasm.mjs [b/.holo.wasm]
 import { readFileSync } from 'node:fs';
 
-const path = process.argv[2] ?? 'out/.holo.wasm';
+const path = process.argv[2] ?? 'b/.holo.wasm';
 const seen = [];
 const { instance } = await WebAssembly.instantiate(readFileSync(path),
   { env: { sys: (x) => { seen.push(x); return x + 1n; } } });
@@ -31,7 +31,7 @@ chk('ir sized memory ops', e.memops(8192n) === 8589934689n);
 chk('ir flags: set, test, unsigned', e.bits(-1n, 1n) === 1110n && e.bits(1n, 2n) === 1011n);
 
 // rung 2: the second module, laid whole by wasm-program -- doubles ride as their bits
-const path2 = process.argv[3] ?? 'out/.holo2.wasm';
+const path2 = process.argv[3] ?? 'b/.holo2.wasm';
 const m2 = (await WebAssembly.instantiate(readFileSync(path2), {})).instance.exports;
 const f64 = new Float64Array(1), i64 = new BigInt64Array(f64.buffer);
 const bits = (x) => { f64[0] = x; return i64[0]; };

@@ -27,33 +27,33 @@ mk=$2
 
 arm='arm-none-eabi-gcc arm-none-eabi-ld qemu-system-arm'
 case $gate in
-  mps2)      banner="MPS2 out/mps2/love.elf"          ; need=$arm
-             elf=out/mps2/love.elf                    ; tmo=300 ; want=42
+  mps2)      banner="MPS2 b/mps2/love.elf"          ; need=$arm
+             elf=b/mps2/love.elf                    ; tmo=300 ; want=42
              qemu="qemu-system-arm -M mps2-an500 -semihosting -nographic"
              why="love-on-M7 boot"
              done_msg="love (all-mooncc thumb2) boots on qemu Cortex-M7 -- egg baked on-device, laws hold, exit 42" ;;
-  mps2_t1)   banner="MPS2T1 out/mps2/love-t1.elf"     ; need=$arm
-             elf=out/mps2/love-t1.elf                 ; tmo=600 ; want=42
+  mps2_t1)   banner="MPS2T1 b/mps2/love-t1.elf"     ; need=$arm
+             elf=b/mps2/love-t1.elf                 ; tmo=600 ; want=42
              qemu="qemu-system-arm -M mps2-an500 -semihosting -nographic"
              why="love-on-v6M boot"
              done_msg="love (all-mooncc thumb1/ARMv6-M, the RP2040 ISA) boots -- egg baked on-device, laws hold, exit 42" ;;
-  mps2_wake) banner="MPS2WAKE out/mps2/waker.elf"     ; need=$arm
-             elf=out/mps2/waker.elf                   ; tmo=300 ; want=42
+  mps2_wake) banner="MPS2WAKE b/mps2/waker.elf"     ; need=$arm
+             elf=b/mps2/waker.elf                   ; tmo=300 ; want=42
              qemu="qemu-system-arm -M mps2-an500 -semihosting -nographic"
              why="image wake"
              done_msg="the qemu-baked image WAKES in a different binary -- laws hold, exit 42" ;;
-  nucleo446_smoke) banner="NUSMOKE out/nucleo446/smoke.elf" ; need=$arm
-             elf=out/nucleo446/smoke.elf              ; tmo=120 ; want=28
+  nucleo446_smoke) banner="NUSMOKE b/nucleo446/smoke.elf" ; need=$arm
+             elf=b/nucleo446/smoke.elf              ; tmo=120 ; want=28
              qemu="qemu-system-arm -M netduinoplus2 -semihosting -nographic"
              why="nucleo446 QSMOKE self-check"
              done_msg="the -D QSMOKE twin boots on qemu Cortex-M4 -- self-checks hold and mkboot.l's sh_exit carries the tally out, exit 28" ;;
-  rvboot)    banner="RVBOOT out/rv64/rvboot.elf" ; need=qemu-system-riscv64
-             elf=out/rv64/rvboot.elf          ; tmo=120 ; want=42
+  rvboot)    banner="RVBOOT b/rv64/rvboot.elf" ; need=qemu-system-riscv64
+             elf=b/rv64/rvboot.elf          ; tmo=120 ; want=42
              qemu="qemu-system-riscv64 -M virt -m 128M -nographic -append rv-gate"
              why="riscv bring-up"
              done_msg="inle's riscv bring-up holds on a hart: sv39 on, the hhdm window reaches ram, and the tree qemu built reads back through it, exit 42" ;;
-  virt)      banner="VIRT out/virt/love.elf"          ; need=qemu-system-riscv64
-             elf=out/virt/love.elf                    ; tmo=300 ; want=42
+  virt)      banner="VIRT b/virt/love.elf"          ; need=qemu-system-riscv64
+             elf=b/virt/love.elf                    ; tmo=300 ; want=42
              qemu="qemu-system-riscv64 -M virt -bios none -nographic"
              why="love-on-virt boot"
              done_msg="love (all-mooncc rv64, our linker, holo start.o) boots on qemu -M virt -- egg baked on-hart, laws hold, exit 42" ;;
@@ -76,10 +76,10 @@ done
 case $gate in
   mps2)      $mk -C i/mps2 || fail "mps2 build" ;;
   mps2_t1)   $mk -C i/mps2 mps2t1 || fail "mps2t1 build" ;;
-  mps2_wake) $mk -C i/mps2 img ../../out/mps2/waker.elf || fail "mps2 waker build"
+  mps2_wake) $mk -C i/mps2 img ../../b/mps2/waker.elf || fail "mps2 waker build"
              # the image is baked ON qemu, so without qemu at bake time there is
              # nothing to wake -- a skip, not a failure
-             test -s out/mps2/love.img || {
+             test -s b/mps2/love.img || {
                echo "$name: empty image (no qemu at bake), skipped"; exit 0; } ;;
   nucleo446_smoke) $mk -C i/nucleo446 smoke || fail "nucleo446 smoke build" ;;
   virt)      $mk -C i/virt || fail "virt build" ;;

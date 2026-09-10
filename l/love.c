@@ -16,7 +16,7 @@ static lvm_t
 static struct ai
  *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, void*, size_t));
 static uintptr_t stringlen(struct ai *g, word x);
-// the build's version string, generated into out/lib/love_version.h and surfaced
+// the build's version string, generated into b/lib/love_version.h and surfaced
 // as `love-version`. -DLvVersion wins (love0 pins "bootstrap" so a new commit never
 // relinks the bootstrap); -DLvHaveVersionH says the header exists -- mooncc has
 // no __has_include, so the probe alone is not enough.

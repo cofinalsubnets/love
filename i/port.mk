@@ -15,13 +15,13 @@ R := ../..
 # restating it, since nothing in a makefile can see that a list has grown.
 include $(R)/common.mk
 p_dir = $(notdir $(CURDIR))
-o = out/$(p_dir)
+o = b/$(p_dir)
 # mooncc is love's own verb (the layered bake). MOONCC is the
 # command as run FROM $(R); mc is the file the verb needs, the baked-stamp's sibling.
 # LOVE_NO_IMAGE= leads (the guard against an exported egg): an egg-booted love has no verbs.
-MOONCC = LOVE_NO_IMAGE= out/love mooncc
-mc = $(R)/out/.love.baked
-lv = $(R)/out/love
+MOONCC = LOVE_NO_IMAGE= b/love mooncc
+mc = $(R)/b/.love.baked
+lv = $(R)/b/love
 
 # a failed recipe takes its half-written target with it -- else a 0-byte artifact carries a
 # fresh mtime and the next make calls it up to date. the root does not include these
@@ -38,7 +38,7 @@ clean:
 
 # FORCE, never a bare prerequisite-less rule: that fires only when the target is MISSING,
 # so a stale header or binary is served forever. and the explicit binary rules also block
-# make's builtin `%: %.o` -- out/love.o sits beside the binary, and a bare prerequisite
+# make's builtin `%: %.o` -- b/love.o sits beside the binary, and a bare prerequisite
 # let the builtin "relink" love from that lone object, then delete the half-made result.
 FORCE:
 # lib_hR is what an OBJECT depends on; p_hdrs only widens what gets delegated, for a
@@ -49,9 +49,9 @@ $(sort $(lib_hR) $(addprefix $(R)/,$(p_hdrs))): FORCE
 	@$(MAKE) -C $(R) $(patsubst $(R)/%,%,$@)
 endif
 $(lv): FORCE
-	@$(MAKE) -C $(R) out/love
+	@$(MAKE) -C $(R) b/love
 $(mc): FORCE
-	@$(MAKE) -C $(R) out/.love.baked
+	@$(MAKE) -C $(R) b/.love.baked
 
 # the holo cats. the backend text is named explicitly: a frontend bakes holo with the
 # NATIVE backend only, and a port must not care which machine it is building on.
@@ -138,7 +138,7 @@ $$(R)/$$(o)/$1.o: $2.l $$(p_be_l) $$(lay_l) $$(lv)
 	@mkdir -p $$(R)/$$(o)
 	@cd $$(R) && { echo "(borrow 'holo)"; cat $$(be_lc) $$(kore_lc); echo "(borrow 'kore)"; \
 	  cat $$(filter-out $$(kore_lc),$$(lay_lc)) i/$$(p_dir)/$2.l; \
-	  echo '($2 $3)'; } | out/love
+	  echo '($2 $3)'; } | b/love
 endef
 
 # p_link -- the link driver's cat. $1 its stem. an explicit target, never a pattern rule:

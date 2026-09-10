@@ -6,7 +6,7 @@ Zassenhaus under a button, every answer exact. cas.l is the whole demo;
 main.c is the love frontend glue (the console is a quay cb, 50x30 cells of
 the 8x8 CGA font, blitted to the 1-bit LCD each frame).
 
-    make -C i/playdate        # out/playdate/love.pdx (device + simulator)
+    make -C i/playdate        # b/playdate/love.pdx (device + simulator)
     make -C i/playdate sim    # run it in the Playdate Simulator
 
 **nothing foreign compiles or links the device half.** mooncc `-t thumb2sp`

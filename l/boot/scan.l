@@ -29,10 +29,7 @@
    ; the honest answer, and the differential oracle the laws hold the kernel to.
    ; it is also the engine wherever the kernel cannot be built -- inle declines the
    ; install (its heap rides an NX window), and so does wasm
-   (walk s c i)
-    (: n #s
-       (go k) (n <= k ? -1 (s k = c ? k (go (k + 1))))
-       (go (i < 0 ? 0 i)))
+   (walk s c i) (: n #s (go k) (n <= k ? -1 (s k = c ? k (go (k + 1)))) (go (i < 0 ? 0 i)))
 
    ones 72340172838076673                        ; 0x0101010101010101
    ; highs is ones << 7 (0x8080808080808080), shifted rather than written: as a
@@ -47,7 +44,7 @@
    ; arguments off the instruction pointer. sc is the scratch and is here for the
    ; same reason -- r0 is free on x64 and is `g` on a64.
    ;                            g   ip  sp  scratch
-   (abi tgt) (? (= tgt 'a64) '(r0 r1 r3 r4) '(r6 r5 r1 r0))
+   (abi tgt) (tgt @ 'a64 '(r0 r1 r3 r4) '(r6 r5 r1 r0))
    ; r7..r14 are free of the ABI on both and are spelled: r7 = the charm, r8 = the
    ; cursor, r9 = the bytes, r10 = n, r11 = the charm in all eight lanes, r12 = ones,
    ; r13 = highs, r14 = ~w. r11..r14 are callee-saved on x64 (x86's r12..r15) so
@@ -111,7 +108,7 @@
    ; (scanner ()) -> (f s c i), answering the index of charm c at-or-after i, or -1.
    ; a caller with many texts asks once and holds f: this is a tablet read, which is
    ; ~1000 instructions, and belongs outside any loop
-   (scanner _) (: k (peep box 'k 'none) (k @- k 'none (: k2 (mk ()) _ (pin box 'k k2) k2)))
+   (scanner _) (: k (peep box 'k 'none) (k @- k 'none (: k2 (mk ()) (pin box 'k k2, k2))))
 )
 
 ) ; module 'scan

@@ -1,8 +1,8 @@
 ; u/hue2vim.l -- write the vim syntax for .l out of a/vi/hue.l's class table
 ; and the vocabulary the running binary answers to. `make syntax` runs it, into
-; out/syntax.vim (the Makefile), and the Makefile installs that:
+; b/syntax.vim (the Makefile), and the Makefile installs that:
 ;
-;   cat a/vi/config.l a/vi/hue.l u/hue2vim.l | out/love
+;   cat a/vi/config.l a/vi/hue.l u/hue2vim.l | b/love
 ;
 ; the file is built and never checked in, which is the point of the whole tool:
 ; the syntax used to carry a hand-curated copy of the vocabulary, with a comment
@@ -152,7 +152,7 @@
 ; --- the file ------------------------------------------------------------------
    _ (line "\" vim syntax for love (.l) -- GENERATED. do not edit.")
    _ (line "\"")
-   _ (line "\"   make syntax   --   cat a/vi/config.l a/vi/hue.l u/hue2vim.l | out/love")
+   _ (line "\"   make syntax   --   cat a/vi/config.l a/vi/hue.l u/hue2vim.l | b/love")
    _ (line "\"")
    _ (line "\" the source is a/vi/hue.l's class table -- the same table pulchritude's own")
    _ (line "\" painter reads, so the editor in the tree and the editor outside it agree by")

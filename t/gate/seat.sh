@@ -10,8 +10,8 @@
 #
 # usage: sh t/gate/seat.sh LOVE
 set -u
-love=${1:-out/love}
-d=out/.seat && mkdir -p $d
+love=${1:-b/love}
+d=b/.seat && mkdir -p $d
 fails=0
 bad=$d/broken.l; printf '(: x (foo\n' > $bad
 
@@ -37,7 +37,7 @@ want='no markdown'  ; try "papel"                a/papel.l --nope
 # core modules and no crew, and libra reads lint and salt. -l CAT is how the shipped
 # image is baked too (Makefile's .love.baked), so this wakes the shape love ships.
 img=$d/seat.image
-if "$love" bake -l out/.dist-cat.l "$img" >/dev/null 2>&1; then
+if "$love" bake -l b/.dist-cat.l "$img" >/dev/null 2>&1; then
   want='unclosed ('; try "libra (under a wake)" wake "$img" a/libra/libra.l $bad
 else
   echo "FAIL seat: could not bake an image to test the prime lane"; fails=$((fails+1))

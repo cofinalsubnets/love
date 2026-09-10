@@ -110,15 +110,14 @@
  ; the next step of the dialog: a say appends its words, an ask opens the prompt, a
  ; hatch runs the crawl, and nothing left closes the window
  (step g) (: w (g 'win) st (w 'steps)
-             (? (one? st) (pin g 'win ())
-                (: s <st
-                   _ (pin w 'steps >st)
-                   (<s @ 'say (each >s (window-say g))
-                        'ask (pin w 'prompt 1)
-                        'hatch (: run (cite 'rove 'rove-run)
-                                  (? run (run (), window-say g "you climb back out of the hold.")
-                                     (window-say g "the hatch is sealed on this seat.")))
-                        (window-say g ("?? " + show s))))))
+             (one? st ? (pin g 'win ())
+              (: s (pin w 'steps >st, <st)
+               (<s @- (window-say g $ "?? " + show s)
+                'say (each >s (window-say g))
+                'ask (pin w 'prompt 1)
+                'hatch (: run (cite 'rove 'rove-run)
+                        (? run (run (), window-say g "you climb back out of the hold.")
+                           (window-say g "the hatch is sealed on this seat.")))))))
  (mod nm k) (cite nm k)
  ; the interpreter, inside a window: a book to read or open off the thing's shelf, a
  ; look, a help, or a love form evaluated and shown -- every answer lands in the window
@@ -131,7 +130,7 @@
                   (f p)))
    _ (window-say g ("> " + ln))
    (? (0 < #ln && ln 0 = 40)
-      (: r (trap (\ _ (show (ev (: d (sound ln) (two? d ? <d ()))))) () (\ a b (";; " + show a + " " + show b)))
+      (: r (trap (_ \ show (ev (sound ln @ (d . _) d))) () (a \ b \ ";; " + show a + " " + show b))
          (window-say g r))
       (v @ ("read" || "r") (with (p \ (: lift (mod 'libra 'ldoc-md) s (book p)
                                           (? !s (window-say g ("the book is missing: " + p))
@@ -153,7 +152,7 @@
  (command g l) (l @ "q" (pin g 'over 'quit)
                    (pin g 'msg ("not a command: " + l)))
  (story-key g c) (:- g w (g 'win)
-  _ (? (g 'mode = 'cmd) (edit-line g 'cmd c (l \ (pin g 'mode 'map, command g l)) (\ _ (pins g 'mode 'map 'cmd (ednew ()))))
+  _ (? (g 'mode = 'cmd) (edit-line g 'cmd c (l \ (pin g 'mode 'map, command g l)) (_ \ pins g 'mode 'map 'cmd (ednew ())))
        !w (c @ (104 || -1) (move g -1 0)  (108 || -2) (move g 1 0)
                (107 || -8) (move g 0 -1)  (106 || -9) (move g 0 1)
                (121 || 377) (move g -1 -1) (117 || 373) (move g 1 -1)
@@ -162,7 +161,7 @@
                63 (open-window g (thing 'help 0 0 "?" 220 -1 "help" '((say "hjkl yubn and the arrows move you. walk into a thing to talk to it. esc closes a window; :q leaves."))))
                27 (pin g 'msg "")
                g)
-       (w 'prompt) (edit-line w 'line c (l \ interp g l) (\ _ (pin g 'win ())))
+       (w 'prompt) (edit-line w 'line c (interp g) (_ \ pin g 'win ()))
        (c @ 27 (pin g 'win ())
             (13 || 10 || 32) (step g)
             107 (0 < w 'top ? (pin w 'top (w 'top - 1)))
@@ -172,7 +171,7 @@
  ; --- the frame: the map with @ on it, the window over it, a status line --------------
  ; a grid of rows is laid as glyphs then the window is written over it, so the port
  ; sees one composed frame; the pens are quay's 256 (rove's palette)
- (pad s n) (#s < n ? (s + ((n - #s) (\ t (t + " ")) "")) (snip s 0 n))
+ (pad s n) (#s < n ? (s + ((n - #s) (t \ t + " ") "")) (snip s 0 n))
  ; a pen is a pair (fg bg); -1 is the terminal's own colour on that side
  (pen p) (: fg <p bg <>p
             ((fg < 0 ? "\e[39m" ("\e[38;5;" + show fg + "m")) + (bg < 0 ? "\e[49m" ("\e[48;5;" + show bg + "m"))))

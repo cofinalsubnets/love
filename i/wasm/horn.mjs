@@ -6,7 +6,7 @@
 import { pathToFileURL } from 'node:url';
 
 const argv = process.argv.slice(2);
-let mod = new URL('../../out/wasm/love.wasm', import.meta.url).href;
+let mod = new URL('../../b/wasm/love.wasm', import.meta.url).href;
 if (argv[0] === '--love') mod = pathToFileURL(argv[1]).href;
 
 // a minimal WebAudio, enough for loader.horn.pull to schedule into

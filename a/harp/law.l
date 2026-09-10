@@ -150,7 +150,7 @@
 (: _ (? !(hosted && files) 0
         (: _ (setenv "HORN" "none")
            p (hit (mini "bd*2 [~ sn]"))
-           w "out/.harp.wav"
+           w "b/.harp.wav"
            spc 24000                                   ; rate 24000, cps 1: one cycle
            _ (harp-wav p 0 1 24000 1 0 20000.0 w)
            q (open w "r")

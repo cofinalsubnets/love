@@ -1,7 +1,7 @@
 ; --- t/init.l: smoke test for the init (pid1 supervisor) nifs (i/posix.c) ---
 ; spawn/glean/wait/still link into love0 as well as `love`, so these are corpus laws.
 ; it still reads standalone (test comes from t/00-init.l):
-;   cat t/00-init.l t/init.l | out/love
+;   cat t/00-init.l t/init.l | b/love
 ; the full pid-1 story -- mounting proc, reaping a reparented orphan -- needs love to
 ; actually be pid 1: `make init-container` (a pid+user+mount namespace). Here we
 ; cover the glean nif's three distinct returns and the spawn/wait pair.
@@ -37,7 +37,7 @@
 
 
   ; --- the fs nifs: stat readdir unlink lseek (the posix_ lane in i/posix.c) -----
-  (: d "out/.fs-nif-probe" f (+ d "/x")
+  (: d "b/.fs-nif-probe" f (+ d "/x")
      _ (mkdir d 493)                                  ; EEXIST from a prior run is fine
      _ (unlink f)                                     ; a clean slate, tolerated if absent
      ; write 5 bytes through the port lane, then measure with stat
@@ -103,7 +103,7 @@
      (test (= 97 a) (= "bcdef" x) (= -1 e) (= "" y)))
 
   ; a file reads the same bytes both ways, gulp boundaries and all
-  (: d "out/.fd-lane-probe" f (+ d "/x")
+  (: d "b/.fd-lane-probe" f (+ d "/x")
      _ (mkdir d 493)
      _ (: p (open f "w") _ (say p (* "abcdefgh" 2000)) (close p))
      fd (openfd f 0) a (slurp fd) _ (close fd)

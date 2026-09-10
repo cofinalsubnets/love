@@ -12,7 +12,7 @@
 ;   /hue.css   the stylesheet that colours both
 ;   anything else -> (), and kiosko does what it always did
 ; run:
-;   cat t/00-init.l t/host/serve.l | out/love
+;   cat t/00-init.l t/host/serve.l | b/love
 
 (borrow "a/vi/config.l")                    ; the theme: hue-theme
 (borrow "a/vi/hue.l")                       ; the class table, read bare by hueweb

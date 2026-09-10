@@ -91,7 +91,7 @@ uintptr_t k_fb_addr(void) { return (uintptr_t) kboot.fb.base; }
 
 // --- what this seat does not have ------------------------------------------------
 // the horn is i/hda.c's, and there is no sound card behind a wasm module; the
-// carried per-ISA runtimes are the shipped artifact's, and out/wasm/src.o brings only
+// carried per-ISA runtimes are the shipped artifact's, and b/wasm/src.o brings only
 // the source blob. plain definitions, so a seat that grows either one collides here
 // rather than quietly keeping the empty answer.
 const unsigned char ai_rtgz_x64[1] = {0};

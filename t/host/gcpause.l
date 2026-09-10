@@ -20,7 +20,7 @@
 ;   (core nifs, every frontend; the gate stays host-side for its pool appetite
 ;   -- megabytes of tenured casks -- not for its names)
 ;
-;   cat t/00-init.l t/host/gcpause.l | out/love
+;   cat t/00-init.l t/host/gcpause.l | b/love
 ;
 ; not a corpus member, and the reason is the table above: it prints live-word counts,
 ; and those differ by READER -- a file door and a seek door allocate differently on the

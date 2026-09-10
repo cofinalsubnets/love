@@ -224,7 +224,7 @@ void host_spawn_guard(struct ai *g, int on) {
 #endif
 }
 
-// the one fork + exec. argv rides at sp[0]; in/out/err are spawnio's fixed triple
+// the one fork + exec. argv rides at sp[0]; in/b/err are spawnio's fixed triple
 // (-1: leave it), applied first; fdmap is a list of (childfd . srcfd) pairs and closes a list
 // of fds, both read off the stack AFTER the marshal (a GC may have moved them), -1 for
 // none. pg >= 0 puts the child in that group (0: a fresh one it leads), fg hands it the
@@ -586,7 +586,7 @@ static lvm(lvm_fdopen) {
  LvmCallp(g, 1, ai_io_alloc, (int) fd) }   // port over the fd arg -- alloc pushed it
 
 // (spawnmap argv fdmap closes pg fg) -> pid | a nom. spawnio generalized: instead
-// of the hardwired in/out/err triple, `fdmap` is a list of (childfd . srcfd) pairs
+// of the hardwired in/b/err triple, `fdmap` is a list of (childfd . srcfd) pairs
 // applied in order in the child -- dup2(srcfd, childfd) for a charm srcfd >= 0,
 // close(childfd) for () -- and each srcfd reads the fd table as remapped so far,
 // which is exactly the POSIX left-to-right redirection law (`>f 2>&1` maps
@@ -608,7 +608,7 @@ static lvm(lvm_getgid) { Sp[0] = putcharm(getgid()); ai_musttail return Next(1);
 // shell's subshell: the child evals a subtree and quits, and must never return
 // to the reader loop (doc/misc/posix.md's open question, answered conservatively:
 // the child owns a full copy-on-write address space, so the GC is fine; the
-// discipline is all in the caller -- flush out/err before, child = eval+quit).
+// discipline is all in the caller -- flush b/err before, child = eval+quit).
 static ai_inline word host_fork(struct ai *g) {
  fflush(NULL);
  pid_t pid = fork();

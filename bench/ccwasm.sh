@@ -13,8 +13,8 @@ set -u
 R=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 REPS=${1:-24}
 SAMPLES=${2:-5}
-W=$R/out/bench/ccwasm
-m=$R/out/love
+W=$R/b/bench/ccwasm
+m=$R/b/love
 export CCACHE_DISABLE=1
 
 [ -x "$m" ] || { echo "ccwasm: no $m -- run \`make host\` first" >&2; exit 1; }
@@ -108,4 +108,4 @@ done
 echo
 echo "ccwasm: the ratio in a cell is mooncc/that lane -- 1.00x is parity. the corpus row lives in"
 echo "        the gates: \`make test_wasm\` drives the module, \`make -C i/wasm gate\` lays"
-echo "        emcc's out/wasm/love.js beside it as the differential."
+echo "        emcc's b/wasm/love.js beside it as the differential."

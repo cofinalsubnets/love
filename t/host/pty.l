@@ -4,7 +4,7 @@
 ; does not survive its own second run -- one marker where a corpus file gives two.
 ; standalone, then, against the built binary (test comes from t/00-init.l):
 ;
-;   cat t/00-init.l t/host/pty.l | out/love      ; green dots = pass, exits 1 on fail
+;   cat t/00-init.l t/host/pty.l | b/love      ; green dots = pass, exits 1 on fail
 ;
 ; Mechanics are scriptable (here); full interactive wrapping is manual (cli.l).
 

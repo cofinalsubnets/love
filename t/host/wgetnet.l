@@ -4,7 +4,7 @@
 ; this suite and answers a plain page.
 ;   make test_wgetnet
 (: wget (cite 'kore 'wget-main)
-   out1 "out/.wget-net.html"
+   out1 "b/.wget-net.html"
    rc (wget ["-q" "-O" out1 "https://github.com/"])
    got (: p (open out1 "r") (? (hot? p) (: s (slurp p) _ (close p) s) ""))
    ; the page opens with a few blank lines before its doctype

@@ -23,7 +23,7 @@
 ;             vector. the state's width is the only thing telling the three apart,
 ;             so the misuse cases feed each nif the other two's cask.
 ;
-; run:  cat t/00-init.l t/digest.l | out/love
+; run:  cat t/00-init.l t/digest.l | b/love
 (test
  (lit? sha256)
  (lit? md5)

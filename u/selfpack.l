@@ -66,7 +66,7 @@
    sp-ign? (cite 'sb 'ign?)
    (sp-rules drops) (((cite 'sb 'igs) 0) + sp-own + drops)
    ; handed to the walk, not run after it: what the archive will not carry is never
-   ; read (out/ and dl/ are gigabytes on a build box, and a rejected directory is
+   ; read (b/ and dl/ are gigabytes on a build box, and a rejected directory is
    ; never descended into at all).
    (sp-keep? rules nom) ((nom = ".sbignore") || !(sp-ign? nom rules))
    ; re-home the kept entries under top -- the walk is already sorted, so order
@@ -97,7 +97,7 @@
        old (sp-read side)
        have (sp-read arch)
        fresh (two? old && two? have && <>old = h)
-       ; an archive with no sidecar (a seed-laid tree, a fresh checkout of out/):
+       ; an archive with no sidecar (a seed-laid tree, a fresh checkout of b/):
        ; adopt it when its content is this content -- no rewrite, so its mtime
        ; holds and nothing downstream re-links.
        adopt (? (fresh || one? have) 0

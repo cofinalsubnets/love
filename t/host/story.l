@@ -7,7 +7,7 @@
 ; things, the box over it, the status line); and the library lifted from a -- a
 ; shelf per wing whose books read through libra. the runner, vi and the hatch stay live
 ; probes: `love story`, `love story a`.
-;   cat t/00-init.l t/host/story.l | out/love
+;   cat t/00-init.l t/host/story.l | b/love
 
 (borrow 'story)   ; the artifact's module, warm from the tree
 

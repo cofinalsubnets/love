@@ -8,7 +8,7 @@
 ; sitting in the cwd. a path load is one fresh layer, leave registers it under the
 ; file's basename, and the prior use splices it below the head.
 ; paths resolve against the cwd, so run from the repo root:
-;   cat t/00-init.l t/host/loader.l | out/love
+;   cat t/00-init.l t/host/loader.l | b/love
 ; the baked-table lane (the frontend's ai_libs) is every frontend's boot; this script
 ; smokes the path lane and the registry behavior around it. fixtures are written here
 ; and removed at the foot -- zz- names, so a crashed run's leftovers are recognizable.
@@ -77,21 +77,21 @@
 
 ; the seat rungs are retired (the modules arc, rung 3) and so is the cwd walk:
 ; the loader reads no directory of its own, so a fixture beside the binary is as
-; invisible as one in lib/. this binary is out/love, so its old rungs were
-; out/lib/ and out/lib/love/ -- fixture there, and the use must miss.
-(: _ (mkdir "out/lib/love" 493)
-   _ (: p (open "out/lib/zz-seatprobe.l" "w")
+; invisible as one in lib/. this binary is b/love, so its old rungs were
+; b/lib/ and b/lib/love/ -- fixture there, and the use must miss.
+(: _ (mkdir "b/lib/love" 493)
+   _ (: p (open "b/lib/zz-seatprobe.l" "w")
         _ (say p "(: zz-seat-pin 51)")
         (close p))
-   _ (: p (open "out/lib/love/zz-fhsprobe.l" "w")
+   _ (: p (open "b/lib/love/zz-fhsprobe.l" "w")
         _ (say p "(: zz-fhs-pin 52)")
         (close p)))
 (: a (trap (\ _ (borrow 'zz-seatprobe)) () (\ a b 'caught))
    b (trap (\ _ (borrow 'zz-fhsprobe)) () (\ a b 'caught))
  (test (a = 'caught) (b = 'caught)
          (nil? (cite 'zz-seatprobe)) (nil? (cite 'zz-fhsprobe))))
-(: _ (unlink "out/lib/zz-seatprobe.l") _ (unlink "out/lib/love/zz-fhsprobe.l")
-   _ (rmdir "out/lib/love") 0)
+(: _ (unlink "b/lib/zz-seatprobe.l") _ (unlink "b/lib/love/zz-fhsprobe.l")
+   _ (rmdir "b/lib/love") 0)
 (test_fin ())
 (puts "loader: ok")
 (putc 10)

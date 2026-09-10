@@ -14,7 +14,7 @@
 ; load after holo.l + x64.l + dialect.l (bare, dev/test context -- the encoder primitives
 ; le32/byte/fix/modrm.. are still on the global book; the eventual host path reaches them
 ; through the `holo` book):
-;   out/love -l l/holo/holo.l -l l/holo/x64.l -l l/holo/dialect.l -l l/holo/as.l ...
+;   b/love -l l/holo/holo.l -l l/holo/x64.l -l l/holo/dialect.l -l l/holo/as.l ...
 
 (module 'holo
 (: ;; --- encoder primitives (physical, width-aware; x64.l is the form reference). ---

@@ -13,7 +13,7 @@
 ;
 ; needs only (borrow 'peg) -- no assembler names, so it loads in the raw holo.l stream (test_holo)
 ; and on the baked host alike:
-;   out/love -l l/holo/text.l ...
+;   b/love -l l/holo/text.l ...
 
 ; the combinators (l/boot/post.l). the use is its own top-level form -- a `:` body compiles
 ; as one unit, so a use inside the form below would run too late to serve it.

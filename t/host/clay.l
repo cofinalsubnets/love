@@ -12,7 +12,7 @@
 ; agree about a tree; here, that the shower emits the C a human meant to write.
 ;
 ; run standalone from the repo root:
-;   cat t/00-init.l t/host/clay.l | out/love
+;   cat t/00-init.l t/host/clay.l | b/love
 
 (borrow "a/moon/clay.l")
 

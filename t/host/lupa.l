@@ -1,7 +1,7 @@
 ; --- t/host/lupa.l: the magnifier, headless ---
 ; the tool is a pure step and a pure frame (a/lupa.l); this drives both over a
-; small raw program and over out/love itself -- an ELF with a .text and a symbol table -- and
-; reads the frames back. run: cat t/00-init.l t/host/lupa.l | out/love
+; small raw program and over b/love itself -- an ELF with a .text and a symbol table -- and
+; reads the frames back. run: cat t/00-init.l t/host/lupa.l | b/love
 (borrow 'lupa)
 
 (: (has? h n) (0 <= findsub h n)
@@ -57,13 +57,13 @@
    _ (test (narrow? d 60) (narrow? d 40))
    _ (keys! d "d") _ (test (narrow? d 60) (narrow? d 40))
 
-   ;; -- out/love: an ELF, its .text, its symbols -------------------------------------------
+   ;; -- b/love: an ELF, its .text, its symbols -------------------------------------------
    (slurpf f) (: q (open f "r") (slurp q))
-   love (slurpf "out/love")
-   e (lupa-new love "out/love")
+   love (slurpf "b/love")
+   e (lupa-new love "b/love")
    _ (test (e 'mode = 'asm) (tablet? (e 'elf)) (0 < ((e 'elf) 'tsize)) (e 'cur = ((e 'elf) 'toff)))
    f (frame e)
-   _ (test (has? f "lupa: out/love") (has? f ".text 0x"))
+   _ (test (has? f "lupa: b/love") (has? f ".text 0x"))
    ;; :g by symbol lands on it, and the row names it
    _ (cmd! e "g main")
    _ (test (e 'cur = ((e 'elf) 'toff) + (((e 'elf) 'names) "main") - ((e 'elf) 'taddr)) (has? (frame e) "main:"))

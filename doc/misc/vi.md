@@ -22,7 +22,7 @@ re.l regex engine):
   sessions (`printf 'ihello\033:wq\n' | kore vi f`).
 * **a/vi/hue.l** — the .l syntax written down once, for two readers: the painter in core.l's
   `vframe`, and the vim syntax file, which u/hue2vim.l generates from the same table, so the
-  two readings cannot drift. `make syntax` builds it into `out/syntax.vim` and
+  two readings cannot drift. `make syntax` builds it into `b/syntax.vim` and
   `make install` puts it in `~/.vim/syntax/love.vim`; it is never checked in, so there is no
   copy to keep up to date.
 * **a/vi/config.l** — the theme (molokayo) as plain data, keyed by vim highlight group, so

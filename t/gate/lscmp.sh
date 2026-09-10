@@ -9,7 +9,7 @@
 # the tree is BUILT here, never a real directory: a stray file, an ACL or an
 # SELinux label would move GNU's mode column by one character and read as a bug.
 set -u
-m=${1:-./out/love}
+m=${1:-./b/love}
 LC_ALL=C TZ=UTC; export LC_ALL TZ
 w=${TMPDIR:-/tmp}/lscmp.$$; mkdir -p "$w"; trap 'rm -rf "$w"' EXIT
 fail=0; ran=0

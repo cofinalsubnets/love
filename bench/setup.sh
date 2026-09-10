@@ -12,7 +12,7 @@
 # usage: ./setup.sh [samples]   (default 5; the median of that many cold-ish runs)
 R=..
 SAMPLES=${1:-5}
-T=$R/out/bench/setup-tmp
+T=$R/b/bench/setup-tmp
 mkdir -p "$T"
 
 # minimal valid program per language -- does ~nothing, so the time IS the setup.
@@ -36,7 +36,7 @@ emit() { command -v "$2" >/dev/null 2>&1 || return; echo "setup $1 1 $(med "$3")
 # love measures its REAL cold start: the binary wakes its baked .image section (a precompiled, glaze-baked heap
 # snapshot, mmap'd + relocated -- no egg eval), ~4 ms. `unset LOVE_NO_IMAGE` defeats the Makefile-wide
 # suppression (the per-iteration harness sets it for determinism; the cold-start row wants the image).
-emit love     "$R/out/love" "unset LOVE_NO_IMAGE; $R/out/love $T/t.l"
+emit love     "$R/b/love" "unset LOVE_NO_IMAGE; $R/b/love $T/t.l"
 emit go     go               "cd $T && go run t.go"
 emit rust   rustc            "rustc -O $T/t.rs -o $T/t.rsbin && $T/t.rsbin"
 emit java   javac            "cd $T && javac T.java && java T"

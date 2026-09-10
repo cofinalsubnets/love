@@ -5,7 +5,7 @@
 ; every cell -- then quantized onto a 256-color ocean ramp and said to the
 ; terminal as painted cells. any key returns you to shore.
 ;
-; run: out/love -l a/ink.l -e '(ink ())'
+; run: b/love -l a/ink.l -e '(ink ())'
 ; the shimmer core is pure love (ink-scene builds a frame(t) closure that runs
 ; headless into a jug -- the wasm console drives it); only the tty runner (ink)
 ; ties raw / winsize / cue?, which ride i/posix.c, so ink never joins the test

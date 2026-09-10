@@ -3,7 +3,7 @@
 ; spawnmap/glean/sigfd/shore live in src/posix.c and src/sock.c, which love0 does not
 ; link, so this runs standalone against the built binary like t/host/kiosko.l.
 ; helm is not baked into the image either, so the four crew files are loaded by path.
-; run: cat t/00-init.l t/host/helm.l | out/host/love
+; run: cat t/00-init.l t/host/helm.l | b/host/love
 ;
 ; what is asserted:
 ;   LANGUAGE  a config reads to units keyed by their own clause names; the defaults
@@ -39,11 +39,11 @@
                            (= n (snip h i (i + nn))) 1
                            (go (i + 1)))
                  (go 0))
-   good "out/.helm-test.l"
-   bad  "out/.helm-bad.l"
-   stamp "out/.helm-test-stamp"
+   good "b/.helm-test.l"
+   bad  "b/.helm-bad.l"
+   stamp "b/.helm-test-stamp"
    _ (unlink stamp)
-   _ (spill good "(oneshot once (exec \"/bin/sh\" \"-c\" \"echo hi > out/.helm-test-stamp\"))
+   _ (spill good "(oneshot once (exec \"/bin/sh\" \"-c\" \"echo hi > b/.helm-test-stamp\"))
 (service fails (after once) (exec \"/bin/sh\" \"-c\" \"exit 3\") (restart on-fail) (tries 1))
 (service settles (exec \"/bin/sh\" \"-c\" \"exit 0\"))
 (target default (wants fails settles))
@@ -108,7 +108,7 @@
    ; --- MOOR ----------------------------------------------------------------------
    ; the socket is an eval server: a form in, its value out. one process, two tasks --
    ; the moor twirled, the client here -- interleaving through the scheduler.
-   sock "out/.helm-test.sock"
+   sock "b/.helm-test.sock"
    _ (twirl (\ _ (helm-moor sock)) 0)
    _ (rest 50)
    c (connectu sock)
@@ -136,7 +136,7 @@
    ; --- UNDERLAY -------------------------------------------------------------------
    ; every registered verb becomes a link onto this binary, and the count is the
    ; registry's own -- a roster spelled out here would drift from what love can do.
-   ubd "out/.helm-underlay"
+   ubd "b/.helm-underlay"
    n   (hunderlay ubd)
    ws  (keys (cite 'verbs 'tab))
    _   (test (= n (1 + tally ws)))                  ; every verb, and `love` itself
@@ -152,12 +152,12 @@
    ; --- SCATTER --------------------------------------------------------------------
    ; the same blob inle boots on. re-homed: the tree reads from inside as a checkout,
    ; so its own files are where this file says they are.
-   scd "out/.helm-scatter"
+   scd "b/.helm-scatter"
    k   (hscatter scd)
    _   (test (0 < k))
    _   (test (two? (stat (scd + "/a/helm/helm.l"))))
    _   (test (!(two? (stat (scd + "/love-0.1")))))  ; the top is dropped, not laid
-   _   (hark [(selfpath 0) "rm" "-rf" scd])           ; 13M of tree, and out/ is not a nest
+   _   (hark [(selfpath 0) "rm" "-rf" scd])           ; 13M of tree, and b/ is not a nest
 
    _ (unlink good) _ (unlink bad) _ (unlink stamp)
    _ (test_fin ())

@@ -10,7 +10,7 @@
 ;          retraction (many markdowns, one AST), showing its section.
 ; a new surface owes law 1 and nothing more; that is what keeps its arrival from
 ; touching any other. run:
-;   cat t/00-init.l t/host/lapiz.l | out/love
+;   cat t/00-init.l t/host/lapiz.l | b/love
 
 (borrow 'lapiz)                                ; the baked module, spliced
 

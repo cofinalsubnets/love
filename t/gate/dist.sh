@@ -20,7 +20,7 @@ dabs=$(CDPATH= cd -- "$(dirname -- "$dist")" && pwd)/$(basename -- "$dist")
 
 case $mode in
 smoke)
-  s=out/dist/.smoke
+  s=b/dist/.smoke
   rm -rf "$s"; mkdir -p "$s"
 
   run "$dist" kore true                            || fail "kore true (the nested dispatch)"
@@ -31,7 +31,7 @@ smoke)
                                                    || { tail -3 "$s/src.log"; fail "love source did not lay"; }
   srcd=$(echo "$s"/love-*/)
   [ ! -e "$srcd/bin" ]                             || fail "love source laid a bin/ -- the tree is source, nothing else"
-  ls "$srcd"/out/dist/love-*.tar.gz >/dev/null 2>&1 || fail "love source laid no archive"
+  ls "$srcd"/b/dist/love-*.tar.gz >/dev/null 2>&1 || fail "love source laid no archive"
   run "$dist" sb 2>&1 | grep -q "patch-set vcs"  || fail "sb usage"
   run "$dist" mooncc 2>&1 | grep -q "usage: mooncc" || fail "mooncc verb usage"
   # the CC-under-make lane: the build recipes hand this command its image back
@@ -51,7 +51,7 @@ smoke)
   grep -q "bare door" "$s/bare.log"                || fail "bare cc: the exe did not answer"
   [ -z "$(ls -A "$s/bare/home")" ]                 || fail "bare cc: wrote into HOME ($(ls -A "$s/bare/home"))"
   # ..and nothing in the cwd but the two files this leg accounts for. the runtime cache
-  # seats itself at out/cache/moon under a BUILD tree, so a door with no out/ must make
+  # seats itself at b/cache/moon under a BUILD tree, so a door with no b/ must make
   # none -- the HOME leg above cannot see that one any more.
   [ "$(ls -A "$s/bare" | grep -vx -e home -e hi.c -e a.out | wc -l)" -eq 0 ] \
                                                    || fail "bare cc: wrote into the cwd ($(ls -A "$s/bare"))"

@@ -1,11 +1,11 @@
 // the other half of t/holo/fuzz/wasm.l: instantiate what love laid and hold every export
 // to the model's answer. v8 is the second opinion -- its decoder rejects a malformed module
 // outright, and its engine disagrees with a wrong immediate.
-// usage: node t/holo/fuzz/wasm.mjs [out/.wasmfuzz.wasm] [out/.wasmfuzz.json]
+// usage: node t/holo/fuzz/wasm.mjs [b/.wasmfuzz.wasm] [b/.wasmfuzz.json]
 import { readFileSync } from 'node:fs';
 
-const wasm = process.argv[2] ?? 'out/.wasmfuzz.wasm';
-const spec = JSON.parse(readFileSync(process.argv[3] ?? 'out/.wasmfuzz.json', 'utf8'));
+const wasm = process.argv[2] ?? 'b/.wasmfuzz.wasm';
+const spec = JSON.parse(readFileSync(process.argv[3] ?? 'b/.wasmfuzz.json', 'utf8'));
 
 const bytes = readFileSync(wasm);
 if (!WebAssembly.validate(bytes)) {

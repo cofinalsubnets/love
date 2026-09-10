@@ -22,7 +22,7 @@
 ;
 ; skips (exit 0, a note) without llvm-mc. run from the repo root:
 ;
-;   out/love t/holo/fuzz/rvc.l
+;   b/love t/holo/fuzz/rvc.l
 ;
 ; exit 1 on any mismatch, naming the word, both spellings and the count.
 

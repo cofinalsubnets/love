@@ -36,7 +36,7 @@
 ; - `make test` is the fast gate to check if something works (<1m)
 ; - `make test_slow` is the slow gate, before committing (<10m)
 ; - `make test_extra` is the really slow gate, before merging (qemu boots, cross-arch, boards)
-; - use libra `out/love a/libra/libra.l <file>` to check paren balance
+; - use libra `b/love a/libra/libra.l <file>` to check paren balance
 ; - don't trust comments without reading the code they're talking about
 ; - just because something was done on purpose doesn't mean it was for a good reason
 
@@ -53,7 +53,7 @@
 ;   board lanes pass -D __STDC_HOSTED__=0 and are the only freestanding compiles; the
 ;   kernel and wasm are both hosted
 ; - which artifacts compile a file is a question for the build, not for a comment or a
-;   symbol name: `find out -name '<file>.o'`. objects under out/ go stale, so check an
+;   symbol name: `find out -name '<file>.o'`. objects under b/ go stale, so check an
 ;   mtime before reading one as evidence
 
 

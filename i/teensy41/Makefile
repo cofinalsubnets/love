@@ -13,10 +13,10 @@
 # mislayout cost first silicon its boot.
 p_tgt = thumb2
 p_be  = thumb2
-lib_h = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/seat.h out/lib/love_version.h
+lib_h = b/lib/egg.h b/lib/post.h b/lib/p1.h b/lib/prel.h b/lib/ev.h b/lib/seat.h b/lib/love_version.h
 include ../port.mk
 
-te_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Il -Iout/lib
+te_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Il -Ib/lib
 
 objs = $(love_o) $(R)/$(o)/am.o $(libc_o) \
   $(R)/$(o)/teensy41.o $(R)/$(o)/psram.o $(R)/$(o)/main.o $(R)/$(o)/boot.o \
@@ -41,10 +41,10 @@ $(eval $(call p_lay,boot,mkboot,"$(o)/boot.o"))
 # the baked heap image: i/mps2's qemu baker dumps it (a build-time bake), and mkimg.l
 # lays the blob as an object in place of `ld -r -b binary`. FORCE keeps the delegation
 # live -- the mps2 makefile's own deps decide whether the qemu bake re-runs.
-$(R)/out/mps2/love.img: FORCE
+$(R)/b/mps2/love.img: FORCE
 	@$(MAKE) --no-print-directory -C $(R)/i/mps2 img
-$(eval $(call p_lay,love-img,mkimg,"out/mps2/love.img" "$(o)/love-img.o"))
-$(R)/$(o)/love-img.o: $(R)/out/mps2/love.img
+$(eval $(call p_lay,love-img,mkimg,"b/mps2/love.img" "$(o)/love-img.o"))
+$(R)/$(o)/love-img.o: $(R)/b/mps2/love.img
 
 # the link is ours: tlink.l drives holo's ldbare32 with the XIP flash map, in place of
 # arm-none-eabi-ld + teensy41.lds.
@@ -53,14 +53,14 @@ $(eval $(p_ocopy))
 
 $(R)/$(o)/love.elf: $(objs) $(R)/$(o)/tlink.l $(lv)
 	@echo HOLO	$@
-	@cd $(R) && out/love $(o)/tlink.l $(o)/love.elf $(objs:$(R)/%=%)
+	@cd $(R) && b/love $(o)/tlink.l $(o)/love.elf $(objs:$(R)/%=%)
 
 # .hex (Intel HEX) is what teensy_loader_cli / the Teensy Loader GUI flash. The .bin is the
 # verification surface: byte offsets ARE flash offsets.
 $(R)/$(o)/love.hex: $(R)/$(o)/love.elf $(R)/$(o)/ocopy.l
 	@echo LOVE	$@
-	@cd $(R) && out/love $(o)/ocopy.l -O ihex $(o)/love.elf $(o)/love.hex
-	@cd $(R) && out/love $(o)/ocopy.l -O binary $(o)/love.elf $(o)/love.bin
+	@cd $(R) && b/love $(o)/ocopy.l -O ihex $(o)/love.elf $(o)/love.hex
+	@cd $(R) && b/love $(o)/ocopy.l -O binary $(o)/love.elf $(o)/love.bin
 	@python3 -c "import sys,struct; b=open('$(R)/$(o)/love.bin','rb').read(); \
 	  fcfb=struct.unpack_from('<I',b,0)[0]; ivt=struct.unpack_from('<I',b,0x1000)[0]; \
 	  entry=struct.unpack_from('<I',b,0x1004)[0]; \
@@ -83,7 +83,7 @@ flashpsram: $(R)/$(o)/psram-test.hex
 
 $(R)/$(o)/psram-test.elf: $(pt_objs) $(R)/$(o)/tlink.l $(lv)
 	@echo HOLO	$@
-	@cd $(R) && out/love $(o)/tlink.l $(o)/psram-test.elf $(pt_objs:$(R)/%=%)
+	@cd $(R) && b/love $(o)/tlink.l $(o)/psram-test.elf $(pt_objs:$(R)/%=%)
 $(R)/$(o)/psram-test.hex: $(R)/$(o)/psram-test.elf $(R)/$(o)/ocopy.l
 	@echo LOVE	$@
-	@cd $(R) && out/love $(o)/ocopy.l -O ihex $(o)/psram-test.elf $(o)/psram-test.hex
+	@cd $(R) && b/love $(o)/ocopy.l -O ihex $(o)/psram-test.elf $(o)/psram-test.hex

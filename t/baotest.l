@@ -5,7 +5,7 @@
 ;
 ; cli is baked (in the host egg), so this file needs no -l:
 ;
-;   cat t/00-init.l t/baotest.l | out/love
+;   cat t/00-init.l t/baotest.l | b/love
 ;
 ; (wired into `make test_hostnif`.) green dots = pass.
 ; (ed u l r d) builds a buffer; (b4 t) and (b7 t) read it back as a comparable list,

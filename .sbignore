@@ -26,7 +26,7 @@ t/proof/rocq/uugen.v
 t/proof/lean/uugen.lean
 
 # the project's web page and what it alone links: generated, committed for github
-# pages, never shipped (the machine's pair is `make site-wasm`'s copy out of out/)
+# pages, never shipped (the machine's pair is `make site-wasm`'s copy out of b/)
 index.html
 w/style.css
 w/favicon.png

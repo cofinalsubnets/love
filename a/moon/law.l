@@ -3,7 +3,7 @@
 ; AST goldens, and the whole IR for return-42 compared form by form. the cat
 ; (`make test_moon`):
 ;
-;   cat t/00-init.l a/moon/floor.l a/moon/lex.l a/moon/parse.l a/moon/val.l a/moon/gen.l a/moon/law.l | out/love
+;   cat t/00-init.l a/moon/floor.l a/moon/lex.l a/moon/parse.l a/moon/val.l a/moon/gen.l a/moon/law.l | b/love
 ;
 ; the end-to-end (elf64, the run, the gcc differential) lives in the Makefile
 ; smoke through the real `mooncc`.

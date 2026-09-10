@@ -1,5 +1,5 @@
 // l/bare.c -- the null seat: what the runtime's doors answer with no OS under them and
-// no i/fd.c beside them. the boards link it (i/port.mk's love_m) and so does out/front,
+// no i/fd.c beside them. the boards link it (i/port.mk's love_m) and so does b/front,
 // the test frontend, which supplies its own contract and wants exactly these eight and
 // no more -- a hosted love, love0 and every kernel all carry i/fd.c, whose bodies are
 // the real ones.

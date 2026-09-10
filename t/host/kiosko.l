@@ -17,7 +17,7 @@
 ;   types    the extension picks the Content-Type; an unknown one is octet-stream.
 ;   404      a missing file, and nothing else, is 404.
 ;
-; run:  cat t/00-init.l t/host/kiosko.l | out/love
+; run:  cat t/00-init.l t/host/kiosko.l | b/love
 
 (borrow 'kiosko)                                 ; the baked module, spliced
 

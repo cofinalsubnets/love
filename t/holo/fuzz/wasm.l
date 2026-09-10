@@ -7,7 +7,7 @@
 ; the model is the point. every op is simulated over an unsigned 64-bit register file with
 ; wasm's own semantics -- shr_u against shr_s, i64.mul wrapping, div_u -- so the expectation
 ; comes from the instruction's MEANING and not from a second run of our own code.
-; run: cat l/holo/holo.l l/holo/wasm.l l/holo/wasmfn.l t/holo/fuzz/wasm.l | out/love
+; run: cat l/holo/holo.l l/holo/wasm.l l/holo/wasmfn.l t/holo/fuzz/wasm.l | b/love
 
 (borrow 'holo)
 (borrow 'posix)
@@ -97,13 +97,13 @@
       'funcs (map (\ p (: f (wasm-fn p 1 {}) [0 <f >f])) progs)
       'memory '(1 4)
       'exports (map (\ i [("f" + show i) 'func i]) ^N)}
-   _ (wasm-write "out/.wasmfuzz.wasm" m)
+   _ (wasm-write "b/.wasmfuzz.wasm" m)
 
    ; the expectations, as json for the runner: name, argument, the answer the model says
    (row i x) ("{\"name\":\"f" + show i + "\",\"arg\":\"" + show x
               + "\",\"want\":\"" + show (run (progs i) x) + "\"}")
    rows (cats (map (\ i (map (\ x (row i x)) args)) ^N))
-   q (open "out/.wasmfuzz.json" "w")
+   q (open "b/.wasmfuzz.json" "w")
    _ (say q ("[" + (foldl (\ a r (a = "" ? r (a + "," + r))) "" rows) + "]\n"))
    _ (close q)
    (puts ("wasmfuzz: " + show N + " programs, " + show (tally rows) + " calls, "

@@ -1,5 +1,5 @@
 # Playdate build. Run from the project root via `make -C i/playdate`, or
-# directly via `cd i/playdate && make`. Output lands in $(R)/out/playdate/
+# directly via `cd i/playdate && make`. Output lands in $(R)/b/playdate/
 # ($n.pdx at the top). Requires PLAYDATE_SDK_PATH for the C_API headers, the
 # simulator, and pdc, which bundles the .pdx.
 #
@@ -16,17 +16,17 @@
 # trio). The simulator pdex.so stays an ordinary host gcc shared object, and
 # there setup.c is the SDK's again, so `make sim` runs with no cross tools.
 #
-# Both halves bake the same program: the egg bootstrap (out/lib lcat headers,
+# Both halves bake the same program: the egg bootstrap (b/lib lcat headers,
 # delegated to the root), a/rune.l as a registered module, and cas.l (this
 # folder, lcat'd locally) driving the workbench. See main.c + pdglue.c.
 R := ../..
 include $(R)/common.mk
 
-o = $(R)/out/playdate
+o = $(R)/b/playdate
 n = love
 pd_sdk = $(PLAYDATE_SDK_PATH)
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
-MOONCC = $(R)/out/.love.baked
+MOONCC = $(R)/b/.love.baked
 
 # mooncc's flags for the device C (run from $(R): its system include dir is
 # CWD-relative, the SDK's is absolute). TARGET_PLAYDATE gates main.c's newlib
@@ -34,7 +34,7 @@ MOONCC = $(R)/out/.love.baked
 # l/love.h's ai_typ reads wants the link to place love.data.NN, and this seat
 # lays one flat text run, so l/love.h asks the sentinels by name here.
 mc_flags = -t thumb2sp -D ai_tco=1 -D __STDC_HOSTED__=0 -D TARGET_PLAYDATE=1 -D TARGET_EXTENSION=1 -D ai_data_section=0 \
-  -Ii/playdate -Iout/playdate -I. -Il -Iout/lib -Il/quay -Ia/moon/include -I$(pd_sdk)/C_API
+  -Ii/playdate -Ib/playdate -I. -Il -Ib/lib -Il/quay -Ia/moon/include -I$(pd_sdk)/C_API
 # our own link. -Ttext 0 is where link_map.ld puts .text, which is the only thing
 # that script says about placement; --emit-relocs keeps the R_ARM_ABS32 sites so
 # the loader can slide them; -nostdlib makes an owed nom past our own runtime a
@@ -48,7 +48,7 @@ mc_ld_alt = -t thumb2sp -Ttext 0x100000 -nostdlib --emit-relocs
 
 # the lcat lib headers this frontend bakes (produced by the root's rules on
 # love0, delegated below so a standalone make works from a clean tree)
-lib_hs = $(patsubst %,$(R)/out/lib/%.h,egg prel ev rune)
+lib_hs = $(patsubst %,$(R)/b/lib/%.h,egg prel ev rune)
 pd_h = $(love_h) $(wildcard $(R)/l/quay/*.h) $(o)/cas.h $(lib_hs)
 
 # the split: mooncc carries l/love.c + am + quay + main.c; gcc carries pdglue.c
@@ -102,7 +102,7 @@ clean:
 # delegate the lib headers and the host binary (which lcats cas.l) to the root.
 # each one needs FORCE: a rule with NO prerequisites fires only when its target
 # is MISSING, so an existing-but-STALE header was served forever and the root's
-# own up-to-date check never got asked. out/lib/rune.h froze that way -- nothing
+# own up-to-date check never got asked. b/lib/rune.h froze that way -- nothing
 # else in the tree regenerates it -- and when a/rune.l grew the
 # (leave ()) that registers the module, the baked image kept the sealless
 # header and the workbench died on `;; no-module rune`. the root decides
@@ -110,11 +110,11 @@ clean:
 .PHONY: FORCE
 FORCE:
 $(lib_hs): FORCE
-	@$(MAKE) -C $(R) out/lib/$(@F)
+	@$(MAKE) -C $(R) b/lib/$(@F)
 $(m): FORCE
-	@$(MAKE) -C $(R) out/love
+	@$(MAKE) -C $(R) b/love
 $(MOONCC): FORCE
-	@$(MAKE) -C $(R) out/.love.baked
+	@$(MAKE) -C $(R) b/.love.baked
 
 # cas.l -> C string literal, atomically (a 0-byte header would silently drop
 # the whole demo -- same discipline as the root's lcat_h)
@@ -132,11 +132,11 @@ $(o)/$n.pdx: $(o)/Source/pdex.elf $(o)/Source/pdex.so $(o)/Source/love-pd.img
 # bakes AND wake-checks it (FORCE keeps the delegation live -- mps2's own
 # deps decide whether the bake re-runs). An empty image ships too: the
 # device just egg-boots (and the 64-bit sim always does).
-$(R)/out/mps2/love-pd.img: FORCE
+$(R)/b/mps2/love-pd.img: FORCE
 	@$(MAKE) --no-print-directory -C $(R)/i/mps2 imgpd
 FORCE:
 
-$(o)/Source/love-pd.img: $(R)/out/mps2/love-pd.img
+$(o)/Source/love-pd.img: $(R)/b/mps2/love-pd.img
 	@echo CP	$@
 	@mkdir -p $(dir $@)
 	@cp $< $@
@@ -150,32 +150,32 @@ $(o)/Source/pdex.%: $(o)/pdex.%
 $(o)/main.o: main.c pdglue.h $(pd_h) | $(MOONCC)
 	@echo MOON	$@
 	@mkdir -p $(o)
-	@cd $(R) && LOVE_NO_IMAGE= out/love mooncc $(mc_flags) -c i/playdate/main.c out/playdate/main.o
+	@cd $(R) && LOVE_NO_IMAGE= b/love mooncc $(mc_flags) -c i/playdate/main.c b/playdate/main.o
 $(o)/%.o: $(R)/%.c $(pd_h) | $(MOONCC)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@cd $(R) && LOVE_NO_IMAGE= out/love mooncc $(mc_flags) -c $*.c out/playdate/$*.o
+	@cd $(R) && LOVE_NO_IMAGE= b/love mooncc $(mc_flags) -c $*.c b/playdate/$*.o
 # the SDK boundary -- ours too, now: pdglue.c is the one file that includes pd_api.h,
 # and mooncc reads it (the header wants -Wno-unknown-pragmas from gcc and nothing at
 # all from us). It is not under the $(R) pattern above: it lives here, not in the tree.
 $(o)/pdglue.o: pdglue.c pdglue.h | $(MOONCC)
 	@echo MOON	$@
 	@mkdir -p $(o)
-	@cd $(R) && LOVE_NO_IMAGE= out/love mooncc $(mc_flags) -c i/playdate/pdglue.c out/playdate/pdglue.o
+	@cd $(R) && LOVE_NO_IMAGE= b/love mooncc $(mc_flags) -c i/playdate/pdglue.c b/playdate/pdglue.o
 
 $(o)/pdex.elf: $(pd_o) | $(MOONCC)
 	@echo MOON	$@
-	@cd $(R) && LOVE_NO_IMAGE= out/love mooncc $(mc_ld) $(pd_o:$(R)/%=%) -o out/playdate/pdex.elf
+	@cd $(R) && LOVE_NO_IMAGE= b/love mooncc $(mc_ld) $(pd_o:$(R)/%=%) -o b/playdate/pdex.elf
 $(o)/pdex-alt.elf: $(pd_o) | $(MOONCC)
 	@echo MOON	$@
-	@cd $(R) && LOVE_NO_IMAGE= out/love mooncc $(mc_ld_alt) $(pd_o:$(R)/%=%) -o out/playdate/pdex-alt.elf
+	@cd $(R) && LOVE_NO_IMAGE= b/love mooncc $(mc_ld_alt) $(pd_o:$(R)/%=%) -o b/playdate/pdex-alt.elf
 
 # the simulator .so: a single-shot hosted build of the same sources
 $(o)/pdex.so: $(pd_src) $(o)/cas.h
 	@echo CC	$@
 	@mkdir -p $(o)
 	@$(CCACHE) gcc -g -O1 -shared -fPIC -Dai_tco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 \
-	  -I. -Il -I$(o) -I$(R) -I$(R)/out/lib -I$(R)/l/quay -I$(pd_sdk)/C_API \
+	  -I. -Il -I$(o) -I$(R) -I$(R)/b/lib -I$(R)/l/quay -I$(pd_sdk)/C_API \
 	  -o $@ $(pd_src) -lm
 
 .PRECIOUS: $(o)/%.elf

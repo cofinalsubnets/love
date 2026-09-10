@@ -2,7 +2,7 @@
 ; module the kernel mounts on its virtio disk (rung 5), proven here where the
 ; laws run in milliseconds and mtools can sit on the other side of the format.
 ; run standalone from the repo root:
-;   cat t/00-init.l t/fat.l | out/love
+;   cat t/00-init.l t/fat.l | b/love
 
 (borrow "a/fat/fat.l")
 
@@ -89,11 +89,11 @@
    have-mtools (: r (hark '("sh" "-c" "command -v mdir >/dev/null && echo yes"))
                   (&& (! (cap r)) (< 0 (tally (cup r)))))
    _ (? have-mtools
-        (: ip "out/.fat-probe.img"
+        (: ip "b/.fat-probe.img"
            _ (: p (open ip "w") _ (say p (string img)) (close p))
            md (hark ["mdir" "-i" ip "-b" "::/"])
            mt (hark ["mtype" "-i" ip "::/limine.conf"])
-           lp "out/.fat-probe.txt"
+           lp "b/.fat-probe.txt"
            _ (: p (open lp "w") _ (say p "from the host side") (close p))
            mc (hark ["mcopy" "-i" ip lp "::/fromhost.txt"])
            s (: q (open ip "r") t (slurp q) _ (close q) t)

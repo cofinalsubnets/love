@@ -5,7 +5,7 @@
 ; what lets a long cook step show progress. The tee must not disturb the capture.
 ; host-only (the nifs are i/*.c), so it runs standalone against the built
 ; binary like t/host/bake.l:
-;   cat t/00-init.l t/host/run.l | out/love
+;   cat t/00-init.l t/host/run.l | b/love
 ;
 ; The payloads are deliberately tiny: herald echoes what it captures, so anything
 ; big would flood the gate log. The >64KB lane -- where the capture string
@@ -71,7 +71,7 @@
 ;   shares the one line.
 ; the status has to come out of the pipeline, and $? there is head's, so love's
 ; own goes to a file from inside the subshell -- POSIX, no pipestatus.
-(: spew "( echo '(: (go n) (? (n = 0) 0 (: _ (putc 120) _ (putc 10) (go (n - 1)))) _ (go 300000) 0)' | out/love; echo $? > out/.sigst ) | head -1 > /dev/null; cat out/.sigst; rm -f out/.sigst"
+(: spew "( echo '(: (go n) (? (n = 0) 0 (: _ (putc 120) _ (putc 10) (go (n - 1)))) _ (go 300000) 0)' | b/love; echo $? > b/.sigst ) | head -1 > /dev/null; cat b/.sigst; rm -f b/.sigst"
    st (cup (hark ["sh" "-c" spew]))
    sig (cup (hark ["sh" "-c" "grep SigIgn /proc/self/status"]))
    _ (test
@@ -85,7 +85,7 @@
 ; timeout, because its regression is a hang (the scheduler sleeping on a fd set
 ; the ninth parked task never got into) and a wedged gate is worse than a red one.
 ; it must be a subprocess for that reason alone; nothing about it needs one.
-(: rc (cap (hark ["sh" "-c" "timeout 20 out/love t/host/parked.l"]))
+(: rc (cap (hark ["sh" "-c" "timeout 20 b/love t/host/parked.l"]))
    _ (test (rc = 0)))                    ; 124 is the timeout: the old cap's hang
 
 (puts "run parked: ok\n")
@@ -96,7 +96,7 @@
 ; waits for a connection only the wedged vm could still make), and a wedged gate is
 ; worse than a red one. 124 is the control's answer, and each law was verified by
 ; putting its own blocking call back.
-(: rc (cap (hark ["sh" "-c" "timeout 20 out/love t/host/nifpark.l"]))
+(: rc (cap (hark ["sh" "-c" "timeout 20 b/love t/host/nifpark.l"]))
    _ (test (rc = 0)))
 
 (puts "run nifpark: ok\n")
@@ -106,7 +106,7 @@
 ; the loopback. driven from here for the usual reason: a resolver whose deadline
 ; stops working does not redden, it hangs -- there is no answer coming and nothing
 ; to wake the caller.
-(: rc (cap (hark ["sh" "-c" "timeout 20 out/love t/host/dns.l"]))
+(: rc (cap (hark ["sh" "-c" "timeout 20 b/love t/host/dns.l"]))
    _ (test (rc = 0)))
 
 (test_fin ())

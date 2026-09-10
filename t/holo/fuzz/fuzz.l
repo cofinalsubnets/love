@@ -11,7 +11,7 @@
 ; (x64|a64|rv64 -- the lane names below; any other spelling scares rather than
 ; filtering to nothing). run from the repo root:
 ;
-;   out/love t/holo/fuzz/fuzz.l
+;   b/love t/holo/fuzz/fuzz.l
 ;
 ; exit 1 on any failure; each failure names its class, IR, hex and reason.
 

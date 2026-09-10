@@ -9,7 +9,7 @@ import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 
 const argv = process.argv.slice(2);
-let mod = new URL('../../out/wasm/love.js', import.meta.url).href;
+let mod = new URL('../../b/wasm/love.js', import.meta.url).href;
 if (argv[0] === '--love') mod = pathToFileURL(argv[1]).href;
 const here = new URL('.', import.meta.url);
 const tree = new URL('../../', import.meta.url);

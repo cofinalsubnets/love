@@ -3,7 +3,7 @@
 # the named benches.
 #
 # Emits one raw "<name> <lang> <reps> <ms> <chk>" result line per bench on stdout
-# (the Makefile redirects them into out/bench/<lang>.txt) and a progress tick per
+# (the Makefile redirects them into b/bench/<lang>.txt) and a progress tick per
 # bench on stderr. Each bench is run `samples` times (default 5); the line whose
 # per-iteration time (ms/reps) is the MEDIAN of the samples is the one reported.
 # Median -- not min -- is the honest central tendency for a GC'd language: a GC
@@ -28,12 +28,12 @@ samples=${5:-5}   # timed windows per bench; the median ms/it window is reported
 # per-language file extension, interpreter binary, and run command. the command
 # is eval'd with $b bound to the bench name, so the source is benches/$b.$ext.
 case $lang in
-  # love: the native glaze (l/boot/glaze.l) is BAKED into out/love and active by default, so the
+  # love: the native glaze (l/boot/glaze.l) is BAKED into b/love and active by default, so the
   # bench just runs through the binary -- no prepend. (`make bench` depends on `host`, so the baked glaze
   # is always fresh.) We do NOT cat the glaze source ahead of the bench: re-loading the glaze on top of
   # the baked glaze is a redundant DOUBLE-LOAD that faults under autospec; the baked binary is the truth.
   # cdcl alone prepends the SAT solver library it needs (not the glaze).
-  love)            ext=l;    bin=../out/love;  cmd='cat $([ "$b" = cdcl ] && printf "%s " ../a/sat/sat.l) bench.l benches/$b.l | LOVE_NO_IMAGE=1 ../out/love' ;;
+  love)            ext=l;    bin=../b/love;  cmd='cat $([ "$b" = cdcl ] && printf "%s " ../a/sat/sat.l) bench.l benches/$b.l | LOVE_NO_IMAGE=1 ../b/love' ;;
   chez)         ext=ss;   bin=chez;       cmd='chez --script benches/$b.ss' ;;
   sbcl)         ext=lisp; bin=sbcl;       cmd='sbcl --script benches/$b.lisp' ;;
   apl)          ext=apl;  bin=dyalogscript; cmd='dyalogscript benches/$b.apl' ;;   # Dyalog APL (~/.local install); the bench ⎕FIXes lib/bench.apl

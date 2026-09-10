@@ -7,7 +7,7 @@
 ;   papel  is what is left: the site -- titles, anchors, contents, cross-links, the page
 ;          template -- the things that are true of a page only because of the other pages.
 ;
-; that split is the whole design. papel declares one cook recipe per page (out/site/x.html
+; that split is the whole design. papel declares one cook recipe per page (b/site/x.html
 ; from doc/x.md) and hands the lot to cook, so an incremental site build is not a feature
 ; papel implements -- it is cook's ordinary job, arriving for free. and papel never parses
 ; markdown or emits a paragraph: it asks lapiz. what it does own is the site-level reading
@@ -31,8 +31,8 @@
 ; usage:  papel [-o out] [-t title] [src ..]        (with the `papel` script on PATH)
 ;     or: love -l a/papel.l [-o out] [src ..]
 ; src is a .md file or a directory of them; with none, this tree's own docs (README.md
-; and doc/). out defaults to out/site. papel writes out/<name>.html per source, out/
-; papel.css, and out/index.html -- the last only when no source is itself an index.md.
+; and doc/). out defaults to b/site. papel writes b/<name>.html per source, b/
+; papel.css, and b/index.html -- the last only when no source is itself an index.md.
 
 ; no brackets here: the runtime supplies the layer (a module consumer says
 ; (borrow 'papel); a -l load rides the session layer, where the seat reads bare).
@@ -313,7 +313,7 @@ table{border-collapse:collapse}
 (: (mdsof p) (? (dir? p) (map (f \ p + "/" + f) (sort (filter (f \ ends? f ".md") (readdir p))))
                 (ends? p ".md") [p])
    (sources conf) (foldl (+) () (map mdsof (peep conf 'src ())))
-   (conf0 _) {'out "out/site" 'title "papel" 'src () 'self "a/papel.l"}
+   (conf0 _) {'out "b/site" 'title "papel" 'src () 'self "a/papel.l"}
    ; the build is a declaration, not a loop: one recipe per page, one for the stylesheet,
    ; one for the index, and a phony `site` over the lot -- then cook decides what is stale.
    ; every output also depends on this file, since the template and the stylesheet live in
@@ -338,7 +338,7 @@ table{border-collapse:collapse}
                          (f = peep box 'f -1 ? 0 (pin box 'f f, build conf)))
 
    (build conf)
-   (: out (peep conf 'out "out/site")
+   (: out (peep conf 'out "b/site")
       srcs (sources conf)
       _ (atom? srcs ? (scare 'papel "papel: no markdown sources"))
       _ (mkdirp out)
@@ -367,7 +367,7 @@ table{border-collapse:collapse}
 (: _ (:
    (usage _) (: _ (puts "papel -- the static site (markdown -> html, through lapiz, built by cook)
 usage: papel [-o OUT] [-t TITLE] [SRC ..]
-  -o, --out DIR     where the site is written (default out/site)
+  -o, --out DIR     where the site is written (default b/site)
   -t, --title NAME  the site name, used in the header and on the index (default papel)
   -q, --quiet       write the site and say nothing
   -s, --serve PORT  build, then hand OUT to kiosko and serve it on PORT
@@ -410,7 +410,7 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
               q (peep c 'quiet 0)
               _ (pin c 'quiet 1)
               box (: t (tablet 0) _ (pin t 'f (fprint c)) t)
-              _ (? (cite 'kiosko 'serve (peep c 'out "out/site") port q (_ \ _ \ refresh c box)) 0
+              _ (? (cite 'kiosko 'serve (peep c 'out "b/site") port q (_ \ _ \ refresh c box)) 0
                    (say err $ "papel: cannot listen on :" + show port + "\n", quit 1))))
       (quit 0))
    papel-main)

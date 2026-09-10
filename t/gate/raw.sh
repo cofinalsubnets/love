@@ -19,7 +19,7 @@
 # gate that globs a directory instead is a second authority on what the binary is.
 #
 # gate_seat_c is i/nokern.c + i/noblob.c: this link has no kmain.c under it and takes
-# neither out/src.o nor out/moonlibc.o, so it answers the kernel's doors and the carried
+# neither b/src.o nor b/moonlibc.o, so it answers the kernel's doors and the carried
 # archives itself. Without them the bind fails on symbols nothing defines -- which is
 # the failure the weak defaults used to hide.
 #
@@ -72,7 +72,7 @@ moonc() { LOVE_NO_IMAGE= "$m" mooncc $tflag "$@"; }
 
 for f in $gate_love_c $gate_host_c $gate_seat_c; do
   b=$(basename "$f" .c)
-  moonc -D ai_tco=1 -I"$ho" -I. -Il -Ii -Iout/lib -c "$f" "$d/$b.o" || fail "mooncc $tflag -c $f"
+  moonc -D ai_tco=1 -I"$ho" -I. -Il -Ii -Ib/lib -c "$f" "$d/$b.o" || fail "mooncc $tflag -c $f"
 done
 
 # moonlibc is NOT compiled here: the link below owes its symbols and the driver's

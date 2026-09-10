@@ -188,9 +188,9 @@ int main(void) {
   freelist->next = NULL;
   freelist->len = (POOL_BYTES - WAKE_OFF) / sizeof(uintptr_t);
 #ifdef BAKER_RUNE
-  static const char impath[] = "out/mps2/love-pd.img";
+  static const char impath[] = "b/mps2/love-pd.img";
 #else
-  static const char impath[] = "out/mps2/love.img";
+  static const char impath[] = "b/mps2/love.img";
 #endif
   uintptr_t o[3] = { (uintptr_t) impath, 1, sizeof impath - 1 };   // mode 1 = "rb"
   intptr_t fd = (intptr_t) sh_call(SH_OPEN, (uintptr_t) o);
@@ -314,9 +314,9 @@ int main(void) {
     "   _ (putc 10) 0)");
   if (!ai_ok(r2)) { sh_puts("; round-trip eval FAILED\n"); m7_exit(8); }
 #ifdef BAKER_RUNE
-  static const char impath[] = "out/mps2/love-pd.img";
+  static const char impath[] = "b/mps2/love-pd.img";
 #else
-  static const char impath[] = "out/mps2/love.img";
+  static const char impath[] = "b/mps2/love.img";
 #endif
   uintptr_t o[3] = { (uintptr_t) impath, 5, sizeof impath - 1 };
   intptr_t fd = (intptr_t) sh_call(SH_OPEN, (uintptr_t) o);

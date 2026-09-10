@@ -243,7 +243,7 @@
                (binary? f) (seal-hook 5 f)
                (scare 'help-arity f)))
 
-; the stdio door, the help's twin: (wear (i o e)) re-seats in/out/err for this task,
+; the stdio door, the help's twin: (wear (i o e)) re-seats in/b/err for this task,
 (: (wear l) (seal-hook 6 l))
 
 ; trap -- (f x) under a help that escapes: the value on a clean run, (n a b) when a

@@ -2,7 +2,7 @@
 ; i/sock.c links love0 as well as the final `love`, so this is a corpus law; it
 ; still reads standalone, like t/net.l:
 ;
-;   cat t/00-init.l t/lux.l | out/love
+;   cat t/00-init.l t/lux.l | b/love
 ;
 ; (connectu path) opens a unix-domain stream socket. a real round trip needs a
 ; unix listener on the other end -- that is an X display socket in practice, so

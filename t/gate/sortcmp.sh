@@ -7,7 +7,7 @@
 # ours is byte order, and without this every row disagrees for a reason that has
 # nothing to do with the code.
 set -u
-m=${1:-./out/love}
+m=${1:-./b/love}
 LC_ALL=C; export LC_ALL
 w=${TMPDIR:-/tmp}/sortcmp.$$; mkdir -p "$w"; trap 'rm -rf "$w"' EXIT
 fail=0; ran=0

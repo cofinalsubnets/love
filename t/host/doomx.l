@@ -3,7 +3,7 @@
 ; wire a desktop gets: a/doom.l), holds an arrow key through XTEST for a
 ; second and a half of the run, and holds the run to exit 0 and its own frame count. no Xvfb on the box -> a polite skip. wants a DOOM=1 love and the IWAD
 ; (test_doomx builds the first; the Makefile's doom lane says where the second goes).
-;   cat t/00-init.l t/host/doomx.l | out/love
+;   cat t/00-init.l t/host/doomx.l | b/love
 ; a love without doom in it would take the verb's NEST path -- a seed and a build under
 ; $HOME -- which no gate may start: the door is DOOM=1, and this says so instead.
 (: _ (? (elem 'doom-start (names ())) 0
@@ -22,7 +22,7 @@
    dn (rdnum (cup xv))
    _ (test (charm? dn))
    ; the game: silent (HORN=none), 300 frames, then it says how many it drew
-   ph (tether ["env" "HORN=none" (+ "DISPLAY=:" (show dn)) "out/love" "doom" "-frames" "300"])
+   ph (tether ["env" "HORN=none" (+ "DISPLAY=:" (show dn)) "b/love" "doom" "-frames" "300"])
    ; while it runs, a held key through XTEST on a wire of our own: a second and a half
    ; of the up arrow (keycode 111), which the server repeats -- the path a/doom.l's
    ; detectable autorepeat covers -- then the release. what this proves is that

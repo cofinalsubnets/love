@@ -5,7 +5,7 @@
 ; as the datum story.l plays and loaded back the same, and the frame showing the
 ; cursor, what is under it, the help. the runner, vi on the file and play stay live
 ; probes: `love design`.
-;   cat t/00-init.l t/host/design.l | out/love
+;   cat t/00-init.l t/host/design.l | b/love
 
 (borrow 'story)
 (borrow 'design)

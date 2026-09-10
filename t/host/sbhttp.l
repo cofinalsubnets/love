@@ -20,7 +20,7 @@
    record (SD 'sb-record) sync (SD 'sb-sync) bank (SD 'sb-bank)
    look (SD 'look) lay (SD 'lay) mk (SD 'mk) dirty (SD 'dirty) refof (SD 'refof)
    urlsplit (SD 'url-split) urlp (SD 'url?) digits (SD 'digits) readform (SD 'readform)
-   root "out/.sbhttp"
+   root "b/.sbhttp"
    _ (hark (list "rm" "-rf" root))
    _ (mkdir "out" 493) _ (mkdir root 493)
    _ (mkdir (root + "/origin") 493) _ (mkdir (root + "/clone") 493)

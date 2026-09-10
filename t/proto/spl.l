@@ -20,7 +20,7 @@
 ;   * order: arg effects precede body effects, call and bind alike
 ; NOT modeled: the boxed return (the register machine's s4 laws carry the tail
 ; story), scare/abort mid-body (a scare here is a trace record, not a control
-; exit), recursion. run: cat t/00-init.l t/proto/spl.l | out/love
+; exit), recursion. run: cat t/00-init.l t/proto/spl.l | b/love
 ;
 ; the uu lift: u/spl2uu.l emits these threads as t/uusplgen.l;
 ; t/uuspllaw.l proves the laws forall states, and the cross-machine theorem

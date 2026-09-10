@@ -17,7 +17,7 @@
 ; Sigma carrier. Defs are `noncomputable` -- we certify the terms, never run them, so
 ; the code generator (which rejects bare recursors) is irrelevant.
 ;
-; Run: out/love u/uu2lean.l > t/proof/lean/uugen.lean   then  lean t/proof/lean/uugen.lean
+; Run: b/love u/uu2lean.l > t/proof/lean/uugen.lean   then  lean t/proof/lean/uugen.lean
 
 (borrow 'posix)
 ; the files read below spell their laws `test`, the corpus recorder. here they run to

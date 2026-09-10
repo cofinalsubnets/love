@@ -26,10 +26,10 @@ mk=$1
 lv=$2
 fail() { echo "FAIL playdate: $*" >&2; exit 1; }
 
-echo "TEST out/playdate/main.o (the device main, no SDK)"
+echo "TEST b/playdate/main.o (the device main, no SDK)"
 $mk -C i/playdate probe || fail "the device main does not compile"
 
-echo "TEST out/playdate/love.pdx"
+echo "TEST b/playdate/love.pdx"
 if [ -z "${PLAYDATE_SDK_PATH:-}" ]; then
   echo "test_playdate: the device main compiles; no PLAYDATE_SDK_PATH, the pdx half skipped"
   exit 0
@@ -38,7 +38,7 @@ fi
 $mk -C i/playdate || fail "build"
 $mk -C i/playdate alt || fail "the second-base link"
 
-e=out/playdate/pdex.elf
+e=b/playdate/pdex.elf
 u=$(llvm-readelf -s $e | grep -c "UND [a-zA-Z_]")
 [ "$u" -eq 0 ] || fail "pdex.elf has $u undefined symbols"
 llvm-readelf -s $e | grep -qw eventHandlerShim || fail "no eventHandlerShim"
@@ -53,8 +53,8 @@ case $ent in *[13579bdf]) ;; *) fail "entry $ent has no thumb bit" ;; esac
 { cat a/kore/text.l a/kore/u.l
   echo "(borrow 'kore)"
   cat t/gate/pdreloc.l
-  echo '(pdbin-check "out/playdate/love.pdx/pdex.bin"'
-  echo '  (pdreloc-check "out/playdate/pdex.elf" "out/playdate/pdex-alt.elf" 1048576))'
+  echo '(pdbin-check "b/playdate/love.pdx/pdex.bin"'
+  echo '  (pdreloc-check "b/playdate/pdex.elf" "b/playdate/pdex-alt.elf" 1048576))'
 } | "$lv" || fail "the relocation table is not exactly the words that move, or pdc dropped some"
 
 echo "test_playdate: love.pdx -- every device object and the LINK are mooncc's, no foreign tool; resolved, thumb entry, ABS32 words only, and the table proven against a second base"

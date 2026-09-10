@@ -12,7 +12,7 @@
 #     the classic competition-era suite): uniform random 3-SAT at the phase
 #     transition, SATISFIABLE (uf) and PROVEN-UNSATISFIABLE (uuf) sets, plus flat
 #     graph 3-coloring; a fixed file prefix per row, summed, signature verdicts.
-#     Downloaded once into out/bench/satlib/ (rows silently skip if offline).
+#     Downloaded once into b/bench/satlib/ (rows silently skip if offline).
 # The rnd instances are drawn from love's own xoshiro (seed/random, reproducible), and
 # the SAME generator text feeds both the DIMACS dump and love's in-process lane, so
 # every solver sees identical instances by construction; the SATLIB rows feed love the
@@ -29,7 +29,7 @@
 # NB: no `set -e` -- SAT solvers exit non-zero by convention (minisat: 10=SAT,
 # 20=UNSAT), and `timeout` exits 124, all of which are normal control flow here.
 R=..
-GL=$R/out/love
+GL=$R/b/love
 export LOVE_NO_IMAGE=1   # REQUIRED for the flat solver's native BCP kernel: a/sat/flat.l installs it
                        # through the `nif` seam, which the glazed image mops from the book (the
                        # no-image book keeps it). the old glaze<->sat.l miscompile is gone.
@@ -38,7 +38,7 @@ INSTANCES="5 6 7 8"
 RNDN="100 150"        # random-3-SAT row sizes; m = round(4.26 n), seeds 1000..1004
 RNDK=5
 SOLVERS="minisat cadical kissat glucose picosat"   # external; love is special-cased
-CNF=$R/out/bench/cnf
+CNF=$R/b/bench/cnf
 mkdir -p "$CNF"
 
 # the ONE generator text (leaks gen2 from a body-less top-level `:`): standard random
@@ -174,7 +174,7 @@ done
 
 # -- the SATLIB rows: real benchmark-library instances, downloaded once and cached.
 #    Each row = a fixed set of files summed; verdict = the per-file signature.
-SLIB=$R/out/bench/satlib
+SLIB=$R/b/bench/satlib
 SATLIB_URL="https://www.cs.ubc.ca/~hoos/SATLIB/Benchmarks/SAT"
 # fetch <tarball-subpath> <glob-of-wanted-files> -- extract matching files FLAT into $SLIB
 fetch() {

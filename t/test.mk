@@ -63,23 +63,23 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 # must print two "tests pass" summaries -- a reader stop drops the rest and exits 0. status
 # rides `.rc`, no pipefail. corpus.list is a runtime input, not a stamp: love0 reads it to
 # find the corpus (i/main.c), and nothing else asks for it, so it is named here or a fresh
-# tree dies with `love0: corpus: cannot open out/lib/corpus.list`.
-test_love0: $(love0) out/lib/corpus.list
+# tree dies with `love0: corpus: cannot open b/lib/corpus.list`.
+test_love0: $(love0) b/lib/corpus.list
 	@echo TEST $(love0)
-	@{ $(love0) </dev/null; echo $$? > out/.test_love0.rc; } | tee out/.test_love0.out; \
-	  s=$$(cat out/.test_love0.rc); \
-	  [ $$s -eq 0 ] && [ `grep -c "tests pass" out/.test_love0.out` -eq 2 ]
+	@{ $(love0) </dev/null; echo $$? > b/.test_love0.rc; } | tee b/.test_love0.out; \
+	  s=$$(cat b/.test_love0.rc); \
+	  [ $$s -eq 0 ] && [ `grep -c "tests pass" b/.test_love0.out` -eq 2 ]
 # test_filemode -- file mode is terminal, and nothing inside the corpus can gate that:
 # a test that proves the run dies cannot also report. so a shell runs one two-line file
 # and asks both halves of the law -- the face on err and exit 1 -- for a missing name.
 test_filemode: $(ho)/.love.baked
 	@echo TEST file mode is terminal
-	@printf '(: _ (puts "reached\\n") _ (an-name-the-book-lacks 1) (puts "past\\n"))\n' > out/.test_filemode.l
-	@$m out/.test_filemode.l > out/.test_filemode.out 2>&1; r=$$?; \
-	  { [ $$r -eq 1 ] && grep -q "^reached$$" out/.test_filemode.out \
-	      && grep -q "^;; missing an-name-the-book-lacks$$" out/.test_filemode.out \
-	      && ! grep -q "^past$$" out/.test_filemode.out; } \
-	    || { cat out/.test_filemode.out; echo "FAIL file mode not terminal (exit $$r)"; exit 1; }
+	@printf '(: _ (puts "reached\\n") _ (an-name-the-book-lacks 1) (puts "past\\n"))\n' > b/.test_filemode.l
+	@$m b/.test_filemode.l > b/.test_filemode.out 2>&1; r=$$?; \
+	  { [ $$r -eq 1 ] && grep -q "^reached$$" b/.test_filemode.out \
+	      && grep -q "^;; missing an-name-the-book-lacks$$" b/.test_filemode.out \
+	      && ! grep -q "^past$$" b/.test_filemode.out; } \
+	    || { cat b/.test_filemode.out; echo "FAIL file mode not terminal (exit $$r)"; exit 1; }
 # test_stdinbuf -- what we borrow OF fd 0 is invisible, and we borrow two things. both doors
 # gulp 4096 (l/love.c's rbio_of), so the law is that both leave the untaken bytes there, for
 # an in-form and for a child inheriting the fd. a seekable door lseeks them back; a pipe has
@@ -89,38 +89,38 @@ test_filemode: $(ho)/.love.baked
 # ended one. the corpus cannot gate any of this; it lives between two ways of being fed.
 test_stdinbuf: $(ho)/.love.baked
 	@echo TEST stdin borrows a run
-	@printf '(say out (+ "rest: [" (+ (slurp in) "]")))\n(say out "tail form")\n' > out/.test_stdinbuf1.l
-	@printf '(exec ["cat"])\nHANDOFF-TAIL\n' > out/.test_stdinbuf2.l
-	@for f in out/.test_stdinbuf1.l out/.test_stdinbuf2.l; do \
+	@printf '(say out (+ "rest: [" (+ (slurp in) "]")))\n(say out "tail form")\n' > b/.test_stdinbuf1.l
+	@printf '(exec ["cat"])\nHANDOFF-TAIL\n' > b/.test_stdinbuf2.l
+	@for f in b/.test_stdinbuf1.l b/.test_stdinbuf2.l; do \
 	   $m < $$f > $$f.seek 2>&1; cat $$f | $m > $$f.pipe 2>&1; \
 	   cmp -s $$f.seek $$f.pipe \
 	     || { echo "FAIL $$f: the buffered door differs from the bare one"; \
 	          diff $$f.pipe $$f.seek; exit 1; }; done
-	@grep -qF 'rest: [(say out "tail form")' out/.test_stdinbuf1.l.seek \
-	  || { cat out/.test_stdinbuf1.l.seek; echo "FAIL an in-form (slurp in) lost the remainder"; exit 1; }
-	@for w in seek pipe; do grep -qF HANDOFF-TAIL out/.test_stdinbuf2.l.$$w \
-	  || { cat out/.test_stdinbuf2.l.$$w; echo "FAIL the exec'd child lost the fd position ($$w)"; exit 1; }; done
+	@grep -qF 'rest: [(say out "tail form")' b/.test_stdinbuf1.l.seek \
+	  || { cat b/.test_stdinbuf1.l.seek; echo "FAIL an in-form (slurp in) lost the remainder"; exit 1; }
+	@for w in seek pipe; do grep -qF HANDOFF-TAIL b/.test_stdinbuf2.l.$$w \
+	  || { cat b/.test_stdinbuf2.l.$$w; echo "FAIL the exec'd child lost the fd position ($$w)"; exit 1; }; done
 	@# ..and the residue is only the FIRST gulp: past it the pumper must splice the rest of the
 	@# pipe, whose writer is still going (200000 bytes against a 64K pipe, so cat really blocks).
-	@{ printf '(exec ["cat"])\n'; yes HANDOFF-BULK | head -c 200000; } > out/.test_stdinbuf4.l
-	@cat out/.test_stdinbuf4.l | $m 2>/dev/null | wc -c > out/.test_stdinbuf4.n
-	@n=`cat out/.test_stdinbuf4.n`; [ $$n -eq 200000 ] \
+	@{ printf '(exec ["cat"])\n'; yes HANDOFF-BULK | head -c 200000; } > b/.test_stdinbuf4.l
+	@cat b/.test_stdinbuf4.l | $m 2>/dev/null | wc -c > b/.test_stdinbuf4.n
+	@n=`cat b/.test_stdinbuf4.n`; [ $$n -eq 200000 ] \
 	  || { echo "FAIL the pumper delivered $$n of 200000 -- the splice past the residue stopped short"; exit 1; }
-	@printf '(exec ["cat" "/proc/self/fdinfo/0"])\n' > out/.test_stdinbuf3.l
-	@cat out/.test_stdinbuf3.l | $m > out/.test_stdinbuf3.out 2>&1; \
-	  fl=$$(sed -n 's/^flags:[[:space:]]*//p' out/.test_stdinbuf3.out); \
+	@printf '(exec ["cat" "/proc/self/fdinfo/0"])\n' > b/.test_stdinbuf3.l
+	@cat b/.test_stdinbuf3.l | $m > b/.test_stdinbuf3.out 2>&1; \
+	  fl=$$(sed -n 's/^flags:[[:space:]]*//p' b/.test_stdinbuf3.out); \
 	  [ -n "$$fl" ] && [ $$(( $$fl & 04000 )) -eq 0 ] \
-	    || { cat out/.test_stdinbuf3.out; \
+	    || { cat b/.test_stdinbuf3.out; \
 	         echo "FAIL fd 0 handed on nonblocking (flags $$fl) -- stdin_give did not put the bit back"; exit 1; }
 # ..and the give-back rides the same seek: `unchug` returns drained bytes to the run, so
 # ai_io_pending counts them again and the child inherits fd 0 in front of them. the CONTRAST
 # is the law -- `chug` drains the whole run, so the child inherits nothing without it and all
 # ten with. only rbio_of finds that run: a heap-port-only door answers 0 here while every
 # file-port law in t/io.l still passes.
-	@printf 'abcdefghij' > out/.test_stdinbuf4.in
+	@printf 'abcdefghij' > b/.test_stdinbuf4.in
 	@p='(: c (see in) _ (unsee in c) t (chug in)'; \
-	  a=`$m -e "$$p k (unchug in 99) (exec [\"cat\"]))" < out/.test_stdinbuf4.in`; \
-	  b=`$m -e "$$p (exec [\"cat\"]))" < out/.test_stdinbuf4.in`; \
+	  a=`$m -e "$$p k (unchug in 99) (exec [\"cat\"]))" < b/.test_stdinbuf4.in`; \
+	  b=`$m -e "$$p (exec [\"cat\"]))" < b/.test_stdinbuf4.in`; \
 	  { [ "$$a" = abcdefghij ] && [ -z "$$b" ]; } \
 	    || { echo "FAIL unchug is not in the inherited fd offset (with=[$$a] without=[$$b])"; exit 1; }
 # test_host takes the corpus as a FILE: a speed choice, not a necessity. the gap is the
@@ -129,10 +129,10 @@ test_stdinbuf: $(ho)/.love.baked
 # cat'ing also keeps the corpus's one-global-scope property.
 test_host: $(ho)/.love.baked
 	@echo TEST $m
-	@cat $t > out/.test_host.l
-	@{ $m out/.test_host.l </dev/null; echo $$? > out/.test_host.rc; } | tee out/.test_host.out; \
-	  s=$$(cat out/.test_host.rc); \
-	  [ $$s -eq 0 ] && grep -q "tests pass" out/.test_host.out
+	@cat $t > b/.test_host.l
+	@{ $m b/.test_host.l </dev/null; echo $$? > b/.test_host.rc; } | tee b/.test_host.out; \
+	  s=$$(cat b/.test_host.rc); \
+	  [ $$s -eq 0 ] && grep -q "tests pass" b/.test_host.out
 # test_hostegg -- the same corpus down the egg boot. a woken heap is not the egg's: it
 # arrives with a pinned prefix it did not copy and an intern map it did not build, so both
 # doors are worth running. wants $(ho)/love, not .love.baked -- an egg lane has no use for
@@ -140,10 +140,10 @@ test_host: $(ho)/.love.baked
 # `(lit? (cite 'holo))` and holo lives in the glaze, so those two laws are the baked door's.
 test_hostegg: $(ho)/love
 	@echo TEST $m "(egg)"
-	@cat $t > out/.test_hostegg.l
-	@{ env LOVE_NO_IMAGE=1 $m out/.test_hostegg.l </dev/null; echo $$? > out/.test_hostegg.rc; } | tee out/.test_hostegg.out; \
-	  s=$$(cat out/.test_hostegg.rc); \
-	  [ $$s -eq 0 ] && grep -q "tests pass" out/.test_hostegg.out
+	@cat $t > b/.test_hostegg.l
+	@{ env LOVE_NO_IMAGE=1 $m b/.test_hostegg.l </dev/null; echo $$? > b/.test_hostegg.rc; } | tee b/.test_hostegg.out; \
+	  s=$$(cat b/.test_hostegg.rc); \
+	  [ $$s -eq 0 ] && grep -q "tests pass" b/.test_hostegg.out
 # test_stdincorpus -- the only oracle for `reads` over STDIN at corpus scale, which is where
 # a reader's window arithmetic breaks. three doors because they are three readers: a file and
 # a redirect share the borrowed run (l/love.c's rbio_of), a pipe has none and drips. both
@@ -152,35 +152,35 @@ test_hostegg: $(ho)/love
 # dropped assert being exactly what this catches.
 test_stdincorpus: $(ho)/.love.baked
 	@echo TEST the corpus down file, redirect and pipe -- egg and baked
-	@cat $t > out/.test_sc.l
+	@cat $t > b/.test_sc.l
 	@for L in "env LOVE_NO_IMAGE=1 $m" "$m"; do \
 	 for d in file seek pipe; do \
 	   case $$d in \
-	     file) $$L out/.test_sc.l < /dev/null > out/.test_sc.$$d 2>&1;; \
-	     seek) $$L < out/.test_sc.l > out/.test_sc.$$d 2>&1;; \
-	     pipe) cat out/.test_sc.l | $$L > out/.test_sc.$$d 2>&1;; \
+	     file) $$L b/.test_sc.l < /dev/null > b/.test_sc.$$d 2>&1;; \
+	     seek) $$L < b/.test_sc.l > b/.test_sc.$$d 2>&1;; \
+	     pipe) cat b/.test_sc.l | $$L > b/.test_sc.$$d 2>&1;; \
 	   esac; \
 	   r=$$?; \
 	   [ $$r -eq 0 ] \
-	     || { echo "FAIL [$$L] the $$d door exited $$r"; tail -4 out/.test_sc.$$d; exit 1; }; \
-	   grep -q "tests pass" out/.test_sc.$$d \
-	     || { echo "FAIL [$$L] the $$d door printed no summary"; tail -4 out/.test_sc.$$d; exit 1; }; \
-	   ! grep -q "^;;" out/.test_sc.$$d \
-	     || { echo "FAIL [$$L] the $$d door scared"; grep -m3 "^;;" out/.test_sc.$$d; exit 1; }; \
-	   sed 's/in [0-9.]* seconds/in Xs/' out/.test_sc.$$d > out/.test_sc.$$d.n; \
+	     || { echo "FAIL [$$L] the $$d door exited $$r"; tail -4 b/.test_sc.$$d; exit 1; }; \
+	   grep -q "tests pass" b/.test_sc.$$d \
+	     || { echo "FAIL [$$L] the $$d door printed no summary"; tail -4 b/.test_sc.$$d; exit 1; }; \
+	   ! grep -q "^;;" b/.test_sc.$$d \
+	     || { echo "FAIL [$$L] the $$d door scared"; grep -m3 "^;;" b/.test_sc.$$d; exit 1; }; \
+	   sed 's/in [0-9.]* seconds/in Xs/' b/.test_sc.$$d > b/.test_sc.$$d.n; \
 	 done; \
 	 for d in seek pipe; do \
-	   cmp -s out/.test_sc.file.n out/.test_sc.$$d.n \
+	   cmp -s b/.test_sc.file.n b/.test_sc.$$d.n \
 	     || { echo "FAIL [$$L] the $$d door read a different corpus than the file door"; \
-	          diff out/.test_sc.file.n out/.test_sc.$$d.n | head -8; exit 1; }; \
+	          diff b/.test_sc.file.n b/.test_sc.$$d.n | head -8; exit 1; }; \
 	 done; \
 	 done
 	@echo "  ok   file, redirect and pipe read the corpus identically on both loves"
-# test_front -- the test-only frontend: out/front links liblove.a (l/love.c only)
+# test_front -- the test-only frontend: b/front links liblove.a (l/love.c only)
 # and supplies the frontend contract itself, so its port vt can answer would-block on
 # cue. it exits 97 on a wait with no deadline -- a deadlock, said loudly.
 $(ho)/front: t/front/main.c $(R)/l/bare.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/l/love_data.ld \
-    out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h
+    b/lib/egg.h b/lib/post.h b/lib/p1.h b/lib/prel.h b/lib/ev.h
 	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -o $@ t/front/main.c $(R)/l/bare.c $(ho)/liblove.a $(data_ld) $(nifs_ld)
@@ -193,10 +193,10 @@ test_front: $(ho)/front
 # regression is a HANG, wanting a timeout a corpus cannot give -- a wedged gate is worse than
 # a red one. gate = exit 0 and a "<name>: ok"; a cold lane opts in via hostnif_cold.
 hostnif_tests = t/host/gcpause.l t/host/wharf.l t/host/cb.l t/host/manifest.l t/host/rune.l t/host/pty.l t/host/loader.l t/host/rdiff.l t/host/run.l t/host/luxui.l t/host/sh.l t/host/berth.l t/host/overlay.l t/host/bake.l t/host/rove.l t/host/lapiz.l t/host/papel.l t/host/kiosko.l t/host/serve.l t/host/sbhttp.l t/host/salt.l t/host/libra.l t/host/clay.l t/host/tls.l t/host/tlsc.l t/host/gz.l t/host/gzc.l t/host/story.l t/host/design.l t/host/lupa.l t/host/helm.l t/host/wget.l t/host/cook.l
-# out/lush: t/host/sh.l drives the built shell end to end, via out/love and
+# b/lush: t/host/sh.l drives the built shell end to end, via b/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
-test_hostnif: host out$(hsuf)/lush
+test_hostnif: host b$(hsuf)/lush
 	@for s in $(hostnif_tests); do echo "TEST $$s"; \
 	  case " $(hostnif_cold) " in *" $$s "*) L="env LOVE_NO_IMAGE=1 $m";; *) L="$m";; esac; \
 	  cat t/00-init.l $$s | sh t/gate/run.sh hostnif "$$L" ": ok" \
@@ -255,7 +255,7 @@ endif
 ifneq ($(filter $a,x64 a64),)
 test_glazefuzz: host
 	@echo TEST t/gate/glazefuzz.l "(glaze differential fuzz: glazed vs interpreted)"
-	@on=out/.gfuzz_on.out; off=out/.gfuzz_off.out; \
+	@on=b/.gfuzz_on.out; off=b/.gfuzz_off.out; \
 	  LOVE_NO_IMAGE=1 $m t/gate/glazefuzz.l > $$on 2>/dev/null \
 	    || { echo "FAIL glazefuzz: the GLAZED run died"; exit 1; }; \
 	  LOVE_NO_IMAGE=1 LOVE_NO_GLAZE=1 $m t/gate/glazefuzz.l > $$off 2>/dev/null \
@@ -289,7 +289,7 @@ test_sat: host
 	@cat a/sat/sat.l a/sat/dimacs.l a/sat/flat.l \
 	  | sh t/gate/run.sh sat "env LOVE_NO_IMAGE=1 $m" "sat: Stages 1-3 ok|a/sat/dimacs: ok|a/sat/flat: ok"
 # The DRAT lane's external check: flat.l's refutations verified by drat-trim, the SAT
-# competition's own checker (fetched + built into out/drat on first use; skips offline).
+# competition's own checker (fetched + built into b/drat on first use; skips offline).
 # The in-gate twin (fd-check) runs inside test_sat. Not in test_slow (network).
 test_drat: host
 	@cd a/sat && ./dratcheck.sh || { echo "FAIL drat"; exit 1; }
@@ -333,21 +333,21 @@ test_cli: host
 # source without `make web`.
 test_web: host
 	@echo TEST w/index.l w/style.l u/mkicon.l
-	@mkdir -p out/.w
-	@$m w/index.l out/.w/index.html
-	@env -u LOVE_NO_IMAGE $m w/style.l out/.w/style.css
-	@env -u LOVE_NO_IMAGE $m u/mkicon.l l/quay/cga_8x8.c 3 32 out/.w/favicon.png 2>/dev/null
-	@env -u LOVE_NO_IMAGE $m u/mkfont.l l/quay/moderndos_8x16.c 12 out/.w/quay16.woff "Quay 16"
-	@env -u LOVE_NO_IMAGE $m u/mkfont.l l/quay/cga_8x8.c 6 out/.w/quay8.woff "Quay 8"
-	@cmp -s out/.w/index.html index.html && cmp -s out/.w/style.css w/style.css \
-	  && cmp -s out/.w/favicon.png w/favicon.png \
-	  && cmp -s out/.w/quay16.woff w/fonts/quay16.woff \
-	  && cmp -s out/.w/quay8.woff w/fonts/quay8.woff \
+	@mkdir -p b/.w
+	@$m w/index.l b/.w/index.html
+	@env -u LOVE_NO_IMAGE $m w/style.l b/.w/style.css
+	@env -u LOVE_NO_IMAGE $m u/mkicon.l l/quay/cga_8x8.c 3 32 b/.w/favicon.png 2>/dev/null
+	@env -u LOVE_NO_IMAGE $m u/mkfont.l l/quay/moderndos_8x16.c 12 b/.w/quay16.woff "Quay 16"
+	@env -u LOVE_NO_IMAGE $m u/mkfont.l l/quay/cga_8x8.c 6 b/.w/quay8.woff "Quay 8"
+	@cmp -s b/.w/index.html index.html && cmp -s b/.w/style.css w/style.css \
+	  && cmp -s b/.w/favicon.png w/favicon.png \
+	  && cmp -s b/.w/quay16.woff w/fonts/quay16.woff \
+	  && cmp -s b/.w/quay8.woff w/fonts/quay8.woff \
 	  || { echo "  FAIL: a committed web asset is behind w/ -- run make web and commit"; exit 1; }
 	@echo "  web: ok -- the page, the stylesheet, the icon and both fonts are what w/ lays"
-test_sb: host out$(hsuf)/sb
+test_sb: host b$(hsuf)/sb
 	@echo TEST a/sb/sb.l + t/host/sb.l
-	@rm -rf out/.sbtest
+	@rm -rf b/.sbtest
 	@cat t/00-init.l t/host/sb.l | sh t/gate/run.sh sb "$m" "sb: ok"
 # the kore smokes drive love's own crew layer (`love kore ..` -- the layered bake),
 # warm per spawn; the argv0 smoke lays its own two-line shim,
@@ -432,7 +432,7 @@ mx_gen = l/mx.h:l/mx.l:mx-h:mx-ok l/kinds.h:l/mx.l:kinds-h:mx-ok l/nifs.h:l/nifs
          l/quay/xterm256.h:l/quay/quay.l:q-c:q-ok l/love_data.ld:l/mx.l:mx-ld:mx-ok
 # /warn the \# escapes are load-bearing: a bare # in a make variable starts a comment and
 # would eat the rest of the line (a recipe line passes # through, a variable does not).
-mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${r\#*:}; o=out/.`basename $$d`
+mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${r\#*:}; o=b/.`basename $$d`
 # the egg lane, deliberately: these generators read core tables with the boot
 # vocabulary, and the warm book now carries the crew (the layered bake) -- kore's
 # two-arg `join` shadowed clay's one-arg at mx-h's define and the .h came out empty.
@@ -451,9 +451,9 @@ mx: host
 define mx_dep
 $(word 1,$(subst :, ,$(1))): $(word 2,$(subst :, ,$(1)))
 	@if test -x $$(m); then \
-	   $$(m) -l $$< -e "(: _ (? $(word 4,$(subst :, ,$(1))) 0 (quit 1)) _ (puts $(word 3,$(subst :, ,$(1)))) (quit 0))" > out/.$$(@F) || exit 1; \
-	   cmp -s out/.$$(@F) $$@ || echo "LOVE	$$@ (relaid -- $$< moved)"; \
-	   mv out/.$$(@F) $$@; \
+	   $$(m) -l $$< -e "(: _ (? $(word 4,$(subst :, ,$(1))) 0 (quit 1)) _ (puts $(word 3,$(subst :, ,$(1)))) (quit 0))" > b/.$$(@F) || exit 1; \
+	   cmp -s b/.$$(@F) $$@ || echo "LOVE	$$@ (relaid -- $$< moved)"; \
+	   mv b/.$$(@F) $$@; \
 	 else touch $$@; fi
 endef
 $(foreach s,$(mx_gen),$(eval $(call mx_dep,$(s))))
@@ -539,7 +539,7 @@ test_selfhost: host
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/selfhost; mkdir -p $$d; rm -f $$d/*.o; \
 	  for f in $(love_tu_c) $(host_c) $(R)/i/nokern.c $(R)/i/noblob.c $(R)/i/noosv.c; do b=`basename $$f .c`; \
-	    $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Il -Ii -Iout/lib -c $$f $$d/$$b.o \
+	    $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Il -Ii -Ib/lib -c $$f $$d/$$b.o \
 	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
 	  $(moonrun) -Ia/moon/include -c a/moon/lib/moonlibc/math/am.c $$d/am.o \
 	    || { echo "FAIL mooncc -c am.c"; exit 1; }; \
@@ -602,7 +602,7 @@ rvboot_o = $(ko)/rv64/rv64/boot.o $(ko)/rv64/i/rv64/dtb.o $(ko)/rv64/rvboot.o
 $(ko)/rv64/rvboot.o: t/gate/rvboot.c $(love_h) $(R)/i/k.h $(R)/i/dtb.h $(mooncc_dep)
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
-	@$(mooncc) -I$(ko)/rv64 -I. -Il -Ii -I$(ho) -Iout/lib -I$R -I$R/a/moon/include \
+	@$(mooncc) -I$(ko)/rv64 -I. -Il -Ii -I$(ho) -Ib/lib -I$R -I$R/a/moon/include \
 	  -t rv64 -c $< -o $@
 $(ko)/rv64/rvboot.elf: $(rvboot_o) t/gate/rvboot.l $m
 	@echo 'RVLINK	'$@
@@ -628,18 +628,18 @@ kvec_a64 = $(moon_d)/kvec.o
 endif
 test_vec: host
 	@$(MAKE) -s a=x64 kernel
-	@sh t/gate/vec.sh x64 out/love-x64.elf $(kvec_x64)
+	@sh t/gate/vec.sh x64 b/love-x64.elf $(kvec_x64)
 	@$(MAKE) -s a=a64 kernel
-	@sh t/gate/vec.sh a64 out/love-a64.elf $(kvec_a64)
+	@sh t/gate/vec.sh a64 b/love-a64.elf $(kvec_a64)
 	@$(MAKE) -s a=rv64 kernel
-	@sh t/gate/vec.sh rv64 out/love-rv64.elf $(kvec_rv64)
+	@sh t/gate/vec.sh rv64 b/love-rv64.elf $(kvec_rv64)
 # the fixpoint: the default love is mooncc-built, so this gate has it rebuild itself --
 # love1 (love0's lane, relinked) bakes its own compiler image, recompiles every TU, links
 # love2, and the two must be byte-identical. a headline invariant -- but it runs in
 # test_extra only, so a deleted src/*.c goes green through test_slow either way.
 # $(moon_o) $(kart_o) is the link list, the artifact's own: the gate is handed make's
 # objects, it never globs the odir, and it links no less than `make` does.
-test_fixpoint: host $(moon_seat_o) $(love0) out/mooncc0.image
+test_fixpoint: host $(moon_seat_o) $(love0) b/mooncc0.image
 	@$(MAKE) -s a=$(hosta) $(ko)/$(hosta)/mkvec.l
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
 	  gate_kern_c='$(k_free_c)' gate_seat_c='$(R)/i/noblob.c' \
@@ -650,7 +650,7 @@ test_fixpoint: host $(moon_seat_o) $(love0) out/mooncc0.image
 # opt-in by NAME (a full rebuild under emulation is minutes): `make test_xfixpoint`,
 # or `make xa=rv64 test_xfixpoint` for the other twin. skips loudly without qemu.
 .PHONY: test_xfixpoint
-test_xfixpoint: $(x_o) $(x_seat_o) $(xkart_o) $(love0) out/mooncc0.image
+test_xfixpoint: $(x_o) $(x_seat_o) $(xkart_o) $(love0) b/mooncc0.image
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(wildcard $R/i/$(xa)/*.c)' \
 	  gate_kern_c='$(k_free_c)' gate_seat_c='$(R)/i/noblob.c' \
 	  sh t/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xa) mksys-$(xa) $(tco) $(xd) $(xa) $(x_o) $(x_seat_o) $(xkart_o)
@@ -666,12 +666,12 @@ test_fat: dist-fat
 # gate skips loudly. opt-in by name, like test_distboot; FBSD_SEED=1 /
 # NBSD_SEED=1 adds the on-box `love seed` trophy leg (minutes).
 .PHONY: test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64
-test_freebsd test_netbsd: test_%: host $(love0) out/mooncc0.image
+test_freebsd test_netbsd: test_%: host $(love0) b/mooncc0.image
 	@sh t/gate/osbox.sh $(ho) $(love0) $*
 # the second ISA: {F,N}BSD_ARM64_SSH name aarch64 boxes and the local half of each
 # comparison rides qemu-aarch64, so one binary answers all three kernels on an ISA this
 # machine is not. the door netbsd needs there is the svc immediate. skips loudly without.
-test_freebsd_a64 test_netbsd_a64: test_%_a64: host $(love0) out/mooncc0.image
+test_freebsd_a64 test_netbsd_a64: test_%_a64: host $(love0) b/mooncc0.image
 	@sh t/gate/osbox.sh $(ho) $(love0) $* a64
 # test_raw_bake -- the mooncc-PIE binary bakes its own image and wakes it. The procedure
 # (and the why) lives in t/gate/raw-bake.sh; make keeps the dependency and the file list,
@@ -733,7 +733,7 @@ test_playdate: host
 # and the ROM-facing boot image is verified out of that .bin (FCFB tag at flash 0, IVT at
 # 0x1000, thumb-bit entry). So this one never skips; test_mps2 is the runtime (no RT1062 qemu).
 test_teensy41: host
-	@echo TEST out/teensy41/love.hex
+	@echo TEST b/teensy41/love.hex
 	@$(MAKE) -C i/teensy41 || { echo "FAIL teensy41 build (the boot-image verify is inside)"; exit 1; }
 	@echo "test_teensy41: love (all-mooncc thumb2), OUR linker, flatten and boot image -- nothing foreign"
 # test_nucleo446 -- the Nucleo-F446RE firmware build: mooncc -t thumb2sp compiles, nlink.l
@@ -742,7 +742,7 @@ test_teensy41: host
 # arm-none-eabi-gcc is asked only where its cortex-m4 hard-float libgcc.a lives, and the .a
 # is READ by need. the 128 KB SRAM never held love: this port is the toolchain on silicon.
 test_nucleo446: host
-	@echo TEST out/nucleo446/firm.hex
+	@echo TEST b/nucleo446/firm.hex
 	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   echo "test_nucleo446: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
 	  $(MAKE) -C i/nucleo446 || { echo "FAIL nucleo446 build (the boot-image verify is inside)"; exit 1; }; \
@@ -754,7 +754,7 @@ test_nucleo446: host
 # and inside flash. nothing foreign is left to ask after, so this never skips. qemu has no
 # RP2040 machine, so it builds and never boots -- test_mps2_t1 runs the ISA.
 test_rp2040: host
-	@echo TEST out/rp2040/love.bin
+	@echo TEST b/rp2040/love.bin
 	@$(MAKE) -C i/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }
 	@echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker, flatten and runtime -- no foreign file, flash R|X, boot surface verified"
 # test_boards -- the build half of the ports, no emulator anywhere: the boot gates prove a
@@ -763,21 +763,21 @@ test_rp2040: host
 # against ~35 s in a row, each port's own make being single-threaded.
 # mps2 and virt want nothing foreign to build, only to boot, so their build halves are here.
 # i/wasm is not a board and never joins: that folder is the retired emcc build, opt-in as
-# `make wasm-emcc`. the module the page carries is out/love-wasm.wasm, from test_links.
+# `make wasm-emcc`. the module the page carries is b/love-wasm.wasm, from test_links.
 test_boards: test_mps2_build test_virt_build test_rp2040 test_nucleo446 test_teensy41 test_playdate
 	@echo "test_boards: six ports build and link -- mooncc and our linker, no emulator"
 test_mps2_build: host
-	@echo TEST out/mps2/love.elf '(build)'
+	@echo TEST b/mps2/love.elf '(build)'
 	@$(MAKE) -C i/mps2 || { echo "FAIL mps2 build"; exit 1; }
 test_virt_build: host
-	@echo TEST out/virt/love.elf '(build)'
+	@echo TEST b/virt/love.elf '(build)'
 	@$(MAKE) -C i/virt || { echo "FAIL virt build"; exit 1; }
 # test_links -- every distinct link topology, compiled and linked, nothing run. a seat
 # change breaks LINKS, and a link is the cheapest question this tree asks; playdate keeps
 # its own roster, so it is the one that goes missing. rides both slow tiers -- in test_extra
 # it stands for the four build-only board rows, being test_boards and more.
 .PHONY: test_links
-test_links: host $(ho)/front $(love0) out/wasm/love.wasm out/love-wasm.wasm
+test_links: host $(ho)/front $(love0) b/wasm/love.wasm b/love-wasm.wasm
 	@$(MAKE) -s $(ko)/love-x64.elf
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
@@ -901,8 +901,8 @@ nettest: host
 # The tool gates beside the build: the hue generators, cook, tele. See u/Makefile.
 # vmret is not here -- it rides test_slow over $m, and after plan C2 every other love in
 # the tree is a projection of that one. lush is a real
-# prerequisite: t/host/cook.l's SHELL pair sets `SHELL := out/lush` to prove cook honors it.
-test_tools: host out$(hsuf)/lush
+# prerequisite: t/host/cook.l's SHELL pair sets `SHELL := b/lush` to prove cook honors it.
+test_tools: host b$(hsuf)/lush
 	@$(MAKE) -C u
 # test_gcheck: the copy loop's fixpoint instance check. LvGcCheck makes gen_minor re-drive
 # its whole scan after the drain and trap if the second pass copies a word, in its own tree.
@@ -912,14 +912,14 @@ test_tools: host out$(hsuf)/lush
 # file to whoever reads it meanwhile -- a half-written mooncc0.image wakes with no verb
 # table and `mooncc` then reads as a filename (the Makefile). test_fixpoint names them
 # for the same reason.
-test_gcheck: host $(love0) out/mooncc0.image
+test_gcheck: host $(love0) b/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DLvGcCheck test_host
 	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DLvGcCheck test_hostegg
 # test_gcstress: the mutator's side -- whether the C around the collector holds a raw pointer
 # across a call that collects. LvGcStress always collects, poisons the vacated nursery, and
 # majors every 32nd. ~12 min, own tree -- the baked leg tracks the glaze, since every major
 # walks it, and costs 3.4x the egg one for it (429 s against 126 s).
-test_gcstress: host $(love0) out/mooncc0.image
+test_gcstress: host $(love0) b/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_host
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_hostegg
 # --- the machine-checked half: t/proof/rocq/ + t/proof/lean/ ---------------------------------
@@ -991,14 +991,14 @@ test_extract: host $(rocq_kept)
 	@echo TEST t/proof/rocq/extract.v "(coqc extraction -> ocaml ref vs ev)"
 	@cd t/proof/rocq && $(COQC) -R . "" extract.v >/dev/null \
 	  && rm -f normalizer.mli && $(OCAMLOPT) -w -a normalizer.ml oracle_drive.ml -o oracle_drive
-	@t/proof/rocq/oracle_drive 2000 6 1 > out/.extract_oracle.l
-	@$m out/.extract_oracle.l > out/.extract_oracle.out 2>&1; r=$$?; \
-	  { [ $$r -eq 0 ] && grep -q "2000 / 2000 PASS" out/.extract_oracle.out; } \
-	    || { echo "FAIL the extract oracle (exit $$r):"; cat out/.extract_oracle.out; exit 1; }
-	@cat out/.extract_oracle.out
+	@t/proof/rocq/oracle_drive 2000 6 1 > b/.extract_oracle.l
+	@$m b/.extract_oracle.l > b/.extract_oracle.out 2>&1; r=$$?; \
+	  { [ $$r -eq 0 ] && grep -q "2000 / 2000 PASS" b/.extract_oracle.out; } \
+	    || { echo "FAIL the extract oracle (exit $$r):"; cat b/.extract_oracle.out; exit 1; }
+	@cat b/.extract_oracle.out
 	@$(call vclean,extract)
 	@rm -f t/proof/rocq/normalizer.ml t/proof/rocq/normalizer.mli t/proof/rocq/oracle_drive \
-	  t/proof/rocq/*.cmi t/proof/rocq/*.cmx t/proof/rocq/*.o out/.extract_oracle.l out/.extract_oracle.out
+	  t/proof/rocq/*.cmi t/proof/rocq/*.cmx t/proof/rocq/*.o b/.extract_oracle.l b/.extract_oracle.out
 # big.v proves the decimal codec roundtrip and the quot-rem/gcd witnesses, then extracts stdlib's
 # binary Z with the codec; big_drive.ml emits decimal comparisons -- love's reader, limbs and
 # printer against it.
@@ -1006,14 +1006,14 @@ test_big: host
 	@echo TEST t/proof/rocq/big.v "(coqc codec proof + extracted Z ref vs the limb lane)"
 	@cd t/proof/rocq && $(COQC) -q big.v >/dev/null \
 	  && rm -f bigref.mli && $(OCAMLOPT) -w -a bigref.ml big_drive.ml -o big_drive
-	@t/proof/rocq/big_drive 2000 1 > out/.big_oracle.l
-	@$m out/.big_oracle.l > out/.big_oracle.out 2>&1; r=$$?; \
-	  { [ $$r -eq 0 ] && grep -q "2000 / 2000 PASS" out/.big_oracle.out; } \
-	    || { echo "FAIL the big oracle (exit $$r):"; cat out/.big_oracle.out; exit 1; }
-	@cat out/.big_oracle.out
+	@t/proof/rocq/big_drive 2000 1 > b/.big_oracle.l
+	@$m b/.big_oracle.l > b/.big_oracle.out 2>&1; r=$$?; \
+	  { [ $$r -eq 0 ] && grep -q "2000 / 2000 PASS" b/.big_oracle.out; } \
+	    || { echo "FAIL the big oracle (exit $$r):"; cat b/.big_oracle.out; exit 1; }
+	@cat b/.big_oracle.out
 	@$(call vclean,big)
 	@rm -f t/proof/rocq/bigref.ml t/proof/rocq/bigref.mli t/proof/rocq/big_drive \
-	  t/proof/rocq/*.cmi t/proof/rocq/*.cmx t/proof/rocq/*.o out/.big_oracle.l out/.big_oracle.out
+	  t/proof/rocq/*.cmi t/proof/rocq/*.cmx t/proof/rocq/*.o b/.big_oracle.l b/.big_oracle.out
 # the prove rung of the holo encoder ladder: reference x86-64 encoders each proving decode
 # inverts encode, extracted to OCaml and checked BYTE-IDENTICAL against holo -- an oracle, not a
 # disassembler. enc.v is reg-direct, encmem.v ModRM/SIB, encli.v `li`'s form choice.
@@ -1026,7 +1026,7 @@ test_encver: host
 	  && $(OCAMLOPT) -w -a encmem_ref.ml encmem_drive.ml -o encmem_drive >/dev/null \
 	  && $(OCAMLOPT) -w -a encli_ref.ml encli_drive.ml -o encli_drive >/dev/null
 	@for s in $(encver); do n=$${s%%:*}; r=$${s#*:}; c=$${r%%:*}; l=$${r#*:}; \
-	   o=out/.$${n}_oracle; \
+	   o=b/.$${n}_oracle; \
 	   t/proof/rocq/$${n}_drive > $$o.l; \
 	   { cat l/holo/holo.l l/holo/x64.l; echo "(borrow 'holo)"; cat $$o.l; } | $m > $$o.out 2>&1; r=$$?; \
 	   { [ $$r -eq 0 ] && grep -q "$$c / $$c PASS" $$o.out; } \
@@ -1034,7 +1034,7 @@ test_encver: host
 	   cat $$o.out; done
 	@$(call vclean,enc encmem encli)
 	@$(call dclean,enc encmem encli)
-	@rm -f t/proof/rocq/*.cmi t/proof/rocq/*.cmx t/proof/rocq/*.o out/.enc_oracle.* out/.encmem_oracle.* out/.encli_oracle.*
+	@rm -f t/proof/rocq/*.cmi t/proof/rocq/*.cmx t/proof/rocq/*.o b/.enc_oracle.* b/.encmem_oracle.* b/.encli_oracle.*
 endif
 
 # the lean leg of the proof bridge (cf. test_uugen, the Rocq leg): u/uu2lean.l emits the same
@@ -1049,8 +1049,8 @@ test_uulean: host
 	@echo 'LOVE	't/proof/lean/uugen.lean "(u/uu2lean.l on $m)"
 	@$m u/uu2lean.l > t/proof/lean/uugen.lean
 	@echo TEST t/proof/lean/uugen.lean "(lean)"
-	@$(LEAN) t/proof/lean/uugen.lean > out/.uulean.out 2>&1; r=$$?; \
-	  if [ $$r -ne 0 ] || grep -q sorryAx out/.uulean.out; then cat out/.uulean.out; exit 1; fi
+	@$(LEAN) t/proof/lean/uugen.lean > b/.uulean.out 2>&1; r=$$?; \
+	  if [ $$r -ne 0 ] || grep -q sorryAx b/.uulean.out; then cat b/.uulean.out; exit 1; fi
 endif
 
 # the fuzz-first rung of the holo encoder ladder (t/holo/fuzz/): random IR encoded via
@@ -1080,10 +1080,10 @@ $1: host
 	@$$m u/$2.l > t/$1.l
 test_$1: host
 	@echo TEST t/$1.l "(regenerate + diff)"
-	@$$m u/$2.l > out/.$1.l.tmp
-	@cmp -s out/.$1.l.tmp t/$1.l \
+	@$$m u/$2.l > b/.$1.l.tmp
+	@cmp -s b/.$1.l.tmp t/$1.l \
 	  || { echo "FAIL: t/$1.l is stale ($3 moved?) -- run: make $1"; exit 1; }
-	@rm -f out/.$1.l.tmp
+	@rm -f b/.$1.l.tmp
 endef
 # what each row proves, the only part that differs:
 #   uuwm      lux's zipper ops                        -> t/uuwmlaw.l, its theorems
@@ -1214,7 +1214,7 @@ test_kernel_rv64: host $(R)/u/ktest.l
 endif
 
 NODE ?= $(shell command -v node 2>/dev/null)
-# test_wasm rides moon's own module (make wasm -> out/wasm/love.wasm) under the loader, no
+# test_wasm rides moon's own module (make wasm -> b/wasm/love.wasm) under the loader, no
 # emcc. the corpus is not here: t/kernel/all.l reads common.mk's `t` off the ramfs, so
 # test_kernel_wasm runs it on the kernel module, woken image and all. what is left is the two
 # seams the machine has not grown -- quay's cells as html, the horn's PCM into WebAudio.
@@ -1223,15 +1223,15 @@ test_wasm:
 	@echo "test_wasm: skipped (needs node)"
 else
 test_wasm: wasm
-	@$(NODE) $(R)/i/wasm/screen.mjs --love $(R)/out/wasm/love.wasm
-	@$(NODE) $(R)/i/wasm/horn.mjs --love $(R)/out/wasm/love.wasm
+	@$(NODE) $(R)/i/wasm/screen.mjs --love $(R)/b/wasm/love.wasm
+	@$(NODE) $(R)/i/wasm/horn.mjs --love $(R)/b/wasm/love.wasm
 endif
 
 # INLE_RAM: cpu.mjs grows the memory once at boot and hands kmain that fixed span, so the
 # seat's room is a number here, not a policy. 256 (the default) is short of the corpus: the
 # collector's doubling asks 4480156 words and the grow refuses, at the same length whichever
 # member is running, the live set being what crossed the line.
-# test_kernel_wasm -- the wasm inle seat (out/love-wasm.wasm) under node: the image baked
+# test_kernel_wasm -- the wasm inle seat (b/love-wasm.wasm) under node: the image baked
 # (the egg lane, `bake PATH` on the boot line), then the kernel corpus off the ramfs on the
 # woken image, the serial line captured, the (reset) that ends it read as the exit -- what
 # u/ktest.l reads off qemu, with no qemu and no browser.
@@ -1240,15 +1240,15 @@ test_kernel_wasm:
 	@echo "test_kernel_wasm: skipped (needs node)"
 else
 test_kernel_wasm: host
-	@$(MAKE) -s out/wasm/love-wasm.image
-	@echo TEST out/love-wasm.wasm "(node: the kernel corpus on the woken image, serial, headless)"
-	@INLE_RAM=768 $(NODE) $(R)/i/wasm/inle.mjs --image out/wasm/love-wasm.image $(R)/out/love-wasm.wasm t/kernel/all.l \
-	   < /dev/null > out/wasm/kernel.log 2>&1; \
-	 grep -q "image awake" out/wasm/kernel.log \
-	   && grep -q "tests pass" out/wasm/kernel.log && ! grep -q "failed:" out/wasm/kernel.log \
-	   && ! grep -q "^0 tests pass" out/wasm/kernel.log \
-	   || { tail -20 out/wasm/kernel.log; echo "FAIL test_kernel_wasm"; exit 1; }
-	@grep "tests pass" out/wasm/kernel.log
+	@$(MAKE) -s b/wasm/love-wasm.image
+	@echo TEST b/love-wasm.wasm "(node: the kernel corpus on the woken image, serial, headless)"
+	@INLE_RAM=768 $(NODE) $(R)/i/wasm/inle.mjs --image b/wasm/love-wasm.image $(R)/b/love-wasm.wasm t/kernel/all.l \
+	   < /dev/null > b/wasm/kernel.log 2>&1; \
+	 grep -q "image awake" b/wasm/kernel.log \
+	   && grep -q "tests pass" b/wasm/kernel.log && ! grep -q "failed:" b/wasm/kernel.log \
+	   && ! grep -q "^0 tests pass" b/wasm/kernel.log \
+	   || { tail -20 b/wasm/kernel.log; echo "FAIL test_kernel_wasm"; exit 1; }
+	@grep "tests pass" b/wasm/kernel.log
 endif
 
 # the wasm module writer and the IR lowering (l/holo/wasm.l) under a foreign engine, and
@@ -1260,7 +1260,7 @@ endif
 # skips without node.
 WASMOPT ?= $(shell command -v wasm-opt 2>/dev/null)
 wasmopt_flags = --enable-memory64 --enable-bulk-memory --enable-nontrapping-float-to-int
-holo_wasm = out/.holo.wasm out/.holo2.wasm out/.holo3.wasm
+holo_wasm = b/.holo.wasm b/.holo2.wasm b/.holo3.wasm
 ifeq ($(NODE),)
 test_holowasm:
 	@echo "test_holowasm: skipped (needs node)"
@@ -1269,11 +1269,11 @@ test_holowasm: host
 	@echo TEST t/holo/wasm.l
 	@cat l/holo/holo.l l/holo/wasm.l l/holo/wasmfn.l t/holo/wasm.l | $m
 	@$(if $(WASMOPT),for w in $(holo_wasm); do $(WASMOPT) $(wasmopt_flags) $$w -o /dev/null 2>/dev/null || exit 1; done && echo "  wasm-opt: all valid",echo "  wasm-opt: absent, node alone validates")
-	@$(NODE) t/holo/wasm.mjs out/.holo.wasm out/.holo2.wasm
-	@$(NODE) t/holo/loader.mjs out/.holo3.wasm
+	@$(NODE) t/holo/wasm.mjs b/.holo.wasm b/.holo2.wasm
+	@$(NODE) t/holo/loader.mjs b/.holo3.wasm
 	@echo TEST t/holo/fuzz/wasm.l "(the wasm lane's second opinion: v8 against the model)"
 	@cat l/holo/holo.l l/holo/wasm.l l/holo/wasmfn.l t/holo/fuzz/wasm.l | $m
-	@$(NODE) t/holo/fuzz/wasm.mjs out/.wasmfuzz.wasm out/.wasmfuzz.json
+	@$(NODE) t/holo/fuzz/wasm.mjs b/.wasmfuzz.wasm b/.wasmfuzz.json
 endif
 
 # --- the two binary-shape gates, both skipping when their tool is absent ---

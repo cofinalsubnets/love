@@ -14,7 +14,7 @@
 ; worth cache (cleared whole on any edit -- the painter refills only what it
 ; shows), slot 2 the visiting watch.
 ;
-; run: out/love -l a/manifest/manifest.l -e '(manifest "a/manifest/cargo.l")'
+; run: b/love -l a/manifest/manifest.l -e '(manifest "a/manifest/cargo.l")'
 ;      (a bare (manifest ()) sails without a file.)
 ; keys: arrows/hjkl move . enter edits the cell (= starts fresh) . x clears
 ;       w stows . q stows and steps ashore . ^C abandons ship

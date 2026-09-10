@@ -148,8 +148,8 @@ toolchain), and that tree is the one served.
    (: exe (selfpath 0)
       _ (string? exe ? 0 (say err "serve: can't find my own path\n", quit 1))
       _ ((cite 'source 'src-arm) dir exe)
-      _ (say err ";; laying the page: make web wasm site-wasm out/love-wasm.wasm\n")
-      p (spawn [exe "make" "-C" dir "web" "wasm" "site-wasm" "out/love-wasm.wasm"])
+      _ (say err ";; laying the page: make web wasm site-wasm b/love-wasm.wasm\n")
+      p (spawn [exe "make" "-C" dir "web" "wasm" "site-wasm" "b/love-wasm.wasm"])
       st (charm? p && 0 <= p ? (wait p) 1)
       (0 = st ? 0 (say err ("serve: the page did not build (" + show st + ")\n"), quit 1)))
 

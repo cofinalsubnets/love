@@ -10,7 +10,7 @@
 ; space IS the register file), so it enumerates. SYSDIFF_ARCH=x64|a64|rv64 narrows;
 ; default all three.
 ;
-;   out/love t/holo/fuzz/sysdiff.l          (exit 1 on any disagreement)
+;   b/love t/holo/fuzz/sysdiff.l          (exit 1 on any disagreement)
 
 (borrow 'posix)
 (reads (open "l/holo/holo.l" "r"))

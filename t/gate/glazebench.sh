@@ -14,8 +14,8 @@
 #
 # usage: sh t/gate/glazebench.sh LOVE ARCH
 set -u
-love=${1:-out/love} arch=${2:-x64}
-d=out/.glazebench && mkdir -p $d
+love=${1:-b/love} arch=${2:-x64}
+d=b/.glazebench && mkdir -p $d
 [ -d bench/benches ] || { echo "glazebench: skipped (no bench/ in this tree)"; exit 0; }
 fails=0
 

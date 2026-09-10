@@ -8,7 +8,7 @@ CCACHE :=
 endif
 
 # bootstrap interpreter
-love0 = out/love0
+love0 = b/love0
 
 .PHONY: all install uninstall clean distclean host kernel wasm love0 lint ulp fonts web \
   site site-serve valg disasm flame cat cata catav perf repl gdb bench cloc
@@ -29,13 +29,13 @@ endif
 sed_lit = sed \
   -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/'
 boot0_l = $(wildcard l/boot/*.l) l/holo/holo.l l/holo/x64.l l/holo/a64.l
-out/lib/boot0.h: $(boot0_l)
+b/lib/boot0.h: $(boot0_l)
 	@echo '$(t_sed)	'$@
-	@mkdir -p out/lib
+	@mkdir -p b/lib
 	@for f in $(boot0_l); do n=$${f##*/}; printf 'static char const src0_%s[] =\n' $${n%.l}; \
 	   LOVE_NO_IMAGE= $(sed_lit) $$f || exit 1; echo ';'; done > $@
 .PHONY: lib
-lib: out/lib/boot0.h out/lib/baked.h
+lib: b/lib/boot0.h b/lib/baked.h
 lcat_love = $(love0) -l l/boot/prel.l
 # A FORCED WITNESS KEEPS ITS MTIME, and that is the whole point: make cannot depend on a
 # variable's VALUE, so a roster change has to be noticed some other way. Depending on the
@@ -47,60 +47,60 @@ note = if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo '$(
 # the baked source: one header, one love0 run. u/lcat.l carries the roster -- which
 # files, in which blobs, with what glue -- so a roster change edits a file this depends on.
 baked_l = $(wildcard l/boot/*.l) l/holo/holo.l l/holo/x64.l l/holo/a64.l l/holo/rv64.l
-out/lib/baked.h: $(baked_l) u/lcat.l $(love0)
+b/lib/baked.h: $(baked_l) u/lcat.l $(love0)
 	@echo 'LOVE	'$@
-	@mkdir -p out/lib
+	@mkdir -p b/lib
 	@$(lcat_love) u/lcat.l > $@
 # one file as one literal: the ports and t/front paste these in expression position
-lib_h = $(patsubst l/boot/%.l,out/lib/%.h,$(wildcard l/boot/*.l))
-holo_h = out/lib/holo.h out/lib/x64.h out/lib/a64.h out/lib/rv64.h
-$(lib_h): out/lib/%.h: l/boot/%.l u/lcat.l $(love0)
+lib_h = $(patsubst l/boot/%.l,b/lib/%.h,$(wildcard l/boot/*.l))
+holo_h = b/lib/holo.h b/lib/x64.h b/lib/a64.h b/lib/rv64.h
+$(lib_h): b/lib/%.h: l/boot/%.l u/lcat.l $(love0)
 	@echo 'LOVE	'$@
-	@mkdir -p out/lib
+	@mkdir -p b/lib
 	@$(lcat_love) u/lcat.l $< > $@
-$(holo_h): out/lib/%.h: l/holo/%.l u/lcat.l $(love0)
+$(holo_h): b/lib/%.h: l/holo/%.l u/lcat.l $(love0)
 	@echo 'LOVE	'$@
-	@mkdir -p out/lib
+	@mkdir -p b/lib
 	@$(lcat_love) u/lcat.l $< > $@
-out/lib/rune.h: a/rune.l u/lcat.l $(love0)
+b/lib/rune.h: a/rune.l u/lcat.l $(love0)
 	@echo 'LOVE	'$@
-	@mkdir -p out/lib
+	@mkdir -p b/lib
 	@$(lcat_love) u/lcat.l $< > $@
 # the seat laws, one text for every board that runs love (i/mps2, i/virt): their
 # main.c splices this literal into its driver tail, so the laws are said once.
-out/lib/seat.h: i/seat.l u/lcat.l $(love0)
+b/lib/seat.h: i/seat.l u/lcat.l $(love0)
 	@echo 'LOVE	'$@
-	@mkdir -p out/lib
+	@mkdir -p b/lib
 	@$(lcat_love) u/lcat.l $< > $@
 .PHONY: force_corpus_list
 force_corpus_list: ;
 # love0 reads this at runtime to find the corpus. $t is a glob, so it is written
 # every run; only the phony test_love0 wants it, so the moving mtime costs nothing.
-out/lib/corpus.list: force_corpus_list
-	@mkdir -p out/lib
+b/lib/corpus.list: force_corpus_list
+	@mkdir -p b/lib
 	@echo '$t' > $@
 
-out/lib/love_version.h: $(R)/VERSION
-	@mkdir -p out/lib
+b/lib/love_version.h: $(R)/VERSION
+	@mkdir -p b/lib
 	@printf '#define LvVersion "%s"\n' "$$(cat $(R)/VERSION)" > $@
 	@echo '$(t_sh)	'$@
 
-out/lib/readme.bin: $(love0) $(R)/l/boot/post.l $(R)/VERSION
-	@mkdir -p out/lib
+b/lib/readme.bin: $(love0) $(R)/l/boot/post.l $(R)/VERSION
+	@mkdir -p b/lib
 	@printf 'love %s\n' "$$(cat $(R)/VERSION)" > $@
 	@$(love0) -h </dev/null >> $@
 	@echo 'LOVE	'$@
 
-ho = out$(hsuf)
+ho = b$(hsuf)
 h_o = $(love_c:$(R)/%.c=$(ho)/%.o)
 host_o = $(host_c:$(R)/%.c=$(ho)/%.o)
 # the three a LINK names rather than the directory, one per thing it does without:
 # i/nokern.c the kernel's doors where no kmain.c stands under them, i/noblob.c the
 # carried archives where no laid object brings them, i/noosv.c the OS word where no
-# moonlibc writes it. the mooncc lane takes kart_o + out/src.o + out/moonlibc.o and
+# moonlibc writes it. the mooncc lane takes kart_o + b/src.o + b/moonlibc.o and
 # wants none of them; the HCC flavour is gcc and glibc alone, so it takes all three.
 seat_o = $(ho)/i/nokern.o $(ho)/i/noblob.o $(ho)/i/noosv.o
-hcc = LOVE_NO_IMAGE= $(CC) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Il -Ii -Iout/lib
+hcc = LOVE_NO_IMAGE= $(CC) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Il -Ii -Ib/lib
 image_ldflags = -Wl,--section-start=.love.image=0x2000000
 .PHONY: force_hostcc
 force_hostcc: ;
@@ -124,24 +124,24 @@ $(ho)/liblove.a: $(h_o)
 	@mkdir -p $(dir $@)
 	@rm -f $@; ar rcs $@ $^
 
-# pinned to out/0, never $(ho)/0: love0 is one binary whatever HCC and tco say
+# pinned to b/0, never $(ho)/0: love0 is one binary whatever HCC and tco say
 # love0 takes the whole hosted surface less the crew catalog, PLUS its own seat --
 # i/main0.c, which host_c holds back because only this link has a use for it.
-love0_o = $(patsubst $(R)/%.c,out/0/%.o,$(filter-out $(R)/i/cats.c,$(host_c)) $(R)/i/main0.c $(R)/i/nokern.c $(R)/i/noblob.c $(R)/i/noosv.c $(love_c))
-out/0/i/main0.o: out/lib/boot0.h
-out/0/i/cb.o: l/quay/quay.c l/quay/nif.c l/quay/quay.h
-boot_cc = $(CCACHE) $(CC) $(ai_cflags) -fPIE -DLove0 -Dai_tco=0 -Dai_data_section=0 -DLvVersion='"$(love_base)+bootstrap"' -I. -Il -Ii -Iout/lib
+love0_o = $(patsubst $(R)/%.c,b/0/%.o,$(filter-out $(R)/i/cats.c,$(host_c)) $(R)/i/main0.c $(R)/i/nokern.c $(R)/i/noblob.c $(R)/i/noosv.c $(love_c))
+b/0/i/main0.o: b/lib/boot0.h
+b/0/i/cb.o: l/quay/quay.c l/quay/nif.c l/quay/quay.h
+boot_cc = $(CCACHE) $(CC) $(ai_cflags) -fPIE -DLove0 -Dai_tco=0 -Dai_data_section=0 -DLvVersion='"$(love_base)+bootstrap"' -I. -Il -Ii -Ib/lib
 .PHONY: force_love0cc
 force_love0cc: ;
-out/0/.love0cc: force_love0cc
+b/0/.love0cc: force_love0cc
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; printf '%s\n' '$(boot_cc)' > $$tf; \
 	 $(note)
-out/0/%.o: $(R)/%.c $(love_h) out/0/.love0cc
+b/0/%.o: $(R)/%.c $(love_h) b/0/.love0cc
 	@echo '$(t_cc)	'$@
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(boot_cc) -c $< -o $@
-# l/love.c -> out/*.o
+# l/love.c -> b/*.o
 $(ho)/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
 	@echo '$(t_cc)	'$@
 	@mkdir -p $(dir $@)
@@ -150,17 +150,17 @@ $(ho)/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
 # l.o carries the version string; recompile it when the id changes. love0's twin is
 # deliberately not here -- see the -DLvVersion note on boot_cc.
 # the baked source rides i/cats.c; main.c bakes the dist roster for the first boot
-$(ho)/i/cats.o: out/lib/baked.h
-$(ho)/i/main.o: out/lib/distlist.h
-$(ho)/l/love.o: out/lib/love_version.h
+$(ho)/i/cats.o: b/lib/baked.h
+$(ho)/i/main.o: b/lib/distlist.h
+$(ho)/l/love.o: b/lib/love_version.h
 # the carried-blob reader both the first boot and the kernel's ram fs decode with
 $(ho)/i/main.o $(ho)/i/ustar.o: $(R)/i/ustar.h
 # i/cb.c rides the l/quay sources by unity include -- recompile when they move.
 $(ho)/i/cb.o: l/quay/quay.c l/quay/nif.c l/quay/quay.h
 
-moon0 = $(love0) wake out/mooncc0.image mooncc $(GCDBG)
-moon0_dep = out/mooncc0.image
-# A DRIVING LOVE (`love doom` names itself in LOVE): the artifact IS the bootstrap. out/love0
+moon0 = $(love0) wake b/mooncc0.image mooncc $(GCDBG)
+moon0_dep = b/mooncc0.image
+# A DRIVING LOVE (`love doom` names itself in LOVE): the artifact IS the bootstrap. b/love0
 # becomes a two-line script onto it (image awake: every cat a recipe preloads reopens modules
 # the image carries, the kernel verb's own shape), its own mooncc is the moon, the mooncc
 # image is never baked and no love0 is compiled -- the tree builds with nothing but the
@@ -178,8 +178,8 @@ $(love0):
 	@printf '#!/bin/sh\nexec %s "$$@"\n' '$(LOVE)' > $@
 	@chmod 755 $@
 else
-rtlove = $(love0) wake out/mooncc0.image
-rtlove_dep = out/mooncc0.image
+rtlove = $(love0) wake b/mooncc0.image
+rtlove_dep = b/mooncc0.image
 $(love0): $(love0_o)
 	@echo '$(t_ld)	'$@
 	@mkdir -p $(dir $@)
@@ -189,7 +189,7 @@ endif
 # the host's arch, and at the cross arch $(xa) names. $(call moonlane,NAME,DIRVAR,CCVAR,
 # ARCHVAR), every argument but the first a variable NAME so the body stays deferred; the
 # kart shape below is the same idiom. Answers $(1)_love_o, _host_o, _math_o and $(1)_o.
-# EVERY OBJECT SITS AT ITS SOURCE'S PATH under the odir, as out/0 and $(k_odir) already
+# EVERY OBJECT SITS AT ITS SOURCE'S PATH under the odir, as b/0 and $(k_odir) already
 # lay theirs. The sets take different flags, so each rule names its own list and the odir
 # needs no prefix to keep l/ev.o and i/ev.o apart -- the tree does that.
 define moonlane
@@ -198,20 +198,20 @@ $(1)_host_o = $$(host_c:$$(R)/%.c=$$($(2))/%.o)
 $(1)_math_o = $$(patsubst a/moon/lib/moonlibc/%.c,$$($(2))/moonlibc/%.o,$$(wildcard a/moon/lib/moonlibc/math/*.c))
 $(1)_o = $$($(1)_love_o) $$($(1)_host_o) $$($(1)_math_o) $$($(2))/sys.o
 # ..and the one this lane's own LINK owes: the fixpoint gates relink these objects without
-# out/src.o, so they carry i/noblob.c's empty archives instead. deliberately NOT in $(1)_o
+# b/src.o, so they carry i/noblob.c's empty archives instead. deliberately NOT in $(1)_o
 # -- the artifact link takes the laid object and would collide.
 $(1)_seat_o = $$($(2))/i/noblob.o
 $$($(1)_love_o): $$($(2))/%.o: $$(R)/%.c $$(love_h) $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
-	@$$($(3)) -D ai_tco=$$(tco) -D LvHaveVersionH -I$$(ho) -I. -Il -Ii -Iout/lib -c $$< $$@
-$$($(2))/l/love.o: out/lib/love_version.h   # only this TU carries the version id
+	@$$($(3)) -D ai_tco=$$(tco) -D LvHaveVersionH -I$$(ho) -I. -Il -Ii -Ib/lib -c $$< $$@
+$$($(2))/l/love.o: b/lib/love_version.h   # only this TU carries the version id
 $$($(1)_host_o) $$($(1)_seat_o): $$($(2))/%.o: $$(R)/%.c $$(love_h) $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
-	@$$($(3)) -D ai_tco=$$(tco) -I$$(ho) -I. -Il -Ii -Iout/lib -c $$< $$@
-$$($(2))/i/main.o: out/lib/distlist.h
-$$($(2))/i/cats.o: out/lib/baked.h
+	@$$($(3)) -D ai_tco=$$(tco) -I$$(ho) -I. -Il -Ii -Ib/lib -c $$< $$@
+$$($(2))/i/main.o: b/lib/distlist.h
+$$($(2))/i/cats.o: b/lib/baked.h
 $$($(2))/i/cb.o: l/quay/quay.c l/quay/nif.c l/quay/quay.h
 $$($(1)_math_o): $$($(2))/moonlibc/%.o: a/moon/lib/moonlibc/%.c $$(moon0_dep)
 	@echo 'MOON	'$$@
@@ -219,10 +219,10 @@ $$($(1)_math_o): $$($(2))/moonlibc/%.o: a/moon/lib/moonlibc/%.c $$(moon0_dep)
 	@$$($(3)) -Ia/moon/include -c $$< $$@
 # the machine tail rides the host's own cat, one cut for every consumer; only the entry
 # names the arch.
-$$($(2))/sys.o: out/.mksys-cat.l $$(love0)
+$$($(2))/sys.o: b/.mksys-cat.l $$(love0)
 	@echo 'HOLO	'$$@
 	@mkdir -p $$(dir $$@)
-	@LOVE_NO_IMAGE= $$(love0) -l out/.mksys-cat.l -q -e "((cite 'moon 'mksys-$$($(4))) \"$$@\")" && test -s $$@
+	@LOVE_NO_IMAGE= $$(love0) -l b/.mksys-cat.l -q -e "((cite 'moon 'mksys-$$($(4))) \"$$@\")" && test -s $$@
 endef
 
 moon_d = $(ho)/moon
@@ -232,11 +232,11 @@ mksys_l = a/kore/text.l a/kore/u.l a/kore/asbook.l \
           l/holo/elf.l l/holo/obj.l a/moon/lib/mksys.l
 .PHONY: force_dist_list
 force_dist_list: ;
-out/.mksys-cat.list: force_dist_list
+b/.mksys-cat.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(mksys_l)' > $$tf; \
 	 $(note)
-out/.mksys-cat.l: $(mksys_l) out/.mksys-cat.list
+b/.mksys-cat.l: $(mksys_l) b/.mksys-cat.list
 	@echo '$(t_cat)	'$@
 	@mkdir -p $(dir $@)
 	@cat $(mksys_l) > $@
@@ -248,19 +248,19 @@ $(ho)/love $(ho)/love.cand: $(host_o) $(seat_o) $(ho)/liblove.a $(ho)/.hostcc $(
 else
 moonlibc_src = $(wildcard a/moon/lib/moonlibc/*.c a/moon/lib/moonlibc/*.h \
                         a/moon/lib/moonlibc/*/*.c a/moon/lib/moonlibc/*/*.h)
-# out/moonlibc.o LEADS: a job pool fills in prerequisite order, and this one is the long pole
+# b/moonlibc.o LEADS: a job pool fills in prerequisite order, and this one is the long pole
 # (three ISAs' runtime members, ~30 s cold) -- behind the TU list it starts as they finish
 # and runs alone. ahead of them it rides beside them, and -j loses that time outright.
-$(ho)/love $(ho)/love.cand: out/moonlibc.o $(moon_o) out/src.o out/lib/readme.bin $(moonlibc_src)
+$(ho)/love $(ho)/love.cand: b/moonlibc.o $(moon_o) b/src.o b/lib/readme.bin $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) $(kart_o) out/src.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
+	@$(moon0) -pie $(moon_o) $(kart_o) b/src.o b/moonlibc.o -freadme=b/lib/readme.bin -o $@
 endif
 
-$(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md u/mkman.l a/lapiz.l out/lib/love_version.h $(ho)/love
+$(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md u/mkman.l a/lapiz.l b/lib/love_version.h $(ho)/love
 	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
-	@$(ho)/love u/mkman.l doc/$*.md out/lib/love_version.h > $@
+	@$(ho)/love u/mkman.l doc/$*.md b/lib/love_version.h > $@
 
 lushfiles = a/lush.l
 # THE CATS, IN PARTS. three rosters cover almost the same ground -- what kore carries,
@@ -313,9 +313,9 @@ $(ho)/sb $(ho)/lush $(ho)/helm:
 	@mkdir -p $(dir $@)
 	@{ echo '#!/usr/bin/env -S love'; cat $^; } > $@
 	@chmod 755 $@
-out/mooncc0.image: out/.mooncc-cat.l $(love0)
+b/mooncc0.image: b/.mooncc-cat.l $(love0)
 	@echo 'BAKE	'$@
-	@$(love0) -l out/.mooncc-cat.l -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
+	@$(love0) -l b/.mooncc-cat.l -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
 
 distfiles = $(kore_head) $(holo_be) l/holo/decode.l l/holo/gas.l \
             $(holo_obj) l/holo/copy.l $(moon_mid) $(kore_net) $(crewfiles)
@@ -327,15 +327,15 @@ $(ho)/.dist-cat.l: $(distfiles) $(ho)/.dist.list
 	@echo '$(t_cat)	'$@
 	@mkdir -p $(dir $@)
 	@cat $(distfiles) > $@
-out/lib/distlist.h: Makefile
-	@mkdir -p out/lib
+b/lib/distlist.h: Makefile
+	@mkdir -p b/lib
 	@tf=$@.$$$$.tmp; printf '"%s"\n' '$(distfiles)' > $$tf; \
 	 $(note)
 .PHONY: dist dist-source dist-seed
 
 dist_ver  := $(love_base)
 dist_stamp ?= 0
-dist_source = out/dist/love-$(dist_ver).tar.gz
+dist_source = b/dist/love-$(dist_ver).tar.gz
 dist-source: $(dist_source)
 ifneq ($(HCC),)
 dist-seed:
@@ -357,9 +357,9 @@ $(dist_source): force_src $(love0)
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) u/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
 
-out/src.o: $(dist_source) u/mksrc.l out/.mksys-cat.l $(love0)
+b/src.o: $(dist_source) u/mksrc.l b/.mksys-cat.l $(love0)
 	@echo 'HOLO	'$@
-	@$(love0) -l out/.mksys-cat.l u/mksrc.l $(dist_source) $@ $(hosta)
+	@$(love0) -l b/.mksys-cat.l u/mksrc.l $(dist_source) $@ $(hosta)
 
 # this roster must cover what mcsrctext walks (a/moon/moon.l): the carried archives are
 # stamped with an identity hashed over include/ and lib/ ENTIRE, so a source file the roster
@@ -369,7 +369,7 @@ rt_slice = $(wildcard a/moon/include/*.h a/moon/include/*/*.h \
                       a/moon/lib/moonlibc/*.c a/moon/lib/moonlibc/*.h \
                       a/moon/lib/moonlibc/*/*.c a/moon/lib/moonlibc/*/*.h \
                       a/moon/lib/moonlibc/math/*.c)
-out/moonlibc.o: $(rt_slice) u/mkrt.l $(rtlove_dep) $(love0)
+b/moonlibc.o: $(rt_slice) u/mkrt.l $(rtlove_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(rtlove) u/mkrt.l $@ $(hosta)
 
@@ -381,23 +381,23 @@ xqemu  = $(xqemu_$(xa))
 ifeq ($(filter $(xa),x64 a64 rv64),)
 $(error x-lane: no such arch `$(xa)' -- the roster carries x64 a64 rv64)
 endif
-xd = out/x-$(xa)
+xd = b/x-$(xa)
 moonx = $(moon0) -t $(xa)
 $(eval $(call moonlane,x,xd,moonx,xa))
 
-$(xd)/src.o: $(dist_source) u/mksrc.l out/.mksys-cat.l $(love0)
+$(xd)/src.o: $(dist_source) u/mksrc.l b/.mksys-cat.l $(love0)
 	@echo 'HOLO	'$@
-	@$(love0) -l out/.mksys-cat.l u/mksrc.l $(dist_source) $@ $(xa)
+	@$(love0) -l b/.mksys-cat.l u/mksrc.l $(dist_source) $@ $(xa)
 $(xd)/moonlibc.o: $(rt_slice) u/mkrt.l $(rtlove_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(rtlove) u/mkrt.l $@ $(xa)
-$(xd)/love: $(x_o) $(xd)/src.o $(xd)/moonlibc.o out/lib/readme.bin
+$(xd)/love: $(x_o) $(xd)/src.o $(xd)/moonlibc.o b/lib/readme.bin
 	@echo 'MOON	'$@
-	@$(moonx) -pie $(x_o) $(xkart_o) $(xd)/src.o $(xd)/moonlibc.o -freadme=out/lib/readme.bin -o $@
-fat = out/dist/love-fat
+	@$(moonx) -pie $(x_o) $(xkart_o) $(xd)/src.o $(xd)/moonlibc.o -freadme=b/lib/readme.bin -o $@
+fat = b/dist/love-fat
 .PHONY: dist-fat
 dist-fat: $(ho)/.love.baked $(xd)/love u/fatpack.l
-	@mkdir -p out/dist
+	@mkdir -p b/dist
 	@$(love0) u/fatpack.l $(fat) $a $(ho)/love $(xa) $(xd)/love
 	@chmod +x $(fat)
 
@@ -415,7 +415,7 @@ syntax: $(ho)/syntax.vim
 # a bootable system is just PACKAGING what is green: love as pid 1, kore as the
 # busybox-style userland, lush as the console shell.
 #
-#   make distro-initramfs   -> out/distro/initramfs.cpio.gz
+#   make distro-initramfs   -> b/distro/initramfs.cpio.gz
 #   make distro-run         -> boot it under qemu on a stock kernel
 #
 # The kernel stays the one imported artifact (BZIMAGE, default the host's).
@@ -424,13 +424,13 @@ syntax: $(ho)/syntax.vim
 # host's find | cpio | gzip -9 stood. $(mabs) because the pack runs INSIDE a `cd`, and
 # $m is spelled relative to the tree root.
 mabs         = $(abspath $m)
-distro_dir   = out/distro
+distro_dir   = b/distro
 distro_root  = $(distro_dir)/root
 distro_img   = $(distro_dir)/initramfs.cpio.gz
 # the base love MUST be static -- a bare initramfs has no ld.so or glibc. love-raw is it:
 # gcc-free, our own linker over moonlibc, and 935K against the baked love's ~11M, which is
 # what an initramfs wants carried into RAM. `make test_raw` lays it.
-distro_love    = $(wildcard out/love-raw)
+distro_love    = $(wildcard b/love-raw)
 # kore applets to expose as argv[0] symlinks (kore dispatches on the basename).
 distro_applets = ls cat head tail wc sort uniq grep sed awk find cut tr nl rev cp mv rm \
                  mkdir rmdir ln touch pwd chmod basename dirname seq yes true \
@@ -442,7 +442,7 @@ BZIMAGE ?= /boot/vmlinuz-linux
 .PHONY: distro-initramfs distro-run distro-smoke
 distro-initramfs: $(distro_img)
 $(distro_img): a/init/boot.l $(lushfiles) $(korefiles) $(distro_love)
-	@test -n "$(distro_love)" || { echo "distro: no out/love-raw -- run 'make test_raw' to lay it"; exit 1; }
+	@test -n "$(distro_love)" || { echo "distro: no b/love-raw -- run 'make test_raw' to lay it"; exit 1; }
 	@echo 'LOVE	'$@
 	@rm -rf $(distro_root)
 	@mkdir -p $(distro_root)/bin $(distro_root)/lib $(distro_root)/proc $(distro_root)/sys $(distro_root)/dev $(distro_root)/tmp $(distro_root)/a
@@ -488,7 +488,7 @@ distro-smoke: $(distro_img)
 	@grep -qE "kore ls /proc -> exit 0, [1-9]" $(distro_dir)/boot.log && echo "  OK kore userland runs (ls /proc, forked+captured)" || { echo "  FAIL userland self-check"; exit 1; }
 	@echo "-- distro smoke passed --"
 
-ko = out
+ko = b
 
 # the kernel's verbs; its gates are t/test.mk's.
 .PHONY: kmain_o run run-$a run-sh run-headless init-container uefi
@@ -527,7 +527,7 @@ k_o = $(k_c:$(R)/%.c=$(k_odir)/%.o) $(k_lay_o) $(k_tail_o) \
 
 kcppflags := \
   -I$(k_odir) \
-  -I. -Il -Ii -Iout/lib -I$(R)/l/quay -I$(R) \
+  -I. -Il -Ii -Ib/lib -I$(R)/l/quay -I$(R) \
   -I$(R)/a/moon/include \
   $(kcppflags)
 kcc = $(mooncc) $(kcppflags) -t $a
@@ -539,10 +539,10 @@ $(k_odir)/moonlibc.o: $(rt_slice) u/mkrt.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@$m u/mkrt.l $@ $a
-$(k_odir)/src.o: $(dist_source) u/mksrc.l out/.mksys-cat.l $m
+$(k_odir)/src.o: $(dist_source) u/mksrc.l b/.mksys-cat.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $m -l out/.mksys-cat.l u/mksrc.l $(dist_source) $@ $a
+	@LOVE_NO_IMAGE= $m -l b/.mksys-cat.l u/mksrc.l $(dist_source) $@ $a
 $(k_pie): $(k_o) $m
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
@@ -576,8 +576,8 @@ $(k_elf): $(k_odir)/kproject.l $(k_pie_in) $(k_pie_dep) $(k_boot_o) $m
 	@mkdir -p "$(dir $@)"
 	@$m $(k_odir)/kproject.l $(k_pie_in) $(k_boot_o) $@ $a && test -s $@
 
-out/lib/korelist.h: Makefile
-	@mkdir -p out/lib
+b/lib/korelist.h: Makefile
+	@mkdir -p b/lib
 	@tf=$@.$$$$.tmp; printf '"%s"\n' '$(korefiles)' > $$tf; \
 	 $(note)
 
@@ -585,13 +585,13 @@ out/lib/korelist.h: Makefile
 # order is all the kernel carries and the members come off /proc/src when a verb is asked
 # for. one line, because a name does not say which file holds it -- story lives in
 # a/rove/, xwire in a/lux/wire.l, and sb spans three that must load in order.
-out/lib/crewlist.h: Makefile
-	@mkdir -p out/lib
+b/lib/crewlist.h: Makefile
+	@mkdir -p b/lib
 	@tf=$@.$$$$.tmp; printf '"%s"\n' '$(crewfiles)' > $$tf; \
 	 $(note)
 
 # every $(k_c) source, wherever in the tree it lives, lands under $(k_odir) by its path.
-$(k_odir)/%.o: $(R)/%.c $(k_h) $(mooncc_dep) out/lib/baked.h out/lib/distlist.h out/lib/korelist.h out/lib/crewlist.h
+$(k_odir)/%.o: $(R)/%.c $(k_h) $(mooncc_dep) b/lib/baked.h b/lib/distlist.h b/lib/korelist.h b/lib/crewlist.h
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
@@ -605,12 +605,12 @@ kmain_o: $(k_free_o)
 # worn once per machine -- $(call kart,ROSTER,DIRVAR,CCVAR,ARCHVAR), every argument but
 # the first a variable NAME so the body stays deferred. an arch with no i/<arch>/
 # carries no seat and its roster is empty.
-kart_inc = -I$(ho) -I. -Il -Ii -Iout/lib -I$R \
+kart_inc = -I$(ho) -I. -Il -Ii -Ib/lib -I$R \
   -I$R/l/quay -I$R/a/moon/include
 # kmain.c's own bake is the two ROSTERS now -- the kore cat's order, and the crew's, which
 # it carries the order of and reads the members of off /proc/src. the egg and the module set
 # are i/cats.c's, and that object rides the host lane above.
-kart_bake = out/lib/korelist.h out/lib/crewlist.h
+kart_bake = b/lib/korelist.h b/lib/crewlist.h
 define kart
 $(1)_h = $$(love_h) $$R/i/k.h $$R/i/ustar.h $$(wildcard $$R/i/$$($(4))/*.h)
 $(1)_arch_o = $$(patsubst $$R/%.c,$$($(2))/%.o,$$(wildcard $$R/i/$$($(4))/*.c))
@@ -652,10 +652,10 @@ $(k_odir)/doom/%.o: $(doom_d)/%.c $(mooncc_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
-$(k_odir)/doom/wad.o: $R/dl/doom1.wad u/mkblob.l out/.mksys-cat.l $m
+$(k_odir)/doom/wad.o: $R/dl/doom1.wad u/mkblob.l b/.mksys-cat.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $m -l out/.mksys-cat.l u/mkblob.l $< $@ doom_wad $a
+	@LOVE_NO_IMAGE= $m -l b/.mksys-cat.l u/mkblob.l $< $@ doom_wad $a
 # and the same set on the KART lane, which is where the host's own kernel is
 # built (plan C2: the artifact carries it) -- so `make kernel DOOM=1` at $(hosta)
 # rides these and the cross odir rides the rows above.
@@ -667,22 +667,22 @@ $(moon_d)/doom/%.o: $(doom_d)/%.c $(moon0_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
 	@$(moon0) $(kart_inc) -c $< $@
-$(moon_d)/doom/wad.o: $R/dl/doom1.wad u/mkblob.l out/.mksys-cat.l $(love0)
+$(moon_d)/doom/wad.o: $R/dl/doom1.wad u/mkblob.l b/.mksys-cat.l $(love0)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $(love0) -l out/.mksys-cat.l u/mkblob.l $< $@ doom_wad $(hosta)
+	@LOVE_NO_IMAGE= $(love0) -l b/.mksys-cat.l u/mkblob.l $< $@ doom_wad $(hosta)
 endif
 
-$(ho)/love $(ho)/love.cand: $(kart_o) out/.doom.flag
+$(ho)/love $(ho)/love.cand: $(kart_o) b/.doom.flag
 
 # the DOOM flag is a link input no timestamp can see: a witness that changes with it, so
 # `make host DOOM=1` after a plain `make host` relinks (and the other way round)
-out/.doom.flag: force_dist_list
-	@mkdir -p out
+b/.doom.flag: force_dist_list
+	@mkdir -p b
 	@tf=$@.$$$$.tmp; echo 'DOOM=$(DOOM)' > $$tf; \
 	 $(note)
 
-$(k_odir)/l/love.o: out/lib/love_version.h
+$(k_odir)/l/love.o: b/lib/love_version.h
 $(k_odir)/l/love.o: kcppflags += -DLvHaveVersionH
 
 klay_l = $R/a/kore/text.l $R/a/kore/u.l $R/a/kore/asbook.l \
@@ -704,10 +704,10 @@ $(k_lay_o) $(k_boot_o): $(k_odir)/$a/%.o: $(k_odir)/mk%.l $m
 
 # the machine tail rides the host's own cat (flavour-neutral, one cut for every
 # consumer); only the entry names the arch.
-$(k_tail_o): out/.mksys-cat.l $m
+$(k_tail_o): b/.mksys-cat.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@$m -l out/.mksys-cat.l -q -e "((cite 'moon 'mksys-$a) \"$@\")" && test -s $@
+	@$m -l b/.mksys-cat.l -q -e "((cite 'moon 'mksys-$a) \"$@\")" && test -s $@
 
 k_kvm = $(if $(and $(wildcard /dev/kvm),$(filter x64,$a),$(filter x64,$(hosta))),-enable-kvm -cpu host,)
 # the sound card: an HDA controller with one output codec, on the host's own audio.
@@ -976,7 +976,7 @@ $d/share/man/man1/cook.1 $d/share/man/man1/lush.1: $d/share/man/man1/%.1: $(ho)/
 $v/ftdetect/love.vim $v/ftplugin/love.vim: $v/%/love.vim: vim/%.vim
 	$(inst644)
 # the syntax is GENERATED (the Makefile) out of a/vi/hue.l's class table and the
-# vocabulary this host answers to, so it is installed from out/ like any other artifact.
+# vocabulary this host answers to, so it is installed from b/ like any other artifact.
 $v/syntax/love.vim: $(ho)/syntax.vim
 	$(inst644)
 
@@ -989,88 +989,88 @@ lint: $(ho)/love
 crewtools = $(wildcard a/*.l) $(foreach d,$(wildcard a/*),$(wildcard $d/$(notdir $d).l))
 sitetools = $(foreach f,$(crewtools),\
   $(if $(wildcard doc/$(notdir $(basename $f)).md doc/misc/$(notdir $(basename $f)).md),,$f))
-out/toolmd.stamp: $(sitetools) a/libra/libra.l $(ho)/love
-	@rm -rf out/toolmd && mkdir -p out/toolmd
+b/toolmd.stamp: $(sitetools) a/libra/libra.l $(ho)/love
+	@rm -rf b/toolmd && mkdir -p b/toolmd
 	@for f in $(sitetools); do n=$${f##*/}; n=$${n%.l}; \
 	   { $(ho)/love $R/a/libra/libra.l doc $$f && echo && echo "[the source]($$n.src.html)"; } \
-	     > out/toolmd/$$n.md || exit 1; done
-	@echo "  toolmd: $(words $(sitetools)) crew headers -> out/toolmd/"
+	     > b/toolmd/$$n.md || exit 1; done
+	@echo "  toolmd: $(words $(sitetools)) crew headers -> b/toolmd/"
 	@touch $@
 # the source pages and their stylesheet, written into the site papel just built
 huesrc = $(crewtools) a/vi/hue.l a/vi/config.l u/hue2web.l $(ho)/love
-site: host out/toolmd.stamp
-	@$(ho)/love -l a/papel.l -t love -o out/site README.md doc out/toolmd
-	@$(MAKE) --no-print-directory out/site/hue.css
-out/site/hue.css: $(huesrc)
+site: host b/toolmd.stamp
+	@$(ho)/love -l a/papel.l -t love -o b/site README.md doc b/toolmd
+	@$(MAKE) --no-print-directory b/site/hue.css
+b/site/hue.css: $(huesrc)
 	@env -u LOVE_NO_IMAGE $(ho)/love $R/u/hue2web.l css > $@
 	@for f in $(crewtools); do n=$${f##*/}; n=$${n%.l}; \
-	   env -u LOVE_NO_IMAGE $(ho)/love $R/u/hue2web.l src $$f > out/site/$$n.src.html \
+	   env -u LOVE_NO_IMAGE $(ho)/love $R/u/hue2web.l src $$f > b/site/$$n.src.html \
 	     || exit 1; done
-	@echo "  hue2web: $(words $(crewtools)) sources painted -> out/site/*.src.html"
+	@echo "  hue2web: $(words $(crewtools)) sources painted -> b/site/*.src.html"
 SITEPORT ?= 8080
-site-serve: host out/toolmd.stamp
-	@$(ho)/love -l a/papel.l -t love -o out/site -s $(SITEPORT) README.md doc out/toolmd
+site-serve: host b/toolmd.stamp
+	@$(ho)/love -l a/papel.l -t love -o b/site -s $(SITEPORT) README.md doc b/toolmd
 
 # the wasm artifact, moon's own: love's TUs (plus the horn and the seat's host.c)
 # through mooncc -t wasm, linked to one module -- no emcc, no C toolchain. tco=1: the
 # vm's tails are return_call, the engines' tail-call law (node 26, firefox 121, chrome
 # 112, safari 18), and the corpus runs 1.31x faster than on the trampoline. the loader
 # (i/wasm/loader.js) is the runtime under it. NOTHING SHIPS IT any more -- the front
-# page carries the machine (the kernel module below) -- so it is laid under out/ and never
+# page carries the machine (the kernel module below) -- so it is laid under b/ and never
 # copied out: test_wasm's two checks and horn.html are the whole readership, and each is a
 # seam the machine has not grown yet (quay's cells, the horn's ring).
 # the emcc build stays as wasm-emcc, a differential and nothing on the page.
 wasm_c = $(love_c) $(R)/i/horn.c $(R)/i/wasm/host.c
-out/wasm/love.wasm: $(wasm_c) $(lib_h) out/lib/love_version.h host
+b/wasm/love.wasm: $(wasm_c) $(lib_h) b/lib/love_version.h host
 	@mkdir -p $(dir $@)
 	@echo 'MOON	'$@
-	@$(mooncc) -t wasm -Dai_tco=1 -DLvHaveVersionH -I. -Il -Ii -Iout/lib -o $@ $(wasm_c)
+	@$(mooncc) -t wasm -Dai_tco=1 -DLvHaveVersionH -I. -Il -Ii -Ib/lib -o $@ $(wasm_c)
 ifeq ($(NODE),)
-wasm: out/wasm/love.wasm
+wasm: b/wasm/love.wasm
 else
-wasm: out/wasm/love.wasm out/wasm/love-wasm.image
+wasm: b/wasm/love.wasm b/wasm/love-wasm.image
 endif
 # by hand, as love.js was: bytes every C edit would otherwise churn. ONE PAIR IS COPIED
 # OUT, the machine's, to w/ beside the fonts and the stylesheet -- generated files
 # committed for one reason, that github pages serves what it is given and builds nothing.
-# the hosted module is a gate's, not a page's, and never leaves out/.
+# the hosted module is a gate's, not a page's, and never leaves b/.
 site-wasm: wasm
 	@mkdir -p w/wasm
 	@echo '$(t_cp)	'w/wasm/love-wasm.wasm
-	@cp out/love-wasm.wasm w/wasm/love-wasm.wasm
+	@cp b/love-wasm.wasm w/wasm/love-wasm.wasm
 	@echo '$(t_cp)	'w/wasm/love-wasm.image
-	@cp out/wasm/love-wasm.image w/wasm/love-wasm.image
+	@cp b/wasm/love-wasm.image w/wasm/love-wasm.image
 # the wasm inle seat: the kernel the three metal seats link -- kmain and the ramfs, the
 # console painter with its fonts, i/sys.c under moonlibc, the host frontend whole -- with
 # i/wasm/arch.c for the machine and the source blob as a wasm data object (mksrc.l's
-# text lane). one module beside out/love-$a.elf; the runtime rides in by need, and no
+# text lane). one module beside b/love-$a.elf; the runtime rides in by need, and no
 # the heap image is baked below. the CPU under it is i/wasm/cpu.mjs, a worker;
 # the terminals are i/wasm/inle.mjs (node) and i/wasm/inle.html (the page).
 kw_c = $(love_c) $R/l/quay/cga_8x8.c $R/l/quay/moderndos_8x16.c $R/l/quay/paint.c \
   $(k_free_c) $(host_c) $R/i/wasm/arch.c
 kw_h = $(love_h) $R/i/k.h $R/i/ustar.h $R/i/asmops.h $R/i/wasm/asmops.h
-out/wasm/src.o: $(dist_source) u/mksrc.l out/.mksys-cat.l $m
+b/wasm/src.o: $(dist_source) u/mksrc.l b/.mksys-cat.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $m -l out/.mksys-cat.l u/mksrc.l $(dist_source) $@ wasm
-out/love-wasm.wasm: $(kw_c) $(kw_h) out/wasm/src.o out/lib/baked.h out/lib/distlist.h \
-  out/lib/korelist.h out/lib/crewlist.h out/lib/love_version.h $(mooncc_dep)
+	@LOVE_NO_IMAGE= $m -l b/.mksys-cat.l u/mksrc.l $(dist_source) $@ wasm
+b/love-wasm.wasm: $(kw_c) $(kw_h) b/wasm/src.o b/lib/baked.h b/lib/distlist.h \
+  b/lib/korelist.h b/lib/crewlist.h b/lib/love_version.h $(mooncc_dep)
 	@echo 'MOON	'$@
-	@$(mooncc) -t wasm -Dai_tco=1 -DLvHaveVersionH -I. -Il -Ii -Iout/lib \
-	  -Il/quay -Ia/moon/include -o $@ $(kw_c) out/wasm/src.o
-wasm-emcc:                       # emcc's love, out/wasm/love.js: the foreign build ccwasm takes
+	@$(mooncc) -t wasm -Dai_tco=1 -DLvHaveVersionH -I. -Il -Ii -Ib/lib \
+	  -Il/quay -Ia/moon/include -o $@ $(kw_c) b/wasm/src.o
+wasm-emcc:                       # emcc's love, b/wasm/love.js: the foreign build ccwasm takes
 	@$(MAKE) -C i/wasm
 # the seat's heap image: the kernel booted once under node with `bake PATH` on the boot
 # line -- the egg, the modules and the korecat warm, the seat text run -- written to the
 # ramfs and lifted out at the reset. the page fetches it beside the module and the worker
 # hands it to k_start; a stale one is refused and the egg bakes, the host's own law.
-out/wasm/love-wasm.image: out/love-wasm.wasm i/wasm/cpu.mjs i/wasm/inle.mjs
+b/wasm/love-wasm.image: b/love-wasm.wasm i/wasm/cpu.mjs i/wasm/inle.mjs
 	@echo 'BAKE	'$@
-	@$(NODE) i/wasm/inle.mjs --lift /love.image:$@ out/love-wasm.wasm bake /love.image < /dev/null > out/wasm/bake.log 2>&1 \
-	   || { cat out/wasm/bake.log; exit 1; }
+	@$(NODE) i/wasm/inle.mjs --lift /love.image:$@ b/love-wasm.wasm bake /love.image < /dev/null > b/wasm/bake.log 2>&1 \
+	   || { cat b/wasm/bake.log; exit 1; }
 
 clean:
-	rm -rf out
+	rm -rf b
 	@rm -f t/proof/rocq/*.vo t/proof/rocq/*.vok t/proof/rocq/*.vos t/proof/rocq/*.glob t/proof/rocq/.*.aux
 	@[ -d i/wasm ] && $(MAKE) -C i/wasm clean || :
 distclean: clean
@@ -1103,15 +1103,15 @@ index.html: w/index.l i/wasm/machine.html $(ho)/.love.baked
 	@$m w/index.l $@
 .PHONY: ulp
 ulp:
-	@mkdir -p out
-	@$(CC) -O2 -o out/ulp $R/u/ulp.c $R/a/moon/lib/moonlibc/math/am.c -lm
-	@out/ulp
-out/perf.data: host
+	@mkdir -p b
+	@$(CC) -O2 -o b/ulp $R/u/ulp.c $R/a/moon/lib/moonlibc/math/am.c -lm
+	@b/ulp
+b/perf.data: host
 	cat $t | perf record -o $@ $m
-perf: out/perf.data
+perf: b/perf.data
 	exec perf report -i $<
-flame: out/flamegraph.svg
-out/flamegraph.svg: out/perf.data
+flame: b/flamegraph.svg
+b/flamegraph.svg: b/perf.data
 	flamegraph -o $@ --perfdata $<
 repl: host
 	@exec $m

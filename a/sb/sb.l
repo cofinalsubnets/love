@@ -12,7 +12,7 @@
 ;                    is deterministic and the address honest
 ;   tips             the maximal patches (the growth ends) -- (ID ..)
 ;   snap             the recorded state -- ((PATH CHASH PATCHID) ..) path-sorted
-;   ignore           optional: one path prefix per line, atop (".sb" ".git" "out")
+;   ignore           optional: one path prefix per line, atop (".sb" ".git" "b")
 ;
 ; a hunk is the proven named-slot patch (t/patch.l's chg): slot = the path,
 ; context = the old content hash, value = the new -- () for absent (a birth or a
@@ -61,9 +61,9 @@
    ;     * ? [ is a glob against the whole relative path -- `*` crosses `/`, so
    ;     `*.vo` catches one at any depth and wants no basename rule of its own.
    ;     every other rule is a path prefix at a segment boundary: `out` takes out
-   ;     and out/love, never output. blank lines and # comments are skipped.
+   ;     and b/love, never output. blank lines and # comments are skipped.
    ;     u/selfpack.l reads these too, so the dist cut and the walk agree.
-   igs0 '(".sb" ".git" "out")
+   igs0 '(".sb" ".git" "b")
    ig-glob? (cite 'glob 'anyglob)
    ig-match (cite 'glob 'match)
    (ig-live? l) (0 < #l && l 0 != 35)

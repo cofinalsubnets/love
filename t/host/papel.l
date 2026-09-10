@@ -18,7 +18,7 @@
 ;             files (that page and the index). that is cook's law, but papel is the
 ;             one that has to declare the recipes right for it to hold.
 ;
-; run:  cat t/00-init.l t/host/papel.l | out/love
+; run:  cat t/00-init.l t/host/papel.l | b/love
 ; (through STDIN, as the gate does -- `love t/host/papel.l` would seat a file
 ;  whose basename is papel.l, and papel's own seat would fire on it.)
 

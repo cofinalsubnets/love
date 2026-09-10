@@ -143,7 +143,7 @@
     (: exe (selfpath 0)
        here (cwd 0)
        nest (here + "/love-" + love-version)
-       bin (nest + "/out/love")
+       bin (nest + "/b/love")
        dl (nest + "/dl")
        (fail s) (say err ("doom: " + s + "\n"), 1)
        (? !(string? exe) (fail "cannot find this binary's path")

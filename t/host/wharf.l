@@ -5,7 +5,7 @@
 ; WHOLE corpus love0's second evaluation stops, as cb's does, against a member not
 ; identified. when a seat bakes wharf behind its egg, the first of those goes.
 ;
-;   cat t/00-init.l t/host/wharf.l | out/love   ; exits 1 on fail
+;   cat t/00-init.l t/host/wharf.l | b/love   ; exits 1 on fail
 ;
 ; the vocabulary under test is rectangles in cells: (id row col rows cols), origins
 ; 0-based, and a bar is (dir row col len) with dir 'across or 'down.

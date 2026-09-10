@@ -69,8 +69,8 @@ struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load
     "                                       (go (+ i 1) (+ i 1) (? (< j i) (. (snip s j i) acc) acc))"
     "                                       (go (+ i 1) j acc))))"
     "                  (go 0 0 ()))"
-    "   fs (c0split (c0read \"out/lib/corpus.list\"))"
-    "   _ (? (two? fs) 0 (: _ (say err \"love0: corpus: out/lib/corpus.list names nothing\")"
+    "   fs (c0split (c0read \"b/lib/corpus.list\"))"
+    "   _ (? (two? fs) 0 (: _ (say err \"love0: corpus: b/lib/corpus.list names nothing\")"
     "                       _ (put err 10) (quit 1)))"
     "   tests (foldl (\\ a f (a + c0read f)) \"\" fs))");
   g = ai_evals_(g, runner);          // pass 1: corpus via ev = the c0 nif

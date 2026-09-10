@@ -54,7 +54,7 @@
 #   mb       corpus size in megabytes for the work table (default 8)
 #   samples  timed runs per cell, median reported (default 3)
 # env:
-#   LOVE=path   the binary under test (default ../out/love)
+#   LOVE=path   the binary under test (default ../b/love)
 #   TIMEOUT=n   per-run wall-clock cutoff, seconds (default 60). not tight: the
 #               rows here are chosen to be slow, and a cutoff that catches one of
 #               them turns a NUMBER worth recording into an unreadable `to`.
@@ -69,8 +69,8 @@ SAMPLES=${2:-3}
 TO=${TIMEOUT:-60}
 RAW=${RAW:-}
 SCALE=${SCALE:-4}
-W=$R/out/bench/kore
-m=${LOVE:-$R/out/love}
+W=$R/b/bench/kore
+m=${LOVE:-$R/b/love}
 
 export LC_ALL=C
 

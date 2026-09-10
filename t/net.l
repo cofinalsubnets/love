@@ -3,7 +3,7 @@
 ; as surely as the final `love` does -- love0_o is the whole host glob -- so these are
 ; corpus laws. it still reads standalone (test comes from t/00-init.l):
 ;
-;   cat t/00-init.l t/net.l | out/love      ; green dots = pass, exits 1 on fail
+;   cat t/00-init.l t/net.l | b/love      ; green dots = pass, exits 1 on fail
 ;
 ; It runs a whole loopback in one process: a server task accepts and echoes a
 ; line, the main task connects as a client and checks the round trip. The two

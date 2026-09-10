@@ -760,7 +760,7 @@
 (test ((:) = not-in-the-book) !not-in-the-book)     ; a nom not in the book
 (hear test-strict)
 
-; --- i/o & ports --- in/out/err are the default ports; getc + putc/puts/putn/putx, per-port
+; --- i/o & ports --- in/b/err are the default ports; getc + putc/puts/putn/putx, per-port
 ; see/put/... , open/close/pad. the vessels: (tap cl) an input source over a colist, (jug 0) an
 ; output port with a growable buffer that pours both ways (a PORT, not a cask -- a cask is the
 ; mutable byte array); (see o) draws one unit, (flow o) reads as a lazy charlist, (slurp o) drains
@@ -773,7 +773,7 @@
 ; and the residue is a charlist whichever door went in: a string is spread once and a port lifted
 ; once, at the door, so the three doors meet after the first datum and a resuming caller has one
 ; shape to know -- and a port, having become its own tail, is never handed in twice.
-; in/out/err are names a task seats for itself: (wear (i o e)) re-seats them for the running
+; in/b/err are names a task seats for itself: (wear (i o e)) re-seats them for the running
 ; task, (wear ()) hands the console back, (worn ()) answers what is worn -- carried like the
 ; help (saved on the switch, inherited at spawn). two live jugs are two sinks.
 ; the port door streams, one buffered run per gulp: the reader takes a heap fd port's 4096-byte

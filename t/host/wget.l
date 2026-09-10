@@ -4,14 +4,14 @@
 ; serving love, t/host/sbhttp.l's shape. the https half is held to the RFC vectors
 ; the handshake stands on (x25519 from 7748, hmac from 4231): a live peer is
 ; t/host/wgetnet.l, opt-in, because a gate must not need the internet.
-;   cat t/00-init.l t/host/wget.l | out/love
+;   cat t/00-init.l t/host/wget.l | b/love
 (borrow 'kiosko)
 (borrow 'tls)
 
 (: T (cite 'tls)
    unhex (T 'unhex) hex (T 'hex)
    wget (cite 'kore 'wget-main)
-   root "out/.wget"
+   root "b/.wget"
    _ (hark (list "rm" "-rf" root))
    _ (mkdir "out" 493) _ (mkdir root 493) _ (mkdir (root + "/site") 493)
    home (cwd 0)

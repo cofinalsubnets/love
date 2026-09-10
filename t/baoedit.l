@@ -6,7 +6,7 @@
 ; the piped forms read-eval off stdin (a pipe is the bare filter) while each edraw
 ; consumes its own sip. Run (test comes from t/00-init.l):
 ;
-;   cat t/00-init.l t/baoedit.l | out/love
+;   cat t/00-init.l t/baoedit.l | b/love
 ;
 ; green dots = pass; the shell's banner/prompts + edraw's ansi redraws are noise
 ; around them. Full interactive editing (real keystrokes, real tty) stays manual.

@@ -3,7 +3,7 @@
 # inner loop (auto-scaling reps past a 200ms floor) so interpreter startup is
 # excluded; see bench.l / lib/bench.* for the shared protocol.
 #
-# Results are cached per language under out/bench/<lang>.txt. The user-facing
+# Results are cached per language under b/bench/<lang>.txt. The user-facing
 # targets DEPEND on those files and just pretty-print them -- a bench is only
 # (re)run when its result file is missing or older than the bench sources (or,
 # for love, the love binary). So `make bench` reformats instantly once the files
@@ -19,7 +19,7 @@
 #   make SAMPLES=5 …    timed windows per bench; the median ms/it is reported
 #                          (default 5; SAMPLES=1 = the old single-shot, fast but noisy)
 #   make raw            cat the raw "<name> <lang> <reps> <ms> <chk>" lines
-#   make clean          remove out/bench/
+#   make clean          remove b/bench/
 #
 # A language whose interpreter/compiler is not on PATH is skipped automatically, as
 # is any bench a language has no implementation file for (e.g. luajit/rust lack bell
@@ -29,9 +29,9 @@
 R := ..
 include $(R)/common.mk
 
-GL   := $(R)/out/love
+GL   := $(R)/b/love
 HARN := bench.l
-BDIR := $(R)/out/bench
+BDIR := $(R)/b/bench
 TIMEOUT ?= 30
 SAMPLES ?= 5
 
@@ -169,7 +169,7 @@ setup: $(SETUP)
 # columns the compilers. ai_cflags + the corpus come from the Makefile (one source of
 # truth); the mooncc lane runs THE ARTIFACT's own mooncc verb, so depend on `dist-seed`
 # beside `host`. that is not tidiness -- ccbench.sh's SEED note has the measurement:
-# through out/mooncc the build row read 2.2x high, because rebuilding mooncc.image
+# through b/mooncc the build row read 2.2x high, because rebuilding mooncc.image
 # invalidated the cached moonlibc archive on every run. Cached; `make ccbench` to refresh it
 # on its own. (mooncc is x86-64 only -- dnf elsewhere.)
 CCBENCH := $(BDIR)/ccbench.txt

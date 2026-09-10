@@ -46,14 +46,14 @@ The harness is love, and the knobs ride the environment: `FUZZ_N` (samples per c
 default 8), `FUZZ_SEED`, `FUZZ_ARCH` (`x64`|`a64`|`rv64`, default all three).
 
 ```
-out/love t/holo/fuzz/fuzz.l                              # all three lanes
-FUZZ_N=300 FUZZ_SEED=7 out/love t/holo/fuzz/fuzz.l       # deeper, one seed
-FUZZ_ARCH=a64 FUZZ_N=500 out/love t/holo/fuzz/fuzz.l     # one lane
-out/love t/holo/fuzz/rvc.l                               # the rvc squeeze, next door
+b/love t/holo/fuzz/fuzz.l                              # all three lanes
+FUZZ_N=300 FUZZ_SEED=7 b/love t/holo/fuzz/fuzz.l       # deeper, one seed
+FUZZ_ARCH=a64 FUZZ_N=500 b/love t/holo/fuzz/fuzz.l     # one lane
+b/love t/holo/fuzz/rvc.l                               # the rvc squeeze, next door
 ```
 
 An arch no lane answers to scares rather than filtering to nothing, so a misspelling
-cannot read as a pass. Deterministic per seed. Needs `out/love` built, plus `objdump`
+cannot read as a pass. Deterministic per seed. Needs `b/love` built, plus `objdump`
 (x64) and `llvm-mc` (a64/rv64, and x64 as the second decoder); a lane whose disassembler
 is absent says so and is skipped. Exit code is nonzero iff any sample fails.
 
@@ -128,8 +128,8 @@ read/write, `lgdt`/`lidt`/`invlpg` over every base including the rsp-SIB and rbp
 quirks, `ltr`, all 256 `int` vectors, and the nullaries.
 
 ```
-out/love t/holo/fuzz/sysdiff.l                    # all three (in test_holofuzz)
-SYSDIFF_ARCH=a64 out/love t/holo/fuzz/sysdiff.l   # one arch
+b/love t/holo/fuzz/sysdiff.l                    # all three (in test_holofuzz)
+SYSDIFF_ARCH=a64 b/love t/holo/fuzz/sysdiff.l   # one arch
 ```
 
 Two rejections by `llvm-mc` are counted as skips, not failures, because holo is deliberately the
@@ -147,6 +147,6 @@ one deliberate divergence is `int 3`: `llvm-mc` folds it to the one-byte `CC`, h
 
 Add a `g_<class>(rng) -> (ir_string, checker)` generator and register it in `GENS`. The checker
 receives the parsed objdump instruction list and raises `Fail(msg)` on any mismatch. Probe what
-holo actually emits first (`echo "(...)" | ... | out/love`, then `objdump` the bytes) so the
+holo actually emits first (`echo "(...)" | ... | b/love`, then `objdump` the bytes) so the
 checker matches reality rather than assumption — several classes lower to more than one machine
 instruction (e.g. `setcc` → setcc+movzx, three-address ALU with distinct dest → mov+op).

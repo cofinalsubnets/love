@@ -11,7 +11,7 @@
 ; wrong, and a direct call skips all three. the child inherits the namespace, which
 ; is the whole reason this can be one process's worth of setup.
 ;
-; run standalone:  out/love t/gate/rootns.l
+; run standalone:  b/love t/gate/rootns.l
 ; a kernel with unprivileged user namespaces off skips the file with a word and
 ; stays green -- that is a machine's policy, not a fault in the code.
 
@@ -31,7 +31,7 @@
                 r (? (nom? p) 127 (wait p))
                 _ (close fd)
                 r)
-   ; a command's stdout, as a string. spawnio's in/out/err are RAW FDS and not
+   ; a command's stdout, as a string. spawnio's in/b/err are RAW FDS and not
    ; ports, so a jug cannot be handed to it -- the capture goes through a file the
    ; child writes and this side reads back.
    (out-of as) (: f (W + "/.cap")

@@ -50,7 +50,7 @@
    ; read at each call, never bound: mooncc rides a baked image, and a
    ; captured seat would fold the build tree's path into that image and ride it
    ; forever -- prel.l carries the same warning because it learned this one the
-   ; hard way (the installed love walked out/lib instead of its own nest).
+   ; hard way (the installed love walked b/lib instead of its own nest).
    (mseat _) (: x (selfpath 0)
                 (string? x && cdir x + "../lib/love/moon/"))
    (mroots _) (: s (mseat ()) (string? s ? [mtree s] [mtree]))
@@ -574,7 +574,7 @@
    ; -- the runtime cache. a member must be compiled to know what it defines, so
    ; the pull below cannot select without paying for all of them -- ~23s of the
    ; ~23s a cold hello-world link costs. so the whole compiled runtime rides
-   ; out/cache/moon/<sha256>.a, one archive per (compiler, target), keyed on
+   ; b/cache/moon/<sha256>.a, one archive per (compiler, target), keyed on
    ; everything that decides its bytes. the carried archives answer that for every
    ; stock tree now (rtcarried), so what is left for this cache is the build itself --
    ; u/mkrt.l cutting the carried set under love0, which has none -- and a toolchain
@@ -595,14 +595,14 @@
    ; in reach does not open it.
    ; read at each call, never bound -- mhome's law, for mhome's reason.
    (sdir? st) (two? st && (st 2 & 61440) = 16384)
-   ; the cache seat is the build tree's own out/, never a home directory. who wants it:
+   ; the cache seat is the build tree's own b/, never a home directory. who wants it:
    ; u/mkrt.l under love0, which carries no archives of its own (22 s of member
    ; compiles against 0.2 s), and a toolchain tree edited past the carried stamp. both
-   ; are a checkout, and a checkout is what has an out/ -- so presence is the wrapper,
-   ; the way mhome reads its roots, and out/ itself is never created here.
+   ; are a checkout, and a checkout is what has an b/ -- so presence is the wrapper,
+   ; the way mhome reads its roots, and b/ itself is never created here.
    (mcdir _)
-    (: d "out/cache/moon/"
-       _ (sdir? (stat "out") && map (s \ mkdir s 493) '("out/cache" "out/cache/moon"))
+    (: d "b/cache/moon/"
+       _ (sdir? (stat "b") && map (s \ mkdir s 493) '("b/cache" "b/cache/moon"))
        (sdir? (stat d) && d))
    ; the input-name predicates, ahead of every reader of them.
    (dota? p) (: n #p (2 < n && p (n - 2) = 46 && p (n - 1) = 97))

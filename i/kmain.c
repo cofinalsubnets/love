@@ -221,7 +221,7 @@ static struct k_source *k_source_open(int fd) {
 
 // --- rung 4: a task's stdio ---------------------------------------------------
 // the love machine's dup2-in-the-child, and it is the port itself: a task wears a chain
-// (i o e) of real ports (prel's `wear`, hook 6) and io_route swaps the folded in/out/err
+// (i o e) of real ports (prel's `wear`, hook 6) and io_route swaps the folded in/b/err
 // for them at every op, so ai_io_fd already answers the row and there is nothing here to
 // translate. i/sys.c's raw-fd door names absolute rows for the same reason.
 

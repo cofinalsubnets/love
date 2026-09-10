@@ -182,8 +182,7 @@
    ; constant's value can itself be nothing. no `&&`: c0 is single-pass and it is defined later.
    (kconst e) (? (nom? e) ()                                                    ; a variable -> no fact
                  (one? e) (. 1 e)                                           ; a literal -> (1 . itself)
-                 (== (cap e) '\) (? (one? (cuup e)) (. 1 (caup e)) ())     ; (\ v) quote of an atom -> (1 . v); a real lambda -> no fact
-                 ())
+                 (== (cap e) '\) (? (one? (cuup e)) (. 1 (caup e))))    ; (\ v) quote of an atom -> (1 . v); a real lambda -> no fact
    (cat a b) (foldr (.) b a))
 ; (sort l) is the C lane -- a stable bottom-up merge by the total order, no lisp re-entry;
 ; descending is (rev (sort l)). an arbitrary predicate takes this lisp merge sort instead.

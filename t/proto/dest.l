@@ -19,7 +19,7 @@
 ; the literature calls it destination-driven code generation (Dybvig & Burger).
 ; the design said once, both machines:.
 ;
-; run: cat t/00-init.l t/proto/dest.l | out/love    ; dots, then `dest: ok`
+; run: cat t/00-init.l t/proto/dest.l | b/love    ; dots, then `dest: ok`
 ;
 ; the laws, gen.l's machinery named in brackets:
 ;   * p->f = 7 is ONE si form            [the addressing/store folds, by construction]
