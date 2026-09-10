@@ -671,6 +671,12 @@
    (pmembers ps ts acc)                             ; member pairs ((name ty)..); () name = anonymous splice; (name ty width) = a bitfield
     (? !(two? ts) ()
        (peekp ts "}") [(rev acc) >ts]
+       ; C11 6.7.2.1: a static_assert-declaration is a struct-declaration, and it declares
+       ; no member. the kernel's const_true/BUILD_BUG_ON_ZERO idiom is `sizeof(struct
+       ; {_Static_assert(..);})`, so a whole struct body can be nothing but one
+       (sassert? ts)
+        (: r (pstatic ps ts)
+           (? (two? r) (pmembers ps <>r acc) ()))
        ; a struct label: `name:` where a member declaration would start -- a virtual member
        ; naming an offset, holding nothing and taking no space. borrowed from HolyC, but the
        ; first client is our own C, so it rides `moon` (the default) and not a HolyC front.
@@ -865,7 +871,13 @@
                  ; enumerator (gcc's -fshort-enums, its bare-metal arm default and what the
                  ; objects we link beside carry), and every other target of ours says int.
                  (ety pos lo hi)
-                  (: ty (? !(pst32? ps) (? pos 'uint 'int)
+                  (: ty (? !(pst32? ps)
+                           ; past the 32-bit word the underlying type widens, gcc's own reading:
+                           ; an enumerator that does not fit an int would otherwise be truncated
+                           ; by every load of a variable of this type
+                           (? (pos && 4294967295 < hi) 'ulong
+                              (!pos && (hi > 2147483647 || lo < -2147483648)) 'long
+                              pos 'uint 'int)
                            pos (? (hi <= 255) 'uchar (hi <= 65535) 'ushort 'uint)
                            ((-128 <= lo) && (hi <= 127)) 'char
                            ((-32768 <= lo) && (hi <= 32767)) 'short
@@ -882,7 +894,10 @@
                                     (: er (pasn ps >ts5)              ; = const-expr: fold it (enum consts, 1<<n, A+1) -- not just a literal
                                        (? !(two? er) ()
                                           (: cv (cfold <er)
-                                             (? (charm? cv) [cv <>er] ()))))
+                                             ; a sun-sized enumerator is still a number: the kernel's
+                                             ; `(0xffffffffULL << 32)` is one, and gcc widens the
+                                             ; underlying type for it rather than refusing
+                                             (? (cint? cv) [cv <>er] ()))))
                                     [v ts5])
                               (? !(two? vr) ()
                                  (: _ (spin ps 'enums name <vr)
@@ -1248,7 +1263,7 @@
              (tkk t = 'id)
               (: nm (tkv t)
                  ev (? (peep (ps 'declaring) nm ()) () (peep (ps 'enums) nm ()))
-                 (? (charm? ev) [['num ev] >ts]
+                 (? (cint? ev) [['num ev] >ts]
                     [['var nm] >ts]))
              ; ({ .. }) -- gcc's statement expression. its value is the last statement when
              ; that is an expression, void otherwise, so the node splits into the leading
