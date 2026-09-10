@@ -44,16 +44,15 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_tools test_web test_hostnif test_doc test_glaze test_hook test_sat test_holo test_holowasm test_as \
 	test_holofuzz test_glazefuzz test_encver test_kore test_refuzz test_sb test_vi \
 	test_clay test_moonfuzz test_forge test_gates \
-	test_cts test_libc test_ulp test_softfp test_reloc32 test_raw \
+	test_cts test_libc test_ulp test_softfp test_reloc32 \
 	test_drv test_hdiff test_tco0 nettest test_wake test_gz test_cpio test_fat32 test_root \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
 	test_asmops test_dtb test_rvboot test_elf32 test_objcopy test_distboot test_fat test_wasm \
-	test_rv64 test_cca64 test_ccrv64 test_ccwasm test_ccthumb1 test_ccthumb2 test_cts_a64 test_cts_rv64 test_cts_wasm \
+	test_cca64 test_ccrv64 test_ccwasm test_ccthumb1 test_ccthumb2 test_cts_a64 test_cts_rv64 test_cts_wasm \
 	test_raw_a64 test_raw_rv64 \
 	test_virt test_thumb1 test_thumb2 test_thumb2sp \
-	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446 test_nucleo446_smoke \
-	test_playdate test_rp2040 test_teensy41 \
+	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_links \
 	test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 \
 	test_inle
 
@@ -738,8 +737,8 @@ test_netbsd_a64: host $(love0) out/mooncc0.image
 test_raw_bake: test_raw
 	@sh test/gate/raw-bake.sh $(ho) $t
 # test_rv64 -- the test/cc battery `mooncc -t rv64` under qemu-riscv64, exit code
-# against the native x64 build. OUT of test_slow: test_ccrv64 runs the same battery and
-# compares STDOUT, so this is its strict subset -- the lighter opt-in lane.
+# against the native x64 build. In NO tier: test_ccrv64 runs the same battery and compares
+# STDOUT, so this is its strict subset -- the lighter lane, opt-in by name.
 test_rv64: host
 	@sh test/gate/rv64.sh $(ho) $m
 # test_raw's rv64 twin: mooncc -t rv64 lays every object, mksys-rv64 the syscall
@@ -867,7 +866,8 @@ test_virt_build: host
 # work that removed the weak defaults broke four at once -- the wasm library module,
 # out/front, the boards, and playdate, which keeps its own roster and so missed l/bare.c --
 # and no fast gate could see any of them, because the lanes that cover them live in
-# test_extra, which takes an hour and therefore does not get run. rides test_slow.
+# test_extra, which takes an hour and therefore does not get run. rides BOTH slow tiers --
+# in test_extra it stands for the four build-only board rows, being test_boards and more.
 .PHONY: test_links
 test_links: host $(ho)/front $(love0) out/wasm/love.wasm out/love-wasm.wasm
 	@$(MAKE) -s $(ko)/love-x64.elf
