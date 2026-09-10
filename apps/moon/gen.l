@@ -935,7 +935,10 @@
                    ('regw x) ['regw x y]    ; a d128 pair home: (lo hi)
                    ('glob x) ['glo x y]
                    ['loc h y]))
-          (g 'glob name @ (a . b . _) ['glo a b] 'bad)))
+          (peep (g 'gregs) name () @ (s . y . _)
+             (: r (gas-regname (peep g 'tgt 'x64) s)
+                (? (nom? r) ['regv r y] 'bad))
+           (g 'glob name @ (a . b . _) ['glo a b] 'bad))))
    ; a static object's one address: a frame slot reads off r4, a global off its label through
    ; the address temp -- (f base off) lays the access
    (atstat en tmp f) (? (<en = 'loc) (f 'r4 <>en) ([['la tmp <>en]] + f tmp 0))
@@ -8086,6 +8089,9 @@
           ; type tree has never carried a qualifier node. nothing reads it yet: the consumer
           ; is the interior-store elision at a splice seam (THE LADDER step 7)
           'rstrs (two? xtra && 8 < #xtra ? (xtra 8) {})
+          ; a file-scope `register T nm asm("R")`: the name is that machine register, so
+          ; nothing was laid for it and vent answers the register instead of a label
+          'gregs (two? xtra && 10 < #xtra ? (xtra 10) {})
           'xfns ()                                  ; (secname forms) per fn that named a section, newest first
           'romemo {}}                               ; a const candidate's image, laid once and read by both walks
        ; pass 0: every function name -- so a bare use of one is its address (la). the sig table

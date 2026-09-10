@@ -173,6 +173,22 @@ moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
 printf 'int m(void){ register long sp asm("rsp"); asm("" : "+r"(sp)); return (int)sp; }\n' > "$ho/.feat.c"
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
   && fail "a register variable pinned to the stack pointer was accepted"
+# a FILE-SCOPE `register T nm asm("rsp")` is GNU's global register variable -- x86's
+# current_stack_pointer, which every kernel TU reaches through asm/asm.h. reads answer
+# the register and lay no storage; a WRITE refuses (gcc reserves the register for the
+# whole unit and we cannot), and so does any register but the stack pointer
+printf 'register unsigned long sp asm("rsp");\nint main(void){ int l; unsigned long s = sp; return (unsigned long)&l > s - 8192; }\n' > "$ho/.greg.c"
+moonrun "$ho/.greg.c" "$ho/.greg" > /dev/null 2>&1 || fail "a global register variable refused"
+"$ho/.greg"; a=$?
+[ $a -eq 1 ] || fail "a global register variable did not read the stack pointer (got $a want 1)"
+nm "$ho/.greg" 2>/dev/null | grep -q " [BbDd] sp$" && fail "a global register variable laid storage"
+printf 'register unsigned long sp asm("rsp");\nvoid m(void){ sp = 0; }\n' > "$ho/.greg2.c"
+moonrun -c -o /dev/null "$ho/.greg2.c" 2>&1 | grep -q "write to a global register variable" \
+  || fail "a write to a global register variable was taken"
+printf 'register unsigned long v asm("rcx");\nunsigned long m(void){ return v; }\n' > "$ho/.greg3.c"
+moonrun -c -o /dev/null "$ho/.greg3.c" 2>&1 | grep -q "stack pointer only" \
+  || fail "a global register variable on an allocatable register was taken"
+
 printf 'int m(void){ register long v asm("rcx") = 5; asm("" : "+r"(v)); return (int)v; }\n' > "$ho/.feat.c"
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
   || fail "a register variable pinned by asm() to a nameable register refused"

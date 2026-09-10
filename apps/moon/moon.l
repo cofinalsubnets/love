@@ -440,11 +440,11 @@
    ; the gen's option list is the parser's nine tablets plus the driver's own word (-fno-inline).
    (cc-objbytes src (t @ {'ni ni 'tgt tgt}))
     (@ (cc-parse src t)
-       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs]
+       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs]
        ; wasm rides gen's rv64 lane whole (l/holo/wasmfn.l is the machine under it) and
        ; lays no ELF: its object is the gen tuple as text, read back by the wasm link
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni] (? (= tgt 'wasm) 'rv64 tgt))
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs] (? (= tgt 'wasm) 'rv64 tgt))
           _ (? (okv? ob) () (ccdie ob src ("cc: codegen error in " + src)))
           (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns]
              (: xs (map (\ [nm forms ro] (objsec-named nm forms ro)) xsecs

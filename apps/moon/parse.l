@@ -220,6 +220,21 @@
    (leadstatic? ps ts) (leadkw? ps ts 'static)
    (leadextern? ps ts) (leadkw? ps ts 'extern)
    (leadregister? ps ts) (leadkw? ps ts 'register)
+   ; a file-scope `register T nm asm("R")` is GNU's GLOBAL register variable: the name
+   ; IS that machine register, so no storage is laid and every read answers it (vent
+   ; turns the spelling into a neutral register, as the local form's pin does). it must
+   ; be caught before patt, which would skip an asm name as decoration and rename the
+   ; object in silence
+   (pgreg ps ts nm regv)
+    (? (!regv || !(two? ts)) ts
+       (!(asmid? <ts) || !(peekp >ts "(") || !(strat? >>ts) || !(peekp >>>ts ")")) ts
+       (: s (tkv <>>ts)
+          ; only the STACK POINTER: gcc reserves a global register variable's register
+          ; for the whole translation unit and we cannot, so a read of any register the
+          ; allocator uses would answer whatever it last held
+          (? !(elem s '("rsp" "sp" "esp"))
+             (blame >>>>ts ("a global register variable is taken on the stack pointer only, not '" + s + "'"))
+             (: _ (pin (ps 'gregs) nm [s 'long]) >>>>ts))))
    ; `const` in the specifier run. it names the object only when the declarator
    ; adds no pointer of its own, which cobj? decides per declarator.
    (leadconst? ps ts) (leadkw? ps ts 'const)
@@ -340,6 +355,7 @@
                 _ (pin t 'sects {})         ; global name -> its __attribute__((section "..")) string
                 _ (pin t 'consts {})        ; global name -> 1 when `const` names the object and it has an initializer
                 _ (pin t 'rstrs {})         ; fn name -> its `T *restrict` param names (the alias promise, out of band)
+                _ (pin t 'gregs {})         ; a file-scope `register T nm asm("R")`: nm -> (R ty), no storage laid
                 _ (pin t 'currstr ())               ; ...accumulating for the declaration being parsed, like curweak
                 _ (pin t 'aligns {})        ; global name -> its __attribute__((aligned(N))) boundary
                 _ (pin t 'locals {})        ; local/param name -> its declared type (for parse-time sizeof folding)
@@ -1424,10 +1440,15 @@
                 (: r2 (pasn ps ><>r)
                    (? !(two? r2) ()
                       (: lv <r op <>hit
-                         [(? !op ['asn lv <r2]                         ; plain =: no duplicate to make
-                              (calm? lv) ['asn lv ['bin op lv <r2]]    ; the desugar, exact here
-                              ['rmw op lv <r2])                         ; evaluate the lvalue once
-                            <>r2])))))))
+                         ; a global register variable is READ-ONLY here: writing the stack
+                         ; pointer through a plain assignment is a program losing its frame,
+                         ; and gcc's own whole-unit reservation is what makes it sane there
+                         greg (two? lv && (= <lv 'var) && two? (peep (ps 'gregs) <>lv ()))
+                         (? greg (blame <>r2 "a write to a global register variable")
+                            [(? !op ['asn lv <r2]                      ; plain =: no duplicate to make
+                                 (calm? lv) ['asn lv ['bin op lv <r2]] ; the desugar, exact here
+                                 ['rmw op lv <r2])                     ; evaluate the lvalue once
+                               <>r2]))))))))
    (pexpr ps ts) (pone ps pasn "," 'comma ts)
 
    ; an initializer is an assignment-expr or a brace list. a brace list is
@@ -2335,12 +2356,16 @@
                                        ; later sizeof(b) answered 0 in silence (the bytes were laid
                                        ; right; only the type was wrong, which is the worse half).
                                        [[nm (fillarr ps t2 <r) <r] <>r]))
-                                [[nm t2 ()] ts3])
+                                ; a global register variable's row was pinned before its type
+                                ; was in hand; fill it in here, where the declarator is done
+                                (: gv (peep (ps 'gregs) nm ())
+                                   _ (? (two? gv) (pin (ps 'gregs) nm [<gv t2]) ())
+                                   [[nm t2 ()] ts3]))
                             (more ts3 acc)
                                 (? (peekp ts3 ",")
                                    (: dr (pdtor ps >ts3 base)
                                       (? !(two? dr) ()
-                                         (: r (one (patt <>dr) <<dr <><dr)
+                                         (: r (one (patt (pgreg ps <>dr <<dr (leadregister? ps ts))) <<dr <><dr)
                                             (? (two? r) (more <>r (<r . acc)) ()))))
                                    ; a declarator whose type is a function type (a function-type
                                    ; typedef: love.h's `lvm_t lvm_ret0, lvm_cur, ..;`) declares a
@@ -2371,7 +2396,8 @@
                                                              (regs >l)))
                                               (regs acc))
                                          vps (: (go2 l a2) (? !(two? l) a2
-                                                              (go2 >l (? (fnp? <l) a2 (<l . a2))))
+                                                              (go2 >l (? (fnp? <l || two? (peep (ps 'gregs) <<l ()))
+                                                                         a2 (<l . a2))))
                                                 (go2 acc ()))
                                          ; a const object with an initializer is a candidate for .rodata --
                                          ; per declarator, since one specifier run serves them all and only
@@ -2411,7 +2437,7 @@
                                    (? (peekp aft ";") [['proto name] >aft]
                                       (pfbody ps name <fprm aft)))
                                ; a global declaration; the first declarator's stars came off `sr`
-                               (: first (one (patt ts2) name (? (two? fpty) fpty rty))
+                               (: first (one (patt (pgreg ps ts2 name (leadregister? ps ts))) name (? (two? fpty) fpty rty))
                                   (? (two? first) (more <>first [<first]) ())))))))))))
    ; a parse refusal names where it stood. the first pass ran unstamped and so
    ; left no trail -- so stamp just this form and run it through ptop again,
@@ -2515,7 +2541,7 @@
         ; and C's tentative rule lets a real definition later in the TU take the entry back
         (? !(two? ts2) [1 ['prog ((ps 'hoist) + (rev acc))] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; empty acc = a valid empty TU (crypt.c), not a parse failure
                               (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
-                              (ps 'consts) (ps 'rstrs)]
+                              (ps 'consts) (ps 'rstrs) (ps 'gregs)]
            (: r (ptop ps ts2)
               (? (two? r) (: _ (note <r) (tops <>r (<r . acc))) (pfail ps ts2 spans toks))))
        (tops toks ())))
