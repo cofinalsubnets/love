@@ -1296,7 +1296,7 @@
              (uv-padl-bwd (pr1 v) (pr1 v) (pr2 v))
              (uv-padr-bwd (pr1 v) (pr1 v) (pr2 v)))))
  ; == is finer than =, never the converse: where == holds, = does
- (defq uv-idq-finer (pi v val (paths bool (veq v v) true)) uv-veq-refl)
+ (defq uv-eqeq-finer (pi v val (paths bool (veq v v) true)) uv-veq-refl)
  ; ..and = is total, answering the charm 1 on every value
  (defq uv-eq-total (pi v val (paths nat (nbit (veq v v)) 1))
    (lam v (maponpaths bool nat (lam z (nbit z)) (veq v v) true (uv-veq-refl v)))))
@@ -1511,7 +1511,7 @@
          (uv-link-apart v)))))
  ; == is finer than =, never the converse: where == holds, = does -- and over
  ; paths that is reflexivity, with nothing left to decide
- (defq uv-pidq-finer (pi x pval (paths pval x x)) (lam x (idpath x)))
+ (defq uv-peqeq-finer (pi x pval (paths pval x x)) (lam x (idpath x)))
  ; ..and = is total: it answers the charm 1 on every pair the paths agree on,
  ; which is the completeness half of the bridge worn as a law
  (defq uv-peq-total

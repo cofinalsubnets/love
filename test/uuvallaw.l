@@ -44,13 +44,13 @@
    uv-eq-total)
  ; ==-finer   (\ x (? (== x x) (= x x) 1))
  ; by the lemma the model names; the guard (== x x) erases
- (defq law-idq-finer
+ (defq law-eqeq-finer
    (pi v val (paths bool (veq v v) true))
-   uv-idq-finer)
+   uv-eqeq-finer)
  ; ..and the same law over the pinned carrier, by the bridge
- (defq law-idq-finer-p
+ (defq law-eqeq-finer-p
    (pi v val (paths pval (pin v) (pin v)))
-   (lam v (uv-veq-paths v v (law-idq-finer v))))
+   (lam v (uv-veq-paths v v (law-eqeq-finer v))))
  ; net-idem   (\ x (: n (net x) (= n (net n))))
  ; by conversion
  (defq law-net-idem
@@ -66,7 +66,7 @@
  (defq law-ceil-idem
    (pi v val (paths zed (vceil v) (vceil (zval (vceil v)))))
    (lam v (idpath (vceil v))))
- ; sat-idem   (\ x (: s (saturate x) (= s (saturate s))))
+ ; sat-idem   (\ x (: s (sat x) (= s (sat s))))
  ; by conversion
  (defq law-sat-idem
    (pi v val (paths nat (vsat v) (vsat (nval (vsat v)))))
@@ -84,12 +84,12 @@
  (defq law-ceil-net
    (pi v val (paths zed (vceil v) (vceil (rval (mre (vnet v))))))
    (lam v (idpath (vceil v))))
- ; sat-ceil   (\ x (= (saturate x) (? (< 0 (ceil x)) (ceil x) 0)))
+ ; sat-ceil   (\ x (= (sat x) (? (< 0 (ceil x)) (ceil x) 0)))
  ; by conversion
  (defq law-sat-ceil
    (pi v val (paths nat (vsat v) (zsat (vceil v))))
    (lam v (idpath (vsat v))))
- ; bit-sat   (\ x (= (bit x) (< 0 (saturate x))))
+ ; bit-sat   (\ x (= (bit x) (< 0 (sat x))))
  ; by cases on the saturated measure
  (defq law-bit-sat
    (pi v val (paths bool (vbit v) (natgtb (vsat v) 0)))
@@ -97,7 +97,7 @@
                      (idpath (vbit (nval 0)))
                      (lam k (lam r (idpath (vbit (nval (succ k))))))
                      (vsat v))))
- ; nil?-bit   (\ x (= (nil? x) (= 0 (saturate x))))
+ ; nil?-bit   (\ x (= (nil? x) (= 0 (sat x))))
  ; by cases on the saturated measure
  (defq law-nilq-bit
    (pi v val (paths bool (vnil v) (niszero (vsat v))))
@@ -105,7 +105,7 @@
                      (idpath (vnil (nval 0)))
                      (lam k (lam r (idpath (vnil (nval (succ k))))))
                      (vsat v))))
- ; sat-net   (\ x (= (saturate x) (saturate (net x))))
+ ; sat-net   (\ x (= (sat x) (sat (net x))))
  ; by conversion
  (defq law-sat-net
    (pi v val (paths nat (vsat v) (vsat (vnum (vnet v)))))
