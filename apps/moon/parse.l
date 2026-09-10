@@ -467,7 +467,8 @@
    (ptype ps e)
     (? !(two? e) ()
        (: k <e
-          (? (k = 'var) (: lt (peep (ps 'locals) <>e ())   ; locals shadow; a file-scope name falls through
+          (? (k = 'sexpr) <>>>e                            ; a statement expression carries its own
+             (k = 'var) (: lt (peep (ps 'locals) <>e ())   ; locals shadow; a file-scope name falls through
                            (? lt lt
                               (: gt (peep (ps 'globals) <>e ())
                                  (? gt gt
@@ -1233,6 +1234,23 @@
                  ev (? (peep (ps 'declaring) nm ()) () (peep (ps 'enums) nm ()))
                  (? (charm? ev) [['num ev] >ts]
                     [['var nm] >ts]))
+             ; ({ .. }) -- gcc's statement expression. its value is the last statement when
+             ; that is an expression, void otherwise, so the node splits into the leading
+             ; STATEMENTS and that value expression: gen compiles the first in place and
+             ; the second as an ordinary expression against the env the decls built
+             (tp? t "(" && peekp >ts "{")
+              (: br (pblock ps >ts)
+                 (? !(two? br) ()
+                    (: rest (want <>br ")")
+                       items (? (two? <br && (= <<br 'blk)) <><br [<br])
+                       (lst l) (? !(two? l) () !(two? >l) <l (lst >l))
+                       (butl l) (? !(two? l) () !(two? >l) () (<l . butl >l))
+                       lv (lst items)
+                       val? (two? lv && (= <lv 'expr))
+                       ty0 (? val? (ptype ps <>lv) ())
+                       (? !(two? rest) ()
+                          val? [['sexpr (butl items) <>lv (? ty0 ty0 'long)] rest]
+                          [['sexpr items () 'void] rest]))))
              (tp? t "(") (thenw (pexpr ps >ts) ")")
              ())))
    ; postfix: calls, indexing, members, ++/--

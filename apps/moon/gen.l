@@ -359,11 +359,13 @@
           (sweep (f . u)) (f @ ('mov x x) (sweep u) (f . sweep u))
         (sweep (map fix1 fs))))
    (callish? (a . u))                                ; does the AST reach a call? (an inline splice still may)
-    (a = 'call || callish? a || callish? u)
+    ; a statement expression runs STATEMENTS, and every one of those resets the operand
+    ; pool -- so it is a barrier to the enclosing expression exactly as a call is
+    (a = 'call || a = 'sexpr || callish? a || callish? u)
    ; does the AST write anything? a face's base register must survive the rhs, so a
    ; store rides the face only past a write-free right side (calls clobber the pool too)
    (wrany? (a . u))
-    (elem a '(asn post call asm vastart vaarg) || wrany? a || wrany? u)
+    (elem a '(asn post call asm vastart vaarg sexpr) || wrany? a || wrany? u)
    (tor0 g v)                                       ; land a value on the r0 protocol (frees its pool reg)
     (? (= (vreg v) 'r0) (vfs v)
        (: rd (vreg v) rl (rev (vfs v))
@@ -2550,6 +2552,22 @@
                      (: toff (nslot g 16)
                         (mkv (vty cr) 'r0 (vfs cr + [['st 'r4 toff 'r0] ['lean 'r0 'r4 toff]])))
                     'bad))))))
+       ; a statement expression: the leading statements compiled in place, then the value
+       ; expression as an ordinary one -- so it keeps its own register and no label sits
+       ; between it and whatever consumes it. `return` inside the statements still leaves
+       ; the FUNCTION (or the enclosing splice), which is C's own reading.
+       ; 'inlining is raised over the statements so stq stops ticking and each wears the
+       ; conservative wrapset: alive never numbered them (the node is an expression, and
+       ; erd's default already answers the whole universe for one it does not know)
+       ('sexpr items ve ty)
+        (: il0 (g 'inlining)
+           _ (pin g 'inlining ((il0 || 0) + 1))
+           pre ((g 'sxpre) g env items ())
+           _ (pin g 'inlining il0)
+           (? (bad? pre) 'bad
+              !(two? ve) (mkv ty 'r0 <pre)                   ; void: the statements alone
+              (: r (cgexpr g <>pre ve wnt)
+                 (? (bad? r) 'bad (mkv (vty r) (vreg r) (<pre + vfs r))))))
        ('clit . _)                              ; a compound literal as a value: fill the temp, load it
         (: lv (clval g env e)
            (? (bad? lv) 'bad (loadval g lv wnt)))
@@ -7041,6 +7059,23 @@
                    (? (bad? r) 'bad
                       (cgitems g env >items (acc + r)))))))
 
+   ; cgitems' twin for a statement expression's leading statements: it answers the env the
+   ; decls built as well as the forms, because the value expression that follows is compiled
+   ; against it -> (forms env) | 'bad. reached through the g tablet for the same reason
+   ; cgitems is -- a direct cgexpr edge would close the cycle back into cgstmt, whose body
+   ; reads globals bound after cgexpr's own definition
+   (sxpre g env items acc)
+    (? !(two? items) [acc env]
+       (: it <items
+          (it @ ('decl ps)
+                 (: r (cgdecl g env ps)
+                    (? (bad? r) 'bad (sxpre g <>r >items (acc + <r))))
+                ('sdecl ps)
+                 (: r (cgsdecl g env ps)
+                    (? (bad? r) 'bad (sxpre g <>r >items (acc + <r))))
+                (: r (cgstmt g env it)
+                   (? (bad? r) 'bad (sxpre g env >items (acc + r)))))))
+
    ; scan a switch body for its case/default labels at any depth, pinning value->label into `tab`
    ; and answering the (value label) dispatch pairs. recurses through stkids but stops at a nested
    ; switch, whose cases belong to it -- a case ties to its nearest enclosing switch, per C.
@@ -8027,7 +8062,7 @@
     (: g {'n 0 'brk () 'brkm () 'cnt () 'cases () 'glob {} 'globs () 'strs () 'statics ()
           'abl (ablenv 0)                           ; the pricing knob, read per unit at run time
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
-          'fns {} 'inl {} 'cgitems cgitems 'stag stbl 'sigs sigs
+          'fns {} 'inl {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
           'tgt tgt                                  ; (the epilogue is per fn: cgfn pins g 'epi)
           'sects (two? xtra ? <>>xtra {})
           'alias (two? xtra && 3 < #xtra ? (xtra 3) {})

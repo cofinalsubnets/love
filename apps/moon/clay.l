@@ -96,6 +96,10 @@
       (post 2 2) (cond 3 3) (comma 2 2) (call 2 2) (deref 1 1) (addr 1 1)
       (dot 2 2) (cast 2 2) (szof 1 1) (init 1 1) (dfield 2 2) (didx 2 2)
       (clit 2 2) (land 2 2) (lor 2 2) (vastart 1 2) (vaarg 2 2) (vaend 1 1)
+      ; ('sexpr items value ty) -- gcc's ({ .. }). the shape is known and the node is
+      ; deliberately UNSAYABLE: a generator emitting C has a block for this, and the
+      ; type slot is recomputed on a re-parse rather than read back from the text
+      (sexpr 3 3)
       ; type forms, validated by the same table since a type is a clay node.
       ; ('varr elt dim [idx]): the optional third is gen's VLA-local slot index,
       ; bookkeeping the shower has nothing to say about.
