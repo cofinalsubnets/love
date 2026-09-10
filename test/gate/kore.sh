@@ -714,7 +714,7 @@ fsh 'echo x | love -e "(3 + 4)"' >/dev/null; r=$?; [ $r -eq 0 ] || fail "fork la
 # one refusal observable from out here: a 1 means the lane forked and swallowed it.
 # (the knob rides the COMMAND, never the shell: an egg-booted love has no verb table,
 # so `love sh` there would read "sh" as a filename.)
-[ "$(fsh 'echo x | LOVE_NO_IMAGE=1 love -e "(member? (quote love-image) (names ()))"')" = "0" ] \
+[ "$(fsh 'echo x | LOVE_NO_IMAGE=1 love -e "(elem (quote love-image) (names ()))"')" = "0" ] \
   || fail "fork lane swallowed LOVE_NO_IMAGE"
 # a word with nothing past it may want a terminal, and the repl is the caller's isatty
 # answer to give -- so the bare word is asked of the STAGE, not of the word: a pipe or a

@@ -48,6 +48,7 @@ fail() { echo "FAIL targz: $*"; exit 1; }
 
 # ---- 1. we WRITE, they READ ------------------------------------------------
 cat > "$w/pack.l" <<EOF
+(borrow 'posix)
 (borrow 'tar)
 (borrow 'gz)
 (: g (tar-gather "$w/tree" "")
@@ -77,6 +78,7 @@ echo "  OK we write, GNU tar + gzip read -- tree identical, symlink and mode int
 ( cd "$w/tree" && tar czf "$w/theirs.tar.gz" . )
 mkdir -p "$w/ours"
 cat > "$w/unpack.l" <<EOF
+(borrow 'posix)
 (borrow 'tar)
 (borrow 'gz)
 (: q (open "$w/theirs.tar.gz" "r") z (: s (slurp q) _ (close q) (s + ""))
@@ -103,6 +105,7 @@ echo "  OK GNU tar + gzip write, we read -- tree identical, modes preserved"
 for f in tree/text.l tree/sub/deep/blob.bin tree/empty; do
   src="$w/$f"
   cat > "$w/one.l" <<EOF
+(borrow 'posix)
 (borrow 'gz)
 (: q (open "$src" "r") s (: t (slurp q) _ (close q) (t + ""))
    z (gz-zip s "" 0)
@@ -116,6 +119,7 @@ EOF
   # reading only its own writer's output has never been asked anything.
   gzip -9 -c "$src" > "$w/theirs.gz"
   cat > "$w/one2.l" <<EOF
+(borrow 'posix)
 (borrow 'gz)
 (: q (open "$w/theirs.gz" "r") z (: t (slurp q) _ (close q) (t + ""))
    u (gz-unzip z)
@@ -231,6 +235,7 @@ echo "  OK the streamed archive digest equals the packed one"
 # pack it again, and the packer must answer the tree rather than its own umask.
 mkdir -p "$w/um"
 cat > "$w/unpack6.l" <<EOF
+(borrow 'posix)
 (borrow 'tar)
 (borrow 'gz)
 (: q (open "$w/ours.tar.gz" "r") z (: s (slurp q) _ (close q) (s + ""))

@@ -108,7 +108,7 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 
 ; the working vocabulary (verified in-tree)
 ; - (show x) prints-to-string; puts/putc write; putx prints a form
-; - sort orders numbers, symbols, strings, and lists; rev, tally (#), member?, map
+; - sort orders numbers, symbols, strings, and lists; rev, tally (#), elem, map
 ; - tablets: {} makes, (pin t k v) mutates AND answers t (so foldl builds one),
 ;   (peep t k d) reads with default, t k = peep t k () ; (keys t) is UNSORTED -- sort before
 ;   walking or answers drift
