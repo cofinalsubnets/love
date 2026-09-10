@@ -567,8 +567,8 @@
    ; -- the type floor rides apps/moon/floor.l (shapes, sizes, the typing door): g carries only
    ; the two things the floor takes as parameters -- the machine word and the stag table. --
    (uldop sz) (sz @ 1 'ldu1 2 'ldu2 4 'ldu4 'ld)   ; unsigned load of a sz-byte word
-   (fnty g nm) (: sig (g 'sigs nm)        ; a named function's type, return riding when sig'd
-                (two? sig ? ['fn <sig] '(fn)))
+   (fnty g nm) (: sig (g 'sigs nm)        ; a named function's type, return and parameters riding when sig'd
+                (two? sig ? ['fn <sig <>sig] '(fn)))
    ; by-value aggregates (structs AND unions): a struct VALUE in cgexpr is its address in r0, and
    ; params/args/returns/results read the eightbytes through it. aclass answers the SysV eightbyte
    ; classes -- '(int) / '(sse) at <=8 bytes, a two-symbol list at 9..16, () for a scalar, an
@@ -636,8 +636,10 @@
    ; first gp argument, the callee fills that memory and answers the pointer.
    ; the v6-M base ABI does it past 4 bytes; SysV past 16 (aclass ()).
    (sretm? g ty) (stru? ty && (v6m? g && 4 < tsz g ty || amem? g ty))
-   (fnret ty) (? !(two? ty && <ty = 'ptr) 'long        ; an indirect callee's result type: ('ptr ('fn ret)) | 'long
+   (fnret ty) (? !(two? ty && <ty = 'ptr) 'long        ; an indirect callee's result type: ('ptr ('fn ret ptys)) | 'long
                  (: ft <>ty (fn? ft && two? >ft ? <>ft 'long)))
+   (fnpts ty) (? !(two? ty && <ty = 'ptr) ()           ; ..and its parameter types, () where the declarator had no prototype
+                 (: ft <>ty (fn? ft && 2 < #ft ? (ft 2) ())))
    ; unsigned scalars ride 'uchar 'ushort 'uint 'ulong -- same width as their signed
    ; twin, but a load zero-extends, `>>` is logical, compare/divide go unsigned, and
    ; a binary op is unsigned if either operand is (simplified usual conversions).
@@ -1191,6 +1193,24 @@
          ('un 'neg x) (flo9? g env x)
          ('cond _ a b) (flo9? g env a || flo9? g env b)
          ('comma _ b) (flo9? g env b)
+         ())
+   ; the static type of a call HEAD. an indirect call's arguments classify before the
+   ; head evaluates, so the parameter types cannot come off the compiled value -- they
+   ; are read off the expression here. a miss answers (), and the arguments classify by
+   ; themselves, which is what every indirect call did before the types rode the pointer.
+   (hdty9 g env e)
+    (e @ ('var nm) (: en (vent g env nm) (bad? en ? () <>>en))
+         ('dot b f) (: bt (hdty9 g env b)
+                       fm (stru? bt ? (fmem g bt f) 'bad)
+                       (bad? fm ? () <>fm))
+         ('deref x) (: it (hdty9 g env x)
+                       (two? it && elem <it '(ptr arr) ? <>it ()))
+         ('cast ty _) ty
+         ; a[i] desugars to *(a + i), so a dispatch table's element type reaches
+         ; the deref above only through the pointer operand of the sum
+         ('bin o x y && (= o '+))
+          (: a (hdty9 g env x)
+             (two? a && elem <a '(ptr arr) ? a (hdty9 g env y)))
          ())
    (cbinl g env e cc lbl)
     (: head <>e args <>>e
@@ -2712,7 +2732,11 @@
               (: direct (<head = 'var && bad? (vent g env <>head) &&  ; not a local/global variable...
                                          g 'fns <>head)     ; ...and a known function (typos refuse)
                  sig (direct ? (g 'sigs <>head))
-                 ptys (two? sig ? <>sig)
+                 ; the parameter types: a direct call's prototype, or the ones the
+                 ; function-pointer type carries -- an indirect call classifies by them
+                 ; too, since a float argument is indistinguishable from a double once
+                 ; gen has widened it into an f-register.
+                 ptys (? (two? sig) <>sig direct () (fnpts (hdty9 g env head)))
                  rt (? (two? sig) <sig 'long)
                  variadic (two? sig ? (sig 2))
                  ; the arity check: a sig'd direct call hands its callee the arguments the
@@ -2721,8 +2745,9 @@
                  ; an empty parameter list is exempt and must stay so: `int f()` and
                  ; `int f(void)` both park an empty ptys and the sigs row cannot tell them
                  ; apart -- refusing the first would refuse musl's headers.
+                 ; direct only: the gripe below spells a name, which only a direct head has.
                  nps #ptys nas #args
-                 off (0 < nps && (variadic ? (nas < nps) (nas != nps)))
+                 off (direct && 0 < nps && (variadic ? (nas < nps) (nas != nps)))
                  _ (? off (pin g 'arity
                                ("call to '" + <>head + "' wants "
                                 + show nps + (? variadic " or more" "")

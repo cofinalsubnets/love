@@ -1004,7 +1004,7 @@
    (test
       (= (cast "void f(void){return;}") '(prog ((fn "f" () (blk ((ret ())))))))   ; bare void return
       (= (cexp "sizeof x") '(szof (var "x")))                                       ; sizeof EXPR -> a node (not folded)
-      (= (cexp "(int (*)(int)) p") '(cast (ptr (fn int)) (var "p")))                ; a function-pointer cast type (return rides)
+      (= (cexp "(int (*)(int)) p") '(cast (ptr (fn int (int))) (var "p")))                ; a function-pointer cast type (return and parameters ride)
       (= (cexp "sizeof(int)") '(cast ulong (num 4)))                              ; sizeof type folds to a coated num (size_t)
       (= (cast "typedef long a, b; int main(void){ b x; return x; }")                ; a multi-declarator typedef binds both names as `long`
          '(prog ((tdef) (fn "main" () (blk ((decl (("x" long ()))) (ret (var "x"))))))))
@@ -1052,8 +1052,8 @@
       (= (dty "int (*p)[3];") '(ptr (arr int 3)))                   ; pointer to array[3] of int
       (= (dty "int (*p)[2][3];") '(ptr (arr (arr int 3) 2)))        ; pointer to a 2D array
       (= (dty "int (*p[2])[3];") '(arr (ptr (arr int 3)) 2))        ; array[2] of pointer-to-array
-      (= (dty "int (*p)(void);") '(ptr (fn int)))                   ; pointer to function (unregressed)
-      (= (dty "int (*fp[4])(void);") '(arr (ptr (fn int)) 4))       ; dispatch table (unregressed)
+      (= (dty "int (*p)(void);") '(ptr (fn int ())))                   ; pointer to function (unregressed)
+      (= (dty "int (*fp[4])(void);") '(arr (ptr (fn int ())) 4))       ; dispatch table (unregressed)
       (= (cast "enum q { A, B, KN }; int m[KN][KN]; int main(void){return 0;}")   ; an enum constant dim folds (KN = 2)
          '(prog ((tdef) (gdecl (("m" (arr (arr int 2) 2) ()))) (fn "main" () (blk ((ret (num 0))))))))))
 

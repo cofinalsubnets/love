@@ -1,9 +1,8 @@
 // the SDK half: the only file that includes pd_api.h. every crossing flattens
-// to ints and pointers here, so the seam stays word-only -- which still buys
-// the variadic logToConsole, and buys the float args a function POINTER cannot
-// type (mooncc reads a prototype's floats onto s0..s15, but ('fn ret) carries
-// no parameter list, so an indirect one would ride a d-reg). a float RESULT is
-// read from s0, so getCrankAngle needs nothing.
+// to ints and pointers here, so the seam stays word-only -- which buys the
+// variadic logToConsole, whose `...` no pointer type carries. floats need no
+// flattening either way: a pointer's own parameter list places an argument and
+// a result is read from s0, so getCrankAngle answers straight.
 #include "pd_api.h"
 #include "pdglue.h"
 

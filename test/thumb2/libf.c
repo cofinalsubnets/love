@@ -35,8 +35,17 @@ extern float gback(float a, double b, float c);
 float fout(float x){ return gback(x, 2.0, 0.5f) + 1.0f; }
 
 /* through a POINTER, which is the playdate's whole seam: every pd->* entry is a
-   function pointer and getCrankAngle answers in s0. the ARGUMENTS stay word-sized
-   here on purpose -- mooncc's function-pointer type carries a return and no
-   parameter list, so an indirect call classifies a floating argument by the value
-   it holds, which is always the widened double (doc/misc/moon-c-gaps.md). */
+   function pointer. the pointer type carries its parameter list, so the arguments
+   classify by the prototype and a float rides its s-slot exactly as a direct
+   call's does -- the value alone could never say so, being the widened double. */
 float fvia(float (*p)(int, int), int a, int b){ return p(a, b) + 1.0f; }
+float fviaf(float (*p)(float, double, float), float a, float b){
+ return p(a, 2.0, b) + 1.0f; }
+
+/* the playdate's own shape: a struct of them, reached through `->` */
+struct api { float (*mix)(int, float, float, int); };
+float fvias(const struct api *g, float a, float b){ return g->mix(3, a, b, 2); }
+
+/* ..and a dispatch table, where the element type reaches the call head through
+   the pointer sum a[i] desugars to */
+float fviat(float (**tbl)(float, float), float a, float b){ return tbl[1](a, b) * 2.0f; }

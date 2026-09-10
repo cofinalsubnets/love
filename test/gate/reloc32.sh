@@ -10,9 +10,10 @@
 #
 # thumb2 is deliberately not a lane. Its `la` is a MOVW/MOVT pair, an absolute
 # carried as two split immediates that no loader slides by adding to a word, so
-# the linker refuses --emit-relocs there. thumb1 and thumb2sp route `la` through
-# a pooled ABS32 word instead, which is why they can answer. The refusal is a row
-# here too: a silently short table is the failure that would actually cost.
+# the driver refuses --emit-relocs there before the link runs. thumb1 and thumb2sp
+# route `la` through a pooled ABS32 word instead, which is why they can answer.
+# Both refusals are rows here: a silently short table is the failure that would
+# actually cost, and a refusal spelled as an internal error reads as a bug.
 #
 # usage: reloc32.sh OUTDIR MOONCC
 set -u
@@ -88,8 +89,19 @@ lane thumb2sp
 LOVE_NO_IMAGE= "$m" mooncc -t thumb2 -D __STDC_HOSTED__=0 -Ttext 0x0 \
   --emit-relocs -o "$d/no.elf" "$d/rel.c" > "$d/no.err" 2>&1 \
   && fail "thumb2 took --emit-relocs; its MOVW/MOVT absolutes cannot be slid"
-grep -q link-abs-imm "$d/no.err" \
+grep -q "MOVW/MOVT" "$d/no.err" \
   || fail "thumb2 refused for the wrong reason: $(cat "$d/no.err")"
-echo "  thumb2: --emit-relocs refused, naming the MOVW/MOVT site"
+grep -q "internal error" "$d/no.err" \
+  && fail "thumb2 refused as an internal error, not as a flag it cannot answer"
+echo "  thumb2: --emit-relocs refused up front, naming the split immediate"
 
-echo "test_reloc32: --emit-relocs lays a complete and minimal R_ARM_ABS32 table on the pooled-la seats, and refuses on the seat whose absolutes ride split immediates"
+# ..and the 64-bit seats, where the flag has no meaning at all: ldlink carries its
+# own table under -pie. Silence there would have looked like a table that was laid.
+LOVE_NO_IMAGE= "$m" mooncc -Ttext 0x0 --emit-relocs -o "$d/no64.elf" "$d/rel.c" \
+  > "$d/no64.err" 2>&1 \
+  && fail "x64 took --emit-relocs, which lays no table there"
+grep -q -- "--emit-relocs is the arm32 lane" "$d/no64.err" \
+  || fail "x64 refused for the wrong reason: $(cat "$d/no64.err")"
+echo "  x64: --emit-relocs refused as a flag the seat has no answer for"
+
+echo "test_reloc32: --emit-relocs lays a complete and minimal R_ARM_ABS32 table on the pooled-la seats, and refuses up front on the seat whose absolutes ride split immediates and on the seats that carry their own"

@@ -694,13 +694,6 @@ also takes — probe the one you mean.
   return the v6-M lane already implements (`sretm?`); thumb2 has no such lane. It is NOT what
   stops the Playdate SDK header — `mooncc -t thumb2sp -c` compiles `pd_api.h` clean, and the
   `LCDMakeRect` this note used to cite is in no shipped SDK.
-- **a float ARGUMENT through a function POINTER on thumb2/thumb2sp** is passed as a double.
-  mooncc's function-pointer type is `('ptr ('fn ret))` — a return and no parameter list — so
-  an indirect call classifies each argument by the value it holds, and gen widens every float
-  to a double before the call site sees it. A DIRECT call reads the prototype and places the
-  float in its own s-slot (below), so the two disagree. Doubles and everything word-sized are
-  right either way; only an actual `float` argument through a pointer is wrong, and it is
-  wrong in silence. Closing it means carrying parameter types in the pointer's type.
 - **a MEMORY-class composite RETURN on a64 and rv64** — `no lane for returning this
   80-byte struct by value on <tgt>`. Probe: `typedef struct { long a[10]; } R;` with a
   definition that returns one; a bare prototype compiles everywhere.
@@ -737,8 +730,21 @@ float HFA aligns to ONE slot and so may straddle a d-register — `f(float, stru
 puts the struct in s1:s2 — which is why its words ride the slots one at a time. The allocator
 is a 16-bit mask (`vfpn`/`vfpm`) riding where the other seats carry an xmm count. Two new holo
 ops carry the odd slots, which have no f-register name: `movsnxr`/`movsnrx`, VMOV between a gp
-register and a NUMBERED single. The gate is `test/gate/thumb.sh`'s `f` lane, 13 differential
+register and a NUMBERED single. The gate is `test/gate/thumb.sh`'s `f` lane, 16 differential
 checks against `arm-none-eabi-gcc -mfloat-abi=hard` on both seats.
+
+**An INDIRECT call places its floats too, since 2026-09-10.** A function-pointer type is
+`('ptr ('fn ret ptys))` now — the parameter types ride it, laid by the declarator that spelled
+them — and a call through one classifies by that list exactly as a direct call classifies by
+its prototype. It had to: gen widens every float to a double before a call site sees it, so
+the value alone can never say a `float` was written. The head's type is read off the
+expression (`hdty9`), which covers a name, a `->` chain and a dispatch table's element — the
+arguments classify before the head evaluates, so it cannot come off the compiled value. A
+declarator with no prototype still parks `()` and its arguments still classify by themselves,
+and so does a VARIADIC one — AAPCS-VFP keeps a variadic argument out of the co-processor
+registers whatever it was declared as, and no `...` rides the type to say so, so a list there
+would place the named parameters wrong. The arity check stays direct-only: only a direct head
+has a name to put in the gripe.
 
 **`--emit-relocs` landed 2026-09-10** on the arm32 lane: a fully linked image that keeps its
 R_ARM_ABS32 sites in `.rel.<lane>` sections, so a loader placing it at a base of its own can
@@ -747,8 +753,11 @@ slide them — the 32-bit twin of what `ldlink -pie` already does for the 64-bit
 recomputes `S + A` reads back the address already in the field and lands where one that simply
 adds its load delta does. It refuses on plain **thumb2**, whose `la` is a MOVW/MOVT pair — an
 absolute carried as two split immediates that no loader slides by adding to a word;
-thumb1 and thumb2sp route `la` through a pooled ABS32 word and can answer. `test_reloc32`
-links one source twice 64K apart and holds the table to being exactly the words that moved.
+thumb1 and thumb2sp route `la` through a pooled ABS32 word and can answer. That refusal, and
+the one for a 64-bit seat (which carries its own table under `-pie`), are the driver's, said
+before the link runs — a flag the seat cannot answer is a usage error, not a linker fault.
+`test_reloc32` links one source twice 64K apart and holds the table to being exactly the words
+that moved, and holds both refusals to reading as refusals.
 
 An image that carries relocations also **folds** its lanes: a lane whose section would be
 named anything but `.text`/`.rodata`/`.data`/`.bss` joins the header before it, when it is

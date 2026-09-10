@@ -203,19 +203,19 @@ thumb2)
     " = the seven transcendentals BIT-IDENTICAL to the host am floor, incl. the Payne-Hanek big-argument reduction"
   lane a  test/thumb2/liba.c  test/thumb2/harnessa.c  "" 6  30 "thumb2 aligned(N)" \
     " = every aligned(N) global lands on its N after the link; 100+n names the first miss -- see test/thumb2/harnessa.c. the pad inside a section is laid by mooncc either way, so a miss here is sh_addralign: objsecs3's data lanes handing the linker a grain narrower than the stream asked for"
-  lane f  test/thumb2/libf.c  test/thumb2/harnessf.c "" 13 30 "thumb2 bare floats" \
+  lane f  test/thumb2/libf.c  test/thumb2/harnessf.c "" 16 30 "thumb2 bare floats" \
     " = AAPCS-VFP placement vs gcc -mfloat-abi=hard: s0..s15 with back-fill around the doubles, the stack past them, s0 for the return; 100+n names the first miss -- see test/thumb2/harnessf.c"
   lane z  test/thumb2/libz.c  test/thumb2/harnessz.c "-Iapps/moon/include" 18 30 "thumb2 composites+varargs" \
     " = HFA d-pairs + 8B blob + <=4B int one + the AAPCS32 word walk, gcc<->mooncc both directions; 100+n names the first miss -- see test/thumb2/harnessz.c"
-  echo "test_thumb2: mooncc -t thumb2 -c -> ELF32/EM_ARM (la + pairs + VFP + am.c bit-exact + aligned(N) section grain + AAPCS-VFP floats + composites/varargs: 48+45+9+13+6+18 differential checks), ld binds, runs on qemu Cortex-M7" ;;
+  echo "test_thumb2: mooncc -t thumb2 -c -> ELF32/EM_ARM (la + pairs + VFP + am.c bit-exact + aligned(N) section grain + AAPCS-VFP floats + composites/varargs: 48+45+9+16+6+18 differential checks), ld binds, runs on qemu Cortex-M7" ;;
 thumb2sp)
   lane d  test/thumb2/libd.c  test/thumb2/harnessd.c  "" 45 30 "thumb2sp doubles" \
     "; 100+n names the first miss -- soft f64 vs gcc's __aeabi"
   lane am "$am" test/thumb2/harnessam.c "$aminc" 9 60 "thumb2sp am.c" \
     " = BIT-identical through the shared __aeabi helpers"
-  lane f  test/thumb2/libf.c  test/thumb2/harnessf.c "" 13 30 "thumb2sp bare floats" \
+  lane f  test/thumb2/libf.c  test/thumb2/harnessf.c "" 16 30 "thumb2sp bare floats" \
     " = AAPCS-VFP placement vs gcc -mfloat-abi=hard: s0..s15 with back-fill around the doubles, the stack past them, s0 for the return; 100+n names the first miss -- see test/thumb2/harnessf.c"
   lane z  test/thumb2/libz.c  test/thumb2/harnessz.c "-Iapps/moon/include" 18 30 "thumb2sp composites+varargs" \
     ""
-  echo "test_thumb2sp: mooncc -t thumb2sp (soft f64 over __aeabi, AAPCS-VFP floats) -> 45+9+13+18 differential checks vs gcc on qemu Cortex-M4" ;;
+  echo "test_thumb2sp: mooncc -t thumb2sp (soft f64 over __aeabi, AAPCS-VFP floats) -> 45+9+16+18 differential checks vs gcc on qemu Cortex-M4" ;;
 esac

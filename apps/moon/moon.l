@@ -1002,6 +1002,12 @@
        arm? (arm32? tgt)
        _ (? (arm? && pie) (udie 2 "cc: -pie needs an MMU; an arm32 link is bare metal") 0)
        _ (? (arm? && !(charm? org)) (udie 2 "cc: an arm32 link needs -Ttext <addr>") 0)
+       ; the two ways --emit-relocs cannot be answered, said here rather than left to the
+       ; linker: a 64-bit seat has its own table under -pie, and thumb2's `la` is a
+       ; MOVW/MOVT pair -- an address split across two immediates, which no loader slides
+       ; by adding a base. thumb1 and thumb2sp pool it through a relocatable word.
+       _ (? (relo && !arm?) (udie 2 "cc: --emit-relocs is the arm32 lane's; a 64-bit link carries its own table under -pie") 0)
+       _ (? (relo && (= tgt 'thumb2)) (udie 2 "cc: --emit-relocs cannot answer -t thumb2: its `la` splits an address across MOVW/MOVT, which no loader can slide -- -t thumb2sp pools it") 0)
        ; the map the board's image lays under. -Ttext alone is the one-region
        ; part (mps2's SSRAM, where code and data share a memory): everything at
        ; org, and the file is the image. -Tdata splits it the way every xip mcu

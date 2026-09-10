@@ -8,6 +8,10 @@ float fovf(float,float,float,float,float,float,float,float,float,
 float f2f(double); double f2d(float); int fcmp(float, float);
 float fout(float);
 float fvia(float (*)(int, int), int, int);
+float fviaf(float (*)(float, double, float), float, float);
+float fviat(float (**)(float, float), float, float);
+struct api { float (*mix)(int, float, float, int); };
+float fvias(const struct api *, float, float);
 
 struct F2 { float a, b; };
 struct F4 { float a, b, c, d; };
@@ -19,6 +23,10 @@ struct F2 fmk(float, float);
 
 float gback(float a, double b, float c){ return a + (float)b*2.0f + c*4.0f; }
 float gcrank(int a, int b){ return (float)a * 0.25f + (float)b; }
+float gbf3(float a, double b, float c){ return a + (float)b*2.0f + c*4.0f; }
+float gmix4(int i, float a, float b, int j){ return a*(float)i + b - (float)j; }
+float gsub2(float a, float b){ return a - b*2.0f; }
+static float (*gtbl[2])(float, float) = { 0, gsub2 };
 
 static float t_fadd(float a, float b){ return a + b; }
 static float t_fbf(float a, double b, float c, float d, double e, float f){
@@ -44,5 +52,8 @@ int run(void){
    CK(fhd(X, sd, Y) == X + 3.0f + 10.0f + Y*8.0f);
    struct F2 m = fmk(X, Y); CK(m.a == X && m.b == Y); }
  CK(fvia(gcrank, 6, 3) == gcrank(6, 3) + 1.0f);
- return 13;
+ CK(fviaf(gbf3, X, Y) == gbf3(X, 2.0, Y) + 1.0f);
+ { struct api a = { gmix4 }; CK(fvias(&a, X, Y) == gmix4(3, X, Y, 2)); }
+ CK(fviat(gtbl, X, Y) == gsub2(X, Y) * 2.0f);
+ return 16;
 }
