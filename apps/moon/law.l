@@ -651,8 +651,8 @@
       (refused? (cgn "_Static_assert(0, \"nope\"); int main() { return 0; }"))
       ; every declarator in a declaration infers its own [] bound, not just the
       ; first -- a later one has its dims parsed before the initializer is seen.
-      ; the bytes come from the initializer either way; it is the TYPE that would
-      ; be wrong, and an incomplete b makes a countof() over it read zero.
+      ; the bytes come from the initializer either way; only the type goes
+      ; wrong, and an incomplete b makes a countof() over it read zero.
       (= (cast "char a[]={1}, b[]={2,2}, c[]={3,3,3};")
          '(prog ((gdecl (("a" (arr char 1) (init ((num 1))))
                          ("b" (arr char 2) (init ((num 2) (num 2))))

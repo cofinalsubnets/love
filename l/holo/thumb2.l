@@ -302,7 +302,7 @@
    (thumb-ldss d base off) (thumb-fmem 0xED90 0xED10 0xA00 (frn d) (rn base) off)   ; vldr S[2d]
    (thumb-cvtss2sd d s) (: dn (frn d) sn (frn s) (t32 ((0xEEB7 << 16) | ((dn << 12) | (0xAC0 | sn)))))   ; vcvt.F64.F32 Dd, S[2s]
    (thumb-cvtsd2ss d s) (: dn (frn d) sn (frn s) (t32 ((0xEEB7 << 16) | ((dn << 12) | (0xBC0 | sn)))))   ; vcvt.F32.F64 S[2d], Ds
-   ;; the numbered single view: an AAPCS-VFP argument slot is any of s0..s15, ODD ones
+   ;; the numbered single view: an AAPCS-VFP argument slot is any of s0..s15, odd ones
    ;; included, so these two take the slot number where every float op above takes an
    ;; f-register. VMOV Sk, Rt / VMOV Rt, Sk -- Vn = k >> 1 and the odd bit rides N (bit 7).
    (thumb-movsnxr k g) (: gn (rn g) (t32 (((0xEE00 | (k >> 1)) << 16) | ((gn << 12) | (0xA10 | ((k & 1) << 7))))))
