@@ -41,5 +41,5 @@
       lib (set + (ldarch set (map nread ars) 'thumb2sp))
       runs [['at 0x08000000 (intern ".vectors") 'text 'rodata]
             ['copy 0x20000000 'data 'bss]]
-      _ (ld-write out (ldbare32 'thumb2sp runs lib [["__stack_top__" sram-top]]))
+      _ (ld-write out (ldbare32 'thumb2sp runs lib [["__stack_top__" sram-top]] ()))
       0))

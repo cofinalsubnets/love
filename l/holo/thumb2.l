@@ -302,6 +302,11 @@
    (thumb-ldss d base off) (thumb-fmem 0xED90 0xED10 0xA00 (frn d) (rn base) off)   ; vldr S[2d]
    (thumb-cvtss2sd d s) (: dn (frn d) sn (frn s) (t32 ((0xEEB7 << 16) | ((dn << 12) | (0xAC0 | sn)))))   ; vcvt.F64.F32 Dd, S[2s]
    (thumb-cvtsd2ss d s) (: dn (frn d) sn (frn s) (t32 ((0xEEB7 << 16) | ((dn << 12) | (0xBC0 | sn)))))   ; vcvt.F32.F64 S[2d], Ds
+   ;; the numbered single view: an AAPCS-VFP argument slot is any of s0..s15, ODD ones
+   ;; included, so these two take the slot number where every float op above takes an
+   ;; f-register. VMOV Sk, Rt / VMOV Rt, Sk -- Vn = k >> 1 and the odd bit rides N (bit 7).
+   (thumb-movsnxr k g) (: gn (rn g) (t32 (((0xEE00 | (k >> 1)) << 16) | ((gn << 12) | (0xA10 | ((k & 1) << 7))))))
+   (thumb-movsnrx g k) (: gn (rn g) (t32 (((0xEE10 | (k >> 1)) << 16) | ((gn << 12) | (0xA10 | ((k & 1) << 7))))))
    (thumb-smull dl dh a b)                                    ; smull RdLo, RdHi, Rn, Rm (T1)
       (: ln (rn dl) hn (rn dh) an (rn a) bn (rn b)
          (t32 (((0xFB80 | an) << 16) | ((ln << 12) | ((hn << 8) | bn)))))
@@ -348,6 +353,7 @@
           ('movqxr . thumb-movqxr) ('movqrx . thumb-movqrx)
           ('stsd . thumb-stsd) ('ldsd . thumb-ldsd) ('stss . thumb-stss) ('ldss . thumb-ldss)
           ('cvtss2sd . thumb-cvtss2sd) ('cvtsd2ss . thumb-cvtsd2ss)
+          ('movsnxr . thumb-movsnxr) ('movsnrx . thumb-movsnrx)
           ('clz . thumb-clz)
           ('udivll . t2-udivmod 'div) ('uremll . t2-udivmod 'rem)        ; nullary: the whole expansion
           ('ld . thumb-ld) ('st . thumb-st)

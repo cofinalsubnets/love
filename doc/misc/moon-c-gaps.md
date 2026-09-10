@@ -693,10 +693,14 @@ also takes — probe the one you mean.
   caller; a bare prototype compiles everywhere. AAPCS32 wants the hidden-pointer memory
   return the v6-M lane already implements (`sretm?`); thumb2 has no such lane. It is NOT what
   stops the Playdate SDK header — `mooncc -t thumb2sp -c` compiles `pd_api.h` clean, and the
-  `LCDMakeRect` this note used to cite is in no shipped SDK. What `pdglue.c` is really for is
-  the **float ABI**: the `pd->*` pointers speak AAPCS-VFP, where a float rides s0 (getCrankAngle
-  returns one), and mooncc widens every float to a double in a d-reg. The glue flattens each
-  crossing to words so the moon side never passes a float or a variadic.
+  `LCDMakeRect` this note used to cite is in no shipped SDK.
+- **a float ARGUMENT through a function POINTER on thumb2/thumb2sp** is passed as a double.
+  mooncc's function-pointer type is `('ptr ('fn ret))` — a return and no parameter list — so
+  an indirect call classifies each argument by the value it holds, and gen widens every float
+  to a double before the call site sees it. A DIRECT call reads the prototype and places the
+  float in its own s-slot (below), so the two disagree. Doubles and everything word-sized are
+  right either way; only an actual `float` argument through a pointer is wrong, and it is
+  wrong in silence. Closing it means carrying parameter types in the pointer's type.
 - **a MEMORY-class composite RETURN on a64 and rv64** — `no lane for returning this
   80-byte struct by value on <tgt>`. Probe: `typedef struct { long a[10]; } R;` with a
   definition that returns one; a bare prototype compiles everywhere.
@@ -723,6 +727,28 @@ the reserved converter scratch; VCMP+VMRS for NaN-honest flags), with `am.c` run
 BIT-IDENTICAL to the host on the M7. By-value composites + varargs on thumb2 (a {double,double}
 HFA rides d-pairs per the AAPCS32-VFP rule; va_list is gcc's one running pointer). `la` on
 thumb2 lowers to the MOVW/MOVT absolute pair, and `leax` to `ADD.W Rd,Rn,Rm,LSL#n`.
+
+**AAPCS-VFP floats landed 2026-09-10** on thumb2 and thumb2sp. gen keeps every float widened
+to a double in a register, as it always has; what changed is the SEAM. A float argument now
+rides one of s0..s15, taking the lowest free slot, so it back-fills the hole a double left
+(`f(float, double, float)` is s0, d1, s1 — gcc's exact placement); a float result rides s0;
+past the file a float takes a 4-byte stack word and the register file closes behind it. A
+float HFA aligns to ONE slot and so may straddle a d-register — `f(float, struct{float,float})`
+puts the struct in s1:s2 — which is why its words ride the slots one at a time. The allocator
+is a 16-bit mask (`vfpn`/`vfpm`) riding where the other seats carry an xmm count. Two new holo
+ops carry the odd slots, which have no f-register name: `movsnxr`/`movsnrx`, VMOV between a gp
+register and a NUMBERED single. The gate is `test/gate/thumb.sh`'s `f` lane, 13 differential
+checks against `arm-none-eabi-gcc -mfloat-abi=hard` on both seats.
+
+**`--emit-relocs` landed 2026-09-10** on the arm32 lane: a fully linked image that keeps its
+R_ARM_ABS32 sites in `.rel.<lane>` sections, so a loader placing it at a base of its own can
+slide them — the 32-bit twin of what `ldlink -pie` already does for the 64-bit seats through
+`love_rela`. Each entry names symbol 0, whose `st_value` is 0 by ELF's rule, so a loader that
+recomputes `S + A` reads back the address already in the field and lands where one that simply
+adds its load delta does. It refuses on plain **thumb2**, whose `la` is a MOVW/MOVT pair — an
+absolute carried as two split immediates that no loader slides by adding to a word;
+thumb1 and thumb2sp route `la` through a pooled ABS32 word and can answer. `test_reloc32`
+links one source twice 64K apart and holds the table to being exactly the words that moved.
 
 **Parse-side and gen-side type twins drift silently.** `tsz`/`talign` (parse) and `(wsize g)`
 (gen) once disagreed on pointer width, mislaying every struct containing a pointer on both

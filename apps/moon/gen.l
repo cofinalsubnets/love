@@ -94,6 +94,26 @@
    argregs-t32 '(r0 r1 r2 r3)                        ; aapcs32: r0..r3  through argr -- a VALUE
                                                     ; binding resolves in source order)
    (xmmreg i) (name ("f" + show i))                ; the SysV double arg registers f0..f7
+   ; -- the AAPCS-VFP argument slots (t32f): s0..s15, one per float and an aligned pair per
+   ; double, each candidate taking the LOWEST free run -- so a float back-fills the hole an
+   ; earlier double left. the state is a 16-bit mask riding where the other seats carry an xmm
+   ; COUNT, and both start at 0. once a candidate misses, the mask goes FULL and every later
+   ; one takes the stack: the pcs closes the co-processor file behind the first stack float.
+   (vfpn m n a)                                    ; the lowest a-aligned run of n free slots, or -1
+    (: (go i) (? (16 < i + n) -1                   ;  -- a NUMBER, since slot 0 is the common seat
+                 (0 = (m & (((1 << n) - 1) << i))) i
+                 (go (i + a)))
+       (go 0))
+   (vfpm m i n) (m | (((1 << n) - 1) << i))        ; the mask with that run taken
+   vfpx 65535                                      ; the full mask
+   ; a float crosses the seam as binary32 in one slot. an EVEN slot is the low half of dK,
+   ; which every f-register op already names, so the convert lands there outright; an ODD one
+   ; has no f-register name, so the word bounces through r12 -- free at both seams -- and s30
+   ; (f15's own single view, the narrow scratch, never an argument slot) is the other end.
+   (vfpst k fS) (? (0 = k & 1) [['cvtsd2ss (xmmreg (k // 2)) fS]]        ; the double in fS -> slot k
+                   [['cvtsd2ss 'f15 fS] ['movsnrx 'r12 30] ['movsnxr k 'r12]])
+   (vfpsv k base off) (? (0 = k & 1) [['stss base off (xmmreg (k // 2))]]   ; slot k -> a 4-byte home
+                         [['movsnrx 'r12 k] ['st base off 'r12]])
    (bad? x) (= x 'bad)                             ; the gripe carrier (gripe/gripe?/okv?) lives in lex.l -- parse answers one too
    ; -- the value tuple: every expression answers (ty reg forms) -- its type, the register
    ; holding the value, and the forms that compute it. the flo lane keeps the f0 protocol (its
@@ -457,6 +477,7 @@
    (t32? g) (elem (g 'tgt) '(thumb2 thumb2sp thumb1))   ; the 32-bit thumb ABI family (AAPCS32): armv7e-m + armv6-M share it
    (sp64? {'tgt 'thumb2sp}) 1       ; armv7e-m with an sp-only fpu (the playdate's STM32F746): f64 arithmetic softens
    (v6m? {'tgt 'thumb1}) 1          ; armv6-M refinements only: narrower immediates, no imm-mul, soft-divide, pop-pc epilogue
+   (t32f? g) (t32? g && !(v6m? g))  ; the thumb seats with an fpu, hence AAPCS-VFP: floats ride s0..s15
    (rv64? g) (elem (g 'tgt) '(rv64 wasm))   ; rv64imfd (LP64): 64-bit, 8 gp args, hard doubles, the lr/fp frame
    (wasm? {'tgt 'wasm}) 1          ; ..which wasm rides whole; it differs only where its machine lacks an op
    (gtgt g) (? (wasm? g) 'rv64 (peep g 'tgt 'x64))   ; the ABI name the asm dialect and the lane rosters read
@@ -581,6 +602,23 @@
                 _ (fields 0 <se)
                 (? (<>se <= 8) [(peep cls 0 'int)]
                    [(peep cls 0 'int) (peep cls 1 'int)])))))
+   ; the HFA base: an aggregate whose scalar leaves are all the SAME float type answers that
+   ; type, else (). AAPCS-VFP aligns a co-processor candidate to its base -- a float HFA to one
+   ; slot, a double one to two -- and the eightbyte classes above cannot tell the two apart.
+   (hfab g ty)
+    (: (walk mty acc)
+        (? (flo? mty) (? !acc mty (= acc mty) acc 'no)
+           (arr? mty) (walk <>mty acc)
+           (stru? mty) (: e2 (peep (g 'stag) <>mty 0)
+                          (? !(two? e2) 'no (fields <e2 acc)))
+           'no)
+       (fields fs acc)
+        (? !(two? fs) acc
+           (: a2 (walk <>><fs acc) (? (= a2 'no) 'no (fields >fs a2))))
+       (? !(stru? ty) ()
+          (: se (peep (g 'stag) <>ty 0)
+             (? !(two? se) ()
+                (: r (fields <se ()) (? (= r 'no) () r))))))
    (acls2 g ty ca cb) (aclass g ty @ (^ca ^cb) 1)
    (sse2? g ty) (acls2 g ty 'sse 'sse)       ; both eightbytes SSE: the xmm0:xmm1 pair
    (ipair? g ty) (acls2 g ty 'int 'int)      ; both INT: rax:rdx (return/result lanes)
@@ -2849,6 +2887,13 @@
                            !(sse2? g aty ||
                              (= (aone g aty) 'sse && tsz g aty = 8) ||
                              (= (aone g aty) 'int && tsz g aty <= 4))) 'bad
+                       (t32f? g && sse2? g aty)            ; a 16-byte HFA: four float slots, or a d-reg pair
+                        (: fb (hfab g aty)
+                           k (vfpn xmmc 4 (= fb 'float ? 1 2))
+                           (? (k < 0) 'bad
+                              (kls >as (i + 1) gpc (vfpm xmmc k 4) ovc
+                                   (. [(= fb 'float ? ['sn k 4] ['x2 (k // 2)])
+                                       (tor0 g a + cell4w)] acc))))
                        (sse2? g aty)                       ; a two-double struct arg: push its pair (re on top), an xmm pair target
                         (? (6 < xmmc) 'bad
                            (kls >as (i + 1) gpc (xmmc + 2) ovc
@@ -2934,6 +2979,35 @@
                                    (aval + '((push r0))))
                           (? (t32? g && va? && wd2)        ; a t32 variadic call rides the base pcs: no d-reg doubles
                               (nolane g ("no lane for a double in a variadic call" + ontgt g))
+                             ; AAPCS-VFP: a bare float takes ONE slot, back-filling the hole a
+                             ; double left, and the cell still carries the widened double -- the
+                             ; pop narrows it into the slot. past the file, a 4-byte stack word,
+                             ; and the mask closes behind it.
+                             (t32f? g && (= aty 'float))
+                              (: k (vfpn xmmc 1 1)
+                                 (? (0 <= k) (kls >as (i + 1) gpc (vfpm xmmc k 1) ovc
+                                                  ([['s k] rpush] . acc))
+                                    (kls >as (i + 1) gpc vfpx (ovc + 4)
+                                         ([['ov ovc 4]
+                                           (asflo g a + [['cvtsd2ss 'f15 (xmmreg 0)]
+                                                         ['stss 'sp ovc 'f15]])] . acc))))
+                             ; a two-float HFA: two slots aligned to ONE, so it may straddle a
+                             ; d-register boundary -- the words ride the slots one at a time
+                             (t32f? g && (= one 'sse) && (= (hfab g aty) 'float))
+                              (: k (vfpn xmmc 2 1)
+                                 (? (0 <= k) (kls >as (i + 1) gpc (vfpm xmmc k 2) ovc
+                                                  ([['sn k 2] rpush] . acc))
+                                    (kls >as (i + 1) gpc vfpx (ovc + 8)
+                                         ([['ov ovc 8]
+                                           (aval + [['st 'sp ovc 'r0] ['st 'sp (ovc + 4) 'r1]])] . acc))))
+                             (t32f? g && wd2)                 ; a double, or a one-double HFA: an aligned slot pair
+                              (: k (vfpn xmmc 2 2)
+                                 (? (0 <= k) (kls >as (i + 1) gpc (vfpm xmmc k 2) ovc
+                                                  ([['x (k // 2)] rpush] . acc))
+                                    (: ov8 ((ovc + 7) & -8)
+                                       (kls >as (i + 1) gpc vfpx (ov8 + 8)
+                                            ([['ov ov8 8]
+                                              (aval + [['st 'sp ov8 'r0] ['st 'sp (ov8 + 4) 'r1]])] . acc)))))
                              (v6m? g && (= aty 'float))    ; v6-M base ABI: a bare float arg is one word (binary32,
                               (: av1 (asflo g a              ;  the gcc shape -- ai_flo_t is float on a 32-bit love)
                                       + '((cvtsd2ss f0 f0) (movqrx r0 f0)))
@@ -2960,8 +3034,6 @@
                              (rv64? g && va? && wd2)
                               (kls >as (i + 1) gpc xmmc (ovc + 1) ([['ov ovc] opush] . acc))
                              (wd2 && xmmc < 8) (kls >as (i + 1) gpc (xmmc + 1) ovc ([['x xmmc] rpush] . acc))
-                             (t32? g && wd2)              ; a t32 fp/blob overflow arg (9+ doubles): the 4-byte slot can't carry it
-                              (nolane g ("no lane for a double argument past the register file" + ontgt g))
                              (!wd2 && gpc < ngp g) (kls >as (i + 1) (gpc + 1) xmmc ovc ([['g gpc] rpush] . acc))
                              (t32? g) (kls >as (i + 1) gpc xmmc (ovc + 4) ([['ov ovc 4] opush] . acc))
                              (kls >as (i + 1) gpc xmmc (ovc + 1) ([['ov ovc] opush] . acc)))))))))))
@@ -2983,7 +3055,7 @@
                                      (go1 >l1 (? (ov? <l1) (<l1 . acc1) acc1)))
                     (go1 kr ()))                          ; overflow entries, reversed (deepest pushes first)
              rgr (: (go2 l2 acc2) (? !(two? l2) acc2
-                                     (go2 >l2 (? (elem <<<l2 '(g g2 g4 x x2 p2 ezd))
+                                     (go2 >l2 (? (elem <<<l2 '(g g2 g4 x x2 p2 ezd s sn))
                                                       (<l2 . acc2) acc2)))
                     (go2 kr ()))                          ; pushing register entries, reversed (pops run forward)
              (pushcat l3 acc3) (? !(two? l3) acc3 (pushcat >l3 (acc3 + <><l3)))
@@ -3014,6 +3086,14 @@
                                             + '((add sp sp 16)))
                                            ((<>kc @ 'g [['pop (argr g <>>kc)]] ['(pop r0) ['movqxr (xmmreg <>>kc) 'r0]])
                                             + (<>>>kc @ 'g [['pop (argr g <>>>>kc)]] ['(pop r0) ['movqxr (xmmreg <>>>>kc) 'r0]])))
+                                       's    ; a float: the cell holds the widened double, the slot takes it narrowed
+                                        ([['ldsd 'f15 'sp 0]] + vfpst <>kc 'f15 + '((add sp sp 16)))
+                                       'sn   ; n float words into n consecutive slots, off the same cell
+                                        (: (go i acc5)
+                                            (? (<>>kc <= i) acc5
+                                               (go (i + 1) (acc5 + [['ld 'r12 'sp (4 * i)]
+                                                                    ['movsnxr (<>kc + i) 'r12]])))
+                                           (go 0 () + '((add sp sp 16))))
                                        (? (arm? g) [['ldsd (xmmreg <>kc) 'sp 0] '(add sp sp 16)]   ; a lone double
                                           (spop 'r0 + [['movqxr (xmmreg <>kc) 'r0]]))))))))
                      (go4 kr ()))
@@ -3078,7 +3158,8 @@
              (? dir
                  (: ; v6-M base ABI: a double result arrives in r0:r1, a bare float as one word
                     ; (binary32 in r0 -- widen it) -- either lands on the f0 fiction
-                    fres (? !(v6m? g && flo? ret) ()
+                    fres (? (t32f? g && (= ret 'float)) '((cvtss2sd f0 f0))   ; AAPCS-VFP: the result is binary32 in s0
+                            !(v6m? g && flo? ret) ()
                             (= ret 'float) '((movqxr f0 r0) (cvtss2sd f0 f0))
                             '((movqxr f0 r0)))
                     ; the hidden sret pointer rides the first argument register (rdi on x64, r0
@@ -3088,7 +3169,8 @@
                     (mkv ret 'r0 (pf + spills + ezf + pops + setal + srin + [['call (intern <>hd)]] + fres + srout + clean + relods)))
                 (: hr (cgexpr g env hd ())                   ; a function-pointer value: park (x64 rbx; a64 x15), callr
                    pk (pkr g)
-                   fres (? !(v6m? g && flo? (fnret (vty hr))) ()
+                   fres (? (t32f? g && (= (fnret (vty hr)) 'float)) '((cvtss2sd f0 f0))
+                           !(v6m? g && flo? (fnret (vty hr))) ()
                            (= (fnret (vty hr)) 'float) '((movqxr f0 r0) (cvtss2sd f0 f0))
                            '((movqxr f0 r0)))
                    (? (bad? hr) 'bad
@@ -3778,6 +3860,11 @@
           ; value deaddef takes away; an unspelled def is a stale one the forwarders keep
           (op = 'movqxr) [([<>>f] + (t32? g ? (qtwin <>>f) ())) () ()]
           (op = 'movqrx) [() ([<>f] + (t32? g ? (qtwin <>f) ())) 1]
+          ; the numbered single moves: an s-slot is no gp register, so one reads its gp and
+          ; the other defines one. the slot write is a side effect nothing here can see, so
+          ; movsnxr is never droppable
+          (op = 'movsnxr) [[<>>f] () ()]
+          (op = 'movsnrx) [() [<>f] 1]
           (elem op '(cvtsi2sd cvtui2sd)) [[<>>f] () ()]
           (elem op '(cvttsd2si cvttsd2ui)) [() [<>f] ()]
           (elem op fldops) [[<>>f] () ()]
@@ -7102,7 +7189,8 @@
                    (? (bad? r) 'bad
                       (flo? rt)                                        ; a double return leaves f0 (xmm0; never inline -- gated);
                        (asflo g r                                      ; v6-M base ABI carries a double out on the r0:r1 pair,
-                        + (? !(v6m? g) ()                              ; a bare float as one word (binary32 in r0)
+                        + (? (t32f? g && (= rt 'float)) '((cvtsd2ss f0 f0))   ; AAPCS-VFP: narrow into s0, d0's own low half
+                             !(v6m? g) ()                              ; a bare float as one word (binary32 in r0)
                              (= rt 'float) '((cvtsd2ss f0 f0) (movqrx r0 f0))
                              '((movqrx r0 f0)))
                         + epj)
@@ -7610,6 +7698,38 @@
                   !(sse2? g pty ||                      ; one (the gp lane's word store IS its <=4 bytes);
                     aone g pty == 'sse && tsz g pty = 8 ||       ; mixed/int-pair composites refuse loud
                     aone g pty == 'int && tsz g pty <= 4)) 'bad
+                 ; -- the AAPCS-VFP param seats (t32f). a float HFA aligns to ONE slot and can
+                 ; straddle a d-register, so its words come home one at a time; everything else
+                 ; is a d-register pair. a float's frame slot holds the binary32 word, which is
+                 ; exactly what fldf 'float reads back.
+                 (t32f? g && stru? pty && (= (hfab g pty) 'float))
+                  (: n (tsz g pty // 4)
+                     k (vfpn xmmi n 1)
+                     (? (k < 0) (nolane g ("no lane for a float HFA param past the register file" + ontgt g))
+                        (: off (nslot g (tsz g pty <= 8 ? 8 16))
+                           (go i acc9) (? (n <= i) acc9
+                                          (go (i + 1) (acc9 + vfpsv (k + i) 'r4 (off + 4 * i))))
+                           (spill hp >ps gpi (vfpm xmmi k n) ovi ([<p off pty] . env) (acc + go 0 ())))))
+                 (t32f? g && sse2? g pty)                  ; a two-double HFA: an adjacent d-pair
+                  (: k (vfpn xmmi 4 2)
+                     (? (k < 0) (nolane g ("no lane for an HFA param past the register file" + ontgt g))
+                        (: off (nslot g 16) d (k // 2)
+                           (spill hp >ps gpi (vfpm xmmi k 4) ovi ([<p off pty] . env)
+                                  (acc + fstf g 'double 'r4 off (xmmreg d)
+                                       + fstf g 'double 'r4 (off + 8) (xmmreg (d + 1)))))))
+                 (t32f? g && (= pty 'float))               ; a bare float: one slot, else the caller's 4-byte word
+                  (? (0 <= vfpn xmmi 1 1)
+                     (: k (vfpn xmmi 1 1) off (nslot g 8)
+                        (spill hp >ps gpi (vfpm xmmi k 1) ovi ([<p off pty] . env)
+                               (acc + vfpsv k 'r4 off)))
+                     (spill hp >ps gpi vfpx (ovi + 4) ([<p (ovb g + ovi) pty] . env) acc))
+                 (t32f? g && (flo? pty || stru? pty && (= (aone g pty) 'sse)))   ; a double, or a one-double HFA
+                  (? (0 <= vfpn xmmi 2 2)
+                     (: k (vfpn xmmi 2 2) off (nslot g 8)
+                        (spill hp >ps gpi (vfpm xmmi k 2) ovi ([<p off pty] . env)
+                               (acc + fstf g 'double 'r4 off (xmmreg (k // 2)))))
+                     (: ov8 ((ovi + 7) & -8)
+                        (spill hp >ps gpi vfpx (ov8 + 8) ([<p (ovb g + ov8) pty] . env) acc)))
                  (v6m? g && stru? pty && aone g pty == 'sse)           ; v6-M 8B blob param: the even-odd gp pair (the caller's g2 lane)
                   (: gpe ((gpi + 1) & -2)
                      (? (gpe + 2 <= ngp g)
@@ -7689,8 +7809,6 @@
                                           ['st 'r4 (off + 4) (argr g (gpe + 1))]])))
                         (: ov8 ((ovi + 7) & -8)
                          (spill hp >ps 4 xmmi (ov8 + 8) ([<p (ovb g + ov8) pty] . env) acc))))
-                 (t32? g && flo? pty)                   ; a t32 double param past d7: the 4-byte slot can't carry it
-                  (nolane g ("no lane for a double param past the register file" + ontgt g))
                  (d128? pty)                            ; a wide param: not carried (mirror of the arg refusal)
                   (nolane g "a wide value is not carried as a parameter")
                  (!(flo? pty) && gpi < ngp g)

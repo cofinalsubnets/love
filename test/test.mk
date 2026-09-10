@@ -19,7 +19,7 @@
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_raw test_raw_a64 test_raw_bake test_raw_rv64 \
-  test_refuzz test_root test_rv64 test_rp2040 test_rvboot test_sat test_sb test_seat test_seed \
+  test_refuzz test_reloc32 test_root test_rv64 test_rp2040 test_rvboot test_sat test_sb test_seat test_seed \
   test_selfhost test_slow test_softfp test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
@@ -44,7 +44,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_tools test_web test_hostnif test_doc test_glaze test_hook test_sat test_holo test_holowasm test_as \
 	test_holofuzz test_glazefuzz test_encver test_kore test_refuzz test_sb test_vi \
 	test_clay test_moonfuzz test_forge test_gates \
-	test_cts test_libc test_ulp test_softfp test_raw \
+	test_cts test_libc test_ulp test_softfp test_reloc32 test_raw \
 	test_drv test_hdiff test_tco0 nettest test_wake test_gz test_cpio test_fat32 test_root \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
@@ -573,6 +573,12 @@ test_ulp: host
 # real hardware here, built by the system cc and by mooncc on all three backends.
 test_softfp: host
 	@sh test/gate/softfp.sh $(ho) $m
+# test_reloc32 -- --emit-relocs on the arm32 lane: a fully linked image that keeps its
+# R_ARM_ABS32 sites, so a loader placing it at a base of its own can slide them. The gate
+# links one source twice, 64K apart, and holds the table to being exactly the words that
+# moved -- and holds the seat whose absolutes ride MOVW/MOVT to refusing outright.
+test_reloc32: host
+	@sh test/gate/reloc32.sh $(ho) $m
 # The rung-2 self-host gate: compile the love AND host lanes with mooncc (gcc/clang only
 # LINKS), then run the whole corpus through the all-mooncc binary -- the compiler compiles
 # the runtime it runs on. OPT-IN; x86-64 only; the binary carries no image, so a fresh egg.

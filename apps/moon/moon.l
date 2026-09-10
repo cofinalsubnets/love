@@ -983,7 +983,7 @@
        0)
    (cc-link ins dst t) (? (= (peep t 'tgt ()) 'wasm) (cc-wasm ins dst t) (cc-link-elf ins dst t))
    (cc-link-elf ins dst (t @ {'is is 'ds ds 'tgt tgt 'os os 'pie pie 'org org 'dorg dorg
-                          'nostd nostd 'vb vb 'ni ni 'rdme rdme}))
+                          'nostd nostd 'vb vb 'ni ni 'rdme rdme 'relo relo}))
     ; -os freebsd links on x64 only (the one lane with a table + mksys twin);
     ; any other tgt under it is refused rather than half-built.
     (: _ (? (= os 'freebsd && ! (= tgt 'x64))
@@ -1020,14 +1020,14 @@
        ; line named is what the link meant, and the implicit one is the fallback.
        lib (all + arload all ars tgt)
        set (lib + rtpull lib tgt os nostd vb)
-       ps (? arm? (ldbare32 tgt runs set ()) (ldlink tgt pie org set ("love " + <(usplit 43 love-version)) rdme))
+       ps (? arm? (ldbare32 tgt runs set () relo) (ldlink tgt pie org set ("love " + <(usplit 43 love-version)) rdme))
        ; the ei_osabi = 9 brand (rung UV3) is ldlink's now, laid where the header is
        ; made -- this driver used to lay it and kore's `ld` did not, which made two
        ; doors over one linker write two different files.
        nw (ld-write dst ps)
        _ (? (nom? nw) (udie 1 ("cc: cannot write " + dst + " -- " + show nw)) 0)
        (chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [-x c] [-t x64|a64|rv64] [-os linux|none|freebsd] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
+   usage "usage: mooncc [-c] [-pie] [--emit-relocs] [-x c] [-t x64|a64|rv64] [-os linux|none|freebsd] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n (tally s)
@@ -1140,7 +1140,7 @@
    ; the positional walk had and the bare tablet lost. it is not a wrapper on `{}`: the
    ; literal has to be complete and it is wanted at two sites, so it is spelled once.
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
-                    'nostd () 'vb () 'ni () 'rdme () 'dia dia}
+                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'dia dia}
    (flags as t)
     (? !(two? as)
        (: _ (pin t 'is (rev (peep t 'is ())))
@@ -1156,6 +1156,11 @@
              ((a = "--version") || (a = "-v"))
               (: _ (puts ("mooncc " + love-version)) _ (putc 10) (quit 0))
              (a = "-pie") (flags r (pin t 'pie 1))
+             ; --emit-relocs: keep the ABS32 sites in .rel.* sections beside a fully
+             ; linked image, so a loader placing it at a base of its own can slide them.
+             ; the arm32 lane only -- ldlink's -pie already answers this on the 64-bit
+             ; seats, through its own table and our startup.
+             (a = "--emit-relocs") (flags r (pin t 'relo 1))
              (a = "-I") (? (two? r) (flags >r (fpush t 'is <r)) (udie 2 usage))
              (a = "-D") (? (two? r) (flags >r (fpush t 'ds <r)) (udie 2 usage))
              (a = "-U") (? (two? r) (flags >r (fpush t 'ds ['u <r])) (udie 2 usage))

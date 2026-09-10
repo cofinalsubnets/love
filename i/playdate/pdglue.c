@@ -1,9 +1,9 @@
-// the SDK half: the ONLY file that includes pd_api.h, gcc-compiled on device
-// (mooncc parses no SDK header and, more to the point, the pd->* function
-// pointers speak the hard-float SP ABI -- getCrankAngle returns a float in
-// s0 -- while mooncc's floats ride widened-as-double d-regs. every crossing
-// flattens to ints and pointers here, so the seam stays word-only and the
-// moon side never sees a float or a variadic.)
+// the SDK half: the only file that includes pd_api.h. every crossing flattens
+// to ints and pointers here, so the seam stays word-only -- which still buys
+// the variadic logToConsole, and buys the float args a function POINTER cannot
+// type (mooncc reads a prototype's floats onto s0..s15, but ('fn ret) carries
+// no parameter list, so an indirect one would ride a d-reg). a float RESULT is
+// read from s0, so getCrankAngle needs nothing.
 #include "pd_api.h"
 #include "pdglue.h"
 
