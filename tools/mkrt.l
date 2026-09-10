@@ -47,10 +47,10 @@
     (: w ("" + getenv "COOKJOBS")
        n #w
        (go k a) (? (n <= k) a
-                   ((w k < 48) || (57 < w k)) 0
-                   (go (k + 1) (a * 10 + (w k) - 48)))
-       v (? (0 < n) (go 0 0) 0)
-       (? (1 < v) v (rt-cores 0)))
+                   (w k < 48 || 57 < w k) 0
+                   (go (k + 1) (a * 10 + w k - 48)))
+       v (0 < n ? (go 0 0) 0)
+       (1 < v ? v (rt-cores 0)))
    ; half the cores /proc/cpuinfo names, plus one -- the same width rule cook's bare -j
    ; takes. no /proc (the BSDs) is 1, the serial fan.
    (rt-cores _)
@@ -58,9 +58,9 @@
        (? !(hot? q) 1
           (: s (slurp q)
              _ (close q)
-             n (foldl (\ a l ((9 <= tally l) && (snip l 0 9 = "processor") ? (a + 1) a))
+             n (foldl (a \ l \ 9 <= #l && snip l 0 9 = "processor" ? (a + 1) a)
                       0 (lines s))
-             (? (0 < n) (n // 2 + 1) 1))))
+             (0 < n ? (n // 2 + 1) 1))))
    ; ~600 member compiles across the three archives and none reads another, so a pool of
    ; children fills the member cache and `one` below indexes the archives out of it,
    ; every member a hit. the cache IS the join -- without one a child's work dies with
@@ -74,7 +74,7 @@
           ; first spends the children's cores and then runs one share alone, which is
           ; half the width for the whole second half.
           _ (rtwarm "apps/moon/" ts 'linux () w 0)
-          (foldl (\ _ p (wait p)) 0 ps)))
+          (foldl (_ \ wait) 0 ps)))
    (rt-kids rtwarm ts w i acc)
     (? (w <= i) acc
        (: p (fork 0)

@@ -24,10 +24,8 @@
 (:
    ; --- the display, as lux reads it: DISPLAY -> the unix socket, the cookie off
    ;     XAUTHORITY or ~/.Xauthority when the server wants one ---
-   (dispof d) (? (#d < 2) "0"
-                 (: b (snip d 1 #d)
-                    (: (go i) ((i = tally b) || (b i = 46) ? (snip b 0 i) (go (i + 1)))
-                       (go 0))))
+   (dispof d) (#d < 2 ? "0" (:- (go 0) b (snip d 1 #d)
+               (go i) (i = #b || b i = 46 ? (snip b 0 i) (go (i + 1)))))
    (xauth u) (: v (getenv "XAUTHORITY") (0 < tally v ? v (getenv "HOME" + "/.Xauthority")))
 
    ; --- the requests the wire does not carry: a window of ours, a GC, a title,
@@ -79,11 +77,8 @@
        hdr (x-reply s)
        kpc (<hdr = 1 ? (hdr 1) 0)
        km (tablet 8)
-       _ (: (go i) (i < nkc * kpc ?
-                    (: sym (x-r32 s)
-                       _ (? (i % kpc = 0) (pin km (mink + (i // kpc)) sym) 0)
-                       (go (i + 1))))
-            (go 0))
+       _ (:- (go 0) (go i) (i < nkc * kpc ?
+          (: sym (x-r32 s) (i % kpc = 0 && pin km (mink + i // kpc) sym, go (i + 1)))))
        km)
    ; a keysym -> doomkeys.h's code, () for one doom has no name for. letters arrive
    ; lower-case (the unshifted column), which is what doom's menus want.
@@ -95,8 +90,7 @@
              65470 187 65471 188 65472 189 65473 190 65474 191                    ; f1..f5
              65475 192 65476 193 65477 194 65478 195 65479 196 65480 215 65481 216 ; f6..f12
              32 162}                                                              ; space: use
-   (keyof sym) (: k (peep doomkeys sym ())
-                  (? (charm? k) k ((32 < sym) && (sym < 127)) sym ()))
+   (keyof sym) (: k (doomkeys sym) (? (charm? k) k (32 < sym < 127) sym))
 
    ; --- the driver ---
    (drive s sc win gc wad frames)
@@ -107,18 +101,15 @@
        ; every event waiting on the wire, none waited for; 1 = the window is gone
        (events _) (? !(cue? s) 0
                      (: e (x-next s)
-                        (? !(two? e) 1
-                           (: c (ev-code e)
-                              gone (? (c = 17) 1                                          ; DestroyNotify
-                                      ((c = 33) && ((u32 (ev-raw e) 12) = dl)) 1         ; the close button
-                                      0)
-                              _ (? ((c = 2) || (c = 3))
-                                   (: k (keyof (peep km (ev-detail e) 0))
-                                      (charm? k ? (doom-key k (c = 2)) 0))
-                                   0)
-                              (gone ? 1 (events 0))))))
+                        (? (one? e) 1
+                         (: c (ev-code e)
+                            gone (c @ (17 || 33 && u32 (ev-raw e) 12 = dl) 1)
+                            _ (c = 2 || c = 3 ?
+                                 (: k (keyof (peep km (ev-detail e) 0))
+                                  (charm? k && doom-key k (c = 2))))
+                            (gone ? 1 (events 0))))))
        (loop n) (? (events 0) n
-                   (frames && (n >= frames)) n
+                   (frames && n >= frames) n
                    (: drew (doom-tick ())
                       _ (? drew (: _ (doom-frame buf) (x-putframe s win gc depth buf)) 0)
                       (loop (n + drew))))
@@ -145,9 +136,9 @@
     (? (two? (stat path)) 0
        (: _ (note ("fetching " + url))
           rc ((cite 'kore 'wget-main) ["-q" "-O" path url])
-          (? (rc = 0) 0 (: _ (unlink path) rc))))
+          (? (rc = 0) 0 (unlink path, rc))))
    ; the nest's IWAD rides the exec unless the caller named one: the nest's cwd is the caller's
-   (nest-args dl as) (? (any (\ a (a = "-iwad")) as) as ("-iwad" . ((dl + "/doom1.wad") . as)))
+   (nest-args dl as) (any (= "-iwad") as ? as ("-iwad" . dl + "/doom1.wad" . as))
    (doom-nest as)
     (: exe (selfpath 0)
        here (cwd 0)
@@ -156,7 +147,7 @@
        dl (nest + "/dl")
        (fail s) (say err ("doom: " + s + "\n"), 1)
        (? !(string? exe) (fail "cannot find this binary's path")
-          ((0 < tally (getenv "LOVE_DOOM_NEST")) && (two? (stat bin)))
+          ((0 < #(getenv "LOVE_DOOM_NEST")) && two? (stat bin))
            (fail ("the nest's love carries no doom either: `cook host DOOM=1` under " + nest))
           (two? (stat bin))
            (: _ (setenv "LOVE_DOOM_NEST" "1")
@@ -192,14 +183,14 @@
                  (go 0 0))
    (doom-usage _) (say err "usage: love doom [-iwad FILE] [-display :N] [-frames N]\n", 1)
    (doom-main as)
-    (: (opt a k d) (? !(two? a) d ((<a = k) && (two? >a)) <>a (opt >a k d))
+    (: (opt a k d) (? (one? a) d (<a = k && two? >a) <>a (opt >a k d))
        nestwad (cwd 0 + "/love-" + love-version + "/dl/doom1.wad")
-       wad (opt as "-iwad" (? (two? (stat "dl/doom1.wad")) "dl/doom1.wad" nestwad))
+       wad (opt as "-iwad" (two? (stat "dl/doom1.wad") ? "dl/doom1.wad" nestwad))
        disp (opt as "-display" (getenv "DISPLAY"))
        frames (: f (opt as "-frames" ()) (string? f ? (digits f) 0))
-       (? (any (\ a (a = "-h" || a = "--help")) as) (doom-usage 0)
+       (? (any ("-h" || "--help" \ 1) as) (doom-usage 0)
           !(elem 'doom-start (names ())) (doom-nest as)
-          !(two? (stat wad)) (say err ("doom: no IWAD at " + wad + "\n"), 1)
+          (one? (stat wad)) (say err ("doom: no IWAD at " + wad + "\n"), 1)
           (: dn (dispof (string? disp ? disp ""))
              s (x-connect ("/tmp/.X11-unix/X" + dn))
              (? !(hot? s) (say err ("doom: no display :" + dn + "\n"), 1)

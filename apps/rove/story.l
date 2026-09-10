@@ -48,16 +48,16 @@
  (kind-of lvl c) (: k (lvl 'tiles c)
                     (? k k (c = 35) (kind 35 "#" 242 -1 1) (kind c (string c) 238 -1 ())))
  (tile lvl x y) (: rows (lvl 'rows)
-                   (? (0 <= y < lvl 'h && 0 <= x < #(rows y)) ((rows y) x) 35))   ; off the map is wall
+                   (0 <= y < lvl 'h && 0 <= x < #(rows y) ? (rows y x) 35))   ; off the map is wall
  (wall? lvl x y) (: k (kind-of lvl (tile lvl x y)) (? (k 'solid) 1 0))
  (thing-at lvl x y) (: ts (filter (id \ lvl 'things id 'x = x && lvl 'things id 'y = y) (keys (lvl 'things)))
-                       (two? ts ? (lvl 'things <ts) ()))
+                       (two? ts && lvl 'things <ts))
 
  ; the file's datum -> the level in play, and back. a shown level is a legal file.
  (part k l) (: p (filter (x \ two? x && <x = k) l) (two? p ? ><p ()))
  (level-of d) (: st (part 'start >d)
-                 tiles (foldl (\ t r (pin t (<r 0) (kind (<r 0) (r 1) (r 2) (r 3) (? (r 4) 1 ())))) {} (part 'tiles >d))
-                 things (foldl (\ t r (pin t <r (thing <r (r 1) (r 2) (r 3) (r 4) (r 5) (r 6) (drop 7 r)))) {} (part 'things >d))
+                 tiles (foldl (t \ r \ pin t (<r 0) (kind (<r 0) (r 1) (r 2) (r 3) (? (r 4) 1 ()))) {} (part 'tiles >d))
+                 things (foldl (t \ r \ pin t <r (thing <r (r 1) (r 2) (r 3) (r 4) (r 5) (r 6) (drop 7 r))) {} (part 'things >d))
                  (level (d 1) (? (two? st) <st 1) (? (two? st) (st 1) 1) (part 'map >d) tiles things))
  (data-of lvl) (: (trow c) (: k (lvl 'tiles c) [(string c) (k 'gl) (k 'fg) (k 'bg) (k 'solid ? 'wall ())])
                   (row id) (: t (lvl 'things id) ([id (t 'x) (t 'y) (t 'gl) (t 'fg) (t 'bg) (t 'name)] + (t 'steps)))
@@ -82,9 +82,7 @@
  ; the window's prompt and the command line are cli's editor, a key at a time: enter
  ; takes the line and clears it, escape is the caller's, the rest the editor's
  (edit-line t k c enter esc) (: e (t k) _ (edstep e c)
-   (e 'ev @ 27 (esc ())
-             10 (: l (edtext e) _ (pin t k (ednew ())) (0 < #l ? (enter l)))
-             ()))
+   (e 'ev @ 27 (esc ()) 10 (: l (edtext e) (pin t k (ednew ()), 0 < #l && enter l))))
  (words s) (filter (w \ 0 < #w) (split " " s))
  (joins l sp) (? (one? l) "" (one? >l) <l (<l + sp + joins >l sp))
  (wrap s w) (: (go ws cur acc) (? (one? ws) (rev (cur . acc))
@@ -93,7 +91,7 @@
                                         (0 < #cur) (go ws "" (cur . acc))
                                         (go >ws "" (snip nx 0 w . acc)))))
                (go (words s) "" ()))
- (concat ls) (foldl (\ a l (cat a l)) () ls)               ; cat is the pairwise append
+ (concat ls) (foldl (+) () ls)               ; cat is the pairwise append
  (lines-of s w) (concat (map (l \ wrap l w) (split "\n" s)))
 
  ; --- windows: a thing's dialog, one step at a time ---------------------------------
@@ -115,7 +113,7 @@
              (? (one? st) (pin g 'win ())
                 (: s <st
                    _ (pin w 'steps >st)
-                   (<s @ 'say (each >s (t \ window-say g t))
+                   (<s @ 'say (each >s (window-say g))
                         'ask (pin w 'prompt 1)
                         'hatch (: run (cite 'rove 'rove-run)
                                   (? run (run (), window-say g "you climb back out of the hold.")
@@ -128,7 +126,7 @@
    ws (words ln) v (? (two? ws) <ws "") n (? (two? >ws) <>ws "")
    (book f) (: q (open f "r") (? (hot? q) (: s (slurp q) (close q, s)) ()))
    (with f) (: p (t 'books (nom n))
-               (? !(0 < #n) (window-say g (v + " what?"))
+               (? (0 >= #n) (window-say g (v + " what?"))
                   !p (window-say g ("there is no " + n + " here."))
                   (f p)))
    _ (window-say g ("> " + ln))
@@ -154,23 +152,22 @@
  ; the command line: :q leaves; anything else is not a command
  (command g l) (l @ "q" (pin g 'over 'quit)
                    (pin g 'msg ("not a command: " + l)))
- (story-key g c) (: w (g 'win)
-   _ (? (g 'mode = 'cmd) (edit-line g 'cmd c (l \ (pin g 'mode 'map, command g l)) (\ _ (pins g 'mode 'map 'cmd (ednew ()))))
-        !w (c @ (104 || -1) (move g -1 0)  (108 || -2) (move g 1 0)
-                (107 || -8) (move g 0 -1)  (106 || -9) (move g 0 1)
-                (121 || 377) (move g -1 -1) (117 || 373) (move g 1 -1)
-                (98 || 354) (move g -1 1) (110 || 366) (move g 1 1)
-                58 (pins g 'mode 'cmd 'cmd (ednew ()) 'msg "")
-                63 (open-window g (thing 'help 0 0 "?" 220 -1 "help" '((say "hjkl yubn and the arrows move you. walk into a thing to talk to it. esc closes a window; :q leaves."))))
-                27 (pin g 'msg "")
-                g)
-        (w 'prompt) (edit-line w 'line c (l \ interp g l) (\ _ (pin g 'win ())))
-        (c @ 27 (pin g 'win ())
-             (13 || 10 || 32) (step g)
-             107 (0 < w 'top ? (pin w 'top (w 'top - 1)))
-             106 (w 'top + page-rows g < #(w 'lines) ? (pin w 'top (w 'top + 1)))
-             g))
-   g)
+ (story-key g c) (:- g w (g 'win)
+  _ (? (g 'mode = 'cmd) (edit-line g 'cmd c (l \ (pin g 'mode 'map, command g l)) (\ _ (pins g 'mode 'map 'cmd (ednew ()))))
+       !w (c @ (104 || -1) (move g -1 0)  (108 || -2) (move g 1 0)
+               (107 || -8) (move g 0 -1)  (106 || -9) (move g 0 1)
+               (121 || 377) (move g -1 -1) (117 || 373) (move g 1 -1)
+               (98 || 354) (move g -1 1) (110 || 366) (move g 1 1)
+               58 (pins g 'mode 'cmd 'cmd (ednew ()) 'msg "")
+               63 (open-window g (thing 'help 0 0 "?" 220 -1 "help" '((say "hjkl yubn and the arrows move you. walk into a thing to talk to it. esc closes a window; :q leaves."))))
+               27 (pin g 'msg "")
+               g)
+       (w 'prompt) (edit-line w 'line c (l \ interp g l) (\ _ (pin g 'win ())))
+       (c @ 27 (pin g 'win ())
+            (13 || 10 || 32) (step g)
+            107 (0 < w 'top ? (pin w 'top (w 'top - 1)))
+            106 (w 'top + page-rows g < #(w 'lines) ? (pin w 'top (w 'top + 1)))
+            g)))
 
  ; --- the frame: the map with @ on it, the window over it, a status line --------------
  ; a grid of rows is laid as glyphs then the window is written over it, so the port
@@ -197,10 +194,10 @@
                  (peep spot [x y] 0) (: th (spot [x y]) [(th 'gl) (th 'fg) (th 'bg)])
                  !(y < lvl 'h && x < #((lvl 'rows) y)) [" " -1 -1]        ; past the map: nothing
                  (: k (kind-of lvl (tile lvl x y)) [(k 'gl) (k 'fg) (k 'bg)]))
-   (row y) (: (go x p acc) (? (x < w) (: c (cell (vx + x) (vy + y)) p2 >c
-                                          (go (x + 1) p2 (acc + (= p2 p ? "" (pen p2)) + <c)))
-                              acc)
-              (go 0 () ""))
+   (row y) (:- (go 0 () "")
+    (go x p acc) (x >= w ? acc
+                  (: c (cell (vx + x) (vy + y)) p2 >c
+                   (go (x + 1) p2 (acc + (= p2 p ? "" (pen p2)) + <c)))))
    rows (map row (jot mh))
    ; the window: a box of the dialog's lines, its title in the top border, a prompt or
    ; a more-mark at the foot, laid over the rows it covers
@@ -210,7 +207,7 @@
                foot (? (win 'prompt) ("> " + edtext (win 'line))
                        (win 'top + k < #ls) "-- more --"
                        (one? (win 'steps)) "-- esc --" "-- enter --")
-               inner (map (l \ "| " + pad l (ww - 4) + " |") (shown + (map (\ _ "") (jot (k - #shown))) + [foot]))
+               inner (map (l \ "| " + pad l (ww - 4) + " |") (shown + (map (const "") ^(k - #shown)) + [foot]))
                top ("+-" + pad (win 'title + " ") (ww - 4) "-" + "+")
                box ([top] + inner + [("+" + ((ww - 2) (\ t (t + "-")) "") + "+")])
                x0 ((w - ww) // 2) y0 ((mh - #box) // 2)
@@ -219,31 +216,29 @@
                                ; the pen resets around the box, so the map's colour does not bleed in
                                (snip-cells r x0 + "\e[0m" + pen '(252 -1) + b))
                             (rows i)))
-                    (jot mh))))
-   _ (each rows2 (r \ say j (r + "\e[0m\e[K\r\n")))
+                    ^mh)))
+   _ (each rows2 (r \ say j $ r + "\e[0m\e[K\r\n"))
    ; the cursor shows only where you type: at the command line's end
    _ (say j (? (g 'mode = 'cmd) (":" + edtext (g 'cmd) + "\e[K\e[?25h")
                ("\e[7m" + pad (" " + lvl 'title + "  @ " + show (g 'x) + "," + show (g 'y) + "  " + g 'msg
                                + (win ? "  esc closes" "  ? help  :q leaves")) w + "\e[0m\e[K\e[?25l")))
    ("\e[H" + slurp j))
  ; the first n cells of a painted row: pens have no width, so count the glyphs
- (snip-cells r n) (: (past i) (r i = 109 ? (i + 1) (past (i + 1)))          ; the byte after an SGR's m
-                     (go i k acc) (? (i < #r && k < n)
-                                     (: c (r i)
-                                        (? (c = 27) (: e (past i) (go e k (acc + snip r i e)))
-                                           (go (i + 1) (k + 1) (acc + string c))))
-                                     acc)
-                     (go 0 0 ""))
+ (snip-cells r n) (:- (go 0 0 "")
+  (past i) (r i @ 109 (i + 1) (past (i + 1)))          ; the byte after an SGR's m
+  (go i k acc) (i >= #r || k >= n ? acc
+                (r i @ 27 (: e (past i) (go e k (acc + snip r i e)))
+                 (go (i + 1) (k + 1) (acc + string (r i))))))
 
  ; --- the library: a hall of shelves, one per crew module under root ------------------
- (base p) (: n #p (go k r) (k < n ? (go (k + 1) (p k = 47 ? (k + 1) r)) (snip p r n)) (go 0 0))
- (ends? s t) (: n #s m #t ((m <= n) && (snip s (n - m) n = t)))
- (first-para md) (: ls (split "\n" md)
-                    (go l acc) (? !(two? l) acc
-                                  (0 < #(<l) && !(<l 0 = 35)) (go >l (0 < #acc ? (acc + " " + <l) <l))
-                                  (0 < #acc) acc
-                                  (go >l acc))
-                    (go ls ""))
+ (base p) (: n #p (go k r) (k < n ? (go (k + 1) (p k @ 47 (k + 1) r)) (snip p r n)) (go 0 0))
+ (ends? s t) (: n #s m #t (m <= n && snip s (n - m) n = t))
+ (first-para md) (:- (go ls "")
+  ls (split "\n" md)
+  (go l acc) (? (one? l) acc
+                (0 < #<l && <l 0 != 35) (go >l (0 < #acc ? (acc + " " + <l) <l))
+                (0 < #acc) acc
+                (go >l acc)))
  (head-of f) (: q (open f "r") lift (mod 'libra 'ldoc-md)
                 (hot? q && lift ? (: s (slurp q) (close q, first-para (lift s))) ""))
  (library root) (:
@@ -256,7 +251,7 @@
    ; the hall: a shelf every 4 columns and 3 rows, a border of wall, the hatch at the foot
    w (2 + 4 * cols + 1) h (3 + 3 * rowsn + 2)
    (line y) (: (go x acc) (? (x < w) (go (x + 1) (acc + (? (y = 0 || y = h - 1 || x = 0 || x = w - 1) "#" "."))) acc) (go 0 ""))
-   rows (map line (jot h))
+   rows (map line ^h)
    ; a wing is a folder of files or one lone file; b is where its books lie, and its
    ; header is b/<name>.l either way (ROOT/d/d.l or ROOT/d.l)
    (shelf i d) (: p (root + "/" + d)
@@ -274,10 +269,10 @@
 
  ; --- the runner: the story on cli's stage, a key a turn -----------------------------
  (story-run lvl) (: g (story-new lvl)
-                    (stage (w \ h \ story-frame g w h) (c \ story-key g c) (\ _ (g 'over))))
+                    (stage (w \ h \ story-frame g w h) (c \ story-key g c) (_ \ g 'over)))
  ; the verb: a level file, or the library under a root; the page has its own door (web.l)
  (story-main as) (: p (two? as ? <as "apps/rove/levels/lighthouse.l")
-                     lvl (? (two? (readdir p)) (library p) (load-level p))
+                     lvl (two? (readdir p) ? (library p) (load-level p))
                      (? lvl (story-run lvl) (say err ("story: not a level: " + p + "\n"), 1)))
- _ (pins (cite 'verbs 'tab) 'story story-main))
+ _ (pin (cite 'verbs 'tab) 'story story-main))
 ) ; module story

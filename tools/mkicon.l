@@ -14,10 +14,11 @@
    (num s)   (foldl (\ a c (a * 10 + c - 48)) 0 (bytes s))
    (hexd c)  (? (c <= 57) (c - 48) (c <= 70) (c - 55) (c - 87))
    (hexv s)  (foldl (\ a i (a * 16 + hexd (s i))) 0 (drop 2 ^#s))    ; "0x7e" -> 126
+   (min a b) (a < b ? a b) (max a b) (a < b ? b a)
    ; --- the source: one row list per cell, in cell order (mkfont.l's reading) ------
    (cell line) (: ps (split "{" line)
-                  (? ((! (two? >ps)) || (! (two? >(split "// [" line)))) ()
-                     (map (p \ hexv <(words p)) (split "," <(split "}" (ps 1))))))
+                  (? (one? >ps || one? >(split "// [" line)) ()
+                     (map (hexv * cap * words) (split "," <(split "}" (ps 1))))))
    (cells src) (filter two? (map cell (lines src)))
    ; --- the ink: the palette's red, "#rrggbb" -> (r g b) ----------------------------
    (row nm l) (? (atom? l) () (= <<l nm) <l (row nm >l))
@@ -26,11 +27,11 @@
           (? (= #hex 7) (map (i \ hexv ("0x" + snip hex (1 + 2 * i) (3 + 2 * i))) ^3)
              (: _ (say err "mkicon: no tokyo-night red in config.l\n") (quit 1))))
    ; --- the raster: lit? asks the glyph, the canvas asks lit? through scale and margin
-   (lit? rows y x) ((0 <= y) && (y < 8) && (0 <= x) && (x < 8) && (((rows y) >> (7 - x)) & 1))
+   (lit? rows y x) (0 <= y < 8 && 0 <= x < 8 && (rows y >> (7 - x)) & 1)
    (bbox rows) (: ps (filter (p \ lit? rows <p <>p) (cat (map (y \ map (x \ [y x]) ^8) ^8)))
-                  (? !(two? ps) (: _ (say err "mkicon: an empty glyph\n") (quit 1))
-                     (: ys (map (p \ <p) ps) xs (map (p \ <>p) ps)
-                        (lo l) (foldl (\ a b (a < b ? a b)) <l l) (hi l) (foldl (\ a b (a < b ? b a)) <l l)
+                  (? (one? ps) (say err "mkicon: an empty glyph\n", quit 1)
+                     (: ys (map cap ps) xs (map caup ps)
+                        (lo l) (foldl min <l l) (hi l) (foldl max <l l)
                         [(lo ys) (lo xs) (1 + hi ys) (1 + hi xs)])))            ; [y0 x0 y1 x1)
    (raster rows sz)
    (: b (bbox rows)
@@ -39,7 +40,7 @@
       my ((sz - h * s) // 2) mx ((sz - w * s) // 2)
       (px y x) (lit? rows ((y - my) // s + (b 0)) ((x - mx) // s + (b 1)) ? (ink + [255]) [0 0 0 0])
       ; each scanline led by its filter byte, 0: none
-      (cat (map (y \ 0 . (? ((y < my) || (y >= my + h * s)) (cat (map (_ \ [0 0 0 0]) ^sz))
+      (cat (map (y \ 0 . (? (y < my || y >= my + h * s) (cat (map (_ \ [0 0 0 0]) ^sz))
                              (cat (map (x \ (? ((x < mx) || (x >= mx + w * s)) [0 0 0 0] (px y x))) ^sz))))
                 ^sz)))
    ; --- the file ---------------------------------------------------------------------

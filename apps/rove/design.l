@@ -34,15 +34,15 @@
  ; every key would redraw the whole map
  (fit s n c) (pad (#s > n ? (snip s 0 n) s) n c)
  (set-tile d c) (: lvl (d 'lvl) x (d 'cx) y (d 'cy)
-                   rows (lvl 'rows + map (\ _ "") (jot (nat (y + 1 - lvl 'h))))
+                   rows (lvl 'rows + map (const "") ^(nat (y + 1 - lvl 'h)))
                    r (pad (rows y) (x + 1) " ")
                    r2 (snip r 0 x + string c + snip r (x + 1) #r)
-                   rows2 (map (\ i (i = y ? r2 (rows i))) (jot #rows))
-                   _ (pins lvl 'rows rows2 'h #rows2 'w (foldl (\ a s (#s < a ? a #s)) 0 rows2))
+                   rows2 (map (i \ i = y ? r2 (rows i)) ^#rows)
+                   _ (pins lvl 'rows rows2 'h #rows2 'w (foldl (a \ s \ #s < a ? a #s) 0 rows2))
                    (touch d))
  ; the palette in the file's order; the brush is one of its characters
  (palette d) (sort (keys (d 'lvl 'tiles)))
- (pick d i) (: ks (palette d) (? (i < #ks) (pin d 'brush (ks i), tell d ("brush: " + string (ks i))) (tell d "no such tile")))
+ (pick d i) (: ks (palette d) (i < #ks ? (pin d 'brush (ks i), tell d ("brush: " + string (ks i))) (tell d "no such tile")))
  ; a new kind from one line: CH GLYPH FG BG [wall]
  (add-kind d ln) (: ws (words ln)
                     (? (#ws < 4) (tell d "a tile is: CH GLYPH FG BG [wall]")
@@ -78,7 +78,7 @@
  (prompt d m) (pins d 'mode m 'buf (ednew ()))
  (commit d) (: b (edtext (d 'buf)) m (d 'mode)
                _ (pin d 'mode 'map)
-               (? !(0 < #b) (tell d "nothing entered")
+               (? (0 >= #b) (tell d "nothing entered")
                   (m @ 'id    (: n {} _ (pin n 'id b) (pin d 'new n, prompt d 'glyph))
                        'glyph (pin (d 'new) 'gl (snip b 0 1), prompt d 'name)
                        'name  (pin (d 'new) 'name b, add-thing d)
@@ -116,15 +116,14 @@
    spot (foldl (\ t id (: th (lvl 'things id) (pin t [(th 'x) (th 'y)] th))) {} (keys (lvl 'things)))
    (cell x y) (? (x = lvl 'sx && y = lvl 'sy) ["@" 228 -1]
                  (peep spot [x y] 0) (: th (spot [x y]) [(th 'gl) (th 'fg) (th 'bg)])
-                 !(y < lvl 'h && x < #((lvl 'rows) y)) [" " -1 -1]
+                 (y >= lvl 'h || x >= #(lvl 'rows y)) [" " -1 -1]
                  (: k (kind-of lvl (tile lvl x y)) [(k 'gl) (k 'fg) (k 'bg)]))
-   (row y) (: (go x p acc) (? (x < w)
-                              (: c (cell x y) cur? (x = d 'cx && y = d 'cy) p2 >c
-                                 (go (x + 1) p2 (acc + (= p2 p ? "" (pen p2)) + (cur? ? ("\e[7m" + <c + "\e[27m") <c))))
-                              acc)
-              (go 0 () ""))
+   (row y) (:- (go 0 () "")
+    (go x p acc) (x >= w ? acc
+     (: c (cell x y) cur? (x = d 'cx && y = d 'cy) p2 >c
+      (go (x + 1) p2 (acc + (p2 @ ^p "" (pen p2)) + (cur? ? ("\e[7m" + <c + "\e[27m") <c))))))
    _ (say j ("\e[H\e[0m\e[7m" + fit (" design: " + lvl 'title + " -- " + d 'path + (d 'dirty ? " [+]" "")) w " " + "\e[0m\e[K\r\n"))
-   _ (each (jot mh) (\ y (say j (row y + "\e[0m\e[K\r\n"))))
+   _ (each ^mh (y \ say j (row y + "\e[0m\e[K\r\n")))
    t (thing-at lvl (d 'cx) (d 'cy))
    k (kind-of lvl (tile lvl (d 'cx) (d 'cy)))
    bk (kind-of lvl (d 'brush))
@@ -146,12 +145,11 @@
                    vi (cite 'vi 'vi-main)
                    ; vi on the level's file and a play of the level are stages of their own:
                    ; each leaves the screen and the tty as it found them, so this one re-arms
-                   (visit f) (: _ (save d) _ (f ()) _ (raw 1) (say out "\e[?1049h"))
-                   (step c) (: _ (design-key d c)
-                              (d 'want @ 'vi (pin d 'want (), (? vi (visit (\ _ (vi [p])), reload d) (tell d "no editor on this seat")))
-                                       'play (pin d 'want (), visit (\ _ (story-run (d 'lvl))))
-                                       ()))
+                   (visit f) (save d, f (), raw 1, say out "\e[?1049h")
+                   (step c) (design-key d c,
+                             d 'want @ 'vi (pin d 'want (), (? vi (visit (_ \ vi [p]), reload d) (tell d "no editor on this seat")))
+                                       'play (pin d 'want (), visit (_ \ story-run (d 'lvl))))
                    (stage (w \ h \ design-frame d w h) step (\ _ (d 'over))))
  (design-main as) (design-run (two? as ? <as "apps/rove/levels/lighthouse.l"))
- _ (pins (cite 'verbs 'tab) 'design design-main))
+ _ (pin (cite 'verbs 'tab) 'design design-main))
 ) ; module design

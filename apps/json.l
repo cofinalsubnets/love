@@ -16,14 +16,14 @@
    json-false (jbool 0)
    ; `&&` is value-preserving, so the bare conjunction answers () and not the bit a
    ; predicate owes; `!!` is the clamp. same for json-null? below.
-   (json-bool? v) !!(kind v = 'json-bool)
+   (json-bool? v) (kind v = 'json-bool)
    (json-bool v)  (v ? json-true json-false)
 
    ; null, on its own die -- payload 0 so it nets blue like the nothing it is, but
    ; never `=` json-false.
    jnull          (coin 'json-null ())
    json-null      (jnull 0)
-   (json-null? v) !!(kind v = 'json-null)
+   (json-null? v) (kind v = 'json-null)
 
    ; --- reading --------------------------------------------------------------------
    (jws s i n)  (i < n && elem (s i) '(32 9 10 13) ? (jws s (i + 1) n) i)
@@ -51,10 +51,10 @@
 
    ; a code point out as utf-8 bytes, one (string byte) per byte.
    (jutf8 u) (? (u < 128)   (string u)
-                (u < 2048)  (string (192 + (u // 64)) + string (128 + (u % 64)))
-                (u < 65536) (string (224 + (u // 4096)) + string (128 + ((u // 64) % 64))
+                (u < 2048)  (string (192 + u // 64) + string (128 + (u % 64)))
+                (u < 65536) (string (224 + u // 4096) + string (128 + ((u // 64) % 64))
                                 + string (128 + (u % 64)))
-                (string (240 + (u // 262144)) + string (128 + ((u // 4096) % 64))
+                (string (240 + u // 262144) + string (128 + ((u // 4096) % 64))
                     + string (128 + ((u // 64) % 64)) + string (128 + (u % 64))))
 
    ; \uxxxx, with the surrogate pair rejoined. a lone or unpaired surrogate is passed
@@ -67,7 +67,7 @@
         !(k + 1 < n && s k = 92 && s (k + 1) = 117)
          [(jutf8 u) k]
         (: l (jhex4 s (k + 2) n)
-           (? (atom? l) [(jutf8 u) k]
+           (? (one? l) [(jutf8 u) k]
               (: v <l
                  (? (56320 <= v <= 57343)
                     [(jutf8 (65536 + (u - 55296) * 1024 + (v - 56320))) <>l]
@@ -88,7 +88,7 @@
                         (: c (s k)
                            (? (c = 34) [acc (k + 1)]
                               (c = 92) (: e (jesc s (k + 1) n)
-                                          (? (two? e) (go <>e (acc + <e)) ()))
+                                          (two? e && go <>e (acc + <e)))
                               (c < 32) ()            ; a raw control byte is not json
                               (go (k + 1) (acc + string c))))))
                  (i + 1) "")
@@ -139,35 +139,28 @@
                      (: r (jval s k n)
                       (two? r ?
                        (: e (jws s <>r n)
-                        (? (e >= n)   ()
-                           (s e = 44) (go (e + 1) (<r . acc))
-                           (s e = 93) [(rev (<r . acc)) (e + 1)])))))))
+                        (e < n ? (s e @ 44 (go (e + 1) (<r . acc))
+                                        93 [(rev (<r . acc)) (e + 1)]))))))))
 
    ; a later duplicate key wins, which is what pin does and what every other reader does.
    (jobj s i n) (: a (jws s (i + 1) n)
-                   (? (a < n && s a = 125) [{} (a + 1)]
-                      ((: (go k acc)
-                          (: ks (jws s k n)
-                             (? !(ks < n && s ks = 34) ()
-                                (: kr (jstr s ks n)
-                                   (? (atom? kr) ()
-                                      (: cn (jws s <>kr n)
-                                         (? !(cn < n && s cn = 58) ()
-                                            (: vr (jval s (cn + 1) n)
-                                               (? (atom? vr) ()
-                                                  (: _ (pin acc <kr <vr)
-                                                     e (jws s <>vr n)
-                                                     (? (e >= n)    ()
-                                                        (s e = 44)   (go (e + 1) acc)
-                                                        (s e = 125)  [acc (e + 1)])))))))))))
-                       a {})))
+    (a < n && s a = 125 ? [{} (a + 1)]
+     (:- (go a {}) (go k acc)
+      (: ks (jws s k n)
+       (ks < n && s ks = 34 ?
+        (: kr (jstr s ks n)
+         (two? kr ? (: cn (jws s <>kr n)
+          (cn < n && s cn = 58 ?
+           (: vr (jval s (cn + 1) n)
+            (two? vr ?  (: e (pin acc <kr <vr, jws s <>vr n)
+             (e < n ? (s e @ 44 (go (e + 1) acc) 125 [acc (e + 1)]))))))))))))))
 
    (jval s i n) (: a (jws s i n)
                   (a < n ? (s a @ 34 (jstr s a n) 91 (jarr s a n) 123 (jobj s a n) (jlit s a n))))
 
    ; --- the door in ----------------------------------------------------------------
    ; (1 value), or () -- trailing junk after the document is a refusal, not a shrug.
-   (json-read s) (: n (tally s)
+   (json-read s) (: n #s
                     r (jval s 0 n)
                     (? (two? r) (: e (jws s <>r n) (? (e < n) () [1 <r]))))
 

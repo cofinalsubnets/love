@@ -17,17 +17,17 @@
    ; both would send you to the wrong one.
    (tgz-open arch)                          ; -> entries, or quits
     (: b (tgz-slurp arch)
-       _ (!b ? (tgz-die ("cannot read " + arch)))
+       _ (!b && tgz-die ("cannot read " + arch))
        u (gz-unzip <>b)
-       _ (!u ? (tgz-die (arch + ": not a gzip stream, or its crc32 disagrees")))
+       _ (!u && tgz-die (arch + ": not a gzip stream, or its crc32 disagrees"))
        r (tar-unpack <>u)
-       _ (!r ? (tgz-die (arch + ": not a tar archive, or it is truncated")))
+       _ (!r && tgz-die (arch + ": not a tar archive, or it is truncated"))
        <>r)
 
    (tgz-x arch dir)
     (: es (tgz-open arch)
        w (tar-scatter dir es)
-       _ (!w ? (tgz-die ("cannot write under " + dir)))
+       _ (!w && tgz-die ("cannot write under " + dir))
        _ (say out $ "tgz: " + show <>w + " entries -> " + dir + "\n")
        0)
 

@@ -23,7 +23,7 @@
 ; the files read below spell their laws `test`, the corpus recorder. here they run to
 ; BUILD, and stdout is the artifact -- so bind assert's instead: silent on success,
 ; and a false law stops the run rather than printing a dot into the output.
-(:: 'test (\ l (. 'assert l)))
+(:: 'test (. 'assert))
 (: _ (reads (open "test/uu.l" "r"))
    _ (reads (open "test/uuhom.l" "r"))
    _ (reads (open "test/uuhomgen.l" "r"))
@@ -45,13 +45,13 @@
    nl "\n"
    b8 "⟨"  b9 "⟩"   ; Lean's anonymous-constructor angle brackets
    (unq x) (two? x && <x = bs ? (x 1) x)   ; strip one ' (reads shows quote as (\ ..))
-   (lines l) (foldl (\ a s (a + s + nl)) "" l)   ; join a list of lines, newline after each
+   (lines l) (foldl (a \ s \ a + s + nl) "" l)   ; join a list of lines, newline after each
 
    ; read a file's top-level forms as data (the reader strips ; comments)
 
    ; a uu name -> a Lean identifier: prefix uu_, kebab '-' -> '_'
-   (sanit s) (: (g i acc) (? (< i #s) (g (+ 1 i) (+ acc (string (: c (s i) (? (= c 45) 95 c))))) acc) (g 0 ""))
-   (leann nm) (+ "uu_" (sanit (string nm)))
+   (sanit s) (:- (g 0 "") (g i acc) (i >= #s ? acc (g (1 + i) (acc + string (s i @ 45 95 c c)))))
+   (leann nm) ("uu_" + sanit (string nm))
 
    ; --- collect (kind nm T t) entries from the uu.l forms (defns live inside asserts) ---
    (deq? c) (two? c && (<c = 'defn || <c = 'defq))
@@ -74,102 +74,97 @@
    ; nothing and paints its assert dot green. redden here instead. the empty seat is
    ; `== ()` and not `!`: a term of 0 is a legal def (a code table's first row) and
    ; falsy, so truthiness would redden it.
-   _ (map (\ e (? (<e = 'def && (= (e 3) ()) || !(peep GLOB (e 1) 0))
+   _ (map (\ e (? (<e = 'def && e 3 = () || !(peep GLOB (e 1) 0))
                   (puts "MALFORMED-OR-UNPINNED-DEF ", puts (string (e 1)), quit 1)
                   0))
         ents)
 
    ; names that exist (corpus-wide) -- for telling a global reference from a bound var
-   nt (tablet 0) _ (map (\ e (pin nt (e 1) 1)) ents)
+   nt {} _ (map (e \ pin nt <>e 1) ents)
    (corpus? x) (peep nt x 0)
 
    ; explicit skips: the type-in-type detonations (sound MLTT can't host them, and
    ; lean's universe check rightly rejects them -- the filter, working as intended)
-   bl (tablet 0)
-   _ (map (\ n (pin bl n 1)) '(the_world_explodes but_seriously_the_world_explodes whoa irref))
+   bl {}
+   _ (map (n \ pin bl n 1) '(the_world_explodes but_seriously_the_world_explodes whoa irref))
 
    ; UU pinned to concrete `Type` for these: a type-level nat_rect both declares
    ; and computes `Type _`, so the level is underdetermined, Lean generalizes it,
    ; and the universe strands at every downstream use (uu_zrow found it). ground
    ; the StackSet model's types at Type 0 and the whole tower's universes solve.
-   mono (tablet 0)
-   _ (map (\ n (pin mono n 1)) '(nvec nlist stk mstk patch tree ppair pvec plist cmside hunk hpair hvec hlist hcmside duo etree epatch spair scmside cell tmleaf tm svec slist sqside mvside store))
+   mono {}
+   _ (map (n \ pin mono n 1) '(nvec nlist stk mstk patch tree ppair pvec plist cmside hunk hpair hvec hlist hcmside duo etree epatch spair scmside cell tmleaf tm svec slist sqside mvside store))
 
    ; transparent type-former/identity combinators: Lean checks a paths.rec minor premise
    ; at reducible transparency and won't unfold a plain `def`, so an equivalence proof
    ; (idisweq: idfun T x must reduce to x) stalls. Mark these few `@[reducible]`.
-   red (tablet 0)
-   _ (map (\ n (pin red n 1)) '(idfun coconustot coconusfromt hfiber))
+   red {}
+   _ (map (n \ pin red n 1) '(idfun coconustot coconusfromt hfiber))
 
    ; backend-specific drop set (NOT soundness -- uu AND Rocq certify everything here). empty:
    ; the two based-J equivalence roots Lean's elaborator can't reconstruct from the structural
    ; term (idisweq, iscontrcoconustot) are instead hand-proven below (the `manual` set), so the
    ; full 200 port -- matching the Rocq leg. Kept as the mechanism for any future holdout.
-   np (tablet 0)
-   _ (map (\ n (pin np n 1)) '())
+   np {}
+   _ (map (n \ pin np n 1) '())
 
    ; hand-written Lean proofs for the two based-J equivalence roots the structural
    ; translation can't reconstruct (see the note above). Tactic mode runs at full
    ; transparency, so `cases` does the path induction and idfun reduces -- where the
    ; emitted term stalled. Their ~17 dependents auto-port once these exist. The type is
    ; still the auto-translated stated type; only the body is replaced.
-   manual (tablet 0)
-   _ (pin manual 'idisweq
-       "  by intro T y; refine ⟨⟨y, @paths.idpath _ y⟩, ?_⟩; intro t; obtain ⟨x, p⟩ := t; cases p; exact @paths.idpath _ _")
-   _ (pin manual 'iscontrcoconustot
-       "  by intro T t; refine ⟨⟨t, @paths.idpath _ t⟩, ?_⟩; intro w; obtain ⟨x, p⟩ := w; cases p; exact @paths.idpath _ _")
+   manual {
+   'idisweq
+       "  by intro T y; refine ⟨⟨y, @paths.idpath _ y⟩, ?_⟩; intro t; obtain ⟨x, p⟩ := t; cases p; exact @paths.idpath _ _"
+   'iscontrcoconustot
+       "  by intro T t; refine ⟨⟨t, @paths.idpath _ t⟩, ?_⟩; intro w; obtain ⟨x, p⟩ := w; cases p; exact @paths.idpath _ _"}
 
    ; --- the translator: a uu term -> a Lean string ---
    ; every MLTT constructor is mapped; `un` is the safety net for any unhandled head
    ; (empty today -- the dependency closure + lean are the real filters).
-   un (tablet 0)
-   bases (tablet 0)
-   _ (pin bases 'nat "Nat") _ (pin bases 'UU "(Type _)") _ (pin bases 'bool "Bool")
-   ; unit rides at the concrete universe (PUnit.{1} = Unit): lean >= 4.32 refuses to
-   ; infer a polymorphic punit's level at a def's use site (uu_sasq's Sum Nat PUnit
-   ; auto-bound a level param, and every Sum.rec on its result stranded a metavar)
-   _ (pin bases 'unit "PUnit.{1}") _ (pin bases 'empty "Empty")
-   _ (pin bases 'true "true") _ (pin bases 'false "false") _ (pin bases 'tt "PUnit.unit")
+   un {}
+   bases {'nat "Nat" 'UU "(Type _)" 'bool "Bool" 'unit "PUnit.{1}"
+          'empty "Empty" 'true "true" 'false "false" 'tt "PUnit.unit"}
    (atom-l t) (peep bases t (? (corpus? t) (leann t) (string t)))   ; base type / global / bound var
 
-   (spine-l l) (? (two? l) ((u2l (cap l)) + (? (two? (cup l)) " " "") + (spine-l (cup l))) "")
+   (spine-l l) (one? l ? "" (u2l <l + (? (two? >l) " " "") + spine-l >l))
    (u2l t)
-   (? (charm? t) (show t)
-      (nom? t) (atom-l t)
-      (two? t) (: h (cap t)
-        (? (h = 'pi)        ("(forall " + (string (t 1)) + " : " + (u2l (t 2)) + ", " + (u2l (t 3)) + ")")
-           (h = 'lam)       ("(fun " + (string (t 1)) + " => " + (u2l (t 2)) + ")")
-           (h = 'let)       ("(let " + (string (t 1)) + " := " + (u2l (t 2)) + "; " + (u2l (t 3)) + ")")
-           (h = 'succ)      ("(Nat.succ " + (u2l (t 1)) + ")")
-           ; paths -- the Type-valued Id type (idpath's a and a are both implicit -> @ _ a)
-           (h = 'idpath)    ("(@paths.idpath _ " + (u2l (t 1)) + ")")
-           (h = 'paths)     ("(@paths " + (u2l (t 1)) + " " + (u2l (t 2)) + " " + (u2l (t 3)) + ")")
-           (h = 'nat_rect)  ("(@Nat.rec " + (u2l (t 1)) + " " + (u2l (t 2)) + " " + (u2l (t 3)) + " " + (u2l (t 4)) + ")")
-           ; Bool.rec is false-case then true-case (Lean's ctor order); uu/Coq order is
-           ; true-case then false-case -- so swap the two minor premises (e3<->e4)
-           (h = 'bool_rect) ("(@Bool.rec " + (u2l (t 1)) + " " + (u2l (t 3)) + " " + (u2l (t 2)) + " " + (u2l (t 4)) + ")")
-           (h = 'unit_rect) ("(@PUnit.rec " + (u2l (t 1)) + " " + (u2l (t 2)) + " " + (u2l (t 3)) + ")")
-           (h = 'empty_rect)("(@Empty.rec " + (u2l (t 1)) + " " + (u2l (t 2)) + ")")
-           ; Sigma -> a Lean structure (definitional eta is FREE -- idisweq exports plainly).
-           ; total2 mirrors pi (index 1 var, 2 domain, 3 body); tpair's family inferred.
-           (h = 'total2)    ("(total2 (fun " + (string (t 1)) + " : " + (u2l (t 2)) + " => " + (u2l (t 3)) + "))")
-           (h = 'tpair)     ("(total2.tpair " + (u2l (t 1)) + " " + (u2l (t 2)) + ")")
-           (h = 'pr1)       ("(total2.pr1 " + (u2l (t 1)) + ")")
-           (h = 'pr2)       ("(total2.pr2 " + (u2l (t 1)) + ")")
-           ; coprod -> Sum; ii1/ii2 -> Sum.inl/inr; the eliminator -> Sum.rec (A B as _)
-           (h = 'coprod)    ("(Sum " + (u2l (t 1)) + " " + (u2l (t 2)) + ")")
-           (h = 'ii1)       ("(Sum.inl " + (u2l (t 1)) + ")")
-           (h = 'ii2)       ("(Sum.inr " + (u2l (t 1)) + ")")
-           (h = 'coprod_rect)("(@Sum.rec _ _ " + (u2l (t 1)) + " " + (u2l (t 2)) + " " + (u2l (t 3)) + " " + (u2l (t 4)) + ")")
-           ; (the T t) is a type ascription
-           (h = 'the)       ("(" + (u2l (t 2)) + " : " + (u2l (t 1)) + ")")
-           ; full path induction (J): uu (paths_rect P pr e) -> paths.rec, based J (a fixed)
-           (h = 'paths_rect)("(paths.rec (motive := " + (u2l (t 1)) + ") " + (u2l (t 2)) + " " + (u2l (t 3)) + ")")
-           ("(" + (spine-l t) + ")")))                              ; an application spine
-      (show t))
+   (?- (show t)
+    (charm? t) (show t)
+    (nom? t) (atom-l t)
+    (two? t) (<t @
+     'pi       ("(forall " + string <>t + " : " + u2l <>>t + ", " + u2l (t 3) + ")")
+     'lam       ("(fun " + string <>t + " => " + u2l <>>t + ")")
+     'let       ("(let " + string <>t + " := " + u2l <>>t + "; " + u2l (t 3) + ")")
+     'succ      ("(Nat.succ " + u2l <>t + ")")
+     ; paths -- the Type-valued Id type (idpath's a and a are both implicit -> @ _ a)
+     'idpath    ("(@paths.idpath _ " + u2l <>t + ")")
+     'paths     ("(@paths " + u2l <>t + " " + u2l <>>t + " " + u2l (t 3) + ")")
+     'nat_rect  ("(@Nat.rec " + u2l <>t + " " + u2l <>>t + " " + u2l (t 3) + " " + u2l (t 4) + ")")
+     ; Bool.rec is false-case then true-case (Lean's ctor order); uu/Coq order is
+     ; true-case then false-case -- so swap the two minor premises (e3<->e4)
+     'bool_rect ("(@Bool.rec " + u2l <>t + " " + u2l (t 3) + " " + u2l <>>t + " " + u2l (t 4) + ")")
+     'unit_rect ("(@PUnit.rec " + u2l <>t + " " + u2l <>>t + " " + u2l (t 3) + ")")
+     'empty_rect ("(@Empty.rec " + u2l <>t + " " + u2l <>>t + ")")
+       ; Sigma -> a Lean structure (definitional eta is FREE -- idisweq exports plainly).
+       ; total2 mirrors pi (index 1 var, 2 domain, 3 body); tpair's family inferred.
+     'total2    ("(total2 (fun " + string <>t + " : " + u2l <>>t + " => " + u2l (t 3) + "))")
+     'tpair     ("(total2.tpair " + u2l <>t + " " + u2l <>>t + ")")
+     'pr1       ("(total2.pr1 " + u2l <>t + ")")
+     'pr2       ("(total2.pr2 " + u2l <>t + ")")
+     ; coprod -> Sum; ii1/ii2 -> Sum.inl/inr; the eliminator -> Sum.rec (A B as _)
+     'coprod    ("(Sum " + u2l <>t + " " + u2l <>>t + ")")
+     'ii1       ("(Sum.inl " + u2l <>t + ")")
+     'ii2       ("(Sum.inr " + u2l <>t + ")")
+     'coprod_rect ("(@Sum.rec _ _ " + u2l <>t + " " + u2l <>>t + " " + u2l (t 3) + " " + u2l (t 4) + ")")
+     ; (the T t) is a type ascription
+     'the       ("(" + u2l <>>t + " : " + u2l <>t + ")")
+     ; full path induction (J): uu (paths_rect P pr e) -> paths.rec, based J (a fixed)
+     'paths_rect ("(paths.rec (motive := " + u2l <>t + ") " + u2l <>>t + " " + u2l (t 3) + ")")
+     ("(" + spine-l t + ")")))                             ; an application spine
 
    ; --- translatability: every head handled (no unhandled constructor anywhere) ---
-   (alltr? l) (? (two? l) (&& (tr? (cap l)) (alltr? (cup l))) 1)
+   (alltr? l) (two? l ? (tr? <l && alltr? >l) 1)
    (tr? t) (? (charm? t) 1  (nom? t) 1
               (two? t) (? (peep un (cap t) 0) 0 (alltr? (cup t)))  1)
 
@@ -203,7 +198,7 @@
      _ (pin bases 'UU "(Type _)")
      out)
    ; foldr keeps ents' order, and lean wants every definition before its uses (foldl flips)
-   exports (foldr (\ e a (? (peep keep (e 1) 0) (. e a) a)) () ents)
+   exports (foldr (\ e a (? (peep keep (e 1) 0) (e . a) a)) () ents)
 
    _ (dot (lines [
       "/- test/proof/lean/uugen.lean -- GENERATED from test/uu.l by tools/uu2lean.l. Do not edit;"
@@ -232,7 +227,7 @@
       "/- CERTIFY, never run: defs use bare recursors the code generator rejects. -/"
       "noncomputable section"
       ""]))
-   _ (map (\ e (dot (emit e))) exports)
+   _ (map (dot * emit) exports)
    _ (dot (lines [
       ""
       "end"
