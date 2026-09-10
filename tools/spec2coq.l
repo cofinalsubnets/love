@@ -260,6 +260,10 @@
    (listv? x) (arr? x || lst? x)                     ; any collection value
    ; the list reducers (love surface -> coq): net -> asum, prod -> aprod, max/min, tally -> count
    (lop? h) (elem h '(net prod tally max min))
+   ; the saturate head, every spelling it reaches here in: opfix canonicalises the glued
+   ; $x to `sat`, `($ x)` keeps `$`, and sat and saturate are one nif under two names --
+   ; so the one spelling that never arrives is the long one
+   (satf h) (elem h '(sat saturate $))
    ; a hash literal {k v ..} = (hash k v ..): an assoc list of fixnum chains (even count)
    (even? l) (two? l ? !(even? >l) 1)
    (hashv? x) (two? x && (= <x 'hash) && zlist? >x && even? >x)
@@ -308,7 +312,7 @@
                                                ? (wz? <>x && wz? <>>x)        ; a big operand answers (), off the Z model
                                                  (intv? <>x && intv? <>>x)))
                                (shiftf h)    (len3? x && charm? <>x && charm? <>>x)
-                               (= h 'saturate) (un2? x && (intv? <>x || listv? <>x || hashv? <>x ||
+                               (satf h)        (un2? x && (intv? <>x || listv? <>x || hashv? <>x ||
                                                              qnlist? <>x || lamform? <>x ||
                                                              (hasg? <>x && glist? <>x)))
                                (= h 'peep)  (len4? x && (hashv? <>x || listv? <>x) && intv? <>>x && intv? <>>>x)
@@ -341,7 +345,7 @@
              (: h <x b (binop h)
                 (? b ("(" + b + " " + tv <>x + " " + tv <>>x + ")")   ; (Z.add a b) / (Z.gcd a b)
                    (shiftf h) ("(" + shiftf h + " " + tv <>x + " " + tv <>>x + ")")
-                   (= h 'saturate) (? (lamform? <>x || hashv? <>x) "1"          ; a closure nets 1, and a tablet is one
+                   (satf h)        (? (lamform? <>x || hashv? <>x) "1"          ; a closure nets 1, and a tablet is one
                                         (hasg? <>x && glist? <>x) ("(gsat " + tgsum (gels <>x) + ")")
                                         (listv? <>x || qnlist? <>x) ("(satZ (asum " + tl <>x + "))")
                                         ("(satZ " + tv <>x + ")"))  ; $list / $int -- spec.v's clamp, floor and ceiling
