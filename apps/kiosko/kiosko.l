@@ -59,7 +59,7 @@
    ; the swig protocol, common to all three: 0 means nothing waiting or EOF, and only a
    ; `see` tells those apart (it parks on a slow fd, and answers -1 at the end). the byte
    ; `see` returns is a real byte and has to be kept.
-   swigp        (elem 'swig (names ()))       ; pinned before the lanes read it
+   swigp        (lit? (cite 'posix 'swig))       ; pinned before the lanes read it
    ; the chunk floor: at or above it, handing back the cask beats copying out of it. the
    ; lane below costs one copy of the body against two syscalls, and 128K is where those
    ; cross on this machine -- measured, 40000 reads a point, best of five whole processes

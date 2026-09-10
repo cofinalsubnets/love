@@ -26,7 +26,7 @@
    ; baked by a host love, so a load-time answer would freeze this world's nif set into
    ; that one's.
    (ucopy-bytes src dst)
-    (? (elem 'copyfile (names ()))
+    (? (lit? (cite 'posix 'copyfile))
        (charm? (copyfile src dst))
        (: r (uread src)
           (? (two? r) (: q (open dst "w")
@@ -51,7 +51,7 @@
    ; syncing everything instead would be a different thing wearing the same name.
    (sync-main as)
     (: _ (? (two? as) (udie 1 "sync: takes no operands here (no fsync nif)") ())
-       _ (? (elem 'sync (names ())) (sync 0) ())
+       _ (? (lit? (cite 'posix 'sync)) (sync 0) ())
        0)
 
    ; -- mkfifo and mknod: the two rows a /dev wants ------------------------------
@@ -61,8 +61,10 @@
    ; and 20.. -- so the obvious (major << 8) | minor is right only while both are small.
    (umkdev maj mn)
     (((& maj 4095) << 8) | (& mn 255) | ((maj >> 12) << 44) | ((mn >> 8) << 20))
+   ; the seat may carry no mknod (inle, wasm), so the row is probed -- and probed in the
+   ; MODULE, which is where posix's names live: the book holds none of them.
    (umknod who p md dev)
-    (? (elem 'mknod (names ())) (mknod p md dev) 'enosys)
+    (? (lit? (cite 'posix 'mknod)) (mknod p md dev) 'enosys)
    (mkfifo-main as)
     (: t (tablet 0)
        o (uopts as t '(109) ())

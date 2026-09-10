@@ -245,7 +245,7 @@
    (chroot-main as)
     (: _ (? (two? as) () (udie 1 "usage: chroot DIR [CMD [ARG..]]"))
        d <as
-       _ (? (elem 'chroot (names ())) () (udie 1 "chroot: no chroot on this seat"))
+       _ (? (lit? (cite 'posix 'chroot)) () (udie 1 "chroot: no chroot on this seat"))
        e (chroot d)
        _ (? e (udie 1 ("chroot: cannot change root to " + d + ": " + (show e))) ())
        ; the chdir is not tidiness. chroot moves the ROOT and leaves the cwd where it
@@ -295,12 +295,12 @@
           fs <>>o
           _ (? (two? >fs) () (udie 1 "usage: mount [-t TYPE] [-o OPTS] SRC TGT   (or bare, to list)"))
           src <fs tgt <>fs
-          _ (? (elem 'mountf (names ())) () (udie 1 "mount: no mount on this seat"))
+          _ (? (lit? (cite 'posix 'mountf)) () (udie 1 "mount: no mount on this seat"))
           e (mountf src tgt ty ob)
           (? e (udie 1 ("mount: cannot mount " + src + " on " + tgt + ": " + (show e))) 0)))
    (umount-main as)
     (: _ (? (two? as) () (udie 1 "usage: umount TARGET.."))
-       _ (? (elem 'umount (names ())) () (udie 1 "umount: no umount on this seat"))
+       _ (? (lit? (cite 'posix 'umount)) () (udie 1 "umount: no umount on this seat"))
        (go l ok) (? !(two? l) ok
                     (: e (umount <l)
                        _ (? e (: _ (say err ("umount: cannot unmount " + <l + ": " + (show e)))
