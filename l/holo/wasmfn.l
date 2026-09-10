@@ -5,13 +5,15 @@
 ;
 ; the machine. every abstract register is an i64 local and every f-register an f64 local;
 ; sp is global 0, the shadow stack in linear memory, so push/pop and the frame are stores.
-; control flow is one loop and one br_table over a label local (rung 1): every (label l)
-; opens a segment, the entry is segment 0, falling out of block j runs segment j and its
-; tail falls into j+1 as the IR does; a jmp sets the local and branches to the loop at depth
-; k-j, a br the same under an if, one deeper. the flags are locals (rung 2): A B the last
-; cmp's operands, V the overflow sign adds/subs leave, FA FB the last ucomisd's, with rv64's
-; float law and which compare came last read in emission order. a narrowed f-register holds
-; the single's bits in its low word (x64's law); the conversions saturate.
+; control flow is structured wherever the graph is reducible -- block, loop and br_if, so an
+; engine sees a loop as a loop -- and one loop over a br_table on a label local where it is
+; not: every (label l) opens a segment, the entry is segment 0, falling out of block j runs
+; segment j and its tail falls into j+1 as the IR does; a jmp sets the local and branches to
+; the loop at depth k-j, a br the same under an if, one deeper. the flags are locals
+; (rung 2): A B the last cmp's operands, V the overflow sign adds/subs leave, FA FB the
+; last ucomisd's, with rv64's float law and which compare came last read in emission
+; order. a narrowed f-register holds the single's bits in its low word (x64's law); the
+; conversions saturate.
 ;
 ; the convention (rung 4): ONE function type for the whole program, (i64 x 8, f64 x 8) ->
 ; (i64 i64 f64 f64) -- r0..r7 and f0..f7 in, r0 r1 f0 f1 out (a 16-byte aggregate rides a

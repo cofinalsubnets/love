@@ -127,8 +127,12 @@
       ("cas.hi"      "f04d0fb111"            ((cas r0 r9 r8)))      ; lock cmpxchg [r9], r10
       ("cas4.rdi"    "f00fb10f"            ((cas4 r0 r1 r6)))     ; lock cmpxchg DWORD [rdi], ecx
       ("cas4.rbp"    "f0440fb15500"          ((cas4 r0 r9 r4)))     ; lock cmpxchg DWORD [rbp], r10d (forced 0 disp)
-      ("udiv"        "52564889d831d248f734244883c4085a4889c3"      ((udiv r3 r3 r5)))    ; xor rdx + div (unsigned)
-      ("urem"        "52564889d831d248f734244889d04883c4085a4889c3" ((urem r3 r3 r5 r2)))   ; unsigned rem (rdx; the scratch t is rdx's job here, ignored)
+      ("udiv"        "524889d831d248f7f65a4889c3"              ((udiv r3 r3 r5)))    ; xor rdx + div (unsigned)
+      ("urem"        "524889d831d248f7f64889d05a4889c3"        ((urem r3 r3 r5 r2)))   ; unsigned rem (rdx; the scratch t is rdx's job here, ignored)
+      ;; the divisor's two homes that cannot be a div operand: rax is about to hold the dividend,
+      ;; rdx the high half. each divides from a stack cell -- rax needs one pushed, rdx already is.
+      ("udiv.rax"    "52504889d831d248f734244883c4085a4889c3"  ((udiv r3 r3 r0)))    ; push rax ; div [rsp] ; add rsp,8
+      ("udiv.rdx"    "524889d831d248f734245a4889c3"            ((udiv r3 r3 r2)))    ; the saved rdx IS the cell; pop balances
       ("shlv"        "48d3e0"                ((shlv r0 r1)))        ; shl rax, cl
       ("shrv.hi"     "49d3e8"                ((shrv r7 r1)))        ; shr r8, cl
       ("sarv"        "48d3fb"                ((sarv r3 r1)))        ; sar rbx, cl
@@ -198,10 +202,8 @@
                        ((mulo r0 r0 r7 r4 ovf) (jmp done) (label ovf) (jmpr r5) (label done) (ret)))
       ("mulh.reg"    "524c89c049f7eb4889d05a"  ((mulh r0 r7 r10)))   ; push rdx ; mov rax,r8 ; imul r11 ; mov rax,rdx ; pop rdx
       ("mulh.mem"    "52524c89c048f72c244889d04883c4085a" ((mulh r0 r7 r2)))   ; b on the fixed pair: push rdx ; push rdx ; mov rax,r8 ; imul [rsp] ; mov rax,rdx ; add rsp,8 ; pop rdx
-      ("div"         "524150489948f73c244883c4085a"                   ; push rdx;push r8;cqo;idiv [rsp];add rsp,8;pop rdx
-                       ((div r0 r0 r7)))
-      ("rem"         "524150489948f73c244889d04883c4085a"             ; ... mov rax,rdx (remainder) ...
-                       ((rem r0 r0 r7 r4)))
+      ("div"         "52489949f7f85a"          ((div r0 r0 r7)))            ; push rdx;cqo;idiv r8;pop rdx
+      ("rem"         "52489949f7f84889d05a"    ((rem r0 r0 r7 r4)))         ; ... mov rax,rdx (remainder) ...
       ("divq"        "48f7f6"                 ((divq r5)))           ; div rsi (rn r5 = rsi): f7 /6
       ("divl"        "f7f1"                   ((divl r1)))           ; div ecx: the 32-bit twin, no REX.W
       ("dv128"       "4889c1488b0424488b54240848890c244889c14889d031d248f73424489148f734244889ca" ((dv128 sp)))
@@ -1071,20 +1073,28 @@
    _ (chk-eq "w.module.func" "0061736d0100000001070160027e7e017e030201000707010361646400000a09010700200020017c0b"
              (wasm-hex {'types '(((i64 i64) (i64))) 'funcs '((0 () ((local.get 0) (local.get 1) (i64.add))))
                         'exports '(("add" func 0))}))
-   ;; rung 1, the dispatch loop off holo's IR: the skeleton with no label, and with one -- the
-   ;; entry falls into it, the jmp sets the label local and branches to the loop at depth k-j
+   ;; the relooper off holo's IR: a reducible graph wears structured control -- no label at all
+   ;; is straight line, and a self-loop is a wasm loop whose br_if carries the condition
    _ (chk-eq "w.fn.skeleton"
              '(((29 i64) (1 i32) (3 i64) (22 f64))
-               (i32.const 0) (local.set 29) (loop) (block) (local.get 29) (br_table (0) 0)
-               (end) (i64.const 5) (local.set 0) (local.get 0) (return) (end) (unreachable))
+               (i64.const 5) (local.set 0) (local.get 0) (return) (unreachable))
              (wasm-fn '((li r0 5) (ret)) 0 {}))
    _ (chk-eq "w.fn.label"
              '(((28 i64) (1 i32) (3 i64) (22 f64))
-               (i32.const 0) (local.set 29) (loop) (block) (block) (local.get 29) (br_table (0 1) 0)
-               (end) (local.get 0) (local.set 30) (i64.const 0) (local.set 31)
-               (end) (local.get 30) (local.get 31) (i64.eq) (if) (i32.const 1) (local.set 29) (br 1) (end)
-               (i32.const 1) (local.set 29) (br 0) (end) (unreachable))
+               (local.get 0) (local.set 30) (i64.const 0) (local.set 31)
+               (loop) (local.get 30) (local.get 31) (i64.eq) (br_if 0) (br 0) (end) (unreachable))
              (wasm-fn '((cmp r0 0) (label top) (br eq top) (jmp top)) 1 {}))
+   ;; ..and an irreducible one -- two blocks entered from outside and jumping to each other --
+   ;; keeps the dispatch loop: the label local, one br_table, a jmp setting it and branching out
+   _ (chk-eq "w.fn.irreducible"
+             '(((27 i64) (1 i32) (3 i64) (22 f64))
+               (i32.const 0) (local.set 29) (loop) (block) (block) (block)
+               (local.get 29) (br_table (0 1 2) 0)
+               (end) (local.get 0) (local.set 30) (i64.const 0) (local.set 31)
+               (local.get 30) (local.get 31) (i64.eq) (if) (i32.const 2) (local.set 29) (br 3) (end)
+               (end) (i32.const 2) (local.set 29) (br 1)
+               (end) (i32.const 1) (local.set 29) (br 0) (end) (unreachable))
+             (wasm-fn '((cmp r0 0) (br eq bb) (label aa) (jmp bb) (label bb) (jmp aa)) 2 {}))
 
    ;; -- summary; nonzero exit on any miss, so `make`-style gates see the failure. --
    np (peep pass 0 0) nf (peep fail 0 0)
