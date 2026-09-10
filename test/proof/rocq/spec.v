@@ -942,8 +942,9 @@ Theorem str_juxt_unitr: forall s, sjux s [] = s.                Proof. intros. a
 Theorem str_juxt_assoc: forall s t u, sjux (sjux s t) u = sjux s (sjux t u).  (* so ("a" "b" "c") joins three *)
 Proof. intros. unfold sjux. now rewrite app_assoc. Qed.
 
-(* A NEGATIVE INDEX IS OUT OF RANGE, exactly like one past the end, so application and peep
-   agree at every index: (X k) is (peep X k ()). *)
+(* A NEGATIVE INDEX IS OUT OF RANGE, exactly like one past the end. peep reads a sequence
+   by the same law, differing only in the miss -- () here, the caller default there. That
+   the two coincide is a rule the tree keeps, not a law it promises: a tray towers. *)
 Theorem str_idx_neg1  : sidx [97;98;99] (-1) = None. Proof. reflexivity. Qed. (* ("abc" -1) = () *)
 Theorem str_idx_neg3  : sidx [97;98;99] (-3) = None. Proof. reflexivity. Qed. (* ("abc" -3) = () *)
 Theorem str_idx_neg_far : sidx [97;98;99] (-4) = None. Proof. reflexivity. Qed. (* and further out, still () *)

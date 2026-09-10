@@ -54,8 +54,9 @@
   (nil? ("hi" -1)) (nil? ("hi" -2))         ; a negative index is out of range, like one past the end
   (= "hix" ("hi" 'x))                       ; a point operand is text: it juxtaposes
   (= 255 ((string 255) 0))                  ; high byte returns unsigned 0..255
-  ; apply and peep agree at every index -- (X k) IS (peep X k ()). snip is the one that
-  ; still reads a negative, and it clamps to the front rather than counting from the end.
+  ; apply and peep coincide on the sequence kinds -- the same index action, apply answering
+  ; () where peep answers the caller default. a rule the tree keeps, not a law it promises:
+  ; a tray towers instead of indexing. snip still reads a negative, clamping to the front.
   (= (peep "vaporeon" 3 0) ("vaporeon" 3))
   (= 0 (peep "vaporeon" -1 0)) (nil? ("vaporeon" -1))
   ; pin writes exactly where peep reads, and text has no cell, so it answers a fresh string
