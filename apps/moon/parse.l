@@ -480,6 +480,10 @@
    (ptrarg ps e) (? !(two? e && (<e = 'bin)) ()          ; the ptr/arr operand of a `bin + ptr idx` (a[i] desugars so)
                     (: a (ptype ps <>>e) b (ptype ps <>>>e)
                        (? (ptr? a || arr? a) a (ptr? b || arr? b) b ())))
+   ; a null pointer constant (C11 6.3.2.3p3): an integer constant expression that
+   ; folds to 0, with or without a cast to a pointer type -- cfold folds through a
+   ; cast whose target is not an integer type, so both spellings arrive here as 0
+   (npc? e) (: v (cfold e) (? (cint? v && (v = 0)) 1 ()))
    (ptype ps e)
     (? !(two? e) ()
        (: k <e
@@ -537,6 +541,17 @@
               (: a (ptype ps <>>e) b (ptype ps <>>>e)
                  (? (parith? a && parith? b) (puac !(pst32? ps) a b)
                     (two? a && (a = b)) a
+                    ; C11 6.5.15p6: with one operand a NULL POINTER CONSTANT the
+                    ; result takes the OTHER's type. that is what tells `(void *)
+                    ; ((long)(x) * 0l)` apart from a plain void pointer, and so what
+                    ; the linux kernel's __is_constexpr reads to decide whether x
+                    ; folded -- the whole trick is that the cast is a null pointer
+                    ; constant only when its operand is a constant expression
+                    (npc? <>>e && ptr? b) b
+                    (npc? <>>>e && ptr? a) a
+                    ; both pointers, one of them to void: pointer to void, same paragraph
+                    (ptr? a && ptr? b && (= a '(ptr void))) a
+                    (ptr? a && ptr? b && (= b '(ptr void))) b
                     ()))
              ; a truth value is an int (C11 6.5.3.3, 6.5.8, 6.5.13): !, the six
              ; relations, && and || -- whatever the operand, so no operand typing
