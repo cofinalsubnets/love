@@ -1,4 +1,4 @@
-// i/hash.c -- digests over a string's bytes. auto-globbed and AiNif-registered,
+// i/hash.c -- digests over a string's bytes. auto-globbed and LvNif-registered,
 // the fs.c discipline; value ops, so absence or misuse answers ().
 //   (sha256 str) / (md5 str)  -> the lowercase hex digest
 //   (crc32 str)               -> the IEEE crc32, a charm
@@ -455,16 +455,16 @@ static union u const
  nif_ck_feed[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ck_feed}, {lvm_ret0}},
  nif_ck_done[] = {{lvm_ck_done}, {lvm_ret0}};
 
-AiNif("sha256", nif_sha256, NULL);
-AiNif("sha256-init", nif_sha_init, NULL);
-AiNif("sha256-feed", nif_sha_feed, NULL);
-AiNif("sha256-done", nif_sha_done, NULL);
-AiNif("md5", nif_md5, NULL);
-AiNif("md5-init", nif_md5_init, NULL);
-AiNif("md5-feed", nif_md5_feed, NULL);
-AiNif("md5-done", nif_md5_done, NULL);
-AiNif("crc32", nif_crc32, NULL);
-AiNif("cksum", nif_cksum, NULL);
-AiNif("cksum-init", nif_ck_init, NULL);
-AiNif("cksum-feed", nif_ck_feed, NULL);
-AiNif("cksum-done", nif_ck_done, NULL);
+LvNif("sha256", nif_sha256, NULL);
+LvNif("sha256-init", nif_sha_init, NULL);
+LvNif("sha256-feed", nif_sha_feed, NULL);
+LvNif("sha256-done", nif_sha_done, NULL);
+LvNif("md5", nif_md5, NULL);
+LvNif("md5-init", nif_md5_init, NULL);
+LvNif("md5-feed", nif_md5_feed, NULL);
+LvNif("md5-done", nif_md5_done, NULL);
+LvNif("crc32", nif_crc32, NULL);
+LvNif("cksum", nif_cksum, NULL);
+LvNif("cksum-init", nif_ck_init, NULL);
+LvNif("cksum-feed", nif_ck_feed, NULL);
+LvNif("cksum-done", nif_ck_done, NULL);

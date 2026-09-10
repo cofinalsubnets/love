@@ -16,7 +16,7 @@ size_t strlen(char const *s) {
     p++; }
   for (;;) {
     unsigned long w = *(unsigned long const *) p;
-    if ((w - AiOnes) & ~w & AiHighs) break;
+    if ((w - LvOnes) & ~w & LvHighs) break;
     p += sizeof(unsigned long); }
   while (*p) p++;
   return (size_t) (p - s); }

@@ -11,7 +11,7 @@
 #include <errno.h>
 #include <math.h>
 #include <stddef.h>      // offsetof (the struct ai_wait_fd / struct pollfd assert)
-#if defined(AiNolibc)
+#if defined(LvNolibc)
 #endif
 #include <stdnoreturn.h>
 #include <signal.h>
@@ -243,12 +243,12 @@ static union u const
  nif_exec[] = {{lvm_exec}, {lvm_ret0}},
  nif_getenv[] = {{lvm_getenv}, {lvm_ret0}},
  nif_getpid[] = {{lvm_getpid}, {lvm_ret0}};
-AiNif("quit", nif_exit, NULL);
-AiNif("hark", nif_hark, NULL);
-AiNif("herald", nif_herald, NULL);
-AiNif("exec", nif_exec, NULL);
-AiNif("getenv", nif_getenv, NULL);
-AiNif("getpid", nif_getpid, NULL);
+LvNif("quit", nif_exit, NULL);
+LvNif("hark", nif_hark, NULL);
+LvNif("herald", nif_herald, NULL);
+LvNif("exec", nif_exec, NULL);
+LvNif("getenv", nif_getenv, NULL);
+LvNif("getpid", nif_getpid, NULL);
 
 static struct ai *env_budget(struct ai *g) {
   char const *b = getenv("LOVE_BUDGET_MB");
@@ -267,7 +267,7 @@ static struct ai *env_budget(struct ai *g) {
 
 // LOVE_NO_GLAZE: a pure-interpreter session -- ev back to base-ev and the natjit hook
 // cleared. a session knob like LOVE_NO_IMAGE: it governs a run, never the artifact.
-#ifdef AiGlazed
+#ifdef LvGlazed
 static char const glaze_off[] = "(: ev (cite 'glaze 'base-ev) natjit ())";
 #else
 static char const glaze_off[] = "";
@@ -289,7 +289,7 @@ static struct ai *run_program(struct ai *g, bool replp) {
   if (getenv("LOVE_NO_GLAZE")) g = ai_evals_(g, glaze_off);
   return ai_evals(g, replp ? "(cli-line cmdline 1)" : "(cli-line cmdline 0)"); }
 
-#ifdef LoveBoot
+#ifdef Love0
 // love0's seat is its own translation unit: i/boot.c, linked only into love0.
 struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load);
 #else
@@ -348,7 +348,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     "   s_plus (cite 'kanren 's_plus)  s_star (cite 'kanren 's_star)"
     "   === (cite 'kanren '===)  =/= (cite 'kanren '=/=))");
   g = ai_cats_glaze(g);                                     // a no-op on an unglazed arch
-#ifdef AiGlazed
+#ifdef LvGlazed
   g = ai_shelve_(g);                                   // holo back to non-ambient
 #endif
 
@@ -381,7 +381,7 @@ ai_noinline static struct ai *argv_chain(struct ai *g, char const **v, int argc,
   for (g = ai_push(g, 1, ZeroPoint); n--; g = gxr(g));   // () terminates, as a love list does
   return g; }
 
-#ifdef AiFirstBoot
+#ifdef LvFirstBoot
 #include "ustar.h"
 static char const src_distlist[] =
 #include "distlist.h"
@@ -520,7 +520,7 @@ int main(int argc, char const **argv) {
   char const *image_load_path = NULL, *bake = NULL,   // see boot(): "" = self-bake, a path = an image file
              *bake_load = NULL;                      // bake -l CAT: read-eval it before the seal
   int skip = 0;                                      // words that are the prime's, not the program's
-#ifndef LoveBoot
+#ifndef Love0
   if (argc >= 2 && !strcmp(argv[1], "bake")) {
    int i = 2;                                      // bake [-l CAT] [PATH]
    if (i + 1 < argc && !strcmp(argv[i], "-l")) bake_load = argv[i + 1], i += 2;
@@ -559,7 +559,7 @@ int main(int argc, char const **argv) {
     if (image_load_path && ai_ok(g = ai_defv(ai_strof(g, image_load_path), "love-image"))) g->sp++;
     if (!bake) {
       char const *osn =
-#if defined(AiNolibc)
+#if defined(LvNolibc)
         __ai_osv  < 0 ? "inle" :
         __ai_osv == 1 ? "linux" : __ai_osv == 2 ? "freebsd" : __ai_osv == 3 ? "netbsd" : 0;
 #elif defined(__linux__)

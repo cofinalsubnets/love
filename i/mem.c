@@ -1,7 +1,7 @@
 // FIXME this file is too short, merge it somewhere else
 // i/mem.c -- 8-byte word slots on a cask, low 4 bytes live: the flat solver's state
 // (apps/sat/flat.l), where the byte-at-a-time accessors cost 4 dispatches per read.
-// auto-globbed and AiNif-registered.
+// auto-globbed and LvNif-registered.
 //   (peepw c i)   -> the word at slot i, low 4 bytes | () misuse
 //   (pinw c i v)  -> lay v zero-extended into slot i -> c | () misuse
 // value ops, so absence/misuse answers (); flat.l binds getw/putw to them, the byte path
@@ -38,5 +38,5 @@ static lvm(lvm_pinw) {
 static union u const
   nif_peepw[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_peepw}, {lvm_ret0}},
   nif_pinw[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_pinw},  {lvm_ret0}};
-AiNif("peepw", nif_peepw, "guts");
-AiNif("pinw", nif_pinw, "guts");
+LvNif("peepw", nif_peepw, "guts");
+LvNif("pinw", nif_pinw, "guts");

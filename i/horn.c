@@ -49,7 +49,7 @@ struct ai_horn { struct ai_bio b; word kind, rate, chans, wpos, t0; };
 #if defined(__wasm__)
 # define horn_alsa 0
 # define horn_oss  0
-#elif defined(AiNolibc)
+#elif defined(LvNolibc)
 # define horn_alsa 1
 # define horn_oss  1
 #elif defined(__linux__)
@@ -373,5 +373,5 @@ static lvm(lvm_horn_lag) {
 static union u const
  nif_horn[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_horn}, {lvm_ret0}},
  nif_horn_lag[] = {{lvm_horn_lag}, {lvm_ret0}};
-AiNif("horn", nif_horn, NULL);
-AiNif("horn-lag", nif_horn_lag, NULL);
+LvNif("horn", nif_horn, NULL);
+LvNif("horn-lag", nif_horn_lag, NULL);

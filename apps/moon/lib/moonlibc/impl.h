@@ -5,8 +5,8 @@
  * one file it used to be. a member reaching another member's file-scope
  * static is what splitting costs: use the public spelling (errno, not
  * __errno_v), or move the state here. */
-#ifndef AiMoonlibcImplH
-#define AiMoonlibcImplH
+#ifndef LvMoonlibcImplH
+#define LvMoonlibcImplH
 #include <stddef.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -56,10 +56,10 @@ extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
  * rather than register a trampoline that is not there; freebsd on the same arch
  * is unaffected. */
 #if !defined(__riscv) && !defined(__wasm__)   /* wasm's one kernel is the page's loader */
-# define AiOsTranslate 1        /* os.c's tables, and the leaves they call */
-# define AiNbTramp 1            /* netbsd's signal return path */
+# define LvOsTranslate 1        /* os.c's tables, and the leaves they call */
+# define LvNbTramp 1            /* netbsd's signal return path */
 #endif
-#ifdef AiOsTranslate
+#ifdef LvOsTranslate
 extern long __ai_sys7(long n, long a, long b, long c, long d, long e, long f, long g);   /* the 7th arg rides the stack (netbsd mmap) */
 #endif
 extern void __ai_sigret(void);
@@ -399,7 +399,7 @@ static long __ai_call(long n, long a, long b, long c, long d, long e, long f) {
 static long __ai_fb(long n, long a, long b, long c, long d, long e, long f) {
   long r = __ai_sys(n, a, b, c, d, e, f);
   return r < -4096L ? -__ai_errfb(-r - 4096) : r; }
-#ifdef AiOsTranslate
+#ifdef LvOsTranslate
 static long __ai_fb7(long n, long a, long b, long c, long d, long e, long f, long g) {
   long r = __ai_sys7(n, a, b, c, d, e, f, g);
   return r < -4096L ? -__ai_errfb(-r - 4096) : r; }
@@ -519,7 +519,7 @@ struct __nb_kevent {                  /* __kevent50's record: 40 bytes, no ext,
   void *udata;
 };
 extern void __ai_nbstat(struct __nb_stat const *f, struct stat *st);
-#ifdef AiNbTramp
+#ifdef LvNbTramp
 extern void __ai_nb_sigtramp(void);   /* mksys: the ucontext register; setcontext */
 #endif
 #if defined(__aarch64__)
@@ -547,16 +547,16 @@ extern long __ai_nbp202(long, long, long, long, long, long);
 #define BdU (BdI * 9 - 1)            /* the index of the units place */
 
 /* the SWAR pair every word-at-a-time byte scan reads: 0x01 and 0x80 in each byte
- * of a long, sized by the seat rather than written out. (w - AiOnes) & ~w &
- * AiHighs is nonzero exactly when some byte of w is zero -- strlen.c and
+ * of a long, sized by the seat rather than written out. (w - LvOnes) & ~w &
+ * LvHighs is nonzero exactly when some byte of w is zero -- strlen.c and
  * memchr.c both ride it. compile-time, so no member pays to build them. */
 /* WRITTEN OUT, not derived. the tidy spelling is ~0UL / 255, and mooncc does
  * not fold it -- it emits a `divq`, twice per loop iteration, and the byte scan
  * that was supposed to get faster carries a hardware divide. a cast of an
  * out-of-range literal is well defined modulo 2^N, so the 32-bit seats truncate
  * to 0x01010101 / 0x80808080, which is what they want. */
-#define AiOnes  ((unsigned long) 0x0101010101010101ULL)
-#define AiHighs ((unsigned long) 0x8080808080808080ULL)
+#define LvOnes  ((unsigned long) 0x0101010101010101ULL)
+#define LvHighs ((unsigned long) 0x8080808080808080ULL)
 
 extern char **environ;
 extern char const *__ai_progname;

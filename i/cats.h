@@ -11,7 +11,7 @@
 // the tail-threaded lvm shape (g, Ip, Hp, Sp), so a trampoline build calling into it jumps
 // with the wrong ABI. one spelling, since the blob and its callers are separate TUs.
 #if (defined(__x86_64__) || defined(__aarch64__)) && ai_tco
-#define AiGlazed 1
+#define LvGlazed 1
 #endif
 
 struct ai

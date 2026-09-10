@@ -68,7 +68,7 @@ static bool gen_remembered(struct ai *g, word obj) {
 static void gen_remember(struct ai *g, word obj) {
  if (g->rem_n && g->rem[g->rem_n - 1] == obj) return;          // hot path: same map as last pin
  if (gen_remembered(g, obj)) return;                           // deduped: the set stays small (book + a few)
- if (g->rem_n < AiRemCap) g->rem[g->rem_n++] = obj;            // full: the miss forces a major (roots-only trace, no rem set), so a dropped entry can't orphan a young edge
+ if (g->rem_n < LvRemCap) g->rem[g->rem_n++] = obj;            // full: the miss forces a major (roots-only trace, no rem set), so a dropped entry can't orphan a young edge
  else g->rem_miss++;
  if (g->rem_n > g->rem_hi) g->rem_hi = g->rem_n; }
 
@@ -154,7 +154,7 @@ static void major_run_finalizers(struct ai *g, struct ai_gcx *X) {
   } else fz->fn(g, fz->p); }
  g->fz = new_fz; }
 
-// AiGcStress's two numbers: an even poison, so a stale read faults at an address
+// LvGcStress's two numbers: an even poison, so a stale read faults at an address
 // a backtrace can name; and how often a forced collection is a major (ai_please).
 #define ai_gc_poison ((word) 0xd0d0d0d0d0d0d0d0ULL)
 #define ai_gc_stress_major 32
@@ -184,7 +184,7 @@ static void gen_minor(struct ai *g) {
  while (X.cp < g->major_hp)
   if (datp(X.cp)) evac_data(g, &X);
   else evac_thread(g, &X);
-#ifdef AiGcCheck
+#ifdef LvGcCheck
  // the fixpoint is a fixpoint (gc.v drain_second_pass_copies_nothing): re-drive the
  // whole scan; every gcp must be an identity. if major_hp moves, the first pass lost
  // a reachable object -- trap at the collection that lost it. (make test_gcheck)
@@ -206,7 +206,7 @@ static void gen_minor(struct ai *g) {
 #endif
  if (g->fz) gen_fz_relocate(g);
  g->hp = g->end;                                              // minor emptied
-#ifdef AiGcStress
+#ifdef LvGcStress
  // poison the vacated nursery, or the stress build is half a detector: a stale
  // local otherwise reads a forwarding pointer that still looks live. last thing
  // here -- gen_fz_relocate is the from-space's last reader.
@@ -277,7 +277,7 @@ struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
  if (resized) g->alloc(g, g->major_pool, 0), g->major_pool = resized, g->major_len = to_len;
  g->major_base = to;                                           // flip: active = the to-space
  g->hp = g->end;                                             // the minor's young was promoted: reset it
-#ifdef AiGcStress
+#ifdef LvGcStress
  // poison the promoted young, like the minor. the old major half does not: poisoning it
  // costs ten minutes on a 24-second lane, and a cheney copy already left a forwarding
  // pointer in word0 (the ap), which faults on dispatch.
@@ -331,7 +331,7 @@ ai_noinline struct ai *ai_please(struct ai *g, uintptr_t req0) {
  bool major = g->rem_miss
    || major_free < (uintptr_t) g->len + req0 + 16
    || g->since_major > g->major_live0 + 4 * (uintptr_t) g->len;
-#ifdef AiGcStress
+#ifdef LvGcStress
  // a minor is not enough: stress-collecting tenures everything almost at once,
  // and a minor never moves the tenured -- the detector answered green on its own
  // control. every-collection-major cost a 458 s boot, so a major rides every Nth
@@ -344,7 +344,7 @@ ai_noinline struct ai *ai_please(struct ai *g, uintptr_t req0) {
   if (!ai_ok(g = gen_major(g, req0, &tight))) return g;     // a true oom mid-major (compacting would overflow the spare): propagate the scare
   g->n_gc += 1;
   g->since_major = 0, g->major_live0 = (uintptr_t)(g->major_hp - g->major_base);   // reset the amortization window
-#ifdef AiGcCheck
+#ifdef LvGcCheck
   // the forcing test above must read false after the major it forced, unless the sizer was
   // denied the room -- there thrash beats dying. still true on a pool that got what it asked
   // for is the two disagreeing over one number, and the collector has latched into permanent
@@ -365,7 +365,7 @@ ai_noinline struct ai *ai_please(struct ai *g, uintptr_t req0) {
  // the schedule is reproducible): keep the copy overhead inside a band, accumulated
  // over a sliding window; ai_budget caps the footprint by appel's rule.
  uintptr_t const ratio = g->ratio;              // target band: grow above 1/ratio overhead, shrink below 1/(4*ratio)
-#ifdef AiGcStress
+#ifdef LvGcStress
  // the band is meaningless on a forced schedule (`allocated` ~0 doubles the nursery
  // every collection), but the hard floor stays: it guarantees the pending allocation
  // fits. it must also come back down -- a nursery parked at its high-water stands above

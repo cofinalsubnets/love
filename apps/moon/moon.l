@@ -404,7 +404,7 @@
                  ; our libc is the one in this link, and it carries its whole
                  ; surface on every kernel it serves -- so a source asking what it
                  ; may call asks this, never which kernel it is standing on.
-                 + '("AiMoonlibc=1")
+                 + '("LvMoonlibc=1")
                  + (? (= dia 'moon) '("__moon__=1") ())   ; the dialect's own macro: extensions on
                  +   ; ds9, not ds: a :-local shadows the param over the whole scope (the boxfix cell trap)
                  (? (elem tgt '(x64 a64)) ("__SIZEOF_INT128__=16" . ds) ds))     ; the wide pair (gen's d128 lane); love.c's limb seam reads it, and gcc says the same on both
@@ -777,7 +777,7 @@
    ; the refusal is the target's, not the kernel's. one archive per ISA, all three cut
    ; under -os linux -- and that pin does not reach the bytes, because impl.h parts the
    ; kernels at run time on __ai_osv. os.c is the only member with an OS predefine in it
-   ; and its arms sit under #ifndef AiOsTranslate, so on x64 and arm64 linux, freebsd and
+   ; and its arms sit under #ifndef LvOsTranslate, so on x64 and arm64 linux, freebsd and
    ; netbsd compile to the same object. riscv is where that stops: no translation tables,
    ; so os.c reads -os and only linux has an answer -- the BSDs there owe a compile, which
    ; refuses by #error rather than quietly linking linux's.

@@ -179,10 +179,10 @@ static intptr_t image_imm_index(word v) {
 // the root table is sized from the core itself: symbols, tasks, then every WORD of v0..end,
 // in this target's word. the enc and dec loops take their bound from here too, so the table's
 // length and the count written into it cannot be spelled in two units and disagree.
-#define AiImgRoots (2 + (__builtin_offsetof(struct ai, end) - __builtin_offsetof(struct ai, v0)) / sizeof(word))
+#define LvImgRoots (2 + (__builtin_offsetof(struct ai, end) - __builtin_offsetof(struct ai, v0)) / sizeof(word))
 struct image_hdr {
  uint64_t magic, wordsize, nwords, arch, anchor, nroot, rsv1, nstream, next_serial, ncode;
- uint64_t root_tag[AiImgRoots], root_val[AiImgRoots]; };   // symbols, tasks, then the entire v0..end region walked
+ uint64_t root_tag[LvImgRoots], root_val[LvImgRoots]; };   // symbols, tasks, then the entire v0..end region walked
                                              // GENERICALLY -- a new v0 field rides with no codec change
 
 // an image is wholly symbolic: every word encodes as a heap offset, an lvm index, an
@@ -283,7 +283,7 @@ static word image_root_dec(uint64_t tag, uint64_t val, word *base) {
 #define ImageNImm ((uintptr_t) countof(image_immortals))
 #define ImageCellW 16u   /* max nif-cell span (words) an interior link can sit in */
 // the bare-fn lane's width: one slot per nif cell whose code slot a thread can embed --
-// ai_def1's, then the host slice's (AiNif registers a cell too: i/main.c's nif_exit[]).
+// ai_def1's, then the host slice's (LvNif registers a cell too: i/main.c's nif_exit[]).
 #define ImageNFn ((uintptr_t)(ai_def1_n + ImageNHost))
 // the lane floor: above any heap this codec encodes (1 TB on 64-bit, 128 MB on 32-bit;
 // a dump past it is refused rather than aliased) and below the absolute lane.
@@ -864,7 +864,7 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
  g->alloc(g, rank, 0);
  // roots = symbols + tasks (live outside v0), then the whole GC-traced v0..end block, generically: any
  // field added to struct ai's v0 region is serialized automatically, no codec edit (cf. the GC's v0..end loop).
- uintptr_t nv = AiImgRoots - 2, nr = AiImgRoots;
+ uintptr_t nv = LvImgRoots - 2, nr = LvImgRoots;
  Why(5);
  image_root_enc(x, g->symbols,      &H.root_tag[0], &H.root_val[0]);
  image_root_enc(x, (word) g->tasks, &H.root_tag[1], &H.root_val[1]);
@@ -1018,8 +1018,8 @@ static struct ai *img_wake(void const *buf, uintptr_t len, void *(*al)(struct ai
    base[off + k] = (word) p + ai_thread_tag;                                      // the terminator, decoded by hand: its head went live
    sz = k + 1; }
   off += sz; }
- uintptr_t nv = AiImgRoots - 2;                                          // same struct/binary (anchor-checked) -> same layout
- if (H.nroot != AiImgRoots) goto no;                                     // root count mismatch -> stale/foreign image -> normal boot
+ uintptr_t nv = LvImgRoots - 2;                                          // same struct/binary (anchor-checked) -> same layout
+ if (H.nroot != LvImgRoots) goto no;                                     // root count mismatch -> stale/foreign image -> normal boot
  g->symbols = image_root_dec(H.root_tag[0], H.root_val[0], base);
  g->tasks   = (union u*) image_root_dec(H.root_tag[1], H.root_val[1], base);
  // the parked ring is not in the image: an fd means nothing in a new process,

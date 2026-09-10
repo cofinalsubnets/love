@@ -45,7 +45,7 @@ What genuinely stands between here and freestanding C11, each row live above:
   reports it in place of the generic near-token line, so a refusal can name the program's
   fault rather than the compiler's position. **A redefinition at file scope passes in silence
   too** (found 2026-09-07): `static const int a = 1; static const int a = 2;` compiles, the
-  second definition winning — gcc refuses it (6.9p3). It bit through `AiNif`, whose static is
+  second definition winning — gcc refuses it (6.9p3). It bit through `LvNif`, whose static is
   named off the nif's array, so two names on one array quietly kept only the second.
 
 **A duplicate label now refuses and names itself** (2026-08-18). C11 6.8.1p3 scopes a label to

@@ -10,7 +10,7 @@
 # everywhere" asks for), and mooncc's output does not depend on the arch
 # mooncc runs on.
 #
-# the TU flags MIRROR the Makefile's x-lane (AiHaveVersionH on love.o), the
+# the TU flags MIRROR the Makefile's x-lane (LvHaveVersionH on love.o), the
 # fixpoint.sh drift trap wearing its cross face. this gate's first run caught the
 # version flag MISSING from the x-lane: the twin named itself "unknown".
 # AND THE LIST IS THE ARTIFACT'S, kernel objects included: a gate that links a
@@ -71,7 +71,7 @@ LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$cat" -e "(? ((bake \"$d/mooncc1.image\")
 moon1() { "$qemu" "$d/love1" wake "$d/mooncc1.image" mooncc "$@"; }
 for f in $gate_love_c; do
   mkobj "$f"
-  moon1 -D ai_tco="$tco" -D AiHaveVersionH -I"$ho" -I. -Il -Ii -Iout/lib -c "$f" "$o" \
+  moon1 -D ai_tco="$tco" -D LvHaveVersionH -I"$ho" -I. -Il -Ii -Iout/lib -c "$f" "$o" \
     || fail "love1 mooncc -c $f"
 done
 for f in $gate_host_c $gate_seat_c; do

@@ -18,7 +18,7 @@ long __ai_inle(long n, long a, long b, long c, long d, long e, long f) {
   return -38; }
 
 long __ai_osdetect(void) {
-#ifndef AiOsTranslate
+#ifndef LvOsTranslate
   /* no tables on this arch: the kernel is whichever one the build was compiled
    * for, and nothing at runtime can contradict it. READ OFF -os, never
    * assumed -- linux is where we started, not a default, and a build naming a
@@ -67,7 +67,7 @@ long __ai_osdetect(void) {
 #endif
 }
 
-#ifndef AiOsTranslate
+#ifndef LvOsTranslate
 long __ai_nrfb(long n) { return n; }      /* no second kernel on this arch */
 long __ai_errfb(long e) { return e; }
 long __ai_sigfb(long s) { return s; }

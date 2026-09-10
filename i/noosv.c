@@ -9,10 +9,10 @@
 // collides rather than going quiet.
 #include "love.h"
 
-// ..and only where there is no moonlibc: mooncc sets AiNolibc (l/love.h), and a TU it
+// ..and only where there is no moonlibc: mooncc sets LvNolibc (l/love.h), and a TU it
 // compiled links moonlibc's os.c, which owns the word and writes it at start. love0 is
 // the link that goes both ways -- the ambient cc normally, mooncc where the seed has
 // poisoned every compiler -- so the guard is the compiler's, not the rule's.
-#if !defined(AiNolibc)
+#if !defined(LvNolibc)
 long __ai_osv;
 #endif

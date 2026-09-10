@@ -48,5 +48,5 @@ static union u const
  nif_srcgz[] = {{lvm_srcgz}, {lvm_ret0}},
  nif_rtgz[] = {{lvm_rtgz}, {lvm_ret0}};
 
-AiNif("source-gz", nif_srcgz, NULL);
-AiNif("runtime-gz", nif_rtgz, NULL);
+LvNif("source-gz", nif_srcgz, NULL);
+LvNif("runtime-gz", nif_rtgz, NULL);

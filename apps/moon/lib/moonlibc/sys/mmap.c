@@ -2,7 +2,7 @@
 
 void *mmap(void *a, long n, int prot, int fl, int fd, long off) {
   long r;
-#ifdef AiOsTranslate
+#ifdef LvOsTranslate
   if (__ai_osv == 3)
     /* netbsd keeps the classic pad: (addr len prot flags fd PAD pos), the
      * seventh riding the stack through the wide door */

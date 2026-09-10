@@ -73,12 +73,12 @@ LOVE_NO_IMAGE=1 "$d/love1" -l "$cat" -e "(? ((bake \"$d/mooncc1.image\") = 1) (q
 # ...and rebuilds every TU with it, in the exact order make links them
 moon1() { "$d/love1" wake "$d/mooncc1.image" mooncc "$@"; }
 # l/love.c's flags must MIRROR make's ($(moon_d)/love.o in the Makefile), not just its
-# order: -D AiHaveVersionH is what puts the version id in this TU, and love1 was linked
+# order: -D LvHaveVersionH is what puts the version id in this TU, and love1 was linked
 # from make's object. Drop it here and love2 carries "unknown" -- the compare fails at the
 # string, naming a broken fixpoint where the only difference is a build flag.
 for f in $gate_love_c; do
   mkobj "$f"
-  moon1 -D ai_tco=1 -D AiHaveVersionH -I"$ho" -I. -Il -Ii -Iout/lib -c "$f" "$o" \
+  moon1 -D ai_tco=1 -D LvHaveVersionH -I"$ho" -I. -Il -Ii -Iout/lib -c "$f" "$o" \
     || fail "love1 mooncc -c $f"
 done
 for f in $gate_host_c $gate_seat_c; do

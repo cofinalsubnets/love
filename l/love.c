@@ -17,16 +17,16 @@ static struct ai
  *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, void*, size_t));
 static uintptr_t stringlen(struct ai *g, word x);
 // the build's version string, generated into out/lib/love_version.h and surfaced
-// as `love-version`. -DAiVersion wins (love0 pins "bootstrap" so a new commit never
-// relinks the bootstrap); -DAiHaveVersionH says the header exists -- mooncc has
+// as `love-version`. -DLvVersion wins (love0 pins "bootstrap" so a new commit never
+// relinks the bootstrap); -DLvHaveVersionH says the header exists -- mooncc has
 // no __has_include, so the probe alone is not enough.
-#ifndef AiVersion
-# if defined(AiHaveVersionH) || (defined(__has_include) && __has_include("love_version.h"))
+#ifndef LvVersion
+# if defined(LvHaveVersionH) || (defined(__has_include) && __has_include("love_version.h"))
 #  include "love_version.h"
 # endif
 #endif
-#ifndef AiVersion
-#define AiVersion "unknown"
+#ifndef LvVersion
+#define LvVersion "unknown"
 #endif
 word const ai_map_gap_cell = 0; // FIXME why do we need 0 as a constant :/
 struct ai_str0 const ai_str_empty = { .ap = lvm_str, .len = 0 };
@@ -147,7 +147,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c;
  // the rem set + major pool ride g->alloc: a frontend that cannot supply them cannot run
  g->major_len = ai_major0;
- g->rem = g->alloc(g, NULL, AiRemCap * sizeof(word));
+ g->rem = g->alloc(g, NULL, LvRemCap * sizeof(word));
  g->major_pool = g->rem ? g->alloc(g, NULL, 2 * g->major_len * sizeof(word)) : NULL;
  if (!g->major_pool) { if (g->rem) g->alloc(g, g->rem, 0); return encode(g, ai_status_scare); }
  g->major_base = g->major_hp = g->major_pool, g->budget = ai_budget;
@@ -209,24 +209,24 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
    struct ai_def d = def1[j];
    if (!ai_nif_cell(d.v.k)) d.v.x = putcharm(ai_op_index((intptr_t) d.v.ap));
    g = ai_defn(g, &d, 1); }
-  if (ai_ok(g = ai_strof(g, AiVersion)))            // a live string: off the stack, never an ai_def
+  if (ai_ok(g = ai_strof(g, LvVersion)))            // a live string: off the stack, never an ai_def
    g = ai_pop(ai_defv(g, "love-version"), 1);
   // `love-arch`: the host CPU the glaze emits for, and the assembler target every backend
   // is registered under. A NOM, in the prel's canonical spelling (l/boot/prel.l's arch-canon)
   // -- so a reader compares it against 'x64 rather than interning a string first, and
   // there is one word for this machine across holo, moon, kore and the seed.
 #if defined(__x86_64__)
-  #define AiArch "x64"
+  #define LvArch "x64"
 #elif defined(__aarch64__)
-  #define AiArch "a64"
+  #define LvArch "a64"
 #elif defined(__riscv)
-  #define AiArch "rv64"
+  #define LvArch "rv64"
 #elif defined(__wasm__)
-  #define AiArch "wasm"
+  #define LvArch "wasm"
 #else
-  #define AiArch "other"
+  #define LvArch "other"
 #endif
-  if (ai_ok(g = intern(ai_strof(g, AiArch))))
+  if (ai_ok(g = intern(ai_strof(g, LvArch))))
    g = ai_pop(ai_defv(g, "love-arch"), 1);
   // the errno vocabulary (g->errs): canonical number -> its nom, all interned
   // here so no error path ever allocates. ai_err reads it; 0 is 'eunknown, the

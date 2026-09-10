@@ -39,12 +39,12 @@ struct ai *ai_cats_egg(struct ai *g) {
 
 // the arch's holo, scan riding it; every other module registers as post is sat
 struct ai *ai_cats_lib(struct ai *g) {
-#ifdef AiCatModsH
+#ifdef LvCatModsH
   g = CatEval(g, ai_cat_lib_h_z);
 #endif
   return g; }
 
-#ifdef AiGlazed
+#ifdef LvGlazed
 // 138 KB of text that only a `love bake` reads, for 41 KB of .rodata
 struct ai *ai_cats_glaze(struct ai *g) { return CatEval(g, src_glaze_z); }
 #else

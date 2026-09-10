@@ -45,8 +45,8 @@
 // doors a lane may CALL is a build fact here and a box fact under a foreign
 // libc, which is the distinction i/posix.c's ladder is written against. the
 // ambient-cc lane (love0, glibc) takes that ladder's kernel arms instead.
-#if defined(__mooncc__) && !defined(AiNolibc)
-#define AiNolibc 1
+#if defined(__mooncc__) && !defined(LvNolibc)
+#define LvNolibc 1
 #endif
 
 // musttail IS the tail-threaded vm: without it every dispatch keeps its frame and a
@@ -209,7 +209,7 @@ struct ai {
  // pointer, rescanned by the next minor. rem_miss counts drops on overflow -- any miss
  // forces the next collection major, so a minor only runs under a complete set.
  word *rem;
- uint32_t rem_n, rem_hi, rem_miss;   // all three bounded by AiRemCap, the fixed capacity
+ uint32_t rem_n, rem_hi, rem_miss;   // all three bounded by LvRemCap, the fixed capacity
  // the sub-word collector scalars, adjacent so both ride the rem set's tail
  bool gc_gen;                             // set during a collection: gbump() targets major_hp, not hp
  int8_t lean;                             // resize-stickiness streak (+grow/-shrink); a resize needs |lean| >= 2
@@ -279,7 +279,7 @@ struct ai {
 // and no boot order has to be kept for it.
 struct ai_def { char const *n; union u v; char const *m; };
 
-// host nif auto-registration: AiNif("name", fn, "mod") lands the entry in the love_nifs
+// host nif auto-registration: LvNif("name", fn, "mod") lands the entry in the love_nifs
 // section and boot drains [__start_love_nifs, __stop_love_nifs) through ai_defn, so an app
 // adds nifs in its own i/<app>.c. no linker script -- the toolchain defines the bracket
 // symbols. a nif rides the image as an index off this bracket, never a kept absolute.
@@ -291,14 +291,14 @@ struct ai_def { char const *n; union u v; char const *m; };
 // how 109 rows read as 134 the day this struct grew its third field. a literal, not
 // _Alignof: mooncc reads this attribute's operand as a number token and nothing else.
 #if UINTPTR_MAX > 0xffffffffu
-#define AiDefAlign 8
+#define LvDefAlign 8
 #else
-#define AiDefAlign 4
+#define LvDefAlign 4
 #endif
 extern struct ai_def const __start_love_nifs[], __stop_love_nifs[];
-#define AiNif(nm, fn, mod) \
+#define LvNif(nm, fn, mod) \
   static struct ai_def const \
-    __attribute__((section("love_nifs"), used, aligned(AiDefAlign))) \
+    __attribute__((section("love_nifs"), used, aligned(LvDefAlign))) \
     _ainif_##fn = { (nm), { .k = (fn) }, (mod) }
 
 // port vtable -- what a device owes, and nothing else. a NULL slot means no method
@@ -491,27 +491,27 @@ extern struct ai_fio ai_stdin, ai_stdout, ai_stderr;
 #define cell(_) ((union u*)(_))
 #define charmp oddp
 // the blue floor: extra stack slack on every avail check, a buffer against off-by-one
-// overshoots. 0 under LoveBoot so love0 keeps strict discipline; -Dai_avail_floor=N overrides.
+// overshoots. 0 under Love0 so love0 keeps strict discipline; -Dai_avail_floor=N overrides.
 #ifndef ai_avail_floor
-# ifdef LoveBoot
+# ifdef Love0
 #  define ai_avail_floor 0
 # else
 #  define ai_avail_floor 8
 # endif
 #endif
-// AiFirstBoot -- this link can bake itself from the source it carries (i/src.c's
+// LvFirstBoot -- this link can bake itself from the source it carries (i/src.c's
 // ai_srcgz, laid strong by the dist link) and re-exec the patched file. a capability,
 // not a roster: love0 LAYS that blob rather than carrying one, and the wasm seat has no
 // exec to come back through, so neither asks for the reader or the fork.
-#if !defined(LoveBoot) && !defined(__wasm__)
-# define AiFirstBoot 1
+#if !defined(Love0) && !defined(__wasm__)
+# define LvFirstBoot 1
 #endif
-// AiFirstBoot -- this link can bake itself from the source it carries (i/src.c's
+// LvFirstBoot -- this link can bake itself from the source it carries (i/src.c's
 // ai_srcgz, laid strong by the dist link) and re-exec the patched file. a capability,
 // not a roster: love0 LAYS that blob rather than carrying one, and the wasm seat has
 // no exec to come back through, so neither asks for the reader or the fork.
-#if !defined(LoveBoot) && !defined(__wasm__)
-# define AiFirstBoot 1
+#if !defined(Love0) && !defined(__wasm__)
+# define LvFirstBoot 1
 #endif
 // the GC tail is ai_musttail like every other, and that is why lvm_gc takes its word
 // count in g->b instead of a fifth parameter: musttail wants matching prototypes, so an
@@ -630,11 +630,11 @@ static ai_inline struct ai *encode(struct ai *g, enum ai_status s) { return
 
 // call installed help with an error. _lvm prefix makes vmret skip it, since it returns to C if no help is installed
 lvm_t _lvm_ghelp;
-// ai_have is the phrase "this call may collect"; under AiGcStress every one does, so a
+// ai_have is the phrase "this call may collect"; under LvGcStress every one does, so a
 // raw local held across it goes stale on the first run rather than years later.
-// AiGcCheck is the other half, checking the collector where this checks the mutator.
+// LvGcCheck is the other half, checking the collector where this checks the mutator.
 static ai_inline struct ai *ai_have(struct ai *g, uintptr_t n) {
-#ifdef AiGcStress
+#ifdef LvGcStress
  return !ai_ok(g) ? g : ai_please(g, n);
 #else
  return !ai_ok(g) || avail(g) >= n ? g : ai_please(g, n);
@@ -713,7 +713,7 @@ _Static_assert(Bytes == sizeof(uintptr_t), "word size sanity check");
 _Static_assert(sizeof(union u) == sizeof(intptr_t), "cell size equals word size");
 
 // remembered-set capacity in words; g->alloc'd, so the collector stays freestanding
-#define AiRemCap (1u << 12)
+#define LvRemCap (1u << 12)
 // initial pool sizes, words per half; both grow on demand (a tiny device overrides
 // with -Dai_minor0/-Dai_major0 and accepts more collections)
 #ifndef ai_minor0

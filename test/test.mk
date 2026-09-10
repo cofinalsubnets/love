@@ -597,7 +597,7 @@ test_raw: host
 # (common.mk) and it had rotted to a segfault in `bake`: the glaze emits the
 # TAIL-THREADED lvm shape, and nothing stopped a trampoline build from calling it.
 # love0 is the tree's other tco=0 lane and it cannot cover this -- it is the
-# LoveBoot branch, which never reaches AiGlazed, so the one build that exercised
+# Love0 branch, which never reaches LvGlazed, so the one build that exercised
 # the trampoline was the one build that could not meet the bug. this is the full
 # love at tco=0: it must build, BAKE (where the segfault was), and pass the corpus.
 # it takes its own hsuf'd tree, so it neither clobbers nor is clobbered by the
@@ -1011,7 +1011,7 @@ nettest: host
 # prerequisite: test/host/cook.l's SHELL pair sets `SHELL := out/lush` to prove cook honors it.
 test_tools: host out$(hsuf)/lush
 	@$(MAKE) -C tools
-# test_gcheck: the copy loop's FIXPOINT instance check. AiGcCheck makes gen_minor re-drive
+# test_gcheck: the copy loop's FIXPOINT instance check. LvGcCheck makes gen_minor re-drive
 # its WHOLE scan after the drain and trap if the second pass copies a word, in its own tree.
 # /warn the knob is GCDBG: EXTRA_CFLAGS rides $(ai_cflags), which the mooncc recipes do not use.
 # â  the shared unsuffixed prerequisites are named HERE so the PARENT makes them once.
@@ -1020,15 +1020,15 @@ test_tools: host out$(hsuf)/lush
 # table and `mooncc` then reads as a filename (the Makefile). test_fixpoint names them
 # for the same reason.
 test_gcheck: host $(love0) out/mooncc0.image
-	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DAiGcCheck test_host
-	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DAiGcCheck test_hostegg
+	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DLvGcCheck test_host
+	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DLvGcCheck test_hostegg
 # test_gcstress: the MUTATOR's side -- whether the C around the collector holds a raw pointer
-# across a call that collects. AiGcStress always collects, poisons the vacated nursery, and
+# across a call that collects. LvGcStress always collects, poisons the vacated nursery, and
 # majors every 32nd. ~12 min, own tree -- the baked leg tracks the glaze, since every major
 # walks it, and costs 3.4x the egg one for it (429 s against 126 s).
 test_gcstress: host $(love0) out/mooncc0.image
-	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DAiGcStress test_host
-	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DAiGcStress test_hostegg
+	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_host
+	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DLvGcStress test_hostegg
 # --- the machine-checked half: test/proof/rocq/ + test/proof/lean/ ---------------------------------
 # Each gate below is a no-op that SAYS SO when its checker is missing, so a bare box stays
 # green. The tool guards are grouped by what they need, not by gate.

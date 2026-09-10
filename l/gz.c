@@ -19,7 +19,7 @@ static const uint8_t gz_dext[30] = {
 static const uint8_t gz_clord[19] = {
  16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 };
 
-// ===== inflate -- the C twin of apps/gz/gz.l's inflate, AiNif-registered =====
+// ===== inflate -- the C twin of apps/gz/gz.l's inflate, LvNif-registered =====
 // the tls.c discipline: (inflate s n) -> the bytes | (), s a raw DEFLATE stream and n its
 // inflated size or 0. `gz-inflate` reaches for this and falls back to gz-puff.
 // a twin, not a replacement: gz-puff stays the readable statement of RFC 1951 and the
@@ -246,9 +246,9 @@ static lvm(lvm_inflate) {
  LvmCall(g, host_inflate) }
 
 static union u const nif_inflate[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_inflate}, {lvm_ret0}};
-AiNif("inflate", nif_inflate, NULL);
+LvNif("inflate", nif_inflate, NULL);
 
-// ===== deflate -- the C twin of apps/gz/gz.l's DEFLATE coder, AiNif-registered =====
+// ===== deflate -- the C twin of apps/gz/gz.l's DEFLATE coder, LvNif-registered =====
 // the same discipline as inflate above: (deflate s) -> the raw stream | ().
 // a twin held to the bytes: same greedy parse (chain 32, min match 3, the far-3
 // refusal at 4096), same 16384-symbol blocks each costed stored/fixed/dynamic, same
@@ -564,4 +564,4 @@ static LvmWrap(lvm_deflate, host_deflate)
 // one operand, so the run is {impl, ret0} -- l/nifs.l states the law and lvm_cur
 // curries once unconditionally, which at arity one hands the body an operand too many.
 static union u const nif_deflate[] = {{lvm_deflate}, {lvm_ret0}};
-AiNif("deflate", nif_deflate, NULL);
+LvNif("deflate", nif_deflate, NULL);

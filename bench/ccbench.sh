@@ -145,9 +145,9 @@ build_mooncc() { # $1=binpath
   bin=$1; od=$WORK/mooncc; rm -rf "$od"; mkdir -p "$od"
   ( cd "$R" || exit 1
     for b in $love_tu; do
-      mc -D ai_tco=1 -D AiHaveVersionH -Iout -I. -Il -Ii -Iout/lib -c "l/$b.c" "$od/$b.o" || exit 1; done
+      mc -D ai_tco=1 -D LvHaveVersionH -Iout -I. -Il -Ii -Iout/lib -c "l/$b.c" "$od/$b.o" || exit 1; done
     for f in $host_cs; do b=$(basename "$f" .c)
-      mc -D ai_tco=1 -D AiHaveVersionH -Iout -I. -Il -Ii -Iout/lib -c "$f" "$od/host_$b.o" || exit 1; done
+      mc -D ai_tco=1 -D LvHaveVersionH -Iout -I. -Il -Ii -Iout/lib -c "$f" "$od/host_$b.o" || exit 1; done
     # no moonlibc object: the link owes its symbols and the driver supplies them
     # member by need, so the dead areas never arrive. ccsize/ccdead therefore
     # read mooncc's libc off the BINARY's complement, not off a moonlibc.o.

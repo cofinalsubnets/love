@@ -148,9 +148,9 @@ struct ai_port_vt const ai_fd_port_vt = { _flush, fd_writen, fd_readn, NULL };
 // exit() reaches the JS caller as an ExitStatus it catches (loader.js).
 static noreturn lvm(lvm_exit) { exit(getcharm(Sp[0])); }
 static union u const nif_exit[] = {{lvm_exit}, {lvm_ret0}};
-AiNif("exit", nif_exit, NULL);
+LvNif("exit", nif_exit, NULL);
 static union u const nif_quit[] = {{lvm_exit}, {lvm_ret0}};   // the crew's verb tail (moon-main), as main.c has it
-AiNif("quit", nif_quit, NULL);
+LvNif("quit", nif_quit, NULL);
 
 // (close p) -> (): a port's write run lands, a horn shuts its device, and the closed
 // vt goes in -- posix.c's close less the fd, which this seat has none of
@@ -172,7 +172,7 @@ static lvm(lvm_close) {
   Sp[0] = ZeroPoint;
   ai_musttail return Next(1); }
 static union u const nif_close[] = {{lvm_close}, {lvm_ret0}};
-AiNif("close", nif_close, NULL);
+LvNif("close", nif_close, NULL);
 
 // --- the console: quay's screen, and the page's mirror of it ---------------
 // the engine and its love door ride along by unity include, as i/cb.c has them;
@@ -182,13 +182,13 @@ AiNif("close", nif_close, NULL);
 // reads after the eval returns. answers the cell count, or () for a screen too big.
 #include "quay/quay.c"
 #include "quay/nif.c"
-AiNif("screen", nif_screen, NULL);      // the console's love door, on the slice as i/cb.c lays it
-AiNif("scribe", nif_scribe, NULL);
-AiNif("glass", nif_glass, NULL);
-AiNif("gaze", nif_gaze, NULL);
-AiNif("reply", nif_reply, NULL);
-AiNif("unfold", nif_unfold, NULL);
-AiNif("wet", nif_damage, NULL);
+LvNif("screen", nif_screen, NULL);      // the console's love door, on the slice as i/cb.c lays it
+LvNif("scribe", nif_scribe, NULL);
+LvNif("glass", nif_glass, NULL);
+LvNif("gaze", nif_gaze, NULL);
+LvNif("reply", nif_reply, NULL);
+LvNif("unfold", nif_unfold, NULL);
+LvNif("wet", nif_damage, NULL);
 #include "quay/xterm256.h"
 enum { mir_head = 4, mir_max = 1 << 16 };
 static uint32_t mir[mir_head + mir_max];   // rows cols cursor flag, then the cells
@@ -202,7 +202,7 @@ static lvm(lvm_mirror) {
   else Sp[0] = ZeroPoint;
   Ip += 1; ai_musttail return Continue(); }
 static union u const nif_mirror[] = {{lvm_mirror}, {lvm_ret0}};
-AiNif("mirror", nif_mirror, NULL);
+LvNif("mirror", nif_mirror, NULL);
 EMSCRIPTEN_KEEPALIVE uint32_t*       ai_mirror(void)  { return mir; }
 EMSCRIPTEN_KEEPALIVE uint32_t const* ai_palette(void) { return xterm256; }
 EMSCRIPTEN_KEEPALIVE uint32_t        ai_unfold(uint32_t g_) { return g_ < 256 ? cb_unfold((uint8_t) g_) : 0; }
@@ -220,7 +220,7 @@ EMSCRIPTEN_KEEPALIVE int ai_key(int b) {
   if (F && ai_ok(F)) ai_core_of(F)->sweep_ctr = sweep_interval;
   return 1; }
 
-// the seat's nifs ride the love_nifs slice (AiNif), as main.c's do: the image codec
+// the seat's nifs ride the love_nifs slice (LvNif), as main.c's do: the image codec
 // names a nif by its place in that slice, so a baked heap can carry them.
 // the base: the egg boot, the page's boot text, the seat's name. a bake seals this.
 EMSCRIPTEN_KEEPALIVE
@@ -233,7 +233,7 @@ int ai_boot(void) {
   // a quarter of the ceiling, like every other bounded seat: the transient peak while a
   // resize holds both halves is double the budget.
   if (ai_ok(F)) ai_core_of(F)->budget = (2048u << 20) / sizeof(word) / 4;
-  // the AiNif slice of every linked TU (this seat, the console, the horn), as main.c drains it
+  // the LvNif slice of every linked TU (this seat, the console, the horn), as main.c drains it
   F = ai_defn(F, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
   if (!ai_ok(F)) return ai_code_of(F);
   F = ai_egg_(F, src_egg, src_p1, src_corpus, src_post);

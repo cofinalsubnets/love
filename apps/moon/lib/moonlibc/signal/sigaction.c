@@ -50,9 +50,9 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
       old->sa_mask.__v[0] = (long) __ai_maskcan((unsigned long) ko.mask[0]
                                                 | ((unsigned long) ko.mask[1] << 32)); }
     return 0; }
-#ifdef AiOsTranslate
+#ifdef LvOsTranslate
   if (__ai_osv == 3) {
-#ifndef AiNbTramp
+#ifndef LvNbTramp
     /* no proven return path on this ISA: refuse rather than register a tramp
      * that was never laid. freebsd on this arch does not come through here. */
     __errno_v = ENOSYS; return -1;

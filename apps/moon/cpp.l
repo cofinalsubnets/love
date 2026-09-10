@@ -652,7 +652,7 @@
                ; and it's gated off on trampoline builds.
                _ (pin t "__STDC_HOSTED__" ['obj [(tok 'num 1 0)]])
                ; the arch predefine (__x86_64__ / __aarch64__) is the driver's:
-               ; cc.l prepends it as a -D-style define by target (love.c's AiArch/
+               ; cc.l prepends it as a -D-style define by target (love.c's LvArch/
                ; ImageArch read it -- a build without one believed its arch was
                ; "other" and the glaze handed holo an unknown target).
                ; __sizeof_int128__ rides the driver's -D channel too, on the

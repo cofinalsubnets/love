@@ -84,7 +84,7 @@ out/lib/corpus.list: force_corpus_list
 
 out/lib/love_version.h: $(R)/VERSION
 	@mkdir -p out/lib
-	@printf '#define AiVersion "%s"\n' "$$(cat $(R)/VERSION)" > $@
+	@printf '#define LvVersion "%s"\n' "$$(cat $(R)/VERSION)" > $@
 	@echo '$(t_sh)	'$@
 
 out/lib/readme.bin: $(love0) $(R)/l/boot/post.l $(R)/VERSION
@@ -132,7 +132,7 @@ $(ho)/liblove.a: $(h_o)
 love0_o = $(patsubst $(R)/%.c,out/0/%.o,$(filter-out $(R)/i/cats.c,$(host_c)) $(R)/i/main0.c $(R)/i/nokern.c $(R)/i/noblob.c $(R)/i/noosv.c $(love_c))
 out/0/i/main0.o: out/lib/boot0.h
 out/0/i/cb.o: l/quay/quay.c l/quay/nif.c l/quay/quay.h
-boot_cc = $(CCACHE) $(CC) $(ai_cflags) -fPIE -DLoveBoot -Dai_tco=0 -Dai_data_section=0 -DAiVersion='"$(love_base)+bootstrap"' -I. -Il -Ii -Iout/lib
+boot_cc = $(CCACHE) $(CC) $(ai_cflags) -fPIE -DLove0 -Dai_tco=0 -Dai_data_section=0 -DLvVersion='"$(love_base)+bootstrap"' -I. -Il -Ii -Iout/lib
 .PHONY: force_love0cc
 force_love0cc: ;
 out/0/.love0cc: force_love0cc
@@ -150,7 +150,7 @@ $(ho)/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
 	@$(hcc) -c $< -o $@
 
 # l.o carries the version string; recompile it when the id changes. love0's twin is
-# deliberately not here -- see the -DAiVersion note on boot_cc.
+# deliberately not here -- see the -DLvVersion note on boot_cc.
 # the baked source rides i/cats.c; main.c bakes the dist roster for the first boot
 $(ho)/i/cats.o: out/lib/baked.h
 $(ho)/i/main.o: out/lib/distlist.h
@@ -206,7 +206,7 @@ $(1)_seat_o = $$($(2))/i/noblob.o
 $$($(1)_love_o): $$($(2))/%.o: $$(R)/%.c $$(love_h) $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
-	@$$($(3)) -D ai_tco=$$(tco) -D AiHaveVersionH -I$$(ho) -I. -Il -Ii -Iout/lib -c $$< $$@
+	@$$($(3)) -D ai_tco=$$(tco) -D LvHaveVersionH -I$$(ho) -I. -Il -Ii -Iout/lib -c $$< $$@
 $$($(2))/l/love.o: out/lib/love_version.h   # only this TU carries the version id
 $$($(1)_host_o) $$($(1)_seat_o): $$($(2))/%.o: $$(R)/%.c $$(love_h) $$(moon0_dep)
 	@echo 'MOON	'$$@
@@ -682,7 +682,7 @@ out/.doom.flag: force_dist_list
 	 $(note)
 
 $(k_odir)/l/love.o: out/lib/love_version.h
-$(k_odir)/l/love.o: kcppflags += -DAiHaveVersionH
+$(k_odir)/l/love.o: kcppflags += -DLvHaveVersionH
 
 klay_l = $R/apps/kore/text.l $R/apps/kore/u.l $R/apps/kore/asbook.l \
   $R/l/holo/$a.l $R/l/holo/elf.l $R/l/holo/obj.l
@@ -1023,7 +1023,7 @@ wasm_c = $(love_c) $(R)/i/horn.c $(R)/i/wasm/host.c
 out/wasm/love.wasm: $(wasm_c) $(lib_h) out/lib/love_version.h host
 	@mkdir -p $(dir $@)
 	@echo 'MOON	'$@
-	@$(mooncc) -t wasm -Dai_tco=1 -DAiHaveVersionH -I. -Il -Ii -Iout/lib -o $@ $(wasm_c)
+	@$(mooncc) -t wasm -Dai_tco=1 -DLvHaveVersionH -I. -Il -Ii -Iout/lib -o $@ $(wasm_c)
 ifeq ($(NODE),)
 wasm: out/wasm/love.wasm
 else
@@ -1055,7 +1055,7 @@ out/wasm/src.o: $(dist_source) tools/mksrc.l out/.mksys-cat.l $m
 out/love-wasm.wasm: $(kw_c) $(kw_h) out/wasm/src.o out/lib/baked.h out/lib/distlist.h \
   out/lib/korelist.h out/lib/crewlist.h out/lib/love_version.h $(mooncc_dep)
 	@echo 'MOON	'$@
-	@$(mooncc) -t wasm -Dai_tco=1 -DAiHaveVersionH -I. -Il -Ii -Iout/lib \
+	@$(mooncc) -t wasm -Dai_tco=1 -DLvHaveVersionH -I. -Il -Ii -Iout/lib \
 	  -Il/quay -Iapps/moon/include -o $@ $(kw_c) out/wasm/src.o
 wasm-emcc:                       # emcc's love, out/wasm/love.js: the foreign build ccwasm takes
 	@$(MAKE) -C i/wasm

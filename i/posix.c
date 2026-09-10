@@ -2,7 +2,7 @@
 // signal, the pid-1 supervisor's primitives and the shell's job control), fs
 // effects and values (stat/readdir/rename/chmod/..), the environment, pipes and
 // raw-fd plumbing, and the pty wrapper (bao's rlwrap/debugger muscle). host-only,
-// auto-globbed + AiNif-registered (no love.c/love.h/main.c edit). the
+// auto-globbed + LvNif-registered (no love.c/love.h/main.c edit). the
 // conventions, kept throughout:
 //   effect ops answer () ok | 'enoent | 'badarg
 //   value ops answer the value | () absence | 'enoent | 'badarg
@@ -37,43 +37,43 @@
 // the question a lane owes is which doors it may call, never which kernel it is
 // standing on: ours carries every door on all three (apps/moon/include/sys), and
 // a foreign libc carries what its own box does. so these are build facts under
-// AiNolibc and box facts under anything else.
+// LvNolibc and box facts under anything else.
 // mount(2) and unshare are LINUX-reaching, and still not this file's question:
 // ours carries both symbols and os.c leaves their rows unmapped, so the call
 // refuses with ENOSYS off linux at run time -- which is the only place that can
 // know, since one binary meets three kernels. compiling them out by the kernel
 // we were built on would refuse them on a linux box too. widening them is the
 // libc's job (mount wants the BSD argument shapes; unshare is linux's own).
-#if defined(AiNolibc)
-# define AiHaveSignalfd 1
-# define AiHaveKqueue   1
-# define AiHaveSysctl   1
-# define AiHaveDontfork 1
+#if defined(LvNolibc)
+# define LvHaveSignalfd 1
+# define LvHaveKqueue   1
+# define LvHaveSysctl   1
+# define LvHaveDontfork 1
 #elif defined(__linux__)
-# define AiHaveSignalfd 1
-# define AiHaveDontfork 1
+# define LvHaveSignalfd 1
+# define LvHaveDontfork 1
 #elif defined(__FreeBSD__) || defined(__NetBSD__)
-# define AiHaveKqueue 1
-# define AiHaveSysctl 1
+# define LvHaveKqueue 1
+# define LvHaveSysctl 1
 #endif
-#if defined(AiNolibc) || defined(__linux__)
-# define AiHaveMount      1
-# define AiHaveNamespaces 1
+#if defined(LvNolibc) || defined(__linux__)
+# define LvHaveMount      1
+# define LvHaveNamespaces 1
 #endif
 
-#if defined(AiHaveSignalfd)
+#if defined(LvHaveSignalfd)
 #include <sys/signalfd.h>   // signalfd, struct signalfd_siginfo
 #endif
-#if defined(AiHaveKqueue)
+#if defined(LvHaveKqueue)
 #include <sys/event.h>      // kqueue/kevent, the signal port's BSD door
 #endif
-#if defined(AiHaveSysctl)
+#if defined(LvHaveSysctl)
 #include <sys/sysctl.h>     // the BSD selfpath doors (glibc dropped the symbol)
 #endif
-#if defined(AiHaveMount)
+#if defined(LvHaveMount)
 #include <sys/mount.h>      // mount(2), in linux's argument shape
 #endif
-#if defined(AiHaveNamespaces)
+#if defined(LvHaveNamespaces)
 #include <sched.h>          // unshare, CLONE_NEWUSER/NEWNS (newns)
 #endif
 // OUTSIDE every guard: what follows is called unconditionally below (argv_marshal,
@@ -205,14 +205,14 @@ static lvm(lvm_sigclear) { Sp[0] = host_sigclear(g); ai_musttail return Next(1);
 // and 820-1080 unguarded. scoped by the caller: the (fork) nif and any child that walks
 // the heap inherit whole, as fork means. best-effort -- an unaligned edge or a kernel
 // without the advice keeps plain fork.
-#if defined(AiHaveDontfork)
+#if defined(LvHaveDontfork)
 static void guard1(void *lo, void *hi, int adv) {
  uintptr_t a = ((uintptr_t) lo + 4095) & ~(uintptr_t) 4095,
            b = (uintptr_t) hi & ~(uintptr_t) 4095;
  if (b > a) (void) madvise((void*) a, (long) (b - a), adv); }
 #endif
 void host_spawn_guard(struct ai *g, int on) {
-#if defined(AiHaveDontfork)
+#if defined(LvHaveDontfork)
  int adv = on ? MADV_DONTFORK : MADV_DOFORK;
  // the ceiling is the frontier, not the block top: ai_argv_marshal lays the
  // child's argv at g->hp, so the window above hp stays mapped and is the one
@@ -304,8 +304,8 @@ static lvm(lvm_reapany) {
 // merges the sigfd with a heartbeat task's timer in one wait, the {nic, clock}
 // story for {signals, clock}), then sigtake reads the record. SIGCHLD coalesces, so a
 // 'chld wake still loops `glean` to harvest every zombie.
-#if defined(AiHaveSignalfd) || defined(AiHaveKqueue)
-#if defined(AiHaveKqueue)
+#if defined(LvHaveSignalfd) || defined(LvHaveKqueue)
+#if defined(LvHaveKqueue)
 // the BSD door: the port holds a kqueue fd instead. EVFILT_SIGNAL fires on
 // send -- before delivery processing -- so the same blocked mask queues here
 // too (probed on both boxes). one kernel per process, so one flavor: a flag.
@@ -342,10 +342,10 @@ ai_noinline static struct ai *host_sigfd(struct ai *g) {
  // every door this libc carries, in order: the canonical one, then the BSD one
  // where it answers -- the try is the probe, as selfpath's ladder below.
  int fd = -1;
-#if defined(AiHaveSignalfd)
+#if defined(LvHaveSignalfd)
  fd = signalfd(-1, &m, SFD_NONBLOCK | SFD_CLOEXEC);
 #endif
-#if defined(AiHaveKqueue)
+#if defined(LvHaveKqueue)
  if (fd < 0) fd = host_sigfd_kq(a);          // ENOSYS: a BSD kernel; kqueue is the body
 #endif
  if (fd < 0) return g->sp[0] = ai_err(g, errno), g;
@@ -363,7 +363,7 @@ static lvm(lvm_sigfd) {
 // 'chld consumer loops glean for the pids anyway.
 ai_noinline static struct ai *host_sigtake(struct ai *g, int fd) {
  intptr_t signo, pid;
-#if defined(AiHaveKqueue)
+#if defined(LvHaveKqueue)
  if (host_sigkq) {
   struct kevent ev;
   struct timespec z = {0, 0};
@@ -374,7 +374,7 @@ ai_noinline static struct ai *host_sigtake(struct ai *g, int fd) {
  else
 #endif
  {
-#if defined(AiHaveSignalfd)
+#if defined(LvHaveSignalfd)
   struct signalfd_siginfo si;
   ssize_t n = read(fd, &si, sizeof si);
   if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {      // EAGAIN is absence, not failure
@@ -493,7 +493,7 @@ ai_noinline size_t host_selfpath(char *b, size_t n) {
   if ((size_t) r > dl && !memcmp(b + (size_t) r - dl, " (deleted)", dl))
    r -= (ssize_t) dl, b[r] = 0;
   return (size_t) r; }
-#if defined(AiHaveSysctl)
+#if defined(LvHaveSysctl)
  // ours always links sysctl (ENOSYS off the BSDs); glibc dropped the symbol,
  // and that build is the linux bootstrap scaffold -- /proc answered above.
  int mib[4] = { 1, 14, 12, -1 };                       // freebsd: CTL_KERN KERN_PROC KERN_PROC_PATHNAME(-1)
@@ -648,7 +648,7 @@ static lvm(lvm_mkdir) {
  Sp[1] = mkdir(p, (mode_t) mode) ? ai_err(g, errno) : ZeroPoint;
  ai_musttail return Nextp(1, 1); }
 
-#if defined(AiHaveMount)
+#if defined(LvHaveMount)
 static ai_inline word host_mount(struct ai *g, word a, word b, word c) {
  char const *src = str_c(a), *tgt = str_c(b), *typ = str_c(c);
  if (!src || !tgt || !typ) return ai_badarg(g);
@@ -703,7 +703,7 @@ static lvm(lvm_mknod) {
              : (mknod(p, (mode_t) mode, (dev_t) dev) ? ai_err(g, errno) : ZeroPoint);
   Sp += 2; ai_musttail return Next(1); }
 
-#if defined(AiHaveNamespaces)
+#if defined(LvHaveNamespaces)
 static int ns_write(char const *path, char const *s) {
  int fd = open(path, O_WRONLY);
  if (fd < 0) return -1;
@@ -909,43 +909,43 @@ static union u const
 // reached -- so a module splice, sitting above the base, would hide it for good and the
 // crew would call the host's door on a seat that has no host. the line is not
 // posix-vs-love: it is SYSCALL vs SEAT DOOR, and only the seats can say which.
-AiNif("spawn", nif_spawn, NULL);
-AiNif("glean", nif_reapany, NULL);
-AiNif("sigfd", nif_sigfd, "posix");
-AiNif("sigtake", nif_sigtake, "posix");
-AiNif("sigclear", nif_sigclear, "posix");
-AiNif("sigign?", nif_sigignp, "posix");
-AiNif("wait", nif_waitpid, NULL);
-AiNif("chdir", nif_chdir, "posix");
-AiNif("cwd", nif_cwd, "posix");
-AiNif("selfpath", nif_selfpath, "posix");
-AiNif("pipe", nif_pipe, NULL);
-AiNif("openfd", nif_openfd, "posix");
-AiNif("spawnio", nif_spawnio, NULL);
-AiNif("fdopen", nif_fdopen, NULL);
-AiNif("spawnmap", nif_spawnmap, NULL);
-AiNif("getuid", nif_getuid, NULL);
-AiNif("getgid", nif_getgid, "posix");
-AiNif("fork", nif_fork, NULL);
-AiNif("dup2", nif_dup2, NULL);
-AiNif("dup", nif_dup, NULL);
-AiNif("mkdir", nif_mkdir, "posix");
-AiNif("mount", nif_mount, "posix");
-AiNif("mountf", nif_mountf, "posix");
-AiNif("umount", nif_umount, "posix");
-AiNif("chroot", nif_chroot, "posix");
-AiNif("sync", nif_sync, "posix");
-AiNif("mknod", nif_mknod, "posix");
-AiNif("newns", nif_newns, "posix");
-AiNif("stat", nif_posix_stat, "posix");
-AiNif("lstat", nif_posix_lstat, "posix");
-AiNif("readdir", nif_posix_readdir, "posix");
-AiNif("unlink", nif_posix_unlink, "posix");
-AiNif("lseek", nif_posix_lseek, "posix");
-AiNif("signal", nif_posix_signal, NULL);
-AiNif("ttyfg", nif_posix_ttyfg, NULL);
-AiNif("setenv", nif_posix_setenv, NULL);
-AiNif("environ", nif_posix_environ, NULL);
+LvNif("spawn", nif_spawn, NULL);
+LvNif("glean", nif_reapany, NULL);
+LvNif("sigfd", nif_sigfd, "posix");
+LvNif("sigtake", nif_sigtake, "posix");
+LvNif("sigclear", nif_sigclear, "posix");
+LvNif("sigign?", nif_sigignp, "posix");
+LvNif("wait", nif_waitpid, NULL);
+LvNif("chdir", nif_chdir, "posix");
+LvNif("cwd", nif_cwd, "posix");
+LvNif("selfpath", nif_selfpath, "posix");
+LvNif("pipe", nif_pipe, NULL);
+LvNif("openfd", nif_openfd, "posix");
+LvNif("spawnio", nif_spawnio, NULL);
+LvNif("fdopen", nif_fdopen, NULL);
+LvNif("spawnmap", nif_spawnmap, NULL);
+LvNif("getuid", nif_getuid, NULL);
+LvNif("getgid", nif_getgid, "posix");
+LvNif("fork", nif_fork, NULL);
+LvNif("dup2", nif_dup2, NULL);
+LvNif("dup", nif_dup, NULL);
+LvNif("mkdir", nif_mkdir, "posix");
+LvNif("mount", nif_mount, "posix");
+LvNif("mountf", nif_mountf, "posix");
+LvNif("umount", nif_umount, "posix");
+LvNif("chroot", nif_chroot, "posix");
+LvNif("sync", nif_sync, "posix");
+LvNif("mknod", nif_mknod, "posix");
+LvNif("newns", nif_newns, "posix");
+LvNif("stat", nif_posix_stat, "posix");
+LvNif("lstat", nif_posix_lstat, "posix");
+LvNif("readdir", nif_posix_readdir, "posix");
+LvNif("unlink", nif_posix_unlink, "posix");
+LvNif("lseek", nif_posix_lseek, "posix");
+LvNif("signal", nif_posix_signal, NULL);
+LvNif("ttyfg", nif_posix_ttyfg, NULL);
+LvNif("setenv", nif_posix_setenv, NULL);
+LvNif("environ", nif_posix_environ, NULL);
 // --- the rest of the fs surface: the effect ops the fs tools ride ---------------
 // (mv, ln, touch, chmod, chown -- apps/kore/fs.l and friends).
 //   (rename old new)      -> () | a nom | 'badarg  (mv's heart; same filesystem)
@@ -1086,16 +1086,16 @@ static union u const
   nif_posix_rmdir[]    = {{lvm_posix_rmdir}, {lvm_ret0}},
   nif_posix_hardlink[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_hardlink}, {lvm_ret0}},
   nif_posix_copyfile[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_copyfile}, {lvm_ret0}};
-AiNif("rename", nif_posix_rename, "posix");
-AiNif("symlink", nif_posix_symlink, "posix");
-AiNif("readlink", nif_posix_readlink, "posix");
-AiNif("chmod", nif_posix_chmod, "posix");
-AiNif("chown", nif_posix_chown, "posix");
-AiNif("utime", nif_posix_utime, "posix");
-AiNif("umask", nif_posix_umask, "posix");
-AiNif("rmdir", nif_posix_rmdir, "posix");
-AiNif("hardlink", nif_posix_hardlink, NULL);
-AiNif("copyfile", nif_posix_copyfile, "posix");
+LvNif("rename", nif_posix_rename, "posix");
+LvNif("symlink", nif_posix_symlink, "posix");
+LvNif("readlink", nif_posix_readlink, "posix");
+LvNif("chmod", nif_posix_chmod, "posix");
+LvNif("chown", nif_posix_chown, "posix");
+LvNif("utime", nif_posix_utime, "posix");
+LvNif("umask", nif_posix_umask, "posix");
+LvNif("rmdir", nif_posix_rmdir, "posix");
+LvNif("hardlink", nif_posix_hardlink, NULL);
+LvNif("copyfile", nif_posix_copyfile, "posix");
 // --- the pty wrapper: bao's rlwrap/debugger muscle ------------------------------
 // spawn a program on a fresh pseudo-terminal, reap it without blocking, signal
 // it, and read/write its window size. the keystone, (tether argv), is hark
@@ -1415,13 +1415,13 @@ static union u const
   nif_winsize[]    = {{lvm_winsize}, {lvm_ret0}},
   nif_setwinsize[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_setwinsize}, {lvm_ret0}},
   nif_ptyecho[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ptyecho}, {lvm_ret0}};
-AiNif("tether", nif_tether, "posix");
-AiNif("gather", nif_reap, "posix");
-AiNif("still", nif_kill, NULL);
-AiNif("winsize", nif_winsize, NULL);
-AiNif("setwinsize", nif_setwinsize, "posix");
-AiNif("ptyecho", nif_ptyecho, "posix");
-AiNif("raw", nif_raw, NULL);
-AiNif("swig", nif_swig, "posix");
-AiNif("open", nif_open, "posix");
-AiNif("close", nif_close, "posix");
+LvNif("tether", nif_tether, "posix");
+LvNif("gather", nif_reap, "posix");
+LvNif("still", nif_kill, NULL);
+LvNif("winsize", nif_winsize, NULL);
+LvNif("setwinsize", nif_setwinsize, "posix");
+LvNif("ptyecho", nif_ptyecho, "posix");
+LvNif("raw", nif_raw, NULL);
+LvNif("swig", nif_swig, "posix");
+LvNif("open", nif_open, "posix");
+LvNif("close", nif_close, "posix");

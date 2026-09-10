@@ -191,8 +191,8 @@ static union u const
  nif_doom_tick[] = {{lvm_doom_tick}, {lvm_ret0}},
  nif_doom_frame[] = {{lvm_doom_frame}, {lvm_ret0}},
  nif_doom_key[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_doom_key}, {lvm_ret0}};
-AiNif("doom", nif_doom, NULL);
-AiNif("doom-start", nif_doom_start, NULL);
-AiNif("doom-tick", nif_doom_tick, NULL);
-AiNif("doom-frame", nif_doom_frame, NULL);
-AiNif("doom-key", nif_doom_key, NULL);
+LvNif("doom", nif_doom, NULL);
+LvNif("doom-start", nif_doom_start, NULL);
+LvNif("doom-tick", nif_doom_tick, NULL);
+LvNif("doom-frame", nif_doom_frame, NULL);
+LvNif("doom-key", nif_doom_key, NULL);

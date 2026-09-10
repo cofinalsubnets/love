@@ -289,7 +289,7 @@ which is why the cache seats itself at `out/` and `make clean` reaches it.
 **The carried archives are per-ISA and kernel-neutral.** All three are cut under `-os linux`
 and the pin does not reach the bytes: `impl.h` parts linux, freebsd and netbsd at RUN time on
 `__ai_osv`, and `os.c` — the only member with an OS predefine in it — keeps its arms under
-`#ifndef AiOsTranslate`. So a refusal here belongs to the TARGET, never the kernel: riscv has no
+`#ifndef LvOsTranslate`. So a refusal here belongs to the TARGET, never the kernel: riscv has no
 translation tables, so a BSD there owes a compile that `#error`s rather than quietly linking
 linux's numbers.
 
