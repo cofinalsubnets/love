@@ -1,3 +1,4 @@
+# FIXME shrink the comments in this file and then also shrink the contents as much as possible
 # i/port.mk -- the shape every bare-metal port shares. Included by i/<x>/Makefile,
 # each of which is run from its own folder (`make -C i/<x>`); $(R) is the project root,
 # and mooncc's system include dir is CWD-relative, so every compile cd's to $(R) first.

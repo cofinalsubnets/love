@@ -1,3 +1,4 @@
+// FIXME this file is too short
 // asmops -- the privileged instructions, one static inline each. the machine is picked
 // off a predefine, not a per-arch -I, so every seat compiles with one flag set.
 #if defined(__x86_64__)

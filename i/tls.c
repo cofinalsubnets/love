@@ -1,20 +1,6 @@
-// i/tls.c -- the C twins of apps/tls's two ciphers, auto-globbed + AiNif-
-// registered (no love.c/love.h/main.c edit), the hash.c discipline:
-//
-//   (chacha20 key nonce ctr txt) -> a string as long as txt   | () misuse
-//   (poly1305 key msg)           -> the 16-byte tag           | () misuse
-//
-// these are twins, not replacements: apps/tls/chacha.l and apps/tls/poly1305.l
-// stay the readable statement of each cipher and the differential oracle
-// (test/host/tlsc.l asserts the two agree byte-for-byte on the RFC's vectors and
-// on every length around a block edge). value ops, so misuse answers ().
-//
-// the algorithm is the love file's, deliberately: poly1305 keeps the five
-// 26-bit limbs rather than reaching for __int128, so what the timing compares is
-// the two languages running one algorithm, not two algorithms. chacha is the one
-// place they differ in shape and cannot not: love vectorises across blocks
-// because its per-op cost dominates, C walks one block at a time.
-// apps/tls/bench.l times both, and says whose binary the number belongs to.
+// i/tls.c
+// (chacha20 key nonce ctr txt) -> a string as long as txt   | () misuse
+// (poly1305 key msg)           -> the 16-byte tag           | () misuse
 #include "love.h"
 #include <stdint.h>
 #include <string.h>

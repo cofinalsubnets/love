@@ -11,8 +11,8 @@
 ;   ai_rtgz_<nm>       the bytes, right behind it (a .a under DEFLATE; `id`
 ;                      is moon.l's rtcid of the tree slice, plain text)
 ;
-; i/src.c declares every symbol weak, so a love carrying no runtime (love0)
-; answers nothing and the compile-from-source lane stands. determinism is
+; a link carrying no runtime (love0, and the gate links) names i/noblob.c, whose
+; zeros answer nothing and leave the compile-from-source lane standing. determinism is
 ; load-bearing: arbytes and rtcid are all pure of the machine, so the
 ; seed's fixpoint carries this object unchanged.
 ; this rides the mooncc image (wake), not the mksys cat: the archives are

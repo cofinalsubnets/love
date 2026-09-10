@@ -1,3 +1,4 @@
+// FIXME this file is too short. combined header shared by main/kmain?
 // ustar.h -- decoding the carried source blob (i/src.c's ai_srcgz): a gzip member
 // wrapping a ustar archive. two callers WALK it differently and decode it identically --
 // the first boot (main.c) mmaps and wants one member, the kernel's ram fs (kmain.c)

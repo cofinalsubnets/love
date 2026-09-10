@@ -1,3 +1,4 @@
+// FIXME merge into posix.c?
 // i/sock.c -- every socket nif, both address families: TCP/UDP (ain's netcat core and
 // inle's oracle wire), unix-domain connect (lux's X display door) and listen (the shore
 // lux moors at). auto-globbed and AiNif-registered. every stream nif mirrors main.c's

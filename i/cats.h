@@ -1,3 +1,4 @@
+// FIXME this file is too short
 // cats.h -- the baked source both frontends warm from. i/main.c (hosted) and
 // i/kmain.c (inle) run the same egg and register the same modules, and the artifact
 // carries BOTH of them -- so these are one definition (i/cats.c) rather than a static
@@ -13,17 +14,9 @@
 #define AiGlazed 1
 #endif
 
-// the texts ride DEFLATED, so they are reached through calls rather than named: the
-// blobs and the inflate are i/cats.c's alone, and a frontend asks for the effect.
-// warm the egg from its four texts -- prel carries ev's half spliced after its own.
-struct ai *ai_cats_egg(struct ai *g);
-
-// register the arch's holo (scan riding it), so each later `borrow` is a pure splice; the
-// rest of the registry is post's, and rides the egg.
-struct ai *ai_cats_lib(struct ai *g);
-
-// the glaze: a no-op on an unglazed build, so every eval site stands unconditional
-struct ai *ai_cats_glaze(struct ai *g);
-
+struct ai
+ *ai_cats_egg(struct ai *g),
+ *ai_cats_lib(struct ai *g),
+ *ai_cats_glaze(struct ai *g);
 
 #endif

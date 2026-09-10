@@ -420,7 +420,7 @@ static unsigned char const *fb_find(unsigned char const *t, uintptr_t n,
   return NULL; }
 
 static void first_boot(char const **argv) {
-  if (ai_srcgz_len < 18) return;                     // i/src.c's weak zero: this link carries no source
+  if (ai_srcgz_len < 18) return;                     // i/noblob.c's zero: this link carries no source
   // an env var because the state it guards spans an exec: the re-exec below sets it, so
   // the binary that comes back knows it already tried and a failed bake cannot loop.
   if (getenv("LOVE_FIRST_BOOT")) {
