@@ -40,39 +40,36 @@
    ; --- the field pokes ------------------------------------------------------
    ; eight uppercase hex digits, zero-padded. every number in the header is this.
    (cpio-hex! b o v)
-    (: (go i x) (? (i < 0) 0
-                   (: d (x & 15)
-                      _ (pin b (o + i) (d < 10 ? (48 + d) (55 + d)))
-                      (go (i - 1) (x >> 4))))
+    (: (go i x) (i < 0 ? 0
+                 (: d (x & 15)
+                    _ (pin b (o + i) (d < 10 ? (48 + d) (55 + d)))
+                  (go (i - 1) (x >> 4))))
        (go 7 v))
    (cpio-hex s o)                           ; eight hex digits -> the number
     (: (go i acc) (? (8 <= i) acc
                      (: c (s (o + i))
                         d (? (48 <= c <= 57)   (c - 48)
                              (65 <= c <= 70)   (c - 65 + 10)
-                             (97 <= c <= 102)  (c - 97 + 10)
-                             ())
+                             (97 <= c <= 102)  (c - 97 + 10))
                         ; the refusal is asked by identity: `nil?` is a truth test, and
                         ; the digit 0 answers it as readily as a miss does
-                        (? (= d ()) () (go (i + 1) (acc << 4 | d)))))
+                        (d != () ? (go (i + 1) (acc << 4 | d)))))
        (go 0 0))
    (cpio-pad n) ((4 - n % 4) % 4)           ; the NULs after a name or a body
-   (cpio-nuls k) (: (go i acc) (? (k <= i) acc (go (i + 1) (acc + string 0))) (go 0 ""))
+   (cpio-nuls k) (: (go i acc) (k <= i ? acc (go (i + 1) (acc + string 0))) (go 0 ""))
 
    ; --- the kind, which lives in the mode here --------------------------------
-   (cpio-kmode k) (? (= k 'dir) 16384 (= k 'link) 40960 32768)
-   (cpio-kind m) (: t (m & 61440)
-                    (? (t = 16384) 'dir (t = 40960) 'link 'file))
+   (cpio-kmode k) (k @ 'dir 16384 'link 40960 32768)
+   (cpio-kind m) (m & 61440 @ 16384 'dir 40960 'link 'file)
 
    ; --- writing ---------------------------------------------------------------
    (cpio-body e)                            ; what the member carries: a link says its target
-    (: k (peep e 'kind 'file)
-       (? (= k 'link) (peep e 'to "") (= k 'dir) "" (peep e 'body "")))
+    (peep e 'kind 'file @ 'link (peep e 'to "") 'dir "" (peep e 'body ""))
    (cpio-head ino nom mode mtime uid gid nb)
     (: nz (#nom + 1)
        h (cask 110)
        (txt! o s) (: n #s
-                     (go i) (? (n <= i) 0 (: _ (pin h (o + i) (s i)) (go (i + 1))))
+                     (go i) (n <= i ? 0 (pin h (o + i) (s i), go (i + 1)))
                      (go 0))
        _ (txt! 0 cpio-mag)
        _ (cpio-hex! h 6 ino)   _ (cpio-hex! h 14 mode)
@@ -90,7 +87,7 @@
            b (cpio-body e)
            nb #b
            mode (cpio-kmode (peep e 'kind 'file)
-                 | peep e 'mode (= (peep e 'kind 'file) 'dir ? 493 420))
+                 | peep e 'mode (peep e 'kind 'file = 'dir ? 493 420))
            _ (say o (cpio-head i nom mode (peep e 'mtime 0)
                                (peep e 'uid 0) (peep e 'gid 0) nb))
            _ (say o (nom + string 0))
@@ -117,7 +114,7 @@
           nb (cpio-hex s (o + 54))
           uid (cpio-hex s (o + 22)) gid (cpio-hex s (o + 30))
           nz (cpio-hex s (o + 94))
-          (? (= mode () || (= nb ()) || (= nz ())) ()
+          (? (mode = () || nb = () || nz = ()) ()
              (n < o + 110 + nz) ()
              (: nom (snip s (o + 110) (o + 110 + nz - 1))
                 b0 (o + 110 + nz + cpio-pad (110 + nz))
@@ -126,29 +123,22 @@
                    (: kind (cpio-kind mode)
                       body (snip s b0 (b0 + nb))
                       e (tar-entry nom kind (= kind 'link ? "" body))
-                      _ (pin e 'mode (mode & 4095))
-                      _ (pin e 'mtime mtime)
-                      _ (pin e 'uid uid) _ (pin e 'gid gid)
-                      _ (= kind 'link && pin e 'to body)
+                      _ (pins e 'mode (mode & 4095) 'mtime mtime 'uid uid 'gid gid)
+                      _ (kind = 'link && pin e 'to body)
                       [1 e (b0 + nb + cpio-pad nb)]))))))
    (cpio-unpack s)
-    (: n #s
-       (go o acc) (: r (cpio-read1 s n o)
-                     (? (= r 'end) [1 (rev acc)]
-                        !r ()
-                        (go <>>r (<>r . acc))))
-       (go 0 ()))
+    (:- (go 0 ()) n #s
+     (go o acc) (: r (cpio-read1 s n o)
+                   (? (r = 'end) [1 (rev acc)]
+                      !r ()
+                      (go <>>r (<>r . acc)))))
 
    ; --- writing the tree back out ---------------------------------------------
    ; the leading directories are always made. GNU wants -d before it will and refuses
    ; the member otherwise; refusing to write a file we can write is not a service, so
    ; -d is a flag we accept and were already honouring.
    (cpio-mkp p)                             ; every parent of p, in order
-    (: n #p
-       (go i) (? (n <= i) 0
-                 (: _ (p i = 47 && 0 < i && mkdir (snip p 0 i) 493)
-                    (go (i + 1))))
-       (go 0))
+    (:- (go 0) n #p (go i) (n <= i ? 0 (p i = 47 && 0 < i && mkdir (snip p 0 i) 493, go (i + 1))))
    (cpio-there? p) (two? (stat p))
    (cpio-newer? p ms)                       ; is what is already there at least as new
     (: st (stat p) (two? st ? !(<>st // 1000 < ms) 0))
@@ -162,14 +152,14 @@
               _ (cpio-mkp p)
               skip (!u && !(= kind 'dir) && cpio-newer? p (peep e 'mtime 0))
               ok (? skip 1
-                    (= kind 'dir) (: _ (mkdir p (peep e 'mode 493)) (cpio-there? p))
-                    (= kind 'link) (: _ (cpio-there? p && unlink p)
-                                         _ (symlink (peep e 'to "") p)
-                                         (string? (readlink p)))
+                    (kind = 'dir) (mkdir p (peep e 'mode 493), cpio-there? p)
+                    (kind = 'link) (cpio-there? p && unlink p,
+                                    symlink (peep e 'to "") p,
+                                    string? (readlink p))
                     (: q (open p "w")
-                       _ (hot? q && (: _ (say q (peep e 'body "")) (close q)))
-                       _ (cpio-there? p && chmod p (peep e 'mode 420))
-                       (cpio-there? p)))
+                     (hot? q && (: _ (say q (peep e 'body "")) (close q)),
+                      cpio-there? p && chmod p (peep e 'mode 420),
+                      cpio-there? p)))
               (ok && go >xs (skip ? k (k + 1)))))
        (go es 0)))
 

@@ -71,11 +71,10 @@
                (: w (v * 10 + s j - 48) (? (255 < w) () (dig (j + 1) w 1)))
                (any ? [j v] ()))
            r (dig i 0 0)
-           (? (atom? r) ()
+           (? (one? r) ()
               (: j <r  b (a * 256 + <>r)
                  (? (k = 1) (n <= j ? [b] ())
-                    (j < n && s j = 46) (oct (j + 1) b (k - 1))
-                    ()))))
+                    (j < n && s j = 46) (oct (j + 1) b (k - 1))))))
        (oct 0 0 4))
 
    ; --- the wire ---------------------------------------------------------------
@@ -91,7 +90,7 @@
                  (: j (dot i)  l (j - i)
                     (? (l = 0 || 63 < l) ()
                        (: r (go (j + 1))
-                          (string? r && (string l + snip h i j + r))))))
+                          (string? r && string l + snip h i j + r)))))
        (0 < n && go 0))
 
    ; the query packet: header (RD set, one question), the name, QTYPE A QCLASS in.
@@ -145,8 +144,8 @@
         q (dns-query id h)
       (? !(string? q) (close p, ())
        (udp-send p (ns * 65536 + port) q,
-        (: r (twirl (\ _ (udp-recv p)) ())
-           w (twirl (\ _ (rest ms, freeze r)) ())
+        (: r (twirl (_ \ (udp-recv p)) ())
+           w (twirl (_ \ (rest ms, freeze r)) ())
            d (catch r)
          (freeze w,
           close p,
@@ -165,7 +164,7 @@
    (dns-hosts path h)
     (: (go (l . u))
      (: w (dns-words l)
-      (? (atom? w) (go u)
+      (? (one? w) (go u)
        (: a (dns-quad <w)
         (two? a && elem h >w ? a (go u)))))
      (go (dns-lines (dns-look path))))
@@ -198,7 +197,7 @@
           (: servers (dns-servers conf)
              a (dns-walk servers h)
              (? (two? a) a
-                (: (go ds) (? (atom? ds) ()
+                (: (go ds) (? (one? ds) ()
                               (: b (dns-walk servers (h + "." + <ds))
                                  (two? b ? b (go >ds))))
                    (go (dns-conf conf "search")))))))

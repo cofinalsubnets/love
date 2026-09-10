@@ -33,10 +33,10 @@
                  (go 0))
    (esc? c set) (: b (bytes set) (elem c b))
    ; a keyword as vim reads one: | and \ carry meaning in a syn keyword line
-   (kwesc t) (foldl (\ a c (a + (? (esc? c "|\\") ("\\" + (string c)) (string c))))
+   (kwesc t) (foldl (\ a c (a + (? (esc? c "|\\") ("\\" + string c) (string c))))
                     "" (bytes t))
    ; a byte inside a [...] collection, and inside the "..." that delimits it
-   (clesc t) (foldl (\ a c (a + (? (esc? c "]^-\\\"") ("\\" + (string c)) (string c))))
+   (clesc t) (foldl (\ a c (a + (? (esc? c "]^-\\\"") ("\\" + string c) (string c))))
                     "" (bytes t))
 
    ; --- the groups: Love<Class>, straight off the table ------------------------
@@ -61,7 +61,7 @@
    _ (elem 'book (names ())
       ? (say err "hue2vim: `book` is still on the book -- the seal did not run, and that is build state, not the language",
          put err 10, quit 1))
-   wtab (: seen (tablet ())
+   wtab (: seen {}
            (go l t)
             (? (one? l) t
                (: r <l
@@ -69,7 +69,7 @@
                   _ (each ws (w \ pin seen w 1))
                   _ (pin t (hue-cls r) ws)
                   (go >l t)))
-           (go (hue-tagged 'word) (tablet ())))
+           (go (hue-tagged 'word) {}))
    (kwlines g ws) (one? ws ? ()
                    (line $ "syn keyword " + g + " " + join (map kwesc (take 8 ws)) " ",
                     kwlines g (drop 8 ws)))
@@ -89,12 +89,12 @@
               (line ("syn region " + g + " start='" + q + "' skip='" + e + e + e + e
                      + "\\|" + e + e + q + "' end='" + q + "'")))
           (tag = 'mark)
-           (line ("syn match " + g + " \"" + (string a) + "[^" + stop + "]*\""))
+           (line ("syn match " + g + " \"" + string a + "[^" + stop + "]*\""))
           ; sep: one byte standing alone, and a tag of its own because both
           ; readings reach a tag through its first row, so a second row under
           ; one tag would be read by neither
           (tag = 'sep)
-           (line ("syn match " + g + " \"" + (string a) + "\""))
+           (line ("syn match " + g + " \"" + string a + "\""))
           (tag = 'num)
            ; hex first: `0x1f` would otherwise take the plain-integer match on its
            ; leading 0 and leave the rest bare, which is a worse lie than no colour
@@ -129,14 +129,13 @@
             (cyan        magenta1      blue         darkslateblue)
             (magenta     purple1       darkmagenta  darkviolet))
    (levline i l k)
-    (line ("    hi def LoveLevel" + (show i) + " ctermfg=" + (string (l k))
-           + (: p (13 - #(string (l k))) (: (sp j) (? (j < 1) "" (" " + (sp (j - 1)))) (sp p)))
-           + "guifg=" + (string (l (k + 1)))))
+    (line ("    hi def LoveLevel" + show i + " ctermfg=" + string (l k)
+           + (: p (13 - #(string (l k))) (: (sp j) (j < 1 ? "" (" " + (sp (j - 1)))) (sp p)))
+           + "guifg=" + string (l (k + 1))))
    (levels-of k) (: (go l i) (one? l ? () (levline i <l k, go >l (i + 1))) (go levels 0))
 
    pgroup (grp <(hue-tagged 'delim))
-   cluster (join ((map grp (filter (r \ hue-tag r != 'delim) hue-classes))
-                  + '("LoveTodo")) ",")
+   cluster (join ((map grp (filter (r \ hue-tag r != 'delim) hue-classes)) + '("LoveTodo")) ",")
 
    ; the delim row's bytes read as pairs -- (0,1) then (2,3) then (4,5) -- and one
    ; region takes them all, so a level is one region however its list is bracketed.
@@ -144,9 +143,9 @@
    ; regions a level, and buys only the mis-colouring of `(a]`, which is libra's
    ; to say and not a highlighter's. `[` is the one byte vim's regex would read
    ; as a collection; `(`, `{` and `}` are literal under default magic.
-   (vim-brk c) (c = 91 ? "\\[" (string c))
+   (vim-brk c) (c @ 91 "\\[" (string c))
    brkpairs
-    (: (go j k a) (? (#hue-brk <= j) a
+    (: (go j k a) (#hue-brk <= j ? a
                      (go (j + 2) k (a + " " + k + "=\"" + vim-brk (hue-brk j) + "\"")))
        ((go 0 "start" "") + (go 1 "end" "")))
 
@@ -183,9 +182,9 @@
    _ (blank ())
    _ (line "syn sync lines=100")
    _ (blank ())
-   _ (each hue-classes (r \ line ("hi def link " + pad (grp r) 14 + " " + string (hue-grp r))))
-   _ (line ("hi def link " + (pad "LoveTodo" 14) + " Todo"))
-   _ (line ("hi def link " + (pad "LoveParenError" 14) + " Error"))
+   _ (each hue-classes (r \ line $ "hi def link " + pad (grp r) 14 + " " + string (hue-grp r)))
+   _ (line ("hi def link " + pad "LoveTodo" 14 + " Todo"))
+   _ (line ("hi def link " + pad "LoveParenError" 14 + " Error"))
    _ (blank ())
    _ (line "\" Rainbow parentheses -- each nesting level gets its own colour, level 9 wraps")
    _ (line "\" to 0. Toggle with g:love_rainbow (default: off, one flat Delimiter).")

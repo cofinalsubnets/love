@@ -33,27 +33,25 @@
 (borrow 'kore) ; the text/diff floors (myers, lines) ride module 'kore
 (:
    ; the 'adds sitting at the front of a script (a del's replacement)
-   (m3grab m a) (? (two? m && (<<m = 'add)) (m3grab >m (<><m . a)) [m (rev a)])
+   (m3grab m a) (two? m && <<m = 'add ? (m3grab >m (<><m . a)) [m (rev a)])
 
    ; a myers script -> the 2n+1 slots, gap line gap line .. gap. an 'add after a
    ; keep is an insertion and lands in the pending gap; the 'adds after a del are
    ; that line's replacement and land in its line slot.
    (m3parts sc)
-    (: (go m gp acc)
-        (? !(two? m) (rev (rev gp . acc))
-           (: o <m op <o x <>o acc2 (rev gp . acc)                   ; the gap closes on a line op
-              (? (op = 'keep) (go >m () ([x] . acc2))
-                 (op = 'del) (: r (m3grab >m ()) (go <r () (<>r . acc2)))
-                 (go >m (x . gp) acc))))                             ; 'add: into the open gap
-       (go sc () ()))
+    (:- (go sc () ())
+     (go m gp acc)
+      (one? m ? (rev (rev gp . acc))
+       (: o <m op <o x <>o acc2 (rev gp . acc)                   ; the gap closes on a line op
+        (op @ 'keep (go >m () ([x] . acc2))
+              'del (: r (m3grab >m ()) (go <r () (<>r . acc2)))
+              (go >m (x . gp) acc)))))                            ; 'add: into the open gap
 
    ; the base's own slots: every gap empty, every line its one line
-   (m3base b) (: (go m a) (? (two? m) (go >m ([<m] . (() . a)))
-                              (rev (() . a)))
-                 (go b ()))
+   (m3base b) (:- (go b ()) (go m a) (two? m ? (go >m ([<m] . (() . a))) (rev (() . a))))
 
    ; the chunks (a list of line-lists) -> one flat line list
-   (m3cat cs) (: (go m a) (? (two? m) (go >m (a + <m)) a) (go cs ()))
+   (m3cat cs) (:- (go cs ()) (go m a) (? (two? m) (go >m (a + <m)) a))
 
    ; the marker block for a true overlap
    (m3marks ob tb ol tl)
@@ -62,10 +60,10 @@
    ; walk the three part-lists in step, chunking stable runs and resolving
    ; unstable ones. answers (chunks nconflicts), chunks newest-first.
    (m3go bs os ts ol tl acc nc)
-    (? !(two? bs) [acc nc]
-       ((<os = <bs) && (<ts = <bs)) (m3go >bs >os >ts ol tl (<bs . acc) nc)
+    (? (one? bs) [acc nc]
+       (<os = <bs && <ts = <bs) (m3go >bs >os >ts ol tl (<bs . acc) nc)
        (: (run b o t bb ob tb)                                        ; extend while either side moved
-           (? (two? b && (!(<o = <b) || !(<t = <b)))
+           (? (two? b && (<o != <b || <t != <b))
               (run >b >o >t (<b . bb) (<o . ob) (<t . tb))
               [b o t (m3cat (rev bb)) (m3cat (rev ob)) (m3cat (rev tb))])
           r (run bs os ts () () ())

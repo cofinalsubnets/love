@@ -1,4 +1,3 @@
-;;; FIXME can this be a C nif?
 ; scan -- find one byte in a text, natively where that is possible. love's own walk
 ; costs ~684 instructions a byte (a call, an index, a compare, a tail); the kernel
 ; below costs 1.876, which is 364x, and every tool that reads lines or matches a
@@ -32,7 +31,7 @@
    ; install (its heap rides an NX window), and so does wasm
    (walk s c i)
     (: n #s
-       (go k) (? (n <= k) -1 (s k = c ? k (go (k + 1))))
+       (go k) (n <= k ? -1 (s k = c ? k (go (k + 1))))
        (go (i < 0 ? 0 i)))
 
    ones 72340172838076673                        ; 0x0101010101010101
@@ -105,15 +104,14 @@
    ; build it, or answer the twin. `nif` hands the twin back itself when it declines
    ; (inle's heap rides an NX window; so does wasm), so no fallback is arranged here
    (mk _) (: h (cite 'holo) g (cite 'glaze)
-             (? (nil? h || nil? g || !(elem love-arch '(x64 a64))) walk
-                (: bs (peep ((h 'assemble) love-arch (scan-ir love-arch)) 'bytes 0)
-                   ((g 'nif) (cask bs) walk '(\ q (q)) 3))))
-   box (tablet 0)                                ; one install for the process, not one per ask
+             (? (!h || !g || !(elem love-arch '(x64 a64))) walk
+                (: bs (peep (h 'assemble love-arch (scan-ir love-arch)) 'bytes 0)
+                   (g 'nif (cask bs) walk '(\ q (q)) 3))))
+   box {}                                ; one install for the process, not one per ask
    ; (scanner ()) -> (f s c i), answering the index of charm c at-or-after i, or -1.
    ; a caller with many texts asks once and holds f: this is a tablet read, which is
    ; ~1000 instructions, and belongs outside any loop
-   (scanner _) (: k (peep box 'k 'none)
-                  (k !== 'none ? k (: k2 (mk ()) _ (pin box 'k k2) k2)))
+   (scanner _) (: k (peep box 'k 'none) (k @- k 'none (: k2 (mk ()) _ (pin box 'k k2) k2)))
 )
 
 ) ; module 'scan

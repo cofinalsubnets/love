@@ -41,7 +41,7 @@
 
    ; one .v: harvest names, first-file wins in pub, answer this file's distinct count
    (scan-v s pubT file)
-    (: n #s seen (tablet 0)
+    (: n #s seen {}
        (name-end i) (i < n && vnamec? (s i) ? (name-end (i + 1)) i)
        (eol i) (i < n && !(s i = 10) ? (eol (i + 1)) (i + 1))
        (ws i) (i < n && blank? (s i) ? (ws (i + 1)) i)
@@ -53,7 +53,7 @@
               (? (!e || n <= e || !(blank? (s e) || s e = 10)) (line (eol j) cnt)
                  (: a (wsn e) b (name-end a)
                     (? (b = a) (line (eol j) cnt)
-                       (: nm (intern (snip s a b))
+                       (: nm (nom (snip s a b))
                           _ (? (peep pubT nm 0) 0 (pin pubT nm file))
                           (? (peep seen nm 0) (line (eol j) cnt)
                              (pin seen nm 1, line (eol j) (cnt + 1)))))))))
@@ -89,7 +89,7 @@
    _ (? (dir? unimath) 0
         (puts "uuparity: UniMath not installed, audit skipped\n", quit 0))
 
-   pubT (tablet 0)
+   pubT {}
    ; (file . distinct) per file, walked in flat path order; file = the short name
    tot (: (go m acc)
            (? (one? m) (rev acc)
@@ -98,15 +98,15 @@
                  (go >m ([short (scan-v (rdf full) pubT short)] . acc))))
           (go (sort (vfiles unimath ())) ()))
    ; the preamble ctors and notations that are names in uu.l's object language
-   _ (map (x \ (: nm (intern x) (? (peep pubT nm 0) 0 (pin pubT nm "Foundations/Preamble.v"))))
+   _ (map (x \ (: nm (nom x) (? (peep pubT nm 0) 0 (pin pubT nm "Foundations/Preamble.v"))))
           '("tpair" "pr1" "pr2" "idpath" "ii1" "ii2" "tt" "succ"
             "total2" "paths" "coprod" "nat" "bool" "unit" "empty" "UU"))
 
    names (uu-names (rdf uul))
    (uu-loc? s) (2 < #s && s 0 = 117 && s 1 = 117 && s 2 = 45)
    local (filter uu-loc? names)
-   matched (filter (s \ !(uu-loc? s) && peep pubT (intern s) 0) names)
-   impostors (filter (s \ !(uu-loc? s) && !(peep pubT (intern s) 0)) names)
+   matched (filter (s \ !(uu-loc? s) && peep pubT (nom s) 0) names)
+   impostors (filter (s \ !(uu-loc? s) && !(peep pubT (nom s) 0)) names)
 
    _ (puts $ uul + ": " + show #names + " names = " + show #matched
              + " published + " + show #local + " uu-local + "
@@ -114,7 +114,7 @@
    ; coverage per file: counts over matched (dups counted), first-seen order, then sorted
    cov (: (go m acc)
            (? (one? m) acc
-              (: f (peep pubT (intern <m) 0)
+              (: f (peep pubT (nom <m) 0)
                  hit (assoc f acc)
                  (go >m (? (two? hit) (map (p \ (<p = f ? [f (<>p + 1)] p)) acc)
                            (acc + [[f 1]])))))

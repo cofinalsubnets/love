@@ -11,8 +11,8 @@
    ; the directory is positional, so a mistyped flag would be taken as one and a whole
    ; tree laid under it. a leading dash is never a directory here: name the flags, ask
    ; about anything else.
-   (src-dash? w) (: n #w ((0 < n) && (w 0 = 45)))
-   (src-help? w) ((w = "-h") || (w = "--help") || (w = "-help") || (w = "help"))
+   (src-dash? w) (: n #w (0 < n && w 0 = 45))
+   (src-help? ("-h" || "--help" || "-help" || "help")) 1
    (src-not-dir m w)
     (src-die (w + " is not a directory -- `love " + m + " help` for usage"))
 
@@ -20,7 +20,7 @@
                      (go i) (? (n <= i) nom (nom i = 47) (snip nom 0 i) (go (i + 1)))
                      (go 0))
 
-   (src-top es) (? (atom? es) ""
+   (src-top es) (? (one? es) ""
     (src-head (tar-get <es 'nom "") @ ("." || "") (src-top >es) c c))
 
    (src-lay-tgz root top gz)
@@ -37,14 +37,14 @@
     (: gz (source-gz "x")
        _ (!(string? gz) ? (src-die "this love carries no source"))
        u (gz-unzip gz)
-       _ (atom? u ? (src-die "the embedded archive did not inflate"))
+       _ (one? u ? (src-die "the embedded archive did not inflate"))
        t (tar-unpack <>u)
-       _ (atom? t ? (src-die "the embedded archive is torn"))
+       _ (one? t ? (src-die "the embedded archive is torn"))
        es <>t
        top (src-top es)
-       _ (0 >= tally top ? (src-die "the embedded archive names no top directory"))
+       _ (0 >= #top ? (src-die "the embedded archive names no top directory"))
        w (tar-scatter dir es)
-       _ (atom? w ? (src-die ("can't write " + dir)))
+       _ (one? w ? (src-die ("can't write " + dir)))
        root (dir = "." ? top (dir + "/" + top))
        ; no love is laid beside the source: which mode a build is in belongs to whoever
        ; drives it. bare make has no love and can only mean the ambient cc; a love driving
@@ -54,11 +54,10 @@
         [1 root <>w]))
 
    (src-usage _)
-    (puts ("usage: love source [DIR]\n"
-           + "  lay this binary's carried source tree under DIR (default .)\n"))
+    (puts ("usage: love source [DIR]\n  lay this binary's carried source tree under DIR (default .)\n"))
 
    (source-main as)
-    (: d (? (two? as) <as ".")
+    (: d (two? as ? <as ".")
        _ (src-help? d ? (src-usage 0, quit 0))
        _ (src-dash? d ? (src-not-dir "source" d))
        r (src-lay d)
@@ -89,8 +88,8 @@
              (0 = st))))
    (src-cc dir)
     (: (try (w . x))
-     (: (go ds) (atom? ds ? (try x)
-              (: d (tally <ds ? <ds ".") p (d + "/" + w)
+     (: (go ds) (one? ds ? (try x)
+              (: d (#<ds ? <ds ".") p (d + "/" + w)
                (src-foreign? p && src-ccworks? p dir ? [1 p] (go >ds))))
       (go (src-dirs ())))
      (try '("cc" "gcc" "clang")))
@@ -118,21 +117,20 @@
                "test" "uname" "printf" "install" "cmp" "chmod" "touch" "echo")
    ; kore's ujoin is not in this layer -- src-dirs rolls its own split for the
    ; same reason, so the join is local too.
-   (src-words l) (? (!(two? l)) "" (!(two? >l)) <l (<l + " " + (src-words >l)))
-   (src-ours ns)
-    (: (go l acc) (? !(two? l) (rev acc)
-                     (: w <l
-                        (any ds) (? !(two? ds) 0
-                                    (: d (tally <ds ? <ds ".") p (d + "/" + w)
-                                       (src-foreign? p ? 1 (any >ds))))
-                        (go >l (any (src-dirs ()) ? acc (w . acc)))))
-       (go ns ()))
+   (src-words l) (? (one? l) "" (one? >l) <l (<l + " " + (src-words >l)))
+   (src-ours ns) (:- (go ns ())
+    (go l acc) (? (one? l) (rev acc)
+                (: w <l
+                   (any ds) (two? ds ?
+                             (: d (#<ds ? <ds ".") p (d + "/" + w)
+                              (src-foreign? p ? 1 (any >ds))))
+                 (go >l (any (src-dirs ()) ? acc (w . acc))))))
    ; not (sha256 (slurp a) = sha256 (slurp b)): slurp draws a byte at a time and the
    ; answer is copied, so two 13 MB binaries cost the waiter ~140 MB it never gets back.
    ; a short read rides as a leftover, so the streams line up however the reads fall.
    ; `snip` reads the cask -- (snip (string b) 0 k) would copy all 64K to take the k bytes
    ; the read filled, and a short read at the tail of every file pays it twice.
-   (src-chunk q b) (: k (swig q b) (? (charm? k && 0 < k) (snip b 0 k) ""))
+   (src-chunk q b) (: k (swig q b) (charm? k && 0 < k ? (snip b 0 k) ""))
    (src-same? p1 p2)
     (: q1 (open p1 "r")
        q2 (open p2 "r")
@@ -140,14 +138,14 @@
           (: b1 (cask 65536)
              b2 (cask 65536)
              (go r1 r2)
-              (: r1 (tally r1 ? r1 (src-chunk q1 b1))
-                 r2 (tally r2 ? r2 (src-chunk q2 b2))
+              (: r1 (#r1 ? r1 (src-chunk q1 b1))
+                 r2 (#r2 ? r2 (src-chunk q2 b2))
                  n1 #r1
                  n2 #r2
                  m (? (n1 < n2) n1 n2)
-                 (? (0 = m) (? (0 = (n1 + n2)) 1 0)      ; both ended, same place
+                 (? (0 = m) (? (0 = n1 + n2) 1 0)      ; both ended, same place
                     (n1 = n2) (r1 = r2 ? (go "" "") 0)   ; the even case: no snip at all
-                    (!((snip r1 0 m) = (snip r2 0 m))) 0
+                    (snip r1 0 m != snip r2 0 m) 0
                     (go (snip r1 m n1) (snip r2 m n2))))
              v (go "" "")
              _ (close q1)
@@ -162,7 +160,7 @@
    ; roster, and its first boot on the target bakes and patches it in place (i/main.c),
    ; the same bytes a native `make dist` lays.
    (seed-cross root xa dst)
-    (: made (root + "/out/x-" + (show (intern xa)) + "/love")
+    (: made (root + "/out/x-" + (show (nom xa)) + "/love")
        e (copyfile made dst)
        _ (e < 0 ? (src-die ("can't write " + dst)))
        _ (chmod dst 493)
@@ -182,7 +180,7 @@
        _ (string? exe ? 0 (src-die "can't find seed path"))
        here (cwd 0)
        _ (? !(chdir root) 0 (src-die ("can't enter " + root)))
-       xm (? (string? xa) (show (intern xa)) ())     ; make's word for it
+       xm (? (string? xa) (show (nom xa)) ())     ; make's word for it
        ; -j with no count: cook reads this machine's width, and answers 1 where it
        ; cannot -- so the seed is as wide as the box and never wider.
        s (herald (string? xa ? [exe "make" "-j" ("xa=" + xm) ("out/x-" + xm + "/love")]
@@ -226,7 +224,7 @@
            + "          holds; without it the ambient cc and tools build, ours fill the gaps\n"))
 
    (seed-lay as0)
-    (: _ ((two? as0) && (src-help? <as0) ? (seed-usage 0, quit 0))
+    (: _ (two? as0 && src-help? <as0 ? (seed-usage 0, quit 0))
        self? (two? as0 ? (<as0 = "-a") 0)
        as1 (self? ? >as0 as0)
        ; naming this machine is a native seed, fixpoint and all: the cross lane
@@ -234,8 +232,8 @@
        ; output ought to be this binary -- which `love seed x64` on an x64
        ; box asks for exactly as much as a bare `love seed`. the word is eaten either
        ; way, or the arch would go on to be read as the directory.
-       xa0 (? ((two? as1) && (seed-arch? <as1)) (arch-nom <as1) ())
-       xa (? ((nom? xa0) && (= xa0 (seed-native 0))) () xa0)
+       xa0 (two? as1 && seed-arch? <as1 ? (arch-nom <as1) ())
+       xa (nom? xa0 && xa0 = seed-native 0 ? () xa0)
        as (nom? xa0 ? >as1 as1)
        dir (two? as ? <as ".")
        _ (src-dash? dir ? (src-not-dir "seed" dir))
@@ -274,13 +272,13 @@
        (src-die ("can't wait for the build (exec: " + show e + ")")))
 
    (seed-main as0)
-    (? (!((two? as0) && (<as0 = "-wait"))) (seed-lay as0)
+    (? (one? as0 || <as0 != "-wait") (seed-lay as0)
        (: a1 >as0
           root (two? a1 ? <a1 ".")
-          a2 (two? a1 ? >a1 ())
-          xa (two? a2 ? <a2 ())
-          a3 (two? a2 ? >a2 ())
-          dst (two? a3 ? <a3 ())
+          a2 (two? a1 ? >a1)
+          xa (two? a2 ? <a2)
+          a3 (two? a2 ? >a2)
+          dst (two? a3 ? <a3)
           (seed-wait root xa dst)))
 
    ; --- `love kernel OUT.elf` -- the metal projection of this binary ----------
@@ -293,12 +291,12 @@
    ; projection of self can be nothing else.
    (kern-pick es top nm)
     (: want (top + "/" + nm)
-       (go l) (? (atom? l) (src-die ("the blob carries no " + nm))
-                 ((tar-get <l 'nom "") = want) (tar-get <l 'body "")
+       (go l) (? (one? l) (src-die ("the blob carries no " + nm))
+                 (tar-get <l 'nom "" = want) (tar-get <l 'body "")
                  (go >l))
        (go es))
    (kern-b16 s i) ((s i) + (256 * (s (+ i 1))))
-   kern-box (tablet 0)                  ; the verb's inputs, read back by the stream
+   kern-box {}                  ; the verb's inputs, read back by the stream
    (kernel-main as)
     (: _ (? (two? as) 0 (src-die "usage: love kernel OUT.elf"))
        out <as
@@ -324,18 +322,16 @@
        ; its own layer, where a plain name cannot cross either way; its last
        ; form does the whole projection where everything is visible, so
        ; nothing has to cross back out either.
-       _ (pin kern-box 'pie pie)
-       _ (pin kern-box 'out out)
-       _ (pin kern-box 'arch arch)
+       _ (pins kern-box 'pie pie 'out out 'arch arch)
        vt (cite 'verbs 'tab)
        _ (pin vt 'kern-in kern-box)
        cat ("(borrow 'holo)"
-            + (kern-pick es top "apps/kore/text.l")
-            + (kern-pick es top "apps/kore/u.l")
+            + kern-pick es top "apps/kore/text.l"
+            + kern-pick es top "apps/kore/u.l"
             + "(borrow 'kore)"
-            + (kern-pick es top "apps/kore/asbook.l")
-            + (kern-pick es top "i/mkboot.l")
-            + (kern-pick es top "tools/kproject.l")
+            + kern-pick es top "apps/kore/asbook.l"
+            + kern-pick es top "i/mkboot.l"
+            + kern-pick es top "tools/kproject.l"
             + "(: kb (peep (cite 'verbs 'tab) 'kern-in 0)"
             + "   bb (string (cask (lay-boot-bytes (peep kb 'arch 0))))"
             + "   (kproject (peep kb 'pie 0) bb (peep kb 'out 0) (peep kb 'arch 0)))")

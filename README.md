@@ -60,7 +60,7 @@ i = 0.5 -1                   ; built in complex
 ```
 ; this example uses lambda def sugar, pattern matching, and church exponentiation
 ; : is the let form, @ is pattern matching; :-/@- variants place the default branch first
-(:- (100 fb 1 )
+(:- (100 fb 1)
  (fb n) (puts $ s n + "\n", n + 1)
  (s n) (n % 3 . n % 5 @- (show n) (0 . 0) "fizzbuzz" (0 . _) "fizz" (_ . 0) "buzz"))
 ```

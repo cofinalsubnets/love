@@ -28,7 +28,7 @@
    ; prefix would refuse a text it is carrying.
    fp-unames '((x64 "x86_64|amd64") (a64 "aarch64|arm64") (rv64 "riscv64"))
    (fp-uname arch)
-    (: r (assoc (intern arch) fp-unames)
+    (: r (assoc (nom arch) fp-unames)
        (two? r ? (r 1) (fp-die ("no uname spelling for " + arch))))
    ; (arch size) -> one case arm; b/n in blocks, s the exact byte count
    (fp-arm arch b n s)
@@ -48,8 +48,8 @@
      + "exec \"$c\" \"$@\"\n")
    ; args -> ((arch . bytes) ..), in argv order (the order is the make rule's, fixed)
    (fp-members l)
-    (? (atom? l) ()
-       (atom? >l) (fp-die "ARCH with no FILE")
+    (? (one? l) ()
+       (one? >l) (fp-die "ARCH with no FILE")
        (: g (fp-read <>l)
           _ (one? g ? (fp-die ("cannot read " + <>l)))
           ((<l . <>g) . fp-members >>l)))
@@ -57,15 +57,14 @@
     (: _ (#av < 3 ? (fp-die "usage: fatpack OUT ARCH FILE [ARCH FILE ..]"))
        out <av
        ms (fp-members >av)
-       id (fp-id16 (sha256 (foldl (\ a m (a + >m)) "" ms)))
+       id (fp-id16 (sha256 (foldl (a \ m \ a + >m) "" ms)))
        ; lay the arms and the body: member k starts at block 1 + blocks-before-it
-       arms (: (go l b) (? (atom? l) ""
-                 (: n #><l
-                    ((fp-arm <<l b (fp-blocks n) n) + (go >l (b + fp-blocks n)))))
+       arms (: (go l b) (? (one? l) ""
+                 (: n #><l (fp-arm <<l b (fp-blocks n) n + go >l (b + fp-blocks n))))
                (go ms 1))
        pre (fp-prefix id arms)
        _ (bs < #pre ? (fp-die "prefix outgrew its block"))
-       body (foldl (\ a m (a + >m + (fp-pad #>m))) (pre + (fp-pad #pre)) ms)
+       body (foldl (a \ m \ a + >m + fp-pad #>m) (pre + fp-pad #pre) ms)
        _ (fp-write out body)
        (say out $ "FAT\t" + out + " (" + show #ms + " texts, "
                   + show #body + " bytes, id " + id + ")\n"))

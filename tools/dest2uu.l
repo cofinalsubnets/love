@@ -21,7 +21,7 @@
 ; the files read below spell their laws `test`, the corpus recorder. here they run to
 ; BUILD, and stdout is the artifact -- so bind assert's instead: silent on success,
 ; and a false law stops the run rather than printing a dot into the output.
-(:: 'test (\ l (. 'assert l)))
+(:: 'test (. 'assert))
 (: j (jug 0) _ (wear [in j err])
    _ (reads (open "test/proto/dest.l" "r"))
    _ (wear ()) ())
@@ -32,7 +32,7 @@
    (look t k) (: e (assoc k t) (two? e ? <>e (scare 'dest2uu-look k)))
    ; labels and frame offsets take codes as met, in emission order -- presence is
    ; the (1 x) wrapper, a code may be 0
-   LAB (tablet 0) OFF (tablet 0)
+   LAB {} OFF {}
    (dyn t x) (: e (t x)
                 (? (two? e) <e
                    (: k (peep t 'n 0) _ (pin t 'n (k + 1)) _ (pin t x [k]) k)))
@@ -44,33 +44,32 @@
 
    ; the shuttle idioms, folded before the lift: shov -> push X, shpo -> pop X
    (plift fs)
-    (? (one? fs) ()
-       (? (<fs 0 = 'sub && <fs 1 = 'sp && two? >fs
-           && <>fs 0 = 'st && <>fs 1 = 'sp)
-          (['push (<>fs 3)] . plift >>fs)
-          (<fs 0 = 'ld && <fs 2 = 'sp && two? >fs
-           && <>fs 0 = 'add && <>fs 1 = 'sp)
-          (['pop (<fs 1)] . plift >>fs)
-          (<fs . plift >fs)))
+    (two? fs ?
+     (? (<fs 0 = 'sub && <fs 1 = 'sp && two? >fs
+         && <>fs 0 = 'st && <>fs 1 = 'sp)
+        (['push (<>fs 3)] . plift >>fs)
+        (<fs 0 = 'ld && <fs 2 = 'sp && two? >fs
+         && <>fs 0 = 'add && <>fs 1 = 'sp)
+        (['pop (<fs 1)] . plift >>fs)
+        (<fs . plift >fs)))
    (lift1 f)
-    (: h (f 0)
-       (? (h = 'li)    [0 (tr (f 1)) (tx (f 2)) 0]
-          (h = 'mov)   [1 (tr (f 1)) (tr (f 2)) 0]
-          (h = 'ld)    [2 (tr (f 1)) (tr (f 2)) (toff (f 3))]
-          (h = 'st)    [3 (tr (f 1)) (toff (f 2)) (tr (f 3))]
-          (h = 'si)    [4 (tr (f 1)) (toff (f 2)) (ti (f 3))]
-          (h = 'add)   [5 (tr (f 1)) (tx (f 2)) (tx (f 3))]
-          (h = 'sub)   [6 (tr (f 1)) (tx (f 2)) (tx (f 3))]
-          (h = 'cmp)   [7 (tx (f 1)) (tx (f 2)) 0]
-          (h = 'set)   [8 (ti (look rels (f 1))) (tr (f 2)) 0]
-          (h = 'br)    [9 (ti (look rels (f 1))) (tlab (f 2)) 0]
-          (h = 'jmp)   [10 (tlab (f 1)) 0 0]
-          (h = 'label) [11 (tlab (f 1)) 0 0]
-          (h = 'call)  [12 (tlab (f 1)) 0 0]
-          (h = 'ret)   [13 0 0 0]
-          (h = 'push)  [14 (tr (f 1)) 0 0]
-          (h = 'pop)   [15 (tr (f 1)) 0 0]
-          (scare 'dest2uu-op h)))
+    (f 0 @ 'li    [0 (tr (f 1)) (tx (f 2)) 0]
+           'mov   [1 (tr (f 1)) (tr (f 2)) 0]
+           'ld    [2 (tr (f 1)) (tr (f 2)) (toff (f 3))]
+           'st    [3 (tr (f 1)) (toff (f 2)) (tr (f 3))]
+           'si    [4 (tr (f 1)) (toff (f 2)) (ti (f 3))]
+           'add   [5 (tr (f 1)) (tx (f 2)) (tx (f 3))]
+           'sub   [6 (tr (f 1)) (tx (f 2)) (tx (f 3))]
+           'cmp   [7 (tx (f 1)) (tx (f 2)) 0]
+           'set   [8 (ti (look rels (f 1))) (tr (f 2)) 0]
+           'br    [9 (ti (look rels (f 1))) (tlab (f 2)) 0]
+           'jmp   [10 (tlab (f 1)) 0 0]
+           'label [11 (tlab (f 1)) 0 0]
+           'call  [12 (tlab (f 1)) 0 0]
+           'ret   [13 0 0 0]
+           'push  [14 (tr (f 1)) 0 0]
+           'pop   [15 (tr (f 1)) 0 0]
+           h (scare 'dest2uu-op h))
 
    (pre fs) (? (one? fs) ()
                (elem (<fs 0) '(call jmp ret)) ()
@@ -82,7 +81,7 @@
        _ (each fs (f \ (: q (lift1 f)
                           (puts $ "\n    (ncons " + show (q 0) + " (ncons " + show (q 1)
                                   + " (ncons " + show (q 2) + " (ncons " + show (q 3)))))
-       _ (puts $ "\n    nnil" + ")" * (4 * #fs) + ")")
+       _ (puts $ "\n    nnil" + ")" * 4 * #fs + ")")
        ())
 
    eb '(bin add (v y) (k 1))                    ; dest.l's e5 bin, held inline there

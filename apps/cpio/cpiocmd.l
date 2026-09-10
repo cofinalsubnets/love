@@ -40,11 +40,10 @@
    ; the name list, split here rather than by kore's `lines`: that one is module 'kore's
    ; and this file is a lib, outside it
    (cpioc-lines s)
-    (: n #s
-       (go k st acc) (? (n <= k) (rev (st < k ? (snip s st k . acc) acc))
-                        (s k = 10) (go (k + 1) (k + 1) (snip s st k . acc))
-                        (go (k + 1) st acc))
-       (go 0 0 ()))
+    (:- (go 0 0 ()) n #s (go k st acc)
+     (? (n <= k) (rev (st < k ? (snip s st k . acc) acc))
+        (s k = 10) (go (k + 1) (k + 1) (snip s st k . acc))
+        (go (k + 1) st acc)))
 
    ; one named path -> its entry. no descent: `find` already walked, and walking again
    ; here would carry what the caller's own find deliberately pruned. the stored name
@@ -54,12 +53,12 @@
     (: lnk (readlink p)
        st (stat p)
        nom (tar-strip p)
-       (own e) (: _ (5 < #st && (: _ (pin e 'uid (st 4)) (pin e 'gid (st 5))))
+       (own e) (: _ (5 < #st && pins e 'uid (st 4) 'gid (st 5))
                   _ (two? st && pin e 'mtime (<>st // 1000))
                   e)
        (? (string? lnk)
-          (: e (tar-entry nom 'link "") _ (pin e 'to lnk) _ (pin e 'mode 511) [1 (own e)])
-          !(two? st) (: _ (cpioc-moan (p + ": No such file or directory")) ())
+          (: e (tar-entry nom 'link "") _ (pins e 'to lnk 'mode 511) [1 (own e)])
+          (one? st) (cpioc-moan (p + ": No such file or directory"), ())
           (<>>st & 61440 = 16384)
            (: e (tar-entry nom 'dir "") _ (pin e 'mode (<>>st & 4095)) [1 (own e)])
           (: b (cpioc-slurp p)
@@ -72,22 +71,22 @@
    (cpioc-o t)
     (: ns (cpioc-lines (slurp in + ""))
        (go l acc ok)
-        (? !(two? l) [(rev acc) ok]
+        (? (one? l) [(rev acc) ok]
            (: p <l
-              (? (#p = 0) (go >l acc ok)            ; find's trailing empty line
-                 (: r (cpioc-one p)
-                    (? !r (go >l acc 0)
-                       (: _ (cpioc-tell t p) (go >l (<>r . acc) ok)))))))
+              (#p @ 0 (go >l acc ok)            ; find's trailing empty line
+               (: r (cpioc-one p)
+                (? !r (go >l acc 0)
+                 (cpioc-tell t p, go >l (<>r . acc) ok))))))
        g (go ns () 1)
        s (cpio-pack <g)
-       dst (peep t 'out ())
+       dst (t 'out)
        _ (? (string? dst)
             (cpioc-blurt dst s ? 0 (cpioc-moan ("cannot write " + dst)))
-            (: _ (say out s) (flush out)))
+            (say out s, flush out))
        _ (cpioc-blocks t #s)
        (<>g ? 0 1))
    (cpioc-in t)                             ; -> (1 bytes) | ()
-    (: src (peep t 'in ())
+    (: src (t 'in)
        (? (string? src) (: r (cpioc-slurp src)
                            (r || (: _ (cpioc-moan ("cannot read " + src)) ())))
           [1 (slurp in + "")]))
@@ -101,7 +100,7 @@
        (? !b 1
           (: es (cpio-unpack <>b)
              (? !es (: _ (cpioc-moan "premature end of archive") 1)
-                (: fs (map (e \ (: t2 (tablet 0)
+                (: fs (map (e \ (: t2 {}
                                    _ (map (k \ pin t2 k (e k)) (keys e))
                                    _ (pin t2 'nom (cpioc-strip (peep e 'nom "")))
                                    _ (cpioc-tell t (peep t2 'nom ""))
@@ -122,23 +121,22 @@
 
    ; --- the options -----------------------------------------------------------
    (cpioc-long t w)                         ; -> 1 taken | 'val a word is wanted | ()
-    (? (w = "create" || w = "extract") (pin t 'mode (w = "create" ? 'o 'i))
-       (w = "list") (pin t 'mode 't)
-       (w = "make-directories") (pin t 'd 1)
-       (w = "unconditional") (pin t 'u 1)
-       (w = "verbose") (pin t 'v 1)
-       (w = "quiet") (pin t 'quiet 1)
-       (w = "no-absolute-filenames") 1      ; what we do anyway, said out loud
-       (w = "help") (pin t 'h 1)
-       (w = "format" || w = "file") 'val
-       ())
+    (w @ ("create" || "extract") (pin t 'mode (w = "create" ? 'o 'i))
+         "list" (pin t 'mode 't)
+         "make-directories" (pin t 'd 1)
+         "unconditional" (pin t 'u 1)
+         "verbose" (pin t 'v 1)
+         "quiet" (pin t 'quiet 1)
+         "no-absolute-filenames" 1      ; what we do anyway, said out loud
+         "help" (pin t 'h 1)
+         ("format" || "file") 'val)
    (cpioc-opts as t)                        ; -> (1 rest) | ()
     (: (want k v)                           ; a value word landing in its place
         (? (k = "format") (? (v = "newc") 1
                              (: _ (cpioc-moan ("format " + v + " is not here (newc only)")) ()))
            (: _ (pin t 'in v) (pin t 'out v) 1))
        (go a)
-        (? !(two? a) '(1 ())
+        (one? a ? '(1 ())
            (: w <a n #w
               (? (w = "--") [1 >a]
                  (n < 2 || !(w 0 = 45)) [1 a]
@@ -151,39 +149,36 @@
                             (: _ (cpioc-moan (w + " wants a value")) ()))
                         (go >a)))
                  (: (cl i rest)
-                     (? (n <= i) (go rest)
-                        (: c (w i)
-                           (? (elem c '(111 105 116))            ; -o -i -t
-                              (: _ (pin t 'mode (? (c = 111) 'o (c = 105) 'i 't))
-                                 (cl (i + 1) rest))
-                              (elem c '(100 117 118))            ; -d -u -v
-                               (: _ (pin t (? (c = 100) 'd (c = 117) 'u 'v) 1)
-                                  (cl (i + 1) rest))
-                              (elem c '(72 70 73 79))            ; -H -F -I -O
-                               (: glue (snip w (i + 1) n)
-                                  v (0 < #glue ? glue (two? rest && <rest))
-                                  rest2 (0 < #glue ? rest (two? rest ? >rest rest))
-                                  (? !(string? v)
-                                     (: _ (cpioc-moan ("-" + string c + " wants a value")) ())
-                                     (c = 72) (want "format" v ? (go rest2) ())
-                                     (: _ (? (c = 73) (pin t 'in v)
-                                             (c = 79) (pin t 'out v)
-                                             (: _ (pin t 'in v) (pin t 'out v)))
-                                        (go rest2))))
-                              (: _ (cpioc-moan ("unknown option -" + string c)) ()))))
+                     (n <= i ? (go rest)
+                      (: c (w i)
+                         (? (elem c '(111 105 116))            ; -o -i -t
+                            (pin t 'mode (? (c = 111) 'o (c = 105) 'i 't),
+                             cl (i + 1) rest)
+                            (elem c '(100 117 118))            ; -d -u -v
+                             (pin t (? (c = 100) 'd (c = 117) 'u 'v) 1,
+                              cl (i + 1) rest)
+                            (elem c '(72 70 73 79))            ; -H -F -I -O
+                             (: glue (snip w (i + 1) n)
+                                v (0 < #glue ? glue (two? rest && <rest))
+                                rest2 (0 < #glue ? rest (two? rest ? >rest rest))
+                                (? !(string? v)
+                                   (cpioc-moan ("-" + string c + " wants a value"), ())
+                                   (c = 72) (want "format" v ? (go rest2) ())
+                                   (: _ (c @ 73 (pin t 'in v)
+                                             79 (pin t 'out v)
+                                                (pin t 'in v, pin t 'out v))
+                                      (go rest2))))
+                            (: _ (cpioc-moan ("unknown option -" + string c)) ()))))
                     (cl 1 >a)))))
        (go as))
    (cpio-main as)
-    (: t (tablet 0)
+    (: t {}
        o (cpioc-opts as t)
        (? !o 2
           (peep t 'h 0) (: _ (say out (cpioc-usage + "\n")) _ (flush out) 0)
-          (: m (peep t 'mode ())
+          (: m (t 'mode)
              _ (two? <>o && cpioc-moan "the names come in on stdin, not on the line")
-             (? (= m 'o) (cpioc-o t)
-                (= m 'i) (cpioc-i t)
-                (= m 't) (cpioc-t t)
-                (: _ (cpioc-moan cpioc-usage) 2)))))
+           (m @ 'o (cpioc-o t) 'i (cpioc-i t) 't (cpioc-t t) (cpioc-moan cpioc-usage, 2)))))
 
    (pins (cite 'verbs 'tab) 'cpio cpio-main))
 
