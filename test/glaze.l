@@ -57,3 +57,29 @@
     (11 = (ev '(: f 2  (g f) (+ f 1)  (g 10))))
     (7  = (ev '(: tw (\ h (h 1))  (g tw) (tw (\ y (+ y 5)))  (g (\ k 7)))))   ; dehof's lamc fold holds the same law
     (12 = (ev '(: m 7  (g x) (+ x m)  (g 5)))))                                ; ..and an unshadowed const still folds
+
+; --- a word an enclosing letrec rebinds is not the word the desugar owns --------------
+; adesug rewrites (list a..), (one? x), (nil? x), (atom? x), (!= a b) and (!== a b) into
+; the shapes amble compiles, by the head's name -- and the frame's binders are not the only
+; ones in scope, so a letrec that spells one of those words itself declines the rewrite.
+; each local answers 7 where its word answers 1 or 0; a constant body would be folded in
+; before the desugar ever saw a call, so these compute.
+(: (one? e)  (charm? e ? 7 9)
+   (nil? e)  (charm? e ? 7 9)
+   (atom? e) (charm? e ? 7 9)
+   (!= a b)  (charm? a ? 7 9)
+   (!== a b) (charm? a ? 7 9)
+   (c1 r) (two? r && (one? <r))
+   (c2 r) (two? r && (nil? <r))
+   (c3 r) (two? r && (atom? <r))
+   (c4 r) (two? r && (!= <r <r))
+   (c5 r) (two? r && (!== <r <r))
+   q [0 "x"]
+   _ (test (7 = c1 q) (7 = c2 q) (7 = c3 q) (7 = c4 q) (7 = c5 q))
+   0)
+; ..and `list`, in a letrec of its own: a local spelling owns that scope's [..] too
+(: (list a) (charm? a ? 7 9)
+   (c6 r) (two? r && (list <r))
+   q (. 0 (. "x" ()))
+   _ (test (7 = c6 q))
+   0)

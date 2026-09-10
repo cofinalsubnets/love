@@ -521,8 +521,13 @@
        k    #vars
        body (lp ? GB (ainl M inl st))
        env  (vars + ps)
-       body (adesug env ti ta body)                          ; own list/&& by definition (nested links / nested ?s) + untag
-       inits (map (i \ adesug env ti ta (ainl i inl st)) inits)
+       ; adesug rewrites a head by its MEANING, and env is this frame's binders alone -- an
+       ; enclosing letrec that rebinds one of its words is invisible there, so the body would
+       ; run the nif the name no longer names. farq knows those binders; a shadowed word joins
+       ; the env adesug reads and stays a call, resolved through lams like any other sibling.
+       denv (env + filter (n \ farq n) '(list nil? one? atom? != !== &&))
+       body (adesug denv ti ta body)                         ; own list/&& by definition (nested links / nested ?s) + untag
+       inits (map (i \ adesug denv ti ta (ainl i inl st)) inits)
        ins  (st 'l)
        nin  #ins
        ; self: the letrec name this closure is being bound to (ala's nm; 0 when anonymous).
