@@ -798,25 +798,12 @@ test_mps2_wake: host
 # qemu's mps2-an386, whose FPv4-SP FPU FAULTS on any f64 arithmetic that slipped through.
 test_thumb2sp: host
 	@sh test/gate/thumb.sh thumb2sp $(ho)
-# test_playdate -- the playdate build gate: the device half compiled by mooncc -t thumb2sp
-# behind pdglue's word-only SDK seam, the pdx built by pdc. Verifies the DEVICE elf: no UND,
-# eventHandler exported, ZERO movw/movt relocs -- the loader relocates ABS32 words only.
-# the probe runs FIRST and never skips: main.c reaches the SDK through pdglue's word-only
-# seam, so mooncc compiles the device main with no foreign tool. without it the whole lane
-# exits 0 on a machine with no SDK -- which is how main.c spent three days as invalid C.
+# test_playdate -- the playdate build gate. The device half is OURS end to end now:
+# mooncc -t thumb2sp compiles every object, pdglue.c (the pd_api.h owner) included, and
+# ldbare32 binds them -- no arm-none-eabi-gcc, no ld, no linker script. The SDK is wanted
+# for its C_API headers and for pdc. See test/gate/playdate.sh for what the image is held to.
 test_playdate: host
-	@echo TEST out/playdate/main.o '(the device main, no SDK)'
-	@$(MAKE) -C i/playdate probe || { echo "FAIL playdate: the device main does not compile"; exit 1; }
-	@echo TEST out/playdate/love.pdx
-	@if [ -z "$$PLAYDATE_SDK_PATH" ] || ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
-	   echo "test_playdate: the device main compiles; no PLAYDATE_SDK_PATH / arm-none-eabi, the pdx half skipped"; exit 0; fi; \
-	  $(MAKE) -C i/playdate || { echo "FAIL playdate build"; exit 1; }; \
-	  u=`llvm-readelf -s out/playdate/pdex.elf | grep -c "UND [a-zA-Z_]"`; \
-	  [ "$$u" -eq 0 ] || { echo "FAIL pdex.elf has $$u undefined symbols"; exit 1; }; \
-	  llvm-readelf -s out/playdate/pdex.elf | grep -qw eventHandler || { echo "FAIL no eventHandler"; exit 1; }; \
-	  m=`llvm-readelf -r out/playdate/pdex.elf | grep -c "MOVW\|MOVT"`; \
-	  [ "$$m" -eq 0 ] || { echo "FAIL $$m movw/movt relocs (the loader can't relocate them)"; exit 1; }; \
-	  echo "test_playdate: love.pdx (device half all-mooncc -t thumb2sp, soft f64) -- resolved, word-relocs only"
+	@sh test/gate/playdate.sh "$(MAKE)" $m
 # test_teensy41 -- the REAL-METAL build gate, and the one port asking for NO foreign tool at
 # all: mooncc -t thumb2 compiles, tlink.l binds (no ld, no linker script -- the XIP flash map
 # is the map in that file), mkimg.l wraps the baked heap image, ocopy.l writes the .hex/.bin,

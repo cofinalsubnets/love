@@ -1,13 +1,20 @@
 # Playdate build. Run from the project root via `make -C i/playdate`, or
 # directly via `cd i/playdate && make`. Output lands in $(R)/out/playdate/
-# ($n.pdx at the top). Requires PLAYDATE_SDK_PATH (pdc + C_API + simulator);
-# the DEVICE half is compiled by mooncc -t thumb2sp (the STM32F746's FPU is
-# single-precision: every f64 op softens to the __aeabi_* libgcc helpers,
-# gated bit-exact by test_thumb2sp) with only pdglue.c + the SDK's setup.c on
-# arm-none-eabi-gcc -- pdglue owns pd_api.h and flattens the SDK to a
-# word-only seam. la rides pooled ABS32 words on this target (the loader
-# relocates words, never a MOVW/MOVT pair). The simulator pdex.so stays an
-# ordinary host gcc shared object, so `make sim` runs with no cross tools.
+# ($n.pdx at the top). Requires PLAYDATE_SDK_PATH for the C_API headers, the
+# simulator, and pdc, which bundles the .pdx.
+#
+# NOTHING FOREIGN COMPILES OR LINKS THE DEVICE HALF. mooncc -t thumb2sp builds
+# every object, pdglue.c included -- it owns pd_api.h and flattens the SDK to a
+# word-only seam -- and our own linker binds them: -Ttext 0 because link_map.ld
+# names no address at all, --emit-relocs so the ABS32 sites survive for a loader
+# that places the image where it likes, -nostdlib because the six moonlibc
+# members and rt.c beside them are the whole runtime this seat wants. la rides
+# pooled ABS32 words on this target, which is what makes the relocation table
+# complete: a MOVW/MOVT pair is an absolute no loader slides by adding to a
+# word, and the linker refuses --emit-relocs on a seat that emits one.
+# pdglue.c also stands in for the SDK's setup.c here (the entry and the malloc
+# trio). The simulator pdex.so stays an ordinary host gcc shared object, and
+# there setup.c is the SDK's again, so `make sim` runs with no cross tools.
 #
 # Both halves bake the same program: the egg bootstrap (out/lib lcat headers,
 # delegated to the root), apps/rune.l as a registered module, and cas.l (this
@@ -20,29 +27,24 @@ n = love
 pd_sdk = $(PLAYDATE_SDK_PATH)
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
 MOONCC = $(R)/out/.love.baked
-pd_cc = $(CCACHE) arm-none-eabi-gcc -g3
-pd_opt = -Os -falign-functions=16 -fomit-frame-pointer
-# the device M7's FPU is single-precision; gcc-side doubles ride the libgcc
-# soft helpers -- the same __aeabi_* calls mooncc's soft-double pass emits.
-pd_fpu = -mfloat-abi=hard -mfpu=fpv5-sp-d16 -D__FPU_USED=1
-pd_mcflags = -mthumb -mcpu=cortex-m7 $(pd_fpu)
-pd_incdir = -I. -Il -I$(o) -I$(R) -I$(R)/out/lib -I$(R)/l/quay -I$(pd_sdk)/C_API
-# ai_data_section=0: the sentinel tiling l/love.h's ai_typ reads needs the link to
-# place love.data.NN, and this seat links through the SDK's own link_map.ld --
-# not ours to write a block into. l/love.h asks the sentinels by name here.
-pd_defs = -DTARGET_PLAYDATE=1 -DTARGET_EXTENSION=1 -Dai_data_section=0
-pd_cpflags = $(pd_mcflags) $(pd_opt) $(pd_defs) -std=gnu2x -ffreestanding \
-  -gdwarf-2 -Wall -Wno-unused -Wstrict-prototypes -Wno-unknown-pragmas \
-  -Wdouble-promotion -mword-relocations -fno-common \
-  -ffunction-sections -fdata-sections $(pd_incdir)
-pd_lds = $(pd_sdk)/C_API/buildsupport/link_map.ld
-pd_ldflags = -nostartfiles $(pd_mcflags) -T$(pd_lds) \
-  -Wl,-Map=$(o)/pdex.map,--cref,--gc-sections,--no-warn-mismatch,--emit-relocs
 
 # mooncc's flags for the device C (run from $(R): its system include dir is
-# CWD-relative). TARGET_PLAYDATE gates main.c's newlib stubs.
+# CWD-relative, the SDK's is absolute). TARGET_PLAYDATE gates main.c's newlib
+# stubs and pdglue.c's setup.c half. ai_data_section=0: the sentinel tiling
+# l/love.h's ai_typ reads wants the link to place love.data.NN, and this seat
+# lays one flat text run, so l/love.h asks the sentinels by name here.
 mc_flags = -t thumb2sp -D ai_tco=1 -D __STDC_HOSTED__=0 -D TARGET_PLAYDATE=1 -D TARGET_EXTENSION=1 -D ai_data_section=0 \
-  -Ii/playdate -Iout/playdate -I. -Il -Iout/lib -Il/quay
+  -Ii/playdate -Iout/playdate -I. -Il -Iout/lib -Il/quay -Iapps/moon/include -I$(pd_sdk)/C_API
+# our own link. -Ttext 0 is where link_map.ld puts .text, which is the only thing
+# that script says about placement; --emit-relocs keeps the R_ARM_ABS32 sites so
+# the loader can slide them; -nostdlib makes an owed nom past our own runtime a
+# diagnostic rather than a hunt for a libc this seat would not want.
+mc_ld = -t thumb2sp -Ttext 0 -nostdlib --emit-relocs
+# the same link at a second base. test_playdate diffs the two images and holds the
+# relocation table to being exactly the words that moved -- complete and minimal, which
+# is the whole of what a loader placing this image somewhere else leans on. Nothing
+# else builds it, and it never rides the pdx.
+mc_ld_alt = -t thumb2sp -Ttext 0x100000 -nostdlib --emit-relocs
 
 # the lcat lib headers this frontend bakes (produced by the root's rules on
 # love0, delegated below so a standalone make works from a clean tree)
@@ -56,15 +58,25 @@ pd_local_c = $(wildcard *.c)
 # love_c already carries the codecs (common.mk's core_tu = love_tu + love_codec),
 # so naming them again here is one roster too many -- and the second one pointed at
 # src/, which the flatten retired.
-# l/bare.c is the null seat: this frontend supplies main and the SDK supplies the
-# libc, so the doors i/fd.c carries on a hosted love have nobody here to answer them.
+# l/bare.c is the null seat: this frontend supplies main and pdglue supplies the
+# heap, so the doors i/fd.c carries on a hosted love have nobody here to answer them.
 # the port.mk boards take it through love_m; this folder keeps its own roster and so
 # has to name it.
 pd_shared_c = $(love_c) $(f_c) $(R)/l/bare.c
+# the bare-metal runtime, and the whole of it. the six moonlibc string members every
+# port takes (i/port.mk's libc_m, out of the same source -- there is no second libc
+# in this tree), plus rt.c: the calls mooncc's own lowering makes where the machine
+# has no instruction, which on an sp-only fpu is every f64 op. these ride the same
+# $(o)/%.o pattern as the love objects, so they mirror their source paths.
+pd_bare_c = $(addprefix $(R)/apps/moon/lib/moonlibc/string/,\
+  memchr.c memcmp.c memcpy.c memmove.c memset.c strlen.c) $(R)/apps/moon/lib/rt.c
+# the simulator is a hosted .so and keeps the SDK's setup.c: there pdglue.c leaves the
+# shim and the malloc trio to it, and the host libc answers the rest.
 pd_sdk_c = $(pd_sdk)/C_API/buildsupport/setup.c
 pd_src = $(pd_local_c) $(pd_shared_c) $(pd_sdk_c)
 mc_shared_o = $(pd_shared_c:$(R)/%.c=$(o)/%.o)
-pd_o = $(o)/main.o $(mc_shared_o) $(o)/pdglue.o $(o)/setup.o
+pd_bare_o = $(pd_bare_c:$(R)/%.c=$(o)/%.o)
+pd_o = $(o)/main.o $(mc_shared_o) $(pd_bare_o) $(o)/pdglue.o
 
 # a failed recipe takes its half-written target with it -- else a 0-byte artifact
 # carries a fresh mtime and the next make calls it up to date. this makefile stands
@@ -76,9 +88,10 @@ pd_o = $(o)/main.o $(mc_shared_o) $(o)/pdglue.o $(o)/setup.o
 # with no foreign tool -- which makes this the one playdate lane that can run anywhere
 # and therefore the one that can FAIL. test_playdate runs it before it decides whether
 # it has an SDK to do the rest with.
-.PHONY: default sim clean probe
+.PHONY: default sim clean probe alt
 default: $(o)/$n.pdx
 probe: $(o)/main.o
+alt: $(o)/pdex-alt.elf
 
 sim: $(o)/$n.pdx
 	@$(pd_sdk)/bin/PlaydateSimulator $^
@@ -142,19 +155,20 @@ $(o)/%.o: $(R)/%.c $(pd_h) | $(MOONCC)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
 	@cd $(R) && LOVE_NO_IMAGE= out/love mooncc $(mc_flags) -c $*.c out/playdate/$*.o
-# the gcc half: the SDK boundary
-$(o)/pdglue.o: pdglue.c pdglue.h
-	@echo CC	$@
+# the SDK boundary -- ours too, now: pdglue.c is the one file that includes pd_api.h,
+# and mooncc reads it (the header wants -Wno-unknown-pragmas from gcc and nothing at
+# all from us). It is not under the $(R) pattern above: it lives here, not in the tree.
+$(o)/pdglue.o: pdglue.c pdglue.h | $(MOONCC)
+	@echo MOON	$@
 	@mkdir -p $(o)
-	@$(pd_cc) -c $(pd_cpflags) pdglue.c -o $@
-$(o)/setup.o: $(pd_sdk)/C_API/buildsupport/setup.c
-	@echo CC	$@
-	@mkdir -p $(o)
-	@$(pd_cc) -c $(pd_cpflags) $< -o $@
+	@cd $(R) && LOVE_NO_IMAGE= out/love mooncc $(mc_flags) -c i/playdate/pdglue.c out/playdate/pdglue.o
 
-$(o)/pdex.elf: $(pd_o) $(pd_lds)
-	@echo LD	$@
-	@$(pd_cc) $(pd_o) $(pd_ldflags) -o $@
+$(o)/pdex.elf: $(pd_o) | $(MOONCC)
+	@echo MOON	$@
+	@cd $(R) && LOVE_NO_IMAGE= out/love mooncc $(mc_ld) $(pd_o:$(R)/%=%) -o out/playdate/pdex.elf
+$(o)/pdex-alt.elf: $(pd_o) | $(MOONCC)
+	@echo MOON	$@
+	@cd $(R) && LOVE_NO_IMAGE= out/love mooncc $(mc_ld_alt) $(pd_o:$(R)/%=%) -o out/playdate/pdex-alt.elf
 
 # the simulator .so: a single-shot hosted build of the same sources
 $(o)/pdex.so: $(pd_src) $(o)/cas.h

@@ -750,6 +750,20 @@ absolute carried as two split immediates that no loader slides by adding to a wo
 thumb1 and thumb2sp route `la` through a pooled ABS32 word and can answer. `test_reloc32`
 links one source twice 64K apart and holds the table to being exactly the words that moved.
 
+An image that carries relocations also **folds** its lanes: a lane whose section would be
+named anything but `.text`/`.rodata`/`.data`/`.bss` joins the header before it, when it is
+contiguous and carries the same flags. A loader walks `.rel` sections by a ROSTER of section
+names — pdc's is `.text .data .got .got.plt .bss` — so a lane named anything else has its
+relocations dropped in silence, which is what was happening to the nif table's four pointers.
+
+**The Playdate device build is all-mooncc as of 2026-09-10**: every object including
+`pdglue.c`, the one file that includes `pd_api.h`, and the link too. `pdglue.c` stands in for
+the SDK's `setup.c` (the entry and the malloc trio over the SDK realloc); the six moonlibc
+string members and `rt.c` are the whole runtime; `-Ttext 0 -nostdlib --emit-relocs` is the
+link, because `link_map.ld` names no address at all. `test_playdate` holds the image to the
+same two-base diff over its whole 1.1 MB, and then to `pdex.bin` carrying every one of those
+sites past pdc.
+
 **Parse-side and gen-side type twins drift silently.** `tsz`/`talign` (parse) and `(wsize g)`
 (gen) once disagreed on pointer width, mislaying every struct containing a pointer on both
 32-bit targets with no scare. The target is threaded into the parse state now (`psnew tgt`,

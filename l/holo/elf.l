@@ -92,21 +92,28 @@
    ;; Thumb state, and an M-profile part has no other state to enter. every EM_ARM backend
    ;; here is a Thumb one, so the machine number is the whole test. e_flags says eabi
    ;; version 5, the tag an arm reader checks first (obj.l stamps the same on its .o).
-   (elf32-hdrn etype entry machine sh phs)
+   (elf32-hdrn etype entry machine eflags sh phs)
     (: shoff (two? sh ? <sh 0) shnum (two? sh ? <>sh 0) shstrx (two? sh ? <>>sh 0)
        arm? (machine = 40)
       (catall [
         '(127 69 76 70 1 1 1 0 0 0 0 0 0 0 0 0)               ; e_ident: \x7fELF, 32-bit LSB SysV
         (le16 etype) (le16 machine) (le32 1)                   ; e_type (2 EXEC / 3 DYN), e_machine, version 1
         (le32 (arm? ? (entry | 1) entry)) (le32 52) (le32 shoff)    ; e_entry, e_phoff=52, e_shoff
-        (le32 (arm? ? 83886080 0)) (le16 52) (le16 32)         ; e_flags=eabi_ver5, e_ehsize=52, e_phentsize=32
+        (le32 (arm? ? eflags 0)) (le16 52) (le16 32)           ; e_flags (arm-eflags), e_ehsize=52, e_phentsize=32
         (le16 #phs) (le16 (two? sh ? 40 0)) (le16 shnum) (le16 shstrx)
         (catall phs)]))
 
    ;; the 84-byte header for a single R+X+W load segment at `base` covering the whole file.
-   (elf32-hdr etype base entry filesz memsz machine sh)
-    (elf32-hdrn etype entry machine sh
+   (elf32-hdr etype base entry filesz memsz machine eflags sh)
+    (elf32-hdrn etype entry machine eflags sh
                 [(elf32-phdr 1 7 0 base base filesz memsz 4096)])
+
+   ;; e_flags for an EM_ARM EXECUTABLE. eabi version 5 is the tag every arm reader checks
+   ;; first; the float-abi bit beside it says how a float crosses a call, and it belongs to
+   ;; the LINK -- an .o carries 0x05000000 whatever its abi, gcc's included, and ld derives
+   ;; the executable's bit from the inputs' attributes. a seat with an fpu is hard-float
+   ;; here, since mooncc has no softfp lane.
+   (arm-eflags target) (? (elem target '(thumb2 thumb2sp)) 83887104 83886080)
 
    ;; elf64-at's twin at 32 bits. `entry` answers the code address, even -- the thumb bit
    ;; is the header's business, not an address you can compare or disassemble at.
@@ -118,7 +125,7 @@
          dataddr (base + elf-hdr32 + probe-len)
          code (holo-bytes-at target (mkprog dataddr) org)
          filesz (elf-hdr32 + #code + #data)
-         img (catall [(elf32-hdr 2 base org filesz filesz machine ()) code data])
+         img (catall [(elf32-hdr 2 base org filesz filesz machine (arm-eflags target) ()) code data])
          res {'bytes img 'entry org 'dataddr dataddr})
    (elf32 target mkprog data) (elf32-at elf-base target mkprog data)
 

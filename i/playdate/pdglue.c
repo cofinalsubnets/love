@@ -32,8 +32,28 @@ int pdg_file_read(const char *path, void *buf, unsigned cap) {
   PD->file->close(f);
   return n; }
 
-int eventHandler(PlaydateAPI *pd, PDSystemEvent event, uint32_t arg) {
+// on device this file also replaces the SDK's setup.c, which did three things: name
+// the entry, capture the realloc, and answer malloc/free over it. the malloc trio
+// matters because moonlibc's own reaches for a heap this seat has no syscall to ask
+// for -- the SDK realloc IS the heap here, 16 MB of it. the SIMULATOR keeps setup.c
+// (it is an ordinary hosted .so), so there the shim and the trio are its.
+static int pd_event(PlaydateAPI *pd, PDSystemEvent event, uint32_t arg) {
   if (event != kEventInit) return 0;
   PD = pd;
   love_init();
   return 0; }
+
+#if TARGET_PLAYDATE
+int eventHandlerShim(PlaydateAPI *pd, PDSystemEvent event, uint32_t arg) {
+  return pd_event(pd, event, arg); }
+// ldbare32 takes _start for e_entry and the SDK's link script names eventHandlerShim;
+// a loader may read either, so both are true here and the named one is the real function.
+int _start(PlaydateAPI *pd, PDSystemEvent event, uint32_t arg) {
+  return eventHandlerShim(pd, event, arg); }
+void *malloc(size_t n) { return pdg_realloc(NULL, n); }
+void *realloc(void *p, size_t n) { return pdg_realloc(p, n); }
+void free(void *p) { if (p) pdg_realloc(p, 0); }
+#else
+int eventHandler(PlaydateAPI *pd, PDSystemEvent event, uint32_t arg) {
+  return pd_event(pd, event, arg); }
+#endif
