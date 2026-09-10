@@ -328,23 +328,23 @@ test_cli: host
 	@echo TEST test/gate/cli.sh "(the cli exit-status lane)"
 	@sh test/gate/cli.sh $m
 
-# the front page, its sheet and its icon are laid (web/index.l, web/style.l, u/mkicon.l)
+# the front page, its sheet and its icon are laid (w/index.l, w/style.l, u/mkicon.l)
 # and checked in for github pages: a lay that differs from the tree means someone edited a
 # source without `make web`.
 test_web: host
-	@echo TEST web/index.l web/style.l u/mkicon.l
-	@mkdir -p out/.web
-	@$m web/index.l out/.web/index.html
-	@env -u LOVE_NO_IMAGE $m web/style.l out/.web/style.css
-	@env -u LOVE_NO_IMAGE $m u/mkicon.l l/quay/cga_8x8.c 3 32 out/.web/favicon.png 2>/dev/null
-	@env -u LOVE_NO_IMAGE $m u/mkfont.l l/quay/moderndos_8x16.c 12 out/.web/quay16.woff "Quay 16"
-	@env -u LOVE_NO_IMAGE $m u/mkfont.l l/quay/cga_8x8.c 6 out/.web/quay8.woff "Quay 8"
-	@cmp -s out/.web/index.html index.html && cmp -s out/.web/style.css assets/web/style.css \
-	  && cmp -s out/.web/favicon.png assets/web/favicon.png \
-	  && cmp -s out/.web/quay16.woff assets/fonts/quay16.woff \
-	  && cmp -s out/.web/quay8.woff assets/fonts/quay8.woff \
-	  || { echo "  FAIL: a committed web asset is behind web/ -- run make web and commit"; exit 1; }
-	@echo "  web: ok -- the page, the stylesheet, the icon and both fonts are what web/ lays"
+	@echo TEST w/index.l w/style.l u/mkicon.l
+	@mkdir -p out/.w
+	@$m w/index.l out/.w/index.html
+	@env -u LOVE_NO_IMAGE $m w/style.l out/.w/style.css
+	@env -u LOVE_NO_IMAGE $m u/mkicon.l l/quay/cga_8x8.c 3 32 out/.w/favicon.png 2>/dev/null
+	@env -u LOVE_NO_IMAGE $m u/mkfont.l l/quay/moderndos_8x16.c 12 out/.w/quay16.woff "Quay 16"
+	@env -u LOVE_NO_IMAGE $m u/mkfont.l l/quay/cga_8x8.c 6 out/.w/quay8.woff "Quay 8"
+	@cmp -s out/.w/index.html index.html && cmp -s out/.w/style.css w/style.css \
+	  && cmp -s out/.w/favicon.png w/favicon.png \
+	  && cmp -s out/.w/quay16.woff w/fonts/quay16.woff \
+	  && cmp -s out/.w/quay8.woff w/fonts/quay8.woff \
+	  || { echo "  FAIL: a committed web asset is behind w/ -- run make web and commit"; exit 1; }
+	@echo "  web: ok -- the page, the stylesheet, the icon and both fonts are what w/ lays"
 test_sb: host out$(hsuf)/sb
 	@echo TEST a/sb/sb.l + test/host/sb.l
 	@rm -rf out/.sbtest

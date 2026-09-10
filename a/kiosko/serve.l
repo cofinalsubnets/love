@@ -20,11 +20,11 @@
 ; no papel here, so a rendered .md is the document and not a site page: no title,
 ; anchors, contents nav or cross-link rewriting. `make site` still builds a site.
 ;
-; and the github page: its files are generated -- make web lays index.html and assets/,
+; and the github page: its files are generated -- make web lays index.html and w/,
 ; make wasm the module and its image, site-wasm copies them beside the loader, and the
 ; wasm inle seat (i/wasm/inle.html) is its own module -- and .sbignore drops every one
 ; from the source, so a checkout serves nothing of it until they are laid. where DIR is
-; the tree (a Makefile and web/index.l), this lays them through our own make first; the
+; the tree (a Makefile and w/index.l), this lays them through our own make first; the
 ; two isolation headers kiosko's reply sends are what let inle.html's machine run here
 ; without its service worker.
 ;
@@ -141,7 +141,7 @@ toolchain), and that tree is the one served.
 
    ; the page's build, through our own make in DIR: only where DIR is the tree, and
    ; a refused build is said and stops the server -- a page half laid is not one
-   (sv-tree? dir) (two? (stat (dir + "/Makefile")) && two? (stat (dir + "/web/index.l")))
+   (sv-tree? dir) (two? (stat (dir + "/Makefile")) && two? (stat (dir + "/w/index.l")))
    ; autonomous throughout, as `seed -a` and `love doom` are (a/source.l's src-arm):
    ; our verbs first on PATH, lush -a, CC our mooncc
    (sv-build dir)

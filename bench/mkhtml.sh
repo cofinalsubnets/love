@@ -25,7 +25,7 @@ cat <<'HEAD'
      the quay bitmap face, green = a kept (fastest) answer. */
   @font-face {
     font-family: "Quay 16";
-    src: url("../assets/fonts/quay16.woff") format("woff");
+    src: url("../w/fonts/quay16.woff") format("woff");
     font-display: swap;
   }
   :root { color-scheme: dark; }

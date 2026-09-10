@@ -7,7 +7,7 @@
 // a shared ring means the page must be CROSS-ORIGIN ISOLATED. a server that sends the
 // two headers has it already (kiosko does); on a host that will not, coi.js asks for them
 // with a service worker and one reload. no isolation, no machine -- said, not left blank.
-// the module and its image are fetched from assets/wasm/ -- where the tracked, committed
+// the module and its image are fetched from w/wasm/ -- where the tracked, committed
 // pair lives -- unless data-wasm/data-image name them; data-boot is the boot line (default
 // the shell), data-ram the RAM in MiB.
 import { ring_n, ring_at, shared_n } from './cpu.mjs';
@@ -69,8 +69,8 @@ export async function loveMachine(root) {
   status.textContent = 'fetching the machine...';
   let wasm, image;
   try {
-    wasm = await (await fetch(url(at('wasm', '../../assets/wasm/love-wasm.wasm')))).arrayBuffer();
-    image = await fetch(url(at('image', '../../assets/wasm/love-wasm.image')))
+    wasm = await (await fetch(url(at('wasm', '../../w/wasm/love-wasm.wasm')))).arrayBuffer();
+    image = await fetch(url(at('image', '../../w/wasm/love-wasm.image')))
       .then(r => r.ok ? r.arrayBuffer() : null).catch(() => null);
   } catch (e) { return halt(`the machine did not load (${e.message}); the page needs to be served over http.`); }
 

@@ -28,9 +28,11 @@ test/proof/lean/uugen.lean
 # the project's web page and what it alone links: generated, committed for github
 # pages, never shipped (the machine's pair is `make site-wasm`'s copy out of out/)
 index.html
-assets
-assets/wasm/love-wasm.wasm
-assets/wasm/love-wasm.image
+w/style.css
+w/favicon.png
+w/fonts
+w/wasm/love-wasm.wasm
+w/wasm/love-wasm.image
 
 # editor and debugger leavings
 vgcore.*

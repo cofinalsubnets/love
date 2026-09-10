@@ -1031,15 +1031,15 @@ else
 wasm: out/wasm/love.wasm out/wasm/love-wasm.image
 endif
 # by hand, as love.js was: bytes every C edit would otherwise churn. ONE PAIR IS COPIED
-# OUT, the machine's, to assets/ beside the fonts and the stylesheet -- generated files
+# OUT, the machine's, to w/ beside the fonts and the stylesheet -- generated files
 # committed for one reason, that github pages serves what it is given and builds nothing.
 # the hosted module is a gate's, not a page's, and never leaves out/.
 site-wasm: wasm
-	@mkdir -p assets/wasm
-	@echo '$(t_cp)	'assets/wasm/love-wasm.wasm
-	@cp out/love-wasm.wasm assets/wasm/love-wasm.wasm
-	@echo '$(t_cp)	'assets/wasm/love-wasm.image
-	@cp out/wasm/love-wasm.image assets/wasm/love-wasm.image
+	@mkdir -p w/wasm
+	@echo '$(t_cp)	'w/wasm/love-wasm.wasm
+	@cp out/love-wasm.wasm w/wasm/love-wasm.wasm
+	@echo '$(t_cp)	'w/wasm/love-wasm.image
+	@cp out/wasm/love-wasm.image w/wasm/love-wasm.image
 # the wasm inle seat: the kernel the three metal seats link -- kmain and the ramfs, the
 # console painter with its fonts, i/sys.c under moonlibc, the host frontend whole -- with
 # i/wasm/arch.c for the machine and the source blob as a wasm data object (mksrc.l's
@@ -1080,27 +1080,27 @@ valg: host
 	valgrind --error-exitcode=1 --suppressions=$R/u/valgrind.supp $m $(ho)/.valg-corpus.l </dev/null
 # the site's faces and its stylesheet, laid and checked in: github pages serves
 # the tree as it is, so a generated file still has to be committed
-web: fonts assets/web/style.css assets/web/favicon.png index.html
-fonts: assets/fonts/quay16.woff assets/fonts/quay8.woff
-assets/fonts/quay16.woff: l/quay/moderndos_8x16.c u/mkfont.l $(ho)/.love.baked
+web: fonts w/style.css w/favicon.png index.html
+fonts: w/fonts/quay16.woff w/fonts/quay8.woff
+w/fonts/quay16.woff: l/quay/moderndos_8x16.c u/mkfont.l $(ho)/.love.baked
 	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
 	@$m u/mkfont.l $< 12 $@ "Quay 16"
-assets/fonts/quay8.woff: l/quay/cga_8x8.c u/mkfont.l $(ho)/.love.baked
+w/fonts/quay8.woff: l/quay/cga_8x8.c u/mkfont.l $(ho)/.love.baked
 	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
 	@$m u/mkfont.l $< 6 $@ "Quay 8"
 # ..the front page's stylesheet: config.l's tokyo-night through hueweb, over the layout
-assets/web/style.css: web/style.l a/vi/config.l a/vi/hueweb.l $(ho)/.love.baked
+w/style.css: w/style.l a/vi/config.l a/vi/hueweb.l $(ho)/.love.baked
 	@mkdir -p $(dir $@)
-	@env -u LOVE_NO_IMAGE $m web/style.l $@
+	@env -u LOVE_NO_IMAGE $m w/style.l $@
 # ..the favicon: cp437's heart off the 8x8 face, in the palette's red
-assets/web/favicon.png: l/quay/cga_8x8.c u/mkicon.l a/vi/config.l $(ho)/.love.baked
+w/favicon.png: l/quay/cga_8x8.c u/mkicon.l a/vi/config.l $(ho)/.love.baked
 	@mkdir -p $(dir $@)
 	@env -u LOVE_NO_IMAGE $m u/mkicon.l $< 3 32 $@
 # ..and the front page itself, its island the fragment machine.js drives
-index.html: web/index.l i/wasm/machine.html $(ho)/.love.baked
-	@$m web/index.l $@
+index.html: w/index.l i/wasm/machine.html $(ho)/.love.baked
+	@$m w/index.l $@
 .PHONY: ulp
 ulp:
 	@mkdir -p out
@@ -1116,7 +1116,7 @@ out/flamegraph.svg: out/perf.data
 repl: host
 	@exec $m
 cloc:
-	cloc --by-file l i a u test web bench
+	cloc --by-file l i a u test w bench
 cat: clean all test
 cata: clean all test_slow
 # full clean rebuild, every frontend, all tests, then the corpus under valgrind

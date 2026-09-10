@@ -60,7 +60,7 @@ all: $(o)/love.js
 $(o)/l/love.o: ../../out/lib/love_version.h
 
 # the link is multi-input, so ccache cannot cache it -- bare $(EMCC), and EMFLAGS apply only
-# here. the page rides the machine now (assets/wasm/love-wasm.*), so this build lands
+# here. the page rides the machine now (w/wasm/love-wasm.*), so this build lands
 # under out/ only: the differential beside ours, never the artifact.
 emlink = $(EMCC) $(CFLAGS) $(EMFLAGS) $(objs) -o $@
 

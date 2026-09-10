@@ -1,11 +1,11 @@
-; web/index.l -- the front page, index.html, laid from this file: `love web/index.l OUT`
+; w/index.l -- the front page, index.html, laid from this file: `love w/index.l OUT`
 ;
 ; not a document, so not markdown: one page with a glossary, a roster, a terminal and
 ; its chips, and each of those is data below with a small lay of its own. the prose is
 ; html as written -- it is our file. what the lay adds is the one property a hand page
 ; loses: every link on the page to an anchor on the page is checked, and a dead one fails
 ; the lay rather than shipping. the island is i/wasm/machine.html, slurped, so the
-; markup machine.js drives has one copy; the sheet is web/style.l's, the fonts u/mkfont.l's,
+; markup machine.js drives has one copy; the sheet is w/style.l's, the fonts u/mkfont.l's,
 ; the icon u/mkicon.l's. the island is inle itself -- the kernel in a worker, painting a
 ; canvas -- so the page carries coi.js too, and the two artifacts site-wasm lays.
 
@@ -191,8 +191,8 @@ don't automatically construct a list for you.</p>
 <meta charset=\"utf-8\">
 <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
 <title>love</title>
-<link rel=\"icon\" type=\"image/png\" href=\"assets/web/favicon.png\">
-<link rel=\"stylesheet\" href=\"assets/web/style.css\">
+<link rel=\"icon\" type=\"image/png\" href=\"w/favicon.png\">
+<link rel=\"stylesheet\" href=\"w/style.css\">
 <!-- the machine's shared ring wants an isolated page, and a static host sends no headers:
      this asks for them with a service worker and one reload. first, so the reload is
      cheap; inert where the server sends them itself (kiosko does). -->
