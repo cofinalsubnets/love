@@ -1072,7 +1072,7 @@
    (ar-apply o a b)
      (o @ "+"  (a + b)   "-" (a - b)   "*" (a * b)
           "/"  (b = 0 ? (ar-rt "division by zero") (a // b))
-          "%"  (b = 0 ? (ar-rt "division by zero") (a - b * a // b))
+          "%"  (b = 0 ? (ar-rt "division by zero") (a - b * (a // b)))
           "<<" (b < 0 ? (ar-rt "negative shift") (a * b 2))
           ">>" (b < 0 ? (ar-rt "negative shift") (ar-fdiv a (b 2)))
           "<"  (a < b ? 1 0)     "<=" (a <= b ? 1 0)

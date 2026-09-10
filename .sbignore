@@ -1,7 +1,7 @@
 # svalbard's ignore list, one rule a line, read by sb's walk and by the dist cut
 # (u/selfpack.l). a rule holding * ? [ is a glob over the whole relative path
 # and `*` crosses `/`; every other rule is a path prefix at a segment boundary.
-# the built-ins .sb .git out need no line here.
+# the built-ins .sb .git b need no line here.
 
 # downloaded, never built
 dl

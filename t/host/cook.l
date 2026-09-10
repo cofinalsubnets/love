@@ -49,7 +49,7 @@
 
    ; ---------------------------------------------------------------- expansion
    ev (run-cook (mk '("R := ."
-                      "ho = out"
+                      "ho = b"
                       "love_c = $R/l/love.c $R/data.c"
                       "h_o = $(love_c:$(R)/%.c=$(ho)/%.o)"
                       "suf = $(love_c:.c=.o)"
@@ -59,7 +59,7 @@
                       "\techo \"E3[$R/$(ho)]\"")) "all")
    _ (ok "nested-paren + pattern subst-ref" (has ev "E1[b/l/love.o b/data.o]"))
    _ (ok "suffix subst-ref"                 (has ev "E2[./l/love.o ./data.o]"))
-   _ (ok "single-char $R + $(VAR)"          (has ev "E3[./out]"))
+   _ (ok "single-char $R + $(VAR)"          (has ev "E3[./b]"))
 
    ; ---------------------------------------------------------------- functions
    fn (run-cook (mk '("files = a.c b.c sub/c.c"
