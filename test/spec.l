@@ -58,7 +58,8 @@
  !-5 !-3.9 !(-3 ~ 4) !(0 ~ -1)                   ; <= 0 in the total order -> false (complex by re then im)
  !!5 !!"x" !!'a !!cap !!(3 ~ 4) !!(3 ~ -4)       ; positive / nonempty -> true (a twin gem by its RE)
  !!(tablet 0) !!{} (1 = $(tablet 0)) (2 = #{1 2 3 4})   ; a tablet is a lookup lambda and nets 1 like one, empty or
-                                                 ; not -- mutable, its truth is not its contents; tally counts keys
+ (1 = ${1 2 3 4}) (1 = ${0})                     ; not -- mutable, its truth is not its contents. $ is that 1 whatever
+                                                 ; it holds, and never the key count; tally is what counts keys
  !'(() ()) !'(0 0) !'((0) (())) (0 = $'(() () ()))  ; a chain of nothings is nothing, recursively
  !'(-5) !@(-3 -4) !'(-2 1) !!'(0 1)              ; negatives net <= 0 at every rank; -2+1 < 0 < 0+1
  (3 = $'(1 () 2)) (6 = $'(1 2 3)) (7 = $@(3 4))  ; $ sums the nets, then clamps once

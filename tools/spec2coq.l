@@ -341,9 +341,8 @@
              (: h <x b (binop h)
                 (? b ("(" + b + " " + tv <>x + " " + tv <>>x + ")")   ; (Z.add a b) / (Z.gcd a b)
                    (shiftf h) ("(" + shiftf h + " " + tv <>x + " " + tv <>>x + ")")
-                   (= h 'saturate) (? (lamform? <>x) "1"                        ; a closure nets 1
+                   (= h 'saturate) (? (lamform? <>x || hashv? <>x) "1"          ; a closure nets 1, and a tablet is one
                                         (hasg? <>x && glist? <>x) ("(gsat " + tgsum (gels <>x) + ")")
-                                        (hashv? <>x) ("(Z.of_nat (length " + th <>x + "))")  ; $hash = key count
                                         (listv? <>x || qnlist? <>x) ("(satZ (asum " + tl <>x + "))")
                                         ("(satZ " + tv <>x + ")"))  ; $list / $int -- spec.v's clamp, floor and ceiling
                    (= h 'net)   ("(asum " + tl <>x + ")")   ; net/+list -- the sum
@@ -409,7 +408,7 @@
                                    (? (intv? a)  ("(Z.leb " + tv a + " 0)")
                                       (listv? a) ("(Z.leb (asum " + tl a + ") 0)")   ; !list: net <= 0
                                       (unitv? a) "true"                              ; the unit is nothing
-                                      (lamform? a) "false"                           ; a closure nets 1: something
+                                      (lamform? a || hashv? a) "false"                ; a closure nets 1: something, and so does a tablet
                                       (hasg? a && gz? a) ("(negb (gpos " + tg a + "))")  ; a twin is true iff lex-positive
                                       (hasg? a && glist? a) ("(negb (gpos " + tgsum (gels a) + "))")
                                       (: p (tp a) (? p ("(negb " + p + ")") 0))))
