@@ -627,9 +627,9 @@ never silent**.
 
 | lane | x64 | a64 | rv64 | thumb2 | thumb2sp | thumb1 |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
-| `__int128` | ✓ | — | — | — | — | — |
+| `__int128` | ✓ | ✓ | — | — | — | — |
 | `_Complex` arithmetic | ✓ | — | — | — | — | — |
-| variable-length array | ✓ | ✓ | — | — | — | — |
+| variable-length array | ✓ | ✓ | ✓ | — | — | — |
 | by-value composite arg, ≤16B, registers free | ✓ | ✓ | ✓ | — | — | — |
 | by-value composite arg, MEMORY class | ✓ | — | — | — | — | — |
 | composite passed at a variadic call site | ✓ | ✓ | ✓ | — | — | — |
@@ -638,9 +638,9 @@ never silent**.
 | composite return, MEMORY class | ✓ | — | — | — | — | ✓ |
 | `__builtin_bswap64` | ✓ | ✓ | ✓ | — | — | — |
 | `__sync` spin-lock pair | ✓ | ✓ | ✓ | — | — | — |
-| signed 64-bit `/` and `%` | ✓ | ✓ | ✓ | — | — | libgcc |
-| 64-bit `*` and shifts | ✓ | ✓ | ✓ | ✓ | ✓ | libgcc |
-| `double`/`float` arithmetic | ✓ | ✓ | ✓ | ✓ | libgcc | libgcc |
+| signed 64-bit `/` and `%` | ✓ | ✓ | ✓ | — | — | rt.c |
+| 64-bit `*` and shifts | ✓ | ✓ | ✓ | ✓ | ✓ | rt.c |
+| `double`/`float` arithmetic | ✓ | ✓ | ✓ | ✓ | rt.c | rt.c |
 
 **The table is generated, not maintained: `tools/moon-parity.sh table` prints it and
 `tools/moon-parity.sh check` fails if this doc and the compiler have drifted** (`why` prints
@@ -652,15 +652,15 @@ these refusals arrive as `cannot compile 'f' (cause unnamed)` rather than a name
 `__int128` and every composite-argument row among them. The refusal is real either way; what is
 missing is the sentence naming it.
 
-**`libgcc` is a cell value, and the two targets wearing it borrow for different reasons.**
+**`rt.c` is a cell value, and the two targets wearing it call out for different reasons.**
 thumb1 (v6-M) has no UMULL, no long shifts and no FPU, so 64-bit `*`/shifts/divide, int↔double
 conversion and *all* float and double arithmetic lower to `__aeabi_*` calls (`gen.l`'s `v6m?`
-lanes); `i/rp2040/Makefile` names a cortex-m0 libgcc.a on the link line and calls it "the one
-foreign FILE". thumb2sp borrows for one row only — it is ARMv7E-M with an **SP-only** FPU (the
+lanes). thumb2sp calls out for one row only — it is ARMv7E-M with an **SP-only** FPU (the
 Playdate's STM32F746), so `float` rides the hardware and `double` softens, where thumb2's
-fpv5-d16 does both. A borrow is a LINK-time dependency, invisible to a compile: it shows up as
-an undefined `__aeabi_*` in the object, which is how the table finds it. Everywhere else the
-lane is ours or there is no lane.
+fpv5-d16 does both. The answers are `apps/moon/lib/rt.c`, the tree's own compiler runtime;
+gcc's libgcc.a answered them until 2026-09-10 and rides no board link now. A call-out is a
+LINK-time dependency, invisible to a compile: it shows up as an undefined `__aeabi_*` in the
+object, which is how the table finds it. Everywhere else the lane is ours or there is no lane.
 
 **The two struct rows do not move together, and thumb1 inverts them.** v6-M returns *any*
 struct over 4 bytes through memory (`sretm?`), so thumb1 takes both composite returns while
@@ -690,17 +690,16 @@ also takes — probe the one you mean.
 - **a 16B all-int composite RETURN on t32** refuses on thumb2 and thumb2sp; a64, rv64 and
   x64 all take it. the probe must DEFINE one, not declare it —
   `typedef struct {int a,b,c,d;} R; static R mk(int x){ R r = {x,x,x,x}; return r; }` plus a
-  caller; a bare prototype compiles everywhere. It is what stops the Playdate SDK's own
-  header: `LCDMakeRect` returns an `LCDRect` by value, so `pd_api.h` cannot be compiled for the
-  device — which is exactly why `i/playdate` routes it through `pdglue.c` on
-  arm-none-eabi-gcc and calls that a "word-only seam". AAPCS32 wants the hidden-pointer memory
-  return the v6-M lane already implements (`sretm?`); thumb2 has no such lane.
+  caller; a bare prototype compiles everywhere. AAPCS32 wants the hidden-pointer memory
+  return the v6-M lane already implements (`sretm?`); thumb2 has no such lane. It is NOT what
+  stops the Playdate SDK header — `mooncc -t thumb2sp -c` compiles `pd_api.h` clean, and the
+  `LCDMakeRect` this note used to cite is in no shipped SDK.
 - **a MEMORY-class composite RETURN on a64 and rv64** — `no lane for returning this
   80-byte struct by value on <tgt>`. Probe: `typedef struct { long a[10]; } R;` with a
   definition that returns one; a bare prototype compiles everywhere.
 - **signed 64-bit `/` and `%` on thumb2 and thumb2sp** refuse (`cgfn refuses`) — love.c's lane
   is unsigned; wrap the unsigned expansion in an abs/refix sleeve when needed. thumb1 answers
-  it, but through libgcc's `__aeabi_ldivmod`.
+  it, through the runtime's own `__divdi3`/`__moddi3` (apps/moon/lib/rt.c).
 - **thumb1 varargs** — the pop-pc epilogue cannot drop the r0-r3 block; `vaspill-t32` refuses
   v6-M whole.
 - **thumb1 `leax`** — the indexed-call variant (`a[i]()` over a local array) hits
@@ -710,10 +709,10 @@ also takes — probe the one you mean.
   ctz the isolate-and-clz / `__ctzsi2`), but the 64-bit swap wants the r0:r1 pair lane and
   the atomics want LDREX/STREX plumbing (v6-M has none), and nothing reaches either there yet.
 
-What **thumb2** carries, so it is not re-derived (thumb1 reaches libgcc for most of this — the
-above): 64-bit `long long` as register pairs (lo:hi on r0:r1, r2:r3 the shuttle) with +, -,
+What **thumb2** carries, so it is not re-derived (thumb1 reaches apps/moon/lib/rt.c, the
+compiler runtime, for most of this — the above): 64-bit `long long` as register pairs (lo:hi on r0:r1, r2:r3 the shuttle) with +, -,
 ×(UMULL/MLA), unsigned `/` and `%` (a self-contained 64-step restoring expansion — no
-`__aeabi_uldivmod`, no libgcc), all shifts across the word
+helper call at all), all shifts across the word
 boundary, every relation (SUBS/SBCS, exact at the 2^53 tie), widen/narrow, `__builtin_clzll`,
 pair args (AAPCS32 even-odd pairs, 8-aligned stack slots) and pair returns, pair
 globals/locals/members/derefs. VFP doubles on thumb2 (fpv5-d16 scalar, f0..f15 → d0..d15, d15
@@ -721,6 +720,58 @@ the reserved converter scratch; VCMP+VMRS for NaN-honest flags), with `am.c` run
 BIT-IDENTICAL to the host on the M7. By-value composites + varargs on thumb2 (a {double,double}
 HFA rides d-pairs per the AAPCS32-VFP rule; va_list is gcc's one running pointer). `la` on
 thumb2 lowers to the MOVW/MOVT absolute pair, and `leax` to `ADD.W Rd,Rn,Rm,LSL#n`.
+
+**AAPCS-VFP floats landed 2026-09-10** on thumb2 and thumb2sp. gen keeps every float widened
+to a double in a register, as it always has; what changed is the SEAM. A float argument now
+rides one of s0..s15, taking the lowest free slot, so it back-fills the hole a double left
+(`f(float, double, float)` is s0, d1, s1 — gcc's exact placement); a float result rides s0;
+past the file a float takes a 4-byte stack word and the register file closes behind it. A
+float HFA aligns to ONE slot and so may straddle a d-register — `f(float, struct{float,float})`
+puts the struct in s1:s2 — which is why its words ride the slots one at a time. The allocator
+is a 16-bit mask (`vfpn`/`vfpm`) riding where the other seats carry an xmm count. Two new holo
+ops carry the odd slots, which have no f-register name: `movsnxr`/`movsnrx`, VMOV between a gp
+register and a NUMBERED single. The gate is `test/gate/thumb.sh`'s `f` lane, 16 differential
+checks against `arm-none-eabi-gcc -mfloat-abi=hard` on both seats.
+
+**An INDIRECT call places its floats too, since 2026-09-10.** A function-pointer type is
+`('ptr ('fn ret ptys))` now — the parameter types ride it, laid by the declarator that spelled
+them — and a call through one classifies by that list exactly as a direct call classifies by
+its prototype. It had to: gen widens every float to a double before a call site sees it, so
+the value alone can never say a `float` was written. The head's type is read off the
+expression (`hdty9`), which covers a name, a `->` chain and a dispatch table's element — the
+arguments classify before the head evaluates, so it cannot come off the compiled value. A
+declarator with no prototype still parks `()` and its arguments still classify by themselves,
+and so does a VARIADIC one — AAPCS-VFP keeps a variadic argument out of the co-processor
+registers whatever it was declared as, and no `...` rides the type to say so, so a list there
+would place the named parameters wrong. The arity check stays direct-only: only a direct head
+has a name to put in the gripe.
+
+**`--emit-relocs` landed 2026-09-10** on the arm32 lane: a fully linked image that keeps its
+R_ARM_ABS32 sites in `.rel.<lane>` sections, so a loader placing it at a base of its own can
+slide them — the 32-bit twin of what `ldlink -pie` already does for the 64-bit seats through
+`love_rela`. Each entry names symbol 0, whose `st_value` is 0 by ELF's rule, so a loader that
+recomputes `S + A` reads back the address already in the field and lands where one that simply
+adds its load delta does. It refuses on plain **thumb2**, whose `la` is a MOVW/MOVT pair — an
+absolute carried as two split immediates that no loader slides by adding to a word;
+thumb1 and thumb2sp route `la` through a pooled ABS32 word and can answer. That refusal, and
+the one for a 64-bit seat (which carries its own table under `-pie`), are the driver's, said
+before the link runs — a flag the seat cannot answer is a usage error, not a linker fault.
+`test_reloc32` links one source twice 64K apart and holds the table to being exactly the words
+that moved, and holds both refusals to reading as refusals.
+
+An image that carries relocations also **folds** its lanes: a lane whose section would be
+named anything but `.text`/`.rodata`/`.data`/`.bss` joins the header before it, when it is
+contiguous and carries the same flags. A loader walks `.rel` sections by a ROSTER of section
+names — pdc's is `.text .data .got .got.plt .bss` — so a lane named anything else has its
+relocations dropped in silence, which is what was happening to the nif table's four pointers.
+
+**The Playdate device build is all-mooncc as of 2026-09-10**: every object including
+`pdglue.c`, the one file that includes `pd_api.h`, and the link too. `pdglue.c` stands in for
+the SDK's `setup.c` (the entry and the malloc trio over the SDK realloc); the six moonlibc
+string members and `rt.c` are the whole runtime; `-Ttext 0 -nostdlib --emit-relocs` is the
+link, because `link_map.ld` names no address at all. `test_playdate` holds the image to the
+same two-base diff over its whole 1.1 MB, and then to `pdex.bin` carrying every one of those
+sites past pdc.
 
 **Parse-side and gen-side type twins drift silently.** `tsz`/`talign` (parse) and `(wsize g)`
 (gen) once disagreed on pointer width, mislaying every struct containing a pointer on both

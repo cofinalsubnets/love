@@ -9,14 +9,18 @@ the 8x8 CGA font, blitted to the 1-bit LCD each frame).
     make -C i/playdate        # out/playdate/love.pdx (device + simulator)
     make -C i/playdate sim    # run it in the Playdate Simulator
 
-the DEVICE half is compiled by **mooncc** (`-t thumb2sp`: the STM32F746's FPU
-is single-precision, so f64 arithmetic softens to the same `__aeabi_*` libgcc
-helpers Panic's toolchain uses -- gated bit-exact by `make test_thumb2sp`,
-and `la` rides pooled ABS32 words since the loader relocates words, never a
-MOVW/MOVT pair). only pdglue.c (the pd_api.h owner: the SDK flattened to a
-word-only seam -- no float ABI, no variadics cross to moon code) and the
-SDK's setup.c ride arm-none-eabi-gcc. needs PLAYDATE_SDK_PATH (pdc + C_API +
-simulator); the simulator pdex.so stays a host gcc shared object, so
-`make sim` alone needs no cross tools.
+**nothing foreign compiles or links the device half.** mooncc `-t thumb2sp`
+builds every object, pdglue.c included -- it owns pd_api.h and flattens the SDK
+to a word-only seam, and it stands in for the SDK's setup.c (the entry and the
+malloc trio) -- and our own linker binds them: `-Ttext 0` because link_map.ld
+names no address at all, `--emit-relocs` so the ABS32 sites survive for the
+loader to slide, `-nostdlib` because six moonlibc members and rt.c beside them
+are the whole runtime this seat wants. The STM32F746's FPU is single-precision,
+so f64 arithmetic softens to the `__aeabi_*` calls rt.c answers, gated bit-exact
+by `make test_thumb2sp`; `la` rides pooled ABS32 words, which is what makes the
+relocation table complete (a MOVW/MOVT pair is an absolute no loader slides by
+adding to a word). PLAYDATE_SDK_PATH is wanted for the C_API headers and for
+pdc, which bundles the .pdx. The simulator pdex.so stays a host gcc shared
+object -- there setup.c is the SDK's again -- so `make sim` needs no cross tools.
 
 based on Panic's "Hello World" C API example by Dave Hayden.

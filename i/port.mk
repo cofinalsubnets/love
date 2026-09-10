@@ -100,6 +100,15 @@ $(R)/$(o)/am.o: $(R)/apps/moon/lib/moonlibc/math/am.c $(mc)
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(MOONCC) -t $(p_tgt) -Iapps/moon/lib/moonlibc/math -Iapps/moon/include -c apps/moon/lib/moonlibc/math/am.c $(o)/am.o
 
+# the compiler runtime: the calls mooncc's own lowering makes where the machine has no
+# instruction (v6-M has neither FPU nor umull nor clz nor a variable 64-bit shift; a
+# single-precision FPU softens f64 alone). Only the thumb ports name it -- an rv64 or x64
+# seat has the hardware, and an object named on a link line rides it whole.
+$(R)/$(o)/rt.o: $(R)/apps/moon/lib/rt.c $(mc)
+	@echo 'MOON	'$@
+	@mkdir -p $(R)/$(o)
+	@cd $(R) && $(MOONCC) -t $(p_tgt) -Iapps/moon/include -c apps/moon/lib/rt.c $(o)/rt.o
+
 # p_ocopy -- the flatten, for the ports that ship a .bin/.hex: l/holo/copy.l reads the
 # linked ELF and writes objcopy's two output formats, byte for byte (`kore objcopy` is the
 # same code with a name). Takes no argument; a port that links its own ELF and stops there

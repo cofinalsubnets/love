@@ -363,8 +363,11 @@ out/src.o: $(dist_source) tools/mksrc.l out/.mksys-cat.l $(love0)
 	@echo 'HOLO	'$@
 	@$(love0) -l out/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(hosta)
 
+# this roster must cover what mcsrctext walks (apps/moon/moon.l): the carried archives are
+# stamped with an identity hashed over include/ and lib/ ENTIRE, so a source file the roster
+# misses leaves a stamp no link can match, and every link falls to member-compiling.
 rt_slice = $(wildcard apps/moon/include/*.h apps/moon/include/*/*.h \
-                      apps/moon/lib/*.l \
+                      apps/moon/lib/*.l apps/moon/lib/*.c \
                       apps/moon/lib/moonlibc/*.c apps/moon/lib/moonlibc/*.h \
                       apps/moon/lib/moonlibc/*/*.c apps/moon/lib/moonlibc/*/*.h \
                       apps/moon/lib/moonlibc/math/*.c)

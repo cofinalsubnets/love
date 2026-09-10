@@ -663,6 +663,17 @@
               ; () -- so every line below would fold the unit into an address.
               (? arm?
                  (: _ (ro + 4 <= sz ? 0 (scare 'link-oob (peep ob 'id 0)))
+                    ; the emit-relocs half: an ABS32 site holds an address this link
+                    ; just wrote, so a loader placing the image elsewhere has only to
+                    ; add its delta here. the pc-relative kinds travel with the code
+                    ; and are not recorded -- the table is a location list, not work.
+                    _ (relbox && kind = 2 ? (pin relbox 0 ((base + ro) . relbox 0)))
+                    ; ..and a MOVW/MOVT pair is absolute too, but carries the address as
+                    ; two split immediates -- no loader slides that by adding to a word.
+                    ; the seats a relocatable image is asked of route `la` through a
+                    ; pooled abs32 word for exactly this reason; if one did not, the
+                    ; table would be silently short, so say so here instead.
+                    _ (relbox && elem kind '(47 48) ? (scare 'link-abs-imm <sy))
                     (go (off0 + ro + 4) >es
                         (ldarm be s (off0 + ro) sv kind (base + ro)
                          . (snip s pos (off0 + ro) . acc))))
@@ -1187,7 +1198,7 @@
                           acc (ld-lanes + <os 'named))))
        (go objs ()))
 
-   (ldbare32 target runs srcs pns)
+   (ldbare32 target runs srcs pns rel?)
     (: mach (peep elf-machines target 0)
        _ (0 >= mach  ? (scare 'link-target target))
        _ (atom? runs ? (scare 'link-no-map target))
@@ -1294,7 +1305,8 @@
        ; the end is honest already, nothing following the last section.
        nif (: r (lpos 'nifs) (two? r ? r [org org 0]))
        n0 (ld-align (: s (ld-lane0 objs 'nifs) (two? s ? (s 3) 1)) <nif)
-       cx [glo n0 (<nif + nif 2) org org () () 1 be (ld-extents objs)]
+       relbox (rel? ? {0 ()} ())    ; the emit-relocs site accumulator
+       cx [glo n0 (<nif + nif 2) org org relbox () 1 be (ld-extents objs)]
        ; -- the bytes, run by run, lane by lane, in that same order --
        body (: (go rs fp acc)
                 (? !(two? rs) [fp acc]
@@ -1308,30 +1320,72 @@
        ; -- the section headers and the symbol table, past every loaded byte: one
        ; header per mapped lane, so `nm` classifies a symbol as the lane it really
        ; lives in rather than the lane it travels with.
-       shl (filter (l \ elem l (ld-uselanes objs)) maplanes)
+       shl0 (filter (l \ elem l (ld-uselanes objs)) maplanes)
+       ; -- one section header per lane, except where the image carries its own
+       ; relocations. A loader walking .rel sections walks a ROSTER of section NAMES
+       ; -- pdc's is .text .data .got .got.plt .bss -- so a lane named anything else
+       ; has its relocations dropped in silence, which is what would have happened to
+       ; the nif table's four pointers. A lane outside the four names below folds into
+       ; the header before it when it is contiguous and carries the same flags: it IS
+       ; that region, and the header only says so. -> ((lane addr off flags size) ..)
+       secs (: (go ls acc)
+                (? !(two? ls) (rev acc)
+                   (: l <ls q (peep lpos l '(0 0 0))
+                      p (two? acc ? <acc ())
+                      fl (ld-secflags (ld-homeof objs l))
+                      (? (rel? && !(elem l '(text rodata data bss)) && two? p
+                          && (p 3) = fl && (p 1) + (p 4) = <q)
+                          (go >ls ([<p (p 1) (p 2) fl ((p 4) + q 2)] . >acc))
+                          (go >ls ([l <q <>q fl (q 2)] . acc)))))
+               (go shl0 ()))
+       shl (map (e \ <e) secs)
        lanesx (: t {} (foldl (\ i l (pin t l i, i + 1)) 1 shl, t))
        st (ldstab objs glo lanesx ld-sym32 16)
-       shstr (o-strtab (map ld-lanenm shl + '(".symtab" ".strtab" ".shstrtab")))
+       ; -- the recorded ABS32 sites, grouped by the lane whose extent holds each. every
+       ; entry is an Elf32_Rel naming symbol 0, whose st_value is 0 by ELF's own rule --
+       ; so a loader that recomputes S + A reads back the address already in the field
+       ; and lands exactly where one that only adds its load delta does. the sections
+       ; carry no SHF_ALLOC, as the emit-relocs output of ld does not: they are for
+       ; whoever reads the FILE, and cost the image nothing.
+       rsites (sort (rel? ? (relbox 0) ()))
+       (rlane v) (: (go es) (? !(two? es) ()
+                               (: e <es
+                                  ((e 1) <= v < (e 1) + (e 4) ? <e (go >es))))
+                    (go secs))
+       rgrp (foldl (\ t v (: l (rlane v) (? l (pin t l (peep t l () + [v])) t))) {} rsites)
+       rlanes (filter (l \ two? (peep rgrp l ())) shl)
+       nr (tally rlanes)
+       shstr (o-strtab (map ld-lanenm shl + '(".symtab" ".strtab" ".shstrtab")
+                        + map (l \ ".rel" + ld-lanenm l) rlanes))
        (snm k) (<>shstr k)
        nl (tally shl)
        symo (ld-align 4 fend) symz (tally <st)
        stro (symo + symz) strz #<>st
        ssto (stro + strz) sstz #<shstr
-       shto (ld-align 4 (ssto + sstz))
+       relo (ld-align 4 (ssto + sstz))
+       relbs (map (l \ catall (map (v \ catall [(le32 v) (le32 2)]) (peep rgrp l ()))) rlanes)
+       reloffs (: (go bs cur acc) (? !(two? bs) acc (go >bs (cur + #<bs) (acc + [cur])))
+                  (go relbs relo ()))
+       relsz (foldl (\ a b (a + #b)) 0 relbs)
+       shto (ld-align 4 (relo + relsz))
        sht (catall ([(ld-shdr32 0 0 0 0 0 0 0 0 0 0)]                        ; the reserved null header
-                    + o-mapi (\ i l (: q (peep lpos l '(0 0 0))
-                                       (ld-shdr32 (snm i) (l == 'bss ? 8 1)
-                                                  (ld-secflags (ld-homeof objs l))
-                                                  <q <>q (q 2) 0 0 4 0)))
-                             shl
+                    + o-mapi (\ i e (ld-shdr32 (snm i) (<e == 'bss ? 8 1) (e 3)
+                                                (e 1) (e 2) (e 4) 0 0 4 0))
+                             secs
                     + [(ld-shdr32 (snm nl) 2 0 0 symo symz (nl + 2) (st 2) 4 16)    ; link=.strtab
                        (ld-shdr32 (snm (nl + 1)) 3 0 0 stro strz 0 0 1 0)
-                       (ld-shdr32 (snm (nl + 2)) 3 0 0 ssto sstz 0 0 1 0)]))
-       hdr (elf32-hdrn 2 ent mach [shto (nl + 4) (nl + 3)]
+                       (ld-shdr32 (snm (nl + 2)) 3 0 0 ssto sstz 0 0 1 0)]
+                    + o-mapi (\ i l (ld-shdr32 (snm (nl + 3 + i)) 9 64 0           ; sht_rel, shf_info_link
+                                                (reloffs i) #(relbs i)
+                                                (nl + 1) (peep lanesx l 0) 4 8))
+                             rlanes))
+       hdr (elf32-hdrn 2 ent mach (arm-eflags target) [shto (nl + 4 + nr) (nl + 3)]
                        (map (g \ elf32-phdr 1 (g 5) (g 2) <g (g 1) (g 3) (g 4) 4096) segs))
        (hdr . ([(ld-zeros (foff - hdrsz))] + pieces
                + [(ld-zeros (symo - fend)) <st <>st <shstr
-                  (ld-zeros (shto - (ssto + sstz))) sht])))
+                  (ld-zeros (relo - (ssto + sstz)))]
+               + relbs
+               + [(ld-zeros (shto - (relo + relsz))) sht])))
 
    ; one byte of a piece, whichever shape the piece arrived in (the header comes back
    ; as a text from one hdr builder and as a byte list from another)

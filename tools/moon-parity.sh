@@ -13,12 +13,13 @@
 # THREE VERDICTS per cell, and the third is the interesting one:
 #   ok       -- an object came out, referencing nothing the probe did not declare.
 #               The lane is ours.
-#   libgcc   -- an object came out, and it CALLS OUT: a lane that exists but is
-#               borrowed. On a freestanding seat that is a link-time dependency,
-#               not a compile-time one, so only the object's symbols reveal it.
+#   rt.c     -- an object came out, and it CALLS OUT: the lane exists but lands in
+#               the compiler runtime, apps/moon/lib/rt.c. That is ours, and a
+#               separate object -- a link-time dependency, not a compile-time one,
+#               so only the object's symbols reveal it.
 #   —        -- refused. The cause is printed by `moon-parity.sh why`.
 #
-# The borrow test is "an undefined symbol the probe's own source never declared",
+# The call-out test is "an undefined symbol the probe's own source never declared",
 # not a grep for __aeabi_ -- so it catches an x64 or rv64 lane reaching for
 # libgcc's own spellings (__divti3, __muldc3) as readily as arm's.
 #
@@ -38,7 +39,7 @@
 # usage: moon-parity.sh [table | check | why]
 #   table  (default) the markdown table, ready to paste into doc/misc/moon-c-gaps.md
 #   check  diff the measured matrix against the table the doc carries; nonzero on drift
-#   why    every refusal with the cause the compiler gave, and every borrow with its symbol
+#   why    every refusal with the cause the compiler gave, and every call-out with its symbol
 set -e
 
 # mooncc and kore are love's own verbs (the layered bake); MOONCC/KORE still override.
@@ -125,8 +126,8 @@ if [ -s "$d/objs" ]; then
     i=${b%%.*}; i=${i#p}                  # 3
     t=${b#*.}                             # a64
     grep -qx -- "$s" "$d/p$i.allow" 2>/dev/null && continue
-    printf 'libgcc' > "$d/p$i.$t.v"
-    printf '%s\n' "$s" >> "$d/p$i.$t.borrow"
+    printf 'rt.c' > "$d/p$i.$t.v"
+    printf '%s\n' "$s" >> "$d/p$i.$t.callout"
   done < "$d/pairs.txt"
 fi
 
@@ -154,9 +155,9 @@ why)
     for t in $targets; do
       v=$(cat "$d/p$i.$t.v")
       [ "$v" = ok ] && continue
-      if [ "$v" = libgcc ]; then
-        printf '  %-46s %-9s borrows %s\n' "$(cat "$d/p$i.label")" "$t" \
-          "$(tr '\n' ' ' < "$d/p$i.$t.borrow")"
+      if [ "$v" = rt.c ]; then
+        printf '  %-46s %-9s calls out to %s\n' "$(cat "$d/p$i.label")" "$t" \
+          "$(tr '\n' ' ' < "$d/p$i.$t.callout")"
       else
         printf '  %-46s %-9s %s\n' "$(cat "$d/p$i.label")" "$t" \
           "$(sed 's/.*: //; s/ (in .*//' "$d/p$i.$t.log" | head -1)"

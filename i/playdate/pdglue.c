@@ -1,9 +1,8 @@
-// the SDK half: the ONLY file that includes pd_api.h, gcc-compiled on device
-// (mooncc parses no SDK header and, more to the point, the pd->* function
-// pointers speak the hard-float SP ABI -- getCrankAngle returns a float in
-// s0 -- while mooncc's floats ride widened-as-double d-regs. every crossing
-// flattens to ints and pointers here, so the seam stays word-only and the
-// moon side never sees a float or a variadic.)
+// the SDK half: the only file that includes pd_api.h. every crossing flattens
+// to ints and pointers here, so the seam stays word-only -- which buys the
+// variadic logToConsole, whose `...` no pointer type carries. floats need no
+// flattening either way: a pointer's own parameter list places an argument and
+// a result is read from s0, so getCrankAngle answers straight.
 #include "pd_api.h"
 #include "pdglue.h"
 
@@ -32,8 +31,28 @@ int pdg_file_read(const char *path, void *buf, unsigned cap) {
   PD->file->close(f);
   return n; }
 
-int eventHandler(PlaydateAPI *pd, PDSystemEvent event, uint32_t arg) {
+// on device this file also replaces the SDK's setup.c, which did three things: name
+// the entry, capture the realloc, and answer malloc/free over it. the malloc trio
+// matters because moonlibc's own reaches for a heap this seat has no syscall to ask
+// for -- the SDK realloc IS the heap here, 16 MB of it. the SIMULATOR keeps setup.c
+// (it is an ordinary hosted .so), so there the shim and the trio are its.
+static int pd_event(PlaydateAPI *pd, PDSystemEvent event, uint32_t arg) {
   if (event != kEventInit) return 0;
   PD = pd;
   love_init();
   return 0; }
+
+#if TARGET_PLAYDATE
+int eventHandlerShim(PlaydateAPI *pd, PDSystemEvent event, uint32_t arg) {
+  return pd_event(pd, event, arg); }
+// ldbare32 takes _start for e_entry and the SDK's link script names eventHandlerShim;
+// a loader may read either, so both are true here and the named one is the real function.
+int _start(PlaydateAPI *pd, PDSystemEvent event, uint32_t arg) {
+  return eventHandlerShim(pd, event, arg); }
+void *malloc(size_t n) { return pdg_realloc(NULL, n); }
+void *realloc(void *p, size_t n) { return pdg_realloc(p, n); }
+void free(void *p) { if (p) pdg_realloc(p, 0); }
+#else
+int eventHandler(PlaydateAPI *pd, PDSystemEvent event, uint32_t arg) {
+  return pd_event(pd, event, arg); }
+#endif

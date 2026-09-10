@@ -37,5 +37,5 @@
             ['at 0x60001000 (intern ".ivt") (intern ".bootdata") (intern ".vectors")
                             'text 'rodata 'image]
             ['copy 0x20200000 'data 'nifs 'bss]]
-      _ (ld-write out (ldbare32 'thumb2 runs lib [["__stack_top__" ocram2-top]]))
+      _ (ld-write out (ldbare32 'thumb2 runs lib [["__stack_top__" ocram2-top]] ()))
       0))

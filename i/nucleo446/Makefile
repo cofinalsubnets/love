@@ -1,9 +1,9 @@
 # Nucleo-F446RE build -- firmware compiled END TO END by mooncc -t thumb2sp (the F446's
 # Cortex-M4 has the single-precision FPv4 FPU: the playdate's exact target -- f64 softens
-# to __aeabi_* libgcc calls, so the link takes gcc's cortex-m4 hard-float multilib libgcc,
-# a LIBRARY read by need, not a tool run). boot.o is laid from holo IR by mkboot.l, nlink.l
-# links over holo's ldbare32 and ocopy.l flattens over holo's copy.l, so the port owes no
-# gas, no ld, no linker script and no objcopy.
+# to __aeabi_* calls, and rt.o answers those, so no foreign file rides the link either).
+# boot.o is laid from holo IR by mkboot.l, nlink.l links over holo's ldbare32 and ocopy.l
+# flattens over holo's copy.l, so the port owes no gas, no ld, no linker script and no
+# objcopy.
 #
 # Faces: `make` builds firm.bin/.hex (flash with `make flash` -- st-flash -- or copy
 # firm.bin to the NODE_F446RE mass-storage drive), and that is what `make test_nucleo446`
@@ -15,10 +15,9 @@ p_be  = thumb2
 include ../port.mk
 
 nu_cc = $(MOONCC) -t thumb2sp -D __STDC_HOSTED__=0 -I.
-lg = `arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -print-libgcc-file-name`
 
-objs  = $(R)/$(o)/nucleo446.o $(R)/$(o)/main.o $(R)/$(o)/am.o $(R)/$(o)/boot.o
-qobjs = $(R)/$(o)/nucleo446-q.o $(R)/$(o)/main-q.o $(R)/$(o)/am.o $(R)/$(o)/boot.o
+objs  = $(R)/$(o)/nucleo446.o $(R)/$(o)/main.o $(R)/$(o)/am.o $(R)/$(o)/rt.o $(R)/$(o)/boot.o
+qobjs = $(R)/$(o)/nucleo446-q.o $(R)/$(o)/main-q.o $(R)/$(o)/am.o $(R)/$(o)/rt.o $(R)/$(o)/boot.o
 
 .PHONY: nucleo446 smoke flash
 default: nucleo446
@@ -42,11 +41,11 @@ $(eval $(p_ocopy))
 
 $(R)/$(o)/firm.elf: $(objs) $(R)/$(o)/nlink.l $(lv)
 	@echo HOLO	$@
-	@cd $(R) && out/love $(o)/nlink.l $(o)/firm.elf $(objs:$(R)/%=%) $(lg)
+	@cd $(R) && out/love $(o)/nlink.l $(o)/firm.elf $(objs:$(R)/%=%)
 
 $(R)/$(o)/smoke.elf: $(qobjs) $(R)/$(o)/nlink.l $(lv)
 	@echo HOLO	$@
-	@cd $(R) && out/love $(o)/nlink.l $(o)/smoke.elf $(qobjs:$(R)/%=%) $(lg)
+	@cd $(R) && out/love $(o)/nlink.l $(o)/smoke.elf $(qobjs:$(R)/%=%)
 
 # .bin byte offsets ARE flash offsets -- verify the boot surface: a valid initial SP inside
 # SRAM and a thumb-bit reset entry inside flash (the two words a bricked-looking board

@@ -34,5 +34,5 @@
       runs [['at 0x10000000 '(flags 5) (intern ".boot2")]
             ['at 0x10000100 (intern ".vectors") 'text 'rodata]
             ['copy 0x20000000 'data 'bss]]
-      _ (ld-write out (ldbare32 'thumb1 runs lib [["__stack_top__" sram-top]]))
+      _ (ld-write out (ldbare32 'thumb1 runs lib [["__stack_top__" sram-top]] ()))
       0))

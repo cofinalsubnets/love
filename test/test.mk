@@ -19,8 +19,8 @@
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_raw test_raw_a64 test_raw_bake test_raw_rv64 \
-  test_refuzz test_root test_rv64 test_rp2040 test_rvboot test_sat test_sb test_seat test_seed \
-  test_selfhost test_slow test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
+  test_refuzz test_reloc32 test_root test_rv64 test_rp2040 test_rvboot test_sat test_sb test_seat test_seed \
+  test_selfhost test_slow test_softfp test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
   test_vec test_vi test_virt test_virt_build test_wake test_wasm test_xfixpoint uuhomgen uukind uumx uusplgen \
@@ -44,7 +44,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_tools test_web test_hostnif test_doc test_glaze test_hook test_sat test_holo test_holowasm test_as \
 	test_holofuzz test_glazefuzz test_encver test_kore test_refuzz test_sb test_vi \
 	test_clay test_moonfuzz test_forge test_gates \
-	test_cts test_libc test_ulp test_raw \
+	test_cts test_libc test_ulp test_softfp test_reloc32 test_raw \
 	test_drv test_hdiff test_tco0 nettest test_wake test_gz test_cpio test_fat32 test_root \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
@@ -567,6 +567,18 @@ test_libc: host
 # right, never whether OUR compiler builds it -- and float BITS are where codegen hides.
 test_ulp: host
 	@sh test/gate/ulp.sh $(ho) $m
+# test_softfp -- THE COMPILER RUNTIME, against the machine that has the instruction.
+# apps/moon/lib/rt.c is what mooncc's own lowering calls on a board with no FPU, no umull
+# and no clz; on the board there is no second opinion, so it is held to BIT equality with
+# real hardware here, built by the system cc and by mooncc on all three backends.
+test_softfp: host
+	@sh test/gate/softfp.sh $(ho) $m
+# test_reloc32 -- --emit-relocs on the arm32 lane: a fully linked image that keeps its
+# R_ARM_ABS32 sites, so a loader placing it at a base of its own can slide them. The gate
+# links one source twice, 64K apart, and holds the table to being exactly the words that
+# moved -- and holds the seat whose absolutes ride MOVW/MOVT to refusing outright.
+test_reloc32: host
+	@sh test/gate/reloc32.sh $(ho) $m
 # The rung-2 self-host gate: compile the love AND host lanes with mooncc (gcc/clang only
 # LINKS), then run the whole corpus through the all-mooncc binary -- the compiler compiles
 # the runtime it runs on. OPT-IN; x86-64 only; the binary carries no image, so a fresh egg.
@@ -786,25 +798,12 @@ test_mps2_wake: host
 # qemu's mps2-an386, whose FPv4-SP FPU FAULTS on any f64 arithmetic that slipped through.
 test_thumb2sp: host
 	@sh test/gate/thumb.sh thumb2sp $(ho)
-# test_playdate -- the playdate build gate: the device half compiled by mooncc -t thumb2sp
-# behind pdglue's word-only SDK seam, the pdx built by pdc. Verifies the DEVICE elf: no UND,
-# eventHandler exported, ZERO movw/movt relocs -- the loader relocates ABS32 words only.
-# the probe runs FIRST and never skips: main.c reaches the SDK through pdglue's word-only
-# seam, so mooncc compiles the device main with no foreign tool. without it the whole lane
-# exits 0 on a machine with no SDK -- which is how main.c spent three days as invalid C.
+# test_playdate -- the playdate build gate. The device half is OURS end to end now:
+# mooncc -t thumb2sp compiles every object, pdglue.c (the pd_api.h owner) included, and
+# ldbare32 binds them -- no arm-none-eabi-gcc, no ld, no linker script. The SDK is wanted
+# for its C_API headers and for pdc. See test/gate/playdate.sh for what the image is held to.
 test_playdate: host
-	@echo TEST out/playdate/main.o '(the device main, no SDK)'
-	@$(MAKE) -C i/playdate probe || { echo "FAIL playdate: the device main does not compile"; exit 1; }
-	@echo TEST out/playdate/love.pdx
-	@if [ -z "$$PLAYDATE_SDK_PATH" ] || ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
-	   echo "test_playdate: the device main compiles; no PLAYDATE_SDK_PATH / arm-none-eabi, the pdx half skipped"; exit 0; fi; \
-	  $(MAKE) -C i/playdate || { echo "FAIL playdate build"; exit 1; }; \
-	  u=`llvm-readelf -s out/playdate/pdex.elf | grep -c "UND [a-zA-Z_]"`; \
-	  [ "$$u" -eq 0 ] || { echo "FAIL pdex.elf has $$u undefined symbols"; exit 1; }; \
-	  llvm-readelf -s out/playdate/pdex.elf | grep -qw eventHandler || { echo "FAIL no eventHandler"; exit 1; }; \
-	  m=`llvm-readelf -r out/playdate/pdex.elf | grep -c "MOVW\|MOVT"`; \
-	  [ "$$m" -eq 0 ] || { echo "FAIL $$m movw/movt relocs (the loader can't relocate them)"; exit 1; }; \
-	  echo "test_playdate: love.pdx (device half all-mooncc -t thumb2sp, soft f64) -- resolved, word-relocs only"
+	@sh test/gate/playdate.sh "$(MAKE)" $m
 # test_teensy41 -- the REAL-METAL build gate, and the one port asking for NO foreign tool at
 # all: mooncc -t thumb2 compiles, tlink.l binds (no ld, no linker script -- the XIP flash map
 # is the map in that file), mkimg.l wraps the baked heap image, ocopy.l writes the .hex/.bin,
@@ -837,15 +836,13 @@ test_nucleo446_smoke: host
 # vector table and crt0 are C, and boot2 -- the 256-byte stage the mask ROM checksums before
 # it runs anything -- is laid straight into a named section by mkboot2.l. So the boot image
 # verify has THREE words, not two: boot2's CRC-32/MPEG-2 must be 0x7a4eb274, the SP inside the
-# 264 KB SRAM, the reset entry thumb-bit and inside flash. rlink.l binds, ocopy.l flattens; the
-# skip asks after the last foreign thing here, gcc's cortex-m0 libgcc, READ as an archive.
-# qemu has no RP2040 machine, so this builds and never boots -- test_thumb1 gates the ISA.
+# 264 KB SRAM, the reset entry thumb-bit and inside flash. rlink.l binds, ocopy.l flattens, and
+# rt.o answers the __aeabi_* calls -- nothing foreign is left to ask after, so this lane never
+# skips. qemu has no RP2040 machine, so it builds and never boots -- test_mps2_t1 runs the ISA.
 test_rp2040: host
 	@echo TEST out/rp2040/love.bin
-	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
-	   echo "test_rp2040: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
-	  $(MAKE) -C i/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }; \
-	  echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker and flatten, flash R|X, boot surface verified"
+	@$(MAKE) -C i/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }
+	@echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker, flatten and runtime -- no foreign file, flash R|X, boot surface verified"
 # test_boards -- THE BUILD HALF of the ports, no emulator anywhere. the boot gates above
 # prove a port RUNS; this one proves it still COMPILES, and that is the half that rots
 # unwatched -- a path or a roster moves, nothing in the merge gate names a board, and the

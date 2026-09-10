@@ -151,6 +151,7 @@
           ('cvtss2sd . 2) ('cvtsd2ss . 2) ('ucomisd . 2) ('movmskpd . 2)
           ('cvtsi2sd . 2) ('cvtui2sd . 2) ('cvttsd2si . 2) ('cvttsd2ui . 2)
           ('movqxr . 2) ('movqrx . 2)
+          ('movsnxr . 2) ('movsnrx . 2)
           ('add . 3) ('sub . 3) ('and . 3) ('or . 3) ('xor . 3) ('imul . 3) ('mulh . 3) ('umulh . 3)
           ('adds . 3) ('subs . 3) ('adc . 3) ('adcs . 3) ('sbc . 3) ('sbcs . 3) ('ors . 3)
           ('div . 3) ('udiv . 3)

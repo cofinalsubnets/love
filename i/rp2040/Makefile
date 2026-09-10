@@ -1,11 +1,11 @@
 # Raspberry Pi Pico (RP2040) build -- Cortex-M0+ / ARMv6-M, compiled by mooncc -t thumb1.
 # No Pico SDK, no CMake, no vendor headers. `make -C i/rp2040` from the project root.
 #
-# NOTHING FOREIGN WRITES A BYTE OF THIS IMAGE, and nothing foreign reads it either: every
-# .o is mooncc's or holo's (the vector table and crt0 are C in rp2040.c, and boot2 -- the
-# 256-byte stage the mask ROM checksums and runs -- is laid by mkboot2.l straight into a
-# named section), rlink.l binds it over holo's ldbare32, and ocopy.l flattens it. gcc's
-# cortex-m0 libgcc is the one foreign FILE, read as an archive by need and never run.
+# NOTHING FOREIGN TOUCHES THIS IMAGE -- no file, no tool. Every .o is mooncc's or holo's
+# (the vector table and crt0 are C in rp2040.c, and boot2 -- the 256-byte stage the mask ROM
+# checksums and runs -- is laid by mkboot2.l straight into a named section), rt.o answers the
+# __aeabi_* calls v6-M's missing FPU/umull/clz make, rlink.l binds it all over holo's
+# ldbare32, and ocopy.l flattens it. gcc's cortex-m0 libgcc was the last foreign file here.
 #
 # there is no .uf2 packer, so `make bin` writes the raw flash image and a UF2 wants one.
 #
@@ -18,10 +18,8 @@ p_link_be  = thumb1 thumb2
 include ../port.mk
 
 rp_cc = $(MOONCC) -t thumb1 -D __STDC_HOSTED__=0 -I.
-# the v6-m/nofp multilib: __aeabi_[u]idiv, the 64-bit pairs, the whole soft-float set
-lg = `arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -print-libgcc-file-name`
 
-objs = $(R)/$(o)/boot2.o $(R)/$(o)/rp2040.o $(R)/$(o)/main.o $(R)/$(o)/am.o
+objs = $(R)/$(o)/boot2.o $(R)/$(o)/rp2040.o $(R)/$(o)/main.o $(R)/$(o)/am.o $(R)/$(o)/rt.o
 
 .PHONY: objs bin
 default: bin
@@ -37,8 +35,7 @@ $(eval $(call p_lay,boot2,mkboot2,"i/rp2040/boot2.bin" "$(o)/boot2.o"))
 $(R)/$(o)/boot2.o: boot2.bin
 
 # the link is ours: rlink.l drives holo's ldbare32 with the Pico's flash map, in place of
-# arm-none-eabi-ld + rp2040.lds. libgcc.a is named on the line and read as a LIBRARY, by
-# need through the ranlib index -- never run.
+# arm-none-eabi-ld + rp2040.lds. Nothing but our own objects is named on the line.
 $(eval $(call p_link,rlink))
 $(eval $(p_ocopy))
 
@@ -46,7 +43,7 @@ $(eval $(p_ocopy))
 # Read back rather than trusted -- nothing here is both writable and executable.
 $(R)/$(o)/love.elf: $(objs) $(R)/$(o)/rlink.l $(lv)
 	@echo HOLO	$@
-	@cd $(R) && out/love $(o)/rlink.l $(o)/love.elf $(objs:$(R)/%=%) $(lg)
+	@cd $(R) && out/love $(o)/rlink.l $(o)/love.elf $(objs:$(R)/%=%)
 	@python3 -c "import struct; b=open('$(R)/$(o)/love.elf','rb').read(); \
 	  po,pe,pn = struct.unpack_from('<I',b,28)[0], struct.unpack_from('<H',b,42)[0], struct.unpack_from('<H',b,44)[0]; \
 	  ph=[struct.unpack_from('<8I',b,po+i*pe) for i in range(pn)]; \

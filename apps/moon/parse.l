@@ -494,10 +494,10 @@
                            (? lt lt
                               (: gt (peep (ps 'globals) <>e ())
                                  (? gt gt
-                                    ; a bare function name: its 'sigs row as ('fn rty)
+                                    ; a bare function name: its 'sigs row as ('fn rty ptys)
                                     ; (__typeof(open) -- musl's weak_alias declares through it)
                                     (: sg (peep (ps 'sigs) <>e ())
-                                       (? (two? sg) ['fn <sg] ()))))))
+                                       (? (two? sg) ['fn <sg <>sg] ()))))))
              (k = 'dot) (: bt (ptype ps <>e) (? (stru? bt) (fldty ps bt <>>e) ()))
              (k = 'deref) (: it (ptype ps <>e)
                              (? (ptr? it) <>it (arr? it) <>it
@@ -564,10 +564,11 @@
              ())))
 
    ; -- declarators: stars XOR one array suffix, plus the function-pointer
-   ; dragon -- T (*name)(..) and the dispatch-table T (*name[n])(..). the
-   ; parameter list is balance-skipped (args classify by their own type); a
-   ; function pointer is ('ptr ('fn ret)) -- ret so an indirect call knows a
-   ; double result -- a table of them ('arr ('ptr ('fn ret)) n).
+   ; dragon -- T (*name)(..) and the dispatch-table T (*name[n])(..). a function
+   ; pointer is ('ptr ('fn ret ptys)) -- ret so an indirect call knows a double
+   ; result, ptys so it classifies its arguments by the PROTOTYPE, the only thing
+   ; that tells a float argument from the double it widened to. a table of them
+   ; is ('arr ('ptr ('fn ret ptys)) n).
    (skipbal s d) (? (d < 1) s
                     !(two? s) ()
                     (peekp s "(") (skipbal >s (d + 1))
@@ -607,7 +608,12 @@
    (psufs ps ts name w dat bare)
     (? (peekp ts "(")
         (: rp (pparams ps >ts ())
-           (? !(two? rp) () (psufs ps <>rp name (\ t (w ['fn t])) (? bare rp dat) ())))
+           ; the parameter TYPES, names dropped. a VARIADIC prototype parks () like an
+           ; unprototyped declarator: AAPCS-VFP keeps a variadic argument out of the
+           ; co-processor registers whatever it was declared as, and no `...` rides the
+           ; type for a call site to read that from, so the list would place them wrong.
+           pt9 (two? rp && !(rp 2) ? (map caup <rp))
+           (? !(two? rp) () (psufs ps <>rp name (\ t (w ['fn t pt9])) (? bare rp dat) ())))
        (peekp ts "[")
         (: ar (adims ps ts ())
            (? !(two? ar) () (psufs ps <>ar name (\ t (w (mkarr t <ar))) dat ())))
