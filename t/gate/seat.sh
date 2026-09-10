@@ -35,7 +35,7 @@ want='no markdown'  ; try "papel"                a/papel.l --nope
 # program's, so l/boot/post.l's `unprime` steps it and the app still seats itself.
 # the cat is not optional: a bare `bake` snapshots a fresh egg, which registers the
 # core modules and no crew, and libra reads lint and salt. -l CAT is how the shipped
-# image is baked too (Makefile's .love.baked), so this wakes the shape love ships.
+# image is baked too (the Makefile lays b/love from b/love.raw), so this wakes the shape love ships.
 img=$d/seat.image
 if "$love" bake -l b/.dist-cat.l "$img" >/dev/null 2>&1; then
   want='unclosed ('; try "libra (under a wake)" wake "$img" a/libra/libra.l $bad

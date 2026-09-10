@@ -44,7 +44,7 @@ For a caller already in the image there is one more door. `sh-oneline` runs a si
 **-e**, **-u**, **-x**
 :   The `set` flags, given at invocation. They bundle with each other and with **-c** in one word: `lush -ec 'cmd'` is what a Makefile's `.SHELLFLAGS` writes, and it is how lush can be the `SHELL` of a make.
 **-a**, **-g**
-:   The mode: **-a** autonomous (the default), **-g** gregarious, as the DESCRIPTION has them. They bundle like the flags above. With neither on the command line the shell reads `LUSHFLAGS` from the environment (the last **a** or **g** in it wins), which is how a whole build inherits one choice: **love seed** sets `-g` so a bootstrap through an ambient compiler and userland stays one, and `love seed -a` sets `-a`.
+:   The mode: **-a** autonomous (the default), **-g** gregarious, as the DESCRIPTION has them. They bundle like the flags above. With neither on the command line the shell reads `LUSHFLAGS` from the environment (the last **a** or **g** in it wins), which is how a whole build inherits one choice: **love seed** sets `-a`, and `love seed -g` sets `-g` so a bootstrap through an ambient compiler and userland stays one.
 **--login**
 :   A login shell: read */etc/profile*, then *~/.profile*, before anything else. A dash-led `argv[0]` (`-lush`, `-sh`, the mark **login**(1) leaves) is honored too, but the `env -S` shebang usually eats it -- the flag is the reliable door.
 

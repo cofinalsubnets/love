@@ -77,24 +77,17 @@ out=$(cd "$w" && env -u LOVE_NO_IMAGE ./b1 -e '(puts (? (3 = 1 + 2) "wake-ok" "w
   || fail "the reproducible bake does not run"
 case $out in *wake-ok*) ;; *) fail "the reproducible bake woke wrong: [$out]" ;; esac
 
-# THE FIRST BOOT (i/main.c): an unbaked binary that carries its source bakes and
-# patches ITSELF, serves the invocation it was given -- and the bytes are the same
-# bake. flip the image HEADER's magic (its byte string's LAST occurrence: the
-# section is laid last, past the immediates in .text that spell the same constant)
-# so the load refuses and the binary reads as unbaked, then run one command: the
-# banner must show, the command must answer, and the self-patched file must equal
-# the explicit bake to the byte -- the header the corruption lived in is exactly
-# what the self-bake rewrites. b3 is the yardstick: the first boot IS the crew
-# bake off the egg, where b1 re-baked an already-woken image.
-cp "$w/b3" "$w/love" || fail "cannot stage the first boot"     # the SAME PATH the bakes ran at (the path law above)
-mo=$(grep -abo 'AISNO06' "$w/love" | tail -1 | cut -d: -f1)
-[ -n "$mo" ] || fail "no image magic to corrupt"
-printf 'x' | dd of="$w/love" bs=1 seek="$mo" conv=notrunc 2>/dev/null \
-  || fail "cannot corrupt the image"
-out=$(cd "$w" && env -u LOVE_NO_IMAGE -u LOVE_FIRST_BOOT ./love -e '(puts "fb-ok")' 2>&1) \
-  || fail "the first boot did not serve its invocation"
-case $out in *fb-ok*) ;; *) fail "the first boot ran but the command answered nothing: [$out]" ;; esac
-cmp -s "$w/love" "$w/b3" || fail "the first boot baked different bytes than the explicit bake"
+# THE TWO STATES (i/image.c): a binary is baked or raw, and each state emits the other --
+# a bake takes the crew off the carried source where no -l names one, and -n lays the
+# section's stub back. the round trip has to land on the bytes it started from, both ways.
+# it runs in $w, with no tree in reach, because that is the claim: the source is aboard.
+cp "$w/b1" "$w/love" || fail "cannot stage the round trip"
+( cd "$w" && ./love bake -n -i ) > "$w/rt.log" 2>&1 \
+  || { cat "$w/rt.log"; fail "the strip failed"; }
+cmp -s "$w/love" "$ho/love.raw" || fail "a stripped artifact is not the link it was baked from"
+( cd "$w" && ./love bake -i ) > "$w/rt.log" 2>&1 \
+  || { cat "$w/rt.log"; fail "the carried-source bake failed"; }
+cmp -s "$w/love" "$w/b1" || fail "raw -> baked did not land on the bake it came from"
 rm -f "$w/love"
 
-echo "test_bakerep: two bakes of one binary are the same bytes, it wakes, and a first boot self-bakes to the same bytes ($(sha256sum < "$w/b1" | cut -c1-16)..)"
+echo "test_bakerep: two bakes of one binary are the same bytes, it wakes, and the raw/baked pair round-trips to the byte ($(sha256sum < "$w/b1" | cut -c1-16)..)"

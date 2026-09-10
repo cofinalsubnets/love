@@ -40,10 +40,11 @@ static struct ai *evals0(struct ai *g, char const *const *v) {
 // with args, run the build tool (lcat / gen_data) through the CLI driver.
 // with no args, self-test: eval prel, load bao (the shell core) as a module, and run
 // the baked corpus via c0, then bootstrap the self-hosted ev (egg) and run the corpus
-// again through it. bake/bake_load are the full love's words: they stand in the
+// again through it. the three bake words are the full love's: they stand in the
 // signature so main() has one call for both seats, and love0 has no bake verb.
-struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load) {
-  (void) bake, (void) bake_load;
+struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load,
+                char const *bake_out) {
+  (void) bake, (void) bake_load, (void) bake_out;
   if (argp) {
     g = ai_evals_(g, src0_p1);
     g = evals0(g, prelpost0);

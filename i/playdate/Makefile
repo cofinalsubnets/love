@@ -26,7 +26,6 @@ o = $(R)/b/playdate
 n = love
 pd_sdk = $(PLAYDATE_SDK_PATH)
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
-MOONCC = $(R)/b/.love.baked
 
 # mooncc's flags for the device C (run from $(R): its system include dir is
 # CWD-relative, the SDK's is absolute). TARGET_PLAYDATE gates main.c's newlib
@@ -113,8 +112,6 @@ $(lib_hs): FORCE
 	@$(MAKE) -C $(R) b/lib/$(@F)
 $(m): FORCE
 	@$(MAKE) -C $(R) b/love
-$(MOONCC): FORCE
-	@$(MAKE) -C $(R) b/.love.baked
 
 # cas.l -> C string literal, atomically (a 0-byte header would silently drop
 # the whole demo -- same discipline as the root's lcat_h)
@@ -147,26 +144,26 @@ $(o)/Source/pdex.%: $(o)/pdex.%
 	@cp $< $@
 
 # the mooncc half: main.c + the shared runtime + quay
-$(o)/main.o: main.c pdglue.h $(pd_h) | $(MOONCC)
+$(o)/main.o: main.c pdglue.h $(pd_h) | $(m)
 	@echo MOON	$@
 	@mkdir -p $(o)
 	@cd $(R) && LOVE_NO_IMAGE= b/love mooncc $(mc_flags) -c i/playdate/main.c b/playdate/main.o
-$(o)/%.o: $(R)/%.c $(pd_h) | $(MOONCC)
+$(o)/%.o: $(R)/%.c $(pd_h) | $(m)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
 	@cd $(R) && LOVE_NO_IMAGE= b/love mooncc $(mc_flags) -c $*.c b/playdate/$*.o
 # the SDK boundary -- ours too, now: pdglue.c is the one file that includes pd_api.h,
 # and mooncc reads it (the header wants -Wno-unknown-pragmas from gcc and nothing at
 # all from us). It is not under the $(R) pattern above: it lives here, not in the tree.
-$(o)/pdglue.o: pdglue.c pdglue.h | $(MOONCC)
+$(o)/pdglue.o: pdglue.c pdglue.h | $(m)
 	@echo MOON	$@
 	@mkdir -p $(o)
 	@cd $(R) && LOVE_NO_IMAGE= b/love mooncc $(mc_flags) -c i/playdate/pdglue.c b/playdate/pdglue.o
 
-$(o)/pdex.elf: $(pd_o) | $(MOONCC)
+$(o)/pdex.elf: $(pd_o) | $(m)
 	@echo MOON	$@
 	@cd $(R) && LOVE_NO_IMAGE= b/love mooncc $(mc_ld) $(pd_o:$(R)/%=%) -o b/playdate/pdex.elf
-$(o)/pdex-alt.elf: $(pd_o) | $(MOONCC)
+$(o)/pdex-alt.elf: $(pd_o) | $(m)
 	@echo MOON	$@
 	@cd $(R) && LOVE_NO_IMAGE= b/love mooncc $(mc_ld_alt) $(pd_o:$(R)/%=%) -o b/playdate/pdex-alt.elf
 

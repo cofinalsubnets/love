@@ -415,7 +415,7 @@ void host_spawn_guard(struct ai*, int);            // exec-bound forks drop the 
 int ai_raw_mode(intptr_t on);                      // the (raw on) latch; main.c's repl too
 size_t host_selfpath(char*, size_t);               // the one selfpath door (per-OS ladder)
 // ..i/image.c, the carried image and the self-bake..
-int image_bake(struct ai*), ai_baked_pick(void const **blob, uintptr_t *blen);
+int image_bake(struct ai*, char const *out, int bare), ai_baked_pick(void const **blob, uintptr_t *blen);
 struct ai *image_load(char const*), *image_dump(struct ai*, char const*);
 extern uint64_t ai_baked_image[];
 extern uintptr_t ai_baked_image_len;
@@ -499,19 +499,12 @@ extern struct ai_fio ai_stdin, ai_stdout, ai_stderr;
 #  define ai_avail_floor 8
 # endif
 #endif
-// LvFirstBoot -- this link can bake itself from the source it carries (i/src.c's
-// ai_srcgz, laid strong by the dist link) and re-exec the patched file. a capability,
-// not a roster: love0 LAYS that blob rather than carrying one, and the wasm seat has no
-// exec to come back through, so neither asks for the reader or the fork.
+// LvBakeSrc -- this link can bake the crew from the source it carries (i/src.c's
+// ai_srcgz, laid strong by the dist link), so a raw binary emits its baked state with no
+// tree to hand. a capability, not a roster: love0 LAYS that blob rather than carrying
+// one, and the wasm seat has no self on disk to lay over.
 #if !defined(Love0) && !defined(__wasm__)
-# define LvFirstBoot 1
-#endif
-// LvFirstBoot -- this link can bake itself from the source it carries (i/src.c's
-// ai_srcgz, laid strong by the dist link) and re-exec the patched file. a capability,
-// not a roster: love0 LAYS that blob rather than carrying one, and the wasm seat has
-// no exec to come back through, so neither asks for the reader or the fork.
-#if !defined(Love0) && !defined(__wasm__)
-# define LvFirstBoot 1
+# define LvBakeSrc 1
 #endif
 // the GC tail is ai_musttail like every other, and that is why lvm_gc takes its word
 // count in g->b instead of a fifth parameter: musttail wants matching prototypes, so an

@@ -121,12 +121,12 @@ usage: love serve [-p PORT] [-n] [DIR]
 a .l is painted, a .md rendered, and x.l.md is x.l's header as a document. the github
 page is laid first -- make web wasm site-wasm and the wasm inle seat -- and the machine
 is at /i/wasm/inle.html. where DIR is no tree, this binary's own source is laid
-under it as `love seed -a` lays it (love-VERSION/, rebuilt there with our own
+under it as `love seed` lays it (love-VERSION/, rebuilt there with our own
 toolchain), and that tree is the one served.
 ")
       (quit 0))
 
-   ; no tree at DIR: lay and seed one there, as `love seed -a DIR` does -- the source this
+   ; no tree at DIR: lay and seed one there, as `love seed DIR` does -- the source this
    ; binary carries, rebuilt in place by its own mooncc and userland -- and answer its
    ; root, which is `love source`'s: love-VERSION under DIR
    (sv-root dir) ((dir = "." ? "" (dir + "/")) + "love-" + love-version)
@@ -142,7 +142,7 @@ toolchain), and that tree is the one served.
    ; the page's build, through our own make in DIR: only where DIR is the tree, and
    ; a refused build is said and stops the server -- a page half laid is not one
    (sv-tree? dir) (two? (stat (dir + "/Makefile")) && two? (stat (dir + "/w/index.l")))
-   ; autonomous throughout, as `seed -a` and `love doom` are (a/source.l's src-arm):
+   ; autonomous throughout, as `love seed` and `love doom` are (a/source.l's src-arm):
    ; our verbs first on PATH, lush -a, CC our mooncc
    (sv-build dir)
    (: exe (selfpath 0)

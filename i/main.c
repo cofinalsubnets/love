@@ -16,7 +16,7 @@
 #include <stdnoreturn.h>
 #include <signal.h>
 #include <sys/wait.h>
-#include <sys/mman.h>    // the first boot's inflate buffer (mmap, no malloc)
+#include <sys/mman.h>    // the carried source's inflate buffer (mmap, no malloc)
 
 // ai_clock lives in i/posix.c, one body for this frontend and the kernel's.
 // the fine clock's real source (the weak default in love.c degrades to ms*1e6)
@@ -291,8 +291,81 @@ static struct ai *run_program(struct ai *g, bool replp) {
 
 #ifdef Love0
 // love0's seat is its own translation unit: i/boot.c, linked only into love0.
-struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load);
+struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load, char const *bake_out);
 #else
+#ifdef LvBakeSrc
+#include "ustar.h"
+static char const src_distlist[] =
+#include "distlist.h"
+ ;
+
+// inflate the carried blob (gzip: skip the header fields, ISIZE names the tar)
+static unsigned char *bsrc_untar(uintptr_t *outn) {
+  uintptr_t o = 0, un = 0;
+  if (!ai_gz_body(ai_srcgz, ai_srcgz_len, &o, &un)) return NULL;
+  unsigned char *t = mmap(NULL, un ? un : 1, PROT_READ | PROT_WRITE,
+                          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (t == MAP_FAILED) return NULL;
+  if (ai_inflate_raw(ai_srcgz + o, ai_srcgz_len - o - 8, t, un) != (intptr_t) un)
+    return munmap(t, un), NULL;
+  return *outn = un, t; }
+
+// find a tree-relative path in the ustar block. the archive's paths carry a top component,
+// so match past it; a symlink member chases its target against its own directory.
+static unsigned char const *bsrc_find(unsigned char const *t, uintptr_t n,
+                                    char const *path, uintptr_t *len, int hop) {
+  uintptr_t pl = strlen(path);
+  if (hop > 3 || !pl) return NULL;
+  for (uintptr_t o = 0; o + 512 <= n && t[o];) {
+    unsigned char const *h = t + o;
+    uintptr_t sz = ai_ustar_octal(h + 124, 12);
+    if (ai_ustar_member(h)) {
+      char nm[256];
+      uintptr_t ln = ai_ustar_name(h, nm, sizeof nm);
+      if (ln == pl && !memcmp(nm, path, pl)) {
+        if (!ai_ustar_islink(h)) return *len = sz, t + o + 512;
+        char tgt[101], cn[256];
+        tgt[ai_ustar_link(h, tgt, sizeof tgt - 1)] = 0;
+        cn[ai_lnk_canon(path, tgt, cn, sizeof cn - 1)] = 0;
+        return bsrc_find(t, n, cn, len, hop + 1); } }
+    o += 512 + ((sz + 511) & ~(uintptr_t) 511); }
+  return NULL; }
+
+// lay the roster cat from the carried source, beside `at`: the crew a binary bakes when
+// no -l names one, which is how a raw love emits its baked state with no tree to hand.
+// 1 laid, 0 refused -- no blob aboard, nowhere to write, or a roster name the archive
+// does not carry. per-process, for the reason the bake's scratch is (i/image.c).
+static int bsrc_lay_cat(char *cat, size_t n, char const *at) {
+  char exe[4096];                                    // the kernel's own PATH_MAX, not a cap of ours
+  if (ai_srcgz_len < 18) return 0;                   // i/noblob.c's zero: this link carries no source
+  if (!at && !(at = host_selfpath(exe, sizeof exe) ? exe : NULL)) return 0;
+  uintptr_t un = 0;
+  unsigned char *t = bsrc_untar(&un);
+  if (!t) return fprintf(stderr, "love: bake: the carried source will not inflate\n"), 0;
+  snprintf(cat, n, "%s.bakecat.%ld.l", at, (long) getpid());
+  int fd = open(cat, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) {                                      // a read-only seat -- /usr/bin, a container layer
+    fprintf(stderr, "love: bake: %s is not writable\n", cat);
+    return munmap(t, un), 0; }
+  for (char const *p = src_distlist; *p;) {
+    while (*p == ' ' || *p == '\n') p++;
+    char w[256]; size_t wl = 0;
+    while (*p && *p != ' ' && *p != '\n' && wl < 255) w[wl++] = *p++;
+    if (!wl) break;
+    w[wl] = 0;
+    uintptr_t ml = 0;
+    unsigned char const *m = bsrc_find(t, un, w, &ml, 0);
+    // a roster name the archive does not carry (a stale distlist), or a full filesystem
+    if (!m || (ml && write(fd, m, ml) != (ssize_t) ml)) {
+      fprintf(stderr, "love: bake: %s %s\n", w,
+              m ? "would not write" : "is not in the carried source");
+      close(fd), unlink(cat), munmap(t, un);
+      return 0; } }
+  return close(fd), munmap(t, un), 1; }
+#else
+#define bsrc_lay_cat(cat, n, at) 0
+#endif
+
 // read-eval one .l file into the booting session, loudly: a bake's cat has no shell help,
 // so a raise in it must end the bake rather than seal a half-built artifact.
 // the path is a value, never spliced into the source, so the text stays data whatever it
@@ -315,7 +388,8 @@ static struct ai *bake_eval_file(struct ai *g, char const *path) {
   return ai_ok(g) ? ai_evals_(g, "(: bake-load ())") : g; }
 
 // FIXME waaaaaaaaaaaaaaaaaaaaay too much code in string literals
-static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load) {
+static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load,
+                       char const *bake_out) {
   // leave the internal names in global scope too. only an unbaked boot reaches this; the
   // `guts` module egg.l registers is how a baked one gets at them (cite 'guts 'peek).
   char const *nm = getenv("LOVE_NO_MOP");
@@ -367,8 +441,16 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     : "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) (pull book 'book 0))");
 
   if (bake) {                                            // the bake verb: snapshot the post-warm heap, then exit
-    if (bake_load && !ai_ok(g = bake_eval_file(g, bake_load))) return g;
-    int rc = *bake ? (int) ai_core_of(g = image_dump(g, bake))->b : image_bake(g);
+    // a bake egg-boots whatever this binary carries, so the crew is never aboard here.
+    // -l names it; with nothing named the carried source is the roster, which is the
+    // raw -> baked direction of the verb (`love bake -n` is the other).
+    char cat[4096 + 40];                               // a path, and ".bakecat.<pid>.l"
+    if (!bake_load && bsrc_lay_cat(cat, sizeof cat, bake_out)) bake_load = cat;
+    if (bake_load) {
+      int ok = ai_ok(g = bake_eval_file(g, bake_load));
+      if (bake_load == cat) unlink(cat);
+      if (!ok) return g; }
+    int rc = *bake ? (int) ai_core_of(g = image_dump(g, bake))->b : image_bake(g, bake_out, 0);
     if (rc) fprintf(stderr, "love: bake failed (rc=%d)\n", rc);
     exit(rc ? 1 : 0); }
   return run_program(g, !argp && isatty(STDIN_FILENO)); }
@@ -381,98 +463,6 @@ ai_noinline static struct ai *argv_chain(struct ai *g, char const **v, int argc,
   for (g = ai_push(g, 1, ZeroPoint); n--; g = gxr(g));   // () terminates, as a love list does
   return g; }
 
-#ifdef LvFirstBoot
-#include "ustar.h"
-static char const src_distlist[] =
-#include "distlist.h"
- ;
-
-// inflate the carried blob (gzip: skip the header fields, ISIZE names the tar)
-static unsigned char *fb_untar(uintptr_t *outn) {
-  uintptr_t o = 0, un = 0;
-  if (!ai_gz_body(ai_srcgz, ai_srcgz_len, &o, &un)) return NULL;
-  unsigned char *t = mmap(NULL, un ? un : 1, PROT_READ | PROT_WRITE,
-                          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  if (t == MAP_FAILED) return NULL;
-  if (ai_inflate_raw(ai_srcgz + o, ai_srcgz_len - o - 8, t, un) != (intptr_t) un)
-    return munmap(t, un), NULL;
-  return *outn = un, t; }
-
-// find a tree-relative path in the ustar block. the archive's paths carry a top component,
-// so match past it; a symlink member chases its target against its own directory.
-static unsigned char const *fb_find(unsigned char const *t, uintptr_t n,
-                                    char const *path, uintptr_t *len, int hop) {
-  uintptr_t pl = strlen(path);
-  if (hop > 3 || !pl) return NULL;
-  for (uintptr_t o = 0; o + 512 <= n && t[o];) {
-    unsigned char const *h = t + o;
-    uintptr_t sz = ai_ustar_octal(h + 124, 12);
-    if (ai_ustar_member(h)) {
-      char nm[256];
-      uintptr_t ln = ai_ustar_name(h, nm, sizeof nm);
-      if (ln == pl && !memcmp(nm, path, pl)) {
-        if (!ai_ustar_islink(h)) return *len = sz, t + o + 512;
-        char tgt[101], cn[256];
-        tgt[ai_ustar_link(h, tgt, sizeof tgt - 1)] = 0;
-        cn[ai_lnk_canon(path, tgt, cn, sizeof cn - 1)] = 0;
-        return fb_find(t, n, cn, len, hop + 1); } }
-    o += 512 + ((sz + 511) & ~(uintptr_t) 511); }
-  return NULL; }
-
-static void first_boot(char const **argv) {
-  if (ai_srcgz_len < 18) return;                     // i/noblob.c's zero: this link carries no source
-  // an env var because the state it guards spans an exec: the re-exec below sets it, so
-  // the binary that comes back knows it already tried and a failed bake cannot loop.
-  if (getenv("LOVE_FIRST_BOOT")) {
-    fprintf(stderr, "; first boot: still unbaked after a bake -- running cite source\n");
-    return; }
-  char exe[4096], cat[sizeof exe + 40];              // + ".firstboot.<pid>.l" and its NUL
-  if (!host_selfpath(exe, sizeof exe)) return;
-  uintptr_t un = 0;
-  unsigned char *t = fb_untar(&un);
-  if (!t) {                                          // truncated or not gzip; or the mmap failed
-    fprintf(stderr, "; first boot: the carried source will not inflate -- running cite source\n");
-    return; }
-  // per-process, for the reason the bake's scratch is (i/image.c): concurrent first
-  // boots on one name would write into and unlink each other's cat.
-  snprintf(cat, sizeof cat, "%s.firstboot.%ld.l", exe, (long) getpid());
-  int fd = open(cat, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-  if (fd < 0) {                                      // a read-only seat -- /usr/bin, a container layer
-    fprintf(stderr, "; first boot: %s is not writable -- running cite source this session\n", cat);
-    munmap(t, un);
-    return; }
-  for (char const *p = src_distlist; *p;) {
-    while (*p == ' ' || *p == '\n') p++;
-    char w[256]; size_t wl = 0;
-    while (*p && *p != ' ' && *p != '\n' && wl < 255) w[wl++] = *p++;
-    if (!wl) break;
-    w[wl] = 0;
-    uintptr_t ml = 0;
-    unsigned char const *m = fb_find(t, un, w, &ml, 0);
-    // a roster name the archive does not carry (a stale distlist), or a full filesystem
-    if (!m || (ml && write(fd, m, ml) != (ssize_t) ml)) {
-      fprintf(stderr, "; first boot: %s %s -- running cite source\n", w,
-              m ? "would not write" : "is not in the carried source");
-      close(fd), unlink(cat), munmap(t, un);
-      return; } }
-  close(fd), munmap(t, un);
-  // a child, so the bake gets a clean process: it snapshots its own heap and exits, and
-  // this one keeps a session to fall back to.
-  pid_t p = fork();
-  if (!p) { char *args[] = { exe, (char*) "bake", (char*) "-l", cat, NULL };
-            execv(exe, args); _exit(127); }
-  int st = -1;
-  if (p > 0) waitpid(p, &st, 0);
-  unlink(cat);
-  if (p < 0 || !WIFEXITED(st) || WEXITSTATUS(st)) {
-    fprintf(stderr, ";; bake failed, running cite source\n");
-    return; }
-  setenv("LOVE_FIRST_BOOT", "1", 1);
-  execv(exe, (void*) argv);                          // the patched file: same path, new inode
-  fprintf(stderr, "; first boot: cannot re-exec -- running cite source\n"); }
-#else
-#define first_boot(argv) ((void) 0)                      // no blob to bake, or no exec back
-#endif
 
 // a __builtin_trap guard fired: `ud2` / `brk #0` / `ebreak`, so it lands here as
 // SIGILL (SIGTRAP on the arm and riscv seats) with si_addr at the instruction.
@@ -518,13 +508,24 @@ int main(int argc, char const **argv) {
   trap_note_on();
   struct ai *g = NULL;
   char const *image_load_path = NULL, *bake = NULL,   // see boot(): "" = self-bake, a path = an image file
-             *bake_load = NULL;                      // bake -l CAT: read-eval it before the seal
-  int skip = 0;                                      // words that are the prime's, not the program's
+             *bake_load = NULL,                      // bake -l CAT: read-eval it before the seal
+             *bake_out = NULL;                       // bake -o OUT: a copy of the binary, not this one
+  int skip = 0, bare = 0;                            // words that are the prime's, not the program's; bake -n
 #ifndef Love0
   if (argc >= 2 && !strcmp(argv[1], "bake")) {
-   int i = 2;                                      // bake [-l CAT] [PATH]
-   if (i + 1 < argc && !strcmp(argv[i], "-l")) bake_load = argv[i + 1], i += 2;
+   int i = 2, in_place = 0;                        // bake [-l CAT] [-i] [-o OUT] [-n] [IMAGE]
+   for (; i < argc && argv[i][0] == '-' && argv[i][1]; i++)
+    if (!strcmp(argv[i], "-l") && i + 1 < argc) bake_load = argv[++i];
+    else if (!strcmp(argv[i], "-o") && i + 1 < argc) bake_out = argv[++i];
+    else if (!strcmp(argv[i], "-n")) bare = 1;      // no image: the stub back, and no snapshot
+    else if (!strcmp(argv[i], "-i")) in_place = 1;  // -i says the default -- this binary -- out loud
+    else
+     return fprintf(stderr, "love: bake [-l CAT] [-i] [-o OUT] [-n] [IMAGE]\n"), 2;
    bake = i < argc ? argv[i] : "";
+   if (*bake && (bake_out || bare))                 // a named IMAGE is a plain image file, never a binary
+    return fprintf(stderr, "love: bake: IMAGE writes an image; -o and -n write a binary\n"), 2;
+   if (in_place && bake_out)                        // one says this binary, the other a copy
+    return fprintf(stderr, "love: bake: -i and -o name different targets\n"), 2;
    skip = (i < argc ? i + 1 : i) - 1; }
   else
 #endif
@@ -543,11 +544,13 @@ int main(int argc, char const **argv) {
    if (ai_baked_pick(&bimg, &blen) && (g = ai_image_load(bimg, blen)))
     woke_ms = ai_clock() - t0,
     image_load_path = "<baked>"; }                                     // a loaded image is the booted state: skip the egg warm
-  // unbaked, with source aboard, and nothing explicit asked for: finish first.
-  // a `wake` names its own image and a `bake` is the finishing move itself.
-  if (!g && !bake && !(noimg && *noimg) && !(argc >= 2 && !strcmp(argv[1], "wake")))
-    first_boot(argv);                                  // returns only on refusal; success re-execs
   if (!g) g = ai_ini();
+  // -n lays the stub back and saves no heap, so it skips the warm outright: the strip is
+  // instant, and it answers for a binary whose own corpus would not boot.
+  if (bare) {
+    int rc = image_bake(g, bake_out, 1);
+    if (rc) fprintf(stderr, "love: bake failed (rc=%d)\n", rc);
+    exit(rc ? 1 : 0); }
   g = env_budget(g);                               // the LOVE_BUDGET_MB cap, on whichever g won (fresh or woken image)
   bool argp = argc - skip > 1;
   if (!bake) g = argv_chain(g, argv, argc, skip);   // the line past the primes -- sp[0]
@@ -580,7 +583,7 @@ int main(int argc, char const **argv) {
     if (!bake) g = stdin_take(g);
     // an egg warm, or a woken image straight to the program -- the wake skips the warm
     g = image_load_path ? run_program(g, !argp && isatty(STDIN_FILENO))
-                        : boot(g, argp, bake, bake_load); }
+                        : boot(g, argp, bake, bake_load, bake_out); }
   if (ai_code_of(g) == ai_status_scare) ai_scare_face_(g);
   // the program's status is cli-line's answer, a charm, left at sp[0] by ai_evals: the
   // process answers with it. a scare answers 1 through ai_fin, ahead of it.

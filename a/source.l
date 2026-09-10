@@ -95,11 +95,12 @@
      (try '("cc" "gcc" "clang")))
    (src-farm root exe)
     (d : (root + "/b/.seedbin")
-       (mkdir d 493,
+       ; a laid tree carries no b/, and mkdir makes one directory: the parent first
+       (mkdir (root + "/b") 493, mkdir d 493,
         each (keys (cite 'verbs 'tab))
              (k \ (d + "/" + string k @ p (unlink p, symlink exe p))),
         d))
-   ; the autonomous arming, what `seed -a` sets before its build: the farm of our verbs
+   ; the autonomous arming, what a seed sets before its build: the farm of our verbs
    ; first on PATH, lush autonomous, CC our mooncc. `love serve` and `love doom` build
    ; under the same, so a nest or a page is ours throughout whatever PATH holds -- a
    ; tree our mooncc built and an object the ambient cc made link neither way.
@@ -157,15 +158,15 @@
    ; a dirty tree still fails.
    ; the lay is an egg -- the crew arrives at bake and a bake means running the artifact,
    ; which this machine cannot do for another ISA. the egg carries its source and the dist
-   ; roster, and its first boot on the target bakes and patches it in place (i/main.c),
-   ; the same bytes a native `make dist` lays.
+   ; roster, so `love bake` on the target lays the crew from them (i/main.c), the same
+   ; bytes a native `make dist` lays.
    (seed-cross root xa dst)
     (: made (root + "/b/x-" + (show (nom xa)) + "/love")
        e (copyfile made dst)
        _ (e < 0 ? (src-die ("can't write " + dst)))
        _ (chmod dst 493)
-       _ (puts (";; laid " + dst + " -- an egg for " + xa + ": its first run on that\n"
-                + ";; machine bakes the crew from the carried source and patches itself.\n"
+       _ (puts (";; laid " + dst + " -- a raw egg for " + xa + ". on that machine\n"
+                + ";; `love bake` lays its crew from the source it carries.\n"
                 + ";; no fixpoint claimed here: a cross lay cannot BE this binary --\n"
                 + ";; `love seed` on the " + xa + " machine proves it.\n"))
        0)
@@ -191,10 +192,40 @@
        (? (string? xa) (seed-cross root xa dst)
           ; the one artifact (seed-universal U2): the seed is the laid tree's own
           ; binary, and the rebuild must be this binary, byte for byte.
-          (: out (root + "/b/love")
-             (? (src-same? exe out)
-               (puts (";; fixpoint ok -- " + out + "\n"), 0)
-              (say err ";; fixpoint failed\n", 1)))))
+          (seed-fix exe (root + "/b/love"))))
+
+   ; the imageless projection of a binary, written beside p. a binary carrying no image
+   ; is its own projection, which is how seed-fix reads either side's state.
+   (seed-bare exe p)
+    (: _ (unlink p)
+       r (hark [exe "bake" "-n" "-o" p])
+       (two? r && <r = 0 ? p ()))
+
+   ; the fixpoint compares LIKE WITH LIKE. an image is a deterministic function of the
+   ; binary carrying it (test_bakerep), so two sides in the same state are compared whole,
+   ; images and all, and a mixed pair -- an installed love with no image rebuilding a baked
+   ; one, either way round -- is compared stripped. that keeps a differing image a failure
+   ; where both sides have one, instead of an answer no configuration could give.
+   (seed-fix exe out)
+    (: a (seed-bare exe (out + ".bare0"))
+       b (seed-bare out (out + ".bare1"))
+       ; a seat with no bake door strips NEITHER side -- the wasm guest has no ELF and no
+       ; selfpath, and there both sides are unbaked by construction, so the whole compare
+       ; already is like with like. one side stripping and the other not is a real refusal.
+       ; every predicate parenthesised: a bare infix one swallows the arm beside it
+       v (? (!(string? a) && !(string? b))          (src-same? exe out ? 'yes 'no)
+            (!(string? a) || !(string? b))          'nostrip
+            (!(src-same? a b))                      'no
+            ((src-same? a exe) != (src-same? b out)) 'bare
+            (src-same? exe out)                     'yes
+                                                    'image)
+       _ (string? a ? (unlink a) 0)
+       _ (string? b ? (unlink b) 0)
+       (v @ 'yes   (puts (";; fixpoint ok -- " + out + "\n"), 0)
+            'bare  (puts (";; fixpoint ok -- " + out + ", imageless: one side carries no image\n"), 0)
+            'image (say err ";; fixpoint failed: the code matches, the images do not\n", 1)
+            'nostrip (say err ";; fixpoint: can't lay an imageless copy\n", 1)
+            (say err ";; fixpoint failed\n", 1)))
 
    ; the cross door: we are a cross compiler carrying our own source, so a seed
    ; lays a seed for a machine it is not -- which is the portability story now
@@ -216,17 +247,18 @@
    (seed-native _) love-arch
 
    (seed-usage _)
-    (puts ("usage: love seed [-a] [ARCH] [DIR]\n"
+    (puts ("usage: love seed [-g] [ARCH] [DIR]\n"
            + "  lay this binary's source under DIR (default .) and rebuild it there;\n"
            + "  the result has to BE this binary, byte for byte.\n"
            + "  ARCH    x64 | a64 | rv64 -- an egg for that machine instead\n"
-           + "  -a      autonomous: our own mooncc and userland throughout, whatever PATH\n"
-           + "          holds; without it the ambient cc and tools build, ours fill the gaps\n"))
+           + "  -g      gregarious: the ambient cc and tools build, ours fill the gaps.\n"
+           + "          without it ours go throughout, whatever PATH holds\n"))
 
    (seed-lay as0)
     (: _ (two? as0 && src-help? <as0 ? (seed-usage 0, quit 0))
-       self? (two? as0 ? (<as0 = "-a") 0)
-       as1 (self? ? >as0 as0)
+       f0 (two? as0 ? <as0 "")
+       greg? (f0 = "-g")
+       as1 (greg? || f0 = "-a" ? >as0 as0)     ; -a is the default now; the word still eats
        ; naming this machine is a native seed, fixpoint and all: the cross lane
        ; exists for a machine we are not, and the fixpoint is scoped to where the
        ; output ought to be this binary -- which `love seed x64` on an x64
@@ -244,24 +276,26 @@
        _ (string? exe ? 0 (src-die "can't find seed path"))
        farm (src-farm root exe)
        path ("" + getenv "PATH")
-       ; ours last fills the gaps only; -a puts them first, so ours win wherever we
-       ; carry a tool of that name. the build's shells read the same choice off
-       ; LUSHFLAGS: -g (gregarious) makes a bare word PATH's business (the bootstrap through an
-       ; ambient cc and userland), -a keeps lush autonomous, where PATH decides nothing
-       _ (setenv "PATH" (self? ? (farm + ":" + path) (path + ":" + farm)))
-       _ (setenv "LUSHFLAGS" (self? ? "-a" "-g"))
+       ; ours lead, so ours win wherever we carry a tool of that name; -g puts them
+       ; last, where they fill the gaps only. the build's shells read the same choice
+       ; off LUSHFLAGS: -g (gregarious) makes a bare word PATH's business (the bootstrap
+       ; through an ambient cc and userland), -a keeps lush autonomous, PATH deciding nothing
+       _ (setenv "PATH" (greg? ? (path + ":" + farm) (farm + ":" + path)))
+       _ (setenv "LUSHFLAGS" (greg? ? "-g" "-a"))
        env (getenv "CC")
-       amb (!self? && !(string? env) ? (src-cc $ root + "/out"))
+       ; the probe writes into the laid tree's root: it is the one directory a lay
+       ; is known to have made, and the two scratch files go straight back out
+       amb (greg? && !(string? env) ? (src-cc root))
        ; something has to be named. the tree carries no love, so an unnamed CC is the
        ; ambient cc and nothing else -- right as make's default, wrong as this verb's
        ; answer where the probe just found no cc that works. a working ambient one is the
        ; stronger claim, a foreign compiler holding the scaffold being the one thing a self
-       ; build cannot say; this binary's own mooncc is the fallback and --self takes it
-       ; outright. naming CC reaches any other mix: `CC="<love> mooncc" love seed`
+       ; build cannot say; this binary's own mooncc is the fallback, and the default
+       ; takes it outright. naming CC reaches any other mix: `CC="<love> mooncc" love seed`
        ; is our compiler under an ambient userland.
        _ (string? env ? 0
           (two? amb ? (setenv "CC" <>amb) (setenv "CC" (exe + " mooncc"))))
-       _ (? self? (puts ";; using own tools throughout\n")
+       _ (? !greg? (puts ";; using own tools throughout\n")
             (: ours (src-ours src-needs)
                (two? ours ? (puts $ ";; using own tools: " + (src-words ours) + "\n") 0)))
        cc (? (string? env) env (two? amb) <>amb "this binary")

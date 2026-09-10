@@ -96,9 +96,25 @@ compiles into the freestanding kernel.
 
 ## `bake` and `wake`
 
-`love bake` boots fully and lays the image into the binary's own `.image` section;
-`love bake PATH` writes a plain file instead. `love wake PATH prog.l args..` boots from a
-named image.
+**A binary is in one of two states — baked or raw — and `bake` is the verb that emits either
+from the other.** `love bake` boots fully and lays the image into the binary's own `.image`
+section; `love bake -n` lays the section's sentinel stub back, which is the raw state. Both
+work in place (`-i`, the default) or into a copy (`-o OUT`), and the pair round-trips to the
+byte: stripping a bake gives back the link it was baked from, and baking a strip gives back
+the bake. `test_bakerep` holds that.
+
+A bake egg-boots whatever it is given, so the crew is never aboard when the snapshot is taken.
+`-l CAT` names the roster; with nothing named, the binary's own carried source is it (the
+`distlist` roster through `i/src.c`'s `ai_srcgz`), so **a raw love alone in an empty directory
+bakes itself into the whole artifact.** That is what a cross-laid seed egg is for: a lay for
+another ISA cannot be baked here, so it ships raw and one `love bake` on the target finishes it.
+
+`love bake PATH` writes a plain image file instead of touching a binary. `love wake PATH
+prog.l args..` boots from a named image.
+
+The build lays both states as two files — `b/love.raw` from the link, `b/love` from
+`b/love.raw bake -o b/love -l b/.dist-cat.l`. They were one file and a `.love.baked` stamp
+until `bake -o` existed: an in-place bake leaves make no second file to name.
 
 **`love-image` says which one woke.** The wake strips the path from `argv`, so a session that
 must key on the identity of the compiler it is running (mooncc's runtime cache) can ask no other

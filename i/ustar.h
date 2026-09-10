@@ -1,7 +1,7 @@
 // FIXME this file is too short. combined header shared by main/kmain?
 // ustar.h -- decoding the carried source blob (i/src.c's ai_srcgz): a gzip member
 // wrapping a ustar archive. two callers WALK it differently and decode it identically --
-// the first boot (main.c) mmaps and wants one member, the kernel's ram fs (kmain.c)
+// a carried-source bake (main.c) mmaps and wants one member, the kernel's ram fs (kmain.c)
 // kmallocs and wants every one -- so the walk stays theirs and the header reading is here.
 #ifndef AI_USTAR_H
 #define AI_USTAR_H

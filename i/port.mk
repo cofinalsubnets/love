@@ -7,7 +7,7 @@
 # splice in; p_link_be if the link wants a different set). Optional: lib_h + p_hdrs, the
 # lcat'd headers to delegate to the root.
 #
-# Answers: R o MOONCC mc lv, .DELETE_ON_ERROR, clean, FORCE and its three delegations, the
+# Answers: R o MOONCC lv, .DELETE_ON_ERROR, clean, FORCE and its three delegations, the
 # lay_l/link_l/copy_l cats, the am.o and ocopy.l rules, and the p_obj/p_lay/p_link shapes.
 
 R := ../..
@@ -16,11 +16,10 @@ R := ../..
 include $(R)/common.mk
 p_dir = $(notdir $(CURDIR))
 o = b/$(p_dir)
-# mooncc is love's own verb (the layered bake). MOONCC is the
-# command as run FROM $(R); mc is the file the verb needs, the baked-stamp's sibling.
+# mooncc is love's own verb. MOONCC is the command as run FROM $(R); lv is the file it
+# needs, which is the baked artifact -- b/love is that file now, where a stamp stood in.
 # LOVE_NO_IMAGE= leads (the guard against an exported egg): an egg-booted love has no verbs.
 MOONCC = LOVE_NO_IMAGE= b/love mooncc
-mc = $(R)/b/.love.baked
 lv = $(R)/b/love
 
 # a failed recipe takes its half-written target with it -- else a 0-byte artifact carries a
@@ -50,8 +49,6 @@ $(sort $(lib_hR) $(addprefix $(R)/,$(p_hdrs))): FORCE
 endif
 $(lv): FORCE
 	@$(MAKE) -C $(R) b/love
-$(mc): FORCE
-	@$(MAKE) -C $(R) b/.love.baked
 
 # the holo cats. the backend text is named explicitly: a frontend bakes holo with the
 # NATIVE backend only, and a port must not care which machine it is building on.
@@ -81,7 +78,7 @@ be_lc   = $(subst $(R)/,,$(p_be_l))
 # doors. only a bare seat links it: everything else carries i/fd.c, whose bodies
 # are the real ones, and two of them in one link is a collision that says so.
 love_m   = $(basename $(love_tu) $(love_codec)) bare
-love_dep = $(love_h) $(lib_hR) $(mc)
+love_dep = $(love_h) $(lib_hR) $(lv)
 love_o   = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(love_m)))
 
 # moonlibc's pure members: the libc a bare-metal seat gets, the same six the kernel takes
@@ -91,11 +88,11 @@ love_o   = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(love_m)))
 # nothing else -- the six owe ONE symbol between them (memmove's memcpy), and it is one
 # of the six.
 libc_m    = memchr memcmp memcpy memmove memset strlen
-libc_dep  = $(R)/a/moon/lib/moonlibc/impl.h $(mc)
+libc_dep  = $(R)/a/moon/lib/moonlibc/impl.h $(lv)
 libc_o    = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(libc_m)))
 
 # the am math floor: the one object every port compiles exactly alike.
-$(R)/$(o)/am.o: $(R)/a/moon/lib/moonlibc/math/am.c $(mc)
+$(R)/$(o)/am.o: $(R)/a/moon/lib/moonlibc/math/am.c $(lv)
 	@echo 'MOON	'$@
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(MOONCC) -t $(p_tgt) -Ia/moon/lib/moonlibc/math -Ia/moon/include -c a/moon/lib/moonlibc/math/am.c $(o)/am.o
@@ -104,7 +101,7 @@ $(R)/$(o)/am.o: $(R)/a/moon/lib/moonlibc/math/am.c $(mc)
 # instruction (v6-M has neither FPU nor umull nor clz nor a variable 64-bit shift; a
 # single-precision FPU softens f64 alone). Only the thumb ports name it -- an rv64 or x64
 # seat has the hardware, and an object named on a link line rides it whole.
-$(R)/$(o)/rt.o: $(R)/a/moon/lib/rt.c $(mc)
+$(R)/$(o)/rt.o: $(R)/a/moon/lib/rt.c $(lv)
 	@echo 'MOON	'$@
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(MOONCC) -t $(p_tgt) -Ia/moon/include -c a/moon/lib/rt.c $(o)/rt.o

@@ -78,7 +78,7 @@ smoke)
   sabs=$(cd "$s" && pwd)
   mkdir -p "$sabs/bin" "$sabs/cbin" "$sabs/w/sub" "$sabs/refo"
   for n in sh mooncc cook; do ln -sf "$dabs" "$sabs/bin/$n"; done
-  # the reference lane is gregarious (LUSHFLAGS=-g, what `love seed` sets), and
+  # the reference lane is gregarious (LUSHFLAGS=-g, what `love seed -g` sets), and
   # its compiler a COPY: same bytes, different file -- so the skew guard refuses the
   # shortcut and every TU is exec'd through a spawned /bin/sh. the other lane is lush's
   # default, autonomous: a bare word this binary carries runs here whatever PATH holds.

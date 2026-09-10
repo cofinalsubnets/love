@@ -63,9 +63,10 @@ struct ai *image_dump(struct ai *g, char const *path) {
   ai_core_of(g)->sp++;
   return ai_core_of(g)->b = rc, g; }
 
-// image_bake -- the self-bake: lay the post-warm image into the running binary's own
-// .image section on disk. ETXTBSY-proof by the adopt pattern -- copy the file, lay the blob
-// in, fsync, rename over the original, so anything still executing keeps the old inode.
+// image_bake -- lay an image into a binary's own .image section on disk. `out` NULL is the
+// self-bake, in place; a path writes a copy there instead. ETXTBSY-proof by the adopt
+// pattern -- copy the file, lay the blob in, fsync, rename, so anything still executing
+// keeps the old inode.
 // same build = same layout, so the codec's anchor/refsym guards hold by construction.
 // .image is laid last, so the blob is appended where the section already sits and only the
 // one phdr and shdr that name it are rewritten. no reserve, no ceiling, and no vaddr moves.
@@ -187,29 +188,35 @@ static int bake_tail(struct ai *g, int src, char const *tmp, void const *buf, ui
   g->alloc(g, sh, 0), g->alloc(g, ph, 0), g->alloc(g, str, 0), g->alloc(g, win, 0);
   return rc; }
 
-int image_bake(struct ai *g) {
-  uintptr_t len = 0;
-  void *buf = ai_image_save(g, &len, NULL);
+// `bare` lays the sentinel stub back instead of a snapshot -- the section a fresh link
+// carries -- so the answer is an imageless binary, and no heap has to be saved.
+int image_bake(struct ai *g, char const *out, int bare) {
+  uint64_t stub[ReserveWords] = {1};
+  uintptr_t len = sizeof stub;
+  void *buf = bare ? NULL : ai_image_save(g, &len, NULL);
   // the natives ride: their code is a segment of the image, woken as a chunk of the
   // arena. only a refused bake (below) is worth a word.
-  if (!buf) return -2;
+  if (!bare && !buf) return -2;
   // ai_baked_image_len is patched by file offset, taken from the running program's own
-  // phdrs -- the one place a live address and a file position name the same byte.
+  // phdrs -- the one place a live address and a file position name the same byte. a copy
+  // is this binary's head byte for byte, so the same offset names the same word there.
   struct bake_at bl = { (uintptr_t) &ai_baked_image_len, 0, 0 };
   dl_iterate_phdr(bake_phdr, &bl);
   if (!bl.found) return g->alloc(g, buf, 0), -5;
   // exe[4096] is the kernel's own PATH_MAX, not a cap of ours: host_selfpath asks about a
   // real file, and no path an open could name is longer.
   char exe[4096];
-  char *tmp = host_selfpath(exe, sizeof exe) ? bake_scratch(g, exe) : NULL;
+  if (!host_selfpath(exe, sizeof exe)) return g->alloc(g, buf, 0), -6;
+  char const *dst = out ? out : exe;
+  char *tmp = bake_scratch(g, dst);
   struct stat st;
   int rc = -6, src = tmp ? open(exe, O_RDONLY) : -1;
   if (src >= 0 && !fstat(src, &st)) {
-    rc = bake_tail(g, src, tmp, buf, len, bl.off, st.st_mode & 07777);
+    rc = bake_tail(g, src, tmp, bare ? (void const *) stub : buf, len, bl.off, st.st_mode & 07777);
     if (rc > 0) {
       fprintf(stderr, "love: .image is not laid last -- nowhere to grow the image\n");
       rc = -3; }
-    if (!rc && rename(tmp, exe)) rc = -6;         // the adopt: atomic, a new inode
+    if (!rc && rename(tmp, dst)) rc = -6;         // the adopt: atomic, a new inode
     if (rc) unlink(tmp); }
   if (src >= 0) close(src);
   g->alloc(g, tmp, 0);

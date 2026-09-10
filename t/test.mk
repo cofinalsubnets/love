@@ -72,7 +72,7 @@ test_love0: $(love0) b/lib/corpus.list
 # test_filemode -- file mode is terminal, and nothing inside the corpus can gate that:
 # a test that proves the run dies cannot also report. so a shell runs one two-line file
 # and asks both halves of the law -- the face on err and exit 1 -- for a missing name.
-test_filemode: $(ho)/.love.baked
+test_filemode: $(ho)/love
 	@echo TEST file mode is terminal
 	@printf '(: _ (puts "reached\\n") _ (an-name-the-book-lacks 1) (puts "past\\n"))\n' > b/.test_filemode.l
 	@$m b/.test_filemode.l > b/.test_filemode.out 2>&1; r=$$?; \
@@ -87,7 +87,7 @@ test_filemode: $(ho)/.love.baked
 # asked of the PIPE output directly. the pipe also lends its O_NONBLOCK bit (`inflag`), read
 # straight off /proc: a child must inherit fd 0 blocking or it takes an empty pipe for an
 # ended one. the corpus cannot gate any of this; it lives between two ways of being fed.
-test_stdinbuf: $(ho)/.love.baked
+test_stdinbuf: $(ho)/love
 	@echo TEST stdin borrows a run
 	@printf '(say out (+ "rest: [" (+ (slurp in) "]")))\n(say out "tail form")\n' > b/.test_stdinbuf1.l
 	@printf '(exec ["cat"])\nHANDOFF-TAIL\n' > b/.test_stdinbuf2.l
@@ -127,7 +127,7 @@ test_stdinbuf: $(ho)/.love.baked
 # reader, not the device -- a redirect gulps 4096 like a file does, but `reads` trickles `in`
 # a byte at a time to keep its position exact, ~1.45x here, and this gate runs constantly.
 # cat'ing also keeps the corpus's one-global-scope property.
-test_host: $(ho)/.love.baked
+test_host: $(ho)/love
 	@echo TEST $m
 	@cat $t > b/.test_host.l
 	@{ $m b/.test_host.l </dev/null; echo $$? > b/.test_host.rc; } | tee b/.test_host.out; \
@@ -135,13 +135,13 @@ test_host: $(ho)/.love.baked
 	  [ $$s -eq 0 ] && grep -q "tests pass" b/.test_host.out
 # test_hostegg -- the same corpus down the egg boot. a woken heap is not the egg's: it
 # arrives with a pinned prefix it did not copy and an intern map it did not build, so both
-# doors are worth running. wants $(ho)/love, not .love.baked -- an egg lane has no use for
+# doors are worth running. wants $(ho)/love.raw, not the bake -- an egg lane has no use for
 # the ~12 s bake. two asserts fewer than test_host is right: t/holo.l opens on
 # `(lit? (cite 'holo))` and holo lives in the glaze, so those two laws are the baked door's.
-test_hostegg: $(ho)/love
+test_hostegg: $(ho)/love.raw
 	@echo TEST $m "(egg)"
 	@cat $t > b/.test_hostegg.l
-	@{ env LOVE_NO_IMAGE=1 $m b/.test_hostegg.l </dev/null; echo $$? > b/.test_hostegg.rc; } | tee b/.test_hostegg.out; \
+	@{ env LOVE_NO_IMAGE=1 $(ho)/love.raw b/.test_hostegg.l </dev/null; echo $$? > b/.test_hostegg.rc; } | tee b/.test_hostegg.out; \
 	  s=$$(cat b/.test_hostegg.rc); \
 	  [ $$s -eq 0 ] && grep -q "tests pass" b/.test_hostegg.out
 # test_stdincorpus -- the only oracle for `reads` over STDIN at corpus scale, which is where
@@ -150,7 +150,7 @@ test_hostegg: $(ho)/love
 # loves because a reader bug that lost two bytes showed on the baked lane and not the egg.
 # past the summary's duration everything matches byte for byte -- the dots included, a
 # dropped assert being exactly what this catches.
-test_stdincorpus: $(ho)/.love.baked
+test_stdincorpus: $(ho)/love
 	@echo TEST the corpus down file, redirect and pipe -- egg and baked
 	@cat $t > b/.test_sc.l
 	@for L in "env LOVE_NO_IMAGE=1 $m" "$m"; do \
@@ -370,19 +370,19 @@ test_cookdiff: host
 	@sh t/gate/cookdiff.sh $m
 # the dist artifact -- the tree's own baked binary: test_dist smokes its verb rail,
 # the bare cc door, the image chain and the in-image lane. seconds, test_slow.
-test_dist: $(ho)/.love.baked
+test_dist: $(ho)/love
 	@sh t/gate/dist.sh smoke $(ho)/love
 # test_seed -- the merge gate: the artifact lays its own source into a scratch dir, rebuilds
 # itself through the machine's toolchain, and the rebuilt binary must answer the running
 # one's bytes. minutes, and the claim the product makes. scratch stays on a red.
-# ONLY this gate runs the DEFAULT lane, where the seed probes for an ambient cc and defers
-# to it (a/source.l) -- the diverse-double-compiling leg, the one thing a self build
-# cannot say. test_distboot runs `love seed` with every compiler poisoned, so it takes the
+# ONLY this gate runs the GREGARIOUS lane, where the seed probes for an ambient cc and
+# defers to it (a/source.l) -- the diverse-double-compiling leg, the one thing a self build
+# cannot say. it is `-g` since autonomous became the default, and naming it is the point. test_distboot runs `love seed` with every compiler poisoned, so it takes the
 # fallback and can never exercise the deference. do not roster the two as one claim.
-test_seed: $(ho)/.love.baked
+test_seed: $(ho)/love
 	@echo TEST love seed "(the fixpoint)"
 	@rm -rf $(ho)/.seedtest && mkdir -p $(ho)/.seedtest
-	@$(ho)/love seed $(ho)/.seedtest > $(ho)/.test_seed.out 2>&1 \
+	@$(ho)/love seed -g $(ho)/.seedtest > $(ho)/.test_seed.out 2>&1 \
 	  || { tail -20 $(ho)/.test_seed.out; echo "FAIL love seed"; exit 1; }
 	@tail -1 $(ho)/.test_seed.out
 	@rm -rf $(ho)/.seedtest

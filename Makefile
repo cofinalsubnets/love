@@ -108,16 +108,18 @@ $(ho)/.hostcc: force_hostcc
 	@mkdir -p $(ho)
 	@tf=$@.$$$$.tmp; printf '%s\n' '$(CC) $(image_ldflags)' > $$tf; \
 	 $(note)
-host: $(ho)/love $(ho)/.love.baked $(ho)/love.1 $(ho)/cook.1
+host: $(ho)/love $(ho)/love.1 $(ho)/cook.1
 love0: $(love0)
 
-$(ho)/.love.baked $(ho)/.love.cand.baked: $(ho)/.%.baked: $(ho)/% $(ho)/.dist-cat.l
-	@echo 'BAKE	'$<
-	@$< bake -l $(ho)/.dist-cat.l
-	@touch $@
+# the two states of one binary, as two files: the link lays the raw one, and the bake
+# writes the artifact beside it. `bake -o` is what lets these be separate targets at all --
+# an in-place bake leaves make no file to name, which is what the old .baked stamp stood in for.
+$(ho)/love $(ho)/love.cand: $(ho)/%: $(ho)/%.raw $(ho)/.dist-cat.l
+	@echo 'BAKE	'$@
+	@$< bake -o $@ -l $(ho)/.dist-cat.l
 
 .PHONY: candidate
-candidate: $(ho)/.love.cand.baked
+candidate: $(ho)/love.cand
 
 $(ho)/liblove.a: $(h_o)
 	@echo '$(t_ar)	'$@
@@ -149,11 +151,11 @@ $(ho)/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
 
 # l.o carries the version string; recompile it when the id changes. love0's twin is
 # deliberately not here -- see the -DLvVersion note on boot_cc.
-# the baked source rides i/cats.c; main.c bakes the dist roster for the first boot
+# the baked source rides i/cats.c; main.c bakes the dist roster a bare `love bake` reads
 $(ho)/i/cats.o: b/lib/baked.h
 $(ho)/i/main.o: b/lib/distlist.h
 $(ho)/l/love.o: b/lib/love_version.h
-# the carried-blob reader both the first boot and the kernel's ram fs decode with
+# the carried-blob reader both a carried-source bake and the kernel's ram fs decode with
 $(ho)/i/main.o $(ho)/i/ustar.o: $(R)/i/ustar.h
 # i/cb.c rides the l/quay sources by unity include -- recompile when they move.
 $(ho)/i/cb.o: l/quay/quay.c l/quay/nif.c l/quay/quay.h
@@ -241,7 +243,7 @@ b/.mksys-cat.l: $(mksys_l) b/.mksys-cat.list
 	@mkdir -p $(dir $@)
 	@cat $(mksys_l) > $@
 ifneq ($(HCC),)
-$(ho)/love $(ho)/love.cand: $(host_o) $(seat_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/l/love_data.ld
+$(ho)/love.raw $(ho)/love.cand.raw: $(host_o) $(seat_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/l/love_data.ld
 	@echo '$(t_ld)	'$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -o $@ $(host_o) $(seat_o) $(ho)/liblove.a $(image_ldflags) $(data_ld)
@@ -251,7 +253,7 @@ moonlibc_src = $(wildcard a/moon/lib/moonlibc/*.c a/moon/lib/moonlibc/*.h \
 # b/moonlibc.o LEADS: a job pool fills in prerequisite order, and this one is the long pole
 # (three ISAs' runtime members, ~30 s cold) -- behind the TU list it starts as they finish
 # and runs alone. ahead of them it rides beside them, and -j loses that time outright.
-$(ho)/love $(ho)/love.cand: b/moonlibc.o $(moon_o) b/src.o b/lib/readme.bin $(moonlibc_src)
+$(ho)/love.raw $(ho)/love.cand.raw: b/moonlibc.o $(moon_o) b/src.o b/lib/readme.bin $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(moon0) -pie $(moon_o) $(kart_o) b/src.o b/moonlibc.o -freadme=b/lib/readme.bin -o $@
@@ -341,7 +343,7 @@ ifneq ($(HCC),)
 dist-seed:
 	$(error dist: the HCC flavor is a differential, not the artifact -- drop HCC=)
 else
-dist-seed: $(ho)/.love.baked
+dist-seed: $(ho)/love
 endif
 dist: dist-source dist-seed   # a release is both
 
@@ -396,7 +398,7 @@ $(xd)/love: $(x_o) $(xd)/src.o $(xd)/moonlibc.o b/lib/readme.bin
 	@$(moonx) -pie $(x_o) $(xkart_o) $(xd)/src.o $(xd)/moonlibc.o -freadme=b/lib/readme.bin -o $@
 fat = b/dist/love-fat
 .PHONY: dist-fat
-dist-fat: $(ho)/.love.baked $(xd)/love u/fatpack.l
+dist-fat: $(ho)/love $(xd)/love u/fatpack.l
 	@mkdir -p b/dist
 	@$(love0) u/fatpack.l $(fat) $a $(ho)/love $(xa) $(xd)/love
 	@chmod +x $(fat)
@@ -497,7 +499,7 @@ ko = b
 # binary, so nothing foreign builds the kernel and there is no second cc to name.
 # LOVE_NO_IMAGE= leads: an egg-booted love has no verbs.
 mooncc = LOVE_NO_IMAGE= $(ho)/love mooncc
-mooncc_dep = $(ho)/.love.baked
+mooncc_dep = $(ho)/love
 
 # this machine's metal files, and the three TUs only a kernel has a frontend for.
 k_arch_c = $(wildcard $(R)/i/$a/*.c)
@@ -568,7 +570,6 @@ k_pie_in = $(k_pie)
 k_pie_dep =
 ifeq ($a,$(hosta))
 k_pie_in = $(ho)/love
-# `love bake` rewrites $(ho)/love in place, so the projection is ordered behind the stamp
 k_pie_dep = $(mooncc_dep)
 endif
 $(k_elf): $(k_odir)/kproject.l $(k_pie_in) $(k_pie_dep) $(k_boot_o) $m
@@ -673,7 +674,7 @@ $(moon_d)/doom/wad.o: $R/dl/doom1.wad u/mkblob.l b/.mksys-cat.l $(love0)
 	@LOVE_NO_IMAGE= $(love0) -l b/.mksys-cat.l u/mkblob.l $< $@ doom_wad $(hosta)
 endif
 
-$(ho)/love $(ho)/love.cand: $(kart_o) b/.doom.flag
+$(ho)/love.raw $(ho)/love.cand.raw: $(kart_o) b/.doom.flag
 
 # the DOOM flag is a link input no timestamp can see: a witness that changes with it, so
 # `make host DOOM=1` after a plain `make host` relinks (and the other way round)
@@ -757,7 +758,7 @@ k_efiname_a64 = BOOTAA64.EFI
 k_efiname = $(k_efiname_$a)
 k_uefid = $(ko)/uefi-$a
 k_espd = $(ko)/esp-$a
-$(k_uefid)/loader.o: $R/i/uefi/loader.c $(ho)/.love.baked
+$(k_uefid)/loader.o: $R/i/uefi/loader.c $(ho)/love
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(mooncc) -t $a -c $< $@
@@ -867,7 +868,7 @@ uninstall:
 # UNSTRIPPED deliberately: stripping drops the symbol table holo lays on purpose, for ~2%
 # of a baked binary. binutils strip IS safe on our ELF (every loaded byte has a covering
 # section header), so a user who wants it smaller can strip their own.
-$d/bin/$(BIN): $(ho)/love $(ho)/.love.baked
+$d/bin/$(BIN): $(ho)/love
 	@echo '$(t_cp)	'$(abspath $@)
 	@install -D -m 755 $< $@
 # the boot image travels INSIDE the binary (.image is an allocated PROGBITS section, the
@@ -882,10 +883,10 @@ $d/bin/$(BIN): $(ho)/love $(ho)/.love.baked
 # (borrow 'salt), and (borrow 'lapiz) on the doc verb alone) and ride the baked image.
 # each source sits FIRST on its own line: instool reads $<, and a prerequisite added on
 # the grouped line below lands ahead of it -- which installs the kore shim as `cook`.
-$d/bin/cook:    a/cook.l    $(ho)/.love.baked
-$d/bin/papel:   a/papel.l  $(ho)/.love.baked
-$d/bin/kiosko:  a/kiosko/kiosko.l $(ho)/.love.baked
-$d/bin/libra:   a/libra/libra.l  $(ho)/.love.baked
+$d/bin/cook:    a/cook.l    $(ho)/love
+$d/bin/papel:   a/papel.l  $(ho)/love
+$d/bin/kiosko:  a/kiosko/kiosko.l $(ho)/love
+$d/bin/libra:   a/libra/libra.l  $(ho)/love
 $d/bin/cook $d/bin/papel $d/bin/kiosko $d/bin/libra:
 	@echo $(instag)	$(abspath $@)
 	@mkdir -p $(@D)
@@ -894,7 +895,7 @@ $d/bin/cook $d/bin/papel $d/bin/kiosko $d/bin/libra:
 # ain, the netcat clone: the same shebang mechanism, but installed as a COPY rather than a
 # symlink, so it takes the rewrite unconditionally. At the default BIN the substitution is
 # an identity and the bytes are unchanged.
-$d/bin/ain: a/ain.l $(ho)/.love.baked
+$d/bin/ain: a/ain.l $(ho)/love
 	@echo '$(t_cp)	'$(abspath $@)
 	@install -d $(@D)
 	@$(korecmd) sed '1s|env -S love|env -S $(BIN)|' $< > $@
@@ -963,7 +964,7 @@ $d/bin/bao: $(MAKEFILE_LIST)
 
 # the .TH command name follows BIN too (`man lovelang` should not head LOVE(1));
 # the other `love`s on that line are the PROJECT and the version string, so they stay.
-$d/share/man/man1/$(BIN).1: $(ho)/love.1 $(ho)/.love.baked
+$d/share/man/man1/$(BIN).1: $(ho)/love.1 $(ho)/love
 	@echo '$(t_cp)	'$(abspath $@)
 	@install -d $(@D)
 	@$(korecmd) sed '1s|"LOVE"|"$(BINUP)"|' $< > $@
@@ -1082,24 +1083,24 @@ valg: host
 # the tree as it is, so a generated file still has to be committed
 web: fonts w/style.css w/favicon.png index.html
 fonts: w/fonts/quay16.woff w/fonts/quay8.woff
-w/fonts/quay16.woff: l/quay/moderndos_8x16.c u/mkfont.l $(ho)/.love.baked
+w/fonts/quay16.woff: l/quay/moderndos_8x16.c u/mkfont.l $(ho)/love
 	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
 	@$m u/mkfont.l $< 12 $@ "Quay 16"
-w/fonts/quay8.woff: l/quay/cga_8x8.c u/mkfont.l $(ho)/.love.baked
+w/fonts/quay8.woff: l/quay/cga_8x8.c u/mkfont.l $(ho)/love
 	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
 	@$m u/mkfont.l $< 6 $@ "Quay 8"
 # ..the front page's stylesheet: config.l's tokyo-night through hueweb, over the layout
-w/style.css: w/style.l a/vi/config.l a/vi/hueweb.l $(ho)/.love.baked
+w/style.css: w/style.l a/vi/config.l a/vi/hueweb.l $(ho)/love
 	@mkdir -p $(dir $@)
 	@env -u LOVE_NO_IMAGE $m w/style.l $@
 # ..the favicon: cp437's heart off the 8x8 face, in the palette's red
-w/favicon.png: l/quay/cga_8x8.c u/mkicon.l a/vi/config.l $(ho)/.love.baked
+w/favicon.png: l/quay/cga_8x8.c u/mkicon.l a/vi/config.l $(ho)/love
 	@mkdir -p $(dir $@)
 	@env -u LOVE_NO_IMAGE $m u/mkicon.l $< 3 32 $@
 # ..and the front page itself, its island the fragment machine.js drives
-index.html: w/index.l i/wasm/machine.html $(ho)/.love.baked
+index.html: w/index.l i/wasm/machine.html $(ho)/love
 	@$m w/index.l $@
 .PHONY: ulp
 ulp:
