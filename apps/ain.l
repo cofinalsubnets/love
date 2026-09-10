@@ -71,7 +71,7 @@
 
     ; client: resolve, connect, then talk.
     (client host port) (: s (dial host port)
-                          (? s (talk s) (die (+ "cannot connect to " (+ host (+ ":" (string port)))))))
+                          (? s (talk s) (die ("cannot connect to " + host + ":" + string port))))
 
     ; dispatch on the args: -l port = server, host port = client, else usage.
     (? (<as = "-l") (two? >as ? (serve (atoi <>as)) (die "usage: ain -l PORT"))

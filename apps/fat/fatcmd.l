@@ -32,35 +32,34 @@
 
 (borrow 'posix)
 (: fatc-usage "usage: fat {ls|stat|cat|get|put|mkdir|rm|mkfs} IMG [PATH..]"
-   (fatc-moan m) (: _ (say err ("fat: " + m)) _ (put err 10) _ (flush err) 1)
+   (fatc-moan m) (say err ("fat: " + m), put err 10, flush err, 1)
    ; the exit door: a status raised, not a process ended, so a caller already in
    ; this image gets a charm back; without kore aboard there is no catcher.
-   (fatc-leave c) (: u (cite 'kore 'uleave) (? (lit? u) (u c) (quit c)))
-   (fatc-die c m) (: _ (fatc-moan m) (fatc-leave c))
-   (fatc-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) [1 (s + "")])))
-   (fatc-blurt p s) (: q (open p "w") (hot? q && (: _ (say q s) _ (close q) 1)))
+   (fatc-leave c) (: u (cite 'kore 'uleave) (lit? u ? (u c) (quit c)))
+   (fatc-die c m) (fatc-moan m, fatc-leave c)
+   (fatc-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) (close q, [1 (s + "")]))))
+   (fatc-blurt p s) (: q (open p "w") (hot? q && (say q s, close q, 1)))
 
    ; a size word: 64M, 40m, 33554432. answers charms, () when it will not read.
    (fatc-size s)
     (: n #s
        (dig k a) (? (n <= k) [a ""]
-                    (48 <= (s k) <= 57) (dig (k + 1) (a * 10 + (s k - 48)))
+                    (48 <= s k <= 57) (dig (k + 1) (a * 10 + s k - 48))
                     [a (snip s k n)])
        p (dig 0 0)
        v <p sfx <>p
-       (? !#s () (! (48 <= (s 0) <= 57)) ()
-          (sfx = "") v
-          ((sfx = "k") || (sfx = "K")) (v * 1024)
-          ((sfx = "m") || (sfx = "M")) (v * 1048576)
-          ((sfx = "g") || (sfx = "G")) (v * 1073741824)
-          ()))
+       (? !#s () !(48 <= s 0 <= 57) ()
+        (sfx @ "" v
+         ("k" || "K") (v * 1024)
+         ("m" || "M") (v * 1048576)
+         ("g" || "G") (v * 1073741824))))
 
    ; the image as a cask, and the cask as fat.l's device. rd hands back a fresh
    ; string (fat.l indexes it); wr pours into the cask and marks it dirty, which is
    ; what decides whether the file is rewritten at the end.
    (fatc-dev im dirty)
     [(\ lba n (: b (cask (n * 512)) _ (pour b 0 im (lba * 512) (n * 512)) (string b)))
-     (\ lba s (: _ (pour im (lba * 512) s 0 #s) _ (pin dirty 0 1) (#s // 512)))
+     (\ lba s (pour im (lba * 512) s 0 #s, pin dirty 0 1, #s // 512))
      (#im // 512)]
 
    ; open IMG as a mounted fs: answers [im dirty fs], or leaves through fatc-die.
@@ -68,41 +67,40 @@
    ; not a FAT32 want different repairs, and one "cannot read" sends you to the wrong one.
    (fatc-open img)
     (: t (fatc-slurp img)
-       _ (? t () (fatc-die 2 ("cannot read " + img)))
+       _ (!t && fatc-die 2 ("cannot read " + img))
        s <>t
        im (cask #s)
-       _ (#s && (pour im 0 s 0 #s))
+       _ (#s && pour im 0 s 0 #s)
        dirty (tablet 0)
        f (fat-mount (fatc-dev im dirty))
-       _ (? (tablet? f) () (fatc-die 2 (img + ": not a FAT32 filesystem")))
+       _ (tablet? f || fatc-die 2 (img + ": not a FAT32 filesystem"))
        [im dirty f])
    ; the write-back, once, and only when something wrote
    (fatc-sync img im dirty)
     (? (peep dirty 0 0)
-       (? (fatc-blurt img (string im)) 0 (fatc-moan ("cannot write " + img)))
+       (fatc-blurt img (string im) ? 0 (fatc-moan ("cannot write " + img)))
        0)
 
    (fatc-ls img path)
     (: b (fatc-open img)
        r (fat-ls <>>b path)
-       (? (two? r) (: _ (map (\ n (: _ (say out n) (put out 10))) (sort <>r))
+       (? (two? r) (: _ (map (\ n (say out n, put out 10)) (sort <>r))
                       _ (flush out) 0)
           (fatc-moan (path + ": no such directory"))))
    (fatc-stat img path)
     (: b (fatc-open img)
        r (fat-stat <>>b path)
-       (? (two? r) (: _ (say out ((show <>r) + " bytes, attr " + (show <>>r)))
-                      _ (put out 10) _ (flush out) 0)
+       (? (two? r) (say out (show <>r + " bytes, attr " + show <>>r), put out 10, flush out, 0)
           (fatc-moan (path + ": no such file"))))
    (fatc-get img path dst)
     (: b (fatc-open img)
        r (fat-read <>>b path)
-       (? !(two? r) (fatc-moan (path + ": no such file"))
-          ((dst = "") || (dst = "-")) (: _ (say out <>r) _ (flush out) 0)
-          (? (fatc-blurt dst <>r) 0 (fatc-moan ("cannot write " + dst)))))
+       (? (one? r) (fatc-moan (path + ": no such file"))
+          (dst = "" || dst = "-") (: _ (say out <>r) _ (flush out) 0)
+          (fatc-blurt dst <>r ? 0 (fatc-moan ("cannot write " + dst)))))
    (fatc-put img path src)
-    (: t (? ((src = "") || (src = "-")) [1 (slurp in)] (fatc-slurp src))
-       _ (? t () (fatc-die 2 ("cannot read " + src)))
+    (: t (src @ ("" || "-") [1 (slurp in)] (fatc-slurp src))
+       _ (t || fatc-die 2 ("cannot read " + src))
        b (fatc-open img)
        im <b dirty <>b f <>>b
        ok (fat-write f path <>t)
@@ -126,8 +124,8 @@
        _ (? (charm? n && (0 < n)) () (fatc-die 2 ("no size for " + img + ", and no image there")))
        _ (? (% n 512) (fatc-die 2 "the size must be a whole number of 512-byte sectors") ())
        im (cask n)
-       _ (? ((! (charm? size)) && have) (: s <>have (#s && (pour im 0 s 0 #s))) ())
-       dirty (tablet 0)
+       _ (!(charm? size) && have && (: s <>have (#s && (pour im 0 s 0 #s))))
+       dirty {}
        (? (fat-mkfs (fatc-dev im dirty))
           (? (fatc-blurt img (string im)) 0 (fatc-moan ("cannot write " + img)))
           (fatc-moan (img + ": too small for FAT32 (it wants about 33 MB; "
@@ -152,17 +150,17 @@
    ; busybox spells the format two ways and takes -C SIZE-IN-1K-BLOCKS after the name.
    ; the blocks are 1024 here, which is what mkfs.vfat's own BLOCKS means.
    (mkfsv-main av)
-    (: as (? ((two? av) && (<av = "-C")) >av av)
-       (? !(two? as) (: _ (say err "usage: mkfs.vfat [-C] IMG [BLOCKS]\n") 2)
+    (: as (? (two? av && (<av = "-C")) >av av)
+       (? (one? as) (say err "usage: mkfs.vfat [-C] IMG [BLOCKS]\n", 2)
           (: img <as
-             bl (? (two? >as) (fatc-size <>as) ())
-             (fatc-mkfs img (? (charm? bl) (bl * 1024) ())))))
+             bl (two? >as && fatc-size <>as)
+             (fatc-mkfs img (charm? bl && bl * 1024)))))
 
    T (cite 'verbs 'tab)
    ; the verb wraps in urun, kore.l's own shape for a main that leaves deep
-   (fatc-run f av) (: r (cite 'kore 'urun) (? (lit? r) (r f av) (f av)))
-   _ (pins T 'fat       (av \ fatc-run fat-main av)
-            'mkfs.vfat  (av \ fatc-run mkfsv-main av)
-            'mkdosfs    (av \ fatc-run mkfsv-main av)))
+   (fatc-run f av) (: r (cite 'kore 'urun) (lit? r ? (r f av) (f av)))
+   _ (pins T 'fat       (fatc-run fat-main)
+            'mkfs.vfat  (fatc-run mkfsv-main)
+            'mkdosfs    (fatc-run mkfsv-main)))
 
 ) ; module 'fatcmd
