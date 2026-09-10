@@ -187,7 +187,7 @@
    ; executable / B nobits / D writable / R the rest, and a local bind lowercases it
    ; -- that case is nm's whole convention. -g keeps the externals, the only view a
    ; link has an opinion about; -u the undefined ones, which is what says a lane was
-   ; borrowed from libgcc rather than ours (tools/moon-parity.sh reads exactly that).
+   ; borrowed from libgcc rather than ours (u/moon-parity.sh reads exactly that).
    ; an archive is not walked here: `ar t` lists members, and nm's per-member
    ; header shape wants the member walk ar-t owns. an ELF of any e_type is fine.
    ; the sort is by byte, which is `LC_ALL=C nm`'s order and not the bare `nm` a

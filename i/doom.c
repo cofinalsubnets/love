@@ -32,7 +32,7 @@ int k_scan_pop(void);
 uintptr_t k_clock_ms(void);
 void k_sleep(uintptr_t ms);
 
-// the IWAD, laid into .rodata by tools/mkblob.l
+// the IWAD, laid into .rodata by u/mkblob.l
 extern unsigned char const doom_wad[];
 extern uintptr_t const doom_wad_len;
 

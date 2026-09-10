@@ -23,7 +23,7 @@
 # fail loudly, and the build has to come out the far side anyway.
 #
 # THE SEED CARRIES ITS OWN SOURCE. It holds the source tarball in .rodata
-# (tools/mksrc.l, i/src.c) and lays it out itself, so one downloaded file needs no tar
+# (u/mksrc.l, i/src.c) and lays it out itself, so one downloaded file needs no tar
 # and no second fetch. "It unpacked something" is not the claim -- the tree it lays has to
 # BUILD, compilers poisoned. and `love seed` is what drives that build, not a bare make:
 # the tree carries no love of its own now, so make alone can only mean the ambient cc (and
@@ -71,7 +71,7 @@ echo "distboot: two bootstraps and a self-rebuild, this takes a few minutes"
 
 # ---- 1. SOURCE, through the machine's own compiler ---------------------------
 mkdir -p "$w/lean"
-"$love" "$R/tools/tgz.l" x "$src" "$w/lean" > /dev/null || fail "cannot unpack $src"
+"$love" "$R/u/tgz.l" x "$src" "$w/lean" > /dev/null || fail "cannot unpack $src"
 lean=$(echo "$w"/lean/love-*/)
 [ -d "$lean" ] || fail "the source tarball unpacked no love-<ver>/ directory"
 [ -f "$lean/VERSION" ] || fail "the source tarball carries no VERSION (the binary would stamp 'unknown')"

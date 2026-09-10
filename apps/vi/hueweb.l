@@ -1,6 +1,6 @@
 ; apps/vi/hueweb.l -- the .l syntax as a stylesheet and as painted html, out of
 ; apps/vi/hue.l's class table and apps/vi/config.l's theme. the third reader of that
-; one table: the painter in apps/vi/core.l's vframe, the vim syntax (tools/hue2vim.l),
+; one table: the painter in apps/vi/core.l's vframe, the vim syntax (u/hue2vim.l),
 ; and this. nothing here knows what a comment or a sigil is -- it asks hue, the way the
 ; other two do, so a class added to that table arrives in all three unannounced.
 ;

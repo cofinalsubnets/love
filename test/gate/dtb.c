@@ -15,7 +15,7 @@
 #include <string.h>
 
 // the two symbols an arch door borrows: kmain owns kboot, and the projection patches
-// k_image_top into the file (tools/kproject.l).
+// k_image_top into the file (u/kproject.l).
 struct k_boot kboot;
 uintptr_t const k_image_top = 0x80210000;
 #define k1 0x80210000ull                 // ..page-aligned already, so k_image_top is it

@@ -5,8 +5,8 @@
 ; html as written -- it is our file. what the lay adds is the one property a hand page
 ; loses: every link on the page to an anchor on the page is checked, and a dead one fails
 ; the lay rather than shipping. the island is i/wasm/machine.html, slurped, so the
-; markup machine.js drives has one copy; the sheet is web/style.l's, the fonts tools/mkfont.l's,
-; the icon tools/mkicon.l's. the island is inle itself -- the kernel in a worker, painting a
+; markup machine.js drives has one copy; the sheet is web/style.l's, the fonts u/mkfont.l's,
+; the icon u/mkicon.l's. the island is inle itself -- the kernel in a worker, painting a
 ; canvas -- so the page carries coi.js too, and the two artifacts site-wasm lays.
 
 ; --- the little dsl: the lay of each element. first, since a value binds in order and the

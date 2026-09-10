@@ -14,7 +14,7 @@
 ;      on the same stacks, through an encode -> vof -> decode round trip.
 ;   5. the seeded fuzz: the whole op vocabulary walked at random through both
 ;      worlds, compared after every step, the proved invariant watched live.
-;   6. the translator (tools/wm2uu.l, stage 3): core.l's ops read as data,
+;   6. the translator (u/wm2uu.l, stage 3): core.l's ops read as data,
 ;      kind-directed into uu terms, kernel-certified, and fuzzed against the
 ;      implementation they were translated from -- then (stage 4) tied to the
 ;      hand-proved model by idpath bridges: compiled-from-source == proved,
@@ -28,7 +28,7 @@
 (:    chk1 (overlay 'ov-check)
    ; opfix first, then unglue: `forms` reads the surface, the domain checker reads
    ; the core shapes -- and a glued sigil factors to a VALUE, which no checker matches
-   ; by name. the two passes are the one door between them (tools/uuwmgen.l too).
+   ; by name. the two passes are the one door between them (u/uuwmgen.l too).
    (fix1 f) (unglue (opfix f))
    (sweep path) (foldl (\ a f (cat a (chk1 lux-dom lux-sigs (fix1 f)))) () (forms (open path "r")))
 
@@ -130,13 +130,13 @@
  _ (test (fuzz 150 20260705 (zmk 0 () ()) 1))
  (puts "overlay leg 5: ok"))
 
-; leg 6 (stage 3 of the translator ladder): tools/wm2uu.l reads core.l's ops
+; leg 6 (stage 3 of the translator ladder): u/wm2uu.l reads core.l's ops
 ; as data, kind-directed by the sig table, and emits uu terms -- which the
 ; kernel then defn-certifies right here (dependency order: certify in the
 ; order gens answers), and which must answer the fuzz exactly as core.l
 ; does. the translated terms live in the model's vocabulary, so stage 4's
 ; idpath bridges can tie gen-* to the proved ops.
-(reads (open "tools/wm2uu.l" "r"))
+(reads (open "u/wm2uu.l" "r"))
 (:    cforms (map (f \ unglue (opfix f)) (forms (open "apps/lux/core.l" "r")))   ; the surface factored to the core, as above
    gens (wm2uu cforms lux-sigs)
  _ (test (= 10 #gens))

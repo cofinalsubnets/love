@@ -577,7 +577,7 @@
    ; out/cache/moon/<sha256>.a, one archive per (compiler, target), keyed on
    ; everything that decides its bytes. the carried archives answer that for every
    ; stock tree now (rtcarried), so what is left for this cache is the build itself --
-   ; tools/mkrt.l cutting the carried set under love0, which has none -- and a toolchain
+   ; u/mkrt.l cutting the carried set under love0, which has none -- and a toolchain
    ; edited past the stamp. an archive because the ranlib index is
    ; what each member defines, written once and read back rather than recomputed
    ; over 190 objects on every warm link -- and because one file is one
@@ -596,7 +596,7 @@
    ; read at each call, never bound -- mhome's law, for mhome's reason.
    (sdir? st) (two? st && (st 2 & 61440) = 16384)
    ; the cache seat is the build tree's own out/, never a home directory. who wants it:
-   ; tools/mkrt.l under love0, which carries no archives of its own (22 s of member
+   ; u/mkrt.l under love0, which carries no archives of its own (22 s of member
    ; compiles against 0.2 s), and a toolchain tree edited past the carried stamp. both
    ; are a checkout, and a checkout is what has an out/ -- so presence is the wrapper,
    ; the way mhome reads its roots, and out/ itself is never created here.
@@ -754,17 +754,17 @@
    ; cannot open is invisible, and the link is the one that happens today, at
    ; today's price.
    ; the pure runtime identity: names and bytes of the headers + lib sources,
-   ; nothing of the machine -- what tools/mkrt.l stamps beside the carried
+   ; nothing of the machine -- what u/mkrt.l stamps beside the carried
    ; archives, and what a disk home must hash to for them to serve it. (mcid
    ; below is a cache key and mixes in the binary's own path and stats; this
    ; one must travel.)
-   ; the VALUE travels, so the formula is fixed: tools/mkrt.l stamps this number beside
+   ; the VALUE travels, so the formula is fixed: u/mkrt.l stamps this number beside
    ; the archives and a link compares against the stamp. the memo is around it, never in it.
    (rtcid home)
     (mcmemo "moon-rtcid 1" (mcsrcshape home)
             (\ _ (sha256 ("moon-rtc 1\n" + (mcsrctext home)))))
    ; the carried runtime: the build lays each ISA's compiled archive beside the
-   ; source blob (tools/mkrt.l; i/src.c answers runtime-gz), so a link
+   ; source blob (u/mkrt.l; i/src.c answers runtime-gz), so a link
    ; owes no member compiles -- the bare door's ~28 s becomes a read. only when the
    ; identity matches: the blob lane's identity is the carried source, a disk home
    ; serves iff its slice hashes to the stamped id (a laid seed tree does; an edited

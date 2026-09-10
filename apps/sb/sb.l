@@ -62,7 +62,7 @@
    ;     `*.vo` catches one at any depth and wants no basename rule of its own.
    ;     every other rule is a path prefix at a segment boundary: `out` takes out
    ;     and out/love, never output. blank lines and # comments are skipped.
-   ;     tools/selfpack.l reads these too, so the dist cut and the walk agree.
+   ;     u/selfpack.l reads these too, so the dist cut and the walk agree.
    igs0 '(".sb" ".git" "out")
    ig-glob? (cite 'glob 'anyglob)
    ig-match (cite 'glob 'match)

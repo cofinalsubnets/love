@@ -1,8 +1,8 @@
-; test/uumx.l -- generated from l/mx.l by tools/mx2uu.l. Do not edit;
+; test/uumx.l -- generated from l/mx.l by u/mx2uu.l. Do not edit;
 ; refresh with `make uumx`. love's `+` and `*` dispatch matrices as uu terms:
 ; a kind is its index in mx.l's enum roster (which IS the dispatch lattice), a
 ; lane its index in appearance order, a band its class id under row+column
-; equality across both matrices -- the partition tools/mx2coq.l derives too, off
+; equality across both matrices -- the partition u/mx2coq.l derives too, off
 ; the same datum, so the Rocq model and this one cannot disagree about a band.
 ; test/uumxlaw.l then proves the laws OF this table -- the same love datum
 ; love.c's mx.h is laid from -- so a dispatch edit that breaks the band quotient,

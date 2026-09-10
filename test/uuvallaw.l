@@ -1,4 +1,4 @@
-; test/uuvallaw.l -- generated from test/law.l by tools/law2uu.l. Do not edit;
+; test/uuvallaw.l -- generated from test/law.l by u/law2uu.l. Do not edit;
 ; refresh with `make uuvallaw`. CLAUDE.md's laws, one spelling for both lanes:
 ; test/law.l quantifies each row over a corpus (refutation), and the rows the
 ; measure tower can state arrive here as uu obligations over test/uuval.l's

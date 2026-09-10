@@ -21,7 +21,7 @@ re.l regex engine):
   quits — which is what makes `kore vi` fully drivable from a pipe: the smokes script whole
   sessions (`printf 'ihello\033:wq\n' | kore vi f`).
 * **apps/vi/hue.l** — the .l syntax written down once, for two readers: the painter in core.l's
-  `vframe`, and the vim syntax file, which tools/hue2vim.l generates from the same table, so the
+  `vframe`, and the vim syntax file, which u/hue2vim.l generates from the same table, so the
   two readings cannot drift. `make syntax` builds it into `out/syntax.vim` and
   `make install` puts it in `~/.vim/syntax/love.vim`; it is never checked in, so there is no
   copy to keep up to date.

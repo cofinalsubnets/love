@@ -3,7 +3,7 @@
 ; repo-state are one algebra of selectable sets, with commute the primitive underneath.
 ;
 ; the proofs run on two legs. the generated leg is the destination: test/uupatch.l
-; encodes the models below as uu proof terms, tools/uu2coq.l + uu2lean.l emit them, and
+; encodes the models below as uu proof terms, u/uu2coq.l + uu2lean.l emit them, and
 ; rocq + lean audit them axiom-free (make test_uugen + test_uulean). the hand leg,
 ; test/proof/rocq/patch.v, scaffolds the slices whose models are still settling (make
 ; test_proof); each migrates to the generated leg as its model stabilizes.

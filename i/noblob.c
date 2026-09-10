@@ -1,5 +1,5 @@
 // i/noblob.c -- what i/src.c's carried blobs mean in a link that carries none.
-// out/src.o (tools/mksrc.l) lays the source archive and out/moonlibc.o (tools/mkrt.l)
+// out/src.o (u/mksrc.l) lays the source archive and out/moonlibc.o (u/mkrt.l)
 // the per-ISA runtimes; a link that takes neither -- love0, and the gate links that
 // build the artifact's C with no laid objects under them -- names this instead.
 //

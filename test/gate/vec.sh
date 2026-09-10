@@ -77,7 +77,7 @@ else
   fault_report() {
     : > "$work/out"
     rm -f "$work/in"; mkfifo "$work/in"
-    # 768M like tools/ktest.l: a major takes a contiguous 2x pool beside the old one,
+    # 768M like u/ktest.l: a major takes a contiguous 2x pool beside the old one,
     # and whether it fits is a placement lottery -- 512M loses it and the boot says nothing.
     # shellcheck disable=SC2086
     $qemu $mach -m 768M -serial stdio -display none -no-reboot \

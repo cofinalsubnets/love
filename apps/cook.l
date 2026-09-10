@@ -1467,7 +1467,7 @@
       _ (pin clivars 0 (peep opt 'var ()))                   ; the VAR=VAL words, for seed-defaults
       _ (pin jobs 0 (peep opt 'jobs 1))                      ; the -j width; 1 is the serial cook
       ; ..and the width goes down the environment, for a recipe that forks on its own
-      ; account (tools/mkrt.l's member pool). NOT a jobserver: nothing is handed back,
+      ; account (u/mkrt.l's member pool). NOT a jobserver: nothing is handed back,
       ; so it is a hint about the machine and no claim on this pool.
       _ (setenv "COOKJOBS" (show (jobw ())))
       _ (pin dryrun 0 (peep opt 'dry 0))                     ; -n: say the steps, run none

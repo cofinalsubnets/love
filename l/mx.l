@@ -1,7 +1,7 @@
 ; mx.l -- love.c's `+` and `*` dispatch matrices as love data, the kind lattice they
 ; are indexed by, and the derivations that read it: the C (mx.h and kinds.h, through
 ; clay), the host link's love_data.ld, and the Rocq model (test/proof/rocq/mx.v,
-; through tools/mx2coq.l). doc/misc/clay.md rungs 2 and 2b.
+; through u/mx2coq.l). doc/misc/clay.md rungs 2 and 2b.
 ;
 ; edit this file, not mx.h / kinds.h / love_data.ld -- make relays all three from
 ; here, off the mx_gen roster in test/test.mk. `make mx` refreshes, test_clay diffs.

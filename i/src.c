@@ -6,7 +6,7 @@
 // (runtime-gz "x64"|"a64"|"rv64") -> that ISA's moonlibc archive, deflated;
 // (runtime-gz "id") -> the pure tree-slice hash they were cut from (moon.l's rtcid),
 // which moon.l's rtcarried consumes. () when none is carried.
-// tools/mksrc.l lays the first and tools/mkrt.l the rest; a link that takes neither
+// u/mksrc.l lays the first and u/mkrt.l the rest; a link that takes neither
 // object names i/noblob.c instead, so the length alone says whether anything is aboard.
 extern const unsigned char
  ai_rtgz_x64[], ai_rtgz_a64[], ai_rtgz_rv64[], ai_rtgz_id[], ai_srcgz[];

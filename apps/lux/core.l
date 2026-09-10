@@ -4,7 +4,7 @@
 ; tiled stacks. Pure -- so it rides the corpus on every target (apps/lux/law.l asserts
 ; the invariants), and the driver (apps/lux/lux.l) + the X layers build on it.
 ;
-; tools/wm2uu.l reads this file as data and keys on the post-opfix tree --
+; u/wm2uu.l reads this file as data and keys on the post-opfix tree --
 ; cap/cup chains (the glued accessors factor to them), ></+/!=, and the literal
 ; shape (cap (cup (cup z))). a rewrite that changes the tree, even value-equal,
 ; must teach the translator first or test/host/overlay.l's leg 6 stops certifying.

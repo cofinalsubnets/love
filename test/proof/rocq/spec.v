@@ -175,7 +175,7 @@ Proof. intros f a. exists (vapp f a). reflexivity. Qed.
    over half-integers rather than Z (so ceil is not the identity, and the ratio and
    twin bands are readable), a leaf carries a tag (so () and 0 part without a
    separate constructor), and equality is structural rather than propositional.
-   It exports back to universe-checked Rocq through tools/uu2coq.l, so the two are
+   It exports back to universe-checked Rocq through u/uu2coq.l, so the two are
    not a strong/weak pair -- what this file keeps is the WIDTH (maxcharm at the
    host's 2^62-1, where uu names a small one and proves the same three clamp laws
    against it), the order and colour facts the rest of this file leans on, and the
@@ -867,7 +867,7 @@ Theorem asum_iota_100 : asum (iota 100) = 4950.  Proof. now vm_compute. Qed.
 (* the Z lane: ONE model, shared with the generated test/proof/rocq/gen.v  *)
 (* ============================================================ *)
 (* The nat `app` (Nat.pow) above carries the numeral LAWS by clean unary induction.
-   The GENERATED corpus checks (test/proof/rocq/gen.v, from tools/spec2coq.l) instead need Z --
+   The GENERATED corpus checks (test/proof/rocq/gen.v, from u/spec2coq.l) instead need Z --
    3^27 would blow unary-nat vm_compute -- so they run over `appZ`. These are not two
    models: `app_appZ` PROVES appZ and app are ONE function under the nat->Z embedding,
    so gen.v `Require Import spec` and checks its instances against THIS file's

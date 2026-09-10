@@ -4,7 +4,7 @@
 ; type-in-type -- see l/boot/post.l for the term grammar and the machinery. this file
 ; (and the test/uu*.l ladder above it in sort order) is the corpus half: every
 ; definition and theorem below is type-checked by the baked kernel at corpus
-; time, then re-certified by Rocq + Lean via tools/uu2coq.l / uu2lean.l.
+; time, then re-certified by Rocq + Lean via u/uu2coq.l / uu2lean.l.
 ;
 ; a post-boot stream binds what it calls through the books at its head (the
 ; module-books law): the kernel surface the corpus reads bare re-leaks here --
@@ -2339,7 +2339,7 @@
 ; --- the stack substrate: focus x up x down, a stk nonempty by construction;
 ; --- the representation vocabulary the translator targets (zmk/zfoc/zup/zdn,
 ; --- hd0/tl0, mstk). the moves themselves live in test/uuwm.l -- generated
-; --- from apps/lux/core.l by tools/wm2uu.l -- and their laws + computed
+; --- from apps/lux/core.l by u/wm2uu.l -- and their laws + computed
 ; --- claims in test/uuwmlaw.l (the two load after this file by sort order) ---
 (test
  (defn stk UU (total2 f nat (total2 u nlist nlist)))

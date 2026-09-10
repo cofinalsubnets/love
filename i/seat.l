@@ -1,6 +1,6 @@
 ; i/seat.l -- the laws a love-running seat checks before it trusts its image.
 ;
-; the seats paste this in EXPRESSION position: tools/lcat.l lays it as one C string
+; the seats paste this in EXPRESSION position: u/lcat.l lays it as one C string
 ; literal (out/lib/seat.h) and each seat's main.c splices that into its driver tail.
 ; so it stays ONE top-level form answering a BOOLEAN -- an `assert` here would answer
 ; 0 and scare, where a seat wants a verdict to hand its exit nif (42 held, 1 did not).

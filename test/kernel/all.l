@@ -3,7 +3,7 @@
 ; the initrd is the source blob, so every member is a file this machine can open:
 ; the driver spells the roster below and hands each member to `reads`, the same
 ; stream shell the host's stdin runner uses. the BOOT CMDLINE names this file --
-; tools/ktest.l's -append, or love.cmd beside love.elf where firmware carries no
+; u/ktest.l's -append, or love.cmd beside love.elf where firmware carries no
 ; command line -- and naming another replaces it; an empty line drops to the console
 ; shell. that is the whole of the kernel's corpus wiring: no baked string, no
 ; second filesystem.

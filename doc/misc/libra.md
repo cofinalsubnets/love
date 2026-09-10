@@ -41,7 +41,7 @@ and libra implements none of them.
 ```
 $ libra doc apps/vi/hue.l | head -3
 apps/vi/hue.l -- the .l syntax, written down ONCE, for two readers: the
-painter in apps/vi/core.l's vframe, and the vim syntax file, which tools/hue2vim.l
+painter in apps/vi/core.l's vframe, and the vim syntax file, which u/hue2vim.l
 GENERATES from the very table below -- built by make into out/syntax.vim and
 ```
 

@@ -1,7 +1,7 @@
 ; test/uuval.l -- love's own values, modelled in uu: the measure tower of
 ; claude.md's lambda equations ($x = ceil (re (net x)), ?x = ($x > 0)) built as
 ; a stack OF retractions, so the laws test/law.l can only refute become theorems
-; (tools/law2uu.l compiles them off law.l's own rows into test/uuvallaw.l -- one
+; (u/law2uu.l compiles them off law.l's own rows into test/uuvallaw.l -- one
 ; spelling, both lanes). the value universe is a binary tree of measures -- love's
 ; net sums over a compound's parts and reads nothing else, so a leaf is its
 ; measure and no gem's value (hence no ieee) enters the model.
@@ -1226,7 +1226,7 @@
    (lam v (uv-colq (pr1 (vre v)) (pr2 (vre v))))))
 
 ; --- and the laws the equality unlocks. each is stated as test/law.l states it,
-; --- and tools/law2uu.l picks these up by NAME -- so if a row moves and the
+; --- and u/law2uu.l picks these up by NAME -- so if a row moves and the
 ; --- obligation with it, the lemma stops applying and the gate says so ---
 (test
  (defq uv-cap-total-d
@@ -1519,7 +1519,7 @@
    (lam u (lam w (lam h (maponpaths bool nat (lam z (nbit z)) (veq u w) true
                            (uv-paths-veq u w h)))))))
 
-; --- claude.md's laws themselves are not spelled here: tools/law2uu.l compiles
+; --- claude.md's laws themselves are not spelled here: u/law2uu.l compiles
 ; --- them straight off test/law.l's rows into test/uuvallaw.l, so each law has one
 ; --- spelling and both lanes read it. sat-green and bit-bool need no proof at
 ; --- all: they are the types -- vsat lands in nat and vbit in bool, so "a

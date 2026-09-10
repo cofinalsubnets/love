@@ -246,7 +246,7 @@ the runtime sources the implicit link pulls — are found through three rungs, t
    install — and a version's compiles can never ride a stale copy, because the source it reads
    is the binary's own.
 
-The runtime itself rides COMPILED as well as in source: tools/mkrt.l lays each hosted
+The runtime itself rides COMPILED as well as in source: u/mkrt.l lays each hosted
 ISA's moonlibc archive (x64/a64/rv64, ~1.5 MB of archive under DEFLATE, ~210 kB carried,
 one inflate on the ISA a link asks for) beside the source blob, stamped with
 `rtcid` — a pure hash of the include/ + lib/ slice. A link consults the cache, then the
@@ -282,7 +282,7 @@ the same face.
 
 **The CARRIED archive is asked first, and on a stock tree it is the whole answer** — the
 binary's own stamped bytes cannot be improved on by a cache entry, so the key is cut only where
-they were refused. That leaves the cache two populations: `tools/mkrt.l` cutting the carried set
+they were refused. That leaves the cache two populations: `u/mkrt.l` cutting the carried set
 under love0, which carries none, and a toolchain edited past the stamp. Both are a checkout,
 which is why the cache seats itself at `out/` and `make clean` reaches it.
 

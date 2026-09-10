@@ -331,7 +331,7 @@
             + "(borrow 'kore)"
             + kern-pick es top "apps/kore/asbook.l"
             + kern-pick es top "i/mkboot.l"
-            + kern-pick es top "tools/kproject.l"
+            + kern-pick es top "u/kproject.l"
             + "(: kb (peep (cite 'verbs 'tab) 'kern-in 0)"
             + "   bb (string (cask (lay-boot-bytes (peep kb 'arch 0))))"
             + "   (kproject (peep kb 'pie 0) bb (peep kb 'out 0) (peep kb 'arch 0)))")

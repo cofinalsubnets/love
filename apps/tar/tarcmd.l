@@ -4,7 +4,7 @@
 ;   love tar xzf A.tar.gz [DIR]   unpack into DIR (default ".")
 ;   love tar tzf A.tar.gz         list, one path a line
 ;
-; tools/tgz.l is the same two engines behind c|x|t; this is the spelling a hand types.
+; u/tgz.l is the same two engines behind c|x|t; this is the spelling a hand types.
 ; our deflate lands a few percent above `gzip -9`; the numbers live in apps/gz/gz.l.
 ;
 ; the module wrap is not decoration: `borrow` splices a module's names into the current

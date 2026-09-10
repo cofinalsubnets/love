@@ -642,8 +642,8 @@ never silent**.
 | 64-bit `*` and shifts | ✓ | ✓ | ✓ | ✓ | ✓ | rt.c |
 | `double`/`float` arithmetic | ✓ | ✓ | ✓ | ✓ | rt.c | rt.c |
 
-**The table is generated, not maintained: `tools/moon-parity.sh table` prints it and
-`tools/moon-parity.sh check` fails if this doc and the compiler have drifted** (`why` prints
+**The table is generated, not maintained: `u/moon-parity.sh table` prints it and
+`u/moon-parity.sh check` fails if this doc and the compiler have drifted** (`why` prints
 each refusal's cause). Regenerate it rather than editing a cell by hand.
 
 **A ✓ means the lane exists, not that it is differentiated** — the sweep compiles (`-c`) and

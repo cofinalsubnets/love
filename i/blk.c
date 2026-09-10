@@ -140,7 +140,7 @@ static int blk_pci(uint32_t bdf, void *dma) {
   if (!common || !notify || !devcfg) return 0; // legacy-only device: not driven
   // every x64 door's map stops at 4G (pvh + uefi/loader.c both lay 0..4G),
   // so a BAR above it is out of reach -- OVMF parks 64-bit
-  // BARs there unless the lane pins its MMIO window low (tools/ktest.l's fw_cfg).
+  // BARs there unless the lane pins its MMIO window low (u/ktest.l's fw_cfg).
   // khhdm 0 would be a true identity door where everything is reachable.
   if (khhdm && (common >> 32 || notify >> 32 || devcfg >> 32))
     return bputs("disk: virtio-blk BAR above 4G, skipped\r\n"), 0;

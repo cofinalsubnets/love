@@ -44,34 +44,34 @@ lcat_love = $(love0) -l l/boot/prel.l
 note = if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo '$(t_sh)	'$@; fi
 # every header below is written straight to $@. .DELETE_ON_ERROR (above) takes the
 # half-written one away when a generator dies, which is the whole of the guarantee.
-# the baked source: one header, one love0 run. tools/lcat.l carries the roster -- which
+# the baked source: one header, one love0 run. u/lcat.l carries the roster -- which
 # files, in which blobs, with what glue -- so a roster change edits a file this depends on.
 baked_l = $(wildcard l/boot/*.l) l/holo/holo.l l/holo/x64.l l/holo/a64.l l/holo/rv64.l
-out/lib/baked.h: $(baked_l) tools/lcat.l $(love0)
+out/lib/baked.h: $(baked_l) u/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
-	@$(lcat_love) tools/lcat.l > $@
+	@$(lcat_love) u/lcat.l > $@
 # one file as one literal: the ports and test/front paste these in expression position
 lib_h = $(patsubst l/boot/%.l,out/lib/%.h,$(wildcard l/boot/*.l))
 holo_h = out/lib/holo.h out/lib/x64.h out/lib/a64.h out/lib/rv64.h
-$(lib_h): out/lib/%.h: l/boot/%.l tools/lcat.l $(love0)
+$(lib_h): out/lib/%.h: l/boot/%.l u/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
-	@$(lcat_love) tools/lcat.l $< > $@
-$(holo_h): out/lib/%.h: l/holo/%.l tools/lcat.l $(love0)
+	@$(lcat_love) u/lcat.l $< > $@
+$(holo_h): out/lib/%.h: l/holo/%.l u/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
-	@$(lcat_love) tools/lcat.l $< > $@
-out/lib/rune.h: apps/rune.l tools/lcat.l $(love0)
+	@$(lcat_love) u/lcat.l $< > $@
+out/lib/rune.h: apps/rune.l u/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
-	@$(lcat_love) tools/lcat.l $< > $@
+	@$(lcat_love) u/lcat.l $< > $@
 # the seat laws, one text for every board that runs love (i/mps2, i/virt): their
 # main.c splices this literal into its driver tail, so the laws are said once.
-out/lib/seat.h: i/seat.l tools/lcat.l $(love0)
+out/lib/seat.h: i/seat.l u/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
-	@$(lcat_love) tools/lcat.l $< > $@
+	@$(lcat_love) u/lcat.l $< > $@
 .PHONY: force_corpus_list
 force_corpus_list: ;
 # love0 reads this at runtime to find the corpus. $t is a glob, so it is written
@@ -257,10 +257,10 @@ $(ho)/love $(ho)/love.cand: out/moonlibc.o $(moon_o) out/src.o out/lib/readme.bi
 	@$(moon0) -pie $(moon_o) $(kart_o) out/src.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
 endif
 
-$(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md tools/mkman.l apps/lapiz.l out/lib/love_version.h $(ho)/love
+$(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md u/mkman.l apps/lapiz.l out/lib/love_version.h $(ho)/love
 	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
-	@$(ho)/love tools/mkman.l doc/$*.md out/lib/love_version.h > $@
+	@$(ho)/love u/mkman.l doc/$*.md out/lib/love_version.h > $@
 
 lushfiles = apps/lush.l
 # THE CATS, IN PARTS. three rosters cover almost the same ground -- what kore carries,
@@ -348,18 +348,18 @@ dist: dist-source dist-seed   # a release is both
 # what a release is not: the benches and the board seats. the wasm seat rides -- a
 # laid tree serves its own page (`love serve`) -- and the page's generated files are
 # .sbignore's to drop, which selfpack reads too. each nom is matched as a path prefix
-# at a segment boundary (tools/selfpack.l).
+# at a segment boundary (u/selfpack.l).
 dist_drop = bench
 .PHONY: force_src
 force_src: ;
 $(dist_source): force_src $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
+	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) u/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
 
-out/src.o: $(dist_source) tools/mksrc.l out/.mksys-cat.l $(love0)
+out/src.o: $(dist_source) u/mksrc.l out/.mksys-cat.l $(love0)
 	@echo 'HOLO	'$@
-	@$(love0) -l out/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(hosta)
+	@$(love0) -l out/.mksys-cat.l u/mksrc.l $(dist_source) $@ $(hosta)
 
 # this roster must cover what mcsrctext walks (apps/moon/moon.l): the carried archives are
 # stamped with an identity hashed over include/ and lib/ ENTIRE, so a source file the roster
@@ -369,9 +369,9 @@ rt_slice = $(wildcard apps/moon/include/*.h apps/moon/include/*/*.h \
                       apps/moon/lib/moonlibc/*.c apps/moon/lib/moonlibc/*.h \
                       apps/moon/lib/moonlibc/*/*.c apps/moon/lib/moonlibc/*/*.h \
                       apps/moon/lib/moonlibc/math/*.c)
-out/moonlibc.o: $(rt_slice) tools/mkrt.l $(rtlove_dep) $(love0)
+out/moonlibc.o: $(rt_slice) u/mkrt.l $(rtlove_dep) $(love0)
 	@echo 'HOLO	'$@
-	@$(rtlove) tools/mkrt.l $@ $(hosta)
+	@$(rtlove) u/mkrt.l $@ $(hosta)
 
 xqemu_x64  = qemu-x86_64
 xqemu_a64 = qemu-aarch64
@@ -385,23 +385,23 @@ xd = out/x-$(xa)
 moonx = $(moon0) -t $(xa)
 $(eval $(call moonlane,x,xd,moonx,xa))
 
-$(xd)/src.o: $(dist_source) tools/mksrc.l out/.mksys-cat.l $(love0)
+$(xd)/src.o: $(dist_source) u/mksrc.l out/.mksys-cat.l $(love0)
 	@echo 'HOLO	'$@
-	@$(love0) -l out/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(xa)
-$(xd)/moonlibc.o: $(rt_slice) tools/mkrt.l $(rtlove_dep) $(love0)
+	@$(love0) -l out/.mksys-cat.l u/mksrc.l $(dist_source) $@ $(xa)
+$(xd)/moonlibc.o: $(rt_slice) u/mkrt.l $(rtlove_dep) $(love0)
 	@echo 'HOLO	'$@
-	@$(rtlove) tools/mkrt.l $@ $(xa)
+	@$(rtlove) u/mkrt.l $@ $(xa)
 $(xd)/love: $(x_o) $(xd)/src.o $(xd)/moonlibc.o out/lib/readme.bin
 	@echo 'MOON	'$@
 	@$(moonx) -pie $(x_o) $(xkart_o) $(xd)/src.o $(xd)/moonlibc.o -freadme=out/lib/readme.bin -o $@
 fat = out/dist/love-fat
 .PHONY: dist-fat
-dist-fat: $(ho)/.love.baked $(xd)/love tools/fatpack.l
+dist-fat: $(ho)/.love.baked $(xd)/love u/fatpack.l
 	@mkdir -p out/dist
-	@$(love0) tools/fatpack.l $(fat) $a $(ho)/love $(xa) $(xd)/love
+	@$(love0) u/fatpack.l $(fat) $a $(ho)/love $(xa) $(xd)/love
 	@chmod +x $(fat)
 
-huefiles = apps/vi/config.l apps/vi/hue.l tools/hue2vim.l
+huefiles = apps/vi/config.l apps/vi/hue.l u/hue2vim.l
 $(ho)/syntax.vim: $(huefiles) $(m)
 	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@); t=$@.$$$$.tmp; \
@@ -535,20 +535,20 @@ kcc = $(mooncc) $(kcppflags) -t $a
 kernel: $(k_elf)
 
 $(k_odir)/i/cb.o: l/quay/quay.c l/quay/nif.c l/quay/quay.h
-$(k_odir)/moonlibc.o: $(rt_slice) tools/mkrt.l $m
+$(k_odir)/moonlibc.o: $(rt_slice) u/mkrt.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@$m tools/mkrt.l $@ $a
-$(k_odir)/src.o: $(dist_source) tools/mksrc.l out/.mksys-cat.l $m
+	@$m u/mkrt.l $@ $a
+$(k_odir)/src.o: $(dist_source) u/mksrc.l out/.mksys-cat.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $m -l out/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $a
+	@LOVE_NO_IMAGE= $m -l out/.mksys-cat.l u/mksrc.l $(dist_source) $@ $a
 $(k_pie): $(k_o) $m
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(mooncc) -pie -t $a $(k_o) -o $@
 kproject_l = $R/apps/kore/text.l $R/apps/kore/u.l $R/apps/kore/asbook.l \
-  $R/l/holo/elf.l $R/l/holo/obj.l $R/l/holo/link.l $R/tools/kproject.l
+  $R/l/holo/elf.l $R/l/holo/obj.l $R/l/holo/link.l $R/u/kproject.l
 $(k_odir)/kproject.list: force_dist_list
 	@mkdir -p "$(dir $@)"
 	@tf=$@.$$$$.tmp; echo '$(kproject_l)' > $$tf; \
@@ -652,10 +652,10 @@ $(k_odir)/doom/%.o: $(doom_d)/%.c $(mooncc_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
-$(k_odir)/doom/wad.o: $R/dl/doom1.wad tools/mkblob.l out/.mksys-cat.l $m
+$(k_odir)/doom/wad.o: $R/dl/doom1.wad u/mkblob.l out/.mksys-cat.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $m -l out/.mksys-cat.l tools/mkblob.l $< $@ doom_wad $a
+	@LOVE_NO_IMAGE= $m -l out/.mksys-cat.l u/mkblob.l $< $@ doom_wad $a
 # and the same set on the KART lane, which is where the host's own kernel is
 # built (plan C2: the artifact carries it) -- so `make kernel DOOM=1` at $(hosta)
 # rides these and the cross odir rides the rows above.
@@ -667,10 +667,10 @@ $(moon_d)/doom/%.o: $(doom_d)/%.c $(moon0_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
 	@$(moon0) $(kart_inc) -c $< $@
-$(moon_d)/doom/wad.o: $R/dl/doom1.wad tools/mkblob.l out/.mksys-cat.l $(love0)
+$(moon_d)/doom/wad.o: $R/dl/doom1.wad u/mkblob.l out/.mksys-cat.l $(love0)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $(love0) -l out/.mksys-cat.l tools/mkblob.l $< $@ doom_wad $(hosta)
+	@LOVE_NO_IMAGE= $(love0) -l out/.mksys-cat.l u/mkblob.l $< $@ doom_wad $(hosta)
 endif
 
 $(ho)/love $(ho)/love.cand: $(kart_o) out/.doom.flag
@@ -997,14 +997,14 @@ out/toolmd.stamp: $(sitetools) apps/libra/libra.l $(ho)/love
 	@echo "  toolmd: $(words $(sitetools)) crew headers -> out/toolmd/"
 	@touch $@
 # the source pages and their stylesheet, written into the site papel just built
-huesrc = $(crewtools) apps/vi/hue.l apps/vi/config.l tools/hue2web.l $(ho)/love
+huesrc = $(crewtools) apps/vi/hue.l apps/vi/config.l u/hue2web.l $(ho)/love
 site: host out/toolmd.stamp
 	@$(ho)/love -l apps/papel.l -t love -o out/site README.md doc out/toolmd
 	@$(MAKE) --no-print-directory out/site/hue.css
 out/site/hue.css: $(huesrc)
-	@env -u LOVE_NO_IMAGE $(ho)/love $R/tools/hue2web.l css > $@
+	@env -u LOVE_NO_IMAGE $(ho)/love $R/u/hue2web.l css > $@
 	@for f in $(crewtools); do n=$${f##*/}; n=$${n%.l}; \
-	   env -u LOVE_NO_IMAGE $(ho)/love $R/tools/hue2web.l src $$f > out/site/$$n.src.html \
+	   env -u LOVE_NO_IMAGE $(ho)/love $R/u/hue2web.l src $$f > out/site/$$n.src.html \
 	     || exit 1; done
 	@echo "  hue2web: $(words $(crewtools)) sources painted -> out/site/*.src.html"
 SITEPORT ?= 8080
@@ -1049,10 +1049,10 @@ site-wasm: wasm
 kw_c = $(love_c) $R/l/quay/cga_8x8.c $R/l/quay/moderndos_8x16.c $R/l/quay/paint.c \
   $(k_free_c) $(host_c) $R/i/wasm/arch.c
 kw_h = $(love_h) $R/i/k.h $R/i/ustar.h $R/i/asmops.h $R/i/wasm/asmops.h
-out/wasm/src.o: $(dist_source) tools/mksrc.l out/.mksys-cat.l $m
+out/wasm/src.o: $(dist_source) u/mksrc.l out/.mksys-cat.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $m -l out/.mksys-cat.l tools/mksrc.l $(dist_source) $@ wasm
+	@LOVE_NO_IMAGE= $m -l out/.mksys-cat.l u/mksrc.l $(dist_source) $@ wasm
 out/love-wasm.wasm: $(kw_c) $(kw_h) out/wasm/src.o out/lib/baked.h out/lib/distlist.h \
   out/lib/korelist.h out/lib/crewlist.h out/lib/love_version.h $(mooncc_dep)
 	@echo 'MOON	'$@
@@ -1077,34 +1077,34 @@ distclean: clean
 	rm -rf dl
 valg: host
 	@cat $t > $(ho)/.valg-corpus.l
-	valgrind --error-exitcode=1 --suppressions=$R/tools/valgrind.supp $m $(ho)/.valg-corpus.l </dev/null
+	valgrind --error-exitcode=1 --suppressions=$R/u/valgrind.supp $m $(ho)/.valg-corpus.l </dev/null
 # the site's faces and its stylesheet, laid and checked in: github pages serves
 # the tree as it is, so a generated file still has to be committed
 web: fonts assets/web/style.css assets/web/favicon.png index.html
 fonts: assets/fonts/quay16.woff assets/fonts/quay8.woff
-assets/fonts/quay16.woff: l/quay/moderndos_8x16.c tools/mkfont.l $(ho)/.love.baked
+assets/fonts/quay16.woff: l/quay/moderndos_8x16.c u/mkfont.l $(ho)/.love.baked
 	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
-	@$m tools/mkfont.l $< 12 $@ "Quay 16"
-assets/fonts/quay8.woff: l/quay/cga_8x8.c tools/mkfont.l $(ho)/.love.baked
+	@$m u/mkfont.l $< 12 $@ "Quay 16"
+assets/fonts/quay8.woff: l/quay/cga_8x8.c u/mkfont.l $(ho)/.love.baked
 	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
-	@$m tools/mkfont.l $< 6 $@ "Quay 8"
+	@$m u/mkfont.l $< 6 $@ "Quay 8"
 # ..the front page's stylesheet: config.l's tokyo-night through hueweb, over the layout
 assets/web/style.css: web/style.l apps/vi/config.l apps/vi/hueweb.l $(ho)/.love.baked
 	@mkdir -p $(dir $@)
 	@env -u LOVE_NO_IMAGE $m web/style.l $@
 # ..the favicon: cp437's heart off the 8x8 face, in the palette's red
-assets/web/favicon.png: l/quay/cga_8x8.c tools/mkicon.l apps/vi/config.l $(ho)/.love.baked
+assets/web/favicon.png: l/quay/cga_8x8.c u/mkicon.l apps/vi/config.l $(ho)/.love.baked
 	@mkdir -p $(dir $@)
-	@env -u LOVE_NO_IMAGE $m tools/mkicon.l $< 3 32 $@
+	@env -u LOVE_NO_IMAGE $m u/mkicon.l $< 3 32 $@
 # ..and the front page itself, its island the fragment machine.js drives
 index.html: web/index.l i/wasm/machine.html $(ho)/.love.baked
 	@$m web/index.l $@
 .PHONY: ulp
 ulp:
 	@mkdir -p out
-	@$(CC) -O2 -o out/ulp $R/tools/ulp.c $R/apps/moon/lib/moonlibc/math/am.c -lm
+	@$(CC) -O2 -o out/ulp $R/u/ulp.c $R/apps/moon/lib/moonlibc/math/am.c -lm
 	@out/ulp
 out/perf.data: host
 	cat $t | perf record -o $@ $m
@@ -1116,7 +1116,7 @@ out/flamegraph.svg: out/perf.data
 repl: host
 	@exec $m
 cloc:
-	cloc --by-file apps core host inle port tools test
+	cloc --by-file l i apps u test web bench
 cat: clean all test
 cata: clean all test_slow
 # full clean rebuild, every frontend, all tests, then the corpus under valgrind

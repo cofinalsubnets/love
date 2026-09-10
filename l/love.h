@@ -1070,7 +1070,7 @@ struct ai_twin { lvm_t *ap; word re, im; };   // two punned-double payload words
 #define twin(_) ((struct ai_twin*)(_))
 // pun through a union, not memcpy(&local,..): the memcpy form escapes a stack
 // local, and clang -Os then refuses the sibling call out of any inlining VM ap --
-// silently breaking threaded dispatch (tools/vmret.l).
+// silently breaking threaded dispatch (u/vmret.l).
 _Static_assert(sizeof(ai_flo_t) == sizeof(uintptr_t), "float box assumes ai_flo_t is pointer-width");
 typedef union { uintptr_t u; ai_flo_t d; } ai_flo_pun;
 static ai_inline ai_flo_t gem_get(word x) {

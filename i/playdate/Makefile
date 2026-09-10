@@ -118,10 +118,10 @@ $(MOONCC): FORCE
 
 # cas.l -> C string literal, atomically (a 0-byte header would silently drop
 # the whole demo -- same discipline as the root's lcat_h)
-$(o)/cas.h: cas.l $(R)/tools/lcat.l | $(m)
+$(o)/cas.h: cas.l $(R)/u/lcat.l | $(m)
 	@echo LOVE	$@
 	@mkdir -p $(o)
-	@$(m) $(R)/tools/lcat.l cas.l > $@.tmp && test -s $@.tmp && mv -f $@.tmp $@ \
+	@$(m) $(R)/u/lcat.l cas.l > $@.tmp && test -s $@.tmp && mv -f $@.tmp $@ \
 	  || { rm -f $@.tmp; echo "FAIL: $@ empty"; exit 1; }
 
 $(o)/$n.pdx: $(o)/Source/pdex.elf $(o)/Source/pdex.so $(o)/Source/love-pd.img

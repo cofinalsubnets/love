@@ -17,7 +17,7 @@
 (: head "/* laid by web/style.l from apps/vi/config.l's tokyo-night -- edit those, not this.
    periwinkle on polar-night blue, green = a kept answer; the crew fly the name space in
    aurora teal/cyan. the quay bitmaps set everything: 8x16 cells, crisp at 16px native
-   (so 32px is a clean 2x), and the 8x8 face beside it. both are laid by tools/mkfont.l. */
+   (so 32px is a clean 2x), and the 8x8 face beside it. both are laid by u/mkfont.l. */
 "
    frame "@font-face {
   font-family: \"Quay 16\";

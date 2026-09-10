@@ -1,4 +1,4 @@
-; test/uuwm.l -- generated from apps/lux/core.l by tools/uuwmgen.l. Do not
+; test/uuwm.l -- generated from apps/lux/core.l by u/uuwmgen.l. Do not
 ; edit; refresh with `make uuwm`. The window-manager moves, compiled from
 ; the source the lux runs (kind-directed by apps/lux/sigs.l) -- so the laws
 ; in test/uuwmlaw.l are proved of the implementation itself; an invariant-

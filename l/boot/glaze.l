@@ -2,7 +2,7 @@
 ; transparent applicable value. it applies by juxtaposition, is =/show identical to its
 ; source, and deopts to the interpreter on overflow, so native is never wrong, only faster.
 ;
-; one file, in bake order. tools/lcat.l lays it as src_glaze_z with l/holo's holo/x64/a64
+; one file, in bake order. u/lcat.l lays it as src_glaze_z with l/holo's holo/x64/a64
 ; trailing, because the glaze folds `assemble` at its own compile:
 ;   (module 'glaze  emit   the native emitter
 ;                   auto)  ev's source recognizer, which reads emit's names bare

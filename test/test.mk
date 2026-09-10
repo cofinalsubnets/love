@@ -328,17 +328,17 @@ test_cli: host
 	@echo TEST test/gate/cli.sh "(the cli exit-status lane)"
 	@sh test/gate/cli.sh $m
 
-# the front page, its sheet and its icon are laid (web/index.l, web/style.l, tools/mkicon.l)
+# the front page, its sheet and its icon are laid (web/index.l, web/style.l, u/mkicon.l)
 # and checked in for github pages: a lay that differs from the tree means someone edited a
 # source without `make web`.
 test_web: host
-	@echo TEST web/index.l web/style.l tools/mkicon.l
+	@echo TEST web/index.l web/style.l u/mkicon.l
 	@mkdir -p out/.web
 	@$m web/index.l out/.web/index.html
 	@env -u LOVE_NO_IMAGE $m web/style.l out/.web/style.css
-	@env -u LOVE_NO_IMAGE $m tools/mkicon.l l/quay/cga_8x8.c 3 32 out/.web/favicon.png 2>/dev/null
-	@env -u LOVE_NO_IMAGE $m tools/mkfont.l l/quay/moderndos_8x16.c 12 out/.web/quay16.woff "Quay 16"
-	@env -u LOVE_NO_IMAGE $m tools/mkfont.l l/quay/cga_8x8.c 6 out/.web/quay8.woff "Quay 8"
+	@env -u LOVE_NO_IMAGE $m u/mkicon.l l/quay/cga_8x8.c 3 32 out/.web/favicon.png 2>/dev/null
+	@env -u LOVE_NO_IMAGE $m u/mkfont.l l/quay/moderndos_8x16.c 12 out/.web/quay16.woff "Quay 16"
+	@env -u LOVE_NO_IMAGE $m u/mkfont.l l/quay/cga_8x8.c 6 out/.web/quay8.woff "Quay 8"
 	@cmp -s out/.web/index.html index.html && cmp -s out/.web/style.css assets/web/style.css \
 	  && cmp -s out/.web/favicon.png assets/web/favicon.png \
 	  && cmp -s out/.web/quay16.woff assets/fonts/quay16.woff \
@@ -798,7 +798,7 @@ define moon_pkg
 moon-$1: host
 moon-$1-a64 moon-$1-rv64: $3
 moon-$1 moon-$1-a64 moon-$1-rv64:
-	@$2="$$($2)" ./tools/moon-$1.sh $$(moon_arch_$$(patsubst moon-$1-%,%,$$@))
+	@$2="$$($2)" ./u/moon-$1.sh $$(moon_arch_$$(patsubst moon-$1-%,%,$$@))
 endef
 $(eval $(call moon_pkg,tar,TARSRC,host))
 $(eval $(call moon_pkg,m4,M4SRC,host))
@@ -898,12 +898,12 @@ PORT ?= 7390
 nettest: host
 	@echo TEST $m "(127.0.0.1:$(PORT))"
 	@sh $R/test/net/loopback.sh $m $(PORT)
-# The tool gates beside the build: the hue generators, cook, tele. See tools/Makefile.
+# The tool gates beside the build: the hue generators, cook, tele. See u/Makefile.
 # vmret is not here -- it rides test_slow over $m, and after plan C2 every other love in
 # the tree is a projection of that one. lush is a real
 # prerequisite: test/host/cook.l's SHELL pair sets `SHELL := out/lush` to prove cook honors it.
 test_tools: host out$(hsuf)/lush
-	@$(MAKE) -C tools
+	@$(MAKE) -C u
 # test_gcheck: the copy loop's fixpoint instance check. LvGcCheck makes gen_minor re-drive
 # its whole scan after the drain and trap if the second pass copies a word, in its own tree.
 # /warn the knob is GCDBG: EXTRA_CFLAGS rides $(ai_cflags), which the mooncc recipes do not use.
@@ -954,28 +954,28 @@ test_gc:
 	@echo TEST test/proof/rocq/gc.v "(coqc)"
 	@$(COQC) -q test/proof/rocq/gc.v
 	@$(call vclean,gc)
-# The .l -> .v pipeline: tools/spec2coq.l reads test/spec.l and emits gen.v, the spec generating
+# The .l -> .v pipeline: u/spec2coq.l reads test/spec.l and emits gen.v, the spec generating
 # theorems for its own numeral facts. Regenerated every run, so asserts and proofs cannot diverge.
 test_gen: host $(rocq_kept)
-	@echo 'LOVE	'test/proof/rocq/gen.v "(tools/spec2coq.l on $m)"
-	@$m tools/spec2coq.l > test/proof/rocq/gen.v
+	@echo 'LOVE	'test/proof/rocq/gen.v "(u/spec2coq.l on $m)"
+	@$m u/spec2coq.l > test/proof/rocq/gen.v
 	@echo TEST test/proof/rocq/gen.v "(coqc, against spec.v's shared model)"
 	@cd test/proof/rocq && $(COQC) -R . "" gen.v
 	@$(call vclean,gen)
-# The proof half of that pipeline (cf. test_gen, which exports concrete ASSERTS): tools/uu2coq.l
+# The proof half of that pipeline (cf. test_gen, which exports concrete ASSERTS): u/uu2coq.l
 # has uu's kernel type-check a proof term and emits the same term in Gallina for coqc to re-check
 # -- a law proved in love's own kernel and certified by Rocq.
 test_uugen: host
-	@echo 'LOVE	'test/proof/rocq/uugen.v "(tools/uu2coq.l on $m)"
-	@$m tools/uu2coq.l > test/proof/rocq/uugen.v
+	@echo 'LOVE	'test/proof/rocq/uugen.v "(u/uu2coq.l on $m)"
+	@$m u/uu2coq.l > test/proof/rocq/uugen.v
 	@echo TEST test/proof/rocq/uugen.v "(coqc)"
 	@$(COQC) -q test/proof/rocq/uugen.v
 	@$(call vclean,uugen)
-# l/mx.l is the +/* dispatch matrices; l/mx.h is laid from it through clay and tools/mx2coq.l models
+# l/mx.l is the +/* dispatch matrices; l/mx.h is laid from it through clay and u/mx2coq.l models
 # it in Rocq -- two derivations of one datum.
 test_mx: host
 	@echo TEST test/proof/rocq/mx.v "(the dispatch matrices: band factorization + dispatch commutativity, coqc)"
-	@cat l/mx.l tools/mx2coq.l | $m > test/proof/rocq/mx.v
+	@cat l/mx.l u/mx2coq.l | $m > test/proof/rocq/mx.v
 	@cd test/proof/rocq && $(COQC) -q mx.v >/dev/null
 	@$(call vclean,mx)
 endif
@@ -1037,7 +1037,7 @@ test_encver: host
 	@rm -f test/proof/rocq/*.cmi test/proof/rocq/*.cmx test/proof/rocq/*.o out/.enc_oracle.* out/.encmem_oracle.* out/.encli_oracle.*
 endif
 
-# the lean leg of the proof bridge (cf. test_uugen, the Rocq leg): tools/uu2lean.l emits the same
+# the lean leg of the proof bridge (cf. test_uugen, the Rocq leg): u/uu2lean.l emits the same
 # uu corpus to Lean 4, which re-checks it -- a second independent kernel, so each law is agreed
 # by two unrelated implementations. Regenerated every run.
 ifeq ($(LEAN),)
@@ -1046,8 +1046,8 @@ test_uulean:
 else
 test_uulean: host
 	@mkdir -p test/proof/lean
-	@echo 'LOVE	'test/proof/lean/uugen.lean "(tools/uu2lean.l on $m)"
-	@$m tools/uu2lean.l > test/proof/lean/uugen.lean
+	@echo 'LOVE	'test/proof/lean/uugen.lean "(u/uu2lean.l on $m)"
+	@$m u/uu2lean.l > test/proof/lean/uugen.lean
 	@echo TEST test/proof/lean/uugen.lean "(lean)"
 	@$(LEAN) test/proof/lean/uugen.lean > out/.uulean.out 2>&1; r=$$?; \
 	  if [ $$r -ne 0 ] || grep -q sorryAx out/.uulean.out; then cat out/.uulean.out; exit 1; fi
@@ -1073,14 +1073,14 @@ test_holofuzz: host
 # implementation at corpus time and not of a transcription somebody keeps by hand.
 # `make <stem>` refreshes one; test_<stem> regenerates into scratch and diffs, so a
 # source that moved reddens here instead of going quiet.
-# $1 the corpus stem, $2 its generator under tools/, $3 the source that generator reads
+# $1 the corpus stem, $2 its generator under u/, $3 the source that generator reads
 define uu_corpus
 $1: host
-	@echo 'LOVE	'test/$1.l "(tools/$2.l on $$m)"
-	@$$m tools/$2.l > test/$1.l
+	@echo 'LOVE	'test/$1.l "(u/$2.l on $$m)"
+	@$$m u/$2.l > test/$1.l
 test_$1: host
 	@echo TEST test/$1.l "(regenerate + diff)"
-	@$$m tools/$2.l > out/.$1.l.tmp
+	@$$m u/$2.l > out/.$1.l.tmp
 	@cmp -s out/.$1.l.tmp test/$1.l \
 	  || { echo "FAIL: test/$1.l is stale ($3 moved?) -- run: make $1"; exit 1; }
 	@rm -f out/.$1.l.tmp
@@ -1118,12 +1118,12 @@ test_wake: $(ho)/love
 
 ifeq ($a,x64)
 
-test_disk: host $(R)/tools/ktest.l
+test_disk: host $(R)/u/ktest.l
 	@$(MAKE) -s $(k_elf)
 	@rm -f $(k_elf).disk
 	@echo TEST $(k_elf) "(the WAKE lane: two boots, one disk, the reset-persistence gate)"
-	@$m $(R)/tools/ktest.l $(k_elf) - $a
-	@$m $(R)/tools/ktest.l $(k_elf) - $a "disk: fat kept across the reset"
+	@$m $(R)/u/ktest.l $(k_elf) - $a
+	@$m $(R)/u/ktest.l $(k_elf) - $a "disk: fat kept across the reset"
 	@echo "test_disk: the machine remembered"
 
 # wget against a live https peer: opt-in, it needs the internet (test/host/wgetnet.l)
@@ -1146,13 +1146,13 @@ test_kverb: host
 	@cmp $(ko)/.kverb.elf $(k_elf)
 	@rm -f $(ko)/.kverb.elf
 
-test_kboot: host $(R)/tools/kboot.l
+test_kboot: host $(R)/u/kboot.l
 	@$(MAKE) -s $(k_elf)
 	@echo TEST $(k_elf) "(the kore cat off cmdline; 4 boots, ceiling 420s each)"
-	@$m $(R)/tools/kboot.l $(k_elf) "kore ls apps/kore" "kore.l"
-	@$m $(R)/tools/kboot.l $(k_elf) "kore wc apps/json.l" "apps/json.l" $$(wc -c < $(R)/apps/json.l)
-	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"cd apps/kore; pwd\"" "/apps/kore"
-	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"kore ls apps/kore | kore wc -l\"" $$(ls $(R)/apps/kore | wc -l)
+	@$m $(R)/u/kboot.l $(k_elf) "kore ls apps/kore" "kore.l"
+	@$m $(R)/u/kboot.l $(k_elf) "kore wc apps/json.l" "apps/json.l" $$(wc -c < $(R)/apps/json.l)
+	@$m $(R)/u/kboot.l $(k_elf) "sh -c \"cd apps/kore; pwd\"" "/apps/kore"
+	@$m $(R)/u/kboot.l $(k_elf) "sh -c \"kore ls apps/kore | kore wc -l\"" $$(ls $(R)/apps/kore | wc -l)
 else
 test_disk test_kboot:
 	@echo "$@: skipped (host arch $a is not x64)"
@@ -1163,10 +1163,10 @@ ifeq ($(and $(filter x64,$a),$(OVMF_X64)),)
 test_uefi:
 	@echo "test_uefi: skipped (x64 + dl/edk2-ovmf/ovmf-code-x86_64.fd needed)"
 else
-test_uefi: host $(R)/tools/ktest.l
+test_uefi: host $(R)/u/ktest.l
 	@$(MAKE) -s $(ko)/esp-x64/EFI/BOOT/BOOTX64.EFI $(ko)/esp-x64/love.elf $(ko)/esp-x64/love.cmd
 	@echo TEST $(ko)/esp-x64 "(serial, headless, our own BOOTX64.EFI; ~64s, ceiling 420s)"
-	@$m $(R)/tools/ktest.l $(ko)/esp-x64 $(OVMF_X64) x64
+	@$m $(R)/u/ktest.l $(ko)/esp-x64 $(OVMF_X64) x64
 endif
 
 OVMF_A64 := $(wildcard dl/edk2-ovmf/ovmf-code-aarch64.fd)
@@ -1175,10 +1175,10 @@ ifeq ($(and $(OVMF_A64),$(QEMU_A64)),)
 test_uefi_a64:
 	@echo "test_uefi_a64: skipped (qemu-system-aarch64 + dl/edk2-ovmf/ovmf-code-aarch64.fd needed)"
 else
-test_uefi_a64: host $(R)/tools/ktest.l
+test_uefi_a64: host $(R)/u/ktest.l
 	@$(MAKE) -s a=a64 $(ko)/esp-a64/EFI/BOOT/BOOTAA64.EFI $(ko)/esp-a64/love.elf $(ko)/esp-a64/love.cmd
 	@echo TEST $(ko)/esp-a64 "(serial, headless, our own BOOTAA64.EFI; TCG, ceiling 420s)"
-	@$m $(R)/tools/ktest.l $(ko)/esp-a64 $(OVMF_A64) a64
+	@$m $(R)/u/ktest.l $(ko)/esp-a64 $(OVMF_A64) a64
 endif
 
 test_inle:
@@ -1196,10 +1196,10 @@ ifeq ($(QEMU_A64),)
 test_kernel_a64:
 	@echo "test_kernel_a64: skipped (need qemu-system-aarch64)"
 else
-test_kernel_a64: host $(R)/tools/ktest.l
+test_kernel_a64: host $(R)/u/ktest.l
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@echo TEST $(ko)/love-a64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 420s)"
-	@$m $(R)/tools/ktest.l $(ko)/love-a64.elf - a64
+	@$m $(R)/u/ktest.l $(ko)/love-a64.elf - a64
 endif
 
 QEMU_RV64 ?= $(shell command -v qemu-system-riscv64 2>/dev/null)
@@ -1207,10 +1207,10 @@ ifeq ($(QEMU_RV64),)
 test_kernel_rv64:
 	@echo "test_kernel_rv64: skipped (need qemu-system-riscv64)"
 else
-test_kernel_rv64: host $(R)/tools/ktest.l
+test_kernel_rv64: host $(R)/u/ktest.l
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
 	@echo TEST $(ko)/love-rv64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 420s)"
-	@$m $(R)/tools/ktest.l $(ko)/love-rv64.elf - rv64
+	@$m $(R)/u/ktest.l $(ko)/love-rv64.elf - rv64
 endif
 
 NODE ?= $(shell command -v node 2>/dev/null)
@@ -1234,7 +1234,7 @@ endif
 # test_kernel_wasm -- the wasm inle seat (out/love-wasm.wasm) under node: the image baked
 # (the egg lane, `bake PATH` on the boot line), then the kernel corpus off the ramfs on the
 # woken image, the serial line captured, the (reset) that ends it read as the exit -- what
-# tools/ktest.l reads off qemu, with no qemu and no browser.
+# u/ktest.l reads off qemu, with no qemu and no browser.
 ifeq ($(NODE),)
 test_kernel_wasm:
 	@echo "test_kernel_wasm: skipped (needs node)"
@@ -1284,7 +1284,7 @@ vmret: host
 	@echo "vmret: skipped (needs objdump or llvm-objdump)"
 else
 vmret: host
-	@$m tools/vmret.l $m
+	@$m u/vmret.l $m
 endif
 
 WAITS_C := $(shell git ls-files '*.c' 2>/dev/null)
@@ -1293,5 +1293,5 @@ waits: host
 	@echo "waits: skipped (needs a git checkout to enumerate the .c files)"
 else
 waits: host
-	@$m tools/waits.l $(WAITS_C)
+	@$m u/waits.l $(WAITS_C)
 endif

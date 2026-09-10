@@ -17,7 +17,7 @@ struct hvm_memmap_entry { uint64_t addr, size; uint32_t type, reserved; };
 
 // the physical footprint qemu loaded us into -- which e820 still calls usable
 // RAM (the PVH loader reserves nothing). hand it to the heap and the kernel
-// eats itself. a VALUE the projection patches into the file (tools/kproject.l),
+// eats itself. a VALUE the projection patches into the file (u/kproject.l),
 // where the flat link's kimage_end symbol used to stand.
 extern uintptr_t const k_image_top;
 

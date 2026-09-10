@@ -1,5 +1,5 @@
 // cats.c -- the baked source, one copy for the whole link: the egg's four texts, the
-// module registry, the glaze and the CLI driver, laid by tools/lcat.l into one header, the
+// module registry, the glaze and the CLI driver, laid by u/lcat.l into one header, the
 // texts DEFLATED. i/main.c and i/kmain.c both warm from these through the
 // calls below; see i/cats.h.
 // only a love with no image to wake reads any of it, so the inflate lands on the lane

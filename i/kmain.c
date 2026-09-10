@@ -86,7 +86,7 @@ extern struct ai_def const __start_ai_knifs[], __stop_ai_knifs[];
 uintptr_t ai_knifs_slice(struct ai_def const **s) {
   return *s = __start_ai_knifs, (uintptr_t)(__stop_ai_knifs - __start_ai_knifs); }
 // the metal image's far edge, PATCHED INTO THE FILE by the projection
-// (tools/kproject.l) -- the flat link's kimage_end, as a value the one binary
+// (u/kproject.l) -- the flat link's kimage_end, as a value the one binary
 // can carry. the sentinel is loud: unpatched, the memmap excludes nothing and
 // the heap eats the kernel at once.
 uintptr_t const k_image_top = 1;

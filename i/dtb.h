@@ -12,7 +12,7 @@
 // everything from the RAM base up to the image's far edge (the firmware below it, the
 // dtb, the hole, the image itself) is spoken for, and no loader here reserves it --
 // hand it to the heap and the kernel eats itself. a VALUE the projection patches into
-// the file (tools/kproject.l), where the flat link's kimage_end symbol used to stand.
+// the file (u/kproject.l), where the flat link's kimage_end symbol used to stand.
 extern uintptr_t const k_image_top;
 
 static uint32_t be32(uint8_t const *p) {
