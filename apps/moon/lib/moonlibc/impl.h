@@ -172,8 +172,8 @@ struct _IO_FILE {
 /* ---- the NR_* the members say: linux's, the CANONICAL numbers -- one body
  * per member, and a freebsd runtime translates through os.c's map (a member's
  * freebsd branch reaches an unmappable call by NR_fb_* through fb0..fb6
- * below). linux's one arch gate: rv64 shares a64's asm-generic table
- * verbatim. ---- */
+ * below). linux's one arch gate: rv64 shares a64's asm-generic table but for
+ * renameat, which its kernel does not carry. ---- */
 #if defined(__aarch64__) || defined(__riscv)
 #define NR_getcwd          17
 #define NR_dup3            24
@@ -190,6 +190,7 @@ struct _IO_FILE {
 #define NR_symlinkat       36
 #define NR_linkat          37
 #define NR_renameat        38
+#define NR_renameat2      276   /* riscv is the one asm-generic port without __ARCH_WANT_RENAMEAT */
 #define NR_umount2         39
 #define NR_mount           40
 #define NR_ftruncate       46
