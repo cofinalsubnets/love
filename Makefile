@@ -174,12 +174,18 @@ moon0_dep =
 rtlove = $(LOVE)
 rtlove_dep =
 lcat_love = $(LOVE)
+# ..and the tool lane with them: a rule that RUNS a love-written tool (the man pages, the
+# fonts, the page) wants a working love, not this tree's. naming one says which, and mdep
+# is the prerequisite that goes with it -- there is nothing to wait for.
+m = $(LOVE)
+mdep =
 $(love0):
 	@echo '$(t_sh)	'$@
 	@mkdir -p $(dir $@)
 	@printf '#!/bin/sh\nexec %s "$$@"\n' '$(LOVE)' > $@
 	@chmod 755 $@
 else
+mdep = $(ho)/love
 rtlove = $(love0) wake b/mooncc0.image
 rtlove_dep = b/mooncc0.image
 $(love0): $(love0_o)
@@ -259,10 +265,10 @@ $(ho)/love.raw $(ho)/love.cand.raw: b/moonlibc.o $(moon_o) b/src.o b/lib/readme.
 	@$(moon0) -pie $(moon_o) $(kart_o) b/src.o b/moonlibc.o -freadme=b/lib/readme.bin -o $@
 endif
 
-$(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md u/mkman.l a/lapiz.l b/lib/love_version.h $(ho)/love
+$(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md u/mkman.l a/lapiz.l b/lib/love_version.h $(mdep)
 	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
-	@$(ho)/love u/mkman.l doc/$*.md b/lib/love_version.h > $@
+	@$m u/mkman.l doc/$*.md b/lib/love_version.h > $@
 
 lushfiles = a/lush.l
 # THE CATS, IN PARTS. three rosters cover almost the same ground -- what kore carries,
@@ -498,8 +504,8 @@ ko = b
 # love's own mooncc, and the artifact that answers it. the compiler IS the shipped
 # binary, so nothing foreign builds the kernel and there is no second cc to name.
 # LOVE_NO_IMAGE= leads: an egg-booted love has no verbs.
-mooncc = LOVE_NO_IMAGE= $(ho)/love mooncc
-mooncc_dep = $(ho)/love
+mooncc = LOVE_NO_IMAGE= $m mooncc
+mooncc_dep = $(mdep)
 
 # this machine's metal files, and the three TUs only a kernel has a frontend for.
 k_arch_c = $(wildcard $(R)/i/$a/*.c)
@@ -983,17 +989,17 @@ $v/syntax/love.vim: $(ho)/syntax.vim
 
 all: host kernel wasm dist
 
-lint: $(ho)/love
-	@$(ho)/love $R/a/libra/libra.l $$(git ls-files '*.l') && echo "lint: parens balance"
+lint: $(mdep)
+	@$m $R/a/libra/libra.l $$(git ls-files '*.l') && echo "lint: parens balance"
 
 
 crewtools = $(wildcard a/*.l) $(foreach d,$(wildcard a/*),$(wildcard $d/$(notdir $d).l))
 sitetools = $(foreach f,$(crewtools),\
   $(if $(wildcard doc/$(notdir $(basename $f)).md doc/misc/$(notdir $(basename $f)).md),,$f))
-b/toolmd.stamp: $(sitetools) a/libra/libra.l $(ho)/love
+b/toolmd.stamp: $(sitetools) a/libra/libra.l $(mdep)
 	@rm -rf b/toolmd && mkdir -p b/toolmd
 	@for f in $(sitetools); do n=$${f##*/}; n=$${n%.l}; \
-	   { $(ho)/love $R/a/libra/libra.l doc $$f && echo && echo "[the source]($$n.src.html)"; } \
+	   { $m $R/a/libra/libra.l doc $$f && echo && echo "[the source]($$n.src.html)"; } \
 	     > b/toolmd/$$n.md || exit 1; done
 	@echo "  toolmd: $(words $(sitetools)) crew headers -> b/toolmd/"
 	@touch $@
@@ -1022,7 +1028,7 @@ site-serve: host b/toolmd.stamp
 # seam the machine has not grown yet (quay's cells, the horn's ring).
 # the emcc build stays as wasm-emcc, a differential and nothing on the page.
 wasm_c = $(love_c) $(R)/i/horn.c $(R)/i/wasm/host.c
-b/wasm/love.wasm: $(wasm_c) $(lib_h) b/lib/love_version.h host
+b/wasm/love.wasm: $(wasm_c) $(lib_h) b/lib/love_version.h $(mooncc_dep)
 	@mkdir -p $(dir $@)
 	@echo 'MOON	'$@
 	@$(mooncc) -t wasm -Dai_tco=1 -DLvHaveVersionH -I. -Il -Ii -Ib/lib -o $@ $(wasm_c)
@@ -1083,24 +1089,24 @@ valg: host
 # the tree as it is, so a generated file still has to be committed
 web: fonts w/style.css w/favicon.png index.html
 fonts: w/fonts/quay16.woff w/fonts/quay8.woff
-w/fonts/quay16.woff: l/quay/moderndos_8x16.c u/mkfont.l $(ho)/love
+w/fonts/quay16.woff: l/quay/moderndos_8x16.c u/mkfont.l $(mdep)
 	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
 	@$m u/mkfont.l $< 12 $@ "Quay 16"
-w/fonts/quay8.woff: l/quay/cga_8x8.c u/mkfont.l $(ho)/love
+w/fonts/quay8.woff: l/quay/cga_8x8.c u/mkfont.l $(mdep)
 	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
 	@$m u/mkfont.l $< 6 $@ "Quay 8"
 # ..the front page's stylesheet: config.l's tokyo-night through hueweb, over the layout
-w/style.css: w/style.l a/vi/config.l a/vi/hueweb.l $(ho)/love
+w/style.css: w/style.l a/vi/config.l a/vi/hueweb.l $(mdep)
 	@mkdir -p $(dir $@)
 	@env -u LOVE_NO_IMAGE $m w/style.l $@
 # ..the favicon: cp437's heart off the 8x8 face, in the palette's red
-w/favicon.png: l/quay/cga_8x8.c u/mkicon.l a/vi/config.l $(ho)/love
+w/favicon.png: l/quay/cga_8x8.c u/mkicon.l a/vi/config.l $(mdep)
 	@mkdir -p $(dir $@)
 	@env -u LOVE_NO_IMAGE $m u/mkicon.l $< 3 32 $@
 # ..and the front page itself, its island the fragment machine.js drives
-index.html: w/index.l i/wasm/machine.html $(ho)/love
+index.html: w/index.l i/wasm/machine.html $(mdep)
 	@$m w/index.l $@
 .PHONY: ulp
 ulp:

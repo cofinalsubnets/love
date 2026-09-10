@@ -120,36 +120,38 @@ usage: love serve [-p PORT] [-n] [DIR]
   DIR               the tree to serve (default .)
 a .l is painted, a .md rendered, and x.l.md is x.l's header as a document. the github
 page is laid first -- make web wasm site-wasm and the wasm inle seat -- and the machine
-is at /i/wasm/inle.html. where DIR is no tree, this binary's own source is laid
-under it as `love seed` lays it (love-VERSION/, rebuilt there with our own
-toolchain), and that tree is the one served.
+is at /i/wasm/inle.html. where DIR is no tree, this binary's own source is laid under it
+as `love source` lays it (love-VERSION/), and that tree is the one served. this binary
+drives that build: no love is rebuilt to serve a page.
 ")
       (quit 0))
 
-   ; no tree at DIR: lay and seed one there, as `love seed DIR` does -- the source this
-   ; binary carries, rebuilt in place by its own mooncc and userland -- and answer its
-   ; root, which is `love source`'s: love-VERSION under DIR
+   ; no tree at DIR: LAY one there -- the source this binary carries, and nothing more.
+   ; the page is what a serve owes, and this binary already builds it; rebuilding love to
+   ; get there is a fixpoint's business, which `love seed` is still the verb for.
    (sv-root dir) ((dir = "." ? "" (dir + "/")) + "love-" + love-version)
    (sv-seed dir)
    (: exe (selfpath 0)
       _ (string? exe ? 0 (say err "serve: can't find my own path\n", quit 1))
-      _ (say err (";; no tree at " + dir + ": laying " + sv-root dir + " and seeding it\n"))
-      p (spawn [exe "seed" "-a" dir])
+      _ (say err (";; no tree at " + dir + ": laying " + sv-root dir + "\n"))
+      p (spawn [exe "source" dir])
       st (charm? p && 0 <= p ? (wait p) 1)
-      _ (0 = st ? 0 (say err ("serve: the seed did not take (" + show st + ")\n"), quit 1))
+      _ (0 = st ? 0 (say err ("serve: the lay did not take (" + show st + ")\n"), quit 1))
       (sv-root dir))
 
    ; the page's build, through our own make in DIR: only where DIR is the tree, and
    ; a refused build is said and stops the server -- a page half laid is not one
    (sv-tree? dir) (two? (stat (dir + "/Makefile")) && two? (stat (dir + "/w/index.l")))
-   ; autonomous throughout, as `love seed` and `love doom` are (a/source.l's src-arm):
-   ; our verbs first on PATH, lush -a, CC our mooncc
+   ; autonomous throughout, as `love doom` is (a/source.l's src-arm): our verbs first on
+   ; PATH, lush -a, CC our mooncc. LOVE= names US as the driving love, so love0 is a
+   ; two-line script onto this binary and no second love is compiled to lay a page --
+   ; only the wasm module, which is the one thing here that is not already aboard.
    (sv-build dir)
    (: exe (selfpath 0)
       _ (string? exe ? 0 (say err "serve: can't find my own path\n", quit 1))
       _ ((cite 'source 'src-arm) dir exe)
       _ (say err ";; laying the page: make web wasm site-wasm b/love-wasm.wasm\n")
-      p (spawn [exe "make" "-C" dir "web" "wasm" "site-wasm" "b/love-wasm.wasm"])
+      p (spawn [exe "make" "-C" dir ("LOVE=" + exe) "web" "wasm" "site-wasm" "b/love-wasm.wasm"])
       st (charm? p && 0 <= p ? (wait p) 1)
       (0 = st ? 0 (say err ("serve: the page did not build (" + show st + ")\n"), quit 1)))
 
