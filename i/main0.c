@@ -11,46 +11,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-// --- the null seat ---------------------------------------------------------------
-// love0 is the ONE link with no kmain.c under it, so every door a seat would otherwise
-// give is answered here. plain definitions, not weak ones: a link that ends up with two
-// of any of these says so, and a link that ends up with none says that too -- which is
-// the whole reason they moved out of the runtime and into a seat.
-long __ai_osv;                       // 0 = hosted, which love0 is; moonlibc's os.c gives it elsewhere
-
-uintptr_t ai_knifs_slice(struct ai_def const **s) { return *s = NULL, 0; }
-char *ai_code_window(char *p) { return p; }
-
-// the kernel's port lanes and the rows beneath them. love0 never takes the negative-osv
-// branch that reaches these, so they stand where the linker wants a body and nowhere else.
-struct ai *k_port_flush(struct ai *g) { return g; }
-struct ai *k_port_writen(struct ai *g, unsigned char const *src, uintptr_t n) { return g->b = -1, g; }
-intptr_t k_port_readn(struct ai *g, unsigned char *dst, uintptr_t n) { return -1; }
-intptr_t k_row_read(int fd, unsigned char *dst, uintptr_t n) { return -1; }
-intptr_t k_row_write(int fd, unsigned char const *src, uintptr_t n) { return -1; }
-void k_row_close(int fd) {}
-bool k_ready(int fd, int events) { return true; }
-void k_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {}
-void k_sleep(uintptr_t ms) {}
-int k_horn_open(int rate) { return -1; }
-intptr_t k_horn_write(unsigned char const *src, uintptr_t n) { return -1; }
-uintptr_t k_horn_lag(void) { return 0; }
-void k_horn_close(void) { }
-lvm(k_lvm_quit) { ai_musttail return Ap(_lvm_ghelp, g); }
-lvm(k_lvm_getpid) { ai_musttail return Ap(_lvm_ghelp, g); }
-
-// love0 LAYS the blob the shipped love carries, so it carries none itself: an empty pair
-// is what these names mean on this seat, and out/src.o is what they mean on every other.
-const unsigned char ai_srcgz[1] = {0};
-const uintptr_t ai_srcgz_len = 0;
-const unsigned char ai_rtgz_x64[1] = {0};
-const uintptr_t ai_rtgz_x64_len = 0;
-const unsigned char ai_rtgz_a64[1] = {0};
-const uintptr_t ai_rtgz_a64_len = 0;
-const unsigned char ai_rtgz_rv64[1] = {0};
-const uintptr_t ai_rtgz_rv64_len = 0;
-const unsigned char ai_rtgz_id[1] = {0};
-const uintptr_t ai_rtgz_id_len = 0;
+// the null seat is i/nokern.c's and the carried blobs i/noblob.c's -- love0 has no
+// kmain.c under it and lays the archives rather than carrying them, and so does every
+// gate link that builds this C set. both are named into love0_o beside this file.
+// love0 has no moonlibc either, so i/noosv.c gives it __ai_osv.
 
 #include "boot0.h"                                   // src0_<name>[]: one literal per boot file, laid by sed
 static char const runner[] = "(reads(tap(s2cl tests)))";   // the stream shell (l/boot/post.l) drinks the corpus

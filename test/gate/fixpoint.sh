@@ -13,7 +13,12 @@
 # file. the lanes arrive in the environment because the object list already has the
 # variadic tail -- gate_love_c / gate_host_c / gate_arch_c / gate_kern_c, the Makefile's own.
 #
-# usage: gate_love_c=.. gate_host_c=.. gate_arch_c=.. gate_kern_c=..
+# gate_seat_c is i/noblob.c: this pair links the kernel but lays no out/src.o and no
+# out/moonlibc.o -- it rebuilds every TU itself and carries no archives -- so it answers
+# the carried-archive symbols itself. it rides the OBJ list too, or love1 has a body
+# love2's link cannot find.
+#
+# usage: gate_love_c=.. gate_host_c=.. gate_arch_c=.. gate_kern_c=.. gate_seat_c=..
 #        fixpoint.sh OUTDIR LOVE0 HOSTA ODIR OBJ...
 set -u
 
@@ -76,7 +81,7 @@ for f in $gate_love_c; do
   moon1 -D ai_tco=1 -D AiHaveVersionH -I"$ho" -I. -Il -Ii -Iout/lib -c "$f" "$o" \
     || fail "love1 mooncc -c $f"
 done
-for f in $gate_host_c; do
+for f in $gate_host_c $gate_seat_c; do
   mkobj "$f"
   moon1 -D ai_tco=1 -I"$ho" -I. -Il -Ii -Iout/lib -c "$f" "$o" || fail "love1 mooncc -c $f"
 done

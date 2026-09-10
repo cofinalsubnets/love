@@ -574,7 +574,7 @@ test_selfhost: host
 	@echo TEST $(ho)/love-selfhost
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/selfhost; mkdir -p $$d; rm -f $$d/*.o; \
-	  for f in $(love_tu_c) $(host_c); do b=`basename $$f .c`; \
+	  for f in $(love_tu_c) $(host_c) $(R)/i/nokern.c $(R)/i/noblob.c $(R)/i/noosv.c; do b=`basename $$f .c`; \
 	    $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Il -Ii -Iout/lib -c $$f $$d/$$b.o \
 	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
 	  $(moonrun) -Iapps/moon/include -c apps/moon/lib/moonlibc/math/am.c $$d/am.o \
@@ -591,7 +591,7 @@ test_selfhost: host
 # libc (moonlibc/), math floor (am.c) and sys.o, bound by OUR OWN static linker -- no gcc,
 # no glibc, no ld anywhere. In test_slow, x86-64 only; supersedes test_selfhost.
 test_raw: host
-	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
+	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' gate_hosta='$(hosta)' gate_seat_c='$(R)/i/nokern.c $(R)/i/noblob.c' \
 	  sh test/gate/raw.sh x64 $(ho) $m $t
 # test_tco0 -- THE TRAMPOLINE, at full strength. `tco=0` is a documented knob
 # (common.mk) and it had rotted to a segfault in `bake`: the glaze emits the
@@ -631,7 +631,7 @@ test_asmops: host
 # it, both clamps, a cmdline past the buffer and a torn magic. Host cc, no love, no qemu.
 test_dtb:
 	@echo TEST test/gate/dtb.c
-	@$(CC) -I$R/src -I$R -o $(ho)/.dtbgate $R/test/gate/dtb.c
+	@$(CC) -I$R/i -I$R/l -I$R -o $(ho)/.dtbgate $R/test/gate/dtb.c
 	@$(ho)/.dtbgate
 # test_rvboot -- THE RISCV BRING-UP ON A HART: mkboot.l's sv39 lane and i/rv64/dtb.c
 # under qemu -M virt, entered the way the kernel will be (OpenSBI, S-mode, a1 the tree).
@@ -680,21 +680,21 @@ test_vec: host
 # test_extra only, so a deleted src/*.c goes green through test_slow either way.
 # $(moon_o) $(kart_o) is the link list, the artifact's own: the gate is handed make's
 # objects, it never globs the odir, and it links no less than `make` does.
-test_fixpoint: host $(love0) out/mooncc0.image
+test_fixpoint: host $(moon_seat_o) $(love0) out/mooncc0.image
 	@$(MAKE) -s a=$(hosta) $(ko)/$(hosta)/mkvec.l
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
-	  gate_kern_c='$(k_free_c)' \
-	  sh test/gate/fixpoint.sh $(ho) $(love0) $(hosta) $(moon_d) $(moon_o) $(kart_o)
+	  gate_kern_c='$(k_free_c)' gate_seat_c='$(R)/i/noblob.c' \
+	  sh test/gate/fixpoint.sh $(ho) $(love0) $(hosta) $(moon_d) $(moon_o) $(moon_seat_o) $(kart_o)
 # THE CROSS-MACHINE FIXPOINT, in effigy: the x-lane's
 # twin objects link love1, then love1 under qemu-user rebuilds itself natively and must
 # answer the same bytes -- the twin machine reproducing this machine's, on one box.
 # opt-in BY NAME (a full rebuild under emulation is minutes): `make test_xfixpoint`,
 # or `make xa=rv64 test_xfixpoint` for the other twin. skips loudly without qemu.
 .PHONY: test_xfixpoint
-test_xfixpoint: $(x_o) $(xkart_o) $(love0) out/mooncc0.image
+test_xfixpoint: $(x_o) $(x_seat_o) $(xkart_o) $(love0) out/mooncc0.image
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(wildcard $R/i/$(xa)/*.c)' \
-	  gate_kern_c='$(k_free_c)' \
-	  sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xa) mksys-$(xa) $(tco) $(xd) $(xa) $(x_o) $(xkart_o)
+	  gate_kern_c='$(k_free_c)' gate_seat_c='$(R)/i/noblob.c' \
+	  sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xa) mksys-$(xa) $(tco) $(xd) $(xa) $(x_o) $(x_seat_o) $(xkart_o)
 # test_fat -- the fat container (seed-universal U1): the one file answers through
 # its prefix + cache on the native machine, the pack is byte-deterministic, and
 # the foreign member answers under qemu-user. opt-in by name, like the x-lane.
@@ -734,7 +734,7 @@ test_rv64: host
 # leaf, OUR linker binds, qemu-riscv64 runs the whole corpus over the fresh egg. The riscv
 # backend loads into the sealed holo module at runtime for mksys. Opt-in; skips w/o qemu.
 test_raw_rv64: host
-	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
+	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' gate_hosta='$(hosta)' gate_seat_c='$(R)/i/nokern.c $(R)/i/noblob.c' \
 	  sh test/gate/raw.sh rv64 $(ho) $m $t
 # test_raw's a64 twin: mooncc -t a64 lays every object, mksys-a64 the syscall leaf,
 # OUR linker binds, qemu-user runs the WHOLE C-sorted $t over the fresh egg. $t must stay
@@ -742,7 +742,7 @@ test_raw_rv64: host
 # test/a64/callout.l rides past $t: it builds 'a64 nifs and RUNS them, so only an a64
 # love may read it -- gate_sentinel is how the gate knows it was read and not stopped short.
 test_raw_a64: host
-	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
+	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' gate_hosta='$(hosta)' gate_seat_c='$(R)/i/nokern.c $(R)/i/noblob.c' \
 	  gate_sentinel='test/a64/callout:.* ok' \
 	  sh test/gate/raw.sh a64 $(ho) $m $t test/a64/callout.l
 # test_thumb1 -- the ELF32/EM_ARM object writer (l/holo/obj.l objsecs32) end to end and the

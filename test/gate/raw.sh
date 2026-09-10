@@ -18,6 +18,11 @@
 # tail -- gate_love_c / gate_host_c, common.mk's own. one folder, named lanes: a
 # gate that globs a directory instead is a second authority on what the binary is.
 #
+# gate_seat_c is i/nokern.c + i/noblob.c: this link has no kmain.c under it and takes
+# neither out/src.o nor out/moonlibc.o, so it answers the kernel's doors and the carried
+# archives itself. Without them the bind fails on symbols nothing defines -- which is
+# the failure the weak defaults used to hide.
+#
 # usage: gate_love_c=.. gate_host_c=.. raw.sh TARGET OUTDIR LOVE CORPUS.l ..
 set -u
 gate_sentinel=${gate_sentinel-}
@@ -44,10 +49,12 @@ fail() { echo "FAIL $name: $*" >&2; exit 1; }
 
 # x64 is the native lane: it needs no emulator but mksys/moonlibc/math are x64-only,
 # so it is the host arch that gates it. The cross lanes need their qemu.
+# gate_hosta is common.mk's $(hosta), and must be: `uname -m` is the kernel's MACHINE,
+# never the ISA word -- it says x86_64 here and amd64 on the BSDs, so a bare comparison
+# against `x64` skips this lane on every machine there is.
 if [ -z "$need" ]; then
-  arch=$(uname -m)
-  if [ "$arch" != x64 ]; then
-    echo "$name: x86-64 only, skipped on $arch"
+  if [ "$gate_hosta" != x64 ]; then
+    echo "$name: x86-64 only, skipped on ${gate_hosta:-unknown}"
     exit 0
   fi
 elif ! command -v "$need" > /dev/null 2>&1; then
@@ -63,7 +70,7 @@ rm -f "$d"/*.o
 # shellcheck disable=SC2086  # $tflag is a word pair or empty, deliberately unquoted
 moonc() { LOVE_NO_IMAGE= "$m" mooncc $tflag "$@"; }
 
-for f in $gate_love_c $gate_host_c; do
+for f in $gate_love_c $gate_host_c $gate_seat_c; do
   b=$(basename "$f" .c)
   moonc -D ai_tco=1 -I"$ho" -I. -Il -Ii -Iout/lib -c "$f" "$d/$b.o" || fail "mooncc $tflag -c $f"
 done

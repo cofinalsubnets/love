@@ -96,6 +96,12 @@ out/lib/readme.bin: $(love0) $(R)/l/boot/post.l $(R)/VERSION
 ho = out$(hsuf)
 h_o = $(love_c:$(R)/%.c=$(ho)/%.o)
 host_o = $(host_c:$(R)/%.c=$(ho)/%.o)
+# the three a LINK names rather than the directory, one per thing it does without:
+# i/nokern.c the kernel's doors where no kmain.c stands under them, i/noblob.c the
+# carried archives where no laid object brings them, i/noosv.c the OS word where no
+# moonlibc writes it. the mooncc lane takes kart_o + out/src.o + out/moonlibc.o and
+# wants none of them; the HCC flavour is gcc and glibc alone, so it takes all three.
+seat_o = $(ho)/i/nokern.o $(ho)/i/noblob.o $(ho)/i/noosv.o
 hcc = LOVE_NO_IMAGE= $(CC) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Il -Ii -Iout/lib
 image_ldflags = -Wl,--section-start=.love.image=0x2000000
 .PHONY: force_hostcc
@@ -123,7 +129,7 @@ $(ho)/liblove.a: $(h_o)
 # pinned to out/0, never $(ho)/0: love0 is one binary whatever HCC and tco say
 # love0 takes the whole hosted surface less the crew catalog, PLUS its own seat --
 # i/main0.c, which host_c holds back because only this link has a use for it.
-love0_o = $(patsubst $(R)/%.c,out/0/%.o,$(filter-out $(R)/i/cats.c,$(host_c)) $(R)/i/main0.c $(love_c))
+love0_o = $(patsubst $(R)/%.c,out/0/%.o,$(filter-out $(R)/i/cats.c,$(host_c)) $(R)/i/main0.c $(R)/i/nokern.c $(R)/i/noblob.c $(R)/i/noosv.c $(love_c))
 out/0/i/main0.o: out/lib/boot0.h
 out/0/i/cb.o: l/quay/quay.c l/quay/nif.c l/quay/quay.h
 boot_cc = $(CCACHE) $(CC) $(ai_cflags) -fPIE -DLoveBoot -Dai_tco=0 -Dai_data_section=0 -DAiVersion='"$(love_base)+bootstrap"' -I. -Il -Ii -Iout/lib
@@ -193,12 +199,16 @@ $(1)_love_o = $$(love_tu_c:$$(R)/%.c=$$($(2))/%.o)
 $(1)_host_o = $$(host_c:$$(R)/%.c=$$($(2))/%.o)
 $(1)_math_o = $$(patsubst apps/moon/lib/moonlibc/%.c,$$($(2))/moonlibc/%.o,$$(wildcard apps/moon/lib/moonlibc/math/*.c))
 $(1)_o = $$($(1)_love_o) $$($(1)_host_o) $$($(1)_math_o) $$($(2))/sys.o
+# ..and the one this lane's own LINK owes: the fixpoint gates relink these objects without
+# out/src.o, so they carry i/noblob.c's empty archives instead. deliberately NOT in $(1)_o
+# -- the artifact link takes the laid object and would collide.
+$(1)_seat_o = $$($(2))/i/noblob.o
 $$($(1)_love_o): $$($(2))/%.o: $$(R)/%.c $$(love_h) $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
 	@$$($(3)) -D ai_tco=$$(tco) -D AiHaveVersionH -I$$(ho) -I. -Il -Ii -Iout/lib -c $$< $$@
 $$($(2))/l/love.o: out/lib/love_version.h   # only this TU carries the version id
-$$($(1)_host_o): $$($(2))/%.o: $$(R)/%.c $$(love_h) $$(moon0_dep)
+$$($(1)_host_o) $$($(1)_seat_o): $$($(2))/%.o: $$(R)/%.c $$(love_h) $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
 	@$$($(3)) -D ai_tco=$$(tco) -I$$(ho) -I. -Il -Ii -Iout/lib -c $$< $$@
@@ -233,10 +243,10 @@ out/.mksys-cat.l: $(mksys_l) out/.mksys-cat.list
 	@mkdir -p $(dir $@)
 	@cat $(mksys_l) > $@
 ifneq ($(HCC),)
-$(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/l/love_data.ld
+$(ho)/love $(ho)/love.cand: $(host_o) $(seat_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/l/love_data.ld
 	@echo '$(t_ld)	'$@
 	@mkdir -p $(dir $@)
-	@$(hcc) -o $@ $(host_o) $(ho)/liblove.a $(image_ldflags) $(data_ld)
+	@$(hcc) -o $@ $(host_o) $(seat_o) $(ho)/liblove.a $(image_ldflags) $(data_ld)
 else
 moonlibc_src = $(wildcard apps/moon/lib/moonlibc/*.c apps/moon/lib/moonlibc/*.h \
                         apps/moon/lib/moonlibc/*/*.c apps/moon/lib/moonlibc/*/*.h)

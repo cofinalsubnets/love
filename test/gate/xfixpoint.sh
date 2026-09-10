@@ -21,7 +21,9 @@
 # (mkobj below) and the rosters arrive in the environment -- gate_love_c / gate_host_c /
 # gate_arch_c / gate_kern_c -- so a rename in the Makefile cannot leave this behind.
 #
-# usage: gate_love_c=.. gate_host_c=.. gate_arch_c=.. gate_kern_c=..
+# gate_seat_c is i/noblob.c: this pair lays no out/src.o, so it answers the carried
+# archives itself -- and rides the OBJ list, or the twin link cannot find the body.
+# usage: gate_love_c=.. gate_host_c=.. gate_arch_c=.. gate_kern_c=.. gate_seat_c=..
 #        xfixpoint.sh OUTDIR LOVE0 QEMU XTGT MKSYS TCO XD XA OBJ...
 set -u
 
@@ -72,7 +74,7 @@ for f in $gate_love_c; do
   moon1 -D ai_tco="$tco" -D AiHaveVersionH -I"$ho" -I. -Il -Ii -Iout/lib -c "$f" "$o" \
     || fail "love1 mooncc -c $f"
 done
-for f in $gate_host_c; do
+for f in $gate_host_c $gate_seat_c; do
   mkobj "$f"
   moon1 -D ai_tco="$tco" -I"$ho" -I. -Il -Ii -Iout/lib -c "$f" "$o" || fail "love1 mooncc -c $f"
 done
