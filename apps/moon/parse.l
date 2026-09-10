@@ -133,7 +133,9 @@
             "__extension__" "_Thread_local" "__thread")
    ; typeof's three spellings; the bare one is gnu-mode's and c23's. not reserved in
    ; C11, so an object named `typeof` reads as a declaration (the typedef table wins first)
-   tyofid '("__typeof" "__typeof__" "typeof")
+   ; typeof's spellings, plus C23's typeof_unqual -- which is the same operator here,
+   ; since a type in this compiler has never carried a qualifier to strip
+   tyofid '("__typeof" "__typeof__" "typeof" "__typeof_unqual__" "typeof_unqual")
    ; gcc's __auto_type: the declared type IS the initializer's, so it stands where a
    ; type begins and is read by looking past the one name it allows
    autoid "__auto_type"
@@ -686,6 +688,10 @@
    (pmembers ps ts acc)                             ; member pairs ((name ty)..); () name = anonymous splice; (name ty width) = a bitfield
     (? !(two? ts) ()
        (peekp ts "}") [(rev acc) >ts]
+       ; a bare `;` in a struct body declares nothing. C11 has no such struct-declaration
+       ; and gcc takes one anyway (C23 spells it); the kernel's DEFINE_LOCK_GUARD_0 lays
+       ; `struct { void *lock; ; }` through a macro that cannot know whether it is empty
+       (peekp ts ";") (pmembers ps >ts acc)
        ; C11 6.7.2.1: a static_assert-declaration is a struct-declaration, and it declares
        ; no member. the kernel's const_true/BUILD_BUG_ON_ZERO idiom is `sizeof(struct
        ; {_Static_assert(..);})`, so a whole struct body can be nothing but one
@@ -697,7 +703,9 @@
        ; first client is our own C, so it rides `moon` (the default) and not a HolyC front.
        ; it is read before the type parse because a label has no type to parse; and only
        ; where the dialect says so, since under -std=c this is a syntax error and stays one.
-       (moon? ps && plabel? ts)
+       ; ..and it must not be a TYPE name: `s32:32` is an anonymous bitfield over a
+       ; typedef, which reads exactly like a label and is what linux/timex.h writes
+       (moon? ps && plabel? ts && !(tkbty? ps <ts))
         (: nm (tkv <ts)
            (? (two? (want >ts ":")) (pmembers ps >>ts ([nm 'label] . acc)) ()))
        (: br (pbty ps ts)
@@ -705,11 +713,6 @@
              (: bty <br ts2 <>br
                 (? (peekp ts2 ";")                   ; an anonymous struct/union member
                    (? (stru? bty) (pmembers ps >ts2 ([() bty] . acc)) ())
-                   (peekp ts2 ":")                   ; an anonymous bitfield (padding / `:0` aligner): () name + width
-                   (: bw (pbits ps ts2)
-                      (? !(two? bw) ()
-                         (: rest (want <>bw ";")
-                            (? (two? rest) (pmembers ps rest ([() bty <bw] . acc)) ()))))
                    (: mq (qspec ps ts bty)   ; _Generic's mask for this run; playout has no slot for it
                       (dfin mem2 toks acc2)          ; after a declarator (+ optional bitfield): , or ;
                        (: _ (? (<mem2 && mq) (pin ps 'qmemacc ([<mem2 mq] . peep ps 'qmemacc ())) 0)
@@ -717,6 +720,11 @@
                              (: rest (want toks ";")
                                 (? (two? rest) [(mem2 . acc2) rest] ()))))
                       (dts ts3 acc2)                 ; dtor [: width] (, dtor [: width])* ;
+                       ; an anonymous bitfield (padding, or a `:0` aligner) is a declarator of
+                       ; the list like any other -- `u32 : 31, invalid : 1;` names only the second
+                       (? (peekp ts3 ":")
+                          (: bw (pbits ps ts3)
+                             (? !(two? bw) () (dfin [() bty <bw] (pattr <>bw) acc2)))
                        (: dr (pdtor ps ts3 bty)
                           (? !(two? dr) ()
                              (peekp <>dr ":")        ; a bitfield: append the width to (name ty)
@@ -724,7 +732,7 @@
                                  (? !(two? bw) () (dfin (<dr + [<bw]) (pattr <>bw) acc2)))
                              ; a trailing __attribute__((..)) on a member declarator. an
                              ; `aligned` ask drops here as it does on the leading spelling
-                             (dfin <dr (pattr <>dr) acc2)))
+                             (dfin <dr (pattr <>dr) acc2))))
                       r (dts ts2 ())
                       ; <r is reversed (dts links) -- and acc accumulates reversed
                       ; too (pmembers revs at "}"), so prepend it as is: a second rev
