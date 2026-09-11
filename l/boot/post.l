@@ -2122,19 +2122,41 @@
                  (ours? c) (go (k + 1) (s . acc))
                  ())))
        (2 <= n && w 0 = 45 && !(w 1 = 45) ? (go 1 ()) ()))
-   ; (uopt as t vals reps) -> [t stacked rest]: every flag pinned on t under its own charm,
-   ; a value flag pinning the (1 v) wrapper -- never the bare text, since `two?` is false
-   ; for a one-element list and a bare "" would read as absent -- and a letter in `reps`
+   ; (uopt as t vals reps longs) -> [t stacked rest]: every flag pinned on t under its own
+   ; key, a value flag pinning the (1 v) wrapper -- never the bare text, since `two?` is
+   ; false for a one-element list and a bare "" would read as absent -- and a key in `reps`
    ; stacking into a list instead, that being the option a tool spells more than once.
    ; `rest` is the operands, `--` ends the flags. () when a value flag is left without one,
    ; which is why the answer is read with `two?` and not for truth.
-   (uopt as t vals reps)
+   ;
+   ; `longs` maps a long flag's NAME, no dashes, to the key it pins under: a charm, so that
+   ; --width and -w are ONE option with one reader, or any other value where there is no
+   ; letter to share (the name itself reads well). () is an applet with no long flags, and
+   ; a name the map does not carry is not ours -- that word ends the flags and becomes an
+   ; operand, which is what an unknown long flag did here before there was a map at all.
+   ; --name=VALUE is taken only where the name's key is in `vals`; a glued value on a flag
+   ; that takes none is not ours either, rather than a value silently dropped.
+   (uopt as t vals reps longs)
     (: (pinv c v es) (? (elem c reps) (v . es) (: _ (pin t c [1 v]) es))
-       ; the exploded word, then the argv tail behind it. a value letter ends its chain, so
+       (lgot nm) (? (tablet? longs) (peep longs nm ()) ())
+       ; the key a flag word pins under: a long word's name through the map, a short word's
+       ; own letter. one key per option however it was spelled.
+       (ukey w) (? (w 1 = 45) (lgot (snip w 2 #w)) (w 1))
+       ; ONE long word into the shape uopt1 answers for a short cluster, so `eat` walks
+       ; either: the word alone, or the word and the value that was glued behind its `=`.
+       (long1 a)
+        (: n #a
+           e ((: (go i) (? (n <= i) -1 (a i = 61) i (go (i + 1)))) 2)
+           c (lgot (snip a 2 (e < 0 ? n e)))
+           (? (nil? c) ()
+              (e < 0) [a]
+              (elem c vals) [(snip a 0 e) (snip a (e + 1) n)]
+              ()))
+       ; the exploded word, then the argv tail behind it. a value key ends its chain, so
        ; at most one element of `bs` is ever a value and it is the last.
        (eat bs rest es)
         (? !(two? bs) (walk rest es)
-           (: w <bs c (w 1)
+           (: w <bs c (ukey w)
               (? (elem c vals)
                  (? (two? >bs)  (walk rest (pinv c <>bs es))     ; the value rode along glued
                     (two? rest) (walk >rest (pinv c <rest es))   ; ..or it is the next word
@@ -2144,6 +2166,8 @@
         (? !(two? as) [t (rev es) ()]
            (: a <as
               (? (a = "--") [t (rev es) >as]
+                 (2 < #a && a 0 = 45 && a 1 = 45)
+                  (: bs (long1 a) (? (two? bs) (eat bs >as es) [t (rev es) as]))
                  (: bs (uopt1 a () vals)
                     (? (two? bs) (eat bs >as es) [t (rev es) as])))))
        (walk as ()))

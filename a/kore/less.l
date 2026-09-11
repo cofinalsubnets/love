@@ -426,7 +426,7 @@
    ; the flags kore's pager knows, and the complaint for anything else
    (pgopts as)
     (: t (tablet 0)
-       o (uopt as t () '(101))
+       o (uopt as t () '(101) ())
        _ (? (two? o) () (udie 2 "less: bad option"))
        _ (foldl (\ a c (? (elem c '(78 105 115 101)) a
                           (udie 2 ("less: unknown option -" + string c))))

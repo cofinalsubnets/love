@@ -49,7 +49,7 @@
        (foldl best () ms))
    (grep-main as)
     (: t (tablet 0)
-       o (uopt as t '(101 109) '(101))              ; -e pattern (stacks), -m count
+       o (uopt as t '(101 109) '(101) ())              ; -e pattern (stacks), -m count
        _ (? (two? o) () (udie 2 "grep: bad option"))
        eps <>o rest <>>o
        ; with -e the whole tail is files; without it the first word is the pattern

@@ -68,7 +68,7 @@
     (? (lit? (cite 'posix 'mknod)) (mknod p md dev) 'enosys)
    (mkfifo-main as)
     (: t (tablet 0)
-       o (uopt as t '(109) '(101))
+       o (uopt as t '(109) '(101) ())
        _ (? (two? o) () (udie 1 "mkfifo: -m wants a mode"))
        v (uoptv t 109)
        md (? (string? v) (uoct v) 438)          ; 0666, the mode mkfifo(1) defaults to
@@ -84,7 +84,7 @@
        _ (flush err) (? ok 0 1))
    (mknod-main as)
     (: t (tablet 0)
-       o (uopt as t '(109) '(101))
+       o (uopt as t '(109) '(101) ())
        _ (? (two? o) () (udie 1 "mknod: -m wants a mode"))
        v (uoptv t 109)
        md (? (string? v) (uoct v) 438)
@@ -184,7 +184,7 @@
        (? (two? st) [nm st p] ()))
    (ls-main as)
     (: t (tablet 0)
-       o (uopt as t '() '(101))
+       o (uopt as t '() '(101) ())
        _ (? (two? o) () (udie 2 "ls: an option wants a value"))
        ops <>>o
        (opt? c) (: n #uls-opts
@@ -448,7 +448,7 @@
        (walk "/" (rp-parts (rl-abs q)) n))
    (realpath-main as)
     (: t (tablet 0)
-       o (uopt as t () '(101))
+       o (uopt as t () '(101) ())
        fs <>>o
        _ (? (two? fs) () (udie 1 "usage: realpath [-e|-m|-s] PATH.."))
        e? (peep t 101 0) m? (peep t 109 0) s? (peep t 115 0)

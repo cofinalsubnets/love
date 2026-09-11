@@ -130,7 +130,7 @@
     ((two? rest) && (two? >rest) && (0 < #(<rest) <= 4) && (47 < (<rest 0) < 58))
    (man-main as)
     (: t (tablet 0)
-       o (uopt as t () '(101))
+       o (uopt as t () '(101) ())
        _ (? (two? o) () (udie 2 man-usage))
        _ (foldl (\ a c (? (c = 119) a (udie 2 ("man: unknown option -" + string c)))) 0 (keys t))
        rest <>>o

@@ -49,7 +49,7 @@
    (h2t-lay s w tty?) (: t ((cite 'lapiz 'ht->tty) s w) (? tty? t (usgr t)))
    (html2text-main as)
     (: t (tablet 0)
-       o (uopt as t '(119) '(101))                       ; -w takes a value
+       o (uopt as t '(119) '(101) ())                       ; -w takes a value
        _ (? (two? o) () (udie 2 h2t-usage))
        _ (foldl (\ a c (? (c = 119) a
                           (udie 2 ("html2text: unknown option -" + string c)))) 0 (keys t))
@@ -66,7 +66,7 @@
        ((cite 'lapiz 'md->ht) s))
    (markdown-main as)
     (: t (tablet 0)
-       o (uopt as t '(116 119) '(101))                   ; -t and -w take values
+       o (uopt as t '(116 119) '(101) ())                   ; -t and -w take values
        _ (? (two? o) () (udie 2 md-usage))
        _ (foldl (\ a c (? (elem c '(116 119)) a
                           (udie 2 ("markdown: unknown option -" + string c)))) 0 (keys t))
