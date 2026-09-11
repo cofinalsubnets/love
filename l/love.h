@@ -296,9 +296,20 @@ struct ai_def { char const *n; union u v; char const *m; };
 #define LvDefAlign 4
 #endif
 extern struct ai_def const __start_love_nifs[], __stop_love_nifs[];
+// `used` keeps the compiler off it; a LINKER doing --gc-sections is a second question,
+// and the answer is SHF_GNU_RETAIN. nothing references a row -- the bracket is how they
+// are found -- so a collecting linker drops the section and leaves __start_/__stop_
+// undefined, which is a love embedded by cargo failing to link. only the ambient-cc
+// lane meets such a linker: mooncc and holo collect nothing, and mooncc is not asked to
+// parse an attribute it has no use for.
+#if defined(__GNUC__) && !defined(__mooncc__) && __GNUC__ >= 11
+#define LvNifKeep , retain
+#else
+#define LvNifKeep
+#endif
 #define LvNif(nm, fn, mod) \
   static struct ai_def const \
-    __attribute__((section("love_nifs"), used, aligned(LvDefAlign))) \
+    __attribute__((section("love_nifs"), used, aligned(LvDefAlign) LvNifKeep)) \
     _ainif_##fn = { (nm), { .k = (fn) }, (mod) }
 
 // port vtable -- what a device owes, and nothing else. a NULL slot means no method

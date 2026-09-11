@@ -3,11 +3,9 @@
 // make here instead of reading a path out of the environment.
 fn main() {
     let dir = std::env::var("LOVE_LIB_DIR").unwrap_or_else(|_| "../../../b".into());
-    println!("cargo:rustc-link-search=native={dir}");
-    println!("cargo:rustc-link-lib=static=lv");
-    // the nif section's __start/__stop bracket: --gc-sections drops love_nifs
-    // where nothing keeps it, and lld then leaves the pair undefined. see the
-    // README -- the alternative is `retain` on the LvNif macro in l/love.h.
-    println!("cargo:rustc-link-arg=-Wl,-z,nostart-stop-gc");
-    println!("cargo:rerun-if-changed={dir}/liblv.a");
+    // the object, not an archive: a love_nifs row is referenced by nothing, so an
+    // archive member carrying one is never pulled and the __start_/__stop_ bracket
+    // comes out undefined. one .o on the link line, and no flags of ours.
+    println!("cargo:rustc-link-arg={dir}/liblv.o");
+    println!("cargo:rerun-if-changed={dir}/liblv.o");
 }

@@ -11,7 +11,7 @@ package love
 
 /*
 #cgo CFLAGS: -I${SRCDIR}/../../
-#cgo LDFLAGS: ${SRCDIR}/../../../../b/liblv.a
+#cgo LDFLAGS: ${SRCDIR}/../../../../b/liblv.o
 #include <stdlib.h>
 #include "lv.h"
 

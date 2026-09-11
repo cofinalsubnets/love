@@ -49,7 +49,7 @@ x64, gcc, this tree, the demo programs in this folder.
 
 | | |
 |---|---|
-| `b/liblv.a` (core + seat) | 2.0 MB, ~280 KB of text |
+| `b/liblv.o` (core + seat, one object) | 2.7 MB, ~280 KB of text |
 | `b/liblv.so`, exports trimmed | 1.7 MB, 26 dynamic symbols |
 | open, baking the egg | 550-700 ms |
 | open, waking a saved image | 3 ms |
@@ -71,20 +71,22 @@ to the egg bake -- correct, and 200x slower in silence. An embedder that ships
 an image must fail loudly instead, or the first relink turns a 3 ms open into
 half a second and nothing says so.
 
-**`-Dai_data_section=0` removes the linker script.** The data sentinels
-normally tile a section that `l/love_data.ld` lays, which means every foreign
-build system has to pass `-Wl,-T`. The wasm lane already takes a comparison
-path instead, and taking it here costs nothing measurable on the apply
-benchmark -- which is what lets `cargo` and `go build` link love with no link
-arguments of their own. The real cost should be read off the tree's own bench
-before this becomes the default anywhere.
+**The runtime ships partially linked, and that is the whole build story.**
+`ai_typ` reads nine one-instruction functions as an array (`love.c`'s DSENT), so
+they must lie at a fixed stride, and the ambient `ld` only does that under
+`l/love_data.ld`. Laying the tiling in OUR build with `ld -r` settles it inside
+the object -- `.love.data` comes out one 9x16 section and the final link places
+it whole, offsets already right. So an embedder keeps the fast `ai_typ` and
+carries no linker script: the alternative, `-Dai_data_section=0`, buys the same
+freedom by putting a comparison chain on the path every value dispatch takes.
 
-**`__start_love_nifs` needs keeping.** Nothing in a pure embedding references
-the `love_nifs` section, so `--gc-sections` drops it and lld then leaves the
-bracket undefined -- the failure `l/love.h`'s own comment predicts. Rust needs
-`-Wl,-z,nostart-stop-gc`; go's cgo rejects that flag outright, and links the
-archive by path instead. The tidier fix is `__attribute__((retain))` on the
-`LvNif` macro, which would want checking against holo's linker first.
+**`__start_love_nifs` needs keeping, twice over.** Nothing references a
+`love_nifs` row -- the bracket is how they are found -- so it falls to two
+different collectors. An ARCHIVE never pulls the member in the first place,
+which is why the deliverable is an object; and `--gc-sections`, which rust
+passes, drops the section even from an object. The second wants
+SHF_GNU_RETAIN, so `LvNif` carries `retain` on the ambient-cc lane only --
+mooncc and holo collect nothing and are not asked to parse it.
 
 **Two sessions in one process work.** `i/lib/two.c` opens two, defines a
 different `x` in each, churns half a million words through one and reads the

@@ -121,29 +121,26 @@ $(ho)/love $(ho)/love.cand: $(ho)/%: $(ho)/%.raw $(ho)/.dist-cat.l
 .PHONY: candidate
 candidate: $(ho)/love.cand
 
-# the runtime as an archive, and there are two of them for one reason: a link that
-# owns no linker script wants the data sentinels off the section. -Dai_data_section=0
-# is the wasm lane's own answer to ai_typ, and it is the difference between a foreign
-# build system embedding love in one line and one made to carry a -Wl,-T of ours.
-# one roster, one recipe, one flag between them. the plain lane's objects stay under
-# $(ho) proper, where the special deps below name them by hand.
-# $1 the archive, $2 its objects.
-define ar_lane
-$$(ho)/$(1): $(2)
-	@echo '$$(t_ar)	'$$@
-	@mkdir -p $$(dir $$@)
-	@rm -f $$@; ar rcs $$@ $$^
-endef
-$(eval $(call ar_lane,liblove.a,$$(h_o)))
-
-# ..the second lane, for i/lib's embedders. its own object dir, since the flag is
-# not the one the artifact's link was compiled with.
-nosec_o = $(love_c:$(R)/%.c=$(ho)/nosec/%.o)
-$(ho)/nosec/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
-	@echo '$(t_cc)	'$@
+$(ho)/liblove.a: $(h_o)
+	@echo '$(t_ar)	'$@
 	@mkdir -p $(dir $@)
-	@$(hcc) -Dai_data_section=0 -c $< -o $@
-$(eval $(call ar_lane,liblove-nosec.a,$$(nosec_o)))
+	@rm -f $@; ar rcs $@ $^
+
+# ..and the same runtime PARTIALLY LINKED, which is the shape anything outside this
+# build wants. the data sentinels are nine one-instruction functions that ai_typ reads
+# as an array (love.c's DSENT), so they must lie at a fixed stride -- and the ambient ld
+# only does that under l/love_data.ld. laying the tiling HERE, with -r, settles it
+# inside the object: .love.data comes out one 9*16 section and the final link places it
+# whole, wherever it likes, offsets already right. so an embedder keeps the FAST ai_typ
+# and carries no linker script of ours, which is the whole trade -- the alternative was
+# -Dai_data_section=0 and the comparison chain, and ai_typ is on the path every value
+# dispatch takes. the love_nifs bracket comes free with it: the section is in the object,
+# so __start_/__stop_ resolve without --whole-archive or -z nostart-stop-gc, neither of
+# which an archive's members can do without.
+$(ho)/liblove.o: $(h_o) $(R)/l/love_data.ld
+	@echo '$(t_ld)	'$@
+	@mkdir -p $(dir $@)
+	@$(CC) -nostdlib -no-pie -Wl,-r -o $@ $(h_o) -Wl,-T,$(R)/l/love_data.ld
 
 # pinned to b/0, never $(ho)/0: love0 is one binary whatever HCC and tco say
 # love0 takes the whole hosted surface less the crew catalog, PLUS its own seat --
