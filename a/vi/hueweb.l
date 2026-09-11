@@ -41,41 +41,42 @@
 (module (hueweb hw-vars hw-css hw-body hw-page)
 (borrow 'vi)
 (:
-   (hw-cat l)   (foldl (+) "" l)
+   ; the first row of tbl headed by k. config.l's two tables are both keyed that
+   ; way and there is no assoc in the vocabulary, so this is the one walk for both
+   (hw-find tbl k) (:- (f tbl) (f l) (? (one? l) () (<<l = k) <l (f >l)))
    ; the three characters html cannot hear otherwise
    (hw-q s) (:- (g 0 "")
-                (g i acc) (? (i < #s)
-                             (: c (s i)
-                                (g (i + 1) (acc + (? (c = 38) "&amp;" (c = 60) "&lt;"
-                                                     (c = 62) "&gt;" (string c)))))
-                             acc))
+             (g i acc) (i >= #s ? acc
+                        (: c (s i)
+                         (g (i + 1) (acc + (c @ 38 "&amp;" 60 "&lt;" 62 "&gt;" (string c)))))))
    ; the final newline ends the last line, it does not open another: a file of n lines
    ; that ends in one would otherwise paint an n+1'th empty row.
    (hw-lines s) (:- (g 0 0 ())
-                    (g i st acc) (? !(i < #s) (st < i ? (rev (snip s st i . acc)) (rev acc))
-                                    (s i = 10) (g (i + 1) (i + 1) (snip s st i . acc))
-                                    (g (i + 1) st acc)))
+                 (g i st acc) (? (i >= #s) (st < i ? (rev (snip s st i . acc)) (rev acc))
+                                 (s i = 10) (g (i + 1) (i + 1) (snip s st i . acc))
+                                 (g (i + 1) st acc)))
 
    ; --- the palette ----------------------------------------------------------
    ; a scheme off config.l's hue-page: one palette, or a light and a dark one. a role
    ; is the variable of its own name, so the frame says var(--link) and the table
    ; answers. an unknown scheme is an empty block, and the page wears the UA's colours.
    (hw-vars nm)
-   (: s ((: (f l) (? (atom? l) () (= <<l nm) <l (f >l))) hue-page)
-      (roles p) (":root{" + hw-cat (map (r \ "--" + string <r + ":" + <>r + ";") p) + "}\n")
-      (? !(two? s) ""
+   (: s (hw-find hue-page nm)
+      (roles p) (":root{" + cats (map (r \ "--" + string <r + ":" + <>r + ";") p) + "}\n")
+      ; the parens around the first `roles` are load-bearing: bare, the + binds its
+      ; two neighbours and leaves `roles` standing as an element of the ? -- a
+      ; predicate, always true, and the call never happens
+      (? (one? s) ""
          (roles (s 1)) + (two? >>s ? ("@media (prefers-color-scheme:dark){" + roles (s 2) + "}\n") "")))
 
    ; --- the stylesheet -------------------------------------------------------
    ; one rule per class, coloured by the group that class names. a class whose
    ; group the theme does not carry gets no rule at all rather than a guess.
-   (hw-row g) (:- (f hue-theme) (f l) (? (atom? l) () (= <<l g) <l (f >l)))
-   (hw-faces l) (hw-cat (map (f \ ? (= f 'bold) ";font-weight:700"
-                                    (= f 'italic) ";font-style:italic" "") l))
-   (hw-rule r) (: t (hw-row (hue-grp r))
-                  (? !(two? t) ""
-                     (".hue .l-" + string (hue-cls r) + "{color:" + (t 2)
-                      + hw-faces (t 3) + "}\n")))
+   hw-faces (cats * map (f \ f @ 'bold ";font-weight:700" 'italic ";font-style:italic" ""))
+   ; a row is (group cterm256 "#rrggbb" faces); no row, no rule
+   (hw-rule r) (hw-find hue-theme (hue-grp r) @
+                (_ _ col fs) (".hue .l-" + string (hue-cls r) + "{color:" + col + hw-faces fs + "}\n")
+                "")
    ; the frame: a slab to sit on, and line numbers out of a css counter -- so the
    ; markup carries one span per line and no number, and selecting the code copies
    ; the code alone. the page's own colours answer to the reader's theme; the
@@ -106,27 +107,26 @@ dt{font-weight:600;margin-top:.8rem}
 dd{margin:0 0 .2rem 1.2rem;color:var(--dim)}
 hr{border:0;border-top:1px solid var(--rule);margin:2rem 0}
 "
-   (hw-css nm) (hw-vars nm + hw-frame + hw-cat (map hw-rule hue-classes))
+   (hw-css nm) (hw-vars nm + hw-frame + cats (map hw-rule hue-classes))
 
    ; --- one file, painted ----------------------------------------------------
    ; a line becomes its runs, in order, with the unclaimed gaps between them kept
    ; as plain text. `in` rides from line to line for the string carry.
    (hw-span c a b s) ("<span class=\"l-" + string c + "\">" + hw-q (snip s a b) + "</span>")
    (hw-paint bk s in)
-   (: r (hue-lex bk s in 1)
-      (go rs i acc)
-       (? !(two? rs) [(acc + hw-q (snip s i #s)) <>r]
-          (<rs @ [c a b]
-           (go >rs b (acc + hw-q (snip s i a) + hw-span c a b s))))
-      (go <r 0 ""))
+   (:- (go <r 0 "")
+    r (hue-lex bk s in 1)
+    (go rs i acc)
+     (? (one? rs) [(acc + hw-q (snip s i #s)) <>r]
+      (<rs @ [c a b] (go >rs b (acc + hw-q (snip s i a) + hw-span c a b s)))))
    (hw-body path src)
-   (: bk (hue-book 0)
-      (go ls k in acc)
-       (? !(two? ls) acc
-          (: p (hw-paint bk <ls in)
-             (go >ls (k + 1) <>p
-                 (acc + "<span class=\"ln\" id=\"L" + show k + "\">" + <p + "\n</span>"))))
-      ("<pre class=\"hue\">" + (go (hw-lines src) 1 0 "") + "</pre>"))
+   (:- ("<pre class=\"hue\">" + go (hw-lines src) 1 0 "" + "</pre>")
+    bk (hue-book 0)
+    (go ls k in acc)
+     (? (one? ls) acc
+        (hw-paint bk <ls in @ (txt in2)
+         (go >ls (k + 1) in2
+             (acc + "<span class=\"ln\" id=\"L" + show k + "\">" + txt + "\n</span>")))))
 
    ; --- the page -------------------------------------------------------------
    ; small on purpose: a title, whatever stylesheets the caller wants linked, a
@@ -136,8 +136,8 @@ hr{border:0;border-top:1px solid var(--rule);margin:2rem 0}
    ("<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
     + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
     + "<title>" + hw-q ttl + "</title>\n"
-    + hw-cat (map (h \ "<link rel=\"stylesheet\" href=\"" + hw-q h + "\">\n") hrefs)
+    + cats (map (h \ "<link rel=\"stylesheet\" href=\"" + hw-q h + "\">\n") hrefs)
     + "</head>\n<body>\n"
-    + (0 < #home ? ("<header><a href=\"" + hw-q home + "\">love</a></header>\n") "")
+    + (#home ? ("<header><a href=\"" + hw-q home + "\">love</a></header>\n") "")
     + "<main>\n<article>\n" + body + "\n</article>\n</main>\n</body>\n</html>\n"))
 ) ; module hueweb
