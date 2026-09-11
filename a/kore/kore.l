@@ -34,16 +34,13 @@
 ;   kore sh [-c CMD | file]          the shell, lush (a/lush.l; also `lush`, and an sh symlink)
 ; (the C compiler is NO LONGER here -- it split into its own app `mooncc`, doc/misc/moon.md.)
 ;
-; loads last in the kore cat, when every tool main is already defined; the tool files'
-; own seats stay quiet here (no file of theirs sits in the program seat), so this
-; dispatcher is the one thing that fires. the module head is the export list -- this is
-; the last kore block in every cat, so its leave prunes the whole module down to the
-; names below: every tool's <name>-main (lush's in-image lane and any (cite 'kore ..)
-; reach them by that spelling), the u/text floors later cat members read bare, and
-; kore-main. the helpers this file defines (die, read-text, the registry) stay private.
-; every path answers a charm through core.l's urun, so an in-image caller lives through
-; a tool that would have quit (the SEAT below is the one site that quits).
-; a main here leaves deep through `die`, never `quit`.
+; loads LAST in the kore cat, when every tool main is defined, and its leave prunes the
+; module down to the head below: every tool's <name>-main (the spelling lush's in-image lane
+; and any (cite 'kore ..) reach), the u/text floors later cat members read bare, and
+; kore-main. die, read-text and the registry stay private.
+; every path answers a charm through core.l's urun, so an in-image caller lives through a
+; tool that would have quit -- the SEAT below is the one site that quits, and a main here
+; leaves deep through `die`.
 (module (kore kore-main wget-main wg-digits wg-find wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
         diff-main as-main ar-main ld-main nm-main
         arch-main awk-main base32-main base64-main basename-main bracket-main cat-main
@@ -95,12 +92,9 @@
           _ (say err ("as: wrote " + dst)) _ (put err 10)
           0))
 
-   ; ar: the classic "!<arch>" archive, GNU shape to the byte -- the bytes come
-   ; from holo's `arbytes` (l/holo/link.l), beside the reader that pulls them
-   ; back, so mooncc's runtime archive and this one are the same writer.
-   ; `ar rcs OUT M..` writes out whole (fresh, like liblove.a's rm-first recipe),
-   ; member names stored as basenames (GNU's rule). `ar t OUT` lists.
-   ; (x/d verbs: add when a real script wants them.)
+   ; ar: the classic "!<arch>" archive, GNU shape to the byte. the bytes come from holo's
+   ; `arbytes`, beside the reader that pulls them back, so mooncc's runtime archive and this
+   ; one share a writer. `ar rcs OUT M..` writes out whole; names stored as basenames.
    (ar-write dst ms)                                          ; ms: ((basename bytes)..)
     (: q (open dst "w")
        _ (? (hot? q) () (die ("ar: cannot write " + dst)))
@@ -181,18 +175,12 @@
        _ (chmod o 493)
        0)
 
-   ; nm: the symbols a file names, in nm's three columns -- VALUE type NAME, over
-   ; l/holo/link.l's ld-syms. the letter is ELF's own facts and never a guess: U
-   ; undefined, a absolute, C common, else the defining section's flags pick T
-   ; executable / B nobits / D writable / R the rest, and a local bind lowercases it
-   ; -- that case is nm's whole convention. -g keeps the externals, the only view a
-   ; link has an opinion about; -u the undefined ones, which is what says a lane was
-   ; borrowed from libgcc rather than ours (u/moon-parity.sh reads exactly that).
-   ; an archive is not walked here: `ar t` lists members, and nm's per-member
-   ; header shape wants the member walk ar-t owns. an ELF of any e_type is fine.
-   ; the sort is by byte, which is `LC_ALL=C nm`'s order and not the bare `nm` a
-   ; desk with a locale set answers -- a build tool reads no locale, so the order
-   ; is the same on every machine.
+   ; nm: VALUE type NAME over l/holo/link.l's ld-syms. the letter is ELF's own facts, never
+   ; a guess: U undefined, a absolute, C common, else the section's flags pick T/B/D/R, and a
+   ; local bind lowercases it. -u names the undefined, which is what says a lane was borrowed
+   ; from libgcc rather than ours (u/moon-parity.sh reads exactly that).
+   ; the sort is BY BYTE -- `LC_ALL=C nm`'s order, so it is the same on every machine.
+   ; an archive is not walked here: nm's per-member header wants the walk `ar t` owns.
    (nm-sp w) (? (w < 1) "" (nm-sp (w - 1) + " "))
    (nm-hex v w) (: dg "0123456789abcdef"
                    (go k a) (? (k < 0) a (go (k - 1) (a + string (dg ((v // (k 16)) % 16)))))

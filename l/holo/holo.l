@@ -45,21 +45,18 @@
 ; ALU ops take either in the same slot with no syntax. the abstract register file is what makes the
 ; IR neutral: each backend maps r0..r14/sp onto its own encoding.
 
-; the backends reopen this module, each wearing the same (module 'holo head, so a frontend
-; cats this file plus the backends it wants into the text its boot evals and gets one layer.
-; its boot then says (borrow 'holo) and ai_shelve_ -- so holo registers without staying
-; ambient: a consumer either (borrow 'holo) and reads bare, or probes one member through
-; (cite 'holo 'assemble). a backend the frontend left out joins at runtime the same way every
-; cat does: (borrow 'holo), then the backend text.
+; the backends REOPEN this module, each wearing the same (module 'holo head, so a frontend
+; cats this file plus the backends it wants and gets one layer. a consumer then says
+; (borrow 'holo) and reads bare, or probes one member with (cite 'holo 'assemble); a backend
+; the frontend left out joins at runtime the same way.
 
 (module 'holo
 (: ;; -- a 0-based list accessor (prel has none; `nth` is not bound -- it absorbs as the zero
    ;; point). instruction forms read their operands through this. --
 
-   ;; -- bytes, little-endian: the leaves a backend emits immediates with. byte/le16/le32 ride the
-   ;; fast &/>> path (their inputs are always < 2^31, where & is exact). le64 must not: a movabs
-   ;; immediate can be a full 64-bit word >= 2^63 -- a bignum, where `&` drops the high limb -- so
-   ;; it normalizes negatives into [0,2^64) and slices with //%, both bignum-exact. --
+   ;; -- bytes, little-endian. byte/le16/le32 ride the fast &/>> path, their inputs always
+   ;; < 2^31 where & is exact. le64 MUST NOT: a movabs immediate can be a full 64-bit word,
+   ;; a bignum where `&` drops the high limb -- so it slices with //%, bignum-exact. --
    (catall ls) (foldr (+) () ls)                     ; concat a list of byte-lists
    (byte n)  (n & 255)
    (le16 n)  [(byte n) (byte (n >> 8))]

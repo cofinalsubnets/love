@@ -1,36 +1,29 @@
-; a/moon/clay.l -- clay: C as love data. the AST moon has produced all along,
-; given a name, a validator and a shower, so a piece of C can be generated from a
-; love table rather than transcribed by hand. the plan, the ranked slate and the
-; gates are doc/misc/clay.md.
+; a/moon/clay.l -- clay: C as love data. the AST moon has produced all along, given a name,
+; a validator and a shower, so a piece of C can be generated from a love table rather than
+; transcribed by hand. the plan, the ranked slate and the gates are doc/misc/clay.md.
 ;
-; a registered module: (borrow "a/moon/clay.l"), then clay-show / clay-ok? / clay-tags. nothing
-; here depends on the rest of moon -- a shower is pure AST -> text -- so a generator
+; a registered module: (borrow "a/moon/clay.l"), then clay-show / clay-ok? / clay-tags.
+; nothing here depends on the rest of moon -- a shower is pure AST -> text -- so a generator
 ; can take clay without the lexer, the preprocessor and the parser.
 ;
-; --- clay is a superset of cparse's AST, and has to be --------------------------
-; a top-level declaration mostly does not survive a parse:
-;
-;   typedef struct P { int x; } P;   ->  (tdef)          name and shape both gone
-;   int f(int a);                    ->  (proto "f")     the signature gone
-;   long g(int a) { .. }             ->  (fn "g" (("a" int)) (blk ..))   no return type
-;   static int const t[2] = ..       ->  (gdecl (("t" (arr int 2) ..)))  no static, no const
-;
-; that information lives in the side tables cparse answers alongside the tree (stag,
-; sigs) and in the parse state's static and alias tablets. gen.l is handed those
-; tables; a shower is not, having only the tree. so clay's grammar is cparse's tags
-; plus slots carrying what cparse drops, always appended, which is what keeps clay
-; acceptable to (cgen-obj ..) unchanged:
+; --- clay is a SUPERSET of cparse's AST, and has to be -------------------------
+; a top-level declaration mostly does not survive a parse: `typedef struct P {..} P;` is
+; (tdef), `int f(int a);` is (proto "f"), `long g(..){..}` loses its return type, a `static
+; int const t[2]` loses both qualifiers. what cparse drops lives in the side tables it
+; answers alongside the tree (stag, sigs) and in the parse state's static and alias tablets.
+; gen.l is handed those; a shower has only the tree. so clay's grammar is cparse's tags plus
+; slots carrying what cparse drops, always APPENDED, which keeps clay acceptable to
+; (cgen-obj ..) unchanged:
 ;
 ;   (fn name params body RET ATTRS)    the return type, absent = int; then attribute
 ;                                      spellings ("ai_noinline"), call-shaped as love.h's
-;   (proto name PARAMS RET ATTRS)      the same three on a forward declaration, which
-;                                      cparse keeps the name of and nothing else
+;   (proto name PARAMS RET ATTRS)      the same three on a forward declaration
 ;   (ret e PRE)                        a prefix spelling: `ai_musttail return ..`
 ;   (gdecl decls STOR)                 (static) / (extern) / (), absent = ()
 ;   (restrict t)                       the qualifier beside (const t) -- pointers only
 ;   (sassert e "msg")                  a _Static_assert, which cparse reduces to (tdef)
 ;   (tdef NAME TY)                     a real typedef, which cparse can never emit
-;   (sdef TAG FIELDS)                  a struct/union definition, which it can never emit
+;   (sdef TAG FIELDS)                  a struct/union definition, likewise
 ;   (named "lvm_t")   (const t)        type forms with no cparse counterpart
 ;   (arr t EXPR)                       a symbolic bound -- cparse folds these to numbers,
 ;   (didx EXPR val)                    a generator wants to say [kcharm], not [2]
@@ -39,23 +32,20 @@
 ;   (cpp-def NAME [BODY])              the preprocessor, likewise never captured
 ;   (cpp-undef NAME)   (cpp-if ARMS [ELSE])
 ;
-; a term that came out of cparse is therefore a subset term, and the lossy forms show
-; as the best C the tree can justify: an absent return type prints `int`, `(proto "f")`
-; prints `int f();`. `(tdef)` alone refuses, carrying nothing at all, and G1 counts
-; that refusal.
+; so a term out of cparse is a subset term, and a lossy form shows as the best C the tree
+; can justify: an absent return type prints `int`, `(proto "f")` prints `int f();`. `(tdef)`
+; alone carries nothing and refuses; G1 counts that refusal.
 ;
-; note and the cpp trio are emit-only: lex.l has no comment token and cpp runs before
-; the lexer, so neither ever comes back from a parse. doc/misc/clay.md prices the capture
-; side and says why the architecture conditionals cannot be folded away instead.
-;   (cpp-def NAME [BODY])  NAME a spelling, carrying its own parameter list where it has
-;                          one ("countof(_)"), which is what cpp reads. body absent is a
-;                          bare `#define` -- presence is the arity, never the value.
-;   (cpp-if ARMS [ELSE])   arms is ((cond items)..): the first arm `#if`, the rest
-;                          `#elif`, else the `#else` items. items are top-level forms at
-;                          column 0, so a cpp-if nests inside one as love.h's do.
-; a #define's body is tokens, not an expression: a spelling rides through verbatim,
-; while a clay expression renders at the tightest context and parenthesizes itself,
-; a macro body not being able to see where it is substituted.
+; note and the cpp trio are EMIT-ONLY: lex.l has no comment token and cpp runs before the
+; lexer, so neither comes back from a parse. clay.md prices the capture side.
+;   (cpp-def NAME [BODY])  NAME a spelling carrying its own parameter list where it has one
+;                          ("countof(_)"). body absent is a bare `#define` -- PRESENCE is
+;                          the arity, never the value.
+;   (cpp-if ARMS [ELSE])   arms is ((cond items)..): first arm `#if`, rest `#elif`. items
+;                          are top-level forms at column 0, so a cpp-if nests inside one.
+; a #define's body is TOKENS, not an expression: a spelling rides through verbatim, while a
+; clay expression renders at the tightest context and parenthesizes itself, a macro body not
+; being able to see where it is substituted.
 ; `#ifdef X` is `#if defined(X)` -- (call (var "defined") ((var "X"))), no node owed.
 (:
    ; --- the small vocabulary this file stands on ---------------------------------

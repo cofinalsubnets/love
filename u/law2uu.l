@@ -8,15 +8,11 @@
 ; so a law is written once. edit its spelling in law.l and the obligation moves
 ; with it -- `make test_uuvallaw` regenerates and diffs, and the proof is re-found.
 ;
-; the lift is kind-directed by the tower itself: every expression has a level in
-;   bool -- nat -- zed -- rea -- msr -- val
-; and a word fixes the level of its argument (net wants a val, re wants a msr)
-; and of its answer. an argument at the wrong level is coerced along the sections
-; going up (nbit nzed zrea rmsr vnum, or one of the named val shortcuts nval zval
-; rval bval) and the retractions going down -- so (net (net x)), whose inner net
-; answers a measure where the outer wants a value, lifts to (vnet (vnum (vnet v)))
-; and needs no rule of its own. that is the whole type oracle: a/lux/sigs.l does
-; this job for wm2uu, and here the tower is its own.
+; the lift is kind-directed by the tower itself -- bool, nat, zed, rea, msr, val -- each
+; word fixing the level of its argument and its answer. an argument at the wrong level is
+; coerced along the sections going up (nbit nzed zrea rmsr vnum, or the val shortcuts) and
+; the retractions going down, so (net (net x)) lifts to (vnet (vnum (vnet v))) with no rule
+; of its own. that is the whole type oracle; a/lux/sigs.l does this job for wm2uu.
 ;
 ; the proof is searched, not transcribed. three strategies, tried in order
 ; against the live kernel (the tool loads t/uu.l + t/uuval.l and runs defq):
@@ -32,24 +28,20 @@
 ;      so a row that moves leaves its lemma behind and the tool says so.
 ; a row no strategy discharges is skipped and counted, never silently dropped.
 ;
-; a guard the tower cannot read erases -- (? (coin? x) 1 e) -- the way core.l's
-; ()-lane erases under wm2uu, and the obligation it makes is then stronger than
-; the row, not weaker; each such row names the guard it dropped. a guard the
-; tower can read (two?) stays, as the orb it always was. a `:` binds into the
-; environment, which is substitution at the term level. `?` and `=` are no name
-; characters downstream (uu2coq emits Coq), so they spell q and eq in an emitted
-; name, the way kinds2uu writes numq for num?.
+; a guard the tower cannot read ERASES -- (? (coin? x) 1 e) -- making the obligation
+; stronger than the row, never weaker; each such row names the guard it dropped. a guard it
+; can read (two?) stays as the orb it always was. `?` and `=` are no name characters
+; downstream (uu2coq emits Coq), so they spell q and eq in an emitted name.
 ;
-; love's `=` between two values is veq, not paths: the depth index is a height
-; bound, so one value has many spellings and identity is finer than love's own
-; equality. below val the carriers are canonical and the claim stays a path.
+; love's `=` between two values is veq, NOT paths: the depth index is a height bound, so
+; one value has many spellings and identity is finer than love's equality. below val the
+; carriers are canonical and the claim stays a path.
 ;
 ; untrusted like every translator here: a wrong lift can miss a law, never fake
 ; one, and each row prints its source form over its term.
 ;
-; load the kernel and the model first, in their own form -- the next form's bare
-; references resolve at its compile, which must follow this run. their asserts
-; ride a jug meanwhile so the artifact stays clean.
+; load the kernel and the model FIRST, in their own form: the next form's bare references
+; resolve at its compile, which must follow this run. their asserts ride a jug meanwhile.
 (borrow 'posix)
 ; the files read below spell their laws `test`, the corpus recorder. here they run to
 ; BUILD, and stdout is the artifact -- so bind assert's instead: silent on success,
