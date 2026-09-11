@@ -16,7 +16,7 @@
   test_forge test_freebsd test_freebsd_a64 test_front test_gc test_gcheck test_gcstress \
   test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_harp test_hdiff test_holo test_holofuzz test_holowasm test_hook \
   test_host test_hostegg test_hostnif test_inle test_kboot test_kernel_a64 test_kernel_rv64 test_kernel_wasm test_kore \
-  test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
+  test_kverb test_lib test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_raw test_raw_a64 test_raw_bake test_raw_rv64 \
   test_refuzz test_reloc32 test_root test_rv64 test_rp2040 test_rvboot test_sat test_sb test_seat test_seed \
@@ -45,7 +45,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_holofuzz test_glazefuzz test_encver test_kore test_refuzz test_sb test_vi \
 	test_clay test_moonfuzz test_forge test_gates \
 	test_cts test_libc test_ulp test_softfp test_reloc32 \
-	test_drv test_hdiff test_tco0 nettest test_wake test_gz test_cpio test_fat32 test_root \
+	test_drv test_hdiff test_tco0 nettest test_wake test_lib test_gz test_cpio test_fat32 test_root \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
 	test_asmops test_dtb test_rvboot test_elf32 test_objcopy test_distboot test_fat \
@@ -176,6 +176,19 @@ test_stdincorpus: $(ho)/love
 	 done; \
 	 done
 	@echo "  ok   file, redirect and pipe read the corpus identically on both loves"
+# test_lib -- love as a library (i/lib): the embedding API, and nothing foreign.
+# the C host only. the rust and go doors are real and `make -C i/lib rust|go` runs
+# them, but a merge gate that wants cargo and a go toolchain installed is a gate
+# that reddens on the machine rather than on the tree.
+# the two programs check their own answers and exit nonzero on a wrong one, so this
+# is the whole assertion: they are the example and the check at once (t/front's shape).
+test_lib: $(ho)/love
+	@echo TEST i/lib "(love as a library: eval, the value doors, apply, a host callback)"
+	@$(MAKE) -s -C i/lib demo
+	@$(ho)/lvdemo > /dev/null
+	@$(ho)/lvtwo > /dev/null
+	@echo "test_lib: the C host embeds love, and two sessions keep their own heaps"
+
 # test_front -- the test-only frontend: b/front links liblove.a (l/love.c only)
 # and supplies the frontend contract itself, so its port vt can answer would-block on
 # cue. it exits 97 on a wait with no deadline -- a deadlock, said loudly.

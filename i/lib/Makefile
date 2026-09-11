@@ -1,6 +1,8 @@
 # i/lib -- love as a library. `make -C i/lib` lays b/liblv.a, b/liblv.so and the
-# three demos. run from this folder; $(R) is the tree root, which owns liblove.a
-# and the boot headers.
+# three demos. run from this folder; $(R) is the tree root, which owns the boot
+# headers. NOT b/liblove.a: that archive is the same ten TUs, but compiled for the
+# artifact's own link, and this one wants -Dai_data_section=0 so a foreign build
+# system needs no -Wl,-T of ours. one flag, one extra compile of the runtime.
 R := ../..
 include $(R)/common.mk
 # b/lib is the tree's generated-header dir; the objects go somewhere of their own.
@@ -13,10 +15,11 @@ o = b/lvo
 cc_lib = LOVE_NO_IMAGE= $(CC) $(ai_cflags) -Dai_tco=$(tco) -Dai_data_section=0 \
   -fpic -Ib -I. -Il -Ii -Ib/lib -Ii/lib
 
-# the runtime's own roster, READ and not restated: common.mk's love_c is the eight
-# TUs plus the codec and the math floor, and a file joining it must reach here by
-# itself. the seat is this folder's, plus the three a link with no i/fd.c owes.
-core_c = $(love_c)
+# the runtime half is the ROOT's: b/liblove-nosec.a is love_c on the one flag this
+# seat needs, laid by the same recipe as b/liblove.a. so the ten TUs are compiled
+# once for the tree and a file joining the roster reaches here by itself. what is
+# left here is the seat -- this folder's two, and the three a link with no i/fd.c owes.
+core_a = $(R)/b/liblove-nosec.a
 seat_c = $(addprefix $(R)/i/lib/,lv.c seat.c) $(R)/l/bare.c $(R)/i/alloc.c $(R)/l/nohorn.c
 boot_h = $(addprefix $(R)/b/lib/,egg.h p1.h prel.h ev.h post.h)
 
@@ -28,12 +31,16 @@ FORCE:
 $(boot_h): FORCE
 	@$(MAKE) -C $(R) $(patsubst $(R)/%,%,$@)
 
-$(R)/b/liblv.a: $(core_c) $(seat_c) lv.h $(boot_h)
+$(core_a): FORCE
+	@$(MAKE) -C $(R) $(patsubst $(R)/%,%,$@)
+
+$(R)/b/liblv.a: $(core_a) $(seat_c) lv.h $(boot_h)
 	@echo 'LIB	'$@
 	@mkdir -p $(R)/$(o)
-	@cd $(R) && for f in $(patsubst $(R)/%,%,$(core_c) $(seat_c)) ; do \
+	@cd $(R) && for f in $(patsubst $(R)/%,%,$(seat_c)) ; do \
 	   $(cc_lib) -c $$f -o $(o)/`basename $$f .c`.o || exit 1 ; done
-	@rm -f $@; ar rcs $@ $(R)/$(o)/*.o
+	@cp $(core_a) $@
+	@ar rs $@ $(R)/$(o)/*.o
 
 # the .so's exports are trimmed to lv_* by lv.map: without it a linked-in love
 # publishes 390 names, and an ai_ or lvm_ symbol loose in a host's namespace is

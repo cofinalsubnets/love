@@ -121,10 +121,29 @@ $(ho)/love $(ho)/love.cand: $(ho)/%: $(ho)/%.raw $(ho)/.dist-cat.l
 .PHONY: candidate
 candidate: $(ho)/love.cand
 
-$(ho)/liblove.a: $(h_o)
-	@echo '$(t_ar)	'$@
+# the runtime as an archive, and there are two of them for one reason: a link that
+# owns no linker script wants the data sentinels off the section. -Dai_data_section=0
+# is the wasm lane's own answer to ai_typ, and it is the difference between a foreign
+# build system embedding love in one line and one made to carry a -Wl,-T of ours.
+# one roster, one recipe, one flag between them. the plain lane's objects stay under
+# $(ho) proper, where the special deps below name them by hand.
+# $1 the archive, $2 its objects.
+define ar_lane
+$$(ho)/$(1): $(2)
+	@echo '$$(t_ar)	'$$@
+	@mkdir -p $$(dir $$@)
+	@rm -f $$@; ar rcs $$@ $$^
+endef
+$(eval $(call ar_lane,liblove.a,$$(h_o)))
+
+# ..the second lane, for i/lib's embedders. its own object dir, since the flag is
+# not the one the artifact's link was compiled with.
+nosec_o = $(love_c:$(R)/%.c=$(ho)/nosec/%.o)
+$(ho)/nosec/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
+	@echo '$(t_cc)	'$@
 	@mkdir -p $(dir $@)
-	@rm -f $@; ar rcs $@ $^
+	@$(hcc) -Dai_data_section=0 -c $< -o $@
+$(eval $(call ar_lane,liblove-nosec.a,$$(nosec_o)))
 
 # pinned to b/0, never $(ho)/0: love0 is one binary whatever HCC and tco say
 # love0 takes the whole hosted surface less the crew catalog, PLUS its own seat --

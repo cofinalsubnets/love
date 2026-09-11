@@ -14,6 +14,14 @@ static int host_hypot(struct lv *L, void *ud, int n) {
   double a = lv_toflo(L, 0), b = lv_toflo(L, 1);
   return lv_pushflo(L, __builtin_sqrt(a * a + b * b)); }
 
+// the demo checks its own answers: it is the example AND what test_lib runs, so a
+// wrong one has to be an exit status and not a line somebody reads.
+static int bad;
+static void want(char const *what, long got, long expect) {
+  if (got != expect) bad++, printf("  ! %s: %ld, wanted %ld\n", what, got, expect); }
+static void wants(char const *what, char const *got, char const *expect) {
+  if (strcmp(got, expect)) bad++, printf("  ! %s: %s, wanted %s\n", what, got, expect); }
+
 static double ms(void) {
   struct timespec t;
   clock_gettime(CLOCK_MONOTONIC, &t);
@@ -44,13 +52,16 @@ int main(void) {
   // 1. eval, and read the answer back as a C scalar
   lv_eval(L, "+[1 2 3 4]");
   printf("net         %ld  (type %d)\n", (long) lv_toint(L, 0), lv_type_at(L, 0));
+  want("net", lv_toint(L, 0), 10);
+  want("net type", lv_type_at(L, 0), lv_int);
   lv_pop(L, 1);
 
   // 2. a string out
   lv_eval(L, "(\"hello \" + \"world\")");
   { char buf[64];
     lv_strcpy(L, 0, buf, sizeof buf);
-    printf("string      %s\n", buf); }
+    printf("string      %s\n", buf);
+    wants("string", buf, "hello world"); }
   lv_pop(L, 1);
 
   // 3. a list out, element by element
@@ -59,8 +70,10 @@ int main(void) {
   for (int i = 0; i < lv_count(L, 0); i++) {
     lv_at(L, 0, i);
     printf("%s%ld", i ? " " : "", (long) lv_toint(L, 0));
+    want("list element", lv_toint(L, 0), i + 2);
     lv_pop(L, 1); }
   printf("]\n");
+  want("list length", lv_count(L, 0), 3);
   lv_pop(L, 1);
 
   // 4. apply a love closure to C-made arguments -- no source text per call
@@ -69,7 +82,8 @@ int main(void) {
   lv_pushint(L, 5);
   // stack: [5 7 f ..] -- args pushed in order, f beneath them
   if (lv_apply(L, 2)) printf("apply       FAILED: %s", lv_error(L));
-  else printf("apply       %ld\n", (long) lv_toint(L, 0));
+  else { printf("apply       %ld\n", (long) lv_toint(L, 0));
+         want("apply", lv_toint(L, 0), 54); }
   lv_pop(L, 1);
 
   // ..and the cost of one such call
@@ -89,11 +103,18 @@ int main(void) {
   lv_defn(L, "hypot", 2, host_hypot, NULL);
   lv_eval(L, "(hypot 3.0 4.0)");
   printf("callback    %g\n", lv_toflo(L, 0));
+  want("callback", (long) lv_toflo(L, 0), 5);
   lv_pop(L, 1);
 
   // 6. a scare is a return code, not a longjmp -- and the session survives it
-  if (lv_eval(L, "(scare 'boom 42)")) printf("scare       %s", lv_error(L));
+  { int rc = lv_eval(L, "(scare 'boom 42)");
+    want("a scare is a return code", rc, -1);
+    if (rc) printf("scare       %s", lv_error(L)); }
   printf("after scare stack depth %d, ok=%d\n", lv_top(L), lv_ok(L));
 
+  want("the stack is restored", lv_top(L), 0);
+  want("the session survives", lv_ok(L), 1);
+
   lv_close(L);
-  return 0; }
+  printf(bad ? "FAILED (%d)\n" : "ok\n", bad);
+  return bad != 0; }
