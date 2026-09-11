@@ -18,8 +18,15 @@
 (borrow 'posix)
 
 (:
-   ; -- cat: files (or -) onto out, verbatim --
-   (cat-main as) (uchunks "cat" puts as)
+   ; -- cat: files (or -) onto out, verbatim -- and a DIRECTORY lists, the way ls does.
+   ; POSIX cat refuses one; this cat used to open it, read nothing, and exit 0, which is
+   ; the one answer of the three worth nobody's while.
+   (cat-dir? f) (: st (stat f) (two? st && (16384 = (& 61440 <>>st))))
+   (cat-main as)
+    (uwalk (\ f ok (? ((f != "-") && (cat-dir? f))
+                      (: _ (each (sort (readdir f)) (\ n (puts n, putc 10))) ok)
+                      (: r (uchunks "cat" puts [f]) ((r = 0) ? ok 0))))
+           as)
 
    ; -- tac: the lines back to front, a file at a time. the newline rides the line it
    ; followed, so a last line arriving without one comes back first without one --
