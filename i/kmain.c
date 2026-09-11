@@ -586,7 +586,8 @@ static int k_ents_n, k_ents_cap;
 // /proc/vt -- the console's colours as two files, xterm-256 indices in decimal. an
 // ordinary entry each, so stat, dents and the whole fd machinery need nothing new: the
 // open refreshes a read off the live pen and the close applies a write.
-static char const k_vtfg[] = "proc/vt/fg", k_vtbg[] = "proc/vt/bg";
+static char const k_vtfg[] = "proc/vt/fg", k_vtbg[] = "proc/vt/bg",
+                  k_vtscale[] = "proc/vt/scale";
 // and the two the open fills from the running machine -- see k_proc_fill, below the
 // grow door it needs.
 static char const k_pmem[] = "proc/meminfo", k_pgauge[] = "proc/gauge";
@@ -604,13 +605,15 @@ static intptr_t k_zero_readn(int fd, unsigned char *dst, uintptr_t n) {
   return memset(dst, 0, n), (intptr_t) n; }
 static bool k_dev_ready(int fd) { return true; }
 
-// 0 is neither, 1 the foreground, 2 the background.
+// 0 is neither, 1 the foreground, 2 the background, 3 the glyph scale.
 static int k_vt_slot(char const *p, uintptr_t n) {
   if (n == sizeof k_vtfg - 1 && !memcmp(p, k_vtfg, n)) return 1;
   if (n == sizeof k_vtbg - 1 && !memcmp(p, k_vtbg, n)) return 2;
+  if (n == sizeof k_vtscale - 1 && !memcmp(p, k_vtscale, n)) return 3;
   return 0; }
 
 static char *k_strdup(char const *p, uintptr_t n);   // below, with the entry doors
+static bool k_vt_rescale(unsigned v);                // below, with fbdraw's cached cursor
 
 // lay the table on first use: every baked row, live, reading off .rodata -- plus
 // tmp, the scratch a POSIX machine promises and no initrd carries. idempotent, and
@@ -639,6 +642,10 @@ static bool k_fs_init(void) {
                               .mode = 0644, .own = true, .live = true };
   t[n + 2] = (struct k_ent) { .path = k_vtbg, .bake = -1, .ms = k_clock_ms(),
                               .mode = 0644, .own = true, .live = true };
+  // ..and the glyph scale beside them, the one vt file that is not a colour. n + 8 and
+  // not n + 3: the compat loop below starts where the numbered rows stop.
+  t[n + 8] = (struct k_ent) { .path = k_vtscale, .bake = -1, .ms = k_clock_ms(),
+                              .mode = 0644, .own = true, .live = true };
   // and the two the open fills: read-only, since nothing here is anyone's to set.
   t[n + 3] = (struct k_ent) { .path = k_pmem, .bake = -1, .ms = k_clock_ms(),
                               .mode = 0444, .own = true, .live = true };
@@ -656,7 +663,7 @@ static bool k_fs_init(void) {
   t[n + 7] = (struct k_ent) { .path = "usr/bin", .bake = -1, .ms = k_clock_ms(),
                               .mode = 0755, .own = true, .dir = true, .live = true };
   static char const *const compat[] = { "bin", "sbin", "usr/sbin" };
-  int m = n + 8;
+  int m = n + 9;
   for (uintptr_t c = 0; c < countof(compat); c++) {
     char *to = k_strdup("/usr/bin", 8);
     t[m] = (struct k_ent) { .path = compat[c], .bake = -1, .ms = k_clock_ms(),
@@ -910,7 +917,9 @@ static void k_vt_read(int i, int slot) {
   // serial-only: no console to ask, and the file reads EMPTY rather than handing back
   // whatever a write left in it -- a colour nothing is wearing would be a lie.
   if (!kcb) { k_ents[i].len = 0; return; }
-  unsigned v = slot == 1 ? kcb->def_fg : kcb->def_bg;
+  // the colours come off the pen; the scale off the paper, kfb being what a glyph pixel
+  // is measured against.
+  unsigned v = slot == 3 ? kfb.scale : slot == 1 ? kcb->def_fg : kcb->def_bg;
   char d[4]; int n = 0;
   if (v >= 100) d[n++] = (char) ('0' + v / 100);
   if (v >= 10)  d[n++] = (char) ('0' + v / 10 % 10);
@@ -930,6 +939,7 @@ static void k_vt_write(int i, int slot) {
   unsigned v = 0;
   while (j < len && b[j] >= '0' && b[j] <= '9' && v < 256) v = v * 10 + (unsigned) (b[j++] - '0');
   if (!j || v > 255) return;
+  if (slot == 3) { k_vt_rescale(v); return; }   // a scale is a new grid, not a new pen
   cb_recolor(kcb, slot == 1 ? (uint8_t) v : kcb->def_fg,
                   slot == 1 ? kcb->def_bg : (uint8_t) v); }
 
@@ -1742,6 +1752,37 @@ void fbdraw(void) {
       cb_paint(&paper, kcb, &kface, i, 0, 0, blink ? cur : ~0u); }
   for (int k = 0; k < 8; k++) kcb->dmg[k] = 0;
   fbcur = cur, fbblink = blink; }
+
+// the console re-made at a new glyph scale -- what /proc/vt/scale answers to. the GRID is
+// a function of the scale (cbinit divides the framebuffer by the face times it), so this
+// is not a repaint: a cb of the new size, and the screen's text does not survive it. the
+// pen does, being the one piece of console state a reader set on purpose.
+//
+// 1..8 is fbscale's own range and the bound here. a scale that would leave no grid at all
+// is refused, as is one the heap cannot carry -- and a refusal leaves the standing console
+// exactly where it was, which is why the allocation comes before anything is given up.
+//
+// kcb is moved BEFORE the old buffer is freed: fbdraw can run from a fault handler, and
+// either console it finds there is a whole one. what does NOT follow is a program that
+// already asked (winsize) -- it holds a grid that no longer exists, the way a terminal
+// resized under a process that never hears SIGWINCH does.
+static bool k_vt_rescale(unsigned v) {
+  if (!kcb || !kfb._ || v < 1 || v > 8 || v == kfb.scale) return false;
+  uintptr_t const rows = kfb.height / (kface.h * v), cols = kfb.width / (kface.w * v);
+  if (!rows || !cols) return false;
+  struct cb *c = kmallocw(b2w(sizeof *c + rows * cols * sizeof(uint32_t)));
+  if (!c) return false;
+  struct cb *const old = kcb;
+  uint8_t const fg = old->def_fg, bg = old->def_bg;
+  kcb = c;
+  cb_open(kcb, (uint16_t) rows, (uint16_t) cols);
+  kcb->flag |= cb_lnm;                 // the kernel console's discipline, as cbinit sets it
+  cb_attr(kcb, fg, bg, 0);
+  cb_fill(kcb, 0);
+  kfb.scale = (uint8_t) v;
+  kfree(old);
+  fbcur = ~0u;                         // the cached cursor indexed the grid that just went
+  return true; }
 
 // the framebuffer as a program may borrow it whole: the base, the size, and the
 // stride in PIXELS. false where the door handed over none (PVH has nothing to

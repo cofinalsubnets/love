@@ -77,7 +77,10 @@
    ; the console's pen opens either way -- it reads empty on a seat with no console,
    ; which every headless lane in this corpus is
    (port? (open "/proc/vt/fg" "r"))
-   (port? (open "/proc/vt/bg" "r"))))
+   (port? (open "/proc/vt/bg" "r"))
+   ; and the glyph scale beside them -- the one vt file that is not a colour, and the
+   ; only console state a write RESIZES rather than repaints
+   (port? (open "/proc/vt/scale" "r"))))
 
 ; /dev/{null,zero}. neither holds a byte: null IS the source table's empty slot, whose
 ; law is already "writes discard, reads answer the end", and zero is that slot with a
