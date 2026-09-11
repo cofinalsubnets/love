@@ -13,7 +13,7 @@
  (ev '(:
    ; keep this list up to date
    m '(cellread seal-hook stack setstack lib enter leave gv trim peek poke pick place seek stem span
-       dis disp discell opname opnames nifop spin lamsrc nifnom yield ci-vt to-vt macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx feels apx iop gone numfn nfa nfq nfnest powg fpow ipow tray atype asum aprod alen a-coll a-dim a-emax a-rank a-shape a-type pureset operators seqx sortsplit lidx ldel packp _)
+       dis disp discell opname opnames nifop spin lamsrc lamparts eq0 nifnom yield ci-vt to-vt macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx feels apx iop gone numfn nfa nfq nfnest powg fpow ipow tray atype asum aprod alen a-coll a-dim a-emax a-rank a-shape a-type pureset operators seqx sortsplit lidx ldel packp _)
    n (filter (\ k (? (nom? k) (= "lvm_" (snip (string k) 0 4)))) (keys book))
    M (lib ())
    ; the module may already exist: a def row can name it in C (l/love.h's LvNif), and

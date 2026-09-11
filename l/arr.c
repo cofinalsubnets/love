@@ -729,6 +729,32 @@ static bool clo_eq(struct ai *g, struct clonf *ca, struct clonf *cb, word *scrat
  struct arib rA = { ca->rem, ca->rem, ca->nr, ca->nr, 0 }, rB = { cb->rem, cb->rem, cb->nr, cb->nr, 0 };
  return nf_walk(g, ca->body, &rA, ca, cb->body, &rB, cb, scratch, hi); }
 
+// one non-descending step of the walk: eq_no and eq_yes settle it, and the three descents
+// name the parts a walker has to take apart. eqv_at and the eq0 nif read this one set of
+// rules, so a love-side equality and the C one cannot drift.
+enum eqstep { eq_no, eq_yes, eq_chain, eq_coin, eq_fn };
+static enum eqstep eqv_leaf(struct ai *g, word a, word b) {
+ if (a == b) return eq_yes;
+ if (coinp(a) || coinp(b))                                 // a coin: same die, then the payloads
+  return coinp(a) && coinp(b) && coin_kind(a) == coin_kind(b) ? eq_coin : eq_no;
+ if (lamp(a) && lamp(b) && !datp(a) && !datp(b)) return eq_fn;
+ // a number never equals a closure: bridging 0/1 to their church lambdas would
+ // break congruence, the order, and tower transitivity
+ if (((a | b) & 1) || !datp(a) || !datp(b) || typ(a) != typ(b)) return eq_no;
+ switch (typ(a)) {
+  default: return eq_no;
+  case DChain: return eq_chain;
+  case DTray: { size_t la = ai_tray_bytes(tray(a)), lb = ai_tray_bytes(tray(b));
+   return la == lb && !memcmp(tray(a), tray(b), la) ? eq_yes : eq_no; }
+  case DGem: return gem_get(a) == gem_get(b) ? eq_yes : eq_no;   // the float payload (parallels = / cmp)
+  case DSun: return sun_get(a) == sun_get(b) ? eq_yes : eq_no;
+  case DTwin: return twin_re(a) == twin_re(b) && twin_im(a) == twin_im(b) ? eq_yes : eq_no;
+  case DBig: { struct ai_big *x = big(a), *y = big(b);
+   size_t nb = (size_t) (x->slen < 0 ? -x->slen : x->slen) * sizeof(ai_limb);
+   return x->slen == y->slen && !memcmp(x->limb, y->limb, nb) ? eq_yes : eq_no; }
+  case DString:
+   return len(a) == len(b) && !memcmp(txt(a), txt(b), len(a)) ? eq_yes : eq_no; } }
+
 // two stacks in the gap: pairs still to compare come UP from base, pairs a source walker
 // owes go DOWN from the top, and the answer is in when both are drained. the walkers below
 // never call back in, so this is the only frame of the walk that the C stack ever holds.
@@ -736,16 +762,18 @@ static bool eqv_at(struct ai *g, word a, word b, word *base) {
  word *top = off_pool(g) + g->len, *hi = top, *w = base;
  struct ai *c = ai_core_of(g);
  for (;;) {
-  if (a != b) {
-   // coins: equal iff same die and eqv payloads
-   if (coinp(a) || coinp(b)) {
-    if (coinp(a) && coinp(b) && coin_kind(a) == coin_kind(b)) {
-     a = coin_load(a), b = coin_load(b); continue; }
-    return false; }
-   // function values: equality up to the beta the runtime already ran (the
-   // bridge). a source-less base (a bif partial like (+ 1)) can't residualize:
-   // fall back to base + captures pairwise. maps/ports/mixed fall to identity.
-   if (lamp(a) && lamp(b) && !datp(a) && !datp(b)) {
+  switch (eqv_leaf(g, a, b)) {
+   case eq_no: return false;
+   case eq_yes: break;
+   case eq_coin: a = coin_load(a), b = coin_load(b); continue;
+   case eq_chain:
+    if (hi - w < 2) __builtin_trap();      // worklist overflow: a cycle
+    *w++ = B(a), *w++ = B(b), a = A(a), b = A(b);
+    continue;
+   // function values: equality up to the beta the runtime already ran (the bridge). a
+   // source-less base (a bif partial like (+ 1)) can't residualize: fall back to base
+   // + captures pairwise. maps/ports/mixed fell to identity above.
+   case eq_fn: {
     union u *ka = cell(a), *kb = cell(b);
     bool pa = fn_partialp(ka), pb = fn_partialp(kb);
     if (!pa && !pb) {                                      // common case: two no-capture lambdas -> α-compare sources
@@ -762,38 +790,7 @@ static bool eqv_at(struct ai *g, word a, word b, word *base) {
      if (hi - w < 2 * (na + 1)) __builtin_trap();         // worklist overflow / cycle
      for (int i = 0; i < na; i++) *w++ = fn_arg(ka, i, na), *w++ = fn_arg(kb, i, nb);
      a = (word) ba, b = (word) bb; continue; }
-    return false; }
-   // a number never equals a closure: bridging 0/1 to their church lambdas would
-   // break congruence, the order, and tower transitivity
-   if (((a | b) & 1) || !datp(a) || !datp(b) || typ(a) != typ(b)) return false;
-   switch (typ(a)) {
-    default: return false;
-    case DChain:
-     if (hi - w < 2) __builtin_trap();      // worklist overflow: a cycle
-     *w++ = B(a), *w++ = B(b), a = A(a), b = A(b);
-     continue;
-    case DTray: {
-     size_t la = ai_tray_bytes(tray(a)), lb = ai_tray_bytes(tray(b));
-     if (la != lb || memcmp(tray(a), tray(b), la)) return false;
-     break; }
-    case DGem:
-     if (gem_get(a) != gem_get(b)) return false;       // two float boxes: compare the payload (parallels = / cmp)
-     break;
-    case DSun:
-     if (sun_get(a) != sun_get(b)) return false;       // two suns: compare the payload
-     break;
-    case DTwin:
-     if (twin_re(a) != twin_re(b) || twin_im(a) != twin_im(b)) return false;  // re and im
-     break;
-    case DBig: {
-     struct ai_big *x = big(a), *y = big(b);
-     if (x->slen != y->slen) return false;
-     size_t nb = (size_t) (x->slen < 0 ? -x->slen : x->slen) * sizeof(ai_limb);
-     if (memcmp(x->limb, y->limb, nb)) return false;
-     break; }
-    case DString:
-     if (len(a) != len(b) || memcmp(txt(a), txt(b), len(a))) return false;
-     break; } }
+    return false; } }
   if (w != base) { b = *--w, a = *--w; continue; }
   if (hi == top) return true;               // both stacks drained: all equal
   a = *hi++, b = *hi++; } }
@@ -865,6 +862,49 @@ lvm(lvm_eq) {
   ai_musttail return Answerp(1, r ? putcharm(1) : zero); }
  Sp[1] = ai_eq_value(g, a, b) ? putcharm(1) : zero;
  ai_musttail return Nextp(1, 1); }
+
+// (eq0 a b): one step of the structural equality that never walks -- 1 equal, 0 unequal,
+// () the caller's cue to compare the parts itself. eqv's leaf half through eqv_leaf, so a
+// love-side walk answers exactly what the C one does. the numeric promotion `=` runs above
+// eqv is not here: that belongs to the top of a walk, not to every level of it.
+lvm(lvm_eq0) {
+ enum eqstep s = eqv_leaf(g, Sp[0], Sp[1]);
+ ai_musttail return Answerp(1, s == eq_yes ? putcharm(1) : s == eq_no ? zero : ZeroPoint); }
+
+// (lamparts f): a function value's parts, or () for one C cannot take apart -- a nif, a
+// quote, a source-less non-partial. lamsrc's sibling: what a love-side walk reads instead
+// of spending gap words on the bridge below. captures come back paired with the binder
+// each fills, and the shapes are told apart by the head:
+//   [rem body caps]  a sourced base: rem the \-expr's operands past the filled binders
+//                    (the ones still to take, then the body), body that body on its own,
+//                    caps ((binder . captured) ..) in binder order
+//   [() base caps]   a source-less partial (a bif's, like (+ 1)): base what it partly
+//                    applies, and every binder in caps is ()
+lvm(lvm_lamparts) {
+ if (!lamp(Sp[0]) || datp(Sp[0])) ai_musttail return Answer(ZeroPoint);
+ int na = 0;
+ if (fn_partialp(cell(Sp[0]))) fn_base(cell(Sp[0]), &na);
+ if (na < 0 || na > nf_maxcap) ai_musttail return Answer(ZeroPoint);
+ Have((3 + 2 * na) * Width(struct ai_chain));
+ struct clonf o;
+ union u *k = cell(Sp[0]);                              // re-read post-Have, off the rooted value
+ bool bridge = clo_load(ai_core_of(g), Sp[0], &o);
+ word rem, body, syms = bridge ? o.fsyms : ZeroPoint;
+ if (bridge) rem = o.rem, body = o.body;
+ else if (fn_partialp(k)) rem = ZeroPoint, body = word(fn_base(k, &na));
+ else ai_musttail return Answer(ZeroPoint);
+ struct ai_chain *p = (struct ai_chain*) Hp;            // na pairs, then na links, then the 3-list
+ Hp += (3 + 2 * na) * Width(struct ai_chain);
+ for (int i = 0; i < na; i++) {
+  ini_chain(p + i, bridge ? A(syms) : ZeroPoint, bridge ? o.fv[i] : fn_arg(k, i, na));
+  if (bridge) syms = B(syms); }
+ word caps = ZeroPoint;
+ for (int i = na; i--; ) caps = word(ini_chain(p + na + i, word(p + i), caps));
+ struct ai_chain *t = p + 2 * na;
+ ini_chain(t + 2, caps, ZeroPoint);
+ ini_chain(t + 1, body, word(t + 2));
+ ini_chain(t, rem, word(t + 1));
+ ai_musttail return Answer(word(t)); }
 
 // (== a b): pointer/word identity, no structural recursion
 lvm(lvm_same) {
