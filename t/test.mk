@@ -790,12 +790,15 @@ test_virt_build: host
 # change breaks LINKS, and a link is the cheapest question this tree asks; playdate keeps
 # its own roster, so it is the one that goes missing. rides both slow tiers -- in test_extra
 # it stands for the four build-only board rows, being test_boards and more.
+# and the lay law over what an OS loader maps: t/gate/lay.l, which needs no kernel to ask
+# it -- the kernels and boards above are placed by something that is not a loader.
 .PHONY: test_links
 test_links: host $(ho)/front $(ho)/frontseat $(love0) b/love-wasm.wasm
 	@$(MAKE) -s $(ko)/love-x64.elf
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
 	@$(MAKE) -s test_boards
+	@$m t/gate/lay.l $(ho)/love $(ho)/front $(ho)/frontseat || { echo "FAIL lay"; exit 1; }
 	@echo "test_links: hosted, bootstrap, front and its seat-horn twin, the wasm machine, three kernels, six boards"
 
 # the userland packages: each built by mooncc + moonlibc + the holo linker -- no gcc/glibc/ld

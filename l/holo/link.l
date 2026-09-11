@@ -79,6 +79,12 @@
    (ld-cstr s i) (: (go j) (s j = 0 ? (snip s i j) (go (j + 1))) (go i))
    (ld-zeros n) (n >= 1 ? (0 . ld-zeros (n - 1)))
    (ld-align a v) (a < 2 ? v (: r (v % a) (r = 0 ? v (v + a - r))))
+   ; where a segment stands when its file offset f is already spent: the next page
+   ; at or after v, plus f's own place in a page. a loader maps a PT_LOAD from
+   ; p_vaddr rounded DOWN, so this is the least address that begins a fresh page and
+   ; still answers p_vaddr = p_offset (mod a). the file pays nothing; the address
+   ; space skips a page. a < 2 packs tight, for a lay that shares no segments.
+   (ld-lift a v f) (a < 2 ? v ((ld-align a v) + (f % a)))
    (ld-fits32 v) (-2147483648 <= v <= 2147483647)
    ; every relocation's field arithmetic is a linker's: 64-bit modular. nothing
    ; laid here reaches the wrap today, but an image linked above the signed half
@@ -545,14 +551,20 @@
    ; salign is the grain the three lanes may be cut on: a caller giving each its
    ; own segment asks for a page, so a segment boundary is never shared. 1 packs
    ; them tight, and then each start is just where the lane before it stopped.
-   (ldlay objs base hdrsz salign)
-    (: t1 (ldlayn 'text (ldlay1 'text (base + hdrsz) objs) objs)
-       o0 (ld-align salign t1)
+   ; dense says what the file does at a cut. 0 follows the address and writes the gap
+   ; out as zeros, which is what a format wanting its sections ON the grain needs (pe).
+   ; 1 carries the offset straight on and lets the ADDRESS skip the page instead --
+   ; ld-lift picks the one that keeps the two congruent, and the file pays nothing.
+   ; answers the ends as well as the starts: under 1 they are no longer the same numbers.
+   (ldlay objs base hdrsz salign dense)
+    (: (cut v f) (? dense (ld-lift salign v f) (ld-align salign v))
+       t1 (ldlayn 'text (ldlay1 'text (base + hdrsz) objs) objs)
+       o0 (cut t1 (t1 - base))
        o1 (ldlayn 'rodata (ldlay1 'rodata o0 objs) objs)
-       d0 (ld-align salign o1)
+       d0 (cut o1 (o1 - base - (o0 - t1)))
        d1 (ldlayn 'data (ldlay1 'data d0 objs) objs)
        n0 (ld-align 16 d1)
-       [(ldlay1 'nifs n0 objs) n0 o0 d0])
+       [(ldlay1 'nifs n0 objs) n0 o0 d0 t1 o1])
 
    ; the one symbol book: name -> (addr weak?), every defined global/weak
    ; across the set. a strong def beats any weak; two strongs scare; the
@@ -916,8 +928,13 @@
        nbnote (? nb? (catall [(le32 7) (le32 4) (le32 1)                 ; namesz descsz netbsd_tag
                               '(78 101 116 66 83 68 0 0) (le32 1000000000)]))   ; "NetBSD\0\0", 10.0
                   
-       lay (ldlay objs base hdrsz (? wx? pg 1))
-       end <lay n0 <>lay o0 <>>lay d0 <>>>lay
+       lay (ldlay objs base hdrsz (? wx? pg 1) 1)
+       end <lay n0 <>lay o0 <>>lay d0 <>>>lay t1 (lay 4) o1 (lay 5)
+       ; the address the lay skipped to seat the cuts, which the file does not carry.
+       ; below o0 an offset is `addr - base`; o0 itself is at `t1 - base`; from d0 on
+       ; it is `addr - base - sk`. each term is 0 or a whole page, so every offset
+       ; stays congruent to its address and the file grows by nothing.
+       sk ((o0 - t1) + (d0 - o1))
        nrel (? pie (ld-nabs objs rv) 0)
        r0 (? pie (ld-align 16 end) end)         ; the reloc table starts 16-aligned, just past the nifs
        r1 (r0 + 8 * nrel)
@@ -925,20 +942,19 @@
        ; out to `bend` where its p_filesz stops at r1, and the kernel hands over
        ; the difference already zeroed -- which is the whole meaning of .bss.
        bend (ldlayn 'bss (ldlay1 'bss r1 objs) objs)
-       ; .image last of all -- past .bss, on a page, so `love bake` can grow it at
-       ; the tail of the file (i/image.c: the section that ENDS the segment is the
-       ; one that can grow without moving anything). it takes a segment of its own,
-       ; because .bss sits between it and everything written: one segment would have to
-       ; carry that gap as file zeros, and a real .bss makes that the whole of it. two
-       ; segments buy the address gap for free -- the file offset stops mirroring the
-       ; address. this is the shape ld's --section-start already hands the gcc lane, and
-       ; the shape bake_tail already reads. No .image section in the set (every link but
-       ; love's) and the whole lane costs nothing: one segment, as before.
-       iaddr (? img? (ld-align pg bend) r1)
+       ; .image last of all -- past .bss, so `love bake` can grow it at the tail of the
+       ; file (i/image.c: the section that ENDS the segment is the one that can grow
+       ; without moving anything). it takes a segment of its own, because .bss sits
+       ; between it and everything written: one segment would have to carry that gap as
+       ; file zeros, and a real .bss makes that the whole of it. two segments buy the
+       ; address gap for free. this is the shape ld's --section-start already hands the
+       ; gcc lane, and the shape bake_tail already reads. No .image section in the set
+       ; (every link but love's) and the whole lane costs nothing: one segment, as before.
+       ioff (r1 - base - sk)                    ; the file stops where the data segment's bytes do..
+       iaddr (? img? (ld-lift pg bend ioff) r1)  ; ..and the image's address is lifted onto it
        iend (? img? (ldlay1 'image iaddr objs) r1)
        isz (iend - iaddr)
-       ioff (? img? (ld-align pg (r1 - base)) (r1 - base))     ; ..its file offset, page-congruent to iaddr
-       endf (? img? (ioff + isz) (r1 - base))                  ; the file bytes the segments carry
+       endf (? img? (ioff + isz) ioff)          ; the file bytes the segments carry
        relbox (? pie {0 ()} ())    ; abs64 site accumulator (pie only)
        glo (ldsyms objs)
        ; the entry: ld's rule -- the symbol `_start` when the set defines one,
@@ -952,14 +968,11 @@
                  (peep (peep o1 'base 0) <(peep (peep o1 'lanes 0) 'text ()) 0)))
        cx [glo n0 end r0 r1 relbox rv () () (ld-extents objs)]
        et (ldemitn cx 'text objs (ldemit cx 'text (base + hdrsz) objs ()))
-       eo (ldemitn cx 'rodata objs (ldemit cx 'rodata <et objs >et))
-       ed (ldemitn cx 'data objs (ldemit cx 'data <eo objs >eo))
+       eo (ldemitn cx 'rodata objs (ldemit cx 'rodata o0 objs >et))
+       ed (ldemitn cx 'data objs (ldemit cx 'data d0 objs >eo))
        en (ldemit cx 'nifs <ed objs >ed)
        tail (<en < r0 ? [(ld-zeros (r0 - <en))])       ; nif tail + table alignment in one pad
        rtab (? pie (catall (map le64 (rev (peep relbox 0 ())))) ())
-       ; the image's own pad is a file distance now, not an address one: r1's offset up
-       ; to ioff. emitting from iaddr leaves ldemit nothing to pad (cur is already the base).
-       ipad (? img? [(ld-zeros (ioff - (r1 - base)))] ())
        ei (? img? (ldemit cx 'image iaddr objs ()) [iaddr])
        ; -- the section headers and the symbol table, laid past p_filesz. nothing
        ; here is shf_alloc, so the kernel maps not a byte of it and the program is
@@ -993,14 +1006,14 @@
        nsh ((0 < rdmz ? 13 12) + ?nb?)
        shto (ld-align 8 (rdmo + rdmz))
        sht (catall [(ld-shdr 0 0 0 0 0 0 0 0 0 0)                                    ; the reserved null header
-                     ; each lane runs to the page the next one starts on, so a split's pad
-                     ; rides a section instead of the orphan gap the note above warns of
-                    (ld-shdr (snm 0) 1 6 (base + hdrsz) hdrsz (o0 - (base + hdrsz)) 0 0 16 0)
-                    (ld-shdr (snm 1) 1 2 o0 (o0 - base) (d0 - o0) 0 0 16 0)
-                    (ld-shdr (snm 2) 1 3 d0 (d0 - base) (<ed - d0) 0 0 16 0)
-                    (ld-shdr (snm 3) 1 3 <ed (<ed - base) (<en - <ed) 0 0 16 0)
-                    (ld-shdr (snm 4) 1 2 r0 (r0 - base) (r1 - r0) 0 0 16 0)          ; love_rela, the -pie table (empty non-pie)
-                    (ld-shdr (snm 5) 8 3 r1 (r1 - base) (bend - r1) 0 0 16 0)        ; NOBITS: an offset, no bytes
+                     ; a lane stops where its bytes stop -- the next one's address may sit a
+                     ; page on, but its offset is the very next byte, so no gap is left unowned
+                    (ld-shdr (snm 0) 1 6 (base + hdrsz) hdrsz (t1 - (base + hdrsz)) 0 0 16 0)
+                    (ld-shdr (snm 1) 1 2 o0 (t1 - base) (o1 - o0) 0 0 16 0)
+                    (ld-shdr (snm 2) 1 3 d0 (d0 - base - sk) (<ed - d0) 0 0 16 0)
+                    (ld-shdr (snm 3) 1 3 <ed (<ed - base - sk) (<en - <ed) 0 0 16 0)
+                    (ld-shdr (snm 4) 1 2 r0 (r0 - base - sk) (r1 - r0) 0 0 16 0)     ; love_rela, the -pie table (empty non-pie)
+                    (ld-shdr (snm 5) 8 3 r1 (r1 - base - sk) (bend - r1) 0 0 16 0)   ; NOBITS: an offset, no bytes
                     (ld-shdr (snm 6) 1 3 iaddr ioff isz 0 0 16 0)                    ; .image, the grow slot -- its own segment
                     (ld-shdr (snm 7) 2 0 0 symo symz 9 (st 2) 8 24)               ; link=.strtab info=first global
                     (ld-shdr (snm 8) 3 0 0 stro strz 0 0 1 0)
@@ -1011,9 +1024,10 @@
        ; w^x: segment one is the header and the code, read+execute; segment two the
        ; literals, read; segment three .data through love_rela, running out to bss in memsz
        ; alone, read+write; a fourth carries the image when there is one, rw (a heap
-       ; snapshot is read and rebased, never entered). each meets the next exactly on a
-       ; page -- every lane's header absorbs its own pad -- so no loaded byte belongs to
-       ; neither, and no page belongs to two.
+       ; snapshot is read and rebased, never entered). no loaded byte belongs to neither
+       ; and no page to two: each segment begins on a page at or past where the last one
+       ; ended, so the rounding a loader does lands in nobody's ground. the file pays no
+       ; padding for that -- the offsets run on unbroken and the addresses do the skipping.
        ; this holds only because no relocation site lands in text or rodata: the -pie
        ; table is abs64 sites, and mooncc addresses text pc-relative, so every site is in
        ; .data or love_nifs. a lane that ever needs to write code has to say so with its own
@@ -1024,9 +1038,9 @@
        ; laid past the nifs, and moving it above d0 would reorder the emit for 13k.
        ; bake_tail asks that .image end its segment and that no load live above it --
        ; both hold by construction here.
-       phs ((? wx? [(elf64-phdr 1 5 0 base base (o0 - base) (o0 - base) pg)
-                    (elf64-phdr 1 4 (o0 - base) o0 o0 (d0 - o0) (d0 - o0) pg)
-                    (elf64-phdr 1 6 (d0 - base) d0 d0 (r1 - d0) (bend - d0) pg)]
+       phs ((? wx? [(elf64-phdr 1 5 0 base base (t1 - base) (t1 - base) pg)
+                    (elf64-phdr 1 4 (t1 - base) o0 o0 (o1 - o0) (o1 - o0) pg)
+                    (elf64-phdr 1 6 (d0 - base - sk) d0 d0 (r1 - d0) (bend - d0) pg)]
                  [(elf64-phdr 1 7 0 base base (r1 - base) (bend - base) pg)])
             + (? img? [(elf64-phdr 1 6 ioff iaddr iaddr isz isz pg)] ())
             + (? nb? [(elf64-phdr 4 4 nbo (base + nbo) (base + nbo) 24 24 4)] ()))
@@ -1038,7 +1052,7 @@
        ; mooncc branded its own output and kore's `ld` did not, so the two doors
        ; over one linker wrote different files. Same ISAs the note rides.
        hdr9 (elem mach '(62 183) ? (ld-brand hdr 7 9) hdr)
-       (hdr9 . ((? nb? [nbnote] ()) + >en + tail + (? pie [rtab] ()) + ipad + >ei
+       (hdr9 . ((? nb? [nbnote] ()) + >en + tail + (? pie [rtab] ()) + >ei
                  + [(ld-zeros (symo - endf)) <st <>st <shstr cmt rdm
                     (ld-zeros (shto - (rdmo + rdmz))) sht])))
 

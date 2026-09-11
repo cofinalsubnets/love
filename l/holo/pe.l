@@ -64,7 +64,7 @@
        _ (0 < mach ? 0 (scare 'pe-target target))
        objs (map (p \ ld-read <p <>p emach) srcs)
        base (pe-ibase + 4096)
-       lay (ldlay objs base 0 4096)       ; the lanes land page-apart: rodata at o0, data at d0
+       lay (ldlay objs base 0 4096 0)     ; the lanes land page-apart: rodata at o0, data at d0
        end (lay 0) n0 (lay 1) o0 (lay 2) d0 (lay 3)
        bend (ldlay1 'bss end objs)
        relbox {0 ()}
