@@ -45,7 +45,7 @@ struct k_boot {
  u32 ram_n;
  struct { u64 base, len; } ram[ram_max];
  u64 hhdm;
- struct { u64 base; u16 w, h; u32 pitch_px; } fb;
+ struct { u64 base; u16 w, h; u32 pitch_px; u8 scale; } fb;
  u8 has_fb;
  u64 date;                             // no door here answers it; kmain's rtc does
  char cmdline[256]; };

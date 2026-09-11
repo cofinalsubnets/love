@@ -11,7 +11,7 @@
 #include <errno.h>
 #include <math.h>
 #include <stddef.h>      // offsetof (the struct ai_wait_fd / struct pollfd assert)
-#if defined(LvNolibc)
+#if defined(__moonlibc__)
 #endif
 #include <stdnoreturn.h>
 #include <signal.h>
@@ -562,7 +562,7 @@ int main(int argc, char const **argv) {
     if (image_load_path && ai_ok(g = ai_defv(ai_strof(g, image_load_path), "love-image"))) g->sp++;
     if (!bake) {
       char const *osn =
-#if defined(LvNolibc)
+#if defined(__moonlibc__)
         __ai_osv  < 0 ? "inle" :
         __ai_osv == 1 ? "linux" : __ai_osv == 2 ? "freebsd" : __ai_osv == 3 ? "netbsd" : 0;
 #elif defined(__linux__)

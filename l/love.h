@@ -45,9 +45,6 @@
 // doors a lane may CALL is a build fact here and a box fact under a foreign
 // libc, which is the distinction i/posix.c's ladder is written against. the
 // ambient-cc lane (love0, glibc) takes that ladder's kernel arms instead.
-#if defined(__mooncc__) && !defined(LvNolibc)
-#define LvNolibc 1
-#endif
 
 // musttail IS the tail-threaded vm: without it every dispatch keeps its frame and a
 // long read overflows the stack, so tco=1 without it is not slower, it is broken.
@@ -282,7 +279,11 @@ struct ai_def { char const *n; union u v; char const *m; };
 // host nif auto-registration: LvNif("name", fn, "mod") lands the entry in the love_nifs
 // section and boot drains [__start_love_nifs, __stop_love_nifs) through ai_defn, so an app
 // adds nifs in its own i/<app>.c. no linker script -- the toolchain defines the bracket
-// symbols. a nif rides the image as an index off this bracket, never a kept absolute.
+// symbols, but only where the SECTION exists: an embedder that registers every def by
+// hand and owns no LvNif leaves the pair undefined at the link, and a weak declaration
+// does not answer it -- ld leaves a weak undefined at 0 even where the section IS there,
+// which unregisters every host nif in silence. such a link names the empty pair itself.
+// a nif rides the image as an index off this bracket, never a kept absolute.
 // the third argument is the module, NULL to land on the book: a nif that has a namespace to
 // belong to should say so here rather than be swept off the book afterwards.
 // the alignment is load-bearing: the bracket is read as an ARRAY, so an entry must not

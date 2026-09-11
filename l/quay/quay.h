@@ -67,12 +67,16 @@ int cb_reply(struct cb*, uint8_t*);  // drain the reply queue; buf holds cb_outn
 uint32_t cb_unfold(uint8_t);       // a glyph byte's codepoint (0 = none)
 
 struct font { uint8_t const *glyphs, w, h; };
-extern uint8_t const cga_8x8[256][8], moderndos_8x16[256][16];
+extern uint8_t const cga_8x8[256][8], cleat_8x16[256][16];
 
 // where a screen lands (paint.c): a 32bpp target. px is the pixel origin and
 // pitch/w/h are all in PIXELS -- a screen paints at an ORIGIN inside it, so one
 // target can carry several panes rather than exactly one screen.
-struct cb_paper { volatile uint32_t *px; uintptr_t pitch, w, h; };
+// scale is how many of this target's pixels a GLYPH pixel gets, so a cell covers
+// f->w*scale by f->h*scale. it is the screen's number and not the face's: a bitmap
+// stays sharp on a dense display by growing whole pixels, where the alternative is
+// resampling somebody else does. 1 is the bitmap as drawn; 0 paints nothing.
+struct cb_paper { volatile uint32_t *px; uintptr_t pitch, w, h, scale; };
 void cb_paint(struct cb_paper const*, struct cb const*, struct font const*,
               uint16_t row, uintptr_t x0, uintptr_t y0, uint32_t cur);
 #endif

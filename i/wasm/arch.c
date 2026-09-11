@@ -70,16 +70,19 @@ void __ai_sigret(void) { }
 
 // the door: the worker grows the memory, then hands over the span above the module's
 // own data and shadow stack, the boot line, and the heap image it fetched, if any (laid
-// above the span; kmain copies it into the heap). a page with a canvas names its size, and
-// the framebuffer is carved off the top of that span; headless, the serial line is the
-// console (kmain's own law). never returns: kmain ends in k_reset.
-void k_start(uintptr_t lo, uintptr_t hi, uintptr_t w, uintptr_t h, char const *cmd,
-             uintptr_t img, uintptr_t imgn) {
+// above the span; kmain copies it into the heap). a page with a canvas names its size in
+// REAL pixels -- the canvas backing store, device ratio included -- and the scale a glyph
+// pixel gets there, which is how the page's own zoom reaches the console; rows and columns
+// then fall out of the two. the framebuffer is carved off the top of that span; headless,
+// the serial line is the console (kmain's own law). never returns: kmain ends in k_reset.
+void k_start(uintptr_t lo, uintptr_t hi, uintptr_t w, uintptr_t h, uintptr_t scale,
+             char const *cmd, uintptr_t img, uintptr_t imgn) {
   kboot.image = (void const *) img, kboot.image_len = imgn;
   if (w && h) {
     uintptr_t fb = (hi - w * h * 4) & ~(uintptr_t) 4095;
     kboot.fb.base = (void *) fb;
     kboot.fb.w = (uint16_t) w, kboot.fb.h = (uint16_t) h, kboot.fb.pitch_px = (uint32_t) w;
+    kboot.fb.scale = (uint8_t) scale;
     kboot.has_fb = true;
     hi = fb; }
   k_ram_give(lo, hi - lo);

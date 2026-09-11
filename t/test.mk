@@ -23,7 +23,7 @@
   test_selfhost test_slow test_softfp test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
-  test_vec test_vi test_virt test_virt_build test_wake test_wasm test_xfixpoint uuhomgen uukind uumx uusplgen \
+  test_vec test_vi test_virt test_virt_build test_wake test_xfixpoint uuhomgen uukind uumx uusplgen \
   uuvallaw uuwm vmret waits
 
 # the three gates. `make test` is the fast one an edit loop runs, test_slow the
@@ -48,7 +48,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_drv test_hdiff test_tco0 nettest test_wake test_gz test_cpio test_fat32 test_root \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
-	test_asmops test_dtb test_rvboot test_elf32 test_objcopy test_distboot test_fat test_wasm \
+	test_asmops test_dtb test_rvboot test_elf32 test_objcopy test_distboot test_fat \
 	test_cca64 test_ccrv64 test_ccwasm test_ccthumb1 test_ccthumb2 test_cts_a64 test_cts_rv64 test_cts_wasm \
 	test_raw_a64 test_raw_rv64 \
 	test_virt test_thumb1 test_thumb2 test_thumb2sp \
@@ -179,20 +179,22 @@ test_stdincorpus: $(ho)/love
 # test_front -- the test-only frontend: b/front links liblove.a (l/love.c only)
 # and supplies the frontend contract itself, so its port vt can answer would-block on
 # cue. it exits 97 on a wait with no deadline -- a deadlock, said loudly.
-$(ho)/front: t/front/main.c $(R)/l/bare.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/l/love_data.ld \
+$(ho)/front: t/front/main.c $(R)/l/bare.c $(R)/i/horn.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/l/love_data.ld \
     b/lib/egg.h b/lib/post.h b/lib/p1.h b/lib/prel.h b/lib/ev.h
 	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
-	@$(hcc) -o $@ t/front/main.c $(R)/l/bare.c $(ho)/liblove.a $(data_ld) $(nifs_ld)
+	@$(hcc) -o $@ t/front/main.c $(R)/l/bare.c $(R)/i/horn.c $(ho)/liblove.a $(data_ld)
 test_front: $(ho)/front
 	@echo TEST $(ho)/front
 	@sh t/gate/run.sh -a front "$(ho)/front" "front: ok" t/front/io.l
+	@echo TEST $(ho)/front "(i/horn.c's sink, read back through the tap)"
+	@sh t/gate/run.sh -a horn "env HORN=none $(ho)/front" "horn: ok" t/front/horn.l
 # standalone smoke tests, held out of the corpus glob ($t is a non-recursive t/*.l).
 # a file is held back for one of three reasons and says which: it wants a crew module and
 # cats.c is the catalog love0 lacks; it is not idempotent and love0 evaluates twice; or its
 # regression is a HANG, wanting a timeout a corpus cannot give -- a wedged gate is worse than
 # a red one. gate = exit 0 and a "<name>: ok"; a cold lane opts in via hostnif_cold.
-hostnif_tests = t/host/gcpause.l t/host/wharf.l t/host/cb.l t/host/manifest.l t/host/rune.l t/host/pty.l t/host/loader.l t/host/rdiff.l t/host/run.l t/host/luxui.l t/host/sh.l t/host/berth.l t/host/overlay.l t/host/bake.l t/host/rove.l t/host/lapiz.l t/host/papel.l t/host/kiosko.l t/host/serve.l t/host/sbhttp.l t/host/salt.l t/host/libra.l t/host/clay.l t/host/tls.l t/host/tlsc.l t/host/gz.l t/host/gzc.l t/host/story.l t/host/design.l t/host/lupa.l t/host/helm.l t/host/wget.l t/host/cook.l
+hostnif_tests = t/host/gcpause.l t/host/wharf.l t/host/cb.l t/host/manifest.l t/host/rune.l t/host/pty.l t/host/loader.l t/host/rdiff.l t/host/run.l t/host/luxui.l t/host/sh.l t/host/berth.l t/host/overlay.l t/host/bake.l t/host/rove.l t/host/tty.l t/host/lapiz.l t/host/papel.l t/host/kiosko.l t/host/serve.l t/host/sbhttp.l t/host/salt.l t/host/libra.l t/host/clay.l t/host/tls.l t/host/tlsc.l t/host/gz.l t/host/gzc.l t/host/story.l t/host/design.l t/host/lupa.l t/host/helm.l t/host/wget.l t/host/cook.l
 # b/lush: t/host/sh.l drives the built shell end to end, via b/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
@@ -337,7 +339,7 @@ test_web: host
 	@$m w/index.l b/.w/index.html
 	@env -u LOVE_NO_IMAGE $m w/style.l b/.w/style.css
 	@env -u LOVE_NO_IMAGE $m u/mkicon.l l/quay/cga_8x8.c 3 32 b/.w/favicon.png 2>/dev/null
-	@env -u LOVE_NO_IMAGE $m u/mkfont.l l/quay/moderndos_8x16.c 12 b/.w/quay16.woff "Quay 16"
+	@env -u LOVE_NO_IMAGE $m u/mkfont.l l/quay/cleat_8x16.c 12 b/.w/quay16.woff "Quay 16"
 	@env -u LOVE_NO_IMAGE $m u/mkfont.l l/quay/cga_8x8.c 6 b/.w/quay8.woff "Quay 8"
 	@cmp -s b/.w/index.html index.html && cmp -s b/.w/style.css w/style.css \
 	  && cmp -s b/.w/favicon.png w/favicon.png \
@@ -538,7 +540,7 @@ test_selfhost: host
 	@echo TEST $(ho)/love-selfhost
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/selfhost; mkdir -p $$d; rm -f $$d/*.o; \
-	  for f in $(love_tu_c) $(host_c) $(R)/i/nokern.c $(R)/i/noblob.c $(R)/i/noosv.c; do b=`basename $$f .c`; \
+	  for f in $(love_tu_c) $(host_c) $(R)/i/nokern.c $(R)/i/noblob.c; do b=`basename $$f .c`; \
 	    $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Il -Ii -Ib/lib -c $$f $$d/$$b.o \
 	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
 	  $(moonrun) -Ia/moon/include -c a/moon/lib/moonlibc/math/am.c $$d/am.o \
@@ -762,8 +764,8 @@ test_rp2040: host
 # PREREQUISITES, not recipe lines, so a wide make runs the six at once -- ~10 s together
 # against ~35 s in a row, each port's own make being single-threaded.
 # mps2 and virt want nothing foreign to build, only to boot, so their build halves are here.
-# i/wasm is not a board and never joins: that folder is the retired emcc build, opt-in as
-# `make wasm-emcc`. the module the page carries is b/love-wasm.wasm, from test_links.
+# i/wasm is not a board and never joins: it is the machine, and the module the page carries
+# is b/love-wasm.wasm, from test_links.
 test_boards: test_mps2_build test_virt_build test_rp2040 test_nucleo446 test_teensy41 test_playdate
 	@echo "test_boards: six ports build and link -- mooncc and our linker, no emulator"
 test_mps2_build: host
@@ -777,12 +779,12 @@ test_virt_build: host
 # its own roster, so it is the one that goes missing. rides both slow tiers -- in test_extra
 # it stands for the four build-only board rows, being test_boards and more.
 .PHONY: test_links
-test_links: host $(ho)/front $(love0) b/wasm/love.wasm b/love-wasm.wasm
+test_links: host $(ho)/front $(love0) b/love-wasm.wasm
 	@$(MAKE) -s $(ko)/love-x64.elf
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
 	@$(MAKE) -s test_boards
-	@echo "test_links: hosted, bootstrap, front, both wasm modules, three kernels, six boards"
+	@echo "test_links: hosted, bootstrap, front, the wasm machine, three kernels, six boards"
 
 # the userland packages: each built by mooncc + moonlibc + the holo linker -- no gcc/glibc/ld
 # anywhere -- then run and held to the package's own answers: tar 1.13 roundtrips and
@@ -1214,19 +1216,6 @@ test_kernel_rv64: host $(R)/u/ktest.l
 endif
 
 NODE ?= $(shell command -v node 2>/dev/null)
-# test_wasm rides moon's own module (make wasm -> b/wasm/love.wasm) under the loader, no
-# emcc. the corpus is not here: t/kernel/all.l reads common.mk's `t` off the ramfs, so
-# test_kernel_wasm runs it on the kernel module, woken image and all. what is left is the two
-# seams the machine has not grown -- quay's cells as html, the horn's PCM into WebAudio.
-ifeq ($(NODE),)
-test_wasm:
-	@echo "test_wasm: skipped (needs node)"
-else
-test_wasm: wasm
-	@$(NODE) $(R)/i/wasm/screen.mjs --love $(R)/b/wasm/love.wasm
-	@$(NODE) $(R)/i/wasm/horn.mjs --love $(R)/b/wasm/love.wasm
-endif
-
 # INLE_RAM: cpu.mjs grows the memory once at boot and hands kmain that fixed span, so the
 # seat's room is a number here, not a policy. 256 (the default) is short of the corpus: the
 # collector's doubling asks 4480156 words and the grow refuses, at the same length whichever
@@ -1249,6 +1238,8 @@ test_kernel_wasm: host
 	   && ! grep -q "^0 tests pass" b/wasm/kernel.log \
 	   || { tail -20 b/wasm/kernel.log; echo "FAIL test_kernel_wasm"; exit 1; }
 	@grep "tests pass" b/wasm/kernel.log
+	@echo TEST t/kernel/glass.l "(the console's grid: real pixels in, rows and columns out)"
+	@sh $(R)/t/gate/glass.sh $(NODE) $(R)/b/love-wasm.wasm b/wasm/love-wasm.image b/wasm/glass.log
 endif
 
 # the wasm module writer and the IR lowering (l/holo/wasm.l) under a foreign engine, and

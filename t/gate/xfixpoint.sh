@@ -91,7 +91,7 @@ test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 if [ -n "$gate_arch_c" ]; then
   kinc="-I$ho -I. -Il -Ii -Ib/lib -Il/quay -Ia/moon/include"
   for f in $gate_kern_c $gate_arch_c l/quay/paint.c \
-           l/quay/cga_8x8.c l/quay/moderndos_8x16.c; do
+           l/quay/cga_8x8.c l/quay/cleat_8x16.c; do
     mkobj "$f"
     moon1 $kinc -c "$f" "$o" || fail "love1 mooncc -c $f"
   done

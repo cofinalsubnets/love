@@ -37,14 +37,14 @@
 // the question a lane owes is which doors it may call, never which kernel it is
 // standing on: ours carries every door on all three (a/moon/include/sys), and
 // a foreign libc carries what its own box does. so these are build facts under
-// LvNolibc and box facts under anything else.
+// __moonlibc__ and box facts under anything else.
 // mount(2) and unshare are LINUX-reaching, and still not this file's question:
 // ours carries both symbols and os.c leaves their rows unmapped, so the call
 // refuses with ENOSYS off linux at run time -- which is the only place that can
 // know, since one binary meets three kernels. compiling them out by the kernel
 // we were built on would refuse them on a linux box too. widening them is the
 // libc's job (mount wants the BSD argument shapes; unshare is linux's own).
-#if defined(LvNolibc)
+#if defined(__moonlibc__)
 # define LvHaveSignalfd 1
 # define LvHaveKqueue   1
 # define LvHaveSysctl   1
@@ -56,7 +56,7 @@
 # define LvHaveKqueue 1
 # define LvHaveSysctl 1
 #endif
-#if defined(LvNolibc) || defined(__linux__)
+#if defined(__moonlibc__) || defined(__linux__)
 # define LvHaveMount      1
 # define LvHaveNamespaces 1
 #endif
@@ -903,8 +903,8 @@ static union u const
 // NOT EVERY ROW HERE IS THE MODULE'S. nineteen stay on the BOOK -- dup dup2 environ
 // fdopen fork getuid glean hardlink pipe raw setenv signal spawn spawnio spawnmap still
 // ttyfg wait winsize -- because a SEAT SHADOWS each with a global of its own: the
-// kernel's bindings and no-op roster (i/kmain.c), the page's tty words
-// (i/wasm/web.l), and the four the seat-doors tablet swaps (i/main.c). a global
+// kernel's bindings and no-op roster (i/kmain.c), and the four the seat-doors tablet
+// swaps (i/main.c). a global
 // name reads the LIVE book (l/ev.c's lvm_index), which is exactly how the shadow is
 // reached -- so a module splice, sitting above the base, would hide it for good and the
 // crew would call the host's door on a seat that has no host. the line is not

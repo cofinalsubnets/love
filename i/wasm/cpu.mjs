@@ -7,8 +7,11 @@
 // import is i/wasm/arch.c's five hypercalls, wearing linux's numbers.
 //
 //   in:  { wasm, ring, ram, cmd, fb,      the module's bytes, the shared ring, RAM in MiB,
-//          image }                        the boot line, { w, h, canvas } or null, and the
-//                                         heap image (`bake PATH` on the boot line) or null
+//          image }                        the boot line, { w, h, scale, canvas } or null, and
+//                                         the heap image (`bake PATH` on the boot line) or
+//                                         null. w and h are REAL pixels and scale is how
+//                                         many of them a glyph pixel gets (0 = the console
+//                                         picks); rows and columns are the kernel's answer
 //   out: { serial }                       a run of the serial console's bytes, as text
 //        { reset }                        the kernel reset: the worker boots it again
 //        { fault }                        the module trapped: the message, and the worker stops
@@ -69,20 +72,30 @@ const flush = () => { if (serial) { post({ serial }); serial = ''; } };
 // the framebuffer, 0xRRGGBB a pixel (l/quay/xterm256.h), into the canvas's RGBA --
 // or, under node with no canvas, a PPM at fb.dump once a second: the gate's eyes.
 let writeFileSync = null, dumpAt = 0, postAt = 0;
+// the guest wrote since the last frame went out. without one the only thing that can have
+// moved is the cursor's blink, so an idle screen goes out at the blink's rate and not the
+// tick's -- the idle forces a blit every 10 ms, and at REAL pixels a frame is megabytes to
+// swizzle and hand over. a console nobody is typing at was the expensive case, which is
+// absurd. (the next lever, if output bursts ever want it, is the painted band: quay knows
+// which rows it drew, and a frame could carry those rows and a y.)
+let drew = false;
+const blink_ms = 640;                                     // kmain's cursor phase: kticks & 64, one tick per 10 ms
 const blit = (force) => {
   if (!fb || !(fbCtx || fb.dump || fb.post)) return;
   const now = performance.now();
   if (!force && now - blitAt < 30) return;
+  if (!drew && now - blitAt < blink_ms) return;
+  if (fb.post && now - postAt < 16) return;
   blitAt = now;
+  drew = false;
   const px = new Uint32Array(memory.buffer, fbAt, fb.w * fb.h);
   // THE FRAME GOES BY MESSAGE, not by an offscreen commit. this worker never returns to
   // its event loop -- the idle is an Atomics.wait inside the boot's own task -- and a
   // canvas transferred here only reaches its placeholder at a task checkpoint, which
   // never arrives. postMessage does work from inside a long task, so the pixels travel
-  // that way and the page paints them. an idle forces a blit, so this lane keeps its own
-  // floor: no display shows more than one frame per 16 ms anyway.
+  // that way and the page paints them. the 16 ms floor above is this lane's: no display
+  // shows more than one frame in that time anyway.
   if (fb.post) {
-    if (now - postAt < 16) return;
     postAt = now;
     const rgba = new Uint8ClampedArray(px.length * 4), o32 = new Uint32Array(rgba.buffer);
     for (let i = 0; i < px.length; i++) {
@@ -112,6 +125,7 @@ const sys1 = (n, a, b, c) => {
       const p = Number(b), len = Number(c), s = dec.decode(u8().subarray(p, p + len), { stream: true });
       serial += s;
       if (s.includes('\n') || serial.length > 4096) flush();
+      drew = true;
       blit(false);
       return c; }
     case NR.clock_gettime: {                            // 0 the wall, 1 since the worker began
@@ -168,7 +182,7 @@ async function boot(msg) {
     if (fb.canvas) { fbCtx = fb.canvas.getContext('2d'); fbImg = fbCtx.createImageData(fb.w, fb.h); }
     else if (fb.dump && isNode) writeFileSync = (await import('node:fs')).writeFileSync; }
   seen = Atomics.load(ctl, 2);
-  call(ex.k_start, lo, hi, fb ? fb.w : 0, fb ? fb.h : 0, top, img, imgn); }
+  call(ex.k_start, lo, hi, fb ? fb.w : 0, fb ? fb.h : 0, fb?.scale ?? 0, top, img, imgn); }
 
 // the terminals import the ring's shape from here, so this file also loads on a main
 // thread, where there is no port and nothing to do

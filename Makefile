@@ -96,10 +96,10 @@ h_o = $(love_c:$(R)/%.c=$(ho)/%.o)
 host_o = $(host_c:$(R)/%.c=$(ho)/%.o)
 # the three a LINK names rather than the directory, one per thing it does without:
 # i/nokern.c the kernel's doors where no kmain.c stands under them, i/noblob.c the
-# carried archives where no laid object brings them, i/noosv.c the OS word where no
-# moonlibc writes it. the mooncc lane takes kart_o + b/src.o + b/moonlibc.o and
+# carried archives where no laid object brings them. the OS word is l/love.c's
+# weak one wherever moonlibc's os.c is not in the link.
 # wants none of them; the HCC flavour is gcc and glibc alone, so it takes all three.
-seat_o = $(ho)/i/nokern.o $(ho)/i/noblob.o $(ho)/i/noosv.o
+seat_o = $(ho)/i/nokern.o $(ho)/i/noblob.o
 hcc = LOVE_NO_IMAGE= $(CC) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Il -Ii -Ib/lib
 image_ldflags = -Wl,--section-start=.love.image=0x2000000
 .PHONY: force_hostcc
@@ -129,7 +129,7 @@ $(ho)/liblove.a: $(h_o)
 # pinned to b/0, never $(ho)/0: love0 is one binary whatever HCC and tco say
 # love0 takes the whole hosted surface less the crew catalog, PLUS its own seat --
 # i/main0.c, which host_c holds back because only this link has a use for it.
-love0_o = $(patsubst $(R)/%.c,b/0/%.o,$(filter-out $(R)/i/cats.c,$(host_c)) $(R)/i/main0.c $(R)/i/nokern.c $(R)/i/noblob.c $(R)/i/noosv.c $(love_c))
+love0_o = $(patsubst $(R)/%.c,b/0/%.o,$(filter-out $(R)/i/cats.c,$(host_c)) $(R)/i/main0.c $(R)/i/nokern.c $(R)/i/noblob.c $(love_c))
 b/0/i/main0.o: b/lib/boot0.h
 b/0/i/cb.o: l/quay/quay.c l/quay/nif.c l/quay/quay.h
 boot_cc = $(CCACHE) $(CC) $(ai_cflags) -fPIE -DLove0 -Dai_tco=0 -Dai_data_section=0 -DLvVersion='"$(love_base)+bootstrap"' -I. -Il -Ii -Ib/lib
@@ -515,7 +515,7 @@ k_free_c = $R/i/kmain.c $R/i/blk.c $R/i/hda.c $R/i/sys.c
 # because the kernel runs the same frontend the host does. taking that roster rather than
 # copying it is what lets a new i/<app>.c reach the kernel with no rule edit.
 k_c = $(love_c) \
-  $R/l/quay/cga_8x8.c $R/l/quay/moderndos_8x16.c $R/l/quay/paint.c \
+  $R/l/quay/cga_8x8.c $R/l/quay/cleat_8x16.c $R/l/quay/paint.c \
   $(c_c) $(k_arch_c) $(k_free_c) $(host_c)
 k_h = $(love_h) $(R)/i/k.h $(R)/i/ustar.h $(wildcard $(R)/i/$a/*.h)
 
@@ -622,7 +622,7 @@ define kart
 $(1)_h = $$(love_h) $$R/i/k.h $$R/i/ustar.h $$(wildcard $$R/i/$$($(4))/*.h)
 $(1)_arch_o = $$(patsubst $$R/%.c,$$($(2))/%.o,$$(wildcard $$R/i/$$($(4))/*.c))
 # the console's painter and its fonts: kernel-only draws the host link never had
-$(1)_quay_o = $$(patsubst %,$$($(2))/l/quay/%.o,paint cga_8x8 moderndos_8x16)
+$(1)_quay_o = $$(patsubst %,$$($(2))/l/quay/%.o,paint cga_8x8 cleat_8x16)
 $(1)_kern_o = $$(k_free_c:$$R/%.c=$$($(2))/%.o)
 $(1)_o = $$(if $$($(1)_arch_o),$$($(1)_kern_o) \
   $$($(1)_arch_o) $$($(1)_quay_o) $$($(2))/kvec.o,)
@@ -1018,29 +1018,18 @@ SITEPORT ?= 8080
 site-serve: host b/toolmd.stamp
 	@$(ho)/love -l a/papel.l -t love -o b/site -s $(SITEPORT) README.md doc b/toolmd
 
-# the wasm artifact, moon's own: love's TUs (plus the horn and the seat's host.c)
-# through mooncc -t wasm, linked to one module -- no emcc, no C toolchain. tco=1: the
-# vm's tails are return_call, the engines' tail-call law (node 26, firefox 121, chrome
-# 112, safari 18), and the corpus runs 1.31x faster than on the trampoline. the loader
-# (i/wasm/loader.js) is the runtime under it. NOTHING SHIPS IT any more -- the front
-# page carries the machine (the kernel module below) -- so it is laid under b/ and never
-# copied out: test_wasm's two checks and horn.html are the whole readership, and each is a
-# seam the machine has not grown yet (quay's cells, the horn's ring).
-# the emcc build stays as wasm-emcc, a differential and nothing on the page.
-wasm_c = $(love_c) $(R)/i/horn.c $(R)/i/wasm/host.c
-b/wasm/love.wasm: $(wasm_c) $(lib_h) b/lib/love_version.h $(mooncc_dep)
-	@mkdir -p $(dir $@)
-	@echo 'MOON	'$@
-	@$(mooncc) -t wasm -Dai_tco=1 -DLvHaveVersionH -I. -Il -Ii -Ib/lib -o $@ $(wasm_c)
+# `make wasm` is the machine: the kernel module below, and the heap image beside it.
+# tco=1 on both -- the vm's tails are return_call, the engines' tail-call law (node 26,
+# firefox 121, chrome 112, safari 18), and the corpus runs 1.31x faster than on the
+# trampoline. the loader (i/wasm/loader.js) is the runtime under a bare module.
 ifeq ($(NODE),)
-wasm: b/wasm/love.wasm
+wasm: b/love-wasm.wasm
 else
-wasm: b/wasm/love.wasm b/wasm/love-wasm.image
+wasm: b/love-wasm.wasm b/wasm/love-wasm.image
 endif
-# by hand, as love.js was: bytes every C edit would otherwise churn. ONE PAIR IS COPIED
-# OUT, the machine's, to w/ beside the fonts and the stylesheet -- generated files
-# committed for one reason, that github pages serves what it is given and builds nothing.
-# the hosted module is a gate's, not a page's, and never leaves b/.
+# by hand: bytes every C edit would otherwise churn. ONE PAIR IS COPIED OUT to w/ beside
+# the fonts and the stylesheet -- generated files committed for one reason, that github
+# pages serves what it is given and builds nothing.
 site-wasm: wasm
 	@mkdir -p w/wasm
 	@echo '$(t_cp)	'w/wasm/love-wasm.wasm
@@ -1053,7 +1042,7 @@ site-wasm: wasm
 # text lane). one module beside b/love-$a.elf; the runtime rides in by need, and no
 # the heap image is baked below. the CPU under it is i/wasm/cpu.mjs, a worker;
 # the terminals are i/wasm/inle.mjs (node) and i/wasm/inle.html (the page).
-kw_c = $(love_c) $R/l/quay/cga_8x8.c $R/l/quay/moderndos_8x16.c $R/l/quay/paint.c \
+kw_c = $(love_c) $R/l/quay/cga_8x8.c $R/l/quay/cleat_8x16.c $R/l/quay/paint.c \
   $(k_free_c) $(host_c) $R/i/wasm/arch.c
 kw_h = $(love_h) $R/i/k.h $R/i/ustar.h $R/i/asmops.h $R/i/wasm/asmops.h
 b/wasm/src.o: $(dist_source) u/mksrc.l b/.mksys-cat.l $m
@@ -1065,8 +1054,6 @@ b/love-wasm.wasm: $(kw_c) $(kw_h) b/wasm/src.o b/lib/baked.h b/lib/distlist.h \
 	@echo 'MOON	'$@
 	@$(mooncc) -t wasm -Dai_tco=1 -DLvHaveVersionH -I. -Il -Ii -Ib/lib \
 	  -Il/quay -Ia/moon/include -o $@ $(kw_c) b/wasm/src.o
-wasm-emcc:                       # emcc's love, b/wasm/love.js: the foreign build ccwasm takes
-	@$(MAKE) -C i/wasm
 # the seat's heap image: the kernel booted once under node with `bake PATH` on the boot
 # line -- the egg, the modules and the korecat warm, the seat text run -- written to the
 # ramfs and lifted out at the reset. the page fetches it beside the module and the worker
@@ -1079,7 +1066,6 @@ b/wasm/love-wasm.image: b/love-wasm.wasm i/wasm/cpu.mjs i/wasm/inle.mjs
 clean:
 	rm -rf b
 	@rm -f t/proof/rocq/*.vo t/proof/rocq/*.vok t/proof/rocq/*.vos t/proof/rocq/*.glob t/proof/rocq/.*.aux
-	@[ -d i/wasm ] && $(MAKE) -C i/wasm clean || :
 distclean: clean
 	rm -rf dl
 valg: host
@@ -1089,7 +1075,7 @@ valg: host
 # the tree as it is, so a generated file still has to be committed
 web: fonts w/style.css w/favicon.png index.html
 fonts: w/fonts/quay16.woff w/fonts/quay8.woff
-w/fonts/quay16.woff: l/quay/moderndos_8x16.c u/mkfont.l $(mdep)
+w/fonts/quay16.woff: l/quay/cleat_8x16.c u/mkfont.l $(mdep)
 	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
 	@$m u/mkfont.l $< 12 $@ "Quay 16"

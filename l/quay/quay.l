@@ -25,10 +25,18 @@
    q-clay ['gdecl [["xterm256" '(arr (const (named "uint32_t")) 256) ['init q-pal]]] '(static)]
    ; a shape check before a byte is written: 256 entries, every one an xrgb pixel.
    ; the C compiler would take a short table without a word, and the seats index it
-   ; by a byte -- so the length is the whole safety here.
+   ; by a byte -- so the length is most of the safety here. the rest is five corners,
+   ; one per band: the three loops above can each be right in shape and wrong by an
+   ; index, and every seat reads the answer as pixels nobody diffs.
+   q-corners (&& (0 = q-pal 0)                      ; black, the first classic
+             (&& (16711680 = q-pal 9)               ; bright red, the last of the low eight
+             (&& (16711680 = q-pal 196)             ; ... and the cube's own red, 5/0/0
+             (&& (526344 = q-pal 232)               ; the grey ramp's first step, 8
+                 (15658734 = q-pal 255)))))         ; ... and its last, 238
    q-ok (&& ((tally q-pal) = 256)
+            (&& q-corners
             (&& (clay-ok? q-clay)
-                (foldl (\ a v (&& a (&& (v >= 0) (v < 16777216)))) 1 q-pal)))
+                (foldl (\ a v (&& a (&& (v >= 0) (v < 16777216)))) 1 q-pal))))
    ; the banner is not decoration: a hand edit here is lost the next time the gate
    ; runs, so the file has to say where its source is.
    q-c (cats (map clay-show

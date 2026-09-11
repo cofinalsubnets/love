@@ -28,6 +28,8 @@
 //                 the number backpressure exists to bound
 //   (naps ())     how many times the scheduler has reached its wait -- the gauge
 //                 that tells a park from a spin
+//   (tapped ())   the PCM i/horn.c's sink accepted, as text; (taprate ()) and
+//                 (tapchans ()) the rate and channels it took it at
 //
 // A WAIT WITH NO DEADLINE EXITS 97 rather than sleeping. A synthetic device
 // can only be fed by another task, so "every task is parked with no timer" is a
@@ -296,7 +298,60 @@ static lvm(lvm_naps) {
   Sp[0] = putcharm((intptr_t) naps);
   Ip += 1; return Continue(); }
 
+// --- the horn's tap ---------------------------------------------------------
+// i/horn.c's sink hands its ACCEPTED frames to ai_horn_tap and the weak default in
+// that file takes nothing, so on every native seat the PCM stops at the sink and no
+// law can say what went in came out. a seat with a speaker and no card defines this
+// and plays what it is handed; here it is kept, so a .l law can read it back.
+//
+//   (tapped ())    what the sink has taken, as text, and the keep is emptied
+//   (taprate ())   the rate it was taken at, 0 for nothing yet
+//   (tapchans ())  ..and the channel count. i/horn.c doubles a mono port on the way
+//                  down, so this is the DEVICE's two, never the port's one
+//
+// the seat is doorless by HORN=none, which is also the only way a box with a card
+// reaches the sink -- the law sets it, and a seat that ignored it would write to the
+// speaker and tap nothing.
+enum { tap_n = 1 << 16 };
+static unsigned char tap_buf[tap_n];
+static uintptr_t tap_len, tap_rate, tap_chans;
+void ai_horn_tap(unsigned char const *pcm, uintptr_t frames, uintptr_t chans, uintptr_t rate) {
+  uintptr_t n = frames * chans * 2, room = tap_n - tap_len;
+  tap_rate = rate, tap_chans = chans;
+  memcpy(tap_buf + tap_len, pcm, n < room ? n : room);
+  tap_len += n < room ? n : room; }
+
+// i/horn.c's inle door, which this seat has no i/hda.c for. never called: __ai_osv is
+// 0 here (l/love.c's weak word, unprobed) and every one of these is gated on it being
+// negative -- but a link wants a body, and a wrong one that ran would be loud.
+int k_horn_open(int rate) { return -1; }
+intptr_t k_horn_write(unsigned char const *src, uintptr_t n) { return -1; }
+uintptr_t k_horn_lag(void) { return 0; }
+void k_horn_close(void) { }
+
+static lvm(lvm_tapped) {
+  uintptr_t n = tap_len;
+  tap_len = 0;
+  if (!n) { Sp[0] = EmptyString; Ip += 1; return Continue(); }
+  Pack(g);
+  struct ai *r = str0(g, n);
+  if (!ai_ok(r)) { Unpack(g); Sp[0] = EmptyString; Ip += 1; return Continue(); }
+  g = r;
+  Unpack(g);
+  memcpy(txt(Sp[0]), tap_buf, n);
+  Sp[1] = Sp[0];
+  Sp += 1; Ip += 1; return Continue(); }
+static lvm(lvm_taprate) {
+  Sp[0] = putcharm((intptr_t) tap_rate);
+  Ip += 1; return Continue(); }
+static lvm(lvm_tapchans) {
+  Sp[0] = putcharm((intptr_t) tap_chans);
+  Ip += 1; return Continue(); }
+
 static union u const
+  nif_tapped[] = {{lvm_tapped}, {lvm_ret0}},
+  nif_taprate[] = {{lvm_taprate}, {lvm_ret0}},
+  nif_tapchans[] = {{lvm_tapchans}, {lvm_ret0}},
   nif_naps[]   = {{lvm_naps},  {lvm_ret0}},
   nif_quit[]   = {{lvm_quit},  {lvm_ret0}},
   nif_wpend[]  = {{lvm_wpending}, {lvm_ret0}},
@@ -318,7 +373,10 @@ static struct ai_def const defs[] = {
   {"wcap",   {.k = nif_wcap}, NULL},
   {"sent",   {.k = nif_sent}, NULL},
   {"wpending", {.k = nif_wpend}, NULL},
-  {"naps",   {.k = nif_naps}, NULL} };
+  {"naps",   {.k = nif_naps}, NULL},
+  {"tapped", {.k = nif_tapped}, NULL},
+  {"taprate", {.k = nif_taprate}, NULL},
+  {"tapchans", {.k = nif_tapchans}, NULL} };
 
 // --- the boot --------------------------------------------------------------
 
@@ -342,6 +400,10 @@ int main(int argc, char const **argv) {
     fprintf(stderr, "usage: %s <file.l>...\n", argv[0]);
     return 2; }
   struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
+  // ..and the LvNif slice of every TU linked beside this one, as i/main.c drains it:
+  // i/horn.c's rows ride the section, not the table above, so without this the horn is
+  // in the binary and off the book.
+  g = ai_defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
   g = ai_egg_(g,
 #include "egg.h"
     ,

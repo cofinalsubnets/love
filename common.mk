@@ -131,9 +131,9 @@ hosta_c = $(wildcard $R/i/$(hosta)/*.c)
 # ..and the hosted surface is i/ less the kernel's own six (kmain, the syscall table,
 # the two drivers, doom), love0's own seat (main0.c) and the three a LINK names for
 # itself rather than a directory naming it: nokern.c (no kmain.c under it), noblob.c (no
-# laid archives) and noosv.c (no moonlibc). drop an i/<app>.c in and its nifs register
+# laid archives). drop an i/<app>.c in and its nifs register
 # with no rule edit.
-host_c = $(filter-out $(addprefix $R/i/,kmain.c main0.c nokern.c noblob.c noosv.c blk.c hda.c sys.c doom.c doomsnd.c),$(wildcard $R/i/*.c))
+host_c = $(filter-out $(addprefix $R/i/,kmain.c main0.c nokern.c noblob.c blk.c hda.c sys.c doom.c doomsnd.c),$(wildcard $R/i/*.c))
 # l/ vs i/ cuts language from SEATS, not portable from machine-specific: quay
 # draws into a buffer and names no device, so it stays here with the engines no machine
 # owns. a seat that wants its own nifs brings them through ai_defn, which is that door.
@@ -205,10 +205,3 @@ ai_cflags += -D_POSIX_C_SOURCE=200809L
 endif
 # the data-sentinel tiling l/love.h's ai_typ reads (l/love.c's DSENT), on every ld/lld link.
 data_ld = -Wl,-T,$R/l/love_data.ld
-# AN EMPTY BRACKET IS STILL A BRACKET. l/love.c indexes the host nif slice off
-# [__start_love_nifs, __stop_love_nifs), which the toolchain synthesises only where the
-# SECTION exists -- so an embedder registering its defs by hand owns no LvNif and the
-# pair goes undefined at the link. weak declarations do not answer it: ld leaves a weak
-# undefined at 0 even where the section IS there, which silently unregisters every host
-# nif. naming the empty pair at the one link that wants it keeps the host lane untouched.
-nifs_ld = -Wl,--defsym=__start_love_nifs=0,--defsym=__stop_love_nifs=0

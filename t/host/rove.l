@@ -3,8 +3,8 @@
 ; the engine core is pure love, so everything but the tty runner gates here:
 ; delve (seeded, connected, bordered), fov (strides, walls, memory), the
 ; painter (a frame into a jug), the helm decoder, and the crawl end to end
-; -- combat, loot, grog, the hatch, the pearl, death. the tty side (rove)
-; stays a live probe: it is berth-thin over what this file proves.
+; -- combat, loot, grog, the hatch, the pearl, death. the tty side (rove-run) is
+; berth-thin over what this file proves, and t/host/tty.l plays it on a real pty.
 ;
 ;   cat t/00-init.l t/host/rove.l | b/love
 

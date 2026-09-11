@@ -3,7 +3,9 @@
      worker (cpu.mjs), the canvas is its framebuffer, the keyboard its serial line. serve
      the tree root (`make serve`) and open /i/wasm/inle.html; the module is read from
      b/love-wasm.wasm, so `make b/love-wasm.wasm` first. coi.js makes the page
-     cross-origin isolated on a static host, which SharedArrayBuffer wants. -->
+     cross-origin isolated on a static host, which SharedArrayBuffer wants.
+     ?boot= is the boot line, ?ram= the RAM in MiB, ?cols= the fewest columns the
+     console should have -- which is what settles how large a glyph is drawn. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -12,19 +14,23 @@
 <style>
   html, body { margin: 0; background: #111; color: #ccc; font: 14px/1.4 monospace; }
   main { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px; }
-  canvas { image-rendering: pixelated; width: 1280px; max-width: 100%; outline: none; background: #000; }
+  /* the console takes the box and settles its own rows and columns inside it, so the
+     size here is a page layout and nothing else -- no aspect ratio to keep. */
+  canvas { image-rendering: pixelated; display: block; outline: none; background: #000;
+           width: min(100%, 1280px); height: min(78vh, 880px); }
   .hint { color: #666; }
 </style>
 </head>
 <body>
 <main>
-  <canvas id="fb" width="640" height="400" tabindex="0"></canvas>
+  <canvas id="fb" tabindex="0"></canvas>
   <div class="hint">click the screen, then type. the boot line: <code id="boot"></code></div>
   <div class="hint">lift a file out of the machine: <input id="path" size="40" placeholder="/tmp/love-x64.elf"> <button id="lift">lift</button> <span id="lifted"></span></div>
   <p id="note" class="hint"></p>
 </main>
 <script type="module">
   import { ring_n, ring_at, lift_n, lift_at, shared_n } from './cpu.mjs';
+  import { glass } from './glass.mjs';
   const $ = (id) => document.getElementById(id);
   const note = $('note'), canvas = $('fb');
   // ONE CONSOLE DOOR: the canvas is it -- the worker is handed the framebuffer and quay
@@ -82,7 +88,10 @@
     // egg boot is many seconds. absent, the kernel bakes the egg.
     const image = await fetch(new URL('../../b/wasm/love-wasm.image', import.meta.url))
       .then((r) => r.ok ? r.arrayBuffer() : null).catch(() => null);
-    cpu.postMessage({ wasm, ring, ram: Number(q.get('ram') ?? 256), cmd, fb: { w: 640, h: 400, post: true }, image },
+    // the canvas measured as real pixels, and the zoom a glyph pixel gets there; ?cols
+    // is the fewest columns worth reading, which is what picks the zoom
+    const fb = { ...glass(canvas, Number(q.get('cols') ?? 80)), post: true };
+    cpu.postMessage({ wasm, ring, ram: Number(q.get('ram') ?? 256), cmd, fb, image },
                     image ? [wasm, image] : [wasm]);
     canvas.focus(); }
 </script>

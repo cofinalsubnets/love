@@ -34,6 +34,16 @@
       (limn-down = limn-utf8 9474)
       (limn-across = limn-utf8 9472))
 
+; --- the unfold itself: a cp437 byte's codepoint, quay's own table (cb_umap).
+;     0 is "no meaning" and the ascii range never asks -- limn reads a byte as
+;     itself there, so a nonzero answer for one would be a second opinion ---
+   _ (test
+      (9829 = unfold 3)                               ; the heart
+      (9474 = unfold 179)                             ; the box glyph limn draws down with
+      (233 = unfold 130)                              ; e-acute
+      (0 = unfold 0) (0 = unfold 65) (0 = unfold 126)
+      (limn-down = limn-glyph 179))                   ; the two spellings of one line
+
 ; --- a glyph byte: ascii through, a high byte unfolded, and the cache is
 ;     transparent -- asking twice answers the same text ---
    _ (test

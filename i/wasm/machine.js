@@ -9,8 +9,10 @@
 // with a service worker and one reload. no isolation, no machine -- said, not left blank.
 // the module and its image are fetched from w/wasm/ -- where the tracked, committed
 // pair lives -- unless data-wasm/data-image name them; data-boot is the boot line (default
-// the shell), data-ram the RAM in MiB.
+// the shell), data-ram the RAM in MiB, data-cols the fewest columns worth reading, which
+// is what settles how large a glyph is drawn.
 import { ring_n, ring_at, shared_n } from './cpu.mjs';
+import { glass } from './glass.mjs';
 
 // the module is wasm64: an engine without memory64 says so instead of failing in silence
 const memory64 = () => WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 5, 3, 1, 4, 0]));
@@ -90,8 +92,11 @@ export async function loveMachine(root) {
       if (!woke) { woke = true; status.hidden = true; } }
     else if (m.fault) halt('the machine faulted: ' + m.fault); };
   cpu.onerror = e => halt('the machine stopped: ' + e.message);
-  cpu.postMessage({ wasm, ring, ram: Number(at('ram', 256)), cmd: at('boot', 'sh'),
-                    fb: { w: canvas.width, h: canvas.height, post: true }, image },
+  // the canvas measured as REAL pixels -- its own box times the device ratio -- and the
+  // zoom a glyph pixel gets there. the kernel settles rows and columns from the two, so
+  // the island's shape is a layout question and nothing the console has to live inside.
+  const fb = { ...glass(canvas, Number(at('cols', 80))), post: true };
+  cpu.postMessage({ wasm, ring, ram: Number(at('ram', 256)), cmd: at('boot', 'sh'), fb, image },
                   image ? [wasm, image] : [wasm]);
   status.textContent = 'the machine is waking...';
   canvas.focus({ preventScroll: true });
