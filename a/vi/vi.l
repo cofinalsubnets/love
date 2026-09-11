@@ -48,8 +48,10 @@
                  _ (vload s2 (? (two? r) (lines <>r) ()) nm)
                  (vmsg s2 (? (two? r) (nm + ": " + show (tally (s2 'lines)) + " lines")
                               (nm + ": new file"))))))
-       ; the stage hides the cursor; vi's frame places it, so the frame shows it
-       (stage (\ w h (pins st 'w w 'h h, "\e[?25h" + vframe st))
+       ; the stage hides the cursor; vi's frame places it, so the frame shows it.
+       ; vfresh, not vframe: a full redraw a keystroke is what the flicker is, and
+       ; it writes only the rows that changed since the last one
+       (stage (\ w h (pins st 'w w 'h h, "\e[?25h" + vfresh st))
               (\ c (vstep st c, dow st, doe st))
               (\ _ (st 'quit)))))
 ) ; module 'vi
