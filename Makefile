@@ -298,7 +298,7 @@ crewfiles = a/sb/merge.l a/sb/http.l a/sb/sb.l a/kiosko/kiosko.l \
   a/source.l a/lapiz.l \
   a/libra/salt.l a/libra/libra.l a/vi/hueweb.l a/kiosko/serve.l \
   a/rove/rove.l a/rove/story.l a/rove/design.l \
-  a/lux/wire.l a/doom.l a/lupa.l
+  a/lux/wire.l a/doom.l a/lupa.l a/mc.l
 korefiles = $(kore_head) $(holo_obj) l/holo/copy.l $(kore_net)
 moonfiles = a/kore/text.l a/kore/u.l a/kore/asbook.l $(holo_be) l/holo/gas.l $(holo_obj) $(moon_mid)
 $(ho)/.mooncc-cat.list: force_dist_list

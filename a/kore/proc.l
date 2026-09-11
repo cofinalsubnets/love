@@ -7,6 +7,7 @@
 ; sleep, milliseconds). a body-less top-level `:` leaking one pure helper
 ; (udur -- lawed in t/law/kore.l) and the mains.
 (module 'kore
+(borrow 'cli)
 (borrow 'posix)
 
 (:
@@ -288,7 +289,7 @@
    (mount-main as)
     (? !(two? as) (mount-list ())
        (: t (tablet 0)
-          o (uopts as t '(116 111) ())
+          o (uopt as t '(116 111) '(101))
           _ (? (two? o) () (udie 1 "mount: -t and -o each want a value"))
           ty (: v (uoptv t 116) (? (string? v) v "auto"))
           ob (: v (uoptv t 111) (? (string? v) (umnt-bits (usplit 44 v) 0) 0))
@@ -487,7 +488,7 @@
        (? (two? ps) 0 1))
    (pgrep-main as)
     (: t (tablet 0)
-       o (uopts as t () ())
+       o (uopt as t () '(101))
        _ (? (two? o) () (udie 2 "usage: pgrep [-f] [-x] PATTERN"))
        rest <>>o
        _ (? (two? rest) () (udie 2 "usage: pgrep [-f] [-x] PATTERN"))
@@ -499,7 +500,7 @@
     (: sig (? (two? as) (usignum <as) ())
        rest (? (charm? sig) >as as)
        t (tablet 0)
-       o (uopts rest t () ())
+       o (uopt rest t () '(101))
        _ (? (two? o) () (udie 2 "usage: pkill [-SIG] [-f] [-x] PATTERN"))
        ws <>>o
        _ (? (two? ws) () (udie 2 "usage: pkill [-SIG] [-f] [-x] PATTERN"))

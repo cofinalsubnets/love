@@ -88,7 +88,7 @@
  (close (cup md)))
 
 ; --- the harbour: many berths on one wharf ---------------------------------
-; the multiplexing half. berth's own entry needs a tty (raw/winsize) and blocks
+; the multiplexing half. berth's own entry needs a tty (raw/tty) and blocks
 ; until the last child leaves, so these drive the harbour directly -- the same
 ; pieces berth wires up, minus the terminal. a pane is (box master pid).
 (: (sub? h n i) (? (< (+ i (tally n)) (+ (tally h) 1))

@@ -2494,12 +2494,21 @@
         (: r (hark ["git" "symbolic-ref" "--short" "-q" "HEAD"])
            (? (0 = <r) (sh-chomp >r) ""))
         "")
+   ; the prompt's pens: a failing status red, the cwd the crew's cyan (post.l's ps1c
+   ; wears the same 117), the branch dim, the sigil plain. no tty test guards them --
+   ; sh-loop is only reached when (raw 1) answered (), so the prompt is on a terminal
+   ; by construction, and the cooked fallback never draws one. edlnc measures with
+   ; edwide, so the escapes cost no column.
+   sh-pen-st  "\e[31m"
+   sh-pen-cwd "\e[38;5;117m"
+   sh-pen-br  "\e[2m"
+   sh-pen-off "\e[0m"
    (sh-prompt _)
      (: st (sh-status ())
         br (sh-gitbr 0)
-        (+ (? (st = 0) "" ((show st) + " "))
-           (+ (sh-homely ("" + (cwd 0)))
-              (+ (? #br (" (" + (br + ")")) "")
+        (+ (? (st = 0) "" (sh-pen-st + ((show st) + (" " + sh-pen-off))))
+           (+ (sh-pen-cwd + ((sh-homely ("" + (cwd 0))) + sh-pen-off))
+              (+ (? #br (sh-pen-br + (" (" + (br + (")" + sh-pen-off)))) "")
                  (? (0 = (getuid 0)) " # " " $ ")))))
 
    ; --- history: ~/.lush_history, oldest first on disk, newest first in hand

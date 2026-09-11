@@ -36,6 +36,7 @@
 (borrow 're)
 
 (module 'kore
+(borrow 'cli)
 (borrow 'posix)
 
 (:
@@ -379,12 +380,12 @@
                           ((f = 126) && (d = 49)) 103
                           ((f = 126) && (d = 52)) 71
                           27) -1]))))))
-   ; winsize's (rows . cols) as [h w]. a fresh pty answers 0x0 before anyone has
+   ; tty's (rows . cols) as [h w]. a fresh pty answers 0x0 before anyone has
    ; sized it, and that is a terminal with no size yet, not a missing one
    (pgwin ws) [(? (0 < <ws) <ws 24) (? (0 < >ws) >ws 80)]
    ; the window may move under us; the top line is what survives a rewrap
    (pgresize st)
-    (: ws (winsize 0)
+    (: ws (tty 1)
        (? !(two? ws) 0
           (: hw (pgwin ws)
              (? ((<hw = st 'h) && (<>hw = st 'w)) 0
@@ -425,7 +426,7 @@
    ; the flags kore's pager knows, and the complaint for anything else
    (pgopts as)
     (: t (tablet 0)
-       o (uopts as t () ())
+       o (uopt as t () '(101))
        _ (? (two? o) () (udie 2 "less: bad option"))
        _ (foldl (\ a c (? (elem c '(78 105 115 101)) a
                           (udie 2 ("less: unknown option -" + string c))))
@@ -439,7 +440,7 @@
        plus? ((two? rest) && (1 < #(<rest)) && (<rest 0 = 43))
        plus (? plus? (snip <rest 1 #(<rest)) "")
        fs (? plus? >rest rest)
-       ws (winsize 0)
+       ws (tty 1)
        hw (? (two? ws) (pgwin ws) [24 80])
        (? !(two? ws) (pgpour fs)
           (two? fs)

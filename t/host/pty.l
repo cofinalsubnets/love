@@ -1,5 +1,5 @@
 ; --- t/host/pty.l: a runnable smoke test for bao's pty nifs (i/posix.c) ---
-; held out of the corpus, and not for its nifs: love0 links tether/gather/still/winsize
+; held out of the corpus, and not for its nifs: love0 links tether/gather/still/tty
 ; as surely as the final `love` does. love0 evaluates the corpus TWICE, and this file
 ; does not survive its own second run -- one marker where a corpus file gives two.
 ; standalone, then, against the built binary (test comes from t/00-init.l):
@@ -43,11 +43,11 @@
     (two? st)           ; reaped
     (= 137 (cap st))))    ; 128 + 9: the signal-death encoding
 
-; --- (setwinsize port r c): ok on a live master, an errno nom on a non-port ---
+; --- (settty port r c): ok on a live master, an errno nom on a non-port ---
 (: r (tether ["cat"])
  _ (test
-    !(setwinsize (cup r) 24 80)          ; () = ok
-    ('ebadf = (setwinsize 5 24 80)))   ; a bare fixnum (not a port)
+    !(settty (cup r) 24 80)          ; () = ok
+    ('ebadf = (settty 5 24 80)))   ; a bare fixnum (not a port)
  _ (still (cap r) 9)
  _ (slurp (cup r))
  _ (waitfor (cap r)))

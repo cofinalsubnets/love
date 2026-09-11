@@ -15,6 +15,7 @@
 ; digit width of the byte total, uniq -c wears width 7, head/tail banner many files
 ; with ==> name <== and a blank line between.
 (module 'kore
+(borrow 'cli)
 (borrow 'posix)
 
 (:
@@ -243,7 +244,7 @@
    (sort-main as)
     (: (sdie m) (udie 2 ("sort: " + m))
        ; the flag walk is sort's own: -k takes a value AND stacks, -t takes a charm
-       ; that may be glued or not, and uopts stacks only -e.
+       ; that may be glued or not, and uopt stacks only what `reps` names.
        ; every arm below sits inside the ONE `?`. a `(:` here reads `(w = "--")` as a
        ; BINDING -- a define whose head is a call pattern -- and silently shadows w with
        ; a two-parameter function, which is how the first draft of this walk answered a
@@ -843,7 +844,7 @@
             (pre >a (uatoi (snip <a 1 (tally <a))) acc)
            (pre >a wid (<a . acc)))
        p (pre as () ())
-       o (uopts <>p t '(119) ())
+       o (uopt <>p t '(119) '(101))
        _ (? (two? o) () (udie 2 "fold: -w wants a width"))
        v (uoptv t 119)
        w (? (string? v) (uatoi v) (? (charm? <p) <p 80))
@@ -873,7 +874,7 @@
        (go 0 0 1))
    (expand-main as)
     (: t (tablet 0)
-       o (uopts as t '(116) ())
+       o (uopt as t '(116) '(101))
        _ (? (two? o) () (udie 2 "expand: -t wants a tab size"))
        v (uoptv t 116)
        n (? (string? v) (uatoi v) 8)
@@ -904,7 +905,7 @@
        (go 0 0 -1 1))
    (unexpand-main as)
     (: t (tablet 0)
-       o (uopts as t '(116) ())
+       o (uopt as t '(116) '(101))
        _ (? (two? o) () (udie 2 "unexpand: -t wants a tab size"))
        v (uoptv t 116)
        n (? (string? v) (uatoi v) 8)
@@ -944,7 +945,7 @@
    d2u-usage "usage: dos2unix [-fkqn] [FILE..]   (unix2dos and mac2unix are the same door)"
    (ud2u nm fn as)
     (: t (tablet 0)
-       o (uopts as t () ())
+       o (uopt as t () '(101))
        _ (? (two? o) () (udie 2 d2u-usage))
        _ (foldl (\ a c (? (elem c '(102 107 113 110)) a
                           (udie 2 (nm + ": unknown option -" + string c)))) 0 (keys t))
@@ -1081,7 +1082,7 @@
        (go 0 0 0))
    (ubmain who set bits as)
     (: t (tablet 0)
-       o (uopts as t '(119) ())
+       o (uopt as t '(119) '(101))
        _ (? (two? o) () (udie 1 (who + ": -w wants a width")))
        v (uoptv t 119)
        w (? (string? v) (uatoi v) 76)
@@ -1307,7 +1308,7 @@
    ; the shape every option walk past this point rides: a word is -X and the value is
    ; either glued to it or the next word. asked by tally: a text is no link, so a
    ; `two?` here reads every glued value as absent (the bug that ate `grep -m2`).
-   (uopt w)                            ; "-tx1" -> ("t" "x1"), a bare word -> ()
+   (uflag w)                            ; "-tx1" -> ("t" "x1"), a bare word -> ()
     (: n (tally w)
        (? ((1 < n) && (w 0 = 45)) [(snip w 1 2) (snip w 2 n)] ()))
 
@@ -1333,7 +1334,7 @@
        (fl a fs)
         (? !(two? a) (rev fs)
            (: w <a
-              o (uopt w)
+              o (uflag w)
               takes (? o (elem <o '("1" "2" "t" "a" "v")) 0)
               glue (? o <>o "")
               got (? (0 < tally glue) glue (? (two? >a) <>a ()))
@@ -1421,7 +1422,7 @@
        (fl a fs)
         (? !(two? a) (rev fs)
            (: w <a
-              o (uopt w)
+              o (uflag w)
               k (? o <o ())
               glue (? o <>o "")
               takes (? o (elem k '("A" "t" "N" "j")) 0)

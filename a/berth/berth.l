@@ -26,7 +26,7 @@
 ; run: b/love -l a/berth/berth.l -e '(berth ["sh"])'
 ;      b/love -l a/berth/berth.l -e '(berth ["vim" "README.md"])'
 ;
-; host-only (screen/scribe + tether/gather + raw/winsize ride i/*.c), so
+; host-only (screen/scribe + tether/gather + raw/tty ride i/*.c), so
 ; berth never joins the corpus; the moor core needs no tty and is smoke-
 ; tested end to end over a real pty by t/host/berth.l.
 (borrow "a/berth/wharf.l")
@@ -80,7 +80,7 @@
                       (: m >md
                          s (screen (cask (screen () r c)) r c)
                          bx {s}
-                         _ (setwinsize m r c)
+                         _ (settty m r c)
                          [bx m <md])))
 
  ; --- the relay: the plan says where every berth is, so every screen is opened
@@ -97,7 +97,7 @@
                                    (? ((= nr (gaze s 1)) && (= nc (gaze s 2))) 0
                                     (: s2 (screen (cask (screen () nr nc)) nr nc)
                                        _ (pin bx () s2)
-                                       (setwinsize (hmas p) nr nc)))))))
+                                       (settty (hmas p) nr nc)))))))
                        bs)
                 _ (pin hb 'lay bs)
                 (hsoil hb))
@@ -189,7 +189,7 @@
  ; cells lays every berth at zero extent, which paints a blank screen and never
  ; recovers. the opening had this floor; the tide did not, and quietly undid it
  ; half a second in.
- (hsize u) (: ws (winsize 0)
+ (hsize u) (: ws (tty 1)
               [(? (two? ws && (< 5 <ws)) <ws 24)
                (? (two? ws && (< 19 >ws)) >ws 80)])
  (htide hb) (: sz (hsize 0) r <sz c <>sz

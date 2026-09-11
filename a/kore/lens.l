@@ -24,6 +24,7 @@
 ; anything positioned by css are gone, and that is the whole design: this answers "what does
 ; the page SAY", and nothing about what it looks like.
 (module 'kore
+(borrow 'cli)
 (borrow 'posix)
 
 (:
@@ -48,11 +49,11 @@
    (h2t-lay s w tty?) (: t ((cite 'lapiz 'ht->tty) s w) (? tty? t (usgr t)))
    (html2text-main as)
     (: t (tablet 0)
-       o (uopts as t '(119) ())                       ; -w takes a value
+       o (uopt as t '(119) '(101))                       ; -w takes a value
        _ (? (two? o) () (udie 2 h2t-usage))
        _ (foldl (\ a c (? (c = 119) a
                           (udie 2 ("html2text: unknown option -" + string c)))) 0 (keys t))
-       ws (winsize 1)                                 ; the width is the OUTPUT's
+       ws (tty 1)                                     ; the width is the OUTPUT's
        w (lens-w t ws)
        tty? (two? ws)
        (lensrun (\ s (h2t-lay s w tty?)) "html2text" <>>o))
@@ -65,14 +66,14 @@
        ((cite 'lapiz 'md->ht) s))
    (markdown-main as)
     (: t (tablet 0)
-       o (uopts as t '(116 119) ())                   ; -t and -w take values
+       o (uopt as t '(116 119) '(101))                   ; -t and -w take values
        _ (? (two? o) () (udie 2 md-usage))
        _ (foldl (\ a c (? (elem c '(116 119)) a
                           (udie 2 ("markdown: unknown option -" + string c)))) 0 (keys t))
        v (uoptv t 116)
        to (? (string? v) v "html")
        _ (? (elem to md-tos) () (udie 2 md-usage))
-       ws (winsize 1)
+       ws (tty 1)
        w (lens-w t ws)
        tty? ((two? ws) && (to = "text"))
        (lensrun (\ s (md-lay s to w tty?)) "markdown" <>>o)))

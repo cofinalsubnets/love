@@ -8,7 +8,7 @@
 ; run: b/love -l a/ink.l -e '(ink ())'
 ; the shimmer core is pure love (ink-scene builds a frame(t) closure that runs
 ; headless into a jug -- the wasm console drives it); only the tty runner (ink)
-; ties raw / winsize / cue?, which ride i/posix.c, so ink never joins the test
+; ties raw / tty / cue?, which ride i/posix.c, so ink never joins the test
 ; corpus (love0 links no host nifs) -- t/host/tty.l gives it a pty instead.
 
 (: esc (string 27)
@@ -51,7 +51,7 @@
 
    ; ink -- the shimmer on the tty. the swim: paint, rest a beat, listen for a
    ; cue from shore. the frame goes out say's bulk lane -- one write(2) per frame.
-   (ink _) (: ws (winsize 0)
+   (ink _) (: ws (tty 1)
               rv (two? ws ? (<ws - 1) 0)          ; spare the last line: no scroll
               cv (two? ws ? >ws 0)
               r (1 < rv ? rv 23)                  ; a sizeless tty paints 23x80

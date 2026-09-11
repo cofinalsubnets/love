@@ -23,6 +23,7 @@
 ; unsupported instead. apropos/whatis, the cat cache, and .so chains deeper than one
 ; are also absent.
 (module 'kore
+(borrow 'cli)
 (borrow 'posix)
 
 (:
@@ -129,7 +130,7 @@
     ((two? rest) && (two? >rest) && (0 < #(<rest) <= 4) && (47 < (<rest 0) < 58))
    (man-main as)
     (: t (tablet 0)
-       o (uopts as t () ())
+       o (uopt as t () '(101))
        _ (? (two? o) () (udie 2 man-usage))
        _ (foldl (\ a c (? (c = 119) a (udie 2 ("man: unknown option -" + string c)))) 0 (keys t))
        rest <>>o
@@ -137,7 +138,7 @@
        sec (? sec? <rest "")
        nms (? sec? >rest rest)
        _ (? (two? nms) () (udie 2 man-usage))
-       ws (winsize 0)
+       ws (tty 1)
        hw (? (two? ws) [(? (0 < <ws) <ws 24) (? (0 < >ws) >ws 80)] ())
        w (? (two? hw) <>hw 80)
        ; -w reads nothing: the search is the whole answer
