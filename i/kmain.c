@@ -312,6 +312,15 @@ bool k_ready(int fd, int events) {
 // so a spin on (clock) with no idle in it still sees time move. metal has nothing to do.
 __attribute__((weak)) void k_tick_sync(void) { }
 
+// parked: the console takes a frame before the machine stops. fbdraw's blink phase is
+// kticks & 64 and serial_flush is its only other caller, so a console nobody is typing at
+// would hold one half of the blink for as long as it stayed quiet -- which is every idle
+// screen. it paints the cursor's row and no other, every row being clean by then.
+static void k_park(void) {
+  fbdraw();
+  k_horn_poll();
+  k_wait(); }
+
 void k_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
   if (n <= 0) { k_sleep(ms); return; }
   k_tick_sync();
@@ -323,8 +332,7 @@ void k_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
       fds[i].revents = r ? fds[i].events : 0;
       any |= r; }
     if (any || (ms && kticks >= deadline)) return;
-    k_horn_poll();
-    k_wait(); } }
+    k_park(); } }
 
 // milliseconds since the epoch: one scale for the scheduler's deadlines, for (clock t) and
 // for every mtime. ai_clock is one body (i/posix.c) and i/sys.c's arm serves it from
@@ -341,8 +349,7 @@ void k_sleep(uintptr_t ms) {
   uintptr_t deadline = kticks + k_ticks_for(ms);
   for (;;) {
     if (ms && kticks >= deadline) break;
-    k_horn_poll();
-    k_wait(); } }
+    k_park(); } }
 
 static const uint8_t
   kb2ascii[] = {
@@ -1786,6 +1793,13 @@ static bool k_cb_remake(void) {
   cb_fill(kcb, 0);
   kfree(old);
   fbcur = ~0u;                         // the cached cursor indexed the grid that just went
+  // the paper still holds what the OLD grid drew, at the OLD stride, and fbdraw comes back
+  // only for a row that MOVED -- so without this the previous screen stands there sheared
+  // until something else happens to write. the ground goes down first because the strip
+  // past the last whole row is no cell's, and nothing would paint over it.
+  for (uintptr_t y = 0; y < kfb.height; y++)
+    for (uintptr_t x = 0; x < kfb.width; x++) kfb._[y * kfb.pitch + x] = 0;
+  fbdraw();
   return true; }
 
 static bool k_vt_rescale(unsigned v) {
