@@ -955,6 +955,7 @@ static ai_inline bool sunp(word _) { return lamp(_) && cell(_)->ap == lvm_sunbox
 static ai_inline bool twinp(word _) { return lamp(_) && cell(_)->ap == lvm_twinbox; }
 static ai_inline bool trayp(word _) { return packp(_) && tray(_)->rank >= 1; }
 static ai_inline bool galaxyp(word _) { return trayp(_) && tray(_)->type != ai_O; }
+static ai_inline bool objtrayp(word _) { return trayp(_) && tray(_)->type == ai_O; }
 
 // FIXME uh, there's a max rank? that's not on purpose
 #define maxrank 8   // bounds the stack index/stride arrays in the broadcast loop

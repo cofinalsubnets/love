@@ -279,8 +279,9 @@ uintptr_t hash(struct ai *g, intptr_t x) {
 
 // a leaf's own hash, nothing walked under it: -> 0 the answer is in *out; 1 hash the
 // \-expr in *src, nothing filled; 2 bridge the closure in *src, falling back to *out when
-// it will not residualize. a chain never arrives -- hash_at spines it -- and a sourced
-// lambda leaves by 1 or 2, which is what keeps this side free of the source walk.
+// it will not residualize; 3 fold the cells of the object tray in *src over the header hash
+// in *out. a chain never arrives -- hash_at spines it -- and a sourced lambda leaves by 1
+// or 2, which is what keeps this side free of the source walk.
 int hash_leaf(struct ai *g, word x, uintptr_t *out, word *src) {
  if (charmp(x)) return *out = rot(x*mix), 0;
  if (!datp(x)) {
@@ -299,9 +300,14 @@ int hash_leaf(struct ai *g, word x, uintptr_t *out, word *src) {
                                                    // bucket order to intern history (a reproducible-
                                                    // build leak); same-spelled noms collide, `=` separates
    case DTray: {
-    uintptr_t len = ai_tray_bytes(tray(x)), h = mix;
+    // an object tray's payload words are pointers, so only the header hashes here and
+    // hash_at folds the cells: two trays built apart hold one set of values behind two
+    // sets of pointers, and `=` reads through to the values
+    bool obj = objtrayp(x);
+    uintptr_t len = obj ? (uintptr_t) ((uint8_t*) tray_data(tray(x)) - (uint8_t*) x)
+                        : ai_tray_bytes(tray(x)), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
-    return *out = h, 0; }
+    return *out = h, obj ? (*src = x, 3) : 0; }
    case DBig: {
     uintptr_t len = ai_big_bytes(big(x)), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);

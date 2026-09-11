@@ -147,3 +147,22 @@
  !!oa-b2                                          ; a bignum element is truthy
  (= 0 (sat (top-tray '(2 2) 0)))                       ; all-nil object array -> pin 0
  !!(array 2 'a 'b))                               ; symbol elements -> truthy
+
+; --- a cell holds a value, so `=` reads through to it and hashing has to as well:
+; two object arrays built apart hold one set of values behind two sets of pointers,
+; and a tablet that keyed them by those pointers would miss what `=` calls equal.
+(: oa-k1 @((+ "a" "b") [1 2] 'sym)
+   oa-k2 @((+ "a" "b") [1 2] 'sym)
+   oa-t (pin (pin {} oa-k1 1) oa-k2 2))
+(test
+ (= oa-k1 oa-k2) (= (dig oa-k1) (dig oa-k2))
+ (= 2 (peep oa-t oa-k1 0))                          ; one key, pinned twice
+ (= 1 (tally (keys oa-t)))
+ !(= oa-k1 @("ab" [1 3] 'sym))                      ; a cell apart is a key apart
+ !(= (dig oa-k1) (dig @("ab" [1 3] 'sym)))
+ !(= oa-k1 @("ab" [1 2]))                           ; ..and so is a shape apart
+ (= (array [2 2] "a" "b" "c" "d") (array [2 2] (+ "" "a") "b" "c" "d"))   ; rank-N alike
+ (= (dig (array [2 2] "a" "b" "c" "d")) (dig (array [2 2] (+ "" "a") "b" "c" "d")))
+ ; the cells move and the key stays findable: a probe rehashes, so a hash that read
+ ; the pointers would lose its own entry at the first collection
+ (= 0 (oa-churn 80)) (= 2 (peep oa-t oa-k1 0)) (= (dig oa-k1) (dig oa-k2)))

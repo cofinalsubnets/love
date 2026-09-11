@@ -578,6 +578,12 @@ uintptr_t hash_at(struct ai *g, intptr_t x0, word *base) {
    h = (h ^ mix) * mix;                                   // mark a chain node
    *sw++ = A(x), x = B(x); }
   { int how = hash_leaf(g, x, &t, &src);
+    if (how == 3) {                                       // an object tray: its cells fold like a chain's cars,
+     struct ai_tray *v = tray(src);                       // the header already in t
+     uintptr_t n = tray_nelem(v);
+     if ((uintptr_t) (end - sw) < n) __builtin_trap();
+     for (uintptr_t i = n; i--;) *sw++ = tray_get_obj(v, i);
+     fold = true; goto vhave; }
     if (how) {
      word *back = sw;
      struct arib *r = 0; int wrap = 0;
@@ -729,10 +735,10 @@ static bool clo_eq(struct ai *g, struct clonf *ca, struct clonf *cb, word *scrat
  struct arib rA = { ca->rem, ca->rem, ca->nr, ca->nr, 0 }, rB = { cb->rem, cb->rem, cb->nr, cb->nr, 0 };
  return nf_walk(g, ca->body, &rA, ca, cb->body, &rB, cb, scratch, hi); }
 
-// one non-descending step of the walk: eq_no and eq_yes settle it, and the three descents
+// one non-descending step of the walk: eq_no and eq_yes settle it, and the four descents
 // name the parts a walker has to take apart. eqv_at and the eq0 nif read this one set of
 // rules, so a love-side equality and the C one cannot drift.
-enum eqstep { eq_no, eq_yes, eq_chain, eq_coin, eq_fn };
+enum eqstep { eq_no, eq_yes, eq_chain, eq_coin, eq_fn, eq_tray };
 static enum eqstep eqv_leaf(struct ai *g, word a, word b) {
  if (a == b) return eq_yes;
  if (coinp(a) || coinp(b))                                 // a coin: same die, then the payloads
@@ -744,7 +750,15 @@ static enum eqstep eqv_leaf(struct ai *g, word a, word b) {
  switch (typ(a)) {
   default: return eq_no;
   case DChain: return eq_chain;
-  case DTray: { size_t la = ai_tray_bytes(tray(a)), lb = ai_tray_bytes(tray(b));
+  case DTray: {
+   // an object tray holds values, so its cells decide: the payload words are pointers
+   // and two trays built apart never memcmp equal however equal their cells are
+   if (objtrayp(a) || objtrayp(b)) {
+    struct ai_tray *va = tray(a), *vb = tray(b);
+    if (!objtrayp(a) || !objtrayp(b) || va->rank != vb->rank) return eq_no;
+    for (uintptr_t k = 0; k < va->rank; k++) if (va->shape[k] != vb->shape[k]) return eq_no;
+    return eq_tray; }
+   size_t la = ai_tray_bytes(tray(a)), lb = ai_tray_bytes(tray(b));
    return la == lb && !memcmp(tray(a), tray(b), la) ? eq_yes : eq_no; }
   case DGem: return gem_get(a) == gem_get(b) ? eq_yes : eq_no;   // the float payload (parallels = / cmp)
   case DSun: return sun_get(a) == sun_get(b) ? eq_yes : eq_no;
@@ -770,6 +784,12 @@ static bool eqv_at(struct ai *g, word a, word b, word *base) {
     if (hi - w < 2) __builtin_trap();      // worklist overflow: a cycle
     *w++ = B(a), *w++ = B(b), a = A(a), b = A(b);
     continue;
+   case eq_tray: {                         // an object tray: shape settled above, cells onto the worklist
+    struct ai_tray *va = tray(a), *vb = tray(b);
+    uintptr_t n = tray_nelem(va);
+    if ((uintptr_t) (hi - w) < 2 * n) __builtin_trap();
+    for (uintptr_t i = 0; i < n; i++) *w++ = tray_get_obj(va, i), *w++ = tray_get_obj(vb, i);
+    break; }
    // function values: equality up to the beta the runtime already ran (the bridge). a
    // source-less base (a bif partial like (+ 1)) can't residualize: fall back to base
    // + captures pairwise. maps/ports/mixed fell to identity above.
