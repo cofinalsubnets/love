@@ -919,9 +919,10 @@ static word *eq_scratch(struct ai **gp, uintptr_t n) {
 // walked are not, so a shape past it gets a region of its own, doubling from twice the
 // gap until the walk fits. the pair is re-read each round -- a reservation may move it.
 // nothing fits a pair no region can hold, and the doubling ends where every reservation
-// does, at a heap that will not grow.
+// does, at a heap that will not grow. the 64 is what makes that true of the doubling
+// too: from a zero-word gap it would double forever without asking for anything.
 static struct ai *eq_wide(struct ai *g) {
- for (uintptr_t n = 2 * (uintptr_t) g->len;; n *= 2) {
+ for (uintptr_t n = 2 * (uintptr_t) g->len + 64;; n *= 2) {
   word *base = eq_scratch(&g, n);
   if (!base) return g;
   int r = ai_eq_value(g, g->sp[0], g->sp[1], base, base + n);
@@ -929,7 +930,7 @@ static struct ai *eq_wide(struct ai *g) {
 
 // ..and of `elem`: the scan has no side effects, so a widened region simply re-runs it
 static struct ai *elem_wide(struct ai *g) {
- for (uintptr_t n = 2 * (uintptr_t) g->len;; n *= 2) {
+ for (uintptr_t n = 2 * (uintptr_t) g->len + 64;; n *= 2) {
   word *base = eq_scratch(&g, n);
   if (!base) return g;
   int r = 0;
