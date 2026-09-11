@@ -334,7 +334,7 @@
    ; -- the parse state --
    (psnew tgt) (psnew-d tgt 'moon)                ; the short spelling: the default language
    ; a new door rather than a wider one. psnew/cparse-t keep the arity every caller
-   ; already spells (law.l alone holds dozens), so nothing shifts by a position -- and
+   ; already spells (t/law/moon.l alone holds dozens), so nothing shifts by a position -- and
    ; under (f) == f a shifted call would hand back a closure without a word.
    (psnew-d tgt dia) (: t {}
                 _ (pin t 'dia dia)                  ; the dialect: what grammar the front reads (moon | c)

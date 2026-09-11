@@ -1,9 +1,9 @@
-; a/vi/law.l -- the editor's laws, held by assertion: every key sequence
+; t/law/vi.l -- the editor's laws, held by assertion: every key sequence
 ; below drives the pure engine (vstep, one byte at a time) and reads the
 ; tablet back -- no tty, no port, no file. the cat (`make test_vi`):
 ;
 ;   cat t/00-init.l a/kore/text.l a/kore/core.l a/kore/re.l a/kore/sed.l a/libra/lint.l \
-;       a/vi/config.l a/vi/hue.l a/vi/core.l a/vi/law.l | b/love
+;       a/vi/config.l a/vi/hue.l a/vi/core.l t/law/vi.l | b/love
 ;
 ; (vgo lines keys) births a buffer, feeds the TEXT's bytes (27 spelled \e via
 ; the 27-element list shape), and answers the state; the helpers read it back.
@@ -454,4 +454,4 @@
       !(st? (vgob '("a") ((bytes ":hl") + [CR] + (bytes ":hl") + [CR])) 'hl))
 
    _ (test_fin ())                                    ; no zz-fin here: quit before claiming ok
-   _ (say err "a/vi/law: motions + words + finds + insert + operators + registers + undo + search + ex + frames + hue ok") _ (put err 10) 0)
+   _ (say err "t/law/vi: motions + words + finds + insert + operators + registers + undo + search + ex + frames + hue ok") _ (put err 10) 0)

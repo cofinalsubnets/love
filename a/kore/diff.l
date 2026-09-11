@@ -5,7 +5,7 @@
 ;
 ; the script is a list of (op x) 2-lists, op one of 'keep 'del 'add, in order: the
 ; keep+del column spells the old list, keep+add the new, and the del+add count is
-; minimal -- the three laws a/kore/law.l holds it to (an O(nm) LCS oracle for the
+; minimal -- the three laws t/law/kore.l holds it to (an O(nm) LCS oracle for the
 ; third). a body-less top-level `:` (the wm's app shape): `myers` the entry,
 ; dold/dnew/dcost the script readers, d* the machinery. indexes and rounds ride tablets
 ; (charm keys, negatives fine) for O(1) reads; every loop is a tail call.

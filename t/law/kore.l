@@ -1,4 +1,4 @@
-; a/kore/law.l -- the kore laws, held by assertion: the myers/patience projections
+; t/law/kore.l -- the kore laws, held by assertion: the myers/patience projections
 ; (the script spells both sides), minimality against an O(nm) lcs oracle, the u-floor and
 ; field/fs floors to their GNU faces, the regex floor (hand BRE laws + a seeded fuzz
 ; against an independent Brzozowski-derivative oracle), and a seeded fuzz over the diffs.
@@ -837,5 +837,5 @@
    (test (= r 'ok)))
 
 (test_fin ())                                        ; no zz-fin here: quit before claiming ok
-(say err "a/kore/law: myers + patience + lines/unlines + unified hunks + the u-floor + the regex floor + the find, awk, pager and bc floors -- projections + minimality (lcs oracle) + anchors + seeded fuzz (lcs + brzozowski oracles) ok
+(say err "t/law/kore: myers + patience + lines/unlines + unified hunks + the u-floor + the regex floor + the find, awk, pager and bc floors -- projections + minimality (lcs oracle) + anchors + seeded fuzz (lcs + brzozowski oracles) ok
 ")

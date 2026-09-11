@@ -5,7 +5,7 @@
 ; spawn/wait (init.c's posix lane -- spawn answers the pid or a NEGATIVE errno,
 ; a child that cannot exec _exit(127)s), still (pty.c's kill), rest (the core
 ; sleep, milliseconds). a body-less top-level `:` leaking one pure helper
-; (udur -- lawed in law.l) and the mains.
+; (udur -- lawed in t/law/kore.l) and the mains.
 (module 'kore
 (borrow 'posix)
 
@@ -317,7 +317,7 @@
    ; error. The tools say what they found; they do not invent a reason.
    ; and none of them can be smoked byte-for-byte against procps: the process table
    ; moves between two runs, and every number here is a clock. So the parsers are lawed
-   ; (law.l) and the faces are smoked as sets -- a pid we made ourselves is in the
+   ; (t/law/kore.l) and the faces are smoked as sets -- a pid we made ourselves is in the
    ; listing, a pid we killed is gone -- which is t/gate/kore.sh's own note.
 
    (uprocs _)                          ; every numeric name under /proc, ascending

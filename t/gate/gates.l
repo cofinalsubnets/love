@@ -24,12 +24,12 @@
    ; process of its own was buying.
    early [['vi "a/kore/text.l" "a/kore/u.l" "a/kore/core.l" "a/kore/re.l"
            "a/kore/sed.l" "a/libra/lint.l" "a/vi/config.l" "a/vi/hue.l"
-           "a/vi/core.l" "a/vi/law.l"]]
+           "a/vi/core.l" "t/law/vi.l"]]
 
    ; a row is [name path ..]. borrow marks a path once read, so a file two rows both want
    ; loads once and splices twice -- which is what the separate processes used to pay for.
    rows [['lux "a/lux/core.l" "a/lux/layout.l" "a/lux/wire.l" "a/lux/ewmh.l"
-          "a/lux/manage.l" "a/lux/keys.l" "a/lux/config.l" "a/lux/law.l"]
+          "a/lux/manage.l" "a/lux/keys.l" "a/lux/config.l" "t/law/lux.l"]
          ; LAST, and it has to be. harp's module exports `rev` -- the cycle algebra's
          ; pattern reverse -- along with stack, pure, range, cut, with and n. borrow
          ; splices a module's names into the caller's layer, so from here on `rev` is
@@ -37,7 +37,7 @@
          ; rd-forms with (rev acc) and answered 0 forms instead of 1929: not an error, a
          ; WRONG ANSWER, which a process apiece is what kept anyone from seeing. ordering
          ; is containment, not a fix -- the fix is a scope door the harness can close.
-         ['harp "a/harp/harp.l" "a/harp/play.l" "a/harp/law.l"]]
+         ['harp "a/harp/harp.l" "a/harp/play.l" "t/law/harp.l"]]
 
    ; the host-nif smokes are NOT rows yet, and the blocking law is `quit`: a row that
    ; calls it ends the SHARED process, so a (quit 0) skip -- luxui's, when the box has no

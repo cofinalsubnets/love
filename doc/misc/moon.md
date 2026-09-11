@@ -43,7 +43,7 @@ The dialect is not "C11-ish" by taste — it is what the target demands:
 ## the architecture
 
 `a/moon/`, the kore discipline: pure engines with law files, a thin driver, one gate per
-piece. ~14k lines of love (law.l beside them).
+piece. ~14k lines of love (the laws in t/law/moon.l).
 
 * **floor.l** — the C type floor: the laws that are neither syntax nor codegen (the type shapes,
   `tysz`/`tyalign`, and the typing door — promotions and the usual arithmetic conversions),
@@ -83,7 +83,7 @@ piece. ~14k lines of love (law.l beside them).
   stage). The moon gate checks gen.l *as data* against it, so a new pass declares its sig there
   and a bad recomposition is a clash naming its seam.
 * **moon.l** — the driver.
-* **law.l** — the laws, ~1360 of them.
+* **t/law/moon.l** — the laws, ~1360 of them.
 
 ## the driver
 
@@ -480,7 +480,7 @@ never a bare `mooncc`, until `make install` refreshes the PATH binary.
 
 ## testing
 
-* Every pure piece is lawed in `a/moon/law.l`: lexer goldens, cpp expansions, parser ASTs
+* Every pure piece is lawed in `t/law/moon.l`: lexer goldens, cpp expansions, parser ASTs
   printed and compared, layout/alignment tables, gen goldens.
 * **The differential oracle is `gcc -O0`**: same source, run both, compare stdout + exit code.
   The battery lives in `t/cc/*.c` and ONLY grows — every bug fixed adds its regression.

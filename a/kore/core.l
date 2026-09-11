@@ -32,7 +32,7 @@
    ; tac is the one line tool that must hold its input -- nothing can be said until
    ; the end is known. Reading it a line at a time still drops the whole-text copy and
    ; the `lines` list over it, and prepending is the reversal, so there is no rev.
-   ; utac stays as the pure face law.l holds.
+   ; utac stays as the pure face t/law/kore.l holds.
    (tac-main as)
     (ureach "tac"
             (\ f first rd
@@ -70,7 +70,7 @@
     (? many (say out (uhdr first (? (f = "-") "standard input" f))) 0)
    ; head stops -- it used to `lines` the whole input and take n off the front, so
    ; one line of a 100 MB file cost 7.2 GB. uhead is still the spec for where the
-   ; last newline goes (law.l holds it); this answers the same text, a line at a time.
+   ; last newline goes (t/law/kore.l holds it); this answers the same text, a line at a time.
    (head-main as)
     (: p (uclip-args "head" as) n <p fs <>p many <>>p
        (body f first rd)
@@ -660,7 +660,7 @@
    ; the interpreter's byte loop is ~700 instructions a byte (l/boot/scan.l
    ; prices it), and tr and base64 are nothing but that loop. tr's is the `xlat` nif:
    ; any byte map through a 512-byte table, one C body on every target, with the
-   ; love walk below as the oracle law.l holds it to. base64's group coder is its
+   ; love walk below as the oracle t/law/kore.l holds it to. base64's group coder is its
    ; own shape and used by nothing in the core, so it stays out of the roster: a holo
    ; kernel, one IR for x64 and a64, with a twin that is the oracle and the engine
    ; wherever the install declines (inle, wasm, rv64). the shape is scan.l's -- the
@@ -910,7 +910,7 @@
    ; Howard Hinnant's exact integer civil-from-days and its inverse, shifted to a March
    ; year so the leap day lands at the end and no month table is needed. love's // is
    ; a floor division, which is what these want -- the sign dance the C originals carry
-   ; is only there because C truncates. lawed in law.l over the round trip.
+   ; is only there because C truncates. lawed in t/law/kore.l over the round trip.
    ; there is no time zone here and there will not be one without a tz database: every
    ; face over these is utc, exactly as moonlibc's localtime is its gmtime.
    (ucivil z0)                         ; days since 1970-01-01 -> (year month day)

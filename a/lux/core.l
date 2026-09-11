@@ -1,7 +1,7 @@
 ; a/lux/core.l -- the pure StackSet: the window model, no X and no sockets. This is
 ; xmonad's StackSet.hs, single-screen: a focus zipper per workspace, a sheaf of
 ; workspaces with one current, and a floating map (window -> rect) beside the
-; tiled stacks. Pure -- so it rides the corpus on every target (a/lux/law.l asserts
+; tiled stacks. Pure -- so it rides the corpus on every target (t/law/lux.l asserts
 ; the invariants), and the driver (a/lux/lux.l) + the X layers build on it.
 ;
 ; u/wm2uu.l reads this file as data and keys on the post-opfix tree --

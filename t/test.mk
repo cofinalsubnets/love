@@ -392,8 +392,8 @@ test_seed: $(ho)/love
 test_vi: host
 	@echo TEST a/vi/{hue,core,law}.l
 	@cat t/00-init.l a/kore/text.l a/kore/u.l a/kore/core.l a/kore/re.l a/kore/sed.l a/libra/lint.l \
-	    a/vi/config.l a/vi/hue.l a/vi/core.l a/vi/law.l \
-	  | sh t/gate/run.sh vi "$m" "a/vi/law:"
+	    a/vi/config.l a/vi/hue.l a/vi/core.l t/law/vi.l \
+	  | sh t/gate/run.sh vi "$m" "t/law/vi:"
 	@rm -f $(ho)/.vi1; \
 	  printf 'ihello world\033:wq\n' | $(korerun) vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
 	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi1)" = "hello world" ]; } \

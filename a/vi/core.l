@@ -2,7 +2,7 @@
 ; time (vstep), rendered to one escape-sequence frame (vframe). no port, no
 ; tty, no file io in here -- the face (a/vi/vi.l) reads keys, performs the
 ; write requests the ex commands leave on the state, and blits frames; the
-; laws (a/vi/law.l) drive vstep with byte lists and read the tablet back.
+; laws (t/law/vi.l) drive vstep with byte lists and read the tablet back.
 ; search rides a/kore/re.l (rebre/refind), so re.l loads first in any cat.
 ;
 ; the state (a tablet): 'lines (texts, never empty -- the vi invariant),

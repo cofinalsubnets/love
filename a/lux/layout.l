@@ -1,6 +1,6 @@
 ; a/lux/layout.l -- layouts as data records, messages as symbols. a layout answers
 ; two questions, both pure (no X, no sockets -- so this rides the corpus on every
-; target, a/lux/law.l asserts the geometry):
+; target, t/law/lux.l asserts the geometry):
 ;
 ;   (lay-tile lay rect z) -> (placements lay')   ; place the zipper's row in the rect
 ;   (lay-msg  lay msg  z) -> lay' | ()            ; () = "I don't take this message"

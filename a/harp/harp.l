@@ -1,6 +1,6 @@
 ; a/harp/harp.l -- harp: cycles as patterns, tidal's algebra in love. Pure --
 ; no port, no clock, no card -- so it rides the corpus on every seat and
-; a/harp/law.l asserts the whole thing by querying spans.
+; t/law/harp.l asserts the whole thing by querying spans.
 ;
 ; A PATTERN IS A FUNCTION FROM A SPAN TO EVENTS: (p b e) -> [ev ..], where b and
 ; e are cycle positions. That one sentence is the design; every combinator below

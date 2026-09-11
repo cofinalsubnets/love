@@ -8,7 +8,7 @@
 ;   * struts: a dock's _net_wm_strut_partial shrinks the tiling rect
 ;     (avoidStruts); ewmh-toggle flips it live (ToggleStruts, sup+b).
 ; The strut arithmetic and the property encodings are pure (jug-testable), so
-; a/lux/law.l asserts them; the ewst tablet is the module's one mutable cell (the
+; t/law/lux.l asserts them; the ewst tablet is the module's one mutable cell (the
 ; evq pattern). Loads after a/lux/{layout,wire}.l. a body-less `:` -- leaks all.
 (borrow 'xwire)   ; the X wire, a/lux/wire.l
 (:

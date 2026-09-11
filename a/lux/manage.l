@@ -3,7 +3,7 @@
 ; window already admitted tiled by the driver), it may re-place the window --
 ; float it, center it, ignore it (evict) -- or pass the sheaf through unchanged.
 ; This mirrors xmonad: the core manages/tiles every window first, then the
-; manageHook transforms. The combinators + float actions are pure (a/lux/law.l
+; manageHook transforms. The combinators + float actions are pure (t/law/lux.l
 ; asserts them with mock predicates); the predicates query X (prop?/class-of?/
 ; transient) so they, do-raise, and the assembled default are host-only -- they
 ; call a/lux/wire.l's GetProperty. a body-less `:` -- it all leaks to the driver.

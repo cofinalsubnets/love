@@ -1,5 +1,5 @@
 #!/bin/sh
-# t/gate/moon.sh -- mooncc's gate. Two halves: the LAWS (a/moon/law.l, which
+# t/gate/moon.sh -- mooncc's gate. Two halves: the LAWS (t/law/moon.l, which
 # runs anywhere) and, on x86-64 only, an END-TO-END battery against gcc as the oracle
 # -- mooncc compiles a program, gcc compiles the same program, and the two exit codes
 # must agree. gcc is never trusted to be right, only to be a second opinion; where a
@@ -30,11 +30,11 @@ out=$ho/.test_moon.out
   cat a/moon/floor.l a/moon/lex.l a/moon/cpp.l a/moon/parse.l \
       l/holo/text.l l/holo/dialect.l l/holo/gas.l a/moon/val.l a/moon/gen.l
   echo "(borrow 'moon)"                    # the cat re-laid module 'moon; law.l reads it bare
-  cat a/moon/law.l
+  cat t/law/moon.l
 } | "$m" > "$out" 2>&1
 r=$?
 cat "$out"
-[ $r -eq 0 ] && grep -q "a/moon/law:" "$out" || fail "cc laws (exit $r)"
+[ $r -eq 0 ] && grep -q "t/law/moon:" "$out" || fail "cc laws (exit $r)"
 
 # ----------------------------------------------- the template parser, under love0
 # holo/text.l reaches the combinators through the bare name `post`, which each

@@ -5,7 +5,7 @@
 ; posix_ lane (stat readdir unlink mkdir rename symlink hardlink rmdir
 ; chmod utime cwd), whose convention shapes every loop here: an effect op
 ; answers () ok or an errno nom, so !e is the success every loop below asks.
-; a body-less top-level `:` leaking uoct (lawed in law.l) and the mains.
+; a body-less top-level `:` leaking uoct (lawed in t/law/kore.l) and the mains.
 (module 'kore
 (borrow 'posix)
 

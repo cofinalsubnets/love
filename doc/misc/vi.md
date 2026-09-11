@@ -1,6 +1,6 @@
 # vi — the editor
 
-a/vi/ orients here; the laws live in a/vi/law.l, the gate is `make test_vi`, and every
+a/vi/ orients here; the laws live in t/law/vi.l, the gate is `make test_vi`, and every
 doubt settles by feeding `vstep` bytes.
 
 ## the shape
@@ -27,7 +27,7 @@ re.l regex engine):
   copy to keep up to date.
 * **a/vi/config.l** — the theme (molokayo) as plain data, keyed by vim highlight group, so
   the generated syntax file can emit `hi def link` lines rather than hardcoded colours.
-* **a/vi/law.l** — the gate.
+* **t/law/vi.l** — the gate.
 
 The pens are the face's to hand over: they want `$COLORTERM` and the user's theme file, and the
 engine reads neither.

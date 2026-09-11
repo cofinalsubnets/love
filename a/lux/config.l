@@ -30,7 +30,7 @@
 ; and a bare number is the keysym itself -- so the name table is a convenience,
 ; never a ceiling.
 ;
-; the conf-* readers take the tablet, so a/lux/law.l proves the defaults against
+; the conf-* readers take the tablet, so t/law/lux.l proves the defaults against
 ; an empty one -- the gate must not change meaning the day you write a config file.
 (borrow 'xwire)   ; the X wire, a/lux/wire.l
 (borrow 'salt)

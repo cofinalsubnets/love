@@ -52,10 +52,10 @@ out=$ho/.test_kore.out
       a/vi/core.l a/vi/vi.l a/kore/diff.l a/kore/patch.l a/lush.l \
       a/kore/find.l; \
   echo "(borrow 'kore)"; \
-  cat a/kore/law.l; } | "$m" > "$out" 2>&1
+  cat t/law/kore.l; } | "$m" > "$out" 2>&1
 r=$?
 cat "$out"
-[ $r -eq 0 ] && grep -q "a/kore/law: myers" "$out" || fail "utils (exit $r)"
+[ $r -eq 0 ] && grep -q "t/law/kore: myers" "$out" || fail "utils (exit $r)"
 
 # ------------------------------------------- diff, argv0 dispatch, usage, as
 printf 'a\nb\nc\n' > "$ho/.au1"; printf 'a\nX\nc\n' > "$ho/.au2"

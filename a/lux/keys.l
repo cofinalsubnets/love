@@ -1,7 +1,7 @@
 ; a/lux/keys.l -- the keymap dsl + xmonad's default keymap + the config's custom
 ; table. pure data: a binding is (lib keysym action), an action a tagged list
 ; the driver (a/lux/lux.l) interprets -- so the whole table rides the corpus and
-; a/lux/law.l asserts its shape, the union law, and the directional generator.
+; t/law/lux.l asserts its shape, the union law, and the directional generator.
 ; The config is xmonad's `(. keys def) . M.union . M.fromList $ [custom]`:
 ; custom bindings union over the stock table, custom winning on (lib keysym).
 ; keys-build is the same union with a user's rows on top -- it takes plain

@@ -26,7 +26,7 @@
 ; out of dialect (documented, unsmoked): GNU's empty-s-pattern reuse (an empty
 ; pattern here just matches the empty text), \n in replacements, hold space.
 ;
-; the pure floor (lawed in a/kore/law.l): (sparse sc ere?) -> (1 cmds) | (),
+; the pure floor (lawed in t/law/kore.l): (sparse sc ere?) -> (1 cmds) | (),
 ; and (usub nodes repl ln g?) -> (changed text), the one substitution walk.
 (module 'kore
 (borrow 'posix)

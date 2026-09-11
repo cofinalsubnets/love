@@ -3,7 +3,7 @@
 ; every window in the row exactly once, in row order (xmonad's prop_tiling).
 ; Geometry is erased to an opaque rect token (the nat-only model can't carry
 ; floats or pixel arithmetic -- the exact pixel partition stays natively
-; asserted in a/lux/law.l); what survives erasure is the ledger: which
+; asserted in t/law/lux.l); what survives erasure is the ledger: which
 ; windows get placed, how many strips each split yields, how take/drop/zip
 ; move the row. Substrate: t/uu.l (this file loads after it by sort order).
 

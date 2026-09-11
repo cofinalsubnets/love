@@ -1,4 +1,4 @@
-; --- a/harp/law.l: harp, tidal's cycle algebra in love (a/harp/harp.l) ---
+; --- t/law/harp.l: harp, tidal's cycle algebra in love (a/harp/harp.l) ---
 ; the laws are queries: a pattern is a function from a span to events, so every
 ; combinator can be checked by asking it for a span and reading the answer. the
 ; shape under test is [wb we v] per event, with the times as plain numbers -- the
@@ -183,4 +183,4 @@
            (setenv "HORN" ()))))
 
 ; the sentinel the gate reads
-(say out "a/harp/law: patterns, mini-notation, voices\n")
+(say out "t/law/harp: patterns, mini-notation, voices\n")

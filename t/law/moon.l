@@ -1,9 +1,9 @@
-; a/moon/law.l -- the compiler's laws (stage 0), held by assertion over the
+; t/law/moon.l -- the compiler's laws (stage 0), held by assertion over the
 ; pure pipeline: lexer goldens (kinds, values, lines, maximal munch), parser
 ; AST goldens, and the whole IR for return-42 compared form by form. the cat
 ; (`make test_moon`):
 ;
-;   cat t/00-init.l a/moon/floor.l a/moon/lex.l a/moon/parse.l a/moon/val.l a/moon/gen.l a/moon/law.l | b/love
+;   cat t/00-init.l a/moon/floor.l a/moon/lex.l a/moon/parse.l a/moon/val.l a/moon/gen.l t/law/moon.l | b/love
 ;
 ; the end-to-end (elf64, the run, the gcc differential) lives in the Makefile
 ; smoke through the real `mooncc`.
@@ -2165,5 +2165,5 @@ int main() { return 0; }"
       (= 2 #(csset fJ))))                     ; shared: a and b ride one seat
 
 (test_fin ())                                        ; no zz-fin here: quit before claiming ok
-(say err "a/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, a64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) + the value layer (rung 0) + per-def promotion (rungs 1+2+3, narrow and cs seats ride) + the interval locals allocator (rung 4) + the param-cell default (rung 5) + the one-build default and its rides (rung 6, the only world) ok")
+(say err "t/law/moon: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, a64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) + the value layer (rung 0) + per-def promotion (rungs 1+2+3, narrow and cs seats ride) + the interval locals allocator (rung 4) + the param-cell default (rung 5) + the one-build default and its rides (rung 6, the only world) ok")
 (put err 10)

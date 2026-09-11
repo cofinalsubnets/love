@@ -84,7 +84,7 @@
                 (<a + " " + ujoin >a))
    ; the many-file banner head and tail share: none before the first, a blank between
    (uhdr first f) (? first ("==> " + f + " <==\n") ("\n==> " + f + " <==\n"))
-   ; the two pure line clips (lawed in law.l). each chomps only when the source's last
+   ; the two pure line clips (lawed in t/law/kore.l). each chomps only when the source's last
    ; line actually rode through: head that cut before it ends on a line the text itself
    ; terminated, so it keeps its newline whatever the far end of the input looked like.
    (uhead n t) (: ls (lines t) k (tally ls) cut (n < k)
@@ -116,9 +116,9 @@
     (? w? ucount-go (? l? (ucount-l ((cite 'scan 'scanner) ())) ucount-b))
    ucount0 [0 0 0 0]
    (ucount-say st) [<>st <>>st <>>>st]      ; the state's (lines words bytes) face
-   ; text -> (lines words bytes), a word a maximal ink run (lawed in law.l)
+   ; text -> (lines words bytes), a word a maximal ink run (lawed in t/law/kore.l)
    (ucount t) (ucount-say (ucount-go ucount0 t))
-   ; the two pure path clips (basename NAME [SUFFIX] / dirname NAME; lawed in law.l)
+   ; the two pure path clips (basename NAME [SUFFIX] / dirname NAME; lawed in t/law/kore.l)
    (ubase p sfx)
     (: (e k) (? ((0 < k) && (p (k - 1) = 47)) (e (k - 1)) k)
        e0 (e (tally p))

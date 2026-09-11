@@ -1,4 +1,4 @@
-; a/lux/law.l -- xmonad's QuickCheck properties for a/lux/core.l, in exact arithmetic,
+; t/law/lux.l -- xmonad's QuickCheck properties for a/lux/core.l, in exact arithmetic,
 ; plus a seeded fuzz. Reads a/lux/core.l's names off the row that loads them both
 ; (t/gates.l 'lux). Split into small independent top-level `:` forms -- each
 ; self-contained, nothing new leaks, and no single form grows big enough to stress the
@@ -390,5 +390,5 @@
       !(lay-msg M '(restore-window 30) z3)))                                     ; not minimized -> unhandled ()
 
 (test_fin ())                                        ; no zz-fin here: quit before claiming ok
-(say err "a/lux/law: StackSet zipper + sheaf + floating + layout + modifier + manage + keymap + ewmh + config laws ok
+(say err "t/law/lux: StackSet zipper + sheaf + floating + layout + modifier + manage + keymap + ewmh + config laws ok
 ")

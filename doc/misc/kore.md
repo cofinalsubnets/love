@@ -1,6 +1,6 @@
 # kore — the multi-call toolbox
 
-a/kore/ orients here; the laws live in a/kore/law.l, the GNU-identical smokes in
+a/kore/ orients here; the laws live in t/law/kore.l, the GNU-identical smokes in
 `make test_kore`, and every doubt settles by probing the built `kore`.
 Speed and adversarial inputs are a different page, filled by
 `make -C bench korebench` (kore against busybox, uutils and GNU).
@@ -77,7 +77,7 @@ The file discipline, two shapes:
   two forms and the boundary is 31556952/2 seconds, coreutils' own half-year. Effects
   (cp/mv/rm/..) are smoked by acting and then verifying with the shell, and the encodings are
   smoked over a BINARY file, which is the only input that says anything.
-* **the u-floor.** The shared helpers leak u-prefixed from core.l and are lawed pure in law.l:
+* **the u-floor.** The shared helpers leak u-prefixed from core.l and are lawed pure in t/law/kore.l:
   uatoi uread udie upad ujoin uhdr uhead/utail ucount ubase/udir usplit ujoinc uspec/upick
   uset urev uwords upad/urpad ueach, core.l's ucol/utac/ufold/uexpand/uunexpand and the
   coder trio ubenc/ubdec/ubwrap, fs.l's uoct/udirp/udest/ucopy/rp-parts, and proc.l's

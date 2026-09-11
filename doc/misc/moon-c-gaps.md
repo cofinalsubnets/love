@@ -818,7 +818,7 @@ The three real blockers:
   it mirrors back-edge handling exactly, which exists for precisely this reason.
 - **Surface.** `pasm` hardcodes three colons as `s1`/`s2`/`s3`; a fourth (GotoLabels) needs an
   `s4` and a fifth field on the `('asm ..)` node, which ripples to every positional consumer in
-  `gen.l` and to the goldens in `law.l`. `asmsub` must learn `%lN` — currently `'bad` — and
+  `gen.l` and to the goldens in `t/law/moon.l`. `asmsub` must learn `%lN` — currently `'bad` — and
   substitute the *mangled* label `fn.NAME`, sharing the mangling with the label emitter.
   `asm goto` is implicitly volatile and, pre-GCC-14, takes no outputs.
 

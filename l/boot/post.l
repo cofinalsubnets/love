@@ -1373,7 +1373,7 @@
 ; boot never splices, so each consumer opens with its own top-level (borrow 're).
 ; grep lives on in a/kore/re.l, which reads four names off this splice.
 ;
-; lawed in a/kore/law.l: hand laws plus a seeded differential fuzz against an
+; lawed in t/law/kore.l: hand laws plus a seeded differential fuzz against an
 ; independent Brzozowski-derivative oracle, and grep is smoked byte-identical
 ; against GNU in `make test_kore`.
 ;
