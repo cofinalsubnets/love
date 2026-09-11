@@ -6,6 +6,11 @@ u64 sub64(u64 a, u64 b){ return a - b; }
 u64 mul64(u64 a, u64 b){ return a * b; }
 u64 div64(u64 a, u64 b){ return a / b; }
 u64 rem64(u64 a, u64 b){ return a % b; }
+/* the SIGNED pair divide: no thumb carries a 64-bit divide instruction, so this is the
+ * runtime helper on every one of them -- and the lane above is unsigned, which is how
+ * thumb2 refused this one for as long as it did with the gate green. */
+s64 divs64(s64 a, s64 b){ return a / b; }
+s64 rems64(s64 a, s64 b){ return a % b; }
 u64 shl64(u64 a, int c){ return a << c; }
 u64 shr64(u64 a, int c){ return a >> c; }
 s64 sar64(s64 a, int c){ return a >> c; }

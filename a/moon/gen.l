@@ -3505,11 +3505,12 @@
                                 (t32? g && !(pa || pb) && (llt? ta || llt? tb))
                                  ; the pair shuttle: both sides widen to r0:r1, left pops to
                                  ; r2:r3; +,-,* and the logicals combine through the carry family,
-                                 ; unsigned / and % ride the backend's restoring expansion,
-                                 ; relations ride subs/sbcs. signed pair divide stays refused.
+                                 ; unsigned / and % ride the backend's restoring expansion, signed
+                                 ; ones the runtime helper, relations subs/sbcs.
                                  (: mid2 (asll g av + spush2 + asll g b + spop2 'r2 'r3)
-                                    ; v6-M divide staging: numerator (the LEFT) lands r0:r1, denominator
-                                    ; r2:r3, the ordinary pair-argument places; mov is the hi-form, flag-silent
+                                    ; helper-call divide staging: numerator (the LEFT) lands r0:r1,
+                                    ; denominator r2:r3 -- the ordinary pair-argument places, so the call
+                                    ; below is an ordinary one; mov is the hi-form, flag-silent
                                     mid2d (asll g av + spush2 + asll g b
                                            + '((mov r2 r0) (mov r3 r1)) + spop2 'r0 'r1)
                                     rt (ubin !(t32? g) ta tb)
@@ -3526,14 +3527,18 @@
                                          '/
                                           ; the one-answer names, not aeabi's uldivmod: that one returns the
                                           ; quotient in r0:r1 AND the remainder in r2:r3, which no C function
-                                          ; can spell, and moon asks for one of the two anyway
-                                          (? (v6m? g)
+                                          ; can spell, and moon asks for one of the two anyway.
+                                          ; the backend's expansion is restoring and UNSIGNED, and there is no
+                                          ; 64-bit divide instruction on any thumb -- so a signed pair divide
+                                          ; takes the helper wherever it lands, v6-M or not. rt.c carries it
+                                          ; and every thumb seat links rt.c, libgcc being off all of them.
+                                          (? (v6m? g || !unsg)
                                              (mkv rt 'r0 (mid2d + [['call (? unsg '__udivdi3 '__divdi3)]]))
-                                             unsg (mkv rt 'r0 (mid2 + '((udivll)))) 'bad)
+                                             (mkv rt 'r0 (mid2 + '((udivll)))))
                                          '%
-                                          (? (v6m? g)
+                                          (? (v6m? g || !unsg)
                                              (mkv rt 'r0 (mid2d + [['call (? unsg '__umoddi3 '__moddi3)]]))
-                                             unsg (mkv rt 'r0 (mid2 + '((uremll)))) 'bad)
+                                             (mkv rt 'r0 (mid2 + '((uremll)))))
                                          ('eq || 'ne || 'lt || 'le || 'gt || 'ge)
                                           (: cf (prel g op unsg)
                                              (mkv 'long 'r0 (mid2 + <>cf + [['set <cf 'r0]])))

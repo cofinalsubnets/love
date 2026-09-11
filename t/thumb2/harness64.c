@@ -2,6 +2,7 @@ typedef unsigned long long u64;
 typedef long long s64;
 extern u64 acc64;
 u64 add64(u64,u64); u64 sub64(u64,u64); u64 mul64(u64,u64); u64 div64(u64,u64); u64 rem64(u64,u64);
+s64 divs64(s64,s64); s64 rems64(s64,s64);
 u64 shl64(u64,int); u64 shr64(u64,int); s64 sar64(s64,int);
 u64 shlc(u64); u64 shrc(u64); s64 sarc(s64);
 int lt64u(u64,u64); int lt64s(s64,s64); int ge64s(s64,s64); int eq64(u64,u64); int gt64u(u64,u64);
@@ -65,5 +66,18 @@ int run(void){
  CK(ltlu(-6, 5u) == (-6L < 5u));                       /* ILP32: unsigned compare (gcc computes the rhs) */
  CK(divlu(-6, 5u) == (long)(-6L / 5u));
  CK(remlu(-6, 5u) == (long)(-6L % 5u));
+ /* the signed pair divide, both signs on both sides. C truncates TOWARD ZERO and the
+  * remainder takes the DIVIDEND's sign, which is exactly the half a magnitude divide
+  * gets wrong when the fixup is dropped on one side -- so the negative cases are the
+  * point and a positive-only check would pass on a broken helper. */
+ CK(divs64(N, 7) == N/7);
+ CK(divs64(N, -7) == N/-7);
+ CK(divs64(-N, 7) == -N/7);
+ CK(divs64(-N, -7) == -N/-7);
+ CK(rems64(N, 7) == N%7);
+ CK(rems64(N, -7) == N%-7);
+ CK(rems64(-N, 7) == -N%7);
+ CK(divs64(N, (s64)A) == N/(s64)A);                    /* a divisor past 32 bits */
+ CK(divs64(-1LL, 1LL) == -1LL);
  return 48;                                            /* 46 checks */
 }
