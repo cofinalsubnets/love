@@ -205,10 +205,3 @@ ai_cflags += -D_POSIX_C_SOURCE=200809L
 endif
 # the data-sentinel tiling l/love.h's ai_typ reads (l/love.c's DSENT), on every ld/lld link.
 data_ld = -Wl,-T,$R/l/love_data.ld
-# AN EMPTY BRACKET IS STILL A BRACKET. l/love.c indexes the host nif slice off
-# [__start_love_nifs, __stop_love_nifs), which the toolchain synthesises only where the
-# SECTION exists -- so an embedder registering its defs by hand owns no LvNif and the
-# pair goes undefined at the link. weak declarations do not answer it: ld leaves a weak
-# undefined at 0 even where the section IS there, which silently unregisters every host
-# nif. naming the empty pair at the one link that wants it keeps the host lane untouched.
-nifs_ld = -Wl,--defsym=__start_love_nifs=0,--defsym=__stop_love_nifs=0

@@ -1,9 +1,11 @@
-// l/nohorn.c -- the horn with no device under it. a seat that HAS a sound card answers
-// this itself (i/horn.c on a hosted kernel, i/hda.c through k_horn_* on inle), so this is
-// the refusal for a seat that has none: the boards, the playdate until it grows one, and
-// b/front. separate from l/bare.c because the two ask different questions -- bare.c is
-// what a seat with no i/fd.c owes the runtime, and a seat can lack fd.c and still have a
-// speaker. the wasm host seat is exactly that one, which is what split them.
+// l/nohorn.c -- the horn with no device under it. a seat that HAS one links i/horn.c,
+// which answers this itself (a card by ioctl on a hosted kernel, i/hda.c through k_horn_*
+// on inle, the sink with no card at all), so this is the refusal for a seat that carries
+// no horn at all: the boards, and the playdate until it grows one -- it has a speaker,
+// and i/horn.c doorless plus an ai_horn_tap is the way in.
+//
+// separate from l/bare.c because the two ask different questions. bare.c is what a seat
+// with no i/fd.c owes the runtime, and having a speaker is not having an fd.
 //
 // plain definition, not a weak default: a seat that grows a real horn collides here and
 // says so, and a seat that needs one and has none fails to link.

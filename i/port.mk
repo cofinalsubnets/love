@@ -78,7 +78,8 @@ be_lc   = $(subst $(R)/,,$(p_be_l))
 # and l/nohorn.c, the horn's refusal where there is no card. only a bare seat links
 # either: everything else carries i/fd.c, whose bodies are the real ones, and two of
 # them in one link is a collision that says so. a board that grows a speaker drops
-# nohorn and answers ai_horn_writen itself.
+# nohorn for i/horn.c, which answers ai_horn_writen itself -- b/front is the link that
+# shows the shape.
 love_m   = $(basename $(love_tu) $(love_codec)) bare nohorn
 love_dep = $(love_h) $(lib_hR) $(lv)
 love_o   = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(love_m)))

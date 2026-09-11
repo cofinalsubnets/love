@@ -9,7 +9,7 @@
 ; the shimmer core is pure love (ink-scene builds a frame(t) closure that runs
 ; headless into a jug -- the wasm console drives it); only the tty runner (ink)
 ; ties raw / winsize / cue?, which ride i/posix.c, so ink never joins the test
-; corpus (love0 links no host nifs) -- probe it live under a pty instead.
+; corpus (love0 links no host nifs) -- t/host/tty.l gives it a pty instead.
 
 (: esc (string 27)
 
