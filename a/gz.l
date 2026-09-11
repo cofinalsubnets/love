@@ -1,4 +1,4 @@
-; a/gz/gz.l -- gzip in love, both ways: the RFC 1952 container, the RFC 1951 deflate
+; a/gz.l -- gzip in love, both ways: the RFC 1952 container, the RFC 1951 deflate
 ; stream inside it, and the crc32 underneath. `(borrow 'gz)`, then:
 ;
 ;   (gz-crc32 s)           -> the IEEE crc32 of a string, a charm
@@ -667,33 +667,31 @@
     (: hlit ((gz-bits s n t 5) + 257)
        hdist ((gz-bits s n t 5) + 1)
        hclen ((gz-bits s n t 4) + 4)
-       cl (tablet 0)
+       cl {}
        _ (: (go i) (? (hclen <= i) 0
-                      (: _ (pin cl (peep gz-clord i 0) (gz-bits s n t 3)) (go (i + 1))))
+                      (pin cl (peep gz-clord i 0) (gz-bits s n t 3), go (i + 1)))
             (go 0))
        ch (gz-huff cl 19)
        tot (hlit + hdist)
-       lens (tablet 0)
-       (rep i r v) (: (go k) (? (r <= k) 0 (: _ (pin lens (i + k) v) (go (k + 1)))) (go 0))
+       lens {}
+       (rep i r v) (: (go k) (? (r <= k) 0 (pin lens (i + k) v, go (k + 1))) (go 0))
        (rd i prev)
         (? (tot <= i) 1
            (peep t 1 0) ()
            (: d (gz-dec s n t ch)
-              (? (! d) ()
+              (? !d ()
                  (: sy (<(>d))
-                    (? (sy < 16) (: _ (pin lens i sy) (rd (i + 1) sy))
-                       (sy = 16) (: r (3 + (gz-bits s n t 2)) _ (rep i r prev) (rd (i + r) prev))
-                       (sy = 17) (: r (3 + (gz-bits s n t 3)) _ (rep i r 0) (rd (i + r) 0))
-                       (sy = 18) (: r (11 + (gz-bits s n t 7)) _ (rep i r 0) (rd (i + r) 0))
-                       ())))))
+                    (sy < 16 ? (pin lens i sy, rd (i + 1) sy)
+                     (sy @ 16 (: r (3 + (gz-bits s n t 2)) _ (rep i r prev) (rd (i + r) prev))
+                           17 (: r (3 + (gz-bits s n t 3)) _ (rep i r 0) (rd (i + r) 0))
+                           18 (: r (11 + (gz-bits s n t 7)) _ (rep i r 0) (rd (i + r) 0))))))))
        ok (rd 0 0)
-       (? (! ok) ()
+       (? !ok ()
           ; the distance lengths sit after the literal ones in the same run, and
           ; gz-huff counts from 0, so they are carried down into a table of their own.
-          (: dl (tablet 0)
-             _ (: (go k) (? (hdist <= k) 0
-                            (: _ (pin dl k (peep lens (hlit + k) 0)) (go (k + 1))))
-                  (go 0))
+          (: dl {}
+             _ (:- (go 0) (go k) (hdist <= k ? 0
+                            (pin dl k (peep lens (hlit + k) 0), go (k + 1))))
              lit (gz-huff lens hlit)
              dst (gz-huff dl hdist)
              (gz-codes s n t b lit dst))))
@@ -701,21 +699,18 @@
    (gz-block s n t b)                         ; -> (1 last?) | ()
     (: fin (gz-bit s n t)
        typ (gz-bits s n t 2)
-       r (? (typ = 0) (gz-stored s n t b)
-            (typ = 1) (gz-codes s n t b gz-fixlithuff gz-fixdisthuff)
-            (typ = 2) (gz-dynamic s n t b)
-            ())
+       r (typ @ 0 (gz-stored s n t b)
+                1 (gz-codes s n t b gz-fixlithuff gz-fixdisthuff)
+                2 (gz-dynamic s n t b))
        (? r [1 fin] ()))
 
    (gz-puff s hint)
-    (: n #s
-       t (tablet 0)   b (gz-buf hint)
-       (go u) (: r (gz-block s n t b)
-                 (? (! r) ()
-                    (peep t 1 0) ()
-                    (<(>r)) [1 (gz-take b)]
-                    (go ())))
-       (? n (go ()) ()))
+    (:- (n && go ())
+     n #s t {}  b (gz-buf hint)
+     (go u) (: r (gz-block s n t b)
+               (? (!r || peep t 1 0) ()
+                  <>r [1 (gz-take b)]
+                  (go ()))))
    ; the door. l/gz.c where the artifact carries it, gz-puff where it does not
    ; and wherever it declines -- and a torn stream declines, so a torn one is read twice
    ; and answers () both times. `string?`, never `?`: a string of NULs sums to zero and
@@ -728,54 +723,337 @@
    ; --- the container (RFC 1952) --------------------------------------------
    (gz-le32s v)
     (: b (cask 4)
-       _ (pin b 0 (v & 255))          _ (pin b 1 ((v >> 8) & 255))
-       _ (pin b 2 ((v >> 16) & 255))  _ (pin b 3 ((v >> 24) & 255))
+       _ (pins b 0 (v & 255)         1 ((v >> 8) & 255)
+                 2 ((v >> 16) & 255) 3 ((v >> 24) & 255))
        (string b))
    (gz-zip s nom stamp)
     (: txt (s + "")
        named (? #nom 1 0)
        h (cask 10)
-       _ (pin h 0 31) _ (pin h 1 139) _ (pin h 2 8) _ (pin h 3 (? named 8 0))
-       _ (pin h 4 (stamp & 255))        _ (pin h 5 ((stamp >> 8) & 255))
-       _ (pin h 6 ((stamp >> 16) & 255)) _ (pin h 7 ((stamp >> 24) & 255))
-       _ (pin h 8 0) _ (pin h 9 3)               ; xfl none, os 3 = unix
-       ((string h) + (? named (nom + (string 0)) "") + (gz-deflate txt)
-        + (gz-le32s (gz-crc32 txt)) + (gz-le32s (#txt & 4294967295))))
+       _ (pins h 0 31 1 139 2 8 3 (? named 8 0)
+          4 (stamp & 255) 5 ((stamp >> 8) & 255)
+          6 ((stamp >> 16) & 255) 7 ((stamp >> 24) & 255)
+          8 0 9 3)               ; xfl none, os 3 = unix
+       (string h + (? named (nom + string 0) "") + gz-deflate txt
+        + gz-le32s (gz-crc32 txt) + gz-le32s (#txt & 4294967295)))
 
    ; the header's optional fields are four flags, and every one of them must be
    ; stepped over even though we write none of them -- the far side is gzip, and
    ; `gzip -N` writes a name. ftext (bit 0) carries no bytes.
    (gz-skip s n i)                            ; step a NUL-ended field
-    (? (n <= i) () ((s i) = 0) (i + 1) (gz-skip s n (i + 1)))
+    (? (n <= i) () (s i = 0) (i + 1) (gz-skip s n (i + 1)))
    (gz-unzip s)
     (: n #s
-       (? (n < 18) ()
-          (! (((s 0) = 31) & ((s 1) = 139) & ((s 2) = 8)))  ()
+       (? (n < 18 || s 0 != 31 || s 1 != 139 || s 2 != 8)  ()
           (: flg (s 3)
              i0 10
-             i1 (? (flg & 4) (: x ((s i0) + ((s (i0 + 1)) << 8)) (i0 + 2 + x)) i0)   ; fextra
+             i1 (? (flg & 4) (: x (s i0 + (s (i0 + 1) << 8)) (i0 + 2 + x)) i0)   ; fextra
              i2 (? (flg & 8) (gz-skip s n i1) i1)                                  ; fname
-             i3 (? (! i2) () (flg & 16) (gz-skip s n i2) i2)                        ; fcomment
-             i4 (? (! i3) () (flg & 2) (i3 + 2) i3)                                   ; fhcrc
-             (? (! i4) ()
+             i3 (? !i2 () (flg & 16) (gz-skip s n i2) i2)                        ; fcomment
+             i4 (? !i3 () (flg & 2) (i3 + 2) i3)                                   ; fhcrc
+             (? !i4 ()
                 (n < (i4 + 8)) ()
-                (: isize ((s (n - 4)) + ((s (n - 3)) << 8)
-                          + ((s (n - 2)) << 16) + ((s (n - 1)) << 24))
-                   crc ((s (n - 8)) + ((s (n - 7)) << 8)
-                        + ((s (n - 6)) << 16) + ((s (n - 5)) << 24))
+                (: isize (s (n - 4) + (s (n - 3) << 8)
+                          + (s (n - 2) << 16) + (s (n - 1) << 24))
+                   crc (s (n - 8) + (s (n - 7) << 8)
+                        + (s (n - 6) << 16) + (s (n - 5) << 24))
                    ; `pour`'s last argument is a count, not an end offset, and the nif
                    ; clamps it to the shorter of the two arrays -- so an end offset can
                    ; answer right off the destination's size alone, silently, and move
                    ; the whole tail to do it. spell the count.
-                   body (: c (cask (n - i4 - 8)) _ (pour c 0 s i4 (n - i4 - 8)) (string c))
+                   body (: c (cask (n - i4 - 8)) (pour c 0 s i4 (n - i4 - 8), string c))
                    r (gz-inflate body isize)
-                   (? (! r) ()
-                      (: out (<(>r))
-                         ; the trailer is the whole point of the container: a stream
-                         ; that inflated cleanly and hashes wrong is a corrupt one,
-                         ; and saying so is the only thing the crc is for.
-                         (? (! ((gz-crc32 out) = crc)) ()
-                            (! (#out = (isize & 4294967295))) ()
-                            [1 out])))))))))
+                   out <>r
+                   ; the trailer is the whole point of the container: a stream
+                   ; that inflated cleanly and hashes wrong is a corrupt one,
+                   ; and saying so is the only thing the crc is for.
+                   (? r (gz-crc32 out = crc && #out = isize & 4294967295 && [1 out]))))))))
 
 ) ; module 'gz
+
+; --- the face -----------------------------------------------------------------------
+; `love gzip`, `love gunzip` and `love zcat`: GNU's flag spelling over the two doors
+; above. the module above is the codec; this one is the face -- the options, the suffix
+; rules, and the in-place replace that carries the mode and the mtime across.
+;
+;   gzip [-cdfklnNqrtv] [-1..-9] [-S suf] [file..]    file.gz written, file removed
+;   gunzip [..]  = gzip -d          zcat [..] = gzip -dc
+;   -c stdout   -d decompress   -f overwrite an existing output   -k keep the input
+;   -l list     -n write no name or time into the header   -N take both back out of it
+;   -q quiet    -r walk directories   -t test only   -v say what happened   -S suf
+;
+; no file (or a bare `-`) is the filter: stdin -> stdout, which is what a pipe wants.
+; a status like GNU's: 0 clean, 1 something failed, 2 a warning (a name refused).
+;
+; one member per file. gz-unzip reads the trailer off the tail, so a legal concatenation
+; (`cat a.gz b.gz`) is refused whole rather than half-read; when something needs that it
+; belongs in the codec, not in a face. the levels are taken and change nothing -- the coder
+; costs every block three ways and writes the cheapest, which is one level.
+;
+; -l's ratio is the deflate payload's and not the file's, GNU taking the header and the
+; trailer out before it divides, which is why a small file lists a ratio its bytes on
+; disk do not show. the (totals) row is ours: GNU's own adds the first file's whole size
+; to the others' payloads.
+;
+; gz rides module 'gz, so the codec's names are asked for and the ask lands in a layer
+; of our own rather than on the dist cat's shared one.
+(module 'gzcmd
+(borrow 'gz)
+
+(borrow 'posix)
+(: gzc-usage "usage: gzip [-cdfklnNqrtv19] [-S SUF] [FILE..]   (gunzip = -d, zcat = -dc)"
+   gzc-help "gzip -- the RFC 1952 container in love (module 'gz is the codec)
+usage: gzip [-cdfklnNqrtv19] [-S SUF] [FILE..]
+  -c  write on stdout, keep the files      -d  decompress (gunzip)
+  -f  overwrite an existing output         -k  keep the input file
+  -l  list a member's sizes and ratio      -n  no name or time in the header
+  -N  take the name AND the time back      -q  say nothing on a warning
+  -r  walk the named directories           -S  the suffix (.gz unsaid)
+  -t  test the members, write nothing      -v  say what happened, on err
+  -1 .. -9  taken, and they change nothing: the coder has one level
+no file, or a bare -, is the filter: stdin -> stdout"
+
+   ; --- the small floor ------------------------------------------------------
+   (gzc-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) [1 (s + "")])))
+   (gzc-blurt p s) (: q (open p "w") (hot? q && (: _ (say q s) _ (close q) 1)))
+   (gzc-moan t m) (? (peep t 'q 0) 0
+                     (: _ (say err ("gzip: " + m)) _ (put err 10) (flush err)))
+   (gzc-tell t m) (peep t 'v 0 && (: _ (say err m) _ (put err 10) (flush err)))
+   (gzc-pad w s) (#s < w ? (gzc-pad w (" " + s)) s)
+   (gzc-ends? s x) (: n #s m #x (m <= n && snip s (n - m) n = x))
+   (gzc-base p) (: n #p
+                   (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
+                   (go 0 0))
+   (gzc-dir p) (: n #p
+                  (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) r)
+                  (go 0 0))                          ; the head including its slash, "" for none
+   (gzc-dirp? q) (: st (stat q) (two? st && <>>st & 61440 = 16384))
+   (gzc-worse a b) (? (a = 1 || b = 1) 1 (a = 2 || b = 2) 2 0)
+
+   ; --- the member's own header, which -l and -N read and gz-unzip does not tell --
+   ; every optional field must be stepped over even though only fname is wanted.
+   (gzc-hdr s)                         ; -> (1 stamp name body-seat) | ()
+    (: n #s
+       (skip i) (? (n <= i) () (s i = 0) (i + 1) (skip (i + 1)))
+       (? (n < 18 || !(s 0 = 31 && s 1 = 139 && s 2 = 8)) ()
+          (: flg (s 3)
+             stamp (s 4 + (s 5 << 8) + (s 6 << 16) + (s 7 << 24))
+             i1 (flg & 4 ? (10 + 2 + s 10 + (s 11 << 8)) 10)
+             r2 (flg & 8 ? (: e (skip i1) (e && [1 (snip s i1 (e - 1)) e])) [1 "" i1])
+             (? !r2 ()
+                (: nom <>r2
+                   i3 (flg & 16 ? (skip <>>r2) <>>r2)
+                   (? !i3 ()
+                      (: i4 (flg & 2 ? (i3 + 2) i3)
+                         (? (n < i4 + 8) () [1 stamp nom i4]))))))))
+   (gzc-isize s) (: n #s
+                    (s (n - 4) + (s (n - 3) << 8) + (s (n - 2) << 16) + (s (n - 1) << 24)))
+   (gzc-pay z) (: h (gzc-hdr z) (h ? (#z - <>>>h - 8) 0))          ; the deflate bytes alone
+
+   ; --- the ratio, GNU's `%5.1f%%` ------------------------------------------
+   ; the tenth is rounded, not truncated, and a tie lands half away from zero where C
+   ; rounds half to even -- a difference an exact .05 could reach and real sizes do not.
+   (gzc-ratio num den)
+    (? (den = 0) "  0.0%"
+       (: neg (num < 0) a (neg ? -num num)
+          v ((a * 1000 + den // 2) // den)
+          txt (show (v // 10) + "." + show (v % 10) + "%")
+          (gzc-pad 6 (neg ? ("-" + txt) txt))))
+
+   ; --- -l, the listing ------------------------------------------------------
+   gzc-lhead "         compressed        uncompressed  ratio uncompressed_name"
+   (gzc-lrow fs un pay nom)
+    (gzc-pad 19 (show fs) + " " + gzc-pad 19 (show un)
+     + " " + gzc-ratio (un - pay) un + " " + nom)
+   (gzc-list t fs)
+    (: suf (peep t 'suf ".gz")
+       _ (say out (gzc-lhead + "\n"))
+       (one p acc)                     ; acc: (status compressed uncompressed payload)
+        (: r (gzc-slurp p)
+           (? !r (: _ (gzc-moan t (p + ": No such file or directory"))
+                    [(gzc-worse <acc 1) <>acc <>>acc <>>>acc])
+              (: s <>r h (gzc-hdr s)
+                 (? !h (: _ (gzc-moan t (p + ": not in gzip format"))
+                          [(gzc-worse <acc 1) <>acc <>>acc <>>>acc])
+                    (: fs2 #s un (gzc-isize s) pay (fs2 - <>>>h - 8)
+                       ; the name column is the path as it was typed, stem and all --
+                       ; only -N's stored name arrives without a directory to keep
+                       nom (? (peep t 'N 0 && 0 < #<>>h) (gzc-base <>>h)
+                              (: st (gzc-stem p suf) (st ? <>st p)))
+                       _ (say out ((gzc-lrow fs2 un pay nom) + "\n"))
+                       [<acc (<>acc + fs2) (<>>acc + un) (<>>>acc + pay)])))))
+       a (foldl (\ acc p (one p acc)) '(0 0 0 0) fs)
+       _ (two? >fs && say out (gzc-lrow <>a <>>a <>>>a "(totals)" + "\n"))
+       _ (flush out)
+       <a)
+
+   ; --- the suffix rules -----------------------------------------------------
+   ; .gz (or -S's) comes off; .tgz answers .tar, which is the one rename gzip does.
+   (gzc-stem p suf)                    ; -> (1 stem) | ()
+    (: n #p
+       (? (gzc-ends? p suf) [1 (snip p 0 (n - #suf))]
+          (gzc-ends? p ".tgz") [1 (snip p 0 (n - 4) + ".tar")]
+          ()))
+
+   ; --- one file, compressed -------------------------------------------------
+   (gzc-zip1 t p)
+    (: suf (peep t 'suf ".gz")
+       r (gzc-slurp p)
+       (? !r (: _ (gzc-moan t (p + ": No such file or directory")) 1)
+          (gzc-ends? p suf && !(peep t 'c 0))
+           (: _ (gzc-moan t (p + " already has " + suf + " suffix -- unchanged")) 0)
+          (: s <>r
+             st (stat p)
+             ms (two? st ? <>st 0)
+             n? (peep t 'n 0)
+             z (gz-zip s (n? ? "" (gzc-base p)) (n? ? 0 (ms // 1000)))
+             (? (peep t 'c 0) (: _ (say out z) _ (flush out) 0)
+                (: dst (p + suf)
+                   (? (two? (lstat dst) && !(peep t 'f 0))
+                      (: _ (gzc-moan t (dst + " already exists;\tnot overwritten")) 2)
+                      !(gzc-blurt dst z)
+                       (: _ (gzc-moan t ("cannot write " + dst)) 1)
+                      (: _ (two? st && (: _ (chmod dst (<>>st & 4095)) (utime dst ms)))
+                         _ (peep t 'k 0 ? 0 (unlink p))
+                         _ (gzc-tell t (p + ":\t" + gzc-ratio (#s - gzc-pay z) #s
+                                          + (peep t 'k 0 ? " -- created " " -- replaced with ")
+                                          + dst))
+                         0)))))))
+
+   ; --- one file, decompressed (and -t, which is the same read and no write) --
+   (gzc-unzip1 t p)
+    (: suf (peep t 'suf ".gz")
+       stem0 (gzc-stem p suf)
+       ; the suffix is asked before the bytes are: a name with nothing to strip is a
+       ; warning and not an error, so a `gunzip *` over a mixed directory walks on --
+       ; reading first would call every plain file "not in gzip format" instead
+       (? (!(peep t 'c 0) && !(peep t 't 0) && !stem0 && !(peep t 'N 0))
+          (: _ (gzc-moan t (p + ": unknown suffix -- ignored")) 2)
+       (: r (gzc-slurp p)
+       (? !r (: _ (gzc-moan t (p + ": No such file or directory")) 1)
+          (: s <>r
+             h (gzc-hdr s)
+             u (h && gz-unzip s)
+             (? !h (: _ (gzc-moan t (p + ": not in gzip format")) 1)
+                !u (: _ (gzc-moan t (p + ": invalid compressed data--crc error")) 1)
+                (peep t 't 0) (: _ (gzc-tell t (p + ":\t OK")) 0)
+                (peep t 'c 0) (: _ (say out <>u) _ (flush out) 0)
+                (: stem stem0
+                   N? (peep t 'N 0 && 0 < #<>>h)
+                   (? (!stem && !N?)
+                      (: _ (gzc-moan t (p + ": unknown suffix -- ignored")) 2)
+                      (: dst (N? ? (gzc-dir p + gzc-base <>>h) <>stem)
+                         st (stat p)
+                         (? (two? (lstat dst) && !(peep t 'f 0))
+                            (: _ (gzc-moan t (dst + " already exists;\tnot overwritten")) 2)
+                            !(gzc-blurt dst <>u)
+                             (: _ (gzc-moan t ("cannot write " + dst)) 1)
+                            (: _ (two? st && chmod dst (<>>st & 4095))
+                               ; without -N the output keeps the .gz's own mtime and not
+                               ; the one in the header: gzip restores the stored stamp
+                               ; only when asked, which is what -N means on this side
+                               _ (? N? (utime dst (<>h * 1000))
+                                    (two? st) (utime dst <>st)
+                                    0)
+                               _ (peep t 'k 0 ? 0 (unlink p))
+                               _ (gzc-tell t (p + ":\t" + gzc-ratio (#<>u - gzc-pay s) #<>u
+                                                + (peep t 'k 0 ? " -- created "
+                                                     " -- replaced with ")
+                                                + dst))
+                               0)))))))))))
+
+   ; --- the walk -------------------------------------------------------------
+   (gzc-one t p) (peep t 'd 0 ? (gzc-unzip1 t p) (gzc-zip1 t p))
+   (gzc-walk t p)                      ; -r: a directory is its files, sorted
+    (? !(gzc-dirp? p) (gzc-one t p)
+       (peep t 'r 0)
+        (foldl (\ acc c (gzc-worse acc (gzc-walk t (p + "/" + c)))) 0 (sort (readdir p)))
+       (: _ (gzc-moan t (p + " is a directory -- ignored")) 2))
+
+   ; --- the filter: no file named, so stdin -> stdout -------------------------
+   (gzc-filter t)
+    (: s (slurp in)
+       (? (peep t 'd 0)
+          (: u (gz-unzip (s + ""))
+             (? !u (: _ (gzc-moan t "stdin: not in gzip format") 1)
+                (peep t 't 0) 0
+                (: _ (say out <>u) _ (flush out) 0)))
+          (: _ (say out (gz-zip (s + "") "" 0)) _ (flush out) 0)))
+
+   ; --- the options ----------------------------------------------------------
+   ; clustered shorts, the long spellings beside them, and -S's value glued or next.
+   ; a digit is a level and not a flag: it is taken and dropped, because a script that
+   ; says -9 is asking for the best this coder has and that is what it gets.
+   (gzc-long t w)                      ; -> 1 taken | 'val -S wants a word | ()
+    (: n #w
+       (eq k) (: m #k (m + 1 <= n && snip w 0 (m + 1) = k + "="))
+       (? (w = "stdout" || w = "to-stdout") (pin t 'c 1)
+          (w = "decompress" || w = "uncompress") (pin t 'd 1)
+          (w = "force") (pin t 'f 1)
+          (w = "keep") (pin t 'k 1)
+          (w = "list") (pin t 'l 1)
+          (w = "no-name") (pin t 'n 1)
+          (w = "name") (pin t 'N 1)
+          (w = "quiet") (pin t 'q 1)
+          (w = "recursive") (pin t 'r 1)
+          (w = "test") (pin t 't 1)
+          (w = "verbose") (pin t 'v 1)
+          (w = "fast" || w = "best") 1
+          (w = "help") (pin t 'h 1)
+          (w = "version") (pin t 'V 1)
+          (eq "suffix") (: _ (pin t 'suf (snip w 7 n)) 1)
+          (w = "suffix") 'val
+          ()))
+   (gzc-opts as t)                     ; -> (1 files) | ()  -- () is a bad option
+    (: (go a fs)
+        (? !(two? a) [1 (rev fs)]
+           (: w <a n #w
+              (? (w = "--") [1 (rev fs + >a)]
+                 (n < 2 || !(w 0 = 45)) (go >a (w . fs))        ; a name, and "-" is one
+                 (w 1 = 45)
+                  (: r (gzc-long t (snip w 2 n))
+                     (? !r (: _ (gzc-moan t ("unknown option " + w)) ())
+                        (= r 'val) (two? >a ? (: _ (pin t 'suf <>a) (go >>a fs))
+                                                 (: _ (gzc-moan t "--suffix wants a suffix") ()))
+                        (go >a fs)))
+                 (: (cl k rest)
+                     (? (n <= k) (go rest fs)
+                        (: c (w k)
+                           (? (48 <= c <= 57) (cl (k + 1) rest)            ; a level: taken, dropped
+                              (c = 83)                                    ; -S, glued or next
+                               (: glue (snip w (k + 1) n)
+                                  (? (0 < #glue) (: _ (pin t 'suf glue) (go rest fs))
+                                     (two? rest) (: _ (pin t 'suf <rest) (go >rest fs))
+                                     (: _ (gzc-moan t "-S wants a suffix") ())))
+                              (elem c '(99 100 102 104 107 108 110 113 114 116 118))
+                               (: _ (pin t (intern (string c)) 1) (cl (k + 1) rest))
+                              (c = 78) (: _ (pin t 'N 1) (cl (k + 1) rest))
+                              (c = 86) (: _ (pin t 'V 1) (cl (k + 1) rest))
+                              (: _ (gzc-moan t ("unknown option -" + string c)) ()))))
+                    (cl 1 >a)))))
+       (go as ()))
+
+   (gzc-run as t0)
+    (: t t0
+       o (gzc-opts as t)
+       (? !o 1
+          (peep t 'h 0) (: _ (say out (gzc-help + "\n")) _ (flush out) 0)
+          (peep t 'V 0)
+           (: _ (say out ("gzip (love " + love-version + ")\n")) _ (flush out) 0)
+          (: fs (filter (p \ !(p = "-")) <>o)
+             _ (? (peep t 'l 0) 0 (peep t 't 0) (pin t 'd 1) 0)
+             (? !(two? fs) (peep t 'l 0 ? (: _ (gzc-moan t "-l wants a file") 1)
+                                          (gzc-filter t))
+                (peep t 'l 0) (gzc-list t fs)
+                (foldl (\ acc p (gzc-worse acc (gzc-walk t p))) 0 fs)))))
+
+   (gzip-main as) (gzc-run as (tablet 0))
+   (gunzip-main as) (: t (tablet 0) _ (pin t 'd 1) (gzc-run as t))
+   (zcat-main as) (: t (tablet 0) _ (pin t 'd 1) _ (pin t 'c 1) (gzc-run as t))
+
+   (pins (cite 'verbs 'tab)
+    'gzip   gzip-main
+    'gunzip gunzip-main
+    'zcat   zcat-main))
+
+) ; module 'gzcmd

@@ -293,7 +293,7 @@ kore_net = a/tls/bytes.l a/tls/chacha.l a/tls/poly1305.l a/tls/client.l \
   a/kore/wget.l a/kore/kore.l
 # the crew the artifact carries past kore and mooncc
 crewfiles = a/sb/merge.l a/sb/http.l a/sb/sb.l a/kiosko/kiosko.l \
-  a/gz/gz.l a/tar/tar.l a/tar/tarcmd.l a/gz/gzcmd.l a/cpio/cpio.l \
+  a/gz.l a/tar.l a/cpio/cpio.l \
   a/cpio/cpiocmd.l a/fat/fat.l a/fat/fatcmd.l \
   a/source.l a/lapiz.l \
   a/libra/salt.l a/libra/libra.l a/vi/hueweb.l a/kiosko/serve.l \
@@ -428,7 +428,7 @@ syntax: $(ho)/syntax.vim
 #
 # The kernel stays the one imported artifact (BZIMAGE, default the host's).
 
-# THE CUT IS OURS END TO END NOW -- kore's find, a/cpio/cpio.l and a/gz/gz.l where the
+# THE CUT IS OURS END TO END NOW -- kore's find, a/cpio/cpio.l and a/gz.l where the
 # host's find | cpio | gzip -9 stood. $(mabs) because the pack runs INSIDE a `cd`, and
 # $m is spelled relative to the tree root.
 mabs         = $(abspath $m)

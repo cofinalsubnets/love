@@ -206,7 +206,7 @@ test_front: $(ho)/front $(ho)/frontseat
 # cats.c is the catalog love0 lacks; it is not idempotent and love0 evaluates twice; or its
 # regression is a HANG, wanting a timeout a corpus cannot give -- a wedged gate is worse than
 # a red one. gate = exit 0 and a "<name>: ok"; a cold lane opts in via hostnif_cold.
-hostnif_tests = t/host/gcpause.l t/host/wharf.l t/host/cb.l t/host/manifest.l t/host/rune.l t/host/pty.l t/host/loader.l t/host/rdiff.l t/host/run.l t/host/luxui.l t/host/sh.l t/host/berth.l t/host/overlay.l t/host/bake.l t/host/rove.l t/host/tty.l t/host/lapiz.l t/host/papel.l t/host/kiosko.l t/host/serve.l t/host/sbhttp.l t/host/salt.l t/host/libra.l t/host/clay.l t/host/tls.l t/host/tlsc.l t/host/gz.l t/host/gzc.l t/host/story.l t/host/design.l t/host/lupa.l t/host/helm.l t/host/wget.l t/host/cook.l
+hostnif_tests = t/host/gcpause.l t/host/wharf.l t/host/cb.l t/host/manifest.l t/host/rune.l t/host/pty.l t/host/loader.l t/host/rdiff.l t/host/run.l t/host/luxui.l t/host/sh.l t/host/berth.l t/host/overlay.l t/host/bake.l t/host/rove.l t/host/tty.l t/host/lapiz.l t/host/papel.l t/host/kiosko.l t/host/serve.l t/host/sbhttp.l t/host/salt.l t/host/libra.l t/host/clay.l t/host/tls.l t/host/tlsc.l t/host/gz.l t/host/gzc.l t/host/story.l t/host/design.l t/host/lupa.l t/host/mc.l t/host/helm.l t/host/wget.l t/host/cook.l
 # b/lush: t/host/sh.l drives the built shell end to end, via b/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
@@ -839,7 +839,7 @@ test_bakerep: host
 test_distboot: dist
 	@echo TEST t/gate/distboot.sh
 	@sh t/gate/distboot.sh $(dist_source) $(ho)/love
-# test_gz -- a/tar/tar.l + a/gz/gz.l against the two programs they replace. the laws
+# test_gz -- a/tar.l + a/gz.l against the two programs they replace. the laws
 # are t/host/gz.l; this is the half only the OUTSIDE can say, and it is separate because
 # a coder and decoder by one hand round-trip cleanly through a format nobody else speaks.
 # skips without either system tool. gzfind.l rides along: the differential between gz.l's

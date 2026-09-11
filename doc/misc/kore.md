@@ -39,8 +39,10 @@ The file discipline, two shapes:
 `--help` and `--version` are answered at that door, not in the tools: `koredoor` in
 kore.l wraps every applet on both dispatch lanes (the verb registry and the symlink), so
 one synopsis table — `korehelp` — is where a tool's shape is written down, and the two
-lanes cannot drift. The walk reads only the leading flag words and stops at the first
-operand and at `--`. It is NOT getopt: a value word that looks like a flag is walked
+lanes cannot drift. The door itself is cli's, `udoor` in post.l, and the crew's own verbs
+(mc, lupa, rove, story, design, libra, sb, tar, fat, doom) stand at the same one; what
+kore keeps is the policy below. The walk reads only the leading flag words and stops at
+the first operand and at `--`. It is NOT getopt: a value word that looks like a flag is walked
 over, so `grep -e --help f` answers the help rather than searching for `--help` — glue
 the value (`grep -e--help f`) to mean the pattern. `-h` and `-v` come too, except where
 the letter is the tool's own or POSIX and GNU spell it otherwise (`grep -h`, `du -h`,

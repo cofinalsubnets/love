@@ -12,11 +12,6 @@
 (module (mc mc-main mc-run mc-new mc-key mc-frame mc-read mc-pane mc-at mc-goto mc-cell)
 (borrow 'posix)
 (:
- ; pad and fit are lupa's and design's, spelled again rather than borrowed: three lines
- ; and no module between them. both count BYTES, so a cell is fitted while it is still
- ; plain and the colour goes on after -- an sgr run inside the argument eats the width.
- (pad s n c) (#s < n ? (s + ((n - #s) (t \ t + c) "")) s)
- (fit s n c) (pad (#s > n ? (snip s 0 n) s) n c)
  (mc-rfind s b) (: (go k) (? (k < 0) (0 - 1) (s k = b) k (go (k - 1))) (go (#s - 1)))
 
  ; --- an entry is [name mode size], the mode an LSTAT's: a link is a link here -------
@@ -94,8 +89,8 @@
  (mc-cell d e w sel)                           ; one listing row, fitted plain then dressed
   (: sz (mc-size e)
      k (w - #sz - 2)
-     txt (" " + (fit <e (? (k < 1) 1 k) " ") + " " + sz)
-     row (fit txt w " ")
+     txt (" " + (edfit <e (? (k < 1) 1 k) " ") + " " + sz)
+     row (edfit txt w " ")
      h (mc-hue d e)
      (? (sel = 1) ("\e[7m" + row + "\e[0m")
         (sel = 2) ("\e[4m" + row + "\e[0m")
@@ -103,9 +98,9 @@
         row))
  (mc-row p k w act?)
   (: es (p 'es) i ((p 'top) + k)
-     (? (#es <= i) (fit "" w " ")
+     (? (#es <= i) (edfit "" w " ")
         (mc-cell (p 'dir) <(drop i es) w (? (i != (p 'cur)) 0 act? 1 2))))
- (mc-head d w) ("\e[7m" + (fit (" " + d) w " ") + "\e[0m")
+ (mc-head d w) ("\e[7m" + (edfit (" " + d) w " ") + "\e[0m")
  mc-keys " tab pane  enter descend  u up  g G ends  r reread  q quit"
  (mc-frame s w h)
   (: j (jug 0)
@@ -119,8 +114,8 @@
      _ (each ^rows (k \ say j $
         mc-row l k lw (0 = s 'act) + "\e[0m|" + mc-row r k rw (1 = s 'act) + "\e[0m\e[K\r\n"))
      p (mc-act s) e (mc-at p)
-     _ (say j (fit (" " + (two? e ? (mc-join (p 'dir) <e) (p 'dir))) w " " + "\e[K\r\n"))
-     _ (say j ("\e[7m" + fit mc-keys w " " + "\e[0m\e[K\e[?25l"))
+     _ (say j (edfit (" " + (two? e ? (mc-join (p 'dir) <e) (p 'dir))) w " " + "\e[K\r\n"))
+     _ (say j ("\e[7m" + edfit mc-keys w " " + "\e[0m\e[K\e[?25l"))
      (slurp j))
 
  ; --- the runner: the tool on cli's stage -------------------------------------------
@@ -128,16 +123,12 @@
  (mc-run ld rd)
   (: s (mc-new ld rd)
      (stage (mc-frame s) (mc-key s) (\ _ (s 'over))))
- ; the operands open a full-screen stage, so the flags are read before it
+ mc-usage "usage: love mc [DIR [DIR]]"
  (mc-main as)
-  (: u "usage: love mc [DIR [DIR]]\n"
-     a (? (two? as) <as "")
-     (? (a = "-h" || a = "--help") (puts u, 0)
-        (a = "-v" || a = "--version") (puts ("mc (love " + love-version + ")\n"), 0)
-        (: d1 (two? as ? a ("" + (cwd 0)))
-           d2 (two? as && two? >as ? <>as d1)
-           (? !(mc-dirat? d1) (puts ("mc: " + d1 + ": not a directory\n"), 1)
-              !(mc-dirat? d2) (puts ("mc: " + d2 + ": not a directory\n"), 1)
-              (mc-run d1 d2)))))
- _ (pins (cite 'verbs 'tab) 'mc mc-main))
+  (: d1 (two? as ? <as ("" + (cwd 0)))
+     d2 (two? as && two? >as ? <>as d1)
+     (? !(mc-dirat? d1) (puts ("mc: " + d1 + ": not a directory\n"), 1)
+        !(mc-dirat? d2) (puts ("mc: " + d2 + ": not a directory\n"), 1)
+        (mc-run d1 d2)))
+ _ (pins (cite 'verbs 'tab) 'mc (udoor 'mc mc-main mc-usage 1 1)))
 ) ; module mc

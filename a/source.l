@@ -1,4 +1,4 @@
-; the wrap: see a/tar/tarcmd.l -- `borrow` splices into the current layer, so the two asks
+; the wrap: see a/tar.l -- `borrow` splices into the current layer, so the two asks
 ; need a layer of this file's own rather than the dist cat's. the seed's lay reads the
 ; carried archive through both, and rode that cat's leak to reach them before.
 (module 'source
@@ -146,8 +146,8 @@
                  r2 (#r2 ? r2 (src-chunk q2 b2))
                  n1 #r1
                  n2 #r2
-                 m (? (n1 < n2) n1 n2)
-                 (? (0 = m) (? (0 = n1 + n2) 1 0)      ; both ended, same place
+                 m (n1 < n2 ? n1 n2)
+                 (? (0 = m) (n1 + n2 @ 0 1 0)      ; both ended, same place
                     (n1 = n2) (r1 = r2 ? (go "" "") 0)   ; the even case: no snip at all
                     (snip r1 0 m != snip r2 0 m) 0
                     (go (snip r1 m n1) (snip r2 m n2))))
@@ -219,7 +219,7 @@
        v (? (!(string? a) && !(string? b))          (src-same? exe out ? 'yes 'no)
             (!(string? a) || !(string? b))          'nostrip
             (!(src-same? a b))                      'no
-            ((src-same? a exe) != (src-same? b out)) 'bare
+            (src-same? a exe != src-same? b out)    'bare
             (src-same? exe out)                     'yes
                                                     'image)
        _ (string? a ? (unlink a) 0)
@@ -241,21 +241,19 @@
    seed-arches '(x64 a64 rv64)
    ; the arch word is positional and A PATH still wins: `./a64` is the
    ; directory, the verb rail's own rule worn one level down.
-   (seed-arch? w) (: n #w
-                     (go i) (? (n <= i) (elem (arch-nom w) seed-arches)
-                               (w i = 47) 0
-                               (go (i + 1)))
-                     (go 0))
+   (seed-arch? w) (:- (go 0) n #w (go i)
+                   (n <= i ? (elem (arch-nom w) seed-arches)
+                             (w i @ 47 0 (go (i + 1)))))
    ; this machine's arch: love-arch is already canonical, which is seed-arches' spelling.
    (seed-native _) love-arch
 
-   (seed-usage _)
-    (puts ("usage: love seed [-g] [ARCH] [DIR]\n"
-           + "  lay this binary's source under DIR (default .) and rebuild it there;\n"
-           + "  the result has to BE this binary, byte for byte.\n"
-           + "  ARCH    x64 | a64 | rv64 -- an egg for that machine instead\n"
-           + "  -g      gregarious: the ambient cc and tools build, ours fill the gaps.\n"
-           + "          without it ours go throughout, whatever PATH holds\n"))
+   (seed-usage _) (puts $
+    "usage: love seed [-g] [ARCH] [DIR]\n" +
+    "  lay this binary's source under DIR (default .) and rebuild it there;\n" +
+    "  the result has to BE this binary, byte for byte.\n" +
+    "  ARCH    x64 | a64 | rv64 -- an egg for that machine instead\n" +
+    "  -g      gregarious: the ambient cc and tools build, ours fill the gaps.\n" +
+    "          without it ours go throughout, whatever PATH holds\n")
 
    (seed-lay as0)
     (: _ (two? as0 && src-help? <as0 ? (seed-usage 0, quit 0))

@@ -1,8 +1,8 @@
 ; --- t/host/gzc.l: the C twins of gz.l, held to the love they shadow ---
 ; not in the t/*.l corpus: `inflate` (l/gz.c) and `crc32` (i/hash.c) are
-; host nifs and a/gz/gz.l is a lib module, so neither is visible to the love0 bake.
+; host nifs and a/gz.l is a lib module, so neither is visible to the love0 bake.
 ;
-; t/host/gz.l is where a/gz/gz.l's own laws live; this file asks the other question --
+; t/host/gz.l is where a/gz.l's own laws live; this file asks the other question --
 ; does the C answer what love answers, on the same stream? gz-puff is the oracle
 ; (l/gz.c says so in its head), so a disagreement is the C being wrong until
 ; proven otherwise.

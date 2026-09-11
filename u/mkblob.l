@@ -29,10 +29,10 @@
    ; a cross arch's backend joins at runtime (obj.l's law: registered, not merely
    ; named), and an unbaked love has no holo at all -- say so.
    (mkblob-be arch)
-    (? (lit? (cite 'holo 'objelf)) (mkblob-be2 arch)
+    (lit? (cite 'holo 'objelf) ? (mkblob-be2 arch)
        (mkblob-die "no holo aboard -- this love is unbaked (make host bakes it)"))
    (mkblob-be2 arch)
-    (? (lit? (backends arch)) 0
+    (lit? (backends arch) ? 0
        ; the backend file is the canonical arch word now -- one spelling, no map
        (: f ("l/holo/" + string arch + ".l")
           q (open f "r")
@@ -50,8 +50,8 @@
        n #s
        _ (? (0 < n) 0 (mkblob-die (src + " is empty")))
        lsym (sym + "_len")
-       forms [['label (name lsym)] ['raw (mkblob-le8 n 0 ())]
-              ['label (name sym)]  ['raw (mkblob-bytes s (n - 1) ())]]
+       forms [['label (nom lsym)] ['raw (mkblob-le8 n 0 ())]
+              ['label (nom sym)]  ['raw (mkblob-bytes s (n - 1) ())]]
        ob (objelf arch () () () [sym lsym] () () () () () forms)
        (write-bytes dst ob))
 
@@ -60,7 +60,7 @@
    ; answer is the very symbol the backend table is keyed by.
    (mkblob-main av)
     (: n #av
-     (3 <= n ? (mkblob (4 <= n ? (name (av 3)) 'x64) <av <>av <>>av)
+     (3 <= n ? (mkblob (4 <= n ? (nom (av 3)) 'x64) <av <>av <>>av)
       (mkblob-die "usage: mkblob IN OUT.o SYM [ARCH]")))
 
    (mkblob-main >argv))

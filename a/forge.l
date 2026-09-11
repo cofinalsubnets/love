@@ -19,7 +19,7 @@
 ; loop-codegen gap that pays better closed. two reasons do hold up: a constant known only at
 ; run time (a/sat/flat.l bakes an instance's nvars in as immediates, which C cannot do at any
 ; -O), or a twin that is interpreted love rather than C, where the kernel is not racing a
-; compiler at all and what it buys is vocabulary -- a/gz/gz.l's match finder compares bytes
+; compiler at all and what it buys is vocabulary -- a/gz.l's match finder compares bytes
 ; where `(s i)` is a VM apply. that one is 2.7x on the whole of `gz-deflate` and is the shape
 ; to copy, registering its kernel from its own module through `forge-putx`.
 ;

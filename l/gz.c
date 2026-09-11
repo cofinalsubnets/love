@@ -1,6 +1,6 @@
 // l/gz.c -- DEFLATE, both directions. one translation unit because the two halves are
 // one format: RFC 1951 §3.2.5's code tables are read by the coder and the decoder alike,
-// and a coder and a decoder that disagree there disagree about the format. a/gz/gz.l's
+// and a coder and a decoder that disagree there disagree about the format. a/gz.l's
 // gz-lbase/gz-lext/gz-dbase/gz-dext say the same numbers in love.
 #include "love.h"
 #include <stdint.h>
@@ -19,7 +19,7 @@ static const uint8_t gz_dext[30] = {
 static const uint8_t gz_clord[19] = {
  16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 };
 
-// ===== inflate -- the C twin of a/gz/gz.l's inflate, LvNif-registered =====
+// ===== inflate -- the C twin of a/gz.l's inflate, LvNif-registered =====
 // the tls.c discipline: (inflate s n) -> the bytes | (), s a raw DEFLATE stream and n its
 // inflated size or 0. `gz-inflate` reaches for this and falls back to gz-puff.
 // a twin, not a replacement: gz-puff stays the readable statement of RFC 1951 and the
@@ -248,7 +248,7 @@ static lvm(lvm_inflate) {
 static union u const nif_inflate[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_inflate}, {lvm_ret0}};
 LvNif("inflate", nif_inflate, NULL);
 
-// ===== deflate -- the C twin of a/gz/gz.l's DEFLATE coder, LvNif-registered =====
+// ===== deflate -- the C twin of a/gz.l's DEFLATE coder, LvNif-registered =====
 // the same discipline as inflate above: (deflate s) -> the raw stream | ().
 // a twin held to the bytes: same greedy parse (chain 32, min match 3, the far-3
 // refusal at 4096), same 16384-symbol blocks each costed stored/fixed/dynamic, same

@@ -29,13 +29,9 @@
  (num s) (: v <(sound s) (charm? v ? v 0))
 
  ; --- the tiles: a row grows to reach the cursor, and the map grows a row ------------
- (pad s n c) (#s < n ? (s + ((n - #s) (\ t (t + c)) "")) s)
- ; a status line is cut to the screen: one wider would wrap, scroll the frame up a row, and
- ; every key would redraw the whole map
- (fit s n c) (pad (#s > n ? (snip s 0 n) s) n c)
  (set-tile d c) (: lvl (d 'lvl) x (d 'cx) y (d 'cy)
                    rows (lvl 'rows + map (const "") ^(nat (y + 1 - lvl 'h)))
-                   r (pad (rows y) (x + 1) " ")
+                   r (edpad (rows y) (x + 1) " ")
                    r2 (snip r 0 x + string c + snip r (x + 1) #r)
                    rows2 (map (i \ i = y ? r2 (rows i)) ^#rows)
                    _ (pins lvl 'rows rows2 'h #rows2 'w (foldl (a \ s \ #s < a ? a #s) 0 rows2))
@@ -76,7 +72,7 @@
  ; map: the cursor and the edits. a prompt collects a line into buf; a thing takes
  ; three in turn (id, glyph, name). esc backs out.
  (prompt d m) (pins d 'mode m 'buf (ednew ()))
- (commit d) (: b (edtext (d 'buf)) m (d 'mode)
+ (commit d b) (: m (d 'mode)
                _ (pin d 'mode 'map)
                (? (0 >= #b) (tell d "nothing entered")
                   (m @ 'id    (: n {} _ (pin n 'id b) (pin d 'new n, prompt d 'glyph))
@@ -105,10 +101,7 @@
                  118 (pin d 'want 'vi)  112 (pin d 'want 'play)   ; the runner's: they leave the stage
                  d)))
       ; a prompt is cli's editor: enter commits, escape backs out
-      (: t (d 'buf) _ (edstep t c)
-         (t 'ev @ 10 (commit d)
-                  27 (pin d 'mode 'map, tell d "")
-                  d))))
+      (edcmd d 'buf c (l \ (commit d l)) (_ \ (pin d 'mode 'map, tell d "")))))
 
  ; --- the frame: the map with the cursor on it, the tile and thing under it, the help --
  (design-frame d w h) (: j (jug 0) lvl (d 'lvl)
@@ -122,7 +115,7 @@
     (go x p acc) (x >= w ? acc
      (: c (cell x y) cur? (x = d 'cx && y = d 'cy) p2 >c
       (go (x + 1) p2 (acc + (p2 @ ^p "" (pen p2)) + (cur? ? ("\e[7m" + <c + "\e[27m") <c))))))
-   _ (say j ("\e[H\e[0m\e[7m" + fit (" design: " + lvl 'title + " -- " + d 'path + (d 'dirty ? " [+]" "")) w " " + "\e[0m\e[K\r\n"))
+   _ (say j ("\e[H\e[0m\e[7m" + edfit (" design: " + lvl 'title + " -- " + d 'path + (d 'dirty ? " [+]" "")) w " " + "\e[0m\e[K\r\n"))
    _ (each ^mh (y \ say j (row y + "\e[0m\e[K\r\n")))
    t (thing-at lvl (d 'cx) (d 'cy))
    k (kind-of lvl (tile lvl (d 'cx) (d 'cy)))
@@ -132,11 +125,11 @@
                  (string (k 'ch) + " " + (k 'solid ? "wall" "floor") + " " + show (k 'fg) + "/" + show (k 'bg)))
           + "   brush: " + string (d 'brush) + " " + (bk 'solid ? "wall" "floor") + " " + show (bk 'fg) + "/" + show (bk 'bg)
           + "   palette: " + joins (map string (palette d)) " ")
-   _ (say j (fit about w " " + "\e[K\r\n"))
-   _ (say j (fit " hjkl yubn move  space paint  1-9 # . brush  a tile  c pens  t thing  x remove  m start  v vi  p play  :w save  :q leave" w " " + "\e[K\r\n"))
-   _ (say j (d 'mode @ 'map (fit (d 'msg) w " " + "\e[K\e[?25l")
-                       'cmd (fit (":" + edtext (d 'buf)) w "" + "\e[K\e[?25h")
-                       (fit (show (d 'mode) + ": " + edtext (d 'buf)) w "" + "\e[K\e[?25h")))
+   _ (say j (edfit about w " " + "\e[K\r\n"))
+   _ (say j (edfit " hjkl yubn move  space paint  1-9 # . brush  a tile  c pens  t thing  x remove  m start  v vi  p play  :w save  :q leave" w " " + "\e[K\r\n"))
+   _ (say j (d 'mode @ 'map (edfit (d 'msg) w " " + "\e[K\e[?25l")
+                       'cmd (edfit (":" + edtext (d 'buf)) w "" + "\e[K\e[?25h")
+                       (edfit (show (d 'mode) + ": " + edtext (d 'buf)) w "" + "\e[K\e[?25h")))
    (slurp j))
 
  ; --- the runner: the designer on cli's stage --------------------------------------
@@ -150,11 +143,7 @@
                              d 'want @ 'vi (pin d 'want (), (? vi (visit (_ \ vi [p]), reload d) (tell d "no editor on this seat")))
                                        'play (pin d 'want (), visit (_ \ story-run (d 'lvl))))
                    (stage (w \ h \ design-frame d w h) step (\ _ (d 'over))))
- ; the operand takes the whole screen, so the two flags are answered before it opens
- (design-main as)
-  (: w (two? as ? <as "")
-     (? (w = "-h" || w = "--help") (puts "usage: love design [LEVEL.l]\n", 0)
-        (w = "-v" || w = "--version") (puts ("design (love " + love-version + ")\n"), 0)
-        (design-run (#w ? w "a/rove/levels/lighthouse.l"))))
- _ (pin (cite 'verbs 'tab) 'design design-main))
+ design-usage "usage: love design [LEVEL.l]"
+ (design-main as) (design-run (two? as ? <as "a/rove/levels/lighthouse.l"))
+ _ (pin (cite 'verbs 'tab) 'design (udoor 'design design-main design-usage 1 1)))
 ) ; module design

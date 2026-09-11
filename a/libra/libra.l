@@ -170,33 +170,31 @@
           + "  config: ~/.love/etc/libra.l, then ./.libra.l over it -- (singleton 0),\n"
           + "          (deprecated old (worse \"use better\")). doc/misc/libra.md\n")
 
+   libra-help ("libra ⚖ -- the .l balance tool.\n" + usage)
    ; the config is read once, here, and handed down -- never re-read per file
    (libra-main as)
-    (? (elem "-h" as || elem "--help" as)
-        (: _ (say err "libra ⚖ -- the .l balance tool.\n") _ (say err usage) 0)
-       (elem "-v" as || elem "--version" as)
-        (: _ (puts ("libra (love " + love-version + ")\n")) _ (flush out) 0)
-       (: conf (salt 'libra)
-          v (? (two? as) <as "")
-          r >as
-          (? (v = "check") (libra-check conf (files r))
-             (v = "doc")   (libra-doc (files r) (? (elem "-ht" r) 'ht
-                                                   (elem "-rf" r) 'rf
-                                                   'md))
-             (v = "")      (: _ (say err usage) 1)            ; nothing named, nothing to weigh
-             ; no verb: the whole line is files. so an unknown verb reads as a
-             ; filename and says "cannot open" rather than "no such verb"
-             (libra-check conf (files as)))))
+    (: conf (salt 'libra)
+       v (? (two? as) <as "")
+       r >as
+       (? (v = "check") (libra-check conf (files r))
+          (v = "doc")   (libra-doc (files r) (? (elem "-ht" r) 'ht
+                                                (elem "-rf" r) 'rf
+                                                'md))
+          (v = "")      (: _ (say err usage) 1)            ; nothing named, nothing to weigh
+          ; no verb: the whole line is files. so an unknown verb reads as a
+          ; filename and says "cannot open" rather than "no such verb"
+          (libra-check conf (files as))))
 )
 
 ; the verb, and the seat (kiosko's shape): the table makes `love libra ..` a word
 ; on the artifact, the seat fires libra-main iff this file sits in the program
 ; seat of the real command line. body-having, so nothing leaks.
-(: _ (pins (cite 'verbs 'tab) 'libra libra-main)
+(: door (udoor 'libra libra-main libra-help 1 1)
+   _ (pins (cite 'verbs 'tab) 'libra door)
    s ((cite 'verbs 'fire) ["libra" "libra.l"])
    ; quit, never return: the shebang's -l makes this a preload, so a path that
    ; merely answers leaves cli holding our arguments and loads the first as a
    ; program. the seat miss does return -- that arm is (borrow 'libra).
    ; the status is libra-main's now, so the seat carries it out rather than 0.
-   (? (two? s) (: r (libra-main >s) (quit (? (charm? r) r 0))) ()))
+   (? (two? s) (: r (door >s) (quit (? (charm? r) r 0))) ()))
 ) ; module libra

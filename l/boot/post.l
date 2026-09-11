@@ -1813,7 +1813,7 @@
 ; layer is spliced.
 
 (module '(cli read reads forms shell welp edraw edln edlnc cli-rail cli-line stage edkey
-          uopt uopt1 uoptv
+          uopt uopt1 uoptv uask udoor edcmd edsgr edwide edcut edpad edfit
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
           joinln splitat parseall)
@@ -1976,6 +1976,21 @@
            (-9 && two? (t 'd)) (took eddown)
            (pin t 'ev (c @ 13 10 c)))))
 
+   ; --- a prompt on the buffer -------------------------------------------------------
+   ; the `:` line, which four apps spelled the same way: the editor sits at key k of a
+   ; state, the key is stepped into it, and an enter hands the caller the line while an
+   ; escape backs out. a tab is a tab -- nothing here completes. any other key answers
+   ; the state itself, which is what a stage loop wants back. a fresh buffer afterward
+   ; is the caller's business: most make one on the way in, and one reads the line it
+   ; just committed.
+   (edcmd t k c enter esc)
+    (: e (t k)
+       _ (edstep e c)
+       (e 'ev @ 10 (enter (edtext e))
+                27 (esc ())
+                9 (edput e 9, t)
+                t))
+
    ; --- the key reader ---------------------------------------------------------------
    ; one key off port p: a byte as itself, -7 at eof, and the escape family decoded. a
    ; bare escape (no tail within a beat) is 27, the CSI arrows and jumps are the codes
@@ -2039,6 +2054,15 @@
          0 < col ? (csi col 67),
          flush out))
 
+   ; an sgr run at i -- ESC [ digits-and-semicolons m -- as its length, or 0 for no run
+   (edsgr s i)
+    (: n #s
+       (? !(i + 1 < n && s i = 27 && s (i + 1) = 91) 0
+          ((: (g k) (? (n <= k) 0
+                       (s k = 109) (k + 1 - i)
+                       (47 < s k < 58 || s k = 59) (g (k + 1))
+                       0)) (i + 2))))
+
    ; a prompt's width on the screen, which is not its tally: an sgr run costs no
    ; column (it is zero-width to both the host terminal and the inle console,
    ; l/quay/quay.c) and a utf-8 tail byte is no character of its own. edrender's
@@ -2046,18 +2070,31 @@
    ; bytes lands the cursor one column per escape byte too far right.
    (edwide s)
     (: n #s
-       (esc k)                                   ; ESC [ digits-and-semicolons m
-        (? !(k + 1 < n && s k = 27 && s (k + 1) = 91) 0
-           ((: (g i) (? (n <= i) 0
-                        (s i = 109) (i + 1 - k)
-                        (47 < s i < 58 || s i = 59) (g (i + 1))
-                        0)) (k + 2)))
        (go i c) (? (n <= i) c
-                   (: e (esc i)
+                   (: e (edsgr s i)
                       (? e (go (i + e) c)
                          (128 <= s i < 192) (go (i + 1) c)
                          (go (i + 1) (c + 1)))))
        (go 0 0))
+
+   ; the first n columns of s, by the same measure. an sgr run rides along free; a cut
+   ; that dropped part of a coloured string ends in a reset, so a pen cannot run on into
+   ; whatever is laid beside it. a string that already fits is answered as it stands.
+   (edcut s n)
+    (: m #s
+       (go i c pen) (? (m <= i) s
+                       (128 <= s i < 192) (go (i + 1) c pen)
+                       (n <= c) (snip s 0 i + (pen ? "\e[0m" ""))
+                       (: e (edsgr s i)
+                          (? e (go (i + e) c 1)
+                             (go (i + 1) (c + 1) pen))))
+       (go 0 0 0))
+
+   ; a string laid in a field n columns wide: edpad fills what the glyphs leave, edfit
+   ; cuts first so the answer is exactly n wide. three apps spelled this pair in bytes,
+   ; which is right until something wears colour.
+   (edpad s n c) (: w (edwide s) (w < n ? (s + ((n - w) (t \ t + c) "")) s))
+   (edfit s n c) (edpad (edcut s n) n c)
 
    ; --- the option walk, lifted out of kore, whose floor and love's own coincide here:
    ; both are collections of applets reading clustered short flags, and the walk was
@@ -2112,6 +2149,33 @@
        (walk as ()))
    ; a value option's text, or () -- the presence read that pairs with uopt
    (uoptv t c) (: r (peep t c ()) (? (two? r) <>r ()))
+
+   ; --- the two flags every applet answers, and the one place that answers them ------
+   ; the leading flag words only: the walk stops at the first operand and at `--`, so a
+   ; file really called --help still opens once something else has been named. it is not
+   ; getopt -- a value word that looks like a flag is walked over, so `grep -e --help f`
+   ; answers the help; glue it (`grep -e--help f`) to mean the pattern.
+   (uask as h? v?)
+    (? !(two? as) ()
+       (: w <as
+          (? (w = "--") ()
+             (w = "--help") 'help
+             (w = "--version") 'vers
+             ((w = "-h") && h?) 'help
+             ((w = "-v") && v?) 'vers
+             ((1 < #w) && (w 0 = 45)) (uask >as h? v?)
+             ())))
+   ; an applet as the world calls it: nm is its name, u its usage text, and h?/v? whether
+   ; the bare letters are free -- posix or gnu has already spoken for one in a few places,
+   ; and there the long form is the only answer. answers the main a verb registry takes,
+   ; so a whole userland's two flags are this walk and no other.
+   (udoor nm f u h? v?)
+    (: (say1 x) (: n #x                       ; a page that ends in a newline keeps just the one
+                   (puts (? (n && (x (n - 1) = 10)) x (x + "\n")), flush out, 0))
+       (\ as (uask as h? v?
+              @ 'help (say1 (u || ("usage: " + string nm)))
+                'vers (say1 (string nm + " (love " + love-version + ")"))
+                (f as))))
 
    ps1 "> "
    ; the helm glows in the crew's cyan (256-colour 117 ~ #7dcfff), reset after.

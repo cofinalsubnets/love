@@ -25,9 +25,9 @@
  ;; a tablet addr -> name; names a tablet name -> addr (the goto door)
  (elf? s) (#s > 64 && s 0 = 127 && s 1 = 69 && s 2 = 76 && s 3 = 70 && s 4 = 2)
  (hexd n) ("0123456789abcdef" n)
- (hex n w) (: (go k a) (? (k < 0) a (go (k - 1) (a + string (hexd ((n >> (4 * k)) & 15)))))
+ (hex n w) (: (go k a) (k < 0 ? a (go (k - 1) (a + string (hexd ((n >> (4 * k)) & 15)))))
               (go (w - 1) ""))
- (hexn n) (: (go v a) (? (v = 0) (0 = #a ? "0" a) (go (v >> 4) (string (hexd (v & 15)) + a)))
+ (hexn n) (: (go v a) (v @ 0 (#a @ 0 "0" a) (go (v >> 4) (string (hexd (v & 15)) + a)))
               ("0x" + go n ""))
  (cstr s i) (: (go j) (? (j >= #s || s j = 0) j (go (j + 1))) (snip s i (go i)))
  (elf-text s)                                              ; -> (off addr size) of .text, or ()
@@ -71,19 +71,19 @@
  (tell d s) (pin d 'msg s)
  (clamp d i) (? (i < 0) 0 (i >= d 'n) (d 'n - 1) i)
  ;; asm: one instruction at off, out of the patched bytes: -> (len . items)
- (insn d off) (x64-decode (slice d off (? (off + 16 < d 'n) (off + 16) (d 'n))) 0)
+ (insn d off) (x64-decode (slice d off (off + 16 < d 'n ? (off + 16) (d 'n))) 0)
  (next-insn d off) (: r (insn d off) (clamp d (off + <r)))
  ;; the instruction before off: walk forward from a boundary above (the window's top, else a
  ;; little way back) and take the last one before off; if the walk never lands on off, the
  ;; shortest real decode from just above that does
  (prev-insn d off)
   (: anchor (? (d 'top < off) (d 'top) (off > 64) (off - 64) 0)
-     (short k) (? (k > 15) (clamp d (off - 1))
-                  (: b (off - k)
-                     (? (b < 0) (clamp d (off - 1))
-                        (: r (insn d b) (<r = k && <(<>r) = 'op ? b (short (k + 1)))))))
-     (walk b last) (? (b >= off) (b = off ? last (short 1)) (walk (next-insn d b) b))
-     (off = 0 ? 0 (walk anchor anchor)))
+     (short k) (k > 15 ? (clamp d (off - 1))
+                (: b (off - k)
+                 (b < 0 ? (clamp d (off - 1))
+                  (: r (insn d b) (<r = k && <(<>r) = 'op ? b (short (k + 1)))))))
+     (walk b last) (b >= off ? (b = off ? last (short 1)) (walk (next-insn d b) b))
+     (off @ 0 0 (walk anchor anchor)))
  ;; a row step in the hex view stays put at the file's edges, as vi's j and k do
  (row-move d n) (: t (d 'cur + n) (? (0 <= t < d 'n) (goto d t) d))
  (rows-of h) (h - 4 > 1 ? (h - 4) 1)
@@ -105,9 +105,9 @@
  (step-insn d n) (goto d (n > 0 ? (next-insn d (d 'cur)) (prev-insn d (d 'cur))))
  (page d h k)
   (: rows (rows-of h)
-     (? (d 'mode = 'hex) (move d (k * rows * 16))
-        (: (go i off) (? (i = 0) off (go (i - 1) (k > 0 ? (next-insn d off) (prev-insn d off))))
-           (goto d (go rows (d 'cur))))))
+   (d 'mode @ 'hex (move d (k * rows * 16))
+    (: (go i off) (i @ 0 off (go (i - 1) (k > 0 ? (next-insn d off) (prev-insn d off))))
+     (goto d (go rows (d 'cur))))))
 
  ;; --- editing: a hex digit at the cursor, the high nibble first --------------------------
  (hexval c) (? (48 <= c <= 57) (c - 48) (97 <= c <= 102) (c - 87) -1)
@@ -122,7 +122,7 @@
 
  ;; --- find: a hex string or a "quoted text", from just past the cursor, wrapping --------
  (unhex h) (: t (string (filter (c \ !(c = 32)) (chars h)))
-              (? (0 = #t || #t % 2 = 1 || !(foldl (\ a c (a && hexval c >= 0)) 1 (chars t))) ""
+              (? (0 = #t || #t % 2 = 1 || !(foldl (a \ c \ a && hexval c >= 0) 1 (chars t))) ""
                  (string (map (\ i (hexval (t (2 * i)) * 16 + hexval (t (2 * i + 1)))) ^(#t // 2)))))
  (needle s) (? (#s >= 2 && s 0 = 34 && s (#s - 1) = 34) (snip s 1 (#s - 1)) (unhex s))
  (find d s)
@@ -132,12 +132,12 @@
            (at? i) ((: (g k) (? (k >= n) 1 (lupa-byte d (i + k) = nd k) (g (k + 1)) 0)) 0)
            (go i left) (? (left = 0) -1 (i + n > d 'n) (go 0 left) (at? i) i (go (i + 1) (left - 1)))
            hit (go (start >= d 'n ? 0 start) (d 'n))
-           (? (hit < 0) (tell d "not found") (pins d 'find s 'cur hit 'msg ("found at " + hexn (addr d hit)))))))
+           (hit < 0 ? (tell d "not found") (pins d 'find s 'cur hit 'msg ("found at " + hexn (addr d hit)))))))
 
  ;; --- the command line: w q q! wq g / -----------------------------------------------------
  (words s) (filter (w \ 0 < #w) (split " " s))
- (joins l sep) (? !(two? l) "" (foldl (\ a s (a + sep + s)) <l >l))
- (hexnum s) (foldl (\ a c (a < 0 || hexval c < 0 ? -1 (a * 16 + hexval c))) 0 (chars s))
+ (joins l sep) (l @- "" (a . u) (foldl (a \ s \ a + sep + s) a u))
+ (hexnum s) (foldl (a \ c \ a < 0 || hexval c < 0 ? -1 (a * 16 + hexval c)) 0 (chars s))
  (parse-addr d s)
   (: sym (elfed? d ? (peep ((d 'elf) 'names) s -1) -1)
      (? (sym >= 0) (offset d sym)
@@ -156,10 +156,7 @@
  ;; --- the step: a key on the state -------------------------------------------------------
  (lupa-key d c) (: h (d 'h) hexmode (d 'mode = 'hex)
    (? (d 'in = 'cmd)
-      (: t (d 'cmd) _ (edstep t c)
-         (t 'ev @ 10 (pin d 'in 'map, command d (edtext t))
-                  27 (pin d 'in 'map, tell d "")
-                  d))
+      (edcmd d 'cmd c (l \ (pin d 'in 'map, command d l)) (_ \ (pin d 'in 'map, tell d "")))
       (: _ (? (c = 58 || c = 27) 0 (pin d 'msg ""))
          (c @ (104 || -1) (hexmode ? (move d -1) (step-insn d -1))
               (108 || -2) (hexmode ? (move d 1) (step-insn d 1))
@@ -178,8 +175,6 @@
               (? (hexmode && hexval c >= 0) (nibble d (hexval c)) d)))))
 
  ;; --- the frame ---------------------------------------------------------------------------
- (pad s n c) (#s < n ? (s + ((n - #s) (\ t (t + c)) "")) s)
- (fit s n c) (pad (#s > n ? (snip s 0 n) s) n c)
  (printable c) (32 <= c < 127 ? (string c) ".")
  ;; a hex row: 77 columns with its text, the text dropped on a narrower screen, the whole cut
  ;; to the screen; the cursor's cell is lit only when it is on the screen
@@ -191,8 +186,8 @@
      k (cur - off)                                          ; the cursor's cell, if on this row
      col (10 + k * 3 + (k > 7 ? 1 0))
      (? (0 <= k < 16 && col + 2 <= w)
-        (snip row 0 col + "\e[7m" + snip row col (col + 2) + "\e[0m" + fit (snip row (col + 2) #row) (w - col - 2) " ")
-        (fit row w " ")))
+        (snip row 0 col + "\e[7m" + snip row col (col + 2) + "\e[0m" + edfit (snip row (col + 2) #row) (w - col - 2) " ")
+        (edfit row w " ")))
  ;; an instruction's text in the chosen dialect, its targets named where a symbol covers them
  (named d o)
   (<o @ 'lbl (? !(charm? <>o) o
@@ -212,46 +207,41 @@
   (: r (insn d off) ln <r its >r cur (off = d 'cur)
      bs (foldl (\ a i (a + (i < ln ? (hex (lupa-byte d (off + i)) 2) "  ") + " ")) "" ^7)
      s (symat d (addr d off)) sym (0 < #s && !(has? s "+") ? (s + ":") "")
-     row (hex (addr d off) 8 + "  " + bs + (ln > 7 ? "+" " ") + " " + fit sym 14 " " + " " + insn-text d off ln its)
-     [ln ((cur ? "\e[7m" "") + fit row w " " + (cur ? "\e[0m" ""))])
+     row (hex (addr d off) 8 + "  " + bs + (ln > 7 ? "+" " ") + " " + edfit sym 14 " " + " " + insn-text d off ln its)
+     [ln ((cur ? "\e[7m" "") + edfit row w " " + (cur ? "\e[0m" ""))])
  (lupa-frame d w h) (: j (jug 0) rows (rows-of h) _ (pin d 'h h) _ (settle d h)
    e (d 'elf) hexmode (d 'mode = 'hex)
    title (" lupa: " + d 'path + (d 'dirty ? " [+]" "") + "  " + (hexmode ? "hex" "asm") + " " + show (d 'syn)
           + "  " + hexn (addr d (d 'cur)) + "/" + hexn (d 'n)
           + (elfed? d ? ("  .text " + hexn (e 'taddr) + " " + show (e 'tsize) + " bytes") ""))
-   _ (say j ("\e[H\e[0m\e[7m" + fit title w " " + "\e[0m\e[K\r\n"))
+   _ (say j ("\e[H\e[0m\e[7m" + edfit title w " " + "\e[0m\e[K\r\n"))
    _ (? hexmode
-        (each (jot rows) (\ k (: off (d 'top + k * 16)
+        (each ^rows (\ k (: off (d 'top + k * 16)
                                  (say j ((off < d 'n ? (hexrow d off w) "") + "\e[0m\e[K\r\n")))))
-        ((: (go k off) (? (k >= rows) 0
-                          (: row (? (off < d 'n) (asmrow d off w) [1 ""])
-                             _ (say j (<>row + "\e[0m\e[K\r\n"))
-                             (go (k + 1) (off + <row)))))
+        ((: (go k off) (k >= rows ? 0
+                        (: row (? (off < d 'n) (asmrow d off w) [1 ""])
+                         (say j (<>row + "\e[0m\e[K\r\n"),
+                          go (k + 1) (off + <row)))))
          0 (d 'top)))
    cur (d 'cur) b (lupa-byte d cur) sym (symat d (addr d cur))
    about (" " + hexn (addr d cur) + "  byte " + hex b 2 + " " + show b + " " + printable b
           + (0 < #sym ? ("  " + sym) "") + (d 'nib >= 0 ? "  (high nibble set)" "")
           + (elfed? d ? "" "  (raw bytes)"))
-   _ (say j (fit about w " " + "\e[K\r\n"))
-   _ (say j (fit " hjkl move  ^f ^b page  g G ends  d hex/asm  s att/intel  0-9a-f edit  n again  :w :q :g ADDR :/ HEX  q quit" w " " + "\e[K\r\n"))
-   _ (say j (d 'in @ 'cmd (fit (":" + edtext (d 'cmd)) w "" + "\e[K\e[?25h")
-                        (fit (d 'msg) w " " + "\e[K\e[?25l")))
+   _ (say j (edfit about w " " + "\e[K\r\n"))
+   _ (say j (edfit " hjkl move  ^f ^b page  g G ends  d hex/asm  s att/intel  0-9a-f edit  n again  :w :q :g ADDR :/ HEX  q quit" w " " + "\e[K\r\n"))
+   _ (say j (d 'in @ 'cmd (edfit (":" + edtext (d 'cmd)) w "" + "\e[K\e[?25h")
+                        (edfit (d 'msg) w " " + "\e[K\e[?25l")))
    (slurp j))
 
  ;; --- the runner: the tool on cli's stage ---------------------------------------------------
- (readf p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) [1 t]) ()))
+ (readf p) (: q (open p "r") (hot? q ? (: t (slurp q) (close q, [1 t]))))
  (lupa-run p) (: r (readf p)
-                 (? !(two? r) (puts ("lupa: cannot read " + p + "\n"), 1)
-                    (0 = #(<>r)) (puts ("lupa: " + p + " is empty\n"), 1)
+                 (? (one? r) (puts ("lupa: cannot read " + p + "\n"), 1)
+                    (0 = #<>r) (puts ("lupa: " + p + " is empty\n"), 1)
                     (: d (lupa-new <>r p)
-                       (stage (w \ h \ lupa-frame d w h) (c \ lupa-key d c) (\ _ (d 'over))))))
- ; the operand opens a full-screen stage, so the flags are read before it
+                       (stage (lupa-frame d) (lupa-key d) (_ \ d 'over)))))
+ lupa-usage "usage: love lupa FILE"
  (lupa-main as)
-  (: w (two? as ? <as "")
-     u "usage: love lupa FILE\n"
-     (? (w = "-h" || w = "--help") (puts u, 0)
-        (w = "-v" || w = "--version") (puts ("lupa (love " + love-version + ")\n"), 0)
-        (two? as) (lupa-run w)
-        (puts u, 1)))
- _ (pins (cite 'verbs 'tab) 'lupa lupa-main))
+  (two? as ? (lupa-run <as) (puts (lupa-usage + "\n"), 1))
+ _ (pins (cite 'verbs 'tab) 'lupa (udoor 'lupa lupa-main lupa-usage 1 1)))
 ) ; module lupa
