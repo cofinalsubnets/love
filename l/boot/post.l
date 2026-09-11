@@ -1813,7 +1813,7 @@
 ; layer is spliced.
 
 (module '(cli read reads forms shell welp edraw edln edlnc cli-rail cli-line stage edkey
-          uopt uopt1 uoptv uask udoor edcmd edsgr edwide edcut edpad edfit
+          uopt uopt1 uoptv uoptun uoptstray unum uask udoor edcmd edsgr edwide edcut edpad edfit
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
           joinln splitat parseall)
@@ -2173,6 +2173,21 @@
        (walk as ()))
    ; a value option's text, or () -- the presence read that pairs with uopt
    (uoptv t c) (: r (peep t c ()) (? (two? r) <>r ()))
+   ; the first key the walk pinned that `ok` does not name, or () when every one is the
+   ; applet's own. the short lane takes ANY letter -- that is uopt1's `flags ()`, and an
+   ; alphabet is the applet's to state -- so the key comes back for a refusal to name it.
+   (uoptun t ok) (<(filter (c \ !(elem c ok)) (sort (keys t))))
+   ; an operand that still looks like a flag, or (). the walk stops at the first word that
+   ; is not one, so an applet whose operands are positional would take `-x` for a filename
+   ; and lay a whole tree under its name. () once `--` has been spelled: the words behind
+   ; it are literal by request, which is the whole of what `--` is for.
+   (uoptstray as rest) (? (elem "--" as) () (<(filter (w \ 1 < #w && w 0 = 45) rest)))
+   ; a flag's text as a whole number, or () for anything that is not all digits. the
+   ; hand-rolled readers answer 0 for "abc" as they do for "", so a port typed wrong and
+   ; a port nobody typed read alike; `charm?` on the answer is the test.
+   (unum s) (: n #s
+               (go i a) (? (n <= i) a (48 <= s i < 58) (go (i + 1) (a * 10 + (s i - 48))) ())
+               (? (string? s && n) (go 0 0) ()))
 
    ; --- the two flags every applet answers, and the one place that answers them ------
    ; the leading flag words only: the walk stops at the first operand and at `--`, so a

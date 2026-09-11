@@ -33,17 +33,15 @@
 (borrow 'tar)
 
 (borrow 'posix)
-(: (usage _)
-   (: _ (puts "helm -- a service supervisor, and a love shell over its socket
+(: helm-usage "helm -- a service supervisor, and a love shell over its socket
 usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first)
        helm check [-c CONF]              read the config and report on it
        helm ctl [WORDS ..]               one command, or a session, over the socket
   -c, --config PATH   the unit file (default /etc/helm.l)
   -s, --socket PATH   the control socket (default $XDG_RUNTIME_DIR/helm.sock, or /run)
   -q, --quiet         keep the journal, but do not narrate to stderr
-")
-      (quit 0))
-   (need h r) ((atom? r) ? (say err ("helm: " + h + " needs an argument\n"), quit 2))
+"
+   (hdie c m) (: _ (say err ("helm: " + m)) _ (put err 10) (quit c))
 
    ; --- helm ctl: the client --------------------------------------------------
    ; a PIPE, not a protocol: the words go up as one line and whatever comes back
@@ -179,31 +177,40 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
        0)
 
    ; --- the command line ------------------------------------------------------
+   ; the flags in `ws` into `t`, answering the words behind them. walked twice, once
+   ; ahead of the verb and once behind it, `helm check -c CONF` being the spelling the
+   ; usage gives -- one tablet, so either side pins the same key.
+   ; a word that is neither a flag of ours nor a command, named for what it looks like:
+   ; the walk stops at the first word that is not a flag, so `helm --nosuch` arrives here
+   (hbad w) (hdie 2 ((1 < #w && w 0 = 45 ? "unknown option " "not a command: ") + w))
+   (hopts t ws)
+    (: o (uopt ws t '(99 115) () {"config" 99 "socket" 115 "quiet" 113})
+       _ (two? o ? 0 (hdie 2 (last ws + " needs an argument")))
+       un (uoptun t '(99 115 113))
+       _ (nil? un ? 0 (hdie 2 ("unknown option -" + string un)))
+       <>>o)
    (helm-main as)
     (: _ (!(nil? (cite 'helm)) ? (borrow 'helm))
-       box {'conf "/etc/helm.l" 'sock (helm-sock 0) 'verb 'run 'words ()}
-       (loop (w . r))
-        (w @ ("-c" || "--config") (need w r, pin box 'conf <r, loop >r)
-             ("-s" || "--socket") (need w r, pin box 'sock <r, loop >r)
-             ("-q" || "--quiet")  (pin box 'quiet 1, loop r)
-             ("-h" || "--help")   (usage 0)
-             ("-v" || "--version") (puts ("helm (love " + love-version + ")\n"),
-                                    flush out, quit 0)
-             "run"                (pin box 'verb 'run, loop r)
-             "check"              (pin box 'verb 'check, loop r)
-             "ctl"                (pin box 'verb 'ctl, pin box 'words r, ())
-             (pin box 'words (happend (peep box 'words []) [w]), loop r))
-       _ (loop as)
-       v (peep box 'verb 'run)
-       (? (v == 'check) (helm-check (peep box 'conf ""))
-          (v == 'ctl)   (helm-ctl (peep box 'sock "") (peep box 'words []))
-          (helm-run (peep box 'conf "") (peep box 'sock "") (peep box 'quiet 0)))))
+       t (tablet 0)
+       r (hopts t as)
+       w (two? r ? <r "")
+       _ (? (w = "" || w = "run" || w = "check" || w = "ctl") 0 (hbad w))
+       verb (? (w = "check") 'check (w = "ctl") 'ctl 'run)
+       ; ctl is where our flags end -- the words behind it are the remote command's own
+       words (? (verb = 'ctl) >r (hopts t >r))
+       _ (? (verb = 'ctl) 0 (two? words) (hbad <words) 0)
+       conf (: v (uoptv t 99) (nil? v ? "/etc/helm.l" v))
+       sock (: v (uoptv t 115) (nil? v ? (helm-sock 0) v))
+       (? (verb == 'check) (helm-check conf)
+          (verb == 'ctl)   (helm-ctl sock words)
+          (helm-run conf sock (peep t 113 0)))))
 
 ; the seat, its own form so the binder above stays body-less and defglobs: fire
 ; helm-main iff the installed `helm` script sits in the program seat of the real
 ; command line. the bare file name is deliberately NOT a seat word -- helm is
 ; four files, and a `-l a/helm/helm.l` that seated would start supervising in
 ; the middle of loading itself.
-(: _ (pins (cite 'verbs 'tab) 'helm helm-main)
+(: door (udoor 'helm helm-main helm-usage 1 1)
+   _ (pins (cite 'verbs 'tab) 'helm door)
    s (cite 'verbs 'fire ["helm"])
-   ((two? s) ? (helm-main >s))))
+   ((two? s) ? (door >s))))
