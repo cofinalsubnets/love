@@ -48,7 +48,7 @@ the letter is the tool's own or POSIX and GNU spell it otherwise (`grep -h`, `du
 the long forms only. echo, test and `[` read no options at all and are not at the door;
 cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (100 tools, 103 names)
+## the inventory (103 tools, 106 names)
 
 | where | tools |
 | --- | --- |
@@ -58,6 +58,7 @@ cook and lush answer both flags themselves, each with more to say than a synopsi
 | core.l, the line tools | cat tac echo head tail wc sort uniq tee |
 | core.l, the field tools | cut tr nl rev |
 | core.l, the column tools | fold expand unexpand (all three count COLUMNS, so a tab steps to the next stop) |
+| core.l, the line endings | dos2unix unix2dos mac2unix (in place by default; a binary file is refused, the mode is kept) |
 | core.l, the encodings | base64 base32 (RFC 4648; `-d` reads it back, `-w` says the wrap) |
 | core.l, the two little computations | tsort factor |
 | core.l, the record tools | paste comm join split od |
@@ -382,6 +383,29 @@ parsers for a shape nothing in this decade emits.
   `--backup-if-mismatch`, since a hunk that moved applied to a file the patch did not describe.
 * the gate's oracle is **the tree, not the message**: GNU patch's chatter has moved between
   releases; what it leaves on disk has not.
+
+## the line endings (a/kore/core.l)
+
+`dos2unix`, `unix2dos` and `mac2unix` are one walk under three names; what separates them is
+which break goes in and which comes out. The transform is the easy half — `tr -d '\r'` is most
+of `dos2unix` — and it is not why these are tools.
+
+* **In place is the default**, which is what every caller of `dos2unix` means and what no
+  ordinary filter does. `-n IN OUT` writes a new file instead; with no operands it is a plain
+  stdin-to-stdout filter.
+* **A binary file is refused** (a NUL byte says so) unless `-f`. A `dos2unix *` over a mixed
+  directory is the accident that rule is there for.
+* **The mode is kept**, and `-k` keeps the mtime too.
+* **A file already in the target form is not rewritten** — same bytes, no write, so a build
+  that runs the rule twice does not touch the timestamp.
+* **Neither direction doubles its own output**: `unix2dos` run twice is `unix2dos`, and the
+  two are each other's inverse. Idempotence is lawed, because a converter that doubles turns
+  a file into `\r\r\n` on the second pass and nothing complains.
+* **Only the PAIR is a line ending** for `dos2unix` — a lone CR mid-line survives. A lone CR
+  as a break is the classic Mac form and is `mac2unix`'s job.
+
+Not built: `-c` conversion modes (ascii/7bit/iso), BOM handling, `-b` backups, and the
+`--info` report.
 
 ## man (a/kore/man.l)
 

@@ -906,6 +906,66 @@
        (dot ln term?) (: _ (say out (uunexpand n a? ln)) _ (? term? (put out 10) 0) 1)
        (ulines "unexpand" dot <>>o))
 
+   ; ---- the line endings: dos2unix, unix2dos, mac2unix -------------------------
+   ; three names and one walk; what separates them is which break goes in and which comes
+   ; out. the transform is the easy half -- `tr -d '\r'` is most of dos2unix -- and it is
+   ; not why this is a tool. the other half is: it converts IN PLACE, which is what every
+   ; caller of dos2unix means, and in place means keeping the mode, leaving a binary file
+   ; alone, and not rewriting a file that already reads the way it was asked to.
+   (ucrlf s)                                  ; crlf -> lf
+    (: n #s o (jug 0)
+       (go i) (? (n <= i) (slurp o)
+                 (s i = 13 && i + 1 < n && s (i + 1) = 10) (: _ (put o 10) (go (i + 2)))
+                 (: _ (put o (s i)) (go (i + 1))))
+       (go 0))
+   (ulfcr s)                                  ; lf -> crlf, and one already there stays one
+    (: n #s o (jug 0)
+       (go i) (? (n <= i) (slurp o)
+                 (s i = 13 && i + 1 < n && s (i + 1) = 10) (: _ (say o "\r\n") (go (i + 2)))
+                 (s i = 10) (: _ (say o "\r\n") (go (i + 1)))
+                 (: _ (put o (s i)) (go (i + 1))))
+       (go 0))
+   (ucrlone s)                                ; a LONE cr -> lf; a crlf is dos2unix's to do
+    (: n #s o (jug 0)
+       (go i) (? (n <= i) (slurp o)
+                 (s i = 13 && !(i + 1 < n && s (i + 1) = 10)) (: _ (put o 10) (go (i + 1)))
+                 (: _ (put o (s i)) (go (i + 1))))
+       (go 0))
+   ; a NUL says binary, and a binary file is left alone unless -f: an .exe walked into by
+   ; a `dos2unix *` over a mixed directory is the accident this is here to refuse
+   (ubin? s) (: n #s (go i) (? (n <= i) 0 (s i = 0) 1 (go (i + 1))) (go 0))
+   d2u-usage "usage: dos2unix [-fkqn] [FILE..]   (unix2dos and mac2unix are the same door)"
+   (ud2u nm fn as)
+    (: t (tablet 0)
+       o (uopts as t () ())
+       _ (? (two? o) () (udie 2 d2u-usage))
+       _ (foldl (\ a c (? (elem c '(102 107 113 110)) a
+                          (udie 2 (nm + ": unknown option -" + string c)))) 0 (keys t))
+       fs <>>o
+       q? (peep t 113 0) f? (peep t 102 0) k? (peep t 107 0) n? (peep t 110 0)
+       (note m) (? q? 0 (: _ (say err (nm + ": " + m)) _ (put err 10) 0))
+       (one src dst)
+        (: r (uread src)
+           (? !(two? r) (: _ (note ("cannot read " + src)) 1)
+              (: s <>r
+                 (? (!f? && ubin? s) (: _ (note ("skipping binary file " + src)) 0)
+                    (: c (fn s) st (stat src)
+                       (? (src = dst && c = s) 0     ; already so: in place writes nothing
+                          !(uwrite dst c) (: _ (note ("cannot write " + dst)) 1)
+                          (: _ (? (two? st) (chmod dst (& 4095 <>>st)) 0)
+                             _ (? (k? && two? st) (utime dst <>st) 0)
+                             0)))))))
+       ; -n is dos2unix's "new file" pair, so the operands read IN OUT, IN OUT
+       (go l) (? !(two? l) 0
+                 n? (? !(two? >l) (udie 2 d2u-usage)
+                       (: r (one <l <>l) (? (r || go >>l) 1 0)))
+                 (: r (one <l <l) (? (r || go >l) 1 0)))
+       (? (two? fs) (go fs)
+          (: s (slurp in) _ (puts (fn s)) 0)))   ; no operands: the plain filter
+   (dos2unix-main as) (ud2u "dos2unix" ucrlf as)
+   (unix2dos-main as) (ud2u "unix2dos" ulfcr as)
+   (mac2unix-main as) (ud2u "mac2unix" ucrlone as)
+
    ; ---- the calendar floor (stat's %y and date both read it) --------------------
    ; Howard Hinnant's exact integer civil-from-days and its inverse, shifted to a March
    ; year so the leap day lands at the end and no month table is needed. love's // is

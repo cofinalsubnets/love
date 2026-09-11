@@ -844,6 +844,26 @@
    r (fz 300 (wheel 23))
    (test (= r 'ok)))
 
+; --- the line endings: the three transforms, and the pair that is a round trip ---
+; the tool's own work is the filesystem half (in place, the mode, the binary refusal); what
+; is a function of a string is here. the load-bearing one is idempotence: `dos2unix` run
+; twice is `dos2unix`, and so is unix2dos -- a converter that doubles its own output on a
+; second pass is the way a file ends up with \r\r\n, and a makefile runs a rule twice.
+(: dos "a\r\nb\r\nc\r\n" unx "a\nb\nc\n"
+   (test
+      (= (ucrlf dos) unx) (= (ulfcr unx) dos)
+      (= (ucrlf unx) unx)                        ; already unix: nothing to do
+      (= (ulfcr dos) dos)                        ; already dos: NOT doubled to \r\r\n
+      (= (ucrlf (ucrlf dos)) unx) (= (ulfcr (ulfcr unx)) dos)     ; both idempotent
+      (= (ulfcr (ucrlf dos)) dos) (= (ucrlf (ulfcr unx)) unx)     ; ..and each other's inverse
+      ; a lone cr is the classic mac break, and it is mac2unix's and not dos2unix's
+      (= (ucrlone "a\rb\r") "a\nb\n") (= (ucrlone dos) dos) (= (ucrlf "a\rb\r") "a\rb\r")
+      ; a cr that is not a line ending survives dos2unix -- only the PAIR is a break
+      (= (ucrlf "a\rb\n") "a\rb\n")
+      (= (ucrlf "") "") (= (ulfcr "") "") (= (ucrlf "\r") "\r")   ; a trailing bare cr stays
+      ; the NUL that says binary, and the text that does not
+      (ubin? "a\000b") (ubin? "\000") (! (ubin? unx)) (! (ubin? "")) (! (ubin? "\r\n"))))
+
 ; --- man: the search and the four readings, with no filesystem in any of them ---
 ; man's own work is naming a file and deciding what it holds; the rendering is lapiz's
 ; (t/host/lapiz.l laws that) and the paging is the pager's. so what is held here is the
