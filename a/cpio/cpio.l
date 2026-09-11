@@ -32,6 +32,7 @@
 (module 'cpio
 (borrow 'tar)
 
+(borrow 'path)
 (borrow 'posix)
 (:
    cpio-mag "070701"
@@ -137,8 +138,8 @@
    ; the leading directories are always made. GNU wants -d before it will and refuses
    ; the member otherwise; refusing to write a file we can write is not a service, so
    ; -d is a flag we accept and were already honouring.
-   (cpio-mkp p)                             ; every parent of p, in order
-    (:- (go 0) n #p (go i) (n <= i ? 0 (p i = 47 && 0 < i && mkdir (snip p 0 i) 493, go (i + 1))))
+   ; every parent of p and not p itself: the caller is about to make that
+   (cpio-mkp p) (each (pprefixes p) (\ d (mkdir d 493)))
    (cpio-there? p) (two? (stat p))
    (cpio-newer? p ms)                       ; is what is already there at least as new
     (: st (stat p) (two? st ? !(<>st // 1000 < ms) 0))

@@ -711,14 +711,25 @@
 ;   (lastdot p)   -> index of the last '.' after that, #p for none
 ;   (segs p)      -> the '/'-separated components, empties dropped
 ;   (pclean l lim)-> that list cleaned, lim bounding how far '..' may climb out of it
+;   (pprefixes p) -> the directory prefixes of p, outermost first
 ;
 ; apart from glob because the callers say so: of the five that borrowed it for these,
 ; three -- kiosko, serve and kore's basename/dirname -- never match a pattern at all.
 
-(module '(path lastslash lastdot segs pclean)
+(module '(path lastslash lastdot segs pclean pprefixes)
 (: (lastslash p) ((: (go j) (0 < j ? (p (j - 1) = 47 ? j (go (j - 1))) 0)) #p)
    (lastdot p) (: sl (lastslash p)
                   ((: (go j) (j > sl ? (p (j - 1) = 46 ? (j - 1) (go (j - 1))) #p)) #p))
+   ; "/a/b/c" -> ("/a" "/a/b"). a leading '/' is not a prefix of its own and the leaf
+   ; is not one either, so `mkdir -p` is this walk plus whatever the caller does about
+   ; the leaf -- helm and papel make it, cpio deliberately does not. splitting on '/'
+   ; and rejoining would not do: it drops the leading slash, and /tmp/x becomes tmp/x.
+   (pprefixes p)
+    (: n #p
+       (go i acc) (? (n <= i) (rev acc)
+                     (0 < i && p i = 47) (go (i + 1) (snip p 0 i . acc))
+                     (go (i + 1) acc))
+       (go 0 ()))
    (segs s) ((: (go i st acc)
                 (? (i >= #s) (rev (st < i ? (snip s st i . acc) acc))
                    (s i = 47) (go (1 + i) (1 + i) (st < i ? (snip s st i . acc) acc))

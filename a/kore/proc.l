@@ -8,6 +8,7 @@
 ; (udur -- lawed in t/law/kore.l) and the mains.
 (module 'kore
 (borrow 'cli)
+(borrow 'path)
 (borrow 'posix)
 
 (:
@@ -373,9 +374,9 @@
              o (go 0 "")
              z (tally o)
              (? (0 = z) () ((o (z - 1)) = 32) (snip o 0 (z - 1)) o))))
-   (ubase0 p) (: n (tally p)                       ; argv[0]'s basename, for pidof
-                 (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r n))
-                 (go 0 0))
+   ; argv[0]'s basename, for pidof -- the raw clip, since a kernel comm never
+   ; carries a trailing slash for posix's rule to strip
+   (ubase0 p) (snip p (lastslash p) #p)
 
    ; the two clocks. user_hz is 100 everywhere Linux runs a userland we could be in.
    (uclk s)                            ; a second count -> hh:mm:SS

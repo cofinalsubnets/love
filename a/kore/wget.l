@@ -9,6 +9,7 @@
 ; the exit codes are wget's own: 0, 1 a bad url or a dead wire, 3 the file, 8 a server
 ; that answered with an error status.
 (module 'kore
+(borrow 'path)
 (borrow 'posix)
 
 (:
@@ -106,8 +107,7 @@
    (wg-name url)
     (: u (wg-url url)
        p (? (two? u) (u 3) "/")
-       k (: (go i) (? (i < 0) -1 (p i = 47) i (go (i - 1))) (go (#p - 1)))
-       nm (snip p (k + 1) #p)
+       nm (snip p (lastslash p) #p)
        q (wg-find nm "?" 0)
        nm2 (? (q < 0) nm (snip nm 0 q))
        (? (0 < #nm2) nm2 "index.html"))
