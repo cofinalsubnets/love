@@ -11,7 +11,7 @@ endif
 love0 = b/love0
 
 .PHONY: all install uninstall clean distclean host kernel wasm love0 lint ulp fonts web \
-  site site-serve valg disasm flame cat cata catav perf repl gdb bench cloc
+  site serve site-serve valg disasm flame cat cata catav perf repl gdb bench cloc
 
 # an unpacked release builds the product; a checkout keeps the fast gate
 ifeq ($(in_git),)
@@ -1017,6 +1017,13 @@ b/site/hue.css: $(huesrc)
 SITEPORT ?= 8080
 site-serve: host b/toolmd.stamp
 	@$(ho)/love -l a/papel.l -t love -o b/site -s $(SITEPORT) README.md doc b/toolmd
+# ..and `make serve` is the TREE in a browser: kiosko under love's own painter, a .l
+# served syntax-coloured and a .md rendered. it lays the page first through this same
+# make -- index.html, w/ and the wasm pair -- and its reply carries the two isolation
+# headers, which is what lets i/wasm/inle.html's machine run without a service worker.
+SERVEPORT ?= 8080
+serve: host
+	@$(ho)/love serve -p $(SERVEPORT) $R
 
 # `make wasm` is the machine: the kernel module below, and the heap image beside it.
 # tco=1 on both -- the vm's tails are return_call, the engines' tail-call law (node 26,
