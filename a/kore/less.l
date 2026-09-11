@@ -23,6 +23,14 @@
 ; is a fragment carrying the source line it came off, so the counts and the
 ; percentage stay the source's. a tab steps to the next 8th column, a control
 ; byte shows as ^X, and a utf-8 tail byte is no column of its own.
+;
+; a colour is the exception to "a control byte shows as ^X": an sgr sequence rides
+; the text, costs no column, and a wrap through the middle of one closes it and
+; opens it again on the next row. `kore man` needs that -- a man page's bold is the
+; thing being read -- and nothing else with an escape in it is let through, so a
+; file still cannot move the cursor out from under a frame. less spells this -R and
+; this pager does not: there is one pager here and one behaviour for it.
+;
 ; out of scope, documented: horizontal scroll (-S), marks, and following a
 ; growing file (+F) -- the input is read once.
 (borrow 're)
@@ -56,39 +64,68 @@
 
    ; -- the display: tabs, columns, and the wrap ---------------------------------
    (pgsp k) (? (k < 1) "" (" " + pgsp (k - 1)))
+   pgrst (string 27 + "[0m")
+   ; an sgr sequence at k -- ESC [ digits-and-semicolons m -- and how long it is, or 0.
+   ; a colour is the one escape the text is allowed to carry, so it is the only one read:
+   ; anything else with a CSI final byte can move the cursor, and a file is not permitted
+   ; to move ours. it costs no column, which is what pgtabs and pgspan each need from it.
+   (pgesc s k)
+    (: n #s
+       (? !(k + 1 < n && s k = 27 && s (k + 1) = 91) 0
+          ((: (g i) (? (n <= i) 0
+                       (s i = 109) (i + 1 - k)
+                       (47 < s i < 58 || s i = 59) (g (i + 1))
+                       0)) (k + 2))))
+   ; the sgr in force after h, given what was in force before it. the shower closes every
+   ; attribute inside the word that opened it, so the last sequence is the whole answer
+   (pgact a h)
+    (: n #h
+       (go i a) (? (n <= i) a
+                   (: e (pgesc h i)
+                      (? e (: q (snip h i (i + e)) (go (i + e) (? (q = pgrst) "" q)))
+                         (go (i + 1) a))))
+       (go 0 a))
    ; a source line -> what it looks like on a screen: tabs to the next 8th column,
-   ; a control byte as ^X, everything else its own bytes
+   ; a control byte as ^X, an sgr sequence itself, everything else its own bytes
    (pgtabs ln)
     (: n #ln
        o (jug 0)
        (go k c)
         (? (n <= k) (slurp o)
-           (: b (ln k)
-              (? (b = 9) (: p (8 - c % 8) _ (say o (pgsp p)) (go (k + 1) (c + p)))
-                 (b = 127) (: _ (say o "^?") (go (k + 1) (c + 2)))
-                 (b < 32) (: _ (say o ("^" + string (b + 64))) (go (k + 1) (c + 2)))
-                 (: _ (put o b) (go (k + 1) (c + 1))))))
+           (: e (pgesc ln k)
+              (? e (: _ (say o (snip ln k (k + e))) (go (k + e) c))
+                 (: b (ln k)
+                    (? (b = 9) (: p (8 - c % 8) _ (say o (pgsp p)) (go (k + 1) (c + p)))
+                       (b = 127) (: _ (say o "^?") (go (k + 1) (c + 2)))
+                       (b < 32) (: _ (say o ("^" + string (b + 64))) (go (k + 1) (c + 2)))
+                       (: _ (put o b) (go (k + 1) (c + 1))))))))
        (go 0 0))
-   ; the byte index where column k of s falls -- a utf-8 tail byte is no column.
-   ; the count is taken at the lead byte and the stop is before it, or the cut
-   ; lands in the middle of the character that would have overflowed
+   ; the byte index where column k of s falls -- a utf-8 tail byte is no column, and
+   ; neither is an sgr sequence. the count is taken at the lead byte and the stop is
+   ; before it, or the cut lands in the middle of the character that would have overflowed
    (pgspan s k)
     (: n #s
        (go i c) (? (n <= i) i
-                   (: c2 (? (s i & 192 = 128) c (c + 1))
-                      (? (k < c2) i (go (i + 1) c2))))
+                   (: e (pgesc s i)
+                      (? e (go (i + e) c)
+                         (: c2 (? (s i & 192 = 128) c (c + 1))
+                            (? (k < c2) i (go (i + 1) c2))))))
        (go 0 0))
    (pgclip w s) (: k (pgspan s w) (? (k < #s) (snip s 0 k) s))
    ; the status line clips from the left, the way vi's does: its tail is what
    ; carries the news -- the line span, the percent, the end of the / being typed
    ; -- and a deep path would otherwise push every word of it off the screen
    (pgclipl w s) (: k #s (? (w < k) ("<" + snip s ((k - w) + 1) k) s))
-   ; a line -> its fragments at width w, at least one, so a blank line is a row
+   ; a line -> its fragments at width w, at least one, so a blank line is a row.
+   ; a fragment closes whatever colour it opened and the next one opens it again, so a
+   ; wrap through the middle of an attribute cannot leave the rest of the screen wearing it
    (pgwrap w ln)
-    (: (go s acc) (: k (pgspan s w)
-                     (? (#s <= k) (rev (s . acc))
-                        (go (snip s k #s) (snip s 0 k . acc))))
-       (go (pgtabs ln) ()))
+    (: (go s a acc)
+        (: k (pgspan s w)
+           (? (#s <= k) (rev ((a + s) . acc))
+              (: h (snip s 0 k) a2 (pgact a h)
+                 (go (snip s k #s) a2 ((a + h + (#a2 ? pgrst "")) . acc)))))
+       (go (pgtabs ln) "" ()))
    ; the display rows: [fragment line first?], source order
    (pgrows w ls)
     (: (frag fs i acc first) (? !(two? fs) acc

@@ -12,6 +12,7 @@
 ;   kore cut|tr|nl|rev|paste|comm|join|split|od   the line, field and record tools
 ;                                                 (a/kore/core.l)
 ;   kore fold|expand|unexpand        the column tools (a tab steps to the next stop)
+;   kore dos2unix|unix2dos|mac2unix [-fkqn] [F..]   the three line endings, IN PLACE
 ;   kore base64|base32 [-d] [-w N]   the RFC 4648 encodings
 ;   kore tsort|factor                a partial order made total, and a number's primes
 ;   kore cksum|md5sum|sha256sum [-c] [F..]   the checksums (a/kore/sum.l)
@@ -31,6 +32,9 @@
 ;   kore vi [file]                   the editor (a/vi/)
 ;   kore less|more [-Nise] [+N|+/P] [F..]   the pager (a/kore/less.l; one pager,
 ;                                           two spellings, less's keys and its manners)
+;   kore man [-w] [SEC] NAME..       the manual pages (a/kore/man.l): the roff a page is
+;                                    written in, read back through lapiz and paged by less
+;   kore html2text [-w N] [F..]      a page's prose, laid out (a/kore/h2t.l)
 ;   kore sh [-c CMD | file]          the shell, lush (a/lush.l; also `lush`, and an sh symlink)
 ; (the C compiler is NO LONGER here -- it split into its own app `mooncc`, doc/misc/moon.md.)
 ;
@@ -45,9 +49,10 @@
         diff-main as-main ar-main ld-main nm-main
         arch-main awk-main base32-main base64-main basename-main bracket-main cat-main
         chmod-main chomp chown-main chroot-main cksum-main cmp-main cnames comm-main cp-main cut-main
-        date-main dirname-main dsplit du-main echo-main env-main expand-main expr-main
+        date-main dirname-main dos2unix-main dsplit du-main echo-main env-main expand-main expr-main
+        mac2unix-main unix2dos-main
         factor-main false-main find-main fold-main free-main gfind grep-main groups-main
-        head-main id-main install-main join-main killall-main kill-main lastn less-main lines link-main
+        head-main id-main install-main join-main killall-main kill-main lastn less-main lines link-main man-main html2text-main
         ln-main ls-main md5sum-main mkdir-main mkfifo-main mknod-main mktemp-main mount-main
         mv-main myers nl-main nproc-main
         od-main paste-main patch-main pgrep-main pidof-main pkill-main printenv-main
@@ -259,6 +264,8 @@
             'uname uname-main 'arch arch-main 'nproc nproc-main 'printf printf-main
             'basename basename-main 'dirname dirname-main
             'cut cut-main 'tr tr-main
+            ; the three line endings, one walk (a/kore/core.l)
+            'dos2unix dos2unix-main 'unix2dos unix2dos-main 'mac2unix mac2unix-main
             'nl nl-main 'rev rev-main
             'fold fold-main 'expand expand-main 'unexpand unexpand-main
             'base64 base64-main 'base32 base32-main
@@ -283,6 +290,8 @@
             'awk awk-main 'find find-main
             'vi (cite 'vi 'vi-main)   ; the editor's wrap registered ahead in the cat
             'less less-main 'more less-main   ; one pager, and the two names it is asked for
+            'man man-main    ; the pages the build writes, read back (a/kore/man.l)
+            'html2text html2text-main   ; a page's prose (a/kore/h2t.l), the same lens
             'env env-main 'printenv printenv-main 'sleep sleep-main
             ; the privileged half: chroot is LFS chapter 7's own call, and mount,
             ; umount, sync, mkfifo and mknod are what a root the distro builds
@@ -458,6 +467,7 @@ every tool answers --help and --version, and -h and -v where the letter is free
   nm [-gup] FILE..   an ELF's symbols; -g externals, -u undefined, -p unsorted
   cat tac head tail wc sort uniq tee      the line tools (a/kore/core.l)
   cut tr nl rev                           the field tools
+  dos2unix | unix2dos | mac2unix [-fkqn] [F..]   the line endings, converted IN PLACE
   fold [-w N] [-s] [-b] | expand [-t N] [-i] | unexpand [-a] [-t N]   the columns
   base64 | base32 [-d] [-w N] [F]         the encodings (RFC 4648)
   tsort [F] | factor [N..]                the two little computations
@@ -485,6 +495,8 @@ every tool answers --help and --version, and -h and -v where the letter is free
   id [-u|-g|-G] [-n]                      who this process is
   vi [FILE]                               the editor (a/vi/)
   less | more [-Nise] [+N|+/PAT] [F..]    the pager (a/kore/less.l); h is its help
+  man [-w] [SECTION] NAME..               the manual pages (a/kore/man.l)
+  html2text [-w COLS] [F..]               a page's prose, laid out (a/kore/h2t.l)
   sh [-c CMD | FILE]                      the shell, lush (a/lush.l)
   ls cp mv rm mkdir rmdir ln touch pwd chmod   the fs tools (a/kore/fs.l)
   install readlink cmp                         ... the build's fs verbs

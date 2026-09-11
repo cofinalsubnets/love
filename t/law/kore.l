@@ -656,6 +656,14 @@
       (= (pgwrap 8 "a\tb") '("a       " "b"))
       (= (pgwrap 20 (string 1)) '("^A"))
       (= (pgwrap 2 "\xce\xbb\xce\xbb\xce\xbb") '("\xce\xbb\xce\xbb" "\xce\xbb"))
+      ; an sgr sequence rides the text and costs no column, so four bold letters still
+      ; fill a width of four; anything else with an escape in it is still shown as ^[
+      (= (pgwrap 4 "\x1b[1mabcd\x1b[0m") '("\x1b[1mabcd\x1b[0m"))
+      (= (pgwrap 4 "\x1b[1;4mab\x1b[0mcdef") '("\x1b[1;4mab\x1b[0mcd" "ef"))
+      (= (pgwrap 20 "\x1b[2Ja") '("^[[2Ja"))
+      ; ..and a wrap inside an attribute closes it and opens it again on the next row,
+      ; so the colour never outlives the fragment that carried it
+      (= (pgwrap 2 "\x1b[1mabcd\x1b[0m") '("\x1b[1mab\x1b[0m" "\x1b[1mcd\x1b[0m"))
       (= (pgclip 3 "abcdef") "abc") (= (pgclip 9 "abcdef") "abcdef")
       ; the status clips the other way -- its tail is what carries the news
       (= (pgclipl 6 "t  1-2/3  66%") "<  66%")
@@ -836,6 +844,64 @@
    r (fz 300 (wheel 23))
    (test (= r 'ok)))
 
+; --- the line endings: the three transforms, and the pair that is a round trip ---
+; the tool's own work is the filesystem half (in place, the mode, the binary refusal); what
+; is a function of a string is here. the load-bearing one is idempotence: `dos2unix` run
+; twice is `dos2unix`, and so is unix2dos -- a converter that doubles its own output on a
+; second pass is the way a file ends up with \r\r\n, and a makefile runs a rule twice.
+(: dos "a\r\nb\r\nc\r\n" unx "a\nb\nc\n"
+   (test
+      (= (ucrlf dos) unx) (= (ulfcr unx) dos)
+      (= (ucrlf unx) unx)                        ; already unix: nothing to do
+      (= (ulfcr dos) dos)                        ; already dos: NOT doubled to \r\r\n
+      (= (ucrlf (ucrlf dos)) unx) (= (ulfcr (ulfcr unx)) dos)     ; both idempotent
+      (= (ulfcr (ucrlf dos)) dos) (= (ucrlf (ulfcr unx)) unx)     ; ..and each other's inverse
+      ; a lone cr is the classic mac break, and it is mac2unix's and not dos2unix's
+      (= (ucrlone "a\rb\r") "a\nb\n") (= (ucrlone dos) dos) (= (ucrlf "a\rb\r") "a\rb\r")
+      ; a cr that is not a line ending survives dos2unix -- only the PAIR is a break
+      (= (ucrlf "a\rb\n") "a\rb\n")
+      (= (ucrlf "") "") (= (ulfcr "") "") (= (ucrlf "\r") "\r")   ; a trailing bare cr stays
+      ; the NUL that says binary, and the text that does not
+      (ubin? "a\000b") (ubin? "\000") (! (ubin? unx)) (! (ubin? "")) (! (ubin? "\r\n"))))
+
+; --- man: the search and the four readings, with no filesystem in any of them ---
+; man's own work is naming a file and deciding what it holds; the rendering is lapiz's
+; (t/host/lapiz.l laws that) and the paging is the pager's. so what is held here is the
+; part that is a function of a string: the stem a page name has, whether the bytes are
+; gzipped, whether the page is a redirect or an mdoc one, and the escape strip.
+(test
+   ; the stem is the name with its compression and section suffixes off, and BOTH come off
+   ; the right -- a stem taken at the first dot loses every page whose name has one in it
+   (= (man-stem "ls.1.gz") "ls") (= (man-stem "ls.1") "ls") (= (man-stem "ls") "ls")
+   (= (man-stem "tcl_endOfWord.n.gz") "tcl_endOfWord")
+   (= (man-stem "valac-0.56.1.gz") "valac-0.56")
+   (= (man-stem "systemd-mute-console@.service.7.gz") "systemd-mute-console@.service")
+   (= (man-stem "foo.1p.gz") "foo") (= (man-stem "foo.3.xz") "foo")
+   (= (man-base "/usr/share/man/man1/ls.1.gz") "ls.1.gz") (= (man-base "ls.1") "ls.1")
+   (= (man-head "man1/gzip.1") "man1") (= (man-head "gzip.1") "gzip.1")
+   ; the magic decides, not the suffix -- a page named without .gz still reads
+   (man-gz? "\x1f\x8b\x08\x00rest") (! (man-gz? ".TH LS 1")) (! (man-gz? "")) (! (man-gz? "\x1f"))
+   ; a redirect page is a .so and nothing else; a comment ahead of it does not count
+   (= (man-so ".so man1/gzip.1\n") "man1/gzip.1")
+   (= (man-so ".\\\" a comment\n.so man7/x.7\n") "man7/x.7")
+   (! (man-so ".TH LS 1\n.SH NAME\n")) (! (man-so ""))
+   ; the root is up past the file AND its section directory, in one step
+   (= (man-root "/usr/share/man/man1/ls.1.gz") "/usr/share/man")
+   (= (man-root "/usr/share/man/man3/printf.3.gz") "/usr/share/man")
+   ; mdoc is the macro set this reader does not read, and .TH ahead of .Sh settles it
+   (man-mdoc? ".Dd July 1 2026\n.Sh NAME\n") (man-mdoc? ".Sh NAME\n")
+   (! (man-mdoc? ".TH LS 1\n.SH NAME\n")) (! (man-mdoc? ".TH X 1\n.Sh odd\n")) (! (man-mdoc? ""))
+   ; a section operand is a digit and up to three more, with a name behind it -- so a page
+   ; whose name merely begins with a digit is a name, not a section with nothing after it
+   (man-sec? ["3" "printf"]) (man-sec? ["3p" "x"]) (man-sec? ["3ssl" "x"])
+   (! (man-sec? ["411toppm"])) (! (man-sec? ["411toppm" "x"]))
+   (! (man-sec? ["3"])) (! (man-sec? ["ls"])) (! (man-sec? ["ls" "x"])) (! (man-sec? []))
+   ; the strip takes sgr runs and leaves every other byte where it was (the u-floor's,
+   ; since html2text wants the same thing for the same reason)
+   (= (usgr "\x1b[1mbold\x1b[0m and \x1b[4mit\x1b[0m") "bold and it")
+   (= (usgr "plain") "plain") (= (usgr "") "")
+   (= (usgr "\x1b[0m") "") (= (usgr "a\x1b[38;5;9mb") "ab"))
+
 (test_fin ())                                        ; no zz-fin here: quit before claiming ok
-(say err "t/law/kore: myers + patience + lines/unlines + unified hunks + the u-floor + the regex floor + the find, awk, pager and bc floors -- projections + minimality (lcs oracle) + anchors + seeded fuzz (lcs + brzozowski oracles) ok
+(say err "t/law/kore: myers + patience + lines/unlines + unified hunks + the u-floor + the regex floor + the find, awk, pager, man and bc floors -- projections + minimality (lcs oracle) + anchors + seeded fuzz (lcs + brzozowski oracles) ok
 ")

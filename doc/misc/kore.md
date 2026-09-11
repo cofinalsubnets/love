@@ -48,7 +48,7 @@ the letter is the tool's own or POSIX and GNU spell it otherwise (`grep -h`, `du
 the long forms only. echo, test and `[` read no options at all and are not at the door;
 cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (99 tools, 102 names)
+## the inventory (104 tools, 107 names)
 
 | where | tools |
 | --- | --- |
@@ -58,6 +58,7 @@ cook and lush answer both flags themselves, each with more to say than a synopsi
 | core.l, the line tools | cat tac echo head tail wc sort uniq tee |
 | core.l, the field tools | cut tr nl rev |
 | core.l, the column tools | fold expand unexpand (all three count COLUMNS, so a tab steps to the next stop) |
+| core.l, the line endings | dos2unix unix2dos mac2unix (in place by default; a binary file is refused, the mode is kept) |
 | core.l, the encodings | base64 base32 (RFC 4648; `-d` reads it back, `-w` says the wrap) |
 | core.l, the two little computations | tsort factor |
 | core.l, the record tools | paste comm join split od |
@@ -77,6 +78,8 @@ cook and lush answer both flags themselves, each with more to say than a synopsi
 | proc.l, the privileged three | chroot (the root moved, then exec), mount (bare = /proc/self/mounts; `-t TYPE`, and the FLAG half of `-o` -- `size=`-style filesystem text is refused by name, not dropped), umount |
 | fs.l, what fills a /dev | sync mkfifo mknod (`p b c u`, `-m MODE`, linux's wide device encoding) |
 | a/vi/ | vi |
+| man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
+| h2t.l, the pages a browser gets | html2text (the same lens, entered from the other surface) |
 | a/lush.l | sh / lush |
 
 ## the discipline (why this stays trustworthy)
@@ -381,6 +384,80 @@ parsers for a shape nothing in this decade emits.
   `--backup-if-mismatch`, since a hunk that moved applied to a file the patch did not describe.
 * the gate's oracle is **the tree, not the message**: GNU patch's chatter has moved between
   releases; what it leaves on disk has not.
+
+## the line endings (a/kore/core.l)
+
+`dos2unix`, `unix2dos` and `mac2unix` are one walk under three names; what separates them is
+which break goes in and which comes out. The transform is the easy half — `tr -d '\r'` is most
+of `dos2unix` — and it is not why these are tools.
+
+* **In place is the default**, which is what every caller of `dos2unix` means and what no
+  ordinary filter does. `-n IN OUT` writes a new file instead; with no operands it is a plain
+  stdin-to-stdout filter.
+* **A binary file is refused** (a NUL byte says so) unless `-f`. A `dos2unix *` over a mixed
+  directory is the accident that rule is there for.
+* **The mode is kept**, and `-k` keeps the mtime too.
+* **A file already in the target form is not rewritten** — same bytes, no write, so a build
+  that runs the rule twice does not touch the timestamp.
+* **Neither direction doubles its own output**: `unix2dos` run twice is `unix2dos`, and the
+  two are each other's inverse. Idempotence is lawed, because a converter that doubles turns
+  a file into `\r\r\n` on the second pass and nothing complains.
+* **Only the PAIR is a line ending** for `dos2unix` — a lone CR mid-line survives. A lone CR
+  as a break is the classic Mac form and is `mac2unix`'s job.
+
+Not built: `-c` conversion modes (ascii/7bit/iso), BOM handling, `-b` backups, and the
+`--info` report.
+
+## html2text (a/kore/h2t.l)
+
+`html2text [-w COLS] [FILE..]`, and the same three-part path `man` takes with the first part
+swapped: lapiz's html reader takes the page to the document AST, `ttyshow` lays it out at a
+width, and what is left here is the operand walk. papel already runs this lens the other way
+(markdown in, html out), so reading html back cost a face and not a parser.
+
+**It is not a browser.** A page is prose to this tool. lapiz's scrub drops the doctype, the
+comments, the `<head>` and the `<script>`/`<style>` bodies, and *unwraps* the containers —
+`div`, `nav`, `section`, `span` and the rest wrap blocks rather than being one — so what
+reaches the reader is headings, paragraphs, lists, definition lists, quotes, displays and the
+inline spans. `<b>` is `<strong>` and `<tt>` is `<code>` to a reader with one font.
+
+* **A table is unwrapped to its cells**, which reads as prose and not as a table. The middle
+  has no table node, and inventing one in the scrub would be a lie about the lens.
+* **A tag with no node here is dropped and its content kept**, so an unknown element costs a
+  wrapper and never the text inside it.
+* **Text with no `<p>` around it is still a paragraph** — once the containers are gone that
+  is where most of a real page's prose turns out to live.
+* **An `<a>` is normalized to its href** by the scrub, so the reader knows one link shape;
+  an `<a>` with no href is an anchor, not a link, and prints as its text alone.
+* Named and numeric entities both decode; an unknown name rides through as written, which is
+  better than eating the word it was part of.
+
+None of this is law 1 — that says `htread` reads what `htshow` writes, and reading a page
+*nobody* wrote with `htshow` is a different promise. It is stated in `t/host/lapiz.l` instead.
+
+## man (a/kore/man.l)
+
+`man [-w] [SECTION] NAME..`. The tree writes its pages in `doc/*.md` and the build shows them
+as roff (`u/mkman.l`, through `a/lapiz.l`); reading one back is the same lens run the other
+way. So man owns none of the three hard parts — lapiz's roff reader takes the page to the
+document AST, its `ttyshow` lays that out at a width, and `a/kore/less.l` pages the result.
+What is man's own is the search path, the decompression, and the handing over.
+
+* **The search** is MANPATH if it is set, else `/usr/local/share/man`, `/usr/share/man`,
+  `/usr/local/man`, each walked in section order. A leading numeric operand is the section.
+* **Compression is decided by the magic bytes, not the suffix** — a gzipped page named without
+  `.gz` still reads, and a page named `.gz` that is not gzipped is not mangled into one.
+* **`.so` redirects are followed once**, resolved under the root the page was found in.
+* **`-w` reads nothing**: it answers the path. That is what a script wants, and it is what
+  makes the search testable without a terminal.
+* **With no terminal the page is poured, and poured plain** — the attributes belong to the
+  terminal and a pipe is not one. With one, bold and underline ride through the pager: an SGR
+  sequence costs no column there and a wrap re-opens it on the next row.
+
+**mdoc is not read.** A BSD-style page (`.Dd`/`.Sh`/`.Nm` — about one man1 page in twenty-five
+here) is a different macro set, and rendering it through the man-macro reader produces a page
+of macro names rather than prose. So it is named as unsupported instead of rendered wrong.
+Also absent: `apropos`/`whatis`, the cat cache, and `.so` chains deeper than one.
 
 ## not built
 

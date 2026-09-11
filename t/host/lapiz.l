@@ -251,7 +251,106 @@ some literal
                              (! (elem 'rule (map cap d)))))) ["doc/love.md" "doc/cook.md"])
       0)
 
+ ; --- the html surface outside its own output ---------------------------------
+ ; law 1 says htread reads what htshow writes. what `html2text` needs is the other half:
+ ; that it also reads a page NOBODY wrote with htshow -- attributes, containers, a head,
+ ; entities, and tags this middle has no node for. none of that is law 1 and none of it can
+ ; be, so it is stated here as what the scrub promises.
+ _ (test
+    ; an attribute does not hide a block, and the scrub drops what is not prose
+    ((htread "<h1 id=\"x\">hi</h1>") = '((head 1 ((text "hi")))))
+    ((htread "<!doctype html>\n<html><body><p>hi</p></body></html>") = '((para ((text "hi")))))
+    ((htread "<head><title>t</title></head><p>hi</p>") = '((para ((text "hi")))))
+    ((htread "<script>var x = '<p>no</p>';</script><p>yes</p>") = '((para ((text "yes")))))
+    ((htread "<!-- <p>no</p> --><p>yes</p>") = '((para ((text "yes")))))
+    ; a container is UNWRAPPED -- what it held is still there, one level out
+    ((htread "<div class=\"a\"><p>hi</p></div>") = '((para ((text "hi")))))
+    ((htread "<div><div><p>hi</p></div></div>") = '((para ((text "hi")))))
+    ; ..and a nested kill does not end its parent early
+    ((htread "<script><script></script>x</script><p>y</p>") = '((para ((text "y")))))
+    ; the aliases: one font, so <b> is <strong> and <tt> is <code>
+    ((htread "<p><b>a</b> <i>c</i> <tt>d</tt></p>")
+     = '((para ((strong ((text "a"))) (text " ") (em ((text "c"))) (text " ") (code "d")))))
+    ; text with no <p> around it is still a paragraph -- which is where a page's prose
+    ; lives once its containers are gone
+    ((htread "<div>bare text</div>") = '((para ((text "bare text")))))
+    ; the entities a document spells, named and numeric
+    ((htread "<p>a&nbsp;b &amp; c&#65;d&#x42;e</p>") = '((para ((text "a b & cAdBe")))))
+    ((htread "<p>&mdash;&hellip;</p>") = '((para ((text "—…")))))
+    ((htread "<p>&nosuchentity;</p>") = '((para ((text "&nosuchentity;")))))   ; unknown rides through
+    ; a tag with no node here is dropped and its content kept, so nothing truncates
+    ((htread "<p>a</p><button>b</button><p>c</p>")
+     = '((para ((text "a"))) (para ((text "b"))) (para ((text "c")))))
+    ; ..and the closers stay with the block waiting for them: a quote survives a stray tag
+    ((htread "<blockquote><p>q</p></blockquote>") = '((quote ((para ((text "q")))))))
+    ((htread "<blockquote><wat><p>q</p></blockquote>") = '((quote ((para ((text "q")))))))
+    ; a page of nothing but furniture is empty, not garbage
+    ((htread "<!doctype html><html><head></head><body></body></html>") = ()))
+
+ ; --- the terminal surface: the circle the man pages travel ---------------------
+ ; the build writes doc/*.md, shows it as roff, ships that, and `kore man` reads it back.
+ ; so the property that matters is the round trip through the SHIPPED form: every heading
+ ; the markdown has is still a heading after roff and the tty shower, at the column the
+ ; shower puts one. it is not law 1 -- a terminal keeps nothing and there is no ttread --
+ ; which is why 'tty is no row in `surfaces`: a row owes law 1 and this cannot pay it.
+ _ (: (slurpf f) (: q (open f "r") (slurp q))
+      ; an inl down to its text -- lapiz keeps its own `plain` off the export list
+      (flat l) (? (one? l) ""
+                  (: x <l
+                     ((<x @ 'text <>x 'code <>x 'strong (flat <>x) 'em (flat <>x)
+                             'link (flat <>x) "") + flat >l)))
+      ; the line a heading should have become: a .SH flush left, a .SS indented three
+      (heads d) (map (b \ (<>b < 2 ? "" "   ") + flat <>>b) (filter (b \ = <b 'head) d))
+      (flush s) ((: (g i o) (? (#s <= i) (slurp o)
+                               (i + 1 < #s && s i = 27 && s (i + 1) = 91)
+                                ((: (h k) (? (#s <= k) (slurp o) (s k = 109) (g (k + 1) o)
+                                             (h (k + 1)))) (i + 2))
+                               (: _ (put o (s i)) (g (i + 1) o)))) 0 (jug 0))
+      (lines s) (: (g i st a) (? (#s <= i) (rev a)
+                                 (s i = 10) (g (i + 1) (i + 1) (snip s st i . a))
+                                 (g (i + 1) st a))
+                   (g 0 0 ()))
+      _ (map (\ f (: d (mdread (slurpf f))
+                     t (flush (ttyshow (rfread (rfshow d)) 80))
+                     ls (lines t)
+                     (test
+                        ; every heading survives the trip, and lands flush left the way
+                        ; a .SH does -- so a missing one is a missing section, not a wrap
+                        (foldl (\ a h (a && elem h ls)) 1 (heads d))
+                        ; nothing overruns the width it was given
+                        (foldl (\ a l (a && #l <= 80)) 1 ls)
+                        ; the .th became the header line, with the page either side of it
+                        (: h0 <ls (0 < #h0 && (h0 0) != 32)))))
+             ["doc/love.md" "doc/cook.md"])
+      ; a roff page the tree did not write still lays out: the shower is total over the
+      ; middle, so every block kind renders and none of them widens past the width
+      _ (: d (rfread ".TH \"T\" \"1\" \"\" \"s\" \"m\"
+.SH NAME
+t \\- a thing
+.SH OPTIONS
+.TP
+\\fB\\-v\\fR
+be loud
+.IP \\(bu 2
+a bullet
+.PP
+.RS
+.EX
+a display
+.EE
+.RE
+")
+           ls (lines (flush (ttyshow d 40)))
+           (test (0 < #ls)
+                   (foldl (\ a l (a && #l <= 40)) 1 ls)
+                   (elem "NAME" ls) (elem "OPTIONS" ls)
+                   (elem "     t - a thing" ls)
+                   (elem "     -v     be loud" ls)       ; a short term keeps its definition
+                   (elem "     • a bullet" ls)
+                   (elem "         a display" ls)))      ; a display sits inside the quote
+      0)
+
  _ (test_fin ())
- _ (puts "a/lapiz: ok -- the document lens (markdown/html/roff), laws 1 + 2 + the roff domain
+ _ (puts "a/lapiz: ok -- the document lens (markdown/html/roff), laws 1 + 2 + the roff domain + the tty shower
 ")
  0)
