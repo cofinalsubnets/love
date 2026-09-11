@@ -1813,6 +1813,7 @@
 ; layer is spliced.
 
 (module '(cli read reads forms shell welp edraw edln edlnc cli-rail cli-line stage edkey
+          uopt uopt1 uoptv
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
           joinln splitat parseall)
@@ -2058,6 +2059,60 @@
                          (go (i + 1) (c + 1)))))
        (go 0 0))
 
+   ; --- the option walk, lifted out of kore, whose floor and love's own coincide here:
+   ; both are collections of applets reading clustered short flags, and the walk was
+   ; unreachable outside kore (kore.l's export list prunes it).
+   ;
+   ; (uopt1 w flags vals) -- ONE word into its letters as words of their own, or () when
+   ; the word is not ours to read. the short flags cluster, so `-qe X` is `-q -e X`; a
+   ; letter in `vals` takes an argument and ENDS the chain, the rest of its own word being
+   ; the value (-m4m), and where there is no rest only the caller can see the next word.
+   ; `flags` names the letters that chain, and () there means any letter not in `vals`
+   ; does -- what an applet wants when it validates its own alphabet and owes its own
+   ; "unknown option -- x". a letter in NEITHER set refuses the whole word, so `love -qz`
+   ; stays one word, reaches the file lane, and says it cannot open it.
+   (uopt1 w flags vals)
+    (: n #w
+       ; `flags` empty means every letter chains. spelled as the predicate and not as
+       ; !flags, which would glue to the arm behind it and read (nil? (flags 1)).
+       (ours? c) (? (elem c vals) 1 flags (elem c flags) 1)
+       (go k acc)
+        (? (n <= k) (rev acc)
+           (: c (w k)
+              s ("-" + string c)
+              g (snip w (k + 1) n)
+              (? (elem c vals) (rev (#g ? (g . s . acc) (s . acc)))
+                 (ours? c) (go (k + 1) (s . acc))
+                 ())))
+       (2 <= n && w 0 = 45 && !(w 1 = 45) ? (go 1 ()) ()))
+   ; (uopt as t vals reps) -> [t stacked rest]: every flag pinned on t under its own charm,
+   ; a value flag pinning the (1 v) wrapper -- never the bare text, since `two?` is false
+   ; for a one-element list and a bare "" would read as absent -- and a letter in `reps`
+   ; stacking into a list instead, that being the option a tool spells more than once.
+   ; `rest` is the operands, `--` ends the flags. () when a value flag is left without one,
+   ; which is why the answer is read with `two?` and not for truth.
+   (uopt as t vals reps)
+    (: (pinv c v es) (? (elem c reps) (v . es) (: _ (pin t c [1 v]) es))
+       ; the exploded word, then the argv tail behind it. a value letter ends its chain, so
+       ; at most one element of `bs` is ever a value and it is the last.
+       (eat bs rest es)
+        (? !(two? bs) (walk rest es)
+           (: w <bs c (w 1)
+              (? (elem c vals)
+                 (? (two? >bs)  (walk rest (pinv c <>bs es))     ; the value rode along glued
+                    (two? rest) (walk >rest (pinv c <rest es))   ; ..or it is the next word
+                    ())                                          ; ..or there is none: a miss
+                 (: _ (pin t c 1) (eat >bs rest es)))))
+       (walk as es)
+        (? !(two? as) [t (rev es) ()]
+           (: a <as
+              (? (a = "--") [t (rev es) >as]
+                 (: bs (uopt1 a () vals)
+                    (? (two? bs) (eat bs >as es) [t (rev es) as])))))
+       (walk as ()))
+   ; a value option's text, or () -- the presence read that pairs with uopt
+   (uoptv t c) (: r (peep t c ()) (? (two? r) <>r ()))
+
    ps1 "> "
    ; the helm glows in the crew's cyan (256-colour 117 ~ #7dcfff), reset after.
    ps1c (string 27 + "[38;5;117m" + ps1 + string 27 + "[39m")
@@ -2212,27 +2267,12 @@
                    (v * (u || M) // wordsz)
                    (say err $ "love: " + h + ": not a size: " + s,
                     cli-leave 2)))
-    ; the short flags cluster: `-qe X` is `-q -e X`. a letter that takes an argument ENDS
-    ; the chain -- the rest of its word is the value (-m4m), or the next word when there is
-    ; no rest. a word carrying a letter that is not ours does not burst at all, so a file
-    ; really called -qz still reaches the file lane and says so.
-    (burst w)
-     (: n #w
-        (go k acc)
-         (? (n <= k) (rev acc)
-            (: c (w k)
-               s ("-" + string c)
-               g (snip w (k + 1) n)
-               (? (elem c "lem") (rev (#g ? (g . s . acc) (s . acc)))
-                  (elem c "vhq") (go (k + 1) (s . acc))
-                  ())))
-        (2 < n && w 0 = 45 && !(w 1 = 45) ? (go 1 ()) ()))
     ; -> (kind . rest): 'eval code.args / 'verb fn.args / 'file prog.args / 'stdin / 'none.
     ; 'none is the command line running out with no program named: -v and -h are not
     ; terminal, so `love -v -h` prints both, reaches the end, and leaves 0.
     (pre a) (a @ (h . t)
-      (: bs (burst h)
-       (two? bs ? (pre (bs + t))
+      (: bs (uopt1 h "vhq" "lem")
+       (two? >bs ? (pre (bs + t))
         (h @ ("-l" || "--load")    (need h t, load1 <t, pre >t)
              ("-v" || "--version") (puts v-msg, pre t)
              ("-h" || "--help")    (puts h-msg, pre t)

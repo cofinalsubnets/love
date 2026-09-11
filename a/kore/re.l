@@ -5,12 +5,13 @@
 (borrow 're)
 
 (module 'kore
+(borrow 'cli)
 (: rebre (cite 're 'rebre) reere (cite 're 'reere)      ; the four engine names grep reads
    refold (cite 're 'refold) refindp (cite 're 'refindp)
    recomp (cite 're 'recomp) refindpm (cite 're 'refindpm)
 
    ; -- grep --------------------------------------------------------------------
-   ; flags ride a tablet keyed by the option charm (u.l's uopts fills it), so a
+   ; flags ride a tablet keyed by the option charm (cli's uopt fills it), so a
    ; new one is a row here and not another leg on a tuple every caller re-spells
    (gflag t c) (peep t c 0)
    ; a pattern text -> its node list, by the dialect and the -F/-i flags. a
@@ -48,7 +49,7 @@
        (foldl best () ms))
    (grep-main as)
     (: t (tablet 0)
-       o (uopts as t '(101 109) ())              ; -e pattern (stacks), -m count
+       o (uopt as t '(101 109) '(101))              ; -e pattern (stacks), -m count
        _ (? (two? o) () (udie 2 "grep: bad option"))
        eps <>o rest <>>o
        ; with -e the whole tail is files; without it the first word is the pattern

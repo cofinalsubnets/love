@@ -34,38 +34,6 @@
                   ((: (g k) (? (n <= k) (slurp o) (s k = 109) (go (k + 1)) (g (k + 1)))) (i + 2))
                  (: _ (put o (s i)) (go (i + 1))))
        (go 0))
-   ; -- the option walk, shared by every applet taking clustered flags -----------
-   ; clustering is not optional: this tree's own scripts write -qF, -qiw, -vE,
-   ; -oE and -ne, so a walk that reads only whole words takes `-qF` for a pattern
-   ; and a script for a file. a plain flag pins 1 on t under its own charm; `vals`
-   ; names the charms taking a VALUE, glued (-m3) or as the next word, and those
-   ; pin the (1 v) wrapper -- never the bare string, since `two?` is false for
-   ; one and a bare "" would read as absent. charm 101 (-e) is the repeatable one
-   ; and stacks into a list instead, that being the option every tool here spells
-   ; more than once. answers (t stacked rest), or () when a value is missing.
-   (uopts as t vals eps)
-    (? !(two? as) [t (rev eps) ()]
-       (: a <as
-          (? (a = "--") [t (rev eps) >as]
-             (!(2 <= tally a) || !(a 0 = 45)) [t (rev eps) as]
-             (: (cl k rest es)
-                 (? (tally a <= k) (uopts rest t vals es)
-                    (: c (a k)
-                       (? !(elem c vals) (: _ (pin t c 1) (cl (k + 1) rest es))
-                          ; a glued value is asked by tally and never by `two?`: a text
-                          ; is no link, so `two? "2"` is 0 and a -m2 read as a bare -m
-                          ; with nothing behind it -- silently, since the miss then took
-                          ; the next word (the FILE) for the count
-                          (: glued (snip a (k + 1) (tally a))
-                             got (? (0 < tally glued) 1 (two? rest))
-                             v (? (0 < tally glued) glued (? (two? rest) <rest ()))
-                             rest2 (? (0 < tally glued) rest (? (two? rest) >rest rest))
-                             (? !got ()
-                                (: _ (? (c = 101) () (pin t c [1 v]))
-                                   (cl (tally a) rest2 (? (c = 101) (v . es) es))))))))
-                (cl 1 >as eps)))))
-   ; a value option's text, or () -- the presence read that pairs with uopts
-   (uoptv t c) (: r (peep t c ()) (? (two? r) <>r ()))
    ; the exit door, two faces: a main answers its status as a charm, and a leave from
    ; deep inside scares 'leave carrying it. urun is the driver both come back through,
    ; so a caller in the same image gets a charm instead of a dead process -- the seat

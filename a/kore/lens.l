@@ -24,6 +24,7 @@
 ; anything positioned by css are gone, and that is the whole design: this answers "what does
 ; the page SAY", and nothing about what it looks like.
 (module 'kore
+(borrow 'cli)
 (borrow 'posix)
 
 (:
@@ -48,7 +49,7 @@
    (h2t-lay s w tty?) (: t ((cite 'lapiz 'ht->tty) s w) (? tty? t (usgr t)))
    (html2text-main as)
     (: t (tablet 0)
-       o (uopts as t '(119) ())                       ; -w takes a value
+       o (uopt as t '(119) '(101))                       ; -w takes a value
        _ (? (two? o) () (udie 2 h2t-usage))
        _ (foldl (\ a c (? (c = 119) a
                           (udie 2 ("html2text: unknown option -" + string c)))) 0 (keys t))
@@ -65,7 +66,7 @@
        ((cite 'lapiz 'md->ht) s))
    (markdown-main as)
     (: t (tablet 0)
-       o (uopts as t '(116 119) ())                   ; -t and -w take values
+       o (uopt as t '(116 119) '(101))                   ; -t and -w take values
        _ (? (two? o) () (udie 2 md-usage))
        _ (foldl (\ a c (? (elem c '(116 119)) a
                           (udie 2 ("markdown: unknown option -" + string c)))) 0 (keys t))

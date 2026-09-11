@@ -29,6 +29,7 @@
 ; the pure floor (lawed in t/law/kore.l): (sparse sc ere?) -> (1 cmds) | (),
 ; and (usub nodes repl ln g?) -> (changed text), the one substitution walk.
 (module 'kore
+(borrow 'cli)
 (borrow 'posix)
 
 (:
@@ -205,7 +206,7 @@
    ; -- sed: the flags, then one of the two stream models --
    (sed-main as)
     (: t (tablet 0)
-       o (uopts as t '(101) ())                      ; -e script, stacking
+       o (uopt as t '(101) '(101))                      ; -e script, stacking
        _ (? (two? o) () (udie 1 "sed: bad option"))
        eps <>o rest <>>o
        _ (? (two? eps || two? rest) ()
