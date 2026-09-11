@@ -83,6 +83,19 @@ static lvm(ai_cur_set) {
   Ip += 1;
   return Continue(); }
 
+// --- the horn's seat door ---------------------------------------------------
+// this roster says ai_horn_seat, so i/horn.c asks these instead of hunting a kernel's
+// device -- the same four i/hda.c answers under inle. the ring and the SDK source are
+// pdglue's, which owns pd_api.h; nothing but words crosses.
+//
+// a mono port is doubled to stereo before it reaches here (i/horn.c's horn_land), so
+// what arrives is always interleaved stereo and the pull can hand two channels out.
+int k_horn_open(int rate) { return pdg_horn_open(rate); }
+intptr_t k_horn_write(unsigned char const *src, uintptr_t n) {
+  return pdg_horn_push(src, (int) n); }
+uintptr_t k_horn_lag(void) { return (uintptr_t) pdg_horn_lag(); }
+void k_horn_close(void) { pdg_horn_close(); }
+
 static union u const
   nif_crank[]   = {{ai_crank}, {lvm_ret0}},
   nif_pushed[]  = {{ai_pushed}, {lvm_ret0}},
@@ -166,6 +179,9 @@ void love_init(void) {
     cb_putc(kcb, *s);
   blit();
   struct ai *g = ai_defn(woke ? g0 : ai_ini_m(pd_alloc), defs, countof(defs));
+  // ..and the LvNif slice of every TU linked beside this one, as i/main.c drains it:
+  // i/horn.c's rows ride the section, not the table above.
+  g = ai_defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
   pdg_log(ai_ok(g) ? "love: core up" : "love: core FAILED");
   // bound the collector to a QUARTER of the device's 16 MB (the Appel knob,
   // teensy's law): a major resize holds old and new pools at once, so the

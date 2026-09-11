@@ -22,5 +22,13 @@ void pdg_mark_updated(void);             // mark every row dirty
 void pdg_set_update(int (*cb)(void *));  // install the per-frame callback
 int pdg_file_read(const char *path, void *buf, unsigned cap);  // whole bundled file -> buf; -1 = absent
 
+// the horn's device, pulled by the SDK and pushed by love. this speaker has ONE rate --
+// i/horn.c reads a refusal as ENODEV and the caller picks again.
+#define PDG_HORN_RATE 44100
+int pdg_horn_open(int rate);                     // start the source; 0 ok, -1 refused
+int pdg_horn_push(const void *pcm, int n);       // n bytes of interleaved stereo s16; bytes taken
+int pdg_horn_lag(void);                          // frames queued and unplayed
+void pdg_horn_close(void);
+
 // the mooncc side (main.c): pdglue's eventHandler calls it once at init
 void love_init(void);
