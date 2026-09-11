@@ -938,10 +938,17 @@
        nrel (? pie (ld-nabs objs rv) 0)
        r0 (? pie (ld-align 16 end) end)         ; the reloc table starts 16-aligned, just past the nifs
        r1 (r0 + 8 * nrel)
+       ; ..and the segment's file bytes end on 16, so .bss and .image each open on the
+       ; alignment their own headers claim. the image's offset does too, which is what
+       ; seats ai_baked_image at the section's first byte instead of past a pad -- and
+       ; i/image.c lays the blob at that symbol. the slack is laid but claimed by no
+       ; section: inside .love.rela it would be an entry, and the relocator walks
+       ; start..stop and would read that zero as a site at the load base.
+       dend (ld-align 16 r1)
        ; .bss last, past every byte the file carries: the segment's p_memsz runs
-       ; out to `bend` where its p_filesz stops at r1, and the kernel hands over
+       ; out to `bend` where its p_filesz stops at dend, and the kernel hands over
        ; the difference already zeroed -- which is the whole meaning of .bss.
-       bend (ldlayn 'bss (ldlay1 'bss r1 objs) objs)
+       bend (ldlayn 'bss (ldlay1 'bss dend objs) objs)
        ; .image last of all -- past .bss, so `love bake` can grow it at the tail of the
        ; file (i/image.c: the section that ENDS the segment is the one that can grow
        ; without moving anything). it takes a segment of its own, because .bss sits
@@ -950,9 +957,9 @@
        ; address gap for free. this is the shape ld's --section-start already hands the
        ; gcc lane, and the shape bake_tail already reads. No .image section in the set
        ; (every link but love's) and the whole lane costs nothing: one segment, as before.
-       ioff (r1 - base - sk)                    ; the file stops where the data segment's bytes do..
-       iaddr (? img? (ld-lift pg bend ioff) r1)  ; ..and the image's address is lifted onto it
-       iend (? img? (ldlay1 'image iaddr objs) r1)
+       ioff (dend - base - sk)                  ; the file stops where the data segment's bytes do..
+       iaddr (? img? (ld-lift pg bend ioff) dend)  ; ..and the image's address is lifted onto it
+       iend (? img? (ldlay1 'image iaddr objs) dend)
        isz (iend - iaddr)
        endf (? img? (ioff + isz) ioff)          ; the file bytes the segments carry
        relbox (? pie {0 ()} ())    ; abs64 site accumulator (pie only)
@@ -972,7 +979,7 @@
        ed (ldemitn cx 'data objs (ldemit cx 'data d0 objs >eo))
        en (ldemit cx 'nifs <ed objs >ed)
        tail (<en < r0 ? [(ld-zeros (r0 - <en))])       ; nif tail + table alignment in one pad
-       rtab (? pie (catall (map le64 (rev (peep relbox 0 ())))) ())
+       rtab ((? pie (catall (map le64 (rev (peep relbox 0 ())))) ()) + (ld-zeros (dend - r1)))
        ei (? img? (ldemit cx 'image iaddr objs ()) [iaddr])
        ; -- the section headers and the symbol table, laid past p_filesz. nothing
        ; here is shf_alloc, so the kernel maps not a byte of it and the program is
@@ -1013,7 +1020,7 @@
                     (ld-shdr (snm 2) 1 3 d0 (d0 - base - sk) (<ed - d0) 0 0 16 0)
                     (ld-shdr (snm 3) 1 3 <ed (<ed - base - sk) (<en - <ed) 0 0 16 0)
                     (ld-shdr (snm 4) 1 2 r0 (r0 - base - sk) (r1 - r0) 0 0 16 0)     ; love_rela, the -pie table (empty non-pie)
-                    (ld-shdr (snm 5) 8 3 r1 (r1 - base - sk) (bend - r1) 0 0 16 0)   ; NOBITS: an offset, no bytes
+                    (ld-shdr (snm 5) 8 3 dend (dend - base - sk) (bend - dend) 0 0 16 0)   ; NOBITS: an offset, no bytes
                     (ld-shdr (snm 6) 1 3 iaddr ioff isz 0 0 16 0)                    ; .image, the grow slot -- its own segment
                     (ld-shdr (snm 7) 2 0 0 symo symz 9 (st 2) 8 24)               ; link=.strtab info=first global
                     (ld-shdr (snm 8) 3 0 0 stro strz 0 0 1 0)
@@ -1040,8 +1047,8 @@
        ; both hold by construction here.
        phs ((? wx? [(elf64-phdr 1 5 0 base base (t1 - base) (t1 - base) pg)
                     (elf64-phdr 1 4 (t1 - base) o0 o0 (o1 - o0) (o1 - o0) pg)
-                    (elf64-phdr 1 6 (d0 - base - sk) d0 d0 (r1 - d0) (bend - d0) pg)]
-                 [(elf64-phdr 1 7 0 base base (r1 - base) (bend - base) pg)])
+                    (elf64-phdr 1 6 (d0 - base - sk) d0 d0 (dend - d0) (bend - d0) pg)]
+                 [(elf64-phdr 1 7 0 base base (dend - base) (bend - base) pg)])
             + (? img? [(elf64-phdr 1 6 ioff iaddr iaddr isz isz pg)] ())
             + (? nb? [(elf64-phdr 4 4 nbo (base + nbo) (base + nbo) 24 24 4)] ()))
        hdr (elf64-hdrn (? pie 3 2) ent mach [shto nsh 10] phs)
@@ -1052,7 +1059,7 @@
        ; mooncc branded its own output and kore's `ld` did not, so the two doors
        ; over one linker wrote different files. Same ISAs the note rides.
        hdr9 (elem mach '(62 183) ? (ld-brand hdr 7 9) hdr)
-       (hdr9 . ((? nb? [nbnote] ()) + >en + tail + (? pie [rtab] ()) + >ei
+       (hdr9 . ((? nb? [nbnote] ()) + >en + tail + [rtab] + >ei
                  + [(ld-zeros (symo - endf)) <st <>st <shstr cmt rdm
                     (ld-zeros (shto - (rdmo + rdmz))) sht])))
 
