@@ -1128,7 +1128,7 @@
        t (? (two? as) (: r (? (<as = "-") [1 (slurp in)] (uread <as))
                          (? (two? r) <>r (udie 1 ("tsort: cannot open " + <as))))
               (slurp in))
-       ws (uwords t)
+       ws (words t)
        _ (? (% (tally ws) 2) (udie 1 "tsort: odd number of input words") ())
        deg (tablet 0) succ (tablet 0)       ; the graph, keyed by the interned words
        (rd l order)
@@ -1180,7 +1180,7 @@
               _ (foldl (\ _ p (: _ (put out 32) (say out (show p)))) 0 (ufactor (uatoi w)))
               _ (put out 10) ok))
        (go a ok) (? (two? a) (go >a (one <a ok)) ok)
-       ok (go (? (two? as) as (uwords (slurp in))) 1)
+       ok (go (? (two? as) as (words (slurp in))) 1)
        _ (flush out) (? ok 0 1))
 
    ; ---- the record tools: paste, comm, join, split, od -------------------------

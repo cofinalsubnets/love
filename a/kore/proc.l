@@ -292,7 +292,7 @@
     (: r (uread "/proc/self/mounts")
        _ (? (two? r) () (udie 1 "mount: cannot read /proc/self/mounts"))
        (go l) (? !(two? l) ()
-                 (: w (uwords <l)
+                 (: w (words <l)
                     _ (? (4 <= #w) (: _ (say out ((w 0) + " on " + (w 1) + " type " + (w 2)
                                                   + " (" + (w 3) + ")"))
                                       (put out 10))
@@ -353,12 +353,12 @@
        (lp k) (? (k < 0) -1 ((ln k) = 41) k (lp (k - 1)))
        (fp k) (? (n <= k) -1 ((ln k) = 40) k (fp (k + 1)))
        a (fp 0) b (lp (n - 1))
-       ; the pid is taken through uwords and not off the raw slice: `uatoi` reads
-       ; every charm it is handed, so the space before the "(" would go in as -16
+       ; the pid is taken through the word split and not off the raw slice: `uatoi`
+       ; reads every charm it is handed, so the space before the "(" goes in as -16
        (? ((a < 0) || ((b < 0) || (b < a))) ()
-          (: h (uwords (snip ln 0 a))
+          (: h (words (snip ln 0 a))
              (? !(two? h) ()
-                ((uatoi <h) . ((snip ln (a + 1) b) . (uwords (snip ln (b + 1) n))))))))
+                ((uatoi <h) . ((snip ln (a + 1) b) . (words (snip ln (b + 1) n))))))))
    (upstat pid)                        ; a pid -> its stat fields | ()
     (: r (uread (("/proc/" + (show pid)) + "/stat"))
        (? (two? r) (ustatf <>r) ()))
@@ -407,7 +407,7 @@
                    (go k) (? (n <= k) -1 ((ln k) = 58) k (go (k + 1)))
                    i (go 0)
                    (? (i < 0) 0
-                      (: ws (uwords (snip ln (i + 1) n))
+                      (: ws (words (snip ln (i + 1) n))
                          (? (two? ws) (pin t (intern (snip ln 0 i)) (uatoi <ws)) 0))))
        _ (? (two? r) (foldl (\ _ ln (one ln)) 0 (lines <>r)) 0)
        t)
@@ -471,11 +471,11 @@
    ; of day is utc, for the reason `date` gives --
    (uptime-main as)
     (: r (uread "/proc/uptime")
-       secs (? (two? r) (: w (uwords <>r)
+       secs (? (two? r) (: w (words <>r)
                            (? (two? w) (uatoi <(usplit 46 <w)) 0))
               0)
        l (uread "/proc/loadavg")
-       ws (? (two? l) (uwords <>l) ())
+       ws (? (two? l) (words <>l) ())
        ld (? (2 < (tally ws)) ((((ws 0) + ", ") + ((ws 1) + ", ")) + (ws 2))
               "0.00, 0.00, 0.00")
        tod (uclk (% (// (clock 0) 1000) 86400))
@@ -562,7 +562,7 @@
        _ (? (nflag && (nn < 1)) (udie 1 "xargs: invalid -n") ())
        rest (? nflag >>as as)
        cmd (? (two? rest) rest '("echo"))
-       ws (uwords (slurp in))
+       ws (words (slurp in))
        (chunks k l) (? !(two? l) () (take k l . chunks k (drop k l)))
        runs (? !(two? ws) [()]                       ; no input still runs once, like GNU
                nn (chunks nn ws)
