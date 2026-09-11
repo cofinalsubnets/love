@@ -2631,17 +2631,31 @@
            t (cgexpr g env ea ())
            el (cgexpr g env eb ())
            (? (bad? c || bad? t || bad? el) 'bad
-              ; C's conditional converts its arms: one flo arm makes the whole result flo,
-              ; so the integer arm rides asflo at its edge -- typing by the then-arm alone
-              ; leaves an int in r0 where the reader takes f0
+              ; C's conditional converts its arms (6.5.15p5): one flo arm makes the whole
+              ; result flo, so the integer arm rides asflo at its edge, and two arithmetic
+              ; arms meet at the typing door the way a binary op's operands do. typing by
+              ; the then-arm alone leaves an int in r0 where the reader takes f0, and reads
+              ; (1 ? -1 : 0u) as signed
               (: fl (flo? (vty t) || flo? (vty el))
                  pl (pair? g (vty t) || pair? g (vty el))   ; one pair arm pairs the other too
+                 ; a literal arm reads through its written face, as the compare and divide
+                 ; lanes do: the value tuple types a bare number 'long where C says int
+                 ta9 (numty9 ea (vty t)) tb9 (numty9 eb (vty el))
+                 ; ..and the wide pair rides its own lane, so it stays with the then-arm
+                 ua (!fl && !pl && parith? ta9 && parith? tb9 &&
+                     !(d128? ta9) && !(d128? tb9))
                  tf (? fl (asflo g t) pl (asll g t) (tor0 g t))
                  ef (? fl (asflo g el) pl (asll g el) (tor0 g el))
                  rt (? (flo? (vty t)) (vty t) fl (vty el)
-                       pl (? (llt? (vty t)) (vty t) (vty el)) (vty t))
+                       pl (? (llt? (vty t)) (vty t) (vty el))
+                       ua (puac !(t32? g) ta9 tb9)
+                       (vty t))
+                 ; ..and a 32-bit unsigned result owes a signed arm the narrow: that arm
+                 ; rode sign-extended past bit 31, where a uint in r0 is zero-extended
+                 nt (u32? g rt && !(usg? ta9) ? '((zx4 r0)) ())
+                 ne (u32? g rt && !(usg? tb9) ? '((zx4 r0)) ())
                  (mkv rt 'r0
-                    (c + tf + [['jmp ld] ['label le]] + ef + [['label ld]])))))
+                    (c + tf + nt + [['jmp ld] ['label le]] + ef + ne + [['label ld]])))))
        ; -- the varargs builtins, per target (a/moon/include/stdarg.h). SysV: the 24-byte
        ; { int gp_offset; int fp_offset; void *overflow_arg_area; void *reg_save_area; } --
        ; va_arg fetches from the save area until the offset passes the reg limit, then from
@@ -4898,7 +4912,11 @@
                                                     ; needs no save/restore pair, and no call may
                                                     ; sit inside the range that takes one
    lvquiet '(label align ud2 br jmp)                ; no register effect at all
-   (lvret g) (? (t32? g) '(r0 r1) '(r0 r1 f0 f1))   ; what an exit owes back, beside the cs file
+   ; what an exit owes back, beside the cs file. x64's second gp return register, r2 (rdx), is
+   ; missing: a two-eightbyte aggregate leaves its high half there. nothing reads this that
+   ; would drop such a def today -- coal's drop takes copies only, and deaddef needs a
+   ; redefinition -- so a consumer that trusts it for a plain dead-def test owes r2 first.
+   (lvret g) (? (t32? g) '(r0 r1) '(r0 r1 f0 f1))
    ; the blanket cases read the machine, so a mint stays out of them: a call clobbers the
    ; caller-saved physical file, and a mint live across one must show as crossing -- the
    ; assignment's whole question -- not be read+def'd into a false kill. inert post-vrfix.
