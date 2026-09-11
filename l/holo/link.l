@@ -883,6 +883,16 @@
        _ (? (0 < mach) 0 (scare 'link-target target))
        objs (map (p \ ld-read <p <>p mach) srcs)
        rv (mach = 243)                          ; em_rv64: its own reloc-number namespace (see ldpatch)
+       ; THE PAGE A SEGMENT STANDS ON, which is not the page the MMU happens to run.
+       ; a loader maps each PT_LOAD from its p_vaddr rounded DOWN to the kernel's page
+       ; size, so two segments sharing one of those pages are laid over each other --
+       ; the later one wins, and a read-only .rodata mapping takes the tail of .text
+       ; with it. aarch64 is where that bites: the same binary meets 4K, 16K and 64K
+       ; kernels (a pi 4 and a pi 500 differ this way), so the alignment has to answer
+       ; the largest of them. ld's own aarch64 default is this number for this reason.
+       ; every other ISA here has ONE page wherever it runs -- x86-64 and riscv are 4K --
+       ; and pays no padding for a hazard it does not have.
+       pg (mach = 183 ? 65536 4096)
        base (? (charm? org) org pie 0 elf-base)
        ; w^x gives each lane the rights it needs and no others: read+execute for the
        ; code, read for the literals, read+write for the data -- three segments, and
@@ -906,7 +916,7 @@
        nbnote (? nb? (catall [(le32 7) (le32 4) (le32 1)                 ; namesz descsz netbsd_tag
                               '(78 101 116 66 83 68 0 0) (le32 1000000000)]))   ; "NetBSD\0\0", 10.0
                   
-       lay (ldlay objs base hdrsz (? wx? 4096 1))
+       lay (ldlay objs base hdrsz (? wx? pg 1))
        end <lay n0 <>lay o0 <>>lay d0 <>>>lay
        nrel (? pie (ld-nabs objs rv) 0)
        r0 (? pie (ld-align 16 end) end)         ; the reloc table starts 16-aligned, just past the nifs
@@ -924,10 +934,10 @@
        ; address. this is the shape ld's --section-start already hands the gcc lane, and
        ; the shape bake_tail already reads. No .image section in the set (every link but
        ; love's) and the whole lane costs nothing: one segment, as before.
-       iaddr (? img? (ld-align 4096 bend) r1)
+       iaddr (? img? (ld-align pg bend) r1)
        iend (? img? (ldlay1 'image iaddr objs) r1)
        isz (iend - iaddr)
-       ioff (? img? (ld-align 4096 (r1 - base)) (r1 - base))   ; ..its file offset, page-congruent to iaddr
+       ioff (? img? (ld-align pg (r1 - base)) (r1 - base))     ; ..its file offset, page-congruent to iaddr
        endf (? img? (ioff + isz) (r1 - base))                  ; the file bytes the segments carry
        relbox (? pie {0 ()} ())    ; abs64 site accumulator (pie only)
        glo (ldsyms objs)
@@ -1014,11 +1024,11 @@
        ; laid past the nifs, and moving it above d0 would reorder the emit for 13k.
        ; bake_tail asks that .image end its segment and that no load live above it --
        ; both hold by construction here.
-       phs ((? wx? [(elf64-phdr 1 5 0 base base (o0 - base) (o0 - base) 4096)
-                    (elf64-phdr 1 4 (o0 - base) o0 o0 (d0 - o0) (d0 - o0) 4096)
-                    (elf64-phdr 1 6 (d0 - base) d0 d0 (r1 - d0) (bend - d0) 4096)]
-                 [(elf64-phdr 1 7 0 base base (r1 - base) (bend - base) 4096)])
-            + (? img? [(elf64-phdr 1 6 ioff iaddr iaddr isz isz 4096)] ())
+       phs ((? wx? [(elf64-phdr 1 5 0 base base (o0 - base) (o0 - base) pg)
+                    (elf64-phdr 1 4 (o0 - base) o0 o0 (d0 - o0) (d0 - o0) pg)
+                    (elf64-phdr 1 6 (d0 - base) d0 d0 (r1 - d0) (bend - d0) pg)]
+                 [(elf64-phdr 1 7 0 base base (r1 - base) (bend - base) pg)])
+            + (? img? [(elf64-phdr 1 6 ioff iaddr iaddr isz isz pg)] ())
             + (? nb? [(elf64-phdr 4 4 nbo (base + nbo) (base + nbo) 24 24 4)] ()))
        hdr (elf64-hdrn (? pie 3 2) ent mach [shto nsh 10] phs)
        ; the brand: ei_osabi = 9 in e_ident[7] on every exe this lane writes for
