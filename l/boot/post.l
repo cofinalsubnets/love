@@ -663,13 +663,49 @@
 ;   (match pat s)       -> the all-live face
 ;   (anyglob t)         -> does t hold any * ? [ at all (the cheap pre-scan)
 ;   (ones k)            -> an all-live mask of width k
+;
+; ..and the path clips the same callers were each writing for themselves. these are
+; the PRIMITIVES, not the faces: make's $(dir) and posix's dirname disagree about a
+; bare name ("./" against "."), so each caller still spells its own face -- over one
+; scan rather than a fifth copy of it.
+;   (lastslash p) -> index just past the last '/', 0 for none
+;   (lastdot p)   -> index of the last '.' after that, #p for none
+;   (segs p)      -> the '/'-separated components, empties dropped
+;   (pclean l lim)-> that list cleaned, lim bounding how far '..' may climb out of it
 
-(module '(glob match fmatch anyglob ones)
+(module '(glob match fmatch anyglob ones lastslash lastdot segs pclean)
 (: (anyglob t)
      (: n #t
         (go i) (i != n && (t i @ (42 || 63 || 91) 1 (go (i + 1))))
         (go 0))
    (ones k) (k < 1 ? "" (ones (k - 1) + "1"))
+   ; -- the path clips ------------------------------------------------------------
+   (lastslash p) ((: (go j) (0 < j ? (p (j - 1) = 47 ? j (go (j - 1))) 0)) #p)
+   (lastdot p) (: sl (lastslash p)
+                  ((: (go j) (j > sl ? (p (j - 1) = 46 ? (j - 1) (go (j - 1))) #p)) #p))
+   (segs s) ((: (go i st acc)
+                (? (i >= #s) (rev (st < i ? (snip s st i . acc) acc))
+                   (s i = 47) (go (1 + i) (1 + i) (st < i ? (snip s st i . acc) acc))
+                   (go (1 + i) st acc))) 0 0 0)
+   ; no filesystem asked: '..' pops lexically, which is what make's $(abspath) means
+   ; and what a symlink makes a lie. a caller that needs the real thing asks the fs.
+   ; lim is the climb this caller allows -- how many leading '..' may survive:
+   ;   ()  unbounded, a '..' with nothing to pop stays one (the shell's own face)
+   ;   n   at most n survive; one that would climb past answers () -- REFUSED, not
+   ;       clamped, because a clamped path silently names a different file. a server
+   ;       rooting a request asks with 0 and answers the refusal 403.
+   ; a surviving '..' is not popped by the next one -- "a/../../b" climbs once and
+   ; stays (".." "b"). () answers both a refusal and an empty path, so a caller that
+   ; must tell them apart asks whether it handed anything in.
+   (pclean l lim)
+   ((: (go l acc up)
+       (? (one? l) (rev acc)
+          (<l = ".") (go >l acc up)
+          (<l = "..") (? (two? acc && <acc != "..") (go >l >acc up)
+                         (charm? lim && up >= lim) ()      ; the climb runs out: refused
+                         (go >l (".." . acc) (1 + up)))
+          (go >l (<l . acc) up)))
+    l () 0)
    (match p s) (fmatch p (ones #p) s)
    (fmatch p m s)
    (: np #p ns #s
