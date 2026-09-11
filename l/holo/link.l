@@ -808,12 +808,14 @@
                       (? (atom? se || 0 = #nm ||
                           !(elem typ '(0 1 2)) || !(elem bind '(0 1 2)))
                           a                             ; undefined, unnamed, a file/section marker, or dropped
-                         ; a weak def a strong one replaced: its bytes stay laid, so it
-                         ; keeps a symbol -- demoted to local, naming the dead copy at its
-                         ; own address (glo holds the winner; a global twin would be a lie,
-                         ; but an unnamed span makes nm/vmret charge the bytes to whatever
-                         ; symbol precedes them)
-                         (0 < bind && !won) ([nm 0 typ (lx se) ad (sy 5)] . a)
+                         ; a weak def a strong one replaced: its bytes stay laid (dropping
+                         ; them would mean moving every symbol after them in the section),
+                         ; so the span keeps a symbol -- an unnamed one makes nm/vmret
+                         ; charge those bytes to whatever symbol precedes them. demoted to
+                         ; local, and SUFFIXED: glo holds the winner, and two entries under
+                         ; one name at two addresses is a reading anyone has to do twice --
+                         ; the bind tells them apart only if they think to look.
+                         (0 < bind && !won) ([(nm + ".lost") 0 typ (lx se) ad (sy 5)] . a)
                          ([nm bind typ (lx se) ad (sy 5)] . a)))))
            (go 1 acc))
        all (foldl (\ a ob (one ob a)) () objs)
