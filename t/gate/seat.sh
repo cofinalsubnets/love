@@ -28,8 +28,10 @@ try() {
 want='unclosed ('   ; try "libra (positional)"   a/libra/libra.l $bad
 want='unclosed ('   ; try "libra (-l preload)"   -l a/libra/libra.l $bad
 want='usage'        ; try "ain"                  a/ain.l
-want='not a directory'; try "kiosko"             a/kiosko/kiosko.l --nope
-want='no markdown'  ; try "papel"                a/papel.l --nope
+# a PATH neither can use, not a flag: both refuse an unknown option now, and this
+# lane is about the seat firing at all -- so the word has to reach the app's own walk
+want='not a directory'; try "kiosko"             a/kiosko/kiosko.l /nope
+want='no markdown'  ; try "papel"                a/papel.l /nope
 
 # and the same seat UNDER A PRIME: `wake IMAGE` is the command line's word, not the
 # program's, so l/boot/post.l's `unprime` steps it and the app still seats itself.
