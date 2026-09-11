@@ -1,6 +1,18 @@
 // love.c -- g, stack, sys, str, sym, chain, tray. one translation unit of the runtime;
 // the shared layouts and the cross-TU seam are l/love.h.
 #include "love.h"
+
+// which kernel we woke on -- 0 unprobed, 1 linux, 2 freebsd, 3 netbsd, -1 inle. the
+// values and the probe are moonlibc's (a/moon/lib/moonlibc/os.c), which owns the word
+// on any link that carries it; this is the same word for a link that does not -- love0
+// under the ambient cc, and the boards, which take moonlibc's string members and no os.c.
+//
+// WEAK, where this tree's doors are plain definitions on purpose (l/bare.c, i/nokern.c).
+// the rule those state is about DOORS: a missing implementation quietly becoming a no-op
+// is the bug it prevents. this is a data word whose zero is already an answer -- os.c
+// spells 0 "unprobed", and 0 is exactly what the seats below read today -- so there is no
+// quiet wrong behaviour to fall into, only an honest "nobody probed".
+__attribute__((weak)) long __ai_osv;
 #include <stddef.h>
 struct ai_chain;
 // this file's own, forward-declared so order within it does not matter.

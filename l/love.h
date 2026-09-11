@@ -45,9 +45,6 @@
 // doors a lane may CALL is a build fact here and a box fact under a foreign
 // libc, which is the distinction i/posix.c's ladder is written against. the
 // ambient-cc lane (love0, glibc) takes that ladder's kernel arms instead.
-#if defined(__mooncc__) && !defined(LvNolibc)
-#define LvNolibc 1
-#endif
 
 // musttail IS the tail-threaded vm: without it every dispatch keeps its frame and a
 // long read overflows the stack, so tco=1 without it is not slower, it is broken.

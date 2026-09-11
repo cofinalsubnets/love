@@ -9,8 +9,6 @@
 // old shape answered quietly in both directions.
 #include "love.h"
 
-long __ai_osv;                    // no kernel to name; 0 is what a seat with none reads
-
 void ai_fd_close(int fd) { }
 void ai_fd_drain(int fd, void const *p, uintptr_t n) { }
 // the horn wants a device; a board that grows one answers this itself

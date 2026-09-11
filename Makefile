@@ -96,10 +96,10 @@ h_o = $(love_c:$(R)/%.c=$(ho)/%.o)
 host_o = $(host_c:$(R)/%.c=$(ho)/%.o)
 # the three a LINK names rather than the directory, one per thing it does without:
 # i/nokern.c the kernel's doors where no kmain.c stands under them, i/noblob.c the
-# carried archives where no laid object brings them, i/noosv.c the OS word where no
-# moonlibc writes it. the mooncc lane takes kart_o + b/src.o + b/moonlibc.o and
+# carried archives where no laid object brings them. the OS word is l/love.c's
+# weak one wherever moonlibc's os.c is not in the link.
 # wants none of them; the HCC flavour is gcc and glibc alone, so it takes all three.
-seat_o = $(ho)/i/nokern.o $(ho)/i/noblob.o $(ho)/i/noosv.o
+seat_o = $(ho)/i/nokern.o $(ho)/i/noblob.o
 hcc = LOVE_NO_IMAGE= $(CC) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Il -Ii -Ib/lib
 image_ldflags = -Wl,--section-start=.love.image=0x2000000
 .PHONY: force_hostcc
@@ -129,7 +129,7 @@ $(ho)/liblove.a: $(h_o)
 # pinned to b/0, never $(ho)/0: love0 is one binary whatever HCC and tco say
 # love0 takes the whole hosted surface less the crew catalog, PLUS its own seat --
 # i/main0.c, which host_c holds back because only this link has a use for it.
-love0_o = $(patsubst $(R)/%.c,b/0/%.o,$(filter-out $(R)/i/cats.c,$(host_c)) $(R)/i/main0.c $(R)/i/nokern.c $(R)/i/noblob.c $(R)/i/noosv.c $(love_c))
+love0_o = $(patsubst $(R)/%.c,b/0/%.o,$(filter-out $(R)/i/cats.c,$(host_c)) $(R)/i/main0.c $(R)/i/nokern.c $(R)/i/noblob.c $(love_c))
 b/0/i/main0.o: b/lib/boot0.h
 b/0/i/cb.o: l/quay/quay.c l/quay/nif.c l/quay/quay.h
 boot_cc = $(CCACHE) $(CC) $(ai_cflags) -fPIE -DLove0 -Dai_tco=0 -Dai_data_section=0 -DLvVersion='"$(love_base)+bootstrap"' -I. -Il -Ii -Ib/lib

@@ -267,10 +267,12 @@
    ; values -- no long double here -- so a consumer takes its double lane, the
    ; one we can compile. a user -D lands after these and wins.
    stdcommon
-    ; __mooncc__ says which compiler, __moon__ says which dialect, and a source wanting an
-    ; extension must ask the second: under -std=c this is still mooncc and the extension is
-    ; still refused. cc-parse adds __moon__ because only it knows the dialect.
-    '("__mooncc__=1"
+    ; __mooncc__ says which compiler, __moon__ says which dialect, __moonlibc__ which libc,
+    ; and a source wanting an extension must ask the second: under -std=c this is still
+    ; mooncc and the extension is still refused. cc-parse adds __moon__ because only it
+    ; knows the dialect. the libc is this compiler's by construction -- there is no second
+    ; one to link -- but it is its OWN fact and a source asks it by its own name.
+    '("__mooncc__=1" "__moonlibc__=1"
       "__CHAR_BIT__=8" "__SCHAR_MAX__=0x7f" "__SHRT_MAX__=0x7fff"
       "__SCHAR_WIDTH__=8" "__SHRT_WIDTH__=16" "__INT_WIDTH__=32"
       "__LONG_LONG_MAX__=0x7fffffffffffffffLL" "__LONG_LONG_WIDTH__=64"

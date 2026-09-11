@@ -49,7 +49,7 @@ struct ai_horn { struct ai_bio b; word kind, rate, chans, wpos, t0; };
 #if defined(__wasm__)
 # define horn_alsa 0
 # define horn_oss  0
-#elif defined(LvNolibc)
+#elif defined(__moonlibc__)
 # define horn_alsa 1
 # define horn_oss  1
 #elif defined(__linux__)

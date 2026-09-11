@@ -538,7 +538,7 @@ test_selfhost: host
 	@echo TEST $(ho)/love-selfhost
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/selfhost; mkdir -p $$d; rm -f $$d/*.o; \
-	  for f in $(love_tu_c) $(host_c) $(R)/i/nokern.c $(R)/i/noblob.c $(R)/i/noosv.c; do b=`basename $$f .c`; \
+	  for f in $(love_tu_c) $(host_c) $(R)/i/nokern.c $(R)/i/noblob.c; do b=`basename $$f .c`; \
 	    $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Il -Ii -Ib/lib -c $$f $$d/$$b.o \
 	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
 	  $(moonrun) -Ia/moon/include -c a/moon/lib/moonlibc/math/am.c $$d/am.o \

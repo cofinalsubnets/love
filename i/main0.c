@@ -14,7 +14,7 @@
 // the null seat is i/nokern.c's and the carried blobs i/noblob.c's -- love0 has no
 // kmain.c under it and lays the archives rather than carrying them, and so does every
 // gate link that builds this C set. both are named into love0_o beside this file.
-// love0 has no moonlibc either, so i/noosv.c gives it __ai_osv.
+// love0 has no moonlibc either, so __ai_osv is l/love.c's weak one, which reads 0.
 
 #include "boot0.h"                                   // src0_<name>[]: one literal per boot file, laid by sed
 static char const runner[] = "(reads(tap(s2cl tests)))";   // the stream shell (l/boot/post.l) drinks the corpus
