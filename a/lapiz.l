@@ -190,7 +190,6 @@
                      (seqs [(skip (lit "```")) (span nonl?) eol (pack (many f-line))
                             (skip (lit "```")) (skip (span nonl?)) eol]))
    q-line  (seqs [(skip (lit ">")) (skip (opt (lit " "))) (span nonl?) (lit "\n")])
-   b-quote (tag (\ p ['quote (mdread (cats <p))]) (pack (many1 q-line)))   ; the doc reads itself
    ; a wrapped item is one item: a line neither blank nor a block opener belongs to the
    ; item above it. `p-line` is already that exact test, so the two readings of "what
    ; continues a block" cannot drift. law 1 is untouched -- a shower writes an item on one
@@ -221,8 +220,6 @@
    ; the rest of the document vanishes in silence. taking one line as a paragraph lets the
    ; loop go on. it cannot fire on what a shower writes, so law 1 does not feel it.
    b-line  (tag (\ p ['para (mdinl (cats p))]) (seqs [(one nonl?) (span nonl?) eol]))
-   mdblock (seqs [(skip (many blankline))
-                  (alts [b-rule b-head b-fence b-quote b-bullets b-numbers b-deflist b-para b-line])])
    ; yaml-ish front matter, the markdown face of the meta block: head-only (a `---` fence
    ; anywhere else is a rule), so it is read before the block loop and shown before it.
    kvline (tag (\ p [(name <p) <>p])
@@ -230,6 +227,17 @@
    b-meta (tag (\ p ['meta (mnorm p)])
                     (seqs [(skip (lit "---")) (skip (span sp?)) (skip (lit "\n"))
                            (many kvline) (skip (lit "---")) (skip (span sp?)) (skip (lit "\n"))]))
+   ; quote recurses into the block loop, so it sits with it and stays eta-expanded -- and
+   ; both sit after every value binding above, because a value binding written after a
+   ; lambda is not one the lambda can see. this one re-reads its own text where the html
+   ; quote recurses in place, the `> ` having to come off first; what it re-reads with is
+   ; the BLOCK LOOP and not mdread, which is the difference between a quote that reads and
+   ; a quote that comes back empty.
+   (b-quote s y n) ((tag (\ p ['quote (bmrg (runp (many mdblock) (cats <p)))])
+                         (pack (many1 q-line))) s y n)
+   (mdblock s y n)
+    ((seqs [(skip (many blankline))
+            (alts [b-rule b-head b-fence b-quote b-bullets b-numbers b-deflist b-para b-line])]) s y n)
    (mdread t) (bmrg (runp (seqs [(opt b-meta) (many mdblock) (skip (many blankline))]) (endnl t))))
 
 ; ---------------------------------------------------------------- markdown, show
@@ -539,6 +547,22 @@
                    (g (i + 1) k))) 0 d)
    ; a no-break control character is the same macro, so ' normalizes to .
    (rfdot ln) (#ln && ln 0 = 39 ? ("." + snip ln 1 #ln) ln)
+   ; nroff is what a terminal is, so `.if n` is OUR branch and its text is the page's;
+   ; `.if t` is the typesetter's and goes. the answer is the text to read in this line's
+   ; place, "" for the branch not taken, or 'no for a condition this cannot decide -- an
+   ; expression, or one opening a \{ group, where the branch is a block and not a line's
+   ; tail. an .el is always 'no: the .ie it answers is not remembered, so a page that
+   ; spells the terminal branch second still loses it, as it did before any of this.
+   (rfnro ln)
+    (: r (snip ln #(rfmac ln) #ln)
+       n #r
+       i ((: (g k) (? (n <= k) k !(elem (r k) '(32 9)) k (g (k + 1)))) 0)
+       (? (rfmac ln = ".el") 'no                         ; an .el carries no condition at all
+          (rfdepth ln 0) 'no
+          !((i + 1 < n) && elem (r (i + 1)) '(32 9)) 'no
+          (r i = 110) (snip r (i + 2) n)
+          (r i = 116) ""
+          'no))
    (rfcom? ln) (2 < #ln && ln 0 = 46 && ln 1 = 92 && ln 2 = 34)
    ; a macro line's first argument, bare or "quoted"
    (rffst ln)
@@ -576,13 +600,23 @@
     ((: (go l de nf d rs defs acc)
         (? !(two? l) ((cats (rev acc)) + rfshut nf rs)
            (: ln (rfdot <l) m (rfmac ln)
-              (? de       (go >l !(m = ".." || m = ".") nf d rs defs acc)  ; a .de body runs to a lone ..
-                 (0 < d)  (go >l de nf (rfdepth ln d) rs defs acc)         ; a conditional group, likewise
+              ; a .de body runs to a lone .. -- and ONLY to that. a lone . is an empty
+              ; request, and so is any line whose name is blank (`.  if t ..`, which roff
+              ; indents inside a definition), so ending the body on one leaks the rest of
+              ; the definition into the page, .. included
+              (? de       (go >l !(m = "..") nf d rs defs acc)
+                 (0 < d)  (go >l de nf (rfdepth ln d) rs defs acc)         ; a conditional group
                  ; a comment, and a bare \ -- a continuation with nothing on it, which some
                  ; generators leave at the head of a page and which shows as text otherwise
                  (rfcom? ln || ln = "\\") (go >l de nf d rs defs acc)
                  (elem m rfdef) (go >l 1 nf d rs ("." + rffst ln . defs) acc)
-                 (elem m rfcond) (go >l de nf (rfdepth ln 0) rs defs acc)
+                 ; the branch this device takes is read in the condition's place, so a macro
+                 ; there is still a macro and the text is still text
+                 (elem m rfcond)
+                  (: k (rfnro ln)
+                     (? (= k 'no) (go >l de nf (rfdepth ln 0) rs defs acc)
+                        !#k       (go >l de nf d rs defs acc)
+                        (go (k . >l) de nf d rs defs acc)))
                  (m = "." || elem m rfskip) (go >l de nf d rs defs acc)
                  (: m2 (rfas m) rest (snip ln #m #ln)
                     ; .sp is a blank line inside a display and a paragraph break outside one
