@@ -64,7 +64,7 @@
                         (go (c ^ ((b & 255) << 24)) 8))
    ; the message, then its own length low byte first, then the register complemented
    (hash-ckwalk s)
-    (: n (tally s)
+    (: n #s
        (fold c m) (? (m < 1) (c ^ hash-m32) (fold (hash-ckbyte c (m & 255)) (m >> 8)))
        (go c i) (? (n <= i) (fold c n) (go (hash-ckbyte c (s i)) (i + 1)))
        (go 0 0))
@@ -85,7 +85,7 @@
                                   (: c (d k)
                                      (? (((47 < c) && (c < 58)) || ((96 < c) && (c < 103)))
                                         (go (k + 1)) 0)))
-                        (? ((tally d) = n) (go 0) 0))
+                        (? (#d = n) (go 0) 0))
    (hash-shape ls)
     (? !(two? ls) 1
        (: s (hash-bytes <ls)
@@ -118,7 +118,7 @@
    (dig-stream d s k)
     (: b (cask <d)
        _ (<>d b)
-       n (tally s)
+       n #s
        (go i) (? (n <= i) (<>>>d b)
                  (: j (? (n < (i + k)) n (i + k))
                     _ (<>>d b (snip s i j))
@@ -138,9 +138,9 @@
    (dig-agree? n)
     (: s (hash-bytes n)
        (go ks) (? (! (two? ks)) 1
-                  (? (&& (= (sha256 s) (sha-stream s <ks))
-                         (= (md5 s) (md5-stream s <ks))
-                         (= (cksum s) (ck-stream s <ks)))
+                  (? (&& (sha256 s = sha-stream s <ks)
+                         (md5 s = md5-stream s <ks)
+                         (cksum s = ck-stream s <ks))
                      (go >ks) 0)))
    (sha-sweep lo hi)
     (: (go n) (? (hi < n) 1
@@ -164,12 +164,12 @@
  ((sha-stream (hash-bytes 100000) 65536) = (sha256 (hash-bytes 100000)))
  ((sha-stream (hash-bytes 100000) 1000) = (sha256 (hash-bytes 100000)))
  ; misuse: the state is a 105-byte cask or it is nothing
- (nil? (sha256-init (cask 8)))
- (nil? (sha256-init "not a cask"))
- (nil? (sha256-feed (cask 8) "x"))
- (nil? (sha256-feed (cask sha-st) 7))
- (nil? (sha256-done (cask 8)))
- (nil? (sha256-done "not a cask"))
+ !(sha256-init (cask 8))
+ !(sha256-init "not a cask")
+ !(sha256-feed (cask 8) "x")
+ !(sha256-feed (cask sha-st) 7)
+ !(sha256-done (cask 8))
+ !(sha256-done "not a cask")
  ; --- md5 and cksum stream the same way ---
  (lit? md5-init) (lit? md5-feed) (lit? md5-done)
  (lit? cksum-init) (lit? cksum-feed) (lit? cksum-done)
@@ -183,10 +183,10 @@
  ((ck-stream (hash-bytes 100000) 1000) = (cksum (hash-bytes 100000)))
  ; misuse, and crosswise: a state of the wrong width is refused, which is the only
  ; thing between three digests that all take a cask and a string
- (nil? (md5-init (cask sha-st))) (nil? (sha256-init (cask md5-st)))
- (nil? (cksum-init (cask sha-st))) (nil? (md5-init (cask ck-st)))
- (nil? (md5-feed (cask md5-st) 7)) (nil? (cksum-feed (cask ck-st) 7))
- (nil? (md5-done (cask 8))) (nil? (cksum-done (cask 8))))
+ !(md5-init (cask sha-st)) !(sha256-init (cask md5-st))
+ !(cksum-init (cask sha-st)) !(md5-init (cask ck-st))
+ !(md5-feed (cask md5-st) 7) !(cksum-feed (cask ck-st) 7)
+ !(md5-done (cask 8)) !(cksum-done (cask 8)))
 
 (: _ (test_fin ())
    _ (puts "digest: ok -- md5 and sha-256 on their published vectors, the resumable sha-256

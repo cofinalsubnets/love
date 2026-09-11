@@ -291,6 +291,7 @@
        (: t (tablet 0)
           o (uopt as t '(116 111) '(101) ())
           _ (? (two? o) () (udie 1 "mount: -t and -o each want a value"))
+          _ (: c (uoptun t "to") (? (nil? c) () (udie 1 ("mount: unknown option -" + string c))))
           ty (: v (uoptv t 116) (? (string? v) v "auto"))
           ob (: v (uoptv t 111) (? (string? v) (umnt-bits (usplit 44 v) 0) 0))
           fs <>>o
@@ -432,7 +433,12 @@
     (: m (umeminfo 0)
        (g k) (peep m k 0)
        div (? (elem "-g" as) 1048576 (? (elem "-m" as) 1024 1))
-       (cell x) (upad 12 (show (// x div)))
+       ; -h: the unit each number fits, procps' suffixes. the readings are KiB out of
+       ; /proc/meminfo, so the ladder starts at Ki
+       (hum k) (: (go v us) (? (v < 1024 || !(two? >us)) (show v + <us) (go (// v 1024) >us))
+                  (go k '("Ki" "Mi" "Gi" "Ti" "Pi")))
+       h? (elem "-h" as)
+       (cell x) (upad 12 (? h? (hum x) (show (// x div))))
        tot (g 'MemTotal) fre (g 'MemFree) av (g 'MemAvailable)
        bc (((g 'Buffers) + (g 'Cached)) + (g 'SReclaimable))
        st (g 'SwapTotal) sf (g 'SwapFree)
@@ -490,6 +496,7 @@
     (: t (tablet 0)
        o (uopt as t () '(101) ())
        _ (? (two? o) () (udie 2 "usage: pgrep [-f] [-x] PATTERN"))
+       _ (: c (uoptun t "fx") (? (nil? c) () (udie 2 ("pgrep: unknown option -" + string c))))
        rest <>>o
        _ (? (two? rest) () (udie 2 "usage: pgrep [-f] [-x] PATTERN"))
        ps (upfind (peep t 102 0) (peep t 120 0) <rest)
@@ -502,6 +509,7 @@
        t (tablet 0)
        o (uopt rest t () '(101) ())
        _ (? (two? o) () (udie 2 "usage: pkill [-SIG] [-f] [-x] PATTERN"))
+       _ (: c (uoptun t "fx") (? (nil? c) () (udie 2 ("pkill: unknown option -" + string c))))
        ws <>>o
        _ (? (two? ws) () (udie 2 "usage: pkill [-SIG] [-f] [-x] PATTERN"))
        ps (upfind (peep t 102 0) (peep t 120 0) <ws)

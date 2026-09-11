@@ -51,6 +51,10 @@
     (: t (tablet 0)
        o (uopt as t '(101 109) '(101) ())              ; -e pattern (stacks), -m count
        _ (? (two? o) () (udie 2 "grep: bad option"))
+       ; -a is in the usage and read nowhere: everything here is text, so it is a
+       ; no-op and not an unknown
+       _ (: c (uoptun t "nvclqhaixwFEoem")
+            (? (nil? c) () (udie 2 ("grep: unknown option -" + string c))))
        eps <>o rest <>>o
        ; with -e the whole tail is files; without it the first word is the pattern
        _ (? (two? eps || two? rest) ()
@@ -116,7 +120,8 @@
        ; step budget on exactly those and scares when it runs out. this is where the
        ; scare becomes a sentence and a status instead of a stack. any other scare is
        ; re-raised: swallowing it here would turn a real fault into "too costly".
-       _ (trap (\ _ (ureachm (\ f (: _ (say err ("grep: " + f + ": No such file or directory"))
+       _ (trap (\ _ (ureachm (\ f (: _ (say err ("grep: " + f + (udirp f ? ": Is a directory"
+                                                                ": No such file or directory")))
                                      _ (put err 10) _ (pin st 'bad 1) 0))
                              (\ f first rd
                                 (: _ (pin st 'hit (dof (? (f = "-") "(standard input)" f) rd

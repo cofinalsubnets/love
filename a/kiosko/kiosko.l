@@ -150,9 +150,7 @@
    (after1 s)   (: n #s
                    (skipw i) (i < n && s i != 32 ? (skipw (i + 1)) i)
                    (skips i) (i < n && s i  = 32 ? (skips (i + 1)) i)
-                   (snip s (skips (skipw 0)) n))
-   (numof s)    ((: (g i acc) (i < #s && 48 <= s i && s i <= 57 ?
-                               (g (i + 1) (acc * 10 + (s i - 48))) acc)) 0 0))
+                   (snip s (skips (skipw 0)) n)))
 
 ; --- the request line ----------------------------------------------------------------
 ; -1 for "not a hex digit", never () -- a valid digit can be 0, and 0 is nothing (it
@@ -338,15 +336,14 @@
        l)))
 
 ; --- the command line ---------------------------------------------------------------------
-(: _ (:
-   (usage _) (: _ (puts "kiosko -- the newsstand: a static web server over a directory
+(: kiosko-usage "kiosko -- the newsstand: a static web server over a directory
 usage: kiosko [-p PORT] [-q] [DIR]
   -p, --port N   the port to serve on (default 8080)
   -q, --quiet    do not log requests
   DIR            the document root (default .)
-")
-                (quit 0))
-   (need h r) (atom? r ? (say err $ "kiosko: " + h + " needs an argument\n", quit 2))
+"
+   _ (:
+   (kdie c m) (: _ (say err ("kiosko: " + m)) _ (put err 10) (quit c))
    (kiosko-main as)
    (: _ (? !(nil? (cite 'kiosko)) (borrow 'kiosko))  ; splice my registered self if I am one (cook-main's
                                                   ; guard); on a -l load my names already walk
@@ -354,21 +351,21 @@ usage: kiosko [-p PORT] [-q] [DIR]
       ; and this is called on a chain that carries neither: the line above puts back
       ; this file's own names, and nothing puts back the doors it was loaded with.
       _ (borrow 'posix)
-      box {'port 8080 'root "."}
-      (loop (w . r))
-        (w @ ("-p" || "--port") (need w r, pin box 'port (numof <r), loop >r)
-             ("-q" || "--quiet") (pin box 'quiet 1, loop r)
-             ("-h" || "--help")  (usage 0)
-             ("-v" || "--version") (puts ("kiosko (love " + love-version + ")\n"),
-                                    flush out, quit 0)
-             (pin box 'root w, loop r))
-      _ (loop as)
-      port (peep box 'port 8080)
-      _ (!(dir? (peep box 'root ".")) ?
-         (say err $ "kiosko: not a directory: " + peep box 'root ".", put err 10, quit 1))
-      r (serve (peep box 'root ".") port (peep box 'quiet 0) ())
-      _ (nom? r ?
-         (say err ("kiosko: cannot listen on :" + show port + " -- " + show r), put err 10, quit 1))
+      t (tablet 0)
+      o (uopt as t '(112) () {"port" 112 "quiet" 113})
+      _ (two? o ? 0 (kdie 2 (last as + " needs an argument")))
+      un (uoptun t '(112 113))
+      _ (nil? un ? 0 (kdie 2 ("unknown option -" + string un)))
+      rest <>>o
+      sy (uoptstray as rest)
+      _ (nil? sy ? 0 (kdie 2 ("unknown option " + sy)))
+      _ (two? >rest ? (kdie 2 ("one directory at a time, not " + <>rest)) 0)
+      root (two? rest ? <rest ".")
+      pt (uoptv t 112)
+      port (: v (unum pt) (? (nil? pt) 8080 (charm? v) v (kdie 2 ("not a port: " + pt))))
+      _ (!(dir? root) ? (kdie 1 ("not a directory: " + root)))
+      r (serve root port (peep t 113 0) ())
+      _ (nom? r ? (kdie 1 ("cannot listen on :" + show port + " -- " + show r)))
       (quit 0))
    kiosko-main)
 
@@ -378,7 +375,8 @@ usage: kiosko [-p PORT] [-q] [DIR]
 ; script -- sits in the program seat of the real command line. kiosko-main reads bare:
 ; whichever layer holds this file's binds is still the head here. body-having, so
 ; nothing leaks.
-(: _ (pins (cite 'verbs 'tab) 'kiosko kiosko-main)
+(: door (udoor 'kiosko kiosko-main kiosko-usage 1 1)
+   _ (pins (cite 'verbs 'tab) 'kiosko door)
    s (cite 'verbs 'fire ["kiosko" "kiosko.l"])
-   (two? s ? (kiosko-main >s)))
+   (two? s ? (door >s)))
 ) ; module kiosko

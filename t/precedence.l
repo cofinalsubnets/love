@@ -110,23 +110,23 @@
  (: was (grip 2 '<+> -60)                           ; haskell's `infixl 7 <+>` -- the minus is the left hand
     tree (opfix '(a <+> b <+> c))
     _ (grip 2 '<+> was)
-    (&& (was = ()) (tree = '(<+> (<+> a b) c))))      ; undeclared before; left-handed after
- (: _ (grip 2 '<+> 60)                              ; `infixr 7` -- a positive band is right-handed
+    (was = () && tree = '(<+> (<+> a b) c))) ; undeclared before; left-handed after
+ (: _ (grip 2 '<+> 60)                       ; `infixr 7` -- a positive band is right-handed
     tree (opfix '(a <+> b <+> c))
     _ (grip 2 '<+> ())
     (tree = '(<+> a (<+> b c))))
  (: _ (grip 2 '<+> -60)
-    prev (grip 2 '<+> ())                             ; () clears, and answers what it cleared
-    (&& (prev = -60) ((opfix '(a <+> b * c)) = '(* (<+> a b) c))))   ; back to house band -- above *
- ((grip 2 '<+> ()) = ())                              ; clearing an absent row is a no-op answering ()
- (: _ (grip 2 '=: '(pin 20))                        ; the (nom band) alias: a target with no row to lend
+    prev (grip 2 '<+> ())                                        ; () clears, and answers what it cleared
+    (prev = -60 && ((opfix '(a <+> b * c)) = '(* (<+> a b) c)))) ; back to house band -- above *
+ ((grip 2 '<+> ()) = ())                                         ; clearing an absent row is a no-op answering ()
+ (: _ (grip 2 '=: '(pin 20))                                     ; the (nom band) alias: a target with no row to lend
     tree (opfix '(t =: k))
     _ (grip 2 '=: ())
     (tree = '(pin t k)))
  (: was (grip 2 '+ -70)                             ; a core operator can be re-gripped ..
     tree (opfix '(a + b * c))
     _ (grip 2 '+ was)                                 ; .. and put back
-    (&& (tree = '(* (+ a b) c)) ((opfix '(a + b * c)) = '(+ a (* b c)))))
+    (tree = '(* (+ a b) c) && ((opfix '(a + b * c)) = '(+ a (* b c)))))
  ; a shape op-ent refuses is rolled back and scared -- never pinned, because a bad row does not
  ; error, it silently demotes its operator to the fresh-punct default.
  (!(catch (\ _ (grip 2 '^^ 0))))                      ; band 0 -- a table miss answers 0, so zero can never be a row
@@ -158,18 +158,18 @@
  (: t (tablet 0) _ (pin t 0 0)                        ; a span link is still evaluated once
     (bump v) (: _ (pin t 0 (1 + (peep t 0 0))) 2)
     r (1 < bump () < 3)
-    (&& r (1 = (peep t 0 0))))
+    (r && (1 = (peep t 0 0))))
  (0 = (1 < (2 < 3)))                                  ; parens opt out: (< 2 3) is 1, and (< 1 1) is 0
  ((show (opfix '(a < b))) = (show '(< a b)))          ; one link is a plain comparison, untouched
  ((show (opfix '(< a (< b c)))) = (show '(< a (< b c))))   ; ..and the prefix spelling stays a fixed point
  (: t (tablet 0) _ (pin t 0 0)                        ; the shared operand runs once, not twice
     (bump v) (: _ (pin t 0 (1 + (peep t 0 0))) 2)
     r (1 < (bump ()) < 3)
-    (&& r (1 = (peep t 0 0))))
+    (r && (1 = (peep t 0 0))))
  (: t (tablet 0) _ (pin t 0 0)                        ; ..and a false link never reaches the rest
     (bump v) (: _ (pin t 0 999) 9)
     r (2 < 1 < (bump ()))
-    (&& !r (0 = (peep t 0 0)))))
+    (!r && (0 = (peep t 0 0)))))
 (test
  (!(catch (\ _ (grip 7 '^^ 60))))                   ; ..and a lane with no key is refused, never minted
 
@@ -182,14 +182,14 @@
  (: was (grip 0 '& 'cup)                            ; coin a glued sigil ..
     tree (opfix '&x)
     _ (grip 0 '& was)
-    (&& (was = ()) (tree = '(cup x))))                 ; .. it factors, then clears
- ((unglue (opfix '?5)) = '(bit 5))                    ; the glued lane survived intact
+    (was = () && tree = '(cup x))) ; .. it factors, then clears
+ ((unglue (opfix '?5)) = '(bit 5)) ; the glued lane survived intact
 
  ; --- && / || stay lazy: the macro rides ?/: , so the right arm never fires when the left decides it.
  ; a mutable tablet witnesses the non-evaluation (kept LOCAL in a body-having `:`). ---
  (: t (tablet 0) _ (pin t 0 0)
     r (1 || (pin t 0 999))                            ; 1 is truthy -> the pin never runs
-    (&& (r = 1) (0 = (peep t 0 0))))
+    (r = 1 && (0 = (peep t 0 0))))
  (: t (tablet 0) _ (pin t 0 0)
     r (0 && (pin t 0 999))                            ; 0 is false -> && short-circuits, the pin never runs
-    (&& (! r) (0 = (peep t 0 0)))))
+    ((! r) && (0 = (peep t 0 0)))))

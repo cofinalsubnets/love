@@ -87,11 +87,11 @@
                     (lam n (zaddn a n))
                     (lam n (zsubn a (succ n)))
                     b))))
- (= (vof 0 '(ii1 5)) (vof 0 '(zadd (ii1 2) (ii1 3))))
- (= (vof 0 '(ii2 0)) (vof 0 '(zadd (ii1 2) (ii2 2))))     ;  2 + (-3) = -1
- (= (vof 0 '(ii1 1)) (vof 0 '(zadd (ii2 1) (ii1 3))))     ; -2 +   3  =  1
- (= (vof 0 '(ii2 3)) (vof 0 '(zadd (ii2 1) (ii2 1))))     ; -2 + (-2) = -4
- (= (vof 0 '(ii1 0)) (vof 0 '(zsucc (ii2 0)))))
+ (vof 0 '(ii1 5) = vof 0 '(zadd (ii1 2) (ii1 3)))
+ (vof 0 '(ii2 0) = vof 0 '(zadd (ii1 2) (ii2 2))) ;  2 + (-3) = -1
+ (vof 0 '(ii1 1) = vof 0 '(zadd (ii2 1) (ii1 3))) ; -2 +   3  =  1
+ (vof 0 '(ii2 3) = vof 0 '(zadd (ii2 1) (ii2 1))) ; -2 + (-2) = -4
+ (vof 0 '(ii1 0) = vof 0 '(zsucc (ii2 0))))
 
 ; --- rea: a real is a half-integer, z + (h ? 1/2 : 0). ceil is the carry ---
 (test
@@ -106,9 +106,9 @@
       (tpair (zsucc (zadd (pr1 a) (pr1 b))) false)           ; two halves carry
       (tpair (zadd (pr1 a) (pr1 b)) (orb (pr2 a) (pr2 b)))
       (andb (pr2 a) (pr2 b))))))
- (= (vof 0 '(ii1 3)) (vof 0 '(rceil (rmk (ii1 2) true))))  ; ceil  2.5 =  3
- (= (vof 0 '(ii2 1)) (vof 0 '(rceil (rmk (ii2 2) true))))  ; ceil -2.5 = -2
- (= (vof 0 '(rmk (ii1 3) false)) (vof 0 '(radd (rmk (ii1 1) true) (rmk (ii1 1) true)))))
+ (vof 0 '(ii1 3) = vof 0 '(rceil (rmk (ii1 2) true))) ; ceil  2.5 =  3
+ (vof 0 '(ii2 1) = vof 0 '(rceil (rmk (ii2 2) true))) ; ceil -2.5 = -2
+ (vof 0 '(rmk (ii1 3) false) = vof 0 '(radd (rmk (ii1 1) true) (rmk (ii1 1) true))))
 
 ; --- msr: the measure is complex, and re is the rung love's ceil reads ---
 (test
@@ -1526,12 +1526,12 @@
 ; --- non-negative charm" and "0 or 1" are read off the ladder rather than
 ; --- checked. the demos: the tower computes ---
 (test
- (= (vof 0 '(ii1 3))  (vof 0 '(vceil (rval (rmk (ii1 2) true)))))   ; ceil 2.5 = 3
- (= (vof 0 '3)        (vof 0 '(vsat  (rval (rmk (ii1 2) true)))))   ; $2.5 = 3
- (= (vof 0 '0)        (vof 0 '(vsat  (zval (zneg 4)))))             ; $-5 = 0
- (= (vof 0 'false)    (vof 0 '(vbit  (zval (zneg 4)))))             ; ?-5 = 0
- (= (vof 0 'true)     (vof 0 '(vnil  (zval (zneg 4)))))             ; !-5 = 1
- (= (vof 0 'true)     (vof 0 '(vbit  (nval 2))))
+ (vof 0 '(ii1 3) = vof 0 '(vceil (rval (rmk (ii1 2) true)))) ; ceil 2.5 = 3
+ (vof 0 '3 = vof 0 '(vsat  (rval (rmk (ii1 2) true))))       ; $2.5 = 3
+ (vof 0 '0 = vof 0 '(vsat  (zval (zneg 4))))                 ; $-5 = 0
+ (vof 0 'false = vof 0 '(vbit  (zval (zneg 4))))             ; ?-5 = 0
+ (vof 0 'true = vof 0 '(vnil  (zval (zneg 4))))              ; !-5 = 1
+ (vof 0 'true = vof 0 '(vbit  (nval 2)))
  ; a link: (1 2) nets 3, and the pair sits one level up
  (= (vof 0 '3)
       (vof 0 '(vsat (tpair 1 (ii2 (tpair (anum (rmsr (zrea (nzed 1))))
@@ -1545,20 +1545,20 @@
       (vof 0 '(vceil (vnum (tpair (zrea (nzed 3)) (zrea (nzed 4)))))))
  ; --- and veq discriminates, which is what keeps its laws from being vacuous:
  ; --- a constant-true equality would prove every one of them ---
- (= (vof 0 'true)  (vof 0 '(veq (nval 2) (nval 2))))
- (= (vof 0 'false) (vof 0 '(veq (nval 2) (nval 3))))
- (= (vof 0 'true)  (vof 0 '(vtwo (vlink (nval 1) (nval 2)))))
- (= (vof 0 'false) (vof 0 '(vtwo (nval 1))))
- (= (vof 0 'false) (vof 0 '(veq (vlink (nval 1) (nval 2)) (nval 1))))
- (= (vof 0 'false) (vof 0 '(veq (vlink (nval 1) (nval 2)) (vlink (nval 2) (nval 1)))))
+ (vof 0 'true = vof 0 '(veq (nval 2) (nval 2)))
+ (vof 0 'false = vof 0 '(veq (nval 2) (nval 3)))
+ (vof 0 'true = vof 0 '(vtwo (vlink (nval 1) (nval 2))))
+ (vof 0 'false = vof 0 '(vtwo (nval 1)))
+ (vof 0 'false = vof 0 '(veq (vlink (nval 1) (nval 2)) (nval 1)))
+ (vof 0 'false = vof 0 '(veq (vlink (nval 1) (nval 2)) (vlink (nval 2) (nval 1))))
  ; cap and cup invert a link, and the padding a link costs is not observable
- (= (vof 0 'true)  (vof 0 '(veq (vcap (vlink (nval 1) (nval 2))) (nval 1))))
- (= (vof 0 'true)  (vof 0 '(veq (vcup (vlink (nval 1) (nval 2))) (nval 2))))
+ (vof 0 'true = vof 0 '(veq (vcap (vlink (nval 1) (nval 2))) (nval 1)))
+ (vof 0 'true = vof 0 '(veq (vcup (vlink (nval 1) (nval 2))) (nval 2)))
  (= (vof 0 'true)  (vof 0 '(veq (vlink (vlink (nval 1) (nval 2)) (nval 3))
                                 (vlink (vlink (nval 1) (nval 2)) (nval 3)))))
  ; an atom is its own cap; its cup is ()
- (= (vof 0 'true)  (vof 0 '(veq (vcap (nval 7)) (nval 7))))
- (= (vof 0 'true)  (vof 0 '(veq (vcup (nval 7)) vnilv)))
+ (vof 0 'true = vof 0 '(veq (vcap (nval 7)) (nval 7)))
+ (vof 0 'true = vof 0 '(veq (vcup (nval 7)) vnilv))
  ; --- and veq composes: a value, its padded self, and the same value read back
  ; --- out of a deeper link are three spellings, and the chain closes ---
  (= (vof 0 'true)
@@ -1571,11 +1571,11 @@
       (vof 0 '(veq (vlink (nval 1) (nval 2)) (vlink (nval 1) (nval 3)))))
  ; --- and the pinned carrier: the index a value carries is the height it has,
  ; --- where the unpinned one carries whatever height it was met at ---
- (= (vof 0 '0) (vof 0 '(pr1 (pr1 (pin (nval 7))))))
- (= (vof 0 '1) (vof 0 '(pr1 (pr1 (pin (vlink (nval 1) (nval 2)))))))
- (= (vof 0 '2) (vof 0 '(pr1 (pr1 (pin (vlink (vlink (nval 1) (nval 2)) (nval 3)))))))
+ (vof 0 '0 = vof 0 '(pr1 (pr1 (pin (nval 7)))))
+ (vof 0 '1 = vof 0 '(pr1 (pr1 (pin (vlink (nval 1) (nval 2))))))
+ (vof 0 '2 = vof 0 '(pr1 (pr1 (pin (vlink (vlink (nval 1) (nval 2)) (nval 3))))))
  ; the cup of that link is the number 3, met at height 1 and living at 0
- (= (vof 0 '1) (vof 0 '(pr1 (vcup (vlink (vlink (nval 1) (nval 2)) (nval 3))))))
+ (vof 0 '1 = vof 0 '(pr1 (vcup (vlink (vlink (nval 1) (nval 2)) (nval 3)))))
  (= (vof 0 '0)
       (vof 0 '(pr1 (pr1 (pin (vcup (vlink (vlink (nval 1) (nval 2)) (nval 3))))))))
  ; ..and the two spellings net the same, which is what makes pin a change of
@@ -1583,7 +1583,7 @@
  (= (vof 0 '(vnet (nval 3)))
       (vof 0 '(pnet (pin (vcup (vlink (vlink (nval 1) (nval 2)) (nval 3)))))))
  ; the bridge, computed: what veq accepts the pinned values agree on
- (= (vof 0 'true) (vof 0 '(veq (vcup (vlink (vlink (nval 1) (nval 2)) (nval 3))) (nval 3))))
+ (vof 0 'true = vof 0 '(veq (vcup (vlink (vlink (nval 1) (nval 2)) (nval 3))) (nval 3)))
  (= (vof 0 '(pin (nval 3)))
       (vof 0 '(pin (vcup (vlink (vlink (nval 1) (nval 2)) (nval 3)))))))
 

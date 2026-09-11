@@ -54,7 +54,7 @@
     v <>r
     p (v "params")
     (&& (two? r) (() = (p "diagnostics")) ("file:///x.l" = (p "uri"))
-        (: r2 (json-read (json-show v)) (&& (two? r2) (() = ((<>r2 "params") "diagnostics")))))))
+        (: r2 (json-read (json-show v)) (two? r2 && (() = ((<>r2 "params") "diagnostics")))))))
 
 (test_fin ())
 (puts "json: ok")

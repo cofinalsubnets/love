@@ -22,10 +22,10 @@
     (coin? a)                      ; a is a coin
     !(coin? 5)               ; a plain value is not
     !(coin? "s")
-    (3 = load a)                 ; load reads the payload
-    (7 = load 7)                 ; load of a non-coin is itself
-    (= (kind a) (kind (z5 3)))     ; every z5 coin names one kind
-    (nil? (kinds (kind 5)))        ; a built-in kind has no table
+    (3 = load a)           ; load reads the payload
+    (7 = load 7)           ; load of a non-coin is itself
+    (kind a = kind (z5 3)) ; every z5 coin names one kind
+    !(kinds (kind 5))      ; a built-in kind has no table
 
     ; --- kind: the name a value dispatches as; the coin row refined ---
     ('z5 = kind a)
@@ -39,9 +39,9 @@
     ([(z5 1) (sm 1)] = sort [(sm 1) (z5 1)])   ; distinct kinds order by registration
 
     ; --- value equality: same kind + eqv payloads ---
-    (a = z5 3)                   ; by value, not identity
-    (nil? (a = z5 4))            ; different payload
-    (nil? (a = sm 3))            ; different kind (even with equal payload)
+    (a = z5 3)  ; by value, not identity
+    !(a = z5 4) ; different payload
+    !(a = sm 3) ; different kind (even with equal payload)
 
     ; --- + and * run the kind's methods over the payloads ---
     (z5 2 = a + b)             ; (3+4) mod 5 = 2
@@ -81,7 +81,7 @@
     (sm 5 = sm 2 + sm 3)   ; ... but same-kind still combines
 
     ; --- tally delegates to the payload ---
-    (3 = (tally (sm [7 8 9])))    ; a coin over a 3-list tallies its payload
+    (3 = #(sm [7 8 9]))    ; a coin over a 3-list tallies its payload
 
     ; --- net-mode 1 (slot 6): net by tally -- truth reads "has any", never "sums green" ---
     (2 = $(cnt [1 -5]))      ; content sums -4; the count is 2
@@ -103,7 +103,7 @@
     ; in a form is an application, so the old (q (1 2)) read back as q applied to 2; now the
     ; rational wears the operator, which reads back as itself.
     ("(1 /// 2)" = show (2 /// 4))
-    (1 /// 2 = ev (cap (sound (show (2 /// 4)))))   ; ..and that is the whole claim, checked
+    (1 /// 2 = ev <(sound (show (2 /// 4))))   ; ..and that is the whole claim, checked
 
     ; --- a rational promotes across the tower, like every other numeric rung ---
     ; the law that pins it: `=` has to agree with the order it is already given. a
@@ -127,22 +127,22 @@
     (-1 /// 1 = 1 /// 2 - 3 /// 2)   ; goes red exactly
     (1 /// 2 = 3 /// 2 - 1)          ; an integer rides cap/mint, either side
     (1 /// 2 = 1 - 1 /// 2)
-    (nil? (1 /// 2 - ()))          ; () is absent to -, so there is nothing to compute
-    (nil? (() - 1 /// 2))          ; ... either side
-    !(a - z5 1)                ; a kind without - -> nil, like sm's *
-    !(a - sm 3)                ; distinct kinds never combine
+    !(1 /// 2 - ()) ; () is absent to -, so there is nothing to compute
+    !(() - 1 /// 2) ; ... either side
+    !(a - z5 1)     ; a kind without - -> nil, like sm's *
+    !(a - sm 3)     ; distinct kinds never combine
 
     ; --- `/` rides slot 8: q pins it (invert and multiply); zero has no reciprocal ---
-    (3 /// 2 = 1 /// 2 / 1 /// 3)    ; (1/2) / (1/3) = 3/2
-    (1 /// 4 = 1 /// 2 / 2)          ; an integer rides cap/mint, either side
-    (2 /// 1 = 1 / 1 /// 2)          ; ... so 1 / (1/2) is the reciprocal, exact
-    (-3 /// 2 = 1 /// 2 / -1 /// 3)  ; the sign lands on the numerator, reduced
-    !(1 /// 2 / 0 /// 1)         ; by zero -> (): Q holds no inf
-    !(1 /// 2 / 0)               ; ... the bare zero too
-    (nil? (1 /// 2 / ()))          ; ... and absent to / as well
-    (nil? (() / 1 /// 2))          ; ... either side
-    !(a / z5 2)                ; a kind without slot 8 -> nil
-    !(a / sm 3)                ; distinct kinds never combine
+    (3 /// 2 = 1 /// 2 / 1 /// 3)   ; (1/2) / (1/3) = 3/2
+    (1 /// 4 = 1 /// 2 / 2)         ; an integer rides cap/mint, either side
+    (2 /// 1 = 1 / 1 /// 2)         ; ... so 1 / (1/2) is the reciprocal, exact
+    (-3 /// 2 = 1 /// 2 / -1 /// 3) ; the sign lands on the numerator, reduced
+    !(1 /// 2 / 0 /// 1)            ; by zero -> (): Q holds no inf
+    !(1 /// 2 / 0)                  ; ... the bare zero too
+    !(1 /// 2 / ())                 ; ... and absent to / as well
+    !(() / 1 /// 2)                 ; ... either side
+    !(a / z5 2)                     ; a kind without slot 8 -> nil
+    !(a / sm 3)                     ; distinct kinds never combine
 
     ; --- a method owns its domain: off it (no star / (n d)-of-stars face), () ---
     !(1 /// 2 + [(1 /// 1) (0 /// 1)])    ; a chain of coins is not an (n d)

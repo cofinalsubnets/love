@@ -12,24 +12,24 @@
 ; kernel (a cryptic ;; missing vof -> BADJJ). Fail loudly and by name instead if that ever recurs.
 (test (elem 'vof (names ())))
 (:
-   (uk-jj a b) (vof 0 ['kjoin a b])                          ; kjoin a b, run in the kernel
-   (uk-all f)  (foldl (\ acc x (&& acc (f x))) 1 uk-codes)   ; forall over the carrier
+   (uk-jj a b) (vof 0 ['kjoin a b])                      ; kjoin a b, run in the kernel
+   (uk-all f)  (foldl (\ acc x (acc && f x)) 1 uk-codes) ; forall over the carrier
    (uk-all2 f) (uk-all (\ a (uk-all (\ b (f a b)))))
    (uk-all3 f) (uk-all (\ a (uk-all (\ b (uk-all (\ c (f a b c)))))))
-   uk-bot (cap uk-codes)                                     ; the floor  (bot, code 0)
-   uk-top (cap (cup (rev uk-codes))))                        ; the ceiling (top, below str)
+   uk-bot <uk-codes         ; the floor  (bot, code 0)
+   uk-top <>(rev uk-codes)) ; the ceiling (top, below str)
 
 (test
  ; --- a bounded join-semilattice, exhaustively over uk-codes ---
- (uk-all  (\ a     (= (uk-jj a a) a)))                              ; idempotent
- (uk-all2 (\ a b   (= (uk-jj a b) (uk-jj b a))))                    ; commutative
- (uk-all3 (\ a b c (= (uk-jj (uk-jj a b) c) (uk-jj a (uk-jj b c))))) ; associative
- (uk-all  (\ a (&& (= (uk-jj uk-bot a) a) (= (uk-jj a uk-bot) a)))) ; bot the identity
- (uk-all  (\ a (&& (= (uk-jj uk-top a) uk-top) (= (uk-jj a uk-top) uk-top)))) ; top absorbs
+ (uk-all  (\ a     (uk-jj a a = a)))                                      ; idempotent
+ (uk-all2 (\ a b   (uk-jj a b = uk-jj b a)))                              ; commutative
+ (uk-all3 (\ a b c (uk-jj (uk-jj a b) c = uk-jj a (uk-jj b c))))          ; associative
+ (uk-all  (\ a ((uk-jj uk-bot a = a) && (uk-jj a uk-bot = a))))           ; bot the identity
+ (uk-all  (\ a ((uk-jj uk-top a = uk-top) && (uk-jj a uk-top = uk-top)))) ; top absorbs
  ; --- str (the last code) is the incomparable branch: it joins up to top against
  ;     any numeric, so it is not the spine's max (that is the whole point of str) ---
- (= (vof 0 '(numq 6)) (vof 0 'false))            ; str is not numeric
- (= (uk-jj 6 1) uk-top))                         ; str `join` charm = top, not str
+ (vof 0 '(numq 6) = vof 0 'false) ; str is not numeric
+ (uk-jj 6 1 = uk-top))            ; str `join` charm = top, not str
 
 ; --- the bridge: kinds.l's four driver cases as uu idpath lemmas. these are real
 ;     kernel proof terms (paths over a computing join), so they export axiom-free

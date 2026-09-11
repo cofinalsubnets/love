@@ -235,8 +235,14 @@
    ; an operand open for reading -> [port close?] | (). "-" is stdin and is not
    ; closed after: a later operand may be it again. `miss` says the complaint, because
    ; grep and sed each owe GNU a different sentence for the same failure.
+   ; is the path a directory (stat follows links, like the tools want)
+   (udirp q) (: st (stat q) (two? st && (16384 = (& 61440 <>>st))))
    (uin miss f)
     (? (f = "-") [in 0]
+       ; a directory opens, and reading it hands back the raw getdents bytes: `cat DIR`
+       ; printed them and `wc DIR` counted none, both leaving 0. it is a miss like any
+       ; other -- the complaint is the caller's sentence and the status follows
+       (udirp f) (: _ (miss f) ())
        (: q (open f "r") (? (hot? q) [q 1] (: _ (miss f) ()))))
    (umiss who) (\ f (: _ (say err (who + ": cannot open " + f)) _ (put err 10) 0))
    ; the driver the rest ride: body gets (name first? reader) per operand and answers

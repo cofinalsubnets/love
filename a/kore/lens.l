@@ -51,8 +51,8 @@
     (: t (tablet 0)
        o (uopt as t '(119) '(101) ())                       ; -w takes a value
        _ (? (two? o) () (udie 2 h2t-usage))
-       _ (foldl (\ a c (? (c = 119) a
-                          (udie 2 ("html2text: unknown option -" + string c)))) 0 (keys t))
+       _ (: c (uoptun t '(119))
+            (? (nil? c) () (udie 2 ("html2text: unknown option -" + string c))))
        ws (tty 1)                                     ; the width is the OUTPUT's
        w (lens-w t ws)
        tty? (two? ws)
@@ -68,8 +68,8 @@
     (: t (tablet 0)
        o (uopt as t '(116 119) '(101) ())                   ; -t and -w take values
        _ (? (two? o) () (udie 2 md-usage))
-       _ (foldl (\ a c (? (elem c '(116 119)) a
-                          (udie 2 ("markdown: unknown option -" + string c)))) 0 (keys t))
+       _ (: c (uoptun t '(116 119))
+            (? (nil? c) () (udie 2 ("markdown: unknown option -" + string c))))
        v (uoptv t 116)
        to (? (string? v) v "html")
        _ (? (elem to md-tos) () (udie 2 md-usage))

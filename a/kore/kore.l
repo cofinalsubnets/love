@@ -435,12 +435,25 @@
    korenoh '(grep du ls sort touch chown ln free)
    korenov '(grep awk od join nl uname cat head tail cp mv rm ln mkdir rmdir chmod
              chown install mount umount readlink patch pgrep pkill killall)
+   ; the tools that read no options at all, and the few dash words the two of them
+   ; that do read still answer. each of these ignored every argument it was handed,
+   ; so `arch -Z` printed the machine and `ps --nosuch` the process table -- the walk
+   ; is the leading words only, which leaves `ps aux` (no dash) exactly as it was.
+   korebare '(arch nproc whoami groups uptime pwd ps free)
+   korebareok {'ps '("-e" "-A" "-a" "-ax" "-x") 'free '("-g" "-m" "-h")}
+   (kobare nm as)
+    (: ok (peep korebareok nm ())
+       (<(filter (w \ 1 < #w && w 0 = 45 && !(elem w ok)) as)))
    ; the applet as the world calls it: cli's door, then the tool under urun. both
    ; dispatch lanes come through here -- the verb registry and the symlink -- so there
    ; is one answer and not two. what kore keeps is the policy: which names take no
    ; flags at all, which have spoken for a letter themselves, and the usage text.
    (koredoor nm f)
-    (: (run as) (urun f as)
+    (: (run as) (? !(elem nm korebare) (urun f as)
+                   (: w (kobare nm as)
+                      (? (nil? w) (urun f as)
+                         (: _ (say err (string nm + ": unknown option " + w))
+                            _ (put err 10) 2))))
        (? (elem nm korenoflag) run
           (udoor nm run (peep korehelp nm ()) !(elem nm korenoh) !(elem nm korenov))))
 

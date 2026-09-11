@@ -15,22 +15,22 @@
 ; which compile correctly. Same algorithm, identical output.
 
 (: facts (tablet 0) bells (tablet 0) digits "0123456789abcdefghijklmnopqrstuvwxyz"
-   (digit d) (snip digits d (+ d 1))
-   (choose n k) (/ (fact n) (* (fact k) (fact (- n k))))
+   (digit d) (snip digits d (d + 1))
+   (choose n k) (fact n / (fact k * fact (n - k)))
    (fact n) (:
-    (f n x) (? (< n 2) x (f (- n 1) (* x n)))
+    (f n x) (? (n < 2) x (f (n - 1) (x * n)))
     v (facts n)
     (? v v (: v (f n 1) _ (pin facts n v) v)))
    (bell n) (:
-    (f n k x) (? (>= k n) x (f n (+ k 1) (+ x (* (choose (- n 1) k) (bell k)))))
+    (f n k x) (? (k >= n) x (f n (k + 1) (x + (choose (n - 1) k * bell k))))
     v (bells n)
-    (? v v (: v (? (< n 2) 1 (f n 0 0)) _ (pin bells n v) v)))
-   (showloop acc n) (? (< n 1) acc (showloop (+ (digit (% n (tally digits))) acc)(// n (tally digits)) ))
+    (? v v (: v (? (n < 2) 1 (f n 0 0)) _ (pin bells n v) v)))
+   (showloop acc n) (? (n < 1) acc (showloop (digit (n % tally digits) + acc)(n // tally digits) ))
    show (showloop "")
-   (gen i limit) (: b (show (bell i)) (? (<= (tally b) limit) (. b (gen (+ i 1) limit))))
-   (leq a b) (? (two? a) (? (two? b) (? (= (cap a) (cap b)) (leq (cup a) (cup b)) 0) 0)
+   (gen i limit) (: b (show (bell i)) (? (tally b <= limit) (. b (gen (i + 1) limit))))
+   (leq a b) (? (two? a) (? (two? b) (? (cap a = cap b) (leq >a >b) 0) 0)
                          (? (two? b) 0 1))
-   (ln x) (foldl (\ n _ (+ 1 n)) 0 x)            ; line count ($ on a list is the net sum)
+   (ln x) (foldl (\ n _ (1 + n)) 0 x)            ; line count ($ on a list is the net sum)
    out (gen 0 280)
    ; expected: byte-exact stdout of `ruby t/bell.rb` (n defaults to 280),
    ; 291 lines, B(0..290) in base 36.
@@ -329,15 +329,15 @@
    )
  (test
   ; the Bell numbers themselves, decimal, cross-checked vs oeis a000110
-  (= 1 (bell 0)) (= 1 (bell 1)) (= 2 (bell 2)) (= 5 (bell 3)) (= 15 (bell 4))
-  (= 52 (bell 5)) (= 203 (bell 6)) (= 877 (bell 7)) (= 4140 (bell 8))
-  (= 21147 (bell 9)) (= 115975 (bell 10)) (= 4213597 (bell 12)) (= 27644437 (bell 13))
-  (= 51724158235372 (bell 20))                 ; past 32-bit, into bignums
-  (= 4638590332229999353 (bell 25))
+  (1 = bell 0) (1 = bell 1) (2 = bell 2) (5 = bell 3) (15 = bell 4)
+  (52 = bell 5) (203 = bell 6) (877 = bell 7) (4140 = bell 8)
+  (21147 = bell 9) (115975 = bell 10) (4213597 = bell 12) (27644437 = bell 13)
+  (51724158235372 = bell 20)                 ; past 32-bit, into bignums
+  (4638590332229999353 = bell 25)
   ; base-36 rendering of known values
-  (= "" (show 0)) (= "1" (show 1)) (= "f" (show 15)) (= "z" (show 35))
-  (= "10" (show 36)) (= "zz" (show 1295))
+  ("" = show 0) ("1" = show 1) ("f" = show 15) ("z" = show 35)
+  ("10" = show 36) ("zz" = show 1295)
   ; the full output matches the Ruby program's, line for line
-  (= 291 (ln out))
-  (= (ln expected) (ln out))
+  (291 = ln out)
+  (ln expected = ln out)
   (leq out expected)))

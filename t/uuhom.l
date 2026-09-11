@@ -35,7 +35,7 @@
  (test
   (6 = (vof 0 hc))
   ((vof 0 hc) = (lof hc))
-  ((vof 0 hc) = (((\ y (+ y 1)) * (\ x (+ x 2))) 3))))
+  ((vof 0 hc) = (((\ y (y + 1)) * (\ x (x + 2))) 3))))
 
 ; --- the skeleton, worn: an object is a location (a nat), the state one map,
 ; --- a morphism a state transformer. hmov is the relocation the design declines

@@ -112,8 +112,7 @@
                            md? (sv-doc p <>r ())
                            (sv-page p (hw-body p <>r) [(p + ".md") "the header, as a document"]))))]))))
 
-   (sv-usage _)
-   (: _ (say err "love serve -- the tree in a browser, painted on the way out
+   sv-usage "love serve -- the tree in a browser, painted on the way out
 usage: love serve [-p PORT] [-n] [DIR]
   -p, --port PORT   the port to listen on (default 8080)
   -n, --no-build    serve DIR as it is
@@ -123,8 +122,8 @@ page is laid first -- make web wasm site-wasm and the wasm inle seat -- and the 
 is at /i/wasm/inle.html. where DIR is no tree, this binary's own source is laid under it
 as `love source` lays it (love-VERSION/), and that tree is the one served. this binary
 drives that build: no love is rebuilt to serve a page.
-")
-      (quit 0))
+"
+   (sv-die c m) (: _ (say err ("serve: " + m)) _ (put err 10) (quit c))
 
    ; no tree at DIR: LAY one there -- the source this binary carries, and nothing more.
    ; the page is what a serve owes, and this binary already builds it; rebuilding love to
@@ -155,30 +154,23 @@ drives that build: no love is rebuilt to serve a page.
       st (charm? p && 0 <= p ? (wait p) 1)
       (0 = st ? 0 (say err ("serve: the page did not build (" + show st + ")\n"), quit 1)))
 
-   (sv-num s) (:- (g 0 0)
-                  (g i acc) (? (i < #s && 48 <= s i <= 57)
-                               (g (i + 1) (acc * 10 + (s i - 48))) acc))
-
    (serve-main as)
    (: box (tablet 0)
-      (loop ws port dir build)
-       (? !(two? ws) [port dir build]
-          (: w <ws r >ws
-             (? (w = "-p" || w = "--port")
-                 (two? r ? (loop >r (sv-num <r) dir build) (sv-usage 0))
-                (w = "-n" || w = "--no-build") (loop r port dir 0)
-                (w = "-h" || w = "--help") (sv-usage 0)
-                (w = "-v" || w = "--version")
-                 (puts ("serve (love " + love-version + ")\n"), flush out, quit 0)
-                ; DIR is positional, so a flag that fell through here would become one
-                ; and a whole tree would be laid under its name
-                (1 < #w && w 0 = 45)
-                 (say err ("serve: unknown option " + w + "\n"), sv-usage 0)
-                (loop r port w build))))
-      c (loop as 8080 "." 1)
-      port <c
-      dir0 <>c
-      build? <>>c
+      t (tablet 0)
+      o (uopt as t '(112) () {"port" 112 "no-build" 110})
+      _ (two? o ? 0 (sv-die 2 (last as + " needs an argument")))
+      un (uoptun t '(112 110))
+      _ (nil? un ? 0 (sv-die 2 ("unknown option -" + string un)))
+      rest <>>o
+      ; DIR is positional, so a flag that fell through would become one and a whole tree
+      ; would be laid under its name
+      sy (uoptstray as rest)
+      _ (nil? sy ? 0 (sv-die 2 ("unknown option " + sy)))
+      _ (two? >rest ? (sv-die 2 ("one tree at a time, not " + <>rest)) 0)
+      pt (uoptv t 112)
+      port (: v (unum pt) (? (nil? pt) 8080 (charm? v) v (sv-die 2 ("not a port: " + pt))))
+      dir0 (two? rest ? <rest ".")
+      build? (peep t 110 0 ? 0 1)
       ; the tree: DIR itself, or the one laid and seeded under it
       dir (? (sv-tree? dir0) dir0
              (sv-tree? (sv-root dir0)) (sv-root dir0)
@@ -195,7 +187,8 @@ drives that build: no love is rebuilt to serve a page.
 
    ; the verb, and the seat (kiosko's shape): `love serve ..` on the artifact, or
    ; this file named on a command line, and neither needs a script
-   _ (pins (cite 'verbs 'tab) 'serve serve-main)
+   door (udoor 'serve serve-main sv-usage 1 1)
+   _ (pins (cite 'verbs 'tab) 'serve door)
    s ((cite 'verbs 'fire) ["serve" "serve.l"])
-   _ (two? s && serve-main >s))
+   _ (two? s && door >s))
 ) ; module serve
