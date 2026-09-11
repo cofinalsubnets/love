@@ -287,6 +287,11 @@
                               'dead ("the hold keeps you, deck " + show (g 'lvl))
                                     ("ashore with " + show (g 'p 'gold) + " gold")),
               (g 'p 'gold)))
- (rove-main as) (rove-run ())
+ ; the crawl takes the whole screen, so the two flags are answered before it opens
+ (rove-main as)
+  (: w (two? as ? <as "")
+     (? (w = "-h" || w = "--help") (puts "usage: love rove   (no options; q or esc steps ashore)\n", 0)
+        (w = "-v" || w = "--version") (puts ("rove (love " + love-version + ")\n"), 0)
+        (rove-run ())))
  _ (pins (cite 'verbs 'tab) 'rove rove-main))
 ) ; module rove

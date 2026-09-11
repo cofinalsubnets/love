@@ -762,11 +762,8 @@ define j(n, x) {
        _ (pin st 'scale 0) _ (pin st 'ibase 10) _ (pin st 'obase 10)
        _ (pin st 'last bn-zero) _ (pin st 'col 0)
        st)
-   (bc-usage _)
-    (: _ (say err "usage: bc [-l] [-q] [FILE..]
-  -l  the math library (e l a s c j), and scale = 20
-  -q  accepted: nothing is printed at start with or without it")
-       (put err 10))
+   ; the bad-option face; the flags themselves are spelled out under `bc --help`
+   (bc-usage _) (: _ (say err "usage: bc [-l] [-q] [FILE..]") (put err 10))
    (bc-main as)
     (: st (bc-state 0)
        (opts m fs bad ml)
@@ -776,7 +773,6 @@ define j(n, x) {
                  (a = "-l" || a = "--mathlib") (opts >m fs bad 1)
                  (a = "-q" || a = "--quiet") (opts >m fs bad ml)
                  (a = "-lq" || a = "-ql") (opts >m fs bad 1)
-                 (a = "-h" || a = "--help") (: _ (bc-usage 0) (uleave 0))
                  ((1 < #a) && (a 0 = 45)) (opts >m fs a ml)
                  (opts >m (a . fs) bad ml))))
        r (opts as () () 0)

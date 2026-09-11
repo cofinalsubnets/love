@@ -187,6 +187,8 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
              ("-s" || "--socket") (need w r, pin box 'sock <r, loop >r)
              ("-q" || "--quiet")  (pin box 'quiet 1, loop r)
              ("-h" || "--help")   (usage 0)
+             ("-v" || "--version") (puts ("helm (love " + love-version + ")\n"),
+                                    flush out, quit 0)
              "run"                (pin box 'verb 'run, loop r)
              "check"              (pin box 'verb 'check, loop r)
              "ctl"                (pin box 'verb 'ctl, pin box 'words r, ())

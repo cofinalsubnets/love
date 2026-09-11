@@ -390,6 +390,8 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
                          ("-q" || "--quiet") (pin c 'quiet 1, loop r)
                          ("-s" || "--serve") (need w r, pin c 'serve (numof <r), loop >r)
                          ("-h" || "--help") (usage 0)
+                         ("-v" || "--version")
+                          (puts ("papel (love " + love-version + ")\n"), flush out, quit 0)
                          (pin c 'src (peep c 'src () + [w]), loop r))))
       _ (loop as)
       _ (? (two? (peep c 'src ())) 0 (pin c 'src '("README.md" "doc")))

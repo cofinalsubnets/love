@@ -245,6 +245,13 @@
                     (0 = #(<>r)) (puts ("lupa: " + p + " is empty\n"), 1)
                     (: d (lupa-new <>r p)
                        (stage (w \ h \ lupa-frame d w h) (c \ lupa-key d c) (\ _ (d 'over))))))
- (lupa-main as) (two? as ? (lupa-run <as) (puts "usage: love lupa FILE\n", 1))
+ ; the operand opens a full-screen stage, so the flags are read before it
+ (lupa-main as)
+  (: w (two? as ? <as "")
+     u "usage: love lupa FILE\n"
+     (? (w = "-h" || w = "--help") (puts u, 0)
+        (w = "-v" || w = "--version") (puts ("lupa (love " + love-version + ")\n"), 0)
+        (two? as) (lupa-run w)
+        (puts u, 1)))
  _ (pins (cite 'verbs 'tab) 'lupa lupa-main))
 ) ; module lupa

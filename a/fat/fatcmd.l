@@ -135,7 +135,10 @@
     (: n #av
        (arg k) (? (n <= k) "" (av k))
        v <av img (arg 1) p (arg 2)
-       (? (n < 2) (: _ (say err (fatc-usage + "\n")) 2)
+       (? (v = "-h" || v = "--help") (puts (fatc-usage + "\n"), flush out, 0)
+          (v = "-v" || v = "--version")
+           (puts ("fat (love " + love-version + ")\n"), flush out, 0)
+          (n < 2) (: _ (say err (fatc-usage + "\n")) 2)
           (v @
            "ls"    (fatc-ls img p)
            "stat"  (: _ (? #p () (fatc-die 2 "stat wants a path")) (fatc-stat img p))
@@ -150,8 +153,13 @@
    ; busybox spells the format two ways and takes -C SIZE-IN-1K-BLOCKS after the name.
    ; the blocks are 1024 here, which is what mkfs.vfat's own BLOCKS means.
    (mkfsv-main av)
-    (: as (? (two? av && (<av = "-C")) >av av)
-       (? (one? as) (say err "usage: mkfs.vfat [-C] IMG [BLOCKS]\n", 2)
+    (: w (two? av ? <av "")
+       as (? (two? av && (<av = "-C")) >av av)
+       (? (w = "-h" || w = "--help")
+           (puts "usage: mkfs.vfat [-C] IMG [BLOCKS]\n", flush out, 0)
+          (w = "-v" || w = "--version")
+           (puts ("mkfs.vfat (love " + love-version + ")\n"), flush out, 0)
+          (one? as) (say err "usage: mkfs.vfat [-C] IMG [BLOCKS]\n", 2)
           (: img <as
              bl (two? >as && fatc-size <>as)
              (fatc-mkfs img (charm? bl && bl * 1024)))))

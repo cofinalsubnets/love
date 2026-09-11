@@ -174,6 +174,8 @@
    (libra-main as)
     (? (elem "-h" as || elem "--help" as)
         (: _ (say err "libra ⚖ -- the .l balance tool.\n") _ (say err usage) 0)
+       (elem "-v" as || elem "--version" as)
+        (: _ (puts ("libra (love " + love-version + ")\n")) _ (flush out) 0)
        (: conf (salt 'libra)
           v (? (two? as) <as "")
           r >as

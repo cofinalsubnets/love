@@ -803,12 +803,24 @@ lvm(lvm_same) {
  Sp[1] = Sp[0] == Sp[1] ? putcharm(1) : zero;
  ai_musttail return Nextp(1, 1); }
 
-// (elem x l): x equal to some element of the chain l. eqv scratches above the pool and
-// never collects, so l is safe to hold across a compare.
+// (elem x l): x equal to some element of the sequence l -- a chain by link, a text by
+// byte, which is the lattice the index lane already spells (a chain indexes elements
+// where a text indexes bytes). eqv scratches above the pool and never collects, so l is
+// safe to hold across a compare.
+// a text's elements are CHARMS, so a 1-byte text is not one of them: (elem "b" "abc")
+// is 0, as `=` across kinds is, and the charm is the spelling that finds it.
 // a nom and a charm are each their own equality -- eql settles both by identity and
 // never reaches eqv -- so ask that ONCE rather than per link: the common
 // (elem nm '(a b c)) then walks at one pointer compare a link, which is assq's speed.
 lvm(lvm_elem) { word x = Sp[0], l = Sp[1];
+ if (!chainp(l) && strp(l)) {                            // the chain path pays one test it already makes
+  if (!oddp(x)) ai_musttail return Push(zero);          // only a charm can be a byte
+  word c = getcharm(x);
+  if (c >= 0 && c < 256) {
+   struct ai_str *s = str(l);
+   for (uintptr_t i = 0; i < s->len; i++)
+    if ((unsigned char) txt(s)[i] == (unsigned char) c) ai_musttail return Push(putcharm(1)); }
+  ai_musttail return Push(zero); }
  if (nomp(x)) {
   for (; chainp(l) && !nomp(l); l = B(l))
    if (A(l) == x) ai_musttail return Push(putcharm(1));

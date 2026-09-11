@@ -264,7 +264,8 @@ no file, or a bare -, is the filter: stdin -> stdout"
        o (gzc-opts as t)
        (? !o 1
           (peep t 'h 0) (: _ (say out (gzc-help + "\n")) _ (flush out) 0)
-          (peep t 'V 0) (: _ (say out "gzip (love) -- a/gz/gz.l\n") _ (flush out) 0)
+          (peep t 'V 0)
+           (: _ (say out ("gzip (love " + love-version + ")\n")) _ (flush out) 0)
           (: fs (filter (p \ !(p = "-")) <>o)
              _ (? (peep t 'l 0) 0 (peep t 't 0) (pin t 'd 1) 0)
              (? !(two? fs) (peep t 'l 0 ? (: _ (gzc-moan t "-l wants a file") 1)

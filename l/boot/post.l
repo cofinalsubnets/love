@@ -2173,6 +2173,8 @@
      "  -v, --version     print the version\n" +
      "  -h, --help        print this help\n" +
      "  --                end of options; the rest are files, and none of them is stdin\n" +
+     "the short flags cluster -- `-qe EXPR` is `-q -e EXPR` -- and a letter taking an\n" +
+     "argument ends the chain, on the rest of its word (-m8m) or the next one\n" +
      "with no arguments then start a repl if on a tty else eval expressions from stdin\n" +
      "try `love verbs` to see a list of commands\n")
     (need h '()) (say err $ "love: " + h + " needs an argument", cli-leave 2)
@@ -2192,20 +2194,37 @@
                    (v * (u || M) // wordsz)
                    (say err $ "love: " + h + ": not a size: " + s,
                     cli-leave 2)))
+    ; the short flags cluster: `-qe X` is `-q -e X`. a letter that takes an argument ENDS
+    ; the chain -- the rest of its word is the value (-m4m), or the next word when there is
+    ; no rest. a word carrying a letter that is not ours does not burst at all, so a file
+    ; really called -qz still reaches the file lane and says so.
+    (burst w)
+     (: n #w
+        (go k acc)
+         (? (n <= k) (rev acc)
+            (: c (w k)
+               s ("-" + string c)
+               g (snip w (k + 1) n)
+               (? (elem c "lem") (rev (#g ? (g . s . acc) (s . acc)))
+                  (elem c "vhq") (go (k + 1) (s . acc))
+                  ())))
+        (2 < n && w 0 = 45 && !(w 1 = 45) ? (go 1 ()) ()))
     ; -> (kind . rest): 'eval code.args / 'verb fn.args / 'file prog.args / 'stdin / 'none.
     ; 'none is the command line running out with no program named: -v and -h are not
     ; terminal, so `love -v -h` prints both, reaches the end, and leaves 0.
     (pre a) (a @ (h . t)
-      (h @ ("-l" || "--load")    (need h t, load1 <t, pre >t)
-           ("-v" || "--version") (puts v-msg, pre t)
-           ("-h" || "--help")    (puts h-msg, pre t)
-           ("-e" || "--eval")    (need h t, 'eval . t)
-           ("-q" || "--quiet")   (pre t @ ('eval . r) ('evalq . r) r r)
-           ; slot 0 of a fresh `tune` read, so the other knobs ride and the last -m wins. it
-           ; lands at the next collection: the opening pool was sized before argv was read.
-           ("-m" || "--memory")  (need h t, tune (pin (tune ()) 0 (size h <t)), pre >t)
-           "--"                 (t @ (_ . _) ('file . t) '(stdin))
-           (cite 'verbs 'word h @ '() ('file . a) f ('verb . f . a)))
+      (: bs (burst h)
+       (two? bs ? (pre (bs + t))
+        (h @ ("-l" || "--load")    (need h t, load1 <t, pre >t)
+             ("-v" || "--version") (puts v-msg, pre t)
+             ("-h" || "--help")    (puts h-msg, pre t)
+             ("-e" || "--eval")    (need h t, 'eval . t)
+             ("-q" || "--quiet")   (pre t @ ('eval . r) ('evalq . r) r r)
+             ; slot 0 of a fresh `tune` read, so the other knobs ride and the last -m wins. it
+             ; lands at the next collection: the opening pool was sized before argv was read.
+             ("-m" || "--memory")  (need h t, tune (pin (tune ()) 0 (size h <t)), pre >t)
+             "--"                 (t @ (_ . _) ('file . t) '(stdin))
+             (cite 'verbs 'word h @ '() ('file . a) f ('verb . f . a)))))
       '(none))
     ; stdin is the answer to an empty command line, or to `--` with nothing after it --
     ; never to a line that carried flags and named no program.

@@ -13,6 +13,8 @@
    ; about anything else.
    (src-dash? w) (: n #w (0 < n && w 0 = 45))
    (src-help? ("-h" || "--help" || "-help" || "help")) 1
+   (src-vers? ("-v" || "--version")) 1
+   (src-vers m) (puts (m + " (love " + love-version + ")\n"), quit 0)
    (src-not-dir m w)
     (src-die (w + " is not a directory -- `love " + m + " help` for usage"))
 
@@ -59,6 +61,7 @@
    (source-main as)
     (: d (two? as ? <as ".")
        _ (src-help? d ? (src-usage 0, quit 0))
+       _ (src-vers? d ? (src-vers "source"))
        _ (src-dash? d ? (src-not-dir "source" d))
        r (src-lay d)
      (puts (";; wrote " + <>r + "\n"), 0))
@@ -256,6 +259,7 @@
 
    (seed-lay as0)
     (: _ (two? as0 && src-help? <as0 ? (seed-usage 0, quit 0))
+       _ (two? as0 && src-vers? <as0 ? (src-vers "seed"))
        f0 (two? as0 ? <as0 "")
        greg? (f0 = "-g")
        as1 (greg? || f0 = "-a" ? >as0 as0)     ; -a is the default now; the word still eats
@@ -332,7 +336,12 @@
    (kern-b16 s i) ((s i) + (256 * (s (+ i 1))))
    kern-box {}                  ; the verb's inputs, read back by the stream
    (kernel-main as)
-    (: _ (? (two? as) 0 (src-die "usage: love kernel OUT.elf"))
+    ; the operand is a path to WRITE, so the flags are asked before it: a `-h` taken
+    ; for one lays a kernel in a file called -h
+    (: u "usage: love kernel OUT.elf"
+       _ (two? as && src-help? <as ? (puts (u + "\n"), quit 0))
+       _ (two? as && src-vers? <as ? (src-vers "kernel"))
+       _ (? (two? as) 0 (src-die u))
        out <as
        exe (selfpath 0)
        _ (string? exe ? 0 (src-die "can't read the seed path"))
