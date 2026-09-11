@@ -15,23 +15,23 @@
  ; pad and fit are lupa's and design's, spelled again rather than borrowed: three lines
  ; and no module between them. both count BYTES, so a cell is fitted while it is still
  ; plain and the colour goes on after -- an sgr run inside the argument eats the width.
- (pad s n c) (#s < n ? (s + ((n - #s) (\ t (t + c)) "")) s)
+ (pad s n c) (#s < n ? (s + ((n - #s) (t \ t + c) "")) s)
  (fit s n c) (pad (#s > n ? (snip s 0 n) s) n c)
- (mc-rfind s b) (: (go k) (? (k < 0) (0 - 1) ((s k) = b) k (go (k - 1))) (go (#s - 1)))
+ (mc-rfind s b) (: (go k) (? (k < 0) (0 - 1) (s k = b) k (go (k - 1))) (go (#s - 1)))
 
  ; --- an entry is [name mode size], the mode an LSTAT's: a link is a link here -------
- (mc-join d n) (? (d = "/") ("/" + n) (d + "/" + n))
- (mc-dir? e) (16384 = (& (e 1) 61440))
- (mc-link? e) (40960 = (& (e 1) 61440))
+ (mc-join d n) (d @ "/" ("/" + n) (d + "/" + n))
+ (mc-dir? e) (16384 = e 1 & 61440)
+ (mc-link? e) (40960 = e 1 & 61440)
  ; is the path a directory with the links FOLLOWED -- what enter asks, since a link to
  ; a directory is one to walk into even though its own mode says otherwise
- (mc-dirat? q) (: st (stat q) (two? st && (16384 = (& (st 2) 61440))))
+ (mc-dirat? q) (: st (stat q) (two? st && 16384 = st 2 & 61440))
  ; the sgr a name wears, "" for none: ls's four classes (a/kore/fs.l's uls-hue). only a
  ; broken link costs a second call, since only the stat behind a link can miss.
  (mc-hue d e)
   (? (mc-dir? e) "\e[1;34m"
-     (mc-link? e) (? (two? (stat (mc-join d <e))) "\e[36m" "\e[31m")
-     (& (e 1) 73) "\e[32m"
+     (mc-link? e) (two? (stat (mc-join d <e)) ? "\e[36m" "\e[31m")
+     (e 1 & 73) "\e[32m"
      "")
  (mc-ent d n) (: st (lstat (mc-join d n)) (? (two? st) [n (st 2) <st] ()))
  ; a directory's rows: "..", then the directories, then the rest, each by name. a name
@@ -41,49 +41,48 @@
  (mc-read d)
   (? !(mc-dirat? d) ()
      (: ns (readdir d)
-        es (filter two? (map (\ n (mc-ent d n)) (? (two? ns) ns ())))
-        by (\ a b (<a <= <b))
+        es (filter two? (map (mc-ent d) (? (two? ns) ns ())))
+        by (a \ b \ <a <= <b)
         ds (sortby by (filter mc-dir? es))
-        fs (sortby by (filter (\ e !(mc-dir? e)) es))
-        (? (d = "/") (ds + fs) ([".." 16384 0] . (ds + fs)))))
+        fs (sortby by (filter (nil? * mc-dir?) es))
+        (d @ "/" (ds + fs) ([".." 16384 0] . ds + fs))))
 
  ; --- a pane: {'dir 'es 'cur 'top} --------------------------------------------------
- (mc-pane d) (pins (tablet 0) 'dir d 'es (mc-read d) 'cur 0 'top 0)
- (mc-at p) (: es (p 'es) c (p 'cur) (? (c < #es) <(drop c es) ()))
+ (mc-pane d) (pins {} 'dir d 'es (mc-read d) 'cur 0 'top 0)
+ (mc-at p) <(drop (p 'cur) (p 'es))
  ; the cursor, and the window that follows it. top moves only far enough to keep the
  ; cursor on the screen, which is what makes ^f read as a page and not as a jump.
  (mc-goto p i n)
   (: es (p 'es) m #es
      c (? (i < 0) 0 (m <= i) (? m (m - 1) 0) i)
      t (p 'top)
-     t2 (? (c < t) c ((t + n) <= c) (c - n + 1) t)
-     (pins p 'cur c 'top (? (t2 < 0) 0 t2)))
+     t2 (? (c < t) c (t + n <= c) (c - n + 1) t)
+     (pins p 'cur c 'top (t2 < 0 ? 0 t2)))
  ; a pane that cannot read the new directory keeps the one it has, so an unreadable
  ; path is a key that did nothing rather than an empty pane with no way back.
- (mc-cd p d) (: es (mc-read d) (? (two? es) (pins p 'dir d 'es es 'cur 0 'top 0) p))
+ (mc-cd p d) (: es (mc-read d) (two? es ? (pins p 'dir d 'es es 'cur 0 'top 0) p))
  (mc-parent d) (: k (mc-rfind d 47) (? (d = "/") "/" (k < 1) "/" (snip d 0 k)))
  (mc-enter p)
   (: e (mc-at p)
-     (? !(two? e) p
+     (? (one? e) p
         (<e = "..") (mc-cd p (mc-parent (p 'dir)))
         (: q (mc-join (p 'dir) <e) (? (mc-dirat? q) (mc-cd p q) p))))
 
  ; --- the step: every arm answers the state, so an idle key answers it unchanged -----
- (mc-act s) (? (s 'act) (s 'r) (s 'l))
+ (mc-act s) (s $ s 'act ? 'r 'l)
  (mc-key s c)
-  (: p (mc-act s) n (s 'rows) cur (p 'cur)
-     (? (c = -8 || c = 107) (mc-goto p (cur - 1) n, s)
-        (c = -9 || c = 106) (mc-goto p (cur + 1) n, s)
-        (c = 2)             (mc-goto p (cur - n) n, s)
-        (c = 6)             (mc-goto p (cur + n) n, s)
-        (c = 103)           (mc-goto p 0 n, s)
-        (c = 71)            (mc-goto p (#(p 'es) - 1) n, s)
-        (c = 9 || c = -1 || c = -2) (pin s 'act (? (s 'act) 0 1))
-        (c = 10 || c = 13)  (mc-enter p, s)
-        (c = 117)           (mc-cd p (mc-parent (p 'dir)), s)
-        (c = 114)           (mc-cd p (p 'dir), s)
-        (c = 113 || c = -7) (pin s 'over 1)
-        s))
+  (: p (mc-act s) n (s 'rows) cur (p 'cur) (c @- s
+   (-8 || 107) (mc-goto p (cur - 1) n, s)
+   (-9 || 106) (mc-goto p (cur + 1) n, s)
+   2             (mc-goto p (cur - n) n, s)
+   6             (mc-goto p (cur + n) n, s)
+   103           (mc-goto p 0 n, s)
+   71            (mc-goto p (#(p 'es) - 1) n, s)
+   (9 || -1 || -2) (pin s 'act (? (s 'act) 0 1))
+   (10 || 13)  (mc-enter p, s)
+   117           (mc-cd p (mc-parent (p 'dir)), s)
+   114           (mc-cd p (p 'dir), s)
+   (113 || -7) (pin s 'over 1)))
 
  ; --- the frame ---------------------------------------------------------------------
  ; the two panes side by side with a rule between, a header each, the cursor's path
@@ -116,17 +115,16 @@
      rw (w - 1 - lw)
      l (s 'l) r (s 'r)
      _ (say j "\e[H\e[0m")
-     _ (say j ((mc-head (l 'dir) lw) + "\e[0m|" + (mc-head (r 'dir) rw) + "\e[0m\e[K\r\n"))
-     _ (each (jot rows)
-             (\ k (say j ((mc-row l k lw (0 = (s 'act))) + "\e[0m|"
-                          + (mc-row r k rw (1 = (s 'act))) + "\e[0m\e[K\r\n"))))
+     _ (say j (mc-head (l 'dir) lw + "\e[0m|" + mc-head (r 'dir) rw + "\e[0m\e[K\r\n"))
+     _ (each ^rows (k \ say j $
+        mc-row l k lw (0 = s 'act) + "\e[0m|" + mc-row r k rw (1 = s 'act) + "\e[0m\e[K\r\n"))
      p (mc-act s) e (mc-at p)
-     _ (say j ((fit (" " + (? (two? e) (mc-join (p 'dir) <e) (p 'dir))) w " ") + "\e[K\r\n"))
-     _ (say j ("\e[7m" + (fit mc-keys w " ") + "\e[0m\e[K\e[?25l"))
+     _ (say j (fit (" " + (two? e ? (mc-join (p 'dir) <e) (p 'dir))) w " " + "\e[K\r\n"))
+     _ (say j ("\e[7m" + fit mc-keys w " " + "\e[0m\e[K\e[?25l"))
      (slurp j))
 
  ; --- the runner: the tool on cli's stage -------------------------------------------
- (mc-new ld rd) (pins (tablet 0) 'l (mc-pane ld) 'r (mc-pane rd) 'act 0 'rows 20 'over 0)
+ (mc-new ld rd) (pins {} 'l (mc-pane ld) 'r (mc-pane rd) 'act 0 'rows 20 'over 0)
  (mc-run ld rd)
   (: s (mc-new ld rd)
      (stage (mc-frame s) (mc-key s) (\ _ (s 'over))))
@@ -136,8 +134,8 @@
      a (? (two? as) <as "")
      (? (a = "-h" || a = "--help") (puts u, 0)
         (a = "-v" || a = "--version") (puts ("mc (love " + love-version + ")\n"), 0)
-        (: d1 (? (two? as) a ("" + (cwd 0)))
-           d2 (? ((two? as) && (two? >as)) <>as d1)
+        (: d1 (two? as ? a ("" + (cwd 0)))
+           d2 (two? as && two? >as ? <>as d1)
            (? !(mc-dirat? d1) (puts ("mc: " + d1 + ": not a directory\n"), 1)
               !(mc-dirat? d2) (puts ("mc: " + d2 + ": not a directory\n"), 1)
               (mc-run d1 d2)))))
