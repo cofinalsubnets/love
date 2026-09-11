@@ -48,7 +48,7 @@
     (: (go i x) (i >= 0 ? (pin b (o + i) (48 + (x & 7)), go (i - 1) (x >> 3)))
      (pin b (o + n - 1) 0, go (n - 2) v))
    (tar-txt! b o n s)                       ; a text field, NUL-filled, never overrun
-    (: k #s (go i) (n > i ? (pin b (o + i) (? (i < k) (s i) 0), go (i + 1))) (go 0))
+    (: k #s (go i) (n > i ? (pin b (o + i) (i < k ? (s i) 0), go (i + 1))) (go 0))
    (tar-sum b)                              ; the header checksum, own field as spaces
     (: (go i a) (tar-blk <= i ? a (go (i + 1) (a + (148 <= i < 156 ? 32 (peep b i 0))))) (go 0 0))
 
@@ -56,7 +56,7 @@
    (tar-oct s o n)                          ; octal digits until a non-digit
     (: (go i a) (n <= i ? a (s (o + i) @ c (48 <= c < 56 ? (go (i + 1) (a * 8 + c - 48)) a))) (go 0 0))
    (tar-txt s o n)                          ; a NUL-ended text field
-    (: (go i) (? (n <= i) i ((s (o + i)) = 0) i (go (i + 1))) k (go 0)
+    (: (go i) (? (n <= i) i (s (o + i) = 0) i (go (i + 1))) k (go 0)
      (!k ? "" (cask k @ c (pour c 0 s o k, string c))))
 
    ; --- entries --------------------------------------------------------------
@@ -137,12 +137,12 @@
        q (? (0 < n) (open (tar-get e 'path "") "r") 0)
        (? (0 = n) 1
           !(hot? q) ()
-          (: (go left) (? (0 = left) 1
-                          (: k (swig q buf)
-                             (? !(charm? k && 0 < k) ()
-                                (: k2 (? (left < k) left k)
-                                   _ (sha256-feed h (snip buf 0 k2))
-                                   (go (left - k2))))))
+          (: (go left) (left @ 0 1
+                        (: k (swig q buf)
+                         (? !(charm? k && 0 < k) ()
+                          (: k2 (? (left < k) left k)
+                             _ (sha256-feed h (snip buf 0 k2))
+                           (go (left - k2))))))
              ok (go n)
              _ (close q)
              (ok && (: r (n % tar-blk) (r && sha256-feed h * string * cask $ tar-blk - r, 1))))))
@@ -164,44 +164,36 @@
     (: n #s r (n % tar-blk)
        (? r (: c (cask (tar-blk - r)) (s + string c)) s))
    (tar-pack es)
-    (: j (jug 0)
-       (go xs) (? (! (two? xs)) 1
-                  (: e <xs
-                     h (tar-head e)
-                     (? !h ()
-                        (: _ (say j h)
-                           _ (? (= (tar-get e 'kind 'file) 'file)
-                                (: body (tar-get e 'body "")
-                                   (? #body (say j (tar-pad body)) 0))
-                                0)
-                           (go >xs)))))
-       ok (go es)
-       (? (! ok) ()
-          ; two zero blocks end an archive -- one is not enough, and readers that
-          ; stop at the first will still read this, so it costs nothing to be right.
-          (: _ (say j (string (cask (tar-blk * 2))))
-             ((slurp j) + ""))))
+    (:- (go es ? (say j (string (cask (tar-blk * 2))), (slurp j) + ""))
+     j (jug 0)
+     (go xs)
+      (xs @- 1 (e . u)
+       (: h (tar-head e) (? h
+        (say j h,
+         tar-get e 'kind 'file = 'file ?
+          (tar-get e 'body "" @ body (#body && say j (tar-pad body))),
+         go u)))))
 
    ; --- reading --------------------------------------------------------------
    (tar-zero? s o)                          ; is the block at o all zeros?
-    (: (go i) (? (tar-blk <= i) 1 ((s (o + i)) = 0) (go (i + 1)) 0) (go 0))
+    (: (go i) (? (tar-blk <= i) 1 (s (o + i) = 0) (go (i + 1)) 0) (go 0))
    (tar-read1 s n o)                        ; -> (1 entry next) | () | 'end
     (? (tar-zero? s o) 'end
        (: b (cask tar-blk) _ (pour b 0 s o tar-blk)
           got (tar-sum b)
           want (tar-oct s (o + 148) 8)
-          (? (! (got = want)) ()
+          (? (got != want) ()
              (: name (tar-txt s o 100)
                 pre (tar-txt s (o + 345) 155)
-                nom (? (tally pre) (pre + "/" + name) name)
+                nom (#pre ? (pre + "/" + name) name)
                 tc (s (o + 156))
-                kind (? (tc = 53) 'dir (elem tc '(50 49)) 'link 'file)   ; '5' '2'/'1'
+                kind (tc @ 53 'dir (50 || 49) 'link 'file)   ; '5' '2'/'1'
                 sz (kind == 'file && tar-oct s (o + 124) 12)
                 ; a member whose body runs past the end of the bytes we were handed
                 ; is a truncated archive, and the size field is where that shows.
-                (? (n < (o + tar-blk + sz)) ()
+                (n < o + tar-blk + sz ? ()
                    (: e {
-                       'nom nom 'kind kind
+                      'nom nom 'kind kind
                       'mode (tar-oct s (o + 100) 8)
                       'uid (tar-oct s (o + 108) 8)
                       'gid (tar-oct s (o + 116) 8)
@@ -256,19 +248,19 @@
        st (stat full)
        (? (string? lnk)
           (: e (tar-entry rel 'link "")
-             _ (pin e 'to lnk) _ (pin e 'mode 511)
+             _ (pins e 'to lnk 'mode 511)
              _ (? (two? st) (pin e 'mtime (tar-secs st)) 0)
              ; the inner ` is load-bearing: `(1 (e)) would apply e to nothing, and
              ; (f) == f, so the caller would take a bare entry for a list of them.
              [1 [e]])
-          (! (two? st)) ()
+          (one? st) ()
           (tar-dir? st)
           (: e (tar-entry (? (tally rel) rel ".") 'dir "")
-             _ (pin e 'mode (tar-mode st)) _ (pin e 'mtime (tar-secs st))
+             _ (pins e 'mode (tar-mode st) 'mtime (tar-secs st))
              ; sorted, so an archive of the same tree is the same bytes -- readdir's
              ; order is the filesystem's and varies between two boxes holding one tree.
              kids (sort (readdir full))
-             (go ks acc) (atom? ks ? [1 (rev acc)]
+             (go ks acc) (one? ks ? [1 (rev acc)]
                           (: k2 (tar-join rel <ks)
                            (!(keep k2) ? (go >ks acc)
                             (: r (tar-walk? keep root k2 fat)
@@ -283,11 +275,11 @@
           (: b (tar-slurp full)
              (b ?
                 (: e (tar-entry rel 'file (<(>b)))
-                   _ (pin e 'mode (tar-mode st)) _ (pin e 'mtime (tar-secs st))
+                   _ (pins e 'mode (tar-mode st) 'mtime (tar-secs st))
                    ; the inner ` is load-bearing: `(1 (e)) would apply e to nothing, and
              ; (f) == f, so the caller would take a bare entry for a list of them.
              [1 [e]])))))
-   (tar-gather root rel) (tar-gather? (\ _ 1) root rel)
+   (tar-gather root rel) (tar-gather? 0 root rel)
    ; `mkdir` is dyadic (path, mode). At one operand it hands back a closure and makes
    ; no directory -- (f x) curries, it does not default -- and the closure is truthy, so
    ; the miss is silent at every call site that tests it.
@@ -295,7 +287,7 @@
    ; zero point when they worked. So each write is checked by looking -- stat for a dir
    ; or a file, readlink for a link. The presence law from the other side: the value
    ; cannot say, so ask out of band.
-   (tar-there? p) (two? (stat p))
+   tar-there? (two? * stat)
    (tar-strip nom)                          ; the "./" GNU tar stores on a `-C dir .`
     (#nom > 1 && nom 0 = 46 && nom 1 = 47 ? (snip nom 2 #nom) nom)
    ; a release tarball must not carry the clock or the packer's uid. Two cuts of
@@ -305,11 +297,8 @@
    ; umask, so one tree cut under 022 and under 077 disagrees in every directory.
    ; Only the x bit of it is content (a binary that unpacks unrunnable is a broken
    ; artifact), so that is the half kept and the rest is spelled canonically.
-   (tar-canon e) (: k (tar-get e 'kind 'file)
-                    (? (k == 'link) 511
-                       (k == 'dir)  493
-                       (tar-get e 'mode 420 & 73 > 0) 493
-                       420))
+   (tar-canon e) (tar-get e 'kind 'file @ 'link 511 'dir 493
+                  (tar-get e 'mode 420 & 73 > 0 ? 493 420))
    (tar-level es stamp)
     (map (e \ pins (foldl (t \ k \ pin t k (e k)) {} (keys e))
               'mtime stamp 'uid 0 'gid 0
@@ -317,10 +306,10 @@
          es)
    (tar-scatter root es)                    ; -> (1 count) | ()
     (:- (go es 0) (go xs k)
-     (atom? xs ? [1 k]
+     (one? xs ? [1 k]
       (: e <xs
          nom (tar-strip (tar-get e 'nom ""))
-         p (? (tally nom) (? (tally root) (root + "/" + nom) nom) root)
+         p (? #nom (? #root (root + "/" + nom) nom) root)
          kind (tar-get e 'kind 'file)
          ; the mode is content, and it must be laid back explicitly: `open`
          ; and `mkdir` both create at the umask's pleasure, so a file written

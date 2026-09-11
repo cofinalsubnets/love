@@ -667,33 +667,31 @@
     (: hlit ((gz-bits s n t 5) + 257)
        hdist ((gz-bits s n t 5) + 1)
        hclen ((gz-bits s n t 4) + 4)
-       cl (tablet 0)
+       cl {}
        _ (: (go i) (? (hclen <= i) 0
-                      (: _ (pin cl (peep gz-clord i 0) (gz-bits s n t 3)) (go (i + 1))))
+                      (pin cl (peep gz-clord i 0) (gz-bits s n t 3), go (i + 1)))
             (go 0))
        ch (gz-huff cl 19)
        tot (hlit + hdist)
-       lens (tablet 0)
-       (rep i r v) (: (go k) (? (r <= k) 0 (: _ (pin lens (i + k) v) (go (k + 1)))) (go 0))
+       lens {}
+       (rep i r v) (: (go k) (? (r <= k) 0 (pin lens (i + k) v, go (k + 1))) (go 0))
        (rd i prev)
         (? (tot <= i) 1
            (peep t 1 0) ()
            (: d (gz-dec s n t ch)
-              (? (! d) ()
+              (? !d ()
                  (: sy (<(>d))
-                    (? (sy < 16) (: _ (pin lens i sy) (rd (i + 1) sy))
-                       (sy = 16) (: r (3 + (gz-bits s n t 2)) _ (rep i r prev) (rd (i + r) prev))
-                       (sy = 17) (: r (3 + (gz-bits s n t 3)) _ (rep i r 0) (rd (i + r) 0))
-                       (sy = 18) (: r (11 + (gz-bits s n t 7)) _ (rep i r 0) (rd (i + r) 0))
-                       ())))))
+                    (sy < 16 ? (pin lens i sy, rd (i + 1) sy)
+                     (sy @ 16 (: r (3 + (gz-bits s n t 2)) _ (rep i r prev) (rd (i + r) prev))
+                           17 (: r (3 + (gz-bits s n t 3)) _ (rep i r 0) (rd (i + r) 0))
+                           18 (: r (11 + (gz-bits s n t 7)) _ (rep i r 0) (rd (i + r) 0))))))))
        ok (rd 0 0)
-       (? (! ok) ()
+       (? !ok ()
           ; the distance lengths sit after the literal ones in the same run, and
           ; gz-huff counts from 0, so they are carried down into a table of their own.
-          (: dl (tablet 0)
-             _ (: (go k) (? (hdist <= k) 0
-                            (: _ (pin dl k (peep lens (hlit + k) 0)) (go (k + 1))))
-                  (go 0))
+          (: dl {}
+             _ (:- (go 0) (go k) (hdist <= k ? 0
+                            (pin dl k (peep lens (hlit + k) 0), go (k + 1))))
              lit (gz-huff lens hlit)
              dst (gz-huff dl hdist)
              (gz-codes s n t b lit dst))))
@@ -701,21 +699,18 @@
    (gz-block s n t b)                         ; -> (1 last?) | ()
     (: fin (gz-bit s n t)
        typ (gz-bits s n t 2)
-       r (? (typ = 0) (gz-stored s n t b)
-            (typ = 1) (gz-codes s n t b gz-fixlithuff gz-fixdisthuff)
-            (typ = 2) (gz-dynamic s n t b)
-            ())
+       r (typ @ 0 (gz-stored s n t b)
+                1 (gz-codes s n t b gz-fixlithuff gz-fixdisthuff)
+                2 (gz-dynamic s n t b))
        (? r [1 fin] ()))
 
    (gz-puff s hint)
-    (: n #s
-       t (tablet 0)   b (gz-buf hint)
-       (go u) (: r (gz-block s n t b)
-                 (? (! r) ()
-                    (peep t 1 0) ()
-                    (<(>r)) [1 (gz-take b)]
-                    (go ())))
-       (? n (go ()) ()))
+    (:- (n && go ())
+     n #s t {}  b (gz-buf hint)
+     (go u) (: r (gz-block s n t b)
+               (? (!r || peep t 1 0) ()
+                  <>r [1 (gz-take b)]
+                  (go ()))))
    ; the door. l/gz.c where the artifact carries it, gz-puff where it does not
    ; and wherever it declines -- and a torn stream declines, so a torn one is read twice
    ; and answers () both times. `string?`, never `?`: a string of NULs sums to zero and
@@ -728,54 +723,50 @@
    ; --- the container (RFC 1952) --------------------------------------------
    (gz-le32s v)
     (: b (cask 4)
-       _ (pin b 0 (v & 255))          _ (pin b 1 ((v >> 8) & 255))
-       _ (pin b 2 ((v >> 16) & 255))  _ (pin b 3 ((v >> 24) & 255))
+       _ (pins b 0 (v & 255)         1 ((v >> 8) & 255)
+                 2 ((v >> 16) & 255) 3 ((v >> 24) & 255))
        (string b))
    (gz-zip s nom stamp)
     (: txt (s + "")
        named (? #nom 1 0)
        h (cask 10)
-       _ (pin h 0 31) _ (pin h 1 139) _ (pin h 2 8) _ (pin h 3 (? named 8 0))
-       _ (pin h 4 (stamp & 255))        _ (pin h 5 ((stamp >> 8) & 255))
-       _ (pin h 6 ((stamp >> 16) & 255)) _ (pin h 7 ((stamp >> 24) & 255))
-       _ (pin h 8 0) _ (pin h 9 3)               ; xfl none, os 3 = unix
-       ((string h) + (? named (nom + (string 0)) "") + (gz-deflate txt)
-        + (gz-le32s (gz-crc32 txt)) + (gz-le32s (#txt & 4294967295))))
+       _ (pins h 0 31 1 139 2 8 3 (? named 8 0)
+          4 (stamp & 255) 5 ((stamp >> 8) & 255)
+          6 ((stamp >> 16) & 255) 7 ((stamp >> 24) & 255)
+          8 0 9 3)               ; xfl none, os 3 = unix
+       (string h + (? named (nom + string 0) "") + gz-deflate txt
+        + gz-le32s (gz-crc32 txt) + gz-le32s (#txt & 4294967295)))
 
    ; the header's optional fields are four flags, and every one of them must be
    ; stepped over even though we write none of them -- the far side is gzip, and
    ; `gzip -N` writes a name. ftext (bit 0) carries no bytes.
    (gz-skip s n i)                            ; step a NUL-ended field
-    (? (n <= i) () ((s i) = 0) (i + 1) (gz-skip s n (i + 1)))
+    (? (n <= i) () (s i = 0) (i + 1) (gz-skip s n (i + 1)))
    (gz-unzip s)
     (: n #s
-       (? (n < 18) ()
-          (! (((s 0) = 31) & ((s 1) = 139) & ((s 2) = 8)))  ()
+       (? (n < 18 || s 0 != 31 || s 1 != 139 || s 2 != 8)  ()
           (: flg (s 3)
              i0 10
-             i1 (? (flg & 4) (: x ((s i0) + ((s (i0 + 1)) << 8)) (i0 + 2 + x)) i0)   ; fextra
+             i1 (? (flg & 4) (: x (s i0 + (s (i0 + 1) << 8)) (i0 + 2 + x)) i0)   ; fextra
              i2 (? (flg & 8) (gz-skip s n i1) i1)                                  ; fname
-             i3 (? (! i2) () (flg & 16) (gz-skip s n i2) i2)                        ; fcomment
-             i4 (? (! i3) () (flg & 2) (i3 + 2) i3)                                   ; fhcrc
-             (? (! i4) ()
+             i3 (? !i2 () (flg & 16) (gz-skip s n i2) i2)                        ; fcomment
+             i4 (? !i3 () (flg & 2) (i3 + 2) i3)                                   ; fhcrc
+             (? !i4 ()
                 (n < (i4 + 8)) ()
-                (: isize ((s (n - 4)) + ((s (n - 3)) << 8)
-                          + ((s (n - 2)) << 16) + ((s (n - 1)) << 24))
-                   crc ((s (n - 8)) + ((s (n - 7)) << 8)
-                        + ((s (n - 6)) << 16) + ((s (n - 5)) << 24))
+                (: isize (s (n - 4) + (s (n - 3) << 8)
+                          + (s (n - 2) << 16) + (s (n - 1) << 24))
+                   crc (s (n - 8) + (s (n - 7) << 8)
+                        + (s (n - 6) << 16) + (s (n - 5) << 24))
                    ; `pour`'s last argument is a count, not an end offset, and the nif
                    ; clamps it to the shorter of the two arrays -- so an end offset can
                    ; answer right off the destination's size alone, silently, and move
                    ; the whole tail to do it. spell the count.
-                   body (: c (cask (n - i4 - 8)) _ (pour c 0 s i4 (n - i4 - 8)) (string c))
+                   body (: c (cask (n - i4 - 8)) (pour c 0 s i4 (n - i4 - 8), string c))
                    r (gz-inflate body isize)
-                   (? (! r) ()
-                      (: out (<(>r))
-                         ; the trailer is the whole point of the container: a stream
-                         ; that inflated cleanly and hashes wrong is a corrupt one,
-                         ; and saying so is the only thing the crc is for.
-                         (? (! ((gz-crc32 out) = crc)) ()
-                            (! (#out = (isize & 4294967295))) ()
-                            [1 out])))))))))
+                   out <>r
+                   ; the trailer is the whole point of the container: a stream
+                   ; that inflated cleanly and hashes wrong is a corrupt one,
+                   ; and saying so is the only thing the crc is for.
+                   (? r (gz-crc32 out = crc && #out = isize & 4294967295 && [1 out]))))))))
 
 ) ; module 'gz

@@ -18,13 +18,11 @@
 (: ; the exit door: a status raised, not a process ended, so a caller already in
    ; this image gets a charm back. loaded without kore there is no catcher and we
    ; quit as before -- the two ride together in every artifact that carries tar.
-   (tarc-leave c) (: u (cite 'kore 'uleave) (? (lit? u) (u c) (quit c)))
-   (tarc-die m) (: _ (say err ("tar: " + m + "\n")) (tarc-leave 1))
-   (tarc-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) [1 (s + "")])))
-   (tarc-blurt p s) (: q (open p "w") (hot? q && (: _ (say q s) _ (close q) 1)))
-   (tarc-has? fl c) (: n #fl
-                       (go k) (? (n <= k) 0 (fl k = c) 1 (go (k + 1)))
-                       (go 0))
+   (tarc-leave c) (: u (cite 'kore 'uleave) (lit? u ? (u c) (quit c)))
+   (tarc-die m) (say err ("tar: " + m + "\n"), tarc-leave 1)
+   (tarc-slurp p) (: q (open p "r") (hot? q && (: s (slurp q) (close q, [1 (s + "")]))))
+   (tarc-blurt p s) (: q (open p "w") (hot? q && (say q s, close q, 1)))
+   (tarc-has? fl c) (:- (go 0) n #fl (go k) (? (n <= k) 0 (fl k = c) 1 (go (k + 1))))
 
    (tarc-c arch dir z?)
     (: g (tar-gather dir "")
@@ -52,10 +50,7 @@
        _ (!w && tarc-die ("cannot write under " + dir))
        0)
 
-   (tarc-t arch z?)
-    (: es (tarc-open arch z?)
-       _ (each es (e \ say out (peep e 'nom "" + "\n")))
-       0)
+   (tarc-t arch z?) (each (tarc-open arch z?) (e \ say out (peep e 'nom "" + "\n")), 0)
 
    usage "usage: tar czf|xzf|tzf ARCHIVE [DIR]"
    (tar-main av)
@@ -71,7 +66,7 @@
           (tarc-die usage)))
 
    T (cite 'verbs 'tab)
-   (tarc-run av) (: r (cite 'kore 'urun) (? (lit? r) (r tar-main av) (tar-main av)))
+   (tarc-run av) (: r (cite 'kore 'urun) (lit? r ? (r tar-main av) (tar-main av)))
    _ (pins T 'tar (udoor 'tar tarc-run usage 1 1)))
 
 ) ; module 'tarcmd
