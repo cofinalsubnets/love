@@ -486,27 +486,6 @@ rather than in a commit.
   side), and **`offsetof` still folds signed** where every other `sizeof` wears the unsigned
   coat.
 
-### a `?:` over two ARITHMETIC arms is typed by the then-arm alone
-
-C11 6.5.15p5 says the result of a conditional whose arms are both arithmetic takes the usual
-arithmetic conversions over the two of them. `cgexpr`'s `'cond` computes `rt` from the then-arm
-unless one side is float or a pair, so the signedness and width of a dead integer arm are lost:
-
-```c
-(1 ? -1 : 0u) > 0        /* gcc 1 -- uint, so -1 is UINT_MAX. mooncc 0 */
-```
-
-The float half of the same law IS held (the comment there says why: an int in r0 where the
-reader takes f0), and so is the pair half. Only the integer-meets-integer case is missing, and
-it is silent — the value that comes back is right, the TYPE stamped on it is not, so what
-breaks is the next operator to read it: a compare's signedness, a divide's, a shift's.
-
-Costing the fix: `puac` (floor.l) already spells the conversion and `cmpu` already consumes it,
-so `rt` is a one-line change. The work is the VALUES — an `int` arm landing in a `uint` result
-owes the narrow (`znrw`/`zx4` lay it for the binary operators), and getting that wrong trades a
-quiet wrong type for a quiet wrong value. `t/cc/165-constcond.c` holds the arms C does convert
-and says in its header why no row leans on this one.
-
 ### an alignment ask on a LOCAL or a MEMBER is dropped in silence
 
 `_Alignas(64) char buf[8];` inside a function, and `__attribute__((aligned(N)))` on a local or

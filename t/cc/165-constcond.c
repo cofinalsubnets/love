@@ -10,10 +10,8 @@
  * effects not happening and the live arm's still happening; a count constant only after
  * the fold; and a genuinely variable shift, which must stay variable.
  *
- * two ARITHMETIC arms are typed by the then-arm alone here, which is not C's rule and is
- * older than this file (doc/misc/moon-c-gaps.md). so no row leans on the signedness a
- * dead unsigned arm should impose -- the float and pair conversions, which are the ones
- * gen does hold, carry that question instead. */
+ * the float and pair conversions carry that question here; t/cc/166-condconv.c holds the
+ * arithmetic ones, where the two arms meet by rank and signedness. */
 #include <stdio.h>
 #include <stdint.h>
 
