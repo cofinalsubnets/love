@@ -242,19 +242,33 @@
 
    ; chroot DIR [CMD [ARG..]] -- LFS chapter 7 is this call. the root changes, the cwd
    ; follows it to /, and the command REPLACES us, so the only thing that returns here
-   ; is a failure. no CMD runs $SHELL, GNU's default, and /bin/sh when there is none.
+   ; is a failure.
+   ;
+   ; with no CMD the command is OUR OWN SHELL, not $SHELL and not /bin/sh: in an empty
+   ; root there is no /bin/sh to be had, and there does not need to be one -- lush's
+   ; verbs are in this binary, so an autonomous shell in a root with no files in it is
+   ; a whole userland. what that costs is an exec of an image the new root cannot name,
+   ; which is exactly what fexecve is for: the fd is opened HERE, before the root moves,
+   ; and names the image afterwards when no path does. a seat that cannot say where it
+   ; is (no selfpath) has no self to exec and falls back to the path it was given.
    (chroot-main as)
     (: _ (? (two? as) () (udie 1 "usage: chroot DIR [CMD [ARG..]]"))
        d <as
        _ (? (lit? (cite 'posix 'chroot)) () (udie 1 "chroot: no chroot on this seat"))
+       ; both of these are read BEFORE the root moves, and for the same reason:
+       ; selfpath is /proc/self/exe, and the new root has no /proc to read it from.
+       mypath (: p (selfpath 0) (? (string? p) p ()))
+       me (? mypath (open mypath "r") ())
        e (chroot d)
        _ (? e (udie 1 ("chroot: cannot change root to " + d + ": " + (show e))) ())
        ; the chdir is not tidiness. chroot moves the ROOT and leaves the cwd where it
        ; was -- outside the new tree -- and a relative path then walks out of the jail.
        _ (? (chdir "/") (udie 1 "chroot: cannot enter the new root") ())
+       self? (!(two? >as) && hot? me)
        cmd (? (two? >as) >as
+              self? [mypath "lush"]
               (: sh (getenv "SHELL") [(? (string? sh) sh "/bin/sh") "-i"]))
-       r (exec cmd)
+       r (self? ? (fexec me cmd) (exec cmd))
        (udie 127 ("chroot: cannot run " + <cmd + ": " + (show r))))
 
    ; the -o words that are FLAGS. anything else an -o can carry is filesystem text

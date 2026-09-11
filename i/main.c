@@ -223,7 +223,35 @@ ai_noinline static struct ai *host_exec(struct ai *g) {
  return ai_push(g, 1, ai_err(g, errno)); }                  // exec failed -> its nom
 
 static lvm(lvm_exec) {
- LvmCallp(g, 1, host_exec) }   // returns only on failure; the errno nom over argv
+ LvmCallp(g, 1, host_exec) }
+
+// (fexec fd argv) -- exec an image by open fd rather than by name. a path is a
+// fact about the filesystem we are standing in; an fd is not, so this is the exec
+// that survives a chroot, an unlink or a mount move. the fd must be opened BEFORE
+// the root moves -- that is the caller's whole job, and why the fd is a parameter
+// and not something the runtime keeps.
+// posix puts environ in unistd.h and glibc puts it behind __USE_GNU, so the lane
+// built by the ambient cc has to say it here. moonlibc's own is the same type.
+extern char **environ;
+
+ai_noinline static struct ai *host_fexec(struct ai *g) {
+ // the fd is read BEFORE the marshal: a charm cannot move, and a port's fd is a
+ // number once read, so neither needs rooting across a collection.
+ word x = g->sp[0];
+ intptr_t fd = charmp(x) ? getcharm(x) : ai_port_fd(x);    // a charm is a raw fd
+ char **cav;
+ g->sp[0] = g->sp[1];                       // argv over the fd -- the marshal's only root
+ g = ai_argv_marshal(g, &cav);
+ if (!cav || fd < 0) return ai_ok(g) ? ai_push(g, 1, ai_badarg(g)) : g;
+ fflush(stdout);
+ fflush(stderr);
+ signal(SIGPIPE, SIG_DFL);
+ stdin_hand(g);                                            // as host_exec: fd 0 exact
+ fexecve((int) fd, cav, environ);
+ return ai_push(g, 1, ai_err(g, errno)); }                 // returns only on failure
+
+static lvm(lvm_fexec) {
+ LvmCallp(g, 2, host_fexec) }   // returns only on failure; the errno nom over argv
 
 // (getenv name) -> string, or zero if unset / misused. zero = absent, not an error.
 // the name goes to getenv where it lies: a love string's bytes[len] is always a NUL.
@@ -241,12 +269,14 @@ static union u const
  nif_hark[] = {{lvm_hark}, {lvm_harkdrain}, {lvm_ret0}},
  nif_herald[] = {{lvm_herald}, {lvm_harkdrain}, {lvm_ret0}},
  nif_exec[] = {{lvm_exec}, {lvm_ret0}},
+ nif_fexec[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_fexec}, {lvm_ret0}},
  nif_getenv[] = {{lvm_getenv}, {lvm_ret0}},
  nif_getpid[] = {{lvm_getpid}, {lvm_ret0}};
 LvNif("quit", nif_exit, NULL);
 LvNif("hark", nif_hark, NULL);
 LvNif("herald", nif_herald, NULL);
 LvNif("exec", nif_exec, NULL);
+LvNif("fexec", nif_fexec, NULL);
 LvNif("getenv", nif_getenv, NULL);
 LvNif("getpid", nif_getpid, NULL);
 

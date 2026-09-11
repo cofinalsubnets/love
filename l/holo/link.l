@@ -955,6 +955,16 @@
        iend (? img? (ldlay1 'image iaddr objs) r1)
        isz (iend - iaddr)
        endf (? img? (ioff + isz) ioff)          ; the file bytes the segments carry
+       ; the lift keeps the address congruent to the offset MOD A PAGE, which says
+       ; nothing about the 16-grain .image asks for -- so ldlay1 and ldemit seat the
+       ; contents wherever that grain lands, up to 15 bytes above iaddr. the headers
+       ; name THAT, never the lane's start: `love bake` writes the image at the
+       ; header's offset and ai_baked_image is read from the symbol's, so a section
+       ; whose header begins below its own first byte is an image the wake cannot find
+       ; -- and a missed wake is a silent egg boot, which no gate can see.
+       ist (? img? (ld-align 16 iaddr) iaddr)   ; where the lane's bytes actually start
+       isho (ioff + (ist - iaddr))              ; ..its file offset, moved by the same pad
+       iszr (iend - ist)                        ; ..and the size from there
        relbox (? pie {0 ()} ())    ; abs64 site accumulator (pie only)
        glo (ldsyms objs)
        ; the entry: ld's rule -- the symbol `_start` when the set defines one,
@@ -1014,7 +1024,7 @@
                     (ld-shdr (snm 3) 1 3 <ed (<ed - base - sk) (<en - <ed) 0 0 16 0)
                     (ld-shdr (snm 4) 1 2 r0 (r0 - base - sk) (r1 - r0) 0 0 16 0)     ; love_rela, the -pie table (empty non-pie)
                     (ld-shdr (snm 5) 8 3 r1 (r1 - base - sk) (bend - r1) 0 0 16 0)   ; NOBITS: an offset, no bytes
-                    (ld-shdr (snm 6) 1 3 iaddr ioff isz 0 0 16 0)                    ; .image, the grow slot -- its own segment
+                    (ld-shdr (snm 6) 1 3 ist isho iszr 0 0 16 0)                     ; .image, the grow slot -- its own segment
                     (ld-shdr (snm 7) 2 0 0 symo symz 9 (st 2) 8 24)               ; link=.strtab info=first global
                     (ld-shdr (snm 8) 3 0 0 stro strz 0 0 1 0)
                     (ld-shdr (snm 9) 3 0 0 ssto sstz 0 0 1 0)
@@ -1042,7 +1052,7 @@
                     (elf64-phdr 1 4 (t1 - base) o0 o0 (o1 - o0) (o1 - o0) pg)
                     (elf64-phdr 1 6 (d0 - base - sk) d0 d0 (r1 - d0) (bend - d0) pg)]
                  [(elf64-phdr 1 7 0 base base (r1 - base) (bend - base) pg)])
-            + (? img? [(elf64-phdr 1 6 ioff iaddr iaddr isz isz pg)] ())
+            + (? img? [(elf64-phdr 1 6 isho ist ist iszr iszr pg)] ())
             + (? nb? [(elf64-phdr 4 4 nbo (base + nbo) (base + nbo) 24 24 4)] ()))
        hdr (elf64-hdrn (? pie 3 2) ent mach [shto nsh 10] phs)
        ; the brand: ei_osabi = 9 in e_ident[7] on every exe this lane writes for
