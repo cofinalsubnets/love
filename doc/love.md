@@ -23,14 +23,20 @@ With a *file* argument (or **-e**), **love** runs it as the program and exits; a
 
 # OPTIONS
 
+The short flags cluster: **-qe** *expr* is **-q** **-e** *expr*. A letter that takes an argument ends the chain and takes the rest of its own word, or the next word when there is no rest — so **-m8m** and **-m** *8m* are the same. A word carrying a letter that is not an option does not cluster at all, and reaches the *file* lane whole.
+
 **-l** *lib*, **--load** *lib*
 :   Preload *lib* (read-eval it to end of file) before the program. May be repeated.
 **-e** *expr*, **--eval** *expr*
-:   Read-eval the forms in *expr*, as the program.
+:   Read-eval the forms in *expr*, as the program, and print the answer through **show**.
+**-q**, **--quiet**
+:   With **-e**, do not print the answer. The status is unchanged.
+**-m** *size*, **--memory** *size*
+:   Cap the heap at *size*, suffixed **k**, **m** or **g**. **0m**, the default, is unlimited. The last **-m** wins.
 **-v**, **--version**
-:   Print the version and exit.
+:   Print the version. Not terminal: the walk carries on, so `love -v -e 1` prints both.
 **-h**, **--help**
-:   Print a usage summary and exit.
+:   Print a usage summary. Not terminal either, and neither excludes the other.
 **--**
 :   End option processing: the next argument is the program, the rest are its arguments.
 *file*

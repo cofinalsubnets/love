@@ -52,6 +52,19 @@ try 0 usage    -v -h                      # both, in the order given
 try 0 'love '  -h -v
 try 0 3        -v -e '1 + 2'              # a flag before a program does not eat it
 
+# the short flags CLUSTER, and an argument-taking letter ends the chain: it takes the
+# rest of its own word, or the next one when there is no rest. -qe used to reach the
+# file lane and say "cannot open -qe", which is a whole flag word read as a filename.
+try 0 ''       -qe '1 + 2'                # -q -e: the eval is muted, the 0 stands
+try 0 3        -ve '1 + 2'                # -v -e: the version prints, then the answer
+try 0 1        -m8m -e 1                  # a glued value: -m8m is -m 8m
+try 0 ''       -qm8m -e 1                 # ..ending a chain that began with -q, which mutes
+try 2 'not a size'        -qm zz -e 1     # the chain's last letter still owes its check
+try 2 'needs an argument' -qe             # ..and still owes its argument
+# a letter that is not ours does not burst: the word stays whole and reaches the file
+# lane, so a file really called -qz is still openable and the complaint names it whole
+try 1 'cannot open -qz'   -qz
+
 # ..and every failure lane answers ITS OWN number, which is the whole gate
 try 2 'not a size'        -m zz -e 1
 try 2 'needs an argument' -e
