@@ -156,10 +156,7 @@
  ;; --- the step: a key on the state -------------------------------------------------------
  (lupa-key d c) (: h (d 'h) hexmode (d 'mode = 'hex)
    (? (d 'in = 'cmd)
-      (: t (d 'cmd) _ (edstep t c)
-         (t 'ev @ 10 (pin d 'in 'map, command d (edtext t))
-                  27 (pin d 'in 'map, tell d "")
-                  d))
+      (edcmd d 'cmd c (l \ (pin d 'in 'map, command d l)) (_ \ (pin d 'in 'map, tell d "")))
       (: _ (? (c = 58 || c = 27) 0 (pin d 'msg ""))
          (c @ (104 || -1) (hexmode ? (move d -1) (step-insn d -1))
               (108 || -2) (hexmode ? (move d 1) (step-insn d 1))
@@ -178,8 +175,6 @@
               (? (hexmode && hexval c >= 0) (nibble d (hexval c)) d)))))
 
  ;; --- the frame ---------------------------------------------------------------------------
- (pad s n c) (#s < n ? (s + ((n - #s) (\ t (t + c)) "")) s)
- (fit s n c) (pad (#s > n ? (snip s 0 n) s) n c)
  (printable c) (32 <= c < 127 ? (string c) ".")
  ;; a hex row: 77 columns with its text, the text dropped on a narrower screen, the whole cut
  ;; to the screen; the cursor's cell is lit only when it is on the screen
@@ -191,8 +186,8 @@
      k (cur - off)                                          ; the cursor's cell, if on this row
      col (10 + k * 3 + (k > 7 ? 1 0))
      (? (0 <= k < 16 && col + 2 <= w)
-        (snip row 0 col + "\e[7m" + snip row col (col + 2) + "\e[0m" + fit (snip row (col + 2) #row) (w - col - 2) " ")
-        (fit row w " ")))
+        (snip row 0 col + "\e[7m" + snip row col (col + 2) + "\e[0m" + edfit (snip row (col + 2) #row) (w - col - 2) " ")
+        (edfit row w " ")))
  ;; an instruction's text in the chosen dialect, its targets named where a symbol covers them
  (named d o)
   (<o @ 'lbl (? !(charm? <>o) o
@@ -212,14 +207,14 @@
   (: r (insn d off) ln <r its >r cur (off = d 'cur)
      bs (foldl (\ a i (a + (i < ln ? (hex (lupa-byte d (off + i)) 2) "  ") + " ")) "" ^7)
      s (symat d (addr d off)) sym (0 < #s && !(has? s "+") ? (s + ":") "")
-     row (hex (addr d off) 8 + "  " + bs + (ln > 7 ? "+" " ") + " " + fit sym 14 " " + " " + insn-text d off ln its)
-     [ln ((cur ? "\e[7m" "") + fit row w " " + (cur ? "\e[0m" ""))])
+     row (hex (addr d off) 8 + "  " + bs + (ln > 7 ? "+" " ") + " " + edfit sym 14 " " + " " + insn-text d off ln its)
+     [ln ((cur ? "\e[7m" "") + edfit row w " " + (cur ? "\e[0m" ""))])
  (lupa-frame d w h) (: j (jug 0) rows (rows-of h) _ (pin d 'h h) _ (settle d h)
    e (d 'elf) hexmode (d 'mode = 'hex)
    title (" lupa: " + d 'path + (d 'dirty ? " [+]" "") + "  " + (hexmode ? "hex" "asm") + " " + show (d 'syn)
           + "  " + hexn (addr d (d 'cur)) + "/" + hexn (d 'n)
           + (elfed? d ? ("  .text " + hexn (e 'taddr) + " " + show (e 'tsize) + " bytes") ""))
-   _ (say j ("\e[H\e[0m\e[7m" + fit title w " " + "\e[0m\e[K\r\n"))
+   _ (say j ("\e[H\e[0m\e[7m" + edfit title w " " + "\e[0m\e[K\r\n"))
    _ (? hexmode
         (each (jot rows) (\ k (: off (d 'top + k * 16)
                                  (say j ((off < d 'n ? (hexrow d off w) "") + "\e[0m\e[K\r\n")))))
@@ -232,10 +227,10 @@
    about (" " + hexn (addr d cur) + "  byte " + hex b 2 + " " + show b + " " + printable b
           + (0 < #sym ? ("  " + sym) "") + (d 'nib >= 0 ? "  (high nibble set)" "")
           + (elfed? d ? "" "  (raw bytes)"))
-   _ (say j (fit about w " " + "\e[K\r\n"))
-   _ (say j (fit " hjkl move  ^f ^b page  g G ends  d hex/asm  s att/intel  0-9a-f edit  n again  :w :q :g ADDR :/ HEX  q quit" w " " + "\e[K\r\n"))
-   _ (say j (d 'in @ 'cmd (fit (":" + edtext (d 'cmd)) w "" + "\e[K\e[?25h")
-                        (fit (d 'msg) w " " + "\e[K\e[?25l")))
+   _ (say j (edfit about w " " + "\e[K\r\n"))
+   _ (say j (edfit " hjkl move  ^f ^b page  g G ends  d hex/asm  s att/intel  0-9a-f edit  n again  :w :q :g ADDR :/ HEX  q quit" w " " + "\e[K\r\n"))
+   _ (say j (d 'in @ 'cmd (edfit (":" + edtext (d 'cmd)) w "" + "\e[K\e[?25h")
+                        (edfit (d 'msg) w " " + "\e[K\e[?25l")))
    (slurp j))
 
  ;; --- the runner: the tool on cli's stage ---------------------------------------------------

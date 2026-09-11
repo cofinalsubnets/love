@@ -1180,27 +1180,21 @@
     (: m (st 'mode)
        (? (m = 'i) (vins st c)
           (m = 'c || m = 's)
-           ; the line is cli's editor; enter takes it, escape leaves, and a backspace on
-           ; nothing leaves too
+           ; the line is cli's prompt; a backspace on nothing leaves too, which is vi's
+           ; own rule and no prompt's
            (: t (st 'cmd)
               (? ((c = 127 || c = 8 || c = -3) && edempty? t) (pin st 'mode 'n)
-                 (: _ (edstep t c)
-                    e (t 'ev)
-                    (? (e = 0) st
-                       (e = 27) (pin st 'mode 'n)
-                       (e = 9) (edput t 9, st)
-                       (e = 10)
-                        (: s (edtext t)
-                           _ (pin st 'mode 'n)
-                           _ (vmsg st "")
-                           (? (m = 'c) (vex st)
-                              (s = "") (two? (st 'pat) ? (vhunt st (st 'dir)) st)
-                              (: b (rebre s)
-                                 (? (two? b)
-                                    (pins st 'pat <>b 'pattx s 'patw (),
-                                     vhunt st (st 'dir))
-                                    (vmsg st $ "bad pattern: " + s)))))
-                       st))))
+                 (edcmd st 'cmd c
+                  (s \ (: _ (pin st 'mode 'n)
+                          _ (vmsg st "")
+                          (? (m = 'c) (vex st)
+                             (s = "") (two? (st 'pat) ? (vhunt st (st 'dir)) st)
+                             (: b (rebre s)
+                                (? (two? b)
+                                   (pins st 'pat <>b 'pattx s 'patw (),
+                                    vhunt st (st 'dir))
+                                   (vmsg st $ "bad pattern: " + s))))))
+                  (_ \ pin st 'mode 'n))))
           ; normal
           (? (st 'pc) (vpc st c)
              (48 <= c <= 57 && (48 < c || 0 < st 'cnt))

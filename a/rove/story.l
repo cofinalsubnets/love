@@ -81,8 +81,6 @@
  (story-new lvl) {'lvl lvl 'x (lvl 'sx) 'y (lvl 'sy) 'vx 0 'vy 0 'win () 'over 0 'msg "" 'mode 'map 'cmd (ednew ())}
  ; the window's prompt and the command line are cli's editor, a key at a time: enter
  ; takes the line and clears it, escape is the caller's, the rest the editor's
- (edit-line t k c enter esc) (: e (t k) _ (edstep e c)
-   (e 'ev @ 27 (esc ()) 10 (: l (edtext e) (pin t k (ednew ()), 0 < #l && enter l))))
  (words s) (filter (w \ 0 < #w) (split " " s))
  (joins l sp) (? (one? l) "" (one? >l) <l (<l + sp + joins >l sp))
  (wrap s w) (: (go ws cur acc) (? (one? ws) (rev (cur . acc))
@@ -152,7 +150,7 @@
  (command g l) (l @ "q" (pin g 'over 'quit)
                    (pin g 'msg ("not a command: " + l)))
  (story-key g c) (:- g w (g 'win)
-  _ (? (g 'mode = 'cmd) (edit-line g 'cmd c (l \ (pin g 'mode 'map, command g l)) (_ \ pins g 'mode 'map 'cmd (ednew ())))
+  _ (? (g 'mode = 'cmd) (edcmd g 'cmd c (l \ (pin g 'mode 'map, 0 < #l && command g l)) (_ \ pins g 'mode 'map 'cmd (ednew ())))
        !w (c @ (104 || -1) (move g -1 0)  (108 || -2) (move g 1 0)
                (107 || -8) (move g 0 -1)  (106 || -9) (move g 0 1)
                (121 || 377) (move g -1 -1) (117 || 373) (move g 1 -1)
@@ -161,7 +159,7 @@
                63 (open-window g (thing 'help 0 0 "?" 220 -1 "help" '((say "hjkl yubn and the arrows move you. walk into a thing to talk to it. esc closes a window; :q leaves."))))
                27 (pin g 'msg "")
                g)
-       (w 'prompt) (edit-line w 'line c (interp g) (_ \ pin g 'win ()))
+       (w 'prompt) (edcmd w 'line c (l \ (pin w 'line (ednew ()), 0 < #l && interp g l)) (_ \ pin g 'win ()))
        (c @ 27 (pin g 'win ())
             (13 || 10 || 32) (step g)
             107 (0 < w 'top ? (pin w 'top (w 'top - 1)))
@@ -171,7 +169,6 @@
  ; --- the frame: the map with @ on it, the window over it, a status line --------------
  ; a grid of rows is laid as glyphs then the window is written over it, so the port
  ; sees one composed frame; the pens are quay's 256 (rove's palette)
- (pad s n) (#s < n ? (s + ((n - #s) (t \ t + " ") "")) (snip s 0 n))
  ; a pen is a pair (fg bg); -1 is the terminal's own colour on that side
  (pen p) (: fg <p bg <>p
             ((fg < 0 ? "\e[39m" ("\e[38;5;" + show fg + "m")) + (bg < 0 ? "\e[49m" ("\e[48;5;" + show bg + "m"))))
@@ -206,8 +203,8 @@
                foot (? (win 'prompt) ("> " + edtext (win 'line))
                        (win 'top + k < #ls) "-- more --"
                        (one? (win 'steps)) "-- esc --" "-- enter --")
-               inner (map (l \ "| " + pad l (ww - 4) + " |") (shown + (map (const "") ^(k - #shown)) + [foot]))
-               top ("+-" + pad (win 'title + " ") (ww - 4) "-" + "+")
+               inner (map (l \ "| " + edfit l (ww - 4) " " + " |") (shown + (map (const "") ^(k - #shown)) + [foot]))
+               top ("+-" + edfit (win 'title + " ") (ww - 3) "-" + "+")
                box ([top] + inner + [("+" + ((ww - 2) (\ t (t + "-")) "") + "+")])
                x0 ((w - ww) // 2) y0 ((mh - #box) // 2)
                (map (\ i (? (y0 <= i < y0 + #box)
@@ -219,8 +216,8 @@
    _ (each rows2 (r \ say j $ r + "\e[0m\e[K\r\n"))
    ; the cursor shows only where you type: at the command line's end
    _ (say j (? (g 'mode = 'cmd) (":" + edtext (g 'cmd) + "\e[K\e[?25h")
-               ("\e[7m" + pad (" " + lvl 'title + "  @ " + show (g 'x) + "," + show (g 'y) + "  " + g 'msg
-                               + (win ? "  esc closes" "  ? help  :q leaves")) w + "\e[0m\e[K\e[?25l")))
+               ("\e[7m" + edfit (" " + lvl 'title + "  @ " + show (g 'x) + "," + show (g 'y) + "  " + g 'msg
+                               + (win ? "  esc closes" "  ? help  :q leaves")) w " " + "\e[0m\e[K\e[?25l")))
    ("\e[H" + slurp j))
  ; the first n cells of a painted row: pens have no width, so count the glyphs
  (snip-cells r n) (:- (go 0 0 "")
