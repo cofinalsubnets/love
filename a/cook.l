@@ -55,6 +55,7 @@
 ; the pattern law and the path clips both (l/boot/post.l): match/anyglob under
 ; $(wildcard), lastslash/lastdot/segs/pclean under make's own $(dir) family.
 (borrow 'glob)
+(borrow 'path)
 
 (: cards (tablet 0)          ; the recipe cards: item -> (ingredients orderonly . steps)
    check (tablet 0)        ; a 1-cell box: the standing check -- the first item declared (the default when no ticket is named)
@@ -414,8 +415,10 @@
 ; (kore's) registered it already, and a standalone -l load reads the file by
 ; name, here, before cook-glob folds its from-read. where neither lands (a dev
 ; binary run outside the tree), globw below keeps the POSIX shell-out lane.
-(? (tablet? (cite 'lush)) 0
-   (two? (stat "a/lush.l")) (borrow "a/lush.l")  ; the one file registers module 'lush
+; the probe names sh-line and not the module: module 'lush starts at the floor, in
+; l/boot/post.l, so its presence says nothing about whether the shell itself is aboard
+(? (lit? (cite 'lush 'sh-line)) 0
+   (two? (stat "a/lush.l")) (borrow "a/lush.l")  ; the file that carries the shell half
    0)
 ; cook-glob: the pathname glob, a closure when lush's glob is aboard, () when
 ; not (the importer then keeps its POSIX shell-out lane). the glob rides

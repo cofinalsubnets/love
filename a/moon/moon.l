@@ -28,7 +28,8 @@
 (borrow 'holo) ; the assembler module: asm-text, arbytes, the linker
 
 (borrow 'posix)
-(borrow 'glob) ; lastslash, under cdir
+(borrow 'glob) ; match and ones, under the wildcard
+(borrow 'path) ; lastslash, under cdir
 
 (:
    ; the directory portion of a path (up to and including the last '/'), or ""

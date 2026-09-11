@@ -3,10 +3,10 @@
 ; dirname answers "."), so what is lawed here is only the shared mechanism.
 ; cite, not borrow: the corpus is one scope, so a splice would land glob's whole
 ; export list -- match, ones -- on every file after this one (t/cells.l's law).
-(: lastslash (cite 'glob 'lastslash)
-   lastdot   (cite 'glob 'lastdot)
-   segs      (cite 'glob 'segs)
-   pclean    (cite 'glob 'pclean)
+(: lastslash (cite 'path 'lastslash)
+   lastdot   (cite 'path 'lastdot)
+   segs      (cite 'path 'segs)
+   pclean    (cite 'path 'pclean)
    (p s lim) (pclean (segs s) lim))
 
 (test

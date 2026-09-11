@@ -68,7 +68,10 @@
       (= 3 (peep (hby us 'settles) 'tries 0))            ; ... three times
       (= 1 (peep (hby us 'fails) 'tries 0))              ; unless the config says otherwise
       (= ['once] (peep (hby us 'fails) 'after []))
-      (= ["/bin/sh" "-c" "exit 3"] (peep (hby us 'fails) 'exec [])))
+      (= ["/bin/sh" "-c" "exit 3"] (peep (hby us 'fails) 'exec []))
+      ; what check prints of an exec is a command line, not a list laid out with
+      ; spaces: the one word sh is handed comes back as one word
+      (has? (hunit-line (hby us 'fails)) "exec /bin/sh -c 'exit 3'"))
 
    ; --- CHECKS --------------------------------------------------------------------
    ; every complaint at once, and each one names the unit it is about

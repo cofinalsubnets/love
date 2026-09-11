@@ -13,7 +13,7 @@
 (module 'kore
 (borrow 'posix)
 ; lastslash, for the two path clips below (l/boot/post.l)
-(borrow 'glob)
+(borrow 'path)
 
 (:
    ; -- the u-floor --
@@ -339,16 +339,5 @@
             (\ f fst rd (: (go _) (: l (urd-line rd)
                                      (? (! (two? l)) 1 (? (dot <l <>l) (go 0) 1)))
                            (go 0)))
-            as)
-
-   ; whitespace-split a text into words (the xargs face, quote-blind)
-   (uwords t)
-    (: n (tally t)
-       (go i st acc)
-        (? (n <= i) (rev (? (st < 0) acc (snip t st i . acc)))
-           (: c (t i)
-              w ((c = 32) || (c = 9) || (c = 10) || (c = 13))
-              (? w (go (i + 1) -1 (? (st < 0) acc (snip t st i . acc)))
-                 (go (i + 1) (? (st < 0) i st) acc))))
-       (go 0 -1 ())))
+            as))
 ) ; module 'kore

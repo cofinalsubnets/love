@@ -32,6 +32,7 @@
 (borrow 'gz)
 (borrow 'tar)
 
+(borrow 'path)
 (borrow 'posix)
 (: helm-usage "helm -- a service supervisor, and a love shell over its socket
 usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first)
@@ -88,13 +89,7 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
    ;
    ; the names come from the registry and are never listed: a roster would drift
    ; from what the binary can actually do the first time a verb is added.
-   (hmkdirs p)
-    (: n #p
-       (go i) (? (n <= i) 0
-                 (p i = 47) (: _ ((0 < i) ? (mkdir (snip p 0 i) 493) 0) (go (i + 1)))
-                 (go (i + 1)))
-       _ (go 0)
-       (mkdir p 493))
+   (hmkdirs p) (each (pprefixes p) (\ d (mkdir d 493)), mkdir p 493)
    ; one link, laid over whatever stands there: a second boot into a live tmpfs
    ; would meet its own last pass, and eexist is not a reason to have no `ls`.
    (hlink1 exe dir nm)

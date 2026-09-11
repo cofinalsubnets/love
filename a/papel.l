@@ -46,13 +46,12 @@
 ; module and splices it. a module already registered (the gate, a host embedding) is
 ; left alone. `root` and `bn` are exactly the kind of name a leak makes dangerous, and
 ; they stay wherever this file's layer is -- never orth.
+(borrow 'path)
 (borrow 'posix)
-(: (bn p)   (: n #p
-               (go k r) (k < n ? (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
-               (go 0 0))
-   (dirof p) (: n #p
-                (go k r) (k < n ? (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p 0 r))
-                (go 0 0))
+(: ; the raw clips, not posix's: what is after the last slash, and what is before
+   ; it with the slash kept. a url path and a file path are both handed on whole
+   (bn p)    (snip p (lastslash p) #p)
+   (dirof p) (snip p 0 (lastslash p))
    (findme (a . u)) ; the word that named this file, if any
     (bn a @ ("papel" || "papel.l") a (findme u))
    (up p) (: n #p (0 < n ? (dirof (snip p 0 (n - 1))) p))   ; "a/b/" -> "a/"
@@ -90,9 +89,7 @@
    (ends? s t)   (: n #s m #t ((m <= n) && (snip s (n - m) n = t)))
    (sub? s t)    (: n #s m #t
                     ((: (g i) (? ((i + m) <= n) (? (snip s i (i + m) = t) 1 (g (i + 1))) 0)) 0))
-   (base p)      (: n #p
-                    (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
-                    (go 0 0))
+   (base p)      (snip p (lastslash p) #p)
    (slurpf f)    (: q (open f "r") (? (hot? q) (slurp q) ""))
    (spitf f s)   (: q (open f "w") _ (? (hot? q) (: _ (say q s) (close q)) 0) (? (hot? q) 1 0))
    ; a directory answers a list from readdir, a file answers nothing -- that is the test,
@@ -102,11 +99,9 @@
    ; do not care which -- a real failure surfaces at the first open for writing). it walks the
    ; path rather than splitting it, so a leading slash survives: splitting on / and
    ; rejoining quietly turns /tmp/x into tmp/x, and the whole build then writes nowhere.
-   (mkdirp p)    (: n #p
-                    (go i) (? (i < n) (: _ (? ((0 < i) && (p i = 47)) (mkdir (snip p 0 i) 493) 0)
-                                          (go (i + 1)))
-                              (? (0 < n) (mkdir p 493) 0))
-                    (go 0)))
+   ; the prefixes keep a leading slash where splitting on / and rejoining would
+   ; quietly turn /tmp/x into tmp/x, and the whole build then writes nowhere
+   (mkdirp p)    (each (pprefixes p) (\ d (mkdir d 493)), #p ? (mkdir p 493) 0))
 
 ; --- slugs: a heading becomes an id ----------------------------------------------------
 ; lowercase, runs of anything-else collapsed to one dash, the ends trimmed. two headings

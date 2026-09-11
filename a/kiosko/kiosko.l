@@ -39,7 +39,7 @@
 ; --- little utils -------------------------------------------------------------------
 (borrow 'posix)
 ; the path clips (l/boot/post.l): segs and pclean under the request guard below.
-(borrow 'glob)
+(borrow 'path)
 (: (strcat l)   (foldl (+) "" l)
    (joins l sp) (? !(two? l) "" !(two? >l) <l (<l + sp + joins >l sp))
    (ends? s t)  (: n #s m #t (m <= n && snip s (n - m) n = t))
