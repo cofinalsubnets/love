@@ -141,8 +141,7 @@
    ;; for a door that hands over with C already reachable), then C.
    x-text
     '((label khop)
-       (lia sp kstack)
-       (add sp sp 0x10000)                            ; + kstack_size
+       (lia sp kstack_top)
        (ldcr r0 0)
        (and r0 r0 -5)                                ; ~(1 << 2): CR0.EM = 0
        (or r0 r0 2)                                  ; CR0.MP = 1
@@ -255,8 +254,7 @@
 
    a-text
     '((label khop)
-       (la r9 kstack)                                ; flat: pc-relative IS the linked address
-       (li r10 0x10000) (add r9 r9 r10)              ; + kstack_size
+       (la r9 kstack_top)                            ; flat: pc-relative IS the linked address
        (lea sp r9 0)                                 ; mov sp, x9
        ;; qemu lays the dtb at the RAM base; a loader that passed one in x0 wins.
        ;; GAS said this with csel; the neutral surface says it with a branch.
@@ -319,9 +317,8 @@
 
    r-text
     '((label khop)
-       (la sp kstack)                                ; flat: pc-relative IS the linked address
-       (li r8 0x10000) (add sp sp r8)                ; + kstack_size
-       (mov r0 r13)                                  ; the tree SBI passed, straight to the door
+       (la sp kstack_top)                            ; flat: pc-relative IS the linked address
+       (mov r0 r13)                                ; the tree SBI passed, straight to the door
        (call dtb_to_kboot)
        (call kmain)
        (label rv_park)
@@ -329,8 +326,9 @@
        (jmp rv_park))
 
    ;; the boot stack, every arch: kmain never returns, and 64 KiB is what a
-   ;; firmware hand-off hands over. .bss so it costs the file nothing.
-   b-stack [['label 'kstack] ['raw (b-zeros 65536)]]
+   ;; firmware hand-off hands over. .bss so it costs the file nothing. the far end
+   ;; carries a label, so every khop loads the top and the size is spelled once.
+   b-stack [['label 'kstack] ['raw (b-zeros 65536)] ['label 'kstack_top]]
 
    ;; -- the two objects ---------------------------------------------------
    ;; SHF flags: 2 ALLOC, 3 ALLOC|WRITE, 6 ALLOC|EXEC. types: 1 PROGBITS,
