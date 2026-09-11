@@ -180,6 +180,7 @@
                                         + "  " + (show (evv x)) + "\n"))))))
 
    ; --- the verb -------------------------------------------------------------
+   harp-usage "usage: harp [-n N] [-c CPS] [-r RATE] [-g GAIN] [-o F.wav] [-p] PATTERN.."
    ; a bare argument is mini-notation for `hit`; one that opens a paren is love, read
    ; and evaluated with the harp module already spliced. several arguments stack.
    (harp-read a) (? ((0 < #a) && (40 = (a 0)))
@@ -200,6 +201,9 @@
                  (a = "-o") (go >>l (pin o 'wav <>l) ps)
                  (a = "-g") (go >>l (pin o 'gain (harp-atof <>l)) ps)
                  (a = "-p") (go >l (pin o 'print 1) ps)
+                 (a = "-h" || a = "--help") (puts (harp-usage + "\n"), flush out, 0)
+                 (a = "-v" || a = "--version")
+                  (puts ("harp (love " + love-version + ")\n"), flush out, 0)
                  (go >l o (a . ps)))))
        (go as {'cycles 4 'rate 48000 'cps 0.5 'from 0 'print 0 'gain 1.0} ()))
    (harp-fire o ps)
@@ -210,8 +214,7 @@
        tail (int (rate / 2))                       ; half a second for the last decay
        g    (harp-scale * (o 'gain))
        (? !(two? ps)
-          (: _ (say err "usage: harp [-n N] [-c CPS] [-r RATE] [-g GAIN] [-o F.wav] [-p] PATTERN..\n")
-             1)
+          (: _ (say err (harp-usage + "\n")) 1)
           (o 'print) (: _ (harp-print p c0 ncyc) 0)
           (peep o 'wav ()) (: _ (harp-wav p c0 ncyc rate cps tail g (o 'wav)) 0)
           (: _ (harp-horn p c0 ncyc rate cps tail g) 0))))

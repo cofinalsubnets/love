@@ -313,8 +313,153 @@
             ; cat load on an sh/lush basename -- this row serves the image
             ; wake, where only kore-main dispatches)
             'sh (cite 'lush 'sh-main) 'lush (cite 'lush 'sh-main)}
-   (usage _) (: _ (say err "kore -- the love multi-call toolbox
+
+   ; the synopses, one line a tool -- what `TOOL --help` prints. a name with no row
+   ; here still answers the flag, with its own spelling for a synopsis.
+   korehelp
+   {'diff "usage: diff OLD NEW   (0 same / 1 differ / 2 trouble)"
+    'nm "usage: nm [-g] [-u] [-p] FILE.."
+    'nc "usage: nc HOST PORT  |  nc -l PORT"
+    'ain "usage: ain HOST PORT  |  ain -l PORT"
+    'as "usage: as TARGET IN OUT   (TARGET: x64 | a64)"
+    'ar "usage: ar rcs OUT MEMBER..  |  ar t OUT"
+    'ld "usage: ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"
+    'objcopy "usage: objcopy -O binary|ihex IN OUT"
+    'cat "usage: cat [FILE..]"
+    'tac "usage: tac [FILE..]"
+    'head "usage: head [-n N] [-N] [FILE..]"
+    'tail "usage: tail [-n N] [-N] [FILE..]"
+    'wc "usage: wc [-lwc] [FILE..]"
+    'sort "usage: sort [-bfnrsu] [-k SPEC].. [-t C] [FILE..]"
+    'uniq "usage: uniq [-c] [FILE]"
+    'tee "usage: tee [-a] [FILE..]"
+    'seq "usage: seq [FIRST [INCR]] LAST"
+    'yes "usage: yes [WORD..]"
+    'true "usage: true   (the 0 exit, and nothing else)"
+    'false "usage: false   (the 1 exit, and nothing else)"
+    'uname "usage: uname [-snrma]"
+    'arch "usage: arch   (uname -m, and nothing else)"
+    'nproc "usage: nproc"
+    'printf "usage: printf FORMAT [ARG..]"
+    'basename "usage: basename NAME [SUFFIX]"
+    'dirname "usage: dirname NAME"
+    'cut "usage: cut -f LIST [-d C] [-s] | cut -c LIST"
+    'tr "usage: tr SET1 SET2 | tr -d SET1 | tr -s SET1"
+    'nl "usage: nl [FILE..]"
+    'rev "usage: rev [FILE..]"
+    'fold "usage: fold [-w N] [-s] [-b] [FILE..]"
+    'expand "usage: expand [-t N] [-i] [FILE..]"
+    'unexpand "usage: unexpand [-a] [-t N] [FILE..]"
+    'base64 "usage: base64 [-d] [-w N] [FILE]"
+    'base32 "usage: base32 [-d] [-w N] [FILE]"
+    'tsort "usage: tsort [FILE]"
+    'factor "usage: factor [N..]"
+    'paste "usage: paste [-s] [-d LIST] [FILE..]"
+    'comm "usage: comm [-123] FILE1 FILE2"
+    'split "usage: split [-l N] [-b SIZE] [-a N] [-d] [FILE [PREFIX]]"
+    'join "usage: join [-1 F] [-2 F] [-t C] [-a 1|2] [-v 1|2] FILE1 FILE2"
+    'od "usage: od [-A C] [-t TYPE] [-N N] [-j N] [-v] [-abcdiosx] [FILE..]"
+    'cksum "usage: cksum [FILE..]"
+    'md5sum "usage: md5sum [-c] [FILE..]"
+    'sha256sum "usage: sha256sum [-c] [FILE..]"
+    'ls "usage: ls [-aAldrt1] [FILE..]"
+    'dir "usage: dir [-aAldrt1] [FILE..]"
+    'cp "usage: cp [-f] [-p] SRC DST"
+    'mv "usage: mv [-f] SRC DST"
+    'rm "usage: rm [-r] [-f] FILE.."
+    'mkdir "usage: mkdir [-p] DIR.."
+    'rmdir "usage: rmdir DIR.."
+    'ln "usage: ln [-s] [-f] TARGET LINKNAME"
+    'touch "usage: touch FILE.."
+    'pwd "usage: pwd"
+    'chmod "usage: chmod OCTAL FILE.."
+    'install "usage: install [-D] [-m OCTAL] [-s] SRC DST  |  install -d DIR.."
+    'readlink "usage: readlink [-f] PATH"
+    'realpath "usage: realpath [-e|-m|-s] PATH.."
+    'link "usage: link FILE NEW"
+    'unlink "usage: unlink FILE"
+    'cmp "usage: cmp [-s] A B"
+    'stat "usage: stat [-L] -c FORMAT | --printf=FORMAT   FILE.."
+    'du "usage: du [-sabchk] [-d N] [FILE..]"
+    'chown "usage: chown [-R] OWNER[:GROUP] FILE.."
+    'mktemp "usage: mktemp [-d] [-u] [-q] [-p DIR] [TEMPLATE]"
+    'sync "usage: sync   (the bare call; no operands here)"
+    'mkfifo "usage: mkfifo [-m MODE] NAME.."
+    'mknod "usage: mknod [-m MODE] NAME TYPE [MAJOR MINOR]"
+    'expr "usage: expr EXPRESSION"
+    'patch "usage: patch [-pN] [-R] [-i F] [-o F] [-s] [--dry-run]"
+    'grep "usage: grep [-nvclqhaixwFEo] [-e PAT] [-m N] PATTERN [FILE..]"
+    'sed "usage: sed [-n] [-E] [-i] [-e SCRIPT].. SCRIPT [FILE..]"
+    'awk "usage: awk [-F FS] [-v var=val].. PROGRAM [FILE..]  |  awk .. -f PROGFILE.. [FILE..]"
+    'find "usage: find [PATH..] [EXPR]  -- see doc/misc/kore.md for the grammar"
+    'less "usage: less [-Nise] [+N|+/PAT] [FILE..]"
+    'more "usage: more [-Nise] [+N|+/PAT] [FILE..]"
+    'wget "usage: wget [-q] [-O FILE] URL"
+    'bc "usage: bc [-l] [-q] [FILE..]
+  -l  the math library (e l a s c j), and scale = 20
+  -q  accepted: nothing is printed at start with or without it"
+    'vi "usage: vi [FILE]"
+    'env "usage: env [-i] [-u NAME].. [NAME=VALUE].. [CMD [ARG..]]"
+    'printenv "usage: printenv [NAME..]"
+    'sleep "usage: sleep N[smhd].."
+    'chroot "usage: chroot DIR [CMD [ARG..]]"
+    'mount "usage: mount [-t TYPE] [-o OPTS] SRC TGT   (or bare, to list)"
+    'umount "usage: umount TARGET.."
+    'whoami "usage: whoami"
+    'groups "usage: groups"
+    'ps "usage: ps [-e]"
+    'free "usage: free [-m|-g]"
+    'uptime "usage: uptime"
+    'pidof "usage: pidof NAME.."
+    'pgrep "usage: pgrep [-f] [-x] PATTERN"
+    'pkill "usage: pkill [-SIG] [-f] [-x] PATTERN"
+    'killall "usage: killall [-SIG] NAME.."
+    'pwdx "usage: pwdx PID.."
+    'kill "usage: kill [-SIG] PID.."
+    'xargs "usage: xargs [-n N] [CMD ARGS..]"
+    'date "usage: date [-u] [-d TIME] [-r FILE] [+FORMAT]"
+    'id "usage: id [-u|-g|-G] [-n] [-r]"}
+
+   ; echo, test and [ read no options at all -- posix says so, and a script writing
+   ; `echo --help` means the word. cook and lush answer the flags themselves, each
+   ; with more to say than a synopsis. none of them is at this door.
+   korenoflag ['echo 'test (name "[") 'make 'cook 'sh 'lush]
+   ; -h and -v are not free everywhere. the tools below spell one of them themselves,
+   ; or posix and gnu do, so they answer the long forms only and the letter stays theirs.
+   korenoh '(grep du ls sort touch chown ln free)
+   korenov '(grep awk od join nl uname cat head tail cp mv rm ln mkdir rmdir chmod
+             chown install mount umount readlink patch pgrep pkill killall)
+   ; the leading flag words only: the walk stops at the first operand and at `--`, so a
+   ; file really called --help still opens once something else has been named. it is not
+   ; getopt -- a value word that looks like a flag is walked over, so `grep -e --help f`
+   ; answers the help; glue it (`grep -e--help f`) to mean the pattern.
+   (koreask as h? v?)
+    (? !(two? as) ()
+       (: w <as
+          (? (w = "--") ()
+             (w = "--help") 'help
+             (w = "--version") 'vers
+             ((w = "-h") && h?) 'help
+             ((w = "-v") && v?) 'vers
+             ((1 < tally w) && (w 0 = 45)) (koreask >as h? v?)
+             ())))
+   ; the applet as the world calls it: the two flags first, then the tool under urun.
+   ; both dispatch lanes come through here -- the verb registry and the symlink -- so
+   ; there is one answer and not two
+   (koredoor nm f)
+    (? (elem nm korenoflag) (\ as (urun f as))
+     (: u (peep korehelp nm ())
+       h? !(elem nm korenoh)
+       v? !(elem nm korenov)
+       (say1 s) (: _ (puts (s + "\n")) _ (flush out) 0)
+       (\ as (koreask as h? v?
+              @ 'help (say1 (u || ("usage: " + string nm)))
+                'vers (say1 (string nm + " (love " + love-version + ")"))
+                (urun f as)))))
+
+   kore-usage "kore -- the love multi-call toolbox
 usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
+every tool answers --help and --version, and -h and -v where the letter is free
   diff OLD NEW       unified diff, patience hunks (0 same / 1 differ / 2 trouble)
   nc HOST PORT       netcat; nc -l PORT listens
   make [FILE] [T..]  the build tool (Cards.l / Cookfile / Makefile)
@@ -358,8 +503,8 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   realpath [-e|-m|-s] P.. | link F NEW | unlink F   ... the paths and the two calls
   stat -c FMT | du [-sabhc] | chown | mktemp   ... and what they report
   echo seq yes true false basename dirname     ... and the trivia
-")
-                2)
+"
+   (usage _) (: _ (say err kore-usage) 2)
    (bn p) (: n (tally p)
              (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
              (go 0 0))
@@ -388,7 +533,7 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
         ; it. a bare read compiled here would ride a missing cell against the
         ; caller's walk, where kore never walks.
         _ (pin T 'kore (\ as ((cite 'kore 'kore-main) ("kore" . as))))
-        (go ks) (? (two? ks) (: f (applets <ks) _ (pin T <ks (\ as (urun f as))) (go >ks)) 0)
+        (go ks) (? (two? ks) (: f (applets <ks) _ (pin T <ks (koredoor <ks f)) (go >ks)) 0)
         (go (keys applets)))
    ; kore-main is the dispatch door, and the in-image door too: it dispatches a
    ; program-relative arg list -- argv0 a tool symlink, or `kore`/a dev path then the
@@ -400,11 +545,19 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
    (kore-main a)
     (: s (? (two? a) ((cite 'verbs 'seatof) mynames a) ((cite 'verbs 'fire) mynames))
        (? !(two? s) ()
-          (: f0 (applets (intern (bn <s)))
-             (? f0 (urun f0 >s)
+          (: n0 (intern (bn <s))
+             f0 (applets n0)
+             (? f0 ((koredoor n0 f0) >s)
                 (: t >s
-                   f (? (two? t) (applets (intern <t)) ())
-                   (? f (urun f >t) (usage ()))))))))
+                   n (? (two? t) (intern <t) ())
+                   f (? n (applets n) ())
+                   ; no tool named: kore's own two flags, then the listing
+                   (? f ((koredoor n f) >t)
+                      (koreask t 1 1
+                       @ 'help (: _ (puts kore-usage) _ (flush out) 0)
+                         'vers (: _ (puts ("kore (love " + love-version + ")\n"))
+                                  _ (flush out) 0)
+                         (usage ())))))))))
 ; the seat: file mode (cat | love) dispatches on the real command line and quits with
 ; the status. the -l bake preload seats a flag, not kore, so the scan answers () and
 ; kore-main answers () -- the presence guard, and the one answer that is not a status.

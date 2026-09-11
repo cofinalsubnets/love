@@ -645,7 +645,7 @@
 
 ; --- the CLI face: usage + the verb dispatcher (cook-main's shape) ---
 (:
-   (usage _) (: _ (say err "sb -- svalbard, the patch-set vcs (doc/misc/sb.md)
+   sb-usage "sb -- svalbard, the patch-set vcs (doc/misc/sb.md)
 usage: sb VERB ..
   record [NOTE]   working changes -> a patch in the store (.sb/)
   sync PEER       EXCHANGE patch sets with a peer nest (a dir holding .sb/),
@@ -665,10 +665,14 @@ usage: sb VERB ..
                   clobbered: P's write is lifted OUT, later edits stay
   log             the patches, newest first (* marks a tip)
   diff            working tree vs the recorded state (unified; exit 1 on change)
-")
-                (quit 2))
+"
+   ; the same page two ways: asked for, it is the answer; reached by a miss, a complaint
+   (usage _) (: _ (say err sb-usage) (quit 2))
    (sb-main as) (? (one? as) (usage ())
-    (<as @ "record" (sb-record (? (two? >as) <>as ""), quit 0)
+    (<as @ ("-h" || "--help") (puts sb-usage, flush out, quit 0)
+           ("-v" || "--version")
+            (puts ("sb (love " + love-version + ")\n"), flush out, quit 0)
+           "record" (sb-record (? (two? >as) <>as ""), quit 0)
            "sync" (? (two? >as) (: r (sb-sync <>as) (quit (? r 0 1))) (usage ()))
            "apply" (: r (sb-apply >as) (quit (? r 0 1)))
            "bank" (? (two? >as) (: r (sb-bank >as) (quit (? r 0 1))) (usage ()))

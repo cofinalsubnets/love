@@ -2701,6 +2701,13 @@
                            (ch = 120) (: _ (pin sh-xflag () 1) (go (k + 1) c?))
                            ())))
         (go 1 0))
+   sh-usage "usage: sh [-aeguxc] [--login] [-c CMD [NAME [ARG..]]] [FILE [ARG..]]
+  -c CMD   run CMD              -e  leave on a failing command
+  -a       autonomous: our own verbs first, whatever PATH holds
+  -g       gregarious: PATH decides (the default is LUSHFLAGS')
+  -u       an unset name is an error    -x  trace what runs
+  --login  a login shell: the profiles are read
+no file and no -c is a shell: a repl on a tty, cooked script off stdin otherwise"
    (sh-main args)
      (: _ (sh-snapign 0)                        ; first: what our caller had turned off
         _ (pin sh-gflag () (sh-envflag 0))      ; the mode: LUSHFLAGS' now, a flag word's below
@@ -2710,6 +2717,10 @@
      (? !args (sh 0)
         (: a <args
            (? (a = "--login") (: _ (pin sh-login () 1) (sh-args >args))
+              ; the long forms only: -h is `set -h` in every shell, and -v is `set -v`
+              (a = "--help") (: _ (puts (sh-usage + "\n")) _ (flush out) (quit 0))
+              (a = "--version")
+               (: _ (puts ("lush (love " + love-version + ")\n")) _ (flush out) (quit 0))
               ((1 < #a) && ((a 0) = 45))
                 (: fw (sh-flagw a >args)
                    (? !(two? fw) (sh-file a >args)          ; a letter not ours: a name

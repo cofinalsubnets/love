@@ -129,6 +129,7 @@
          "quiet" (pin t 'quiet 1)
          "no-absolute-filenames" 1      ; what we do anyway, said out loud
          "help" (pin t 'h 1)
+         "version" (pin t 'vers 1)
          ("format" || "file") 'val)
    (cpioc-opts as t)                        ; -> (1 rest) | ()
     (: (want k v)                           ; a value word landing in its place
@@ -157,6 +158,7 @@
                             (elem c '(100 117 118))            ; -d -u -v
                              (pin t (? (c = 100) 'd (c = 117) 'u 'v) 1,
                               cl (i + 1) rest)
+                            (c = 104) (pin t 'h 1, cl (i + 1) rest)   ; -h, the help
                             (elem c '(72 70 73 79))            ; -H -F -I -O
                              (: glue (snip w (i + 1) n)
                                 v (0 < #glue ? glue (two? rest && <rest))
@@ -176,6 +178,8 @@
        o (cpioc-opts as t)
        (? !o 2
           (peep t 'h 0) (: _ (say out (cpioc-usage + "\n")) _ (flush out) 0)
+          (peep t 'vers 0)
+           (: _ (say out ("cpio (love " + love-version + ")\n")) _ (flush out) 0)
           (: m (t 'mode)
              _ (two? <>o && cpioc-moan "the names come in on stdin, not on the line")
            (m @ 'o (cpioc-o t) 'i (cpioc-i t) 't (cpioc-t t) (cpioc-moan cpioc-usage, 2)))))

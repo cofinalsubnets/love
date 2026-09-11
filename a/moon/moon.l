@@ -1150,7 +1150,9 @@
              ; two versions would be reporting a thing that cannot happen. `love-version`
              ; is that one id (the Makefile computes it: ./VERSION plus a VCS suffix).
              (a = "--version" || a = "-v")
-              (: _ (puts ("mooncc " + love-version)) _ (putc 10) (quit 0))
+              (: _ (puts ("mooncc (love " + love-version + ")")) _ (putc 10) (quit 0))
+             (a = "--help" || a = "-h")
+              (: _ (puts usage) _ (putc 10) _ (flush out) (quit 0))
              (a = "-pie") (flags r (pin t 'pie 1))
              ; --emit-relocs: keep the ABS32 sites in .rel.* sections beside a fully
              ; linked image, so a loader placing it at a base of its own can slide them.

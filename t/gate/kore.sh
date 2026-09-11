@@ -1482,3 +1482,33 @@ LOVE_NO_IMAGE= "$m" -e '(: _ (borrow (name "kore")) r (kore-main (list "kore" "n
                                     _ (say out ("after " + show r + "\n")) (quit 0))' > "$o" 2>/dev/null
 [ "$(tail -1 "$o")" = "after 2" ] || fail "kore in-image unknown tool: $(tail -1 "$o")"
 echo "kore: the status charm (mains answer, the image survives, the seat quits) ok"
+
+# ------------------------------------------ --help and --version at the door
+# a/kore/kore.l's koredoor answers the two flags for every applet, on BOTH dispatch
+# lanes. the exit code is the half that is easy to lose: a help leaving 2 reads as a
+# usage error to whatever asked for it.
+hv() { n=$1; want=$2; shift 2
+       "$@" > "$o" 2>/dev/null; r=$?
+       [ $r -eq 0 ] || fail "$n (exit $r)"
+       grep -q "$want" "$o" || fail "$n: no \"$want\", got \"$(head -1 "$o")\""; }
+# the nested lane (`kore TOOL`) and the verb lane (`love TOOL`) must agree
+hv "awk -h"          '^usage: awk'   korerun awk -h
+hv "awk --help"      '^usage: awk'   korerun awk --help
+hv "awk --version"   '^awk (love'    korerun awk --version
+hv "love awk --help" '^usage: awk'   "$m" awk --help
+hv "love awk -h"     '^usage: awk'   "$m" awk -h
+hv "cat --help"      '^usage: cat'   korerun cat --help
+hv "sed --version"   '^sed (love'    korerun sed --version
+hv "bc --version"    '^bc (love'     korerun bc --version
+hv "ls -l --help"    '^usage: ls'    korerun ls -l --help
+hv "kore --help"     '^kore -- the'  "$m" kore --help
+hv "kore --version"  '^kore (love'   "$m" kore --version
+# ..and the letters that are NOT the door's: grep -h suppresses the filename (GNU says
+# what it says), ls -h is neither and refuses, echo hands back the word it was given
+printf 'a\nb\n' > "$ho/.hv1"; printf 'a\nX\n' > "$ho/.hv2"
+both "grep -h is grep's own" grep -h a "$ho/.hv1" "$ho/.hv2"
+korerun ls -h > "$o" 2>&1; r=$?
+[ $r -eq 2 ] || fail "kore ls -h: the letter is reserved, not the help (exit $r)"
+printf -- '--help\n' > "$g"; korerun echo --help > "$o" 2>/dev/null
+same "echo --help is the word"
+echo "kore: --help / --version at the door ok"

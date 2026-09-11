@@ -36,6 +36,18 @@ The file discipline, two shapes:
   cat member.
 * **a toolbox** (core.l, fs.l): many mains, NO seat — kore is its door.
 
+`--help` and `--version` are answered at that door, not in the tools: `koredoor` in
+kore.l wraps every applet on both dispatch lanes (the verb registry and the symlink), so
+one synopsis table — `korehelp` — is where a tool's shape is written down, and the two
+lanes cannot drift. The walk reads only the leading flag words and stops at the first
+operand and at `--`. It is NOT getopt: a value word that looks like a flag is walked
+over, so `grep -e --help f` answers the help rather than searching for `--help` — glue
+the value (`grep -e--help f`) to mean the pattern. `-h` and `-v` come too, except where
+the letter is the tool's own or POSIX and GNU spell it otherwise (`grep -h`, `du -h`,
+`ls -h`, `sort -h`, `touch -h`, `cat -v`, `od -v`, `join -v`, `nl -v`, …); those answer
+the long forms only. echo, test and `[` read no options at all and are not at the door;
+cook and lush answer both flags themselves, each with more to say than a synopsis.
+
 ## the inventory (99 tools, 102 names)
 
 | where | tools |

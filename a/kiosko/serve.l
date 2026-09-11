@@ -168,6 +168,12 @@ drives that build: no love is rebuilt to serve a page.
                  (two? r ? (loop >r (sv-num <r) dir build) (sv-usage 0))
                 (w = "-n" || w = "--no-build") (loop r port dir 0)
                 (w = "-h" || w = "--help") (sv-usage 0)
+                (w = "-v" || w = "--version")
+                 (puts ("serve (love " + love-version + ")\n"), flush out, quit 0)
+                ; DIR is positional, so a flag that fell through here would become one
+                ; and a whole tree would be laid under its name
+                (1 < #w && w 0 = 45)
+                 (say err ("serve: unknown option " + w + "\n"), sv-usage 0)
                 (loop r port w build))))
       c (loop as 8080 "." 1)
       port <c

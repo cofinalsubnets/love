@@ -359,6 +359,8 @@ usage: kiosko [-p PORT] [-q] [DIR]
         (w @ ("-p" || "--port") (need w r, pin box 'port (numof <r), loop >r)
              ("-q" || "--quiet") (pin box 'quiet 1, loop r)
              ("-h" || "--help")  (usage 0)
+             ("-v" || "--version") (puts ("kiosko (love " + love-version + ")\n"),
+                                    flush out, quit 0)
              (pin box 'root w, loop r))
       _ (loop as)
       port (peep box 'port 8080)
