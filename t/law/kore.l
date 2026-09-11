@@ -896,9 +896,11 @@
    (man-sec? ["3" "printf"]) (man-sec? ["3p" "x"]) (man-sec? ["3ssl" "x"])
    (! (man-sec? ["411toppm"])) (! (man-sec? ["411toppm" "x"]))
    (! (man-sec? ["3"])) (! (man-sec? ["ls"])) (! (man-sec? ["ls" "x"])) (! (man-sec? []))
-   ; the strip takes sgr runs and leaves every other byte where it was
-   (= (man-plain "\x1b[1mbold\x1b[0m and \x1b[4mit\x1b[0m") "bold and it")
-   (= (man-plain "plain") "plain") (= (man-plain "") ""))
+   ; the strip takes sgr runs and leaves every other byte where it was (the u-floor's,
+   ; since html2text wants the same thing for the same reason)
+   (= (usgr "\x1b[1mbold\x1b[0m and \x1b[4mit\x1b[0m") "bold and it")
+   (= (usgr "plain") "plain") (= (usgr "") "")
+   (= (usgr "\x1b[0m") "") (= (usgr "a\x1b[38;5;9mb") "ab"))
 
 (test_fin ())                                        ; no zz-fin here: quit before claiming ok
 (say err "t/law/kore: myers + patience + lines/unlines + unified hunks + the u-floor + the regex floor + the find, awk, pager, man and bc floors -- projections + minimality (lcs oracle) + anchors + seeded fuzz (lcs + brzozowski oracles) ok

@@ -251,6 +251,42 @@ some literal
                              (! (elem 'rule (map cap d)))))) ["doc/love.md" "doc/cook.md"])
       0)
 
+ ; --- the html surface outside its own output ---------------------------------
+ ; law 1 says htread reads what htshow writes. what `html2text` needs is the other half:
+ ; that it also reads a page NOBODY wrote with htshow -- attributes, containers, a head,
+ ; entities, and tags this middle has no node for. none of that is law 1 and none of it can
+ ; be, so it is stated here as what the scrub promises.
+ _ (test
+    ; an attribute does not hide a block, and the scrub drops what is not prose
+    ((htread "<h1 id=\"x\">hi</h1>") = '((head 1 ((text "hi")))))
+    ((htread "<!doctype html>\n<html><body><p>hi</p></body></html>") = '((para ((text "hi")))))
+    ((htread "<head><title>t</title></head><p>hi</p>") = '((para ((text "hi")))))
+    ((htread "<script>var x = '<p>no</p>';</script><p>yes</p>") = '((para ((text "yes")))))
+    ((htread "<!-- <p>no</p> --><p>yes</p>") = '((para ((text "yes")))))
+    ; a container is UNWRAPPED -- what it held is still there, one level out
+    ((htread "<div class=\"a\"><p>hi</p></div>") = '((para ((text "hi")))))
+    ((htread "<div><div><p>hi</p></div></div>") = '((para ((text "hi")))))
+    ; ..and a nested kill does not end its parent early
+    ((htread "<script><script></script>x</script><p>y</p>") = '((para ((text "y")))))
+    ; the aliases: one font, so <b> is <strong> and <tt> is <code>
+    ((htread "<p><b>a</b> <i>c</i> <tt>d</tt></p>")
+     = '((para ((strong ((text "a"))) (text " ") (em ((text "c"))) (text " ") (code "d")))))
+    ; text with no <p> around it is still a paragraph -- which is where a page's prose
+    ; lives once its containers are gone
+    ((htread "<div>bare text</div>") = '((para ((text "bare text")))))
+    ; the entities a document spells, named and numeric
+    ((htread "<p>a&nbsp;b &amp; c&#65;d&#x42;e</p>") = '((para ((text "a b & cAdBe")))))
+    ((htread "<p>&mdash;&hellip;</p>") = '((para ((text "—…")))))
+    ((htread "<p>&nosuchentity;</p>") = '((para ((text "&nosuchentity;")))))   ; unknown rides through
+    ; a tag with no node here is dropped and its content kept, so nothing truncates
+    ((htread "<p>a</p><button>b</button><p>c</p>")
+     = '((para ((text "a"))) (para ((text "b"))) (para ((text "c")))))
+    ; ..and the closers stay with the block waiting for them: a quote survives a stray tag
+    ((htread "<blockquote><p>q</p></blockquote>") = '((quote ((para ((text "q")))))))
+    ((htread "<blockquote><wat><p>q</p></blockquote>") = '((quote ((para ((text "q")))))))
+    ; a page of nothing but furniture is empty, not garbage
+    ((htread "<!doctype html><html><head></head><body></body></html>") = ()))
+
  ; --- the terminal surface: the circle the man pages travel ---------------------
  ; the build writes doc/*.md, shows it as roff, ships that, and `kore man` reads it back.
  ; so the property that matters is the round trip through the SHIPPED form: every heading

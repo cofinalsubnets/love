@@ -24,6 +24,16 @@
    (uread p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) [1 t]) ()))
    ; a path + text -> 1 when it lands, () when it will not open (uread's mirror)
    (uwrite p t) (: q (open p "w") (? (hot? q) (: _ (say q t) _ (close q) 1) ()))
+   ; text with its sgr runs taken out, every other byte where it was. the shape a tool
+   ; wants when its own output is going somewhere that is not a terminal -- a colour is
+   ; for a reader, and a pipe is not one. lapiz's tty shower is what puts them in.
+   (usgr s)
+    (: n #s o (jug 0)
+       (go i) (? (n <= i) (slurp o)
+                 (i + 1 < n && s i = 27 && s (i + 1) = 91)
+                  ((: (g k) (? (n <= k) (slurp o) (s k = 109) (go (k + 1)) (g (k + 1)))) (i + 2))
+                 (: _ (put o (s i)) (go (i + 1))))
+       (go 0))
    ; -- the option walk, shared by every applet taking clustered flags -----------
    ; clustering is not optional: this tree's own scripts write -qF, -qiw, -vE,
    ; -oE and -ne, so a walk that reads only whole words takes `-qF` for a pattern

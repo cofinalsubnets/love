@@ -48,7 +48,7 @@ the letter is the tool's own or POSIX and GNU spell it otherwise (`grep -h`, `du
 the long forms only. echo, test and `[` read no options at all and are not at the door;
 cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (103 tools, 106 names)
+## the inventory (104 tools, 107 names)
 
 | where | tools |
 | --- | --- |
@@ -79,6 +79,7 @@ cook and lush answer both flags themselves, each with more to say than a synopsi
 | fs.l, what fills a /dev | sync mkfifo mknod (`p b c u`, `-m MODE`, linux's wide device encoding) |
 | a/vi/ | vi |
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
+| h2t.l, the pages a browser gets | html2text (the same lens, entered from the other surface) |
 | a/lush.l | sh / lush |
 
 ## the discipline (why this stays trustworthy)
@@ -406,6 +407,33 @@ of `dos2unix` — and it is not why these are tools.
 
 Not built: `-c` conversion modes (ascii/7bit/iso), BOM handling, `-b` backups, and the
 `--info` report.
+
+## html2text (a/kore/h2t.l)
+
+`html2text [-w COLS] [FILE..]`, and the same three-part path `man` takes with the first part
+swapped: lapiz's html reader takes the page to the document AST, `ttyshow` lays it out at a
+width, and what is left here is the operand walk. papel already runs this lens the other way
+(markdown in, html out), so reading html back cost a face and not a parser.
+
+**It is not a browser.** A page is prose to this tool. lapiz's scrub drops the doctype, the
+comments, the `<head>` and the `<script>`/`<style>` bodies, and *unwraps* the containers —
+`div`, `nav`, `section`, `span` and the rest wrap blocks rather than being one — so what
+reaches the reader is headings, paragraphs, lists, definition lists, quotes, displays and the
+inline spans. `<b>` is `<strong>` and `<tt>` is `<code>` to a reader with one font.
+
+* **A table is unwrapped to its cells**, which reads as prose and not as a table. The middle
+  has no table node, and inventing one in the scrub would be a lie about the lens.
+* **A tag with no node here is dropped and its content kept**, so an unknown element costs a
+  wrapper and never the text inside it.
+* **Text with no `<p>` around it is still a paragraph** — once the containers are gone that
+  is where most of a real page's prose turns out to live.
+* **An `<a>` is normalized to its href** by the scrub, so the reader knows one link shape;
+  an `<a>` with no href is an anchor, not a link, and prints as its text alone.
+* Named and numeric entities both decode; an unknown name rides through as written, which is
+  better than eating the word it was part of.
+
+None of this is law 1 — that says `htread` reads what `htshow` writes, and reading a page
+*nobody* wrote with `htshow` is a different promise. It is stated in `t/host/lapiz.l` instead.
 
 ## man (a/kore/man.l)
 

@@ -44,13 +44,13 @@ pipe() { n=$1; i=$2; shift 2
          same "$n"; }
 
 # ------------------------------------------------------------------- the laws
-echo "UTILS a/kore/{text,core,fs,re,sed,awk,expr,bc,less,find,diff,patch,man}.l t/law/kore.l"
+echo "UTILS a/kore/{text,core,fs,re,sed,awk,expr,bc,less,find,diff,patch,man,h2t}.l t/law/kore.l"
 out=$ho/.test_kore.out
 # lush's job.l + glob.l ride along because find.l captures sh-match at its define
 { cat t/00-init.l a/kore/text.l a/kore/u.l a/kore/core.l a/kore/fs.l a/kore/re.l \
       a/kore/sed.l a/kore/awk.l a/kore/expr.l a/kore/bc.l a/kore/proc.l a/kore/less.l a/libra/lint.l a/vi/config.l a/vi/hue.l \
       a/vi/core.l a/vi/vi.l a/kore/diff.l a/kore/patch.l a/lush.l \
-      a/kore/find.l a/kore/man.l; \
+      a/kore/find.l a/kore/man.l a/kore/h2t.l; \
   echo "(borrow 'kore)"; \
   cat t/law/kore.l; } | "$m" > "$out" 2>&1
 r=$?

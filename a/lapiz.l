@@ -27,6 +27,15 @@
 ; lands there, or law 1 fails on an AST that reads the same and is spelled two ways. every
 ; list ends in the unit -- `=` tells the two terminators apart, so a 0 tail fails law 1.
 ;
+; --- reading what a shower did not write ---
+; law 1 is about a surface's own output, and both readers now take a good deal more than
+; that: rfread reads a hand-written man page and htread reads a web page. each has a scrub
+; ahead of it (rfscrub, htscrub) for the same reason -- what such a file carries around its
+; prose is not blocks, and is line-shaped in roff and container-shaped in html -- and each
+; has a last-resort block rule, so a construct neither can place costs its own line and
+; never the rest of the document. accepting more input cannot break law 1, which is why
+; both were safe to add; what they owe instead is stated in t/host/lapiz.l.
+;
 ; --- the terminal, which is not a surface ---
 ; `ttyshow` lays the middle out for a terminal at a width, and `kore man` is built on it.
 ; it is not a row in `surfaces` and never will be: a row owes law 1, and a terminal keeps
@@ -64,7 +73,7 @@
 ; reaches through the accessor. everything else is machinery and stays off the
 ; tablet -- catted, an unwrapped lapiz put all ~163 of its names on the session.
 (module (lapiz mdread mdshow htread htshow rfread rfshow ttyshow
-         md->ht ht->md md->rf rf->md rf->tty md->tty convert  htb hti hq mget)
+         md->ht ht->md md->rf rf->md rf->tty md->tty ht->tty convert  htb hti hq mget)
 
 ; the combinators (l/boot/post.l) -- lapiz wants only the lenient `runp`. inside the
 ; module, so peg splices for this compile alone.
@@ -278,12 +287,130 @@
                  "")
    (htshow d) (joins (map htb d) "\n"))
 
+; ---------------------------------------------------------------- html, scrubbed
+; the roff surface learned this first, and html wants it for the same reason: a page in the
+; wild is mostly not prose. a doctype, a comment, a <head> and everything under it, and the
+; <script>/<style> bodies are not blocks; and a container -- div, nav, section, span -- is
+; not one either, since it wraps blocks rather than being one. so the scrub deletes the
+; first kind whole, opening tag to matching close, and UNWRAPS the second, dropping the tag
+; and keeping what it held. the aliases go here too: <b> is <strong> to a reader with one
+; font, and <br> ends a line the only way this middle can say it.
+(: hkill '("script" "style" "head" "svg" "noscript" "template" "iframe" "object")
+   hbare '("div" "nav" "section" "article" "main" "header" "footer" "aside" "span" "body"
+           "html" "figure" "figcaption" "form" "label" "picture" "video" "audio" "canvas"
+           "table" "thead" "tbody" "tfoot" "tr" "td" "th" "caption" "colgroup" "col"
+           "font" "center" "small" "big" "abbr" "cite" "time" "mark" "ins" "del" "sup" "sub")
+   halias '(("b" "strong") ("i" "em") ("u" "em") ("strike" "em") ("s" "em") ("q" "em")
+            ("tt" "code") ("kbd" "code") ("samp" "code") ("var" "code") ("dfn" "em")
+            ("h7" "h6") ("h8" "h6") ("menu" "ul") ("dir" "ul"))
+   (hlow t) (: n #t o (jug 0)
+               (go i) (? (n <= i) (slurp o)
+                         (: c (t i) _ (put o (? (64 < c < 91) (c + 32) c)) (go (i + 1))))
+               (go 0))
+   ; the tag starting at i: [name end-index open?], or () where none does
+   (htag s i)
+    (: n #s
+       (? !(i < n && s i = 60) ()
+          (: c? (i + 1 < n && s (i + 1) = 47)
+             b (? c? (i + 2) (i + 1))
+             (nm k) (? (n <= k) k (elem (s k) '(32 9 10 13 47 62)) k (nm (k + 1)))
+             e (nm b)
+             (go k) (? (n <= k) k (s k = 62) (k + 1) (go (k + 1)))
+             (? (n <= b || e = b) () [(hlow (snip s b e)) (go e) !c?]))))
+   (halias? t) ((: (g l) (? (one? l) t (<<l = t) <><l (g >l))) halias)
+   ; from i, past the matching close of t -- nesting counted, so a <div> inside a killed
+   ; <div> does not end it early. an unclosed one runs to the end, as it does in a browser.
+   (hpast s i t)
+    (: n #s
+       (go k d) (? (n <= k) k
+                   (: h (htag s k)
+                      (? !(two? h) (go (k + 1) d)
+                         (<h != t) (go <>h d)
+                         <>>h (go <>h (d + 1))
+                         (d <= 1) <>h
+                         (go <>h (d - 1)))))
+       (go i 1))
+   ; the href inside an open tag's attributes, single or double quoted, or ()
+   (href s k e)
+    ((: (go i) (? (e <= i + 6) ()
+                  !("href=" = snip s i (i + 5)) (go (i + 1))
+                  (: c (s (i + 5))
+                     (? !(elem c '(34 39)) ()
+                        ((: (h j) (? (e <= j) () (s j = c) (snip s (i + 6) j) (h (j + 1))))
+                         (i + 6))))))
+     k)
+   (hfind s i pat)                                  ; past the next pat, or the end
+    (: n #s m #pat
+       (go k) (? (n < k + m) n (pat = snip s k (k + m)) (k + m) (go (k + 1)))
+       (go i))
+   (htscrub s)
+    (: n #s o (jug 0)
+       (go i)
+        (? (n <= i) (slurp o)
+           (i + 3 < n && s i = 60 && s (i + 1) = 33 && s (i + 2) = 45 && s (i + 3) = 45)
+            (go (hfind s (i + 4) "-->"))
+           (i + 1 < n && s i = 60 && s (i + 1) = 33)                       ; <!doctype ..>
+            (go ((: (g k) (? (n <= k) k (s k = 62) (k + 1) (g (k + 1)))) (i + 1)))
+           (: h (htag s i)
+              (? !(two? h) (: _ (put o (s i)) (go (i + 1)))
+                 (: t <h e <>h op? <>>h
+                    (? (elem t hkill) (go (? op? (hpast s e t) e))
+                       (elem t hbare) (go e)
+                       (= t "br") (: _ (say o "</p><p>") (go e))
+                       ; a link is the one tag whose attribute the middle keeps, so it is
+                       ; normalized to the shape the reader knows: href alone, and first.
+                       ; an <a> with no href is an anchor, not a link, and gets an empty
+                       ; one -- which the tty shower then does not print.
+                       (= t "a") (: v (? op? (href s (i + 2) (e - 1)) ())
+                                    _ (say o (? op? ("<a href=\"" + (? (string? v) v "") + "\">")
+                                                    "</a>"))
+                                    (go e))
+                       (: a (halias? t)
+                          _ (say o (? op? ("<" + a + (snip s (i + 1 + #t) (e - 1)) + ">")
+                                         ("</" + a + ">")))
+                          (go e)))))))
+       (go 0)))
+
 ; ---------------------------------------------------------------- html, read
-(: (otag t)    (lit ("<" + t + ">"))
+; an open tag may carry attributes -- `<h1 id="x">` is the same head as `<h1>`, and a page
+; not written by htshow always carries some. accepting them costs law 1 nothing: htshow
+; emits none, so its own output always takes the bare branch.
+(: (otag t)    (alts [(lit ("<" + t + ">"))
+                      (seqs [(lit ("<" + t)) (one ws?) (span (!= 62)) (lit ">")])])
    (ctag t)    (lit ("</" + t + ">"))
    hws         (skip (span ws?))
    (wrapt t a) (seqs [(skip (otag t)) a hws (skip (ctag t))])
-   (entof nm) (nm @ "amp" "&" "lt" "<" "gt" ">" "quot" "\"" ("&" + nm + ";"))
+   ; the named entities a document actually spells, and the numeric forms. an unknown name
+   ; rides through as it was written, which is what the markdown surface does with a sigil
+   ; it cannot claim -- better a literal `&foo;` on the page than a silently eaten word.
+   hents '(("amp" "&") ("lt" "<") ("gt" ">") ("quot" "\"") ("apos" "'") ("nbsp" " ")
+           ("middot" "·") ("mdash" "—") ("ndash" "–") ("hellip" "…") ("bull" "•")
+           ("lsquo" "‘") ("rsquo" "’") ("ldquo" "“") ("rdquo" "”") ("copy" "©")
+           ("reg" "®") ("trade" "™") ("deg" "°") ("times" "×") ("divide" "÷")
+           ("laquo" "«") ("raquo" "»") ("dagger" "†") ("para" "¶") ("sect" "§")
+           ("larr" "←") ("rarr" "→") ("harr" "↔") ("le" "≤") ("ge" "≥") ("ne" "≠"))
+   ; a code point -> its utf-8 bytes. the tree had no encoder; `string` on a number is one
+   ; BYTE, which is the right primitive and the wrong end of this.
+   (utf8 v)
+    (? (v < 0) ""
+       (v < 128) (string v)
+       (v < 2048) ((string (192 + (v // 64))) + string (128 + (v % 64)))
+       (v < 65536) ((string (224 + (v // 4096))) + (string (128 + ((v // 64) % 64)))
+                    + string (128 + (v % 64)))
+       (v < 1114112) ((string (240 + (v // 262144))) + (string (128 + ((v // 4096) % 64)))
+                      + (string (128 + ((v // 64) % 64))) + string (128 + (v % 64)))
+       "")
+   (hnum nm)                                     ; &#NN; and &#xHH; -> the character
+    (: n #nm
+       (dig16 c) (? (47 < c < 58) (c - 48) (96 < c < 103) ((c - 97) + 10)
+                    (64 < c < 71) ((c - 65) + 10) -1)
+       (go i b v) (? (n <= i) (? (v < 0) () (utf8 v))
+                     (: d (dig16 (nm i))
+                        (? (d < 0 || b <= d) () (go (i + 1) b ((? (v < 0) 0 v) * b + d)))))
+       (? (n < 2 || nm 0 != 35) ()
+          (elem (nm 1) '(120 88)) (go 2 16 -1) (go 1 10 -1)))
+   (entof nm) ((: (g l) (? (one? l) (: u (hnum nm) (? (string? u) u ("&" + nm + ";")))
+                           (<<l = nm) <><l (g >l))) hents)
 
    (hraw? c)   (c != 60 && c != 38)                        ; ordinary text runs to the next < or &
 
@@ -316,10 +443,30 @@
    h-meta  (tag (\ p ['meta (mnorm p)]) (many1 h-meta1))
    h-dt    (seqs [hws (wrapt "dt" (pack htinl)) hws (wrapt "dd" (pack htinl))])
    h-dl    (tag (\ p ['deflist (dpair p)]) (wrapt "dl" (many h-dt)))
+   ; the last resort, and the reason `many h-block` never stalls: a tag no block above could
+   ; place is dropped, and what it wrapped is left to be read on its own. without it `runp`
+   ; -- which is lenient -- keeps what it parsed and drops the rest of the page in silence,
+   ; so a page that opened with anything unexpected parsed to NOTHING at all. it cannot fire
+   ; on what htshow writes, so law 1 does not feel it; and it sits ahead of h-quote because
+   ; a value binding after that lambda is not one h-block can see.
+   ; one closer is exempt, for the reason the roff reader exempts three: `many h-block`
+   ; runs inside the block waiting for it, and eating </blockquote> there starves the quote
+   ; and loses the whole of it. h-quote is the ONLY place `many h-block` appears, so it is
+   ; the only closer that needs this -- every other one is consumed by the inline or item
+   ; parser that opened it, and a </a> arriving HERE is an orphan whose opener never
+   ; matched. exempting those too is what made a page of <a accesskey=..> tags stall.
+   h-close (lit "</blockquote>")
+   h-lone  (skip (seqs [(notp h-close) (lit "<") (span (!= 62)) (lit ">")]))
+   ; ..and text with no <p> around it is still a paragraph. unwrapping a container leaves
+   ; its inline content bare at block level, which is where most of a real page's prose
+   ; turns out to live; `many1` is what keeps it from matching nothing and looping.
+   h-loose (tag (\ p ['para <p])
+                (pack (pmap mrg (many1 (alts [hent hcode hstrong hem hlink htext])))))
    ; quote recurses into the block loop, so it sits with it and stays eta-expanded
    (h-quote s y n) ((tag (\ p ['quote <p]) (wrapt "blockquote" (pack (many h-block)))) s y n)
-   (h-block s y n) ((seqs [hws (alts [h-rule h-head h-fence h-quote h-ul h-ol h-dl h-meta h-para])]) s y n)
-   (htread t) (bmrg (runp (seqs [(many h-block) hws]) t)))
+   (h-block s y n)
+    ((seqs [hws (alts [h-rule h-head h-fence h-quote h-ul h-ol h-dl h-meta h-para h-loose h-lone])]) s y n)
+   (htread t) (bmrg (runp (seqs [(many h-block) hws]) (htscrub t))))
 
 ; ---------------------------------------------------------------- roff (man), show
 ; man macros carry sections two deep, literal blocks with no language, and no rule or
@@ -626,13 +773,18 @@
                 'code   ([[<>x a]] + ttsegs >l a)
                 'strong ((ttsegs <>x (ttadd a "1")) + ttsegs >l a)
                 'em     ((ttsegs <>x (ttadd a "4")) + ttsegs >l a)
-                'link   ((ttsegs <>x a) + [[(" <" + <>>x + ">") a]] + ttsegs >l a)
+                ; the url trails the text it was on, the way a man page's \(la..\(ra does
+                ; -- and an anchor, which has no url, is just its text
+                'link   ((ttsegs <>x a) + (#<>>x ? [[(" <" + <>>x + ">") a]] ()) + ttsegs >l a)
                 (ttsegs >l a))))
    ; a run's text at its space breaks; the empty pieces at each end are what lets a word
-   ; carry on across a style change with no space between the halves
+   ; carry on across a style change with no space between the halves. a newline is a break
+   ; like any other -- this fills, and a surface that keeps its own line structure (a fence)
+   ; never comes through here. without that a run of whitespace is one enormous WORD, which
+   ; wraps to a line of its own and reads as a blank paragraph nobody wrote.
    (ttsplit s)
     ((: (g i st acc) (? (#s <= i) (rev (snip s st i . acc))
-                        (elem (s i) '(32 9)) (g (i + 1) (i + 1) (snip s st i . acc))
+                        (elem (s i) '(32 9 10 13)) (g (i + 1) (i + 1) (snip s st i . acc))
                         (g (i + 1) st acc))) 0 0 ())
    ; the runs -> words, each one [visible styled]: the visible half is what a fill measures
    (ttwords segs)
@@ -718,7 +870,8 @@
              (h + [""] + r))))
    (ttyshow d w) (cats (map (ln \ ln + "\n") (ttdoc d (? (w < 20) 20 w) 5)))
    (rf->tty s w) (ttyshow (rfread s) w)
-   (md->tty s w) (ttyshow (mdread s) w))
+   (md->tty s w) (ttyshow (mdread s) w)
+   (ht->tty s w) (ttyshow (htread s) w))
 
 ; ---------------------------------------------------------------- the lens
 ; five surfaces under two hubs. the x86 rows reach the holo book when CALLED, so lapiz owes

@@ -104,17 +104,6 @@
            (man-pre? <ls ".Sh ") 1
            (go >ls th))
        (go l 0))
-   ; the escapes come off when there is no terminal to read them
-   (man-plain s)
-    (: n #s
-       o (jug 0)
-       (go i) (? (n <= i) (slurp o)
-                 (i + 1 < n && s i = 27 && s (i + 1) = 91)
-                  ((: (g k) (? (n <= k) (slurp o)
-                               (s k = 109) (go (k + 1))
-                               (g (k + 1)))) (i + 2))
-                 (: _ (put o (s i)) (go (i + 1))))
-       (go 0))
    ; the page found, read, redirected and rendered. [1 path text] when it lands and
    ; [0 complaint] when it does not -- every way of failing carries the sentence for it
    (man-lay nm sec w)
@@ -157,7 +146,7 @@
                      (man-moan ("man: no manual entry for " + nm))))
        (one nm) (: r (man-lay nm sec w)
                    (? !<r (man-moan <>r)
-                      !(two? hw) (: _ (puts (man-plain <>>r)) 0)
+                      !(two? hw) (: _ (puts (usgr <>>r)) 0)
                       (: _ (pgride () (lines <>>r)
                                    (nm + (tally sec ? ("(" + sec + ")") "")) in
                                    <>hw <hw (tablet 0) "")
