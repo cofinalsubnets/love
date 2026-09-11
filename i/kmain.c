@@ -38,7 +38,9 @@ static struct cb *kcb;
 static struct {
   volatile uint32_t *_;
   uint16_t width, height, pitch;
-  uint8_t scale; } kfb;              // pixels per glyph pixel, settled in fbinit
+  uint8_t scale;
+  uint32_t cap_px; } kfb;            // pixels per glyph pixel, settled in fbinit; and the
+                                     // most the paper may hold, for a door that resizes
 
 // keyboard input. kb_int (interrupt context) decodes scancodes into input bytes -- arrow
 // and Delete as the ANSI escapes the line editor decodes -- and kb_readn and (key) drain
@@ -1766,9 +1768,12 @@ void fbdraw(void) {
 // either console it finds there is a whole one. what does NOT follow is a program that
 // already asked (winsize) -- it holds a grid that no longer exists, the way a terminal
 // resized under a process that never hears SIGWINCH does.
-static bool k_vt_rescale(unsigned v) {
-  if (!kcb || !kfb._ || v < 1 || v > 8 || v == kfb.scale) return false;
-  uintptr_t const rows = kfb.height / (kface.h * v), cols = kfb.width / (kface.w * v);
+// the console re-made for whatever kfb now says -- both doors below want exactly this.
+// a refusal leaves the standing console where it was, which is why the allocation comes
+// before anything is given up.
+static bool k_cb_remake(void) {
+  uintptr_t const rows = kfb.height / (kface.h * kfb.scale),
+                  cols = kfb.width / (kface.w * kfb.scale);
   if (!rows || !cols) return false;
   struct cb *c = kmallocw(b2w(sizeof *c + rows * cols * sizeof(uint32_t)));
   if (!c) return false;
@@ -1779,10 +1784,34 @@ static bool k_vt_rescale(unsigned v) {
   kcb->flag |= cb_lnm;                 // the kernel console's discipline, as cbinit sets it
   cb_attr(kcb, fg, bg, 0);
   cb_fill(kcb, 0);
-  kfb.scale = (uint8_t) v;
   kfree(old);
   fbcur = ~0u;                         // the cached cursor indexed the grid that just went
   return true; }
+
+static bool k_vt_rescale(unsigned v) {
+  if (!kcb || !kfb._ || v < 1 || v > 8 || v == kfb.scale) return false;
+  uint8_t const was = kfb.scale;
+  kfb.scale = (uint8_t) v;
+  if (k_cb_remake()) return true;
+  return kfb.scale = was, false; }
+
+// the paper itself moved: same machine, a canvas the reader resized under it. the pixels
+// have to land inside the reservation fbinit was given, because everything below the
+// framebuffer was handed to the heap at boot and is not the console's to grow into.
+// scale 0 keeps the one in force; anything else is bounded the way /proc/vt/scale is.
+bool k_fb_reseat(unsigned w, unsigned h, unsigned pitch, unsigned scale) {
+  if (!kcb || !kfb._ || !w || !h) return false;
+  if ((uintptr_t) pitch * h > kfb.cap_px) return false;
+  // every field here is 16 bits wide, so the bound is the type's and not a policy.
+  if (w > 0xffffu || h > 0xffffu || pitch > 0xffffu || w > pitch) return false;
+  if (scale > 8) return false;
+  uint16_t const ow = kfb.width, oh = kfb.height, op = kfb.pitch;
+  uint8_t const os = kfb.scale;
+  kfb.width = (uint16_t) w, kfb.height = (uint16_t) h, kfb.pitch = (uint16_t) pitch;
+  if (scale) kfb.scale = (uint8_t) scale;
+  if (k_cb_remake()) return true;
+  kfb.width = ow, kfb.height = oh, kfb.pitch = op, kfb.scale = os;
+  return false; }
 
 // the framebuffer as a program may borrow it whole: the base, the size, and the
 // stride in PIXELS. false where the door handed over none (PVH has nothing to
@@ -1927,6 +1956,8 @@ static bool fbinit(void) {
   kfb.height = kboot.fb.h;
   kfb.pitch  = kboot.fb.pitch_px;
   kfb.scale  = kboot.fb.scale ? kboot.fb.scale : fbscale();
+  // a door that named no reservation cannot be resized, so its paper is its own size.
+  kfb.cap_px = kboot.fb.cap_px ? kboot.fb.cap_px : (uint32_t) kfb.width * kfb.height;
   return true; }
 
 static bool cbinit(void) {

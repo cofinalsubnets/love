@@ -48,6 +48,11 @@ struct k_boot {
   // size (kmain's fbscale). a door that knows the screen better than its pixel count
   // does, a page with a device ratio, names it here instead.
   uint8_t  scale;
+  // the most pixels this paper may ever hold. a door that can be RESIZED under the
+  // running machine (the wasm seat's canvas) reserves its largest here, so a later
+  // w/h lands inside memory the heap was never given. 0 is "what w*h says", which is
+  // every door whose screen cannot change size.
+  uint32_t cap_px;
  } fb;
  bool has_fb; // FIXME how is this different from fb.base == NULL
  // the wall date at boot, UNIX SECONDS -- what makes ai_clock a clock and not an

@@ -168,7 +168,8 @@ async function boot(msg) {
   // RAM is everything above the module's own pages: grow, and hand kmain the span. the
   // boot line rides the top page of it, the heap image (if the terminal brought one) sits
   // below that, and a canvas's framebuffer is carved below those by k_start
-  // (i/wasm/arch.c) -- the same sum here says where to blit from.
+  // (i/wasm/arch.c) -- the same sum here says where to blit from. the two carves must
+  // agree to the byte: k_start never returns, so this side cannot ask where it landed.
   const lo = memory.buffer.byteLength, imgn = msg.image?.byteLength ?? 0;
   if (memory.grow(BigInt(Math.ceil((msg.ram * 1048576 + imgn) / 65536))) < 0n) throw new Error('memory.grow refused');
   let hi = top = memory.buffer.byteLength - 4096;
@@ -177,12 +178,21 @@ async function boot(msg) {
   const img = imgn ? (hi - imgn) & ~7 : 0;
   if (imgn) { u8().set(new Uint8Array(msg.image), img); hi = img & ~4095; }
   fb = msg.fb;
+  let cap = 0;
   if (fb) {
-    fbAt = (hi - fb.w * fb.h * 4) & ~4095;
+    // the RESERVATION, in pixels: the most this canvas will ever be, which is the screen
+    // it is on. the paper is carved at that and the heap gets what is under it, so a later
+    // resize (k_fb_reseat) lands inside memory the kernel was never given. absent, it is
+    // the live size -- the canvas is pinned, which is what it always was.
+    cap = Math.max(fb.cap ?? 0, fb.w * fb.h);
+    fbAt = (hi - cap * 4) & ~4095;
     if (fb.canvas) { fbCtx = fb.canvas.getContext('2d'); fbImg = fbCtx.createImageData(fb.w, fb.h); }
     else if (fb.dump && isNode) writeFileSync = (await import('node:fs')).writeFileSync; }
   seen = Atomics.load(ctl, 2);
-  call(ex.k_start, lo, hi, fb ? fb.w : 0, fb ? fb.h : 0, fb?.scale ?? 0, top, img, imgn); }
+  // the scale and the reservation ride ONE argument: moon's wasm convention gives eight
+  // integer slots and this call already spends them. low byte the scale, the rest pixels.
+  const sc = fb ? ((fb.scale ?? 0) & 0xff) + cap * 256 : 0;
+  call(ex.k_start, lo, hi, fb ? fb.w : 0, fb ? fb.h : 0, sc, top, img, imgn); }
 
 // the terminals import the ring's shape from here, so this file also loads on a main
 // thread, where there is no port and nothing to do

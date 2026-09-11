@@ -13,6 +13,7 @@
 
 void kq(uint8_t);                      // kmain's input queue, one byte
 void kmain(void);
+bool k_fb_reseat(unsigned w, unsigned h, unsigned pitch, unsigned scale);  // kmain's paper door
 extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
 
 #define hc_read 0
@@ -75,14 +76,24 @@ void __ai_sigret(void) { }
 // pixel gets there, which is how the page's own zoom reaches the console; rows and columns
 // then fall out of the two. the framebuffer is carved off the top of that span; headless,
 // the serial line is the console (kmain's own law). never returns: kmain ends in k_reset.
-void k_start(uintptr_t lo, uintptr_t hi, uintptr_t w, uintptr_t h, uintptr_t scale,
+// `sc` carries two things in one argument, and it has to: moon's wasm convention hands a
+// function EIGHT integer slots and k_start already spent them. the low byte is the scale a
+// glyph pixel gets; the rest is the RESERVATION in pixels -- the most this canvas will ever
+// be, which is the screen it sits on. the paper is carved at the reservation and the heap
+// gets what is under it, so k_fb_reseat can move the live w/h around inside a span the heap
+// was never given. a reservation under w*h (0, from a door that names none) is the live
+// size, and the canvas is pinned the way it always was.
+void k_start(uintptr_t lo, uintptr_t hi, uintptr_t w, uintptr_t h, uintptr_t sc,
              char const *cmd, uintptr_t img, uintptr_t imgn) {
+  uintptr_t const scale = sc & 0xff, cap0 = sc >> 8;
   kboot.image = (void const *) img, kboot.image_len = imgn;
   if (w && h) {
-    uintptr_t fb = (hi - w * h * 4) & ~(uintptr_t) 4095;
+    uintptr_t cap = cap0 < w * h ? w * h : cap0;
+    uintptr_t fb = (hi - cap * 4) & ~(uintptr_t) 4095;
     kboot.fb.base = (void *) fb;
     kboot.fb.w = (uint16_t) w, kboot.fb.h = (uint16_t) h, kboot.fb.pitch_px = (uint32_t) w;
     kboot.fb.scale = (uint8_t) scale;
+    kboot.fb.cap_px = (uint32_t) cap;
     kboot.has_fb = true;
     hi = fb; }
   k_ram_give(lo, hi - lo);
@@ -91,6 +102,13 @@ void k_start(uintptr_t lo, uintptr_t hi, uintptr_t w, uintptr_t h, uintptr_t sca
 
 // where the worker blits from: the framebuffer's address, 0 when there is none
 uintptr_t k_fb_addr(void) { return (uintptr_t) kboot.fb.base; }
+
+// the canvas was resized under the running machine. the base does not move -- only what
+// of the reservation is in use -- so the worker keeps blitting from k_fb_addr and simply
+// reads a new w and h back. 0 says the machine would not take it and the page should keep
+// the box it had.
+bool k_fb_resize(uintptr_t w, uintptr_t h, uintptr_t scale) {
+  return k_fb_reseat((unsigned) w, (unsigned) h, (unsigned) w, (unsigned) scale); }
 
 // --- what this seat does not have ------------------------------------------------
 // the horn is i/hda.c's, and there is no sound card behind a wasm module; the
