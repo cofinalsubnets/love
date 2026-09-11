@@ -279,7 +279,7 @@ kore_head = a/kore/text.l a/kore/u.l a/kore/core.l a/kore/fs.l a/kore/sum.l a/ko
   a/kore/sed.l a/kore/awk.l a/kore/expr.l a/kore/bc.l a/kore/proc.l a/kore/less.l \
   a/libra/lint.l a/vi/config.l a/vi/hue.l a/vi/core.l a/vi/vi.l \
   a/kore/diff.l a/kore/patch.l a/dns.l a/ain.l $(lushfiles) \
-  a/kore/find.l a/cook.l a/kore/asbook.l
+  a/kore/find.l a/cook.l a/kore/asbook.l a/kore/man.l
 # the backends: one file per ISA, then the text faces they share
 holo_be = l/holo/x64.l l/holo/a64.l l/holo/thumb2.l l/holo/rv64.l \
   l/holo/thumb1.l l/holo/wasm.l l/holo/wasmfn.l l/holo/text.l l/holo/dialect.l

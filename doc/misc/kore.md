@@ -48,7 +48,7 @@ the letter is the tool's own or POSIX and GNU spell it otherwise (`grep -h`, `du
 the long forms only. echo, test and `[` read no options at all and are not at the door;
 cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (99 tools, 102 names)
+## the inventory (100 tools, 103 names)
 
 | where | tools |
 | --- | --- |
@@ -77,6 +77,7 @@ cook and lush answer both flags themselves, each with more to say than a synopsi
 | proc.l, the privileged three | chroot (the root moved, then exec), mount (bare = /proc/self/mounts; `-t TYPE`, and the FLAG half of `-o` -- `size=`-style filesystem text is refused by name, not dropped), umount |
 | fs.l, what fills a /dev | sync mkfifo mknod (`p b c u`, `-m MODE`, linux's wide device encoding) |
 | a/vi/ | vi |
+| man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | a/lush.l | sh / lush |
 
 ## the discipline (why this stays trustworthy)
@@ -381,6 +382,30 @@ parsers for a shape nothing in this decade emits.
   `--backup-if-mismatch`, since a hunk that moved applied to a file the patch did not describe.
 * the gate's oracle is **the tree, not the message**: GNU patch's chatter has moved between
   releases; what it leaves on disk has not.
+
+## man (a/kore/man.l)
+
+`man [-w] [SECTION] NAME..`. The tree writes its pages in `doc/*.md` and the build shows them
+as roff (`u/mkman.l`, through `a/lapiz.l`); reading one back is the same lens run the other
+way. So man owns none of the three hard parts — lapiz's roff reader takes the page to the
+document AST, its `ttyshow` lays that out at a width, and `a/kore/less.l` pages the result.
+What is man's own is the search path, the decompression, and the handing over.
+
+* **The search** is MANPATH if it is set, else `/usr/local/share/man`, `/usr/share/man`,
+  `/usr/local/man`, each walked in section order. A leading numeric operand is the section.
+* **Compression is decided by the magic bytes, not the suffix** — a gzipped page named without
+  `.gz` still reads, and a page named `.gz` that is not gzipped is not mangled into one.
+* **`.so` redirects are followed once**, resolved under the root the page was found in.
+* **`-w` reads nothing**: it answers the path. That is what a script wants, and it is what
+  makes the search testable without a terminal.
+* **With no terminal the page is poured, and poured plain** — the attributes belong to the
+  terminal and a pipe is not one. With one, bold and underline ride through the pager: an SGR
+  sequence costs no column there and a wrap re-opens it on the next row.
+
+**mdoc is not read.** A BSD-style page (`.Dd`/`.Sh`/`.Nm` — about one man1 page in twenty-five
+here) is a different macro set, and rendering it through the man-macro reader produces a page
+of macro names rather than prose. So it is named as unsupported instead of rendered wrong.
+Also absent: `apropos`/`whatis`, the cat cache, and `.so` chains deeper than one.
 
 ## not built
 

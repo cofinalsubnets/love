@@ -251,7 +251,70 @@ some literal
                              (! (elem 'rule (map cap d)))))) ["doc/love.md" "doc/cook.md"])
       0)
 
+ ; --- the terminal surface: the circle the man pages travel ---------------------
+ ; the build writes doc/*.md, shows it as roff, ships that, and `kore man` reads it back.
+ ; so the property that matters is the round trip through the SHIPPED form: every heading
+ ; the markdown has is still a heading after roff and the tty shower, at the column the
+ ; shower puts one. it is not law 1 -- a terminal keeps nothing and there is no ttread --
+ ; which is why 'tty is no row in `surfaces`: a row owes law 1 and this cannot pay it.
+ _ (: (slurpf f) (: q (open f "r") (slurp q))
+      ; an inl down to its text -- lapiz keeps its own `plain` off the export list
+      (flat l) (? (one? l) ""
+                  (: x <l
+                     ((<x @ 'text <>x 'code <>x 'strong (flat <>x) 'em (flat <>x)
+                             'link (flat <>x) "") + flat >l)))
+      ; the line a heading should have become: a .SH flush left, a .SS indented three
+      (heads d) (map (b \ (<>b < 2 ? "" "   ") + flat <>>b) (filter (b \ = <b 'head) d))
+      (flush s) ((: (g i o) (? (#s <= i) (slurp o)
+                               (i + 1 < #s && s i = 27 && s (i + 1) = 91)
+                                ((: (h k) (? (#s <= k) (slurp o) (s k = 109) (g (k + 1) o)
+                                             (h (k + 1)))) (i + 2))
+                               (: _ (put o (s i)) (g (i + 1) o)))) 0 (jug 0))
+      (lines s) (: (g i st a) (? (#s <= i) (rev a)
+                                 (s i = 10) (g (i + 1) (i + 1) (snip s st i . a))
+                                 (g (i + 1) st a))
+                   (g 0 0 ()))
+      _ (map (\ f (: d (mdread (slurpf f))
+                     t (flush (ttyshow (rfread (rfshow d)) 80))
+                     ls (lines t)
+                     (test
+                        ; every heading survives the trip, and lands flush left the way
+                        ; a .SH does -- so a missing one is a missing section, not a wrap
+                        (foldl (\ a h (a && elem h ls)) 1 (heads d))
+                        ; nothing overruns the width it was given
+                        (foldl (\ a l (a && #l <= 80)) 1 ls)
+                        ; the .th became the header line, with the page either side of it
+                        (: h0 <ls (0 < #h0 && (h0 0) != 32)))))
+             ["doc/love.md" "doc/cook.md"])
+      ; a roff page the tree did not write still lays out: the shower is total over the
+      ; middle, so every block kind renders and none of them widens past the width
+      _ (: d (rfread ".TH \"T\" \"1\" \"\" \"s\" \"m\"
+.SH NAME
+t \\- a thing
+.SH OPTIONS
+.TP
+\\fB\\-v\\fR
+be loud
+.IP \\(bu 2
+a bullet
+.PP
+.RS
+.EX
+a display
+.EE
+.RE
+")
+           ls (lines (flush (ttyshow d 40)))
+           (test (0 < #ls)
+                   (foldl (\ a l (a && #l <= 40)) 1 ls)
+                   (elem "NAME" ls) (elem "OPTIONS" ls)
+                   (elem "     t - a thing" ls)
+                   (elem "     -v     be loud" ls)       ; a short term keeps its definition
+                   (elem "     • a bullet" ls)
+                   (elem "         a display" ls)))      ; a display sits inside the quote
+      0)
+
  _ (test_fin ())
- _ (puts "a/lapiz: ok -- the document lens (markdown/html/roff), laws 1 + 2 + the roff domain
+ _ (puts "a/lapiz: ok -- the document lens (markdown/html/roff), laws 1 + 2 + the roff domain + the tty shower
 ")
  0)

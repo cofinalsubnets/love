@@ -27,6 +27,13 @@
 ; lands there, or law 1 fails on an AST that reads the same and is spelled two ways. every
 ; list ends in the unit -- `=` tells the two terminators apart, so a 0 tail fails law 1.
 ;
+; --- the terminal, which is not a surface ---
+; `ttyshow` lays the middle out for a terminal at a width, and `kore man` is built on it.
+; it is not a row in `surfaces` and never will be: a row owes law 1, and a terminal keeps
+; nothing -- there is no ttread to be the other half of the pair, so there is no lens to
+; state. what it owes instead is stated in t/host/lapiz.l: every heading the markdown has
+; is still a heading after roff and the shower, and no line overruns the width.
+;
 ; --- the roff domain ---
 ; man macros are a smaller surface. law 1 holds on man-page-shaped docs: meta, head 1-2,
 ; para, fence with empty language, quote, bullets, numbers, deflist, and text/strong/em/code
@@ -41,12 +48,23 @@
 ; `nope`/`alts`, `many1`, and `pack`/`tag`, which build a node out of a flat payload.
 ;
 ; a consumer says (borrow 'lapiz), or hands the loader this file's path, and reads bare down
-; the splice or reaches one member by accessor: (cite 'lapiz 'md->ht). the six faces are
-; mdread/mdshow/htread/htshow/md->ht/ht->md. the head below names the exports and nothing
-; else: unwrapped, lapiz puts all ~163 of its names on the session.
+; the splice or reaches one member by accessor: (cite 'lapiz 'md->ht). the faces are the six
+; surface pairs, plus rf->tty/md->tty and ttyshow beside them. the head below names the
+; exports and nothing else: unwrapped, lapiz puts all ~163 of its names on the session.
 
-(module (lapiz mdread mdshow htread htshow rfread rfshow
-         md->ht ht->md md->rf rf->md convert  htb hti hq mget)
+; no brackets here: the runtime supplies the layer. a consumer says (borrow 'lapiz)
+; (the baked module) or hands the loader this file's path ((borrow "a/lapiz.l")
+; -- papel's want does), and reads bare down the splice, or reaches one member through
+; the accessor: (cite 'lapiz 'md->ht). the six faces are
+; mdread/mdshow/htread/htshow/md->ht/ht->md, and rfread/rfshow/ttyshow beside them;
+; everything else is machinery, reachable for a probe ((keys (cite 'lapiz))) but not
+; meant for the eye.
+
+; the head names the exports: the ten faces, plus the four pieces papel's template
+; reaches through the accessor. everything else is machinery and stays off the
+; tablet -- catted, an unwrapped lapiz put all ~163 of its names on the session.
+(module (lapiz mdread mdshow htread htshow rfread rfshow ttyshow
+         md->ht ht->md md->rf rf->md rf->tty md->tty convert  htb hti hq mget)
 
 ; the combinators (l/boot/post.l) -- lapiz wants only the lenient `runp`. inside the
 ; module, so peg splices for this compile alone.
@@ -87,11 +105,28 @@
 ; share a character, which is why \(aq \(oq \(cq (all an apostrophe) are absent. groff reads
 ; latin-1 unless preconv ran, so a raw UTF-8 character in the source renders as mojibake.
 (: rglyphs '(("em" "—") ("en" "–") ("bu" "•") ("la" "⟨") ("ra" "⟩") ("mi" "−"))
-   (glyph n)   ((: (g l) (? (one? l) ("\\(" + n) (<<l = n) <><l (g >l))) rglyphs)
+   ; ..and the glyphs the reader alone knows. rfshow emits none of them, so they sit outside
+   ; the bijection and only `glyph` consults them: rq still encodes from the six above, and
+   ; law 1 never sees this table. a page in the wild is mostly quotes and dashes.
+   rglyphr '(("aq" "'") ("cq" "'") ("oq" "'") ("dq" "\"") ("lq" "“") ("rq" "”")
+             ("ga" "`") ("rs" "\\") ("hy" "-") ("ti" "~") ("ha" "^") ("ul" "_")
+             ("ru" "_") ("sl" "/") ("co" "©") ("rg" "®") ("tm" "™") ("at" "@")
+             ("br" "|") ("bv" "|") ("de" "°") ("dg" "†") ("dd" "‡") ("ct" "¢")
+             ("mu" "×") ("di" "÷") ("+-" "±") ("is" "∫") ("if" "∞") ("pd" "∂")
+             ("->" "→") ("<-" "←") ("ua" "↑") ("da" "↓") ("na" "∇") ("ap" "~")
+             ("==" "≡") ("!=" "≠") ("<=" "≤") (">=" "≥") ("sr" "√") ("fm" "′"))
+   (glyph n)   ((: (g l) (? (one? l) ((: (h m) (? (one? m) ("\\(" + n) (<<m = n) <><m (h >m))) rglyphr)
+                            (<<l = n) <><l (g >l))) rglyphs)
    (rqat s i)  ((: (g l) (? (one? l) ()                       ; does a glyph start at i? -> (name len)
                             (: gl <><l n #gl
                              (i + n <= #s && gl = snip s i (i + n) ? [<<l n] (g >l)))))
-                rglyphs))
+                rglyphs)
+   ; \*(XX and \*[name]: a page's own strings. the ones a generator defines and then uses are
+   ; quote and dash spellings; anything else it set we dropped with its .ds, and an unset
+   ; string is empty in groff too, so that is the fallback.
+   rstrs '(("Aq" "'") ("C`" "") ("C'" "") ("\"" "\"") ("``" "“") ("''" "”") ("lq" "“") ("rq" "”")
+           ("L\"" "“") ("R\"" "”") ("Em" "—") ("En" "–") ("Tr" "") ("(A" "") ("(B" ""))
+   (rstr n) ((: (g l) (? (one? l) "" (<<l = n) <><l (g >l))) rstrs))
 
 ; --- normalizing an inl: adjacent texts are one text (the AST is the fixed point, so this matters) ---
 (: (mrg l) (? (one? l) () (: h <l (= <h 'text && 0 = #<>h)) (mrg >l)     ; a \& contributes an empty text: drop it
@@ -326,6 +361,97 @@
                  "")                                        ; a rule has no roff form: it vanishes
    (rfshow d) (cats (map rfb d)))
 
+; ---------------------------------------------------------------- roff (man), scrubbed
+; a page in the wild opens with a preamble the reader has no use for: pod2man and sphinx
+; define their own macros, guard them with conditionals, and leave comments and index calls
+; all through the body. none of that is a block, so the parser would read it as paragraph
+; text. the scrub is line-oriented because what it removes is: a .de runs to a lone `..`,
+; a conditional group runs to the \} that closes it, and a request is one line -- none of
+; them a shape a combinator sees without carrying state the rest of the reader does not want.
+; what it cannot do is honour a condition: `.if n` and `.if t` both go, so a page that spells
+; one passage twice loses both. no page in the corpus does that outside its preamble.
+(: rfskip '(".IX" ".PD" ".ds" ".as" ".nr" ".rr" ".tm" ".ad" ".na" ".hy" ".nh" ".ne" ".ft"
+            ".fam" ".ll" ".ps" ".vs" ".lf" ".hw" ".in" ".ti" ".rm" ".rn" ".cc" ".c2" ".eo"
+            ".ec" ".sy" ".do" ".it" ".pl" ".po" ".mk" ".rt" ".ns" ".rs" ".UC" ".DT" ".tr"
+            ".char" ".fc" ".so" ".nop" ".ev" ".di" ".wh" ".pso" ".blm" ".shift" ".return")
+   ; the macros a generator defines for itself, read as the stock ones they stand for
+   rfsame '((".Sp" ".sp") (".Vb" ".nf") (".Ve" ".fi") (".P" ".PP") (".HP" ".PP")
+            (".Pp" ".PP") (".INDENT" ".RS") (".UNINDENT" ".RE") (".Ip" ".IP") (".IPs" ".IP"))
+   rfdef  '(".de" ".de1" ".am" ".am1")
+   rfcond '(".if" ".ie" ".el")
+   ; the macro name: up to the first blank or \, so `.el\{\` names .el the way groff reads it
+   (rfmac ln) ((: (g i) (? (#ln <= i) (snip ln 0 i)
+                           (elem (ln i) '(32 9 92)) (snip ln 0 i)
+                           (g (i + 1)))) 0)
+   (rfas m)   ((: (g l) (? (one? l) m (<<l = m) <><l (g >l))) rfsame)
+   ; the \{ groups one line opens, less the ones it closes; a lone \} floors at none open
+   (rfdepth ln d)
+    ((: (g i k) (? (#ln <= i) (? (k < 0) 0 k)
+                   (ln i = 92 && i + 1 < #ln && ln (i + 1) = 123) (g (i + 2) (k + 1))
+                   (ln i = 92 && i + 1 < #ln && ln (i + 1) = 125) (g (i + 2) (k - 1))
+                   (g (i + 1) k))) 0 d)
+   ; a no-break control character is the same macro, so ' normalizes to .
+   (rfdot ln) (#ln && ln 0 = 39 ? ("." + snip ln 1 #ln) ln)
+   (rfcom? ln) (2 < #ln && ln 0 = 46 && ln 1 = 92 && ln 2 = 34)
+   ; a macro line's first argument, bare or "quoted"
+   (rffst ln)
+    (: n #ln
+       (go i) (? (n <= i) ""
+                 (elem (ln i) '(32 9)) (go (i + 1))
+                 (ln i = 34) ((: (h k) (? (n <= k || ln k = 34) (snip ln (i + 1) k) (h (k + 1)))) (i + 1))
+                 ((: (h k) (? (n <= k || elem (ln k) '(32 9)) (snip ln i k) (h (k + 1)))) i))
+       (go #(rfmac ln)))
+   (rfdigs? a) (#a && ((: (g i) (? (#a <= i) 1 (dig? (a i)) (g (i + 1)) 0)) 0))
+   (rfbul? a)  (elem a '("\\(bu" "\\(em" "\\-" "•" "-" "*" "o"))
+   (rfnum? a)  (: n #a (1 < n && elem (a (n - 1)) '(46 41) && rfdigs? (snip a 0 (n - 1))))
+   ; .IP is three blocks under one macro: a bullet, a numbered item, or a tagged paragraph.
+   ; a tagged paragraph is what .TP already spells, so it becomes one and the reader needs no
+   ; new block for it -- and without this the tag is skipped with the rest of the .IP line,
+   ; which on a pod2man page is every option name in the file. a bare .IP, or one carrying
+   ; only the indent it wants, tags nothing and is a paragraph.
+   (rfip ln)
+    (: a (rffst ln)
+       (? (!#a || rfdigs? a) ".PP\n"
+          (rfbul? a) ".IP \\(bu\n"
+          (rfnum? a) (".IP \"" + a + "\"\n")
+          (".TP\n" + (#a && a 0 = 46 ? ("\\&" + a) a) + "\n")))
+   ; what a page opened and did not close, closed for it. the reader's block loop leaves a
+   ; display and a quote closer alone -- the block waiting for one would starve otherwise --
+   ; so an unmatched one has nothing that can consume it and the page truncates there. that
+   ; makes balance the scrub's job: a second .nf is the no-op groff reads it as, a .RE with
+   ; no .RS goes, and whatever is still open at the end is shut here.
+   (rfshut nf rs) ((nf ? ".fi\n" "") + rep ".RE\n" rs)
+   ; a macro the page defined for itself: we dropped the .de that says what it does, but its
+   ; arguments are still its content, and they are the difference between a word rendered
+   ; without its quotes and a line that is not in the page at all
+   (rfown ln) (: r (rffst ln) (!#r ? "" ((r 0 = 46 ? ("\\&" + r) r) + "\n")))
+   (rfscrub s)
+    ((: (go l de nf d rs defs acc)
+        (? !(two? l) ((cats (rev acc)) + rfshut nf rs)
+           (: ln (rfdot <l) m (rfmac ln)
+              (? de       (go >l !(m = ".." || m = ".") nf d rs defs acc)  ; a .de body runs to a lone ..
+                 (0 < d)  (go >l de nf (rfdepth ln d) rs defs acc)         ; a conditional group, likewise
+                 ; a comment, and a bare \ -- a continuation with nothing on it, which some
+                 ; generators leave at the head of a page and which shows as text otherwise
+                 (rfcom? ln || ln = "\\") (go >l de nf d rs defs acc)
+                 (elem m rfdef) (go >l 1 nf d rs ("." + rffst ln . defs) acc)
+                 (elem m rfcond) (go >l de nf (rfdepth ln 0) rs defs acc)
+                 (m = "." || elem m rfskip) (go >l de nf d rs defs acc)
+                 (: m2 (rfas m) rest (snip ln #m #ln)
+                    ; .sp is a blank line inside a display and a paragraph break outside one
+                    (? (m2 = ".sp") (go >l de nf d rs defs ((nf ? "\n" ".PP\n") . acc))
+                       (m2 = ".IP" && !nf) (go >l de nf d rs defs (rfip ln . acc))
+                       (elem m2 '(".nf" ".EX"))
+                        (go >l de 1 d rs defs (nf ? acc ((m2 + "\n") . acc)))
+                       (elem m2 '(".fi" ".EE"))
+                        (go >l de 0 d rs defs (nf ? ((m2 + "\n") . acc) acc))
+                       (m2 = ".RS") (go >l de nf d (rs + 1) defs ((m2 + rest + "\n") . acc))
+                       (m2 = ".RE") (? rs (go >l de nf d (rs - 1) defs ((m2 + "\n") . acc))
+                                        (go >l de nf d rs defs acc))
+                       (elem m defs) (go >l de nf d rs defs (rfown ln . acc))
+                       (go >l de nf d rs defs ((m2 + rest + "\n") . acc))))))))
+     (splitnl s) 0 0 0 0 () ()))
+
 ; ---------------------------------------------------------------- roff (man), read
 ; roff FILLS, which is why this reader is line-oriented where the html one is tag-oriented:
 ; consecutive input lines join with a space, a font macro's arguments with nothing (the
@@ -336,11 +462,46 @@
    rclose    (alts [(lit "\\fR") (lit "\\fP")])                ; \fP is "previous font" -- same thing here
    rgl     (tag (\ p ['text (glyph (string <p + string <>p))])
                 (seqs [(skip (lit "\\(")) (one chr?) (one chr?)]))
+   ; the escapes that carry an argument in quotes -- a device call, a motion, a rule. none
+   ; of them has a terminal form, so each contributes nothing and takes its argument with
+   ; it; without that the argument reads as text and a link's url lands in the page.
+   rdropq  (tag (const '(text ""))
+                (alts (map (c \ seqs [(lit ("\\" + c)) (lit "'") (span (!= 39)) (lit "'")])
+                           '("X" "Z" "h" "v" "l" "L" "N" "o" "w" "A" "b" "D" "C" "R" "H" "S"))))
+   ; a number register read: whatever it held, the .nr that set it is gone
+   rreg    (tag (const '(text ""))
+                (alts [(seqs [(lit "\\n(") (one chr?) (one chr?)])
+                       (seqs [(lit "\\n[") (span (!= 93)) (lit "]")])
+                       (seqs [(lit "\\n") (one chr?)])]))
+   rpm     (one (c \ elem c '(43 45)))                     ; the sign a size change may carry
+   rsize   (tag (const '(text ""))
+                (alts [(seqs [(lit "\\s") (opt rpm) (lit "[") (span (!= 93)) (lit "]")])
+                       (seqs [(lit "\\s") (opt rpm) (lit "(") (one dig?) (one dig?)])
+                       (seqs [(lit "\\s") (opt rpm) (one dig?)])]))
+   ; \*(XX and \*[name]: a string the page set for itself -- see rstrs. \[name] is the long
+   ; spelling of \(xx and reaches the same table.
+   rstrg   (tag (\ p ['text (rstr (string <p + string <>p))])
+                (seqs [(skip (lit "\\*(")) (one chr?) (one chr?)]))
+   rstrb   (tag (\ p ['text (rstr <p)]) (seqs [(skip (lit "\\*[")) (span (!= 93)) (skip (lit "]"))]))
+   rstr1   (tag (\ p ['text (rstr (string <p))]) (seqs [(skip (lit "\\*")) (one chr?)]))
+   rglb    (tag (\ p ['text (glyph <p)]) (seqs [(skip (lit "\\[")) (span (!= 93)) (skip (lit "]"))]))
+   ; and the bare ones: a mark, a hyphenation point, a thin space -- all of them nothing here
+   rnone   (tag (const '(text ""))
+                (alts (map (c \ lit ("\\" + c)) '("%" ":" "," "/" "|" "^" "{" "}" "c" "d" "u" "z" "p"))))
    resc    (alts [(tag (const '(text "\\")) (lit "\\e"))
+                  (tag (const '(text "\\")) (lit "\\\\"))
                   (tag (const '(text "-")) (lit "\\-"))
                   (tag (const '(text "")) (lit "\\&"))      ; zero-width: mrg drops it
                   (tag (const '(text " ")) (lit "\\ "))
-                  rgl])
+                  (tag (const '(text " ")) (lit "\\0"))
+                  (tag (const '(text " ")) (lit "\\~"))
+                  (tag (const '(text ".")) (lit "\\."))
+                  (tag (const '(text "'")) (lit "\\'"))
+                  (tag (const '(text "`")) (lit "\\`"))
+                  ; a closer with no font open: roman already, so it says nothing. inside a
+                  ; font body `rinls` tests rclose before it gets here, so this cannot steal one
+                  (tag (const '(text "")) rclose)
+                  rdropq rreg rsize rstrg rstrb rglb rstr1 rnone rgl])
    rtext  (tag (\ p ['text (cats p)]) (seq (one rfesc?) (span rfesc?)))
    ; ..a \ starting none of the above reads as literal text one char at a time, `mrg` gluing
    ; it back on. without it the reader stops dead at the first escape it does not model.
@@ -348,8 +509,10 @@
    rcode   (tag (\ p ['code (plain <p)])
            (seqs [(skip (alts [(lit "\\f(CR") (lit "\\f(CW")]))   ; cw is groff-deprecated, still read
                   (pack (many (seq (notp rclose) (alts [resc rtext rchar])))) (skip rclose)]))
-   ; the font cycle (span -> strong/em -> rfont -> rinls -> span) rides eta-expanded parsers
-   (rfont o t) (tag (\ p [t <p]) (seqs [(skip (lit o)) (pack rinls) (skip rclose)]))
+   ; the font cycle (span -> strong/em -> rfont -> rinls -> span) rides eta-expanded parsers.
+   ; the closer is optional because a font runs to one in roff and a page may leave it to the
+   ; end of the line; `rinls` stops at either, so `opt` is the whole of the difference.
+   (rfont o t) (tag (\ p [t <p]) (seqs [(skip (lit o)) (pack rinls) (skip (opt rclose))]))
    (rstrong s y n) ((rfont "\\fB" 'strong) s y n)
    (rem s y n)     ((rfont "\\fI" 'em) s y n)
    (rspan s y n)   ((alts [resc rcode rstrong rem rtext rchar]) s y n)
@@ -364,10 +527,17 @@
           (s i = 32) (g (i + 1) acc)
           (s i = 34) (: j ((: (h k) (k < #s && s k != 34 ? (h (k + 1)) k)) (i + 1))
                       (g (j + 1) (snip s (i + 1) j . acc)))
-          (: j ((: (h k) (k < #s && s k != 32 ? (h (k + 1)) k)) i)
+          ; an escape is two characters and neither of them splits the argument -- `\ ` is a
+          ; non-breaking space, and splitting there leaves a lone \ at the end of one
+          ; argument and the word it was joining at the head of the next
+          (: j ((: (h k) (? (#s <= k) k
+                            (s k = 92 && k + 1 < #s) (h (k + 2))
+                            (s k = 32) k
+                            (h (k + 1)))) i)
            (g j (snip s i j . acc))))) 0 ())
    fontmacs '((".BR" (strong text) 0) (".RB" (text strong) 0) (".IR" (em text) 0)
-              (".RI" (text em) 0) (".SB" (strong) 1) (".SM" (text) 1) (".B" (strong) 1) (".I" (em) 1))
+              (".RI" (text em) 0) (".BI" (strong em) 0) (".IB" (em strong) 0)
+              (".SB" (strong) 1) (".SM" (text) 1) (".B" (strong) 1) (".I" (em) 1))
    (macinfo m) ((: (g l) (? (one? l) () (<<l = m) (>(<l)) (g >l))) fontmacs)
    (wrapf f l) (f @ ('strong || 'em) [[f l]] l)
    (allplain? l) (? (one? l) 1 (= <<l 'text) (allplain? >l) 0)
@@ -412,12 +582,143 @@
                       (skip (alts [(lit ".EE") (lit ".fi")])) (skip (span nonl?)) (skip (lit "\n"))]))
    r-br    (skip (seqs [(lit ".br") (span nonl?) (lit "\n")]))   ; a break ends the run
    r-blank (skip (seqs [(span sp?) (lit "\n")]))
+   ; the last resort, and the reason `many r-block` never stalls: a macro line no block above
+   ; could place contributes nothing. without it `runp` -- which is lenient -- keeps what it
+   ; parsed and drops the whole rest of the page in silence, so one unplaced .RE truncates it.
+   ; the closers are exempt: this runs inside the `many` of the block that is waiting for one,
+   ; so eating .RE there would starve the quote and lose the whole of it. it cannot fire on
+   ; what rfshow writes, so law 1 does not feel it -- and it sits ahead of r-rs because a
+   ; value binding after that lambda is not one r-block can see.
+   r-close (alts [(lit ".RE") (lit ".EE") (lit ".fi")])
+   r-lone  (skip (seqs [(notp r-close) (lit ".") (span nonl?) (lit "\n")]))
    ; .rs recurses into the block loop, so it sits with it and stays eta-expanded
    (r-rs s y n) ((tag (\ p ['quote p])
                       (seqs [(skip (lit ".RS")) (skip (span nonl?)) (skip (lit "\n"))
                              (many r-block) (skip (lit ".RE")) (skip (span nonl?)) (skip (lit "\n"))])) s y n)
-   (r-block s y n) ((alts [r-blank r-br r-th r-sh r-ss r-pp r-ex r-rs r-ul r-ol r-dl r-para]) s y n)
-   rfread (bmrg * runp (many r-block)))
+   (r-block s y n) ((alts [r-blank r-br r-th r-sh r-ss r-pp r-ex r-rs r-ul r-ol r-dl r-para r-lone]) s y n)
+   rfread (bmrg * runp (many r-block) * rfscrub))   ; the scrub runs first: see above
+
+; ---------------------------------------------------------------- a terminal, shown
+; the fourth surface, and the one that is not a lens: a terminal is where a document is
+; read, never where one is kept, so there is no ttread and law 1 has nothing to say. that
+; is why it is not a row in `surfaces` -- a row owes law 1 and this cannot pay it. it takes
+; the width because filling is the whole of the job, and answers one string of lines.
+;
+; the shape is man's, measured against man-db 2.13 rather than remembered: a .SH flush left,
+; body at 5, a .SS at 3, a tagged term at the body indent with its definition 7 further in,
+; and a quote 4 further in again. a display is not filled -- it is already laid out, and a
+; pager scrolls sideways better than a shower guesses.
+;
+; a word carries its own escapes: bold opens and closes inside the word, never across the
+; space between two. that costs a few bytes on a run of bold words and buys the thing that
+; matters -- no wrap, here or in a pager that wraps again at its own width, can ever cut an
+; attribute away from the reset that ends it.
+(: ttesc  (string 27)
+   (tton a)  (#a ? (ttesc + "[" + a + "m") "")
+   ttoff  (ttesc + "[0m")
+   (ttsp n)  (rep " " (? (n < 0) 0 n))
+   (ttadd a b) (#a ? (a + ";" + b) b)                        ; a nested attribute joins the outer
+   ; an inl -> [text attribute] runs. code stays plain: roman is what a terminal shows for it
+   (ttsegs l a)
+    (? (one? l) ()
+       (: x <l
+          (<x @ 'text   ([[<>x a]] + ttsegs >l a)
+                'code   ([[<>x a]] + ttsegs >l a)
+                'strong ((ttsegs <>x (ttadd a "1")) + ttsegs >l a)
+                'em     ((ttsegs <>x (ttadd a "4")) + ttsegs >l a)
+                'link   ((ttsegs <>x a) + [[(" <" + <>>x + ">") a]] + ttsegs >l a)
+                (ttsegs >l a))))
+   ; a run's text at its space breaks; the empty pieces at each end are what lets a word
+   ; carry on across a style change with no space between the halves
+   (ttsplit s)
+    ((: (g i st acc) (? (#s <= i) (rev (snip s st i . acc))
+                        (elem (s i) '(32 9)) (g (i + 1) (i + 1) (snip s st i . acc))
+                        (g (i + 1) st acc))) 0 0 ())
+   ; the runs -> words, each one [visible styled]: the visible half is what a fill measures
+   (ttwords segs)
+    ((: (go l vis sty acc)
+        (? (one? l) (#vis ? (rev ([vis sty] . acc)) (rev acc))
+           (: s <(<l) a <>(<l)
+              (pc p vis sty acc)
+               (? (one? p) (go >l vis sty acc)
+                  (: h <p v2 (vis + h)
+                     s2 (sty + (#h ? (#a ? (tton a + h + ttoff) h) ""))
+                     (? (one? >p) (pc >p v2 s2 acc)
+                        (pc >p "" "" (#v2 ? ([v2 s2] . acc) acc)))))
+              (pc (ttsplit s) vis sty acc))))
+     segs "" "" ())
+   ; greedy fill: the words onto lines of at most (w - ind) visible columns, each indented
+   (ttfill words w ind)
+    (: pad (ttsp ind)
+       room (: r (w - ind) (? (r < 8) 8 r))
+       (go l vis sty acc)
+        (? (one? l) (#vis ? (rev ((pad + sty) . acc)) (rev acc))
+           (: v <(<l) s <>(<l)
+              (? !#vis (go >l v s acc)
+                 (#vis + 1 + #v <= room) (go >l (vis + " " + v) (sty + " " + s) acc)
+                 (go >l v s ((pad + sty) . acc)))))
+       (go words "" "" ()))
+   (ttinl l w ind a) (ttfill (ttwords (ttsegs l a)) w ind)
+   ; a marker replaces the head of the first line's indent -- which is spaces, so the byte
+   ; arithmetic is the column arithmetic even where the marker itself is not one byte
+   (ttmark ls mk ind)
+    (? (one? ls) ls
+       (: h <ls (((ttsp ind + mk) + snip h (ind + #mk) #h) . >ls)))
+   (ttitem l w ind mk) (ttmark (ttinl l w (ind + #mk) "") mk ind)
+   ; the .th line: the page either side of its manual, which is what a terminal reader
+   ; looks at to know what they opened. it is dropped whole if the width cannot hold it.
+   (ttmeta kvs w)
+    (: t (mget kvs 'title) sec (mget kvs 'section) mn (mget kvs 'manual)
+       l (#sec ? (t + "(" + sec + ")") t)
+       gap (w - 1 - (2 * #l) - #mn)                          ; the last column stays empty
+       lf (gap // 2)
+       (? (!#t || gap < 2) (#t ? [l] ())
+          [(l + ttsp lf + mn + ttsp (gap - lf) + l)]))
+   (ttvis words) ((: (g l a) (? (one? l) a (g >l (#a ? (a + " " + <(<l)) <(<l))))) words "")
+   ; the term carries whatever fonts the page gave it, so nothing is forced on it here.
+   ; a term that fits the gap keeps its definition beside it, which is what .TP does and
+   ; what a page of one-letter flags wants; a longer one takes the line to itself. and a
+   ; blank between items, without which a long definition runs into the next term.
+   (ttdefs l w ind)
+    (? (one? l) ()
+       (: it <l
+          tw (ttwords (ttsegs <it ""))
+          tv (ttvis tw)
+          tl (ttfill tw w ind)
+          bl (ttinl <>it w (ind + 7) "")
+          h  (? (#tv && #tv < 7 && one? >tl && two? bl)
+                (((ttsp ind + snip <tl ind #(<tl) + ttsp (7 - #tv))
+                  + snip <bl (ind + 7) #(<bl)) . >bl)
+                (tl + bl))
+          r  (ttdefs >l w ind)
+          (? (one? r) h (h + [""] + r))))
+   (ttnums l w ind i)
+    (? (one? l) ()
+       ((ttitem <l w ind (show i + ". ")) + ttnums >l w ind (i + 1)))
+   (ttbuls l w ind)
+    (? (one? l) () ((ttitem <l w ind "• ") + ttbuls >l w ind))
+   (ttblk x w ind)
+    (<x @ 'meta    (ttmeta <>x w)
+          'head    (ttinl <>>x w (<>x < 2 ? 0 3) "1")
+          'para    (ttinl <>x w ind "")
+          'fence   (map (ln \ ttsp ind + ln) (splitnl <>>x))
+          'quote   (ttdoc <>x w (ind + 4))
+          'bullets (ttbuls <>x w ind)
+          'numbers (ttnums <>x w ind 1)
+          'deflist (ttdefs <>x w ind)
+          'rule    [(ttsp ind + rep "-" (? (w - ind < 1) 1 (w - ind)))]
+          ())
+   ; one blank line between blocks, none before the first, and none after a heading --
+   ; a heading belongs to what follows it, and man sets it that way
+   (ttdoc d w ind)
+    (? (one? d) ()
+       (: h (ttblk <d w ind) r (ttdoc >d w ind)
+          (? (one? h) r (one? r) h
+             (= <(<d) 'head) (h + r)
+             (h + [""] + r))))
+   (ttyshow d w) (cats (map (ln \ ln + "\n") (ttdoc d (? (w < 20) 20 w) 5)))
+   (rf->tty s w) (ttyshow (rfread s) w)
+   (md->tty s w) (ttyshow (mdread s) w))
 
 ; ---------------------------------------------------------------- the lens
 ; five surfaces under two hubs. the x86 rows reach the holo book when CALLED, so lapiz owes
