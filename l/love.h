@@ -491,6 +491,18 @@ extern struct ai_fio ai_stdin, ai_stdout, ai_stderr;
 #define evenp(_) !oddp(_)
 #define cell(_) ((union u*)(_))
 #define charmp oddp
+// an unaligned little-endian read, where the machine takes one in a single instruction.
+// mooncc lays a byte gather as eight loads and as many shifts and ors, so this is the
+// difference between one instruction and thirty; a seat without the load says the same
+// thing the long way. the caller owns the bound -- these read their full width.
+#if defined(__x86_64__) || defined(__aarch64__)
+#define ai_wideld 1
+struct ai_u64u { uint64_t v; } __attribute__((packed, aligned(1)));
+#define ai_ld64(p) (((struct ai_u64u const*)(p))->v)
+#define ai_st64(p, x) (((struct ai_u64u*)(p))->v = (x))
+#else
+#define ai_wideld 0
+#endif
 // the blue floor: extra stack slack on every avail check, a buffer against off-by-one
 // overshoots. 0 under Love0 so love0 keeps strict discipline; -Dai_avail_floor=N overrides.
 #ifndef ai_avail_floor

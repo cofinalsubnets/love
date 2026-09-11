@@ -35,13 +35,16 @@ static const uint8_t gz_clord[19] = {
 // the size argument is a hint and a bound -- nothing grows here, so the output is
 // allocated once. a positive n is believed and verified; a wrong or absent one costs a
 // counting pass first, which is the decode with the stores dropped.
-// eight unaligned bytes as a word, little-endian by construction. not memcpy and not a
-// cast: gcc folds this to one load, and mooncc emits shifts where memcpy would be a call
-// -- 1.5x slower over the whole decode.
+// eight unaligned bytes as a word, little-endian by construction, once per symbol --
+// love.h's ai_ld64 where the machine takes one load, the byte gather where it does not.
+#if ai_wideld
+#define LD64(p) ai_ld64(p)
+#else
 #define LD64(p) ((uint64_t) (p)[0]       | (uint64_t) (p)[1] <<  8 \
                | (uint64_t) (p)[2] << 16 | (uint64_t) (p)[3] << 24 \
                | (uint64_t) (p)[4] << 32 | (uint64_t) (p)[5] << 40 \
                | (uint64_t) (p)[6] << 48 | (uint64_t) (p)[7] << 56)
+#endif
 
 // the table roots. a code longer than its root falls through to the bit walk, so these
 // only trade build cost against how often that happens: 12 bits leaves ~1% of symbols
@@ -187,20 +190,17 @@ static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t c
    if (d > op) return -1;                        // a reach before the start
    if (op + l > cap) return -2;
    if (out) {
-    // eight in order, and that is not a word move. deflate lets a run overlap its own
-    // source -- dist 1 len 100 is a hundred of one byte -- and written out in sequence
-    // these read each byte back as they go, so they are the byte loop with its counter
-    // gone and are right at every distance, no guard to get wrong. a real word move,
-    // guarded at eight, was measured and is slower in both lanes (gcc 22 ms against 20,
-    // mooncc 39 against 37): mean match here is 8.5 bytes, one word and a tail, and the
-    // branch to choose costs what the wide store saves. the plain loop is slower again
-    // (mooncc 42), which is the counter and nothing else.
+    // deflate lets a run overlap its own source -- dist 1 len 100 is a hundred of one
+    // byte -- so the bytes go out in order and read each other back as they go, which is
+    // right at every distance. eight or more apart, no byte of a word is read back inside
+    // that word, and the wide move says the same thing: mooncc spends ten instructions a
+    // byte on the narrow one here, so the guard pays for itself well under the old
+    // 8.5-byte mean match.
     uint8_t *dp = out + op, *sp = dp - d;
-    unsigned k = 0;
-    for (; k + 8 <= l; k += 8) {
-     dp[k]     = sp[k];     dp[k + 1] = sp[k + 1]; dp[k + 2] = sp[k + 2];
-     dp[k + 3] = sp[k + 3]; dp[k + 4] = sp[k + 4]; dp[k + 5] = sp[k + 5];
-     dp[k + 6] = sp[k + 6]; dp[k + 7] = sp[k + 7]; }
+    uintptr_t k = 0;
+#if ai_wideld
+    if (d >= 8) for (; k + 8 <= l; k += 8) ai_st64(dp + k, ai_ld64(sp + k));
+#endif
     for (; k < l; k++) dp[k] = sp[k]; }
    op += l; }
  } while (!last);
