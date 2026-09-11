@@ -20,9 +20,12 @@
 const NR = { read: 0, write: 1, nanosleep: 35, reboot: 169, clock_gettime: 228 };
 const ENOSYS = 38;
 // the ring: Int32 [0] the reader's head, [1] the writer's tail, [2] the wake count, [3] a
-// lift request; then ring_n bytes of keys from ring_at, then lift_n bytes holding the
-// path of the file asked for. inle.mjs and inle.html write it, this file reads it.
-export const ring_n = 4096, ring_at = 16, lift_n = 256, lift_at = ring_at + ring_n;
+// lift request, [4] a resize request with [5] [6] [7] the width, height and glyph scale it
+// asks for; then ring_n bytes of keys from ring_at, then lift_n bytes holding the path of
+// the file asked for. inle.mjs and inle.html write it, this file reads it.
+// the ring is the only door into the worker: it blocks inside k_start and idles in an
+// Atomics.wait, so it never returns to an event loop and a postMessage cannot reach it.
+export const ctl_n = 8, ring_n = 4096, ring_at = ctl_n * 4, lift_n = 256, lift_at = ring_at + ring_n;
 export const shared_n = lift_at + lift_n;
 
 // the way out of the machine: a ramfs file, read through the kernel's own fs faces --
@@ -52,6 +55,22 @@ const lift = (when) => {
   const bytes = new Uint8Array(parts.reduce((a, p) => a + p.length, 0));
   for (let o = 0, i = 0; i < parts.length; o += parts[i++].length) bytes.set(parts[i], o);
   post({ lift: path, bytes }); };
+
+// the canvas was resized under the running machine: the page leaves the new size in the
+// ring and the kernel re-makes its console at it (kmain's k_fb_reseat, through arch.c).
+// the base does not move -- the paper was carved at the RESERVATION at boot, and what a
+// resize changes is only how much of it is in use -- so this side keeps blitting from the
+// same place and reads a new w and h back. refused, the machine keeps the box it had, and
+// the frame that goes out says which size that is -- as a module older than the door does,
+// the export being the one thing this side can ask about before it calls.
+const resize = () => {
+  if (!ex?.k_fb_resize || !fb || !Atomics.exchange(ctl, 4, 0)) return;
+  const w = Atomics.load(ctl, 5), h = Atomics.load(ctl, 6), scale = Atomics.load(ctl, 7);
+  if (w <= 0 || h <= 0 || (w === fb.w && h === fb.h && scale === (fb.scale ?? 0))) return;
+  if (!Number(call(ex.k_fb_resize, w, h, scale))) return;
+  fb.w = w, fb.h = h, fb.scale = scale;
+  if (fbCtx) fbImg = fbCtx.createImageData(w, h);
+  drew = true; };                                         // the whole screen is new
 
 const isNode = typeof process !== 'undefined' && !!process.versions?.node;
 const port = isNode ? (await import('node:worker_threads')).parentPort
@@ -136,7 +155,7 @@ const sys1 = (n, a, b, c) => {
     case NR.nanosleep: {                                // the idle: a tick, or the next key
       const ts = new BigInt64Array(memory.buffer, Number(a), 2),
             ms = Number(ts[0]) * 1000 + Number(ts[1]) / 1e6;
-      flush(); blit(true); lift(1);
+      flush(); resize(); blit(true); lift(1);
       // a key still queued is a wake already: the kernel drains a few per idle, so the
       // sleep is skipped until the ring is empty, and a pasted line lands at speed
       if (Atomics.load(ctl, 0) === Atomics.load(ctl, 1)) Atomics.wait(ctl, 2, seen, ms);
@@ -198,7 +217,7 @@ async function boot(msg) {
 // thread, where there is no port and nothing to do
 if (port) isNode ? port.on('message', run) : port.addEventListener('message', (e) => run(e.data));
 async function run(msg) {
-  ctl = new Int32Array(msg.ring, 0, 4);
+  ctl = new Int32Array(msg.ring, 0, ctl_n);
   kb = new Uint8Array(msg.ring, ring_at, ring_n);
   for (;;) {
     try { await boot(msg); return; }

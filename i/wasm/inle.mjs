@@ -15,7 +15,7 @@
 //                                  [--image love-wasm.image] love-wasm.wasm [boot line ..]
 import { Worker } from 'node:worker_threads';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { ring_n, ring_at, lift_n, lift_at, shared_n } from './cpu.mjs';
+import { ctl_n, ring_n, ring_at, lift_n, lift_at, shared_n } from './cpu.mjs';
 
 const args = process.argv.slice(2);
 let fb = null, dump = null, scale = 0, liftReq = null, image = null;
@@ -32,7 +32,7 @@ const [wasm, ...cmd] = args;
 if (!wasm) { console.error('usage: inle.mjs [--fb WxH --scale N --dump screen.ppm] [--lift IN:OUT] [--image IMG] love-wasm.wasm [boot line ..]'); process.exit(2); }
 
 const ring = new SharedArrayBuffer(shared_n);
-const ctl = new Int32Array(ring, 0, 4), kb = new Uint8Array(ring, ring_at, ring_n);
+const ctl = new Int32Array(ring, 0, ctl_n), kb = new Uint8Array(ring, ring_at, ring_n);
 if (liftReq) {                                            // asked for at the reset: 2
   const p = new TextEncoder().encode(liftReq.from).subarray(0, lift_n - 1);
   new Uint8Array(ring, lift_at, lift_n).set(p);

@@ -11,7 +11,7 @@
 // pair lives -- unless data-wasm/data-image name them; data-boot is the boot line (default
 // the shell), data-ram the RAM in MiB, data-cols the fewest columns worth reading, which
 // is what settles how large a glyph is drawn.
-import { ring_n, ring_at, shared_n } from './cpu.mjs';
+import { ctl_n, ring_n, ring_at, shared_n } from './cpu.mjs';
 import { glass } from './glass.mjs';
 
 // the module is wasm64: an engine without memory64 says so instead of failing in silence
@@ -43,9 +43,11 @@ export async function loveMachine(root) {
   const url = p => new URL(p, import.meta.url);
 
   // the ring: Int32 [0] the reader's head, [1] the writer's tail, [2] the wake count,
-  // [3] a lift request (unused here); then ring_n bytes of keys. cpu.mjs reads it.
+  // [3] a lift request (unused here), [4] a resize request and [5] [6] [7] its size; then
+  // ring_n bytes of keys. cpu.mjs reads it -- and it is the only door, the worker having
+  // no event loop to deliver a postMessage to.
   const ring = new SharedArrayBuffer(shared_n);
-  const ctl = new Int32Array(ring, 0, 4), kb = new Uint8Array(ring, ring_at, ring_n);
+  const ctl = new Int32Array(ring, 0, ctl_n), kb = new Uint8Array(ring, ring_at, ring_n);
   const push = bytes => {
     let tail = Atomics.load(ctl, 1);
     for (const b of bytes) {                       // full: the rest is dropped, as a uart's would be
@@ -88,6 +90,10 @@ export async function loveMachine(root) {
   let woke = false;
   cpu.onmessage = ({ data: m }) => {
     if (m.frame) {
+      // the backing store follows the FRAME, never the measurement: the machine may refuse
+      // a size (k_fb_reseat's bounds), and a canvas sized to what was asked for would then
+      // show the frame in a corner of itself. resizing it also clears it, so only on a change.
+      if (canvas.width !== m.w || canvas.height !== m.h) canvas.width = m.w, canvas.height = m.h;
       ctx.putImageData(new ImageData(new Uint8ClampedArray(m.frame), m.w, m.h), 0, 0);
       if (!woke) { woke = true; status.hidden = true; } }
     else if (m.fault) halt('the machine faulted: ' + m.fault); };
@@ -95,9 +101,25 @@ export async function loveMachine(root) {
   // the canvas measured as REAL pixels -- its own box times the device ratio -- and the
   // zoom a glyph pixel gets there. the kernel settles rows and columns from the two, so
   // the island's shape is a layout question and nothing the console has to live inside.
-  const fb = { ...glass(canvas, Number(at('cols', 80))), post: true };
+  const cols = Number(at('cols', 80));
+  const fb = { ...glass(canvas, cols), post: true };
   cpu.postMessage({ wasm, ring, ram: Number(at('ram', 256)), cmd: at('boot', 'sh'), fb, image },
                   image ? [wasm, image] : [wasm]);
+  // the box reflowed -- the window resized, or the island's column did. the new size goes
+  // into the ring and the kernel re-makes its console at it; the canvas itself is left
+  // alone until a frame comes back at the size the machine actually took.
+  let pending = 0;
+  const ask = () => {
+    const box = canvas.getBoundingClientRect();
+    if (canvas.hidden || box.width < 1 || box.height < 1) return;
+    const g = glass(canvas, cols);
+    Atomics.store(ctl, 5, g.w); Atomics.store(ctl, 6, g.h); Atomics.store(ctl, 7, g.scale);
+    Atomics.store(ctl, 4, 1);
+    Atomics.add(ctl, 2, 1); Atomics.notify(ctl, 2); };
+  // a drag is hundreds of reflows and each one re-makes a console and frees a grid, so the
+  // machine hears the size the reader stopped at rather than every size on the way there
+  new ResizeObserver(() => { clearTimeout(pending); pending = setTimeout(ask, 150); })
+    .observe(canvas);
   status.textContent = 'the machine is waking...';
   canvas.focus({ preventScroll: true });
 }
