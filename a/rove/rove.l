@@ -275,7 +275,7 @@
                     (slurp j))
 
  ; --- rove: the crawl on cli's stage. any seed sails; q or esc steps ashore ---
- (rove-run _) (: ws (winsize 0)
+ (rove-run _) (: ws (tty 1)
              r (two? ws && 7 < <ws ? (<ws - 2) 22)
              c (two? ws && 19 < <>ws ? <>ws 80)
              g (crawl-new (c < 100 ? c 100) r (wheel (clock 0)))

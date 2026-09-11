@@ -104,12 +104,15 @@
    ;   -a all   -A all but . and ..   -l long   -d the directory itself
    ;   -r reverse   -t newest first
    ;   -1 one per line, which is what this ls always does: GNU writes one name a line
-   ;      whenever stdout is not a terminal, and nothing here is one
+   ;      whenever stdout is not a terminal, and columns are still absent here
    ; several operands print GNU's `name:` headers, files before directories.
    ; THE LONG ROW'S CLOCK IS UTC. this tree carries no timezone database (see
    ; date's own note), so `ls -l` reads local time only where local time is UTC, and
    ; the gate that compares it to GNU sets TZ for that reason.
-   ; absent and said so: -C/-x columns, -R, -S, -h, -i, -F and --color.
+   ; colour is automatic and goes only onto a terminal -- (tty 1) answers a pair for
+   ; one and 'enotty for anything else, so a pipe keeps the plain name and `ls | grep`
+   ; reads what it always read. there is no --color to ask for it or refuse it.
+   ; absent and said so: -C/-x columns, -R, -S, -h, -i and -F.
    uls-opts "aAldrt1"
    ; GNU shows the clock for the last six months and the year outside them. six
    ; months is 31556952/2 -- the average Gregorian year halved, coreutils' own
@@ -122,20 +125,33 @@
           (mo + " " + d + " " + (uzpad 2 (show (// secs 3600)))
               + ":" + (uzpad 2 (show (// (% secs 3600) 60))))
           (mo + " " + d + "  " + (show <ymd))))
+   ; the sgr a name wears, "" for none. the class is read off the lstat already in
+   ; hand; a broken link is the one class that costs a second call, since only the
+   ; stat behind the link can miss.
+   (uls-hue p md)
+    (: k (& md 61440)
+       (? (k = 16384) "\e[1;34m"
+          (k = 40960) (? (two? (stat p)) "\e[36m" "\e[31m")
+          (& md 73)   "\e[32m"
+          ""))
+   (uls-tint s h) (? #h (h + (s + "\e[0m")) s)
+   (uls-name e tty?) (uls-tint <e (? tty? (uls-hue (e 2) (<>e 2)) ""))
    ; a name as the long row shows it -- a link wears its target, which is why every
-   ; stat here is an lstat: ls -l describes the link and not what it points at.
-   (uls-nom p nm md)
-    (? (40960 = (& md 61440))
-       (: t (readlink p) (? (string? t) (nm + " -> " + t) nm))
-       nm)
-   (uls-row p nm st now)                ; the six columns, as strings
+   ; stat here is an lstat: ls -l describes the link and not what it points at. the
+   ; colour dresses the name alone: the target after the arrow keeps its own text.
+   (uls-nom p nm md h)
+    (: n (uls-tint nm h)
+       (? (40960 = (& md 61440))
+          (: t (readlink p) (? (string? t) (n + " -> " + t) n))
+          n))
+   (uls-row p nm st now tty?)           ; the six columns, as strings
     [(ust-perm (st 2))
      (? (charm? (ust-at st 6)) (show (st 6)) "?")
      (? (charm? (ust-at st 4)) (uidname "/etc/passwd" (st 4)) "?")
      (? (charm? (ust-at st 5)) (uidname "/etc/group" (st 5)) "?")
      (show <st)
      (uls-when (// (st 3) 1000000000) now)
-     (uls-nom p nm (st 2))]
+     (uls-nom p nm (st 2) (? tty? (uls-hue p (st 2)) ""))]
    (uls-wide rs k) (foldl (\ w r (: n #(r k) (? (w < n) n w))) 0 rs)
    ; the widths come from `ws` and not from `rs`. GNU sizes the command-line block's
    ; columns over EVERY operand, directories included -- even though a directory
@@ -178,13 +194,14 @@
        a? (peep t 97 0) aa? (peep t 65 0) l? (peep t 108 0) d? (peep t 100 0)
        r? (peep t 114 0) tm? (peep t 116 0)
        now (// (clock 0) 1000)
+       tty? (two? (tty 1))                  ; colour only onto a terminal
        fs (? (two? ops) ops '("."))
        hdr? (two? >fs)
-       (rows es) (map (\ e (uls-row (e 2) <e <>e now)) es)
+       (rows es) (map (\ e (uls-row (e 2) <e <>e now tty?)) es)
        (show1 es ws0)                    ; a run of entries, long or bare
         (? l? (uls-emit (rows es) ws0)
            (: (go l) (? !(two? l) ()
-                        (: e <l _ (say out <e) _ (put out 10) (go >l)))
+                        (: e <l _ (say out (uls-name e tty?)) _ (put out 10) (go >l)))
               (go es)))
        ; a directory's own listing: the entries, with `total` ahead of a long one.
        ; an EMPTY directory still owes its header and its `total 0`, so nothing here

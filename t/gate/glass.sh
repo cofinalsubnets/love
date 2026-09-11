@@ -1,7 +1,7 @@
 #!/bin/sh
 # t/gate/glass.sh -- the framebuffer console's grid, end to end. a size in REAL pixels and
 # a scale go into the machine (i/wasm/arch.c's k_start), and rows and columns come back
-# out of winsize (t/kernel/glass.l) after kmain has settled them. what each boot should
+# out of tty (t/kernel/glass.l) after kmain has settled them. what each boot should
 # answer is worked out HERE and not read off the kernel, so the law gets two readings: an
 # 8x16 face at `scale` pixels a glyph pixel, and the scale itself either the door's or the
 # largest that still leaves 80 columns and 24 rows.
@@ -18,7 +18,7 @@ name=test_glass
 bad=0
 
 # one boot: glass FB SCALE WANT. an empty FB is headless -- no framebuffer, no grid, and
-# winsize answers the same nom a host gives for a stdout that is not a tty.
+# tty answers the same nom a host gives for an fd that is not a terminal.
 glass() {
   fbarg=""
   [ -n "$1" ] && fbarg="--fb $1"

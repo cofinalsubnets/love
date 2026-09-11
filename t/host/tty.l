@@ -16,7 +16,7 @@
 ; TWO RULES, both learned here:
 ;
 ; THE SIZE IS SET FROM INSIDE THE CHILD. a fresh pty is 0x0 and the parent's
-; setwinsize races the child's first `winsize` -- rove reads its size ONCE and falls
+; settty races the child's first `tty` -- rove reads its size ONCE and falls
 ; back to 22x80, so a lost race is a quiet 22-row deck and a gate that reddens one run
 ; in fifty. `stty` on the child's own tty before the exec cannot race.
 ;
@@ -70,7 +70,7 @@
 ; --- rove: the crawl takes the terminal's size, and a key is a turn ---
 ; the bar is the LAST row, which is the geometry law -- but only away from 80x24. a
 ; sizeless rove falls back to a 22-row deck, which with the note and the bar is 24
-; lines exactly, so the same grid comes out whether the winsize was read or missed and
+; lines exactly, so the same grid comes out whether the tty was read or missed and
 ; the law at 24 rows is vacuous. 20x70 is nobody's fallback.
  a (run "b/love rove" "q" 20 70)
  _ (test

@@ -902,7 +902,7 @@ static union u const
   nif_posix_environ[] = {{lvm_posix_environ}, {lvm_ret0}};
 // NOT EVERY ROW HERE IS THE MODULE'S. nineteen stay on the BOOK -- dup dup2 environ
 // fdopen fork getuid glean hardlink pipe raw setenv signal spawn spawnio spawnmap still
-// ttyfg wait winsize -- because a SEAT SHADOWS each with a global of its own: the
+// ttyfg tty wait -- because a SEAT SHADOWS each with a global of its own: the
 // kernel's bindings and no-op roster (i/kmain.c), and the four the seat-doors tablet
 // swaps (i/main.c). a global
 // name reads the LIVE book (l/ev.c's lvm_index), which is exactly how the shadow is
@@ -1109,11 +1109,13 @@ LvNif("copyfile", nif_posix_copyfile, "posix");
 //                       | ()         still running
 //                       | a nom      waitpid error (e.g. 'echild)
 //   (kill pid sig)     -> () ok | a nom  (caller passes (0 - pid) for the group)
-//   (winsize _)        -> (rows . cols) of the controlling tty (stdout), or a nom
-//   (setwinsize p r c) -> () ok | a nom  push a size onto a master port
+//   (tty fd)           -> (rows . cols) of the terminal on fd, or a nom
+//   (settty p r c)     -> () ok | a nom  push a size onto a master port
 //
-// (winsize) takes a dummy arg (ignored, like getpid): a bare (winsize) is the
-// function itself -- (f) == f at zero operands -- so the call is (winsize 0).
+// (tty) names the fd it asks about: a charm (0 in, 1 out, 2 err) or a port over one.
+// the size and the isatty are the same question -- TIOCGWINSZ answers only for a
+// terminal -- so a pair means one and 'enotty means anything else. a nom is truthy,
+// so the caller's test is `two?` and never `?` alone.
 
 // workhorse for (tether argv), called with g Packed; argv is the single arg and
 // the sole GC root at g->sp[0]. leaves exactly one net value above argv on every
@@ -1204,40 +1206,44 @@ static lvm(lvm_kill) {
  Sp[1] = kill((pid_t) getcharm(Sp[0]), (int) getcharm(Sp[1])) ? ai_err(g, errno) : ZeroPoint;
  ai_musttail return Nextp(1, 1); }
 
-// workhorse for (winsize), called with g Packed (the dummy arg sits at sp[0]).
-// the &ws ioctl + the chain alloc live here so lvm_winsize's Continue() tail-jumps
-// (cf. host_tether). overwrites sp[0] with (rows . cols), or a nom if stdout
-// isn't a tty. returns a not-ok g only on oom (lvm_winsize routes that to ghelp).
-ai_noinline static struct ai *host_winsize(struct ai *g) {
+// workhorse for (tty fd), called with g Packed (the operand sits at sp[0]).
+// the &ws ioctl + the chain alloc live here so lvm_tty's Continue() tail-jumps
+// (cf. host_tether). overwrites sp[0] with (rows . cols), or a nom if the fd is
+// no terminal. returns a not-ok g only on oom (lvm_tty routes that to ghelp).
+ai_noinline static struct ai *host_tty(struct ai *g) {
  struct winsize ws;
- if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) < 0) { g->sp[0] = ai_err(g, errno); return g; }
+ word x = g->sp[0];
+ intptr_t fd = charmp(x) ? getcharm(x) : ai_port_fd(x);   // a charm is a raw fd
+ if (fd < 0) { g->sp[0] = ai_badarg(g); return g; }
+ if (ioctl((int) fd, TIOCGWINSZ, &ws) < 0) { g->sp[0] = ai_err(g, errno); return g; }
  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
                                  putcharm(ws.ws_row), putcharm(ws.ws_col));
  g->sp[0] = word(w);
  return g; }
 
-// (winsize): the controlling tty's size as (rows . cols), read off stdout; a nom
-// ('enotty) if stdout isn't one. the size to mirror onto a wrapped child.
-static lvm(lvm_winsize) {
- LvmCall(g, host_winsize) }
+// (tty fd): the terminal on fd as (rows . cols); a nom ('enotty) if fd is none, or
+// 'badarg for an operand that is neither a charm fd nor a port. the size to mirror
+// onto a wrapped child, and the tty test every colouring tool asks first.
+static lvm(lvm_tty) {
+ LvmCall(g, host_tty) }
 
-// (setwinsize port rows cols): push a window size onto a master port; the kernel
+// (settty port rows cols): push a window size onto a master port; the kernel
 // raises SIGWINCH on the slave's foreground group. () on success, a nom on
 // failure (incl. a non-port / closed port -> 'ebadf).
-// the &ws ioctl for (setwinsize), off lvm_setwinsize's frame so its Continue()
+// the &ws ioctl for (settty), off lvm_settty's frame so its Continue()
 // tail-jumps. returns 0 or the errno.
-ai_noinline static int host_setwinsize(intptr_t fd, intptr_t row, intptr_t col) {
+ai_noinline static int host_settty(intptr_t fd, intptr_t row, intptr_t col) {
  struct winsize ws = {0};
  ws.ws_row = (unsigned short) row;
  ws.ws_col = (unsigned short) col;
  return ioctl((int) fd, TIOCSWINSZ, &ws) ? -errno : 0; }
 
-static lvm(lvm_setwinsize) {
+static lvm(lvm_settty) {
  intptr_t fd  = ai_port_fd(Sp[0]),
           row = charmp(Sp[1]) ? getcharm(Sp[1]) : 0,
           col = charmp(Sp[2]) ? getcharm(Sp[2]) : 0;
- int rc = host_setwinsize(fd, row, col);
+ int rc = host_settty(fd, row, col);
  Sp[2] = rc ? ai_err(g, -rc) : ZeroPoint;
  ai_musttail return Nextp(1, 2); }
 
@@ -1412,14 +1418,14 @@ static union u const
   nif_tether[]     = {{lvm_tether}, {lvm_ret0}},
   nif_reap[]       = {{lvm_reap}, {lvm_ret0}},
   nif_kill[]       = {{lvm_cur}, {.x = putcharm(2)}, {lvm_kill}, {lvm_ret0}},
-  nif_winsize[]    = {{lvm_winsize}, {lvm_ret0}},
-  nif_setwinsize[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_setwinsize}, {lvm_ret0}},
+  nif_tty[]        = {{lvm_tty}, {lvm_ret0}},
+  nif_settty[]     = {{lvm_cur}, {.x = putcharm(3)}, {lvm_settty}, {lvm_ret0}},
   nif_ptyecho[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ptyecho}, {lvm_ret0}};
 LvNif("tether", nif_tether, "posix");
 LvNif("gather", nif_reap, "posix");
 LvNif("still", nif_kill, NULL);
-LvNif("winsize", nif_winsize, NULL);
-LvNif("setwinsize", nif_setwinsize, "posix");
+LvNif("tty", nif_tty, NULL);
+LvNif("settty", nif_settty, "posix");
 LvNif("ptyecho", nif_ptyecho, "posix");
 LvNif("raw", nif_raw, NULL);
 LvNif("swig", nif_swig, "posix");

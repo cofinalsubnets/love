@@ -2006,7 +2006,7 @@
    ; the tty is raw for the visit and cooked after, and eof leaves too. a frame places or
    ; hides the cursor itself; it comes back shown
    (stage show step over?)
-     (: (loop _) (: ws (winsize 0)
+     (: (loop _) (: ws (tty 1)
                     h (two? ws && 7 < <ws ? <ws 24)
                     w (two? ws && 19 < <>ws ? <>ws 80)
                     _ (say out (show w h))
@@ -2038,16 +2038,34 @@
          0 < col ? (csi col 67),
          flush out))
 
+   ; a prompt's width on the screen, which is not its tally: an sgr run costs no
+   ; column (it is zero-width to both the host terminal and the inle console,
+   ; l/quay/quay.c) and a utf-8 tail byte is no character of its own. edrender's
+   ; cursor math is all relative motion off this number, so a prompt measured in
+   ; bytes lands the cursor one column per escape byte too far right.
+   (edwide s)
+    (: n #s
+       (esc k)                                   ; ESC [ digits-and-semicolons m
+        (? !(k + 1 < n && s k = 27 && s (k + 1) = 91) 0
+           ((: (g i) (? (n <= i) 0
+                        (s i = 109) (i + 1 - k)
+                        (47 < s i < 58 || s i = 59) (g (i + 1))
+                        0)) (k + 2)))
+       (go i c) (? (n <= i) c
+                   (: e (esc i)
+                      (? e (go (i + e) c)
+                         (128 <= s i < 192) (go (i + 1) c)
+                         (go (i + 1) (c + 1)))))
+       (go 0 0))
+
    ps1 "> "
    ; the helm glows in the crew's cyan (256-colour 117 ~ #7dcfff), reset after.
-   ; SGR is zero-width to both the host terminal and the inle console (l/quay/quay.c),
-   ; so `pl` below stays (tally ps1) and the cursor math is undisturbed.
    ps1c (string 27 + "[38;5;117m" + ps1 + string 27 + "[39m")
 
    ; print the prompt, then dispatch keys until ^D or a submitted buffer.
    ; returns eofsym on ^D, else (vs . nhu) so the repl can thread history.
    (edline hu hd)
-     (: pl (tally ps1)
+     (: pl (edwide ps1c)
         _ (puts ps1c)
         t (pins (ednew ()) 'hu hu 'hd hd 'cur ())
         (loop pra)
@@ -2100,14 +2118,14 @@
 
    ; (edraw ip pr) -- read one line off port `ip`, with in-line editing: the charlist, or eofsym
    (edraw ip pr) (:- (loop ())
-    pl #(puts pr) t (ednew ())
+    pl (puts pr, edwide pr) t (ednew ())
     (loop _) (edrender pl 0 t,
               edstep t (edkey ip),
               t 'ev @- (loop ()) (-7 || 4) eofsym 10 (putc 10, revcat (t 'l) (t 'r))))
 
    ; the shell line reader: edraw + command history + tab completion
    (edlnc ip pr hist comp)
-     (: pl #(puts pr) hn #hist t (ednew ())
+     (: pl (puts pr, edwide pr) hn #hist t (ednew ())
         (hnth k) <(drop k hist)                       ; hist[k], 0-based (k < hn)
         (recall i ni draft)                           ; jump to view index ni (0 = the draft)
           (: nd (i = 0 ? (revcat (t 'l) (t 'r)) draft)  ; save the live draft once, the instant up leaves it

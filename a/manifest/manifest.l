@@ -19,7 +19,7 @@
 ; keys: arrows/hjkl move . enter edits the cell (= starts fresh) . x clears
 ;       w stows . q stows and steps ashore . ^C abandons ship
 ;
-; the engine is pure core (ev/sound/tap); the tui rides raw/winsize like
+; the engine is pure core (ev/sound/tap); the tui rides raw/tty like
 ; ink, so manifest never joins the corpus -- boot/manifest.l probes both,
 ; the tui end to end through a pty with the cb screen as the witness.
 
@@ -210,7 +210,7 @@
 
  (manifest path) (: sh (sheet 0)
                     _ (tally path ? (unstow sh path))
-                    ws (winsize 0)                       ; a fresh pty says 0x0: fall back
+                    ws (tty 1)                           ; a fresh pty says 0x0: fall back
                     r (two? ws && (5 < <ws) ? <ws 24)
                     c (two? ws && (19 < >ws) ? >ws 80)
                     (raw 1,

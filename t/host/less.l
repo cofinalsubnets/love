@@ -4,13 +4,13 @@
 ; loop, the frame blit, and the file the : commands ask for. That lane needs a
 ; terminal, so it gets one: `tether` spawns `kore less` on a pty, we type at the
 ; master and read the frames back off it. not in the t/*.l corpus -- tether and
-; winsize live in i/posix.c, which love0 does not link. Run it (the test macro
+; tty both live in i/posix.c, which love0 does not link. Run it (the test macro
 ; comes from t/00-init.l; $lovebin names the binary under test and $lesstestdir a
 ; scratch directory it may write in):
 ;
 ;   lovebin=b/love lesstestdir=out sh -c "cat t/00-init.l t/host/less.l | b/love"
 ;
-; the pty starts 0x0 until setwinsize lands, and the child may read its size before
+; the pty starts 0x0 until settty lands, and the child may read its size before
 ; we push one -- so nothing here asks about geometry, only about what any window
 ; shows: the text, the status line, and the screen put back on the way out.
 
@@ -31,7 +31,7 @@
     (: r (tether (cat [love "kore" "less"] args))
        _ (test (two? r))
        m >r
-       _ (setwinsize m 10 40)
+       _ (settty m 10 40)
        _ (say m (keys + "qq\n"))
        txt (slurp m)
        st (waitfor <r)
@@ -83,7 +83,7 @@
    ra (: r (tether ["sh" "-c" (love + " kore head -3 " + f + " | " + love + " kore more")])
          _ (test (two? r))
          m >r
-         _ (setwinsize m 10 40)
+         _ (settty m 10 40)
          _ (say m "qq\n")
          txt (slurp m)
          st (waitfor <r)

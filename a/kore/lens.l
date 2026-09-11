@@ -52,7 +52,7 @@
        _ (? (two? o) () (udie 2 h2t-usage))
        _ (foldl (\ a c (? (c = 119) a
                           (udie 2 ("html2text: unknown option -" + string c)))) 0 (keys t))
-       ws (winsize 1)                                 ; the width is the OUTPUT's
+       ws (tty 1)                                     ; the width is the OUTPUT's
        w (lens-w t ws)
        tty? (two? ws)
        (lensrun (\ s (h2t-lay s w tty?)) "html2text" <>>o))
@@ -72,7 +72,7 @@
        v (uoptv t 116)
        to (? (string? v) v "html")
        _ (? (elem to md-tos) () (udie 2 md-usage))
-       ws (winsize 1)
+       ws (tty 1)
        w (lens-w t ws)
        tty? ((two? ws) && (to = "text"))
        (lensrun (\ s (md-lay s to w tty?)) "markdown" <>>o)))

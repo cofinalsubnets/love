@@ -7,4 +7,4 @@
 (: (raw m) () (signal n h) ())
 (map (\ n (? (elem n (names ())) () (ev [': [n 'x] ()])))
      '(symlink hardlink readlink fork exec herald still getuid seal ttyfg
-       glean connect listen accept udp-bind udp-send udp-recv hark winsize))
+       glean connect listen accept udp-bind udp-send udp-recv hark tty))

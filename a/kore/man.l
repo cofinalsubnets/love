@@ -137,7 +137,7 @@
        sec (? sec? <rest "")
        nms (? sec? >rest rest)
        _ (? (two? nms) () (udie 2 man-usage))
-       ws (winsize 0)
+       ws (tty 1)
        hw (? (two? ws) [(? (0 < <ws) <ws 24) (? (0 < >ws) >ws 80)] ())
        w (? (two? hw) <>hw 80)
        ; -w reads nothing: the search is the whole answer

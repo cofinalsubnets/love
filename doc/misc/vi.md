@@ -16,7 +16,7 @@ re.l regex engine):
   tablet back, and the frame is lawed to the byte on a tiny screen.
 * **a/vi/vi.l** — the face. Keys off `in` one byte at a time (arrows ESC[A-D decode to kjlh
   with a one-byte pushback so a bare ESC still interleaves), frames onto `out`, the alternate
-  screen (?1049) so scrollback survives, `raw` for the tty (cooked restores at exit), winsize
+  screen (?1049) so scrollback survives, `raw` for the tty (cooked restores at exit), tty
   when there is one (80x24 on a pipe). It performs the engine's write/read requests. Port EOF
   quits — which is what makes `kore vi` fully drivable from a pipe: the smokes script whole
   sessions (`printf 'ihello\033:wq\n' | kore vi f`).

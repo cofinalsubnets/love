@@ -1773,7 +1773,7 @@ void fbdraw(void) {
 //
 // kcb is moved BEFORE the old buffer is freed: fbdraw can run from a fault handler, and
 // either console it finds there is a whole one. what does NOT follow is a program that
-// already asked (winsize) -- it holds a grid that no longer exists, the way a terminal
+// already asked (tty) -- it holds a grid that no longer exists, the way a terminal
 // resized under a process that never hears SIGWINCH does.
 // the console re-made for whatever kfb now says -- both doors below want exactly this.
 // a refusal leaves the standing console where it was, which is why the allocation comes
@@ -1835,20 +1835,22 @@ bool k_fb(volatile uint32_t **p, int *w, int *h, int *pitch) {
   *p = kfb._, *w = kfb.width, *h = kfb.height, *pitch = kfb.pitch;
   return true; }
 
-// (winsize _) -- the console as (rows . cols). the grid is settled once at boot, off the
+// (tty fd) -- the console as (rows . cols). the grid is settled once at boot, off the
 // framebuffer's pixels and the scale a glyph pixel gets (cbinit), so a program that wants
 // the whole screen has nowhere else to ask: it is not 80x25 here and has no reason to be.
-// serial-only there is no grid, and the answer is the nom a host gives for a stdout that
-// is not a tty. the dummy argument is (winsize)'s host shape, kept.
-ai_noinline static struct ai *k_winsize(struct ai *g) {
+// serial-only there is no grid, and the answer is the nom a host gives for an fd that is
+// not a tty. the operand is not read: there is one console and every fd is it, so where
+// the host separates 0 from 1 this seat cannot, and an operand the host calls 'badarg
+// answers the grid here.
+ai_noinline static struct ai *k_tty(struct ai *g) {
   if (!kcb) return g->sp[0] = ai_err(g, ENOTTY), g;
   if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
   struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
                                  putcharm(kcb->rows), putcharm(kcb->cols));
   return g->sp[0] = word(w), g; }
 
-static lvm(lvm_winsize) {
-  LvmCall(g, k_winsize) }
+static lvm(lvm_tty) {
+  LvmCall(g, k_tty) }
 
 static lvm(draw) {
  fbdraw();
@@ -1938,7 +1940,7 @@ static union u
   nif_vmx_run[] = {{lvm_vmx_run}, {lvm_ret0}},
 #endif
   nif_fault[] = {{lvm_fault}, {lvm_ret0}},
-  nif_winsize[] = {{lvm_winsize}, {lvm_ret0}};
+  nif_tty[] = {{lvm_tty}, {lvm_ret0}};
 
 // reads the door-populated kboot struct and links every reported free range into the kernel
 // free list. entries are pushed in array order, so kmem points at the last and the earlier
@@ -2016,9 +2018,9 @@ static struct ai_def const __attribute__((section("ai_knifs"), used)) defs[] = {
   {"vmx-run", {.k = nif_vmx_run}},
 #endif
   {"color", {.k = nif_color}},
-  // the console's own size. the no-op roster below pins `winsize` only where the seat
+  // the console's own size. the no-op roster below pins `tty` only where the seat
   // lacks it, so landing it here takes the stub off by existing.
-  {"winsize", {.k = nif_winsize}} };
+  {"tty", {.k = nif_tty}} };
 
 // the kore cat is CATTED FROM THE RAMFS at boot -- the blob initrd carries every
 // member, so only the ORDER is baked: the korefiles roster, one line.
@@ -2282,7 +2284,7 @@ void kmain(void) {
    "(map (\\ n (? (elem n (names ())) () (ev [': [n 'x] ()])))"
    "     '(hardlink spawn spawnmap fork exec herald wait still"
    "       getpid getuid seal ttyfg glean pipe fdopen dup dup2 connect listen"
-   "       accept udp-bind udp-send udp-recv hark winsize))");
+   "       accept udp-bind udp-send udp-recv hark tty))");
   // then the kore cat through the stream shell, quietly: the line is seatless here, so every
   // member's own seat sits out and the whole userland lands. the cat is built here member by
   // member off the blob initrd, korelist being the baked space-separated roster.
