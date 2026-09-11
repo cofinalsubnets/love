@@ -23,7 +23,7 @@
   test_selfhost test_slow test_softfp test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
-  test_vec test_vi test_virt test_virt_build test_wake test_wasm test_xfixpoint uuhomgen uukind uumx uusplgen \
+  test_vec test_vi test_virt test_virt_build test_wake test_xfixpoint uuhomgen uukind uumx uusplgen \
   uuvallaw uuwm vmret waits
 
 # the three gates. `make test` is the fast one an edit loop runs, test_slow the
@@ -48,7 +48,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_drv test_hdiff test_tco0 nettest test_wake test_gz test_cpio test_fat32 test_root \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
-	test_asmops test_dtb test_rvboot test_elf32 test_objcopy test_distboot test_fat test_wasm \
+	test_asmops test_dtb test_rvboot test_elf32 test_objcopy test_distboot test_fat \
 	test_cca64 test_ccrv64 test_ccwasm test_ccthumb1 test_ccthumb2 test_cts_a64 test_cts_rv64 test_cts_wasm \
 	test_raw_a64 test_raw_rv64 \
 	test_virt test_thumb1 test_thumb2 test_thumb2sp \
@@ -764,8 +764,8 @@ test_rp2040: host
 # PREREQUISITES, not recipe lines, so a wide make runs the six at once -- ~10 s together
 # against ~35 s in a row, each port's own make being single-threaded.
 # mps2 and virt want nothing foreign to build, only to boot, so their build halves are here.
-# i/wasm is not a board and never joins: that folder is the retired emcc build, opt-in as
-# `make wasm-emcc`. the module the page carries is b/love-wasm.wasm, from test_links.
+# i/wasm is not a board and never joins: it is the machine, and the module the page carries
+# is b/love-wasm.wasm, from test_links.
 test_boards: test_mps2_build test_virt_build test_rp2040 test_nucleo446 test_teensy41 test_playdate
 	@echo "test_boards: six ports build and link -- mooncc and our linker, no emulator"
 test_mps2_build: host
@@ -779,12 +779,12 @@ test_virt_build: host
 # its own roster, so it is the one that goes missing. rides both slow tiers -- in test_extra
 # it stands for the four build-only board rows, being test_boards and more.
 .PHONY: test_links
-test_links: host $(ho)/front $(love0) b/wasm/love.wasm b/love-wasm.wasm
+test_links: host $(ho)/front $(love0) b/love-wasm.wasm
 	@$(MAKE) -s $(ko)/love-x64.elf
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
 	@$(MAKE) -s test_boards
-	@echo "test_links: hosted, bootstrap, front, both wasm modules, three kernels, six boards"
+	@echo "test_links: hosted, bootstrap, front, the wasm machine, three kernels, six boards"
 
 # the userland packages: each built by mooncc + moonlibc + the holo linker -- no gcc/glibc/ld
 # anywhere -- then run and held to the package's own answers: tar 1.13 roundtrips and
@@ -1216,19 +1216,6 @@ test_kernel_rv64: host $(R)/u/ktest.l
 endif
 
 NODE ?= $(shell command -v node 2>/dev/null)
-# test_wasm rides moon's own module (make wasm -> b/wasm/love.wasm) under the loader, no
-# emcc. the corpus is not here: t/kernel/all.l reads common.mk's `t` off the ramfs, so
-# test_kernel_wasm runs it on the kernel module, woken image and all. what is left is the two
-# seams the machine has not grown -- quay's cells as html, the horn's PCM into WebAudio.
-ifeq ($(NODE),)
-test_wasm:
-	@echo "test_wasm: skipped (needs node)"
-else
-test_wasm: wasm
-	@$(NODE) $(R)/i/wasm/screen.mjs --love $(R)/b/wasm/love.wasm
-	@$(NODE) $(R)/i/wasm/horn.mjs --love $(R)/b/wasm/love.wasm
-endif
-
 # INLE_RAM: cpu.mjs grows the memory once at boot and hands kmain that fixed span, so the
 # seat's room is a number here, not a policy. 256 (the default) is short of the corpus: the
 # collector's doubling asks 4480156 words and the grow refuses, at the same length whichever

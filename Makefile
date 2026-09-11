@@ -1012,29 +1012,18 @@ SITEPORT ?= 8080
 site-serve: host b/toolmd.stamp
 	@$(ho)/love -l a/papel.l -t love -o b/site -s $(SITEPORT) README.md doc b/toolmd
 
-# the wasm artifact, moon's own: love's TUs (plus the horn and the seat's host.c)
-# through mooncc -t wasm, linked to one module -- no emcc, no C toolchain. tco=1: the
-# vm's tails are return_call, the engines' tail-call law (node 26, firefox 121, chrome
-# 112, safari 18), and the corpus runs 1.31x faster than on the trampoline. the loader
-# (i/wasm/loader.js) is the runtime under it. NOTHING SHIPS IT any more -- the front
-# page carries the machine (the kernel module below) -- so it is laid under b/ and never
-# copied out: test_wasm's two checks and horn.html are the whole readership, and each is a
-# seam the machine has not grown yet (quay's cells, the horn's ring).
-# the emcc build stays as wasm-emcc, a differential and nothing on the page.
-wasm_c = $(love_c) $(R)/i/horn.c $(R)/l/bare.c $(R)/i/wasm/host.c
-b/wasm/love.wasm: $(wasm_c) $(lib_h) b/lib/love_version.h host
-	@mkdir -p $(dir $@)
-	@echo 'MOON	'$@
-	@$(mooncc) -t wasm -Dai_tco=1 -DLvHaveVersionH -I. -Il -Ii -Ib/lib -o $@ $(wasm_c)
+# `make wasm` is the machine: the kernel module below, and the heap image beside it.
+# tco=1 on both -- the vm's tails are return_call, the engines' tail-call law (node 26,
+# firefox 121, chrome 112, safari 18), and the corpus runs 1.31x faster than on the
+# trampoline. the loader (i/wasm/loader.js) is the runtime under a bare module.
 ifeq ($(NODE),)
-wasm: b/wasm/love.wasm
+wasm: b/love-wasm.wasm
 else
-wasm: b/wasm/love.wasm b/wasm/love-wasm.image
+wasm: b/love-wasm.wasm b/wasm/love-wasm.image
 endif
-# by hand, as love.js was: bytes every C edit would otherwise churn. ONE PAIR IS COPIED
-# OUT, the machine's, to w/ beside the fonts and the stylesheet -- generated files
-# committed for one reason, that github pages serves what it is given and builds nothing.
-# the hosted module is a gate's, not a page's, and never leaves b/.
+# by hand: bytes every C edit would otherwise churn. ONE PAIR IS COPIED OUT to w/ beside
+# the fonts and the stylesheet -- generated files committed for one reason, that github
+# pages serves what it is given and builds nothing.
 site-wasm: wasm
 	@mkdir -p w/wasm
 	@echo '$(t_cp)	'w/wasm/love-wasm.wasm
@@ -1059,8 +1048,6 @@ b/love-wasm.wasm: $(kw_c) $(kw_h) b/wasm/src.o b/lib/baked.h b/lib/distlist.h \
 	@echo 'MOON	'$@
 	@$(mooncc) -t wasm -Dai_tco=1 -DLvHaveVersionH -I. -Il -Ii -Ib/lib \
 	  -Il/quay -Ia/moon/include -o $@ $(kw_c) b/wasm/src.o
-wasm-emcc:                       # emcc's love, b/wasm/love.js: the foreign build ccwasm takes
-	@$(MAKE) -C i/wasm
 # the seat's heap image: the kernel booted once under node with `bake PATH` on the boot
 # line -- the egg, the modules and the korecat warm, the seat text run -- written to the
 # ramfs and lifted out at the reset. the page fetches it beside the module and the worker
@@ -1073,7 +1060,6 @@ b/wasm/love-wasm.image: b/love-wasm.wasm i/wasm/cpu.mjs i/wasm/inle.mjs
 clean:
 	rm -rf b
 	@rm -f t/proof/rocq/*.vo t/proof/rocq/*.vok t/proof/rocq/*.vos t/proof/rocq/*.glob t/proof/rocq/.*.aux
-	@[ -d i/wasm ] && $(MAKE) -C i/wasm clean || :
 distclean: clean
 	rm -rf dl
 valg: host

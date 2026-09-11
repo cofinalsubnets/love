@@ -903,8 +903,8 @@ static union u const
 // NOT EVERY ROW HERE IS THE MODULE'S. nineteen stay on the BOOK -- dup dup2 environ
 // fdopen fork getuid glean hardlink pipe raw setenv signal spawn spawnio spawnmap still
 // ttyfg wait winsize -- because a SEAT SHADOWS each with a global of its own: the
-// kernel's bindings and no-op roster (i/kmain.c), the page's tty words
-// (i/wasm/web.l), and the four the seat-doors tablet swaps (i/main.c). a global
+// kernel's bindings and no-op roster (i/kmain.c), and the four the seat-doors tablet
+// swaps (i/main.c). a global
 // name reads the LIVE book (l/ev.c's lvm_index), which is exactly how the shadow is
 // reached -- so a module splice, sitting above the base, would hide it for good and the
 // crew would call the host's door on a seat that has no host. the line is not

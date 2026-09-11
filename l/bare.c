@@ -1,11 +1,11 @@
 // l/bare.c -- the null seat: what the runtime's doors answer with no i/fd.c beside them.
-// the boards link it (i/port.mk's love_m), so do b/front and the wasm host seat -- a
-// hosted love, love0 and every kernel all carry i/fd.c, whose bodies are the real ones.
+// the boards link it (i/port.mk's love_m) and so does b/front -- a hosted love, love0 and
+// every kernel all carry i/fd.c, whose bodies are the real ones.
 //
 // these six and no more, and every one of them is about the ABSENCE OF fd.c. a seat can
-// lack fd.c and still have hardware: the wasm host has no fd.c and a speaker, which is
-// why the horn's refusal is l/nohorn.c's and the OS word is l/love.c's weak one. bundling
-// them here made this file unlinkable by a seat that wanted six of eight.
+// lack fd.c and still have hardware, so the horn's refusal is l/nohorn.c's and the OS
+// word is l/love.c's weak one: bundled here they made this file unlinkable by a seat
+// that wanted six of eight, which is a roster this file has no business deciding.
 //
 // plain definitions, not weak defaults in the runtime: a seat that grows a real door
 // collides here and says so, and a seat that needs one and has none fails to link. the

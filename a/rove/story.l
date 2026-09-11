@@ -269,7 +269,7 @@
  ; --- the runner: the story on cli's stage, a key a turn -----------------------------
  (story-run lvl) (: g (story-new lvl)
                     (stage (w \ h \ story-frame g w h) (c \ story-key g c) (_ \ g 'over)))
- ; the verb: a level file, or the library under a root; the page has its own door (web.l)
+ ; the verb: a level file, or the library under a root
  (story-main as) (: p (two? as ? <as "a/rove/levels/lighthouse.l")
                      lvl (two? (readdir p) ? (library p) (load-level p))
                      (? lvl (story-run lvl) (say err ("story: not a level: " + p + "\n"), 1)))
