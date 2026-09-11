@@ -4311,14 +4311,26 @@
        (swallow fs) (? !(two? fs) ()
                        (: f <fs (? (two? f && <f = 'label) fs (swallow >fs))))
        (atlab? fs l) (two? fs && (: f <fs (two? f && <f = 'label && <>f = l)))
-       ; back-edge labels (a jmp/br sitting BELOW its target): a loop head joins
+       ; the labels a form OTHER than a control transfer names -- an inline-asm splice can
+       ; hold one, and jmp/br/jmpt are the only references pend and backs read exactly.
+       ; over-approximate, so a label kept on its account is never wrong. filled by the
+       ; scan below, which is walking the stream anyway.
+       misc {}
+       ; back-edge labels (a jmp/br/jmpt sitting BELOW its target): a loop head joins
        ; an edge this one linear pass never computes -- assume nothing there
        backs (: seen {} bt {}
+                (note ops) (? !(two? ops) 0
+                              (: o <ops
+                                 _ (? (nom? o) (pin misc o 1) (two? o) (note o))
+                                 (note >ops)))
                 (bscan l) (? !(two? l) bt
-                             (<l @ ('label a) (pin seen a 1)
-                                   ('jmp j)   (seen j ? (pin bt j 1))
-                                   ('br _ b)  (seen b ? (pin bt b 1)),
-                              bscan >l))
+                             (: f <l
+                                _ (f @ ('label a) (pin seen a 1)
+                                      ('jmp j)   (seen j ? (pin bt j 1))
+                                      ('br _ b)  (seen b ? (pin bt b 1))
+                                      ('jmpt _ _ ts) (map (\ j (seen j ? (pin bt j 1))) ts)
+                                      (two? f ? (note >f)))
+                                (bscan >l)))
                 (bscan fs0))
        ; the pending in-states: every forward jmp/br to L joins its state into pend[L]; L's label
        ; reads it back and joins the fall-through, so a known value crosses a label. the sp
@@ -4343,6 +4355,11 @@
                         (: pd (peep pend l1 ())
                            (? !(two? pd)
                                (? lv (go r 1 cur rg sl ce ci acc2)
+                                  ; no edge in, and the linear one is cut: the region is
+                                  ; unreachable and drops with its label. a folded branch is
+                                  ; how it got that way -- the arm a constant ternary does not
+                                  ; take -- and its join then reads one in-state, not two.
+                                  !(peep misc l1 ()) (go (swallow r) () cur rg sl ce ci acc)
                                   (go r 1 cur (fresh 0) (fresh 0) (fresh 0) (fresh 0) acc2))
                               !lv (go r 1 <pd <>pd <>>pd <>>>pd
                                          <>>>>pd acc2)
@@ -4434,6 +4451,22 @@
                                (fold? v) (go r 1 cur rg sl ce ci (['li d v] . acc))
                                (go r 1 cur rg sl ce ci (f . acc))))
                         (go r 1 cur rg sl ce ci (f . acc))))
+                 ; ..and a variable shift with a known count is an immediate one. the count
+                 ; rides a pinned register that no copy lane rewrites, so this is the only
+                 ; pass that can see it -- and the machine masks the count where the
+                 ; immediate form does not, so a count outside [0, W) stays variable.
+                 (elem op vshops)
+                  (: d <>f iop (op @ 'shlv 'shl 'shrv 'shr 'sarv 'sar 'rorv 'ror 'ror4)
+                     dk (rv rg d) ck (rv rg <>>f)
+                     k (kn? ck ? <>ck 'no)
+                     _ (defr ci rg sl ce d)
+                     (? !(shk? iop k) (go r 1 cur rg sl ce ci (f . acc))
+                        !(kn? dk) (go r 1 cur rg sl ce ci ([iop d k] . acc))
+                        (: v (shf iop <>dk k)
+                           _ (rset rg d [1 v])
+                           (? (v = <>dk) (go r 1 cur rg sl ce ci acc)
+                              (fold? v) (go r 1 cur rg sl ce ci (['li d v] . acc))
+                              (go r 1 cur rg sl ce ci ([iop d k] . acc))))))
                  (elem op unops)
                   (: d <>f dk (rv rg d)
                      _ (defr ci rg sl ce d)
@@ -5457,6 +5490,11 @@
               (? (dead && lbl)
                   (refs <>f ? (f . sweep >l 0) (sweep >l 1))
                  dead (sweep >l 1)
+                 ; a jump to the very next label is the fall-through; the fixpoint above
+                 ; then takes the label, if that jump was its last reference
+                 (two? f && <f = 'jmp &&
+                  (: n <>l (two? n && <n = 'label && <>n = <>f)))
+                  (sweep >l 0)
                  (f . sweep >l (xit? f || (two? f && elem <f '(jmp jmpt)))))))
        (sweep fs 0))
 
