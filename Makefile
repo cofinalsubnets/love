@@ -126,22 +126,6 @@ $(ho)/liblove.a: $(h_o)
 	@mkdir -p $(dir $@)
 	@rm -f $@; ar rcs $@ $^
 
-# ..and the same runtime PARTIALLY LINKED, which is the shape anything outside this
-# build wants. the data sentinels are nine one-instruction functions that ai_typ reads
-# as an array (love.c's DSENT), so they must lie at a fixed stride -- and the ambient ld
-# only does that under l/love_data.ld. laying the tiling HERE, with -r, settles it
-# inside the object: .love.data comes out one 9*16 section and the final link places it
-# whole, wherever it likes, offsets already right. so an embedder keeps the FAST ai_typ
-# and carries no linker script of ours, which is the whole trade -- the alternative was
-# -Dai_data_section=0 and the comparison chain, and ai_typ is on the path every value
-# dispatch takes. the love_nifs bracket comes free with it: the section is in the object,
-# so __start_/__stop_ resolve without --whole-archive or -z nostart-stop-gc, neither of
-# which an archive's members can do without.
-$(ho)/liblove.o: $(h_o) $(R)/l/love_data.ld
-	@echo '$(t_ld)	'$@
-	@mkdir -p $(dir $@)
-	@$(CC) -nostdlib -no-pie -Wl,-r -o $@ $(h_o) -Wl,-T,$(R)/l/love_data.ld
-
 # pinned to b/0, never $(ho)/0: love0 is one binary whatever HCC and tco say
 # love0 takes the whole hosted surface less the crew catalog, PLUS its own seat --
 # i/main0.c, which host_c holds back because only this link has a use for it.

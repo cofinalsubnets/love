@@ -1,4 +1,0 @@
-/* the .so's export list. without it a linked-in love publishes its whole
-   runtime -- 390 names where 25 are wanted -- and an ai_ or lvm_ symbol in a
-   host's global namespace is a collision waiting for a second interpreter. */
-LV_1 { global: lv_*; local: *; };
