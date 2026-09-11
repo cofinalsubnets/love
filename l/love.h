@@ -1372,7 +1372,6 @@ struct ai
  *ored(struct ai *g, int kind), *zflush(struct ai*g);
 uintptr_t
  bshape(word a, word b, uintptr_t *R),
- shash(struct ai *g, word x, struct arib *env, word *base),
  hash_at(struct ai *g, intptr_t x, word *base),
  map_probe(struct ai *g, word m, word k, bool *found);
 struct ai_str *seq_cat(struct ai *g, void *w, word a, word b);
@@ -1404,10 +1403,10 @@ static ai_inline void bc_step(struct bcast *w) {          // one tick: an axis a
   if (++w->idx[j] < (intptr_t) w->shape[j]) { w->oa += w->ca[j], w->ob += w->cb[j]; return; }
   w->idx[j] = 0, w->oa -= ((intptr_t) w->shape[j] - 1) * w->ca[j], w->ob -= ((intptr_t) w->shape[j] - 1) * w->cb[j]; } }
 ai_flo_t vop_flo(int op, ai_flo_t a, ai_flo_t b);
+int hash_leaf(struct ai *g, word x, uintptr_t *out, word *src);  // one leaf's hash, or what hash_at must walk for it
 bool
  bio_rpending(struct ai_bio *b),
  wait_buffered(struct ai *g, lvm_t *ap, word x, int fd),
- clo_nfhash(struct ai *g, word x, uintptr_t *out, word *base),
  fn_partialp(union u *k),
  in_heap(struct ai *c, word x),
  iop(word x),
