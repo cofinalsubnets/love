@@ -22,7 +22,7 @@ moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 moon0() { "$love0" wake b/mooncc0.image mooncc "$@"; }
 
 # ---------------------------------------------------------------- the laws
-echo "CC a/moon/{lex,cpp,parse,gen,val,law}.l"
+echo "CC a/moon/{lex,cpp,parse,gen,val}.l t/law/moon.l"
 out=$ho/.test_moon.out
 { echo "(borrow 'holo)"
   cat t/00-init.l a/kore/text.l a/kore/u.l   # the kore floors register module 'kore

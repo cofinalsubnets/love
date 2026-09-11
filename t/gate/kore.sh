@@ -44,7 +44,7 @@ pipe() { n=$1; i=$2; shift 2
          same "$n"; }
 
 # ------------------------------------------------------------------- the laws
-echo "UTILS a/kore/{text,core,fs,re,sed,awk,expr,bc,less,find,diff,patch,law}.l"
+echo "UTILS a/kore/{text,core,fs,re,sed,awk,expr,bc,less,find,diff,patch}.l t/law/kore.l"
 out=$ho/.test_kore.out
 # lush's job.l + glob.l ride along because find.l captures sh-match at its define
 { cat t/00-init.l a/kore/text.l a/kore/u.l a/kore/core.l a/kore/fs.l a/kore/re.l \

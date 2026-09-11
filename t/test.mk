@@ -390,7 +390,7 @@ test_seed: $(ho)/love
 # byte), then scripted end-to-end passes through the `kore vi` face over a pipe (keys off
 # stdin, frames onto a captured stdout, :wq writes), driven through the crew layer.
 test_vi: host
-	@echo TEST a/vi/{hue,core,law}.l
+	@echo TEST a/vi/{hue,core}.l t/law/vi.l
 	@cat t/00-init.l a/kore/text.l a/kore/u.l a/kore/core.l a/kore/re.l a/kore/sed.l a/libra/lint.l \
 	    a/vi/config.l a/vi/hue.l a/vi/core.l t/law/vi.l \
 	  | sh t/gate/run.sh vi "$m" "t/law/vi:"
