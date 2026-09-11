@@ -9,17 +9,17 @@
 (: help-log (tablet 0))
 
 ; a counting ap, keyed by the tag it hears
-(hear (\ p e (: _ (pin help-log p (+ 1 (peep help-log p 0))) 0)))
+(hear (\ p e (: _ (pin help-log p (1 + peep help-log p 0)) 0)))
 
 ; (scare a b) is the deliberate raise: the ap hears (help a b). unlike a C scare
 ; (oom, terminal), the raise point is a clean boundary, so the ap's result comes
 ; back as (scare a b)'s value.
-(test (= 0 (scare 'deliberate 'data)))            ; the counting ap returns 0 on a scare
-(test (= 1 (peep help-log 'deliberate 0)))        ; ... and the observation logged, exactly once
+(test (0 = scare 'deliberate 'data))     ; the counting ap returns 0 on a scare
+(test (1 = peep help-log 'deliberate 0)) ; ... and the observation logged, exactly once
 
 ; the help function owns the protocol: deliver a constant instead
 (hear (\ p e 'gotcha))
-(test (= 'gotcha (scare 'any 'thing)))            ; the deliberate scare resumes through it
+(test ('gotcha = scare 'any 'thing))            ; the deliberate scare resumes through it
 
 ; uninstall; the raw default is back
 (hear 0)                       ; uninstall: a non-lit? value defers to the raw default
@@ -45,7 +45,7 @@
 (test (: pa (twirl (\ _ (: _ (hear (\ a b 'A)) _ (rest 0) (scare 'x 0))) ())
            pb (twirl (\ _ (: _ (hear (\ a b 'B)) _ (rest 0) (scare 'x 0))) ())
            ra (catch pa) rb (catch pb)
-           (&& (ra = 'A) (rb = 'B))))
+           (ra = 'A && rb = 'B)))
 ; a child starts under its parent's help, and its own install stays its own
 (hear (\ a b ['parent a]))
 (test (: pc (twirl (\ _ (: _ (rest 0) (scare 'from-c 0))) ())        ; installs none
@@ -95,18 +95,18 @@
     ; the clean path: c fires after f, and f's own value is the form's
     (: _ (fresh ())
        v (mind (\ _ (: _ (note 'body) 'value)) () (\ _ (note 'freed)))
-       (&& (v = 'value) ('(body freed) = (mlog 0))))
+       (v = 'value && ('(body freed) = (mlog 0))))
     ; the raised path: c fires, and the condition goes on to the catcher outside
     (: _ (fresh ())
        r (trap (\ _ (mind (\ _ (: _ (note 'body) (scare 'boom 7))) () (\ _ (note 'freed))))
                () (\ a b [a b]))
-       (&& ('(boom 7) = r) ('(body freed) = (mlog 0))))
+       (('(boom 7) = r) && ('(body freed) = (mlog 0))))
     ; one raise fires every c between it and the catcher, innermost first
     (: _ (fresh ())
        r (trap (\ _ (mind (\ _ (mind (\ _ (scare 'deep 0)) () (\ _ (note 'inner))))
                           () (\ _ (note 'outer))))
                () (\ a b a))
-       (&& (r = 'deep) ('(inner outer) = (mlog 0))))
+       (r = 'deep && ('(inner outer) = (mlog 0))))
     ; c runs with the displaced help back, so its own raise belongs to the trap outside
     ('from-c = (trap (\ _ (mind (\ _ 'v) () (\ _ (scare 'from-c 0)))) () (\ a b a)))
     ; exactly once under a help that answers rather than escapes -- the shell's default
@@ -115,17 +115,17 @@
        _ (hear (\ a b 'answered))
        r (mind (\ _ (scare 'boom 0)) () (\ _ (note 'freed)))
        _ (hear prev)
-       (&& (r = 'answered) ('(freed) = (mlog 0))))
+       (r = 'answered && ('(freed) = (mlog 0))))
     (: _ (fresh ()) prev (heard ())                       ; ..welp underneath, the floor handler
        _ (hear welp)
        r (mind (\ _ (scare 'boom 0)) () (\ _ (note 'freed)))
        _ (hear prev)
-       (&& (nil? r) ('(freed) = (mlog 0))))
+       (nil? r && ('(freed) = (mlog 0))))
     ; raises only: only a scare reaches a help, so a k captured outside jumps clean
     ; past every c between there and here -- the wall this rung stops at
     (: _ (fresh ())
        v (call-cc (\ k (mind (\ _ (k 'jumped)) () (\ _ (note 'never)))))
-       (&& (v = 'jumped) (nil? (mlog 0))))))
+       (v = 'jumped && nil? (mlog 0)))))
 
 ; a trap's escape is its task's. a help is inherited at spawn, so a child can hold a
 ; continuation captured in its parent's stack -- landing there tears both, and before
@@ -170,7 +170,7 @@
  ('help-arity = (trap (\ _ (hear (\ a b c 1))) () (\ a b a)))
  ('help-arity = (trap (\ _ (trap (\ _ 1) () (\ a a))) () (\ a b a)))
  ; ... and every nothing still uninstalls
- (: _ (hear ()) r (nil? (heard ())) _ (hear welp) r))
+ (: _ (hear ()) r !(heard ()) _ (hear welp) r))
 (hear 0)
 
 (hear test-strict)   ; the empty slot is this file's subject; the corpus resumes strict

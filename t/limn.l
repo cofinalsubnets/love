@@ -11,7 +11,7 @@
 
 ; `sub?` is each gate's own here (t/host/berth.l carries the same three lines) --
 ; it searches from i; `at?` is the exact-position twin, which is what counting wants
-(: (at? h n i) (&& ((i + tally n) <= tally h) (n = snip h i (i + tally n)))
+(: (at? h n i) (((i + tally n) <= tally h) && n = snip h i (i + tally n))
    (sub? h n i) (? ((i + tally n) < (tally h + 1))
                    (? (at? h n i) 1 (sub? h n (i + 1)))
                    0)
@@ -86,7 +86,7 @@
         j (jug 0)
         p (limn-rows j s 1 6 0 0 0 -1)
         f (slurp j)
-        (cnt t sb i n) (? ((tally t) <= i) n
+        (cnt t sb i n) (? (#t <= i) n
                           (at? t sb i) (cnt t sb (i + 1) (n + 1))
                           (cnt t sb (i + 1) n))
         _ (test

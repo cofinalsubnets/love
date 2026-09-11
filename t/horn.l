@@ -32,6 +32,6 @@
            ; close lands the run and shuts the device; a closed horn has no lag
            _ (test !(close m) !(horn-lag m) !(close h) !(horn-lag h))
            ; and a horn is not the reader
-           _ (test (= (quote (5)) (sound "5")))
+           _ (test (quote (5) = sound "5"))
            ; the policy word goes, so the environ laws downstream count what they always did
            (? hosted (setenv "HORN" ()) ()))))
