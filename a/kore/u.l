@@ -13,7 +13,7 @@
 (module 'kore
 (borrow 'posix)
 ; lastslash, for the two path clips below (l/boot/post.l)
-(borrow 'glob)
+(borrow 'path)
 
 (:
    ; -- the u-floor --

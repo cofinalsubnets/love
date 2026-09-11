@@ -55,6 +55,7 @@
 ; the pattern law and the path clips both (l/boot/post.l): match/anyglob under
 ; $(wildcard), lastslash/lastdot/segs/pclean under make's own $(dir) family.
 (borrow 'glob)
+(borrow 'path)
 
 (: cards (tablet 0)          ; the recipe cards: item -> (ingredients orderonly . steps)
    check (tablet 0)        ; a 1-cell box: the standing check -- the first item declared (the default when no ticket is named)

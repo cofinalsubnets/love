@@ -34,7 +34,7 @@
 (borrow 'libra)
 (borrow 'hueweb)
 (borrow 'lapiz)
-(borrow 'glob)
+(borrow 'path)
 
 (borrow 'posix)
 (:

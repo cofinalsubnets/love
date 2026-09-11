@@ -651,9 +651,9 @@
 ; glob -- fnmatch, pure love and no filesystem. the pattern law only: pathname
 ; expansion (readdir, the dotfile rule at the directory scan) stays in a/lush.l,
 ; where the substrate belongs. this half is a predicate over two strings, and more than
-; the shell asks it -- lush's case patterns, kore's find -name, the sb ignore law, the
-; selfpack walk. selfpack runs on love0, which carries no lush: that is why this is a
-; l/boot module and not an app one.
+; the shell asks it -- lush's case patterns, kore's find -name, the sb ignore law. sb
+; is catted without a/lush.l and cites this directly, which is why the pattern language
+; stands at the floor and not inside the shell that reads it most.
 ;
 ; patterns travel as (text . mask) -- the mask a parallel string of '1'/'0' bytes, '1'
 ; where the char came in unquoted (glob-live), '0' where a quote shielded it ('*' matches
@@ -663,49 +663,13 @@
 ;   (match pat s)       -> the all-live face
 ;   (anyglob t)         -> does t hold any * ? [ at all (the cheap pre-scan)
 ;   (ones k)            -> an all-live mask of width k
-;
-; ..and the path clips the same callers were each writing for themselves. these are
-; the PRIMITIVES, not the faces: make's $(dir) and posix's dirname disagree about a
-; bare name ("./" against "."), so each caller still spells its own face -- over one
-; scan rather than a fifth copy of it.
-;   (lastslash p) -> index just past the last '/', 0 for none
-;   (lastdot p)   -> index of the last '.' after that, #p for none
-;   (segs p)      -> the '/'-separated components, empties dropped
-;   (pclean l lim)-> that list cleaned, lim bounding how far '..' may climb out of it
 
-(module '(glob match fmatch anyglob ones lastslash lastdot segs pclean)
+(module '(glob match fmatch anyglob ones)
 (: (anyglob t)
      (: n #t
         (go i) (i != n && (t i @ (42 || 63 || 91) 1 (go (i + 1))))
         (go 0))
    (ones k) (k < 1 ? "" (ones (k - 1) + "1"))
-   ; -- the path clips ------------------------------------------------------------
-   (lastslash p) ((: (go j) (0 < j ? (p (j - 1) = 47 ? j (go (j - 1))) 0)) #p)
-   (lastdot p) (: sl (lastslash p)
-                  ((: (go j) (j > sl ? (p (j - 1) = 46 ? (j - 1) (go (j - 1))) #p)) #p))
-   (segs s) ((: (go i st acc)
-                (? (i >= #s) (rev (st < i ? (snip s st i . acc) acc))
-                   (s i = 47) (go (1 + i) (1 + i) (st < i ? (snip s st i . acc) acc))
-                   (go (1 + i) st acc))) 0 0 0)
-   ; no filesystem asked: '..' pops lexically, which is what make's $(abspath) means
-   ; and what a symlink makes a lie. a caller that needs the real thing asks the fs.
-   ; lim is the climb this caller allows -- how many leading '..' may survive:
-   ;   ()  unbounded, a '..' with nothing to pop stays one (the shell's own face)
-   ;   n   at most n survive; one that would climb past answers () -- REFUSED, not
-   ;       clamped, because a clamped path silently names a different file. a server
-   ;       rooting a request asks with 0 and answers the refusal 403.
-   ; a surviving '..' is not popped by the next one -- "a/../../b" climbs once and
-   ; stays (".." "b"). () answers both a refusal and an empty path, so a caller that
-   ; must tell them apart asks whether it handed anything in.
-   (pclean l lim)
-   ((: (go l acc up)
-       (? (one? l) (rev acc)
-          (<l = ".") (go >l acc up)
-          (<l = "..") (? (two? acc && <acc != "..") (go >l >acc up)
-                         (charm? lim && up >= lim) ()      ; the climb runs out: refused
-                         (go >l (".." . acc) (1 + up)))
-          (go >l (<l . acc) up)))
-    l () 0)
    (match p s) (fmatch p (ones #p) s)
    (fmatch p m s)
    (: np #p ns #s
@@ -738,6 +702,48 @@
       (bit (fm 0 0))))
 
 ) ; module glob
+
+; path -- the clips five callers were each writing for themselves, and one more scan
+; than the tree should hold. these are the PRIMITIVES, not the faces. make's $(dir) and posix's dirname disagree
+; about a bare name ("./" against "."), so a caller still spells its own face -- over
+; one scan rather than a sixth copy of it. its own FACE: never its own scan.
+;   (lastslash p) -> index just past the last '/', 0 for none
+;   (lastdot p)   -> index of the last '.' after that, #p for none
+;   (segs p)      -> the '/'-separated components, empties dropped
+;   (pclean l lim)-> that list cleaned, lim bounding how far '..' may climb out of it
+;
+; apart from glob because the callers say so: of the five that borrowed it for these,
+; three -- kiosko, serve and kore's basename/dirname -- never match a pattern at all.
+
+(module '(path lastslash lastdot segs pclean)
+(: (lastslash p) ((: (go j) (0 < j ? (p (j - 1) = 47 ? j (go (j - 1))) 0)) #p)
+   (lastdot p) (: sl (lastslash p)
+                  ((: (go j) (j > sl ? (p (j - 1) = 46 ? (j - 1) (go (j - 1))) #p)) #p))
+   (segs s) ((: (go i st acc)
+                (? (i >= #s) (rev (st < i ? (snip s st i . acc) acc))
+                   (s i = 47) (go (1 + i) (1 + i) (st < i ? (snip s st i . acc) acc))
+                   (go (1 + i) st acc))) 0 0 0)
+   ; no filesystem asked: '..' pops lexically, which is what make's $(abspath) means
+   ; and what a symlink makes a lie. a caller that needs the real thing asks the fs.
+   ; lim is the climb this caller allows -- how many leading '..' may survive:
+   ;   ()  unbounded, a '..' with nothing to pop stays one (the shell's own face)
+   ;   n   at most n survive; one that would climb past answers () -- REFUSED, not
+   ;       clamped, because a clamped path silently names a different file. a server
+   ;       rooting a request asks with 0 and answers the refusal 403.
+   ; a surviving '..' is not popped by the next one -- "a/../../b" climbs once and
+   ; stays (".." "b"). () answers both a refusal and an empty path, so a caller that
+   ; must tell them apart asks whether it handed anything in.
+   (pclean l lim)
+   ((: (go l acc up)
+       (? (one? l) (rev acc)
+          (<l = ".") (go >l acc up)
+          (<l = "..") (? (two? acc && <acc != "..") (go >l >acc up)
+                         (charm? lim && up >= lim) ()      ; the climb runs out: refused
+                         (go >l (".." . acc) (1 + up)))
+          (go >l (<l . acc) up)))
+    l () 0))
+
+) ; module path
 
 ; lush 🐚 the word -- a word back into a command line, and the mask law's other half.
 ; module 'lush begins here, at the floor, because the shell owns the idea of a shell
