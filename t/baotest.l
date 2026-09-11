@@ -149,7 +149,7 @@
    _ (each results (\ b (test b)))
    ; and the battery must be non-trivial (a typo'd list returning () would
    ; vacuously pass the each above).
-   _ (test (< 50 (tally results))))
+   _ (test (50 < tally results)))
 
 (test_fin ())
 (puts "baotest: ok") (putc 10)

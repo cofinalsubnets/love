@@ -12,6 +12,8 @@
 ; a body-less top-level `:` -- these names leak on purpose, which is what makes them a floor.
 (module 'kore
 (borrow 'posix)
+; lastslash, for the two path clips below (l/boot/post.l)
+(borrow 'path)
 
 (:
    ; -- the u-floor --
@@ -96,24 +98,24 @@
    (ucount-say st) [<>st <>>st <>>>st]      ; the state's (lines words bytes) face
    ; text -> (lines words bytes), a word a maximal ink run (lawed in t/law/kore.l)
    (ucount t) (ucount-say (ucount-go ucount0 t))
-   ; the two pure path clips (basename NAME [SUFFIX] / dirname NAME; lawed in t/law/kore.l)
+   ; the two pure path clips (basename NAME [SUFFIX] / dirname NAME; lawed in t/law/kore.l).
+   ; posix's faces, not make's: trailing slashes are stripped first, and a bare name's
+   ; directory is "." where make's $(dir) says "./". `chop` is that strip, and what is
+   ; left is one 'glob lastslash -- the scan itself lives there.
+   (uchop p) (: (e k) (? ((0 < k) && (p (k - 1) = 47)) (e (k - 1)) k) (e (tally p)))
    (ubase p sfx)
-    (: (e k) (? ((0 < k) && (p (k - 1) = 47)) (e (k - 1)) k)
-       e0 (e (tally p))
+    (: e0 (uchop p)
        (? (e0 = 0) (? (0 < tally p) "/" "")
-          (: (b k) (? ((0 < k) && !(p (k - 1) = 47)) (b (k - 1)) k)
-             s (snip p (b e0) e0)
+          (: s (snip p (lastslash (snip p 0 e0)) e0)
              m (tally sfx) n (tally s)
              (? ((0 < m) && (m < n) && (snip s (n - m) n = sfx))
                 (snip s 0 (n - m)) s))))
    (udir p)
-    (: (e k) (? ((0 < k) && (p (k - 1) = 47)) (e (k - 1)) k)
-       e0 (e (tally p))
+    (: e0 (uchop p)
        (? (e0 = 0) (? (0 < tally p) "/" ".")
-          (: (b k) (? ((0 < k) && !(p (k - 1) = 47)) (b (k - 1)) k)
-             b0 (b e0)
+          (: b0 (lastslash (snip p 0 e0))
              (? (b0 = 0) "."
-                (: z (e b0) (? (z = 0) "/" (snip p 0 z)))))))
+                (: z (uchop (snip p 0 b0)) (? (z = 0) "/" (snip p 0 z)))))))
    ; split at charm c, every piece kept -- "a:" is ("a" ""), "" is ("") (cut's face,
    ; where lines would drop the empty tail)
    ; the scan floor finds each separator natively; the charm walk stands in where
@@ -235,8 +237,14 @@
    ; an operand open for reading -> [port close?] | (). "-" is stdin and is not
    ; closed after: a later operand may be it again. `miss` says the complaint, because
    ; grep and sed each owe GNU a different sentence for the same failure.
+   ; is the path a directory (stat follows links, like the tools want)
+   (udirp q) (: st (stat q) (two? st && (16384 = (& 61440 <>>st))))
    (uin miss f)
     (? (f = "-") [in 0]
+       ; a directory opens, and reading it hands back the raw getdents bytes: `cat DIR`
+       ; printed them and `wc DIR` counted none, both leaving 0. it is a miss like any
+       ; other -- the complaint is the caller's sentence and the status follows
+       (udirp f) (: _ (miss f) ())
        (: q (open f "r") (? (hot? q) [q 1] (: _ (miss f) ()))))
    (umiss who) (\ f (: _ (say err (who + ": cannot open " + f)) _ (put err 10) 0))
    ; the driver the rest ride: body gets (name first? reader) per operand and answers
@@ -331,16 +339,5 @@
             (\ f fst rd (: (go _) (: l (urd-line rd)
                                      (? (! (two? l)) 1 (? (dot <l <>l) (go 0) 1)))
                            (go 0)))
-            as)
-
-   ; whitespace-split a text into words (the xargs face, quote-blind)
-   (uwords t)
-    (: n (tally t)
-       (go i st acc)
-        (? (n <= i) (rev (? (st < 0) acc (snip t st i . acc)))
-           (: c (t i)
-              w ((c = 32) || (c = 9) || (c = 10) || (c = 13))
-              (? w (go (i + 1) -1 (? (st < 0) acc (snip t st i . acc)))
-                 (go (i + 1) (? (st < 0) i st) acc))))
-       (go 0 -1 ())))
+            as))
 ) ; module 'kore

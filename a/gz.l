@@ -800,6 +800,7 @@
 (module 'gzcmd
 (borrow 'gz)
 
+(borrow 'path)
 (borrow 'posix)
 (: gzc-usage "usage: gzip [-cdfklnNqrtv19] [-S SUF] [FILE..]   (gunzip = -d, zcat = -dc)"
    gzc-help "gzip -- the RFC 1952 container in love (module 'gz is the codec)
@@ -821,12 +822,10 @@ no file, or a bare -, is the filter: stdin -> stdout"
    (gzc-tell t m) (peep t 'v 0 && (: _ (say err m) _ (put err 10) (flush err)))
    (gzc-pad w s) (#s < w ? (gzc-pad w (" " + s)) s)
    (gzc-ends? s x) (: n #s m #x (m <= n && snip s (n - m) n = x))
-   (gzc-base p) (: n #p
-                   (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
-                   (go 0 0))
-   (gzc-dir p) (: n #p
-                  (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) r)
-                  (go 0 0))                          ; the head including its slash, "" for none
+   ; the raw clips, not posix's: no trailing slash is stripped first, so "a/b/" is
+   ; a base of "" and a dir of "a/b/". a tar member wants the text it was handed
+   (gzc-base p) (snip p (lastslash p) #p)
+   (gzc-dir p)  (snip p 0 (lastslash p))             ; the head with its slash, "" for none
    (gzc-dirp? q) (: st (stat q) (two? st && <>>st & 61440 = 16384))
    (gzc-worse a b) (? (a = 1 || b = 1) 1 (a = 2 || b = 2) 2 0)
 

@@ -17,10 +17,10 @@
  (fz-map f g) (\ st (: r (g st) (f <r . >r)))
  (fz-bind g k) (\ st (: r (g st) ((k <r) >r))) ; feed value into next gen
  ; --- primitive draws (every range below keeps hi > lo so random never mods by 0) ---
- (fz-nat n) (\ st (random st n))                        ; [0, n)
- (fz-int lo hi) (fz-map (+ lo) (fz-nat (- hi lo)))       ; [lo, hi)
- (fz-elt l) (\ st (: r (random st (tally l)) (<(drop <r l) . >r)))
- (fz-oneof gs) (fz-bind (fz-nat (tally gs)) (\ k <(drop k gs)))  ; pick a generator
+ (fz-nat n) (\ st (random st n))                   ; [0, n)
+ (fz-int lo hi) (fz-map (+ lo) (fz-nat (hi - lo))) ; [lo, hi)
+ (fz-elt l) (\ st (: r (random st #l) (<(drop <r l) . >r)))
+ (fz-oneof gs) (fz-bind (fz-nat #gs) (\ k <(drop k gs)))  ; pick a generator
  ; --- structured draws: fixed repetition, bounded-length list, tuples ---
  (fz-rep n g) (? (n < 1) (fz-pure ())
     (\ st (: a (g st) b ((fz-rep (n - 1) g) >a) ((<a . <b) . >b))))
@@ -31,7 +31,7 @@
  ; --- the driver: N trials from seed `sd`, first counterexample wins ---
  (fz-find n sd g p)
    (: (go n st) (? (n < 1) (1 . 0)
-        (: r (g st) (? (p <r) (go (- n 1) >r) (0 . <r))))
+        (: r (g st) (? (p <r) (go (n - 1) >r) (0 . <r))))
       (go n (wheel sd)))
  (fz-ok n sd g p) <(fz-find n sd g p))
 
@@ -112,7 +112,7 @@
  ; map preserves spine length ($ is the net sum, so count the spine explicitly)
  (fz-ok 300 25 fz-l (\ l (: (ln x) (foldl (\ n _ (1 + n)) 0 x) (ln (map (+ 1) l) = ln l))))
  ; take n ++ drop n = identity, for n drawn within [0, spine length]
- (fz-ok 300 26 (fz-bind fz-l (\ l (fz-map (\ n [l n]) (fz-int 0 (+ 1 (foldl (\ n _ (1 + n)) 0 l))))))
+ (fz-ok 300 26 (fz-bind fz-l (\ l (fz-map (\ n [l n]) (fz-int 0 (1 + foldl (\ n _ (1 + n)) 0 l)))))
    (\ v (<v = take <>v <v + drop <>v <v)))
  ; filter keeps only matching elements and never grows the spine (the clamped $
  ; can grow under filter -- dropping a negative raises the net -- so fold)
@@ -130,10 +130,10 @@
    (fz-rd x) (: r (rd-test (fz-s2cl (show x))) (? (two? r) <r r))   ; the reader-under-test socket (t/00-init.l)
    fz-syms '(a b c d foo bar baz qux)
    fz-leaf (fz-oneof [(fz-elt fz-syms) (fz-int -500 500)])
-   (fz-sexp d) (? (< d 1) fz-leaf
+   (fz-sexp d) (? (d < 1) fz-leaf
       (\ st (: r (random st 3)            ; 1/3 leaf, 2/3 a bounded list of sub-exprs
           (? (<r = 0) (fz-leaf >r)
-             ((fz-list 4 (fz-sexp (- d 1))) >r))))))
+             ((fz-list 4 (fz-sexp (d - 1))) >r))))))
 (test
  (fz-ok 200 30 fz-leaf (\ x (x = fz-rd x)))            ; leaves: ints + symbols
  (fz-ok 200 31 (fz-sexp 3) (\ x (x = fz-rd x)))        ; nested structure round-trips
@@ -181,10 +181,10 @@
  ; filed), so these draw inputs that trip a real failure -- skip on the wasm shim.
  (? word (fz-ok 300 54 fz-s-i (\ v (<v = fz-norm (fz-norm (snip <v 0 >v) +
                                                   fz-norm (snip <v >v (tally <v)))))) 1)
- (? word (fz-ok 300 55 fz-s (\ s (s = fz-norm (snip s 0 (tally s))))) 1)
+ (? word (fz-ok 300 55 fz-s (\ s (s = fz-norm (snip s 0 #s)))) 1)
  ; the snip length is j-i, and out-of-range indices clamp to [0, pin]
  (fz-ok 300 56 fz-s-ij (\ v (<>>v - <>v = tally (snip <v <>v <>>v))))
- (fz-ok 300 57 fz-s (\ s (fz-norm (snip s 0 (tally s)) = fz-norm (snip s -9 (99 + tally s)))))
+ (fz-ok 300 57 fz-s (\ s (fz-norm (snip s 0 #s) = fz-norm (snip s -9 (99 + tally s)))))
  ; snip recovers the two operands of a scat
  (fz-ok 250 58 fz-s2 (\ v (<v = fz-norm (snip (<v + <>v) 0 (tally <v)))))
  (fz-ok 250 59 fz-s2 (\ v (<>v = (fz-norm (snip (<v + <>v) (tally <v) (tally <v + tally <>v))))))
@@ -193,7 +193,7 @@
  (fz-ok 250 61 fz-cl1 (\ cl (cl = fz-s2cl (string cl))))
  (fz-ok 250 62 fz-cl1 (\ cl (: (ln x) (foldl (\ n _ (1 + n)) 0 x) (ln cl = tally (string cl)))))
  ; get yields the default outside [0, pin)
- (fz-ok 300 63 fz-s (\ s ('oob = peep s (tally s) 'oob && 'oob = peep s -1 'oob)))
+ (fz-ok 300 63 fz-s (\ s ('oob = peep s #s 'oob && 'oob = peep s -1 'oob)))
  ; print -> read round trip over arbitrary byte strings
  (fz-ok 250 64 fz-s (\ s (s = fz-rd s))))
 

@@ -17,10 +17,10 @@
 ; accessors. the leak assert must run before those binds: it is a body-less top-level `:`, so its
 ; names land on the book and half the roster would answer its own copies.
 (assert (elem 'glaze (cite ()))
-        (400 < (tally (keys (cite 'glaze))))
+        (400 < #(keys (cite 'glaze)))
         (: nm (names ()) (&& (! (elem 'autogroup nm)) (! (elem 'jitir nm)) (! (elem 'glaze nm)))))
 (: assemble (cite 'holo 'assemble)
-   bcat (\ ps (foldl (\ a b (+ a b)) () ps))
+   bcat (\ ps (foldl (\ a b (a + b)) () ps))
    G (cite 'glaze)
    anat-defs (G 'anat-defs)  autogroup (G 'autogroup)  autonat (G 'autonat)  autospec (G 'autospec)
    base-ev (G 'base-ev)  castbuild (G 'castbuild)  cggir (G 'cggir)  cggvir (G 'cggvir)
@@ -189,16 +189,16 @@
 ; global closure glazes automatically as the stackless bridge (emit.l jitcalloutx), F resolved via ala's
 ; gv. The targets are top-level body-less defines -> real globals, so gv finds them at the summing
 ; closure's creation. == interp across the fast path + both soundness gates.
-(: (rc-sq i) (* i i))
-(: (rc-half i) (* i 0.5))
+(: (rc-sq i) (i * i))
+(: (rc-half i) (i * 0.5))
 (: (rc-big i) 1000000000000000000)
-(: (rc-ssum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (rc-sq i))) a)) 0 0))
-(: (rc-fsum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (rc-half i))) a)) 0 0))
-(: (rc-bsum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (rc-big i))) a)) 0 0))
+(: (rc-ssum n) ((: (go i a) (? (i < n) (go (i + 1) (a + rc-sq i)) a)) 0 0))
+(: (rc-fsum n) ((: (go i a) (? (i < n) (go (i + 1) (a + rc-half i)) a)) 0 0))
+(: (rc-bsum n) ((: (go i a) (? (i < n) (go (i + 1) (a + rc-big i)) a)) 0 0))
 ; pure-interp references (inline sums -- not closures, so natjit never fires on them), shared globals
-(: sref ((: (go i a) (? (< i 30)  (go (+ i 1) (+ a (rc-sq i)))   a)) 0 0))
-(: fref ((: (go i a) (? (< i 20)  (go (+ i 1) (+ a (rc-half i))) a)) 0 0))
-(: bref ((: (go i a) (? (< i 100) (go (+ i 1) (+ a (rc-big i)))  a)) 0 0))
+(: sref ((: (go i a) (? (i < 30)  (go (i + 1) (a + rc-sq i))   a)) 0 0))
+(: fref ((: (go i a) (? (i < 20)  (go (i + 1) (a + rc-half i)) a)) 0 0))
+(: bref ((: (go i a) (? (i < 100) (go (i + 1) (a + rc-big i))  a)) 0 0))
 (: _ (assert (lit? rc-ssum) (285 = (rc-ssum 10)) ((rc-ssum 30) = sref)             ; fixnum fast path == interp
         (95.0 = (rc-fsum 20)) ((rc-fsum 20) = fref)                                ; gate 1: float call-out -> gem, == interp
         (100000000000000000000 = (rc-bsum 100)) ((rc-bsum 100) = bref)             ; gate 2: sum overflows fixnum -> bignum, == interp
@@ -208,8 +208,8 @@
 ; captured / multi-arg call-out (calloutinfo-frame + njit-calloutframe): F read from the [imps args]
 ; frame, not baked. rc-summer captures f -> `(\ f n ..)`; the frame native reads F/N by index, hand-rolls
 ; lvm_ret(n=a), deopts to value[1]=e (which captures F). == interp across the fast path + both gates.
-(: (rc-summer f) (\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (f i))) a)) 0 0)))          ; captured: (\ f n ..)
-(: (rc-hosum f n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (f i))) a)) 0 0))               ; multi-arg: f a genuine 2nd frame arg
+(: (rc-summer f) (\ n ((: (go i a) (? (i < n) (go (i + 1) (a + f i)) a)) 0 0))) ; captured: (\ f n ..)
+(: (rc-hosum f n) ((: (go i a) (? (i < n) (go (i + 1) (a + f i)) a)) 0 0))      ; multi-arg: f a genuine 2nd frame arg
 (: cs (rc-summer rc-sq)  cf (rc-summer rc-half)  cb (rc-summer rc-big)
    _ (assert (lit? cs) (285 = (cs 10)) ((cs 30) = sref)                                    ; captured fixnum fast path == interp
         (95.0 = (cf 20)) ((cf 20) = fref)                                                  ; gate 1 (captured float)
@@ -235,28 +235,28 @@
 ; stale leaked namesake (the rc4 regression below; bref-summing-fref was the farq find). am-deep
 ; is the storm shape: deep non-tail call nesting with cons churn per level -- thousands of
 ; pending drive frames while the GC runs.
-(: (am-cnt l k a) ((: (go l a) (? (two? l) (go (cup l) (? (= (cap l) k) (+ a 1) a)) a)) l a))
-(: (am-rev l acc) ((: (go l a) (? (two? l) (go (cup l) (. (cap l) a)) a)) l acc))
-(: (am-mk i acc) (? (< i 1) acc (am-mk (- i 1) (. (% i 7) acc))))
+(: (am-cnt l k a) ((: (go l a) (? (two? l) (go >l (? (cap l = k) (a + 1) a)) a)) l a))
+(: (am-rev l acc) ((: (go l a) (? (two? l) (go >l (. <l a)) a)) l acc))
+(: (am-mk i acc) (? (i < 1) acc (am-mk (i - 1) (. (i % 7) acc))))
 (: am-l (am-mk 200 ()))
-(: am-dbl (: F (\ x (+ x x)) (\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (F (F i)))) a)) 0 0))))
-(: (am-sq x) (+ (* x x) 1))                                                          ; the v4 global callees + the rc4 namesake
-(: (am-mul2 x y) (* (+ x 1) y))
-(: (am-seed k) (+ k 3))
-(: (am-gref l a) ((: (go l a) (? (two? l) (go (cup l) (+ a (am-sq (cap l)))) a)) l a))
-(: am-go (\ x (* x 1000000)))
+(: am-dbl (: F (\ x (x + x)) (\ n ((: (go i a) (? (i < n) (go (i + 1) (a + F (F i))) a)) 0 0))))
+(: (am-sq x) ((x * x) + 1))                                                          ; the v4 global callees + the rc4 namesake
+(: (am-mul2 x y) ((x + 1) * y))
+(: (am-seed k) (k + 3))
+(: (am-gref l a) ((: (go l a) (? (two? l) (go >l (a + am-sq <l)) a)) l a))
+(: am-go (\ x (x * 1000000)))
 (: _ (: n0 (peep fires () 0)
        wk (ev '(\ l k a ((: (go l a) (? (two? l) (go (cup l) (? (= (cap l) k) (+ a 1) a)) a)) l a)))
        ; references are literals: an in-file "interp twin" is impossible -- the hook fires at
        ; base-ev's ala too, so any reference closure ambles as well (how bref nearly lied).
-       (assert (fired? n0)                                                          ; the walker ambled at creation
-          (29 = (wk am-l 3 0)) (29 = (am-cnt am-l 3 0))                             ; fast path; i%7==3 for i in 1..200 -> 29
-          (4611686018427387932 = (wk am-l 3 4611686018427387903))                   ; +1 past max fixnum -> restart -> bignum
-          (30.5 = (wk am-l 3 1.5))                                                  ; gem acc -> arith guard deopt -> generic +
-          (0 = (wk () 3 0)) (7 = (wk 42 3 7))                                      ; ()/non-chain -> two? false -> a
-          ((am-rev (am-rev am-l ()) ()) = am-l)                                    ; native cons round-trips against the interp-built list (()-tailed)
-          (= () (am-rev () ()))                                                  ; the () literal is the mint, not charm 0
-          (19800 = (am-dbl 100))                                                   ; nested captured calls via the drive: sum 4i, i<100
+       (assert (fired? n0)                                        ; the walker ambled at creation
+          (29 = (wk am-l 3 0)) (29 = (am-cnt am-l 3 0))           ; fast path; i%7==3 for i in 1..200 -> 29
+          (4611686018427387932 = (wk am-l 3 4611686018427387903)) ; +1 past max fixnum -> restart -> bignum
+          (30.5 = (wk am-l 3 1.5))                                ; gem acc -> arith guard deopt -> generic +
+          (0 = (wk () 3 0)) (7 = (wk 42 3 7))                     ; ()/non-chain -> two? false -> a
+          ((am-rev (am-rev am-l ()) ()) = am-l)                   ; native cons round-trips against the interp-built list (()-tailed)
+          (() = am-rev () ())                                     ; the () literal is the mint, not charm 0
+          (19800 = (am-dbl 100))                                  ; nested captured calls via the drive: sum 4i, i<100
           (: deep (base-ev '(: H (\ x ((: (go i a) (? (< i 40) (go (+ i 1) (. i a)) a)) 0 (. x ())))
                              (: (dv d) (? (< d 1) 0 (+ (two? (H d)) (dv (- d 1)))))))
              (5000 = (deep 5000)))                                                 ; the storm shape: 5000 pending frames + GC churn, == interp
@@ -267,16 +267,16 @@
           (: dsp (ev '(\ l a ((: (go l a) (? (two? l) (go (cup l) (? (= (cap l) (\ r)) (+ a 1) (? ((cap l) = (\ R)) (+ a 10) a))) a)) l a)))
              (&& (23 = (dsp '(r R r x R r) 0)) (0 = (dsp () 0)) (5 = (dsp '(x y) 5))))
           (: qz (ev '(\ x (? (= x (\ k)) (\ (1 2)) ())))
-             (&& ('(1 2) = (qz 'k)) (= (qz 'k) (qz 'k)) (= () (qz 'nope))))
+             (&& ('(1 2) = (qz 'k)) (qz 'k = qz 'k) (() = qz 'nope)))
           (: qe (ev '(\ x (? (= x (\ q)) 1 0)))
              (&& (1 = (qe 'q)) (0 = (qe 'r)) (0 = (qe 5)) (0 = (qe "q")) (0 = (qe '(q)))))
           ; global callees (v4): a free head resolves via gv and drive-calls through its extras
           ; slot -- per-element (am-sq), multi-arg via the curry chain (am-mul2), in an init
           ; (am-seed), and a nif head (%). all == their literal references.
           (: gw (ev '(\ l a ((: (go l a) (? (two? l) (go (cup l) (+ a (am-sq (cap l)))) a)) l a)))
-             (&& (32 = (gw '(2 3 4) 0)) ((gw am-l 0) = (am-gref am-l 0))))
+             ((32 = (gw '(2 3 4) 0)) && ((gw am-l 0) = (am-gref am-l 0))))
           (: gm (ev '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (am-mul2 i 2))) a)) (am-seed 0) 0)))
-             (&& (98 = (gm 10)) (0 = (gm 0))))                                    ; inits ran: (am-seed 0) = 3 -> i starts at 3
+             ((98 = (gm 10)) && (0 = (gm 0))))                                    ; inits ran: (am-seed 0) = 3 -> i starts at 3
           (: gp (ev '(\ l a ((: (go l a) (? (two? l) (go (cup l) (+ a (% (cap l) 3))) a)) l a)))
              (4 = (gp '(10 11 12 13) 0)))                                         ; 1+2+0+1 -- a nif callee curries through two drives
           ; the rc4 regression: a global namesake of the loop name exists (am-go, *1000000); a
@@ -285,7 +285,7 @@
           ; (a baked global answers 11 here, not 10: rc4's miscompile, bref summing dref's loop).
           (: r4 (ev '(\ n ((: (am-go i a) (? (< i n) (am-go (+ i 1) (+ a i)) (+ a (tally (am-go n))))) 0 0)))
              (&& (10 = (r4 5))
-                 ((r4 5) = ((\ n ((: (am-go i a) (? (< i n) (am-go (+ i 1) (+ a i)) (+ a (tally (am-go n))))) 0 0)) 5))))
+                 ((r4 5) = ((\ n ((: (am-go i a) (? (i < n) (am-go (i + 1) (a + i)) (a + tally (am-go n)))) 0 0)) 5))))
           ; the string lane: a 1-arg frame-callee call carries a text fast path (kind-guarded,
           ; falls to the drive -- never a deopt), so a non-negative in-range (s i) in a loop is
           ; a native byte index; the fast lane's unsigned compare wraps a negative huge, so both
@@ -297,15 +297,15 @@
           (: dg (ev '(\ s n ((: (go i a) (? (< i n) (go (+ i 1) (+ (* a 10) (- (s i) 48))) a)) 0 0)))
              (31415926 = (dg "31415926" 8)))
           (: bs (ev '(\ s ((: (go i a) (? (< i (tally s)) (go (+ i 1) (+ a (s i))) a)) 0 0)))
-             (&& (294 = (bs "abc")) (0 = (bs ""))))
+             ((294 = (bs "abc")) && (0 = (bs ""))))
           (: pk (ev '(\ s n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (s (- i 2)))) a)) 0 0)))
              (195 = (pk "ab" 6)))                                                 ; 97+98: i=0,1 index -2,-1 and i>=4 runs past the end -- every out-of-range read joins nothing on
           (: mx (ev '(\ f n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (f i))) a)) 0 0)))
-             (&& (90 = (mx (\ x (* x 2)) 10)) (294 = (mx "abc" 5))))              ; one site, both callee kinds; 97+98+99, the two past-end reads joining nothing on
+             ((90 = (mx (\ x (x * 2)) 10)) && (294 = (mx "abc" 5))))              ; one site, both callee kinds; 97+98+99, the two past-end reads joining nothing on
           (: ct (ev '(\ l n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (tally l))) a)) 0 0)))
-             (&& (12 = (ct '(1 2 3) 4)) (8 = (ct "ab" 4))))                       ; chain tally drives; text tally native
+             ((12 = (ct '(1 2 3) 4)) && (8 = (ct "ab" 4))))                       ; chain tally drives; text tally native
           (: ts (ev '(\ tally n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (tally i))) a)) 0 0)))
-             (10 = (ts (\ x (+ x 1)) 4)))
+             (10 = (ts (\ x (x + 1)) 4)))
           ; sibling callees (v6): a letrec lambda sibling is a free head in the weave re-analysis
           ; surface; ala's lams hands amble the cell (entry . import-names) lz freezes into the
           ; bytecode site, so the call curries the frozen entry -- no staleness bet. the digrun
@@ -329,7 +329,7 @@
           ; spends its budget and retires -- every later call takes d0 straight to the twin, so a
           ; perma-deopting native heals to bytecode; correct at every point on the way.
           (: hp (ev '(\ l q ((: (go l a) (? (two? l) (go (cup l) (? (= (cap l) q) (+ a 1) a)) a)) l 0)))
-             (: (chk i bad) (? (< i 40) (chk (+ i 1) (? (= 2 (hp '("ab" "cd" "ab" "x") "ab")) bad (+ bad 1))) bad)
+             (: (chk i bad) (? (i < 40) (chk (i + 1) (? (2 = hp '("ab" "cd" "ab" "x") "ab") bad (bad + 1))) bad)
                 (0 = (chk 0 0))))))
    (say err "t/glaze-x86: amble -- the boring-tier translator (walker + cons + globals + siblings + the deopt budget) ok\n"))
 
@@ -337,8 +337,8 @@
 ; so the loader auto-ev's them and srcrec records their source (a body-less `:` define -- inside a
 ; base-ev block they'd be local + un-recorded). swq is a leaf callee; swsum has a named-let loop,
 ; so its swallow exercises the structural lift pass.
-(: (swq n) (+ (* n n) 1))
-(: (swsum n) (: (go i a) (? (< i 1) a (go (- i 1) (+ a i))) (go n 0)))
+(: (swq n) ((n * n) + 1))
+(: (swsum n) (: (go i a) (? (i < 1) a (go (i - 1) (a + i))) (go n 0)))
 
 (base-ev '(:
  _ (assert
@@ -858,17 +858,17 @@
 ;     law (a 32-bit read came back word-swapped). a user-fn call hides its effects from any head
 ;     scan, so a non-dcheap binding must always bail, never inline.
 (: j (jug 0)
-   (dsw v) (: _ (put j (& 255 v)) (put j (& 255 (>> v 8))))                                        ; the x11 spike's w16
-   (dsleaf n) (% (- 4 (% n 4)) 4)                                                                  ; the pure leaf that triggers the walk
-   _ (dsw 513)                                                                                     ; bytes 1 then 2
+   (dsw v) (: _ (put j (& 255 v)) (put j (& 255 (>> v 8)))) ; the x11 spike's w16
+   (dsleaf n) ((4 - (n % 4)) % 4)                           ; the pure leaf that triggers the walk
+   _ (dsw 513)                                              ; bytes 1 then 2
    t (tap [1 2 3 4])
    (dsr2 u) (: a (see t) b (see t) (| a (<< b 8)))
    (dsr4 u) (: a (dsr2 ()) b (dsr2 ()) (| a (<< b 16)))                                            ; the x11 spike's r32
    v (dsr4 ())
    _ (assert
       (0 = (dsleaf 20))
-      (= (slurp j) (+ (string 1) (string 2)))                                                      ; both bytes, in order: the _-bound put kept
-      (67305985 = v))                                                                              ; 0x04030201: the two dsr2 calls read in source order
+      (slurp j = (string 1 + string 2)) ; both bytes, in order: the _-bound put kept
+      (67305985 = v))                   ; 0x04030201: the two dsr2 calls read in source order
    (say err "glaze auto: delet keeps _-bound effects + call-binding order ok\n"))
 
 ; --- swheads reads opfixed source (auto.l): in raw source an infix (a op b) wears its left
@@ -896,18 +896,18 @@
    ; baked elem silently fell back to interp.
    adm ((G 'autogroup) '(: (pm1 x l) (? (two? l) (? (= x (cap l)) 1 (pm1 x (cup l))) 0) (pm1 'b '(a b))))
    _ (assert
-      (! (two? (caup (cup adm)))) (1 = (ev adm))                                  ; admitted: native spliced, and it answers
-      (1 = (elem 'b '(a b c))) (0 = (elem 'z '(a b c)))                     ; nom key, native walk
-      (1 = (elem 2 '(1 2 3))) (0 = (elem 9 '(1 2 3)))                      ; charm key -> entry deopt (bridges), interp stays right
-      (1 = (elem 2 '(2.0 4))) (1 = (elem 2 '(4 2.0 2)))                    ; the numeric bridge, through the fallback
-      (0 = (elem 5 '(6.0 7.0)))                                              ; deopt lane, false stays false
-      (1 = (elem "ab" '(1 "ab"))) (0 = (elem "zz" '("ab")))                ; string key -> entry deopt, structural =
-      (1 = (elem 'z '(1 "s" (x y) 2.5 z)))                                    ; nom key walks every car kind natively
-      (0 = (elem 'q '("s" 2.5 (a))))                                          ; ... and a miss over heap cars
-      (1 = (elem mm (. 1 (. mm ())))) (0 = (elem mm '(a b)))         ; a mint key rides the guard
-      (0 = (elem () '(1 2))) (1 = (elem () (. () ())))                  ; the zero point is a mint
-      (0 = (elem 'x ())) (0 = (elem 'x 5))                                 ; no chain -> the walk never starts
-      (200000 = ((: (go i a) (? (< i 200000) (go (+ i 1) (+ a (elem 'q '(a b q)))) a)) 0 0))
+      (! (two? (caup >adm))) (1 = (ev adm))                  ; admitted: native spliced, and it answers
+      (1 = (elem 'b '(a b c))) (0 = (elem 'z '(a b c)))      ; nom key, native walk
+      (1 = (elem 2 '(1 2 3))) (0 = (elem 9 '(1 2 3)))        ; charm key -> entry deopt (bridges), interp stays right
+      (1 = (elem 2 '(2.0 4))) (1 = (elem 2 '(4 2.0 2)))      ; the numeric bridge, through the fallback
+      (0 = (elem 5 '(6.0 7.0)))                              ; deopt lane, false stays false
+      (1 = (elem "ab" '(1 "ab"))) (0 = (elem "zz" '("ab")))  ; string key -> entry deopt, structural =
+      (1 = (elem 'z '(1 "s" (x y) 2.5 z)))                   ; nom key walks every car kind natively
+      (0 = (elem 'q '("s" 2.5 (a))))                         ; ... and a miss over heap cars
+      (1 = (elem mm (. 1 (. mm ())))) (0 = (elem mm '(a b))) ; a mint key rides the guard
+      (0 = (elem () '(1 2))) (1 = (elem () (. () ())))       ; the zero point is a mint
+      (0 = (elem 'x ())) (0 = (elem 'x 5))                   ; no chain -> the walk never starts
+      (200000 = ((: (go i a) (? (i < 200000) (go (i + 1) (a + elem 'q '(a b q))) a)) 0 0))
       (: pg (jitgroupir [(. '(pm2 x l) '(? (two? l) (? (= x (cap l)) 1 (pm2 x (cup l))) 0))] 'pm2 'x64)     ; the group lane direct: exec x64 ...
          (&& (1 = (pg 'b '(a b))) (0 = (pg 'z '(a b))) (0 = (pg 'z 7))))
       (< 0 (tally (peep (assemble 'a64 (bcat [(mkouterir 'a64 2 'pm3 2 0 () () () () '(0))     ; ... and the point-guarded outer assembles on a64

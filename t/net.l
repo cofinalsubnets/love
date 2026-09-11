@@ -16,7 +16,7 @@
 ; the nifs link on every seat, but the answers below are the OS's -- errno lanes and a
 ; real loopback. skip where there is no kernel underneath (hosted, t/00-init.l).
 (? hosted (do
-  (: (rdline p) (: (go acc) (: ch (see p) (? (= ch 10) acc (= ch -1) acc (go (acc + string ch))))
+  (: (rdline p) (: (go acc) (: ch (see p) (? (ch = 10) acc (ch = -1) acc (go (acc + string ch))))
                    (go "")))
 
   ; --- listen / accept / connect / get / say / seal over 127.0.0.1 ---
@@ -38,12 +38,12 @@
    _ (say c "neko\n")
    echo (rdline c)
    _ (test
-      (= echo "neko"))                      ; the round trip: what went out came back
+      (echo = "neko"))                      ; the round trip: what went out came back
    ; (seal s how) returns the port (chainable); a no-op on a non-port arg.
    _ (test
-      (lit? (seal c 1))                     ; returns the port
-      (= 5 (seal 5 1)))                     ; misuse: returns the arg unchanged
-   _ (catch srv)                             ; catch the server task -- no orphan
+      (lit? (seal c 1)) ; returns the port
+      (5 = seal 5 1))   ; misuse: returns the arg unchanged
+   _ (catch srv)        ; catch the server task -- no orphan
    _ (close c)
    _ (close l))
 
@@ -93,9 +93,9 @@
   (: port 7394
    l (listen port)
    got (tablet 0)
-   srv (twirl (\ _ (: c (accept l) s (slurp c) _ (pin got 0 (tally s)) _ (close c) 1)) 0)
+   srv (twirl (\ _ (: c (accept l) s (slurp c) _ (pin got 0 #s) _ (close c) 1)) 0)
    c (connect "127.0.0.1" port)
-   _ (say c (* "x" 160000))
+   _ (say c ("x" * 160000))
    _ (close c)
    t0 (clock 0)
    _ (catch srv)
@@ -114,7 +114,7 @@
    l (listen port)
    srv (twirl (\ _ (: c (accept l)
                       _ ((: (go k) (? (k = 0) 0
-                                      (: _ (say c (* "x" 200000)) _ (rest 5) (go (k - 1))))) 30)
+                                      (: _ (say c ("x" * 200000)) _ (rest 5) (go (k - 1))))) 30)
                       _ (close c) 1)) 0)
    c (connect "127.0.0.1" port)
    _ (rest 30)

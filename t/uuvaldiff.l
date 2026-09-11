@@ -129,7 +129,7 @@
  ; ..and it has teeth: the degeneration is visible in the net, so a cell that
  ; kept the number instead of dropping it would not pass above
  (3 = (uv3-add 5 '(1 2)))
- (8 = (+ 5 (net '(1 2))))
+ (8 = (5 + net '(1 2)))
  (9 = (uv3-mul 3 '(1 2)))
  (0 = (uv3-mul () '(1 2)))
  (0 = (uv3-mul 0 '(1 2)))

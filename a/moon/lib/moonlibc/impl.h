@@ -124,6 +124,7 @@ struct _IO_FILE {
 #define NR_fb_setsockopt    105
 #define NR_fb_fork            2   /* fork(2) is real here; fork.c forks on the OS */
 #define NR_fb_execve         59
+#define NR_fb_fexecve       492   /* nb: 465, the os_nr row. both BSDs have the call */
 #define NR_fb_wait4           7
 #define NR_fb_kill           37
 #define NR_fb_fcntl          92
@@ -256,6 +257,7 @@ struct _IO_FILE {
 #define NR_madvise        233
 #define NR_wait4          260
 #define NR_memfd_create   279
+#define NR_execveat       281
 #else
 #define NR_read             0
 #define NR_write            1
@@ -295,6 +297,7 @@ struct _IO_FILE {
 #define NR_setsockopt      54
 #define NR_clone           56
 #define NR_execve          59
+#define NR_execveat       322
 #define NR_wait4           61
 #define NR_kill            62
 #define NR_fcntl           72

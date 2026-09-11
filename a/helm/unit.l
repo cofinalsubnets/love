@@ -142,7 +142,10 @@
              [us (happend <>p (happend torn (hcheck us)))])))
 
    ; --- showing ---------------------------------------------------------------
+   ; a name list is joined; an argv is a command line, so it goes through shword --
+   ; `sh -c "date > f"` laid out with spaces reads as a redirect helm performs
    (hargv-line l) (? !(two? l) "" !(two? >l) <l (<l + " " + hargv-line >l))
+   hargv-show (cite 'lush 'sh-show)
    (hunit-line u)
     (: nm (peep u 'name ()) kind (peep u 'kind ())
        af (peep u 'after [])  ex (peep u 'exec [])
@@ -151,5 +154,5 @@
              ? (" wants " + hargv-line (map string (peep u 'wants [])))
                (" restart " + string (peep u 'restart ()) + " tries " + show (peep u 'tries 0)))
        dep  (two? af ? (" after " + hargv-line (map string af)) "")
-       run  (two? ex ? ("\n    exec " + hargv-line ex) "")
+       run  (two? ex ? ("\n    exec " + hargv-show ex) "")
        (head + body + dep + run))))

@@ -939,11 +939,12 @@
        r0 (? pie (ld-align 16 end) end)         ; the reloc table starts 16-aligned, just past the nifs
        r1 (r0 + 8 * nrel)
        ; ..and the segment's file bytes end on 16, so .bss and .image each open on the
-       ; alignment their own headers claim. the image's offset does too, which is what
-       ; seats ai_baked_image at the section's first byte instead of past a pad -- and
-       ; i/image.c lays the blob at that symbol. the slack is laid but claimed by no
-       ; section: inside .love.rela it would be an entry, and the relocator walks
-       ; start..stop and would read that zero as a site at the load base.
+       ; alignment their own headers claim. the image's offset does too, which seats
+       ; ai_baked_image at the section's first byte rather than past a pad. the slack is
+       ; laid and claimed by no section: inside .love.rela it would be a table entry, and
+       ; the relocator walks start..stop and would read that zero as a site at the load
+       ; base. the three bindings below hold the other end -- this lane makes the grain
+       ; 16, and they name wherever ldlay1's grain actually lands.
        dend (ld-align 16 r1)
        ; .bss last, past every byte the file carries: the segment's p_memsz runs
        ; out to `bend` where its p_filesz stops at dend, and the kernel hands over
@@ -962,6 +963,16 @@
        iend (? img? (ldlay1 'image iaddr objs) dend)
        isz (iend - iaddr)
        endf (? img? (ioff + isz) ioff)          ; the file bytes the segments carry
+       ; the lift keeps the address congruent to the offset MOD A PAGE, which says
+       ; nothing about the 16-grain .image asks for -- so ldlay1 and ldemit seat the
+       ; contents wherever that grain lands, up to 15 bytes above iaddr. the headers
+       ; name THAT, never the lane's start: `love bake` writes the image at the
+       ; header's offset and ai_baked_image is read from the symbol's, so a section
+       ; whose header begins below its own first byte is an image the wake cannot find
+       ; -- and a missed wake is a silent egg boot, which no gate can see.
+       ist (? img? (ld-align 16 iaddr) iaddr)   ; where the lane's bytes actually start
+       isho (ioff + (ist - iaddr))              ; ..its file offset, moved by the same pad
+       iszr (iend - ist)                        ; ..and the size from there
        relbox (? pie {0 ()} ())    ; abs64 site accumulator (pie only)
        glo (ldsyms objs)
        ; the entry: ld's rule -- the symbol `_start` when the set defines one,
@@ -1021,7 +1032,7 @@
                     (ld-shdr (snm 3) 1 3 <ed (<ed - base - sk) (<en - <ed) 0 0 16 0)
                     (ld-shdr (snm 4) 1 2 r0 (r0 - base - sk) (r1 - r0) 0 0 16 0)     ; love_rela, the -pie table (empty non-pie)
                     (ld-shdr (snm 5) 8 3 dend (dend - base - sk) (bend - dend) 0 0 16 0)   ; NOBITS: an offset, no bytes
-                    (ld-shdr (snm 6) 1 3 iaddr ioff isz 0 0 16 0)                    ; .image, the grow slot -- its own segment
+                    (ld-shdr (snm 6) 1 3 ist isho iszr 0 0 16 0)                     ; .image, the grow slot -- its own segment
                     (ld-shdr (snm 7) 2 0 0 symo symz 9 (st 2) 8 24)               ; link=.strtab info=first global
                     (ld-shdr (snm 8) 3 0 0 stro strz 0 0 1 0)
                     (ld-shdr (snm 9) 3 0 0 ssto sstz 0 0 1 0)
@@ -1049,7 +1060,7 @@
                     (elf64-phdr 1 4 (t1 - base) o0 o0 (o1 - o0) (o1 - o0) pg)
                     (elf64-phdr 1 6 (d0 - base - sk) d0 d0 (dend - d0) (bend - d0) pg)]
                  [(elf64-phdr 1 7 0 base base (dend - base) (bend - base) pg)])
-            + (? img? [(elf64-phdr 1 6 ioff iaddr iaddr isz isz pg)] ())
+            + (? img? [(elf64-phdr 1 6 isho ist ist iszr iszr pg)] ())
             + (? nb? [(elf64-phdr 4 4 nbo (base + nbo) (base + nbo) 24 24 4)] ()))
        hdr (elf64-hdrn (? pie 3 2) ent mach [shto nsh 10] phs)
        ; the brand: ei_osabi = 9 in e_ident[7] on every exe this lane writes for

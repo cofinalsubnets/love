@@ -14,6 +14,8 @@
 (:
    (vi-main as)
     (: f (? (two? as) <as "")
+       ; vi reads no options: a dash word would open a new file named after it
+       _ (? (1 < #f && f 0 = 45) (udie 2 ("vi: unknown option " + f)) ())
        r (? (< 0 (tally f)) (uread f) ())
        st (vnew (? (two? r) (lines <>r) ()) f)
        _ (? ((< 0 (tally f)) && !(two? r)) (vmsg st (+ f ": new file")) ())

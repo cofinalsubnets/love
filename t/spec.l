@@ -9,12 +9,12 @@
 ; --- everything is a function --- (f x y) == ((f x) y), (f) == f; numbers are church
 ; numerals; data self-applies. asserts read infix, folding right-associatively (sound by (f) == f).
 (test
- (1 = (0 5)) (5 = (1 5))                         ; 0 is const-1, 1 is the identity
- (1 = (0 0)) (7 = (0 0 7))                       ; const of const is the identity: (0 0 x) = ((0 0) x) = (1 x) = x
- (8 = (3 2)) (262144 = (2 3 4))                  ; (n x) = x**n; the tower (2 3 4) = 4**(3**2)
- (12 = (3 (+ 1) 9)) ('(2 3 4) = (map (+ 1) '(1 2 3)))  ; (n f) composes f ($ n) times; currying *is* partial application
- (10 = (-3 (+ 1) 10)) (13 = (2.5 (+ 1) 10))      ; the count saturates, true to !!$: (-3 f) = (0 f) = 1; a float ceils
- (0.5 = (-1 2)) (3.0 = ((/ 1 2) 9)))             ; ... but exponents don't: (-1 x) = 1/x; (1/2 x) = sqrt x
+ (1 = (0 5)) (5 = (1 5))                              ; 0 is const-1, 1 is the identity
+ (1 = (0 0)) (7 = (0 0 7))                            ; const of const is the identity: (0 0 x) = ((0 0) x) = (1 x) = x
+ (8 = (3 2)) (262144 = (2 3 4))                       ; (n x) = x**n; the tower (2 3 4) = 4**(3**2)
+ (12 = (3 (+ 1) 9)) ('(2 3 4) = (map (+ 1) '(1 2 3))) ; (n f) composes f ($ n) times; currying *is* partial application
+ (10 = (-3 (+ 1) 10)) (13 = (2.5 (+ 1) 10))           ; the count saturates, true to !!$: (-3 f) = (0 f) = 1; a float ceils
+ (0.5 = (-1 2)) (3.0 = ((1 / 2) 9)))                  ; ... but exponents don't: (-1 x) = 1/x; (1/2 x) = sqrt x
 
 ; --- three special forms --- `:` letrec*/sequence, `?` cond, `\` lambda (one operand: quote).
 ; a body-having `:` is one scope; an empty special form reads its head (the zero point).
@@ -60,14 +60,14 @@
  !!(tablet 0) !!{} (1 = $(tablet 0)) (2 = #{1 2 3 4})   ; a tablet is a lookup lambda and nets 1 like one, empty or
  (1 = ${1 2 3 4}) (1 = ${0})                     ; not -- mutable, its truth is not its contents. $ is that 1 whatever
                                                  ; it holds, and never the key count; tally is what counts keys
- !'(() ()) !'(0 0) !'((0) (())) (0 = $'(() () ()))  ; a chain of nothings is nothing, recursively
- !'(-5) !@(-3 -4) !'(-2 1) !!'(0 1)              ; negatives net <= 0 at every rank; -2+1 < 0 < 0+1
- (3 = $'(1 () 2)) (6 = $'(1 2 3)) (7 = $@(3 4))  ; $ sums the nets, then clamps once
- (? word (: n ((53 2) + 1) m ((53 2) + 3) (&& (n = $n) (m = $m))) 1)  ; $ is the identity on a green charm, exactly -- past 2^53 the net's double would round it
- (3 = $(. 1 2)) !!(. 0 2) (6 = $(1 . 2 . 3))  ; every link nets car + cdr, so a dotted tail counts too
- (0 = $[(3 ~ 4) (-3 ~ 4)]) ![(0 ~ 5) -1]       ; phases sum as vectors, then the total is gated once:
- !i !(0 ~ -1) !(0 ~ 8) (0 = $i)                  ; ...and a pure phase is blue. `i` and `-i` are swapped by a
- (i < 5) ((0 ~ -1) < i)                          ; field automorphism, so truth cannot tell them apart -- but the
+ !'(() ()) !'(0 0) !'((0) (())) (0 = $'(() () ()))               ; a chain of nothings is nothing, recursively
+ !'(-5) !@(-3 -4) !'(-2 1) !!'(0 1)                              ; negatives net <= 0 at every rank; -2+1 < 0 < 0+1
+ (3 = $'(1 () 2)) (6 = $'(1 2 3)) (7 = $@(3 4))                  ; $ sums the nets, then clamps once
+ (? word (: n ((53 2) + 1) m ((53 2) + 3) (n = $n && m = $m)) 1) ; $ is the identity on a green charm, exactly -- past 2^53 the net's double would round it
+ (3 = $(. 1 2)) !!(. 0 2) (6 = $(1 . 2 . 3))                     ; every link nets car + cdr, so a dotted tail counts too
+ (0 = $[(3 ~ 4) (-3 ~ 4)]) ![(0 ~ 5) -1]                         ; phases sum as vectors, then the total is gated once:
+ !i !(0 ~ -1) !(0 ~ 8) (0 = $i)                                  ; ...and a pure phase is blue. `i` and `-i` are swapped by a
+ (i < 5) ((0 ~ -1) < i)                                          ; field automorphism, so truth cannot tell them apart -- but the
                                                  ; order still must (sorting needs totality). the one place they part.
  (3 = $(3 ~ 4)) (3 = $(3 ~ -4))                  ; ...so the amount is the real part, conjugate-blind
  (1 = $@(0.3 0.4)) (1 = $(0.001 ~ 0))            ; the clamp ceils, so any positive net reaches 1 at every tier
@@ -237,14 +237,14 @@
 ; const-1, a nested redex reduced all the way, and eta still unbridged (its de Bruijn reduct shifts).
 (test
  (5 = (\ x x) 5)                               ; beta_id: (\ x x) a ~> a
- (1 = ((\ _ 1) 9))                               ; beta_const: (\ _ 1) a ~> 1 (drops its arg)
- (5 = ((\ x x) ((\ x x) 5)))                     ; beta_nested: (\ x x) ((\ x x) a) ~>* a
- (10 = ((\ q ((\ i (: q 7 (+ i q))) q)) 3))      ; capture-avoiding: a : binder shadowing the arg does not capture it (i stays 3, local q 7)
- (8  = ((\ q ((\ i (: i 5 (+ i q))) q)) 3))      ; a : rebinding the lambda param shadows it -- the subst drops, not lands on the binder
- (99 = ((\ tuple (tuple 1 2 3)) (\ a b c 99)))   ; a binder shadows a same-spelled macro: the macro must not fire (tuple is a prel macro)
- (5  = (: let (\ x 5) (let 9)))                  ; likewise for a : binder named like a macro
- (43 = ((\ p (: p (+ p 1) p)) 42))               ; a : value binding shadows its name only after its right side is
- (2  = (: v 1 (: v (+ v 1) v))))                 ; evaluated, so that side reads the outer binding, a param or an enclosing :
+ (1 = ((\ _ 1) 9))                             ; beta_const: (\ _ 1) a ~> 1 (drops its arg)
+ (5 = ((\ x x) ((\ x x) 5)))                   ; beta_nested: (\ x x) ((\ x x) a) ~>* a
+ (10 = ((\ q ((\ i (: q 7 (i + q))) q)) 3))    ; capture-avoiding: a : binder shadowing the arg does not capture it (i stays 3, local q 7)
+ (8  = ((\ q ((\ i (: i 5 (i + q))) q)) 3))    ; a : rebinding the lambda param shadows it -- the subst drops, not lands on the binder
+ (99 = ((\ tuple (tuple 1 2 3)) (\ a b c 99))) ; a binder shadows a same-spelled macro: the macro must not fire (tuple is a prel macro)
+ (5  = (: let (\ x 5) (let 9)))                ; likewise for a : binder named like a macro
+ (43 = ((\ p (: p (p + 1) p)) 42))             ; a : value binding shadows its name only after its right side is
+ (2  = (: v 1 (: v (v + 1) v))))               ; evaluated, so that side reads the outer binding, a param or an enclosing :
 
 ; --- string answers a string --- the one total coercion. four kinds the nif spells itself:
 ; a charm is its byte (not its digits -- (string 10) is a newline, which the tree writes
@@ -278,20 +278,20 @@
  (('ab + 'ab) + 'ef = 'ab + ('ab + 'ef)) (('ef + 'ab) + 'ab = 'ef + ('ab + 'ab))  ; the triples that annihilation could not close
  ("x" = "x" + 66.0) ("x" = "x" + 1.5) ("x" = "x" + -66) ("x" = "x" + 256)   ; a number degenerates against text
  ('(1 2 3 4) = '(1 2) + '(3 4)) ('(1 2) = 5 + '(1 2)) !("a" - "b")
- ('(3) = '(3) + ()) ('(3) = () + '(3)) ('(1 2) = '(1 2) + (mint 0))   ; a bare mint -- the zero point () too -- is +'s
- ("ab" = "ab" + ()) ("ab" = () + "ab") (5 = 5 + ()) (5 = () + 5)      ; identity in every lane, not just on lists:
- ((1 ~ 2) = () + (1 ~ 2)) ("@(1 2 3)" = show (() + @(1 2 3))) (() = () + ())  ; string/number/complex/array pass through
- ('(1 2) = 'ef + '(1 2)) (5 = 'ef + 5) (5 = 65 + 'ef + -60)   ; a name is the identity against every band,
- ("@(1 2)" = show ('ef + @(1 2))) ("@(1 2)" = show (@(1 2) + 'ef))  ; ..either side, a tray included
- ((\ x x) = () + (\ x x)) (2 = (((\ x x) + (\ x x)) (\ n (+ n 1)) 0))   ; the top lane too: () + hot = hot, and
- ("ababab" = "ab" * 3) (() = 'xy * 2) ('(1 2 1 2) = '(1 2) * 2) !("ab" * "cd")   ; a name is absent under *; + on two hots is church add (id+id acts as 2)
- ("ababab" = "ab" * -3) !("ab" * 2.5) !('(1 2) * 0)         ; a count acts by |magnitude| when exact (the one hom
- (() = () * 5) (() = 5 * ()) (() = "ab" * ()) (() = () * "ab")   ; over the sign crossing); an inexact count is no count.
- (() = '(1 2) * mint 0) (() = () * ()) (() = () * @(1 2 3))    ; () is the zero and the zero annihilates * (the
- ("" = "ab" * 0) (() = () * (\ x x))                        ; semiring law; 1 is the identity); the number 0 still counts: 0 copies = the kind's empty
- !("ab" * (3 ~ 4))                                          ; ..and a complex is no count either, like the gem
- ("ab" * 3 = "ab" + "ab" + "ab")                            ; the tie, the whole reason * is `repeated +`:
- ('(1) * 3 = '(1) + '(1) + '(1)))                           ;   s*n is s+s+..+s, in each lane that repeats
+ ('(3) = '(3) + ()) ('(3) = () + '(3)) ('(1 2) = '(1 2) + (mint 0))            ; a bare mint -- the zero point () too -- is +'s
+ ("ab" = "ab" + ()) ("ab" = () + "ab") (5 = 5 + ()) (5 = () + 5)               ; identity in every lane, not just on lists:
+ ((1 ~ 2) = () + (1 ~ 2)) ("@(1 2 3)" = show (() + @(1 2 3))) (() = () + ())   ; string/number/complex/array pass through
+ ('(1 2) = 'ef + '(1 2)) (5 = 'ef + 5) (5 = 65 + 'ef + -60)                    ; a name is the identity against every band,
+ ("@(1 2)" = show ('ef + @(1 2))) ("@(1 2)" = show (@(1 2) + 'ef))             ; ..either side, a tray included
+ ((\ x x) = () + (\ x x)) (2 = (((\ x x) + (\ x x)) (\ n (n + 1)) 0))          ; the top lane too: () + hot = hot, and
+ ("ababab" = "ab" * 3) (() = 'xy * 2) ('(1 2 1 2) = '(1 2) * 2) !("ab" * "cd") ; a name is absent under *; + on two hots is church add (id+id acts as 2)
+ ("ababab" = "ab" * -3) !("ab" * 2.5) !('(1 2) * 0)                            ; a count acts by |magnitude| when exact (the one hom
+ (() = () * 5) (() = 5 * ()) (() = "ab" * ()) (() = () * "ab")                 ; over the sign crossing); an inexact count is no count.
+ (() = '(1 2) * mint 0) (() = () * ()) (() = () * @(1 2 3))                    ; () is the zero and the zero annihilates * (the
+ ("" = "ab" * 0) (() = () * (\ x x))                                           ; semiring law; 1 is the identity); the number 0 still counts: 0 copies = the kind's empty
+ !("ab" * (3 ~ 4))                                                             ; ..and a complex is no count either, like the gem
+ ("ab" * 3 = "ab" + "ab" + "ab")                                               ; the tie, the whole reason * is `repeated +`:
+ ('(1) * 3 = '(1) + '(1) + '(1)))                                              ;   s*n is s+s+..+s, in each lane that repeats
 
 ; --- () is absent to every numeric lane --- - / // % & | ^ << >> have nothing to compute
 ; with, either side, so they answer (). not the number 0 -- no face projection -- and no
@@ -340,19 +340,19 @@
  (5 = (abs -5)) (charm? (abs -5)) (5.0 = (abs (3 ~ 4))) (2 = (int 2.9))
  ((abs -9223372036854775808) = 9223372036854775808)   ; |sun min| overflows the word: the bignum lane (the big oracle caught the wrap)
  (1024 = (10 2)) (21 = (gcd 1071 462)) (976371285 = (modpow 2 100 1000000007))
- (2.0 = ((/ 1 2) 4)) (1024 = (10 2)) (1 = (0 e)) (2.718281828459045 = e))
+ (2.0 = ((1 / 2) 4)) (1024 = (10 2)) (1 = (0 e)) (2.718281828459045 = e))
 
 ; --- a few identities --- tetration is the tower with one base; i*i = -1; euler holds in the
 ; exact direction ((log -1) = i * pi -- `=` is exact, so e^(i*pi) does not hold forward); power's
 ; principal root is exact, ((/ 1 2) -1) = i on the nose. (only bit-exact claims on every target.)
 (test
- (27 = (3 3)) (7625597484987 = (3 3 3)) (16 = (2 2 2)) (65536 = (2 2 2 2))   ; tetration
- (-1 = i * i) (-1 = (2 i)) (1 = ((i * 0) e))                                 ; i^2 = -1; e^(i*0) = 1
- ((log -1) = i * pi) ((log i) = i * pi / 2)                                  ; euler, in the exact direction
- (twin? (log -1)) (gem? (log 2)) (twin? (log (2 ~ 3)))                         ; log widens only when it must
- (i = ((/ 1 2) -1)) ((0 ~ 2) = ((/ 1 2) -4))                                 ; sqrt of a negative: principal, exact
- (-8 = (3 -2)) (twin? ((/ 1 3) -8))                                       ; integer powers stay real; odd roots go principal
- (0.0 = (sine 0) / (cosine 0)) (gem? (sine 0)))                                   ; tan 0 = 0
+ (27 = (3 3)) (7625597484987 = (3 3 3)) (16 = (2 2 2)) (65536 = (2 2 2 2)) ; tetration
+ (-1 = i * i) (-1 = (2 i)) (1 = ((i * 0) e))                               ; i^2 = -1; e^(i*0) = 1
+ ((log -1) = i * pi) ((log i) = i * pi / 2)                                ; euler, in the exact direction
+ (twin? (log -1)) (gem? (log 2)) (twin? (log (2 ~ 3)))                     ; log widens only when it must
+ (i = ((1 / 2) -1)) ((0 ~ 2) = ((1 / 2) -4))                               ; sqrt of a negative: principal, exact
+ (-8 = (3 -2)) (twin? ((1 / 3) -8))                                        ; integer powers stay real; odd roots go principal
+ (0.0 = (sine 0) / (cosine 0)) (gem? (sine 0)))                            ; tan 0 = 0
 
 ; --- complex --- a scalar at tier C; the `~` sigil, two lanes: spaced, (re ~ im) builds
 ; (twin re im) at the tightest band; glued, ~x lifts a real or conjugates (an involution); i = (0 ~ 1). a rank-N complex array packs (re,im)
@@ -425,7 +425,7 @@
  (@(2 4 6) = @(1 2 3) * 2) (gem-tray = (tier ((star-tray '(2) 0) + 1.5))) (star-tray = (tier ((star-tray '(3) 0) < 1)))
  (60 = (net @(10 20 30))) (30 = (max @(10 30 20))) (5 = (net 5)) (aall (1 < 2))
  (@(0 1 2) = (iota 3)) (star-tray = (tier (iota 3))) !(iota 0) !(iota -1) (4950 = (net (iota 100)))   ; iota: jot's range as a z-array
- (aall (@(2.0 3.0) = ((/ 1 2) @(4.0 9.0)))) (@(3.5 5.5) = @(7 11) / 2) (@(3 5) = @(7 11) // 2)
+ (aall (@(2.0 3.0) = ((1 / 2) @(4.0 9.0)))) (@(3.5 5.5) = @(7 11) / 2) (@(3 5) = @(7 11) // 2)
  (@(4 6) = @(8 12) / 2) !(star-tray '(3) 0) ("@(10 20 30)" = show @(10 20 30))
  (aall (@(10 20 30) = (array 3 10 20 30))) !(@(1 2 3) + @(1 2))
  (0 = (@(1 2 3) = @(1 2))) (0 = ('sym = @(1 2 3))) (0 = ("ab" = @(1 2)))   ; a shape/kind mismatch is 0
@@ -452,7 +452,7 @@
  (() = ((array '(2) (200 2) (200 2)) & @(255 255)))              ; ...nor an object tray: boxed cells, not words
  (: m @(1 3 5 7 9) (aall (@(0 1 1 1 0) = ((m > 2) & (m < 8)))))  ; masks combine: the everyday customer
  (: M (inner (star-tray '(2 3) '(1 2 3 4 5 6)) (star-tray '(3 2) '(7 8 9 10 11 12)))  ; 2x2 matmul
-    (&& ('(2 2) = (shape M)) (154 = (peep M '(1 1) 0)))) !(inner @(1 2 3) @(1 2))
+    (('(2 2) = (shape M)) && (154 = (peep M '(1 1) 0)))) !(inner @(1 2 3) @(1 2))
  ; a tray is immutable, so pin answers a fresh one -- one slot replaced, the rest copied
  (@(1 9 3) = (pin @(1 2 3) 1 9)) (: v @(1 2 3) _ (pin v 1 9) (@(1 2 3) = v))
  (@(7.0 2.5) = (pin @(1.5 2.5) 0 7))                       ; the value converts to the tray's tier, as the ctor's fill does
@@ -513,15 +513,15 @@
  ; the line the predicates draw is binding: a mint binds and captures like a spelled symbol
  ; ((: m 5 (1 + m)) is 6 through a minted m), () binds nothing and reads back as itself.
  (: m (mint 0) s (nom "x")
-    (&& (&& (mint? m) !(name? m)) (&& (name? s) !(mint? s))))
+    ((&& (mint? m) !(name? m)) && (&& (name? s) !(mint? s))))
  (&& !(mint? 'x) (&& !(mint? "x") (&& !(mint? 0) !(mint? '(1 2)))))
- (&& ("" = (string (mint 0))) ("" = (string ())))   ; the anonymous ones spell empty
- (: m (mint 0) (= m (m 5))) ('xyz = ('xyz 1))   ; a point applied answers itself, named or not
- ((mint 0) != (mint 0)) (: m (mint 0) (m = m))                 ; distinct always; itself only
- (nom? (nom "x")) (name? (nom "x")) !(mint? (nom "x")) (name? 'x) !(two? (nom "x"))   ; `nom` answers an interned symbol: nom? AND name?, an ATOM, never a chain
- ('x = (nom "x")) ('x = (nom 'x)) ('x = (2 nom "x"))  ; nom interns: an idempotent projection to the kind
- ((mint 0) < 'x)                                 ; within the symbol band: an anonymous one below a spelled one
- ((mint 0) < 0)                                  ; the blue floor: every symbol sits below the numbers (true-blue)
+ (("" = (string (mint 0))) && ("" = (string ())))                                   ; the anonymous ones spell empty
+ (: m (mint 0) (m = m 5)) ('xyz = ('xyz 1))                                         ; a point applied answers itself, named or not
+ ((mint 0) != (mint 0)) (: m (mint 0) (m = m))                                      ; distinct always; itself only
+ (nom? (nom "x")) (name? (nom "x")) !(mint? (nom "x")) (name? 'x) !(two? (nom "x")) ; `nom` answers an interned symbol: nom? AND name?, an ATOM, never a chain
+ ('x = (nom "x")) ('x = (nom 'x)) ('x = (2 nom "x"))                                ; nom interns: an idempotent projection to the kind
+ ((mint 0) < 'x)                                                                    ; within the symbol band: an anonymous one below a spelled one
+ ((mint 0) < 0)                                                                     ; the blue floor: every symbol sits below the numbers (true-blue)
  (: a (mint 0) b (mint 0) t (tablet 0) _ (pin t a 1) _ (pin t b 2)
     (&& (1 = (t a)) (2 = (t b)) (2 = #t)))      ; distinct mints are distinct map keys
  (97 = ("abc" 0)) (294 = $"abc") (3 = #"abc") (4 = $3.9) (0 = $-3.9) (7 = $@(3 4)) (5 = (abs -5)) (5.0 = (abs @(3 4)))
@@ -534,12 +534,12 @@
  ("" = (snip "abc" 1 1)) ("" = (snip "" 0 5)) (0 = (snip 0 0 5))
  ("" = "" + "") ("" = "ab" * 0) ("" = (string ())) ("" = (string ""))
  ("" = slurp (jug 0)) ("" = slurp (tap ())) ("" = slurp 42)
- ("" = (puts "")) (0 = (puts 0))                 ; ..and an empty operand writes nothing, answering itself
- ("abcd" = ("ab" "cd")) ("abcdef" = ("ab" "cd" "ef")) (: a "ab" b "cd" ((a b) = (+ a b)))   ; juxtaposition joins text, curried, no literal needed
- !("abc" -1) !("abc" -3) !("abc" 3)                     ; a negative index is out of range, the same as one past the end
- ("aXcd" = (pin "abcd" 1 88)) (: s "abcd" _ (pin s 1 88) ("abcd" = s))   ; pin answers a fresh text; the original is untouched
- ("abcd" = (pin "abcd" 9 88)) ("abcd" = (pin "abcd" -1 88)) ("abcd" = (pin "abcd" 1 'x))  ; out of range / a non-byte is the no-op (from-the-end is APPLY's alone)
- ("ab" = ("ab" "")) ("ab" = ("" "ab")) ("" = ("" "")) ("abcd" = ("ab" 'cd)) !("ab" '(1 2))         ; "" is the unit; a point is text; a non-text operand is ()
+ ("" = (puts "")) (0 = (puts 0))                                                           ; ..and an empty operand writes nothing, answering itself
+ ("abcd" = ("ab" "cd")) ("abcdef" = ("ab" "cd" "ef")) (: a "ab" b "cd" ((a b) = (a + b)))  ; juxtaposition joins text, curried, no literal needed
+ !("abc" -1) !("abc" -3) !("abc" 3)                                                        ; a negative index is out of range, the same as one past the end
+ ("aXcd" = (pin "abcd" 1 88)) (: s "abcd" _ (pin s 1 88) ("abcd" = s))                     ; pin answers a fresh text; the original is untouched
+ ("abcd" = (pin "abcd" 9 88)) ("abcd" = (pin "abcd" -1 88)) ("abcd" = (pin "abcd" 1 'x))   ; out of range / a non-byte is the no-op (from-the-end is APPLY's alone)
+ ("ab" = ("ab" "")) ("ab" = ("" "ab")) ("" = ("" "")) ("abcd" = ("ab" 'cd)) !("ab" '(1 2)) ; "" is the unit; a point is text; a non-text operand is ()
  ('asdf = (intern "asdf")) !((mint 0) = (mint 0)) ("asdf" = (string 'asdf))
  ('xy = (intern (string 'xy)))                   ; ..so intern . string is the identity on an interned symbol
  ("\"a\\nb\"" = show "a\nb"))
@@ -651,26 +651,26 @@
  ('(1 (\ x) 3) = [1 ''x 3]) ('(1 2 3 4) = (: xs '(2 3) ('(1) + xs + '(4))))
  (532 = $"hello") (5 = (tally "hello")) (42 = $42) (1 = !0) (0 = !5) !!5
  (i = (0 ~ 1)) ((2 ~ 3) = (twin 2 3)) ('~x = '(mono (~ x))) (~5 = (conj 5)) (5 = #"hello") (lit? dot)
- ("(# x)" = (show (opfix '(# x)))) ('! = (caup '(a ! b)))   ; a monadic-only sigil has no row, so opfix hands the plain symbol to the function (cmp via show: internal forms stay 0-tailed); quotes stay data
- (: was (grip 2 '^ -60) t (opfix '(a ^= b)) back (grip 2 '^ was)     ; a spaced sigil is one whole
-    (&& (back = -60) (t = '(^= a b))))                                   ;   name: ^'s row never splits ^=
- (6 = ((\ x' (x' + 1)) 5)) (nom? 'ab') (7 = (: n' 7 n'))   ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
- (5 = --5) (5 = ++5) (-5 = ---5) (: x 5 (-5 = -x))   ; + and - are runs: --5 is -(-5), -x is negate x -- symmetric with !!5 / !x
- (-3 = -3) (-0.5 = -.5) (5 = (2 - -3))               ; ...and a digit or . after them still starts a numeral (the whole exception)
- ([1 2 3] = (list 1 2 3)) ([] = (list)) (1 = ({'a 1} 'a))     ; the opener carries the wrap: [ is list, { is the map
- ([[1 2] [3 4]] = (list (list 1 2) (list 3 4))) (-[1 2] = -(list 1 2))  ; ...to any depth, and it glues like a form does
- ((show (cap (sound "{'a 1}"))) = (show '(hash 'a 1)))              ; a hash compares by identity, so the law is on the form
- (@[1 2 3] = @(1 2 3)) (1 = ({'a 1} 'a))                     ; a constructor sigil renames the opener's wrap
- ('(\ (list a b)) = (cap (sound "'[a b]")))                  ; ...but ' is not one: it quotes the form
- (3 = 1 + 2) (7 = 1 + 2 * 3) (1 < 2 ? 'big) ('small = (? (2 < 1) 'big 'small))  ; ? is dyadic: infix takes one arm ((< 1 2) binds first at 40), an else arm is the prefix cond
- (-4 = 1 - 2 - 3) (1 = 8 / 4 / 2)                ; the left hand: ((1 - 2) - 3), ((8 / 4) / 2)
- (: was (grip 2 '<+> -60) t (opfix '(a <+> b <+> c)) _ (grip 2 '<+> was)   ; the grip door,
-    (&& (was = ()) (t = '(<+> (<+> a b) c))))     ;   restored inside the form: the next one reparses
- ('(1 2 3) = 1 . 2 . '(3))                     ; ... while a right-handed band still folds right
- ((1 . 2) = (. 1 2)) ("(1 . 2)" = (show (1 . 2)))     ; `.` is . under its other name --
- ((1 . 2) @ (a . b) (a = 1 && b = 2) _ 0)                            ;   valid in a pattern too, and
- ((1 . 2) @ (a . b) (a = 1 && b = 2) _ 0)                            ;   the two spellings interchange
- ((1 . 2 . 3) = (1 . 2 . 3)) (3 = tally '(1 . 2))                  ;   the pair reads and prints, but a
+ ("(# x)" = (show (opfix '(# x)))) ('! = (caup '(a ! b)))                      ; a monadic-only sigil has no row, so opfix hands the plain symbol to the function (cmp via show: internal forms stay 0-tailed); quotes stay data
+ (: was (grip 2 '^ -60) t (opfix '(a ^= b)) back (grip 2 '^ was)               ; a spaced sigil is one whole
+    (back = -60 && t = '(^= a b)))                                             ;   name: ^'s row never splits ^=
+ (6 = ((\ x' (x' + 1)) 5)) (nom? 'ab') (7 = (: n' 7 n'))                       ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
+ (5 = --5) (5 = ++5) (-5 = ---5) (: x 5 (-5 = -x))                             ; + and - are runs: --5 is -(-5), -x is negate x -- symmetric with !!5 / !x
+ (-3 = -3) (-0.5 = -.5) (5 = (2 - -3))                                         ; ...and a digit or . after them still starts a numeral (the whole exception)
+ ([1 2 3] = (list 1 2 3)) ([] = (list)) (1 = ({'a 1} 'a))                      ; the opener carries the wrap: [ is list, { is the map
+ ([[1 2] [3 4]] = (list (list 1 2) (list 3 4))) (-[1 2] = -(list 1 2))         ; ...to any depth, and it glues like a form does
+ ((show <(sound "{'a 1}")) = (show '(hash 'a 1)))                              ; a hash compares by identity, so the law is on the form
+ (@[1 2 3] = @(1 2 3)) (1 = ({'a 1} 'a))                                       ; a constructor sigil renames the opener's wrap
+ ('(\ (list a b)) = <(sound "'[a b]"))                                         ; ...but ' is not one: it quotes the form
+ (3 = 1 + 2) (7 = 1 + 2 * 3) (1 < 2 ? 'big) ('small = (? (2 < 1) 'big 'small)) ; ? is dyadic: infix takes one arm ((< 1 2) binds first at 40), an else arm is the prefix cond
+ (-4 = 1 - 2 - 3) (1 = 8 / 4 / 2)                                              ; the left hand: ((1 - 2) - 3), ((8 / 4) / 2)
+ (: was (grip 2 '<+> -60) t (opfix '(a <+> b <+> c)) _ (grip 2 '<+> was)       ; the grip door,
+    (was = () && t = '(<+> (<+> a b) c)))                                      ;   restored inside the form: the next one reparses
+ ('(1 2 3) = 1 . 2 . '(3))                                                     ; ... while a right-handed band still folds right
+ ((1 . 2) = (. 1 2)) ("(1 . 2)" = (show (1 . 2)))                              ; `.` is . under its other name --
+ ((1 . 2) @ (a . b) (a = 1 && b = 2) _ 0)                                      ;   valid in a pattern too, and
+ ((1 . 2) @ (a . b) (a = 1 && b = 2) _ 0)                                      ;   the two spellings interchange
+ ((1 . 2 . 3) = (1 . 2 . 3)) (3 = tally '(1 . 2))                              ;   the pair reads and prints, but a
                                                                      ;   quoted (1 . 2) is data: a 3-list
  (3 = abs -3) (66 = (2 + 3 4))                   ; application binds tighter than infix: (= 3 (abs -3)), (+ 2 (3 4))
  (1 = (3 != 4)) (0 = (3 != 3)) (: t (opfix '(a != b && c)) (t = '(&& (!= a b) c)))  ; != is a plain
@@ -682,10 +682,10 @@
  (1 = <'(1 2 3)) (2 = <>'(1 2 3)) ('(3) = >>'(1 2 3))   ; glued runs are monadic
  (6 = +'(1 2 3)) (-1 = +'(-2 1)) (24 = *'(1 2 3 4))     ; +/ and */ -- the net, unclamped
  (5 = |-5) (-3 = -(1 + 2)) (0.25 = /4) (1 = ?7) (0 = ?"")
- (3 = (+ 1 2)) (1 = ((< 5) 9))                   ; spaced head = prefix call; the section
- (0 = (: mr '(to 0) (<mr = 'lin))) (3 = (:(+ 1 2)))   ; head fuses ((<mr = 'lin)=(= (cap mr) 'lin)); : cannot factor, so it falls back
- ('(mono (< x)) = (caup (cap (sound '(40 102 32 60 120 41)))))  ; the emission, data-lane
- (7 = (+ 1 2, + 3 4)) (3 = (1 ,, 3, )) (7 = (, 6 7))   ; the comma layer: clauses in sequence, the last answers; empties drop
+ (3 = (1 + 2)) (1 = ((< 5) 9))                            ; spaced head = prefix call; the section
+ (0 = (: mr '(to 0) (<mr = 'lin))) (3 = (:(1 + 2)))       ; head fuses ((<mr = 'lin)=(= (cap mr) 'lin)); : cannot factor, so it falls back
+ ('(mono (< x)) = (caup <(sound '(40 102 32 60 120 41)))) ; the emission, data-lane
+ (7 = (+ 1 2, + 3 4)) (3 = (1 ,, 3, )) (7 = (, 6 7))      ; the comma layer: clauses in sequence, the last answers; empties drop
  (12 = (foldl (+) 0 '(3 4 5))))
 ; the compile tables (operators/pureset) are off the book post-birth --
 ; mopped beside macros (a live pin into a compile table would poison every later
@@ -703,7 +703,7 @@
  ; the false answer is the unit, never a 0-fossil: a && with any failing
  ; operand, or a || with none passing, reads () -- blue like 0, but
  ; nothing, not a number
- ((&& () 5) = ()) ((&& 1 0 3) = ()) ((|| () ()) = ()) ((|| () 0) = ())
+ ((() && 5) = ()) ((&& 1 0 3) = ()) ((() || ()) = ()) ((() || 0) = ())
  (2 = (|| 0 2 3)) ('(1 2 3) = [1 2 3]) (6 = (do 1 2 6)) (3 = (let a 1 b 2 (a + b)))
  (1 = (quote 1)) ('a = (quote a))                                  ; quote, the macro spelling of '
  (3 = (:- (a + b) a 1 b 2)) ('big = (?- 'else (1 < 2) 'big)) (9 = ((<=< (+ 1) (x \ x * 2)) 4))

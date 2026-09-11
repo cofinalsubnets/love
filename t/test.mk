@@ -1124,6 +1124,12 @@ $(eval $(call uu_corpus,uuvallaw,law2uu,t/law.l))
 test_wake: $(ho)/love
 	@echo TEST wake "(the woken-image lane)"
 	@cp $(ho)/love $(ho)/love.wake && $(ho)/love.wake bake
+	@# ..and that it woke AT ALL. a refused image is not an error: love boots the egg
+	@# instead, which is a correct boot of a smaller vocabulary -- same answers, no
+	@# crew, and fast enough that the clock below cannot tell. the crew is the tell.
+	@if ! $(ho)/love.wake -q -e "(quit (nil? (cite 'cook)))"; \
+	  then echo "test_wake: the baked image was REFUSED -- this is an egg boot"; \
+	       rm -f $(ho)/love.wake; exit 1; fi
 	@cat t/00-init.l t/uu.l > $(ho)/wake-corpus.l
 	@if timeout 60 $(ho)/love.wake $(ho)/wake-corpus.l > /dev/null 2>&1; \
 	  then echo "test_wake: green (the woken image checks uu at speed)"; rm -f $(ho)/love.wake $(ho)/wake-corpus.l; \

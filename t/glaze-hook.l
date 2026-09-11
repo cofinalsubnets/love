@@ -23,31 +23,31 @@
     (9000000000000000000 = (ev '((\ x (* x x)) 3000000000)))        ; embedded leaf, applied inline -> deopt -> bignum
     (3 = (ev '(: g (\ x (cap x)) (g '(3 4)))))                      ; chain body -> the amble lane owns it now, still right
     ; --- an embedded float-result leaf: native gem box at creation, == interp, deopts on a non-float arg ---
-    (: n (peep fires () 0)  fr (ev '(: f (\ x (+ (* x 1.5) 2.0)) f))   ; f built by ala -> the float lane fires
-       (&& (gem? (fr 4)) (8.0 = (fr 4)) (= (fr 4) ((\ x (+ (* x 1.5) 2.0)) 4))   ; boxes a gem, == the interpreter
-           (fired? n) (= (fr 'nope) ((\ x (+ (* x 1.5) 2.0)) 'nope))))   ; ... the hook fired, and a non-float arg deopts == interp
+    (: n (peep fires () 0)  fr (ev '(: f (\ x (+ (* x 1.5) 2.0)) f))         ; f built by ala -> the float lane fires
+       (&& (gem? (fr 4)) (8.0 = (fr 4)) (fr 4 = ((\ x ((x * 1.5) + 2.0)) 4)) ; boxes a gem, == the interpreter
+           (fired? n) (fr 'nope = ((\ x ((x * 1.5) + 2.0)) 'nope))))         ; ... the hook fired, and a non-float arg deopts == interp
     ; --- an embedded N-VAR loop (iterative fib i,a,b): native back-edge at creation, == interp ---
     (: n (peep fires () 0)  fib (ev '(: f (\ m ((: (go i a b) (? (< i m) (go (+ i 1) b (+ a b)) a)) 0 0 1)) f))
-       (&& (55 = (fib 10)) (fired? n)                                       ; the hook owned the loop; fib(10)=55
-           (= (fib 20) ((\ m ((: (go i a b) (? (< i m) (go (+ i 1) b (+ a b)) a)) 0 0 1)) 20))   ; == the interpreter
-           (= (fib 100) ((\ m ((: (go i a b) (? (< i m) (go (+ i 1) b (+ a b)) a)) 0 0 1)) 100))))  ; ... and past fixnum: cf-deopt's bignum matrix path == interp
+       (&& (55 = (fib 10)) (fired? n)                                                            ; the hook owned the loop; fib(10)=55
+           (fib 20 = ((\ m ((: (go i a b) (? (i < m) (go (i + 1) b (a + b)) a)) 0 0 1)) 20))     ; == the interpreter
+           (fib 100 = ((\ m ((: (go i a b) (? (i < m) (go (i + 1) b (a + b)) a)) 0 0 1)) 100)))) ; ... and past fixnum: cf-deopt's bignum matrix path == interp
     ; --- an embedded capturing closure: native captured closure, transparent ---
-    (: mk (ev '(\ y (\ x (+ x y))))  a5 (mk 5)                      ; inner (\ x (+ x y)) is the embedded one
-       (&& (15 = (a5 10)) ('(6 7 8) = (map a5 '(1 2 3)))            ; native captured closure, composes
-           (= a5 ((\ y (\ x (+ x y))) 5))))                         ; ... and = the interpreter's instance
+    (: mk (ev '(\ y (\ x (+ x y))))  a5 (mk 5)           ; inner (\ x (+ x y)) is the embedded one
+       (&& (15 = (a5 10)) ('(6 7 8) = (map a5 '(1 2 3))) ; native captured closure, composes
+           (a5 = ((\ y (\ x (x + y))) 5))))              ; ... and = the interpreter's instance
     ; --- == + transparency on an embedded capturing leaf pulled out as a value ---
     ; (the leaf must CAPTURE (z) -- a closed leaf like (\ x (+ x 0)) hoists to a shared
     ; constant, so (id 9) twice is one object; a capturing one is allocated per call.
-    (: id (ev '(\ z (\ x (+ x z))))  f (id 9)  g (id 9)            ; inner captures z -> a fresh native cell per call
-       (&& (19 = (f 10)) (= f ((\ z (\ x (+ x z))) 9)))) ; computes right, = the interp instance
+    (: id (ev '(\ z (\ x (+ x z))))  f (id 9)  g (id 9)  ; inner captures z -> a fresh native cell per call
+       ((19 = (f 10)) && (f = ((\ z (\ x (x + z))) 9)))) ; computes right, = the interp instance
     ; --- the self seam: a letrec name recurs natively -- a tail call re-enters as a loop,
     ; a non-tail call takes the direct self frame; a captured import re-supplies through both
     (: n (peep fires () 0)
        r (ev '(: (sum f z l) (? (two? l) (sum f (f z (cap l)) (cup l)) z) (sum (\ a x (+ a (* x x))) 0 '(1 2 3 4))))
-       (&& (30 = r) (fired? n)))
+       ((30 = r) && fired? n))
     (: n (peep fires () 0)
        r (ev '(: p 7 (f k) (? (< 0 k) (+ p (f (- k 1))) 0) (f 3)))
-       (&& (21 = r) (fired? n)))
+       ((21 = r) && fired? n))
     ; --- the generic = stays native and right across kinds: points inline, structure drives
     (: n (peep fires () 0)
        mem (ev '(: (mem x l) (? (two? l) (? (= x (cap l)) 1 (mem x (cup l))) 0) mem))
@@ -62,12 +62,12 @@
     (: n (peep fires () 0)
        dw (ev '(: (dw x l) (? (two? l) (: h (cap l) t (cup l) (? (= h x) 1 (dw x t))) 0) dw))
        (&& (fired? n) (1 = (dw 'b '(a b c))) (0 = (dw 'z '(a b c))) (0 = (dw 3 ()))
-           (= (dw 2.0 '(1 2)) ((\ x l (? (two? l) (: h (cap l) t (cup l) (? (= h x) 1 (dw x t))) 0)) 2.0 '(1 2)))))
+           (dw 2.0 '(1 2) = ((\ x l (? (two? l) (: h <l t >l (? (h = x) 1 (dw x t))) 0)) 2.0 '(1 2)))))
     ; --- the owned op set widens: // % & | ^ (fixnum-guarded, trunc toward zero), == interp
     (: n (peep fires () 0)
        h (ev '(: (h a b) (? (< 0 b) (+ (+ (// a b) (% a b)) (+ (& a b) (+ (| a b) (^ a b)))) 0) h))
-       i (\ a b (+ (+ (// a b) (% a b)) (+ (& a b) (+ (| a b) (^ a b)))))
-       (&& (fired? n) (= (h 17 5) (i 17 5)) (= (h -17 8) (i -17 8)) (0 = (h 17 0))))
+       i (\ a b (((a // b) + (a % b)) + ((& a b) + ((| a b) + (^ a b)))))
+       (&& (fired? n) (h 17 5 = i 17 5) (h -17 8 = i -17 8) (0 = (h 17 0))))
     ; --- an inner lambda in a driver body: the site builds the closure natively (lz's chain
     ; over the frame's imports), fresh per evaluation, = the interpreter's instance; a
     ; closed one is the shared cell. the inner bodies here decline every lane (a show call
@@ -76,12 +76,12 @@
        ad (ev '(: (ad f l) (? (two? l) (. (f (\ x (+ (tally (show x)) (cap l)))) (ad f (cup l))) ()) ad))
        cs (ad (\ g g) '(1 2))
        (&& (fired? n) ('(4 5 6) = (ad (\ g (g 100)) '(1 2 3)))
-           !(= (cap cs) (cap (cup cs)))
-           (= (cap cs) ((\ l (\ x (+ (tally (show x)) (cap l)))) '(1 2)))))
+           !(cap cs = cap >cs)
+           (cap cs = ((\ l (\ x (tally (show x) + cap l))) '(1 2)))))
     (: n (peep fires () 0)
        ac (ev '(: (ac f l) (? (two? l) (. (f (\ x (+ (tally (show x)) 1))) (ac f (cup l))) ()) ac))
        cs (ac (\ g g) '(1 2))
-       (&& (fired? n) ('(2 2) = (ac (\ g (g 5)) '(1 2))) (= (cap cs) (cap (cup cs)))))
+       (&& (fired? n) ('(2 2) = (ac (\ g (g 5)) '(1 2))) (cap cs = cap >cs)))
     ; --- the negations, a cond chain, and an inlined sibling's mint-bound arg: (nil? x) is
     ; (? x 0 1), (? c a c2 b e) nests, and cprop's (: <mint> (arg) body) binds like a name --
     ; the shapes holo's layout loop is made of
@@ -93,10 +93,10 @@
                                   (: r (cap (cap p)) (lay (cup p) (. r acc))))
                    lay))
        (&& (fired? n) ('(add 4 mov) = (lay '((label a) (add) (align 4) (mov)) ()))
-           (= (lay '((x) (align 2)) ()) '(x 2))))
+           (lay '((x) (align 2)) () = '(x 2))))
     ; --- the leaf grammar is exact-arity: (+ x 1 2) is the tower ((+ x 1) 2), never x + 1
     (: f (ev '(\ x (+ x 1 2)))  g (\ x (+ x 1 2))
-       (&& (16 = (f 3)) (= (f 3) (g 3)) (= (f 5) (g 5))))
+       (&& (16 = (f 3)) (f 3 = g 3) (f 5 = g 5)))
     ; ... and under a named-let whose loop var shadows the frame: the site's import renames with it
     (: n (peep fires () 0)
        mk (ev '(\ l ((: (go l acc) (? (two? l) (go (cup l) (. (\ y (* y (tally (show (cap l))))) acc)) acc)) l ())))
@@ -113,7 +113,7 @@
     ;     machine word, so the amble must decline the body rather than lay it truncated. the
     ;     answer is the whole number, never a wrapped negative -- and the sign both ways.
     (: f (ev '(\ x (: y 6000000000000000000 (+ x y))))
-       (&& (6000000000000000000 = (f 0)) (= (f 0) ((\ x (: y 6000000000000000000 (+ x y))) 0))))
+       ((6000000000000000000 = (f 0)) && (f 0 = ((\ x (: y 6000000000000000000 (x + y))) 0))))
     (: f (ev '(\ x (: y -6000000000000000000 (+ x y))))
        (-6000000000000000000 = (f 0)))
     (: f (ev '(\ n (: (go i a) (? (< i n) (go (+ i 1) 6000000000000000000) a) (go 0 0))))
@@ -126,13 +126,13 @@
     ;     the collected cons all come back right, and no call runs twice
     (: n (peep fires () 0)
        f (ev '(: (g h m) (? (< m 1) () ((h m) . (g h (- m 1)))) g))
-       (&& (fired? n) (= '(9 4 1) (f (\ x (* x x)) 3))))                   ; a cons after the non-tail self-call
+       (fired? n && ('(9 4 1) = f (\ x (x * x)) 3)))                   ; a cons after the non-tail self-call
     (: n (peep fires () 0)
        f (ev '(: (g h m) (? (< m 1) 0 (+ (h m) (g h (- m 1)))) g))
-       (&& (fired? n) (= 12000000000000000000 (f (\ _ 4000000000000000000) 3))))   ; the sum overflows past the call: the + stub answers the bignum
+       (fired? n && (12000000000000000000 = f (\ _ 4000000000000000000) 3)))   ; the sum overflows past the call: the + stub answers the bignum
     (: n (peep fires () 0)
        f (ev '(: (g h m) (? (< m 1) 0 (? (h m) (+ 1 (g h (- m 1))) (g h (- m 1)))) g))
-       (&& (fired? n) (= 2 (f (\ x (? (= x 2) () (list x))) 3))))            ; a heap truth on the call's answer: the bit stub decides
+       (fired? n && (2 = f (\ x (? (x = 2) () (list x))) 3)))            ; a heap truth on the call's answer: the bit stub decides
     ; ... and the stub's bit is the glaze's own, whatever the book binds to the name (a spliced
     ;     module may export one): a nil in a let slot still reads false
     (: old bit
@@ -141,33 +141,33 @@
        f (ev '(: (g h m) (: y (? (< m 1) (h m) ()) (? y 8 9)) g))
        r (f (\ x x) 1)
        _ (ev (list ': 'bit (list 'quote old)))
-       (&& (fired? n) (= 9 r) (= 0 (bit ()))))
+       (&& (fired? n) (9 = r) (0 = bit ())))
     (: o (jug 0) k {0}
        f (ev '(: (g h m) (? (< m 1) 0 (+ (h m) (g h (- m 1)))) g))
-       _ (f (\ x (: _ (pin k 0 (+ 1 (peep k 0 0))) _ (put o (+ 97 x)) 4000000000000000000)) 3)
-       (&& (= 3 (peep k 0 0)) (= "dcb" (slurp o))))                          ; three calls, three effects -- the overflow past them replayed none
+       _ (f (\ x (: _ (pin k 0 (1 + peep k 0 0)) _ (put o (97 + x)) 4000000000000000000)) 3)
+       ((3 = peep k 0 0) && ("dcb" = slurp o)))                          ; three calls, three effects -- the overflow past them replayed none
     ; ... and the lane keeps the calls no restart can reach -- nothing deopts after this one
     (: n (peep fires () 0)
        f (ev '(: (go i m a) (? (< i m) (go (+ i 1) m (tally (show (+ a i)))) a) go))
-       (&& (fired? n) (2 = (f 0 20 0))))
+       (fired? n && (2 = (f 0 20 0))))
     ; --- a literal divisor never divides: a power of two shifts, any other rides its magic
     ;     multiply (mulh), and both truncate toward zero as the interpreter does -- the sign both
     ;     ways, on the leaf, the loop and the amble
     (: n (peep fires () 0)
        f (ev '(\ x (+ (* 100 (// x 7)) (% x 7))))
-       (&& (fired? n) (= '(-1401 -1 0 1 1401 20000 -20000) (map f '(-99 -1 0 1 99 1400 -1400)))))
+       (fired? n && ('(-1401 -1 0 1 1401 20000 -20000) = map f '(-99 -1 0 1 99 1400 -1400))))
     (: n (peep fires () 0)
        f (ev '(\ x (+ (* 10000 (// x 4096)) (% x 4096))))
-       (&& (fired? n) (= '(-241695 -10000 -4095 -1 0 4095 10000 241695) (map f '(-99999 -4096 -4095 -1 0 4095 4096 99999)))))
+       (fired? n && ('(-241695 -10000 -4095 -1 0 4095 10000 241695) = map f '(-99999 -4096 -4095 -1 0 4095 4096 99999))))
     (: n (peep fires () 0)
        f (ev '(\ x (+ (* 1000 (// x 1000003)) (% x 1000003))))
-       (&& (fired? n) (= '(-3001 -1000 -1000002 0 1000002 1000 3001) (map f '(-3000010 -1000003 -1000002 0 1000002 1000003 3000010)))))
+       (fired? n && ('(-3001 -1000 -1000002 0 1000002 1000 3001) = map f '(-3000010 -1000003 -1000002 0 1000002 1000003 3000010))))
     (: n (peep fires () 0)
        f (ev '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (+ (% (- i 5) 4) (// (- i 5) 3)))) a)) 0 0)))
-       (&& (fired? n) (4 = (f 12))))
+       (fired? n && (4 = (f 12))))
     (: n (peep fires () 0)
        f (ev '(: (g h m) (? (< m 1) 0 (+ (% (h m) 4096) (+ (// (h m) 10) (g h (- m 1))))) g))
-       (&& (fired? n) (6504 = (f (\ x (- 1000 (* x (* x x)))) 12))))
+       (fired? n && (6504 = (f (\ x (1000 - (x * (x * x)))) 12))))
    )
 (: _ (puts "glaze-hook: ok -- the natjit creation hook (leaf, float, loop, capture, self, =, transparency)
 ") 0)

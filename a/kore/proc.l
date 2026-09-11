@@ -8,6 +8,7 @@
 ; (udur -- lawed in t/law/kore.l) and the mains.
 (module 'kore
 (borrow 'cli)
+(borrow 'path)
 (borrow 'posix)
 
 (:
@@ -242,19 +243,33 @@
 
    ; chroot DIR [CMD [ARG..]] -- LFS chapter 7 is this call. the root changes, the cwd
    ; follows it to /, and the command REPLACES us, so the only thing that returns here
-   ; is a failure. no CMD runs $SHELL, GNU's default, and /bin/sh when there is none.
+   ; is a failure.
+   ;
+   ; with no CMD the command is OUR OWN SHELL, not $SHELL and not /bin/sh: in an empty
+   ; root there is no /bin/sh to be had, and there does not need to be one -- lush's
+   ; verbs are in this binary, so an autonomous shell in a root with no files in it is
+   ; a whole userland. what that costs is an exec of an image the new root cannot name,
+   ; which is exactly what fexecve is for: the fd is opened HERE, before the root moves,
+   ; and names the image afterwards when no path does. a seat that cannot say where it
+   ; is (no selfpath) has no self to exec and falls back to the path it was given.
    (chroot-main as)
     (: _ (? (two? as) () (udie 1 "usage: chroot DIR [CMD [ARG..]]"))
        d <as
        _ (? (lit? (cite 'posix 'chroot)) () (udie 1 "chroot: no chroot on this seat"))
+       ; both of these are read BEFORE the root moves, and for the same reason:
+       ; selfpath is /proc/self/exe, and the new root has no /proc to read it from.
+       mypath (: p (selfpath 0) (? (string? p) p ()))
+       me (? mypath (open mypath "r") ())
        e (chroot d)
        _ (? e (udie 1 ("chroot: cannot change root to " + d + ": " + (show e))) ())
        ; the chdir is not tidiness. chroot moves the ROOT and leaves the cwd where it
        ; was -- outside the new tree -- and a relative path then walks out of the jail.
        _ (? (chdir "/") (udie 1 "chroot: cannot enter the new root") ())
+       self? (!(two? >as) && hot? me)
        cmd (? (two? >as) >as
+              self? [mypath "lush"]
               (: sh (getenv "SHELL") [(? (string? sh) sh "/bin/sh") "-i"]))
-       r (exec cmd)
+       r (self? ? (fexec me cmd) (exec cmd))
        (udie 127 ("chroot: cannot run " + <cmd + ": " + (show r))))
 
    ; the -o words that are FLAGS. anything else an -o can carry is filesystem text
@@ -278,7 +293,7 @@
     (: r (uread "/proc/self/mounts")
        _ (? (two? r) () (udie 1 "mount: cannot read /proc/self/mounts"))
        (go l) (? !(two? l) ()
-                 (: w (uwords <l)
+                 (: w (words <l)
                     _ (? (4 <= #w) (: _ (say out ((w 0) + " on " + (w 1) + " type " + (w 2)
                                                   + " (" + (w 3) + ")"))
                                       (put out 10))
@@ -291,6 +306,7 @@
        (: t (tablet 0)
           o (uopt as t '(116 111) '(101) ())
           _ (? (two? o) () (udie 1 "mount: -t and -o each want a value"))
+          _ (: c (uoptun t "to") (? (nil? c) () (udie 1 ("mount: unknown option -" + string c))))
           ty (: v (uoptv t 116) (? (string? v) v "auto"))
           ob (: v (uoptv t 111) (? (string? v) (umnt-bits (usplit 44 v) 0) 0))
           fs <>>o
@@ -338,12 +354,12 @@
        (lp k) (? (k < 0) -1 ((ln k) = 41) k (lp (k - 1)))
        (fp k) (? (n <= k) -1 ((ln k) = 40) k (fp (k + 1)))
        a (fp 0) b (lp (n - 1))
-       ; the pid is taken through uwords and not off the raw slice: `uatoi` reads
-       ; every charm it is handed, so the space before the "(" would go in as -16
+       ; the pid is taken through the word split and not off the raw slice: `uatoi`
+       ; reads every charm it is handed, so the space before the "(" goes in as -16
        (? ((a < 0) || ((b < 0) || (b < a))) ()
-          (: h (uwords (snip ln 0 a))
+          (: h (words (snip ln 0 a))
              (? !(two? h) ()
-                ((uatoi <h) . ((snip ln (a + 1) b) . (uwords (snip ln (b + 1) n))))))))
+                ((uatoi <h) . ((snip ln (a + 1) b) . (words (snip ln (b + 1) n))))))))
    (upstat pid)                        ; a pid -> its stat fields | ()
     (: r (uread (("/proc/" + (show pid)) + "/stat"))
        (? (two? r) (ustatf <>r) ()))
@@ -358,9 +374,9 @@
              o (go 0 "")
              z (tally o)
              (? (0 = z) () ((o (z - 1)) = 32) (snip o 0 (z - 1)) o))))
-   (ubase0 p) (: n (tally p)                       ; argv[0]'s basename, for pidof
-                 (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r n))
-                 (go 0 0))
+   ; argv[0]'s basename, for pidof -- the raw clip, since a kernel comm never
+   ; carries a trailing slash for posix's rule to strip
+   (ubase0 p) (snip p (lastslash p) #p)
 
    ; the two clocks. user_hz is 100 everywhere Linux runs a userland we could be in.
    (uclk s)                            ; a second count -> hh:mm:SS
@@ -392,7 +408,7 @@
                    (go k) (? (n <= k) -1 ((ln k) = 58) k (go (k + 1)))
                    i (go 0)
                    (? (i < 0) 0
-                      (: ws (uwords (snip ln (i + 1) n))
+                      (: ws (words (snip ln (i + 1) n))
                          (? (two? ws) (pin t (intern (snip ln 0 i)) (uatoi <ws)) 0))))
        _ (? (two? r) (foldl (\ _ ln (one ln)) 0 (lines <>r)) 0)
        t)
@@ -432,7 +448,12 @@
     (: m (umeminfo 0)
        (g k) (peep m k 0)
        div (? (elem "-g" as) 1048576 (? (elem "-m" as) 1024 1))
-       (cell x) (upad 12 (show (// x div)))
+       ; -h: the unit each number fits, procps' suffixes. the readings are KiB out of
+       ; /proc/meminfo, so the ladder starts at Ki
+       (hum k) (: (go v us) (? (v < 1024 || !(two? >us)) (show v + <us) (go (// v 1024) >us))
+                  (go k '("Ki" "Mi" "Gi" "Ti" "Pi")))
+       h? (elem "-h" as)
+       (cell x) (upad 12 (? h? (hum x) (show (// x div))))
        tot (g 'MemTotal) fre (g 'MemFree) av (g 'MemAvailable)
        bc (((g 'Buffers) + (g 'Cached)) + (g 'SReclaimable))
        st (g 'SwapTotal) sf (g 'SwapFree)
@@ -451,11 +472,11 @@
    ; of day is utc, for the reason `date` gives --
    (uptime-main as)
     (: r (uread "/proc/uptime")
-       secs (? (two? r) (: w (uwords <>r)
+       secs (? (two? r) (: w (words <>r)
                            (? (two? w) (uatoi <(usplit 46 <w)) 0))
               0)
        l (uread "/proc/loadavg")
-       ws (? (two? l) (uwords <>l) ())
+       ws (? (two? l) (words <>l) ())
        ld (? (2 < (tally ws)) ((((ws 0) + ", ") + ((ws 1) + ", ")) + (ws 2))
               "0.00, 0.00, 0.00")
        tod (uclk (% (// (clock 0) 1000) 86400))
@@ -490,6 +511,7 @@
     (: t (tablet 0)
        o (uopt as t () '(101) ())
        _ (? (two? o) () (udie 2 "usage: pgrep [-f] [-x] PATTERN"))
+       _ (: c (uoptun t "fx") (? (nil? c) () (udie 2 ("pgrep: unknown option -" + string c))))
        rest <>>o
        _ (? (two? rest) () (udie 2 "usage: pgrep [-f] [-x] PATTERN"))
        ps (upfind (peep t 102 0) (peep t 120 0) <rest)
@@ -502,6 +524,7 @@
        t (tablet 0)
        o (uopt rest t () '(101) ())
        _ (? (two? o) () (udie 2 "usage: pkill [-SIG] [-f] [-x] PATTERN"))
+       _ (: c (uoptun t "fx") (? (nil? c) () (udie 2 ("pkill: unknown option -" + string c))))
        ws <>>o
        _ (? (two? ws) () (udie 2 "usage: pkill [-SIG] [-f] [-x] PATTERN"))
        ps (upfind (peep t 102 0) (peep t 120 0) <ws)
@@ -540,7 +563,7 @@
        _ (? (nflag && (nn < 1)) (udie 1 "xargs: invalid -n") ())
        rest (? nflag >>as as)
        cmd (? (two? rest) rest '("echo"))
-       ws (uwords (slurp in))
+       ws (words (slurp in))
        (chunks k l) (? !(two? l) () (take k l . chunks k (drop k l)))
        runs (? !(two? ws) [()]                       ; no input still runs once, like GNU
                nn (chunks nn ws)

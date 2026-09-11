@@ -6,7 +6,7 @@
    law-corpus (law-flat + law-jot)
    ; a law is (nom . closure); it holds when every value answers the charm 1
    (law-bad f) (: (go l) (? (atom? l) ()
-                            (= 1 (f <l)) (go >l)
+                            (1 = f <l) (go >l)
                             [1 <l])                       ; (1 witness) -- presence, not the value
                   (go law-corpus))
    (law-run r) (: nom <r f <>r b (law-bad f)
@@ -95,7 +95,7 @@
       ['mul-tally-hom
        (\ x (? !(two? x) 1
                (: cs (list '(1 2) '(3) '(4 5 6) ())
-                  (ok? b) ((tally (x * b)) = (tally x * tally b))
+                  (ok? b) (#(x * b) = (tally x * tally b))
                   (all ok? cs))))]
       ['mul-dist
        (\ x (? (lit? x || coin? x) 1
@@ -118,7 +118,7 @@
       ['apply-is-id (x \ atom? x ? 1 (<x = (cap $ x)))]
       ; --- the traps claude.md states as laws, held to the same standard
       ['unit-f     (x \ : (g _) x (g = (g)))]             ; (f) == f: a nullary call is the value
-      ['curry      (x \ charm? x ? (((x +) 2) = (+ x 2)) 1)]
+      ['curry      (x \ charm? x ? (((x +) 2) = (x + 2)) 1)]
       ['seq        (x \ : y 1 y (y + 1) (y = 2))]         ; the sequence law: a rebind reads the previous
       ['empty-form (x \ ((:) = ()))])
    law-ok (foldl (\ a r (a + law-run r)) 0 law-rows)

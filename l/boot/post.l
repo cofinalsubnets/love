@@ -651,9 +651,9 @@
 ; glob -- fnmatch, pure love and no filesystem. the pattern law only: pathname
 ; expansion (readdir, the dotfile rule at the directory scan) stays in a/lush.l,
 ; where the substrate belongs. this half is a predicate over two strings, and more than
-; the shell asks it -- lush's case patterns, kore's find -name, the sb ignore law, the
-; selfpack walk. selfpack runs on love0, which carries no lush: that is why this is a
-; l/boot module and not an app one.
+; the shell asks it -- lush's case patterns, kore's find -name, the sb ignore law. sb
+; is catted without a/lush.l and cites this directly, which is why the pattern language
+; stands at the floor and not inside the shell that reads it most.
 ;
 ; patterns travel as (text . mask) -- the mask a parallel string of '1'/'0' bytes, '1'
 ; where the char came in unquoted (glob-live), '0' where a quote shielded it ('*' matches
@@ -702,6 +702,107 @@
       (bit (fm 0 0))))
 
 ) ; module glob
+
+; path -- the clips five callers were each writing for themselves, and one more scan
+; than the tree should hold. these are the PRIMITIVES, not the faces. make's $(dir) and posix's dirname disagree
+; about a bare name ("./" against "."), so a caller still spells its own face -- over
+; one scan rather than a sixth copy of it. its own FACE: never its own scan.
+;   (lastslash p) -> index just past the last '/', 0 for none
+;   (lastdot p)   -> index of the last '.' after that, #p for none
+;   (segs p)      -> the '/'-separated components, empties dropped
+;   (pclean l lim)-> that list cleaned, lim bounding how far '..' may climb out of it
+;   (pprefixes p) -> the directory prefixes of p, outermost first
+;
+; apart from glob because the callers say so: of the five that borrowed it for these,
+; three -- kiosko, serve and kore's basename/dirname -- never match a pattern at all.
+
+(module '(path lastslash lastdot segs pclean pprefixes)
+(: (lastslash p) ((: (go j) (0 < j ? (p (j - 1) = 47 ? j (go (j - 1))) 0)) #p)
+   (lastdot p) (: sl (lastslash p)
+                  ((: (go j) (j > sl ? (p (j - 1) = 46 ? (j - 1) (go (j - 1))) #p)) #p))
+   ; "/a/b/c" -> ("/a" "/a/b"). a leading '/' is not a prefix of its own and the leaf
+   ; is not one either, so `mkdir -p` is this walk plus whatever the caller does about
+   ; the leaf -- helm and papel make it, cpio deliberately does not. splitting on '/'
+   ; and rejoining would not do: it drops the leading slash, and /tmp/x becomes tmp/x.
+   (pprefixes p)
+    (: n #p
+       (go i acc) (? (n <= i) (rev acc)
+                     (0 < i && p i = 47) (go (i + 1) (snip p 0 i . acc))
+                     (go (i + 1) acc))
+       (go 0 ()))
+   (segs s) ((: (go i st acc)
+                (? (i >= #s) (rev (st < i ? (snip s st i . acc) acc))
+                   (s i = 47) (go (1 + i) (1 + i) (st < i ? (snip s st i . acc) acc))
+                   (go (1 + i) st acc))) 0 0 0)
+   ; no filesystem asked: '..' pops lexically, which is what make's $(abspath) means
+   ; and what a symlink makes a lie. a caller that needs the real thing asks the fs.
+   ; lim is the climb this caller allows -- how many leading '..' may survive:
+   ;   ()  unbounded, a '..' with nothing to pop stays one (the shell's own face)
+   ;   n   at most n survive; one that would climb past answers () -- REFUSED, not
+   ;       clamped, because a clamped path silently names a different file. a server
+   ;       rooting a request asks with 0 and answers the refusal 403.
+   ; a surviving '..' is not popped by the next one -- "a/../../b" climbs once and
+   ; stays (".." "b"). () answers both a refusal and an empty path, so a caller that
+   ; must tell them apart asks whether it handed anything in.
+   (pclean l lim)
+   ((: (go l acc up)
+       (? (one? l) (rev acc)
+          (<l = ".") (go >l acc up)
+          (<l = "..") (? (two? acc && <acc != "..") (go >l >acc up)
+                         (charm? lim && up >= lim) ()      ; the climb runs out: refused
+                         (go >l (".." . acc) (1 + up)))
+          (go >l (<l . acc) up)))
+    l () 0))
+
+) ; module path
+
+; lush 🐚 the word -- a word back into a command line, and the mask law's other half.
+; module 'lush begins here, at the floor, because the shell owns the idea of a shell
+; word and because two catted scripts that carry no a/lush.l still need one: sb reads
+; the ignore patterns, helm shows what a unit will run. what stands here is the part
+; with no substrate under it -- pure love, no filesystem and no shell -- and the rest
+; of the module, everything that reads a directory or runs a process, is a/lush.l's.
+;
+; the pair is a retraction and not a bijection -- many spellings say one word -- so the
+; law is one-sided: (sh-read (sh-show ws)) = ws for every ws, while (sh-show (sh-read s))
+; is a canonical s rather than s itself. the reading half is a/lush.l's lexer, and
+; t/host/sh.l is where the two are checked against each other.
+;   (sh-quote w)  -> the word as a shell reads it back: bare where it can be, in '..'
+;                    where it cannot. a word holding a newline keeps it.
+;   (sh-show ws)  -> the words as one line. the head of a line is where a keyword reads
+;                    as syntax, so it takes quotes there and nowhere else.
+
+(module 'lush
+(: ; the bare set: bytes no shell reads as anything but themselves, in any position
+   ; and under every expansion. ~ $ * ? [ ] { } \ ' " ` ( ) | & ; < > # ! and the
+   ; blanks are all out, and so is everything over 127 -- a locale may letter them.
+   (sh-tame? c) (97 <= c <= 122 || 65 <= c <= 90 || 48 <= c <= 57 || elem c "_-.,:/@+%=")
+   ; and two shapes whose bytes are tame and whose reading still is not: NAME=VAL is
+   ; an assignment in command position, and a leading = is zsh's command-path lookup
+   ; (`=x` there is /usr/bin/x, and a miss fails the whole line). both cost one pair
+   ; of quotes. `--port=8080` is neither: an assignment's name has to be a name.
+   (sh-namec? c i) (97 <= c <= 122 || 65 <= c <= 90 || c = 95 || 0 < i && 48 <= c <= 57)
+   (sh-plain? w)
+    (: n #w
+       (go i) (? (n <= i) 1 (w i = 61) 0 (sh-namec? (w i) i) (go (i + 1)) 1)
+       (go 0))
+   ; '..' holds every byte but ' itself, so that one leaves and comes back: a'b
+   ; quotes as 'a'\''b' -- three adjacent words to a reader, one to the shell
+   (sh-sqesc w) (cats (map (c \ c = 39 ? "'\\''" (string c)) (chars w)))
+   (sh-quote w) (? !#w "''"
+                   (all sh-tame? (chars w) && sh-plain? w) w
+                   ("'" + sh-sqesc w + "'"))
+   ; the one thing a word cannot judge alone: a keyword bare in command position is
+   ; syntax and not a command name, and `if x` opens an if. so the line is where it
+   ; is known, and a later word pays nothing -- `grep -w in f` keeps its `in`. every
+   ; one of these fails with a syntax error where an assignment fails in silence.
+   sh-kw '("if" "then" "else" "elif" "fi" "do" "done" "case" "esac"
+           "while" "until" "for" "in" "function" "select" "time")
+   (sh-qhead w)  (elem w sh-kw ? ("'" + w + "'") (sh-quote w))
+   (sh-qrest ws) (!(two? ws) ? "" (" " + sh-quote <ws + sh-qrest >ws))
+   (sh-show ws)  (!(two? ws) ? "" (sh-qhead <ws + sh-qrest >ws)))
+
+) ; module lush -- a/lush.l carries the rest
 
 ; kanren -- first-order unification + a lazy-colist search monad.
 ; a post-egg layer: prel stays the language, this registers as a module. needs prel and
@@ -1778,8 +1879,12 @@
                (: r (vsort s)
                 (ins x l) (l @- [x] (a . u) (string x < string a ? (x . l) (a . ins x u)))
                 (ins p r)))
-   _ (pin tab 'verbs (\ as (map putln * vsort $ keys tab,
-                            flush out)))
+   ; the lister reads nothing: --help says the one line, any other word is a mistake
+   _ (pin tab 'verbs
+        (\ as (? !(two? as) (map putln * vsort $ keys tab, flush out)
+                 (<as = "--help")
+                  (puts "usage: verbs   (the names this artifact answers to)\n", flush out, 0)
+                 (say err ("verbs: unknown option " + <as + "\n"), flush err, 2))))
 
    ; --- the seat scan, the third door ---
    ; a file that is the program seats itself: `love a/moon/moon.l foo.c`, the installed
@@ -1813,7 +1918,7 @@
 ; layer is spliced.
 
 (module '(cli read reads forms shell welp edraw edln edlnc cli-rail cli-line stage edkey
-          uopt uopt1 uoptv uask udoor edcmd edsgr edwide edcut edpad edfit
+          uopt uopt1 uoptv uoptun uoptstray unum uask udoor edcmd edsgr edwide edcut edpad edfit
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
           joinln splitat parseall)
@@ -2173,6 +2278,21 @@
        (walk as ()))
    ; a value option's text, or () -- the presence read that pairs with uopt
    (uoptv t c) (: r (peep t c ()) (? (two? r) <>r ()))
+   ; the first key the walk pinned that `ok` does not name, or () when every one is the
+   ; applet's own. the short lane takes ANY letter -- that is uopt1's `flags ()`, and an
+   ; alphabet is the applet's to state -- so the key comes back for a refusal to name it.
+   (uoptun t ok) (<(filter (c \ !(elem c ok)) (sort (keys t))))
+   ; an operand that still looks like a flag, or (). the walk stops at the first word that
+   ; is not one, so an applet whose operands are positional would take `-x` for a filename
+   ; and lay a whole tree under its name. () once `--` has been spelled: the words behind
+   ; it are literal by request, which is the whole of what `--` is for.
+   (uoptstray as rest) (? (elem "--" as) () (<(filter (w \ 1 < #w && w 0 = 45) rest)))
+   ; a flag's text as a whole number, or () for anything that is not all digits. the
+   ; hand-rolled readers answer 0 for "abc" as they do for "", so a port typed wrong and
+   ; a port nobody typed read alike; `charm?` on the answer is the test.
+   (unum s) (: n #s
+               (go i a) (? (n <= i) a (48 <= s i < 58) (go (i + 1) (a * 10 + (s i - 48))) ())
+               (? (string? s && n) (go 0 0) ()))
 
    ; --- the two flags every applet answers, and the one place that answers them ------
    ; the leading flag words only: the walk stops at the first operand and at `--`, so a

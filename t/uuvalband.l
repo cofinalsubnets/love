@@ -285,9 +285,9 @@
    (lam a (coprod_rect (lam w nat) (lam u bUnit) (lam m bNum) a)))
  (defn vband (pi v val nat)
    (lam v (bool_rect (lam x nat) bSeq (aband (vleaf v)) (vtwo v))))
- (= (vof 0 '0) (vof 0 '(vband vnilv)))
- (= (vof 0 '1) (vof 0 '(vband (nval 3))))
- (= (vof 0 '2) (vof 0 '(vband (vlink (nval 1) (nval 2))))))
+ (vof 0 '0 = vof 0 '(vband vnilv))
+ (vof 0 '1 = vof 0 '(vband (nval 3)))
+ (vof 0 '2 = vof 0 '(vband (vlink (nval 1) (nval 2)))))
 
 ; --- + over the whole carrier, cell for cell as love answers: the unit on
 ; --- either side, numbers add, chains append, and a mixed band degenerates --
@@ -336,9 +336,9 @@
                        (nateqb (vband w) bUnit))
                     (nateqb (vband u) bUnit)))))
  ; the corpus love answers, answered here
- (= (vof 0 'true) (vof 0 '(veq (vadd vnilv (nval 3)) (nval 3))))
- (= (vof 0 'true) (vof 0 '(veq (vadd (nval 3) vnilv) (nval 3))))
- (= (vof 0 'true) (vof 0 '(veq (vadd (nval 2) (nval 3)) (nval 5))))
+ (vof 0 'true = vof 0 '(veq (vadd vnilv (nval 3)) (nval 3)))
+ (vof 0 'true = vof 0 '(veq (vadd (nval 3) vnilv) (nval 3)))
+ (vof 0 'true = vof 0 '(veq (vadd (nval 2) (nval 3)) (nval 5)))
  (= (vof 0 'true) (vof 0 '(veq (vadd (nval 5) (vlink (nval 1) (nval 2)))
                                (vlink (nval 1) (nval 2)))))
  (= (vof 0 'true) (vof 0 '(veq (vadd (vlink (nval 1) (nval 2)) (nval 5))
@@ -805,11 +805,11 @@
  (defn mmulz (pi a msr (pi b msr msr))
    (lam a (lam b (rmsr (zrea (zmul (mzed a) (mzed b)))))))
  (defn vcount (pi v val nat) (lam v (zabs (mzed (vnet v)))))  ; |count| -- love repeats by it
- (= (vof 0 '(ii1 6))  (vof 0 '(zmul (ii1 2) (ii1 3))))
- (= (vof 0 '(ii2 5))  (vof 0 '(zmul (ii2 1) (ii1 3))))     ; -2 * 3 = -6
- (= (vof 0 '(ii1 6))  (vof 0 '(zmul (ii2 1) (ii2 2))))     ; -2 * -3 = 6
- (= (vof 0 '(ii1 0))  (vof 0 '(zmul (ii1 0) (ii2 2))))
- (= (vof 0 '2)        (vof 0 '(vcount (zval (ii2 1))))))   ; |-2| = 2
+ (vof 0 '(ii1 6) = vof 0 '(zmul (ii1 2) (ii1 3)))
+ (vof 0 '(ii2 5) = vof 0 '(zmul (ii2 1) (ii1 3))) ; -2 * 3 = -6
+ (vof 0 '(ii1 6) = vof 0 '(zmul (ii2 1) (ii2 2))) ; -2 * -3 = 6
+ (vof 0 '(ii1 0) = vof 0 '(zmul (ii1 0) (ii2 2)))
+ (vof 0 '2 = vof 0 '(vcount (zval (ii2 1)))))   ; |-2| = 2
 
 ; --- the two chain cells: a number repeats a chain |count| times, and two
 ; --- chains take the cartesian -- each pair a 2-list, which is why the carrier
@@ -889,10 +889,10 @@
 
 ; --- the demos: * computes, and the cartesian is the shape love answers ---
 (test
- (= (vof 0 'true) (vof 0 '(veq (vmul (nval 2) (nval 3)) (nval 6))))
- (= (vof 0 'true) (vof 0 '(veq (vmul (zval (ii2 1)) (nval 3)) (zval (ii2 5)))))
- (= (vof 0 'true) (vof 0 '(veq (vmul vnilv (vlink (nval 1) vnilv)) vnilv)))
- (= (vof 0 'true) (vof 0 '(veq (vmul (nval 0) (vlink (nval 1) vnilv)) vnilv)))
+ (vof 0 'true = vof 0 '(veq (vmul (nval 2) (nval 3)) (nval 6)))
+ (vof 0 'true = vof 0 '(veq (vmul (zval (ii2 1)) (nval 3)) (zval (ii2 5))))
+ (vof 0 'true = vof 0 '(veq (vmul vnilv (vlink (nval 1) vnilv)) vnilv))
+ (vof 0 'true = vof 0 '(veq (vmul (nval 0) (vlink (nval 1) vnilv)) vnilv))
  ; 2 * '(1) = '(1 1)
  (= (vof 0 'true) (vof 0 '(veq (vmul (nval 2) (vlink (nval 1) vnilv))
                                (vlink (nval 1) (vlink (nval 1) vnilv)))))
@@ -905,7 +905,7 @@
                    (vlink (vlink (nval 1) (vlink (nval 2) vnilv))
                           (vlink (vlink (nval 1) (vlink (nval 3) vnilv)) vnilv)))))
  ; and * discriminates, so none of the above is a constant
- (= (vof 0 'false) (vof 0 '(veq (vmul (nval 2) (nval 3)) (nval 5))))
+ (vof 0 'false = vof 0 '(veq (vmul (nval 2) (nval 3)) (nval 5)))
  (= (vof 0 'false) (vof 0 '(veq (vmul (nval 2) (vlink (nval 1) vnilv))
                                 (vlink (nval 1) vnilv)))))
 

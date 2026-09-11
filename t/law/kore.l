@@ -135,9 +135,11 @@
       (= (ubase "b" "b") "b")                                      ; the suffix never eats the whole name
       (= (udir "/a/b") "/a") (= (udir "a") ".") (= (udir "/") "/")
       (= (udir "a/") ".") (= (udir "/a/b/") "/a")
-      (= (uwords " a  bb\tc\n") '("a" "bb" "c"))                   ; the quote-blind split
-      (= (uwords "x") '("x"))
-      !(uwords "  \n") !(uwords "")))
+      ; the quote-blind split is post.l's `words` -- kore carried a second copy of
+      ; it until the two were measured equal over every string to length four
+      (= (words " a  bb\tc\n") '("a" "bb" "c"))
+      (= (words "x") '("x"))
+      !(words "  \n") !(words "")))
 
 ; --- the field-tool floor: usplit keeps every piece (cut's face, where lines drops
 ; the empty tail), uspec/upick read cut's list, uset expands tr's ranges + escapes,

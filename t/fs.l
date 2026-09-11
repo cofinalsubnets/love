@@ -11,7 +11,7 @@
 ; for a kernel underneath. run.l guards the same way, for the same kind of reason.
 (? !hosted 0
 (: d "b/.fs-nif-smoke"
-   a (+ d "/a") b (+ d "/b") l (+ d "/l")
+   a (d + "/a") b (d + "/b") l (d + "/l")
    _ (mkdir d 493)                                  ; EEXIST from a prior run is fine
    _ (unlink a) _ (unlink b) _ (unlink l)           ; a clean slate, tolerated if absent
    _ (: p (open a "w") _ (say p "five!") (close p))
@@ -19,9 +19,9 @@
    ; rename: the file moves whole -- old gone, new wears the same size
    _ (test
        !(rename a b)                                ; ok is ()
-       ((stat a) = 'enoent) (= 5 (cap (stat b)))
-       ('enoent = (rename a (+ d "/x")))          ; a missing source is a live errno
-       ('badarg = (rename 7 b)))                  ; misuse: a non-string path
+       ((stat a) = 'enoent) (5 = cap (stat b))
+       ('enoent = (rename a (d + "/x"))) ; a missing source is a live errno
+       ('badarg = (rename 7 b)))         ; misuse: a non-string path
 
    ; symlink + readlink: path becomes a link to target -- and the target string
    ; resolves relative to the link's directory, so a link beside its file names
@@ -29,21 +29,21 @@
    ; it is nothing. stat follows the link, so through l it sees the file whole.
    _ (test
        !(symlink "b" l)
-       (= (readlink l) "b")
-       (= 5 (cap (stat l))) (= 32768 (& 61440 (cauup (stat l))))
-       ((readlink b) = 'einval) ((readlink (+ d "/nope")) = 'enoent))
+       (readlink l = "b")
+       (5 = cap (stat l)) (32768 = (& 61440 (cauup (stat l))))
+       ((readlink b) = 'einval) ((readlink (d + "/nope")) = 'enoent))
 
    ; chmod: the permission bits land exactly (0600 = 384); utime: the mtime
    ; lands on the stat scale (MILLISECONDS), and a non-charm ms reads "now"
    _ (test
        !(chmod b 384)
-       (= 384 (- (cauup (stat b)) 32768))
+       (384 = (cauup (stat b) - 32768))
        !(utime b 1600000000000)
-       (= 1600000000000 (caup (stat b)))
+       (1600000000000 = caup (stat b))
        !(utime b ())
-       (< 1600000000000 (caup (stat b)))            ; "now" is later than the pinned past
-       ('enoent = (chmod (+ d "/nope") 384))      ; a miss is a live errno
-       ('badarg = (chmod b "rw")))                ; misuse: a non-charm mode
+       (1600000000000 < caup (stat b))       ; "now" is later than the pinned past
+       ('enoent = (chmod (d + "/nope") 384)) ; a miss is a live errno
+       ('badarg = (chmod b "rw")))           ; misuse: a non-charm mode
 
    ; chown: a no-op self-chown succeeds (-1 -1 leaves both ids alone); misuse einvals
    _ (test
@@ -52,10 +52,10 @@
 
    ; umask: always answers the previous mask, so set-read-restore round-trips
    _ (: m0 (umask 18)
-        (test (charm? m0) (= 18 (umask m0)) (= m0 (umask m0))))
+        (test (charm? m0) (18 = umask m0) (m0 = umask m0)))
 
    ; rmdir: the empty-directory unlink -- full is a live errno, empty goes
-   _ (: e (+ d "/sub")
+   _ (: e (d + "/sub")
         _ (mkdir e 493)
         (test
           ('enotempty = (rmdir d))                 ; d holds b and l still
@@ -66,29 +66,29 @@
 
    ; hardlink: two names, one file -- content shows through both, and the
    ; survivor keeps it when the first name unlinks
-   _ (: h (+ d "/h")
+   _ (: h (d + "/h")
         _ (unlink h)
         (test
           !(hardlink b h)
-          (= 5 (cap (stat h)))
+          (5 = cap (stat h))
           ('eexist = (hardlink b h))               ; the name is taken
-          (: _ (unlink b) (= 5 (cap (stat h))))
+          (: _ (unlink b) (5 = cap (stat h)))
           !(unlink h)))
 
    ; copyfile: a value op -- the byte count, or the failure's nom. an empty source
    ; answers 0, a falsy success, which is why every caller asks charm? and never
    ; the truth.
-   _ (: c (+ d "/c") z (+ d "/z")
+   _ (: c (d + "/c") z (d + "/z")
         _ (: p (open c "w") _ (say p "five!") (close p))
         _ (: p (open z "w") (close p))
         (test
-          (= 5 (copyfile c (+ d "/c2")))
-          (= 5 (cap (stat (+ d "/c2"))))
-          (= 0 (copyfile z (+ d "/z2")))            ; empty in, empty out, and 0 is the count
-          ('enoent = (copyfile (+ d "/nope") (+ d "/c3")))
+          (5 = copyfile c (d + "/c2"))
+          (5 = cap (stat (d + "/c2")))
+          (0 = copyfile z (d + "/z2"))            ; empty in, empty out, and 0 is the count
+          ('enoent = (copyfile (d + "/nope") (d + "/c3")))
           ('badarg = (copyfile 7 c))              ; misuse: a non-string path
           !(unlink c) !(unlink z)
-          !(unlink (+ d "/c2")) !(unlink (+ d "/z2"))))
+          !(unlink (d + "/c2")) !(unlink (d + "/z2"))))
 
    ; selfpath: the running binary's own path, the seat every library walk starts
    ; from. no cwd and no argv here -- an absolute path at a real regular file is
@@ -96,9 +96,9 @@
    _ (: s (selfpath 0)
         (test
           (string? s)
-          (= 47 (peep s 0 0))                       ; absolute, whatever the cwd was
-          (= 32768 (& 61440 (cauup (stat s))))      ; s_ifreg: a file, not the /proc link
-          (< 0 (cap (stat s)))))
+          (47 = peep s 0 0)                    ; absolute, whatever the cwd was
+          (32768 = (& 61440 (cauup (stat s)))) ; s_ifreg: a file, not the /proc link
+          (0 < cap (stat s))))
 
    ; the OS roster: the linux lane is compiled in, not its stub. a lost
    ; __linux__ predefine compiles posix.c's lanes out in silence, so probe one:

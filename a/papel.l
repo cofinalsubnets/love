@@ -46,13 +46,12 @@
 ; module and splices it. a module already registered (the gate, a host embedding) is
 ; left alone. `root` and `bn` are exactly the kind of name a leak makes dangerous, and
 ; they stay wherever this file's layer is -- never orth.
+(borrow 'path)
 (borrow 'posix)
-(: (bn p)   (: n #p
-               (go k r) (k < n ? (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
-               (go 0 0))
-   (dirof p) (: n #p
-                (go k r) (k < n ? (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p 0 r))
-                (go 0 0))
+(: ; the raw clips, not posix's: what is after the last slash, and what is before
+   ; it with the slash kept. a url path and a file path are both handed on whole
+   (bn p)    (snip p (lastslash p) #p)
+   (dirof p) (snip p 0 (lastslash p))
    (findme (a . u)) ; the word that named this file, if any
     (bn a @ ("papel" || "papel.l") a (findme u))
    (up p) (: n #p (0 < n ? (dirof (snip p 0 (n - 1))) p))   ; "a/b/" -> "a/"
@@ -90,11 +89,7 @@
    (ends? s t)   (: n #s m #t ((m <= n) && (snip s (n - m) n = t)))
    (sub? s t)    (: n #s m #t
                     ((: (g i) (? ((i + m) <= n) (? (snip s i (i + m) = t) 1 (g (i + 1))) 0)) 0))
-   (base p)      (: n #p
-                    (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
-                    (go 0 0))
-   (numof s)     ((: (g i acc) (? ((i < tally s) && (48 <= s i) && (s i <= 57))
-                                  (g (i + 1) (acc * 10 + (s i - 48))) acc)) 0 0)
+   (base p)      (snip p (lastslash p) #p)
    (slurpf f)    (: q (open f "r") (? (hot? q) (slurp q) ""))
    (spitf f s)   (: q (open f "w") _ (? (hot? q) (: _ (say q s) (close q)) 0) (? (hot? q) 1 0))
    ; a directory answers a list from readdir, a file answers nothing -- that is the test,
@@ -104,11 +99,9 @@
    ; do not care which -- a real failure surfaces at the first open for writing). it walks the
    ; path rather than splitting it, so a leading slash survives: splitting on / and
    ; rejoining quietly turns /tmp/x into tmp/x, and the whole build then writes nowhere.
-   (mkdirp p)    (: n #p
-                    (go i) (? (i < n) (: _ (? ((0 < i) && (p i = 47)) (mkdir (snip p 0 i) 493) 0)
-                                          (go (i + 1)))
-                              (? (0 < n) (mkdir p 493) 0))
-                    (go 0)))
+   ; the prefixes keep a leading slash where splitting on / and rejoining would
+   ; quietly turn /tmp/x into tmp/x, and the whole build then writes nowhere
+   (mkdirp p)    (each (pprefixes p) (\ d (mkdir d 493)), #p ? (mkdir p 493) 0))
 
 ; --- slugs: a heading becomes an id ----------------------------------------------------
 ; lowercase, runs of anything-else collapsed to one dash, the ends trimmed. two headings
@@ -364,17 +357,16 @@ table{border-collapse:collapse}
       n))
 
 ; --- the command line ---------------------------------------------------------------------
-(: _ (:
-   (usage _) (: _ (puts "papel -- the static site (markdown -> html, through lapiz, built by cook)
+(: papel-usage "papel -- the static site (markdown -> html, through lapiz, built by cook)
 usage: papel [-o OUT] [-t TITLE] [SRC ..]
   -o, --out DIR     where the site is written (default b/site)
   -t, --title NAME  the site name, used in the header and on the index (default papel)
   -q, --quiet       write the site and say nothing
   -s, --serve PORT  build, then hand OUT to kiosko and serve it on PORT
   SRC               a .md file or a directory of them; with none, README.md and doc/
-")
-                (quit 0))
-   (need h r) (? (two? r) 0 (: _ (say err ("papel: " + h + " needs an argument")) _ (put err 10) (quit 2)))
+"
+   _ (:
+   (pdie c m) (: _ (say err ("papel: " + m)) _ (put err 10) (quit c))
    (papel-main as)
    (: _ (? (lit? (cite 'papel)) (borrow 'papel) 0)   ; splice my registered self if I am one (cook-main's
                                                   ; guard); on a -l load my names already walk
@@ -383,18 +375,20 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
       ; this file's own names, and nothing puts back the doors it was loaded with.
       _ (borrow 'posix)
       c (conf0 ())
-      (loop ws) (? !(two? ws) 0
-                   (: w <ws r >ws
-                    (w @ ("-o" || "--out") (need w r, pin c 'out <r, loop >r)
-                         ("-t" || "--title") (need w r, pin c 'title <r, loop >r)
-                         ("-q" || "--quiet") (pin c 'quiet 1, loop r)
-                         ("-s" || "--serve") (need w r, pin c 'serve (numof <r), loop >r)
-                         ("-h" || "--help") (usage 0)
-                         ("-v" || "--version")
-                          (puts ("papel (love " + love-version + ")\n"), flush out, quit 0)
-                         (pin c 'src (peep c 'src () + [w]), loop r))))
-      _ (loop as)
-      _ (? (two? (peep c 'src ())) 0 (pin c 'src '("README.md" "doc")))
+      t (tablet 0)
+      o (uopt as t '(111 116 115) () {"out" 111 "title" 116 "quiet" 113 "serve" 115})
+      _ (two? o ? 0 (pdie 2 (last as + " needs an argument")))
+      un (uoptun t '(111 116 113 115))
+      _ (nil? un ? 0 (pdie 2 ("unknown option -" + string un)))
+      src <>>o
+      sy (uoptstray as src)
+      _ (nil? sy ? 0 (pdie 2 ("unknown option " + sy)))
+      _ (: v (uoptv t 111) (nil? v ? 0 (pin c 'out v)))
+      _ (: v (uoptv t 116) (nil? v ? 0 (pin c 'title v)))
+      _ (peep t 113 0 ? (pin c 'quiet 1) 0)
+      sp (uoptv t 115)
+      _ (nil? sp ? 0 (: v (unum sp) (charm? v ? (pin c 'serve v) (pdie 2 ("not a port: " + sp)))))
+      _ (pin c 'src (two? src ? src '("README.md" "doc")))
       _ (build c)
       ; --serve: hand the finished directory to kiosko, which is a separate crew member and
       ; stays one -- papel does not know what a socket is, and kiosko does not know what
@@ -423,4 +417,6 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
 ; script -- sits in the program seat of the real command line, on the args after it.
 ; body-having, so the machinery leaks nothing; papel-main reads bare -- whichever
 ; layer holds this file's binds is still the head here.
-(: s (cite 'verbs 'fire ["papel" "papel.l"]) (two? s ? (papel-main >s)))
+(: door (udoor 'papel papel-main papel-usage 1 1)
+   s (cite 'verbs 'fire ["papel" "papel.l"])
+   (two? s ? (door >s)))

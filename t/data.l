@@ -2,37 +2,37 @@
 (: s0 (mint 0)
    s1 (mint 0)
    s2 (mint 0)
- (test !(= s0 s1)
-         !(= s0 s2)
-         !(= s1 s2)
-         (= 'asdf (intern "asdf"))          ; intern: string -> the interned symbol
-         (= 'asdf (intern 'asdf))           ; ...identity on any non-string arg
-         (= 'asdf (nom "asdf"))             ; nom on a string is that same interning
-         (= 'asdf (2 nom "asdf"))           ; ...so it is a projection to the kind: idempotent
-         (= "asdf" (string 'asdf))))
+ (test !(s0 = s1)
+         !(s0 = s2)
+         !(s1 = s2)
+         ('asdf = intern "asdf")  ; intern: string -> the interned symbol
+         ('asdf = intern 'asdf)   ; ...identity on any non-string arg
+         ('asdf = nom "asdf")     ; nom on a string is that same interning
+         ('asdf = (2 nom "asdf")) ; ...so it is a projection to the kind: idempotent
+         ("asdf" = string 'asdf)))
 (:
  t (tablet 0)
  (Put k v) (pin t k v)
  (Del k) (pull t k 0)
  (Get k) (peep t k 0)
- (ln x) (foldl (\ n _ (+ 1 n)) 0 x)             ; spine length ($ on a list is the net sum)
+ (ln x) (foldl (\ n _ (1 + n)) 0 x)             ; spine length ($ on a list is the net sum)
  _ (Put 1 2)
  _ (Put 2 3)
  _ (Put 3 4)
  _ (Put 't 'f)
  _ (test
-    (= 4 (tally t))
-    (= 4 (ln (keys t))))
+    (4 = tally t)
+    (4 = ln (keys t)))
  _ (Del 2)
  _ (Del 't)
  (test
-    (= 2 (tally t))
-    (= 2 (ln (keys t)))
+    (2 = tally t)
+    (2 = ln (keys t))
     (: (lll t) (foldl (\ l k (. k (. (Get k) l))) () (keys t))
-     (= (* 2 (tally t)) (ln (lll t))))))
+     ((2 * tally t) = ln (lll t)))))
 
 (:
- (stripPrefix p s) (? (= p (snip s 0 (tally p))) (snip s (tally p) (tally s)))
+ (stripPrefix p s) (? (p = snip s 0 #p) (snip s #p #s))
  (lit l y n s) ((\ ss (? ss (y ss (. l ())) (n s))) (stripPrefix l s))
  (drop p y) (p (\ s _ (y s ())))
  (opt p y _) (p y (\ s (y s ())))
@@ -40,28 +40,28 @@
  (alt a b y n) (a y (b y n))
  (rep a y n s) ((opt (cats a (rep a))) y n s)
  (test
-  (= "xx" (+ "xx" ""))
-  (= "xx" (+ "x" "x"))
-  (= "xx" (+ "" "xx"))
-  (= 4 (tally "slen"))
-  (= "bidden" (snip "forbidden planet" 3 9))
-  (= "all of it" (snip "all of it" -9 100))
+  ("xx" = ("xx" + ""))
+  ("xx" = ("x" + "x"))
+  ("xx" = ("" + "xx"))
+  (4 = tally "slen")
+  ("bidden" = snip "forbidden planet" 3 9)
+  ("all of it" = snip "all of it" -9 100)
   ; applying a string indexes it: a byte 0..255, or 1 when out of range --
   ; matching the empty string, where ("" k) is Church-numeral k**0 == 1
-  (= 104 ("hi" 0))                          ; 'h'
-  (= 105 ("hi" 1))                          ; 'i'
-  (nil? ("hi" 2))                            ; past the end -> 1
-  (nil? ("hi" -1)) (nil? ("hi" -2))         ; a negative index is out of range, like one past the end
-  (= "hix" ("hi" 'x))                       ; a point operand is text: it juxtaposes
-  (= 255 ((string 255) 0))                  ; high byte returns unsigned 0..255
+  (104 = ("hi" 0))         ; 'h'
+  (105 = ("hi" 1))         ; 'i'
+  !("hi" 2)                ; past the end -> 1
+  !("hi" -1) !("hi" -2)    ; a negative index is out of range, like one past the end
+  ("hix" = ("hi" 'x))      ; a point operand is text: it juxtaposes
+  (255 = ((string 255) 0)) ; high byte returns unsigned 0..255
   ; apply and peep coincide on the sequence kinds -- the same index action, apply answering
   ; () where peep answers the caller default. a rule the tree keeps, not a law it promises:
   ; a tray towers instead of indexing. snip still reads a negative, clamping to the front.
-  (= (peep "vaporeon" 3 0) ("vaporeon" 3))
-  (= 0 (peep "vaporeon" -1 0)) (nil? ("vaporeon" -1))
+  (peep "vaporeon" 3 0 = ("vaporeon" 3))
+  (0 = peep "vaporeon" -1 0) !("vaporeon" -1)
   ; pin writes exactly where peep reads, and text has no cell, so it answers a fresh string
-  (= "vapoReon" (pin "vaporeon" 4 82)) (= "vaporeon" (pin "vaporeon" -1 82))
-  (= "eon" (stripPrefix "vapor" "vaporeon"))
+  ("vapoReon" = pin "vaporeon" 4 82) ("vaporeon" = pin "vaporeon" -1 82)
+  ("eon" = stripPrefix "vapor" "vaporeon")
  (= '("eon" "vapor")
   (lit "vapor" (.) 0 "vaporeon"))
  (= '("rrq" "R")
