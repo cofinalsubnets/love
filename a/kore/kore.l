@@ -34,7 +34,8 @@
 ;                                           two spellings, less's keys and its manners)
 ;   kore man [-w] [SEC] NAME..       the manual pages (a/kore/man.l): the roff a page is
 ;                                    written in, read back through lapiz and paged by less
-;   kore html2text [-w N] [F..]      a page's prose, laid out (a/kore/h2t.l)
+;   kore html2text [-w N] [F..]      a page's prose, laid out (a/kore/lens.l)
+;   kore markdown [-t T] [F..]       markdown out the other side: html, roff or text
 ;   kore sh [-c CMD | file]          the shell, lush (a/lush.l; also `lush`, and an sh symlink)
 ; (the C compiler is NO LONGER here -- it split into its own app `mooncc`, doc/misc/moon.md.)
 ;
@@ -52,7 +53,7 @@
         date-main dirname-main dos2unix-main dsplit du-main echo-main env-main expand-main expr-main
         mac2unix-main unix2dos-main
         factor-main false-main find-main fold-main free-main gfind grep-main groups-main
-        head-main id-main install-main join-main killall-main kill-main lastn less-main lines link-main man-main html2text-main
+        head-main id-main install-main join-main killall-main kill-main lastn less-main lines link-main man-main html2text-main markdown-main
         ln-main ls-main md5sum-main mkdir-main mkfifo-main mknod-main mktemp-main mount-main
         mv-main myers nl-main nproc-main
         od-main paste-main patch-main pgrep-main pidof-main pkill-main printenv-main
@@ -291,7 +292,8 @@
             'vi (cite 'vi 'vi-main)   ; the editor's wrap registered ahead in the cat
             'less less-main 'more less-main   ; one pager, and the two names it is asked for
             'man man-main    ; the pages the build writes, read back (a/kore/man.l)
-            'html2text html2text-main   ; a page's prose (a/kore/h2t.l), the same lens
+            'html2text html2text-main   ; a page's prose (a/kore/lens.l), the same lens
+            'markdown markdown-main     ; ..and the lens run the way papel runs it
             'env env-main 'printenv printenv-main 'sleep sleep-main
             ; the privileged half: chroot is LFS chapter 7's own call, and mount,
             ; umount, sync, mkfifo and mknod are what a root the distro builds
@@ -415,7 +417,13 @@
     'kill "usage: kill [-SIG] PID.."
     'xargs "usage: xargs [-n N] [CMD ARGS..]"
     'date "usage: date [-u] [-d TIME] [-r FILE] [+FORMAT]"
-    'id "usage: id [-u|-g|-G] [-n] [-r]"}
+    'id "usage: id [-u|-g|-G] [-n] [-r]"
+    'dos2unix "usage: dos2unix [-fkqn] [FILE..]"
+    'unix2dos "usage: unix2dos [-fkqn] [FILE..]"
+    'mac2unix "usage: mac2unix [-fkqn] [FILE..]"
+    'man "usage: man [-w] [SECTION] NAME.."
+    'html2text "usage: html2text [-w COLS] [FILE..]"
+    'markdown "usage: markdown [-t html|roff|text] [-w COLS] [FILE..]"}
 
    ; echo, test and [ read no options at all -- posix says so, and a script writing
    ; `echo --help` means the word. cook and lush answer the flags themselves, each
@@ -496,7 +504,8 @@ every tool answers --help and --version, and -h and -v where the letter is free
   vi [FILE]                               the editor (a/vi/)
   less | more [-Nise] [+N|+/PAT] [F..]    the pager (a/kore/less.l); h is its help
   man [-w] [SECTION] NAME..               the manual pages (a/kore/man.l)
-  html2text [-w COLS] [F..]               a page's prose, laid out (a/kore/h2t.l)
+  html2text [-w COLS] [F..]               a page's prose, laid out (a/kore/lens.l)
+  markdown [-t html|roff|text] [F..]      markdown laid out the other way
   sh [-c CMD | FILE]                      the shell, lush (a/lush.l)
   ls cp mv rm mkdir rmdir ln touch pwd chmod   the fs tools (a/kore/fs.l)
   install readlink cmp                         ... the build's fs verbs

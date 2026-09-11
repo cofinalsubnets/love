@@ -48,7 +48,7 @@ the letter is the tool's own or POSIX and GNU spell it otherwise (`grep -h`, `du
 the long forms only. echo, test and `[` read no options at all and are not at the door;
 cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (104 tools, 107 names)
+## the inventory (105 tools, 108 names)
 
 | where | tools |
 | --- | --- |
@@ -79,7 +79,7 @@ cook and lush answer both flags themselves, each with more to say than a synopsi
 | fs.l, what fills a /dev | sync mkfifo mknod (`p b c u`, `-m MODE`, linux's wide device encoding) |
 | a/vi/ | vi |
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
-| h2t.l, the pages a browser gets | html2text (the same lens, entered from the other surface) |
+| lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
 | a/lush.l | sh / lush |
 
 ## the discipline (why this stays trustworthy)
@@ -408,7 +408,7 @@ of `dos2unix` — and it is not why these are tools.
 Not built: `-c` conversion modes (ascii/7bit/iso), BOM handling, `-b` backups, and the
 `--info` report.
 
-## html2text (a/kore/h2t.l)
+## html2text (a/kore/lens.l)
 
 `html2text [-w COLS] [FILE..]`, and the same three-part path `man` takes with the first part
 swapped: lapiz's html reader takes the page to the document AST, `ttyshow` lays it out at a
@@ -434,6 +434,22 @@ inline spans. `<b>` is `<strong>` and `<tt>` is `<code>` to a reader with one fo
 
 None of this is law 1 — that says `htread` reads what `htshow` writes, and reading a page
 *nobody* wrote with `htshow` is a different promise. It is stated in `t/host/lapiz.l` instead.
+
+## markdown (a/kore/lens.l)
+
+`markdown [-t html|roff|text] [-w COLS] [FILE..]` — the same lens, driven the direction papel
+drives it. `-t html` (the default) is `md->ht`, `-t roff` is `md->rf`, `-t text` is `md->tty`
+at a width. The roff lane is the build's own page path a command away: `markdown -t roff
+doc/love.md` writes what `doc/love.1` is made of, `.TH` and all, because the `.TH` comes from
+the document's front matter and lapiz reads front matter as the meta block.
+
+* **The html is a FRAGMENT**, which is what `markdown(1)` has always meant: the blocks, no
+  doctype and no head. papel owns the template that wraps one into a page, and a second
+  template here would be a second thing to keep true.
+* `-w` and the terminal attributes matter to `-t text` only; html and roff carry neither.
+* The roff lane normalizes what roff cannot spell — a head at 3+ lands at 2, a fence language
+  is dropped, a rule vanishes, a link flattens to its text with the url trailing. That is
+  lapiz's stated rf behaviour, not this tool's.
 
 ## man (a/kore/man.l)
 
