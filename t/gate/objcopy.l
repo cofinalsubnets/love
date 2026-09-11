@@ -17,7 +17,7 @@
              '("_start") () ()))
       src [["fix.o" obj]]
       (lay1 nm runs) (: _ (ld-write ((d + "/fix-") + nm + ".elf")
-                                    (ldbare32 'thumb2 runs src ()))
+                                    (ldbare32 'thumb2 runs src () ()))
                         0)
       _ (lay1 "cross" [['at 0x0800FFF0 'rodata 'text] ['copy 0x20000000 'data]])
       _ (lay1 "mb"    [['at 0x000FFFF0 'rodata 'text] ['copy 0x20000000 'data]])
