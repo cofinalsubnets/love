@@ -46,6 +46,46 @@
     (= [(. 'dq ())] (sh-wordize "\"\""))
     (= [(. 'sub "")] (sh-wordize "``"))))
 
+; the writing half of the same module, checked against the reading half just above.
+; the pair is a retraction: (sh-read (sh-show ws)) = ws for every ws, while
+; (sh-show (sh-read s)) is a canonical s and not s. sh-read here is sh-lex plus
+; sh-fields, the whole path a word takes to argv -- tilde, parameters, splitting,
+; glob, quote removal -- so a quote that only fools the lexer still fails here.
+(: (sh-read s) (: lx (sh-lex s)
+                  (<lx != 1 ? ['lex <lx]
+                   (catmap (t \ (<t != 'w ? ['tok <t] (sh-fields >t))) >lx)))
+   ; bytes 1 to 126, alone and buried in a word (a shell word holds no NUL, and
+   ; everything past 127 is quoted whole -- the utf-8 word below stands for those)
+   bytes  (map string (map (+ 1) ^126))
+   buried (map (c \ "a" + c + "b") bytes)
+   ; ..and the shapes whose bytes are all tame and whose reading is not
+   shapes ["" "a=b" "x=" "A_1=v" "=x" "9x=1" "--port=8080" "-" "--" "%1"
+           "a'b" "'" "''" "x  y" "  " "caf\xc3\xa9" "$(echo hi)" "a/lus*.l"
+           "/usr/local/bin:1,2.3@x+y%z_-"]
+   corpus (bytes + buried + shapes)
+   (test
+    ; the sweep: 271 words, each alone -- a filter and not `all`, so a failure
+    ; names the words that failed rather than answering 0
+    (= () (filter (w \ (sh-read (sh-quote w)) != [w]) corpus))
+    ((sh-read (sh-show corpus)) = corpus)        ; ..and all of them as one line
+    ; the spellings, so a change to the bare set reads as a diff and not a silence
+    ((sh-quote "") = "''")
+    ((sh-quote "abc") = "abc")
+    ((sh-quote "a b") = "'a b'")
+    ((sh-quote "a'b") = "'a'\\''b'")             ; the one byte '..' cannot hold
+    ((sh-quote "--port=8080") = "--port=8080")   ; an assignment's name is a name
+    ((sh-quote "a=b") = "'a=b'")                 ; ..and this one is, in command position
+    ((sh-quote "=x") = "'=x'")                   ; zsh reads a leading = as a command path
+    ((sh-quote "9x=1") = "9x=1")
+    ((sh-show []) = "") ((sh-show ["a"]) = "a") ((sh-show ["a" "b c"]) = "a 'b c'")
+    ; a keyword at the head is syntax and not a command name, which sh-fields cannot
+    ; see -- the parser can. quoted it is one simple command; plain it is not a
+    ; command at all, and a later `in` needs nothing
+    ((sh-show ["if" "x"]) = "'if' x")
+    ((sh-show ["grep" "-w" "in" "f"]) = "grep -w in f")
+    (<(sh-parse (cup (sh-lex (sh-show ["if" "x"])))) = 'ok)
+    (<(sh-parse (cup (sh-lex "if x"))) != 'ok)))
+
 ; the grammar: pipelines under && under ; -- and & backgrounds only its own
 ; and_or; a dangling && is parse-'more (the PS2 lane); compounds refuse politely
 (: pr (sh-parse (cup (sh-lex "a | b && c ; d &")))

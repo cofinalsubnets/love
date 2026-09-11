@@ -739,6 +739,54 @@
 
 ) ; module glob
 
+; lush 🐚 the word -- a word back into a command line, and the mask law's other half.
+; module 'lush begins here, at the floor, because the shell owns the idea of a shell
+; word and because two catted scripts that carry no a/lush.l still need one: sb reads
+; the ignore patterns, helm shows what a unit will run. what stands here is the part
+; with no substrate under it -- pure love, no filesystem and no shell -- and the rest
+; of the module, everything that reads a directory or runs a process, is a/lush.l's.
+;
+; the pair is a retraction and not a bijection -- many spellings say one word -- so the
+; law is one-sided: (sh-read (sh-show ws)) = ws for every ws, while (sh-show (sh-read s))
+; is a canonical s rather than s itself. the reading half is a/lush.l's lexer, and
+; t/host/sh.l is where the two are checked against each other.
+;   (sh-quote w)  -> the word as a shell reads it back: bare where it can be, in '..'
+;                    where it cannot. a word holding a newline keeps it.
+;   (sh-show ws)  -> the words as one line. the head of a line is where a keyword reads
+;                    as syntax, so it takes quotes there and nowhere else.
+
+(module 'lush
+(: ; the bare set: bytes no shell reads as anything but themselves, in any position
+   ; and under every expansion. ~ $ * ? [ ] { } \ ' " ` ( ) | & ; < > # ! and the
+   ; blanks are all out, and so is everything over 127 -- a locale may letter them.
+   (sh-tame? c) (97 <= c <= 122 || 65 <= c <= 90 || 48 <= c <= 57 || elem c "_-.,:/@+%=")
+   ; and two shapes whose bytes are tame and whose reading still is not: NAME=VAL is
+   ; an assignment in command position, and a leading = is zsh's command-path lookup
+   ; (`=x` there is /usr/bin/x, and a miss fails the whole line). both cost one pair
+   ; of quotes. `--port=8080` is neither: an assignment's name has to be a name.
+   (sh-namec? c i) (97 <= c <= 122 || 65 <= c <= 90 || c = 95 || 0 < i && 48 <= c <= 57)
+   (sh-plain? w)
+    (: n #w
+       (go i) (? (n <= i) 1 (w i = 61) 0 (sh-namec? (w i) i) (go (i + 1)) 1)
+       (go 0))
+   ; '..' holds every byte but ' itself, so that one leaves and comes back: a'b
+   ; quotes as 'a'\''b' -- three adjacent words to a reader, one to the shell
+   (sh-sqesc w) (cats (map (c \ c = 39 ? "'\\''" (string c)) (chars w)))
+   (sh-quote w) (? !#w "''"
+                   (all sh-tame? (chars w) && sh-plain? w) w
+                   ("'" + sh-sqesc w + "'"))
+   ; the one thing a word cannot judge alone: a keyword bare in command position is
+   ; syntax and not a command name, and `if x` opens an if. so the line is where it
+   ; is known, and a later word pays nothing -- `grep -w in f` keeps its `in`. every
+   ; one of these fails with a syntax error where an assignment fails in silence.
+   sh-kw '("if" "then" "else" "elif" "fi" "do" "done" "case" "esac"
+           "while" "until" "for" "in" "function" "select" "time")
+   (sh-qhead w)  (elem w sh-kw ? ("'" + w + "'") (sh-quote w))
+   (sh-qrest ws) (!(two? ws) ? "" (" " + sh-quote <ws + sh-qrest >ws))
+   (sh-show ws)  (!(two? ws) ? "" (sh-qhead <ws + sh-qrest >ws)))
+
+) ; module lush -- a/lush.l carries the rest
+
 ; kanren -- first-order unification + a lazy-colist search monad.
 ; a post-egg layer: prel stays the language, this registers as a module. needs prel and
 ; pat's @. overlay below reads unify/ufail?/var
