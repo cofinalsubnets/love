@@ -118,30 +118,41 @@
       hdrsz (64 + 56 * nph)
       _ (4096 < hdrsz + nsz ? (scare 'kproject-headers hdrsz))
       (fo a) ((a - kbase) + 4096)
+      ; each load with the file offset it takes: dense from where the boot chain
+      ; stopped, moved on only far enough to keep p_offset congruent to p_vaddr mod
+      ; the page -- which is all a loader asks and more than a copier needs. the pie's
+      ; own cuts already skip address space the file does not carry, and laying this
+      ; file address-linear would put back the zeros the link took out.
+      (cfo c a) (: r ((a % 4096) - (c % 4096)) (c + (r >= 0 ? r (r + 4096))))
+      lds (rev ((: (go l c acc)
+                    (? (one? l) acc
+                       (: g <l o (cfo c (bias + g 0))
+                          (go >l (o + g 2) ((g + (o . ())) . acc)))))
+                loads (fo d1) ()))
       phs (: bs [1 7 (fo b0) b0 b0 (d1 - b0) (bootend - b0) 4096]
-             ps (map (g \ [1 (g 4) (fo (bias + g 0)) (bias + g 0)
+             ps (map (g \ [1 (g 4) (g 5) (bias + g 0)
                             (bias + g 0) (g 2) (g 3) 4096])
-                     loads)
+                     lds)
              (0 < nsz ? ([4 4 hdrsz kbase kbase nsz nsz 4] . bs . ps)
                         (bs . ps)))
       en (ldemit cx 'note kbase objs ())
       (gapz a b) (a < b ? [(ld-zeros (b - a))] ())
-      ; the file is address-linear from kbase plus one page (fo), so the boot
-      ; chain is seeded with the kbase..b0 gap -- without it every byte lands
-      ; one page below where its phdr points. each stage takes the pieces of
-      ; the one before (never the [cur pieces] pair), bridged by its gap; bss
-      ; owns address space and no bytes, so it is laid above and never emitted.
+      ; the boot chain is address-linear from kbase plus one page (fo), so it is
+      ; seeded with the kbase..b0 gap -- without it every byte lands one page below
+      ; where its phdr points. each stage takes the pieces of the one before (never
+      ; the [cur pieces] pair), bridged by its gap; bss owns address space and no
+      ; bytes, so it is laid above and never emitted.
       eb (ldemit cx 'boot b0 objs [(ld-zeros (b0 - kbase))])
       et (ldemitn cx 'text objs (ldemit cx 'text b1 objs (>eb + (gapz <eb b1))))
       eo (ldemitn cx 'rodata objs (ldemit cx 'rodata t1 objs (>et + (gapz <et t1))))
       ed (ldemitn cx 'data objs (ldemit cx 'data o1 objs (>eo + (gapz <eo o1))))
-      ; the image bytes, each load at its congruent file spot
+      ; the image bytes, each load at the congruent file spot lds picked for it
       body ((: (go l c acc)
                 (? (one? l) [c acc]
-                   (: g <l o (fo (bias + g 0))
+                   (: g <l o (g 5)
                       (go >l (o + g 2)
                           (acc + ([(ld-zeros (o - c))] + spliced (g 1) (g 0) (g 2) sites))))))
-           loads (fo d1) ())
+           lds (fo d1) ())
       fsz <body
       ; the symtab, values slid: the uefi loader reads `kboot` out of exactly this
       esy ((: (go e acc)

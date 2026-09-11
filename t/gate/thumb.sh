@@ -209,6 +209,8 @@ thumb2)
     " = HFA d-pairs + 8B blob + <=4B int one + the AAPCS32 word walk, gcc<->mooncc both directions; 100+n names the first miss -- see t/thumb2/harnessz.c"
   echo "test_thumb2: mooncc -t thumb2 -c -> ELF32/EM_ARM (la + pairs + VFP + am.c bit-exact + aligned(N) section grain + AAPCS-VFP floats + composites/varargs: 48+45+9+16+6+18 differential checks), ld binds, runs on qemu Cortex-M7" ;;
 thumb2sp)
+  lane p  t/thumb2/lib64.c t/thumb2/harness64.c "" 48 30 "thumb2sp 64-bit pairs" \
+    " = every differential check vs gcc; 100+n names the first miss -- see t/thumb2/harness64.c"
   lane d  t/thumb2/libd.c  t/thumb2/harnessd.c  "" 45 30 "thumb2sp doubles" \
     "; 100+n names the first miss -- soft f64 vs gcc's __aeabi"
   lane am "$am" t/thumb2/harnessam.c "$aminc" 9 60 "thumb2sp am.c" \
@@ -217,5 +219,5 @@ thumb2sp)
     " = AAPCS-VFP placement vs gcc -mfloat-abi=hard: s0..s15 with back-fill around the doubles, the stack past them, s0 for the return; 100+n names the first miss -- see t/thumb2/harnessf.c"
   lane z  t/thumb2/libz.c  t/thumb2/harnessz.c "-Ia/moon/include" 18 30 "thumb2sp composites+varargs" \
     ""
-  echo "test_thumb2sp: mooncc -t thumb2sp (soft f64 over __aeabi, AAPCS-VFP floats) -> 45+9+16+18 differential checks vs gcc on qemu Cortex-M4" ;;
+  echo "test_thumb2sp: mooncc -t thumb2sp (soft f64 over __aeabi, AAPCS-VFP floats) -> 48+45+9+16+18 differential checks vs gcc on qemu Cortex-M4" ;;
 esac

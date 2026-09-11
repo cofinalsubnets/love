@@ -158,6 +158,15 @@ long __ai_inle(long n, long a, long b, long c, long d, long e, long f) {
    if ((r = at_ok(a, (char const*) b)) || (r = at_ok(c, (char const*) d))) return r;
    return k_fs_rename((char const*) b, strlen((char const*) b),
                       (char const*) d, strlen((char const*) d));
+  // (olddfd, old, newdfd, new, flags) -- the same call one argument longer, and the only
+  // one riscv's table carries, so on that seat it is how every rename arrives. a flag
+  // asks for semantics this fs does not have (NOREPLACE, EXCHANGE, WHITEOUT); refused,
+  // because performing a plain rename instead is the worse answer.
+  case NR_renameat2:
+   if (e) return -EINVAL;
+   if ((r = at_ok(a, (char const*) b)) || (r = at_ok(c, (char const*) d))) return r;
+   return k_fs_rename((char const*) b, strlen((char const*) b),
+                      (char const*) d, strlen((char const*) d));
   case NR_chdir:
    if (!a) return -EFAULT;
    return k_fs_chdir((char const*) a, strlen((char const*) a));

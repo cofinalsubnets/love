@@ -6,6 +6,7 @@
 #include "pd_api.h"
 #include "../../l/love.h"                   // ai_alloc, the runtime's one heap door
 #include "pdglue.h"
+#include "../hornring.h"
 
 _Static_assert(PDG_ROWSIZE == LCD_ROWSIZE, "LCD rowsize drifted");
 _Static_assert(PDG_ROWS == LCD_ROWS, "LCD rows drifted");
@@ -31,6 +32,35 @@ int pdg_file_read(const char *path, void *buf, unsigned cap) {
   int n = PD->file->read(f, buf, cap);
   PD->file->close(f);
   return n; }
+
+// --- the horn's device -----------------------------------------------------------
+// the SDK PULLS -- an AudioSourceFunction, one buffer per channel, as many frames as it
+// wants -- and the horn PUSHES interleaved stereo. i/hornring.h is the ring between
+// them, shared with the test frontend so the awkward half is lawed off the device
+// (t/front/hornseat.l); what is here is only the SDK's own shape.
+//
+// the pull runs on the audio side -- a thread in the simulator, a DMA refill on the
+// device -- and the push on love's, which is the single-producer/single-consumer the
+// ring is written for.
+enum { pdg_hn = 1 << 14 };                // 16384 frames, ~370 ms at 44.1k
+static int16_t h_buf[pdg_hn * 2];
+static struct horn_ring h_ring = { h_buf, pdg_hn, 0, 0 };
+static SoundSource *h_src;
+
+static int pdg_horn_pull(void *ctx, int16_t *l, int16_t *r, int len) {
+  hring_pull(&h_ring, l, r, len);
+  return 1; }                             // 1: this source produced output
+
+int pdg_horn_open(int rate) {
+  if (rate != PDG_HORN_RATE) return -1;
+  h_ring.rd = h_ring.wr = 0;
+  if (!h_src) h_src = PD->sound->addSource(pdg_horn_pull, NULL, 1);
+  return h_src ? 0 : -1; }
+int pdg_horn_push(const void *pcm, int n) { return hring_push(&h_ring, pcm, n); }
+int pdg_horn_lag(void) { return (int) hring_lag(&h_ring); }
+// the source stays added and plays silence: taking it out from under a callback that
+// may be mid-buffer buys nothing this seat needs.
+void pdg_horn_close(void) { h_ring.rd = h_ring.wr = 0; }
 
 // on device this file also replaces the SDK's setup.c, which did three things: name
 // the entry, capture the realloc, and answer malloc/free over it. the malloc trio

@@ -16,6 +16,10 @@
 //   - HORN=none in the environment: a sink that keeps time and discards, so a box
 //     without a card (and every gate) still sees the shape: the ring fills, refuses,
 //     drains at the rate. HORN=<path> names the device instead of the first found.
+//   - a BOARD with its own card: -D ai_horn_seat=1 on the roster that links this file,
+//     and the seat answers k_horn_* the way i/hda.c does under inle. it is a fact about
+//     the link, not a guess about the box -- which is what the OS word cannot carry,
+//     since a board has no OS to have a word about.
 // a mono port is doubled to stereo on the way down, so the device is always stereo.
 #include "love.h"
 #include <unistd.h>
@@ -46,7 +50,18 @@ struct ai_horn { struct ai_bio b; word kind, rate, chans, wpos, t0; };
 // was the last thing in the artifact whose bytes depended on the kernel it was built
 // ON, and so the last thing standing between an on-box `love seed` and its fixpoint.
 // a foreign libc still gets the one door its own box can speak for.
-#if defined(__wasm__)
+// a seat that carries its own door wants neither kernel's: it is freestanding, so
+// open/ioctl/close/getenv have nobody here to answer them, and a reference to one is a
+// link error rather than a device it will never reach. this is the ONE compile-time
+// answer that is not a guess about the build box -- the roster declaring it is the same
+// roster that supplies k_horn_*.
+#ifndef ai_horn_seat
+#define ai_horn_seat 0
+#endif
+#if ai_horn_seat
+# define horn_alsa 0
+# define horn_oss  0
+#elif defined(__wasm__)
 # define horn_alsa 0
 # define horn_oss  0
 #elif defined(__moonlibc__)
@@ -220,9 +235,26 @@ static uintptr_t dev_lag(int fd) {
 // --- anywhere else: no device door, the sink alone ---------------------------------
 // a seat with a door opens the sink only by HORN=none; a doorless one has nothing else
 #define horn_doorless 1
+#if !ai_horn_seat
 static int dev_open(char const *name, int rate, int *err) { return *err = ENODEV, -1; }
+#endif
 static intptr_t dev_land(int fd, unsigned char const *src, uintptr_t n) { return -1; }
 static uintptr_t dev_lag(int fd) { return 0; }
+#endif
+
+// the seat's own door, asked once: inle says so with the OS word, a board in its
+// roster. everything below asks this and never the word, so the two seats that answer
+// k_horn_* are one case and not two.
+#if ai_horn_seat
+#define horn_at_seat 1
+#else
+#define horn_at_seat (__ai_osv < 0)
+#endif
+// ..and a doorless build opens no fd, so it closes none -- and has nobody to close with
+#if horn_doorless
+static void dev_shut(int fd) { (void) fd; }
+#else
+static void dev_shut(int fd) { close(fd); }
 #endif
 
 // --- the sink: a ring that keeps time --------------------------------------------
@@ -249,19 +281,21 @@ static uintptr_t sink_land(struct ai_horn *h, uintptr_t frames) {
 static int horn_c_fd = -1;
 
 int ai_horn_open(int rate) {
- if (__ai_osv < 0) return k_horn_open(rate);
- if (horn_c_fd >= 0) close(horn_c_fd);
+ if (horn_at_seat) return k_horn_open(rate);
+#if !ai_horn_seat
+ if (horn_c_fd >= 0) dev_shut(horn_c_fd);
  char const *dev = getenv("HORN");
  int err = 0;
  horn_c_fd = dev && !strcmp(dev, "none") ? -1 : dev_open(dev, rate, &err);
+#endif
  return horn_c_fd < 0 ? -1 : 0; }
 
 intptr_t ai_horn_write(unsigned char const *src, uintptr_t n) {
- if (__ai_osv < 0) return k_horn_write(src, n);
+ if (horn_at_seat) return k_horn_write(src, n);
  return horn_c_fd < 0 ? -1 : dev_land(horn_c_fd, src, n & ~(uintptr_t) 3); }
 
 uintptr_t ai_horn_lag(void) {
- if (__ai_osv < 0) return k_horn_lag();
+ if (horn_at_seat) return k_horn_lag();
  return horn_c_fd < 0 ? 0 : dev_lag(horn_c_fd); }
 
 // a seat may tap the sink's accepted PCM -- the browser feeds it to WebAudio. the
@@ -271,8 +305,8 @@ __attribute__((weak)) void ai_horn_tap(unsigned char const *pcm, uintptr_t frame
  (void) pcm, (void) frames, (void) chans, (void) rate; }
 
 void ai_horn_close(void) {
- if (__ai_osv < 0) { k_horn_close(); return; }
- if (horn_c_fd >= 0) close(horn_c_fd);
+ if (horn_at_seat) { k_horn_close(); return; }
+ if (horn_c_fd >= 0) dev_shut(horn_c_fd);
  horn_c_fd = -1; }
 
 // --- the door -------------------------------------------------------------------
@@ -308,7 +342,7 @@ static void horn_fin(struct ai *g, void *p) {
  struct ai_horn *h = p;
  int kind = (int) getcharm(h->kind);
  intptr_t fd = getcharm(h->b.f.fd);
- if (kind == horn_dev && fd >= 0) close((int) fd);
+ if (kind == horn_dev && fd >= 0) dev_shut((int) fd);
  else if (kind == horn_seat) k_horn_close();
  h->b.f.fd = putcharm(-1);
  h->kind = putcharm(horn_sink); }
@@ -322,19 +356,22 @@ ai_noinline static struct ai *horn_open(struct ai *g) {
  intptr_t rate = (rw & 1) ? getcharm(rw) : -1, chans = (cw & 1) ? getcharm(cw) : -1;
  if (rate < 8000 || rate > 192000 || chans < 1 || chans > 2)
   return g->sp[1] = ai_badarg(g), g->sp += 1, g;
- int kind = horn_sink, fd = -1, err = 0;
- if (__ai_osv < 0) {
+ int kind = horn_sink, fd = -1;
+ if (horn_at_seat) {
   if (k_horn_open((int) rate) < 0) return g->sp[1] = ai_err(g, ENODEV), g->sp += 1, g;
   kind = horn_seat; }
+#if !ai_horn_seat
  else {
   char const *dev = getenv("HORN");
+  int err = 0;
   if (!horn_doorless && (!dev || strcmp(dev, "none"))) {
    fd = dev_open(dev, (int) rate, &err);
    if (fd < 0) return g->sp[1] = ai_err(g, err), g->sp += 1, g;
    kind = horn_dev; } }
+#endif
  uintptr_t const n = Width(struct ai_horn);
  if (!ai_ok(g = ai_have(g, n + Width(struct ai_tag) + Width(struct ai_fz) + 1))) {
-  if (kind == horn_dev) close(fd); else if (kind == horn_seat) k_horn_close();
+  if (kind == horn_dev) dev_shut(fd); else if (kind == horn_seat) k_horn_close();
   return g; }
  union u *k = bump(g, n + Width(struct ai_tag));
  struct ai_horn *h = (struct ai_horn*) k;

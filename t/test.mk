@@ -184,11 +184,23 @@ $(ho)/front: t/front/main.c $(R)/l/bare.c $(R)/i/alloc.c $(R)/i/horn.c $(love_h)
 	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -o $@ t/front/main.c $(R)/l/bare.c $(R)/i/alloc.c $(R)/i/horn.c $(ho)/liblove.a $(data_ld)
-test_front: $(ho)/front
+# ..and the same frontend with the horn's SEAT door in place of its sink: ai_horn_seat
+# makes i/horn.c ask k_horn_* for the device, which is the lane inle runs over i/hda.c
+# and the playdate over its SDK. no gate can reach that lane WITH hardware, and this one
+# reaches it without -- the frontend's k_horn_* are the device, over the same
+# i/hornring.h the playdate hands its SDK callback.
+$(ho)/frontseat: t/front/main.c $(R)/l/bare.c $(R)/i/alloc.c $(R)/i/horn.c $(R)/i/hornring.h $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/l/love_data.ld \
+    b/lib/egg.h b/lib/post.h b/lib/p1.h b/lib/prel.h b/lib/ev.h
+	@echo 'CC	'$@
+	@mkdir -p $(dir $@)
+	@$(hcc) -D ai_horn_seat=1 -o $@ t/front/main.c $(R)/l/bare.c $(R)/i/alloc.c $(R)/i/horn.c $(ho)/liblove.a $(data_ld)
+test_front: $(ho)/front $(ho)/frontseat
 	@echo TEST $(ho)/front
 	@sh t/gate/run.sh -a front "$(ho)/front" "front: ok" t/front/io.l
 	@echo TEST $(ho)/front "(i/horn.c's sink, read back through the tap)"
 	@sh t/gate/run.sh -a horn "env HORN=none $(ho)/front" "horn: ok" t/front/horn.l
+	@echo TEST $(ho)/frontseat "(i/horn.c's seat door, over the device's own ring)"
+	@sh t/gate/run.sh -a hornseat "$(ho)/frontseat" "hornseat: ok" t/front/hornseat.l
 # standalone smoke tests, held out of the corpus glob ($t is a non-recursive t/*.l).
 # a file is held back for one of three reasons and says which: it wants a crew module and
 # cats.c is the catalog love0 lacks; it is not idempotent and love0 evaluates twice; or its
@@ -778,13 +790,16 @@ test_virt_build: host
 # change breaks LINKS, and a link is the cheapest question this tree asks; playdate keeps
 # its own roster, so it is the one that goes missing. rides both slow tiers -- in test_extra
 # it stands for the four build-only board rows, being test_boards and more.
+# and the lay law over what an OS loader maps: t/gate/lay.l, which needs no kernel to ask
+# it -- the kernels and boards above are placed by something that is not a loader.
 .PHONY: test_links
-test_links: host $(ho)/front $(love0) b/love-wasm.wasm
+test_links: host $(ho)/front $(ho)/frontseat $(love0) b/love-wasm.wasm
 	@$(MAKE) -s $(ko)/love-x64.elf
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
 	@$(MAKE) -s test_boards
-	@echo "test_links: hosted, bootstrap, front, the wasm machine, three kernels, six boards"
+	@$m t/gate/lay.l $(ho)/love $(ho)/front $(ho)/frontseat || { echo "FAIL lay"; exit 1; }
+	@echo "test_links: hosted, bootstrap, front and its seat-horn twin, the wasm machine, three kernels, six boards"
 
 # the userland packages: each built by mooncc + moonlibc + the holo linker -- no gcc/glibc/ld
 # anywhere -- then run and held to the package's own answers: tar 1.13 roundtrips and

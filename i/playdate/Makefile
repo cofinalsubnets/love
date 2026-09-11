@@ -32,7 +32,12 @@ CCACHE ?= $(shell command -v ccache 2>/dev/null)
 # stubs and pdglue.c's setup.c half. ai_data_section=0: the sentinel tiling
 # l/love.h's ai_typ reads wants the link to place love.data.NN, and this seat
 # lays one flat text run, so l/love.h asks the sentinels by name here.
-mc_flags = -t thumb2sp -D ai_tco=1 -D __STDC_HOSTED__=0 -D TARGET_PLAYDATE=1 -D TARGET_EXTENSION=1 -D ai_data_section=0 \
+# ai_horn_seat: i/horn.c takes k_horn_* as its device rather than hunting a kernel's.
+# a fact about the LINK -- this roster supplies the door -- and the reason it cannot be
+# read off __ai_osv is that a board has no OS to have a word about. it also keeps the
+# ALSA and OSS lanes out of the compile, which want open/ioctl/getenv and would be a
+# link error here rather than a device this seat could ever reach.
+mc_flags = -t thumb2sp -D ai_tco=1 -D __STDC_HOSTED__=0 -D TARGET_PLAYDATE=1 -D TARGET_EXTENSION=1 -D ai_data_section=0 -D ai_horn_seat=1 \
   -Ii/playdate -Ib/playdate -I. -Il -Ib/lib -Il/quay -Ia/moon/include -I$(pd_sdk)/C_API
 # our own link. -Ttext 0 is where link_map.ld puts .text, which is the only thing
 # that script says about placement; --emit-relocs keeps the R_ARM_ABS32 sites so
@@ -59,11 +64,9 @@ pd_local_c = $(wildcard *.c)
 # src/, which the flatten retired.
 # l/bare.c is the null seat: this frontend supplies main and pdglue supplies the
 # heap, so the doors i/fd.c carries on a hosted love have nobody here to answer them.
-# l/nohorn.c is the horn's refusal, and the one to drop when this device grows sound --
-# it has a speaker, and i/horn.c doorless plus an ai_horn_tap is the way in.
-# the port.mk boards take both through love_m; this folder keeps its own roster and so
-# has to name them.
-pd_shared_c = $(love_c) $(f_c) $(R)/l/bare.c $(R)/l/nohorn.c
+# i/horn.c where the boards take l/nohorn.c: this device has a speaker, so it answers
+# ai_horn_writen for real -- see ai_horn_seat in the flags below, and k_horn_* in main.c.
+pd_shared_c = $(love_c) $(f_c) $(R)/l/bare.c $(R)/i/horn.c
 # the bare-metal runtime, and the whole of it. the six moonlibc string members every
 # port takes (i/port.mk's libc_m, out of the same source -- there is no second libc
 # in this tree), plus rt.c: the calls mooncc's own lowering makes where the machine
@@ -173,8 +176,8 @@ $(o)/pdex-alt.elf: $(pd_o) | $(m)
 $(o)/pdex.so: $(pd_src) $(o)/cas.h
 	@echo CC	$@
 	@mkdir -p $(o)
-	@$(CCACHE) gcc -g -O1 -shared -fPIC -Dai_tco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 \
-	  -I. -Il -I$(o) -I$(R) -I$(R)/b/lib -I$(R)/l/quay -I$(pd_sdk)/C_API \
+	@$(CCACHE) gcc -g -O1 -shared -fPIC -Dai_tco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 -Dai_horn_seat=1 \
+	  -I. -I$(o) -I$(R) -I$(R)/l -I$(R)/b/lib -I$(R)/l/quay -I$(pd_sdk)/C_API \
 	  -o $@ $(pd_src) -lm
 
 .PRECIOUS: $(o)/%.elf

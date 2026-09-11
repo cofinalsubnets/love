@@ -30,6 +30,8 @@
 //                 that tells a park from a spin
 //   (tapped ())   the PCM i/horn.c's sink accepted, as text; (taprate ()) and
 //                 (tapchans ()) the rate and channels it took it at
+//   (starved n)   pull n frames off the seat ring and answer how many samples came
+//                 back loud -- 0 is a starved ring zeroing what it could not fill
 //
 // A WAIT WITH NO DEADLINE EXITS 97 rather than sleeping. A synthetic device
 // can only be fed by another task, so "every task is parked with no timer" is a
@@ -37,6 +39,7 @@
 // harness kills it. That makes this frontend a deadlock detector as well as a
 // fault injector, which is most of its value on the rungs after this one.
 #include "love.h"
+#include "../../i/hornring.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -321,15 +324,50 @@ void ai_horn_tap(unsigned char const *pcm, uintptr_t frames, uintptr_t chans, ui
   memcpy(tap_buf + tap_len, pcm, n < room ? n : room);
   tap_len += n < room ? n : room; }
 
-// i/horn.c's inle door, which this seat has no i/hda.c for. never called: __ai_osv is
-// 0 here (l/love.c's weak word, unprobed) and every one of these is gated on it being
-// negative -- but a link wants a body, and a wrong one that ran would be loud.
-int k_horn_open(int rate) { return -1; }
-intptr_t k_horn_write(unsigned char const *src, uintptr_t n) { return -1; }
-uintptr_t k_horn_lag(void) { return 0; }
-void k_horn_close(void) { }
+// ..and the SEAT's door, the OTHER way PCM leaves love: i/horn.c asks k_horn_* where the
+// seat carries its own card -- inle over i/hda.c, the playdate over its SDK. b/front is
+// built TWICE, once doorless where the sink taps and once with -D ai_horn_seat=1 where
+// these four are the device, so one pair of nifs reads both lanes and a law can say
+// exactly where they differ.
+//
+// and it is the DEVICE'S OWN RING under them -- i/hornring.h, the same header
+// i/playdate/pdglue.c hands its SDK callback. that ring is the one part of a seat's
+// sound nobody could law from a gate: a card pulls on its own clock and a gate has no
+// card. here the pull is (tapped ()), so push, pull and the wrap all ride every law
+// below. SMALL on purpose -- 1024 frames against writes of a few hundred, so the
+// free-running indices wrap many times over a run rather than never.
+//
+// the rate is whatever is asked: a real device refuses one it cannot play (the playdate
+// speaker is 44100 alone), and i/horn.c's misuse laws already cover the refusal path.
+// chans is 2 always -- horn_land doubles a mono port on the way to this door, which is
+// the difference the sink lane does not have.
+enum { seat_n = 1 << 10 };
+static int16_t seat_buf[seat_n * 2];
+static struct horn_ring seat_ring = { seat_buf, seat_n, 0, 0 };
+
+int k_horn_open(int rate) {
+  tap_rate = (uintptr_t) rate, tap_chans = 2;
+  seat_ring.rd = seat_ring.wr = 0;
+  return 0; }
+intptr_t k_horn_write(unsigned char const *src, uintptr_t n) {
+  return hring_push(&seat_ring, src, (int) n); }
+uintptr_t k_horn_lag(void) { return hring_lag(&seat_ring); }
+void k_horn_close(void) { seat_ring.rd = seat_ring.wr = 0; }
+
+// drain the seat ring the way a card would, and lay it back interleaved so (tapped ())
+// means the same thing on both lanes: the PCM that got out.
+static void seat_drain(void) {
+  int16_t l[64], r[64];
+  for (;;) {
+    int got = hring_pull(&seat_ring, l, r, 64);
+    for (int i = 0; i < got && tap_len + 4 <= tap_n; i++) {
+      memcpy(tap_buf + tap_len, &l[i], 2);
+      memcpy(tap_buf + tap_len + 2, &r[i], 2);
+      tap_len += 4; }
+    if (got < 64) return; } }
 
 static lvm(lvm_tapped) {
+  seat_drain();                      // the sink lane leaves this empty; the seat lane fills it
   uintptr_t n = tap_len;
   tap_len = 0;
   if (!n) { Sp[0] = EmptyString; Ip += 1; return Continue(); }
@@ -341,6 +379,22 @@ static lvm(lvm_tapped) {
   memcpy(txt(Sp[0]), tap_buf, n);
   Sp[1] = Sp[0];
   Sp += 1; Ip += 1; return Continue(); }
+// (starved n): pull n frames from the seat ring into buffers pre-filled with a value no
+// silence could be, and answer how many samples came back NOT zero. this is the half of
+// the ring (tapped ()) cannot see -- that one lays back only the frames that were REAL,
+// so a device holding its last frame under a stall instead of zeroing reads identically
+// from there. holding it rings a tone; this is what says it does not.
+static lvm(lvm_starved) {
+  int16_t l[64], r[64];
+  intptr_t want = charmp(Sp[0]) ? getcharm(Sp[0]) : 64;
+  if (want < 1 || want > 64) want = 64;
+  for (intptr_t i = 0; i < want; i++) l[i] = r[i] = 0x7f7f;   // no silence looks like this
+  hring_pull(&seat_ring, l, r, (int) want);
+  intptr_t loud = 0;
+  for (intptr_t i = 0; i < want; i++) loud += (l[i] != 0) + (r[i] != 0);
+  Sp[0] = putcharm(loud);
+  Ip += 1; return Continue(); }
+
 static lvm(lvm_taprate) {
   Sp[0] = putcharm((intptr_t) tap_rate);
   Ip += 1; return Continue(); }
@@ -350,6 +404,7 @@ static lvm(lvm_tapchans) {
 
 static union u const
   nif_tapped[] = {{lvm_tapped}, {lvm_ret0}},
+  nif_starved[] = {{lvm_starved}, {lvm_ret0}},
   nif_taprate[] = {{lvm_taprate}, {lvm_ret0}},
   nif_tapchans[] = {{lvm_tapchans}, {lvm_ret0}},
   nif_naps[]   = {{lvm_naps},  {lvm_ret0}},
@@ -375,6 +430,7 @@ static struct ai_def const defs[] = {
   {"wpending", {.k = nif_wpend}, NULL},
   {"naps",   {.k = nif_naps}, NULL},
   {"tapped", {.k = nif_tapped}, NULL},
+  {"starved", {.k = nif_starved}, NULL},
   {"taprate", {.k = nif_taprate}, NULL},
   {"tapchans", {.k = nif_tapchans}, NULL} };
 

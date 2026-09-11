@@ -49,15 +49,17 @@
             "-device" "intel-hda" "-device" "hda-output,audiodev=snd" "-audiodev" "none,id=snd"])
    ; the two virts carry their disk on virtio-mmio; q35 on pci
    mmio? (arch = "a64" || arch = "rv64")
-   ; 768M + 420s. the corpus outgrew 256M (a silent death mid-corpus) and then
-   ; 512M (";; oom@len=N" at a deterministic dot) -- both the same wall: a major
-   ; collection grows the pool by allocating a new contiguous 2x pair while the
-   ; old pair still stands, so the ask (~78M at today's corpus) must fit a hole
-   ; in ram the old pair fragments -- and whether one fits is a placement
-   ; lottery any image-size change re-rolls. the margin here is the mitigation;
-   ; the cure would be a pool pair in two blocks. a full green run is ~3min
-   ; wall under tcg (the kernel's own summary clock reads ~17s -- don't trust
-   ; it for the timeout).
+   ; 1536M + 420s. the corpus outgrew 256M (a silent death mid-corpus), then
+   ; 512M and then 768M (";; oom@len=N" at a deterministic dot) -- all the same
+   ; wall: a major collection grows the pool by allocating a new contiguous 2x
+   ; pair while the old pair still stands, so the ask (~78M at today's corpus)
+   ; must fit a hole in ram the old pair fragments -- and whether one fits is a
+   ; placement lottery any image-size change re-rolls. 768M lost it to a link
+   ; change that moved the image by a few KB. the margin here is the mitigation
+   ; and the reason it is doubled rather than nudged past the last loss; the cure
+   ; would be a pool pair in two blocks. the room also buys time -- fewer
+   ; collections, ~28s of corpus against 44s. a full green run is ~3min wall
+   ; under tcg (the kernel's own summary clock -- don't trust it for the timeout).
    fw   ["-drive" ("if=pflash,unit=0,format=raw,file=" + ovmf + ",readonly=on")]
    ; the uefi door only: ovmf parks 64-bit bars above 4G, past every door's
    ; 0..4G map, and the driver then skips the disk (its honest fallback). this
@@ -94,7 +96,7 @@
                (d + ["-device" "virtio-blk-device,drive=d0"
                      "-global" "virtio-mmio.force-legacy=false"])
                (d + ["-device" "virtio-blk-pci,drive=d0"])))
-   r    (hark (["timeout" "420" ("qemu-system-" + arch-mach (intern arch)) "-m" "768M"]
+   r    (hark (["timeout" "420" ("qemu-system-" + arch-mach (intern arch)) "-m" "1536M"]
                + mach + kvm + dargs
                + ["-serial" "stdio" "-display" "none" "-no-reboot"] + media))
    out  >r

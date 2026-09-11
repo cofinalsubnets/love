@@ -326,6 +326,7 @@ struct _IO_FILE {
 #define NR_newfstatat     262
 #define NR_unlinkat       263
 #define NR_renameat       264
+#define NR_renameat2      316
 #define NR_linkat         265
 #define NR_symlinkat      266
 #define NR_readlinkat     267
