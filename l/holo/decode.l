@@ -205,6 +205,9 @@
           48 (nil 'wrmsr)  49 (nil 'rdtsc)  50 (nil 'rdmsr)  162 (nil 'cpuid)
           (c && c = 0) (: r (dc-modrm s k2 p 2 2) (r 3 = 3 ? (fin (r 0) [(op1 'ltr 2 [(r 2)])]) (bad 0)))
           31 (: r (dc-modrm s k2 p w w) (fin (r 0) [(op1 'nop w [(r 2)])]))          ; the long nops
+          24 (: m (dc-at s k2) r (dc-modrm s k2 p 8 8)                               ; the prefetch hints, /0../3
+                 mn (? (m >> 6 = 3) () (r 3 @ 0 'prefetchnta 1 'prefetcht0 2 'prefetcht1 3 'prefetcht2 ()))
+                 (nom? mn ? (fin (r 0) [(op1 mn 0 [(r 2)])]) (bad 0)))
           (c && c = 30 && px = 'f3 && (dc-at s k2 = 250 || dc-at s k2 = 251))
            (finx (k2 + 1) [(op1 (dc-at s k2 = 250 ? 'endbr64 'endbr32) 0 ())])
           1 (: m (dc-at s k2)
