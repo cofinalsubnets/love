@@ -1778,8 +1778,12 @@
                (: r (vsort s)
                 (ins x l) (l @- [x] (a . u) (string x < string a ? (x . l) (a . ins x u)))
                 (ins p r)))
-   _ (pin tab 'verbs (\ as (map putln * vsort $ keys tab,
-                            flush out)))
+   ; the lister reads nothing: --help says the one line, any other word is a mistake
+   _ (pin tab 'verbs
+        (\ as (? !(two? as) (map putln * vsort $ keys tab, flush out)
+                 (<as = "--help")
+                  (puts "usage: verbs   (the names this artifact answers to)\n", flush out, 0)
+                 (say err ("verbs: unknown option " + <as + "\n"), flush err, 2))))
 
    ; --- the seat scan, the third door ---
    ; a file that is the program seats itself: `love a/moon/moon.l foo.c`, the installed

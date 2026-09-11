@@ -12,12 +12,9 @@
 
 (:
    ; octal text -> a charm ("755" is 493), chmod's one argument shape
-   (uoct s)
-    (: n (tally s)
-       (go i acc) (? (i < n) (go (i + 1) ((* 8 acc) + (s i - 48))) acc)
-       (go 0 0))
-   ; is the path a directory (stat follows links, like the tools want)
-   (udirp q) (: st (stat q) (two? st && (16384 = (& 61440 <>>st))))
+   (uoct s) (:- (go 0 0) n #s (go i acc)
+    (i >= n ? acc (go (i + 1) ((* 8 acc) + (s i - 48))))
+       )
    ; a file destination: into a directory the source's basename lands beside
    (udest src dst) (? (udirp dst) (dst + "/" + ubase src "") dst)
    ; copy bytes + permission bits (cp's heart; mv's cross-device leg)
@@ -70,9 +67,11 @@
     (: t (tablet 0)
        o (uopt as t '(109) '(101) ())
        _ (? (two? o) () (udie 1 "mkfifo: -m wants a mode"))
+       _ (: c (uoptun t "m") (? (nil? c) () (udie 1 ("mkfifo: unknown option -" + string c))))
        v (uoptv t 109)
        md (? (string? v) (uoct v) 438)          ; 0666, the mode mkfifo(1) defaults to
        fs <>>o
+       _ (: w (uoptstray as fs) (? (nil? w) () (udie 1 ("mkfifo: unknown option " + w))))
        _ (? (two? fs) () (udie 1 "usage: mkfifo [-m MODE] NAME.."))
        (go l ok) (? !(two? l) ok
                     (: e (umknod "mkfifo" <l (md | 4096) 0)
@@ -86,6 +85,7 @@
     (: t (tablet 0)
        o (uopt as t '(109) '(101) ())
        _ (? (two? o) () (udie 1 "mknod: -m wants a mode"))
+       _ (: c (uoptun t "m") (? (nil? c) () (udie 1 ("mknod: unknown option -" + string c))))
        v (uoptv t 109)
        md (? (string? v) (uoct v) 438)
        fs <>>o
@@ -187,11 +187,7 @@
        o (uopt as t '() '(101) ())
        _ (? (two? o) () (udie 2 "ls: an option wants a value"))
        ops <>>o
-       (opt? c) (: n #uls-opts
-                   (go k) (? (n <= k) 0 (uls-opts k = c) 1 (go (k + 1)))
-                   (go 0))
-       _ (map (\ k (? (opt? k) () (udie 2 ("ls: unknown option -- " + (string k)))))
-              (filter charm? (keys t)))
+       _ (: k (uoptun t uls-opts) (? (nil? k) () (udie 2 ("ls: unknown option -- " + (string k)))))
        a? (peep t 97 0) aa? (peep t 65 0) l? (peep t 108 0) d? (peep t 100 0)
        r? (peep t 114 0) tm? (peep t 116 0)
        now (// (clock 0) 1000)
@@ -303,8 +299,12 @@
 
    ; -- mkdir and rmdir: -p lays every prefix on the way down --
    (mkdir-main as)
-    (: p? (two? as && (<as = "-p"))
-       fs (? p? >as as)
+    (: t (tablet 0)
+       o (uopt as t () '(101) ())
+       _ (: c (uoptun t "p") (? (nil? c) () (udie 2 ("mkdir: unknown option -" + string c))))
+       p? (peep t 112 0)
+       fs <>>o
+       _ (: w (uoptstray as fs) (? (nil? w) () (udie 2 ("mkdir: unknown option " + w))))
        (mkp q)                          ; a tolerant mkdir at every slash, then the whole
         (: n (tally q)
            (go k) (? (n <= k) (mkdir q 493)
@@ -345,12 +345,19 @@
 
    ; -- touch: be there, and be now --
    (touch-main as)
-    (: (one q ok)
+    (: t (tablet 0)
+       o (uopt as t () '(101) ())
+       ; touch reads no options: "" names an empty alphabet, so every letter the walk
+       ; pinned is unknown. the file really called -h is `touch -- -h`
+       _ (: c (uoptun t "") (? (nil? c) () (udie 2 ("touch: unknown option -" + string c))))
+       fs <>>o
+       _ (: w (uoptstray as fs) (? (nil? w) () (udie 2 ("touch: unknown option " + w))))
+       (one q ok)
         (: _ (? (two? (stat q)) () (: p (open q "a") (? (hot? p) (close p) ())))
            e (utime q ())
            (? !e ok (: _ (say err ("touch: cannot touch " + q)) _ (put err 10) 0)))
        (go a ok) (? (two? a) (go >a (one <a ok)) (? ok 0 1))
-       (? (two? as) (go as 1) (udie 2 "usage: touch FILE..")))
+       (? (two? fs) (go fs 1) (udie 2 "usage: touch FILE..")))
 
    ; -- chmod: the octal bits onto every named path --
    (chmod-main as)
@@ -449,6 +456,7 @@
    (realpath-main as)
     (: t (tablet 0)
        o (uopt as t () '(101) ())
+       _ (: c (uoptun t "ems") (? (nil? c) () (udie 1 ("realpath: unknown option -" + string c))))
        fs <>>o
        _ (? (two? fs) () (udie 1 "usage: realpath [-e|-m|-s] PATH.."))
        e? (peep t 101 0) m? (peep t 109 0) s? (peep t 115 0)
@@ -487,19 +495,16 @@
    ; /etc/passwd and /etc/group, read as the files they are (no NSS, no getpwnam)
    (uidname path id)                   ; a numeric id -> its name, or the number back
     (: r (uread path)
-       (? !(two? r) (show id)
-          (: (go ls) (? !(two? ls) (show id)
-                        (: f (usplit 58 <ls)
-                           (? ((3 <= tally f) && (uatoi (f 2) = id)) (f 0) (go >ls))))
-             (go (lines <>r)))))
+       (one? r ? (show id)
+        (: (go ls) (one? ls ? (show id)
+                    (: f (usplit 58 <ls)
+                       (3 <= #f && uatoi (f 2) = id ? (f 0) (go >ls))))
+           (go (lines <>r)))))
    (uidof path nm)                     ; a name -> (1 id), or () when the file has none
-    (: r (uread path)
-       (? !(two? r) ()
-          (: (go ls) (? !(two? ls) ()
-                        (: f (usplit 58 <ls)
-                           (? ((3 <= tally f) && (f 0 = nm)) [1 (uatoi (f 2))]
-                              (go >ls))))
-             (go (lines <>r)))))
+    (: r (uread path) (two? r ?
+     (:- (go (lines <>r)) (go ls) (two? ls ? 
+      (: f (usplit 58 <ls)
+       (3 <= #f && f 0 = nm ? [1 (uatoi (f 2))] (go >ls)))))))
    ; every group a user belongs to: the primary first, then the /etc/group rows naming
    ; them, ascending -- which is the order the kernel keeps its credential list in, and
    ; so the order `id` prints
@@ -520,22 +525,24 @@
    ; and birth times and a device number, and this stat carries none of them -- printing
    ; a block with the modify time standing in three times over would be a fabrication,
    ; so the tool asks for -c instead of inventing one.
-   (ust-kindc m) (: k (& m 61440)
-                    (? (k = 32768) "-" (k = 16384) "d" (k = 40960) "l" (k = 8192) "c"
-                       (k = 24576) "b" (k = 4096) "p" (k = 49152) "s" "?"))
-   (ust-kind m sz) (: k (& m 61440)
-                      (? (k = 32768) (? sz "regular file" "regular empty file")
-                         (k = 16384) "directory" (k = 40960) "symbolic link"
-                         (k = 8192) "character special file"
-                         (k = 24576) "block special file"
-                         (k = 4096) "fifo" (k = 49152) "socket" "weird file"))
+   (ust-kindc m) (m & 61440 @
+    32768 "-" 16384 "d" 40960 "l" 8192 "c"
+    24576 "b" 4096 "p" 49152 "s"
+    "?")
+   (ust-kind m sz) (m & 61440 @
+    32768 (sz ? "regular file" "regular empty file")
+    16384 "directory"  40960 "symbolic link"
+    8192 "character special file"
+    24576 "block special file"
+    4096 "fifo"  49152 "socket"
+    "weird file")
    (ust-perm m)                        ; the ls face: drwxr-sr-t, the three set bits told
     (: (tri sh sb ch)
-        (: b (% (// m (sh 2)) 8)
-           x (0 < (& b 1))
-           s (0 < (& m sb))
-           (((? (0 < (& b 4)) "r" "-") + (? (0 < (& b 2)) "w" "-"))
-            + (? s (? x ch (string ((ch 0) - 32))) (? x "x" "-"))))
+        (: b ((m // sh 2) % 8)
+           x (0 < b & 1)
+           s (0 < m & sb)
+           (((0 < b & 4 ? "r" "-") + (0 < b & 2 ? "w" "-"))
+            + (!s ? (x ? "x" "-") (x ? ch (string ((ch 0) - 32))))))
        ((ust-kindc m) + ((tri 6 2048 "s") + ((tri 3 1024 "s") + (tri 0 512 "t")))))
    (ustamp ns)                         ; %y: 2026-08-17 13:32:41.073610912 +0000
     (: s (// ns 1000000000) frac (% ns 1000000000)
@@ -734,6 +741,9 @@
            (<a = "-t") (fl >a d u q (? dir dir (getenv "TMPDIR")) fs)
            (<a = "-p") (? (two? >a) (fl >>a d u q <>a fs) (udie 1 "mktemp: -p wants a directory"))
            ((2 < tally <a) && (snip <a 0 2 = "-p")) (fl >a d u q (snip <a 2 (tally <a)) fs)
+           ; anything else is the template -- unless it still looks like a flag, which
+           ; would name a temporary file after the option someone meant
+           ((1 < tally <a) && (<a 0 = 45)) (udie 1 ("mktemp: unknown option " + <a))
            (fl >a d u q dir (<a . fs)))
        p (fl as 0 0 0 () ())
        d? <p u? <>p q? <>>p pdir (p 3) fs (p 4)

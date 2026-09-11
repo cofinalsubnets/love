@@ -132,7 +132,7 @@
     (: t (tablet 0)
        o (uopt as t () '(101) ())
        _ (? (two? o) () (udie 2 man-usage))
-       _ (foldl (\ a c (? (c = 119) a (udie 2 ("man: unknown option -" + string c)))) 0 (keys t))
+       _ (: c (uoptun t '(119)) (? (nil? c) () (udie 2 ("man: unknown option -" + string c))))
        rest <>>o
        sec? (man-sec? rest)
        sec (? sec? <rest "")

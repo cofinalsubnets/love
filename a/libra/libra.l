@@ -176,7 +176,11 @@
     (: conf (salt 'libra)
        v (? (two? as) <as "")
        r >as
-       (? (v = "check") (libra-check conf (files r))
+       ; `files` drops every dash word, so one nobody meant used to leave no files and
+       ; a green 0. the two libra reads are named here and the rest is a mistake
+       bad (<(filter (x \ flag? x && !(elem x '("-ht" "-rf"))) as))
+       (? (string? bad) (: _ (say err ("libra: unknown option " + bad)) _ (put err 10) 2)
+          (v = "check") (libra-check conf (files r))
           (v = "doc")   (libra-doc (files r) (? (elem "-ht" r) 'ht
                                                 (elem "-rf" r) 'rf
                                                 'md))

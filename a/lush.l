@@ -2730,9 +2730,14 @@ no file and no -c is a shell: a repl on a tty, cooked script off stdin otherwise
               (a = "--help") (: _ (puts (sh-usage + "\n")) _ (flush out) (quit 0))
               (a = "--version")
                (: _ (puts ("lush (love " + love-version + ")\n")) _ (flush out) (quit 0))
+              ; -- ends the options, which is the only way to name a file that starts
+              ; with a dash: every other dash word is a flag word, ours or a mistake
+              (a = "--") (? (two? >args) (sh-file <>args >>args) (sh 0))
               ((1 < #a) && ((a 0) = 45))
                 (: fw (sh-flagw a >args)
-                   (? !(two? fw) (sh-file a >args)          ; a letter not ours: a name
+                   (? !(two? fw)
+                        (: _ (say err ("lush: " + a + ": invalid option\n")) _ (flush err)
+                           (quit 2))
                       (fw 1)
                         (: r (fw 2)
                            (? r (sh-c <r >r)

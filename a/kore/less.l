@@ -428,9 +428,8 @@
     (: t (tablet 0)
        o (uopt as t () '(101) ())
        _ (? (two? o) () (udie 2 "less: bad option"))
-       _ (foldl (\ a c (? (elem c '(78 105 115 101)) a
-                          (udie 2 ("less: unknown option -" + string c))))
-                0 (keys t))
+       _ (: c (uoptun t '(78 105 115 101))
+            (? (nil? c) () (udie 2 ("less: unknown option -" + string c))))
        [t <>>o])
    (less-main as)
     (: r (pgopts as)

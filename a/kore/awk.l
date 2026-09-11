@@ -1316,11 +1316,16 @@
              "-F" (two? >a ? (aw-flags >>a <>a vs pfs) (udie 2 "awk: -F wants a separator"))
              "-v" (two? >a ? (aw-flags >>a fs (<>a . vs) pfs) (udie 2 "awk: -v wants var=value"))
              "-f" (two? >a ? (aw-flags >>a fs vs (<>a . pfs)) (udie 2 "awk: -f wants a file"))
-             ;; a glued -Fx -vx -fx: the letter after the dash, or nothing
-             ((2 < n && w 0 = 45 && w 1) @ 70 (aw-flags >a glued vs pfs)
-                                          118 (aw-flags >a fs (glued . vs) pfs)
-                                          102 (aw-flags >a fs vs (glued . pfs))
-                                          [fs (rev vs) (rev pfs) a]))))
+             ;; a glued -Fx -vx -fx: the letter after the dash, or nothing. a dash word
+             ;; that is none of them is refused and not read as the program -- `awk -Z`
+             ;; used to be the program `-Z`, which parses, matches nothing and leaves 0
+             (: f? (1 < n && w 0 = 45)
+                (? !f? [fs (rev vs) (rev pfs) a]
+                   (2 < n && elem (w 1) '(70 118 102))
+                    ((w 1) @ 70 (aw-flags >a glued vs pfs)
+                            118 (aw-flags >a fs (glued . vs) pfs)
+                            (aw-flags >a fs vs (glued . pfs)))
+                   (udie 2 ("awk: unknown option " + w)))))))
    (awk-main as)
     (aw-flags as () () () @ [fs vs pfs rest]
      (: fns {}

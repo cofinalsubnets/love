@@ -289,6 +289,8 @@
                                     ("ashore with " + show (g 'p 'gold) + " gold")),
               (g 'p 'gold)))
  rove-usage "usage: love rove   (no options; q or esc steps ashore)"
- (rove-main as) (rove-run ())
+ ; rove takes nothing: a word here is a mistake, and the game would swallow it
+ (rove-main as) (? !(two? as) (rove-run ())
+                   (say err ("rove: takes no arguments, not " + <as + "\n"), flush err, 2))
  _ (pins (cite 'verbs 'tab) 'rove (udoor 'rove rove-main rove-usage 1 1)))
 ) ; module rove

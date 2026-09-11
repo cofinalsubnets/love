@@ -144,6 +144,11 @@
                                        'play (pin d 'want (), visit (_ \ story-run (d 'lvl))))
                    (stage (w \ h \ design-frame d w h) step (\ _ (d 'over))))
  design-usage "usage: love design [LEVEL.l]"
- (design-main as) (design-run (two? as ? <as "a/rove/levels/lighthouse.l"))
+ ; the one operand is a level file -- a dash word would be opened as one
+ (design-main as)
+  (: f (two? as ? <as "a/rove/levels/lighthouse.l")
+     (? (1 < #f && f 0 = 45)
+        (say err ("design: unknown option " + f + "\n"), flush err, 2)
+        (design-run f)))
  _ (pin (cite 'verbs 'tab) 'design (udoor 'design design-main design-usage 1 1)))
 ) ; module design

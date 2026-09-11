@@ -427,8 +427,12 @@
 
    ; -- tee: stdin onto out and every file (-a appends) --
    (tee-main as)
-    (: a? (two? as && (<as = "-a"))
-       fs (? a? >as as)
+    (: t (tablet 0)
+       o (uopt as t () '(101) ())
+       _ (: c (uoptun t "a") (? (nil? c) () (udie 2 ("tee: unknown option -" + string c))))
+       a? (peep t 97 0)
+       fs <>>o
+       _ (: w (uoptstray as fs) (? (nil? w) () (udie 2 ("tee: unknown option " + w))))
        ; every destination opens up front. tee is a pipe, and a pipe cannot wait
        ; for the end of its input to start writing -- it used to slurp stdin whole.
        (opn l acc ok)
@@ -446,11 +450,21 @@
        _ (flush out) (? ok 0 1))
 
    ; -- seq: first incr last, one a line (one and two args fill in the 1s) --
+   ; a signed whole number, or (). the sign is read here rather than left to a flag
+   ; walk: `seq -5 5` counts up from -5, so a leading dash is a sign and not an option
+   (useqn s) (: n #s
+                neg (0 < n && s 0 = 45)
+                v (unum (neg ? (snip s 1 n) s))
+                (? (charm? v) (neg ? (0 - v) v) ()))
    (seq-main as)
     (: n (tally as)
-       trip (? (n = 1) [1 1 (uatoi <as)]
-               (n = 2) [(uatoi <as) 1 (uatoi <>as)]
-               (n = 3) [(uatoi <as) (uatoi <>as) (uatoi <>>as)]
+       ns (map useqn as)
+       ; uatoi read "abc" as a number made of its bytes, so `seq --nosuch` counted to
+       ; a large negative and printed nothing, in silence and at 0
+       _ (? (all charm? ns) () (udie 2 "usage: seq [FIRST [INCR]] LAST"))
+       trip (? (n = 1) [1 1 (ns 0)]
+               (n = 2) [(ns 0) 1 (ns 1)]
+               (n = 3) [(ns 0) (ns 1) (ns 2)]
                (udie 2 "usage: seq [FIRST [INCR]] LAST"))
        a <trip d <>trip z <>>trip
        _ (? (d = 0) (udie 2 "seq: increment must not be 0") ())
@@ -846,6 +860,7 @@
        p (pre as () ())
        o (uopt <>p t '(119) '(101) ())
        _ (? (two? o) () (udie 2 "fold: -w wants a width"))
+       _ (: c (uoptun t "wsb") (? (nil? c) () (udie 2 ("fold: unknown option -" + string c))))
        v (uoptv t 119)
        w (? (string? v) (uatoi v) (? (charm? <p) <p 80))
        _ (? (0 < w) () (udie 2 "fold: width must be positive"))
@@ -876,6 +891,7 @@
     (: t (tablet 0)
        o (uopt as t '(116) '(101) ())
        _ (? (two? o) () (udie 2 "expand: -t wants a tab size"))
+       _ (: c (uoptun t "ti") (? (nil? c) () (udie 2 ("expand: unknown option -" + string c))))
        v (uoptv t 116)
        n (? (string? v) (uatoi v) 8)
        _ (? (0 < n) () (udie 2 "expand: tab size must be positive"))
@@ -907,6 +923,7 @@
     (: t (tablet 0)
        o (uopt as t '(116) '(101) ())
        _ (? (two? o) () (udie 2 "unexpand: -t wants a tab size"))
+       _ (: c (uoptun t "ta") (? (nil? c) () (udie 2 ("unexpand: unknown option -" + string c))))
        v (uoptv t 116)
        n (? (string? v) (uatoi v) 8)
        _ (? (0 < n) () (udie 2 "unexpand: tab size must be positive"))
@@ -947,8 +964,8 @@
     (: t (tablet 0)
        o (uopt as t () '(101) ())
        _ (? (two? o) () (udie 2 d2u-usage))
-       _ (foldl (\ a c (? (elem c '(102 107 113 110)) a
-                          (udie 2 (nm + ": unknown option -" + string c)))) 0 (keys t))
+       _ (: c (uoptun t '(102 107 113 110))
+            (? (nil? c) () (udie 2 (nm + ": unknown option -" + string c))))
        fs <>>o
        q? (peep t 113 0) f? (peep t 102 0) k? (peep t 107 0) n? (peep t 110 0)
        (note m) (? q? 0 (: _ (say err (nm + ": " + m)) _ (put err 10) 0))
@@ -1084,6 +1101,7 @@
     (: t (tablet 0)
        o (uopt as t '(119) '(101) ())
        _ (? (two? o) () (udie 1 (who + ": -w wants a width")))
+       _ (: c (uoptun t "wd") (? (nil? c) () (udie 1 (who + ": unknown option -" + string c))))
        v (uoptv t 119)
        w (? (string? v) (uatoi v) 76)
        d? (peep t 100 0)
