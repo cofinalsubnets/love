@@ -94,10 +94,12 @@ other back intact. What is genuinely process-global is smaller than it looks:
 its table. That last one is the only real blocker to a supported multi-session
 API, and it is a table keyed by the session rather than a global.
 
-**`cook` cannot resolve a `../..`-prefixed target.** Not this file's problem to
-fix, but worth writing down: `love make -C i/mps2` answers `no recipe to make
-"../../b//love.elf"` for every port makefile in the tree, so those are GNU make
-only in practice. `$(notdir $(CURDIR))` comes back empty there too.
+**`cook` could not resolve a `../..`-prefixed target**, which is how every port
+makefile in the tree came to be GNU make only in practice. Two bugs, both fixed
+in the commit after this one: a rule whose target began with a dot was dropped
+on the way to dropping `.PHONY`, and `CURDIR` was never seeded. What is left is
+`$(foreach ...$(eval ...))` -- cook recognizes `$(eval)` only as a whole line --
+so `make -C i/lib` now runs under cook and `make -C i/mps2` still does not.
 
 ## not done
 
