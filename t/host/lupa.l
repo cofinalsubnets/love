@@ -33,6 +33,13 @@
              (has? f "mov\t$42, %eax") (has? f "pop\t%rbp") (has? f "ret") (has? f "jmp\t0x1"))   ; eb f4: back 12 from 13
    _ (keys! d "jj")   _ (test (d 'cur = 4))         ; past push (1) and mov (3)
    _ (keys! d "k")    _ (test (d 'cur = 1))
+   ;; a cursor that is no instruction boundary: the walk from the anchor steps PAST it and
+   ;; never lands on it, so k takes the shortest real decode ENDING there instead -- 00 00
+   ;; at 6 is two bytes and ends at 8. where nothing decodes to end there, one byte back.
+   _ (cmd! d "g 8")   _ (test (d 'cur = 8))
+   _ (keys! d "k")    _ (test (d 'cur = 6))
+   _ (cmd! d "g 6")   _ (keys! d "k")    _ (test (d 'cur = 5))
+   _ (cmd! d "g 4")   _ (keys! d "k")    _ (test (d 'cur = 1))   ; a boundary is unaffected
    _ (keys! d "s")    _ (test (has? (frame d) "mov\teax, 42") (has? (frame d) "asm intel"))
    _ (keys! d "s")
    ;; :g takes an address, and the mode toggles back
