@@ -1,8 +1,11 @@
-// l/bare.c -- the null seat: what the runtime's doors answer with no OS under them and
-// no i/fd.c beside them. the boards link it (i/port.mk's love_m) and so does b/front,
-// the test frontend, which supplies its own contract and wants exactly these eight and
-// no more -- a hosted love, love0 and every kernel all carry i/fd.c, whose bodies are
-// the real ones.
+// l/bare.c -- the null seat: what the runtime's doors answer with no i/fd.c beside them.
+// the boards link it (i/port.mk's love_m), so do b/front and the wasm host seat -- a
+// hosted love, love0 and every kernel all carry i/fd.c, whose bodies are the real ones.
+//
+// these six and no more, and every one of them is about the ABSENCE OF fd.c. a seat can
+// lack fd.c and still have hardware: the wasm host has no fd.c and a speaker, which is
+// why the horn's refusal is l/nohorn.c's and the OS word is l/love.c's weak one. bundling
+// them here made this file unlinkable by a seat that wanted six of eight.
 //
 // plain definitions, not weak defaults in the runtime: a seat that grows a real door
 // collides here and says so, and a seat that needs one and has none fails to link. the
@@ -11,9 +14,6 @@
 
 void ai_fd_close(int fd) { }
 void ai_fd_drain(int fd, void const *p, uintptr_t n) { }
-// the horn wants a device; a board that grows one answers this itself
-struct ai *ai_horn_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
-  return g->b = -1, g; }
 // no kernel bracket to drain, so the image bakes the book it was handed
 uintptr_t ai_knifs_slice(struct ai_def const **s) { return *s = NULL, 0; }
 // the heap runs where it lies: no second, executable window

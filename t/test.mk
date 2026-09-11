@@ -179,11 +179,11 @@ test_stdincorpus: $(ho)/love
 # test_front -- the test-only frontend: b/front links liblove.a (l/love.c only)
 # and supplies the frontend contract itself, so its port vt can answer would-block on
 # cue. it exits 97 on a wait with no deadline -- a deadlock, said loudly.
-$(ho)/front: t/front/main.c $(R)/l/bare.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/l/love_data.ld \
+$(ho)/front: t/front/main.c $(R)/l/bare.c $(R)/l/nohorn.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/l/love_data.ld \
     b/lib/egg.h b/lib/post.h b/lib/p1.h b/lib/prel.h b/lib/ev.h
 	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
-	@$(hcc) -o $@ t/front/main.c $(R)/l/bare.c $(ho)/liblove.a $(data_ld) $(nifs_ld)
+	@$(hcc) -o $@ t/front/main.c $(R)/l/bare.c $(R)/l/nohorn.c $(ho)/liblove.a $(data_ld) $(nifs_ld)
 test_front: $(ho)/front
 	@echo TEST $(ho)/front
 	@sh t/gate/run.sh -a front "$(ho)/front" "front: ok" t/front/io.l

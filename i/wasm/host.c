@@ -106,18 +106,10 @@ void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ticks) {
   if (!n && ticks) ai_sleep(ticks);
   (void) fds; }
 
-// the rest of this seat. the leanest link in the tree -- love_c, i/horn.c and this file,
-// with no i/fd.c and no kernel beside them -- so the doors those two carry are answered
-// here instead. the boards say the same in l/bare.c.
-void ai_fd_close(int fd) { }
-void ai_fd_drain(int fd, void const *p, uintptr_t n) { }
-uintptr_t ai_knifs_slice(struct ai_def const **s) { return *s = NULL, 0; }
-char *ai_code_window(char *p) { return p; }   // the heap runs where it lies
-intptr_t ai_nclock(void) { return (intptr_t) (ai_clock() * 1000000u); }
-// one fd at a time, every slot filled, so "none ready" never reads as "nobody answered"
-void ai_ready_fds(struct ai_wait_fd *fds, int n) {
-  for (int i = 0; i < n; i++)
-    fds[i].revents = ai_ready(fds[i].fd, fds[i].events) ? fds[i].events : 0; }
+// the six doors the absence of i/fd.c owes are l/bare.c's, which this seat links: it is
+// the reason that file holds six and not eight -- the horn's refusal and the OS word were
+// bundled in, and this seat has a speaker (the page, through ai_horn_tap) and moonlibc's
+// own word. ai_ready and ai_sleep stay here, being this machine's.
 ai_noinline void ai_sleep(uintptr_t ticks) {
   for (ticks += ai_clock(); ai_clock() < ticks;); }
 // no card under this module: the page is the device and hears ai_horn_tap below, so the

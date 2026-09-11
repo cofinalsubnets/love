@@ -74,10 +74,12 @@ be_lc   = $(subst $(R)/,,$(p_be_l))
 # (common.mk names both). a port compiles every one under its own <x>_cc, since love.c
 # owes the other six and snap.c owes the codecs. love_m is the object stems, love_dep what
 # each one watches.
-# ..plus l/bare.c, the answers a seat with no OS under it gives to the runtime's own
-# doors. only a bare seat links it: everything else carries i/fd.c, whose bodies
-# are the real ones, and two of them in one link is a collision that says so.
-love_m   = $(basename $(love_tu) $(love_codec)) bare
+# ..plus l/bare.c, the answers a seat with no i/fd.c gives to the runtime's own doors,
+# and l/nohorn.c, the horn's refusal where there is no card. only a bare seat links
+# either: everything else carries i/fd.c, whose bodies are the real ones, and two of
+# them in one link is a collision that says so. a board that grows a speaker drops
+# nohorn and answers ai_horn_writen itself.
+love_m   = $(basename $(love_tu) $(love_codec)) bare nohorn
 love_dep = $(love_h) $(lib_hR) $(lv)
 love_o   = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(love_m)))
 

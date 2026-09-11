@@ -59,9 +59,11 @@ pd_local_c = $(wildcard *.c)
 # src/, which the flatten retired.
 # l/bare.c is the null seat: this frontend supplies main and pdglue supplies the
 # heap, so the doors i/fd.c carries on a hosted love have nobody here to answer them.
-# the port.mk boards take it through love_m; this folder keeps its own roster and so
-# has to name it.
-pd_shared_c = $(love_c) $(f_c) $(R)/l/bare.c
+# l/nohorn.c is the horn's refusal, and the one to drop when this device grows sound --
+# it has a speaker, and i/horn.c doorless plus an ai_horn_tap is the way in.
+# the port.mk boards take both through love_m; this folder keeps its own roster and so
+# has to name them.
+pd_shared_c = $(love_c) $(f_c) $(R)/l/bare.c $(R)/l/nohorn.c
 # the bare-metal runtime, and the whole of it. the six moonlibc string members every
 # port takes (i/port.mk's libc_m, out of the same source -- there is no second libc
 # in this tree), plus rt.c: the calls mooncc's own lowering makes where the machine

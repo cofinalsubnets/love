@@ -1021,7 +1021,7 @@ site-serve: host b/toolmd.stamp
 # copied out: test_wasm's two checks and horn.html are the whole readership, and each is a
 # seam the machine has not grown yet (quay's cells, the horn's ring).
 # the emcc build stays as wasm-emcc, a differential and nothing on the page.
-wasm_c = $(love_c) $(R)/i/horn.c $(R)/i/wasm/host.c
+wasm_c = $(love_c) $(R)/i/horn.c $(R)/l/bare.c $(R)/i/wasm/host.c
 b/wasm/love.wasm: $(wasm_c) $(lib_h) b/lib/love_version.h host
 	@mkdir -p $(dir $@)
 	@echo 'MOON	'$@
