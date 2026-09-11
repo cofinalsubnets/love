@@ -1612,7 +1612,7 @@
 
    ; --- builtins: a charm status, a control pair (brk/cnt/ret), or 'nope --------
    sh-binames '("exit" "cd" "export" "pwd" "jobs" "fg" "bg" ":" "true" "false" "command"
-                "read" "set" "shift" "unset" "eval" "." "wait" "local"
+                "read" "set" "shift" "unset" "eval" "." "wait" "local" "exec"
                 "break" "continue" "return" "ev" "trap" "which" "where" "type")
    (sh-bi? nm) (sh-smem? nm sh-binames)
    (sh-readb args)
@@ -1961,10 +1961,40 @@
                  (flush out, flush err,
                   each saves (\ e (? (nom? >e) (close <e) (dup2 >e <e, close >e))),
                   s)))))
+   ; `exec [CMD [ARG..]]` -- the one builtin whose redirects are not swapped back:
+   ; with no CMD they become the shell's own, and with one there is no shell left to
+   ; swap them back for. so it takes its own lane here, ahead of sh-withrs.
+   (sh-execb argv rs)
+     (: rm (sh-rdmap rs)
+        (? (<rm = 'err) (cmderr >rm)
+           (: fdmap (rm 1) opens (rm 2) wrs (rm 3)
+              _ (sh-hwrite wrs)
+              _ (flush out) _ (flush err)          ; what we still hold is the OLD fd's
+              _ (each fdmap (\ e (? (charm? >e) (dup2 >e <e) (close <e))))
+              _ (each opens close)
+              (? (one? argv) (: _ (pin sh-status () 0) 0)
+                 (sh-execgo argv)))))
+   ; the five tty ignores are the shell's (main.l) and an ignore SURVIVES exec: the
+   ; hand hygiene sh-fork1 does for a fork, undone again if the exec did not happen
+   (sh-exectty on)
+     (? (sh-tty ()) (each [sig-int sig-quit sig-tstp sig-ttou sig-ttin] (flip signal on)) 0)
+   (sh-execgo argv)
+     (: w <argv
+        _ (sh-disarm 0)                            ; the mask outlives an exec too
+        _ (sh-exectty 0)
+        e (exec (sh-spawnv argv))                  ; answers only when it did not happen
+        _ (sh-exectty 1)
+        _ (sh-rearm 0)
+        st (? (e = 'enoent) 127 126)
+        msg (? (st = 127) ": not found" ": cannot exec")
+        _ (say err ("lush: exec: " + w + msg + "\n"))
+        _ (pin sh-status () st)
+        (? (sh-tty ()) st (sh-leave st)))          ; POSIX: a script dies on it
    (sh-simple2 argv rs)
      (: _ (? (sh-xflag ()) (say err ("+ " + ((sh-unwords argv) + "\n"))) 0)
         fn (sh-fnof <argv)
         (? !(sh-nofn = fn) (sh-withrs rs (\ _ (sh-fncall fn argv)))
+           (<argv = "exec") (sh-execb >argv rs)
            (sh-bi? <argv)
              (: b (sh-withrs rs (\ _ (sh-builtin argv)))
                 (? (two? b) b                            ; brk/cnt/ret ride out
@@ -2517,7 +2547,7 @@
         (? (hot? o) (: _ (say o (ln + "\n")) _ (flush o) (close o)) 0))
 
    ; --- completion: (insert . candidates) off the text left of the cursor ------
-   sh-builtins '("cd" "exit" "export" "pwd" "jobs" "fg" "bg" "which" "where" "type")
+   sh-builtins '("cd" "exit" "exec" "export" "pwd" "jobs" "fg" "bg" "which" "where" "type")
    (sh-prefix? p s) (: n #p ((n <= #s) && (p = (snip s 0 n))))
    (sh-comm2 a s)                               ; longest common prefix of two
      (: n (? (#a < #s) #a #s)

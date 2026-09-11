@@ -181,6 +181,30 @@
    _ (signal sig-int 0)
    (test (= "done\n" (cup r))))
 
+; exec: the shell becomes the command, or keeps the redirects of one that is not
+; there. the words after it run in this very process -- nothing after the line does
+(: r (hark ["b/love" "b/lush" "-c" "echo one; exec echo two; echo three"])
+   (test (= "one\ntwo\n" (cup r)) (= 0 (cap r))))
+; ..and with no command the redirects are the SHELL's from here on, which is the
+; whole of `exec 3>&1`: a second command still finds the fd open
+(: r (hark ["b/love" "b/lush" "-c" "exec 3>&1; echo a >&3; echo b >&3"])
+   (test (= "a\nb\n" (cup r))))
+; a word that is not there is 127 and the end of a script (POSIX), never a line
+; the shell carries on from
+(: r (hark ["b/love" "b/lush" "-c" "exec nosuchcmd123; echo after"])
+   (test (= "" (cup r)) (= 127 (cap r))))
+; a stage is a process of its own, so exec there replaces the stage and the
+; pipeline reads its output like any other
+(: r (hark ["b/love" "b/lush" "-c" "exec echo hi | cat; echo end"])
+   (test (= "hi\nend\n" (cup r))))
+; the blocked mask a trap installs must not ride the exec: the exec'd shell is
+; killed by its own INT (130), where a mask carried over would leave it pending
+(: r (hark ["b/love" "b/lush" "-c"
+            "trap 'echo T' INT; exec b/love b/lush -c 'kill -INT $$; echo NOT'"])
+   (test (= "" (cup r)) (= 130 (cap r))))
+(: r (hark ["b/love" "b/lush" "-c" "type exec"])
+   (test (= "exec is a shell builtin\n" (cup r))))
+
 ; the engine plans: (sh-plan ast) reads the AST once and answers a thunk, so
 ; firing it twice runs twice. the function book holds that plan -- a closure, so
 ; two? can never see it, and absence is the sh-nofn mint (peep's total test)
