@@ -83,6 +83,23 @@ struct stat {
 #define st_atime st_atim.tv_sec
 #define st_mtime st_mtim.tv_sec
 #define st_ctime st_ctim.tv_sec
+/* statx: linux's own, and the only call that answers a BIRTH time -- struct stat has
+ * no field for one. the shape is the kernel's, the same on every 64-bit port. a mask
+ * says which fields were really filled: ask for STATX_BTIME and read stx_mask back,
+ * because a filesystem that does not keep one answers without complaining. */
+#define STATX_BTIME            2048
+#define AT_STATX_SYNC_AS_STAT     0
+struct statx_timestamp { long tv_sec; unsigned int tv_nsec, __reserved; };
+struct statx {
+  unsigned int stx_mask, stx_blksize;
+  unsigned long stx_attributes;
+  unsigned int stx_nlink, stx_uid, stx_gid;
+  unsigned short stx_mode, __spare0[1];
+  unsigned long stx_ino, stx_size, stx_blocks, stx_attributes_mask;
+  struct statx_timestamp stx_atime, stx_btime, stx_ctime, stx_mtime;
+  unsigned int stx_rdev_major, stx_rdev_minor, stx_dev_major, stx_dev_minor;
+  unsigned long stx_mnt_id, __spare2, __spare3[12]; };
+int statx(int, char const*, int, unsigned int, struct statx*);
 int stat(char const*, struct stat*);
 int fstat(int, struct stat*);
 int lstat(char const*, struct stat*);

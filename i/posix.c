@@ -61,6 +61,7 @@
 # define LvHaveMount      1
 # define LvHaveNamespaces 1
 # define LvHaveStatfs     1   // linux's struct; the BSDs carry the name over another shape
+# define LvHaveStatx      1   // ..and the only call that answers a birth time
 #endif
 
 #if defined(LvHaveSignalfd)
@@ -733,7 +734,8 @@ static lvm(lvm_newns) { Sp[0] = ai_err(g, ENOSYS); ai_musttail return Next(1); }
 // --- the general POSIX fs surface (the posix_ symbol namespace; doc/misc/posix.md L0,
 // staging step 1) -- these serve any program, not just the supervisor, so their C
 // symbols wear the posix_ prefix; the love names stay the plain POSIX words.
-// (stat path|fd) -> (size mtime mode ns uid gid nlink blocks ino) | a nom
+// (stat path|fd) -> (size mtime mode ns uid gid nlink blocks ino atime ctime dev rdev
+//                   blksize) | a nom
 //                   ('enoent absent, 'eacces unreadable, ..) | 'badarg. a charm is an
 //                   open fd and the answer is fstat's, the tuple the same either way.
 //                   size in bytes, mtime in milliseconds (the (clock t) scale), mode
@@ -744,6 +746,14 @@ static lvm(lvm_newns) { Sp[0] = ai_err(g, ENOSYS); ai_musttail return Next(1); }
 //                   wants, where two writes in one millisecond still order (cook).
 //                   blocks is st_blocks, 512-byte units, which is disk usage and not
 //                   the size (du's whole subject; a sparse file says less than it is).
+//                   atime and ctime ride in nanoseconds beside mtime's ns; dev is the
+//                   filesystem the file is on and rdev the device a node NAMES (0 for
+//                   everything that is not one), both the kernel's packed word, which
+//                   love splits into major and minor itself; blksize is the io block a
+//                   write wants to be a multiple of. these five cost nothing -- one
+//                   struct stat already holds them -- and `stat`'s default block is
+//                   what wanted them: it had no access, change or device to report and
+//                   so refused to print a block at all.
 // the tail is append-only and a reader asks `tally` before it
 //                   reads past ns: the kernel's own stat (i/kmain.c) answers the
 //                   first four alone, having no ownership to tell about.
@@ -771,10 +781,17 @@ ai_noinline static struct ai *host_stat_tuple(struct ai *g, int follow) {
   if (!p) return g->sp[0] = ai_badarg(g), g;
   if (follow ? stat(p, &st) : lstat(p, &st)) return g->sp[0] = ai_err(g, errno), g; }
  intptr_t ms = (intptr_t) st.st_mtim.tv_sec * 1000 + st.st_mtim.tv_nsec / 1000000,
-          ns = (intptr_t) st.st_mtim.tv_sec * 1000000000 + st.st_mtim.tv_nsec;
- if (!ai_ok(g = ai_have(g, 9 * Width(struct ai_chain)))) return g;
+          ns = (intptr_t) st.st_mtim.tv_sec * 1000000000 + st.st_mtim.tv_nsec,
+          as = (intptr_t) st.st_atim.tv_sec * 1000000000 + st.st_atim.tv_nsec,
+          cs = (intptr_t) st.st_ctim.tv_sec * 1000000000 + st.st_ctim.tv_nsec;
+ if (!ai_ok(g = ai_have(g, 14 * Width(struct ai_chain)))) return g;
  size_t const C = Width(struct ai_chain);
- struct ai_chain *c = ini_chain(bump(g, C), putcharm(st.st_ino), ZeroPoint);
+ struct ai_chain *c = ini_chain(bump(g, C), putcharm(st.st_blksize), ZeroPoint);
+ c = ini_chain(bump(g, C), putcharm((intptr_t) st.st_rdev), word(c));
+ c = ini_chain(bump(g, C), putcharm((intptr_t) st.st_dev), word(c));
+ c = ini_chain(bump(g, C), putcharm(cs), word(c));
+ c = ini_chain(bump(g, C), putcharm(as), word(c));
+ c = ini_chain(bump(g, C), putcharm(st.st_ino), word(c));
  c = ini_chain(bump(g, C), putcharm(st.st_blocks), word(c));
  c = ini_chain(bump(g, C), putcharm(st.st_nlink), word(c));
  c = ini_chain(bump(g, C), putcharm(st.st_gid), word(c));
@@ -826,6 +843,32 @@ ai_noinline static struct ai *host_posix_statfs(struct ai *g) {
 #endif
 static lvm(lvm_posix_statfs) {
  LvmCall(g, host_posix_statfs) }
+
+// (birth path follow) -> the file's creation time in nanoseconds | () where the
+//                  filesystem keeps none | a nom | 'badarg. struct stat has no field
+//                  for one, so this is statx(2) and therefore linux's: elsewhere the
+//                  map has no row and the answer is 'enosys, which `stat` prints as the
+//                  dash GNU prints on a filesystem with no birth to tell about.
+//                  ITS OWN CALL, not a fourteenth seat in the stat tuple, because du
+//                  and ls walk that tuple a million times a tree and owe nothing for a
+//                  field only this one report reads.
+#if defined(LvHaveStatx)
+ai_noinline static word host_posix_birth(struct ai *g, word pw, word fw) {
+ char const *p = str_c(pw);
+ if (!p) return ai_badarg(g);
+ struct statx sx;
+ int fl = (charmp(fw) && getcharm(fw)) ? 0 : AT_SYMLINK_NOFOLLOW;
+ if (statx(AT_FDCWD, p, fl | AT_STATX_SYNC_AS_STAT, STATX_BTIME, &sx)) return ai_err(g, errno);
+ return sx.stx_mask & STATX_BTIME
+  ? putcharm((intptr_t) sx.stx_btime.tv_sec * 1000000000 + sx.stx_btime.tv_nsec)
+  : ZeroPoint; }
+static lvm(lvm_posix_birth) {
+ Sp[1] = host_posix_birth(g, Sp[0], Sp[1]);
+ ai_musttail return Nextp(1, 1); }
+#else
+// a linux mechanism; elsewhere the name stands and refuses.
+static lvm(lvm_posix_birth) { Sp[1] = ai_err(g, ENOSYS); ai_musttail return Nextp(1, 1); }
+#endif
 
 // (rusage who) -> (user sys), cpu microseconds. who: 0 this process, -1 the children
 //                 it has already reaped. `time` reads the children's pair on either
@@ -948,6 +991,7 @@ static union u const
   nif_posix_lstat[]   = {{lvm_posix_lstat}, {lvm_ret0}},
   nif_posix_statfs[]  = {{lvm_posix_statfs}, {lvm_ret0}},
   nif_posix_rusage[]  = {{lvm_posix_rusage}, {lvm_ret0}},
+  nif_posix_birth[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_birth}, {lvm_ret0}},
   nif_posix_readdir[] = {{lvm_posix_readdir}, {lvm_ret0}},
   nif_posix_unlink[]  = {{lvm_posix_unlink}, {lvm_ret0}},
   nif_posix_lseek[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_lseek}, {lvm_ret0}},
@@ -998,6 +1042,7 @@ LvNif("stat", nif_posix_stat, "posix");
 LvNif("lstat", nif_posix_lstat, "posix");
 LvNif("statfs", nif_posix_statfs, "posix");
 LvNif("rusage", nif_posix_rusage, "posix");
+LvNif("birth", nif_posix_birth, "posix");
 LvNif("readdir", nif_posix_readdir, "posix");
 LvNif("unlink", nif_posix_unlink, "posix");
 LvNif("lseek", nif_posix_lseek, "posix");

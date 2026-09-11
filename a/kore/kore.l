@@ -379,7 +379,7 @@
     'link "usage: link FILE NEW"
     'unlink "usage: unlink FILE"
     'cmp "usage: cmp [-s] A B"
-    'stat "usage: stat [-L] -c FORMAT | --printf=FORMAT   FILE.."
+    'stat "usage: stat [-L] [-c FORMAT | --printf=FORMAT] FILE.."
     'du "usage: du [-sabchk] [-d N] [FILE..]"
     'df "usage: df [-h|-k] [-i] [-a] [-P] [FILE..]"
     'chown "usage: chown [-R] OWNER[:GROUP] FILE.."
@@ -508,7 +508,7 @@ every tool answers --help and --version, and -h and -v where the letter is free
   ls cp mv rm mkdir rmdir ln touch pwd chmod   the fs tools (a/kore/fs.l)
   install readlink cmp                         ... the build's fs verbs
   realpath [-e|-m|-s] P.. | link F NEW | unlink F   ... the paths and the two calls
-  stat -c FMT | du [-sabhc] | df [-hia] | chown | mktemp   ... and what they report
+  stat [-c FMT] | du [-sabhc] | df [-hia] | chown | mktemp   ... and what they report
   echo seq yes true false basename dirname     ... and the trivia
 "
    (usage _) (: _ (say err kore-usage) 2)

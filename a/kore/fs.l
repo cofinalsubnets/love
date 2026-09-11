@@ -519,12 +519,11 @@
        rest (? (two? r) (sort (go (lines <>r) ())) ())
        (gid . rest))
 
-   ; -- stat: the file's own facts, by -c format. %n %N %s %b %B %f %a %A %F %u %U %g %G
-   ; %h %i %Y %y, the \n \t \\ escapes, and %% . -L follows a symbolic link; the bare
-   ; face does not. there is no default block. GNU's is four lines of access, change
-   ; and birth times and a device number, and this stat carries none of them -- printing
-   ; a block with the modify time standing in three times over would be a fabrication,
-   ; so the tool asks for -c instead of inventing one.
+   ; -- stat: the file's own facts. bare, it prints GNU's eight-line block; -c FORMAT
+   ; (or --printf=, which reads the escapes and adds no newline) asks for named fields:
+   ; %n %N %s %b %B %f %a %A %F %u %U %g %G %h %i %m %o %d %D %r %R %t %T %y %Y %x %X
+   ; %z %Z %w %W, the \n \t \\ escapes, and %% ; anything else is GNU's bare ?. -L
+   ; follows a symbolic link and the bare face does not.
    ; %N is the name shell-quoted, and a link's own target after an arrow.
    ; the quoting is the shell's: single quotes, '\'' for a quote of its own, $'\t' for a
    ; control byte, and double quotes for a name whose only trouble IS the quote. a byte
@@ -553,6 +552,13 @@
     (: q (ushq p)
        (? !(40960 = md & 61440) q
           (: t (readlink p) (? (string? t) (q + " -> " + (ushq t)) q))))
+   ; a device number is one packed word and linux splits it unevenly: the major's low
+   ; twelve bits sit at 8, its high twenty at 32; the minor's low eight at 0 and the
+   ; rest at 12. %t/%T print the two in hex, %d/%D and %r/%R the whole word either way.
+   (ust-major d) ((& (d >> 32) 4294963200) | (& (d >> 8) 4095))
+   (ust-minor d) ((& (d >> 12) 4294967040) | (& d 255))
+   (ust-mount p)                       ; %m: the mount point the path sits on
+    (: m (udf-holds (udf-mounts ()) p) (? m <>m "/"))
    (ust-kindc m) (m & 61440 @
     32768 "-" 16384 "d" 40960 "l" 8192 "c"
     24576 "b" 4096 "p" 49152 "s"
@@ -582,13 +588,18 @@
    ; -c does not read escapes -- `stat -c 'a\tb'` prints the backslash and the t, and
    ; adds a newline of its own; --printf reads them and adds none. GNU's split, and the
    ; only way a format can carry a literal backslash at all.
-   (ust-expand fmt p st esc?)
+   (ust-expand fmt p st esc? L?)
     (:- (go 0)
      n #fmt o (jug 0)
      sz <st md <>>st ns (st 3)
      uid (ust-at st 4) gid (ust-at st 5) nlk (ust-at st 6)
      blk (ust-at st 7) ino (ust-at st 8)
+     ats (ust-at st 9) cts (ust-at st 10)
+     dev (ust-at st 11) rdev (ust-at st 12) iob (ust-at st 13)
      (num v) (? (charm? v) (show v) "?")
+     (hex v) (? (charm? v) (uradix v 16) "?")
+     (secs v) (? (charm? v) (show (v // 1000000000)) "?")
+     (when v) (? (charm? v) (ustamp v) "?")
      (go k) (n <= k ? (slurp o) (: c (fmt k) (?- (go (k + 2))
       (esc? && c = 92 && k + 1 < n)
        (: d (fmt (k + 1))
@@ -611,9 +622,64 @@
         71 (say o (charm? gid ? (uidname "/etc/group" gid) "?"))
         104 (say o (num nlk))
         105 (say o (num ino))
-        89 (say o (show (ns // 1000000000)))
-        121 (say o (ustamp ns))
-        d (put o 37, put o d))))))
+        89 (say o (secs ns))
+        121 (say o (when ns))
+        88 (say o (secs ats))
+        120 (say o (when ats))
+        90 (say o (secs cts))
+        122 (say o (when cts))
+        ; the birth time is statx's own call, so it is asked only where it is spelled --
+        ; and a filesystem keeping none answers the dash and the zero GNU answers
+        87 (say o (: b (birth p L?) (charm? b ? (secs b) "0")))
+        119 (say o (: b (birth p L?) (charm? b ? (ustamp b) "-")))
+        100 (say o (num dev))
+        68 (say o (hex dev))
+        114 (say o (num rdev))
+        82 (say o (hex rdev))
+        116 (say o (hex (? (charm? rdev) (ust-major rdev) ())))
+        84 (say o (hex (? (charm? rdev) (ust-minor rdev) ())))
+        111 (say o (num iob))
+        109 (say o (ust-mount p))
+        67 (say o "?")                  ; the security context: no labels here
+        (put o 63))))))                 ; an unknown directive is GNU's bare ?
+   ; the default face: GNU's block, line for line. what once refused it was missing
+   ; access, change and device -- the stat tuple carries all three now -- and the birth
+   ; time, which is statx's own call and answers the dash where a filesystem keeps none.
+   ; the widths are GNU's printf: a Links is padded only when a device type follows it,
+   ; and the name here is raw, not %N's shell-quoted one.
+   (ust-block p st L?)
+    (: sz <st md <>>st ns (st 3)
+       kind (& md 61440)
+       rdev (ust-at st 12)
+       dev? ((kind = 8192) || (kind = 24576))
+       ; -L followed, so a link's own mode can only be here when it did not: the kind
+       ; alone says whether there is an arrow to draw, and asks readlink only then
+       t (? (kind = 40960) (readlink p) ())
+       nm (? (string? t) (p + " -> " + t) p)
+       (num v) (? (charm? v) (show v) "?")
+       (idcol id path) (: n (? (charm? id) (uidname path id) "?")
+                          ((upad 5 (num id)) + "/" + (upad 8 n)))
+       (line s) (say out s, put out 10)
+       _ (line ("  File: " + nm))
+       _ (line ("  Size: " + (urpad 10 (show sz)) + string 9
+                + "Blocks: " + (urpad 10 (num (ust-at st 7)))
+                + " IO Block: " + (urpad 6 (num (ust-at st 13)))
+                + " " + (ust-kind md sz)))
+       _ (line ("Device: " + (num (? (charm? (ust-at st 11)) (ust-major (ust-at st 11)) ()))
+                + "," + (num (? (charm? (ust-at st 11)) (ust-minor (ust-at st 11)) ()))
+                + string 9 + "Inode: " + (urpad 10 (num (ust-at st 8)))
+                + "  Links: " + (? dev? (urpad 5 (num (ust-at st 6))) (num (ust-at st 6)))
+                ; the block spells a device type in DECIMAL; only %t and %T are hex
+                + (? dev? (" Device type: " + (num (ust-major rdev))
+                           + "," + (num (ust-minor rdev))) "")))
+       _ (line ("Access: (" + (uzpad 4 (uradix (& md 4095) 8)) + "/" + (ust-perm md)
+                + ")  Uid: (" + (idcol (ust-at st 4) "/etc/passwd")
+                + ")   Gid: (" + (idcol (ust-at st 5) "/etc/group") + ")"))
+       _ (line ("Access: " + (ustamp (ust-at st 9))))
+       _ (line ("Modify: " + (ustamp ns)))
+       _ (line ("Change: " + (ustamp (ust-at st 10))))
+       b (birth p L?)
+       (line (" Birth: " + (charm? b ? (ustamp b) "-"))))
    (stat-main as)
     (: (long? w n s) ((n < tally w) && (snip w 0 n = s))
        (fl a fmt L pf fs)
@@ -626,13 +692,13 @@
            (fl >a fmt L pf (<a . fs)))
        p (fl as () 0 0 ())
        fmt <p L? <>p pf? <>>p fs (p 3)
-       _ (? ((string? fmt) && two? fs) ()
-            (udie 2 "usage: stat [-L] -c FORMAT | --printf=FORMAT   FILE.."))
+       _ (? (two? fs) () (udie 2 "usage: stat [-L] [-c FORMAT | --printf=FORMAT] FILE.."))
        (one q ok)
         (: st (? L? (stat q) (lstat q))
            (? (one? st)
               (say err ("stat: cannot stat '" + q + "': No such file or directory\n"), 0)
-              (say out (ust-expand fmt q st pf?), pf? || put out 10, ok)))
+              (string? fmt) (say out (ust-expand fmt q st pf? L?), pf? || put out 10, ok)
+              (ust-block q st L?, ok)))
        (go a ok) (two? a ? (go >a (one <a ok)) (flush out, !ok))
        (go fs 1))
 
@@ -729,6 +795,14 @@
                      (: w (words <l)
                         (go >l (? (2 <= #w) ([(udf-esc (w 0)) (udf-esc (w 1))] . acc) acc))))
        (? (two? r) (go (filter (\ s #s) (lines <>r)) ()) ()))
+   ; the mount a path sits on: the LONGEST point its resolved name starts with, so a
+   ; bind mount names itself and not the twin it shares a device with. stat's %m asks
+   ; this too, which is why it is here and not inside df's own walk.
+   (udf-holds ms p)
+    (: c (: q (rp-canon p 40) (? (two? q) <>q p))
+       (fits m) (: pt <>m n #pt
+                   ((snip c 0 n = pt) && ((n = #c) || (pt = "/") || (c n = 47))))
+       (foldl (\ b m (? ((fits m) && ((nil? b) || (#<>b < #<>m))) m b)) () ms))
    (udf-up a b) (? (b <= 0) 0 ((a + b - 1) // b))
    (udf-pct u a) (? ((u + a) <= 0) "-" ((show (udf-up (u * 100) (u + a))) + "%"))
    (udf-cells dev pt fs h? i?)         ; a statfs tuple -> the six cells of its row
@@ -770,14 +844,9 @@
               '("Filesystem" "1K-blocks" "Used" "Available" "Use%" "Mounted on"))
        ms (udf-mounts ())
        _ (? ((two? fs) || (two? ms)) () (udie 1 "df: cannot read /proc/self/mounts"))
-       (holds p)                        ; the mount point p sits under, longest first
-        (: c (: q (rp-canon p 40) (? (two? q) <>q p))
-           (fits m) (: pt <>m n #pt
-                       ((snip c 0 n = pt) && ((n = #c) || (pt = "/") || (c n = 47))))
-           (foldl (\ b m (? ((fits m) && ((nil? b) || (#<>b < #<>m))) m b)) () ms))
        (named p acc)
         (: r (statfs p)
-           (? (two? r) (: m (holds p) ((udf-cells (? m <m "-") (? m <>m p) r h? i?) . acc))
+           (? (two? r) (: m (udf-holds ms p) ((udf-cells (? m <m "-") (? m <>m p) r h? i?) . acc))
               (: _ (say err ("df: " + p + ": "
                              + (? (= r 'eacces) "Permission denied" "No such file or directory")))
                  _ (put err 10) _ (pin t 'bad 1) acc)))

@@ -314,15 +314,23 @@ allows any of it to be missing, `-s` takes the links as they lie. `readlink -f` 
 STRICTER than GNU's (it wants the path to exist), which is GNU's `readlink -e`; realpath is
 the GNU-shaped door. `link` and `unlink` are the two syscalls said plainly, no face on them.
 
-`stat -c FORMAT` (or `--printf=`, which reads the escapes and adds no newline where `-c` does
-neither), `du`, `df`, `chown`, `mktemp`. They read the **stat tail**: i/posix.c's `stat` answers
-`(size mtime mode ns uid gid nlink blocks ino)` and `lstat` the same of the link itself. The tail
+`stat` (bare, or `-c FORMAT` / `--printf=`, which reads the escapes and adds no newline where
+`-c` does neither), `du`, `df`, `chown`, `mktemp`. They read the **stat tail**: i/posix.c's `stat`
+answers `(size mtime mode ns uid gid nlink blocks ino atime ctime dev rdev blksize)` and `lstat`
+the same of the link itself. The tail
 is append-only and the KERNEL's own stat (i/kmain.c) answers the first four alone — an image
 tree has no ownership to tell about — so it is asked by `tally` and a world without it says so.
 
-* **there is no default `stat` face.** GNU's is four lines of access, change and birth times
-  and a device number, none of which this stat carries. Printing the modify time three times over
-  would be a fabrication, so the tool asks for `-c`.
+* **the default `stat` face is GNU's block, line for line.** It was refused once, and the
+  reason was real: the tuple had no access time, no change time and no device number, so a
+  block would have printed the modify time three times over. The last five fields of the tuple
+  are those facts, and they cost nothing — one `struct stat` already held them. The birth line
+  is the exception: `struct stat` has no field for one, so it is `statx(2)`'s own call through
+  the `birth` nif, asked once per file by this report alone and never by the `stat`/`lstat`
+  every tree walk leans on. Off Linux, and on a filesystem keeping no birth, it is the dash
+  GNU prints there too.
+* **`%t`/`%T` are hex and the block's `Device type:` is decimal** — GNU's own split, and the
+  only place the packed device word is taken apart. An unrecognised directive is a bare `?`.
 * **du counts `st_blocks`, which is allocation and not size** — a sparse file costs less than it
   measures, a tiny one costs a whole block — and reports 1K units rounded up. `-b`'s apparent
   size counts a FILE's `st_size` and a directory's **not at all**, which is GNU's rule and not a

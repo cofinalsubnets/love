@@ -258,6 +258,7 @@ struct _IO_FILE {
 #define NR_madvise        233
 #define NR_wait4          260
 #define NR_getrusage      165
+#define NR_statx          291
 #define NR_statfs          43
 #define NR_fstatfs         44
 #define NR_memfd_create   279
@@ -304,6 +305,7 @@ struct _IO_FILE {
 #define NR_execveat       322
 #define NR_wait4           61
 #define NR_getrusage       98
+#define NR_statx          332
 #define NR_statfs         137
 #define NR_fstatfs        138
 #define NR_kill            62

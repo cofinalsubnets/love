@@ -266,6 +266,12 @@
       (= (ushq ("tab" + string 9 + "here")) "'tab'$'\\t''here'")
       (= (ushq ("a" + string 1 + "b")) "'a'$'\\001''b'")
       (= (ushq "") "''")
+      ; a device number is one packed word, and linux splits it unevenly
+      (= (ust-major 54) 0) (= (ust-minor 54) 54)          ; a plain filesystem
+      (= (ust-major 259) 1) (= (ust-minor 259) 3)         ; /dev/null: 1,3
+      (= (ust-major 1050) 4) (= (ust-minor 1050) 26)      ; a tty: 4,26
+      (= (ust-major 66306) 259) (= (ust-minor 66306) 2)   ; nvme: a major past 8 bits
+      (= (ust-minor 1048576) 256)                         ; ..and a minor past its own
       ; df's arithmetic: every figure rounds UP, and a filesystem with nothing used and
       ; nothing free has no percentage to report
       (= (udf-up 0 1024) 0) (= (udf-up 1 1024) 1) (= (udf-up 1024 1024) 1)

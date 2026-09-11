@@ -1273,9 +1273,37 @@ head -c 9000 /dev/urandom > "$dt/a/f2"
 : > "$dt/a/b/f3"
 ln -sf f1 "$dt/lk"
 for f in '%n' '%s' '%a' '%A' '%F' '%u' '%U' '%g' '%G' '%h' '%i' '%Y' '%b' '%B' '%f' \
-         '%N' '%y' '%n|%s|%a' 'x%%y' 'a\tb\n'; do
+         '%N' '%y' '%x' '%X' '%z' '%Z' '%w' '%W' '%d' '%D' '%r' '%R' '%t' '%T' '%o' \
+         '%m' '%n|%s|%a' 'x%%y' 'a\tb\n' 'a%Qb'; do
   both "stat -c $f" stat -c "$f" "$dt/f1"
 done
+# the device numbers, which only a NODE has any of -- %t and %T split the packed word
+# into major and minor and spell them in hex, %d/%r hand the word over whole
+for dv in /dev/null /dev/zero; do
+  [ -e "$dv" ] && both "stat -c dev $dv" stat -c '%d|%D|%r|%R|%t|%T|%F' "$dv"
+done
+# the DEFAULT face: GNU's eight-line block, which this tool used to refuse outright for
+# want of an access time, a change time and a device number. the stat tuple carries all
+# three now and the birth line is statx's own call, answering the dash GNU answers on a
+# filesystem that keeps none. compared byte for byte on what holds still.
+both "stat block file"  stat "$dt/f1"
+both "stat block empty" stat "$dt/a/b/f3"
+both "stat block dir"   stat "$dt/a"
+both "stat block -L lk" stat -L "$dt/lk"
+for dv in /dev/null /dev/zero; do
+  [ -e "$dv" ] && both "stat block $dv" stat "$dv"
+done
+# a link's own block is the one that cannot be compared byte for byte, and the reason is
+# not ours: READING a link updates its access time, so GNU run twice disagrees with GNU.
+# every other line is compared, the arrow among them.
+stat "$dt/lk" 2>/dev/null | grep -v '^Access: 2' > "$g"
+korerun stat "$dt/lk" 2>/dev/null | grep -v '^Access: 2' > "$o"
+same "stat block link"
+# no operand is still usage, and -c still wants its format
+korerun stat > /dev/null 2>&1; r=$?
+[ $r -eq 2 ] || fail "kore stat no operand (exit $r)"
+korerun stat -c > /dev/null 2>&1; r=$?
+[ $r -eq 2 ] || fail "kore stat -c with no format (exit $r)"
 both "stat dir"      stat -c '%n %F %A %a' "$dt/a"
 # the bare face does NOT follow a link and -L does -- one stat call apart, and the
 # only check that can tell lstat from stat at all

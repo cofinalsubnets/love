@@ -68,6 +68,7 @@ processes, this surface answered against a ramfs.
 | `dup2`/`pipe`                  | `dup` `dup2` `pipe` (a pair of fds)                    |
 | `stat`/`mkdir`/`unlink`/readdir| `stat` `lstat` `statfs` `mkdir` `rmdir` `unlink` `readdir` `rename` `symlink` `readlink` `hardlink` `chmod` `chown` `utime` `umask` |
 | `getrusage`                    | `rusage` — `(rusage 0)` this process, `(rusage -1)` the children reaped |
+| `statx` — the birth time       | `birth` — `(birth path follow)`; `()` where the filesystem keeps none |
 | `cwd` — `chdir`/`getcwd`       | `chdir` `cwd`                                           |
 | signals — `sigaction`/`kill`   | **the condition system**: `signal`, `sigfd`/`sigtake`, `still` |
 | environment                    | `getenv` `setenv` `environ`; cli.l parses argv          |
@@ -104,7 +105,7 @@ failure is TRUTHY: never ask `? x` of a value op's answer — `hot?` is the port
 untouched: `kmain.c`'s `k_fs_*` and `__ai_sys` answer 0-or-negative as every C face
 must, and the nom is minted at the one place C meets love. The misuse axis is one
 word now: `'badarg`, retiring the positive-EINVAL / `-1` / `-EINVAL` split.
-`stat` answers `(size mtime-ms mode ns uid gid nlink blocks ino)` — ns the
+`stat` answers `(size mtime-ms mode ns uid gid nlink blocks ino atime ctime dev rdev blksize)` — ns the
 whole mtime in nanoseconds, one charm, cook's build-grade resolution; blocks is `st_blocks`,
 512-byte units, which is DISK USAGE and not the size — or the nom (`'enoent` absent,
 `'eacces` unreadable). `lstat` answers the same of the LINK itself. **the tail is append-only and a reader asks `tally` before reading past
@@ -115,6 +116,10 @@ holding a path, which `df` lays out — LINUX's call and no one else's: the BSDs
 another struct, the syscall map leaves the row out, and one asks and hears `'enosys`. `rusage`
 is the same shape of question about cpu: `(user sys)` in microseconds, of this process (0) or of
 the children it has reaped (-1), which is how `time` prices a command it did not itself run.
+`birth` answers a file's creation time in nanoseconds, `()` where the filesystem keeps none —
+`statx(2)`, and therefore linux's, because `struct stat` has no field for one. **Its own call
+rather than a fifteenth seat in the stat tuple**: `du` and `ls` walk that tuple a million times
+a tree and owe nothing for a field only `stat`'s report reads.
 `openfd`'s mode 3 is O_CREAT|O_EXCL at 0600 — the one that FAILS on an existing name,
 which is what makes a `mktemp` a claim and not a guess. `spawn` answers a pid or the
 failure's nom, and a child that cannot exec `_exit(127)`s. `setenv` with a non-string value
