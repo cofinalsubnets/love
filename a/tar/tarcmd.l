@@ -64,10 +64,7 @@
        z? (tarc-has? fl 122)                       ; z
        a (2 <= n ? <>av "")
        d (3 <= n ? <>>av ".")
-       (? (fl = "-h" || fl = "--help") (puts (usage + "\n"), flush out, 0)
-          (fl = "-v" || fl = "--version")
-           (puts ("tar (love " + love-version + ")\n"), flush out, 0)
-          (n < 2) (tarc-die usage)
+       (? (n < 2) (tarc-die usage)
           (tarc-has? fl 99) (n < 3 ? (tarc-die usage) (tarc-c a d z?))      ; c
           (tarc-has? fl 120) (tarc-x a d z?)                                ; x
           (tarc-has? fl 116) (tarc-t a z?)                                  ; t
@@ -75,6 +72,6 @@
 
    T (cite 'verbs 'tab)
    (tarc-run av) (: r (cite 'kore 'urun) (? (lit? r) (r tar-main av) (tar-main av)))
-   _ (pins T 'tar tarc-run))
+   _ (pins T 'tar (udoor 'tar tarc-run usage 1 1)))
 
 ) ; module 'tarcmd

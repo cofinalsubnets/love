@@ -63,6 +63,7 @@
         touch-main tr-main true-main tsort-main uatoi ubase uclk ucopy udie udiff udirp ujoin
         uleave umount-main uname-main unexpand-main uniq-main unlines unlink-main uptime-main uread urun
         uset usplit ustatf utag utty uupsay wc-main whoami-main xargs-main yes-main)
+(borrow 'cli)  ; the option walk and the -h/-v door, both of them love's floor too
 (borrow 'holo) ; the assembler module: elf64, arbytes, ld-syms, at -- as/ar/ld/nm read it
 (borrow 'posix)
 (: (read-text p) (: q (open p "r") (? (hot? q) (: t (slurp q) _ (close q) [1 t]) ()))    ; (1 text) | ()
@@ -434,33 +435,14 @@
    korenoh '(grep du ls sort touch chown ln free)
    korenov '(grep awk od join nl uname cat head tail cp mv rm ln mkdir rmdir chmod
              chown install mount umount readlink patch pgrep pkill killall)
-   ; the leading flag words only: the walk stops at the first operand and at `--`, so a
-   ; file really called --help still opens once something else has been named. it is not
-   ; getopt -- a value word that looks like a flag is walked over, so `grep -e --help f`
-   ; answers the help; glue it (`grep -e--help f`) to mean the pattern.
-   (koreask as h? v?)
-    (? !(two? as) ()
-       (: w <as
-          (? (w = "--") ()
-             (w = "--help") 'help
-             (w = "--version") 'vers
-             ((w = "-h") && h?) 'help
-             ((w = "-v") && v?) 'vers
-             ((1 < tally w) && (w 0 = 45)) (koreask >as h? v?)
-             ())))
-   ; the applet as the world calls it: the two flags first, then the tool under urun.
-   ; both dispatch lanes come through here -- the verb registry and the symlink -- so
-   ; there is one answer and not two
+   ; the applet as the world calls it: cli's door, then the tool under urun. both
+   ; dispatch lanes come through here -- the verb registry and the symlink -- so there
+   ; is one answer and not two. what kore keeps is the policy: which names take no
+   ; flags at all, which have spoken for a letter themselves, and the usage text.
    (koredoor nm f)
-    (? (elem nm korenoflag) (\ as (urun f as))
-     (: u (peep korehelp nm ())
-       h? !(elem nm korenoh)
-       v? !(elem nm korenov)
-       (say1 s) (: _ (puts (s + "\n")) _ (flush out) 0)
-       (\ as (koreask as h? v?
-              @ 'help (say1 (u || ("usage: " + string nm)))
-                'vers (say1 (string nm + " (love " + love-version + ")"))
-                (urun f as)))))
+    (: (run as) (urun f as)
+       (? (elem nm korenoflag) run
+          (udoor nm run (peep korehelp nm ()) !(elem nm korenoh) !(elem nm korenov))))
 
    kore-usage "kore -- the love multi-call toolbox
 usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
@@ -562,7 +544,7 @@ every tool answers --help and --version, and -h and -v where the letter is free
                    f (? n (applets n) ())
                    ; no tool named: kore's own two flags, then the listing
                    (? f ((koredoor n f) >t)
-                      (koreask t 1 1
+                      (uask t 1 1
                        @ 'help (: _ (puts kore-usage) _ (flush out) 0)
                          'vers (: _ (puts ("kore (love " + love-version + ")\n"))
                                   _ (flush out) 0)

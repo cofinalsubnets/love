@@ -181,17 +181,14 @@
                  (go i a) (? (n <= i) a
                              (: c (s i) (? ((47 < c) && (c < 58)) (go (i + 1) ((a * 10) + (c - 48))) a)))
                  (go 0 0))
-   (doom-usage _) (say err "usage: love doom [-iwad FILE] [-display :N] [-frames N]\n", 1)
+   doom-usage "usage: love doom [-iwad FILE] [-display :N] [-frames N]"
    (doom-main as)
     (: (opt a k d) (? (one? a) d (<a = k && two? >a) <>a (opt >a k d))
        nestwad (cwd 0 + "/love-" + love-version + "/dl/doom1.wad")
        wad (opt as "-iwad" (two? (stat "dl/doom1.wad") ? "dl/doom1.wad" nestwad))
        disp (opt as "-display" (getenv "DISPLAY"))
        frames (: f (opt as "-frames" ()) (string? f ? (digits f) 0))
-       (? (any ("-h" || "--help" \ 1) as) (doom-usage 0)
-          (any ("-v" || "--version" \ 1) as)
-           (puts ("doom (love " + love-version + ")\n"), flush out, 0)
-          !(elem 'doom-start (names ())) (doom-nest as)
+       (? !(elem 'doom-start (names ())) (doom-nest as)
           (one? (stat wad)) (say err ("doom: no IWAD at " + wad + "\n"), 1)
           (: dn (dispof (string? disp ? disp ""))
              s (x-connect ("/tmp/.X11-unix/X" + dn))
@@ -211,7 +208,8 @@
                          _ (puts ("doom: " + show n + " frames\n"))
                          0)))))))
 
-   _ (pins (cite 'verbs 'tab) 'doom doom-main)
+   door (udoor 'doom doom-main doom-usage 1 1)
+   _ (pins (cite 'verbs 'tab) 'doom door)
    s (cite 'verbs 'fire ["doom" "doom.l"])
-   (two? s ? (quit (doom-main >s))))
+   (two? s ? (quit (door >s))))
 ) ; module doom

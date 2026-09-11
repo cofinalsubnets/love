@@ -123,16 +123,12 @@
  (mc-run ld rd)
   (: s (mc-new ld rd)
      (stage (mc-frame s) (mc-key s) (\ _ (s 'over))))
- ; the operands open a full-screen stage, so the flags are read before it
+ mc-usage "usage: love mc [DIR [DIR]]"
  (mc-main as)
-  (: u "usage: love mc [DIR [DIR]]\n"
-     a (? (two? as) <as "")
-     (? (a = "-h" || a = "--help") (puts u, 0)
-        (a = "-v" || a = "--version") (puts ("mc (love " + love-version + ")\n"), 0)
-        (: d1 (two? as ? a ("" + (cwd 0)))
-           d2 (two? as && two? >as ? <>as d1)
-           (? !(mc-dirat? d1) (puts ("mc: " + d1 + ": not a directory\n"), 1)
-              !(mc-dirat? d2) (puts ("mc: " + d2 + ": not a directory\n"), 1)
-              (mc-run d1 d2)))))
- _ (pins (cite 'verbs 'tab) 'mc mc-main))
+  (: d1 (two? as ? <as ("" + (cwd 0)))
+     d2 (two? as && two? >as ? <>as d1)
+     (? !(mc-dirat? d1) (puts ("mc: " + d1 + ": not a directory\n"), 1)
+        !(mc-dirat? d2) (puts ("mc: " + d2 + ": not a directory\n"), 1)
+        (mc-run d1 d2)))
+ _ (pins (cite 'verbs 'tab) 'mc (udoor 'mc mc-main mc-usage 1 1)))
 ) ; module mc

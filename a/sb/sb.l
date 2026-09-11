@@ -669,10 +669,7 @@ usage: sb VERB ..
    ; the same page two ways: asked for, it is the answer; reached by a miss, a complaint
    (usage _) (: _ (say err sb-usage) (quit 2))
    (sb-main as) (? (one? as) (usage ())
-    (<as @ ("-h" || "--help") (puts sb-usage, flush out, quit 0)
-           ("-v" || "--version")
-            (puts ("sb (love " + love-version + ")\n"), flush out, quit 0)
-           "record" (sb-record (? (two? >as) <>as ""), quit 0)
+    (<as @ "record" (sb-record (? (two? >as) <>as ""), quit 0)
            "sync" (? (two? >as) (: r (sb-sync <>as) (quit (? r 0 1))) (usage ()))
            "apply" (: r (sb-apply >as) (quit (? r 0 1)))
            "bank" (? (two? >as) (: r (sb-bank >as) (quit (? r 0 1))) (usage ()))
@@ -689,8 +686,9 @@ usage: sb VERB ..
 ; this file and have nothing fire. sb-main reads bare: the module's layer holds
 ; this file's binds and is still the head when this form compiles. body-having:
 ; the seat leaks nothing.
-(: _ (pins (cite 'verbs 'tab) 'sb sb-main)
+(: door (udoor 'sb sb-main sb-usage 1 1)
+   _ (pins (cite 'verbs 'tab) 'sb door)
    s ((cite 'verbs 'fire) ["sb" "sb.l"])
-   (? (two? s) (sb-main >s) ()))
+   (? (two? s) (door >s) ()))
 
 ) ; module 'sb

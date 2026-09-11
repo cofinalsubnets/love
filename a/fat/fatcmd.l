@@ -32,6 +32,7 @@
 
 (borrow 'posix)
 (: fatc-usage "usage: fat {ls|stat|cat|get|put|mkdir|rm|mkfs} IMG [PATH..]"
+   mkfsv-usage "usage: mkfs.vfat [-C] IMG [BLOCKS]"
    (fatc-moan m) (say err ("fat: " + m), put err 10, flush err, 1)
    ; the exit door: a status raised, not a process ended, so a caller already in
    ; this image gets a charm back; without kore aboard there is no catcher.
@@ -135,10 +136,7 @@
     (: n #av
        (arg k) (? (n <= k) "" (av k))
        v <av img (arg 1) p (arg 2)
-       (? (v = "-h" || v = "--help") (puts (fatc-usage + "\n"), flush out, 0)
-          (v = "-v" || v = "--version")
-           (puts ("fat (love " + love-version + ")\n"), flush out, 0)
-          (n < 2) (: _ (say err (fatc-usage + "\n")) 2)
+       (? (n < 2) (: _ (say err (fatc-usage + "\n")) 2)
           (v @
            "ls"    (fatc-ls img p)
            "stat"  (: _ (? #p () (fatc-die 2 "stat wants a path")) (fatc-stat img p))
@@ -155,11 +153,7 @@
    (mkfsv-main av)
     (: w (two? av ? <av "")
        as (? (two? av && (<av = "-C")) >av av)
-       (? (w = "-h" || w = "--help")
-           (puts "usage: mkfs.vfat [-C] IMG [BLOCKS]\n", flush out, 0)
-          (w = "-v" || w = "--version")
-           (puts ("mkfs.vfat (love " + love-version + ")\n"), flush out, 0)
-          (one? as) (say err "usage: mkfs.vfat [-C] IMG [BLOCKS]\n", 2)
+       (? (one? as) (say err (mkfsv-usage + "\n"), 2)
           (: img <as
              bl (two? >as && fatc-size <>as)
              (fatc-mkfs img (charm? bl && bl * 1024)))))
@@ -167,8 +161,8 @@
    T (cite 'verbs 'tab)
    ; the verb wraps in urun, kore.l's own shape for a main that leaves deep
    (fatc-run f av) (: r (cite 'kore 'urun) (lit? r ? (r f av) (f av)))
-   _ (pins T 'fat       (fatc-run fat-main)
-            'mkfs.vfat  (fatc-run mkfsv-main)
-            'mkdosfs    (fatc-run mkfsv-main)))
+   _ (pins T 'fat       (udoor 'fat (fatc-run fat-main) fatc-usage 1 1)
+            'mkfs.vfat  (udoor 'mkfs.vfat (fatc-run mkfsv-main) mkfsv-usage 1 1)
+            'mkdosfs    (udoor 'mkdosfs (fatc-run mkfsv-main) mkfsv-usage 1 1)))
 
 ) ; module 'fatcmd

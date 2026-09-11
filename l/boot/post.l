@@ -1813,7 +1813,7 @@
 ; layer is spliced.
 
 (module '(cli read reads forms shell welp edraw edln edlnc cli-rail cli-line stage edkey
-          uopt uopt1 uoptv edcmd edsgr edwide edcut edpad edfit
+          uopt uopt1 uoptv uask udoor edcmd edsgr edwide edcut edpad edfit
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
           joinln splitat parseall)
@@ -2149,6 +2149,33 @@
        (walk as ()))
    ; a value option's text, or () -- the presence read that pairs with uopt
    (uoptv t c) (: r (peep t c ()) (? (two? r) <>r ()))
+
+   ; --- the two flags every applet answers, and the one place that answers them ------
+   ; the leading flag words only: the walk stops at the first operand and at `--`, so a
+   ; file really called --help still opens once something else has been named. it is not
+   ; getopt -- a value word that looks like a flag is walked over, so `grep -e --help f`
+   ; answers the help; glue it (`grep -e--help f`) to mean the pattern.
+   (uask as h? v?)
+    (? !(two? as) ()
+       (: w <as
+          (? (w = "--") ()
+             (w = "--help") 'help
+             (w = "--version") 'vers
+             ((w = "-h") && h?) 'help
+             ((w = "-v") && v?) 'vers
+             ((1 < #w) && (w 0 = 45)) (uask >as h? v?)
+             ())))
+   ; an applet as the world calls it: nm is its name, u its usage text, and h?/v? whether
+   ; the bare letters are free -- posix or gnu has already spoken for one in a few places,
+   ; and there the long form is the only answer. answers the main a verb registry takes,
+   ; so a whole userland's two flags are this walk and no other.
+   (udoor nm f u h? v?)
+    (: (say1 x) (: n #x                       ; a page that ends in a newline keeps just the one
+                   (puts (? (n && (x (n - 1) = 10)) x (x + "\n")), flush out, 0))
+       (\ as (uask as h? v?
+              @ 'help (say1 (u || ("usage: " + string nm)))
+                'vers (say1 (string nm + " (love " + love-version + ")"))
+                (f as))))
 
    ps1 "> "
    ; the helm glows in the crew's cyan (256-colour 117 ~ #7dcfff), reset after.

@@ -143,11 +143,7 @@
                              d 'want @ 'vi (pin d 'want (), (? vi (visit (_ \ vi [p]), reload d) (tell d "no editor on this seat")))
                                        'play (pin d 'want (), visit (_ \ story-run (d 'lvl))))
                    (stage (w \ h \ design-frame d w h) step (\ _ (d 'over))))
- ; the operand takes the whole screen, so the two flags are answered before it opens
- (design-main as)
-  (: w (two? as ? <as "")
-     (? (w = "-h" || w = "--help") (puts "usage: love design [LEVEL.l]\n", 0)
-        (w = "-v" || w = "--version") (puts ("design (love " + love-version + ")\n"), 0)
-        (design-run (#w ? w "a/rove/levels/lighthouse.l"))))
- _ (pin (cite 'verbs 'tab) 'design design-main))
+ design-usage "usage: love design [LEVEL.l]"
+ (design-main as) (design-run (two? as ? <as "a/rove/levels/lighthouse.l"))
+ _ (pin (cite 'verbs 'tab) 'design (udoor 'design design-main design-usage 1 1)))
 ) ; module design
