@@ -135,6 +135,9 @@ static short const os_nr[][3] = {
   {57,               NR_fb_fork,          2},   /* fork: linux's fork.c rides clone (56,
                                                  * unmapped); a BSD branch calls 57 */
   {NR_execve,        NR_fb_execve,       59},
+  {NR_execveat,      NR_fb_fexecve,     465},   /* the member builds the OS shape: the BSDs
+                                                 * have fexecve(fd av ev), linux wants the
+                                                 * empty path and AT_EMPTY_PATH */
   {60,               NR_fb_exit,          1},   /* exit and exit_group are one act here */
   {NR_wait4,         NR_fb_wait4,       449},
   {NR_kill,          NR_fb_kill,         37},
