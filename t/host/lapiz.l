@@ -348,6 +348,26 @@ a display
                    (elem "     -v     be loud" ls)       ; a short term keeps its definition
                    (elem "     • a bullet" ls)
                    (elem "         a display" ls)))      ; a display sits inside the quote
+      ; the two ways a page's own furniture leaks into it. a .de body runs to a lone `..`
+      ; and to nothing else -- an indented request inside one names no macro, and ending
+      ; the body there spills the rest of the definition, terminator included. and `.if n`
+      ; is THIS device's branch, so its text is the page's; `.if t` belongs to the other one.
+      _ (: d (rfread ".TH \"T\" \"1\" \"\" \"s\" \"m\"
+.de Q
+.ie \\n(.g \\(lq\\\\$1\\(rq
+.el \\{\\
+.  if t ``\\\\$1''
+.  if n \"\\\\$1\"
+.\\}
+..
+.SH NAME
+.if n kept by nroff
+.if t dropped by nroff
+t \\- a thing
+")
+           ls (lines (flush (ttyshow d 40)))
+           (test (! (elem "     .." ls)) (! (elem "     .. .." ls))
+                   (elem "     kept by nroff t - a thing" ls)))
       0)
 
  _ (test_fin ())
