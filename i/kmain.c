@@ -2295,7 +2295,16 @@ void kmain(void) {
   // `bake PATH` on the boot line: the warm heap -- the crew in, the seat text run -- as an
   // image file on the ramfs, then reset; a door that can carry a file out (the wasm lift)
   // hands it to the next boot as kboot.image. the same bake the host's verb makes.
-  if (!memcmp(kboot.cmdline, "bake ", 5)) k_bake(r, kboot.cmdline + 5);
+  //
+  // and the crew is pulled ABOARD first, because "the crew in" is what an image is for.
+  // left behind the filler it is not in the heap that gets written, so every boot of that
+  // image pays the whole load at its first verb MISS -- seventeen seconds on the wasm seat,
+  // for the miss that says "not found" -- and until something trips it `seed`, `cc` and
+  // every other crew verb are simply absent. the filler stays armed and costs nothing
+  // afterwards: its own guard is the `source` row this load registers.
+  if (!memcmp(kboot.cmdline, "bake ", 5)) {
+    r = ai_evals_(r, "(crewload 0)");
+    k_bake(r, kboot.cmdline + 5); }
   // now the line wears its real shape and the program word dispatches off the
   // registry -- spawn's own door. a seated program quits with its status (the
   // reset door); an empty line falls to the console shell, the toolbox warm.
