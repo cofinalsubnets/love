@@ -18,7 +18,7 @@ include ../port.mk
 
 te_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Il -Ib/lib
 
-objs = $(love_o) $(R)/$(o)/am.o $(libc_o) \
+objs = $(love_o) $(heap_o) $(R)/$(o)/am.o $(libc_o) \
   $(R)/$(o)/teensy41.o $(R)/$(o)/psram.o $(R)/$(o)/main.o $(R)/$(o)/boot.o \
   $(R)/$(o)/love-img.o
 
@@ -28,6 +28,7 @@ teensy41: $(R)/$(o)/love.hex
 
 $(foreach u,$(love_m),$(eval $(call p_obj,$u,l/$u.c,\
   $(R)/l/$u.c $(love_dep),$(te_cc))))
+$(eval $(call p_heap,$(te_cc),))
 $(foreach m,$(libc_m),$(eval $(call p_obj,$m,a/moon/lib/moonlibc/string/$m.c,\
   $(R)/a/moon/lib/moonlibc/string/$m.c $(libc_dep),$(te_cc) -Ia/moon/include)))
 $(eval $(call p_obj,teensy41,i/teensy41/teensy41.c,teensy41.c teensy41.h $(R)/l/love.h $(mc),$(te_cc)))

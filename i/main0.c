@@ -27,7 +27,7 @@ static char const *const prelev0[] = { src0_prel, src0_ev, NULL };
 static char *join0(struct ai *g, char const *const *v) {
   uintptr_t n = 0;
   for (int i = 0; v[i]; i++) n += strlen(v[i]);
-  char *t = g->alloc(g, NULL, n + 1), *p = t;
+  char *t = ai_alloc(NULL, n + 1), *p = t;
   if (!t) return NULL;
   for (int i = 0; v[i]; i++) { uintptr_t l = strlen(v[i]); memcpy(p, v[i], l); p += l; }
   return *p = 0, t; }
@@ -35,7 +35,7 @@ static struct ai *evals0(struct ai *g, char const *const *v) {
   char *t = join0(g, v);
   if (!t) return g;
   g = ai_evals_(g, t);
-  return g->alloc(g, t, 0), g; }
+  return ai_alloc(t, 0), g; }
 
 // with args, run the build tool (lcat / gen_data) through the CLI driver.
 // with no args, self-test: eval prel, load bao (the shell core) as a module, and run
@@ -76,5 +76,5 @@ struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load
     "   tests (foldl (\\ a f (a + c0read f)) \"\" fs))");
   g = ai_evals_(g, runner);          // pass 1: corpus via ev = the c0 nif
   char *corpus = join0(g, prelev0);                   // bootstrap: install the self-hosted ev
-  if (corpus) g = ai_egg_(g, src0_egg, src0_p1, corpus, src0_post), g->alloc(g, corpus, 0);
+  if (corpus) g = ai_egg_(g, src0_egg, src0_p1, corpus, src0_post), ai_alloc(corpus, 0);
   return ai_evals_(g, runner); }                      // pass 2: corpus via the self-hosted ev

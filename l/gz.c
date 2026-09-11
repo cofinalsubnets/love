@@ -260,7 +260,7 @@ LvNif("inflate", nif_inflate, NULL);
 // the heap grows toward the budget before a collection pays. this is a fixed window
 // and some tables.
 // scratch is not the heap: the off semispace where it is big enough (the major pool's
-// spare half is dead between collections), one g->alloc block where it is not. the
+// spare half is dead between collections), one ai_alloc block where it is not. the
 // shape is inflate's counting pass twice over -- count, str0 the exact answer,
 // re-derive and emit -- because str0 may collect and a collection flips that half.
 #define DF_WSIZE 32768u
@@ -523,7 +523,7 @@ static uint8_t *df_arena(struct ai *g, int *alloced) {
  *alloced = 0;
  if (g->major_pool && g->major_len * sizeof(word) >= DF_ARENA)
   return (uint8_t*) ((g->major_base == g->major_pool) ? g->major_pool + g->major_len : g->major_pool);
- void *p = g->alloc(g, NULL, DF_ARENA);
+ void *p = ai_alloc(NULL, DF_ARENA);
  if (p) *alloced = 1;
  return (uint8_t*) p; }
 
@@ -532,11 +532,11 @@ static uint8_t *df_arena(struct ai *g, int *alloced) {
 // a dump is walking a compacted heap that owns it.
 intptr_t ai_deflate_raw(struct ai *g, unsigned char const *in, uintptr_t n,
                         unsigned char *out, uintptr_t cap) {
- uint8_t *m = g->alloc(g, NULL, DF_ARENA);
+ uint8_t *m = ai_alloc(NULL, DF_ARENA);
  int64_t got;
  if (!m) return -1;
  got = df_go(in, n, out, cap, m);
- g->alloc(g, m, 0);
+ ai_alloc(m, 0);
  return (intptr_t) got; }
 
 ai_noinline static struct ai *host_deflate(struct ai *g) {
@@ -548,14 +548,14 @@ ai_noinline static struct ai *host_deflate(struct ai *g) {
  m = df_arena(g, &alloced);
  if (!m) { g->sp[0] = ZeroPoint; return g; }
  want = df_go((const uint8_t*) txt(sw), len(sw), 0, (uintptr_t) -1, m);
- if (alloced) g->alloc(g, m, 0);
+ if (alloced) ai_alloc(m, 0);
  if (want < 0) { g->sp[0] = ZeroPoint; return g; }
  if (!ai_ok(g = str0(g, (uintptr_t) want))) return g;
  m = df_arena(g, &alloced);
  if (!m) { g->sp[1] = ZeroPoint, g->sp += 1; return g; }
  got = df_go((const uint8_t*) txt(g->sp[1]), len(g->sp[1]),
              (uint8_t*) txt(g->sp[0]), (uintptr_t) want, m);
- if (alloced) g->alloc(g, m, 0);
+ if (alloced) ai_alloc(m, 0);
  g->sp[1] = got != want ? ZeroPoint : g->sp[0];
  return g->sp++, g; }
 

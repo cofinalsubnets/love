@@ -244,9 +244,9 @@ struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
  word *spare = (g->major_base == g->major_pool) ? g->major_pool + g->major_len : g->major_pool,  // the same-size other half
       *to, *resized = 0;
  if (to_len != g->major_len) {                                 // a different-size pair: alloc it, free the old
-  resized = g->alloc(g, NULL, 2 * to_len * sizeof(word));
+  resized = ai_alloc(NULL, 2 * to_len * sizeof(word));
   if (!resized && to_len > need_step)                          // the headroom alloc failed: retry at the tight size
-   to_len = need_step, resized = (need_step == g->major_len) ? 0 : g->alloc(g, NULL, 2 * need_step * sizeof(word));
+   to_len = need_step, resized = (need_step == g->major_len) ? 0 : ai_alloc(NULL, 2 * need_step * sizeof(word));
   // last chance: drop the STEP granularity too. need_step is need rounded UP to a whole
   // step, so it can overshoot the largest free block by most of a step -- on a seat whose
   // pool is a fixed region that is the difference between a heap and a dead board. need
@@ -254,7 +254,7 @@ struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
   // sized there has no headroom and the next collection will be a major too, which is the
   // trade this rung exists to make.
   if (!resized && need < to_len)
-   to_len = need, resized = (need == g->major_len) ? 0 : g->alloc(g, NULL, 2 * need * sizeof(word));
+   to_len = need, resized = (need == g->major_len) ? 0 : ai_alloc(NULL, 2 * need * sizeof(word));
   if (resized) to = resized;
   else if (need <= g->major_len) to_len = g->major_len, to = spare;   // alloc failed, but the existing spare half holds the live set
   else return g->gc_gen = false, encode(g, ai_status_scare);         // true oom: compacting would overflow the spare -> clean scare, no corruption
@@ -274,7 +274,7 @@ struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
  while (X.cp < g->major_hp) (datp(X.cp) ? evac_data : evac_thread)(g, &X);
  g->symbols = major_symbols_rebuild(g, &X, om);
  major_run_finalizers(g, &X);
- if (resized) g->alloc(g, g->major_pool, 0), g->major_pool = resized, g->major_len = to_len;
+ if (resized) ai_alloc(g->major_pool, 0), g->major_pool = resized, g->major_len = to_len;
  g->major_base = to;                                           // flip: active = the to-space
  g->hp = g->end;                                             // the minor's young was promoted: reset it
 #ifdef LvGcStress
@@ -294,7 +294,7 @@ struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
 // so the minor is empty: only the core + stack move; the major + intern map ride
 // through untouched (() is ZeroPoint, so nothing points at the moving core).
 struct ai *gen_grow(struct ai *g, uintptr_t len1) {
- struct ai *h = g->alloc(g, NULL, len1 * 2 * sizeof(word));
+ struct ai *h = ai_alloc(NULL, len1 * 2 * sizeof(word));
  if (!h) return encode(g, ai_status_scare);
  memcpy(h, g, sizeof(struct ai));
  h->len = len1;
@@ -315,7 +315,7 @@ struct ai *gen_grow(struct ai *g, uintptr_t len1) {
  while (X.cp < h->hp) (datp(X.cp) ? evac_data : evac_thread)(h, &X);                 // heap empty -> ~nothing
  h->n_resize += 1;
  if (h->len > h->max_len) h->max_len = h->len;
- g->alloc(g, g, 0);                          // free the old main pool
+ ai_alloc(g, 0);                          // free the old main pool
  ai_system = h;                              // the one place a state changes address
  return h; }
 

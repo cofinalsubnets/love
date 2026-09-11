@@ -21,7 +21,7 @@ mps2_ld = $(MOONCC) -t thumb2 -Ttext 0 -Tdata 0x20000000 -nostdlib
 # the five faces share a skeleton and differ in main.o alone: the plain kernel, the BAKER
 # that dumps a heap image through semihosting, the WAKER that boots one back, and the two
 # -pd twins carrying the rune+cas corpus.
-skel = $(R)/$(o)/start.o $(love_o) $(R)/$(o)/am.o $(libc_o)
+skel = $(R)/$(o)/start.o $(love_o) $(heap_o) $(R)/$(o)/am.o $(libc_o)
 objs        = $(skel) $(R)/$(o)/main.o
 baker_objs  = $(skel) $(R)/$(o)/main-baker.o
 waker_objs  = $(skel) $(R)/$(o)/main-waker.o
@@ -34,6 +34,7 @@ mps2t1: $(R)/$(o)/love-t1.elf
 
 $(foreach u,$(love_m),$(eval $(call p_obj,$u,l/$u.c,\
   $(R)/l/$u.c $(love_dep),$(mps2_cc))))
+$(eval $(call p_heap,$(mps2_cc),))
 $(foreach m,$(libc_m),$(eval $(call p_obj,$m,a/moon/lib/moonlibc/string/$m.c,\
   $(R)/a/moon/lib/moonlibc/string/$m.c $(libc_dep),$(mps2_cc) -Ia/moon/include)))
 
@@ -106,11 +107,12 @@ $(R)/$(o)/love-pd.img: $(R)/$(o)/baker-pd.elf $(R)/$(o)/waker-pd.elf
 mps2t1_cc = $(MOONCC) -t thumb1 -D ai_tco=0 -D __STDC_HOSTED__=0 -I. -Il -Ib/lib
 t1_libc_o = $(addprefix $(R)/$(o)/,$(addsuffix -t1.o,$(libc_m)))
 t1_love_o = $(addprefix $(R)/$(o)/,$(addsuffix -t1.o,$(love_m)))
-t1_objs = $(R)/$(o)/start.o $(t1_love_o) $(R)/$(o)/am-t1.o $(R)/$(o)/rt-t1.o $(t1_libc_o) \
+t1_objs = $(R)/$(o)/start.o $(t1_love_o) $(R)/$(o)/alloc-t1.o $(R)/$(o)/am-t1.o $(R)/$(o)/rt-t1.o $(t1_libc_o) \
   $(R)/$(o)/main-t1.o
 
 $(foreach u,$(love_m),$(eval $(call p_obj,$u-t1,l/$u.c,\
   $(R)/l/$u.c $(love_dep),$(mps2t1_cc))))
+$(eval $(call p_heap,$(mps2t1_cc),-t1))
 $(foreach m,$(libc_m),$(eval $(call p_obj,$m-t1,a/moon/lib/moonlibc/string/$m.c,\
   $(R)/a/moon/lib/moonlibc/string/$m.c $(libc_dep),$(mps2t1_cc) -Ia/moon/include)))
 $(eval $(call p_obj,main-t1,i/mps2/main.c,$(mainc),$(mps2t1_cc)))

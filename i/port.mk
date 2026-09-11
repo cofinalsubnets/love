@@ -84,6 +84,17 @@ love_m   = $(basename $(love_tu) $(love_codec)) bare nohorn
 love_dep = $(love_h) $(lib_hR) $(lv)
 love_o   = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(love_m)))
 
+# ..and the seat's heap beside them: i/alloc.c answers ai_alloc over malloc and free,
+# which is what a board whose memory is already those wants. it is not in love_m because
+# that list is compiled out of l/ and this answer is the seat's, not the runtime's -- a
+# board with a heap of its own defines ai_alloc and names no alloc.o, and a board that
+# names neither fails to link, which is the right answer for a runtime with nowhere to
+# put its pools. $1 is the board's own <x>_cc, $2 an object-stem suffix.
+define p_heap
+$$(eval $$(call p_obj,alloc$2,i/alloc.c,$$(R)/i/alloc.c $$(love_dep),$1))
+endef
+heap_o = $(R)/$(o)/alloc.o
+
 # moonlibc's pure members: the libc a bare-metal seat gets, the same six the kernel takes
 # (common.mk) out of the same source -- there is no second libc in this tree. A port
 # lays them with a foreach over libc_m under its own <x>_cc. -Ia/moon/include is

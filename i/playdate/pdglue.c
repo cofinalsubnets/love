@@ -4,6 +4,7 @@
 // flattening either way: a pointer's own parameter list places an argument and
 // a result is read from s0, so getCrankAngle answers straight.
 #include "pd_api.h"
+#include "../../l/love.h"                   // ai_alloc, the runtime's one heap door
 #include "pdglue.h"
 
 _Static_assert(PDG_ROWSIZE == LCD_ROWSIZE, "LCD rowsize drifted");
@@ -36,6 +37,15 @@ int pdg_file_read(const char *path, void *buf, unsigned cap) {
 // matters because moonlibc's own reaches for a heap this seat has no syscall to ask
 // for -- the SDK realloc IS the heap here, 16 MB of it. the SIMULATOR keeps setup.c
 // (it is an ordinary hosted .so), so there the shim and the trio are its.
+// the runtime's heap, named rather than inherited: the SDK's realloc IS the memory on
+// this seat, 16 MB of it, and the collector's pools have no other place to come from.
+// the malloc trio lands on the same realloc either way -- ours below on device, the SDK's
+// setup.c on the simulator -- but which translation unit happens to answer that name is
+// not a thing this seat should have to depend on, so it says so here and links no
+// i/alloc.c. (l/love.h names the door; i/alloc.c is what a malloc-heap seat links.)
+void *ai_alloc(void *p, size_t n) {
+  return n ? pdg_realloc(NULL, n) : (pdg_realloc(p, 0), NULL); }
+
 static int pd_event(PlaydateAPI *pd, PDSystemEvent event, uint32_t arg) {
   if (event != kEventInit) return 0;
   PD = pd;

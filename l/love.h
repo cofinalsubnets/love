@@ -198,7 +198,6 @@ struct ai {
  // drives are addresses of this binary, and a blob that held one could not ride an
  // image. jk_ini fills it; the emitter's `jk` law names the slots.
  word jk[12];
- void *(*alloc)(struct ai*, void*, size_t); // alloc(g,p,n): n>0 reserve n bytes (p ignored), n==0 free p; -> block or NULL
  uintptr_t n_gc, max_len, max_heap, // gc instrumentation (cycles, peak pool len, peak live heap; words)
            n_seen, n_evac;          // Σ per collection: occupancy entering / survivors copied.
                                     // mortality = (n_seen-n_evac)/n_seen; copy-amp = n_evac/max_heap
@@ -435,9 +434,14 @@ extern long __ai_osv;
 void ai_sleep(uintptr_t ticks); // per-frontend deep wait for at most `ticks` ai_clock()
 // units (0 = infinite); no input wakeup (parked streams go via ai_wait_fds). default no-op.
 
+// the runtime's heap, and the one door to it: the nursery that IS g, the major pool, the
+// remembered set and every scratch block the collector and the image codec take. THE SEAT
+// defines it -- i/alloc.c is that answer over malloc and free, linked by a seat whose
+// memory is already those; one whose heap is its own writes the body instead.
+void *ai_alloc(void *p, size_t n);  // n>0 reserve n bytes (p ignored), n==0 free p; -> block or NULL
+
 struct ai
  *ai_ini(void),
- *ai_ini_m(void*(*)(struct ai*, void*, size_t)),
  *ai_evals(struct ai*, const char*),      // ..keeping the last form's value at sp[0]
  *ai_evals_(struct ai*, const char*),
  *ai_egg_(struct ai*, char const*, char const*, char const*, char const*),  // (egg, p1, corpus, post)
@@ -447,7 +451,7 @@ struct ai
  *ai_shelve_(struct ai*);   // drop the link below the head (the runtime's bare leave)
 
 // the heap-image codec (stdio-free): save compacts g and serializes into a fresh
-// g->alloc'd buffer; load reconstructs a fresh g, or NULL on any mismatch (the
+// ai_alloc'd buffer; load reconstructs a fresh g, or NULL on any mismatch (the
 // caller boots normally). buffer-based so a freestanding frontend needs no filesystem.
 // a kept absolute only survives a wake if it aims inside the binary's own load segments
 // (one ASLR delta shifts them all); a JIT W^X page, an mmap or a shared library dies with
@@ -466,8 +470,7 @@ struct ai_image_bad { uintptr_t q[3 * 2]; int n, why; };
 // resets sp/ip, so a dump wherever it is called is a dump like any other.
 void *ai_image_save(struct ai*, uintptr_t *outlen, struct ai_image_bad*);
 struct ai
- *ai_image_load(void const *buf, uintptr_t len),
- *ai_image_load_m(void const *buf, uintptr_t len, void *(*)(struct ai*, void*, size_t));   // allocator-parameterized (a device heap has no malloc)
+ *ai_image_load(void const *buf, uintptr_t len);
 
 // the terminal scare face: prints ";; a b\n" (show forms) to the err port from
 // the stashed condition data; the bare oom prints ";; oom@len=N\n".
@@ -718,7 +721,7 @@ _Static_assert(Bytes == sizeof(uintptr_t), "word size sanity check");
 #include <stdarg.h>
 _Static_assert(sizeof(union u) == sizeof(intptr_t), "cell size equals word size");
 
-// remembered-set capacity in words; g->alloc'd, so the collector stays freestanding
+// remembered-set capacity in words; ai_alloc'd, so the collector stays freestanding
 #define LvRemCap (1u << 12)
 // initial pool sizes, words per half; both grow on demand (a tiny device overrides
 // with -Dai_minor0/-Dai_major0 and accepts more collections)
@@ -1382,7 +1385,6 @@ intptr_t
  hot_hook(word h),
  fn_src(struct ai *c, union u *k, word x);
 void
- *ai_libc_alloc(struct ai*g, void *p, size_t n),
  bshape_put(uintptr_t *shape, uintptr_t R, word a, word b),
  bstride(struct ai_tray *v, uintptr_t R, intptr_t *c),
  gen_wb(struct ai *g, word src, word p),

@@ -131,7 +131,7 @@ struct k_boot kboot;
 // the table grows and does not cap: k_source_open is the one door in, and it grows the
 // table in the kernel's own heap, so nothing is silently refused at a ceiling.
 // malloc is moonlibc's, running its mmap arenas over i/sys.c's page arm, which kmallocw
-// supplies. so the door here stays kmallocw where g cannot be reached and g->alloc
+// supplies. so the door here stays kmallocw where g cannot be reached and ai_alloc
 // everywhere it can: one page supply under both.
 void *kmallocw(uintptr_t n);
 void kfree(void *p);
@@ -485,7 +485,7 @@ void kfree(void *p) {
 // off it and the first write copies that file into the kernel heap, so the entry reads from
 // the copy ever after: a file nobody writes costs a row and not one word of the bounded
 // heap, and two opens of one path see each other's writes, the copy being per file.
-// kmallocw/kfree rather than g->alloc, because a vt method is handed an fd and nothing else
+// kmallocw/kfree rather than ai_alloc, because a vt method is handed an fd and nothing else
 // and g is out of reach at the door that grows a file. on this seat they are one heap.
 // ms is the source's mtime, baked: the initrd carries no directory, so the date a file was
 // last written on the machine that built it exists nowhere else.
@@ -1977,7 +1977,7 @@ static bool fbinit(void) {
 static bool cbinit(void) {
   const uintptr_t rows = kfb.height / (kface.h * kfb.scale),
                   cols = kfb.width / (kface.w * kfb.scale);
-  // kmallocw, not g->alloc: kmain runs cbinit before ai_ini, the console being how a failure
+  // kmallocw, not ai_alloc: kmain runs cbinit before ai_ini, the console being how a failure
   // in ai_ini would be said. no g exists yet, so this names the kernel heap directly.
   if (!(kcb = kmallocw(b2w(sizeof(struct cb) + rows * cols * sizeof(uint32_t))))) return false;
   cb_open(kcb, rows, cols);

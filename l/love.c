@@ -26,7 +26,7 @@ static lvm_t
  lvm_nclock, lvm_nomctor, lvm_nomp, lvm_packp, lvm_please, lvm_setstack, lvm_setp,
  lvm_snip, lvm_strp, lvm_sub, lvm_subn, lvm_sunp, lvm_tune, _lvm_help_scare, _lvm_yield_c;
 static struct ai
- *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, void*, size_t));
+ *ai_ini_0(struct ai*g, uintptr_t len0);
 static uintptr_t stringlen(struct ai *g, word x);
 // the build's version string, generated into b/lib/love_version.h and surfaced
 // as `love-version`. -DLvVersion wins (love0 pins "bootstrap" so a new commit never
@@ -51,12 +51,12 @@ enum ai_status ai_fin(struct ai *g) {
  if ((g = ai_core_of(g))) {
    for (struct ai_fz *fz = g->fz; fz; fz->fn(g, fz->p), fz = fz->next); // run finalizers
    code_fin(g);                                 // ..then the native arena they hand blobs back to
-   // the rem set and the major pool are ai_ini_0's own g->alloc calls, not room inside
+   // the rem set and the major pool are ai_ini_0's own ai_alloc calls, not room inside
    // the nursery -- a frontend that exits never misses them, one that fins to make room
    // for the next runtime gets nothing back without this.
-   if (g->rem) g->alloc(g, g->rem, 0);
-   if (g->major_pool) g->alloc(g, g->major_pool, 0);
-   g->alloc(g, g, 0); }                       // ..the pool is g, so it goes last
+   if (g->rem) ai_alloc(g->rem, 0);
+   if (g->major_pool) ai_alloc(g->major_pool, 0);
+   ai_alloc(g, 0); }                       // ..the pool is g, so it goes last
  return s; }
 
 // the map a row binds into, pushed: the book, or the tablet its module names -- minted on
@@ -151,17 +151,17 @@ static struct { short v; char n[16]; } const ai_errnames[] = {
  {126,"enokey"}, {127,"ekeyexpired"}, {128,"ekeyrevoked"}, {129,"ekeyrejected"}, {130,"eownerdead"},
  {131,"enotrecoverable"}, {132,"erfkill"}, {133,"ehwpoison"} };
 
-static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, void*, size_t)) {
+static struct ai *ai_ini_0(struct ai*g, uintptr_t len0) {
  memset(g, 0, sizeof(struct ai));      // the core needs no leading ap: () is the const ZeroPoint, never (word)g
- g->len = len0, g->alloc = al;
+ g->len = len0;
  g->scare_a = g->scare_b = zero;        // v0..end is GC-walked: raw 0 is not a value
  g->hot_read = g->hot_numap = g->hot_arrange = g->hot_compose = g->hot_opfix = g->hot_show = zero;   // unsealed: hot_hook traps until (seal-hook) fills them
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c;
- // the rem set + major pool ride g->alloc: a frontend that cannot supply them cannot run
+ // the rem set + major pool ride ai_alloc: a seat whose heap cannot supply them cannot run
  g->major_len = ai_major0;
- g->rem = g->alloc(g, NULL, LvRemCap * sizeof(word));
- g->major_pool = g->rem ? g->alloc(g, NULL, 2 * g->major_len * sizeof(word)) : NULL;
- if (!g->major_pool) { if (g->rem) g->alloc(g, g->rem, 0); return encode(g, ai_status_scare); }
+ g->rem = ai_alloc(NULL, LvRemCap * sizeof(word));
+ g->major_pool = g->rem ? ai_alloc(NULL, 2 * g->major_len * sizeof(word)) : NULL;
+ if (!g->major_pool) { if (g->rem) ai_alloc(g->rem, 0); return encode(g, ai_status_scare); }
  g->major_base = g->major_hp = g->major_pool, g->budget = ai_budget;
  g->minor0 = ai_minor0, g->major0 = ai_major0, g->ratio = ai_gc_ratio;   // the live knobs; `tune` moves them
  g->next_wait_events = ai_wait_in;
@@ -284,15 +284,12 @@ word ai_err(struct ai *g, int e) {
 // see the one that grew last; nothing in the tree does, and only /proc reads this.
 struct ai *ai_system;
 
-struct ai *ai_ini_m(void *(*al)(struct ai*, void*, size_t)) {
+struct ai *ai_ini(void) {
  uintptr_t const len0 = ai_minor0;   // initial minor pool; grows on demand (gen_grow)
- struct ai *g = al(NULL, NULL, 2 * len0 * sizeof(word));
+ struct ai *g = ai_alloc(NULL, 2 * len0 * sizeof(word));
  if (g == NULL) return encode(g, ai_status_scare);
- g = ai_ini_0(g, len0, al);
+ g = ai_ini_0(g, len0);
  return ai_ok(g) ? (ai_system = g) : g; }
-
-void *ai_libc_alloc(struct ai*g, void *p, size_t n) { return n ? malloc(n) : (free(p), NULL); }
-struct ai *ai_ini(void) { return ai_ini_m(ai_libc_alloc); }
 
 // ============================================================================
 // stack
@@ -585,7 +582,7 @@ static struct ai_code *code_chunk(struct ai *g, size_t need) {
  len = (len + ps - 1) & ~(ps - 1);
  void *b = mmap(0, len, PROT_READ | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
  if (b == MAP_FAILED) return NULL;
- struct ai_code *c = g->alloc(g, NULL, sizeof *c);
+ struct ai_code *c = ai_alloc(NULL, sizeof *c);
  if (!c) { munmap(b, len); return NULL; }
  c->base = b, c->own = NULL, c->len = len, c->used = 0, c->fixed = 0, c->next = g->code, g->code = c;
  return c; }
@@ -597,7 +594,7 @@ char *code_install(struct ai *g, char const *src, size_t n) {
   if ((*l)->n >= need) {
    struct ai_cfree *f = *l; p = f->p;
    if (f->n - need >= 32) f->p += need, f->n -= need;
-   else *l = f->next, g->alloc(g, f, 0);
+   else *l = f->next, ai_alloc(f, 0);
    break; }
  if (!p) {
   struct ai_code *c = g->code;
@@ -616,7 +613,7 @@ void code_free(struct ai *g, char *code) {
  struct ai_cfree *f;
  for (struct ai_code *c = g->code; c; c = c->next)      // the image's chunk is text: the dump packs one blob
   if (c->fixed && p >= c->base && p < c->base + c->len) return;   // per distinct BODY, so a dead closure never
- f = g->alloc(g, NULL, sizeof *f);                      // frees bytes another one is still running
+ f = ai_alloc(NULL, sizeof *f);                      // frees bytes another one is still running
  if (!f) return;                                                  // no node: the blob stays, unreachable
  f->p = p, f->n = code_round(CodeHead + ((uintptr_t*) p)[0] + 1), f->next = g->cfree, g->cfree = f; }
 int code_in(struct ai *g, uintptr_t v) {                          // a code address of this session's arena?
@@ -636,13 +633,13 @@ char *code_adopt(struct ai *g, char const *src, size_t n) {
  // memory, the address the low map reaches it by -- and seat it as a fixed chunk, so
  // code_in and code_free read it the way they read the hosted one.
  if (__ai_osv < 0) {
-  char *b = g->alloc(g, NULL, n);
+  char *b = ai_alloc(NULL, n);
   if (!b) return NULL;
   memcpy(b, src, n);
   char *x = ai_code_window(b);
   ai_code_sync(x, x + n);
-  struct ai_code *c = g->alloc(g, NULL, sizeof *c);
-  if (!c) { g->alloc(g, b, 0); return NULL; }
+  struct ai_code *c = ai_alloc(NULL, sizeof *c);
+  if (!c) { ai_alloc(b, 0); return NULL; }
   c->base = x, c->own = b, c->len = n, c->used = n, c->fixed = 1, c->next = g->code, g->code = c;
   return x; }
  size_t ps = code_page(), len = (n + ps - 1) & ~(ps - 1);
@@ -651,12 +648,12 @@ char *code_adopt(struct ai *g, char const *src, size_t n) {
  memcpy(b, src, n);
  if (mprotect(b, len, PROT_READ | PROT_EXEC)) { munmap(b, len); return NULL; }
  ai_code_sync((char*) b, (char*) b + n);
- struct ai_code *c = g->alloc(g, NULL, sizeof *c);
+ struct ai_code *c = ai_alloc(NULL, sizeof *c);
  if (!c) { munmap(b, len); return NULL; }
  c->base = b, c->own = NULL, c->len = len, c->used = len, c->fixed = 1, c->next = g->code, g->code = c;   // used = len: the tail is nobody's
  return b; }
 static void code_drop(struct ai *g, struct ai_code *c) {
- if (c->own) g->alloc(g, c->own, 0); else munmap(c->base, c->len); }
+ if (c->own) ai_alloc(c->own, 0); else munmap(c->base, c->len); }
 #else
 // freestanding: RAM runs as it is; blobs live in the heap (lvm_nif) and an image's segment in the allocator
 int code_in(struct ai *g, uintptr_t v) { return 0; }
@@ -664,22 +661,22 @@ int code_in(struct ai *g, uintptr_t v) { return 0; }
 // snap's code rung reaches this only behind the code_in above, which owns no address
 size_t code_len(char *code) { return 0; }
 void code_free(struct ai *g, char *code) { }
-static void code_drop(struct ai *g, struct ai_code *c) { g->alloc(g, c->own, 0); }
+static void code_drop(struct ai *g, struct ai_code *c) { ai_alloc(c->own, 0); }
 // seated as a chunk like the hosted lane's, so the session owns it and code_fin frees it
 char *code_adopt(struct ai *g, char const *src, size_t n) {
- char *b = g->alloc(g, NULL, n);
+ char *b = ai_alloc(NULL, n);
  if (!b) return NULL;
  memcpy(b, src, n), ai_code_sync(b, b + n);
- struct ai_code *c = g->alloc(g, NULL, sizeof *c);
- if (!c) { g->alloc(g, b, 0); return NULL; }
+ struct ai_code *c = ai_alloc(NULL, sizeof *c);
+ if (!c) { ai_alloc(b, 0); return NULL; }
  c->base = c->own = b, c->len = c->used = n, c->fixed = 1, c->next = g->code, g->code = c;
  return b; }
 #endif
 // the arena is the session's, not the collector's: no root names a chunk, so nothing but
 // the end of the session can free one. blobs still live are dead code by then.
 void code_fin(struct ai *g) {
- for (struct ai_code *c = g->code, *n; c; c = n) n = c->next, code_drop(g, c), g->alloc(g, c, 0);
- for (struct ai_cfree *f = g->cfree, *n; f; f = n) n = f->next, g->alloc(g, f, 0);
+ for (struct ai_code *c = g->code, *n; c; c = n) n = c->next, code_drop(g, c), ai_alloc(c, 0);
+ for (struct ai_cfree *f = g->cfree, *n; f; f = n) n = f->next, ai_alloc(f, 0);
  g->code = NULL, g->cfree = NULL; }
 
 // ============================================================================

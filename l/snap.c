@@ -22,7 +22,7 @@ static intptr_t
  img_encode(struct img_ctx *x, intptr_t v);
 static struct ai
  *img_canon_symbols(struct ai *g),
- *img_wake(void const *buf, uintptr_t len, void *(*al)(struct ai*, void*, size_t));
+ *img_wake(void const *buf, uintptr_t len);
 static uintptr_t
  hc_hchain(struct ai_chain *c),
  hc_hstr(struct ai_str *s),
@@ -219,7 +219,6 @@ static uintptr_t img_chash(char const *p, uintptr_t n) {          // FNV-1a over
  for (uintptr_t i = 0; i < n; i++) h = (h ^ (unsigned char) p[i]) * (uintptr_t) 1099511628211u;
  return h; }
 static intptr_t img_code_off(struct img_ctx *x, uintptr_t a) {
- struct ai *g = x->g;
  for (uintptr_t i = 0; i < x->ctn; i++) if (x->ct[i].a == a) return (intptr_t) x->ct[i].off;
  uintptr_t hd = 2 * sizeof(uintptr_t), n = code_len((char*) a), span = (hd + n + 1 + 15) & ~(uintptr_t) 15;
  // closures compiled from different sites often assemble to the same bytes, so an identical
@@ -233,15 +232,15 @@ static intptr_t img_code_off(struct img_ctx *x, uintptr_t a) {
  if (hit < 0 && x->cn + span > x->ccap) {
   uintptr_t cap = x->ccap ? 2 * x->ccap : 1u << 16;
   while (cap < x->cn + span) cap *= 2;
-  char *b = g->alloc(g, NULL, cap);
+  char *b = ai_alloc(NULL, cap);
   if (!b) return -1;
-  if (x->cseg) memcpy(b, x->cseg, x->cn), g->alloc(g, x->cseg, 0);
+  if (x->cseg) memcpy(b, x->cseg, x->cn), ai_alloc(x->cseg, 0);
   x->cseg = b, x->ccap = cap; }
  if (x->ctn == x->ctcap) {
   uintptr_t cap = x->ctcap ? 2 * x->ctcap : 256;
-  struct img_code *t = g->alloc(g, NULL, cap * sizeof *t);
+  struct img_code *t = ai_alloc(NULL, cap * sizeof *t);
   if (!t) return -1;
-  if (x->ct) memcpy(t, x->ct, x->ctn * sizeof *t), g->alloc(g, x->ct, 0);
+  if (x->ct) memcpy(t, x->ct, x->ctn * sizeof *t), ai_alloc(x->ct, 0);
   x->ct = t, x->ctcap = cap; }
  uintptr_t off;
  if (hit >= 0) off = (uintptr_t) hit;
@@ -539,7 +538,7 @@ static struct ai *img_canon_symbols(struct ai *g) {
  if (!m) return g;
  uintptr_t cap = map_cap(m), mask = cap - 1, n = 0;
  word *s = map_slots(m),
-      *pairs = g->alloc(g, NULL, 2 * cap * sizeof(word));
+      *pairs = ai_alloc(NULL, 2 * cap * sizeof(word));
  if (!pairs) return encode(g, ai_status_scare);
  for (uintptr_t j = 0; j < cap; j++)
   if (s[2 * j] != map_gap) pairs[2 * n] = s[2 * j], pairs[2 * n + 1] = s[2 * j + 1], n++;
@@ -550,7 +549,7 @@ static struct ai *img_canon_symbols(struct ai *g) {
   uintptr_t i = hash(g, pairs[2 * k]) & mask;
   while (s[2 * i] != map_gap) i = (i + 1) & mask;
   s[2 * i] = pairs[2 * k], s[2 * i + 1] = pairs[2 * k + 1]; }
- g->alloc(g, pairs, 0);
+ ai_alloc(pairs, 0);
  return g; }
 
 // canonical serial order: the live serials keep session order, packed 1..k. a name
@@ -619,7 +618,7 @@ static word hc_intern(struct hc *h, union u *p, uintptr_t hv) {
 // asks the list, which is slow and right.
 static unsigned char *hc_fzmap(struct ai *g, word const *base, word const *hp) {
  uintptr_t nw = (uintptr_t) (hp - base);
- unsigned char *m = g->alloc(g, NULL, nw);
+ unsigned char *m = ai_alloc(NULL, nw);
  if (!m) return NULL;
  memset(m, 0, nw);
  for (struct ai_fz *z = g->fz; z; z = z->next)
@@ -643,10 +642,10 @@ static void img_hashcons(struct ai *g) {
   p =  cell(ptr(p) + hc_stride(g, fzm, base, p, &fz));
  while (cap < 2 * nobj) cap <<= 1;
  struct hc H = { base, hp, 0, 0, 0, 0, cap - 1 }, *h = &H;
- h->fl = g->alloc(g, NULL, nw);
- h->cn = g->alloc(g, NULL, nw * sizeof(word));
- h->tab = g->alloc(g, NULL, cap * sizeof(word));
- h->stk = g->alloc(g, NULL, (nobj + 1) * sizeof(word));
+ h->fl = ai_alloc(NULL, nw);
+ h->cn = ai_alloc(NULL, nw * sizeof(word));
+ h->tab = ai_alloc(NULL, cap * sizeof(word));
+ h->stk = ai_alloc(NULL, (nobj + 1) * sizeof(word));
  if (h->fl && h->cn && h->tab) {                       // no scratch -> no dedup, never half of one
   memset(h->fl, 0, nw);
   memset(h->tab, 0, cap * sizeof(word));
@@ -767,10 +766,10 @@ static void img_hashcons(struct ai *g) {
       break;
      default: break; } }
    p = cell(ptr(p) + sz); } }
- g->alloc(g, h->fl, 0), g->alloc(g, h->cn, 0), g->alloc(g, h->tab, 0), g->alloc(g, h->stk, 0);
- g->alloc(g, fzm, 0); }
+ ai_alloc(h->fl, 0), ai_alloc(h->cn, 0), ai_alloc(h->tab, 0), ai_alloc(h->stk, 0);
+ ai_alloc(fzm, 0); }
 
-// compact g and encode its live half into a fresh g->alloc'd blob, filling *Ho; NULL on
+// compact g and encode its live half into a fresh ai_alloc'd blob, filling *Ho; NULL on
 // failure. the blob is words, not the wire: img_wire tokenizes it for a file. it dumps
 // wherever it is called, a mid-eval dump's continuation riding as wake-unreachable ballast.
 #define Why(n) ((void) (bad ? bad->why = (n) : 0))   // the step a refusal stopped at
@@ -790,7 +789,7 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
  if (bytes >= ImageIdxBase) return NULL;
  Why(3);
  *cseg = NULL, *ncode = 0;
- word *blob = g->alloc(g, NULL, bytes);                  // the encoded words: scratch, not the file
+ word *blob = ai_alloc(NULL, bytes);                  // the encoded words: scratch, not the file
  if (!blob) return NULL;
  memcpy(blob, base, bytes);
  // canonical serials, blob-side only: the mint stream's live members rename monotone to
@@ -803,8 +802,8 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
  // two words at least, a tablet's sits at off+2 so it is three, and the densest heap is
  // all mints. the cap is carried anyway -- this walk writes scratch it sized itself, and
  // a serializer that runs past its own buffer corrupts the heap it is reading.
- uintptr_t nslot = 0, ncap = nw / 2 + 1, *slots = g->alloc(g, NULL, ncap * sizeof(uintptr_t));
- if (!slots) { g->alloc(g, blob, 0); return NULL; }
+ uintptr_t nslot = 0, ncap = nw / 2 + 1, *slots = ai_alloc(NULL, ncap * sizeof(uintptr_t));
+ if (!slots) { ai_alloc(blob, 0); return NULL; }
  bool slotover = false;
  // every field spelled: a designated initializer leans on the compiler to zero the rest
  struct img_ctx X = { g, base, hp, 0, 0, 0, {0}, 0, 0, 0, 0, 0, 0, 0 }, *x = &X;
@@ -844,21 +843,21 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
          if (p->ap == lvm_map_lookup) {                                                // a tablet's serial, a charm
           if (nslot < ncap) slots[nslot++] = (off + 2) | SlotCharm; else slotover = true; } }
   p = cell(ptr(p) + sz); }
- g->alloc(g, fzm, 0);
- if (x->ct) g->alloc(g, x->ct, 0);
+ ai_alloc(fzm, 0);
+ if (x->ct) ai_alloc(x->ct, 0);
  *cseg = x->cseg, *ncode = x->cn;
  Why(4);
- if (x->fail) { img_bad_out(x, bad); g->alloc(g, slots, 0); g->alloc(g, blob, 0); return NULL; }   // an unencodable word -> refuse (caller boots normally)
+ if (x->fail) { img_bad_out(x, bad); ai_alloc(slots, 0); ai_alloc(blob, 0); return NULL; }   // an unencodable word -> refuse (caller boots normally)
  // the bound above did not hold: refuse rather than serialize off a truncated slot list
- if (slotover) { Why(12); g->alloc(g, slots, 0); g->alloc(g, blob, 0); return NULL; }
+ if (slotover) { Why(12); ai_alloc(slots, 0); ai_alloc(blob, 0); return NULL; }
  // the rename: mark live serials (the collected nom/mint slots read raw off the
  // blob -- scalars rode the memcpy -- plus the pids of both task rings), rank
  // them 1..k in img_rank_assign's canonical order, rewrite in place. rings walk
  // the live post-compaction nodes; their pid word sits at [2] as a charm.
  uintptr_t nser = g->next_serial + 1, kser = 0;
  Why(10);
- word *rank = g->alloc(g, NULL, nser * sizeof(word));
- if (!rank) { g->alloc(g, slots, 0); g->alloc(g, blob, 0); return NULL; }
+ word *rank = ai_alloc(NULL, nser * sizeof(word));
+ if (!rank) { ai_alloc(slots, 0); ai_alloc(blob, 0); return NULL; }
  Why(11);
  memset(rank, 0, nser * sizeof(word));
  for (uintptr_t i = 0; i < nslot; i++)
@@ -881,7 +880,7 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
   for (union u *n = g->parked, *st = n; n; n = n->m == st ? NULL : n->m) {
    uintptr_t off = (uintptr_t)(ptr(n) - base), pid = getcharm(n[2].x);
    if (ptr(n) >= base && ptr(n) < hp && pid < nser) blob[off + 2] = putcharm(rank[pid]); }
- g->alloc(g, slots, 0);
+ ai_alloc(slots, 0);
  // rsv1 is reserved: it carried the kept-absolute count while absolutes were encodable.
  // `anchor` is the gap between the two symbols, not either address. addresses would
  // write this run's ASLR base into the header, which is the whole of what a
@@ -889,7 +888,7 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
  // the counter drops to the live count: the woken twin's first mint lands
  // above every renamed 1..kser, and the bytes carry no dead mints.
  struct image_hdr H = { ImageMagic, sizeof(word), nw, ImageArch, (uint64_t)((word) &ai_image_save - (word) image_immortals), 0, 0, 0, kser, x->cn, {0}, {0} };
- g->alloc(g, rank, 0);
+ ai_alloc(rank, 0);
  // roots = symbols + tasks (live outside v0), then the whole GC-traced v0..end block, generically: any
  // field added to struct ai's v0 region is serialized automatically, no codec edit (cf. the GC's v0..end loop).
  uintptr_t nv = LvImgRoots - 2, nr = LvImgRoots;
@@ -898,22 +897,22 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_bad *
  image_root_enc(x, (word) g->tasks, &H.root_tag[1], &H.root_val[1]);
  for (uintptr_t i = 0; i < nv; i++) image_root_enc(x, ((word*) &g->v0)[i], &H.root_tag[2 + i], &H.root_val[2 + i]);
  Why(6);
- if (x->fail) { img_bad_out(x, bad); g->alloc(g, blob, 0); return NULL; }   // ..a root refused: the walk's own check is behind us
+ if (x->fail) { img_bad_out(x, bad); ai_alloc(blob, 0); return NULL; }   // ..a root refused: the walk's own check is behind us
  H.nroot = nr;
  return Why(0), *Ho = H, *outnw = nw, blob; }
 
-// ..and the wire: {header, dictionary, token stream}, g->alloc'd. fills H.nstream.
+// ..and the wire: {header, dictionary, token stream}, ai_alloc'd. fills H.nstream.
 static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintptr_t nw, char const *cseg, uintptr_t *outlen) {
  uintptr_t bytes = nw * sizeof(word);
  // the dictionary wants a sorted copy and the copy is the blob's size again -- transient,
  // and bake-time, which is the side of this trade nobody waits on.
- struct img_dic *d = g->alloc(g, NULL, sizeof *d);
+ struct img_dic *d = ai_alloc(NULL, sizeof *d);
  if (!d) return NULL;
- word *sorted = g->alloc(g, NULL, bytes);
- if (!sorted) { g->alloc(g, d, 0); return NULL; }
+ word *sorted = ai_alloc(NULL, bytes);
+ if (!sorted) { ai_alloc(d, 0); return NULL; }
  memcpy(sorted, blob, bytes);
  uintptr_t nd = img_dict(sorted, nw, d->dict, d->cnt);
- g->alloc(g, sorted, 0);
+ ai_alloc(sorted, 0);
  memset(d->tk, 0xff, sizeof d->tk);
  for (uintptr_t i = 0; i < nd; i++) {
   uintptr_t h = img_hash(d->dict[i]) & (ImageDHash - 1);
@@ -929,14 +928,14 @@ static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintp
  unsigned char *cz = NULL;
  if (craw) {
   intptr_t got = -1;
-  if ((cz = g->alloc(g, NULL, craw)))
+  if ((cz = ai_alloc(NULL, craw)))
    got = ai_deflate_raw(g, (unsigned char const*) cseg, craw, cz, craw);
   if (got > 0) cstore = CodeSegHead + (uintptr_t) got;
-  else { if (cz) g->alloc(g, cz, 0); cz = NULL; cstore = CodeSegHead + craw; }
+  else { if (cz) ai_alloc(cz, 0); cz = NULL; cstore = CodeSegHead + craw; }
   H->ncode = cstore; }
  uintptr_t total = sizeof *H + db + ns + cstore;
- char *buf = g->alloc(g, NULL, total);
- if (!buf) { if (cz) g->alloc(g, cz, 0); g->alloc(g, d, 0); return NULL; }
+ char *buf = ai_alloc(NULL, total);
+ if (!buf) { if (cz) ai_alloc(cz, 0); ai_alloc(d, 0); return NULL; }
  memcpy(buf, H, sizeof *H);
  memcpy(buf + sizeof *H, d->dict, db);
  img_stream((unsigned char*)(buf + sizeof *H + db), blob, nw, d->key, d->tk);
@@ -944,8 +943,8 @@ static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintp
   char *p = buf + sizeof *H + db + ns;
   ((uint64_t*) p)[0] = craw, ((uint64_t*) p)[1] = cz ? 1 : 0;
   memcpy(p + CodeSegHead, cz ? (char const*) cz : cseg, cstore - CodeSegHead); }
- if (cz) g->alloc(g, cz, 0);
- g->alloc(g, d, 0);
+ if (cz) ai_alloc(cz, 0);
+ ai_alloc(d, 0);
  return *outlen = total, buf; }
 
 void *ai_image_save(struct ai *g, uintptr_t *outlen, struct ai_image_bad *bad) {
@@ -953,10 +952,10 @@ void *ai_image_save(struct ai *g, uintptr_t *outlen, struct ai_image_bad *bad) {
  uintptr_t nw = 0;
  char *cseg = NULL; uintptr_t ncode = 0;
  word *blob = img_build(g, &H, bad, &nw, &cseg, &ncode);
- if (!blob) { if (cseg) g->alloc(g, cseg, 0); return NULL; }
+ if (!blob) { if (cseg) ai_alloc(cseg, 0); return NULL; }
  void *buf = img_wire(g, &H, blob, nw, cseg, outlen);
- if (cseg) g->alloc(g, cseg, 0);
- return g->alloc(g, blob, 0), buf; }
+ if (cseg) ai_alloc(cseg, 0);
+ return ai_alloc(blob, 0), buf; }
 
 // the decode walk, over the pool img_expand has just filled. src and dst are the one
 // array -- a word is read encoded and written live at the same index -- so a payload is
@@ -1001,7 +1000,7 @@ static int img_walk(word *base, uintptr_t nw, char *code) {
  return 1; }
 
 // the wake: `buf` holds the header, dictionary and token stream to read.
-static struct ai *img_wake(void const *buf, uintptr_t len, void *(*al)(struct ai*, void*, size_t)) {
+static struct ai *img_wake(void const *buf, uintptr_t len) {
  struct image_hdr H;
  if (len < sizeof H) return NULL;
  memcpy(&H, buf, sizeof H);
@@ -1011,13 +1010,13 @@ static struct ai *img_wake(void const *buf, uintptr_t len, void *(*al)(struct ai
  // reserved section and a file may carry a shebang, so "the rest of what you handed me" is
  // the one reading that would make a good image look foreign and fall silently back to the egg.
  if (len < sizeof H + db + ns + H.ncode) return NULL;             // truncated buffer
- struct ai *g = ai_ini_m(al);
+ struct ai *g = ai_ini();
  if (!ai_ok(g)) {                    // a refused ini answers a tagged core, never NULL
   struct ai *c = ai_core_of(g);
-  if (c) al(c, c, 0);
+  if (c) ai_alloc(c, 0);
   return NULL; }
  if (nw > g->major_len) {                                // grow the major pool to fit the image
-  g->alloc(g, g->major_pool, 0);
+  ai_alloc(g->major_pool, 0);
   // the slack is what the nursery ramps into, and it must CLEAR the nursery: a minor is
   // forced to a major once the pool has less free than a whole one (ai_please's
   // worst-case promotion test), and the wake seeds g->len at nw >> 1 below -- so a
@@ -1025,7 +1024,7 @@ static struct ai *img_wake(void const *buf, uintptr_t len, void *(*al)(struct ai
   // over the whole woken image. a floor besides, for the small end; the pages stay
   // untouched until the ramp wants them.
   g->major_len = nw + (nw >> 1) + (1u << 19);
-  g->major_pool = g->major_base = g->alloc(g, NULL, 2 * g->major_len * sizeof(word));
+  g->major_pool = g->major_base = ai_alloc(NULL, 2 * g->major_len * sizeof(word));
   if (!g->major_pool) goto no; }
  word *base = g->major_base;
  g->major_hp = base + nw;
@@ -1052,12 +1051,12 @@ static struct ai *img_wake(void const *buf, uintptr_t len, void *(*al)(struct ai
   if (H.ncode < CodeSegHead) goto no;
   craw = (uintptr_t) ((uint64_t const*) p)[0];
   if (((uint64_t const*) p)[1]) {                        // deflated: inflate, then adopt the blobs
-   unsigned char *t = g->alloc(g, NULL, craw);
+   unsigned char *t = ai_alloc(NULL, craw);
    if (!t) goto no;
    if (ai_inflate_raw(p + CodeSegHead, H.ncode - CodeSegHead, t, craw) != (intptr_t) craw) {
-    g->alloc(g, t, 0); goto no; }
+    ai_alloc(t, 0); goto no; }
    code = code_adopt(g, (char const*) t, craw);
-   g->alloc(g, t, 0); }
+   ai_alloc(t, 0); }
   else code = code_adopt(g, (char const*) p + CodeSegHead, craw);
   if (!code) goto no; }
  if (!img_walk(base, nw, code)) goto no;
@@ -1073,7 +1072,7 @@ static struct ai *img_wake(void const *buf, uintptr_t len, void *(*al)(struct ai
  g->tasks[7].x = zero;   // a worn port names an fd, which means nothing in a new process -- a woken task wears the console (the parked ring's rule)
  // sp stays at ai_ini's topof(g) (empty ai stack); the dispatch re-establishes ip
  g->major_live0 = nw, g->since_major = 0;
- // the rem set names the heap this wake just freed: ai_ini_m's session has been collecting
+ // the rem set names the heap this wake just freed: ai_ini's session has been collecting
  // all along, so every remembered address points into the major pool freed above and the
  // first minor would walk one. gen_major clears it for the same reason.
  g->rem_n = 0, g->rem_miss = 0;
@@ -1083,13 +1082,10 @@ static struct ai *img_wake(void const *buf, uintptr_t len, void *(*al)(struct ai
  uintptr_t want = nw >> 1;
  if (want > (uintptr_t) g->len) { struct ai *h = gen_grow(g, want); if (ai_ok(h)) g = h; }
  return g;
- // a refused wake owns a whole runtime: the rem set and the major pool ride g->alloc,
+ // a refused wake owns a whole runtime: the rem set and the major pool ride ai_alloc,
  // and the caller's fallback builds its own. the code chunk is sealed text and stays.
 no:
  return ai_fin(g), NULL; }
 
-struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai*, void*, size_t)) {
- return img_wake(buf, len, al); }
-
 struct ai *ai_image_load(void const *buf, uintptr_t len) {
-  return ai_image_load_m(buf, len, ai_libc_alloc); }
+ return img_wake(buf, len); }

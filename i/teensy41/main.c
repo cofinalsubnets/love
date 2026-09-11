@@ -136,8 +136,8 @@ static struct ai_def defs[] = {
 
 // --- the arena ------------------------------------------------------------
 // The generational collector is the ONLY collector, and it draws its pools
-// through g->alloc, whose default rides malloc/free (ai_ini). So the frontend
-// supplies them: a first-fit free list over a static arena in OCRAM2 (the inle
+// through ai_alloc, whose default rides malloc/free (l/love.c). So the frontend
+// supplies those: a first-fit free list over a static arena in OCRAM2 (the inle
 // kernel's kmallocw/kfree, shrunk to one region), with the C stack above it
 // under __stack_top__. Lengths are in words, header included.
 static struct mem {

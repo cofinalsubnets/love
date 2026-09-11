@@ -27,7 +27,7 @@
 static char *bake_scratch(struct ai *g, char const *path) {
   long pid = (long) getpid();
   int n = snprintf(NULL, 0, "%s.bake.%ld", path, pid);       // measure, then the one exact block
-  char *t = n < 0 ? NULL : g->alloc(g, NULL, (size_t) n + 1);
+  char *t = n < 0 ? NULL : ai_alloc(NULL, (size_t) n + 1);
   if (t) snprintf(t, (size_t) n + 1, "%s.bake.%ld", path, pid);
   return t; }
 
@@ -50,8 +50,8 @@ ai_noinline static int image_put(struct ai *g) {
     if (f && fclose(f)) rc = -4;
     if (!rc && rename(tmp, path)) rc = -4;        // the adopt: atomic, a whole file or none
     if (rc) remove(tmp);
-    g->alloc(g, tmp, 0); }
-  return g->alloc(g, buf, 0), rc; }
+    ai_alloc(tmp, 0); }
+  return ai_alloc(buf, 0), rc; }
 
 // `bake PATH`: image_put reads the path off the stack, so the C string goes there first.
 // the push can move g, so g comes back out, and the rc rides g->b, written last.
@@ -130,13 +130,13 @@ static int bake_tail(struct ai *g, int src, char const *tmp, void const *buf, ui
       || eh.e_shentsize != sizeof(Elf64_Shdr) || eh.e_phentsize != sizeof(Elf64_Phdr)
       || eh.e_shnum < 2 || !eh.e_phnum || eh.e_shstrndx >= eh.e_shnum) return 1;
   nsh = eh.e_shnum, nph = eh.e_phnum;
-  sh = g->alloc(g, NULL, nsh * sizeof *sh), ph = g->alloc(g, NULL, nph * sizeof *ph);
-  win = g->alloc(g, NULL, BakeScratch);
+  sh = ai_alloc(NULL, nsh * sizeof *sh), ph = ai_alloc(NULL, nph * sizeof *ph);
+  win = ai_alloc(NULL, BakeScratch);
   if (!sh || !ph || !win) { rc = -6; goto out; }
   if (pread(src, sh, nsh * sizeof *sh, (off_t) eh.e_shoff) != (ssize_t)(nsh * sizeof *sh)
       || pread(src, ph, nph * sizeof *ph, (off_t) eh.e_phoff) != (ssize_t)(nph * sizeof *ph))
     { rc = -6; goto out; }
-  if (!(str = g->alloc(g, NULL, sh[eh.e_shstrndx].sh_size + 1))) { rc = -6; goto out; }
+  if (!(str = ai_alloc(NULL, sh[eh.e_shstrndx].sh_size + 1))) { rc = -6; goto out; }
   if (pread(src, str, sh[eh.e_shstrndx].sh_size, (off_t) sh[eh.e_shstrndx].sh_offset)
       != (ssize_t) sh[eh.e_shstrndx].sh_size) { rc = -6; goto out; }
   str[sh[eh.e_shstrndx].sh_size] = 0;
@@ -185,7 +185,7 @@ static int bake_tail(struct ai *g, int src, char const *tmp, void const *buf, ui
   if (dst >= 0) {
     if (!rc && (fchmod(dst, mode) || fsync(dst))) rc = -6;
     if (close(dst)) rc = -6; }
-  g->alloc(g, sh, 0), g->alloc(g, ph, 0), g->alloc(g, str, 0), g->alloc(g, win, 0);
+  ai_alloc(sh, 0), ai_alloc(ph, 0), ai_alloc(str, 0), ai_alloc(win, 0);
   return rc; }
 
 // `bare` lays the sentinel stub back instead of a snapshot -- the section a fresh link
@@ -202,11 +202,11 @@ int image_bake(struct ai *g, char const *out, int bare) {
   // is this binary's head byte for byte, so the same offset names the same word there.
   struct bake_at bl = { (uintptr_t) &ai_baked_image_len, 0, 0 };
   dl_iterate_phdr(bake_phdr, &bl);
-  if (!bl.found) return g->alloc(g, buf, 0), -5;
+  if (!bl.found) return ai_alloc(buf, 0), -5;
   // exe[4096] is the kernel's own PATH_MAX, not a cap of ours: host_selfpath asks about a
   // real file, and no path an open could name is longer.
   char exe[4096];
-  if (!host_selfpath(exe, sizeof exe)) return g->alloc(g, buf, 0), -6;
+  if (!host_selfpath(exe, sizeof exe)) return ai_alloc(buf, 0), -6;
   char const *dst = out ? out : exe;
   char *tmp = bake_scratch(g, dst);
   struct stat st;
@@ -219,8 +219,8 @@ int image_bake(struct ai *g, char const *out, int bare) {
     if (!rc && rename(tmp, dst)) rc = -6;         // the adopt: atomic, a new inode
     if (rc) unlink(tmp); }
   if (src >= 0) close(src);
-  g->alloc(g, tmp, 0);
-  return g->alloc(g, buf, 0), rc; }
+  ai_alloc(tmp, 0);
+  return ai_alloc(buf, 0), rc; }
 
 // the (bake path) nif: `love wake path prog.l ..` boots a session carrying every global
 // this one had pinned, a live native closure among them -- its code is bytes the image

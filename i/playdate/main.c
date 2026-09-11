@@ -5,7 +5,7 @@
 // hooks. Here the console is a quay cb (50x30 cells of the 8x8 CGA font)
 // blitted to the 1-bit LCD each frame; stdout/stderr both land there, so the
 // prel's puts IS the screen and a scare face is visible. The heap rides the
-// SDK realloc through ai_ini_m. The bootstrap egg compiles the love compiler
+// SDK realloc, which pdglue.c gives malloc and free. The bootstrap egg compiles the love compiler
 // with the C evaluator, recompiles it with itself, installs it, then
 // a/rune.l bakes in as a registered module and cas.l (this folder) drives
 // the demo: the C update just clears the console, fires (cas ()), and blits.
@@ -134,9 +134,6 @@ void *_sbrk(intptr_t n) { return (void *) -1; }
 #endif
 
 // --- entry -------------------------------------------------------------------
-static void *pd_alloc(struct ai *g, void *p, size_t n) {
-  return n ? pdg_realloc(NULL, n) : (pdg_realloc(p, 0), NULL); }
-
 // THE BAKED MODULE: rune does not declare itself, so the wrapper is here; q and kanren ride post.
 static char const src_mods[] =
 "(module 'rune "
@@ -157,7 +154,7 @@ void love_init(void) {
   { enum { imgcap = 2u << 20 };
     void *ib = pdg_realloc(NULL, imgcap);
     int n = ib ? pdg_file_read("love-pd.img", ib, imgcap) : -1;
-    if (n > 0) g0 = ai_image_load_m(ib, (uintptr_t) n, pd_alloc);
+    if (n > 0) g0 = ai_image_load(ib, (uintptr_t) n);
     if (ib) pdg_realloc(ib, 0); }
   int woke = g0 != NULL;
   pdg_log(woke ? "love: image awake" : "love: no image -- baking the egg");
@@ -165,7 +162,7 @@ void love_init(void) {
                             : "; l/playdate -- baking the egg"; *s; s++)
     cb_putc(kcb, *s);
   blit();
-  struct ai *g = ai_defn(woke ? g0 : ai_ini_m(pd_alloc), defs, countof(defs));
+  struct ai *g = ai_defn(woke ? g0 : ai_ini(), defs, countof(defs));
   pdg_log(ai_ok(g) ? "love: core up" : "love: core FAILED");
   // bound the collector to a QUARTER of the device's 16 MB (the Appel knob,
   // teensy's law): a major resize holds old and new pools at once, so the
