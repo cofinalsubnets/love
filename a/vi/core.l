@@ -7,32 +7,30 @@
 ; search rides a/kore/re.l (rebre/refind), so re.l loads first in any cat.
 ;
 ; the state (a tablet): 'lines (texts, never empty -- the vi invariant),
-; 'row 'col (0-based), 'goal (the remembered column j/k aim for), 'top (first
-; visible row), 'mode ('n normal, 'i insert, 'c ex, 's search), 'cnt (pending
-; count), 'op (pending operator (char n) or ()), 'pc (pending char-arg nom:
-; f F t T r g z Z, and ti/ta for a text object), 'lastf (the f F t T that ;
-; and , repeat), 'reg (the yank: ('lin lines) | ('chr text), and a charwise
-; text carries newlines when the cut crossed rows), 'undo 'redo (snapshot
-; stacks), 'dot 'rec 'reccnt 'dotting (the `.` register: the keys of the last
-; change, the count it carried apart from them, and the guard that keeps a
-; replay from recording itself), 'file 'dirty 'msg 'sw (the shiftwidth > and <
-; move by, :set's one option), 'cmd (the ex/search line), 'pat 'pattx 'patw
-; (the search state; 'patw is * and #'s word-bounding, which re.l's engine has
-; no node for), 'dir, 'quit (() | 1), 'dow (a write request: (name) --
-; uread's shape, the face consumes it), 'doe (a READ request, same shape: :e/:o
-; leave it, the face reads and calls vload), 'w 'h (the view).
+; 'row 'col (0-based), 'goal (the column j/k aim for), 'top (first visible row),
+; 'mode ('n normal, 'i insert, 'c ex, 's search), 'cnt (pending count), 'op
+; (pending operator (char n) or ()), 'pc (pending char-arg nom: f F t T r g z Z,
+; and ti/ta for a text object), 'lastf (the f F t T that ; and , repeat), 'reg
+; (the yank: ('lin lines) | ('chr text), a charwise text carrying newlines when the
+; cut crossed rows), 'undo 'redo (snapshot stacks), 'dot 'rec 'reccnt 'dotting (the
+; `.` register: the last change's keys, its count apart from them, and the guard
+; keeping a replay from recording itself), 'file 'dirty 'msg 'sw (the shiftwidth
+; > and < move by), 'cmd (the ex/search line), 'pat 'pattx 'patw (the search state;
+; 'patw is * and #'s word-bounding, which re.l's engine has no node for), 'dir,
+; 'quit (() | 1), 'dow (a write request: (name), uread's shape, the face consumes
+; it), 'doe (a READ request, same shape: :e/:o leave it, the face calls vload),
+; 'w 'h (the view).
 ;
-; the syntax paint rides a/vi/hue.l and five more keys: 'hl (paint? -- born
-; on for a .l name, :hl flips it), 'pens (the class -> escape tablet; the FACE
-; installs it, so this file still touches no getenv and no file), 'book (the
-; vocabulary, folded once at the first paint), 'hlcar (the cached per-line
-; "starts inside a string" carry, [gen flags] -- the wrapper is not
-; decoration, gen 0 over an empty buffer is a real cached value, so a bare one
-; could not say "no cache"), 'hlgen (bumped by the three line mutators -- vput,
-; vsplice, vrest -- and nothing else touches 'lines), 'hlrow (the painted row
-; per SCREEN row, keyed by the text and carry and width it came from). the
-; lexer is not only the paint's: % and the bracket objects read its runs to
-; know which ( is code, which is why a ) in a literal is not a mate.
+; the syntax paint rides a/vi/hue.l and five more keys: 'hl (paint? -- born on for
+; a .l name, :hl flips it), 'pens (the class -> escape tablet, installed by the FACE
+; so this file touches no getenv and no file), 'book (the vocabulary, folded once at
+; the first paint), 'hlcar (the per-line "starts inside a string" carry as
+; [gen flags] -- the wrapper is load-bearing, gen 0 over an empty buffer being a real
+; cached value a bare one could not tell from "no cache"), 'hlgen (bumped by the three
+; line mutators, vput/vsplice/vrest, and nothing else touches 'lines), 'hlrow (the
+; painted row per SCREEN row, keyed by the text, carry and width it came from).
+; the lexer is not only the paint's: % and the bracket objects read its runs to know
+; which ( is code, which is why a ) in a literal is not a mate.
 ;
 ; the dialect: motions h j k l (space and backspace too, and the arrows)
 ; 0 ^ $ | w b e W B E f F t T ; , { } + - _ G gg g_ H M L %, counts, the
@@ -606,14 +604,11 @@
                    _ (vgole st a)
                    (vhunt st dir))))))
 
-   ; -- libra ⚖, on the buffer ------------------------------------------------
-   ; both of libra's weighings run in here, because both are pure functions over
-   ; text (a/libra/lint.l rides ahead of this file in the cat). the point is the
-   ; buffer rather than the file on disk: it answers for what you are looking at,
-   ; not for what you last saved, which is exactly when you want to be told.
-   ; one scanner under libra's three faces and this one, so what pulchritude says
-   ; is what `make lint` will refuse -- there is no second implementation to
-   ; drift. lint counts line and col from one and the buffer from zero.
+   ; -- libra, on the buffer --------------------------------------------------
+   ; both weighings are pure functions over text, so they run here, and over the
+   ; BUFFER rather than the file: it answers for what you are looking at. one
+   ; scanner under libra's three faces and this one, so what pulchritude says is
+   ; what `make lint` refuses. lint counts line and col from one, the buffer from zero.
    (vlint st)
     (: ws (lint-scan (unlines (st 'lines)))
        (? !(two? ws) (vmsg st "balance clean")
@@ -627,13 +622,11 @@
 
 
    ; -- the ex line -----------------------------------------------------------
-   ; a line reads [range] command [args]. an address is N . $ /re/ ?re? with any
-   ; run of +N / -N after it; two of them join with , or ; (`;` moves dot to the
-   ; first before reading the second) and % is 1,$. rows answer 0-based, so
-   ; address 0 is -1 -- the "before the first line" m and t take as a destination.
-   ; a search address that finds nothing answers 'bad, which is not (): "no
-   ; address here" and "an address that failed" have to part company, or
-   ; :/nomatch/d silently deletes the current line.
+   ; a line reads [range] command [args]; `;` moves dot to the first address before
+   ; reading the second, and % is 1,$. rows answer 0-based, so address 0 is -1, the
+   ; "before the first line" m and t take as a destination.
+   ; a search address that finds nothing answers 'bad, NOT (): "no address here" and
+   ; "an address that failed" must part company, or :/nomatch/d deletes the current line.
 
    (vexskip s i) (: n #s (go k) (? (k < n && (s k = 32 || s k = 9)) (go (k + 1)) k) (go i))
    (vextrim s)
@@ -1149,12 +1142,11 @@
           st))
 
    ; -- the dot register ---------------------------------------------------------
-   ; `.` repeats the last CHANGE, and the way to know what that was is to keep the
-   ; keys. recording opens on a command that changes text and runs until normal
-   ; mode is quiet again -- no pending operator, no pending char argument, out of
-   ; insert -- so `ciwfoo<esc>` is one entry and so is `3dd`. the count is kept
-   ; apart from the keys because that is the half a count on `.` replaces: `3dd`
-   ; recorded is (3 "dd"), and `2.` feeds `2dd`.
+   ; `.` repeats the last CHANGE by keeping its keys. recording opens on a command
+   ; that changes text and runs until normal mode is quiet again -- no pending
+   ; operator or char argument, out of insert -- so `ciwfoo<esc>` is one entry.
+   ; the count is kept APART from the keys, being the half a count on `.` replaces:
+   ; `3dd` records as (3 "dd"), and `2.` feeds `2dd`.
    (vchange? c) (elem c '(120 88 68 67 115 83 114 74 126 112 80
                           105 97 73 65 111 79 100 99 62 60 1 24))
    (vquiet? st) ((st 'mode = 'n) && !(st 'pc) && !(two? (st 'op)))
@@ -1244,12 +1236,10 @@
        _ (st 'top + body - 1 < st 'row ? (pin st 'top (st 'row - (body - 1))))
        top (st 'top) ls (st 'lines)
        (clip ln) (w < #ln ? (snip ln 0 w) ln)
-       ; the status line clips from the left. its tail is what carries the
-       ; news -- the row,col, the ": 12 lines", the end of the : you are typing --
-       ; and a deep path would otherwise push every word of it off the screen
-       ; (which it did: `:e some/long/path.l` confirmed into the void). `<` marks
-       ; the cut, the way vim marks a name it had to shorten. the TEXT lines
-       ; still clip right: that is the no-horizontal-scroll rule and it stays.
+       ; the status line clips from the LEFT: its tail carries the news (row,col, the
+       ; ": 12 lines", the end of the : being typed), which a deep path would push off
+       ; the screen. `<` marks the cut. the TEXT lines still clip right -- the
+       ; no-horizontal-scroll rule.
        (clipl ln) (: k #ln (? (w < k) ("<" + snip ln ((k - w) + 1) k) ln))
        ; -- the paint. escapes are zero width, so clip first and paint the clip:
        ; every column worked out below is the plain one, cursor included. off,
@@ -1306,12 +1296,11 @@
           + e + "[" + show <>>L + ";" + show <>>>L + "H"))
 
    ; -- the frame as a refresh: only what changed -------------------------------
-   ; a full redraw a keystroke is what the flicker is: the screen is cleared line
-   ; by line and rewritten while the terminal is drawing it. so keep the rows the
-   ; last frame put there and place only the ones that differ, and bracket the lot
-   ; in the terminal's synchronised-output mode (DEC 2026) so even a scroll lands
-   ; in one piece -- a terminal that does not know 2026 ignores it, as does quay.
-   ; navigation inside one screen now costs the status line and the cursor.
+   ; a full redraw a keystroke is the flicker: the screen is cleared line by line and
+   ; rewritten while the terminal draws it. so keep the rows the last frame put there,
+   ; place only the ones that differ, and bracket the lot in synchronised-output mode
+   ; (DEC 2026) so a scroll lands in one piece -- a terminal that does not know 2026
+   ; ignores it, as does quay.
    (vfresh st)
     (: e (string 27) L (vlay st)
        rs <L ss <>L key (L 4)

@@ -9,7 +9,7 @@
 ; the 27-element list shape), and answers the state; the helpers read it back.
 (borrow 'vi) ; the editor's engine just registered module 'vi in this cat
 
-(: (bytes s) (: n (tally s) (go i acc) (? (< i 0) acc (go (- i 1) (s i . acc))) (go (- n 1) ()))
+(: (bytes s) (: n #s (go i acc) (? (i < 0) acc (go (i - 1) (s i . acc))) (go (n - 1) ()))
    (vgo ls ks) (vfeed (vnew ls "t") (bytes ks))
    (vgol ls ks) (vfeed (vnew ls "t.l") (bytes ks))   ; the same, in a .l buffer
    (vgob ls bs) (vfeed (vnew ls "t") bs)
@@ -19,334 +19,330 @@
 
 ; --- motion: hjkl, 0 ^ $, counts, the goal column, G/gg ---
    _ (test
-      (= (at (vgo '("abc" "de") "ll")) '(0 2))
-      (= (at (vgo '("abc" "de") "lll")) '(0 2))                ; the col fence
-      (= (at (vgo '("abc" "de") "llh")) '(0 1))
-      (= (at (vgo '("abc" "de") "j")) '(1 0))
-      (= (at (vgo '("abc" "de") "jj")) '(1 0))                 ; the row fence
-      (= (at (vgo '("abc" "de") "jk")) '(0 0))
-      (= (at (vgo '("abc") "$")) '(0 2))
-      (= (at (vgo '("abc") "$0")) '(0 0))
-      (= (at (vgo '("  xy") "^")) '(0 2))
-      (= (at (vgo '("abcdef") "3l")) '(0 3))
-      (= (at (vgo '("abcdef" "ab") "$j")) '(1 1))              ; clamp on the short line ...
-      (= (at (vgo '("abcdef" "ab" "abcdef") "$jj")) '(2 5))    ; ... but the goal survives
-      (= (at (vgo '("a" "b" "c") "G")) '(2 0))
-      (= (at (vgo '("a" "b" "c") "2G")) '(1 0))
-      (= (at (vgo '("a" "b" "c") "Ggg")) '(0 0))
-      (= (at (vgo '("a" "b" "c") "3gg")) '(2 0)))
+      (at (vgo '("abc" "de") "ll") = '(0 2))
+      (at (vgo '("abc" "de") "lll") = '(0 2))                ; the col fence
+      (at (vgo '("abc" "de") "llh") = '(0 1))
+      (at (vgo '("abc" "de") "j") = '(1 0))
+      (at (vgo '("abc" "de") "jj") = '(1 0))                 ; the row fence
+      (at (vgo '("abc" "de") "jk") = '(0 0))
+      (at (vgo '("abc") "$") = '(0 2))
+      (at (vgo '("abc") "$0") = '(0 0))
+      (at (vgo '("  xy") "^") = '(0 2))
+      (at (vgo '("abcdef") "3l") = '(0 3))
+      (at (vgo '("abcdef" "ab") "$j") = '(1 1))              ; clamp on the short line ...
+      (at (vgo '("abcdef" "ab" "abcdef") "$jj") = '(2 5))    ; ... but the goal survives
+      (at (vgo '("a" "b" "c") "G") = '(2 0))
+      (at (vgo '("a" "b" "c") "2G") = '(1 0))
+      (at (vgo '("a" "b" "c") "Ggg") = '(0 0))
+      (at (vgo '("a" "b" "c") "3gg") = '(2 0)))
 
 ; --- the diagonals: alt-y u b n arrive as 256 + the letter, a vertical then a
 ; horizontal, the count on both; fenced like their halves; not a range, so an
 ; operator is dropped ---
    _ (test
-      (= (at (vgob '("abc" "def" "ghi") (bytes "l" + [354]))) '(1 0))        ; alt-b: down-left
-      (= (at (vgob '("abc" "def" "ghi") [366])) '(1 1))                      ; alt-n: down-right
-      (= (at (vgob '("abc" "def" "ghi") [366 366])) '(2 2))
-      (= (at (vgob '("abc" "def" "ghi") [366 366 377])) '(1 1))              ; alt-y: up-left
-      (= (at (vgob '("abc" "def" "ghi") [366 373])) '(0 2))                  ; alt-u: up-right
-      (= (at (vgob '("abc" "def" "ghi") (bytes "2" + [366]))) '(2 2))        ; the count rides both halves
-      (= (at (vgob '("abc" "def" "ghi") [377])) '(0 0))                      ; the fences hold
-      (= (at (vgob '("abcdef" "ab") [366])) '(1 1))                          ; the short line clamps
-      (= ((vgob '("abc" "def") (bytes "d" + [366])) 'lines) '("abc" "def"))  ; d then a diagonal: nothing cut
-      (= (at (vgob '("abc" "def") (bytes "d" + [366]))) '(0 0)))             ; ..and nothing moves either
+      (at (vgob '("abc" "def" "ghi") (bytes "l" + [354])) = '(1 0))        ; alt-b: down-left
+      (at (vgob '("abc" "def" "ghi") [366]) = '(1 1))                      ; alt-n: down-right
+      (at (vgob '("abc" "def" "ghi") [366 366]) = '(2 2))
+      (at (vgob '("abc" "def" "ghi") [366 366 377]) = '(1 1))              ; alt-y: up-left
+      (at (vgob '("abc" "def" "ghi") [366 373]) = '(0 2))                  ; alt-u: up-right
+      (at (vgob '("abc" "def" "ghi") (bytes "2" + [366])) = '(2 2))        ; the count rides both halves
+      (at (vgob '("abc" "def" "ghi") [377]) = '(0 0))                      ; the fences hold
+      (at (vgob '("abcdef" "ab") [366]) = '(1 1))                          ; the short line clamps
+      (((vgob '("abc" "def") (bytes "d" + [366])) 'lines) = '("abc" "def"))  ; d then a diagonal: nothing cut
+      (at (vgob '("abc" "def") (bytes "d" + [366])) = '(0 0)))             ; ..and nothing moves either
 
 ; --- words: w e b across lines ---
    _ (test
-      (= (at (vgo '("foo bar baz") "w")) '(0 4))
-      (= (at (vgo '("foo bar baz") "2w")) '(0 8))
-      (= (at (vgo '("foo.bar") "w")) '(0 3))                   ; punct is its own word
-      (= (at (vgo '("foo" "bar") "w")) '(1 0))                 ; w crosses the line
-      (= (at (vgo '("foo bar") "e")) '(0 2))
-      (= (at (vgo '("foo bar") "ee")) '(0 6))
-      (= (at (vgo '("foo bar") "$b")) '(0 4))
-      (= (at (vgo '("foo bar") "$bb")) '(0 0))
-      (= (at (vgo '("foo" "bar") "jb")) '(0 0)))               ; b crosses back
+      (at (vgo '("foo bar baz") "w") = '(0 4))
+      (at (vgo '("foo bar baz") "2w") = '(0 8))
+      (at (vgo '("foo.bar") "w") = '(0 3))                   ; punct is its own word
+      (at (vgo '("foo" "bar") "w") = '(1 0))                 ; w crosses the line
+      (at (vgo '("foo bar") "e") = '(0 2))
+      (at (vgo '("foo bar") "ee") = '(0 6))
+      (at (vgo '("foo bar") "$b") = '(0 4))
+      (at (vgo '("foo bar") "$bb") = '(0 0))
+      (at (vgo '("foo" "bar") "jb") = '(0 0)))               ; b crosses back
 
 ; --- f F t T ---
    _ (test
-      (= (at (vgo '("abcabc") "fc")) '(0 2))
-      (= (at (vgo '("abcabc") "2fc")) '(0 5))
-      (= (at (vgo '("abcabc") "tc")) '(0 1))
-      (= (at (vgo '("abcabc") "$Fa")) '(0 3))
-      (= (at (vgo '("abcabc") "$Ta")) '(0 4))
-      (= (at (vgo '("abc") "fz")) '(0 0)))                     ; a miss stands still
+      (at (vgo '("abcabc") "fc") = '(0 2))
+      (at (vgo '("abcabc") "2fc") = '(0 5))
+      (at (vgo '("abcabc") "tc") = '(0 1))
+      (at (vgo '("abcabc") "$Fa") = '(0 3))
+      (at (vgo '("abcabc") "$Ta") = '(0 4))
+      (at (vgo '("abc") "fz") = '(0 0)))                     ; a miss stands still
 
 ; --- insert: i a I a o O, enter, backspace, escape ---
    _ (test
-      (= (lns (vgo '("bc") "iaX")) '("aXbc"))                  ; i, then a and X insert
-      (= (lns (vgob '("ac") [105 98 27 88])) '("bac"))         ; i b ESC, then X at col 0 bites nothing
-      (= (lns (vgo '("") "ihello")) '("hello"))
-      (= (lns (vgo '("xy") "aZ")) '("xZy"))
-      (= (lns (vgo '("xy") "AZ")) '("xyZ"))
-      (= (lns (vgo '("  xy") "IZ")) '("  Zxy"))
-      (= (lns (vgo '("ab") "ocd")) '("ab" "cd"))
-      (= (at (vgo '("ab") "ocd")) '(1 2))
-      (= (lns (vgo '("ab") "Ocd")) '("cd" "ab"))
-      (= (lns (vgo '("ab" "cd") "jOx")) '("ab" "x" "cd")))
+      (lns (vgo '("bc") "iaX") = '("aXbc"))                  ; i, then a and X insert
+      (lns (vgob '("ac") [105 98 27 88]) = '("bac"))         ; i b ESC, then X at col 0 bites nothing
+      (lns (vgo '("") "ihello") = '("hello"))
+      (lns (vgo '("xy") "aZ") = '("xZy"))
+      (lns (vgo '("xy") "AZ") = '("xyZ"))
+      (lns (vgo '("  xy") "IZ") = '("  Zxy"))
+      (lns (vgo '("ab") "ocd") = '("ab" "cd"))
+      (at (vgo '("ab") "ocd") = '(1 2))
+      (lns (vgo '("ab") "Ocd") = '("cd" "ab"))
+      (lns (vgo '("ab" "cd") "jOx") = '("ab" "x" "cd")))
    _ (test
-      (= (lns (vgob '("abcd") [108 108 105 13])) '("ab" "cd"))            ; ll i cr splits
-      (= (at (vgob '("abcd") [108 108 105 13])) '(1 0))
-      (= (lns (vgob '("abcd") [65 120 BS BS 121])) '("abcy"))             ; a x bsp bsp y
-      (= (lns (vgob '("ab" "cd") [106 105 BS])) '("abcd"))                ; bsp at col 0 joins up
-      (= (at (vgob '("ab" "cd") [106 105 BS])) '(0 2))
-      (= (at (vgob '("abc") [65 27])) '(0 2))                             ; esc steps left, fenced
-      (= (st? (vgob '("a") [105 120 27]) 'mode) 'n))
+      (lns (vgob '("abcd") [108 108 105 13]) = '("ab" "cd"))            ; ll i cr splits
+      (at (vgob '("abcd") [108 108 105 13]) = '(1 0))
+      (lns (vgob '("abcd") [65 120 BS BS 121]) = '("abcy"))             ; a x bsp bsp y
+      (lns (vgob '("ab" "cd") [106 105 BS]) = '("abcd"))                ; bsp at col 0 joins up
+      (at (vgob '("ab" "cd") [106 105 BS]) = '(0 2))
+      (at (vgob '("abc") [65 27]) = '(0 2))                             ; esc steps left, fenced
+      (st? (vgob '("a") [105 120 27]) 'mode = 'n))
    ; the arrows in insert (edkey's -1 -2 -8 -9): the cursor may sit past the last
    ; char, the fences are the line's ends, and up and down keep the goal column
    _ (test
-      (= (lns (vgob '("abc") [65 -1 120])) '("abxc"))                     ; A, left, x
-      (= (lns (vgob '("abc") [105 -2 -2 -2 -2 120])) '("abcx"))          ; i, right past the end
-      (= (at (vgob '("abc") [105 -2 -2 -2 -2])) '(0 3))
-      (= (at (vgob '("abc") [65 -1 -1 -1 -1])) '(0 0))                    ; left stops at 0
-      (= (lns (vgob '("abcdef" "de") [65 -9 120])) '("abcdef" "dex"))    ; down: col clamped to 2
-      (= (at (vgob '("abcdef" "de") [65 -9])) '(1 2))
-      (= (lns (vgob '("abcdef" "de") [65 -9 -8 120])) '("abcdefx" "de")) ; up again: the goal 6 returns
-      (= (at (vgob '("abcdef" "de") [65 -8])) '(0 6))                     ; up at the top: nothing
-      (= (at (vgob '("ab" "cd") [106 65 -9])) '(1 2))                     ; down at the foot: nothing
-      (= (st? (vgob '("abc") [65 -1 -9 -8]) 'mode) 'i))                  ; still inserting
+      (lns (vgob '("abc") [65 -1 120]) = '("abxc"))                     ; A, left, x
+      (lns (vgob '("abc") [105 -2 -2 -2 -2 120]) = '("abcx"))          ; i, right past the end
+      (at (vgob '("abc") [105 -2 -2 -2 -2]) = '(0 3))
+      (at (vgob '("abc") [65 -1 -1 -1 -1]) = '(0 0))                    ; left stops at 0
+      (lns (vgob '("abcdef" "de") [65 -9 120]) = '("abcdef" "dex"))    ; down: col clamped to 2
+      (at (vgob '("abcdef" "de") [65 -9]) = '(1 2))
+      (lns (vgob '("abcdef" "de") [65 -9 -8 120]) = '("abcdefx" "de")) ; up again: the goal 6 returns
+      (at (vgob '("abcdef" "de") [65 -8]) = '(0 6))                     ; up at the top: nothing
+      (at (vgob '("ab" "cd") [106 65 -9]) = '(1 2))                     ; down at the foot: nothing
+      (st? (vgob '("abc") [65 -1 -9 -8]) 'mode = 'i))                  ; still inserting
 
 ; --- operators: x X D C s r J, dd yy cc, d+motion, spans ---
    _ (test
-      (= (lns (vgo '("abc") "x")) '("bc"))
-      (= (lns (vgo '("abc") "2x")) '("c"))
-      (= (lns (vgo '("abc") "lx")) '("ac"))
-      (= (lns (vgo '("abc") "$X")) '("ac"))
-      (= (lns (vgo '("abcdef") "llD")) '("ab"))
-      (= (at (vgo '("abcdef") "llD")) '(0 1))
-      (= (lns (vgo '("abc" "def") "dd")) '("def"))
-      (= (lns (vgo '("abc" "def") "jdd")) '("abc"))
-      (= (lns (vgo '("a" "b" "c") "2dd")) '("c"))
-      (= (lns (vgo '("only") "dd")) '(""))                     ; the vi invariant: one line stays
-      (= (lns (vgo '("foo bar") "dw")) '("bar"))
-      (= (lns (vgo '("foo bar") "d$")) '(""))
-      (= (lns (vgo '("foo bar") "wdb")) '("bar"))
-      (= (lns (vgo '("abcabc") "dfb")) '("cabc"))
-      (= (lns (vgo '("abcabc") "dtb")) '("bcabc"))
-      (= (lns (vgo '("a" "b" "c") "dj")) '("c"))               ; d+linewise takes both rows
-      (= (lns (vgo '("a" "b" "c") "jdk")) '("c"))
-      (= (lns (vgo '("a" "b" "c") "dG")) '(""))
-      (= (lns (vgo '("abc") "rz")) '("zbc"))
-      (= (lns (vgo '("abcd") "2rz")) '("zzcd"))
-      (= (at (vgo '("abcd") "2rz")) '(0 1))
-      (= (lns (vgo '("ab" "  cd") "J")) '("ab cd"))
-      (= (at (vgo '("ab" "  cd") "J")) '(0 2))
-      (= (lns (vgo '("a" "b" "c") "3J")) '("a b c")))
+      (lns (vgo '("abc") "x") = '("bc"))
+      (lns (vgo '("abc") "2x") = '("c"))
+      (lns (vgo '("abc") "lx") = '("ac"))
+      (lns (vgo '("abc") "$X") = '("ac"))
+      (lns (vgo '("abcdef") "llD") = '("ab"))
+      (at (vgo '("abcdef") "llD") = '(0 1))
+      (lns (vgo '("abc" "def") "dd") = '("def"))
+      (lns (vgo '("abc" "def") "jdd") = '("abc"))
+      (lns (vgo '("a" "b" "c") "2dd") = '("c"))
+      (lns (vgo '("only") "dd") = '(""))                     ; the vi invariant: one line stays
+      (lns (vgo '("foo bar") "dw") = '("bar"))
+      (lns (vgo '("foo bar") "d$") = '(""))
+      (lns (vgo '("foo bar") "wdb") = '("bar"))
+      (lns (vgo '("abcabc") "dfb") = '("cabc"))
+      (lns (vgo '("abcabc") "dtb") = '("bcabc"))
+      (lns (vgo '("a" "b" "c") "dj") = '("c"))               ; d+linewise takes both rows
+      (lns (vgo '("a" "b" "c") "jdk") = '("c"))
+      (lns (vgo '("a" "b" "c") "dG") = '(""))
+      (lns (vgo '("abc") "rz") = '("zbc"))
+      (lns (vgo '("abcd") "2rz") = '("zzcd"))
+      (at (vgo '("abcd") "2rz") = '(0 1))
+      (lns (vgo '("ab" "  cd") "J") = '("ab cd"))
+      (at (vgo '("ab" "  cd") "J") = '(0 2))
+      (lns (vgo '("a" "b" "c") "3J") = '("a b c")))
    _ (test
-      (= (lns (vgo '("foo bar") "cwxy")) '("xy bar"))          ; c enters insert
-      (= (st? (vgo '("foo bar") "cw") 'mode) 'i)
-      (= (lns (vgo '("abc") "sZ")) '("Zbc"))
-      (= (lns (vgo '("abcdef") "llCxy")) '("abxy"))
-      (= (lns (vgo '("aa" "bb") "ccX")) '("X" "bb")))          ; cc keeps a fresh line
+      (lns (vgo '("foo bar") "cwxy") = '("xy bar"))          ; c enters insert
+      (st? (vgo '("foo bar") "cw") 'mode = 'i)
+      (lns (vgo '("abc") "sZ") = '("Zbc"))
+      (lns (vgo '("abcdef") "llCxy") = '("abxy"))
+      (lns (vgo '("aa" "bb") "ccX") = '("X" "bb")))          ; cc keeps a fresh line
 
 ; --- the WORD family, the paragraph motions, and the column motions -----------
    _ (test
-      (= (at (vgo '("a.b c.d") "W")) '(0 4))
-      (= (at (vgo '("a.b c.d") "E")) '(0 2))
-      (= (at (vgo '("a.b c.d") "$B")) '(0 4))
-      (= (at (vgo '("a.b") "w")) '(0 1))                       ; w still splits on punct
-      (= (at (vgo '("abcdef") "4|")) '(0 3))
-      (= (at (vgo '("ab") "9|")) '(0 1))                       ; | fences at the line
-      (= (at (vgo '("a" "b" "" "c") "}")) '(2 0))
-      (= (at (vgo '("a" "" "b" "c") "G{")) '(1 0))
-      (= (at (vgo '("a" "b" "c") "}")) '(2 0))                 ; no blank line: the end
-      (= (at (vgo '("  ab" "  cd") "+")) '(1 2))               ; + lands on the first ink
-      (= (at (vgo '("  ab" "  cd") "j-")) '(0 2))
-      (= (at (vgo '("ab   ") "g_")) '(0 1))                    ; g_: the last ink
+      (at (vgo '("a.b c.d") "W") = '(0 4))
+      (at (vgo '("a.b c.d") "E") = '(0 2))
+      (at (vgo '("a.b c.d") "$B") = '(0 4))
+      (at (vgo '("a.b") "w") = '(0 1))                       ; w still splits on punct
+      (at (vgo '("abcdef") "4|") = '(0 3))
+      (at (vgo '("ab") "9|") = '(0 1))                       ; | fences at the line
+      (at (vgo '("a" "b" "" "c") "}") = '(2 0))
+      (at (vgo '("a" "" "b" "c") "G{") = '(1 0))
+      (at (vgo '("a" "b" "c") "}") = '(2 0))                 ; no blank line: the end
+      (at (vgo '("  ab" "  cd") "+") = '(1 2))               ; + lands on the first ink
+      (at (vgo '("  ab" "  cd") "j-") = '(0 2))
+      (at (vgo '("ab   ") "g_") = '(0 1))                    ; g_: the last ink
       ; space and backspace are l and h
-      (= (at (vgo '("abc") " ")) '(0 1))
-      (= (at (vgob '("abc") [108 108 8])) '(0 1)))
+      (at (vgo '("abc") " ") = '(0 1))
+      (at (vgob '("abc") [108 108 8]) = '(0 1)))
 
 ; --- % over the delimiters. in a .l buffer the paint's lexer says which ( is
 ;     code, so a ) inside a literal is not a mate; in any other file every one
 ;     counts, which is the classic vi rule and the fallback ------------------
    _ (test
-      (= (at (vgo '("(a (b) c)") "%")) '(0 8))
-      (= (at (vgo '("(a (b) c)") "$%")) '(0 0))
-      (= (at (vgo '("(a (b) c)") "3l%")) '(0 5))               ; the inner pair
-      (= (at (vgo '("(a" "b)") "%")) '(1 1))                   ; rows are crossed
-      (= (at (vgo '("[1 2]") "%")) '(0 4))
-      (= (at (vgo '("a(b") "%")) '(0 0))                       ; no mate: nothing moves
-      (= (lns (vgo '("x(ab)y") "ld%")) '("xy"))                ; d% is inclusive both ends
-      (= (lns (vgo '("(a" "b)c") "d%")) '("c"))
-      (= (at (vgol '("(a \")\" b)") "%")) '(0 8))              ; the quoted ) is not a mate
-      (= (at (vgo '("(a \")\" b)") "%")) '(0 4)))              ; ..and in a plain file it is
+      (at (vgo '("(a (b) c)") "%") = '(0 8))
+      (at (vgo '("(a (b) c)") "$%") = '(0 0))
+      (at (vgo '("(a (b) c)") "3l%") = '(0 5))               ; the inner pair
+      (at (vgo '("(a" "b)") "%") = '(1 1))                   ; rows are crossed
+      (at (vgo '("[1 2]") "%") = '(0 4))
+      (at (vgo '("a(b") "%") = '(0 0))                       ; no mate: nothing moves
+      (lns (vgo '("x(ab)y") "ld%") = '("xy"))                ; d% is inclusive both ends
+      (lns (vgo '("(a" "b)c") "d%") = '("c"))
+      (at (vgol '("(a \")\" b)") "%") = '(0 8))              ; the quoted ) is not a mate
+      (at (vgo '("(a \")\" b)") "%") = '(0 4)))              ; ..and in a plain file it is
 
 ; --- ; and , -- the last f F t T over again, forward and back ----------------
    _ (test
-      (= (at (vgo '("abcabcabc") "fa;")) '(0 6))
-      (= (at (vgo '("abcabcabc") "fa;,")) '(0 3))
-      (= (at (vgo '("abcabcabc") "$Fa;")) '(0 3))
-      (= (at (vgo '("abc") ";")) '(0 0)))                      ; with none remembered
+      (at (vgo '("abcabcabc") "fa;") = '(0 6))
+      (at (vgo '("abcabcabc") "fa;,") = '(0 3))
+      (at (vgo '("abcabcabc") "$Fa;") = '(0 3))
+      (at (vgo '("abc") ";") = '(0 0)))                      ; with none remembered
 
 ; --- the text objects: i and a after an operator. every one answers a range in
 ;     vapply's vocabulary, so ci( di( yi( are one object under three operators --
    _ (test
-      (= (lns (vgo '("f(ab)g") "lllci(X")) '("f(X)g"))
-      (= (lns (vgo '("f(ab)g") "lci(X")) '("f(X)g"))            ; on the delimiter itself
-      (= (lns (vgo '("f(ab)g") "4lci(X")) '("f(X)g"))           ; and on the closer
-      (= (lns (vgo '("f(ab)g") "lllca)X")) '("fXg"))
-      (= (lns (vgo '("x[1 2]y") "lda[")) '("xy"))
-      (= (lns (vgo '("x[1 2]y") "3ldi[")) '("x[]y"))
-      (= (lns (vgo '("x{1 2}y") "lda{")) '("xy"))
-      (= (lns (vgo '("a<bc>d") "lldi<")) '("a<>d"))
-      (= (lns (vgo '("(a (b) c)") "5ldab")) '("(a  c)"))        ; b is (, and the inner wins
-      (= (st? (vgo '("f(ab)g") "lllci(") 'mode) 'i)
-      (= (lns (vgo '("f()g") "lldi(")) '("f()g")))              ; an empty pair cuts nothing
+      (lns (vgo '("f(ab)g") "lllci(X") = '("f(X)g"))
+      (lns (vgo '("f(ab)g") "lci(X") = '("f(X)g"))            ; on the delimiter itself
+      (lns (vgo '("f(ab)g") "4lci(X") = '("f(X)g"))           ; and on the closer
+      (lns (vgo '("f(ab)g") "lllca)X") = '("fXg"))
+      (lns (vgo '("x[1 2]y") "lda[") = '("xy"))
+      (lns (vgo '("x[1 2]y") "3ldi[") = '("x[]y"))
+      (lns (vgo '("x{1 2}y") "lda{") = '("xy"))
+      (lns (vgo '("a<bc>d") "lldi<") = '("a<>d"))
+      (lns (vgo '("(a (b) c)") "5ldab") = '("(a  c)"))        ; b is (, and the inner wins
+      (st? (vgo '("f(ab)g") "lllci(") 'mode = 'i)
+      (lns (vgo '("f()g") "lldi(") = '("f()g")))              ; an empty pair cuts nothing
    _ (test
       ; the bracket objects cross rows, which is the whole point in a .l file
-      (= (lns (vgo '("(a" " b" " c)") "di(")) '("()"))
-      (= (lns (vgo '("x(a" " b" " c)y") "lda(")) '("xy"))
-      (= ((vgo '("(a" " b)" "z") "yi(") 'reg) '(chr "a\n b"))
+      (lns (vgo '("(a" " b" " c)") "di(") = '("()"))
+      (lns (vgo '("x(a" " b" " c)y") "lda(") = '("xy"))
+      (((vgo '("(a" " b)" "z") "yi(") 'reg) = '(chr "a\n b"))
       ; ..and the register they fill is one p away from being lines again
-      (= (lns (vgo '("(a" " b)" "z") "yi(jjp")) '("(a" " b)" "za" " b")))
+      (lns (vgo '("(a" " b)" "z") "yi(jjp") = '("(a" " b)" "za" " b")))
    _ (test
-      (= (lns (vgo '("foo bar baz") "wdiw")) '("foo  baz"))
-      (= (lns (vgo '("foo bar baz") "wdaw")) '("foo baz"))
-      (= (lns (vgo '("foo bar baz qux") "d2aw")) '("baz qux"))
-      (= (lns (vgo '("foo bar") "wciwZZZ")) '("foo ZZZ"))
-      (= (lns (vgo '("a.b c") "daW")) '("c"))                   ; aW takes the punct too
-      (= (lns (vgo '("x  y") "ldaw")) '("x"))                   ; on blanks: them and the word
-      (= (lns (vgo '("a \"bc\" d") "di\"")) '("a \"\" d"))
-      (= (lns (vgo '("a \"bc\" d") "da\"")) '("a d"))           ; around eats the trailing blank
-      (= (lns (vgo '("a 'bc' d") "di'")) '("a '' d"))
-      (= (lns (vgo '("\"ab\" \"cd\"") "$di\"")) '("\"ab\" \"\""))
-      (= (lns (vgo '("a" "b" "" "c") "dip")) '("" "c"))
-      (= (lns (vgo '("a" "b" "" "c") "dap")) '("c"))
-      (= (lns (vgo '("a" "" "" "b") "jdip")) '("a" "b")))       ; a blank run is a paragraph too
+      (lns (vgo '("foo bar baz") "wdiw") = '("foo  baz"))
+      (lns (vgo '("foo bar baz") "wdaw") = '("foo baz"))
+      (lns (vgo '("foo bar baz qux") "d2aw") = '("baz qux"))
+      (lns (vgo '("foo bar") "wciwZZZ") = '("foo ZZZ"))
+      (lns (vgo '("a.b c") "daW") = '("c"))                   ; aW takes the punct too
+      (lns (vgo '("x  y") "ldaw") = '("x"))                   ; on blanks: them and the word
+      (lns (vgo '("a \"bc\" d") "di\"") = '("a \"\" d"))
+      (lns (vgo '("a \"bc\" d") "da\"") = '("a d"))           ; around eats the trailing blank
+      (lns (vgo '("a 'bc' d") "di'") = '("a '' d"))
+      (lns (vgo '("\"ab\" \"cd\"") "$di\"") = '("\"ab\" \"\""))
+      (lns (vgo '("a" "b" "" "c") "dip") = '("" "c"))
+      (lns (vgo '("a" "b" "" "c") "dap") = '("c"))
+      (lns (vgo '("a" "" "" "b") "jdip") = '("a" "b")))       ; a blank run is a paragraph too
 
 ; --- `.` -- the last CHANGE again, and a count on it replaces the count it
 ;     carried. a motion, an undo and a yank are not changes and do not arm it --
    _ (test
-      (= (lns (vgo '("abcdef") "x..")) '("def"))
-      (= (lns (vgo '("abcdefgh") "x3.")) '("efgh"))             ; the count is replaced
-      (= (lns (vgo '("abcdefgh") "3x.")) '("gh"))               ; ..and carried when none is given
-      (= (lns (vgo '("a" "b" "c" "d") "dd.")) '("c" "d"))
-      (= (lns (vgo '("a" "b" "c" "d" "e") "dd2.")) '("d" "e"))
-      (= (lns (vgo '("foo bar") "ciwZZ\eww.")) '("ZZ ZZ"))      ; a whole insert, one entry
-      (= (lns (vgo '("ab" "cd") "A!\ej.")) '("ab!" "cd!"))
-      (= (lns (vgo '("abcd") "~.")) '("ABcd"))
-      (= (lns (vgo '("ab" "cd") ">>j.")) '("  ab" "  cd"))
-      (= (lns (vgo '("ab" "cd") "yyp.")) '("ab" "ab" "ab" "cd"))
-      (= (st? (vgo '("ab") ".") 'msg) "nothing to repeat")
-      (= (lns (vgo '("ab" "cd") "yy.")) '("ab" "cd")))          ; a yank arms nothing
+      (lns (vgo '("abcdef") "x..") = '("def"))
+      (lns (vgo '("abcdefgh") "x3.") = '("efgh"))             ; the count is replaced
+      (lns (vgo '("abcdefgh") "3x.") = '("gh"))               ; ..and carried when none is given
+      (lns (vgo '("a" "b" "c" "d") "dd.") = '("c" "d"))
+      (lns (vgo '("a" "b" "c" "d" "e") "dd2.") = '("d" "e"))
+      (lns (vgo '("foo bar") "ciwZZ\eww.") = '("ZZ ZZ"))      ; a whole insert, one entry
+      (lns (vgo '("ab" "cd") "A!\ej.") = '("ab!" "cd!"))
+      (lns (vgo '("abcd") "~.") = '("ABcd"))
+      (lns (vgo '("ab" "cd") ">>j.") = '("  ab" "  cd"))
+      (lns (vgo '("ab" "cd") "yyp.") = '("ab" "ab" "ab" "cd"))
+      (st? (vgo '("ab") ".") 'msg = "nothing to repeat")
+      (lns (vgo '("ab" "cd") "yy.") = '("ab" "cd")))          ; a yank arms nothing
 
 ; --- ~ Y S gJ, and the shifts -----------------------------------------------
    _ (test
-      (= (lns (vgo '("aBc") "3~")) '("AbC"))
-      (= (at (vgo '("aBc") "3~")) '(0 2))                       ; ~ fences at the line's end
-      (= (lns (vgo '("ab" "cd") "Yp")) '("ab" "ab" "cd"))
-      (= (lns (vgo '("ab" "cd") "SX\e")) '("X" "cd"))
-      (= (lns (vgo '("ab" "  cd") "gJ")) '("ab  cd"))           ; gJ keeps the indent, adds nothing
-      (= (lns (vgo '("ab" "cd") ">>")) '("  ab" "cd"))
-      (= (lns (vgo '("ab" "cd") "2>>")) '("  ab" "  cd"))
-      (= (lns (vgo '("    ab") "<<")) '("  ab"))
-      (= (lns (vgo '("ab") "<<")) '("ab"))                      ; already home
-      (= (lns (vgo '("ab" "cd" "ef") ">j")) '("  ab" "  cd" "ef"))
-      (= (lns (vgo '("" "ab") ">j")) '("" "  ab"))              ; an empty line stays empty
-      (= (lns (vgo '("ab" "cd") ">>u")) '("ab" "cd"))
+      (lns (vgo '("aBc") "3~") = '("AbC"))
+      (at (vgo '("aBc") "3~") = '(0 2))                       ; ~ fences at the line's end
+      (lns (vgo '("ab" "cd") "Yp") = '("ab" "ab" "cd"))
+      (lns (vgo '("ab" "cd") "SX\e") = '("X" "cd"))
+      (lns (vgo '("ab" "  cd") "gJ") = '("ab  cd"))           ; gJ keeps the indent, adds nothing
+      (lns (vgo '("ab" "cd") ">>") = '("  ab" "cd"))
+      (lns (vgo '("ab" "cd") "2>>") = '("  ab" "  cd"))
+      (lns (vgo '("    ab") "<<") = '("  ab"))
+      (lns (vgo '("ab") "<<") = '("ab"))                      ; already home
+      (lns (vgo '("ab" "cd" "ef") ">j") = '("  ab" "  cd" "ef"))
+      (lns (vgo '("" "ab") ">j") = '("" "  ab"))              ; an empty line stays empty
+      (lns (vgo '("ab" "cd") ">>u") = '("ab" "cd"))
       ; a shift is not a cut: it leaves the register alone
-      (= ((vgo '("ab" "cd") "yy>>") 'reg) '(lin ("ab")))
-      (= (lns (vgob '("ab") ((bytes ":set sw=4") + [CR] + (bytes ">>")))) '("    ab"))
-      (= (st? (vgob '("ab") ((bytes ":set sw") + [CR])) 'msg) "shiftwidth=2")
-      (= (st? (vgob '("ab") ((bytes ":set nu") + [CR])) 'msg) "not an option: nu"))
+      (((vgo '("ab" "cd") "yy>>") 'reg) = '(lin ("ab")))
+      (lns (vgob '("ab") ((bytes ":set sw=4") + [CR] + (bytes ">>"))) = '("    ab"))
+      (st? (vgob '("ab") ((bytes ":set sw") + [CR])) 'msg = "shiftwidth=2")
+      (st? (vgob '("ab") ((bytes ":set nu") + [CR])) 'msg = "not an option: nu"))
 
 ; --- ^A and ^X, * and #, H M L, zt zz zb, and insert's ^W and ^U -------------
    _ (test
-      (= (lns (vgob '("x 41 y") [1])) '("x 42 y"))
-      (= (lns (vgob '("x 41 y") ((bytes "3") + [1]))) '("x 44 y"))
-      (= (lns (vgob '("x 41 y") ((bytes "lll") + [1]))) '("x 42 y"))   ; standing on it
-      (= (lns (vgob '("x -3 y") [24])) '("x -4 y"))                    ; the sign rides along
-      (= (st? (vgob '("abc") [1]) 'msg) "no number here"))
+      (lns (vgob '("x 41 y") [1]) = '("x 42 y"))
+      (lns (vgob '("x 41 y") ((bytes "3") + [1])) = '("x 44 y"))
+      (lns (vgob '("x 41 y") ((bytes "lll") + [1])) = '("x 42 y"))   ; standing on it
+      (lns (vgob '("x -3 y") [24]) = '("x -4 y"))                    ; the sign rides along
+      (st? (vgob '("abc") [1]) 'msg = "no number here"))
    _ (test
       ; * is word-bounded, which re.l has no node for -- the hunt checks the span
-      (= (at (vgo '("foo bar" "xfoo" "foo") "*")) '(2 0))
-      (= (at (vgo '("foo" "bar" "foo z") "G#")) '(0 0))
-      (= (st? (vgo '("   ") "*") 'msg) "no word under the cursor")
+      (at (vgo '("foo bar" "xfoo" "foo") "*") = '(2 0))
+      (at (vgo '("foo" "bar" "foo z") "G#") = '(0 0))
+      (st? (vgo '("   ") "*") 'msg = "no word under the cursor")
       ; a name full of BRE metacharacters is spelled out, not read as a pattern
-      (= (at (vgo '("a.c" "abc" "a.c") "*")) '(2 0)))
+      (at (vgo '("a.c" "abc" "a.c") "*") = '(2 0)))
    (view ls ks h) (: st (vgo ls ks) _ (pin st 'h h) _ (vframe st) st)
    _ (test
-      (= (at (vfeed (view '("a" "b" "c" "d") "G" 4) (bytes "H"))) '(1 0))
-      (= (at (vfeed (view '("a" "b" "c" "d") "gg" 4) (bytes "L"))) '(2 0))
-      (= (at (vfeed (view '("a" "b" "c" "d") "gg" 4) (bytes "M"))) '(1 0))
-      (= ((vfeed (view '("a" "b" "c" "d" "e") "3G" 4) (bytes "zt")) 'top) 2)
-      (= ((vfeed (view '("a" "b" "c" "d" "e") "3G" 4) (bytes "zb")) 'top) 0)
+      (at (vfeed (view '("a" "b" "c" "d") "G" 4) (bytes "H")) = '(1 0))
+      (at (vfeed (view '("a" "b" "c" "d") "gg" 4) (bytes "L")) = '(2 0))
+      (at (vfeed (view '("a" "b" "c" "d") "gg" 4) (bytes "M")) = '(1 0))
+      (((vfeed (view '("a" "b" "c" "d" "e") "3G" 4) (bytes "zt")) 'top) = 2)
+      (((vfeed (view '("a" "b" "c" "d" "e") "3G" 4) (bytes "zb")) 'top) = 0)
       ; the view slides, the cursor does not
-      (= (at (vfeed (view '("a" "b" "c" "d" "e") "3G" 4) (bytes "zt"))) '(2 0)))
+      (at (vfeed (view '("a" "b" "c" "d" "e") "3G" 4) (bytes "zt")) = '(2 0)))
    _ (test
-      (= (lns (vgob '("foo bar") ((bytes "A") + [23]))) '("foo "))
-      (= (lns (vgob '("foo bar") ((bytes "A") + [23 23]))) '(""))
-      (= (lns (vgob '("  foo bar") ((bytes "A") + [21]))) '("  "))
-      (= (lns (vgob '("ab") ((bytes "I") + [21]))) '("ab")))            ; nothing before it
+      (lns (vgob '("foo bar") ((bytes "A") + [23])) = '("foo "))
+      (lns (vgob '("foo bar") ((bytes "A") + [23 23])) = '(""))
+      (lns (vgob '("  foo bar") ((bytes "A") + [21])) = '("  "))
+      (lns (vgob '("ab") ((bytes "I") + [21])) = '("ab")))            ; nothing before it
 
 ; --- an operator that crosses rows is charwise, the way vim's is. the linewise
 ;     motions (j k G gg) stay linewise, and dw stops at the line it ends -----
    _ (test
-      (= (lns (vgo '("ab" "cd ef") "ldw")) '("a" "cd ef"))
-      (= (lns (vgo '("a" "b" "c") "d2w")) '("" "c"))
-      (= (lns (vgo '("ab" "cd") "jdb")) '("cd"))
-      (= (lns (vgo '("abc" "def") "lld\e")) '("abc" "def"))            ; escape drops the operator
-      (= (lns (vgo '("a" "b" "c") "dj")) '("c")))                      ; j is still linewise
+      (lns (vgo '("ab" "cd ef") "ldw") = '("a" "cd ef"))
+      (lns (vgo '("a" "b" "c") "d2w") = '("" "c"))
+      (lns (vgo '("ab" "cd") "jdb") = '("cd"))
+      (lns (vgo '("abc" "def") "lld\e") = '("abc" "def"))            ; escape drops the operator
+      (lns (vgo '("a" "b" "c") "dj") = '("c")))                      ; j is still linewise
 
 ; --- yank + paste, both kinds ---
    _ (test
-      (= (lns (vgo '("ab" "cd") "yyp")) '("ab" "ab" "cd"))
-      (= (at (vgo '("ab" "cd") "yyp")) '(1 0))
-      (= (lns (vgo '("ab" "cd") "yyP")) '("ab" "ab" "cd"))
-      (= (at (vgo '("ab" "cd") "yyP")) '(0 0))
-      (= (lns (vgo '("ab" "cd") "ddp")) '("cd" "ab"))          ; the line swap idiom
-      (= (lns (vgo '("abc") "ylp")) '("aabc"))                 ; charwise p lands past the cursor
-      (= (lns (vgo '("foo bar") "ywP")) '("foo foo bar"))
-      (= (lns (vgo '("ab" "cd") "2yyjp")) '("ab" "cd" "ab" "cd")))
+      (lns (vgo '("ab" "cd") "yyp") = '("ab" "ab" "cd"))
+      (at (vgo '("ab" "cd") "yyp") = '(1 0))
+      (lns (vgo '("ab" "cd") "yyP") = '("ab" "ab" "cd"))
+      (at (vgo '("ab" "cd") "yyP") = '(0 0))
+      (lns (vgo '("ab" "cd") "ddp") = '("cd" "ab"))          ; the line swap idiom
+      (lns (vgo '("abc") "ylp") = '("aabc"))                 ; charwise p lands past the cursor
+      (lns (vgo '("foo bar") "ywP") = '("foo foo bar"))
+      (lns (vgo '("ab" "cd") "2yyjp") = '("ab" "cd" "ab" "cd")))
 
 ; --- undo / redo ---
    _ (test
-      (= (lns (vgo '("abc") "xu")) '("abc"))
-      (= (lns (vgob '("abc") [105 122 27 117])) '("abc"))      ; the whole insert, one undo
-      (= (lns (vgob '("abc") [120 117 18])) '("bc"))          ; x u ^R
-      (= (lns (vgo '("a" "b") "dduu")) '("a" "b"))
-      (= (at (vgo '("abc") "lxu")) '(0 1)))
+      (lns (vgo '("abc") "xu") = '("abc"))
+      (lns (vgob '("abc") [105 122 27 117]) = '("abc"))      ; the whole insert, one undo
+      (lns (vgob '("abc") [120 117 18]) = '("bc"))          ; x u ^R
+      (lns (vgo '("a" "b") "dduu") = '("a" "b"))
+      (at (vgo '("abc") "lxu") = '(0 1)))
 
 ; --- search over re.l: / ? n N, wrap ---
    (skeys s) ((bytes "/") + (bytes s) + [CR])
    _ (test
-      (= (at (vgob '("foo" "bar" "foobar") (skeys "bar"))) '(1 0))
-      (= (at (vgob '("foo" "bar" "foobar") ((skeys "bar") + (bytes "n")))) '(2 3))
-      (= (at (vgob '("foo" "bar" "foobar") ((skeys "bar") + (bytes "nn")))) '(1 0))     ; wraps
-      (= (at (vgob '("foo" "bar" "foobar") ((skeys "bar") + (bytes "nN")))) '(1 0))
-      (= (at (vgob '("ab" "cd") ((bytes "j$?ab") + [CR]))) '(0 0))
-      (= (at (vgob '("xax" "b") (skeys "q"))) '(0 0)))         ; a miss stands still
+      (at (vgob '("foo" "bar" "foobar") (skeys "bar")) = '(1 0))
+      (at (vgob '("foo" "bar" "foobar") ((skeys "bar") + (bytes "n"))) = '(2 3))
+      (at (vgob '("foo" "bar" "foobar") ((skeys "bar") + (bytes "nn"))) = '(1 0))     ; wraps
+      (at (vgob '("foo" "bar" "foobar") ((skeys "bar") + (bytes "nN"))) = '(1 0))
+      (at (vgob '("ab" "cd") ((bytes "j$?ab") + [CR])) = '(0 0))
+      (at (vgob '("xax" "b") (skeys "q")) = '(0 0)))         ; a miss stands still
 
 ; --- the ex line: :N, :$, :q with dirt, :q!, :w's request ---
    _ (test
-      (= (at (vgob '("a" "b" "c") ((bytes ":3") + [CR]))) '(2 0))
-      (= (at (vgob '("a" "b" "c") ((bytes ":$") + [CR]))) '(2 0))
-      (= (st? (vgob '("a") ((bytes ":q") + [CR])) 'quit) 1)
+      (at (vgob '("a" "b" "c") ((bytes ":3") + [CR])) = '(2 0))
+      (at (vgob '("a" "b" "c") ((bytes ":$") + [CR])) = '(2 0))
+      (st? (vgob '("a") ((bytes ":q") + [CR])) 'quit = 1)
       !(st? (vgob '("a") ((bytes "x:q") + [CR])) 'quit)        ; dirty q refuses
-      (= (st? (vgob '("a") ((bytes "x:q!") + [CR])) 'quit) 1)
-      (= (st? (vgob '("a") ((bytes ":w") + [CR])) 'dow) '("t"))
-      (= (st? (vgob '("a") ((bytes ":w other") + [CR])) 'dow) '("other"))
+      (st? (vgob '("a") ((bytes "x:q!") + [CR])) 'quit = 1)
+      (st? (vgob '("a") ((bytes ":w") + [CR])) 'dow = '("t"))
+      (st? (vgob '("a") ((bytes ":w other") + [CR])) 'dow = '("other"))
       (: q (vgob '("a") ((bytes "x:wq") + [CR]))
-         ((= (q 'dow) '("t")) && (= (q 'quit) 1)))
+         ((q 'dow = '("t")) && (q 'quit = 1)))
       (: q (vgob '("a") (bytes "xZZ"))
-         ((= (q 'dow) '("t")) && (= (q 'quit) 1))))
+         ((q 'dow = '("t")) && (q 'quit = 1))))
 
 ; --- the frame: escapes exact on a tiny screen ---
    (mini ls ks) (: st (vgo ls ks) _ (pin st 'w 8) _ (pin st 'h 4) (vframe st))
    E$ (string 27)
    _ (test
-      (= (mini '("ab") "")
-         (+ E$ (+ "[H" (+ "ab" (+ E$ (+ "[K\r\n" (+ "~" (+ E$ (+ "[K\r\n" (+ "~" (+ E$ (+ "[K\r\n"
-            (+ "t  1,1" (+ E$ (+ "[K" (+ E$ "[1;1H"))))))))))))))))
+      (mini '("ab") "" = (E$ + ("[H" + ("ab" + (E$ + ("[K\r\n" + ("~" + (E$ + ("[K\r\n" + ("~" + (E$ + ("[K\r\n" + ("t  1,1" + (E$ + ("[K" + (E$ + "[1;1H"))))))))))))))))
       ; a long line clips at w; the cursor never leaves the view
-      (= (mini '("abcdefghij") "$")
-         (+ E$ (+ "[H" (+ "abcdefgh" (+ E$ (+ "[K\r\n" (+ "~" (+ E$ (+ "[K\r\n" (+ "~" (+ E$ (+ "[K\r\n"
-            (+ "t  1,10" (+ E$ (+ "[K" (+ E$ "[1;8H"))))))))))))))))
+      (mini '("abcdefghij") "$" = (E$ + ("[H" + ("abcdefgh" + (E$ + ("[K\r\n" + ("~" + (E$ + ("[K\r\n" + ("~" + (E$ + ("[K\r\n" + ("t  1,10" + (E$ + ("[K" + (E$ + "[1;8H"))))))))))))))))
       ; scrolling: the cursor's row stays inside the 3 text rows
       (: st (vgo '("a" "b" "c" "d" "e") "G") _ (pin st 'w 8) _ (pin st 'h 4)
          f (vframe st)
-         ((= (st 'top) 2) && two? [f])))
+         ((st 'top = 2) && two? [f])))
 
 ; --- vfresh: the frame as a refresh. the first one is everything, and after that
 ;     only the rows that differ from the ones the last frame put there, each
@@ -359,32 +355,30 @@
    _ (test
       ; the first refresh lays the whole screen, the way vframe does
       (: st (small '("ab") "")
-         (= (vfresh st)
-            (SY + E$ + "[H" + "ab" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n"
+         (vfresh st = (SY + E$ + "[H" + "ab" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n"
                 + place 4 "t  1,1" + E$ + "[1;1H" + YS)))
       ; the same state again is the cursor and nothing else at all
       (: st (small '("ab") "") _ (vfresh st)
-         (= (vfresh st) (SY + E$ + "[1;1H" + YS)))
+         (vfresh st = (SY + E$ + "[1;1H" + YS)))
       ; a motion inside the screen moves the cursor and the row,col it reports
       (: st (small '("ab") "") _ (vfresh st) _ (vstep st 108)
-         (= (vfresh st) (SY + place 4 "t  1,2" + E$ + "[1;2H" + YS)))
+         (vfresh st = (SY + place 4 "t  1,2" + E$ + "[1;2H" + YS)))
       ; an edit places the one row it changed, and the status that noticed
       (: st (small '("ab" "cd") "") _ (vfresh st) _ (vfeed st (bytes "jx"))
-         (= (vfresh st) (SY + place 2 "d" + place 4 "t [+]  2,1" + E$ + "[2;1H" + YS)))
+         (vfresh st = (SY + place 2 "d" + place 4 "t [+]  2,1" + E$ + "[2;1H" + YS)))
       ; a scroll is a new set of rows, so it is a whole screen again
       (: st (small '("a" "b" "c" "d" "e") "") _ (vfresh st) _ (vfeed st (bytes "G"))
          f (vfresh st)
-         (= f (SY + E$ + "[H" + "c" + E$ + "[K\r\n" + "d" + E$ + "[K\r\n" + "e" + E$ + "[K\r\n"
+         (f = (SY + E$ + "[H" + "c" + E$ + "[K\r\n" + "d" + E$ + "[K\r\n" + "e" + E$ + "[K\r\n"
                  + place 4 "t  5,1" + E$ + "[3;1H" + YS))))
    ; and the law that keeps the two honest: what a fresh refresh lays is what
    ; vframe lays, rows for rows and status for status
    _ (test
       (: a (small '("ab" "cd") "j") b (small '("ab" "cd") "j")
-         (= (vlay a) (vlay b)))
+         (vlay a = (vlay b)))
       (: st (small '("hello" "there") "jl")
          L (vlay st)
-         (= (vframe st)
-            (E$ + "[H" + <L 0 + E$ + "[K\r\n" + <L 1 + E$ + "[K\r\n" + <L 2 + E$ + "[K\r\n"
+         (vframe st = (E$ + "[H" + <L 0 + E$ + "[K\r\n" + <L 1 + E$ + "[K\r\n" + <L 2 + E$ + "[K\r\n"
                 + <>L + E$ + "[K" + E$ + "[" + show <>>L + ";" + show <>>>L + "H"))))
 
 ; --- the painted row is cached against the text that made it, so a keystroke
@@ -393,7 +387,7 @@
       (: st (hlon (small '("(map f)" "(g 1)") "")) _ (vfresh st)
          r0 ((st 'hlrow) 0)
          ; [text carry width painted]: the key is what it was painted from
-         ((= <r0 "(map f)") && (= <>r0 0) && (= <>>r0 16) && (0 < tally <>>>r0)))
+         ((<r0 = "(map f)") && (<>r0 = 0) && (<>>r0 = 16) && (0 < tally <>>>r0)))
       ; the cache is keyed by SCREEN row, so it is the height of the view and
       ; never the height of the file
       (: st (hlon (small '("a" "b" "c" "d" "e" "f") "")) _ (vfresh st) _ (vfeed st (bytes "G"))
@@ -402,33 +396,33 @@
 
 ; --- :e and :o -- the request the face performs, and the buffer swap it calls -
    _ (test
-      (= (st? (vgob '("a") ((bytes ":e other") + [CR])) 'doe) '("other"))
-      (= (st? (vgob '("a") ((bytes ":o other") + [CR])) 'doe) '("other"))       ; the same door
-      (= (st? (vgob '("a") ((bytes ":e") + [CR])) 'doe) '("t"))                 ; bare :e reloads
+      (st? (vgob '("a") ((bytes ":e other") + [CR])) 'doe = '("other"))
+      (st? (vgob '("a") ((bytes ":o other") + [CR])) 'doe = '("other"))       ; the same door
+      (st? (vgob '("a") ((bytes ":e") + [CR])) 'doe = '("t"))                 ; bare :e reloads
       !(st? (vgob '("a") ((bytes "x:e other") + [CR])) 'doe)                    ; dirty refuses ...
-      (= (st? (vgob '("a") ((bytes "x:e! other") + [CR])) 'doe) '("other"))     ; ... and ! overrides
-      (= (st? (vgob '("a") ((bytes "x:e!") + [CR])) 'doe) '("t"))
+      (st? (vgob '("a") ((bytes "x:e! other") + [CR])) 'doe = '("other"))     ; ... and ! overrides
+      (st? (vgob '("a") ((bytes "x:e!") + [CR])) 'doe = '("t"))
       ; a trailing blank is just blank: `:e ` reloads the way a bare `:e` does
-      (= (st? (vgob '("a") ((bytes ":e ") + [CR])) 'doe) '("t")))
+      (st? (vgob '("a") ((bytes ":e ") + [CR])) 'doe = '("t")))
    _ (test
       ; the swap starts the file over -- and re-decides the paint from the new name
       (: q (vgo '("a" "b") "jx") _ (vload q '("x" "y" "z") "n.l")
-         ((= (lns q) '("x" "y" "z")) &&
-          (= (at q) '(0 0)) &&
+         ((lns q = '("x" "y" "z")) &&
+          (at q = '(0 0)) &&
           !(q 'dirty) && !(q 'undo) && q 'hl))
       (: q (vgo '("a") "") _ (pin q 'hl 1) _ (vload q '("z") "n.md") !(q 'hl))
-      (: q (vgo '("a") "") _ (vload q () "e.l") (= (lns q) '(""))))             ; an empty read is one empty line
+      (: q (vgo '("a") "") _ (vload q () "e.l") (lns q = '(""))))             ; an empty read is one empty line
 
 ; --- libra ⚖ on the buffer: :lint weighs what you are looking at. one scanner
 ;     (a/libra/lint.l) under libra's faces and this one ---------------------------
    (ex ls s) (vgob ls ((bytes (":" + s)) + [CR]))
    _ (test
-      (= (st? (ex '("(: a 1)") "lint") 'msg) "balance clean")
-      (= (st? (ex '("(: a 1") "lint") 'msg) "1 warning: 1,1 unclosed (")
-      (= (at (ex '("(: a 1") "lint")) '(0 0))                  ; and it goes there
+      (st? (ex '("(: a 1)") "lint") 'msg = "balance clean")
+      (st? (ex '("(: a 1") "lint") 'msg = "1 warning: 1,1 unclosed (")
+      (at (ex '("(: a 1") "lint") = '(0 0))                  ; and it goes there
       ; an unclosed opener reports where it opened, so the jump lands on the cause
       (: q (ex '("(f x)" "(: a 1" "(g y)") "lint")
-         ((= (at q) '(1 0)) && (= (q 'msg) "1 warning: 2,1 unclosed ("))))
+         ((at q = '(1 0)) && (q 'msg = "1 warning: 2,1 unclosed ("))))
 
 ; --- the ex language: addresses, then the commands that read a range ---
 ; every line below goes in through the same `:` the hand does, so what is lawed
@@ -436,78 +430,78 @@
    ab5 '("aa" "bb" "cc" "dd" "ee")
    _ (test
       ; addresses: N . $ , ; % and the +N / -N offsets
-      (= (at (ex ab5 "3")) '(2 0))
-      (= (at (ex ab5 "$")) '(4 0))
-      (= (at (ex ab5 "+2")) '(2 0))
-      (= (at (ex ab5 "$-1")) '(3 0))
-      (= (at (ex ab5 ".+1")) '(1 0))
-      (= (at (ex ab5 "2+")) '(2 0))                          ; a bare + steps one
-      (= (at (ex ab5 "/cc/")) '(2 0))
-      (= (at (ex ab5 "?bb?")) '(1 0))                        ; ? hunts backward, wrapping
-      (= (at (ex ab5 "/aa/")) '(0 0))                        ; and the hunt wraps
-      (= (st? (ex ab5 "/zz/") 'msg) "no match")              ; a failed address is an error ...
-      (= (lns (ex ab5 "/zz/d")) ab5)                         ; ... and never a silent :d
-      (= (at (ex ab5 "0")) '(0 0))                           ; a goto fences, it does not fail
-      (= (at (ex ab5 "99")) '(4 0)))
+      (at (ex ab5 "3") = '(2 0))
+      (at (ex ab5 "$") = '(4 0))
+      (at (ex ab5 "+2") = '(2 0))
+      (at (ex ab5 "$-1") = '(3 0))
+      (at (ex ab5 ".+1") = '(1 0))
+      (at (ex ab5 "2+") = '(2 0))                          ; a bare + steps one
+      (at (ex ab5 "/cc/") = '(2 0))
+      (at (ex ab5 "?bb?") = '(1 0))                        ; ? hunts backward, wrapping
+      (at (ex ab5 "/aa/") = '(0 0))                        ; and the hunt wraps
+      (st? (ex ab5 "/zz/") 'msg = "no match")              ; a failed address is an error ...
+      (lns (ex ab5 "/zz/d") = ab5)                         ; ... and never a silent :d
+      (at (ex ab5 "0") = '(0 0))                           ; a goto fences, it does not fail
+      (at (ex ab5 "99") = '(4 0)))
 
    _ (test
       ; d y m t j -- the range commands
-      (= (lns (ex ab5 "2d")) '("aa" "cc" "dd" "ee"))
-      (= (lns (ex ab5 "2,3d")) '("aa" "dd" "ee"))
-      (= (lns (ex ab5 "%d")) '(""))                          ; the buffer is never empty
-      (= (lns (ex ab5 ",d")) '(""))                          ; a bare , is 1,$ too
-      (= (lns (ex ab5 "d")) '("bb" "cc" "dd" "ee"))          ; no range is dot
-      (= (lns (ex ab5 "/cc/d")) '("aa" "bb" "dd" "ee"))
-      (= (lns (ex ab5 "1,2m4")) '("cc" "dd" "aa" "bb" "ee"))
-      (= (lns (ex ab5 "4,5m0")) '("dd" "ee" "aa" "bb" "cc")) ; 0 is before the first line
-      (= (lns (ex ab5 "1t2")) '("aa" "bb" "aa" "cc" "dd" "ee"))
-      (= (lns (ex ab5 "1,2j")) '("aa bb" "cc" "dd" "ee"))
-      (= (lns (ex ab5 "1,3j")) '("aa bb cc" "dd" "ee"))
-      (= (st? (ex ab5 "2,1d") 'msg) "out of range")          ; a backward range refuses
-      (= (st? (ex ab5 "2m2") 'msg) "destination inside the range")
-      (= (lns (ex ab5 "2y")) ab5)                            ; y leaves the text alone ...
-      (= (st? (ex ab5 "2y") 'reg) '(lin ("bb"))))            ; ... and fills the register
+      (lns (ex ab5 "2d") = '("aa" "cc" "dd" "ee"))
+      (lns (ex ab5 "2,3d") = '("aa" "dd" "ee"))
+      (lns (ex ab5 "%d") = '(""))                          ; the buffer is never empty
+      (lns (ex ab5 ",d") = '(""))                          ; a bare , is 1,$ too
+      (lns (ex ab5 "d") = '("bb" "cc" "dd" "ee"))          ; no range is dot
+      (lns (ex ab5 "/cc/d") = '("aa" "bb" "dd" "ee"))
+      (lns (ex ab5 "1,2m4") = '("cc" "dd" "aa" "bb" "ee"))
+      (lns (ex ab5 "4,5m0") = '("dd" "ee" "aa" "bb" "cc")) ; 0 is before the first line
+      (lns (ex ab5 "1t2") = '("aa" "bb" "aa" "cc" "dd" "ee"))
+      (lns (ex ab5 "1,2j") = '("aa bb" "cc" "dd" "ee"))
+      (lns (ex ab5 "1,3j") = '("aa bb cc" "dd" "ee"))
+      (st? (ex ab5 "2,1d") 'msg = "out of range")          ; a backward range refuses
+      (st? (ex ab5 "2m2") 'msg = "destination inside the range")
+      (lns (ex ab5 "2y") = ab5)                            ; y leaves the text alone ...
+      (st? (ex ab5 "2y") 'reg = '(lin ("bb"))))            ; ... and fills the register
 
    _ (test
       ; :s -- over sed's own usub, so & and \1 read the same in both
-      (= (lns (ex '("a b a") "s/a/X/")) '("X b a"))
-      (= (lns (ex '("a b a") "s/a/X/g")) '("X b X"))
-      (= (lns (ex '("ab" "ab") "%s/b/Y/")) '("aY" "aY"))
-      (= (lns (ex '("ab" "cd") "s/./X/")) '("Xb" "cd"))      ; no range is dot only
-      (= (lns (ex '("xy") "s/x/[&]/")) '("[x]y"))            ; & is the whole match
-      (= (lns (ex '("ab") "s/\\(a\\)\\(b\\)/\\2\\1/")) '("ba"))
-      (= (lns (ex '("a,b") "s,\\,,-,")) '("a-b"))            ; any delimiter, escaped in
-      (= (lns (ex '("xbz") "s/x*/-/g")) '("-b-z-"))          ; the POSIX empty-match rule
-      (= (lns (ex '("ab") "s/q/X/")) '("ab"))
-      (= (st? (ex '("ab") "s/q/X/") 'msg) "not found: q")
-      (= (st? (ex '("ab") "s/a/X/") 'msg) "1 line changed")
+      (lns (ex '("a b a") "s/a/X/") = '("X b a"))
+      (lns (ex '("a b a") "s/a/X/g") = '("X b X"))
+      (lns (ex '("ab" "ab") "%s/b/Y/") = '("aY" "aY"))
+      (lns (ex '("ab" "cd") "s/./X/") = '("Xb" "cd"))      ; no range is dot only
+      (lns (ex '("xy") "s/x/[&]/") = '("[x]y"))            ; & is the whole match
+      (lns (ex '("ab") "s/\\(a\\)\\(b\\)/\\2\\1/") = '("ba"))
+      (lns (ex '("a,b") "s,\\,,-,") = '("a-b"))            ; any delimiter, escaped in
+      (lns (ex '("xbz") "s/x*/-/g") = '("-b-z-"))          ; the POSIX empty-match rule
+      (lns (ex '("ab") "s/q/X/") = '("ab"))
+      (st? (ex '("ab") "s/q/X/") 'msg = "not found: q")
+      (st? (ex '("ab") "s/a/X/") 'msg = "1 line changed")
       ; a fresh :s pattern is the last search, which is where n picks it up
-      (: q (ex '("ab" "cd" "ab") "s/ab/zz/") (= (q 'pattx) "ab")))
+      (: q (ex '("ab" "cd" "ab") "s/ab/zz/") (q 'pattx = "ab")))
 
    _ (test
       ; :g and :v -- the body runs from the last row up, so a delete never
       ; moves a row still to be visited, and the whole sweep is one undo
-      (= (lns (ex ab5 "g/[bd]/d")) '("aa" "cc" "ee"))
-      (= (lns (ex ab5 "v/[bd]/d")) '("bb" "dd"))
-      (= (lns (ex '("a1" "b2" "a3") "g/a/s/[0-9]/X/")) '("aX" "b2" "aX"))
-      (= (lns (ex ab5 "1,3g/./d")) '("dd" "ee"))             ; g takes a range too
-      (= (st? (ex ab5 "g/zz/d") 'msg) "not found: zz")
-      (= (lns (ex ab5 "g/zz/d")) ab5)
+      (lns (ex ab5 "g/[bd]/d") = '("aa" "cc" "ee"))
+      (lns (ex ab5 "v/[bd]/d") = '("bb" "dd"))
+      (lns (ex '("a1" "b2" "a3") "g/a/s/[0-9]/X/") = '("aX" "b2" "aX"))
+      (lns (ex ab5 "1,3g/./d") = '("dd" "ee"))             ; g takes a range too
+      (st? (ex ab5 "g/zz/d") 'msg = "not found: zz")
+      (lns (ex ab5 "g/zz/d") = ab5)
       ; one u puts the whole global back
-      (: q (ex ab5 "g/[bd]/d") _ (vfeed q (bytes "u")) (= (lns q) ab5))
+      (: q (ex ab5 "g/[bd]/d") _ (vfeed q (bytes "u")) (lns q = ab5))
       (: q (ex '("a1" "b2" "a3") "g/a/s/[0-9]/X/") _ (vfeed q (bytes "u"))
-         (= (lns q) '("a1" "b2" "a3"))))
+         (lns q = '("a1" "b2" "a3"))))
 
    _ (test
       ; the file half still answers, now through the one dispatch
-      (= (st? (ex '("a") "w") 'dow) '("t"))
-      (= (st? (ex '("a") "w other") 'dow) '("other"))
-      (= (st? (ex '("a") "q") 'quit) 1)
-      (= (st? (ex '("a") "=") 'msg) "1")
-      (= (st? (ex ab5 "$=") 'msg) "5")
-      (= (st? (ex '("a") "zz") 'msg) "not an ex command: zz")
+      (st? (ex '("a") "w") 'dow = '("t"))
+      (st? (ex '("a") "w other") 'dow = '("other"))
+      (st? (ex '("a") "q") 'quit = 1)
+      (st? (ex '("a") "=") 'msg = "1")
+      (st? (ex ab5 "$=") 'msg = "5")
+      (st? (ex '("a") "zz") 'msg = "not an ex command: zz")
       ; a no-op line is a no-op, not a complaint
-      (= (st? (ex '("a") "") 'msg) ""))
+      (st? (ex '("a") "") 'msg = ""))
 
 ; --- the status line clips from the left: its tail is the news ---------------
    (miniw ls ks m) (: st (vgo ls ks) _ (vmsg st m) _ (pin st 'w 8) _ (pin st 'h 4)
@@ -517,16 +511,16 @@
    _ (test
       ; 11 characters into a view 8 wide: the head goes, `<` says so, and the
       ; tail -- which is where the news lives -- is what you are left looking at
-      (= (miniw '("ab") "" "abcdefghijk") (frame3 "<efghijk"))
-      (= (miniw '("ab") "" "12345678") (frame3 "12345678"))    ; exactly w: untouched
-      (= (miniw '("ab") "" "short") (frame3 "short")))
+      (miniw '("ab") "" "abcdefghijk" = (frame3 "<efghijk"))
+      (miniw '("ab") "" "12345678" = (frame3 "12345678"))    ; exactly w: untouched
+      (miniw '("ab") "" "short" = (frame3 "short")))
 
 ; --- the cursor sits where you are typing: on the status line in ex and search -
    _ (test
-      (: f (mini '("ab") ":") (= (snip f (tally f - 6) (tally f)) (E$ + "[4;2H")))
-      (: f (mini '("ab") ":wq") (= (snip f (tally f - 6) (tally f)) (E$ + "[4;4H")))
-      (: f (mini '("ab") "/x") (= (snip f (tally f - 6) (tally f)) (E$ + "[4;3H")))
-      (: f (mini '("ab") "") (= (snip f (tally f - 6) (tally f)) (E$ + "[1;1H"))))
+      (: f (mini '("ab") ":") (snip f (#f - 6) #f = (E$ + "[4;2H")))
+      (: f (mini '("ab") ":wq") (snip f (#f - 6) #f = (E$ + "[4;4H")))
+      (: f (mini '("ab") "/x") (snip f (#f - 6) #f = (E$ + "[4;3H")))
+      (: f (mini '("ab") "") (snip f (#f - 6) #f = (E$ + "[1;1H"))))
 
 ; --- the syntax paint (a/vi/hue.l): classes, the carry, and the one law
 ; that keeps every exact-frame assertion above honest --------------------------
@@ -537,7 +531,7 @@
    ; because those are the frame's own geometry and the whole point is that the
    ; paint did not touch it
    (bare s)
-    (: n (tally s)
+    (: n #s
        (dig? c) (((48 <= c) && (c <= 57)) || (c = 59))
        (go i acc)
         (? (n <= i) acc
@@ -552,24 +546,24 @@
 ; --- one class per token, table order: a word lane beats the punct lanes, the
 ;     number lane beats a leading sigil, and punct inside a name is the name ---
    _ (test
-      (= (klass "; hi") '(comment))
-      (= (klass "#!/x") '(comment))
-      (= (klass "\"a ; b\"") '(string))               ; a ; inside a string is no comment
-      (= (klass "'foo") '(atom))
-      (= (klass "[1]") '(paren number paren))
-      (= (klass "map") '(book))
-      (= (klass "zzznope") ())                        ; not in the book: plain, and that is the tell
-      (= (klass "zzz?") ())
-      (= (klass ":") '(form))
-      (= (klass "&&") '(macro))
-      (= (klass "tau") '(const))
-      (= (klass "$x") '(mono))                        ; the valence law, in colour
-      (= (klass "a $ b") '(dyad))
-      (= (klass "+") '(dyad))                         ; a bare operator is not a book name
-      (= (klass "-3") '(number))
-      (= (klass ".5") '(number))
-      (= (klass "1.5e-3") '(number))
-      (= (klass "1e10") '(number)))
+      (klass "; hi" = '(comment))
+      (klass "#!/x" = '(comment))
+      (klass "\"a ; b\"" = '(string))               ; a ; inside a string is no comment
+      (klass "'foo" = '(atom))
+      (klass "[1]" = '(paren number paren))
+      (klass "map" = '(book))
+      (klass "zzznope" = ())                        ; not in the book: plain, and that is the tell
+      (klass "zzz?" = ())
+      (klass ":" = '(form))
+      (klass "&&" = '(macro))
+      (klass "tau" = '(const))
+      (klass "$x" = '(mono))                        ; the valence law, in colour
+      (klass "a $ b" = '(dyad))
+      (klass "+" = '(dyad))                         ; a bare operator is not a book name
+      (klass "-3" = '(number))
+      (klass ".5" = '(number))
+      (klass "1.5e-3" = '(number))
+      (klass "1e10" = '(number)))
 
 ; --- a stop still ends the token and the walk still moves on. `,` is one: it
 ;     reads as a symbol and terminates one ((sound "a,b") answers a, then ,b),
@@ -577,17 +571,17 @@
 ;     because it is its own case everywhere else too. a control byte is the case
 ;     that stays unclaimed, and it ends a token exactly the same way ----------
    _ (test
-      (= (klass ",") '(comma))
-      (= (runs "," 0) '((comma 0 1)))
-      (= (runs "map,map" 0) '((book 0 3) (comma 3 4) (book 4 7)))
-      (= (runs ("map" + (string 1) + "map") 0) '((book 0 3) (book 4 7))))   ; unclaimed: no run of its own
+      (klass "," = '(comma))
+      (runs "," 0 = '((comma 0 1)))
+      (runs "map,map" 0 = '((book 0 3) (comma 3 4) (book 4 7)))
+      (runs ("map" + (string 1) + "map") 0 = '((book 0 3) (book 4 7))))   ; unclaimed: no run of its own
 
 ; --- the carry: a string spans lines (papel.l's css is forty of them), so a
 ;     line's class depends on where the line before it ended -----------------
    _ (test
-      (= (hue-carry hbk '("(: css \"a" "b\" 1)" "x")) '(0 1 0))
-      (= (runs "a ; b\" c" 1) '((string 0 6)))        ; carried in: the ; is still string
-      (= (runs "a ; b" 1) '((string 0 5)))            ; and it stays open to the end
+      (hue-carry hbk '("(: css \"a" "b\" 1)" "x") = '(0 1 0))
+      (runs "a ; b\" c" 1 = '((string 0 6)))        ; carried in: the ; is still string
+      (runs "a ; b" 1 = '((string 0 5)))            ; and it stays open to the end
       ; keep () is the same walk with its answers dropped -- one lexer, provably
       (: a (hue-lex hbk "\"x" 0 1) b (hue-lex hbk "\"x" 0 ())
          ((<>a = <>b) && !(two? <b))))
@@ -596,8 +590,8 @@
 ;     written out, and they are the grammar rather than the book ---------------
    _ (test
       (: ls (map hue-arg (hue-tagged 'word))
-         ((= (tally (filter nom? ls)) 3) &&                ; macros values names
-          (= (tally (filter two? ls)) 1)))                 ; the forms, and nothing else
+         ((#(filter nom? ls) = 3) &&                ; macros values names
+          (#(filter two? ls) = 1)))                 ; the forms, and nothing else
       (0 < tally (hue-words 'macros))
       (0 < tally (hue-words 'values))
       (0 < tally (hue-words 'names))
@@ -610,7 +604,7 @@
       !(elem "+" (hue-words 'names))                    ; a bare operator belongs to the punct lanes
       !(elem "$" (hue-words 'values))
       ; sorted, because the generator freezes them into a diff-gated file
-      (: w (hue-words 'names) (= w (sort w)))
+      (: w (hue-words 'names) (w = (sort w)))
       ; the stability law. both book lanes are positive tests -- a name does
       ; something or is something -- so session data (argv, cmdline, `parsed`,
       ; which is bound only when love was handed a file) falls out of both, and
@@ -620,16 +614,16 @@
       !(elem "argv" (hue-words 'names))
       !(elem "argv" (hue-words 'values))
       ; earlier row wins in the one tablet, exactly as the table reads top-down
-      (: b (hue-book ()) (= (b "assert") 'macro && (= (b "tau") 'const) &&
-                          (= (b "map") 'book))))
+      (: b (hue-book ()) (b "assert" = 'macro && (b "tau" = 'const) &&
+                          (b "map" = 'book))))
 
 ; --- the pens: molokayo, and every class has one -----------------------------
    _ (test
-      (= (hue-pen '(Comment 59 "#75715E" ()) ()) "\e[38;5;59m")
-      (= (hue-pen '(Statement 161 "#F92672" (bold)) ()) "\e[1;38;5;161m")
-      (= (hue-pen '(Statement 161 "#F92672" (bold)) 1) "\e[1;38;2;249;38;114m")
+      (hue-pen '(Comment 59 "#75715E" ()) () = "\e[38;5;59m")
+      (hue-pen '(Statement 161 "#F92672" (bold)) () = "\e[1;38;5;161m")
+      (hue-pen '(Statement 161 "#F92672" (bold)) 1 = "\e[1;38;2;249;38;114m")
       (: ps (hue-pens hue-theme ()) (all (\ c (string? (ps (hue-cls c)))) hue-classes))
-      (all (\ r (any (\ c (= (hue-grp c) <r)) hue-classes)) hue-theme))
+      (all (\ r (any (\ c (hue-grp c = <r)) hue-classes)) hue-theme))
 
 ; --- paint invariance: colour adds colour and moves nothing. this is what keeps
 ;     every byte-exact frame law above meaningful once the paint exists -------
