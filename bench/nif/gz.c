@@ -11,7 +11,7 @@
  *
  * A ROUND TRIP IS NOT ENOUGH and it is worth saying why. inflate(deflate(x))
  * == x holds under a great many wrong deflates -- any legal stream decodes --
- * so the compressed BYTES are reported too. deflate is a twin held to a/gz/gz.l
+ * so the compressed BYTES are reported too. deflate is a twin held to a/gz.l
  * at the byte (t/host/gzc.l), so its output is a fixed answer and not a
  * licensed choice: a differing byte is a differing compiler.
  *

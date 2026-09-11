@@ -17,7 +17,7 @@
 ; is behind on inflate and level on crc32 is losing to branches, not to loads. On the
 ; day they were added it read mooncc 1.85x gcc on inflate and 1.5x on crc32.
 ;
-; these run the NIFS, never a/gz/gz.l's love twins -- this table times C compilers.
+; these run the NIFS, never a/gz.l's love twins -- this table times C compilers.
 ; no `borrow` and no lib file: the binary under test lives in b/bench/cc, so the
 ; module walk would miss lib/ entirely. everything here is built from the core, and the
 ; inflate row's stream is laid beside it by ccgen.l through the host love.

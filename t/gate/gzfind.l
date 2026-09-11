@@ -1,4 +1,4 @@
-; t/gate/gzfind.l -- a/gz/gz.l's match finder has two presentations: `gz-find`, which is
+; t/gate/gzfind.l -- a/gz.l's match finder has two presentations: `gz-find`, which is
 ; the definition, and the holo IR beside it that says the same thing to a cpu. This gate is
 ; the differential between them, and it needs nothing outside the tree.
 ;

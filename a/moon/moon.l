@@ -80,7 +80,7 @@
        (jn (go 0 0 ()) ""))
    ; the carried archive is a .gz: the 10-byte header, the flagged optional
    ; fields stepped over, the deflate stream to the C nif, the isize from the
-   ; trailer as its hint. a/gz/gz.l's walk, carried here read-only because moon
+   ; trailer as its hint. a/gz.l's walk, carried here read-only because moon
    ; owes no module -- a `borrow` here would tie it to the bake order.
    (gzskip s n i) (? (n <= i) () (s i = 0) (i + 1) (gzskip s n (i + 1)))
    (gzbody s)
@@ -98,7 +98,7 @@
                             (s (n - 4) + (s (n - 3) << 8)
                              + (s (n - 2) << 16) + (s (n - 1) << 24))))))))
    ; ..and a read-only ustar walk: nom (prefix + name), size, body -- all this
-   ; needs. a/tar/tar.l stays the whole law; this reads the slice and nothing else.
+   ; needs. a/tar.l stays the whole law; this reads the slice and nothing else.
    (toct s o k) (: (go i a) (? (k <= i) a
                                (: c (s (o + i))
                                   (48 <= c < 56 ? (go (i + 1) (a * 8 + (c - 48))) a)))

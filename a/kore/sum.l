@@ -13,7 +13,7 @@
    ; --- the digest door ------------------------------------------------------
    ; the probe is asked at first call and kept, never at load: this file is baked
    ; into the artifact by a love that has the nifs, so a load-time answer would be the
-   ; baking love's and not the running one's. a/gz/gz.l's gz-nif, the same reasoning --
+   ; baking love's and not the running one's. a/gz.l's gz-nif, the same reasoning --
    ; and the same reason each probe is a lambda: an unbound global scares when it is
    ; referenced, not when the function around it is compiled.
    sum-door (tablet 0)

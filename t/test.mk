@@ -839,7 +839,7 @@ test_bakerep: host
 test_distboot: dist
 	@echo TEST t/gate/distboot.sh
 	@sh t/gate/distboot.sh $(dist_source) $(ho)/love
-# test_gz -- a/tar/tar.l + a/gz/gz.l against the two programs they replace. the laws
+# test_gz -- a/tar.l + a/gz.l against the two programs they replace. the laws
 # are t/host/gz.l; this is the half only the OUTSIDE can say, and it is separate because
 # a coder and decoder by one hand round-trip cleanly through a format nobody else speaks.
 # skips without either system tool. gzfind.l rides along: the differential between gz.l's

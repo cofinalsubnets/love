@@ -4,7 +4,7 @@
 ;   (cpio-unpack s)          -> (1 entries) | ()
 ;   (cpio-scatter root es u) -> (1 count) | ()   write entries back out under root
 ;
-; an entry is a/tar/tar.l's entry -- the same tablet, the same keys ('nom 'kind 'body 'to
+; an entry is a/tar.l's entry -- the same tablet, the same keys ('nom 'kind 'body 'to
 ; 'mode 'mtime 'uid 'gid) -- because the walk that fills them (`tar-gather`) and the
 ; leveller that makes them reproducible (`tar-level`) are about a file and not about a
 ; wire. this file is a second wire for them, which is the whole reason it is short.

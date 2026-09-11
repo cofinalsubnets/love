@@ -200,7 +200,7 @@ drv_ms() { # $1=binpath $2=driver-file $3=driver-call $4=sentinel
   awk -v f="$full" -v b="$boot" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
 }
 
-# the inflate row's input, laid ONCE by the already-built host love -- a/gz/gz.l is a
+# the inflate row's input, laid ONCE by the already-built host love -- a/gz.l is a
 # module and the lane binaries have no module path, so the stream cannot be made where
 # it is used. INFN is the inflated size, handed to the nif so it allocates once.
 # if this fails the inflate row is dnf and the other two are unaffected: a missing

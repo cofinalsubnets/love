@@ -1,4 +1,4 @@
-; t/host/gz.l -- the laws of a/gz/gz.l and a/tar/tar.l, the .tar.gz written and read
+; t/host/gz.l -- the laws of a/gz.l and a/tar.l, the .tar.gz written and read
 ; in love. What is proved here is internal: crc32 against its published vector, both
 ; coders against each other over the shapes that break coders, and the ustar header
 ; field by field. The half that needs the outside world -- that GNU tar and GNU gzip

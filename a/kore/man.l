@@ -9,7 +9,7 @@
 ;   man [-w] [SECTION] NAME..     man 3 printf     man -w ls
 ;
 ; the search is the usual one: MANPATH if it is set, else the three roots below, each
-; walked in section order. a page may be plain or gzipped (a/gz/) -- the suffix is not
+; walked in section order. a page may be plain or gzipped (a/gz.l) -- the suffix is not
 ; consulted, the two magic bytes are, so a page named without .gz still reads. a page
 ; whose whole body is `.so man1/other.1` is a redirect and is followed once.
 ;

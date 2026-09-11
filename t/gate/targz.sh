@@ -1,5 +1,5 @@
 #!/bin/sh
-# t/gate/targz.sh -- a/tar/tar.l + a/gz/gz.l against the two programs they replace.
+# t/gate/targz.sh -- a/tar.l + a/gz.l against the two programs they replace.
 #
 # t/host/gz.l proves the laws that need nothing outside the tree: crc32 against
 # its published vector, both coders against each other, the ustar header field by
@@ -40,7 +40,7 @@ head -c 4096 /dev/urandom               > "$w/tree/sub/deep/blob.bin"
 # turn on a single body -- the only shape here that is about the STREAM and not
 # about the header.
 head -c 200000 /dev/urandom             > "$w/tree/sub/deep/big.bin"
-cat a/gz/gz.l a/tar/tar.l                  > "$w/tree/text.l"
+cat a/gz.l a/tar.l                  > "$w/tree/text.l"
 ln -s a.txt "$w/tree/link"
 chmod 0600 "$w/tree/sub/b.txt"
 
@@ -132,11 +132,11 @@ EOF
 done
 echo "  OK gzip container both ways (text, incompressible, empty; -9 dynamic codes read)"
 
-# ---- 4. the command faces: gzip, gunzip, zcat (a/gz/gzcmd.l) --------------
+# ---- 4. the command faces: gzip, gunzip, zcat (a/gz.l) --------------
 # the engine is section 3's; what is asked here is the FACE -- the suffix rules, the
 # in-place replace, the mode and the mtime carried across, the flags and the statuses.
 c="$w/cmd"; mkdir -p "$c"
-head -c 20000 /etc/services > "$c/f.txt" 2>/dev/null || cat a/gz/gz.l > "$c/f.txt"
+head -c 20000 /etc/services > "$c/f.txt" 2>/dev/null || cat a/gz.l > "$c/f.txt"
 cp "$c/f.txt" "$c/g.txt"
 chmod 0640 "$c/f.txt"
 touch -d '2021-02-03 04:05:06' "$c/f.txt"
@@ -267,4 +267,4 @@ EOF
 "$love" "$w/repack6.l" || fail "the re-pack of a 077 lay is not the pack of the tree"
 echo "  OK a lay under umask 077 keeps every archived mode, dirs included, and re-packs to one sha"
 
-echo "targz: a/tar/tar.l + a/gz/gz.l agree with GNU tar and GNU gzip both ways -- ok"
+echo "targz: a/tar.l + a/gz.l agree with GNU tar and GNU gzip both ways -- ok"

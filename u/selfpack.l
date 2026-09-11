@@ -19,8 +19,8 @@
 ; the borrows below name PATHS, in dependency order. a module name has nothing to find
 ; under love0 (gcc-built from the l/boot/*.l headers, no image), and `-l FILE` whose
 ; basename names a verb SEATS it (post.l's seatof), so `-l a/sb/sb.l` would run sb.
-(borrow "a/tar/tar.l")
-(borrow "a/gz/gz.l")
+(borrow "a/gz.l")
+(borrow "a/tar.l")
 (borrow "a/kore/text.l")
 (borrow "a/kore/diff.l")
 (borrow "a/sb/merge.l")
