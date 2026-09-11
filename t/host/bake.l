@@ -28,6 +28,12 @@
    drv "b/.bake-nif-drive.l"
    _ (unlink img) _ (unlink drv)                    ; a clean slate, tolerated if absent
 
+   ; this binary woke from its OWN .image. every assertion below rides `love wake FILE`,
+   ; a door ai_baked_pick does not use -- a blob laid where the section opens instead of
+   ; where ai_baked_image reads falls back to the egg in silence, and `love-image` is the
+   ; one tell. not for the cold lane (LOVE_NO_IMAGE), which has no image by design.
+   _ (test ((ev 'love-image) = "<baked>"))
+
    ; the bake answers 1 and the session rides on (this very assert runs post-dump);
    ; note the file port feeding this script is live at the dump -- the fz leg.
    _ (test ((bake img) = 1))

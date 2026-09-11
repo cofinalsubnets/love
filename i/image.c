@@ -117,13 +117,13 @@ static int bake_move(int src, int dst, uint64_t soff, uint64_t doff, uint64_t n,
 
 // lay the image. 0 done, >0 "this binary is not laid for growth", <0 a real failure.
 static int bake_tail(struct ai *g, int src, char const *tmp, void const *buf, uintptr_t len,
-                     uint64_t lenoff, mode_t mode) {
+                     uint64_t lenoff, uint64_t imgoff, mode_t mode) {
   Elf64_Ehdr eh;
   Elf64_Shdr *sh = NULL;
   Elf64_Phdr *ph = NULL;
   char *str = NULL, *win = NULL;
   size_t nsh, nph, si = 0, pi;
-  uint64_t head, off, cur, al;
+  uint64_t head, off, cur, al, pad;
   int dst = -1, rc = 1;
   if (pread(src, &eh, sizeof eh, 0) != (ssize_t) sizeof eh) return -6;
   if (memcmp(eh.e_ident, ELFMAG, SELFMAG) || eh.e_ident[EI_CLASS] != ELFCLASS64
@@ -157,12 +157,19 @@ static int bake_tail(struct ai *g, int src, char const *tmp, void const *buf, ui
   if (pi == nph) goto out;                        // .image does not end a segment: not the tail
   for (size_t i = 0; i < nph; i++)                // ..and no other segment lives above it
     if (i != pi && ph[i].p_type == PT_LOAD && ph[i].p_vaddr > ph[pi].p_vaddr) goto out;
-  head = off;                                     // everything below the blob stays put, byte for byte
+  // the blob's home is ai_baked_image's, not the section's. a lay may open the section
+  // with alignment padding ahead of the symbol -- the address is congruent to the file
+  // offset, which says nothing about the symbol's own alignment -- and the wake reads from
+  // the symbol. pad is that gap: it rides inside the head and the two records below carry
+  // it, so the bake lands where the wake looks whatever the lay left in front.
+  if (imgoff < off || imgoff - off >= sh[si].sh_size) goto out;   // the symbol is not in the section
+  pad = imgoff - off;
+  head = imgoff;                                  // everything below the blob stays put, byte for byte
   al = sh[si].sh_addr - ph[pi].p_vaddr;           // the image's own start within its segment
   if ((dst = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0700)) < 0) { rc = -6; goto out; }
   if ((rc = bake_move(src, dst, 0, 0, head, win))) goto out;
-  if (pwrite(dst, buf, len, (off_t) off) != (ssize_t) len) { rc = -6; goto out; }
-  cur = off + len;
+  if (pwrite(dst, buf, len, (off_t) imgoff) != (ssize_t) len) { rc = -6; goto out; }
+  cur = imgoff + len;
   for (size_t i = 1; i < nsh; i++) {              // the non-allocated tail, relaid past the blob
     uint64_t a;
     if (i == si || sh[i].sh_type == SHT_NOBITS || (sh[i].sh_flags & SHF_ALLOC)) continue;
@@ -172,8 +179,8 @@ static int bake_tail(struct ai *g, int src, char const *tmp, void const *buf, ui
     if ((rc = bake_move(src, dst, sh[i].sh_offset, cur, sh[i].sh_size, win))) goto out;
     sh[i].sh_offset = cur;
     cur += sh[i].sh_size; }
-  sh[si].sh_size = len;                           // the two records that now describe the image
-  ph[pi].p_filesz = ph[pi].p_memsz = al + len;    // .image ends the segment, so its growth is the segment's
+  sh[si].sh_size = pad + len;                     // the two records that now describe the image
+  ph[pi].p_filesz = ph[pi].p_memsz = al + pad + len;   // .image ends the segment, so its growth is the segment's
   eh.e_shoff = cur = (cur + 7) & ~(uint64_t) 7;
   // FIXME remove bare block delimiters like this, rename scoped variables if needed
   { uintptr_t l = len;                            // ai_baked_image_len: what main.c hands the codec
@@ -200,9 +207,11 @@ int image_bake(struct ai *g, char const *out, int bare) {
   // ai_baked_image_len is patched by file offset, taken from the running program's own
   // phdrs -- the one place a live address and a file position name the same byte. a copy
   // is this binary's head byte for byte, so the same offset names the same word there.
-  struct bake_at bl = { (uintptr_t) &ai_baked_image_len, 0, 0 };
+  struct bake_at bl = { (uintptr_t) &ai_baked_image_len, 0, 0 },
+                 bi = { (uintptr_t) ai_baked_image, 0, 0 };     // ..and the blob goes where that symbol reads
   dl_iterate_phdr(bake_phdr, &bl);
-  if (!bl.found) return ai_alloc(buf, 0), -5;
+  dl_iterate_phdr(bake_phdr, &bi);
+  if (!bl.found || !bi.found) return ai_alloc(buf, 0), -5;
   // exe[4096] is the kernel's own PATH_MAX, not a cap of ours: host_selfpath asks about a
   // real file, and no path an open could name is longer.
   char exe[4096];
@@ -212,7 +221,7 @@ int image_bake(struct ai *g, char const *out, int bare) {
   struct stat st;
   int rc = -6, src = tmp ? open(exe, O_RDONLY) : -1;
   if (src >= 0 && !fstat(src, &st)) {
-    rc = bake_tail(g, src, tmp, bare ? (void const *) stub : buf, len, bl.off, st.st_mode & 07777);
+    rc = bake_tail(g, src, tmp, bare ? (void const *) stub : buf, len, bl.off, bi.off, st.st_mode & 07777);
     if (rc > 0) {
       fprintf(stderr, "love: .image is not laid last -- nowhere to grow the image\n");
       rc = -3; }
