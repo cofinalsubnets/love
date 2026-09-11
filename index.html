@@ -21,11 +21,12 @@
      coi.js in the head -- that one goes first because it may reload the page to put the
      isolation headers on. w/index.l lays it on the front page.
      the boot line and the two artifacts ride data- attributes, so a page can aim it
-     elsewhere (data-wasm, data-image, data-boot, data-ram); the defaults are w/wasm/,
-     which is where `make site-wasm` puts them. -->
+     elsewhere (data-wasm, data-image, data-boot, data-ram, data-cols); the defaults are
+     w/wasm/, which is where `make site-wasm` puts them. the canvas carries no size: its
+     box is the stylesheet's and its pixels are that box's own, measured at boot. -->
 <div class="machine">
 <p class="status">waking the machine...</p>
-<canvas class="fb" width="640" height="400" tabindex="0"></canvas>
+<canvas class="fb" tabindex="0"></canvas>
 <div class="mbar">click the screen, then type &middot; <code>love</code> opens a repl, <code>ctrl-d</code> leaves it</div>
 <span class="chip" data-type="love">love</span>
 <span class="chip" data-type="ls /">ls /</span>

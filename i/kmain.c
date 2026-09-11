@@ -37,7 +37,8 @@ static struct cb *kcb;
 
 static struct {
   volatile uint32_t *_;
-  uint16_t width, height, pitch; } kfb;
+  uint16_t width, height, pitch;
+  uint8_t scale; } kfb;              // pixels per glyph pixel, settled in fbinit
 
 // keyboard input. kb_int (interrupt context) decodes scancodes into input bytes -- arrow
 // and Delete as the ANSI escapes the line editor decodes -- and kb_readn and (key) drain
@@ -59,9 +60,10 @@ static int kqpop(void) {                   // dequeue one byte, -1 if empty
   int b = kkb.q[kkb.qh];
   return kkb.qh = (kkb.qh + 1) & 15, b; }
 
-// the console's font. the palette that goes with it lives in l/quay/paint.c,
-// which is the one place a cell becomes pixels.
-static struct font const kfont = { .glyphs = (uint8_t*) moderndos_8x16, .w = 8, .h = 16 };
+// the console's face. the palette that goes with it lives in l/quay/paint.c, which
+// is the one place a cell becomes pixels; how large it is drawn is the SCREEN's number
+// and rides the paper (kfb.scale), so this stays what it is -- glyphs and their size.
+static struct font const kface = { (uint8_t const*) cleat_8x16, 8, 16 };
 
 
 
@@ -1733,11 +1735,11 @@ void fbdraw(void) {
   bool const moved = cur != fbcur || blink != fbblink;
   // the paper is minted per FRAME, never per row: kticks is bumped by the timer ISR,
   // so re-reading the blink phase mid-frame could paint one row lit and the next dark.
-  struct cb_paper const paper = { kfb._, kfb.pitch, kfb.width, kfb.height };
+  struct cb_paper const paper = { kfb._, kfb.pitch, kfb.width, kfb.height, kfb.scale };
   for (uint16_t i = 0; i < rows; i++) {
     uint32_t const r = i > 255 ? 255 : i;   // quay's fold: bit 255 stands for 255-and-past
     if (kcb->dmg[r >> 5] >> (r & 31) & 1 || (moved && (i == was || i == now)))
-      cb_paint(&paper, kcb, &kfont, i, 0, 0, blink ? cur : ~0u); }
+      cb_paint(&paper, kcb, &kface, i, 0, 0, blink ? cur : ~0u); }
   for (int k = 0; k < 8; k++) kcb->dmg[k] = 0;
   fbcur = cur, fbblink = blink; }
 
@@ -1748,6 +1750,21 @@ bool k_fb(volatile uint32_t **p, int *w, int *h, int *pitch) {
   if (!kfb._) return false;
   *p = kfb._, *w = kfb.width, *h = kfb.height, *pitch = kfb.pitch;
   return true; }
+
+// (winsize _) -- the console as (rows . cols). the grid is settled once at boot, off the
+// framebuffer's pixels and the scale a glyph pixel gets (cbinit), so a program that wants
+// the whole screen has nowhere else to ask: it is not 80x25 here and has no reason to be.
+// serial-only there is no grid, and the answer is the nom a host gives for a stdout that
+// is not a tty. the dummy argument is (winsize)'s host shape, kept.
+ai_noinline static struct ai *k_winsize(struct ai *g) {
+  if (!kcb) return g->sp[0] = ai_err(g, ENOTTY), g;
+  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
+  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                                 putcharm(kcb->rows), putcharm(kcb->cols));
+  return g->sp[0] = word(w), g; }
+
+static lvm(lvm_winsize) {
+  LvmCall(g, k_winsize) }
 
 static lvm(draw) {
  fbdraw();
@@ -1836,7 +1853,8 @@ static union u
   nif_vmx[] = {{lvm_vmx}, {lvm_ret0}},
   nif_vmx_run[] = {{lvm_vmx_run}, {lvm_ret0}},
 #endif
-  nif_fault[] = {{lvm_fault}, {lvm_ret0}};
+  nif_fault[] = {{lvm_fault}, {lvm_ret0}},
+  nif_winsize[] = {{lvm_winsize}, {lvm_ret0}};
 
 // reads the door-populated kboot struct and links every reported free range into the kernel
 // free list. entries are pushed in array order, so kmem points at the last and the earlier
@@ -1851,17 +1869,28 @@ static bool meminit(void) {
     kmem = m; }
   return true; }
 
+// how many pixels a glyph pixel gets. the door names one where it knows the screen
+// better than the pixel count says (a page knows its device ratio); otherwise the
+// largest that still leaves 80 columns and 24 rows, which is the least a terminal is.
+// without this a dense framebuffer answers 480x135 cells of unreadable 8x16 text.
+static uint8_t fbscale(void) {
+  uint8_t s = 1;
+  while (s < 8 && kfb.width / (kface.w * (s + 1u)) >= 80
+               && kfb.height / (kface.h * (s + 1u)) >= 24) s++;
+  return s; }
+
 static bool fbinit(void) {
   if (!kboot.has_fb) return false;
   kfb._      = kboot.fb.base;
   kfb.width  = kboot.fb.w;
   kfb.height = kboot.fb.h;
   kfb.pitch  = kboot.fb.pitch_px;
+  kfb.scale  = kboot.fb.scale ? kboot.fb.scale : fbscale();
   return true; }
 
 static bool cbinit(void) {
-  const uintptr_t rows = kfb.height / kfont.h,
-                  cols = kfb.width / kfont.w;
+  const uintptr_t rows = kfb.height / (kface.h * kfb.scale),
+                  cols = kfb.width / (kface.w * kfb.scale);
   // kmallocw, not g->alloc: kmain runs cbinit before ai_ini, the console being how a failure
   // in ai_ini would be said. no g exists yet, so this names the kernel heap directly.
   if (!(kcb = kmallocw(b2w(sizeof(struct cb) + rows * cols * sizeof(uint32_t))))) return false;
@@ -1900,7 +1929,10 @@ static struct ai_def const __attribute__((section("ai_knifs"), used)) defs[] = {
   {"vmx", {.k = nif_vmx}},
   {"vmx-run", {.k = nif_vmx_run}},
 #endif
-  {"color", {.k = nif_color}} };
+  {"color", {.k = nif_color}},
+  // the console's own size. the no-op roster below pins `winsize` only where the seat
+  // lacks it, so landing it here takes the stub off by existing.
+  {"winsize", {.k = nif_winsize}} };
 
 // the kore cat is CATTED FROM THE RAMFS at boot -- the blob initrd carries every
 // member, so only the ORDER is baked: the korefiles roster, one line.

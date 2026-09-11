@@ -110,8 +110,10 @@ footer { margin-top: 3.5em; color: var(--faint); font-size: .85em;
 .appbar { flex-shrink: 0; color: var(--dim); font-size: .8em; margin-top: .6em; }
 .appbar b { color: var(--link); font-weight: normal; }
 /* the machine island: the canvas IS the console -- the only one -- so it takes the box
-   and scales by width, its pixels left square. */
-.machine .fb { width: 100%; image-rendering: pixelated; background: #000000; outline: none;
+   and the console settles its own rows and columns inside it. the height is a layout
+   choice, not an aspect ratio to keep; the pixels are the box's own and stay square. */
+.machine .fb { width: 100%; height: min(56vh, 620px);
+               image-rendering: pixelated; background: #000000; outline: none;
                border-radius: 3px; }
 .machine .fb[hidden] { display: none; }
 .mbar { flex-shrink: 0; color: var(--dim); font-size: .8em; margin-top: .6em; }

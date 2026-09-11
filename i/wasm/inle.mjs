@@ -4,28 +4,32 @@
 // which is how t/kernel/all.l's (reset) quits the gate, as -no-reboot does under qemu.
 // a tty is put in raw mode so every key reaches the machine; ctrl-] leaves. with --fb the
 // machine has a framebuffer console too, and its pixels land in a PPM once a second --
-// what a gate can look at where a browser would show the canvas. --lift names a ramfs
-// file the machine's program leaves behind, and where to put it on this side, once the
-// program has quit (the reset). --image hands the machine a heap image to wake (the one
+// what a gate can look at where a browser would show the canvas; the size is REAL pixels
+// and the console settles its own rows and columns inside it. --scale is how many of those
+// pixels a glyph pixel gets, and without one the console picks from the size. --lift names
+// a ramfs file the machine's program leaves behind, and where to put it on this side, once
+// the program has quit (the reset). --image hands the machine a heap image to wake (the one
 // `bake PATH` on the boot line writes, lifted out: `make b/wasm/love-wasm.image`).
-//   usage: node i/wasm/inle.mjs [--fb WxH --dump screen.ppm] [--lift /in/machine:b/here]
+//   usage: node i/wasm/inle.mjs [--fb WxH --scale N --dump screen.ppm]
+//                                  [--lift /in/machine:b/here]
 //                                  [--image love-wasm.image] love-wasm.wasm [boot line ..]
 import { Worker } from 'node:worker_threads';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { ring_n, ring_at, lift_n, lift_at, shared_n } from './cpu.mjs';
 
 const args = process.argv.slice(2);
-let fb = null, dump = null, liftReq = null, image = null;
+let fb = null, dump = null, scale = 0, liftReq = null, image = null;
 while (args[0]?.startsWith('--')) {
   const o = args.shift();
   if (o === '--fb') { const [w, h] = args.shift().split('x').map(Number); fb = { w, h }; }
+  else if (o === '--scale') scale = Number(args.shift());
   else if (o === '--dump') dump = args.shift();
   else if (o === '--lift') { const [from, to] = args.shift().split(':'); liftReq = { from, to: to ?? from.split('/').pop() }; }
   else if (o === '--image') { const b = readFileSync(args.shift()); image = b.buffer.slice(b.byteOffset, b.byteOffset + b.length); }
   else { console.error('inle.mjs: unknown option ' + o); process.exit(2); } }
-if (fb) fb.dump = dump;
+if (fb) fb.dump = dump, fb.scale = scale;
 const [wasm, ...cmd] = args;
-if (!wasm) { console.error('usage: inle.mjs [--fb WxH --dump screen.ppm] [--lift IN:OUT] [--image IMG] love-wasm.wasm [boot line ..]'); process.exit(2); }
+if (!wasm) { console.error('usage: inle.mjs [--fb WxH --scale N --dump screen.ppm] [--lift IN:OUT] [--image IMG] love-wasm.wasm [boot line ..]'); process.exit(2); }
 
 const ring = new SharedArrayBuffer(shared_n);
 const ctl = new Int32Array(ring, 0, 4), kb = new Uint8Array(ring, ring_at, ring_n);

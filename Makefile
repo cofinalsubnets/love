@@ -509,7 +509,7 @@ k_free_c = $R/i/kmain.c $R/i/blk.c $R/i/hda.c $R/i/sys.c
 # because the kernel runs the same frontend the host does. taking that roster rather than
 # copying it is what lets a new i/<app>.c reach the kernel with no rule edit.
 k_c = $(love_c) \
-  $R/l/quay/cga_8x8.c $R/l/quay/moderndos_8x16.c $R/l/quay/paint.c \
+  $R/l/quay/cga_8x8.c $R/l/quay/cleat_8x16.c $R/l/quay/paint.c \
   $(c_c) $(k_arch_c) $(k_free_c) $(host_c)
 k_h = $(love_h) $(R)/i/k.h $(R)/i/ustar.h $(wildcard $(R)/i/$a/*.h)
 
@@ -616,7 +616,7 @@ define kart
 $(1)_h = $$(love_h) $$R/i/k.h $$R/i/ustar.h $$(wildcard $$R/i/$$($(4))/*.h)
 $(1)_arch_o = $$(patsubst $$R/%.c,$$($(2))/%.o,$$(wildcard $$R/i/$$($(4))/*.c))
 # the console's painter and its fonts: kernel-only draws the host link never had
-$(1)_quay_o = $$(patsubst %,$$($(2))/l/quay/%.o,paint cga_8x8 moderndos_8x16)
+$(1)_quay_o = $$(patsubst %,$$($(2))/l/quay/%.o,paint cga_8x8 cleat_8x16)
 $(1)_kern_o = $$(k_free_c:$$R/%.c=$$($(2))/%.o)
 $(1)_o = $$(if $$($(1)_arch_o),$$($(1)_kern_o) \
   $$($(1)_arch_o) $$($(1)_quay_o) $$($(2))/kvec.o,)
@@ -1047,7 +1047,7 @@ site-wasm: wasm
 # text lane). one module beside b/love-$a.elf; the runtime rides in by need, and no
 # the heap image is baked below. the CPU under it is i/wasm/cpu.mjs, a worker;
 # the terminals are i/wasm/inle.mjs (node) and i/wasm/inle.html (the page).
-kw_c = $(love_c) $R/l/quay/cga_8x8.c $R/l/quay/moderndos_8x16.c $R/l/quay/paint.c \
+kw_c = $(love_c) $R/l/quay/cga_8x8.c $R/l/quay/cleat_8x16.c $R/l/quay/paint.c \
   $(k_free_c) $(host_c) $R/i/wasm/arch.c
 kw_h = $(love_h) $R/i/k.h $R/i/ustar.h $R/i/asmops.h $R/i/wasm/asmops.h
 b/wasm/src.o: $(dist_source) u/mksrc.l b/.mksys-cat.l $m
@@ -1083,7 +1083,7 @@ valg: host
 # the tree as it is, so a generated file still has to be committed
 web: fonts w/style.css w/favicon.png index.html
 fonts: w/fonts/quay16.woff w/fonts/quay8.woff
-w/fonts/quay16.woff: l/quay/moderndos_8x16.c u/mkfont.l $(ho)/love
+w/fonts/quay16.woff: l/quay/cleat_8x16.c u/mkfont.l $(ho)/love
 	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
 	@$m u/mkfont.l $< 12 $@ "Quay 16"

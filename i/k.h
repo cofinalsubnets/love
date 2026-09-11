@@ -44,6 +44,10 @@ struct k_boot {
   void    *base;                    // framebuffer linear address
   uint16_t w, h;                    // pixels
   uint32_t pitch_px;                // pixels per scanline (not bytes)
+  // pixels per glyph pixel. 0 is the ordinary case -- the console picks one off the
+  // size (kmain's fbscale). a door that knows the screen better than its pixel count
+  // does, a page with a device ratio, names it here instead.
+  uint8_t  scale;
  } fb;
  bool has_fb; // FIXME how is this different from fb.base == NULL
  // the wall date at boot, UNIX SECONDS -- what makes ai_clock a clock and not an

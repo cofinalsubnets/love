@@ -337,7 +337,7 @@ test_web: host
 	@$m w/index.l b/.w/index.html
 	@env -u LOVE_NO_IMAGE $m w/style.l b/.w/style.css
 	@env -u LOVE_NO_IMAGE $m u/mkicon.l l/quay/cga_8x8.c 3 32 b/.w/favicon.png 2>/dev/null
-	@env -u LOVE_NO_IMAGE $m u/mkfont.l l/quay/moderndos_8x16.c 12 b/.w/quay16.woff "Quay 16"
+	@env -u LOVE_NO_IMAGE $m u/mkfont.l l/quay/cleat_8x16.c 12 b/.w/quay16.woff "Quay 16"
 	@env -u LOVE_NO_IMAGE $m u/mkfont.l l/quay/cga_8x8.c 6 b/.w/quay8.woff "Quay 8"
 	@cmp -s b/.w/index.html index.html && cmp -s b/.w/style.css w/style.css \
 	  && cmp -s b/.w/favicon.png w/favicon.png \
@@ -1249,6 +1249,8 @@ test_kernel_wasm: host
 	   && ! grep -q "^0 tests pass" b/wasm/kernel.log \
 	   || { tail -20 b/wasm/kernel.log; echo "FAIL test_kernel_wasm"; exit 1; }
 	@grep "tests pass" b/wasm/kernel.log
+	@echo TEST t/kernel/glass.l "(the console's grid: real pixels in, rows and columns out)"
+	@sh $(R)/t/gate/glass.sh $(NODE) $(R)/b/love-wasm.wasm b/wasm/love-wasm.image b/wasm/glass.log
 endif
 
 # the wasm module writer and the IR lowering (l/holo/wasm.l) under a foreign engine, and
