@@ -77,6 +77,18 @@
       (elem 'b '(a b)) (eleq 'b '(a b))       ; a nom is its own equality either way
       !(elem 'z '(a b)) !(eleq 'z '(a b))
       (elem '(1 2) '((1 2))) !(eleq '(1 2) '((1 2))))) ; two chains built apart
+; elem walks a TEXT by byte, as the index lane does -- so its elements are charms, and a
+; 1-byte text is not one of them. eleq is the chain walk alone and answers 0 throughout.
+(test
+   (elem 98 "abc") (elem 97 "abc") (elem 99 "abc")   ; every byte, first last and middle
+   !(elem 100 "abc")
+   !(elem "b" "abc")                                 ; a text is no element of a text
+   !(elem 98 "")                                     ; nothing is in the empty text
+   (elem 10 "a\nb") (elem 0 (string 0))              ; a newline and a NUL are bytes like any
+   !(elem 353 "abc") !(elem -1 "abc")                ; out of a byte's range, never in it
+   !(elem 'b "abc") !(elem '(98) "abc")              ; a nom and a chain are not bytes either
+   !(eleq 98 "abc")                                  ; eleq stays the chain walk
+   ("abc" 1 = 98) (elem ("abc" 1) "abc"))            ; what indexing answers, elem finds
 ; assoc and assq are the pair-walkers of the same two questions: assoc reads keys with
 ; `=`, assq with `==`, so a ratio key finds a charm row only through assoc.
 (: rows (list (list (/// 1 1) 'ratio) '(b two))
