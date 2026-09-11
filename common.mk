@@ -166,7 +166,7 @@ c_c = $(addprefix $R/a/moon/lib/moonlibc/string/,memchr.c memcmp.c memcpy.c memm
   $(addprefix $R/a/moon/lib/moonlibc/signal/,grantpt.c posix_openpt.c ptsname.c \
     sigaction.c sigaddset.c sigemptyset.c signal.c signalfd.c sigprocmask.c \
     tcgetattr.c tcsetattr.c tcsetpgrp.c unlockpt.c) \
-  $(addprefix $R/a/moon/lib/moonlibc/proc/,atexit.c execv.c execvp.c exit.c) \
+  $(addprefix $R/a/moon/lib/moonlibc/proc/,atexit.c execv.c execvp.c exit.c fexecve.c) \
   $(addprefix $R/a/moon/lib/moonlibc/env/,getenv.c setenv.c unsetenv.c) \
   $(addprefix $R/a/moon/lib/moonlibc/stdio/,fflush.c femit.c pad.c semit.c) \
   $R/a/moon/lib/moonlibc/fmt/fprintf.c \

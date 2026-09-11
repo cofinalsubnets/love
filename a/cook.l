@@ -52,6 +52,10 @@
 
 (borrow 'posix)
 
+; the pattern law and the path clips both (l/boot/post.l): match/anyglob under
+; $(wildcard), lastslash/lastdot/segs/pclean under make's own $(dir) family.
+(borrow 'glob)
+
 (: cards (tablet 0)          ; the recipe cards: item -> (ingredients orderonly . steps)
    check (tablet 0)        ; a 1-cell box: the standing check -- the first item declared (the default when no ticket is named)
    tickets (tablet 0)      ; a 1-cell box: the recipe words named on the command line (the non-flag args), () until the dispatch parses them
@@ -640,50 +644,34 @@
    (fn-shell sh cmd) (: r (hark [sh "-c" cmd]) (? (two? r) (nl->sp (chomp >r)) ""))
    ; $(wildcard), native both ways: lush's glob (cook-glob -- classes, multi-
    ; segment patterns, the mask law) when it is aboard; else glob1 below -- a
-   ; word with no * or ? is an existence test; otherwise the
+   ; word with no glob char is an existence test; otherwise the
    ; last path segment is the pattern (the tree's globs are all leaf-shaped), matched
-   ; over readdir -- * a run, ? one char, a leading . only by an explicit . -- and the
-   ; matches sorted under their directory prefix (glob(3) order, what sh gave before).
-   (globch s) ((: (g i) (? (i >= #s) 0 (s i = 42 || s i = 63 || g (1 + i)))) 0)
-   (gmatch p s)
-   ((: (m i j)
-       (? (i >= #p) (j >= #s)
-          (p i = 42) (m (1 + i) j || ((j < #s) && m i (1 + j)))
-          (j >= #s) 0
-          ((p i = 63) || (p i = s j)) (m (1 + i) (1 + j))
-          0))
-    0 0)
+   ; over readdir by 'glob's own `match` -- a leading . only by an explicit . -- and
+   ; the matches sorted under their directory prefix (glob(3) order, what sh gave).
    (glob1 pat)
-   (? !(globch pat) (? (exists? pat) [pat] 0)
-      (: k (mk-lastslash pat)
+   (? !(anyglob pat) (? (exists? pat) [pat] 0)
+      (: k (lastslash pat)
          dir (? (0 < k) (snip pat 0 (1 < k ? (k - 1) k)) ".")
          pfx (sub pat 0 k)
          leaf (snip pat k #pat)
          hid (0 < #leaf && leaf 0 = 46)
-         ms (filter (e \ (hid || e 0 != 46) && gmatch leaf e)
+         ms (filter (e \ (hid || e 0 != 46) && match leaf e)
                     (: es (readdir dir) (two? es && es)))
          (map (e \ 0 < #pfx ? (pfx + e) e) (sort ms))))
    (globw pat) (? (lit? cook-glob) (cook-glob pat) (glob1 pat))
-   (fdir w) (: k (mk-lastslash w) (? (0 < k) (sub w 0 k) "./"))
-   (fnotdir w) (sub w (mk-lastslash w) #w)
-   (flastdot w) (: sl (mk-lastslash w)
-                   ((: (g j) (? (j > sl) (w (j - 1) @ 46 (j - 1) (g (j - 1))) #w)) #w))
-   (fbase w) (: dot (flastdot w) (dot < #w ? (sub w 0 dot) w))
-   (fsuf w)  (: dot (flastdot w) (dot < #w ? (sub w dot #w) ""))
-   ; make's $(abspath): rooted on the cwd, then lexically cleaned -- no repeated
-   ; separators, no . or .. components (.. pops a segment; no filesystem asked).
-   (segs s) ((: (g i st acc) (? (i >= #s) (rev (st < i ? (snip s st i . acc) acc))
-                                (? (s i = 47) (g (1 + i) (1 + i) (? (st < i) (snip s st i . acc) acc))
-                                   (g (1 + i) st acc)))) 0 0 0)
+   ; make's own faces over 'glob's clips: $(dir) keeps the trailing slash and
+   ; answers "./" for a bare name, which is where it parts from posix's dirname.
+   (fdir w) (: k (lastslash w) (? (0 < k) (sub w 0 k) "./"))
+   (fnotdir w) (sub w (lastslash w) #w)
+   (fbase w) (: dot (lastdot w) (dot < #w ? (sub w 0 dot) w))
+   (fsuf w)  (: dot (lastdot w) (dot < #w ? (sub w dot #w) ""))
+   ; make's $(abspath): rooted on the cwd, then lexically cleaned. the climb is
+   ; bounded at 0 because the path is already absolute -- and a `/..` that runs out
+   ; comes back empty, which rebuilds as "/", make's own answer for it.
    (fabs w)
    (: r (? ((0 < #w) && (w 0 = 47)) w
            (: p (cwd 0) (? (string? p) (p + "/" + w) w)))
-      cl ((: (g l acc) (? (two? l)
-                          (g >l (? (<l = ".") acc
-                                   (<l = "..") (? (two? acc) >acc acc)
-                                   (<l . acc)))
-                          (rev acc)))
-          (segs r) 0)
+      cl (pclean (segs r) 0)
       ("/" + join "/" cl))
    (dedup l) (? (two? l) (? (two? >l) (? (<l = <>l) (dedup >l) (<l . dedup >l)) l) l)
    (sortu l) (dedup (sort l))
@@ -847,7 +835,7 @@
                    (? (0 < #f) (split-ws f) '("-c")))
    ; $(@D): the target's directory sans trailing slash ("." for a bare name), $(@F)
    ; its basename -- make's D/F faces, pinned beside the plain automatics.
-   (dslash w) (: k (mk-lastslash w) (? (0 < k) (snip w 0 (? (1 < k) (k - 1) k)) "."))
+   (dslash w) (: k (lastslash w) (? (0 < k) (snip w 0 (? (1 < k) (k - 1) k)) "."))
    ; ..and SHELL picks the shell itself (a Makefile saying SHELL := lush runs
    ; its recipes -- and its $(shell) calls -- under lush), default sh.
    (shname as) (: s (trim (peep as "SHELL" "")) (? (0 < #s) s "sh"))
@@ -1059,6 +1047,9 @@
                      (: _ (pin as nm v) (pin origins nm "default")) 0)
       _ (dflt "CC" (? px "c99" "cc")) _ (? px (dflt "CFLAGS" "-O1") 0)
       _ (dflt "MAKE" "make") _ (dflt "AR" "ar") _ (dflt "RM" "rm -f")
+      ; CURDIR is make's own, and it is read AFTER -C: a port makefile names itself
+      ; with $(notdir $(CURDIR)), and unset that spells every output b//x.
+      _ (dflt "CURDIR" (: p (cwd 0) (? (string? p) p "")))
       _ (dflt "AS" "as") _ (dflt "ARFLAGS" "rv")      ; the builtin rules below read these
       _ (each (clivars 0)
               (\ pr (: _ (pin as <pr >pr) (pin origins <pr "command line"))))
@@ -1138,7 +1129,9 @@
               tgts (expand-words [tgtstext] as)
               sp (? (two? raws) (sufpat <tgts) 0)   ; an old-style suffix rule, .c.o style
               (? sp (pin patbox 0 ([<sp [<>sp] () raws] . peep patbox 0 0))
-                 (any (\ t ((0 < tally t) && (t 0 = 46))) tgts) 0        ; drop .PHONY / .SUFFIXES / ...
+                 ; drop .PHONY / .SUFFIXES / ... -- a special target names no directory,
+                 ; so a leading dot alone is not the test: ./x and ../x are paths.
+                 (any (\ t ((0 < tally t) && (t 0 = 46) && (0 = lastslash t))) tgts) 0
                  (: cp (splittop prtext 58)
                     (? (two? >cp)
                        ; static pattern rule
@@ -1282,8 +1275,7 @@
        (say o "\n(cook-all 0)\ "))
 
    ; is a recipe-file path named like a Makefile? then cook reads it as one.
-   (mk-lastslash p) ((: (g j) (? (0 < j) (? (p (j - 1) = 47) j (g (j - 1))) 0)) #p)
-   (mk-base p) (snip p (mk-lastslash p) #p)
+   (mk-base p) (snip p (lastslash p) #p)
    (mk-ends p suf) (: ls #suf lp #p ((ls <= lp) && (suf = snip p (lp - ls) lp)))
    (makefilep p) (: b (mk-base p)
       ((b = "Makefile") || b = "makefile" || b = "GNUmakefile" || mk-ends p ".mk"))

@@ -14,9 +14,10 @@
 ;
 ; what kiosko does own is HTTP, and only as much of it as a static server needs:
 ;   get and head; anything else is 405.
-;   the request line is percent-decoded and then guarded -- a `..` segment is 403, always,
-;     before any path is built. (a segment, not a substring: a file honestly named `a..b`
-;     is not an escape attempt and is served.)
+;   the request line is percent-decoded and then normalized by 'glob's pclean, before
+;     any path is built: `.` and an inward `..` resolve, and a `..` that would leave the
+;     root is 403. (a segment, not a substring: a file honestly named `a..b` is not an
+;     escape attempt and is served.)
 ;   a query string is cut and ignored; a static file has no use for one.
 ;   a directory answers its index.html, and a listing when it has none.
 ;   Content-Type comes off the extension, Content-Length off the body, and every response
@@ -37,6 +38,8 @@
 
 ; --- little utils -------------------------------------------------------------------
 (borrow 'posix)
+; the path clips (l/boot/post.l): segs and pclean under the request guard below.
+(borrow 'glob)
 (: (strcat l)   (foldl (+) "" l)
    (joins l sp) (? !(two? l) "" !(two? >l) <l (<l + sp + joins >l sp))
    (ends? s t)  (: n #s m #t (m <= n && snip s (n - m) n = t))
@@ -174,9 +177,18 @@
                                 (s i = 63 || s i = 35) (snip s 0 i)
                                 (g (i + 1)))
                 (g 0))
-   ; the one guard: no `..` segment, and the path must be rooted. everything downstream
-   ; is a plain string append, so this is where an escape has to be refused.
-   (safe? p)   (0 < #p && p 0 = 47 && !(elem ".." (splits p 47))))
+   ; the one guard, and it normalizes rather than merely refusing: 'glob's pclean at
+   ; a climb of 0, which resolves `.` and an inward `..` and answers () for one that
+   ; would leave the root. everything downstream is a plain string append, so the
+   ; path that comes back here is the only one that may reach it. a trailing slash
+   ; survives the round trip because the directory redirect reads it.
+   ; the climb is read off the answer rather than asked for as 0, because pclean
+   ; spells a refusal and an empty path the same way -- and "/a/.." IS the root, not
+   ; an escape. cleaned unbounded, a leading ".." is exactly the escape.
+   (rooted p)  (? !(0 < #p && p 0 = 47) ()
+                  (: cl (pclean (segs p) ())
+                     (? (two? cl && <cl = "..") ()
+                        ("/" + join "/" cl + (ends? p "/" && two? cl ? "/" ""))))))
 
 ; --- what a file is ------------------------------------------------------------------
 (: types '(("html" "text/html; charset=utf-8") ("htm" "text/html; charset=utf-8")
@@ -254,8 +266,8 @@
             raw (word1 (after1 line))
             head? (meth = "HEAD")
             (? !(meth = "GET" || head?) (oops c 405 "Method Not Allowed" 0, [405 meth raw])
-               (: p (pdecode (cutq raw))
-                  (? !(safe? p) (oops c 403 "Forbidden" head?, [403 meth raw])
+               (: p (rooted (pdecode (cutq raw)))
+                  (? !(string? p) (oops c 403 "Forbidden" head?, [403 meth raw])
                      (: m (? make (make p blk))
                         (? (two? m)
                            (reply c 200 "OK" <m <>m head?, [200 meth raw])

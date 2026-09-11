@@ -34,15 +34,14 @@
 (borrow 'libra)
 (borrow 'hueweb)
 (borrow 'lapiz)
+(borrow 'glob)
 
 (borrow 'posix)
 (:
    (sv-ends? s t) (: n #s m #t (m <= n && snip s (n - m) n = t))
    (sv-rdf p) (: q (open p "r") (hot? q && (: s (slurp q) _ (close q) (string? s && [1 s]))))
    ; the directory a path sits in, as a link back up: "/a/b/c.l" -> "/a/b/"
-   (sv-up p) (: n #p
-                (g k r) (? (k < n) (g (k + 1) (p k = 47 ? (k + 1) r)) (snip p 0 r))
-                (g 0 0))
+   (sv-up p) (snip p 0 (lastslash p))
 
    ; the cache key: an edit that moves neither mtime nor size is one nobody can see
    (sv-stamp p) (: st (stat p) (two? st ? (<>st + <st * 7) 0))

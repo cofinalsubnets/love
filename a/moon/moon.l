@@ -28,13 +28,11 @@
 (borrow 'holo) ; the assembler module: asm-text, arbytes, the linker
 
 (borrow 'posix)
+(borrow 'glob) ; lastslash, under cdir
 
 (:
    ; the directory portion of a path (up to and including the last '/'), or ""
-   (cdir path) (: n #path
-                  (go i last) (? (n <= i) last (path i = 47) (go (i + 1) (i + 1)) (go (i + 1) last))
-                  d (go 0 0)
-                  (0 < d ? (snip path 0 d) ""))
+   (cdir path) (: d (lastslash path) (0 < d ? (snip path 0 d) ""))
    ; the toolchain slice's place in the tree, spelled once: the roots below and
    ; the carried-blob filter both read it, and the filter reads its length too.
    mtree "a/moon/"

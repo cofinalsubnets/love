@@ -41,6 +41,8 @@ int  fork(void);
 int  execvp(char const*, char *const*);
 int  execv(char const*, char *const*);
 int  execve(char const*, char *const*, char *const*);
+int  fexecve(int, char *const*, char *const*);
+extern char **environ;   /* posix keeps it here; moonlibc's own members read impl.h's */
 int  execl(char const*, char const*, ...);
 int  execlp(char const*, char const*, ...);
 int  execle(char const*, char const*, ...);

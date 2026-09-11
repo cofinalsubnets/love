@@ -34,6 +34,8 @@
 #define AT_FDCWD      (-100)   /* both kernels' spelling */
 #define AT_SYMLINK_NOFOLLOW 256
 #define AT_REMOVEDIR        512
+/* linux only, and only fexecve asks: the BSDs have the call itself */
+#define AT_EMPTY_PATH      4096
 #define F_DUPFD          0
 #define F_GETFD          1
 #define F_SETFD          2
